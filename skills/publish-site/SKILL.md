@@ -12,13 +12,15 @@ identical either way; the setting `player_site.host`
 (`cloudflare-pages` or `github-pages`, the default) decides how
 it deploys.
 
+`shared/` is the `shared` folder beside this skill's folder (inside
+it, in a zip install). `gma` is `python3 "<shared>/scripts/gma.py"`,
+with the whole path quoted; `gma llms` lists its commands.
+
 Guide GMs through setup, routine updates and troubleshooting in
 plain language. Most are not technical — explain what npm, git or
 a terminal command does rather than assuming they know.
 
-**Version check:** on first invocation run `python3
-"${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py" <vault>
-version`. `OK`/`SETUP` → proceed. `MISMATCH` → announce the row,
+**Version check:** on first invocation run `gma vault-check <vault> version`. `OK`/`SETUP` → proceed. `MISMATCH` → announce the row,
 run the update by campaign-organizer's
 `references/migration-procedure.md`, then resume. `AHEAD` →
 announce the row, tell the GM to update the plugin, stop. `ERROR` → report the row (broken plugin install),
@@ -29,32 +31,24 @@ for the correct vault path.
 
 All build logic lives in the `gm-apprentice-publish` tool, which
 ships inside this plugin (never install it from the npm registry,
-and never replicate its logic):
-
-```text
-<plugin-cache-path>/gm-apprentice/<plugin-version>/tools/publish
-```
-
-`<plugin-version>` comes from `.claude-plugin/plugin.json` (or
-this skill's own cache path). One-off commands run from the cache:
+and never replicate its logic). One-off commands:
 
 ```bash
-TOOL="<plugin-cache-path>/gm-apprentice/<plugin-version>/tools/publish/bin/gm-publish.js"
-node "$TOOL" init <target-dir> --vault <vault>   # scaffold a new site (auto-pins itself to this version)
-node "$TOOL" update-pin --site <dir>                       # repoint + npm install a stale site (outside the plugin: add --tag publish-vX.Y.Z to pin a release tarball)
-node "$TOOL" manifest diff --config <dir>/vault.config.json    # classify vault files vs the publish list
-node "$TOOL" manifest apply --config <dir>/vault.config.json ...  # change the publish list
-node "$TOOL" manifest list --vault <vault>   # show the publish list
-node "$TOOL" manifest publish-played --config <dir>/vault.config.json  # register played sessions
-node "$TOOL" deploy --verify --config <dir>/vault.config.json  # build, deploy, probe the URL
-node "$TOOL" doctor --site --config <dir>/vault.config.json    # audit the vault for publish defects
-node "$TOOL" explain "<vault-relative path>" --config <dir>/vault.config.json  # one file's publish chain
-node "$TOOL" --version
-node "$TOOL" --help
+gma publish init <target-dir> --vault <vault>   # scaffold a new site (auto-pins itself to this version)
+gma publish update-pin --site <dir>                       # repoint + npm install a stale site (outside the plugin: add --tag publish-vX.Y.Z to pin a release tarball)
+gma publish manifest diff --config <dir>/vault.config.json    # classify vault files vs the publish list
+gma publish manifest apply --config <dir>/vault.config.json ...  # change the publish list
+gma publish manifest list --vault <vault>   # show the publish list
+gma publish manifest publish-played --config <dir>/vault.config.json  # register played sessions
+gma publish deploy --verify --config <dir>/vault.config.json  # build, deploy, probe the URL
+gma publish doctor --site --config <dir>/vault.config.json    # audit the vault for publish defects
+gma publish explain "<vault-relative path>" --config <dir>/vault.config.json  # one file's publish chain
+gma publish --version
+gma publish --help
 ```
 
 **Before any build or deploy this skill runs**, run
-`node "$TOOL" manifest publish-played --config <dir>/vault.config.json`
+`gma publish manifest publish-played --config <dir>/vault.config.json`
 yourself, so a site never ships missing a played session (#277). It
 ticks a reviewed session index only together with a linked Wrap-Up
 that will publish, so the site withholds the hub body. It skips
@@ -77,7 +71,7 @@ read-only on the vault, so this lives in the skill, not in
 `build`/`deploy`.
 
 **On a D&D vault, before every build**, also run
-`python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/dnd_ddb.py" --party "<vault>" --on-build --write`
+`gma dnd-ddb --party "<vault>" --on-build --write`
 and pass on any `ERROR`, `CHECK` or `REMOVE` row. It does nothing unless
 `vault.dndbeyond_sync` is `build`.
 
@@ -94,7 +88,7 @@ npx gm-apprentice-publish sheet show --pc <name> [--player-safe] [--json]
 Node 22+ is required; on a version error, send the GM to
 https://nodejs.org (LTS).
 
-**Settings.** Read and change every setting through `node "$TOOL"
+**Settings.** Read and change every setting through `gma publish
 settings … --config <dir>/vault.config.json` (`--help` lists the
 verbs); never open a settings file in `_meta/` to read one or edit it
 by hand. When a command stops on the old settings file or the old
@@ -102,7 +96,7 @@ publish list ("no longer read since plugin 1.11.0"), the vault needs the
 update from plugin 1.10.134 first; tell the GM, then carry on once it is
 done.
 
-**Is there a site?** `node "$TOOL" settings get player_site.publish
+**Is there a site?** `gma publish settings get player_site.publish
 player_site.folder --vault <vault>`.
 
 - **Off:** no site. Nothing to register, so skip `publish-played`. If
@@ -132,17 +126,17 @@ A GM copy, a copy for the table: `references/gm-site.md`.
 ("update my site", "rebuild", "I've updated the vault")
 
 1. Locate the site directory (above).
-2. `node "$TOOL" update-pin --site <dir>` — report its one line.
-3. `node "$TOOL" manifest diff --config <dir>/vault.config.json`.
+2. `gma publish update-pin --site <dir>` — report its one line.
+3. `gma publish manifest diff --config <dir>/vault.config.json`.
    If it lists New/Removed files, present them; after the GM
-   confirms, `node "$TOOL" manifest apply --config <dir>/vault.config.json --publish <path>... --exclude "<path>=<reason>"... --prune`.
+   confirms, `gma publish manifest apply --config <dir>/vault.config.json --publish <path>... --exclude "<path>=<reason>"... --prune`.
    Leave played session indexes out of `--publish`: `publish-played`
    (above) registers them.
-4. `node "$TOOL" deploy --verify --config <dir>/vault.config.json`
+4. `gma publish deploy --verify --config <dir>/vault.config.json`
    — relay its final line verbatim. On a non-zero exit, go to
    capability 3. Missing Cloudflare credentials are explained
    inline by `deploy`; to set them directly, run
-   `node "$TOOL" doctor --set-cloudflare-creds`. If it stopped on the leak
+   `gma publish doctor --set-cloudflare-creds`. If it stopped on the leak
    check (the JSON has `refused: true` and `leaks.findings`), read
    `references/leak-findings.md` and take the GM through each finding.
    If a message says the leak check could not run, show it word for
@@ -152,8 +146,8 @@ A GM copy, a copy for the table: `references/gm-site.md`.
 (error messages, "build crashed", "portraits not showing", "page is
 missing", "links are broken")
 
-Run `node "$TOOL" doctor --site --config <dir>/vault.config.json`
-first; for one missing page, `node "$TOOL" explain "<vault-relative
+Run `gma publish doctor --site --config <dir>/vault.config.json`
+first; for one missing page, `gma publish explain "<vault-relative
 path>"`. Then use `references/troubleshooting.md`: name the failure
 mode, explain the cause plainly, guide the fix step by step, and
 offer to apply it. A build warning that ends "campaign-qa's Site
@@ -166,7 +160,7 @@ act on the cause and fix it names, rather than explaining it from
 ("I added a new entity type", "campaign-organizer was updated",
 "new folder in the vault", "pages missing after an update")
 
-1. Locate the site directory; `node "$TOOL" settings get
+1. Locate the site directory; `gma publish settings get
    player_site.folder_map player_site.hide.folders --config
    <dir>/vault.config.json`.
 2. Compare them with the vault's folders; propose additions.
@@ -191,7 +185,7 @@ and § Publish List. A file publishes only when it is under
 `publishing`; `excluded` and `needs_decision` never publish it. The GM
 site (`gm_site.publish`) is the copy that shows everything.
 
-1. `node "$TOOL" settings get player_site.theme player_site.not_found
+1. `gma publish settings get player_site.theme player_site.not_found
    --config <dir>/vault.config.json`. If every theme and
    404 line says `(default)`, first follow
    content-filtering.md § Setup Questioning Flow.
@@ -219,7 +213,7 @@ CoC 7e and D&D 5e) and flags edge cases. It names the one
 up the inbox", "let players submit changes")
 
 Cloudflare Pages only. From the site directory run
-`node "$TOOL" setup-status-bar` or `node "$TOOL" setup-inbox`
+`gma publish setup-status-bar` or `gma publish setup-inbox`
 (`--config <path>` if not `./vault.config.json`). Both are
 preflight-gated, idempotent, handle KV themselves and turn on
 `player_site.features.live_stats` / `player_site.features.inbox` — see

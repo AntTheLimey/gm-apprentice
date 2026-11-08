@@ -64,11 +64,10 @@ setup, which saves it and figures out your Account ID for you → done.**
 You never look up the Account ID by hand, and you never edit a shell
 startup file yourself.
 
-Run this from the site directory (the `$TOOL` path is the one you set at
-the top of the publish walkthrough — the plugin's `gm-publish.js`):
+Run this from the site directory:
 
 ```bash
-node "$TOOL" doctor --set-cloudflare-creds
+gma publish doctor --set-cloudflare-creds
 ```
 
 Paste your token when it asks. It then:
@@ -91,10 +90,13 @@ Paste your token when it asks. It then:
 **Prefer your token never passes through the assistant?** Run the same
 command in **your own terminal window**, entering the token at the
 hidden `read` prompt (you can paste it — it stays invisible) so it never
-passes through the assistant — for example:
+passes through the assistant. `gma` is not defined in the GM's own
+shell, so hand them the line with `gma` written out in full
+(`python3 "<shared>/scripts/gma.py"`, the real absolute path filled in
+before you hand it over). For example:
 
 ```bash
-read -rs CF_TOKEN; printf '%s' "$CF_TOKEN" | node "$TOOL" doctor --set-cloudflare-creds; unset CF_TOKEN
+read -rs CF_TOKEN; printf '%s' "$CF_TOKEN" | python3 "<shared>/scripts/gma.py" publish doctor --set-cloudflare-creds; unset CF_TOKEN
 ```
 
 Chain the three with `;` (not `&&`) so `unset CF_TOKEN` always runs and
@@ -154,7 +156,7 @@ variables aren't in `~/.zshenv`, or you need a new terminal / `source`.
 ## Step 3: Point the site at Cloudflare
 
 ```bash
-node "$TOOL" settings set player_site.host=cloudflare-pages player_site.url=https://<project-name>.pages.dev --config <dir>/vault.config.json
+gma publish settings set player_site.host=cloudflare-pages player_site.url=https://<project-name>.pages.dev --config <dir>/vault.config.json
 ```
 
 The address must be the Cloudflare one: with a `github.io` address
@@ -180,7 +182,7 @@ so the deploy is `npx wrangler@4 pages deploy --branch=main` — no `docs/`
 argument; passing it positionally conflicts with the config and errors.
 Only a site with no `wrangler.toml` (an older scaffold) uses the explicit
 `pages deploy docs/ --project-name=<project-name> --branch=main --commit-dirty=true`
-form instead. `gm-publish deploy` chooses the form for you — the explanation
+form instead. `gma publish deploy` chooses the form for you — the explanation
 above is the fallback for running wrangler by hand.
 
 The `project create` step is a one-time setup per site. When it finishes,
@@ -204,7 +206,7 @@ npx wrangler@4 pages deploy --branch=main
 ```
 
 wrangler only uploads files that changed, so repeat deploys are fast.
-`gm-publish deploy --verify` runs this same build-then-deploy pair and
+`gma publish deploy --verify` runs this same build-then-deploy pair and
 also checks that the site's address serves the deployment wrangler
 printed (exit 1 if it does not) — the commands above are the fallback for
 running it by hand. The vault's build steps run with every build,
@@ -223,7 +225,7 @@ A fresh Tier-1 site scaffolds a **minimal** `wrangler.toml` — it has
 working) but **no** `[[kv_namespaces]]` block — and **no** `functions/`
 directory. The KV binding and the `functions/` are added only when you opt
 into the inbox or the live status bar: either the streamlined
-`gm-publish setup-inbox` / `setup-status-bar` commands below, or the manual
+`gma publish setup-inbox` / `setup-status-bar` commands below, or the manual
 steps further down in this section. Already-deployed inbox sites are
 unaffected — this only changes what a brand-new site ships.
 
@@ -240,8 +242,8 @@ the `[[kv_namespaces]]` block, turn the switch on in the vault's
 settings, rebuild, and deploy — in one command. Run from the site directory:
 
 ```bash
-node "$TOOL" setup-status-bar   # live status bar (Tier 2a)
-node "$TOOL" setup-inbox        # change-request inbox (Tier 2b)
+gma publish setup-status-bar   # live status bar (Tier 2a)
+gma publish setup-inbox        # change-request inbox (Tier 2b)
 ```
 
 Each defaults to `./vault.config.json`; pass `--config <path>` if you're
@@ -417,7 +419,7 @@ skip it only if the loadout endpoint already put it there), then re-deploy.
    > same bare `npx wrangler@4 pages deploy` used throughout this guide — no
    > `docs/` argument. The `wrangler.toml` (`pages_build_output_dir = "docs"`)
    > is what makes the bare form required; there is nothing inbox-specific
-   > about it. `gm-publish deploy` chooses the form for you; the commands
+   > about it. `gma publish deploy` chooses the form for you; the commands
    > above are the fallback for running wrangler by hand.
 
 5. **Verify the endpoint** — with no session code set yet, a submit must be
@@ -456,7 +458,7 @@ of `<project>.pages.dev`:
 The token isn't reaching the command. Almost always the variables are in
 `~/.zshrc` instead of `~/.zshenv` (see Step 2), or you're in a terminal
 opened before you added them — open a new one or run `source ~/.zshenv`.
-Re-running `node "$TOOL" doctor --set-cloudflare-creds` fixes this by
+Re-running `gma publish doctor --set-cloudflare-creds` fixes this by
 writing the file every shell reads.
 Confirm with `npx wrangler@4 whoami`.
 

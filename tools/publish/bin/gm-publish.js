@@ -201,7 +201,7 @@ vocabulary are listed on one line.
                              written, the target as written, the description on one line; the header counts the notes whose
                              frontmatter does not read. --json gives { tones: [{ rel, line, tone, target, description, gmOnly }],
                              unread: [{ rel, message }] }
-  relationships accept       Record hostile ties the GM reviewed and left (--at rows of tones.py shown); a tie stops being accepted when its
+  relationships accept       Record hostile ties the GM reviewed and left (--at rows of gma tones <vault> shown); a tie stops being accepted when its
                              tone, target or description changes. Without --write it only says what it would record.
   relationships fix          The certain repairs. Without --write it lists them (WOULD-CHANGE and KEEP rows); with
                              --write it makes them in every note at once or in none (CHANGED rows). A tie it cannot move
@@ -273,7 +273,7 @@ rows, then "# served: N pages: N same: N blockers: N", and exits 1 on any
 blocker (or an error line), else 0. move-check also runs the leak check on the
 new build: a "LEAK<TAB>page<TAB>sentence" row per finding, and "leaks: N" in the
 count line. A leak does not change the exit code: whether the move caused it is
-for the caller to tell (prop_move.py compares the live site's own findings).
+for the caller to tell (gma prop-move compares the live site's own findings).
 
   SAME            the same bytes
   SAME-WORDS      every word still there (added words, or the tool's prop bar)

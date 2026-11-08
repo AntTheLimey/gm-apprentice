@@ -1,7 +1,7 @@
 ## Chapter Notes
 
 **Severity:** WARNING
-**Trigger:** `vault_check.py chapters` gives an ASK row: one chapter
+**Trigger:** `gma vault-check <vault> chapters` gives an ASK row: one chapter
 holds two or more `type: chapter` notes.
 
 **Procedure:** read both notes and show the GM what each holds

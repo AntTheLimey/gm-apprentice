@@ -3,8 +3,7 @@
 ## First deploy
 
 Step 21b of the set-up guide. `<project_name>` and the GitHub user
-come from `node "$TOOL" settings setup-note get --vault <vault>`;
-`$TOOL` is set up in `SKILL.md` → "The build tool".
+come from `gma publish settings setup-note get --vault <vault>`.
 
 Initialise git, commit, and push, then enable Pages.
 
@@ -48,7 +47,7 @@ gh repo create <project_name> --public --source . --remote origin --push
 
    ```bash
    git remote add origin https://github.com/<github_username>/<project_name>.git
-   node "$TOOL" deploy --config vault.config.json
+   gma publish deploy --config vault.config.json
    ```
 
    `deploy` builds, commits, and pushes, setting the upstream tracking

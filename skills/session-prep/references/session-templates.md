@@ -87,7 +87,7 @@ combined; recap ≤150 words; NPC Quick Reference one line per NPC.
 Scenes are not word-capped — a scene runs as long as its situation,
 Starts it, the Do | Then table, and mechanical notes earn; cut bloat,
 not substance. Over ~1,200 words, check the length is load-bearing.
-`plan_check.py` measures these budgets (`preamble`, `recap`,
+`gma plan-check` measures these budgets (`preamble`, `recap`,
 `scene-length`). -->
 
 ## Previously On...

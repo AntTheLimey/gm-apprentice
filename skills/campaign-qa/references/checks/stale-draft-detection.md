@@ -5,7 +5,7 @@
 DRAFT for as many sessions as `vault.stale_after_sessions` says, or
 has a missing or future `createdSession`.
 
-**Procedure:** run `vault_check.py stale-drafts` and report its
+**Procedure:** run `gma vault-check <vault> stale-drafts` and report its
 findings. It measures age against each chapter's own latest
 session and exempts session plans.
 

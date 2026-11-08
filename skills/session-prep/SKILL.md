@@ -7,6 +7,10 @@ Session preparation assistant: builds on the canon session-wrapup
 established to get the GM ready for next session.
 Workflow: Reconcile → Gather → Plan → Verify → Handoff.
 
+`shared/` is the `shared` folder beside this skill's folder (inside
+it, in a zip install). `gma` is `python3 "<shared>/scripts/gma.py"`,
+with the whole path quoted; `gma llms` lists its commands.
+
 ## Stance — you draw the session out of the GM
 
 You spark, shape and refine; the GM decides. Every creative call
@@ -41,15 +45,13 @@ exception).
 
 ## Setup
 
-- On a vault kept by a player (`vault.kept_by: player`) `session_context.py`
+- On a vault kept by a player (`vault.kept_by: player`) `gma session-context`
   says so and gathers nothing: session prep is the GM's job, so tell the
   player and stop.
 - Read `shared/session-principles.md`; its Version Gate verdict opens
   the `--prep` output (step 5). After a migration, run `--prep` again.
 - Read `shared/session-document-chain.md`. You write Plan files, only
-  with `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_write.py"
-  <vault> plan --number N --chapter "<chapter>" --title "<title>" --write
-  <<'EOF'` … `EOF`. It files the index as upcoming when there is none,
+  with `gma vault-write <vault> plan --number N --chapter "<chapter>" --title "<title>" --write <<'EOF'` … `EOF`. It files the index as upcoming when there is none,
   sets the index to prepped with `documents.plan`, and prints the Plan
   check. `--section` replaces each
   section sent (by level and title) in an existing Plan. Never write to
@@ -70,16 +72,16 @@ exception).
 **Scope to the question.** After the version gate, do only what was
 asked. "Prep my session" walks the whole workflow. A narrow question
 runs the one script that answers it, reports, and stops:
-document-chain status → `vault_check.py <vault> sessions`; thread ages
-→ `session_context.py <vault> --threads`; a plan's conformance →
-`plan_check.py <plan>`. Offer the next step in one line; don't take it.
+document-chain status → `gma vault-check <vault> sessions`; thread ages
+→ `gma session-context <vault> --threads`; a plan's conformance →
+`gma plan-check <plan>`. Offer the next step in one line; don't take it.
 
 ## Context Source — Step 5, opening move of a prep invocation
 
 Gather the standard read-set in ONE call before any individual reads:
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/session_context.py" <vault-path> --prep
+gma session-context <vault-path> --prep
 ```
 
 It carries the version verdict, then the last Wrap-Up (reconcile-provenance blocks stubbed to one
@@ -93,7 +95,7 @@ a stubbed or outlined section from its file only when a step needs it.
 After the bundle, vault dives are targeted reads, proportional to the
 upcoming session's complexity, not the campaign's size.
 
-**Voices:** with the bundle, run `vault_check.py <vault> voices`
+**Voices:** with the bundle, run `gma vault-check <vault> voices`
 (`# off: vault.voices` → none, as before). Read-aloud, scene-setting,
 dialogue and handouts take the campaign voice, or a voiced
 character's own when that character speaks or writes; Plan bullets
@@ -121,7 +123,7 @@ available.
 
 **6. Existing prep review** — If a Plan (`type: session-plan`) exists
 for the upcoming session, run
-`python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/plan_check.py" <plan> --inventory`,
+`gma plan-check <plan> --inventory`,
 then separately `--state` (one mode per invocation). Gather the
 `placeholder` sections; read the body only for `present` sections
 Reconcile may have invalidated. To find what the session should
@@ -167,7 +169,7 @@ suggest a midwife worldbuilding conversation.
 **10c. Narrative plans** — Forward design lives in **two** places;
 check both: `Chapters/{chapter}/Planning/` (stamped plan entities) and
 `_midwife/` (often richer, often the only one populated). `--prep`'s
-Narrative Plans is `plans_index.py` against the Wrap-Up's NPCs and
+Narrative Plans is `gma plans-index` against the Wrap-Up's NPCs and
 places (rerun it with `--against` only for other names). Present its
 Planning rows, manifest table, the RESOLVED
 adventure's file summaries and the Overlap section as "Narrative plans
@@ -245,15 +247,14 @@ alongside new ideas. The propose-before-write gate is the
    > where the ledger is the trap? Either way it's Emma's want that
    > opens the door.
 2. The GM shapes it — yes / no / tweak / their own premise.
-3. Write it with `vault_write.py <vault> scene-new --chapter
-   "<chapter>" --title "<title>" --write`, then fill its body and its
+3. Write it with `gma vault-write <vault> scene-new --chapter "<chapter>" --title "<title>" --write`, then fill its body and its
    `entities`/`locations` links. In the Plan it, or a queued scene, is
    `### [[<title>]]` and a line each: purpose, who, how it starts;
    prep it needs (paused: where it picks up, what may come next) is
    an edit to its note, for the GM's yes. Read a paused scene's
    snapshot in the bundle's Paused Scenes, not the note; it is
    wrap-up's, kept as written. One the GM drops:
-   `vault_write.py <vault> scene-played --scene "<scene>" --dropped --write`.
+   `gma vault-write <vault> scene-played --scene "<scene>" --dropped --write`.
    A small beat may stay inline in the skeleton from `references/session-templates.md`: **Situation** and **Starts it**
    are required; every other label is optional, and a two-line routing
    scene is finished.
@@ -264,7 +265,7 @@ scenes at any point — confirm understanding, then write. Check
 spotlight balance against the GM's choices and raise gaps as
 questions. → each scene to `## Planned Scenes`
 
-**Check the shape early.** Every `vault_write.py plan` call prints the
+**Check the shape early.** Every `gma vault-write <vault> plan [options]` call prints the
 check; fix each ERROR and mechanical WARNING with `--section` while a
 fix is one line.
 This is a check, not an order of work: write any scene out in full
@@ -277,7 +278,7 @@ ERROR/WARNING report. Fix objective breakage silently, offer to build
 artifacts, raise only genuine craft issues conversationally. Steps
 15–16 are independent — parallelize if sub-agents are available.
 
-**15. Checks** — The check `vault_write.py plan` prints (add
+**15. Checks** — The check `gma vault-write <vault> plan [options]` prints (add
 `--headless` there when run without a GM; `--gm-input` when the GM
 supplied intent, scenes and spotlight up front).
 - ERROR rows — fix with `--section` until none is left: `duration`, `table`,
@@ -293,14 +294,14 @@ supplied intent, scenes and spotlight up front).
   remove content, ask instead.
 
 Then run vault-wide checks
-(`${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py`):
-- `vault_check.py <vault> tables` — fix aliased or escaped pipes in
+(`gma vault-check`):
+- `gma vault-check <vault> tables` — fix aliased or escaped pipes in
   table links silently (alias-form links, no `\|`), without comment.
-- `vault_check.py <vault> timeline` — if the plan spans several days,
+- `gma vault-check <vault> timeline` — if the plan spans several days,
   offer to build a `## Timeline` hour-by-hour clock with the GM ("This
   one runs across three days — want me to lay out a quick clock so
   nothing double-books?").
-- `vault_check.py <vault> read-aloud` — a `> ` line that names a PC,
+- `gma vault-check <vault> read-aloud` — a `> ` line that names a PC,
   dictates a feeling ("you feel…") or uses a 3rd-person pronoun,
   checked against every PC in the vault. Raise the real ones as a
   question ("Scene 2's boxed text says 'Katherine steps into the
@@ -316,9 +317,9 @@ Apply fixes in place; there is no audit-notes report.
 
 **16. Gap Check** — as questions or a short actionable list:
 - NPCs, locations or entity stubs the planned scenes need but the
-  vault lacks: run `graph_check.py unresolved` (vault-wide) and filter
+  vault lacks: run `gma graph-check <vault> unresolved` (vault-wide) and filter
   its `target <- source` rows to the plan file.
-- Stale entity files to update or retire: `vault_check.py stale-drafts`.
+- Stale entity files to update or retire: `gma vault-check <vault> stale-drafts`.
 - Unresolved calls — plot questions the GM deferred or you couldn't
   ground — each with 2–3 seeds, sorted per Stance. "Does Sophia know
   what her husband has become?" is a plot question; "Georgiana's
@@ -352,9 +353,9 @@ the Plan:
 <!-- prep-state: intent=set spotlight=Emma(B) scenes=1of3 open=[Freddy beat?] -->
 ```
 
-On resume, read it first (`plan_check.py <plan> --state` prints the
+On resume, read it first (`gma plan-check <plan> --state` prints the
 well-formed tokens, or `# no prep-state marker`) and pick up from the
-first open item; the default `plan_check.py <plan>` run reports a
+first open item; the default `gma plan-check <plan>` run reports a
 malformed marker as a `prep-state` WARNING.
 
 ## Handoff

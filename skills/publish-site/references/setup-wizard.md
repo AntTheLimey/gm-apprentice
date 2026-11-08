@@ -11,14 +11,6 @@ vault, so an interrupted run can pick up where it left off — and it
 **verifies the deployed site is actually reachable** before declaring
 success.
 
-The build tool is run from the plugin cache. `$TOOL` refers to the
-`gm-publish.js` path set up at the top of the publish walkthrough (see
-`SKILL.md` → "The build tool"):
-
-```text
-$TOOL = <plugin-cache-path>/gm-apprentice/<plugin-version>/tools/publish/bin/gm-publish.js
-```
-
 Do not skip ahead. Some steps depend on answers from earlier ones.
 
 ## Where the answers are kept
@@ -29,7 +21,7 @@ down as the GM gives it, so an interrupted run loses nothing.
 - **An answer that is a setting** (the title, tagline, image, 404
   message, palette, fonts, and at Step 8 the site's host and address)
   is written at once with
-  `node "$TOOL" settings set <name>=<value> --vault <vault>` and read
+  `gma publish settings set <name>=<value> --vault <vault>` and read
   back with `settings get <name> --vault <vault>`. To change a hiding
   list use `settings add` or `remove`: `set` replaces the whole list,
   built-in entries included.
@@ -38,8 +30,8 @@ down as the GM gives it, so an interrupted run loses nothing.
   note:
 
   ```bash
-  node "$TOOL" settings setup-note set last_completed_step=4 host=cloudflare-pages --vault <vault>
-  node "$TOOL" settings setup-note get --vault <vault>
+  gma publish settings setup-note set last_completed_step=4 host=cloudflare-pages --vault <vault>
+  gma publish settings setup-note get --vault <vault>
   ```
 
   `set` keeps the keys already there; `get` prints one `key: value`
@@ -83,7 +75,7 @@ This path is `<vault>` in every command below.
 
 ### Step 2: Resume check
 
-Run `node "$TOOL" settings setup-note get --vault <vault>`. (If the
+Run `gma publish settings setup-note get --vault <vault>`. (If the
 shell cannot find `node`, do Step 3 and come back.)
 
 - **`No set-up note.`** Start fresh: `setup-note set started=<today>
@@ -148,7 +140,7 @@ With the host chosen, run the preflight check (it's host-parameterized,
 so it must run after Step 4):
 
 ```bash
-node "$TOOL" doctor --json --host <cloudflare-pages|github-pages>
+gma publish doctor --json --host <cloudflare-pages|github-pages>
 ```
 
 It prints JSON describing each required tool, for example:
@@ -180,13 +172,13 @@ For each check that is `false`, apply the one-line fix and re-run
      never prints the token back):
 
      ```bash
-     node "$TOOL" doctor --set-cloudflare-creds
+     gma publish doctor --set-cloudflare-creds
      ```
 
      A GM who'd rather the token never passes through the assistant can
      run the exact same command in their own terminal — see
      `cloudflare-pages.md` Step 2 for that one-line variant.
-  3. Re-run `node "$TOOL" doctor --json --host cloudflare-pages` and
+  3. Re-run `gma publish doctor --json --host cloudflare-pages` and
      confirm `wrangler.authed: true` with a non-null `accountId`.
 - **GitHub · `gh.ok: false` or `gh.authed: false`** → offer
   `gh auth login` to install/authenticate the GitHub CLI, **or** record
@@ -225,7 +217,7 @@ If `_Campaign/Campaign Overview.md` exists in the vault, read its
 Write the confirmed name:
 
 ```bash
-node "$TOOL" settings set player_site.title="<title>" --vault <vault>
+gma publish settings set player_site.title="<title>" --vault <vault>
 ```
 
 If it answers that the vault has no settings file yet, run it again
@@ -258,7 +250,7 @@ corrected version if not, then `setup-note set project_name=<name>`
 and write the host, the project and the site's address:
 
 ```bash
-node "$TOOL" settings set player_site.host=cloudflare-pages player_site.cloudflare_project=<project_name> player_site.url=https://<project_name>.pages.dev --vault <vault>
+gma publish settings set player_site.host=cloudflare-pages player_site.cloudflare_project=<project_name> player_site.url=https://<project_name>.pages.dev --vault <vault>
 ```
 
 **GitHub Pages:** ask for username and repo:
@@ -274,7 +266,7 @@ github_username=<user> project_name=<repo>` and write the host and
 the site's address:
 
 ```bash
-node "$TOOL" settings set player_site.host=github-pages player_site.url=https://<github_username>.github.io/<project_name>/ --vault <vault>
+gma publish settings set player_site.host=github-pages player_site.url=https://<github_username>.github.io/<project_name>/ --vault <vault>
 ```
 
 ### Step 9: Choose the site directory
@@ -346,7 +338,7 @@ font pairing based on the genre:
 Write the confirmed values in one command:
 
 ```bash
-node "$TOOL" settings set player_site.theme.palette.primary=#2b1d0e player_site.theme.palette.accent=#8a5a2b player_site.theme.palette.background=#f4ecd8 player_site.theme.fonts.heading="Cormorant Garamond" player_site.theme.fonts.body="EB Garamond" player_site.theme.fonts.source=self-host --vault <vault>
+gma publish settings set player_site.theme.palette.primary=#2b1d0e player_site.theme.palette.accent=#8a5a2b player_site.theme.palette.background=#f4ecd8 player_site.theme.fonts.heading="Cormorant Garamond" player_site.theme.fonts.body="EB Garamond" player_site.theme.fonts.source=self-host --vault <vault>
 ```
 
 Always include `player_site.theme.fonts.source=self-host` when fonts
@@ -362,16 +354,14 @@ to skip theming, set nothing.
 ### Step 13: Scaffold the site
 
 The build tool ships **inside the plugin** — never install it from the
-npm registry. Run its `init` from the plugin cache so the scaffold pins
-itself to the exact version the GM has installed:
+npm registry. Run its `init` through `gma` so the scaffold pins itself to
+the exact version the GM has installed:
 
 ```bash
-node "$TOOL" init "<site_dir>" --vault "<vault>"
+gma publish init "<site_dir>" --vault "<vault>"
 ```
 
-Use the plugin cache path for the GM's OS (e.g.
-`~/.claude/plugins/cache/gm-apprentice` on macOS/Linux). `<site_dir>`
-is the set-up note's `site_dir`. Pass the absolute vault path from
+`<site_dir>` is the set-up note's `site_dir`. Pass the absolute vault path from
 Step 1: `--vault` records it as `vaultPath` in the site file and tells
 `init` which vault's settings to write (without it `init` assumes
 `./vault` inside the site directory). This creates the following
@@ -420,7 +410,7 @@ rare fallback.)
 
 ### Step 14: Confirm the build tool pin
 
-Run `node "$TOOL" update-pin --site <site_dir>` and report what it
+Run `gma publish update-pin --site <site_dir>` and report what it
 prints. It points the site's `package.json` at the installed plugin's
 copy of the tool when it names any other copy. If it prints `could
 not record` or `npm install left`, show the GM those lines and stop.
@@ -431,8 +421,8 @@ The site folder's `vault.config.json` holds only where the vault is,
 and `init` wrote that. Everything else is a setting in the vault:
 
 ```bash
-node "$TOOL" settings check --config <site_dir>/vault.config.json
-node "$TOOL" settings get player_site --config <site_dir>/vault.config.json
+gma publish settings check --config <site_dir>/vault.config.json
+gma publish settings get player_site --config <site_dir>/vault.config.json
 ```
 
 `check` says `Every setting in the file reads cleanly.` or lists the
@@ -506,7 +496,7 @@ Run the content-filtering workflow from `references/content-filtering.md`:
    are excluded, how many need a decision.
 3. Walk through ambiguous files one at a time. For each one, ask the GM:
    publish or exclude?
-4. Record the decisions with `node "$TOOL" manifest apply --config <dir>/vault.config.json --publish <path>... --exclude "<path>=<reason>"...`.
+4. Record the decisions with `gma publish manifest apply --config <dir>/vault.config.json --publish <path>... --exclude "<path>=<reason>"...`.
 
 Tell the GM:
 
@@ -543,7 +533,7 @@ Create the Cloudflare Pages project once, then deploy:
 
 ```bash
 npx wrangler@4 pages project create <project_name> --production-branch=main   # once per site
-node "$TOOL" deploy --verify --config vault.config.json
+gma publish deploy --verify --config vault.config.json
 ```
 
 If `project create` reports "a project with this name already exists,"
@@ -551,7 +541,7 @@ skip it and run `deploy` directly. `deploy --verify` builds, deploys, and
 probes the deployment wrangler printed in one step (exit 1 when it
 cannot tell which build is served) — relay its final line to the GM
 verbatim. If it fails on authentication, re-check the token dance
-(Phase A, Step 5): `node "$TOOL" doctor --set-cloudflare-creds`. A
+(Phase A, Step 5): `gma publish doctor --set-cloudflare-creds`. A
 deploy failure otherwise routes to `troubleshooting.md` (and
 `cloudflare-pages.md` → "Troubleshooting"). Then continue to Phase F.
 
@@ -573,7 +563,7 @@ path:** neither the manual `deploy` push nor the `gh repo create
 point), so run the probe now:
 
 ```bash
-node "$TOOL" deploy --verify --no-build --config vault.config.json
+gma publish deploy --verify --no-build --config vault.config.json
 ```
 
 - **On a 2xx / "live at `<url>`":** tell the GM the site **is live** at
@@ -635,8 +625,8 @@ and each can be set up later:
 (Cloudflare only; `--config <path>` if not `./vault.config.json`):
 
 ```bash
-node "$TOOL" setup-status-bar   # Tier 2a — live status bar
-node "$TOOL" setup-inbox        # Tier 2b — at-table change-request inbox
+gma publish setup-status-bar   # Tier 2a — live status bar
+gma publish setup-inbox        # Tier 2b — at-table change-request inbox
 ```
 
 Each checks first, is safe to re-run, turns its switch on, rebuilds

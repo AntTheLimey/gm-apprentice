@@ -6,7 +6,7 @@ this check fixes each one or asks the GM what the fix should be. Only
 for a vault with a site.
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py" "<vault>" site-faults
+gma vault-check "<vault>" site-faults
 ```
 
 It asks the tool the site builds with and prints one row per finding,
@@ -141,8 +141,7 @@ row: the GM said never. Show the sentence and offer the row's fix. A
 row ending "printed on the index or listing
 page: …" comes from a frontmatter field: reword that field. If the GM
 says the word no longer needs guarding, take it off the list on their
-word: `node "${CLAUDE_PLUGIN_ROOT}/tools/publish/bin/gm-publish.js"
-settings remove player_site.never_show "<word>" --vault "<vault>"`.
+word: `gma publish settings remove player_site.never_show "<word>" --vault "<vault>"`.
 
 ## WITHHELD_IN_PROSE
 
@@ -158,8 +157,7 @@ A name in plain text has no "leave it" answer, and `stays hidden:`
 does not settle this row: the GM rewords the sentence, links the note
 (the neutral word prints), or takes `withheld: true` off. When the fix
 says the name is an everyday word, offer that fix. A rename:
-`python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/relink.py"
-"<vault>" "<note>" "<new name>"` previews it, links included; on a yes,
+`gma relink "<vault>" "<note>" "<new name>"` previews it, links included; on a yes,
 again with `--apply`.
 
 A row that says "in the address of a link" is a Markdown-style link

@@ -2,7 +2,7 @@
 
 Read when source material includes images.
 
-`ingest_images.py VAULT DIR [--execute]` (in `shared/scripts/`)
+`gma ingest-images <vault> <dir> [--execute]`
 converts, matches, files, de-duplicates and links images — run it
 first (dry-run, then `--execute`) and work its report; don't
 redo its steps by hand. It never modifies or deletes the source
@@ -31,9 +31,9 @@ normal flow rather than as a separate pass:
   belongs to.
 
 For `portrait-ambiguous` the image is already filed — apply the
-GM's choice with `stamp_entities.py <vault> FILE --set
+GM's choice with `gma stamp-entities <vault> FILE --set
 portrait="_attachments/..." --write`, then re-run
-`ingest_images.py --execute` to embed the rest automatically.
+`gma ingest-images <vault> <dir> --execute` to embed the rest automatically.
 
 For `UNMATCHED` and `AMBIGUOUS-ENTITY` the image was never
 copied, and setting `portrait` alone doesn't file it.
@@ -42,7 +42,7 @@ copied, and setting `portrait` alone doesn't file it.
 it will match, copy and stamp together. `AMBIGUOUS-ENTITY`:
 renaming can't help (the slug is shared) — copy the image into
 the chosen entity's `_attachments/<type folder>/` by hand, then
-set its `portrait` with `stamp_entities.py`.
+set its `portrait` with `gma stamp-entities`.
 Atmosphere art has no row; file it under `_attachments/documents/`
 by hand.
 

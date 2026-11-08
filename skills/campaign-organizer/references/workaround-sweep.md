@@ -4,7 +4,7 @@ Runs when the update says "No workaround record yet", or when the GM asks.
 A vault whose agents built stand-ins for plugin gaps before workarounds
 were recorded has no record of them, so no update can offer them back when
 their issue ships. The sweep finds them once. `GMA` below is
-`python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/gma.py"`.
+`gma`.
 
 1. **Scan.** Run `GMA workaround scan "<vault>"`. It lists the lines that
    cite a gm-apprentice issue in these places only: the vault's root

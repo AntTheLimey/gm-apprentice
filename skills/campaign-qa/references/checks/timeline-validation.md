@@ -47,7 +47,7 @@ fast travel, adjust thresholds accordingly.
 
 ### Step 4: Date Reference Consistency
 
-Run `vault_check.py <vault-path> timeline --order`: each WARNING
+Run `gma vault-check <vault-path> timeline --order`: each WARNING
 row is a session dated before the one played ahead of it. Ask
 the GM whether it is a flashback or a wrong date.
 

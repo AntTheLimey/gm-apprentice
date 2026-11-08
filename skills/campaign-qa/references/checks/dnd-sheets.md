@@ -3,7 +3,7 @@
 For a D&D 5e (2024) vault only. One call checks every PC's sheet:
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/dnd_sheet.py" --party "<vault>"
+gma dnd-sheet --party "<vault>"
 ```
 
 In a vault that is not D&D 5e (2024) it prints one line saying nothing
@@ -14,4 +14,4 @@ give the `CANTCHECK` count in one line. What each row means, and how a
 `systems/dnd-5e-2024/character-sheet.md`, "Rules checks". A PC with no
 sheet is `pc-body`'s finding, not this check's.
 
-D&D Beyond sync (`dnd_ddb.py`) is not part of QA: it changes notes.
+D&D Beyond sync (`gma dnd-ddb`) is not part of QA: it changes notes.

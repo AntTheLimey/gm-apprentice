@@ -47,7 +47,7 @@ Wrap-Up's reconcile-provenance GM Notes blocks are stubbed to a
 one-line word count each, and the Campaign Overview and the existing
 Session Plan each print as frontmatter plus a heading outline instead
 of their full bodies. Step 6 reads that Plan properly through
-`plan_check.py --inventory/--state` when it needs to.
+`gma plan-check` with `--inventory` or `--state` when it needs to.
 
 `--arcs` replaces the default bundle with each active PC's durable
 arc material instead: `## Background` and `## GM Notes` (the
@@ -1373,7 +1373,7 @@ def build_parser() -> argparse.ArgumentParser:
              "plus a heading outline with word counts. Everything else "
              "unchanged. Drill into a file only where a stub or outline "
              "shows the need — for the Plan that means "
-             "`plan_check.py --inventory/--state`, not a full read.")
+             "`gma plan-check` with `--inventory` or `--state`, not a full read.")
     ap.epilog = 'Example: gma session-context "<vault>" --prep'
     return ap
 
@@ -1550,7 +1550,7 @@ def _main(argv: list[str] | None) -> int:
         chapter)
     if args.brief and plan:
         # Step 6 inspects the existing Plan through
-        # `plan_check.py --inventory/--state`, so the bundle only has to
+        # `gma plan-check` with `--inventory` or `--state`, so the bundle only has to
         # say the Plan exists and what shape it is in — printing it whole
         # made it the third-biggest section of the read-set.
         emit(f"Existing Plan — Session {upcoming} (outline)", plan[0],

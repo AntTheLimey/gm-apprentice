@@ -6,7 +6,7 @@ a log of GM decisions.
 
 ## Creating and counting
 
-Start the file with `vault_check.py <vault-path> report-new --mode
+Start the file with `gma vault-check <vault-path> report-new --mode
 M --scope S` (mode: `canon_audit`, `timeline`, `name_similarity`,
 `clue_redundancy`, `graph_health`, `site_faults`, `full_audit`;
 scope: `full_vault`, `chapter_N` or `custom`). It writes

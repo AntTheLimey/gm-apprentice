@@ -113,7 +113,7 @@ the places a GM already reads:
 | Detector | Where the finding lands |
 |----------|-------------------------|
 | session-wrapup, while processing play notes | The wrap-up's `### Cross-Entity Claims` section (and `### Name Conflicts`, for table-assistant exports only); a claim about another entity that is HELD rather than applied gets an `<!-- UNVERIFIED (S{n}) -->` marker on the file it would have changed |
-| `vault_check.py names` | Duplicate / near-duplicate / sound-alike name pairs |
+| `gma vault-check <vault> names` | Duplicate / near-duplicate / sound-alike name pairs |
 | campaign-qa canon audit (`checks/canon-audit.md`) | Contradictions between files, incrementally since the last audited session |
 | campaign-qa timeline validation | Dated events that cannot both be true |
 
@@ -166,8 +166,8 @@ fact.
 
 ### When Writing Into the Vault
 
-- **Search before creating.** Run `vault_search.py` (or
-  `vault_check.py names`) for the name and its aliases; a near
+- **Search before creating.** Run `gma vault-search` (or
+  `gma vault-check <vault> names`) for the name and its aliases; a near
   miss is a duplicate until the GM says otherwise.
 - **Start as DRAFT.** Every new file and every skill-generated
   fact.

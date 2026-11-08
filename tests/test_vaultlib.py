@@ -583,6 +583,8 @@ class VersionTests(unittest.TestCase):
             scripts.mkdir(parents=True)
             shutil.copy(Path(vl.__file__), scripts / "vaultlib.py")
             shutil.copy(vl.ONTOLOGY_PATH, scripts.parent / vl.ONTOLOGY_PATH.name)
+            shutil.copy(Path(vl.__file__).with_name("install_layout.py"),
+                        scripts / "install_layout.py")
             if stamp is not None:
                 (scripts.parent / "VERSION").write_text(stamp, encoding="utf-8")
             run = subprocess.run(

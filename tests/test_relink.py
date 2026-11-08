@@ -1376,7 +1376,7 @@ class SpellingOwnerTests(unittest.TestCase):
         with self.assertRaises(relink.RelinkError) as cm:
             relink.plan(vault, "NPCs/Hallam.md", "NPCs/Hallam_Reeve.md")
         self.assertIn("no vault.config.json", str(cm.exception))
-        self.assertNotIn("migrate.py", str(cm.exception))
+        self.assertNotIn("gma migrate", str(cm.exception))
         self.assertNotIn("update-pin", str(cm.exception))
 
     def test_a_site_with_no_tool_to_ask_says_why(self):
@@ -1391,7 +1391,7 @@ class SpellingOwnerTests(unittest.TestCase):
         with self.assertRaises(relink.RelinkError) as cm:
             relink.plan(vault, "NPCs/Hallam.md", "NPCs/Hallam_Reeve.md")
         self.assertIn("not installed", str(cm.exception))
-        self.assertIn("migrate.py", str(cm.exception))
+        self.assertIn("gma migrate", str(cm.exception))
 
     def test_a_manifest_without_a_site_does_not_follow_the_link_map(self):
         vault = make_vault(self, {
@@ -1548,7 +1548,7 @@ class SitePublishTests(unittest.TestCase):
         self.assertEqual(
             str(cm.exception),
             "the site's publish tool is older than this rename needs; run the "
-            "migration (`migrate.py <vault> apply`) first")
+            "migration (`gma migrate <vault> apply`) first")
 
 
 class FinalFixTests(unittest.TestCase):

@@ -337,7 +337,7 @@ Once the sheet is built, run the bundled checker to confirm the
 math holds:
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/gurps_check.py" "path/to/PC.md"
+gma gurps-check "path/to/PC.md"
 ```
 
 It re-derives Basic Lift, the encumbrance table, carried load

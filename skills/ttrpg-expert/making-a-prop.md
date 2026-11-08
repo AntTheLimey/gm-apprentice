@@ -26,7 +26,7 @@ beside the note (`--file`; step 5).
 ## 2. File it
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_write.py" \
+gma vault-write \
   <vault> prop-new --chapter "<chapter>" --title "<title>" \
   --style <style> --hand <id> --scene "<scene>"
 ```
@@ -51,8 +51,8 @@ Read `_meta/prop-hands.json` (`{"hands": {"<id>": {"font", "who"}}}`).
 A writer who has a hand reuses it. A new writer gets a new id with
 `--hand-font "<Google Fonts family>"` and `--hand-who "<who wrote it>"`;
 `who` is never published. For a prop already filed, add the hand with
-`vault_write.py <vault> prop-hand` (same flags), then set it on the note
-with `stamp_entities.py <vault> "<note path>" --set prop_hand=<id>`
+`gma vault-write <vault> prop-hand [options]` (same flags), then set it on the note
+with `gma stamp-entities <vault> "<note path>" --set prop_hand=<id>`
 (dry run; `--write`). An id never names a writer the players must not
 learn (`unsigned-1`, not the culprit's name). The same hand on two props
 tells a careful reader one person wrote both.

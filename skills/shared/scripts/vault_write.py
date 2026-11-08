@@ -729,7 +729,7 @@ def split_units(text: str, known: set[str]
 
 
 def gm_region(doc: Doc, rel: str) -> tuple[Head, int, int]:
-    fix = "run vault_check.py wrapup --fix"
+    fix = "run gma vault-check <vault> wrapup --fix"
     if doc.problems:
         raise WriteError(f"{rel}: gm-only fence is unbalanced "
                          f"({doc.problems[0]}) — {fix}")
@@ -2293,7 +2293,7 @@ def _later_entry_heading(doc: Doc, end: int) -> Head | None:
 def cmd_timeline(batch: Batch, args: argparse.Namespace, text: str) -> None:
     rel = batch.resolve(args.file or TIMELINE)
     if not batch.exists(rel):
-        raise WriteError(f"{rel}: no timeline \u2014 vault_scaffold.py creates it")
+        raise WriteError(f"{rel}: no timeline \u2014 gma vault-scaffold creates it")
     entries = split_timeline(text)
     if not entries:
         raise WriteError("nothing on stdin")
@@ -3463,7 +3463,7 @@ def cmd_scene_paused(batch: Batch, args: argparse.Namespace,
                 raise WriteError(
                     f"session {session!r} has no chapter note to file the "
                     f"scene in: pass --chapter, or make the chapter with "
-                    f"vault_write.py chapter-new")
+                    f"gma vault-write <vault> chapter-new")
         assert found is not None
         _crel, chapter_dir, chapter_name = found
         rel = f"{chapter_dir}{chapter_subfolder(args.folder)}/Scenes/{name}.md"

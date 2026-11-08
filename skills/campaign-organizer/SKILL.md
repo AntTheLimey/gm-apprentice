@@ -11,7 +11,9 @@ campaign content as interlinked markdown with Juggl-compatible
 graph metadata. You don't create content — `ttrpg-expert` does.
 For a gap, scaffold a placeholder note and flag it.
 
-Files prefixed `shared/` live at `skills/shared/`.
+`shared/` is the `shared` folder beside this skill's folder (inside
+it, in a zip install). `gma` is `python3 "<shared>/scripts/gma.py"`,
+with the whole path quoted; `gma llms` lists its commands.
 
 ## Companion Skills
 
@@ -50,8 +52,7 @@ The vault's `_meta/` is the source of truth, not this skill.
 | `_meta/vault-notes.md` | The GM's own notes on how this vault is kept; read it if it exists |
 
 The vault's settings (system, campaign name, site) are not a file to
-read: ask `node "${CLAUDE_PLUGIN_ROOT}/tools/publish/bin/gm-publish.js"
-settings get vault --vault <vault>`.
+read: ask `gma publish settings get vault --vault <vault>`.
 
 ### Initialization
 
@@ -60,11 +61,10 @@ On first contact with a vault:
 1. **`_meta/` exists** → read the files in the table; they are the
    live schema. Don't assume defaults. Then run the version check.
 2. **`_meta/` missing** → first-time setup: read
-   `references/vault-setup.md` (it runs `vault_scaffold.py`). No
+   `references/vault-setup.md` (it runs `gma vault-scaffold`). No
    version check.
 
-**Version check** (once per session): run `python3
-"${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py" <vault>
+**Version check** (once per session): run `gma vault-check <vault>
 version`. `OK` → proceed. `SETUP` → run `references/vault-setup.md`. `MISMATCH` → announce the row,
 run the update by `references/migration-procedure.md`, then resume the request.
 `AHEAD` → announce the row, tell the GM to update the plugin, stop.
@@ -87,7 +87,7 @@ Evolved types are identical to built-in ones.
 
 ### Temporal and Entity Fields
 
-A type's fields and values: `schema_rules.py show <type>`. What the
+A type's fields and values: `gma schema-rules show <type>`. What the
 universal and world-evolution fields mean: `shared/entity-schema.md`
 § Universal Fields, § Core Entity Types. Preserve them in every
 Organize or Weave pass.
@@ -132,7 +132,7 @@ wiki-links; entity notes link back to sessions in their
   rules per `references/world-validation.md`. Surface violations
   as advisory prompts (canon / ignore / defer).
 - **Update index:** run
-  `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/index_build.py" <vault>`,
+  `gma index-build <vault>`,
   show the diff summary, then re-run with `--write`. The script is
   idempotent; there is no incremental mode.
 - **Ignore `_inbox/`** (vault-ingest staging): never process,
@@ -194,8 +194,8 @@ wiki-links; entity notes link back to sessions in their
 
 **Use when:** checking graph quality without adding content.
 
-1. **Structural:** run `graph_check.py all`, `links.py` and
-   `vault_check.py all` (see `shared/vault-access.md`; `links.py`
+1. **Structural:** run `gma graph-check <vault> all`, `gma links <vault>` and
+   `gma vault-check <vault> all` (see `shared/vault-access.md`; `gma links`
    sorts the broken links and fixes the misspelt ones on a yes), then
    interpret on top of their orphan/ambiguity/schema output: type
    pair violations.

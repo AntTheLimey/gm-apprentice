@@ -165,7 +165,7 @@ From the **site directory** (the one holding `vault.config.json` and
     npx gm-apprentice-publish flush --dry-run   # preview: same lines, writes nothing
     npx gm-apprentice-publish flush             # write the sheets
 
-(or `node <tool>/bin/gm-publish.js flush`). It prints a per-PC summary
+(or `gma publish flush`). It prints a per-PC summary
 (`✓ Karl Brenner — HP 12→7, FP 11→9`). Report that summary to the GM.
 A D&D line names each cell by its row and shows the whole cell
 (`✓ Mara Voss — HP (Current) 38→31, 1st 0→2, Second Wind 0→1`); a cell

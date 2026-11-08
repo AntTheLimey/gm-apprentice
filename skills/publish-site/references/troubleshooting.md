@@ -8,10 +8,10 @@ and how to fix it.
 Always run the build with a fresh terminal before diagnosing.
 Many "failures" are stale state from a previous aborted run.
 
-**Run `node "$TOOL" doctor --site --config <dir>/vault.config.json` first.**
+**Run `gma publish doctor --site --config <dir>/vault.config.json` first.**
 It audits the vault the way the build sees it and prints a fix for every
-finding. Every `settings` command below is short for `node "$TOOL"
-settings … --config <dir>/vault.config.json`. For one file that should be on the site and is not, `node "$TOOL"
+finding. Every `settings` command below is short for `gma publish
+settings … --config <dir>/vault.config.json`. For one file that should be on the site and is not, `gma publish
 explain "<vault-relative path>"` prints the exact chain the build walked
 and its verdict. The failure modes below name which finding code each
 one is and give the deeper why.
@@ -42,7 +42,7 @@ One of two things:
 
 ### Diagnosis steps
 
-Run `node "$TOOL" doctor --site --config <dir>/vault.config.json`. A
+Run `gma publish doctor --site --config <dir>/vault.config.json`. A
 `PORTRAIT_MISSING` row names the entity and the portrait filename it
 expected inside the attachments folder (`settings get
 vault.attachments`) — the fix line says whether to add the file
@@ -149,14 +149,13 @@ One of:
 
 ### Diagnosis steps
 
-For one entity, run `node "$TOOL" explain "<vault-relative path>"` — it
+For one entity, run `gma publish explain "<vault-relative path>"` — it
 prints the folder's place in the folder map (or lack of one), the file's
-`type:` status, and the build's verdict in one shot. Vault-wide, `node
-"$TOOL" doctor --site --config <dir>/vault.config.json` reports the same
+`type:` status, and the build's verdict in one shot. Vault-wide, `gma publish doctor --site --config <dir>/vault.config.json` reports the same
 causes: `FOLDER_UNMAPPED` (a folder with typed pages inside that will
 not publish), `FILE_UNTYPED` (no `type:` in frontmatter, so the file
 never publishes) and `FILE_UNPARSEABLE` (frontmatter the build cannot
-parse, with the parser's message). `vault_check.py <vault> frontmatter`
+parse, with the parser's message). `gma vault-check <vault> frontmatter`
 lists the unparseable files too.
 
 ### Fix
@@ -166,7 +165,7 @@ lists the unparseable files too.
 with the folder and a URL slug added. For creatures kept in a folder
 called `Bestiary`:
 ```bash
-node "$TOOL" settings set 'player_site.folder_map={<existing entries>,"Bestiary":"creatures"}' --config <dir>/vault.config.json
+gma publish settings set 'player_site.folder_map={<existing entries>,"Bestiary":"creatures"}' --config <dir>/vault.config.json
 ```
 
 **Folder hidden (`player_site.hide.folders`):**
@@ -205,7 +204,7 @@ frontmatter exactly, the link will not resolve.
 
 ### Diagnosis steps
 
-Run `node "$TOOL" doctor --site --config <dir>/vault.config.json`. A
+Run `gma publish doctor --site --config <dir>/vault.config.json`. A
 `LINK_UNRESOLVED` row names the page and the `[[target]]` that matches no
 note — its fix line already suggests the nearest real page
 name when one is close enough to be the likely typo.
@@ -224,7 +223,7 @@ target file's filename exactly.
 
 **Target file is known by another name:**
 Rename the target file to match what the links use (with
-`python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/relink.py" <vault> <old path> <new name>`
+`gma relink <vault> <old path> <new name>`
 for a dry run, then again with `--apply` after the GM's yes, so no link
 breaks), or add the alternate spelling to the target file's `aliases` list:
 ```yaml
@@ -236,7 +235,7 @@ aliases:
 **File has been renamed:**
 If the vault file was renamed without its links, rename it back, then
 rename it with
-`python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/relink.py" <vault> <old path> <new name>`
+`gma relink <vault> <old path> <new name>`
 (a dry run), then again with `--apply` after the GM's yes. It rewrites
 every link to it.
 
@@ -326,9 +325,9 @@ that warning, this is the failure — follow the fix below.
 
 ### Diagnosis steps
 
-Run `node "$TOOL" doctor --site --config <dir>/vault.config.json`. A
+Run `gma publish doctor --site --config <dir>/vault.config.json`. A
 `VERSION_DRIFT` row names the version the site is pinned to, the newest
-version installed in the plugin cache, and the fix (`gm-publish
+version installed in the plugin cache, and the fix (`gma publish
 update-pin`).
 
 ### Fix
@@ -387,7 +386,7 @@ note, with a status other than `planned` — are published too. Two common break
 
 ### Diagnosis steps
 
-Run `node "$TOOL" doctor --site --config <dir>/vault.config.json`. A
+Run `gma publish doctor --site --config <dir>/vault.config.json`. A
 `RECAP_INCOMPLETE` row names the wrap-up file and which of "a published
 session with status played, wrap-up or reviewed" or "a published chapter
 page" is

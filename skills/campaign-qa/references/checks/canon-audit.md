@@ -10,12 +10,12 @@ what changed plus its graph neighborhood instead of the whole
 vault:
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py" \
+gma vault-check \
   <vault-path> changed --since <last-audit-session + 1>
 ```
 
 Audit the listed files, plus each one's backlinks
-(`graph_check.py backlinks`) — contradictions live where
+(`gma graph-check <vault> backlinks <note-name>`) — contradictions live where
 changes happened. Record the audited session number in the QA
 report so the next run knows its starting point. Run the full
 vault sweep periodically (e.g. every few chapters) or when no

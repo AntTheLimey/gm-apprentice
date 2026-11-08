@@ -5,16 +5,16 @@ the entity relationship graph in the vault.
 
 **Preferred procedure:** run the bundled utilities once and
 work from their output instead of hand-building checks by eye
-— `graph_check.py` for the link graph, `vault_check.py` for
+— `gma graph-check` for the link graph, `gma vault-check` for
 schema, GM-leak, and relationship checks:
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/graph_check.py" \
+gma graph-check \
   <vault-path> all
 ```
 
 It reports orphans, dead ends, and
-ambiguous bare links in one pass (`graph_check.py --help`
+ambiguous bare links in one pass (`gma graph-check --help`
 for `--folder` and `--exclude`).
 
 ### Step 1: Enumerate Entities and Links
@@ -28,10 +28,10 @@ Read all entity files in scope. For each, extract:
 ### Step 2: Structural Checks
 
 **Orphaned entities:** Entities with zero inbound relationships
-(what `graph_check.py orphans` reports). These are disconnected
+(what `gma graph-check <vault> orphans` reports). These are disconnected
 from the graph and probably forgotten.
 
-**Broken links:** run `links.py <vault-path>`. It lists every link
+**Broken links:** run `gma links <vault-path>`. It lists every link
 with no note behind it, already sorted, and skips old QA reports and
 archives. Work from its rows:
 
@@ -51,17 +51,17 @@ archives. Work from its rows:
   link and ask whether the GM will restore the file or wants the link
   removed, then edit the note yourself.
 
-To fix, run `links.py <vault-path> retarget "<name>" "<note>"` (add
+To fix, run `gma links <vault-path> retarget "<name>" "<note>"` (add
 `--keep-text` when the words on the page should stay as written and
 only the link should change, as with a variant spelling in a
 player-facing recap). One run covers every spelling shown in the row.
 Read the preview, then run it again with `--write`. To remove a
 link the GM does not want (a rules term, a passing mention), run
-`links.py <vault-path> unlink "<name>" ...` the same way. An
+`gma links <vault-path> unlink "<name>" ...` the same way. An
 unwritten name that deserves a note is created with the
 organizer's entity workflow, not here.
 
-**Ambiguous links:** what `graph_check.py ambiguous` reports —
+**Ambiguous links:** what `gma graph-check <vault> ambiguous` reports —
 wiki-links using a bare basename that matches more than one
 file in the vault. Obsidian resolves these silently to one of
 the matches — which one is unspecified and can change as files
@@ -71,12 +71,11 @@ still on the pre-migration `Session_NN_Wrap_Up.md` pattern (no
 chapter number) after a second chapter reused a session
 number.
 
-**Index drift:** what `vault_check.py index` reports — files
+**Index drift:** what `gma vault-check <vault> index` reports — files
 not referenced from `_meta/index.md`, and index entries whose
-target file no longer exists. The fix is `index_build.py
-<vault> --write`, never a hand edit to `_meta/index.md`.
+target file no longer exists. The fix is `gma index-build <vault> --write`, never a hand edit to `_meta/index.md`.
 
-**Un-fenced GM-only content:** `vault_check.py gm-leak` produces
+**Un-fenced GM-only content:** `gma vault-check <vault> gm-leak` produces
 the findings — ERROR for an orphan `<!-- /gm-only -->` closer
 (everything above it publishes); WARNING for an unclosed opener
 or a published heading whose title contains an exclude-list
@@ -90,7 +89,7 @@ hidden however it is dressed (`### **GM Notes**`, `### GM Notes:`), so it is
 not a finding.
 The script skips notes the site does not publish, so it only flags
 content that would actually reach the site. A keyword heading the GM
-says is for players: run `vault_check.py <vault> gm-leak --settle
+says is for players: run `gma vault-check <vault> gm-leak --settle
 "<note:line from the row>"`, and it is not flagged again.
 That settles every heading with the same text in that note.
 Severity: Critical. With no site the script says so in one INFO row.
@@ -100,11 +99,11 @@ Severity: Critical. With no site the script says so in one INFO row.
 **Preferred procedure:**
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py" \
+gma vault-check \
   <vault-path> frontmatter
 ```
 
-`vault_check.py frontmatter` checks required fields, enum
+`gma vault-check <vault> frontmatter` checks required fields, enum
 values, legacy field names, and unquoted frontmatter links in
 one pass. On a vault that publishes it also asks the publish
 tool which notes the site's build cannot parse: an ERROR row,
@@ -120,7 +119,7 @@ and interpret its findings against it:
 
 ### Step 4: Character Story Validation
 
-Run `vault_check.py <vault-path> stories`. Each WARNING row is a
+Run `gma vault-check <vault-path> stories`. Each WARNING row is a
 living PC with no story file (create it from
 `shared/templates/character-story.md`), or a story file more than
 one Wrap-Up behind (the row names the fix). A story whose
@@ -133,7 +132,7 @@ Every relationship rule is a check in the publish tool, so never
 read ties by eye for one. Run:
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py" \
+gma vault-check \
   <vault-path> relationships
 ```
 
@@ -157,7 +156,7 @@ Then make the repairs yourself:
 1. Run the fix preview. It changes nothing:
 
    ```bash
-   node "${CLAUDE_PLUGIN_ROOT}/tools/publish/bin/gm-publish.js" \
+   gma publish \
      relationships fix --vault <vault-path> --json
    ```
 
@@ -172,7 +171,7 @@ Then make the repairs yourself:
    ERROR rows first, then WARNING:
 
    ```bash
-   node "${CLAUDE_PLUGIN_ROOT}/tools/publish/bin/gm-publish.js" \
+   gma publish \
      relationships check --vault <vault-path> --json
    ```
 
@@ -204,13 +203,13 @@ For each issue:
    violations; Info for quality improvements)
 3. Propose a fix:
    - For orphans: suggest connections or mark for retirement
-   - For broken links: the `links.py` fix for the row's kind (see
+   - For broken links: the `gma links` fix for the row's kind (see
      Step 2); an unwritten name is a to-do, not a finding
    - For ambiguous links: identify which file the GM meant from
      context, then either fix that one link, or — if the
      collision is structural (e.g., unmigrated Wrap-Up
      filenames) — rename the colliding
-     files with `relink.py`, which rewrites every reference
+     files with `gma relink`, which rewrites every reference
      vault-wide; a link it cannot place is listed as UNSURE for
      the GM to settle
    - For schema violations: suggest the missing fields

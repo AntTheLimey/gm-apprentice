@@ -808,7 +808,7 @@ def _run_prop_move(vault: Path, args: list[str]) -> tuple[int, str, str]:
             capture_output=True, text=True, encoding="utf-8", errors="replace",
             check=False)
     except OSError as e:
-        raise StepFailed(f"prop_move.py could not run ({e.__class__.__name__})") from e
+        raise StepFailed(f"gma prop-move could not run ({e.__class__.__name__})") from e
     return proc.returncode, proc.stdout, proc.stderr
 
 
@@ -819,7 +819,7 @@ def _move_failure(code: int, out: str, err: str) -> str:
     errors = [c[2] for c in (row.split("\t", 2) for row in out.splitlines())
               if len(c) == 3 and c[0] == "ERROR"]
     lines = [x.strip() for x in (out + "\n" + err).splitlines() if x.strip()]
-    return "; ".join(errors) or (lines[-1] if lines else f"prop_move.py exited {code}")
+    return "; ".join(errors) or (lines[-1] if lines else f"gma prop-move exited {code}")
 
 
 def _prop_steps(steps: list[Any]) -> list[str]:
@@ -894,7 +894,7 @@ def find_props_move(vault: Path) -> list[Item]:
         lines.append(f"build step {name} is present")
     if not lines:
         return []
-    lines.append("run prop_move.py VAULT plan to see every page compared "
+    lines.append("run gma prop-move VAULT plan to see every page compared "
                  "before choosing")
 
     def apply(value: str | None) -> list[str]:

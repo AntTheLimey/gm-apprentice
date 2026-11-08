@@ -416,7 +416,7 @@ def test_missing_subsection_is_check():
     checks = [r for r in plan.rows if r[0] == "CHECK"]
     assert len(checks) == len(ds.PARTS) and not any(r[0] == "ERROR" for r in plan.rows)
     assert ("CHECK", "Background / Backstory",
-            "the note has no ### Backstory under Background; run the vault upgrade (migrate.py), "
+            "the note has no ### Backstory under Background; run the vault upgrade (gma migrate), "
             "nothing was written") in plan.rows
     assert plan.remember == {}
 
@@ -559,9 +559,9 @@ def test_missing_place_wording():
     no_bonds = no_facts.replace("- **Bonds:** —\n", "")
     plan = synced(no_bonds, BACKGROUND)
     assert ("CHECK", "Background / Appearance / Facts", "the note has no facts line under Appearance; "
-            "run the vault upgrade (migrate.py), nothing was written") in plan.rows
+            "run the vault upgrade (gma migrate), nothing was written") in plan.rows
     assert ("CHECK", "Background / Personality / Bonds", "the note has no **Bonds:** bullet under Personality; "
-            "run the vault upgrade (migrate.py), nothing was written") in plan.rows
+            "run the vault upgrade (gma migrate), nothing was written") in plan.rows
 
 
 def test_a_note_synced_before_dash_escapes_is_brought_up_to_date_once():

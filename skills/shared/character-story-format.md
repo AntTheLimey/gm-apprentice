@@ -29,7 +29,7 @@ it.
 ## Narrative Voice by Campaign Genre
 
 Tell the entry in this character's voice and the campaign's, from
-`vault_check.py <vault> voices`. The table below, set by the
+`gma vault-check <vault> voices`. The table below, set by the
 campaign's genre/tone (campaign overview or world file) and not the
 game system, is the fallback where a voice is `(none)`, the whole
 voice on `# off: vault.voices`, and a starting point for drafting
@@ -65,7 +65,7 @@ Write the entries, then place them all in one call, on stdin
 (`<<'EOF'`), each under a `# [[PC Name]]` line:
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_write.py" \
+gma vault-write \
   <vault> story --wrapup "<wrap-up>" --as-of "<asOfSession value>" \
   --date YYYY-MM-DD --write
 ```

@@ -322,9 +322,9 @@ describe('NAMED_NO_PAGE with the rest of the audit', () => {
   });
 });
 
-// The fix that turns links into words gives the whole links.py command, so the row stands alone (#570 follow-up).
+// The fix that turns links into words gives the whole gma links command, so the row stands alone (#570 follow-up).
 describe('NAMED_NO_PAGE: the unlink command in the fix', () => {
-  const LINKS = 'python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/links.py" "<vault>" unlink';
+  const LINKS = 'gma links "<vault>" unlink';
   it('a working note: the whole command, a preview first', async () => {
     const files = {
       'Characters/Mara_Quill.md': npc('M', 'See [[Flags_Tracker]].'),
@@ -332,7 +332,7 @@ describe('NAMED_NO_PAGE: the unlink command in the fix', () => {
     };
     const [f] = await faults(files, {}, 'NAMED_NO_PAGE');
     assert.ok(f.fix.includes(`${LINKS} "Characters/Flags_Tracker" --in "<page>"`), f.fix);
-    assert.match(f.fix, /prints a preview; run it again with --write; CLAUDE_PLUGIN_ROOT is the gm-apprentice plugin's folder/);
+    assert.match(f.fix, /prints a preview; run it again with --write/);
   });
   it('a withheld note: the whole command, with --as', async () => {
     const files = {

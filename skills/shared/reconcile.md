@@ -10,17 +10,14 @@ scan's `skip:` line gives a reason.
 You need the Wrap-Up path, its related entity files and timeline
 entries, and the session index.
 
-All stamps below use `python3
-"${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/stamp_entities.py"`:
+All stamps below use `gma stamp-entities`:
 dry-run first, `--write` on GM confirmation (see
 `shared/vault-access.md`).
 
 ## Quick Scan — Fast Path
 
-Session prep's `session_context.py --prep` output holds the scan;
-otherwise run `python3
-"${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/reconcile_scan.py"
-<vault> "<wrap-up>"` (reads only). The rule its `quick path:` line
+Session prep's `gma session-context <vault> --prep` output holds the scan;
+otherwise run `gma reconcile-scan <vault> "<wrap-up>"` (reads only). The rule its `quick path:` line
 applies: no UNVERIFIED marker (bar those tagged with another
 session), no Plan file, and no DRAFT created this
 session that contradicts AUTHORITATIVE canon (that last is yours to
@@ -33,10 +30,10 @@ If it passes, offer:
 > by name} to AUTHORITATIVE? (y/n)"
 
 On yes:
-- `stamp_entities.py <vault> "<wrap-up>" --promote --reconciled YYYY-MM-DD`
-- `stamp_entities.py <vault> <entity files> --promote` — the
+- `gma stamp-entities <vault> "<wrap-up>" --promote --reconciled YYYY-MM-DD`
+- `gma stamp-entities <vault> <entity files> --promote` — the
   scan's DRAFTs created this session, never its older ones
-- `stamp_entities.py <vault> "<index>" --set status=reviewed`
+- `gma stamp-entities <vault> "<index>" --set status=reviewed`
 - Do step 6.1, then go to step 6.5.
 
 Otherwise run the full procedure.
@@ -112,9 +109,9 @@ prep.
 ### 6. Promote canon status
 
 On GM approval:
-1. `stamp_entities.py <vault> "<wrap-up>" --promote --reconciled YYYY-MM-DD`
-2. `stamp_entities.py <vault> "<index>" --set status=reviewed`
-3. `stamp_entities.py <vault> <entity files> --promote` for confirmed
+1. `gma stamp-entities <vault> "<wrap-up>" --promote --reconciled YYYY-MM-DD`
+2. `gma stamp-entities <vault> "<index>" --set status=reviewed`
+3. `gma stamp-entities <vault> <entity files> --promote` for confirmed
    content. First, if `_World/` exists, check each entity against its
    rules; on a violation ask ("This NPC is 400 years old, but world
    rules say humans live 60-85 years. Is that intentional?"):
@@ -122,7 +119,7 @@ On GM approval:
    - **Correct it** → update the entity, then promote; a replaced
      GM ruling is struck through and marked `superseded YYYY-MM-DD`
    - **Defer** → promote and set `needs_review: true`
-4. `stamp_entities.py <vault> "<loser>" --supersede-by "[[Winner]]"`
+4. `gma stamp-entities <vault> "<loser>" --supersede-by "[[Winner]]"`
    for contradicted content
 
 Do the bookkeeping now rather than leaving the GM a list. Hand off to
@@ -130,17 +127,14 @@ campaign-organizer if entity filing is needed.
 
 ### 6.1. Publish registration (conditional)
 
-Only if the vault has a publish list (`node "$TOOL" manifest list --json
---vault <vault>` says `listed: true`) and `node "$TOOL" settings
-get player_site.publish player_site.folder --vault <vault>` gives
-`true` and a folder; otherwise skip. `$TOOL` is as in
-`publish-site/SKILL.md`; a relative folder is relative to the
+Only if the vault has a publish list (`gma publish manifest list --json --vault <vault>` says `listed: true`) and `gma publish settings get player_site.publish player_site.folder --vault <vault>` gives
+`true` and a folder; otherwise skip. A relative folder is relative to the
 vault. A played session left in the publish list's `needs_decision`
 never reaches the player site (#277). Run it yourself,
 unconditionally, and report the paths it ticked:
 
 ```bash
-node "$TOOL" manifest publish-played --config <site_dir>/vault.config.json
+gma publish manifest publish-played --config <site_dir>/vault.config.json
 ```
 
 The verb registers a reviewed session index only together with a Wrap-Up that is linked to
@@ -167,10 +161,10 @@ Declined → step 7. Accepted → follow `ttrpg-expert/world-evolution.md`
 (skip its Storage Checkpoint): thread states, faction turns,
 NPC reactions, consequences, foreshadowing, discovery state, world
 state — presented together, GM approves each item. Then:
-- `stamp_entities.py <vault> "<index>" --set world_evolved="Session_NN"`
-- `stamp_entities.py <vault> <new entity files> --set source=world-evolution --session S --date D`
+- `gma stamp-entities <vault> "<index>" --set world_evolved="Session_NN"`
+- `gma stamp-entities <vault> <new entity files> --set source=world-evolution --session S --date D`
   on entities this pass created
-- `stamp_entities.py <vault> <changed entity files> --session S --date D`
+- `gma stamp-entities <vault> <changed entity files> --session S --date D`
   on entities it updated (their `source` stays); S is the session being
   reconciled, in the vault's asOfSession shape (`9` or `"Session 9"`)
 
@@ -194,15 +188,13 @@ Session-prep reads this instead of re-gathering context.
 
 **Where:** always in the Wrap-Up, under its `## GM Notes` — every
 item is Keeper-facing. Pass the section, heading first, on stdin
-(`<<'EOF'`) to `python3
-"${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_write.py" <vault>
-wrapup-add "<wrap-up>" --write`; a later reconcile adds its
+(`<<'EOF'`) to `gma vault-write <vault> wrapup-add "<wrap-up>" --write`; a later reconcile adds its
 decisions to the section with `--append`. Never a top-level
 `## Reconciliation Context`, and never a `player_site.hide.sections` entry
 instead. A Plan file may get a one-line pointer (`See Wrap-Up for
 reconciliation context`).
 
-Then run `vault_check.py <vault> wrapup --file "<wrap-up>"`. A missing
+Then run `gma vault-check <vault> wrapup --file "<wrap-up>"`. A missing
 or wrong-case path exits 2 with a stderr error; the `no wrap-up with
 that path` INFO row (exit 0) now means only that the path resolved but
 the file's `type:` isn't a wrap-up. Confirmation is no row naming the

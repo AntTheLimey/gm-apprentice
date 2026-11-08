@@ -9,8 +9,7 @@ the skill root, as in SKILL.md.
 ### Step 1: Synthesize Adventure Brief
 
 Fields:
-`python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/schema_rules.py"
-show adventure-brief`.
+`gma schema-rules show adventure-brief`.
 Assemble the adventure index and topic files into the brief
 using the template below. Apply the block/seam test: where a
 topic file already holds finished prose, lift it verbatim;
@@ -72,7 +71,7 @@ For each approved plan, dry-run, show the GM the rows, then
 `--write`:
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_write.py" \
+gma vault-write \
   <vault> promote-plan "_midwife/{adventure}/{file}.md" \
   --to "Chapters/{chapter}/Planning/{Plan_Name}.md" \
   --plan-type <type> [--leads-to "<Plan_Name>"]...
@@ -116,7 +115,7 @@ Run the preview, show the GM what it will create and ask: "Ready
 to set up the vault for this campaign?"
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_scaffold.py" \
+gma vault-scaffold \
   <vault> --system <id> --name "<campaign name>"
 ```
 

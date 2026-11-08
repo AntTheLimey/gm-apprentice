@@ -17,12 +17,14 @@ from __future__ import annotations
 
 import argparse
 import importlib
+import os
 import subprocess
 import sys
 from pathlib import Path
 from typing import NamedTuple
 
 import vaultlib
+from install_layout import MISSING_TOOL
 
 
 class Command(NamedTuple):
@@ -116,7 +118,8 @@ def _llms(args: list[str]) -> int:
                   file=sys.stderr)
             return 2
         path = PAGES / "llms" / f"{page}.md"
-    text = path.read_text(encoding="utf-8")
+    text = path.read_text(encoding="utf-8").replace(
+        "{gma}", f'python3 "{Path(__file__).resolve().as_posix()}"')
     enc = getattr(sys.stdout, "encoding", None) or "utf-8"
     sys.stdout.write(text.encode(enc, "replace").decode(enc))
     return 0
@@ -160,12 +163,20 @@ def full_tree() -> argparse.ArgumentParser:
 
 
 def _publish(args: list[str]) -> int:
-    cmd = ["node", str(vaultlib.PUBLISH_TOOL), *args]
+    tool = vaultlib.PUBLISH_TOOL
+    if tool is None:
+        print("gma: " + MISSING_TOOL, file=sys.stderr)
+        return 1
+    cmd = ["node", str(tool), *args]
     try:
+        if os.name != "nt":
+            # Replace this process, so a killed background `serve` takes
+            # Node with it instead of leaving it orphaned.
+            os.execvp("node", cmd)
         code = subprocess.call(cmd)
         # A signal death comes back negative; exit codes are 0..255.
         return code if 0 <= code <= 255 else 1
-    except FileNotFoundError:
+    except OSError:
         print("gma: publish needs node on the PATH", file=sys.stderr)
         return 1
 

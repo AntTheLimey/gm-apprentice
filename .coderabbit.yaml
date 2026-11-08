@@ -10,3 +10,4 @@ reviews:
     - "!docs/site-settings.md"
     - "!tools/publish/package-lock.json"
     - "!.claude-plugin/plugin.json"
+    - "!skills/shared/gma/llms/**"

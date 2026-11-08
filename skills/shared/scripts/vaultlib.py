@@ -41,6 +41,8 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Iterable, Iterator, Literal
 
+from install_layout import LAYOUT, MISSING_TOOL
+
 # --------------------------------------------------------------------------
 # Vault walking
 # --------------------------------------------------------------------------
@@ -881,7 +883,7 @@ def wrapup_filename(rel: str, fm: dict[str, Any]) -> str | None:
 # systems, type folders); schema_rules reads the rest of it. Resolved from
 # this file's own location: the lists travel with the plugin, never with
 # the vault under audit.
-ONTOLOGY_PATH = Path(__file__).resolve().parent.parent / "gm-apprentice-ontology.json"
+ONTOLOGY_PATH = LAYOUT.shared / "gm-apprentice-ontology.json"
 
 
 @lru_cache(maxsize=1)
@@ -1170,10 +1172,19 @@ def markers_in(line: str) -> list[tuple[int, str, bool]]:
 
 # The publish tool, beside skills/ in both the repo and the installed plugin
 # (<plugin>/skills/shared/scripts/vaultlib.py, <plugin>/tools/publish/...).
-PUBLISH_TOOL = (Path(__file__).resolve().parents[3]
-                / "tools" / "publish" / "bin" / "gm-publish.js")
+PUBLISH_TOOL: Path | None = LAYOUT.publish_tool
 # How long one question may take before the tool is given up on.
 PUBLISH_LINES_TIMEOUT = 120
+
+
+def plugin_tool_problem(tool: Path | None) -> str | None:
+    """Why the publish tool at `tool` cannot be run, or None when it can.
+    Callers pass their own module's PUBLISH_TOOL, so a test can patch it."""
+    if tool is None:
+        return MISSING_TOOL
+    if not tool.is_file():
+        return f"the publish tool is not at {tool.as_posix()}"
+    return None
 
 
 class PublishToolUnavailable(Exception):
@@ -1223,8 +1234,10 @@ def _stop_process(proc: subprocess.Popen[str]) -> None:
             proc.stdout.close()
 
 
-def _tool_stamp(tool: Path) -> tuple[str, int, int] | None:
+def _tool_stamp(tool: Path | None) -> tuple[str, int, int] | None:
     """Which tool file a path is now: a repin swaps it under the same path."""
+    if tool is None:
+        return None
     try:
         st = tool.stat()
         return (str(tool.resolve()), st.st_mtime_ns, st.st_size)
@@ -1235,7 +1248,7 @@ def _tool_stamp(tool: Path) -> tuple[str, int, int] | None:
 class PublishLines:
     """A `gm-publish lines` process: one JSON question per line."""
 
-    def __init__(self, tool: Path = PUBLISH_TOOL) -> None:
+    def __init__(self, tool: Path | None = PUBLISH_TOOL) -> None:
         self.tool = tool
         self._proc: subprocess.Popen[str] | None = None
         self._stamp: tuple[str, int, int] | None = None
@@ -1256,6 +1269,8 @@ class PublishLines:
         node = shutil.which("node")
         if not node:
             raise PublishToolUnavailable("node is not on PATH")
+        if self.tool is None:
+            raise PublishToolUnavailable(MISSING_TOOL)
         if not self.tool.is_file():
             raise PublishToolUnavailable(
                 f"the publish tool is not at {self.tool.as_posix()}")
@@ -1286,6 +1301,8 @@ class PublishLines:
         node = shutil.which("node")
         if not node:
             raise PublishToolUnavailable("node is not on PATH")
+        if self.tool is None:
+            raise PublishToolUnavailable(MISSING_TOOL)
         if not self.tool.is_file():
             raise PublishToolUnavailable(
                 f"the publish tool is not at {self.tool.as_posix()}")
@@ -1447,7 +1464,7 @@ def run_tool(cmd: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
 # check that knows the vault's site points it at the tool that site builds
 # with (`use_publish_tool`).
 PUBLISH_LINES = PublishLines()
-_LINES_BY_TOOL: dict[Path, PublishLines] = {PUBLISH_TOOL: PUBLISH_LINES}
+_LINES_BY_TOOL: dict[Path | None, PublishLines] = {PUBLISH_TOOL: PUBLISH_LINES}
 
 
 def use_publish_tool(tool: Path) -> None:
@@ -1728,6 +1745,8 @@ def _run_settings(args: list[str], *, refusable: bool = False,
     node = shutil.which("node")
     if not node:
         raise fail("node is not on PATH")
+    if PUBLISH_TOOL is None:
+        raise fail(MISSING_TOOL)
     if not PUBLISH_TOOL.is_file():
         raise fail(f"the publish tool is not at {PUBLISH_TOOL.as_posix()}")
     try:
@@ -1783,6 +1802,8 @@ def run_relationships(vault: Path, args: list[str]) -> Any:
     node = shutil.which("node")
     if not node:
         raise fail("node is not on PATH")
+    if PUBLISH_TOOL is None:
+        raise fail(MISSING_TOOL)
     if not PUBLISH_TOOL.is_file():
         raise fail(f"the publish tool is not at {PUBLISH_TOOL.as_posix()}")
     try:
@@ -2004,8 +2025,9 @@ def settings_default(name: str) -> Any:
     return copy.deepcopy(_DEFAULTS_CACHE[name])
 
 
-SETTINGS_SCHEMA = (Path(__file__).resolve().parents[3] / "tools" / "publish"
-                   / "schema" / "vault-config.schema.json")
+SETTINGS_SCHEMA: Path | None = (
+    LAYOUT.root / "tools" / "publish" / "schema" / "vault-config.schema.json"
+    if LAYOUT.root is not None else None)
 _NO_NODE_NOTICE = ("Node was not found, so this vault's own settings were not "
                    "read; the built-in values were used.")
 _NO_NODE_NOTICE_GIVEN = False
@@ -2015,6 +2037,9 @@ _FELL_BACK_SAID: set[tuple[Path, str]] = set()   # bad values already said
 def _schema_default(name: str) -> Any:
     """The `default` of setting `name` in the generated schema file, read
     with `json`. KeyError when the schema gives the name none."""
+    if SETTINGS_SCHEMA is None:
+        raise SettingsUnavailable(
+            "could not read the vault's settings: " + MISSING_TOOL)
     try:
         node = json.loads(SETTINGS_SCHEMA.read_text(encoding="utf-8"))
     except (OSError, ValueError) as e:
@@ -2934,20 +2959,21 @@ def plugin_version() -> tuple[str, str] | None:
     quietly. A manifest that exists but cannot be parsed warns on stderr
     first: that is a broken install, not a zip.
     """
-    here = Path(__file__).resolve()
-    manifest = here.parents[3] / ".claude-plugin" / "plugin.json"
+    manifest = (LAYOUT.root / ".claude-plugin" / "plugin.json"
+                if LAYOUT.root is not None else None)
     try:
-        version = json.loads(manifest.read_text(encoding="utf-8"))["version"]
-        if version:
-            return str(version), ".claude-plugin/plugin.json"
-        print(f"warning: {manifest} has an empty version — falling back to "
-              f"shared/VERSION", file=sys.stderr)
+        if manifest is not None:
+            version = json.loads(manifest.read_text(encoding="utf-8"))["version"]
+            if version:
+                return str(version), ".claude-plugin/plugin.json"
+            print(f"warning: {manifest} has an empty version — falling back "
+                  f"to shared/VERSION", file=sys.stderr)
     except FileNotFoundError:
         pass
     except (OSError, ValueError, KeyError, TypeError) as e:
         print(f"warning: unusable {manifest} ({e.__class__.__name__}: {e}) "
               f"— falling back to shared/VERSION", file=sys.stderr)
-    stamp = here.parents[1] / "VERSION"
+    stamp = LAYOUT.shared / "VERSION"
     try:
         current = stamp.read_text(encoding="utf-8").strip()
     except FileNotFoundError:

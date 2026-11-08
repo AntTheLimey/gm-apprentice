@@ -16,7 +16,7 @@ import unittest
 from pathlib import Path
 
 SKILLS = Path(__file__).resolve().parent.parent / "skills"
-SCRIPTS = 'python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/'
+SCRIPTS = "gma "
 
 
 def read(rel):
@@ -43,8 +43,8 @@ class WrapupStep4dTests(unittest.TestCase):
                         at("### 5. Remaining GM Notes"))
 
     def test_both_scripts_by_full_command_line(self):
-        for script in ("reveal_scan.py", "reveal.py"):
-            self.assertRegex(self.step, re.escape(SCRIPTS + script + '"')
+        for script in ("reveal-scan", "reveal"):
+            self.assertRegex(self.step, re.escape(SCRIPTS + script)
                              + r"\s*\\?\s*<vault>")
         for flag in ("--session", "--publish", "--released", "--write"):
             self.assertIn(flag, self.step)
@@ -117,8 +117,8 @@ class ReconcileSpoilerPointerTests(unittest.TestCase):
 class VaultAccessRowsTests(unittest.TestCase):
     def test_both_scripts_listed(self):
         text = read("shared/vault-access.md")
-        self.assertIn("`reveal_scan.py VAULT", text)
-        self.assertIn("`reveal.py VAULT", text)
+        self.assertIn("`gma reveal-scan VAULT", text)
+        self.assertIn("`gma reveal VAULT", text)
 
 
 if __name__ == "__main__":

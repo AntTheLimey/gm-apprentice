@@ -111,7 +111,7 @@ secret in the open:
    with the text it wraps; no pair may open above `## GM Notes` and
    close below it. Make the frontmatter changes.
 2. Turn the telling links into words:
-   `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/links.py" "<vault>" unlink "<note name>" --in "<page>"`
+   `gma links "<vault>" unlink "<note name>" --in "<page>"`
    previews every link to the note on that page, one `WOULD-CHANGE`
    row each, ending with its number (`#2`). Where two notes share the
    name, give the note's vault path as the name; a link that gives no
@@ -127,11 +127,11 @@ secret in the open:
    edit before going on.
 4. Give it a page:
    `SITE manifest apply --publish "<note>"`.
-5. Confirm: `vault_check.py "<vault>" site-faults --file "<note>"`
+5. Confirm: `gma vault-check "<vault>" site-faults --file "<note>"`
    prints no row for it, and `SITE explain "<note>"` says
    `VERDICT: publishes at …`. If the verdict names another rule, tell
    the GM what still holds the note back.
-6. Run `vault_check.py "<vault>" gm-leak --folder "<the note's folder>"`
+6. Run `gma vault-check "<vault>" gm-leak --folder "<the note's folder>"`
    and fix any `ERROR` or `WARNING` row that names this note (an
    unbalanced fence the note already had now matters). `INFO` rows,
    such as a count of notes skipped, are not faults.
@@ -181,6 +181,6 @@ Not something in the world, so never a page. Offer:
 The site cannot tell what the note is. Read it and propose a `type`
 from `_meta/entity-types.md`. On yes, write the type with that type's
 required fields (`shared/templates/`), run
-`vault_check.py "<vault>" frontmatter --folder "<its folder>"` and fix
+`gma vault-check "<vault>" frontmatter --folder "<its folder>"` and fix
 the ERROR rows for this note. Then run `site-faults --file "<note>"`:
 the row now reads entity or working, and is handled as above.

@@ -58,7 +58,7 @@ PC = Entry("pc", "PC", ["pc"], notes={
                     "e.g. `\"D&D Beyond\"` or `\"paper, with the player\"`; not shown by "
                     "default; see `shared/pc-body-structure.md`",
     "dndbeyond": "optional string, D&D only: a D&D Beyond character link or id; "
-                 "`dnd_ddb.py` syncs the note from it",
+                 "`gma dnd-ddb` syncs the note from it",
 }, also=(("gravity", "optional number, GURPS only: local gravity in G, e.g. `1.2`; "
                      "the sheet and party board work encumbrance out by B350 and show "
                      "the value; absent means 1G"),))

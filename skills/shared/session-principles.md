@@ -8,12 +8,12 @@ first invocation.
 Run once, on first invocation, before any other vault work:
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py" <vault> version
+gma vault-check <vault> version
 ```
 
 - `OK` or `SETUP` → proceed.
 - `MISMATCH` → announce the row, run the update
-  (`python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/gma.py" update <vault>`)
+  (`gma update <vault>`)
   as `campaign-organizer/references/migration-procedure.md` says,
   then resume your task.
 - `AHEAD` → announce the row and tell the GM to update the plugin. Stop.
@@ -37,7 +37,7 @@ python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py" <vault> ver
 - **Wiki-link every entity reference** — NPCs, locations, items,
   factions, sessions, scenes. Inside a table cell use the plain form
   (`[[Hassan]]`), never `[[Target|Alias]]` or `\|`: both break the
-  table when Obsidian reflows it. `vault_check.py <vault> tables`
+  table when Obsidian reflows it. `gma vault-check <vault> tables`
   catches violations.
 - **Reality over plans.** Once played, the plan is dead. Mention
   unplayed prep only if it holds clues the players still need.

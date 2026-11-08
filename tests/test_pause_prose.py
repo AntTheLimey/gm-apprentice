@@ -78,14 +78,14 @@ class SharedPauseTests(unittest.TestCase):
     def test_vault_access_row(self):
         self.assertRegex(read("shared/vault-access.md"),
                          r"\| A scene that stopped part-way[^\n]*"
-                         r"\| `vault_write\.py scene-paused` \|")
+                         r"\| `gma vault-write VAULT scene-paused \[options\]` \|")
 
     def test_entity_schema_scene_names_paused_section(self):
         text = read("shared/entity-schema.md")
         block = text[text.index("**Scene:**"):
                      text.index("## Type-Specific Fields")]
         self.assertIn("## Paused", block)
-        self.assertIn("vault_write.py scene-paused", block)
+        self.assertIn("gma vault-write <vault> scene-paused", block)
 
 
 if __name__ == "__main__":

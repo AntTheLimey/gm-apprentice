@@ -96,7 +96,7 @@ Constraints" in `scenario-writing.md`.)
    ("You feel uneasy" = violation; describe objective sensory info only)
 5. Verify every confrontation has ≥2 contingencies (cooperative + hostile)
 
-**What is mechanized:** only item 4. `vault_check.py read-aloud`
+**What is mechanized:** only item 4. `gma vault-check <vault> read-aloud`
 (see `shared/vault-access.md`) scans `> ` blockquote lines in
 plan and scene files for a named PC, a 2nd-person feeling verb,
 or a 3rd-person pronoun, and emits an INFO cue to raise with the
@@ -250,7 +250,7 @@ Upcoming Triggers: [events based on timeline/conditions]
 Automatic checks when generating content:
 
 1. **Name collision** — similar name already exists?
-   `vault_check.py names` finds duplicate and confusable entity
+   `gma vault-check <vault> names` finds duplicate and confusable entity
    names and aliases.
 2. **Timeline placement** — fits without contradictions?
 3. **Relationship coherence** — aligns with existing data?

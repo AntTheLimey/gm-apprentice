@@ -45,7 +45,7 @@ function publishedRels(root, config) {
 
 // `accept --at NOTE:LINE ...`: record each tie the GM reviewed and left. Without --write it says what it would record.
 function acceptTies(root, { at, write, config }) {
-  if (!at || !at.length) throw new Error('accept needs --at NOTE:LINE (a row of tones.py shown)');
+  if (!at || !at.length) throw new Error('accept needs --at NOTE:LINE (a row of gma tones <vault> shown)');
   const rows = listTones(readVault(root));
   const picked = [];
   for (const where of at) {

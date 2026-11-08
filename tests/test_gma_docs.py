@@ -2,9 +2,8 @@
 
 The pages under skills/shared/gma/ are hand-written prose around blocks
 rendered from the command tree (gma_docs.render, the one definition of
-conforming). The skill-text gates read every `gma <cmd> ...`,
-`python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/<x>.py" ...` and
-publish-tool line in skills/**/*.md and hold it to the real parsers.
+conforming). The skill-text gates read every `gma <cmd> ...`
+and publish-tool line in skills/**/*.md and hold it to the real parsers.
 
 Each gate has a positive control: an error planted in a copy, which the
 gate must catch.
@@ -38,7 +37,7 @@ GRANDFATHERED_FLAGS: dict[str, str] = {}
 # Full command lines that stop short on purpose, by where they sit, with why.
 # An entry the scan no longer finds fails (test_prefix_allowances_are_used).
 PREFIX_ONLY = {
-    "skills/session-wrapup/SKILL.md:12":
+    "skills/session-wrapup/SKILL.md:16":
         "defines the shorthand `vw` that the later steps extend",
 }
 
@@ -55,14 +54,10 @@ def tree():
 # --- reading commands out of skill text ------------------------------------
 
 MODULES = {c.module: n for n, c in gma.COMMANDS.items() if c.module}
-SCRIPT_RE = re.compile(
-    r'(?:python3?\s+)?"?\$\{CLAUDE_PLUGIN_ROOT\}/skills/shared/scripts/'
-    r'(?P<mod>\w+)\.py"?')
 BARE_RE = re.compile(r'(?P<mod>[a-z_]+)\.py\b')
 GMA_RE = re.compile(r'gma\s+(?P<cmd>[a-z][a-z-]*)')
 PUBLISH_RE = re.compile(
-    r'(?:(?:node|npx)\s+)?(?:"[^"\s]*/gm-publish\.js"|gm-publish\.js'
-    r'|gm-publish|gm-apprentice-publish|"\$TOOL")\s+(?P<sub>[a-z][a-z-]*)')
+    r'(?:(?:node|npx)\s+)?gm-apprentice-publish\s+(?P<sub>[a-z][a-z-]*)')
 FENCE_RE = re.compile(r'^\s*(```|~~~)')
 SEPARATORS = re.compile(r'\s(?:&&|\|\||;|\|)\s')
 
@@ -73,13 +68,13 @@ class Found:
     def __init__(self, path, line, kind, name, rest, form, fenced):
         self.path, self.line, self.kind = path, line, kind
         self.name, self.rest, self.fenced = name, rest, fenced
-        # "script" (python3 "${CLAUDE_PLUGIN_ROOT}/..."), "gma", or "bare"
-        # (`vault_check.py frontmatter` or `vw ...`, the skills' shorthand).
+        # "gma", "bare" (`vault_check.py frontmatter` or `vw ...`, the
+        # skills' shorthand), or "full" (a publish-tool line).
         self.form = form
 
     def example(self):
         """A full command line with arguments: it must parse."""
-        return (self.kind == "cmd" and self.form in ("script", "gma")
+        return (self.kind == "cmd" and self.form == "gma"
                 and bool(self.rest.strip()) and not _synopsis(self.rest))
 
     def where(self):
@@ -98,15 +93,6 @@ def _match(text):
     text = text.lstrip()
     if text.startswith("$ "):
         text = text[2:]
-    m = SCRIPT_RE.match(text)
-    if m:
-        if m.group("mod") == "gma":
-            # The plan's calling form: hand the rest to the gma branch.
-            text = "gma" + text[m.end():]
-        elif m.group("mod") not in MODULES:
-            return ("unknown-script", m.group("mod"), "", "script")
-        else:
-            return ("cmd", MODULES[m.group("mod")], text[m.end():], "script")
     m = BARE_RE.match(text)
     if m:
         if m.group("mod") not in MODULES:
@@ -221,6 +207,36 @@ def _line_of(para, offset):
         if offset < total:
             return n
     return len(para) - 1
+
+
+# Lines that may still name a script or the publish tool, by "<rel>:<line>",
+# with the reason. Empty to start; it may only shrink.
+ONLY_GMA_ALLOWED: dict[str, str] = {}
+
+MODULE_PY_RE = re.compile(
+    r'(?<![\w.-])(?P<mod>' + "|".join(sorted(MODULES)) + r')\.py\b')
+PUBLISH_DIRECT_RE = re.compile(r'gm-publish\.js|(?<![\w.-])gm-publish(?![\w.-])|\$\{?TOOL\}?\b|"\$TOOL"')
+
+
+def only_gma_problems(paths):
+    """Lines that name a script path or the publish tool instead of `gma`."""
+    bad = []
+    for path in paths:
+        rel = _rel(path)
+        for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            where = f"{rel}:{n}"
+            if where in ONLY_GMA_ALLOWED:
+                continue
+            if "CLAUDE_PLUGIN_ROOT" in line:
+                bad.append(f"{where}: names CLAUDE_PLUGIN_ROOT")
+            for m in MODULE_PY_RE.finditer(line):
+                bad.append(f"{where}: names {m.group('mod')}.py; "
+                           f"use gma {MODULES[m.group('mod')]}")
+                break
+            if PUBLISH_DIRECT_RE.search(line):
+                bad.append(f"{where}: runs the publish tool directly; "
+                           "use gma publish")
+    return bad
 
 
 def skill_files():
@@ -630,7 +646,9 @@ class LlmsCommandTests(unittest.TestCase):
     def test_llms_prints_the_index(self):
         code, out, _ = self._run(["llms"])
         self.assertEqual(code, 0)
-        self.assertEqual(out, gma_docs.INDEX.read_text(encoding="utf-8"))
+        want = gma_docs.INDEX.read_text(encoding="utf-8").replace(
+            "{gma}", f'python3 "{Path(gma.__file__).resolve().as_posix()}"')
+        self.assertEqual(out, want)
 
     def test_llms_prints_a_page(self):
         code, out, _ = self._run(["llms", "relink"])
@@ -656,13 +674,51 @@ class LlmsCommandTests(unittest.TestCase):
 # --- gates over the skill text ----------------------------------------------
 
 class SkillTextTests(unittest.TestCase):
+    def test_skills_call_only_gma(self):
+        self.assertEqual(only_gma_problems(skill_files()), [])
+
+    def test_only_gma_allowances_only_shrink(self):
+        found = set()
+        for path in skill_files():
+            for p in only_gma_problems([path]):
+                found.add(p.split(": ")[0])
+        self.assertEqual(sorted(set(ONLY_GMA_ALLOWED) - found), [])
+
+    def test_only_gma_gate_bites(self):
+        d = Path(tempfile.mkdtemp(prefix="gma-skill-"))
+        self.addCleanup(shutil.rmtree, d, True)
+        md = d / "x.md"
+        md.write_text(
+            'Run `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/gma.py"`.\n'
+            "Run `relink.py <vault> <old> <new>`.\n"
+            "Run `node gm-publish.js build`.\n"
+            "Run `gma relink <vault> <old> <new>`.\n"
+            "Run `npx gm-apprentice-publish build`.\n"
+            "Install the gm-apprentice-publish package.\n"
+            "The entry point is gma.py.\n"
+            "Run `gma publish build`.\n"
+            'Run `"$TOOL" build`.\n'
+            "Run `gm-publish build`.\n"
+            "```bash\n"
+            "gm-publish \\\n"
+            "  build\n"
+            "```\n",
+            encoding="utf-8")
+        self.assertEqual(only_gma_problems([md]), [
+            "x.md:1: names CLAUDE_PLUGIN_ROOT",
+            "x.md:2: names relink.py; use gma relink",
+            "x.md:3: runs the publish tool directly; use gma publish",
+            "x.md:9: runs the publish tool directly; use gma publish",
+            "x.md:10: runs the publish tool directly; use gma publish",
+            "x.md:12: runs the publish tool directly; use gma publish"])
+
     def test_scan_matches_enough_lines(self):
         found = [f for f in all_found() if f.kind == "cmd"]
         self.assertGreater(len(found), 40)
         self.assertTrue(any(f.fenced for f in found))
         self.assertTrue(any(not f.fenced for f in found))
         # Each form the gates claim to read was read.
-        self.assertGreater(len([f for f in found if f.form == "script"]), 0)
+        self.assertGreater(len([f for f in found if f.form == "gma"]), 40)
         self.assertGreater(len([f for f in all_found()
                                 if f.kind == "publish"]), 0)
 
@@ -674,8 +730,7 @@ class SkillTextTests(unittest.TestCase):
         self.addCleanup(shutil.rmtree, d, True)
         md = d / "x.md"
         md.write_text(
-            "Run `python3 \"${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/"
-            "relink.py\"\n<vault> <old> <new> --aply`.\n\n"
+            "Run `gma relink\n<vault> <old> <new> --aply`.\n\n"
             "```bash\ngma moments <vault> tag <w> \\\n  --writ\n```\n\n"
             "```bash\ngma moments <vault> list --write\n```\n",
             encoding="utf-8")
@@ -693,8 +748,7 @@ class SkillTextTests(unittest.TestCase):
         self.addCleanup(shutil.rmtree, d, True)
         md = d / "x.md"
         md.write_text(
-            "Run `python3 \"${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/"
-            "frob_nicate.py\" <vault>`.\n\n"
+            "Run `frob_nicate.py <vault>`.\n\n"
             "Run `gma frobnicate <vault>`.\n\n"
             "Run `gma publish frobnicate`.\n\n"
             "Run `gma relink <vault> \"<old> <new>`.\n",
@@ -731,10 +785,10 @@ class SkillTextTests(unittest.TestCase):
                       encoding="utf-8")
         self.assertNotIn("unclosed quote", " ".join(name_problems(scan_file(md))))
 
-    def test_gma_py_calling_form_is_read(self):
+    def test_gma_calling_form_is_read(self):
         d = Path(tempfile.mkdtemp(prefix="gma-skill-"))
         self.addCleanup(shutil.rmtree, d, True)
-        call = 'python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/gma.py"'
+        call = "gma"
         md = d / "x.md"
         md.write_text(f"Run `{call} relink <vault> <old> <new>`.\n\n"
                       f"Run `{call} frobnicate <vault>`.\n\n"
@@ -788,11 +842,11 @@ class SkillTextTests(unittest.TestCase):
         self.assertEqual(route_problems([md]),
                          (["x.md:2: no page frobnicate"], 2))
 
-    def test_route_gate_reads_the_gma_py_form(self):
+    def test_route_gate_reads_the_gma_form(self):
         d = Path(tempfile.mkdtemp(prefix="gma-skill-"))
         self.addCleanup(shutil.rmtree, d, True)
         md = d / "x.md"
-        call = 'python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/gma.py"'
+        call = "gma"
         md.write_text(f'Read `{call} llms relink`, then\n`{call} llms frobnicate`.\n',
                       encoding="utf-8")
         self.assertEqual(route_problems([md]),

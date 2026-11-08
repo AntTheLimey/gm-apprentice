@@ -48,8 +48,8 @@ a Gregorian date; without a 4-digit year it is left off the timeline
 | wrap-up | Wrap-Up file exists |
 | reviewed | GM has reviewed and confirmed the Wrap-Up |
 
-Derive/verify with `vault_check.py sessions`; fix with
-`stamp_entities.py … --set status=…` (see `shared/vault-access.md`).
+Derive/verify with `gma vault-check <vault> sessions`; fix with
+`gma stamp-entities … --set status=…` (see `shared/vault-access.md`).
 In a player-mode vault with a publish list, it also
 warns on any played (`played`/`wrap-up`/`reviewed`) session index or
 its Wrap-Up that is not under Publishing, saying what happens next:
@@ -85,8 +85,7 @@ document that owns it, where the skill that needs it reads it:
 
 A GM who wants a working dashboard on the hub keeps it inside one
 `<!-- gm-only -->`/`<!-- /gm-only -->` pair under `## GM Notes`, as the
-template shows. For a session with a Wrap-Up, `vault_check.py
-sessions` reports body lines outside that fence as INFO, naming where
+template shows. For a session with a Wrap-Up, `gma vault-check <vault> sessions` reports body lines outside that fence as INFO, naming where
 each kind belongs.
 
 ### 2. Session Plan (`Session {NN} - {Title} - Plan.md`)

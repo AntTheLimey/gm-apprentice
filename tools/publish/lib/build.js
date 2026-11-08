@@ -3216,7 +3216,7 @@ function buildSite(options) {
     const n = sheetlessPcs.length;
     const shown = sheetlessPcs.slice(0, SHEETLESS_NAMED);
     const more = n > shown.length ? `, and ${n - shown.length} more` : '';
-    console.warn(`  WARNING: ${n} PC${n === 1 ? '' : 's'} published with no character sheet (${shown.join(', ')}${more}) — the site found no stats it can read. Fill in ## Stat Sheet to the system template's layout, or set sheet_source on the PC to say where the sheet is kept. \`vault_check.py <vault> pc-body\` lists each file.`);
+    console.warn(`  WARNING: ${n} PC${n === 1 ? '' : 's'} published with no character sheet (${shown.join(', ')}${more}) — the site found no stats it can read. Fill in ## Stat Sheet to the system template's layout, or set sheet_source on the PC to say where the sheet is kept. \`gma vault-check <vault> pc-body\` lists each file.`);
   }
 
   // The scanner said this once, above every `wrote …` line, where nobody reads (#287).
@@ -3228,7 +3228,7 @@ function buildSite(options) {
     const n = scanReport.malformed.length;
     const shown = scanReport.malformed.slice(0, UNPARSEABLE_NAMED).map((m) => `${m.rel} (${firstLine(m.message)})`);
     const more = n > shown.length ? `, and ${n - shown.length} more` : '';
-    console.warn(`  WARNING: the build skipped ${n} note${n === 1 ? '' : 's'} whose frontmatter is not valid YAML: ${shown.join('; ')}${more} — a skipped note has no page on the site, and a skipped story file (…_Story.md) is missing from its PC's page. Fix the frontmatter and rebuild. \`vault_check.py <vault> frontmatter\` lists each file.`);
+    console.warn(`  WARNING: the build skipped ${n} note${n === 1 ? '' : 's'} whose frontmatter is not valid YAML: ${shown.join('; ')}${more} — a skipped note has no page on the site, and a skipped story file (…_Story.md) is missing from its PC's page. Fix the frontmatter and rebuild. \`gma vault-check <vault> frontmatter\` lists each file.`);
   }
 
   // Live stats and the inbox used to be detected from a deployed backend; unset now means

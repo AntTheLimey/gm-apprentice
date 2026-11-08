@@ -8,8 +8,8 @@ does the waiting, and you only wake when a request actually arrives.
 
 ## Prerequisites
 
-- First, bring the site's pinned tool up to date, from the site directory
-  (`$TOOL` as in `SKILL.md`): `node "$TOOL" update-pin --site .`. A site
+- First, bring the site's pinned tool up to date, from the site directory:
+  `gma publish update-pin --site .`. A site
   still pinned to an older tool has no `inbox watch` and no `sheetFamily`.
 - The inbox is set up (KV namespace + `wrangler.toml` id + deployed Function).
   See `references/cloudflare-pages.md` → "Change-request inbox".
@@ -45,7 +45,7 @@ does the waiting, and you only wake when a request actually arrives.
 
 1. Pick a memorable 4-character code (letters, e.g. `WOLF`, `BEAR`, `MOTH`).
 2. Set it live:  `npx gm-apprentice-publish inbox open WOLF`
-   (or `node <tool>/bin/gm-publish.js inbox open WOLF`). A new code starts a
+   (or `gma publish inbox open WOLF`). A new code starts a
    new session: the watcher forgets which requests it showed you before, and
    runs 5 hours from now (`--hours N` for another length, 1 to 12).
    Stop any watcher still running first: a monitor-mode watcher keeps its
@@ -302,8 +302,7 @@ request was handled: when a player says nothing happened, also run
 On "stop", **flush live state to the vault, then terminate the background
 watcher** and do not relaunch it:
 
-1. Run `npx gm-apprentice-publish flush` (or `node <tool>/bin/gm-publish.js
-   flush`). This snapshots each PC's current live vitals back into their vault
+1. Run `npx gm-apprentice-publish flush` (or `gma publish flush`). This snapshots each PC's current live vitals back into their vault
    `.md` (GURPS: current HP and FP into the `## Current Status` block; CoC:
    the Derived table, Reputation and Status; D&D: each live value into its
    own cell; `live-state-flush.md` has the detail), so the site's fallback

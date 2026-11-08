@@ -552,7 +552,7 @@ class SessionsCommandTests(unittest.TestCase):
     def test_declared_status_mismatch_warns_with_the_stamp_command(self):
         self.assertIn(
             f"WARNING\t{ARRIVAL}\tstatus 'planned' but the documents that "
-            f"exist derive 'prepped' — stamp_entities.py VAULT "
+            f"exist derive 'prepped' — gma stamp-entities VAULT "
             f'"{ARRIVAL}" --set status=prepped',
             self.rows)
 
@@ -572,7 +572,7 @@ class SessionsCommandTests(unittest.TestCase):
         wrap = f"{C1}/Session 02/Chapter_01_Session_02_Wrap_Up.md"
         self.assertIn(
             f"INFO\t{FOG}\twrap-up exists ({wrap}) but documents.wrap_up "
-            f'does not link it — stamp_entities.py VAULT "{FOG}" --set '
+            f'does not link it — gma stamp-entities VAULT "{FOG}" --set '
             f'documents.wrap_up="[[Chapter_01_Session_02_Wrap_Up]]"',
             self.rows)
 
@@ -4059,7 +4059,7 @@ class WrapupCommandTests(unittest.TestCase):
         self.assertIn(
             f"WARNING\t{LEGACY}\tfilename 'Session 07 - The Ball - "
             f"Wrap-Up.md' is not Chapter_CC_Session_NN_Wrap_Up.md — "
-            f"relink.py renames it and updates every link", self.rows)
+            f"gma relink renames it and updates every link", self.rows)
         self.assertFalse([r for r in self.fixes(LEGACY) if "filename" in r],
                          self.fixes(LEGACY))
 

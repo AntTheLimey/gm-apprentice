@@ -961,7 +961,7 @@ function startNoteAudit(input) {
         let fix;
         // The command that turns the links on one page into words, whole, so the row stands alone: it prints a
         // preview, and writes when run again with --write.
-        const unlink = (extra = '') => `python3 "\${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/links.py" "<vault>" unlink "${rel.replace(/\.md$/, '')}" --in "<page>"${extra}; it prints a preview; run it again with --write; CLAUDE_PLUGIN_ROOT is the gm-apprentice plugin's folder`;
+        const unlink = (extra = '') => `gma links "<vault>" unlink "${rel.replace(/\.md$/, '')}" --in "<page>"${extra}; it prints a preview; run it again with --write`;
         if (record.why === 'LISTED_ONLY') {
           fix = `its container lists it; write words in the body of ${rel}, or a tie, to give it a page of its own, or turn the link to ${name} into plain words (${unlink()})`;
         } else if (withheld) {

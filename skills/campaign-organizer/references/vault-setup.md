@@ -13,7 +13,7 @@ runs here — the vault starts at the current version.
    what it will create:
 
    ```bash
-   python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_scaffold.py" \
+   gma vault-scaffold \
      <vault> [--system ID | --no-system] [--name "Campaign Name"] [--inbox]
    ```
 

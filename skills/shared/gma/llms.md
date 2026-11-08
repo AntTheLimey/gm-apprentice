@@ -5,8 +5,7 @@ publish tool. Work from these pages, not from `--help` or memory: each
 command's page says when to use it, what it needs, every flag, and an
 example that is checked against the real command.
 
-There is no `gma` on the PATH: where these pages write `gma`, run
-`python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/gma.py"`.
+There is no `gma` on the PATH: where these pages write `gma`, run {gma}.
 
 - `gma llms` prints this index; `gma llms <command>` prints that
   command's page. Read the page before the first use of a command in a

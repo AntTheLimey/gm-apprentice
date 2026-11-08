@@ -7,7 +7,7 @@ duplicates, near-duplicates, or confusingly similar.
 with the GM:
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py" \
+gma vault-check \
   <vault-path> names
 ```
 
@@ -50,6 +50,6 @@ For each similarity found:
 3. Propose a fix:
    - For true duplicates: merge into one file
    - For confusingly similar: suggest a rename for the less
-     established entity; on the GM's yes, `relink.py` renames it
+     established entity; on the GM's yes, `gma relink` renames it
      and rewrites every link
    - For acceptable similarities: dismiss with note

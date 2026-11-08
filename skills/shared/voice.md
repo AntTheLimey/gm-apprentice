@@ -25,9 +25,7 @@ callbacks come from; for the campaign, its house style rules. Name a
 touchstone; never quote a work at length.
 
 Show the GM the draft; they approve or correct it (players are never
-asked). Before writing it on a vault whose site is on (`node
-"${CLAUDE_PLUGIN_ROOT}/tools/publish/bin/gm-publish.js" settings get
-player_site.publish player_site.hide.fields --vault <vault>`) and
+asked). Before writing it on a vault whose site is on (`gma publish settings get player_site.publish player_site.hide.fields --vault <vault>`) and
 whose `player_site.hide.fields` lacks `voice`, tell the GM the voice
 would show on their site and ask the update's question: add `voice`
 to the details the site hides (`settings add player_site.hide.fields
@@ -35,7 +33,7 @@ voice --vault <vault>`)? Whatever they answer about the site, write
 the approved voice: dry-run, then `--write`.
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/stamp_entities.py" \
+gma stamp-entities \
   <vault> "<note path>" --set 'voice="…"'
 ```
 

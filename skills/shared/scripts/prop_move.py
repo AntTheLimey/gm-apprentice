@@ -70,6 +70,7 @@ from reveal import LOG, _load_log, _write_log, apply_publish, prop_paths, publis
 from reveal_scan import NEVER_CANDIDATES  # noqa: E402
 from vault_check import configured_site  # noqa: E402
 from vault_write import BAD_NAME_RE, HAND_ID_RE, HANDS_REL, Batch, WriteError, use_hand  # noqa: E402
+from install_layout import MISSING_TOOL  # noqa: E402
 from vaultlib import cli_name  # noqa: E402
 from vaultlib import (PUBLISH_TOOL, PublishToolUnavailable, SettingsUnavailable, entity_type,  # noqa: E402
                       extract_frontmatter, forget_settings, frontmatter_span, is_skipped_path,
@@ -358,7 +359,7 @@ def convert_build_props(c: Conversion) -> None:
         if not hand.endswith(HAND_SUFFIX) or not HAND_ID_RE.match(short):
             c.row(PERSON, where, f"prop_hand {hand!r}: not a hand class this "
                   f"can name (lower-case letters, digits and hyphens, then "
-                  f"-hand); add the hand with vault_write.py prop-hand and "
+                  f"-hand); add the hand with gma vault-write <vault> prop-hand and "
                   f"set prop_hand on {', '.join(rels)}")
             continue
         families = fonts.get(hand, [])
@@ -366,7 +367,7 @@ def convert_build_props(c: Conversion) -> None:
             why = ("no props.css rule gives it a font-family" if not families
                    else f"the stylesheets disagree ({', '.join(families)})")
             c.row(PERSON, where, f"hand {short}: {why}; add it with "
-                  f"vault_write.py prop-hand --hand {short} --hand-font FAMILY")
+                  f"gma vault-write <vault> prop-hand --hand {short} --hand-font FAMILY")
             continue
         try:
             use_hand(c.batch, short, families[0], None)
@@ -1529,7 +1530,8 @@ def convert(vault: Path, *, site: Path | None = None, given: dict[str, Any] | No
 
 VAULT_STYLES = "_meta/prop-styles"
 # The plugin's own styles, beside the publish tool the move builds with.
-PLUGIN_STYLES = PUBLISH_TOOL.parent.parent / "prop-styles"
+PLUGIN_STYLES = (PUBLISH_TOOL.parent.parent / "prop-styles"
+                 if PUBLISH_TOOL is not None else None)
 MISSING_STYLE = "a listing style that is not there"
 
 
@@ -1541,10 +1543,12 @@ def missing_styles(c: Conversion) -> None:
     gone. The move is not built or checked while one is missing."""
     for address, choice in sorted((c.decisions.get("listings") or {}).items()):
         style = str((choice or {}).get("style") or "").strip()
-        if not style or any((root / style / "layout.html").is_file() for root in (c.vault / VAULT_STYLES, PLUGIN_STYLES)):
+        if not style or any((root / style / "layout.html").is_file() for root in (c.vault / VAULT_STYLES, PLUGIN_STYLES) if root is not None):
             continue
-        c.row(PERSON, f"listings.{address}.style", f'no style "{style}" in {VAULT_STYLES}/ or the plugin '
-              f"({PLUGIN_STYLES}); copy the style's folder into {VAULT_STYLES}/, or name another style")
+        where = (f"{VAULT_STYLES}/ or the plugin ({PLUGIN_STYLES})" if PLUGIN_STYLES is not None
+                 else f"{VAULT_STYLES}/ (and {MISSING_TOOL})")
+        c.row(PERSON, f"listings.{address}.style", f'no style "{style}" in {where}; '
+              f"copy the style's folder into {VAULT_STYLES}/, or name another style")
         c.missing_styles.append(style)
 
 

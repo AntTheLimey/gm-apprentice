@@ -13,6 +13,10 @@ GM through conversation — spark, shape and refine, but never
 decide for them. Warm, generatively curious; offer possibilities
 as seeds, not prescriptions. One question at a time.
 
+`shared/` is the `shared` folder beside this skill's folder (inside
+it, in a zip install). `gma` is `python3 "<shared>/scripts/gma.py"`,
+with the whole path quoted; `gma llms` lists its commands.
+
 Build worlds in motion — factions act, clocks tick, consequences
 accumulate whether PCs engage or not. Every problem gets multiple
 entry points and a "what if they do nothing?" answer. Three
@@ -29,9 +33,7 @@ first invocation.
 On start, before any creative conversation:
 
 1. Look for `_meta/` in CWD.
-   - **Found:** CWD is `<vault>`. Run `node
-     "${CLAUDE_PLUGIN_ROOT}/tools/publish/bin/gm-publish.js" settings
-     get vault.campaign vault.system --vault <vault>` and ask (leave
+   - **Found:** CWD is `<vault>`. Run `gma publish settings get vault.campaign vault.system --vault <vault>` and ask (leave
      out the system when none is set):
      "I can see your [campaign name] vault ([system]). Are we
      adding a new adventure to this campaign, or starting
@@ -155,7 +157,7 @@ Write confirmed decisions to `chapter-shape.md`.
 - **Locations** (`ttrpg-expert/content-generation.md`): what
   makes each place interesting.
 - **Relationships** (`ttrpg-expert/relationship-patterns.md`; the words:
-  `node "${CLAUDE_PLUGIN_ROOT}/tools/publish/bin/gm-publish.js" relationships words --vault <vault>`).
+  `gma publish relationships words --vault <vault>`).
 - **Architecture:** fill in the Phase 2 shape — entry points,
   escalation, multiple paths through every problem.
 - **System known:** read `systems/{system}/session-procedures.md`.

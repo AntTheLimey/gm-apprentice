@@ -14,7 +14,7 @@ The PC note's layout is the template's (`shared/templates/pc-dnd-5e-2024.md`). T
 4. Add Gear with weights, then run the tool once more so the Carrying values are filled.
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/dnd_sheet.py" "path/to/PC.md"
+gma dnd-sheet "path/to/PC.md"
 ```
 
 It prints a row for every derived cell: `SAME`, `FILL` (old -> new), `KEPT`, or `ERROR` when it cannot read the sheet (nothing is written then; fix the note first). Run it after building a character, after a level-up, and after any change to a score, a proficiency, a bonus or the gear.
@@ -129,8 +129,8 @@ Background), gender when blank and, with `--write`, the portrait when
 `portrait` is blank. Run it when the GM says a character changed there.
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/dnd_ddb.py" "path/to/PC.md"
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/dnd_ddb.py" --party "<vault>"
+gma dnd-ddb "path/to/PC.md"
+gma dnd-ddb --party "<vault>"
 ```
 
 Both preview. Show the GM the rows; on their yes, run again with `--write`.

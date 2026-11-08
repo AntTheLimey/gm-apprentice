@@ -9,8 +9,8 @@ migration.
 
 **Procedure:** (commands below: see `shared/vault-access.md`)
 
-1. Detect with `vault_check.py frontmatter` (rows report
-   `legacy field …`) or a `stamp_entities.py <vault>
+1. Detect with `gma vault-check <vault> frontmatter` (rows report
+   `legacy field …`) or a `gma stamp-entities <vault>
    --repair-canon` dry run — either surfaces every file
    carrying `source_confidence:` or `confidence:`.
 2. Present the dry-run rows as the batch finding: `WOULD-REPAIR`

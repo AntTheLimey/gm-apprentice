@@ -179,6 +179,7 @@ from schema_rules import (
 )
 # LINK_RE and SKIP_DIRS are re-exported: they were part
 # of this module's surface before vaultlib existed.
+from install_layout import MISSING_TOOL
 from vaultlib import (  # noqa: F401
     FENCE_RE,
     HEADING_RE,
@@ -200,6 +201,7 @@ from vaultlib import (  # noqa: F401
     PublishToolTooOld,
     PublishToolUnavailable,
     publish_tool_problem,
+    plugin_tool_problem,
     publisher_lines,
     stub_kept,
     use_publish_tool,
@@ -806,9 +808,9 @@ def check_relationships(vault: Path, folder: str | None = None,
     node = shutil.which("node")
     if not node:
         return _relationships_tool_row("node is not on PATH")
-    if not PUBLISH_TOOL.is_file():
-        return _relationships_tool_row(
-            f"the publish tool is not at {PUBLISH_TOOL.as_posix()}")
+    problem = plugin_tool_problem(PUBLISH_TOOL)
+    if PUBLISH_TOOL is None or problem:
+        return _relationships_tool_row(problem or MISSING_TOOL)
     args = [node, str(PUBLISH_TOOL), "relationships", "check", "--json",
             "--vault", str(vault)]
     if folder:
@@ -1445,7 +1447,7 @@ def _resolve_chain_key(key: str, rel: str, stem: str, number: int | None,
     if found and not linked:
         unlinked.append(
             f"INFO\t{rel}\t{kind} exists ({found}) but "
-            f"documents.{key} does not link it — stamp_entities.py "
+            f"documents.{key} does not link it — gma stamp-entities "
             f'VAULT "{rel}" --set '
             f'documents.{key}="[[{Path(found).stem}]]"')
     return linked or found, broken, unlinked
@@ -1675,8 +1677,8 @@ def _publish_tool_for(site: Path) -> tuple[Path | None, str, str | None]:
              if pin.source == "none" else
              f"the plugin's publish tool (the site pins {pin.version}, not "
              f"installed yet)")
-    if not PUBLISH_TOOL.is_file():
-        return None, label, f"the publish tool is not at {PUBLISH_TOOL}"
+    if PUBLISH_TOOL is None or not PUBLISH_TOOL.is_file():
+        return None, label, plugin_tool_problem(PUBLISH_TOOL)
     return PUBLISH_TOOL, label, None
 
 
@@ -1720,8 +1722,8 @@ def ask_publish_tool(vault: Path, args: list[str],
         tool: Path | None = PUBLISH_TOOL
         label = "the plugin's publish tool (the vault has no site to ask)"
         why = None
-        if not PUBLISH_TOOL.is_file():
-            tool, why = None, f"the publish tool is not at {PUBLISH_TOOL}"
+        if PUBLISH_TOOL is None or not PUBLISH_TOOL.is_file():
+            tool, why = None, plugin_tool_problem(PUBLISH_TOOL)
         used: str | None = label
     elif config is None:
         # A site that is off is not a tool that could not be asked: there is
@@ -1866,7 +1868,7 @@ def _lines_tool(vault: Path) -> tuple[Path | None, str | None, str | None,
             # block in the new file): the vault may have a site, so say the
             # settings are the trouble, not that there is none.
             return None, SETTINGS_UNCLEAR, (
-                "run the Settings check (vault_check.py <vault> settings) and "
+                "run the Settings check (gma vault-check <vault> settings) and "
                 "fix what it lists"), True
         return None, site_is_off(vault), None, False
     if site is None:
@@ -1978,7 +1980,7 @@ def no_publish_tool(vault: Path, check: str) -> tuple[str | None, list[str]]:
         return SETTINGS_UNCLEAR, [
             f"ERROR\t(vault)\t{check} could not tell whether this vault has "
             f"a site: {SETTINGS_UNCLEAR} ({why}) — nothing checked, nothing "
-            f"written; run the Settings check (vault_check.py <vault> "
+            f"written; run the Settings check (gma vault-check <vault> "
             f"settings) and fix what it lists"]
     if why == site_is_off(vault):
         # gm-leak is only about the site, so it says why it has no rows. A
@@ -2632,7 +2634,7 @@ def check_sessions(vault: Path) -> list[str]:
         if declared != derived:
             rows.append(f"WARNING\t{rel}\tstatus '{declared}' but the "
                         f"documents that exist derive '{derived}' — "
-                        f'stamp_entities.py VAULT "{rel}" '
+                        f'gma stamp-entities VAULT "{rel}" '
                         f"--set status={derived}")
         rows.extend(broken)
         rows.extend(unlinked)
@@ -2855,7 +2857,7 @@ def _heading_leak(rel: str, state: LineState | BuildLine,
                 f"publishes — nest it under ## GM Notes; to move every one at "
                 f"once, set {list_name} to "
                 f"{json.dumps(paste, ensure_ascii=False)} and run "
-                f"`vault_check.py <vault> gm-leak --renest-excludes --fix`"]
+                f"`gma vault-check <vault> gm-leak --renest-excludes --fix`"]
     if _keeper_text(title, excludes):
         if (unicodedata.normalize("NFC", rel),
                 unicodedata.normalize("NFC", title)) in settled:
@@ -4375,7 +4377,7 @@ def wrapup_filename_findings(rel: str) -> list[Finding]:
                         "chapter-level wrap-up filename — conformant as-is")]
     return [Finding("WARNING", rel,
                     f"filename '{Path(rel).name}' is not "
-                    f"Chapter_CC_Session_NN_Wrap_Up.md — relink.py renames "
+                    f"Chapter_CC_Session_NN_Wrap_Up.md — gma relink renames "
                     f"it and updates every link")]
 
 
@@ -5777,7 +5779,7 @@ def settings_fault_rows(vault: Path) -> list[str]:
                                    f"{warns} warn" if warns else "") if c)
     return [f"{'ERROR' if stops else 'WARNING'}\t{settings_file(vault)}\t"
             f"{len(faults)} settings fault{'s' if len(faults) != 1 else ''} "
-            f"({counts}) — run vault_check.py \"{vault}\" settings"]
+            f"({counts}) — run gma vault-check \"{vault}\" settings"]
 
 
 # The checks that are for the GM's own notes.

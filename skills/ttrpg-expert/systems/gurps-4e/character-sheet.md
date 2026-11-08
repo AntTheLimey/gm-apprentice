@@ -288,7 +288,7 @@ common ranges, defensive options, and tactical notes.*
 bundled checker:*
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/gurps_check.py" "path/to/PC.md"
+gma gurps-check "path/to/PC.md"
 ```
 
 *The checker parses the vault format — bare headings like "Melee
