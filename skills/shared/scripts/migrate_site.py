@@ -15,6 +15,7 @@ import sys
 from pathlib import Path
 from typing import Any, Callable
 
+import install_layout
 from migrate_core import (CHOICE, PERSON, WILL, Check, Item,
                           StepFailed, cells, edit_frontmatter, plugin_tool, stopped)
 from vault_check import (ExplainAll, ask_publish_tool, check_frontmatter, check_gm_leak,
@@ -32,11 +33,11 @@ from vaultlib import (PublishToolUnavailable, SettingsUnavailable,
 REPIN = "site-repin"
 
 
-def _pin_check(site: Path) -> dict[str, Any]:
+def _pin_check(site: Path, extra: list[str]) -> dict[str, Any]:
     """`update-pin --check --json` for the site; its answer has a boolean
     `ok`. Raises StepFailed when the tool does not give one."""
     code, out, err = plugin_tool(
-        ["update-pin", "--check", "--json", "--site", str(site)])
+        ["update-pin", "--check", "--json", "--site", str(site), *extra])
     try:
         data = json.loads(out)
     except ValueError:
@@ -47,6 +48,31 @@ def _pin_check(site: Path) -> dict[str, Any]:
             "update-pin --check did not return the expected JSON: "
             + (said[-1].strip() if said else f"update-pin exited {code}"))
     return data
+
+
+# A site pinned to a release tarball that update-pin --tag vendored.
+_TARBALL_PIN = re.compile(r"^file:vendor/gm-apprentice-publish-\d+\.\d+\.\d+\.tgz$")
+
+
+def _door_check(site: Path) -> tuple[list[str], dict[str, Any]]:
+    """(the update-pin args this door pins with, the check's answer).
+
+    The plugin pins a site to its own cache folder, as it always has. Any
+    other install, and any site already on a release tarball, pins to the
+    tarball of the release named by shared/PUBLISH_VERSION, which works
+    wherever the site is built."""
+    layout = install_layout.LAYOUT
+    if layout.door_owns_tool:
+        data = _pin_check(site, [])
+        if not _TARBALL_PIN.match(str(data.get("spec") or "").replace("\\", "/")):
+            return [], data
+    version = install_layout.publish_version(layout.shared)
+    if version is None:
+        raise StepFailed(
+            f"shared/{install_layout.PUBLISH_STAMP} is missing or empty, so "
+            "the publish tool's release is unknown. " + install_layout.INSTALL_STOP)
+    tag = ["--tag", f"publish-v{version}"]
+    return tag, _pin_check(site, tag)
 
 
 def find_site_repin(vault: Path) -> list[Item]:
@@ -66,24 +92,27 @@ def find_site_repin(vault: Path) -> list[Item]:
         raise StepFailed(
             f"{folder} is set to {site} but no vault.config.json is "
             f"there; correct the path, or set {switch}: false")
-    data = _pin_check(site)
+    pin_args, data = _door_check(site)
     if data["ok"]:
         return []
     installed = data.get("installedBefore") or "none"
 
     def apply(_value: str | None) -> list[str]:
-        code, text, err = plugin_tool(["update-pin", "--site", str(site)])
+        code, text, err = plugin_tool(
+            ["update-pin", "--site", str(site), *pin_args])
         # It may have written the site switch into the vault file.
         forget_settings(vault)
         lines = [line for line in text.splitlines() if line.strip()]
         if code != 0:
             tail = lines[-3:] or [err.strip() or f"update-pin exited {code}"]
             raise StepFailed("; ".join(tail))
-        if not _pin_check(site)["ok"]:
+        if not _pin_check(site, pin_args)["ok"]:
+            by_hand = " ".join(["gma publish update-pin --site <that folder>",
+                                *pin_args])
             raise StepFailed(
                 f"update-pin finished but the site ({folder} in "
                 f"{settings_file(vault)}) is still out of date; run "
-                "update-pin --site <that folder> by hand to see why")
+                f"`{by_hand}` by hand to see why")
         return lines
 
     return [Item(REPIN, WILL,
@@ -749,7 +778,7 @@ def find_retire_steps(vault: Path, release: str = "1.10.63") -> list[Item]:
                 [f"{AFTER_BUILD}\t"
                  f'build step "{command}": the site\'s publish tool is '
                  f"{tool or 'not installed'}, and does this step's work from "
-                 f"{RETIRED_FROM[name]}; update it (update-pin --site {site}) "
+                 f"{RETIRED_FROM[name]}; update the site's tool (`gma update` repins it) "
                  "and the update offers to retire the step"],
                 None, holds_stamp=True))
             continue

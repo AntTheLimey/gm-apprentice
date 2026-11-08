@@ -445,3 +445,28 @@ def test_no_node_skips_fetch(t, server):
     env = _env(t, base, PATH=str(bare))
     _run_gma(gma, ["vault-check", str(vault), "version"], env)
     assert hits == []
+
+
+def test_update_pin_on_a_cache_install_pins_the_stamped_release(monkeypatch):
+    import gma as g
+    seen = []
+    monkeypatch.setattr(g, "_run_tool", lambda tool, args: seen.append(args) or 0)
+    monkeypatch.setattr(g.vaultlib, "PUBLISH_TOOL", Path("/c/gm-publish.js"))
+    monkeypatch.setattr(g.install_layout, "LAYOUT",
+                        g.install_layout.LAYOUT._replace(door_owns_tool=False))
+    g._publish(["update-pin", "--site", "s"])
+    g._publish(["update-pin", "--site", "s", "--tag", "publish-v1.0.0"])
+    g._publish(["update-pin", "--help"])
+    g._publish(["build"])
+    assert seen == [["update-pin", "--site", "s", "--tag", f"publish-v{STAMP}"],
+                    ["update-pin", "--site", "s", "--tag", "publish-v1.0.0"],
+                    ["update-pin", "--help"],
+                    ["build"]]
+
+
+def test_update_pin_in_the_plugin_is_unchanged(monkeypatch):
+    import gma as g
+    seen = []
+    monkeypatch.setattr(g, "_run_tool", lambda tool, args: seen.append(args) or 0)
+    g._publish(["update-pin", "--site", "s"])
+    assert seen == [["update-pin", "--site", "s"]]

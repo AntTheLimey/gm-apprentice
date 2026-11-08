@@ -85,7 +85,7 @@ def refuse_cut(ask):
 
 TOO_OLD_ROW = ("ERROR\t(vault)\t{check} did not run: the site's publish tool "
                "predates 1.17.0 and is too old for this check — run "
-               "update-pin, then run this again")
+               "`gma update`, then run this again")
 
 
 # Found once, before any test patches `shutil.which` or `subprocess.run`.
@@ -1684,7 +1684,7 @@ class GmLeakSettleTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertEqual(rows, [
             "ERROR\tBob.md:7\t'Secret Tactics' was not settled: the site's "
-            "publish tool is too old to settle a heading — run update-pin, "
+            "publish tool is too old to settle a heading — run `gma update`, "
             "then run this again"])
 
     def test_a_site_tool_below_the_settle_version_says_too_old_too(self):
@@ -1703,7 +1703,7 @@ class GmLeakSettleTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertEqual(rows, [
             "ERROR\tBob.md:7\t'Secret Tactics' was not settled: the site's "
-            "publish tool is too old to settle a heading — run update-pin, "
+            "publish tool is too old to settle a heading — run `gma update`, "
             "then run this again"])
 
     def test_settle_refuses_a_line_that_is_no_heading(self):
@@ -2222,7 +2222,7 @@ class RenestReviewRegressionTests(unittest.TestCase):
                     f"what publishes (the publish tool exited without "
                     f"answering"), rows)
                 self.assertIn(") — nothing checked, nothing written; run "
-                              "update-pin --site ", rows[0])
+                              "`gma update`", rows[0])
         self.assertEqual(read(vault, "_meta/vault-config.yaml"), config)
         self.assertEqual(read(vault, "C.md"), self.FENCED_COLLAPSE)
         self.assertEqual(read(vault, "W.md"), NoPublishToolTests.WRAP)
@@ -2808,7 +2808,7 @@ class NoPublishToolTests(unittest.TestCase):
                     self.assertEqual(len(rows), 1, rows)
                     self.assertIn("could not ask the publish tool what "
                                   "publishes", rows[0])
-                    self.assertIn("nothing written; run update-pin --site ",
+                    self.assertIn("nothing written; run `gma update`",
                                   rows[0])
                 self.assertEqual(read(vault, "Bob.md"), self.LEAKY)
                 self.assertEqual(read(vault, "W.md"), self.WRAP)
@@ -4675,7 +4675,7 @@ class GmLeakWithheldHubTests(unittest.TestCase):
         self.assertTrue(rows[0].startswith(
             "ERROR\t(vault)\tgm-leak could not ask the publish tool what "
             "publishes ("), rows)
-        self.assertIn("run update-pin --site ", rows[0])
+        self.assertIn("run `gma update`", rows[0])
 
     def test_a_pin_not_yet_installed_is_still_the_sites_tool(self):
         # Re-check: package.json pins a vendored 1.11.39 and nothing is
@@ -4694,7 +4694,7 @@ class GmLeakWithheldHubTests(unittest.TestCase):
         self.assertTrue(rows[0].startswith(
             "ERROR\t(vault)\tgm-leak could not ask the publish tool what "
             "publishes ("), rows)
-        self.assertIn("run update-pin --site ", rows[0])
+        self.assertIn("run `gma update`", rows[0])
 
     def test_an_installed_prerelease_is_below_the_release(self):
         vault = self.vault()
@@ -4706,7 +4706,7 @@ class GmLeakWithheldHubTests(unittest.TestCase):
         self.assertTrue(rows[0].startswith(
             "ERROR\t(vault)\tgm-leak could not ask the publish tool what "
             "publishes ("), rows)
-        self.assertIn("run update-pin --site ", rows[0])
+        self.assertIn("run `gma update`", rows[0])
 
     def test_an_unreadable_site_tool_is_not_guessed_at(self):
         vault = self.vault()
@@ -5104,7 +5104,7 @@ class GmLeakHandoutSectionTests(unittest.TestCase):
         self.assertTrue(rows[0].startswith(
             "ERROR\t(vault)\tgm-leak could not ask the publish tool what "
             "publishes ("), rows)
-        self.assertIn("run update-pin --site ", rows[0])
+        self.assertIn("run `gma update`", rows[0])
 
     def test_an_emphasis_wrapped_heading_is_named_and_moved(self):
         vault = make_vault(self)

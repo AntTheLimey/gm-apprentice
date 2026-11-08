@@ -182,6 +182,84 @@ class RepinTests(unittest.TestCase):
             "expected JSON: update-pin exited 3"))
 
 
+class DoorPin(Pin):
+    """update-pin as each door sees it. The plain check answers as the
+    plugin's tool does (a tarball pin is "leave it alone", ok); the --tag
+    check answers whether the site holds that release."""
+
+    def __init__(self, tag_ok=False, **kw):
+        super().__init__(**kw)
+        self.tag_ok = tag_ok
+
+    def __call__(self, args):
+        if args[0] == "update-pin" and "--tag" in args:
+            self.calls.append(args)
+            if "--check" in args:
+                return (0 if self.tag_ok else 1), json.dumps(
+                    {"ok": self.tag_ok, "installedBefore": self.installed,
+                     "desired": args[args.index("--tag") + 1][len("publish-v"):],
+                     "changed": False, "tag": args[args.index("--tag") + 1]}), ""
+            self.tag_ok = True
+            return 0, "Updated gm-apprentice-publish (checksum verified)\n", ""
+        return super().__call__(args)
+
+
+TARBALL = "file:vendor/gm-apprentice-publish-1.60.0.tgz"
+STAMP = (SCRIPTS.parent / "PUBLISH_VERSION").read_text().strip()
+
+
+class DoorPinTests(unittest.TestCase):
+    def door(self, owns):
+        return mock.patch.object(
+            ms.install_layout, "LAYOUT",
+            ms.install_layout.LAYOUT._replace(door_owns_tool=owns))
+
+    def run_repin(self, vault, pin, owns):
+        with self.door(owns), mock.patch.object(ms, "plugin_tool", pin):
+            items = ms.find_site_repin(vault)
+            for item in items:
+                item.apply(None)
+            return items
+
+    def test_plugin_door_cache_pin_unchanged(self):
+        pin = DoorPin()
+        (item,) = self.run_repin(make_vault(self), pin, owns=True)
+        self.assertTrue(pin.calls)
+        self.assertFalse([c for c in pin.calls if "--tag" in c])
+
+    def test_cache_door_uses_the_stamped_release(self):
+        pin = DoorPin()
+        (item,) = self.run_repin(make_vault(self), pin, owns=False)
+        self.assertTrue(all("--tag" in c for c in pin.calls), pin.calls)
+        self.assertIn(f"publish-v{STAMP}", pin.calls[-1])
+        self.assertNotIn("--check", pin.calls[1])
+
+    def test_cache_door_current_site_plans_nothing(self):
+        self.assertEqual(
+            self.run_repin(make_vault(self), DoorPin(tag_ok=True), owns=False), [])
+
+    def test_tarball_pin_on_plugin_door_follows_the_stamp(self):
+        pin = DoorPin(ok=True, spec=TARBALL)
+        (item,) = self.run_repin(make_vault(self), pin, owns=True)
+        self.assertNotIn("--tag", pin.calls[0])
+        self.assertIn(f"publish-v{STAMP}", pin.calls[1])
+        self.assertIn("--check", pin.calls[1])
+        self.assertIn("--tag", pin.calls[2])
+        self.assertNotIn("--check", pin.calls[2])
+
+    def test_tarball_pin_at_the_stamp_on_plugin_door_plans_nothing(self):
+        pin = DoorPin(ok=True, spec=TARBALL, tag_ok=True)
+        self.assertEqual(self.run_repin(make_vault(self), pin, owns=True), [])
+
+    def test_cache_path_pin_from_init_moves_to_tarball(self):
+        # A site made on this door pins file:<cache>/…; the plain check
+        # cannot see it from the cache, so the tag check decides.
+        pin = DoorPin(ok=True, spec="file:/Users/x/Library/Caches/gm-apprentice/"
+                                    "publish/1.70.1/package")
+        (item,) = self.run_repin(make_vault(self), pin, owns=False)
+        self.assertIn("--tag", pin.calls[-1])
+
+
 class PublishSiteTests(unittest.TestCase):
     def text(self, vault):
         return (vault / "_meta" / "vault-config.yaml").read_text(encoding="utf-8")

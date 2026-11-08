@@ -224,11 +224,20 @@ def full_tree() -> argparse.ArgumentParser:
     return root
 
 
-def _publish(args: list[str]) -> int:
-    tool = vaultlib.PUBLISH_TOOL
-    if tool is None:
-        print("gma: " + MISSING_TOOL, file=sys.stderr)
-        return 1
+def _door_args(args: list[str]) -> list[str]:
+    """`update-pin` with no --tag repoints at the plugin's cache, which an
+    install without the plugin does not have: there it pins the release
+    these skills go with instead."""
+    if (not args or args[0] != "update-pin"
+            or install_layout.LAYOUT.door_owns_tool
+            or any(a in ("--tag", "-h", "--help") or a.startswith("--tag=")
+                   for a in args[1:])):
+        return args
+    version = install_layout.publish_version(install_layout.LAYOUT.shared)
+    return args if version is None else [*args, "--tag", f"publish-v{version}"]
+
+
+def _run_tool(tool: Path, args: list[str]) -> int:
     cmd = ["node", str(tool), *args]
     try:
         if os.name != "nt":
@@ -241,6 +250,14 @@ def _publish(args: list[str]) -> int:
     except OSError:
         print("gma: publish needs node on the PATH", file=sys.stderr)
         return 1
+
+
+def _publish(args: list[str]) -> int:
+    tool = vaultlib.PUBLISH_TOOL
+    if tool is None:
+        print("gma: " + MISSING_TOOL, file=sys.stderr)
+        return 1
+    return _run_tool(tool, _door_args(args))
 
 
 def main(argv: list[str] | None = None) -> int:
