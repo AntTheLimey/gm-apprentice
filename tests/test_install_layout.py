@@ -616,5 +616,5 @@ def test_update_step_elsewhere_names_npx_skills(t):
     scripts = t / ".agents" / "skills" / "shared" / "scripts"
     scripts.mkdir(parents=True)
     step = install_layout.update_step("update the plugin", find_layout(scripts))
-    assert "npx skills update" in step
+    assert "npx skills update -g" in step
     assert "npx skills add" in step   # a pinned install re-runs add

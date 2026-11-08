@@ -127,7 +127,7 @@ def already_fixed(issue: int) -> str | None:
     fixed: the next update may offer the workaround at once, which is wrong
     if that fix was only part of it. None when open, unknown or unreachable."""
     info = github_issues.GitHub().issue(issue)
-    if info is None or info.state != "closed" or info.reason == "not_planned":
+    if info is None or info.state != "closed" or info.reason not in github_issues.FIXED:
         return None
     return (f"#{issue} is already closed as fixed on GitHub. If that fix "
             f"only partly covers it, run this add again with --release set "

@@ -72,7 +72,9 @@ throws, cantrips and prepared spells by level, the spell slot table, the
 Warlock's pact slots, the Warlock levels at which a spell of level 6 to 9
 is gained, the most cantrips a class option adds, and the level-20 ability
 score caps of the Barbarian and Monk. Numbers only; no rules text is
-copied.
+copied. `shared` can install as a skill of its own without this document,
+so `skills/shared/NOTICE.md` carries the SRD 5.2 notice for this file and
+the SJG notice for `skills/shared/scripts/gurps_calc.py`.
 
 The Python tools' D&D test characters (`tests/fixtures/dnd-pcs/*.md`)
 are built from SRD 5.2 names and numbers only (CC-BY 4.0), with no

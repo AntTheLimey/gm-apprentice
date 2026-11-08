@@ -89,8 +89,8 @@ management UI yet — install via the CLI method above.
 
 ## Skills
 
-You talk to Claude normally; skills activate automatically from what
-you ask. Say "build me an NPC" and Claude reaches for **ttrpg-expert**;
+You talk to your assistant normally; skills activate automatically from
+what you ask. Say "build me an NPC" and it reaches for **ttrpg-expert**;
 say "help me start a new campaign" and it reaches for **the-midwife**.
 
 | Skill | Description | Obsidian |

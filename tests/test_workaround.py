@@ -192,12 +192,13 @@ class AlreadyFixedTests(Base):
                            "--kind", "note", "--where", "PCs/Six.md")
             self.assertNotIn("already closed", out)
 
-    def test_no_notice_for_an_issue_closed_as_not_planned(self):
-        self.hub.issues[997] = github_issues.Issue(
-            "closed", "not_planned", "2026-11-01T00:00:00Z")
-        _, out, _ = wa(self.vault, "add", "--issue", "997", "--what", "x",
-                       "--kind", "note", "--where", "PCs/Six.md")
-        self.assertNotIn("already closed", out)
+    def test_no_notice_for_an_issue_closed_as_not_planned_or_duplicate(self):
+        for issue, reason in (("997", "not_planned"), ("996", "duplicate")):
+            self.hub.issues[int(issue)] = github_issues.Issue(
+                "closed", reason, "2026-11-01T00:00:00Z")
+            _, out, _ = wa(self.vault, "add", "--issue", issue, "--what", "x",
+                           "--kind", "note", "--where", "PCs/Six.md")
+            self.assertNotIn("already closed", out)
 
 
 class MemoryFolderTests(Base):
@@ -484,6 +485,16 @@ class OfferTests(Base):
         self.assertIn("#510 was closed as not planned, so "
                       "gravity-by-hand-on-the-sheet was not offered.", res.notes)
 
+    def test_closed_as_duplicate_is_not_offered(self):
+        self.swept()
+        self.hub.issues[510] = github_issues.Issue(
+            "closed", "duplicate", "2026-11-04T10:00:00Z")
+        self.add()
+        res = self.update()
+        self.assertEqual(res.questions, [])
+        self.assertIn("#510 was closed as duplicate, so "
+                      "gravity-by-hand-on-the-sheet was not offered.", res.notes)
+
     def test_github_unreachable_checks_nothing_and_says_so_once(self):
         self.swept()
         self.hub.issues.clear()
@@ -499,7 +510,7 @@ class OfferTests(Base):
         self.add()
         res = self.update()
         self.assertEqual(res.questions, [])
-        self.assertEqual(res.notes, [update.NO_GITHUB])
+        self.assertEqual(res.notes, [update.no_release("1.10.129")])
 
     def test_a_hand_set_release_is_offered_without_github(self):
         self.swept()

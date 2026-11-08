@@ -44,32 +44,49 @@ class GitHub:
         if path in self.seen:
             return self.seen[path]
         found: Any = None
-        if not self.slow:
-            try:
-                if self.gh is not None:
-                    done = subprocess.run([self.gh, "api", path],
-                                          capture_output=True, text=True,
-                                          timeout=self.timeout, check=False)
-                    found = json.loads(done.stdout) if done.returncode == 0 else None
-                else:
-                    req = urllib.request.Request(
-                        f"{API}/{path}",
-                        headers={"Accept": "application/vnd.github+json",
-                                 "User-Agent": "gm-apprentice"})
-                    with urllib.request.urlopen(req, timeout=self.timeout) as r:
-                        found = json.load(r)
-            except (subprocess.TimeoutExpired, TimeoutError):
-                self.slow = True
-            except (OSError, ValueError, urllib.error.URLError,
-                    http.client.HTTPException):
-                pass
+        if not self.slow and self.gh is not None:
+            found = self._ask_gh(path)
+        if not self.slow and found is None:
+            # No gh, or one that could not answer (not logged in, an
+            # expired token): the public API needs no login.
+            found = self._ask_api(path)
         self.seen[path] = found if isinstance(found, dict) else None
         return self.seen[path]
+
+    def _ask_gh(self, path: str) -> Any:
+        try:
+            done = subprocess.run([str(self.gh), "api", path],
+                                  capture_output=True, text=True,
+                                  timeout=self.timeout, check=False)
+            return json.loads(done.stdout) if done.returncode == 0 else None
+        except subprocess.TimeoutExpired:
+            self.slow = True
+        except (OSError, ValueError):
+            pass
+        return None
+
+    def _ask_api(self, path: str) -> Any:
+        req = urllib.request.Request(
+            f"{API}/{path}", headers={"Accept": "application/vnd.github+json",
+                                      "User-Agent": "gm-apprentice"})
+        try:
+            with urllib.request.urlopen(req, timeout=self.timeout) as r:
+                return json.load(r)
+        except TimeoutError:
+            self.slow = True
+        except urllib.error.URLError as e:
+            # A connect timeout arrives wrapped.
+            if isinstance(e.reason, TimeoutError):
+                self.slow = True
+        except (OSError, ValueError, http.client.HTTPException):
+            pass
+        return None
 
     def issue(self, number: int) -> Issue | None:
         data = self._get(f"repos/{REPO}/issues/{number}")
         state = data.get("state") if data else None
-        if not isinstance(state, str):
+        # A pull request's number answers here too; it is not an issue.
+        if not isinstance(state, str) or "pull_request" in data:  # type: ignore[operator]
             return None
         reason, closed = data.get("state_reason"), data.get("closed_at")  # type: ignore[union-attr]
         return Issue(state.lower(),
@@ -81,6 +98,9 @@ class GitHub:
         data = self._get(f"repos/{REPO}/releases/tags/v{version}")
         when = data.get("published_at") if data else None
         return when if isinstance(when, str) else None
+
+
+FIXED = ("completed", None)   # closed as done; None: closed before reasons existed
 
 
 def _when(iso: str) -> datetime.datetime | None:

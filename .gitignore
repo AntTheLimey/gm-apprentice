@@ -31,7 +31,6 @@ _backup/
 # Claude Code local settings
 .claude/
 
-
 # Python bytecode (from scripts/ and tests/)
 __pycache__/
 *.pyc

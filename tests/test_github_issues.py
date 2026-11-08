@@ -97,3 +97,38 @@ def test_fixed_before_compares_times():
     assert not github_issues.closed_before(issue, "2026-11-04T09:00:00Z")
     assert not github_issues.closed_before(Issue("closed", "completed", None),
                                            "2026-11-04T12:00:00Z")
+
+
+def test_a_gh_that_cannot_answer_falls_back_to_the_rest_api(gh_stub, monkeypatch):
+    # gh installed but not logged in exits 4; the public API still answers.
+    seen = []
+
+    def urlopen(req, timeout):
+        seen.append(req.full_url)
+        return io.BytesIO(json.dumps(ISSUE).encode())
+    monkeypatch.setattr(urllib.request, "urlopen", urlopen)
+    assert GitHub().issue(510).state == "closed"
+    assert seen == ["https://api.github.com/repos/AntTheLimey/gm-apprentice/issues/510"]
+
+
+def test_a_connect_timeout_stops_further_asks(monkeypatch, tmp_path):
+    import urllib.error
+    monkeypatch.setenv("PATH", str(tmp_path))
+    calls = []
+
+    def urlopen(req, timeout):
+        calls.append(req.full_url)
+        raise urllib.error.URLError(TimeoutError("timed out"))
+    monkeypatch.setattr(urllib.request, "urlopen", urlopen)
+    hub = GitHub()
+    hub.issue(510)
+    hub.published("1.0.0")
+    assert len(calls) == 1
+
+
+def test_a_pull_request_number_is_not_an_issue(monkeypatch, tmp_path):
+    monkeypatch.setenv("PATH", str(tmp_path))
+    pr = {**ISSUE, "state_reason": None, "pull_request": {"url": "x"}}
+    monkeypatch.setattr(urllib.request, "urlopen",
+                        lambda req, timeout: io.BytesIO(json.dumps(pr).encode()))
+    assert GitHub().issue(612) is None

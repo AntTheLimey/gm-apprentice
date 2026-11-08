@@ -13,8 +13,8 @@ from tool_cache import cached_tool
 
 INSTALL_STOP = ("Assistants: stop here, tell the GM what is missing, and do "
                 "not work around it.")
-MISSING_TOOL = ("the publish tool is not installed. The Claude Code plugin "
-                "carries it; other installs download it once (it needs Node "
+MISSING_TOOL = ("the publish tool is not installed. The Claude Code and "
+                "Codex plugins carry it; other installs download it once (it needs Node "
                 "22.21 or newer): run `gma tool install` with network access. "
                 + INSTALL_STOP)
 VERSION_UNKNOWN = ("cannot determine the version of these skills: "
@@ -70,9 +70,10 @@ def find_layout(scripts_dir: Path | None = None) -> Layout:
 
 
 # Off the plugin (Claude Code's or Codex's), the skills came from `npx skills`.
-NPX_UPDATE = ("update the gm-apprentice skills: run `npx skills update` (an "
-              "install pinned to a release: run `npx skills add` again with "
-              "the new tag)")
+NPX_UPDATE = ("update the gm-apprentice skills the way they were installed: "
+              "`npx skills update -g` (without `-g` for an install in one "
+              "project; one pinned to a release: run `npx skills add` again "
+              "with the new tag)")
 
 
 def update_step(plugin_words: str, layout: Layout | None = None) -> str:

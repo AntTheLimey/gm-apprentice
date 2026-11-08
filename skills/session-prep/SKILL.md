@@ -7,7 +7,7 @@ Session preparation assistant: builds on the canon session-wrapup
 established to get the GM ready for next session.
 Workflow: Reconcile → Gather → Plan → Verify → Handoff.
 
-`shared/` is the `shared` folder beside this skill's folder (if it is missing, tell the GM to run `npx skills add AntTheLimey/gm-apprentice --skill shared`, then stop). `gma` is `python3 "<shared>/scripts/gma.py"`,
+`shared/` is the `shared` folder beside this skill's folder (if it is missing, tell the GM to add it the way they added this skill, e.g. `npx skills add AntTheLimey/gm-apprentice --skill shared -g`, with the same `#tag` if they pinned one; then stop). `gma` is `python3 "<shared>/scripts/gma.py"`,
 with the whole path quoted; `gma llms` lists its commands.
 
 ## Stance — you draw the session out of the GM

@@ -96,6 +96,8 @@ def _base_repo() -> Path:
             _write(root, f"{SYSTEMS}/{system}/NOTICE.md", notice)
             _write(root, f"{SYSTEMS}/{system}/mechanics.md", "# Mechanics\n")
         _write(root, f"{SYSTEMS}/generic/mechanics.md", "# Generic\n")
+        _write(root, "skills/shared/NOTICE.md",
+               (REPO / "skills" / "shared" / "NOTICE.md").read_text(encoding="utf-8"))
         git(root, "add", "-A")
         git(root, "commit", "-q", "-m", "base")
     return Path(_BASE.name)
@@ -385,3 +387,23 @@ class RealRepoTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SharedNoticeTests(unittest.TestCase):
+    """`shared` installs as its own skill (`npx skills`), without
+    ATTRIBUTION.md, and holds SRD 5.2 and GURPS numbers in its scripts."""
+
+    def test_the_real_shared_notice_is_clean(self) -> None:
+        self.assertEqual(ac.check_shared(REPO), [])
+
+    def test_a_missing_shared_notice_is_reported(self) -> None:
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        (tmp / "skills" / "shared").mkdir(parents=True)
+        found = [str(f) for f in ac.check_shared(tmp)]
+        self.assertTrue(any("skills/shared/NOTICE.md" in f and "missing" in f
+                            for f in found), found)
+        (tmp / "skills" / "shared" / "NOTICE.md").write_text("SRD 5.2 only\n")
+        found = [str(f) for f in ac.check_shared(tmp)]
+        self.assertTrue(any("Steve Jackson Games" in f or "SJG" in f
+                            for f in found), found)

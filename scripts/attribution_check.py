@@ -253,6 +253,22 @@ def check_systems(repo: Path) -> list[Finding]:
     return findings
 
 
+SHARED_REL = Path("skills/shared")
+# The licensed numbers in shared/scripts, by the system whose notice covers them.
+SHARED_SYSTEMS = ("dnd-5e-2024", "gurps-4e")
+
+
+def check_shared(repo: Path) -> list[Finding]:
+    """shared/ installs as a skill of its own, without ATTRIBUTION.md, so
+    its NOTICE.md carries each notice its scripts' numbers need."""
+    findings: list[Finding] = []
+    for name in SHARED_SYSTEMS:
+        for f in check_notice(repo / SHARED_REL, RULES[name], repo):
+            if f not in findings:
+                findings.append(f)
+    return findings
+
+
 def _git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         ["git", *args], cwd=repo, capture_output=True, text=True, check=False
@@ -328,7 +344,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = ap.parse_args(argv)
 
-    findings = check_systems(args.repo) + check_personal(args.repo)
+    findings = (check_systems(args.repo) + check_personal(args.repo)
+                + check_shared(args.repo))
     if args.base:
         findings += check_added_files(args.repo, args.base)
 

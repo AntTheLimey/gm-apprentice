@@ -62,6 +62,11 @@ NO_SWEEP = ("No workaround record yet: run the one-time sweep "
 NO_GITHUB = ("Could not ask GitHub whether the issues these workarounds wait "
              "on are fixed, so they were not checked; the next update asks "
              "again.")
+def no_release(version: str) -> str:
+    return (f"GitHub has no release v{version} yet, so no workaround was "
+            f"checked; the next update asks again.")
+
+
 GH_TIMEOUT = 5.0   # seconds GitHub gets per question; a slow answer stops the rest
 _RELEASE = re.compile(r"\d+\.\d+\.\d+")
 
@@ -297,7 +302,7 @@ def _offers(record: update_record.Record, plugin_v: str,
         return out
     plugin = parse_version(plugin_v)
     hub = github_issues.GitHub(timeout=GH_TIMEOUT)
-    unasked = False
+    unasked = unreleased = False
     for w in active:
         issue = int(w["issue"])
         hand = w.get("release")
@@ -313,13 +318,17 @@ def _offers(record: update_record.Record, plugin_v: str,
             cite = (f"You set {release} by hand as the release that builds "
                     f"it in.")
         else:
-            out_at = hub.published(plugin_v) if info is not None else None
-            if info is None or out_at is None:
+            if info is None:
                 unasked = True
                 continue
-            if info.reason == "not_planned":
-                out.notes.append(f"#{issue} was closed as not planned, so "
+            if info.reason not in github_issues.FIXED:
+                out.notes.append(f"#{issue} was closed as "
+                                 f"{str(info.reason).replace('_', ' ')}, so "
                                  f"{w['id']} was not offered.")
+                continue
+            out_at = hub.published(plugin_v)
+            if out_at is None:
+                unreleased = True
                 continue
             if not github_issues.closed_before(info, out_at):
                 continue   # fixed in a later release than this one
@@ -364,6 +373,8 @@ def _offers(record: update_record.Record, plugin_v: str,
                  "if_keep": "It stays, and is not offered again."}))
     if unasked:
         out.notes.append(NO_GITHUB)
+    elif unreleased:
+        out.notes.append(no_release(plugin_v))
     return out
 
 
