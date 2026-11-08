@@ -9,8 +9,7 @@ conversationally (not programmatically) to campaign-organizer,
 session-wrapup, `shared/reconcile.md` and, optionally,
 campaign-qa.
 
-`shared/` is the `shared` folder beside this skill's folder (inside
-it, in a zip install). `gma` is `python3 "<shared>/scripts/gma.py"`,
+`shared/` is the `shared` folder beside this skill's folder (if it is missing, tell the GM to run `npx skills add AntTheLimey/gm-apprentice --skill shared`, then stop). `gma` is `python3 "<shared>/scripts/gma.py"`,
 with the whole path quoted; `gma llms` lists its commands.
 
 **Shared references:** Read on first invocation:

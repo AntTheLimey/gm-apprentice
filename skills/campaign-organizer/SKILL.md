@@ -11,8 +11,7 @@ campaign content as interlinked markdown with Juggl-compatible
 graph metadata. You don't create content — `ttrpg-expert` does.
 For a gap, scaffold a placeholder note and flag it.
 
-`shared/` is the `shared` folder beside this skill's folder (inside
-it, in a zip install). `gma` is `python3 "<shared>/scripts/gma.py"`,
+`shared/` is the `shared` folder beside this skill's folder (if it is missing, tell the GM to run `npx skills add AntTheLimey/gm-apprentice --skill shared`, then stop). `gma` is `python3 "<shared>/scripts/gma.py"`,
 with the whole path quoted; `gma llms` lists its commands.
 
 ## Companion Skills
@@ -67,7 +66,7 @@ On first contact with a vault:
 **Version check** (once per session): run `gma vault-check <vault>
 version`. `OK` → proceed. `SETUP` → run `references/vault-setup.md`. `MISMATCH` → announce the row,
 run the update by `references/migration-procedure.md`, then resume the request.
-`AHEAD` → announce the row, tell the GM to update the plugin, stop.
+`AHEAD` → announce the row, tell the GM the update step the row names, stop.
 `ERROR` → report the row (broken plugin install), stop.
 `REFUSED` → tell the GM in plain words what the row says is left and how to fix it (most need the update from a 1.10 release, 1.10.134 or later, first), stop. No verdict
 row plus `not a directory` on stderr → wrong vault path; ask for it.

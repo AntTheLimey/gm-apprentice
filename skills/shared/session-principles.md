@@ -16,7 +16,7 @@ gma vault-check <vault> version
   (`gma update <vault>`)
   as `campaign-organizer/references/migration-procedure.md` says,
   then resume your task.
-- `AHEAD` → announce the row and tell the GM to update the plugin. Stop.
+- `AHEAD` → announce the row and tell the GM the update step it names. Stop.
 - `ERROR` → report the row: the plugin install is broken. Stop.
 - `REFUSED` → tell the GM in plain words what the row says is left and how to fix it (most need the update from a 1.10 release, 1.10.134 or later, first). Stop.
 - No verdict row and `not a directory` on stderr → the vault path is
