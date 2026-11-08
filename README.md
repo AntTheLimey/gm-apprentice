@@ -59,8 +59,18 @@ checked against the release's checksum). If a sandbox blocks that
 download, allow `gma tool install` when asked, or run it once in a
 terminal.
 
-Codex and Cursor are being tested end to end. The other agents install
-through `npx skills` but have not been tested yet.
+Agents that sandbox their commands usually let them write only inside
+the project folder. Two things gm-apprentice writes sit outside it: the
+publish tool's download, and the backup `gma update` takes before it
+changes a vault (in `~/.gm-apprentice/backups/`). When a sandbox blocks
+either one, the agent should stop and ask you to allow that one command
+outside the sandbox.
+
+Codex (the plugin) and Cursor (`npx skills`) were tested end to end on
+1.12.0: create a vault, prep a session, wrap it up, build the site
+locally and update the vault. Cursor's agent is slower: a prep or
+wrap-up took 15 to 20 minutes, against 5 to 7 on Codex. The other
+agents install through `npx skills` but have not been tested yet.
 
 ### Requirements
 
