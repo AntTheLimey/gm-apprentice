@@ -34,6 +34,14 @@ STALE_TEMP = 24 * 3600     # a .tmp-* folder this old was left by a killed fetch
 FAILURE_HOLD = 15 * 60     # after a failed automatic fetch, wait this long
 
 
+# A write gma makes outside the vault (this cache, the update's backups):
+# an agent's sandbox may allow writes only in the project folder.
+OUTSIDE_STOP = ("It is outside the project folder, which an assistant's "
+                "sandbox may block. Assistants: stop here, tell the GM, ask "
+                "them to allow this one command outside the sandbox, and do "
+                "not work around it (no other HOME or folder).")
+
+
 class FetchFailed(Exception):
     def __init__(self, reason: str) -> None:
         super().__init__(reason)
@@ -207,7 +215,8 @@ def fetch(version: str, *, root: Path | None = None, base: str | None = None,
         publish.mkdir(parents=True, exist_ok=True)
         work = Path(tempfile.mkdtemp(prefix=".tmp-", dir=publish))
     except OSError as e:
-        raise FetchFailed(f"cannot write the cache at {publish}: {e}") from e
+        raise FetchFailed(f"cannot write the cache at {publish}: {e}. "
+                          + OUTSIDE_STOP) from e
     try:
         tgz, sums = work / name, work / "SHA256SUMS"
         _download(node, f"{url}/SHA256SUMS", sums, wait)

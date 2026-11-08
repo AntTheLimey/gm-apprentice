@@ -260,6 +260,21 @@ class BackupTests(unittest.TestCase):
         self.assertIn("Locked Dir", str(cm.exception))
 
 
+    @unittest.skipUnless(os.name == "posix" and os.geteuid() != 0,
+                         "chmod only blocks writes for non-root POSIX")
+    def test_a_home_it_cannot_write_says_stop_and_ask(self):
+        # An agent's sandbox often allows writes only in the project folder.
+        self._write("fine.md")
+        self.home.chmod(0o500)
+        self.addCleanup(self.home.chmod, 0o755)
+        with self.assertRaises(update_backup.BackupFailed) as cm:
+            update_backup.backup(self.vault, home=self.home)
+        said = str(cm.exception)
+        self.assertIn(".gm-apprentice", said)
+        self.assertIn("outside the project folder", said)
+        self.assertIn("do not work around it", said)
+
+
 class SiteFolderTests(unittest.TestCase):
     def test_settings_failure_means_no_skip(self):
         tmp = Path(tempfile.mkdtemp())

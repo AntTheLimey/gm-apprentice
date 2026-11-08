@@ -352,3 +352,18 @@ def test_too_old_a_node_stops_before_any_download(release, cache, monkeypatch):
         fetch("1.2.3", root=cache, base=release.base, node="node")
     assert release.hits == 0
 
+
+
+@pytest.mark.skipif(os.name != "posix" or os.geteuid() == 0,
+                    reason="chmod only blocks writes for non-root POSIX")
+def test_a_cache_it_cannot_write_says_stop_and_ask(release, cache):
+    # An agent's sandbox often allows writes only in the project folder.
+    cache.mkdir(parents=True, exist_ok=True)
+    cache.chmod(0o500)
+    try:
+        with pytest.raises(FetchFailed) as e:
+            fetch("1.2.3", root=cache, base=release.base)
+    finally:
+        cache.chmod(0o755)
+    assert "outside the project folder" in str(e.value)
+    assert "do not work around it" in str(e.value)
