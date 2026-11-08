@@ -345,6 +345,7 @@ def test_cached_tool_is_found_when_none_sits_beside(t):
     (scripts.parent / "PUBLISH_VERSION").write_text("1.2.3\n")
     tool = t / "c" / "publish" / "1.2.3" / "package" / "bin" / "gm-publish.js"
     _touch(tool)
+    _touch(t / "c" / "publish" / "1.2.3" / "package" / "package.json")
     os.environ["GMA_CACHE"] = str(t / "c")
     try:
         got = find_layout(scripts)
@@ -470,3 +471,73 @@ def test_update_pin_in_the_plugin_is_unchanged(monkeypatch):
     monkeypatch.setattr(g, "_run_tool", lambda tool, args: seen.append(args) or 0)
     g._publish(["update-pin", "--site", "s"])
     assert seen == [["update-pin", "--site", "s"]]
+
+
+def test_update_pin_on_the_plugin_follows_a_tarball_site(monkeypatch):
+    import gma as g
+    seen = []
+    monkeypatch.setattr(g, "_run_tool", lambda tool, args: seen.append(args) or 0)
+    monkeypatch.setattr(g, "_site_pin_spec", lambda tool, args:
+                        "file:vendor/gm-apprentice-publish-1.60.0.tgz")
+    g._publish(["update-pin", "--site", "s"])
+    monkeypatch.setattr(g, "_site_pin_spec", lambda tool, args:
+                        "file:/plugin/cache/1.11.7/tools/publish")
+    g._publish(["update-pin", "--site", "s"])
+    g._publish(["update-pin", "--site", "s", "--check"])
+    assert seen == [["update-pin", "--site", "s", "--tag", f"publish-v{STAMP}"],
+                    ["update-pin", "--site", "s"],
+                    ["update-pin", "--site", "s", "--check"]]
+
+
+def test_node_children_use_a_sandbox_proxy(monkeypatch):
+    import gma as g
+    monkeypatch.delenv("NODE_USE_ENV_PROXY", raising=False)
+    g.main(["llms", "tool"])
+    assert os.environ.get("NODE_USE_ENV_PROXY") == "1"
+
+
+def _broken_door(monkeypatch, tmp_path, reason):
+    import gma as g
+    calls = []
+
+    def fail(version, **kw):
+        calls.append(kw)
+        raise g.tool_cache.FetchFailed(reason)
+    monkeypatch.setenv("GMA_CACHE", str(tmp_path))
+    monkeypatch.setattr(g.vaultlib, "PUBLISH_TOOL", None)
+    monkeypatch.setattr(g.tool_cache, "fetch", fail)
+    monkeypatch.setattr(g.shutil, "which", lambda name: "/usr/bin/node")
+    return g, calls
+
+
+def test_a_failed_automatic_fetch_is_not_retried_at_once(monkeypatch, tmp_path, capsys):
+    g, calls = _broken_door(monkeypatch, tmp_path,
+                            "publish-v1.0.0: could not download: fetch failed")
+    g._ensure_tool()
+    g._ensure_tool()
+    assert len(calls) == 1
+    err = capsys.readouterr().err
+    assert err.count("gma tool install") == 1
+    assert "network access" in err
+    assert calls[0].get("timeout") == g.AUTO_FETCH_TIMEOUT
+
+
+def test_a_checksum_failure_does_not_blame_the_network(monkeypatch, tmp_path, capsys):
+    g, _ = _broken_door(monkeypatch, tmp_path,
+                        "publish-v1.0.0: the checksum does not match SHA256SUMS")
+    g._ensure_tool()
+    err = capsys.readouterr().err
+    assert "checksum" in err
+    assert "network" not in err
+
+
+def test_tool_install_ignores_a_recent_failure(monkeypatch, tmp_path):
+    g, calls = _broken_door(monkeypatch, tmp_path, "x: could not download: y")
+    g._ensure_tool()
+    assert g._tool(["install"]) == 1
+    assert len(calls) == 2
+    assert calls[1].get("timeout") is None
+
+
+def test_missing_tool_names_node():
+    assert "Node 22" in MISSING_TOOL

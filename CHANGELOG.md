@@ -13,13 +13,13 @@ Installs other than the Claude Code plugin now get the publish tool too: it down
 
 ### Added
 
-- **The publish tool reaches every install.** An install without the tool beside its skills (the zips now; `npx skills` and other assistants next) downloads the matching tool release once, on the first command that needs it, checks it against the release's SHA256SUMS and keeps it in a per-user cache folder. Node 22 does the download. A failed download warns once and the command carries on as it would without the tool.
+- **The publish tool reaches every install.** An install without the tool beside its skills (the zips now; `npx skills` and other assistants next) downloads the matching tool release once, on the first command that needs it, checks it against the release's SHA256SUMS and keeps it in a per-user cache folder. Node 22 does the download. A failed download warns once, waits 15 minutes before trying again on its own, and the command carries on as it would without the tool. The three newest versions are kept, for other installs on the same machine.
 - **`gma tool install` and `gma tool path`.** Install fetches the tool now, for a sandbox that blocks network access until the GM allows it; path prints the tool in use.
 - **`skills/shared/PUBLISH_VERSION`** names the tool release the skills go with. A test, CI and the zip build fail when it differs from `tools/publish/package.json`.
 
 ### Changed
 
-- **Each install pins the site its own way.** The Claude Code plugin keeps today's pin. Other installs, and a site already pinned to a release tarball, pin the checksummed release named by `PUBLISH_VERSION`, kept inside the site folder, so the site builds wherever it is. `gma publish update-pin` adds that release on those installs.
+- **Each install pins the site its own way.** The Claude Code plugin keeps today's pin. Other installs, and a site already pinned to a release tarball, pin the checksummed release named by `PUBLISH_VERSION`, kept inside the site folder, so the site builds wherever it is. `gma publish update-pin` does the same, so the publish-site steps that run it work everywhere.
 - **The checks say "run `gma update`"** where they said "run update-pin" for a site tool that is too old: the update repins the site on every install.
 - **The settings schema is read from beside the publish tool**, so a downloaded tool brings it too.
 

@@ -50,10 +50,6 @@ def _pin_check(site: Path, extra: list[str]) -> dict[str, Any]:
     return data
 
 
-# A site pinned to a release tarball that update-pin --tag vendored.
-_TARBALL_PIN = re.compile(r"^file:vendor/gm-apprentice-publish-\d+\.\d+\.\d+\.tgz$")
-
-
 def _door_check(site: Path) -> tuple[list[str], dict[str, Any]]:
     """(the update-pin args this door pins with, the check's answer).
 
@@ -64,7 +60,7 @@ def _door_check(site: Path) -> tuple[list[str], dict[str, Any]]:
     layout = install_layout.LAYOUT
     if layout.door_owns_tool:
         data = _pin_check(site, [])
-        if not _TARBALL_PIN.match(str(data.get("spec") or "").replace("\\", "/")):
+        if not install_layout.TARBALL_PIN.match(str(data.get("spec") or "").replace("\\", "/")):
             return [], data
     version = install_layout.publish_version(layout.shared)
     if version is None:

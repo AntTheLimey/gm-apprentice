@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import importlib
+import json
 import os
 import shutil
 import subprocess
@@ -141,7 +142,7 @@ def _tool_parser() -> argparse.ArgumentParser:
     return ap
 
 
-def _fetch_tool() -> Path:
+def _fetch_tool(timeout: int | None = None) -> Path:
     """Fetch this install's tool release into the cache and point this
     process at it. Raises tool_cache.FetchFailed."""
     version = install_layout.publish_version(install_layout.LAYOUT.shared)
@@ -149,22 +150,34 @@ def _fetch_tool() -> Path:
         raise tool_cache.FetchFailed(
             f"shared/{install_layout.PUBLISH_STAMP} is missing or empty, so "
             "the tool version is unknown")
-    tool = tool_cache.fetch(version)
+    tool = tool_cache.fetch(version, timeout=timeout)
     install_layout.LAYOUT = install_layout.LAYOUT._replace(publish_tool=tool)
     vaultlib.adopt_publish_tool(tool)
     return tool
 
 
+# The automatic fetch runs before a command, maybe at the table: it gives
+# up sooner than `gma tool install`, and a failure holds it off a while.
+AUTO_FETCH_TIMEOUT = 60
+
+
 def _ensure_tool() -> None:
     """Before a command: an install without the tool fetches it once. A
-    failure warns and the command runs without it, as it would have."""
+    failure warns once and the command runs without it, as it would have."""
     if vaultlib.PUBLISH_TOOL is not None or shutil.which("node") is None:
         return
+    version = install_layout.publish_version(install_layout.LAYOUT.shared)
+    if version is None or tool_cache.failed_recently(version):
+        return
     try:
-        _fetch_tool()
+        _fetch_tool(timeout=AUTO_FETCH_TIMEOUT)
     except tool_cache.FetchFailed as e:
-        print(f"gma: warning: could not download the publish tool ({e.reason}); "
-              "run `gma tool install` with network access", file=sys.stderr)
+        tool_cache.note_failure(version)
+        fix = ("run `gma tool install` with network access"
+               if "could not download" in e.reason
+               else "run `gma tool install` to try again")
+        print(f"gma: warning: could not install the publish tool ({e.reason}); "
+              f"{fix}", file=sys.stderr)
 
 
 def _tool(args: list[str]) -> int:
@@ -224,16 +237,32 @@ def full_tree() -> argparse.ArgumentParser:
     return root
 
 
-def _door_args(args: list[str]) -> list[str]:
-    """`update-pin` with no --tag repoints at the plugin's cache, which an
-    install without the plugin does not have: there it pins the release
-    these skills go with instead."""
+def _site_pin_spec(tool: Path, args: list[str]) -> str:
+    """What the site's package.json pins, as `update-pin --check --json`
+    reports it ("" when it does not say)."""
+    try:
+        done = subprocess.run(["node", str(tool), *args, "--check", "--json"],
+                              capture_output=True, text=True, timeout=120)
+        spec = json.loads(done.stdout).get("spec")
+    except (OSError, subprocess.TimeoutExpired, ValueError, AttributeError):
+        return ""
+    return spec if isinstance(spec, str) else ""
+
+
+def _door_args(tool: Path, args: list[str]) -> list[str]:
+    """`update-pin` with no --tag repoints at the plugin's cache. An install
+    without the plugin has none, and a site already on a release tarball
+    is left alone by it: both pin the release these skills go with
+    instead, as `gma update` does (migrate_site._door_check)."""
     if (not args or args[0] != "update-pin"
-            or install_layout.LAYOUT.door_owns_tool
-            or any(a in ("--tag", "-h", "--help") or a.startswith("--tag=")
-                   for a in args[1:])):
+            or any(a in ("--tag", "--check", "-h", "--help")
+                   or a.startswith("--tag=") for a in args[1:])):
         return args
-    version = install_layout.publish_version(install_layout.LAYOUT.shared)
+    layout = install_layout.LAYOUT
+    if layout.door_owns_tool and not install_layout.TARBALL_PIN.match(
+            _site_pin_spec(tool, args).replace("\\", "/")):
+        return args
+    version = install_layout.publish_version(layout.shared)
     return args if version is None else [*args, "--tag", f"publish-v{version}"]
 
 
@@ -257,11 +286,14 @@ def _publish(args: list[str]) -> int:
     if tool is None:
         print("gma: " + MISSING_TOOL, file=sys.stderr)
         return 1
-    return _run_tool(tool, _door_args(args))
+    return _run_tool(tool, _door_args(tool, args))
 
 
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
+    # Node's fetch uses a sandbox's HTTPS_PROXY only when asked: the tool
+    # download, `update-pin --tag` and every other Node child.
+    os.environ.setdefault("NODE_USE_ENV_PROXY", "1")
     if not args or args[0] in ("-h", "--help"):
         # Help lists every command with its summary; the table is enough,
         # so no script's own parser is built.

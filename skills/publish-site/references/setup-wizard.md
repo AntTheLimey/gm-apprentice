@@ -411,8 +411,8 @@ rare fallback.)
 ### Step 14: Confirm the build tool pin
 
 Run `gma publish update-pin --site <site_dir>` and report what it
-prints. It points the site's `package.json` at the installed plugin's
-copy of the tool when it names any other copy. If it prints `could
+prints. It points the site's `package.json` at the tool release
+these skills go with. If it prints `could
 not record` or `npm install left`, show the GM those lines and stop.
 
 ### Step 15: Check the settings

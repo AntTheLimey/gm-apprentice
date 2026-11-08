@@ -156,13 +156,13 @@ def test_tarball_without_the_tool_is_refused(release, cache):
 
 
 @needs_node
-def test_older_versions_cleared_newer_kept(release, cache):
+def test_versions_within_the_newest_three_are_kept(release, cache):
     for v in ("1.0.0", "1.2.3", "1.10.0"):
         release.add(v, make_tgz(GOOD))
     fetch("1.0.0", root=cache, base=release.base)
     fetch("1.10.0", root=cache, base=release.base)
     fetch("1.2.3", root=cache, base=release.base)
-    assert _left(cache) == ["1.10.0", "1.2.3"]
+    assert _left(cache) == ["1.0.0", "1.10.0", "1.2.3"]
 
 
 @needs_node
@@ -213,6 +213,81 @@ def test_download_honours_a_proxy(monkeypatch, tmp_path):
     monkeypatch.setenv("HTTPS_PROXY", "http://127.0.0.1:3128")
     monkeypatch.setattr(tool_cache.subprocess, "run", run)
     with pytest.raises(FetchFailed):
-        tool_cache._download("node", "https://x/y", tmp_path / "f")
+        tool_cache._download("node", "https://x/y", tmp_path / "f", 30)
     assert seen.get("NODE_USE_ENV_PROXY") == "1"
     assert seen.get("HTTPS_PROXY") == "http://127.0.0.1:3128"
+
+
+@needs_node
+@pytest.mark.parametrize("bad", [("package/C:evil.js", b"x", None),
+                                 ("package\\..\\evil.js", b"x", None)])
+def test_windows_style_member_is_refused(release, cache, bad):
+    release.add("1.2.3", make_tgz([*GOOD, bad]))
+    with pytest.raises(FetchFailed):
+        fetch("1.2.3", root=cache, base=release.base)
+
+
+@needs_node
+def test_the_three_newest_versions_are_kept(release, cache):
+    for v in ("1.0.0", "1.1.0", "1.2.0", "1.3.0"):
+        release.add(v, make_tgz(GOOD))
+        fetch(v, root=cache, base=release.base)
+    assert _left(cache) == ["1.1.0", "1.2.0", "1.3.0"]
+
+
+def test_a_half_deleted_version_is_not_cached(cache):
+    tool = cache / "publish" / "1.2.3" / "package" / "bin" / "gm-publish.js"
+    tool.parent.mkdir(parents=True)
+    tool.write_bytes(TOOL_JS)
+    assert cached_tool("1.2.3", root=cache) is None
+    (tool.parents[1] / "package.json").write_text("{}")
+    assert cached_tool("1.2.3", root=cache) == tool
+
+
+@needs_node
+def test_old_temp_folders_are_swept(release, cache):
+    stale = cache / "publish" / ".tmp-old"
+    stale.mkdir(parents=True)
+    os.utime(stale, (0, 0))
+    fresh = cache / "publish" / ".tmp-new"
+    fresh.mkdir()
+    release.add("1.2.3", make_tgz(GOOD))
+    fetch("1.2.3", root=cache, base=release.base)
+    assert not stale.exists()
+    assert fresh.exists()
+
+
+def test_a_recent_failure_holds_off_the_automatic_fetch(cache):
+    assert tool_cache.failed_recently("1.2.3", root=cache) is False
+    tool_cache.note_failure("1.2.3", root=cache)
+    assert tool_cache.failed_recently("1.2.3", root=cache) is True
+    assert tool_cache.failed_recently("1.2.4", root=cache) is False
+    marker = tool_cache.failure_marker("1.2.3", root=cache)
+    os.utime(marker, (0, 0))
+    assert tool_cache.failed_recently("1.2.3", root=cache) is False
+
+
+@needs_node
+def test_a_successful_fetch_clears_the_failure_note(release, cache):
+    tool_cache.note_failure("1.2.3", root=cache)
+    release.add("1.2.3", make_tgz(GOOD))
+    fetch("1.2.3", root=cache, base=release.base)
+    assert tool_cache.failed_recently("1.2.3", root=cache) is False
+
+
+def test_fetch_passes_its_timeout_to_each_download(monkeypatch, tmp_path):
+    seen = []
+    monkeypatch.setattr(tool_cache, "_download",
+                        lambda node, url, dest, timeout: seen.append(timeout)
+                        or (_ for _ in ()).throw(FetchFailed("x")))
+    with pytest.raises(FetchFailed):
+        fetch("1.2.3", root=tmp_path, base="http://x", node="node", timeout=30)
+    assert seen == [30]
+
+
+@needs_node
+def test_an_older_fetch_keeps_its_own_version(release, cache):
+    for v in ("1.1.0", "1.2.0", "1.3.0", "1.0.0"):
+        release.add(v, make_tgz(GOOD))
+        fetch(v, root=cache, base=release.base)
+    assert cached_tool("1.0.0", root=cache) is not None

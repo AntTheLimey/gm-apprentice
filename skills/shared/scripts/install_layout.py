@@ -5,6 +5,7 @@ else asks `LAYOUT`.
 """
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import NamedTuple
 
@@ -13,11 +14,15 @@ from tool_cache import cached_tool
 INSTALL_STOP = ("Assistants: stop here, tell the GM what is missing, and do "
                 "not work around it.")
 MISSING_TOOL = ("the publish tool is not installed. The Claude Code plugin "
-                "carries it; other installs download it once: run `gma tool "
-                "install` with network access. " + INSTALL_STOP)
+                "carries it; other installs download it once (it needs Node "
+                "22): run `gma tool install` with network access. "
+                + INSTALL_STOP)
 VERSION_UNKNOWN = ("cannot determine the version of these skills: "
                    "shared/VERSION is missing, empty or unreadable. This "
                    "install is incomplete. " + INSTALL_STOP)
+
+# A site pinned to a release tarball that `update-pin --tag` vendored.
+TARBALL_PIN = re.compile(r"^file:vendor/gm-apprentice-publish-\d+\.\d+\.\d+\.tgz$")
 
 # The publish tool release these skills go with; a copy without the tool
 # beside it fetches that release (tool_cache).
