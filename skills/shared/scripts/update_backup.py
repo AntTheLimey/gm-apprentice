@@ -37,7 +37,12 @@ SKIP_DIRS = {".obsidian", ".git", ".trash", ".gm-apprentice",
 
 
 class BackupFailed(Exception):
-    """The backup could not be made; the message names the file at fault."""
+    """The backup could not be made; the message names the file at fault.
+    `outside`: the backup folder (outside the vault) could not be written."""
+
+    def __init__(self, reason: str, *, outside: bool = False) -> None:
+        super().__init__(reason)
+        self.outside = outside
 
 
 def _stamp() -> str:
@@ -132,8 +137,8 @@ def backup(vault: Path, *, home: Path | None = None, keep: int = 10) -> Path:
     try:
         folder.mkdir(parents=True, exist_ok=True)
     except OSError as e:
-        raise BackupFailed(f"could not make {folder}: {e.strerror or e}. "
-                           + OUTSIDE_STOP) from e
+        raise BackupFailed(f"could not make {folder}: {e.strerror or e}",
+                           outside=True) from e
     target = _free_name(folder, _stamp())
     partial = target.with_name(target.name + ".partial")
     site = _site_folder(vault)
@@ -159,8 +164,8 @@ def backup(vault: Path, *, home: Path | None = None, keep: int = 10) -> Path:
         raise
     except OSError as e:
         partial.unlink(missing_ok=True)
-        raise BackupFailed(f"could not write {target}: {e.strerror or e}. "
-                           + OUTSIDE_STOP) from e
+        raise BackupFailed(f"could not write {target}: {e.strerror or e}",
+                           outside=True) from e
     except BaseException:
         partial.unlink(missing_ok=True)   # interrupted: no half archive
         raise

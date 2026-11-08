@@ -35,7 +35,9 @@ FAILURE_HOLD = 15 * 60     # after a failed automatic fetch, wait this long
 
 
 # A write gma makes outside the vault (this cache, the update's backups):
-# an agent's sandbox may allow writes only in the project folder.
+# an agent's sandbox may allow writes only in the project folder. Only a
+# command the GM asked for (`gma tool install`, `gma update`) says stop;
+# the automatic fetch before other commands only warns.
 OUTSIDE_STOP = ("It is outside the project folder, which an assistant's "
                 "sandbox may block. Assistants: stop here, tell the GM, ask "
                 "them to allow this one command outside the sandbox, and do "
@@ -43,9 +45,10 @@ OUTSIDE_STOP = ("It is outside the project folder, which an assistant's "
 
 
 class FetchFailed(Exception):
-    def __init__(self, reason: str) -> None:
+    def __init__(self, reason: str, *, outside: bool = False) -> None:
         super().__init__(reason)
         self.reason = reason
+        self.outside = outside   # a write outside the project folder failed
 
 
 def cache_root() -> Path:
@@ -215,8 +218,8 @@ def fetch(version: str, *, root: Path | None = None, base: str | None = None,
         publish.mkdir(parents=True, exist_ok=True)
         work = Path(tempfile.mkdtemp(prefix=".tmp-", dir=publish))
     except OSError as e:
-        raise FetchFailed(f"cannot write the cache at {publish}: {e}. "
-                          + OUTSIDE_STOP) from e
+        raise FetchFailed(f"cannot write the cache at {publish}: {e}",
+                          outside=True) from e
     try:
         tgz, sums = work / name, work / "SHA256SUMS"
         _download(node, f"{url}/SHA256SUMS", sums, wait)

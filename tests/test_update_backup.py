@@ -262,17 +262,27 @@ class BackupTests(unittest.TestCase):
 
     @unittest.skipUnless(os.name == "posix" and os.geteuid() != 0,
                          "chmod only blocks writes for non-root POSIX")
-    def test_a_home_it_cannot_write_says_stop_and_ask(self):
+    def test_a_home_it_cannot_write_is_marked_outside(self):
         # An agent's sandbox often allows writes only in the project folder.
         self._write("fine.md")
         self.home.chmod(0o500)
         self.addCleanup(self.home.chmod, 0o755)
         with self.assertRaises(update_backup.BackupFailed) as cm:
             update_backup.backup(self.vault, home=self.home)
+        self.assertIn(".gm-apprentice", str(cm.exception))
+        self.assertTrue(cm.exception.outside)
+
+    def test_update_puts_the_stop_after_its_sentence(self):
+        import update
+        e = update_backup.BackupFailed("could not make /h/.gm-apprentice: denied",
+                                       outside=True)
+        run = update._Run(self.vault, update.UpdateResult(), self.home, "1.0.0", "1.0.1")
+        with mock.patch.object(update.update_backup, "backup", side_effect=e), \
+                self.assertRaises(update.StepFailed) as cm:
+            run.before_write()
         said = str(cm.exception)
-        self.assertIn(".gm-apprentice", said)
-        self.assertIn("outside the project folder", said)
-        self.assertIn("do not work around it", said)
+        self.assertTrue(said.endswith(update_backup.OUTSIDE_STOP), said)
+        self.assertIn("nothing more was changed. It is outside", said)
 
 
 class SiteFolderTests(unittest.TestCase):

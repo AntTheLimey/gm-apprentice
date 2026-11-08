@@ -354,9 +354,10 @@ def test_too_old_a_node_stops_before_any_download(release, cache, monkeypatch):
 
 
 
+@needs_node
 @pytest.mark.skipif(os.name != "posix" or os.geteuid() == 0,
                     reason="chmod only blocks writes for non-root POSIX")
-def test_a_cache_it_cannot_write_says_stop_and_ask(release, cache):
+def test_a_cache_it_cannot_write_is_marked_outside(release, cache):
     # An agent's sandbox often allows writes only in the project folder.
     cache.mkdir(parents=True, exist_ok=True)
     cache.chmod(0o500)
@@ -365,5 +366,7 @@ def test_a_cache_it_cannot_write_says_stop_and_ask(release, cache):
             fetch("1.2.3", root=cache, base=release.base)
     finally:
         cache.chmod(0o755)
-    assert "outside the project folder" in str(e.value)
-    assert "do not work around it" in str(e.value)
+    # The caller adds the stop line: only `gma tool install` should stop.
+    assert e.value.outside
+    assert "cannot write the cache" in e.value.reason
+    assert "Assistants" not in e.value.reason

@@ -500,8 +500,9 @@ class _Run:
                 self.res.backup = str(update_backup.backup(self.vault,
                                                            home=self.home))
             except update_backup.BackupFailed as e:
+                stop = " " + update_backup.OUTSIDE_STOP if e.outside else ""
                 raise StepFailed(f"the backup could not be made ({e}); "
-                                 f"nothing more was changed") from e
+                                 f"nothing more was changed.{stop}") from e
 
     def wrote(self) -> bool:
         return bool(self.did or self.new or self.kept)

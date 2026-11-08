@@ -15,8 +15,8 @@ Codex and Cursor tested end to end on 1.12.0 (create a vault, prep, wrap-up, bui
 
 ### Fixed
 
-- A first session is reconciled like any other: before, a tidy session 1 was skipped, so its Wrap-Up and new notes stayed DRAFT for good (#618).
-- When an agent's sandbox blocks the update's backup or the publish tool's download, the message says it is outside the project folder and asks the assistant to stop and ask the GM to allow it, not to work around it.
+- A first session is reconciled like any other: before, a tidy session 1 (the campaign's, or any chapter's, as numbers restart each chapter) was skipped, so its Wrap-Up and new notes stayed DRAFT for good (#618).
+- When an agent's sandbox blocks the update's backup or `gma tool install`, the message says the folder is outside the project folder and asks the assistant to stop and ask the GM to allow it, not to work around it. The automatic download before other commands only warns.
 
 ### Changed
 
