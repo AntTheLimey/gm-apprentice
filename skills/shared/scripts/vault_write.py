@@ -1835,7 +1835,26 @@ def show_status(batch: Batch, raw: str) -> str:
 
 def cmd_status(batch: Batch, args: argparse.Namespace, text: str) -> None:
     rel, note = status_target(batch, args.pc)
-    write_fields(batch, rel, note, stdin_fields(text))
+    given = stdin_fields(text)
+    write_fields(batch, rel, note, given)
+    if any(key(f.label) == key(th.PC_PATH[1].strip("*:")) for f in given):
+        warn_dropped_threads(batch, rel, note)
+
+
+def warn_dropped_threads(batch: Batch, rel: str, before: str) -> None:
+    """One WARNING per thread on the PC's Open threads before the rewrite
+    whose lead (see `threads.lead`) no thread after it has: a rewrite may
+    drop one by mistake, and a thread that ended belongs in a Wrap-Up.
+    Rewording is fine, so this warns and never refuses."""
+    after = [t.text for t in th.pc_thread_items(batch.read(rel))]
+    pc = Path(rel).stem
+    for thread in th.pc_thread_items(before):
+        name = th.lead(thread.text)
+        if not th.find_thread(after, name):
+            batch.row("WARNING", rel, f"\u00a7{CURRENT_STATUS}/Open threads",
+                      f"drops '{name}' from {pc}'s Open threads: if it "
+                      f"ended, close it with `vw threads close` so it is "
+                      f"recorded; if it is shared now, `vw threads move`")
 
 
 def threads_overview(batch: Batch) -> str:
