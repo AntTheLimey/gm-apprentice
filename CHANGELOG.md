@@ -23,10 +23,15 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ### In numbers
 
+Measured on notes-only copies of three campaigns, in characters. How much each shrinks depends on how much of the campaign sits in PC subsections:
+
 | | 1.12.3 | 1.12.4 | Change |
 |---|---|---|---|
-| `session-context --prep` | TBD | TBD | TBD |
-| `session-context --arcs` | TBD | TBD | TBD |
+| `session-context --prep`, 4 PCs with long session logs | 155,196 | 129,610 | −17% |
+| `session-context --prep`, 4 PCs with long Background and GM Notes | 82,881 | 51,549 | −38% |
+| `session-context --arcs`, the same 4 PCs | 42,546 | 11,214 | −74% |
+| `session-context --arcs`, 6 PCs | 30,675 | 21,679 | −29% |
+| Prep plan quality (blind judge, both orders) | | no PC fact lost | |
 
 ---
 
