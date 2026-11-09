@@ -61,6 +61,25 @@ class FindSectionTests(unittest.TestCase):
         self.assertIn("line 2", got[0])
         self.assertIn("line 5", got[1])
 
+    def test_spaces_round_a_slash_in_a_title(self):
+        text = ("## S\n### Allies / Enemies\nx\n### Other\ny\n"
+                "## Properties / Stats\nz\n")
+        for path in (["S", "Allies / Enemies"], ["S", "Allies/Enemies"],
+                     ["S", "Allies", "Enemies"], ["s", "allies ", " enemies"]):
+            with self.subTest(path=path):
+                self.assertEqual(vl.find_section(text, path), (1, 3))
+        for path in (["Properties / Stats"], ["Properties", "Stats"],
+                     ["properties/stats"]):
+            with self.subTest(path=path):
+                self.assertEqual(vl.find_section(text, path), (5, 7))
+
+    def test_exact_matches_by_case_only(self):
+        text = "## Open  Threads\nx\n## open threads\ny\n"
+        self.assertEqual(
+            vl.find_section(text, ["Open Threads"], exact=True), (2, 4))
+        self.assertEqual(
+            vl.find_section(text, ["Open Threads"], first=True), (0, 2))
+
     def test_long_path_without_matches_is_quick(self):
         import time
         text = "## S\n### A\nx\n### B\ny\n" * 3
@@ -159,6 +178,18 @@ class SectionCommandTests(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertTrue(r.stdout.startswith("### Allies/Enemies\n"))
         self.assertIn("#### Hook detail", r.stdout)
+
+    def test_spaced_slash_heading_fetches_through_the_cli(self):
+        vault = copy_vault(self)
+        note = vault / "PCs" / "Ada_Quill.md"
+        text = note.read_text(encoding="utf-8")
+        note.write_text(text.replace("## Background\n",
+                                     "## Properties / Stats\n"),
+                        encoding="utf-8")
+        for path in ("Properties / Stats", "Properties/Stats"):
+            r = run(vault, "Ada_Quill", path)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertTrue(r.stdout.startswith("## Properties / Stats\n"))
 
     def test_runs_through_gma(self):
         r = subprocess.run(

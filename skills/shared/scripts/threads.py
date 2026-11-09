@@ -224,9 +224,10 @@ def _shared_span(lines: list[str]) -> tuple[int, int] | None:
     """(heading index, end) of the shared list: the first level-2 heading
     titled Open Threads in any case, outside a code fence, up to the next
     heading of level 1 or 2. Every reader and writer of the list (and the
-    publish tool's `sectionRange`) finds it this way."""
+    publish tool's `sectionRange`) finds it this way: the title matches by
+    case only (`Open  Threads` with two spaces is not it)."""
     found = find_section("\n".join(lines), [SECTION], level=2, first=True,
-                         trim=False)
+                         trim=False, exact=True)
     return found if isinstance(found, tuple) else None
 
 

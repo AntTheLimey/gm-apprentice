@@ -125,27 +125,6 @@ class LayeredTests(unittest.TestCase):
         self.assertIn("friends and foes", r.stdout)
         self.assertNotIn("other words", r.stdout)
 
-    def test_crlf_outline_has_no_mixed_endings(self):
-        body = ("Top text.\r\n\r\n### One\r\nalpha beta\r\n\r\n"
-                "### Two\r\ngamma\r\n")
-        text, outlined = sctx.layered(body, "Zed", "Current Status")
-        self.assertTrue(outlined)
-        self.assertEqual(
-            text,
-            "Top text.\r\n\r\n"
-            "### One  (2 words; Zed: Current Status/One)\r\n"
-            "### Two  (1 words; Zed: Current Status/Two)")
-        self.assertNotRegex(text, r"(?<!\r)\n")
-
-    def test_crlf_multi_line_preamble_keeps_single_returns(self):
-        body = ("Line A.\r\nLine B.\r\n\r\n### One\r\nalpha beta\r\n\r\n"
-                "### Two\r\ngamma\r\n")
-        text, _ = sctx.layered(body, "Zed", "Current Status")
-        self.assertTrue(text.startswith("Line A.\r\nLine B.\r\n\r\n### One"),
-                        repr(text))
-        self.assertNotIn("\r\r", text)
-        self.assertNotRegex(text, r"(?<!\r)\n")
-
     def test_blank_line_before_the_outline_kept(self):
         out = sc("--brief").stdout
         ada = out.split("--- Ada_Quill")[1].split("--- Cole_Plain")[0]
@@ -174,6 +153,24 @@ class LayeredTests(unittest.TestCase):
                 body = r.stdout.split("\n", 1)[1]
                 self.assertEqual(vl.word_count(body), int(words))
 
+    def test_every_printed_path_fetches_with_repeats_and_spaced_slashes(self):
+        note = ("---\ntype: pc\nstatus: active\n---\n# Zed\n\n"
+                "## Current Status\n\nTop.\n\n"
+                "### Notes\n\none\n\n### Notes\n\ntwo\n\n"
+                "### Allies / Enemies\n\nfriends\n\n### Solo\n\nthree\n")
+        vault = copy_vault(self)
+        (vault / "PCs" / "Zed.md").write_text(note, encoding="utf-8")
+        out = sc("--brief", vault=vault).stdout
+        found = [x for x in OUTLINE_RE.findall(out) if x[1] == "Zed"]
+        self.assertEqual(len(found), 4)
+        for words, name, path in found:
+            with self.subTest(path=path):
+                r = fetch(name, path, vault=vault)
+                self.assertEqual(r.returncode, 0, r.stderr)
+        both = fetch("Zed", "Current Status", vault=vault).stdout
+        self.assertIn("one", both)
+        self.assertIn("two", both)
+
     def test_open_threads_never_outlined(self):
         out = sc("--brief").stdout
         ada = out.split("--- Ada_Quill")[1].split("--- Cole_Plain")[0]
@@ -191,6 +188,60 @@ class LayeredTests(unittest.TestCase):
             [sys.executable, str(SCRIPTS / "session_context.py"),
              str(FIXTURE), "--threads"], capture_output=True, text=True)
         self.assertNotIn("gma section ", out.stdout)
+
+
+class LayeredUnitTests(unittest.TestCase):
+    def test_crlf_outline_has_no_mixed_endings(self):
+        body = ("Top text.\r\n\r\n### One\r\nalpha beta\r\n\r\n"
+                "### Two\r\ngamma\r\n")
+        text, outlined = sctx.layered(body, "Zed", "Current Status")
+        self.assertTrue(outlined)
+        self.assertEqual(
+            text,
+            "Top text.\r\n\r\n"
+            "### One  (2 words; Zed: Current Status/One)\r\n"
+            "### Two  (1 words; Zed: Current Status/Two)")
+        self.assertNotRegex(text, r"(?<!\r)\n")
+
+    def test_crlf_multi_line_preamble_keeps_single_returns(self):
+        body = ("Line A.\r\nLine B.\r\n\r\n### One\r\nalpha beta\r\n\r\n"
+                "### Two\r\ngamma\r\n")
+        text, _ = sctx.layered(body, "Zed", "Current Status")
+        self.assertTrue(text.startswith("Line A.\r\nLine B.\r\n\r\n### One"),
+                        repr(text))
+        self.assertNotIn("\r\r", text)
+        self.assertNotRegex(text, r"(?<!\r)\n")
+
+    def test_subsection_holding_the_open_threads_label_prints_whole(self):
+        body = ("Top.\n\n### Quiet\nsome words\n\n### Late\n"
+                "**Open threads:**\n- **The key** \u2014 still missing\n")
+        text, outlined = sctx.layered(body, "Zed", "Current Status")
+        self.assertTrue(outlined)
+        self.assertIn("### Late\n**Open threads:**\n- **The key**", text)
+        self.assertIn("### Quiet  (2 words; Zed: Current Status/Quiet)", text)
+        text, outlined = sctx.layered("### Late\n- **Open threads:**\n- A\n",
+                                      "Zed", "Current Status")
+        self.assertFalse(outlined)
+        self.assertEqual(text, "### Late\n- **Open threads:**\n- A")
+
+    def test_repeated_title_names_the_section(self):
+        body = "### Notes\none\n### Notes\ntwo\n### Solo\nthree\n"
+        text, _ = sctx.layered(body, "Zed", "Current Status")
+        self.assertEqual(text.count("Zed: Current Status)"), 2)
+        self.assertIn("### Solo  (1 words; Zed: Current Status/Solo)", text)
+
+    def test_note_names_are_read_once(self):
+        import section as section_cmd
+        calls = []
+        real = section_cmd.name_index
+        section_cmd.name_index = lambda b: calls.append(1) or real(b)
+        try:
+            outlines = sctx.Outlines()
+            for rel in ("PCs/Ada_Quill.md", "PCs/Cole_Plain.md"):
+                outlines.note_ref(FIXTURE, rel)
+        finally:
+            section_cmd.name_index = real
+        self.assertEqual(len(calls), 1)
 
 
 if __name__ == "__main__":

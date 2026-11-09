@@ -35,6 +35,7 @@ import subprocess
 import sys
 import threading
 import unicodedata
+from bisect import bisect_left
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from functools import lru_cache
@@ -1090,20 +1091,23 @@ def line_headings(lines: list[str]) -> list[tuple[int, int, str]]:
 
 
 def _title_key(title: str) -> str:
-    return " ".join(title.split()).casefold()
+    """A title as headings are compared: case folded, runs of spaces one,
+    and no space round a "/" (`Allies / Enemies` is `Allies/Enemies`)."""
+    return "/".join(" ".join(part.split())
+                    for part in title.split("/")).casefold()
 
 
 def find_section(text: str, path: list[str], *, level: int | None = None,
-                 first: bool = False, trim: bool = True
+                 first: bool = False, trim: bool = True, exact: bool = False
                  ) -> tuple[int, int] | None | list[str]:
     """`find_section_lines` on `text` split on "\\n"."""
     return find_section_lines(text.split("\n"), path, level=level,
-                              first=first, trim=trim)
+                              first=first, trim=trim, exact=exact)
 
 
 def find_section_lines(lines: list[str], path: list[str], *,
                        level: int | None = None, first: bool = False,
-                       trim: bool = True
+                       trim: bool = True, exact: bool = False
                        ) -> tuple[int, int] | None | list[str]:
     """Where a note's section is, by heading path: `["GM Notes", "Hooks"]`.
 
@@ -1121,14 +1125,20 @@ def find_section_lines(lines: list[str], path: list[str], *,
 
     `level` pins the first title to that heading level; `first` takes the
     first match instead of listing candidates when several match; `trim`
-    False keeps the blank lines before the next heading in the span."""
+    False keeps the blank lines before the next heading in the span;
+    `exact` compares titles by case only, with no space folding (how the
+    publish tool finds the Overview's Open Threads)."""
     heads = line_headings(lines)
-    titles = [_title_key(atx_title(h[2])) for h in heads]
-
-    def end_of(n: int) -> int:
-        depth = heads[n][1]
-        return next((heads[m][0] for m in range(n + 1, len(heads))
-                     if heads[m][1] <= depth), len(lines))
+    key = str.casefold if exact else _title_key
+    titles = [key(atx_title(h[2])) for h in heads]
+    # Where each heading's section ends: the next heading no deeper.
+    ends = [len(lines)] * len(heads)
+    stack: list[int] = []
+    for m, (at, depth, _t) in enumerate(heads):
+        while stack and heads[stack[-1]][1] >= depth:
+            ends[stack.pop()] = at
+        stack.append(m)
+    head_lines = [h[0] for h in heads]
 
     found: dict[int, None] = {}      # last heading of each match, in order
 
@@ -1140,22 +1150,21 @@ def find_section_lines(lines: list[str], path: list[str], *,
         # A title may hold "/": take 1, 2, ... parts as the next title, and
         # go on only where a heading of that title exists.
         for take in range(1, len(parts) + 1):
-            key = "/".join(parts[:take])
+            want = "/".join(parts[:take])
             for n in range(lo, hi):
-                if titles[n] != key:
+                if titles[n] != want:
                     continue
                 if last is None and level is not None \
                         and heads[n][1] != level:
                     continue
                 if last is not None and heads[n][1] <= heads[last][1]:
                     continue
-                inside = next((m for m in range(n + 1, len(heads))
-                               if heads[m][0] >= end_of(n)), len(heads))
-                walk(parts[take:], n, n + 1, inside)
+                walk(parts[take:], n, n + 1,
+                     bisect_left(head_lines, ends[n]))
 
     if not path:
         return None
-    walk([_title_key(p) for p in path], None, 0, len(heads))
+    walk([key(p) for p in path], None, 0, len(heads))
     matches = sorted(found)
     if not matches:
         return None
@@ -1168,7 +1177,7 @@ def find_section_lines(lines: list[str], path: list[str], *,
                     depth = heads[m][1]
             return "/".join(names) + f" (line {heads[n][0] + 1})"
         return [full(n) for n in matches]
-    start, end = heads[matches[0]][0], end_of(matches[0])
+    start, end = heads[matches[0]][0], ends[matches[0]]
     while trim and end > start + 1 and not lines[end - 1].strip():
         end -= 1
     return start, end

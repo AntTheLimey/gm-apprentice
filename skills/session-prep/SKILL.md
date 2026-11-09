@@ -207,7 +207,7 @@ Don't move to spotlight until intent is set or deferred to
 
 **12. PC Roster + Arc Check** — Each PC's `## Current Status` is
 already in the bundle (`###` subsections outlined); don't re-read it. `--prep`'s PC Arcs gives every
-active PC's `## Background` and `## GM Notes` plus spotlight history from earlier Plans' `## Spotlight Forecast`
+active PC's `## Background` and `## GM Notes` (outlined too) plus spotlight history from earlier Plans' `## Spotlight Forecast`
 (role, sessions since last B- and C-plot). Don't open full PC
 sheets. Judge arc stage (five-stage model) from that evidence. Per PC:
 - backstory hooks, stated goals, arc stage and theme, relationships

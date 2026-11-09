@@ -22,9 +22,22 @@ import vault_write as vw
 import vaultlib as vl
 
 
-def resolve_note(batch: vw.Batch, raw: str) -> str:
+def name_index(batch: vw.Batch) -> dict[str, list[str]]:
+    """Every note's file name and aliases (normalised) -> the notes that
+    answer to it. Reads the whole vault: build it once and pass it to
+    `resolve_note` when resolving many names."""
+    names: dict[str, list[str]] = {}
+    for found, text in vl.vault_files(batch.vault):
+        for n in {vl.normalize(n)
+                  for n in (Path(found).stem, *vl.frontmatter_aliases(text))}:
+            names.setdefault(n, []).append(found)
+    return names
+
+
+def resolve_note(batch: vw.Batch, raw: str,
+                 names: dict[str, list[str]] | None = None) -> str:
     """The vault-relative path `raw` names: a path (with or without .md),
-    else a note's file name or alias."""
+    else a note's file name or alias. `names` is a ready `name_index`."""
     rel = vl.normalize_file_arg(raw)
     for guess in (rel, f"{rel}.md"):
         try:
@@ -34,12 +47,9 @@ def resolve_note(batch: vw.Batch, raw: str) -> str:
                 return resolved
         except vw.WriteError:
             continue
-    want = vl.normalize(raw.removesuffix(".md"))
-    hits = []
-    for found, text in vl.vault_files(batch.vault):
-        names = [Path(found).stem, *vl.frontmatter_aliases(text)]
-        if want in {vl.normalize(n) for n in names}:
-            hits.append(found)
+    if names is None:
+        names = name_index(batch)
+    hits = names.get(vl.normalize(raw.removesuffix(".md")), [])
     if not hits:
         raise vw.WriteError(f"{raw}: no note with that path, name or alias")
     if len(hits) > 1:

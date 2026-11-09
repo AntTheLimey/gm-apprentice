@@ -112,8 +112,8 @@ from vaultlib import (GM_MARKER_RE, is_active_pc, marker_re,  # noqa: F401
                       report_unreadable_settings, setting_or_builtin,
                       SKIP_DIRS, WRAP_UP_TYPES, body_of, campaign_overview,
                       entity_type,
-                      atx_title, fenced_headings, h3_blocks, line_headings,
-                      nested_mapping,
+                      atx_title, fenced_headings, find_section_lines,
+                      h3_blocks, line_headings, nested_mapping,
                       normalize, raw_frontmatter, section,
                       session_ref_number, word_count)
 from vaultlib import LABEL_RE as _LABEL_RE
@@ -954,28 +954,39 @@ FETCH_LINE = ('Outlined subsections: fetch one with `gma section "<vault>" '
 
 class Outlines:
     """Remembers whether a bundle printed any outline line, so its one
-    fetch line ends it."""
+    fetch line ends it, and the vault's note names, read once, that decide
+    how an outline line names its note."""
 
     def __init__(self) -> None:
         self.used = False
+        self._batch: vw.Batch | None = None
+        self._names: dict[str, list[str]] = {}
 
     def layered(self, body: str, vault: Path, rel: str, section: str) -> str:
-        text, outlined = layered(body, lambda: note_ref(vault, rel), section)
+        text, outlined = layered(body, lambda: self.note_ref(vault, rel),
+                                 section)
         self.used = self.used or outlined
         return text
 
+    def note_ref(self, vault: Path, rel: str) -> str:
+        """What an outline line names the note at `rel` by: its file name
+        when `gma section` resolves that name to this note, else its
+        vault-relative path (without `.md`), which it resolves exactly."""
+        path = Path(rel).as_posix()
+        if self._batch is None:
+            self._batch = vw.Batch(vault)
+            self._names = section_cmd.name_index(self._batch)
+        try:
+            if section_cmd.resolve_note(self._batch, Path(rel).stem,
+                                        self._names) == path:
+                return Path(rel).stem
+        except vw.WriteError:
+            pass
+        return path.removesuffix(".md")
 
-def note_ref(vault: Path, rel: str) -> str:
-    """What an outline line names the note at `rel` by: its file name when
-    `gma section` resolves that name to this note, else its vault-relative
-    path (without `.md`), which it resolves exactly."""
-    path = Path(rel).as_posix()
-    try:
-        if section_cmd.resolve_note(vw.Batch(vault), Path(rel).stem) == path:
-            return Path(rel).stem
-    except vw.WriteError:
-        pass
-    return path.removesuffix(".md")
+
+_OPEN_THREADS_LABEL_RE = re.compile(
+    r"^[ \t]*(?:[-*][ \t]+)?\*\*open threads:\*\*", re.I)
 
 
 def layered(body: str, note: str | Callable[[], str], section: str
@@ -988,7 +999,10 @@ def layered(body: str, note: str | Callable[[], str], section: str
     note and path `gma section` takes. A deeper heading inside a subsection
     folds into it. A body with no such heading comes back unchanged. The
     `**Open threads:**` label is not a heading, so it stays in the text
-    before the first one. A CRLF body gets CRLF outline lines."""
+    before the first one; a subsection holding the label under it prints
+    whole. A title that repeats (or whose path would fetch another heading)
+    names the section instead, which fetches every one of them. A CRLF
+    body gets CRLF outline lines."""
     lines = body.split("\n")
     heads = [h for h in line_headings(lines) if h[1] >= 3]
     if not heads:
@@ -1003,13 +1017,24 @@ def layered(body: str, note: str | Callable[[], str], section: str
     out = ["\n".join(before).rstrip()]   # lines keep their own "\r"
     if before and not before[-1].strip():
         out.append("")
+    # The section as a note holds it, to ask whether a path fetches one
+    # subsection. A repeated title does not: its line names the section.
+    whole = ["## " + section, *lines]
+    outlined = False
     for n, (idx, level, title) in enumerate(tops):
         end = tops[n + 1][0] if n + 1 < len(tops) else len(lines)
+        if any(_OPEN_THREADS_LABEL_RE.match(x) for x in lines[idx + 1:end]):
+            out.append("\n".join(lines[idx:end]).rstrip())   # printed whole
+            continue
         words = word_count("\n".join(lines[idx + 1:end]))
         name = atx_title(title)
+        found = find_section_lines(
+            whole, [section, *(p.strip() for p in name.split("/"))])
+        where = f"{section}/{name}" if isinstance(found, tuple) else section
         out.append(f"{'#' * level} {name}  ({words} words; "
-                   f"{note}: {section}/{name})")
-    return eol.join(out).lstrip("\r\n"), True
+                   f"{note}: {where})")
+        outlined = True
+    return eol.join(out).lstrip("\r\n"), outlined
 
 
 def arcs_report(files, chapter, upcoming: int, vault: Path,
