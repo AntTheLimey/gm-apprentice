@@ -28,6 +28,7 @@ const { loadManifest } = require('./manifest');
 const { canonicalNfc } = require('./unicode');
 const { real, resolveGmFolder, gmFolderProblem, insideGitWorkTree, gmPage, writeMarker, ROBOTS_TXT } = require('./gm-site');
 const { publishView: sharedPublishView } = require('./published-view');
+const { sharedEntries, withSharedThreads } = require('./shared-threads');
 const { createMarks, markKinds, sanitize, unmark, withoutMarked } = require('./gm-marks');
 const { generateThemeCSS, googleFontNames, FONT_FORMATS, fontOutputPath } = require('./theme');
 const fontsLib = require('./fonts');
@@ -1314,7 +1315,34 @@ function buildSite(options) {
       return out;
     })()
     : hubWrapUps;
+  // Each PC page also shows the Overview's shared threads that name that PC (or the party). They are added to the PC's
+  // markdown here, before the stub cut and the GM marks run, so both sites cut or mark them by the rules every other
+  // line of its Current Status follows (a stub that cuts the section cuts them; the GM site marks what players do not
+  // see). The link map exists by now (built above); the Overview's view is computed on a copy, always, published or
+  // not (it is usually left off the publish list), by the same player-safe strip chain, and only its `## Open Threads`
+  // section is read from it. A gm-only shared thread stays off the GM site's PC page too. A view that cannot be made
+  // gives nothing, never the raw text. The Overview itself gets no page.
+  const overviewPage = corpus.find((p) => String((p.sourceFrontmatter || p.frontmatter || {}).type).trim().toLowerCase() === 'campaign_overview');
+  let overviewView = '';
+  if (overviewPage) {
+    try {
+      const copy = { ...overviewPage };
+      require('./published-view').publishView(copy, { gm, mark, excludeCallouts, excludeSections, pcKeepSections, storyMoments });   // looked up at the call: a test can make it throw
+      overviewView = String(copy.publishedMarkdown || '');
+    } catch (err) {
+      overviewView = '';
+      console.warn(`  WARNING: ${vaultRelPathOf(overviewPage)}: shared threads were left off the PC pages because the Overview's published view could not be made (${err.message})`);
+    }
+  }
+  const sharedAll = sharedEntries(overviewView);
+  const namesPage = (target, page) => {
+    const found = resolveSiteLink(`[[${target}]]`, { linkMap, pages });
+    return found.kind === 'page' && found.href === page.outputPath;
+  };
   for (const page of pages) {
+    if (sharedAll.length && String((page.frontmatter || {}).type).trim().toLowerCase() === 'pc') {
+      page.markdown = withSharedThreads(page.markdown, sharedAll.filter((e) => e.party || e.involves.some((t) => namesPage(t, page))));
+    }
     if (hubWrapUps.has(page)) page.markdown = '';
     // `publish: stub` — emit the page shell so navigation and links still work,
     // but keep only the sections the GM explicitly named. Applied to
@@ -1393,7 +1421,6 @@ function buildSite(options) {
   const attachmentsFolder = String(scanConfig.attachmentsDir || require('./settings/registry').entry('vault.attachments').default).replace(/\\/g, '/').replace(/^\.\/|\/+$/g, '');
   const scannedRel = new Map(Object.entries(imageMap).map(([key, e]) => [key, e.relPath]));
 
-  const { sharedEntries, withSharedThreads } = require('./shared-threads');
   const { buildBacklinks, backlinksOf } = require('./backlinks');
   const { buildSearchIndex } = require('./search-index');
   const { scoreByRecency } = require('./recency');
@@ -1472,50 +1499,7 @@ function buildSite(options) {
     page.headingsUnstable = pcHeadingsUnstable(page, linkMap, excludeSections, imageMap, { excludeCallouts, pcKeepSections });
     if (page.headingsUnstable) console.warn(`  WARNING: ${page.outputPath}: ${HEADINGS_UNSTABLE_WARNING}`);
   }
-  // Each PC page also shows the Overview's shared threads that name that PC (or the party), read from the Overview's
-  // published view so nothing hidden there reaches a PC page. A gm-only shared thread stays off the GM site's PC page
-  // too (the Overview's player view is what is read). The PC's own strip chain runs over the added text.
-  // The threads are added only where players would see them: if the PC's Current Status does not publish to players
-  // (stub-cut, hidden section), the GM page shows nothing there either, never an unmarked copy.
-  // The Overview is usually not published (the publish list leaves it out), so it is looked for in the whole corpus.
-  // A published one has its view already; an unpublished one is read through a copy's player-safe view (the same strip
-  // chain), and only its `## Open Threads` section is taken from that. A view that cannot be made gives nothing, never
-  // the raw text. The Overview itself gets no page.
-  const overviewPage = corpus.find((p) => String((p.sourceFrontmatter || p.frontmatter || {}).type).trim().toLowerCase() === 'campaign_overview');
-  let overviewView = '';
-  if (overviewPage) {
-    try {
-      if (typeof overviewPage.publishedMarkdown === 'string') overviewView = overviewPage.publishedMarkdown;
-      else {
-        const copy = { ...overviewPage };
-        require('./published-view').publishView(copy, { gm, mark, excludeCallouts, excludeSections, pcKeepSections, storyMoments });   // looked up at the call: a test can make it throw
-        overviewView = String(copy.publishedMarkdown || '');
-      }
-    } catch (err) {
-      overviewView = '';
-      console.warn(`  WARNING: ${vaultRelPathOf(overviewPage)}: shared threads were left off the PC pages because the Overview's published view could not be made (${err.message})`);
-    }
-  }
-  const sharedAll = sharedEntries(overviewView);
-  const namesPage = (target, page) => {
-    const found = resolveSiteLink(`[[${target}]]`, { linkMap, pages });
-    return found.kind === 'page' && found.href === page.outputPath;
-  };
-  for (const page of pages) {
-    if (!isPcPage(page)) continue;
-    if (sharedAll.length) {
-      const withThreads = withSharedThreads(page.markdown, sharedAll.filter((e) => e.party || e.involves.some((t) => namesPage(t, page))));
-      // What players see of the text: on the GM site a stub-cut section is kept and marked, so the marked spans come off.
-      const playersSee = (md) => {
-        const text = playerSafeMarkdown(md, { excludeCallouts, excludeSections, pcKeepSections, storyMoments, frontmatter: page.sourceFrontmatter || page.frontmatter, ...markOpt }).text;
-        return gm ? withoutMarked(text, mark.marks) : text;
-      };
-      // The threads go in only where players see the Current Status heading itself: the added lines sit after any mark
-      // that closes a cut section, so the changed view alone would not show a cut section.
-      if (withThreads !== page.markdown && /^##\s+Current Status\s*$/mi.test(playersSee(page.markdown)) && playersSee(withThreads) !== playersSee(page.markdown)) page.markdown = withThreads;
-    }
-    publishView(page);
-  }
+  for (const page of pages) if (isPcPage(page)) publishView(page);
 
   // Whether a Story section will exist. Computed early (pure function of pages) so the
   // top nav — threaded into every page, including story pages built later — can point

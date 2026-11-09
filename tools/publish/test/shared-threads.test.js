@@ -27,6 +27,29 @@ function buildVault(files) {
   return { read: (...p) => fs.readFileSync(path.join(root, 'docs', ...p), 'utf8') };
 }
 
+// The page with every GM-marked block (and its nested divs) taken out: what a reader of the GM page sees unmarked.
+function unmarked(html) {
+  let out = '';
+  let i = 0;
+  const open = /<(div|span) class="gm-mark[^"]*"/g;
+  for (;;) {
+    open.lastIndex = i;
+    const m = open.exec(html);
+    if (!m) return out + html.slice(i);
+    out += html.slice(i, m.index);
+    const tag = m[1];
+    const re = new RegExp(`<(/?)${tag}\\b`, 'g');
+    re.lastIndex = m.index;
+    let depth = 0;
+    let n;
+    while ((n = re.exec(html))) {
+      depth += n[1] ? -1 : 1;
+      if (depth === 0) { i = html.indexOf('>', n.index) + 1; break; }
+    }
+    if (depth !== 0) return out;
+  }
+}
+
 const CONFIG = settingsText({ 'player_site.title': 'T', 'player_site.folder_map': { PCs: 'pcs' } });
 
 test('shared threads: reads the entries the Python writer writes', () => {
@@ -120,7 +143,7 @@ test('shared threads: a PC whose Current Status players do not see gets none, on
   const player = fs.readFileSync(path.join(siteDir, 'docs', 'pcs', 'corwin-hale.html'), 'utf8');
   const gm = fs.readFileSync(path.join(root, 'campaign-gm', 'pcs', 'corwin-hale.html'), 'utf8');
   assert.doesNotMatch(player, /Shared threads|The missing ledger/);
-  assert.doesNotMatch(gm, /Shared threads|The missing ledger/, 'the GM page never shows an unmarked copy');
+  assert.doesNotMatch(unmarked(gm), /Shared threads|The missing ledger/, 'the GM page never shows an unmarked copy');
 });
 
 // The Overview is left off the publish list, as a real vault's usually is.
@@ -172,12 +195,12 @@ for (const site of ['player', 'gm']) {
   });
 }
 
-function stubVault(site, { throwView = false } = {}) {
+function stubVault(site, { throwView = false, fm = 'publish: stub\npublish_include_sections: [Notes]\n' } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'shared-threads-stub-'));
   const vault = path.join(root, 'vault');
   const notes = {
     'Campaign Overview.md': overview(),
-    'PCs/Corwin_Hale.md': pc('Corwin_Hale').replace('type: pc\n', 'type: pc\npublish: stub\npublish_include_sections: [Notes]\n'),
+    'PCs/Corwin_Hale.md': pc('Corwin_Hale').replace('type: pc\n', `type: pc\n${fm}`),
   };
   for (const [rel, text] of Object.entries(notes)) {
     fs.mkdirSync(path.dirname(path.join(vault, rel)), { recursive: true });
@@ -202,12 +225,18 @@ function stubVault(site, { throwView = false } = {}) {
 for (const site of ['player', 'gm']) {
   test(`shared threads: a stub PC whose Current Status is cut gets none (${site} site)`, () => {
     const { html } = stubVault(site);
-    assert.doesNotMatch(html, /Shared threads|The missing ledger/);
+    assert.doesNotMatch(unmarked(html), /Shared threads|The missing ledger/);
+  });
+  test(`shared threads: a stub PC that keeps Current Status shows them (${site} site, unmarked)`, () => {
+    const { html } = stubVault(site, { fm: 'publish: stub\npublish_include_sections: [Current Status]\n' });
+    assert.match(unmarked(html), /Shared threads/);
+    assert.match(unmarked(html), /The missing ledger/);
   });
 }
 
 test('shared threads: an Overview view that cannot be made is warned about and adds nothing', () => {
-  const { html, warnings } = stubVault('player', { throwView: true });
+  const { html, warnings } = stubVault('player', { throwView: true, fm: '' });
   assert.ok(warnings.some((w) => /^ {2}WARNING: Campaign Overview\.md: shared threads were left off the PC pages/.test(w)), warnings.join('\n'));
   assert.doesNotMatch(html, /Shared threads/);
+  assert.match(stubVault('player', { fm: '' }).html, /Shared threads/, 'the same vault shows them when the view is made');
 });
