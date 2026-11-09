@@ -1093,18 +1093,6 @@ def _title_key(title: str) -> str:
     return " ".join(title.split()).casefold()
 
 
-def _splits(parts: list[str]) -> list[list[str]]:
-    """Every way to cut `parts` into consecutive groups, each group joined
-    with "/" (a heading title may hold a slash)."""
-    if not parts:
-        return [[]]
-    out = []
-    for n in range(1, len(parts) + 1):
-        for rest in _splits(parts[n:]):
-            out.append(["/".join(parts[:n]), *rest])
-    return out
-
-
 def find_section(text: str, path: list[str], *, level: int | None = None,
                  first: bool = False, trim: bool = True
                  ) -> tuple[int, int] | None | list[str]:
@@ -1144,26 +1132,30 @@ def find_section_lines(lines: list[str], path: list[str], *,
 
     found: dict[int, None] = {}      # last heading of each match, in order
 
-    def walk(keys: list[str], last: int | None, lo: int, hi: int) -> None:
-        if not keys:
+    def walk(parts: list[str], last: int | None, lo: int, hi: int) -> None:
+        if not parts:
             if last is not None:
                 found[last] = None
             return
-        for n in range(lo, hi):
-            if titles[n] != keys[0]:
-                continue
-            if last is None and level is not None and heads[n][1] != level:
-                continue
-            if last is not None and heads[n][1] <= heads[last][1]:
-                continue
-            inside = next((m for m in range(n + 1, len(heads))
-                           if heads[m][0] >= end_of(n)), len(heads))
-            walk(keys[1:], n, n + 1, inside)
+        # A title may hold "/": take 1, 2, ... parts as the next title, and
+        # go on only where a heading of that title exists.
+        for take in range(1, len(parts) + 1):
+            key = "/".join(parts[:take])
+            for n in range(lo, hi):
+                if titles[n] != key:
+                    continue
+                if last is None and level is not None \
+                        and heads[n][1] != level:
+                    continue
+                if last is not None and heads[n][1] <= heads[last][1]:
+                    continue
+                inside = next((m for m in range(n + 1, len(heads))
+                               if heads[m][0] >= end_of(n)), len(heads))
+                walk(parts[take:], n, n + 1, inside)
 
     if not path:
         return None
-    for keys in _splits([_title_key(p) for p in path]):
-        walk(keys, None, 0, len(heads))
+    walk([_title_key(p) for p in path], None, 0, len(heads))
     matches = sorted(found)
     if not matches:
         return None

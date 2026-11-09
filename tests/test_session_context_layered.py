@@ -137,6 +137,15 @@ class LayeredTests(unittest.TestCase):
             "### Two  (1 words; Zed: Current Status/Two)")
         self.assertNotRegex(text, r"(?<!\r)\n")
 
+    def test_crlf_multi_line_preamble_keeps_single_returns(self):
+        body = ("Line A.\r\nLine B.\r\n\r\n### One\r\nalpha beta\r\n\r\n"
+                "### Two\r\ngamma\r\n")
+        text, _ = sctx.layered(body, "Zed", "Current Status")
+        self.assertTrue(text.startswith("Line A.\r\nLine B.\r\n\r\n### One"),
+                        repr(text))
+        self.assertNotIn("\r\r", text)
+        self.assertNotRegex(text, r"(?<!\r)\n")
+
     def test_blank_line_before_the_outline_kept(self):
         out = sc("--brief").stdout
         ada = out.split("--- Ada_Quill")[1].split("--- Cole_Plain")[0]

@@ -61,6 +61,15 @@ class FindSectionTests(unittest.TestCase):
         self.assertIn("line 2", got[0])
         self.assertIn("line 5", got[1])
 
+    def test_long_path_without_matches_is_quick(self):
+        import time
+        text = "## S\n### A\nx\n### B\ny\n" * 3
+        path = [f"p{i}" for i in range(20)]
+        t = time.perf_counter()
+        self.assertIsNone(vl.find_section(text, path))
+        self.assertIsNone(vl.find_section(text, ["S", "A"] + path))
+        self.assertLess(time.perf_counter() - t, 1.0)
+
     def test_lines_split_on_newline_only(self):
         # U+2028 is not a line break here: the span counts "\n" lines.
         text = "## A\nx y\n## B\nz\n"

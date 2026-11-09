@@ -983,7 +983,7 @@ def layered(body: str, note: str, section: str) -> tuple[str, bool]:
             tops.append(h)
     eol = "\r\n" if "\r\n" in body else "\n"
     before = lines[:tops[0][0]]
-    out = [eol.join(before).rstrip()]
+    out = ["\n".join(before).rstrip()]   # lines keep their own "\r"
     if before and not before[-1].strip():
         out.append("")
     for n, (idx, level, title) in enumerate(tops):
