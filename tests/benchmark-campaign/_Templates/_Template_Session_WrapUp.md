@@ -24,9 +24,11 @@ for players, `###` under GM Notes is not. -->
 
 # Chapter CC · Session NN — {Title} — Wrap-Up
 
+<!-- gm-only -->
 > [!info] Source
 > {Where this wrap-up's content came from — play notes file, export
 > name — and any structural caveat, e.g. "session ended mid-scene."}
+<!-- /gm-only -->
 
 ## Narrative Recap
 

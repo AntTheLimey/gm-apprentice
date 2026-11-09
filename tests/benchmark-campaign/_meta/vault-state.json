@@ -1,3 +1,9 @@
 {
-  "gm_apprentice_version": "1.10.118"
+  "gm_apprentice_version": "1.12.1",
+  "update_held": {
+    "left": [
+      "schema-mirror"
+    ],
+    "said": []
+  }
 }

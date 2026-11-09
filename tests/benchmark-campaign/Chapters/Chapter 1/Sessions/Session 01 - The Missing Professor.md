@@ -8,6 +8,6 @@ status: reviewed
 documents:
   plan: null
   play_notes: null
-  wrap_up: "[[Session 01 - The Missing Professor - Wrap-Up]]"
+  wrap_up: "[[Chapter_01_Session_01_Wrap_Up]]"
 tags: []
 ---

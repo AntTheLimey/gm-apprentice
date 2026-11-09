@@ -8,6 +8,6 @@ status: reviewed
 documents:
   plan: null
   play_notes: "[[Session 02 - The Docks at Night - Play Notes]]"
-  wrap_up: "[[Session 02 - The Docks at Night - Wrap-Up]]"
+  wrap_up: "[[Chapter_01_Session_02_Wrap_Up]]"
 tags: []
 ---

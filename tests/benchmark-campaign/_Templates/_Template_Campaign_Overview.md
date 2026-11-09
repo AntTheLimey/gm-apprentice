@@ -18,6 +18,7 @@ canon_status: AUTHORITATIVE
 aliases: []
 tags: []
 portrait: ""
+voice: ""            # the campaign's storytelling voice, a few sentences; the GM approves it; never published
 lastUpdated: ""
 asOfSession: ""
 ---

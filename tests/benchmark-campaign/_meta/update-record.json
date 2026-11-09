@@ -1,0 +1,262 @@
+{
+  "templates": {
+    "_Template_Location.md": {
+      "state": "plugin",
+      "matches": "1.12.1",
+      "decision": null,
+      "file_sha": "edd1d0e2b88fe22fc41eb12a6bc26762fc1775127e236551b86c591622295db6",
+      "shipped_sha": "edd1d0e2b88fe22fc41eb12a6bc26762fc1775127e236551b86c591622295db6",
+      "plugin": "1.12.1",
+      "on": "2026-11-08",
+      "why": "It is the plugin's 1.12.1 text."
+    },
+    "_Template_Item.md": {
+      "state": "plugin",
+      "matches": "1.12.1",
+      "decision": null,
+      "file_sha": "2555b0c10bdd1a48fb78f5729f3c36589f7d1940b62219e5a475bb737d6799ea",
+      "shipped_sha": "2555b0c10bdd1a48fb78f5729f3c36589f7d1940b62219e5a475bb737d6799ea",
+      "plugin": "1.12.1",
+      "on": "2026-11-08",
+      "why": "It is the plugin's 1.12.1 text."
+    },
+    "_Template_Creature.md": {
+      "state": "plugin",
+      "matches": "1.12.1",
+      "decision": null,
+      "file_sha": "2343ae3b78a03e5221f186c144df06bbb81d1d855466103a9afd03acc26b25e7",
+      "shipped_sha": "2343ae3b78a03e5221f186c144df06bbb81d1d855466103a9afd03acc26b25e7",
+      "plugin": "1.12.1",
+      "on": "2026-11-08",
+      "why": "It is the plugin's 1.12.1 text."
+    },
+    "_Template_Organization.md": {
+      "state": "plugin",
+      "matches": "1.12.1",
+      "decision": null,
+      "file_sha": "91d409ba7bd15cf111f20337c62f37f08b6d18e944e7a84f9700c8926fd0232b",
+      "shipped_sha": "91d409ba7bd15cf111f20337c62f37f08b6d18e944e7a84f9700c8926fd0232b",
+      "plugin": "1.12.1",
+      "on": "2026-11-08",
+      "why": "It is the plugin's 1.12.1 text."
+    },
+    "_Template_Faction.md": {
+      "state": "plugin",
+      "matches": "1.12.1",
+      "decision": null,
+      "file_sha": "470acd5b4016d97f305624e3c8de606af9b23da521e8ebfc69995139ef58ea30",
+      "shipped_sha": "470acd5b4016d97f305624e3c8de606af9b23da521e8ebfc69995139ef58ea30",
+      "plugin": "1.12.1",
+      "on": "2026-11-08",
+      "why": "It is the plugin's 1.12.1 text."
+    },
+    "_Template_Event.md": {
+      "state": "plugin",
+      "matches": "1.12.1",
+      "decision": null,
+      "file_sha": "526a7788c339755c41305750b71187a1bef78eadff0d7fea25d14bec89384265",
+      "shipped_sha": "526a7788c339755c41305750b71187a1bef78eadff0d7fea25d14bec89384265",
+      "plugin": "1.12.1",
+      "on": "2026-11-08",
+      "why": "It is the plugin's 1.12.1 text."
+    },
+    "_Template_Clue.md": {
+      "state": "plugin",
+      "matches": "1.12.1",
+      "decision": null,
+      "file_sha": "ea5221c5c4f6e3d89aaa6027c3802ea8d242b9f3862d4aaf1c495d2f4ea987df",
+      "shipped_sha": "ea5221c5c4f6e3d89aaa6027c3802ea8d242b9f3862d4aaf1c495d2f4ea987df",
+      "plugin": "1.12.1",
+      "on": "2026-11-08",
+      "why": "It is the plugin's 1.12.1 text."
+    },
+    "_Template_Document.md": {
+      "state": "plugin",
+      "matches": "1.12.1",
+      "decision": null,
+      "file_sha": "d7a80349cdf5643982ab4a24636c5b8953a1a8752155850bfa21d00a78700b15",
+      "shipped_sha": "d7a80349cdf5643982ab4a24636c5b8953a1a8752155850bfa21d00a78700b15",
+      "plugin": "1.12.1",
+      "on": "2026-11-08",
+      "why": "It is the plugin's 1.12.1 text."
+    },
+    "_Template_Prop.md": {
+      "state": "plugin",
+      "matches": "1.12.1",
+      "decision": null,
+      "file_sha": "be7b89f776922a47881a78faa27524869483ce4c7454935ca77c9d10e894e942",
+      "shipped_sha": "be7b89f776922a47881a78faa27524869483ce4c7454935ca77c9d10e894e942",
+      "plugin": "1.12.1",
+      "on": "2026-11-08",
+      "why": "It is the plugin's 1.12.1 text."
+    },
+    "_Template_Heritage.md": {
+      "state": "plugin",
+      "matches": "1.12.1",
+      "decision": null,
+      "file_sha": "1c63ff6e65f87b7e9d257a4b4f7e78fe863564daed6d30b118cc0f84a7a7380a",
+      "shipped_sha": "1c63ff6e65f87b7e9d257a4b4f7e78fe863564daed6d30b118cc0f84a7a7380a",
+      "plugin": "1.12.1",
+      "on": "2026-11-08",
+      "why": "It is the plugin's 1.12.1 text."
+    },
+    "_Template_World_Domain.md": {
+      "state": "plugin",
+      "matches": "1.12.1",
+      "decision": null,
+      "file_sha": "0e15e6043927591c0bf7ed9cd786e6b1913a4776def00fb430f3f9cf8fc2eabc",
+      "shipped_sha": "0e15e6043927591c0bf7ed9cd786e6b1913a4776def00fb430f3f9cf8fc2eabc",
+      "plugin": "1.12.1",
+      "on": "2026-11-08",
+      "why": "It is the plugin's 1.12.1 text."
+    },
+    "_Template_Plan.md": {
+      "state": "plugin",
+      "matches": "1.12.1",
+      "decision": null,
+      "file_sha": "0bcadfbfabab9ae2ead919acb6b5b27db54cebe65fcbfab5c68761712d9ba958",
+      "shipped_sha": "0bcadfbfabab9ae2ead919acb6b5b27db54cebe65fcbfab5c68761712d9ba958",
+      "plugin": "1.12.1",
+      "on": "2026-11-08",
+      "why": "It is the plugin's 1.12.1 text."
+    },
+    "_Template_Session.md": {
+      "state": "plugin",
+      "matches": "1.12.1",
+      "decision": null,
+      "file_sha": "ebac23739e5fda65fc84c37c0948db352ee0af2af8b4d8ee71ca67b0b22b33f7",
+      "shipped_sha": "ebac23739e5fda65fc84c37c0948db352ee0af2af8b4d8ee71ca67b0b22b33f7",
+      "plugin": "1.12.1",
+      "on": "2026-11-08",
+      "why": "It is the plugin's 1.12.1 text."
+    },
+    "_Template_Session_Plan.md": {
+      "state": "plugin",
+      "matches": "1.12.1",
+      "decision": null,
+      "file_sha": "555cd6c96a4b889e782a02bb7dac33829439d51619f8585654fc7d37c438edb5",
+      "shipped_sha": "555cd6c96a4b889e782a02bb7dac33829439d51619f8585654fc7d37c438edb5",
+      "plugin": "1.12.1",
+      "on": "2026-11-08",
+      "why": "It is the plugin's 1.12.1 text."
+    },
+    "_Template_Scene.md": {
+      "state": "plugin",
+      "matches": "1.12.1",
+      "decision": null,
+      "file_sha": "9434058a8a6361b0ab1f80ba850252337c32b5c12e54d46d0ac1173011a17bc2",
+      "shipped_sha": "9434058a8a6361b0ab1f80ba850252337c32b5c12e54d46d0ac1173011a17bc2",
+      "plugin": "1.12.1",
+      "on": "2026-11-08",
+      "why": "It is the plugin's 1.12.1 text."
+    },
+    "_Template_Chapter.md": {
+      "state": "plugin",
+      "matches": "1.12.1",
+      "decision": null,
+      "file_sha": "6e2060b44d3e4421b207b1de0af756b95f4eaca18bf663896a7b6afbc39cb974",
+      "shipped_sha": "6e2060b44d3e4421b207b1de0af756b95f4eaca18bf663896a7b6afbc39cb974",
+      "plugin": "1.12.1",
+      "on": "2026-11-08",
+      "why": "It is the plugin's 1.12.1 text."
+    },
+    "_Template_NPC.md": {
+      "state": "plugin",
+      "matches": "1.12.1",
+      "decision": null,
+      "file_sha": "a9976ae52a10a18e8e9f9cbcea5e88695a63ab0c2a67ba48a1ecd0b288dd0b1e",
+      "shipped_sha": "a9976ae52a10a18e8e9f9cbcea5e88695a63ab0c2a67ba48a1ecd0b288dd0b1e",
+      "plugin": "1.12.1",
+      "on": "2026-11-08",
+      "why": "It was 1.10.122's text, unedited, so it was updated to 1.12.1."
+    },
+    "_Template_Campaign_Overview.md": {
+      "state": "plugin",
+      "matches": "1.12.1",
+      "decision": null,
+      "file_sha": "bde3182f77669e96659d53b05773d900ff4484994ba57c6a43bf82c4f9e4beee",
+      "shipped_sha": "bde3182f77669e96659d53b05773d900ff4484994ba57c6a43bf82c4f9e4beee",
+      "plugin": "1.12.1",
+      "on": "2026-11-08",
+      "why": "It was 1.11.1's text, unedited, so it was updated to 1.12.1."
+    },
+    "_Template_Session_WrapUp.md": {
+      "state": "plugin",
+      "matches": "1.12.1",
+      "decision": null,
+      "file_sha": "f77623c34099cdf6423d26dee7f3b78e3d0d47bd0a2fd23cbadbf0886b93f157",
+      "shipped_sha": "f77623c34099cdf6423d26dee7f3b78e3d0d47bd0a2fd23cbadbf0886b93f157",
+      "plugin": "1.12.1",
+      "on": "2026-11-08",
+      "why": "It was 1.10.113's text, unedited, so it was updated to 1.12.1."
+    },
+    "character-story.md": {
+      "state": "plugin",
+      "matches": "1.12.1",
+      "decision": null,
+      "file_sha": "33c775221b9db088f65baf9e1b7fa5edf650082870e016f2d5bfbae21a623d34",
+      "shipped_sha": "33c775221b9db088f65baf9e1b7fa5edf650082870e016f2d5bfbae21a623d34",
+      "plugin": "1.12.1",
+      "on": "2026-11-08",
+      "why": "It was 1.11.3's text, unedited, so it was updated to 1.12.1."
+    },
+    "pc-coc-7e.md": {
+      "state": "plugin",
+      "matches": "1.12.1",
+      "decision": null,
+      "file_sha": "ff92b872f8b0dabd9f1b253f61e64248fa988b7a4df5c3a76f70d56831cd624d",
+      "shipped_sha": "ff92b872f8b0dabd9f1b253f61e64248fa988b7a4df5c3a76f70d56831cd624d",
+      "plugin": "1.12.1",
+      "on": "2026-11-08",
+      "why": "It was 1.11.1's text, unedited, so it was updated to 1.12.1."
+    }
+  },
+  "answers": {
+    "schema-mirror": {
+      "answer": "leave",
+      "lines_sha": "777a7b6034324e04d16e560188094a1ee7785a291ea63aba24d3d5d50a3adbf6",
+      "on": "2026-11-08",
+      "plugin": "1.12.1"
+    }
+  },
+  "updates": [
+    {
+      "from": "1.10.118",
+      "to": "1.12.1",
+      "on": "2026-11-08",
+      "did": [
+        "Wrote down whether this vault has a site, which it had only implied.",
+        "Added the folders and setup files your vault was missing; nothing already there was touched.",
+        "Created CLAUDE.md holding the plugin's short instructions for the vault's agent.",
+        "Updated the NPC template to 1.12.1 (it was 1.10.122's text, unedited).",
+        "Updated the Campaign Overview template to 1.12.1 (it was 1.11.1's text, unedited).",
+        "Updated the Session Wrap-Up template to 1.12.1 (it was 1.10.113's text, unedited).",
+        "Updated the character story template to 1.12.1 (it was 1.11.3's text, unedited).",
+        "Updated the Call of Cthulhu character sheet template to 1.12.1 (it was 1.11.1's text, unedited).",
+        "Renamed wrap-up notes to the current naming pattern and updated every link to them."
+      ],
+      "asked": [],
+      "left_open": [
+        "schema-mirror"
+      ],
+      "backup": "/Users/antonypegg/.gm-apprentice/backups/benchmark-campaign-2b41f8ec/20261109-001405.tar.gz"
+    },
+    {
+      "from": "1.12.1",
+      "to": "1.12.1",
+      "on": "2026-11-08",
+      "did": [
+        "Kept your own version of the built-in note types."
+      ],
+      "asked": [
+        "schema-mirror"
+      ],
+      "left_open": [],
+      "backup": "/Users/antonypegg/.gm-apprentice/backups/benchmark-campaign-2b41f8ec/20261109-001442.tar.gz"
+    }
+  ],
+  "workarounds": [],
+  "swept": null,
+  "scanned": null,
+  "swept_memory": null
+}
