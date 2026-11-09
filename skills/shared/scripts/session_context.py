@@ -101,6 +101,8 @@ from pathlib import Path
 from typing import NamedTuple
 
 import scene_queue
+import section as section_cmd
+import vault_write as vw
 from schema_rules import (SESSION_PLAYED, chapter_key, chapter_of,
                           extract_frontmatter, parse_session_number,
                           wikilink_target)
@@ -957,13 +959,27 @@ class Outlines:
     def __init__(self) -> None:
         self.used = False
 
-    def layered(self, body: str, note: str, section: str) -> str:
-        text, outlined = layered(body, note, section)
+    def layered(self, body: str, vault: Path, rel: str, section: str) -> str:
+        text, outlined = layered(body, lambda: note_ref(vault, rel), section)
         self.used = self.used or outlined
         return text
 
 
-def layered(body: str, note: str, section: str) -> tuple[str, bool]:
+def note_ref(vault: Path, rel: str) -> str:
+    """What an outline line names the note at `rel` by: its file name when
+    `gma section` resolves that name to this note, else its vault-relative
+    path (without `.md`), which it resolves exactly."""
+    path = Path(rel).as_posix()
+    try:
+        if section_cmd.resolve_note(vw.Batch(vault), Path(rel).stem) == path:
+            return Path(rel).stem
+    except vw.WriteError:
+        pass
+    return path.removesuffix(".md")
+
+
+def layered(body: str, note: str | Callable[[], str], section: str
+            ) -> tuple[str, bool]:
     """A section body with its `###` subsections outlined, and whether it
     was. `body` is the section's text without its own `##` heading. Returns
     the text before the first heading of level 3 or deeper (a blank line
@@ -981,6 +997,7 @@ def layered(body: str, note: str, section: str) -> tuple[str, bool]:
     for h in heads:
         if not tops or h[1] <= tops[-1][1]:
             tops.append(h)
+    note = note() if callable(note) else note
     eol = "\r\n" if "\r\n" in body else "\n"
     before = lines[:tops[0][0]]
     out = ["\n".join(before).rstrip()]   # lines keep their own "\r"
@@ -1066,11 +1083,11 @@ def arcs_report(files, chapter, upcoming: int, vault: Path,
         lines.append(f"\n--- {stem} ({rel}, player: {player}) ---")
         bg = section(text, "Background")
         lines.append("## Background")
-        lines.append(outlines.layered(bg, stem, "Background") if bg
+        lines.append(outlines.layered(bg, vault, rel, "Background") if bg
                      else "(no ## Background section)")
         gm = section(text, "GM Notes")
         lines.append("## GM Notes")
-        lines.append(outlines.layered(gm, stem, "GM Notes") if gm
+        lines.append(outlines.layered(gm, vault, rel, "GM Notes") if gm
                      else "(no ## GM Notes section)")
         lines.append("Spotlight history (chapter-scoped, from "
                      "## Spotlight Forecast tables):")
@@ -1694,7 +1711,7 @@ def _bundle(argv: list[str] | None, outlines: Outlines) -> int:
         as_of = fm.get("asOfSession", "?")
         print(f"\n--- {Path(rel).stem} ({rel}, asOfSession: {as_of}) ---")
         status_block = section(text, "Current Status")
-        print(outlines.layered(status_block, Path(rel).stem, "Current Status")
+        print(outlines.layered(status_block, args.vault, rel, "Current Status")
               if status_block else "(no ## Current Status block)")
     if not found_pc:
         print("(no active PC entities found)")

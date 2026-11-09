@@ -151,6 +151,29 @@ class LayeredTests(unittest.TestCase):
         ada = out.split("--- Ada_Quill")[1].split("--- Cole_Plain")[0]
         self.assertIn("others\n\n### Session Log  (", ada)
 
+    def test_shared_name_is_named_by_path(self):
+        vault = copy_vault(self)
+        other = vault / "PCs" / "_resources"
+        other.mkdir()
+        (other / "Ada_Quill.md").write_text(
+            "# Ada Quill\n\nA handout.\n", encoding="utf-8")
+        found = []
+        for args in (("--brief",), ("--arcs",)):
+            out = sc(*args, vault=vault).stdout
+            self.assertEqual(out.count("gma section "), 1, out)
+            found += OUTLINE_RE.findall(out)
+        names = {n for _, n, _ in found}
+        self.assertIn("PCs/Ada_Quill", names)       # shared name: its path
+        self.assertGreaterEqual(len(found), 5)
+        for words, note, path in found:
+            with self.subTest(note=note, path=path):
+                r = fetch(note, path, vault=vault)
+                self.assertEqual(r.returncode, 0, r.stderr)
+                self.assertTrue(r.stdout.startswith(
+                    "### " + path.rsplit("/", 1)[1] + "\n"))
+                body = r.stdout.split("\n", 1)[1]
+                self.assertEqual(vl.word_count(body), int(words))
+
     def test_open_threads_never_outlined(self):
         out = sc("--brief").stdout
         ada = out.split("--- Ada_Quill")[1].split("--- Cole_Plain")[0]
