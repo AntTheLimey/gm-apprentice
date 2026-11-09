@@ -857,7 +857,14 @@ MIGRATION_HINT = ("run campaign-organizer's migration workflow "
                   "(references/migration-procedure.md) before proceeding")
 
 
-MOVED_FLOOR = "1.10.60"      # the oldest stamp the update accepts
+# The update floor follows the release (tests/test_floor_schedule.py): for
+# X.Y.Z it is X.(Y-1).0, and FLOOR_HOP is the newest release of that minor,
+# whose own update takes anything the floor refuses (or names the release
+# before it). A minor bump moves both and deletes `dead_checks`.
+MOVED_FLOOR = "1.11.0"       # the oldest stamp the update accepts
+FLOOR_HOP = "1.11.8"         # the release a vault below the floor updates with first
+HOP_SOURCE = ("https://github.com/AntTheLimey/gm-apprentice/archive/refs/"
+              "tags/v{hop}.tar.gz")
 MOVED_TOOL = "1.27.0"        # the oldest site publish tool it accepts
 BRIDGE = "1.10.134"          # the first release whose update moves a vault
 LAST_BRIDGE = "1.10.137"     # the last 1.10 release (the one to install)
@@ -865,6 +872,24 @@ LAST_BRIDGE = "1.10.137"     # the last 1.10 release (the one to install)
 # Where a leftover the publish tool names is, by its `source`; a leftover
 # with no source is the vault file the fault names.
 LEFTOVER_FILES = {"site": "vault.config.json", "package": "package.json"}
+
+
+def below_floor(stamp: str) -> str:
+    """What a stamp below the floor needs, said so an agent can run it."""
+    return (f"an update stamp of {stamp} ({vaultlib.STATE_FILE}), older than "
+            f"{MOVED_FLOOR}: update it first with {FLOOR_HOP}. Download "
+            f"{HOP_SOURCE.format(hop=FLOOR_HOP)}, unpack it anywhere, and run "
+            f"`python3 <unpacked folder>/skills/shared/scripts/gma.py update "
+            f"<vault>`; if {FLOOR_HOP} refuses the vault too, do what it names "
+            f"first")
+
+
+def dead_checks(checks: Iterable[Any], floor: str) -> list[str]:
+    """The names of the checks dated at or below `floor`, in order: no vault
+    the update accepts can be offered one (`migrate.offered`)."""
+    least = parse_version(floor)
+    return [c.name for c in checks
+            if c.release is not None and parse_version(c.release) <= least]
 
 
 @dataclass(frozen=True)
@@ -911,8 +936,7 @@ def unmoved(vault: Path, stamp: str | None,
     if stamp is None:
         left.append(Left(vaultlib.STATE_FILE, f"no update stamp ({vaultlib.STATE_FILE})", True))
     elif parse_version(stamp) < parse_version(MOVED_FLOOR):
-        left.append(Left(vaultlib.STATE_FILE, f"an update stamp of {stamp} "
-                         f"({vaultlib.STATE_FILE}), older than {MOVED_FLOOR}", True))
+        left.append(Left(vaultlib.STATE_FILE, below_floor(stamp), False))
     try:
         own = settings(vault)
     except SettingsUnavailable as e:

@@ -358,28 +358,27 @@ class VersionCommandTests(unittest.TestCase):
 
     def test_behind_is_a_mismatch_pointing_at_the_migration_workflow(self):
         # A moved vault (stamped above the floor) that is merely behind.
-        vault = make_vault(self, '---\ngm_apprentice_version: "1.10.121"\n---\n')
+        vault = make_vault(self, '---\ngm_apprentice_version: "1.11.1"\n---\n')
         (token, path, message), code = self.verdict(vault)
         self.assertEqual(token, "MISMATCH")
         self.assertEqual(path, "_meta/vault-state.json")
-        self.assertIn(f"vault 1.10.121 < plugin {plugin_version_string()}", message)
+        self.assertIn(f"vault 1.11.1 < plugin {plugin_version_string()}", message)
         self.assertIn("campaign-organizer's migration workflow", message)
         self.assertIn("references/migration-procedure.md", message)
         self.assertEqual(code, 1)
 
-    def test_a_vault_below_the_floor_is_refused_naming_the_bridge_not_a_mismatch(self):
+    def test_a_vault_below_the_floor_is_refused_naming_the_hop_not_a_mismatch(self):
         (token, path, message), code = self.verdict(FIXTURES / "version-behind")
         self.assertEqual(token, "REFUSED")
         self.assertEqual(path, "_meta/vault-state.json")
-        self.assertIn("older than 1.10.60", message)
-        self.assertIn("a 1.10 release, 1.10.134 or later", message)
+        self.assertIn("older than 1.11.0: update it first with 1.11.8", message)
         self.assertEqual(code, 1)
 
     def test_comparison_is_numeric_not_lexical(self):
         # 1.8.9 < 1.9.6 lexically too; 1.10.0 vs 1.9.6 is the real test.
         vault = make_vault(self, '---\ngm_apprentice_version: "1.10.0"\n---\n')
         (token, _path, _message), _code = self.verdict(vault)
-        self.assertEqual(token, "REFUSED")   # 1.10.0 is below the floor 1.10.60
+        self.assertEqual(token, "REFUSED")   # 1.10.0 is below the floor 1.11.0
         # "1.9.99" sorts after "1.10.0" as text; numerically it is behind.
         self.assertLess(vc.parse_version("1.9.99"), vc.parse_version("1.10.0"))
 

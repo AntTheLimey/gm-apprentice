@@ -1422,33 +1422,6 @@ def is_moved_note(text: str) -> bool:
     return bool(MOVED_BODY_RE.match("".join(lines[end + 1:])))
 
 
-def moved_drafts(vault: Path) -> list[str]:
-    """The notes a 1.10.105 move made that it published and left marked
-    DRAFT: in a vault whose reveals log starts with the move's before-tracking
-    entry, a note that is exactly as the move wrote it (is_moved_note),
-    still `canon_status: DRAFT`, on the publish list, and published by no
-    session since (a note a wrap-up revealed is the GM's own to settle).
-    Empty when the log or the publish list cannot be read."""
-    try:
-        log = _load_log(vault) if (vault / LOG).is_file() else None
-    except (OSError, ValueError):
-        return []
-    entries = [e for e in (log or {}).get("entries") or [] if isinstance(e, dict)]
-    if not any(e.get("before_tracking") is True for e in entries):
-        return []
-    later = {nfc(str(p)) for e in entries if e.get("session") for p in e.get("published") or []}
-    publishing, _why = publish_state(vault)
-    if publishing is None:
-        return []
-    out = []
-    for rel, text in _notes(vault):
-        fm = extract_frontmatter(text) or {}
-        if (fm.get("canon_status") == "DRAFT" and nfc(rel) in publishing and nfc(rel) not in later
-                and is_moved_note(text)):
-            out.append(rel)
-    return out
-
-
 def new_conversion(vault: Path) -> Conversion:
     return Conversion(vault=vault, batch=vault_write.Batch(vault))
 

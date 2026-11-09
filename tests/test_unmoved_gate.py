@@ -260,7 +260,7 @@ class WithoutNodeTests(unittest.TestCase):
         with self.no_tool():
             said = [x.text for x in vc.unmoved(vault, "1.10.10")]
         self.assertEqual(said, [
-            f"an update stamp of 1.10.10 (_meta/vault-state.json), older than {vc.MOVED_FLOOR}",
+            vc.below_floor("1.10.10"),
             "_meta/vault-config.md is still beside _meta/vault-config.yaml: remove "
             "or rename `_meta/vault-config.md` once you have checked its settings "
             "are in `_meta/vault-config.yaml`; plugin 1.11.0 no longer reads it",

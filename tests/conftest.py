@@ -65,7 +65,7 @@ os.environ["GMA_RELEASE_BASE"] = "http://127.0.0.1:9/no-network-in-tests"
 @pytest.fixture(autouse=True)
 def _test_vaults_may_be_stamped_old(request):
     """Most tests stamp vaults at made-up old versions; the update's real
-    floor (1.10.60) would refuse them all. A module that tests the floor
+    floor (vault_check.MOVED_FLOOR) would refuse them all. A module that tests the floor
     itself sets REAL_FLOOR_TESTS."""
     vault_check = sys.modules.get("vault_check")
     if vault_check is None or getattr(request.module, "REAL_FLOOR_TESTS", False):
