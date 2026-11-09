@@ -417,5 +417,19 @@ class ThreadsTests(unittest.TestCase):
         self.assertIn("- **Lamp** — keeper Para A about the lamp — closed: lit",
                       read(vault, WRAPUP))
 
+    def test_close_takes_the_lazy_line_with_its_bullet(self):
+        vault = self.vault()
+        self.edit(vault, INES, "- Find out who lit the lamp on the north bank",
+                  "- **Lamp** — who lit it\non the north bank")
+        code, out = run(vault, "threads", "--wrapup", WRAPUP, "--write",
+                        stdin=rows(("close", "Ines_Marlowe", "Lamp", "lit")))
+        self.assertEqual(code, 0, out)
+        ines = read(vault, INES)
+        self.assertNotIn("north bank", ines)
+        self.assertIn("The ledger page in her coat", ines)
+        self.assertIn("**Knows (exclusive):**", ines)
+        self.assertIn("- **Lamp** — who lit it on the north bank — closed: "
+                      "lit (Ines_Marlowe)", read(vault, WRAPUP))
+
 if __name__ == "__main__":
     unittest.main()

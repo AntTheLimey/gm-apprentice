@@ -1152,6 +1152,29 @@ class SharedThreadsTests(unittest.TestCase):
         self.assertIn("- First\n- Third\n", pc)
         self.assertNotIn("Para A", self.raw(v, "PCs/B.md"))
 
+    def test_lazy_line_is_part_of_the_bullet(self):
+        a = st_raw_pc("- First\n- **Ledger** — keeper\nwants it back\n"
+                      "- Third\n")
+        v = self.vault({
+            "Campaign Overview.md": ST_OVERVIEW,
+            "PCs/A.md": a,
+            "PCs/B.md": st_raw_pc("- **Ledger** — keeper\nburned it\n"),
+        })
+        self.assertEqual(mv.find_shared_threads(v), [])
+        v = self.vault({
+            "Campaign Overview.md": ST_OVERVIEW,
+            "PCs/A.md": a,
+            "PCs/B.md": st_raw_pc("- **Ledger** — keeper\nwants it back\n"),
+        })
+        (item,) = mv.find_shared_threads(v)
+        item.apply(None)
+        self.assertIn("- **Ledger** — keeper wants it back — involves "
+                      "[[A]], [[B]]", self.raw(v, "Campaign Overview.md"))
+        pc = self.raw(v, "PCs/A.md")
+        self.assertNotIn("wants it back", pc)
+        self.assertIn("- First\n- Third\n", pc)
+        self.assertNotIn("wants it back", self.raw(v, "PCs/B.md"))
+
     def test_template_placeholder_is_not_a_thread(self):
         holder = st_pc("{unresolved, forward-looking item}")
         v = self.vault({

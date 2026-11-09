@@ -257,6 +257,25 @@ class ThreadsTests(unittest.TestCase):
         self.assertEqual(threads.find_thread(["**Bell.** rings"], "Bell"), [0])
         self.assertEqual(threads.find_thread(rung, "Tolls:"), [1])
 
+    def test_pc_thread_items_lazy_line(self):
+        pc = ("## Current Status\n\n**Open threads:**\n"
+              "- **Ledger** — the keeper\nwants it back\n"
+              "- Second\n<!-- gm-only -->\n- Third\n<!-- /gm-only -->\n"
+              "- Fourth\n**Knows:** x\n")
+        got = threads.pc_thread_items(pc)
+        self.assertEqual([t.text for t in got], [
+            "**Ledger** — the keeper wants it back", "Second", "Third",
+            "Fourth"])
+        self.assertEqual(got[0].lines,
+                         ("**Ledger** — the keeper", "wants it back"))
+        self.assertEqual([t.gm_only for t in got], [False, False, True, False])
+        out = threads.remove_pc_thread(pc, got[0])
+        self.assertNotIn("wants it back", out)
+        self.assertIn("**Open threads:**\n- Second\n", out)
+        heading = "## Current Status\n\n**Open threads:**\n- A\n## Notes\n"
+        self.assertEqual(
+            [t.text for t in threads.pc_thread_items(heading)], ["A"])
+
     def test_remove_bullet(self):
         text = read(INES)
         out = threads.remove_bullet(

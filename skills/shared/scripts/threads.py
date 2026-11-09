@@ -333,7 +333,8 @@ def pc_thread_items(pc_text: str) -> list[PcThread]:
     bullet). A line indented deeper than the bullet's marker, nested bullet
     or not, belongs to the bullet above it, after blank lines too (a loose
     list item, as Markdown reads it); a blank line followed by anything
-    else ends the bullet. A template placeholder (`{…}`) is not a
+    else ends the bullet. A plain line straight under the bullet's text,
+    indented or not, carries it on (a lazy line; see `_lazy`). A template placeholder (`{…}`) is not a
     thread. Bullets inside a code fence are skipped. A thread in a gm-only
     fence is returned with `gm_only` set: nothing may move it to a page
     players read."""
@@ -366,7 +367,8 @@ def pc_thread_items(pc_text: str) -> list[PcThread]:
             if not nxt.strip():
                 j += 1     # a blank: the bullet goes on only if a deeper line follows
                 continue
-            if len(nxt) - len(nxt.lstrip()) <= base:
+            if (len(nxt) - len(nxt.lstrip()) <= base
+                    and not (j == stop and _lazy(nxt))):
                 break
             stop = j = j + 1
         parts = tuple([m.group(1).strip()]
@@ -383,6 +385,16 @@ def pc_thread_items(pc_text: str) -> list[PcThread]:
             out.append(PcThread(text, parts, i, stop, gm))
         i = stop
     return out
+
+
+def _lazy(line: str) -> bool:
+    """Can `line`, unindented and straight under a bullet, carry on its
+    text (Markdown's lazy continuation)? Not a bullet, a bold label line,
+    a heading, a code fence or a gm-only marker."""
+    bare = line.strip()
+    return not (BULLET_RE.match(line) or ANY_LABEL_LINE_RE.match(bare)
+                or _HEADING_RE.match(bare) or GM_MARKER_RE.search(line)
+                or bare.startswith(("```", "~~~")))
 
 
 def remove_pc_thread(pc_text: str, thread: PcThread) -> str:
