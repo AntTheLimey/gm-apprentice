@@ -106,6 +106,7 @@ from vaultlib import (GM_MARKER_RE, is_active_pc, marker_re,  # noqa: F401
                       normalize, raw_frontmatter, section,
                       session_ref_number, word_count)
 from vaultlib import LABEL_RE as _LABEL_RE
+from vaultlib import BULLET_RE
 from vaultlib import bullets as _bullets
 from vaultlib import fence_step, link_name, split_paused
 from vaultlib import vault_files as _vault_files
@@ -614,17 +615,44 @@ def _scoped_wrap_ups(files, chapter):
             yield n, text
 
 
+def _pc_key(target: str) -> str:
+    """A PC note name or link target as matching reads it: its last path
+    part, without `.md`, through `vaultlib.normalize`."""
+    name = Path(target).name
+    if name.casefold().endswith(".md"):
+        name = name[:-3]
+    return normalize(name)
+
+
 _CLOSED_TAIL_RE = re.compile(r"\s+\u2014\s+closed:\s.*$")
 
 
-def wrap_up_resolved(files, chapter) -> list[str]:
-    """The closed threads in the in-scope Wrap-Ups' `#### Resolved Threads`,
-    each without its `— closed: …` tail (see `threads.format_resolved`)."""
+def _whole_bullets(block: str) -> list[str]:
+    """Each bullet of `block` with the plain lines under it (a wrapped
+    line, indented or not) joined on after a space."""
     out: list[str] = []
-    for _n, text in _scoped_wrap_ups(files, chapter):
+    going = False   # a plain line now carries on the last bullet
+    for line in block.splitlines():
+        m = BULLET_RE.match(line)
+        if m:
+            out.append(m.group(1).strip())
+            going = True
+        elif going and line.strip() and not line.lstrip().startswith("#"):
+            out[-1] += " " + line.strip()
+        else:
+            going = False   # a blank or a heading ends the bullet
+    return out
+
+
+def wrap_up_resolved(files, chapter) -> list[tuple[int, str]]:
+    """(session, thread) per closed thread in the in-scope Wrap-Ups'
+    `#### Resolved Threads`, each read whole and without its
+    `— closed: …` tail (see `threads.format_resolved`)."""
+    out: list[tuple[int, str]] = []
+    for n, text in _scoped_wrap_ups(files, chapter):
         block = _heading_block(text, 4, "Resolved Threads")
-        out.extend(_CLOSED_TAIL_RE.sub("", b, count=1)
-                   for b in (_bullets(block) if block else []))
+        out.extend((n, _CLOSED_TAIL_RE.sub("", b, count=1))
+                   for b in (_whole_bullets(block) if block else []))
     return out
 
 
@@ -724,7 +752,7 @@ def thread_report(files, current: int, chapter, vault: Path) -> str:
         if not t.hidden:
             shared_texts.setdefault(" ".join(t.text.split()), set()).update(
                 [""] if t.party
-                else [Path(n).name.casefold() for n in t.involves])
+                else [_pc_key(n) for n in t.involves])
     if shared:
         lines.append("--- Shared (Campaign Overview) ---")
     for t in shared:
@@ -745,7 +773,7 @@ def thread_report(files, current: int, chapter, vault: Path) -> str:
             lines.append("(no ## Current Status Open threads)")
             continue
         own = 0
-        stem = Path(rel).stem.casefold()
+        stem = _pc_key(Path(rel).stem)
         for item in pc_items:
             flat = " ".join(item.text.split())
             if shared_texts.get(flat, set()) & {"", stem}:
@@ -763,10 +791,17 @@ def thread_report(files, current: int, chapter, vault: Path) -> str:
     # bullets that are the same thread (the same words, as `_norm_thread`
     # reads them): it is done, not lost. A merely close bullet ("found"
     # against "still missing") stays an orphan, for the GM to judge.
-    closed = {_norm_thread(c) for c in wrap_up_resolved(files, chapter)}
+    # It claims them up to the session that closed it: one raised again
+    # after that is open again. With no chapter in scope, session numbers
+    # from different chapters can collide, so any closure claims them.
+    closed: dict[str, float] = {}
+    for n, c in wrap_up_resolved(files, chapter):
+        key = _norm_thread(c)
+        closed[key] = (float("inf") if chapter is None
+                       else max(n, closed.get(key, n)))
     matched.update((n, bullet) for n, unresolved, _carry in wrap_ups
                    for bullet in unresolved
-                   if _norm_thread(bullet) in closed)
+                   if n <= closed.get(_norm_thread(bullet), -1))
     lines.append("--- Wrap-up threads not on any thread list ---")
     orphans = [f"session {n}\t{bullet}"
               for n, unresolved, _carry in wrap_ups

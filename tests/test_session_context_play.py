@@ -656,7 +656,8 @@ class ThreadReportTests(unittest.TestCase):
             "- Repay Bram — since Session 3; involves [[Bram]]")
         pc_part = self.report(tmp).split("--- Hero ---")[1]
         self.assertIn("\nRepay Bram\tfirst=", pc_part)
-        for who in ("[[Hero]]", "[[hero|H]]", "the party"):
+        for who in ("[[Hero]]", "[[hero|H]]", "[[Hero.md|H]]",
+                    "[[Characters/PCs/Hero]]", "the party"):
             with self.subTest(who=who):
                 tmp = self.shared_copy(f"- Repay Bram — involves {who}")
                 pc_part = self.report(tmp).split("--- Hero ---")[1]
@@ -687,6 +688,41 @@ class ThreadReportTests(unittest.TestCase):
             "--- Wrap-up threads not on any thread list ---", 1)[1]
         self.assertNotIn("The ledger is still missing", orphans)
         self.assertEqual(orphans.strip(), "(none)")
+
+    def test_a_wrapped_closed_thread_is_not_an_orphan(self):
+        # A Resolved bullet that wraps before its `— closed:` tail is read
+        # whole.
+        tmp = self.shared_copy("")
+        wrap = (tmp / "Chapters" / "Chapter 4 - Calcutta" / "Sessions"
+                / "Chapter_04_Session_07_Wrap_Up.md")
+        wrap.write_text(
+            wrap.read_text(encoding="utf-8")
+            + "\n#### Resolved Threads\n\n- The ledger is still\n  missing "
+              "\u2014 closed: found in the dredger (shared)\n",
+            encoding="utf-8")
+        orphans = self.report(tmp).split(
+            "--- Wrap-up threads not on any thread list ---", 1)[1]
+        self.assertEqual(orphans.strip(), "(none)")
+
+    def test_a_thread_raised_after_its_close_is_open_again(self):
+        # Closed in session 5, unresolved again in session 7: the closure
+        # claims session 5's bullet, not the later one.
+        tmp = self.shared_copy("")
+        sessions = tmp / "Chapters" / "Chapter 4 - Calcutta" / "Sessions"
+        five = sessions / "Chapter_04_Session_05_Wrap_Up.md"
+        five.write_text(
+            five.read_text(encoding="utf-8")
+            + "\n#### Resolved Threads\n\n- The ledger is still missing "
+              "\u2014 closed: found (shared)\n", encoding="utf-8")
+        seven = sessions / "Chapter_04_Session_07_Wrap_Up.md"
+        seven.write_text(seven.read_text(encoding="utf-8").replace(
+            "- Find the missing ledger\n",
+            "- Find the missing ledger\n- The ledger is still missing\n"),
+            encoding="utf-8")
+        orphans = self.report(tmp).split(
+            "--- Wrap-up threads not on any thread list ---", 1)[1]
+        self.assertIn("session 7\tThe ledger is still missing", orphans)
+        self.assertNotIn("session 5\t", orphans)
 
     def test_an_archived_overview_is_not_read(self):
         tmp = self.shared_copy("- Repay Bram — involves [[Hero]]")
