@@ -899,5 +899,192 @@ class SmallCheckTests(unittest.TestCase):
         self.assertNotIn("run the migration", item.lines[0])
 
 
+
+ST_OVERVIEW = """---
+type: campaign_overview
+---
+
+# The Lantern Road
+
+## Current Arc
+
+The caravan is at Harrow Ford.
+
+## GM Notes
+
+Secret.
+"""
+
+
+def st_pc(*threads):
+    lines = "".join(f"- {t}\n" for t in threads)
+    return ("---\ntype: pc\n---\n\n# PC\n\n## Current Status\n\n"
+            f"**Location:** Harrow Ford\n**Open threads:**\n{lines}"
+            "\n## Notes\n\nNothing.\n")
+
+
+def st_wrap(n, carries=True):
+    body = ("### What Carries Forward\n\n#### Unresolved Threads\n\n"
+            "- **The missing ledger** — the toll keeper wants it back\n\n"
+            if carries else "### Other\n\n- nothing\n\n")
+    return (f"---\ntype: session_wrap\nsession_number: {n}\n"
+            f'session: "[[Session {n:02d}]]"\n'
+            f'chapter: "[[Chapter 1 - Harbour]]"\n---\n\n# Wrap-Up\n\n'
+            f"## GM Notes\n\n{body}")
+
+
+LEDGER = "**The missing ledger** — the toll keeper wants it back"
+WRAPS = "Chapters/Chapter 1 - Harbour/"
+
+
+class SharedThreadsTests(unittest.TestCase):
+    def vault(self, notes):
+        vault = make_vault(self)
+        for rel, text in notes.items():
+            path = vault / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(text.encode("utf-8"))
+        return vault
+
+    def raw(self, vault, rel):
+        return (vault / rel).read_bytes().decode("utf-8")
+
+    def test_the_check_is_registered(self):
+        (check,) = [c for c in mv.VAULT_CHECKS if c.name == "shared-threads"]
+        self.assertEqual((check.release, check.band, check.kind),
+                         ("1.12.3", 3, "bookkeeping"))
+
+    def test_identical_bullets_move_once_with_holders(self):
+        v = self.vault({
+            "Campaign Overview.md": ST_OVERVIEW,
+            "PCs/Corwin_Hale.md": st_pc(LEDGER, "Corwin's own"),
+            "PCs/Ines_Marlowe.md": st_pc("Ines's own", LEDGER + "  "),
+            "PCs/Odo_Vane.md": st_pc("Odo's own"),
+            WRAPS + "Chapter_01_Session_02_Wrap_Up.md": st_wrap(2),
+        })
+        (item,) = mv.find_shared_threads(v)
+        self.assertEqual((item.id, item.group), ("shared-threads", WILL))
+        self.assertEqual(len(item.lines), 1)
+        self.assertIn("The missing ledger", item.lines[0])
+        item.apply(None)
+        overview = self.raw(v, "Campaign Overview.md")
+        self.assertEqual(overview.count("The missing ledger"), 1)
+        self.assertIn(f"- {LEDGER} — since Session 2; involves "
+                      "[[Corwin_Hale]], [[Ines_Marlowe]]", overview)
+        self.assertLess(overview.index("## Open Threads"),
+                        overview.index("## GM Notes"))
+        for rel, own in (("PCs/Corwin_Hale.md", "Corwin's own"),
+                         ("PCs/Ines_Marlowe.md", "Ines's own")):
+            text = self.raw(v, rel)
+            self.assertNotIn("missing ledger", text)
+            self.assertIn(f"- {own}\n", text)
+        self.assertEqual(mv.find_shared_threads(v), [])
+
+    def test_no_since_without_a_close_match(self):
+        v = self.vault({
+            "Campaign Overview.md": ST_OVERVIEW,
+            "PCs/A.md": st_pc("Find the lamp-lighter"),
+            "PCs/B.md": st_pc("Find the lamp-lighter"),
+        })
+        (item,) = mv.find_shared_threads(v)
+        item.apply(None)
+        self.assertIn("- Find the lamp-lighter — involves [[A]], [[B]]",
+                      self.raw(v, "Campaign Overview.md"))
+
+    def test_single_sheet_bullet_stays(self):
+        v = self.vault({
+            "Campaign Overview.md": ST_OVERVIEW,
+            "PCs/A.md": st_pc(LEDGER),
+            "PCs/B.md": st_pc("**The missing ledger** — someone wants it"),
+        })
+        self.assertEqual(mv.find_shared_threads(v), [])
+
+    def test_struck_bullet_closed_into_latest_wrapup(self):
+        v = self.vault({
+            "Campaign Overview.md": ST_OVERVIEW,
+            "PCs/A.md": st_pc("~~Pay the ferrywoman~~", "Still open"),
+            WRAPS + "Chapter_01_Session_02_Wrap_Up.md": st_wrap(2),
+            WRAPS + "Chapter_01_Session_03_Wrap_Up.md": st_wrap(3),
+        })
+        (item,) = mv.find_shared_threads(v)
+        self.assertIn("Pay the ferrywoman", item.lines[0])
+        item.apply(None)
+        latest = self.raw(v, WRAPS + "Chapter_01_Session_03_Wrap_Up.md")
+        self.assertIn("#### Resolved Threads\n\n- Pay the ferrywoman — "
+                      "closed: struck through before the update (A)\n",
+                      latest)
+        self.assertNotIn("Resolved", self.raw(
+            v, WRAPS + "Chapter_01_Session_02_Wrap_Up.md"))
+        pc = self.raw(v, "PCs/A.md")
+        self.assertNotIn("ferrywoman", pc)
+        self.assertIn("- Still open\n", pc)
+
+    def test_struck_bullet_with_no_wrapup_stays_with_a_notice(self):
+        v = self.vault({
+            "Campaign Overview.md": ST_OVERVIEW,
+            "PCs/A.md": st_pc("~~Pay the ferrywoman~~"),
+            WRAPS + "Chapter_01_Session_03_Wrap_Up.md": st_wrap(3, False),
+        })
+        (item,) = mv.find_shared_threads(v)
+        self.assertEqual(item.group, PERSON)
+        self.assertTrue(item.notice)
+        self.assertIn("What Carries Forward", item.lines[0])
+        bare = self.vault({"PCs/A.md": st_pc("~~Paid~~")})
+        (item,) = mv.find_shared_threads(bare)
+        self.assertEqual(item.group, PERSON)
+        self.assertIn("no Wrap-Up", item.lines[0])
+
+    def test_no_overview_leaves_duplicates(self):
+        v = self.vault({
+            "PCs/A.md": st_pc(LEDGER),
+            "PCs/B.md": st_pc(LEDGER),
+        })
+        (item,) = mv.find_shared_threads(v)
+        self.assertEqual(item.group, PERSON)
+        self.assertTrue(item.notice)
+        self.assertIn("no Campaign Overview to hold shared threads",
+                      item.lines[0])
+        self.assertIn(LEDGER, self.raw(v, "PCs/A.md"))
+
+    def test_out_of_play_pc_does_not_count(self):
+        gone = st_pc(LEDGER).replace("type: pc\n",
+                                     "type: pc\nstatus: dead\n")
+        v = self.vault({
+            "Campaign Overview.md": ST_OVERVIEW,
+            "PCs/A.md": st_pc(LEDGER),
+            "PCs/B.md": gone,
+        })
+        self.assertEqual(mv.find_shared_threads(v), [])
+
+    def test_nothing_to_do_returns_no_items(self):
+        v = self.vault({
+            "Campaign Overview.md": ST_OVERVIEW,
+            "PCs/A.md": st_pc("One"),
+            "PCs/B.md": st_pc("Two"),
+            WRAPS + "Chapter_01_Session_03_Wrap_Up.md": st_wrap(3),
+        })
+        self.assertEqual(mv.find_shared_threads(v), [])
+        self.assertEqual(mv.find_shared_threads(make_vault(self)), [])
+
+    def test_crlf_kept(self):
+        notes = {
+            "Campaign Overview.md": ST_OVERVIEW,
+            "PCs/A.md": st_pc(LEDGER, "~~Done~~"),
+            "PCs/B.md": st_pc(LEDGER),
+            WRAPS + "Chapter_01_Session_03_Wrap_Up.md": st_wrap(3),
+        }
+        v = self.vault({k: t.replace("\n", "\r\n") for k, t in notes.items()})
+        (item,) = mv.find_shared_threads(v)
+        self.assertEqual(len(item.lines), 2)
+        item.apply(None)
+        for rel in notes:
+            text = self.raw(v, rel)
+            self.assertNotIn("\n", text.replace("\r\n", ""), rel)
+        self.assertIn("## Open Threads\r\n",
+                      self.raw(v, "Campaign Overview.md"))
+        self.assertIn("closed: struck through before the update (A)\r\n",
+                      self.raw(v, WRAPS + "Chapter_01_Session_03_Wrap_Up.md"))
+
+
 if __name__ == "__main__":
     unittest.main()

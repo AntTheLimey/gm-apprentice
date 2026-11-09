@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Literal
 
 import relink
+import threads as th
 import update_record
 from migrate_core import (CHOICE, PERSON, WILL, Check, Item, StepFailed,
                           edit_frontmatter, plugin_tool, write_text_atomic)
@@ -21,7 +22,8 @@ from schema_rules import system_id as _system_id
 from schema_rules import TEMPLATE_NAMES
 from template_compare import compare, summary
 from vault_check import WRAP_TYPES, wrapup_filename_findings
-from vaultlib import (StateUnreadable, entity_type, extract_frontmatter,
+from vaultlib import (WRAP_UP_TYPES, StateUnreadable, entity_type,
+                      extract_frontmatter, is_active_pc, out_of_play,
                       set_key, frontmatter_span,
                       parse_version, plugin_version,
                       read_held, read_stamp, settings,
@@ -1001,6 +1003,143 @@ def find_publish_row_pipe(vault: Path) -> list[Item]:
                   f"`false` or `stub`, so the table check passes"], apply)]
 
 
+# --- shared threads ------------------------------------------------------------
+
+# 1.12.3: before the shared list, a thread several PCs shared was written
+# word for word on each PC's Open threads. It moves to the Campaign
+# Overview's `## Open Threads` once, naming those PCs; a bullet struck
+# through whole is closed into the latest Wrap-Up. The editing is
+# threads.py's, as `vw threads` uses it.
+STRUCK_EVIDENCE = "struck through before the update"
+NO_OVERVIEW = "no Campaign Overview to hold shared threads"
+
+
+def _struck(bullet: str) -> str | None:
+    """The text of a bullet struck through whole (`~~text~~`), else None."""
+    b = bullet.strip()
+    inner = b[2:-2]
+    if len(b) > 4 and b[:2] == b[-2:] == "~~" and "~~" not in inner:
+        return inner.strip()
+    return None
+
+
+def _shared_threads_plan(vault: Path) -> tuple[
+        dict[str, str], list[tuple[str, str]], list[str]]:
+    """(new text by note, (verb, what) per change, person rows): every edit
+    worked out in memory, so a move or close that cannot be made is a
+    person row before anything is written."""
+    import session_context as sc
+
+    files = list(sc.vault_files(vault))
+    gone = out_of_play(vault)
+    pcs = [rel for rel, _t, fm in files if is_active_pc(rel, fm, gone)]
+    overview = next((rel for rel, _t, fm in files
+                     if entity_type(fm) == "campaign_overview"), None)
+    wraps = sorted((sc.campaign_order(rel, fm), rel) for rel, _t, fm in files
+                   if entity_type(fm) in WRAP_UP_TYPES)
+    wrapup = wraps[-1][1] if wraps else None
+
+    texts: dict[str, str] = {}
+
+    def text(rel: str) -> str:
+        if rel not in texts:
+            texts[rel] = _read(vault / rel)
+        return texts[rel]
+
+    holders: dict[str, list[tuple[str, int]]] = {}
+    struck: list[tuple[str, int, str]] = []
+    for rel in pcs:
+        for i, bullet in enumerate(th.pc_threads(text(rel))):
+            inner = _struck(bullet)
+            if inner is not None:
+                struck.append((rel, i, inner))
+            else:
+                holders.setdefault(bullet.strip(), []).append((rel, i))
+
+    lines: list[tuple[str, str]] = []
+    left: list[str] = []
+    drop: dict[str, set[int]] = {}
+    shared = ({" ".join(t.text.split())
+               for t in th.shared_threads(text(overview))}
+              if overview else set())
+    wrap_ups = sc.wrap_up_threads(files, None)
+    for thread, where in holders.items():
+        rels = sorted({rel for rel, _i in where})
+        if len(rels) < 2:
+            continue
+        name = th.lead(thread)
+        if overview is None:
+            left.append(f"{name}\t{NO_OVERVIEW}; left on each PC's sheet")
+            continue
+        if " ".join(thread.split()) in shared:
+            left.append(f"{name}\talready in the Campaign Overview's Open "
+                        f"Threads; the copies on PC sheets were left")
+            continue
+        hits, mark = sc.match_sessions(thread, wrap_ups)
+        since = f"Session {min(hits)}" if hits and mark == "=" else None
+        stems = [Path(rel).stem for rel in rels]
+        try:
+            texts[overview] = th.insert_shared(
+                text(overview), th.format_shared(thread, since, stems))
+        except ValueError:
+            left.append(f"{name}\tleft on each PC's sheet: the Campaign "
+                        f"Overview has no place outside a GM-only fence for "
+                        f"Open Threads")
+            continue
+        for rel, i in where:
+            drop.setdefault(rel, set()).add(i)
+        lines.append(("move", f'"{name}" from {" and ".join(stems)} to the '
+                      f"Campaign Overview's Open Threads"
+                      + (f" (since {since})" if since else "")))
+    for rel, i, inner in struck:
+        name = th.lead(inner)
+        if wrapup is None:
+            left.append(f'{rel}\tstruck-through thread "{name}" left on '
+                        f"the sheet: no Wrap-Up to record it in")
+            continue
+        try:
+            texts[wrapup] = th.append_resolved(
+                text(wrapup), th.format_resolved(
+                    inner, STRUCK_EVIDENCE, Path(rel).stem))
+        except KeyError:
+            left.append(f'{rel}\tstruck-through thread "{name}" left on '
+                        f"the sheet: the latest Wrap-Up ({wrapup}) has no "
+                        f"What Carries Forward to record it in")
+            continue
+        drop.setdefault(rel, set()).add(i)
+        lines.append(("close", f'"{name}" (struck through) on '
+                      f"{Path(rel).stem} into {wrapup}'s Resolved Threads"))
+    for rel, gone_at in drop.items():
+        for i in sorted(gone_at, reverse=True):
+            texts[rel] = th.remove_bullet(texts[rel], th.PC_PATH, i)
+    changed = {rel: t for rel, t in texts.items()
+               if t != _read(vault / rel)}
+    return changed, lines, left
+
+
+def find_shared_threads(vault: Path) -> list[Item]:
+    """1.12.3: a thread written word for word on two or more active PCs'
+    Open threads moves to the Campaign Overview's Open Threads once, with
+    those PCs as `involves` and its first-seen session as `since` when a
+    Wrap-Up matches it closely. A bullet struck through whole is closed
+    into the latest Wrap-Up's Resolved Threads. One that cannot be moved
+    or closed stays where it is, and the GM is told."""
+    changed, lines, left = _shared_threads_plan(vault)
+    items = []
+    if changed:
+        def apply(_value: str | None) -> list[str]:
+            # Worked out again: a note may have changed since the find.
+            fresh, done, _left = _shared_threads_plan(vault)
+            for rel, text in fresh.items():
+                write_text_atomic(vault / rel, text)
+            return [f"{verb}d {what}" for verb, what in done]
+        items.append(Item("shared-threads", WILL,
+                          [f"{verb} {what}" for verb, what in lines], apply))
+    if left:
+        items.append(Item("shared-threads-left", PERSON, left, notice=True))
+    return items
+
+
 # --- D&D PC Background sections -----------------------------------------------
 
 FACTS_LINE = " \u00b7 ".join(f"**{label}:** \u2014" for label in (
@@ -1053,4 +1192,7 @@ VAULT_CHECKS: list[Check] = [
           "the publish row of the schema table", find_publish_row_pipe,
           kind="bookkeeping",
           plain=("Fixed the publish row of the schema table in _meta/entity-types.md so the table check no longer reports an error there; nothing else in the file was touched.")),
+    Check("shared-threads", "1.12.3", 3, "shared threads", find_shared_threads,
+          kind="bookkeeping",
+          plain="Moved threads that sat word for word on several PC sheets into the Campaign Overview's Open Threads, once each with the PCs they involve; struck-through threads went to the latest Wrap-Up's Resolved Threads."),
 ]

@@ -1870,9 +1870,6 @@ def threads_find(bullets: list[str], lead_key: str, where: str) -> int:
     return hits[0]
 
 
-PC_THREADS_PATH = ("Current Status", "**Open threads**")
-
-
 def threads_take(batch: Batch, rel: str, lead_key: str,
                  verb: str) -> str:
     """Take the PC's thread `lead_key` off their Open threads; its text."""
@@ -1880,7 +1877,7 @@ def threads_take(batch: Batch, rel: str, lead_key: str,
     found = th.pc_threads(note)
     i = threads_find(found, lead_key, rel)
     try:
-        batch.put(rel, th.remove_bullet(note, PC_THREADS_PATH, i))
+        batch.put(rel, th.remove_bullet(note, th.PC_PATH, i))
     except (KeyError, IndexError):
         raise WriteError(f"{rel}: cannot take thread '{lead_key}' off "
                          f"Open threads") from None
@@ -1972,7 +1969,7 @@ def threads_row(batch: Batch, cols: list[str], wrapup: list[str]) -> None:
             rel = find_pc(batch, which)
             label = Path(rel).stem
             text = threads_take(batch, rel, lead_key, "WOULD-CLOSE")
-        line = f"- {text} \u2014 closed: {evidence} ({label})"
+        line = th.format_resolved(text, evidence, label)
         try:
             batch.put(wrapup[0], th.append_resolved(
                 batch.read(wrapup[0]), line))

@@ -26,6 +26,8 @@ from vaultlib import (ANY_LABEL_LINE_RE, BULLET_RE, GM_MARKER_RE, LABEL_RE, atx_
 
 SECTION = "Open Threads"
 RESOLVED = "Resolved Threads"
+# `remove_bullet`'s path to a PC's own list (see `pc_threads`).
+PC_PATH = ("Current Status", "**Open threads**")
 
 _PARTY = "the party"
 _TAIL_RE = re.compile(
@@ -52,6 +54,12 @@ def format_shared(text: str, since: str | None,
            if involves else _PARTY)
     clause = f"since {since}; " if since else ""
     return f"- {text} — {clause}involves {who}"
+
+
+def format_resolved(text: str, evidence: str, label: str) -> str:
+    """The `#### Resolved Threads` line for a closed thread: its text, the
+    evidence that closed it, and the list it came off (`shared` or a PC)."""
+    return f"- {text} \u2014 closed: {evidence} ({label})"
 
 
 def parse_shared(line: str) -> SharedThread | None:
