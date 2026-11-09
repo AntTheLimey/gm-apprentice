@@ -254,10 +254,12 @@ class ThreadsTests(unittest.TestCase):
         vault = self.vault()
         _, out = run(vault, "threads", stdin=rows(
             ("move", "The ledger page in her coat", "-", "Ines_Marlowe")))
-        self.assertIn("moved: 2  closed: 0", out)
+        self.assertIn("moved: 2  warnings", out)
+        self.assertNotIn("closed:", out)
         _, out = run(vault, "threads", "--wrapup", WRAPUP, stdin=rows(
             ("close", "shared", "The missing ledger", "returned")))
-        self.assertIn("moved: 0  closed: 1", out)
+        self.assertIn("closed: 1  warnings", out)
+        self.assertNotIn("moved:", out)
         self.assertIn("WOULD-RECORD", out)
 
     def test_failed_row_does_not_poison_later_rows(self):

@@ -331,11 +331,13 @@ def emit(batch: Batch, wrote: bool) -> str:
     def count(*verbs: str) -> int:
         return sum(r.split("\t", 1)[0] in verbs for r in rows)
 
+    # `threads` alone reports moves and closes; other totals stay as they were.
+    extra = "".join(f"{name}: {n}  " for name, n in (
+        ("moved", count("WOULD-MOVE", "MOVED")),
+        ("closed", count("WOULD-CLOSE", "CLOSED"))) if n)
     total = (f"# create: {count('WOULD-CREATE', 'CREATED')}  "
              f"add: {count('WOULD-ADD', 'ADDED')}  skip: {count('SKIP')}  "
-             f"moved: {count('WOULD-MOVE', 'MOVED')}  "
-             f"closed: {count('WOULD-CLOSE', 'CLOSED')}  "
-             f"warnings: {count('WARNING')}  errors: {count('ERROR')}")
+             f"{extra}warnings: {count('WARNING')}  errors: {count('ERROR')}")
     return "\n".join([*rows, total]) + "\n"
 
 
