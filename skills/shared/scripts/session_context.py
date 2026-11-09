@@ -93,10 +93,10 @@ from pathlib import Path
 from typing import NamedTuple
 
 import scene_queue
-from threads import shared_threads
 from schema_rules import (SESSION_PLAYED, chapter_key, chapter_of,
                           extract_frontmatter, parse_session_number,
                           wikilink_target)
+from threads import shared_threads
 from vaultlib import (GM_MARKER_RE, is_active_pc,  # noqa: F401
                       is_out_of_play, out_of_play,
                       report_unreadable_settings, setting_or_builtin,
@@ -702,10 +702,14 @@ def thread_report(files, current: int, chapter, vault: Path) -> str:
         if not thread_bullets:
             lines.append("(no ## Current Status Open threads)")
             continue
+        own = 0
         for thread in thread_bullets:
             if " ".join(thread.split()) in shared_texts:
                 continue  # printed once, as shared
+            own += 1
             lines.append(f"{thread}\t{tags(thread)}")
+        if not own:
+            lines.append("(only threads held in the shared list, above)")
 
     if tentative:
         lines.insert(1, "(~ means a likely match by shared names and words, "

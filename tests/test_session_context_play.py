@@ -634,6 +634,23 @@ class ThreadReportTests(unittest.TestCase):
             "The ledger is still missing\tfirst=5\tlast=5\tage=2\t",
             report)
 
+    def test_only_shared_threads_say_so_under_the_pc(self):
+        tmp = self.shared_copy(
+            "- Find the missing ledger — involves [[Hero]]\n"
+            "- Repay Bram — involves [[Hero]]")
+        report = self.report(tmp)
+        self.assertIn("--- Hero ---\n(only threads held in the shared list, "
+                      "above)", report)
+
+    def test_shared_threads_fixture_is_readable(self):
+        vault = ROOT / "tests" / "fixtures" / "shared-threads"
+        wrap_ups = sc.wrap_up_threads(load_files(vault), None)
+        self.assertEqual([n for n, _u, _c in wrap_ups], [3])
+        overview = (vault / "Campaign Overview.md").read_text(encoding="utf-8")
+        ledger = sc.shared_threads(overview)[0].text
+        hits, mark = sc.match_sessions(ledger, wrap_ups)
+        self.assertEqual(hits, [3])
+
     def test_match_sessions_returns_sessions_and_mark(self):
         wrap_ups = sc.wrap_up_threads(load_files(FIXTURE),
                                       "chapter 4 - calcutta")

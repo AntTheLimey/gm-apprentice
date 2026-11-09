@@ -1,6 +1,8 @@
 ---
 type: session_wrap
+session: "[[Session 03 - The Night Crossing]]"
 session_number: 3
+chapter: "[[Chapter 1 - Harbour]]"
 canon_status: AUTHORITATIVE
 ---
 
