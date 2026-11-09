@@ -145,9 +145,10 @@ createdSession: ""
 - {unresolved, forward-looking item}
 **Knows (exclusive):** {secret/exclusive knowledge, if any}
 
-{Player-facing; sits outside any gm-only fence. Maintained cumulatively
-by session-wrapup (Step 3c): carries unresolved Open threads forward,
-adds new, removes resolved. See shared/pc-body-structure.md.}
+{Player-facing; sits outside any gm-only fence. Open threads: this PC's
+own open questions and obligations. Shared ones live in the Campaign
+Overview's Open Threads. A resolved one is closed by wrap-up, never just
+deleted. See shared/pc-body-structure.md.}
 
 ## Notes
 
