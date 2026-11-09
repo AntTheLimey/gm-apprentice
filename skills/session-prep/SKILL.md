@@ -91,6 +91,9 @@ the reconcile scan, threads, PC arcs, the scene queue and the narrative
 plans: steps 8, 10c, 12 and 14 and Phase 1 read these, never rerun
 them. Read
 a stubbed or outlined section from its file only when a step needs it.
+A `###` subsection prints as its heading, size and path; fetch it with
+`gma section` only when a step needs it (for step 12, the PC whose arc
+this session turns on).
 After the bundle, vault dives are targeted reads, proportional to the
 upcoming session's complexity, not the campaign's size.
 
