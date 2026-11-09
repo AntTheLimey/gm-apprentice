@@ -1,4 +1,5 @@
 'use strict';
+const { fenceStep } = require('./processor');
 // The Campaign Overview's `## Open Threads` bullets, and the ones that name a PC put on that PC's page.
 // The writer is skills/shared/scripts/threads.py `format_shared`:
 //   - {text} — since {since}; involves [[A]], [[B]]     (or `involves the party`; `since` may be absent)
@@ -11,23 +12,39 @@ const LINK_RE = /\[\[([^\]|#]+?)(?:[|#][^\]]*)?\]\]/g;
 
 function eol(text) { return text.includes('\r\n') ? '\r\n' : '\n'; }
 
-// The lines of a `## {title}` section (heading excluded), up to the next heading of level 1 or 2.
-function sectionRange(lines, title) {
-  const start = lines.findIndex((l) => new RegExp(`^##\\s+${title}\\s*#*\\s*$`, 'i').test(l));
+// Line indexes outside a code fence.
+function unfenced(lines) {
+  const out = new Set();
+  let fence = null;
+  lines.forEach((line, i) => {
+    const step = fenceStep(line, fence);
+    fence = step.fenceDelim;
+    if (!step.isFenceLine && fence === null) out.add(i);
+  });
+  return out;
+}
+
+// The first level-2 `## {title}` heading in any case, outside a code fence, up to the next heading of level 1 or 2
+// outside one: as threads.py `_shared_span` finds the shared list.
+function sectionRange(lines, title, open = unfenced(lines)) {
+  const heading = new RegExp(`^##\\s+${title}\\s*(?:\\s#+)?\\s*$`, 'i');
+  const start = lines.findIndex((l, i) => open.has(i) && heading.test(l));
   if (start === -1) return null;
   let end = lines.length;
-  for (let i = start + 1; i < lines.length; i++) if (/^#{1,2}\s/.test(lines[i])) { end = i; break; }
+  for (let i = start + 1; i < lines.length; i++) if (open.has(i) && /^#{1,2}\s/.test(lines[i])) { end = i; break; }
   return { start, end };
 }
 
 // -> [{ markdown, involves: [target], party }]; `markdown` is the bullet without its `involves` tail.
 function sharedEntries(publishedMarkdown) {
   const lines = String(publishedMarkdown || '').split(/\r?\n/);
-  const range = sectionRange(lines, 'Open Threads');
+  const open = unfenced(lines);
+  const range = sectionRange(lines, 'Open Threads', open);
   if (!range) return [];
   const entries = [];
-  for (const line of lines.slice(range.start + 1, range.end)) {
-    const bullet = /^[-*+]\s+(.+?)\s*$/.exec(line);
+  for (let i = range.start + 1; i < range.end; i++) {
+    // Python's bullets: `-` or `*`, any indent (vaultlib BULLET_RE).
+    const bullet = open.has(i) && /^\s*[-*]\s+(.+?)\s*$/.exec(lines[i]);
     if (!bullet) continue;
     const tail = TAIL_RE.exec(bullet[1]);
     if (!tail) continue;

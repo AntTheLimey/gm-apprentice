@@ -1341,7 +1341,9 @@ function buildSite(options) {
   };
   for (const page of pages) {
     if (sharedAll.length && String((page.frontmatter || {}).type).trim().toLowerCase() === 'pc') {
-      page.markdown = withSharedThreads(page.markdown, sharedAll.filter((e) => e.party || e.involves.some((t) => namesPage(t, page))));
+      // A party thread is the active PCs' (as `vw threads move … party` reads it): an out-of-play PC gets it only by name.
+      const active = !isOutOfPlay(page.frontmatter, publishConfig.statuses.out_of_play);
+      page.markdown = withSharedThreads(page.markdown, sharedAll.filter((e) => (e.party && active) || e.involves.some((t) => namesPage(t, page))));
     }
     if (hubWrapUps.has(page)) page.markdown = '';
     // `publish: stub` — emit the page shell so navigation and links still work,

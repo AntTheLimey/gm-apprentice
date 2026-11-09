@@ -240,3 +240,34 @@ test('shared threads: an Overview view that cannot be made is warned about and a
   assert.doesNotMatch(html, /Shared threads/);
   assert.match(stubVault('player', { fm: '' }).html, /Shared threads/, 'the same vault shows them when the view is made');
 });
+
+test('shared threads: the section is found as Python finds it, and only - and * bullets are read', () => {
+  const md = [
+    '```', '## Open Threads', '- fenced heading — involves the party', '```', '',
+    '### Open Threads', '', '- level three — involves the party', '',
+    '## Open threads', '',
+    '- a — involves the party',
+    '  - indented — involves the party',
+    '* star — involves the party',
+    '+ plus — involves the party',
+    '```', '- code — involves the party', '```',
+    '', '## Key', '',
+  ].join('\n');
+  assert.deepStrictEqual(sharedEntries(md).map((e) => e.markdown), ['- a', '- indented', '- star']);
+  const status = '# P\n\n```\n## Current Status\n```\n\n## Current status\n\nHere.\n\n## Notes\n';
+  assert.match(withSharedThreads(status, [{ markdown: '- a', involves: [], party: true }]), /Here\.\n\n\*\*Shared threads:\*\*\n- a\n\n## Notes/);
+});
+
+test('shared threads: party threads skip an out-of-play PC; a thread that names one still reaches it', () => {
+  const files = {
+    [NEW_FILE]: CONFIG,
+    'Campaign Overview.md': overview(),
+    'PCs/Corwin_Hale.md': pc('Corwin_Hale').replace('type: pc', 'type: pc\nstatus: deceased'),
+    'PCs/Ines_Marlowe.md': pc('Ines_Marlowe'),
+  };
+  const { read } = buildVault(files);
+  const corwin = read('pcs', 'corwin-hale.html');
+  assert.doesNotMatch(corwin, /The missing ledger/);
+  assert.match(corwin, /Corwin.s debt to the ferrywoman/);
+  assert.match(read('pcs', 'ines-marlowe.html'), /The missing ledger/);
+});
