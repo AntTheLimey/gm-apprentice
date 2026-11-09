@@ -1114,6 +1114,36 @@ class SharedThreadsTests(unittest.TestCase):
             self.assertNotIn("wants it back", self.raw(v, rel))
             self.assertNotIn("Ledger", self.raw(v, rel))
 
+    def test_wrap_variants_of_one_thread_are_one_group(self):
+        # The same words wrapped differently on two pairs of sheets: one
+        # Overview entry naming all four, every copy gone.
+        one = st_raw_pc("- **Ledger** — the keeper wants\n  it back\n")
+        other = st_raw_pc("- **Ledger** — the keeper\n  wants it back\n")
+        v = self.vault({
+            "Campaign Overview.md": ST_OVERVIEW,
+            "PCs/A.md": one, "PCs/B.md": one,
+            "PCs/C.md": other, "PCs/D.md": other,
+        })
+        (item,) = mv.find_shared_threads(v)
+        self.assertEqual(len(item.lines), 1)
+        item.apply(None)
+        overview = self.raw(v, "Campaign Overview.md")
+        self.assertEqual(overview.count("**Ledger**"), 1)
+        self.assertIn("- **Ledger** — the keeper wants it back — involves "
+                      "[[A]], [[B]], [[C]], [[D]]", overview)
+        for rel in ("PCs/A.md", "PCs/B.md", "PCs/C.md", "PCs/D.md"):
+            self.assertNotIn("Ledger", self.raw(v, rel))
+        # A hidden copy among the variants still holds the whole group.
+        hidden = st_raw_pc("<!-- gm-only -->\n- **Ledger** — the keeper\n"
+                           "  wants it back\n<!-- /gm-only -->\n")
+        v = self.vault({
+            "Campaign Overview.md": ST_OVERVIEW,
+            "PCs/A.md": one, "PCs/B.md": one, "PCs/C.md": hidden,
+        })
+        (item,) = mv.find_shared_threads(v)
+        self.assertEqual(item.group, PERSON)
+        self.assertIn("Ledger", self.raw(v, "PCs/A.md"))
+
     def test_struck_wrapped_bullet_closes_whole(self):
         v = self.vault({
             "PCs/A.md": st_raw_pc("- ~~Pay the\n  ferrywoman~~\n- Open\n"),

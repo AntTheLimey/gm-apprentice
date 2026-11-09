@@ -1052,7 +1052,9 @@ def _shared_threads_plan(vault: Path) -> tuple[
     # is the GM's secret and is passed over; one that would otherwise
     # move or close is left with a notice. A group with any hidden copy
     # stays whole: moving the others would show its words to players.
-    holders: dict[tuple[str, ...], list[tuple[str, th.PcThread]]] = {}
+    # Copies are grouped by their words on one line, whitespace collapsed
+    # (the text the shared entry gets), so a wrap variant joins its group.
+    holders: dict[str, list[tuple[str, th.PcThread]]] = {}
     struck: list[tuple[str, th.PcThread, str]] = []
     lines: list[tuple[str, str]] = []
     left: list[str] = []
@@ -1072,7 +1074,8 @@ def _shared_threads_plan(vault: Path) -> tuple[
                 else:
                     struck.append((rel, item, inner))
             else:
-                holders.setdefault(item.lines, []).append((rel, item))
+                holders.setdefault(" ".join(item.text.split()),
+                                   []).append((rel, item))
 
     drop: dict[str, list[th.PcThread]] = {}
     # A hidden shared entry shares nothing with players: a group matching
