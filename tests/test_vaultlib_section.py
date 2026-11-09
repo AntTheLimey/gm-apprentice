@@ -56,6 +56,12 @@ class SameAnswerTests(unittest.TestCase):
 
 
 class FinderTests(unittest.TestCase):
+    def test_section_matches_by_case_only(self):
+        self.assertEqual(vl.section("## current status\nx\n", "Current Status"),
+                         "x")
+        self.assertIsNone(vl.section("## Current  Status\nx\n",
+                                     "Current Status"))
+
     def test_case_insensitive(self):
         text = "## GM notes\nbody\n\n## Other\nx\n"
         self.assertEqual(vl.section(text, "GM Notes"), "body")

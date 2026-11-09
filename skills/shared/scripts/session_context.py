@@ -106,7 +106,7 @@ import vault_write as vw
 from schema_rules import (SESSION_PLAYED, chapter_key, chapter_of,
                           extract_frontmatter, parse_session_number,
                           wikilink_target)
-from threads import pc_thread_items, shared_threads
+from threads import _hidden_lines, pc_thread_items, shared_threads
 from vaultlib import (GM_MARKER_RE, is_active_pc, marker_re,  # noqa: F401
                       is_out_of_play, out_of_play,
                       report_unreadable_settings, setting_or_builtin,
@@ -959,12 +959,14 @@ class Outlines:
 
     def __init__(self) -> None:
         self.used = False
+        self.files: list = []   # the bundle's (rel, text, fm) notes
         self._batch: vw.Batch | None = None
         self._names: dict[str, list[str]] = {}
 
-    def layered(self, body: str, vault: Path, rel: str, section: str) -> str:
+    def layered(self, body: str, vault: Path, rel: str, section: str,
+                note_text: str) -> str:
         text, outlined = layered(body, lambda: self.note_ref(vault, rel),
-                                 section)
+                                 section, note_text)
         self.used = self.used or outlined
         return text
 
@@ -975,7 +977,8 @@ class Outlines:
         path = Path(rel).as_posix()
         if self._batch is None:
             self._batch = vw.Batch(vault)
-            self._names = section_cmd.name_index(self._batch)
+            self._names = section_cmd.name_index(
+                (f[0], f[1]) for f in self.files)
         try:
             if section_cmd.resolve_note(self._batch, Path(rel).stem,
                                         self._names) == path:
@@ -989,22 +992,29 @@ _OPEN_THREADS_LABEL_RE = re.compile(
     r"^[ \t]*(?:[-*][ \t]+)?\*\*open threads:\*\*", re.I)
 
 
-def layered(body: str, note: str | Callable[[], str], section: str
-            ) -> tuple[str, bool]:
+def layered(body: str, note: str | Callable[[], str], section: str,
+            note_text: str | None = None) -> tuple[str, bool]:
     """A section body with its `###` subsections outlined, and whether it
-    was. `body` is the section's text without its own `##` heading. Returns
+    was. `body` is the section's text without its own `##` heading;
+    `note_text` is the whole note, which `gma section` will read. Returns
     the text before the first heading of level 3 or deeper (a blank line
     after it kept), then one line per subsection,
-    `### {title}  ({N} words; {note}: {section}/{title})`, which is the
-    note and path `gma section` takes. A deeper heading inside a subsection
-    folds into it. A body with no such heading comes back unchanged. The
-    `**Open threads:**` label is not a heading, so it stays in the text
-    before the first one; a subsection holding the label under it prints
-    whole. A title that repeats (or whose path would fetch another heading)
-    names the section instead, which fetches every one of them. A CRLF
-    body gets CRLF outline lines."""
+    `### {title}  ({N} words; {note}: {path})`. N counts the whole
+    subsection, deeper headings included, which is what the fetch returns.
+    The path is `{section}/{title}` when that picks out this one heading in
+    the note, else the same with the section's level pinned
+    (`## {section}/{title}`), else the section's own path (pinned if its
+    name repeats), which fetches every subsection under it; when not even
+    that is unique, the subsection prints whole. A deeper heading inside a
+    subsection folds into it, and a heading inside a comment or a gm-only
+    or `%%` block is not a subsection. A body with no subsection heading
+    comes back unchanged. The `**Open threads:**` label is not a heading,
+    so it stays in the text before the first one; a subsection holding the
+    label under it prints whole. A CRLF body gets CRLF outline lines."""
     lines = body.split("\n")
-    heads = [h for h in line_headings(lines) if h[1] >= 3]
+    hidden = _hidden_lines(lines)
+    heads = [h for h in line_headings(lines)
+             if h[1] >= 3 and not hidden[h[0]]]
     if not heads:
         return body, False
     tops: list[tuple[int, int, str]] = []
@@ -1017,24 +1027,43 @@ def layered(body: str, note: str | Callable[[], str], section: str
     out = ["\n".join(before).rstrip()]   # lines keep their own "\r"
     if before and not before[-1].strip():
         out.append("")
-    # The section as a note holds it, to ask whether a path fetches one
-    # subsection. A repeated title does not: its line names the section.
-    whole = ["## " + section, *lines]
+    # The note as `gma section` reads it; the section alone when not given.
+    whole = (note_text.split("\n") if note_text is not None
+             else ["## " + section, *lines])
     outlined = False
     for n, (idx, level, title) in enumerate(tops):
         end = tops[n + 1][0] if n + 1 < len(tops) else len(lines)
-        if any(_OPEN_THREADS_LABEL_RE.match(x) for x in lines[idx + 1:end]):
+        name = atx_title(title)
+        where = _fetch_path(whole, section, name)
+        if (where is None
+                or any(_OPEN_THREADS_LABEL_RE.match(x)
+                       for x in lines[idx + 1:end])):
             out.append("\n".join(lines[idx:end]).rstrip())   # printed whole
             continue
         words = word_count("\n".join(lines[idx + 1:end]))
-        name = atx_title(title)
-        found = find_section_lines(
-            whole, [section, *(p.strip() for p in name.split("/"))])
-        where = f"{section}/{name}" if isinstance(found, tuple) else section
         out.append(f"{'#' * level} {name}  ({words} words; "
                    f"{note}: {where})")
         outlined = True
     return eol.join(out).lstrip("\r\n"), outlined
+
+
+def _fetch_path(whole: list[str], section: str, name: str) -> str | None:
+    """The path `gma section` takes to fetch the subsection `name` of
+    `section` (see `layered`), or None when no path fetches exactly one
+    span: the first of the plain path, the level-pinned path and the
+    section itself (plain, then pinned) that finds one heading."""
+    rest = [p.strip() for p in name.split("/")]
+    for pinned in (False, True):
+        top = f"## {section}" if pinned else section
+        if isinstance(find_section_lines(
+                whole, [section, *rest], level=2 if pinned else None),
+                tuple):
+            return f"{top}/{name}"
+    for pinned in (False, True):
+        if isinstance(find_section_lines(
+                whole, [section], level=2 if pinned else None), tuple):
+            return f"## {section}" if pinned else section
+    return None
 
 
 def arcs_report(files, chapter, upcoming: int, vault: Path,
@@ -1108,11 +1137,11 @@ def arcs_report(files, chapter, upcoming: int, vault: Path,
         lines.append(f"\n--- {stem} ({rel}, player: {player}) ---")
         bg = section(text, "Background")
         lines.append("## Background")
-        lines.append(outlines.layered(bg, vault, rel, "Background") if bg
+        lines.append(outlines.layered(bg, vault, rel, "Background", text) if bg
                      else "(no ## Background section)")
         gm = section(text, "GM Notes")
         lines.append("## GM Notes")
-        lines.append(outlines.layered(gm, vault, rel, "GM Notes") if gm
+        lines.append(outlines.layered(gm, vault, rel, "GM Notes", text) if gm
                      else "(no ## GM Notes section)")
         lines.append("Spotlight history (chapter-scoped, from "
                      "## Spotlight Forecast tables):")
@@ -1628,6 +1657,7 @@ def _bundle(argv: list[str] | None, outlines: Outlines) -> int:
         return 0
 
     files = list(vault_files(args.vault))
+    outlines.files = files
 
     if args.play:
         # --session names the plan directly here, not "just played" — the
@@ -1736,7 +1766,8 @@ def _bundle(argv: list[str] | None, outlines: Outlines) -> int:
         as_of = fm.get("asOfSession", "?")
         print(f"\n--- {Path(rel).stem} ({rel}, asOfSession: {as_of}) ---")
         status_block = section(text, "Current Status")
-        print(outlines.layered(status_block, args.vault, rel, "Current Status")
+        print(outlines.layered(status_block, args.vault, rel, "Current Status",
+                         text)
               if status_block else "(no ## Current Status block)")
     if not found_pc:
         print("(no active PC entities found)")

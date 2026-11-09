@@ -230,18 +230,115 @@ class LayeredUnitTests(unittest.TestCase):
         self.assertEqual(text.count("Zed: Current Status)"), 2)
         self.assertIn("### Solo  (1 words; Zed: Current Status/Solo)", text)
 
-    def test_note_names_are_read_once(self):
+    def test_note_names_are_read_once_from_the_bundle_files(self):
         import section as section_cmd
         calls = []
         real = section_cmd.name_index
+        real_walk = vl.vault_files
         section_cmd.name_index = lambda b: calls.append(1) or real(b)
+
+        def no_walk(*a, **k):
+            raise AssertionError("walked the vault again")
+        vl.vault_files = no_walk
         try:
             outlines = sctx.Outlines()
+            outlines.files = [("PCs/Ada_Quill.md", "", {}),
+                              ("PCs/Cole_Plain.md", "", {})]
             for rel in ("PCs/Ada_Quill.md", "PCs/Cole_Plain.md"):
                 outlines.note_ref(FIXTURE, rel)
         finally:
             section_cmd.name_index = real
+            vl.vault_files = real_walk
         self.assertEqual(len(calls), 1)
+
+    def test_comment_and_hidden_blocks_hold_no_subsections(self):
+        for body in ("lead\n<!--\n### hint\nlong text\n-->\n",
+                     "lead\n<!-- gm-only -->\n### secret\nx\n"
+                     "<!-- /gm-only -->\n",
+                     "lead\n%%\n### aside\nx\n%%\n"):
+            with self.subTest(body=body):
+                self.assertEqual(sctx.layered(body, "Zed", "Background"),
+                                 (body, False))
+        body = "lead\n<!--\n### hint\n-->\n### Real\nwords here\n"
+        text, outlined = sctx.layered(body, "Zed", "Background")
+        self.assertTrue(outlined)
+        self.assertIn("<!--\n### hint\n-->\n### Real  (", text)
+
+    def test_path_is_pinned_when_the_name_repeats_in_the_note(self):
+        note = ("# Ada\n## Current Status\nLead text.\n### GM Notes\ncs gm\n"
+                "## GM Notes\nintro\n### Hooks\nalpha\n### Solo\nz\n")
+        body = "intro\n### Hooks\nalpha\n### Solo\nz"
+        text, _ = sctx.layered(body, "Ada", "GM Notes", note)
+        self.assertIn("Ada: GM Notes/Hooks)", text)  # unique final heading
+        note2 = note + "### Hooks\nbeta\n"
+        body2 = body + "\n### Hooks\nbeta"
+        text, _ = sctx.layered(body2, "Ada", "GM Notes", note2)
+        self.assertEqual(text.count("Ada: ## GM Notes)"), 2, text)
+
+    def test_nothing_unique_prints_the_subsection_whole(self):
+        note = ("# Ada\n## Current Status\n### Log\na\n"
+                "## Current Status\n### Log\nb\n")
+        text, outlined = sctx.layered("### Log\na", "Ada", "Current Status",
+                                      note)
+        self.assertFalse(outlined)
+        self.assertEqual(text, "### Log\na")
+
+
+@NEEDS_NODE
+class PinnedPathTests(unittest.TestCase):
+    ADA = ("---\ntype: pc\nstatus: active\nplayer: Jo\n---\n# Ada\n"
+           "## Current Status\nLead text.\n### GM Notes\ncs gm notes\n"
+           "## GM Notes\nintro\n### Hooks\nalpha\n### Hooks\nbeta\n")
+
+    def vault(self):
+        vault = copy_vault(self)
+        (vault / "PCs" / "Ada_Quill.md").write_text(self.ADA, encoding="utf-8")
+        return vault
+
+    def test_every_printed_path_fetches_one_span(self):
+        vault = self.vault()
+        out = sc("--arcs", vault=vault).stdout + sc("--brief",
+                                                    vault=vault).stdout
+        found = [x for x in OUTLINE_RE.findall(out) if x[1] == "Ada_Quill"]
+        self.assertGreaterEqual(len(found), 2, out)
+        for _w, name, path in found:
+            with self.subTest(path=path):
+                r = fetch(name, path, vault=vault)
+                self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("Ada_Quill: ## GM Notes)", out)
+
+    def test_leading_marks_pin_the_level(self):
+        vault = self.vault()
+        r = fetch("Ada_Quill", "GM Notes", vault=vault)
+        self.assertEqual(r.returncode, 1)
+        r = fetch("Ada_Quill", "## GM Notes", vault=vault)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertTrue(r.stdout.startswith("## GM Notes\n"))
+        self.assertIn("beta", r.stdout)
+        self.assertNotIn("cs gm notes", r.stdout)
+
+    def test_refusal_names_the_parent_when_no_path_helps(self):
+        vault = self.vault()
+        r = fetch("Ada_Quill", "## GM Notes/Hooks", vault=vault)
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("fetch the parent section", r.stderr)
+        self.assertNotIn("longer path", r.stderr)
+        r = fetch("Ada_Quill", "GM Notes", vault=vault)
+        self.assertIn("longer path", r.stderr)
+
+    def test_two_current_status_sections(self):
+        note = ("---\ntype: pc\nstatus: active\nplayer: Jo\n---\n# Ada\n"
+                "## Current Status\nLead.\n### Log\na\n### Only\nx\n"
+                "## Current Status\nAgain.\n### Log\nb\n")
+        vault = copy_vault(self)
+        (vault / "PCs" / "Ada_Quill.md").write_text(note, encoding="utf-8")
+        out = sc("--brief", vault=vault).stdout
+        ada = out.split("--- Ada_Quill")[1].split("--- Cole_Plain")[0]
+        for _w, name, path in OUTLINE_RE.findall(ada):
+            r = fetch(name, path, vault=vault)
+            self.assertEqual(r.returncode, 0, (path, r.stderr))
+        self.assertIn("### Only  (", ada)           # unique: outlined
+        self.assertIn("### Log\na", ada)            # not unique: whole
 
 
 if __name__ == "__main__":

@@ -943,7 +943,8 @@ def section(text: str, heading: str) -> str | None:
     fence), stripped, up to the next heading of level 1 or 2; None when
     there is none. Found by `find_section`, the one section finder."""
     lines = text.split("\n")
-    found = find_section_lines(lines, [heading], level=2, first=True)
+    found = find_section_lines(lines, [heading], level=2, first=True,
+                               exact=True)
     if not isinstance(found, tuple):
         return None
     return "\n".join(lines[found[0] + 1:found[1]]).strip()
