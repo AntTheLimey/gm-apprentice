@@ -938,30 +938,6 @@ ANY_LABEL_LINE_RE = re.compile(r"^\*\*[^*]+\*\*")
 BULLET_RE = re.compile(r"^\s*[-*]\s+(.+)$")
 
 
-def labelled_block(text: str, label: str) -> str | None:
-    """The `**label:** ...` line and any following lines, up to the next
-    bold label line (inline or block) or the end of `text`. None if
-    `label` is absent. Used for both a Session Plan scene's
-    `**Situation:**` / `**Starts it:**` / `**Entities:**` / `**Trigger:**`
-    fields and a PC's `**Open threads:**` block — both are "a bold
-    label, then prose or bullets, until the next bold label" in shape."""
-    lines = text.splitlines()
-    start = None
-    for i, line in enumerate(lines):
-        m = LABEL_RE.match(line.strip())
-        if m and m.group(1).strip().casefold() == label.casefold():
-            start = i
-            break
-    if start is None:
-        return None
-    collected = [lines[start]]
-    for line in lines[start + 1:]:
-        if ANY_LABEL_LINE_RE.match(line.strip()):
-            break
-        collected.append(line)
-    return "\n".join(collected).strip()
-
-
 def bullets(text: str) -> list[str]:
     """`- item` / `* item` line text, in document order, any indentation."""
     out = []
@@ -972,7 +948,7 @@ def bullets(text: str) -> list[str]:
     return out
 
 
-_SECTION_HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
+SECTION_HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
 
 
 def fence_step(line: str, fence_delim: str | None) -> tuple[str | None, bool]:
@@ -1080,7 +1056,7 @@ def fenced_headings(text: str) -> list[tuple[int, int, str]]:
         fence_delim, is_fence_line = fence_step(line, fence_delim)
         if is_fence_line or fence_delim is not None:
             continue
-        m = _SECTION_HEADING_RE.match(line)
+        m = SECTION_HEADING_RE.match(line)
         if m:
             heads.append((i, len(m.group(1)), m.group(2).strip()))
     return heads

@@ -325,21 +325,85 @@ class ThreadsTests(unittest.TestCase):
                 self.assertIn(f"\n{line}\n",
                               threads.remove_pc_thread(pc, got))
 
-    def test_remove_bullet(self):
-        text = read(INES)
-        out = threads.remove_bullet(
-            text, ("Current Status", "**Open threads**"), 0)
-        self.assertEqual([t.text for t in threads.pc_thread_items(out)],
-                         ["Find out who lit the lamp on the north bank"])
-        self.assertIn("## Notes", out)
-        out = threads.remove_bullet(read(WRAPUP), (
-            "GM Notes", "What Carries Forward", "Unresolved Threads"), 1)
-        self.assertNotIn("north-bank lamp", out)
-        self.assertIn("The missing ledger", out)
+    def test_remove_shared(self):
+        text = read(OVERVIEW)
+        out = threads.remove_shared(text, 0)
+        self.assertEqual([t.text for t in threads.shared_threads(out)],
+                         ["**Corwin's debt to the ferrywoman** — owed for "
+                          "the night crossing"])
+        self.assertIn("## Key Factions", out)
+        wrapped = ("# T\n\n## Open Threads\n\n- a — involves the party\n"
+                   "  more of a\n- b — involves the party\n")
+        self.assertEqual(threads.remove_shared(wrapped, 0),
+                         "# T\n\n## Open Threads\n\n"
+                         "- b — involves the party\n")
         with self.assertRaises(IndexError):
-            threads.remove_bullet(text, ("Current Status",), 99)
+            threads.remove_shared(text, 99)
         with self.assertRaises(KeyError):
-            threads.remove_bullet(text, ("No Such Section",), 0)
+            threads.remove_shared("# T\n\n## Premise\n\n- a\n", 0)
+
+    def test_one_finder_for_the_shared_section(self):
+        # Level 2, any case, outside a code fence: read, add and remove
+        # all find the same section.
+        text = ("# T\n\n```\n## Open Threads\n- not this — involves the "
+                "party\n```\n\n### Open Threads\n\n- nor this\n\n"
+                "## Open threads\n\n- a — involves the party\n\n"
+                "## Key\n\nK.\n")
+        self.assertEqual([t.text for t in threads.shared_threads(text)],
+                         ["a"])
+        out = threads.insert_shared(text, "- b — involves the party")
+        self.assertEqual(out.count("\n## Open"), 2)
+        self.assertEqual([t.text for t in threads.shared_threads(out)],
+                         ["a", "b"])
+        self.assertIn("- a — involves the party\n- b — involves the party\n",
+                      out)
+        out = threads.remove_shared(out, 0)
+        self.assertEqual([t.text for t in threads.shared_threads(out)],
+                         ["b"])
+        self.assertIn("- not this", out)
+        self.assertIn("- nor this", out)
+        # A code-fenced bullet inside the section is not a thread.
+        fenced = ("## Open Threads\n\n```\n- code — involves the party\n"
+                  "```\n- real — involves the party\n")
+        self.assertEqual([t.text for t in threads.shared_threads(fenced)],
+                         ["real"])
+        self.assertNotIn("real", threads.remove_shared(fenced, 0))
+
+    def test_existing_section_with_no_open_point_raises(self):
+        # Open Threads runs into an unclosed gm-only fence: no second heading.
+        text = ("# T\n\n## Current Arc\n\nA.\n\n## Open Threads\n\n- a\n\n"
+                "<!-- gm-only -->\n\nhid\n")
+        with self.assertRaises(ValueError):
+            threads.insert_shared(text, "- b — involves the party")
+        # The heading itself sits inside a gm-only fence.
+        text = ("# T\n\n<!-- gm-only -->\n\n## Open Threads\n\n- a\n\n"
+                "<!-- /gm-only -->\n\n## GM Notes\n\nS.\n")
+        with self.assertRaises(ValueError):
+            threads.insert_shared(text, "- b — involves the party")
+
+    def test_party_is_any_case(self):
+        got = threads.parse_shared("- X — involves The Party")
+        self.assertTrue(got.party)
+
+    def test_append_resolved_fences_an_unfenced_block(self):
+        text = ("# W\n\n### What Carries Forward\n\n#### Unresolved Threads"
+                "\n\n- a\n\n## Next\n\nN.\n")
+        out = threads.append_resolved(text, "- b")
+        self.assertEqual(
+            out, "# W\n\n### What Carries Forward\n\n#### Unresolved Threads"
+                 "\n\n- a\n\n<!-- gm-only -->\n\n#### Resolved Threads\n\n"
+                 "- b\n\n<!-- /gm-only -->\n\n## Next\n\nN.\n")
+        again = threads.append_resolved(out, "- c")
+        self.assertIn("- b\n- c\n\n<!-- /gm-only -->", again)
+        self.assertEqual(again.count("#### Resolved Threads"), 1)
+        # At the end of the note too.
+        end = threads.append_resolved(
+            "### What Carries Forward\n\n#### Unresolved Threads\n\n- a\n",
+            "- b")
+        self.assertEqual(
+            end, "### What Carries Forward\n\n#### Unresolved Threads\n\n"
+                 "- a\n\n<!-- gm-only -->\n\n#### Resolved Threads\n\n- b\n\n"
+                 "<!-- /gm-only -->\n")
 
     def test_crlf_kept(self):
         def crlf(s: str) -> str:
@@ -354,10 +418,9 @@ class ThreadsTests(unittest.TestCase):
         out = threads.append_resolved(wrap, "- done")
         self.assertEqual(out.count("\n"), out.count("\r\n"))
         self.assertIn("#### Resolved Threads\r\n\r\n- done\r\n", out)
-        out = threads.remove_bullet(crlf(read(INES)),
-                                    ("Current Status", "**Open threads**"), 0)
+        out = threads.remove_shared(crlf(read(OVERVIEW)), 0)
         self.assertEqual(out.count("\n"), out.count("\r\n"))
-        self.assertEqual(len(threads.pc_thread_items(out)), 1)
+        self.assertEqual(len(threads.shared_threads(out)), 1)
 
 
 if __name__ == "__main__":

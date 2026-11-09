@@ -21,8 +21,9 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from vaultlib import (ANY_LABEL_LINE_RE, BULLET_RE, GM_MARKER_RE, LABEL_RE, atx_title, bullets,
-                      fence_step, marker_re, scan_body, section)
+from vaultlib import (ANY_LABEL_LINE_RE, BULLET_RE, GM_MARKER_RE, LABEL_RE,
+                      SECTION_HEADING_RE, atx_title, fence_step, marker_re,
+                      scan_body)
 
 SECTION = "Open Threads"
 RESOLVED = "Resolved Threads"
@@ -36,7 +37,7 @@ _TAIL_RE = re.compile(
 _LINK_RE = re.compile(r"\[\[([^\]|#]+?)(?:[|#][^\]]*)?\]\]")
 _LEAD_RE = re.compile(r"^\*\*(.+?)\*\*")
 _PLACEHOLDER_RE = re.compile(r"^\{.*\}$")
-_HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
+GM_OPEN, GM_CLOSE = "<!-- gm-only -->", "<!-- /gm-only -->"
 # A thread holding any of these, or next to a line with one, is next to
 # hidden text (see `pc_thread_items`). A gm-only or spoiler marker on a line
 # next to it does not count: `scan_body` reads those fences exactly.
@@ -81,7 +82,7 @@ def parse_shared(line: str) -> SharedThread | None:
     if tail:
         who = tail.group("who")
         names = [n.strip() for n in _LINK_RE.findall(who)]
-        if who == _PARTY:
+        if who.casefold() == _PARTY:
             return SharedThread(tail.group("text").strip(),
                                 tail.group("since"), [], True)
         if names:
@@ -91,11 +92,11 @@ def parse_shared(line: str) -> SharedThread | None:
 
 
 def shared_threads(overview_text: str) -> list[SharedThread]:
-    """The threads under the Overview's `## Open Threads` section."""
-    body = section(overview_text, SECTION)
-    if not body:
-        return []
-    found = (parse_shared(f"- {b}") for b in bullets(body))
+    """The threads under the Overview's `## Open Threads` section (see
+    `_shared_span`), one per bullet line outside a code fence."""
+    lines = _lines(overview_text)
+    found = (parse_shared(lines[i].rstrip("\r"))
+             for i in _shared_bullets(lines))
     return [t for t in found if t is not None]
 
 
@@ -152,9 +153,37 @@ def _headings(lines: list[str]) -> list[tuple[int, int, str]]:
         delim, is_fence = fence_step(line, delim)
         if is_fence or delim is not None:
             continue
-        m = _HEADING_RE.match(line)
+        m = SECTION_HEADING_RE.match(line)
         if m:
             out.append((i, len(m.group(1)), atx_title(m.group(2))))
+    return out
+
+
+def _shared_span(lines: list[str]) -> tuple[int, int] | None:
+    """(heading index, end) of the shared list: the first level-2 heading
+    titled Open Threads in any case, outside a code fence, up to the next
+    heading of level 1 or 2. Every reader and writer of the list (and the
+    publish tool's `sectionRange`) finds it this way."""
+    heads = _headings(lines)
+    for at, (idx, lvl, title) in enumerate(heads):
+        if lvl == 2 and title.casefold() == SECTION.casefold():
+            return idx, _heading_end(lines, heads, at)
+    return None
+
+
+def _shared_bullets(lines: list[str]) -> list[int]:
+    """Line indexes of the bullets in the shared list, any indent, outside
+    a code fence."""
+    span = _shared_span(lines)
+    if span is None:
+        return []
+    out = []
+    delim: str | None = None
+    for i in range(span[0] + 1, span[1]):
+        line = lines[i].rstrip("\r")
+        delim, is_fence = fence_step(line, delim)
+        if not (is_fence or delim is not None) and BULLET_RE.match(line):
+            out.append(i)
     return out
 
 
@@ -240,7 +269,9 @@ def insert_shared(overview_text: str, line: str) -> str:
     `## Current Arc` (else before the first `## GM Notes`, else at the end
     of the note). The section is player-facing, so the insert point is
     always outside a gm-only fence; a path with no such point gives way to
-    the next, and ValueError means the note has none."""
+    the next, and ValueError means the note has none. An existing section
+    with no such point, or whose heading is itself inside a gm-only fence,
+    is a ValueError too: never a second heading."""
     eol = _eol(overview_text)
     lines = _lines(overview_text)
     heads = _headings(lines)
@@ -251,13 +282,16 @@ def insert_shared(overview_text: str, line: str) -> str:
                 return at
         return None
 
-    at = find(SECTION.casefold())
-    if at is not None:
-        idx = heads[at][0]
-        end = _valid_point(lines, idx, _heading_end(lines, heads, at))
-        if end is not None:
-            return _join(_put_after_content(
-                lines, idx, end, [_new(line, eol)]), eol)
+    span = _shared_span(lines)
+    if span is not None:
+        idx = span[0]
+        end = (None if _states(lines)[idx]
+               else _valid_point(lines, idx, span[1]))
+        if end is None:
+            raise ValueError("Open Threads has no place outside a gm-only "
+                             "fence")
+        return _join(_put_after_content(
+            lines, idx, end, [_new(line, eol)]), eol)
     pos = None
     at = find("current arc")
     if at is not None:
@@ -437,7 +471,7 @@ def _lazy(line: str) -> bool:
     `-->`, `%%`) or a blockquote or callout (`>`)."""
     bare = line.strip()
     return not (BULLET_RE.match(line) or ANY_LABEL_LINE_RE.match(bare)
-                or _HEADING_RE.match(bare) or GM_MARKER_RE.search(line)
+                or SECTION_HEADING_RE.match(bare) or GM_MARKER_RE.search(line)
                 or bare.startswith(("```", "~~~", *_HIDING, ">")))
 
 
@@ -448,26 +482,25 @@ def remove_pc_thread(pc_text: str, thread: PcThread) -> str:
     return "\n".join(lines[:thread.start] + lines[thread.end:])
 
 
-def remove_bullet(text: str, section_path: tuple[str, ...],
-                  index: int) -> str:
-    """`text` without bullet number `index` (0-based, document order) of the
-    section `section_path` names, plus any indented lines wrapped under it.
-    KeyError for a missing section, IndexError for a missing bullet."""
-    eol = _eol(text)
-    lines = _lines(text)
-    start, end = _path_span(lines, section_path)
-    seen = -1
-    for i in range(start, end):
-        if BULLET_RE.match(lines[i].rstrip("\r")):
-            seen += 1
-            if seen == index:
-                stop = i + 1
-                while (stop < end and lines[stop].strip()
-                       and lines[stop][:1] in " \t"
-                       and not BULLET_RE.match(lines[stop].rstrip("\r"))):
-                    stop += 1
-                return "\n".join(lines[:i] + lines[stop:])
-    raise IndexError(f"no bullet {index} under {' > '.join(section_path)}")
+def remove_shared(overview_text: str, index: int) -> str:
+    """`overview_text` without shared thread number `index` (as
+    `shared_threads` numbers them), plus any indented lines wrapped under
+    it. KeyError for no Open Threads section, IndexError for no such
+    bullet."""
+    lines = _lines(overview_text)
+    span = _shared_span(lines)
+    if span is None:
+        raise KeyError(SECTION)
+    found = _shared_bullets(lines)
+    if not 0 <= index < len(found):
+        raise IndexError(f"no bullet {index} under {SECTION}")
+    i = found[index]
+    stop = i + 1
+    while (stop < span[1] and lines[stop].strip()
+           and lines[stop][:1] in " \t"
+           and not BULLET_RE.match(lines[stop].rstrip("\r"))):
+        stop += 1
+    return "\n".join(lines[:i] + lines[stop:])
 
 
 def append_resolved(wrapup_text: str, line: str) -> str:
@@ -511,6 +544,13 @@ def append_resolved(wrapup_text: str, line: str) -> str:
     while last > idx and _blank(lines[last - 1]):
         last -= 1
     block = [blank, _new(f"#### {RESOLVED}", eol), blank, _new(line, eol)]
+    closer = end < len(lines) and any(
+        m.group(1) for m in GM_MARKER_RE.finditer(lines[end]))
+    if not (_states(lines)[last] or closer):
+        # An older Wrap-Up with no gm-only fence here: the evidence is the
+        # GM's, so the new block gets a fence of its own.
+        block = ([blank, _new(GM_OPEN, eol)] + block
+                 + [blank, _new(GM_CLOSE, eol)])
     rest = lines[last:]
     after = list(rest)
     while after and _blank(after[0]):
