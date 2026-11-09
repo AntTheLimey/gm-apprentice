@@ -19,6 +19,20 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 - The update's checks for 1.10 releases, which no vault it takes can need, and the publish tool's `google-fonts` question, which only they asked (publish tool 1.70.2).
 
+### In numbers
+
+| | 1.12.1 | 1.12.2 | Change |
+|---|---|---|---|
+| Checks the update carries | 40 | 13 | −67% |
+| The two migration modules | 3,230 lines | 1,481 lines | −54% |
+| All shipped vault scripts | 41,376 lines | 39,389 lines | −4.8% |
+| `template-history.json` | 26,242 B | 18,573 B | −29% |
+| What an install downloads (`skills/`, gzipped) | 1,249 KB | 1,222 KB | −2.1% |
+| Test functions | 4,324 | 4,097 | −227 |
+| Full Python suite, one local run | 429 s | 398 s | −7% |
+
+No faster on a current vault (those checks never ran on one); the gain is upkeep. From here each minor release deletes the last minor's checks, so the update stays about this size.
+
 ## [1.12.1] — 2026-11-08
 
 Codex and Cursor tested end to end on 1.12.0 (create a vault, prep, wrap-up, build the site locally, update).
