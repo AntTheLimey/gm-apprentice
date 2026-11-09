@@ -569,6 +569,79 @@ class ThreadReportTests(unittest.TestCase):
         report = sc.thread_report(load_files(tmp), 7, "chapter 4 - calcutta", tmp)
         self.assertIn(ledger + "STALE", report)
 
+    def shared_copy(self, open_threads):
+        """A copy of the fixture whose Overview carries `## Open Threads`."""
+        tmp = Path(tempfile.mkdtemp(prefix="session-context-shared-"))
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        shutil.copytree(FIXTURE, tmp, dirs_exist_ok=True)
+        overview = tmp / "Overview.md"
+        overview.write_text(
+            overview.read_text(encoding="utf-8")
+            + "\n## Open Threads\n\n" + open_threads + "\n",
+            encoding="utf-8")
+        return tmp
+
+    def report(self, vault):
+        return sc.thread_report(load_files(vault), 7,
+                                "chapter 4 - calcutta", vault)
+
+    def test_no_overview_section_reads_as_before(self):
+        self.assertEqual(self.report(FIXTURE), (
+            "===== Threads =====\n"
+            "--- Hero ---\n"
+            "Find the missing ledger\tfirst=7\tlast=7\tage=0\t\n"
+            "Repay Bram\tfirst=?\tlast=?\tage=?\t"
+            "(not in any wrap-up — check it is still live)\n"
+            "--- Wrap-up threads not on any PC sheet ---\n"
+            "session 5\tThe ledger is still missing"))
+
+    def test_shared_list_prints_first_with_involves(self):
+        tmp = self.shared_copy(
+            "- Find the missing ledger — since Session 5; involves the party\n"
+            "- The harbour toll — since Session 3; involves [[Hero]], [[Bram]]")
+        report = self.report(tmp)
+        lines = report.split("\n")
+        self.assertEqual(lines[0], "===== Threads =====")
+        self.assertEqual(lines[1], "--- Shared (Campaign Overview) ---")
+        self.assertEqual(
+            lines[2], "Find the missing ledger\tfirst=7\tlast=7\tage=0\t"
+            "\tinvolves: the party")
+        self.assertEqual(
+            lines[3], "The harbour toll\tfirst=?\tlast=?\tage=?\t"
+            "(not in any wrap-up — check it is still live)"
+            "\tinvolves: Hero, Bram")
+        self.assertLess(lines.index("--- Shared (Campaign Overview) ---"),
+                        lines.index("--- Hero ---"))
+
+    def test_pc_copy_of_shared_thread_prints_once(self):
+        tmp = self.shared_copy(
+            "- Repay Bram — since Session 3; involves [[Hero]]")
+        report = self.report(tmp)
+        self.assertEqual(report.count("Repay Bram\t"), 1)
+        shared_part, pc_part = report.split("--- Hero ---")
+        self.assertIn("Repay Bram\t", shared_part)
+        self.assertIn("Find the missing ledger\t", pc_part)
+
+    def test_orphan_on_shared_list_is_not_an_orphan(self):
+        tmp = self.shared_copy(
+            "- The ledger is still missing — since Session 5; "
+            "involves the party")
+        report = self.report(tmp)
+        orphans = report.split(
+            "--- Wrap-up threads not on any PC sheet ---", 1)[1]
+        self.assertNotIn("The ledger is still missing", orphans)
+        self.assertIn(
+            "The ledger is still missing\tfirst=5\tlast=5\tage=2\t",
+            report)
+
+    def test_match_sessions_returns_sessions_and_mark(self):
+        wrap_ups = sc.wrap_up_threads(load_files(FIXTURE),
+                                      "chapter 4 - calcutta")
+        self.assertEqual(
+            sc.match_sessions("Find the missing ledger", wrap_ups),
+            ([7], "="))
+        self.assertEqual(sc.match_sessions("Zzz qqq", wrap_ups), ([], ""))
+
     def test_a_deceased_pc_is_not_in_the_active_pcs(self):
         tmp = self.aged_copy("")
         hero = tmp / "Characters" / "PCs" / "Hero.md"

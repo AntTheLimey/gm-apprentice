@@ -11,7 +11,8 @@ trauma, D&D backgrounds), see the per-system `session-procedures.md` files.
 Arc analysis and touchpoint personalization read each active PC's
 `## Current Status` block in `Characters/PCs/{Name}.md`:
 
-- **`Open threads`** — the forward-looking work-list. Design scenes and
+- **`Open threads`** — the PC's own forward-looking work-list (shared
+  threads sit in the Campaign Overview). Design scenes and
   touchpoints that pay off these dangling items.
 - **`Knows (exclusive)`** — per-PC secret knowledge. Fuel for personalized
   hooks and Backstory-Connection touchpoints.

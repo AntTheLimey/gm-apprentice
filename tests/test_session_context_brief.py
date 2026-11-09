@@ -62,6 +62,18 @@ class BriefWrapupUnitTests(unittest.TestCase):
                 self.assertIn(marker, out)
                 self.assertIn("Kept words.", out)
 
+    def test_resolved_threads_stubbed(self):
+        body = ("## GM Notes\n\n### What Carries Forward\n\n"
+                "#### Unresolved Threads\n\n- Kept thread.\n\n"
+                "#### Resolved Threads\n\n- The bell — rung (Session 7)\n"
+                "- The debt — paid\n\n#### Pending Consequences\n\n- Kept.\n")
+        out = sc.brief_wrapup(body)
+        self.assertNotIn("The bell", out)
+        self.assertIn("#### Resolved Threads\n(omitted in --brief: 12 words",
+                      out)
+        self.assertIn("Kept thread.", out)
+        self.assertIn("#### Pending Consequences\n\n- Kept.", out)
+
     def test_no_op_when_nothing_to_drop(self):
         body = "## Narrative Recap\n\nText.\n\n## GM Notes\n\n### World State\n\nDay 1.\n"
         self.assertEqual(sc.brief_wrapup(body), body)

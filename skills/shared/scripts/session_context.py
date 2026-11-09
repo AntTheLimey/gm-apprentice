@@ -93,6 +93,7 @@ from pathlib import Path
 from typing import NamedTuple
 
 import scene_queue
+from threads import shared_threads
 from schema_rules import (SESSION_PLAYED, chapter_key, chapter_of,
                           extract_frontmatter, parse_session_number,
                           wikilink_target)
@@ -198,14 +199,16 @@ def _heading_block(text: str, level: int, title: str) -> str | None:
 
 # H2 blocks --brief stubs outright, and H3 blocks it stubs by title prefix
 # (the template's Name Conflicts heading carries a parenthetical, so an
-# exact match would miss it).
+# exact match would miss it). The list also matches at `####`: the
+# template's Resolved Threads sits one level down, under What Carries
+# Forward.
 BRIEF_DROP_H2: tuple[str, ...] = ("Memorable Moments",)
 BRIEF_DROP_H3: tuple[str, ...] = (
     "Name Conflicts", "Cross-Entity Claims", "World Fact Findings",
-    "Quality Notes", "Reconciliation Context")
+    "Quality Notes", "Reconciliation Context", "Resolved Threads")
 
 _H2_HEADING_RE = re.compile(r"^## (.+)$")
-_H3_HEADING_RE = re.compile(r"^### (.+)$")
+_H3_HEADING_RE = re.compile(r"^(#{3,4}) (.+)$")
 _ANY_HEADING_RE = re.compile(r"^(#{1,6})\s")
 
 
@@ -249,9 +252,9 @@ def brief_wrapup(body: str) -> str:
             level = 2
         else:
             m3 = _H3_HEADING_RE.match(line)
-            if m3 and any(m3.group(1).strip().startswith(p)
+            if m3 and any(m3.group(2).strip().startswith(p)
                           for p in BRIEF_DROP_H3):
-                level = 3
+                level = len(m3.group(1))
         if level is None:
             out.append(line)
             i += 1
@@ -585,10 +588,8 @@ def _ratio_match(norm: str, bullet: str) -> bool:
     return SequenceMatcher(None, norm, _norm_thread(bullet)).ratio() >= 0.6
 
 
-def thread_report(files, current: int, chapter, vault: Path) -> str:
-    """Per-PC Open-threads ages against Wrap-Up Unresolved Threads / PC
-    Carry-Forward bullets, plus wrap-up bullets that never made it onto
-    any PC sheet (thread-decay candidates).
+def wrap_up_threads(files, chapter) -> list[tuple[int, list[str], list[str]]]:
+    """(session, unresolved bullets, carry-forward bullets) per wrap-up.
 
     Wrap-ups are scoped to `chapter` the same way the rest of this file
     is (#162): a wrap-up filed under a different, resolvable chapter is
@@ -596,19 +597,14 @@ def thread_report(files, current: int, chapter, vault: Path) -> str:
     — a flat vault, or a legacy unfiled record, should not silently lose
     its threads.
     """
-    lines = ["===== Threads ====="]
-
-    def in_scope(rel: str, fm) -> bool:
-        if chapter is None:
-            return True
-        ck = chapter_key(rel, fm)
-        return ck is None or ck == chapter
-
-    # (session, unresolved bullets, carry-forward bullets) per wrap-up.
     wrap_ups: list[tuple[int, list[str], list[str]]] = []
     for rel, text, fm in files:
-        if entity_type(fm) not in WRAP_UP_TYPES or not in_scope(rel, fm):
+        if entity_type(fm) not in WRAP_UP_TYPES:
             continue
+        if chapter is not None:
+            ck = chapter_key(rel, fm)
+            if ck is not None and ck != chapter:
+                continue
         n = session_ref_number(fm)
         if n is None:
             continue
@@ -617,16 +613,84 @@ def thread_report(files, current: int, chapter, vault: Path) -> str:
         unresolved = _bullets(unresolved_block) if unresolved_block else []
         carry = _bullets(carry_block) if carry_block else []
         wrap_ups.append((n, unresolved, carry))
+    return wrap_ups
+
+
+def _match(thread: str, wrap_ups):
+    """(sessions, mark, claimed): `claimed` holds the (session, bullet)
+    Unresolved bullets a close match took."""
+    norm = _norm_thread(thread)
+    hits: list[int] = []
+    claimed: set[tuple[int, str]] = set()
+    for n, unresolved, carry in wrap_ups:
+        for bullet in unresolved + carry:
+            if _ratio_match(norm, bullet):
+                hits.append(n)
+                if bullet in unresolved:
+                    claimed.add((n, bullet))
+                break
+    if hits:
+        return hits, "=", claimed
+    # The looser tier reads only what the first missed.
+    for n, unresolved, carry in wrap_ups:
+        if any(threads_related(thread, bullet)
+               for bullet in unresolved + carry):
+            hits.append(n)
+    return hits, ("~" if hits else ""), claimed
+
+
+def match_sessions(thread: str, wrap_ups) -> tuple[list[int], str]:
+    """The session numbers whose Unresolved Threads / PC Carry-Forward
+    bullets match `thread`, and how: `=` for a close match, `~` for the
+    looser shared-words tier (tentative). No match gives `([], "")`.
+    `wrap_ups` is what `wrap_up_threads` returns."""
+    hits, mark, _claimed = _match(thread, wrap_ups)
+    return hits, mark
+
+
+def thread_report(files, current: int, chapter, vault: Path) -> str:
+    """The Campaign Overview's shared Open Threads, then per-PC Open-threads
+    ages against Wrap-Up Unresolved Threads / PC Carry-Forward bullets,
+    plus wrap-up bullets that never made it onto any thread list
+    (thread-decay candidates).
+    """
+    lines = ["===== Threads ====="]
+    wrap_ups = wrap_up_threads(files, chapter)
 
     not_playing = out_of_play(vault)
     stale_after = setting_or_builtin(vault, "vault.stale_after_sessions")
     pcs = [(rel, text) for rel, text, fm in files
            if is_active_pc(rel, fm, not_playing)]
+    overview_text = next((text for _rel, text, fm in files
+                          if fm.get("type") == "campaign_overview"), "")
+    shared = shared_threads(overview_text)
 
-    # Unresolved bullets a PC thread actually matched, keyed by (session,
+    # Unresolved bullets a thread actually matched, keyed by (session,
     # bullet text) — everything else is reported as an orphan below.
     matched: set[tuple[int, str]] = set()
     tentative = False
+
+    def tags(thread: str) -> str:
+        nonlocal tentative
+        hits, mark, claimed = _match(thread, wrap_ups)
+        matched.update(claimed)
+        if not hits:
+            return ("first=?\tlast=?\tage=?\t"
+                    "(not in any wrap-up — check it is still live)")
+        tentative = tentative or mark == "~"
+        first, last = min(hits), max(hits)
+        age = current - last
+        stale = "STALE" if age >= stale_after else ""
+        return (f"first{mark}{first}\tlast{mark}{last}"
+                f"\tage{mark}{age}\t{stale}")
+
+    shared_texts = {" ".join(t.text.split()) for t in shared}
+    if shared:
+        lines.append("--- Shared (Campaign Overview) ---")
+    for t in shared:
+        who = ("the party" if t.party or not t.involves
+               else ", ".join(t.involves))
+        lines.append(f"{t.text}\t{tags(t.text)}\tinvolves: {who}")
 
     if not pcs:
         lines.append("(no active PC entities found)")
@@ -639,36 +703,9 @@ def thread_report(files, current: int, chapter, vault: Path) -> str:
             lines.append("(no ## Current Status Open threads)")
             continue
         for thread in thread_bullets:
-            norm = _norm_thread(thread)
-            hits: list[int] = []
-            for n, unresolved, carry in wrap_ups:
-                for bullet in unresolved + carry:
-                    if _ratio_match(norm, bullet):
-                        hits.append(n)
-                        if bullet in unresolved:
-                            matched.add((n, bullet))
-                        break
-            mark = "="
-            if not hits:
-                # The looser tier reads only what the first missed. Its
-                # matches are tentative: marked `~`, and they leave the
-                # orphan list alone.
-                mark = "~"
-                for n, unresolved, carry in wrap_ups:
-                    if any(threads_related(thread, bullet)
-                           for bullet in unresolved + carry):
-                        hits.append(n)
-                tentative = tentative or bool(hits)
-            if hits:
-                first, last = min(hits), max(hits)
-                age = current - last
-                stale = "STALE" if age >= stale_after else ""
-                lines.append(f"{thread}\tfirst{mark}{first}\tlast{mark}{last}"
-                             f"\tage{mark}{age}\t{stale}")
-            else:
-                lines.append(
-                    f"{thread}\tfirst=?\tlast=?\tage=?\t"
-                    f"(not in any wrap-up — check it is still live)")
+            if " ".join(thread.split()) in shared_texts:
+                continue  # printed once, as shared
+            lines.append(f"{thread}\t{tags(thread)}")
 
     if tentative:
         lines.insert(1, "(~ means a likely match by shared names and words, "
