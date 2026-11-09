@@ -200,10 +200,11 @@ and templates do not carry it.
 
 ## Core Entity Types
 
-Threads are not entity files. They live in each PC's `## Current
-Status` → Open threads and in the Session Plan's `## Active
-Threads`, in the Thread Tracker format in
-`ttrpg-expert/continuity-engine.md`.
+Threads are not entity files. A PC's own live threads sit in its
+`## Current Status` → Open threads. Shared threads sit in the Campaign
+Overview's `## Open Threads`. A closed thread moves to a Wrap-Up's
+`#### Resolved Threads`. The Session Plan's `## Active Threads` uses the
+Thread Tracker format in `ttrpg-expert/continuity-engine.md`.
 
 A type's fields: `gma schema-rules show <type>`. Older vaults spell
 some in camelCase (`factionType` for `faction_type`); follow the

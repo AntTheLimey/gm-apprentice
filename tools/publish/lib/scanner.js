@@ -442,6 +442,8 @@ const SESSION_TYPE_LINE = new RegExp(`^type[ \\t]*:\\s*["']?(session|${[...WRAP_
 const PREP_TYPE_LINE = /^type[ \t]*:\s*["']?(scene|session-plan)["']?\s*$/m;
 // A chapter note is read too: the leak check needs a planned chapter's status even when it has no title: (collect.js).
 const CHAPTER_TYPE_LINE = /^type[ \t]*:\s*["']?chapter["']?\s*$/m;
+// The Campaign Overview is read too: the build picks the one whose Open Threads go on PC pages (build.js).
+const OVERVIEW_TYPE_LINE = /^type[ \t]*:\s*["']?campaign_overview["']?\s*$/im;
 
 function scanAllNotes(vaultPath, deps) {
   const rd = readerFrom(deps);
@@ -467,7 +469,7 @@ function scanAllNotes(vaultPath, deps) {
         // A key written `withheld :` or `"withheld":` is the same key to YAML, so it is looked for so too (#352).
         const inMeta = path.relative(vaultPath, full).split(path.sep)[0] === '_meta';
         // A scene or a session Plan is read too (story-figures.js sceneCandidates), and a scene keeps its body.
-        if (inMeta || /^["']?(?:(?:gm_)?aliases|withheld|companion|title|publish)["']?[ \t]*:/m.test(text) || HOUSEKEEPING_TYPE_LINE.test(text) || SESSION_TYPE_LINE.test(text) || PREP_TYPE_LINE.test(text) || CHAPTER_TYPE_LINE.test(text)) {
+        if (inMeta || /^["']?(?:(?:gm_)?aliases|withheld|companion|title|publish)["']?[ \t]*:/m.test(text) || HOUSEKEEPING_TYPE_LINE.test(text) || SESSION_TYPE_LINE.test(text) || PREP_TYPE_LINE.test(text) || CHAPTER_TYPE_LINE.test(text) || OVERVIEW_TYPE_LINE.test(text)) {
           const note = parseNote(text);
           frontmatter = note.data || {};
           if (frontmatter.type === 'scene') body = note.content;

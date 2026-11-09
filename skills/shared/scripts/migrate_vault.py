@@ -14,14 +14,17 @@ from pathlib import Path
 from typing import Literal
 
 import relink
+import threads as th
 import update_record
 from migrate_core import (CHOICE, PERSON, WILL, Check, Item, StepFailed,
                           edit_frontmatter, plugin_tool, write_text_atomic)
 from schema_rules import system_id as _system_id
 from schema_rules import TEMPLATE_NAMES
 from template_compare import compare, summary
-from vault_check import WRAP_TYPES, wrapup_filename_findings
-from vaultlib import (StateUnreadable, entity_type, extract_frontmatter,
+from vault_check import (WRAP_TYPES, shared_threads_tool_too_old,
+                         wrapup_filename_findings)
+from vaultlib import (WRAP_UP_TYPES, StateUnreadable, campaign_overview,
+                      entity_type, extract_frontmatter, is_active_pc, out_of_play,
                       set_key, frontmatter_span,
                       parse_version, plugin_version,
                       read_held, read_stamp, settings,
@@ -1001,6 +1004,212 @@ def find_publish_row_pipe(vault: Path) -> list[Item]:
                   f"`false` or `stub`, so the table check passes"], apply)]
 
 
+# --- shared threads ------------------------------------------------------------
+
+# 1.12.3: before the shared list, a thread several PCs shared was written
+# word for word on each PC's Open threads. It moves to the Campaign
+# Overview's `## Open Threads` once, naming those PCs; a bullet struck
+# through whole is closed into the latest Wrap-Up. The editing is
+# threads.py's, as `vw threads` uses it.
+STRUCK_EVIDENCE = "struck through before the update"
+NO_OVERVIEW = "no Campaign Overview to hold shared threads"
+def _struck(bullet: str) -> str | None:
+    """The text of a bullet struck through whole (`~~text~~`), else None."""
+    b = bullet.strip()
+    inner = b[2:-2]
+    if len(b) > 4 and b[:2] == b[-2:] == "~~" and "~~" not in inner:
+        return inner.strip()
+    return None
+
+
+def _shared_threads_plan(vault: Path) -> tuple[
+        dict[str, str], list[tuple[str, str]], list[str]]:
+    """(new text by note, (verb, what) per change, person rows): every edit
+    worked out in memory, so a move or close that cannot be made is a
+    person row before anything is written."""
+    import session_context as sc
+
+    files = list(sc.vault_files(vault))
+    gone = out_of_play(vault)
+    pcs = [rel for rel, _t, fm in files if is_active_pc(rel, fm, gone)]
+    overview = campaign_overview((rel, fm) for rel, _t, fm in files)
+    wraps = sorted((sc.campaign_order(rel, fm), rel) for rel, _t, fm in files
+                   if entity_type(fm) in WRAP_UP_TYPES)
+    wrapup = wraps[-1][1] if wraps else None
+
+    texts: dict[str, str] = {}
+
+    def text(rel: str) -> str:
+        if rel not in texts:
+            texts[rel] = _read(vault / rel)
+        return texts[rel]
+
+    # A thread is its whole bullet, wrapped lines and nested bullets
+    # included; a template placeholder is none (see th.pc_thread_items).
+    # One in or next to hidden text is never touched: one wholly hidden
+    # is the GM's secret and is passed over; one that would otherwise
+    # move or close is left with a notice. A group with any hidden copy
+    # stays whole: moving the others would show its words to players.
+    # Copies are grouped by their words on one line, whitespace collapsed
+    # (the text the shared entry gets), so a wrap variant joins its group.
+    holders: dict[str, list[tuple[str, th.PcThread]]] = {}
+    struck: list[tuple[str, th.PcThread, str]] = []
+    lines: list[tuple[str, str]] = []
+    left: list[str] = []
+
+    def near_hidden(rel: str, item: th.PcThread) -> None:
+        if not item.fenced:
+            left.append(f'{rel}\t"{th.lead(item.text)}" on '
+                        f"{Path(rel).stem} left on the sheet: it sits "
+                        f"next to hidden text")
+
+    for rel in pcs:
+        for item in th.pc_thread_items(text(rel)):
+            if item.keep is not None:
+                # Inline text on the label line is one GM's prose, not a
+                # list item: never judged word for word, never moved or
+                # closed here (`vw threads` may take it when asked).
+                continue
+            inner = _struck(item.text)
+            if inner is not None:
+                if item.hidden:
+                    near_hidden(rel, item)
+                else:
+                    struck.append((rel, item, inner))
+            else:
+                holders.setdefault(" ".join(item.text.split()),
+                                   []).append((rel, item))
+
+    drop: dict[str, list[th.PcThread]] = {}
+    # A hidden shared entry shares nothing with players: a group matching
+    # only one is not shared, and is left with a notice.
+    entries = th.shared_threads(text(overview)) if overview else []
+    shared = {" ".join(t.text.split()) for t in entries if not t.hidden}
+    hidden_shared = {" ".join(t.text.split()) for t in entries if t.hidden}
+    # `since` reads the current chapter's Wrap-Ups, as `--threads` does;
+    # with no current chapter there is no since.
+    current, _notes = sc.select_session(files, None)
+    chapter = current["chapter"] if current else None
+    wrap_ups = sc.wrap_up_threads(files, chapter) if chapter else []
+    def stems_of(rels: list[str]) -> str:
+        stems = [Path(rel).stem for rel in rels]
+        return (" and ".join(stems) if len(stems) < 3
+                else ", ".join(stems[:-1]) + " and " + stems[-1])
+
+    for where in holders.values():
+        rels = sorted({rel for rel, _t in where})
+        thread = where[0][1].text
+        name = th.lead(thread)
+        # A copy of a thread already shared word for word is a duplicate:
+        # it goes, one copy or several.
+        flat = " ".join(thread.split())
+        already = flat in shared
+        if len(rels) < 2 and not already:
+            continue
+        if not already and flat in hidden_shared:
+            left.append(f"{name}\tleft on {stems_of(rels)}: a hidden copy "
+                        f"is in the Overview's Open Threads")
+            continue
+        if any(item.hidden for _r, item in where):
+            for rel, item in where:
+                if item.hidden:
+                    near_hidden(rel, item)
+            public = sorted({rel for rel, item in where if not item.hidden})
+            if public:
+                hidden = sorted({rel for rel, item in where if item.hidden})
+                left.append(
+                    f"{name}\tleft on {stems_of(public)} as well: the copy "
+                    f"on {stems_of(hidden)} is in or next to hidden text, "
+                    f"so none moved")
+            continue
+        if already and overview is not None:
+            # The entry comes to involve every holder (a party one stays).
+            texts[overview] = th.widen_shared(
+                text(overview), thread, [Path(rel).stem for rel in rels])
+            for rel, item in where:
+                drop.setdefault(rel, []).append(item)
+            lines.append(("move", f'"{name}" from {stems_of(rels)}: already '
+                          f"in the Campaign Overview's Open Threads"))
+            continue
+        if overview is None:
+            left.append(f"{name}\t{NO_OVERVIEW}; left on each PC's sheet")
+            continue
+        hits, mark = sc.match_sessions(thread, wrap_ups)
+        since = f"Session {min(hits)}" if hits and mark == "=" else None
+        stems = [Path(rel).stem for rel in rels]
+        try:
+            texts[overview] = th.insert_shared(
+                text(overview), th.format_shared(thread, since, stems))
+        except ValueError:
+            left.append(f"{name}\tleft on each PC's sheet: the Campaign "
+                        f"Overview has no place outside a GM-only fence for "
+                        f"Open Threads")
+            continue
+        for rel, item in where:
+            drop.setdefault(rel, []).append(item)
+        lines.append(("move", f'"{name}" from {" and ".join(stems)} to the '
+                      f"Campaign Overview's Open Threads"
+                      + (f" (since {since})" if since else "")))
+    for rel, item, inner in struck:
+        name = th.lead(inner)
+        if wrapup is None:
+            left.append(f'{rel}\tstruck-through thread "{name}" left on '
+                        f"the sheet: no Wrap-Up to record it in")
+            continue
+        try:
+            texts[wrapup] = th.append_resolved(
+                text(wrapup), th.format_resolved(
+                    inner, STRUCK_EVIDENCE, Path(rel).stem))
+        except KeyError:
+            left.append(f'{rel}\tstruck-through thread "{name}" left on '
+                        f"the sheet: the latest Wrap-Up ({wrapup}) has no "
+                        f"What Carries Forward to record it in")
+            continue
+        drop.setdefault(rel, []).append(item)
+        lines.append(("close", f'"{name}" (struck through) on '
+                      f"{Path(rel).stem} into {wrapup}'s Resolved Threads"))
+    for rel, items in drop.items():
+        for item in sorted(items, key=lambda t: t.start, reverse=True):
+            texts[rel] = th.remove_pc_thread(texts[rel], item)
+    changed = {rel: t for rel, t in texts.items()
+               if t != _read(vault / rel)}
+    return changed, lines, left
+
+
+def find_shared_threads(vault: Path) -> list[Item]:
+    """1.12.3: a thread written word for word on two or more active PCs'
+    Open threads moves to the Campaign Overview's Open Threads once, with
+    those PCs as `involves` and its first-seen session as `since` when a
+    Wrap-Up of the current chapter matches it closely; a PC's word-for-word
+    copy of a thread already there just comes off. A thread is the
+    whole bullet (see `threads.pc_thread_items`); one in or next to
+    hidden text is never touched. A bullet struck through whole is closed
+    into the latest Wrap-Up's Resolved Threads. One that cannot be moved
+    or closed stays where it is, and the GM is told (and, for a group held
+    back by a hidden copy, which public copies stayed). While the site's
+    publish tool is too old to show a moved thread on PC pages, nothing
+    moves and the stamp waits."""
+    old_tool = shared_threads_tool_too_old(vault)
+    if old_tool is not None:
+        site, why = old_tool
+        return [Item("shared-threads-wait", PERSON,
+                     [f"{site.as_posix()}\t{why}"], holds_stamp=True)]
+    changed, lines, left = _shared_threads_plan(vault)
+    items = []
+    if changed:
+        def apply(_value: str | None) -> list[str]:
+            # Worked out again: a note may have changed since the find.
+            fresh, done, _left = _shared_threads_plan(vault)
+            for rel, text in fresh.items():
+                write_text_atomic(vault / rel, text)
+            return [f"{verb}d {what}" for verb, what in done]
+        items.append(Item("shared-threads", WILL,
+                          [f"{verb} {what}" for verb, what in lines], apply))
+    if left:
+        items.append(Item("shared-threads-left", PERSON, left, notice=True))
+    return items
+
+
 # --- D&D PC Background sections -----------------------------------------------
 
 FACTS_LINE = " \u00b7 ".join(f"**{label}:** \u2014" for label in (
@@ -1053,4 +1262,9 @@ VAULT_CHECKS: list[Check] = [
           "the publish row of the schema table", find_publish_row_pipe,
           kind="bookkeeping",
           plain=("Fixed the publish row of the schema table in _meta/entity-types.md so the table check no longer reports an error there; nothing else in the file was touched.")),
+    # A moved thread shows on PC pages only from publish tool 1.70.3, so it
+    # waits for the repin: band 4, asks_site.
+    Check("shared-threads", "1.12.3", 4, "shared threads", find_shared_threads,
+          asks_site=True, kind="bookkeeping",
+          plain="Moved threads that sat word for word on several PC sheets into the Campaign Overview's Open Threads, once each with the PCs they involve (copies of one already there came off); struck-through threads went to the latest Wrap-Up's Resolved Threads."),
 ]

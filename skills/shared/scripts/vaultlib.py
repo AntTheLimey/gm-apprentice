@@ -121,6 +121,22 @@ def is_unchecked_source(rel: str) -> bool:
     return len(parts) > 1 and parts[0] in UNCHECKED_DIRS
 
 
+def is_record_copy(rel: str) -> bool:
+    """A note no name means: archived, a QA report, or a Midwife draft."""
+    return is_unchecked_source(rel) or rel.split("/", 1)[0] == "_midwife"
+
+
+def campaign_overview(notes: Iterable[tuple[str, dict[str, Any]]]
+                      ) -> str | None:
+    """The Campaign Overview's path among (path, frontmatter) pairs: the
+    first by path whose `type` is `campaign_overview`, a record copy
+    (`is_record_copy`) never; None when there is none."""
+    hits = sorted(rel for rel, fm in notes
+                  if entity_type(fm) == "campaign_overview"
+                  and not is_record_copy(rel))
+    return hits[0] if hits else None
+
+
 def vault_files(vault: Path, folder: str | None = None,
                 files: Iterable[str] | None = None,
                 skip_dirs: set[str] = SKIP_DIRS,
@@ -928,7 +944,27 @@ def section(text: str, heading: str) -> str | None:
     return m.group(1).strip() if m else None
 
 
-_SECTION_HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
+LABEL_RE = re.compile(r"^\*\*([^*:]+):\*\*")
+# Any bold label line at all, inline (`**Label:**`) or block
+# (`**Label**` / `**Label (a parenthetical)**`) — used only to find where
+# an extracted block *ends*, since the enumerated skeleton's block labels
+# (`**NPCs**`, `**Points to land**`, ...) carry no colon and must stop a
+# block just as an inline label does.
+ANY_LABEL_LINE_RE = re.compile(r"^\*\*[^*]+\*\*")
+BULLET_RE = re.compile(r"^\s*[-*]\s+(.+)$")
+
+
+def bullets(text: str) -> list[str]:
+    """`- item` / `* item` line text, in document order, any indentation."""
+    out = []
+    for line in text.splitlines():
+        m = BULLET_RE.match(line)
+        if m:
+            out.append(m.group(1).strip())
+    return out
+
+
+SECTION_HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
 
 
 def fence_step(line: str, fence_delim: str | None) -> tuple[str | None, bool]:
@@ -1036,7 +1072,7 @@ def fenced_headings(text: str) -> list[tuple[int, int, str]]:
         fence_delim, is_fence_line = fence_step(line, fence_delim)
         if is_fence_line or fence_delim is not None:
             continue
-        m = _SECTION_HEADING_RE.match(line)
+        m = SECTION_HEADING_RE.match(line)
         if m:
             heads.append((i, len(m.group(1)), m.group(2).strip()))
     return heads
@@ -2277,6 +2313,10 @@ class LineState:
     excluded_by: str | None
     heading: tuple[int, str] | None
     marker: str | None
+    # The line opens, closes or sits inside a multi-line HTML comment
+    # (`strip_comment_spans`, outside code). `published` does not read it:
+    # the publish tool's own answers (`build_lines`) are the leak checks'.
+    comment: bool = False
 
     @property
     def published(self) -> bool:
@@ -2463,6 +2503,10 @@ def scan_body(text: str,
     * Lines are split by `str.splitlines`, at a form feed, `\\x85` and a
       lone `\\r` too; the build splits at `\\n` alone.
 
+    Each state's `comment` says the line opens, closes or sits inside a
+    multi-line HTML comment (`strip_comment_spans`); `%%` comments are not
+    modelled.
+
     Returns (states, problems); problems are authoring defects — orphan
     closers and blocks left open at EOF.
     """
@@ -2477,6 +2521,7 @@ def scan_body(text: str,
     problems: list[str] = []
     shadow: list[str] = []      # the note as `filterSections` is handed it
     fence_delim: str | None = None
+    in_comment = False
 
     for lineno, line in iter_body_lines(text):
         # up to 3 leading spaces; 4+ would be an indented code block
@@ -2498,6 +2543,10 @@ def scan_body(text: str,
         in_code = fence_delim is not None or is_fence_line
         marker: str | None = None
         heading: tuple[int, str] | None = None
+        comment = in_comment
+        if not in_code:
+            _kept, in_comment = strip_comment_spans(line, in_comment)
+            comment = comment or in_comment
 
         if not in_code:
             # Markers count wherever they sit on the line (inline, inside an
@@ -2549,6 +2598,7 @@ def scan_body(text: str,
             excluded_by=None,
             heading=heading,
             marker=marker,
+            comment=comment,
         ))
 
     if excludes:

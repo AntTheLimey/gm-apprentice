@@ -176,10 +176,17 @@ the narrative.
    `--session` is written verbatim: match the vault's existing
    shape (`"Chapter 4, Session 9"` or `9`). On a shape `ERROR`,
    re-run with the matching form, not `--force-shape`.
-2. `vw status <PC> --show` prints the prior fields. Reconcile them
-   against Step 3 and the recap: carry unresolved `Open threads`
-   unchanged, add new threads and exclusive knowledge, remove
-   resolved threads, refresh `Location`/`Condition`/`Carrying`.
+2. A thread is an open question or obligation. "Adrien stopped her
+   ears with wax" is an event: the recap. "At the Dak Bungalow" is a
+   stopping point: the Handoff. Shared by 2+ PCs: the shared list.
+   Close one only on a note saying it's over ("Sophia's note is
+   read"), that line as evidence. An implied end ("he's in custody")
+   stays open: prep asks.
+
+   Reconcile `vw status <PC> --show` with Steps 2-3: add a PC's new
+   threads (not shared) and exclusive knowledge, refresh
+   `Location`/`Condition`/`Carrying`. Never drop a thread: Step 5
+   moves or closes it.
    Present tense, player-facing — not Story-file narrative. Send
    the changed fields to `vw status <PC> --write`; it rewrites
    them in place (fields: `shared/pc-body-structure.md`). Don't
@@ -371,8 +378,12 @@ ERROR row. Never publish a scene, Plan or session note.
 
 Fill What Carries Forward, World State, Keeper Checklist, Quality
 Notes and Handoff to session-prep (the section session-prep reads
-first) per the template. If the notes don't show what the players
-enjoyed, ask the GM once. Whatever an older vault template copy says:
+first) per the template. Then one `vw threads --wrapup "<wrap-up>"`
+dry run and `--write`: `add shared` new shared threads, `move` a
+PC's that now involves 2+ PCs, `close` (shared or a PC's) ended
+ones (3c.2), never `(hidden)` ones (one refusal writes nothing).
+Tell the GM each close and its evidence. If the notes don't show what the
+players enjoyed, ask the GM once. Whatever an older vault template copy says:
 Skipped Prep lists every planned scene and clue that didn't fire,
 with what the players still need; Pending Consequences are decisions
 whose effects haven't landed; Advancement records what the sheet or

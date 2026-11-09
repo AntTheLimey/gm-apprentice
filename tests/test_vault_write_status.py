@@ -166,6 +166,38 @@ class StatusWriteTests(unittest.TestCase):
             "- **Lady Anne** wants an answer.")
         self.assertEqual(read(vault, PC), want)
 
+    def test_dropping_a_thread_warns_but_writes(self):
+        # A rewrite that leaves a thread out may have dropped it by
+        # mistake: one warning per thread, the write still goes through.
+        vault = self.vault()
+        code, out = run(vault, "status", PC, "--write", stdin=(
+            "**Open threads:**\n- **The cylinder** is still aboard.\n"))
+        self.assertEqual(code, 0, out)
+        self.assertIn(
+            f"WARNING\t{PC}\t§Current Status/Open threads\tdrops "
+            "'Surlish's floor, under the godowns' from Emma's Open threads: "
+            "if it ended, close it with `vw threads close` so it is "
+            "recorded; if it is shared now, `vw threads move`\n", out)
+        self.assertEqual(out.count("WARNING\t"), 1)
+        self.assertNotIn("Surlish", read(vault, PC))
+
+    def test_rewording_or_adding_a_thread_does_not_warn(self):
+        for sent in (
+                # Reworded, same leads.
+                "- **The cylinder** went over the side.\n"
+                "- **Surlish's floor, under the godowns:** cordon lifted.\n",
+                # Both kept, one added.
+                "- **The cylinder** is still aboard.\n"
+                "- **Surlish's floor, under the godowns:** a cordon.\n"
+                "- **Lady Anne** wants an answer.\n"):
+            with self.subTest(sent):
+                vault = self.vault()
+                code, out = run(vault, "status", PC, "--write",
+                                stdin="**Open threads:**\n" + sent)
+                self.assertEqual(code, 0, out)
+                self.assertNotIn("WARNING", out)
+                self.assertNotEqual(read(vault, PC), SPEC)
+
     def test_a_dry_run_writes_nothing_and_names_each_field(self):
         vault = self.vault()
         code, out = run(vault, "status", PC, stdin=(
@@ -208,6 +240,32 @@ class StatusWriteTests(unittest.TestCase):
             "  - the batch-brand is a tell.\n"
             "  - the ships at the gate.\n")
         self.assertEqual(read(vault, BULLETED), want)
+
+    def test_dropping_a_thread_under_a_bulleted_label_warns(self):
+        # `- **Open threads:**` with its threads nested under it reads as
+        # the unbulleted list does: a rewrite that drops one warns.
+        nested = DRIFTED.replace(
+            "- **Open threads:** Hunted by the Republic.\n",
+            "- **Open threads:**\n  - **Hunted** by the Republic.\n")
+        vault = make_vault(self, {BULLETED: nested})
+        code, out = run(vault, "status", BULLETED, "--write", stdin=(
+            "**Open threads:**\n- **Hunted** by the Republic.\n"
+            "- the batch-brand is a tell.\n"))
+        self.assertEqual(code, 0, out)
+        self.assertIn("drops 'Session 5' from Six's Open threads",
+                      out)
+        self.assertEqual(out.count("WARNING\t"), 1)
+
+    def test_replacing_none_with_threads_does_not_warn(self):
+        vault = make_vault(self, {BULLETED: DRIFTED.replace(
+            "- **Open threads:** Hunted by the Republic.\n"
+            "  - **Session 5:** fled the system.\n"
+            "  - the batch-brand is a tell.\n",
+            "- **Open threads:** None.\n")})
+        code, out = run(vault, "status", BULLETED, "--write", stdin=(
+            "**Open threads:**\n- **Hunted** by the Republic.\n"))
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("WARNING", out)
 
     def test_vitals_and_subsections_are_left_alone(self):
         vault = self.vault()

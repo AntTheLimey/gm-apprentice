@@ -2,7 +2,8 @@
  "coc-7e": {
   "_Template_Campaign_Overview.md": {
    "4653a514b4d29d5307eaa00e75c69bbc0d48d99e121b842aa690c0b3bfeac4e8": "1.11.1",
-   "bde3182f77669e96659d53b05773d900ff4484994ba57c6a43bf82c4f9e4beee": null
+   "4f5e249da9992207cc20366a79358a900580e15357ecce828f328595f8856037": null,
+   "bde3182f77669e96659d53b05773d900ff4484994ba57c6a43bf82c4f9e4beee": "1.12.2"
   },
   "_Template_Chapter.md": {
    "6e2060b44d3e4421b207b1de0af756b95f4eaca18bf663896a7b6afbc39cb974": null
@@ -54,7 +55,8 @@
    "555cd6c96a4b889e782a02bb7dac33829439d51619f8585654fc7d37c438edb5": null
   },
   "_Template_Session_WrapUp.md": {
-   "f77623c34099cdf6423d26dee7f3b78e3d0d47bd0a2fd23cbadbf0886b93f157": null
+   "1cc0ad04af5e8ef52f1da97473415251c97b4cb9199b7512f0022cff04c878c9": null,
+   "f77623c34099cdf6423d26dee7f3b78e3d0d47bd0a2fd23cbadbf0886b93f157": "1.12.2"
   },
   "_Template_World_Domain.md": {
    "0e15e6043927591c0bf7ed9cd786e6b1913a4776def00fb430f3f9cf8fc2eabc": null
@@ -65,13 +67,15 @@
   },
   "pc-coc-7e.md": {
    "bf2c2fa0c2df630c0dfdcb523eb8dc34bad14c0a4cf308151a06a6b44264d8ec": "1.11.1",
-   "ff92b872f8b0dabd9f1b253f61e64248fa988b7a4df5c3a76f70d56831cd624d": null
+   "fe6d13a03143b1fe5589251cc3296144f5582760148c4e4750779b819247ba05": null,
+   "ff92b872f8b0dabd9f1b253f61e64248fa988b7a4df5c3a76f70d56831cd624d": "1.12.2"
   }
  },
  "coc-7e-regency": {
   "_Template_Campaign_Overview.md": {
    "4653a514b4d29d5307eaa00e75c69bbc0d48d99e121b842aa690c0b3bfeac4e8": "1.11.1",
-   "bde3182f77669e96659d53b05773d900ff4484994ba57c6a43bf82c4f9e4beee": null
+   "4f5e249da9992207cc20366a79358a900580e15357ecce828f328595f8856037": null,
+   "bde3182f77669e96659d53b05773d900ff4484994ba57c6a43bf82c4f9e4beee": "1.12.2"
   },
   "_Template_Chapter.md": {
    "6e2060b44d3e4421b207b1de0af756b95f4eaca18bf663896a7b6afbc39cb974": null
@@ -123,7 +127,8 @@
    "555cd6c96a4b889e782a02bb7dac33829439d51619f8585654fc7d37c438edb5": null
   },
   "_Template_Session_WrapUp.md": {
-   "f77623c34099cdf6423d26dee7f3b78e3d0d47bd0a2fd23cbadbf0886b93f157": null
+   "1cc0ad04af5e8ef52f1da97473415251c97b4cb9199b7512f0022cff04c878c9": null,
+   "f77623c34099cdf6423d26dee7f3b78e3d0d47bd0a2fd23cbadbf0886b93f157": "1.12.2"
   },
   "_Template_World_Domain.md": {
    "0e15e6043927591c0bf7ed9cd786e6b1913a4776def00fb430f3f9cf8fc2eabc": null
@@ -133,14 +138,16 @@
    "84efa29d464fa736e03341958b955fadda9fe2a843bec997db612e86b4da0f40": "1.11.3"
   },
   "pc-coc-7e-regency.md": {
-   "1b7f0595db700167874ae0314132314d331842ee94c173963d95e61fc1803009": null,
+   "1b7f0595db700167874ae0314132314d331842ee94c173963d95e61fc1803009": "1.12.2",
+   "2d2e26706273d74dc95c905b06c1bc180a4bc6b28f71dc4d027c456c73d14255": null,
    "84dbce5c179b074eaac805a19beca05a3eb5e4b56fc2c2000d7877a68cdc6f4a": "1.11.1"
   }
  },
  "dnd-5e-2024": {
   "_Template_Campaign_Overview.md": {
    "4653a514b4d29d5307eaa00e75c69bbc0d48d99e121b842aa690c0b3bfeac4e8": "1.11.1",
-   "bde3182f77669e96659d53b05773d900ff4484994ba57c6a43bf82c4f9e4beee": null
+   "4f5e249da9992207cc20366a79358a900580e15357ecce828f328595f8856037": null,
+   "bde3182f77669e96659d53b05773d900ff4484994ba57c6a43bf82c4f9e4beee": "1.12.2"
   },
   "_Template_Chapter.md": {
    "6e2060b44d3e4421b207b1de0af756b95f4eaca18bf663896a7b6afbc39cb974": null
@@ -192,7 +199,8 @@
    "555cd6c96a4b889e782a02bb7dac33829439d51619f8585654fc7d37c438edb5": null
   },
   "_Template_Session_WrapUp.md": {
-   "f77623c34099cdf6423d26dee7f3b78e3d0d47bd0a2fd23cbadbf0886b93f157": null
+   "1cc0ad04af5e8ef52f1da97473415251c97b4cb9199b7512f0022cff04c878c9": null,
+   "f77623c34099cdf6423d26dee7f3b78e3d0d47bd0a2fd23cbadbf0886b93f157": "1.12.2"
   },
   "_Template_World_Domain.md": {
    "0e15e6043927591c0bf7ed9cd786e6b1913a4776def00fb430f3f9cf8fc2eabc": null
@@ -203,13 +211,15 @@
   },
   "pc-dnd-5e-2024.md": {
    "615af1fe8ccebe729809ffff44dfdafbc138bde9c8689d48ad1ee5f971ec7a37": "1.11.1",
-   "852a93f2670efeeac62b492cedc8a1d6372a9bef3e0a5b6261715541d743c030": null
+   "852a93f2670efeeac62b492cedc8a1d6372a9bef3e0a5b6261715541d743c030": "1.12.2",
+   "fe7ac7504767cd021b876ad5f7f628f33e1009cc7fd3b4425af2caf71e0dcb06": null
   }
  },
  "fitd": {
   "_Template_Campaign_Overview.md": {
    "4653a514b4d29d5307eaa00e75c69bbc0d48d99e121b842aa690c0b3bfeac4e8": "1.11.1",
-   "bde3182f77669e96659d53b05773d900ff4484994ba57c6a43bf82c4f9e4beee": null
+   "4f5e249da9992207cc20366a79358a900580e15357ecce828f328595f8856037": null,
+   "bde3182f77669e96659d53b05773d900ff4484994ba57c6a43bf82c4f9e4beee": "1.12.2"
   },
   "_Template_Chapter.md": {
    "6e2060b44d3e4421b207b1de0af756b95f4eaca18bf663896a7b6afbc39cb974": null
@@ -261,7 +271,8 @@
    "555cd6c96a4b889e782a02bb7dac33829439d51619f8585654fc7d37c438edb5": null
   },
   "_Template_Session_WrapUp.md": {
-   "f77623c34099cdf6423d26dee7f3b78e3d0d47bd0a2fd23cbadbf0886b93f157": null
+   "1cc0ad04af5e8ef52f1da97473415251c97b4cb9199b7512f0022cff04c878c9": null,
+   "f77623c34099cdf6423d26dee7f3b78e3d0d47bd0a2fd23cbadbf0886b93f157": "1.12.2"
   },
   "_Template_World_Domain.md": {
    "0e15e6043927591c0bf7ed9cd786e6b1913a4776def00fb430f3f9cf8fc2eabc": null
@@ -275,13 +286,15 @@
   },
   "pc-fitd.md": {
    "cb9d767198866f86e2df3c38170adfda1801f96df483e17293c78ac1d7ec4b6b": "1.11.1",
-   "d93e865084e857268d14190037957d60332977a53ace96618f7232acdcc4b61d": null
+   "d93e865084e857268d14190037957d60332977a53ace96618f7232acdcc4b61d": "1.12.2",
+   "dfbe03edfab4a85ff87d8371cf1b780956b38a785afdf5e7ff55540c31f9f0a7": null
   }
  },
  "generic": {
   "_Template_Campaign_Overview.md": {
    "4653a514b4d29d5307eaa00e75c69bbc0d48d99e121b842aa690c0b3bfeac4e8": "1.11.1",
-   "bde3182f77669e96659d53b05773d900ff4484994ba57c6a43bf82c4f9e4beee": null
+   "4f5e249da9992207cc20366a79358a900580e15357ecce828f328595f8856037": null,
+   "bde3182f77669e96659d53b05773d900ff4484994ba57c6a43bf82c4f9e4beee": "1.12.2"
   },
   "_Template_Chapter.md": {
    "6e2060b44d3e4421b207b1de0af756b95f4eaca18bf663896a7b6afbc39cb974": null
@@ -333,7 +346,8 @@
    "555cd6c96a4b889e782a02bb7dac33829439d51619f8585654fc7d37c438edb5": null
   },
   "_Template_Session_WrapUp.md": {
-   "f77623c34099cdf6423d26dee7f3b78e3d0d47bd0a2fd23cbadbf0886b93f157": null
+   "1cc0ad04af5e8ef52f1da97473415251c97b4cb9199b7512f0022cff04c878c9": null,
+   "f77623c34099cdf6423d26dee7f3b78e3d0d47bd0a2fd23cbadbf0886b93f157": "1.12.2"
   },
   "_Template_World_Domain.md": {
    "0e15e6043927591c0bf7ed9cd786e6b1913a4776def00fb430f3f9cf8fc2eabc": null
@@ -343,14 +357,16 @@
    "84efa29d464fa736e03341958b955fadda9fe2a843bec997db612e86b4da0f40": "1.11.3"
   },
   "pc-generic.md": {
-   "21ac9ecddefc48f3aade911cce0bd2f6ba8ec018d703235753a530933a6ff89c": null,
+   "21ac9ecddefc48f3aade911cce0bd2f6ba8ec018d703235753a530933a6ff89c": "1.12.2",
+   "47e6512a336904c171f710051f1f89b32f251299e10f4352befe866e4e4008f0": null,
    "81924ae369f1b5ef7230b14ea2f5c8f8091656211935e356bbf65b10dc7931d9": "1.11.1"
   }
  },
  "gurps-4e": {
   "_Template_Campaign_Overview.md": {
    "4653a514b4d29d5307eaa00e75c69bbc0d48d99e121b842aa690c0b3bfeac4e8": "1.11.1",
-   "bde3182f77669e96659d53b05773d900ff4484994ba57c6a43bf82c4f9e4beee": null
+   "4f5e249da9992207cc20366a79358a900580e15357ecce828f328595f8856037": null,
+   "bde3182f77669e96659d53b05773d900ff4484994ba57c6a43bf82c4f9e4beee": "1.12.2"
   },
   "_Template_Chapter.md": {
    "6e2060b44d3e4421b207b1de0af756b95f4eaca18bf663896a7b6afbc39cb974": null
@@ -402,7 +418,8 @@
    "555cd6c96a4b889e782a02bb7dac33829439d51619f8585654fc7d37c438edb5": null
   },
   "_Template_Session_WrapUp.md": {
-   "f77623c34099cdf6423d26dee7f3b78e3d0d47bd0a2fd23cbadbf0886b93f157": null
+   "1cc0ad04af5e8ef52f1da97473415251c97b4cb9199b7512f0022cff04c878c9": null,
+   "f77623c34099cdf6423d26dee7f3b78e3d0d47bd0a2fd23cbadbf0886b93f157": "1.12.2"
   },
   "_Template_World_Domain.md": {
    "0e15e6043927591c0bf7ed9cd786e6b1913a4776def00fb430f3f9cf8fc2eabc": null
@@ -412,14 +429,16 @@
    "84efa29d464fa736e03341958b955fadda9fe2a843bec997db612e86b4da0f40": "1.11.3"
   },
   "pc-gurps-4e.md": {
+   "79b1d967b8dd6e572dbcdafb0efb79e8161a69e1345d9e5b6ced06289d8cf20f": null,
    "cd6b35417def55644541636b609e319d431cd435f4318a0da5b671020c0b757c": "1.11.1",
-   "db5b6c030e667ec4c2bd1366327578f06e07b67f8f636fd7805bab56e494bb15": null
+   "db5b6c030e667ec4c2bd1366327578f06e07b67f8f636fd7805bab56e494bb15": "1.12.2"
   }
  },
  "pf2e": {
   "_Template_Campaign_Overview.md": {
    "4653a514b4d29d5307eaa00e75c69bbc0d48d99e121b842aa690c0b3bfeac4e8": "1.11.1",
-   "bde3182f77669e96659d53b05773d900ff4484994ba57c6a43bf82c4f9e4beee": null
+   "4f5e249da9992207cc20366a79358a900580e15357ecce828f328595f8856037": null,
+   "bde3182f77669e96659d53b05773d900ff4484994ba57c6a43bf82c4f9e4beee": "1.12.2"
   },
   "_Template_Chapter.md": {
    "6e2060b44d3e4421b207b1de0af756b95f4eaca18bf663896a7b6afbc39cb974": null
@@ -471,7 +490,8 @@
    "555cd6c96a4b889e782a02bb7dac33829439d51619f8585654fc7d37c438edb5": null
   },
   "_Template_Session_WrapUp.md": {
-   "f77623c34099cdf6423d26dee7f3b78e3d0d47bd0a2fd23cbadbf0886b93f157": null
+   "1cc0ad04af5e8ef52f1da97473415251c97b4cb9199b7512f0022cff04c878c9": null,
+   "f77623c34099cdf6423d26dee7f3b78e3d0d47bd0a2fd23cbadbf0886b93f157": "1.12.2"
   },
   "_Template_World_Domain.md": {
    "0e15e6043927591c0bf7ed9cd786e6b1913a4776def00fb430f3f9cf8fc2eabc": null
@@ -481,7 +501,8 @@
    "84efa29d464fa736e03341958b955fadda9fe2a843bec997db612e86b4da0f40": "1.11.3"
   },
   "pc-pf2e.md": {
-   "a14f489118a93a497ffb01e02fad2b4e246ffda9b219e8deccb3288f81be6604": null,
+   "0174ec88c6cd0636b50bd6f94a225fdcbfeef073f0f030f5ec8163a062f2b30b": null,
+   "a14f489118a93a497ffb01e02fad2b4e246ffda9b219e8deccb3288f81be6604": "1.12.2",
    "ca1833d7348410aa498a44c3714acaed4d60533557ee65fa404f3b69ff371f16": "1.11.1"
   }
  }

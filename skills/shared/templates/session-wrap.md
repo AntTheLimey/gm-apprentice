@@ -72,7 +72,11 @@ person, the reason — these bullets are read cold by session-prep.}
 
 #### Unresolved Threads
 
-{Cliffhangers and live threads.}
+{Live questions and obligations the next session inherits. Where play stopped goes in the Handoff; what happened goes in the recap.}
+
+#### Resolved Threads
+
+{Written by `vw threads close`: each thread closed this session, with the line that closes it.}
 
 #### Player-Stated Intentions
 

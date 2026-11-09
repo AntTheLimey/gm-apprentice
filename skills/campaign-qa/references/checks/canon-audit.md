@@ -71,11 +71,12 @@ the latest sheet only (the block is cumulative — no history walk):
 - **Missing / empty block.** Flag a PC with no `## Current Status`, or with
   an empty `Open threads`, when the PC has a live arc (recent session
   activity). Distinguish from a legitimately quiet PC — surface as a
-  question, not a hard error.
-- **Canon-contradicting Open thread.** Flag an `Open threads` item still
-  listed open when the timeline or a session recap shows it resolved — e.g.
-  a thread about an NPC the timeline records as dead, or whose payoff
-  already occurred.
+  question, not a hard error. An empty list is fine when the Campaign
+  Overview's shared `## Open Threads` names that PC.
+- **Canon-contradicting Open thread.** Flag an `Open threads` item (or a
+  shared thread naming the PC) still listed open when the timeline or a
+  session recap shows it resolved — e.g. a thread about an NPC the
+  timeline records as dead, or whose payoff already occurred.
 
 This is a consistency check, not an age-based decay meter: `Open threads`
 carries no per-thread age stamp, so "how many sessions has this lingered"

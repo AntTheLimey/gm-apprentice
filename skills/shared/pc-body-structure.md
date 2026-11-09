@@ -58,10 +58,12 @@ an optional one-line prose lede may precede them. Fields are omitted when empty:
 **Knows (exclusive):** {secret/exclusive information this PC holds}
 ```
 
-`Open threads` is the load-bearing field: a **cumulative** list that
-carries unresolved items forward across sessions, gains items as they
-arise, and loses them only when resolved. NPC-relationship shifts fold
-into Open threads rather than a separate field.
+`Open threads` is the load-bearing field: this PC's own open questions
+and obligations. It carries unresolved items forward across sessions and
+gains items as they arise. Shared threads live in the Campaign
+Overview's Open Threads. A resolved one is closed by wrap-up, never just
+deleted. NPC-relationship shifts fold into Open threads rather than a
+separate field.
 
 System templates may add labelled fields; wrap-up preserves and
 reconciles any labelled field it finds, not just the canonical five.

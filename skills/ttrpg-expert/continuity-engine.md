@@ -123,9 +123,9 @@ its absence as a gap.
 
 ### Thread Tracker
 
-Threads are tracked inline, not as entity files: each PC's
-`## Current Status` → Open threads, and the Session Plan's
-`## Active Threads`.
+Threads are tracked inline, not as entity files: the Campaign Overview's
+`## Open Threads` (shared), each PC's `## Current Status` → Open threads,
+and the Session Plan's `## Active Threads`.
 Use this format when the GM asks for a thread tracker or a review:
 
 ```markdown
@@ -158,16 +158,17 @@ Ripeness: [Planted / Ripening / Ready / Paid Off / Retired]
 Dormant: untouched for as many sessions as the vault's
 `vault.stale_after_sessions` says; with no vault, three.
 
-- Still relevant? → retire explicitly if campaign moved on
+- Still relevant? → ask the GM; close it (`vw threads close`) only when the GM retires it
 - Connects to current events? → weave back via callback
 - Affects active NPCs/factions? → advance in background,
   let consequences surface naturally
 
 ### Per-PC Always-Current Thread Source
 
-Each active PC's `## Current Status` → `Open threads` (in
+The Campaign Overview's `## Open Threads` holds the threads two or more PCs
+share; each active PC's `## Current Status` → `Open threads` (in
 `Characters/PCs/{Name}.md`) is the canonical, cumulative list of that PC's
-unresolved forward items. Consult it directly for stale-thread detection:
+own unresolved forward items. Consult it directly for stale-thread detection:
 it is the always-current home that prevents thread-decay — a thread does
 not vanish just because it fell out of the last session's carry-forward.
 The list carries no per-thread age stamp, so age-based staleness still

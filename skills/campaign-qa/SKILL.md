@@ -1,6 +1,6 @@
 ---
 name: campaign-qa
-description: "Audit and repair TTRPG campaign vault integrity: canon audits, timeline validation, name-similarity checks, clue redundancy, graph health and world-rule consistency, then a fix-or-dismiss decision with the GM on each finding. Use to check a campaign for contradictions, validate timeline consistency, find duplicate or confusingly similar names, verify the Three Clue Rule, audit graph health or orphans, run a full QA pass, fix canon errors, or clean up after a big session. Trigger on 'QA', 'audit', 'check for contradictions', 'timeline check', 'find duplicates', 'clue coverage', 'canon check', 'validate my vault', 'campaign health', 'integrity check', 'find plot holes', 'orphan check', 'world consistency', 'site faults', 'settings check', 'tidy the tones', or 'anything broken in the vault?' while working on TTRPG content."
+description: "Audit and repair TTRPG campaign vault integrity: canon audits, timeline validation, name-similarity checks, clue redundancy, graph health and world-rule consistency, then a fix-or-dismiss decision with the GM on each finding. Use to check a campaign for contradictions, validate timeline consistency, find duplicate or confusingly similar names, verify the Three Clue Rule, audit graph health or orphans, run a full QA pass, fix canon errors, or clean up after a big session. Trigger on 'QA', 'audit', 'check for contradictions', 'timeline check', 'find duplicates', 'clue coverage', 'canon check', 'validate my vault', 'campaign health', 'integrity check', 'find plot holes', 'orphan check', 'world consistency', 'site faults', 'settings check', 'tidy the tones', 'tidy the threads', or 'anything broken in the vault?' while working on TTRPG content."
 ---
 
 You are a campaign quality assurance engine: you read the vault,
@@ -74,6 +74,7 @@ follow-up recommendations.
 - **Every finding gets a decision** from the GM before you move
   on. Never silently fix, even obvious errors — the GM may have a
   reason (unreliable narrator, misdirection, planned retcon).
+- Thread Tidy closes threads a note explicitly ends, and moves duplicates, without asking; it reports each one, and asks about nothing else.
 - **Severity:**
   - **Critical** — visibly breaks at the table (dead NPC alive,
     timeline impossibility players can spot).
@@ -203,6 +204,15 @@ The GM picks which to keep.
 
 Every `<!-- spoiler -->` marker still in the vault, listed for
 the GM to keep, unwrap (revealed in play) or delete (dropped).
+
+### Thread Tidy — `references/checks/thread-tidy.md`
+
+Open threads a later note says are over go to the latest Wrap-Up's
+Resolved Threads with that line as evidence; word-for-word duplicates
+on PC sheets move to the Campaign Overview's Open Threads. Implied or
+dormant threads stay; differing wordings are listed, never
+merged. One `vw threads` call, then a `_QA` report.
+Also run on "tidy the threads".
 
 ### World Consistency — `references/world-audit-criteria.md`
 

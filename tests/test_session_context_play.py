@@ -494,7 +494,7 @@ class ThreadSecondTierTests(unittest.TestCase):
         tmp = self.reworded_vault()
         report = sc.thread_report(load_files(tmp), 5, None, tmp)
         orphans = report.split(
-            "--- Wrap-up threads not on any PC sheet ---", 1)[1]
+            "--- Wrap-up threads not on any thread list ---", 1)[1]
         self.assertIn("session 3\tVenn drugged in study", orphans)
 
     def test_no_legend_when_nothing_is_tentative(self):
@@ -523,12 +523,12 @@ class ThreadReportTests(unittest.TestCase):
 
     def test_threads_orphans(self):
         report = sc.thread_report(self.files, 7, "chapter 4 - calcutta", FIXTURE)
-        self.assertIn("--- Wrap-up threads not on any PC sheet ---", report)
+        self.assertIn("--- Wrap-up threads not on any thread list ---", report)
         self.assertIn("session 5\tThe ledger is still missing", report)
         # "Find the missing ledger" matched a PC thread, so it must NOT
         # also show up as an orphan.
         orphan_section = report.split(
-            "--- Wrap-up threads not on any PC sheet ---", 1)[1]
+            "--- Wrap-up threads not on any thread list ---", 1)[1]
         self.assertNotIn("Find the missing ledger", orphan_section)
 
     def test_threads_stale_flag(self):
@@ -568,6 +568,227 @@ class ThreadReportTests(unittest.TestCase):
         tmp = self.aged_copy("vault:\n  stale_after_sessions: 2\n")
         report = sc.thread_report(load_files(tmp), 7, "chapter 4 - calcutta", tmp)
         self.assertIn(ledger + "STALE", report)
+
+    def shared_copy(self, open_threads):
+        """A copy of the fixture whose Overview carries `## Open Threads`."""
+        tmp = Path(tempfile.mkdtemp(prefix="session-context-shared-"))
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        shutil.copytree(FIXTURE, tmp, dirs_exist_ok=True)
+        overview = tmp / "Overview.md"
+        overview.write_text(
+            overview.read_text(encoding="utf-8")
+            + "\n## Open Threads\n\n" + open_threads + "\n",
+            encoding="utf-8")
+        return tmp
+
+    def report(self, vault):
+        return sc.thread_report(load_files(vault), 7,
+                                "chapter 4 - calcutta", vault)
+
+    def test_no_overview_section_reads_as_before(self):
+        self.assertEqual(self.report(FIXTURE), (
+            "===== Threads =====\n"
+            "--- Hero ---\n"
+            "Find the missing ledger\tfirst=7\tlast=7\tage=0\t\n"
+            "Repay Bram\tfirst=?\tlast=?\tage=?\t"
+            "(not in any wrap-up — check it is still live)\n"
+            "--- Wrap-up threads not on any thread list ---\n"
+            "session 5\tThe ledger is still missing"))
+
+    def test_wrapped_thread_prints_whole_and_closes_by_that_text(self):
+        import io
+        from unittest import mock
+        import vault_write as vw
+        tmp = self.shared_copy("")
+        hero = tmp / "Characters" / "PCs" / "Hero.md"
+        hero.write_text(hero.read_text(encoding="utf-8").replace(
+            "- Repay Bram",
+            "- Repay Bram\n  the forty rupees\n  - before the monsoon\n"
+            "<!-- gm-only -->\n- Secret debt\n<!-- /gm-only -->"),
+            encoding="utf-8")
+        report = self.report(tmp)
+        whole = "Repay Bram the forty rupees; before the monsoon"
+        self.assertIn(f"\n{whole}\tfirst=", report)
+        self.assertIn("\nSecret debt (hidden)\tfirst=", report)
+        self.assertNotIn("\nbefore the monsoon", report)
+        wrap = ("Chapters/Chapter 4 - Calcutta/Sessions/"
+                "Chapter_04_Session_07_Wrap_Up.md")
+        out = io.StringIO()
+        with mock.patch("sys.stdout", out), \
+                mock.patch("sys.stderr", io.StringIO()):
+            code = vw.main([str(tmp), "threads", "--wrapup", wrap, "--write"],
+                           stdin=f"close\tHero\t{whole}\tpaid\n")
+        self.assertEqual(code, 0, out.getvalue())
+        self.assertNotIn("forty rupees", hero.read_text(encoding="utf-8"))
+        self.assertIn(f"- {whole} — closed: paid (Hero)",
+                      (tmp / wrap).read_text(encoding="utf-8"))
+
+    def test_shared_list_prints_first_with_involves(self):
+        tmp = self.shared_copy(
+            "- Find the missing ledger — since Session 5; involves the party\n"
+            "- The harbour toll — since Session 3; involves [[Hero]], [[Bram]]")
+        report = self.report(tmp)
+        lines = report.split("\n")
+        self.assertEqual(lines[0], "===== Threads =====")
+        self.assertEqual(lines[1], "--- Shared (Campaign Overview) ---")
+        self.assertEqual(
+            lines[2], "Find the missing ledger\tfirst=7\tlast=7\tage=0\t"
+            "\tinvolves: the party")
+        self.assertEqual(
+            lines[3], "The harbour toll\tfirst=?\tlast=?\tage=?\t"
+            "(not in any wrap-up — check it is still live)"
+            "\tinvolves: Hero, Bram")
+        self.assertLess(lines.index("--- Shared (Campaign Overview) ---"),
+                        lines.index("--- Hero ---"))
+
+    def test_pc_copy_of_shared_thread_prints_once(self):
+        tmp = self.shared_copy(
+            "- Repay Bram — since Session 3; involves [[Hero]]")
+        report = self.report(tmp)
+        self.assertEqual(report.count("Repay Bram\t"), 1)
+        shared_part, pc_part = report.split("--- Hero ---")
+        self.assertIn("Repay Bram\t", shared_part)
+        self.assertIn("Find the missing ledger\t", pc_part)
+
+    def test_pc_copy_of_a_shared_thread_naming_others_prints(self):
+        # The shared entry names another PC: the Hero's copy is his own.
+        tmp = self.shared_copy(
+            "- Repay Bram — since Session 3; involves [[Bram]]")
+        pc_part = self.report(tmp).split("--- Hero ---")[1]
+        self.assertIn("\nRepay Bram\tfirst=", pc_part)
+        for who in ("[[Hero]]", "[[hero|H]]", "[[Hero.md|H]]",
+                    "[[Characters/PCs/Hero]]", "the party"):
+            with self.subTest(who=who):
+                tmp = self.shared_copy(f"- Repay Bram — involves {who}")
+                pc_part = self.report(tmp).split("--- Hero ---")[1]
+                self.assertNotIn("Repay Bram", pc_part)
+
+    def test_orphan_on_shared_list_is_not_an_orphan(self):
+        tmp = self.shared_copy(
+            "- The ledger is still missing — since Session 5; "
+            "involves the party")
+        report = self.report(tmp)
+        orphans = report.split(
+            "--- Wrap-up threads not on any thread list ---", 1)[1]
+        self.assertNotIn("The ledger is still missing", orphans)
+        self.assertIn(
+            "The ledger is still missing\tfirst=5\tlast=5\tage=2\t",
+            report)
+
+    def test_a_closed_thread_is_not_an_orphan(self):
+        tmp = self.shared_copy("")
+        wrap = (tmp / "Chapters" / "Chapter 4 - Calcutta" / "Sessions"
+                / "Chapter_04_Session_07_Wrap_Up.md")
+        wrap.write_text(
+            wrap.read_text(encoding="utf-8")
+            + "\n#### Resolved Threads\n\n- The ledger is still missing "
+              "\u2014 closed: found in the dredger (shared)\n",
+            encoding="utf-8")
+        orphans = self.report(tmp).split(
+            "--- Wrap-up threads not on any thread list ---", 1)[1]
+        self.assertNotIn("The ledger is still missing", orphans)
+        self.assertEqual(orphans.strip(), "(none)")
+
+    def test_a_wrapped_closed_thread_is_not_an_orphan(self):
+        # A Resolved bullet that wraps before its `— closed:` tail is read
+        # whole.
+        tmp = self.shared_copy("")
+        wrap = (tmp / "Chapters" / "Chapter 4 - Calcutta" / "Sessions"
+                / "Chapter_04_Session_07_Wrap_Up.md")
+        wrap.write_text(
+            wrap.read_text(encoding="utf-8")
+            + "\n#### Resolved Threads\n\n- The ledger is still\n  missing "
+              "\u2014 closed: found in the dredger (shared)\n",
+            encoding="utf-8")
+        orphans = self.report(tmp).split(
+            "--- Wrap-up threads not on any thread list ---", 1)[1]
+        self.assertEqual(orphans.strip(), "(none)")
+
+    def test_a_thread_raised_after_its_close_is_open_again(self):
+        # Closed in session 5, unresolved again in session 7: the closure
+        # claims session 5's bullet, not the later one.
+        tmp = self.shared_copy("")
+        sessions = tmp / "Chapters" / "Chapter 4 - Calcutta" / "Sessions"
+        five = sessions / "Chapter_04_Session_05_Wrap_Up.md"
+        five.write_text(
+            five.read_text(encoding="utf-8")
+            + "\n#### Resolved Threads\n\n- The ledger is still missing "
+              "\u2014 closed: found (shared)\n", encoding="utf-8")
+        seven = sessions / "Chapter_04_Session_07_Wrap_Up.md"
+        seven.write_text(seven.read_text(encoding="utf-8").replace(
+            "- Find the missing ledger\n",
+            "- Find the missing ledger\n- The ledger is still missing\n"),
+            encoding="utf-8")
+        orphans = self.report(tmp).split(
+            "--- Wrap-up threads not on any thread list ---", 1)[1]
+        self.assertIn("session 7\tThe ledger is still missing", orphans)
+        self.assertNotIn("session 5\t", orphans)
+
+    def test_an_archived_overview_is_not_read(self):
+        tmp = self.shared_copy("- Repay Bram — involves [[Hero]]")
+        (tmp / "_campaign").mkdir()
+        (tmp / "Overview.md").rename(tmp / "_campaign" / "Overview.md")
+        (tmp / "_archive").mkdir()
+        (tmp / "_archive" / "Overview.md").write_text(
+            "---\ntype: campaign_overview\n---\n\n## Open Threads\n\n"
+            "- An old thread — involves the party\n", encoding="utf-8")
+        report = self.report(tmp)
+        self.assertIn("\nRepay Bram\tfirst=", report)
+        self.assertNotIn("An old thread", report)
+
+    def test_a_closed_thread_claims_only_its_own_bullet(self):
+        # "found" and "still missing" are close enough to match a live
+        # thread, but not the same thread: the bullet stays for the GM.
+        tmp = self.shared_copy("")
+        wrap = (tmp / "Chapters" / "Chapter 4 - Calcutta" / "Sessions"
+                / "Chapter_04_Session_07_Wrap_Up.md")
+        wrap.write_text(
+            wrap.read_text(encoding="utf-8")
+            + "\n#### Resolved Threads\n\n- The ledger is found "
+              "\u2014 closed: in the dredger (shared)\n",
+            encoding="utf-8")
+        orphans = self.report(tmp).split(
+            "--- Wrap-up threads not on any thread list ---", 1)[1]
+        self.assertIn("session 5\tThe ledger is still missing", orphans)
+
+    def test_a_hidden_shared_thread_is_marked(self):
+        tmp = self.shared_copy("<!-- gm-only -->\n- Repay Bram — involves "
+                               "[[Hero]]\n<!-- /gm-only -->")
+        report = self.report(tmp)
+        self.assertIn("\nRepay Bram (hidden)\tfirst=", report)
+        # It shares nothing with players: the PC's own copy still prints.
+        self.assertIn("\nRepay Bram\tfirst=", report.split("--- Hero ---")[1])
+
+    def test_shared_bullet_with_no_tail_names_nobody(self):
+        tmp = self.shared_copy("- A loose end with no tail")
+        self.assertIn("A loose end with no tail\tfirst=?\tlast=?\tage=?\t"
+                      "(not in any wrap-up \u2014 check it is still live)"
+                      "\tinvolves: (none named)", self.report(tmp))
+
+    def test_only_shared_threads_say_so_under_the_pc(self):
+        tmp = self.shared_copy(
+            "- Find the missing ledger — involves [[Hero]]\n"
+            "- Repay Bram — involves [[Hero]]")
+        report = self.report(tmp)
+        self.assertIn("--- Hero ---\n(only threads held in the shared list, "
+                      "above)", report)
+
+    def test_shared_threads_fixture_is_readable(self):
+        vault = ROOT / "tests" / "fixtures" / "shared-threads"
+        wrap_ups = sc.wrap_up_threads(load_files(vault), None)
+        self.assertEqual([n for n, _u, _c in wrap_ups], [3])
+        overview = (vault / "Campaign Overview.md").read_text(encoding="utf-8")
+        ledger = sc.shared_threads(overview)[0].text
+        hits, mark = sc.match_sessions(ledger, wrap_ups)
+        self.assertEqual(hits, [3])
+
+    def test_match_sessions_returns_sessions_and_mark(self):
+        wrap_ups = sc.wrap_up_threads(load_files(FIXTURE),
+                                      "chapter 4 - calcutta")
+        self.assertEqual(
+            sc.match_sessions("Find the missing ledger", wrap_ups),
+            ([7], "="))
+        self.assertEqual(sc.match_sessions("Zzz qqq", wrap_ups), ([], ""))
 
     def test_a_deceased_pc_is_not_in_the_active_pcs(self):
         tmp = self.aged_copy("")

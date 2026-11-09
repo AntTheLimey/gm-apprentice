@@ -138,7 +138,7 @@ new or updated entities, timeline entries or carry-forward) and ask:
 full wrap-up first (recommended), or a quick recap from the raw Play
 Notes?
 
-**8. Threads** — `--prep`'s Threads lists every PC's Open threads with first/last-seen session
+**8. Threads** — `--prep`'s Threads lists the Overview's shared Open Threads, then every PC's own Open threads, with first/last-seen session
 and age, the old ones marked `STALE`, plus wrap-up threads missing
 from every sheet.
 You judge whether two wordings are one thread and whether an old one
@@ -209,7 +209,7 @@ active PC's `## Background` and `## GM Notes` plus spotlight history from earlie
 (role, sessions since last B- and C-plot). Don't open full PC
 sheets. Judge arc stage (five-stage model) from that evidence. Per PC:
 - backstory hooks, stated goals, arc stage and theme, relationships
-- `Open threads` → decisions needing consequences, next arc beat;
+- a PC's own `Open threads` → decisions needing consequences, next arc beat;
   `Knows (exclusive)` → personalized touchpoint fuel
 - mechanical highlights (signature abilities, resources)
 - last spotlight role, sessions since last B-plot; next beat

@@ -899,5 +899,667 @@ class SmallCheckTests(unittest.TestCase):
         self.assertNotIn("run the migration", item.lines[0])
 
 
+
+ST_OVERVIEW = """---
+type: campaign_overview
+---
+
+# The Lantern Road
+
+## Current Arc
+
+The caravan is at Harrow Ford.
+
+## GM Notes
+
+Secret.
+"""
+
+
+def st_pc(*threads):
+    lines = "".join(f"- {t}\n" for t in threads)
+    return ("---\ntype: pc\n---\n\n# PC\n\n## Current Status\n\n"
+            f"**Location:** Harrow Ford\n**Open threads:**\n{lines}"
+            "\n## Notes\n\nNothing.\n")
+
+
+def st_wrap(n, carries=True, ch="Chapter 1 - Harbour"):
+    body = ("### What Carries Forward\n\n#### Unresolved Threads\n\n"
+            "- **The missing ledger** — the toll keeper wants it back\n\n"
+            if carries else "### Other\n\n- nothing\n\n")
+    return (f"---\ntype: session_wrap\nsession_number: {n}\n"
+            f'session: "[[Session {n:02d}]]"\n'
+            f'chapter: "[[{ch}]]"\n---\n\n# Wrap-Up\n\n'
+            f"## GM Notes\n\n{body}")
+
+
+def st_session(n, ch="Chapter 1 - Harbour"):
+    return (f"---\ntype: session\nsession_number: {n}\nstatus: played\n"
+            f'play_date: "2026-01-{n:02d}"\nchapter: "[[{ch}]]"\n---\n\n'
+            f"# Session {n}\n")
+
+
+def st_raw_pc(block):
+    return ("---\ntype: pc\n---\n\n# PC\n\n## Current Status\n\n"
+            f"**Open threads:**\n{block}\n## Notes\n\nNothing.\n")
+
+
+LEDGER = "**The missing ledger** — the toll keeper wants it back"
+WRAPS = "Chapters/Chapter 1 - Harbour/"
+
+
+class SharedThreadsTests(unittest.TestCase):
+    def vault(self, notes):
+        vault = make_vault(self)
+        for rel, text in notes.items():
+            path = vault / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(text.encode("utf-8"))
+        return vault
+
+    def raw(self, vault, rel):
+        return (vault / rel).read_bytes().decode("utf-8")
+
+    def test_the_check_is_registered(self):
+        (check,) = [c for c in mv.VAULT_CHECKS if c.name == "shared-threads"]
+        self.assertEqual(
+            (check.release, check.band, check.asks_site, check.kind),
+            ("1.12.3", 4, True, "bookkeeping"))
+
+    def test_a_site_on_an_older_publish_tool_waits(self):
+        # An older tool would drop a moved thread from the PC's page: nothing
+        # moves, and the stamp waits until the tool is updated.
+        notes = {
+            "Campaign Overview.md": ST_OVERVIEW,
+            "PCs/A.md": st_pc(LEDGER), "PCs/B.md": st_pc(LEDGER),
+        }
+        for installed, moves in (("1.70.2", False), ("1.70.3", True),
+                                 ("1.71.0", True)):
+            with self.subTest(installed=installed):
+                v = self.vault(notes)
+                site = Path(tempfile.mkdtemp(prefix="migv-site-"))
+                self.addCleanup(shutil.rmtree, site, ignore_errors=True)
+                pkg = site / "node_modules" / "gm-apprentice-publish"
+                pkg.mkdir(parents=True)
+                (pkg / "package.json").write_text(json.dumps(
+                    {"version": installed}), encoding="utf-8")
+                write_config(v, "---\npublish:\n  system: coc-7e\n"
+                             f"  site: true\n  site_dir: {site.as_posix()}\n"
+                             "---\n")
+                (item,) = mv.find_shared_threads(v)
+                if moves:
+                    self.assertEqual(item.group, WILL)
+                    continue
+                self.assertEqual(item.group, PERSON)
+                self.assertTrue(item.holds_stamp)
+                self.assertIn("1.70.2, older than 1.70.3: update the site's "
+                              "publish tool first", item.lines[0])
+                self.assertIn(LEDGER, self.raw(v, "PCs/A.md"))
+
+    def test_identical_bullets_move_once_with_holders(self):
+        v = self.vault({
+            "Campaign Overview.md": ST_OVERVIEW,
+            "PCs/Corwin_Hale.md": st_pc(LEDGER, "Corwin's own"),
+            "PCs/Ines_Marlowe.md": st_pc("Ines's own", LEDGER + "  "),
+            "PCs/Odo_Vane.md": st_pc("Odo's own"),
+            WRAPS + "Chapter_01_Session_02_Wrap_Up.md": st_wrap(2),
+            WRAPS + "Session 02.md": st_session(2),
+        })
+        (item,) = mv.find_shared_threads(v)
+        self.assertEqual((item.id, item.group), ("shared-threads", WILL))
+        self.assertEqual(len(item.lines), 1)
+        self.assertIn("The missing ledger", item.lines[0])
+        item.apply(None)
+        overview = self.raw(v, "Campaign Overview.md")
+        self.assertEqual(overview.count("The missing ledger"), 1)
+        self.assertIn(f"- {LEDGER} — since Session 2; involves "
+                      "[[Corwin_Hale]], [[Ines_Marlowe]]", overview)
+        self.assertLess(overview.index("## Open Threads"),
+                        overview.index("## GM Notes"))
+        for rel, own in (("PCs/Corwin_Hale.md", "Corwin's own"),
+                         ("PCs/Ines_Marlowe.md", "Ines's own")):
+            text = self.raw(v, rel)
+            self.assertNotIn("missing ledger", text)
+            self.assertIn(f"- {own}\n", text)
+        self.assertEqual(mv.find_shared_threads(v), [])
+
+    def test_no_since_without_a_close_match(self):
+        v = self.vault({
+            "Campaign Overview.md": ST_OVERVIEW,
+            "PCs/A.md": st_pc("Find the lamp-lighter"),
+            "PCs/B.md": st_pc("Find the lamp-lighter"),
+        })
+        (item,) = mv.find_shared_threads(v)
+        item.apply(None)
+        self.assertIn("- Find the lamp-lighter — involves [[A]], [[B]]",
+                      self.raw(v, "Campaign Overview.md"))
+
+    def test_single_sheet_bullet_stays(self):
+        v = self.vault({
+            "Campaign Overview.md": ST_OVERVIEW,
+            "PCs/A.md": st_pc(LEDGER),
+            "PCs/B.md": st_pc("**The missing ledger** — someone wants it"),
+        })
+        self.assertEqual(mv.find_shared_threads(v), [])
+
+    def test_struck_bullet_closed_into_latest_wrapup(self):
+        v = self.vault({
+            "Campaign Overview.md": ST_OVERVIEW,
+            "PCs/A.md": st_pc("~~Pay the ferrywoman~~", "Still open"),
+            WRAPS + "Chapter_01_Session_02_Wrap_Up.md": st_wrap(2),
+            WRAPS + "Chapter_01_Session_03_Wrap_Up.md": st_wrap(3),
+        })
+        (item,) = mv.find_shared_threads(v)
+        self.assertIn("Pay the ferrywoman", item.lines[0])
+        item.apply(None)
+        latest = self.raw(v, WRAPS + "Chapter_01_Session_03_Wrap_Up.md")
+        self.assertIn("#### Resolved Threads\n\n- Pay the ferrywoman — "
+                      "closed: struck through before the update (A)\n",
+                      latest)
+        self.assertNotIn("Resolved", self.raw(
+            v, WRAPS + "Chapter_01_Session_02_Wrap_Up.md"))
+        pc = self.raw(v, "PCs/A.md")
+        self.assertNotIn("ferrywoman", pc)
+        self.assertIn("- Still open\n", pc)
+
+    def test_struck_bullet_with_no_wrapup_stays_with_a_notice(self):
+        v = self.vault({
+            "Campaign Overview.md": ST_OVERVIEW,
+            "PCs/A.md": st_pc("~~Pay the ferrywoman~~"),
+            WRAPS + "Chapter_01_Session_03_Wrap_Up.md": st_wrap(3, False),
+        })
+        (item,) = mv.find_shared_threads(v)
+        self.assertEqual(item.group, PERSON)
+        self.assertTrue(item.notice)
+        self.assertIn("What Carries Forward", item.lines[0])
+        bare = self.vault({"PCs/A.md": st_pc("~~Paid~~")})
+        (item,) = mv.find_shared_threads(bare)
+        self.assertEqual(item.group, PERSON)
+        self.assertIn("no Wrap-Up", item.lines[0])
+
+    def test_no_overview_leaves_duplicates(self):
+        v = self.vault({
+            "PCs/A.md": st_pc(LEDGER),
+            "PCs/B.md": st_pc(LEDGER),
+        })
+        (item,) = mv.find_shared_threads(v)
+        self.assertEqual(item.group, PERSON)
+        self.assertTrue(item.notice)
+        self.assertIn("no Campaign Overview to hold shared threads",
+                      item.lines[0])
+        self.assertIn(LEDGER, self.raw(v, "PCs/A.md"))
+
+    def test_out_of_play_pc_does_not_count(self):
+        gone = st_pc(LEDGER).replace("type: pc\n",
+                                     "type: pc\nstatus: dead\n")
+        v = self.vault({
+            "Campaign Overview.md": ST_OVERVIEW,
+            "PCs/A.md": st_pc(LEDGER),
+            "PCs/B.md": gone,
+        })
+        self.assertEqual(mv.find_shared_threads(v), [])
+
+    def test_nothing_to_do_returns_no_items(self):
+        v = self.vault({
+            "Campaign Overview.md": ST_OVERVIEW,
+            "PCs/A.md": st_pc("One"),
+            "PCs/B.md": st_pc("Two"),
+            WRAPS + "Chapter_01_Session_03_Wrap_Up.md": st_wrap(3),
+        })
+        self.assertEqual(mv.find_shared_threads(v), [])
+        self.assertEqual(mv.find_shared_threads(make_vault(self)), [])
+
+    def test_gm_only_bullets_never_move(self):
+        fenced = st_raw_pc(f"<!-- gm-only -->\n- {LEDGER}\n<!-- /gm-only -->\n")
+        v = self.vault({
+            "Campaign Overview.md": ST_OVERVIEW,
+            "PCs/A.md": fenced,
+            "PCs/B.md": fenced,
+        })
+        self.assertEqual(mv.find_shared_threads(v), [])
+        struck = st_raw_pc("<!-- gm-only -->\n- ~~Secret done~~\n"
+                           "<!-- /gm-only -->\n")
+        v = self.vault({"PCs/A.md": struck,
+                        WRAPS + "Chapter_01_Session_03_Wrap_Up.md": st_wrap(3)})
+        self.assertEqual(mv.find_shared_threads(v), [])
+
+    def test_wrapped_bullets_compare_and_move_whole(self):
+        one = st_raw_pc("- **Ledger** — the keeper\n  wants it back\n")
+        other = st_raw_pc("- **Ledger** — the keeper\n  burned it\n")
+        v = self.vault({
+            "Campaign Overview.md": ST_OVERVIEW,
+            "PCs/A.md": one,
+            "PCs/B.md": other,
+        })
+        self.assertEqual(mv.find_shared_threads(v), [])
+        v = self.vault({
+            "Campaign Overview.md": ST_OVERVIEW,
+            "PCs/A.md": one,
+            "PCs/B.md": one,
+        })
+        (item,) = mv.find_shared_threads(v)
+        item.apply(None)
+        self.assertIn("- **Ledger** — the keeper wants it back — involves "
+                      "[[A]], [[B]]", self.raw(v, "Campaign Overview.md"))
+        for rel in ("PCs/A.md", "PCs/B.md"):
+            self.assertNotIn("wants it back", self.raw(v, rel))
+            self.assertNotIn("Ledger", self.raw(v, rel))
+
+    def test_an_archived_overview_is_never_the_one(self):
+        live = "_campaign/Campaign Overview.md"
+        v = self.vault({
+            "_archive/Campaign Overview.md": ST_OVERVIEW,
+            live: ST_OVERVIEW,
+            "PCs/A.md": st_pc(LEDGER), "PCs/B.md": st_pc(LEDGER),
+        })
+        (item,) = mv.find_shared_threads(v)
+        item.apply(None)
+        self.assertIn("missing ledger", self.raw(v, live))
+        self.assertEqual(self.raw(v, "_archive/Campaign Overview.md"),
+                         ST_OVERVIEW)
+
+    def test_inline_open_threads_are_left_alone(self):
+        # `**Open threads:** None.` is no thread; real inline text is one
+        # GM's prose, never judged word for word: neither moves.
+        for inline in ("None.", "The ferrywoman is owed"):
+            with self.subTest(inline=inline):
+                pc = st_raw_pc("").replace(
+                    "**Open threads:**", f"**Open threads:** {inline}")
+                self.assertIn(f"**Open threads:** {inline}", pc)
+                v = self.vault({"Campaign Overview.md": ST_OVERVIEW,
+                                "PCs/A.md": pc, "PCs/B.md": pc})
+                self.assertEqual(mv.find_shared_threads(v), [])
+                self.assertEqual(mv._shared_threads_plan(v), ({}, [], []))
+        struck = st_raw_pc("").replace("**Open threads:**",
+                                       "**Open threads:** ~~Paid~~")
+        v = self.vault({"PCs/A.md": struck,
+                        WRAPS + "Chapter_01_Session_03_Wrap_Up.md": st_wrap(3)})
+        self.assertEqual(mv.find_shared_threads(v), [])
+
+    def test_wrap_variants_of_one_thread_are_one_group(self):
+        # The same words wrapped differently on two pairs of sheets: one
+        # Overview entry naming all four, every copy gone.
+        one = st_raw_pc("- **Ledger** — the keeper wants\n  it back\n")
+        other = st_raw_pc("- **Ledger** — the keeper\n  wants it back\n")
+        v = self.vault({
+            "Campaign Overview.md": ST_OVERVIEW,
+            "PCs/A.md": one, "PCs/B.md": one,
+            "PCs/C.md": other, "PCs/D.md": other,
+        })
+        (item,) = mv.find_shared_threads(v)
+        self.assertEqual(len(item.lines), 1)
+        item.apply(None)
+        overview = self.raw(v, "Campaign Overview.md")
+        self.assertEqual(overview.count("**Ledger**"), 1)
+        self.assertIn("- **Ledger** — the keeper wants it back — involves "
+                      "[[A]], [[B]], [[C]], [[D]]", overview)
+        for rel in ("PCs/A.md", "PCs/B.md", "PCs/C.md", "PCs/D.md"):
+            self.assertNotIn("Ledger", self.raw(v, rel))
+        # A hidden copy among the variants still holds the whole group.
+        hidden = st_raw_pc("<!-- gm-only -->\n- **Ledger** — the keeper\n"
+                           "  wants it back\n<!-- /gm-only -->\n")
+        v = self.vault({
+            "Campaign Overview.md": ST_OVERVIEW,
+            "PCs/A.md": one, "PCs/B.md": one, "PCs/C.md": hidden,
+        })
+        (item,) = mv.find_shared_threads(v)
+        self.assertEqual(item.group, PERSON)
+        self.assertIn("Ledger", self.raw(v, "PCs/A.md"))
+
+    def test_struck_wrapped_bullet_closes_whole(self):
+        v = self.vault({
+            "PCs/A.md": st_raw_pc("- ~~Pay the\n  ferrywoman~~\n- Open\n"),
+            WRAPS + "Chapter_01_Session_03_Wrap_Up.md": st_wrap(3),
+        })
+        (item,) = mv.find_shared_threads(v)
+        item.apply(None)
+        self.assertIn("- Pay the ferrywoman — closed: struck through",
+                      self.raw(v, WRAPS + "Chapter_01_Session_03_Wrap_Up.md"))
+        pc = self.raw(v, "PCs/A.md")
+        self.assertNotIn("ferrywoman", pc)
+        self.assertIn("- Open\n", pc)
+
+    def test_blank_line_continuation_is_part_of_the_bullet(self):
+        a = st_raw_pc("- First\n- **Ledger** — keeper\n\n"
+                      "  Para A about ledger\n- Third\n")
+        b = st_raw_pc("- **Ledger** — keeper\n\n  Para B different\n")
+        v = self.vault({
+            "Campaign Overview.md": ST_OVERVIEW,
+            "PCs/A.md": a,
+            "PCs/B.md": b,
+        })
+        self.assertEqual(mv.find_shared_threads(v), [])
+        v = self.vault({
+            "Campaign Overview.md": ST_OVERVIEW,
+            "PCs/A.md": a,
+            "PCs/B.md": st_raw_pc("- **Ledger** — keeper\n\n"
+                                  "  Para A about ledger\n"),
+        })
+        (item,) = mv.find_shared_threads(v)
+        item.apply(None)
+        self.assertIn("- **Ledger** — keeper Para A about ledger — involves "
+                      "[[A]], [[B]]", self.raw(v, "Campaign Overview.md"))
+        pc = self.raw(v, "PCs/A.md")
+        self.assertNotIn("Para A", pc)
+        self.assertIn("- First\n- Third\n", pc)
+        self.assertNotIn("Para A", self.raw(v, "PCs/B.md"))
+
+    def test_lazy_line_is_part_of_the_bullet(self):
+        a = st_raw_pc("- First\n- **Ledger** — keeper\nwants it back\n"
+                      "- Third\n")
+        v = self.vault({
+            "Campaign Overview.md": ST_OVERVIEW,
+            "PCs/A.md": a,
+            "PCs/B.md": st_raw_pc("- **Ledger** — keeper\nburned it\n"),
+        })
+        self.assertEqual(mv.find_shared_threads(v), [])
+        v = self.vault({
+            "Campaign Overview.md": ST_OVERVIEW,
+            "PCs/A.md": a,
+            "PCs/B.md": st_raw_pc("- **Ledger** — keeper\nwants it back\n"),
+        })
+        (item,) = mv.find_shared_threads(v)
+        item.apply(None)
+        self.assertIn("- **Ledger** — keeper wants it back — involves "
+                      "[[A]], [[B]]", self.raw(v, "Campaign Overview.md"))
+        pc = self.raw(v, "PCs/A.md")
+        self.assertNotIn("wants it back", pc)
+        self.assertIn("- First\n- Third\n", pc)
+        self.assertNotIn("wants it back", self.raw(v, "PCs/B.md"))
+
+    HIDING_FORMS = {
+        "spoiler fence": ("<!-- spoiler -->", "<!-- /spoiler -->"),
+        "%% comment": ("%%", "%%"),
+        "HTML comment": ("<!--", "-->"),
+    }
+
+    def assert_balanced(self, text):
+        self.assertEqual(text.count("<!--"), text.count("-->"), text)
+        self.assertEqual(text.count("%%") % 2, 0, text)
+        self.assertEqual(text.count("<!-- spoiler -->"),
+                         text.count("<!-- /spoiler -->"), text)
+
+    def test_hidden_bullets_never_move(self):
+        # A bullet in a spoiler fence, a %% comment or an HTML comment is
+        # the GM's own: never moved, nothing said about it.
+        for form, (opener, closer) in self.HIDING_FORMS.items():
+            with self.subTest(form):
+                block = (f"{opener}\n- Reveal: the abbot is the cultist\n"
+                         f"- {LEDGER}\n- The bell\n{closer}\n")
+                v = self.vault({
+                    "Campaign Overview.md": ST_OVERVIEW,
+                    "PCs/A.md": st_raw_pc("- Own\n\n" + block),
+                    "PCs/B.md": st_raw_pc(block),
+                })
+                self.assertEqual(mv.find_shared_threads(v), [])
+
+    def test_a_copy_next_to_hidden_text_holds_the_group(self):
+        # One copy sits next to a comment: no copy moves (the shared line
+        # would show players the hidden one's words) and the GM is told.
+        # A gm-only or spoiler marker line is read exactly, so a bullet
+        # beside one is not held (test_lazy_spoiler_marker_is_not_joined).
+        for form in ("%% comment", "HTML comment"):
+            opener, closer = self.HIDING_FORMS[form]
+            with self.subTest(form):
+                notes = {
+                    "Campaign Overview.md": ST_OVERVIEW,
+                    "PCs/A.md": st_raw_pc(f"- {LEDGER}\n{opener}\nGM aside"
+                                          f"\n{closer}\n"),
+                    "PCs/B.md": st_raw_pc(f"- {LEDGER}\n"),
+                }
+                v = self.vault(notes)
+                (item,) = mv.find_shared_threads(v)
+                self.assertEqual(item.group, PERSON)
+                self.assertTrue(item.notice)
+                self.assertEqual(item.lines, [
+                    'PCs/A.md\t"The missing ledger" on A left on the sheet: '
+                    "it sits next to hidden text",
+                    "The missing ledger\tleft on B as well: the copy on A "
+                    "is in or next to hidden text, so none moved"])
+                for rel in ("PCs/A.md", "PCs/B.md", "Campaign Overview.md"):
+                    self.assertEqual(self.raw(v, rel), notes[rel])
+
+    def test_struck_bullet_next_to_hidden_text_stays(self):
+        notes = {
+            "PCs/A.md": st_raw_pc("- ~~Pay the ferrywoman~~\n%%\nshe lied"
+                                  "\n%%\n"),
+            WRAPS + "Chapter_01_Session_03_Wrap_Up.md": st_wrap(3),
+        }
+        v = self.vault(notes)
+        (item,) = mv.find_shared_threads(v)
+        self.assertEqual(item.group, PERSON)
+        self.assertIn("next to hidden text", item.lines[0])
+        self.assertEqual(self.raw(v, "PCs/A.md"), notes["PCs/A.md"])
+
+    def test_lazy_spoiler_marker_is_not_joined(self):
+        # The opener under a bullet is not its lazy line: the bullet moves
+        # alone and the fence stays whole on each sheet.
+        block = (f"- {LEDGER}\n<!-- spoiler -->\n- Reveal\n"
+                 "<!-- /spoiler -->\n")
+        v = self.vault({
+            "Campaign Overview.md": ST_OVERVIEW,
+            "PCs/A.md": st_raw_pc(block),
+            "PCs/B.md": st_raw_pc(block),
+        })
+        (item,) = mv.find_shared_threads(v)
+        item.apply(None)
+        over = self.raw(v, "Campaign Overview.md")
+        self.assertIn(f"- {LEDGER} — involves [[A]], [[B]]\n", over)
+        self.assertNotIn("spoiler", over)
+        for rel in ("PCs/A.md", "PCs/B.md"):
+            pc = self.raw(v, rel)
+            self.assertIn("**Open threads:**\n<!-- spoiler -->\n- Reveal\n"
+                          "<!-- /spoiler -->\n", pc)
+            self.assert_balanced(pc)
+
+    def test_lazy_callout_is_not_joined(self):
+        block = f"- {LEDGER}\n> [!note] see story\n"
+        v = self.vault({
+            "Campaign Overview.md": ST_OVERVIEW,
+            "PCs/A.md": st_raw_pc(block),
+            "PCs/B.md": st_raw_pc(block),
+        })
+        (item,) = mv.find_shared_threads(v)
+        item.apply(None)
+        over = self.raw(v, "Campaign Overview.md")
+        self.assertIn(f"- {LEDGER} — involves [[A]], [[B]]\n", over)
+        self.assertNotIn("see story", over)
+        for rel in ("PCs/A.md", "PCs/B.md"):
+            self.assertIn("**Open threads:**\n> [!note] see story\n",
+                          self.raw(v, rel))
+
+    def test_a_move_never_splits_a_hidden_block(self):
+        # A public duplicate beside a hidden block moves; the block, and
+        # every opener and closer in it, stays on the sheet.
+        for form, (opener, closer) in self.HIDING_FORMS.items():
+            with self.subTest(form):
+                block = (f"- {LEDGER}\n\n{opener}\n- Reveal\n{closer}\n\n"
+                         "- The bell\n")
+                v = self.vault({
+                    "Campaign Overview.md": ST_OVERVIEW,
+                    "PCs/A.md": st_raw_pc(block),
+                    "PCs/B.md": st_raw_pc(block),
+                })
+                for item in mv.find_shared_threads(v):
+                    if item.apply:
+                        item.apply(None)
+                over = self.raw(v, "Campaign Overview.md")
+                self.assertIn(f"- {LEDGER} — involves", over)
+                self.assertIn("- The bell — involves", over)
+                self.assertNotIn("Reveal", over)
+                self.assert_balanced(over)
+                for rel in ("PCs/A.md", "PCs/B.md"):
+                    pc = self.raw(v, rel)
+                    self.assertIn(f"{opener}\n- Reveal\n{closer}\n", pc)
+                    self.assertNotIn(LEDGER, pc)
+                    self.assert_balanced(pc)
+
+    def test_template_placeholder_is_not_a_thread(self):
+        holder = st_pc("{unresolved, forward-looking item}")
+        v = self.vault({
+            "Campaign Overview.md": ST_OVERVIEW,
+            "PCs/A.md": holder,
+            "PCs/B.md": holder,
+        })
+        self.assertEqual(mv.find_shared_threads(v), [])
+
+    def test_since_reads_the_current_chapter_only(self):
+        fog = "Chapters/Chapter 2 - Fog/"
+        notes = {
+            "Campaign Overview.md": ST_OVERVIEW,
+            "PCs/A.md": st_pc(LEDGER),
+            "PCs/B.md": st_pc(LEDGER),
+            WRAPS + "Chapter_01_Session_01_Wrap_Up.md": st_wrap(1),
+            WRAPS + "Session 01.md": st_session(1),
+            fog + "Chapter_02_Session_03_Wrap_Up.md":
+                st_wrap(3, ch="Chapter 2 - Fog"),
+            fog + "Session 03.md": st_session(3, ch="Chapter 2 - Fog"),
+        }
+        v = self.vault(notes)
+        (item,) = mv.find_shared_threads(v)
+        self.assertIn("(since Session 3)", item.lines[0])
+        # No session note: no current chapter, so no since.
+        v = self.vault({k: t for k, t in notes.items()
+                        if not k.endswith(("Session 01.md", "Session 03.md"))})
+        (item,) = mv.find_shared_threads(v)
+        self.assertNotIn("since", item.lines[0])
+
+    def test_nested_bullets_belong_to_their_parent(self):
+        nested = st_raw_pc("- Find the lamp-lighter\n  - ask the ferrywoman\n")
+        v = self.vault({
+            "Campaign Overview.md": ST_OVERVIEW,
+            "PCs/A.md": nested,
+            "PCs/B.md": st_pc("ask the ferrywoman"),
+        })
+        self.assertEqual(mv.find_shared_threads(v), [])
+        v = self.vault({
+            "Campaign Overview.md": ST_OVERVIEW,
+            "PCs/A.md": nested,
+            "PCs/B.md": nested,
+        })
+        (item,) = mv.find_shared_threads(v)
+        item.apply(None)
+        self.assertIn("- Find the lamp-lighter; ask the ferrywoman — "
+                      "involves [[A]], [[B]]",
+                      self.raw(v, "Campaign Overview.md"))
+        self.assertNotIn("ferrywoman", self.raw(v, "PCs/A.md"))
+
+    def test_overview_fenced_end_to_end_leaves_duplicates(self):
+        fenced = ("---\ntype: campaign_overview\n---\n<!-- gm-only -->\n"
+                  "# Secret\n\n## Current Arc\n\nHidden.\n")
+        v = self.vault({
+            "Campaign Overview.md": fenced,
+            "PCs/A.md": st_pc(LEDGER),
+            "PCs/B.md": st_pc(LEDGER),
+        })
+        (item,) = mv.find_shared_threads(v)
+        self.assertEqual(item.group, PERSON)
+        self.assertIn("no place outside a GM-only fence", item.lines[0])
+        self.assertIn(LEDGER, self.raw(v, "PCs/A.md"))
+
+    def test_a_fenced_copy_holds_the_group_and_names_the_others(self):
+        notes = {
+            "Campaign Overview.md": ST_OVERVIEW,
+            "PCs/A.md": st_raw_pc(f"<!-- gm-only -->\n- {LEDGER}\n"
+                                  "<!-- /gm-only -->\n"),
+            "PCs/B.md": st_raw_pc(f"- {LEDGER}\n"),
+            "PCs/C.md": st_raw_pc(f"- {LEDGER}\n"),
+        }
+        v = self.vault(notes)
+        (item,) = mv.find_shared_threads(v)
+        self.assertEqual(item.group, PERSON)
+        self.assertEqual(item.lines, [
+            "The missing ledger\tleft on B and C as well: the copy on A is "
+            "in or next to hidden text, so none moved"])
+
+    def test_copies_of_a_shared_thread_widen_its_involves(self):
+        # The entry names A and B; C holds a copy too (and A does).
+        overview = ST_OVERVIEW.replace(
+            "## GM Notes", f"## Open Threads\n\n- {LEDGER} — since Session "
+            "2; involves [[A]], [[B]]\n\n## GM Notes")
+        v = self.vault({
+            "Campaign Overview.md": overview,
+            "PCs/A.md": st_pc(LEDGER),
+            "PCs/C.md": st_pc("C's own", LEDGER),
+        })
+        (item,) = mv.find_shared_threads(v)
+        item.apply(None)
+        self.assertIn(f"- {LEDGER} — since Session 2; involves [[A]], [[B]], "
+                      "[[C]]\n", self.raw(v, "Campaign Overview.md"))
+        for rel in ("PCs/A.md", "PCs/C.md"):
+            self.assertNotIn("missing ledger", self.raw(v, rel))
+
+    def test_a_hidden_shared_copy_is_not_shared(self):
+        overview = ST_OVERVIEW.replace(
+            "## GM Notes", f"## Open Threads\n\n<!-- gm-only -->\n- {LEDGER} "
+            "— involves [[A]], [[B]]\n<!-- /gm-only -->\n\n## GM Notes")
+        notes = {
+            "Campaign Overview.md": overview,
+            "PCs/A.md": st_pc(LEDGER),
+            "PCs/B.md": st_pc(LEDGER),
+            "PCs/C.md": st_pc(LEDGER),
+        }
+        v = self.vault(notes)
+        (item,) = mv.find_shared_threads(v)
+        self.assertEqual(item.group, PERSON)
+        self.assertEqual(item.lines, [
+            "The missing ledger\tleft on A, B and C: a hidden copy is in the "
+            "Overview's Open Threads"])
+        for rel, text in notes.items():
+            self.assertEqual(self.raw(v, rel), text)
+
+    def test_copies_of_an_already_shared_thread_go(self):
+        # Any case of the heading; one copy or several.
+        for heading in ("## Open Threads", "## Open threads"):
+            with self.subTest(heading):
+                overview = ST_OVERVIEW.replace(
+                    "## GM Notes", f"{heading}\n\n- {LEDGER} — involves "
+                    "the party\n\n## GM Notes")
+                v = self.vault({
+                    "Campaign Overview.md": overview,
+                    "PCs/A.md": st_pc(LEDGER, "A's own"),
+                    "PCs/B.md": st_pc(LEDGER),
+                    "PCs/C.md": st_pc("C's own", LEDGER),
+                })
+                (item,) = mv.find_shared_threads(v)
+                self.assertEqual(item.group, WILL)
+                self.assertEqual(item.lines, [
+                    'move "The missing ledger" from A, B and C: already in the '
+                    "Campaign Overview's Open Threads"])
+                item.apply(None)
+                self.assertEqual(self.raw(v, "Campaign Overview.md"),
+                                 overview)
+                for rel in ("PCs/A.md", "PCs/B.md", "PCs/C.md"):
+                    self.assertNotIn("missing ledger", self.raw(v, rel))
+                self.assertIn("- A's own", self.raw(v, "PCs/A.md"))
+                self.assertEqual(mv.find_shared_threads(v), [])
+                one = self.vault({
+                    "Campaign Overview.md": overview,
+                    "PCs/A.md": st_pc(LEDGER),
+                })
+                (item,) = mv.find_shared_threads(one)
+                item.apply(None)
+                self.assertNotIn("missing ledger", self.raw(one, "PCs/A.md"))
+
+    def test_crlf_kept(self):
+        notes = {
+            "Campaign Overview.md": ST_OVERVIEW,
+            "PCs/A.md": st_pc(LEDGER, "~~Done~~"),
+            "PCs/B.md": st_pc(LEDGER),
+            WRAPS + "Chapter_01_Session_03_Wrap_Up.md": st_wrap(3),
+        }
+        v = self.vault({k: t.replace("\n", "\r\n") for k, t in notes.items()})
+        (item,) = mv.find_shared_threads(v)
+        self.assertEqual(len(item.lines), 2)
+        item.apply(None)
+        for rel in notes:
+            text = self.raw(v, rel)
+            self.assertNotIn("\n", text.replace("\r\n", ""), rel)
+        self.assertIn("## Open Threads\r\n",
+                      self.raw(v, "Campaign Overview.md"))
+        self.assertIn("closed: struck through before the update (A)\r\n",
+                      self.raw(v, WRAPS + "Chapter_01_Session_03_Wrap_Up.md"))
+
+
 if __name__ == "__main__":
     unittest.main()

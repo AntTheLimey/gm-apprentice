@@ -9,6 +9,35 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.3] — 2026-11-09
+
+### Added
+
+- A shared `## Open Threads` list in the Campaign Overview, for threads two or more PCs share.
+- `gma vault-write threads` adds, moves and closes threads. A closed thread is recorded in that session's Wrap-Up under `#### Resolved Threads`, with the line that ends it.
+- Thread Tidy mode in campaign-qa, for going through the open threads. It closes ended threads and moves word-for-word duplicates without asking, the one campaign-qa check that fixes before you see it, and reports every change it made.
+- Each PC page on the site shows the shared threads that name that PC. They are read from the Overview's Open Threads even when the Overview page does not publish, or sits in a folder the player site hides; GM-only text, spoilers and comments stay hidden (publish tool 1.70.3).
+
+### Changed
+
+- Wrap-up writes only open questions and obligations as threads: stopping points go to the Handoff and events to the recap. It puts shared threads on the shared list, and closes a thread only on a note that says it is over, telling you each time.
+- `--threads` prints each thread once and whole. `--brief` and `--prep` stub the last Wrap-Up's Resolved Threads.
+- `vw threads move` waits, as the update does, while the site's publish tool is older than 1.70.3.
+- `vw status` warns when a rewrite of a PC's Open threads drops a thread, and points at `vw threads close` so the end is recorded.
+- The `shared-threads` check moves threads that sit word for word on several PC sheets into the Overview's Open Threads. Struck-through ones go to the latest Wrap-Up's Resolved Threads. Threads in or next to hidden text stay put, with a notice.
+
+### In numbers
+
+Measured on a notes-only copy of a 16-session chapter (six PCs), after the update and one Thread Tidy:
+
+| | 1.12.2 | 1.12.3 | Change |
+|---|---|---|---|
+| `session-context --threads` | 49,550 chars | 36,000 chars | −27% |
+| `session-context --prep` | 157,760 chars | 126,922 chars | −20% |
+| Threads lost from any PC page on the site | — | 0 | |
+
+---
+
 ## [1.12.2] — 2026-11-08
 
 ### Changed

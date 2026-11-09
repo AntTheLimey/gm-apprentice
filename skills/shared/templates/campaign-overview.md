@@ -48,6 +48,8 @@ What's happening right now in the story? Where did the last session
 leave things? What's the active tension? This is the section the GM
 reads first when sitting down to prep.
 
+## Open Threads
+
 ## Key Factions
 
 The power structures that shape the world — cults, governments,
