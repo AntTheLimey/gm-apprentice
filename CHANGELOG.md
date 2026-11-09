@@ -17,10 +17,10 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ### Changed
 
-- `session-context` prints a PC's `###` subsections as an outline, each with its size and path, and the subsection is fetched when needed. This covers Current Status for Active PCs, and Background and GM Notes in `--arcs`. A section with no `###` prints as before, and Open threads stay whole.
+- `session-context` prints a PC's `###` subsections as an outline with sizes and paths, to fetch when needed: Current Status for Active PCs, and Background and GM Notes in `--arcs`. Open threads stay whole.
 - session-prep reads an outlined subsection only when a step needs it.
 - One section finder serves the Overview's Open Threads and the rest of the scripts. An unclosed code block now runs to the end of the note, as on the site.
-- `gma section` takes `"## Heading/Sub"` to pin a heading's level. An outline line pins it, or names the parent section, when a heading name repeats in the note. A `###` inside a comment or a gm-only block is not a subsection.
+- `gma section` takes `"## Heading/Sub"` to pin a heading's level, so a repeated name can still be fetched.
 
 ### In numbers
 
