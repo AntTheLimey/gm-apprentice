@@ -21,7 +21,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, replace
 
-from vaultlib import (ANY_LABEL_LINE_RE, BULLET_RE, GM_MARKER_RE, LABEL_RE,
+from vaultlib import (ANY_LABEL_LINE_RE, BULLET_RE, GM_MARKER_RE,
                       SECTION_HEADING_RE, atx_title, fence_step, marker_re,
                       scan_body)
 
@@ -369,36 +369,54 @@ def insert_shared(overview_text: str, line: str) -> str:
     return _join(head + block + [""], eol)
 
 
-def _path_span(lines: list[str], path: tuple[str, ...]) -> tuple[int, int]:
-    """(start, end) line indexes of the section `path` names: each element
-    is a heading title, found inside the one before; a final `**Label**`
-    element selects that bold-label block. KeyError if one is missing."""
+# A PC's Open threads label line: bulleted (`- **Open threads:**`) or not,
+# with the inline text after it, if any.
+_PC_LABEL_RE = re.compile(
+    r"^(?P<label>(?P<indent>[ \t]*)(?P<mark>[-*][ \t]+)?\*\*(?P<name>[^*:]+):"
+    r"\*\*)(?P<rest>.*)$")
+
+
+def _pc_span(lines: list[str]) -> tuple[re.Match[str], int, int] | None:
+    """(the label line's match, its index, end) of a PC's Open threads under
+    `## Current Status`, or None. The label is bold, bulleted or not. Its
+    block ends at the next heading of any level, and at the next line no
+    deeper than the label that is a bold label line (`**Knows:**`) or, for
+    a bulleted label, a bullet (the next field); all outside a code
+    fence. A gm-only
+    marker does not end it: a fenced thread is still one (`hidden`)."""
     heads = _headings(lines)
-    start, end = 0, len(lines)
-    for step in path:
-        label = re.fullmatch(r"\*\*(.+?):?\*\*", step)
-        if label:
-            name = label.group(1).strip().casefold()
-            for i in range(start, end):
-                m = LABEL_RE.match(lines[i].strip())
-                if m and m.group(1).strip().casefold() == name:
-                    stop = end
-                    for j in range(i + 1, end):
-                        if ANY_LABEL_LINE_RE.match(lines[j].strip()):
-                            stop = j
-                            break
-                    start, end = i, stop
-                    break
-            else:
-                raise KeyError(step)
+    status = next(((at, idx) for at, (idx, lvl, title) in enumerate(heads)
+                   if title.casefold() == PC_PATH[0].casefold()), None)
+    if status is None:
+        return None
+    sec_end = _heading_end(lines, heads, status[0])
+    want = PC_PATH[1].strip("*:").casefold()
+    delim: str | None = None
+    for i in range(status[1] + 1, sec_end):
+        line = lines[i].rstrip("\r")
+        delim, is_fence = fence_step(line, delim)
+        if is_fence or delim is not None:
             continue
-        for at, (idx, _lvl, title) in enumerate(heads):
-            if start <= idx < end and title.casefold() == step.casefold():
-                start, end = idx, min(_heading_end(lines, heads, at), end)
-                break
-        else:
-            raise KeyError(step)
-    return start, end
+        m = _PC_LABEL_RE.match(line)
+        if m and m.group("name").strip().casefold() == want:
+            break
+    else:
+        return None
+    level = len(m.group("indent").expandtabs(4))
+    delim = None
+    for j in range(i + 1, sec_end):
+        line = lines[j].rstrip("\r")
+        delim, is_fence = fence_step(line, delim)
+        if is_fence or delim is not None:
+            continue
+        if SECTION_HEADING_RE.match(line):
+            return m, i, j
+        if len(line.expandtabs(4)) - len(line.expandtabs(4).lstrip()) > level:
+            continue   # under it: a wrapped line may start in bold
+        if (ANY_LABEL_LINE_RE.match(line.strip())
+                or (m.group("mark") and BULLET_RE.match(line))):
+            return m, i, j
+    return m, i, sec_end
 
 
 @dataclass(frozen=True)
@@ -422,6 +440,9 @@ class PcThread:
     end: int
     hidden: bool
     fenced: bool
+    # An inline thread (`**Open threads:** text`): the label line as it
+    # stays when the thread goes. None for a bullet.
+    keep: str | None = None
 
 
 def _hidden_lines(lines: list[str]) -> list[bool]:
@@ -449,20 +470,22 @@ def _hidden_lines(lines: list[str]) -> list[bool]:
 
 
 def pc_thread_items(pc_text: str) -> list[PcThread]:
-    """The threads under a PC's `## Current Status` > `**Open threads:**`:
-    its top-level bullets, each with everything under it (see `_blocks`).
-    A template placeholder (`{…}`) is not a thread. A thread in or next
-    to hidden text is returned with `hidden` set (see `PcThread`): nothing
-    may move it to a page players read, and removing it could split a
-    hidden block."""
+    """The threads under a PC's `## Current Status` > `**Open threads:**`
+    (see `_pc_span`): its top-level bullets, each with everything under it
+    (see `_blocks`). Text on the label line itself (`**Open threads:**
+    a; b`) is one thread, with the lines under it. A template placeholder
+    (`{…}`) is not a thread. A thread in or next to hidden text is returned
+    with `hidden` set (see `PcThread`): nothing may move it to a page
+    players read, and removing it could split a hidden block."""
     lines = _lines(pc_text)
-    try:
-        start, end = _path_span(lines, PC_PATH)
-    except KeyError:
+    span = _pc_span(lines)
+    if span is None:
         return []
-    return [PcThread(b.text, b.parts, b.start, b.end, b.hidden, b.fenced)
-            for b in _blocks(lines, start, end)
-            if not _PLACEHOLDER_RE.match(b.text)]
+    m, start, end = span
+    found = _blocks(lines, start, end, m)
+    return [PcThread(b.text, b.parts, b.start, b.end, b.hidden, b.fenced,
+                     b.keep)
+            for b in found if not _PLACEHOLDER_RE.match(b.text)]
 
 
 @dataclass(frozen=True)
@@ -474,9 +497,11 @@ class _Block:
     end: int
     hidden: bool
     fenced: bool
+    keep: str | None = None
 
 
-def _blocks(lines: list[str], start: int, end: int) -> list[_Block]:
+def _blocks(lines: list[str], start: int, end: int,
+            label: re.Match[str] | None = None) -> list[_Block]:
     """The threads of a list in lines (start, end): a PC's Open threads and
     the Overview's shared list are both read here.
 
@@ -489,7 +514,12 @@ def _blocks(lines: list[str], start: int, end: int) -> list[_Block]:
     inside a code fence are skipped. The text is the bullet on one line:
     each line under it stripped, a wrapped line after a space and a nested
     bullet's text (marker dropped) after "; ". `hidden` and `fenced` as
-    `PcThread` reads them."""
+    `PcThread` reads them.
+
+    `label` is the match of a PC's label line at `start` (`_PC_LABEL_RE`):
+    text after it is a thread of its own, the label line its first line,
+    and the lines under it belong to it as to a bullet at the label's
+    indent."""
     hidden = _hidden_lines(lines)
     near = [any(h in _FENCE_MARKER_RE.sub("", line) for h in _HIDING)
             for line in lines]
@@ -497,6 +527,12 @@ def _blocks(lines: list[str], start: int, end: int) -> list[_Block]:
     base: int | None = None
     delim: str | None = None
     i = start + 1
+    if label is not None and label.group("rest").strip():
+        stop = _block_stop(lines, start, end,
+                           len(label.group("indent").expandtabs(4)))
+        out.append(_block(lines, hidden, near, start, stop,
+                          label.group("rest").strip(), label.group("label")))
+        i = stop
     while i < end:
         line = lines[i].rstrip("\r")
         delim, is_fence = fence_step(line, delim)
@@ -510,32 +546,46 @@ def _blocks(lines: list[str], start: int, end: int) -> list[_Block]:
         if indent > base:
             i += 1   # nested under a bullet the walk skipped (a placeholder)
             continue
-        stop = j = i + 1
-        while j < end:
-            nxt = lines[j].rstrip("\r")
-            if not nxt.strip():
-                j += 1     # a blank: the bullet goes on only if a deeper line follows
-                continue
-            if (len(nxt) - len(nxt.lstrip()) <= base
-                    and not (j == stop and _lazy(nxt))):
-                break
-            stop = j = j + 1
-        parts = tuple([m.group(1).strip()]
-                      + [lines[k].strip() for k in range(i + 1, stop)
-                         if lines[k].strip()])
-        text = parts[0]
-        for part in parts[1:]:
-            sub = BULLET_RE.match(part)
-            text += f"; {sub.group(1).strip()}" if sub else f" {part}"
-        span = [k for k in range(i, stop) if lines[k].strip()]
-        touches = (any(hidden[k] or any(h in lines[k] for h in _HIDING)
-                       for k in span)
-                   or (i > 0 and near[i - 1])
-                   or (stop < len(lines) and near[stop]))
-        fenced = all(hidden[k] for k in span)
-        out.append(_Block(text, parts, i, stop, touches, fenced))
+        stop = _block_stop(lines, i, end, base)
+        out.append(_block(lines, hidden, near, i, stop,
+                          m.group(1).strip()))
         i = stop
     return out
+
+
+def _block_stop(lines: list[str], i: int, end: int, base: int) -> int:
+    """Index just past the thread whose first line is `i`: the lines
+    deeper than `base` under it, after blank lines too, and a lazy line
+    straight under it (see `_blocks`)."""
+    stop = j = i + 1
+    while j < end:
+        nxt = lines[j].rstrip("\r")
+        if not nxt.strip():
+            j += 1     # a blank: the bullet goes on only if a deeper line follows
+            continue
+        if (len(nxt) - len(nxt.lstrip()) <= base
+                and not (j == stop and _lazy(nxt))):
+            break
+        stop = j = j + 1
+    return stop
+
+
+def _block(lines: list[str], hidden: list[bool], near: list[bool], i: int,
+           stop: int, first: str, keep: str | None = None) -> _Block:
+    """The thread on lines [i, stop) whose first line's text is `first`."""
+    parts = tuple([first] + [lines[k].strip() for k in range(i + 1, stop)
+                             if lines[k].strip()])
+    text = parts[0]
+    for part in parts[1:]:
+        sub = BULLET_RE.match(part)
+        text += f"; {sub.group(1).strip()}" if sub else f" {part}"
+    span = [k for k in range(i, stop) if lines[k].strip()]
+    touches = (any(hidden[k] or any(h in lines[k] for h in _HIDING)
+                   for k in span)
+               or (i > 0 and near[i - 1])
+               or (stop < len(lines) and near[stop]))
+    fenced = all(hidden[k] for k in span)
+    return _Block(text, parts, i, stop, touches, fenced, keep)
 
 
 def _lazy(line: str) -> bool:
@@ -551,8 +601,13 @@ def _lazy(line: str) -> bool:
 
 def remove_pc_thread(pc_text: str, thread: PcThread) -> str:
     """`pc_text` without `thread` (from `pc_thread_items` on this same
-    text): its first line and every line under it."""
+    text): its first line and every line under it. An inline thread's
+    label line stays, bare (`**Open threads:**`)."""
     lines = _lines(pc_text)
+    if thread.keep is not None:
+        cr = "\r" if lines[thread.start].endswith("\r") else ""
+        return "\n".join(lines[:thread.start] + [thread.keep + cr]
+                         + lines[thread.end:])
     return "\n".join(lines[:thread.start] + lines[thread.end:])
 
 

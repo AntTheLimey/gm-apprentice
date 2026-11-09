@@ -241,6 +241,21 @@ class StatusWriteTests(unittest.TestCase):
             "  - the ships at the gate.\n")
         self.assertEqual(read(vault, BULLETED), want)
 
+    def test_dropping_a_thread_under_a_bulleted_label_warns(self):
+        # `- **Open threads:**` with its threads nested under it reads as
+        # the unbulleted list does: a rewrite that drops one warns.
+        nested = DRIFTED.replace(
+            "- **Open threads:** Hunted by the Republic.\n",
+            "- **Open threads:**\n  - **Hunted** by the Republic.\n")
+        vault = make_vault(self, {BULLETED: nested})
+        code, out = run(vault, "status", BULLETED, "--write", stdin=(
+            "**Open threads:**\n- **Hunted** by the Republic.\n"
+            "- the batch-brand is a tell.\n"))
+        self.assertEqual(code, 0, out)
+        self.assertIn("drops 'Session 5' from Six's Open threads",
+                      out)
+        self.assertEqual(out.count("WARNING\t"), 1)
+
     def test_vitals_and_subsections_are_left_alone(self):
         vault = self.vault()
         run(vault, "status", BULLETED, "--write",

@@ -282,6 +282,75 @@ class ThreadsTests(unittest.TestCase):
         "HTML comment": ("<!--", "-->"),
     }
 
+    def test_bulleted_open_threads_label(self):
+        # `- **Open threads:**` with its threads nested under it, as a
+        # bulleted Current Status writes it; the next bulleted field ends it.
+        pc = ("## Current Status\n\n- **Location:** the dock\n"
+              "- **Open threads:**\n    - the ledger;\n    - the bell\n"
+              "      rings at noon\n* **Knows:** x\n    - not a thread\n")
+        got = threads.pc_thread_items(pc)
+        self.assertEqual([t.text for t in got],
+                         ["the ledger;", "the bell rings at noon"])
+        out = threads.remove_pc_thread(pc, got[1])
+        self.assertIn("- **Open threads:**\n    - the ledger;\n* **Knows:**",
+                      out)
+        # A wrapped line that starts in bold is not the next field.
+        pc3 = ("## Current Status\n\n- **Open threads:**\n    - **S7:** the\n"
+               "      **unrecorded** XP\n    - b\n- **Knows:** x\n")
+        self.assertEqual([t.text for t in threads.pc_thread_items(pc3)],
+                         ["**S7:** the **unrecorded** XP", "b"])
+        # An unbulleted label after it ends it too.
+        pc2 = ("## Current Status\n\n- **Open threads:**\n    - a\n"
+               "**Knows:** x\n- b\n")
+        self.assertEqual([t.text for t in threads.pc_thread_items(pc2)],
+                         ["a"])
+
+    def test_inline_open_threads_is_one_thread(self):
+        # `**Open threads:** text` (bulleted or not) is one thread: the text
+        # and any bullets nested under it.
+        for marker in ("- ", "* ", ""):
+            with self.subTest(marker=marker):
+                pc = (f"## Current Status\n\n{marker}**Open threads:** the "
+                      "ledger; the bell\n    - **Session 5:** fled\n"
+                      f"{marker}**Knows:** x\n")
+                got = threads.pc_thread_items(pc)
+                self.assertEqual([t.text for t in got],
+                                 ["the ledger; the bell; **Session 5:** fled"])
+                self.assertEqual(got[0].lines, (
+                    "the ledger; the bell", "- **Session 5:** fled"))
+                out = threads.remove_pc_thread(pc, got[0])
+                self.assertEqual(out, f"## Current Status\n\n"
+                                      f"{marker}**Open threads:**\n"
+                                      f"{marker}**Knows:** x\n")
+                self.assertEqual(threads.pc_thread_items(out), [])
+        # CRLF: the label line keeps its CR.
+        pc = ("## Current Status\r\n\r\n- **Open threads:** a\r\n"
+              "- **Knows:** x\r\n")
+        got = threads.pc_thread_items(pc)
+        self.assertEqual([t.text for t in got], ["a"])
+        self.assertEqual(threads.remove_pc_thread(pc, got[0]),
+                         "## Current Status\r\n\r\n- **Open threads:**\r\n"
+                         "- **Knows:** x\r\n")
+        # Unbulleted, with bullets under it: the text, then each bullet.
+        pc = ("## Current Status\n\n**Open threads:** first\n- second\n"
+              "- third\n")
+        self.assertEqual([t.text for t in threads.pc_thread_items(pc)],
+                         ["first", "second", "third"])
+
+    def test_open_threads_stop_at_a_subsection(self):
+        # The last field before a subsection: its bullets are not threads.
+        for head in ("### Journal", "#### Notes", "## Next"):
+            with self.subTest(head=head):
+                pc = ("## Current Status\n\n**Open threads:**\n- a\n\n"
+                      f"{head}\n\n- not a thread\n")
+                self.assertEqual(
+                    [t.text for t in threads.pc_thread_items(pc)], ["a"])
+        # A heading inside a code fence does not stop it.
+        pc = ("## Current Status\n\n**Open threads:**\n- a\n```\n"
+              "### x\n```\n- b\n")
+        self.assertEqual([t.text for t in threads.pc_thread_items(pc)],
+                         ["a", "b"])
+
     def test_hidden_forms_are_hidden(self):
         # Every bullet inside a spoiler fence, a %% comment or an HTML
         # comment is hidden, the middle one (next to no mark) too.
