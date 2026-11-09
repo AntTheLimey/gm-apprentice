@@ -938,10 +938,14 @@ def iter_body_lines(text: str) -> Iterator[tuple[int, str]]:
 
 
 def section(text: str, heading: str) -> str | None:
-    """Extract a `## Heading` block up to the next same-level heading."""
-    m = re.search(rf"^##\s+{re.escape(heading)}\s*$(.*?)(?=^##\s|\Z)",
-                  text, re.MULTILINE | re.DOTALL)
-    return m.group(1).strip() if m else None
+    """The body of the first `## Heading` (any case, outside a code
+    fence), stripped, up to the next heading of level 1 or 2; None when
+    there is none. Found by `find_section`, the one section finder."""
+    found = find_section(text, [heading], level=2, first=True)
+    if not isinstance(found, tuple):
+        return None
+    lines = text.split("\n")
+    return "\n".join(lines[found[0] + 1:found[1]]).strip()
 
 
 LABEL_RE = re.compile(r"^\*\*([^*:]+):\*\*")
@@ -1101,7 +1105,8 @@ def _title_key(title: str) -> str:
     return " ".join(title.split()).casefold()
 
 
-def find_section(text: str, path: list[str]
+def find_section(text: str, path: list[str], *, level: int | None = None,
+                 first: bool = False, trim: bool = True
                  ) -> tuple[int, int] | None | list[str]:
     """Where a note's section is, by heading path: `["GM Notes", "Hooks"]`.
 
@@ -1113,7 +1118,11 @@ def find_section(text: str, path: list[str]
     A section runs to the next heading of the same or a higher level.
     Headings inside a code fence are not headings. Lines are split on
     "\n" only and keep their endings, so the span indexes
-    `text.split("\n")`."""
+    `text.split("\n")`. A closing `##` sequence is not part of a title.
+
+    `level` pins the first title to that heading level; `first` takes the
+    first match instead of listing candidates when several match; `trim`
+    False keeps the blank lines before the next heading in the span."""
     lines = text.split("\n")
     heads = line_headings(lines)
     keys = [_title_key(p) for p in path]
@@ -1131,7 +1140,9 @@ def find_section(text: str, path: list[str]
             chains.append(chain)
             return
         for n in range(lo, hi):
-            if _title_key(heads[n][2]) != keys[depth]:
+            if _title_key(atx_title(heads[n][2])) != keys[depth]:
+                continue
+            if depth == 0 and level is not None and heads[n][1] != level:
                 continue
             if chain and heads[n][1] <= heads[chain[-1]][1]:
                 continue
@@ -1144,7 +1155,7 @@ def find_section(text: str, path: list[str]
     walk([], 0, len(heads))
     if not chains:
         return None
-    if len(chains) > 1:
+    if len(chains) > 1 and not first:
         def full(n: int) -> str:
             titles, level = [heads[n][2]], heads[n][1]
             for m in range(n - 1, -1, -1):
@@ -1155,7 +1166,7 @@ def find_section(text: str, path: list[str]
         return [full(c[-1]) for c in chains]
     last = chains[0][-1]
     start, end = heads[last][0], end_of(last)
-    while end > start + 1 and not lines[end - 1].strip():
+    while trim and end > start + 1 and not lines[end - 1].strip():
         end -= 1
     return start, end
 

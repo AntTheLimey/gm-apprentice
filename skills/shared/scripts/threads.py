@@ -22,8 +22,8 @@ import re
 from dataclasses import dataclass, replace
 
 from vaultlib import (ANY_LABEL_LINE_RE, BULLET_RE, GM_MARKER_RE,
-                      SECTION_HEADING_RE, atx_title, fence_step, marker_re,
-                      scan_body)
+                      SECTION_HEADING_RE, atx_title, fence_step, find_section,
+                      marker_re, scan_body)
 
 SECTION = "Open Threads"
 RESOLVED = "Resolved Threads"
@@ -233,11 +233,9 @@ def _shared_span(lines: list[str]) -> tuple[int, int] | None:
     titled Open Threads in any case, outside a code fence, up to the next
     heading of level 1 or 2. Every reader and writer of the list (and the
     publish tool's `sectionRange`) finds it this way."""
-    heads = _headings(lines)
-    for at, (idx, lvl, title) in enumerate(heads):
-        if lvl == 2 and title.casefold() == SECTION.casefold():
-            return idx, _heading_end(lines, heads, at)
-    return None
+    found = find_section("\n".join(lines), [SECTION], level=2, first=True,
+                         trim=False)
+    return found if isinstance(found, tuple) else None
 
 
 def _shared_bullets(lines: list[str]) -> list[_Block]:
