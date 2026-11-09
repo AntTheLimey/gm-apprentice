@@ -97,7 +97,7 @@ from schema_rules import (SESSION_PLAYED, chapter_key, chapter_of,
                           extract_frontmatter, parse_session_number,
                           wikilink_target)
 from threads import pc_thread_items, shared_threads
-from vaultlib import (GM_MARKER_RE, is_active_pc,  # noqa: F401
+from vaultlib import (GM_MARKER_RE, is_active_pc, marker_re,  # noqa: F401
                       is_out_of_play, out_of_play,
                       report_unreadable_settings, setting_or_builtin,
                       SKIP_DIRS, WRAP_UP_TYPES, body_of, entity_type,
@@ -209,6 +209,8 @@ BRIEF_DROP_H3: tuple[str, ...] = (
 _H2_HEADING_RE = re.compile(r"^## (.+)$")
 _H3_HEADING_RE = re.compile(r"^(#{3,4}) (.+)$")
 _ANY_HEADING_RE = re.compile(r"^(#{1,6})\s")
+# A gm-only or spoiler marker, anywhere on a line.
+_ANY_MARKER_RE = marker_re()
 
 
 def brief_wrapup(body: str) -> str:
@@ -217,7 +219,7 @@ def brief_wrapup(body: str) -> str:
     `(omitted in --brief: N words — read the Wrap-Up file for it)`.
     H3 titles match on prefix (the template's Name Conflicts heading has
     a parenthetical). A block ends at the next heading of the same or
-    higher level, at a `<!-- gm-only -->` or `<!-- /gm-only -->` line, or
+    higher level, at any line holding a gm-only or spoiler marker, or
     EOF — either marker is a terminator, not just the closer, because the
     template opens the fence right after ## Memorable Moments' own
     content and a terminator that only recognised the closer would eat
@@ -275,7 +277,7 @@ def brief_wrapup(body: str) -> str:
             hm = _ANY_HEADING_RE.match(lines[j])
             if hm and len(hm.group(1)) <= level:
                 break
-            if GM_MARKER_RE.fullmatch(lines[j].strip()):
+            if _ANY_MARKER_RE.search(lines[j]):
                 break
             collected.append(lines[j])
             j += 1
@@ -702,13 +704,16 @@ def thread_report(files, current: int, chapter, vault: Path) -> str:
         return (f"first{mark}{first}\tlast{mark}{last}"
                 f"\tage{mark}{age}\t{stale}")
 
-    shared_texts = {" ".join(t.text.split()) for t in shared}
+    # A PC's copy of a visible shared thread prints once, as shared; a
+    # hidden shared one shares nothing with players, so the copy stays.
+    shared_texts = {" ".join(t.text.split()) for t in shared if not t.hidden}
     if shared:
         lines.append("--- Shared (Campaign Overview) ---")
     for t in shared:
         who = ("the party" if t.party else ", ".join(t.involves)
                or "(none named)")
-        lines.append(f"{t.text}\t{tags(t.text)}\tinvolves: {who}")
+        mark = " (hidden)" if t.hidden else ""
+        lines.append(f"{t.text}{mark}\t{tags(t.text)}\tinvolves: {who}")
 
     if not pcs:
         lines.append("(no active PC entities found)")

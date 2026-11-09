@@ -1075,9 +1075,11 @@ def _shared_threads_plan(vault: Path) -> tuple[
                 holders.setdefault(item.lines, []).append((rel, item))
 
     drop: dict[str, list[th.PcThread]] = {}
-    shared = ({" ".join(t.text.split())
-               for t in th.shared_threads(text(overview))}
-              if overview else set())
+    # A hidden shared entry shares nothing with players: a group matching
+    # only one is not shared, and is left with a notice.
+    entries = th.shared_threads(text(overview)) if overview else []
+    shared = {" ".join(t.text.split()) for t in entries if not t.hidden}
+    hidden_shared = {" ".join(t.text.split()) for t in entries if t.hidden}
     # `since` reads the current chapter's Wrap-Ups, as `--threads` does;
     # with no current chapter there is no since.
     current, _notes = sc.select_session(files, None)
@@ -1094,8 +1096,13 @@ def _shared_threads_plan(vault: Path) -> tuple[
         name = th.lead(thread)
         # A copy of a thread already shared word for word is a duplicate:
         # it goes, one copy or several.
-        already = " ".join(thread.split()) in shared
+        flat = " ".join(thread.split())
+        already = flat in shared
         if len(rels) < 2 and not already:
+            continue
+        if not already and flat in hidden_shared:
+            left.append(f"{name}\tleft on {stems_of(rels)}: a hidden copy "
+                        f"is in the Overview's Open Threads")
             continue
         if any(item.hidden for _r, item in where):
             for rel, item in where:
@@ -1109,7 +1116,10 @@ def _shared_threads_plan(vault: Path) -> tuple[
                     f"on {stems_of(hidden)} is in or next to hidden text, "
                     f"so none moved")
             continue
-        if already:
+        if already and overview is not None:
+            # The entry comes to involve every holder (a party one stays).
+            texts[overview] = th.widen_shared(
+                text(overview), thread, [Path(rel).stem for rel in rels])
             for rel, item in where:
                 drop.setdefault(rel, []).append(item)
             lines.append(("move", f'"{name}" from {stems_of(rels)}: already '

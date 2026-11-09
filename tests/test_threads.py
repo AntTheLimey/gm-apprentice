@@ -381,6 +381,39 @@ class ThreadsTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             threads.insert_shared(text, "- b — involves the party")
 
+    def test_hidden_shared_entries_are_marked(self):
+        text = ("## Open Threads\n\n- open — involves [[A]]\n"
+                "<!-- gm-only -->\n- secret — involves [[A]]\n"
+                "<!-- /gm-only -->\n- %%aside%% note — involves [[A]]\n")
+        got = threads.shared_threads(text)
+        self.assertEqual([(t.text, t.hidden) for t in got],
+                         [("open", False), ("secret", True),
+                          ("%%aside%% note", True)])
+
+    def test_widen_shared_adds_missing_names_only(self):
+        text = ("# T\r\n\r\n## Open Threads\r\n\r\n"
+                "- **Bell** — owed — since Session 2; involves [[Ada|A]], "
+                "[[Bram]]\r\n- Party one — involves the party\r\n"
+                "- Bare one\r\n\r\n## Key\r\n")
+        out = threads.widen_shared(text, "**Bell** — owed",
+                                   ["Cole", "bram", "Ada"])
+        self.assertIn("- **Bell** — owed — since Session 2; involves "
+                      "[[Ada|A]], [[Bram]], [[Cole]]\r\n", out)
+        self.assertEqual(out.count("\n"), out.count("\r\n"))
+        self.assertEqual(threads.widen_shared(out, "**Bell** — owed",
+                                              ["Cole"]), out)
+        self.assertEqual(threads.widen_shared(text, "Party one", ["Cole"]),
+                         text)
+        bare = threads.widen_shared(text, "Bare one", ["Cole", "Ada"])
+        self.assertIn("- Bare one — involves [[Cole]], [[Ada]]\r\n", bare)
+        with self.assertRaises(KeyError):
+            threads.widen_shared(text, "Nothing", ["Cole"])
+        # A hidden entry is never the one widened.
+        fenced = ("## Open Threads\n\n<!-- gm-only -->\n- Bell — involves "
+                  "[[Ada]]\n<!-- /gm-only -->\n")
+        with self.assertRaises(KeyError):
+            threads.widen_shared(fenced, "Bell", ["Cole"])
+
     def test_party_is_any_case(self):
         got = threads.parse_shared("- X — involves The Party")
         self.assertTrue(got.party)

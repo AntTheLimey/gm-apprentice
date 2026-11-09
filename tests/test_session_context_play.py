@@ -676,6 +676,14 @@ class ThreadReportTests(unittest.TestCase):
         self.assertNotIn("The ledger is still missing", orphans)
         self.assertEqual(orphans.strip(), "(none)")
 
+    def test_a_hidden_shared_thread_is_marked(self):
+        tmp = self.shared_copy("<!-- gm-only -->\n- Repay Bram — involves "
+                               "[[Hero]]\n<!-- /gm-only -->")
+        report = self.report(tmp)
+        self.assertIn("\nRepay Bram (hidden)\tfirst=", report)
+        # It shares nothing with players: the PC's own copy still prints.
+        self.assertIn("\nRepay Bram\tfirst=", report.split("--- Hero ---")[1])
+
     def test_shared_bullet_with_no_tail_names_nobody(self):
         tmp = self.shared_copy("- A loose end with no tail")
         self.assertIn("A loose end with no tail\tfirst=?\tlast=?\tage=?\t"

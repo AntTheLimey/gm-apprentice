@@ -19,7 +19,7 @@ caller's job (open with newline="" so the endings survive).
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from vaultlib import (ANY_LABEL_LINE_RE, BULLET_RE, GM_MARKER_RE, LABEL_RE,
                       SECTION_HEADING_RE, atx_title, fence_step, marker_re,
@@ -54,6 +54,10 @@ class SharedThread:
     since: str | None
     involves: list[str]
     party: bool
+    # In or holding hidden text (a gm-only or spoiler fence, an HTML or
+    # `%%` comment), read as `pc_thread_items` reads a PC's: players never
+    # see it, so it shares nothing with them.
+    hidden: bool = False
 
 
 def format_shared(text: str, since: str | None,
@@ -95,9 +99,47 @@ def shared_threads(overview_text: str) -> list[SharedThread]:
     """The threads under the Overview's `## Open Threads` section (see
     `_shared_span`), one per bullet line outside a code fence."""
     lines = _lines(overview_text)
-    found = (parse_shared(lines[i].rstrip("\r"))
-             for i in _shared_bullets(lines))
-    return [t for t in found if t is not None]
+    hidden = _hidden_lines(lines)
+    out = []
+    for i in _shared_bullets(lines):
+        t = parse_shared(lines[i].rstrip("\r"))
+        if t is not None:
+            out.append(replace(t, hidden=hidden[i] or any(
+                h in lines[i] for h in _HIDING)))
+    return out
+
+
+def widen_shared(overview_text: str, text: str, names: list[str]) -> str:
+    """`overview_text` with each of `names` (PC note names) the visible
+    shared entry whose text is `text` does not yet involve added to its
+    `involves`, the rest of the line kept as written (its `since`, alias
+    labels, line ending). A party entry is left alone; one with no tail
+    gets `— involves …`. KeyError when no visible entry has that text."""
+    lines = _lines(overview_text)
+    hidden = _hidden_lines(lines)
+    want = " ".join(text.split())
+    for i in _shared_bullets(lines):
+        line = lines[i]
+        t = parse_shared(line.rstrip("\r"))
+        if (t is None or hidden[i] or any(h in line for h in _HIDING)
+                or " ".join(t.text.split()) != want):
+            continue
+        if t.party:
+            return overview_text
+        have = {n.casefold() for n in t.involves}
+        new = []
+        for name in names:
+            if name.casefold() not in have:
+                have.add(name.casefold())
+                new.append(f"[[{name}]]")
+        if not new:
+            return overview_text
+        cr = "\r" if line.endswith("\r") else ""
+        body = line.rstrip("\r").rstrip()
+        joint = ", " if t.involves else " \u2014 involves "
+        lines[i] = body + joint + ", ".join(new) + cr
+        return "\n".join(lines)
+    raise KeyError(text)
 
 
 def lead(text: str) -> str:

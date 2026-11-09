@@ -1945,20 +1945,33 @@ def threads_row(batch: Batch, cols: list[str], wrapup: list[str]) -> None:
                              for r, t in zip(pcs, texts))
                 + " \u2014 make them match, or add the shared thread and "
                   "close each PC's own")
-        shared = th.shared_threads(batch.read(overview))
+        note = batch.read(overview)
+        shared = [t for t in th.shared_threads(note) if not t.hidden]
         hits = th.find_thread([t.text for t in shared], lead_key)
         if len(hits) > 1:
             raise WriteError(f"{overview}: {len(hits)} threads match "
                              f"'{lead_key}'; use more of its text")
+        if not hits and th.find_thread(
+                [t.text for t in th.shared_threads(note) if t.hidden],
+                lead_key):
+            raise WriteError(f"'{lead_key}': a hidden copy is in the "
+                             f"Overview's Open Threads; edit it by hand")
         if hits:
-            # Already shared: the PCs' copies go, the entry stays as it is.
-            if " ".join(shared[hits[0]].text.split()) != " ".join(
-                    texts[0].split()):
+            # Already shared: the PCs' copies go, and the entry comes to
+            # involve every holder and every PC named (a party one stays).
+            entry = shared[hits[0]]
+            if " ".join(entry.text.split()) != " ".join(texts[0].split()):
                 raise WriteError(
                     f"'{lead_key}' is already a shared thread, worded "
-                    f"differently: shared: {shared[hits[0]].text} | "
+                    f"differently: shared: {entry.text} | "
                     f"{Path(pcs[0]).stem}: {texts[0]} \u2014 make them "
                     f"match, or close the PCs' copies")
+            wider = th.widen_shared(
+                note, entry.text, [Path(r).stem for r in pcs] + (names or []))
+            if wider != note:
+                batch.put(overview, wider)
+                batch.row("WOULD-MOVE", overview, "\u00a7Open Threads",
+                          lead_key)
             return
         threads_insert(batch, overview, texts[0], since, names, "WOULD-MOVE")
     elif verb == "close":

@@ -336,6 +336,57 @@ class ThreadsTests(unittest.TestCase):
         self.assertIn("Find out who lit", read(vault, INES))
         self.assertEqual(read(vault, OVERVIEW), overview)
 
+    def test_move_of_an_already_shared_thread_widens_its_involves(self):
+        # The entry names Corwin; Ines holds a copy and WHO names both.
+        vault = self.vault()
+        debt = ("**Corwin's debt to the ferrywoman** — owed for the night "
+                "crossing")
+        ines = read(vault, INES).replace(
+            "- Find out who lit", f"- {debt}\n- Find out who lit")
+        (vault / INES).write_bytes(ines.encode("utf-8"))
+        over = read(vault, OVERVIEW).replace(
+            "involves [[Ines_Marlowe]], [[Corwin_Hale|Corwin]]",
+            "involves [[Corwin_Hale|Corwin]]")
+        (vault / OVERVIEW).write_bytes(over.encode("utf-8"))
+        code, out = run(vault, "threads", "--write", stdin=rows(
+            ("move", "Corwin's debt to the ferrywoman", "-",
+             "Ines_Marlowe, Corwin_Hale")))
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("ferrywoman", read(vault, INES))
+        self.assertIn(f"- {debt} — since Session 3; involves "
+                      "[[Corwin_Hale|Corwin]], [[Ines_Marlowe]]\n",
+                      read(vault, OVERVIEW))
+        # Named in WHO but not holding it: still added.
+        over = read(vault, OVERVIEW)
+        ines = read(vault, INES).replace(
+            "- Find out who lit",
+            "- **The missing ledger** — Harrow Ford's toll keeper wants it "
+            "back\n- Find out who lit")
+        (vault / INES).write_bytes(ines.encode("utf-8"))
+        code, out = run(vault, "threads", "--write", stdin=rows(
+            ("move", "The missing ledger", "-", "Ines_Marlowe, Corwin_Hale")))
+        self.assertEqual(code, 0, out)
+        self.assertEqual(read(vault, OVERVIEW), over, "a party entry stays")
+
+    def test_move_against_a_hidden_shared_copy_refused(self):
+        vault = self.vault()
+        over = read(vault, OVERVIEW).replace(
+            "## Key Factions",
+            "<!-- gm-only -->\n- **The bell debt** — owed to the sexton — "
+            "involves [[Corwin_Hale]]\n<!-- /gm-only -->\n\n## Key Factions")
+        (vault / OVERVIEW).write_bytes(over.encode("utf-8"))
+        for rel in (INES, CORWIN):
+            text = read(vault, rel).replace(
+                "**Open threads:**\n",
+                "**Open threads:**\n- **The bell debt** — owed to the sexton\n")
+            (vault / rel).write_bytes(text.encode("utf-8"))
+        before = self.snapshot(vault)
+        code, out = run(vault, "threads", "--write", stdin=rows(
+            ("move", "The bell debt", "-", "Ines_Marlowe, Corwin_Hale")))
+        self.assertEqual(code, 1)
+        self.assertIn("a hidden copy is in the Overview's Open Threads", out)
+        self.assertEqual(self.snapshot(vault), before)
+
     def test_close_with_an_empty_list_refused(self):
         vault = self.vault()
         code, out = run(vault, "threads", "--wrapup", WRAPUP, stdin=rows(

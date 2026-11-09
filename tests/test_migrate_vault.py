@@ -1380,6 +1380,42 @@ class SharedThreadsTests(unittest.TestCase):
             "The missing ledger\tleft on B and C as well: the copy on A is "
             "in or next to hidden text, so none moved"])
 
+    def test_copies_of_a_shared_thread_widen_its_involves(self):
+        # The entry names A and B; C holds a copy too (and A does).
+        overview = ST_OVERVIEW.replace(
+            "## GM Notes", f"## Open Threads\n\n- {LEDGER} — since Session "
+            "2; involves [[A]], [[B]]\n\n## GM Notes")
+        v = self.vault({
+            "Campaign Overview.md": overview,
+            "PCs/A.md": st_pc(LEDGER),
+            "PCs/C.md": st_pc("C's own", LEDGER),
+        })
+        (item,) = mv.find_shared_threads(v)
+        item.apply(None)
+        self.assertIn(f"- {LEDGER} — since Session 2; involves [[A]], [[B]], "
+                      "[[C]]\n", self.raw(v, "Campaign Overview.md"))
+        for rel in ("PCs/A.md", "PCs/C.md"):
+            self.assertNotIn("missing ledger", self.raw(v, rel))
+
+    def test_a_hidden_shared_copy_is_not_shared(self):
+        overview = ST_OVERVIEW.replace(
+            "## GM Notes", f"## Open Threads\n\n<!-- gm-only -->\n- {LEDGER} "
+            "— involves [[A]], [[B]]\n<!-- /gm-only -->\n\n## GM Notes")
+        notes = {
+            "Campaign Overview.md": overview,
+            "PCs/A.md": st_pc(LEDGER),
+            "PCs/B.md": st_pc(LEDGER),
+            "PCs/C.md": st_pc(LEDGER),
+        }
+        v = self.vault(notes)
+        (item,) = mv.find_shared_threads(v)
+        self.assertEqual(item.group, PERSON)
+        self.assertEqual(item.lines, [
+            "The missing ledger\tleft on A, B and C: a hidden copy is in the "
+            "Overview's Open Threads"])
+        for rel, text in notes.items():
+            self.assertEqual(self.raw(v, rel), text)
+
     def test_copies_of_an_already_shared_thread_go(self):
         # Any case of the heading; one copy or several.
         for heading in ("## Open Threads", "## Open threads"):
