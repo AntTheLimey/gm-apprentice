@@ -2321,6 +2321,10 @@ class LineState:
     excluded_by: str | None
     heading: tuple[int, str] | None
     marker: str | None
+    # The line opens, closes or sits inside a multi-line HTML comment
+    # (`strip_comment_spans`, outside code). `published` does not read it:
+    # the publish tool's own answers (`build_lines`) are the leak checks'.
+    comment: bool = False
 
     @property
     def published(self) -> bool:
@@ -2507,6 +2511,10 @@ def scan_body(text: str,
     * Lines are split by `str.splitlines`, at a form feed, `\\x85` and a
       lone `\\r` too; the build splits at `\\n` alone.
 
+    Each state's `comment` says the line opens, closes or sits inside a
+    multi-line HTML comment (`strip_comment_spans`); `%%` comments are not
+    modelled.
+
     Returns (states, problems); problems are authoring defects — orphan
     closers and blocks left open at EOF.
     """
@@ -2521,6 +2529,7 @@ def scan_body(text: str,
     problems: list[str] = []
     shadow: list[str] = []      # the note as `filterSections` is handed it
     fence_delim: str | None = None
+    in_comment = False
 
     for lineno, line in iter_body_lines(text):
         # up to 3 leading spaces; 4+ would be an indented code block
@@ -2542,6 +2551,10 @@ def scan_body(text: str,
         in_code = fence_delim is not None or is_fence_line
         marker: str | None = None
         heading: tuple[int, str] | None = None
+        comment = in_comment
+        if not in_code:
+            _kept, in_comment = strip_comment_spans(line, in_comment)
+            comment = comment or in_comment
 
         if not in_code:
             # Markers count wherever they sit on the line (inline, inside an
@@ -2593,6 +2606,7 @@ def scan_body(text: str,
             excluded_by=None,
             heading=heading,
             marker=marker,
+            comment=comment,
         ))
 
     if excludes:

@@ -339,7 +339,9 @@ class ThreadsTests(unittest.TestCase):
             code, out = run(vault, "threads", "--wrapup", WRAPUP, "--write",
                             stdin=rows(row))
             self.assertEqual(code, 1, row)
-            self.assertIn("is GM-only on Ines_Marlowe; edit it by hand", out)
+            self.assertIn("'Find out who lit the lamp on the north bank' on "
+                          "Ines_Marlowe is next to hidden text; edit it by "
+                          "hand", out)
         self.assertEqual(self.snapshot(vault), before)
 
     def test_close_records_continuation(self):
@@ -430,6 +432,55 @@ class ThreadsTests(unittest.TestCase):
         self.assertIn("**Knows (exclusive):**", ines)
         self.assertIn("- **Lamp** — who lit it on the north bank — closed: "
                       "lit (Ines_Marlowe)", read(vault, WRAPUP))
+
+    HIDING_FORMS = {
+        "spoiler fence": ("<!-- spoiler -->", "<!-- /spoiler -->"),
+        "%% comment": ("%%", "%%"),
+        "HTML comment": ("<!--", "-->"),
+    }
+
+    def test_hidden_thread_refused(self):
+        # Inside a spoiler fence, a %% comment or an HTML comment, or next
+        # to a comment: refused, nothing written, no opener left alone.
+        lamp = "- Find out who lit the lamp on the north bank"
+        for form, (opener, closer) in self.HIDING_FORMS.items():
+            shapes = {"inside": f"{opener}\n{lamp}\n{closer}"}
+            if form != "spoiler fence":
+                shapes["next to"] = f"{lamp}\n{opener}\naside\n{closer}"
+            for where, new in shapes.items():
+                with self.subTest(form=form, where=where):
+                    vault = self.vault()
+                    self.edit(vault, INES, lamp, new)
+                    before = self.snapshot(vault)
+                    key = lamp[2:]
+                    for row in (("move", key, "-", "Ines_Marlowe"),
+                                ("close", "Ines_Marlowe", key, "lit")):
+                        code, out = run(vault, "threads", "--wrapup", WRAPUP,
+                                        "--write", stdin=rows(row))
+                        self.assertEqual(code, 1, row)
+                        self.assertIn("on Ines_Marlowe is next to hidden "
+                                      "text; edit it by hand", out)
+                    self.assertEqual(self.snapshot(vault), before)
+
+    def test_close_leaves_a_lazy_spoiler_or_callout_whole(self):
+        lamp = "- **Lamp** — who lit it"
+        for under in ("<!-- spoiler -->\n- Reveal\n<!-- /spoiler -->",
+                      "> [!note] see story"):
+            with self.subTest(under):
+                vault = self.vault()
+                self.edit(vault, INES,
+                          "- Find out who lit the lamp on the north bank",
+                          f"{lamp}\n{under}")
+                code, out = run(vault, "threads", "--wrapup", WRAPUP,
+                                "--write", stdin=rows(
+                                    ("close", "Ines_Marlowe", "Lamp", "lit")))
+                self.assertEqual(code, 0, out)
+                ines = read(vault, INES)
+                self.assertNotIn("who lit it", ines)
+                self.assertIn(f"\n{under}\n", ines)
+                self.assertIn("- **Lamp** — who lit it — closed: lit "
+                              "(Ines_Marlowe)\n", read(vault, WRAPUP))
+
 
 if __name__ == "__main__":
     unittest.main()

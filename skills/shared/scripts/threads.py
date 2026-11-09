@@ -22,7 +22,7 @@ import re
 from dataclasses import dataclass
 
 from vaultlib import (ANY_LABEL_LINE_RE, BULLET_RE, GM_MARKER_RE, LABEL_RE, atx_title, bullets,
-                      fence_step, section)
+                      fence_step, marker_re, scan_body, section)
 
 SECTION = "Open Threads"
 RESOLVED = "Resolved Threads"
@@ -37,6 +37,14 @@ _LINK_RE = re.compile(r"\[\[([^\]|#]+?)(?:[|#][^\]]*)?\]\]")
 _LEAD_RE = re.compile(r"^\*\*(.+?)\*\*")
 _PLACEHOLDER_RE = re.compile(r"^\{.*\}$")
 _HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
+# A thread holding any of these, or next to a line with one, is next to
+# hidden text (see `pc_thread_items`). A gm-only or spoiler marker on a line
+# next to it does not count: `scan_body` reads those fences exactly.
+_HIDING = ("<!--", "-->", "%%")
+_FENCE_MARKER_RE = marker_re()
+# Characters `str.splitlines` breaks at besides "\n": blanked before
+# `scan_body` reads the lines, so its line numbers stay ours.
+_SPLITS_RE = re.compile("[\r\v\f\x1c\x1d\x1e\x85\u2028\u2029]")
 
 
 @dataclass(frozen=True)
@@ -317,13 +325,42 @@ class PcThread:
     after a space and a nested bullet's text (marker dropped) after "; ".
     `lines` is the bullet's non-blank lines stripped but not joined: two
     threads are the same only when these match. `start`/`end` is the bullet's span of note lines (as
-    `text.split("\\n")` numbers them). `gm_only` is True when any of it is
-    inside, or marks, a gm-only fence."""
+    `text.split("\\n")` numbers them). `hidden` is True when any of it is
+    hidden text, holds `<!--`, `-->` or `%%`, or sits next to a line with
+    one (other than a gm-only or spoiler marker): nothing may move or close
+    it. `fenced` is True when every line
+    of it is hidden (inside a gm-only or spoiler fence, an HTML comment or
+    a `%%` comment): the GM's own secret, not a near miss."""
     text: str
     lines: tuple[str, ...]
     start: int
     end: int
-    gm_only: bool
+    hidden: bool
+    fenced: bool
+
+
+def _hidden_lines(lines: list[str]) -> list[bool]:
+    """For each line, whether the site would hide any of it: a gm-only or
+    spoiler fence or marker, or an HTML comment (`scan_body`), or a `%%`
+    comment, read as `%%` marks toggling it on and off outside code (a line
+    with a mark counts as hidden). Errs toward hidden."""
+    flat = "\n".join(_SPLITS_RE.sub(" ", line) for line in lines)
+    out = [False] * len(lines)
+    states, _problems = scan_body(flat)
+    for st in states:
+        out[st.lineno - 1] = not st.published or st.comment
+    odd = False
+    delim: str | None = None
+    for i, raw in enumerate(lines):
+        line = raw.rstrip("\r")
+        delim, is_fence = fence_step(line, delim)
+        if is_fence or delim is not None:
+            continue
+        marks = line.count("%%")
+        if odd or marks:
+            out[i] = True
+        odd ^= marks % 2 == 1
+    return out
 
 
 def pc_thread_items(pc_text: str) -> list[PcThread]:
@@ -335,15 +372,18 @@ def pc_thread_items(pc_text: str) -> list[PcThread]:
     list item, as Markdown reads it); a blank line followed by anything
     else ends the bullet. A plain line straight under the bullet's text,
     indented or not, carries it on (a lazy line; see `_lazy`). A template placeholder (`{…}`) is not a
-    thread. Bullets inside a code fence are skipped. A thread in a gm-only
-    fence is returned with `gm_only` set: nothing may move it to a page
-    players read."""
+    thread. Bullets inside a code fence are skipped. A thread in or next
+    to hidden text is returned with `hidden` set (see `PcThread`): nothing
+    may move it to a page players read, and removing it could split a
+    hidden block."""
     lines = _lines(pc_text)
     try:
         start, end = _path_span(lines, PC_PATH)
     except KeyError:
         return []
-    states = _states(lines)
+    hidden = _hidden_lines(lines)
+    near = [any(h in _FENCE_MARKER_RE.sub("", line) for h in _HIDING)
+            for line in lines]
     out: list[PcThread] = []
     base: int | None = None
     delim: str | None = None
@@ -379,10 +419,13 @@ def pc_thread_items(pc_text: str) -> list[PcThread]:
             sub = BULLET_RE.match(part)
             text += f"; {sub.group(1).strip()}" if sub else f" {part}"
         if not _PLACEHOLDER_RE.match(text):
-            gm = (any(states[j] for j in range(i, stop))
-                  or any(GM_MARKER_RE.search(lines[j])
-                         for j in range(i, stop)))
-            out.append(PcThread(text, parts, i, stop, gm))
+            span = [k for k in range(i, stop) if lines[k].strip()]
+            touches = (any(hidden[k] or any(h in lines[k] for h in _HIDING)
+                           for k in span)
+                       or (i > 0 and near[i - 1])
+                       or (stop < len(lines) and near[stop]))
+            fenced = all(hidden[k] for k in span)
+            out.append(PcThread(text, parts, i, stop, touches, fenced))
         i = stop
     return out
 
@@ -390,11 +433,12 @@ def pc_thread_items(pc_text: str) -> list[PcThread]:
 def _lazy(line: str) -> bool:
     """Can `line`, unindented and straight under a bullet, carry on its
     text (Markdown's lazy continuation)? Not a bullet, a bold label line,
-    a heading, a code fence or a gm-only marker."""
+    a heading, a code fence, a gm-only marker, a comment mark (`<!--`,
+    `-->`, `%%`) or a blockquote or callout (`>`)."""
     bare = line.strip()
     return not (BULLET_RE.match(line) or ANY_LABEL_LINE_RE.match(bare)
                 or _HEADING_RE.match(bare) or GM_MARKER_RE.search(line)
-                or bare.startswith(("```", "~~~")))
+                or bare.startswith(("```", "~~~", *_HIDING, ">")))
 
 
 def remove_pc_thread(pc_text: str, thread: PcThread) -> str:

@@ -268,13 +268,62 @@ class ThreadsTests(unittest.TestCase):
             "Fourth"])
         self.assertEqual(got[0].lines,
                          ("**Ledger** — the keeper", "wants it back"))
-        self.assertEqual([t.gm_only for t in got], [False, False, True, False])
+        self.assertEqual([t.hidden for t in got], [False, False, True, False])
         out = threads.remove_pc_thread(pc, got[0])
         self.assertNotIn("wants it back", out)
         self.assertIn("**Open threads:**\n- Second\n", out)
         heading = "## Current Status\n\n**Open threads:**\n- A\n## Notes\n"
         self.assertEqual(
             [t.text for t in threads.pc_thread_items(heading)], ["A"])
+
+    HIDING_FORMS = {
+        "spoiler fence": ("<!-- spoiler -->", "<!-- /spoiler -->"),
+        "%% comment": ("%%", "%%"),
+        "HTML comment": ("<!--", "-->"),
+    }
+
+    def test_hidden_forms_are_hidden(self):
+        # Every bullet inside a spoiler fence, a %% comment or an HTML
+        # comment is hidden, the middle one (next to no mark) too.
+        for form, (opener, closer) in self.HIDING_FORMS.items():
+            with self.subTest(form):
+                pc = ("## Current Status\n\n**Open threads:**\n- Own\n\n"
+                      f"{opener}\n- Secret one\n- Secret two\n"
+                      f"- Secret three\n{closer}\n\n- After\n"
+                      "**Knows:** x\n")
+                got = threads.pc_thread_items(pc)
+                self.assertEqual([t.text for t in got], [
+                    "Own", "Secret one", "Secret two", "Secret three",
+                    "After"])
+                self.assertEqual([t.hidden for t in got],
+                                 [False, True, True, True, False])
+                self.assertEqual([t.fenced for t in got],
+                                 [False, True, True, True, False])
+
+    def test_inline_and_adjacent_comments_are_hidden(self):
+        pc = ("## Current Status\n\n**Open threads:**\n"
+              "- Aside <!-- the abbot lies --> here\n"
+              "- Next to a comment\n<!-- an aside -->\n\n"
+              "- Under a closer\n\n%%x%%\n- Under a mark\n\n- Clear\n"
+              "**Knows:** x\n")
+        got = threads.pc_thread_items(pc)
+        self.assertEqual([(t.text, t.hidden) for t in got], [
+            ("Aside <!-- the abbot lies --> here", True),
+            ("Next to a comment", True), ("Under a closer", False),
+            ("Under a mark", True), ("Clear", False)])
+        self.assertFalse(any(t.fenced for t in got))
+
+    def test_lazy_line_never_joins_a_comment_or_callout(self):
+        for line in ("<!-- spoiler -->", "<!--", "-->", "%%",
+                     "> [!note] see story", "> quoted"):
+            with self.subTest(line):
+                pc = ("## Current Status\n\n**Open threads:**\n"
+                      f"- **Ledger** — keeper\n{line}\n**Knows:** x\n")
+                (got,) = threads.pc_thread_items(pc)
+                self.assertEqual(got.text, "**Ledger** — keeper")
+                self.assertEqual(got.lines, ("**Ledger** — keeper",))
+                self.assertIn(f"\n{line}\n",
+                              threads.remove_pc_thread(pc, got))
 
     def test_remove_bullet(self):
         text = read(INES)

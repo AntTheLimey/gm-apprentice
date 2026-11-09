@@ -1047,22 +1047,33 @@ def _shared_threads_plan(vault: Path) -> tuple[
         return texts[rel]
 
     # A thread is its whole bullet, wrapped lines and nested bullets
-    # included; one in a gm-only fence or a template placeholder is never
-    # touched (see th.pc_thread_items).
+    # included; a template placeholder is none (see th.pc_thread_items).
+    # One in or next to hidden text is never touched: one wholly hidden
+    # is the GM's secret and is passed over; one that would otherwise
+    # move or close is left with a notice. A group with any hidden copy
+    # stays whole: moving the others would show its words to players.
     holders: dict[tuple[str, ...], list[tuple[str, th.PcThread]]] = {}
     struck: list[tuple[str, th.PcThread, str]] = []
+    lines: list[tuple[str, str]] = []
+    left: list[str] = []
+
+    def near_hidden(rel: str, item: th.PcThread) -> None:
+        if not item.fenced:
+            left.append(f'{rel}\t"{th.lead(item.text)}" on '
+                        f"{Path(rel).stem} left on the sheet: it sits "
+                        f"next to hidden text")
+
     for rel in pcs:
         for item in th.pc_thread_items(text(rel)):
-            if item.gm_only:
-                continue
             inner = _struck(item.text)
             if inner is not None:
-                struck.append((rel, item, inner))
+                if item.hidden:
+                    near_hidden(rel, item)
+                else:
+                    struck.append((rel, item, inner))
             else:
                 holders.setdefault(item.lines, []).append((rel, item))
 
-    lines: list[tuple[str, str]] = []
-    left: list[str] = []
     drop: dict[str, list[th.PcThread]] = {}
     shared = ({" ".join(t.text.split())
                for t in th.shared_threads(text(overview))}
@@ -1075,6 +1086,11 @@ def _shared_threads_plan(vault: Path) -> tuple[
     for where in holders.values():
         rels = sorted({rel for rel, _t in where})
         if len(rels) < 2:
+            continue
+        if any(item.hidden for _r, item in where):
+            for rel, item in where:
+                if item.hidden:
+                    near_hidden(rel, item)
             continue
         thread = where[0][1].text
         name = th.lead(thread)
@@ -1132,8 +1148,8 @@ def find_shared_threads(vault: Path) -> list[Item]:
     Open threads moves to the Campaign Overview's Open Threads once, with
     those PCs as `involves` and its first-seen session as `since` when a
     Wrap-Up of the current chapter matches it closely. A thread is the
-    whole bullet (see `threads.pc_thread_items`); one in a gm-only fence
-    is never touched. A bullet struck through whole is closed
+    whole bullet (see `threads.pc_thread_items`); one in or next to
+    hidden text is never touched. A bullet struck through whole is closed
     into the latest Wrap-Up's Resolved Threads. One that cannot be moved
     or closed stays where it is, and the GM is told."""
     changed, lines, left = _shared_threads_plan(vault)

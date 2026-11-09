@@ -1873,14 +1873,15 @@ def threads_find(bullets: list[str], lead_key: str, where: str) -> int:
 def threads_take(batch: Batch, rel: str, lead_key: str,
                  verb: str) -> th.PcThread:
     """Take the PC's thread `lead_key` off their Open threads and return
-    it (its text has wrapped lines and nested bullets). A thread in a
-    gm-only fence is refused: it must not reach a player-facing list."""
+    it (its text has wrapped lines and nested bullets). A thread in or
+    next to hidden text is refused: it must not reach a player-facing
+    list, and taking it out could split a hidden block."""
     note = batch.read(rel)
     found = th.pc_thread_items(note)
     thread = found[threads_find([t.text for t in found], lead_key, rel)]
-    if thread.gm_only:
-        raise WriteError(f"'{lead_key}' is GM-only on {Path(rel).stem}; "
-                         f"edit it by hand")
+    if thread.hidden:
+        raise WriteError(f"'{lead_key}' on {Path(rel).stem} is next to "
+                         f"hidden text; edit it by hand")
     batch.put(rel, th.remove_pc_thread(note, thread))
     batch.row(verb, rel, "\u00a7Current Status/Open threads", lead_key)
     return thread

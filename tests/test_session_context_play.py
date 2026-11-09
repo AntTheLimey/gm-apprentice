@@ -609,7 +609,7 @@ class ThreadReportTests(unittest.TestCase):
         report = self.report(tmp)
         whole = "Repay Bram the forty rupees; before the monsoon"
         self.assertIn(f"\n{whole}\tfirst=", report)
-        self.assertIn("\nSecret debt (GM-only)\tfirst=", report)
+        self.assertIn("\nSecret debt (hidden)\tfirst=", report)
         self.assertNotIn("\nbefore the monsoon", report)
         wrap = ("Chapters/Chapter 4 - Calcutta/Sessions/"
                 "Chapter_04_Session_07_Wrap_Up.md")

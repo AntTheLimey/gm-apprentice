@@ -1175,6 +1175,131 @@ class SharedThreadsTests(unittest.TestCase):
         self.assertIn("- First\n- Third\n", pc)
         self.assertNotIn("wants it back", self.raw(v, "PCs/B.md"))
 
+    HIDING_FORMS = {
+        "spoiler fence": ("<!-- spoiler -->", "<!-- /spoiler -->"),
+        "%% comment": ("%%", "%%"),
+        "HTML comment": ("<!--", "-->"),
+    }
+
+    def assert_balanced(self, text):
+        self.assertEqual(text.count("<!--"), text.count("-->"), text)
+        self.assertEqual(text.count("%%") % 2, 0, text)
+        self.assertEqual(text.count("<!-- spoiler -->"),
+                         text.count("<!-- /spoiler -->"), text)
+
+    def test_hidden_bullets_never_move(self):
+        # A bullet in a spoiler fence, a %% comment or an HTML comment is
+        # the GM's own: never moved, nothing said about it.
+        for form, (opener, closer) in self.HIDING_FORMS.items():
+            with self.subTest(form):
+                block = (f"{opener}\n- Reveal: the abbot is the cultist\n"
+                         f"- {LEDGER}\n- The bell\n{closer}\n")
+                v = self.vault({
+                    "Campaign Overview.md": ST_OVERVIEW,
+                    "PCs/A.md": st_raw_pc("- Own\n\n" + block),
+                    "PCs/B.md": st_raw_pc(block),
+                })
+                self.assertEqual(mv.find_shared_threads(v), [])
+
+    def test_a_copy_next_to_hidden_text_holds_the_group(self):
+        # One copy sits next to a comment: no copy moves (the shared line
+        # would show players the hidden one's words) and the GM is told.
+        # A gm-only or spoiler marker line is read exactly, so a bullet
+        # beside one is not held (test_lazy_spoiler_marker_is_not_joined).
+        for form in ("%% comment", "HTML comment"):
+            opener, closer = self.HIDING_FORMS[form]
+            with self.subTest(form):
+                notes = {
+                    "Campaign Overview.md": ST_OVERVIEW,
+                    "PCs/A.md": st_raw_pc(f"- {LEDGER}\n{opener}\nGM aside"
+                                          f"\n{closer}\n"),
+                    "PCs/B.md": st_raw_pc(f"- {LEDGER}\n"),
+                }
+                v = self.vault(notes)
+                (item,) = mv.find_shared_threads(v)
+                self.assertEqual(item.group, PERSON)
+                self.assertTrue(item.notice)
+                self.assertEqual(item.lines, [
+                    'PCs/A.md\t"The missing ledger" on A left on the sheet: '
+                    "it sits next to hidden text"])
+                for rel in ("PCs/A.md", "PCs/B.md", "Campaign Overview.md"):
+                    self.assertEqual(self.raw(v, rel), notes[rel])
+
+    def test_struck_bullet_next_to_hidden_text_stays(self):
+        notes = {
+            "PCs/A.md": st_raw_pc("- ~~Pay the ferrywoman~~\n%%\nshe lied"
+                                  "\n%%\n"),
+            WRAPS + "Chapter_01_Session_03_Wrap_Up.md": st_wrap(3),
+        }
+        v = self.vault(notes)
+        (item,) = mv.find_shared_threads(v)
+        self.assertEqual(item.group, PERSON)
+        self.assertIn("next to hidden text", item.lines[0])
+        self.assertEqual(self.raw(v, "PCs/A.md"), notes["PCs/A.md"])
+
+    def test_lazy_spoiler_marker_is_not_joined(self):
+        # The opener under a bullet is not its lazy line: the bullet moves
+        # alone and the fence stays whole on each sheet.
+        block = (f"- {LEDGER}\n<!-- spoiler -->\n- Reveal\n"
+                 "<!-- /spoiler -->\n")
+        v = self.vault({
+            "Campaign Overview.md": ST_OVERVIEW,
+            "PCs/A.md": st_raw_pc(block),
+            "PCs/B.md": st_raw_pc(block),
+        })
+        (item,) = mv.find_shared_threads(v)
+        item.apply(None)
+        over = self.raw(v, "Campaign Overview.md")
+        self.assertIn(f"- {LEDGER} — involves [[A]], [[B]]\n", over)
+        self.assertNotIn("spoiler", over)
+        for rel in ("PCs/A.md", "PCs/B.md"):
+            pc = self.raw(v, rel)
+            self.assertIn("**Open threads:**\n<!-- spoiler -->\n- Reveal\n"
+                          "<!-- /spoiler -->\n", pc)
+            self.assert_balanced(pc)
+
+    def test_lazy_callout_is_not_joined(self):
+        block = f"- {LEDGER}\n> [!note] see story\n"
+        v = self.vault({
+            "Campaign Overview.md": ST_OVERVIEW,
+            "PCs/A.md": st_raw_pc(block),
+            "PCs/B.md": st_raw_pc(block),
+        })
+        (item,) = mv.find_shared_threads(v)
+        item.apply(None)
+        over = self.raw(v, "Campaign Overview.md")
+        self.assertIn(f"- {LEDGER} — involves [[A]], [[B]]\n", over)
+        self.assertNotIn("see story", over)
+        for rel in ("PCs/A.md", "PCs/B.md"):
+            self.assertIn("**Open threads:**\n> [!note] see story\n",
+                          self.raw(v, rel))
+
+    def test_a_move_never_splits_a_hidden_block(self):
+        # A public duplicate beside a hidden block moves; the block, and
+        # every opener and closer in it, stays on the sheet.
+        for form, (opener, closer) in self.HIDING_FORMS.items():
+            with self.subTest(form):
+                block = (f"- {LEDGER}\n\n{opener}\n- Reveal\n{closer}\n\n"
+                         "- The bell\n")
+                v = self.vault({
+                    "Campaign Overview.md": ST_OVERVIEW,
+                    "PCs/A.md": st_raw_pc(block),
+                    "PCs/B.md": st_raw_pc(block),
+                })
+                for item in mv.find_shared_threads(v):
+                    if item.apply:
+                        item.apply(None)
+                over = self.raw(v, "Campaign Overview.md")
+                self.assertIn(f"- {LEDGER} — involves", over)
+                self.assertIn("- The bell — involves", over)
+                self.assertNotIn("Reveal", over)
+                self.assert_balanced(over)
+                for rel in ("PCs/A.md", "PCs/B.md"):
+                    pc = self.raw(v, rel)
+                    self.assertIn(f"{opener}\n- Reveal\n{closer}\n", pc)
+                    self.assertNotIn(LEDGER, pc)
+                    self.assert_balanced(pc)
+
     def test_template_placeholder_is_not_a_thread(self):
         holder = st_pc("{unresolved, forward-looking item}")
         v = self.vault({

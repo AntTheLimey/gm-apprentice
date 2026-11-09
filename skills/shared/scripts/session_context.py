@@ -696,7 +696,8 @@ def thread_report(files, current: int, chapter, vault: Path) -> str:
     for rel, text in pcs:
         lines.append(f"--- {Path(rel).stem} ---")
         # Each thread whole on one line, as `vw threads` matches it; a
-        # GM-only one is shown but marked, since `vw threads` refuses it.
+        # hidden one (in or next to hidden text) is shown but marked, since
+        # `vw threads` refuses it.
         pc_items = pc_thread_items(text)
         if not pc_items:
             lines.append("(no ## Current Status Open threads)")
@@ -706,7 +707,7 @@ def thread_report(files, current: int, chapter, vault: Path) -> str:
             if " ".join(item.text.split()) in shared_texts:
                 continue  # printed once, as shared
             own += 1
-            mark = " (GM-only)" if item.gm_only else ""
+            mark = " (hidden)" if item.hidden else ""
             lines.append(f"{item.text}{mark}\t{tags(item.text)}")
         if not own:
             lines.append("(only threads held in the shared list, above)")
