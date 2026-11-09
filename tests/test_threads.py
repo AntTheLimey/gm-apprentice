@@ -76,7 +76,7 @@ class ThreadsTests(unittest.TestCase):
         self.assertEqual(threads.shared_threads("# X\n\n## Premise\n\n- a\n"),
                          [])
         self.assertEqual(
-            threads.pc_threads(read(INES)),
+            [t.text for t in threads.pc_thread_items(read(INES))],
             ["**The ledger page in her coat** — torn from the toll book, "
              "not yet shown to anyone",
              "Find out who lit the lamp on the north bank"])
@@ -261,7 +261,7 @@ class ThreadsTests(unittest.TestCase):
         text = read(INES)
         out = threads.remove_bullet(
             text, ("Current Status", "**Open threads**"), 0)
-        self.assertEqual(threads.pc_threads(out),
+        self.assertEqual([t.text for t in threads.pc_thread_items(out)],
                          ["Find out who lit the lamp on the north bank"])
         self.assertIn("## Notes", out)
         out = threads.remove_bullet(read(WRAPUP), (
@@ -289,7 +289,7 @@ class ThreadsTests(unittest.TestCase):
         out = threads.remove_bullet(crlf(read(INES)),
                                     ("Current Status", "**Open threads**"), 0)
         self.assertEqual(out.count("\n"), out.count("\r\n"))
-        self.assertEqual(len(threads.pc_threads(out)), 1)
+        self.assertEqual(len(threads.pc_thread_items(out)), 1)
 
 
 if __name__ == "__main__":

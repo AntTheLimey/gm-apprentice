@@ -96,7 +96,7 @@ import scene_queue
 from schema_rules import (SESSION_PLAYED, chapter_key, chapter_of,
                           extract_frontmatter, parse_session_number,
                           wikilink_target)
-from threads import shared_threads
+from threads import pc_thread_items, shared_threads
 from vaultlib import (GM_MARKER_RE, is_active_pc,  # noqa: F401
                       is_out_of_play, out_of_play,
                       report_unreadable_settings, setting_or_builtin,
@@ -107,7 +107,6 @@ from vaultlib import (GM_MARKER_RE, is_active_pc,  # noqa: F401
 from vaultlib import LABEL_RE as _LABEL_RE
 from vaultlib import bullets as _bullets
 from vaultlib import fence_step, link_name, split_paused
-from vaultlib import labelled_block as _labelled_block
 from vaultlib import vault_files as _vault_files
 
 
@@ -696,18 +695,19 @@ def thread_report(files, current: int, chapter, vault: Path) -> str:
         lines.append("(no active PC entities found)")
     for rel, text in pcs:
         lines.append(f"--- {Path(rel).stem} ---")
-        status_block = section(text, "Current Status") or ""
-        threads_block = _labelled_block(status_block, "Open threads")
-        thread_bullets = _bullets(threads_block) if threads_block else []
-        if not thread_bullets:
+        # Each thread whole on one line, as `vw threads` matches it; a
+        # GM-only one is shown but marked, since `vw threads` refuses it.
+        pc_items = pc_thread_items(text)
+        if not pc_items:
             lines.append("(no ## Current Status Open threads)")
             continue
         own = 0
-        for thread in thread_bullets:
-            if " ".join(thread.split()) in shared_texts:
+        for item in pc_items:
+            if " ".join(item.text.split()) in shared_texts:
                 continue  # printed once, as shared
             own += 1
-            lines.append(f"{thread}\t{tags(thread)}")
+            mark = " (GM-only)" if item.gm_only else ""
+            lines.append(f"{item.text}{mark}\t{tags(item.text)}")
         if not own:
             lines.append("(only threads held in the shared list, above)")
 

@@ -393,10 +393,29 @@ class ThreadsTests(unittest.TestCase):
         self.assertIn("no thread 'ask the ferrywoman'", out)
         code, out = run(vault, "threads", "--wrapup", WRAPUP, "--write",
                         stdin=rows(("close", "Ines_Marlowe",
-                                    "Find out who lit the lamp - ask the "
+                                    "Find out who lit the lamp; ask the "
                                     "ferrywoman", "asked")))
         self.assertEqual(code, 0, out)
         self.assertNotIn("ferrywoman", read(vault, INES))
+
+    def test_blank_line_continuation_is_part_of_the_bullet(self):
+        vault = self.vault()
+        self.edit(vault, INES, "- Find out who lit the lamp on the north bank",
+                  "- **Lamp** — keeper\n\n  Para A about the lamp")
+        self.edit(vault, CORWIN, "- **Ferrywoman's debt**",
+                  "- **Lamp** — keeper\n\n  Para B different\n"
+                  "- **Ferrywoman's debt**")
+        code, out = run(vault, "threads", "--write", stdin=rows(
+            ("move", "Lamp", "-", "Ines_Marlowe, Corwin_Hale")))
+        self.assertEqual(code, 1)
+        self.assertIn("differently", out)
+        code, out = run(vault, "threads", "--wrapup", WRAPUP, "--write",
+                        stdin=rows(("close", "Ines_Marlowe", "Lamp", "lit")))
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("Para A", read(vault, INES))
+        self.assertIn("**Knows (exclusive):**", read(vault, INES))
+        self.assertIn("- **Lamp** — keeper Para A about the lamp — closed: lit",
+                      read(vault, WRAPUP))
 
 if __name__ == "__main__":
     unittest.main()

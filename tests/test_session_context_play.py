@@ -595,6 +595,34 @@ class ThreadReportTests(unittest.TestCase):
             "--- Wrap-up threads not on any PC sheet ---\n"
             "session 5\tThe ledger is still missing"))
 
+    def test_wrapped_thread_prints_whole_and_closes_by_that_text(self):
+        import io
+        from unittest import mock
+        import vault_write as vw
+        tmp = self.shared_copy("")
+        hero = tmp / "Characters" / "PCs" / "Hero.md"
+        hero.write_text(hero.read_text(encoding="utf-8").replace(
+            "- Repay Bram",
+            "- Repay Bram\n  the forty rupees\n  - before the monsoon\n"
+            "<!-- gm-only -->\n- Secret debt\n<!-- /gm-only -->"),
+            encoding="utf-8")
+        report = self.report(tmp)
+        whole = "Repay Bram the forty rupees; before the monsoon"
+        self.assertIn(f"\n{whole}\tfirst=", report)
+        self.assertIn("\nSecret debt (GM-only)\tfirst=", report)
+        self.assertNotIn("\nbefore the monsoon", report)
+        wrap = ("Chapters/Chapter 4 - Calcutta/Sessions/"
+                "Chapter_04_Session_07_Wrap_Up.md")
+        out = io.StringIO()
+        with mock.patch("sys.stdout", out), \
+                mock.patch("sys.stderr", io.StringIO()):
+            code = vw.main([str(tmp), "threads", "--wrapup", wrap, "--write"],
+                           stdin=f"close\tHero\t{whole}\tpaid\n")
+        self.assertEqual(code, 0, out.getvalue())
+        self.assertNotIn("forty rupees", hero.read_text(encoding="utf-8"))
+        self.assertIn(f"- {whole} — closed: paid (Hero)",
+                      (tmp / wrap).read_text(encoding="utf-8"))
+
     def test_shared_list_prints_first_with_involves(self):
         tmp = self.shared_copy(
             "- Find the missing ledger — since Session 5; involves the party\n"

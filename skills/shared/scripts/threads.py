@@ -100,11 +100,6 @@ def lead(text: str) -> str:
     return m.group(1).strip().rstrip(" —–-:.").strip()
 
 
-def pc_threads(pc_text: str) -> list[str]:
-    """The text of each PC thread a player can see (see `pc_thread_items`)."""
-    return [t.text for t in pc_thread_items(pc_text) if not t.gm_only]
-
-
 def find_thread(bullet_list: list[str], key: str) -> list[int]:
     """Indexes of the bullets whose whole text, lead (see `lead`) or lead as
     written between the asterisks (`Bell —`) equals `key`."""
@@ -317,11 +312,11 @@ def _path_span(lines: list[str], path: tuple[str, ...]) -> tuple[int, int]:
 class PcThread:
     """One thread on a PC's `**Open threads:**` list.
 
-    `text` is the whole bullet: its first line, then every indented line
-    under it (wrapped text and nested bullets alike), each stripped and
-    joined with one space, because a shared entry is one line. `lines` is
-    the same lines stripped but not joined: two threads are the same only
-    when these match. `start`/`end` is the bullet's span of note lines (as
+    `text` is the whole bullet on one line, because a shared entry is one
+    line: its first line, then each line under it stripped, a wrapped line
+    after a space and a nested bullet's text (marker dropped) after "; ".
+    `lines` is the bullet's non-blank lines stripped but not joined: two
+    threads are the same only when these match. `start`/`end` is the bullet's span of note lines (as
     `text.split("\\n")` numbers them). `gm_only` is True when any of it is
     inside, or marks, a gm-only fence."""
     text: str
@@ -335,8 +330,10 @@ def pc_thread_items(pc_text: str) -> list[PcThread]:
     """The threads under a PC's `## Current Status` > `**Open threads:**`.
 
     Only top-level bullets are threads (the indent of the block's first
-    bullet); a deeper bullet, or an indented line, belongs to the bullet
-    above it, up to a blank line. A template placeholder (`{…}`) is not a
+    bullet). A line indented deeper than the bullet's marker, nested bullet
+    or not, belongs to the bullet above it, after blank lines too (a loose
+    list item, as Markdown reads it); a blank line followed by anything
+    else ends the bullet. A template placeholder (`{…}`) is not a
     thread. Bullets inside a code fence are skipped. A thread in a gm-only
     fence is returned with `gm_only` set: nothing may move it to a page
     players read."""
@@ -363,17 +360,22 @@ def pc_thread_items(pc_text: str) -> list[PcThread]:
         if indent > base:
             i += 1   # nested under a bullet the walk skipped (a placeholder)
             continue
-        stop = i + 1
-        while stop < end:
-            nxt = lines[stop].rstrip("\r")
-            if not nxt.strip() or nxt[:1] not in " \t":
+        stop = j = i + 1
+        while j < end:
+            nxt = lines[j].rstrip("\r")
+            if not nxt.strip():
+                j += 1     # a blank: the bullet goes on only if a deeper line follows
+                continue
+            if len(nxt) - len(nxt.lstrip()) <= base:
                 break
-            if BULLET_RE.match(nxt) and len(nxt) - len(nxt.lstrip()) <= base:
-                break
-            stop += 1
+            stop = j = j + 1
         parts = tuple([m.group(1).strip()]
-                      + [lines[j].strip() for j in range(i + 1, stop)])
-        text = " ".join(parts)
+                      + [lines[k].strip() for k in range(i + 1, stop)
+                         if lines[k].strip()])
+        text = parts[0]
+        for part in parts[1:]:
+            sub = BULLET_RE.match(part)
+            text += f"; {sub.group(1).strip()}" if sub else f" {part}"
         if not _PLACEHOLDER_RE.match(text):
             gm = (any(states[j] for j in range(i, stop))
                   or any(GM_MARKER_RE.search(lines[j])

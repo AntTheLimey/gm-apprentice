@@ -1127,6 +1127,31 @@ class SharedThreadsTests(unittest.TestCase):
         self.assertNotIn("ferrywoman", pc)
         self.assertIn("- Open\n", pc)
 
+    def test_blank_line_continuation_is_part_of_the_bullet(self):
+        a = st_raw_pc("- First\n- **Ledger** — keeper\n\n"
+                      "  Para A about ledger\n- Third\n")
+        b = st_raw_pc("- **Ledger** — keeper\n\n  Para B different\n")
+        v = self.vault({
+            "Campaign Overview.md": ST_OVERVIEW,
+            "PCs/A.md": a,
+            "PCs/B.md": b,
+        })
+        self.assertEqual(mv.find_shared_threads(v), [])
+        v = self.vault({
+            "Campaign Overview.md": ST_OVERVIEW,
+            "PCs/A.md": a,
+            "PCs/B.md": st_raw_pc("- **Ledger** — keeper\n\n"
+                                  "  Para A about ledger\n"),
+        })
+        (item,) = mv.find_shared_threads(v)
+        item.apply(None)
+        self.assertIn("- **Ledger** — keeper Para A about ledger — involves "
+                      "[[A]], [[B]]", self.raw(v, "Campaign Overview.md"))
+        pc = self.raw(v, "PCs/A.md")
+        self.assertNotIn("Para A", pc)
+        self.assertIn("- First\n- Third\n", pc)
+        self.assertNotIn("Para A", self.raw(v, "PCs/B.md"))
+
     def test_template_placeholder_is_not_a_thread(self):
         holder = st_pc("{unresolved, forward-looking item}")
         v = self.vault({
@@ -1172,7 +1197,7 @@ class SharedThreadsTests(unittest.TestCase):
         })
         (item,) = mv.find_shared_threads(v)
         item.apply(None)
-        self.assertIn("- Find the lamp-lighter - ask the ferrywoman — "
+        self.assertIn("- Find the lamp-lighter; ask the ferrywoman — "
                       "involves [[A]], [[B]]",
                       self.raw(v, "Campaign Overview.md"))
         self.assertNotIn("ferrywoman", self.raw(v, "PCs/A.md"))
