@@ -650,6 +650,18 @@ class ThreadReportTests(unittest.TestCase):
         self.assertIn("Repay Bram\t", shared_part)
         self.assertIn("Find the missing ledger\t", pc_part)
 
+    def test_pc_copy_of_a_shared_thread_naming_others_prints(self):
+        # The shared entry names another PC: the Hero's copy is his own.
+        tmp = self.shared_copy(
+            "- Repay Bram — since Session 3; involves [[Bram]]")
+        pc_part = self.report(tmp).split("--- Hero ---")[1]
+        self.assertIn("\nRepay Bram\tfirst=", pc_part)
+        for who in ("[[Hero]]", "[[hero|H]]", "the party"):
+            with self.subTest(who=who):
+                tmp = self.shared_copy(f"- Repay Bram — involves {who}")
+                pc_part = self.report(tmp).split("--- Hero ---")[1]
+                self.assertNotIn("Repay Bram", pc_part)
+
     def test_orphan_on_shared_list_is_not_an_orphan(self):
         tmp = self.shared_copy(
             "- The ledger is still missing — since Session 5; "
@@ -687,6 +699,21 @@ class ThreadReportTests(unittest.TestCase):
         report = self.report(tmp)
         self.assertIn("\nRepay Bram\tfirst=", report)
         self.assertNotIn("An old thread", report)
+
+    def test_a_closed_thread_claims_only_its_own_bullet(self):
+        # "found" and "still missing" are close enough to match a live
+        # thread, but not the same thread: the bullet stays for the GM.
+        tmp = self.shared_copy("")
+        wrap = (tmp / "Chapters" / "Chapter 4 - Calcutta" / "Sessions"
+                / "Chapter_04_Session_07_Wrap_Up.md")
+        wrap.write_text(
+            wrap.read_text(encoding="utf-8")
+            + "\n#### Resolved Threads\n\n- The ledger is found "
+              "\u2014 closed: in the dredger (shared)\n",
+            encoding="utf-8")
+        orphans = self.report(tmp).split(
+            "--- Wrap-up threads not on any thread list ---", 1)[1]
+        self.assertIn("session 5\tThe ledger is still missing", orphans)
 
     def test_a_hidden_shared_thread_is_marked(self):
         tmp = self.shared_copy("<!-- gm-only -->\n- Repay Bram — involves "

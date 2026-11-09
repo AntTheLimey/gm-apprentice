@@ -715,9 +715,16 @@ def thread_report(files, current: int, chapter, vault: Path) -> str:
         return (f"first{mark}{first}\tlast{mark}{last}"
                 f"\tage{mark}{age}\t{stale}")
 
-    # A PC's copy of a visible shared thread prints once, as shared; a
-    # hidden shared one shares nothing with players, so the copy stays.
-    shared_texts = {" ".join(t.text.split()) for t in shared if not t.hidden}
+    # A PC's copy of a visible shared thread that involves them (or the
+    # party) prints once, as shared; a hidden shared one shares nothing
+    # with players, and one naming only others is not theirs, so the copy
+    # stays. Text -> the involved names, casefolded ("" for the party).
+    shared_texts: dict[str, set[str]] = {}
+    for t in shared:
+        if not t.hidden:
+            shared_texts.setdefault(" ".join(t.text.split()), set()).update(
+                [""] if t.party
+                else [Path(n).name.casefold() for n in t.involves])
     if shared:
         lines.append("--- Shared (Campaign Overview) ---")
     for t in shared:
@@ -738,8 +745,10 @@ def thread_report(files, current: int, chapter, vault: Path) -> str:
             lines.append("(no ## Current Status Open threads)")
             continue
         own = 0
+        stem = Path(rel).stem.casefold()
         for item in pc_items:
-            if " ".join(item.text.split()) in shared_texts:
+            flat = " ".join(item.text.split())
+            if shared_texts.get(flat, set()) & {"", stem}:
                 continue  # printed once, as shared
             own += 1
             mark = " (hidden)" if item.hidden else ""
@@ -750,10 +759,14 @@ def thread_report(files, current: int, chapter, vault: Path) -> str:
     if tentative:
         lines.insert(1, "(~ means a likely match by shared names and words, "
                         "not the same text: check it)")
-    # A thread closed into a Resolved Threads list claims its Unresolved
-    # bullets just as a live one does: it is done, not lost.
-    for closed in wrap_up_resolved(files, chapter):
-        matched.update(_match(closed, wrap_ups)[2])
+    # A thread closed into a Resolved Threads list claims the Unresolved
+    # bullets that are the same thread (the same words, as `_norm_thread`
+    # reads them): it is done, not lost. A merely close bullet ("found"
+    # against "still missing") stays an orphan, for the GM to judge.
+    closed = {_norm_thread(c) for c in wrap_up_resolved(files, chapter)}
+    matched.update((n, bullet) for n, unresolved, _carry in wrap_ups
+                   for bullet in unresolved
+                   if _norm_thread(bullet) in closed)
     lines.append("--- Wrap-up threads not on any thread list ---")
     orphans = [f"session {n}\t{bullet}"
               for n, unresolved, _carry in wrap_ups
