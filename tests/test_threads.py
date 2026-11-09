@@ -116,6 +116,15 @@ class ThreadsTests(unittest.TestCase):
                         out.index("<!-- gm-only -->"))
         self.assertEqual(out.count("<!-- gm-only -->"), 1)
 
+    def test_insert_before_gm_notes_ignores_earlier_closed_fence(self):
+        premise = ("## Premise\n\nOne.\n\n<!-- gm-only -->\nHidden.\n"
+                   "<!-- /gm-only -->\n\nTwo.\n")
+        text = f"# T\n\n{premise}\n<!-- gm-only -->\n\n## GM Notes\n\nS.\n"
+        out = threads.insert_shared(text, "- A — involves the party")
+        self.assertIn(premise, out)
+        self.assertIn("Two.\n\n## Open Threads\n\n- A — involves the party"
+                      "\n\n<!-- gm-only -->\n\n## GM Notes", out)
+
     def test_second_insert_before_fenced_gm_notes(self):
         text = ("# T\n\n## Open Threads\n\n- a — involves the party\n\n"
                 "<!-- gm-only -->\n\n## GM Notes\n\nS.\n\n"
@@ -180,6 +189,7 @@ class ThreadsTests(unittest.TestCase):
         self.assertEqual(threads.find_thread(rung, "Bell —"), [0])
         self.assertEqual(threads.find_thread(rung, "Bell"), [0])
         self.assertEqual(threads.find_thread(rung, "Tolls"), [1])
+        self.assertEqual(threads.find_thread(["**Bell.** rings"], "Bell"), [0])
         self.assertEqual(threads.find_thread(rung, "Tolls:"), [1])
 
     def test_remove_bullet(self):

@@ -179,11 +179,13 @@ def _put_after_content(lines: list[str], start: int, end: int,
     return lines[:last] + new + lines[last:]
 
 
-def _outside_fence(lines: list[str], floor: int, pos: int) -> int:
+def _outside_fence(lines: list[str], floor: int, pos: int,
+                   scan: bool = True) -> int:
     """`pos`, moved up so an insert there is outside any gm-only fence: it
-    stops at the first gm marker after `floor`, and steps back over blank
-    lines and gm-only openers directly above."""
-    for i in range(floor + 1, pos):
+    stops at the first gm marker after `floor` (unless `scan` is off, for a
+    `pos` that starts a heading, where earlier closed fences are fine), and
+    steps back over blank lines and gm-only openers directly above."""
+    for i in range(floor + 1, pos) if scan else ():
         if GM_MARKER_RE.search(lines[i]):
             pos = i
             break
@@ -228,7 +230,7 @@ def insert_shared(overview_text: str, line: str) -> str:
     if pos is None:
         for idx, lvl, title in heads:
             if lvl == 2 and title.casefold() == "gm notes":
-                pos = _outside_fence(lines, -1, idx)
+                pos = _outside_fence(lines, -1, idx, scan=False)
                 break
     if pos is None:
         pos = len(lines)
