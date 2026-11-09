@@ -110,7 +110,7 @@ from vaultlib import (GM_MARKER_RE, is_active_pc, marker_re,  # noqa: F401
                       report_unreadable_settings, setting_or_builtin,
                       SKIP_DIRS, WRAP_UP_TYPES, body_of, campaign_overview,
                       entity_type,
-                      fenced_headings, h3_blocks, line_headings,
+                      atx_title, fenced_headings, h3_blocks, line_headings,
                       nested_mapping,
                       normalize, raw_frontmatter, section,
                       session_ref_number, word_count)
@@ -946,41 +946,57 @@ def pc_matches(cell: str, rel: str, fm: dict) -> bool:
             or cell.replace("_", " ").casefold() in candidates)
 
 
-_OUTLINED = False   # set when `layered` printed an outline line this run
-
 FETCH_LINE = ('Outlined subsections: fetch one with `gma section "<vault>" '
               '"<note>" "<path>"`; the note and path are in its line above.')
 
 
-def layered(body: str, note: str, section: str) -> str:
-    """A section body with its `###` subsections outlined. `body` is the
-    section's text without its own `##` heading. Returns the text before
-    the first heading of level 3 or deeper, then one line per subsection,
+class Outlines:
+    """Remembers whether a bundle printed any outline line, so its one
+    fetch line ends it."""
+
+    def __init__(self) -> None:
+        self.used = False
+
+    def layered(self, body: str, note: str, section: str) -> str:
+        text, outlined = layered(body, note, section)
+        self.used = self.used or outlined
+        return text
+
+
+def layered(body: str, note: str, section: str) -> tuple[str, bool]:
+    """A section body with its `###` subsections outlined, and whether it
+    was. `body` is the section's text without its own `##` heading. Returns
+    the text before the first heading of level 3 or deeper (a blank line
+    after it kept), then one line per subsection,
     `### {title}  ({N} words; {note}: {section}/{title})`, which is the
     note and path `gma section` takes. A deeper heading inside a subsection
     folds into it. A body with no such heading comes back unchanged. The
     `**Open threads:**` label is not a heading, so it stays in the text
-    before the first one."""
-    global _OUTLINED
+    before the first one. A CRLF body gets CRLF outline lines."""
     lines = body.split("\n")
     heads = [h for h in line_headings(lines) if h[1] >= 3]
     if not heads:
-        return body
+        return body, False
     tops: list[tuple[int, int, str]] = []
     for h in heads:
         if not tops or h[1] <= tops[-1][1]:
             tops.append(h)
-    out = ["\n".join(lines[:tops[0][0]]).rstrip()]
+    eol = "\r\n" if "\r\n" in body else "\n"
+    before = lines[:tops[0][0]]
+    out = [eol.join(before).rstrip()]
+    if before and not before[-1].strip():
+        out.append("")
     for n, (idx, level, title) in enumerate(tops):
         end = tops[n + 1][0] if n + 1 < len(tops) else len(lines)
         words = word_count("\n".join(lines[idx + 1:end]))
-        out.append(f"{'#' * level} {title}  ({words} words; "
-                   f"{note}: {section}/{title})")
-    _OUTLINED = True
-    return "\n".join(out).lstrip("\n")
+        name = atx_title(title)
+        out.append(f"{'#' * level} {name}  ({words} words; "
+                   f"{note}: {section}/{name})")
+    return eol.join(out).lstrip("\r\n"), True
 
 
-def arcs_report(files, chapter, upcoming: int, vault: Path) -> str:
+def arcs_report(files, chapter, upcoming: int, vault: Path,
+                outlines: Outlines) -> str:
     """For each active PC (type pc, not *_Story.md, status not out of play
     for this vault):
       --- {stem} ({rel}, player: {player_name or ?}) ---
@@ -1050,11 +1066,11 @@ def arcs_report(files, chapter, upcoming: int, vault: Path) -> str:
         lines.append(f"\n--- {stem} ({rel}, player: {player}) ---")
         bg = section(text, "Background")
         lines.append("## Background")
-        lines.append(layered(bg, stem, "Background") if bg
+        lines.append(outlines.layered(bg, stem, "Background") if bg
                      else "(no ## Background section)")
         gm = section(text, "GM Notes")
         lines.append("## GM Notes")
-        lines.append(layered(gm, stem, "GM Notes") if gm
+        lines.append(outlines.layered(gm, stem, "GM Notes") if gm
                      else "(no ## GM Notes section)")
         lines.append("Spotlight history (chapter-scoped, from "
                      "## Spotlight Forecast tables):")
@@ -1418,7 +1434,7 @@ def wrapup_names(files, wrap_text: str) -> list[str]:
 
 
 def print_prep_rest(vault: Path, files, chosen, wrap, current: int,
-                    chapter, upcoming: int) -> None:
+                    chapter, upcoming: int, outlines: Outlines) -> None:
     """What `--prep` adds after the brief bundle."""
     status = str((chosen or {}).get("fm", {}).get("status") or "")
     if wrap and status == "wrap-up":
@@ -1428,7 +1444,7 @@ def print_prep_rest(vault: Path, files, chosen, wrap, current: int,
         print("\n===== Reconcile Scan =====\n(not run: the session's "
               f"status is {status or 'unknown'}, not wrap-up)")
     print(f"\n{thread_report(files, current, chapter, vault)}")
-    print(f"\n{arcs_report(files, chapter, upcoming, vault)}")
+    print(f"\n{arcs_report(files, chapter, upcoming, vault, outlines)}")
     label = (chosen or {}).get("chapter_label")
     where = ("--chapter", label) if label else ()
     print(run_script("scene_queue.py", vault, *where, title="Scene Queue"))
@@ -1518,15 +1534,14 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _main(argv: list[str] | None) -> int:
-    global _OUTLINED
-    _OUTLINED = False
-    code = _bundle(argv)
-    if _OUTLINED and code == 0:
+    outlines = Outlines()
+    code = _bundle(argv, outlines)
+    if outlines.used and code == 0:
         print("\n" + FETCH_LINE)
     return code
 
 
-def _bundle(argv: list[str] | None) -> int:
+def _bundle(argv: list[str] | None, outlines: Outlines) -> int:
     ap = build_parser()
     args = ap.parse_args(argv)
     if args.brief and (args.play or args.threads or args.arcs
@@ -1641,7 +1656,7 @@ def _bundle(argv: list[str] | None) -> int:
         return 0
 
     if args.arcs:
-        print(f"\n{arcs_report(files, chapter, upcoming, args.vault)}")
+        print(f"\n{arcs_report(files, chapter, upcoming, args.vault, outlines)}")
         return 0
 
     # --- latest wrap-up ---
@@ -1679,7 +1694,7 @@ def _bundle(argv: list[str] | None) -> int:
         as_of = fm.get("asOfSession", "?")
         print(f"\n--- {Path(rel).stem} ({rel}, asOfSession: {as_of}) ---")
         status_block = section(text, "Current Status")
-        print(layered(status_block, Path(rel).stem, "Current Status")
+        print(outlines.layered(status_block, Path(rel).stem, "Current Status")
               if status_block else "(no ## Current Status block)")
     if not found_pc:
         print("(no active PC entities found)")
@@ -1722,7 +1737,7 @@ def _bundle(argv: list[str] | None) -> int:
              body_of(overview[1]) if overview else None)
     if args.prep:
         print_prep_rest(args.vault, files, chosen, wrap, current, chapter,
-                        upcoming)
+                        upcoming, outlines)
     return 0
 
 

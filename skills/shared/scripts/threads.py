@@ -23,7 +23,7 @@ from dataclasses import dataclass, replace
 
 from vaultlib import (ANY_LABEL_LINE_RE, BULLET_RE, GM_MARKER_RE,
                       SECTION_HEADING_RE, atx_title, fence_step, find_section,
-                      marker_re, scan_body)
+                      line_headings, marker_re, scan_body)
 
 SECTION = "Open Threads"
 RESOLVED = "Resolved Threads"
@@ -214,18 +214,10 @@ def _blank(line: str) -> bool:
 
 
 def _headings(lines: list[str]) -> list[tuple[int, int, str]]:
-    """(index, level, title) of every heading outside a code fence."""
-    out = []
-    delim: str | None = None
-    for i, raw in enumerate(lines):
-        line = raw.rstrip("\r")
-        delim, is_fence = fence_step(line, delim)
-        if is_fence or delim is not None:
-            continue
-        m = SECTION_HEADING_RE.match(line)
-        if m:
-            out.append((i, len(m.group(1)), atx_title(m.group(2))))
-    return out
+    """(index, level, title) of every heading outside a code fence; the
+    title has no ATX closing sequence."""
+    return [(i, lvl, atx_title(title)) for i, lvl, title
+            in line_headings([raw.rstrip("\r") for raw in lines])]
 
 
 def _shared_span(lines: list[str]) -> tuple[int, int] | None:

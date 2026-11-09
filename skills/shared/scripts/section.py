@@ -28,8 +28,10 @@ def resolve_note(batch: vw.Batch, raw: str) -> str:
     rel = vl.normalize_file_arg(raw)
     for guess in (rel, f"{rel}.md"):
         try:
-            if batch.exists(guess) or batch.resolve(guess) != guess:
-                return batch.resolve(guess)
+            resolved = batch.resolve(guess)
+            # A real file at that path, or a path `resolve` corrects.
+            if batch.exists(guess) or resolved != guess:
+                return resolved
         except vw.WriteError:
             continue
     want = vl.normalize(raw.removesuffix(".md"))

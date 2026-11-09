@@ -941,10 +941,10 @@ def section(text: str, heading: str) -> str | None:
     """The body of the first `## Heading` (any case, outside a code
     fence), stripped, up to the next heading of level 1 or 2; None when
     there is none. Found by `find_section`, the one section finder."""
-    found = find_section(text, [heading], level=2, first=True)
+    lines = text.split("\n")
+    found = find_section_lines(lines, [heading], level=2, first=True)
     if not isinstance(found, tuple):
         return None
-    lines = text.split("\n")
     return "\n".join(lines[found[0] + 1:found[1]]).strip()
 
 
@@ -1065,21 +1065,9 @@ def split_paused(text: str) -> tuple[str | None, str]:
 
 def fenced_headings(text: str) -> list[tuple[int, int, str]]:
     """(0-based line index, level, title) for every heading outside a
-    code fence. Shared walk behind `sections` and `h3_blocks` — both need
-    the same "don't mistake a fenced example for a real heading" fence
-    tracking `scan_body` already does, but neither needs `scan_body`'s
-    marker/exclusion bookkeeping."""
-    lines = text.splitlines()
-    fence_delim: str | None = None
-    heads: list[tuple[int, int, str]] = []
-    for i, line in enumerate(lines):
-        fence_delim, is_fence_line = fence_step(line, fence_delim)
-        if is_fence_line or fence_delim is not None:
-            continue
-        m = SECTION_HEADING_RE.match(line)
-        if m:
-            heads.append((i, len(m.group(1)), m.group(2).strip()))
-    return heads
+    code fence, on `str.splitlines` lines. Shared walk behind `sections`
+    and `h3_blocks`: see `line_headings`."""
+    return line_headings(text.splitlines())
 
 
 _fenced_headings = fenced_headings
@@ -1105,9 +1093,30 @@ def _title_key(title: str) -> str:
     return " ".join(title.split()).casefold()
 
 
+def _splits(parts: list[str]) -> list[list[str]]:
+    """Every way to cut `parts` into consecutive groups, each group joined
+    with "/" (a heading title may hold a slash)."""
+    if not parts:
+        return [[]]
+    out = []
+    for n in range(1, len(parts) + 1):
+        for rest in _splits(parts[n:]):
+            out.append(["/".join(parts[:n]), *rest])
+    return out
+
+
 def find_section(text: str, path: list[str], *, level: int | None = None,
                  first: bool = False, trim: bool = True
                  ) -> tuple[int, int] | None | list[str]:
+    """`find_section_lines` on `text` split on "\\n"."""
+    return find_section_lines(text.split("\n"), path, level=level,
+                              first=first, trim=trim)
+
+
+def find_section_lines(lines: list[str], path: list[str], *,
+                       level: int | None = None, first: bool = False,
+                       trim: bool = True
+                       ) -> tuple[int, int] | None | list[str]:
     """Where a note's section is, by heading path: `["GM Notes", "Hooks"]`.
 
     Returns (start, end), the 0-based line span of the matched heading and
@@ -1115,57 +1124,58 @@ def find_section(text: str, path: list[str], *, level: int | None = None,
     nothing matches, or a list of candidate paths when more than one
     heading does (never a guess). Titles match case-insensitively; the
     first one at any level, each later one at any depth below the last.
-    A section runs to the next heading of the same or a higher level.
-    Headings inside a code fence are not headings. Lines are split on
-    "\n" only and keep their endings, so the span indexes
-    `text.split("\n")`. A closing `##` sequence is not part of a title.
+    A title may hold a "/": every way of cutting `path` into consecutive
+    headings is tried, and two ways that end on different headings are
+    ambiguous. A section runs to the next heading of the same or a higher
+    level. Headings inside a code fence are not headings. `lines` were
+    split on "\n" only and keep their endings; the span indexes them.
+    A closing `##` sequence is not part of a title.
 
     `level` pins the first title to that heading level; `first` takes the
     first match instead of listing candidates when several match; `trim`
     False keeps the blank lines before the next heading in the span."""
-    lines = text.split("\n")
     heads = line_headings(lines)
-    keys = [_title_key(p) for p in path]
+    titles = [_title_key(atx_title(h[2])) for h in heads]
 
     def end_of(n: int) -> int:
-        level = heads[n][1]
+        depth = heads[n][1]
         return next((heads[m][0] for m in range(n + 1, len(heads))
-                     if heads[m][1] <= level), len(lines))
+                     if heads[m][1] <= depth), len(lines))
 
-    chains: list[list[int]] = []
+    found: dict[int, None] = {}      # last heading of each match, in order
 
-    def walk(chain: list[int], lo: int, hi: int) -> None:
-        depth = len(chain)
-        if depth == len(keys):
-            chains.append(chain)
+    def walk(keys: list[str], last: int | None, lo: int, hi: int) -> None:
+        if not keys:
+            found[last] = None
             return
         for n in range(lo, hi):
-            if _title_key(atx_title(heads[n][2])) != keys[depth]:
+            if titles[n] != keys[0]:
                 continue
-            if depth == 0 and level is not None and heads[n][1] != level:
+            if last is None and level is not None and heads[n][1] != level:
                 continue
-            if chain and heads[n][1] <= heads[chain[-1]][1]:
+            if last is not None and heads[n][1] <= heads[last][1]:
                 continue
-            walk(chain + [n], n + 1,
-                 next((m for m in range(n + 1, len(heads))
-                       if heads[m][0] >= end_of(n)), len(heads)))
+            inside = next((m for m in range(n + 1, len(heads))
+                           if heads[m][0] >= end_of(n)), len(heads))
+            walk(keys[1:], n, n + 1, inside)
 
-    if not keys:
+    if not path:
         return None
-    walk([], 0, len(heads))
-    if not chains:
+    for keys in _splits([_title_key(p) for p in path]):
+        walk(keys, None, 0, len(heads))
+    matches = sorted(found)
+    if not matches:
         return None
-    if len(chains) > 1 and not first:
+    if len(matches) > 1 and not first:
         def full(n: int) -> str:
-            titles, level = [heads[n][2]], heads[n][1]
+            names, depth = [atx_title(heads[n][2])], heads[n][1]
             for m in range(n - 1, -1, -1):
-                if heads[m][1] < level:
-                    titles.insert(0, heads[m][2])
-                    level = heads[m][1]
-            return "/".join(titles) + f" (line {heads[n][0] + 1})"
-        return [full(c[-1]) for c in chains]
-    last = chains[0][-1]
-    start, end = heads[last][0], end_of(last)
+                if heads[m][1] < depth:
+                    names.insert(0, atx_title(heads[m][2]))
+                    depth = heads[m][1]
+            return "/".join(names) + f" (line {heads[n][0] + 1})"
+        return [full(n) for n in matches]
+    start, end = heads[matches[0]][0], end_of(matches[0])
     while trim and end > start + 1 and not lines[end - 1].strip():
         end -= 1
     return start, end

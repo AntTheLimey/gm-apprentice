@@ -9,6 +9,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -17,6 +18,7 @@ SCRIPTS = ROOT / "skills" / "shared" / "scripts"
 FIXTURE = ROOT / "tests" / "fixtures" / "layered-reads"
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
+import session_context as sctx  # noqa: E402
 import vaultlib as vl  # noqa: E402
 
 NEEDS_NODE = unittest.skipUnless(shutil.which("node"), "needs node")
@@ -40,16 +42,24 @@ COLE_ARCS = (
     "Spotlight history")
 
 
-def sc(*args):
+def sc(*args, vault=FIXTURE):
     return subprocess.run(
-        [sys.executable, str(SCRIPTS / "session_context.py"), str(FIXTURE),
+        [sys.executable, str(SCRIPTS / "session_context.py"), str(vault),
          *args], capture_output=True, text=True)
 
 
-def fetch(note, path):
+def fetch(note, path, vault=FIXTURE):
     return subprocess.run(
-        [sys.executable, str(SCRIPTS / "section.py"), str(FIXTURE), note,
+        [sys.executable, str(SCRIPTS / "section.py"), str(vault), note,
          path], capture_output=True, text=True)
+
+
+def copy_vault(case) -> Path:
+    root = Path(tempfile.mkdtemp(prefix="layered-"))
+    case.addCleanup(shutil.rmtree, root, ignore_errors=True)
+    vault = root / "vault"
+    shutil.copytree(FIXTURE, vault)
+    return vault
 
 
 @NEEDS_NODE
@@ -98,6 +108,39 @@ class LayeredTests(unittest.TestCase):
                                 r.stdout)
                 body = r.stdout.split("\n", 1)[1]
                 self.assertEqual(vl.word_count(body), int(words))
+
+    def test_slash_title_outline_line_fetches_it(self):
+        note = ("---\ntype: pc\nstatus: active\n---\n# Zed\n\n"
+                "## Current Status\n\nTop text.\n\n"
+                "### Allies/Enemies\n\nfriends and foes here\n\n"
+                "### Plain\n\nother words\n")
+        vault = copy_vault(self)
+        (vault / "PCs" / "Zed.md").write_text(note, encoding="utf-8")
+        out = sc("--brief", vault=vault).stdout
+        m = [x for x in OUTLINE_RE.findall(out) if x[1] == "Zed"]
+        self.assertEqual(m[0][2], "Current Status/Allies/Enemies")
+        r = fetch("Zed", m[0][2], vault=vault)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertTrue(r.stdout.startswith("### Allies/Enemies\n"))
+        self.assertIn("friends and foes", r.stdout)
+        self.assertNotIn("other words", r.stdout)
+
+    def test_crlf_outline_has_no_mixed_endings(self):
+        body = ("Top text.\r\n\r\n### One\r\nalpha beta\r\n\r\n"
+                "### Two\r\ngamma\r\n")
+        text, outlined = sctx.layered(body, "Zed", "Current Status")
+        self.assertTrue(outlined)
+        self.assertEqual(
+            text,
+            "Top text.\r\n\r\n"
+            "### One  (2 words; Zed: Current Status/One)\r\n"
+            "### Two  (1 words; Zed: Current Status/Two)")
+        self.assertNotRegex(text, r"(?<!\r)\n")
+
+    def test_blank_line_before_the_outline_kept(self):
+        out = sc("--brief").stdout
+        ada = out.split("--- Ada_Quill")[1].split("--- Cole_Plain")[0]
+        self.assertIn("others\n\n### Session Log  (", ada)
 
     def test_open_threads_never_outlined(self):
         out = sc("--brief").stdout

@@ -45,6 +45,22 @@ class FindSectionTests(unittest.TestCase):
         self.assertIsInstance(got, list)
         self.assertEqual(len(got), 2)
 
+    def test_slash_in_a_title(self):
+        text = "## S\n### Allies/Enemies\nx\n### Other\ny\n"
+        self.assertEqual(vl.find_section(text, ["S", "Allies/Enemies"]),
+                         (1, 3))
+        self.assertEqual(vl.find_section(text, ["s", "allies", "enemies"]),
+                         (1, 3))
+        self.assertIsNone(vl.find_section(text, ["S", "Allies"]))
+
+    def test_slash_split_two_ways_is_refused(self):
+        text = "## S\n### A/B\nx\n### A\n#### B\ny\n"
+        got = vl.find_section(text, ["S", "A", "B"])
+        self.assertIsInstance(got, list)
+        self.assertEqual(len(got), 2)
+        self.assertIn("line 2", got[0])
+        self.assertIn("line 5", got[1])
+
     def test_lines_split_on_newline_only(self):
         # U+2028 is not a line break here: the span counts "\n" lines.
         text = "## A\nx y\n## B\nz\n"
@@ -123,6 +139,17 @@ class SectionCommandTests(unittest.TestCase):
         self.assertTrue(r.stdout.startswith(b"### Session Log\r\n"))
         self.assertIn(b"watched the north-bank lamp.\r\n", r.stdout)
         self.assertNotIn(b"Wounds", r.stdout)
+
+    def test_slash_title_fetches_through_the_cli(self):
+        vault = copy_vault(self)
+        note = vault / "PCs" / "Ada_Quill.md"
+        text = note.read_text(encoding="utf-8")
+        note.write_text(text.replace("### Hooks\n", "### Allies/Enemies\n"),
+                        encoding="utf-8")
+        r = run(vault, "Ada_Quill", "GM Notes/Allies/Enemies")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertTrue(r.stdout.startswith("### Allies/Enemies\n"))
+        self.assertIn("#### Hook detail", r.stdout)
 
     def test_runs_through_gma(self):
         r = subprocess.run(
