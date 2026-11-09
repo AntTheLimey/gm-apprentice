@@ -1871,18 +1871,19 @@ def threads_find(bullets: list[str], lead_key: str, where: str) -> int:
 
 
 def threads_take(batch: Batch, rel: str, lead_key: str,
-                 verb: str) -> str:
-    """Take the PC's thread `lead_key` off their Open threads; its text."""
+                 verb: str) -> th.PcThread:
+    """Take the PC's thread `lead_key` off their Open threads and return
+    it (its text has wrapped lines and nested bullets). A thread in a
+    gm-only fence is refused: it must not reach a player-facing list."""
     note = batch.read(rel)
-    found = th.pc_threads(note)
-    i = threads_find(found, lead_key, rel)
-    try:
-        batch.put(rel, th.remove_bullet(note, th.PC_PATH, i))
-    except (KeyError, IndexError):
-        raise WriteError(f"{rel}: cannot take thread '{lead_key}' off "
-                         f"Open threads") from None
+    found = th.pc_thread_items(note)
+    thread = found[threads_find([t.text for t in found], lead_key, rel)]
+    if thread.gm_only:
+        raise WriteError(f"'{lead_key}' is GM-only on {Path(rel).stem}; "
+                         f"edit it by hand")
+    batch.put(rel, th.remove_pc_thread(note, thread))
     batch.row(verb, rel, "\u00a7Current Status/Open threads", lead_key)
-    return found[i]
+    return thread
 
 
 def threads_insert(batch: Batch, overview: str, text: str, since: str | None,
@@ -1929,14 +1930,16 @@ def threads_row(batch: Batch, cols: list[str], wrapup: list[str]) -> None:
                          if vl.is_active_pc(
                              rel, vl.extract_frontmatter(t) or {}, gone))
             pcs = [r for r in pcs
-                   if th.find_thread(th.pc_threads(batch.read(r)), lead_key)]
+                   if th.find_thread([t.text for t in th.pc_thread_items(
+                       batch.read(r))], lead_key)]
             if not pcs:
                 raise WriteError(f"no active PC has a thread '{lead_key}'")
         else:
             pcs = [find_pc(batch, n) for n in names]
-        texts = [threads_take(batch, rel, lead_key, "WOULD-MOVE")
+        taken = [threads_take(batch, rel, lead_key, "WOULD-MOVE")
                  for rel in pcs]
-        if len({t.strip() for t in texts}) > 1:
+        texts = [t.text for t in taken]
+        if len({t.lines for t in taken}) > 1:
             raise WriteError(
                 f"the PCs word '{lead_key}' differently: "
                 + " | ".join(f"{Path(r).stem}: {t}"
@@ -1968,7 +1971,7 @@ def threads_row(batch: Batch, cols: list[str], wrapup: list[str]) -> None:
         else:
             rel = find_pc(batch, which)
             label = Path(rel).stem
-            text = threads_take(batch, rel, lead_key, "WOULD-CLOSE")
+            text = threads_take(batch, rel, lead_key, "WOULD-CLOSE").text
         line = th.format_resolved(text, evidence, label)
         try:
             batch.put(wrapup[0], th.append_resolved(

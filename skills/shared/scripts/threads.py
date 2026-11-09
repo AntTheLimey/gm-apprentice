@@ -22,11 +22,11 @@ import re
 from dataclasses import dataclass
 
 from vaultlib import (ANY_LABEL_LINE_RE, BULLET_RE, GM_MARKER_RE, LABEL_RE, atx_title, bullets,
-                      fence_step, labelled_block, section)
+                      fence_step, section)
 
 SECTION = "Open Threads"
 RESOLVED = "Resolved Threads"
-# `remove_bullet`'s path to a PC's own list (see `pc_threads`).
+# The path to a PC's own list (see `pc_thread_items`).
 PC_PATH = ("Current Status", "**Open threads**")
 
 _PARTY = "the party"
@@ -101,10 +101,8 @@ def lead(text: str) -> str:
 
 
 def pc_threads(pc_text: str) -> list[str]:
-    """The `**Open threads:**` bullets under a PC's `## Current Status`."""
-    status = section(pc_text, "Current Status")
-    block = labelled_block(status, "Open threads") if status else None
-    return bullets(block) if block else []
+    """The text of each PC thread a player can see (see `pc_thread_items`)."""
+    return [t.text for t in pc_thread_items(pc_text) if not t.gm_only]
 
 
 def find_thread(bullet_list: list[str], key: str) -> list[int]:
@@ -313,6 +311,83 @@ def _path_span(lines: list[str], path: tuple[str, ...]) -> tuple[int, int]:
         else:
             raise KeyError(step)
     return start, end
+
+
+@dataclass(frozen=True)
+class PcThread:
+    """One thread on a PC's `**Open threads:**` list.
+
+    `text` is the whole bullet: its first line, then every indented line
+    under it (wrapped text and nested bullets alike), each stripped and
+    joined with one space, because a shared entry is one line. `lines` is
+    the same lines stripped but not joined: two threads are the same only
+    when these match. `start`/`end` is the bullet's span of note lines (as
+    `text.split("\\n")` numbers them). `gm_only` is True when any of it is
+    inside, or marks, a gm-only fence."""
+    text: str
+    lines: tuple[str, ...]
+    start: int
+    end: int
+    gm_only: bool
+
+
+def pc_thread_items(pc_text: str) -> list[PcThread]:
+    """The threads under a PC's `## Current Status` > `**Open threads:**`.
+
+    Only top-level bullets are threads (the indent of the block's first
+    bullet); a deeper bullet, or an indented line, belongs to the bullet
+    above it, up to a blank line. A template placeholder (`{…}`) is not a
+    thread. Bullets inside a code fence are skipped. A thread in a gm-only
+    fence is returned with `gm_only` set: nothing may move it to a page
+    players read."""
+    lines = _lines(pc_text)
+    try:
+        start, end = _path_span(lines, PC_PATH)
+    except KeyError:
+        return []
+    states = _states(lines)
+    out: list[PcThread] = []
+    base: int | None = None
+    delim: str | None = None
+    i = start + 1
+    while i < end:
+        line = lines[i].rstrip("\r")
+        delim, is_fence = fence_step(line, delim)
+        m = BULLET_RE.match(line)
+        if is_fence or delim is not None or not m:
+            i += 1
+            continue
+        indent = len(line) - len(line.lstrip())
+        if base is None:
+            base = indent
+        if indent > base:
+            i += 1   # nested under a bullet the walk skipped (a placeholder)
+            continue
+        stop = i + 1
+        while stop < end:
+            nxt = lines[stop].rstrip("\r")
+            if not nxt.strip() or nxt[:1] not in " \t":
+                break
+            if BULLET_RE.match(nxt) and len(nxt) - len(nxt.lstrip()) <= base:
+                break
+            stop += 1
+        parts = tuple([m.group(1).strip()]
+                      + [lines[j].strip() for j in range(i + 1, stop)])
+        text = " ".join(parts)
+        if not _PLACEHOLDER_RE.match(text):
+            gm = (any(states[j] for j in range(i, stop))
+                  or any(GM_MARKER_RE.search(lines[j])
+                         for j in range(i, stop)))
+            out.append(PcThread(text, parts, i, stop, gm))
+        i = stop
+    return out
+
+
+def remove_pc_thread(pc_text: str, thread: PcThread) -> str:
+    """`pc_text` without `thread` (from `pc_thread_items` on this same
+    text): its first line and every line under it."""
+    lines = _lines(pc_text)
+    return "\n".join(lines[:thread.start] + lines[thread.end:])
 
 
 def remove_bullet(text: str, section_path: tuple[str, ...],

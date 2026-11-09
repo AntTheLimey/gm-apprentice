@@ -1046,27 +1046,37 @@ def _shared_threads_plan(vault: Path) -> tuple[
             texts[rel] = _read(vault / rel)
         return texts[rel]
 
-    holders: dict[str, list[tuple[str, int]]] = {}
-    struck: list[tuple[str, int, str]] = []
+    # A thread is its whole bullet, wrapped lines and nested bullets
+    # included; one in a gm-only fence or a template placeholder is never
+    # touched (see th.pc_thread_items).
+    holders: dict[tuple[str, ...], list[tuple[str, th.PcThread]]] = {}
+    struck: list[tuple[str, th.PcThread, str]] = []
     for rel in pcs:
-        for i, bullet in enumerate(th.pc_threads(text(rel))):
-            inner = _struck(bullet)
+        for item in th.pc_thread_items(text(rel)):
+            if item.gm_only:
+                continue
+            inner = _struck(item.text)
             if inner is not None:
-                struck.append((rel, i, inner))
+                struck.append((rel, item, inner))
             else:
-                holders.setdefault(bullet.strip(), []).append((rel, i))
+                holders.setdefault(item.lines, []).append((rel, item))
 
     lines: list[tuple[str, str]] = []
     left: list[str] = []
-    drop: dict[str, set[int]] = {}
+    drop: dict[str, list[th.PcThread]] = {}
     shared = ({" ".join(t.text.split())
                for t in th.shared_threads(text(overview))}
               if overview else set())
-    wrap_ups = sc.wrap_up_threads(files, None)
-    for thread, where in holders.items():
-        rels = sorted({rel for rel, _i in where})
+    # `since` reads the current chapter's Wrap-Ups, as `--threads` does;
+    # with no current chapter there is no since.
+    current, _notes = sc.select_session(files, None)
+    chapter = current["chapter"] if current else None
+    wrap_ups = sc.wrap_up_threads(files, chapter) if chapter else []
+    for where in holders.values():
+        rels = sorted({rel for rel, _t in where})
         if len(rels) < 2:
             continue
+        thread = where[0][1].text
         name = th.lead(thread)
         if overview is None:
             left.append(f"{name}\t{NO_OVERVIEW}; left on each PC's sheet")
@@ -1086,12 +1096,12 @@ def _shared_threads_plan(vault: Path) -> tuple[
                         f"Overview has no place outside a GM-only fence for "
                         f"Open Threads")
             continue
-        for rel, i in where:
-            drop.setdefault(rel, set()).add(i)
+        for rel, item in where:
+            drop.setdefault(rel, []).append(item)
         lines.append(("move", f'"{name}" from {" and ".join(stems)} to the '
                       f"Campaign Overview's Open Threads"
                       + (f" (since {since})" if since else "")))
-    for rel, i, inner in struck:
+    for rel, item, inner in struck:
         name = th.lead(inner)
         if wrapup is None:
             left.append(f'{rel}\tstruck-through thread "{name}" left on '
@@ -1106,12 +1116,12 @@ def _shared_threads_plan(vault: Path) -> tuple[
                         f"the sheet: the latest Wrap-Up ({wrapup}) has no "
                         f"What Carries Forward to record it in")
             continue
-        drop.setdefault(rel, set()).add(i)
+        drop.setdefault(rel, []).append(item)
         lines.append(("close", f'"{name}" (struck through) on '
                       f"{Path(rel).stem} into {wrapup}'s Resolved Threads"))
-    for rel, gone_at in drop.items():
-        for i in sorted(gone_at, reverse=True):
-            texts[rel] = th.remove_bullet(texts[rel], th.PC_PATH, i)
+    for rel, items in drop.items():
+        for item in sorted(items, key=lambda t: t.start, reverse=True):
+            texts[rel] = th.remove_pc_thread(texts[rel], item)
     changed = {rel: t for rel, t in texts.items()
                if t != _read(vault / rel)}
     return changed, lines, left
@@ -1121,7 +1131,9 @@ def find_shared_threads(vault: Path) -> list[Item]:
     """1.12.3: a thread written word for word on two or more active PCs'
     Open threads moves to the Campaign Overview's Open Threads once, with
     those PCs as `involves` and its first-seen session as `since` when a
-    Wrap-Up matches it closely. A bullet struck through whole is closed
+    Wrap-Up of the current chapter matches it closely. A thread is the
+    whole bullet (see `threads.pc_thread_items`); one in a gm-only fence
+    is never touched. A bullet struck through whole is closed
     into the latest Wrap-Up's Resolved Threads. One that cannot be moved
     or closed stays where it is, and the GM is told."""
     changed, lines, left = _shared_threads_plan(vault)

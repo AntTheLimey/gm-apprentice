@@ -321,5 +321,82 @@ class ThreadsTests(unittest.TestCase):
         self.assertIn("(shared)", read(vault, WRAPUP))
 
 
+    def edit(self, vault, rel, old, new):
+        text = read(vault, rel)
+        self.assertIn(old, text)
+        (vault / rel).write_bytes(text.replace(old, new).encode("utf-8"))
+
+    def test_gm_only_thread_refused(self):
+        vault = self.vault()
+        self.edit(vault, INES, "- Find out who lit the lamp on the north bank",
+                  "<!-- gm-only -->\n- Find out who lit the lamp on the north "
+                  "bank\n<!-- /gm-only -->")
+        before = self.snapshot(vault)
+        for row in (("move", "Find out who lit the lamp on the north bank",
+                     "-", "Ines_Marlowe"),
+                    ("close", "Ines_Marlowe",
+                     "Find out who lit the lamp on the north bank", "lit")):
+            code, out = run(vault, "threads", "--wrapup", WRAPUP, "--write",
+                            stdin=rows(row))
+            self.assertEqual(code, 1, row)
+            self.assertIn("is GM-only on Ines_Marlowe; edit it by hand", out)
+        self.assertEqual(self.snapshot(vault), before)
+
+    def test_close_records_continuation(self):
+        vault = self.vault()
+        self.edit(vault, INES, "- Find out who lit the lamp on the north bank",
+                  "- Find out who lit the lamp\n  on the north bank")
+        code, out = run(vault, "threads", "--wrapup", WRAPUP, "--write",
+                        stdin=rows(("close", "Ines_Marlowe",
+                                    "Find out who lit the lamp on the north bank",
+                                    "it was the ferrywoman")))
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("north bank", read(vault, INES))
+        self.assertIn("- Find out who lit the lamp on the north bank — "
+                      "closed: it was the ferrywoman (Ines_Marlowe)",
+                      read(vault, WRAPUP))
+
+    def test_move_wrapped_bullets_keeps_continuation(self):
+        vault = self.vault()
+        wrapped = "- **Lamp** — who lit it\n  on the north bank"
+        self.edit(vault, INES, "- Find out who lit the lamp on the north bank",
+                  wrapped)
+        self.edit(vault, CORWIN, "- **Ferrywoman's debt**",
+                  wrapped + "\n- **Ferrywoman's debt**")
+        code, out = run(vault, "threads", "--write", stdin=rows(
+            ("move", "Lamp", "-", "Ines_Marlowe, Corwin_Hale")))
+        self.assertEqual(code, 0, out)
+        self.assertIn("- **Lamp** — who lit it on the north bank — involves "
+                      "[[Ines_Marlowe]], [[Corwin_Hale]]", read(vault, OVERVIEW))
+        for rel in (INES, CORWIN):
+            self.assertNotIn("north bank", read(vault, rel))
+        # Same first line, different continuation: refused.
+        vault = self.vault()
+        self.edit(vault, INES, "- Find out who lit the lamp on the north bank",
+                  wrapped)
+        self.edit(vault, CORWIN, "- **Ferrywoman's debt**",
+                  "- **Lamp** — who lit it\n  on the south bank\n"
+                  "- **Ferrywoman's debt**")
+        code, out = run(vault, "threads", "--write", stdin=rows(
+            ("move", "Lamp", "-", "Ines_Marlowe, Corwin_Hale")))
+        self.assertEqual(code, 1)
+        self.assertIn("differently", out)
+
+    def test_nested_bullet_is_not_its_own_thread(self):
+        vault = self.vault()
+        self.edit(vault, INES, "- Find out who lit the lamp on the north bank",
+                  "- Find out who lit the lamp\n  - ask the ferrywoman")
+        code, out = run(vault, "threads", "--wrapup", WRAPUP, "--write",
+                        stdin=rows(("close", "Ines_Marlowe",
+                                    "ask the ferrywoman", "asked")))
+        self.assertEqual(code, 1)
+        self.assertIn("no thread 'ask the ferrywoman'", out)
+        code, out = run(vault, "threads", "--wrapup", WRAPUP, "--write",
+                        stdin=rows(("close", "Ines_Marlowe",
+                                    "Find out who lit the lamp - ask the "
+                                    "ferrywoman", "asked")))
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("ferrywoman", read(vault, INES))
+
 if __name__ == "__main__":
     unittest.main()

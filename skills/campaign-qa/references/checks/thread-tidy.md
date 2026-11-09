@@ -19,14 +19,17 @@ Wrap-Up's `#### Resolved Threads` with its evidence.
    - **Implied:** the note suggests an end but doesn't say it ("he's in
      custody"). Leave it open.
    - **Dormant:** nothing new. Leave it open; age is not an ending.
-   - **Not a thread:** where play stopped, or an event that happened.
-     Close it with evidence `not a thread: where play stopped in Session N`
-     or `not a thread: an event, in the Session N recap`. The text itself
+   - **Not a thread:** plainly where play stopped, or plainly an event
+     that happened. Close it with evidence
+     `not a thread: where play stopped in Session N` or
+     `not a thread: an event, in the Session N recap`. The text itself
      shows it, so no other line is needed.
+   - Anything arguable stays open and goes in the report.
 3. Duplicates: the same thread on two or more PCs. Word for word: a
-   `move` row (it refuses wordings that differ). In other words: list
-   them in the report as near-duplicates for the GM. Never merge
-   differing wordings.
+   `move` row (it refuses wordings that differ); its `since` is the
+   thread's first-seen session from `--threads` (`Session N`), or `-`.
+   In other words: list them in the report as near-duplicates for the
+   GM. Never merge differing wordings.
 4. One call for every row of the run, against the latest Wrap-Up:
    `gma vault-write <vault> threads --wrapup "<latest wrap-up>"` with the
    `close` and `move` rows on stdin. Read the preview, then run it again
