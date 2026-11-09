@@ -21,7 +21,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from vaultlib import (BULLET_RE, GM_MARKER_RE, atx_title, bullets,
+from vaultlib import (ANY_LABEL_LINE_RE, BULLET_RE, GM_MARKER_RE, LABEL_RE, atx_title, bullets,
                       fence_step, labelled_block, section)
 
 SECTION = "Open Threads"
@@ -100,10 +100,15 @@ def pc_threads(pc_text: str) -> list[str]:
 
 
 def find_thread(bullet_list: list[str], key: str) -> list[int]:
-    """Indexes of the bullets whose lead, or whole text, equals `key`."""
+    """Indexes of the bullets whose whole text, lead (see `lead`) or lead as
+    written between the asterisks (`Bell —`) equals `key`."""
     key = key.strip()
-    return [i for i, b in enumerate(bullet_list)
-            if lead(b) == key or b.strip() == key]
+    out = []
+    for i, b in enumerate(bullet_list):
+        m = _LEAD_RE.match(b.strip())
+        if key in (b.strip(), lead(b), m.group(1).strip() if m else None):
+            out.append(i)
+    return out
 
 
 # --------------------------------------------------------------------------
@@ -165,7 +170,7 @@ def _stop_end(lines: list[str], start: int, end: int) -> int:
 
 
 def _put_after_content(lines: list[str], start: int, end: int,
-                       new: list[str], eol: str) -> list[str]:
+                       new: list[str]) -> list[str]:
     """`lines` with `new` placed after the last non-blank line in
     [start, end), blank lines around it kept as they were."""
     last = end
@@ -174,32 +179,56 @@ def _put_after_content(lines: list[str], start: int, end: int,
     return lines[:last] + new + lines[last:]
 
 
+def _outside_fence(lines: list[str], floor: int, pos: int) -> int:
+    """`pos`, moved up so an insert there is outside any gm-only fence: it
+    stops at the first gm marker after `floor`, and steps back over blank
+    lines and gm-only openers directly above."""
+    for i in range(floor + 1, pos):
+        if GM_MARKER_RE.search(lines[i]):
+            pos = i
+            break
+    while True:
+        back = pos
+        while back > floor + 1 and _blank(lines[back - 1]):
+            back -= 1
+        if back > floor + 1 and GM_MARKER_RE.search(lines[back - 1]):
+            pos = back - 1
+        else:
+            return pos
+
+
+def _join(lines: list[str], eol: str) -> str:
+    """The lines joined with the note's line ending; in a CRLF note a line
+    that came without its CR (the last one of a note with no final newline)
+    gets it."""
+    if eol == "\r\n":
+        lines = [l if l.endswith("\r") else l + "\r"
+                 for l in lines[:-1]] + lines[-1:]
+    return "\n".join(lines)
+
+
 def insert_shared(overview_text: str, line: str) -> str:
     """Add `line` under `## Open Threads`, creating the section after
-    `## Current Arc` (else before the first `## GM Notes`, else at the end)."""
+    `## Current Arc` (else before the first `## GM Notes`, else at the end).
+    The insert point is always outside a gm-only fence: the section is
+    player-facing."""
     eol = _eol(overview_text)
     lines = _lines(overview_text)
     heads = _headings(lines)
     for at, (idx, lvl, title) in enumerate(heads):
         if lvl == 2 and title.casefold() == SECTION.casefold():
-            end = _heading_end(lines, heads, at)
-            return "\n".join(_put_after_content(
-                lines, idx, end, [_new(line, eol)], eol))
+            end = _outside_fence(lines, idx, _heading_end(lines, heads, at))
+            return _join(_put_after_content(
+                lines, idx, end, [_new(line, eol)]), eol)
     pos = None
     for at, (idx, lvl, title) in enumerate(heads):
         if lvl == 2 and title.casefold() == "current arc":
-            pos = _heading_end(lines, heads, at)
+            pos = _outside_fence(lines, idx, _heading_end(lines, heads, at))
             break
     if pos is None:
         for idx, lvl, title in heads:
             if lvl == 2 and title.casefold() == "gm notes":
-                pos = idx
-                # A gm-only opener just above the heading stays above it.
-                back = idx
-                while back > 0 and _blank(lines[back - 1]):
-                    back -= 1
-                if back > 0 and GM_MARKER_RE.search(lines[back - 1]):
-                    pos = back - 1
+                pos = _outside_fence(lines, -1, idx)
                 break
     if pos is None:
         pos = len(lines)
@@ -212,8 +241,8 @@ def insert_shared(overview_text: str, line: str) -> str:
     blank = _new("", eol)
     block = [blank, _new(f"## {SECTION}", eol), blank, _new(line, eol)]
     if any(not _blank(t) for t in tail):
-        return "\n".join(head + block + [blank] + tail)
-    return "\n".join(head + block + [""])
+        return _join(head + block + [blank] + tail, eol)
+    return _join(head + block + [""], eol)
 
 
 def _path_span(lines: list[str], path: tuple[str, ...]) -> tuple[int, int]:
@@ -227,11 +256,11 @@ def _path_span(lines: list[str], path: tuple[str, ...]) -> tuple[int, int]:
         if label:
             name = label.group(1).strip().casefold()
             for i in range(start, end):
-                m = re.match(r"^\*\*([^*:]+):\*\*", lines[i].strip())
+                m = LABEL_RE.match(lines[i].strip())
                 if m and m.group(1).strip().casefold() == name:
                     stop = end
                     for j in range(i + 1, end):
-                        if re.match(r"^\*\*[^*]+\*\*", lines[j].strip()):
+                        if ANY_LABEL_LINE_RE.match(lines[j].strip()):
                             stop = j
                             break
                     start, end = i, stop
@@ -290,9 +319,9 @@ def append_resolved(wrapup_text: str, line: str) -> str:
             if all(_blank(l) for l in kept[1:]):
                 kept = [kept[0], blank, _new(line, eol)]
                 lines = lines[:idx] + kept + [blank] + lines[end:]
-                return "\n".join(lines)
-            return "\n".join(_put_after_content(
-                lines, idx, end, [_new(line, eol)], eol))
+                return _join(lines, eol)
+            return _join(_put_after_content(
+                lines, idx, end, [_new(line, eol)]), eol)
     anchor = None
     for at, (idx, lvl, title) in enumerate(heads):
         if title.casefold() == "unresolved threads":
@@ -316,5 +345,5 @@ def append_resolved(wrapup_text: str, line: str) -> str:
     while after and _blank(after[0]):
         after.pop(0)
     if after and (end < len(lines) or any(not _blank(r) for r in after)):
-        return "\n".join(lines[:last] + block + [blank] + after)
-    return "\n".join(lines[:last] + block + rest)
+        return _join(lines[:last] + block + [blank] + after, eol)
+    return _join(lines[:last] + block + rest, eol)

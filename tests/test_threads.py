@@ -107,6 +107,32 @@ class ThreadsTests(unittest.TestCase):
         self.assertEqual(
             end, "# T\n\nBody.\n\n## Open Threads\n\n- A — involves the party\n")
 
+    def test_insert_after_current_arc_with_fence_before_gm_notes(self):
+        text = ("# T\n\n## Current Arc\n\nArc.\n\n<!-- gm-only -->\n\n"
+                "## GM Notes\n\nSecret.\n\n<!-- /gm-only -->\n")
+        out = threads.insert_shared(text, "- A — involves the party")
+        self.assertLess(out.index("- A —"), out.index("<!-- gm-only -->"))
+        self.assertLess(out.index("## Open Threads"),
+                        out.index("<!-- gm-only -->"))
+        self.assertEqual(out.count("<!-- gm-only -->"), 1)
+
+    def test_second_insert_before_fenced_gm_notes(self):
+        text = ("# T\n\n## Open Threads\n\n- a — involves the party\n\n"
+                "<!-- gm-only -->\n\n## GM Notes\n\nS.\n\n"
+                "<!-- /gm-only -->\n")
+        out = threads.insert_shared(text, "- b — involves the party")
+        self.assertEqual(
+            out, "# T\n\n## Open Threads\n\n- a — involves the party\n"
+                 "- b — involves the party\n\n<!-- gm-only -->\n\n"
+                 "## GM Notes\n\nS.\n\n<!-- /gm-only -->\n")
+
+    def test_crlf_no_trailing_newline(self):
+        out = threads.insert_shared("# T\r\n\r\nBody.",
+                                    "- A — involves the party")
+        self.assertEqual(out.count("\n"), out.count("\r\n"))
+        self.assertNotIn("\r\r", out)
+        self.assertEqual(threads.shared_threads(out)[0].text, "A")
+
     def test_append_resolved_creates_heading_inside_gm_fence(self):
         out = threads.append_resolved(read(WRAPUP), "- **Ledger** — returned")
         self.assertIn(
@@ -148,6 +174,13 @@ class ThreadsTests(unittest.TestCase):
         self.assertEqual(threads.find_thread(bullets, "Nothing"), [])
         self.assertEqual(threads.lead("**Bell —** rings"), "Bell")
         self.assertEqual(threads.lead("No lead here"), "No lead here")
+        self.assertEqual(threads.lead("**Bell:** rings"), "Bell")
+        self.assertEqual(threads.lead("**Bell.** rings"), "Bell")
+        rung = ["**Bell —** rings", "**Tolls:** the bell"]
+        self.assertEqual(threads.find_thread(rung, "Bell —"), [0])
+        self.assertEqual(threads.find_thread(rung, "Bell"), [0])
+        self.assertEqual(threads.find_thread(rung, "Tolls"), [1])
+        self.assertEqual(threads.find_thread(rung, "Tolls:"), [1])
 
     def test_remove_bullet(self):
         text = read(INES)
