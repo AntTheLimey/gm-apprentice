@@ -1681,6 +1681,32 @@ def site_pin(site: Path) -> SitePin:
     return SitePin("package.json", version, _stale_reason(version), str(spec))
 
 
+# The first publish tool that shows a moved thread on the PC's page: an
+# older one would drop it from the page the PC's player reads.
+SHARED_THREADS_TOOL = "1.70.3"
+
+
+def shared_threads_tool_too_old(vault: Path) -> tuple[Path, str] | None:
+    """(site, why) when the vault's site builds with a publish tool older
+    than SHARED_THREADS_TOOL (or one whose version cannot be read); None
+    when it has no site or no tool, or a new enough one. The update's
+    shared-threads check and `vw threads move` both wait on it."""
+    site, _has_config = configured_site(vault)
+    if site is None:
+        return None
+    pin = site_pin(site)
+    if pin.source == "none":
+        return None
+    if pin.version is not None and not semver_below(pin.version,
+                                                    SHARED_THREADS_TOOL):
+        return None
+    return site, (f"the site's publish tool is "
+                  f"{pin.version or 'of an unknown version'}, older than "
+                  f"{SHARED_THREADS_TOOL}: update the site's publish tool "
+                  f"first (`gma update`); shared threads wait, since an "
+                  f"older tool would drop moved threads from PC pages")
+
+
 def _publish_tool_for(site: Path) -> tuple[Path | None, str, str | None]:
     """(tool script, which tool it is, why it can't answer).
 

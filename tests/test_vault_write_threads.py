@@ -5,6 +5,7 @@ Run: python3 -m pytest tests/test_vault_write_threads.py -q
 """
 
 import io
+import json
 import shutil
 import sys
 import tempfile
@@ -15,8 +16,10 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parent.parent
 SCRIPTS = ROOT / "skills" / "shared" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
+sys.path.insert(0, str(ROOT / "tests"))
 
 import vault_write as vw  # noqa: E402
+from layouts import write_config  # noqa: E402
 
 FIXTURE = ROOT / "tests" / "fixtures" / "shared-threads"
 OVERVIEW = "Campaign Overview.md"
@@ -252,6 +255,32 @@ class ThreadsTests(unittest.TestCase):
         for rel in (OVERVIEW, INES, WRAPUP):
             data = (vault / rel).read_bytes()
             self.assertEqual(data.count(b"\n"), data.count(b"\r\n"), rel)
+
+    def test_move_waits_for_a_site_tool_that_shows_it(self):
+        # A site on publish tool 1.70.2 would drop a moved thread from the
+        # PC's page: the move is refused and nothing changes.
+        for installed, moves in (("1.70.2", False), ("1.70.3", True)):
+            with self.subTest(installed=installed):
+                vault = self.vault()
+                site = Path(tempfile.mkdtemp(prefix="vwthreads-site-"))
+                self.addCleanup(shutil.rmtree, site, ignore_errors=True)
+                pkg = site / "node_modules" / "gm-apprentice-publish"
+                pkg.mkdir(parents=True)
+                (pkg / "package.json").write_text(json.dumps(
+                    {"version": installed}), encoding="utf-8")
+                write_config(vault, "---\npublish:\n  system: coc-7e\n"
+                             f"  site: true\n  site_dir: {site.as_posix()}\n"
+                             "---\n")
+                before = self.snapshot(vault)
+                code, out = run(vault, "threads", "--write", stdin=rows(
+                    ("move", "The ledger page in her coat", "-",
+                     "Ines_Marlowe")))
+                if moves:
+                    self.assertEqual(code, 0, out)
+                    continue
+                self.assertEqual(code, 1)
+                self.assertIn("1.70.2, older than 1.70.3", out)
+                self.assertEqual(self.snapshot(vault), before)
 
     def test_move_differing_wording_refused(self):
         vault = self.vault()

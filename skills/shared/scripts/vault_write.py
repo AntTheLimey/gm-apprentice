@@ -1941,6 +1941,10 @@ def threads_row(batch: Batch, cols: list[str], wrapup: list[str]) -> None:
         if not lead_key:
             raise WriteError("move: the lead is empty")
         since = None if cols[2].strip() in ("", "-") else cols[2].strip()
+        old_tool = vc.shared_threads_tool_too_old(batch.vault)
+        if old_tool is not None:
+            # A moved thread would drop off the PC's page until then.
+            raise WriteError(old_tool[1])
         names = threads_who(batch, cols[3])
         overview = threads_overview(batch)
         # Every named PC is involved; the thread comes off each that has
