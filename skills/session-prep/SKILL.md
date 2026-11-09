@@ -90,10 +90,9 @@ of the campaign overview and the upcoming session's existing Plan, then
 the reconcile scan, threads, PC arcs, the scene queue and the narrative
 plans: steps 8, 10c, 12 and 14 and Phase 1 read these, never rerun
 them. Read
-a stubbed or outlined section from its file only when a step needs it.
-A `###` subsection prints as its heading, size and path; fetch it with
-`gma section` only when a step needs it (for step 12, the PC whose arc
-this session turns on).
+a stubbed or outlined section only when a step needs it: from its file,
+or a `###` subsection (printed as heading, size and path) with
+`gma section` (for step 12, the PC whose arc this session turns on).
 After the bundle, vault dives are targeted reads, proportional to the
 upcoming session's complexity, not the campaign's size.
 
@@ -207,7 +206,7 @@ Don't move to spotlight until intent is set or deferred to
 `## Session Overview`
 
 **12. PC Roster + Arc Check** — Each PC's `## Current Status` is
-already in the bundle; don't re-read it. `--prep`'s PC Arcs gives every
+already in the bundle (`###` subsections outlined); don't re-read it. `--prep`'s PC Arcs gives every
 active PC's `## Background` and `## GM Notes` plus spotlight history from earlier Plans' `## Spotlight Forecast`
 (role, sessions since last B- and C-plot). Don't open full PC
 sheets. Judge arc stage (five-stage model) from that evidence. Per PC:
