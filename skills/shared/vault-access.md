@@ -21,6 +21,7 @@ being open.
 | Publish-safety scan (unfenced Keeper content, fence balance; + `--fix` re-nest) | `gma vault-check VAULT gm-leak` |
 | PC body skeleton / Current Status placement / missing or unfilled Stat Sheet | `gma vault-check VAULT pc-body` |
 | A PC's Current Status fields: print them, or rewrite the ones sent in place | `gma vault-write VAULT status PC --show` / `--write` |
+| Shared threads: add one to the Campaign Overview's Open Threads, move a PC's onto it, close one into the Wrap-Up's Resolved Threads (dry run first; `--write`) | `gma vault-write VAULT threads [--wrapup W]` |
 | Wrap-Up conformance (+ `--fix` re-nest) | `gma vault-check VAULT wrapup` |
 | Faults in the notes that change what the site shows (a named note with no page, a stray `%%`, an unclosed fence, a secret name in prose) | `gma vault-check VAULT site-faults` |
 | What the site still hides in the notes a session touched | `gma reveal-scan VAULT INDEX [--also PATH]` |

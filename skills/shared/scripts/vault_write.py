@@ -72,6 +72,7 @@ from typing import Any
 
 import plan_check
 import schema_rules
+import threads as th
 import vault_check as vc
 from vaultlib import cli_name, utf8_output  # noqa: E402
 import vaultlib as vl
@@ -87,7 +88,8 @@ ANY_MARKER_RE = vl.marker_re()   # a gm-only or spoiler marker
 LIST_RE = re.compile(r"^\s*[-*+] ")
 # The one non-note file a command may change, in the same all-or-none batch.
 DATA_FILES = frozenset({"_meta/prop-hands.json"})
-VERBS = {"WOULD-CREATE": "CREATED", "WOULD-ADD": "ADDED"}
+VERBS = {"WOULD-CREATE": "CREATED", "WOULD-ADD": "ADDED",
+         "WOULD-MOVE": "MOVED", "WOULD-CLOSE": "CLOSED"}
 
 
 class WriteError(Exception):
@@ -1829,6 +1831,155 @@ def show_status(batch: Batch, raw: str) -> str:
 def cmd_status(batch: Batch, args: argparse.Namespace, text: str) -> None:
     rel, note = status_target(batch, args.pc)
     write_fields(batch, rel, note, stdin_fields(text))
+
+
+def threads_overview(batch: Batch) -> str:
+    """The Campaign Overview's path: the note whose `type` is
+    `campaign_overview`."""
+    hits = sorted(rel for rel, text in vl.vault_files(batch.vault, newline="")
+                  if vl.entity_type(vl.extract_frontmatter(text) or {})
+                  == "campaign_overview")
+    if not hits:
+        raise WriteError("no Campaign Overview to hold shared threads")
+    return hits[0]
+
+
+def threads_who(batch: Batch, who: str) -> list[str] | None:
+    """The PC note names a row's `involves` column holds; None for
+    `party`."""
+    if who.strip().casefold() == "party":
+        return None
+    names = [n.strip() for n in who.split(",") if n.strip()]
+    if not names:
+        raise WriteError("no PC named in the involves column")
+    return [Path(find_pc(batch, n)).stem for n in names]
+
+
+def threads_find(bullets: list[str], lead_key: str, where: str) -> int:
+    hits = th.find_thread(bullets, lead_key)
+    if not hits:
+        raise WriteError(f"{where}: no thread '{lead_key}'")
+    if len(hits) > 1:
+        raise WriteError(f"{where}: {len(hits)} threads match '{lead_key}'; "
+                         f"use more of its text")
+    return hits[0]
+
+
+PC_THREADS_PATH = ("Current Status", "**Open threads**")
+
+
+def threads_take(batch: Batch, rel: str, lead_key: str,
+                 verb: str) -> str:
+    """Take the PC's thread `lead_key` off their Open threads; its text."""
+    note = batch.read(rel)
+    found = th.pc_threads(note)
+    i = threads_find(found, lead_key, rel)
+    try:
+        batch.put(rel, th.remove_bullet(note, PC_THREADS_PATH, i))
+    except (KeyError, IndexError):
+        raise WriteError(f"{rel}: cannot take thread '{lead_key}' off "
+                         f"Open threads") from None
+    batch.row(verb, rel, "\u00a7Current Status/Open threads", lead_key)
+    return found[i]
+
+
+def threads_insert(batch: Batch, overview: str, text: str, since: str | None,
+                   involves: list[str] | None, verb: str) -> None:
+    try:
+        batch.put(overview, th.insert_shared(
+            batch.read(overview), th.format_shared(text, since, involves)))
+    except ValueError:
+        raise WriteError(
+            f"{overview}: the Campaign Overview has no place outside a "
+            f"GM-only fence for Open Threads") from None
+    batch.row(verb, overview, "\u00a7Open Threads", th.lead(text))
+
+
+def threads_row(batch: Batch, cols: list[str], wrapup: list[str]) -> None:
+    verb = cols[0].strip().casefold()
+    if verb == "add":
+        if len(cols) != 5 or cols[1].strip().casefold() != "shared":
+            raise WriteError("add needs: add TAB shared TAB since TAB who "
+                             "TAB text")
+        since = None if cols[2].strip() in ("", "-") else cols[2].strip()
+        threads_insert(batch, threads_overview(batch), cols[4].strip(),
+                       since, threads_who(batch, cols[3]), "WOULD-ADD")
+    elif verb == "move":
+        if len(cols) != 4:
+            raise WriteError("move needs: move TAB lead TAB since TAB who")
+        lead_key = cols[1].strip()
+        since = None if cols[2].strip() in ("", "-") else cols[2].strip()
+        names = threads_who(batch, cols[3])
+        overview = threads_overview(batch)
+        if names is None:
+            gone = vl.out_of_play(batch.vault)
+            pcs = sorted(rel for rel, t in vl.vault_files(batch.vault,
+                                                          newline="")
+                         if vl.is_active_pc(
+                             rel, vl.extract_frontmatter(t) or {}, gone))
+            pcs = [r for r in pcs
+                   if th.find_thread(th.pc_threads(batch.read(r)), lead_key)]
+            if not pcs:
+                raise WriteError(f"no active PC has a thread '{lead_key}'")
+        else:
+            pcs = [find_pc(batch, n) for n in names]
+        texts = [threads_take(batch, rel, lead_key, "WOULD-MOVE")
+                 for rel in pcs]
+        threads_insert(batch, overview, texts[0], since, names, "WOULD-MOVE")
+    elif verb == "close":
+        if len(cols) != 4:
+            raise WriteError("close needs: close TAB list TAB lead TAB "
+                             "evidence")
+        which, lead_key, evidence = (c.strip() for c in cols[1:])
+        if which.casefold() == "shared":
+            overview = threads_overview(batch)
+            note = batch.read(overview)
+            found = th.shared_threads(note)
+            i = threads_find([t.text for t in found], lead_key, overview)
+            try:
+                batch.put(overview, th.remove_bullet(
+                    note, (th.SECTION,), i))
+            except (KeyError, IndexError):
+                raise WriteError(f"{overview}: cannot take thread "
+                                 f"'{lead_key}' off Open Threads") from None
+            text, label = found[i].text, "shared"
+            batch.row("WOULD-CLOSE", overview, "\u00a7Open Threads", lead_key)
+        else:
+            rel = find_pc(batch, which)
+            label = Path(rel).stem
+            text = threads_take(batch, rel, lead_key, "WOULD-CLOSE")
+        line = f"- {text} \u2014 closed: {evidence} ({label})"
+        try:
+            batch.put(wrapup[0], th.append_resolved(
+                batch.read(wrapup[0]), line))
+        except KeyError:
+            raise WriteError(f"{wrapup[0]}: no What Carries Forward section "
+                             f"to hold Resolved Threads") from None
+        batch.row("WOULD-CLOSE", wrapup[0], "\u00a7Resolved Threads",
+                  lead_key)
+    else:
+        raise WriteError(f"unknown row '{verb}': use add, move or close")
+
+
+def cmd_threads(batch: Batch, args: argparse.Namespace, text: str) -> None:
+    lines = [ln for ln in text.splitlines() if ln.strip()]
+    if not lines:
+        raise WriteError("no rows on stdin")
+    rows = [ln.split("\t") for ln in lines]
+    wrapup: list[str] = []
+    if any(r[0].strip().casefold() == "close" for r in rows):
+        if not args.wrapup:
+            raise WriteError("close needs --wrapup: a closed thread is "
+                             "recorded in the Wrap-Up")
+        wrapup = [batch.note_named(args.wrapup, vc.WRAP_TYPES, "wrapup")]
+    errors: list[str] = []
+    for n, cols in enumerate(rows, 1):
+        try:
+            threads_row(batch, cols, wrapup)
+        except WriteError as e:
+            errors.append(f"row {n}: {e}")
+    if errors:
+        raise WriteError("\nERROR\t".join(errors))
 
 
 # A per-session journal entry that sits among the fields: `**Session 6 --
@@ -3781,6 +3932,24 @@ def build_parser() -> argparse.ArgumentParser:
     how_status = status.add_mutually_exclusive_group()
     how_status.add_argument("--show", action="store_true", help="print the PC's Current Status fields")
     how_status.add_argument("--write", action="store_true", help="write it (default: preview)")
+    threads = sub.add_parser(
+        "threads", help="add, move and close shared threads (stdin rows)",
+        formatter_class=raw, description=(
+            "stdin: one row per line, fields separated by TAB.\n"
+            "  add   shared  SINCE  WHO  TEXT   add to the Overview's Open Threads\n"
+            "  move  LEAD    SINCE  WHO         take LEAD off each named PC's\n"
+            "                                   Open threads, add it once to the\n"
+            "                                   shared list\n"
+            "  close LIST    LEAD   EVIDENCE    LIST is 'shared' or a PC's note\n"
+            "                                   name; the thread leaves it and is\n"
+            "                                   recorded in the Wrap-Up's\n"
+            "                                   Resolved Threads\n"
+            "SINCE is a session label, or - for none. WHO is PC note\n"
+            "names separated by commas, or 'party' (for move, every active\n"
+            "PC that has the thread). Any ERROR row writes nothing."))
+    threads.add_argument("--wrapup", help="the Wrap-Up that records closed "
+                         "threads (needed by close rows): vault-relative, or its name")
+    threads.add_argument("--write", action="store_true", help="write it (default: preview)")
     log = sub.add_parser(
         "log", help="add log lines to notes (stdin rows)",
         formatter_class=raw, description=(
@@ -3985,6 +4154,7 @@ COMMANDS: dict[str, Command] = {"wrapup-new": cmd_wrapup_new,
                                 "story": cmd_story,
                                 "npc-story": cmd_npc_story,
                                 "status": cmd_status,
+                                "threads": cmd_threads,
                                 "log": cmd_log,
                                 "timeline": cmd_timeline,
                                 "session-new": cmd_session_new,

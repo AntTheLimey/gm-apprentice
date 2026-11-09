@@ -12,7 +12,7 @@ gma vault-write <vault> <command> ...
 | Argument | Value | Help |
 |---|---|---|
 | `<vault>` |  | the vault folder |
-| `<command>` | `wrapup-new`, `wrapup-add`, `story`, `npc-story`, `status`, `log`, `timeline`, `session-new`, `play-notes-new`, `resolve`, `promote-plan`, `chapter-new`, `scene-new`, `scene-paused`, `scene-played`, `prop-new`, `prop-hand`, `plan` |  |
+| `<command>` | `wrapup-new`, `wrapup-add`, `story`, `npc-story`, `status`, `threads`, `log`, `timeline`, `session-new`, `play-notes-new`, `resolve`, `promote-plan`, `chapter-new`, `scene-new`, `scene-paused`, `scene-played`, `prop-new`, `prop-hand`, `plan` |  |
 
 Example: `gma vault-write "<vault>" wrapup-add "<wrap-up>" --write`
 <!-- END GENERATED -->
@@ -132,6 +132,34 @@ the fields as they stand, and reads no stdin.
 |---|---|---|
 | `<pc>` |  | the PC note, vault-relative, or its name |
 | `--show` |  | print the PC's Current Status fields |
+| `--write` |  | write it (default: preview) |
+<!-- END GENERATED -->
+
+<!-- BEGIN GENERATED: gma vault-write threads -->
+add, move and close shared threads (stdin rows)
+
+```text
+gma vault-write <vault> threads [options]
+```
+
+```text
+stdin: one row per line, fields separated by TAB.
+  add   shared  SINCE  WHO  TEXT   add to the Overview's Open Threads
+  move  LEAD    SINCE  WHO         take LEAD off each named PC's
+                                   Open threads, add it once to the
+                                   shared list
+  close LIST    LEAD   EVIDENCE    LIST is 'shared' or a PC's note
+                                   name; the thread leaves it and is
+                                   recorded in the Wrap-Up's
+                                   Resolved Threads
+SINCE is a session label, or - for none. WHO is PC note
+names separated by commas, or 'party' (for move, every active
+PC that has the thread). Any ERROR row writes nothing.
+```
+
+| Argument | Value | Help |
+|---|---|---|
+| `--wrapup` | `WRAPUP` | the Wrap-Up that records closed threads (needed by close rows): vault-relative, or its name |
 | `--write` |  | write it (default: preview) |
 <!-- END GENERATED -->
 
