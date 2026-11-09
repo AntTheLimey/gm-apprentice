@@ -89,7 +89,8 @@ LIST_RE = re.compile(r"^\s*[-*+] ")
 # The one non-note file a command may change, in the same all-or-none batch.
 DATA_FILES = frozenset({"_meta/prop-hands.json"})
 VERBS = {"WOULD-CREATE": "CREATED", "WOULD-ADD": "ADDED",
-         "WOULD-MOVE": "MOVED", "WOULD-CLOSE": "CLOSED"}
+         "WOULD-MOVE": "MOVED", "WOULD-CLOSE": "CLOSED",
+         "WOULD-RECORD": "RECORDED"}
 
 
 class WriteError(Exception):
@@ -332,6 +333,8 @@ def emit(batch: Batch, wrote: bool) -> str:
 
     total = (f"# create: {count('WOULD-CREATE', 'CREATED')}  "
              f"add: {count('WOULD-ADD', 'ADDED')}  skip: {count('SKIP')}  "
+             f"moved: {count('WOULD-MOVE', 'MOVED')}  "
+             f"closed: {count('WOULD-CLOSE', 'CLOSED')}  "
              f"warnings: {count('WARNING')}  errors: {count('ERROR')}")
     return "\n".join([*rows, total]) + "\n"
 
@@ -1902,15 +1905,24 @@ def threads_row(batch: Batch, cols: list[str], wrapup: list[str]) -> None:
             raise WriteError("add needs: add TAB shared TAB since TAB who "
                              "TAB text")
         since = None if cols[2].strip() in ("", "-") else cols[2].strip()
+        if not cols[4].strip():
+            raise WriteError("add: the thread text is empty")
         threads_insert(batch, threads_overview(batch), cols[4].strip(),
                        since, threads_who(batch, cols[3]), "WOULD-ADD")
     elif verb == "move":
         if len(cols) != 4:
             raise WriteError("move needs: move TAB lead TAB since TAB who")
         lead_key = cols[1].strip()
+        if not lead_key:
+            raise WriteError("move: the lead is empty")
         since = None if cols[2].strip() in ("", "-") else cols[2].strip()
         names = threads_who(batch, cols[3])
         overview = threads_overview(batch)
+        if th.find_thread([t.text for t in
+                           th.shared_threads(batch.read(overview))],
+                          lead_key):
+            raise WriteError(f"'{lead_key}' is already a shared thread; "
+                             f"close the PCs' copies instead")
         if names is None:
             gone = vl.out_of_play(batch.vault)
             pcs = sorted(rel for rel, t in vl.vault_files(batch.vault,
@@ -1925,12 +1937,22 @@ def threads_row(batch: Batch, cols: list[str], wrapup: list[str]) -> None:
             pcs = [find_pc(batch, n) for n in names]
         texts = [threads_take(batch, rel, lead_key, "WOULD-MOVE")
                  for rel in pcs]
+        if len({t.strip() for t in texts}) > 1:
+            raise WriteError(
+                f"the PCs word '{lead_key}' differently: "
+                + " | ".join(f"{Path(r).stem}: {t}"
+                             for r, t in zip(pcs, texts))
+                + " \u2014 make them match, or add the shared thread and "
+                  "close each PC's own")
         threads_insert(batch, overview, texts[0], since, names, "WOULD-MOVE")
     elif verb == "close":
         if len(cols) != 4:
             raise WriteError("close needs: close TAB list TAB lead TAB "
                              "evidence")
         which, lead_key, evidence = (c.strip() for c in cols[1:])
+        if not (which and lead_key and evidence):
+            raise WriteError("close needs a list, a lead and evidence; "
+                             "one is empty")
         if which.casefold() == "shared":
             overview = threads_overview(batch)
             note = batch.read(overview)
@@ -1955,7 +1977,7 @@ def threads_row(batch: Batch, cols: list[str], wrapup: list[str]) -> None:
         except KeyError:
             raise WriteError(f"{wrapup[0]}: no What Carries Forward section "
                              f"to hold Resolved Threads") from None
-        batch.row("WOULD-CLOSE", wrapup[0], "\u00a7Resolved Threads",
+        batch.row("WOULD-RECORD", wrapup[0], "\u00a7Resolved Threads",
                   lead_key)
     else:
         raise WriteError(f"unknown row '{verb}': use add, move or close")
@@ -1974,9 +1996,13 @@ def cmd_threads(batch: Batch, args: argparse.Namespace, text: str) -> None:
         wrapup = [batch.note_named(args.wrapup, vc.WRAP_TYPES, "wrapup")]
     errors: list[str] = []
     for n, cols in enumerate(rows, 1):
+        saved = (dict(batch.texts), dict(batch.originals), len(batch.rows))
         try:
             threads_row(batch, cols, wrapup)
         except WriteError as e:
+            # A failed row leaves nothing behind for the rows after it.
+            batch.texts, batch.originals = saved[0], saved[1]
+            del batch.rows[saved[2]:]
             errors.append(f"row {n}: {e}")
     if errors:
         raise WriteError("\nERROR\t".join(errors))

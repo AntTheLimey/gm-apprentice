@@ -82,7 +82,8 @@ class ThreadsTests(unittest.TestCase):
         # Give Corwin the same thread as Ines.
         corwin = read(vault, CORWIN).replace(
             "- **Ferrywoman's debt**",
-            "- **The ledger page in her coat** — copy\n- **Ferrywoman's debt**")
+            "- **The ledger page in her coat** — torn from the toll book, "
+            "not yet shown to anyone\n- **Ferrywoman's debt**")
         (vault / CORWIN).write_bytes(corwin.encode("utf-8"))
         stdin = rows(("move", "The ledger page in her coat", "Session 3",
                       "Ines_Marlowe, Corwin_Hale"))
@@ -106,7 +107,8 @@ class ThreadsTests(unittest.TestCase):
         vault = self.vault()
         corwin = read(vault, CORWIN).replace(
             "- **Ferrywoman's debt**",
-            "- **The ledger page in her coat** — copy\n- **Ferrywoman's debt**")
+            "- **The ledger page in her coat** — torn from the toll book, "
+            "not yet shown to anyone\n- **Ferrywoman's debt**")
         (vault / CORWIN).write_bytes(corwin.encode("utf-8"))
         code, out = run(vault, "threads", "--write", stdin=rows(
             ("move", "The ledger page in her coat", "-", "party")))
@@ -231,6 +233,90 @@ class ThreadsTests(unittest.TestCase):
         for rel in (OVERVIEW, INES, WRAPUP):
             data = (vault / rel).read_bytes()
             self.assertEqual(data.count(b"\n"), data.count(b"\r\n"), rel)
+
+    def test_move_differing_wording_refused(self):
+        vault = self.vault()
+        corwin = read(vault, CORWIN).replace(
+            "- **Ferrywoman's debt**",
+            "- **The ledger page in her coat** — other words\n"
+            "- **Ferrywoman's debt**")
+        (vault / CORWIN).write_bytes(corwin.encode("utf-8"))
+        before = self.snapshot(vault)
+        code, out = run(vault, "threads", "--write", stdin=rows(
+            ("move", "The ledger page in her coat", "-", "party")))
+        self.assertEqual(code, 1)
+        self.assertIn("word 'The ledger page in her coat' differently", out)
+        self.assertIn("other words", out)
+        self.assertIn("torn from the toll book", out)
+        self.assertEqual(self.snapshot(vault), before)
+
+    def test_totals_count_moves_and_closes(self):
+        vault = self.vault()
+        _, out = run(vault, "threads", stdin=rows(
+            ("move", "The ledger page in her coat", "-", "Ines_Marlowe")))
+        self.assertIn("moved: 2  closed: 0", out)
+        _, out = run(vault, "threads", "--wrapup", WRAPUP, stdin=rows(
+            ("close", "shared", "The missing ledger", "returned")))
+        self.assertIn("moved: 0  closed: 1", out)
+        self.assertIn("WOULD-RECORD", out)
+
+    def test_failed_row_does_not_poison_later_rows(self):
+        vault = self.vault()
+        before = self.snapshot(vault)
+        code, out = run(vault, "threads", "--wrapup", WRAPUP, "--write",
+                        stdin=rows(
+                            ("close", "shared", "No such thread", "x"),
+                            ("close", "shared", "The missing ledger", "done")))
+        self.assertEqual(code, 1)
+        self.assertEqual(out.count("ERROR"), 1, out)
+        self.assertIn("row 1", out)
+        self.assertEqual(self.snapshot(vault), before)
+        # A row that fails after it took a bullet off a sheet leaves no trace.
+        code, out = run(vault, "threads", "--wrapup", WRAPUP, stdin=rows(
+            ("move", "The ledger page in her coat", "-",
+             "Ines_Marlowe, Corwin_Hale"),
+            ("close", "Ines_Marlowe", "The ledger page in her coat", "done")))
+        self.assertEqual(code, 1)
+        self.assertEqual(out.count("ERROR"), 1, out)
+        self.assertIn("row 1", out)
+
+    def test_move_already_shared_refused(self):
+        vault = self.vault()
+        ines = read(vault, INES).replace(
+            "- Find out who lit",
+            "- **The missing ledger** — ines copy\n- Find out who lit")
+        (vault / INES).write_bytes(ines.encode("utf-8"))
+        code, out = run(vault, "threads", stdin=rows(
+            ("move", "The missing ledger", "-", "Ines_Marlowe")))
+        self.assertEqual(code, 1)
+        self.assertIn("'The missing ledger' is already a shared thread; "
+                      "close the PCs' copies instead", out)
+
+    def test_empty_fields_refused(self):
+        vault = self.vault()
+        for row in (("add", "shared", "-", "party", " "),
+                    ("close", "shared", "The missing ledger", " "),
+                    ("close", "shared", " ", "done"),
+                    ("move", " ", "-", "Ines_Marlowe")):
+            code, out = run(vault, "threads", "--wrapup", WRAPUP,
+                            stdin=rows(row))
+            self.assertEqual(code, 1, row)
+            self.assertIn("ERROR", out)
+
+    def test_close_names_its_list(self):
+        vault = self.vault()
+        ines = read(vault, INES).replace(
+            "- Find out who lit",
+            "- **The missing ledger** — ines copy\n- Find out who lit")
+        (vault / INES).write_bytes(ines.encode("utf-8"))
+        code, out = run(vault, "threads", "--wrapup", WRAPUP, "--write",
+                        stdin=rows(("close", "shared", "The missing ledger",
+                                    "returned")))
+        self.assertEqual(code, 0, out)
+        self.assertIn("ines copy", read(vault, INES))
+        self.assertNotIn("toll keeper wants it back",
+                         read(vault, OVERVIEW))
+        self.assertIn("(shared)", read(vault, WRAPUP))
 
 
 if __name__ == "__main__":
