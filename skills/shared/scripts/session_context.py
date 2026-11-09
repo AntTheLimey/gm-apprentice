@@ -103,7 +103,10 @@ from vaultlib import (GM_MARKER_RE, is_active_pc,  # noqa: F401
                       fenced_headings, h3_blocks, nested_mapping,
                       normalize, raw_frontmatter, section,
                       session_ref_number, word_count)
+from vaultlib import LABEL_RE as _LABEL_RE
+from vaultlib import bullets as _bullets
 from vaultlib import fence_step, link_name, split_paused
+from vaultlib import labelled_block as _labelled_block
 from vaultlib import vault_files as _vault_files
 
 
@@ -129,40 +132,6 @@ def emit(title: str, source: str | None, content: str | None):
 # --------------------------------------------------------------------------
 # --play / --threads shared helpers
 # --------------------------------------------------------------------------
-
-_LABEL_RE = re.compile(r"^\*\*([^*:]+):\*\*")
-# Any bold label line at all, inline (`**Label:**`) or block
-# (`**Label**` / `**Label (a parenthetical)**`) — used only to find where
-# an extracted block *ends*, since the enumerated skeleton's block labels
-# (`**NPCs**`, `**Points to land**`, ...) carry no colon and must stop a
-# block just as an inline label does.
-_ANY_LABEL_LINE_RE = re.compile(r"^\*\*[^*]+\*\*")
-_BULLET_RE = re.compile(r"^\s*[-*]\s+(.+)$")
-
-
-def _labelled_block(text: str, label: str) -> str | None:
-    """The `**label:** ...` line and any following lines, up to the next
-    bold label line (inline or block) or the end of `text`. None if
-    `label` is absent. Used for both a Session Plan scene's
-    `**Situation:**` / `**Starts it:**` / `**Entities:**` / `**Trigger:**`
-    fields and a PC's `**Open threads:**` block — both are "a bold
-    label, then prose or bullets, until the next bold label" in shape."""
-    lines = text.splitlines()
-    start = None
-    for i, line in enumerate(lines):
-        m = _LABEL_RE.match(line.strip())
-        if m and m.group(1).strip().casefold() == label.casefold():
-            start = i
-            break
-    if start is None:
-        return None
-    collected = [lines[start]]
-    for line in lines[start + 1:]:
-        if _ANY_LABEL_LINE_RE.match(line.strip()):
-            break
-        collected.append(line)
-    return "\n".join(collected).strip()
-
 
 # A line that opens something of its own rather than continuing the
 # label line above it: a blockquote, a table row, a bullet or bold label
@@ -202,16 +171,6 @@ def _remove_inline_label_line(text: str, label: str) -> str:
         end += 1
     del lines[start:end]
     return "\n".join(lines)
-
-
-def _bullets(text: str) -> list[str]:
-    """`- item` / `* item` line text, in document order, any indentation."""
-    out = []
-    for line in text.splitlines():
-        m = _BULLET_RE.match(line)
-        if m:
-            out.append(m.group(1).strip())
-    return out
 
 
 def _heading_block(text: str, level: int, title: str) -> str | None:
