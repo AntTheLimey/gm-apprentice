@@ -83,7 +83,8 @@ def test_stamp_below_floor_names_the_hop_and_how_to_run_it(vault):
     assert (f"update stamp of 1.10.90 (_meta/vault-state.json), older than "
             f"{vc.MOVED_FLOOR}") in line
     assert f"v{vc.FLOOR_HOP}.tar.gz" in line
-    assert "skills/shared/scripts/gma.py update" in line
+    # Quoted, so a folder or vault path with spaces still runs.
+    assert 'python3 "<unpacked folder>/skills/shared/scripts/gma.py" update "<vault>"' in line
     assert "1.10.134" not in line   # a moved vault needs no 1.10 bridge
     assert line.endswith("Then run this update again.")
 

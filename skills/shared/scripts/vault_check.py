@@ -879,9 +879,9 @@ def below_floor(stamp: str) -> str:
     return (f"an update stamp of {stamp} ({vaultlib.STATE_FILE}), older than "
             f"{MOVED_FLOOR}: update it first with {FLOOR_HOP}. Download "
             f"{HOP_SOURCE.format(hop=FLOOR_HOP)}, unpack it anywhere, and run "
-            f"`python3 <unpacked folder>/skills/shared/scripts/gma.py update "
-            f"<vault>`; if {FLOOR_HOP} refuses the vault too, do what it names "
-            f"first")
+            f"`python3 \"<unpacked folder>/skills/shared/scripts/gma.py\" "
+            f"update \"<vault>\"`; if {FLOOR_HOP} refuses the vault too, do "
+            f"what it names first")
 
 
 def dead_checks(checks: Iterable[Any], floor: str) -> list[str]:
