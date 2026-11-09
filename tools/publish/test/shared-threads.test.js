@@ -5,6 +5,7 @@ const os = require('os');
 const path = require('path');
 const { build } = require('../lib/build');
 const { sharedEntries, withSharedThreads } = require('../lib/shared-threads');
+const { strippedLines } = require('../lib/processor');
 const { settingsText, NEW_FILE } = require('./helpers/vault-files');
 const { writeNewConfig } = require('./helpers/settings-files');
 const { writePublishList } = require('./helpers/publish-list');
@@ -123,6 +124,56 @@ for (const site of ['player', 'gm']) {
     assert.match(unmarked(html), /The missing ledger/);
     if (site === 'player') assert.doesNotMatch(html, /The lamp is his/);
   });
+}
+
+// A `###` inside a hidden span is no place to stop: the threads would be hidden with it.
+const HIDDEN_SUBSECTIONS = {
+  'gm-only': '\n<!-- gm-only -->\n### GM Notes\n\nThe lamp is his.\n<!-- /gm-only -->\n',
+  '%%': '\n%%\n### Aside\n\nThe lamp is his.\n%%\n',
+  'HTML comment': '\n<!--\n### Aside\n\nThe lamp is his.\n-->\n',
+};
+
+test('shared threads: never put inside a hidden span', () => {
+  const add = (page) => withSharedThreads(page, [{ markdown: '- a', involves: [], party: true }]);
+  for (const [kind, hidden] of Object.entries(HIDDEN_SUBSECTIONS)) {
+    const page = `## Current Status\n\n**Location:** dock\n${hidden}\n## Notes\n`;
+    const out = add(page);
+    const shown = strippedLines(out).lines.join('\n');
+    assert.match(shown, /\*\*Shared threads:\*\*\n- a/, kind);
+    assert.doesNotMatch(shown, /lamp/, kind);
+  }
+  // The section ends inside an unclosed fence: they go in before its opener.
+  const open = '## Current Status\n\nX.\n\n<!-- gm-only -->\nS.\n';
+  assert.match(strippedLines(add(open)).lines.join('\n'), /X\.\n\n\*\*Shared threads:\*\*\n- a/);
+});
+
+for (const site of ['player', 'gm']) {
+  for (const [kind, hidden] of Object.entries(HIDDEN_SUBSECTIONS)) {
+    test(`shared threads: a ${kind} subsection in Current Status does not hide them (${site} site)`, () => {
+      const root = fs.mkdtempSync(path.join(os.tmpdir(), 'shared-threads-hid-'));
+      const vault = path.join(root, 'vault');
+      const notes = {
+        'Campaign Overview.md': overview(),
+        'PCs/Corwin_Hale.md': pc('Corwin_Hale').replace('\n## Notes', `${hidden}\n## Notes`),
+      };
+      for (const [rel, text] of Object.entries(notes)) {
+        fs.mkdirSync(path.dirname(path.join(vault, rel)), { recursive: true });
+        fs.writeFileSync(path.join(vault, rel), text);
+      }
+      const siteDir = path.join(root, 'campaign');
+      fs.mkdirSync(siteDir);
+      writeNewConfig(vault, { version: 1, player_site: { folder: siteDir, folder_map: { PCs: 'pcs' } }, gm_site: { publish: true, folder: path.join(root, 'campaign-gm') } });
+      const configPath = path.join(siteDir, 'vault.config.json');
+      fs.writeFileSync(configPath, JSON.stringify({ vaultPath: vault }));
+      const real = console.log; const warn = console.warn; console.log = () => {}; console.warn = () => {};
+      try { build({ configPath, site }); } finally { console.log = real; console.warn = warn; }
+      const out = site === 'gm' ? path.join(root, 'campaign-gm') : path.join(siteDir, 'docs');
+      const html = fs.readFileSync(path.join(out, 'pcs', 'corwin-hale.html'), 'utf8');
+      assert.match(unmarked(html), /Shared threads/);
+      assert.match(unmarked(html), /The missing ledger/);
+      if (site === 'player') assert.doesNotMatch(html, /The lamp is his/);
+    });
+  }
 }
 
 test('shared threads: names the PC through an alias link', () => {

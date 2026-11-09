@@ -1,5 +1,5 @@
 'use strict';
-const { fenceStep } = require('./processor');
+const { fenceStep, strippedLines } = require('./processor');
 const { markerRe } = require('./markers');
 // The Campaign Overview's `## Open Threads` bullets, and the ones that name a PC put on that PC's page.
 // The writer is skills/shared/scripts/threads.py `format_shared`:
@@ -107,8 +107,17 @@ function sharedEntries(publishedMarkdown) {
 }
 
 // Adds `**Shared threads:**` and the entries to `## Current Status`, after its lead fields: before its first
-// subsection (a `### GM Notes` the site leaves out would take them with it), else at its end. Unchanged with no
-// entries or no section.
+// subsection outside a code fence (a `### GM Notes` the site leaves out would take them with it; so would one inside a
+// gm-only block, since the page still files what follows it under that heading, #447), else at its end. The point
+// chosen is never inside a hidden span: from it the walk moves up until a line put there survives the page strips, so
+// a subsection hidden in a block or comment, or a section that ends inside an unclosed one, gets them before its
+// opener. Unchanged with no entries or no section, or with no visible place in it.
+const PROBE = 'shared-threads-probe';
+function shownAt(lines, at) {
+  const probe = [...lines.slice(0, at), PROBE, ...lines.slice(at)].join('\n');
+  return strippedLines(probe).lines.some((l) => l.includes(PROBE));
+}
+
 function withSharedThreads(pcMarkdown, entries) {
   const text = String(pcMarkdown || '');
   if (!entries || !entries.length) return text;
@@ -121,8 +130,11 @@ function withSharedThreads(pcMarkdown, entries) {
   for (let i = range.start + 1; i < range.end; i++) if (open.has(i) && /^#{3,6}\s/.test(lines[i])) { end = i; break; }
   let at = end;
   while (at > range.start + 1 && lines[at - 1].trim() === '') at--;
+  while (at > range.start + 1 && !shownAt(lines, at)) at--;
+  if (!shownAt(lines, at)) return text;
+  while (at > range.start + 1 && lines[at - 1].trim() === '') at--;
   const added = ['', '**Shared threads:**', ...entries.map((e) => e.markdown)];
-  if (at === end && end < lines.length) added.push('');
+  if (at < lines.length && lines[at].trim() !== '') added.push('');
   lines.splice(at, 0, ...added);
   return lines.join(nl);
 }
