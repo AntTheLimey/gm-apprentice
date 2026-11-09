@@ -74,6 +74,25 @@ class BriefWrapupUnitTests(unittest.TestCase):
         self.assertIn("Kept thread.", out)
         self.assertIn("#### Pending Consequences\n\n- Kept.", out)
 
+    def test_stubbing_keeps_every_marker_line(self):
+        # The fence `append_resolved` puts round an older Wrap-Up's block,
+        # a spoiler closer, and a marker after text on a line all stay.
+        import threads
+        old = ("# W\n\n### What Carries Forward\n\n#### Unresolved Threads"
+               "\n\n- a\n\n## Next\n\nN.\n")
+        out = sc.brief_wrapup(threads.append_resolved(old, "- b — closed: x"))
+        self.assertIn("<!-- gm-only -->\n\n#### Resolved Threads\n(omitted",
+                      out)
+        self.assertIn("<!-- /gm-only -->\n\n## Next", out)
+        for tail in ("<!-- /spoiler -->", "- c <!-- /gm-only -->",
+                     "<!-- /SPOILER -->"):
+            with self.subTest(tail=tail):
+                body = ("<!-- spoiler -->\n#### Resolved Threads\n\n- b\n"
+                        f"{tail}\n\nKept.\n")
+                out = sc.brief_wrapup(body)
+                self.assertIn(f"\n{tail}\n", out)
+                self.assertNotIn("- b\n", out)
+
     def test_no_op_when_nothing_to_drop(self):
         body = "## Narrative Recap\n\nText.\n\n## GM Notes\n\n### World State\n\nDay 1.\n"
         self.assertEqual(sc.brief_wrapup(body), body)
