@@ -1221,7 +1221,9 @@ class SharedThreadsTests(unittest.TestCase):
                 self.assertTrue(item.notice)
                 self.assertEqual(item.lines, [
                     'PCs/A.md\t"The missing ledger" on A left on the sheet: '
-                    "it sits next to hidden text"])
+                    "it sits next to hidden text",
+                    "The missing ledger\tleft on B as well: the copy on A "
+                    "is in or next to hidden text, so none moved"])
                 for rel in ("PCs/A.md", "PCs/B.md", "Campaign Overview.md"):
                     self.assertEqual(self.raw(v, rel), notes[rel])
 
@@ -1363,19 +1365,53 @@ class SharedThreadsTests(unittest.TestCase):
         self.assertIn("no place outside a GM-only fence", item.lines[0])
         self.assertIn(LEDGER, self.raw(v, "PCs/A.md"))
 
-    def test_already_shared_is_a_notice(self):
-        overview = ST_OVERVIEW.replace(
-            "## GM Notes", f"## Open Threads\n\n- {LEDGER} — involves the "
-            "party\n\n## GM Notes")
-        v = self.vault({
-            "Campaign Overview.md": overview,
-            "PCs/A.md": st_pc(LEDGER),
-            "PCs/B.md": st_pc(LEDGER),
-        })
+    def test_a_fenced_copy_holds_the_group_and_names_the_others(self):
+        notes = {
+            "Campaign Overview.md": ST_OVERVIEW,
+            "PCs/A.md": st_raw_pc(f"<!-- gm-only -->\n- {LEDGER}\n"
+                                  "<!-- /gm-only -->\n"),
+            "PCs/B.md": st_raw_pc(f"- {LEDGER}\n"),
+            "PCs/C.md": st_raw_pc(f"- {LEDGER}\n"),
+        }
+        v = self.vault(notes)
         (item,) = mv.find_shared_threads(v)
         self.assertEqual(item.group, PERSON)
-        self.assertIn("already in the Campaign Overview's Open Threads",
-                      item.lines[0])
+        self.assertEqual(item.lines, [
+            "The missing ledger\tleft on B and C as well: the copy on A is "
+            "in or next to hidden text, so none moved"])
+
+    def test_copies_of_an_already_shared_thread_go(self):
+        # Any case of the heading; one copy or several.
+        for heading in ("## Open Threads", "## Open threads"):
+            with self.subTest(heading):
+                overview = ST_OVERVIEW.replace(
+                    "## GM Notes", f"{heading}\n\n- {LEDGER} — involves "
+                    "the party\n\n## GM Notes")
+                v = self.vault({
+                    "Campaign Overview.md": overview,
+                    "PCs/A.md": st_pc(LEDGER, "A's own"),
+                    "PCs/B.md": st_pc(LEDGER),
+                    "PCs/C.md": st_pc("C's own", LEDGER),
+                })
+                (item,) = mv.find_shared_threads(v)
+                self.assertEqual(item.group, WILL)
+                self.assertEqual(item.lines, [
+                    'move "The missing ledger" from A, B and C: already in the '
+                    "Campaign Overview's Open Threads"])
+                item.apply(None)
+                self.assertEqual(self.raw(v, "Campaign Overview.md"),
+                                 overview)
+                for rel in ("PCs/A.md", "PCs/B.md", "PCs/C.md"):
+                    self.assertNotIn("missing ledger", self.raw(v, rel))
+                self.assertIn("- A's own", self.raw(v, "PCs/A.md"))
+                self.assertEqual(mv.find_shared_threads(v), [])
+                one = self.vault({
+                    "Campaign Overview.md": overview,
+                    "PCs/A.md": st_pc(LEDGER),
+                })
+                (item,) = mv.find_shared_threads(one)
+                item.apply(None)
+                self.assertNotIn("missing ledger", self.raw(one, "PCs/A.md"))
 
     def test_crlf_kept(self):
         notes = {

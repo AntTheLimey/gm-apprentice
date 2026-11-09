@@ -1083,23 +1083,40 @@ def _shared_threads_plan(vault: Path) -> tuple[
     current, _notes = sc.select_session(files, None)
     chapter = current["chapter"] if current else None
     wrap_ups = sc.wrap_up_threads(files, chapter) if chapter else []
+    def stems_of(rels: list[str]) -> str:
+        stems = [Path(rel).stem for rel in rels]
+        return (" and ".join(stems) if len(stems) < 3
+                else ", ".join(stems[:-1]) + " and " + stems[-1])
+
     for where in holders.values():
         rels = sorted({rel for rel, _t in where})
-        if len(rels) < 2:
+        thread = where[0][1].text
+        name = th.lead(thread)
+        # A copy of a thread already shared word for word is a duplicate:
+        # it goes, one copy or several.
+        already = " ".join(thread.split()) in shared
+        if len(rels) < 2 and not already:
             continue
         if any(item.hidden for _r, item in where):
             for rel, item in where:
                 if item.hidden:
                     near_hidden(rel, item)
+            public = sorted({rel for rel, item in where if not item.hidden})
+            if public:
+                hidden = sorted({rel for rel, item in where if item.hidden})
+                left.append(
+                    f"{name}\tleft on {stems_of(public)} as well: the copy "
+                    f"on {stems_of(hidden)} is in or next to hidden text, "
+                    f"so none moved")
             continue
-        thread = where[0][1].text
-        name = th.lead(thread)
+        if already:
+            for rel, item in where:
+                drop.setdefault(rel, []).append(item)
+            lines.append(("move", f'"{name}" from {stems_of(rels)}: already '
+                          f"in the Campaign Overview's Open Threads"))
+            continue
         if overview is None:
             left.append(f"{name}\t{NO_OVERVIEW}; left on each PC's sheet")
-            continue
-        if " ".join(thread.split()) in shared:
-            left.append(f"{name}\talready in the Campaign Overview's Open "
-                        f"Threads; the copies on PC sheets were left")
             continue
         hits, mark = sc.match_sessions(thread, wrap_ups)
         since = f"Session {min(hits)}" if hits and mark == "=" else None
@@ -1147,11 +1164,13 @@ def find_shared_threads(vault: Path) -> list[Item]:
     """1.12.3: a thread written word for word on two or more active PCs'
     Open threads moves to the Campaign Overview's Open Threads once, with
     those PCs as `involves` and its first-seen session as `since` when a
-    Wrap-Up of the current chapter matches it closely. A thread is the
+    Wrap-Up of the current chapter matches it closely; a PC's word-for-word
+    copy of a thread already there just comes off. A thread is the
     whole bullet (see `threads.pc_thread_items`); one in or next to
     hidden text is never touched. A bullet struck through whole is closed
     into the latest Wrap-Up's Resolved Threads. One that cannot be moved
-    or closed stays where it is, and the GM is told."""
+    or closed stays where it is, and the GM is told (and, for a group held
+    back by a hidden copy, which public copies stayed)."""
     changed, lines, left = _shared_threads_plan(vault)
     items = []
     if changed:
@@ -1222,5 +1241,5 @@ VAULT_CHECKS: list[Check] = [
           plain=("Fixed the publish row of the schema table in _meta/entity-types.md so the table check no longer reports an error there; nothing else in the file was touched.")),
     Check("shared-threads", "1.12.3", 3, "shared threads", find_shared_threads,
           kind="bookkeeping",
-          plain="Moved threads that sat word for word on several PC sheets into the Campaign Overview's Open Threads, once each with the PCs they involve; struck-through threads went to the latest Wrap-Up's Resolved Threads."),
+          plain="Moved threads that sat word for word on several PC sheets into the Campaign Overview's Open Threads, once each with the PCs they involve (copies of one already there came off); struck-through threads went to the latest Wrap-Up's Resolved Threads."),
 ]
