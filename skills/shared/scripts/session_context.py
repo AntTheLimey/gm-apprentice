@@ -607,7 +607,7 @@ _CLOSED_TAIL_RE = re.compile(r"\s+\u2014\s+closed:\s.*$")
 def wrap_up_resolved(files, chapter) -> list[str]:
     """The closed threads in the in-scope Wrap-Ups' `#### Resolved Threads`,
     each without its `— closed: …` tail (see `threads.format_resolved`)."""
-    out = []
+    out: list[str] = []
     for _n, text in _scoped_wrap_ups(files, chapter):
         block = _heading_block(text, 4, "Resolved Threads")
         out.extend(_CLOSED_TAIL_RE.sub("", b, count=1)
