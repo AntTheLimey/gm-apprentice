@@ -22,10 +22,21 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 - Wrap-up writes only open questions and obligations as threads: stopping points go to the Handoff and events to the recap. It puts shared threads on the shared list, and closes a thread only on a note that says it is over, telling you each time.
 - `--threads` prints each thread once and whole. `--brief` and `--prep` stub the last Wrap-Up's Resolved Threads.
+- `vw status` warns when a rewrite of a PC's Open threads drops a thread, and points at `vw threads close` so the end is recorded.
 
 ### Update
 
 - The `shared-threads` check moves threads that sit word for word on several PC sheets into the Overview's Open Threads. Struck-through ones go to the latest Wrap-Up's Resolved Threads. Threads in or next to hidden text stay put, with a notice.
+
+### In numbers
+
+Measured on a notes-only copy of a 16-session chapter (six PCs), after the update and one Thread Tidy:
+
+| | 1.12.2 | 1.12.3 | Change |
+|---|---|---|---|
+| `session-context --threads` | 49,550 chars | 36,000 chars | −27% |
+| `session-context --prep` | 157,760 chars | 126,922 chars | −20% |
+| Threads lost from any PC page on the site | — | 0 | |
 
 ---
 
