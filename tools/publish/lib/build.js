@@ -1488,10 +1488,13 @@ function buildSite(options) {
       if (typeof overviewPage.publishedMarkdown === 'string') overviewView = overviewPage.publishedMarkdown;
       else {
         const copy = { ...overviewPage };
-        sharedPublishView(copy, { gm, mark, excludeCallouts, excludeSections, pcKeepSections, storyMoments });
+        require('./published-view').publishView(copy, { gm, mark, excludeCallouts, excludeSections, pcKeepSections, storyMoments });   // looked up at the call: a test can make it throw
         overviewView = String(copy.publishedMarkdown || '');
       }
-    } catch (err) { overviewView = ''; }
+    } catch (err) {
+      overviewView = '';
+      console.warn(`  WARNING: ${vaultRelPathOf(overviewPage)}: shared threads were left off the PC pages because the Overview's published view could not be made (${err.message})`);
+    }
   }
   const sharedAll = sharedEntries(overviewView);
   const namesPage = (target, page) => {
@@ -1502,8 +1505,14 @@ function buildSite(options) {
     if (!isPcPage(page)) continue;
     if (sharedAll.length) {
       const withThreads = withSharedThreads(page.markdown, sharedAll.filter((e) => e.party || e.involves.some((t) => namesPage(t, page))));
-      const playersSee = (md) => playerSafeMarkdown(md, { excludeCallouts, excludeSections, pcKeepSections, storyMoments, frontmatter: page.sourceFrontmatter || page.frontmatter }).text;
-      if (withThreads !== page.markdown && playersSee(withThreads) !== playersSee(page.markdown)) page.markdown = withThreads;
+      // What players see of the text: on the GM site a stub-cut section is kept and marked, so the marked spans come off.
+      const playersSee = (md) => {
+        const text = playerSafeMarkdown(md, { excludeCallouts, excludeSections, pcKeepSections, storyMoments, frontmatter: page.sourceFrontmatter || page.frontmatter, ...markOpt }).text;
+        return gm ? withoutMarked(text, mark.marks) : text;
+      };
+      // The threads go in only where players see the Current Status heading itself: the added lines sit after any mark
+      // that closes a cut section, so the changed view alone would not show a cut section.
+      if (withThreads !== page.markdown && /^##\s+Current Status\s*$/mi.test(playersSee(page.markdown)) && playersSee(withThreads) !== playersSee(page.markdown)) page.markdown = withThreads;
     }
     publishView(page);
   }

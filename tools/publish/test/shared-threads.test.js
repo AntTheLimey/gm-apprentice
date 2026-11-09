@@ -171,3 +171,43 @@ for (const site of ['player', 'gm']) {
     if (site === 'gm') assert.doesNotMatch(corwin, /class="gm-mark/, 'players see the thread, so it is not marked');
   });
 }
+
+function stubVault(site, { throwView = false } = {}) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'shared-threads-stub-'));
+  const vault = path.join(root, 'vault');
+  const notes = {
+    'Campaign Overview.md': overview(),
+    'PCs/Corwin_Hale.md': pc('Corwin_Hale').replace('type: pc\n', 'type: pc\npublish: stub\npublish_include_sections: [Notes]\n'),
+  };
+  for (const [rel, text] of Object.entries(notes)) {
+    fs.mkdirSync(path.dirname(path.join(vault, rel)), { recursive: true });
+    fs.writeFileSync(path.join(vault, rel), text);
+  }
+  writePublishList(vault, { publishing: ['PCs/Corwin_Hale.md'], excluded: ['Campaign Overview.md'] });
+  const siteDir = path.join(root, 'campaign');
+  fs.mkdirSync(siteDir);
+  writeNewConfig(vault, { version: 1, player_site: { folder: siteDir, folder_map: { PCs: 'pcs' } }, gm_site: { publish: true, folder: path.join(root, 'campaign-gm') } });
+  const configPath = path.join(siteDir, 'vault.config.json');
+  fs.writeFileSync(configPath, JSON.stringify({ vaultPath: vault }));
+  const warnings = [];
+  const real = console.log; const warn = console.warn; console.log = () => {}; console.warn = (m) => warnings.push(String(m));
+  const pv = require('../lib/published-view');
+  const original = pv.publishView;
+  if (throwView) pv.publishView = () => { throw new Error('boom'); };
+  try { build({ configPath, site }); } finally { pv.publishView = original; console.log = real; console.warn = warn; }
+  const out = site === 'gm' ? path.join(root, 'campaign-gm') : path.join(siteDir, 'docs');
+  return { html: fs.readFileSync(path.join(out, 'pcs', 'corwin-hale.html'), 'utf8'), warnings };
+}
+
+for (const site of ['player', 'gm']) {
+  test(`shared threads: a stub PC whose Current Status is cut gets none (${site} site)`, () => {
+    const { html } = stubVault(site);
+    assert.doesNotMatch(html, /Shared threads|The missing ledger/);
+  });
+}
+
+test('shared threads: an Overview view that cannot be made is warned about and adds nothing', () => {
+  const { html, warnings } = stubVault('player', { throwView: true });
+  assert.ok(warnings.some((w) => /^ {2}WARNING: Campaign Overview\.md: shared threads were left off the PC pages/.test(w)), warnings.join('\n'));
+  assert.doesNotMatch(html, /Shared threads/);
+});
