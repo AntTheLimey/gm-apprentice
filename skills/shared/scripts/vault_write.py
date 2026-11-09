@@ -1919,24 +1919,22 @@ def threads_row(batch: Batch, cols: list[str], wrapup: list[str]) -> None:
         since = None if cols[2].strip() in ("", "-") else cols[2].strip()
         names = threads_who(batch, cols[3])
         overview = threads_overview(batch)
-        if th.find_thread([t.text for t in
-                           th.shared_threads(batch.read(overview))],
-                          lead_key):
-            raise WriteError(f"'{lead_key}' is already a shared thread; "
-                             f"close the PCs' copies instead")
+        # Every named PC is involved; the thread comes off each that has
+        # it. `party` names every active PC.
         if names is None:
             gone = vl.out_of_play(batch.vault)
             pcs = sorted(rel for rel, t in vl.vault_files(batch.vault,
                                                           newline="")
                          if vl.is_active_pc(
                              rel, vl.extract_frontmatter(t) or {}, gone))
-            pcs = [r for r in pcs
-                   if th.find_thread([t.text for t in th.pc_thread_items(
-                       batch.read(r))], lead_key)]
-            if not pcs:
-                raise WriteError(f"no active PC has a thread '{lead_key}'")
         else:
             pcs = [find_pc(batch, n) for n in names]
+        pcs = [r for r in pcs
+               if th.find_thread([t.text for t in th.pc_thread_items(
+                   batch.read(r))], lead_key)]
+        if not pcs:
+            raise WriteError(f"no {'active' if names is None else 'named'} "
+                             f"PC has a thread '{lead_key}'")
         taken = [threads_take(batch, rel, lead_key, "WOULD-MOVE")
                  for rel in pcs]
         texts = [t.text for t in taken]
@@ -1947,6 +1945,21 @@ def threads_row(batch: Batch, cols: list[str], wrapup: list[str]) -> None:
                              for r, t in zip(pcs, texts))
                 + " \u2014 make them match, or add the shared thread and "
                   "close each PC's own")
+        shared = th.shared_threads(batch.read(overview))
+        hits = th.find_thread([t.text for t in shared], lead_key)
+        if len(hits) > 1:
+            raise WriteError(f"{overview}: {len(hits)} threads match "
+                             f"'{lead_key}'; use more of its text")
+        if hits:
+            # Already shared: the PCs' copies go, the entry stays as it is.
+            if " ".join(shared[hits[0]].text.split()) != " ".join(
+                    texts[0].split()):
+                raise WriteError(
+                    f"'{lead_key}' is already a shared thread, worded "
+                    f"differently: shared: {shared[hits[0]].text} | "
+                    f"{Path(pcs[0]).stem}: {texts[0]} \u2014 make them "
+                    f"match, or close the PCs' copies")
+            return
         threads_insert(batch, overview, texts[0], since, names, "WOULD-MOVE")
     elif verb == "close":
         if len(cols) != 4:
@@ -1962,8 +1975,7 @@ def threads_row(batch: Batch, cols: list[str], wrapup: list[str]) -> None:
             found = th.shared_threads(note)
             i = threads_find([t.text for t in found], lead_key, overview)
             try:
-                batch.put(overview, th.remove_bullet(
-                    note, (th.SECTION,), i))
+                batch.put(overview, th.remove_shared(note, i))
             except (KeyError, IndexError):
                 raise WriteError(f"{overview}: cannot take thread "
                                  f"'{lead_key}' off Open Threads") from None
@@ -3966,16 +3978,18 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=raw, description=(
             "stdin: one row per line, fields separated by TAB.\n"
             "  add   shared  SINCE  WHO  TEXT   add to the Overview's Open Threads\n"
-            "  move  LEAD    SINCE  WHO         take LEAD off each named PC's\n"
-            "                                   Open threads, add it once to the\n"
-            "                                   shared list\n"
+            "  move  LEAD    SINCE  WHO         take LEAD off each named PC that\n"
+            "                                   has it, add it once to the shared\n"
+            "                                   list involving them all (already\n"
+            "                                   there word for word: the copies\n"
+            "                                   just go)\n"
             "  close LIST    LEAD   EVIDENCE    LIST is 'shared' or a PC's note\n"
             "                                   name; the thread leaves it and is\n"
             "                                   recorded in the Wrap-Up's\n"
             "                                   Resolved Threads\n"
             "SINCE is a session label, or - for none. WHO is PC note\n"
             "names separated by commas, or 'party' (for move, every active\n"
-            "PC that has the thread). Any ERROR row writes nothing."))
+            "PC). Any ERROR row writes nothing."))
     threads.add_argument("--wrapup", help="the Wrap-Up that records closed "
                          "threads (needed by close rows): vault-relative, or its name")
     threads.add_argument("--write", action="store_true", help="write it (default: preview)")

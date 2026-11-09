@@ -145,16 +145,18 @@ gma vault-write <vault> threads [options]
 ```text
 stdin: one row per line, fields separated by TAB.
   add   shared  SINCE  WHO  TEXT   add to the Overview's Open Threads
-  move  LEAD    SINCE  WHO         take LEAD off each named PC's
-                                   Open threads, add it once to the
-                                   shared list
+  move  LEAD    SINCE  WHO         take LEAD off each named PC that
+                                   has it, add it once to the shared
+                                   list involving them all (already
+                                   there word for word: the copies
+                                   just go)
   close LIST    LEAD   EVIDENCE    LIST is 'shared' or a PC's note
                                    name; the thread leaves it and is
                                    recorded in the Wrap-Up's
                                    Resolved Threads
 SINCE is a session label, or - for none. WHO is PC note
 names separated by commas, or 'party' (for move, every active
-PC that has the thread). Any ERROR row writes nothing.
+PC). Any ERROR row writes nothing.
 ```
 
 | Argument | Value | Help |

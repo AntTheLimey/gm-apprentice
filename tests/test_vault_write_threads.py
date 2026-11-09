@@ -274,6 +274,11 @@ class ThreadsTests(unittest.TestCase):
         self.assertIn("row 1", out)
         self.assertEqual(self.snapshot(vault), before)
         # A row that fails after it took a bullet off a sheet leaves no trace.
+        corwin = read(vault, CORWIN).replace(
+            "- **Ferrywoman's debt**",
+            "- **The ledger page in her coat** — other words\n"
+            "- **Ferrywoman's debt**")
+        (vault / CORWIN).write_bytes(corwin.encode("utf-8"))
         code, out = run(vault, "threads", "--wrapup", WRAPUP, stdin=rows(
             ("move", "The ledger page in her coat", "-",
              "Ines_Marlowe, Corwin_Hale"),
@@ -288,11 +293,56 @@ class ThreadsTests(unittest.TestCase):
             "- Find out who lit",
             "- **The missing ledger** — ines copy\n- Find out who lit")
         (vault / INES).write_bytes(ines.encode("utf-8"))
-        code, out = run(vault, "threads", stdin=rows(
+        before = self.snapshot(vault)
+        code, out = run(vault, "threads", "--write", stdin=rows(
             ("move", "The missing ledger", "-", "Ines_Marlowe")))
         self.assertEqual(code, 1)
-        self.assertIn("'The missing ledger' is already a shared thread; "
-                      "close the PCs' copies instead", out)
+        self.assertIn("'The missing ledger' is already a shared thread, "
+                      "worded differently", out)
+        self.assertIn("ines copy", out)
+        self.assertEqual(self.snapshot(vault), before)
+
+    def test_move_from_one_holder_involves_every_named_pc(self):
+        vault = self.vault()
+        corwin = read(vault, CORWIN)
+        code, out = run(vault, "threads", "--write", stdin=rows(
+            ("move", "The ledger page in her coat", "Session 3",
+             "Ines_Marlowe, Corwin_Hale")))
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("ledger page", read(vault, INES))
+        self.assertEqual(read(vault, CORWIN), corwin)
+        self.assertIn("- **The ledger page in her coat** — torn from the toll "
+                      "book, not yet shown to anyone — since Session 3; "
+                      "involves [[Ines_Marlowe]], [[Corwin_Hale]]",
+                      read(vault, OVERVIEW))
+        # No named PC has it: refused.
+        code, out = run(vault, "threads", stdin=rows(
+            ("move", "Ferrywoman's debt", "-", "Ines_Marlowe")))
+        self.assertEqual(code, 1)
+        self.assertIn("no named PC has a thread 'Ferrywoman's debt'", out)
+
+    def test_move_of_an_already_shared_thread_takes_the_copies_off(self):
+        vault = self.vault()
+        ines = read(vault, INES).replace(
+            "- Find out who lit",
+            "- **The missing ledger** — Harrow Ford's toll keeper wants it "
+            "back\n- Find out who lit")
+        (vault / INES).write_bytes(ines.encode("utf-8"))
+        overview = read(vault, OVERVIEW)
+        code, out = run(vault, "threads", "--write", stdin=rows(
+            ("move", "The missing ledger", "Session 9", "Ines_Marlowe")))
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("missing ledger", read(vault, INES))
+        self.assertIn("Find out who lit", read(vault, INES))
+        self.assertEqual(read(vault, OVERVIEW), overview)
+
+    def test_close_with_an_empty_list_refused(self):
+        vault = self.vault()
+        code, out = run(vault, "threads", "--wrapup", WRAPUP, stdin=rows(
+            ("close", " ", "The missing ledger", "returned")))
+        self.assertEqual(code, 1)
+        self.assertIn("close needs a list, a lead and evidence; one is empty",
+                      out)
 
     def test_empty_fields_refused(self):
         vault = self.vault()
