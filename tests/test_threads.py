@@ -414,6 +414,29 @@ class ThreadsTests(unittest.TestCase):
                 self.assertEqual([t.fenced for t in got],
                                  [False, True, True, True, False])
 
+    def test_inline_placeholder_leaves_nested_threads_their_own(self):
+        # A `{…}` placeholder left on the label line is no thread: each
+        # bullet nested under it is one, matched and closed on its own.
+        pc = ("## Current Status\n\n- **Open threads:** {Player-facing.}\n"
+              "    - a\n    - b\n- **Knows:** x\n")
+        got = threads.pc_thread_items(pc)
+        self.assertEqual([t.text for t in got], ["a", "b"])
+        out = threads.remove_pc_thread(pc, got[0])
+        self.assertEqual([t.text for t in threads.pc_thread_items(out)],
+                         ["b"])
+        self.assertIn("{Player-facing.}", out)
+
+    def test_open_threads_label_under_a_subsection_is_not_the_field(self):
+        # With no Open threads field above Current Status's first
+        # subsection, a label in a journal below is history, not threads.
+        pc = ("## Current Status\n\n**Location:** dock\n\n### Journal\n\n"
+              "**Open threads:**\n- an old one\n")
+        self.assertEqual(threads.pc_thread_items(pc), [])
+        pc = pc.replace("### Journal", "**Open threads:**\n- live\n\n"
+                        "### Journal")
+        self.assertEqual([t.text for t in threads.pc_thread_items(pc)],
+                         ["live"])
+
     def test_inline_and_adjacent_comments_are_hidden(self):
         pc = ("## Current Status\n\n**Open threads:**\n"
               "- Aside <!-- the abbot lies --> here\n"

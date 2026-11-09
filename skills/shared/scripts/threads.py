@@ -123,9 +123,10 @@ def _shared_of(block: _Block) -> tuple[SharedThread, bool]:
     `involves` tail). The tail is read off the first line when it has one
     (the text is then the rest of the first line, then the lines under
     it); otherwise off the end of the joined text (a tail on a wrapped
-    line)."""
+    line, or an `involves` list the first line leaves open on a comma)."""
     first = _parse_body(block.parts[0])
-    if first.party or first.involves:
+    cut = len(block.parts) > 1 and block.parts[0].rstrip().endswith(",")
+    if (first.party or first.involves) and not cut:
         rest = block.text[len(block.parts[0]):]
         return replace(first, text=first.text + rest,
                        hidden=block.hidden), True
@@ -390,7 +391,8 @@ _PC_LABEL_RE = re.compile(
 
 def _pc_span(lines: list[str]) -> tuple[re.Match[str], int, int] | None:
     """(the label line's match, its index, end) of a PC's Open threads under
-    `## Current Status`, or None. The label is bold, bulleted or not. Its
+    `## Current Status`, before its first subsection, or None. The label
+    is bold, bulleted or not. Its
     block ends at the next heading of any level, and at the next line no
     deeper than the label that is a bold label line (`**Knows:**`) or, for
     a bulleted label, a bullet (the next field); all outside a code
@@ -409,6 +411,8 @@ def _pc_span(lines: list[str]) -> tuple[re.Match[str], int, int] | None:
         delim, is_fence = fence_step(line, delim)
         if is_fence or delim is not None:
             continue
+        if SECTION_HEADING_RE.match(line):
+            return None   # a subsection's label (a journal's) is not the field
         m = _PC_LABEL_RE.match(line)
         if m and m.group("name").strip().casefold() == want:
             break
@@ -545,11 +549,15 @@ def _blocks(lines: list[str], start: int, end: int,
     base: int | None = None
     delim: str | None = None
     i = start + 1
-    if label is not None and not _filler(label.group("rest")):
+    rest = label.group("rest").strip() if label is not None else ""
+    # Inline text that says none, or a template placeholder, is no thread:
+    # bullets nested under it are threads of their own.
+    if label is not None and not (_filler(rest)
+                                  or _PLACEHOLDER_RE.match(rest)):
         stop = _block_stop(lines, start, end,
                            len(label.group("indent").expandtabs(4)))
-        out.append(_block(lines, hidden, near, start, stop,
-                          label.group("rest").strip(), label.group("label")))
+        out.append(_block(lines, hidden, near, start, stop, rest,
+                          label.group("label")))
         i = stop
     while i < end:
         line = lines[i].rstrip("\r")
