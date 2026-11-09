@@ -242,15 +242,15 @@ class Scan(unittest.TestCase):
         self.assertIn("  line 12: the claim runs on", out)
 
     def test_benchmark_reviewed_session(self):
-        out = rs.scan(BENCH, f"{SESSIONS}/Session 04 - The Reckoning - Wrap-Up.md")
+        out = rs.scan(BENCH, f"{SESSIONS}/Chapter_01_Session_04_Wrap_Up.md")
         self.assertIn("skip: status is already reviewed", out)
         self.assertIn("draft entities created this session: 0", out)
 
     # Ruling 5: absolute paths, and two different errors.
     def test_absolute_path_inside_the_vault(self):
-        wrap = BENCH / SESSIONS / "Session 04 - The Reckoning - Wrap-Up.md"
+        wrap = BENCH / SESSIONS / "Chapter_01_Session_04_Wrap_Up.md"
         self.assertEqual(rs.scan(BENCH, str(wrap))[0],
-                         f"wrap-up: {SESSIONS}/Session 04 - The Reckoning - Wrap-Up.md")
+                         f"wrap-up: {SESSIONS}/Chapter_01_Session_04_Wrap_Up.md")
 
     def test_errors(self):
         with self.assertRaisesRegex(LookupError, "is not a Wrap-Up \\(type: session\\)"):
@@ -266,7 +266,7 @@ class Cli(unittest.TestCase):
         script = str(SCRIPTS / "reconcile_scan.py")
         ok = subprocess.run(
             [sys.executable, "-I", script, str(BENCH),
-             f"./{SESSIONS}/Session 02 - The Docks at Night - Wrap-Up.md"],
+             f"./{SESSIONS}/Chapter_01_Session_02_Wrap_Up.md"],
             capture_output=True, text=True, check=False)
         self.assertEqual(ok.returncode, 0, ok.stderr)
         self.assertTrue(ok.stdout.rstrip().endswith("quick path: yes"))

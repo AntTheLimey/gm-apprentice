@@ -11,23 +11,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent
                        / "skills" / "shared" / "scripts"))
 
 import migrate_site as ms  # noqa: E402
-import migrate_vault as mv  # noqa: E402
 
 # (registry, name, the fields of the registered check that are pinned)
 REGISTERED = [
-    (mv.VAULT_CHECKS, "open-threads-fold", {"choices": ("open-threads-fold=",)}),
-    (mv.VAULT_CHECKS, "required-ties-section",
-     {"release": "1.10.65", "band": 3,
-      "choices": ("required-ties-section",)}),
-    (mv.VAULT_CHECKS, "tone-words",
-     {"release": "1.10.44", "band": 3, "choices": ("tone-words=",)}),
-    (mv.VAULT_CHECKS, "tone-list",
-     {"release": "1.10.44", "band": 3, "choices": (), "asks_site": False}),
-    (ms.SITE_CHECKS, "sheet-source", {"choices": ("sheet-source:=",)}),
-    (ms.SITE_CHECKS, "retire-steps",
-     {"release": "1.10.63", "choices": ("retire-step:=",)}),
-    (ms.SITE_CHECKS, "retire-steps-2",
-     {"release": "1.10.92", "choices": ("retire-step:=",)}),
+    (ms.SITE_CHECKS, "hide-fields-voice",
+     {"release": "1.11.2", "band": 2, "choices": ("hide-add:",)}),
 ]
 
 
@@ -38,8 +26,3 @@ def test_the_check_is_registered(registry, name, fields):
     assert check.release is not None
     for field, want in fields.items():
         assert getattr(check, field) == want, field
-
-
-def test_required_ties_runs_right_after_the_schema_mirror():
-    ids = [c.name for c in mv.VAULT_CHECKS]
-    assert ids.index("required-ties-section") == ids.index("schema-mirror") + 1

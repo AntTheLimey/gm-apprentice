@@ -54,11 +54,6 @@
 //                            to be set up). Read with the build's own YAML parser, so
 //                            vault_check does not read that file a second way.
 //
-//   {"op":"google-fonts","vault":…,"config":…}
-//       -> {"families":[…]}  the families the site would load from Google for the vault
-//                            (`config`, the site's vault.config.json, is optional); none
-//                            when the fonts are hosted.
-//
 //   {"op":"dates","values":[…]}
 //       -> {"dates":[{"iso":"1814-08-12"|null,"day":bool}]}  each in-game date as the timeline page reads it
 //                            (`parseDate`); `day` is false when no day of the month was named, so the
@@ -84,7 +79,6 @@
 //
 // A request that cannot be answered gets {"error":…}; the process carries on.
 const { StringDecoder } = require('string_decoder');
-const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { readSettings, nameIn, fileLabel } = require('./settings');
@@ -137,15 +131,6 @@ function siteDirPath(vault, raw) {
   return path.resolve(vault, expanded);
 }
 
-function googleFonts(vault, config) {
-  if (typeof vault !== 'string' || vault === '') throw new Error('vault must be a path');
-  if (config !== undefined && config !== null && (typeof config !== 'string' || config === '')) throw new Error('config must be a path');
-  const { loadVaultConfig } = require('./config');
-  const file = config ? path.resolve(config) : null;
-  const siteConfig = file && fs.existsSync(file) ? loadVaultConfig(file) : {};
-  return { families: require('./fonts').googleFontsFor(path.resolve(vault), siteConfig) };
-}
-
 // The Memorable Moments of a wrap-up's body, as the Story page reads them (see the op above).
 function topHeadings(text) {
   const { headingAt } = findHeadings(text);
@@ -190,7 +175,6 @@ function moments(text, excludeCallouts) {
 function answer(request) {
   if (!request || typeof request !== 'object' || Array.isArray(request)) throw new Error('a request is a JSON object');
   if (request.op === 'site') return site(request.vault);
-  if (request.op === 'google-fonts') return googleFonts(request.vault, request.config);
   if (request.op === 'dates') {
     const { parseDateDetail } = require('./timeline');
     return { dates: list(request, 'values').map((v) => {

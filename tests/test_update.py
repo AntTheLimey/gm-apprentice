@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import migrate  # noqa: E402
 import update  # noqa: E402
+import vaultlib  # noqa: E402
 import vault_check as vc  # noqa: E402
 import update_record  # noqa: E402
 from migrate_core import (CHOICE, KINDS, PERSON, WILL, Check, Item,  # noqa: E402
@@ -123,8 +124,7 @@ class SortTests(unittest.TestCase):
                     self.assertNotIn(word, c.ask.lower())
                     self.assertNotIn(word, c.left.lower())
                 can_ask = (c.kind != "bookkeeping"
-                           or any(x.endswith("=") for x in c.choices)
-                           or c.name == "exclude-lists")
+                           or any(x.endswith("=") for x in c.choices))
                 if can_ask:
                     self.assertTrue(c.ask.endswith("."), c.ask)
                     self.assertTrue(c.left.endswith("."), c.left)
@@ -133,14 +133,11 @@ class SortTests(unittest.TestCase):
 
     def test_the_proposed_sort_holds_where_the_brief_fixed_it(self):
         kinds = {c.name: c.kind for c in migrate.CHECKS}
-        for name in ("required-ties-section", "stage-keys",
-                     "empty-scenes-lists", "retire-steps"):
+        for name in ("schema-mirror", "full-mode"):
             self.assertEqual(kinds[name], "removes", name)
-        for name in ("wrapup-sections", "tone-words", "open-threads-fold",
-                     "sheet-source", "props-move", "props-settle"):
+        for name in ("hide-fields-voice",):
             self.assertEqual(kinds[name], "asks", name)
-        for name in ("wrapup-filenames", "heritage-notes", "mobrpg-sections",
-                     "templates", "site-repin"):
+        for name in ("wrapup-filenames", "templates", "site-repin"):
             self.assertEqual(kinds[name], "bookkeeping", name)
 
 
@@ -552,64 +549,8 @@ class OutputTests(Base):
         self.assertEqual(stamp_of(vault), "1.10.12")
 
 
-class ExcludeListsTests(Base):
-    """The built-in hide lists are bookkeeping; replacing a value the GM
-    typed asks, and a headless run never does it."""
-
-    def test_replacing_a_typed_value_asks_and_is_never_done_headless(self):
-        import migrate_site as ms
-        import test_migrate_site as tms
-        vault = tms.make_vault(self,
-                               extra="  exclude_sections: Mine\n")
-        items = ms.find_exclude_lists(vault)
-        self.assertEqual(sorted((i.id, i.kind) for i in items),
-                         [("exclude-lists", None),
-                          ("exclude-lists-replace", "asks")])
-        real = next(c for c in ms.SITE_CHECKS if c.name == "exclude-lists")
-        lists = dataclasses.replace(real, asks_site=False, release=None)
-        before = (vault / "_meta" / "vault-config.yaml").read_text(encoding="utf-8")
-        self.assertIn("sections: Mine", before)
-        res = self.run_update(vault, [lists], headless=True)
-        self.assertEqual([q.id.split("@")[0] for q in res.questions], ["exclude-lists-replace"])
-        self.assertEqual([q.kind for q in res.questions], ["asks"])
-        import vault_check as vc
-        s = vc.settings(vault)
-        self.assertEqual(s.get("player_site.hide.fields"),
-                         ms.settings_default("player_site.hide.fields"))
-        self.assertEqual(s.origins["player_site.hide.fields"], "file")
-        # What the GM typed is still there (the tool reads it as a fault and
-        # falls back to the built-in list, so read the file).
-        typed = "".join(p.read_text(encoding="utf-8")
-                        for p in (vault / "_meta").glob("vault-config.*"))
-        self.assertIn("sections: Mine", typed)
-
-
-    def new_layout_vault(self, site_config, top="", under=""):
-        root = Path(tempfile.mkdtemp(prefix="upd-lists-"))
-        self.addCleanup(shutil.rmtree, root, ignore_errors=True)
-        vault, site = root / "Vault", root / "site"
-        (vault / "_meta").mkdir(parents=True)
-        site.mkdir()
-        (site / "vault.config.json").write_text(json.dumps(site_config),
-                                                encoding="utf-8")
-        (vault / "_meta" / "vault-config.yaml").write_text(
-            f"version: 1\n{top}player_site:\n  folder: {site.as_posix()}\n"
-            f"{under}", encoding="utf-8")
-        import vaultlib
-        vaultlib.forget_settings(None)
-        return vault
-
-    def test_a_list_typed_under_an_old_name_or_in_a_bad_place_asks(self):
-        import migrate_site as ms
-        for label, vault in (
-                ("vault's old name", self.new_layout_vault(
-                    {}, top="publish:\n  exclude_sections:\n    - Mine\n")),
-                ("the group is not a map",
-                 self.new_layout_vault({}, under="  hide: Mine\n"))):
-            with self.subTest(label):
-                kinds = {i.id: i.kind for i in ms.find_exclude_lists(vault)}
-                self.assertEqual(kinds.get("exclude-lists-replace"), "asks",
-                                 kinds)
+class ReportTests(Base):
+    """What the update says: the report's words, its JSON, its refusals."""
 
     def test_report_never_says_lost(self):
         vault = make_vault(self)
@@ -645,7 +586,7 @@ class ExcludeListsTests(Base):
         c, _ = check("tidy", "bookkeeping", will_item("tidy"))
         code, out, err = self.main(vault, [c])
         self.assertEqual(code, 2)
-        self.assertIn("an update stamp of 1.9.14 (_meta/vault-state.json), older than 1.10.12", err)
+        self.assertIn("update stamp of 1.9.14 (_meta/vault-state.json), older than 1.10.12", err)
         self.assertEqual(self.backups(), [])
 
     def test_an_unmoved_vault_exits_2_naming_the_bridge(self):

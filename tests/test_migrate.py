@@ -16,9 +16,10 @@ SCRIPTS = Path(__file__).resolve().parent.parent / "skills" / "shared" / "script
 sys.path.insert(0, str(SCRIPTS))
 
 import migrate  # noqa: E402
+import schema_rules  # noqa: E402
 import migrate_site  # noqa: E402
 import vault_check as vc  # noqa: E402
-from vaultlib import extract_frontmatter, read_stamp  # noqa: E402
+from vaultlib import read_stamp  # noqa: E402
 from migrate_core import (CHOICE, PERSON, WILL, Check, Item,  # noqa: E402
                           StepFailed, edit_frontmatter, write_all_or_none,
                           write_text_atomic)
@@ -96,7 +97,7 @@ class GateTests(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertEqual(out, "")
         self.assertEqual(len(err.strip().splitlines()), 1)
-        self.assertIn("an update stamp of 1.9.14 (_meta/vault-state.json), older than 1.10.12", err)
+        self.assertIn("update stamp of 1.9.14 (_meta/vault-state.json), older than 1.10.12", err)
 
     def test_no_recorded_version_is_refused(self):
         vault = make_vault(self, None)
@@ -104,14 +105,14 @@ class GateTests(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn("no update stamp (_meta/vault-state.json)", err)
 
-    def test_a_vault_below_the_floor_is_refused_naming_the_bridge(self):
-        vault = make_vault(self, "1.10.59")
+    def test_a_vault_below_the_floor_is_refused_naming_the_hop(self):
+        vault = make_vault(self, "1.10.137")
         code, _, err = call([str(vault), "plan"], [], floor=REAL_FLOOR)
         self.assertEqual(code, 2)
-        self.assertEqual(REAL_FLOOR, "1.10.60")
-        self.assertIn("older than 1.10.60", err)
-        self.assertIn("a 1.10 release, 1.10.134 or later", err)
-        self.assertIn("releases/tag/v1.10.137", err)
+        self.assertEqual(REAL_FLOOR, "1.11.0")
+        self.assertIn("older than 1.11.0: update it first with 1.11.8", err)
+        self.assertIn("archive/refs/tags/v1.11.8.tar.gz", err)
+        self.assertNotIn("1.10.134 or later", err)   # it is moved: no 1.10 bridge
 
     def test_a_moved_vault_stamped_1_10_121_passes(self):
         vault = make_vault(self, "1.10.121")
@@ -940,67 +941,6 @@ class ShortOutputTests(unittest.TestCase):
                       "stamped", out)
 
 
-class WrapupSectionsEngineTests(unittest.TestCase):
-    def test_choice_then_stamp_end_to_end(self):
-        import migrate_vault as mv
-        vault = make_vault(self, "1.10.27")
-        note = vault / "Sessions" / "Chapter_01_Session_01_Wrap_Up.md"
-        note.parent.mkdir()
-        note.write_text(
-            '---\ntype: session_wrap\nsession_number: 1\n---\n\n'
-            '# W\n\n## Narrative Recap\n\nr\n\n'
-            '## What the Party Learned\n\na\n\n## Secret\n\nb\n\n'
-            '<!-- gm-only -->\n\n## GM Notes\n\n### S\n\n- x\n\n'
-            '<!-- /gm-only -->\n', encoding="utf-8")
-        checks = [c for c in mv.VAULT_CHECKS if c.name == "wrapup-sections"]
-        code, out, _ = call([str(vault), "plan"], checks)
-        self.assertEqual(code, 0)
-        self.assertIn("wrapup-sections=<move or leave>", out)
-        code, out, _ = call([str(vault), "apply", "--choose",
-                             "wrapup-sections=move"], checks)
-        self.assertEqual(code, 0, out)
-        text = note.read_text(encoding="utf-8")
-        self.assertIn("### Secret", text)
-        self.assertIn("### What the Party Learned", text)
-        self.assertEqual(stamp_of(vault), PLUGIN)
-        code, out, _ = call([str(vault), "plan"], checks)
-        self.assertEqual(code, 0)
-        self.assertIn("up to date", out)
-
-
-class ToneListEngineTests(unittest.TestCase):
-    def test_a_plain_apply_refreshes_the_list_with_no_choice(self):
-        import migrate_vault as mv
-        vault = make_vault(self, "1.10.43")
-        path = vault / "_meta" / "relationship-types.md"
-        with path.open("w", encoding="utf-8", newline="") as f:
-            f.write("**tone** \u2208 friendly | romantic | respectful | "
-                    "professional | hostile | fearful |\r\ndistrustful | "
-                    "contemptuous | neutral | unknown | complicated. "
-                    "**strength** 1\u201310.\r\n")
-        checks = [c for c in mv.VAULT_CHECKS if c.name == "tone-list"]
-        with mock.patch.object(migrate, "plugin_version",
-                               return_value=("1.10.44", "test")):
-            out = io.StringIO()
-            with mock.patch.object(migrate, "CHECKS", checks), \
-                    contextlib.redirect_stdout(out):
-                self.assertEqual(migrate.main([str(vault), "plan"]), 0)
-                self.assertEqual(migrate.main([str(vault), "apply"]), 0)
-                self.assertEqual(migrate.main([str(vault), "plan"]), 0)
-        shown = out.getvalue()
-        self.assertIn("## Will do", shown)
-        self.assertNotIn("## Your choice", shown)
-        self.assertIn("tone-list\t_meta/relationship-types.md: the tone list "
-                      "is now the 27 listed words", shown)
-        self.assertTrue(shown.rstrip().endswith("up to date"))
-        self.assertEqual(stamp_of(vault), "1.10.44")
-        with path.open("r", encoding="utf-8", newline="") as f:
-            self.assertEqual(
-                f.read(), "**tone** \u2208 "
-                + " | ".join(mv.tone_families())
-                + ". **strength** 1\u201310.\r\n")
-
-
 class EditFrontmatterTests(unittest.TestCase):
     def test_failure_leaves_the_note_and_no_temp_file(self):
         cfg = sample_note(make_vault(self))
@@ -1088,11 +1028,6 @@ class RealToolTests(unittest.TestCase):
         self.assertIn("template:_Template_NPC.md\t", plan)
         self.assertIn("gm-leak\tDocuments/Letter.md: re-nest 'Context'", plan)
         code, did, err = self.run_real(vault, "apply")
-        self.assertEqual(code, 0, err + did)
-        self.assertEqual(stamp_of(vault), "1.10.12")   # default-mode unanswered
-        self.assertIn("not answered: default-mode=<dark, light or leave>", did)
-        code, did, err = self.run_real(vault, "apply", "--choose",
-                                       "default-mode=leave")
         self.assertEqual(code, 0, err + did)
         self.assertEqual(stamp_of(vault), PLUGIN)
         text = (vault / "Documents" / "Letter.md").read_text(encoding="utf-8")

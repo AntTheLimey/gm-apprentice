@@ -358,28 +358,27 @@ class VersionCommandTests(unittest.TestCase):
 
     def test_behind_is_a_mismatch_pointing_at_the_migration_workflow(self):
         # A moved vault (stamped above the floor) that is merely behind.
-        vault = make_vault(self, '---\ngm_apprentice_version: "1.10.121"\n---\n')
+        vault = make_vault(self, '---\ngm_apprentice_version: "1.11.1"\n---\n')
         (token, path, message), code = self.verdict(vault)
         self.assertEqual(token, "MISMATCH")
         self.assertEqual(path, "_meta/vault-state.json")
-        self.assertIn(f"vault 1.10.121 < plugin {plugin_version_string()}", message)
+        self.assertIn(f"vault 1.11.1 < plugin {plugin_version_string()}", message)
         self.assertIn("campaign-organizer's migration workflow", message)
         self.assertIn("references/migration-procedure.md", message)
         self.assertEqual(code, 1)
 
-    def test_a_vault_below_the_floor_is_refused_naming_the_bridge_not_a_mismatch(self):
+    def test_a_vault_below_the_floor_is_refused_naming_the_hop_not_a_mismatch(self):
         (token, path, message), code = self.verdict(FIXTURES / "version-behind")
         self.assertEqual(token, "REFUSED")
         self.assertEqual(path, "_meta/vault-state.json")
-        self.assertIn("older than 1.10.60", message)
-        self.assertIn("a 1.10 release, 1.10.134 or later", message)
+        self.assertIn("older than 1.11.0: update it first with 1.11.8", message)
         self.assertEqual(code, 1)
 
     def test_comparison_is_numeric_not_lexical(self):
         # 1.8.9 < 1.9.6 lexically too; 1.10.0 vs 1.9.6 is the real test.
         vault = make_vault(self, '---\ngm_apprentice_version: "1.10.0"\n---\n')
         (token, _path, _message), _code = self.verdict(vault)
-        self.assertEqual(token, "REFUSED")   # 1.10.0 is below the floor 1.10.60
+        self.assertEqual(token, "REFUSED")   # 1.10.0 is below the floor 1.11.0
         # "1.9.99" sorts after "1.10.0" as text; numerically it is behind.
         self.assertLess(vc.parse_version("1.9.99"), vc.parse_version("1.10.0"))
 
@@ -3987,18 +3986,6 @@ class WrapupCommandTests(unittest.TestCase):
             f"'Cross-Entity Claims' and keep the qualifier as an italic "
             f"first line", self.rows)
 
-    def test_a_wrap_up_with_no_recap_heading_warns_before_the_fix(self):
-        # Under the reading before 1.10.28 (an explicit `player` set) every
-        # H2 but the recap and Memorable Moments is Keeper-facing, so a
-        # wrap-up that never names its recap has its whole body re-nested
-        # — right, and worth saying out loud first.
-        vault = make_vault(self)
-        (vault / "Chapter_01_Session_01_Wrap_Up.md").write_text(
-            "---\ntype: session_wrap\n---\n\n## Session Summary\n\nIt "
-            "happened.\n\n## Open Threads\n\nThe door.\n", encoding="utf-8")
-        self.assertTrue(rows_for(
-            vc.check_wrapup(vault, None, False, player=frozenset()),
-            "no ## Narrative Recap — the publish tool lifts that section"))
 
     def test_a_conformant_wrap_up_never_gets_the_missing_recap_row(self):
         self.assertFalse(rows_for(self.rows, "no ## Narrative Recap"),
@@ -4357,15 +4344,6 @@ class WrapupCommandTests(unittest.TestCase):
         self.assertEqual(text.count("## Narrative Recap"), 1)
         self.assertIn("\n## What Happened\n", text)
 
-    def test_a_second_recap_variant_with_an_explicit_set_is_unchanged(self):
-        vault, rel = self.wrap_file(
-            "\n## Session Recap\n\nFirst.\n\n## What Happened\n\nSecond.\n")
-        rows = vc.check_wrapup(vault, rel, True,
-                               player=frozenset({"what happened"}))
-        hit = rows_for(rows, "'## What Happened' is a second recap-variant "
-                             "heading left as-is — merge by hand")
-        self.assertTrue(hit, rows)
-        self.assertTrue(all(r.startswith("WARNING") for r in hit), hit)
 
     # ---- structure-only repairs are reported and applied -------------
 
@@ -5610,30 +5588,16 @@ class UnderGmNotesOrNotTests(unittest.TestCase):
         self.assertLess(order[-1], gm)
         self.assertGreater(fixed.index("### Keeper Checklist"), gm)
 
-    def test_the_no_recap_row_names_what_each_reading_hides(self):
+    def test_the_no_recap_row_names_what_the_re_nest_moves(self):
         text = ("---\ntype: session_wrap\n---\n\n## Keeper Checklist\n\n"
                 "- x\n")
-        def row(player):
-            return [f.message for f in vc.wrapup_structure_findings(
-                NEW_READING_REL, text, [], player)
-                if f.message.startswith("no ## Narrative Recap")][0]
+        row = [f.message for f in vc.wrapup_structure_findings(
+            NEW_READING_REL, text, [])
+            if f.message.startswith("no ## Narrative Recap")][0]
         self.assertIn("--fix re-nests the template's GM Notes subsections "
                       "under ## GM Notes; retitle the player-facing one "
-                      "first", row(None))
-        self.assertIn("--fix re-nests every other H2 under ## GM Notes; "
-                      "retitle the player-facing one first",
-                      row(frozenset()))
+                      "first", row)
 
-    def test_an_explicit_set_is_the_reading_before_1_10_28(self):
-        text = (NEW_READING_HEAD + "## Letters Home\n\nDear all.\n\n"
-                + NEW_READING_GM)
-        findings = vc.wrapup_structure_findings(
-            NEW_READING_REL, text, [], frozenset())
-        self.assertTrue(any(f.level == "ERROR" for f in findings))
-        self.assertIn("### Letters Home",
-                      vc.renest_wrapup(text, frozenset()))
-        listed = frozenset({vc.player_section_key("Letters Home")})
-        self.assertEqual(vc.renest_wrapup(text, listed), text)
 
     def test_check_wrapup_no_longer_reads_the_vaults_list(self):
         self.assertFalse(hasattr(vc, "wrap_player_sections"))

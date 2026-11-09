@@ -135,8 +135,8 @@ The `default` of `player_site.hide.sections` and `player_site.hide.fields`
 are the lists a site starts with. To change one, edit its entry in
 `tools/publish/lib/settings/registry.js` and run
 `node tools/publish/scripts/gen-settings-doc.js --write`, which
-rewrites the tables in `docs/site-settings.md`. Setup and the `exclude-lists` migration (1.10.47)
-write them into the vault's settings, and from then on
+rewrites the tables in `docs/site-settings.md`. Setup writes them
+into the vault's settings, and from then on
 the list belongs to the GM: the build uses it in place of the built-in
 one. So a heading or field added to a default reaches a new vault and
 one with no list, and never a vault that owns a list, unless a

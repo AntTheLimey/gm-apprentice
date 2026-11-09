@@ -81,10 +81,10 @@ players cannot see it the page has no cover and the build warns.
 headed by `player_site.landing.latest_props_title`. A prop shows when
 its note publishes: never edit the publish list to show a prop.
 
-An older site's own props move into the vault by the update's
-`props-move` choice. It checks every live page first, and puts the
-vault back as it was if a page would go, lose words or links, or show
-something hidden.
+An older site's own props move into the vault with
+`gma prop-move <vault> plan`, then `apply`. It checks every live page
+first, and puts the vault back as it was if a page would go, lose words
+or links, or show something hidden.
 
 ## A vault's own style
 

@@ -1867,7 +1867,6 @@ def settings(vault: Path, *, site_config: Path | None = None) -> Settings:
         has_site_block=bool(read["file"].get("hasSiteBlock")))
 
 
-
 # The vault file's own words, as against a value that came from the site
 # folder's old file or an old name.
 _IN_VAULT_FILE = ("file", "fault")
@@ -2145,23 +2144,6 @@ def vault_site(vault: Path) -> tuple[bool, bool, Path | None]:
         raise PublishToolUnavailable(
             "the publish tool's answer about the site is not understood")
     return publishes, on, Path(site) if site else None
-
-
-def google_fonts(vault: Path, site_config: Path | None = None) -> list[str]:
-    """The font families the vault's site would load from Google (none when
-    its fonts are hosted), worked out by the plugin's own publish tool, never
-    the site's pinned copy. `site_config` is the site's vault.config.json.
-    Raises `PublishToolUnavailable` when it cannot be asked."""
-    request: dict[str, Any] = {"op": "google-fonts",
-                               "vault": str(vault.resolve())}
-    if site_config is not None:
-        request["config"] = str(site_config.resolve())
-    families = _LINES_BY_TOOL[PUBLISH_TOOL].ask(request).get("families")
-    if not (isinstance(families, list)
-            and all(isinstance(f, str) for f in families)):
-        raise PublishToolUnavailable(
-            "the publish tool's answer about fonts is not understood")
-    return families
 
 
 def publish_rename_refs(vault: Path, old: str, new: str,
@@ -2737,7 +2719,6 @@ def sub_wikilinks(line: str, spans: list[tuple[int, int]],
     return LINK_RE.sub(
         lambda m: m.group(0) if inside_spans(m.start(), spans) else replace(m),
         line)
-
 
 
 # --------------------------------------------------------------------------

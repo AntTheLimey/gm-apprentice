@@ -293,33 +293,6 @@ describe('lines: the protocol', () => {
   });
 });
 
-describe('lines: google-fonts', () => {
-  const fs = require('fs');
-  const os = require('os');
-  const cases = {
-    'a genre and google fonts': { 'player_site.theme.genre': 'gothic', 'player_site.theme.fonts': { heading: 'Cinzel', body: 'Lora' } },
-    'self-hosted fonts': { 'player_site.theme.genre': 'gothic', 'player_site.theme.fonts': { source: 'self-host', heading: 'Cinzel' } },
-    'no theme': { 'player_site.title': 'T' },
-  };
-  for (const [name, publish] of Object.entries(cases)) {
-    it(`gives the google fonts: ${name}`, () => {
-      const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gf-'));
-      try {
-        const vault = path.join(root, 'vault');
-        writeSettings(vault, publish);
-        const asked = answer({ op: 'google-fonts', vault });
-        if (name === 'self-hosted fonts' || name === 'no theme') assert.ok(Array.isArray(asked.families));
-        if (name === 'a genre and google fonts') assert.ok(asked.families.includes('Cinzel') && asked.families.includes('Lora'));
-        if (name === 'self-hosted fonts') assert.deepStrictEqual(asked.families, []);
-      } finally { fs.rmSync(root, { recursive: true, force: true }); }
-    });
-  }
-
-  it('refuses a request without a vault', () => {
-    assert.throws(() => answer({ op: 'google-fonts' }), /vault must be a path/);
-  });
-});
-
 describe('lines: dates (vault_check timeline --order asks it, so the two never read a date two ways)', () => {
   const { buildTimelineData } = require('../lib/timeline');
   it('reads each value with the timeline\'s own parseDate, and says whether a day was named', () => {

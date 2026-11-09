@@ -1389,64 +1389,7 @@ def _state_container(c: Conversion, root: Path, index: str, script: str, state: 
 
 # --- a vault moved under 1.10.105: its live notes left as drafts ---------------
 
-# The bodies the move writes under a new note's frontmatter: none, or one line
-# naming the handout the page goes with (for players, or in a gm-only fence).
-MOVED_BODY_RE = re.compile(
-    r"\A(?:"
-    r"|\n## Description\n\nThe page that goes with \[\[[^\]\n]+\]\]\.\n"
-    r"|\n<!-- gm-only -->\n\n## GM Notes\n\nThe page that goes with \[\[[^\]\n]+\]\]\.\n\n<!-- /gm-only -->\n"
-    r")\Z")
 MOVE_EMPTY = ("source", "createdSession", "lastUpdated")
-
-
-def is_moved_note(text: str) -> bool:
-    """Whether a note reads exactly as the move wrote it: the prop template's
-    frontmatter with `name:` first and `title:` set right after
-    `relationships:` (the template has no title; the move adds it last),
-    `source`, `createdSession` and `lastUpdated` still empty, and a body that
-    is one the move writes. A note the GM has written in since fails one of
-    these, so it is never taken for the move's."""
-    lines = text.splitlines(keepends=True)
-    end, error = frontmatter_span(lines)
-    if error:
-        return False
-    keys = [m.group(1) for m in (KEY_RE.match(ln.rstrip("\r\n")) for ln in lines[1:end]) if m]
-    if not keys or keys[0] != "name" or "relationships" not in keys:
-        return False
-    at = keys.index("relationships")
-    if at + 1 >= len(keys) or keys[at + 1] != "title":
-        return False
-    fm = extract_frontmatter(text) or {}
-    if entity_type(fm) != "prop" or any(fm.get(k) not in ("", None, []) for k in MOVE_EMPTY):
-        return False
-    return bool(MOVED_BODY_RE.match("".join(lines[end + 1:])))
-
-
-def moved_drafts(vault: Path) -> list[str]:
-    """The notes a 1.10.105 move made that it published and left marked
-    DRAFT: in a vault whose reveals log starts with the move's before-tracking
-    entry, a note that is exactly as the move wrote it (is_moved_note),
-    still `canon_status: DRAFT`, on the publish list, and published by no
-    session since (a note a wrap-up revealed is the GM's own to settle).
-    Empty when the log or the publish list cannot be read."""
-    try:
-        log = _load_log(vault) if (vault / LOG).is_file() else None
-    except (OSError, ValueError):
-        return []
-    entries = [e for e in (log or {}).get("entries") or [] if isinstance(e, dict)]
-    if not any(e.get("before_tracking") is True for e in entries):
-        return []
-    later = {nfc(str(p)) for e in entries if e.get("session") for p in e.get("published") or []}
-    publishing, _why = publish_state(vault)
-    if publishing is None:
-        return []
-    out = []
-    for rel, text in _notes(vault):
-        fm = extract_frontmatter(text) or {}
-        if (fm.get("canon_status") == "DRAFT" and nfc(rel) in publishing and nfc(rel) not in later
-                and is_moved_note(text)):
-            out.append(rel)
-    return out
 
 
 def new_conversion(vault: Path) -> Conversion:

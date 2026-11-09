@@ -270,18 +270,6 @@ function presetFamiliesFor(theme) {
   }
 }
 
-// The families the site would load from Google for this vault: the heading and body fonts and
-// the genre preset's, none when the fonts are hosted (self-host or local). The one place this is
-// worked out; the `settings` alias and the `google-fonts` question both ask it.
-function googleFontsFor(vaultPath, siteConfig) {
-  const { resolveConfig } = require('./config');
-  const { googleFontNames } = require('./theme');
-  const { publishConfig } = resolveConfig(siteConfig || {}, vaultPath, () => {});
-  const fonts = publishConfig.theme.fonts || {};
-  if (fonts.source === 'local' || fonts.source === 'self-host') return [];
-  return [...googleFontNames(fonts), ...presetFamiliesFor(publishConfig.theme)].filter((v, i, a) => a.indexOf(v) === i);
-}
-
 // Prefetch for a vault.config.json path, then the caller builds. Mirrors what build()
 // will resolve (same config, same preset families) so the cache is warm.
 async function prefetchForConfig(configPath, opts = {}) {
@@ -353,5 +341,5 @@ const GOOGLE_WARNING = (names) => `Custom fonts ${names} are loaded from Google 
 module.exports = {
   GENERIC_FAMILIES, CACHE_DIR, AXIS_CANDIDATES, GOOGLE_WARNING,
   isValidFamily, slugFor, selfHostFamilies, presetImportFamilies, parseFontFaces,
-  readFamilyCache, ensureFontCache, missAdvice, selfHostedFontFaces, prefetchForConfig, prefetchStyleFonts, presetFamiliesFor, googleFontsFor, buildWithFonts,
+  readFamilyCache, ensureFontCache, missAdvice, selfHostedFontFaces, prefetchForConfig, prefetchStyleFonts, presetFamiliesFor, buildWithFonts,
 };

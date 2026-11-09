@@ -24,7 +24,7 @@ from migrate_helpers import (NEEDS_NODE, PLUGIN, hashes, make_vault,  # noqa: E4
 from vaultlib import (SettingsUnavailable, read_stamp, settings,  # noqa: E402
                       settings_written)
 
-CHOOSE = ("apply", "--choose", "default-mode=leave")
+CHOOSE = ("apply",)
 MODE = "player_site.hide.mode"
 
 

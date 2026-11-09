@@ -26,12 +26,11 @@ whose steps all completed, so the next run starts at the failed step.
 For a direct caller: a template's choice needs a value
 (`--choose template:<file>=keep|take`); `apply` writes the update record
 (`_meta/update-record.json`) with the template decisions; an unreadable
-template is a Needs a person row and never stops the run; and the hide
-lists can be two ids (`exclude-lists`, `exclude-lists-replace` for a list
-the GM typed), both run on the one yes.
+template is a Needs a person row and never stops the run.
 
 Exit: 0 done or nothing to do; 1 a step failed; 2 bad arguments, or a
-vault this script does not migrate (below 1.10.12, or ahead of the plugin).
+vault this script does not migrate (below the floor, `MOVED_FLOOR`, or
+ahead of the plugin).
 """
 
 from __future__ import annotations

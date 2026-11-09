@@ -9,6 +9,7 @@ lastUpdated: ""
 aliases: []
 gm_aliases: []        # secret names (a true identity): links resolve, never published
 withheld: false       # true: this note's own name is a secret; the site build looks for it in published text
+companion: false      # true: travels with the party (an Ally, follower, familiar, cohort); never pictured on Story pages
 tags: []
 occupation: ""
 age:
@@ -17,6 +18,7 @@ nationality: ""
 status: alive         # alive / dead / missing / unknown
 location: ""          # "[[Where they can usually be found]]"
 portrait: ""
+voice: ""            # set only when the GM gives this NPC their own story; how they are told and speak; never published
 relationships:
   - target: "[[]]"
     type: knows
@@ -87,7 +89,7 @@ slip she knows the Bishop.` session-wrapup adds a bullet each session.}
 
 ### Playing Them
 
-- **Voice:** {accent, pace, a verbal tic}
+- **Speech:** {accent, pace, a verbal tic}
 - **Tell:** {the gesture you do at the table}
 - **Line:** "{something they'd say the first time the PCs meet them}"
 

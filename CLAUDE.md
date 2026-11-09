@@ -139,7 +139,11 @@ Every non-trivial change follows this sequence:
    unless the user specifies otherwise). The stamp is what every install
    reads; CI fails when the two differ. A publish tool change also bumps
    `tools/publish/package.json` and `skills/shared/PUBLISH_VERSION`
-   together (the release a non-plugin install fetches; CI checks it too)
+   together (the release a non-plugin install fetches; CI checks it too).
+   A minor bump also raises the update floor: `MOVED_FLOOR` to the first
+   release of the minor before, `FLOOR_HOP` to that minor's newest tag,
+   the checks `dead_checks` lists deleted, template history regenerated
+   (`tests/test_floor_schedule.py` fails until it is done)
 4. **CHANGELOG** — add a categorized entry (Added/Changed/Fixed/Removed)
    under the new version in `CHANGELOG.md`. Keep it short: one or two
    lines per change, saying what it does for the GM; the PR holds the

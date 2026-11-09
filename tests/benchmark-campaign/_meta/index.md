@@ -23,10 +23,10 @@ Professor Henry Ashford, a respected antiquarian at Miskatonic University, has g
 
 - **[[Chapter 1]]** — The Ashford Case (3 sessions)
   - [[Session 01 - The Missing Professor]] — Status: reviewed
-    - [[Session 01 - The Missing Professor - Wrap-Up]]
+    - [[Chapter_01_Session_01_Wrap_Up]]
   - [[Session 02 - The Docks at Night]] — Status: reviewed
     - [[Session 02 - The Docks at Night - Play Notes]]
-    - [[Session 02 - The Docks at Night - Wrap-Up]]
+    - [[Chapter_01_Session_02_Wrap_Up]]
   - [[Session 03 - The Inner Sanctum]] — Status: prepped
     - [[Session 03 - The Inner Sanctum - Plan]]
 

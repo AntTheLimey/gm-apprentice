@@ -211,11 +211,6 @@ def _subsections(lines: list[str]) -> dict[str, tuple[int, int]]:
     return found
 
 
-def subsections(text: str) -> set[str]:
-    """Which of `backstory`, `appearance`, `personality` the note has under `## Background`."""
-    return set(_subsections(text.splitlines(keepends=True)))
-
-
 def _facts_line(lines: list[str], start: int, end: int) -> int:
     """Index of the facts line within lines[start:end], -1 when there is none."""
     fence: str | None = None
