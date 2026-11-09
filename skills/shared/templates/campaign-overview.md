@@ -50,9 +50,6 @@ reads first when sitting down to prep.
 
 ## Open Threads
 
-Threads two or more PCs share, one bullet each. Wrap-up writes them
-through `vw threads`. A closed one moves to that session's Wrap-Up.
-
 ## Key Factions
 
 The power structures that shape the world — cults, governments,

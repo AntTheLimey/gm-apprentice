@@ -341,8 +341,10 @@ def insert_shared(overview_text: str, line: str) -> str:
         if end is None:
             raise ValueError("Open Threads has no place outside a gm-only "
                              "fence")
-        return _join(_put_after_content(
-            lines, idx, end, [_new(line, eol)]), eol)
+        new = [_new(line, eol)]
+        if all(_blank(l) for l in lines[idx + 1:end]):
+            new.insert(0, _new("", eol))   # an empty section: a blank first
+        return _join(_put_after_content(lines, idx, end, new), eol)
     pos = None
     at = find("current arc")
     if at is not None:

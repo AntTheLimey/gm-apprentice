@@ -282,6 +282,18 @@ class ThreadsTests(unittest.TestCase):
         "HTML comment": ("<!--", "-->"),
     }
 
+    def test_template_open_threads_holds_no_prose(self):
+        # The section is player-facing: anything in the template would
+        # publish above the shared threads for good.
+        template = read(ROOT / "skills" / "shared" / "templates"
+                        / "campaign-overview.md")
+        lines = template.split("\n")
+        start, end = threads._shared_span(lines)
+        self.assertEqual([l for l in lines[start + 1:end] if l.strip()], [])
+        out = threads.insert_shared(template, "- A — involves the party")
+        self.assertIn("## Open Threads\n\n- A — involves the party\n\n"
+                      "## Key Factions", out)
+
     def test_bulleted_open_threads_label(self):
         # `- **Open threads:**` with its threads nested under it, as a
         # bulleted Current Status writes it; the next bulleted field ends it.
