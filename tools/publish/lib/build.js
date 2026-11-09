@@ -1393,6 +1393,7 @@ function buildSite(options) {
   const attachmentsFolder = String(scanConfig.attachmentsDir || require('./settings/registry').entry('vault.attachments').default).replace(/\\/g, '/').replace(/^\.\/|\/+$/g, '');
   const scannedRel = new Map(Object.entries(imageMap).map(([key, e]) => [key, e.relPath]));
 
+  const { sharedEntries, withSharedThreads } = require('./shared-threads');
   const { buildBacklinks, backlinksOf } = require('./backlinks');
   const { buildSearchIndex } = require('./search-index');
   const { scoreByRecency } = require('./recency');
@@ -1471,7 +1472,19 @@ function buildSite(options) {
     page.headingsUnstable = pcHeadingsUnstable(page, linkMap, excludeSections, imageMap, { excludeCallouts, pcKeepSections });
     if (page.headingsUnstable) console.warn(`  WARNING: ${page.outputPath}: ${HEADINGS_UNSTABLE_WARNING}`);
   }
-  for (const page of pages) if (isPcPage(page)) publishView(page);
+  // Each PC page also shows the Overview's shared threads that name that PC (or the party), read from the Overview's
+  // published view so nothing hidden there reaches a PC page. The PC's own strip chain runs over the added text.
+  const overviewPage = pages.find((p) => String((p.sourceFrontmatter || p.frontmatter || {}).type).trim().toLowerCase() === 'campaign_overview');
+  const sharedAll = overviewPage ? sharedEntries(overviewPage.publishedMarkdown || '') : [];
+  const namesPage = (target, page) => {
+    const found = resolveSiteLink(`[[${target}]]`, { linkMap, pages });
+    return found.kind === 'page' && found.href === page.outputPath;
+  };
+  for (const page of pages) {
+    if (!isPcPage(page)) continue;
+    if (sharedAll.length) page.markdown = withSharedThreads(page.markdown, sharedAll.filter((e) => e.party || e.involves.some((t) => namesPage(t, page))));
+    publishView(page);
+  }
 
   // Whether a Story section will exist. Computed early (pure function of pages) so the
   // top nav — threaded into every page, including story pages built later — can point
