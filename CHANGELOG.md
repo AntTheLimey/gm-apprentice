@@ -9,6 +9,27 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.4] — 2026-11-09
+
+### Added
+
+- `gma section VAULT NOTE "Section/Sub"` prints one section of a note by heading path. Case does not matter, headings in code blocks are ignored, and a path that fits more than one heading is refused with the candidates listed.
+
+### Changed
+
+- `session-context` prints a PC's `###` subsections as an outline, each with its size and path, and the subsection is fetched when needed. This covers Current Status for Active PCs, and Background and GM Notes in `--arcs`. A section with no `###` prints as before, and Open threads stay whole.
+- session-prep reads an outlined subsection only when a step needs it.
+- One section finder serves the Overview's Open Threads and the rest of the scripts.
+
+### In numbers
+
+| | 1.12.3 | 1.12.4 | Change |
+|---|---|---|---|
+| `session-context --prep` | TBD | TBD | TBD |
+| `session-context --arcs` | TBD | TBD | TBD |
+
+---
+
 ## [1.12.3] — 2026-11-09
 
 ### Added
