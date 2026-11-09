@@ -395,7 +395,6 @@ def find_hide_additions(vault: Path, since: str) -> list[Item]:
 
 
 AFTER_BUILD = "player_site.after_build"
-PAGE_EXTS = (".html", ".htm")
 
 
 SITE_CHECKS: list[Check] = [

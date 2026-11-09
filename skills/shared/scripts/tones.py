@@ -257,16 +257,6 @@ def shown_edges(vault: Path, published: set[str]
             yield edge
 
 
-def site_shows_a_tone(vault: Path) -> bool:
-    """Does the vault's site show any relationship's tone? True when the
-    site's tool cannot be asked which notes publish and the vault has a
-    tone at all (better told once too often than not told)."""
-    published = published_notes(vault)
-    if published is None:
-        return bool(survey(vault))
-    return next(shown_edges(vault, published), None) is not None
-
-
 def shown_lines(vault: Path, published: set[str]) -> list[str]:
     """One row per hostile tie a published note shows, then a count."""
     rows: list[str] = []

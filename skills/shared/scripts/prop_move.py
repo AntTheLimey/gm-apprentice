@@ -1389,37 +1389,7 @@ def _state_container(c: Conversion, root: Path, index: str, script: str, state: 
 
 # --- a vault moved under 1.10.105: its live notes left as drafts ---------------
 
-# The bodies the move writes under a new note's frontmatter: none, or one line
-# naming the handout the page goes with (for players, or in a gm-only fence).
-MOVED_BODY_RE = re.compile(
-    r"\A(?:"
-    r"|\n## Description\n\nThe page that goes with \[\[[^\]\n]+\]\]\.\n"
-    r"|\n<!-- gm-only -->\n\n## GM Notes\n\nThe page that goes with \[\[[^\]\n]+\]\]\.\n\n<!-- /gm-only -->\n"
-    r")\Z")
 MOVE_EMPTY = ("source", "createdSession", "lastUpdated")
-
-
-def is_moved_note(text: str) -> bool:
-    """Whether a note reads exactly as the move wrote it: the prop template's
-    frontmatter with `name:` first and `title:` set right after
-    `relationships:` (the template has no title; the move adds it last),
-    `source`, `createdSession` and `lastUpdated` still empty, and a body that
-    is one the move writes. A note the GM has written in since fails one of
-    these, so it is never taken for the move's."""
-    lines = text.splitlines(keepends=True)
-    end, error = frontmatter_span(lines)
-    if error:
-        return False
-    keys = [m.group(1) for m in (KEY_RE.match(ln.rstrip("\r\n")) for ln in lines[1:end]) if m]
-    if not keys or keys[0] != "name" or "relationships" not in keys:
-        return False
-    at = keys.index("relationships")
-    if at + 1 >= len(keys) or keys[at + 1] != "title":
-        return False
-    fm = extract_frontmatter(text) or {}
-    if entity_type(fm) != "prop" or any(fm.get(k) not in ("", None, []) for k in MOVE_EMPTY):
-        return False
-    return bool(MOVED_BODY_RE.match("".join(lines[end + 1:])))
 
 
 def new_conversion(vault: Path) -> Conversion:

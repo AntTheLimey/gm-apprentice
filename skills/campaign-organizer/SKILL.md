@@ -68,7 +68,7 @@ version`. `OK` → proceed. `SETUP` → run `references/vault-setup.md`. `MISMAT
 run the update by `references/migration-procedure.md`, then resume the request.
 `AHEAD` → announce the row, tell the GM the update step the row names, stop.
 `ERROR` → report the row (broken install), stop.
-`REFUSED` → tell the GM in plain words what the row says is left and how to fix it (most need the update from a 1.10 release, 1.10.134 or later, first), stop. No verdict
+`REFUSED` → tell the GM in plain words what the row says is left and how to fix it (it names the release to update with first, when one is needed), stop. No verdict
 row plus `not a directory` on stderr → wrong vault path; ask for it.
 Asked what an update did, or which template and why, at any verdict → "Asked later" in `references/migration-procedure.md`.
 

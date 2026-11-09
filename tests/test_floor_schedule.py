@@ -36,8 +36,11 @@ def test_floor_is_the_first_release_of_the_minor_before():
 
 
 def test_hop_is_in_the_floors_minor_and_already_released():
-    assert parse_version(vc.FLOOR_HOP)[:2] == parse_version(vc.MOVED_FLOOR)[:2]
-    assert parse_version(vc.FLOOR_HOP) < parse_version(VERSION)
+    assert parse_version(vc.FLOOR_HOP)[:2] == parse_version(vc.MOVED_FLOOR)[:2], (
+        f"FLOOR_HOP {vc.FLOOR_HOP} must be the newest release of the floor's "
+        f"minor ({vc.MOVED_FLOOR}): its newest tag")
+    assert parse_version(vc.FLOOR_HOP) < parse_version(VERSION), (
+        f"FLOOR_HOP {vc.FLOOR_HOP} must be a release before {VERSION}")
 
 
 def test_no_check_is_dated_at_or_below_the_floor():
@@ -105,3 +108,13 @@ def test_a_stamp_at_the_floor_is_not_refused_for_its_stamp(vault):
     stamp(vault, vc.MOVED_FLOOR)
     with no_tool():
         assert vc.unmoved(vault, vc.MOVED_FLOOR) == []
+
+
+def test_a_moved_vault_stamped_at_the_bridge_is_not_sent_to_the_bridge(vault):
+    # The hop sentence carries the stamp; 1.10.134 is also BRIDGE's number.
+    stamp(vault, vc.BRIDGE)
+    with no_tool():
+        line = vc.refusal(vc.unmoved(vault, vc.BRIDGE), "1.12.2")
+    assert f"v{vc.FLOOR_HOP}.tar.gz" in line
+    assert "For the 1.10 release" not in line
+    assert vc.LAST_BRIDGE not in line

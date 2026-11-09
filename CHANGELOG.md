@@ -17,7 +17,7 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ### Removed
 
-- The update's checks for 1.10 releases, which no vault it takes can need.
+- The update's checks for 1.10 releases, which no vault it takes can need, and the publish tool's `google-fonts` question, which only they asked (publish tool 1.70.2).
 
 ## [1.12.1] — 2026-11-08
 

@@ -305,8 +305,6 @@ def apply(batch: Batch) -> list[str]:
     return changed
 
 
-
-
 def check_fences(batch: Batch, given: str = "") -> None:
     """Refuse a write that would leave a gm-only fence unbalanced. `given`
     is the text the caller sent: when it holds a gm-only marker, the
@@ -1917,68 +1915,6 @@ def write_fields(batch: Batch, rel: str, note: str,
             last = ""       # the note's last line had no line ending
         lines[start:end] = [ln + doc.eol for ln in new[:-1]] + [new[-1] + last]
     batch.put(rel, "".join(lines))
-
-
-# `**New open threads (Session 6):**`, the per-session bullet wrap-ups once
-# appended to Current Status instead of reconciling its Open threads list.
-SESSION_THREADS_RE = re.compile(
-    r"(?:new\s+)?open threads\s*\(\s*session\s*(\d+)\s*\)")
-
-
-def session_threads(text: str) -> list[tuple[int, Field]]:
-    """(session number, field) for each per-session open-threads field
-    anywhere in the note's public Current Status, subsections included."""
-    doc = parse(text)
-    head, _rows = _status_region(doc)
-    if head is None or doc.problems:
-        return []
-    rows = own_lines(doc, head, section_end(doc, head))
-    out = []
-    for f in read_fields(doc.lines, rows):
-        m = SESSION_THREADS_RE.fullmatch(key(f.label))
-        if m:
-            out.append((int(m.group(1)), f))
-    return out
-
-
-def fold_session_threads(batch: Batch, rel: str) -> list[int]:
-    """Fold the note's per-session open-threads fields into its one Open
-    threads field (created when it has none), through `write_fields`.
-    Each becomes an item `**Session N:**` followed by its text word for
-    word; the bullet itself is removed. Returns the sessions folded."""
-    note = batch.read(rel)
-    found = session_threads(note)
-    if not found:
-        return []
-    doc = parse(note)
-    _head, region = _status_region(doc)
-    main = [f for f in read_fields(doc.lines, region)
-            if key(f.label) == "open threads"]
-    if len(main) > 1:
-        raise WriteError(f"{rel}: 'Open threads' is in {CURRENT_STATUS} "
-                         f"twice: fix it by hand first")
-    lines = (reshape(main[0], "") if main else ["**Open threads:**"])
-    for n, f in found:
-        m = FIELD_RE.match(f.lines[0])
-        assert m is not None
-        rest = f.lines[1:]
-        cut = min((len(ln) - len(ln.lstrip()) for ln in rest if ln.strip()),
-                  default=0)
-        lines.append(f"- **Session {n}:**{f.lines[0][m.end():]}")
-        lines += ["  " + ln[cut:] if ln.strip() else "" for ln in rest]
-    label = main[0].label if main else "Open threads"
-    out = list(doc.lines)
-    for _n, f in sorted(found, key=lambda x: x[1].start, reverse=True):
-        start, end = f.start, f.end
-        # Don't leave two blank lines where the bullet stood alone.
-        if (0 < start and end < len(out) and not out[start - 1].strip()
-                and not out[end].strip()):
-            end += 1
-        del out[start:end]
-    note = "".join(out)
-    batch.put(rel, note)
-    write_fields(batch, rel, note, [Field(label, "", 0, 0, lines)])
-    return [n for n, _f in found]
 
 
 def type_template(note_type: str) -> tuple[TemplateMap | None, bool]:

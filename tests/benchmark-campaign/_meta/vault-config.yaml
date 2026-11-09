@@ -19,4 +19,4 @@ player_site:
       - _meta
       - _Templates
       - _inbox
-  publish: false
+  publish: true

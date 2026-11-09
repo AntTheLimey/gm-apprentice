@@ -124,8 +124,7 @@ class SortTests(unittest.TestCase):
                     self.assertNotIn(word, c.ask.lower())
                     self.assertNotIn(word, c.left.lower())
                 can_ask = (c.kind != "bookkeeping"
-                           or any(x.endswith("=") for x in c.choices)
-                           or c.name == "exclude-lists")
+                           or any(x.endswith("=") for x in c.choices))
                 if can_ask:
                     self.assertTrue(c.ask.endswith("."), c.ask)
                     self.assertTrue(c.left.endswith("."), c.left)
