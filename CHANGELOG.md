@@ -27,11 +27,12 @@ Measured on notes-only copies of three campaigns, in characters. How much each s
 
 | | 1.12.3 | 1.12.4 | Change |
 |---|---|---|---|
-| `session-context --prep`, 4 PCs with long session logs | 155,196 | 129,610 | −17% |
-| `session-context --prep`, 4 PCs with long Background and GM Notes | 82,881 | 51,549 | −38% |
-| `session-context --arcs`, the same 4 PCs | 42,546 | 11,214 | −74% |
-| `session-context --arcs`, 6 PCs | 30,675 | 21,679 | −29% |
-| Prep plan quality (blind judge, both orders) | | no PC fact lost | |
+| `session-context --prep`, 4 PCs with long session logs | 155,196 | 129,610 | −16% |
+| `session-context --prep`, 4 PCs with long GM Notes | 82,881 | 51,609 | −38% |
+| `session-context --arcs`, the same 4 PCs | 42,546 | 11,274 | −74% |
+| `session-context --prep`, 6 PCs | 127,035 | 118,171 | −7% |
+| `session-context --arcs`, the same 6 PCs | 30,675 | 21,679 | −29% |
+| Prep plan quality (blind judge, both orders) | | nothing lost to the outline | |
 
 ---
 
