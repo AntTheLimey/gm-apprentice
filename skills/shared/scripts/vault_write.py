@@ -1887,6 +1887,11 @@ def threads_take(batch: Batch, rel: str, lead_key: str,
     return thread
 
 
+def threads_hidden_shared(lead_key: str) -> str:
+    return (f"'{lead_key}' in the Overview's Open Threads is in or next "
+            f"to hidden text; edit it by hand")
+
+
 def threads_insert(batch: Batch, overview: str, text: str, since: str | None,
                    involves: list[str] | None, verb: str) -> None:
     try:
@@ -1954,8 +1959,7 @@ def threads_row(batch: Batch, cols: list[str], wrapup: list[str]) -> None:
         if not hits and th.find_thread(
                 [t.text for t in th.shared_threads(note) if t.hidden],
                 lead_key):
-            raise WriteError(f"'{lead_key}': a hidden copy is in the "
-                             f"Overview's Open Threads; edit it by hand")
+            raise WriteError(threads_hidden_shared(lead_key))
         if hits:
             # Already shared: the PCs' copies go, and the entry comes to
             # involve every holder and every PC named (a party one stays).
@@ -1987,6 +1991,10 @@ def threads_row(batch: Batch, cols: list[str], wrapup: list[str]) -> None:
             note = batch.read(overview)
             found = th.shared_threads(note)
             i = threads_find([t.text for t in found], lead_key, overview)
+            if found[i].hidden:
+                # Taking it out could leave the secret as text and an
+                # orphan comment closer.
+                raise WriteError(threads_hidden_shared(lead_key))
             try:
                 batch.put(overview, th.remove_shared(note, i))
             except (KeyError, IndexError):

@@ -384,7 +384,8 @@ class ThreadsTests(unittest.TestCase):
         code, out = run(vault, "threads", "--write", stdin=rows(
             ("move", "The bell debt", "-", "Ines_Marlowe, Corwin_Hale")))
         self.assertEqual(code, 1)
-        self.assertIn("a hidden copy is in the Overview's Open Threads", out)
+        self.assertIn("'The bell debt' in the Overview's Open Threads is in "
+                      "or next to hidden text; edit it by hand", out)
         self.assertEqual(self.snapshot(vault), before)
 
     def test_close_with_an_empty_list_refused(self):
@@ -562,6 +563,47 @@ class ThreadsTests(unittest.TestCase):
                         self.assertIn("on Ines_Marlowe is next to hidden "
                                       "text; edit it by hand", out)
                     self.assertEqual(self.snapshot(vault), before)
+
+    def test_hidden_shared_entry_refused(self):
+        # A shared entry whose text opens a comment: closing or moving it
+        # would leave the secret as text and an orphan closer. Refused,
+        # nothing written.
+        for opener, closer in (("<!--", "-->"), ("%%", "%%")):
+            with self.subTest(opener):
+                vault = self.vault()
+                self.edit(vault, OVERVIEW, "\n\n## Key Factions",
+                          "\n- **The bell rings** — involves [[Ines_Marlowe]], "
+                          f"[[Corwin_Hale]] {opener}\nThe sexton rang it for "
+                          f"the cult.\n{closer}\n\n## Key Factions")
+                self.edit(vault, INES, "**Open threads:**\n",
+                          "**Open threads:**\n- **The bell rings**\n")
+                before = self.snapshot(vault)
+                for row in (("close", "shared", "The bell rings", "rung"),
+                            ("move", "The bell rings", "-", "Ines_Marlowe")):
+                    code, out = run(vault, "threads", "--wrapup", WRAPUP,
+                                    "--write", stdin=rows(row))
+                    self.assertEqual(code, 1, row)
+                    self.assertIn("'The bell rings' in the Overview's Open "
+                                  "Threads is in or next to hidden text; "
+                                  "edit it by hand", out)
+                self.assertEqual(self.snapshot(vault), before)
+
+    def test_close_shared_takes_its_nested_lines(self):
+        vault = self.vault()
+        self.edit(vault, OVERVIEW, "\n\n## Key Factions",
+                  "\n- The bell rings — involves the party\n"
+                  "  - the sexton knows\n\n## Key Factions")
+        code, out = run(vault, "threads", "--wrapup", WRAPUP, "--write",
+                        stdin=rows(("close", "shared", "The bell rings; the "
+                                    "sexton knows", "rung")))
+        self.assertEqual(code, 0, out)
+        over = read(vault, OVERVIEW)
+        self.assertNotIn("sexton", over)
+        self.assertIn("night crossing — since Session 3; involves "
+                      "[[Ines_Marlowe]], [[Corwin_Hale|Corwin]]\n\n"
+                      "## Key Factions", over)
+        self.assertIn("- The bell rings; the sexton knows — closed: rung "
+                      "(shared)", read(vault, WRAPUP))
 
     def test_close_leaves_a_lazy_spoiler_or_callout_whole(self):
         lamp = "- **Lamp** — who lit it"

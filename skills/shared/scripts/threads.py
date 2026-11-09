@@ -81,7 +81,11 @@ def parse_shared(line: str) -> SharedThread | None:
     m = BULLET_RE.match(line)
     if not m:
         return None
-    body = m.group(1).strip()
+    return _parse_body(m.group(1).strip())
+
+
+def _parse_body(body: str) -> SharedThread:
+    """A bullet's text (marker dropped) as a SharedThread."""
     tail = _TAIL_RE.match(body)
     if tail:
         who = tail.group("who")
@@ -97,16 +101,25 @@ def parse_shared(line: str) -> SharedThread | None:
 
 def shared_threads(overview_text: str) -> list[SharedThread]:
     """The threads under the Overview's `## Open Threads` section (see
-    `_shared_span`), one per bullet line outside a code fence."""
+    `_shared_span`): one per top-level bullet outside a code fence, read
+    as `pc_thread_items` reads a PC's (its lines under it joined into one
+    text, `hidden` by the same rule)."""
     lines = _lines(overview_text)
-    hidden = _hidden_lines(lines)
-    out = []
-    for i in _shared_bullets(lines):
-        t = parse_shared(lines[i].rstrip("\r"))
-        if t is not None:
-            out.append(replace(t, hidden=hidden[i] or any(
-                h in lines[i] for h in _HIDING)))
-    return out
+    return [_shared_of(b)[0] for b in _shared_bullets(lines)]
+
+
+def _shared_of(block: _Block) -> tuple[SharedThread, bool]:
+    """(the block as a SharedThread, whether its first line holds its own
+    `involves` tail). The tail is read off the first line when it has one
+    (the text is then the rest of the first line, then the lines under
+    it); otherwise off the end of the joined text (a tail on a wrapped
+    line)."""
+    first = _parse_body(block.parts[0])
+    if first.party or first.involves:
+        rest = block.text[len(block.parts[0]):]
+        return replace(first, text=first.text + rest,
+                       hidden=block.hidden), True
+    return replace(_parse_body(block.text), hidden=block.hidden), False
 
 
 def widen_shared(overview_text: str, text: str, names: list[str]) -> str:
@@ -116,14 +129,17 @@ def widen_shared(overview_text: str, text: str, names: list[str]) -> str:
     labels, line ending). A party entry is left alone; one with no tail
     gets `— involves …`. KeyError when no visible entry has that text."""
     lines = _lines(overview_text)
-    hidden = _hidden_lines(lines)
     want = " ".join(text.split())
-    for i in _shared_bullets(lines):
-        line = lines[i]
-        t = parse_shared(line.rstrip("\r"))
-        if (t is None or hidden[i] or any(h in line for h in _HIDING)
-                or " ".join(t.text.split()) != want):
+    for block in _shared_bullets(lines):
+        t, own_tail = _shared_of(block)
+        if t.hidden or " ".join(t.text.split()) != want:
             continue
+        # The line the tail sits on: the first, or (a tail on a wrapped
+        # line) the block's last; with no tail, the first gets one.
+        i = (block.start if own_tail or not (t.party or t.involves)
+             else max(k for k in range(block.start, block.end)
+                      if lines[k].strip()))
+        line = lines[i]
         if t.party:
             return overview_text
         have = {n.casefold() for n in t.involves}
@@ -213,20 +229,13 @@ def _shared_span(lines: list[str]) -> tuple[int, int] | None:
     return None
 
 
-def _shared_bullets(lines: list[str]) -> list[int]:
-    """Line indexes of the bullets in the shared list, any indent, outside
-    a code fence."""
+def _shared_bullets(lines: list[str]) -> list[_Block]:
+    """The threads of the shared list: its top-level bullets, each with
+    everything under it (see `_blocks`)."""
     span = _shared_span(lines)
     if span is None:
         return []
-    out = []
-    delim: str | None = None
-    for i in range(span[0] + 1, span[1]):
-        line = lines[i].rstrip("\r")
-        delim, is_fence = fence_step(line, delim)
-        if not (is_fence or delim is not None) and BULLET_RE.match(line):
-            out.append(i)
-    return out
+    return _blocks(lines, span[0], span[1])
 
 
 def _heading_end(lines: list[str], heads: list[tuple[int, int, str]],
@@ -440,15 +449,9 @@ def _hidden_lines(lines: list[str]) -> list[bool]:
 
 
 def pc_thread_items(pc_text: str) -> list[PcThread]:
-    """The threads under a PC's `## Current Status` > `**Open threads:**`.
-
-    Only top-level bullets are threads (the indent of the block's first
-    bullet). A line indented deeper than the bullet's marker, nested bullet
-    or not, belongs to the bullet above it, after blank lines too (a loose
-    list item, as Markdown reads it); a blank line followed by anything
-    else ends the bullet. A plain line straight under the bullet's text,
-    indented or not, carries it on (a lazy line; see `_lazy`). A template placeholder (`{…}`) is not a
-    thread. Bullets inside a code fence are skipped. A thread in or next
+    """The threads under a PC's `## Current Status` > `**Open threads:**`:
+    its top-level bullets, each with everything under it (see `_blocks`).
+    A template placeholder (`{…}`) is not a thread. A thread in or next
     to hidden text is returned with `hidden` set (see `PcThread`): nothing
     may move it to a page players read, and removing it could split a
     hidden block."""
@@ -457,10 +460,40 @@ def pc_thread_items(pc_text: str) -> list[PcThread]:
         start, end = _path_span(lines, PC_PATH)
     except KeyError:
         return []
+    return [PcThread(b.text, b.parts, b.start, b.end, b.hidden, b.fenced)
+            for b in _blocks(lines, start, end)
+            if not _PLACEHOLDER_RE.match(b.text)]
+
+
+@dataclass(frozen=True)
+class _Block:
+    """One thread's lines: see `_blocks`. Fields as `PcThread`'s."""
+    text: str
+    parts: tuple[str, ...]
+    start: int
+    end: int
+    hidden: bool
+    fenced: bool
+
+
+def _blocks(lines: list[str], start: int, end: int) -> list[_Block]:
+    """The threads of a list in lines (start, end): a PC's Open threads and
+    the Overview's shared list are both read here.
+
+    Only top-level bullets are threads (the indent of the list's first
+    bullet). A line indented deeper than the bullet's marker, nested bullet
+    or not, belongs to the bullet above it, after blank lines too (a loose
+    list item, as Markdown reads it); a blank line followed by anything
+    else ends the bullet. A plain line straight under the bullet's text,
+    indented or not, carries it on (a lazy line; see `_lazy`). Bullets
+    inside a code fence are skipped. The text is the bullet on one line:
+    each line under it stripped, a wrapped line after a space and a nested
+    bullet's text (marker dropped) after "; ". `hidden` and `fenced` as
+    `PcThread` reads them."""
     hidden = _hidden_lines(lines)
     near = [any(h in _FENCE_MARKER_RE.sub("", line) for h in _HIDING)
             for line in lines]
-    out: list[PcThread] = []
+    out: list[_Block] = []
     base: int | None = None
     delim: str | None = None
     i = start + 1
@@ -494,14 +527,13 @@ def pc_thread_items(pc_text: str) -> list[PcThread]:
         for part in parts[1:]:
             sub = BULLET_RE.match(part)
             text += f"; {sub.group(1).strip()}" if sub else f" {part}"
-        if not _PLACEHOLDER_RE.match(text):
-            span = [k for k in range(i, stop) if lines[k].strip()]
-            touches = (any(hidden[k] or any(h in lines[k] for h in _HIDING)
-                           for k in span)
-                       or (i > 0 and near[i - 1])
-                       or (stop < len(lines) and near[stop]))
-            fenced = all(hidden[k] for k in span)
-            out.append(PcThread(text, parts, i, stop, touches, fenced))
+        span = [k for k in range(i, stop) if lines[k].strip()]
+        touches = (any(hidden[k] or any(h in lines[k] for h in _HIDING)
+                       for k in span)
+                   or (i > 0 and near[i - 1])
+                   or (stop < len(lines) and near[stop]))
+        fenced = all(hidden[k] for k in span)
+        out.append(_Block(text, parts, i, stop, touches, fenced))
         i = stop
     return out
 
@@ -526,23 +558,17 @@ def remove_pc_thread(pc_text: str, thread: PcThread) -> str:
 
 def remove_shared(overview_text: str, index: int) -> str:
     """`overview_text` without shared thread number `index` (as
-    `shared_threads` numbers them), plus any indented lines wrapped under
+    `shared_threads` numbers them): its first line and every line under
     it. KeyError for no Open Threads section, IndexError for no such
     bullet."""
     lines = _lines(overview_text)
-    span = _shared_span(lines)
-    if span is None:
+    if _shared_span(lines) is None:
         raise KeyError(SECTION)
     found = _shared_bullets(lines)
     if not 0 <= index < len(found):
         raise IndexError(f"no bullet {index} under {SECTION}")
-    i = found[index]
-    stop = i + 1
-    while (stop < span[1] and lines[stop].strip()
-           and lines[stop][:1] in " \t"
-           and not BULLET_RE.match(lines[stop].rstrip("\r"))):
-        stop += 1
-    return "\n".join(lines[:i] + lines[stop:])
+    block = found[index]
+    return "\n".join(lines[:block.start] + lines[block.end:])
 
 
 def append_resolved(wrapup_text: str, line: str) -> str:

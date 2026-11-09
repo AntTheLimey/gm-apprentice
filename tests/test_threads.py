@@ -390,6 +390,63 @@ class ThreadsTests(unittest.TestCase):
                          [("open", False), ("secret", True),
                           ("%%aside%% note", True)])
 
+    def test_shared_entry_in_or_next_to_a_comment_is_hidden(self):
+        # The PC side's rule: in a comment, holding a mark, or next to a
+        # line with one (a gm-only marker line next to it does not count).
+        for opener, closer in (("<!--", "-->"), ("%%", "%%")):
+            with self.subTest(opener):
+                text = ("## Open Threads\n\n- Clear — involves [[A]]\n\n"
+                        f"- Bell — involves [[A]] {opener}\n"
+                        f"The sexton rang it.\n{closer}\n\n"
+                        f"- Beside — involves [[A]]\n{opener}\naside\n"
+                        f"{closer}\n\n- Last — involves [[A]]\n")
+                got = threads.shared_threads(text)
+                self.assertEqual([(t.text, t.hidden) for t in got], [
+                    ("Clear", False), ("Bell The sexton rang it.", True),
+                    ("Beside", True), ("Last", False)])
+                # widen_shared never edits a hidden entry.
+                for name in ("Bell The sexton rang it.", "Beside"):
+                    with self.assertRaises(KeyError):
+                        threads.widen_shared(text, name, ["Cole"])
+
+    NESTED = ("# T\n\n## Open Threads\n\n"
+              "- **Bell** — rings at dusk — since Session 2; involves "
+              "[[Ines_Marlowe]]\n"
+              "  - the sexton knows\n"
+              "    more of the sexton\n"
+              "- **Ledger** — involves the party\n\n## Key\n\nK.\n")
+
+    def test_nested_shared_bullet_belongs_to_its_parent(self):
+        # The same input as the publish tool's sharedEntries test.
+        got = threads.shared_threads(self.NESTED)
+        self.assertEqual([t.text for t in got], [
+            "**Bell** — rings at dusk; the sexton knows more of the sexton",
+            "**Ledger**"])
+        self.assertEqual(got[0].involves, ["Ines_Marlowe"])
+        self.assertEqual(got[0].since, "Session 2")
+        self.assertTrue(got[1].party)
+        self.assertEqual(threads.remove_shared(self.NESTED, 0),
+                         "# T\n\n## Open Threads\n\n"
+                         "- **Ledger** — involves the party\n\n## Key\n\nK.\n")
+        out = threads.widen_shared(
+            self.NESTED, "**Bell** — rings at dusk; the sexton knows more "
+            "of the sexton", ["Cole"])
+        self.assertIn("involves [[Ines_Marlowe]], [[Cole]]\n"
+                      "  - the sexton knows\n", out)
+        # A tail on a wrapped line is the entry's tail; widening extends it.
+        wrapped = ("## Open Threads\n\n- The bell rings\n"
+                   "  — involves [[A]]\n")
+        (t,) = threads.shared_threads(wrapped)
+        self.assertEqual((t.text, t.involves), ("The bell rings", ["A"]))
+        self.assertEqual(threads.widen_shared(wrapped, "The bell rings",
+                                              ["B"]),
+                         wrapped.replace("[[A]]", "[[A]], [[B]]"))
+        # No tail at all: the first line gets one.
+        bare = "## Open Threads\n\n- Bare\n  - nested\n"
+        self.assertEqual(threads.widen_shared(bare, "Bare; nested", ["B"]),
+                         "## Open Threads\n\n- Bare — involves [[B]]\n"
+                         "  - nested\n")
+
     def test_widen_shared_adds_missing_names_only(self):
         text = ("# T\r\n\r\n## Open Threads\r\n\r\n"
                 "- **Bell** — owed — since Session 2; involves [[Ada|A]], "

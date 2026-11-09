@@ -3,7 +3,7 @@ const { fenceStep } = require('./processor');
 // The Campaign Overview's `## Open Threads` bullets, and the ones that name a PC put on that PC's page.
 // The writer is skills/shared/scripts/threads.py `format_shared`:
 //   - {text} — since {since}; involves [[A]], [[B]]     (or `involves the party`; `since` may be absent)
-// Python writes one line per shared thread; a hand-wrapped bullet is read by its first line only.
+// Python writes one line per shared thread; a hand-wrapped or nested bullet is read by its first line only.
 // A hand-written bullet may have no tail at all: it names nobody, so it goes on no PC page.
 
 // Greedy, as Python's `_TAIL_RE`: the text runs to the LAST valid tail.
@@ -42,11 +42,15 @@ function sharedEntries(publishedMarkdown) {
   const range = sectionRange(lines, 'Open Threads', open);
   if (!range) return [];
   const entries = [];
+  let base = null;
   for (let i = range.start + 1; i < range.end; i++) {
-    // Python's bullets: `-` or `*`, any indent (vaultlib BULLET_RE).
-    const bullet = open.has(i) && /^\s*[-*]\s+(.+?)\s*$/.exec(lines[i]);
+    // Python's bullets: `-` or `*` (vaultlib BULLET_RE). Only top-level ones (the indent of the list's first bullet)
+    // are threads: one indented deeper belongs to the thread above it (threads.py `_blocks`).
+    const bullet = open.has(i) && /^(\s*)[-*]\s+(.+?)\s*$/.exec(lines[i]);
     if (!bullet) continue;
-    const tail = TAIL_RE.exec(bullet[1]);
+    if (base === null) base = bullet[1].length;
+    if (bullet[1].length > base) continue;
+    const tail = TAIL_RE.exec(bullet[2]);
     if (!tail) continue;
     const who = tail[3];
     const party = /^the party$/i.test(who);

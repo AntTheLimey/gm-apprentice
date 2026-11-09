@@ -62,6 +62,23 @@ test('shared threads: reads the entries the Python writer writes', () => {
   assert.deepStrictEqual(noSince, [{ markdown: '- A thing', involves: ['Tobin'], party: false }]);
 });
 
+// The same input as tests/test_threads.py NESTED: a nested bullet belongs to the thread above it.
+const NESTED = '# T\n\n## Open Threads\n\n'
+  + '- **Bell** — rings at dusk — since Session 2; involves [[Ines_Marlowe]]\n'
+  + '  - the sexton knows\n'
+  + '    more of the sexton\n'
+  + '- **Ledger** — involves the party\n\n## Key\n\nK.\n';
+
+test('shared threads: a nested bullet is part of the thread above, as Python reads it', () => {
+  assert.deepStrictEqual(sharedEntries(NESTED), [
+    { markdown: '- **Bell** — rings at dusk — since Session 2', involves: ['Ines_Marlowe'], party: false },
+    { markdown: '- **Ledger**', involves: [], party: true },
+  ]);
+  // A nested bullet with a tail of its own is still not a thread.
+  const tailed = '## Open Threads\n\n- Parent — involves [[A]]\n  - child — involves [[B]]\n';
+  assert.deepStrictEqual(sharedEntries(tailed).map((e) => e.involves), [['A']]);
+});
+
 test('shared threads: names the PC through an alias link', () => {
   const entry = sharedEntries(overview())[1];
   assert.ok(entry.involves.includes('Corwin_Hale'), 'the alias label is dropped, the target kept');
@@ -253,7 +270,7 @@ test('shared threads: the section is found as Python finds it, and only - and * 
     '```', '- code — involves the party', '```',
     '', '## Key', '',
   ].join('\n');
-  assert.deepStrictEqual(sharedEntries(md).map((e) => e.markdown), ['- a', '- indented', '- star']);
+  assert.deepStrictEqual(sharedEntries(md).map((e) => e.markdown), ['- a', '- star'], 'a nested bullet is part of the one above');
   const status = '# P\n\n```\n## Current Status\n```\n\n## Current status\n\nHere.\n\n## Notes\n';
   assert.match(withSharedThreads(status, [{ markdown: '- a', involves: [], party: true }]), /Here\.\n\n\*\*Shared threads:\*\*\n- a\n\n## Notes/);
 });
