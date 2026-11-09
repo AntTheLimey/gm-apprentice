@@ -30,7 +30,7 @@ gma <command> ... [options]
 | Argument | Value | Help |
 |---|---|---|
 | `--version` |  | print the plugin version |
-| `<command>` | `dnd-ddb`, `dnd-sheet`, `graph-check`, `gurps-check`, `gurps-skill-default`, `index-build`, `ingest-images`, `ingest-survey`, `links`, `migrate`, `moments`, `plan-check`, `plans-index`, `prop-move`, `reconcile-scan`, `relink`, `reveal`, `reveal-scan`, `rules-lookup`, `scene-queue`, `schema-rules`, `session-context`, `stamp-entities`, `tones`, `update`, `vault-check`, `vault-scaffold`, `vault-search`, `vault-write`, `workaround`, `publish`, `tool`, `llms` | the command to run; each has its own --help |
+| `<command>` | `dnd-ddb`, `dnd-sheet`, `graph-check`, `gurps-check`, `gurps-skill-default`, `index-build`, `ingest-images`, `ingest-survey`, `links`, `migrate`, `moments`, `plan-check`, `plans-index`, `prop-move`, `reconcile-scan`, `relink`, `reveal`, `reveal-scan`, `rules-lookup`, `scene-queue`, `schema-rules`, `section`, `session-context`, `stamp-entities`, `tones`, `update`, `vault-check`, `vault-scaffold`, `vault-search`, `vault-write`, `workaround`, `publish`, `tool`, `llms` | the command to run; each has its own --help |
 <!-- END GENERATED -->
 
 <!-- BEGIN GENERATED: gma llms -->
@@ -73,6 +73,7 @@ Example: `gma llms relink`
 | `rules-lookup` | `gma llms rules-lookup` | Record-level lookup over the ttrpg-expert systems corpus. |
 | `scene-queue` | `gma llms scene-queue` | The prep queue: scenes written ahead and not yet played. |
 | `schema-rules` | `gma llms schema-rules` | Canonical vault schema rules and relationship vocabulary. |
+| `section` | `gma llms section` | Print one section of a note by heading path. |
 | `session-context` | `gma llms session-context` | Session-prep context bundle in one call. |
 | `stamp-entities` | `gma llms stamp-entities` | Batch frontmatter writes for the session workflows. |
 | `tones` | `gma llms tones` | List a vault's stray tone words, and tidy them. |

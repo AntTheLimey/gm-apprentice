@@ -1081,6 +1081,85 @@ def fenced_headings(text: str) -> list[tuple[int, int, str]]:
 _fenced_headings = fenced_headings
 
 
+def line_headings(lines: list[str]) -> list[tuple[int, int, str]]:
+    """(index, level, title) for every heading outside a code fence in
+    `lines`, which the caller split on "\n" only (so a CRLF note keeps its
+    "\r" and U+2028 is not a line break)."""
+    fence_delim: str | None = None
+    heads: list[tuple[int, int, str]] = []
+    for i, line in enumerate(lines):
+        fence_delim, is_fence_line = fence_step(line, fence_delim)
+        if is_fence_line or fence_delim is not None:
+            continue
+        m = SECTION_HEADING_RE.match(line)
+        if m:
+            heads.append((i, len(m.group(1)), m.group(2).strip()))
+    return heads
+
+
+def _title_key(title: str) -> str:
+    return " ".join(title.split()).casefold()
+
+
+def find_section(text: str, path: list[str]
+                 ) -> tuple[int, int] | None | list[str]:
+    """Where a note's section is, by heading path: `["GM Notes", "Hooks"]`.
+
+    Returns (start, end), the 0-based line span of the matched heading and
+    its body (end exclusive, trailing blank lines left out), None when
+    nothing matches, or a list of candidate paths when more than one
+    heading does (never a guess). Titles match case-insensitively; the
+    first one at any level, each later one at any depth below the last.
+    A section runs to the next heading of the same or a higher level.
+    Headings inside a code fence are not headings. Lines are split on
+    "\n" only and keep their endings, so the span indexes
+    `text.split("\n")`."""
+    lines = text.split("\n")
+    heads = line_headings(lines)
+    keys = [_title_key(p) for p in path]
+
+    def end_of(n: int) -> int:
+        level = heads[n][1]
+        return next((heads[m][0] for m in range(n + 1, len(heads))
+                     if heads[m][1] <= level), len(lines))
+
+    chains: list[list[int]] = []
+
+    def walk(chain: list[int], lo: int, hi: int) -> None:
+        depth = len(chain)
+        if depth == len(keys):
+            chains.append(chain)
+            return
+        for n in range(lo, hi):
+            if _title_key(heads[n][2]) != keys[depth]:
+                continue
+            if chain and heads[n][1] <= heads[chain[-1]][1]:
+                continue
+            walk(chain + [n], n + 1,
+                 next((m for m in range(n + 1, len(heads))
+                       if heads[m][0] >= end_of(n)), len(heads)))
+
+    if not keys:
+        return None
+    walk([], 0, len(heads))
+    if not chains:
+        return None
+    if len(chains) > 1:
+        def full(n: int) -> str:
+            titles, level = [heads[n][2]], heads[n][1]
+            for m in range(n - 1, -1, -1):
+                if heads[m][1] < level:
+                    titles.insert(0, heads[m][2])
+                    level = heads[m][1]
+            return "/".join(titles) + f" (line {heads[n][0] + 1})"
+        return [full(c[-1]) for c in chains]
+    last = chains[0][-1]
+    start, end = heads[last][0], end_of(last)
+    while end > start + 1 and not lines[end - 1].strip():
+        end -= 1
+    return start, end
+
+
 def sections(text: str) -> list[tuple[int, int, str, str]]:
     """(lineno, level, title, body) for each `## ` heading outside a code
     fence, in document order. `lineno` is 1-based; `body` is the text
