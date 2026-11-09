@@ -494,7 +494,7 @@ class ThreadSecondTierTests(unittest.TestCase):
         tmp = self.reworded_vault()
         report = sc.thread_report(load_files(tmp), 5, None, tmp)
         orphans = report.split(
-            "--- Wrap-up threads not on any PC sheet ---", 1)[1]
+            "--- Wrap-up threads not on any thread list ---", 1)[1]
         self.assertIn("session 3\tVenn drugged in study", orphans)
 
     def test_no_legend_when_nothing_is_tentative(self):
@@ -523,12 +523,12 @@ class ThreadReportTests(unittest.TestCase):
 
     def test_threads_orphans(self):
         report = sc.thread_report(self.files, 7, "chapter 4 - calcutta", FIXTURE)
-        self.assertIn("--- Wrap-up threads not on any PC sheet ---", report)
+        self.assertIn("--- Wrap-up threads not on any thread list ---", report)
         self.assertIn("session 5\tThe ledger is still missing", report)
         # "Find the missing ledger" matched a PC thread, so it must NOT
         # also show up as an orphan.
         orphan_section = report.split(
-            "--- Wrap-up threads not on any PC sheet ---", 1)[1]
+            "--- Wrap-up threads not on any thread list ---", 1)[1]
         self.assertNotIn("Find the missing ledger", orphan_section)
 
     def test_threads_stale_flag(self):
@@ -592,7 +592,7 @@ class ThreadReportTests(unittest.TestCase):
             "Find the missing ledger\tfirst=7\tlast=7\tage=0\t\n"
             "Repay Bram\tfirst=?\tlast=?\tage=?\t"
             "(not in any wrap-up — check it is still live)\n"
-            "--- Wrap-up threads not on any PC sheet ---\n"
+            "--- Wrap-up threads not on any thread list ---\n"
             "session 5\tThe ledger is still missing"))
 
     def test_wrapped_thread_prints_whole_and_closes_by_that_text(self):
@@ -656,11 +656,31 @@ class ThreadReportTests(unittest.TestCase):
             "involves the party")
         report = self.report(tmp)
         orphans = report.split(
-            "--- Wrap-up threads not on any PC sheet ---", 1)[1]
+            "--- Wrap-up threads not on any thread list ---", 1)[1]
         self.assertNotIn("The ledger is still missing", orphans)
         self.assertIn(
             "The ledger is still missing\tfirst=5\tlast=5\tage=2\t",
             report)
+
+    def test_a_closed_thread_is_not_an_orphan(self):
+        tmp = self.shared_copy("")
+        wrap = (tmp / "Chapters" / "Chapter 4 - Calcutta" / "Sessions"
+                / "Chapter_04_Session_07_Wrap_Up.md")
+        wrap.write_text(
+            wrap.read_text(encoding="utf-8")
+            + "\n#### Resolved Threads\n\n- The ledger is still missing "
+              "\u2014 closed: found in the dredger (shared)\n",
+            encoding="utf-8")
+        orphans = self.report(tmp).split(
+            "--- Wrap-up threads not on any thread list ---", 1)[1]
+        self.assertNotIn("The ledger is still missing", orphans)
+        self.assertEqual(orphans.strip(), "(none)")
+
+    def test_shared_bullet_with_no_tail_names_nobody(self):
+        tmp = self.shared_copy("- A loose end with no tail")
+        self.assertIn("A loose end with no tail\tfirst=?\tlast=?\tage=?\t"
+                      "(not in any wrap-up \u2014 check it is still live)"
+                      "\tinvolves: (none named)", self.report(tmp))
 
     def test_only_shared_threads_say_so_under_the_pc(self):
         tmp = self.shared_copy(

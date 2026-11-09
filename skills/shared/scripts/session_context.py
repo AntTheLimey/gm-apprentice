@@ -587,6 +587,34 @@ def _ratio_match(norm: str, bullet: str) -> bool:
     return SequenceMatcher(None, norm, _norm_thread(bullet)).ratio() >= 0.6
 
 
+def _scoped_wrap_ups(files, chapter):
+    """(session, text) of each Wrap-Up in scope (see `wrap_up_threads`)."""
+    for rel, text, fm in files:
+        if entity_type(fm) not in WRAP_UP_TYPES:
+            continue
+        if chapter is not None:
+            ck = chapter_key(rel, fm)
+            if ck is not None and ck != chapter:
+                continue
+        n = session_ref_number(fm)
+        if n is not None:
+            yield n, text
+
+
+_CLOSED_TAIL_RE = re.compile(r"\s+\u2014\s+closed:\s.*$")
+
+
+def wrap_up_resolved(files, chapter) -> list[str]:
+    """The closed threads in the in-scope Wrap-Ups' `#### Resolved Threads`,
+    each without its `— closed: …` tail (see `threads.format_resolved`)."""
+    out = []
+    for _n, text in _scoped_wrap_ups(files, chapter):
+        block = _heading_block(text, 4, "Resolved Threads")
+        out.extend(_CLOSED_TAIL_RE.sub("", b, count=1)
+                   for b in (_bullets(block) if block else []))
+    return out
+
+
 def wrap_up_threads(files, chapter) -> list[tuple[int, list[str], list[str]]]:
     """(session, unresolved bullets, carry-forward bullets) per wrap-up.
 
@@ -597,16 +625,7 @@ def wrap_up_threads(files, chapter) -> list[tuple[int, list[str], list[str]]]:
     its threads.
     """
     wrap_ups: list[tuple[int, list[str], list[str]]] = []
-    for rel, text, fm in files:
-        if entity_type(fm) not in WRAP_UP_TYPES:
-            continue
-        if chapter is not None:
-            ck = chapter_key(rel, fm)
-            if ck is not None and ck != chapter:
-                continue
-        n = session_ref_number(fm)
-        if n is None:
-            continue
+    for n, text in _scoped_wrap_ups(files, chapter):
         unresolved_block = _heading_block(text, 4, "Unresolved Threads")
         carry_block = _heading_block(text, 3, "PC Carry-Forward")
         unresolved = _bullets(unresolved_block) if unresolved_block else []
@@ -687,8 +706,8 @@ def thread_report(files, current: int, chapter, vault: Path) -> str:
     if shared:
         lines.append("--- Shared (Campaign Overview) ---")
     for t in shared:
-        who = ("the party" if t.party or not t.involves
-               else ", ".join(t.involves))
+        who = ("the party" if t.party else ", ".join(t.involves)
+               or "(none named)")
         lines.append(f"{t.text}\t{tags(t.text)}\tinvolves: {who}")
 
     if not pcs:
@@ -715,7 +734,11 @@ def thread_report(files, current: int, chapter, vault: Path) -> str:
     if tentative:
         lines.insert(1, "(~ means a likely match by shared names and words, "
                         "not the same text: check it)")
-    lines.append("--- Wrap-up threads not on any PC sheet ---")
+    # A thread closed into a Resolved Threads list claims its Unresolved
+    # bullets just as a live one does: it is done, not lost.
+    for closed in wrap_up_resolved(files, chapter):
+        matched.update(_match(closed, wrap_ups)[2])
+    lines.append("--- Wrap-up threads not on any thread list ---")
     orphans = [f"session {n}\t{bullet}"
               for n, unresolved, _carry in wrap_ups
               for bullet in unresolved if (n, bullet) not in matched]
