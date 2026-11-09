@@ -10,8 +10,12 @@ const { writeNewConfig } = require('./helpers/settings-files');
 const { writePublishList } = require('./helpers/publish-list');
 
 const FIXTURE = path.join(__dirname, '..', '..', '..', 'tests', 'fixtures', 'shared-threads');
-const overview = () => fs.readFileSync(path.join(FIXTURE, 'Campaign Overview.md'), 'utf8');
-const pc = (name) => fs.readFileSync(path.join(FIXTURE, 'PCs', `${name}.md`), 'utf8');
+// A CRLF checkout (Windows) gives the fixtures CRLF endings: read them as LF, so the assertions and the `replace`s
+// below see the text they are written for.
+const lf = (text) => text.replace(/\r\n/g, '\n');
+const overview = () => lf(fs.readFileSync(path.join(FIXTURE, 'Campaign Overview.md'), 'utf8'));
+const pc = (name) => lf(fs.readFileSync(path.join(FIXTURE, 'PCs', `${name}.md`), 'utf8'));
+const VECTORS = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'shared-thread-vectors.json'), 'utf8'));
 
 function buildVault(files) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'shared-threads-build-'));
@@ -71,13 +75,55 @@ const NESTED = '# T\n\n## Open Threads\n\n'
 
 test('shared threads: a nested bullet is part of the thread above, as Python reads it', () => {
   assert.deepStrictEqual(sharedEntries(NESTED), [
-    { markdown: '- **Bell** — rings at dusk — since Session 2', involves: ['Ines_Marlowe'], party: false },
+    { markdown: '- **Bell** — rings at dusk; the sexton knows more of the sexton — since Session 2', involves: ['Ines_Marlowe'], party: false },
     { markdown: '- **Ledger**', involves: [], party: true },
   ]);
   // A nested bullet with a tail of its own is still not a thread.
   const tailed = '## Open Threads\n\n- Parent — involves [[A]]\n  - child — involves [[B]]\n';
   assert.deepStrictEqual(sharedEntries(tailed).map((e) => e.involves), [['A']]);
 });
+
+// The same vectors pin threads.py `shared_threads` (tests/test_threads.py), so the two read one thread alike.
+test('shared threads: each thread is read whole, as Python reads it', () => {
+  for (const c of VECTORS.cases) assert.deepStrictEqual(sharedEntries(c.markdown), c.entries, c.about);
+  // CRLF reads as LF.
+  for (const c of VECTORS.cases) assert.deepStrictEqual(sharedEntries(c.markdown.replace(/\n/g, '\r\n')), c.entries, c.about);
+});
+
+test('shared threads: they go in before the first subsection of Current Status', () => {
+  const page = '# P\n\n## Current Status\n\n**Location:** dock\n\n### GM Notes\n\nS.\n\n## Notes\n';
+  assert.strictEqual(withSharedThreads(page, [{ markdown: '- a', involves: [], party: true }]),
+    '# P\n\n## Current Status\n\n**Location:** dock\n\n**Shared threads:**\n- a\n\n### GM Notes\n\nS.\n\n## Notes\n');
+  const fenced = '## Current Status\n\nX.\n```\n### not one\n```\n';
+  assert.match(withSharedThreads(fenced, [{ markdown: '- a', involves: [], party: true }]), /```\n\n\*\*Shared threads:\*\*\n- a\n$/);
+});
+
+for (const site of ['player', 'gm']) {
+  test(`shared threads: a Current Status ending in a GM Notes subsection still shows them (${site} site)`, () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'shared-threads-sub-'));
+    const vault = path.join(root, 'vault');
+    const notes = {
+      'Campaign Overview.md': overview(),
+      'PCs/Corwin_Hale.md': pc('Corwin_Hale').replace('\n## Notes', '\n### GM Notes\n\nThe lamp is his.\n\n## Notes'),
+    };
+    for (const [rel, text] of Object.entries(notes)) {
+      fs.mkdirSync(path.dirname(path.join(vault, rel)), { recursive: true });
+      fs.writeFileSync(path.join(vault, rel), text);
+    }
+    const siteDir = path.join(root, 'campaign');
+    fs.mkdirSync(siteDir);
+    writeNewConfig(vault, { version: 1, player_site: { folder: siteDir, folder_map: { PCs: 'pcs' } }, gm_site: { publish: true, folder: path.join(root, 'campaign-gm') } });
+    const configPath = path.join(siteDir, 'vault.config.json');
+    fs.writeFileSync(configPath, JSON.stringify({ vaultPath: vault }));
+    const real = console.log; const warn = console.warn; console.log = () => {}; console.warn = () => {};
+    try { build({ configPath, site }); } finally { console.log = real; console.warn = warn; }
+    const out = site === 'gm' ? path.join(root, 'campaign-gm') : path.join(siteDir, 'docs');
+    const html = fs.readFileSync(path.join(out, 'pcs', 'corwin-hale.html'), 'utf8');
+    assert.match(unmarked(html), /Shared threads/);
+    assert.match(unmarked(html), /The missing ledger/);
+    if (site === 'player') assert.doesNotMatch(html, /The lamp is his/);
+  });
+}
 
 test('shared threads: names the PC through an alias link', () => {
   const entry = sharedEntries(overview())[1];
@@ -270,7 +316,9 @@ test('shared threads: the section is found as Python finds it, and only - and * 
     '```', '- code — involves the party', '```',
     '', '## Key', '',
   ].join('\n');
-  assert.deepStrictEqual(sharedEntries(md).map((e) => e.markdown), ['- a', '- star'], 'a nested bullet is part of the one above');
+  // A nested bullet is part of the one above (its own tail is text), and a `+` line carries a thread on, as Python
+  // reads them (`_blocks`, `_lazy`).
+  assert.deepStrictEqual(sharedEntries(md).map((e) => e.markdown), ['- a; indented — involves the party', '- star + plus — involves the party']);
   const status = '# P\n\n```\n## Current Status\n```\n\n## Current status\n\nHere.\n\n## Notes\n';
   assert.match(withSharedThreads(status, [{ markdown: '- a', involves: [], party: true }]), /Here\.\n\n\*\*Shared threads:\*\*\n- a\n\n## Notes/);
 });

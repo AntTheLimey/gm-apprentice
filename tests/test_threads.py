@@ -282,6 +282,21 @@ class ThreadsTests(unittest.TestCase):
         "HTML comment": ("<!--", "-->"),
     }
 
+    def test_shared_threads_read_as_the_publish_tool_reads_them(self):
+        # The vectors lib/shared-threads.js is pinned to: each visible
+        # thread with a tail, as the tool puts it on a PC page.
+        import json
+        vectors = json.loads(read(ROOT / "tools" / "publish" / "test"
+                                  / "fixtures" / "shared-thread-vectors.json"))
+        for case in vectors["cases"]:
+            with self.subTest(case["about"]):
+                got = [{"markdown": f"- {t.text}" + (
+                            f" — since {t.since.strip()}" if t.since else ""),
+                        "involves": t.involves, "party": t.party}
+                       for t in threads.shared_threads(case["markdown"])
+                       if t.party or t.involves]
+                self.assertEqual(got, case["entries"])
+
     def test_template_open_threads_holds_no_prose(self):
         # The section is player-facing: anything in the template would
         # publish above the shared threads for good.

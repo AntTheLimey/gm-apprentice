@@ -235,7 +235,7 @@ def _shared_bullets(lines: list[str]) -> list[_Block]:
     span = _shared_span(lines)
     if span is None:
         return []
-    return _blocks(lines, span[0], span[1])
+    return _blocks(lines, span[0], span[1], code=True)
 
 
 def _heading_end(lines: list[str], heads: list[tuple[int, int, str]],
@@ -503,7 +503,8 @@ class _Block:
 
 
 def _blocks(lines: list[str], start: int, end: int,
-            label: re.Match[str] | None = None) -> list[_Block]:
+            label: re.Match[str] | None = None,
+            code: bool = False) -> list[_Block]:
     """The threads of a list in lines (start, end): a PC's Open threads and
     the Overview's shared list are both read here.
 
@@ -517,6 +518,10 @@ def _blocks(lines: list[str], start: int, end: int,
     each line under it stripped, a wrapped line after a space and a nested
     bullet's text (marker dropped) after "; ". `hidden` and `fenced` as
     `PcThread` reads them.
+
+    With `code` (the shared list), a bullet-like line indented four or
+    more spaces before the list starts is indented code, not a thread, as
+    the publish tool reads it.
 
     `label` is the match of a PC's label line at `start` (`_PC_LABEL_RE`):
     text after it is a thread of its own, the label line its first line,
@@ -543,6 +548,9 @@ def _blocks(lines: list[str], start: int, end: int,
             i += 1
             continue
         indent = len(line) - len(line.lstrip())
+        if base is None and code and indent >= 4:
+            i += 1   # indented code
+            continue
         if base is None:
             base = indent
         if indent > base:

@@ -1,9 +1,10 @@
 'use strict';
 const { fenceStep } = require('./processor');
+const { markerRe } = require('./markers');
 // The Campaign Overview's `## Open Threads` bullets, and the ones that name a PC put on that PC's page.
 // The writer is skills/shared/scripts/threads.py `format_shared`:
 //   - {text} — since {since}; involves [[A]], [[B]]     (or `involves the party`; `since` may be absent)
-// Python writes one line per shared thread; a hand-wrapped or nested bullet is read by its first line only.
+// Python writes one line per shared thread; a hand-wrapped or nested bullet is read whole, as Python reads it.
 // A hand-written bullet may have no tail at all: it names nobody, so it goes on no PC page.
 
 // Greedy, as Python's `_TAIL_RE`: the text runs to the LAST valid tail.
@@ -35,44 +36,93 @@ function sectionRange(lines, title, open = unfenced(lines)) {
   return { start, end };
 }
 
-// -> [{ markdown, involves: [target], party }]; `markdown` is the bullet without its `involves` tail.
+// threads.py `_lazy`: can `line`, unindented and straight under a bullet, carry on its text? Not a bullet, a bold
+// label line, a heading, a code fence, a gm-only marker, a comment mark or a blockquote or callout.
+const GM_MARKER_RE = markerRe(['gm-only'], '');
+function lazy(line) {
+  const bare = line.trim();
+  return !(/^\s*[-*]\s+.+$/.test(line) || /^\*\*[^*]+\*\*/.test(bare) || /^#{1,6}\s+.+$/.test(bare)
+    || GM_MARKER_RE.test(line) || /^(```|~~~|<!--|-->|%%|>)/.test(bare));
+}
+
+// One shared entry's text from its bullet's text: { text, since, involves, party, tailed } as threads.py
+// `_parse_body` reads it; `tailed` when it has a valid `involves` tail.
+function parseBody(body) {
+  const tail = TAIL_RE.exec(body);
+  if (tail) {
+    const who = tail[3];
+    if (/^the party$/i.test(who)) return { text: tail[1].trim(), since: tail[2], involves: [], party: true, tailed: true };
+    const involves = [...who.matchAll(LINK_RE)].map((m) => m[1].trim());
+    if (involves.length) return { text: tail[1].trim(), since: tail[2], involves, party: false, tailed: true };
+  }
+  return { text: body, since: undefined, involves: [], party: false, tailed: false };
+}
+
+// -> [{ markdown, involves: [target], party }]; `markdown` is the thread on one line without its `involves` tail.
+// Read as threads.py `shared_threads` reads it (`_blocks`, `_shared_of`): each top-level bullet with every line under
+// it (deeper lines, after blank lines too, and a lazy line straight under it), joined into one text, a wrapped line
+// after a space and a nested bullet's text after "; ". The tail is read off the first line when it has one, else off
+// the end of the joined text. A bullet-like line indented four or more spaces before the list starts is indented
+// code, not a thread.
 function sharedEntries(publishedMarkdown) {
   const lines = String(publishedMarkdown || '').split(/\r?\n/);
-  const open = unfenced(lines);
-  const range = sectionRange(lines, 'Open Threads', open);
+  const range = sectionRange(lines, 'Open Threads');
   if (!range) return [];
   const entries = [];
   let base = null;
-  for (let i = range.start + 1; i < range.end; i++) {
-    // Python's bullets: `-` or `*` (vaultlib BULLET_RE). Only top-level ones (the indent of the list's first bullet)
-    // are threads: one indented deeper belongs to the thread above it (threads.py `_blocks`).
-    const bullet = open.has(i) && /^(\s*)[-*]\s+(.+?)\s*$/.exec(lines[i]);
-    if (!bullet) continue;
-    if (base === null) base = bullet[1].length;
-    if (bullet[1].length > base) continue;
-    const tail = TAIL_RE.exec(bullet[2]);
-    if (!tail) continue;
-    const who = tail[3];
-    const party = /^the party$/i.test(who);
-    const involves = party ? [] : [...who.matchAll(LINK_RE)].map((m) => m[1].trim());
-    if (!party && !involves.length) continue;
-    entries.push({ markdown: `- ${tail[1].trim()}${tail[2] ? ` — since ${tail[2].trim()}` : ''}`, involves, party });
+  let fence = null;
+  let i = range.start + 1;
+  while (i < range.end) {
+    const line = lines[i];
+    const step = fenceStep(line, fence);
+    fence = step.fenceDelim;
+    // Python's bullets: `-` or `*` (vaultlib BULLET_RE).
+    const bullet = /^(\s*)[-*]\s+(.+)$/.exec(line);
+    const indent = bullet ? bullet[1].length : 0;
+    if (step.isFenceLine || fence !== null || !bullet || (base === null && indent >= 4)) { i++; continue; }
+    if (base === null) base = indent;
+    if (indent > base) { i++; continue; }   // nested under a bullet the walk skipped
+    let stop = i + 1;
+    for (let j = i + 1; j < range.end; j++) {
+      const next = lines[j];
+      if (!next.trim()) continue;   // a blank: the bullet goes on only if a deeper line follows
+      if (next.length - next.trimStart().length <= base && !(j === stop && lazy(next))) break;
+      stop = j + 1;
+    }
+    const parts = [bullet[2].trim()];
+    for (let k = i + 1; k < stop; k++) if (lines[k].trim()) parts.push(lines[k].trim());
+    let joined = parts[0];
+    for (const part of parts.slice(1)) {
+      const sub = /^\s*[-*]\s+(.+)$/.exec(part);
+      joined += sub ? `; ${sub[1].trim()}` : ` ${part}`;
+    }
+    const first = parseBody(parts[0]);
+    const entry = first.tailed ? { ...first, text: first.text + joined.slice(parts[0].length) } : parseBody(joined);
+    if (entry.tailed) {
+      entries.push({ markdown: `- ${entry.text}${entry.since ? ` — since ${entry.since.trim()}` : ''}`, involves: entry.involves, party: entry.party });
+    }
+    i = stop;
   }
   return entries;
 }
 
-// Adds `**Shared threads:**` and the entries at the end of `## Current Status`. Unchanged with no entries or no section.
+// Adds `**Shared threads:**` and the entries to `## Current Status`, after its lead fields: before its first
+// subsection (a `### GM Notes` the site leaves out would take them with it), else at its end. Unchanged with no
+// entries or no section.
 function withSharedThreads(pcMarkdown, entries) {
   const text = String(pcMarkdown || '');
   if (!entries || !entries.length) return text;
   const nl = eol(text);
   const lines = text.split(/\r?\n/);
-  const range = sectionRange(lines, 'Current Status');
+  const open = unfenced(lines);
+  const range = sectionRange(lines, 'Current Status', open);
   if (!range) return text;
-  let at = range.end;
+  let end = range.end;
+  for (let i = range.start + 1; i < range.end; i++) if (open.has(i) && /^#{3,6}\s/.test(lines[i])) { end = i; break; }
+  let at = end;
   while (at > range.start + 1 && lines[at - 1].trim() === '') at--;
   const added = ['', '**Shared threads:**', ...entries.map((e) => e.markdown)];
-  if (at === range.end && range.end < lines.length) added.push('');
+  if (at === end && end < lines.length) added.push('');
   lines.splice(at, 0, ...added);
   return lines.join(nl);
 }

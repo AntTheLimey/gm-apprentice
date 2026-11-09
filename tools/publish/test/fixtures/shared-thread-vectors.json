@@ -1,0 +1,88 @@
+{
+ "_about": "Shared threads as the publish tool reads them (lib/shared-threads.js `sharedEntries`) from an Overview's published text: `markdown` is the thread on one line without its `involves` tail. skills/shared/scripts/threads.py `shared_threads` must read the same threads (tests/test_threads.py).",
+ "cases": [
+  {
+   "about": "the tail on a wrapped line",
+   "markdown": "## Open Threads\n\n- **Ferry** — the crossing\n  is owed — since Session 3; involves [[Corwin_Hale]]\n",
+   "entries": [
+    {
+     "markdown": "- **Ferry** — the crossing is owed — since Session 3",
+     "involves": [
+      "Corwin_Hale"
+     ],
+     "party": false
+    }
+   ]
+  },
+  {
+   "about": "the tail on a lazy line straight under the bullet",
+   "markdown": "## Open Threads\n\n- **Toll** — the keeper\nwants it back — involves the party\n- Next — involves [[Ines_Marlowe|Ines]]\n",
+   "entries": [
+    {
+     "markdown": "- **Toll** — the keeper wants it back",
+     "involves": [],
+     "party": true
+    },
+    {
+     "markdown": "- Next",
+     "involves": [
+      "Ines_Marlowe"
+     ],
+     "party": false
+    }
+   ]
+  },
+  {
+   "about": "the tail on the first line, nested and wrapped lines after it",
+   "markdown": "## Open Threads\n\n- **Bell** — rings at dusk — since Session 2; involves [[Ines_Marlowe]]\n  - the sexton knows\n    more of the sexton\n- **Ledger** — involves the party\n\n## Key\n\nK.\n",
+   "entries": [
+    {
+     "markdown": "- **Bell** — rings at dusk; the sexton knows more of the sexton — since Session 2",
+     "involves": [
+      "Ines_Marlowe"
+     ],
+     "party": false
+    },
+    {
+     "markdown": "- **Ledger**",
+     "involves": [],
+     "party": true
+    }
+   ]
+  },
+  {
+   "about": "a loose item: a deeper paragraph after a blank line",
+   "markdown": "## Open Threads\n\n- A — involves [[X]]\n\n  more about A\n\n- B — involves the party\n",
+   "entries": [
+    {
+     "markdown": "- A more about A",
+     "involves": [
+      "X"
+     ],
+     "party": false
+    },
+    {
+     "markdown": "- B",
+     "involves": [],
+     "party": true
+    }
+   ]
+  },
+  {
+   "about": "indented code before the list, and a fenced bullet, are not threads",
+   "markdown": "## Open Threads\n\n    - code — involves the party\n\n```\n- fenced — involves the party\n```\n\n- real — involves the party\n",
+   "entries": [
+    {
+     "markdown": "- real",
+     "involves": [],
+     "party": true
+    }
+   ]
+  },
+  {
+   "about": "a bullet with no tail names nobody",
+   "markdown": "## Open Threads\n\n- Hand-written, no tail\n",
+   "entries": []
+  }
+ ]
+}
