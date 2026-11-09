@@ -9,6 +9,16 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.2] — 2026-11-08
+
+### Changed
+
+- The update now takes vaults from 1.11.0 on, and from here the oldest it takes moves up one minor release at every minor release. A vault behind is told which release to update with first, and how to run it from its download with Python alone.
+
+### Removed
+
+- The update's checks for 1.10 releases, which no vault it takes can need.
+
 ## [1.12.1] — 2026-11-08
 
 Codex and Cursor tested end to end on 1.12.0 (create a vault, prep, wrap-up, build the site locally, update).

@@ -57,14 +57,15 @@ matches and what was decided when; `answers` holds each answer;
 `updates` lists each run and its backup.
 
 **A vault not yet moved.** The update refuses it (exit 2; `gma vault-check <vault> version` says `REFUSED`) and names what is left on it, each with
-its fix: no update stamp or one older than 1.10.60, the old settings file
+its fix: no update stamp or one older than the floor (1.11.0 in this release), the old settings file
 (alone or beside the new one), the old publish list, a site publish tool
 older than 1.27.0, a key other than `vaultPath` in the site folder's
 `vault.config.json`, a build script (or a broken file) in the site's
 `package.json`, or settings it could not read. This release
 moves none of those. Tell the GM what it names: what the 1.10 update moves
 needs a 1.10 release, 1.10.134 or later (the release it links to: its
-campaign-organizer, and its update); the rest the GM fixes as the row
-says. Then run this update again.
+campaign-organizer, and its update); a stamp below the floor is updated
+first with the release the row names, run from its download as the row
+says; the rest the GM fixes as the row says. Then run this update again.
 
 Then return to the calling skill, or carry on with the GM's request.
