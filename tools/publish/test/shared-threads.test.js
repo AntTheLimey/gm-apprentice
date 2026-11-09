@@ -387,3 +387,40 @@ test('shared threads: party threads skip an out-of-play PC; a thread that names 
   assert.match(corwin, /Corwin.s debt to the ferrywoman/);
   assert.match(read('pcs', 'ines-marlowe.html'), /The missing ledger/);
 });
+
+// The Overview's Open Threads reach PC pages wherever the note sits: in a folder the player site hides too (the writer
+// has taken the threads off the PC notes). An archived copy of it, first by path, is never the one read.
+test('shared threads: an Overview in a hidden folder still feeds PC pages; an archived copy never does', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'shared-threads-hidden-'));
+  const vault = path.join(root, 'vault');
+  const notes = {
+    '_Campaign/Campaign Overview.md': overview(),
+    '_archive/Campaign Overview.md': overview().replace(/The missing ledger/g, 'An archived thread'),
+    'PCs/Corwin_Hale.md': pc('Corwin_Hale'),
+  };
+  for (const [rel, text] of Object.entries(notes)) {
+    fs.mkdirSync(path.dirname(path.join(vault, rel)), { recursive: true });
+    fs.writeFileSync(path.join(vault, rel), text);
+  }
+  const siteDir = path.join(root, 'campaign');
+  fs.mkdirSync(siteDir);
+  writeNewConfig(vault, { version: 1, player_site: { folder: siteDir, folder_map: { _Campaign: 'campaign', PCs: 'pcs' }, hide: { folders: ['_Campaign'] } } });
+  const configPath = path.join(siteDir, 'vault.config.json');
+  fs.writeFileSync(configPath, JSON.stringify({ vaultPath: vault }));
+  const real = console.log; const warn = console.warn; console.log = () => {}; console.warn = () => {};
+  try { build({ configPath }); } finally { console.log = real; console.warn = warn; }
+  const html = fs.readFileSync(path.join(siteDir, 'docs', 'pcs', 'corwin-hale.html'), 'utf8');
+  assert.match(html, /The missing ledger/);
+  assert.doesNotMatch(html, /An archived thread/);
+  assert.ok(!fs.existsSync(path.join(siteDir, 'docs', 'campaign')), 'the hidden folder still gets no pages');
+});
+
+// A long hidden span left open to the section's end costs one strip, not one per line (2,000 lines took seconds).
+test('shared threads: a long unclosed hidden span puts them before its opener, fast', () => {
+  const hidden = Array.from({ length: 2000 }, (_, i) => `secret line ${i}`).join('\n');
+  const md = `# P\n\n## Current Status\n\n**Location:** x\n\n%%\n${hidden}\n\n## Notes\n`;
+  const started = Date.now();
+  const out = withSharedThreads(md, [{ markdown: '- a', involves: [], party: true }]);
+  assert.match(out, /x\n\n\*\*Shared threads:\*\*\n- a\n\n%%\nsecret line 0/);
+  assert.ok(Date.now() - started < 2000, `took ${Date.now() - started} ms`);
+});

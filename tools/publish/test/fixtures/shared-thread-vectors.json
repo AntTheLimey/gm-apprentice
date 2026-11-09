@@ -83,6 +83,20 @@
    "about": "a bullet with no tail names nobody",
    "markdown": "## Open Threads\n\n- Hand-written, no tail\n",
    "entries": []
+  },
+  {
+   "about": "an involves list wrapped after a comma names everyone on it",
+   "markdown": "## Open Threads\n\n- The ledger — since S2; involves [[Corwin_Hale]],\n  [[Ines_Marlowe|Ines]]\n",
+   "entries": [
+    {
+     "markdown": "- The ledger — since S2",
+     "involves": [
+      "Corwin_Hale",
+      "Ines_Marlowe"
+     ],
+     "party": false
+    }
+   ]
   }
  ]
 }

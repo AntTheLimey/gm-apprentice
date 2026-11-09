@@ -1322,7 +1322,21 @@ function buildSite(options) {
   // not (it is usually left off the publish list), by the same player-safe strip chain, and only its `## Open Threads`
   // section is read from it. A gm-only shared thread stays off the GM site's PC page too. A view that cannot be made
   // gives nothing, never the raw text. The Overview itself gets no page.
-  const overviewPage = corpus.find((p) => String((p.sourceFrontmatter || p.frontmatter || {}).type).trim().toLowerCase() === 'campaign_overview');
+  // The Overview is found as vaultlib.campaign_overview finds it (the first by vault path, never an archived, QA or
+  // Midwife copy), and in a folder the player site hides too: the threads on it are player-facing wherever the note
+  // sits, and the writer has taken them off the PC notes. A scan that left folders out is redone over them only when
+  // the Overview was not found.
+  const LOWER_ALWAYS_EXCLUDE = new Set(ALWAYS_EXCLUDE_DIRS.map((d) => d.toLowerCase()));
+  const overviewOf = (scanned) => scanned
+    .map((p) => [vaultRelPathOf(p), p])
+    .filter(([rel, p]) => String((p.sourceFrontmatter || p.frontmatter || {}).type).trim().toLowerCase() === 'campaign_overview'
+      && !['_QA', '_archive', '_midwife'].includes(rel.includes('/') ? rel.split('/')[0] : ''))
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([, p]) => p)[0];
+  const overviewPage = overviewOf(corpus)
+    || ((scanConfig.excludeDirs || []).some((d) => !LOWER_ALWAYS_EXCLUDE.has(String(d).toLowerCase()))
+      ? overviewOf(scanVaultReport(Object.assign({}, config, { excludeDirs: ALWAYS_EXCLUDE_DIRS }), { quiet: true }).pages || [])
+      : undefined);
   let overviewView = '';
   if (overviewPage) {
     try {

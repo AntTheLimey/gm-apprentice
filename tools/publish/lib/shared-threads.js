@@ -62,8 +62,8 @@ function parseBody(body) {
 // Read as threads.py `shared_threads` reads it (`_blocks`, `_shared_of`): each top-level bullet with every line under
 // it (deeper lines, after blank lines too, and a lazy line straight under it), joined into one text, a wrapped line
 // after a space and a nested bullet's text after "; ". The tail is read off the first line when it has one, else off
-// the end of the joined text. A bullet-like line indented four or more spaces before the list starts is indented
-// code, not a thread.
+// the end of the joined text (also when the first line's `involves` list ends on a comma). A bullet-like line indented
+// four or more spaces before the list starts is indented code, not a thread.
 function sharedEntries(publishedMarkdown) {
   const lines = String(publishedMarkdown || '').split(/\r?\n/);
   const range = sectionRange(lines, 'Open Threads');
@@ -96,8 +96,10 @@ function sharedEntries(publishedMarkdown) {
       const sub = /^\s*[-*]\s+(.+)$/.exec(part);
       joined += sub ? `; ${sub[1].trim()}` : ` ${part}`;
     }
+    // An `involves` list the first line leaves open on a comma goes on below: the tail is read off the joined text.
     const first = parseBody(parts[0]);
-    const entry = first.tailed ? { ...first, text: first.text + joined.slice(parts[0].length) } : parseBody(joined);
+    const cut = parts.length > 1 && parts[0].trimEnd().endsWith(',');
+    const entry = first.tailed && !cut ? { ...first, text: first.text + joined.slice(parts[0].length) } : parseBody(joined);
     if (entry.tailed) {
       entries.push({ markdown: `- ${entry.text}${entry.since ? ` — since ${entry.since.trim()}` : ''}`, involves: entry.involves, party: entry.party });
     }
@@ -130,7 +132,15 @@ function withSharedThreads(pcMarkdown, entries) {
   for (let i = range.start + 1; i < range.end; i++) if (open.has(i) && /^#{3,6}\s/.test(lines[i])) { end = i; break; }
   let at = end;
   while (at > range.start + 1 && lines[at - 1].trim() === '') at--;
-  while (at > range.start + 1 && !shownAt(lines, at)) at--;
+  // One strip says which lines survive; a probe is tried only where a line next to it does (or at the section's top),
+  // so a long hidden span costs one strip, not one per line. A spot between two hidden lines is passed over.
+  const kept = new Set(strippedLines(lines.join('\n')).from);
+  const last = at;
+  const worth = (i) => i === last || i === range.start + 1 || kept.has(i - 1) || kept.has(i);
+  while (at > range.start + 1 && !(worth(at) && shownAt(lines, at))) {
+    at--;
+    while (at > range.start + 1 && !worth(at)) at--;
+  }
   if (!shownAt(lines, at)) return text;
   while (at > range.start + 1 && lines[at - 1].trim() === '') at--;
   const added = ['', '**Shared threads:**', ...entries.map((e) => e.markdown)];
