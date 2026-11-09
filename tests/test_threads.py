@@ -125,6 +125,71 @@ class ThreadsTests(unittest.TestCase):
         self.assertIn("Two.\n\n## Open Threads\n\n- A — involves the party"
                       "\n\n<!-- gm-only -->\n\n## GM Notes", out)
 
+    def test_closed_fence_directly_above_gm_notes(self):
+        text = ("# T\n\n## Premise\n\nP.\n\n<!-- gm-only -->\nH.\n"
+                "<!-- /gm-only -->\n\n## GM Notes\n\nS.\n")
+        out = threads.insert_shared(text, "- A — involves the party")
+        self.assertEqual(
+            out, "# T\n\n## Premise\n\nP.\n\n<!-- gm-only -->\nH.\n"
+                 "<!-- /gm-only -->\n\n## Open Threads\n\n"
+                 "- A — involves the party\n\n## GM Notes\n\nS.\n")
+
+    def test_insert_never_lands_in_a_fence(self):
+        open_, close = "<!-- gm-only -->", "<!-- /gm-only -->"
+        layouts = {
+            "fence before GM Notes":
+                f"# T\n\n## Premise\n\nP.\n\n{open_}\n\n## GM Notes\n\nS.\n\n{close}\n",
+            "closed fence in Premise":
+                f"# T\n\n## Premise\n\nOne.\n\n{open_}\nH.\n{close}\n\nTwo.\n\n## GM Notes\n\nS.\n",
+            "closed fence above GM Notes":
+                f"# T\n\n## Premise\n\nP.\n\n{open_}\nH.\n{close}\n\n## GM Notes\n\nS.\n",
+            "fenced Current Arc":
+                f"# T\n\n{open_}\n\n## Current Arc\n\nA.\n\n{close}\n\n## Key\n\nK.\n",
+            "Current Arc then fenced GM Notes":
+                f"# T\n\n## Current Arc\n\nA.\n\n{open_}\n\n## GM Notes\n\nS.\n\n{close}\n",
+            "Open Threads last before fenced GM Notes":
+                f"# T\n\n## Open Threads\n\n- a — involves the party\n\n{open_}\n\n## GM Notes\n\nS.\n\n{close}\n",
+            "unclosed opener at the end":
+                f"# T\n\n## Premise\n\nP.\n\n{open_}\n",
+            "marker in a code block":
+                f"# T\n\n## Premise\n\n```\n{open_}\n```\n\n## GM Notes\n\nS.\n",
+        }
+
+        def nonblank(text):
+            return [l for l in text.split("\n") if l.strip()]
+
+        for name, text in layouts.items():
+            for step in range(2):
+                new = f"- n{step} — involves the party"
+                with self.subTest(layout=name, insert=step):
+                    out = threads.insert_shared(text, new)
+                    lines = out.split("\n")
+                    states = threads._states(lines)
+                    at = [i for i, l in enumerate(lines) if l == new]
+                    self.assertEqual(len(at), 1)
+                    i = at[0]
+                    self.assertFalse(states[i])
+                    self.assertFalse(states[i + 1])
+                    if "## Open Threads" in lines and "## Open Threads" not in text:
+                        h = lines.index("## Open Threads")
+                        self.assertFalse(states[h])
+                    # Nothing else moved or was split.
+                    rest = [l for l in nonblank(out) if l != new
+                            and l != "## Open Threads"]
+                    before = [l for l in nonblank(text)
+                              if l != "## Open Threads"]
+                    self.assertEqual(rest, before)
+                    later = [l for l in lines[i + 1:] if l.strip()]
+                    self.assertTrue(
+                        not later or later[0].startswith("#")
+                        or later[0] == open_, later[:1])
+                    text = out
+
+    def test_insert_with_no_point_outside_a_fence_raises(self):
+        with self.assertRaises(ValueError):
+            threads.insert_shared(
+                "# T\n\n<!-- gm-only -->\n\nSecret.\n", "- A")
+
     def test_second_insert_before_fenced_gm_notes(self):
         text = ("# T\n\n## Open Threads\n\n- a — involves the party\n\n"
                 "<!-- gm-only -->\n\n## GM Notes\n\nS.\n\n"

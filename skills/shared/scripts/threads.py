@@ -179,24 +179,41 @@ def _put_after_content(lines: list[str], start: int, end: int,
     return lines[:last] + new + lines[last:]
 
 
-def _outside_fence(lines: list[str], floor: int, pos: int,
-                   scan: bool = True) -> int:
-    """`pos`, moved up so an insert there is outside any gm-only fence: it
-    stops at the first gm marker after `floor` (unless `scan` is off, for a
-    `pos` that starts a heading, where earlier closed fences are fine), and
-    steps back over blank lines and gm-only openers directly above."""
-    for i in range(floor + 1, pos) if scan else ():
-        if GM_MARKER_RE.search(lines[i]):
-            pos = i
-            break
-    while True:
+def _states(lines: list[str]) -> list[bool]:
+    """states[i] is True when line i starts inside a gm-only fence (one
+    top-down pass: opener goes in, closer comes out; markers inside a code
+    block are inert). One entry more than there are lines: the state at the
+    end of the note."""
+    out = []
+    inside = False
+    delim: str | None = None
+    for raw in lines:
+        out.append(inside)
+        line = raw.rstrip("\r")
+        delim, is_fence = fence_step(line, delim)
+        if is_fence or delim is not None:
+            continue
+        for m in GM_MARKER_RE.finditer(line):
+            inside = not m.group(1)
+    out.append(inside)
+    return out
+
+
+def _valid_point(lines: list[str], floor: int, pos: int) -> int | None:
+    """The insert point at or above `pos` that lies outside every gm-only
+    fence, or None. From `pos` it moves up past blank lines and a gm-only
+    opener directly above, nothing else, and never above `floor`."""
+    states = _states(lines)
+    while states[pos]:
         back = pos
         while back > floor + 1 and _blank(lines[back - 1]):
             back -= 1
-        if back > floor + 1 and GM_MARKER_RE.search(lines[back - 1]):
+        # Line back-1 is an opener when the state flips on there.
+        if back > floor + 1 and not states[back - 1] and states[back]:
             pos = back - 1
         else:
-            return pos
+            return None
+    return pos
 
 
 def _join(lines: list[str], eol: str) -> str:
@@ -211,29 +228,40 @@ def _join(lines: list[str], eol: str) -> str:
 
 def insert_shared(overview_text: str, line: str) -> str:
     """Add `line` under `## Open Threads`, creating the section after
-    `## Current Arc` (else before the first `## GM Notes`, else at the end).
-    The insert point is always outside a gm-only fence: the section is
-    player-facing."""
+    `## Current Arc` (else before the first `## GM Notes`, else at the end
+    of the note). The section is player-facing, so the insert point is
+    always outside a gm-only fence; a path with no such point gives way to
+    the next, and ValueError means the note has none."""
     eol = _eol(overview_text)
     lines = _lines(overview_text)
     heads = _headings(lines)
-    for at, (idx, lvl, title) in enumerate(heads):
-        if lvl == 2 and title.casefold() == SECTION.casefold():
-            end = _outside_fence(lines, idx, _heading_end(lines, heads, at))
+
+    def find(name: str) -> int | None:
+        for at, (_idx, lvl, title) in enumerate(heads):
+            if lvl == 2 and title.casefold() == name:
+                return at
+        return None
+
+    at = find(SECTION.casefold())
+    if at is not None:
+        idx = heads[at][0]
+        end = _valid_point(lines, idx, _heading_end(lines, heads, at))
+        if end is not None:
             return _join(_put_after_content(
                 lines, idx, end, [_new(line, eol)]), eol)
     pos = None
-    for at, (idx, lvl, title) in enumerate(heads):
-        if lvl == 2 and title.casefold() == "current arc":
-            pos = _outside_fence(lines, idx, _heading_end(lines, heads, at))
-            break
+    at = find("current arc")
+    if at is not None:
+        pos = _valid_point(lines, heads[at][0],
+                           _heading_end(lines, heads, at))
     if pos is None:
-        for idx, lvl, title in heads:
-            if lvl == 2 and title.casefold() == "gm notes":
-                pos = _outside_fence(lines, -1, idx, scan=False)
-                break
+        at = find("gm notes")
+        if at is not None:
+            pos = _valid_point(lines, -1, heads[at][0])
     if pos is None:
-        pos = len(lines)
+        pos = _valid_point(lines, -1, len(lines))
+    if pos is None:
+        raise ValueError("no place outside a gm-only fence for Open Threads")
     head = lines[:pos]
     while head and _blank(head[-1]):
         head.pop()
