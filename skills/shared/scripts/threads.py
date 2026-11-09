@@ -575,25 +575,47 @@ def append_resolved(wrapup_text: str, line: str) -> str:
     """Add `line` under the Wrap-Up's `#### Resolved Threads`, creating the
     heading right after the `#### Unresolved Threads` block (inside
     `### What Carries Forward`, before the closing gm-only marker). A lone
-    `{…}` placeholder under an existing heading is dropped."""
+    `{…}` placeholder under an existing heading is dropped. The evidence is
+    the GM's: under a heading outside a gm-only fence, the line goes into
+    the fence that ends the section, else into a fence of its own."""
     eol = _eol(wrapup_text)
     lines = _lines(wrapup_text)
     heads = _headings(lines)
     blank = _new("", eol)
+    new = [_new(line, eol)]
+    fence = [blank, _new(GM_OPEN, eol), blank] + new + [
+        blank, _new(GM_CLOSE, eol)]
     for at, (idx, lvl, title) in enumerate(heads):
         if title.casefold() == RESOLVED.casefold():
-            end = _stop_end(lines, idx, _heading_end(lines, heads, at))
+            fenced = _states(lines)[idx]
+            end = _heading_end(lines, heads, at)
+            if fenced:
+                end = _stop_end(lines, idx, end)
             kept = [lines[idx]] + [
                 l for l in lines[idx + 1:end]
                 if not _PLACEHOLDER_RE.match(l.strip())]
             lines = lines[:idx] + kept + lines[end:]
             end = idx + len(kept)
             if all(_blank(l) for l in kept[1:]):
-                kept = [kept[0], blank, _new(line, eol)]
-                lines = lines[:idx] + kept + [blank] + lines[end:]
+                body = [blank] + new if fenced else fence
+                lines = lines[:idx] + [kept[0]] + body + [blank] + lines[end:]
                 return _join(lines, eol)
-            return _join(_put_after_content(
-                lines, idx, end, [_new(line, eol)]), eol)
+            if fenced:
+                return _join(_put_after_content(lines, idx, end, new), eol)
+            states = _states(lines)
+            last = end
+            while last > idx and _blank(lines[last - 1]):
+                last -= 1
+            if states[last]:
+                # The section's content ends inside a fence (one that
+                # opens under the heading and never closes).
+                return _join(lines[:last] + new + lines[last:], eol)
+            if states[last - 1] and any(
+                    m.group(1) for m in GM_MARKER_RE.finditer(lines[last - 1])):
+                # It ends with a fence's closer: the line goes inside it.
+                return _join(_put_after_content(
+                    lines, idx, last - 1, new), eol)
+            return _join(lines[:last] + fence + lines[last:], eol)
     anchor = None
     for at, (idx, lvl, title) in enumerate(heads):
         if title.casefold() == "unresolved threads":

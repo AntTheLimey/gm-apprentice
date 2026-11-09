@@ -495,6 +495,33 @@ class ThreadsTests(unittest.TestCase):
                  "- a\n\n<!-- gm-only -->\n\n#### Resolved Threads\n\n- b\n\n"
                  "<!-- /gm-only -->\n")
 
+    def test_append_resolved_fences_under_an_unfenced_heading(self):
+        # An existing Resolved Threads heading outside any gm-only fence:
+        # the evidence goes in a fence of its own, and later lines join it.
+        text = ("# W\n\n### What Carries Forward\n\n#### Resolved Threads\n\n"
+                "- a\n\n## Next\n\nN.\n")
+        out = threads.append_resolved(text, "- b")
+        self.assertEqual(
+            out, "# W\n\n### What Carries Forward\n\n#### Resolved Threads\n\n"
+                 "- a\n\n<!-- gm-only -->\n\n- b\n\n<!-- /gm-only -->\n\n"
+                 "## Next\n\nN.\n")
+        again = threads.append_resolved(out, "- c")
+        self.assertEqual(
+            again, out.replace("- b\n", "- b\n- c\n"))
+        # A lone placeholder under it.
+        blank = ("### What Carries Forward\n\n#### Resolved Threads\n\n"
+                 "{Closed threads, with evidence.}\n\n#### Skipped Prep\n")
+        self.assertEqual(
+            threads.append_resolved(blank, "- b"),
+            "### What Carries Forward\n\n#### Resolved Threads\n\n"
+            "<!-- gm-only -->\n\n- b\n\n<!-- /gm-only -->\n\n"
+            "#### Skipped Prep\n")
+        # Inside a fence that opens under the heading and never closes:
+        # already hidden, no second fence.
+        open_ = ("#### Resolved Threads\n\n<!-- gm-only -->\n\n- a\n")
+        self.assertEqual(threads.append_resolved(open_, "- b"),
+                         open_ + "- b\n")
+
     def test_crlf_kept(self):
         def crlf(s: str) -> str:
             return s.replace("\r\n", "\n").replace("\n", "\r\n")
