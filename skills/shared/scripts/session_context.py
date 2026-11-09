@@ -1005,7 +1005,8 @@ def layered(body: str, note: str | Callable[[], str], section: str,
     the note, else the same with the section's level pinned
     (`## {section}/{title}`), else the section's own path (pinned if its
     name repeats), which fetches every subsection under it; when not even
-    that is unique, the subsection prints whole. A deeper heading inside a
+    that is unique, or a hidden heading as high as its own would end the
+    fetched span early, the subsection prints whole. A deeper heading inside a
     subsection folds into it, and a heading inside a comment or a gm-only
     or `%%` block is not a subsection. A body with no subsection heading
     comes back unchanged. The `**Open threads:**` label is not a heading,
@@ -1013,8 +1014,8 @@ def layered(body: str, note: str | Callable[[], str], section: str,
     label under it prints whole. A CRLF body gets CRLF outline lines."""
     lines = body.split("\n")
     hidden = _hidden_lines(lines)
-    heads = [h for h in line_headings(lines)
-             if h[1] >= 3 and not hidden[h[0]]]
+    every = line_headings(lines)
+    heads = [h for h in every if h[1] >= 3 and not hidden[h[0]]]
     if not heads:
         return body, False
     tops: list[tuple[int, int, str]] = []
@@ -1035,7 +1036,11 @@ def layered(body: str, note: str | Callable[[], str], section: str,
         end = tops[n + 1][0] if n + 1 < len(tops) else len(lines)
         name = atx_title(title)
         where = _fetch_path(whole, section, name)
-        if (where is None
+        # `gma section` ends a span at a hidden heading too (it skips only
+        # code fences), so a subsection holding one prints whole.
+        cut = any(idx < h[0] < end and hidden[h[0]] and h[1] <= level
+                  for h in every)
+        if (where is None or cut
                 or any(_OPEN_THREADS_LABEL_RE.match(x)
                        for x in lines[idx + 1:end])):
             out.append("\n".join(lines[idx:end]).rstrip())   # printed whole

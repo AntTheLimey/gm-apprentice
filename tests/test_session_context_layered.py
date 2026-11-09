@@ -326,6 +326,25 @@ class PinnedPathTests(unittest.TestCase):
         r = fetch("Ada_Quill", "GM Notes", vault=vault)
         self.assertIn("longer path", r.stderr)
 
+    def test_outlined_span_is_the_fetched_span_past_a_hidden_heading(self):
+        note = ("---\ntype: pc\nstatus: active\nplayer: Jo\n---\n# Ada\n"
+                "## Current Status\nLead.\n### A\none two\n<!--\n### B\n"
+                "hidden words\n-->\nthree four\n### C\nfive\n"
+                "#### Deep\nsix seven\n")
+        vault = copy_vault(self)
+        (vault / "PCs" / "Ada_Quill.md").write_text(note, encoding="utf-8")
+        out = sc("--brief", vault=vault).stdout
+        ada = out.split("--- Ada_Quill")[1].split("--- Cole_Plain")[0]
+        found = OUTLINE_RE.findall(ada)
+        self.assertEqual([p for _w, _n, p in found],
+                         ["Current Status/C"], ada)
+        self.assertIn("three four", ada)            # A printed whole
+        for words, name, path in found:
+            r = fetch(name, path, vault=vault)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertEqual(vl.word_count(r.stdout.split("\n", 1)[1]),
+                             int(words))
+
     def test_two_current_status_sections(self):
         note = ("---\ntype: pc\nstatus: active\nplayer: Jo\n---\n# Ada\n"
                 "## Current Status\nLead.\n### Log\na\n### Only\nx\n"
