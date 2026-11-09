@@ -9,6 +9,34 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.4] — 2026-11-09
+
+### Added
+
+- `gma section VAULT NOTE "Section/Sub"` prints one section of a note by heading path. Case does not matter, headings in code blocks are ignored, and a path that fits more than one heading is refused with the candidates listed.
+
+### Changed
+
+- `session-context` prints a PC's `###` subsections as an outline with sizes and paths, to fetch when needed: Current Status for Active PCs, and Background and GM Notes in `--arcs`. Open threads stay whole.
+- session-prep reads an outlined subsection only when a step needs it.
+- One section finder serves the Overview's Open Threads and the rest of the scripts. An unclosed code block now runs to the end of the note, as on the site.
+- `gma section` takes `"## Heading/Sub"` to pin a heading's level, so a repeated name can still be fetched.
+
+### In numbers
+
+Measured on notes-only copies of three campaigns, in characters. How much each shrinks depends on how much of the campaign sits in PC subsections:
+
+| | 1.12.3 | 1.12.4 | Change |
+|---|---|---|---|
+| `session-context --prep`, 4 PCs with long session logs | 155,196 | 129,610 | −16% |
+| `session-context --prep`, 4 PCs with long GM Notes | 82,881 | 51,609 | −38% |
+| `session-context --arcs`, the same 4 PCs | 42,546 | 11,274 | −74% |
+| `session-context --prep`, 6 PCs | 127,035 | 118,171 | −7% |
+| `session-context --arcs`, the same 6 PCs | 30,675 | 21,679 | −29% |
+| Prep plan quality (blind judge, both orders) | | nothing lost to the outline | |
+
+---
+
 ## [1.12.3] — 2026-11-09
 
 ### Added

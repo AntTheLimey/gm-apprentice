@@ -67,6 +67,14 @@ narrative plans (`plans_index.py`, checked against the NPCs, locations
 and factions the Wrap-Up links). Each part is the named script's own
 output; nothing is worked out twice.
 
+A PC's `## Current Status` (every bundle mode) and, in `--arcs`, its
+`## Background` and `## GM Notes` print as an outline when they hold
+`###` subsections: the text before the first one in full, then one line
+per subsection with its word count and the note and heading path that
+`gma section VAULT NOTE PATH` fetches whole. A section without `###`
+prints exactly as it is written. One fetch line ends the bundle when any
+outline line was printed.
+
 `--carry` is session-wrapup's: from the Wrap-Up before session INDEX
 (chapter, then session order; the latest without --before) it prints
 only the Handoff, Unresolved Threads, Player-Stated Intentions,
@@ -93,16 +101,19 @@ from pathlib import Path
 from typing import NamedTuple
 
 import scene_queue
+import section as section_cmd
+import vault_write as vw
 from schema_rules import (SESSION_PLAYED, chapter_key, chapter_of,
                           extract_frontmatter, parse_session_number,
                           wikilink_target)
-from threads import pc_thread_items, shared_threads
+from threads import _hidden_lines, pc_thread_items, shared_threads
 from vaultlib import (GM_MARKER_RE, is_active_pc, marker_re,  # noqa: F401
                       is_out_of_play, out_of_play,
                       report_unreadable_settings, setting_or_builtin,
                       SKIP_DIRS, WRAP_UP_TYPES, body_of, campaign_overview,
                       entity_type,
-                      fenced_headings, h3_blocks, nested_mapping,
+                      atx_title, fenced_headings, find_section_lines,
+                      h3_blocks, line_headings, nested_mapping,
                       normalize, raw_frontmatter, section,
                       session_ref_number, word_count)
 from vaultlib import LABEL_RE as _LABEL_RE
@@ -937,7 +948,131 @@ def pc_matches(cell: str, rel: str, fm: dict) -> bool:
             or cell.replace("_", " ").casefold() in candidates)
 
 
-def arcs_report(files, chapter, upcoming: int, vault: Path) -> str:
+FETCH_LINE = ('Outlined subsections: fetch one with `gma section "<vault>" '
+              '"<note>" "<path>"`; the note and path are in its line above.')
+
+
+class Outlines:
+    """Remembers whether a bundle printed any outline line, so its one
+    fetch line ends it, and the vault's note names, read once, that decide
+    how an outline line names its note."""
+
+    def __init__(self) -> None:
+        self.used = False
+        self.files: list = []   # the bundle's (rel, text, fm) notes
+        self._batch: vw.Batch | None = None
+        self._names: dict[str, list[str]] = {}
+
+    def layered(self, body: str, vault: Path, rel: str, section: str,
+                note_text: str) -> str:
+        text, outlined = layered(body, lambda: self.note_ref(vault, rel),
+                                 section, note_text)
+        self.used = self.used or outlined
+        return text
+
+    def note_ref(self, vault: Path, rel: str) -> str:
+        """What an outline line names the note at `rel` by: its file name
+        when `gma section` resolves that name to this note, else its
+        vault-relative path (without `.md`), which it resolves exactly."""
+        path = Path(rel).as_posix()
+        if self._batch is None:
+            self._batch = vw.Batch(vault)
+            self._names = section_cmd.name_index(
+                (f[0], f[1]) for f in self.files)
+        try:
+            if section_cmd.resolve_note(self._batch, Path(rel).stem,
+                                        self._names) == path:
+                return Path(rel).stem
+        except vw.WriteError:
+            pass
+        return path.removesuffix(".md")
+
+
+_OPEN_THREADS_LABEL_RE = re.compile(
+    r"^[ \t]*(?:[-*][ \t]+)?\*\*open threads:\*\*", re.I)
+
+
+def layered(body: str, note: str | Callable[[], str], section: str,
+            note_text: str | None = None) -> tuple[str, bool]:
+    """A section body with its `###` subsections outlined, and whether it
+    was. `body` is the section's text without its own `##` heading;
+    `note_text` is the whole note, which `gma section` will read. Returns
+    the text before the first heading of level 3 or deeper (a blank line
+    after it kept), then one line per subsection,
+    `### {title}  ({N} words; {note}: {path})`. N counts the whole
+    subsection, deeper headings included, which is what the fetch returns.
+    The path is `{section}/{title}` when that picks out this one heading in
+    the note, else the same with the section's level pinned
+    (`## {section}/{title}`), else the section's own path (pinned if its
+    name repeats), which fetches every subsection under it; when not even
+    that is unique, or a hidden heading as high as its own would end the
+    fetched span early, the subsection prints whole. A deeper heading inside a
+    subsection folds into it, and a heading inside a comment or a gm-only
+    or `%%` block is not a subsection. A body with no subsection heading
+    comes back unchanged. The `**Open threads:**` label is not a heading,
+    so it stays in the text before the first one; a subsection holding the
+    label under it prints whole. A CRLF body gets CRLF outline lines."""
+    lines = body.split("\n")
+    hidden = _hidden_lines(lines)
+    every = line_headings(lines)
+    heads = [h for h in every if h[1] >= 3 and not hidden[h[0]]]
+    if not heads:
+        return body, False
+    tops: list[tuple[int, int, str]] = []
+    for h in heads:
+        if not tops or h[1] <= tops[-1][1]:
+            tops.append(h)
+    note = note() if callable(note) else note
+    eol = "\r\n" if "\r\n" in body else "\n"
+    before = lines[:tops[0][0]]
+    out = ["\n".join(before).rstrip()]   # lines keep their own "\r"
+    if before and not before[-1].strip():
+        out.append("")
+    # The note as `gma section` reads it; the section alone when not given.
+    whole = (note_text.split("\n") if note_text is not None
+             else ["## " + section, *lines])
+    outlined = False
+    for n, (idx, level, title) in enumerate(tops):
+        end = tops[n + 1][0] if n + 1 < len(tops) else len(lines)
+        name = atx_title(title)
+        where = _fetch_path(whole, section, name)
+        # `gma section` ends a span at a hidden heading too (it skips only
+        # code fences), so a subsection holding one prints whole.
+        cut = any(idx < h[0] < end and hidden[h[0]] and h[1] <= level
+                  for h in every)
+        if (where is None or cut
+                or any(_OPEN_THREADS_LABEL_RE.match(x)
+                       for x in lines[idx + 1:end])):
+            out.append("\n".join(lines[idx:end]).rstrip())   # printed whole
+            continue
+        words = word_count("\n".join(lines[idx + 1:end]))
+        out.append(f"{'#' * level} {name}  ({words} words; "
+                   f"{note}: {where})")
+        outlined = True
+    return eol.join(out).lstrip("\r\n"), outlined
+
+
+def _fetch_path(whole: list[str], section: str, name: str) -> str | None:
+    """The path `gma section` takes to fetch the subsection `name` of
+    `section` (see `layered`), or None when no path fetches exactly one
+    span: the first of the plain path, the level-pinned path and the
+    section itself (plain, then pinned) that finds one heading."""
+    rest = [p.strip() for p in name.split("/")]
+    for pinned in (False, True):
+        top = f"## {section}" if pinned else section
+        if isinstance(find_section_lines(
+                whole, [section, *rest], level=2 if pinned else None),
+                tuple):
+            return f"{top}/{name}"
+    for pinned in (False, True):
+        if isinstance(find_section_lines(
+                whole, [section], level=2 if pinned else None), tuple):
+            return f"## {section}" if pinned else section
+    return None
+
+
+def arcs_report(files, chapter, upcoming: int, vault: Path,
+                outlines: Outlines) -> str:
     """For each active PC (type pc, not *_Story.md, status not out of play
     for this vault):
       --- {stem} ({rel}, player: {player_name or ?}) ---
@@ -1007,10 +1142,12 @@ def arcs_report(files, chapter, upcoming: int, vault: Path) -> str:
         lines.append(f"\n--- {stem} ({rel}, player: {player}) ---")
         bg = section(text, "Background")
         lines.append("## Background")
-        lines.append(bg if bg else "(no ## Background section)")
+        lines.append(outlines.layered(bg, vault, rel, "Background", text) if bg
+                     else "(no ## Background section)")
         gm = section(text, "GM Notes")
         lines.append("## GM Notes")
-        lines.append(gm if gm else "(no ## GM Notes section)")
+        lines.append(outlines.layered(gm, vault, rel, "GM Notes", text) if gm
+                     else "(no ## GM Notes section)")
         lines.append("Spotlight history (chapter-scoped, from "
                      "## Spotlight Forecast tables):")
         last_b: int | None = None
@@ -1373,7 +1510,7 @@ def wrapup_names(files, wrap_text: str) -> list[str]:
 
 
 def print_prep_rest(vault: Path, files, chosen, wrap, current: int,
-                    chapter, upcoming: int) -> None:
+                    chapter, upcoming: int, outlines: Outlines) -> None:
     """What `--prep` adds after the brief bundle."""
     status = str((chosen or {}).get("fm", {}).get("status") or "")
     if wrap and status == "wrap-up":
@@ -1383,7 +1520,7 @@ def print_prep_rest(vault: Path, files, chosen, wrap, current: int,
         print("\n===== Reconcile Scan =====\n(not run: the session's "
               f"status is {status or 'unknown'}, not wrap-up)")
     print(f"\n{thread_report(files, current, chapter, vault)}")
-    print(f"\n{arcs_report(files, chapter, upcoming, vault)}")
+    print(f"\n{arcs_report(files, chapter, upcoming, vault, outlines)}")
     label = (chosen or {}).get("chapter_label")
     where = ("--chapter", label) if label else ()
     print(run_script("scene_queue.py", vault, *where, title="Scene Queue"))
@@ -1473,6 +1610,14 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _main(argv: list[str] | None) -> int:
+    outlines = Outlines()
+    code = _bundle(argv, outlines)
+    if outlines.used and code == 0:
+        print("\n" + FETCH_LINE)
+    return code
+
+
+def _bundle(argv: list[str] | None, outlines: Outlines) -> int:
     ap = build_parser()
     args = ap.parse_args(argv)
     if args.brief and (args.play or args.threads or args.arcs
@@ -1517,6 +1662,7 @@ def _main(argv: list[str] | None) -> int:
         return 0
 
     files = list(vault_files(args.vault))
+    outlines.files = files
 
     if args.play:
         # --session names the plan directly here, not "just played" — the
@@ -1587,7 +1733,7 @@ def _main(argv: list[str] | None) -> int:
         return 0
 
     if args.arcs:
-        print(f"\n{arcs_report(files, chapter, upcoming, args.vault)}")
+        print(f"\n{arcs_report(files, chapter, upcoming, args.vault, outlines)}")
         return 0
 
     # --- latest wrap-up ---
@@ -1625,8 +1771,9 @@ def _main(argv: list[str] | None) -> int:
         as_of = fm.get("asOfSession", "?")
         print(f"\n--- {Path(rel).stem} ({rel}, asOfSession: {as_of}) ---")
         status_block = section(text, "Current Status")
-        print(status_block if status_block
-              else "(no ## Current Status block)")
+        print(outlines.layered(status_block, args.vault, rel, "Current Status",
+                         text)
+              if status_block else "(no ## Current Status block)")
     if not found_pc:
         print("(no active PC entities found)")
 
@@ -1668,7 +1815,7 @@ def _main(argv: list[str] | None) -> int:
              body_of(overview[1]) if overview else None)
     if args.prep:
         print_prep_rest(args.vault, files, chosen, wrap, current, chapter,
-                        upcoming)
+                        upcoming, outlines)
     return 0
 
 

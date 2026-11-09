@@ -58,6 +58,7 @@ COMMANDS: dict[str, Command] = {
     "rules-lookup": Command("rules_lookup", "Record-level lookup over the ttrpg-expert systems corpus."),
     "scene-queue": Command("scene_queue", "The prep queue: scenes written ahead and not yet played."),
     "schema-rules": Command("schema_rules", "Canonical vault schema rules and relationship vocabulary."),
+    "section": Command("section", "Print one section of a note by heading path."),
     "session-context": Command("session_context", "Session-prep context bundle in one call."),
     "stamp-entities": Command("stamp_entities", "Batch frontmatter writes for the session workflows."),
     "tones": Command("tones", "List a vault's stray tone words, and tidy them."),

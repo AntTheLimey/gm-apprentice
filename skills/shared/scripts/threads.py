@@ -22,8 +22,8 @@ import re
 from dataclasses import dataclass, replace
 
 from vaultlib import (ANY_LABEL_LINE_RE, BULLET_RE, GM_MARKER_RE,
-                      SECTION_HEADING_RE, atx_title, fence_step, marker_re,
-                      scan_body)
+                      SECTION_HEADING_RE, atx_title, fence_step, find_section,
+                      line_headings, marker_re, scan_body)
 
 SECTION = "Open Threads"
 RESOLVED = "Resolved Threads"
@@ -214,30 +214,21 @@ def _blank(line: str) -> bool:
 
 
 def _headings(lines: list[str]) -> list[tuple[int, int, str]]:
-    """(index, level, title) of every heading outside a code fence."""
-    out = []
-    delim: str | None = None
-    for i, raw in enumerate(lines):
-        line = raw.rstrip("\r")
-        delim, is_fence = fence_step(line, delim)
-        if is_fence or delim is not None:
-            continue
-        m = SECTION_HEADING_RE.match(line)
-        if m:
-            out.append((i, len(m.group(1)), atx_title(m.group(2))))
-    return out
+    """(index, level, title) of every heading outside a code fence; the
+    title has no ATX closing sequence."""
+    return [(i, lvl, atx_title(title)) for i, lvl, title
+            in line_headings([raw.rstrip("\r") for raw in lines])]
 
 
 def _shared_span(lines: list[str]) -> tuple[int, int] | None:
     """(heading index, end) of the shared list: the first level-2 heading
     titled Open Threads in any case, outside a code fence, up to the next
     heading of level 1 or 2. Every reader and writer of the list (and the
-    publish tool's `sectionRange`) finds it this way."""
-    heads = _headings(lines)
-    for at, (idx, lvl, title) in enumerate(heads):
-        if lvl == 2 and title.casefold() == SECTION.casefold():
-            return idx, _heading_end(lines, heads, at)
-    return None
+    publish tool's `sectionRange`) finds it this way: the title matches by
+    case only (`Open  Threads` with two spaces is not it)."""
+    found = find_section("\n".join(lines), [SECTION], level=2, first=True,
+                         trim=False, exact=True)
+    return found if isinstance(found, tuple) else None
 
 
 def _shared_bullets(lines: list[str]) -> list[_Block]:
