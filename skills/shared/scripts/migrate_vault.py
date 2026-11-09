@@ -21,7 +21,8 @@ from migrate_core import (CHOICE, PERSON, WILL, Check, Item, StepFailed,
 from schema_rules import system_id as _system_id
 from schema_rules import TEMPLATE_NAMES
 from template_compare import compare, summary
-from vault_check import WRAP_TYPES, wrapup_filename_findings
+from vault_check import (WRAP_TYPES, configured_site, semver_below,
+                         site_pin, wrapup_filename_findings)
 from vaultlib import (WRAP_UP_TYPES, StateUnreadable, entity_type,
                       extract_frontmatter, is_active_pc, out_of_play,
                       set_key, frontmatter_span,
@@ -1012,6 +1013,29 @@ def find_publish_row_pipe(vault: Path) -> list[Item]:
 # threads.py's, as `vw threads` uses it.
 STRUCK_EVIDENCE = "struck through before the update"
 NO_OVERVIEW = "no Campaign Overview to hold shared threads"
+# The first publish tool that shows a moved thread on the PC's page: an
+# older one would drop it from the page the PC's player reads.
+SHARED_THREADS_TOOL = "1.70.3"
+
+
+def _site_tool_too_old(vault: Path) -> str | None:
+    """A PERSON row when the vault's site builds with a publish tool older
+    than SHARED_THREADS_TOOL (or one whose version cannot be read); None
+    when it has no site or no tool, or a new enough one."""
+    site, _has_config = configured_site(vault)
+    if site is None:
+        return None
+    pin = site_pin(site)
+    if pin.source == "none":
+        return None
+    if pin.version is not None and not semver_below(pin.version,
+                                                    SHARED_THREADS_TOOL):
+        return None
+    return (f"{site.as_posix()}\tthe site's publish tool is "
+            f"{pin.version or 'of an unknown version'}, older than "
+            f"{SHARED_THREADS_TOOL}: update the site's publish tool first "
+            f"(`gma update`); shared threads wait, since an older tool "
+            f"would drop moved threads from PC pages")
 
 
 def _struck(bullet: str) -> str | None:
@@ -1183,7 +1207,13 @@ def find_shared_threads(vault: Path) -> list[Item]:
     hidden text is never touched. A bullet struck through whole is closed
     into the latest Wrap-Up's Resolved Threads. One that cannot be moved
     or closed stays where it is, and the GM is told (and, for a group held
-    back by a hidden copy, which public copies stayed)."""
+    back by a hidden copy, which public copies stayed). While the site's
+    publish tool is too old to show a moved thread on PC pages, nothing
+    moves and the stamp waits."""
+    old_tool = _site_tool_too_old(vault)
+    if old_tool is not None:
+        return [Item("shared-threads-wait", PERSON, [old_tool],
+                     holds_stamp=True)]
     changed, lines, left = _shared_threads_plan(vault)
     items = []
     if changed:
@@ -1252,7 +1282,9 @@ VAULT_CHECKS: list[Check] = [
           "the publish row of the schema table", find_publish_row_pipe,
           kind="bookkeeping",
           plain=("Fixed the publish row of the schema table in _meta/entity-types.md so the table check no longer reports an error there; nothing else in the file was touched.")),
-    Check("shared-threads", "1.12.3", 3, "shared threads", find_shared_threads,
-          kind="bookkeeping",
+    # A moved thread shows on PC pages only from publish tool 1.70.3, so it
+    # waits for the repin: band 4, asks_site.
+    Check("shared-threads", "1.12.3", 4, "shared threads", find_shared_threads,
+          asks_site=True, kind="bookkeeping",
           plain="Moved threads that sat word for word on several PC sheets into the Campaign Overview's Open Threads, once each with the PCs they involve (copies of one already there came off); struck-through threads went to the latest Wrap-Up's Resolved Threads."),
 ]

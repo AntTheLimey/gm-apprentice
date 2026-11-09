@@ -962,8 +962,39 @@ class SharedThreadsTests(unittest.TestCase):
 
     def test_the_check_is_registered(self):
         (check,) = [c for c in mv.VAULT_CHECKS if c.name == "shared-threads"]
-        self.assertEqual((check.release, check.band, check.kind),
-                         ("1.12.3", 3, "bookkeeping"))
+        self.assertEqual(
+            (check.release, check.band, check.asks_site, check.kind),
+            ("1.12.3", 4, True, "bookkeeping"))
+
+    def test_a_site_on_an_older_publish_tool_waits(self):
+        # An older tool would drop a moved thread from the PC's page: nothing
+        # moves, and the stamp waits until the tool is updated.
+        notes = {
+            "Campaign Overview.md": ST_OVERVIEW,
+            "PCs/A.md": st_pc(LEDGER), "PCs/B.md": st_pc(LEDGER),
+        }
+        for installed, moves in (("1.70.2", False), ("1.70.3", True),
+                                 ("1.71.0", True)):
+            with self.subTest(installed=installed):
+                v = self.vault(notes)
+                site = Path(tempfile.mkdtemp(prefix="migv-site-"))
+                self.addCleanup(shutil.rmtree, site, ignore_errors=True)
+                pkg = site / "node_modules" / "gm-apprentice-publish"
+                pkg.mkdir(parents=True)
+                (pkg / "package.json").write_text(json.dumps(
+                    {"version": installed}), encoding="utf-8")
+                write_config(v, "---\npublish:\n  system: coc-7e\n"
+                             f"  site: true\n  site_dir: {site.as_posix()}\n"
+                             "---\n")
+                (item,) = mv.find_shared_threads(v)
+                if moves:
+                    self.assertEqual(item.group, WILL)
+                    continue
+                self.assertEqual(item.group, PERSON)
+                self.assertTrue(item.holds_stamp)
+                self.assertIn("1.70.2, older than 1.70.3: update the site's "
+                              "publish tool first", item.lines[0])
+                self.assertIn(LEDGER, self.raw(v, "PCs/A.md"))
 
     def test_identical_bullets_move_once_with_holders(self):
         v = self.vault({
