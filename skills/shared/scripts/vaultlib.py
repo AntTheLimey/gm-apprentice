@@ -1146,7 +1146,8 @@ def find_section_lines(lines: list[str], path: list[str], *,
 
     def walk(keys: list[str], last: int | None, lo: int, hi: int) -> None:
         if not keys:
-            found[last] = None
+            if last is not None:
+                found[last] = None
             return
         for n in range(lo, hi):
             if titles[n] != keys[0]:
