@@ -100,7 +100,8 @@ from threads import pc_thread_items, shared_threads
 from vaultlib import (GM_MARKER_RE, is_active_pc, marker_re,  # noqa: F401
                       is_out_of_play, out_of_play,
                       report_unreadable_settings, setting_or_builtin,
-                      SKIP_DIRS, WRAP_UP_TYPES, body_of, entity_type,
+                      SKIP_DIRS, WRAP_UP_TYPES, body_of, campaign_overview,
+                      entity_type,
                       fenced_headings, h3_blocks, nested_mapping,
                       normalize, raw_frontmatter, section,
                       session_ref_number, word_count)
@@ -115,6 +116,14 @@ def vault_files(vault: Path):
     wants — parsed once per file rather than at each use site."""
     for rel, text in _vault_files(vault):
         yield rel, text, extract_frontmatter(text) or {}
+
+
+def overview_of(files) -> tuple[str, str, dict] | None:
+    """The Campaign Overview's (rel, text, frontmatter) among `files`, by
+    `vaultlib.campaign_overview` (never an archived or QA copy)."""
+    files = list(files)
+    rel = campaign_overview((r, fm) for r, _t, fm in files)
+    return next((f for f in files if f[0] == rel), None)
 
 
 def stem_of(entry) -> str:
@@ -681,8 +690,8 @@ def thread_report(files, current: int, chapter, vault: Path) -> str:
     stale_after = setting_or_builtin(vault, "vault.stale_after_sessions")
     pcs = [(rel, text) for rel, text, fm in files
            if is_active_pc(rel, fm, not_playing)]
-    overview_text = next((text for _rel, text, fm in files
-                          if fm.get("type") == "campaign_overview"), "")
+    overview = overview_of(files)
+    overview_text = overview[1] if overview else ""
     shared = shared_threads(overview_text)
 
     # Unresolved bullets a thread actually matched, keyed by (session,
@@ -1151,8 +1160,8 @@ def select_session(files, session_arg: int | None) -> tuple[dict | None, list[st
 
     warnings: list[str] = []
 
-    overview_fm = next((fm for rel, _t, fm in files
-                        if fm.get("type") == "campaign_overview"), None)
+    found = overview_of(files)
+    overview_fm = found[2] if found else None
     overview_last = wikilink_target((overview_fm or {}).get("last_session"))
 
     def by_recency(entries):
@@ -1597,8 +1606,8 @@ def _main(argv: list[str] | None) -> int:
          section(flags[1], "Deferred") if flags else None)
 
     # --- campaign overview ---
-    overview = next(((rel, text) for rel, text, fm in files
-                     if fm.get("type") == "campaign_overview"), None)
+    found = overview_of(files)
+    overview = found[:2] if found else None
     if args.brief and overview:
         rel, text = overview
         emit("Campaign Overview (outline)", rel,

@@ -1145,6 +1145,19 @@ class SharedThreadsTests(unittest.TestCase):
             self.assertNotIn("wants it back", self.raw(v, rel))
             self.assertNotIn("Ledger", self.raw(v, rel))
 
+    def test_an_archived_overview_is_never_the_one(self):
+        live = "_campaign/Campaign Overview.md"
+        v = self.vault({
+            "_archive/Campaign Overview.md": ST_OVERVIEW,
+            live: ST_OVERVIEW,
+            "PCs/A.md": st_pc(LEDGER), "PCs/B.md": st_pc(LEDGER),
+        })
+        (item,) = mv.find_shared_threads(v)
+        item.apply(None)
+        self.assertIn("missing ledger", self.raw(v, live))
+        self.assertEqual(self.raw(v, "_archive/Campaign Overview.md"),
+                         ST_OVERVIEW)
+
     def test_wrap_variants_of_one_thread_are_one_group(self):
         # The same words wrapped differently on two pairs of sheets: one
         # Overview entry naming all four, every copy gone.

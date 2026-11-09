@@ -1858,14 +1858,14 @@ def warn_dropped_threads(batch: Batch, rel: str, before: str) -> None:
 
 
 def threads_overview(batch: Batch) -> str:
-    """The Campaign Overview's path: the note whose `type` is
-    `campaign_overview`."""
-    hits = sorted(rel for rel, text in vl.vault_files(batch.vault, newline="")
-                  if vl.entity_type(vl.extract_frontmatter(text) or {})
-                  == "campaign_overview")
-    if not hits:
+    """The Campaign Overview's path (`vaultlib.campaign_overview`: never an
+    archived or QA copy)."""
+    found = vl.campaign_overview(
+        (rel, vl.extract_frontmatter(text) or {})
+        for rel, text in vl.vault_files(batch.vault, newline=""))
+    if found is None:
         raise WriteError("no Campaign Overview to hold shared threads")
-    return hits[0]
+    return found
 
 
 def threads_who(batch: Batch, who: str) -> list[str] | None:
@@ -2562,9 +2562,7 @@ ISO_DATE_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
 EXPORT_SECTIONS = ("NPCs", "Locations", "Items")
 
 
-def is_record(rel: str) -> bool:
-    """A note no name means: archived, a QA report, or a Midwife draft."""
-    return vl.is_unchecked_source(rel) or rel.split("/", 1)[0] == "_midwife"
+is_record = vl.is_record_copy
 
 
 def set_block(lines: list[str], key: str, value: str,

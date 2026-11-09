@@ -69,6 +69,25 @@ class ThreadsTests(unittest.TestCase):
                       "involves [[Ines_Marlowe]], [[Corwin_Hale]]", text)
         self.assertLess(text.index("rings at dusk"), text.index("## Key Factions"))
 
+    def test_an_archived_overview_is_never_the_one(self):
+        # An archived copy that sorts first is a record of the past: the
+        # thread goes to the live Overview.
+        vault = self.vault()
+        live = "_campaign/Campaign Overview.md"
+        (vault / "_campaign").mkdir()
+        (vault / OVERVIEW).rename(vault / live)
+        for rec in ("_archive", "_QA"):
+            (vault / rec).mkdir()
+            shutil.copy(vault / live, vault / rec / "Campaign Overview.md")
+        code, out = run(vault, "threads", "--write", stdin=rows(
+            ("add", "shared", "-", "party", "Find the lamp-oil")))
+        self.assertEqual(code, 0, out)
+        self.assertIn("ADDED\t" + live, out)
+        self.assertIn("Find the lamp-oil", read(vault, live))
+        for rec in ("_archive", "_QA"):
+            self.assertNotIn("lamp-oil",
+                             read(vault, rec + "/Campaign Overview.md"))
+
     def test_add_party_and_no_since(self):
         vault = self.vault()
         code, _ = run(vault, "threads", "--write", stdin=rows(

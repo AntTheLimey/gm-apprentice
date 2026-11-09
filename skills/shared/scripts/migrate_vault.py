@@ -23,8 +23,8 @@ from schema_rules import TEMPLATE_NAMES
 from template_compare import compare, summary
 from vault_check import (WRAP_TYPES, configured_site, semver_below,
                          site_pin, wrapup_filename_findings)
-from vaultlib import (WRAP_UP_TYPES, StateUnreadable, entity_type,
-                      extract_frontmatter, is_active_pc, out_of_play,
+from vaultlib import (WRAP_UP_TYPES, StateUnreadable, campaign_overview,
+                      entity_type, extract_frontmatter, is_active_pc, out_of_play,
                       set_key, frontmatter_span,
                       parse_version, plugin_version,
                       read_held, read_stamp, settings,
@@ -1057,8 +1057,7 @@ def _shared_threads_plan(vault: Path) -> tuple[
     files = list(sc.vault_files(vault))
     gone = out_of_play(vault)
     pcs = [rel for rel, _t, fm in files if is_active_pc(rel, fm, gone)]
-    overview = next((rel for rel, _t, fm in files
-                     if entity_type(fm) == "campaign_overview"), None)
+    overview = campaign_overview((rel, fm) for rel, _t, fm in files)
     wraps = sorted((sc.campaign_order(rel, fm), rel) for rel, _t, fm in files
                    if entity_type(fm) in WRAP_UP_TYPES)
     wrapup = wraps[-1][1] if wraps else None

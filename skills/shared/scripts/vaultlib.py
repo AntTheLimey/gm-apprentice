@@ -121,6 +121,22 @@ def is_unchecked_source(rel: str) -> bool:
     return len(parts) > 1 and parts[0] in UNCHECKED_DIRS
 
 
+def is_record_copy(rel: str) -> bool:
+    """A note no name means: archived, a QA report, or a Midwife draft."""
+    return is_unchecked_source(rel) or rel.split("/", 1)[0] == "_midwife"
+
+
+def campaign_overview(notes: Iterable[tuple[str, dict[str, Any]]]
+                      ) -> str | None:
+    """The Campaign Overview's path among (path, frontmatter) pairs: the
+    first by path whose `type` is `campaign_overview`, a record copy
+    (`is_record_copy`) never; None when there is none."""
+    hits = sorted(rel for rel, fm in notes
+                  if entity_type(fm) == "campaign_overview"
+                  and not is_record_copy(rel))
+    return hits[0] if hits else None
+
+
 def vault_files(vault: Path, folder: str | None = None,
                 files: Iterable[str] | None = None,
                 skip_dirs: set[str] = SKIP_DIRS,

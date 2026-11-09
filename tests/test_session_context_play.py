@@ -676,6 +676,18 @@ class ThreadReportTests(unittest.TestCase):
         self.assertNotIn("The ledger is still missing", orphans)
         self.assertEqual(orphans.strip(), "(none)")
 
+    def test_an_archived_overview_is_not_read(self):
+        tmp = self.shared_copy("- Repay Bram — involves [[Hero]]")
+        (tmp / "_campaign").mkdir()
+        (tmp / "Overview.md").rename(tmp / "_campaign" / "Overview.md")
+        (tmp / "_archive").mkdir()
+        (tmp / "_archive" / "Overview.md").write_text(
+            "---\ntype: campaign_overview\n---\n\n## Open Threads\n\n"
+            "- An old thread — involves the party\n", encoding="utf-8")
+        report = self.report(tmp)
+        self.assertIn("\nRepay Bram\tfirst=", report)
+        self.assertNotIn("An old thread", report)
+
     def test_a_hidden_shared_thread_is_marked(self):
         tmp = self.shared_copy("<!-- gm-only -->\n- Repay Bram — involves "
                                "[[Hero]]\n<!-- /gm-only -->")
