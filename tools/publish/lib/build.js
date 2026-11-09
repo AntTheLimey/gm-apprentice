@@ -1477,8 +1477,23 @@ function buildSite(options) {
   // too (the Overview's player view is what is read). The PC's own strip chain runs over the added text.
   // The threads are added only where players would see them: if the PC's Current Status does not publish to players
   // (stub-cut, hidden section), the GM page shows nothing there either, never an unmarked copy.
-  const overviewPage = pages.find((p) => String((p.sourceFrontmatter || p.frontmatter || {}).type).trim().toLowerCase() === 'campaign_overview');
-  const sharedAll = overviewPage ? sharedEntries(overviewPage.publishedMarkdown || '') : [];
+  // The Overview is usually not published (the publish list leaves it out), so it is looked for in the whole corpus.
+  // A published one has its view already; an unpublished one is read through a copy's player-safe view (the same strip
+  // chain), and only its `## Open Threads` section is taken from that. A view that cannot be made gives nothing, never
+  // the raw text. The Overview itself gets no page.
+  const overviewPage = corpus.find((p) => String((p.sourceFrontmatter || p.frontmatter || {}).type).trim().toLowerCase() === 'campaign_overview');
+  let overviewView = '';
+  if (overviewPage) {
+    try {
+      if (typeof overviewPage.publishedMarkdown === 'string') overviewView = overviewPage.publishedMarkdown;
+      else {
+        const copy = { ...overviewPage };
+        sharedPublishView(copy, { gm, mark, excludeCallouts, excludeSections, pcKeepSections, storyMoments });
+        overviewView = String(copy.publishedMarkdown || '');
+      }
+    } catch (err) { overviewView = ''; }
+  }
+  const sharedAll = sharedEntries(overviewView);
   const namesPage = (target, page) => {
     const found = resolveSiteLink(`[[${target}]]`, { linkMap, pages });
     return found.kind === 'page' && found.href === page.outputPath;

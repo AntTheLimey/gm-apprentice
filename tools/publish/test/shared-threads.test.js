@@ -7,6 +7,7 @@ const { build } = require('../lib/build');
 const { sharedEntries, withSharedThreads } = require('../lib/shared-threads');
 const { settingsText, NEW_FILE } = require('./helpers/vault-files');
 const { writeNewConfig } = require('./helpers/settings-files');
+const { writePublishList } = require('./helpers/publish-list');
 
 const FIXTURE = path.join(__dirname, '..', '..', '..', 'tests', 'fixtures', 'shared-threads');
 const overview = () => fs.readFileSync(path.join(FIXTURE, 'Campaign Overview.md'), 'utf8');
@@ -121,3 +122,52 @@ test('shared threads: a PC whose Current Status players do not see gets none, on
   assert.doesNotMatch(player, /Shared threads|The missing ledger/);
   assert.doesNotMatch(gm, /Shared threads|The missing ledger/, 'the GM page never shows an unmarked copy');
 });
+
+// The Overview is left off the publish list, as a real vault's usually is.
+function unpublishedOverview(site) {
+  const secret = 'Nobody must know about the sunken bell';
+  const loose = 'The harbourmaster is the Pale Man';
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'shared-threads-unpub-'));
+  const vault = path.join(root, 'vault');
+  const notes = {
+    'Campaign Overview.md': overview().replace('## Key Factions',
+      `<!-- gm-only -->\n- ${secret} — since Session 1; involves the party\n<!-- /gm-only -->\n\n## Key Factions`).replace('## Premise', `## Premise\n\n${loose}.`),
+    'PCs/Corwin_Hale.md': pc('Corwin_Hale'),
+    'PCs/Ines_Marlowe.md': pc('Ines_Marlowe'),
+  };
+  for (const [rel, text] of Object.entries(notes)) {
+    fs.mkdirSync(path.dirname(path.join(vault, rel)), { recursive: true });
+    fs.writeFileSync(path.join(vault, rel), text);
+  }
+  writePublishList(vault, { publishing: ['PCs/Corwin_Hale.md', 'PCs/Ines_Marlowe.md'], excluded: ['Campaign Overview.md'] });
+  const siteDir = path.join(root, 'campaign');
+  fs.mkdirSync(siteDir);
+  writeNewConfig(vault, { version: 1, player_site: { folder: siteDir, folder_map: { PCs: 'pcs' } }, gm_site: { publish: true, folder: path.join(root, 'campaign-gm') } });
+  const configPath = path.join(siteDir, 'vault.config.json');
+  fs.writeFileSync(configPath, JSON.stringify({ vaultPath: vault }));
+  const real = console.log; const warn = console.warn; console.log = () => {}; console.warn = () => {};
+  try { build({ configPath, site }); } finally { console.log = real; console.warn = warn; }
+  const out = site === 'gm' ? path.join(root, 'campaign-gm') : path.join(siteDir, 'docs');
+  const files = [];
+  (function walk(d) { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const f = path.join(d, e.name); e.isDirectory() ? walk(f) : files.push(f); } })(out);
+  return { out, files, secret, loose };
+}
+
+for (const site of ['player', 'gm']) {
+  test(`shared threads: an unpublished Overview still feeds the PC pages (${site} site), and nothing else of it`, () => {
+    const { out, files, secret, loose } = unpublishedOverview(site);
+    const corwin = fs.readFileSync(path.join(out, 'pcs', 'corwin-hale.html'), 'utf8');
+    assert.match(corwin, /Shared threads/);
+    assert.match(corwin, /The missing ledger/);
+    assert.match(corwin, /Corwin.s debt to the ferrywoman/);
+    // The GM site shows every note, marked, so its own Overview page is the GM's; the player site writes none.
+    if (site === 'player') assert.ok(!files.some((f) => /campaign-overview/.test(f)), 'the Overview gets no page');
+    for (const f of files.filter((x) => /\.(html|js|json)$/.test(x) && (site === 'player' || /corwin-hale|ines-marlowe/.test(x)))) {
+      const text = fs.readFileSync(f, 'utf8');
+      assert.ok(!text.includes('sunken bell'), `gm-only thread leaked into ${f}`);
+      assert.ok(!text.includes(loose), `Overview prose leaked into ${f}`);
+      assert.ok(!text.includes('lamp that was paid'), `GM notes leaked into ${f}`);
+    }
+    if (site === 'gm') assert.doesNotMatch(corwin, /class="gm-mark/, 'players see the thread, so it is not marked');
+  });
+}
