@@ -1322,21 +1322,28 @@ function buildSite(options) {
   // not (it is usually left off the publish list), by the same player-safe strip chain, and only its `## Open Threads`
   // section is read from it. A gm-only shared thread stays off the GM site's PC page too. A view that cannot be made
   // gives nothing, never the raw text. The Overview itself gets no page.
-  // The Overview is found as vaultlib.campaign_overview finds it (the first by vault path, never an archived, QA or
-  // Midwife copy), and in a folder the player site hides too: the threads on it are player-facing wherever the note
-  // sits, and the writer has taken them off the PC notes. A scan that left folders out is redone over them only when
-  // the Overview was not found.
-  const LOWER_ALWAYS_EXCLUDE = new Set(ALWAYS_EXCLUDE_DIRS.map((d) => d.toLowerCase()));
-  const overviewOf = (scanned) => scanned
-    .map((p) => [vaultRelPathOf(p), p])
-    .filter(([rel, p]) => String((p.sourceFrontmatter || p.frontmatter || {}).type).trim().toLowerCase() === 'campaign_overview'
-      && !['_QA', '_archive', '_midwife'].includes(rel.includes('/') ? rel.split('/')[0] : ''))
+  // The Overview is the one vaultlib.campaign_overview picks, from every note in the vault (allNotes): the first by
+  // vault path, never in a folder Python skips (hidden, templates, the inbox) or an archived, QA or Midwife copy. A
+  // folder the player site hides, or one no folder_map entry covers, does not matter: its threads are player-facing
+  // wherever the note sits, and the writer has taken them off the PC notes. When the note is no scanned page, it is
+  // scanned once with its folder added to the map.
+  const overviewNote = allNotes
+    .map((n) => [`${n.vaultPath}.md`, n])
+    .filter(([rel, n]) => String((n.frontmatter || {}).type || '').trim().toLowerCase() === 'campaign_overview'
+      && !rel.split('/').some((seg) => seg.startsWith('.'))
+      && !(rel.includes('/') && ['_Templates', '_templates', '_inbox', '_QA', '_archive', '_midwife'].includes(rel.split('/')[0])))
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-    .map(([, p]) => p)[0];
-  const overviewPage = overviewOf(corpus)
-    || ((scanConfig.excludeDirs || []).some((d) => !LOWER_ALWAYS_EXCLUDE.has(String(d).toLowerCase()))
-      ? overviewOf(scanVaultReport(Object.assign({}, config, { excludeDirs: ALWAYS_EXCLUDE_DIRS }), { quiet: true }).pages || [])
-      : undefined);
+    .map(([, n]) => n)[0];
+  const overviewPage = overviewNote && (corpus.find((p) => p.sourcePath === overviewNote.sourcePath)
+    || (() => {
+      const dir = path.posix.dirname(overviewNote.vaultPath);
+      const folderMap = { ...(config.folderMap || {}), [dir === '.' ? '' : dir]: '_overview' };
+      const report = scanVaultReport(Object.assign({}, config, { excludeDirs: ALWAYS_EXCLUDE_DIRS, folderMap }), { quiet: true });
+      return report.pages.find((p) => p.sourcePath === overviewNote.sourcePath);
+    })());
+  if (overviewNote && !overviewPage) {
+    console.warn(`  WARNING: ${overviewNote.vaultPath}.md: shared threads were left off the PC pages because the site never reads that folder`);
+  }
   let overviewView = '';
   if (overviewPage) {
     try {

@@ -424,3 +424,30 @@ test('shared threads: a long unclosed hidden span puts them before its opener, f
   assert.match(out, /x\n\n\*\*Shared threads:\*\*\n- a\n\n%%\nsecret line 0/);
   assert.ok(Date.now() - started < 2000, `took ${Date.now() - started} ms`);
 });
+
+// The Overview the site reads is the one Python picks: first by vault path, in a folder no folder_map entry covers too.
+test('shared threads: the Overview is the first by path, mapped or not, as Python picks it', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'shared-threads-pick-'));
+  const vault = path.join(root, 'vault');
+  const notes = {
+    'Admin/Campaign Overview.md': overview().replace(/The missing ledger/g, 'The first by path'),
+    'Zed/Campaign Overview.md': overview().replace(/The missing ledger/g, 'A later copy'),
+    'PCs/Corwin_Hale.md': pc('Corwin_Hale'),
+  };
+  for (const [rel, text] of Object.entries(notes)) {
+    fs.mkdirSync(path.dirname(path.join(vault, rel)), { recursive: true });
+    fs.writeFileSync(path.join(vault, rel), text);
+  }
+  const siteDir = path.join(root, 'campaign');
+  fs.mkdirSync(siteDir);
+  // Zed is mapped and visible; Admin is neither mapped nor shown.
+  writeNewConfig(vault, { version: 1, player_site: { folder: siteDir, folder_map: { Zed: 'zed', PCs: 'pcs' } } });
+  const configPath = path.join(siteDir, 'vault.config.json');
+  fs.writeFileSync(configPath, JSON.stringify({ vaultPath: vault }));
+  const real = console.log; const warn = console.warn; console.log = () => {}; console.warn = () => {};
+  try { build({ configPath }); } finally { console.log = real; console.warn = warn; }
+  const html = fs.readFileSync(path.join(siteDir, 'docs', 'pcs', 'corwin-hale.html'), 'utf8');
+  assert.match(html, /The first by path/);
+  assert.doesNotMatch(html, /A later copy/);
+  assert.ok(!fs.existsSync(path.join(siteDir, 'docs', '_overview')), 'the rescan makes no page');
+});
