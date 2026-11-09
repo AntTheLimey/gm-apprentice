@@ -205,11 +205,12 @@ def _heading_block(text: str, level: int, title: str) -> str | None:
 # --brief helpers
 # --------------------------------------------------------------------------
 
-# H2 blocks --brief stubs outright, and H3 blocks it stubs by title prefix
-# (the template's Name Conflicts heading carries a parenthetical, so an
-# exact match would miss it). The list also matches at `####`: the
-# template's Resolved Threads sits one level down, under What Carries
-# Forward.
+# H2 blocks --brief stubs outright, and H3 blocks it stubs by title, alone
+# or followed by a parenthetical (the template's Name Conflicts heading
+# carries one); never a longer title that only starts with one (a
+# `Resolved Threads Review` is the GM's own). The list also matches at
+# `####`: the template's Resolved Threads sits one level down, under What
+# Carries Forward.
 BRIEF_DROP_H2: tuple[str, ...] = ("Memorable Moments",)
 BRIEF_DROP_H3: tuple[str, ...] = (
     "Name Conflicts", "Cross-Entity Claims", "World Fact Findings",
@@ -226,8 +227,8 @@ def brief_wrapup(body: str) -> str:
     """`body` with each BRIEF_DROP_H2 `## ` block and each BRIEF_DROP_H3
     `### ` block replaced by its heading line plus one stub line:
     `(omitted in --brief: N words — read the Wrap-Up file for it)`.
-    H3 titles match on prefix (the template's Name Conflicts heading has
-    a parenthetical). A block ends at the next heading of the same or
+    H3 titles match whole, or followed by ` (` (the template's Name
+    Conflicts heading has a parenthetical). A block ends at the next heading of the same or
     higher level, at any line holding a gm-only or spoiler marker, or
     EOF — either marker is a terminator, not just the closer, because the
     template opens the fence right after ## Memorable Moments' own
@@ -262,7 +263,8 @@ def brief_wrapup(body: str) -> str:
             level = 2
         else:
             m3 = _H3_HEADING_RE.match(line)
-            if m3 and any(m3.group(2).strip().startswith(p)
+            title = m3.group(2).strip() if m3 else ""
+            if m3 and any(title == p or title.startswith(p + " (")
                           for p in BRIEF_DROP_H3):
                 level = len(m3.group(1))
         if level is None:

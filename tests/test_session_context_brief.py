@@ -74,6 +74,20 @@ class BriefWrapupUnitTests(unittest.TestCase):
         self.assertIn("Kept thread.", out)
         self.assertIn("#### Pending Consequences\n\n- Kept.", out)
 
+    def test_only_the_named_headings_are_stubbed(self):
+        # A heading that only starts with a stubbed title is its own: kept.
+        # The title with a parenthetical after it is still the section.
+        for head in ("#### Resolved Threads Review", "### Quality Notes2",
+                     "### Name Conflictsx (a)"):
+            with self.subTest(head=head):
+                body = f"# W\n\n{head}\n\n- Kept words.\n"
+                self.assertEqual(sc.brief_wrapup(body), body)
+        out = sc.brief_wrapup("### Name Conflicts (export vs. vault canon)"
+                              "\n\n- Dropped words.\n")
+        self.assertNotIn("Dropped words", out)
+        out = sc.brief_wrapup("#### Resolved Threads  \n\n- Dropped.\n")
+        self.assertNotIn("Dropped", out)
+
     def test_stubbing_keeps_every_marker_line(self):
         # The fence `append_resolved` puts round an older Wrap-Up's block,
         # a spoiler closer, and a marker after text on a line all stay.
