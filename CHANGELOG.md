@@ -15,7 +15,7 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 - A shared `## Open Threads` list in the Campaign Overview, for threads two or more PCs share.
 - `gma vault-write threads` adds, moves and closes threads. A closed thread is recorded in that session's Wrap-Up under `#### Resolved Threads`, with the line that ends it.
-- Thread Tidy mode in campaign-qa, for going through the open threads.
+- Thread Tidy mode in campaign-qa, for going through the open threads. It closes ended threads and moves word-for-word duplicates without asking, the one campaign-qa check that fixes before you see it, and reports every change it made.
 - Each PC page on the site shows the shared threads that name that PC. They are read from the Overview's Open Threads even when the Overview page does not publish; GM-only text, spoilers and comments stay hidden (publish tool 1.70.3).
 
 ### Changed

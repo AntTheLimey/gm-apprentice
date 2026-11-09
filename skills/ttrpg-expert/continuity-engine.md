@@ -158,15 +158,15 @@ Ripeness: [Planted / Ripening / Ready / Paid Off / Retired]
 Dormant: untouched for as many sessions as the vault's
 `vault.stale_after_sessions` says; with no vault, three.
 
-- Still relevant? → retire explicitly if campaign moved on (`vw threads close`)
+- Still relevant? → ask the GM; close it (`vw threads close`) only when the GM retires it
 - Connects to current events? → weave back via callback
 - Affects active NPCs/factions? → advance in background,
   let consequences surface naturally
 
 ### Per-PC Always-Current Thread Source
 
-The Campaign Overview's `## Open Threads` holds the threads the whole table
-shares; each active PC's `## Current Status` → `Open threads` (in
+The Campaign Overview's `## Open Threads` holds the threads two or more PCs
+share; each active PC's `## Current Status` → `Open threads` (in
 `Characters/PCs/{Name}.md`) is the canonical, cumulative list of that PC's
 own unresolved forward items. Consult it directly for stale-thread detection:
 it is the always-current home that prevents thread-decay — a thread does

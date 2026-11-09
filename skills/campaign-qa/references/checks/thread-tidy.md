@@ -25,11 +25,14 @@ Wrap-Up's `#### Resolved Threads` with its evidence.
      `not a thread: an event, in the Session N recap`. The text itself
      shows it, so no other line is needed.
    - Anything arguable stays open and goes in the report.
-3. Duplicates: the same thread on two or more PCs. Word for word: a
-   `move` row (it refuses wordings that differ); its `since` is the
-   thread's first-seen session from `--threads` (`Session N`), or `-`.
-   In other words: list them in the report as near-duplicates for the
-   GM. Never merge differing wordings.
+   - Leave threads marked `(hidden)`: the tool refuses them, and one
+     refused row writes nothing.
+3. Duplicates: the same thread on two or more PCs.
+   - **Word for word:** one `move` row. WHO is the PCs holding it, or
+     `party` if every active PC holds it; `since` is the thread's
+     first-seen session from `--threads` (`Session N`), or `-`.
+   - **Worded differently:** list them in the report as
+     near-duplicates. Never merge them.
 4. One call for every row of the run, against the latest Wrap-Up:
    `gma vault-write <vault> threads --wrapup "<latest wrap-up>"` with the
    `close` and `move` rows on stdin. Read the preview, then run it again
