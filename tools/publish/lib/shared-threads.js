@@ -2,9 +2,11 @@
 // The Campaign Overview's `## Open Threads` bullets, and the ones that name a PC put on that PC's page.
 // The writer is skills/shared/scripts/threads.py `format_shared`:
 //   - {text} — since {since}; involves [[A]], [[B]]     (or `involves the party`; `since` may be absent)
+// Python writes one line per shared thread; a hand-wrapped bullet is read by its first line only.
 // A hand-written bullet may have no tail at all: it names nobody, so it goes on no PC page.
 
-const TAIL_RE = /^(.*?)\s+—\s+(?:since\s+([^;]+?);\s*)?involves\s+(.+?)\s*$/;
+// Greedy, as Python's `_TAIL_RE`: the text runs to the LAST valid tail.
+const TAIL_RE = /^(.*)\s+—\s+(?:since\s+([^;]+?);\s*)?involves\s+(.+?)\s*$/;
 const LINK_RE = /\[\[([^\]|#]+?)(?:[|#][^\]]*)?\]\]/g;
 
 function eol(text) { return text.includes('\r\n') ? '\r\n' : '\n'; }

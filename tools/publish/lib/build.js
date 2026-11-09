@@ -1473,7 +1473,10 @@ function buildSite(options) {
     if (page.headingsUnstable) console.warn(`  WARNING: ${page.outputPath}: ${HEADINGS_UNSTABLE_WARNING}`);
   }
   // Each PC page also shows the Overview's shared threads that name that PC (or the party), read from the Overview's
-  // published view so nothing hidden there reaches a PC page. The PC's own strip chain runs over the added text.
+  // published view so nothing hidden there reaches a PC page. A gm-only shared thread stays off the GM site's PC page
+  // too (the Overview's player view is what is read). The PC's own strip chain runs over the added text.
+  // The threads are added only where players would see them: if the PC's Current Status does not publish to players
+  // (stub-cut, hidden section), the GM page shows nothing there either, never an unmarked copy.
   const overviewPage = pages.find((p) => String((p.sourceFrontmatter || p.frontmatter || {}).type).trim().toLowerCase() === 'campaign_overview');
   const sharedAll = overviewPage ? sharedEntries(overviewPage.publishedMarkdown || '') : [];
   const namesPage = (target, page) => {
@@ -1482,7 +1485,11 @@ function buildSite(options) {
   };
   for (const page of pages) {
     if (!isPcPage(page)) continue;
-    if (sharedAll.length) page.markdown = withSharedThreads(page.markdown, sharedAll.filter((e) => e.party || e.involves.some((t) => namesPage(t, page))));
+    if (sharedAll.length) {
+      const withThreads = withSharedThreads(page.markdown, sharedAll.filter((e) => e.party || e.involves.some((t) => namesPage(t, page))));
+      const playersSee = (md) => playerSafeMarkdown(md, { excludeCallouts, excludeSections, pcKeepSections, storyMoments, frontmatter: page.sourceFrontmatter || page.frontmatter }).text;
+      if (withThreads !== page.markdown && playersSee(withThreads) !== playersSee(page.markdown)) page.markdown = withThreads;
+    }
     publishView(page);
   }
 
