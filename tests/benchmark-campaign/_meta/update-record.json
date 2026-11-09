@@ -239,7 +239,7 @@
       "left_open": [
         "schema-mirror"
       ],
-      "backup": "/Users/antonypegg/.gm-apprentice/backups/benchmark-campaign-2b41f8ec/20261109-001405.tar.gz"
+      "backup": "~/.gm-apprentice/backups/benchmark-campaign-2b41f8ec/20261109-001405.tar.gz"
     },
     {
       "from": "1.12.1",
@@ -252,7 +252,7 @@
         "schema-mirror"
       ],
       "left_open": [],
-      "backup": "/Users/antonypegg/.gm-apprentice/backups/benchmark-campaign-2b41f8ec/20261109-001442.tar.gz"
+      "backup": "~/.gm-apprentice/backups/benchmark-campaign-2b41f8ec/20261109-001442.tar.gz"
     }
   ],
   "workarounds": [],
