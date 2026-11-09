@@ -256,6 +256,17 @@ class StatusWriteTests(unittest.TestCase):
                       out)
         self.assertEqual(out.count("WARNING\t"), 1)
 
+    def test_replacing_none_with_threads_does_not_warn(self):
+        vault = make_vault(self, {BULLETED: DRIFTED.replace(
+            "- **Open threads:** Hunted by the Republic.\n"
+            "  - **Session 5:** fled the system.\n"
+            "  - the batch-brand is a tell.\n",
+            "- **Open threads:** None.\n")})
+        code, out = run(vault, "status", BULLETED, "--write", stdin=(
+            "**Open threads:**\n- **Hunted** by the Republic.\n"))
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("WARNING", out)
+
     def test_vitals_and_subsections_are_left_alone(self):
         vault = self.vault()
         run(vault, "status", BULLETED, "--write",

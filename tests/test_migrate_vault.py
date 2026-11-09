@@ -1158,6 +1158,24 @@ class SharedThreadsTests(unittest.TestCase):
         self.assertEqual(self.raw(v, "_archive/Campaign Overview.md"),
                          ST_OVERVIEW)
 
+    def test_inline_open_threads_are_left_alone(self):
+        # `**Open threads:** None.` is no thread; real inline text is one
+        # GM's prose, never judged word for word: neither moves.
+        for inline in ("None.", "The ferrywoman is owed"):
+            with self.subTest(inline=inline):
+                pc = st_raw_pc("").replace(
+                    "**Open threads:**", f"**Open threads:** {inline}")
+                self.assertIn(f"**Open threads:** {inline}", pc)
+                v = self.vault({"Campaign Overview.md": ST_OVERVIEW,
+                                "PCs/A.md": pc, "PCs/B.md": pc})
+                self.assertEqual(mv.find_shared_threads(v), [])
+                self.assertEqual(mv._shared_threads_plan(v), ({}, [], []))
+        struck = st_raw_pc("").replace("**Open threads:**",
+                                       "**Open threads:** ~~Paid~~")
+        v = self.vault({"PCs/A.md": struck,
+                        WRAPS + "Chapter_01_Session_03_Wrap_Up.md": st_wrap(3)})
+        self.assertEqual(mv.find_shared_threads(v), [])
+
     def test_wrap_variants_of_one_thread_are_one_group(self):
         # The same words wrapped differently on two pairs of sheets: one
         # Overview entry naming all four, every copy gone.

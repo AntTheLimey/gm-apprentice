@@ -1090,6 +1090,11 @@ def _shared_threads_plan(vault: Path) -> tuple[
 
     for rel in pcs:
         for item in th.pc_thread_items(text(rel)):
+            if item.keep is not None:
+                # Inline text on the label line is one GM's prose, not a
+                # list item: never judged word for word, never moved or
+                # closed here (`vw threads` may take it when asked).
+                continue
             inner = _struck(item.text)
             if inner is not None:
                 if item.hidden:

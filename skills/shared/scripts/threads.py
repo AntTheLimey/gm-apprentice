@@ -37,6 +37,16 @@ _TAIL_RE = re.compile(
 _LINK_RE = re.compile(r"\[\[([^\]|#]+?)(?:[|#][^\]]*)?\]\]")
 _LEAD_RE = re.compile(r"^\*\*(.+?)\*\*")
 _PLACEHOLDER_RE = re.compile(r"^\{.*\}$")
+# Inline text on a PC's label line that says there are none
+# (`**Open threads:** None.`): no thread, as a placeholder is none. Read
+# with case and the punctuation and emphasis round it dropped.
+_NONE_WORDS = frozenset(("none", "nothing", "n/a", "na", "-", "\u2014",
+                         "\u2013", "nothing yet", "none yet", ""))
+
+
+def _filler(text: str) -> bool:
+    return " ".join(text.strip(" \t.,;:!?*_()").casefold().split()) \
+        in _NONE_WORDS
 GM_OPEN, GM_CLOSE = "<!-- gm-only -->", "<!-- /gm-only -->"
 # A thread holding any of these, or next to a line with one, is next to
 # hidden text (see `pc_thread_items`). A gm-only or spoiler marker on a line
@@ -476,7 +486,8 @@ def pc_thread_items(pc_text: str) -> list[PcThread]:
     (see `_pc_span`): its top-level bullets, each with everything under it
     (see `_blocks`). Text on the label line itself (`**Open threads:**
     a; b`) is one thread, with the lines under it. A template placeholder
-    (`{…}`) is not a thread. A thread in or next to hidden text is returned
+    (`{…}`), or inline text that only says there are none (`None.`, `—`),
+    is not a thread. A thread in or next to hidden text is returned
     with `hidden` set (see `PcThread`): nothing may move it to a page
     players read, and removing it could split a hidden block."""
     lines = _lines(pc_text)
@@ -534,7 +545,7 @@ def _blocks(lines: list[str], start: int, end: int,
     base: int | None = None
     delim: str | None = None
     i = start + 1
-    if label is not None and label.group("rest").strip():
+    if label is not None and not _filler(label.group("rest")):
         stop = _block_stop(lines, start, end,
                            len(label.group("indent").expandtabs(4)))
         out.append(_block(lines, hidden, near, start, stop,

@@ -364,6 +364,24 @@ class ThreadsTests(unittest.TestCase):
         self.assertEqual([t.text for t in threads.pc_thread_items(pc)],
                          ["first", "second", "third"])
 
+    def test_inline_filler_is_no_thread(self):
+        # `**Open threads:** None.` says there are none, like a `{…}`
+        # placeholder; bullets under it are still threads.
+        for filler in ("None.", "none", "Nothing yet", "N/A", "na", "-",
+                       "\u2014", "\u2013", "None yet.", "*Nothing.*"):
+            with self.subTest(filler=filler):
+                pc = (f"## Current Status\n\n**Open threads:** {filler}\n"
+                      "**Knows:** x\n")
+                self.assertEqual(threads.pc_thread_items(pc), [])
+        pc = ("## Current Status\n\n- **Open threads:** none\n    - a\n"
+              "- **Knows:** x\n")
+        got = threads.pc_thread_items(pc)
+        self.assertEqual([t.text for t in got], ["a"])
+        self.assertIsNone(got[0].keep)
+        pc = "## Current Status\n\n**Open threads:** None of them trust Bram\n"
+        self.assertEqual([t.text for t in threads.pc_thread_items(pc)],
+                         ["None of them trust Bram"])
+
     def test_open_threads_stop_at_a_subsection(self):
         # The last field before a subsection: its bullets are not threads.
         for head in ("### Journal", "#### Notes", "## Next"):
