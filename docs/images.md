@@ -1,30 +1,45 @@
 # Drawing pictures
 
 Ask the apprentice for a portrait, a place, a faction, an item, a
-document or a scene from a session's recap, and it draws the picture. It
-draws with Codex on your ChatGPT plan when you have one, which costs no
-money, or else with Google's Gemini service on your own Google key, inside
-spending limits you set in the vault. It looks at each picture, redraws a
-wrong one and files the ones that are right. In this release it draws only when you
+document or a scene from a session's recap, and it draws the picture
+with the system you choose: Codex on your ChatGPT plan, which costs no
+money, or Google's Gemini service on your own Google key, inside spending
+limits you set in the vault. It looks at each picture, redraws a wrong one
+and files the ones that are right.
+
+## Choose what draws
+
+The apprentice never picks for you. Set `vault.images.source`:
+
+| Choice | What draws | Money |
+|---|---|---|
+| `codex` | An installed Codex signed in with a ChatGPT plan, using its own image tool | None counted |
+| `self` | The apprentice's own image tool, when it has one (for example, the apprentice running inside Codex) | None counted |
+| `service` | The service and model you set (`vault.images.service`, `vault.images.model`) | Paid, inside your limits |
+
+Until you choose, the apprentice asks. A vault that already names a service
+and model counts as having chosen `service`. `gma image status` says
+whether Codex is installed and signed in, so you can choose knowingly.
+Codex draws with its own built-in image tool: you choose Codex, not the
+model inside it. In this release it draws only when you
 ask: `vault.images.auto`, for drawing without asking, has no effect yet.
 
 ## Drawing on a ChatGPT plan with Codex
 
-If Codex is installed and signed in with a ChatGPT plan (`codex login`),
-the apprentice draws with it first. The pictures come out of the plan you
-already pay for, so no money is counted against your limits, and each
-picture takes a minute or two. The redraw limit still applies. A Codex
+With `vault.images.source` set to `codex`, Codex must be installed and
+signed in with a ChatGPT plan (`codex login`). The pictures come out of
+the plan you already pay for, so no money is counted against your limits,
+and each picture takes a minute or two. The redraw limit still applies. A Codex
 signed in with an API key is charged by the picture, so it is never used
 this way, and the sign-in is checked again before every batch is drawn.
 If your ChatGPT account has bought extra Codex credits, Codex may spend
 them once the plan's allowance runs out: that is billed by OpenAI, outside
 the apprentice's limits.
 
-If you run the apprentice inside Codex, it can draw the pictures itself
-with Codex's own image tool. That costs no money either.
+If you run the apprentice inside Codex, choose `self` and it draws the
+pictures itself with Codex's own image tool. That costs no money either.
 
-`vault.images.source` chooses: `auto` (Codex when it can, else Gemini),
-`codex` or `service` (Gemini only). If Codex stops part-way, for example
+If Codex stops part-way, for example
 when the plan's limit is reached, the apprentice says so and does not
 switch to Gemini by itself: a batch planned as free only starts costing
 money when you plan it again with Gemini and see the estimate.

@@ -49,10 +49,11 @@ def build_parser() -> argparse.ArgumentParser:
                     help="the GM did not ask for these pictures: apply the "
                     "vault's rules for drawing without asking")
     pl.add_argument("--source", choices=image_jobs.SOURCES,
-                    help="who draws, for this job only: codex (an installed "
-                    "Codex on a ChatGPT plan, no money), service (the vault's "
-                    "picture service, paid) or self (you, with your own image "
-                    "tool). Left out: the vault's vault.images.source")
+                    help="who draws, for this job only, as the GM chose: codex "
+                    "(an installed Codex on a ChatGPT plan, no money), service "
+                    "(the vault's picture service and model, paid) or self "
+                    "(you, with your own image tool). Left out: the vault's "
+                    "vault.images.source")
     dr = sub.add_parser(
         "draw",
         help="draw the planned pictures (on a paid service this costs money)",
@@ -100,11 +101,13 @@ def status(vault: Path) -> int:
         return 2
     lim = image_money.limits(vault)
     print("unprompted drawing: " + ("on" if lim.auto else "off"))
-    print(f"source: {lim.source}")
-    if lim.source in ("auto", "codex"):
-        state = image_codex.login()
+    print("source: " + (lim.source or ("service (from the service setting)"
+                                       if lim.service else "none chosen; the GM chooses")))
+    state = image_codex.login()
+    if state.state != "missing":
         print(f"codex: {state.line}"
-              + (" (draws with no money counted)" if state.state == "chatgpt" else ""))
+              + (" (can draw with no money counted, if chosen)"
+                 if state.state == "chatgpt" else ""))
     if lim.service:
         print(f"service: {lim.service}, model: {lim.model or 'none chosen'}")
     else:
@@ -158,7 +161,7 @@ def key(service: str) -> int:
     return 0
 
 
-FREE_WORDS = {"codex": "by Codex on the ChatGPT plan, no money counted",
+FREE_WORDS = {"codex": "by Codex (its built-in image tool) on the ChatGPT plan, no money counted",
               "self": "by you, with your own image tool, no money counted"}
 
 
@@ -178,8 +181,8 @@ def plan(vault: Path, requests: Path, unprompted: bool,
     if free:
         print(f"Drawn {free}.")
     else:
-        print(f"Drawn by {job.service} on the GM's key: this costs money"
-              + (f" (not Codex: {job.passed_over})." if job.passed_over else "."))
+        print(f"Drawn by {job.service}, model {job.model}, on the GM's key: "
+              "this costs money.")
     total = 0.0
     planned = 0
     for pic in job.entries:

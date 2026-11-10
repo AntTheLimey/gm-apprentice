@@ -2,7 +2,7 @@
 
 Use it when the GM asks for a picture for a note: a portrait (PC, NPC, creature, heritage, document), a location, faction, organization or item, or a scene picture in a Wrap-Up's Narrative Recap. `status` shows the source, whether Codex can draw, the service, model, key, this month's spending and the Image Guidance note's path.
 
-Who draws: `vault.images.source` decides. On `auto` (the default) an installed Codex on a ChatGPT plan draws with no money; otherwise the paid service. `plan` says which; tell the GM before drawing when it is the paid service. If you have your own image tool (you are Codex), plan with `--source self` and draw them yourself; see "Drawing them yourself" below.
+Who draws is the GM's choice, never yours: `vault.images.source` is `codex` (an installed Codex on a ChatGPT plan, no money), `self` (your own image tool, no money; see "Drawing them yourself" below) or `service` (the set service and model, paid). If `plan` says to choose, put the three choices to the GM (`status` says whether Codex can draw) and set the one they name. Pass `--source` only when the GM names a source for this batch. `plan`'s first line after the job number says what draws.
 
 Rules:
 
@@ -74,7 +74,7 @@ gma image plan <vault> <requests> [options]
 | `<vault>` |  | the vault folder |
 | `<requests>` |  | a JSON file: a list with one object per picture (for, subject, and optionally blocks, shows, replace, after, name) |
 | `--unprompted` |  | the GM did not ask for these pictures: apply the vault's rules for drawing without asking |
-| `--source` | `codex`, `service`, `self` | who draws, for this job only: codex (an installed Codex on a ChatGPT plan, no money), service (the vault's picture service, paid) or self (you, with your own image tool). Left out: the vault's vault.images.source |
+| `--source` | `codex`, `service`, `self` | who draws, for this job only, as the GM chose: codex (an installed Codex on a ChatGPT plan, no money), service (the vault's picture service and model, paid) or self (you, with your own image tool). Left out: the vault's vault.images.source |
 
 Example: `gma image plan "<vault>" requests.json`
 <!-- END GENERATED -->

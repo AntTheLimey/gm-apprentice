@@ -158,9 +158,9 @@ const REGISTRY = [
     left_out: 'Every kind except player characters',
   },
   {
-    name: 'vault.images.source', type: 'choice', values: ['auto', 'codex', 'service'], default: 'auto', group: 'images',
-    does: 'Where pictures come from. `auto`: an installed Codex signed in with a ChatGPT plan when there is one (no money counted), else the picture service below. `codex`: only Codex. `service`: only the picture service',
-    left_out: '`auto`',
+    name: 'vault.images.source', type: 'choice', values: ['codex', 'self', 'service'], group: 'images',
+    does: 'Which system draws this campaign\'s pictures, always your choice. `codex`: an installed Codex signed in with a ChatGPT plan, using its own image tool (no money counted). `self`: the apprentice\'s own image tool, when it has one (no money counted). `service`: the picture service and model below, on your key (paid, inside the limits)',
+    left_out: 'None chosen; the apprentice asks (a service and model you have set count as choosing `service`)',
   },
   {
     name: 'vault.images.service', type: 'choice', values: ['gemini'], group: 'images',

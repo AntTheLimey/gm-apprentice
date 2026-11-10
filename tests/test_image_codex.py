@@ -88,7 +88,10 @@ def _clean(monkeypatch, tmp_path):
     vaultlib.forget_settings(None)
 
 
-def make_vault(tmp_path, config="", count=2):
+CODEX_CHOSEN = "vault:\n  images:\n    source: codex\n"
+
+
+def make_vault(tmp_path, config=CODEX_CHOSEN, count=2):
     vault = tmp_path / "vault"
     (vault / "_meta").mkdir(parents=True)
     (vault / "_meta" / "vault-config.yaml").write_text(
@@ -229,54 +232,65 @@ def test_a_timeout_fails_that_picture_only(codex, monkeypatch, tmp_path):
     assert not err.value.stop and "10 minutes" in err.value.message
 
 
-# --- choosing the source ------------------------------------------------------
+# --- choosing the source: always the GM's ------------------------------------
 
-def test_auto_takes_codex_before_the_paid_service(codex, tmp_path, capsys):
-    vault = make_vault(tmp_path, GEMINI)
-    assert plan(vault, tmp_path) == 0      # no Gemini key needed
+def test_nothing_chosen_asks_the_gm_even_with_codex_signed_in(codex, tmp_path, capsys):
+    assert plan(make_vault(tmp_path, ""), tmp_path) == 2
+    assert capsys.readouterr().err.strip() == image_jobs.CHOOSE
+    assert codex.execs == []
+
+
+def test_codex_chosen_draws_with_codex(codex, tmp_path, capsys):
+    assert plan(make_vault(tmp_path), tmp_path) == 0      # no Gemini key needed
     out = capsys.readouterr().out
     job = image_jobs.load(job_id(out))
     assert job.service == "codex" and not job.priced
     assert all(e.estimate is None for e in job.entries)
-    assert "by Codex on the ChatGPT plan, no money counted" in out
+    assert "by Codex (its built-in image tool) on the ChatGPT plan, no money counted" in out
     assert "cents" not in out
 
 
-def test_auto_falls_to_the_service_when_codex_is_not_signed_in(codex, tmp_path, monkeypatch, capsys):
+def test_a_service_and_model_set_count_as_choosing_the_service(codex, tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("GEMINI_API_KEY", "AIza-FAKE")
+    assert plan(make_vault(tmp_path, GEMINI), tmp_path) == 0
+    out = capsys.readouterr().out
+    assert image_jobs.load(job_id(out)).service == "gemini"
+    assert ("Drawn by gemini, model gemini-nano-banana-2.1, on the GM's key: "
+            "this costs money.") in out
+
+
+def test_a_service_set_is_never_passed_over_for_codex(codex, tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("GEMINI_API_KEY", "AIza-FAKE")
+    plan(make_vault(tmp_path, GEMINI), tmp_path)    # Codex is signed in, free
+    assert image_jobs.load(job_id(capsys.readouterr().out)).service == "gemini"
+
+
+def test_source_flag_names_codex_for_one_batch(codex, tmp_path, capsys):
+    assert plan(make_vault(tmp_path, GEMINI), tmp_path, "--source", "codex") == 0
+    assert image_jobs.load(job_id(capsys.readouterr().out)).service == "codex"
+
+
+def test_the_vault_setting_wins_over_the_service_setting(codex, tmp_path, capsys):
+    assert plan(make_vault(tmp_path, GEMINI + "    source: codex\n"), tmp_path) == 0
+    assert image_jobs.load(job_id(capsys.readouterr().out)).service == "codex"
+
+
+def test_codex_chosen_but_not_signed_in_stops(codex, tmp_path, capsys):
     codex.login, codex.login_code = NOT_IN, 1
-    monkeypatch.setenv("GEMINI_API_KEY", "AIza-FAKE")
-    vault = make_vault(tmp_path, GEMINI)
-    assert plan(vault, tmp_path) == 0
-    assert image_jobs.load(job_id(capsys.readouterr().out)).service == "gemini"
+    assert plan(make_vault(tmp_path), tmp_path) == 2
+    assert "codex login" in capsys.readouterr().err
 
 
-def test_source_service_skips_codex(codex, tmp_path, monkeypatch, capsys):
-    monkeypatch.setenv("GEMINI_API_KEY", "AIza-FAKE")
-    vault = make_vault(tmp_path, GEMINI)
-    assert plan(vault, tmp_path, "--source", "service") == 0
-    assert image_jobs.load(job_id(capsys.readouterr().out)).service == "gemini"
-
-
-def test_the_vault_setting_can_ask_for_the_service(codex, tmp_path, monkeypatch, capsys):
-    monkeypatch.setenv("GEMINI_API_KEY", "AIza-FAKE")
-    vault = make_vault(tmp_path, GEMINI + "    source: service\n")
-    assert plan(vault, tmp_path) == 0
-    assert image_jobs.load(job_id(capsys.readouterr().out)).service == "gemini"
-
-
-def test_source_codex_without_a_chatgpt_sign_in_stops(codex, tmp_path, capsys):
+def test_codex_chosen_with_a_paid_sign_in_stops(codex, tmp_path, capsys):
     codex.login = "Logged in using personal access token\n"
-    vault = make_vault(tmp_path)
-    assert plan(vault, tmp_path, "--source", "codex") == 2
+    assert plan(make_vault(tmp_path), tmp_path) == 2
     err = capsys.readouterr().err
     assert "charged" in err and "codex login" in err
 
 
-def test_no_service_and_codex_signed_out_names_both_ways(codex, tmp_path, capsys):
-    codex.login, codex.login_code = NOT_IN, 1
-    assert plan(make_vault(tmp_path), tmp_path) == 2
-    err = capsys.readouterr().err
-    assert "vault.images.service gemini" in err and "codex login" in err
+def test_self_chosen_in_the_vault(tmp_path, capsys):
+    assert plan(make_vault(tmp_path, "vault:\n  images:\n    source: self\n"), tmp_path) == 0
+    assert image_jobs.load(job_id(capsys.readouterr().out)).service == "self"
 
 
 def test_unprompted_still_needs_the_switch_for_free_sources(codex, tmp_path, capsys):
@@ -297,7 +311,7 @@ def test_codex_draws_the_job_and_no_money_is_counted(codex, tmp_path, capsys):
     assert [e.status for e in job.entries] == ["drawn", "drawn"]
     assert [e.attempts for e in job.entries] == [1, 1]
     assert job.spent == 0 and image_money.spent(vault, TODAY) == 0
-    assert "This run: 2 pictures drawn by Codex on the ChatGPT plan" in out
+    assert "This run: 2 pictures drawn by Codex (its built-in image tool) on the ChatGPT plan, no money counted" in out
     assert "This month" not in out
     # And the pictures place like any other.
     assert image.main(["place", str(vault), jid, "--keep", "1", "2", "--write"]) == 0
@@ -454,16 +468,18 @@ def test_a_picture_cannot_be_handed_in_for_a_codex_job(codex, tmp_path, capsys):
 
 # --- status -------------------------------------------------------------------
 
-def test_status_says_the_source_and_codex(codex, tmp_path, capsys):
-    assert image.main(["status", str(make_vault(tmp_path))]) == 0
+def test_status_says_nothing_chosen_and_whether_codex_can_draw(codex, tmp_path, capsys):
+    assert image.main(["status", str(make_vault(tmp_path, ""))]) == 0
     out = capsys.readouterr().out
-    assert "source: auto" in out
-    assert "codex: Codex is signed in with a ChatGPT plan (draws with no money counted)" in out
+    assert "source: none chosen; the GM chooses" in out
+    assert ("codex: Codex is signed in with a ChatGPT plan (can draw with no "
+            "money counted, if chosen)") in out
 
 
-def test_status_with_source_service_does_not_ask_codex(codex, tmp_path, capsys):
-    image.main(["status", str(make_vault(tmp_path, GEMINI + "    source: service\n"))])
-    assert "codex:" not in capsys.readouterr().out
+def test_status_without_codex_installed_says_nothing_of_it(tmp_path, capsys):
+    image.main(["status", str(make_vault(tmp_path, GEMINI))])
+    out = capsys.readouterr().out
+    assert "source: service (from the service setting)" in out and "codex:" not in out
 
 
 # --- an agent in a sandbox that cannot write to the cache folder -------------
@@ -540,15 +556,6 @@ def test_a_codex_signed_in_another_way_since_the_plan_draws_nothing(codex, tmp_p
     assert codex.execs == []
     err = capsys.readouterr().err
     assert "charged" in err and "the GM agrees" in err
-
-
-def test_a_paid_plan_says_it_costs_money_and_why_codex_was_passed_over(codex, tmp_path, monkeypatch, capsys):
-    codex.login, codex.login_code = NOT_IN, 1
-    monkeypatch.setenv("GEMINI_API_KEY", "AIza-FAKE")
-    assert plan(make_vault(tmp_path, GEMINI), tmp_path) == 0
-    out = capsys.readouterr().out
-    assert ("Drawn by gemini on the GM's key: this costs money (not Codex: "
-            "Codex is installed but not signed in).") in out
 
 
 # --- the real runner: whole process group on a timeout, UTF-8 always ----------

@@ -109,8 +109,15 @@ def said(e):
 
 # --- one test per rule ---------------------------------------------------
 
-def test_rule_1_no_service_or_model_stops(tmp_path):
+def test_rule_1_nothing_chosen_stops_and_asks(tmp_path):
     v = build(tmp_path, config="")
+    with pytest.raises(image_jobs.Stop) as err:
+        image_jobs.plan(v, [{"for": "Anselm", "subject": "x"}], False, TODAY)
+    assert str(err.value) == image_jobs.CHOOSE
+
+
+def test_rule_1_service_chosen_without_a_model_stops(tmp_path):
+    v = build(tmp_path, config="vault:\n  images:\n    source: service\n")
     with pytest.raises(image_jobs.Stop) as err:
         image_jobs.plan(v, [{"for": "Anselm", "subject": "x"}], False, TODAY)
     assert str(err.value) == ("Choose a picture service and model first: gma "

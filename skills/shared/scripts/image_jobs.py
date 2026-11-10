@@ -101,7 +101,6 @@ class Job:
     spent: float                    # cents this job has spent (draw adds to it)
     entries: list[Entry]
     needs_thinking: bool = False    # the model refused to draw without thinking
-    passed_over: str | None = None  # why `auto` did not take Codex, when it did not
 
 
 # --- the job on disk ------------------------------------------------------
@@ -692,40 +691,40 @@ NO_SERVICE = ("Choose a picture service and model first: gma publish "
               "settings set vault.images.service gemini …")
 
 
-def choose_source(lim: image_money.Limits,
-                  source: str | None) -> tuple[str, str | None]:
-    """Who draws this job: `codex`, `self` or the configured service's
-    name, and, when `auto` passed over an installed Codex, why. `source` is
-    `plan --source`; else the vault's setting. `auto` takes Codex on a
-    ChatGPT plan before the paid service."""
-    want = source or lim.source
+CHOOSE = ("Choose how this vault's pictures are drawn: gma publish settings "
+          "set vault.images.source codex (an installed Codex on a ChatGPT "
+          "plan, no money), self (the apprentice's own image tool, no money) "
+          "or service (a picture service and model on your key, paid).")
+
+
+def choose_source(lim: image_money.Limits, source: str | None) -> str:
+    """Who draws this job: `codex`, `self` or the configured service's name.
+    Always the GM's choice: `plan --source` (given on the GM's word), else
+    `vault.images.source`; with neither, a service and model the GM has set
+    count as choosing the service. Nothing is picked for the GM."""
+    want = source or lim.source or ("service" if lim.service else None)
+    if want is None:
+        raise Stop(CHOOSE)
     if want == "self":
-        return "self", None
-    if want not in ("auto", "codex", "service"):
+        return "self"
+    if want == "codex":
+        state = image_codex.login()
+        if state.state != "chatgpt":
+            raise Stop(image_codex.why_not(state))
+        return "codex"
+    if want != "service":
         raise Stop(f"There is no picture source called {want}; try: "
                    + ", ".join(SOURCES))
-    state: image_codex.Login | None = None
-    if want in ("auto", "codex"):
-        state = image_codex.login()
-        if state.state == "chatgpt":
-            return "codex", None
-        if want == "codex":
-            raise Stop(image_codex.why_not(state))
     if not lim.service or not lim.model:
-        # An installed Codex that could draw for free is worth naming.
-        raise Stop(NO_SERVICE + (" Or sign Codex in with a ChatGPT plan: "
-                                 "codex login" if state is not None
-                                 and state.state in ("none", "other") else ""))
-    passed = (state.line if state is not None and state.state != "missing"
-              else None)
-    return lim.service, passed
+        raise Stop(NO_SERVICE)
+    return lim.service
 
 
 def plan(vault: Path, requests: list[dict[str, Any]], unprompted: bool,
          today: date, source: str | None = None) -> Job:
     requests = check_requests(requests)
     lim = image_money.limits(vault)
-    service, passed_over = choose_source(lim, source)
+    service = choose_source(lim, source)
     free = service in FREE
     if free:
         model, priced = service, False
@@ -765,7 +764,6 @@ def plan(vault: Path, requests: list[dict[str, Any]], unprompted: bool,
 
     job = Job(id=job_id, vault=str(vault), service=service,
               model=model, priced=priced, unprompted=unprompted,
-              passed_over=passed_over,
               spent=0.0, entries=entries)
     try:
         save(job)
