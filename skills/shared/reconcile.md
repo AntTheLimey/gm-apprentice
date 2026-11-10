@@ -107,7 +107,7 @@ If the scan names a Plan file, ask about each unplayed element:
 Flag `must-still-happen` items prominently — they carry into the next
 prep.
 
-### 5.5. Threads: what this session settled
+### 5.5. Threads: keep the lists true
 
 Only for the **most recent** played session (as step 6.5), never an
 older Wrap-Up that vault-ingest reconciles.
@@ -139,18 +139,20 @@ it `?`: the GM would rather add one back than prune a long list.
 
 1. Read `gma session-context <vault> --threads` (prep's bundle has
    it) and this Wrap-Up's recap, What Carries Forward and Handoff.
-   Say in one sentence where the party is at the end of the session.
-2. Test every line: the shared list, each PC's own, and Wrap-Up lines
-   on no list. Skip `(hidden)` ones: the tool refuses them.
+   Say in one sentence where the party is now.
+2. Test every line on every list, and every Wrap-Up line on no list,
+   against where the party is now, whenever it was written. Age, or
+   no note since, is no reason to keep a line or to pass it over.
+   Skip `(hidden)` ones: the tool refuses them.
 3. Propose one numbered list of changes only, grouped, `?` on the
    less sure ones:
    - **Ended**: each with the line that ended it.
    - **Dormant**: left behind, each with where or what was left.
    - **Wake**: dormant threads this session came back to, each with
      the name that matched.
-   - **Not a thread**: each with its reason in a few words (overtaken,
-     an event, colour, one session, a copy).
-   - **Move**: a matter on the wrong sheet, or carried by 2+ PCs.
+   - **Not a thread**: each with its reason in a few words.
+   - **Move**: a matter on the wrong sheet, or carried by 2+ PCs; a
+     live Wrap-Up line on no list goes onto the shared list.
    - **New this session**: what wrap-up added, so the GM can strike
      one that is not a thread.
    - **Answered**: Keeper Checklist items and open questions this
@@ -166,6 +168,7 @@ it `?`: the GM would rather add one back than prune a long list.
    on no list):
 
    ```text
+   add    shared  SINCE  WHO  TEXT   a live line on no list
    close  LIST  LEAD  EVIDENCE   the quoted line, or "not a thread: {reason}"
    rest   LIST  LEAD  WHY        where or what was left
    wake   LEAD  WHO              one PC: their list; PCs or party: shared
@@ -173,10 +176,13 @@ it `?`: the GM would rather add one back than prune a long list.
    hand   FROM  LEAD  TO         one PC's line to another PC's list
    ```
 
-   Then `gma vault-write <vault> wrapup-settle "<wrap-up>"`, rows
-   `SECTION  LEAD  RULING`, for the Answered.
-6. Little changed: a short list. Nothing to propose: "Threads:
-   nothing settled", and move on.
+   WHO: the PCs it bears on, or `party`. Copy an `add`'s TEXT exactly:
+   that claims the Wrap-Up line. Then `gma vault-write <vault>
+   wrapup-settle "<wrap-up>"`, rows `SECTION  LEAD  RULING`, for the
+   Answered.
+6. A tidy vault after a quiet session: a short list, or "Threads:
+   nothing settled". The first run on a vault never tidied is a long
+   list; that is expected.
 
 ### 6. Promote canon status
 
