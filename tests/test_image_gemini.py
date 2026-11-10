@@ -238,3 +238,54 @@ def test_unaccepted_reference_type_refused_before_calls(live, tmp_path, capsys):
                                  allow_under_test=True)
     assert code != 0 and live == []
     assert "r.gif" in capsys.readouterr().err
+
+
+MODEL = "gemini-nano-banana-2.1"
+
+
+def test_estimate_for_the_known_model():
+    assert image_gemini.estimate(MODEL, "1K", 0, 0) == pytest.approx(
+        3.36 + image_gemini.THINK_TOKENS * 7.50 / 10_000)
+    assert image_gemini.estimate(MODEL, "2K", 0, 0) > 5
+
+
+def test_estimate_unknown_model_is_none():
+    assert image_gemini.estimate("anything-else", "1K", 0, 0) is None
+
+
+def test_each_reference_adds_its_tokens():
+    one = image_gemini.estimate(MODEL, "1K", 1, 0)
+    none = image_gemini.estimate(MODEL, "1K", 0, 0)
+    assert one - none == pytest.approx(image_gemini.REF_TOKENS * 1.50 / 10_000)
+
+
+def test_prompt_length_adds_input_tokens():
+    long = image_gemini.estimate(MODEL, "1K", 0, 3000)
+    short = image_gemini.estimate(MODEL, "1K", 0, 0)
+    assert long - short == pytest.approx(0.15)
+
+
+def test_four_references_at_1k_fit_under_five_cents():
+    assert image_gemini.estimate(MODEL, "1K", 4, 2000) < 5
+
+
+def test_unknown_size_and_negative_counts_are_errors():
+    with pytest.raises(ValueError):
+        image_gemini.estimate(MODEL, "8K", 0, 0)
+    with pytest.raises(ValueError):
+        image_gemini.estimate(MODEL, "1K", -1, 0)
+    with pytest.raises(ValueError):
+        image_gemini.estimate(MODEL, "1K", 0, -1)
+    with pytest.raises(ValueError):
+        image_gemini.estimate(MODEL, "1K", 0, float("nan"))
+
+
+def test_rates_entry_is_the_documented_one():
+    assert list(image_gemini.RATES) == [MODEL]
+    rate = image_gemini.RATES[MODEL]
+    assert rate.input_per_m == 1.50
+    assert rate.image_out_per_m == 30.00
+    assert rate.text_out_per_m == 7.50
+    assert rate.out_tokens == {"1K": 1120, "2K": 1680, "4K": 3780}
+    assert rate.checked == "2026-11-09"
+    assert rate.source == "https://aistudio.google.com/docs/pricing"

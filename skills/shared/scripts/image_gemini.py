@@ -9,6 +9,7 @@ from __future__ import annotations
 import base64
 import http.client
 import json
+import math
 import re
 import urllib.error
 import urllib.request
@@ -79,3 +80,57 @@ def _send(url: str, hdrs: dict[str, str], body: bytes,
 
 
 SEND = _send   # tests replace this
+
+
+class Picture(NamedTuple):
+    data: bytes
+    ext: str
+    usage: dict[str, int]
+
+
+class Refused(Exception):
+    """The service answered and gave no picture."""
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(reason)
+        self.reason = reason
+
+
+class Rate(NamedTuple):
+    """US dollars per million tokens, and where the figures came from."""
+    input_per_m: float
+    image_out_per_m: float
+    text_out_per_m: float
+    out_tokens: dict[str, int]
+    checked: str
+    source: str
+
+
+RATES: dict[str, Rate] = {
+    "gemini-nano-banana-2.1": Rate(
+        input_per_m=1.50, image_out_per_m=30.00, text_out_per_m=7.50,
+        out_tokens={"1K": 1120, "2K": 1680, "4K": 3780},
+        checked="2026-11-09",
+        source="https://aistudio.google.com/docs/pricing"),
+}
+
+# Deliberately high provisional guesses; the live check's measured figure,
+# rounded up to the next hundred, will replace each.
+REF_TOKENS = 1200
+THINK_TOKENS = 500
+
+
+def estimate(model: str, size: str, refs: int, prompt_chars: int) -> float | None:
+    """Worst-case cost of one picture in US cents; None for an unknown model."""
+    rate = RATES.get(model)
+    if rate is None:
+        return None
+    if size not in rate.out_tokens:
+        raise ValueError(f"no rate for size {size!r}")
+    if (not math.isfinite(refs) or not math.isfinite(prompt_chars)
+            or refs < 0 or prompt_chars < 0):
+        raise ValueError("refs and prompt_chars must be finite and not negative")
+    dollars = (rate.out_tokens[size] * rate.image_out_per_m
+               + (refs * REF_TOKENS + prompt_chars / 3) * rate.input_per_m
+               + THINK_TOKENS * rate.text_out_per_m) / 1_000_000
+    return dollars * 100
