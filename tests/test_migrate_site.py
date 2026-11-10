@@ -559,7 +559,11 @@ class DormantThreadsHideTests(unittest.TestCase):
         vault = self.owning(old)
         (item,) = ms.find_hide_additions(vault, "1.12.8")
         self.assertEqual(item.id, "hide-add:Dormant Threads")
-        self.assertIn(self.SECTIONS, item.lines[0])
+        self.assertEqual(item.lines, [
+            f"add Dormant Threads to the details your site hides "
+            f"({self.SECTIONS}), so the site never shows it: Dormant Threads "
+            f"is threads parked when the party left a place or arc, kept "
+            f"for the GM"])
         self.assertTrue(item.holds_stamp)
         item.apply(None)
         self.assertEqual(vc.settings(vault).get(self.SECTIONS),

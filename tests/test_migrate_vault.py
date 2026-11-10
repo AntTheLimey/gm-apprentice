@@ -551,6 +551,17 @@ class TemplateTests(unittest.TestCase):
         self.assertIsNone(th.refusal(["v1"]))
         self.assertIn("no release tags", th.refusal([]))
 
+    def test_template_history_help_writes_nothing(self):
+        import io
+        out = io.StringIO()
+        with mock.patch.object(th, "release_tags",
+                               side_effect=AssertionError("it ran")), \
+                mock.patch("sys.stdout", out), \
+                self.assertRaises(SystemExit) as done:
+            th.main(["--help"])
+        self.assertEqual(done.exception.code, 0)
+        self.assertIn("usage:", out.getvalue())
+
     def test_a_released_hash_is_matched_whether_the_history_lists_or_maps_it(self):
         vault = self.older(lambda old: {"coc-7e": {
             "_Template_Document.md": {mv.text_hash(old): "1.10.20"}}})
@@ -1570,6 +1581,12 @@ class SharedThreadsTests(unittest.TestCase):
             WRAPS + "Chapter_01_Session_03_Wrap_Up.md": st_wrap(3)})
         self.assertNotIn("Moved threads", said)
         self.assertIn("Resolved Threads", said)
+
+    def test_shared_threads_plain_is_its_parts(self):
+        # One wording of each sentence, so the two cannot drift apart.
+        (check,) = [c for c in mv.VAULT_CHECKS if c.name == "shared-threads"]
+        self.assertEqual(check.plain,
+                         " ".join(said for _prefix, said in check.plain_when))
 
     def test_crlf_kept(self):
         notes = {

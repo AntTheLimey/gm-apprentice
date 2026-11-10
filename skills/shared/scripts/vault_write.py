@@ -1974,8 +1974,8 @@ def cmd_status(batch: Batch, args: argparse.Namespace, text: str) -> None:
 def warn_dropped_threads(batch: Batch, rel: str, before: str) -> None:
     """One WARNING per thread on the PC's Open threads before the rewrite
     whose lead (see `threads.lead`) no thread after it has: a rewrite may
-    drop one by mistake, and a thread that ended belongs in a Wrap-Up.
-    Rewording is fine, so this warns and never refuses."""
+    drop one by mistake, and a thread that ended is Reconcile's to close,
+    with the GM. Rewording is fine, so this warns and never refuses."""
     after = [t.text for t in th.pc_thread_items(batch.read(rel))]
     pc = Path(rel).stem
     for thread in th.pc_thread_items(before):
@@ -1983,8 +1983,9 @@ def warn_dropped_threads(batch: Batch, rel: str, before: str) -> None:
         if not th.find_thread(after, name):
             batch.row("WARNING", rel, f"\u00a7{CURRENT_STATUS}/Open threads",
                       f"drops '{name}' from {pc}'s Open threads: if it "
-                      f"ended, close it with `vw threads close` so it is "
-                      f"recorded; if it is shared now, `vw threads move`")
+                      f"ended, keep it on the list for Reconcile's thread "
+                      f"step to close; if it is shared now, use "
+                      f"`vw threads move`")
 
 
 def threads_overview(batch: Batch) -> str:
