@@ -184,7 +184,7 @@ When the GM is ready to scaffold, read
 `references/scaffold-handoff.md` and follow its five steps (brief
 template, entity/plan promotion, world-fact flush, vault setup,
 Session 0 handoff). Afterwards, campaign-qa is an optional health
-check.
+check. **Pictures:** if the version check printed `# pictures on:`, then once everything above is done and reported, follow "When no one asked" in `gma llms image` for the notes the scaffold created.
 
 ## Worldbuilding Mode
 

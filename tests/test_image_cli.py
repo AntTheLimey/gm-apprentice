@@ -1,5 +1,6 @@
 """gma image: status and key."""
 
+import json
 import sys
 from pathlib import Path
 
@@ -458,7 +459,7 @@ def test_waiting_names_this_vaults_unfinished_jobs(tmp_path):
     _job(a, "20261110-aaaa02", ["kept", "held", "refused"])       # finished
     _job(a, "20261110-aaaa03", ["planned", "failed", "drawn"])
     _job(b, "20261110-bbbb01", ["planned"])                       # another vault
-    got = image_jobs.waiting(a)
+    got = [(w.id, w.to_draw, w.to_place) for w in image_jobs.waiting(a)]
     assert sorted(got) == [("20261110-aaaa01", 0, 2), ("20261110-aaaa03", 2, 1)]
 
 
@@ -468,7 +469,7 @@ def test_waiting_finds_a_job_in_the_temp_folder(tmp_path, monkeypatch):
     monkeypatch.setattr(image_jobs, "_writable",
                         lambda root: "gm-apprentice-images" in str(root))
     _job(vault, "20261110-temp01", ["drawn"])
-    assert image_jobs.waiting(vault) == [("20261110-temp01", 0, 1)]
+    assert [w.id for w in image_jobs.waiting(vault)] == ["20261110-temp01"]
 
 
 def test_waiting_skips_a_job_file_it_cannot_read(tmp_path):
@@ -478,14 +479,20 @@ def test_waiting_skips_a_job_file_it_cannot_read(tmp_path):
     bad = image_jobs.roots()[0] / "20261110-bad001"
     bad.mkdir(parents=True)
     (bad / "job.json").write_text("{not json", encoding="utf-8")
-    assert image_jobs.waiting(vault) == [("20261110-good01", 0, 1)]
+    odd = image_jobs.roots()[0] / "20261110-odd001"
+    odd.mkdir(parents=True)
+    data = json.loads((image_jobs.job_file("20261110-good01")).read_text())
+    data["vault"] = None                        # a hand-edited job file
+    (odd / "job.json").write_text(json.dumps(data), encoding="utf-8")
+    assert [w.id for w in image_jobs.waiting(vault)] == ["20261110-good01"]
 
 
 def test_status_prints_the_waiting_line(tmp_path, capsys):
     vault = make_vault(tmp_path)
-    _job(vault, "20261110-aaaa01", ["drawn", "drawn", "planned"])
+    _job(vault, "20261110-aaaa01", ["drawn", "drawn", "planned", "kept"])
     assert image.main(["status", str(vault)]) == 0
-    assert ("waiting: 20261110-aaaa01 (1 to draw, 2 to look at and place)"
+    assert ("waiting: 20261110-aaaa01 for N1, N2, N3 and 1 more; codex, "
+            "unasked (1 to draw, 2 to look at and place)"
             in capsys.readouterr().out.splitlines())
 
 
@@ -497,6 +504,8 @@ def test_agent_page_carries_the_unasked_and_fill_rules():
     assert "`# pictures on:`" in page          # the page names the line it answers
     assert "Pass `--unprompted` exactly when no one asked" in page
     assert 'gma image missing "<vault>"' in page
-    assert "never choose for them" in page
+    assert "the GM's choice, never yours" in page
     assert "session-play never draws unasked" in page
-    assert "More than 10 planned" in page
+    assert "more than 10 are asked for" in page
+    assert "needs no further yes" in page
+    assert "never what GM Notes" in page

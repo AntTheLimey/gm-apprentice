@@ -372,3 +372,5 @@ malformed marker as a `prep-state` WARNING.
 content (scenes, NPCs, locations) → `ttrpg-expert`; vault structure
 (entity files, metadata) → `campaign-organizer`; structural issues
 (broken links, schema, graph health) → `campaign-qa`.
+
+**18. Pictures:** if the version check printed `# pictures on:`, then once everything above is done and reported, follow "When no one asked" in `gma llms image` for the notes this prep created.

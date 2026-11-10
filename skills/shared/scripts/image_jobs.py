@@ -86,6 +86,7 @@ class Entry:
     usage: dict[str, int] | None = None   # the last billed reply's usage, if it had one
 
 
+UNASKED_MOST = 10    # more pictures than this unasked: offered as a fill
 FREE = ("codex", "self")    # job sources that spend no money
 SOURCES = ("codex", "service", "self")   # what `plan --source` takes
 
@@ -195,14 +196,23 @@ def load(job_id: str) -> Job:
     return job
 
 
-def waiting(vault: Path) -> list[tuple[str, int, int]]:
-    """This vault's jobs that are not finished, newest first, as (job id,
-    pictures still to draw, pictures drawn and not yet looked at and
-    placed), so a later session can carry on with a job a skill left. A
-    job file that cannot be read is passed over."""
+class Waiting(NamedTuple):
+    """A job of this vault that is not finished."""
+    id: str
+    to_draw: int        # planned, or failed and can be tried again
+    to_place: int       # drawn and not yet looked at and placed
+    source: str         # codex, self or the service
+    unprompted: bool
+    notes: list[str]    # the notes it draws for, in order, each once
+
+
+def waiting(vault: Path) -> list[Waiting]:
+    """This vault's jobs that are not finished, newest first, so a later
+    session can carry on with a job a skill left. A job file that cannot be
+    read is passed over."""
     here = vault.resolve()
     seen: set[str] = set()
-    found = []
+    found: list[tuple[float, Waiting]] = []
     for root in roots():
         try:
             folders = [d for d in root.iterdir() if d.is_dir()]
@@ -217,14 +227,16 @@ def waiting(vault: Path) -> list[tuple[str, int, int]]:
                 if Path(job.vault).resolve() != here:
                     continue
                 when = (d / "job.json").stat().st_mtime
-            except (Stop, OSError):
+            except (Stop, OSError, TypeError, ValueError, RuntimeError):
                 continue
             to_draw = sum(e.status in ("planned", "failed") for e in job.entries)
             to_place = sum(e.status == "drawn" for e in job.entries)
             if to_draw or to_place:
-                found.append((when, job.id, to_draw, to_place))
-    found.sort(key=lambda f: (f[0], f[1]), reverse=True)
-    return [(i, d, p) for _w, i, d, p in found]
+                notes = list(dict.fromkeys(Path(e.note).stem for e in job.entries))
+                found.append((when, Waiting(job.id, to_draw, to_place,
+                                            job.service, job.unprompted, notes)))
+    found.sort(key=lambda f: (f[0], f[1].id), reverse=True)
+    return [w for _when, w in found]
 
 
 _ID_DATE = re.compile(r"^(\d{4})(\d{2})(\d{2})")
@@ -283,7 +295,9 @@ def missing(vault: Path, pcs: bool) -> list[tuple[str, str]]:
     `pcs`) whose `portrait` is blank, sorted by kind then path. Scene
     pictures are never listed (a played session's scenes are their own
     request). A portrait that names a file, even a missing one, is not
-    blank: replacing it is the GM's to ask for by name."""
+    blank: replacing it is the GM's to ask for by name. A note `plan` would
+    refuse (its picture file is already there, or its name leaves nothing to
+    call one) is not listed either."""
     kinds = set(image_money.limits(vault).kinds) - {"scene"}
     if pcs:
         kinds.add("pc")
@@ -295,7 +309,10 @@ def missing(vault: Path, pcs: bool) -> list[tuple[str, str]]:
         if kind not in kinds or kind not in SHAPES:
             continue
         portrait, _close, why_not = read_portrait(rel, note_lines(text))
-        if why_not is None and not portrait:
+        if why_not or portrait or not _slug(Path(rel).stem):
+            continue
+        # `plan` refuses a note whose picture file is already there.
+        if not existing_pictures(vault, _dest(kind, rel, None)):
             found.append((kind, rel))
     return sorted(found)
 
@@ -792,11 +809,19 @@ def plan(vault: Path, requests: list[dict[str, Any]], unprompted: bool,
             raise Stop(unpriced_message(model))
     if unprompted and not lim.auto:
         raise Stop("Drawing without asking is off for this vault.")
+    if unprompted and len(requests) > UNASKED_MOST:
+        raise Stop(f"{counted(len(requests))} were asked for without the GM: "
+                   f"more than {UNASKED_MOST} are never drawn unasked. Offer "
+                   "them to the GM as a fill; nothing was planned.")
     try:
         guidance = image_guidance.read(vault, lim.guidance)
     except (OSError, UnicodeDecodeError, vl.PublishToolUnavailable):
         raise Stop(f"The Image Guidance note at {lim.guidance} could not "
                    "be read.") from None
+    if unprompted and not guidance.found:
+        raise Stop("No Image Guidance note yet, so nothing is drawn without "
+                   "asking: offer to draft it with the GM first. Nothing "
+                   "was planned.")
     month_spent = image_money.spent(vault, today)
     prune(today)
 
@@ -817,7 +842,7 @@ def plan(vault: Path, requests: list[dict[str, Any]], unprompted: bool,
         _plan_one(ctx, e, req)
     _settle(entries, lim, month_spent, priced)
 
-    job = Job(id=job_id, vault=str(vault), service=service,
+    job = Job(id=job_id, vault=str(vault.resolve()), service=service,
               model=model, priced=priced, unprompted=unprompted,
               spent=0.0, entries=entries)
     try:

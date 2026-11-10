@@ -511,6 +511,15 @@ class VersionPicturesLineTests(unittest.TestCase):
             with self.subTest(verdict=verdict):
                 self.assertIsNone(vc.pictures_line(vault, verdict))
 
+    def test_the_line_never_asks_the_tool_a_second_time(self):
+        vault = self.vault(auto=True)
+        vc.vaultlib.forget_settings(vault)
+
+        def asked(*a, **k):
+            raise AssertionError("the publish tool was asked again")
+        with mock.patch.object(vc.vaultlib, "_run_settings", asked):
+            self.assertIsNone(vc.pictures_line(vault, "OK"))
+
     def test_no_node_keeps_the_verdict_and_drops_the_line_quietly(self):
         proc = run_cli_without_node(self.vault(auto=True), "version")
         self.assertEqual(proc.returncode, 0, proc.stderr)

@@ -36,11 +36,13 @@ Turn on `vault.images.auto` and the apprentice draws pictures by itself:
 
 It draws last, once its own work and report are done, and tells you in
 one line how many pictures, what draws them, about how long and any
-cost. Say "not now" and the job waits: ask later for "the pictures from
-the wrap-up" and it carries on where it stopped. More than ten pictures
-are never drawn unasked: the apprentice offers them as a fill instead.
-Player characters are never drawn unasked, and nothing is drawn at the
-table.
+cost. Say "not now" and the job waits for 14 days (`gma image status`
+lists it): ask later for "the pictures from the wrap-up" and it carries
+on where it stopped. More than ten pictures are never drawn unasked: the
+apprentice offers them as a fill instead. Nothing is drawn unasked until
+the vault has an Image Guidance note (the apprentice offers to draft
+it), and a picture shows only what the players have seen. Player
+characters are never drawn unasked, and nothing is drawn at the table.
 
 ## Filling in missing pictures
 
@@ -159,8 +161,9 @@ limits, so it stops and asks you to choose. It changes nothing unasked.
 ## How your pictures look
 
 The Image Guidance note, the note `vault.images.guidance` names, sets the look.
-Make it from `_Templates/_Template_Image_Guidance.md`, by hand for now (a guided
-set-up comes later). It is never published. Without it, pictures have no
+The apprentice offers to draft it with you from
+`_Templates/_Template_Image_Guidance.md`, and to merge any style notes you
+keep by hand. It is never published. Without it, pictures have no
 campaign style. As on the site, comments, spoilers and Dataview are left out.
 
 - **Direction**: what pictures should show. Read, never sent.

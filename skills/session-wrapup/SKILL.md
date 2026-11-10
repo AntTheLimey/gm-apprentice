@@ -406,3 +406,7 @@ it still ticks the index only with a Wrap-Up that pairs with it and
 will publish, on a current site pin. Report what it ticked; if it
 lists the session as unclear, tell the GM its reason and tick nothing
 else.
+
+### 7. Pictures
+
+Only if the version check printed `# pictures on:`, then once everything above is done and reported, follow "When no one asked" in `gma llms image` for the notes this session created and the session's big moments.

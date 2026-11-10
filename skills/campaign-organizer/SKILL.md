@@ -103,7 +103,8 @@ under `_attachments/` and set `portrait:` per
 `shared/vault-structure.md` § Image Attachments (folders, naming,
 formats, body embeds). Entities without images are fine.
 To draw pictures for notes that have none ("fill in the missing
-pictures"), follow "A fill" in `gma llms image`.
+pictures"), follow "A fill" in `gma llms image`. After an Organize,
+Dissect or Weave pass, if the version check printed `# pictures on:`, then once everything above is done and reported, follow "When no one asked" in `gma llms image` for the notes it created.
 
 ## The Two Layers
 

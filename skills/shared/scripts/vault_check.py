@@ -1091,25 +1091,23 @@ def check_version(vault: Path) -> tuple[list[str], int]:
 
 
 PICTURES_ON = (
-    "# pictures on: when this skill's own work and report are done, draw "
-    "pictures for the notes it created (a wrap-up: also the session's big "
-    "moments); read `gma llms image` then, not before. session-play: never.")
+    "# pictures on: drawing without asking is on for this vault; a skill "
+    "whose steps say so draws last (`gma llms image`, \"When no one asked\").")
 
 
 def pictures_line(vault: Path, verdict: str) -> str | None:
     """`PICTURES_ON` when `vault.images.auto` is on, so the skills learn it
     from the gate they already run and a vault with drawing off pays
-    nothing. Only after a verdict that read the vault's settings fine (a
-    MISMATCH vault is updated, then the skill resumes). Settings that
-    cannot be read, or no Node, drop the line quietly: the verdict is what
-    this command is for."""
+    nothing. Only after a verdict whose check read the vault's settings
+    (`unmoved` reads them; a MISMATCH vault is updated, then the skill
+    resumes), and only from what that read found: settings that could not
+    be read, or no Node, drop the line without asking the tool again."""
     if verdict not in ("OK", "MISMATCH", "AHEAD"):
         return None
-    try:
-        on = vaultlib.settings(vault).get("vault.images.auto")
-    except Exception:
+    found = vaultlib.settings_already_read(vault)
+    if found is None:
         return None
-    return PICTURES_ON if on is True else None
+    return PICTURES_ON if found.get("vault.images.auto") is True else None
 
 
 def list_active_pcs(vault: Path) -> list[str]:

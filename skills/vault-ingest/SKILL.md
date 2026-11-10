@@ -176,6 +176,8 @@ After all buckets:
 - `gma vault-check <vault> wrapup` over the generated wrap-ups
 - Route inconsistencies back through reconcile
 
+**Pictures:** if the version check printed `# pictures on:`, then once everything above is done and reported, follow "When no one asked" in `gma llms image` for the notes this ingest created.
+
 Then offer, without pushing: "I've ingested N sessions of
 material. Want to run a vault health check?" (campaign-qa)
 

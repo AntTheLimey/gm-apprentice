@@ -12,6 +12,24 @@ Rules:
 - Never run two `draw` commands on one vault at the same time, sub-agents included: a spending count can be lost.
 - Pass `--unprompted` exactly when no one asked for these pictures.
 - Never ask for a key in chat (the GM runs `gma image key gemini` in their own terminal).
+- A picture shows only what the players have seen or been told: never what GM Notes, Behind the Scenes or a kept secret holds. Pictures land on the players' site.
+
+When no one asked (your skill's steps send you here when the version check printed `# pictures on:`):
+
+- Only after the skill's own work and report are done and nothing is waiting on the GM's answer. session-play never draws unasked.
+- The GM chose the source when they set it: drawing with it needs no further yes. Ask only what the tool asks (a price, a limit).
+- Write one requests file. A wrap-up asks for the session's big moments, as many as the Direction calls for, each `after` its recap paragraph, plus the notes this session created that have no picture. Any other skill asks for the notes it created that have no picture. No PCs.
+- `self` and no image tool: plan nothing; see "Drawing them yourself".
+- `plan --unprompted`. It plans nothing, and you draw nothing, when more than 10 are asked for (offer them to the GM as a fill of those same requests) or when there is no Image Guidance note (offer to draft it, as step 2 says; draw once it is written).
+- Tell the GM in one line how many pictures, who draws, about how long (Codex about a minute each) and the cost if paid. It is not a question: go on to steps 3 to 5.
+- "Not now", or cut off: stop any `draw` you started and wait until no `codex exec` is still running. The job keeps what was drawn; `status` lists it as `waiting`, and asked later, carry on with that job from step 3.
+- End with one line in place of step 6: pictures made, the cost or no money, anything held and where, or the waiting job's number.
+
+A fill (the GM asks to fill in the missing pictures, or says yes to one offered):
+
+- `gma image missing "<vault>"` lists the notes of the vault's drawable kinds that have no picture; add `--pcs` only if the GM includes player characters. A fill offered after an unasked run uses those requests instead.
+- Tell the GM the count, about how long, and the cost if paid, and wait for their yes.
+- Work in batches of 10: plan (no `--unprompted`: the GM asked), draw, look, place, then the next. Stopping part-way loses nothing already placed. The month's ceiling still applies.
 
 1. Read the Image Guidance note. Direction tells you what the pictures should show and is never sent. Write the requests file:
 
@@ -48,23 +66,7 @@ Drawing them yourself (`plan --source self`):
 - `plan` prints each picture's `shape`, `likeness` files and `prompt`. Draw each with your own image tool from exactly that prompt, with the likeness files as references, at that shape.
 - Hand them in: `gma image draw "<vault>" <job> --picture 1 /path/one.png --picture 2 /path/two.png` (PNG or JPEG, from anywhere; they are copied). For a redraw, draw it again and hand it in again with `--picture`; the vault's redraw limit applies.
 - Then look and `place` as in steps 4 to 6. No money is counted.
-- If you have no image tool (Claude Code has none), do not draw: say the job is waiting for a session that can draw for itself, such as Codex. Never switch to another source.
-
-When no one asked (the version check printed `# pictures on:`):
-
-- Draw last: only once the skill's own work and its report are done, so nothing the GM needs waits on pictures. session-play never draws unasked.
-- Plan one requests file with `--unprompted`. A wrap-up plans the session's big moments, as many as the Direction calls for, each `after` its recap paragraph, plus the notes this session created that have no picture. Any other skill plans the notes it created that have no picture. Never a PC: the tool refuses them.
-- More than 10 planned: draw none of them; offer them to the GM as a fill instead.
-- Then tell the GM in one line how many pictures, who draws, about how long (Codex about a minute each) and the cost if paid. Go on unless they say not now: that line is not a question.
-- Not now, or cut off: the job is saved. Name its number in the report; later, `status` lists it as `waiting` and the same job carries on from step 3, with every picture looked at before it is placed.
-- No source chosen: put the three choices to the GM as above; never choose for them.
-- Add one line to the report: pictures made, the cost or no money, anything held and where.
-
-A fill (the GM asks to fill in the missing pictures):
-
-- `gma image missing "<vault>"` lists the notes of the vault's drawable kinds with no picture; add `--pcs` only if the GM includes player characters.
-- Tell the GM the count, about how long, and the cost if paid, and wait for their yes.
-- Work in batches of 10: plan (no `--unprompted`, the GM asked), draw, look, place, then the next. Stopping part-way loses nothing already placed. The month's ceiling still applies.
+- If you have no image tool (Claude Code has none), plan nothing: tell the GM a session that can draw for itself, such as Codex, can draw them when asked (for example "draw the pictures for the Session 16 Wrap-Up"). Never switch to another source.
 
 <!-- BEGIN GENERATED: gma image -->
 Draw a vault's pictures inside its spending limits.
@@ -75,7 +77,7 @@ gma image <command> ...
 
 | Argument | Value | Help |
 |---|---|---|
-| `<command>` | `status`, `key`, `plan`, `draw`, `place`, `missing` | what to do: status, key, plan, draw or place |
+| `<command>` | `status`, `key`, `plan`, `draw`, `place`, `missing` | what to do: status, key, plan, draw, place or missing |
 
 Example: `gma image status "<vault>"`
 <!-- END GENERATED -->
