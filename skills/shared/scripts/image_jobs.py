@@ -43,6 +43,11 @@ THINKING_WHY = (" Thinking is on, which costs more: raise the limit for one "
 STATUSES = ("planned", "refused", "trimmed", "drawn", "failed", "kept", "held")
 
 
+def counted(n: int, noun: str = "picture", plural: str | None = None) -> str:
+    """"1 picture", "2 pictures": every count a report prints goes through here."""
+    return f"{n} {noun if n == 1 else plural or noun + 's'}"
+
+
 class Stop(Exception):
     """Planning cannot go on; the message is for the GM, in plain words."""
 
@@ -338,10 +343,10 @@ def _gather_refs(ctx: _Ctx, e: Entry, shows: list[str]) -> list[str]:
     characters = 0
     for ref in found:
         if ref.character and characters >= accepts.characters:
-            e.said.append(f"only {accepts.characters} character likenesses "
+            e.said.append(f"only {counted(accepts.characters, 'character likeness', 'character likenesses')} "
                           f"can be sent with one picture; {ref.note} was left out")
         elif len(kept) >= accepts.references:
-            e.said.append(f"only {accepts.references} reference pictures can "
+            e.said.append(f"only {counted(accepts.references, 'reference picture')} can "
                           f"be sent with one picture; {ref.note} was left out")
         else:
             kept.append(ref.path)
@@ -460,7 +465,7 @@ def _fit_cost(ctx: _Ctx, e: Entry, refs: list[str]) -> list[str] | None:
         return None
     keep, e.estimate = fitted
     if keep < len(refs):
-        e.said.append(f"dropped {len(refs) - keep} reference pictures "
+        e.said.append(f"dropped {counted(len(refs) - keep, 'reference picture')} "
                       "to stay within the limit for one attempt"
                       + (THINKING_WHY if lim.thinking else ""))
     return refs[:keep]

@@ -588,3 +588,21 @@ def test_an_unusable_reference_listed_twice_is_said_once(tmp_path):
     _, e = one(v, {"for": "Anselm", "subject": "x",
                    "shows": ["Ghost", "Ghost", "Nobody", "Nobody"]})
     assert len(e.said) == 2
+
+
+# --- minor wave 2: C3 -------------------------------------------------------
+
+def test_counted_is_singular_for_one():
+    assert image_jobs.counted(1) == "1 picture"
+    assert image_jobs.counted(0) == "0 pictures"
+    assert image_jobs.counted(2, "reference picture") == "2 reference pictures"
+    assert image_jobs.counted(1, "character likeness", "character likenesses") \
+        == "1 character likeness"
+
+
+def test_one_dropped_reference_is_not_pictures(tmp_path):
+    base = ("vault:\n  images:\n    service: gemini\n"
+            "    model: gemini-nano-banana-2.1\n    thinking: true\n")
+    shows = {"for": "Anselm", "subject": "x", "shows": ["Marta"]}
+    _, on = one(build(tmp_path, config=base), shows)
+    assert "dropped 1 reference picture to stay" in said(on)

@@ -149,7 +149,7 @@ def test_running_draw_again_sends_nothing(tmp_path, monkeypatch, capsys):
 
 def test_a_cut_off_run_resumes_without_repaying(tmp_path, monkeypatch, capsys):
     vault, job = start(tmp_path, count=9)
-    cut = image_gemini.ServiceError("network", "could not reach the service: no route")
+    cut = image_gemini.ServiceError("network", "could not reach the service: no route", maybe_billed=False)
     send = script(monkeypatch, *([fixture(OK)] * 3 + [cut] * 3))
     assert run(vault, job) == 1
     assert len(send.calls) == 6                       # three failures stop the run
@@ -369,7 +369,7 @@ def test_a_billed_failure_is_counted_and_uses_the_attempts(tmp_path, monkeypatch
 
 def test_a_network_failure_is_not_counted_and_uses_no_attempt(tmp_path, monkeypatch):
     vault, job = start(tmp_path, count=1)
-    script(monkeypatch, image_gemini.ServiceError("network", "the connection failed: OSError"))
+    script(monkeypatch, image_gemini.ServiceError("network", "the connection failed: OSError", maybe_billed=False))
     assert run(vault, job) == 1
     e = reload(job).entries[0]
     assert e.status == "failed" and e.attempts == 0 and e.cost is None
@@ -380,7 +380,7 @@ def test_a_network_failure_is_not_counted_and_uses_no_attempt(tmp_path, monkeypa
 
 def test_a_failed_redo_keeps_the_picture_already_drawn(tmp_path, monkeypatch):
     vault, job = start(tmp_path, count=1)
-    script(monkeypatch, fixture(OK), image_gemini.ServiceError("network", "down"))
+    script(monkeypatch, fixture(OK), image_gemini.ServiceError("network", "down", maybe_billed=False))
     run(vault, job)
     assert run(vault, job, "--redo", "1", "wrong") == 1
     e = reload(job).entries[0]
@@ -674,9 +674,39 @@ def test_an_unpriced_lost_reply_counts_one_picture_at_an_unknown_price(tmp_path,
     assert "so it is counted as one picture at an unknown price" in capsys.readouterr().out
 
 
+UNPRICED = ("vault:\n  images:\n    service: gemini\n    model: mystery\n"
+            "    unpriced: true\n")
+
+
+def test_the_report_counts_replies_paid_for_that_gave_no_picture(tmp_path, monkeypatch, capsys):
+    vault, job = start(tmp_path, count=1, config=UNPRICED)
+    script(monkeypatch, image_gemini.ServiceError("network", "x", maybe_billed=True))
+    run(vault, job)
+    assert ("This run: no pictures drawn, 1 paid for at an unknown price"
+            in capsys.readouterr().out)
+
+
+def test_the_report_says_pictures_drawn_and_more_paid_for(tmp_path, monkeypatch, capsys):
+    vault, job = start(tmp_path, count=3, config=UNPRICED)
+    script(monkeypatch, fixture(OK), fixture(OK),
+           image_gemini.ServiceError("network", "x", maybe_billed=True))
+    run(vault, job)
+    assert ("This run: 2 pictures drawn and 1 more paid for, all at an unknown price"
+            in capsys.readouterr().out)
+
+
+def test_the_report_says_one_picture_not_one_pictures(tmp_path, monkeypatch, capsys):
+    vault, job = start(tmp_path, count=1, config=UNPRICED)
+    script(monkeypatch, fixture(OK))
+    run(vault, job)
+    out = capsys.readouterr().out
+    assert "This run: 1 picture drawn at an unknown price" in out
+    assert "and 1 picture at an unknown price" in out
+
+
 def test_a_failure_before_sending_is_not_counted(tmp_path, monkeypatch, capsys):
     vault, job = start(tmp_path, count=1)
-    script(monkeypatch, image_gemini.ServiceError("network", "could not reach the service: refused"))
+    script(monkeypatch, image_gemini.ServiceError("network", "could not reach the service: refused", maybe_billed=False))
     run(vault, job)
     assert month(vault) == 0 and reload(job).entries[0].attempts == 0
     assert "nothing was charged" not in capsys.readouterr().out

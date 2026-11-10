@@ -639,3 +639,19 @@ def test_failures_after_sending_or_unclear_may_have_been_charged(monkeypatch):
     assert _send_failing_with(monkeypatch, http.client.RemoteDisconnected("gone")) is True
     assert _send_failing_with(monkeypatch, ConnectionResetError()) is True
     assert _send_failing_with(monkeypatch, urllib.error.URLError("who knows")) is True
+
+
+# -- minor wave 2: L1 --
+
+
+def test_live_check_with_an_unavailable_key_store_exits_plainly(
+        monkeypatch, tmp_path, capsys, live):
+    def silent(service):
+        raise image_keys.StoreUnavailable("The keychain did not answer. "
+                                          "Unlock it and try again.")
+    monkeypatch.setattr(image_keys, "find", silent)
+    monkeypatch.setattr(image_live_check, "FIXTURES", tmp_path / "fx")
+    assert image_live_check.main(["--model", "m"], allow_under_test=True) != 0
+    assert capsys.readouterr().err == (
+        "The keychain did not answer. Unlock it and try again.\n")
+    assert live == []

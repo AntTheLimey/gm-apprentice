@@ -108,7 +108,7 @@ def test_status_prints_the_real_month_count(tmp_path, capsys, monkeypatch):
 def test_status_says_when_the_state_file_is_broken(tmp_path, capsys):
     v = make_vault(tmp_path)
     (v / "_meta" / "vault-state.json").write_text("{nope", encoding="utf-8")
-    assert image.main(["status", str(v)]) == 1
+    assert image.main(["status", str(v)]) == 2
     assert "not valid JSON" in capsys.readouterr().err
 
 
@@ -116,7 +116,7 @@ def test_status_says_one_line_for_a_damaged_count(tmp_path, capsys):
     v = make_vault(tmp_path)
     (v / "_meta" / "vault-state.json").write_text(
         '{"images": {"months": {"2026-11": [1999]}}}', encoding="utf-8")
-    assert image.main(["status", str(v)]) == 1
+    assert image.main(["status", str(v)]) == 2
     err = capsys.readouterr().err
     assert err.count("\n") == 1 and "images" in err and "vault-state.json" in err
 
@@ -190,7 +190,7 @@ def test_plan_bad_requests_and_bad_state_exit_2_without_a_traceback(
         '{"images": {"months": {"2026-11": {"cents": "lots"}}}}', encoding="utf-8")
     req = requests(tmp_path, [{"for": "Anselm", "subject": "x"}])
     assert image.main(["plan", str(v), str(req)]) == 2
-    assert "error:" in capsys.readouterr().err
+    assert "vault-state.json" in capsys.readouterr().err
 
 
 def test_plan_unwritable_job_folder_says_so(tmp_path, monkeypatch, capsys):
@@ -286,3 +286,69 @@ def test_a_stray_os_error_without_a_path(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(image_money, "spent", boom)
     assert image.main(["status", str(v)]) == 1
     assert capsys.readouterr().err == "Could not read or write odd.\n"
+
+
+# --- minor wave 2: C1 -------------------------------------------------------
+
+@pytest.mark.parametrize("command", ["status", "plan", "draw", "place"])
+def test_unavailable_settings_are_one_plain_line_for_every_command(
+        command, tmp_path, monkeypatch, capsys):
+    import image_money
+    monkeypatch.setenv("GEMINI_API_KEY", SECRET)
+    v = plan_vault(tmp_path, "gemini-nano-banana-2.1")
+    req = requests(tmp_path, [{"for": "Anselm", "subject": "x"}])
+    assert image.main(["plan", str(v), str(req)]) == 0
+    job = next(line for line in capsys.readouterr().out.splitlines()
+               if line.startswith("Job ")).split()[1]
+
+    def boom(*a, **k):
+        raise vaultlib.SettingsUnavailable("x could not be read")
+    monkeypatch.setattr(image_money, "limits", boom)
+    if command == "place":
+        # place never reads the limits; the same wrapper must still cover it.
+        import image_jobs
+        monkeypatch.setattr(image_jobs, "load", boom)
+    argv = {"status": ["status", str(v)],
+            "plan": ["plan", str(v), str(req)],
+            "draw": ["draw", str(v), job],
+            "place": ["place", str(v), job, "--keep", "1"]}[command]
+    assert image.main(argv) == 2
+    assert capsys.readouterr().err == "x could not be read\n"
+
+
+# --- minor wave 2: C5, K1 ---------------------------------------------------
+
+def test_status_for_a_service_with_no_key_store_says_so(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("GEMINI_API_KEY", SECRET)
+    import image_money
+    v = make_vault(tmp_path)
+    real = image_money.limits(v)
+    # The settings reader may refuse an unknown service; a newer vault may not.
+    monkeypatch.setattr(image_money, "limits",
+                        lambda vault: real._replace(service="other"))
+    assert image.main(["status", str(v)]) == 0
+    out = capsys.readouterr().out
+    assert "key: this version cannot store a key for other" in out
+    assert "found" not in out and SECRET not in out
+
+def test_a_failed_write_after_setting_the_old_file_aside_says_both(
+        monkeypatch, tmp_path, capsys):
+    import os
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr(image_keys.getpass, "getpass", lambda prompt="": SECRET)
+    cfg = tmp_path / "cfg"
+    cfg.mkdir()
+    (cfg / "keys.json").write_text("[1]")
+    real_open = os.open
+
+    def no_new_file(path, *a, **k):
+        if str(path).endswith(".tmp"):
+            raise PermissionError(13, "Permission denied", str(path))
+        return real_open(path, *a, **k)
+    monkeypatch.setattr(os, "open", no_new_file)
+    assert image.main(["key", "gemini"]) == 1
+    err = capsys.readouterr().err
+    assert err.count("\n") == 1 and SECRET not in err
+    assert "not stored" in err and "Permission denied" in err
+    assert "set aside as keys.json.unreadable" in err
+    assert (cfg / "keys.json.unreadable").is_file()

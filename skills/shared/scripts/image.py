@@ -92,25 +92,23 @@ def status(vault: Path) -> int:
         print(f"service: {lim.service}, model: {lim.model or 'none chosen'}")
     else:
         print("service: none chosen")
-    # With no service chosen yet, a key for any known service is worth saying.
-    names = ([lim.service] if lim.service in image_keys.ENV
-             else sorted(image_keys.ENV))
-    try:
-        found = next((f for f in (image_keys.find(n) for n in names) if f), None)
-    except image_keys.StoreUnavailable as e:
-        print(f"key: {e}")
+    if lim.service and lim.service not in image_keys.ENV:
+        print(f"key: this version cannot store a key for {lim.service}")
     else:
-        if found:
-            print(f"key: found ({found[1]})")
+        # With no service chosen yet, a key for any known service is worth saying.
+        names = [lim.service] if lim.service else sorted(image_keys.ENV)
+        try:
+            found = next((f for f in (image_keys.find(n) for n in names) if f), None)
+        except image_keys.StoreUnavailable as e:
+            print(f"key: {e}")
         else:
-            print("key: none found")
+            if found:
+                print(f"key: found ({found[1]})")
+            else:
+                print("key: none found")
     today = _today()
-    try:
-        month_spent = image_money.spent(vault, today)
-        unpriced = image_money.unpriced_count(vault, today)
-    except vaultlib.StateUnreadable as e:
-        print(f"error: {e}", file=sys.stderr)
-        return 1
+    month_spent = image_money.spent(vault, today)
+    unpriced = image_money.unpriced_count(vault, today)
     print(f"spent this month: {month_spent:g} of {lim.month:g} cents")
     if unpriced:
         print(f"pictures drawn this month at an unknown price: {unpriced}")
@@ -152,9 +150,6 @@ def plan(vault: Path, requests: Path, unprompted: bool) -> int:
                               unprompted, _today())
     except image_jobs.Stop as e:
         print(str(e), file=sys.stderr)
-        return 2
-    except (vaultlib.StateUnreadable, vaultlib.SettingsUnavailable) as e:
-        print(f"error: {e}", file=sys.stderr)
         return 2
     print(f"Job {job.id}")
     total = 0.0
@@ -206,12 +201,17 @@ def draw(vault: Path, job_id: str, redo: list[list[str]]) -> int:
     except image_jobs.Stop as e:
         print(str(e), file=sys.stderr)
         return 2
-    except (vaultlib.StateUnreadable, vaultlib.SettingsUnavailable) as e:
-        print(f"error: {e}", file=sys.stderr)
-        return 2
-    pictures = f"{result.drawn} picture{'' if result.drawn == 1 else 's'}"
+    pictures = image_jobs.counted(result.drawn)
     if result.unknown and result.cents == 0:
-        print(f"This run: {pictures} drawn at an unknown price")
+        more = result.unknown - result.drawn   # paid for, but no picture came back
+        if not result.drawn:
+            print(f"This run: no pictures drawn, {result.unknown} paid for "
+                  "at an unknown price")
+        elif more > 0:
+            print(f"This run: {pictures} drawn and {more} more paid for, "
+                  "all at an unknown price")
+        else:
+            print(f"This run: {pictures} drawn at an unknown price")
     else:
         drawn = (f"This run: {pictures} drawn, {result.cents:.2f} cents")
         if result.unknown:
@@ -225,7 +225,7 @@ def draw(vault: Path, job_id: str, redo: list[list[str]]) -> int:
         print(f"error: {e}", file=sys.stderr)
         return 1
     print(f"This month: {month:.2f} of {ceiling:g} cents"
-          + (f", and {unpriced} pictures at an unknown price" if unpriced else ""))
+          + (f", and {image_jobs.counted(unpriced)} at an unknown price" if unpriced else ""))
     return 0 if result.ok else 1
 
 
@@ -241,9 +241,6 @@ def place(vault: Path, job_id: str, keep: list[int], hold: list[int],
     except image_jobs.Stop as e:
         print(str(e), file=sys.stderr)
         return 2
-    except (vaultlib.StateUnreadable, vaultlib.SettingsUnavailable) as e:
-        print(f"error: {e}", file=sys.stderr)
-        return 2
     for line in result.lines:
         print(line)
     if not write:
@@ -256,6 +253,9 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         return _dispatch(args)
+    except (vaultlib.SettingsUnavailable, vaultlib.StateUnreadable) as e:
+        print(str(e), file=sys.stderr)
+        return 2
     except OSError as e:
         # Last resort: anything not already wrapped must not be a traceback.
         reason = (f"{e.filename}: {e.strerror}" if e.filename and e.strerror

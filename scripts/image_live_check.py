@@ -111,7 +111,11 @@ def main(argv: list[str] | None = None, *, allow_under_test: bool = False) -> in
                     help="write the first picture received, uncut")
     args = ap.parse_args(argv)
 
-    found = image_keys.find("gemini")
+    try:
+        found = image_keys.find("gemini")
+    except image_keys.StoreUnavailable as err:
+        print(str(err), file=sys.stderr)
+        return 1
     if found is None:
         print("No Gemini key found. Run `gma image key gemini` or set "
               "GEMINI_API_KEY.", file=sys.stderr)

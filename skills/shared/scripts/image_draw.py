@@ -253,7 +253,7 @@ class _Run:
             if est is not None:
                 e.estimate = est
             if keep < len(refs_all):
-                self.note(e, f"dropped {len(refs_all) - keep} reference pictures "
+                self.note(e, f"dropped {image_jobs.counted(len(refs_all) - keep, 'reference picture')} "
                           "to stay within the limit for one attempt"
                           + (FORCED_THINKING_WHY if forced
                              else THINKING_WHY if thinking else ""))

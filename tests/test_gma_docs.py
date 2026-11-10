@@ -633,6 +633,16 @@ class ParserTests(unittest.TestCase):
         self.assertLessEqual(len(GRANDFATHERED_FLAGS), 0)
 
 
+class OptionShapeTests(unittest.TestCase):
+    def test_a_named_pair_of_values_is_not_doubled(self):
+        ap = argparse.ArgumentParser()
+        act = ap.add_argument("--redo", nargs=2, metavar=("N", "WHAT"), help="x")
+        self.assertEqual(gma_docs._shape(act, gma_docs._metavar(act)), "N WHAT")
+        plain = ap.add_argument("--pair", nargs=2, help="x")
+        self.assertEqual(gma_docs._shape(plain, gma_docs._metavar(plain)),
+                         "PAIR PAIR")
+
+
 class LlmsCommandTests(unittest.TestCase):
     def _run(self, argv):
         out, err = io.StringIO(), io.StringIO()

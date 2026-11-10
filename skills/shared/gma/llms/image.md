@@ -78,7 +78,7 @@ gma image draw <vault> <job> [options]
 |---|---|---|
 | `<vault>` |  | the vault folder |
 | `<job>` |  | the job number `plan` printed |
-| `--redo` | `N WHAT N WHAT` | draw picture N again, telling the service what was wrong with it (up to 500 characters); can be given more than once. Each attempt is paid for. Pictures are drawn one at a time; two gma image draw runs on one vault at the same time can lose a spending count (repeatable) |
+| `--redo` | `N WHAT` | draw picture N again, telling the service what was wrong with it (up to 500 characters); can be given more than once. Each attempt is paid for. Pictures are drawn one at a time; two gma image draw runs on one vault at the same time can lose a spending count (repeatable) |
 
 Example: `gma image draw "<vault>" 20261109-a1b2c3 --redo 2 "the cloak should be green"`
 <!-- END GENERATED -->

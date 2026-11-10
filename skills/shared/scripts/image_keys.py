@@ -117,15 +117,21 @@ def store(service: str) -> str:
     data[service] = key
     # Whole or not at all, and never wider than 0600 even for a moment.
     tmp = path.with_name(f"keys.json.{secrets.token_hex(4)}.tmp")
-    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     try:
-        if hasattr(os, "fchmod"):
-            os.fchmod(fd, 0o600)
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            json.dump(data, f)
-        os.replace(tmp, path)
-    finally:
-        tmp.unlink(missing_ok=True)
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        try:
+            if hasattr(os, "fchmod"):
+                os.fchmod(fd, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(data, f)
+            os.replace(tmp, path)
+        finally:
+            tmp.unlink(missing_ok=True)
+    except OSError as e:
+        if aside:
+            raise OSError(f"{e}. The old keys file could not be read and was "
+                          f"set aside as {SET_ASIDE}") from None
+        raise
     if aside:
         return ("key file. The old keys file could not be read and was set "
                 f"aside as {SET_ASIDE}.")
