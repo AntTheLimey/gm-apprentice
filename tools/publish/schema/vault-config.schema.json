@@ -226,7 +226,7 @@
               ]
             },
             "attempt_limit": {
-              "description": "The most one attempt at a picture may cost, in US cents; the apprentice asks before going over it",
+              "description": "The most one attempt at a picture may cost, in US cents; a picture that would cost more is not sent",
               "default": 10,
               "anyOf": [
                 {
@@ -260,7 +260,7 @@
               ]
             },
             "run_cap": {
-              "description": "The most one run of drawing may spend altogether, in US cents",
+              "description": "The most one batch of pictures planned together may cost, redraws included, in US cents",
               "default": 200,
               "anyOf": [
                 {

@@ -109,9 +109,9 @@ def status(vault: Path) -> int:
     today = _today()
     month_spent = image_money.spent(vault, today)
     unpriced = image_money.unpriced_count(vault, today)
-    print(f"spent this month: {month_spent:g} of {lim.month:g} cents")
+    print(f"spent this month: {image_money.cents(month_spent)} of {lim.month:g} cents")
     if unpriced:
-        print(f"pictures drawn this month at an unknown price: {unpriced}")
+        print(f"pictures paid for this month at an unknown price: {unpriced}")
     note = vault / lim.guidance
     print(f"guidance note: {lim.guidance}"
           + ("" if note.is_file() else " (not written yet)"))
@@ -158,7 +158,8 @@ def plan(vault: Path, requests: Path, unprompted: bool) -> int:
         if pic.status == "planned":
             planned += 1
             total += pic.estimate or 0.0
-            cost = (f", about {pic.estimate:.2f} cents" if pic.estimate is not None
+            cost = (f", about {image_money.cents(pic.estimate)} cents"
+                    if pic.estimate is not None
                     else ", price unknown")
             print(f"{pic.n}. {pic.note}: planned{cost}")
             for line in pic.said:
@@ -168,7 +169,7 @@ def plan(vault: Path, requests: Path, unprompted: bool) -> int:
             for line in pic.said:
                 print(f"   {line}")
     if job.priced:
-        print(f"Estimated total: about {total:.2f} cents")
+        print(f"Estimated total: about {image_money.cents(total)} cents")
     else:
         print("Estimated total: unknown (the price of this model is not known)")
     print(f"Job file: {image_jobs.job_file(job.id)}")
@@ -213,10 +214,9 @@ def draw(vault: Path, job_id: str, redo: list[list[str]]) -> int:
         else:
             print(f"This run: {pictures} drawn at an unknown price")
     else:
-        drawn = (f"This run: {pictures} drawn, {result.cents:.2f} cents")
-        if result.unknown:
-            drawn += f", and {result.unknown} paid for at an unknown price"
-        print(drawn + f" (this job so far: {result.job_cents:.2f} cents)")
+        # A priced run counts every reply in cents, so none is unknown here.
+        print(f"This run: {pictures} drawn, {image_money.cents(result.cents)} "
+              f"cents (this job so far: {image_money.cents(result.job_cents)} cents)")
     try:
         month = image_money.spent(vault, _today())
         unpriced = image_money.unpriced_count(vault, _today())
@@ -224,8 +224,9 @@ def draw(vault: Path, job_id: str, redo: list[list[str]]) -> int:
     except (vaultlib.StateUnreadable, vaultlib.SettingsUnavailable) as e:
         print(str(e), file=sys.stderr)
         return 1
-    print(f"This month: {month:.2f} of {ceiling:g} cents"
-          + (f", and {image_jobs.counted(unpriced)} at an unknown price" if unpriced else ""))
+    print(f"This month: {image_money.cents(month)} of {ceiling:g} cents"
+          + (f", and {image_jobs.counted(unpriced)} paid for at an unknown price"
+             if unpriced else ""))
     return 0 if result.ok else 1
 
 

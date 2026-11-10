@@ -123,7 +123,7 @@ const REGISTRY = [
   },
   {
     name: 'vault.images.attempt_limit', type: 'number', min: 0, default: 10, group: 'images',
-    does: 'The most one attempt at a picture may cost, in US cents; the apprentice asks before going over it',
+    does: 'The most one attempt at a picture may cost, in US cents; a picture that would cost more is not sent',
     left_out: '`10`',
   },
   {
@@ -133,7 +133,7 @@ const REGISTRY = [
   },
   {
     name: 'vault.images.run_cap', type: 'number', min: 0, default: 200, group: 'images',
-    does: 'The most one run of drawing may spend altogether, in US cents',
+    does: 'The most one batch of pictures planned together may cost, redraws included, in US cents',
     left_out: '`200`',
   },
   {

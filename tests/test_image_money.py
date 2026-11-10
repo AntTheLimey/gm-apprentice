@@ -164,7 +164,7 @@ def test_room_names_the_cap_that_stops_it(tmp_path):
     lim = image_money.limits(make_vault(tmp_path, None))
     assert image_money.room(lim, 10, 10, 3.4) is None
     assert image_money.room(lim, 198, 10, 3.4) == (
-        "the cap for one run (200 cents) would be passed")
+        "the cap for one batch (200 cents) would be passed")
     assert image_money.room(lim, 10, 1999, 3.4) == (
         "this month's ceiling (2000 cents) would be passed")
     assert image_money.room(lim, 196.6, 10, 3.4) is None
@@ -241,3 +241,28 @@ def test_record_keeps_other_keys_under_images(tmp_path):
 def test_fit_with_negative_references_is_a_caller_error():
     with pytest.raises(ValueError):
         image_money.fit(lambda n: 1, -1, 5)
+
+
+# --- final wave: A3, A4 -----------------------------------------------------
+
+@pytest.mark.parametrize("written, said", [
+    ("month_cap: 500c",
+     'vault.images.month_cap is "500c"; it takes a number, 0 or more.'),
+    ("attempt_limit: -3",
+     "vault.images.attempt_limit is -3; it takes a number, 0 or more.")])
+def test_a_money_setting_that_cannot_be_read_is_never_a_default(tmp_path, written, said):
+    v = make_vault(tmp_path, f"vault:\n  images:\n    {written}\n")
+    with pytest.raises(vaultlib.SettingsUnavailable) as e:
+        image_money.limits(v)
+    assert str(e.value) == said
+
+
+def test_a_fault_outside_the_picture_settings_does_not_stop_drawing(tmp_path):
+    v = make_vault(tmp_path, "vault:\n  name_match: lots\n")
+    assert vaultlib.settings(v).faults            # the tool saw it
+    assert image_money.limits(v).month == 2000
+
+
+def test_cents_are_said_with_two_decimals():
+    assert image_money.cents(33.7181) == "33.72"
+    assert image_money.cents(0) == "0.00"

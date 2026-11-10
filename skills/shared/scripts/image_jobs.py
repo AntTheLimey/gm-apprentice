@@ -122,6 +122,24 @@ def save(job: Job) -> Path:
     return where
 
 
+def _number(x: Any, maybe: bool = False) -> bool:
+    return (x is None and maybe) or (
+        isinstance(x, (int, float)) and not isinstance(x, bool))
+
+
+def _sound(job: Job) -> bool:
+    """Whether the fields the commands compute with have the right types (a
+    job file edited by hand may not)."""
+    def whole(x: Any) -> bool:
+        return isinstance(x, int) and not isinstance(x, bool)
+    return _number(job.spent) and all(
+        whole(e.n) and whole(e.attempts) and isinstance(e.status, str)
+        and _number(e.estimate, True) and _number(e.cost, True)
+        and isinstance(e.refs, list) and all(isinstance(r, str) for r in e.refs)
+        and isinstance(e.pending, str) and isinstance(e.dest, str)
+        for e in job.entries)
+
+
 def load(job_id: str) -> Job:
     if (not job_id or job_id in (".", "..") or "/" in job_id
             or "\\" in job_id or os.sep in job_id or ".." in job_id):
@@ -129,11 +147,14 @@ def load(job_id: str) -> Job:
     try:
         data = json.loads(job_file(job_id).read_text(encoding="utf-8"))
         entries = [Entry(**e) for e in data.pop("entries")]
-        return Job(**data, entries=entries)
+        job = Job(**data, entries=entries)
     except FileNotFoundError:
         raise Stop(f"No picture job {job_id} on this machine.") from None
     except (OSError, ValueError, TypeError, KeyError, AttributeError):
         raise Stop(f"Picture job {job_id} could not be read.") from None
+    if not _sound(job):
+        raise Stop(f"Picture job {job_id} could not be read.")
+    return job
 
 
 _ID_DATE = re.compile(r"^(\d{4})(\d{2})(\d{2})")
@@ -218,10 +239,28 @@ def find_key(service: str) -> str:
     return found[0]
 
 
+# What a picture costs, the one rule `plan` and `draw` share: for a model the
+# adapter has rates for, its estimate before the call and the reply's real
+# cost after it; the GM's stated `vault.images.price` only for a model with
+# no rates.
+
+def stated_price(model: str, price: float | None) -> float | None:
+    """The stated price when it is the one that counts (the adapter has no
+    rates for `model`), else None."""
+    return price if image_gemini.estimate(model, SIZE, 0, 0) is None else None
+
+
+def estimate(model: str, price: float | None, refs: int, prompt_bytes: int,
+             thinking: bool) -> float | None:
+    """What one attempt is taken to cost before it is sent; None when the
+    price is not known."""
+    got = image_gemini.estimate(model, SIZE, refs, prompt_bytes, thinking)
+    return got if got is not None else stated_price(model, price)
+
+
 def is_priced(model: str, price: float | None) -> bool:
-    """Whether the cost of a picture can be worked out: the GM stated a price,
-    or the adapter has rates for the model. The one rule `plan` and `draw` share."""
-    return price is not None or image_gemini.estimate(model, SIZE, 0, 0) is not None
+    """Whether the cost of a picture can be worked out at all."""
+    return estimate(model, price, 0, 0, False) is not None
 
 
 def unpriced_message(model: str) -> str:
@@ -463,14 +502,12 @@ def _fit_cost(ctx: _Ctx, e: Entry, refs: list[str]) -> list[str] | None:
         return refs
     lim = ctx.lim
     assert lim.model
-    model, price = lim.model, lim.price
+    model = lim.model
     prompt_bytes = len(e.prompt.encode("utf-8"))
 
     def cost(k: int) -> float:
-        if price is not None:
-            return price
-        got = image_gemini.estimate(model, SIZE, k, prompt_bytes, lim.thinking)
-        assert got is not None
+        got = estimate(model, lim.price, k, prompt_bytes, lim.thinking)
+        assert got is not None      # priced
         return got
     fitted = image_money.fit(cost, len(refs), lim.attempt)
     if fitted is None:

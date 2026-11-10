@@ -36,6 +36,8 @@ FAILURES_IN_A_ROW = 3
 SANDBOX = " If this AI runs in a sandbox, allow network access for gma image draw."
 NEEDS_THINKING = ("this model will not draw without thinking, and with it "
                   "this picture would pass the limit for one attempt")
+FORCED_THINKING = ("This model will not draw without thinking, so pictures in "
+                   "this batch cost more and their cost varies.")
 
 
 @dataclass
@@ -145,17 +147,10 @@ class _Run:
         pbytes = len(prompt.encode("utf-8"))
 
         def cost(k: int) -> float:
-            if lim.price is not None:
-                return lim.price
-            got = image_gemini.estimate(job.model, SIZE, k, pbytes, thinking)
-            if got is None:
-                raise LookupError
+            got = image_jobs.estimate(job.model, lim.price, k, pbytes, thinking)
+            assert got is not None      # priced: `draw` checked it
             return got
-        try:
-            fitted = image_money.fit(cost, refs, lim.attempt)
-        except LookupError:
-            return _No(f"the price of {job.model} is no longer known; plan "
-                       "the pictures again", True)
+        fitted = image_money.fit(cost, refs, lim.attempt)
         if fitted is None:
             return _No("this picture would pass the limit for one attempt "
                        f"({lim.attempt:g} cents)", False)
@@ -176,11 +171,8 @@ class _Run:
         """Count one reply the service charged for (or may have) in the job
         (memory), in the month (disk) and then in the job file. Nothing may
         come between the reply and this."""
-        lim = self.lim
-        cents: float | None = None
-        if lim.price is not None:
-            cents = lim.price
-        elif usage is not None:
+        cents = image_jobs.stated_price(self.job.model, self.lim.price)
+        if cents is None and usage is not None:
             try:
                 cents = image_gemini.cost(self.job.model, usage)
             except ValueError:
@@ -226,7 +218,7 @@ class _Run:
         return True
 
     def money_words(self, cents: float | None) -> str:
-        return "cost unknown" if cents is None else f"{cents:.2f} cents"
+        return "cost unknown" if cents is None else f"{image_money.cents(cents)} cents"
 
     def attempt(self, e: Entry, redo: str | None) -> None:
         job, lim = self.job, self.lim
@@ -249,8 +241,9 @@ class _Run:
                 if got.stop:
                     self.halt(got.reason)
                 return
-            if forced:
+            if forced and not job.needs_thinking:
                 job.needs_thinking = True
+                self.note(e, FORCED_THINKING)
             keep, est = got
             if est is not None:
                 e.estimate = est
@@ -271,6 +264,16 @@ class _Run:
             except image_gemini.ServiceError as err:
                 self.service_error(e, err, est)
                 return
+            except Exception:
+                raise
+            except BaseException:
+                # Ctrl-C (or the like) while the request was out: the service
+                # has usually had it and charged, so it is counted as a lost
+                # reply, and then the program stops as asked.
+                self.service_error(e, image_gemini.ServiceError(
+                    "interrupted", "the request was interrupted",
+                    maybe_billed=True), est)
+                raise
             self.picture(e, pic, est)
             return
 
@@ -329,7 +332,7 @@ class _Run:
             cents = self.count(e, err.usage, est)
             counted = (f"{self.money_words(cents)} counted" if err.billed else
                        "the reply was lost; it may have been charged, so it is "
-                       + (f"counted at {cents:.2f} cents to be safe"
+                       + (f"counted at {image_money.cents(cents)} cents to be safe"
                           if cents is not None else
                           "counted as one picture at an unknown price"))
             if err.kind == "network":

@@ -554,9 +554,9 @@ cents. The apprentice asks before it goes past any limit here.
 | Setting | What it does | Values | Left out |
 |---------|--------------|--------|----------|
 | `vault.images.auto` | Whether the apprentice may draw pictures without asking you first, inside the limits below | A switch | Off |
-| `vault.images.attempt_limit` | The most one attempt at a picture may cost, in US cents; the apprentice asks before going over it | A number, 0 or more | `10` |
+| `vault.images.attempt_limit` | The most one attempt at a picture may cost, in US cents; a picture that would cost more is not sent | A number, 0 or more | `10` |
 | `vault.images.redraws` | How many times the apprentice may redraw a picture that came out wrong before it stops and asks you | A whole number, 0 or more | `1` |
-| `vault.images.run_cap` | The most one run of drawing may spend altogether, in US cents | A number, 0 or more | `200` |
+| `vault.images.run_cap` | The most one batch of pictures planned together may cost, redraws included, in US cents | A number, 0 or more | `200` |
 | `vault.images.month_cap` | The most the apprentice may spend on pictures in one month, in US cents | A number, 0 or more | `2000` |
 | `vault.images.unpriced` | Whether the apprentice may draw with a model whose price it does not know, without asking you first | A switch | Off |
 | `vault.images.thinking` | Whether the picture service may think before it draws. Off, the apprentice asks for the least thinking the model allows, which costs less and keeps the cost of a picture steady. On, pictures cost more, the cost varies, and the limit for one attempt becomes a likely ceiling and not a guarantee (the cap per run and the month's ceiling still count what was really spent); turn it on if likenesses or details suffer | A switch | Off |

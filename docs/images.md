@@ -87,7 +87,7 @@ limits, so it stops and asks you to choose. It changes nothing unasked.
 - Set `vault.images.price` to what one picture costs, in cents, and the
   limits apply.
 - Turn on `vault.images.unpriced` to draw anyway. The limits do not
-  apply, and reports count the pictures drawn at an unknown price.
+  apply, and reports count the pictures paid for at an unknown price.
 
 ## How your pictures look
 

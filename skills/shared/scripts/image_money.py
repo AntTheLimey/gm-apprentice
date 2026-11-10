@@ -35,8 +35,16 @@ _NAMES = tuple(f"vault.images.{n}" for n in (
 
 
 def limits(vault: Path) -> Limits:
-    """The picture-drawing settings of `vault`."""
-    v = vaultlib.settings(vault).values
+    """The picture-drawing settings of `vault`. A picture setting the tool
+    could not accept raises `SettingsUnavailable` in the tool's own words:
+    a limit on money is never quietly replaced by its default."""
+    found = vaultlib.settings(vault)
+    faults = [str(f.get("message") or "A picture setting could not be read.")
+              for f in found.faults
+              if str(f.get("setting") or f.get("name") or "").startswith("vault.images")]
+    if faults:
+        raise vaultlib.SettingsUnavailable(" ".join(faults), answered=True)
+    v = found.values
     if not all(name in v for name in _NAMES):
         raise vaultlib.SettingsUnavailable(
             "This vault's picture settings could not be read: the publish "
@@ -63,6 +71,11 @@ PLACES = 4  # sums of cents are rounded here, so float error never decides a fit
 
 def _cents(x: float) -> float:
     return round(x, PLACES)
+
+
+def cents(x: float) -> str:
+    """A sum of cents as every report says it: two decimals."""
+    return f"{x:.2f}"
 
 
 def _month_key(d: date) -> str:
@@ -172,5 +185,5 @@ def room(lim: Limits, run_spent: float, month_spent: float,
     if _cents(month_spent + estimate) > _cents(lim.month):
         return f"this month's ceiling ({lim.month:g} cents) would be passed"
     if _cents(run_spent + estimate) > _cents(lim.run):
-        return f"the cap for one run ({lim.run:g} cents) would be passed"
+        return f"the cap for one batch ({lim.run:g} cents) would be passed"
     return None

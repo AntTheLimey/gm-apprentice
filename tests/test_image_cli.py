@@ -9,6 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent
                        / "skills" / "shared" / "scripts"))
 
 import image  # noqa: E402
+import image_gemini  # noqa: E402
 import image_keys  # noqa: E402
 import vaultlib  # noqa: E402
 
@@ -26,6 +27,10 @@ def _clean(monkeypatch, tmp_path):
     def boom(*a, **k):
         raise AssertionError("the real keychain was touched")
     monkeypatch.setattr(image_keys, "RUN", boom)
+
+    def no_network(*a, **k):
+        raise AssertionError("a real call to the service")
+    monkeypatch.setattr(image_gemini, "SEND", no_network)
     yield
     vaultlib.forget_settings(None)
 
@@ -101,8 +106,8 @@ def test_status_prints_the_real_month_count(tmp_path, capsys, monkeypatch):
     image_money.record(v, today, None)
     assert image.main(["status", str(v)]) == 0
     out = capsys.readouterr().out
-    assert "spent this month: 7.5 of 2000 cents" in out
-    assert "unknown price: 1" in out
+    assert "spent this month: 7.50 of 2000 cents" in out
+    assert "pictures paid for this month at an unknown price: 1" in out
 
 
 def test_status_says_when_the_state_file_is_broken(tmp_path, capsys):
@@ -352,3 +357,43 @@ def test_a_failed_write_after_setting_the_old_file_aside_says_both(
     assert "not stored" in err and "Permission denied" in err
     assert "set aside as keys.json.unreadable" in err
     assert (cfg / "keys.json.unreadable").is_file()
+
+
+# --- final wave: A3, A4 -----------------------------------------------------
+
+def test_status_shows_the_month_in_two_decimals(tmp_path, capsys, monkeypatch):
+    from datetime import date
+    import image_money
+    v = make_vault(tmp_path)
+    today = date(2026, 11, 30)
+    monkeypatch.setattr(image, "_today", lambda: today)
+    image_money.record(v, today, 33.7181)
+    assert image.main(["status", str(v)]) == 0
+    assert "spent this month: 33.72 of 2000 cents" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("written, said", [
+    ("month_cap: 500c",
+     'vault.images.month_cap is "500c"; it takes a number, 0 or more.'),
+    ("attempt_limit: -3",
+     "vault.images.attempt_limit is -3; it takes a number, 0 or more.")])
+@pytest.mark.parametrize("command", ["status", "plan", "draw"])
+def test_a_money_setting_that_cannot_be_read_stops_every_command(
+        command, written, said, tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("GEMINI_API_KEY", SECRET)
+    v = plan_vault(tmp_path, "gemini-nano-banana-2.1")
+    req = requests(tmp_path, [{"for": "Anselm", "subject": "x"}])
+    assert image.main(["plan", str(v), str(req)]) == 0
+    job = next(line for line in capsys.readouterr().out.splitlines()
+               if line.startswith("Job ")).split()[1]
+    config = v / "_meta" / "vault-config.yaml"
+    config.write_text(config.read_text(encoding="utf-8") + f"    {written}\n",
+                      encoding="utf-8")
+    vaultlib.forget_settings(None)
+    argv = {"status": ["status", str(v)],
+            "plan": ["plan", str(v), str(req)],
+            "draw": ["draw", str(v), job]}[command]
+    assert image.main(argv) == 2
+    out = capsys.readouterr()
+    assert out.err == said + "\n"
+    assert "Job " not in out.out and "drawn" not in out.out

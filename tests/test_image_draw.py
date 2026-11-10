@@ -168,17 +168,65 @@ def test_a_cut_off_run_resumes_without_repaying(tmp_path, monkeypatch, capsys):
     assert reload(job).spent == pytest.approx(month(vault))
 
 
-def test_a_run_killed_mid_way_loses_nothing_paid(tmp_path, monkeypatch):
-    vault, job = start(tmp_path)
+def test_a_run_killed_while_a_request_is_out_counts_it_and_never_resends_it(
+        tmp_path, monkeypatch, capsys):
+    vault, job = start(tmp_path, config=CONFIG + "    redraws: 0\n")
+    estimate = job.entries[1].estimate
     script(monkeypatch, fixture(OK), KeyboardInterrupt())
-    with pytest.raises(KeyboardInterrupt):
+    with pytest.raises(KeyboardInterrupt):            # the program still stops
         run(vault, job)
     saved = reload(job)
-    assert [e.status for e in saved.entries] == ["drawn", "planned", "planned"]
-    assert month(vault) == pytest.approx(OK_CENTS, abs=0.01)
+    assert [e.status for e in saved.entries] == ["drawn", "failed", "planned"]
+    e = saved.entries[1]
+    assert e.attempts == 1 and e.cost == pytest.approx(estimate)
+    assert month(vault) == pytest.approx(OK_CENTS + estimate, abs=0.01)
+    assert saved.spent == pytest.approx(month(vault), abs=1e-3)
+    out = capsys.readouterr().out
+    assert ("2. NPCs/P2.md: failed, the request was interrupted (the reply was "
+            "lost; it may have been charged, so it is counted at "
+            f"{estimate:.2f} cents to be safe)") in out
     send = script(monkeypatch, fixture(OK))
-    assert run(vault, job) == 0
-    assert len(send.calls) == 2
+    assert run(vault, job) == 1
+    assert len(send.calls) == 1                       # only picture 3
+    assert "picture 2 has used all its attempts (the vault allows 1)" \
+        in capsys.readouterr().out
+
+
+def test_an_interrupted_unpriced_request_counts_one_picture(tmp_path, monkeypatch):
+    vault, job = start(tmp_path, count=1, config=UNPRICED)
+    script(monkeypatch, KeyboardInterrupt())
+    with pytest.raises(KeyboardInterrupt):
+        run(vault, job)
+    e = reload(job).entries[0]
+    assert e.status == "failed" and e.attempts == 1 and e.cost is None
+    assert image_money.unpriced_count(vault, TODAY) == 1 and month(vault) == 0
+
+
+def test_an_interrupted_redo_keeps_the_earlier_picture(tmp_path, monkeypatch, capsys):
+    vault, job, first, send = after_first_draw(tmp_path, monkeypatch,
+                                               KeyboardInterrupt())
+    with pytest.raises(KeyboardInterrupt):
+        run(vault, job, "--redo", "1", "wrong")
+    check_earlier_picture_kept(vault, job, first, capsys)
+
+
+def test_a_known_model_is_counted_at_its_real_cost_whatever_price_is_stated(
+        tmp_path, monkeypatch, capsys):
+    # A stated price of 1 cent once let five pictures through a 5 cent ceiling.
+    vault, job = start(tmp_path, count=5,
+                       config=CONFIG + "    month_cap: 5\n    price: 1\n")
+    assert job.entries[0].estimate == pytest.approx(image_gemini.estimate(
+        MODEL, image_jobs.SIZE, 0, len(job.entries[0].prompt.encode())))
+    assert [e.status for e in job.entries] == ["planned"] + ["trimmed"] * 4
+    for e in job.entries[1:]:                         # planned again, as if allowed
+        e.status = "planned"
+    image_jobs.save(job)
+    send = script(monkeypatch, fixture(OK))
+    assert run(vault, job) == 1
+    assert len(send.calls) == 1
+    assert month(vault) == pytest.approx(OK_CENTS, abs=0.01)
+    assert reload(job).entries[0].cost == pytest.approx(OK_CENTS, abs=0.01)
+    assert "this month's ceiling (5 cents) would be passed" in capsys.readouterr().out
 
 
 def test_a_refusal_is_reported_and_the_rest_draw(tmp_path, monkeypatch, capsys):
@@ -288,13 +336,24 @@ def test_the_run_cap_counts_what_the_job_spent(tmp_path, monkeypatch, capsys):
     assert len(send.calls) == 2
 
 
-def test_stated_price_is_the_cost(tmp_path, monkeypatch, capsys):
-    vault, job = start(tmp_path, config=CONFIG + "    price: 4\n")
+MYSTERY = "vault:\n  images:\n    service: gemini\n    model: mystery\n"
+
+
+def test_stated_price_is_the_cost_of_a_model_with_no_rates(tmp_path, monkeypatch, capsys):
+    vault, job = start(tmp_path, config=MYSTERY + "    price: 4\n")
     script(monkeypatch, fixture(OK))
     assert run(vault, job) == 0
     assert [e.cost for e in reload(job).entries] == [4, 4, 4]
     assert month(vault) == 12
     assert "4.00 cents" in capsys.readouterr().out
+
+
+def test_stated_price_is_not_the_cost_of_a_model_with_rates(tmp_path, monkeypatch):
+    vault, job = start(tmp_path, config=CONFIG + "    price: 4\n")
+    script(monkeypatch, fixture(OK))
+    assert run(vault, job) == 0
+    assert [e.cost for e in reload(job).entries] == \
+        [pytest.approx(OK_CENTS, abs=0.01)] * 3
 
 
 def test_unpriced_draws_and_counts_pictures(tmp_path, monkeypatch, capsys):
@@ -313,7 +372,7 @@ def test_unpriced_draws_and_counts_pictures(tmp_path, monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "drawn, " in out and "cost unknown" in out
     assert "This run: 3 pictures drawn at an unknown price" in out
-    assert "This month: 0.00 of 2000 cents, and 3 pictures at an unknown price" in out
+    assert "This month: 0.00 of 2000 cents, and 3 pictures paid for at an unknown price" in out
 
 
 def test_auth_failure_stops_at_once_and_names_the_fix(tmp_path, monkeypatch, capsys):
@@ -553,7 +612,7 @@ def test_a_job_that_cannot_be_saved_after_a_paid_picture_says_so(tmp_path, monke
 
 
 def test_the_report_shows_two_decimals(tmp_path, monkeypatch, capsys):
-    vault, job = start(tmp_path, count=1, config=CONFIG + "    price: 4.5\n")
+    vault, job = start(tmp_path, count=1, config=MYSTERY + "    price: 4.5\n")
     script(monkeypatch, fixture(OK))
     run(vault, job)
     out = capsys.readouterr().out
@@ -702,7 +761,7 @@ def test_the_report_says_one_picture_not_one_pictures(tmp_path, monkeypatch, cap
     run(vault, job)
     out = capsys.readouterr().out
     assert "This run: 1 picture drawn at an unknown price" in out
-    assert "and 1 picture at an unknown price" in out
+    assert "and 1 picture paid for at an unknown price" in out
 
 
 def test_a_failure_before_sending_is_not_counted(tmp_path, monkeypatch, capsys):
@@ -739,7 +798,7 @@ def test_a_job_planned_unpriced_gets_every_fence_once_a_price_is_stated(tmp_path
     assert len(send.calls) == 1                       # the second would pass the cap
     e = reload(job).entries
     assert e[0].estimate == 4 and e[0].cost == 4 and e[1].status == "planned"
-    assert "the cap for one run (5 cents) would be passed" in capsys.readouterr().out
+    assert "the cap for one batch (5 cents) would be passed" in capsys.readouterr().out
 
 
 def test_a_priced_job_keeps_the_attempt_limit_when_it_is_lowered_later(tmp_path, monkeypatch):
@@ -839,7 +898,7 @@ def test_the_run_cap_stops_a_call_that_the_plan_allowed(tmp_path, monkeypatch, c
     send = script(monkeypatch, fixture(OK))
     assert run(vault, job) == 1
     assert len(send.calls) == 2
-    assert "3. NPCs/P3.md: not drawn, the cap for one run (8 cents) would be passed" \
+    assert "3. NPCs/P3.md: not drawn, the cap for one batch (8 cents) would be passed" \
         in capsys.readouterr().out
 
 
@@ -849,7 +908,7 @@ def test_a_redo_that_would_take_the_job_past_the_run_cap_is_not_sent(tmp_path, m
     run(vault, job)
     assert run(vault, job, "--redo", "1", "wrong") == 1      # 3.59 + ~3.8 is over 7
     assert len(send.calls) == 1
-    assert "the cap for one run (7 cents) would be passed" in capsys.readouterr().out
+    assert "the cap for one batch (7 cents) would be passed" in capsys.readouterr().out
     assert reload(job).entries[0].status == "drawn"
 
 
@@ -907,3 +966,31 @@ def test_a_redo_whose_reply_has_no_usage_clears_the_saved_usage(tmp_path, monkey
     script(monkeypatch, derived(OK, usage=None))
     assert run(vault, job, "--redo", "1", "darker") == 0
     assert reload(job).entries[0].usage is None
+
+
+# -- final wave: A5, A7 -------------------------------------------------------
+
+FORCED = ("This model will not draw without thinking, so pictures in this "
+          "batch cost more and their cost varies.")
+
+
+def test_thinking_forced_by_the_model_is_said_once_for_the_batch(tmp_path, monkeypatch, capsys):
+    vault, job = start(tmp_path, count=2, config=CONFIG + "    attempt_limit: 7\n")
+    script(monkeypatch, fixture("gemini-error-thinking-level.json"),
+           fixture("gemini-prompt-only.json"), fixture("gemini-prompt-only.json"))
+    assert run(vault, job) == 0
+    out = capsys.readouterr().out
+    assert out.count(FORCED) == 1
+    first, second = reload(job).entries
+    assert FORCED in first.said and FORCED not in second.said
+    # a later draw of the same job (thinking already known) does not say it again
+    script(monkeypatch, fixture("gemini-prompt-only.json"))
+    assert run(vault, job, "--redo", "1", "darker") == 0
+    assert FORCED not in capsys.readouterr().out
+
+
+def test_a_vault_with_thinking_on_is_not_told_the_model_forced_it(tmp_path, monkeypatch, capsys):
+    vault, job = start(tmp_path, count=1, config=CONFIG + "    thinking: true\n")
+    script(monkeypatch, fixture("gemini-prompt-only.json"))
+    assert run(vault, job) == 0
+    assert FORCED not in capsys.readouterr().out

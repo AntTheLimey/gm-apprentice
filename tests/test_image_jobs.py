@@ -265,7 +265,7 @@ def test_rule_9_run_cap_trims_the_tail(tmp_path):
                           False, TODAY)
     assert [e.status for e in job.entries] == ["planned", "planned",
                                                "trimmed", "trimmed"]
-    assert "cap for one run" in said(job.entries[2])
+    assert "cap for one batch" in said(job.entries[2])
 
 
 # --- the extras -----------------------------------------------------------
@@ -573,7 +573,7 @@ def test_a_trimmed_picture_does_not_block_a_later_one_for_its_place(tmp_path):
         {"for": "Anselm", "subject": "y"}], False, TODAY)
     a, b, c = job.entries
     assert (a.status, b.status, c.status) == ("planned", "trimmed", "trimmed")
-    assert "cap for one run" in said(c)
+    assert "cap for one batch" in said(c)
     assert "same place" not in said(c)
 
 
@@ -657,3 +657,43 @@ def test_default_settings_plan_four_likenesses_with_thinking_off_or_on(tmp_path)
         _, e = one(v, {"for": "Anselm", "subject": "x" * 2000, "shows": people})
         assert e.status == "planned" and len(e.refs) == 4, extra
         assert e.estimate is not None and e.estimate < 10
+
+
+# --- final wave: A2, A8 -----------------------------------------------------
+
+@pytest.mark.parametrize("where, value", [
+    ("spent", "abc"), ("spent", None), ("spent", True),
+    ("n", "1"), ("attempts", None), ("attempts", 1.5), ("attempts", False),
+    ("status", 5), ("estimate", "4"), ("cost", []), ("refs", "a.png"),
+    ("refs", [1]), ("pending", 3), ("dest", None)])
+def test_a_hand_damaged_job_file_is_one_plain_stop(tmp_path, where, value):
+    job, _ = one(build(tmp_path), {"for": "Anselm", "subject": "x"})
+    path = image_jobs.job_file(job.id)
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if where == "spent":
+        data["spent"] = value
+    else:
+        data["entries"][0][where] = value
+    path.write_text(json.dumps(data), encoding="utf-8")
+    with pytest.raises(image_jobs.Stop) as err:
+        image_jobs.load(job.id)
+    assert str(err.value) == f"Picture job {job.id} could not be read."
+
+
+def test_a_stated_price_is_not_the_estimate_for_a_model_with_rates(tmp_path):
+    cfg = ("vault:\n  images:\n    service: gemini\n"
+           "    model: gemini-nano-banana-2.1\n    price: 1\n")
+    _, e = one(build(tmp_path, config=cfg), {"for": "Anselm", "subject": "x"})
+    assert e.estimate is not None and e.estimate > 3
+
+
+def test_the_one_price_rule(monkeypatch):
+    known = "gemini-nano-banana-2.1"
+    assert image_jobs.stated_price(known, 1) is None
+    assert image_jobs.stated_price("x", 1) == 1
+    assert image_jobs.stated_price("x", None) is None
+    assert image_jobs.estimate(known, 1, 0, 0, False) > 3
+    assert image_jobs.estimate("x", 1, 3, 99, True) == 1
+    assert image_jobs.estimate("x", None, 0, 0, False) is None
+    assert image_jobs.is_priced(known, None) and image_jobs.is_priced("x", 2)
+    assert not image_jobs.is_priced("x", None)
