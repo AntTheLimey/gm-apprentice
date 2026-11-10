@@ -39,9 +39,12 @@ def _is_picture(s: str) -> bool:
 
 
 def cut(node: Any) -> Any:
-    """A copy of `node` with every base64 picture cut short."""
+    """A copy of `node` with every long base64 string cut short, its
+    original length kept in the marker."""
     if isinstance(node, str):
-        return node[:CUT] + "...<cut>" if _is_picture(node) else node
+        if _is_picture(node):
+            return f"{node[:CUT]}...<cut {len(node)} chars>"
+        return node
     if isinstance(node, list):
         return [cut(x) for x in node]
     if isinstance(node, dict):
@@ -49,15 +52,31 @@ def cut(node: Any) -> Any:
     return node
 
 
-def pictures(node: Any) -> list[str]:
-    """Every base64 picture string in the reply, in document order."""
-    if isinstance(node, str):
-        return [node] if _is_picture(node) else []
+def _walk(node: Any, path: str = ""):
+    """Yield (path, node) for every JSON node, in document order."""
+    yield path, node
     if isinstance(node, list):
-        return [p for x in node for p in pictures(x)]
-    if isinstance(node, dict):
-        return [p for v in node.values() for p in pictures(v)]
-    return []
+        for i, x in enumerate(node):
+            yield from _walk(x, f"{path}[{i}]")
+    elif isinstance(node, dict):
+        for k, v in node.items():
+            yield from _walk(v, f"{path}.{k}" if path else str(k))
+
+
+def image_nodes(reply: Any) -> list[tuple[str, dict[str, Any]]]:
+    """Nodes shaped like {"type": "image", ..., "data": ...}, with paths."""
+    return [(p, n) for p, n in _walk(reply)
+            if isinstance(n, dict) and n.get("type") == "image"]
+
+
+def pictures(reply: Any) -> list[str]:
+    """Picture data: from type:image nodes if there are any with data,
+    else every long base64 string in the reply, in document order."""
+    typed = [n["data"] for _, n in image_nodes(reply)
+             if isinstance(n.get("data"), str) and n["data"]]
+    if typed:
+        return typed
+    return [n for _, n in _walk(reply) if isinstance(n, str) and _is_picture(n)]
 
 
 def find_usage(node: Any) -> Any:
@@ -104,6 +123,10 @@ def main(argv: list[str] | None = None, *, allow_under_test: bool = False) -> in
     for name in args.reference:
         path = Path(name)
         mime = mimetypes.guess_type(path.name)[0] or "image/png"
+        if mime not in image_gemini.ACCEPTS.mime:
+            print(f"{name}: type {mime} is not accepted; use "
+                  f"{' or '.join(image_gemini.ACCEPTS.mime)}.", file=sys.stderr)
+            return 1
         refs.append((mime, path.read_bytes()))
 
     runs: list[tuple[str, str, list[tuple[str, bytes]]]] = [
@@ -115,7 +138,20 @@ def main(argv: list[str] | None = None, *, allow_under_test: bool = False) -> in
     if args.refusal_prompt:
         runs.append(("refusal", args.refusal_prompt, []))
 
-    FIXTURES.mkdir(parents=True, exist_ok=True)
+    try:
+        FIXTURES.mkdir(parents=True, exist_ok=True)
+        if not os.access(FIXTURES, os.W_OK):
+            raise OSError("not writable")
+    except OSError as err:
+        print(f"Cannot write fixtures to {FIXTURES}: {err}. Nothing was spent.",
+              file=sys.stderr)
+        return 1
+    if args.save:
+        parent = Path(args.save).resolve().parent
+        if not parent.is_dir() or not os.access(parent, os.W_OK):
+            print(f"Cannot write to {parent}: no such writable folder. "
+                  "Nothing was spent.", file=sys.stderr)
+            return 1
     saved = False
     for name, prompt, run_refs in runs:
         body = image_gemini.request(args.model, prompt, run_refs, "1:1", "1K")
@@ -131,15 +167,23 @@ def main(argv: list[str] | None = None, *, allow_under_test: bool = False) -> in
         except ValueError:
             reply = {"unparsed_text": raw.decode("utf-8", "replace")}
         out = FIXTURES / f"gemini-{name}.json"
-        out.write_text(json.dumps({"status": status, "reply": cut(reply)},
-                                  indent=2) + "\n", encoding="utf-8")
+        text = json.dumps({"status": status, "reply": cut(reply)}, indent=2)
+        out.write_text(text.replace(key, "<key>") + "\n", encoding="utf-8")
         pics = pictures(reply)
+        nodes = image_nodes(reply)
+        fields = sorted(reply) if isinstance(reply, dict) else type(reply).__name__
         print(f"{name}: HTTP {status}, {len(pics)} picture(s), saved {out}")
-        print(f"{name}: usage = {json.dumps(find_usage(reply))}")
+        print(f"{name}: top-level fields = {fields}")
+        print(f"{name}: image node at = {nodes[0][0] if nodes else None}")
+        print(f"{name}: usage = {json.dumps(find_usage(reply)).replace(key, '<key>')}")
         if args.save and pics and not saved:
-            Path(args.save).write_bytes(_decode(pics[0]))
-            saved = True
-            print(f"{name}: first picture written to {args.save}")
+            try:
+                Path(args.save).write_bytes(_decode(pics[0]))
+            except (OSError, ValueError) as err:
+                print(f"{name}: could not save the picture: {err}", file=sys.stderr)
+            else:
+                saved = True
+                print(f"{name}: first picture written to {args.save}")
     return 0
 
 

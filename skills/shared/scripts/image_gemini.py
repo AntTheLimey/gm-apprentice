@@ -7,6 +7,7 @@ the URL, and no message built here contains it.
 from __future__ import annotations
 
 import base64
+import http.client
 import json
 import re
 import urllib.error
@@ -71,6 +72,8 @@ def _send(url: str, hdrs: dict[str, str], body: bytes,
         return err.code, err.read()
     except urllib.error.URLError as err:
         raise ServiceError("network", f"could not reach the service: {err.reason}") from None
+    except http.client.HTTPException as err:
+        raise ServiceError("network", f"the reply was cut short: {type(err).__name__}") from None
     except (TimeoutError, OSError) as err:
         raise ServiceError("network", f"the connection failed: {type(err).__name__}") from None
 

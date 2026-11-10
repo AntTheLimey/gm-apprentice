@@ -1,6 +1,7 @@
 """image_gemini.py (the request half) and scripts/image_live_check.py."""
 
 import base64
+import http.client
 import io
 import json
 import sys
@@ -152,7 +153,7 @@ def test_live_check_cuts_pictures_and_hides_key(live, tmp_path, capsys):
     assert len(fixtures) == 3
     for f in fixtures:
         text = f.read_text(encoding="utf-8")
-        assert PICTURE_B64[:64] + "...<cut>" in text
+        assert f"{PICTURE_B64[:64]}...<cut {len(PICTURE_B64)} chars>" in text
         assert PICTURE_B64 not in text
         assert FAKE_KEY not in text
         assert json.loads(text)["status"] == 200
@@ -176,3 +177,64 @@ def test_live_check_saves_unexpected_shape(monkeypatch, tmp_path):
     image_live_check.main(["--model", "m"], allow_under_test=True)
     saved = json.loads((tmp_path / "fx" / "gemini-prompt-only.json").read_text())
     assert saved["status"] == 400 and saved["reply"] == {"error": "no"}
+
+
+def test_send_incomplete_read_is_service_error(monkeypatch):
+    def fake(req, timeout):
+        raise http.client.IncompleteRead(b"x")
+    _patch_urlopen(monkeypatch, fake)
+    with pytest.raises(image_gemini.ServiceError) as e:
+        image_gemini.SEND(image_gemini.URL, {"x-goog-api-key": FAKE_KEY}, b"{}", 5)
+    assert e.value.kind == "network" and FAKE_KEY not in str(e.value)
+
+
+def test_missing_save_folder_exits_before_any_call(live, tmp_path):
+    code = image_live_check.main(
+        ["--model", "m", "--save", str(tmp_path / "nope" / "p.jpg")],
+        allow_under_test=True)
+    assert code != 0 and live == []
+
+
+def test_decode_failure_keeps_fixture_and_carries_on(monkeypatch, tmp_path):
+    calls = []
+
+    def send(url, headers, body, timeout):
+        calls.append(1)
+        return 200, json.dumps({"outputs": [{"type": "image", "data": "A" * 201}]}).encode()
+    monkeypatch.setattr(image_gemini, "SEND", send)
+    monkeypatch.setattr(image_keys, "find", lambda s: (FAKE_KEY, "environment"))
+    monkeypatch.setattr(image_live_check, "FIXTURES", tmp_path / "fx")
+    code = image_live_check.main(
+        ["--model", "m", "--save", str(tmp_path / "p.jpg"),
+         "--refusal-prompt", "no"], allow_under_test=True)
+    assert code == 0 and len(calls) == 2
+    assert (tmp_path / "fx" / "gemini-prompt-only.json").exists()
+    assert (tmp_path / "fx" / "gemini-refusal.json").exists()
+
+
+def test_typed_image_node_preferred_over_heuristic():
+    other = "B" * 300
+    reply = {"signature": other, "steps": [{"content": [
+        {"type": "image", "data": PICTURE_B64}]}]}
+    assert image_live_check.pictures(reply) == [PICTURE_B64]
+    assert image_live_check.image_nodes(reply)[0][0] == "steps[0].content[0]"
+    assert "300 chars" in json.dumps(image_live_check.cut(reply))
+
+
+def test_key_echoed_in_reply_is_redacted(monkeypatch, tmp_path):
+    monkeypatch.setattr(image_gemini, "SEND",
+                        lambda *a: (403, json.dumps({"error": f"bad {FAKE_KEY}"}).encode()))
+    monkeypatch.setattr(image_keys, "find", lambda s: (FAKE_KEY, "environment"))
+    monkeypatch.setattr(image_live_check, "FIXTURES", tmp_path / "fx")
+    image_live_check.main(["--model", "m"], allow_under_test=True)
+    text = (tmp_path / "fx" / "gemini-prompt-only.json").read_text()
+    assert FAKE_KEY not in text and "<key>" in text
+
+
+def test_unaccepted_reference_type_refused_before_calls(live, tmp_path, capsys):
+    ref = tmp_path / "r.gif"
+    ref.write_bytes(b"GIF89a")
+    code = image_live_check.main(["--model", "m", "--reference", str(ref)],
+                                 allow_under_test=True)
+    assert code != 0 and live == []
+    assert "r.gif" in capsys.readouterr().err
