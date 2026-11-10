@@ -77,7 +77,7 @@ def test_send_returns_status_and_body(monkeypatch):
         seen["timeout"] = timeout
         return Resp()
     _patch_urlopen(monkeypatch, fake)
-    out = image_gemini.SEND(image_gemini.URL, {"x-goog-api-key": FAKE_KEY}, b"{}", 5)
+    out = image_gemini._send(image_gemini.URL, {"x-goog-api-key": FAKE_KEY}, b"{}", 5)
     assert out == (200, b"ok")
     assert FAKE_KEY not in seen["url"]
     assert seen["headers"]["x-goog-api-key"] == FAKE_KEY
@@ -88,7 +88,7 @@ def test_send_returns_http_error_replies(monkeypatch):
     def fake(req, timeout):
         raise urllib.error.HTTPError(req.full_url, 400, "bad", {}, io.BytesIO(b'{"e":1}'))
     _patch_urlopen(monkeypatch, fake)
-    assert image_gemini.SEND(image_gemini.URL, {}, b"{}", 5) == (400, b'{"e":1}')
+    assert image_gemini._send(image_gemini.URL, {}, b"{}", 5) == (400, b'{"e":1}')
 
 
 def test_send_network_failure_is_service_error(monkeypatch):
@@ -96,7 +96,7 @@ def test_send_network_failure_is_service_error(monkeypatch):
         raise urllib.error.URLError("no route")
     _patch_urlopen(monkeypatch, fake)
     with pytest.raises(image_gemini.ServiceError) as e:
-        image_gemini.SEND(image_gemini.URL, {"x-goog-api-key": FAKE_KEY}, b"{}", 5)
+        image_gemini._send(image_gemini.URL, {"x-goog-api-key": FAKE_KEY}, b"{}", 5)
     assert e.value.kind == "network"
     assert FAKE_KEY not in str(e.value)
 
@@ -106,7 +106,7 @@ def test_send_timeout_is_service_error(monkeypatch):
         raise TimeoutError("slow")
     _patch_urlopen(monkeypatch, fake)
     with pytest.raises(image_gemini.ServiceError):
-        image_gemini.SEND(image_gemini.URL, {}, b"{}", 5)
+        image_gemini._send(image_gemini.URL, {}, b"{}", 5)
 
 
 # -- the live-check script ---------------------------------------------------
@@ -184,7 +184,7 @@ def test_send_incomplete_read_is_service_error(monkeypatch):
         raise http.client.IncompleteRead(b"x")
     _patch_urlopen(monkeypatch, fake)
     with pytest.raises(image_gemini.ServiceError) as e:
-        image_gemini.SEND(image_gemini.URL, {"x-goog-api-key": FAKE_KEY}, b"{}", 5)
+        image_gemini._send(image_gemini.URL, {"x-goog-api-key": FAKE_KEY}, b"{}", 5)
     assert e.value.kind == "network" and FAKE_KEY not in str(e.value)
 
 
@@ -487,11 +487,11 @@ def test_send_error_body_read_failure_is_a_network_error(monkeypatch):
         raise urllib.error.HTTPError(req.full_url, 500, "bad", {}, Broken())
     _patch_urlopen(monkeypatch, fake)
     with pytest.raises(image_gemini.ServiceError) as e:
-        image_gemini.SEND(image_gemini.URL, {"x-goog-api-key": FAKE_KEY}, b"{}", 5)
+        image_gemini._send(image_gemini.URL, {"x-goog-api-key": FAKE_KEY}, b"{}", 5)
     assert e.value.kind == "network" and FAKE_KEY not in str(e.value)
     monkeypatch.setattr(Broken, "read", lambda self, *a: (_ for _ in ()).throw(TimeoutError()))
     with pytest.raises(image_gemini.ServiceError) as e:
-        image_gemini.SEND(image_gemini.URL, {}, b"{}", 5)
+        image_gemini._send(image_gemini.URL, {}, b"{}", 5)
     assert e.value.kind == "network"
 
 
@@ -619,7 +619,7 @@ def _send_failing_with(monkeypatch, exc):
         raise exc
     _patch_urlopen(monkeypatch, fake)
     with pytest.raises(image_gemini.ServiceError) as e:
-        image_gemini.SEND(image_gemini.URL, {}, b"{}", 5)
+        image_gemini._send(image_gemini.URL, {}, b"{}", 5)
     assert e.value.kind == "network" and e.value.billed is False
     return e.value.maybe_billed
 
