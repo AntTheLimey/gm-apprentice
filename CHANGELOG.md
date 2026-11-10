@@ -9,6 +9,27 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.8] — 2026-11-10
+
+### Added
+
+- Reconcile now settles threads with you: it proposes which open threads to close or park, and writes only what you agree to.
+- A Dormant Threads list for threads parked when the party left a place or arc. Prep leaves it out of the brief until the thread is woken or its names come up.
+- Thread rows `hand` (give a PC's thread to another PC), `rest` (park a thread) and `wake` (bring it back).
+- `gma vault-write wrapup-settle` ticks checklist items and strikes answered questions in the Wrap-Up.
+
+### Changed
+
+- Wrap-up writes only active threads; settled and dormant ones stay out of what prep reads.
+- The player site never publishes a Dormant Threads heading. The update offers the entry to vaults that keep their own hidden-headings list.
+- Publish tool 1.70.6: `Dormant Threads` joins the hidden headings.
+
+### Fixed
+
+- A one-line comment no longer hides the threads next to it (#641).
+- A thread closed from the Wrap-Up no longer needs to be on a list (#642).
+- Settled checklist items and answered questions stop reappearing in prep (#643).
+
 ## [1.12.7] — 2026-11-10
 
 ### Added

@@ -40,7 +40,7 @@ test('describe player_site.hide.sections names Dormant Threads as added, and hid
   const { rc, data } = describe('player_site.hide.sections');
   assert.equal(rc, 0);
   assert.ok(data.default.includes('Dormant Threads'));
-  assert.deepEqual(data.added.map((a) => [a.entry, a.since]), [['Dormant Threads', '1.12.7']]);
+  assert.deepEqual(data.added.map((a) => [a.entry, a.since]), [['Dormant Threads', '1.12.8']]);
 });
 
 test('a setting with no added entries describes without the key', () => {

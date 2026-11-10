@@ -373,7 +373,7 @@ const REGISTRY = [
     does: 'Headings whose text is never published, on any page, however the heading is dressed (bold, a colon, a link)',
     left_out: '`GM Notes`, `DM Notes`, `Player Notes`, `Source References`, `Reconciliation Context`, `Handoff to Reconcile`, `Dormant Threads`',
     // See player_site.hide.fields: the update offers this to a list the vault owns.
-    added: [{ entry: 'Dormant Threads', since: '1.12.7', why: 'threads parked when the party left a place or arc, kept for the GM' }],
+    added: [{ entry: 'Dormant Threads', since: '1.12.8', why: 'threads parked when the party left a place or arc, kept for the GM' }],
   },
   {
     name: 'player_site.hide.fields', was: [{ name: 'publish.exclude_fields', in: 'vault' }, { name: 'excludeFields', in: 'site' }], type: 'list', of: 'field names',

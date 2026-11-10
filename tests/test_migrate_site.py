@@ -540,7 +540,7 @@ class HideAdditionTests(unittest.TestCase):
 
 
 class DormantThreadsHideTests(unittest.TestCase):
-    """1.12.7: the GM-only dormant list joins the built-in hidden headings,
+    """1.12.8: the GM-only dormant list joins the built-in hidden headings,
     and a vault that owns its list of headings is offered it."""
 
     SECTIONS = "player_site.hide.sections"
@@ -557,22 +557,22 @@ class DormantThreadsHideTests(unittest.TestCase):
     def test_an_owned_list_without_it_is_offered_it(self):
         old = self.old_sections()
         vault = self.owning(old)
-        (item,) = ms.find_hide_additions(vault, "1.12.7")
+        (item,) = ms.find_hide_additions(vault, "1.12.8")
         self.assertEqual(item.id, "hide-add:Dormant Threads")
         self.assertIn(self.SECTIONS, item.lines[0])
         self.assertTrue(item.holds_stamp)
         item.apply(None)
         self.assertEqual(vc.settings(vault).get(self.SECTIONS),
                          [*old, "Dormant Threads"])
-        self.assertEqual(ms.find_hide_additions(vault, "1.12.7"), [])
+        self.assertEqual(ms.find_hide_additions(vault, "1.12.8"), [])
 
     def test_an_owned_list_that_has_it_is_offered_nothing(self):
         vault = self.owning([*self.old_sections(), "Dormant Threads"])
-        self.assertEqual(ms.find_hide_additions(vault, "1.12.7"), [])
+        self.assertEqual(ms.find_hide_additions(vault, "1.12.8"), [])
 
     def test_a_vault_with_no_list_of_its_own_is_offered_nothing(self):
         vault = make_vault(self)
-        self.assertEqual(ms.find_hide_additions(vault, "1.12.7"), [])
+        self.assertEqual(ms.find_hide_additions(vault, "1.12.8"), [])
         self.assertIn("Dormant Threads", vc.settings(vault).get(self.SECTIONS))
 
     def test_the_check_asks_at_1_12_7(self):
@@ -580,7 +580,7 @@ class DormantThreadsHideTests(unittest.TestCase):
                     if c.name == "hide-sections-dormant"]
         self.assertEqual((check.release, check.band, check.asks_site,
                           check.choices, check.kind),
-                         ("1.12.7", 2, True, ("hide-add:",), "asks"))
+                         ("1.12.8", 2, True, ("hide-add:",), "asks"))
         self.assertTrue(check.plain and check.ask and check.left)
 
 
