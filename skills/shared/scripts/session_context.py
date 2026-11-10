@@ -131,7 +131,7 @@ from vaultlib import (GM_MARKER_RE, is_active_pc, marker_re,  # noqa: F401
 from vaultlib import LABEL_RE as _LABEL_RE
 from vaultlib import BULLET_RE
 from vaultlib import bullets as _bullets
-from vaultlib import fence_step, link_name, split_paused
+from vaultlib import alias_split, fence_step, link_name, split_paused
 from vaultlib import vault_files as _vault_files
 
 
@@ -1365,9 +1365,6 @@ def arcs_report(files, chapter, upcoming: int, vault: Path,
       {section or "(no ## Background section)"}
       ## GM Notes
       {section or "(no ## GM Notes section)"}
-
-    `background` False (the --prep bundle) leaves the Background out: no
-    prep plan used one (27 runs, 2026-11-10); `--arcs` prints it.
       Spotlight history (chapter-scoped, from ## Spotlight Forecast tables):
         Session 6: B
         Session 7: (no row for this PC)
@@ -1392,7 +1389,10 @@ def arcs_report(files, chapter, upcoming: int, vault: Path,
 
     Plans = every type: session-plan with a parsable session number <
     upcoming, prefer_chapter semantics, sorted by number.
-    "Sessions since" = upcoming - N."""
+    "Sessions since" = upcoming - N.
+
+    `background` False (the --prep bundle) leaves the Background out: no
+    prep plan used one (27 runs, 2026-11-10); `--arcs` prints it."""
     lines = [f"===== PC Arcs — Sessions before {upcoming} ====="]
 
     plan_files = [(rel, text, fm) for rel, text, fm in files
@@ -1819,34 +1819,48 @@ MAP_SESSIONS = 3   # how many of the latest sessions the map lists
 
 def map_report(files, wrap, plan, chapter, current: int) -> str:
     """Where the notes a prep run may need are, without their text: every
-    note the Wrap-Up (its Resolved Threads left out) and the upcoming Plan
-    link, in the order first linked, PCs left out (their status is in the
-    bundle); then the latest MAP_SESSIONS sessions' notes in the chapter.
-    One line each: `{type}\\t{path}\\t{N} words`. A link that names no
-    note, or more than one, is counted, not listed."""
-    by_name: dict[str, list] = {}
-    for f in files:
-        by_name.setdefault(normalize(Path(f[0]).stem), []).append(f)
+    note the Wrap-Up's body (its Resolved Threads left out) and the
+    upcoming Plan's body link, in the order first linked, found by file
+    name or alias as `gma section` finds them, PCs left out (their status
+    is in the bundle); then the latest MAP_SESSIONS sessions' notes in the
+    chapter. One line each: `{type}\t{path}\t{N} words`. A name several
+    notes answer to lists each of them; a path-style link that picks out
+    one lists that one. Links to files that are not notes (`![[map.png]]`)
+    are skipped; a name no note answers to is counted."""
+    by_rel = {rel: (text, fm) for rel, text, fm in files}
+    names = section_cmd.name_index((rel, text) for rel, text, _fm in files)
     own = {wrap[0] if wrap else None, plan[0] if plan else None}
-    texts = ([_without_block(wrap[1], 4, "Resolved Threads")] if wrap
-             else []) + ([plan[1]] if plan else [])
+    texts = ([_without_block(body_of(wrap[1]), 4, "Resolved Threads")]
+             if wrap else []) + ([body_of(plan[1])] if plan else [])
     seen: set[str] = set()
+    listed: set[str] = set()
     rows: list[str] = []
     missing = 0
     for raw in (r for t in texts for r in _ANY_LINK_RE.findall(t)):
-        key = normalize(link_name(raw))
-        if not key or key in seen:
+        target = re.split(r"[#^]", alias_split(raw), maxsplit=1)[0].strip()
+        name = link_name(raw)
+        if re.search(r"\.(?!md$)[A-Za-z0-9]{2,5}$", target):
+            continue                      # an image or other file
+        key = normalize(name)
+        if not key or normalize(target) in seen:
             continue
-        seen.add(key)
-        hits = by_name.get(key, [])
-        if len(hits) != 1:
+        seen.add(normalize(target))
+        hits = sorted(set(names.get(key, [])))
+        if "/" in target and len(hits) > 1:
+            tail = normalize(target.removesuffix(".md"))
+            picked = [h for h in hits
+                      if normalize(h.removesuffix(".md")).endswith(tail)]
+            hits = picked or hits
+        if not hits:
             missing += 1
             continue
-        rel, text, fm = hits[0]
-        kind = entity_type(fm) or "note"
-        if kind == "pc" or rel in own:
-            continue
-        rows.append(f"{kind}\t{rel}\t{word_count(body_of(text))} words")
+        for rel in hits:
+            text, fm = by_rel[rel]
+            kind = entity_type(fm) or "note"
+            if kind == "pc" or rel in own or rel in listed:
+                continue
+            listed.add(rel)
+            rows.append(f"{kind}\t{rel}\t{word_count(body_of(text))} words")
     out = ["===== Map =====",
            "(where the notes the Wrap-Up and the upcoming Plan link are, "
            "and the latest sessions' notes: read one when a step needs it, "
@@ -1855,7 +1869,9 @@ def map_report(files, wrap, plan, chapter, current: int) -> str:
            "--- Linked from the Wrap-Up and the Plan ---"]
     out += rows or ["(none)"]
     if missing:
-        out.append(f"({missing} linked names have no single note)")
+        out.append(f"({missing} linked "
+                   + ("name has" if missing == 1 else "names have")
+                   + " no note)")
     kinds = {"session": "index", "session-plan": "plan",
              **{t: "wrap-up" for t in WRAP_UP_TYPES}}
 
@@ -1864,21 +1880,27 @@ def map_report(files, wrap, plan, chapter, current: int) -> str:
         return n if n is not None else parse_session_number(
             fm.get("session_number"))
 
-    numbers = sorted({n for rel, _t, fm in files
-                      if entity_type(fm) in kinds
-                      and (n := number(fm)) is not None
-                      and n <= current
-                      and chapter_key(rel, fm) == chapter})[-MAP_SESSIONS:]
+    # Chosen as the bundle chooses its Wrap-Up and Plan (prefer_chapter):
+    # the chapter's own note, else an unfiled one.
+    candidates = [(rel, text, fm) for rel, text, fm in files
+                  if entity_type(fm) in kinds
+                  and (n := number(fm)) is not None and n <= current
+                  and (chapter is None
+                       or chapter_key(rel, fm) in (chapter, None))]
+    numbers = sorted({number(fm) or 0 for _r, _t, fm in candidates}
+                     )[-MAP_SESSIONS:]
     out.append("--- Latest sessions ---")
-    listed = [(number(fm) or 0, kinds[entity_type(fm)], rel, text)
-              for rel, text, fm in files
-              if entity_type(fm) in kinds
-              and number(fm) in numbers
-              and chapter_key(rel, fm) == chapter]
-    for n, kind, rel, text in sorted(listed, key=lambda r: (-r[0], r[1])):
-        out.append(f"Session {n} {kind}\t{rel}\t"
-                   f"{word_count(body_of(text))} words")
-    if not listed:
+    sessions = []
+    for n in reversed(numbers):
+        for kind in sorted(set(kinds.values())):
+            picked = prefer_chapter(
+                [c for c in candidates if number(c[2]) == n
+                 and kinds[entity_type(c[2])] == kind], chapter)
+            if picked:
+                sessions.append(picked)
+                out.append(f"Session {n} {kind}\t{picked[0]}\t"
+                           f"{word_count(body_of(picked[1]))} words")
+    if not sessions:
         out.append("(none)")
     return "\n".join(out)
 

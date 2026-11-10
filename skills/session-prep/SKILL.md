@@ -91,7 +91,7 @@ the reconcile scan, threads, PC arcs, the scene queue and the narrative
 plans: steps 8, 10c, 12 and 14 and Phase 1 read these, never rerun
 them. Its Map gives the path and size of every note the Wrap-Up and the
 upcoming Plan link, and of the latest sessions' notes: take a note's
-path from there rather than searching the vault. Read
+path from there, and search only for a note it doesn't list. Read
 a stubbed or outlined section only when a step needs it: from its file,
 or a `###` subsection (printed as heading, size and path) with
 `gma section` (for step 12, the PC whose arc this session turns on).
@@ -162,9 +162,10 @@ one not struck through).
 **10. World state** — date, location, threats, factions, clocks from
 the Wrap-Up's World State. → `## World State`
 
-**10b. World threads** — If `_World/_flags.md` exists, list its
-**Deferred** items with how often and when each came up (as the entry
-records it), the ones tied to
+**10b. World threads** — If `_World/_flags.md` exists, read its
+**Deferred** section (`gma section <vault> _flags Deferred`; the bundle
+leaves it out) and list its items with how often and when each came up
+(as the entry records it), the ones tied to
 the upcoming adventure's themes or locations first:
 
 > **Deferred world threads:**
@@ -213,7 +214,7 @@ Don't move to spotlight until intent is set or deferred to
 
 **12. PC Roster + Arc Check** — Each PC's `## Current Status` is
 already in the bundle (`###` subsections outlined); don't re-read it. `--prep`'s PC Arcs gives every
-active PC's `## GM Notes` (outlined too) plus spotlight history from earlier Plans' `## Spotlight Forecast`
+active PC's `## GM Notes` (outlined too; the `## Background` is left out, one `gma section` away) plus spotlight history from earlier Plans' `## Spotlight Forecast`
 (role, sessions since last B- and C-plot). Don't open full PC
 sheets. Judge arc stage (five-stage model) from that evidence. Per PC:
 - hooks, stated goals, arc stage and theme, relationships
