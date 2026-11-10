@@ -114,7 +114,7 @@ test('a value that cannot be read falls back to the side that shows less', () =>
     // Nothing to look for; an unreadable list is a stop (it guards), so no deploy gets past it.
     'player_site.never_show': [],
   };
-  assert.deepEqual(expected['player_site.hide.sections'], ['GM Notes', 'DM Notes', 'Player Notes', 'Source References', 'Reconciliation Context', 'Handoff to Reconcile']);
+  assert.deepEqual(expected['player_site.hide.sections'], ['GM Notes', 'DM Notes', 'Player Notes', 'Source References', 'Reconciliation Context', 'Handoff to Reconcile', 'Dormant Threads']);
   assert.deepEqual(expected['player_site.hide.fields'], ['secrets', 'current_plan', 'plan_progress', 'gm_notes', 'prep_notes', 'reliability', 'voice']);
   assert.deepEqual(expected['player_site.hide.folders'], ['_meta', '_Templates']);
   for (const [n, want] of Object.entries(expected)) assert.deepEqual(fallback(n), want, n);

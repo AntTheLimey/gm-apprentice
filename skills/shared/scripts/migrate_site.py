@@ -418,6 +418,13 @@ SITE_CHECKS: list[Check] = [
           plain=("Added voice to the details your site hides, so the voice you keep for the campaign and its characters never shows on the site."),
           ask=("Adds voice to the details your site hides, so the voice you keep for the campaign and its characters never shows on the site."),
           left=("Kept your list of hidden details without voice, so a voice can show on your site wherever a page names that detail.")),
+    Check("hide-sections-dormant", "1.12.7", 2, "the dormant threads list kept off the site",
+          lambda v: find_hide_additions(v, "1.12.7"), asks_site=True,
+          choices=("hide-add:",),
+          kind="asks",
+          plain=("Added Dormant Threads to the headings your site hides, so the threads you have parked for the GM never show on the site."),
+          ask=("Adds Dormant Threads to the headings your site hides, so the threads you have parked for the GM never show on the site."),
+          left=("Kept your list of hidden headings without Dormant Threads, so your parked threads can show on your site.")),
     Check("gm-leak", None, 4, "sections the site withholds are nested under "
           "GM Notes", find_gm_leak, asks_site=True,
           kind="bookkeeping",

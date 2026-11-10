@@ -744,7 +744,8 @@
                 "Player Notes",
                 "Source References",
                 "Reconciliation Context",
-                "Handoff to Reconcile"
+                "Handoff to Reconcile",
+                "Dormant Threads"
               ],
               "type": [
                 "array",

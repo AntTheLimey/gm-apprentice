@@ -36,8 +36,25 @@ test('every setting that names added entries gives each one as text', () => {
   }
 });
 
+test('describe player_site.hide.sections names Dormant Threads as added, and hides it by default', () => {
+  const { rc, data } = describe('player_site.hide.sections');
+  assert.equal(rc, 0);
+  assert.ok(data.default.includes('Dormant Threads'));
+  assert.deepEqual(data.added.map((a) => [a.entry, a.since]), [['Dormant Threads', '1.12.7']]);
+});
+
 test('a setting with no added entries describes without the key', () => {
-  assert.equal('added' in describe('player_site.hide.sections').data, false);
+  assert.equal('added' in describe('player_site.hide.folders').data, false);
+});
+
+test('a published note never shows a Dormant Threads heading or its text', () => {
+  const { playerSafeMarkdown } = require('../lib/processor');
+  const { loadPublishConfig } = require('../lib/config');
+  const note = '## Open Threads\n- the visible one\n\n## Dormant Threads\n- the parked GM-only one\n\n## Other\nkept\n';
+  const { text } = playerSafeMarkdown(note, { excludeSections: loadPublishConfig('/nonexistent/path').exclude_sections });
+  assert.match(text, /the visible one/);
+  assert.match(text, /kept/);
+  assert.doesNotMatch(text, /Dormant Threads|parked GM-only/);
 });
 
 test('vault.voices is a switch, on by default, in the vault group', () => {
