@@ -76,7 +76,7 @@ def embed_after(text: str, after: str, filename: str) -> str | None:
             continue
         if not ln.strip().startswith("![["):
             break
-        if ln.strip() == embed:
+        if ln.strip().casefold() == embed.casefold():
             return text
     cr = "\r" if lines[last].endswith("\r") else ""
     if last + 1 >= len(lines):
@@ -86,6 +86,28 @@ def embed_after(text: str, after: str, filename: str) -> str | None:
         if lines[last + 1].strip():
             block.append("" + cr)
     lines[last + 1:last + 1] = block
+    return "\n".join(lines)
+
+
+_EMBED = re.compile(r"!\[\[([^\]\n|#]+)([^\]\n]*)\]\]")
+
+
+def exact_embed_names(text: str, filename: str) -> str:
+    """The text with every embed in the recap that names `filename` in
+    other letter case now naming it exactly: the name on disk wins."""
+    lines = text.split("\n")
+    for title in ("Narrative Recap", "Recap"):
+        found = vl.find_section_lines(lines, [title], first=True)
+        if not isinstance(found, tuple):
+            continue
+
+        def fix(m: re.Match[str]) -> str:
+            same = _fold(m.group(1).strip()) == _fold(filename)
+            return f"![[{filename}{m.group(2)}]]" if same else m.group(0)
+        start, end = found
+        for i in range(start + 1, end):
+            lines[i] = _EMBED.sub(fix, lines[i])
+        break
     return "\n".join(lines)
 
 
@@ -127,7 +149,8 @@ def _linked(vault: Path, batch: vw.Batch, rel: str) -> bool:
     """Whether anything in the vault might use the picture `rel`: any note
     or canvas outside hidden folders (templates and the inbox included)
     that holds its file name or path, plain or URL-encoded, ignoring case.
-    A note this run changes counts as it will be left. When in doubt: yes."""
+    A note this run changes counts as it will be left; one that cannot be
+    read counts as a use. When in doubt: yes."""
     seen = {_fold(Path(rel).name), _fold(rel),
             _fold(quote(Path(rel).name)), _fold(quote(rel))}
     for path in vault.rglob("*"):
@@ -142,7 +165,7 @@ def _linked(vault: Path, batch: vw.Batch, rel: str) -> bool:
             try:
                 text = path.read_text(encoding="utf-8")
             except (OSError, UnicodeDecodeError):
-                continue
+                return True     # cannot tell, so it may use the picture
         text = _fold(text)
         if any(w in text for w in seen):
             return True
@@ -274,6 +297,7 @@ def _prepare(vault: Path, batch: vw.Batch, e: Entry,
             for o in old:
                 if _fold(Path(o).name) != _fold(name):
                     body = body.replace(f"![[{Path(o).name}]]", f"![[{name}]]")
+            body = exact_embed_names(body, name)
             new_text = embed_after(body, e.after or "", name)
         else:
             new_text = _set_portrait(tlk, close, rel)
@@ -375,6 +399,13 @@ def _retire(vault: Path, batch: vw.Batch, a: _Action, lines: list[str]) -> None:
                          f"({err.__class__.__name__}); it was left.")
 
 
+def _is_target(vault: Path, a: _Action, o: str) -> bool:
+    """Whether the old picture `o` is the very file the new one goes to."""
+    old = _inside(vault, o)
+    return (old is not None and _same_file(old, a.copy.target)) \
+        or _fold(o) == _fold(a.rel)
+
+
 def _filed(a: _Action, wrote: bool) -> str:
     verb = (("embed", "embedded") if a.embed else ("set", "set"))[wrote]
     what = f"it in {a.note}" if a.embed else f"the portrait of {a.note}"
@@ -404,8 +435,10 @@ def run(job: Job, keep: set[int], hold: set[int], write: bool) -> Result:
                 lines.append(f"{'Held' if write else 'Would hold'} picture "
                              f"{e.n}; the file stays at {f}")
         elif e.n in keep and e.status == "kept":
-            lines.append(f"Picture {e.n} is already placed at "
-                         f"{e.dest}.{e.ext}")
+            planned = f"{e.dest}.{e.ext}"
+            here = _inside(vault, planned)
+            shown = _disk_rel(vault, here, planned) if here else planned
+            lines.append(f"Picture {e.n} is already placed at {shown}")
         elif e.n in keep:
             act = _prepare(vault, batch, e, lines)
             if act is None:
@@ -415,8 +448,12 @@ def run(job: Job, keep: set[int], hold: set[int], write: bool) -> Result:
     if not write:
         for a in actions:
             lines.append(_filed(a, False))
-            lines.extend(f"  Would retire the old picture {o} if nothing "
-                         "else links it" for o in a.old)
+            for o in a.old:
+                if _is_target(vault, a, o):
+                    lines.append(f"  The picture replaces the existing file {o}.")
+                else:
+                    lines.append(f"  Would retire the old picture {o} if "
+                                 "nothing else links it")
     if not write:
         return Result(lines, ok)
 
@@ -455,7 +492,7 @@ def run(job: Job, keep: set[int], hold: set[int], write: bool) -> Result:
         e.status = "held"
     try:
         image_jobs.save(job)
-    except OSError as err:
+    except Exception as err:  # noqa: BLE001 - the vault is changed; say so
         ok = False
         lines.append("The vault WAS changed: the pictures are in place and "
                      "linked, but the job could not be saved "

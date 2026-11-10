@@ -639,12 +639,22 @@ def test_sharp_s_is_not_mistaken_for_ss(vault, capsys):
         assert not (vault / CHARS / "strasse.jpg").exists()
 
 
-def test_a_look_alike_name_is_not_filed_unless_the_disk_agrees(vault, tmp_path):
+def test_a_look_alike_name_is_not_filed_unless_the_disk_agrees(
+        vault, tmp_path, monkeypatch, capsys):
     # The rule itself, whatever the disk: "already filed" needs samefile or
     # the exact target name, never a case-folded name match alone.
     (vault / CHARS / "Straße.jpg").write_bytes(JPG)
     here = image_place._existing(vault, f"{CHARS}/strasse")
     assert f"{CHARS}/Straße.jpg" in here          # blocking is the wide match
+    # And on every machine: when the disk says they are two files, it blocks.
+    monkeypatch.setattr(image_place, "_same_file", lambda a, b: False)
+    r = entry(1, "NPCs/Rowan.md", "npc", f"{CHARS}/strasse")
+    job = make_job(vault, [r])
+    before = snapshot(vault)
+    assert run(vault, job, "--keep", "1", "--write") == 1
+    assert "already has a picture" in capsys.readouterr().out
+    assert snapshot(vault) == before
+    assert "portrait" not in (vault / "NPCs/Rowan.md").read_text(encoding="utf-8")
 
 
 def test_a_url_encoded_markdown_link_keeps_the_old_picture(vault):
@@ -667,3 +677,68 @@ def test_a_link_in_the_templates_folder_keeps_the_old_picture(vault):
     job = make_job(vault, [m])
     assert run(vault, job, "--keep", "1", "--write") == 0
     assert (vault / CHARS / "marta.jpg").is_file()
+
+
+# --- minor wave: P1-P6 ------------------------------------------------------
+
+def test_a_wrong_case_embed_is_rewritten_not_doubled(vault):
+    folder = vault / "_attachments/scenes"
+    folder.mkdir(parents=True)
+    (folder / "Session-03-Mill.jpg").write_bytes(JPG)
+    wrap = vault / "Sessions/Session 03 Wrap-Up.md"
+    wrap.write_text(RECAP.replace(
+        "The miller said nothing at first.\n\n",
+        "The miller said nothing at first.\n\n![[session-03-mill.jpg]]\n\n", 1),
+        encoding="utf-8")
+    job = make_job(vault, [scene(replace=True)], data=JPG2)
+    assert run(vault, job, "--keep", "1", "--write") == 0
+    name = _listing(folder)[0]
+    text = wrap.read_text(encoding="utf-8")
+    assert text.casefold().count("![[session-03-mill.jpg]]") == 1
+    assert f"![[{name}]]" in text
+
+
+def test_a_note_that_cannot_be_read_counts_as_a_use(vault):
+    (vault / CHARS / "marta.jpg").write_bytes(JPG)
+    (vault / "NPCs/Rowan.md").write_bytes(
+        npc().encode() + "caf\xe9 ![[marta.jpg]]\n".encode("latin-1"))
+    m = entry(1, "NPCs/Marta.md", "npc", f"{CHARS}/marta-2", replace=True)
+    job = make_job(vault, [m], data=JPG2)
+    assert run(vault, job, "--keep", "1", "--write") == 0
+    assert (vault / CHARS / "marta.jpg").is_file()
+
+
+def test_the_rerun_line_names_the_picture_as_the_disk_does(vault, capsys):
+    (vault / CHARS / "Anselm.jpg").write_bytes(JPG)
+    if not image_place._same_file(vault / CHARS / "Anselm.jpg",
+                                  vault / CHARS / "anselm.jpg"):
+        pytest.skip("this disk tells names apart by case")
+    job = make_job(vault, [anselm(status="kept")])
+    assert run(vault, job, "--keep", "1", "--write") == 0
+    out = capsys.readouterr().out
+    assert f"already placed at {CHARS}/Anselm.jpg" in out
+
+
+def test_a_case_only_replace_preview_does_not_say_retire(vault, capsys):
+    (vault / CHARS / "marta.jpg").unlink()
+    (vault / CHARS / "Marta.jpg").write_bytes(JPG)
+    (vault / "NPCs/Marta.md").write_text(
+        npc(f'portrait: "{CHARS}/Marta.jpg"\n'), encoding="utf-8")
+    m = entry(1, "NPCs/Marta.md", "npc", f"{CHARS}/marta", replace=True)
+    job = make_job(vault, [m], data=JPG2)
+    assert run(vault, job, "--keep", "1") == 0
+    out = capsys.readouterr().out
+    assert "retire" not in out
+    assert f"replaces the existing file {CHARS}/Marta.jpg" in out
+
+
+def test_a_job_that_cannot_be_saved_after_the_write_is_said_plainly(
+        vault, monkeypatch, capsys):
+    job = make_job(vault, [anselm()])
+
+    def boom(j):
+        raise TypeError("not serialisable")
+    monkeypatch.setattr(image_jobs, "save", boom)
+    assert run(vault, job, "--keep", "1", "--write") == 1
+    out = capsys.readouterr().out
+    assert "The vault WAS changed" in out and "TypeError" in out
