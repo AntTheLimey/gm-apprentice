@@ -230,6 +230,17 @@ def test_rule_8_references_are_dropped_to_fit(tmp_path):
     assert e.estimate is not None and e.estimate <= 4.0
 
 
+def test_thinking_on_plans_the_higher_estimate(tmp_path):
+    base = ("vault:\n  images:\n    service: gemini\n"
+            "    model: gemini-nano-banana-2.1\n")
+    _, off = one(build(tmp_path / "a", config=base),
+                 {"for": "Anselm", "subject": "x"})
+    _, on = one(build(tmp_path / "b", config=base + "    thinking: true\n"),
+                {"for": "Anselm", "subject": "x"})
+    assert off.estimate is not None and on.estimate is not None
+    assert on.estimate > off.estimate
+
+
 def test_rule_9_run_cap_trims_the_tail(tmp_path):
     cfg = ("vault:\n  images:\n    service: gemini\n    model: x\n"
            "    price: 4\n    run_cap: 10\n")

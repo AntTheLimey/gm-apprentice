@@ -426,7 +426,7 @@ def _fit_cost(ctx: _Ctx, e: Entry, refs: list[str]) -> list[str] | None:
     def cost(k: int) -> float:
         if price is not None:
             return price
-        got = image_gemini.estimate(model, SIZE, k, chars)
+        got = image_gemini.estimate(model, SIZE, k, chars, lim.thinking)
         assert got is not None
         return got
     fitted = image_money.fit(cost, len(refs), lim.attempt)
