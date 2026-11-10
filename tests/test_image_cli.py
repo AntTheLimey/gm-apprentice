@@ -437,3 +437,53 @@ def test_missing_prints_rows_and_a_count(tmp_path, capsys):
 def test_missing_with_nothing_to_list(tmp_path, capsys):
     assert image.main(["missing", str(make_vault(tmp_path))]) == 0
     assert capsys.readouterr().out == "No notes are missing a picture.\n"
+
+
+def _job(vault: Path, job_id: str, statuses: list[str]) -> None:
+    import image_jobs
+    entries = [image_jobs.Entry(
+        n=i, note=f"NPCs/N{i}.md", kind="npc", prompt="p", refs=[], shape="3:4",
+        pending="", dest="", after=None, replace=False, estimate=None,
+        status=s) for i, s in enumerate(statuses, 1)]
+    image_jobs.save(image_jobs.Job(
+        id=job_id, vault=str(vault), service="codex", model="", priced=False,
+        unprompted=True, spent=0, entries=entries))
+
+
+def test_waiting_names_this_vaults_unfinished_jobs(tmp_path):
+    import image_jobs
+    a, b = make_vault(tmp_path), tmp_path / "other"
+    b.mkdir()
+    _job(a, "20261110-aaaa01", ["kept", "drawn", "drawn", "held"])
+    _job(a, "20261110-aaaa02", ["kept", "held", "refused"])       # finished
+    _job(a, "20261110-aaaa03", ["planned", "failed", "drawn"])
+    _job(b, "20261110-bbbb01", ["planned"])                       # another vault
+    got = image_jobs.waiting(a)
+    assert sorted(got) == [("20261110-aaaa01", 0, 2), ("20261110-aaaa03", 2, 1)]
+
+
+def test_waiting_finds_a_job_in_the_temp_folder(tmp_path, monkeypatch):
+    import image_jobs
+    vault = make_vault(tmp_path)
+    monkeypatch.setattr(image_jobs, "_writable",
+                        lambda root: "gm-apprentice-images" in str(root))
+    _job(vault, "20261110-temp01", ["drawn"])
+    assert image_jobs.waiting(vault) == [("20261110-temp01", 0, 1)]
+
+
+def test_waiting_skips_a_job_file_it_cannot_read(tmp_path):
+    import image_jobs
+    vault = make_vault(tmp_path)
+    _job(vault, "20261110-good01", ["drawn"])
+    bad = image_jobs.roots()[0] / "20261110-bad001"
+    bad.mkdir(parents=True)
+    (bad / "job.json").write_text("{not json", encoding="utf-8")
+    assert image_jobs.waiting(vault) == [("20261110-good01", 0, 1)]
+
+
+def test_status_prints_the_waiting_line(tmp_path, capsys):
+    vault = make_vault(tmp_path)
+    _job(vault, "20261110-aaaa01", ["drawn", "drawn", "planned"])
+    assert image.main(["status", str(vault)]) == 0
+    assert ("waiting: 20261110-aaaa01 (1 to draw, 2 to look at and place)"
+            in capsys.readouterr().out.splitlines())

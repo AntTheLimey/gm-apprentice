@@ -130,6 +130,9 @@ def status(vault: Path) -> int:
         print(f"codex: {state.line}"
               + (" (can draw with no money counted, if chosen)"
                  if state.state == "chatgpt" else ""))
+    for job_id, to_draw, to_place in image_jobs.waiting(vault):
+        print(f"waiting: {job_id} ({to_draw} to draw, "
+              f"{to_place} to look at and place)")
     if lim.service:
         print(f"service: {lim.service}, model: {lim.model or 'none chosen'}")
     else:

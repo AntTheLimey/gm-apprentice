@@ -195,6 +195,38 @@ def load(job_id: str) -> Job:
     return job
 
 
+def waiting(vault: Path) -> list[tuple[str, int, int]]:
+    """This vault's jobs that are not finished, newest first, as (job id,
+    pictures still to draw, pictures drawn and not yet looked at and
+    placed), so a later session can carry on with a job a skill left. A
+    job file that cannot be read is passed over."""
+    here = vault.resolve()
+    seen: set[str] = set()
+    found = []
+    for root in roots():
+        try:
+            folders = [d for d in root.iterdir() if d.is_dir()]
+        except OSError:
+            continue
+        for d in folders:
+            if d.name in seen or not (d / "job.json").is_file():
+                continue
+            seen.add(d.name)
+            try:
+                job = load(d.name)
+                if Path(job.vault).resolve() != here:
+                    continue
+                when = (d / "job.json").stat().st_mtime
+            except (Stop, OSError):
+                continue
+            to_draw = sum(e.status in ("planned", "failed") for e in job.entries)
+            to_place = sum(e.status == "drawn" for e in job.entries)
+            if to_draw or to_place:
+                found.append((when, job.id, to_draw, to_place))
+    found.sort(key=lambda f: (f[0], f[1]), reverse=True)
+    return [(i, d, p) for _w, i, d, p in found]
+
+
 _ID_DATE = re.compile(r"^(\d{4})(\d{2})(\d{2})")
 
 
