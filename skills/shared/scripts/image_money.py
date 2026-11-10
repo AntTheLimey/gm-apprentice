@@ -21,6 +21,7 @@ class Limits(NamedTuple):
     run: float
     month: float
     unpriced: bool
+    thinking: bool
     kinds: tuple[str, ...]
     service: str | None
     model: str | None
@@ -28,9 +29,18 @@ class Limits(NamedTuple):
     guidance: str
 
 
+_NAMES = tuple(f"vault.images.{n}" for n in (
+    "auto", "attempt_limit", "redraws", "run_cap", "month_cap", "unpriced",
+    "thinking", "kinds", "service", "model", "price", "guidance"))
+
+
 def limits(vault: Path) -> Limits:
     """The picture-drawing settings of `vault`."""
     v = vaultlib.settings(vault).values
+    if not all(name in v for name in _NAMES):
+        raise vaultlib.SettingsUnavailable(
+            "This vault's picture settings could not be read: the publish "
+            "tool in use is older than this command. Run gma update.")
     return Limits(
         auto=bool(v["vault.images.auto"]),
         attempt=v["vault.images.attempt_limit"],
@@ -38,6 +48,7 @@ def limits(vault: Path) -> Limits:
         run=v["vault.images.run_cap"],
         month=v["vault.images.month_cap"],
         unpriced=bool(v["vault.images.unpriced"]),
+        thinking=bool(v["vault.images.thinking"]),
         kinds=tuple(v["vault.images.kinds"]),
         service=v["vault.images.service"],
         model=v["vault.images.model"],

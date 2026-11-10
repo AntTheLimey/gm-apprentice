@@ -309,6 +309,22 @@
                 }
               ]
             },
+            "thinking": {
+              "description": "Whether the picture service may think before it draws. Off, the apprentice asks for the least thinking the model allows, which costs less and keeps the cost of a picture steady. On, pictures cost more and the cost varies; turn it on if likenesses or details suffer",
+              "default": false,
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*(?:[tT][rR][uU][eE]|[yY][eE][sS]|[oO][nN]|[fF][aA][lL][sS][eE]|[nN][oO]|[oO][fF][fF])\\s*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "kinds": {
               "description": "The kinds of note the apprentice may draw a picture for; player characters are left out unless you add them",
               "default": [

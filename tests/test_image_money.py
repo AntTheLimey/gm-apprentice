@@ -1,6 +1,7 @@
 """image_money.py: the money limits for drawing pictures, read from the
 vault's settings (the real tool, a real settings file)."""
 
+import dataclasses
 import sys
 from pathlib import Path
 
@@ -45,6 +46,28 @@ def test_limits_read_what_the_vault_sets(tmp_path):
     lim = image_money.limits(v)
     assert (lim.auto, lim.redraws, lim.service, lim.model, lim.price) == (
         True, 0, "gemini", "some-model", 4)
+
+
+def test_thinking_defaults_off_and_reads_on(tmp_path):
+    assert image_money.limits(make_vault(tmp_path, None)).thinking is False
+    vaultlib.forget_settings(None)
+    v = make_vault(tmp_path / "b", "vault:\n  images:\n    thinking: true\n")
+    assert image_money.limits(v).thinking is True
+
+
+def test_settings_without_the_picture_names_are_a_plain_skew_error(
+        tmp_path, monkeypatch):
+    v = make_vault(tmp_path, None)
+    real = vaultlib.settings(v)
+    stripped = {k: x for k, x in real.values.items()
+                if not k.startswith("vault.images.")}
+    monkeypatch.setattr(vaultlib, "settings",
+                        lambda vault: dataclasses.replace(real, values=stripped))
+    with pytest.raises(vaultlib.SettingsUnavailable) as e:
+        image_money.limits(v)
+    assert str(e.value) == (
+        "This vault's picture settings could not be read: the publish tool "
+        "in use is older than this command. Run gma update.")
 
 
 # --- the month count and the fences ---------------------------------------

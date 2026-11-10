@@ -147,6 +147,11 @@ const REGISTRY = [
     left_out: 'Off',
   },
   {
+    name: 'vault.images.thinking', type: 'switch', default: false, group: 'images',
+    does: 'Whether the picture service may think before it draws. Off, the apprentice asks for the least thinking the model allows, which costs less and keeps the cost of a picture steady. On, pictures cost more and the cost varies; turn it on if likenesses or details suffer',
+    left_out: 'Off',
+  },
+  {
     name: 'vault.images.kinds', type: 'list', of: 'note types', group: 'images',
     default: ['npc', 'location', 'faction', 'organization', 'item', 'creature', 'heritage', 'document', 'scene'],
     does: 'The kinds of note the apprentice may draw a picture for; player characters are left out unless you add them',

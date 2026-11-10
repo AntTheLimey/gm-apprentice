@@ -24,6 +24,7 @@ test('a vault that sets nothing gets the drawing defaults', () => {
   assert.equal(im.run_cap, 200);
   assert.equal(im.month_cap, 2000);
   assert.equal(im.unpriced, false);
+  assert.equal(im.thinking, false);
   assert.equal(im.guidance, '_Campaign/Image_Guidance.md');
   assert.ok(!im.kinds.includes('pc'));
   assert.ok(im.kinds.includes('scene'));
