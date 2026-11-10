@@ -487,3 +487,16 @@ def test_status_prints_the_waiting_line(tmp_path, capsys):
     assert image.main(["status", str(vault)]) == 0
     assert ("waiting: 20261110-aaaa01 (1 to draw, 2 to look at and place)"
             in capsys.readouterr().out.splitlines())
+
+
+def test_agent_page_carries_the_unasked_and_fill_rules():
+    import vault_check
+    page = (Path(image.__file__).resolve().parents[1] / "gma" / "llms"
+            / "image.md").read_text(encoding="utf-8")
+    assert vault_check.PICTURES_ON.startswith("# pictures on:")
+    assert "`# pictures on:`" in page          # the page names the line it answers
+    assert "Pass `--unprompted` exactly when no one asked" in page
+    assert 'gma image missing "<vault>"' in page
+    assert "never choose for them" in page
+    assert "session-play never draws unasked" in page
+    assert "More than 10 planned" in page
