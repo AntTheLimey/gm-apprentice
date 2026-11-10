@@ -440,15 +440,143 @@ class ThreadsTests(unittest.TestCase):
     def test_inline_and_adjacent_comments_are_hidden(self):
         pc = ("## Current Status\n\n**Open threads:**\n"
               "- Aside <!-- the abbot lies --> here\n"
-              "- Next to a comment\n<!-- an aside -->\n\n"
-              "- Under a closer\n\n%%x%%\n- Under a mark\n\n- Clear\n"
-              "**Knows:** x\n")
+              "- Next to a whole comment\n<!-- an aside -->\n\n"
+              "- Under a closer\n\n%%x%%\n- Under a whole mark\n\n"
+              "- Clear\n**Knows:** x\n")
         got = threads.pc_thread_items(pc)
+        # A comment that opens and closes on its own line cannot be split
+        # by taking the thread away (#641).
         self.assertEqual([(t.text, t.hidden) for t in got], [
             ("Aside <!-- the abbot lies --> here", True),
-            ("Next to a comment", True), ("Under a closer", False),
-            ("Under a mark", True), ("Clear", False)])
+            ("Next to a whole comment", False), ("Under a closer", False),
+            ("Under a whole mark", False), ("Clear", False)])
         self.assertFalse(any(t.fenced for t in got))
+
+    DORMANT_OVERVIEW = ("# T\n\n## Current Arc\n\nA.\n\n## Open Threads\n\n"
+                        "- a — involves the party\n\n## GM Notes\n\nS.\n")
+
+    def test_format_dormant_round_trips(self):
+        line = threads.format_dormant("**Wu bounty**", "Session 3", ["Rock"],
+                                      "Session 9 (left Wu)")
+        self.assertEqual(
+            line, "- **Wu bounty** — since Session 3; dormant since "
+                  "Session 9 (left Wu); involves [[Rock]]")
+        got = threads.parse_shared(line)
+        self.assertEqual((got.text, got.since, got.involves, got.dormant),
+                         ("**Wu bounty**", "Session 3", ["Rock"],
+                          "Session 9 (left Wu)"))
+        party = threads.parse_shared(threads.format_dormant(
+            "Find it", None, None, "Session 4"))
+        self.assertTrue(party.party)
+        self.assertIsNone(party.since)
+        self.assertEqual(party.dormant, "Session 4")
+        # An active entry reads as before: no dormant clause.
+        self.assertIsNone(threads.parse_shared(
+            "- x — since S1; involves the party").dormant)
+
+    def test_insert_dormant_after_open_threads(self):
+        out = threads.insert_shared(self.DORMANT_OVERVIEW, "- d — involves "
+                                    "the party", threads.DORMANT)
+        heads = [l for l in out.split("\n") if l.startswith("## ")]
+        self.assertEqual(heads, ["## Current Arc", "## Open Threads",
+                                 "## Dormant Threads", "## GM Notes"])
+        self.assertEqual([t.text for t in threads.shared_threads(out)], ["a"])
+        self.assertEqual([t.text for t in threads.shared_threads(
+            out, threads.DORMANT)], ["d"])
+        out2 = threads.insert_shared(out, "- e — involves the party",
+                                     threads.DORMANT)
+        self.assertEqual(out2.count("## Dormant Threads"), 1)
+        self.assertEqual([t.text for t in threads.shared_threads(
+            out2, threads.DORMANT)], ["d", "e"])
+        gone = threads.remove_shared(out2, 0, threads.DORMANT)
+        self.assertEqual([t.text for t in threads.shared_threads(
+            gone, threads.DORMANT)], ["e"])
+        self.assertEqual([t.text for t in threads.shared_threads(gone)],
+                         ["a"])
+
+    def test_insert_dormant_no_open_threads(self):
+        text = "# T\n\n## Current Arc\n\nA.\n\n## GM Notes\n\nS.\n"
+        out = threads.insert_shared(text, "- d — involves the party",
+                                    threads.DORMANT)
+        heads = [l for l in out.split("\n") if l.startswith("## ")]
+        self.assertEqual(heads, ["## Current Arc", "## Dormant Threads",
+                                 "## GM Notes"])
+        self.assertFalse(any(threads._states(out.split("\n"))))
+
+    def test_insert_dormant_open_threads_fenced(self):
+        text = ("# T\n\n## Current Arc\n\nA.\n\n<!-- gm-only -->\n\n"
+                "## Open Threads\n\n- a — involves the party\n\n"
+                "<!-- /gm-only -->\n\n## GM Notes\n\nS.\n")
+        out = threads.insert_shared(text, "- d — involves the party",
+                                    threads.DORMANT)
+        lines = out.split("\n")
+        at = lines.index("## Dormant Threads")
+        self.assertFalse(threads._states(lines)[at])
+        self.assertFalse(threads._states(lines)[at + 2])
+        self.assertEqual([t.text for t in threads.shared_threads(
+            out, threads.DORMANT)], ["d"])
+
+    def test_insert_dormant_crlf(self):
+        text = self.DORMANT_OVERVIEW.replace("\n", "\r\n")
+        out = threads.insert_shared(text, "- d — involves the party",
+                                    threads.DORMANT)
+        self.assertNotIn("\r\r", out)
+        self.assertEqual(out.count("\n"), out.count("\r\n"))
+        self.assertIn("## Dormant Threads\r\n", out)
+
+    def test_widen_shared_in_dormant_section(self):
+        text = ("## Dormant Threads\n\n- d — since S1; dormant since S2; "
+                "involves [[A]]\n")
+        out = threads.widen_shared(text, "d", ["B"], threads.DORMANT)
+        self.assertIn("involves [[A]], [[B]]", out)
+        with self.assertRaises(KeyError):
+            threads.widen_shared(text, "d", ["B"])
+
+    REPRO = ("## Current Status\n\n**Location:** Somewhere\n"
+             "**Open threads:**\n- Plain thread one\n"
+             "- Thread two <!-- GM: a secret aside -->\n"
+             "- Plain thread three\n- Plain thread four\n"
+             "<!-- QA-DISMISSED: 2026-10-20 thread-tidy: kept on purpose "
+             "-->\n\n**Knows (exclusive):** \u2014\n")
+
+    def test_neighbour_one_line_comment_does_not_hide(self):
+        got = threads.pc_thread_items(self.REPRO)
+        self.assertEqual([t.hidden for t in got],
+                         [False, True, False, False])
+
+    def test_neighbour_open_block_still_hides(self):
+        pc = ("## Current Status\n\n**Open threads:**\n- One\n"
+              "- Two\n<!-- an aside that\ngoes on\n-->\n\n"
+              "**Knows:** x\n")
+        self.assertEqual([t.hidden for t in threads.pc_thread_items(pc)],
+                         [False, True])
+        # A line that closes a block opened above hides the thread under it.
+        pc = ("## Current Status\n\n**Open threads:**\n"
+              "<!-- an aside that\ngoes on -->\n- One\n- Two\n"
+              "**Knows:** x\n")
+        self.assertEqual([t.hidden for t in threads.pc_thread_items(pc)],
+                         [True, False])
+        pc = ("## Current Status\n\n**Open threads:**\n- One\n%%\n"
+              "aside\n%%\n**Knows:** x\n")
+        self.assertEqual([t.hidden for t in threads.pc_thread_items(pc)],
+                         [True])
+
+    def test_remove_last_thread_writes_filler(self):
+        pc = ("## Current Status\n\n**Open threads:**\n- Only one\n"
+              "**Knows:** x\n")
+        (t,) = threads.pc_thread_items(pc)
+        out = threads.remove_pc_thread(pc, t)
+        self.assertEqual(out, "## Current Status\n\n**Open threads:** \u2014\n"
+                              "**Knows:** x\n")
+        self.assertEqual(threads.pc_thread_items(out), [])
+        # Not the last: the label stays as it was; CRLF kept.
+        two = pc.replace("- Only one\n", "- Only one\n- Other\n")
+        got = threads.pc_thread_items(two)
+        self.assertNotIn("\u2014", threads.remove_pc_thread(two, got[0]))
+        crlf = pc.replace("\n", "\r\n")
+        (t,) = threads.pc_thread_items(crlf)
+        self.assertIn("**Open threads:** \u2014\r\n",
+                      threads.remove_pc_thread(crlf, t))
 
     def test_lazy_line_never_joins_a_comment_or_callout(self):
         for line in ("<!-- spoiler -->", "<!--", "-->", "%%",
