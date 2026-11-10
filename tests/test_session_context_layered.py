@@ -445,5 +445,58 @@ class PrepSectionLineTests(unittest.TestCase):
                          "* one …\n* two")
 
 
+class MapTests(unittest.TestCase):
+    """--prep's Map: where the linked notes and latest sessions are."""
+
+    def note(self, rel, fm, body=""):
+        return (rel, "---\n---\n" + body, fm)
+
+    def test_map_lists_linked_notes_and_latest_sessions(self):
+        ch = {"chapter": "[[Chapter 1]]"}
+        wrap_body = ("[[Bo]] met [[Ada]] at [[The Ford|the ford]]; "
+                     "[[Nowhere]]; [[Twin]]\n\n#### Resolved Threads\n\n"
+                     "- [[Gone]]\n\n## Next\n\n[[Bo]] again\n")
+        wrap = self.note("Ch1/S5 Wrap.md",
+                         {"type": "session_wrap", "session": "[[Session 5]]", **ch},
+                         wrap_body)
+        plan = self.note("Ch1/S6 Plan.md",
+                         {"type": "session-plan", "session": "[[Session 6]]", **ch},
+                         "[[Inn]] and [[Bo]]")
+        files = [
+            wrap, plan,
+            self.note("NPCs/Bo.md", {"type": "npc"}, "one two three"),
+            self.note("PCs/Ada.md", {"type": "pc"}, "x"),
+            self.note("Places/The Ford.md", {"type": "location"}, "a b"),
+            self.note("Places/Inn.md", {"type": "location"}, "c"),
+            self.note("NPCs/Gone.md", {"type": "npc"}, "g"),
+            self.note("A/Twin.md", {"type": "npc"}, "t"),
+            self.note("B/Twin.md", {"type": "npc"}, "t"),
+        ] + [self.note(f"Ch1/S{n} Plan.md",
+                       {"type": "session-plan", "session_number": n, **ch},
+                       "p") for n in (1, 2, 3, 4)] + [
+            self.note("Ch2/S4 Plan.md", {"type": "session-plan",
+                                         "session_number": 4,
+                                         "chapter": "[[Chapter 2]]"}, "q")]
+        out = sctx.map_report(files, wrap[:2], plan[:2], "chapter 1", 5)
+        linked = out.split("--- Linked")[1].split("--- Latest")[0]
+        self.assertEqual(
+            [r.split("\t")[1] for r in linked.split("\n")[1:]
+             if "\t" in r],
+            ["NPCs/Bo.md", "Places/The Ford.md", "Places/Inn.md"])
+        self.assertIn("npc\tNPCs/Bo.md\t3 words", linked)
+        self.assertIn("(2 linked names have no single note)", linked)
+        latest = out.split("--- Latest sessions ---")[1]
+        self.assertIn("Session 5 wrap-up\tCh1/S5 Wrap.md", latest)
+        self.assertIn("Session 4 plan\tCh1/S4 Plan.md", latest)
+        self.assertIn("Session 3 plan\tCh1/S3 Plan.md", latest)
+        self.assertNotIn("S2 Plan", latest)       # only the latest three
+        self.assertNotIn("Ch2/", latest)          # this chapter only
+
+    def test_prep_ends_with_the_map(self):
+        out = sc("--prep").stdout
+        self.assertIn("===== Map =====", out)
+        self.assertIn("--- Latest sessions ---", out)
+
+
 if __name__ == "__main__":
     unittest.main()

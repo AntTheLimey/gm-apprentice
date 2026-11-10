@@ -1860,6 +1860,75 @@ def wrapup_names(files, wrap_text: str) -> list[str]:
     return names
 
 
+MAP_SESSIONS = 3   # how many of the latest sessions the map lists
+
+
+def map_report(files, wrap, plan, chapter, current: int) -> str:
+    """Where the notes a prep run may need are, without their text: every
+    note the Wrap-Up (its Resolved Threads left out) and the upcoming Plan
+    link, in the order first linked, PCs left out (their status is in the
+    bundle); then the latest MAP_SESSIONS sessions' notes in the chapter.
+    One line each: `{type}\\t{path}\\t{N} words`. A link that names no
+    note, or more than one, is counted, not listed."""
+    by_name: dict[str, list] = {}
+    for f in files:
+        by_name.setdefault(normalize(Path(f[0]).stem), []).append(f)
+    own = {wrap[0] if wrap else None, plan[0] if plan else None}
+    texts = ([_without_block(wrap[1], 4, "Resolved Threads")] if wrap
+             else []) + ([plan[1]] if plan else [])
+    seen: set[str] = set()
+    rows: list[str] = []
+    missing = 0
+    for raw in (r for t in texts for r in _ANY_LINK_RE.findall(t)):
+        key = normalize(link_name(raw))
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        hits = by_name.get(key, [])
+        if len(hits) != 1:
+            missing += 1
+            continue
+        rel, text, fm = hits[0]
+        kind = entity_type(fm) or "note"
+        if kind == "pc" or rel in own:
+            continue
+        rows.append(f"{kind}\t{rel}\t{word_count(body_of(text))} words")
+    out = ["===== Map =====",
+           "(where the notes the Wrap-Up and the upcoming Plan link are, "
+           "and the latest sessions' notes: read one when a step needs it, "
+           "whole with Read or one section with `gma section`, instead of "
+           "searching the vault)",
+           "--- Linked from the Wrap-Up and the Plan ---"]
+    out += rows or ["(none)"]
+    if missing:
+        out.append(f"({missing} linked names have no single note)")
+    kinds = {"session": "index", "session-plan": "plan",
+             **{t: "wrap-up" for t in WRAP_UP_TYPES}}
+
+    def number(fm) -> int | None:
+        n = session_ref_number(fm)
+        return n if n is not None else parse_session_number(
+            fm.get("session_number"))
+
+    numbers = sorted({n for rel, _t, fm in files
+                      if entity_type(fm) in kinds
+                      and (n := number(fm)) is not None
+                      and n <= current
+                      and chapter_key(rel, fm) == chapter})[-MAP_SESSIONS:]
+    out.append("--- Latest sessions ---")
+    listed = [(number(fm) or 0, kinds[entity_type(fm)], rel, text)
+              for rel, text, fm in files
+              if entity_type(fm) in kinds
+              and number(fm) in numbers
+              and chapter_key(rel, fm) == chapter]
+    for n, kind, rel, text in sorted(listed, key=lambda r: (-r[0], r[1])):
+        out.append(f"Session {n} {kind}\t{rel}\t"
+                   f"{word_count(body_of(text))} words")
+    if not listed:
+        out.append("(none)")
+    return "\n".join(out)
+
+
 def print_prep_rest(vault: Path, files, chosen, wrap, current: int,
                     chapter, upcoming: int, outlines: Outlines) -> None:
     """What `--prep` adds after the brief bundle."""
@@ -1883,6 +1952,9 @@ def print_prep_rest(vault: Path, files, chosen, wrap, current: int,
     print(run_script("plans_index.py", vault, *where,
                      *(("--against", *names) if names else ()),
                      title="Narrative Plans"))
+    print("\n" + map_report(files, wrap, _upcoming_plan(files, chapter,
+                                                        upcoming),
+                            chapter, current))
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -1937,7 +2009,9 @@ def build_parser() -> argparse.ArgumentParser:
              "its size and fetch path; deferred world flags likewise, "
              "under each flag's first line), the chapter's scene queue and its "
              "narrative plans checked against the NPCs, locations and "
-             "factions the Wrap-Up links")
+             "factions the Wrap-Up links, then a Map: the path and size "
+             "of every note the Wrap-Up and the upcoming Plan link, and of "
+             "the latest sessions' notes")
     mode.add_argument(
         "--carry", action="store_true",
         help="print only what the previous Wrap-Up carries forward: its "

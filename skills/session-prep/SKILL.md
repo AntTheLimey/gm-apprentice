@@ -89,7 +89,9 @@ deferred world flags (each flag's first line), and outlines (frontmatter, headin
 of the campaign overview and the upcoming session's existing Plan, then
 the reconcile scan, threads, PC arcs, the scene queue and the narrative
 plans: steps 8, 10c, 12 and 14 and Phase 1 read these, never rerun
-them. Read
+them. Its Map gives the path and size of every note the Wrap-Up and the
+upcoming Plan link, and of the latest sessions' notes: take a note's
+path from there rather than searching the vault. Read
 a stubbed or outlined section only when a step needs it: from its file,
 or a section printed as heading, size and path with
 `gma section` (for step 12, the PC whose arc this session turns on).
