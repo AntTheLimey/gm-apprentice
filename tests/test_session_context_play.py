@@ -490,12 +490,14 @@ class ThreadSecondTierTests(unittest.TestCase):
         self.assertNotIn("not in any wrap-up", report)
         self.assertIn("~ means a likely match", report.splitlines()[1])
 
-    def test_tentative_match_leaves_the_bullet_in_the_orphan_list(self):
+    def test_tentative_match_claims_the_bullet(self):
+        # A likely match ages the thread from the line, so the line is
+        # not printed again as one on no list (#642).
         tmp = self.reworded_vault()
         report = sc.thread_report(load_files(tmp), 5, None, tmp)
         orphans = report.split(
             "--- Wrap-up threads not on any thread list ---", 1)[1]
-        self.assertIn("session 3\tVenn drugged in study", orphans)
+        self.assertNotIn("Venn drugged in study", orphans)
 
     def test_no_legend_when_nothing_is_tentative(self):
         report = sc.thread_report(
@@ -592,6 +594,8 @@ class ThreadReportTests(unittest.TestCase):
             "Find the missing ledger\tfirst=7\tlast=7\tage=0\t\n"
             "Repay Bram\tfirst=?\tlast=?\tage=?\t"
             "(not in any wrap-up — check it is still live)\n"
+            "--- Dormant (Campaign Overview) ---\n"
+            "(none)\n"
             "--- Wrap-up threads not on any thread list ---\n"
             "session 5\tThe ledger is still missing"))
 
@@ -816,7 +820,7 @@ class ThreadReportTests(unittest.TestCase):
         self.assertIn("===== Threads =====", result.stdout)
         self.assertNotIn("Wrap-Up —", result.stdout)
         self.assertNotIn("Active PCs", result.stdout)
-        self.assertNotIn("Campaign Overview", result.stdout)
+        self.assertNotIn("===== Campaign Overview", result.stdout)
 
 
 if __name__ == "__main__":

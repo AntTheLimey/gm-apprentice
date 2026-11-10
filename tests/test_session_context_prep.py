@@ -206,6 +206,170 @@ class UnlistedWrapupThreadsTests(unittest.TestCase):
         self.assertEqual(left, [(2, near)])
 
 
+OVERVIEW = "Campaign Overview.md"
+
+DORMANT_LIST = (
+    "## Dormant Threads\n\n"
+    "- **Wu bounty** \u2014 [[Master Wu]] wants the ledger \u2014 since "
+    "Session 1; dormant since Session 1 (left Wu); involves [[Hero]]\n"
+    "- **Gull omen** \u2014 [[The Gull]] cried \u2014 since Session 1; "
+    "dormant since Session 1 (left the quay); involves the party\n"
+    "- **Secret** \u2014 [[Hidden Man]] <!-- gm --> \u2014 since Session "
+    "1; dormant since Session 1 (hid); involves the party\n")
+
+DORMANT_FILES = {
+    **FILES,
+    "NPCs/Master Wu.md": note("type: npc"),
+    "NPCs/The Gull.md": note("type: npc"),
+}
+
+
+class DormantReportTests(unittest.TestCase):
+    def vault(self, dormant: str = DORMANT_LIST,
+              wrap: str | None = None, plan: str | None = None) -> Path:
+        files = dict(DORMANT_FILES)
+        files[OVERVIEW] = note(
+            "type: campaign_overview",
+            "## Open Threads\n\n" + dormant + "\n## Key Factions\n")
+        if wrap is not None:
+            files[f"{SESSIONS}/Session 01 - Landfall - Wrap-Up.md"] = wrap
+        if plan is not None:
+            files[f"{SESSIONS}/Session 02 - Plan.md"] = note(
+                'type: session-plan\nsession: "[[Session 02 - X]]"\n'
+                'chapter: "[[Chapter 1 - Harbour]]"', plan)
+        return make_vault(self, files)
+
+    def test_threads_prints_all_dormant(self) -> None:
+        out = run_cli(self.vault(), "--threads").stdout
+        head = "--- Dormant (Campaign Overview) ---"
+        part = out.split(head, 1)[1].split("--- Wrap-up threads", 1)[0]
+        self.assertIn("Wu bounty", part)
+        self.assertIn("dormant since Session 1 (left Wu)", part)
+        self.assertIn("involves: Hero", part)
+        self.assertIn("involves: the party", part)
+        self.assertIn("Gull omen", part)
+        self.assertIn("(hidden)", part.split("Secret", 1)[1])
+        self.assertGreater(out.find(head), out.find("===== Threads"))
+        self.assertGreater(out.find("--- Wrap-up threads"), out.find(head))
+
+    def test_prep_prints_only_may_wake_with_match(self) -> None:
+        wrap = WRAP.replace(
+            "<!-- gm-only -->",
+            "#### Resolved Threads\n\n- done with [[The Gull]]\n\n"
+            "<!-- gm-only -->").replace(
+            "They met", "They met [[Master Wu]] and ")
+        done = run_cli(self.vault(wrap=wrap), "--prep")
+        self.assertEqual(done.returncode, 0, done.stderr)
+        part = done.stdout.split("--- Dormant, may wake ---", 1)[1]
+        part = part.split("--- Wrap-up threads", 1)[0]
+        self.assertIn("Wu bounty", part)
+        self.assertIn("\tmatched: [[Master Wu]]", part)
+        # The Gull is named only under Resolved Threads: not a match.
+        self.assertNotIn("Gull omen", part)
+        self.assertNotIn("--- Dormant (Campaign Overview) ---", done.stdout)
+
+    def test_prep_matches_the_upcoming_plan(self) -> None:
+        out = run_cli(self.vault(plan="Go see [[The Gull]] again.\n"),
+                      "--prep").stdout
+        part = out.split("--- Dormant, may wake ---", 1)[1]
+        part = part.split("--- Wrap-up threads", 1)[0]
+        self.assertIn("Gull omen", part)
+        self.assertIn("matched: [[The Gull]]", part)
+        self.assertNotIn("Wu bounty", part)
+
+    def test_an_involved_name_alone_does_not_wake(self) -> None:
+        wrap = WRAP.replace("They met", "They met [[Hero]] and ")
+        dormant = ("## Dormant Threads\n\n- **Wu** \u2014 [[Hero]] owes "
+                   "\u2014 since Session 1; dormant since Session 1 (x); "
+                   "involves [[Hero]]\n")
+        out = run_cli(self.vault(dormant, wrap), "--prep").stdout
+        part = out.split("--- Dormant, may wake ---", 1)[1]
+        self.assertTrue(part.lstrip().startswith("(none)"), part[:200])
+
+    def test_dormant_mode_prints_whole_list(self) -> None:
+        done = run_cli(self.vault(), "--dormant")
+        self.assertEqual(done.returncode, 0, done.stderr)
+        out = done.stdout
+        self.assertIn("===== Session Context =====", out)
+        self.assertIn("--- Dormant (Campaign Overview) ---", out)
+        for name in ("Wu bounty", "Gull omen", "Secret"):
+            self.assertIn(name, out)
+        self.assertNotIn("===== Threads", out)
+        self.assertNotIn("===== Wrap-Up", out)
+
+    def test_no_dormant_section_prints_none(self) -> None:
+        vault = self.vault(dormant="")
+        for flag, head in (("--threads", "--- Dormant (Campaign Overview) ---"),
+                           ("--prep", "--- Dormant, may wake ---"),
+                           ("--dormant", "--- Dormant (Campaign Overview) ---")):
+            with self.subTest(flag=flag):
+                done = run_cli(vault, flag)
+                self.assertEqual(done.returncode, 0, done.stderr)
+                part = done.stdout.split(head, 1)[1].lstrip()
+                self.assertTrue(part.startswith("(none)"), part[:200])
+
+    def test_dormant_flag_is_exclusive(self) -> None:
+        done = run_cli(self.vault(), "--dormant", "--threads")
+        self.assertEqual(done.returncode, 2)
+
+
+class LikelyMatchTests(unittest.TestCase):
+    def test_likely_match_claims_line(self) -> None:
+        pc = note("type: pc\nstatus: active",
+                  "## Current Status\n\n**Open threads:**\n"
+                  "- Dr [[Venn]] was drugged in his study; someone knows "
+                  "the cylinder is loose\n")
+        wrap = note(
+            'type: session-wrapup\nsession: "[[Session 03 - X]]"\n'
+            'session_number: 3\nchapter: "[[Chapter 1 - Harbour]]"',
+            "## GM Notes\n\n### PC Carry-Forward\n\n#### [[Ada]]\n\n"
+            "- Venn drugged in study carried by Ada\n\n"
+            "### What Carries Forward\n\n#### Unresolved Threads\n\n"
+            "- Venn drugged in study (by whom?)\n"
+            "- A wholly different matter about the harbour tax\n")
+        vault = make_vault(self, {
+            "PCs/Ada.md": pc, f"{SESSIONS}/Session 03 - Wrap-Up.md": wrap})
+        files = list(sc.vault_files(vault))
+        report = sc.thread_report(files, 5, None, vault)
+        self.assertIn("first~3", report)
+        orphans = report.split(
+            "--- Wrap-up threads not on any thread list ---", 1)[1]
+        self.assertNotIn("Venn drugged", orphans)
+        self.assertIn("harbour tax", orphans)
+
+
+class OverlapNamesTests(unittest.TestCase):
+    def test_overlap_names_skip_resolved(self) -> None:
+        files = [("NPCs/Ma Barker.md", "", {"type": "npc"}),
+                 ("Locations/The_Docks.md", "", {"type": "location"})]
+        text = ("They met [[Ma Barker]].\n\n#### Resolved Threads\n\n"
+                "- the toll at [[The Docks]] \u2014 closed: paid\n\n"
+                "### Next\n\nSee [[The Docks]] later.\n")
+        self.assertEqual(sc.wrapup_names(files, text),
+                         ["Ma Barker", "The Docks"])
+        only = text.replace("See [[The Docks]] later.", "Nothing.")
+        self.assertEqual(sc.wrapup_names(files, only), ["Ma Barker"])
+
+
+class ChapterWarningTests(unittest.TestCase):
+    def warnings(self, as_of: str) -> list[str]:
+        files = dict(FILES)
+        files[OVERVIEW] = note(f"type: campaign_overview\nasOfSession: "
+                               f"{as_of}")
+        vault = make_vault(self, files)
+        got = sc.select_session(list(sc.vault_files(vault)), None)[1]
+        return [w for w in got if "asOfSession" in w]
+
+    def test_chapter_warning_only_on_named_mismatch(self) -> None:
+        for as_of in ('"Session 09"', "9", '"Session 9"',
+                      '"Chapter 1, Session 3"'):
+            with self.subTest(as_of=as_of):
+                self.assertEqual(self.warnings(as_of), [])
+        got = self.warnings('"Chapter 2, Session 3"')
+        self.assertEqual(len(got), 1, got)
+        self.assertIn("verify before trusting", got[0])
+
+
 PAUSED = ("---\ntype: scene\nchapter: \"[[Chapter 1 - Harbour]]\"\n"
           "status: paused\nplayed_in:\n  - \"[[Session 01 - Landfall]]\"\n"
           "---\n\n<!-- prompt -->\n\n## Paused\n\n"
