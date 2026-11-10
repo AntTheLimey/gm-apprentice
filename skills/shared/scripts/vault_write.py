@@ -92,7 +92,8 @@ DATA_FILES = frozenset({"_meta/prop-hands.json"})
 VERBS = {"WOULD-CREATE": "CREATED", "WOULD-ADD": "ADDED",
          "WOULD-MOVE": "MOVED", "WOULD-CLOSE": "CLOSED",
          "WOULD-RECORD": "RECORDED", "WOULD-REST": "RESTED",
-         "WOULD-WAKE": "WOKE", "WOULD-SETTLE": "SETTLED"}
+         "WOULD-WAKE": "WOKE", "WOULD-HAND": "HANDED",
+         "WOULD-SETTLE": "SETTLED"}
 
 
 class WriteError(Exception):
@@ -333,12 +334,13 @@ def emit(batch: Batch, wrote: bool) -> str:
     def count(*verbs: str) -> int:
         return sum(r.split("\t", 1)[0] in verbs for r in rows)
 
-    # `threads` alone reports moves, closes, rests and wakes; other totals stay as they were.
+    # `threads` alone reports moves, closes, rests, wakes and hands; other totals stay as they were.
     extra = "".join(f"{name}: {n}  " for name, n in (
         ("moved", count("WOULD-MOVE", "MOVED")),
         ("closed", count("WOULD-CLOSE", "CLOSED")),
         ("rested", count("WOULD-REST", "RESTED")),
         ("woken", count("WOULD-WAKE", "WOKE")),
+        ("handed", count("WOULD-HAND", "HANDED")),
         ("settled", count("WOULD-SETTLE", "SETTLED"))) if n)
     total = (f"# create: {count('WOULD-CREATE', 'CREATED')}  "
              f"add: {count('WOULD-ADD', 'ADDED')}  skip: {count('SKIP')}  "
@@ -2233,6 +2235,27 @@ def threads_row(batch: Batch, cols: list[str], wrapup: list[str]) -> None:
         else:
             threads_insert(batch, overview, entry.text, entry.since,
                            names, "WOULD-WAKE")
+    elif verb == "hand":
+        # A PC's line about another PC's matter goes to that PC's list.
+        if len(cols) != 4:
+            raise WriteError("hand needs: hand TAB from TAB lead TAB to")
+        giver, lead_key, taker = (c.strip() for c in cols[1:])
+        if not (giver and lead_key and taker):
+            raise WriteError("hand needs a PC to take it from, a lead and "
+                             "a PC to give it to; one is empty")
+        src, dst = find_pc(batch, giver), find_pc(batch, taker)
+        if src == dst:
+            raise WriteError(f"hand: '{giver}' and '{taker}' are the same PC")
+        text = threads_take(batch, src, lead_key, "WOULD-HAND").text
+        try:
+            batch.put(dst, th.add_pc_thread(batch.read(dst), text))
+        except (KeyError, ValueError) as e:
+            raise WriteError(
+                f"{dst}: no place to add the thread on Open threads "
+                f"({e.args[0] if e.args else e}); edit it by hand"
+            ) from None
+        batch.row("WOULD-HAND", dst, "\u00a7Current Status/Open threads",
+                  lead_key)
     elif verb == "close":
         if len(cols) != 4:
             raise WriteError("close needs: close TAB list TAB lead TAB "
@@ -2270,7 +2293,7 @@ def threads_row(batch: Batch, cols: list[str], wrapup: list[str]) -> None:
                   lead_key)
     else:
         raise WriteError(f"unknown row '{verb}': use add, move, close, "
-                         f"rest or wake")
+                         f"rest, wake or hand")
 
 
 def cmd_threads(batch: Batch, args: argparse.Namespace, text: str) -> None:
@@ -4266,7 +4289,7 @@ def build_parser() -> argparse.ArgumentParser:
     how_status.add_argument("--show", action="store_true", help="print the PC's Current Status fields")
     how_status.add_argument("--write", action="store_true", help="write it (default: preview)")
     threads = sub.add_parser(
-        "threads", help="add, move, close, rest and wake threads (stdin rows)",
+        "threads", help="add, move, close, rest, wake and hand threads (stdin rows)",
         formatter_class=raw, description=(
             "stdin: one row per line, fields separated by TAB.\n"
             "  add   shared  SINCE  WHO  TEXT   add to the Overview's Open Threads\n"
@@ -4290,6 +4313,8 @@ def build_parser() -> argparse.ArgumentParser:
             "  wake  LEAD    WHO                a dormant thread goes back: one PC\n"
             "                                   names their Open threads; several\n"
             "                                   PCs or 'party', the shared list\n"
+            "  hand  FROM    LEAD   TO          take LEAD off PC FROM's Open threads\n"
+            "                                   and add it, unchanged, to PC TO's\n"
             "SINCE is a session label, or - for none. WHO is PC note\n"
             "names separated by commas, or 'party' (for move, every active\n"
             "PC). Any ERROR row writes nothing."))

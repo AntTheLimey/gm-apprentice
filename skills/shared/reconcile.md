@@ -26,15 +26,16 @@ judge).
 If it passes, offer:
 
 > "Straightforward session — no conflicts found, no unplayed
-> prep. Promote the Wrap-Up and {the DRAFTs created this session,
-> by name} to AUTHORITATIVE, then the threads? (y/n)"
+> prep. Settle the threads, then promote the Wrap-Up and {the DRAFTs
+> created this session, by name} to AUTHORITATIVE? (y/n)"
 
-On yes:
+On yes, step 5.5 first (a thread write that fails stops here: the
+session stays at `wrap-up`), then:
 - `gma stamp-entities <vault> "<wrap-up>" --promote --reconciled YYYY-MM-DD`
 - `gma stamp-entities <vault> <entity files> --promote` — the
   scan's DRAFTs created this session, never its older ones
 - `gma stamp-entities <vault> "<index>" --set status=reviewed`
-- Do step 5.5, then step 6.1, then go to step 6.5.
+- Do step 6.1, then go to step 6.5.
 
 Otherwise run the full procedure.
 
@@ -158,20 +159,21 @@ it `?`: the GM would rather add one back than prune a long list.
      keeps; never ask the GM to review the whole list.
 4. The GM strikes by number ("keep 4 and 7") or says ok. A struck
    line stays as it is; a struck New is closed as not a thread.
-5. Write in two calls, dry run then `--write`; an ERROR row writes
-   nothing. `gma vault-write <vault> threads --wrapup "<wrap-up>"`,
-   TAB rows (LEAD: bold lead or whole text; LIST: `shared`, a PC's
-   note name, `dormant`, or `wrapup` for a line on no list):
+5. Write in two calls, each a dry run, then the same with `--write`;
+   an ERROR row writes nothing. First `gma vault-write <vault> threads
+   --wrapup "<wrap-up>"`, TAB rows (LEAD: bold lead or whole text;
+   LIST: `shared`, a PC's note name, `dormant`, or `wrapup` for a line
+   on no list):
 
    ```text
    close  LIST  LEAD  EVIDENCE   the quoted line, or "not a thread: {reason}"
    rest   LIST  LEAD  WHY        where or what was left
    wake   LEAD  WHO              one PC: their list; PCs or party: shared
    move   LEAD  SINCE  WHO       holders and PCs involved; "Session N" or -
+   hand   FROM  LEAD  TO         one PC's line to another PC's list
    ```
 
-   To one other PC: `rest`, then `wake` to them, same call. Then
-   `gma vault-write <vault> wrapup-settle "<wrap-up>"`, rows
+   Then `gma vault-write <vault> wrapup-settle "<wrap-up>"`, rows
    `SECTION  LEAD  RULING`, for the Answered.
 6. Little changed: a short list. Nothing to propose: "Threads:
    nothing settled", and move on.

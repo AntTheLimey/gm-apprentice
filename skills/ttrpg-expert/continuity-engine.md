@@ -124,8 +124,8 @@ its absence as a gap.
 ### Thread Tracker
 
 Threads are tracked inline, not as entity files: the Campaign Overview's
-`## Open Threads` (shared), each PC's `## Current Status` → Open threads,
-and the Session Plan's `## Active Threads`.
+`## Open Threads` (shared) and `## Dormant Threads` (parked), each PC's
+`## Current Status` → Open threads, and the Session Plan's `## Active Threads`.
 Use this format when the GM asks for a thread tracker or a review:
 
 ```markdown

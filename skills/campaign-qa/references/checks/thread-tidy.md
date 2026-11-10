@@ -28,6 +28,8 @@ list is Reconcile's, with the GM; Thread Tidy leaves those open.
      `not a thread: an event, in the Session N recap`. The text itself
      shows it, so no other line is needed.
    - Anything arguable stays open and goes in the report.
+   - Leave the dormant list alone: closing a dormant thread is the
+     GM's call.
    - Leave threads marked `(hidden)`: the tool refuses them, and one
      refused row writes nothing.
 3. Duplicates: the same thread on two or more PCs.

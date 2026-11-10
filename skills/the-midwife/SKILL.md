@@ -86,7 +86,7 @@ sub-adventure gets its own file under `adventures/`.
 
 **Existing vault:** mine the vault before asking questions:
 
-- The Campaign Overview's `## Open Threads`, unresolved threads and dormant factions, parked hooks, NPCs
+- The Campaign Overview's `## Open Threads` and its dormant list (`gma session-context <vault> --dormant`), unresolved threads and dormant factions, parked hooks, NPCs
   with unfinished business, world-state changes creating pressure
 - PC arcs needing attention — read
   `ttrpg-expert/arc-spotlight-reference.md`; mine each active

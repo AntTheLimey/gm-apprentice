@@ -960,6 +960,82 @@ class ThreadsTests(unittest.TestCase):
                           "is in or next to hidden text; edit it by hand", out)
         self.assertEqual(self.snapshot(vault), before)
 
+    # -- hand: a PC's line about another PC's matter goes to that PC -----
+
+    LAMP = "Find out who lit the lamp on the north bank"
+
+    def test_hand_preview_then_write(self):
+        vault = self.vault()
+        stdin = rows(("hand", "Ines_Marlowe", self.LAMP, "Corwin_Hale"))
+        before = self.snapshot(vault)
+        code, out = run(vault, "threads", stdin=stdin)
+        self.assertEqual(code, 0, out)
+        self.assertIn("WOULD-HAND\t" + INES, out)
+        self.assertIn("WOULD-HAND\t" + CORWIN, out)
+        self.assertEqual(self.snapshot(vault), before)
+        code, out = run(vault, "threads", "--write", stdin=stdin)
+        self.assertEqual(code, 0, out)
+        self.assertIn("HANDED\t" + CORWIN, out)
+        self.assertIn("handed: 2", out)
+        self.assertNotIn("WOULD", out)
+        self.assertNotIn(self.LAMP, read(vault, INES))
+        self.assertIn("- **Ferrywoman's debt** \u2014 owes her two silver, due "
+                      "at the next full moon\n- " + self.LAMP + "\n",
+                      read(vault, CORWIN))
+
+    def test_hand_crlf_kept(self):
+        vault = self.vault()
+        for rel in (INES, CORWIN):
+            text = read(vault, rel).replace("\r\n", "\n").replace("\n", "\r\n")
+            (vault / rel).write_bytes(text.encode("utf-8"))
+        code, out = run(vault, "threads", "--write", stdin=rows(
+            ("hand", "Ines_Marlowe", self.LAMP, "Corwin_Hale")))
+        self.assertEqual(code, 0, out)
+        for rel in (INES, CORWIN):
+            data = (vault / rel).read_bytes()
+            self.assertEqual(data.count(b"\n"), data.count(b"\r\n"), rel)
+        self.assertIn(self.LAMP + "\r\n", read(vault, CORWIN))
+
+    def test_hand_to_an_empty_list_drops_the_filler(self):
+        vault = self.vault()
+        self.edit(vault, CORWIN, "**Open threads:**\n- **Ferrywoman's debt** "
+                  "\u2014 owes her two silver, due at the next full moon",
+                  "**Open threads:** \u2014")
+        code, out = run(vault, "threads", "--write", stdin=rows(
+            ("hand", "Ines_Marlowe", self.LAMP, "Corwin_Hale")))
+        self.assertEqual(code, 0, out)
+        self.assertIn("**Open threads:**\n- " + self.LAMP + "\n",
+                      read(vault, CORWIN))
+
+    def test_hand_hidden_or_unknown_refused(self):
+        vault = self.vault()
+        before = self.snapshot(vault)
+        for row, error in (
+                (("hand", "Ines_Marlowe", self.LAMP, "Nobody_Here"),
+                 "PC 'Nobody_Here': not found"),
+                (("hand", "Nobody_Here", self.LAMP, "Corwin_Hale"),
+                 "PC 'Nobody_Here': not found"),
+                (("hand", "Ines_Marlowe", "No such thread", "Corwin_Hale"),
+                 "no thread 'No such thread'"),
+                (("hand", "Ines_Marlowe", self.LAMP, "Ines_Marlowe"),
+                 "are the same PC")):
+            with self.subTest(row=row):
+                code, out = run(vault, "threads", "--write", stdin=rows(row))
+                self.assertEqual(code, 1, out)
+                self.assertIn(error, out)
+        self.assertEqual(self.snapshot(vault), before)
+        self.edit(vault, INES, "- " + self.LAMP,
+                  "<!-- gm-only -->\n- " + self.LAMP + "\n<!-- /gm-only -->")
+        before = self.snapshot(vault)
+        # A good row before the refused one is not written either.
+        code, out = run(vault, "threads", "--write", stdin=rows(
+            ("add", "shared", "-", "party", "New one"),
+            ("hand", "Ines_Marlowe", self.LAMP, "Corwin_Hale")))
+        self.assertEqual(code, 1, out)
+        self.assertIn("on Ines_Marlowe is next to hidden text; edit it by "
+                      "hand", out)
+        self.assertEqual(self.snapshot(vault), before)
+
     def test_close_dormant_records_resolved(self):
         vault = self.vault()
         self.with_dormant(vault)

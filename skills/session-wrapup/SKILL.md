@@ -181,9 +181,11 @@ the narrative.
    at the end of this session. Not threads: finished or overtaken, an
    event, colour, one session's business, a copy, on the wrong sheet
    (the whole test: `shared/reconcile.md` step 5.5). Write only what
-   passes. "Adrien stopped her ears with wax" is an event: the recap.
-   "At the Dak Bungalow" is a stopping point: the Handoff. Shared by
-   2+ PCs: the shared list.
+   passes, plus any loose end the party left behind this session: it
+   goes in the Wrap-Up's Unresolved Threads, so Reconcile can park it.
+   "Adrien stopped her ears with wax" is an event: the recap. "At the
+   Dak Bungalow" is a stopping point: the Handoff. Shared by 2+ PCs:
+   the shared list.
 
    Compare `vw status <PC> --show` with Steps 2-3: add a PC's new
    threads (not shared) and exclusive knowledge, refresh
@@ -383,7 +385,7 @@ Notes and Handoff to session-prep (the section session-prep reads
 first) per the template. Then one `vw threads --wrapup "<wrap-up>"`
 dry run and `--write`: `add shared` new shared threads, `move` a
 PC's that now involves 2+ PCs, never `(hidden)` ones (one refusal
-writes nothing). Reconcile (step 6) closes and retires. If the
+writes nothing). Reconcile (step 6) closes and parks. If the
 notes don't show what the players enjoyed, ask the GM once. Whatever an older vault template copy says:
 Skipped Prep lists every planned scene and clue that didn't fire,
 with what the players still need; Pending Consequences are decisions

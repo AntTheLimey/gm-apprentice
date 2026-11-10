@@ -160,7 +160,7 @@ the fields as they stand, and reads no stdin.
 <!-- END GENERATED -->
 
 <!-- BEGIN GENERATED: gma vault-write threads -->
-add, move, close, rest and wake threads (stdin rows)
+add, move, close, rest, wake and hand threads (stdin rows)
 
 ```text
 gma vault-write <vault> threads [options]
@@ -189,6 +189,8 @@ stdin: one row per line, fields separated by TAB.
   wake  LEAD    WHO                a dormant thread goes back: one PC
                                    names their Open threads; several
                                    PCs or 'party', the shared list
+  hand  FROM    LEAD   TO          take LEAD off PC FROM's Open threads
+                                   and add it, unchanged, to PC TO's
 SINCE is a session label, or - for none. WHO is PC note
 names separated by commas, or 'party' (for move, every active
 PC). Any ERROR row writes nothing.
