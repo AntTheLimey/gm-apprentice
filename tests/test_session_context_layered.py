@@ -360,5 +360,90 @@ class PinnedPathTests(unittest.TestCase):
         self.assertIn("### Log\na", ada)            # not unique: whole
 
 
+SECTION_LINE_RE = re.compile(r"^## (.+?)  \((\d+) words; (\S+): (.+)\)$", re.M)
+
+
+@NEEDS_NODE
+class PrepSectionLineTests(unittest.TestCase):
+    """--prep prints each PC's Background and GM Notes, and the deferred
+    world flags, as one line a `gma section` call fetches whole."""
+
+    def arcs(self, out):
+        return out.split("===== PC Arcs")[1].split("===== Scene Queue")[0]
+
+    def assert_fetches(self, out, vault, want):
+        found = SECTION_LINE_RE.findall(out)
+        self.assertEqual(sorted((n, s) for s, _w, n, _p in found),
+                         sorted(want), out)
+        for _s, words, name, path in found:
+            r = fetch(name, path, vault=vault)
+            self.assertEqual(r.returncode, 0, (path, r.stderr))
+            self.assertEqual(vl.word_count(r.stdout.split("\n", 1)[1]),
+                             int(words), path)
+
+    def test_prep_prints_one_line_per_section(self):
+        out = sc("--prep").stdout
+        arcs = self.arcs(out)
+        self.assertNotIn("A lamp-trimmer's daughter", arcs)
+        self.assertNotIn("A ferry hand with no secrets", arcs)
+        self.assertIn("Spotlight history", arcs)
+        self.assert_fetches(arcs, FIXTURE, [
+            ("Ada_Quill", "Background"), ("Ada_Quill", "GM Notes"),
+            ("Cole_Plain", "Background"), ("Cole_Plain", "GM Notes")])
+        self.assertIn(sctx.FETCH_LINE, out)
+
+    def test_arcs_still_prints_whole(self):
+        out = sc("--arcs").stdout
+        self.assertIn(COLE_ARCS, out)
+        self.assertIn("A lamp-trimmer's daughter", out)
+        self.assertFalse(SECTION_LINE_RE.search(out), out)
+
+    def test_repeated_name_pins_the_level(self):
+        vault = copy_vault(self)
+        p = vault / "PCs" / "Cole_Plain.md"
+        p.write_text(p.read_text(encoding="utf-8").replace(
+            "Cole is tired and wet.",
+            "Cole is tired and wet.\n\n### Background\nnoise here"),
+            encoding="utf-8")
+        arcs = self.arcs(sc("--prep", vault=vault).stdout)
+        self.assertIn("Cole_Plain: ## Background)", arcs)
+        self.assert_fetches(arcs, vault, [
+            ("Ada_Quill", "Background"), ("Ada_Quill", "GM Notes"),
+            ("Cole_Plain", "Background"), ("Cole_Plain", "GM Notes")])
+
+    def test_unfetchable_section_prints_whole(self):
+        vault = copy_vault(self)
+        p = vault / "PCs" / "Cole_Plain.md"
+        # Two `## Background` sections: no path fetches one of them.
+        p.write_text(p.read_text(encoding="utf-8")
+                     + "\n## Background\nA second one.\n", encoding="utf-8")
+        arcs = self.arcs(sc("--prep", vault=vault).stdout)
+        self.assertIn("## Background\nA ferry hand with no secrets", arcs)
+
+    def test_world_flags_print_first_lines(self):
+        vault = copy_vault(self)
+        (vault / "_World").mkdir()
+        (vault / "_World" / "_flags.md").write_text(
+            "# Flags\n\n## Deferred\n\n"
+            "- **Who owns the toll house** (Session 2). The deed is lost\n"
+            "  and two families claim it.\n"
+            "- Whether the ferry runs in winter.\n\n"
+            "## Settled\n\n- Nothing.\n", encoding="utf-8")
+        out = sc("--prep", vault=vault).stdout
+        flags = out.split("===== World Flags")[1].split("=====")[1]
+        self.assertIn("- **Who owns the toll house** (Session 2). The deed "
+                      "is lost …\n- Whether the ferry runs in winter.\n"
+                      "## Deferred  (", flags)
+        self.assertNotIn("two families claim it", flags)
+        self.assert_fetches(flags, vault, [("_flags", "Deferred")])
+        whole = sc("--brief", vault=vault).stdout
+        self.assertIn("two families claim it", whole)
+
+    def test_flag_leads_without_bullets(self):
+        self.assertIsNone(sctx.flag_leads("Just prose, no list."))
+        self.assertEqual(sctx.flag_leads("* one\n  more\n* two"),
+                         "* one …\n* two")
+
+
 if __name__ == "__main__":
     unittest.main()

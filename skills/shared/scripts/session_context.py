@@ -1230,7 +1230,7 @@ def pc_matches(cell: str, rel: str, fm: dict) -> bool:
             or cell.replace("_", " ").casefold() in candidates)
 
 
-FETCH_LINE = ('Outlined subsections: fetch one with `gma section "<vault>" '
+FETCH_LINE = ('Outlined sections: fetch one with `gma section "<vault>" '
               '"<note>" "<path>"`; the note and path are in its line above.')
 
 
@@ -1251,6 +1251,28 @@ class Outlines:
                                  section, note_text)
         self.used = self.used or outlined
         return text
+
+    def section_line(self, body: str, vault: Path, rel: str, name: str,
+                     note_text: str) -> str | None:
+        """The `## {name}` section as one outline line,
+        `## {name}  ({N} words; {note}: {path})`, or None when no path
+        makes `gma section` fetch exactly this body (the caller prints it
+        instead)."""
+        whole = note_text.split("\n")
+        path = _section_path(whole, name)
+        if path is None:
+            return None
+        pinned = path.startswith("## ")
+        span = find_section_lines(whole, [name], level=2 if pinned else None)
+        assert isinstance(span, tuple)
+        words = word_count(body)
+        # A hidden heading or a fence can end the fetched span earlier
+        # than `section` ends the body: only a span that holds it all is
+        # worth pointing at.
+        if word_count("\n".join(whole[span[0] + 1:span[1]])) != words:
+            return None
+        self.used = True
+        return f"## {name}  ({words} words; {self.note_ref(vault, rel)}: {path})"
 
     def note_ref(self, vault: Path, rel: str) -> str:
         """What an outline line names the note at `rel` by: its file name
@@ -1346,6 +1368,13 @@ def _fetch_path(whole: list[str], section: str, name: str) -> str | None:
                 whole, [section, *rest], level=2 if pinned else None),
                 tuple):
             return f"{top}/{name}"
+    return _section_path(whole, section)
+
+
+def _section_path(whole: list[str], section: str) -> str | None:
+    """The path `gma section` takes to fetch the `##` section `section`
+    of the note `whole`: its name when that finds one heading, else the
+    level-pinned `## {section}` when that does, else None."""
     for pinned in (False, True):
         if isinstance(find_section_lines(
                 whole, [section], level=2 if pinned else None), tuple):
@@ -1354,7 +1383,7 @@ def _fetch_path(whole: list[str], section: str, name: str) -> str | None:
 
 
 def arcs_report(files, chapter, upcoming: int, vault: Path,
-                outlines: Outlines) -> str:
+                outlines: Outlines, whole: bool = True) -> str:
     """For each active PC (type pc, not *_Story.md, status not out of play
     for this vault):
       --- {stem} ({rel}, player: {player_name or ?}) ---
@@ -1362,6 +1391,11 @@ def arcs_report(files, chapter, upcoming: int, vault: Path,
       {section or "(no ## Background section)"}
       ## GM Notes
       {section or "(no ## GM Notes section)"}
+
+    `whole` False (the --prep bundle) prints each of the two sections as
+    one outline line instead, `## Background  (N words; {note}: {path})`:
+    prep fetches the ones a session turns on. A section no path fetches
+    exactly prints as above.
       Spotlight history (chapter-scoped, from ## Spotlight Forecast tables):
         Session 6: B
         Session 7: (no row for this PC)
@@ -1422,14 +1456,16 @@ def arcs_report(files, chapter, upcoming: int, vault: Path,
         stem = Path(rel).stem
         player = fm.get("player_name") or "?"
         lines.append(f"\n--- {stem} ({rel}, player: {player}) ---")
-        bg = section(text, "Background")
-        lines.append("## Background")
-        lines.append(outlines.layered(bg, vault, rel, "Background", text) if bg
-                     else "(no ## Background section)")
-        gm = section(text, "GM Notes")
-        lines.append("## GM Notes")
-        lines.append(outlines.layered(gm, vault, rel, "GM Notes", text) if gm
-                     else "(no ## GM Notes section)")
+        for name in ("Background", "GM Notes"):
+            body = section(text, name)
+            line = (outlines.section_line(body, vault, rel, name, text)
+                    if body and not whole else None)
+            if line:
+                lines.append(line)
+                continue
+            lines.append(f"## {name}")
+            lines.append(outlines.layered(body, vault, rel, name, text)
+                         if body else f"(no ## {name} section)")
         lines.append("Spotlight history (chapter-scoped, from "
                      "## Spotlight Forecast tables):")
         last_b: int | None = None
@@ -1790,6 +1826,23 @@ def run_script(script: str, *argv, title: str) -> str:
     return f"\n===== {title} =====\n{out or '(no output)'}"
 
 
+_TOP_BULLET_RE = re.compile(r"^[-*][ \t]+\S")
+
+
+def flag_leads(body: str) -> str | None:
+    """Each top-level bullet's first line, word for word, with " …" when
+    the bullet runs on; None when the body has no top-level bullet."""
+    lines = body.split("\n")
+    out = []
+    for i, line in enumerate(lines):
+        if not _TOP_BULLET_RE.match(line):
+            continue
+        nxt = lines[i + 1] if i + 1 < len(lines) else ""
+        more = bool(nxt.strip()) and not _TOP_BULLET_RE.match(nxt)
+        out.append(line.rstrip() + (" …" if more else ""))
+    return "\n".join(out) or None
+
+
 def wrapup_names(files, wrap_text: str) -> list[str]:
     """The NPCs, locations, factions and creatures a Wrap-Up links, by
     note name, in the order first linked. Its `#### Resolved Threads`
@@ -1818,7 +1871,7 @@ def print_prep_rest(vault: Path, files, chosen, wrap, current: int,
         print("\n===== Reconcile Scan =====\n(not run: the session's "
               f"status is {status or 'unknown'}, not wrap-up)")
     print(f"\n{thread_report(files, current, chapter, vault, 'may-wake')}")
-    print(f"\n{arcs_report(files, chapter, upcoming, vault, outlines)}")
+    print(f"\n{arcs_report(files, chapter, upcoming, vault, outlines, whole=False)}")
     label = (chosen or {}).get("chapter_label")
     where = ("--chapter", label) if label else ()
     print(run_script("scene_queue.py", vault, *where, title="Scene Queue"))
@@ -1880,7 +1933,9 @@ def build_parser() -> argparse.ArgumentParser:
              "the --brief bundle, the reconcile scan (status wrap-up only), "
              "--threads (its dormant part only the threads that may "
              "wake: their names are in the Wrap-Up or the upcoming Plan), "
-             "--arcs, the chapter's scene queue and its "
+             "--arcs (each PC's Background and GM Notes as one line with "
+             "its size and fetch path; deferred world flags likewise, "
+             "under each flag's first line), the chapter's scene queue and its "
              "narrative plans checked against the NPCs, locations and "
              "factions the Wrap-Up links")
     mode.add_argument(
@@ -2095,9 +2150,15 @@ def _bundle(argv: list[str] | None, outlines: Outlines) -> int:
     # --- deferred world flags ---
     flags = next(((rel, text) for rel, text, fm in files
                   if rel.endswith("_flags.md")), None)
-    emit("World Flags — Deferred",
-         flags[0] if flags else None,
-         section(flags[1], "Deferred") if flags else None)
+    deferred = section(flags[1], "Deferred") if flags else None
+    if args.prep and flags and deferred:
+        leads = flag_leads(deferred)
+        line = (outlines.section_line(deferred, args.vault, flags[0],
+                                      "Deferred", flags[1])
+                if leads else None)
+        if line:
+            deferred = f"{leads}\n{line}"
+    emit("World Flags — Deferred", flags[0] if flags else None, deferred)
 
     # --- campaign overview ---
     found = overview_of(files)
