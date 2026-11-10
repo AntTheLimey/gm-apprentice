@@ -9,6 +9,19 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.6] — 2026-11-10
+
+### Added
+
+- Pictures. Ask the apprentice for a portrait, a place, an insignia or a scene picture and it draws it with Google Gemini on your own key, looks at it, redraws once if it is wrong, and files it. Set-up and costs are in [docs/images.md](docs/images.md). Nothing is drawn unless you ask.
+- `gma image` (`status`, `key`, `plan`, `draw`, `place`), with spending limits in the vault's settings under `vault.images` that the tool enforces. The key stays on your machine.
+- An Image Guidance note for the campaign's look, from a new template the update offers to existing vaults. It never reaches the player site.
+
+### Changed
+
+- A document note may hold a `portrait`. Image ingest files pictures for heritage and document notes too.
+- Publish tool 1.70.4: the `vault.images` settings, and the Image Guidance note is never published.
+
 ## [1.12.5] — 2026-11-09
 
 ### Fixed

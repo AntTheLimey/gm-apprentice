@@ -203,6 +203,196 @@
             }
           }
         },
+        "images": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "auto": {
+              "description": "Whether the apprentice may draw pictures without asking you first, inside the limits below",
+              "default": false,
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*(?:[tT][rR][uU][eE]|[yY][eE][sS]|[oO][nN]|[fF][aA][lL][sS][eE]|[nN][oO]|[oO][fF][fF])\\s*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "attempt_limit": {
+              "description": "The most one attempt at a picture may cost, in US cents; a picture that would cost more is not sent",
+              "default": 10,
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*-?\\d+(\\.\\d+)?\\s*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "redraws": {
+              "description": "How many times the apprentice may redraw a picture that came out wrong before it stops and asks you",
+              "default": 1,
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*-?\\d+\\s*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "run_cap": {
+              "description": "The most one batch of pictures planned together may cost, redraws included, in US cents",
+              "default": 200,
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*-?\\d+(\\.\\d+)?\\s*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "month_cap": {
+              "description": "The most the apprentice may spend on pictures in one month, in US cents",
+              "default": 2000,
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*-?\\d+(\\.\\d+)?\\s*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "unpriced": {
+              "description": "Whether the apprentice may draw with a model whose price it does not know, without asking you first",
+              "default": false,
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*(?:[tT][rR][uU][eE]|[yY][eE][sS]|[oO][nN]|[fF][aA][lL][sS][eE]|[nN][oO]|[oO][fF][fF])\\s*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "thinking": {
+              "description": "Whether the picture service may think before it draws. On, it follows the fine details of a request more closely; pictures cost a little more, the cost varies, and the limit for one attempt is a likely ceiling and not a guarantee (the cap per run and the month's ceiling still count what was really spent). Off, the apprentice asks for the least thinking the model allows, which costs less and keeps the cost of a picture steady",
+              "default": true,
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*(?:[tT][rR][uU][eE]|[yY][eE][sS]|[oO][nN]|[fF][aA][lL][sS][eE]|[nN][oO]|[oO][fF][fF])\\s*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "kinds": {
+              "description": "The kinds of note the apprentice may draw a picture for; player characters are left out unless you add them",
+              "default": [
+                "npc",
+                "location",
+                "faction",
+                "organization",
+                "item",
+                "creature",
+                "heritage",
+                "document",
+                "scene"
+              ],
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": [
+                  "string",
+                  "number",
+                  "boolean"
+                ]
+              }
+            },
+            "service": {
+              "description": "Which picture service draws for this campaign",
+              "type": [
+                "string",
+                "null"
+              ],
+              "pattern": "^\\s*(?:[gG][eE][mM][iI][nN][iI])\\s*$"
+            },
+            "model": {
+              "description": "Which model at that service draws the pictures",
+              "type": [
+                "string",
+                "number",
+                "null"
+              ]
+            },
+            "price": {
+              "description": "What one picture costs on the chosen model, in US cents, when the apprentice does not know that model's price. Stated, the limits apply; left out, see `vault.images.unpriced`",
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*-?\\d+(\\.\\d+)?\\s*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "guidance": {
+              "description": "The note that holds your guidance on how this campaign's pictures should look",
+              "default": "_Campaign/Image_Guidance.md",
+              "type": [
+                "string",
+                "number",
+                "null"
+              ]
+            }
+          }
+        },
         "attachments": {
           "description": "The vault folder that holds pictures",
           "default": "_attachments",

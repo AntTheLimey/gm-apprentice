@@ -224,6 +224,7 @@ TEMPLATE_NAMES = {
     "chapter.md": "_Template_Chapter.md",
     "session-wrap.md": "_Template_Session_WrapUp.md",
     "character-story.md": "character-story.md",
+    "image-guidance.md": "_Template_Image_Guidance.md",
 }
 TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
 # Templates a new vault gets as a page, not under _Templates/ (vault_scaffold).
@@ -239,7 +240,7 @@ SKILLS_DIR = TEMPLATES_DIR.parent.parent
 # Optional fields that support portraits (for future validation)
 PORTRAIT_TYPES = {
     "npc", "pc", "location", "faction", "organization", "item",
-    "creature", "campaign_overview", "heritage",
+    "creature", "campaign_overview", "heritage", "document",
 }
 
 # Deprecated field renames, keyed by entity type; "*" applies to all types

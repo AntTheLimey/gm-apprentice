@@ -21,7 +21,7 @@
 // first. A page carrying both `publish: false` and `status: planned` was counted as
 // auto-excluded, and still is. The order is:
 //
-//   directory checks → NO_TYPE → PREP_TYPE → STORY_COMPANION → DRAFT_EXCLUDED →
+//   directory checks → IMAGE_GUIDANCE → NO_TYPE → PREP_TYPE → STORY_COMPANION → DRAFT_EXCLUDED →
 //   AUTO_EXCLUDED_* → manifest codes → PUBLISH_FALSE/NONE →
 //   SUPERSEDED_NO_TARGET → OK
 //
@@ -35,6 +35,7 @@ const { storyOwnerPath, isStoryCompanion, matchExcludedDir } = require('./scanne
 const { getCanonStatus } = require('./templates/base');
 const { entry } = require('./settings');
 const { chapterStatusOf } = require('./shared-lists');
+const { canonicalNfc } = require('./unicode');
 
 // The values that keep a note off a player site are listed once, in excluding-values.js.
 const { AUTO_EXCLUDE_STATUS, AUTO_EXCLUDE_STAGE, AUTO_EXCLUDE_SOURCE, PREP_TYPES, DRAFT, ruleValue } = require('./excluding-values');
@@ -105,6 +106,17 @@ function alwaysExcludedSegment(rel) {
   return segments.find((s) => LOWER_ALWAYS_EXCLUDE_DIRS.includes(s.toLowerCase())) || null;
 }
 
+// The Image Guidance note (the note `vault.images.guidance` names) holds the GM's directions for pictures. It is never
+// published, whatever its frontmatter says: a GM writing it by hand may leave out `publish: false`. The path comes from
+// publishConfig.imageGuidance (loadPublishConfig sets it), else the setting's default. Compared as the scanner compares
+// folders: slashes either way, letter case and spaces around the path do not matter.
+const vaultPathKey = (p) => canonicalNfc(String(p == null ? '' : p).trim().replace(/\\/g, '/').replace(/^(?:\.\/|\/)+/, '')).toLowerCase();
+function isImageGuidance(rel, publishConfig) {
+  const written = publishConfig && publishConfig.imageGuidance != null ? String(publishConfig.imageGuidance).trim() : '';
+  const named = written || entry('vault.images.guidance').default;
+  return vaultPathKey(rel) === vaultPathKey(named);
+}
+
 // Manifest sections are arrays; a page-by-page `includes()` would be quadratic on a
 // large vault. Index each manifest object once and hang the index off it.
 const manifestIndexes = new WeakMap();
@@ -163,6 +175,7 @@ function decidePage(page, options) {
 
   const excludedDir = alwaysExcludedSegment(rel);
   if (excludedDir) return verdict('exclude', 'DIR_ALWAYS_EXCLUDED', `in ${excludedDir}/ — never published`);
+  if (isImageGuidance(rel, publishConfig)) return verdict('exclude', 'IMAGE_GUIDANCE', 'the Image Guidance note is never published');
   if (!folderMapped) {
     return verdict('decide', 'DIR_UNMAPPED', `its folder is not in player_site.folder_map`);
   }
@@ -310,6 +323,7 @@ module.exports = {
   alwaysExcludedSegment,
   HOUSEKEEPING_DIRS,
   isHousekeepingNote,
+  isImageGuidance,
   AUTO_EXCLUDE_STATUS,
   AUTO_EXCLUDE_STAGE,
   AUTO_EXCLUDE_SOURCE,

@@ -152,7 +152,7 @@ def _shape(action: argparse.Action, meta: str) -> str:
         return f"{meta} ..."
     if nargs == argparse.REMAINDER:
         return "..."
-    if isinstance(nargs, int) and nargs > 1:
+    if isinstance(nargs, int) and nargs > 1 and not isinstance(action.metavar, tuple):
         return " ".join([meta] * nargs)
     return meta
 

@@ -184,6 +184,8 @@ Tell Claude which system you're running when you start — it won't assume.
   [publish-site](docs/publish-tool.md)
 - [Site settings](docs/site-settings.md) — every setting for a
   campaign's site, what it does and its default
+- [Drawing pictures](docs/images.md) — portraits, places and scene
+  pictures drawn on your own Google key, inside limits you set
 - [Personal reference files](docs/personal-reference-files.md) — add your
   own rulebook content for deeper system support
 - [gm-apprentice-publish](tools/publish/README.md) — reference for the

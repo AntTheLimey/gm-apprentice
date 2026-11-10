@@ -69,6 +69,7 @@ class Generated(unittest.TestCase):
     # A template type with no generated list must be named here, with why.
     NOT_IN_SCHEMA = {
         "chapter": "the narrative hierarchy section describes it",
+        "meta": "the Image Guidance note is a GM-only settings note, not an entity",
         "scene": "the scene section and its own template describe it",
         "session": "the session document chain describes it",
         "session-plan": "the session document chain describes it",
@@ -79,6 +80,7 @@ class Generated(unittest.TestCase):
     NOT_IN_REFERENCE = {
         "campaign_overview": "its fields are prose in the Campaign Overview section",
         "character-story": "it renders inside its PC's page",
+        "meta": "the Image Guidance note is GM-only and never publishes",
         "plan": "plans never publish",
         "prop": "props have their own reference (prop-styles)",
         "scene": "scenes publish through Story pages",

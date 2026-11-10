@@ -544,6 +544,37 @@ player_site:
     card_facts: 2
 ```
 
+## Drawing pictures
+
+Settings for `gma image`, which draws pictures for notes. Money is in US
+cents. The apprentice asks before it goes past any limit here.
+
+<!-- settings:images -->
+
+| Setting | What it does | Values | Left out |
+|---------|--------------|--------|----------|
+| `vault.images.auto` | Whether the apprentice may draw pictures without asking you first, inside the limits below | A switch | Off |
+| `vault.images.attempt_limit` | The most one attempt at a picture may cost, in US cents; a picture that would cost more is not sent | A number, 0 or more | `10` |
+| `vault.images.redraws` | How many times the apprentice may redraw a picture that came out wrong before it stops and asks you | A whole number, 0 or more | `1` |
+| `vault.images.run_cap` | The most one batch of pictures planned together may cost, redraws included, in US cents | A number, 0 or more | `200` |
+| `vault.images.month_cap` | The most the apprentice may spend on pictures in one month, in US cents | A number, 0 or more | `2000` |
+| `vault.images.unpriced` | Whether the apprentice may draw with a model whose price it does not know, without asking you first | A switch | Off |
+| `vault.images.thinking` | Whether the picture service may think before it draws. On, it follows the fine details of a request more closely; pictures cost a little more, the cost varies, and the limit for one attempt is a likely ceiling and not a guarantee (the cap per run and the month's ceiling still count what was really spent). Off, the apprentice asks for the least thinking the model allows, which costs less and keeps the cost of a picture steady | A switch | On |
+| `vault.images.kinds` | The kinds of note the apprentice may draw a picture for; player characters are left out unless you add them | A list of note types | Every kind except player characters |
+| `vault.images.service` | Which picture service draws for this campaign | `gemini` | None chosen; the apprentice asks |
+| `vault.images.model` | Which model at that service draws the pictures | Text | None chosen; the apprentice asks |
+| `vault.images.price` | What one picture costs on the chosen model, in US cents, when the apprentice does not know that model's price. Stated, the limits apply; left out, see `vault.images.unpriced` | A number, 0 or more | Not stated |
+| `vault.images.guidance` | The note that holds your guidance on how this campaign's pictures should look | Text | `_Campaign/Image_Guidance.md` |
+
+<!-- /settings:images -->
+
+```yaml
+vault:
+  images:
+    service: gemini
+    redraws: 2
+```
+
 ## The GM site
 
 The GM site is a second copy of your campaign site, for you at the table.

@@ -30,7 +30,7 @@ gma <command> ... [options]
 | Argument | Value | Help |
 |---|---|---|
 | `--version` |  | print the plugin version |
-| `<command>` | `dnd-ddb`, `dnd-sheet`, `graph-check`, `gurps-check`, `gurps-skill-default`, `index-build`, `ingest-images`, `ingest-survey`, `links`, `migrate`, `moments`, `plan-check`, `plans-index`, `prop-move`, `reconcile-scan`, `relink`, `reveal`, `reveal-scan`, `rules-lookup`, `scene-queue`, `schema-rules`, `section`, `session-context`, `stamp-entities`, `tones`, `update`, `vault-check`, `vault-scaffold`, `vault-search`, `vault-write`, `workaround`, `publish`, `tool`, `llms` | the command to run; each has its own --help |
+| `<command>` | `dnd-ddb`, `dnd-sheet`, `graph-check`, `gurps-check`, `gurps-skill-default`, `image`, `index-build`, `ingest-images`, `ingest-survey`, `links`, `migrate`, `moments`, `plan-check`, `plans-index`, `prop-move`, `reconcile-scan`, `relink`, `reveal`, `reveal-scan`, `rules-lookup`, `scene-queue`, `schema-rules`, `section`, `session-context`, `stamp-entities`, `tones`, `update`, `vault-check`, `vault-scaffold`, `vault-search`, `vault-write`, `workaround`, `publish`, `tool`, `llms` | the command to run; each has its own --help |
 <!-- END GENERATED -->
 
 <!-- BEGIN GENERATED: gma llms -->
@@ -57,6 +57,7 @@ Example: `gma llms relink`
 | `graph-check` | `gma llms graph-check` | Vault graph queries: orphans, unresolved links, dead ends, backlinks. |
 | `gurps-check` | `gma llms gurps-check` | GURPS 4e sheet arithmetic checks. |
 | `gurps-skill-default` | `gma llms gurps-skill-default` | Add a GURPS skill to a PC's sheet at its default level. |
+| `image` | `gma llms image` | Draw a vault's pictures inside its spending limits. |
 | `index-build` | `gma llms index-build` | Derive _meta/index.md from a vault scan. |
 | `ingest-images` | `gma llms ingest-images` | File and link vault-ingest image material. |
 | `ingest-survey` | `gma llms ingest-survey` | Classify vault-ingest source material. |

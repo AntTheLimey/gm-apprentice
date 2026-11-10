@@ -1183,7 +1183,7 @@ function buildSite(options) {
     // codes count as having reached this stage.
     const beforeManifest = new Set([
       'DRAFT_EXCLUDED', 'AUTO_EXCLUDED_STATUS', 'AUTO_EXCLUDED_STAGE', 'AUTO_EXCLUDED_SOURCE',
-      'PREP_TYPE', 'DIR_ALWAYS_EXCLUDED', 'DIR_UNMAPPED', 'NO_TYPE',
+      'PREP_TYPE', 'DIR_ALWAYS_EXCLUDED', 'IMAGE_GUIDANCE', 'DIR_UNMAPPED', 'NO_TYPE',
     ]);
     const reachedManifest = pages.filter(p => !beforeManifest.has(verdicts.get(p).code));
     // Allowlist membership alone, exactly as the old pass counted it: `publish: false`

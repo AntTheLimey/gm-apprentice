@@ -62,6 +62,51 @@ _MADE_TEMP_DIRS.append(os.environ["GMA_CACHE"])
 os.environ["GMA_RELEASE_BASE"] = "http://127.0.0.1:9/no-network-in-tests"
 
 
+_SCRIPTS = str(Path(__file__).resolve().parent.parent / "skills" / "shared" / "scripts")
+# The real seams as the modules first had them, before any test replaced one.
+ORIGINAL: dict[str, object] = {}
+
+
+@pytest.fixture(autouse=True)
+def _no_picture_service_or_keychain(monkeypatch, tmp_path):
+    """No test reaches the paid picture service (by `image_gemini.SEND` or
+    by the sender's own `URLOPEN`) or the real keychain, none sees a real
+    key from the environment, and the key file folder is a temp one. A test
+    that needs any of them replaces it itself (its own monkeypatch runs
+    after this one), and sets a fake key the same way."""
+    for var in ("GEMINI_API_KEY", "GOOGLE_API_KEY"):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("GMA_CONFIG", str(tmp_path / "gma-config"))
+    added = _SCRIPTS not in sys.path
+    if added:
+        sys.path.append(_SCRIPTS)
+    try:
+        import image_gemini
+        import image_keys
+    except Exception:  # noqa: BLE001 - a test that never draws pays nothing
+        return
+    finally:
+        if added:
+            sys.path.remove(_SCRIPTS)
+
+    ORIGINAL.setdefault("SEND", image_gemini.SEND)
+
+    def no_service(*a, **k):
+        pytest.fail("a test tried to call the picture service; replace "
+                    "image_gemini.SEND in the test", pytrace=False)
+
+    def no_keychain(*a, **k):
+        pytest.fail("a test tried to reach the keychain; replace "
+                    "image_keys.RUN in the test", pytrace=False)
+    def no_connection(*a, **k):
+        pytest.fail("a test tried to open a connection for the picture "
+                    "service; replace image_gemini.URLOPEN in the test",
+                    pytrace=False)
+    monkeypatch.setattr(image_gemini, "SEND", no_service)
+    monkeypatch.setattr(image_gemini, "URLOPEN", no_connection)
+    monkeypatch.setattr(image_keys, "RUN", no_keychain)
+
+
 @pytest.fixture(autouse=True)
 def _test_vaults_may_be_stamped_old(request):
     """Most tests stamp vaults at made-up old versions; the update's real

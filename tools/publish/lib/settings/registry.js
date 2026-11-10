@@ -45,6 +45,7 @@ const GROUPS = [
   { id: 'props', title: 'Props' },
   { id: 'lists', title: 'Lists and pictures' },
   { id: 'limits', title: 'Limits' },
+  { id: 'images', title: 'Drawing pictures' },
   { id: 'gm', title: 'The GM site' },
 ];
 
@@ -111,6 +112,70 @@ const REGISTRY = [
     name: 'vault.index.description_chars', type: 'number', integer: true, min: 1, default: 80, group: 'vault',
     does: 'How many characters of a note\'s description the index shows beside its link',
     left_out: '`80`',
+  },
+
+  // Drawing pictures
+  { name: 'vault.images', type: 'map', container: true },
+  {
+    name: 'vault.images.auto', type: 'switch', default: false, group: 'images',
+    does: 'Whether the apprentice may draw pictures without asking you first, inside the limits below',
+    left_out: 'Off',
+  },
+  {
+    name: 'vault.images.attempt_limit', type: 'number', min: 0, default: 10, group: 'images',
+    does: 'The most one attempt at a picture may cost, in US cents; a picture that would cost more is not sent',
+    left_out: '`10`',
+  },
+  {
+    name: 'vault.images.redraws', type: 'number', integer: true, min: 0, default: 1, group: 'images',
+    does: 'How many times the apprentice may redraw a picture that came out wrong before it stops and asks you',
+    left_out: '`1`',
+  },
+  {
+    name: 'vault.images.run_cap', type: 'number', min: 0, default: 200, group: 'images',
+    does: 'The most one batch of pictures planned together may cost, redraws included, in US cents',
+    left_out: '`200`',
+  },
+  {
+    name: 'vault.images.month_cap', type: 'number', min: 0, default: 2000, group: 'images',
+    does: 'The most the apprentice may spend on pictures in one month, in US cents',
+    left_out: '`2000`',
+  },
+  {
+    name: 'vault.images.unpriced', type: 'switch', default: false, group: 'images',
+    does: 'Whether the apprentice may draw with a model whose price it does not know, without asking you first',
+    left_out: 'Off',
+  },
+  {
+    name: 'vault.images.thinking', type: 'switch', default: true, group: 'images',
+    does: 'Whether the picture service may think before it draws. On, it follows the fine details of a request more closely; pictures cost a little more, the cost varies, and the limit for one attempt is a likely ceiling and not a guarantee (the cap per run and the month\'s ceiling still count what was really spent). Off, the apprentice asks for the least thinking the model allows, which costs less and keeps the cost of a picture steady',
+    left_out: 'On',
+  },
+  {
+    name: 'vault.images.kinds', type: 'list', of: 'note types', group: 'images',
+    default: ['npc', 'location', 'faction', 'organization', 'item', 'creature', 'heritage', 'document', 'scene'],
+    does: 'The kinds of note the apprentice may draw a picture for; player characters are left out unless you add them',
+    left_out: 'Every kind except player characters',
+  },
+  {
+    name: 'vault.images.service', type: 'choice', values: ['gemini'], group: 'images',
+    does: 'Which picture service draws for this campaign',
+    left_out: 'None chosen; the apprentice asks',
+  },
+  {
+    name: 'vault.images.model', type: 'text', group: 'images',
+    does: 'Which model at that service draws the pictures',
+    left_out: 'None chosen; the apprentice asks',
+  },
+  {
+    name: 'vault.images.price', type: 'number', min: 0, group: 'images',
+    does: 'What one picture costs on the chosen model, in US cents, when the apprentice does not know that model\'s price. Stated, the limits apply; left out, see `vault.images.unpriced`',
+    left_out: 'Not stated',
+  },
+  {
+    name: 'vault.images.guidance', type: 'text', default: '_Campaign/Image_Guidance.md', group: 'images',
+    does: 'The note that holds your guidance on how this campaign\'s pictures should look',
+    left_out: '`_Campaign/Image_Guidance.md`',
   },
 
   // The site itself

@@ -190,6 +190,9 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}, warn = console.wa
   // The vault's build steps, for the commands that run them. Not listed, like `site`.
   Object.defineProperty(merged, 'steps', { value: steps, enumerable: false });
 
+  // The Image Guidance note's path, which the publish decision never publishes. Not listed, like `site`.
+  Object.defineProperty(merged, 'imageGuidance', { value: v.images.guidance, enumerable: false });
+
   // The GM's extra menu entries. A second entry with the same label under the same group is left out (the settings
   // reader has already reported it). Not listed, like `steps`: a site that sets none builds as it did.
   const menuSeen = new Set();
