@@ -13,7 +13,9 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any, NamedTuple
 
@@ -26,7 +28,44 @@ LOGIN_TIMEOUT = 30
 MAX_BYTES = 50 * 1024 * 1024
 SAID_CHARS = 300
 
-RUN = subprocess.run     # tests replace this
+def _run(cmd: list[str], *, input: str | None = None, timeout: float,
+         cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
+    """Run `cmd` and read its output as UTF-8 (Codex's own encoding,
+    whatever the machine's code page). On a timeout the whole process group
+    is ended: Codex from npm is a launcher with the real program beneath it,
+    and killing only the launcher would leave the program running and its
+    output pipe open."""
+    group: dict[str, Any] = (
+        {"creationflags": getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)}
+        if sys.platform == "win32" else {"start_new_session": True})
+    proc = subprocess.Popen(
+        cmd, stdin=subprocess.PIPE if input is not None else subprocess.DEVNULL,
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=cwd,
+        encoding="utf-8", errors="replace", **group)
+    try:
+        out, err = proc.communicate(input, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        _end_group(proc)
+        try:
+            proc.communicate(timeout=10)
+        except subprocess.TimeoutExpired:
+            pass
+        raise
+    return subprocess.CompletedProcess(cmd, proc.returncode, out, err)
+
+
+def _end_group(proc: subprocess.Popen[str]) -> None:
+    try:
+        if sys.platform == "win32":
+            subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)],
+                           capture_output=True, timeout=30)
+        else:
+            os.killpg(proc.pid, signal.SIGKILL)
+    except (OSError, subprocess.TimeoutExpired):
+        proc.kill()
+
+
+RUN = _run               # tests replace this
 WHICH = shutil.which     # tests replace this
 
 SHAPE_WORDS = {"3:4": "Portrait format, 3:4.", "16:9": "Landscape format, 16:9.",
@@ -73,8 +112,7 @@ def login() -> Login:
     if exe is None:
         return Login("missing", "Codex is not installed")
     try:
-        done = RUN([exe, "login", "status"], capture_output=True, text=True,
-                   timeout=LOGIN_TIMEOUT, stdin=subprocess.DEVNULL)
+        done = RUN([exe, "login", "status"], timeout=LOGIN_TIMEOUT)
     except (OSError, subprocess.TimeoutExpired):
         return Login("unknown", "Codex did not say how it is signed in")
     lines = [ln.strip() for ln in f"{done.stdout}\n{done.stderr}".splitlines()]
@@ -193,7 +231,7 @@ def draw(prompt: str, refs: list[str], shape: str, workdir: Path) -> Picture:
         raise Failed("Codex is not installed", stop=True)
     try:
         done = RUN(command(exe, refs), input=prompt_for(prompt, len(refs), shape),
-                   capture_output=True, text=True, timeout=TIMEOUT, cwd=workdir)
+                   timeout=TIMEOUT, cwd=workdir)
     except subprocess.TimeoutExpired:
         raise Failed(f"Codex took longer than {TIMEOUT // 60} minutes") from None
     except OSError as e:

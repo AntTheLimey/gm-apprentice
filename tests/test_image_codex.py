@@ -473,7 +473,7 @@ def sandboxed(monkeypatch, tmp_path):
     the temp folder takes them."""
     locked = tmp_path / "locked-cache"
     monkeypatch.setenv("GMA_CACHE", str(locked))
-    monkeypatch.setattr(image_jobs.tempfile, "gettempdir", lambda: str(tmp_path / "tmp"))
+    monkeypatch.setattr(image_jobs, "TEMP", lambda: str(tmp_path / "tmp"))
     real = image_jobs._writable
     monkeypatch.setattr(image_jobs, "_writable",
                         lambda root: False if locked in root.parents or root == locked / "images"
@@ -527,3 +527,50 @@ def test_a_self_plan_with_nothing_planned_does_not_say_to_draw(tmp_path, capsys)
     assert plan(vault, tmp_path, "--source", "self", count=1) == 1
     out = capsys.readouterr().out
     assert "it already has a picture" in out and "--picture N FILE" not in out
+
+
+# --- the sign-in is checked again when drawing ---------------------------------
+
+def test_a_codex_signed_in_another_way_since_the_plan_draws_nothing(codex, tmp_path, capsys):
+    vault = make_vault(tmp_path)
+    plan(vault, tmp_path)
+    jid = job_id(capsys.readouterr().out)
+    codex.login = "Logged in using personal access token\n"
+    assert image.main(["draw", str(vault), jid]) == 2
+    assert codex.execs == []
+    err = capsys.readouterr().err
+    assert "charged" in err and "the GM agrees" in err
+
+
+def test_a_paid_plan_says_it_costs_money_and_why_codex_was_passed_over(codex, tmp_path, monkeypatch, capsys):
+    codex.login, codex.login_code = NOT_IN, 1
+    monkeypatch.setenv("GEMINI_API_KEY", "AIza-FAKE")
+    assert plan(make_vault(tmp_path, GEMINI), tmp_path) == 0
+    out = capsys.readouterr().out
+    assert ("Drawn by gemini on the GM's key: this costs money (not Codex: "
+            "Codex is installed but not signed in).") in out
+
+
+# --- the real runner: whole process group on a timeout, UTF-8 always ----------
+
+def test_a_timeout_ends_the_program_beneath_the_launcher(tmp_path):
+    # A launcher that starts a child holding the output pipe, as Codex's
+    # npm launcher does, then both wait.
+    child = "import time; time.sleep(60)"
+    launcher = ("import subprocess, sys, time; "
+                f"subprocess.Popen([sys.executable, '-c', {child!r}]); time.sleep(60)")
+    import time
+    start = time.monotonic()
+    with pytest.raises(subprocess.TimeoutExpired):
+        image_codex._run([sys.executable, "-c", launcher], timeout=1)
+    assert time.monotonic() - start < 20
+
+
+def test_codex_output_is_read_as_utf8_whatever_the_code_page(tmp_path):
+    said = "I’ll draw “her” …"
+    got = image_codex._run(
+        [sys.executable, "-c",
+         f"import sys; sys.stdout.buffer.write({said!r}.encode('utf-8')); "
+         "sys.stdout.buffer.write(sys.stdin.buffer.read())"],
+        input="Hôtel de Brissac", timeout=30)
+    assert got.stdout == said + "Hôtel de Brissac"

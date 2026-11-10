@@ -64,7 +64,8 @@ def build_parser() -> argparse.ArgumentParser:
                     metavar=("N", "WHAT"),
                     help="draw picture N again, telling the service what was "
                     "wrong with it (up to 500 characters); can be given "
-                    "more than once. Each attempt is paid for. Pictures are "
+                    "more than once. On a paid service each attempt is paid "
+                    "for. Pictures are "
                     "drawn one at a time; two gma image draw runs on one "
                     "vault at the same time can lose a spending count")
     dr.add_argument("--picture", nargs=2, action="append", default=[],
@@ -176,6 +177,9 @@ def plan(vault: Path, requests: Path, unprompted: bool,
     free = FREE_WORDS.get(job.service)
     if free:
         print(f"Drawn {free}.")
+    else:
+        print(f"Drawn by {job.service} on the GM's key: this costs money"
+              + (f" (not Codex: {job.passed_over})." if job.passed_over else "."))
     total = 0.0
     planned = 0
     for pic in job.entries:
@@ -205,7 +209,12 @@ def plan(vault: Path, requests: Path, unprompted: bool,
         print(f"Estimated total: about {image_money.cents(total)} cents")
     else:
         print("Estimated total: unknown (the price of this model is not known)")
-    print(f"Job file: {image_jobs.job_file(job.id)}")
+    where = image_jobs.job_file(job.id)
+    print(f"Job file: {where}")
+    if image_jobs.roots()[1] in where.parents:
+        print("The job is in the temp folder (the cache folder could not be "
+              "written); the system may clear it within days, so place or "
+              "keep its pictures soon.")
     return 0 if planned else 1
 
 

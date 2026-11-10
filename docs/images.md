@@ -15,10 +15,13 @@ the apprentice draws with it first. The pictures come out of the plan you
 already pay for, so no money is counted against your limits, and each
 picture takes a minute or two. The redraw limit still applies. A Codex
 signed in with an API key is charged by the picture, so it is never used
-this way.
+this way, and the sign-in is checked again before every batch is drawn.
+If your ChatGPT account has bought extra Codex credits, Codex may spend
+them once the plan's allowance runs out: that is billed by OpenAI, outside
+the apprentice's limits.
 
 If you run the apprentice inside Codex, it can draw the pictures itself
-with Codex's own image tool, the same way.
+with Codex's own image tool. That costs no money either.
 
 `vault.images.source` chooses: `auto` (Codex when it can, else Gemini),
 `codex` or `service` (Gemini only). If Codex stops part-way, for example
@@ -131,7 +134,12 @@ recap. An existing picture is replaced only when you ask for that.
 
 A **held** picture is one the apprentice looked at and did not keep. It
 stays outside the vault, in a folder on your computer for that batch, and
-the apprentice tells you where. You can still keep it for 14 days.
+the apprentice tells you where. You can still keep it for 14 days. When
+the apprentice runs in a sandbox that cannot write to that folder (Codex,
+by default), the batch goes to the system's temporary folder instead,
+which the system may clear sooner, so keep a held picture within a day or
+two. A batch made there is found again only by a program that uses the
+same temporary folder, so finish it in the same place you started it.
 
 ## What can go wrong
 

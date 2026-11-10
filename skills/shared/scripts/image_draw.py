@@ -431,6 +431,11 @@ def draw(job: Job, redo: dict[int, str], today: date,
     may be given so a caller still holds the report if something escapes."""
     result = result if result is not None else DrawResult()
     if job.service == "codex":
+        # Checked again now: a Codex signed in another way since the plan
+        # would be charged for every picture, outside the vault's limits.
+        state = image_codex.login()
+        if state.state != "chatgpt":
+            raise Stop(image_codex.why_not(state) + SERVICE_HINT)
         return _draw_free(job, redo, result, _CodexRun)
     if job.service == "self":
         raise Stop(SELF_HOW.format(job=job.id))
@@ -492,8 +497,9 @@ SELF_HOW = ("Job {job} is drawn by you: draw each planned picture with your "
             "own image tool, save it anywhere, then hand it in with "
             "gma image draw \"<vault>\" {job} --picture N FILE (once per "
             "picture; again for a redraw).")
-SERVICE_HINT = (" To draw the rest with the picture service instead, plan "
-                "them again with --source service (that costs money).")
+SERVICE_HINT = (" Run this draw again later to retry with Codex at no cost. "
+                "Only if the GM agrees to pay: plan the pictures not drawn "
+                "again with --source service.")
 
 
 class _FreeRun:

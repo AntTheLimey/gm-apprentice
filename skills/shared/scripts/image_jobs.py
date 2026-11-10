@@ -101,6 +101,7 @@ class Job:
     spent: float                    # cents this job has spent (draw adds to it)
     entries: list[Entry]
     needs_thinking: bool = False    # the model refused to draw without thinking
+    passed_over: str | None = None  # why `auto` did not take Codex, when it did not
 
 
 # --- the job on disk ------------------------------------------------------
@@ -110,9 +111,12 @@ class Job:
 # then jobs go to the temp folder; the vault is never used. Every command
 # finds a job in either place.
 
+TEMP = tempfile.gettempdir     # tests replace this
+
+
 def roots() -> list[Path]:
     return [tool_cache.cache_root() / "images",
-            Path(tempfile.gettempdir()) / "gm-apprentice-images"]
+            Path(TEMP()) / "gm-apprentice-images"]
 
 
 def _writable(root: Path) -> bool:
@@ -688,13 +692,15 @@ NO_SERVICE = ("Choose a picture service and model first: gma publish "
               "settings set vault.images.service gemini …")
 
 
-def choose_source(lim: image_money.Limits, source: str | None) -> str:
+def choose_source(lim: image_money.Limits,
+                  source: str | None) -> tuple[str, str | None]:
     """Who draws this job: `codex`, `self` or the configured service's
-    name. `source` is `plan --source`; else the vault's setting. `auto`
-    takes Codex on a ChatGPT plan before the paid service."""
+    name, and, when `auto` passed over an installed Codex, why. `source` is
+    `plan --source`; else the vault's setting. `auto` takes Codex on a
+    ChatGPT plan before the paid service."""
     want = source or lim.source
     if want == "self":
-        return "self"
+        return "self", None
     if want not in ("auto", "codex", "service"):
         raise Stop(f"There is no picture source called {want}; try: "
                    + ", ".join(SOURCES))
@@ -702,7 +708,7 @@ def choose_source(lim: image_money.Limits, source: str | None) -> str:
     if want in ("auto", "codex"):
         state = image_codex.login()
         if state.state == "chatgpt":
-            return "codex"
+            return "codex", None
         if want == "codex":
             raise Stop(image_codex.why_not(state))
     if not lim.service or not lim.model:
@@ -710,14 +716,16 @@ def choose_source(lim: image_money.Limits, source: str | None) -> str:
         raise Stop(NO_SERVICE + (" Or sign Codex in with a ChatGPT plan: "
                                  "codex login" if state is not None
                                  and state.state in ("none", "other") else ""))
-    return lim.service
+    passed = (state.line if state is not None and state.state != "missing"
+              else None)
+    return lim.service, passed
 
 
 def plan(vault: Path, requests: list[dict[str, Any]], unprompted: bool,
          today: date, source: str | None = None) -> Job:
     requests = check_requests(requests)
     lim = image_money.limits(vault)
-    service = choose_source(lim, source)
+    service, passed_over = choose_source(lim, source)
     free = service in FREE
     if free:
         model, priced = service, False
@@ -739,12 +747,13 @@ def plan(vault: Path, requests: list[dict[str, Any]], unprompted: bool,
     prune(today)
 
     job_id = f"{today:%Y%m%d}-{secrets.token_hex(3)}"
+    home = folder(job_id)     # chosen once: each choice writes a probe file
     ctx = _Ctx(vault, lim, guidance, vw.Batch(vault),
                section.name_index(vl.vault_files(vault)), priced, unprompted, model)
     entries: list[Entry] = []
     for n, req in enumerate(requests, 1):
         e = Entry(n=n, note=req["for"], kind="", prompt="", refs=[],
-                  shape="", pending=str(folder(job_id) / f"{n:02d}"), dest="",
+                  shape="", pending=str(home / f"{n:02d}"), dest="",
                   after=req.get("after"), replace=req.get("replace") is True,
                   estimate=None, status="refused")
         if n == 1 and not guidance.found:
@@ -756,6 +765,7 @@ def plan(vault: Path, requests: list[dict[str, Any]], unprompted: bool,
 
     job = Job(id=job_id, vault=str(vault), service=service,
               model=model, priced=priced, unprompted=unprompted,
+              passed_over=passed_over,
               spent=0.0, entries=entries)
     try:
         save(job)
