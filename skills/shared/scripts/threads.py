@@ -243,8 +243,8 @@ def _headings(lines: list[str]) -> list[tuple[int, int, str]]:
 def _shared_span(lines: list[str],
                  section: str = SECTION) -> tuple[int, int] | None:
     """(heading index, end) of the shared list: the first level-2 heading
-    titled Open Threads (or another `section`) in any case, outside a code fence, up to the next
-    heading of level 1 or 2. Every reader and writer of the list (and the
+    titled Open Threads (or another `section`) in any case, outside a code
+    fence, up to the next heading of level 1 or 2. Every reader and writer of the list (and the
     publish tool's `sectionRange`) finds it this way: the title matches by
     case only (`Open  Threads` with two spaces is not it)."""
     found = find_section("\n".join(lines), [section], level=2, first=True,
@@ -669,23 +669,28 @@ def _lazy(line: str) -> bool:
                 or bare.startswith(("```", "~~~", *_HIDING, ">")))
 
 
+_COMMENT_ONLY_RE = re.compile(r"\s*(?:<!--.*?-->\s*|%%.*?%%\s*)+")
+
+
 def remove_pc_thread(pc_text: str, thread: PcThread) -> str:
     """`pc_text` without `thread` (from `pc_thread_items` on this same
     text): its first line and every line under it. An inline thread's
-    label line stays, bare (`**Open threads:**`)."""
+    label line stays without its text. When that leaves the list empty
+    (only blank or comment-only lines before the next field), the label
+    gets the filler other empty fields use (`**Open threads:** \u2014`)."""
     lines = _lines(pc_text)
     if thread.keep is not None:
         cr = "\r" if lines[thread.start].endswith("\r") else ""
-        return "\n".join(lines[:thread.start] + [thread.keep + cr]
-                         + lines[thread.end:])
-    lines = lines[:thread.start] + lines[thread.end:]
-    # The list's last thread gone: the label says so, as an empty field
-    # does elsewhere (`**Open threads:** —`), not nothing before the next.
+        lines = (lines[:thread.start] + [thread.keep + cr]
+                 + lines[thread.end:])
+    else:
+        lines = lines[:thread.start] + lines[thread.end:]
     span = _pc_span(lines)
     if span is not None:
         m, at, end = span
         if not m.group("rest").strip() and all(
-                _blank(l) for l in lines[at + 1:end]):
+                _blank(l) or _COMMENT_ONLY_RE.fullmatch(l.rstrip("\r"))
+                for l in lines[at + 1:end]):
             cr = "\r" if lines[at].endswith("\r") else ""
             lines[at] = m.group("label") + " \u2014" + cr
     return "\n".join(lines)

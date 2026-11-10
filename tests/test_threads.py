@@ -347,7 +347,7 @@ class ThreadsTests(unittest.TestCase):
                     "the ledger; the bell", "- **Session 5:** fled"))
                 out = threads.remove_pc_thread(pc, got[0])
                 self.assertEqual(out, f"## Current Status\n\n"
-                                      f"{marker}**Open threads:**\n"
+                                      f"{marker}**Open threads:** \u2014\n"
                                       f"{marker}**Knows:** x\n")
                 self.assertEqual(threads.pc_thread_items(out), [])
         # CRLF: the label line keeps its CR.
@@ -356,7 +356,7 @@ class ThreadsTests(unittest.TestCase):
         got = threads.pc_thread_items(pc)
         self.assertEqual([t.text for t in got], ["a"])
         self.assertEqual(threads.remove_pc_thread(pc, got[0]),
-                         "## Current Status\r\n\r\n- **Open threads:**\r\n"
+                         "## Current Status\r\n\r\n- **Open threads:** \u2014\r\n"
                          "- **Knows:** x\r\n")
         # Unbulleted, with bullets under it: the text, then each bullet.
         pc = ("## Current Status\n\n**Open threads:** first\n- second\n"
@@ -577,6 +577,30 @@ class ThreadsTests(unittest.TestCase):
         (t,) = threads.pc_thread_items(crlf)
         self.assertIn("**Open threads:** \u2014\r\n",
                       threads.remove_pc_thread(crlf, t))
+
+    def test_remove_last_inline_thread_writes_filler(self):
+        pc = ("## Current Status\n\n**Open threads:** The only one\r\n"
+              "**Knows:** x\n").replace("\r", "")
+        (t,) = threads.pc_thread_items(pc)
+        self.assertEqual(
+            threads.remove_pc_thread(pc, t),
+            "## Current Status\n\n**Open threads:** \u2014\n**Knows:** x\n")
+        crlf = pc.replace("\n", "\r\n")
+        (t,) = threads.pc_thread_items(crlf)
+        self.assertIn("**Open threads:** \u2014\r\n",
+                      threads.remove_pc_thread(crlf, t))
+
+    def test_filler_with_comment_line_under_the_list(self):
+        pc = ("## Current Status\n\n**Open threads:**\n- Only one\n"
+              "<!-- QA-DISMISSED: 2026-10-20 thread-tidy: kept -->\n\n"
+              "**Knows:** x\n")
+        (t,) = threads.pc_thread_items(pc)
+        out = threads.remove_pc_thread(pc, t)
+        self.assertIn("**Open threads:** \u2014\n<!-- QA-DISMISSED", out)
+        # A comment that stays open is not an empty line: no filler.
+        pc = pc.replace("kept -->", "kept\n")
+        (t,) = threads.pc_thread_items(pc)
+        self.assertNotIn("\u2014", threads.remove_pc_thread(pc, t))
 
     def test_lazy_line_never_joins_a_comment_or_callout(self):
         for line in ("<!-- spoiler -->", "<!--", "-->", "%%",
