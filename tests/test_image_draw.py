@@ -994,3 +994,23 @@ def test_a_vault_with_thinking_on_is_not_told_the_model_forced_it(tmp_path, monk
     script(monkeypatch, fixture("gemini-prompt-only.json"))
     assert run(vault, job) == 0
     assert FORCED not in capsys.readouterr().out
+
+
+# -- final wave: B7 -----------------------------------------------------------
+
+def test_a_reference_edited_to_point_outside_the_vault_is_never_sent(tmp_path, monkeypatch, capsys):
+    vault, job = start(tmp_path, count=1)
+    outside = tmp_path / "outside.png"
+    outside.write_bytes(PNG)
+    inside = vault / "_attachments" / "characters" / "link.png"
+    inside.parent.mkdir(parents=True)
+    inside.symlink_to(outside)                        # inside by name, outside in fact
+    job.entries[0].refs = [str(outside), str(inside),
+                           str(vault / ".." / "outside.png")]
+    image_jobs.save(job)
+    send = script(monkeypatch, fixture(OK))
+    assert run(vault, job) == 0
+    assert [p["type"] for p in send.calls[0]["input"]] == ["text"]
+    out = capsys.readouterr().out
+    for name in ("outside.png", "link.png"):
+        assert f"left out the reference picture {name}: it is outside the vault" in out

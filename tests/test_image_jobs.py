@@ -697,3 +697,42 @@ def test_the_one_price_rule(monkeypatch):
     assert image_jobs.estimate("x", None, 0, 0, False) is None
     assert image_jobs.is_priced(known, None) and image_jobs.is_priced("x", 2)
     assert not image_jobs.is_priced("x", None)
+
+
+# --- final wave: B4, B5 -------------------------------------------------------
+
+@pytest.mark.parametrize("name", ["Anselm.png", "ANSELM.JPG", "anselm.webp"])
+def test_an_existing_picture_is_found_whatever_its_letter_case(tmp_path, name):
+    v = build(tmp_path)
+    (v / "_attachments" / "characters" / name).write_bytes(PNG)
+    _, e = one(v, {"for": "Anselm", "subject": "x"})
+    assert e.status == "refused" and said(e) == "it already has a picture"
+
+
+def test_plan_and_place_share_one_reading_of_existing_pictures():
+    import image_place
+    assert image_place._existing is image_jobs.existing_pictures
+
+
+@pytest.mark.parametrize("field", [
+    "portrait: [_attachments/characters/a.png, b.png]\n",
+    "portrait:\n  - _attachments/characters/a.png\n",
+    "portrait: |\n  _attachments/characters/a.png\n"])
+@pytest.mark.parametrize("replace", [False, True])
+def test_a_portrait_that_is_not_a_single_path_is_refused_as_place_refuses_it(
+        tmp_path, field, replace):
+    v = build(tmp_path)
+    (v / "NPCs" / "Odd.md").write_text(note("npc", field), encoding="utf-8")
+    _, e = one(v, {"for": "Odd", "subject": "x", "replace": replace})
+    assert e.status == "refused"
+    assert said(e) in (
+        "NPCs/Odd.md already has a picture (its portrait is not a single path)",
+        "NPCs/Odd.md has frontmatter that could not be read")
+    # and place, given the same note, says the same
+    import image_place
+    import vault_write
+    lines = []
+    e.status, e.dest, e.ext, e.pending = "drawn", "_attachments/characters/odd", "png", str(tmp_path / "p")
+    (tmp_path / "p.png").write_bytes(PNG)
+    assert image_place._prepare(v, vault_write.Batch(v), e, lines) is None
+    assert lines == [f"{said(e)}; picture 1 was not placed"]

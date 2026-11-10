@@ -15,7 +15,6 @@ import os
 import re
 import secrets
 import shutil
-import unicodedata
 from urllib.parse import quote
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -26,6 +25,9 @@ import ingest_images
 import vault_write as vw
 import vaultlib as vl
 from image_jobs import Entry, Job, Stop
+from image_jobs import existing_pictures as _existing
+from image_jobs import fold as _fold
+from image_jobs import inside as _inside
 
 
 @dataclass
@@ -136,22 +138,8 @@ def exact_embed_names(text: str, filename: str, folder: Path) -> str:
 
 # --- finding things ------------------------------------------------------------
 
-def _inside(vault: Path, rel: str) -> Path | None:
-    """The file `rel` names, when it stays inside the vault."""
-    full = vault / rel
-    try:
-        full.resolve().relative_to(vault.resolve())
-    except (ValueError, OSError, RuntimeError):
-        return None
-    return full
-
-
 def _pending(e: Entry) -> Path:
     return Path(e.pending + "." + (e.ext or ""))
-
-
-def _fold(s: str) -> str:
-    return unicodedata.normalize("NFC", s).casefold()
 
 
 def _same_bytes(a: Path, b: Path) -> bool:
@@ -213,38 +201,6 @@ def _disk_rel(vault: Path, target: Path, planned: str) -> str:
     return (Path(planned).parent / n).as_posix()
 
 
-def _existing(vault: Path, dest: str) -> list[str]:
-    """Pictures at `dest` under any extension, names compared case-folded."""
-    folder = _inside(vault, dest)
-    if folder is None:
-        return []
-    want = _fold(Path(dest).name)
-    try:
-        names = sorted(os.listdir(folder.parent))
-    except OSError:
-        return []
-    return [(Path(dest).parent / n).as_posix() for n in names
-            if (folder.parent / n).is_file()
-            and _fold(Path(n).stem) == want]
-
-
-def _portrait_of(lines: list[str], close: int) -> tuple[str, bool]:
-    """The note's portrait as (path, odd): odd when the field is a list or
-    has child lines, which is never blank."""
-    for i in range(1, close):
-        m = re.match(r"portrait:(.*)$", lines[i].rstrip("\r\n"))
-        if not m:
-            continue
-        raw = m.group(1).strip()
-        nxt = lines[i + 1] if i + 1 < close else ""
-        if raw[:1] in ("[", "{", "|", ">") or (
-                raw in ("", "#") and nxt[:1] in (" ", "\t", "-")):
-            return "", True
-        value = vl.scalar_value(raw) if raw else ""
-        return ("" if value.casefold() in ("null", "~") else value), False
-    return "", False
-
-
 def _set_portrait(lines: list[str], close: int, value: str) -> str:
     eol = "\r\n" if lines[0].endswith("\r\n") else "\n"
     fm = lines[1:close]
@@ -289,21 +245,13 @@ def _prepare(vault: Path, batch: vw.Batch, e: Entry,
             done = True
             here.remove(h)
     old = list(here)
-    tl = text.split("\n")
-    tlk = [ln + "\n" for ln in tl[:-1]] + ([tl[-1]] if tl[-1] else [])
-    close, err = vl.frontmatter_span(tlk)
-    portrait, odd = "", False
-    if err:
-        if e.kind != "scene":
-            no(f"{note} has no frontmatter to hold a picture"
-               if err.startswith("no frontmatter")
-               else f"{note} has frontmatter that could not be read")
+    tlk = image_jobs.note_lines(text)
+    portrait, close = "", 0
+    if e.kind != "scene":
+        portrait, close, why = image_jobs.read_portrait(note, tlk)
+        if why:
+            no(why)
             return None
-    elif e.kind != "scene":
-        portrait, odd = _portrait_of(tlk, close)
-    if odd:
-        no(f"{note} already has a picture (its portrait is not a single path)")
-        return None
     if e.kind != "scene" and portrait and _fold(portrait) != _fold(rel_new):
         if not e.replace:
             no(f"{note} already has a portrait")

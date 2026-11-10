@@ -397,3 +397,11 @@ def test_a_money_setting_that_cannot_be_read_stops_every_command(
     out = capsys.readouterr()
     assert out.err == said + "\n"
     assert "Job " not in out.out and "drawn" not in out.out
+
+
+# --- final wave: C1 ---------------------------------------------------------
+
+def test_the_image_summary_names_no_command_that_does_not_exist():
+    import gma
+    assert gma.COMMANDS["image"].summary == (
+        "Draw a vault's pictures inside its spending limits.")

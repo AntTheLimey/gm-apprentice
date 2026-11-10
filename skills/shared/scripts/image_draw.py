@@ -61,13 +61,23 @@ def _mime(data: bytes) -> str | None:
     return {"png": "image/png", "jpg": "image/jpeg"}.get(dnd_ddb.image_type(data) or "")
 
 
-def _read_refs(e: Entry) -> tuple[list[tuple[str, bytes]], list[str]]:
+def _read_refs(e: Entry, vault: Path) -> tuple[list[tuple[str, bytes]], list[str]]:
     """The likeness pictures as they are now; one that has gone missing or
-    changed since the plan is left out, with a line saying so."""
+    changed since the plan, or that is not inside the vault (a job file is
+    plain text anyone can edit), is left out, with a line saying so."""
     found: list[tuple[str, bytes]] = []
     notes: list[str] = []
-    for path in e.refs:
-        name = Path(path).name
+    for raw in e.refs:
+        name = Path(raw).name
+        try:
+            path = Path(raw).resolve()
+            if not path.is_relative_to(vault.resolve()):
+                notes.append(f"left out the reference picture {name}: it is "
+                             "outside the vault")
+                continue
+        except (OSError, RuntimeError):
+            notes.append(f"left out the reference picture {name}: it could not be read")
+            continue
         try:
             if os.path.getsize(path) > MAX_REF_BYTES:
                 notes.append(f"left out the reference picture {name}: it is over 5 MB")
@@ -222,7 +232,7 @@ class _Run:
 
     def attempt(self, e: Entry, redo: str | None) -> None:
         job, lim = self.job, self.lim
-        refs_all, notes = _read_refs(e)
+        refs_all, notes = _read_refs(e, self.vault)
         for text in notes:
             self.note(e, text)
         prompt = e.prompt + (

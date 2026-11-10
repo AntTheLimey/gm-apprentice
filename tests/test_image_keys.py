@@ -200,3 +200,25 @@ def test_unknown_service_is_a_value_error(monkeypatch):
     monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
     with pytest.raises(ValueError):
         image_keys.store("nonesuch")
+
+
+# --- final wave: B8 ---------------------------------------------------------
+
+@pytest.mark.parametrize("status, stdout, found", [
+    (44, "", None), (0, "k-chain\n", ("k-chain", "keychain"))])
+def test_the_keychain_answers_found_or_not_there(monkeypatch, status, stdout, found):
+    monkeypatch.setattr(sys, "platform", "darwin")
+    monkeypatch.setattr(image_keys, "RUN", lambda cmd, **kw: SimpleNamespace(
+        returncode=status, stdout=stdout))
+    assert image_keys.find("gemini") == found
+
+
+@pytest.mark.parametrize("status", [1, 36, 51, 128])
+def test_a_keychain_that_refuses_is_not_read_as_no_key(monkeypatch, status):
+    monkeypatch.setattr(sys, "platform", "darwin")
+    monkeypatch.setattr(image_keys, "RUN", lambda cmd, **kw: SimpleNamespace(
+        returncode=status, stdout=""))
+    with pytest.raises(image_keys.StoreUnavailable) as e:
+        image_keys.find("gemini")
+    assert str(e.value) == ("The keychain would not give up the key (it may be "
+                            "locked, or access was refused). Unlock it and try again.")

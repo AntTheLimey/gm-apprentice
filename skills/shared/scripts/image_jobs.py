@@ -10,7 +10,6 @@ everything `draw` and `place` need and nothing secret. Stdlib only.
 
 from __future__ import annotations
 
-import glob
 import json
 import os
 import re
@@ -286,10 +285,76 @@ def _dest(kind: str, rel: str, name: str | None) -> str:
     return f"_attachments/{ingest_images.FOLDER[kind]}/{_slug(stem)}"
 
 
-def _file_at(vault: Path, dest: str) -> bool:
-    """Whether any file sits at `dest` whatever its extension."""
-    return any(Path(p).is_file()
-               for p in glob.glob(glob.escape(str(vault / dest)) + ".*"))
+# What is already at a picture's place, and what a note's `portrait` holds:
+# one reading for `plan` (before money is spent) and `place` (before the vault
+# is touched), so the two never disagree.
+
+def fold(s: str) -> str:
+    return unicodedata.normalize("NFC", s).casefold()
+
+
+def inside(vault: Path, rel: str) -> Path | None:
+    """The file `rel` names, when it stays inside the vault."""
+    full = vault / rel
+    try:
+        full.resolve().relative_to(vault.resolve())
+    except (ValueError, OSError, RuntimeError):
+        return None
+    return full
+
+
+def existing_pictures(vault: Path, dest: str) -> list[str]:
+    """Pictures at `dest` under any extension, names compared case-folded."""
+    folder = inside(vault, dest)
+    if folder is None:
+        return []
+    want = fold(Path(dest).name)
+    try:
+        names = sorted(os.listdir(folder.parent))
+    except OSError:
+        return []
+    return [(Path(dest).parent / n).as_posix() for n in names
+            if (folder.parent / n).is_file()
+            and fold(Path(n).stem) == want]
+
+
+def note_lines(text: str) -> list[str]:
+    """A note's lines, each with its line end, as `frontmatter_span` reads them."""
+    tl = text.split("\n")
+    return [ln + "\n" for ln in tl[:-1]] + ([tl[-1]] if tl[-1] else [])
+
+
+def portrait_of(lines: list[str], close: int) -> tuple[str, bool]:
+    """The note's portrait as (path, odd): odd when the field is a list or
+    has child lines, which is never blank."""
+    for i in range(1, close):
+        m = re.match(r"portrait:(.*)$", lines[i].rstrip("\r\n"))
+        if not m:
+            continue
+        raw = m.group(1).strip()
+        nxt = lines[i + 1] if i + 1 < close else ""
+        if raw[:1] in ("[", "{", "|", ">") or (
+                raw in ("", "#") and nxt[:1] in (" ", "\t", "-")):
+            return "", True
+        value = vl.scalar_value(raw) if raw else ""
+        return ("" if value.casefold() in ("null", "~") else value), False
+    return "", False
+
+
+def read_portrait(note: str, lines: list[str]) -> tuple[str, int, str | None]:
+    """A note's portrait, the index of the line closing its frontmatter, and
+    why a picture cannot be set on it (None when it can): no frontmatter,
+    frontmatter that cannot be read, or a portrait that is not a single path."""
+    close, err = vl.frontmatter_span(lines)
+    if err:
+        return "", close, (f"{note} has no frontmatter to hold a picture"
+                           if err.startswith("no frontmatter")
+                           else f"{note} has frontmatter that could not be read")
+    portrait, odd = portrait_of(lines, close)
+    if odd:
+        return "", close, (f"{note} already has a picture (its portrait is "
+                           "not a single path)")
+    return portrait, close, None
 
 
 def _portrait(fm: dict[str, Any] | None) -> str:
@@ -471,11 +536,19 @@ def _set_dest(e: Entry, req: dict[str, Any]) -> bool:
     return True
 
 
-def _check_existing(ctx: _Ctx, e: Entry, fm: dict[str, Any] | None) -> bool:
-    """Rule 5: an existing picture stays unless the request says replace."""
+def _check_existing(ctx: _Ctx, e: Entry, text: str) -> bool:
+    """Rule 5: an existing picture stays unless the request says replace. A
+    note `place` could not set a picture on is refused now, before money is
+    spent, in `place`'s words."""
+    portrait = ""
+    if e.kind != "scene":
+        portrait, _, why = read_portrait(e.note, note_lines(text))
+        if why:
+            _refuse(e, why)
+            return False
     if e.replace:
         return True
-    if _file_at(ctx.vault, e.dest) or (e.kind != "scene" and _portrait(fm)):
+    if existing_pictures(ctx.vault, e.dest) or portrait:
         _refuse(e, "it already has a picture")
         return False
     return True
@@ -527,8 +600,8 @@ def _plan_one(ctx: _Ctx, e: Entry, req: dict[str, Any]) -> None:
     got = _read_note(ctx, e, req["for"])
     if got is None or not _check_unprompted(ctx, e):
         return
-    text, fm = got
-    if not _set_dest(e, req) or not _check_existing(ctx, e, fm):
+    text, _ = got
+    if not _set_dest(e, req) or not _check_existing(ctx, e, text):
         return
     if e.kind == "scene" and not _check_scene_place(e, text):
         return
@@ -589,7 +662,7 @@ def plan(vault: Path, requests: list[dict[str, Any]], unprompted: bool,
         raise Stop("Drawing without asking is off for this vault.")
     try:
         guidance = image_guidance.read(vault, lim.guidance)
-    except (OSError, UnicodeDecodeError):
+    except (OSError, UnicodeDecodeError, vl.PublishToolUnavailable):
         raise Stop(f"The Image Guidance note at {lim.guidance} could not "
                    "be read.") from None
     month_spent = image_money.spent(vault, today)

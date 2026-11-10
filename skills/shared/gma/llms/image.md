@@ -40,7 +40,7 @@ When it stops:
 - Key, credit, keychain or network messages: pass them on. In a sandbox, `draw` needs network access.
 
 <!-- BEGIN GENERATED: gma image -->
-Draw a vault's pictures: plan, draw, look, place.
+Draw a vault's pictures inside its spending limits.
 
 ```text
 gma image <command> ...

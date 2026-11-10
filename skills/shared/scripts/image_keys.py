@@ -28,6 +28,7 @@ class StoreUnavailable(Exception):
 
 
 KEYCHAIN_WAIT = 10   # seconds the keychain gets to answer
+KEYCHAIN_MISSING = 44   # `security`'s exit status for "no such item"
 SET_ASIDE = "keys.json.unreadable"
 
 
@@ -78,7 +79,12 @@ def find(service: str) -> tuple[str, str] | None:
                                    "Unlock it and try again.") from None
         except OSError:
             done = None
-        # A miss (exit 44) is an answer, not an error.
+        # A miss (exit 44) is an answer, not an error. Any other refusal (a
+        # locked keychain, access denied) is not "no key": the GM has one.
+        if done is not None and done.returncode not in (0, KEYCHAIN_MISSING):
+            raise StoreUnavailable(
+                "The keychain would not give up the key (it may be locked, or "
+                "access was refused). Unlock it and try again.")
         if done is not None and done.returncode == 0 and done.stdout.strip():
             return done.stdout.strip(), "keychain"
         return None

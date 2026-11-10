@@ -2,7 +2,9 @@
 compose a picture prompt from them. Stdlib only.
 
 The note is GM-only. Its Direction section is for the apprentice and is
-never read here, so it can never reach a prompt.
+never read here, so it can never reach a prompt. Comments (`%% %%` and
+`<!-- -->`, a GM's asides) are cut as the publish tool cuts them, so they
+never reach a prompt either.
 """
 
 from __future__ import annotations
@@ -31,11 +33,23 @@ def _body(lines: list[str]) -> str:
     return "" if _PLACEHOLDER_RE.match(text) else text
 
 
+def _uncommented(lines: list[str]) -> list[str]:
+    """The lines with every comment cut by the publish tool's strip chain
+    (`vaultlib.cut_lines`). The gm-only markers go first: the template wraps
+    the whole note in one, and the chain would cut the note with it. Raises
+    `PublishToolUnavailable` when the tool cannot be asked: an aside is
+    never sent because the comments could not be read."""
+    bare = [vl.GM_MARKER_RE.sub("", ln) for ln in lines
+            if not (vl.GM_MARKER_RE.search(ln)
+                    and not vl.GM_MARKER_RE.sub("", ln).strip())]
+    return [ln for ln in vl.cut_lines(bare) if ln is not None]
+
+
 def read(vault: Path, rel: str) -> Guidance:
     path = vault / rel
     if not path.is_file():
         return Guidance("", {}, False)
-    lines = path.read_text(encoding="utf-8").split("\n")
+    lines = _uncommented(path.read_text(encoding="utf-8").split("\n"))
     heads = vl.line_headings(lines)
     # A section runs to the next heading of the same or a higher level.
     ends = [next((h2[0] for h2 in heads[i + 1:] if h2[1] <= h[1]), len(lines))

@@ -42,7 +42,7 @@ COMMANDS: dict[str, Command] = {
     "graph-check": Command("graph_check", "Vault graph queries: orphans, unresolved links, dead ends, backlinks."),
     "gurps-check": Command("gurps_check", "GURPS 4e sheet arithmetic checks."),
     "gurps-skill-default": Command("gurps_skill_default", "Add a GURPS skill to a PC's sheet at its default level."),
-    "image": Command("image", "Draw a vault's pictures: plan, draw, look, place."),
+    "image": Command("image", "Draw a vault's pictures inside its spending limits."),
     "index-build": Command("index_build", "Derive _meta/index.md from a vault scan."),
     "ingest-images": Command("ingest_images", "File and link vault-ingest image material."),
     "ingest-survey": Command("ingest_survey", "Classify vault-ingest source material."),

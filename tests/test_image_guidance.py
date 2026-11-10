@@ -99,3 +99,30 @@ def test_a_note_with_publish_false_reads(tmp_path):
     g = write_and_read(tmp_path, NOTE.replace(
         "type: meta\n", "type: meta\npublish: false\n"))
     assert g.always == "Regency, 1814. No electric light."
+
+
+# --- final wave: B6 -----------------------------------------------------------
+
+COMMENTED = (
+    "---\ntype: meta\n---\n# Image Guidance\n<!-- gm-only -->\n"
+    "## Direction\nShow the worst moment.\n"
+    "## Always\nRegency, 1814. %% my players hate gas light %% No electric light."
+    " <!-- ask Sam about this -->\n"
+    "%%\nPRIVATE-ASIDE spans\nseveral lines\n%%\n"
+    "<!--\nHTML-ASIDE over\ntwo lines\n-->\nCandles only.\n"
+    "## Blocks\n### Oil\nDark Romantic oil %%BLOCK-ASIDE%% painting.\n"
+    "<!-- BLOCK-HTML-ASIDE -->\n<!-- /gm-only -->\n"
+)
+ASIDES = ("my players", "gas light", "ask Sam", "PRIVATE-ASIDE", "several lines",
+          "HTML-ASIDE", "two lines", "BLOCK-ASIDE", "BLOCK-HTML-ASIDE", "%%", "<!--")
+
+
+def test_comments_in_the_guidance_never_leave_the_machine(tmp_path):
+    g = write_and_read(tmp_path, COMMENTED)
+    prompt, _ = image_guidance.compose(g, ["Oil"], "A man on a dock.")
+    for aside in ASIDES:
+        assert aside not in g.always and aside not in prompt, aside
+        assert all(aside not in b for b in g.blocks.values()), aside
+    assert "Regency, 1814." in g.always and "No electric light." in g.always
+    assert "Candles only." in g.always
+    assert "Dark Romantic oil" in g.blocks["oil"] and "painting." in g.blocks["oil"]
