@@ -4,6 +4,7 @@
 Usage:
   image.py status VAULT
   image.py key SERVICE
+  image.py plan VAULT REQUESTS [--unprompted]
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import image_jobs
 import image_keys
 import image_money
 import vaultlib
@@ -29,6 +31,16 @@ def build_parser() -> argparse.ArgumentParser:
                          epilog="Example: gma image key gemini")
     key.add_argument("service", help="the drawing service the key is for "
                      "(" + ", ".join(sorted(image_keys.ENV)) + ")")
+    pl = sub.add_parser(
+        "plan", help="work out which pictures to draw, and what they cost",
+        epilog='Example: gma image plan "<vault>" requests.json')
+    pl.add_argument("vault", type=Path, help="the vault folder")
+    pl.add_argument("requests", type=Path, help="a JSON file: a list with one "
+                    "object per picture (for, subject, and optionally blocks, "
+                    "shows, replace, after, name)")
+    pl.add_argument("--unprompted", action="store_true",
+                    help="the GM did not ask for these pictures: apply the "
+                    "vault's rules for drawing without asking")
     ap.epilog = 'Example: gma image status "<vault>"'
     return ap
 
@@ -89,10 +101,53 @@ def key(service: str) -> int:
     return 0
 
 
+def plan(vault: Path, requests: Path, unprompted: bool) -> int:
+    if not vault.is_dir():
+        print(f"error: not a directory: {vault}", file=sys.stderr)
+        return 2
+    try:
+        job = image_jobs.plan(vault, image_jobs.read_requests(requests),
+                              unprompted, _today())
+    except image_jobs.Stop as e:
+        print(str(e), file=sys.stderr)
+        return 2
+    except (vaultlib.StateUnreadable, vaultlib.SettingsUnavailable) as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+    except OSError as e:
+        print(f"error: could not save the job ({e.__class__.__name__})",
+              file=sys.stderr)
+        return 2
+    print(f"Job {job.id}")
+    total = 0.0
+    planned = 0
+    for pic in job.entries:
+        if pic.status == "planned":
+            planned += 1
+            total += pic.estimate or 0.0
+            cost = (f", about {pic.estimate:.2f} cents" if pic.estimate is not None
+                    else ", price unknown")
+            print(f"{pic.n}. {pic.note}: planned{cost}")
+            for line in pic.said:
+                print(f"   {line}")
+        else:
+            print(f"{pic.n}. {pic.note}: {pic.status}")
+            for line in pic.said:
+                print(f"   {line}")
+    if job.priced:
+        print(f"Estimated total: about {total:.2f} cents")
+    else:
+        print("Estimated total: unknown (the price of this model is not known)")
+    print(f"Job file: {image_jobs.job_file(job.id)}")
+    return 0 if planned else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.command == "status":
         return status(args.vault)
+    if args.command == "plan":
+        return plan(args.vault, args.requests, args.unprompted)
     return key(args.service)
 
 

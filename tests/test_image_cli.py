@@ -119,3 +119,75 @@ def test_status_says_one_line_for_a_damaged_count(tmp_path, capsys):
     assert image.main(["status", str(v)]) == 1
     err = capsys.readouterr().err
     assert err.count("\n") == 1 and "images" in err and "vault-state.json" in err
+
+
+# --- plan -----------------------------------------------------------------
+
+def plan_vault(tmp_path: Path, model: str, extra: str = "") -> Path:
+    v = make_vault(tmp_path, "vault:\n  images:\n    service: gemini\n"
+                   f"    model: {model}\n{extra}")
+    (v / "NPCs").mkdir()
+    (v / "NPCs" / "Anselm.md").write_text(
+        "---\ntype: npc\n---\n# Anselm\n", encoding="utf-8")
+    return v
+
+
+def requests(tmp_path: Path, items) -> Path:
+    import json
+    p = tmp_path / "requests.json"
+    p.write_text(json.dumps(items), encoding="utf-8")
+    return p
+
+
+def test_plan_unpriced_stop_prints_the_exact_sentence(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("GEMINI_API_KEY", SECRET)
+    v = plan_vault(tmp_path, "mystery-model")
+    req = requests(tmp_path, [{"for": "Anselm", "subject": "A man."}])
+    assert image.main(["plan", str(v), str(req)]) == 2
+    out = capsys.readouterr()
+    assert out.err.strip() == (
+        "The apprentice does not know what mystery-model costs, so it cannot "
+        "limit spending on it: the limit per attempt, the cap per run and the "
+        "month's ceiling will not apply. To draw anyway: gma publish settings "
+        "set vault.images.unpriced on. To keep the limits, state the price: "
+        "gma publish settings set vault.images.price <cents>")
+    assert SECRET not in out.out + out.err
+
+
+def test_plan_prints_the_job(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("GEMINI_API_KEY", SECRET)
+    v = plan_vault(tmp_path, "gemini-nano-banana-2.1")
+    req = requests(tmp_path, [{"for": "Anselm", "subject": "A man."},
+                              {"for": "Nobody", "subject": "x"}])
+    assert image.main(["plan", str(v), str(req)]) == 0
+    out = capsys.readouterr().out
+    print(out)
+    assert "1. NPCs/Anselm.md: planned, about" in out
+    assert "2. Nobody: refused" in out
+    assert "Estimated total: about" in out and "Job file:" in out
+    assert SECRET not in out
+
+
+def test_plan_with_nothing_to_draw_exits_1(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("GEMINI_API_KEY", SECRET)
+    v = plan_vault(tmp_path, "gemini-nano-banana-2.1")
+    req = requests(tmp_path, [{"for": "Nobody", "subject": "x"}])
+    assert image.main(["plan", str(v), str(req)]) == 1
+
+
+def test_plan_bad_requests_and_bad_state_exit_2_without_a_traceback(
+        tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("GEMINI_API_KEY", SECRET)
+    v = plan_vault(tmp_path, "gemini-nano-banana-2.1")
+    bad = tmp_path / "bad.json"
+    bad.write_text("{not json", encoding="utf-8")
+    assert image.main(["plan", str(v), str(bad)]) == 2
+    assert image.main(["plan", str(v), str(tmp_path / "missing.json")]) == 2
+    req = requests(tmp_path, [{"for": "Anselm", "subject": "x"}, {"for": "y"}])
+    assert image.main(["plan", str(v), str(req)]) == 2
+    assert "Request 2" in capsys.readouterr().err
+    (v / vaultlib.STATE_FILE).write_text(
+        '{"images": {"months": {"2026-11": {"cents": "lots"}}}}', encoding="utf-8")
+    req = requests(tmp_path, [{"for": "Anselm", "subject": "x"}])
+    assert image.main(["plan", str(v), str(req)]) == 2
+    assert "error:" in capsys.readouterr().err

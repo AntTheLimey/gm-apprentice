@@ -151,6 +151,8 @@ FOLDER = {
     "faction": "factions", "organization": "factions",
     "item": "items",
     "creature": "creatures",
+    "heritage": "heritages",
+    "document": "documents",
     "event": "events", "session": "events",
 }
 
