@@ -90,11 +90,12 @@ def test_key_unknown_service(capsys):
     assert "no drawing service called" in capsys.readouterr().err
 
 
-def test_status_prints_the_real_month_count(tmp_path, capsys):
+def test_status_prints_the_real_month_count(tmp_path, capsys, monkeypatch):
     from datetime import date
     import image_money
     v = make_vault(tmp_path)
-    today = date.today()
+    today = date(2026, 11, 30)
+    monkeypatch.setattr(image, "_today", lambda: today)
     image_money.record(v, today, 3.4)
     image_money.record(v, today, 4.1)
     image_money.record(v, today, None)
@@ -109,3 +110,12 @@ def test_status_says_when_the_state_file_is_broken(tmp_path, capsys):
     (v / "_meta" / "vault-state.json").write_text("{nope", encoding="utf-8")
     assert image.main(["status", str(v)]) == 1
     assert "not valid JSON" in capsys.readouterr().err
+
+
+def test_status_says_one_line_for_a_damaged_count(tmp_path, capsys):
+    v = make_vault(tmp_path)
+    (v / "_meta" / "vault-state.json").write_text(
+        '{"images": {"months": {"2026-11": [1999]}}}', encoding="utf-8")
+    assert image.main(["status", str(v)]) == 1
+    err = capsys.readouterr().err
+    assert err.count("\n") == 1 and "images" in err and "vault-state.json" in err

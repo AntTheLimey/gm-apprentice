@@ -145,3 +145,71 @@ def test_room_names_the_cap_that_stops_it(tmp_path):
     assert image_money.room(lim, 10, 1999, 3.4) == (
         "this month's ceiling (2000 cents) would be passed")
     assert image_money.room(lim, 196.6, 10, 3.4) is None
+
+
+def test_room_names_the_month_when_both_caps_are_passed(tmp_path):
+    lim = image_money.limits(make_vault(tmp_path, None))
+    assert image_money.room(lim, 199, 1999, 3.4) == (
+        "this month's ceiling (2000 cents) would be passed")
+
+
+@pytest.mark.parametrize("args", [
+    (float("nan"), 0, 1), (0, float("nan"), 1), (0, 0, float("nan")),
+    (float("inf"), 0, 1), (0, 0, -1)])
+def test_room_fails_closed_on_bad_figures(tmp_path, args):
+    lim = image_money.limits(make_vault(tmp_path, None))
+    with pytest.raises(ValueError):
+        image_money.room(lim, *args)
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), -1.0])
+def test_record_refuses_bad_cents_and_writes_nothing(tmp_path, bad):
+    v = make_vault(tmp_path, None)
+    image_money.record(v, date(2026, 11, 9), 2)
+    before = (v / STATE).read_bytes()
+    with pytest.raises(ValueError):
+        image_money.record(v, date(2026, 11, 9), bad)
+    assert (v / STATE).read_bytes() == before
+
+
+DAMAGED = [
+    '{"images": 5}',
+    '{"images": {"months": []}}',
+    '{"images": {"months": {"2026-11": [1999]}}}',
+    '{"images": {"months": {"2026-11": {"cents": null}}}}',
+    '{"images": {"months": {"2026-11": {"cents": -3}}}}',
+    '{"images": {"months": {"2026-11": {"pictures": "2"}}}}',
+    '{"images": {"months": {"2026-11": {"unpriced": true}}}}',
+]
+
+
+@pytest.mark.parametrize("text", DAMAGED)
+def test_a_damaged_count_raises_and_is_never_overwritten(tmp_path, text):
+    v = make_vault(tmp_path, None)
+    (v / STATE).write_text(text, encoding="utf-8")
+    d = date(2026, 11, 9)
+    for call in (lambda: image_money.spent(v, d),
+                 lambda: image_money.unpriced_count(v, d),
+                 lambda: image_money.record(v, d, 1)):
+        with pytest.raises(vaultlib.StateUnreadable) as e:
+            call()
+        assert "vault-state.json" in str(e.value) and "images" in str(e.value)
+    assert (v / STATE).read_text(encoding="utf-8") == text
+
+
+def test_absent_things_read_as_nothing_spent(tmp_path):
+    v = make_vault(tmp_path, None)
+    d = date(2026, 11, 9)
+    assert image_money.spent(v, d) == 0
+    (v / STATE).write_text('{"images": {}}', encoding="utf-8")
+    assert image_money.spent(v, d) == 0
+    (v / STATE).write_text('{"images": {"months": {"2026-10": {"cents": 5}}}}',
+                           encoding="utf-8")
+    assert image_money.spent(v, d) == 0
+
+
+def test_record_keeps_other_keys_under_images(tmp_path):
+    v = make_vault(tmp_path, None)
+    (v / STATE).write_text('{"images": {"note": "kept"}}', encoding="utf-8")
+    image_money.record(v, date(2026, 11, 9), 2)
+    assert json.loads((v / STATE).read_text(encoding="utf-8"))["images"]["note"] == "kept"

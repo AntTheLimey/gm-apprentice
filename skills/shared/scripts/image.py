@@ -33,6 +33,10 @@ def build_parser() -> argparse.ArgumentParser:
     return ap
 
 
+def _today() -> date:
+    return date.today()
+
+
 def status(vault: Path) -> int:
     if not vault.is_dir():
         print(f"error: not a directory: {vault}", file=sys.stderr)
@@ -51,7 +55,7 @@ def status(vault: Path) -> int:
         print(f"key: found ({found[1]})")
     else:
         print("key: none found")
-    today = date.today()
+    today = _today()
     try:
         month_spent = image_money.spent(vault, today)
         unpriced = image_money.unpriced_count(vault, today)
