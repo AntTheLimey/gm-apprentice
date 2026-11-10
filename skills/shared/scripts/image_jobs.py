@@ -38,8 +38,20 @@ SHAPES = {"pc": "3:4", "npc": "3:4", "creature": "3:4", "heritage": "3:4",
 SIZE = "1K"
 JOB_DAYS = 14
 MAX_REF_BYTES = 5 * 1024 * 1024
-THINKING_WHY = (" Thinking is on, which costs more: raise the limit for one "
-                "attempt or turn thinking off to keep likenesses.")
+
+
+def thinking_why(forced: bool = False, likenesses: bool = True) -> str:
+    """The sentence that names thinking as the reason a picture costs too
+    much: `forced` when the model needs it, else the vault's switch is on.
+    `likenesses` is False when no likeness is being left out."""
+    if forced:
+        return (" This model will not draw without thinking, which costs more: "
+                "raise the limit for one attempt"
+                + (" to keep likenesses." if likenesses else "."))
+    return (" Thinking is on, which costs more: raise the limit for one attempt "
+            "or turn thinking off" + (" to keep likenesses." if likenesses else "."))
+
+
 STATUSES = ("planned", "refused", "trimmed", "drawn", "failed", "kept", "held")
 
 
@@ -462,13 +474,14 @@ def _fit_cost(ctx: _Ctx, e: Entry, refs: list[str]) -> list[str] | None:
         return got
     fitted = image_money.fit(cost, len(refs), lim.attempt)
     if fitted is None:
-        _refuse(e, "over the limit for one attempt")
+        _refuse(e, "over the limit for one attempt"
+                + ("." + thinking_why(likenesses=False) if lim.thinking else ""))
         return None
     keep, e.estimate = fitted
     if keep < len(refs):
         e.said.append(f"dropped {counted(len(refs) - keep, 'reference picture')} "
                       "to stay within the limit for one attempt"
-                      + (THINKING_WHY if lim.thinking else ""))
+                      + (thinking_why() if lim.thinking else ""))
     return refs[:keep]
 
 

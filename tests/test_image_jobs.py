@@ -633,3 +633,27 @@ def test_a_job_file_from_before_usage_was_kept_still_loads(tmp_path):
         del entry["usage"]
     path.write_text(json.dumps(data), encoding="utf-8")
     assert image_jobs.load(job.id).entries[0].usage is None
+
+
+def test_a_picture_refused_for_cost_with_thinking_on_names_thinking(tmp_path):
+    base = ("vault:\n  images:\n    service: gemini\n"
+            "    model: gemini-nano-banana-2.1\n    attempt_limit: 5\n")
+    _, on = one(build(tmp_path / "a", config=base + "    thinking: true\n"),
+                {"for": "Anselm", "subject": "x"})
+    assert on.status == "refused"
+    assert said(on) == ("over the limit for one attempt. Thinking is on, which "
+                        "costs more: raise the limit for one attempt or turn "
+                        "thinking off.")
+    _, off = one(build(tmp_path / "b", config=base.replace("5", "3")),
+                 {"for": "Anselm", "subject": "x"})
+    assert off.status == "refused" and said(off) == "over the limit for one attempt"
+
+
+def test_default_settings_plan_four_likenesses_with_thinking_off_or_on(tmp_path):
+    for n, extra in enumerate(("", "    thinking: true\n")):
+        v = build(tmp_path / str(n), config="vault:\n  images:\n    service: gemini\n"
+                  "    model: gemini-nano-banana-2.1\n" + extra)
+        people = add_people(v, 4)
+        _, e = one(v, {"for": "Anselm", "subject": "x" * 2000, "shows": people})
+        assert e.status == "planned" and len(e.refs) == 4, extra
+        assert e.estimate is not None and e.estimate < 10

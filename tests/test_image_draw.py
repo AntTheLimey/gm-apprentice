@@ -729,7 +729,7 @@ def test_a_job_planned_unpriced_gets_every_fence_once_a_price_is_stated(tmp_path
            "    unpriced: true\n")
     vault, job = start(tmp_path, count=2, config=cfg)
     assert [e.estimate for e in job.entries] == [None, None]
-    set_config(vault, cfg + "    price: 9\n")             # over the 5 cent attempt limit
+    set_config(vault, cfg + "    price: 9\n    attempt_limit: 5\n")   # over a 5 cent limit
     send = script(monkeypatch, fixture(OK))
     assert run(vault, job) == 1
     assert send.calls == []
@@ -886,3 +886,24 @@ def test_the_last_reported_usage_is_kept_in_the_job_and_never_printed(tmp_path, 
     assert second.usage is None             # that reply carried none
     out = capsys.readouterr().out
     assert "thought" not in out and "'input'" not in out
+
+
+def test_a_picture_not_sent_for_cost_with_thinking_on_names_thinking(tmp_path, monkeypatch, capsys):
+    cfg = CONFIG + "    thinking: true\n"
+    vault, job = start(tmp_path, count=1, config=cfg + "    attempt_limit: 7\n")
+    set_config(vault, cfg + "    attempt_limit: 5\n")
+    send = script(monkeypatch, fixture(OK))
+    assert run(vault, job) == 1 and send.calls == []
+    assert ("not drawn, this picture would pass the limit for one attempt "
+            "(5 cents). Thinking is on, which costs more: raise the limit for "
+            "one attempt or turn thinking off.") in capsys.readouterr().out
+
+
+def test_a_redo_whose_reply_has_no_usage_clears_the_saved_usage(tmp_path, monkeypatch):
+    vault, job = start(tmp_path, count=1)
+    script(monkeypatch, fixture(OK))
+    assert run(vault, job) == 0
+    assert reload(job).entries[0].usage is not None
+    script(monkeypatch, derived(OK, usage=None))
+    assert run(vault, job, "--redo", "1", "darker") == 0
+    assert reload(job).entries[0].usage is None

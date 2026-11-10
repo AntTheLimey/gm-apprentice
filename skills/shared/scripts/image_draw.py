@@ -18,7 +18,7 @@ import image_gemini
 import image_jobs
 import image_money
 import vaultlib as vl
-from image_jobs import (MAX_REF_BYTES, SIZE, THINKING_WHY, Entry, Job, Stop,
+from image_jobs import (MAX_REF_BYTES, SIZE, Entry, Job, Stop,
                         find_key)
 
 
@@ -34,8 +34,6 @@ from image_jobs import (MAX_REF_BYTES, SIZE, THINKING_WHY, Entry, Job, Stop,
 REDO_CHARS = 500
 FAILURES_IN_A_ROW = 3
 SANDBOX = " If this AI runs in a sandbox, allow network access for gma image draw."
-FORCED_THINKING_WHY = (" This model will not draw without thinking, which costs "
-                       "more: raise the limit for one attempt to keep likenesses.")
 NEEDS_THINKING = ("this model will not draw without thinking, and with it "
                   "this picture would pass the limit for one attempt")
 
@@ -191,8 +189,8 @@ class _Run:
             cents = est
         e.attempts += 1
         e.cost = cents
-        if usage is not None:
-            e.usage = dict(usage)   # evidence for later estimates; never printed
+        # Evidence for later estimates; never printed. Always this attempt's.
+        e.usage = dict(usage) if usage is not None else None
         if cents is None:
             self.result.unknown += 1
         else:
@@ -243,6 +241,8 @@ class _Run:
             got = self.prepare(e, prompt, len(refs_all), thinking)
             if isinstance(got, _No):
                 why = NEEDS_THINKING if forced and not got.stop else got.reason
+                if thinking and not forced and not got.stop:
+                    why += "." + image_jobs.thinking_why(likenesses=False)
                 self.remember(e, why)
                 self.say(e, f"not drawn, {why}")
                 self.result.ok = False
@@ -257,8 +257,7 @@ class _Run:
             if keep < len(refs_all):
                 self.note(e, f"dropped {image_jobs.counted(len(refs_all) - keep, 'reference picture')} "
                           "to stay within the limit for one attempt"
-                          + (FORCED_THINKING_WHY if forced
-                             else THINKING_WHY if thinking else ""))
+                          + (image_jobs.thinking_why(forced) if thinking else ""))
             try:
                 pic = image_gemini.draw(job.model, self.key, prompt,
                                         refs_all[:keep], e.shape, SIZE, thinking)

@@ -19,7 +19,7 @@ test('a vault that sets nothing gets the drawing defaults', () => {
   const r = read('');
   const im = r.values.vault.images;
   assert.equal(im.auto, false);
-  assert.equal(im.attempt_limit, 5);
+  assert.equal(im.attempt_limit, 10);
   assert.equal(im.redraws, 1);
   assert.equal(im.run_cap, 200);
   assert.equal(im.month_cap, 2000);
