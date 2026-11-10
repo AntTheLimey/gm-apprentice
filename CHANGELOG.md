@@ -15,7 +15,7 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 - With `vault.images.auto` on, wrap-up draws the session's big moments and pictures for its new notes, and the other skills draw for the notes they create. Drawing comes last, after the report; "not now" leaves the job waiting. Nothing is drawn unasked without an Image Guidance note, and more than ten pictures become a fill offer.
 - "Fill in the missing pictures": the apprentice lists notes with no picture (`gma image missing`), asks once, and draws ten at a time.
-- `gma image status` names jobs still waiting to be drawn or placed.
+- `gma image status` names jobs still waiting to be drawn or placed; `gma image plan` takes its requests on stdin.
 
 ## [1.12.9] — 2026-11-10
 
