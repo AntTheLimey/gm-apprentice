@@ -741,11 +741,27 @@ def test_a_job_planned_unpriced_gets_every_fence_once_a_price_is_stated(tmp_path
     assert "the cap for one run (5 cents) would be passed" in capsys.readouterr().out
 
 
-def test_a_priced_job_turned_unpriced_keeps_its_fences(tmp_path, monkeypatch):
+def test_a_priced_job_keeps_the_attempt_limit_when_it_is_lowered_later(tmp_path, monkeypatch):
     vault, job = start(tmp_path, count=1)
     set_config(vault, CONFIG + "    attempt_limit: 1\n")
     send = script(monkeypatch, fixture(OK))
     assert run(vault, job) == 1 and send.calls == []
+
+
+def test_a_job_planned_on_a_stated_price_whose_price_is_gone_is_checked(tmp_path, monkeypatch, capsys):
+    base = "vault:\n  images:\n    service: gemini\n    model: mystery\n"
+    vault, job = start(tmp_path, count=2, config=base + "    price: 4\n")
+    assert job.priced is True and [e.estimate for e in job.entries] == [4, 4]
+    set_config(vault, base)                  # price removed; mystery has no rates
+    send = script(monkeypatch, fixture(OK))
+    assert run(vault, job) == 2
+    assert "does not know what mystery costs" in capsys.readouterr().err
+    assert send.calls == []
+    set_config(vault, base + "    unpriced: true\n")
+    assert run(vault, job) == 0
+    assert len(send.calls) == 2
+    assert image_money.unpriced_count(vault, TODAY) == 2 and month(vault) == 0
+    assert "This run: 2 pictures drawn at an unknown price" in capsys.readouterr().out
 
 
 def test_the_job_on_disk_shows_the_attempt_and_spend_before_the_picture_is_written(tmp_path, monkeypatch):

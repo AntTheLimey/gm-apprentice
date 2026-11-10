@@ -641,7 +641,30 @@ def test_failures_after_sending_or_unclear_may_have_been_charged(monkeypatch):
     assert _send_failing_with(monkeypatch, urllib.error.URLError("who knows")) is True
 
 
-# -- minor wave 2: L1 --
+# -- minor wave 2: G1, G2, L1 --------------------------------------------------
+
+
+def test_a_certificate_failure_cannot_have_been_charged(monkeypatch):
+    import ssl
+    bad = ssl.SSLCertVerificationError(1, "certificate verify failed")
+    assert _send_failing_with(monkeypatch, urllib.error.URLError(bad)) is False
+    assert _send_failing_with(monkeypatch, bad) is False
+
+
+def test_other_tls_failures_may_have_been_charged(monkeypatch):
+    import ssl
+    assert _send_failing_with(
+        monkeypatch, urllib.error.URLError(ssl.SSLError("bad record mac"))) is True
+    assert _send_failing_with(monkeypatch, ssl.SSLError("bad record mac")) is True
+
+
+def test_maybe_billed_defaults_by_kind():
+    make = image_gemini.ServiceError
+    assert make("network", "x").maybe_billed is True
+    assert make("reply", "x").maybe_billed is False
+    assert make("auth", "x").maybe_billed is False
+    assert make("network", "x", maybe_billed=False).maybe_billed is False
+    assert make("reply", "x", maybe_billed=True).maybe_billed is True
 
 
 def test_live_check_with_an_unavailable_key_store_exits_plainly(

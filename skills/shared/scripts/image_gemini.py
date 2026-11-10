@@ -14,6 +14,7 @@ import math
 import errno
 import re
 import socket
+import ssl
 import urllib.error
 import urllib.request
 from typing import Any, NamedTuple
@@ -42,7 +43,7 @@ class ServiceError(Exception):
 
     def __init__(self, kind: str, message: str,
                  usage: dict[str, int] | None = None,
-                 billed: bool = False, maybe_billed: bool = False) -> None:
+                 billed: bool = False, maybe_billed: bool | None = None) -> None:
         super().__init__(message)
         self.kind = kind
         self.message = message
@@ -50,8 +51,10 @@ class ServiceError(Exception):
         self.billed = billed    # True when the service answered 200: it charged
         # True when the request may have reached the service and the reply was
         # lost, so it may have charged. False only for failures that can happen
-        # before anything is sent (no address, refused, no route).
-        self.maybe_billed = maybe_billed
+        # before anything is sent (no address, refused, no route, a certificate
+        # that did not check out). Not given: True for a network failure
+        # (assume the reply was lost), False for any other kind.
+        self.maybe_billed = kind == "network" if maybe_billed is None else maybe_billed
 
 
 def request(model: str, prompt: str, refs: list[tuple[str, bytes]],
@@ -86,7 +89,8 @@ _NOT_SENT = (errno.ENETUNREACH, errno.EHOSTUNREACH, errno.ENETDOWN,
 def _before_sending(reason: object) -> bool:
     """Whether a URLError reason can only happen before the request is sent.
     Anything not recognised counts as possibly sent."""
-    if isinstance(reason, (socket.gaierror, ConnectionRefusedError)):
+    if isinstance(reason, (socket.gaierror, ConnectionRefusedError,
+                           ssl.SSLCertVerificationError)):
         return True
     return (isinstance(reason, OSError) and not isinstance(reason, TimeoutError)
             and reason.errno in _NOT_SENT)
@@ -113,7 +117,8 @@ def _send(url: str, hdrs: dict[str, str], body: bytes,
                            maybe_billed=True) from None
     except (TimeoutError, OSError) as err:
         raise ServiceError("network", f"the connection failed: {type(err).__name__}",
-                           maybe_billed=True) from None
+                           maybe_billed=not isinstance(
+                               err, ssl.SSLCertVerificationError)) from None
 
 
 SEND = _send   # tests replace this
