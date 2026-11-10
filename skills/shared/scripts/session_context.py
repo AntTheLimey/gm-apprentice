@@ -817,6 +817,14 @@ def wrap_up_threads(files, chapter) -> list[tuple[int, list[str], list[str]]]:
     return wrap_ups
 
 
+def _lead_key(text: str) -> str | None:
+    """The bold lead used for equal-lead matching, or None when the lead
+    names a session (`**Session 5:**`, `**New open threads (Session 6):**`):
+    that is a diary label, so two unrelated lines would otherwise match."""
+    key = lead(text)
+    return None if vw.SESSION_ENTRY_RE.match(key) else key
+
+
 def _match(thread: str, wrap_ups):
     """(sessions, mark, claimed): `claimed` holds the (session, bullet)
     Unresolved bullets a match took: every close match (a likely wording
@@ -826,12 +834,13 @@ def _match(thread: str, wrap_ups):
     matched (never a PC Carry-Forward bullet), so a thread aged from a
     line does not leave that line unlisted too."""
     norm = _norm_thread(thread)
-    key = lead(thread)
+    key = _lead_key(thread)
     hits: list[int] = []
     claimed: set[tuple[int, str]] = set()
     for n, unresolved, carry in wrap_ups:
         for bullet in unresolved + carry:
-            if _ratio_match(norm, bullet) or lead(bullet) == key:
+            if (_ratio_match(norm, bullet)
+                    or (key is not None and _lead_key(bullet) == key)):
                 hits.append(n)
                 if bullet in unresolved:
                     claimed.add((n, bullet))
@@ -892,9 +901,10 @@ def unlisted_wrapup_threads(files, chapter,
 
     def claim(thread: str, scope) -> None:
         matched.update(_match(thread, scope)[2])
-        key = lead(thread)
-        matched.update((n, b) for n, unresolved, _carry in scope
-                       for b in unresolved if lead(b) == key)
+        key = _lead_key(thread)
+        if key is not None:
+            matched.update((n, b) for n, unresolved, _carry in scope
+                           for b in unresolved if _lead_key(b) == key)
 
     for t in shared_threads(overview_text, DORMANT):
         claim(t.text, wrap_ups)

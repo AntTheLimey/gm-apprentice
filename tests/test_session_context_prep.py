@@ -280,6 +280,29 @@ class UnlistedWrapupThreadsTests(unittest.TestCase):
         self.assertEqual(sc.match_sessions(shared, wraps), ([4, 5], "="))
 
 
+class SessionLabelLeadTests(unittest.TestCase):
+    """A bold lead that names a session is a diary label, not a thread."""
+
+    def test_session_labels_never_match_by_lead(self):
+        wraps = [(3, ["**Session 5:** the vault was robbed"], [])]
+        for label in ("**Session 5:** a quite different thing",
+                      "**Session 13 —** another matter",
+                      "**New open threads (Session 6):** x"):
+            self.assertEqual(sc._match(label, wraps)[0], [], label)
+        wraps = [(3, ["**New open threads (Session 6):** the ledger is "
+                      "missing from the bank and nobody has said who "
+                      "took it or why they would"], [])]
+        self.assertEqual(
+            sc._match("**New open threads (Session 6):** Lady Anne asks "
+                      "for a wedding to be put off", wraps)[0], [])
+
+    def test_real_lead_still_matches(self):
+        wraps = [(3, ["**Bell:** it rang at noon"], [])]
+        hits, mark, claimed = sc._match("**Bell:** reworded entirely", wraps)
+        self.assertEqual((hits, mark), ([3], "="))
+        self.assertEqual(claimed, {(3, "**Bell:** it rang at noon")})
+
+
 OVERVIEW = "Campaign Overview.md"
 
 DORMANT_LIST = (

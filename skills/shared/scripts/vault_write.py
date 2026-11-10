@@ -4413,6 +4413,7 @@ def build_parser() -> argparse.ArgumentParser:
             "                                   how it reads there\n"
             "  hand  FROM    LEAD   TO          take LEAD off PC FROM's Open threads\n"
             "                                   and add it, unchanged, to PC TO's\n"
+            "                                   Open threads\n"
             "SINCE is a session label, or - for none. WHO is PC note\n"
             "names separated by commas, or 'party' (for move, every active\n"
             "PC). Any ERROR row writes nothing."))

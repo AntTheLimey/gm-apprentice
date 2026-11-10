@@ -198,6 +198,7 @@ stdin: one row per line, fields separated by TAB.
                                    how it reads there
   hand  FROM    LEAD   TO          take LEAD off PC FROM's Open threads
                                    and add it, unchanged, to PC TO's
+                                   Open threads
 SINCE is a session label, or - for none. WHO is PC note
 names separated by commas, or 'party' (for move, every active
 PC). Any ERROR row writes nothing.
