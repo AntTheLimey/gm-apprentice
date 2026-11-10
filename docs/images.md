@@ -21,8 +21,35 @@ Until you choose, the apprentice asks. A vault that already names a service
 and model counts as having chosen `service`. `gma image status` says
 whether Codex is installed and signed in, so you can choose knowingly.
 Codex draws with its own built-in image tool: you choose Codex, not the
-model inside it. In this release it draws only when you
-ask: `vault.images.auto`, for drawing without asking, has no effect yet.
+model inside it.
+
+## Drawing without being asked
+
+Turn on `vault.images.auto` and the apprentice draws pictures by itself:
+
+- **After a wrap-up**: scene pictures for the session's big moments, as
+  your Image Guidance note's Direction describes them, placed under
+  their recap paragraphs, plus pictures for the session's new notes that
+  have none.
+- **After prep, the Midwife, ingest or the organiser** create notes:
+  pictures for those notes that have none.
+
+It draws last, once its own work and report are done, and tells you in
+one line how many pictures, what draws them, about how long and any
+cost. Say "not now" and the job waits: ask later for "the pictures from
+the wrap-up" and it carries on where it stopped. More than ten pictures
+are never drawn unasked: the apprentice offers them as a fill instead.
+Player characters are never drawn unasked, and nothing is drawn at the
+table.
+
+## Filling in missing pictures
+
+Ask the apprentice to "fill in the missing pictures". It lists the notes
+that could have a picture and have none (player characters only if you
+include them), tells you how many, how long and any cost, and waits for
+your yes. It draws ten at a time, placing each batch before the next, so
+stopping part-way loses nothing. A fill does not need
+`vault.images.auto`.
 
 ## Drawing on a ChatGPT plan with Codex
 
