@@ -41,9 +41,9 @@ def build_parser() -> argparse.ArgumentParser:
                      "(" + ", ".join(sorted(image_keys.ENV)) + ")")
     pl = sub.add_parser(
         "plan", help="work out which pictures to draw, and what they cost",
-        epilog='Example: gma image plan "<vault>" requests.json')
+        epilog="Example: gma image plan \"<vault>\" - <<'EOF' (the requests, then EOF)")
     pl.add_argument("vault", type=Path, help="the vault folder")
-    pl.add_argument("requests", type=Path, help="a JSON file: a list with one "
+    pl.add_argument("requests", type=Path, help="a JSON file (or - to read it from stdin): a list with one "
                     "object per picture (for, subject, and optionally blocks, "
                     "shows, replace, after, name)")
     pl.add_argument("--unprompted", action="store_true",

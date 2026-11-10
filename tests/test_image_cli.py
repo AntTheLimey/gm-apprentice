@@ -174,6 +174,18 @@ def test_plan_prints_the_job(tmp_path, monkeypatch, capsys):
     assert SECRET not in out
 
 
+def test_plan_reads_the_requests_from_stdin(tmp_path, monkeypatch, capsys):
+    import io
+    monkeypatch.setenv("GEMINI_API_KEY", SECRET)
+    v = plan_vault(tmp_path, "gemini-nano-banana-2.1")
+    monkeypatch.setattr(sys, "stdin", io.StringIO(
+        json.dumps([{"for": "Anselm", "subject": "A man."}])))
+    assert image.main(["plan", str(v), "-"]) == 0
+    assert "1. NPCs/Anselm.md: planned, about" in capsys.readouterr().out
+    monkeypatch.setattr(sys, "stdin", io.StringIO("not json"))
+    assert image.main(["plan", str(v), "-"]) == 2
+
+
 def test_plan_with_nothing_to_draw_exits_1(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("GEMINI_API_KEY", SECRET)
     v = plan_vault(tmp_path, "gemini-nano-banana-2.1")

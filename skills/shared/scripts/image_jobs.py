@@ -15,6 +15,7 @@ import os
 import re
 import secrets
 import shutil
+import sys
 import tempfile
 import unicodedata
 from dataclasses import asdict, dataclass, field
@@ -279,8 +280,12 @@ def prune(today: date) -> None:
 # --- the requests file ----------------------------------------------------
 
 def read_requests(path: Path) -> list[dict[str, Any]]:
+    """The requests from the file `path`, or from stdin when it is `-` (so
+    an agent needs no requests file, in the vault or anywhere)."""
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        text = (sys.stdin.read() if str(path) == "-"
+                else path.read_text(encoding="utf-8"))
+        data = json.loads(text)
     except FileNotFoundError:
         raise Stop(f"The requests file {path} was not found.") from None
     except (OSError, UnicodeDecodeError, ValueError) as e:
