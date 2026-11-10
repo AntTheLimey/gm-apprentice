@@ -48,11 +48,11 @@ def test_limits_read_what_the_vault_sets(tmp_path):
         True, 0, "gemini", "some-model", 4)
 
 
-def test_thinking_defaults_off_and_reads_on(tmp_path):
-    assert image_money.limits(make_vault(tmp_path, None)).thinking is False
+def test_thinking_defaults_on_and_reads_off(tmp_path):
+    assert image_money.limits(make_vault(tmp_path, None)).thinking is True
     vaultlib.forget_settings(None)
-    v = make_vault(tmp_path / "b", "vault:\n  images:\n    thinking: true\n")
-    assert image_money.limits(v).thinking is True
+    v = make_vault(tmp_path / "b", "vault:\n  images:\n    thinking: false\n")
+    assert image_money.limits(v).thinking is False
 
 
 def test_settings_without_the_picture_names_are_a_plain_skew_error(

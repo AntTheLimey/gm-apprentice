@@ -26,6 +26,7 @@ TODAY = date(2026, 11, 9)
 KEY = "AIza-FAKE-KEY-for-draw-tests-0000"
 MODEL = "gemini-nano-banana-2.1"
 CONFIG = f"vault:\n  images:\n    service: gemini\n    model: {MODEL}\n"
+OFF = CONFIG + "    thinking: false\n"    # the vault turned thinking off
 PNG = b"\x89PNG\r\n\x1a\n" + b"0" * 32
 OK = "gemini-thinking-minimal.json"    # a real picture, thinking minimal
 OK_CENTS = 3.59                         # what its usage costs (the adapter tests)
@@ -214,7 +215,7 @@ def test_a_known_model_is_counted_at_its_real_cost_whatever_price_is_stated(
         tmp_path, monkeypatch, capsys):
     # A stated price of 1 cent once let five pictures through a 5 cent ceiling.
     vault, job = start(tmp_path, count=5,
-                       config=CONFIG + "    month_cap: 5\n    price: 1\n")
+                       config=OFF + "    month_cap: 5\n    price: 1\n")
     assert job.entries[0].estimate == pytest.approx(image_gemini.estimate(
         MODEL, image_jobs.SIZE, 0, len(job.entries[0].prompt.encode())))
     assert [e.status for e in job.entries] == ["planned"] + ["trimmed"] * 4
@@ -328,7 +329,7 @@ def test_the_month_figure_is_read_fresh_for_every_picture(tmp_path, monkeypatch)
 
 
 def test_the_run_cap_counts_what_the_job_spent(tmp_path, monkeypatch, capsys):
-    vault, job = start(tmp_path, config=CONFIG + "    run_cap: 9\n")
+    vault, job = start(tmp_path, config=OFF + "    run_cap: 9\n")
     # planned within the cap? 3 x ~4.2 passes 9 only for two: the plan trims one
     assert [e.status for e in job.entries] == ["planned", "planned", "trimmed"]
     send = script(monkeypatch, fixture(OK))
@@ -458,7 +459,7 @@ def test_a_picture_whose_reply_has_no_usage_is_counted_at_its_estimate(tmp_path,
 
 
 def test_thinking_needed_and_affordable_draws_with_thinking_and_remembers(tmp_path, monkeypatch):
-    vault, job = start(tmp_path, count=2, config=CONFIG + "    attempt_limit: 7\n")
+    vault, job = start(tmp_path, count=2, config=OFF + "    attempt_limit: 7\n")
     send = script(monkeypatch, fixture("gemini-error-thinking-level.json"),
                   fixture("gemini-prompt-only.json"), fixture("gemini-prompt-only.json"))
     assert run(vault, job) == 0
@@ -473,7 +474,7 @@ def test_thinking_needed_and_affordable_draws_with_thinking_and_remembers(tmp_pa
 
 
 def test_thinking_needed_but_too_dear_is_not_sent(tmp_path, monkeypatch, capsys):
-    vault, job = start(tmp_path, count=2, config=CONFIG + "    attempt_limit: 4.5\n")
+    vault, job = start(tmp_path, count=2, config=OFF + "    attempt_limit: 4.5\n")
     send = script(monkeypatch, fixture("gemini-error-thinking-level.json"))
     assert run(vault, job) == 1
     assert len(send.calls) == 2                       # one free call per picture
@@ -841,7 +842,7 @@ def test_the_job_on_disk_shows_the_attempt_and_spend_before_the_picture_is_writt
 
 
 def test_thinking_forced_by_the_model_does_not_say_turn_thinking_off(tmp_path, monkeypatch, capsys):
-    vault = make_vault(tmp_path, 1, CONFIG + "    attempt_limit: 6.2\n")
+    vault = make_vault(tmp_path, 1, OFF + "    attempt_limit: 6.2\n")
     for i in range(4):
         (vault / "NPCs" / f"R{i}.md").write_text(
             f"---\ntype: npc\nportrait: _attachments/characters/r{i}.png\n---\n",
@@ -863,7 +864,7 @@ def test_thinking_forced_by_the_model_does_not_say_turn_thinking_off(tmp_path, m
 
 
 def test_a_later_picture_that_does_not_fit_with_forced_thinking_gets_the_sentence(tmp_path, monkeypatch, capsys):
-    vault, job = start(tmp_path, count=1, config=CONFIG + "    attempt_limit: 4.5\n")
+    vault, job = start(tmp_path, count=1, config=OFF + "    attempt_limit: 4.5\n")
     job.needs_thinking = True
     image_jobs.save(job)
     send = script(monkeypatch, fixture(OK))
@@ -892,9 +893,9 @@ def test_a_line_already_said_is_not_added_again(tmp_path, monkeypatch):
 
 
 def test_the_run_cap_stops_a_call_that_the_plan_allowed(tmp_path, monkeypatch, capsys):
-    vault, job = start(tmp_path)
+    vault, job = start(tmp_path, config=OFF)
     assert [e.status for e in job.entries] == ["planned"] * 3
-    set_config(vault, CONFIG + "    run_cap: 8\n")      # lowered after the plan
+    set_config(vault, OFF + "    run_cap: 8\n")         # lowered after the plan
     send = script(monkeypatch, fixture(OK))
     assert run(vault, job) == 1
     assert len(send.calls) == 2
@@ -975,7 +976,7 @@ FORCED = ("This model will not draw without thinking, so pictures in this "
 
 
 def test_thinking_forced_by_the_model_is_said_once_for_the_batch(tmp_path, monkeypatch, capsys):
-    vault, job = start(tmp_path, count=2, config=CONFIG + "    attempt_limit: 7\n")
+    vault, job = start(tmp_path, count=2, config=OFF + "    attempt_limit: 7\n")
     script(monkeypatch, fixture("gemini-error-thinking-level.json"),
            fixture("gemini-prompt-only.json"), fixture("gemini-prompt-only.json"))
     assert run(vault, job) == 0
@@ -987,6 +988,22 @@ def test_thinking_forced_by_the_model_is_said_once_for_the_batch(tmp_path, monke
     script(monkeypatch, fixture("gemini-prompt-only.json"))
     assert run(vault, job, "--redo", "1", "darker") == 0
     assert FORCED not in capsys.readouterr().out
+
+
+def test_a_vault_that_says_nothing_draws_with_thinking_on(tmp_path, monkeypatch):
+    vault, job = start(tmp_path, count=1)
+    send = script(monkeypatch, fixture("gemini-prompt-only.json"))
+    assert run(vault, job) == 0
+    assert "generation_config" not in send.calls[0]
+    assert job.entries[0].estimate == pytest.approx(image_gemini.estimate(
+        MODEL, image_jobs.SIZE, 0, len(job.entries[0].prompt.encode()), True))
+
+
+def test_a_vault_with_thinking_off_asks_for_the_least(tmp_path, monkeypatch):
+    vault, job = start(tmp_path, count=1, config=OFF)
+    send = script(monkeypatch, fixture(OK))
+    assert run(vault, job) == 0
+    assert send.calls[0]["generation_config"] == {"thinking_level": "minimal"}
 
 
 def test_a_vault_with_thinking_on_is_not_told_the_model_forced_it(tmp_path, monkeypatch, capsys):

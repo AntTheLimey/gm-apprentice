@@ -219,7 +219,7 @@ def test_rule_8_over_the_attempt_limit_is_refused(tmp_path):
 
 
 def test_rule_8_references_are_dropped_to_fit(tmp_path):
-    cfg = ("vault:\n  images:\n    service: gemini\n"
+    cfg = ("vault:\n  images:\n    service: gemini\n    thinking: false\n"
            "    model: gemini-nano-banana-2.1\n    attempt_limit: 4.5\n")
     v = build(tmp_path, config=cfg)
     add_people(v, 2, "item")
@@ -233,12 +233,16 @@ def test_rule_8_references_are_dropped_to_fit(tmp_path):
 def test_thinking_on_plans_the_higher_estimate(tmp_path):
     base = ("vault:\n  images:\n    service: gemini\n"
             "    model: gemini-nano-banana-2.1\n    attempt_limit: 7\n")
-    _, off = one(build(tmp_path / "a", config=base),
+    _, off = one(build(tmp_path / "a", config=base + "    thinking: false\n"),
                  {"for": "Anselm", "subject": "x"})
     _, on = one(build(tmp_path / "b", config=base + "    thinking: true\n"),
                 {"for": "Anselm", "subject": "x"})
     assert off.estimate is not None and on.estimate is not None
     assert on.estimate > off.estimate
+    # a vault that says nothing draws with thinking on
+    _, unsaid = one(build(tmp_path / "c", config=base),
+                    {"for": "Anselm", "subject": "x"})
+    assert unsaid.estimate == on.estimate
 
 
 def test_dropped_references_say_why_when_thinking_is_on(tmp_path):
@@ -251,7 +255,7 @@ def test_dropped_references_say_why_when_thinking_is_on(tmp_path):
     assert said(on).endswith(
         " Thinking is on, which costs more: raise the limit for one attempt "
         "or turn thinking off to keep likenesses.")
-    cfg = base + "    attempt_limit: 4.2\n"
+    cfg = base + "    attempt_limit: 4.2\n    thinking: false\n"
     _, off = one(build(tmp_path / "b", config=cfg), shows)
     assert "dropped" in said(off) and "Thinking is on" not in said(off)
 
@@ -644,13 +648,14 @@ def test_a_picture_refused_for_cost_with_thinking_on_names_thinking(tmp_path):
     assert said(on) == ("over the limit for one attempt. Thinking is on, which "
                         "costs more: raise the limit for one attempt or turn "
                         "thinking off.")
-    _, off = one(build(tmp_path / "b", config=base.replace("5", "3")),
+    _, off = one(build(tmp_path / "b", config=base.replace("5", "3")
+                                   + "    thinking: false\n"),
                  {"for": "Anselm", "subject": "x"})
     assert off.status == "refused" and said(off) == "over the limit for one attempt"
 
 
 def test_default_settings_plan_four_likenesses_with_thinking_off_or_on(tmp_path):
-    for n, extra in enumerate(("", "    thinking: true\n")):
+    for n, extra in enumerate(("", "    thinking: false\n")):
         v = build(tmp_path / str(n), config="vault:\n  images:\n    service: gemini\n"
                   "    model: gemini-nano-banana-2.1\n" + extra)
         people = add_people(v, 4)

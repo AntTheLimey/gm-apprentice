@@ -65,19 +65,22 @@ apprentice draws (prices change, so treat these as a guide):
 
 | | US cents per picture |
 |---|---|
+| Thinking on (the usual setting) | about 4.3 to 5.8, varying from picture to picture |
 | Thinking off | about 3.6 to 4.5 (no likenesses to four) |
-| Thinking on | about 4.3 to 5.8, varying from picture to picture |
 | Each likeness sent | about 0.17 more |
 
-`vault.images.thinking` lets the service think before it draws. A picture
-then costs more and varies, but fits the usual `vault.images.attempt_limit`,
-likenesses included, though that limit becomes a likely ceiling. With a
-lower limit, a picture may be refused with "Thinking is on, which costs
-more: raise the limit for one attempt or turn thinking off." One comparison
-of six pictures drawn both ways found likenesses held equally well, thinking
-on followed fine details a little more closely, and thinking off was cheaper
-and steadier. A model that "will not draw without thinking" turns it on
-itself.
+`vault.images.thinking` lets the service think before it draws, and it is
+on unless you turn it off. One comparison of six pictures drawn both ways
+found likenesses held equally well and thinking on followed the fine details
+of a request a little more closely. Its cost varies from picture to picture,
+so `vault.images.attempt_limit` is then a likely ceiling and not a
+guarantee; the cap for a batch and the month's ceiling always count what was
+really spent. With a limit lower than the usual one, a picture may be
+refused with "Thinking is on, which costs more: raise the limit for one
+attempt or turn thinking off."
+
+Turn it off to pay about a cent less a picture, at a steadier cost. A model
+that "will not draw without thinking" turns it on by itself for that batch.
 
 ## When the price is not known
 
