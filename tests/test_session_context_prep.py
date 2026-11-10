@@ -203,7 +203,62 @@ class UnlistedWrapupThreadsTests(unittest.TestCase):
         vault = make_vault(self, files)
         left = sc.unlisted_wrapup_threads(
             list(sc.vault_files(vault)), None, vault)
-        self.assertEqual(left, [(2, near)])
+        # The near line has the parked lead: the same thread, reworded.
+        self.assertEqual(left, [])
+
+    LEDGER = "**The missing ledger** — the toll keeper still wants it."
+    # The list's wording, not the Wrap-Up's: a close or likely match.
+    LISTED = ("**The missing ledger** — Harrow Ford's toll keeper wants "
+              "it back")
+    CHAPTER = "chapter 1 - harbour"
+
+    def left(self, files: dict[str, str],
+             chapter: str | None = CHAPTER) -> list[tuple[int, str]]:
+        vault = make_vault(self, files)
+        return sc.unlisted_wrapup_threads(list(sc.vault_files(vault)),
+                                          chapter, vault)
+
+    def test_a_dormant_entry_worded_differently_claims_at_any_session(
+            self) -> None:
+        files = dict([self.wrap(3, self.LEDGER), self.wrap(5, self.LEDGER)])
+        files["Campaign Overview.md"] = note(
+            "type: campaign_overview",
+            "## Dormant Threads\n\n"
+            f"- {self.LISTED} — since Session 3; dormant since Session 4 "
+            "(left the ford); involves the party\n")
+        self.assertEqual(self.left(files), [])
+
+    def test_a_resolved_line_worded_differently_claims_up_to_its_close(
+            self) -> None:
+        resolved = ("\n#### Resolved Threads\n\n"
+                    f"- {self.LISTED} — closed: returned (shared)\n")
+        files = dict([self.wrap(3, self.LEDGER), self.wrap(5, self.LEDGER)])
+        rel, text = self.wrap(4, "**Another matter** — the gull.")
+        files[rel] = text + resolved
+        # Closed in session 4: the session 3 line is done; raised again in
+        # session 5, it is open again.
+        self.assertEqual(self.left(files), [(4, "**Another matter** — "
+                                                "the gull."),
+                                            (5, self.LEDGER)])
+        # With no chapter in scope any closure claims it.
+        self.assertEqual(self.left(files, None),
+                         [(4, "**Another matter** — the gull.")])
+
+    def test_every_wording_of_a_parked_lead_is_claimed(self) -> None:
+        old = "**Bell** — the sexton heard it ring at noon."
+        new = "**Bell** — a gull nests in the belfry now."
+        files = dict([self.wrap(3, old), self.wrap(4, new)])
+        files["Campaign Overview.md"] = note(
+            "type: campaign_overview",
+            "## Dormant Threads\n\n"
+            f"- {new} — since Session 3; dormant since Session 4 "
+            "(left it); involves the party\n")
+        self.assertEqual(self.left(files), [])
+        files.pop("Campaign Overview.md")
+        rel, text = self.wrap(4, new)
+        files[rel] = text + ("\n#### Resolved Threads\n\n"
+                             f"- {new} — closed: melted (Session 4)\n")
+        self.assertEqual(self.left(files), [])
 
 
 OVERVIEW = "Campaign Overview.md"
@@ -252,13 +307,54 @@ class DormantReportTests(unittest.TestCase):
         self.assertGreater(out.find(head), out.find("===== Threads"))
         self.assertGreater(out.find("--- Wrap-up threads"), out.find(head))
 
+    def later(self, recap: str, dormant: str = DORMANT_LIST) -> Path:
+        """A vault whose latest Wrap-Up is session 2's, after the session
+        1 that parked the dormant list; `recap` replaces its recap line."""
+        vault = self.vault(dormant)
+        (vault / SESSIONS / "Session 02 - Second.md").write_text(note(
+            'type: session\nsession_number: 2\n'
+            'chapter: "[[Chapter 1 - Harbour]]"\nstatus: wrap-up\n'
+            'play_date: "2026-10-08"'), encoding="utf-8")
+        (vault / SESSIONS / "Session 02 - Second - Wrap-Up.md").write_text(
+            WRAP.replace("session_number: 1", "session_number: 2")
+            .replace("Session 01 - Landfall", "Session 02 - Second")
+            .replace("They met [[Ma Barker]] on [[The_Docks]] and read the "
+                     "[[Ledger]].", recap), encoding="utf-8")
+        (vault / "PCs").mkdir()
+        (vault / "PCs" / "Hero.md").write_text(note(
+            "type: pc", "## Current Status\n\n**Open threads:** —\n"),
+            encoding="utf-8")
+        return vault
+
+    def may_wake(self, vault: Path) -> str:
+        done = run_cli(vault, "--prep")
+        self.assertEqual(done.returncode, 0, done.stderr)
+        part = done.stdout.split("--- Dormant, may wake ---", 1)[1]
+        return part.split("--- Wrap-up threads", 1)[0]
+
+    def test_the_wrap_up_that_parked_it_does_not_wake_it(self) -> None:
+        # Session 1's Wrap-Up names Master Wu, but it is the one that
+        # parked the Wu bounty.
+        wrap = WRAP.replace("They met", "They met [[Master Wu]] and ")
+        part = self.may_wake(self.vault(wrap=wrap))
+        self.assertTrue(part.lstrip().startswith("(none)"), part[:200])
+
+    def test_a_pc_s_name_never_wakes_a_thread(self) -> None:
+        dormant = ("## Dormant Threads\n\n- **Gull omen** — [[Hero]] saw "
+                   "it — since Session 1; dormant since Session 1 (x); "
+                   "involves the party\n")
+        part = self.may_wake(self.later("They met [[Hero]] at the quay.",
+                                        dormant))
+        self.assertTrue(part.lstrip().startswith("(none)"), part[:200])
+
     def test_prep_prints_only_may_wake_with_match(self) -> None:
-        wrap = WRAP.replace(
+        vault = self.later("They met [[Master Wu]] at the quay.")
+        wrap = vault / SESSIONS / "Session 02 - Second - Wrap-Up.md"
+        wrap.write_text(wrap.read_text(encoding="utf-8").replace(
             "<!-- gm-only -->",
             "#### Resolved Threads\n\n- done with [[The Gull]]\n\n"
-            "<!-- gm-only -->").replace(
-            "They met", "They met [[Master Wu]] and ")
-        done = run_cli(self.vault(wrap=wrap), "--prep")
+            "<!-- gm-only -->"), encoding="utf-8")
+        done = run_cli(vault, "--prep")
         self.assertEqual(done.returncode, 0, done.stderr)
         part = done.stdout.split("--- Dormant, may wake ---", 1)[1]
         part = part.split("--- Wrap-up threads", 1)[0]
@@ -338,6 +434,20 @@ class LikelyMatchTests(unittest.TestCase):
         self.assertIn("harbour tax", orphans)
 
 
+class EmptyPcListTests(unittest.TestCase):
+    def test_a_filler_list_reads_none_and_a_missing_field_says_so(
+            self) -> None:
+        vault = make_vault(self, {
+            "PCs/Ada.md": note("type: pc",
+                               "## Current Status\n\n**Open threads:** "
+                               "—\n**Knows:** x\n"),
+            "PCs/Bo.md": note("type: pc", "## Current Status\n\nFine.\n")})
+        report = sc.thread_report(list(sc.vault_files(vault)), 1, None, vault)
+        self.assertIn("--- Ada ---\n(none)\n", report)
+        self.assertIn("--- Bo ---\n(no ## Current Status Open threads)",
+                      report)
+
+
 class OverlapNamesTests(unittest.TestCase):
     def test_overlap_names_skip_resolved(self) -> None:
         files = [("NPCs/Ma Barker.md", "", {"type": "npc"}),
@@ -368,6 +478,26 @@ class ChapterWarningTests(unittest.TestCase):
         got = self.warnings('"Chapter 2, Session 3"')
         self.assertEqual(len(got), 1, got)
         self.assertIn("verify before trusting", got[0])
+
+    def chapter_warnings(self, chapter: str, as_of: str) -> list[str]:
+        files = {
+            "Sessions/Session 01.md": note(
+                f'type: session\nsession_number: 1\nchapter: "{chapter}"\n'
+                'status: wrap-up\nplay_date: "2026-10-01"'),
+            OVERVIEW: note(f"type: campaign_overview\nasOfSession: {as_of}")}
+        vault = make_vault(self, files)
+        got = sc.select_session(list(sc.vault_files(vault)), None)[1]
+        return [w for w in got if "asOfSession" in w]
+
+    def test_a_chapter_with_no_number_is_never_warned_about(self) -> None:
+        self.assertEqual(self.chapter_warnings("[[Prologue]]",
+                                               '"Chapter 2, Session 3"'), [])
+
+    def test_a_bare_chapter_number_is_read(self) -> None:
+        self.assertEqual(self.chapter_warnings("2", '"Chapter 2, Session 3"'),
+                         [])
+        self.assertEqual(len(self.chapter_warnings(
+            "2", '"Chapter 3, Session 3"')), 1)
 
 
 PAUSED = ("---\ntype: scene\nchapter: \"[[Chapter 1 - Harbour]]\"\n"

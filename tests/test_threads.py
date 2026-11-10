@@ -503,6 +503,45 @@ class ThreadsTests(unittest.TestCase):
                                  "## GM Notes"])
         self.assertFalse(any(threads._states(out.split("\n"))))
 
+    def test_insert_dormant_with_neither_open_threads_nor_current_arc(self):
+        for text, heads in (
+                ("# T\n\n## Premise\n\nP.\n\n## GM Notes\n\nS.\n",
+                 ["## Premise", "## Dormant Threads", "## GM Notes"]),
+                ("# T\n\n## Premise\n\nP.\n",
+                 ["## Premise", "## Dormant Threads"])):
+            with self.subTest(heads=heads):
+                out = threads.insert_shared(text, "- d — involves the party",
+                                            threads.DORMANT)
+                self.assertEqual([l for l in out.split("\n")
+                                  if l.startswith("## ")], heads)
+                self.assertEqual([t.text for t in threads.shared_threads(
+                    out, threads.DORMANT)], ["d"])
+
+    def test_the_last_entry_out_takes_its_heading(self):
+        for section in (threads.SECTION, threads.DORMANT):
+            with self.subTest(section=section):
+                text = (f"# T\n\n## Current Arc\n\nA.\n\n## {section}\n\n"
+                        "- a — involves the party\n\n## GM Notes\n\nS.\n")
+                gone = threads.remove_shared(text, 0, section)
+                self.assertEqual(gone, "# T\n\n## Current Arc\n\nA.\n\n"
+                                       "## GM Notes\n\nS.\n")
+                last = text.split("\n\n## GM Notes")[0] + "\n"
+                self.assertEqual(threads.remove_shared(last, 0, section),
+                                 "# T\n\n## Current Arc\n\nA.\n")
+                crlf = text.replace("\n", "\r\n")
+                self.assertEqual(threads.remove_shared(crlf, 0, section),
+                                 gone.replace("\n", "\r\n"))
+                back = threads.insert_shared(gone, "- b — involves the party",
+                                             section)
+                self.assertEqual([t.text for t in threads.shared_threads(
+                    back, section)], ["b"])
+        # Anything else in the section keeps it.
+        text = ("## Open Threads\n\n- a — involves the party\n\nA note.\n\n"
+                "## GM Notes\n")
+        kept = threads.remove_shared(text, 0)
+        self.assertTrue(kept.startswith("## Open Threads\n"), kept)
+        self.assertIn("A note.", kept)
+
     def test_insert_dormant_open_threads_fenced(self):
         text = ("# T\n\n## Current Arc\n\nA.\n\n<!-- gm-only -->\n\n"
                 "## Open Threads\n\n- a — involves the party\n\n"

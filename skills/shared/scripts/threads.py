@@ -244,9 +244,10 @@ def _shared_span(lines: list[str],
                  section: str = SECTION) -> tuple[int, int] | None:
     """(heading index, end) of the shared list: the first level-2 heading
     titled Open Threads (or another `section`) in any case, outside a code
-    fence, up to the next heading of level 1 or 2. Every reader and writer of the list (and the
-    publish tool's `sectionRange`) finds it this way: the title matches by
-    case only (`Open  Threads` with two spaces is not it)."""
+    fence, up to the next heading of level 1 or 2. Every reader and writer
+    of the list (and the publish tool's `sectionRange`) finds it this way:
+    the title matches by case only (`Open  Threads` with two spaces is not
+    it)."""
     found = find_section("\n".join(lines), [section], level=2, first=True,
                          trim=False, exact=True)
     return found if isinstance(found, tuple) else None
@@ -506,6 +507,12 @@ def _hidden_lines(lines: list[str]) -> list[bool]:
     return out
 
 
+def has_pc_threads(pc_text: str) -> bool:
+    """Does the PC's `## Current Status` have an Open threads field (see
+    `_pc_span`), empty or not?"""
+    return _pc_span(_lines(pc_text)) is not None
+
+
 def pc_thread_items(pc_text: str) -> list[PcThread]:
     """The threads under a PC's `## Current Status` > `**Open threads:**`
     (see `_pc_span`): its top-level bullets, each with everything under it
@@ -736,8 +743,9 @@ def remove_shared(overview_text: str, index: int,
                   section: str = SECTION) -> str:
     """`overview_text` without shared thread number `index` (as
     `shared_threads` numbers them): its first line and every line under
-    it. KeyError for no Open Threads section (or other `section`),
-    IndexError for no such bullet."""
+    it. When that leaves the section nothing but blank lines, its heading
+    goes too (`insert_shared` makes it again). KeyError for no Open
+    Threads section (or other `section`), IndexError for no such bullet."""
     lines = _lines(overview_text)
     if _shared_span(lines, section) is None:
         raise KeyError(section)
@@ -745,7 +753,16 @@ def remove_shared(overview_text: str, index: int,
     if not 0 <= index < len(found):
         raise IndexError(f"no bullet {index} under {section}")
     block = found[index]
-    return "\n".join(lines[:block.start] + lines[block.end:])
+    lines = lines[:block.start] + lines[block.end:]
+    head, end = _shared_span(lines, section) or (0, 0)
+    if all(_blank(l) for l in lines[head + 1:end]):
+        if end == len(lines):
+            # The last section: the note ends after what came before it.
+            while head > 0 and _blank(lines[head - 1]):
+                head -= 1
+            return _join(lines[:head] + [""], _eol(overview_text))
+        lines = lines[:head] + lines[end:]
+    return "\n".join(lines)
 
 
 def append_resolved(wrapup_text: str, line: str) -> str:
