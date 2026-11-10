@@ -14,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent
                        / "skills" / "shared" / "scripts"))
 
 import image  # noqa: E402
+import image_draw  # noqa: E402
 import image_gemini  # noqa: E402
 import image_jobs  # noqa: E402
 import image_keys  # noqa: E402
@@ -507,7 +508,7 @@ def test_a_redo_of_a_picture_not_drawn_stops_before_any_call(tmp_path, monkeypat
 
 def test_a_paid_picture_is_counted_even_if_it_cannot_be_written(tmp_path, monkeypatch, capsys):
     vault, job = start(tmp_path)
-    monkeypatch.setattr(image_jobs._Run, "keep_picture", lambda self, e, pic: False)
+    monkeypatch.setattr(image_draw._Run, "keep_picture", lambda self, e, pic: False)
     send = script(monkeypatch, fixture(OK))
     assert run(vault, job) == 1
     assert len(send.calls) == 1                       # a disk fault stops the run
@@ -529,7 +530,7 @@ def test_the_month_is_counted_before_the_picture_is_written(tmp_path, monkeypatc
     job_in_memory = job
     monkeypatch.setattr(image_money, "record", spy)
     script(monkeypatch, fixture(OK))
-    image_jobs.draw(job, {}, TODAY)
+    image_draw.draw(job, {}, TODAY)
     assert seen == {"file_yet": False, "job_spent": pytest.approx(OK_CENTS, abs=0.01)}
 
 

@@ -17,6 +17,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import image_draw
 import image_jobs
 import image_keys
 import image_money
@@ -195,7 +196,7 @@ def draw(vault: Path, job_id: str, redo: list[list[str]]) -> int:
             notes[int(n_text)] = what
         job = image_jobs.load(job_id)
         image_place.check_vault(job, vault)
-        result = image_jobs.draw(job, notes, _today())
+        result = image_draw.draw(job, notes, _today())
     except image_jobs.Stop as e:
         print(str(e), file=sys.stderr)
         return 2
