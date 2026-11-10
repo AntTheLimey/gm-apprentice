@@ -260,6 +260,25 @@ class UnlistedWrapupThreadsTests(unittest.TestCase):
                              f"- {new} — closed: melted (Session 4)\n")
         self.assertEqual(self.left(files), [])
 
+    def test_a_shared_thread_in_player_words_claims_by_its_bold_lead(
+            self) -> None:
+        lead_words = "**Lamplighter tithe** \u2014 "
+        shared = (lead_words + "a toll for the road lamps is asked of "
+                  "travellers")
+        s4 = lead_words + "the [[Lamplighters]] want a tithe at [[Saltmarsh]]."
+        s5 = (lead_words + "the [[Lamplighters]] will collect at the "
+              "[[Saltmarsh]] gate before the caravan may pass.")
+        files = dict([self.wrap(4, s4), self.wrap(5, s5)])
+        files["Campaign Overview.md"] = note(
+            "type: campaign_overview",
+            f"## Open Threads\n\n- {shared}\n\n## Key Factions\n")
+        self.assertEqual(self.left(files), [])
+        # The thread is aged from the bullets, not flagged as unlisted.
+        vault = make_vault(self, files)
+        wraps = sc.wrap_up_threads(list(sc.vault_files(vault)),
+                                   self.CHAPTER)
+        self.assertEqual(sc.match_sessions(shared, wraps), ([4, 5], "="))
+
 
 OVERVIEW = "Campaign Overview.md"
 

@@ -819,16 +819,19 @@ def wrap_up_threads(files, chapter) -> list[tuple[int, list[str], list[str]]]:
 
 def _match(thread: str, wrap_ups):
     """(sessions, mark, claimed): `claimed` holds the (session, bullet)
-    Unresolved bullets a match took: every close match, and for the
+    Unresolved bullets a match took: every close match (a likely wording
+    or an equal bold lead, `threads.lead`, so a thread rewritten in
+    player words still reads as the line it came from), and for the
     looser tier the first related Unresolved bullet of each Wrap-Up it
     matched (never a PC Carry-Forward bullet), so a thread aged from a
     line does not leave that line unlisted too."""
     norm = _norm_thread(thread)
+    key = lead(thread)
     hits: list[int] = []
     claimed: set[tuple[int, str]] = set()
     for n, unresolved, carry in wrap_ups:
         for bullet in unresolved + carry:
-            if _ratio_match(norm, bullet):
+            if _ratio_match(norm, bullet) or lead(bullet) == key:
                 hits.append(n)
                 if bullet in unresolved:
                     claimed.add((n, bullet))
@@ -861,11 +864,12 @@ def unlisted_wrapup_threads(files, chapter,
     """The (session, bullet) Wrap-Up Unresolved Threads bullets that sit on
     no thread list (thread-decay candidates), as `thread_report` prints
     them. A bullet is claimed by a thread that matches it (`_match`, a
-    close or likely match) or has its bold lead (`threads.lead`; a parked
-    or closed lead keeps every wording the Wrap-Ups gave it), when that
+    close or likely match, an equal bold lead included) or has its bold
+    lead (`threads.lead`; a parked or closed lead keeps every wording the
+    Wrap-Ups gave it), when that
     thread is:
 
-    - a shared or PC Open thread (by `_match` only);
+    - a shared or PC Open thread (by `_match`);
     - a Dormant Threads entry, at any session: a parked thread raised
       again is still the parked thread until woken;
     - a Resolved Threads line (its `— closed: …` tail dropped), for

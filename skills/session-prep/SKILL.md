@@ -145,7 +145,8 @@ and age, the old ones marked `STALE`, plus wrap-up threads missing
 from every sheet, and under "Dormant, may wake" the parked threads
 whose names the Wrap-Up or the upcoming Plan mention, with what matched.
 If Reconcile's thread step wrote rows, apply them to this list (drop
-what it ended or parked, add what it woke or added); don't rerun
+what it ended or parked, add what it woke or added, move what it moved
+or handed to its new list); don't rerun
 `--threads`. You judge whether two wordings are one thread and whether an old one
 is quiet by design (`skills/ttrpg-expert/continuity-engine.md`).
 → `## Active Threads`

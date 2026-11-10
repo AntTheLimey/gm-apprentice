@@ -1077,7 +1077,8 @@ def settle_section(lines: list[str], title: str) -> tuple[int, int]:
                          f"Checklist and ### Open Questions\u2026 sections "
                          f"are, the ones the bundle leaves settled items "
                          f"out of")
-    raise WriteError(f"no section titled '{title}' (### or deeper)")
+    raise WriteError(f"no section titled '{title}' (only ### Keeper "
+                     f"Checklist and ### Open Questions\u2026 settle)")
 
 
 def settle_items(lines: list[str], start: int,
@@ -2124,8 +2125,8 @@ def threads_unlisted(batch: Batch, verb: str,
     the newest one's text). Read as the batch found the vault, so a row
     may close a line another row of the batch has just put on a list in
     other words; a line one row takes is gone for the rows after it.
-    Refused when none match, or when the lead is also on a list: that
-    thread closes or rests there."""
+    Refused when the lead is on a list (that thread closes or rests
+    there, and its Wrap-Up lines are claimed by it), or when none match."""
     import session_context as sc   # it imports this module at its top
     scope = threads_scope(batch)
     if scope.unlisted is None:
@@ -2145,13 +2146,13 @@ def threads_unlisted(batch: Batch, verb: str,
     unlisted = scope.unlisted
     hits = [i for i in th.find_thread([b for _n, b in unlisted], lead_key)
             if i not in scope.taken]
-    if not hits:
-        raise WriteError(f"{verb}: no Wrap-Up line on no list matches "
-                         f"'{lead_key}'")
     for name, bullets in scope.lists or []:
         if th.find_thread(bullets, lead_key):
             raise WriteError(f"{verb}: '{lead_key}' is on {name}: {verb} "
                              f"it there")
+    if not hits:
+        raise WriteError(f"{verb}: no Wrap-Up line on no list matches "
+                         f"'{lead_key}'")
     scope.taken.update(hits)
     newest = max(hits, key=lambda i: (unlisted[i][0], i))
     return (min(unlisted[i][0] for i in hits),
