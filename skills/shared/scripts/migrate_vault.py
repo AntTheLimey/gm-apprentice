@@ -273,6 +273,7 @@ TEMPLATE_LABELS = {
     "event.md": "Event",
     "faction.md": "Faction",
     "heritage.md": "Heritage",
+    "image-guidance.md": "Image Guidance",
     "item.md": "Item",
     "location.md": "Location",
     "npc.md": "NPC",

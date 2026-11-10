@@ -224,6 +224,7 @@ TEMPLATE_NAMES = {
     "chapter.md": "_Template_Chapter.md",
     "session-wrap.md": "_Template_Session_WrapUp.md",
     "character-story.md": "character-story.md",
+    "image-guidance.md": "_Template_Image_Guidance.md",
 }
 TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
 # Templates a new vault gets as a page, not under _Templates/ (vault_scaffold).
