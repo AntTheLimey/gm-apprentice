@@ -217,31 +217,41 @@ def _portrait(fm: dict[str, Any] | None) -> str:
     return vl.scalar_value(raw) if isinstance(raw, str) else ""
 
 
-def _recap_paragraphs(text: str) -> list[str] | None:
-    """The paragraphs of the Narrative Recap (or Recap) section, or None
-    when the note has neither. Code fences and headings are not paragraphs."""
+def recap_spans(text: str) -> list[tuple[str, int]] | None:
+    """The paragraphs of the Narrative Recap (or Recap) section, each with
+    the index of its last line (text split on "\n"), or None when the note
+    has neither. Code fences and headings are not paragraphs."""
     lines = text.split("\n")
     for title in ("Narrative Recap", "Recap"):
         found = vl.find_section_lines(lines, [title], first=True)
         if not isinstance(found, tuple):
             continue
         start, end = found
-        paras: list[str] = []
+        paras: list[tuple[str, int]] = []
         cur: list[str] = []
         fence: str | None = None
-        for ln in lines[start + 1:end]:
+        for i in range(start + 1, end):
+            ln = lines[i]
             fence, is_fence_line = vl.fence_step(ln, fence)
             if (is_fence_line or fence is not None
                     or vl.SECTION_HEADING_RE.match(ln) or not ln.strip()):
                 if cur:
-                    paras.append(" ".join(cur))
+                    paras.append((" ".join(cur), i - 1))
                     cur = []
                 continue
             cur.append(ln.strip())
         if cur:
-            paras.append(" ".join(cur))
+            paras.append((" ".join(cur), end - 1))
         return paras
     return None
+
+
+def after_hits(spans: list[tuple[str, int]], after: str) -> list[int]:
+    """Which recap paragraphs open with the words `after` (runs of
+    whitespace as one space, case ignored): the indexes into `spans`. The
+    one rule `plan` and `place` both find a scene's paragraph by."""
+    want = _squash(after)
+    return [i for i, (p, _) in enumerate(spans) if _squash(p).startswith(want)]
 
 
 def _squash(s: str) -> str:
@@ -391,12 +401,11 @@ def _check_existing(ctx: _Ctx, e: Entry, fm: dict[str, Any] | None) -> bool:
 
 def _check_scene_place(e: Entry, text: str) -> bool:
     """Rule 6: `after` must open exactly one paragraph of the recap."""
-    paras = _recap_paragraphs(text)
-    if paras is None:
+    spans = recap_spans(text)
+    if spans is None:
         _refuse(e, "this Wrap-Up has no Narrative Recap section")
         return False
-    want = _squash(e.after or "")
-    hits = [p for p in paras if _squash(p).startswith(want)]
+    hits = after_hits(spans, e.after or "")
     if len(hits) != 1:
         _refuse(e, f"the opening words {e.after!r} match "
                 + ("no paragraph" if not hits else f"{len(hits)} paragraphs")

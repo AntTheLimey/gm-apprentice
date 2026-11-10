@@ -240,7 +240,7 @@ SKILLS_DIR = TEMPLATES_DIR.parent.parent
 # Optional fields that support portraits (for future validation)
 PORTRAIT_TYPES = {
     "npc", "pc", "location", "faction", "organization", "item",
-    "creature", "campaign_overview", "heritage",
+    "creature", "campaign_overview", "heritage", "document",
 }
 
 # Deprecated field renames, keyed by entity type; "*" applies to all types

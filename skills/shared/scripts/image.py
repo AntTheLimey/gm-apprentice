@@ -5,6 +5,7 @@ Usage:
   image.py status VAULT
   image.py key SERVICE
   image.py plan VAULT REQUESTS [--unprompted]
+  image.py place VAULT JOB [--keep N...] [--hold N...] [--write]
 """
 
 from __future__ import annotations
@@ -18,6 +19,7 @@ from pathlib import Path
 import image_jobs
 import image_keys
 import image_money
+import image_place
 import vaultlib
 
 
@@ -41,6 +43,19 @@ def build_parser() -> argparse.ArgumentParser:
     pl.add_argument("--unprompted", action="store_true",
                     help="the GM did not ask for these pictures: apply the "
                     "vault's rules for drawing without asking")
+    pc = sub.add_parser(
+        "place", help="file the pictures you kept and link them in the vault",
+        epilog='Example: gma image place "<vault>" 20261109-a1b2c3 '
+               '--keep 1 2 --hold 3 --write')
+    pc.add_argument("vault", type=Path, help="the vault folder")
+    pc.add_argument("job", help="the job number `plan` printed")
+    pc.add_argument("--keep", type=int, nargs="+", default=[], metavar="N",
+                    help="numbers of the pictures to file in the vault")
+    pc.add_argument("--hold", type=int, nargs="+", default=[], metavar="N",
+                    help="numbers of the pictures to leave out of the vault "
+                    "(they stay in the job folder)")
+    pc.add_argument("--write", action="store_true",
+                    help="do it; without this, only say what would happen")
     ap.epilog = 'Example: gma image status "<vault>"'
     return ap
 
@@ -138,12 +153,40 @@ def plan(vault: Path, requests: Path, unprompted: bool) -> int:
     return 0 if planned else 1
 
 
+def place(vault: Path, job_id: str, keep: list[int], hold: list[int],
+          write: bool) -> int:
+    if not vault.is_dir():
+        print(f"error: not a directory: {vault}", file=sys.stderr)
+        return 2
+    try:
+        job = image_jobs.load(job_id)
+        image_place.check_vault(job, vault)
+        result = image_place.run(job, set(keep), set(hold), write)
+    except image_jobs.Stop as e:
+        print(str(e), file=sys.stderr)
+        return 2
+    except (vaultlib.StateUnreadable, vaultlib.SettingsUnavailable) as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+    except OSError as e:
+        print(f"error: the job could not be saved ({e.__class__.__name__})",
+              file=sys.stderr)
+        return 1
+    for line in result.lines:
+        print(line)
+    if not write and result.ok:
+        print("Nothing was changed. Add --write to do it.")
+    return 0 if result.ok else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.command == "status":
         return status(args.vault)
     if args.command == "plan":
         return plan(args.vault, args.requests, args.unprompted)
+    if args.command == "place":
+        return place(args.vault, args.job, args.keep, args.hold, args.write)
     return key(args.service)
 
 
