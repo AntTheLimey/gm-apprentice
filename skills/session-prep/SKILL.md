@@ -85,7 +85,7 @@ gma session-context <vault-path> --prep
 
 It carries the version verdict, then the last Wrap-Up (reconcile-provenance blocks stubbed to one
 line with word counts), every active PC's `## Current Status` block,
-deferred world flags (each flag's first line), and outlines (frontmatter, headings, word counts)
+and outlines (frontmatter, headings, word counts)
 of the campaign overview and the upcoming session's existing Plan, then
 the reconcile scan, threads, PC arcs, the scene queue and the narrative
 plans: steps 8, 10c, 12 and 14 and Phase 1 read these, never rerun
@@ -93,7 +93,7 @@ them. Its Map gives the path and size of every note the Wrap-Up and the
 upcoming Plan link, and of the latest sessions' notes: take a note's
 path from there rather than searching the vault. Read
 a stubbed or outlined section only when a step needs it: from its file,
-or a section printed as heading, size and path with
+or a `###` subsection (printed as heading, size and path) with
 `gma section` (for step 12, the PC whose arc this session turns on).
 After the bundle, vault dives are targeted reads, proportional to the
 upcoming session's complexity, not the campaign's size.
@@ -213,13 +213,10 @@ Don't move to spotlight until intent is set or deferred to
 
 **12. PC Roster + Arc Check** — Each PC's `## Current Status` is
 already in the bundle (`###` subsections outlined); don't re-read it. `--prep`'s PC Arcs gives every
-active PC's `## Background` and `## GM Notes` as one line each (size and fetch path) plus spotlight history from earlier Plans' `## Spotlight Forecast`
-(role, sessions since last B- and C-plot). Fetch both with `gma section`
-for each PC whose moment this session may turn on their past or their
-arc: the B-plot PC, and any PC whose status and threads give no moment
-of their own. Don't open full PC
+active PC's `## GM Notes` (outlined too) plus spotlight history from earlier Plans' `## Spotlight Forecast`
+(role, sessions since last B- and C-plot). Don't open full PC
 sheets. Judge arc stage (five-stage model) from that evidence. Per PC:
-- backstory hooks, stated goals, arc stage and theme, relationships
+- hooks, stated goals, arc stage and theme, relationships
 - a PC's own `Open threads` → decisions needing consequences, next arc beat;
   `Knows (exclusive)` → personalized touchpoint fuel
 - mechanical highlights (signature abilities, resources)
