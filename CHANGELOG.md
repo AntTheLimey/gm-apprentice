@@ -9,7 +9,7 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
-## [1.12.6] — 2026-11-09
+## [1.12.6] — 2026-11-10
 
 ### Added
 
