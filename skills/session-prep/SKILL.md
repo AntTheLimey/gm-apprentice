@@ -142,9 +142,10 @@ Notes?
 
 **8. Threads** — `--prep`'s Threads lists the Overview's shared Open Threads, then every PC's own Open threads, with first/last-seen session
 and age, the old ones marked `STALE`, plus wrap-up threads missing
-from every sheet.
+from every sheet, and under "Dormant, may wake" the parked threads
+whose names the Wrap-Up or the upcoming Plan mention, with what matched.
 You judge whether two wordings are one thread and whether an old one
-is dormant by design (`skills/ttrpg-expert/continuity-engine.md`).
+is quiet by design (`skills/ttrpg-expert/continuity-engine.md`).
 → `## Active Threads`
 
 **9. Key NPCs** — likely NPCs with status, motivations, off-screen

@@ -176,17 +176,19 @@ the narrative.
    `--session` is written verbatim: match the vault's existing
    shape (`"Chapter 4, Session 9"` or `9`). On a shape `ERROR`,
    re-run with the matching form, not `--force-shape`.
-2. A thread is an open question or obligation. "Adrien stopped her
-   ears with wax" is an event: the recap. "At the Dak Bungalow" is a
-   stopping point: the Handoff. Shared by 2+ PCs: the shared list.
-   Close one only on a note saying it's over ("Sophia's note is
-   read"), that line as evidence. An implied end ("he's in custody")
-   stays open: prep asks.
+2. A thread is active when it is a question or an obligation that
+   can plausibly bear on the sessions ahead, given where the party is
+   at the end of this session. Not threads: finished or overtaken, an
+   event, colour, one session's business, a copy, on the wrong sheet
+   (the whole test: `shared/reconcile.md` step 5.5). Write only what
+   passes. "Adrien stopped her ears with wax" is an event: the recap.
+   "At the Dak Bungalow" is a stopping point: the Handoff. Shared by
+   2+ PCs: the shared list.
 
-   Reconcile `vw status <PC> --show` with Steps 2-3: add a PC's new
+   Compare `vw status <PC> --show` with Steps 2-3: add a PC's new
    threads (not shared) and exclusive knowledge, refresh
-   `Location`/`Condition`/`Carrying`. Never drop a thread: Step 5
-   moves or closes it.
+   `Location`/`Condition`/`Carrying`. Never drop a thread: Reconcile
+   closes it.
    Present tense, player-facing — not Story-file narrative. Send
    the changed fields to `vw status <PC> --write`; it rewrites
    them in place (fields: `shared/pc-body-structure.md`). Don't
@@ -380,10 +382,9 @@ Fill What Carries Forward, World State, Keeper Checklist, Quality
 Notes and Handoff to session-prep (the section session-prep reads
 first) per the template. Then one `vw threads --wrapup "<wrap-up>"`
 dry run and `--write`: `add shared` new shared threads, `move` a
-PC's that now involves 2+ PCs, `close` (shared or a PC's) ended
-ones (3c.2), never `(hidden)` ones (one refusal writes nothing).
-Tell the GM each close and its evidence. If the notes don't show what the
-players enjoyed, ask the GM once. Whatever an older vault template copy says:
+PC's that now involves 2+ PCs, never `(hidden)` ones (one refusal
+writes nothing). Reconcile (step 6) closes and retires. If the
+notes don't show what the players enjoyed, ask the GM once. Whatever an older vault template copy says:
 Skipped Prep lists every planned scene and clue that didn't fire,
 with what the players still need; Pending Consequences are decisions
 whose effects haven't landed; Advancement records what the sheet or

@@ -27,14 +27,14 @@ If it passes, offer:
 
 > "Straightforward session — no conflicts found, no unplayed
 > prep. Promote the Wrap-Up and {the DRAFTs created this session,
-> by name} to AUTHORITATIVE? (y/n)"
+> by name} to AUTHORITATIVE, then the threads? (y/n)"
 
 On yes:
 - `gma stamp-entities <vault> "<wrap-up>" --promote --reconciled YYYY-MM-DD`
 - `gma stamp-entities <vault> <entity files> --promote` — the
   scan's DRAFTs created this session, never its older ones
 - `gma stamp-entities <vault> "<index>" --set status=reviewed`
-- Do step 6.1, then go to step 6.5.
+- Do step 5.5, then step 6.1, then go to step 6.5.
 
 Otherwise run the full procedure.
 
@@ -105,6 +105,76 @@ If the scan names a Plan file, ask about each unplayed element:
 
 Flag `must-still-happen` items prominently — they carry into the next
 prep.
+
+### 5.5. Threads: what this session settled
+
+Only for the **most recent** played session (as step 6.5), never an
+older Wrap-Up that vault-ingest reconciles.
+
+**The test.** A thread is active when it is a question or an
+obligation that can plausibly bear on the sessions ahead, given where
+the party is at the end of this session. A thread from a place or arc
+the party has left is **dormant**: it goes on the dormant list, kept
+for when the party comes back that way or the GM wants something to
+bring back to bite them, unless something shows it following them now
+(a pursuer, a debt being called in, someone who has turned up again),
+which keeps it active. These are not threads at all:
+
+- **finished or overtaken**: done, settled, or made moot by later play;
+- **an event**: something that happened, or something a character
+  knows. "Ghosh showed his hand at his own dinner table" is an event,
+  even as the only line naming the chapter's threat;
+- **colour**: roleplay with no stake;
+- **one session's business**;
+- **a copy** of another line (keep one);
+- **on the wrong sheet**: a PC's line about another PC's matter goes
+  to that PC, or to the shared list.
+
+Old is not dead. A PC's defining secret or hunted status, an enemy
+the notes show is still looking, a debt someone can still call in,
+and the mystery the current chapter is about stay active, however
+old. When the notes don't let you tell, propose the change and mark
+it `?`: the GM would rather add one back than prune a long list.
+
+1. Read `gma session-context <vault> --threads` (prep's bundle has
+   it) and this Wrap-Up's recap, What Carries Forward and Handoff.
+   Say in one sentence where the party is at the end of the session.
+2. Test every line: the shared list, each PC's own, and Wrap-Up lines
+   on no list. Skip `(hidden)` ones: the tool refuses them.
+3. Propose one numbered list of changes only, grouped, `?` on the
+   less sure ones:
+   - **Ended**: each with the line that ended it.
+   - **Dormant**: left behind, each with where or what was left.
+   - **Wake**: dormant threads this session came back to, each with
+     the name that matched.
+   - **Not a thread**: each with its reason in a few words (overtaken,
+     an event, colour, one session, a copy).
+   - **Move**: a matter on the wrong sheet, or carried by 2+ PCs.
+   - **New this session**: what wrap-up added, so the GM can strike
+     one that is not a thread.
+   - **Answered**: Keeper Checklist items and open questions this
+     reconcile settled, each with the ruling.
+   - Last line: "Everything else stays (N threads)." Never list the
+     keeps; never ask the GM to review the whole list.
+4. The GM strikes by number ("keep 4 and 7") or says ok. A struck
+   line stays as it is; a struck New is closed as not a thread.
+5. Write in two calls, dry run then `--write`; an ERROR row writes
+   nothing. `gma vault-write <vault> threads --wrapup "<wrap-up>"`,
+   TAB rows (LEAD: bold lead or whole text; LIST: `shared`, a PC's
+   note name, `dormant`, or `wrapup` for a line on no list):
+
+   ```text
+   close  LIST  LEAD  EVIDENCE   the quoted line, or "not a thread: {reason}"
+   rest   LIST  LEAD  WHY        where or what was left
+   wake   LEAD  WHO              one PC: their list; PCs or party: shared
+   move   LEAD  SINCE  WHO       holders and PCs involved; "Session N" or -
+   ```
+
+   To one other PC: `rest`, then `wake` to them, same call. Then
+   `gma vault-write <vault> wrapup-settle "<wrap-up>"`, rows
+   `SECTION  LEAD  RULING`, for the Answered.
+6. Little changed: a short list. Nothing to propose: "Threads:
+   nothing settled", and move on.
 
 ### 6. Promote canon status
 

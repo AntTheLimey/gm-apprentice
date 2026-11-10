@@ -210,7 +210,7 @@ the GM to keep, unwrap (revealed in play) or delete (dropped).
 Open threads a later note says are over go to the latest Wrap-Up's
 Resolved Threads with that line as evidence; word-for-word duplicates
 on PC sheets move to the Campaign Overview's Open Threads. Implied or
-dormant threads stay; differing wordings are listed, never
+quiet threads stay; differing wordings are listed, never
 merged. One `vw threads` call, then a `_QA` report.
 Also run on "tidy the threads".
 

@@ -46,7 +46,7 @@ Reach for session-prep when you need to:
 
 - "Which clues did the players miss that they still need to find?"
 - "Are there any Chekhov's guns I've planted that need to fire soon?"
-- "What plot threads have been dormant for more than two sessions?"
+- "Which dormant threads could come back this session?"
 - "Which NPCs have unfinished business with the PCs?"
 
 ### Spotlight and Arc Planning
