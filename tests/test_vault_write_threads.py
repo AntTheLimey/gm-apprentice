@@ -672,6 +672,210 @@ class ThreadsTests(unittest.TestCase):
                 self.assertIn("- **Lamp** — who lit it — closed: lit "
                               "(Ines_Marlowe)\n", read(vault, WRAPUP))
 
+    DORMANT_ENTRY = ("- **Harbour bell** \u2014 rung twice at night \u2014 since "
+                     "Session 1; dormant since Session 2 (left Wu); involves "
+                     "[[Ines_Marlowe]], [[Corwin_Hale]]")
+
+    def with_dormant(self, vault, entry=None):
+        self.edit(vault, OVERVIEW, "\n\n## Key Factions",
+                  "\n\n## Dormant Threads\n\n" + (entry or self.DORMANT_ENTRY)
+                  + "\n\n## Key Factions")
+
+    def test_rest_pc_thread(self):
+        vault = self.vault()
+        before = self.snapshot(vault)
+        stdin = rows(("rest", "Ines_Marlowe",
+                      "Find out who lit the lamp on the north bank",
+                      "left the harbour"))
+        code, out = run(vault, "threads", "--wrapup", WRAPUP, stdin=stdin)
+        self.assertEqual(code, 0, out)
+        self.assertIn("WOULD-REST", out)
+        self.assertEqual(self.snapshot(vault), before)
+        code, out = run(vault, "threads", "--wrapup", WRAPUP, "--write",
+                        stdin=stdin)
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("who lit the lamp", read(vault, INES))
+        text = read(vault, OVERVIEW)
+        self.assertIn("## Dormant Threads\n\n- Find out who lit the lamp on "
+                      "the north bank \u2014 dormant since Session 3 (left the "
+                      "harbour); involves [[Ines_Marlowe]]", text)
+        self.assertLess(text.index("## Open Threads"),
+                        text.index("## Dormant Threads"))
+        self.assertLess(text.index("## Dormant Threads"),
+                        text.index("## Key Factions"))
+
+    def test_rest_shared_keeps_since_and_involves(self):
+        vault = self.vault()
+        code, out = run(vault, "threads", "--wrapup", WRAPUP, "--write",
+                        stdin=rows(("rest", "shared", "Corwin's debt to the ferrywoman",
+                                    "paid off for now; maybe not")))
+        self.assertEqual(code, 0, out)
+        text = read(vault, OVERVIEW)
+        self.assertNotIn("Corwin's debt", text.split("## Dormant")[0])
+        self.assertIn("- **Corwin's debt to the ferrywoman** \u2014 owed for "
+                      "the night crossing \u2014 since Session 3; dormant since "
+                      "Session 3 (paid off for now, maybe not); involves "
+                      "[[Ines_Marlowe]], [[Corwin_Hale]]", text)
+        code, out = run(vault, "threads", "--wrapup", WRAPUP, "--write",
+                        stdin=rows(("rest", "shared", "The missing ledger", "gone")))
+        self.assertEqual(code, 0, out)
+        self.assertIn("since Session 2; dormant since Session 3 (gone); "
+                      "involves the party", read(vault, OVERVIEW))
+
+    def test_rest_needs_wrapup(self):
+        vault = self.vault()
+        before = self.snapshot(vault)
+        code, out = run(vault, "threads", "--write", stdin=rows(
+            ("rest", "shared", "The missing ledger", "gone")))
+        self.assertEqual(code, 1)
+        self.assertIn("--wrapup", out)
+        self.assertEqual(self.snapshot(vault), before)
+
+    def test_rest_hidden_refused_writes_nothing(self):
+        vault = self.vault()
+        lamp = "- Find out who lit the lamp on the north bank"
+        self.edit(vault, INES, lamp, f"<!--\n{lamp}\n-->")
+        self.edit(vault, OVERVIEW, "\n\n## Key Factions",
+                  "\n- **The bell rings** \u2014 involves the party <!--\n"
+                  "secret\n-->\n\n## Key Factions")
+        before = self.snapshot(vault)
+        for row, said in (
+                (("rest", "Ines_Marlowe", "Find out who lit the lamp on the north bank", "gone"),
+                 "on Ines_Marlowe is next to hidden text; edit it by hand"),
+                (("rest", "shared", "The bell rings", "gone"),
+                 "'The bell rings' in the Overview's Open Threads is in or "
+                 "next to hidden text; edit it by hand")):
+            code, out = run(vault, "threads", "--wrapup", WRAPUP, "--write",
+                            stdin=rows(row))
+            self.assertEqual(code, 1, row)
+            self.assertIn(said, out)
+        self.assertEqual(self.snapshot(vault), before)
+
+    def test_rest_beside_a_fenced_dormant_list_lands_outside_it(self):
+        vault = self.vault()
+        self.edit(vault, OVERVIEW, "\n\n## Key Factions",
+                  "\n\n## Dormant Threads\n\n<!-- gm-only -->\n- **Old** "
+                  "\u2014 involves the party\n<!-- /gm-only -->\n\n"
+                  "## Key Factions")
+        code, out = run(vault, "threads", "--wrapup", WRAPUP, "--write",
+                        stdin=rows(("rest", "shared", "The missing ledger", "x")))
+        self.assertEqual(code, 0, out)
+        self.assertIn("RESTED", out)
+        text = read(vault, OVERVIEW)
+        self.assertLess(text.index("<!-- /gm-only -->"),
+                        text.index("dormant since Session 3 (x)"))
+
+    def test_rest_crlf_overview(self):
+        vault = self.vault()
+        for rel in (OVERVIEW, INES, CORWIN, WRAPUP):
+            text = read(vault, rel).replace("\r\n", "\n").replace("\n", "\r\n")
+            (vault / rel).write_bytes(text.encode("utf-8"))
+        code, out = run(vault, "threads", "--wrapup", WRAPUP, "--write",
+                        stdin=rows(
+                            ("rest", "shared", "The missing ledger", "gone"),
+                            ("rest", "Ines_Marlowe", "Find out who lit the lamp on the north bank", "gone"),
+                            ("wake", "The missing ledger", "Corwin_Hale")))
+        self.assertEqual(code, 0, out)
+        for rel in (OVERVIEW, INES, CORWIN):
+            data = (vault / rel).read_bytes()
+            self.assertEqual(data.count(b"\n"), data.count(b"\r\n"), rel)
+        self.assertIn("## Dormant Threads", read(vault, OVERVIEW))
+
+    def test_rest_wrapup_list_not_yet(self):
+        vault = self.vault()
+        before = self.snapshot(vault)
+        code, out = run(vault, "threads", "--wrapup", WRAPUP, "--write",
+                        stdin=rows(("rest", "wrapup", "The north-bank lamp", "x")))
+        self.assertEqual(code, 1)
+        self.assertEqual(self.snapshot(vault), before)
+
+    def test_wake_to_one_pc(self):
+        vault = self.vault()
+        self.with_dormant(vault)
+        stdin = rows(("wake", "Harbour bell", "Corwin_Hale"))
+        before = self.snapshot(vault)
+        code, out = run(vault, "threads", stdin=stdin)
+        self.assertEqual(code, 0, out)
+        self.assertIn("WOULD-WAKE", out)
+        self.assertEqual(self.snapshot(vault), before)
+        code, out = run(vault, "threads", "--write", stdin=stdin)
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("Harbour bell", read(vault, OVERVIEW))
+        corwin = read(vault, CORWIN)
+        self.assertIn("- **Ferrywoman's debt** \u2014 owes her two silver, due "
+                      "at the next full moon\n- **Harbour bell** \u2014 rung "
+                      "twice at night\n", corwin)
+        self.assertNotIn("dormant", corwin)
+
+    def test_wake_to_an_empty_pc_list_drops_the_filler(self):
+        vault = self.vault()
+        self.with_dormant(vault)
+        self.edit(vault, CORWIN, "**Open threads:**\n- **Ferrywoman's debt** "
+                  "\u2014 owes her two silver, due at the next full moon",
+                  "**Open threads:** \u2014")
+        code, out = run(vault, "threads", "--write", stdin=rows(
+            ("wake", "Harbour bell", "Corwin_Hale")))
+        self.assertEqual(code, 0, out)
+        self.assertIn("**Open threads:**\n- **Harbour bell** \u2014 rung twice "
+                      "at night\n", read(vault, CORWIN))
+
+    def test_wake_to_party_goes_shared(self):
+        vault = self.vault()
+        self.with_dormant(vault)
+        for who, involves in (("party", "involves the party"),
+                              ("Ines_Marlowe, Corwin_Hale",
+                               "involves [[Ines_Marlowe]], [[Corwin_Hale]]")):
+            with self.subTest(who=who):
+                v = self.vault()
+                self.with_dormant(v)
+                code, out = run(v, "threads", "--write", stdin=rows(
+                    ("wake", "Harbour bell", who)))
+                self.assertEqual(code, 0, out)
+                text = read(v, OVERVIEW)
+                self.assertNotIn("Dormant Threads\n\n- **Harbour",
+                                 text)
+                open_part = text.split("## Dormant")[0]
+                self.assertIn("- **Harbour bell** \u2014 rung twice at night "
+                              "\u2014 since Session 1; " + involves, open_part)
+                self.assertNotIn("dormant since", text)
+
+    def test_wake_unknown_or_hidden_refused(self):
+        vault = self.vault()
+        self.with_dormant(vault)
+        before = self.snapshot(vault)
+        code, out = run(vault, "threads", "--write", stdin=rows(
+            ("wake", "No such thread", "party")))
+        self.assertEqual(code, 1)
+        self.assertIn("no thread 'No such thread'", out)
+        self.edit(vault, OVERVIEW, "involves [[Ines_Marlowe]], "
+                  "[[Corwin_Hale]]\n\n## Key Factions",
+                  "involves [[Ines_Marlowe]] %%\nsecret\n%%\n\n## Key Factions")
+        before = self.snapshot(vault)
+        for row in (("wake", "Harbour bell", "party"),
+                    ("close", "dormant", "Harbour bell", "x")):
+            code, out = run(vault, "threads", "--wrapup", WRAPUP, "--write",
+                            stdin=rows(row))
+            self.assertEqual(code, 1, row)
+            self.assertIn("'Harbour bell' in the Overview's Dormant Threads "
+                          "is in or next to hidden text; edit it by hand", out)
+        self.assertEqual(self.snapshot(vault), before)
+
+    def test_close_dormant_records_resolved(self):
+        vault = self.vault()
+        self.with_dormant(vault)
+        stdin = rows(("close", "dormant", "Harbour bell", "the bell was melted"))
+        code, out = run(vault, "threads", "--wrapup", WRAPUP, stdin=stdin)
+        self.assertEqual(code, 0, out)
+        self.assertIn("WOULD-CLOSE", out)
+        self.assertIn("WOULD-RECORD", out)
+        code, out = run(vault, "threads", "--wrapup", WRAPUP, "--write",
+                        stdin=stdin)
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("Harbour bell", read(vault, OVERVIEW))
+        self.assertIn("- **Harbour bell** \u2014 rung twice at night \u2014 "
+                      "closed: the bell was melted (dormant)",
+                      read(vault, WRAPUP))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -696,6 +696,42 @@ def remove_pc_thread(pc_text: str, thread: PcThread) -> str:
     return "\n".join(lines)
 
 
+def add_pc_thread(pc_text: str, text: str) -> str:
+    """`pc_text` with `text` as a new bullet after the last thread on the
+    PC's Open threads (the filler `\u2014`, or a placeholder, after the
+    label is dropped: the list is not empty any more). KeyError for no
+    Open threads field; ValueError for a list that is one inline thread
+    (`**Open threads:** a; b`) or whose end lies in a gm-only fence, where
+    a new bullet would be hidden."""
+    lines = _lines(pc_text)
+    span = _pc_span(lines)
+    if span is None:
+        raise KeyError(PC_PATH[1])
+    m, at, end = span
+    eol = _eol(pc_text)
+    rest = m.group("rest").strip()
+    if rest and not _filler(rest) and not _PLACEHOLDER_RE.match(rest):
+        raise ValueError("the Open threads field is one inline thread")
+    end = _stop_end(lines, at, end)
+    last = end
+    while last > at + 1 and _blank(lines[last - 1]):
+        last -= 1
+    if _states(lines)[last]:
+        raise ValueError("the end of the Open threads list is hidden")
+    existing = [b for b in _blocks(lines, at, end, m)
+                if not _PLACEHOLDER_RE.match(b.text)]
+    if existing:
+        first = lines[existing[0].start]
+        indent = first[:len(first) - len(first.lstrip())]
+    else:
+        indent = m.group("indent") + ("  " if m.group("mark") else "")
+    if rest:
+        lines[at] = m.group("label") + ("\r" if lines[at].endswith("\r")
+                                        else "")
+    bullet = _new(f"{indent}- {text}", eol)
+    return "\n".join(_put_after_content(lines, at + 1, end, [bullet]))
+
+
 def remove_shared(overview_text: str, index: int,
                   section: str = SECTION) -> str:
     """`overview_text` without shared thread number `index` (as

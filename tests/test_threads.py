@@ -828,6 +828,44 @@ class ThreadsTests(unittest.TestCase):
         self.assertEqual(out.count("\n"), out.count("\r\n"))
         self.assertEqual(len(threads.shared_threads(out)), 1)
 
+    def test_add_pc_thread_appends_after_the_last_thread(self):
+        out = threads.add_pc_thread(read(INES), "**Bell** rings")
+        got = [t.text for t in threads.pc_thread_items(out)]
+        self.assertEqual(got[-1], "**Bell** rings")
+        self.assertEqual(len(got), 3)
+        self.assertIn("rings\n**Knows (exclusive):**", out)
+
+    def test_add_pc_thread_replaces_the_filler(self):
+        pc = "# P\n\n## Current Status\n\n**Open threads:** \u2014\n**Location:** X\n"
+        out = threads.add_pc_thread(pc, "**Bell** rings")
+        self.assertEqual(
+            out, "# P\n\n## Current Status\n\n**Open threads:**\n"
+                 "- **Bell** rings\n**Location:** X\n")
+        empty = threads.remove_pc_thread(
+            read(INES), threads.pc_thread_items(read(INES))[0])
+        self.assertEqual(len(threads.pc_thread_items(empty)), 1)
+
+    def test_add_pc_thread_refuses_what_it_cannot_place(self):
+        with self.assertRaises(KeyError):
+            threads.add_pc_thread("# P\n\nNo status.\n", "x")
+        with self.assertRaises(ValueError):
+            threads.add_pc_thread(
+                "# P\n\n## Current Status\n\n**Open threads:** one; two\n", "x")
+        fenced = ("# P\n\n## Current Status\n\n**Open threads:**\n"
+                  "- A\n<!-- gm-only -->\n- secret\n<!-- /gm-only -->\n")
+        out = threads.add_pc_thread(fenced, "x")
+        self.assertIn("- A\n- x\n<!-- gm-only -->", out)
+        inside = ("# P\n\n<!-- gm-only -->\n## Current Status\n\n"
+                  "**Open threads:**\n- A\n<!-- /gm-only -->\n")
+        with self.assertRaises(ValueError):
+            threads.add_pc_thread(inside, "x")
+
+    def test_add_pc_thread_crlf(self):
+        pc = read(INES).replace("\n", "\r\n")
+        out = threads.add_pc_thread(pc, "**Bell** rings")
+        self.assertEqual(out.count("\n"), out.count("\r\n"))
+        self.assertEqual(threads.pc_thread_items(out)[-1].text, "**Bell** rings")
+
 
 if __name__ == "__main__":
     unittest.main()

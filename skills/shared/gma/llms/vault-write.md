@@ -136,7 +136,7 @@ the fields as they stand, and reads no stdin.
 <!-- END GENERATED -->
 
 <!-- BEGIN GENERATED: gma vault-write threads -->
-add, move and close shared threads (stdin rows)
+add, move, close, rest and wake threads (stdin rows)
 
 ```text
 gma vault-write <vault> threads [options]
@@ -150,10 +150,18 @@ stdin: one row per line, fields separated by TAB.
                                    list involving them all (already
                                    there word for word: the copies
                                    just go)
-  close LIST    LEAD   EVIDENCE    LIST is 'shared' or a PC's note
-                                   name; the thread leaves it and is
-                                   recorded in the Wrap-Up's
+  close LIST    LEAD   EVIDENCE    LIST is 'shared', 'dormant' or a PC's
+                                   note name; the thread leaves it and
+                                   is recorded in the Wrap-Up's
                                    Resolved Threads
+  rest  LIST    LEAD   WHY         LIST is 'shared' or a PC's note name;
+                                   the thread leaves it for the
+                                   Overview's Dormant Threads, with
+                                   'dormant since Session N (WHY)', N
+                                   the Wrap-Up's session
+  wake  LEAD    WHO                a dormant thread goes back: one PC
+                                   names their Open threads; several
+                                   PCs or 'party', the shared list
 SINCE is a session label, or - for none. WHO is PC note
 names separated by commas, or 'party' (for move, every active
 PC). Any ERROR row writes nothing.
@@ -161,7 +169,7 @@ PC). Any ERROR row writes nothing.
 
 | Argument | Value | Help |
 |---|---|---|
-| `--wrapup` | `WRAPUP` | the Wrap-Up that records closed threads (needed by close rows): vault-relative, or its name |
+| `--wrapup` | `WRAPUP` | the Wrap-Up that records closed threads (needed by close and rest rows): vault-relative, or its name |
 | `--write` |  | write it (default: preview) |
 <!-- END GENERATED -->
 
