@@ -16,6 +16,8 @@ import re
 import secrets
 import shutil
 import unicodedata
+from urllib.parse import quote
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -49,6 +51,8 @@ class _Action:
     embed: str | None
     old: list[str]          # vault-relative old picture files to retire
     done: bool = False      # our own earlier copy is already at the target
+    stage: Callable[[str], bool] | None = None   # (re)write the note edit
+    rel: str = ""           # the vault path the picture is filed under
 
 
 # --- the embed ---------------------------------------------------------------
@@ -120,23 +124,44 @@ def _same_file(a: Path, b: Path) -> bool:
 
 
 def _linked(vault: Path, batch: vw.Batch, rel: str) -> bool:
-    """Whether anything in the vault names the picture `rel`, by path or
-    file name, ignoring case: a note (as this run leaves it) or a canvas."""
-    name, path = _fold(Path(rel).name), _fold(rel)
-    for note, text in vl.vault_files(vault):
-        text = _fold(batch.texts.get(note, text))
-        if name in text or path in text:
-            return True
-    for canvas in vault.rglob("*.canvas"):
-        if any(part.startswith(".") for part in canvas.relative_to(vault).parts):
+    """Whether anything in the vault might use the picture `rel`: any note
+    or canvas outside hidden folders (templates and the inbox included)
+    that holds its file name or path, plain or URL-encoded, ignoring case.
+    A note this run changes counts as it will be left. When in doubt: yes."""
+    seen = {_fold(Path(rel).name), _fold(rel),
+            _fold(quote(Path(rel).name)), _fold(quote(rel))}
+    for path in vault.rglob("*"):
+        if path.suffix.lower() not in (".md", ".canvas"):
             continue
-        try:
-            text = _fold(canvas.read_text(encoding="utf-8"))
-        except (OSError, UnicodeDecodeError):
+        parts = path.relative_to(vault).parts
+        if any(part.startswith(".") for part in parts):
             continue
-        if name in text or path in text:
+        key = "/".join(parts)
+        text = batch.texts.get(key)
+        if text is None:
+            try:
+                text = path.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError):
+                continue
+        text = _fold(text)
+        if any(w in text for w in seen):
             return True
     return False
+
+
+def _disk_rel(vault: Path, target: Path, planned: str) -> str:
+    """The vault path of the file at `target` under the name the folder
+    listing gives it (the disk may keep an existing name that differs from
+    the planned one only in case); the planned path when nothing is there."""
+    try:
+        names = sorted(os.listdir(target.parent))
+    except OSError:
+        return planned
+    same = [n for n in names if _same_file(target.parent / n, target)]
+    if not same:
+        return planned
+    n = target.name if target.name in same else same[0]
+    return (Path(planned).parent / n).as_posix()
 
 
 def _existing(vault: Path, dest: str) -> list[str]:
@@ -209,10 +234,11 @@ def _prepare(vault: Path, batch: vw.Batch, e: Entry,
     done = False
     for h in list(here):
         full = vault / h
-        if _same_file(full, target) or _fold(h) == _fold(rel_new):
-            if _same_bytes(full, src):
-                done = True
-                here.remove(h)
+        # "Already filed" needs the very file at the target; the wider
+        # case-folded match above only ever blocks.
+        if (_same_file(full, target) or h == rel_new) and _same_bytes(full, src):
+            done = True
+            here.remove(h)
     old = list(here)
     tl = text.split("\n")
     tlk = [ln + "\n" for ln in tl[:-1]] + ([tl[-1]] if tl[-1] else [])
@@ -238,21 +264,32 @@ def _prepare(vault: Path, batch: vw.Batch, e: Entry,
     if old and not e.replace:
         no(f"{e.dest} already has a picture")
         return None
-    embed: str | None = None
-    if e.kind == "scene":
-        embed = Path(rel_new).name
-        for o in old:
-            if _fold(Path(o).name) != _fold(embed):
-                text = text.replace(f"![[{Path(o).name}]]", f"![[{embed}]]")
-        new_text = embed_after(text, e.after or "", embed)
+    base = text
+
+    def stage(rel: str) -> bool:
+        """Put the note edit for a picture filed at `rel` into the batch."""
+        if e.kind == "scene":
+            name = Path(rel).name
+            body = base
+            for o in old:
+                if _fold(Path(o).name) != _fold(name):
+                    body = body.replace(f"![[{Path(o).name}]]", f"![[{name}]]")
+            new_text = embed_after(body, e.after or "", name)
+        else:
+            new_text = _set_portrait(tlk, close, rel)
         if new_text is None:
-            no("the recap changed since the plan")
-            return None
-    else:
-        new_text = _set_portrait(tlk, close, rel_new)
-    batch.put(note, new_text)
+            return False
+        batch.put(note, new_text)
+        return True
+
+    rel_now = _disk_rel(vault, target, rel_new)
+    if not stage(rel_now):
+        no("the recap changed since the plan")
+        return None
     existed = target.exists() and not done
-    return _Action(e, _Copy(src, target, existed), note, embed, old, done)
+    return _Action(e, _Copy(src, target, existed), note,
+                   Path(rel_now).name if e.kind == "scene" else None,
+                   old, done, stage, rel_now)
 
 
 # --- doing it -----------------------------------------------------------------
@@ -315,7 +352,7 @@ def _check_verdicts(job: Job, keep: set[int], hold: set[int]) -> None:
 def _retire(vault: Path, batch: vw.Batch, a: _Action, lines: list[str]) -> None:
     """Remove the picture a replace left behind, when that is safe. Never
     raises: a problem is one line."""
-    new_rel = f"{a.entry.dest}.{a.entry.ext}"
+    new_rel = a.rel
     for o in a.old:
         try:
             old = _inside(vault, o)
@@ -336,6 +373,13 @@ def _retire(vault: Path, batch: vw.Batch, a: _Action, lines: list[str]) -> None:
         except Exception as err:  # noqa: BLE001 - clean-up never fails the run
             lines.append(f"  Could not remove the old picture {o} "
                          f"({err.__class__.__name__}); it was left.")
+
+
+def _filed(a: _Action, wrote: bool) -> str:
+    verb = (("embed", "embedded") if a.embed else ("set", "set"))[wrote]
+    what = f"it in {a.note}" if a.embed else f"the portrait of {a.note}"
+    lead = "Filed" if wrote else "Would file"
+    return f"{lead} picture {a.entry.n} at {a.rel} and {verb} {what}."
 
 
 def run(job: Job, keep: set[int], hold: set[int], write: bool) -> Result:
@@ -368,18 +412,11 @@ def run(job: Job, keep: set[int], hold: set[int], write: bool) -> Result:
                 ok = False
             else:
                 actions.append(act)
-    for a in actions:
-        e = a.entry
-        where = f"{e.dest}.{e.ext}"
-        verb = (("embed", "embedded") if a.embed else ("set", "set"))[write]
-        what = f"it in {a.note}" if a.embed else f"the portrait of {a.note}"
-        lead = "Filed" if write else "Would file"
-        lines.append(f"{lead} picture {e.n} at {where} and {verb} {what}.")
-        for o in a.old:
-            if write:
-                continue
-            lines.append(f"  Would retire the old picture {o} if nothing "
-                         "else links it")
+    if not write:
+        for a in actions:
+            lines.append(_filed(a, False))
+            lines.extend(f"  Would retire the old picture {o} if nothing "
+                         "else links it" for o in a.old)
     if not write:
         return Result(lines, ok)
 
@@ -392,13 +429,18 @@ def run(job: Job, keep: set[int], hold: set[int], write: bool) -> Result:
             done.append(a.copy)          # recorded before it is touched
             _copy_in(a.copy, spare / f"replaced-{a.entry.n:02d}"
                      f".{a.entry.ext}")
+        for a in actions:
+            # The disk decides the name: an existing file keeps its own.
+            a.rel = _disk_rel(vault, a.copy.target,
+                              f"{a.entry.dest}.{a.entry.ext}")
+            if a.stage is None or not a.stage(a.rel):
+                raise OSError("the recap changed while placing")
         vw.apply(batch)
     except BaseException as err:
         stuck = _undo(done)
         if not isinstance(err, Exception):
             raise
         why = str(err) or err.__class__.__name__
-        lines = [ln for ln in lines if not ln.startswith("Filed ")]
         if stuck:
             lines.append(f"The notes could not be written ({why}), and these "
                          "files could not be put back: " + "; ".join(stuck))
@@ -406,6 +448,7 @@ def run(job: Job, keep: set[int], hold: set[int], write: bool) -> Result:
             lines.append(f"The notes could not be written ({why}); "
                          "the pictures were put back.")
         return Result(lines, False)
+    lines.extend(_filed(a, True) for a in actions)
     for a in actions:
         a.entry.status = "kept"
     for e in held:

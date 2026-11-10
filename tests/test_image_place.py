@@ -573,3 +573,97 @@ def test_a_note_outside_the_vault_is_refused(vault, tmp_path, capsys):
     assert "outside the vault" in capsys.readouterr().out
     assert not (vault / CHARS / "x.jpg").exists()
     assert (tmp_path / "outside.md").read_text(encoding="utf-8") == npc()
+
+
+# --- fix round 2: the name on disk wins ------------------------------------------
+
+def _listing(folder):
+    return sorted(p.name for p in folder.iterdir())
+
+
+def test_case_only_replace_names_the_note_as_the_disk_does(vault):
+    (vault / CHARS / "marta.jpg").unlink()
+    (vault / CHARS / "Marta.jpg").write_bytes(JPG)
+    (vault / "NPCs/Marta.md").write_text(
+        npc(f'portrait: "{CHARS}/Marta.jpg"\n'), encoding="utf-8")
+    m = entry(1, "NPCs/Marta.md", "npc", f"{CHARS}/marta", replace=True)
+    job = make_job(vault, [m], data=JPG2)
+    assert run(vault, job, "--keep", "1", "--write") == 0
+    fm = vaultlib.extract_frontmatter(
+        (vault / "NPCs/Marta.md").read_text(encoding="utf-8"))
+    assert Path(fm["portrait"]).name in _listing(vault / CHARS)
+    assert (vault / fm["portrait"]).read_bytes() == JPG2
+
+
+def test_case_only_scene_replace_embeds_the_disk_name(vault):
+    folder = vault / "_attachments/scenes"
+    folder.mkdir(parents=True)
+    (folder / "Session-03-Mill.jpg").write_bytes(JPG)
+    job = make_job(vault, [scene(replace=True)], data=JPG2)
+    assert run(vault, job, "--keep", "1", "--write") == 0
+    text = (vault / "Sessions/Session 03 Wrap-Up.md").read_text(encoding="utf-8")
+    names = _listing(folder)
+    assert len(names) == 1 and f"![[{names[0]}]]" in text
+    assert (folder / names[0]).read_bytes() == JPG2
+
+
+def test_the_rerun_path_uses_the_disk_name(vault):
+    (vault / CHARS / "Anselm.jpg").write_bytes(JPG)    # same bytes as the job
+    job = make_job(vault, [anselm()])
+    assert run(vault, job, "--keep", "1", "--write") == 0
+    fm = vaultlib.extract_frontmatter(
+        (vault / "NPCs/Anselm.md").read_text(encoding="utf-8"))
+    assert Path(fm["portrait"]).name in _listing(vault / CHARS)
+    assert (vault / fm["portrait"]).read_bytes() == JPG
+    assert _listing(vault / CHARS).count("Anselm.jpg") + \
+        _listing(vault / CHARS).count("anselm.jpg") == 1
+
+
+def test_sharp_s_is_not_mistaken_for_ss(vault, capsys):
+    (vault / CHARS / "Straße.jpg").write_bytes(JPG)    # same bytes
+    r = entry(1, "NPCs/Rowan.md", "npc", f"{CHARS}/strasse")
+    job = make_job(vault, [r])
+    # Whether this disk treats the two names as one file is the disk's say.
+    same = image_place._same_file(vault / CHARS / "Straße.jpg",
+                                  vault / CHARS / "strasse.jpg")
+    rc = run(vault, job, "--keep", "1", "--write")
+    text = (vault / "NPCs/Rowan.md").read_text(encoding="utf-8")
+    if same:
+        assert rc == 0
+        fm = vaultlib.extract_frontmatter(text)
+        assert Path(fm["portrait"]).name in _listing(vault / CHARS)
+    else:
+        assert rc == 1
+        assert "already has a picture" in capsys.readouterr().out
+        assert "portrait" not in text
+        assert not (vault / CHARS / "strasse.jpg").exists()
+
+
+def test_a_look_alike_name_is_not_filed_unless_the_disk_agrees(vault, tmp_path):
+    # The rule itself, whatever the disk: "already filed" needs samefile or
+    # the exact target name, never a case-folded name match alone.
+    (vault / CHARS / "Straße.jpg").write_bytes(JPG)
+    here = image_place._existing(vault, f"{CHARS}/strasse")
+    assert f"{CHARS}/Straße.jpg" in here          # blocking is the wide match
+
+
+def test_a_url_encoded_markdown_link_keeps_the_old_picture(vault):
+    (vault / CHARS / "old a.jpg").write_bytes(JPG)
+    (vault / "NPCs/Marta.md").write_text(
+        npc(f'portrait: "{CHARS}/old a.jpg"\n'), encoding="utf-8")
+    (vault / "NPCs/Rowan.md").write_text(
+        npc() + f"![x](../{CHARS}/old%20a.jpg)\n", encoding="utf-8")
+    m = entry(1, "NPCs/Marta.md", "npc", f"{CHARS}/marta-2", replace=True)
+    job = make_job(vault, [m])
+    assert run(vault, job, "--keep", "1", "--write") == 0
+    assert (vault / CHARS / "old a.jpg").is_file()
+
+
+def test_a_link_in_the_templates_folder_keeps_the_old_picture(vault):
+    (vault / "_Templates").mkdir()
+    (vault / "_Templates/_Template_X.md").write_text(
+        "![[marta.jpg]]\n", encoding="utf-8")
+    m = entry(1, "NPCs/Marta.md", "npc", f"{CHARS}/marta-2", replace=True)
+    job = make_job(vault, [m])
+    assert run(vault, job, "--keep", "1", "--write") == 0
+    assert (vault / CHARS / "marta.jpg").is_file()
