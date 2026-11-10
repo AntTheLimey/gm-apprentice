@@ -69,6 +69,6 @@ Next session opens at dawn on the quay. Keep this.
 
 ### Reconciliation Context
 
-Twenty-five words of reconcile provenance that --brief must replace with a one-line stub carrying a word count, so the count here matters for the test.
+This reconcile provenance block is printed in full by --brief and --prep.
 
 <!-- /gm-only -->

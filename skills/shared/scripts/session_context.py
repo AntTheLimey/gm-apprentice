@@ -252,12 +252,16 @@ def brief_wrapup(body: str) -> str:
 
     Headings inside a fenced code block are inert, the same as in
     `outline`: a wrap-up that shows `### Quality Notes` as a markdown
-    example must not have its example stubbed out from under it."""
+    example must not have its example stubbed out from under it.
+
+    A Reconciliation Context block (`##` or `###`, to the next heading of
+    the same or higher level) prints untouched, nothing inside it stubbed."""
     lines = body.splitlines()
     out: list[str] = []
     i = 0
     n = len(lines)
     in_fence = False
+    recon_level = 0
     while i < n:
         line = lines[i]
         if line.strip().startswith("```"):
@@ -266,6 +270,17 @@ def brief_wrapup(body: str) -> str:
             i += 1
             continue
         if in_fence:
+            out.append(line)
+            i += 1
+            continue
+        hm0 = _ANY_HEADING_RE.match(line)
+        if hm0:
+            if recon_level and len(hm0.group(1)) <= recon_level:
+                recon_level = 0
+            if (not recon_level and re.match(
+                    r"^#{2,3} Reconciliation Context\s*$", line)):
+                recon_level = len(hm0.group(1))
+        if recon_level:
             out.append(line)
             i += 1
             continue

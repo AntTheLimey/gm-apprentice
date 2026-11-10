@@ -172,6 +172,27 @@ class ReconciliationContextTests(unittest.TestCase):
                     self.assertIn("### Quality Notes\n(omitted in --brief",
                                   out)
 
+    def test_sub_headings_inside_the_block_are_not_stubbed(self):
+        inner = ("#### Name Conflicts\n\nNAME LINE\n\n"
+                 "#### Resolved Threads\n\nTHREAD LINE\n\n"
+                 "#### World Evolution\n\nEVOLVE LINE\n\n")
+        for head, outer in (("### Reconciliation Context", "### Quality Notes"),
+                            ("## Reconciliation Context", "## Next")):
+            with self.subTest(head=head):
+                body = (f"{head}\n\nIntro.\n\n{inner}"
+                        f"{outer}\n\nQuality line.\n\n"
+                        "### Name Conflicts\n\nOutside conflict.\n")
+                out = sc.brief_wrapup(body)
+                for line in ("NAME LINE", "THREAD LINE", "EVOLVE LINE"):
+                    self.assertIn(line, out)
+                before = out.split(outer)[0]
+                self.assertNotIn("(omitted in --brief", before)
+                self.assertNotIn("Outside conflict.", out)
+                self.assertIn("### Name Conflicts\n(omitted in --brief", out)
+                if outer == "### Quality Notes":
+                    self.assertIn("### Quality Notes\n(omitted in --brief",
+                                  out)
+
     def test_top_level_block_prints_in_full(self):
         out = sc.brief_wrapup(sc.body_of(RECON_TOP))
         self.assertIn("## Reconciliation Context\n\nReconciled", out)
@@ -226,7 +247,8 @@ class BriefCLITests(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         out = r.stdout
         self.assertIn("===== Wrap-Up — Session 7 =====", out)
-        self.assertNotIn("(omitted in --brief: 25 words", out)
+        after = out.split("### Reconciliation Context", 1)[1]
+        self.assertNotIn("(omitted in --brief", after.split("\n###", 1)[0])
         self.assertIn("reconcile provenance", out)
         self.assertIn("===== Campaign Overview (outline) =====", out)
         self.assertIn("## Chapter 1: Harbour  (", out)
