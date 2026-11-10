@@ -466,6 +466,69 @@ class VersionCommandTests(unittest.TestCase):
         self.assertNotIn("## version", proc.stdout)
 
 
+class VersionPicturesLineTests(unittest.TestCase):
+    """With `vault.images.auto` on, the gate every drawing skill runs carries
+    one `# pictures on:` line; off, its output is what it always was."""
+
+    def vault(self, version=None, auto=None):
+        version = version or plugin_version_string()
+        vault = make_vault(
+            self, f'---\ngm_apprentice_version: "{version}"\n---\n', site=False)
+        if auto is not None:
+            config = vault / "_meta" / "vault-config.yaml"
+            config.write_text(
+                config.read_text(encoding="utf-8")
+                + f"vault:\n  images:\n    auto: {'true' if auto else 'false'}\n",
+                encoding="utf-8")
+            vc.vaultlib.forget_settings(vault)
+        return vault
+
+    def test_on_prints_the_line_after_the_verdict(self):
+        proc = run_cli(self.vault(auto=True), "version")
+        lines = proc.stdout.splitlines()
+        self.assertTrue(lines[2].startswith("OK\t"), lines)
+        self.assertEqual(lines[3:], [vc.PICTURES_ON])
+        self.assertEqual(proc.returncode, 0)
+
+    def test_off_or_unset_prints_exactly_the_old_output(self):
+        for auto in (False, None):
+            with self.subTest(auto=auto):
+                proc = run_cli(self.vault(auto=auto), "version")
+                self.assertEqual(proc.stdout.splitlines()[:2],
+                                 ["## version", "# count: 1"])
+                self.assertEqual(len(proc.stdout.splitlines()), 3)
+                self.assertNotIn("pictures", proc.stdout)
+
+    def test_on_and_behind_still_prints_it(self):
+        # The skill updates the vault, then resumes, and must still know.
+        proc = run_cli(self.vault(version="1.11.1", auto=True), "version")
+        self.assertIn("MISMATCH\t", proc.stdout)
+        self.assertIn(vc.PICTURES_ON, proc.stdout.splitlines())
+
+    def test_other_verdicts_never_get_it(self):
+        vault = self.vault(auto=True)
+        for verdict in ("ERROR", "SETUP", "REFUSED"):
+            with self.subTest(verdict=verdict):
+                self.assertIsNone(vc.pictures_line(vault, verdict))
+
+    def test_no_node_keeps_the_verdict_and_drops_the_line_quietly(self):
+        proc = run_cli_without_node(self.vault(auto=True), "version")
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertIn("OK\t", proc.stdout)
+        self.assertNotIn("pictures", proc.stdout)
+        self.assertEqual(proc.stderr, "")
+
+    def test_unreadable_settings_keep_the_verdict(self):
+        vault = self.vault()
+        (vault / "_meta" / "vault-config.yaml").write_text(
+            "vault:\n  images: [\n", encoding="utf-8")
+        proc = run_cli(vault, "version")
+        # The gate refuses a vault whose settings it cannot read; no line.
+        self.assertIn("REFUSED\t", proc.stdout)
+        self.assertNotIn("Traceback", proc.stderr)
+        self.assertNotIn("pictures", proc.stdout)
+
+
 class ActivePcsCommandTests(unittest.TestCase):
     """`vault_check.py VAULT active-pcs` — the roster helper five skills
     open with, exposed instead of re-walked by eye."""
