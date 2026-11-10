@@ -947,33 +947,62 @@ def tells_case_apart(a, b):
     return Path(a) == Path(b)
 
 
-def test_the_disk_is_asked_whether_it_folds_case(tmp_path, monkeypatch):
-    f = tmp_path / "Marta.jpg"
-    f.write_bytes(JPG)
-    assert image_place._folds_case(f) is disk_folds_case(tmp_path)
-    monkeypatch.setattr(image_place, "_same_file", tells_case_apart)
-    assert image_place._folds_case(f) is False
-    monkeypatch.setattr(image_place, "_same_file", lambda a, b: True)
-    assert image_place._folds_case(f) is True
-    assert image_place._folds_case(tmp_path / "missing.jpg") is None
-    (tmp_path / "01.ßß").write_bytes(JPG)          # no letter that can be swapped
-    assert image_place._folds_case(tmp_path / "01.ßß") is None
+OLD, NEW = f"{CHARS}/Marta.jpg", f"{CHARS}/marta.jpg"
 
 
-@pytest.mark.parametrize("folds, used", [(False, False), (True, True), (None, True)])
-def test_the_new_name_in_the_note_is_a_use_only_where_the_disk_folds_case(
-        vault, folds, used):
+def _note_names_the_new_picture(vault):
     batch = vault_write.Batch(vault)
-    batch.put("NPCs/Marta.md", npc(f'portrait: "{CHARS}/marta.jpg"\n'))
-    assert image_place._linked(vault, batch, f"{CHARS}/Marta.jpg", folds) is used
+    batch.put("NPCs/Marta.md", npc(f'portrait: "{NEW}"\n'))
+    return batch
 
 
-@pytest.mark.parametrize("folds", [False, True, None])
-def test_an_exact_mention_of_the_old_name_is_a_use_on_any_disk(vault, folds):
-    (vault / "NPCs/Rowan.md").write_text(npc() + "![[Marta.jpg]]\n", encoding="utf-8")
+def test_the_new_pictures_own_reference_is_not_a_use_of_the_old(vault):
+    assert image_place._linked(vault, _note_names_the_new_picture(vault), OLD, NEW) is False
+
+
+def test_without_the_new_name_a_case_variant_is_a_use(vault):
+    assert image_place._linked(vault, _note_names_the_new_picture(vault), OLD) is True
+
+
+@pytest.mark.parametrize("where, text", [
+    ("NPCs/Rowan.md", npc() + "![[Marta.jpg]]\n"),          # the old name exactly
+    ("map.canvas", '{"file": "MARTA.JPG"}'),                  # a case variant: doubt
+    ("NPCs/Rowan.md", npc() + "![[marta.JPG]]\n")])
+def test_any_other_mention_whatever_its_case_keeps_the_old_picture(vault, where, text):
+    (vault / where).write_text(text, encoding="utf-8")
+    assert image_place._linked(vault, _note_names_the_new_picture(vault), OLD, NEW) is True
+
+
+def test_the_same_name_in_another_folder_is_no_clue_which_file_a_link_means(vault):
     batch = vault_write.Batch(vault)
-    batch.put("NPCs/Marta.md", npc(f'portrait: "{CHARS}/marta.jpg"\n'))
-    assert image_place._linked(vault, batch, f"{CHARS}/Marta.jpg", folds) is True
+    batch.put("NPCs/Marta.md", npc(f'portrait: "{NEW}"\n'))
+    assert image_place._linked(vault, batch, "Old/marta.jpg", NEW) is True
+
+
+@pytest.mark.parametrize("other", [None, ("NPCs/Rowan.md", "![[Marta.jpg]]\n"),
+                                   ("map.canvas", '{"file": "MARTA.JPG"}')])
+def test_a_case_only_replace_on_this_disk_ends_as_the_disk_allows(vault, tmp_path, capsys, other):
+    folds = disk_folds_case(tmp_path)
+    (vault / CHARS / "marta.jpg").unlink()
+    (vault / CHARS / "Marta.jpg").write_bytes(JPG)
+    (vault / "NPCs/Marta.md").write_text(npc(f'portrait: "{OLD}"\n'), encoding="utf-8")
+    if other:
+        (vault / other[0]).write_text(other[1], encoding="utf-8")
+    m = entry(1, "NPCs/Marta.md", "npc", f"{CHARS}/marta", replace=True)
+    job = make_job(vault, [m], data=JPG2)
+    assert run(vault, job, "--keep", "1", "--write") == 0
+    out = capsys.readouterr().out
+    fm = vaultlib.extract_frontmatter((vault / "NPCs/Marta.md").read_text(encoding="utf-8"))
+    names = _listing(vault / CHARS)
+    assert (vault / fm["portrait"]).read_bytes() == JPG2
+    if folds:       # one file whatever else names it; the original is backed up
+        assert len(names) == 1 and "the picture that was there is kept at" in out
+    elif other is None:     # one picture under the new name; the old one gone
+        assert names == ["marta.jpg"] and fm["portrait"] == NEW
+        assert f"Removed the old picture {OLD}." in out
+    else:                   # something else may use the old one: it stays
+        assert names == ["Marta.jpg", "marta.jpg"] and fm["portrait"] == NEW
+        assert f"Kept the old picture {OLD}; something else links it." in out
 
 
 def _old_and_new(vault):
@@ -997,7 +1026,7 @@ def test_retire_on_a_disk_that_tells_case_apart_removes_an_unused_old_file(vault
     batch, act = _old_and_new(vault)
     monkeypatch.setattr(image_place, "_same_file", tells_case_apart)
     lines = []
-    image_place._retire(vault, batch, act, lines, False)
+    image_place._retire(vault, batch, act, lines)
     assert lines == [f"  Removed the old picture {CHARS}/Old-Marta.jpg."]
     assert not (vault / CHARS / "Old-Marta.jpg").exists()
 
@@ -1008,7 +1037,7 @@ def test_retire_on_a_disk_that_tells_case_apart_keeps_an_old_file_named_exactly(
     (vault / "NPCs/Rowan.md").write_text(npc() + "![[Old-Marta.jpg]]\n", encoding="utf-8")
     monkeypatch.setattr(image_place, "_same_file", tells_case_apart)
     lines = []
-    image_place._retire(vault, batch, act, lines, False)
+    image_place._retire(vault, batch, act, lines)
     assert lines == [f"  Kept the old picture {CHARS}/Old-Marta.jpg; something else links it."]
     assert (vault / CHARS / "Old-Marta.jpg").is_file()
 
@@ -1017,7 +1046,7 @@ def test_retire_of_the_very_file_written_says_only_where_the_original_is(vault, 
     batch, act = _old_and_new(vault)
     monkeypatch.setattr(image_place, "_same_file", lambda a, b: True)   # one file
     lines = []
-    image_place._retire(vault, batch, act, lines, True)
+    image_place._retire(vault, batch, act, lines)
     assert lines == [f"  Replaced {CHARS}/marta.jpg; the picture that was there is "
                      f"kept at {vault / 'backup.jpg'} until this job is tidied away "
                      f"({image_jobs.JOB_DAYS} days)."]
@@ -1032,6 +1061,6 @@ def test_a_case_variant_name_never_makes_two_files_one_without_the_disk(vault, m
     monkeypatch.setattr(image_place, "_inside", lambda v, rel: vault / "elsewhere.jpg")
     (vault / "elsewhere.jpg").write_bytes(JPG)
     lines = []
-    image_place._retire(vault, batch, act, lines, False)
+    image_place._retire(vault, batch, act, lines)
     assert lines == [f"  Removed the old picture {CHARS}/MARTA.jpg."]
     assert not image_place._is_target(vault, act, f"{CHARS}/MARTA.jpg")

@@ -157,37 +157,41 @@ def _same_file(a: Path, b: Path) -> bool:
         return False
 
 
-def _folds_case(path: Path) -> bool | None:
-    """Whether the disk holding the file `path` treats names that differ
-    only in letter case as one file, asked of the disk: True, False, or None
-    when it cannot be told (no such file, or no letter in its name)."""
-    twin = "".join(c.swapcase() if c.isascii() else c for c in path.name)
-    if twin == path.name or not path.is_file():
-        return None
-    return _same_file(path, path.with_name(twin))
-
-
-def _mention_key(folds: bool | None) -> Callable[[str], str]:
-    """How a mention of a file is compared with its name on this disk:
-    exactly where the disk tells letter case apart, case-folded where it
-    does not or cannot be told (a case-variant mention then counts)."""
-    if folds is False:
-        return lambda t: unicodedata.normalize("NFC", t)
-    return _fold
+def _mentions(text: str, seen: set[str], new: set[str]) -> bool:
+    """Whether `text` holds any of the case-folded names in `seen`, a match
+    that is exactly (letter case included) one of the `new` names not
+    counted: that is the reference to the new picture this run wrote. When
+    folding changes the text's length the matches cannot be lined up, so
+    any match counts (when in doubt: a use)."""
+    nfc = unicodedata.normalize("NFC", text)
+    folded = nfc.casefold()
+    aligned = len(folded) == len(nfc)
+    for w in seen:
+        at = folded.find(w)
+        while at != -1:
+            if not (new and aligned and nfc[at:at + len(w)] in new):
+                return True
+            at = folded.find(w, at + 1)
+    return False
 
 
 def _linked(vault: Path, batch: vw.Batch, rel: str,
-            folds: bool | None = None) -> bool:
+            new_rel: str | None = None) -> bool:
     """Whether anything in the vault might use the picture `rel`: any note
     or canvas outside hidden folders (templates and the inbox included)
-    that holds its file name or path, plain or URL-encoded, compared as the
-    disk compares names (`folds`, see `_mention_key`).
+    that holds its file name or path, plain or URL-encoded, ignoring case
+    (Obsidian finds a file whatever the case of the link). `new_rel`, the
+    new picture filed as a different file, is not a use of the old one
+    where a mention names it exactly, letter case included.
     A note this run changes counts as it will be left; one that cannot be
     read, and a folder that cannot be listed, count as a use. When in
     doubt: yes."""
-    key_of = _mention_key(folds)
-    seen = {key_of(Path(rel).name), key_of(rel),
-            key_of(quote(Path(rel).name)), key_of(quote(rel))}
+    seen = {_fold(Path(rel).name), _fold(rel),
+            _fold(quote(Path(rel).name)), _fold(quote(rel))}
+    new: set[str] = set()
+    # The very same name elsewhere is no clue which file a bare link means.
+    if new_rel is not None and Path(new_rel).name != Path(rel).name:
+        new = {Path(new_rel).name, new_rel, quote(Path(new_rel).name), quote(new_rel)}
     unlistable: list[OSError] = []
     for top, dirs, files in os.walk(vault, onerror=unlistable.append):
         dirs[:] = [d for d in dirs if not d.startswith(".")]
@@ -203,8 +207,7 @@ def _linked(vault: Path, batch: vw.Batch, rel: str,
                     text = path.read_text(encoding="utf-8")
                 except (OSError, UnicodeDecodeError):
                     return True     # cannot tell, so it may use the picture
-            text = key_of(text)
-            if any(w in text for w in seen):
+            if _mentions(text, seen, new):
                 return True
     return bool(unlistable)     # a folder that cannot be listed may hold a use
 
@@ -385,12 +388,10 @@ def _check_verdicts(job: Job, keep: set[int], hold: set[int]) -> None:
                        "then keep or hold it")
 
 
-def _retire(vault: Path, batch: vw.Batch, a: _Action, lines: list[str],
-            folds: bool | None) -> None:
+def _retire(vault: Path, batch: vw.Batch, a: _Action, lines: list[str]) -> None:
     """Remove the picture a replace left behind, when that is safe. Whether
     an old picture is the very file just written is the disk's to say
-    (`_same_file`), never its name's; `folds` is whether this disk folds
-    letter case (`_folds_case`). Never raises: a problem is one line."""
+    (`_same_file`), never its name's. Never raises: a problem is one line."""
     new_rel = a.rel
     for o in a.old:
         try:
@@ -408,7 +409,7 @@ def _retire(vault: Path, batch: vw.Batch, a: _Action, lines: list[str],
                     lines.append(f"  Replaced {new_rel}; the picture that was "
                                  f"there is kept at {a.copy.backup} until this "
                                  f"job is tidied away ({image_jobs.JOB_DAYS} days).")
-            elif _linked(vault, batch, o, folds):
+            elif _linked(vault, batch, o, new_rel):
                 lines.append(f"  Kept the old picture {o}; something else "
                              "links it.")
             else:
@@ -523,11 +524,8 @@ def run(job: Job, keep: set[int], hold: set[int], write: bool) -> Result:
                      "linked, but the job could not be saved "
                      f"({err.__class__.__name__}). Run place again to "
                      "finish; nothing needs drawing again.")
-    # Asked once, of a picture just written: whether this disk folds case.
-    folds = next((f for f in (_folds_case(a.copy.target) for a in actions)
-                  if f is not None), None)
     for a in actions:
-        _retire(vault, batch, a, lines, folds)
+        _retire(vault, batch, a, lines)
     return Result(lines, ok)
 
 
