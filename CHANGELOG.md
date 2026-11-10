@@ -9,6 +9,13 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.11] — 2026-11-10
+
+### Changed
+
+- Prep writes the whole Plan in one go: the skill carries the Plan's shape, and the write prints every check prep used to run by hand (read-aloud lines naming a PC, a multi-day clock, links with no note, scene pointers).
+- `--gm-input` implies `--headless` and takes its parts comma-separated too; the check no longer asks for an empty `## Planned vs Played` during prep.
+
 ## [1.12.10] — 2026-11-10
 
 ### Added

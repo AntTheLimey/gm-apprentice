@@ -13,7 +13,7 @@ gma plan-check <plan> [options]
 |---|---|---|
 | `<plan>` |  | the Session Plan's path |
 | `--headless` |  | the plan was written with no GM present: apply the hard guard |
-| `--gm-input` | `intent`, `scenes`, `spotlight` | with --headless: the GM supplied the spine, so skip the guard; or name the parts the GM's request settled (intent, scenes, spotlight) |
+| `--gm-input` | `[PART ...]` | a run with no GM present (implies --headless) whose request supplied the spine, so skip the guard; or name the parts it settled (intent, scenes, spotlight; spaced or comma-separated) |
 | `--inventory` |  | list the plan's sections instead of findings |
 | `--state` |  | print the prep-state comment instead of findings |
 | `--json` |  | print as JSON |

@@ -391,7 +391,13 @@ class ShippedTemplateTests(unittest.TestCase):
 
     ROOT = Path(__file__).resolve().parent.parent / "skills"
     TEMPLATE = ROOT / "shared" / "templates" / "session-plan.md"
-    REFERENCE = ROOT / "session-prep" / "references" / "session-templates.md"
+    REFERENCE = ROOT / "session-prep" / "SKILL.md"
+
+    @classmethod
+    def shape(cls) -> str:
+        """SKILL.md's Plan shape section, the reference prep writes from."""
+        return cls.REFERENCE.read_text(encoding="utf-8").split(
+            "\n## Plan shape\n", 1)[1]
 
     @staticmethod
     def h2s(text: str) -> list[str]:
@@ -402,15 +408,13 @@ class ShippedTemplateTests(unittest.TestCase):
         self.assertEqual(self.h2s(text), list(pc.TEMPLATE_SECTIONS))
 
     def test_template_sections_match_the_reference(self):
-        ref = self.REFERENCE.read_text(encoding="utf-8")
-        block = ref.split("## Session Plan", 1)[1].split(
-            "## Play Notes", 1)[0]
-        # The reference shows the plan inside a code fence; unfence it.
-        block = "\n".join(ln for ln in block.splitlines()
-                          if not ln.startswith("```"))
+        # The skill lists each section as a `## Title` bullet, in order;
+        # the ones prep leaves out are the only ones it may skip.
+        listed = pc.re.findall(r"^- `## ([^`]+)`", self.shape(), pc.re.M)
         self.assertEqual(
-            self.h2s(self.TEMPLATE.read_text(encoding="utf-8")),
-            self.h2s(block))
+            [t for t in self.h2s(self.TEMPLATE.read_text(encoding="utf-8"))
+             if t not in pc.NOT_ASKED_FOR],
+            listed)
 
     def test_template_passes_plan_check_with_no_errors(self):
         text = self.TEMPLATE.read_text(encoding="utf-8")
@@ -422,9 +426,8 @@ class ShippedTemplateTests(unittest.TestCase):
     def test_template_scene_shape_matches_the_reference(self):
         # The scene skeleton is the part most likely to drift: compare
         # the inline and block labels each file carries.
-        label = pc.re.compile(r"^\*\*([^*:\n]+?)(?::)?\*\*", pc.re.M)
-        ref = self.REFERENCE.read_text(encoding="utf-8").split(
-            "## Session Plan", 1)[1].split("## Play Notes", 1)[0]
+        label = pc.re.compile(r"\*\*([^*:\n]+?)(?::)?\*\*")
+        ref = self.shape()
         tpl = self.TEMPLATE.read_text(encoding="utf-8")
         keep = set(pc.SCENE_LABELS) | set(pc.CONTINGENCY_LABELS) | {"Type"}
         norm = lambda text: {  # noqa: E731
@@ -579,10 +582,17 @@ class HeadlessTests(unittest.TestCase):
             "- [ ] Sophia's motive (**Missing:** from the notes)\n")
         self.assertEqual(len(rows), 1, rows)
 
-    def test_gm_input_without_headless_is_refused(self):
-        proc = run_cli(GOOD, "--gm-input")
-        self.assertEqual(proc.returncode, 2, proc.stdout + proc.stderr)
-        self.assertIn("--headless", proc.stderr)
+    def test_gm_input_implies_headless(self):
+        proc = run_cli(GOOD, "--gm-input", "scenes")
+        rows = [line for line in proc.stdout.splitlines()
+                if line.startswith("ERROR\t") and "hard-guard" in line]
+        self.assertEqual(len(rows), 2, proc.stdout)
+
+    def test_gm_input_takes_comma_separated_parts(self):
+        spaced = run_cli(GOOD, "--gm-input", "intent", "scenes")
+        commas = run_cli(GOOD, "--gm-input", "intent,scenes")
+        self.assertEqual(spaced.stdout, commas.stdout)
+        self.assertEqual(commas.returncode, spaced.returncode)
 
     def test_gm_input_skips_the_guard_and_says_so(self):
         # #207: a scripted prep hands the agent the intent, scenes and

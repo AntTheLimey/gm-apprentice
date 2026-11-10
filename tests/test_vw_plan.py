@@ -283,10 +283,71 @@ class PlanTests(unittest.TestCase):
                          "--gm-input")
         self.assertNotIn("ERROR\t", out)
 
-    def test_gm_input_without_headless_is_refused(self):
-        code, out = run(self.vault, "--number", "2", "--gm-input", "scenes")
+    def test_gm_input_implies_headless(self):
+        # Most proof runs sent --gm-input alone, were refused, and spent a
+        # turn resending: --gm-input only means anything with no GM present.
+        code, out = run(self.vault, "--number", "2", "--gm-input", "intent")
+        self.assertEqual(code, 0, out)
+        hard = [r for r in out.splitlines() if "hard-guard" in r]
+        self.assertTrue(hard and all(r.startswith("ERROR\t") for r in hard),
+                        out)
+        self.assertFalse(any("Session Intent" in r for r in hard), out)
+
+    def test_gm_input_takes_comma_separated_parts(self):
+        _code, spaced = run(self.vault, "--number", "2", "--gm-input",
+                            "intent", "scenes", "spotlight")
+        _code, commas = run(self.vault, "--number", "2", "--gm-input",
+                            "intent,scenes, spotlight")
+        self.assertEqual(spaced, commas)
+        self.assertNotIn("ERROR\t", commas)
+
+    def test_gm_input_refuses_an_unknown_part(self):
+        code, out = run(self.vault, "--number", "2", "--gm-input",
+                        "intent,plot")
         self.assertEqual(code, 1)
-        self.assertIn("pass --headless too", out)
+        self.assertIn("no part 'plot'", out)
+        self.assertFalse((self.vault / PLAN).exists())
+
+    def test_planned_vs_played_is_not_asked_for(self):
+        # Nothing fills it in prep; asking for it cost a second write.
+        _code, out = run(self.vault, "--number", "2")
+        self.assertNotIn("Planned vs Played", out)
+        self.assertIn("sections: missing '## World State'", out)
+
+    def test_the_plans_own_vault_checks_print_with_the_write(self):
+        (self.vault / "Characters/PCs").mkdir(parents=True)
+        (self.vault / "Characters/PCs/Rosa Vance.md").write_text(
+            "---\ntype: pc\nstatus: active\n---\n# Rosa Vance\n")
+        (self.vault / "Characters/NPCs").mkdir(parents=True)
+        (self.vault / "Characters/NPCs/Ma Barker.md").write_text(
+            "---\ntype: npc\n---\n# Ma Barker\n")
+        body = BODY + ("\n> Rosa sees the crane swing.\n\n"
+                       "Ask [[Old Tom]] and [[Ma Barker]].\n")
+        code, out = run(self.vault, "--number", "2", stdin=body)
+        self.assertEqual(code, 0, out)
+        self.assertIn("read-aloud blockquote names PC 'Rosa'", out)
+        self.assertIn("unresolved: [[Old Tom]]", out)
+        self.assertNotIn("[[Ma Barker]] has no note", out)
+        # Counted in the summary, which stays the last line.
+        self.assertTrue(out.rstrip().splitlines()[-1].startswith(
+            "# plan_check: errors: 0"), out)
+
+    def test_a_link_to_the_index_it_files_is_not_unresolved(self):
+        # The new index is in the same write, not yet on disk.
+        (self.vault / INDEX).unlink()
+        body = BODY + "\nBack to [[Session 02 - The Quay]].\n"
+        code, out = run(self.vault, "--number", "2", "--title", "The Quay",
+                        "--chapter", "Chapter 1 - Harbour", stdin=body)
+        self.assertEqual(code, 0, out)
+        self.assertIn("WOULD-CREATE", out)
+        self.assertIn("unresolved: [[Ma Barker]]", out)  # a real gap
+        self.assertNotIn("[[Session 02 - The Quay]] has no note", out)
+
+    def test_the_write_checks_its_scene_pointers(self):
+        body = BODY + "\n### [[The Missing Scene]]\n**Purpose:** x.\n"
+        _code, out = run(self.vault, "--number", "2", stdin=body)
+        self.assertIn("scene-pointer: no note is named 'The Missing Scene'",
+                      out)
 
     def test_empty_sections_are_one_line(self):
         _code, out = run(self.vault, "--number", "2")

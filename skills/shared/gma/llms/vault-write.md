@@ -490,7 +490,8 @@ gma vault-write <vault> plan --number NUMBER [options]
 ```text
 Writes the Plan on stdin beside session N's index, with the
 template's frontmatter, sets the index to prepped with
-documents.plan, and prints plan_check's rows. No index yet:
+documents.plan, and prints plan_check's rows, then the
+Plan's read-aloud, clock and unresolved-link rows. No index yet:
 --title (and --chapter) files one as upcoming. An existing
 Plan is never overwritten: --section replaces each section
 on stdin by level and title, and adds a missing ## where the
@@ -504,6 +505,6 @@ template has it.
 | `--title` | `TITLE` | the session's title, to file its index when it has none |
 | `--section` |  | replace or add sections of the existing Plan |
 | `--headless` |  | check as a run with no GM (plan_check --headless) |
-| `--gm-input` | `intent`, `scenes`, `spotlight` | with --headless: the parts the GM supplied (intent, scenes, spotlight; bare: all) |
+| `--gm-input` | `[PART ...]` | a run with no GM (implies --headless): the parts the request supplied (intent, scenes, spotlight, spaced or comma-separated; bare: all) |
 | `--write` |  | write it (default: preview) |
 <!-- END GENERATED -->

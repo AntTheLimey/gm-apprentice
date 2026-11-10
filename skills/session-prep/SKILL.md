@@ -50,16 +50,16 @@ exception).
 - Read `shared/session-principles.md`; its Version Gate verdict opens
   the `--prep` output (step 5). After a migration, run `--prep` again.
 - Read `shared/session-document-chain.md`. You write Plan files, only
-  with `gma vault-write <vault> plan --number N --chapter "<chapter>" --title "<title>" --write <<'EOF'` … `EOF`. It files the index as upcoming when there is none,
+  with `gma vault-write <vault> plan --number N --chapter "<chapter>" --title "<title>" --write <<'EOF'` … `EOF`, every section of **Plan shape** (below) in one call. It files the index as upcoming when there is none,
   sets the index to prepped with `documents.plan`, and prints the Plan
-  check. `--section` replaces each
+  check (step 15). `--section` replaces each
   section sent (by level and title) in an existing Plan. Never write to
   the index body: scene states, key prep and image prompts go in the
   Plan. You read earlier Wrap-Ups for context, not
   other sessions' Play Notes or Plans (exception: raw Play Notes, to
   generate a recap when no Wrap-Up exists — step 7).
-- Read `references/session-templates.md` when creating or updating
-  session notes.
+- Read `references/session-templates.md` when creating or updating a
+  session index; the Plan's shape is below.
 - Before creative planning (steps 11–14), read
   `skills/ttrpg-expert/arc-spotlight-reference.md` and the active
   system's `session-procedures.md` for arc drivers.
@@ -83,6 +83,9 @@ Gather the standard read-set in ONE call before any individual reads:
 gma session-context <vault-path> --prep
 ```
 
+On a big campaign it outgrows one read: save it to a file with its line
+count (`> <file>; wc -l <file>`), then read all of it in ONE message, as
+two or three line ranges side by side if one read would be too large.
 It carries the version verdict, then the last Wrap-Up (reconcile-provenance blocks stubbed to one
 line with word counts), every active PC's `## Current Status` block,
 and outlines (frontmatter, headings, word counts)
@@ -98,7 +101,8 @@ or a `###` subsection (printed as heading, size and path) with
 After the bundle, vault dives are targeted reads, proportional to the
 upcoming session's complexity, not the campaign's size.
 
-**Voices:** with the bundle, run `gma vault-check <vault> voices`
+**Voices:** with the bundle, run `gma vault-check <vault> voices` and
+`gma vault-check <vault> stale-drafts` (step 16)
 (`# off: vault.voices` → none, as before). Read-aloud, scene-setting,
 dialogue and handouts take the campaign voice, or a voiced
 character's own when that character speaks or writes; Plan bullets
@@ -263,7 +267,7 @@ alongside new ideas. The propose-before-write gate is the
    snapshot in the bundle's Paused Scenes, not the note; it is
    wrap-up's, kept as written. One the GM drops:
    `gma vault-write <vault> scene-played --scene "<scene>" --dropped --write`.
-   A small beat may stay inline in the skeleton from `references/session-templates.md`: **Situation** and **Starts it**
+   A small beat may stay inline in the scene skeleton (Plan shape): **Situation** and **Starts it**
    are required; every other label is optional, and a two-line routing
    scene is finished.
 
@@ -286,34 +290,32 @@ ERROR/WARNING report. Fix objective breakage silently, offer to build
 artifacts, raise only genuine craft issues conversationally. Steps
 15–16 are independent — parallelize if sub-agents are available.
 
-**15. Checks** — The check `gma vault-write <vault> plan [options]` prints (add
-`--headless` there when run without a GM; `--gm-input` when the GM
-supplied intent, scenes and spotlight up front).
-- ERROR rows — fix with `--section` until none is left: `duration`, `table`,
-  `type`, `scene-labels` (every scene has **Situation** and
+**15. Checks** — Every `gma vault-write <vault> plan [options]` call
+prints the check; there is nothing else to run for the Plan. Run without
+a GM, add `--headless`, or `--gm-input` with the parts the GM's request
+supplied (`intent`, `scenes`, `spotlight`; bare for all three; it
+implies `--headless`).
+- ERROR rows — fix with `--section` until none is left: `duration`, `table`
+  (aliased or escaped pipes in table links: use alias-form links, no
+  `\|`, silently), `type`, `scene-labels` (every scene has **Situation** and
   **Starts it** — a Contingency scene **Trigger**, a routing or hub
   scene neither — with the exact punctuation the row names), and a
   missing `## GM Notes`.
 - WARNING rows — fix silently when mechanical (`preamble`, `recap`,
-  `audit-trail`, `pc-state`, `scene-type`, the other `sections`);
-  raise as a question when they touch content.
-- INFO rows are cues (`read-aloud`, `scene-length`, `placeholder`).
+  `audit-trail`, `pc-state`, `scene-type`, `scene-pointer`, the other
+  `sections`); raise as a question when they touch content.
+- INFO rows are cues (`read-aloud`, `scene-length`, `placeholder`). A
+  read-aloud line that names a PC, dictates a feeling ("you feel…") or
+  uses a 3rd-person pronoun: raise the real ones as a question ("Scene
+  2's boxed text says 'Katherine steps into the lamplight' — keep it
+  general so it reads to the whole table?"). A multi-day plan: offer to
+  build a `## Timeline` hour-by-hour clock with the GM ("This one runs
+  across three days — want me to lay out a quick clock so nothing
+  double-books?"). `unresolved` links feed step 16.
 - Never delete a line of the GM's own writing; if a remedy would
   remove content, ask instead.
 
-Then run vault-wide checks
-(`gma vault-check`):
-- `gma vault-check <vault> tables` — fix aliased or escaped pipes in
-  table links silently (alias-form links, no `\|`), without comment.
-- `gma vault-check <vault> timeline` — if the plan spans several days,
-  offer to build a `## Timeline` hour-by-hour clock with the GM ("This
-  one runs across three days — want me to lay out a quick clock so
-  nothing double-books?").
-- `gma vault-check <vault> read-aloud` — a `> ` line that names a PC,
-  dictates a feeling ("you feel…") or uses a 3rd-person pronoun,
-  checked against every PC in the vault. Raise the real ones as a
-  question ("Scene 2's boxed text says 'Katherine steps into the
-  lamplight' — keep it general so it reads to the whole table?").
+Then, by eye:
 - **Scene length** — flag bloat (restated theses, repetition,
   self-documentation, unusable purple prose) at any length and offer to
   trim; not a cap (`skills/ttrpg-expert/scenario-writing.md`).
@@ -325,9 +327,9 @@ Apply fixes in place; there is no audit-notes report.
 
 **16. Gap Check** — as questions or a short actionable list:
 - NPCs, locations or entity stubs the planned scenes need but the
-  vault lacks: run `gma graph-check <vault> unresolved` (vault-wide) and filter
-  its `target <- source` rows to the plan file.
-- Stale entity files to update or retire: `gma vault-check <vault> stale-drafts`.
+  vault lacks: the write's `unresolved` rows.
+- Stale entity files to update or retire: the `stale-drafts` rows run
+  with the bundle.
 - Unresolved calls — plot questions the GM deferred or you couldn't
   ground — each with 2–3 seeds, sorted per Stance. "Does Sophia know
   what her husband has become?" is a plot question; "Georgiana's
@@ -374,3 +376,66 @@ content (scenes, NPCs, locations) → `ttrpg-expert`; vault structure
 (broken links, schema, graph health) → `campaign-qa`.
 
 **18. Pictures:** if the version check printed `# pictures on:`, then once everything above is done and reported, follow "When no one asked" in `gma llms image` for the notes this prep created.
+
+## Plan shape
+
+The write supplies the frontmatter. Send these sections in this order;
+one with nothing for it keeps its heading with an empty body (never
+"N/A"). Planned vs Played is the GM's, after play: leave it out. The
+GM-facing blank is `shared/templates/session-plan.md`.
+
+- `## Session Intent` — the GM's purpose in one or two sentences: what
+  it is about, whose moment it is (step 11).
+- `## Session Overview` — a short dramatic synopsis from the intent.
+- `## GM Notes` — Keeper-only content goes under it (the players' site
+  hides it), never in a new top-level section.
+- `## Prior Prep Review` — what earlier prep was kept or updated (step 6).
+- `## Previously On...` — the Wrap-Up's recap, 150 words at most.
+- `## Active Threads` — bullets, two lines each (step 8).
+- `## NPC Quick Reference` — `| NPC | Role This Session | Key Detail | Location |`, one row per NPC (step 9).
+- `## World State` — date, place, threats, factions, clocks; bullets.
+  With the three above: under ~1,000 words, so the first scene comes fast.
+- `## Planned Scenes` — the scenes, skeleton below (step 14). Every
+  line a bullet, table row or one-line label; the read-aloud blockquote
+  is the only prose. Not word-capped: cut bloat, not substance.
+- `## Contingency Scenes` — each `### Title`, a one-line
+  `**Trigger:**`, then `**Then**` bullets.
+- `## Handouts & Props` — `| Document | Scene | Status | Notes |`, one
+  row each in scene order, status built, print or to build; else "No
+  handouts or props."
+- `## Session End Objectives` — two or three good stopping points, not
+  a railroad.
+- `## PC Roster & Arcs` — per PC: arc stage, theme, next beat, plot
+  (step 12).
+- `## Touchpoint Plan` — per PC: type, what, when (step 13).
+- `## Spotlight Forecast` — per PC: role and moment, none blank (step 13).
+- `## Open Questions` — plot questions with 2–3 seeds;
+  `- [ ] **Missing:** {value, whose sheet}`; guesses only here (Hard Guard).
+- `## Gaps & Actions` — missing entities, stale files (step 16).
+
+A scene: `### Scene N: Title` (or a scene note's `### [[Title]]`, step
+14). Only **Situation:** and **Starts it:** are required; use the rest
+where they earn a place. A routing or hub scene (a menu of where the
+party is and what is open) needs neither: "(routing)" or "(hub)" in
+its title, `Scene 0`, or `**Type:** transition`.
+
+```markdown
+**Type:** investigation | social | combat | chase | transition | horror | downtime | other
+**Situation:** One line: what is happening as it opens, a thing in motion.
+**Starts it:** One line: the named NPC or schedule that brings the PCs in within sixty seconds, and what they want from this PC.
+**Entities:** [[NPC]], [[Location]], [[Item]]
+**Handouts:** [[Document]] — what this scene hands over, and how
+**NPCs**
+- **[[Name]]:** wants X. Does Y if left alone.
+**Points to land**
+- [ ] A fact the GM must convey however the improv goes.
+**If the players...**
+| Do | Then |
+|---|---|
+| A choice the table may make | What the situation does in reply |
+**Complications**
+- A curveball to drop when the scene sags.
+
+> Read-aloud: 2–4 sentences of sensory description to the table; never
+> names one PC or dictates a feeling.
+```

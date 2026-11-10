@@ -3579,10 +3579,29 @@ def plans_naming(batch: Batch, stem: str) -> list[str]:
         and vl.normalize(vl.wikilink_target(fm.get("session"))) == want)
 
 
+def after_write_rows(batch: Batch, rel: str, plan: str) -> list[str]:
+    """The vault checks prep runs on the Plan it writes, scoped to it:
+    read-aloud lines naming a PC, a multi-day Plan with no clock, and
+    links with no note behind them."""
+    import graph_check as gc
+    pc_re = vc.pc_name_regex(vl.active_pc_names(batch.vault))
+    return (vc.read_aloud_findings(rel, plan, pc_re)
+            + vc.timeline_findings(rel, plan)
+            + [f"INFO\t{rel}\tunresolved: [[{name}]] has no note or file "
+               f"behind it: a gap to fill, or a misspelt link"
+               for name in gc.unresolved_in(
+                   batch.vault, plan, [r for r, before in
+                                       batch.originals.items()
+                                       if before is None])])
+
+
 def cmd_plan(batch: Batch, args: argparse.Namespace, text: str) -> None:
-    if args.gm_input is not None and not args.headless:
-        raise WriteError("--gm-input only changes what --headless checks: "
-                         "pass --headless too")
+    try:
+        gm_input = plan_check.gm_input_parts(args.gm_input)
+    except ValueError as e:
+        raise WriteError(str(e)) from None
+    # --gm-input says what a run with no GM present was handed.
+    headless = args.headless or args.gm_input is not None
     index = find_session(batch, args.number, args.chapter)
     if index is None:
         if not args.title:
@@ -3631,13 +3650,9 @@ def cmd_plan(batch: Batch, args: argparse.Namespace, text: str) -> None:
         batch.row("WOULD-CREATE", rel, "", f"beside {index}")
     stamp_index(batch, index, Path(rel).stem)
     plan = batch.texts[rel]
-    gm_input: bool | frozenset[str] = (
-        False if args.gm_input is None else
-        frozenset(plan_check.GM_INPUT_PARTS[p] for p in args.gm_input)
-        or True)
     findings = plan_check.run_checks(
-        rel, plan, vl.extract_frontmatter(plan) or {}, args.headless,
-        gm_input)
+        rel, plan, vl.extract_frontmatter(plan) or {}, headless,
+        gm_input, batch.vault)
     counts = {lv: sum(f.level == lv for f in findings)
               for lv in ("ERROR", "WARNING", "INFO")}
     # An empty section is allowed: its placeholder cues go on one line.
@@ -3647,7 +3662,9 @@ def cmd_plan(batch: Batch, args: argparse.Namespace, text: str) -> None:
     if empty:
         rows.append(f"INFO\t{rel}\tplaceholder: empty or template text: "
                     + ", ".join(empty))
-    batch.after = rows + [
+    after = after_write_rows(batch, rel, plan)
+    counts["INFO"] += len(after)
+    batch.after = rows + after + [
         f"# plan_check: errors: {counts['ERROR']}  warnings: "
         f"{counts['WARNING']}  info: {counts['INFO']}"]
 
@@ -4595,7 +4612,8 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=raw, description=(
             "Writes the Plan on stdin beside session N's index, with the\n"
             "template's frontmatter, sets the index to prepped with\n"
-            "documents.plan, and prints plan_check's rows. No index yet:\n"
+            "documents.plan, and prints plan_check's rows, then the\n"
+            "Plan's read-aloud, clock and unresolved-link rows. No index yet:\n"
             "--title (and --chapter) files one as upcoming. An existing\n"
             "Plan is never overwritten: --section replaces each section\n"
             "on stdin by level and title, and adds a missing ## where the\n"
@@ -4610,9 +4628,9 @@ def build_parser() -> argparse.ArgumentParser:
     pl.add_argument("--headless", action="store_true",
                     help="check as a run with no GM (plan_check --headless)")
     pl.add_argument("--gm-input", dest="gm_input", nargs="*",
-                    choices=sorted(plan_check.GM_INPUT_PARTS),
-                    metavar="PART", help="with --headless: the parts the "
-                    "GM supplied (intent, scenes, spotlight; bare: all)")
+                    metavar="PART", help="a run with no GM (implies "
+                    "--headless): the parts the request supplied (intent, "
+                    "scenes, spotlight, spaced or comma-separated; bare: all)")
     pl.add_argument("--write", action="store_true", help="write it (default: preview)")
     ap.epilog = 'Example: gma vault-write "<vault>" wrapup-add "<wrap-up>" --write'
     return ap
