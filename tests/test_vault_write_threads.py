@@ -697,9 +697,12 @@ class ThreadsTests(unittest.TestCase):
         self.assertEqual(code, 0, out)
         self.assertNotIn("who lit the lamp", read(vault, INES))
         text = read(vault, OVERVIEW)
+        # Its first-seen session (the threads report ages it from the
+        # Wrap-Ups) stays as its `since`.
         self.assertIn("## Dormant Threads\n\n- Find out who lit the lamp on "
-                      "the north bank \u2014 dormant since Session 3 (left the "
-                      "harbour); involves [[Ines_Marlowe]]", text)
+                      "the north bank \u2014 since Session 3; dormant since "
+                      "Session 3 (left the harbour); involves [[Ines_Marlowe]]",
+                      text)
         self.assertLess(text.index("## Open Threads"),
                         text.index("## Dormant Threads"))
         self.assertLess(text.index("## Dormant Threads"),
@@ -976,7 +979,7 @@ class ThreadsTests(unittest.TestCase):
         code, out = run(vault, "threads", "--write", stdin=stdin)
         self.assertEqual(code, 0, out)
         self.assertIn("HANDED\t" + CORWIN, out)
-        self.assertIn("handed: 2", out)
+        self.assertIn("handed: 1  warnings", out)
         self.assertNotIn("WOULD", out)
         self.assertNotIn(self.LAMP, read(vault, INES))
         self.assertIn("- **Ferrywoman's debt** \u2014 owes her two silver, due "
@@ -1050,6 +1053,212 @@ class ThreadsTests(unittest.TestCase):
         self.assertNotIn("Harbour bell", read(vault, OVERVIEW))
         self.assertIn("- **Harbour bell** \u2014 rung twice at night \u2014 "
                       "closed: the bell was melted (dormant)",
+                      read(vault, WRAPUP))
+
+    # -- final fixes ----------------------------------------------------------
+
+    def test_a_reworded_thread_rested_or_closed_leaves_no_orphan(self):
+        # The lists word both threads differently from the Wrap-Up's lines
+        # (a close match and a likely one): parked or closed, the thread
+        # still claims its line.
+        for row in (("rest", "shared", "The missing ledger", "left the ford"),
+                    ("rest", "Ines_Marlowe", self.LAMP, "left the ford"),
+                    ("close", "shared", "The missing ledger", "returned"),
+                    ("close", "Ines_Marlowe", self.LAMP, "the ferrywoman")):
+            with self.subTest(row=row):
+                vault = self.vault()
+                self.assertEqual(self.report(vault).strip(), "(none)")
+                code, out = run(vault, "threads", "--wrapup", WRAPUP,
+                                "--write", stdin=rows(row))
+                self.assertEqual(code, 0, out)
+                self.assertEqual(self.report(vault).strip(), "(none)")
+
+    WRAP4 = "Chapters/Chapter 1 - Harbour/Session 04 - Wrap-Up.md"
+    BELL4 = "**The cracked bell** \u2014 a gull nests in it now."
+
+    def two_wordings(self):
+        """The cracked bell, worded one way in session 3's Wrap-Up and
+        another in session 4's."""
+        vault = self.unlisted_vault()
+        (vault / self.WRAP4).write_text(read(vault, WRAPUP).replace(
+            "session_number: 3", "session_number: 4").replace(
+            "Session 03 - The Night", "Session 04 - The Marsh").replace(
+            self.BELL, self.BELL4), encoding="utf-8")
+        report = self.report(vault)
+        self.assertIn("session 3\t" + self.BELL, report)
+        self.assertIn("session 4\t" + self.BELL4, report)
+        return vault
+
+    def test_one_lead_rests_as_one_entry(self):
+        vault = self.two_wordings()
+        code, out = run(vault, "threads", "--wrapup", self.WRAP4, "--write",
+                        stdin=rows(("rest", "wrapup", "The cracked bell",
+                                    "left the chapel")))
+        self.assertEqual(code, 0, out)
+        self.assertIn("rested: 1  warnings", out)
+        dormant = read(vault, OVERVIEW).split("## Dormant Threads", 1)[1]
+        self.assertEqual(dormant.count("cracked bell"), 1, dormant)
+        self.assertIn(f"- {self.BELL4} \u2014 since Session 3; dormant since "
+                      "Session 4 (left the chapel); involves the party",
+                      dormant)
+        self.assertNotIn("cracked bell", self.report(vault))
+
+    def test_one_lead_closes_as_one_line(self):
+        vault = self.two_wordings()
+        code, out = run(vault, "threads", "--wrapup", self.WRAP4, "--write",
+                        stdin=rows(("close", "wrapup", "The cracked bell",
+                                    "a gull")))
+        self.assertEqual(code, 0, out)
+        self.assertIn("closed: 1  warnings", out)
+        wrap = read(vault, self.WRAP4).split("#### Resolved Threads", 1)[1]
+        self.assertEqual(wrap.count("cracked bell"), 1, wrap)
+        self.assertIn(f"- {self.BELL4} \u2014 closed: a gull (Session 4)",
+                      wrap)
+        self.assertNotIn("cracked bell", self.report(vault))
+
+    def test_rest_wrapup_takes_who(self):
+        vault = self.unlisted_vault()
+        code, out = run(vault, "threads", "--wrapup", WRAPUP, "--write",
+                        stdin=rows(("rest", "wrapup", "The cracked bell",
+                                    "quiet", "Ines_Marlowe")))
+        self.assertEqual(code, 0, out)
+        self.assertIn(f"- {self.BELL} \u2014 since Session 3; dormant since "
+                      "Session 3 (quiet); involves [[Ines_Marlowe]]",
+                      read(vault, OVERVIEW))
+        code, out = run(vault, "threads", "--wrapup", WRAPUP, stdin=rows(
+            ("rest", "shared", "The missing ledger", "gone", "Ines_Marlowe")))
+        self.assertEqual(code, 1)
+        self.assertIn("WHO", out)
+
+    def test_rest_waits_for_a_site_tool_that_hides_the_list(self):
+        # A site on publish tool 1.70.5 would publish the dormant list:
+        # rest is refused and nothing changes.
+        for installed, rests in (("1.70.5", False), ("1.70.6", True)):
+            with self.subTest(installed=installed):
+                vault = self.vault()
+                site = Path(tempfile.mkdtemp(prefix="vwthreads-site-"))
+                self.addCleanup(shutil.rmtree, site, ignore_errors=True)
+                pkg = site / "node_modules" / "gm-apprentice-publish"
+                pkg.mkdir(parents=True)
+                (pkg / "package.json").write_text(json.dumps(
+                    {"version": installed}), encoding="utf-8")
+                write_config(vault, "---\npublish:\n  system: coc-7e\n"
+                             f"  site: true\n  site_dir: {site.as_posix()}\n"
+                             "---\n")
+                before = self.snapshot(vault)
+                code, out = run(vault, "threads", "--wrapup", WRAPUP,
+                                "--write", stdin=rows(
+                                    ("rest", "shared", "The missing ledger",
+                                     "gone")))
+                if rests:
+                    self.assertEqual(code, 0, out)
+                    continue
+                self.assertEqual(code, 1)
+                self.assertIn("1.70.5, older than 1.70.6", out)
+                self.assertIn("Dormant Threads", out)
+                self.assertEqual(self.snapshot(vault), before)
+
+    def test_wake_with_text_rewords_it(self):
+        said = "**Harbour bell** \u2014 it rang for the drowned"
+        for who, rel in (("Corwin_Hale", CORWIN), ("party", OVERVIEW)):
+            with self.subTest(who=who):
+                vault = self.vault()
+                self.with_dormant(vault)
+                code, out = run(vault, "threads", "--write", stdin=rows(
+                    ("wake", "Harbour bell", who, said)))
+                self.assertEqual(code, 0, out)
+                text = read(vault, rel)
+                self.assertIn(f"- {said}", text)
+                self.assertNotIn("rung twice", text)
+
+    def test_counts_are_threads_not_rows(self):
+        vault = self.vault()
+        self.with_dormant(vault)
+        for row, said in (
+                (("rest", "shared", "The missing ledger", "gone"),
+                 "rested: 1  warnings"),
+                (("rest", "Ines_Marlowe", self.LAMP, "gone"),
+                 "rested: 1  warnings"),
+                (("wake", "Harbour bell", "Corwin_Hale"), "woken: 1  warnings"),
+                (("hand", "Ines_Marlowe", self.LAMP, "Corwin_Hale"),
+                 "handed: 1  warnings")):
+            with self.subTest(row=row):
+                code, out = run(vault, "threads", "--wrapup", WRAPUP,
+                                stdin=rows(row))
+                self.assertEqual(code, 0, out)
+                self.assertIn(said, out)
+        vault = self.unlisted_vault()
+        code, out = run(vault, "threads", "--wrapup", WRAPUP, stdin=rows(
+            ("close", "wrapup", "The cracked bell", "a gull")))
+        self.assertEqual(code, 0, out)
+        self.assertIn("closed: 1  warnings", out)
+
+    def test_wake_names_one_pc_once(self):
+        vault = self.vault()
+        self.with_dormant(vault)
+        code, out = run(vault, "threads", "--write", stdin=rows(
+            ("wake", "Harbour bell", "Ines_Marlowe, Ines_Marlowe")))
+        self.assertEqual(code, 0, out)
+        self.assertIn("- **Harbour bell** \u2014 rung twice at night\n",
+                      read(vault, INES))
+        self.assertNotIn("Harbour bell", read(vault, OVERVIEW))
+
+    def test_the_last_one_out_takes_the_heading(self):
+        vault = self.vault()
+        self.with_dormant(vault)
+        code, out = run(vault, "threads", "--wrapup", WRAPUP, "--write",
+                        stdin=rows(
+                            ("wake", "Harbour bell", "party"),
+                            ("close", "shared", "Harbour bell", "rung"),
+                            ("close", "shared", "The missing ledger", "found"),
+                            ("close", "shared",
+                             "Corwin's debt to the ferrywoman", "paid")))
+        self.assertEqual(code, 0, out)
+        text = read(vault, OVERVIEW)
+        self.assertNotIn("## Open Threads", text)
+        self.assertNotIn("## Dormant Threads", text)
+        self.assertIn("admits to owning.\n\n## Key Factions", text)
+
+    def test_the_unlisted_lines_are_read_once_a_batch(self):
+        import session_context as sc
+        vault = self.two_wordings()
+        self.edit(vault, self.WRAP4, f"- {self.BELL4}",
+                  f"- {self.BELL4}\n- **A stray dog** \u2014 it follows the "
+                  "mules.")
+        real = sc.unlisted_wrapup_threads
+        with mock.patch.object(sc, "unlisted_wrapup_threads",
+                               side_effect=real) as spy:
+            code, out = run(vault, "threads", "--wrapup", self.WRAP4,
+                            stdin=rows(
+                                ("close", "wrapup", "A stray dog",
+                                 "it went home"),
+                                ("rest", "wrapup", "The cracked bell", "x")))
+        self.assertEqual(code, 0, out)
+        self.assertEqual(spy.call_count, 1)
+
+    def test_the_wrapup_list_is_the_one_the_batch_found(self):
+        # A line put on the shared list in player words, then the Wrap-Up
+        # line it came from closed, in one batch.
+        vault = self.unlisted_vault()
+        code, out = run(vault, "threads", "--wrapup", WRAPUP, "--write",
+                        stdin=rows(
+                            ("add", "shared", "Session 3", "party",
+                             "**The cracked bell** \u2014 it rang at noon "
+                             "with nobody in the tower"),
+                            ("close", "wrapup", "The cracked bell",
+                             "now on the shared list"),
+                            ("close", "wrapup", "The cracked bell", "again")))
+        self.assertEqual(code, 1, out)
+        self.assertIn("row 3: close: no Wrap-Up line on no list matches", out)
+        code, out = run(vault, "threads", "--wrapup", WRAPUP, "--write",
+                        stdin=rows(
+                            ("add", "shared", "Session 3", "party",
+                             "**The cracked bell** \u2014 it rang at noon "
+                             "with nobody in the tower"),
+                            ("close", "wrapup", "The cracked bell",
+                             "now on the shared list")))
+        self.assertEqual(code, 0, out)
+        self.assertIn("closed: now on the shared list (Session 3)",
                       read(vault, WRAPUP))
 
 

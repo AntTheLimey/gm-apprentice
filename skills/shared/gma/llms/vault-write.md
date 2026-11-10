@@ -177,18 +177,23 @@ stdin: one row per line, fields separated by TAB.
   close LIST    LEAD   EVIDENCE    LIST is 'shared', 'dormant' or a PC's
                                    note name; the thread leaves it and
                                    is recorded in the Wrap-Up's
-                                   Resolved Threads. 'wrapup': a
-                                   Wrap-Up line on no list, recorded
-                                   as it stands
-  rest  LIST    LEAD   WHY         LIST is 'shared', 'wrapup' (a line
-                                   on no list) or a PC's note name;
-                                   the thread leaves it for the
+                                   Resolved Threads. 'wrapup': the
+                                   Wrap-Up lines on no list with that
+                                   lead, recorded as one, in the
+                                   newest words
+  rest  LIST    LEAD   WHY  [WHO]  LIST is 'shared', 'wrapup' (lines
+                                   on no list, as one; WHO, default
+                                   party, only here) or a PC's note
+                                   name; the thread leaves it for the
                                    Overview's Dormant Threads, with
                                    'dormant since Session N (WHY)', N
-                                   the Wrap-Up's session
-  wake  LEAD    WHO                a dormant thread goes back: one PC
-                                   names their Open threads; several
-                                   PCs or 'party', the shared list
+                                   the Wrap-Up's session. Waits for a
+                                   site tool that hides that list
+  wake  LEAD    WHO    [TEXT]      a dormant thread goes back to a
+                                   list players read: one PC names
+                                   their Open threads; several PCs or
+                                   'party', the shared list. TEXT:
+                                   how it reads there
   hand  FROM    LEAD   TO          take LEAD off PC FROM's Open threads
                                    and add it, unchanged, to PC TO's
 SINCE is a session label, or - for none. WHO is PC note

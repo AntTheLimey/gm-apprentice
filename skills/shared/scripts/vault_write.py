@@ -66,6 +66,7 @@ import unicodedata
 from collections import Counter
 from collections.abc import Callable, Collection, Iterable
 from dataclasses import dataclass
+from dataclasses import field as dc_field
 from datetime import date
 from functools import lru_cache
 from pathlib import Path
@@ -120,6 +121,11 @@ class Batch:
         # Questions that can only be asked once the files are on disk.
         self.after_write: list[Callable[[], None]] = []
         self._listing: dict[str, str] | None = None
+        # `threads`: threads done per kind for the totals line (a thread
+        # counts once, whatever rows it printed), and the vault's thread
+        # lists as the batch found them (see `threads_scope`).
+        self.tally: Counter[str] = Counter()
+        self.scope: ThreadsScope | None = None
 
     def guard(self, rel: str) -> None:
         """Refuse a path that is not a note inside the vault."""
@@ -334,13 +340,14 @@ def emit(batch: Batch, wrote: bool) -> str:
     def count(*verbs: str) -> int:
         return sum(r.split("\t", 1)[0] in verbs for r in rows)
 
-    # `threads` alone reports moves, closes, rests, wakes and hands; other totals stay as they were.
+    # `threads` alone reports moves, closes, rests, wakes and hands (the
+    # last four as threads, from its tally); other totals stay as they were.
     extra = "".join(f"{name}: {n}  " for name, n in (
         ("moved", count("WOULD-MOVE", "MOVED")),
-        ("closed", count("WOULD-CLOSE", "CLOSED")),
-        ("rested", count("WOULD-REST", "RESTED")),
-        ("woken", count("WOULD-WAKE", "WOKE")),
-        ("handed", count("WOULD-HAND", "HANDED")),
+        ("closed", batch.tally["closed"]),
+        ("rested", batch.tally["rested"]),
+        ("woken", batch.tally["woken"]),
+        ("handed", batch.tally["handed"]),
         ("settled", count("WOULD-SETTLE", "SETTLED"))) if n)
     total = (f"# create: {count('WOULD-CREATE', 'CREATED')}  "
              f"add: {count('WOULD-ADD', 'ADDED')}  skip: {count('SKIP')}  "
@@ -1972,7 +1979,12 @@ def threads_who(batch: Batch, who: str) -> list[str] | None:
     names = [n.strip() for n in who.split(",") if n.strip()]
     if not names:
         raise WriteError("no PC named in the involves column")
-    return [Path(find_pc(batch, n)).stem for n in names]
+    out: list[str] = []
+    for name in names:
+        stem = Path(find_pc(batch, name)).stem
+        if all(stem.casefold() != o.casefold() for o in out):
+            out.append(stem)   # a PC named twice is one PC
+    return out
 
 
 def threads_find(bullets: list[str], lead_key: str, where: str) -> int:
@@ -2051,47 +2063,71 @@ def threads_insert(batch: Batch, overview: str, text: str, since: str | None,
     batch.row(verb, overview, "\u00a7Open Threads", th.lead(text))
 
 
-def threads_unlisted(batch: Batch, verb: str,
-                     lead_key: str) -> list[tuple[int, int, str]]:
-    """The Wrap-Up lines on no thread list that `lead_key` names, one
-    `(first session, last session, text)` per distinct text (the words
-    `session_context` claims by), oldest first. Refused when none match,
-    or when the lead is also on a list: that thread closes or rests there.
-    `rest` uses `first` (the dormant entry's `since`); `close` uses `last`
-    (the label on the Resolved line).
-    Reads the vault as this batch has left it."""
+@dataclass
+class ThreadsScope:
+    """The vault as a `threads` batch found it (see `threads_scope`)."""
+    files: list[tuple[str, str, dict[str, Any]]]
+    chapter: str | None
+    # Read on first use: the Wrap-Up lines on no list, as (session,
+    # bullet), and the lists a `wrapup` row's lead must not be on.
+    unlisted: list[tuple[int, str]] | None = None
+    lists: list[tuple[str, list[str]]] | None = None
+    # Indexes into `unlisted` a row of this batch has already taken.
+    taken: set[int] = dc_field(default_factory=set)
+
+
+def threads_scope(batch: Batch) -> ThreadsScope:
+    """The vault's notes and current chapter as the batch found them, read
+    once a batch. Nothing is written before the batch is applied, so the
+    files on disk are the vault before any row ran."""
     import session_context as sc   # it imports this module at its top
-    files = [(rel, batch.texts.get(rel, text), fm)
-             for rel, text, fm in sc.vault_files(batch.vault)]
-    chosen, _warnings = sc.select_session(files, None)
-    unlisted = sc.unlisted_wrapup_threads(
-        files, chosen["chapter"] if chosen else None, batch.vault)
-    hits = th.find_thread([b for _n, b in unlisted], lead_key)
+    if batch.scope is None:
+        files = list(sc.vault_files(batch.vault))
+        chosen, _warnings = sc.select_session(files, None)
+        batch.scope = ThreadsScope(files,
+                                   chosen["chapter"] if chosen else None)
+    return batch.scope
+
+
+def threads_unlisted(batch: Batch, verb: str,
+                     lead_key: str) -> tuple[int, int, str]:
+    """The Wrap-Up lines on no thread list that `lead_key` names, as one
+    thread: (the first session one appears in, the newest one's session,
+    the newest one's text). Read as the batch found the vault, so a row
+    may close a line another row of the batch has just put on a list in
+    other words; a line one row takes is gone for the rows after it.
+    Refused when none match, or when the lead is also on a list: that
+    thread closes or rests there."""
+    import session_context as sc   # it imports this module at its top
+    scope = threads_scope(batch)
+    if scope.unlisted is None:
+        scope.unlisted = sc.unlisted_wrapup_threads(
+            scope.files, scope.chapter, batch.vault)
+        texts = {rel: text for rel, text, _fm in scope.files}
+        note = texts.get(threads_overview(batch), "")
+        scope.lists = [
+            ("the shared list", [t.text for t in th.shared_threads(note)]),
+            ("the dormant list",
+             [t.text for t in th.shared_threads(note, th.DORMANT)])]
+        gone = vl.out_of_play(batch.vault)
+        for rel, text, fm in scope.files:
+            if vl.is_active_pc(rel, fm, gone):
+                scope.lists.append((f"{Path(rel).stem}'s Open threads",
+                                    [t.text for t in th.pc_thread_items(text)]))
+    unlisted = scope.unlisted
+    hits = [i for i in th.find_thread([b for _n, b in unlisted], lead_key)
+            if i not in scope.taken]
     if not hits:
         raise WriteError(f"{verb}: no Wrap-Up line on no list matches "
                          f"'{lead_key}'")
-    overview = threads_overview(batch)
-    note = batch.read(overview)
-    lists = [("the shared list", [t.text for t in th.shared_threads(note)]),
-             ("the dormant list",
-              [t.text for t in th.shared_threads(note, th.DORMANT)])]
-    gone = vl.out_of_play(batch.vault)
-    for rel, text, fm in files:
-        if vl.is_active_pc(rel, fm, gone):
-            lists.append((f"{Path(rel).stem}'s Open threads",
-                          [t.text for t in th.pc_thread_items(text)]))
-    for name, bullets in lists:
+    for name, bullets in scope.lists or []:
         if th.find_thread(bullets, lead_key):
             raise WriteError(f"{verb}: '{lead_key}' is on {name}: {verb} "
                              f"it there")
-    distinct: dict[str, list[int]] = {}
-    texts: dict[str, str] = {}
-    for i in hits:
-        n, bullet = unlisted[i]
-        key = sc._norm_thread(bullet)
-        distinct.setdefault(key, []).append(n)
-        texts.setdefault(key, bullet)
-    return sorted((min(ns), max(ns), texts[k]) for k, ns in distinct.items())
+    scope.taken.update(hits)
+    newest = max(hits, key=lambda i: (unlisted[i][0], i))
+    return (min(unlisted[i][0] for i in hits),
+            unlisted[newest][0], unlisted[newest][1])
 
 
 def threads_row(batch: Batch, cols: list[str], wrapup: list[str]) -> None:
@@ -2173,47 +2209,60 @@ def threads_row(batch: Batch, cols: list[str], wrapup: list[str]) -> None:
             return
         threads_insert(batch, overview, texts[0], since, names, "WOULD-MOVE")
     elif verb == "rest":
-        if len(cols) != 4:
-            raise WriteError("rest needs: rest TAB list TAB lead TAB why")
-        which, lead_key, why = (c.strip() for c in cols[1:])
+        if len(cols) not in (4, 5):
+            raise WriteError("rest needs: rest TAB list TAB lead TAB why "
+                             "[TAB who, for wrapup]")
+        which, lead_key, why = (c.strip() for c in cols[1:4])
         if not (which and lead_key and why):
             raise WriteError("rest needs a list, a lead and a reason; "
                              "one is empty")
+        if len(cols) == 5 and which.casefold() != "wrapup":
+            raise WriteError("rest: WHO is only for a wrapup line; a "
+                             "listed thread keeps whom it involves")
+        old_tool = vc.dormant_threads_tool_too_old(batch.vault)
+        if old_tool is not None:
+            # The site would publish the dormant list until then.
+            raise WriteError(old_tool[1])
         # `;` ends the clause when the entry is read back.
         why = " ".join(why.replace(";", ",").split())
         dormant = f"{threads_wrapup_session(batch, wrapup[0])} ({why})"
         overview = threads_overview(batch)
+        involves: list[str] | None
         if which.casefold() == "wrapup":
-            # Each distinct line goes dormant as the party's thread, since
-            # the first session that raised it.
-            parked: list[tuple[str | None, str]] = [
-                (f"Session {first}", text) for first, _last, text
-                in threads_unlisted(batch, "rest", lead_key)]
-            involves = None
+            # Every wording of the lead goes dormant as one thread: the
+            # newest words, since the first session that raised it.
+            first, _last, text = threads_unlisted(batch, "rest", lead_key)
+            since = f"Session {first}"
+            involves = (threads_who(batch, cols[4]) if len(cols) == 5
+                        else None)
         elif which.casefold() == "shared":
             entry = threads_take_shared(batch, overview, lead_key,
                                         th.SECTION, "WOULD-REST")
-            parked = [(entry.since, entry.text)]
+            since, text = entry.since, entry.text
             involves = None if entry.party else entry.involves
         else:
+            import session_context as sc   # it imports this module at its top
             rel = find_pc(batch, which)
             text = threads_take(batch, rel, lead_key, "WOULD-REST").text
-            parked = [(None, text)]
+            # The first session the threads report ages it from.
+            scope = threads_scope(batch)
+            seen, _mark = sc.match_sessions(
+                text, sc.wrap_up_threads(scope.files, scope.chapter))
+            since = f"Session {min(seen)}" if seen else None
             involves = [Path(rel).stem]
-        for since, text in parked:
-            try:
-                batch.put(overview, th.insert_shared(
-                    batch.read(overview),
-                    th.format_dormant(text, since, involves, dormant),
-                    th.DORMANT))
-            except ValueError:
-                raise WriteError(
-                    f"{overview}: the Campaign Overview has no place "
-                    f"outside a GM-only fence for Dormant Threads") from None
+        try:
+            batch.put(overview, th.insert_shared(
+                batch.read(overview),
+                th.format_dormant(text, since, involves, dormant),
+                th.DORMANT))
+        except ValueError:
+            raise WriteError(
+                f"{overview}: the Campaign Overview has no place "
+                f"outside a GM-only fence for Dormant Threads") from None
         batch.row("WOULD-REST", overview, f"\u00a7{th.DORMANT}", lead_key)
     elif verb == "wake":
-        if len(cols) != 3:
-            raise WriteError("wake needs: wake TAB lead TAB who")
+        if len(cols) not in (3, 4):
+            raise WriteError("wake needs: wake TAB lead TAB who [TAB text]")
         lead_key = cols[1].strip()
         if not lead_key:
             raise WriteError("wake: the lead is empty")
@@ -2221,10 +2270,14 @@ def threads_row(batch: Batch, cols: list[str], wrapup: list[str]) -> None:
         overview = threads_overview(batch)
         entry = threads_take_shared(batch, overview, lead_key, th.DORMANT,
                                     "WOULD-WAKE")
+        # A woken thread lands on a list players read: TEXT, when given,
+        # is how it reads there.
+        text = (cols[3].strip() if len(cols) == 4 and cols[3].strip()
+                else entry.text)
         if names is not None and len(names) == 1:
             rel = find_pc(batch, names[0])
             try:
-                batch.put(rel, th.add_pc_thread(batch.read(rel), entry.text))
+                batch.put(rel, th.add_pc_thread(batch.read(rel), text))
             except (KeyError, ValueError) as e:
                 raise WriteError(
                     f"{rel}: no place to add the thread on Open threads "
@@ -2233,7 +2286,7 @@ def threads_row(batch: Batch, cols: list[str], wrapup: list[str]) -> None:
             batch.row("WOULD-WAKE", rel, "\u00a7Current Status/Open threads",
                       lead_key)
         else:
-            threads_insert(batch, overview, entry.text, entry.since,
+            threads_insert(batch, overview, text, entry.since,
                            names, "WOULD-WAKE")
     elif verb == "hand":
         # A PC's line about another PC's matter goes to that PC's list.
@@ -2265,10 +2318,10 @@ def threads_row(batch: Batch, cols: list[str], wrapup: list[str]) -> None:
             raise WriteError("close needs a list, a lead and evidence; "
                              "one is empty")
         if which.casefold() == "wrapup":
-            # One line per distinct text, labelled with its last session.
-            lines = [th.format_resolved(text, evidence, f"Session {last}")
-                     for _first, last, text
-                     in threads_unlisted(batch, "close", lead_key)]
+            # Every wording of the lead closes as one line: the newest
+            # words, labelled with their session.
+            _first, last, text = threads_unlisted(batch, "close", lead_key)
+            lines = [th.format_resolved(text, evidence, f"Session {last}")]
         else:
             if which.casefold() in ("shared", "dormant"):
                 label = which.casefold()
@@ -2312,15 +2365,24 @@ def cmd_threads(batch: Batch, args: argparse.Namespace, text: str) -> None:
                 "Wrap-Up's session")
         wrapup = [batch.note_named(args.wrapup, vc.WRAP_TYPES, "wrapup")]
     errors: list[str] = []
+    done = {"close": "closed", "rest": "rested", "wake": "woken",
+            "hand": "handed"}
     for n, cols in enumerate(rows, 1):
-        saved = (dict(batch.texts), dict(batch.originals), len(batch.rows))
+        saved = (dict(batch.texts), dict(batch.originals), len(batch.rows),
+                 set(batch.scope.taken) if batch.scope else set())
         try:
             threads_row(batch, cols, wrapup)
         except WriteError as e:
             # A failed row leaves nothing behind for the rows after it.
             batch.texts, batch.originals = saved[0], saved[1]
             del batch.rows[saved[2]:]
+            if batch.scope:
+                batch.scope.taken = saved[3]
             errors.append(f"row {n}: {e}")
+            continue
+        verb = cols[0].strip().casefold()
+        if verb in done:
+            batch.tally[done[verb]] += 1
     if errors:
         raise WriteError("\nERROR\t".join(errors))
 
@@ -4301,18 +4363,23 @@ def build_parser() -> argparse.ArgumentParser:
             "  close LIST    LEAD   EVIDENCE    LIST is 'shared', 'dormant' or a PC's\n"
             "                                   note name; the thread leaves it and\n"
             "                                   is recorded in the Wrap-Up's\n"
-            "                                   Resolved Threads. 'wrapup': a\n"
-            "                                   Wrap-Up line on no list, recorded\n"
-            "                                   as it stands\n"
-            "  rest  LIST    LEAD   WHY         LIST is 'shared', 'wrapup' (a line\n"
-            "                                   on no list) or a PC's note name;\n"
-            "                                   the thread leaves it for the\n"
+            "                                   Resolved Threads. 'wrapup': the\n"
+            "                                   Wrap-Up lines on no list with that\n"
+            "                                   lead, recorded as one, in the\n"
+            "                                   newest words\n"
+            "  rest  LIST    LEAD   WHY  [WHO]  LIST is 'shared', 'wrapup' (lines\n"
+            "                                   on no list, as one; WHO, default\n"
+            "                                   party, only here) or a PC's note\n"
+            "                                   name; the thread leaves it for the\n"
             "                                   Overview's Dormant Threads, with\n"
             "                                   'dormant since Session N (WHY)', N\n"
-            "                                   the Wrap-Up's session\n"
-            "  wake  LEAD    WHO                a dormant thread goes back: one PC\n"
-            "                                   names their Open threads; several\n"
-            "                                   PCs or 'party', the shared list\n"
+            "                                   the Wrap-Up's session. Waits for a\n"
+            "                                   site tool that hides that list\n"
+            "  wake  LEAD    WHO    [TEXT]      a dormant thread goes back to a\n"
+            "                                   list players read: one PC names\n"
+            "                                   their Open threads; several PCs or\n"
+            "                                   'party', the shared list. TEXT:\n"
+            "                                   how it reads there\n"
             "  hand  FROM    LEAD   TO          take LEAD off PC FROM's Open threads\n"
             "                                   and add it, unchanged, to PC TO's\n"
             "SINCE is a session label, or - for none. WHO is PC note\n"
