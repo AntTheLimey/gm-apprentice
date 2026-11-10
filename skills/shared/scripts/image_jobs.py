@@ -506,6 +506,7 @@ def _settle(entries: list[Entry], lim: image_money.Limits,
         if e.status != "planned":
             continue
         if e.dest.casefold() in claimed:
+            e.said.clear()      # only the duplicate sentence: earlier lines are moot
             _refuse(e, "another picture in this plan goes to the same place")
             e.prompt, e.refs, e.estimate = "", [], None
             continue

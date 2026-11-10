@@ -57,11 +57,27 @@ class _Action:
 
 # --- the embed ---------------------------------------------------------------
 
-def embed_after(text: str, after: str, filename: str) -> str | None:
+_EMBED = re.compile(r"!\[\[([^\]\n|#]+)([^\]\n]*)\]\]")
+
+
+def _names_the_file(named: str, filename: str, folder: Path | None) -> bool:
+    """Whether an embed naming `named` points at the picture filed as
+    `filename` in `folder`: the same name, or a name that differs in case
+    only and that the disk says is the very same file."""
+    if named == filename:
+        return True
+    return (folder is not None and _fold(named) == _fold(filename)
+            and _same_file(folder / named, folder / filename))
+
+
+def embed_after(text: str, after: str, filename: str,
+                folder: Path | None = None) -> str | None:
     """The note's text with `![[filename]]` on its own line, a blank line
     each side, directly after the one recap paragraph that starts with
-    `after`; the text unchanged when that line is already in the run of
-    embeds there; None when zero or several paragraphs match."""
+    `after`; the text unchanged when an embed of that picture (a display
+    size or alias after the name does not matter) is already in the run of
+    embeds there; None when zero or several paragraphs match. `folder` is
+    where the picture is filed."""
     spans = image_jobs.recap_spans(text)
     if spans is None:
         return None
@@ -76,7 +92,8 @@ def embed_after(text: str, after: str, filename: str) -> str | None:
             continue
         if not ln.strip().startswith("![["):
             break
-        if ln.strip().casefold() == embed.casefold():
+        m = _EMBED.fullmatch(ln.strip())
+        if m and _names_the_file(m.group(1).strip(), filename, folder):
             return text
     cr = "\r" if lines[last].endswith("\r") else ""
     if last + 1 >= len(lines):
@@ -89,12 +106,10 @@ def embed_after(text: str, after: str, filename: str) -> str | None:
     return "\n".join(lines)
 
 
-_EMBED = re.compile(r"!\[\[([^\]\n|#]+)([^\]\n]*)\]\]")
-
-
-def exact_embed_names(text: str, filename: str) -> str:
-    """The text with every embed in the recap that names `filename` in
-    other letter case now naming it exactly: the name on disk wins."""
+def exact_embed_names(text: str, filename: str, folder: Path) -> str:
+    """The text with every embed in the recap that names the picture filed
+    as `filename` in `folder` in other letter case now naming it exactly:
+    the name on disk wins. An embed of a different file is left alone."""
     lines = text.split("\n")
     for title in ("Narrative Recap", "Recap"):
         found = vl.find_section_lines(lines, [title], first=True)
@@ -102,7 +117,7 @@ def exact_embed_names(text: str, filename: str) -> str:
             continue
 
         def fix(m: re.Match[str]) -> str:
-            same = _fold(m.group(1).strip()) == _fold(filename)
+            same = _names_the_file(m.group(1).strip(), filename, folder)
             return f"![[{filename}{m.group(2)}]]" if same else m.group(0)
         start, end = found
         for i in range(start + 1, end):
@@ -150,26 +165,29 @@ def _linked(vault: Path, batch: vw.Batch, rel: str) -> bool:
     or canvas outside hidden folders (templates and the inbox included)
     that holds its file name or path, plain or URL-encoded, ignoring case.
     A note this run changes counts as it will be left; one that cannot be
-    read counts as a use. When in doubt: yes."""
+    read, and a folder that cannot be listed, count as a use. When in
+    doubt: yes."""
     seen = {_fold(Path(rel).name), _fold(rel),
             _fold(quote(Path(rel).name)), _fold(quote(rel))}
-    for path in vault.rglob("*"):
-        if path.suffix.lower() not in (".md", ".canvas"):
-            continue
-        parts = path.relative_to(vault).parts
-        if any(part.startswith(".") for part in parts):
-            continue
-        key = "/".join(parts)
-        text = batch.texts.get(key)
-        if text is None:
-            try:
-                text = path.read_text(encoding="utf-8")
-            except (OSError, UnicodeDecodeError):
-                return True     # cannot tell, so it may use the picture
-        text = _fold(text)
-        if any(w in text for w in seen):
-            return True
-    return False
+    unlistable: list[OSError] = []
+    for top, dirs, files in os.walk(vault, onerror=unlistable.append):
+        dirs[:] = [d for d in dirs if not d.startswith(".")]
+        for name in files:
+            if name.startswith(".") or Path(name).suffix.lower() not in (
+                    ".md", ".canvas"):
+                continue
+            path = Path(top) / name
+            key = path.relative_to(vault).as_posix()
+            text = batch.texts.get(key)
+            if text is None:
+                try:
+                    text = path.read_text(encoding="utf-8")
+                except (OSError, UnicodeDecodeError):
+                    return True     # cannot tell, so it may use the picture
+            text = _fold(text)
+            if any(w in text for w in seen):
+                return True
+    return bool(unlistable)     # a folder that cannot be listed may hold a use
 
 
 def _disk_rel(vault: Path, target: Path, planned: str) -> str:
@@ -297,8 +315,9 @@ def _prepare(vault: Path, batch: vw.Batch, e: Entry,
             for o in old:
                 if _fold(Path(o).name) != _fold(name):
                     body = body.replace(f"![[{Path(o).name}]]", f"![[{name}]]")
-            body = exact_embed_names(body, name)
-            new_text = embed_after(body, e.after or "", name)
+            filed = (vault / rel).parent
+            body = exact_embed_names(body, name, filed)
+            new_text = embed_after(body, e.after or "", name, filed)
         else:
             new_text = _set_portrait(tlk, close, rel)
         if new_text is None:

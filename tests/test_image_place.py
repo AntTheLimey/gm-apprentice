@@ -685,6 +685,10 @@ def test_a_wrong_case_embed_is_rewritten_not_doubled(vault):
     folder = vault / "_attachments/scenes"
     folder.mkdir(parents=True)
     (folder / "Session-03-Mill.jpg").write_bytes(JPG)
+    if not image_place._same_file(folder / "Session-03-Mill.jpg",
+                                  folder / "session-03-mill.jpg"):
+        pytest.skip("this disk tells names apart by case: that embed names "
+                    "another file")
     wrap = vault / "Sessions/Session 03 Wrap-Up.md"
     wrap.write_text(RECAP.replace(
         "The miller said nothing at first.\n\n",
@@ -742,3 +746,58 @@ def test_a_job_that_cannot_be_saved_after_the_write_is_said_plainly(
     assert run(vault, job, "--keep", "1", "--write") == 1
     out = capsys.readouterr().out
     assert "The vault WAS changed" in out and "TypeError" in out
+
+
+# --- minor wave 2: P1-P3 ----------------------------------------------------
+
+def test_an_unreadable_folder_keeps_the_old_picture(vault):
+    import os
+    if os.name == "nt" or (hasattr(os, "geteuid") and os.geteuid() == 0):
+        pytest.skip("folder permissions do not stop this user")
+    hidden = vault / "Archive"
+    hidden.mkdir()
+    (hidden / "Old.md").write_text("![[marta.jpg]]\n", encoding="utf-8")
+    m = entry(1, "NPCs/Marta.md", "npc", f"{CHARS}/marta-2", replace=True)
+    job = make_job(vault, [m], data=JPG2)
+    hidden.chmod(0)
+    try:
+        assert run(vault, job, "--keep", "1", "--write") == 0
+    finally:
+        hidden.chmod(0o755)
+    assert (vault / CHARS / "marta.jpg").is_file()
+
+
+RECAP_WITH = RECAP.replace("The miller said nothing at first.\n\n",
+                           "The miller said nothing at first.\n\n{}\n\n", 1)
+WHERE = "The miller said nothing"
+
+
+def test_a_case_variant_embed_of_another_file_is_left_alone(tmp_path, monkeypatch):
+    monkeypatch.setattr(image_place, "_same_file", lambda a, b: False)
+    t = RECAP_WITH.format("![[A.jpg]]")
+    assert image_place.exact_embed_names(t, "a.jpg", tmp_path) == t
+    out = image_place.embed_after(t, WHERE, "a.jpg", tmp_path)
+    assert out is not None and "![[A.jpg]]" in out and "![[a.jpg]]" in out
+
+
+def test_a_case_variant_embed_of_the_same_file_is_rewritten_not_doubled(
+        tmp_path, monkeypatch):
+    monkeypatch.setattr(image_place, "_same_file", lambda a, b: True)
+    t = RECAP_WITH.format("![[A.jpg]]")
+    fixed = image_place.exact_embed_names(t, "a.jpg", tmp_path)
+    assert "![[a.jpg]]" in fixed and "![[A.jpg]]" not in fixed
+    assert image_place.embed_after(t, WHERE, "a.jpg", tmp_path) == t
+
+
+def test_an_embed_with_a_size_is_already_there_and_keeps_its_size(tmp_path):
+    t = RECAP_WITH.format("![[a.jpg|300]]")
+    assert image_place.embed_after(t, WHERE, "a.jpg", tmp_path) == t
+    assert image_place.exact_embed_names(t, "a.jpg", tmp_path) == t
+
+
+def test_a_renamed_embed_keeps_the_gms_size(tmp_path, monkeypatch):
+    monkeypatch.setattr(image_place, "_same_file", lambda a, b: True)
+    t = RECAP_WITH.format("![[A.jpg|300]]")
+    out = image_place.exact_embed_names(t, "a.jpg", tmp_path)
+    assert "![[a.jpg|300]]" in out
+    assert image_place.embed_after(t, WHERE, "a.jpg", tmp_path) == t

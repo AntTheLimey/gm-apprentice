@@ -606,3 +606,15 @@ def test_one_dropped_reference_is_not_pictures(tmp_path):
     shows = {"for": "Anselm", "subject": "x", "shows": ["Marta"]}
     _, on = one(build(tmp_path, config=base), shows)
     assert "dropped 1 reference picture to stay" in said(on)
+
+
+def test_a_refused_duplicate_says_only_that_it_is_a_duplicate(tmp_path):
+    base = ("vault:\n  images:\n    service: gemini\n"
+            "    model: gemini-nano-banana-2.1\n    thinking: true\n")
+    v = build(tmp_path, config=base)
+    req = {"for": "Anselm", "subject": "x", "shows": ["Marta"]}
+    job = image_jobs.plan(v, [req, req], False, TODAY)
+    a, b = job.entries
+    assert (a.status, b.status) == ("planned", "refused")
+    assert "dropped 1 reference picture" in said(a)
+    assert b.said == ["another picture in this plan goes to the same place"]
