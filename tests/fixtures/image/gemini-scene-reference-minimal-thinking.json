@@ -1,0 +1,53 @@
+{
+ "status": 200,
+ "reply": {
+  "id": "v1_Chd4NER5YXBIMkVJZXB4ZElQOWRhZGlBcxIXeDREeWFwSDJFSWVweGRJUDlkYWRpQXM",
+  "status": "completed",
+  "usage": {
+   "total_tokens": 2758,
+   "total_input_tokens": 1213,
+   "input_tokens_by_modality": [
+    {
+     "modality": "image",
+     "tokens": 1120
+    },
+    {
+     "modality": "text",
+     "tokens": 93
+    }
+   ],
+   "total_cached_tokens": 0,
+   "total_output_tokens": 1545,
+   "output_tokens_by_modality": [
+    {
+     "modality": "image",
+     "tokens": 1120
+    }
+   ],
+   "total_tool_use_tokens": 0,
+   "total_thought_tokens": 0,
+   "initial_input_tokens": 1213
+  },
+  "created": "2026-11-10T02:26:25Z",
+  "updated": "2026-11-10T02:26:25Z",
+  "service_tier": "standard",
+  "steps": [
+   {
+    "signature": "EqmgpgEKpKCmAQFpFH0Tzt/4wEsFNUeufPVxgdbOxcTc1AuMuVHi/lTMmQoh4W8/...<cut 3631848 chars>",
+    "type": "thought"
+   },
+   {
+    "content": [
+     {
+      "data": "/9j/4AAQSkZJRgABAQAAAQABAAD/65TwSlAAAQAAAAEAAJTmanVtYgAAAB5qdW1k...<cut 1237584 chars>",
+      "mime_type": "image/jpeg",
+      "type": "image"
+     }
+    ],
+    "type": "model_output"
+   }
+  ],
+  "object": "interaction",
+  "model": "gemini-nano-banana-2.1"
+ }
+}

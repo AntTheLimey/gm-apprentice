@@ -1,0 +1,49 @@
+{
+  "status": 200,
+  "reply": {
+    "id": "v1_ChdGNER5YXRXeUJfakh4ZElQdXNldDBBURIXRjREeWF0V3lCX2pIeGRJUHVzZXQwQVE",
+    "status": "completed",
+    "usage": {
+      "total_tokens": 2216,
+      "total_input_tokens": 56,
+      "input_tokens_by_modality": [
+        {
+          "modality": "text",
+          "tokens": 56
+        }
+      ],
+      "total_cached_tokens": 0,
+      "total_output_tokens": 1477,
+      "output_tokens_by_modality": [
+        {
+          "modality": "image",
+          "tokens": 1120
+        }
+      ],
+      "total_tool_use_tokens": 0,
+      "total_thought_tokens": 683,
+      "initial_input_tokens": 56
+    },
+    "created": "2026-11-10T02:23:33Z",
+    "updated": "2026-11-10T02:23:33Z",
+    "service_tier": "standard",
+    "steps": [
+      {
+        "signature": "EuaQgAEK4ZCAAQFpFH0T/dJuLyflg5Y6/sZLwhS/ucSnDVuV72LiyD+B2PN6x8jJ...<cut 2799076 chars>",
+        "type": "thought"
+      },
+      {
+        "content": [
+          {
+            "data": "/9j/4AAQSkZJRgABAQEBLAEsAAD/6xe7SlAAAQAAAAEAABexanVtYgAAAB5qdW1k...<cut 1183612 chars>",
+            "mime_type": "image/jpeg",
+            "type": "image"
+          }
+        ],
+        "type": "model_output"
+      }
+    ],
+    "object": "interaction",
+    "model": "gemini-nano-banana-2.1"
+  }
+}
