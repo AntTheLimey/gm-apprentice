@@ -21,6 +21,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any, NamedTuple
 
+import image_codex
 import image_gemini
 import image_guidance
 import image_keys
@@ -84,11 +85,15 @@ class Entry:
     usage: dict[str, int] | None = None   # the last billed reply's usage, if it had one
 
 
+FREE = ("codex", "self")    # job sources that spend no money
+SOURCES = ("codex", "service", "self")   # what `plan --source` takes
+
+
 @dataclass
 class Job:
     id: str
     vault: str
-    service: str
+    service: str        # gemini, or a free source: codex, self (the agent)
     model: str
     priced: bool
     unprompted: bool
@@ -480,6 +485,7 @@ class _Ctx:
     names: dict[str, list[str]]
     priced: bool
     unprompted: bool
+    model: str
 
 
 def _refuse(e: Entry, why: str) -> None:
@@ -574,8 +580,7 @@ def _fit_cost(ctx: _Ctx, e: Entry, refs: list[str]) -> list[str] | None:
     if not ctx.priced:
         return refs
     lim = ctx.lim
-    assert lim.model
-    model = lim.model
+    model = ctx.model
     prompt_bytes = len(e.prompt.encode("utf-8"))
 
     def cost(k: int) -> float:
@@ -647,17 +652,50 @@ def _settle(entries: list[Entry], lim: image_money.Limits,
         claimed.add(e.dest.casefold())
 
 
+NO_SERVICE = ("Choose a picture service and model first: gma publish "
+              "settings set vault.images.service gemini …")
+
+
+def choose_source(lim: image_money.Limits, source: str | None) -> str:
+    """Who draws this job: `codex`, `self` or the configured service's
+    name. `source` is `plan --source`; else the vault's setting. `auto`
+    takes Codex on a ChatGPT plan before the paid service."""
+    want = source or lim.source
+    if want == "self":
+        return "self"
+    if want not in ("auto", "codex", "service"):
+        raise Stop(f"There is no picture source called {want}; try: "
+                   + ", ".join(SOURCES))
+    state: image_codex.Login | None = None
+    if want in ("auto", "codex"):
+        state = image_codex.login()
+        if state.state == "chatgpt":
+            return "codex"
+        if want == "codex":
+            raise Stop(image_codex.why_not(state))
+    if not lim.service or not lim.model:
+        # An installed Codex that could draw for free is worth naming.
+        raise Stop(NO_SERVICE + (" Or sign Codex in with a ChatGPT plan: "
+                                 "codex login" if state is not None
+                                 and state.state in ("none", "other") else ""))
+    return lim.service
+
+
 def plan(vault: Path, requests: list[dict[str, Any]], unprompted: bool,
-         today: date) -> Job:
+         today: date, source: str | None = None) -> Job:
     requests = check_requests(requests)
     lim = image_money.limits(vault)
-    if not lim.service or not lim.model:
-        raise Stop("Choose a picture service and model first: gma publish "
-                   "settings set vault.images.service gemini …")
-    find_key(lim.service)
-    priced = is_priced(lim.model, lim.price)
-    if not priced and not lim.unpriced:
-        raise Stop(unpriced_message(lim.model))
+    service = choose_source(lim, source)
+    free = service in FREE
+    if free:
+        model, priced = service, False
+    else:
+        assert lim.model
+        model = lim.model
+        find_key(service)
+        priced = is_priced(model, lim.price)
+        if not priced and not lim.unpriced:
+            raise Stop(unpriced_message(model))
     if unprompted and not lim.auto:
         raise Stop("Drawing without asking is off for this vault.")
     try:
@@ -670,7 +708,7 @@ def plan(vault: Path, requests: list[dict[str, Any]], unprompted: bool,
 
     job_id = f"{today:%Y%m%d}-{secrets.token_hex(3)}"
     ctx = _Ctx(vault, lim, guidance, vw.Batch(vault),
-               section.name_index(vl.vault_files(vault)), priced, unprompted)
+               section.name_index(vl.vault_files(vault)), priced, unprompted, model)
     entries: list[Entry] = []
     for n, req in enumerate(requests, 1):
         e = Entry(n=n, note=req["for"], kind="", prompt="", refs=[],
@@ -684,8 +722,8 @@ def plan(vault: Path, requests: list[dict[str, Any]], unprompted: bool,
         _plan_one(ctx, e, req)
     _settle(entries, lim, month_spent, priced)
 
-    job = Job(id=job_id, vault=str(vault), service=lim.service,
-              model=lim.model, priced=priced, unprompted=unprompted,
+    job = Job(id=job_id, vault=str(vault), service=service,
+              model=model, priced=priced, unprompted=unprompted,
               spent=0.0, entries=entries)
     try:
         save(job)

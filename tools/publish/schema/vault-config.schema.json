@@ -350,6 +350,15 @@
                 ]
               }
             },
+            "source": {
+              "description": "Where pictures come from. `auto`: an installed Codex signed in with a ChatGPT plan when there is one (no money counted), else the picture service below. `codex`: only Codex. `service`: only the picture service",
+              "default": "auto",
+              "type": [
+                "string",
+                "null"
+              ],
+              "pattern": "^\\s*(?:[aA][uU][tT][oO]|[cC][oO][dD][eE][xX]|[sS][eE][rR][vV][iI][cC][eE])\\s*$"
+            },
             "service": {
               "description": "Which picture service draws for this campaign",
               "type": [

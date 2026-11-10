@@ -1,11 +1,30 @@
 # Drawing pictures
 
 Ask the apprentice for a portrait, a place, a faction, an item, a
-document or a scene from a session's recap, and it draws the picture with
-Google's Gemini service on your own Google key, inside spending limits
-you set in the vault. It looks at each picture, redraws a wrong one and
-files the ones that are right. In this release it draws only when you
+document or a scene from a session's recap, and it draws the picture. It
+draws with Codex on your ChatGPT plan when you have one, which costs no
+money, or else with Google's Gemini service on your own Google key, inside
+spending limits you set in the vault. It looks at each picture, redraws a
+wrong one and files the ones that are right. In this release it draws only when you
 ask: `vault.images.auto`, for drawing without asking, has no effect yet.
+
+## Drawing on a ChatGPT plan with Codex
+
+If Codex is installed and signed in with a ChatGPT plan (`codex login`),
+the apprentice draws with it first. The pictures come out of the plan you
+already pay for, so no money is counted against your limits, and each
+picture takes a minute or two. The redraw limit still applies. A Codex
+signed in with an API key is charged by the picture, so it is never used
+this way.
+
+If you run the apprentice inside Codex, it can draw the pictures itself
+with Codex's own image tool, the same way.
+
+`vault.images.source` chooses: `auto` (Codex when it can, else Gemini),
+`codex` or `service` (Gemini only). If Codex stops part-way, for example
+when the plan's limit is reached, the apprentice says so and does not
+switch to Gemini by itself: a batch planned as free only starts costing
+money when you plan it again with Gemini and see the estimate.
 
 ## Set up a Google key
 
@@ -120,3 +139,6 @@ the apprentice tells you where. You can still keep it for 14 days.
 - **Google declines a picture**: this is rare. The apprentice describes
   it differently and plans it again.
 - **No network**: give the apprentice network access for `gma image draw`.
+- **Codex stops part-way**: it reports why (signed out, the plan's limit
+  reached). Sign it in again, wait for the limit to reset, or draw the
+  rest with Gemini.

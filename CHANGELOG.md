@@ -9,6 +9,17 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.7] — 2026-11-10
+
+### Added
+
+- Pictures on a ChatGPT plan: when Codex is installed and signed in with a ChatGPT plan, the apprentice draws with it first, and no money is counted. A Codex signed in with an API key is never used this way. See [docs/images.md](docs/images.md).
+- An apprentice running inside Codex can draw the pictures with its own image tool (`gma image plan --source self`, then `draw --picture N FILE`).
+
+### Changed
+
+- Publish tool 1.70.5: the `vault.images.source` setting (`auto`, `codex` or `service`).
+
 ## [1.12.6] — 2026-11-10
 
 ### Added

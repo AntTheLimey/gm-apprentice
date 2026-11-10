@@ -70,7 +70,8 @@ ORIGINAL: dict[str, object] = {}
 @pytest.fixture(autouse=True)
 def _no_picture_service_or_keychain(monkeypatch, tmp_path):
     """No test reaches the paid picture service (by `image_gemini.SEND` or
-    by the sender's own `URLOPEN`) or the real keychain, none sees a real
+    by the sender's own `URLOPEN`), a real Codex (`image_codex.RUN`; tests
+    see no Codex installed) or the real keychain, none sees a real
     key from the environment, and the key file folder is a temp one. A test
     that needs any of them replaces it itself (its own monkeypatch runs
     after this one), and sets a fake key the same way."""
@@ -81,6 +82,7 @@ def _no_picture_service_or_keychain(monkeypatch, tmp_path):
     if added:
         sys.path.append(_SCRIPTS)
     try:
+        import image_codex
         import image_gemini
         import image_keys
     except Exception:  # noqa: BLE001 - a test that never draws pays nothing
@@ -105,6 +107,14 @@ def _no_picture_service_or_keychain(monkeypatch, tmp_path):
     monkeypatch.setattr(image_gemini, "SEND", no_service)
     monkeypatch.setattr(image_gemini, "URLOPEN", no_connection)
     monkeypatch.setattr(image_keys, "RUN", no_keychain)
+
+    def no_codex(*a, **k):
+        pytest.fail("a test tried to run Codex; replace image_codex.RUN in "
+                    "the test", pytrace=False)
+    # As a machine with no Codex: a test that wants one replaces WHICH too.
+    monkeypatch.setattr(image_codex, "RUN", no_codex)
+    monkeypatch.setattr(image_codex, "WHICH", lambda *a, **k: None)
+    monkeypatch.delenv("CODEX_HOME", raising=False)
 
 
 @pytest.fixture(autouse=True)

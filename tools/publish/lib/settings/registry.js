@@ -158,6 +158,11 @@ const REGISTRY = [
     left_out: 'Every kind except player characters',
   },
   {
+    name: 'vault.images.source', type: 'choice', values: ['auto', 'codex', 'service'], default: 'auto', group: 'images',
+    does: 'Where pictures come from. `auto`: an installed Codex signed in with a ChatGPT plan when there is one (no money counted), else the picture service below. `codex`: only Codex. `service`: only the picture service',
+    left_out: '`auto`',
+  },
+  {
     name: 'vault.images.service', type: 'choice', values: ['gemini'], group: 'images',
     does: 'Which picture service draws for this campaign',
     left_out: 'None chosen; the apprentice asks',

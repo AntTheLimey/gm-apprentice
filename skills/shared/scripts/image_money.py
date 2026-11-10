@@ -27,6 +27,7 @@ class Limits(NamedTuple):
     model: str | None
     price: float | None
     guidance: str
+    source: str = "auto"    # auto, codex or service (vault.images.source)
 
 
 _NAMES = tuple(f"vault.images.{n}" for n in (
@@ -66,6 +67,8 @@ def limits(vault: Path) -> Limits:
         model=v["vault.images.model"],
         price=v["vault.images.price"],
         guidance=guidance.strip(),
+        # Not a money limit, so a site tool older than the setting means auto.
+        source=v.get("vault.images.source") or "auto",
     )
 
 

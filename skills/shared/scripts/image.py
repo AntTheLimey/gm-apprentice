@@ -4,8 +4,8 @@
 Usage:
   image.py status VAULT
   image.py key SERVICE
-  image.py plan VAULT REQUESTS [--unprompted]
-  image.py draw VAULT JOB [--redo N "what was wrong"]...
+  image.py plan VAULT REQUESTS [--unprompted] [--source codex|service|self]
+  image.py draw VAULT JOB [--redo N "what was wrong"]... [--picture N FILE]...
   image.py place VAULT JOB [--keep N...] [--hold N...] [--write]
 """
 
@@ -17,6 +17,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import image_codex
 import image_draw
 import image_jobs
 import image_keys
@@ -47,9 +48,14 @@ def build_parser() -> argparse.ArgumentParser:
     pl.add_argument("--unprompted", action="store_true",
                     help="the GM did not ask for these pictures: apply the "
                     "vault's rules for drawing without asking")
+    pl.add_argument("--source", choices=image_jobs.SOURCES,
+                    help="who draws, for this job only: codex (an installed "
+                    "Codex on a ChatGPT plan, no money), service (the vault's "
+                    "picture service, paid) or self (you, with your own image "
+                    "tool). Left out: the vault's vault.images.source")
     dr = sub.add_parser(
         "draw",
-        help="send the planned pictures to the drawing service (this costs money)",
+        help="draw the planned pictures (on a paid service this costs money)",
         epilog='Example: gma image draw "<vault>" 20261109-a1b2c3 '
                '--redo 2 "the cloak should be green"')
     dr.add_argument("vault", type=Path, help="the vault folder")
@@ -61,6 +67,11 @@ def build_parser() -> argparse.ArgumentParser:
                     "more than once. Each attempt is paid for. Pictures are "
                     "drawn one at a time; two gma image draw runs on one "
                     "vault at the same time can lose a spending count")
+    dr.add_argument("--picture", nargs=2, action="append", default=[],
+                    metavar=("N", "FILE"),
+                    help="for a job planned with --source self: hand in the "
+                    "picture you drew for picture N (a PNG or JPEG); again "
+                    "for a redraw; can be given more than once")
     pc = sub.add_parser(
         "place", help="file the pictures you kept and link them in the vault",
         epilog='Example: gma image place "<vault>" 20261109-a1b2c3 '
@@ -88,6 +99,11 @@ def status(vault: Path) -> int:
         return 2
     lim = image_money.limits(vault)
     print("unprompted drawing: " + ("on" if lim.auto else "off"))
+    print(f"source: {lim.source}")
+    if lim.source in ("auto", "codex"):
+        state = image_codex.login()
+        print(f"codex: {state.line}"
+              + (" (draws with no money counted)" if state.state == "chatgpt" else ""))
     if lim.service:
         print(f"service: {lim.service}, model: {lim.model or 'none chosen'}")
     else:
@@ -141,34 +157,51 @@ def key(service: str) -> int:
     return 0
 
 
-def plan(vault: Path, requests: Path, unprompted: bool) -> int:
+FREE_WORDS = {"codex": "by Codex on the ChatGPT plan, no money counted",
+              "self": "by you, with your own image tool, no money counted"}
+
+
+def plan(vault: Path, requests: Path, unprompted: bool,
+         source: str | None = None) -> int:
     if not vault.is_dir():
         print(f"error: not a directory: {vault}", file=sys.stderr)
         return 2
     try:
         job = image_jobs.plan(vault, image_jobs.read_requests(requests),
-                              unprompted, _today())
+                              unprompted, _today(), source)
     except image_jobs.Stop as e:
         print(str(e), file=sys.stderr)
         return 2
     print(f"Job {job.id}")
+    free = FREE_WORDS.get(job.service)
+    if free:
+        print(f"Drawn {free}.")
     total = 0.0
     planned = 0
     for pic in job.entries:
         if pic.status == "planned":
             planned += 1
             total += pic.estimate or 0.0
-            cost = (f", about {image_money.cents(pic.estimate)} cents"
+            cost = ("" if free else
+                    f", about {image_money.cents(pic.estimate)} cents"
                     if pic.estimate is not None
                     else ", price unknown")
             print(f"{pic.n}. {pic.note}: planned{cost}")
             for line in pic.said:
                 print(f"   {line}")
+            if job.service == "self":
+                print(f"   shape: {pic.shape}")
+                for ref in pic.refs:
+                    print(f"   likeness: {ref}")
+                print("   prompt: " + pic.prompt.replace("\n", "\n   "))
         else:
             print(f"{pic.n}. {pic.note}: {pic.status}")
             for line in pic.said:
                 print(f"   {line}")
-    if job.priced:
+    if free:
+        if job.service == "self":
+            print(image_draw.SELF_HOW.format(job=job.id))
+    elif job.priced:
         print(f"Estimated total: about {image_money.cents(total)} cents")
     else:
         print("Estimated total: unknown (the price of this model is not known)")
@@ -176,7 +209,8 @@ def plan(vault: Path, requests: Path, unprompted: bool) -> int:
     return 0 if planned else 1
 
 
-def draw(vault: Path, job_id: str, redo: list[list[str]]) -> int:
+def draw(vault: Path, job_id: str, redo: list[list[str]],
+         pictures: list[list[str]] | None = None) -> int:
     if not vault.is_dir():
         print(f"error: not a directory: {vault}", file=sys.stderr)
         return 2
@@ -191,10 +225,26 @@ def draw(vault: Path, job_id: str, redo: list[list[str]]) -> int:
                 raise image_jobs.Stop(
                     f"Picture {int(n_text)} has two --redo notes; give one.")
             notes[int(n_text)] = what
+        handed: dict[int, Path] = {}
+        for n_text, file in pictures or []:
+            if not n_text.isdecimal():
+                raise image_jobs.Stop(
+                    f"--picture needs a picture number first, not {n_text!r}.")
+            if int(n_text) in handed:
+                raise image_jobs.Stop(
+                    f"Picture {int(n_text)} has two --picture files; give one.")
+            handed[int(n_text)] = Path(file)
         job = image_jobs.load(job_id)
         image_place.check_vault(job, vault)
+        if handed and notes:
+            raise image_jobs.Stop("--picture and --redo cannot go together: for "
+                                  "a redraw of your own, hand in the new "
+                                  "picture with --picture.")
         try:
-            image_draw.draw(job, notes, _today(), result)
+            if handed:
+                image_draw.hand_in(job, handed, result)
+            else:
+                image_draw.draw(job, notes, _today(), result)
         finally:
             # Whatever happens, what was already drawn and paid for is shown.
             for line in result.lines:
@@ -202,20 +252,24 @@ def draw(vault: Path, job_id: str, redo: list[list[str]]) -> int:
     except image_jobs.Stop as e:
         print(str(e), file=sys.stderr)
         return 2
-    pictures = image_jobs.counted(result.drawn)
+    if job.service in FREE_WORDS:
+        print(f"This run: {image_jobs.counted(result.drawn)} drawn "
+              f"{FREE_WORDS[job.service]}")
+        return 0 if result.ok else 1
+    drawn = image_jobs.counted(result.drawn)
     if result.unknown and result.cents == 0:
         more = result.unknown - result.drawn   # paid for, but no picture came back
         if not result.drawn:
             print(f"This run: no pictures drawn, {result.unknown} paid for "
                   "at an unknown price")
         elif more > 0:
-            print(f"This run: {pictures} drawn and {more} more paid for, "
+            print(f"This run: {drawn} drawn and {more} more paid for, "
                   "all at an unknown price")
         else:
-            print(f"This run: {pictures} drawn at an unknown price")
+            print(f"This run: {drawn} drawn at an unknown price")
     else:
         # A priced run counts every reply in cents, so none is unknown here.
-        print(f"This run: {pictures} drawn, {image_money.cents(result.cents)} "
+        print(f"This run: {drawn} drawn, {image_money.cents(result.cents)} "
               f"cents (this job so far: {image_money.cents(result.job_cents)} cents)")
     try:
         month = image_money.spent(vault, _today())
@@ -269,9 +323,9 @@ def _dispatch(args: argparse.Namespace) -> int:
     if args.command == "status":
         return status(args.vault)
     if args.command == "plan":
-        return plan(args.vault, args.requests, args.unprompted)
+        return plan(args.vault, args.requests, args.unprompted, args.source)
     if args.command == "draw":
-        return draw(args.vault, args.job, args.redo)
+        return draw(args.vault, args.job, args.redo, args.picture)
     if args.command == "place":
         return place(args.vault, args.job, args.keep, args.hold, args.write)
     return key(args.service)
