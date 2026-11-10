@@ -106,6 +106,13 @@ def embed_after(text: str, after: str, filename: str,
     return "\n".join(lines)
 
 
+def _retarget(text: str, old: str, new: str) -> str:
+    """Every embed of the file `old` now names `new`; a size stays."""
+    def swap(m: re.Match[str]) -> str:
+        return f"![[{new}{m.group(2)}]]" if m.group(1).strip() == old else m.group(0)
+    return _EMBED.sub(swap, text)
+
+
 def exact_embed_names(text: str, filename: str, folder: Path) -> str:
     """The text with every embed in the recap that names the picture filed
     as `filename` in `folder` in other letter case now naming it exactly:
@@ -313,8 +320,11 @@ def _prepare(vault: Path, batch: vw.Batch, e: Entry,
             name = Path(rel).name
             body = base
             for o in old:
-                if _fold(Path(o).name) != _fold(name):
-                    body = body.replace(f"![[{Path(o).name}]]", f"![[{name}]]")
+                # An old picture that is not the very file filed has its
+                # embed pointed at the new one; the very file is only a
+                # spelling, which exact_embed_names settles.
+                if Path(o).name != name and not _same_file(vault / o, vault / rel):
+                    body = _retarget(body, Path(o).name, name)
             filed = (vault / rel).parent
             body = exact_embed_names(body, name, filed)
             new_text = embed_after(body, e.after or "", name, filed)

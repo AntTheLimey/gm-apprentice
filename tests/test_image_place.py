@@ -801,3 +801,25 @@ def test_a_renamed_embed_keeps_the_gms_size(tmp_path, monkeypatch):
     out = image_place.exact_embed_names(t, "a.jpg", tmp_path)
     assert "![[a.jpg|300]]" in out
     assert image_place.embed_after(t, WHERE, "a.jpg", tmp_path) == t
+
+
+# --- fix round 1: a case-only replace on a case-sensitive disk -------------
+
+def test_a_case_only_replace_leaves_one_embed_when_the_disk_tells_case_apart(
+        vault, monkeypatch):
+    folder = vault / "_attachments/scenes"
+    folder.mkdir(parents=True)
+    (folder / "Session-03-Mill.jpg").write_bytes(JPG)
+    wrap = vault / "Sessions/Session 03 Wrap-Up.md"
+    wrap.write_text(RECAP.replace(
+        "The miller said nothing at first.\n\n",
+        "The miller said nothing at first.\n\n![[Session-03-Mill.jpg|300]]\n\n", 1),
+        encoding="utf-8")
+    # What a case-sensitive disk says: two names are one file only if equal.
+    monkeypatch.setattr(image_place, "_same_file", lambda a, b: Path(a) == Path(b))
+    job = make_job(vault, [scene(replace=True)], data=JPG2)
+    run(vault, job, "--keep", "1", "--write")
+    text = wrap.read_text(encoding="utf-8")
+    assert text.count("![[") == 1
+    assert "![[session-03-mill.jpg|300]]" in text
+    assert "![[Session-03-Mill.jpg" not in text

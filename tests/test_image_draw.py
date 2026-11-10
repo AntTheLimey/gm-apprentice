@@ -367,9 +367,10 @@ def test_a_billed_failure_is_counted_and_uses_the_attempts(tmp_path, monkeypatch
     assert "picture 1 has used all its attempts (the vault allows 2)" in capsys.readouterr().out
 
 
-def test_a_network_failure_is_not_counted_and_uses_no_attempt(tmp_path, monkeypatch):
+def test_a_failure_before_sending_is_not_counted_and_uses_no_attempt(tmp_path, monkeypatch):
     vault, job = start(tmp_path, count=1)
-    script(monkeypatch, image_gemini.ServiceError("network", "the connection failed: OSError", maybe_billed=False))
+    script(monkeypatch, image_gemini.ServiceError("network", "could not reach the service: [Errno 61] Connection refused",
+                                                    maybe_billed=False))
     assert run(vault, job) == 1
     e = reload(job).entries[0]
     assert e.status == "failed" and e.attempts == 0 and e.cost is None
@@ -863,3 +864,14 @@ def test_a_declined_first_attempt_is_final_for_the_job(tmp_path, monkeypatch, ca
     err = capsys.readouterr().err
     assert "plan it again with a different description" in err
     assert len(send.calls) == 1
+
+
+def test_totals_that_cannot_be_read_after_a_draw_are_one_plain_line(tmp_path, monkeypatch, capsys):
+    vault, job = start(tmp_path, count=1)
+    script(monkeypatch, fixture(OK))
+
+    def broken(*a):
+        raise vaultlib.StateUnreadable("vault-state.json is not valid JSON")
+    monkeypatch.setattr(image_money, "unpriced_count", broken)
+    assert run(vault, job) == 1
+    assert capsys.readouterr().err == "vault-state.json is not valid JSON\n"

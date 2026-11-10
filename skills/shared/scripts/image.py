@@ -222,7 +222,7 @@ def draw(vault: Path, job_id: str, redo: list[list[str]]) -> int:
         unpriced = image_money.unpriced_count(vault, _today())
         ceiling = image_money.limits(vault).month
     except (vaultlib.StateUnreadable, vaultlib.SettingsUnavailable) as e:
-        print(f"error: {e}", file=sys.stderr)
+        print(str(e), file=sys.stderr)
         return 1
     print(f"This month: {month:.2f} of {ceiling:g} cents"
           + (f", and {image_jobs.counted(unpriced)} at an unknown price" if unpriced else ""))
