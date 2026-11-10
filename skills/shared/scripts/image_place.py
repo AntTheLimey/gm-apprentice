@@ -15,6 +15,7 @@ import os
 import re
 import secrets
 import shutil
+import unicodedata
 from urllib.parse import quote
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -156,15 +157,37 @@ def _same_file(a: Path, b: Path) -> bool:
         return False
 
 
-def _linked(vault: Path, batch: vw.Batch, rel: str) -> bool:
+def _folds_case(path: Path) -> bool | None:
+    """Whether the disk holding the file `path` treats names that differ
+    only in letter case as one file, asked of the disk: True, False, or None
+    when it cannot be told (no such file, or no letter in its name)."""
+    twin = "".join(c.swapcase() if c.isascii() else c for c in path.name)
+    if twin == path.name or not path.is_file():
+        return None
+    return _same_file(path, path.with_name(twin))
+
+
+def _mention_key(folds: bool | None) -> Callable[[str], str]:
+    """How a mention of a file is compared with its name on this disk:
+    exactly where the disk tells letter case apart, case-folded where it
+    does not or cannot be told (a case-variant mention then counts)."""
+    if folds is False:
+        return lambda t: unicodedata.normalize("NFC", t)
+    return _fold
+
+
+def _linked(vault: Path, batch: vw.Batch, rel: str,
+            folds: bool | None = None) -> bool:
     """Whether anything in the vault might use the picture `rel`: any note
     or canvas outside hidden folders (templates and the inbox included)
-    that holds its file name or path, plain or URL-encoded, ignoring case.
+    that holds its file name or path, plain or URL-encoded, compared as the
+    disk compares names (`folds`, see `_mention_key`).
     A note this run changes counts as it will be left; one that cannot be
     read, and a folder that cannot be listed, count as a use. When in
     doubt: yes."""
-    seen = {_fold(Path(rel).name), _fold(rel),
-            _fold(quote(Path(rel).name)), _fold(quote(rel))}
+    key_of = _mention_key(folds)
+    seen = {key_of(Path(rel).name), key_of(rel),
+            key_of(quote(Path(rel).name)), key_of(quote(rel))}
     unlistable: list[OSError] = []
     for top, dirs, files in os.walk(vault, onerror=unlistable.append):
         dirs[:] = [d for d in dirs if not d.startswith(".")]
@@ -180,7 +203,7 @@ def _linked(vault: Path, batch: vw.Batch, rel: str) -> bool:
                     text = path.read_text(encoding="utf-8")
                 except (OSError, UnicodeDecodeError):
                     return True     # cannot tell, so it may use the picture
-            text = _fold(text)
+            text = key_of(text)
             if any(w in text for w in seen):
                 return True
     return bool(unlistable)     # a folder that cannot be listed may hold a use
@@ -362,9 +385,12 @@ def _check_verdicts(job: Job, keep: set[int], hold: set[int]) -> None:
                        "then keep or hold it")
 
 
-def _retire(vault: Path, batch: vw.Batch, a: _Action, lines: list[str]) -> None:
-    """Remove the picture a replace left behind, when that is safe. Never
-    raises: a problem is one line."""
+def _retire(vault: Path, batch: vw.Batch, a: _Action, lines: list[str],
+            folds: bool | None) -> None:
+    """Remove the picture a replace left behind, when that is safe. Whether
+    an old picture is the very file just written is the disk's to say
+    (`_same_file`), never its name's; `folds` is whether this disk folds
+    letter case (`_folds_case`). Never raises: a problem is one line."""
     new_rel = a.rel
     for o in a.old:
         try:
@@ -377,14 +403,12 @@ def _retire(vault: Path, batch: vw.Batch, a: _Action, lines: list[str]) -> None:
             elif not old.is_file():
                 lines.append(f"  Left {o} alone; it is not a picture file "
                              "in the vault.")
-            elif a.copy.backup is not None and _same_file(old, a.copy.target):
-                lines.append(f"  Replaced {new_rel}; the picture that was there "
-                             f"is kept at {a.copy.backup} until this job is "
-                             f"tidied away ({image_jobs.JOB_DAYS} days).")
-            elif _same_file(old, a.copy.target) or _fold(o) == _fold(new_rel):
-                lines.append(f"  The old picture {o} is the new picture's "
-                             "own file (or differs only in case); left as it is.")
-            elif _linked(vault, batch, o):
+            elif _same_file(old, a.copy.target):
+                if a.copy.backup is not None:
+                    lines.append(f"  Replaced {new_rel}; the picture that was "
+                                 f"there is kept at {a.copy.backup} until this "
+                                 f"job is tidied away ({image_jobs.JOB_DAYS} days).")
+            elif _linked(vault, batch, o, folds):
                 lines.append(f"  Kept the old picture {o}; something else "
                              "links it.")
             else:
@@ -396,10 +420,10 @@ def _retire(vault: Path, batch: vw.Batch, a: _Action, lines: list[str]) -> None:
 
 
 def _is_target(vault: Path, a: _Action, o: str) -> bool:
-    """Whether the old picture `o` is the very file the new one goes to."""
+    """Whether the old picture `o` is the very file the new one goes to (the
+    disk's say, never the name's)."""
     old = _inside(vault, o)
-    return (old is not None and _same_file(old, a.copy.target)) \
-        or _fold(o) == _fold(a.rel)
+    return old is not None and _same_file(old, a.copy.target)
 
 
 def _filed(a: _Action, wrote: bool) -> str:
@@ -499,8 +523,11 @@ def run(job: Job, keep: set[int], hold: set[int], write: bool) -> Result:
                      "linked, but the job could not be saved "
                      f"({err.__class__.__name__}). Run place again to "
                      "finish; nothing needs drawing again.")
+    # Asked once, of a picture just written: whether this disk folds case.
+    folds = next((f for f in (_folds_case(a.copy.target) for a in actions)
+                  if f is not None), None)
     for a in actions:
-        _retire(vault, batch, a, lines)
+        _retire(vault, batch, a, lines, folds)
     return Result(lines, ok)
 
 

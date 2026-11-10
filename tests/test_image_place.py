@@ -406,7 +406,19 @@ def test_a_picture_with_another_extension_blocks_too(vault):
     assert (vault / CHARS / "ANSELM.PNG").read_bytes() == JPG2
 
 
-def test_a_replace_differing_only_in_case_keeps_one_file(vault):
+def disk_folds_case(where):
+    """Whether the disk under `where` treats names differing only in letter
+    case as one file, asked of the disk itself."""
+    probe = where / "Aa"
+    probe.write_bytes(b"")
+    try:
+        return (where / "aA").exists()
+    finally:
+        probe.unlink()
+
+
+def test_a_replace_differing_only_in_case_keeps_one_file(vault, tmp_path, capsys):
+    folds = disk_folds_case(tmp_path)
     (vault / CHARS / "marta.jpg").unlink()
     (vault / CHARS / "Marta.jpg").write_bytes(JPG)
     (vault / "NPCs/Marta.md").write_text(
@@ -419,6 +431,14 @@ def test_a_replace_differing_only_in_case_keeps_one_file(vault):
     fm = vaultlib.extract_frontmatter(
         (vault / "NPCs/Marta.md").read_text(encoding="utf-8"))
     assert (vault / fm["portrait"]).read_bytes() == JPG2
+    out = capsys.readouterr().out
+    assert "left as it is" not in out
+    if folds:       # one file, under the name the disk kept; the original backed up
+        assert Path(fm["portrait"]).name == files[0].name
+        assert "the picture that was there is kept at" in out
+    else:           # two files until the old one, used by nothing now, is removed
+        assert files[0].name == "marta.jpg" and fm["portrait"] == f"{CHARS}/marta.jpg"
+        assert f"Removed the old picture {CHARS}/Marta.jpg." in out
 
 
 def test_a_copy_that_fails_half_way_leaves_the_old_picture(vault, monkeypatch,
@@ -595,7 +615,8 @@ def test_case_only_replace_names_the_note_as_the_disk_does(vault):
     assert (vault / fm["portrait"]).read_bytes() == JPG2
 
 
-def test_case_only_scene_replace_embeds_the_disk_name(vault):
+def test_case_only_scene_replace_embeds_the_disk_name(vault, tmp_path):
+    folds = disk_folds_case(tmp_path)
     folder = vault / "_attachments/scenes"
     folder.mkdir(parents=True)
     (folder / "Session-03-Mill.jpg").write_bytes(JPG)
@@ -605,18 +626,29 @@ def test_case_only_scene_replace_embeds_the_disk_name(vault):
     names = _listing(folder)
     assert len(names) == 1 and f"![[{names[0]}]]" in text
     assert (folder / names[0]).read_bytes() == JPG2
+    assert text.count("![[") == 1
+    if not folds:   # the new name; the old file, embedded nowhere, is gone
+        assert names == ["session-03-mill.jpg"]
 
 
-def test_the_rerun_path_uses_the_disk_name(vault):
+def test_the_rerun_path_uses_the_disk_name(vault, tmp_path, capsys):
+    folds = disk_folds_case(tmp_path)
     (vault / CHARS / "Anselm.jpg").write_bytes(JPG)    # same bytes as the job
     job = make_job(vault, [anselm()])
-    assert run(vault, job, "--keep", "1", "--write") == 0
-    fm = vaultlib.extract_frontmatter(
-        (vault / "NPCs/Anselm.md").read_text(encoding="utf-8"))
-    assert Path(fm["portrait"]).name in _listing(vault / CHARS)
-    assert (vault / fm["portrait"]).read_bytes() == JPG
-    assert _listing(vault / CHARS).count("Anselm.jpg") + \
-        _listing(vault / CHARS).count("anselm.jpg") == 1
+    before = snapshot(vault)
+    rc = run(vault, job, "--keep", "1", "--write")
+    text = (vault / "NPCs/Anselm.md").read_text(encoding="utf-8")
+    if folds:       # it is the very file: already filed, under the disk's name
+        assert rc == 0
+        fm = vaultlib.extract_frontmatter(text)
+        assert Path(fm["portrait"]).name in _listing(vault / CHARS)
+        assert (vault / fm["portrait"]).read_bytes() == JPG
+        assert _listing(vault / CHARS).count("Anselm.jpg") + \
+            _listing(vault / CHARS).count("anselm.jpg") == 1
+    else:           # another file whose name differs only in case: it blocks
+        assert rc == 1
+        assert "already has a picture" in capsys.readouterr().out
+        assert snapshot(vault) == before and "portrait" not in text
 
 
 def test_sharp_s_is_not_mistaken_for_ss(vault, capsys):
@@ -723,7 +755,8 @@ def test_the_rerun_line_names_the_picture_as_the_disk_does(vault, capsys):
     assert f"already placed at {CHARS}/Anselm.jpg" in out
 
 
-def test_a_case_only_replace_preview_does_not_say_retire(vault, capsys):
+def test_a_case_only_replace_preview_says_what_the_disk_will_do(vault, tmp_path, capsys):
+    folds = disk_folds_case(tmp_path)
     (vault / CHARS / "marta.jpg").unlink()
     (vault / CHARS / "Marta.jpg").write_bytes(JPG)
     (vault / "NPCs/Marta.md").write_text(
@@ -732,8 +765,11 @@ def test_a_case_only_replace_preview_does_not_say_retire(vault, capsys):
     job = make_job(vault, [m], data=JPG2)
     assert run(vault, job, "--keep", "1") == 0
     out = capsys.readouterr().out
-    assert "retire" not in out
-    assert f"replaces the existing file {CHARS}/Marta.jpg" in out
+    if folds:       # the same file: it is replaced
+        assert "retire" not in out
+        assert f"replaces the existing file {CHARS}/Marta.jpg" in out
+    else:           # another file: it goes if nothing else uses it
+        assert f"Would retire the old picture {CHARS}/Marta.jpg" in out
 
 
 def test_a_job_that_cannot_be_saved_after_the_write_is_said_plainly(
@@ -902,3 +938,100 @@ def test_a_late_file_survives_the_undo_of_a_later_failure(vault, monkeypatch):
                         lambda b: (_ for _ in ()).throw(OSError("no")))
     assert run(vault, job, "--keep", "1", "--write") == 1
     assert target.read_bytes() == JPG          # someone else's file: the undo leaves it
+
+
+# --- review round: letter case is the disk's to judge -------------------------
+
+def tells_case_apart(a, b):
+    """What a case-sensitive disk says: two names are one file only if equal."""
+    return Path(a) == Path(b)
+
+
+def test_the_disk_is_asked_whether_it_folds_case(tmp_path, monkeypatch):
+    f = tmp_path / "Marta.jpg"
+    f.write_bytes(JPG)
+    assert image_place._folds_case(f) is disk_folds_case(tmp_path)
+    monkeypatch.setattr(image_place, "_same_file", tells_case_apart)
+    assert image_place._folds_case(f) is False
+    monkeypatch.setattr(image_place, "_same_file", lambda a, b: True)
+    assert image_place._folds_case(f) is True
+    assert image_place._folds_case(tmp_path / "missing.jpg") is None
+    (tmp_path / "01.ßß").write_bytes(JPG)          # no letter that can be swapped
+    assert image_place._folds_case(tmp_path / "01.ßß") is None
+
+
+@pytest.mark.parametrize("folds, used", [(False, False), (True, True), (None, True)])
+def test_the_new_name_in_the_note_is_a_use_only_where_the_disk_folds_case(
+        vault, folds, used):
+    batch = vault_write.Batch(vault)
+    batch.put("NPCs/Marta.md", npc(f'portrait: "{CHARS}/marta.jpg"\n'))
+    assert image_place._linked(vault, batch, f"{CHARS}/Marta.jpg", folds) is used
+
+
+@pytest.mark.parametrize("folds", [False, True, None])
+def test_an_exact_mention_of_the_old_name_is_a_use_on_any_disk(vault, folds):
+    (vault / "NPCs/Rowan.md").write_text(npc() + "![[Marta.jpg]]\n", encoding="utf-8")
+    batch = vault_write.Batch(vault)
+    batch.put("NPCs/Marta.md", npc(f'portrait: "{CHARS}/marta.jpg"\n'))
+    assert image_place._linked(vault, batch, f"{CHARS}/Marta.jpg", folds) is True
+
+
+def _old_and_new(vault):
+    """An old picture and a new one in two files, whatever this disk is: the
+    names differ in more than case, and the forced `_same_file` judges them."""
+    (vault / CHARS / "marta.jpg").unlink()
+    (vault / CHARS / "Old-Marta.jpg").write_bytes(JPG)
+    (vault / CHARS / "marta.jpg").write_bytes(JPG2)
+    batch = vault_write.Batch(vault)
+    batch.put("NPCs/Marta.md", npc(f'portrait: "{CHARS}/marta.jpg"\n'))
+    copy = image_place._Copy(src=vault / CHARS / "marta.jpg",
+                             target=vault / CHARS / "marta.jpg", existed=True,
+                             backup=vault / "backup.jpg")
+    act = image_place._Action(entry(1, "NPCs/Marta.md", "npc", f"{CHARS}/marta"),
+                              copy, "NPCs/Marta.md", None, [f"{CHARS}/Old-Marta.jpg"],
+                              rel=f"{CHARS}/marta.jpg")
+    return batch, act
+
+
+def test_retire_on_a_disk_that_tells_case_apart_removes_an_unused_old_file(vault, monkeypatch):
+    batch, act = _old_and_new(vault)
+    monkeypatch.setattr(image_place, "_same_file", tells_case_apart)
+    lines = []
+    image_place._retire(vault, batch, act, lines, False)
+    assert lines == [f"  Removed the old picture {CHARS}/Old-Marta.jpg."]
+    assert not (vault / CHARS / "Old-Marta.jpg").exists()
+
+
+def test_retire_on_a_disk_that_tells_case_apart_keeps_an_old_file_named_exactly(
+        vault, monkeypatch):
+    batch, act = _old_and_new(vault)
+    (vault / "NPCs/Rowan.md").write_text(npc() + "![[Old-Marta.jpg]]\n", encoding="utf-8")
+    monkeypatch.setattr(image_place, "_same_file", tells_case_apart)
+    lines = []
+    image_place._retire(vault, batch, act, lines, False)
+    assert lines == [f"  Kept the old picture {CHARS}/Old-Marta.jpg; something else links it."]
+    assert (vault / CHARS / "Old-Marta.jpg").is_file()
+
+
+def test_retire_of_the_very_file_written_says_only_where_the_original_is(vault, monkeypatch):
+    batch, act = _old_and_new(vault)
+    monkeypatch.setattr(image_place, "_same_file", lambda a, b: True)   # one file
+    lines = []
+    image_place._retire(vault, batch, act, lines, True)
+    assert lines == [f"  Replaced {CHARS}/marta.jpg; the picture that was there is "
+                     f"kept at {vault / 'backup.jpg'} until this job is tidied away "
+                     f"({image_jobs.JOB_DAYS} days)."]
+    assert (vault / CHARS / "Old-Marta.jpg").is_file()
+
+
+def test_a_case_variant_name_never_makes_two_files_one_without_the_disk(vault, monkeypatch):
+    # The name alone never decides "it is the new picture's own file".
+    batch, act = _old_and_new(vault)
+    act.old = [f"{CHARS}/MARTA.jpg"]
+    monkeypatch.setattr(image_place, "_same_file", tells_case_apart)
+    monkeypatch.setattr(image_place, "_inside", lambda v, rel: vault / "elsewhere.jpg")
+    (vault / "elsewhere.jpg").write_bytes(JPG)
+    lines = []
+    image_place._retire(vault, batch, act, lines, False)
+    assert lines == [f"  Removed the old picture {CHARS}/MARTA.jpg."]
+    assert not image_place._is_target(vault, act, f"{CHARS}/MARTA.jpg")
