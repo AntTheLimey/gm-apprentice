@@ -189,6 +189,17 @@ def place(vault: Path, job_id: str, keep: list[int], hold: list[int],
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    try:
+        return _dispatch(args)
+    except OSError as e:
+        # Last resort: anything not already wrapped must not be a traceback.
+        reason = (f"{e.filename}: {e.strerror}" if e.filename and e.strerror
+                  else str(e))
+        print(f"Could not read or write {reason}.", file=sys.stderr)
+        return 1
+
+
+def _dispatch(args: argparse.Namespace) -> int:
     if args.command == "status":
         return status(args.vault)
     if args.command == "plan":

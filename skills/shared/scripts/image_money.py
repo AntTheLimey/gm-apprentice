@@ -137,7 +137,10 @@ def record(vault: Path, today: date, cents: float | None) -> None:
 def fit(estimate: Callable[[int], float], refs: int,
         limit: float) -> tuple[int, float] | None:
     """The most references `n <= refs` whose estimated cost is within
-    `limit`, with that estimate; `None` when even no references is over."""
+    `limit`, with that estimate; `None` when even no references is over.
+    A negative `refs` is a caller error and raises `ValueError`."""
+    if refs < 0:
+        raise ValueError(f"refs must be zero or more, got {refs}")
     for n in range(refs, -1, -1):
         cost = _cents(estimate(n))
         if cost <= _cents(limit):

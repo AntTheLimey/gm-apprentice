@@ -532,3 +532,34 @@ def test_fences_and_headings_in_the_recap_are_not_paragraphs(tmp_path):
                           False, TODAY)
     assert job.entries[0].status == "planned"
     assert job.entries[1].status == job.entries[2].status == "refused"
+
+
+# --- minor wave: J1, J2 ---------------------------------------------------
+
+def test_a_trimmed_picture_does_not_block_a_later_one_for_its_place(tmp_path):
+    cfg = ("vault:\n  images:\n    service: gemini\n    model: x\n"
+           "    price: 4\n    run_cap: 5\n")
+    v = build(tmp_path, config=cfg)
+    job = image_jobs.plan(v, [
+        {"for": "Six", "subject": "x"},
+        {"for": "Anselm", "subject": "x"},
+        {"for": "Anselm", "subject": "y"}], False, TODAY)
+    a, b, c = job.entries
+    assert (a.status, b.status, c.status) == ("planned", "trimmed", "trimmed")
+    assert "cap for one run" in said(c)
+    assert "same place" not in said(c)
+
+
+def test_a_copy_of_a_surviving_picture_is_still_refused(tmp_path):
+    v = build(tmp_path)
+    job = image_jobs.plan(v, [{"for": "Anselm", "subject": "x"},
+                              {"for": "Anselm", "subject": "y"}], False, TODAY)
+    assert [e.status for e in job.entries] == ["planned", "refused"]
+    assert job.entries[1].estimate is None
+
+
+def test_an_unusable_reference_listed_twice_is_said_once(tmp_path):
+    v = build(tmp_path)
+    _, e = one(v, {"for": "Anselm", "subject": "x",
+                   "shows": ["Ghost", "Ghost", "Nobody", "Nobody"]})
+    assert len(e.said) == 2

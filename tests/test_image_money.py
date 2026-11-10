@@ -213,3 +213,8 @@ def test_record_keeps_other_keys_under_images(tmp_path):
     (v / STATE).write_text('{"images": {"note": "kept"}}', encoding="utf-8")
     image_money.record(v, date(2026, 11, 9), 2)
     assert json.loads((v / STATE).read_text(encoding="utf-8"))["images"]["note"] == "kept"
+
+
+def test_fit_with_negative_references_is_a_caller_error():
+    with pytest.raises(ValueError):
+        image_money.fit(lambda n: 1, -1, 5)

@@ -261,3 +261,28 @@ def test_the_image_group_has_help_text():
     ap = image.build_parser()
     sub = next(a for a in ap._actions if a.dest == "command")
     assert sub.help
+
+
+# --- minor wave: J3 ---------------------------------------------------
+
+def test_a_stray_os_error_is_one_plain_line(tmp_path, monkeypatch, capsys):
+    import image_money
+    v = make_vault(tmp_path)
+
+    def boom(*a, **k):
+        raise PermissionError(13, "Permission denied", "/some/path")
+    monkeypatch.setattr(image_money, "spent", boom)
+    assert image.main(["status", str(v)]) == 1
+    err = capsys.readouterr().err
+    assert err == "Could not read or write /some/path: Permission denied.\n"
+
+
+def test_a_stray_os_error_without_a_path(tmp_path, monkeypatch, capsys):
+    import image_money
+    v = make_vault(tmp_path)
+
+    def boom(*a, **k):
+        raise OSError("odd")
+    monkeypatch.setattr(image_money, "spent", boom)
+    assert image.main(["status", str(v)]) == 1
+    assert capsys.readouterr().err == "Could not read or write odd.\n"

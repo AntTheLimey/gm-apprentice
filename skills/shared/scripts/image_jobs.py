@@ -305,7 +305,8 @@ def _gather_refs(ctx: _Ctx, e: Entry, shows: list[str]) -> list[str]:
     for raw in shows:
         ref, why = _reference(ctx, raw)
         if why:
-            e.said.append(why)
+            if why not in e.said:
+                e.said.append(why)
         elif ref and ref.note not in seen:
             seen.add(ref.note)
             found.append(ref)
@@ -439,8 +440,7 @@ def _fit_cost(ctx: _Ctx, e: Entry, refs: list[str]) -> list[str] | None:
     return refs[:keep]
 
 
-def _plan_one(ctx: _Ctx, e: Entry, req: dict[str, Any],
-              claimed: set[str]) -> None:
+def _plan_one(ctx: _Ctx, e: Entry, req: dict[str, Any]) -> None:
     """Rules 4 to 8 for one picture, in the brief's order."""
     got = _read_note(ctx, e, req["for"])
     if got is None or not _check_unprompted(ctx, e):
@@ -449,9 +449,6 @@ def _plan_one(ctx: _Ctx, e: Entry, req: dict[str, Any],
     if not _set_dest(e, req) or not _check_existing(ctx, e, fm):
         return
     if e.kind == "scene" and not _check_scene_place(e, text):
-        return
-    if e.dest.casefold() in claimed:
-        _refuse(e, "another picture in this plan goes to the same place")
         return
     refs = _gather_refs(ctx, e, req.get("shows", []))
     e.prompt, missing = image_guidance.compose(
@@ -463,26 +460,35 @@ def _plan_one(ctx: _Ctx, e: Entry, req: dict[str, Any],
         return
     e.refs = kept
     e.status = "planned"
-    claimed.add(e.dest.casefold())
 
 
-def _trim(entries: list[Entry], lim: image_money.Limits,
-          month_spent: float) -> None:
-    """Rule 9: take planned pictures in order while the caps allow."""
+def _settle(entries: list[Entry], lim: image_money.Limits,
+            month_spent: float, priced: bool) -> None:
+    """Rules 9 and 3: go through the planned pictures in order. A picture
+    for a place an earlier survivor already holds is refused; otherwise it
+    is trimmed when a cap says so, or it survives and holds its place. A
+    picture that was refused or trimmed never blocks a later one."""
     run_spent = 0.0
     stopped: str | None = None
+    claimed: set[str] = set()
     for e in entries:
         if e.status != "planned":
             continue
-        assert e.estimate is not None
-        why = stopped or image_money.room(lim, run_spent,
-                                          month_spent + run_spent, e.estimate)
-        if why:
-            stopped = why
-            e.status = "trimmed"
-            e.said.append(why)
-        else:
+        if e.dest.casefold() in claimed:
+            _refuse(e, "another picture in this plan goes to the same place")
+            e.prompt, e.refs, e.estimate = "", [], None
+            continue
+        if priced:
+            assert e.estimate is not None
+            why = stopped or image_money.room(
+                lim, run_spent, month_spent + run_spent, e.estimate)
+            if why:
+                stopped = why
+                e.status = "trimmed"
+                e.said.append(why)
+                continue
             run_spent += e.estimate
+        claimed.add(e.dest.casefold())
 
 
 def plan(vault: Path, requests: list[dict[str, Any]], unprompted: bool,
@@ -519,7 +525,6 @@ def plan(vault: Path, requests: list[dict[str, Any]], unprompted: bool,
     ctx = _Ctx(vault, lim, guidance, vw.Batch(vault),
                section.name_index(vl.vault_files(vault)), priced, unprompted)
     entries: list[Entry] = []
-    claimed: set[str] = set()
     for n, req in enumerate(requests, 1):
         e = Entry(n=n, note=req["for"], kind="", prompt="", refs=[],
                   shape="", pending=str(folder(job_id) / f"{n:02d}"), dest="",
@@ -529,9 +534,8 @@ def plan(vault: Path, requests: list[dict[str, Any]], unprompted: bool,
             e.said.append("No Image Guidance note yet; pictures are drawn "
                           "with no campaign style.")
         entries.append(e)
-        _plan_one(ctx, e, req, claimed)
-    if priced:
-        _trim(entries, lim, month_spent)
+        _plan_one(ctx, e, req)
+    _settle(entries, lim, month_spent, priced)
 
     job = Job(id=job_id, vault=str(vault), service=lim.service,
               model=lim.model, priced=priced, unprompted=unprompted,
