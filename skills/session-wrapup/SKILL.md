@@ -181,8 +181,8 @@ the narrative.
    at the end of this session. Not threads: finished or overtaken, an
    event, colour, one session's business, a copy, on the wrong sheet
    (the whole test: `shared/reconcile.md` step 5.5). Write only what
-   passes, plus any loose end the party left behind this session: it
-   goes in the Wrap-Up's Unresolved Threads, so Reconcile can park it.
+   passes. A loose end the party left behind this session goes in
+   Unresolved Threads too; Reconcile parks it.
    "Adrien stopped her ears with wax" is an event: the recap. "At the
    Dak Bungalow" is a stopping point: the Handoff. Shared by 2+ PCs:
    the shared list.

@@ -72,7 +72,7 @@ person, the reason — these bullets are read cold by session-prep.}
 
 #### Unresolved Threads
 
-{A thread is active when it is a question or an obligation that can plausibly bear on the sessions ahead, given where the party is at the end of this session. Not threads: finished or overtaken, an event, colour, one session's business, a copy, on the wrong sheet. Where play stopped goes in the Handoff; what happened goes in the recap.}
+{A thread is active when it is a question or an obligation that can plausibly bear on the sessions ahead, given where the party is at the end of this session. Not threads: finished or overtaken, an event, colour, one session's business, a copy, on the wrong sheet. A loose end the party left behind this session goes here too; Reconcile parks it. Where play stopped goes in the Handoff; what happened goes in the recap.}
 
 #### Resolved Threads
 

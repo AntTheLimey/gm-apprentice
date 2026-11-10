@@ -21,7 +21,7 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 ### Changed
 
 - Wrap-up writes only active threads; settled and dormant ones stay out of what prep reads.
-- The player site never publishes a Dormant Threads heading. The update offers the entry to vaults that keep their own hidden-headings list.
+- The player site never publishes a Dormant Threads heading: threads are parked only once the site's publish tool hides it, and the update offers the entry to vaults that keep their own hidden-headings list.
 - Publish tool 1.70.6: `Dormant Threads` joins the hidden headings.
 
 ### Fixed

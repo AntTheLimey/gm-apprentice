@@ -148,8 +148,8 @@ it `?`: the GM would rather add one back than prune a long list.
    less sure ones:
    - **Ended**: each with the line that ended it.
    - **Dormant**: left behind, each with where or what was left.
-   - **Wake**: dormant threads this session came back to, each with
-     the name that matched.
+   - **Wake**: dormant entries whose names (never a PC's) this Wrap-Up
+     mentions (prep's "Dormant, may wake" lists them), each with the name.
    - **Not a thread**: each with its reason in a few words.
    - **Move**: a matter on the wrong sheet, or carried by 2+ PCs; a
      live Wrap-Up line on no list goes onto the shared list.
@@ -163,21 +163,24 @@ it `?`: the GM would rather add one back than prune a long list.
    line stays as it is; a struck New is closed as not a thread.
 5. Write in two calls, each a dry run, then the same with `--write`;
    an ERROR row writes nothing. First `gma vault-write <vault> threads
-   --wrapup "<wrap-up>"`, TAB rows (LEAD: bold lead or whole text;
-   LIST: `shared`, a PC's note name, `dormant`, or `wrapup` for a line
-   on no list):
+   --wrapup "<wrap-up>"`, TAB rows (LEAD: the bold lead, or the whole
+   text exactly; LIST: `shared`, a PC's note name, `wrapup` for lines
+   on no list, or for `close` only `dormant`):
 
    ```text
    add    shared  SINCE  WHO  TEXT   a live line on no list
    close  LIST  LEAD  EVIDENCE   the quoted line, or "not a thread: {reason}"
-   rest   LIST  LEAD  WHY        where or what was left
-   wake   LEAD  WHO              one PC: their list; PCs or party: shared
+   rest   LIST  LEAD  WHY [WHO]  where or what was left; WHO: wrapup only
+   wake   LEAD  WHO [TEXT]       one PC: their list; PCs or party: shared
    move   LEAD  SINCE  WHO       holders and PCs involved; "Session N" or -
    hand   FROM  LEAD  TO         one PC's line to another PC's list
    ```
 
-   WHO: the PCs it bears on, or `party`. Copy an `add`'s TEXT exactly:
-   that claims the Wrap-Up line. Then `gma vault-write <vault>
+   WHO: the PCs it bears on, or `party`. The shared list and PC lists
+   are published: write their TEXT as players should read it, never
+   copied from the Wrap-Up's GM Notes. A live Wrap-Up line: `add` it,
+   then `close wrapup LEAD "now on the shared list"`; one woken from a
+   Wrap-Up line: `wake` with TEXT. Then `gma vault-write <vault>
    wrapup-settle "<wrap-up>"`, rows `SECTION  LEAD  RULING`, for the
    Answered.
 6. A tidy vault after a quiet session: a short list, or "Threads:
