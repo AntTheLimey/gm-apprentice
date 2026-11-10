@@ -31,7 +31,7 @@ A fill (the GM asks to fill in the missing pictures, or says yes to one offered)
 - Tell the GM the count, about how long, and the cost if paid, and wait for their yes.
 - Work in batches of 10: plan (no `--unprompted`: the GM asked), draw, look, place, then the next. Stopping part-way loses nothing already placed. The month's ceiling still applies.
 
-1. Read the Image Guidance note. Direction tells you what the pictures should show and is never sent. Write the requests file:
+1. Read the Image Guidance note. Direction tells you what the pictures should show and is never sent. Write the requests file in the temp folder, never in the vault:
 
    ```json
    [
