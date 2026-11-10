@@ -398,7 +398,7 @@ def test_a_self_plan_needs_no_service_and_prints_what_to_draw(tmp_path, capsys):
     vault, jid, out = self_job(tmp_path, capsys)
     assert "by you, with your own image tool" in out
     assert "prompt: person 1" in out and "shape: 3:4" in out
-    assert f"--picture N FILE" in out and "cents" not in out
+    assert "--picture N FILE" in out and "cents" not in out
 
 
 def test_draw_on_a_self_job_says_how_to_hand_in(tmp_path, capsys):

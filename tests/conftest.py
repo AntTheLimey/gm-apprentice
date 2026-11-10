@@ -84,6 +84,7 @@ def _no_picture_service_or_keychain(monkeypatch, tmp_path):
     try:
         import image_codex
         import image_gemini
+        import image_jobs
         import image_keys
     except Exception:  # noqa: BLE001 - a test that never draws pays nothing
         return
@@ -116,7 +117,6 @@ def _no_picture_service_or_keychain(monkeypatch, tmp_path):
     monkeypatch.setattr(image_codex, "WHICH", lambda *a, **k: None)
     monkeypatch.delenv("CODEX_HOME", raising=False)
     # Picture jobs that fall back to the temp folder stay in this test's own.
-    import image_jobs
     monkeypatch.setattr(image_jobs, "TEMP", lambda: str(tmp_path / "tmp"))
 
 
