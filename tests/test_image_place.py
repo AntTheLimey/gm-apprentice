@@ -119,7 +119,7 @@ def test_keep_files_the_picture_and_sets_a_blank_portrait(vault, capsys):
         "_attachments/characters/anselm.jpg"
     assert not [f for f in schema_rules.frontmatter_findings(
         vaultlib.extract_frontmatter(text)) if f[0] == "ERROR"]
-    assert not Path(job.entries[0].pending + ".jpg").exists()
+    assert Path(job.entries[0].pending + ".jpg").read_bytes() == JPG
     assert image_jobs.load(job.id).entries[0].status == "kept"
     out = capsys.readouterr().out
     assert "anselm.jpg" in out
@@ -380,3 +380,196 @@ def test_a_job_for_another_vault_is_refused(vault, tmp_path, capsys):
 def test_an_unknown_job_is_exit_2(vault, capsys):
     assert image.main(["place", str(vault), "nonesuch", "--keep", "1"]) == 2
     assert "No picture job nonesuch" in capsys.readouterr().err
+
+
+# --- fix round 1: copy, never move; never touch what was not asked --------------
+
+CHARS = "_attachments/characters"
+
+
+def test_a_picture_differing_only_in_case_is_not_overwritten(vault, capsys):
+    (vault / CHARS / "Anselm.jpg").write_bytes(JPG2)
+    job = make_job(vault, [anselm()])
+    before = snapshot(vault)
+    assert run(vault, job, "--keep", "1", "--write") == 1
+    assert snapshot(vault) == before
+    assert (vault / CHARS / "Anselm.jpg").read_bytes() == JPG2
+    assert Path(job.entries[0].pending + ".jpg").read_bytes() == JPG
+    assert "already has a picture" in capsys.readouterr().out
+    assert image_jobs.load(job.id).entries[0].status == "drawn"
+
+
+def test_a_picture_with_another_extension_blocks_too(vault):
+    (vault / CHARS / "ANSELM.PNG").write_bytes(JPG2)
+    job = make_job(vault, [anselm()])
+    assert run(vault, job, "--keep", "1", "--write") == 1
+    assert (vault / CHARS / "ANSELM.PNG").read_bytes() == JPG2
+
+
+def test_a_replace_differing_only_in_case_keeps_one_file(vault):
+    (vault / CHARS / "marta.jpg").unlink()
+    (vault / CHARS / "Marta.jpg").write_bytes(JPG)
+    (vault / "NPCs/Marta.md").write_text(
+        npc(f'portrait: "{CHARS}/Marta.jpg"\n'), encoding="utf-8")
+    m = entry(1, "NPCs/Marta.md", "npc", f"{CHARS}/marta", replace=True)
+    job = make_job(vault, [m], data=JPG2)
+    assert run(vault, job, "--keep", "1", "--write") == 0
+    files = [p for p in (vault / CHARS).iterdir()]
+    assert len(files) == 1 and files[0].read_bytes() == JPG2
+    fm = vaultlib.extract_frontmatter(
+        (vault / "NPCs/Marta.md").read_text(encoding="utf-8"))
+    assert (vault / fm["portrait"]).read_bytes() == JPG2
+
+
+def test_a_copy_that_fails_half_way_leaves_the_old_picture(vault, monkeypatch,
+                                                          capsys):
+    m = entry(1, "NPCs/Marta.md", "npc", f"{CHARS}/marta", replace=True)
+    job = make_job(vault, [m], data=JPG2)
+    before = snapshot(vault)
+    real = image_place.shutil.copyfile
+    calls = []
+
+    def flaky(a, b):
+        calls.append(a)
+        if len(calls) == 2:          # the new picture, after the backup
+            raise OSError("disk full")
+        return real(a, b)
+    monkeypatch.setattr(image_place.shutil, "copyfile", flaky)
+    assert run(vault, job, "--keep", "1", "--write") == 1
+    assert snapshot(vault) == before
+    assert Path(job.entries[0].pending + ".jpg").read_bytes() == JPG2
+    assert "disk full" in capsys.readouterr().out
+
+
+def test_a_failed_undo_says_where_the_original_is(vault, monkeypatch, capsys):
+    m = entry(1, "NPCs/Marta.md", "npc", f"{CHARS}/marta", replace=True)
+    job = make_job(vault, [m], data=JPG2)
+    monkeypatch.setattr(vault_write, "apply",
+                        lambda b: (_ for _ in ()).throw(vault_write.WriteError("x")))
+    real = image_place.shutil.copyfile
+    state = {"n": 0}
+
+    def flaky(a, b):
+        state["n"] += 1
+        if state["n"] == 3:          # the restore
+            raise OSError("gone")
+        return real(a, b)
+    monkeypatch.setattr(image_place.shutil, "copyfile", flaky)
+    assert run(vault, job, "--keep", "1", "--write") == 1
+    out = capsys.readouterr().out
+    assert "could not be put back" in out and "replaced-01.jpg" in out
+    assert "were put back" not in out
+
+
+def test_a_failed_job_save_says_the_vault_changed_and_a_rerun_finishes(
+        vault, monkeypatch, capsys):
+    job = make_job(vault, [anselm()])
+    real = image_jobs.save
+    monkeypatch.setattr(image_jobs, "save",
+                        lambda j: (_ for _ in ()).throw(OSError("x")))
+    assert run(vault, job, "--keep", "1", "--write") == 1
+    out = capsys.readouterr().out
+    assert "The vault WAS changed" in out
+    assert (vault / CHARS / "anselm.jpg").read_bytes() == JPG
+    monkeypatch.setattr(image_jobs, "save", real)
+    after_first = snapshot(vault)
+    assert run(vault, job, "--keep", "1", "--write") == 0
+    out = capsys.readouterr().out
+    assert "missing" not in out and "draw it again" not in out
+    assert snapshot(vault) == after_first
+    assert image_jobs.load(job.id).entries[0].status == "kept"
+
+
+def test_an_interrupted_earlier_copy_is_accepted(vault):
+    (vault / CHARS / "anselm.jpg").write_bytes(JPG)    # same bytes as the job
+    job = make_job(vault, [anselm()])
+    assert run(vault, job, "--keep", "1", "--write") == 0
+    text = (vault / "NPCs/Anselm.md").read_text(encoding="utf-8")
+    assert f'portrait: "{CHARS}/anselm.jpg"' in text
+    assert (vault / CHARS / "anselm.jpg").read_bytes() == JPG
+
+
+def test_a_cleanup_failure_does_not_fail_the_command(vault, monkeypatch,
+                                                    capsys):
+    m = entry(1, "NPCs/Marta.md", "npc", f"{CHARS}/marta-2", replace=True)
+    job = make_job(vault, [m])
+    monkeypatch.setattr(image_place, "_linked",
+                        lambda *a: (_ for _ in ()).throw(RuntimeError("no")))
+    assert run(vault, job, "--keep", "1", "--write") == 0
+    assert (vault / CHARS / "marta.jpg").is_file()
+    assert "Could not remove the old picture" in capsys.readouterr().out
+    assert image_jobs.load(job.id).entries[0].status == "kept"
+
+
+def test_the_job_keeps_its_copy(vault):
+    job = make_job(vault, [anselm()])
+    assert run(vault, job, "--keep", "1", "--write") == 0
+    assert Path(job.entries[0].pending + ".jpg").read_bytes() == JPG
+
+
+def test_the_old_picture_is_kept_when_a_canvas_links_it(vault):
+    (vault / "map.canvas").write_text('{"file": "marta.JPG"}', encoding="utf-8")
+    m = entry(1, "NPCs/Marta.md", "npc", f"{CHARS}/marta-2", replace=True)
+    job = make_job(vault, [m])
+    assert run(vault, job, "--keep", "1", "--write") == 0
+    assert (vault / CHARS / "marta.jpg").is_file()
+
+
+def test_a_bare_old_portrait_value_is_never_claimed_removed(vault, capsys):
+    (vault / "NPCs/Rowan.md").write_text(npc('portrait: "rowan-old.jpg"\n'),
+                                         encoding="utf-8")
+    r = entry(1, "NPCs/Rowan.md", "npc", f"{CHARS}/rowan", replace=True)
+    job = make_job(vault, [r])
+    assert run(vault, job, "--keep", "1", "--write") == 0
+    assert "Removed" not in capsys.readouterr().out
+
+
+def test_embed_already_in_the_run_of_embeds_is_not_added_again():
+    t = ("## Recap\nThe miller said.\n\n![[other.jpg]]\n\n![[a.jpg]]\n\nNext.\n")
+    assert image_place.embed_after(t, "The miller", "a.jpg") == t
+
+
+def test_embed_at_the_last_line_ends_with_a_newline():
+    t = "## Recap\nThe miller said nothing."
+    assert image_place.embed_after(t, "The miller", "a.jpg") == \
+        "## Recap\nThe miller said nothing.\n\n![[a.jpg]]\n"
+
+
+@pytest.mark.parametrize("field", ["portrait:\n  - a.jpg\n",
+                                   "portrait: [a.jpg]\n",
+                                   "portrait:\n  path: a.jpg\n"])
+def test_a_portrait_that_is_not_a_single_value_is_never_written_over(
+        vault, field):
+    (vault / "NPCs/Rowan.md").write_text(npc(field), encoding="utf-8")
+    before = (vault / "NPCs/Rowan.md").read_text(encoding="utf-8")
+    r = entry(1, "NPCs/Rowan.md", "npc", f"{CHARS}/rowan", replace=True)
+    job = make_job(vault, [r])
+    assert run(vault, job, "--keep", "1", "--write") == 1
+    assert (vault / "NPCs/Rowan.md").read_text(encoding="utf-8") == before
+    assert not (vault / CHARS / "rowan.jpg").exists()
+
+
+def test_a_note_without_frontmatter_is_not_placed(vault, capsys):
+    (vault / "NPCs/Rowan.md").write_text("# Rowan\n", encoding="utf-8")
+    job = make_job(vault, [entry(1, "NPCs/Rowan.md", "npc", f"{CHARS}/rowan")])
+    assert run(vault, job, "--keep", "1", "--write") == 1
+    assert "NPCs/Rowan.md has no frontmatter to hold a picture" in \
+        capsys.readouterr().out
+    assert not (vault / CHARS / "rowan.jpg").exists()
+
+
+def test_a_preview_with_an_unplaceable_picture_says_so(vault, capsys):
+    job = make_job(vault, [scene(after="Nothing like this")])
+    assert run(vault, job, "--keep", "1") == 1
+    out = capsys.readouterr().out
+    assert out.strip().splitlines()[-1] == (
+        "Some pictures cannot be placed (see above). Nothing was changed.")
+
+
+def test_a_note_outside_the_vault_is_refused(vault, tmp_path, capsys):
+    (tmp_path / "outside.md").write_text(npc(), encoding="utf-8")
+    job = make_job(vault, [entry(1, "../outside.md", "npc", f"{CHARS}/x")])
+    assert run(vault, job, "--keep", "1", "--write") == 1
+    assert "outside the vault" in capsys.readouterr().out
+    assert not (vault / CHARS / "x.jpg").exists()
+    assert (tmp_path / "outside.md").read_text(encoding="utf-8") == npc()

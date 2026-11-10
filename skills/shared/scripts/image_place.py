@@ -1,8 +1,8 @@
 """Place kept pictures: file them in the vault, link them, leave the rest.
 
 `place` runs after `draw`, once the assistant has looked at every drawn
-picture and given a verdict. A kept picture moves from the job folder to
-its place under `_attachments/`; an entity note gets its `portrait` set, a
+picture and given a verdict. A kept picture is copied from the job folder to
+its place under `_attachments/` (the job keeps its copy); an entity note gets its `portrait` set, a
 Wrap-Up gets an `![[embed]]` after its recap paragraph. A held picture
 stays in the job folder. Without `write` nothing moves and nothing is
 written. A picture that exists is never replaced unless the plan said
@@ -11,8 +11,11 @@ written. A picture that exists is never replaced unless the plan said
 
 from __future__ import annotations
 
-import glob
+import os
+import re
+import secrets
 import shutil
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -29,19 +32,23 @@ class Result:
 
 
 @dataclass
-class _Move:
+class _Copy:
+    """One picture going into the vault, recorded before it is touched."""
     src: Path
     target: Path
-    backup: Path | None = None
+    existed: bool                 # a different picture sits at the target
+    backup: Path | None = None    # its copy in the job folder, once made
+    tmp: Path | None = None
 
 
 @dataclass
 class _Action:
     entry: Entry
-    move: _Move
+    copy: _Copy
     note: str
     embed: str | None
     old: list[str]          # vault-relative old picture files to retire
+    done: bool = False      # our own earlier copy is already at the target
 
 
 # --- the embed ---------------------------------------------------------------
@@ -49,8 +56,8 @@ class _Action:
 def embed_after(text: str, after: str, filename: str) -> str | None:
     """The note's text with `![[filename]]` on its own line, a blank line
     each side, directly after the one recap paragraph that starts with
-    `after`; the text unchanged when that line is already there; None when
-    zero or several paragraphs match."""
+    `after`; the text unchanged when that line is already in the run of
+    embeds there; None when zero or several paragraphs match."""
     spans = image_jobs.recap_spans(text)
     if spans is None:
         return None
@@ -60,13 +67,20 @@ def embed_after(text: str, after: str, filename: str) -> str | None:
     last = spans[hits[0]][1]
     lines = text.split("\n")
     embed = f"![[{filename}]]"
-    nxt = next((ln for ln in lines[last + 1:] if ln.strip()), None)
-    if nxt is not None and nxt.strip() == embed:
-        return text
+    for ln in lines[last + 1:]:
+        if not ln.strip():
+            continue
+        if not ln.strip().startswith("![["):
+            break
+        if ln.strip() == embed:
+            return text
     cr = "\r" if lines[last].endswith("\r") else ""
-    block = ["" + cr, embed + cr]
-    if last + 1 < len(lines) and lines[last + 1].strip():
-        block.append("" + cr)
+    if last + 1 >= len(lines):
+        block = ["" + cr, embed + cr, ""]
+    else:
+        block = ["" + cr, embed + cr]
+        if lines[last + 1].strip():
+            block.append("" + cr)
     lines[last + 1:last + 1] = block
     return "\n".join(lines)
 
@@ -87,108 +101,195 @@ def _pending(e: Entry) -> Path:
     return Path(e.pending + "." + (e.ext or ""))
 
 
+def _fold(s: str) -> str:
+    return unicodedata.normalize("NFC", s).casefold()
+
+
+def _same_bytes(a: Path, b: Path) -> bool:
+    try:
+        return a.stat().st_size == b.stat().st_size and a.read_bytes() == b.read_bytes()
+    except OSError:
+        return False
+
+
+def _same_file(a: Path, b: Path) -> bool:
+    try:
+        return os.path.samefile(a, b)
+    except OSError:
+        return False
+
+
 def _linked(vault: Path, batch: vw.Batch, rel: str) -> bool:
-    """Whether any note in the vault names the picture `rel`, as a path or
-    by its file name (a `portrait:` value or an embed). A plain search of
-    the notes' text, as the current text of notes this run changes."""
-    name = Path(rel).name
-    for note, text in vl.vault_files(batch.vault):
-        text = batch.texts.get(note, text)
-        if name in text or rel in text:
+    """Whether anything in the vault names the picture `rel`, by path or
+    file name, ignoring case: a note (as this run leaves it) or a canvas."""
+    name, path = _fold(Path(rel).name), _fold(rel)
+    for note, text in vl.vault_files(vault):
+        text = _fold(batch.texts.get(note, text))
+        if name in text or path in text:
+            return True
+    for canvas in vault.rglob("*.canvas"):
+        if any(part.startswith(".") for part in canvas.relative_to(vault).parts):
+            continue
+        try:
+            text = _fold(canvas.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError):
+            continue
+        if name in text or path in text:
             return True
     return False
 
 
-def _set_portrait(text: str, value: str) -> str | None:
-    lines = text.splitlines(keepends=True)
-    close, err = vl.frontmatter_span(lines)
-    if err:
-        return None
+def _existing(vault: Path, dest: str) -> list[str]:
+    """Pictures at `dest` under any extension, names compared case-folded."""
+    folder = _inside(vault, dest)
+    if folder is None:
+        return []
+    want = _fold(Path(dest).name)
+    try:
+        names = sorted(os.listdir(folder.parent))
+    except OSError:
+        return []
+    return [(Path(dest).parent / n).as_posix() for n in names
+            if (folder.parent / n).is_file()
+            and _fold(Path(n).stem) == want]
+
+
+def _portrait_of(lines: list[str], close: int) -> tuple[str, bool]:
+    """The note's portrait as (path, odd): odd when the field is a list or
+    has child lines, which is never blank."""
+    for i in range(1, close):
+        m = re.match(r"portrait:(.*)$", lines[i].rstrip("\r\n"))
+        if not m:
+            continue
+        raw = m.group(1).strip()
+        nxt = lines[i + 1] if i + 1 < close else ""
+        if raw[:1] in ("[", "{", "|", ">") or (
+                raw in ("", "#") and nxt[:1] in (" ", "\t", "-")):
+            return "", True
+        value = vl.scalar_value(raw) if raw else ""
+        return ("" if value.casefold() in ("null", "~") else value), False
+    return "", False
+
+
+def _set_portrait(lines: list[str], close: int, value: str) -> str:
     eol = "\r\n" if lines[0].endswith("\r\n") else "\n"
     fm = lines[1:close]
     vl.set_key(fm, "portrait", vl.yaml_scalar(value), eol)
-    lines[1:close] = fm
-    return "".join(lines)
+    return "".join([lines[0], *fm, *lines[close:]])
 
 
 # --- planning one picture ---------------------------------------------------------
 
-def _prepare(job: Job, vault: Path, batch: vw.Batch, e: Entry,
+def _prepare(vault: Path, batch: vw.Batch, e: Entry,
              lines: list[str]) -> _Action | None:
-    """Everything one kept picture needs, worked out in memory; None (with
-    a line saying why) when it cannot be placed."""
+    """Every check for one kept picture, and its note change worked out in
+    memory; nothing is touched. None (with a line saying why) when it
+    cannot be placed."""
     def no(why: str) -> None:
-        lines.append(why)
+        lines.append(f"{why}; picture {e.n} was not placed")
 
     src = _pending(e)
     if not src.is_file():
-        no(f"picture {e.n}'s file is missing from the job; draw it again")
+        lines.append(f"picture {e.n}'s file is missing from the job; "
+                     "draw it again")
         return None
     rel_new = f"{e.dest}.{e.ext}"
     target = _inside(vault, rel_new)
     if target is None or not e.dest:
-        no(f"picture {e.n} goes outside the vault; it was not placed")
+        no("it goes outside the vault")
         return None
     try:
         note = batch.resolve(e.note)
         text = batch.read(note)
-    except vw.WriteError as err:
-        no(f"{err}; picture {e.n} was not placed")
+    except vw.WriteError as bad:
+        no(str(bad))
         return None
-    # What is already at the destination, whatever its extension.
-    here = sorted(Path(p).relative_to(vault).as_posix() for p in
-                  glob.glob(glob.escape(str(vault / e.dest)) + ".*")
-                  if Path(p).is_file())
+    # Pictures already at the destination, whatever the extension or case.
+    here = _existing(vault, e.dest)
+    done = False
+    for h in list(here):
+        full = vault / h
+        if _same_file(full, target) or _fold(h) == _fold(rel_new):
+            if _same_bytes(full, src):
+                done = True
+                here.remove(h)
     old = list(here)
-    fm = vl.extract_frontmatter(text)
-    portrait = image_jobs._portrait(fm)
-    if e.kind != "scene" and portrait:
-        if not e.replace:
-            no(f"{note} has a portrait now; picture {e.n} was not placed")
+    tl = text.split("\n")
+    tlk = [ln + "\n" for ln in tl[:-1]] + ([tl[-1]] if tl[-1] else [])
+    close, err = vl.frontmatter_span(tlk)
+    portrait, odd = "", False
+    if err:
+        if e.kind != "scene":
+            no(f"{note} has no frontmatter to hold a picture"
+               if err.startswith("no frontmatter")
+               else f"{note} has frontmatter that could not be read")
             return None
-        if _inside(vault, portrait) is not None and portrait not in old:
-            old.append(portrait)
-    if here and not e.replace:
-        no(f"{e.dest} already has a picture; picture {e.n} was not placed")
+    elif e.kind != "scene":
+        portrait, odd = _portrait_of(tlk, close)
+    if odd:
+        no(f"{note} already has a picture (its portrait is not a single path)")
         return None
-    new_text: str | None
+    if e.kind != "scene" and portrait and _fold(portrait) != _fold(rel_new):
+        if not e.replace:
+            no(f"{note} already has a portrait")
+            return None
+        if portrait not in old:
+            old.append(portrait)
+    if old and not e.replace:
+        no(f"{e.dest} already has a picture")
+        return None
     embed: str | None = None
     if e.kind == "scene":
         embed = Path(rel_new).name
         for o in old:
-            if Path(o).name != embed:
+            if _fold(Path(o).name) != _fold(embed):
                 text = text.replace(f"![[{Path(o).name}]]", f"![[{embed}]]")
         new_text = embed_after(text, e.after or "", embed)
         if new_text is None:
-            no(f"the recap changed since the plan; picture {e.n} was not placed")
+            no("the recap changed since the plan")
             return None
     else:
-        new_text = _set_portrait(text, rel_new)
-        if new_text is None:
-            no(f"{note} has frontmatter that could not be read; "
-               f"picture {e.n} was not placed")
-            return None
+        new_text = _set_portrait(tlk, close, rel_new)
     batch.put(note, new_text)
-    retire = [o for o in old if o != rel_new]
-    return _Action(e, _Move(src, target), note, embed, retire)
+    existed = target.exists() and not done
+    return _Action(e, _Copy(src, target, existed), note, embed, old, done)
 
 
 # --- doing it -----------------------------------------------------------------
 
-def _do(m: _Move, spare: Path) -> None:
-    m.target.parent.mkdir(parents=True, exist_ok=True)
-    if m.target.exists():
-        shutil.move(str(m.target), str(spare))
-        m.backup = spare
-    shutil.move(str(m.src), str(m.target))
+def _copy_in(c: _Copy, spare: Path) -> None:
+    """Copy the picture in beside its target, then swap it into place. The
+    picture it replaces is copied to the job folder first."""
+    c.target.parent.mkdir(parents=True, exist_ok=True)
+    if c.existed:
+        shutil.copyfile(c.target, spare)
+        c.backup = spare
+    c.tmp = c.target.with_name(f".{c.target.name}.{secrets.token_hex(4)}.tmp")
+    shutil.copyfile(c.src, c.tmp)
+    os.replace(c.tmp, c.target)
+    c.tmp = None
 
 
-def _undo(done: list[_Move]) -> None:
-    for m in reversed(done):
-        if m.target.exists() and not m.src.exists():
-            shutil.move(str(m.target), str(m.src))
-        if m.backup is not None and m.backup.exists():
-            shutil.move(str(m.backup), str(m.target))
+def _undo(copies: list[_Copy]) -> list[str]:
+    """Put every recorded copy back as it was; say exactly what failed."""
+    stuck: list[str] = []
+    for c in reversed(copies):
+        try:
+            if c.tmp is not None:
+                c.tmp.unlink(missing_ok=True)
+            if c.existed:
+                if c.backup is not None and c.backup.exists() \
+                        and not _same_bytes(c.backup, c.target):
+                    back = c.target.with_name(
+                        f".{c.target.name}.{secrets.token_hex(4)}.tmp")
+                    shutil.copyfile(c.backup, back)
+                    os.replace(back, c.target)
+            else:
+                c.target.unlink(missing_ok=True)
+        except OSError:
+            where = f" (the original is at {c.backup})" if c.backup else ""
+            stuck.append(f"{c.target}{where}")
+    return stuck
 
 
 def _check_verdicts(job: Job, keep: set[int], hold: set[int]) -> None:
@@ -209,6 +310,32 @@ def _check_verdicts(job: Job, keep: set[int], hold: set[int]) -> None:
         if e.status == "drawn" and e.n not in keep | hold:
             raise Stop(f"picture {e.n} has no verdict: look at it, "
                        "then keep or hold it")
+
+
+def _retire(vault: Path, batch: vw.Batch, a: _Action, lines: list[str]) -> None:
+    """Remove the picture a replace left behind, when that is safe. Never
+    raises: a problem is one line."""
+    new_rel = f"{a.entry.dest}.{a.entry.ext}"
+    for o in a.old:
+        try:
+            old = _inside(vault, o)
+            if old is None:
+                lines.append(f"  Left {o} alone; it is not inside the vault.")
+            elif not old.is_file():
+                lines.append(f"  Left {o} alone; it is not a picture file "
+                             "in the vault.")
+            elif _same_file(old, a.copy.target) or _fold(o) == _fold(new_rel):
+                lines.append(f"  The old picture {o} is the new picture's "
+                             "own file (or differs only in case); left as it is.")
+            elif _linked(vault, batch, o):
+                lines.append(f"  Kept the old picture {o}; something else "
+                             "links it.")
+            else:
+                old.unlink()
+                lines.append(f"  Removed the old picture {o}.")
+        except Exception as err:  # noqa: BLE001 - clean-up never fails the run
+            lines.append(f"  Could not remove the old picture {o} "
+                         f"({err.__class__.__name__}); it was left.")
 
 
 def run(job: Job, keep: set[int], hold: set[int], write: bool) -> Result:
@@ -236,7 +363,7 @@ def run(job: Job, keep: set[int], hold: set[int], write: bool) -> Result:
             lines.append(f"Picture {e.n} is already placed at "
                          f"{e.dest}.{e.ext}")
         elif e.n in keep:
-            act = _prepare(job, vault, batch, e, lines)
+            act = _prepare(vault, batch, e, lines)
             if act is None:
                 ok = False
             else:
@@ -249,45 +376,50 @@ def run(job: Job, keep: set[int], hold: set[int], write: bool) -> Result:
         lead = "Filed" if write else "Would file"
         lines.append(f"{lead} picture {e.n} at {where} and {verb} {what}.")
         for o in a.old:
-            lines.append(f"  {'Retiring' if write else 'Would retire'} "
-                         f"the old picture {o} if nothing else links it")
+            if write:
+                continue
+            lines.append(f"  Would retire the old picture {o} if nothing "
+                         "else links it")
     if not write:
         return Result(lines, ok)
 
-    done: list[_Move] = []
+    done: list[_Copy] = []
     spare = image_jobs.folder(job.id)
     try:
         for a in actions:
-            _do(a.move, spare / f"replaced-{a.entry.n:02d}.{a.entry.ext}")
-            done.append(a.move)
+            if a.done:
+                continue
+            done.append(a.copy)          # recorded before it is touched
+            _copy_in(a.copy, spare / f"replaced-{a.entry.n:02d}"
+                     f".{a.entry.ext}")
         vw.apply(batch)
     except BaseException as err:
-        _undo(done)
+        stuck = _undo(done)
         if not isinstance(err, Exception):
             raise
         why = str(err) or err.__class__.__name__
         lines = [ln for ln in lines if not ln.startswith("Filed ")]
-        lines.append(f"The notes could not be written ({why}); "
-                     "the pictures were put back.")
+        if stuck:
+            lines.append(f"The notes could not be written ({why}), and these "
+                         "files could not be put back: " + "; ".join(stuck))
+        else:
+            lines.append(f"The notes could not be written ({why}); "
+                         "the pictures were put back.")
         return Result(lines, False)
     for a in actions:
-        for o in a.old:
-            if o == f"{a.entry.dest}.{a.entry.ext}":
-                continue
-            if _linked(vault, batch, o):
-                lines.append(f"  Kept the old picture {o}; another note "
-                             "links it.")
-                continue
-            target = _inside(vault, o)
-            if target is not None:
-                target.unlink(missing_ok=True)
-                lines.append(f"  Removed the old picture {o}.")
-        if a.move.backup is not None:
-            a.move.backup.unlink(missing_ok=True)
         a.entry.status = "kept"
     for e in held:
         e.status = "held"
-    image_jobs.save(job)
+    try:
+        image_jobs.save(job)
+    except OSError as err:
+        ok = False
+        lines.append("The vault WAS changed: the pictures are in place and "
+                     "linked, but the job could not be saved "
+                     f"({err.__class__.__name__}). Run place again to "
+                     "finish; nothing needs drawing again.")
+    for a in actions:
+        _retire(vault, batch, a, lines)
     return Result(lines, ok)
 
 
@@ -303,4 +435,3 @@ def check_vault(job: Job, vault: Path) -> None:
         same = False
     if not same:
         raise Stop("that job belongs to another vault")
-

@@ -168,14 +168,11 @@ def place(vault: Path, job_id: str, keep: list[int], hold: list[int],
     except (vaultlib.StateUnreadable, vaultlib.SettingsUnavailable) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
-    except OSError as e:
-        print(f"error: the job could not be saved ({e.__class__.__name__})",
-              file=sys.stderr)
-        return 1
     for line in result.lines:
         print(line)
-    if not write and result.ok:
-        print("Nothing was changed. Add --write to do it.")
+    if not write:
+        print("Nothing was changed. Add --write to do it." if result.ok else
+              "Some pictures cannot be placed (see above). Nothing was changed.")
     return 0 if result.ok else 1
 
 
