@@ -109,6 +109,8 @@ test('the Image Guidance note is never published, needs no decision, and explain
     ['_campaign/image_guidance.md', {}, null],                             // case, as the disk reads it
     ['Style/G.md', { imageGuidance: 'Style/G.md' }, manifest],             // the setting's own path
     ['Style/G.md', { imageGuidance: './Style\\G.md' }, null],
+    ['Style/G.md', { imageGuidance: '  Style/G.md  ' }, null],             // spaces round the setting
+    ['Style/G.md', { imageGuidance: ' ./Style\\G.md ' }, manifest],
   ];
   for (const [rel, extra, list] of cases) {
     const publishConfig = Object.defineProperty({}, 'imageGuidance', { value: extra.imageGuidance, enumerable: false });
@@ -142,4 +144,12 @@ test('explain says the Image Guidance note is never published', async () => {
     assert.strictEqual(rc, 0);
     assert.match(out.join('\n'), /VERDICT: does not publish — the Image Guidance note is never published \(IMAGE_GUIDANCE\)/);
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('a guidance path written with spaces round it still names the note', () => {
+  const v = buildVault({
+    'Style/Look Book.md': BARE,
+    'People/Jon.md': '---\ntype: npc\n---\nA clerk. See [[Look Book|the style notes]].\n',
+  }, { settings: { 'vault.images.guidance': '  Style/Look Book.md  ' } });
+  try { assertHidden(v); } finally { v.cleanup(); }
 });

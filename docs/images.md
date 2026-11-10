@@ -91,10 +91,10 @@ limits, so it stops and asks you to choose. It changes nothing unasked.
 
 ## How your pictures look
 
-The Image Guidance note, the note `vault.images.guidance` names, sets the
-look. Make it from `_Templates/_Template_Image_Guidance.md`, by hand for
-now (a guided set-up comes later). It is never published. Without it,
-pictures have no campaign style.
+The Image Guidance note, the note `vault.images.guidance` names, sets the look.
+Make it from `_Templates/_Template_Image_Guidance.md`, by hand for now (a guided
+set-up comes later). It is never published. Without it, pictures have no
+campaign style. As on the site, comments, spoilers and Dataview are left out.
 
 - **Direction**: what pictures should show. Read, never sent.
 - **Always**: style text sent with every picture.

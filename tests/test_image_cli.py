@@ -405,3 +405,15 @@ def test_the_image_summary_names_no_command_that_does_not_exist():
     import gma
     assert gma.COMMANDS["image"].summary == (
         "Draw a vault's pictures inside its spending limits.")
+
+
+# --- review round: a guidance path that is not text (#639) -------------------
+
+@pytest.mark.parametrize("command", ["status", "plan"])
+def test_a_guidance_path_that_is_a_number_is_one_plain_line(command, tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("GEMINI_API_KEY", SECRET)
+    v = plan_vault(tmp_path, "gemini-nano-banana-2.1", "    guidance: 5\n")
+    req = requests(tmp_path, [{"for": "Anselm", "subject": "x"}])
+    argv = ["status", str(v)] if command == "status" else ["plan", str(v), str(req)]
+    assert image.main(argv) == 2
+    assert capsys.readouterr().err == "vault.images.guidance must be the path of a note.\n"

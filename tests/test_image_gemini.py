@@ -53,7 +53,7 @@ def test_constants():
 
 
 def _patch_urlopen(monkeypatch, fn):
-    monkeypatch.setattr(image_gemini.urllib.request, "urlopen", fn)
+    monkeypatch.setattr(image_gemini, "URLOPEN", fn)
 
 
 def test_send_returns_status_and_body(monkeypatch):

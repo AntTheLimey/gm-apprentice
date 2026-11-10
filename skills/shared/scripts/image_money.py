@@ -49,6 +49,10 @@ def limits(vault: Path) -> Limits:
         raise vaultlib.SettingsUnavailable(
             "This vault's picture settings could not be read: the publish "
             "tool in use is older than this command. Run gma update.")
+    guidance = v["vault.images.guidance"]
+    if not isinstance(guidance, str) or not guidance.strip():
+        raise vaultlib.SettingsUnavailable(
+            "vault.images.guidance must be the path of a note.")
     return Limits(
         auto=bool(v["vault.images.auto"]),
         attempt=v["vault.images.attempt_limit"],
@@ -61,7 +65,7 @@ def limits(vault: Path) -> Limits:
         service=v["vault.images.service"],
         model=v["vault.images.model"],
         price=v["vault.images.price"],
-        guidance=v["vault.images.guidance"],
+        guidance=guidance.strip(),
     )
 
 

@@ -32,3 +32,20 @@ def test_a_keychain_lookup_fails_the_test(monkeypatch):
 def test_no_real_key_is_in_the_environment():
     assert "GEMINI_API_KEY" not in os.environ
     assert "GOOGLE_API_KEY" not in os.environ
+
+
+def test_the_sender_cannot_open_a_connection_either():
+    with pytest.raises(pytest.fail.Exception) as e:
+        image_gemini._send(image_gemini.URL, {}, b"{}", 1)
+    assert str(e.value) == ("a test tried to open a connection for the picture "
+                            "service; replace image_gemini.URLOPEN in the test")
+
+
+def test_the_real_sender_is_the_one_the_module_sends_with():
+    import conftest
+    assert conftest.ORIGINAL["SEND"] is image_gemini._send
+
+
+def test_the_key_file_folder_is_a_temp_folder(tmp_path):
+    assert os.environ["GMA_CONFIG"] == str(tmp_path / "gma-config")
+    assert image_keys.config_dir() == tmp_path / "gma-config"

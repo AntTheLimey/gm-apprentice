@@ -46,6 +46,8 @@ def _uncommented(lines: list[str]) -> list[str]:
 
 
 def read(vault: Path, rel: str) -> Guidance:
+    """The note's Always text and blocks, read as the site would show them:
+    comments, spoiler blocks and Dataview blocks are not part of what is sent."""
     path = vault / rel
     if not path.is_file():
         return Guidance("", {}, False)

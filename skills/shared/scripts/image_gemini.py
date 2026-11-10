@@ -96,11 +96,14 @@ def _before_sending(reason: object) -> bool:
             and reason.errno in _NOT_SENT)
 
 
+URLOPEN = urllib.request.urlopen   # tests replace this
+
+
 def _send(url: str, hdrs: dict[str, str], body: bytes,
           timeout: int) -> tuple[int, bytes]:
     req = urllib.request.Request(url, data=body, headers=hdrs, method="POST")
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with URLOPEN(req, timeout=timeout) as resp:
             return resp.status, resp.read()
     except urllib.error.HTTPError as err:
         try:

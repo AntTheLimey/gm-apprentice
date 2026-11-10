@@ -109,10 +109,11 @@ function alwaysExcludedSegment(rel) {
 // The Image Guidance note (the note `vault.images.guidance` names) holds the GM's directions for pictures. It is never
 // published, whatever its frontmatter says: a GM writing it by hand may leave out `publish: false`. The path comes from
 // publishConfig.imageGuidance (loadPublishConfig sets it), else the setting's default. Compared as the scanner compares
-// folders: slashes either way and letter case do not matter.
-const vaultPathKey = (p) => canonicalNfc(String(p == null ? '' : p).replace(/\\/g, '/').replace(/^(?:\.\/|\/)+/, '')).toLowerCase();
+// folders: slashes either way, letter case and spaces around the path do not matter.
+const vaultPathKey = (p) => canonicalNfc(String(p == null ? '' : p).trim().replace(/\\/g, '/').replace(/^(?:\.\/|\/)+/, '')).toLowerCase();
 function isImageGuidance(rel, publishConfig) {
-  const named = (publishConfig && publishConfig.imageGuidance) || entry('vault.images.guidance').default;
+  const written = publishConfig && publishConfig.imageGuidance != null ? String(publishConfig.imageGuidance).trim() : '';
+  const named = written || entry('vault.images.guidance').default;
   return vaultPathKey(rel) === vaultPathKey(named);
 }
 

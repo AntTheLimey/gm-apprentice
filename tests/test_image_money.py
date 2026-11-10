@@ -266,3 +266,21 @@ def test_a_fault_outside_the_picture_settings_does_not_stop_drawing(tmp_path):
 def test_cents_are_said_with_two_decimals():
     assert image_money.cents(33.7181) == "33.72"
     assert image_money.cents(0) == "0.00"
+
+
+# --- review round: the guidance path (#639) ---------------------------------
+
+def test_the_guidance_path_is_trimmed(tmp_path):
+    v = make_vault(tmp_path, 'vault:\n  images:\n    guidance: "  Notes/Look Book.md  "\n')
+    assert image_money.limits(v).guidance == "Notes/Look Book.md"
+
+
+@pytest.mark.parametrize("written, said", [
+    ("5", "vault.images.guidance must be the path of a note."),
+    ('"   "', "vault.images.guidance must be the path of a note."),
+    ("[a, b]", 'vault.images.guidance is ["a","b"]; it takes text.')])   # the tool's own words
+def test_a_guidance_path_that_is_not_text_is_one_plain_stop(tmp_path, written, said):
+    v = make_vault(tmp_path, f"vault:\n  images:\n    guidance: {written}\n")
+    with pytest.raises(vaultlib.SettingsUnavailable) as e:
+        image_money.limits(v)
+    assert str(e.value) == said
