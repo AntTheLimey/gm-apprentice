@@ -5,6 +5,7 @@ Usage:
   image.py status VAULT
   image.py key SERVICE
   image.py plan VAULT REQUESTS [--unprompted]
+  image.py draw VAULT JOB [--redo N "what was wrong"]...
   image.py place VAULT JOB [--keep N...] [--hold N...] [--write]
 """
 
@@ -27,7 +28,7 @@ def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(
         dest="command", required=True,
-        help="what to do: status, key, plan or place")
+        help="what to do: status, key, plan, draw or place")
     st = sub.add_parser("status", help="where picture drawing stands for a vault",
                         epilog='Example: gma image status "<vault>"')
     st.add_argument("vault", type=Path, help="the vault folder")
@@ -45,6 +46,20 @@ def build_parser() -> argparse.ArgumentParser:
     pl.add_argument("--unprompted", action="store_true",
                     help="the GM did not ask for these pictures: apply the "
                     "vault's rules for drawing without asking")
+    dr = sub.add_parser(
+        "draw",
+        help="send the planned pictures to the drawing service (this costs money)",
+        epilog='Example: gma image draw "<vault>" 20261109-a1b2c3 '
+               '--redo 2 "the cloak should be green"')
+    dr.add_argument("vault", type=Path, help="the vault folder")
+    dr.add_argument("job", help="the job number `plan` printed")
+    dr.add_argument("--redo", nargs=2, action="append", default=[],
+                    metavar=("N", "WHAT"),
+                    help="draw picture N again, telling the service what was "
+                    "wrong with it (up to 500 characters); can be given "
+                    "more than once. Each attempt is paid for. Pictures are "
+                    "drawn one at a time; two gma image draw runs on one "
+                    "vault at the same time can lose a spending count")
     pc = sub.add_parser(
         "place", help="file the pictures you kept and link them in the vault",
         epilog='Example: gma image place "<vault>" 20261109-a1b2c3 '
@@ -164,6 +179,47 @@ def plan(vault: Path, requests: Path, unprompted: bool) -> int:
     return 0 if planned else 1
 
 
+def draw(vault: Path, job_id: str, redo: list[list[str]]) -> int:
+    if not vault.is_dir():
+        print(f"error: not a directory: {vault}", file=sys.stderr)
+        return 2
+    notes: dict[int, str] = {}
+    try:
+        for n_text, what in redo:
+            if not n_text.isdecimal():
+                raise image_jobs.Stop(
+                    f"--redo needs a picture number first, not {n_text!r}.")
+            if int(n_text) in notes:
+                raise image_jobs.Stop(
+                    f"Picture {int(n_text)} has two --redo notes; give one.")
+            notes[int(n_text)] = what
+        job = image_jobs.load(job_id)
+        image_place.check_vault(job, vault)
+        result = image_jobs.draw(job, notes, _today())
+    except image_jobs.Stop as e:
+        print(str(e), file=sys.stderr)
+        return 2
+    except (vaultlib.StateUnreadable, vaultlib.SettingsUnavailable) as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+    for line in result.lines:
+        print(line)
+    drawn = f"This run: {result.drawn} pictures drawn, {result.cents:.2f} cents"
+    if result.unknown:
+        drawn += f", and {result.unknown} paid for at an unknown price"
+    print(drawn)
+    try:
+        month = image_money.spent(vault, _today())
+        unpriced = image_money.unpriced_count(vault, _today())
+        ceiling = image_money.limits(vault).month
+    except (vaultlib.StateUnreadable, vaultlib.SettingsUnavailable) as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    print(f"This month: {month:.2f} of {ceiling:g} cents"
+          + (f", and {unpriced} pictures at an unknown price" if unpriced else ""))
+    return 0 if result.ok else 1
+
+
 def place(vault: Path, job_id: str, keep: list[int], hold: list[int],
           write: bool) -> int:
     if not vault.is_dir():
@@ -204,6 +260,8 @@ def _dispatch(args: argparse.Namespace) -> int:
         return status(args.vault)
     if args.command == "plan":
         return plan(args.vault, args.requests, args.unprompted)
+    if args.command == "draw":
+        return draw(args.vault, args.job, args.redo)
     if args.command == "place":
         return place(args.vault, args.job, args.keep, args.hold, args.write)
     return key(args.service)
