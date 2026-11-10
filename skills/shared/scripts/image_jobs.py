@@ -15,6 +15,7 @@ import os
 import re
 import secrets
 import shutil
+import tempfile
 import unicodedata
 from dataclasses import asdict, dataclass, field
 from datetime import date
@@ -104,8 +105,38 @@ class Job:
 
 # --- the job on disk ------------------------------------------------------
 
+# Jobs live in the machine's cache folder. An agent in a sandbox (Codex
+# writes only to its workspace and the temp folder) may not write there, and
+# then jobs go to the temp folder; the vault is never used. Every command
+# finds a job in either place.
+
+def roots() -> list[Path]:
+    return [tool_cache.cache_root() / "images",
+            Path(tempfile.gettempdir()) / "gm-apprentice-images"]
+
+
+def _writable(root: Path) -> bool:
+    try:
+        root.mkdir(parents=True, exist_ok=True)
+        probe = root / f".probe-{secrets.token_hex(4)}"
+        probe.write_bytes(b"")
+        probe.unlink()
+        return True
+    except OSError:
+        return False
+
+
 def folder(job_id: str) -> Path:
-    return tool_cache.cache_root() / "images" / job_id
+    """The job's folder: where it already is, else the first place this
+    process can write (the cache folder before the temp folder)."""
+    places = roots()
+    for root in places:
+        if (root / job_id).is_dir():
+            return root / job_id
+    for root in places:
+        if _writable(root):
+            return root / job_id
+    return places[0] / job_id
 
 
 def job_file(job_id: str) -> Path:
@@ -184,11 +215,12 @@ def _age_dates(path: Path) -> list[date]:
 
 def prune(today: date) -> None:
     """Remove job folders older than JOB_DAYS."""
-    root = tool_cache.cache_root() / "images"
-    try:
-        found = sorted(root.iterdir()) if root.is_dir() else []
-    except OSError:
-        return
+    found: list[Path] = []
+    for root in roots():
+        try:
+            found += sorted(root.iterdir()) if root.is_dir() else []
+        except OSError:
+            continue
     for d in found:
         if not d.is_dir():
             continue
@@ -729,5 +761,7 @@ def plan(vault: Path, requests: list[dict[str, Any]], unprompted: bool,
         save(job)
     except OSError as err:
         raise Stop("The picture job could not be saved "
-                   f"({err.__class__.__name__}).") from None
+                   f"({err.__class__.__name__}). It needs to write to "
+                   + " or ".join(str(r) for r in roots())
+                   + "; in a sandbox, allow one of them.") from None
     return job

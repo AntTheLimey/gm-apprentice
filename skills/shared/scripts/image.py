@@ -199,7 +199,7 @@ def plan(vault: Path, requests: Path, unprompted: bool,
             for line in pic.said:
                 print(f"   {line}")
     if free:
-        if job.service == "self":
+        if job.service == "self" and planned:
             print(image_draw.SELF_HOW.format(job=job.id))
     elif job.priced:
         print(f"Estimated total: about {image_money.cents(total)} cents")

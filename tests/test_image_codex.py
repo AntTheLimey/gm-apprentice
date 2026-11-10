@@ -464,3 +464,66 @@ def test_status_says_the_source_and_codex(codex, tmp_path, capsys):
 def test_status_with_source_service_does_not_ask_codex(codex, tmp_path, capsys):
     image.main(["status", str(make_vault(tmp_path, GEMINI + "    source: service\n"))])
     assert "codex:" not in capsys.readouterr().out
+
+
+# --- an agent in a sandbox that cannot write to the cache folder -------------
+
+def sandboxed(monkeypatch, tmp_path):
+    """The cache folder refuses writes, as Codex's workspace sandbox does;
+    the temp folder takes them."""
+    locked = tmp_path / "locked-cache"
+    monkeypatch.setenv("GMA_CACHE", str(locked))
+    monkeypatch.setattr(image_jobs.tempfile, "gettempdir", lambda: str(tmp_path / "tmp"))
+    real = image_jobs._writable
+    monkeypatch.setattr(image_jobs, "_writable",
+                        lambda root: False if locked in root.parents or root == locked / "images"
+                        else real(root))
+    return tmp_path / "tmp" / "gm-apprentice-images"
+
+
+def test_a_sandboxed_agent_keeps_its_jobs_in_the_temp_folder(tmp_path, monkeypatch, capsys):
+    temp_root = sandboxed(monkeypatch, tmp_path)
+    vault, jid, out = self_job(tmp_path, capsys, count=1)
+    assert f"Job file: {temp_root / jid / 'job.json'}" in out
+    a = tmp_path / "a.png"
+    a.write_bytes(PNG)
+    assert image.main(["draw", str(vault), jid, "--picture", "1", str(a)]) == 0
+    assert (temp_root / jid / "01.png").read_bytes() == PNG
+    assert image.main(["place", str(vault), jid, "--keep", "1", "--write"]) == 0
+
+
+def test_a_job_made_in_the_temp_folder_is_found_outside_the_sandbox(tmp_path, monkeypatch, capsys):
+    temp_root = sandboxed(monkeypatch, tmp_path)
+    vault, jid, _ = self_job(tmp_path, capsys, count=1)
+    monkeypatch.setattr(image_jobs, "_writable", lambda root: True)   # the GM's own terminal
+    assert image_jobs.folder(jid) == temp_root / jid
+    assert image_jobs.load(jid).id == jid
+
+
+def test_nowhere_to_write_names_both_places(tmp_path, monkeypatch, capsys):
+    sandboxed(monkeypatch, tmp_path)
+    monkeypatch.setattr(image_jobs, "_writable", lambda root: False)
+    monkeypatch.setattr(image_jobs, "save", lambda job: (_ for _ in ()).throw(PermissionError()))
+    assert plan(make_vault(tmp_path), tmp_path, "--source", "self") == 2
+    err = capsys.readouterr().err
+    assert "PermissionError" in err and "gm-apprentice-images" in err and "sandbox" in err
+
+
+def test_old_jobs_in_the_temp_folder_are_tidied_too(tmp_path, monkeypatch):
+    temp_root = sandboxed(monkeypatch, tmp_path)
+    old = temp_root / "20261001-abcdef"
+    old.mkdir(parents=True)
+    import os
+    stamp = 1759276800   # 2025-10-01
+    os.utime(old, (stamp, stamp))
+    image_jobs.prune(TODAY)
+    assert not old.exists()
+
+
+def test_a_self_plan_with_nothing_planned_does_not_say_to_draw(tmp_path, capsys):
+    vault = make_vault(tmp_path, count=1)
+    (vault / "NPCs" / "P1.md").write_text(
+        "---\ntype: npc\nportrait: x.png\n---\n", encoding="utf-8")
+    assert plan(vault, tmp_path, "--source", "self", count=1) == 1
+    out = capsys.readouterr().out
+    assert "it already has a picture" in out and "--picture N FILE" not in out
