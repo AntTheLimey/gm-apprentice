@@ -226,7 +226,7 @@ def _heading_block(text: str, level: int, title: str) -> str | None:
 BRIEF_DROP_H2: tuple[str, ...] = ("Memorable Moments",)
 BRIEF_DROP_H3: tuple[str, ...] = (
     "Name Conflicts", "Cross-Entity Claims", "World Fact Findings",
-    "Quality Notes", "Reconciliation Context", "Resolved Threads")
+    "Quality Notes", "Resolved Threads")
 
 _H2_HEADING_RE = re.compile(r"^## (.+)$")
 _H3_HEADING_RE = re.compile(r"^(#{3,4}) (.+)$")
@@ -1591,8 +1591,8 @@ def build_parser() -> argparse.ArgumentParser:
         "--brief", action="store_true",
         help="default mode only: Wrap-Up with the reconcile-provenance "
              "blocks stubbed (Memorable Moments; Name Conflicts, "
-             "Cross-Entity Claims, World Fact Findings, Quality Notes, "
-             "Reconciliation Context — heading kept, body replaced by a "
+             "Cross-Entity Claims, World Fact Findings, Quality Notes — "
+             "heading kept, body replaced by a "
              "one-line stub with its word count), and the Campaign "
              "Overview and the existing Session Plan each as frontmatter "
              "plus a heading outline with word counts. Everything else "
