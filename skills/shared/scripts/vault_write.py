@@ -1056,41 +1056,66 @@ KEEPER_CHECKLIST = "keeper checklist"
 
 
 def settle_section(lines: list[str], title: str) -> tuple[int, int]:
-    """(first line, end) of the body of the heading, of level 3 or deeper
-    and outside a code fence, whose title equals `title` in any case. The
-    body runs to the next heading of any level."""
+    """(first line, end) of the body of the heading, outside a code fence,
+    whose title equals `title` in any case. The body runs to the next
+    heading of any level. Only the sections `--brief` drops settled items
+    from are settled (`session_context.SETTLED_HEADING_RE`: `### Keeper
+    Checklist`, a `###` heading starting `Open Questions`): one settled
+    anywhere else would stay in the bundle, struck through."""
+    import session_context as sc   # it imports this module at its top
     heads = th._headings(lines)
     want = title.strip().casefold()
-    for n, (idx, level, found) in enumerate(heads):
-        if level >= 3 and found.casefold() == want:
+    named = [n for n, (_idx, _level, found) in enumerate(heads)
+             if found.casefold() == want]
+    for n in named:
+        idx = heads[n][0]
+        if sc.SETTLED_HEADING_RE.match(lines[idx].rstrip("\r")):
             end = heads[n + 1][0] if n + 1 < len(heads) else len(lines)
             return idx + 1, end
+    if named:
+        raise WriteError(f"'{title}' is not settled here: only ### Keeper "
+                         f"Checklist and ### Open Questions\u2026 sections "
+                         f"are, the ones the bundle leaves settled items "
+                         f"out of")
     raise WriteError(f"no section titled '{title}' (### or deeper)")
 
 
 def settle_items(lines: list[str], start: int,
                  end: int) -> list[tuple[int, re.Match[str]]]:
     """(line, match of SETTLE_ITEM_RE) for the list items of a section at
-    its top indent; nested items are left out."""
-    found = [(i, m) for i in range(start, end)
-             if (m := SETTLE_ITEM_RE.match(lines[i].rstrip("\r")))]
+    its top indent, outside a code fence; nested items are left out."""
+    found = []
+    delim: str | None = None
+    for i in range(start, end):
+        line = lines[i].rstrip("\r")
+        delim, is_fence = vl.fence_step(line, delim)
+        if is_fence or delim is not None:
+            continue
+        m = SETTLE_ITEM_RE.match(line)
+        if m:
+            found.append((i, m))
     if not found:
         return []
     width = [len(m["indent"].expandtabs(4)) for _i, m in found]
     return [item for item, w in zip(found, width) if w == min(width)]
 
 
+def _unstruck(text: str) -> str:
+    """An item's text without the `~~` a struck item opens with."""
+    return text[2:] if text.startswith("~~") else text
+
+
 def settle_one(lines: list[str], section: str, lead: str,
                ruling: str) -> str:
     """Settle the one item of `section` that `lead` names, in `lines`
     (changed in place); returns the item's text for the row. An item
-    matches when its text, with a leading `[ ] ` and the bold markers
-    and a struck item's leading `~~` dropped, starts with `lead` (case-sensitive), or its bold lead
-    (`threads.lead`) equals `lead`."""
+    matches when its text, with a leading `[ ] `, the bold markers and a
+    struck item's leading `~~` dropped, starts with `lead`
+    (case-sensitive), or its bold lead (`threads.lead`) equals `lead`."""
     start, end = settle_section(lines, section)
     hits = [(i, m) for i, m in settle_items(lines, start, end)
-            if m["text"].replace("**", "").lstrip("~ ").startswith(lead)
-            or th.lead(m["text"].lstrip("~ ")) == lead]
+            if _unstruck(m["text"]).replace("**", "").startswith(lead)
+            or th.lead(_unstruck(m["text"])) == lead]
     if not hits:
         raise WriteError(f"'{section}': no item matches '{lead}'")
     if len(hits) > 1:
@@ -1106,7 +1131,9 @@ def settle_one(lines: list[str], section: str, lead: str,
     cr = "\r" if lines[i].endswith("\r") else ""
     tick = "[x] " if checklist or box else ""
     said = ruling if checklist else f"answered: {ruling}"
-    lines[i] = (f"{m['indent']}{m['mark']} {tick}~~{text}~~ "
+    # A text that opens with `~` is escaped: `~~~` would open a code fence.
+    struck = "\\" + text if text.startswith("~") else text
+    lines[i] = (f"{m['indent']}{m['mark']} {tick}~~{struck}~~ "
                 f"\u2014 {said}{cr}")
     return text
 
@@ -4281,11 +4308,13 @@ def build_parser() -> argparse.ArgumentParser:
         "answered questions (stdin rows)",
         formatter_class=raw, description=(
             "stdin: one tab-separated row per item: SECTION, LEAD, RULING.\n"
-            "SECTION is the title of a ### (or deeper) heading in the\n"
-            "Wrap-Up, any case. LEAD names one top-level list item: its text\n"
+            "SECTION is the title, any case, of the Wrap-Up's ### Keeper\n"
+            "Checklist or a ### heading starting Open Questions (the ones\n"
+            "the bundle leaves settled items out of; any other is\n"
+            "refused). LEAD names one top-level list item: its text\n"
             "(bold markers and a leading [ ] dropped) starts with LEAD, or\n"
             "its bold lead is LEAD. In Keeper Checklist the item becomes\n"
-            "'- [x] ~~item~~ \u2014 RULING'; in any other section\n"
+            "'- [x] ~~item~~ \u2014 RULING'; under Open Questions\n"
             "'~~item~~ \u2014 answered: RULING'. Nested lines stay. An item\n"
             "already ticked or struck is refused."))
     settle.add_argument("wrapup", help="the Wrap-Up: vault-relative, or its name")

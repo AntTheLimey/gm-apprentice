@@ -63,11 +63,13 @@ gma vault-write <vault> wrapup-settle <wrapup> [options]
 
 ```text
 stdin: one tab-separated row per item: SECTION, LEAD, RULING.
-SECTION is the title of a ### (or deeper) heading in the
-Wrap-Up, any case. LEAD names one top-level list item: its text
+SECTION is the title, any case, of the Wrap-Up's ### Keeper
+Checklist or a ### heading starting Open Questions (the ones
+the bundle leaves settled items out of; any other is
+refused). LEAD names one top-level list item: its text
 (bold markers and a leading [ ] dropped) starts with LEAD, or
 its bold lead is LEAD. In Keeper Checklist the item becomes
-'- [x] ~~item~~ — RULING'; in any other section
+'- [x] ~~item~~ — RULING'; under Open Questions
 '~~item~~ — answered: RULING'. Nested lines stay. An item
 already ticked or struck is refused.
 ```

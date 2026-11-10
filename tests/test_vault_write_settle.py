@@ -146,6 +146,49 @@ class SettleTests(unittest.TestCase):
         self.assertEqual(text.replace("\r\n", "").count("\n"), 0)
         self.assertIn("— x\r\n", text)
 
+    def test_only_the_sections_the_bundle_drops_are_settled(self):
+        # `--brief` leaves out settled items of `### Keeper Checklist` and
+        # `### Open Questions…` only: anything else settled would stay in
+        # the bundle, struck through.
+        note = NOTE.replace(
+            "### Open Questions for Reconcile",
+            "### Loose Ends\n\n- [ ] The boat\n\n"
+            "#### Open Questions too deep\n\n1. Deep one?\n\n"
+            "### Open Questions for Reconcile")
+        vault = self.vault(note)
+        for section, lead in (("Loose Ends", "The boat"),
+                              ("Open Questions too deep", "Deep one")):
+            with self.subTest(section=section):
+                code, out = self.settle(vault, (section, lead, "x"))
+                self.assertEqual(code, 1, out)
+                self.assertIn("only ### Keeper Checklist and ### Open "
+                              "Questions", out)
+        self.assertEqual(self.read(vault), note)
+
+    def test_an_item_in_a_code_block_is_not_one(self):
+        note = NOTE.replace(
+            "2. Who owns the boat?\n",
+            "2. Who owns the boat?\n\n```\n2. Who owns the boat? (old)\n```\n")
+        vault = self.vault(note)
+        code, out = self.settle(vault, ("Open Questions for Reconcile",
+                                        "Who owns", "Anne"))
+        self.assertEqual(code, 0, out)
+        self.assertIn("2. Who owns the boat? (old)\n", self.read(vault))
+
+    def test_a_leading_tilde_is_kept(self):
+        note = NOTE.replace("- [ ] Letter: who burned it",
+                            "- [ ] ~50 cultists at the mill")
+        vault = self.vault(note)
+        code, out = self.settle(vault, ("Keeper Checklist", "~50 cultists",
+                                        "fewer"))
+        self.assertEqual(code, 0, out)
+        # Escaped, so the strike's own tildes do not open a code fence.
+        self.assertIn("- [x] ~~\\~50 cultists at the mill~~ — fewer",
+                      self.read(vault))
+        code, out = self.settle(vault, ("Keeper Checklist", "50 cultists",
+                                        "again"))
+        self.assertEqual(code, 1)
+
     def test_settle_preview_writes_nothing(self):
         vault = self.vault()
         code, out = self.settle(vault, ("Keeper Checklist", "Bell", "x"),

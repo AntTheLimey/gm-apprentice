@@ -253,7 +253,9 @@ _ANY_HEADING_RE = re.compile(r"^(#{1,6})\s")
 _ANY_MARKER_RE = marker_re()
 
 
-_SETTLED_HEADING_RE = re.compile(
+# The sections `--brief` leaves settled items out of, and the only ones
+# `vw wrapup-settle` settles.
+SETTLED_HEADING_RE = re.compile(
     r"^###\s+(?:Keeper Checklist|Open Questions\b.*?)\s*$")
 _ITEM_RE = re.compile(r"^(\s*)(?:[-*+]|\d+[.)])\s+(.*)$")
 
@@ -277,7 +279,7 @@ def _drop_settled(text: str) -> str:
         line = lines[i]
         if line.strip().startswith("```"):
             in_fence = not in_fence
-        if in_fence or not _SETTLED_HEADING_RE.match(line):
+        if in_fence or not SETTLED_HEADING_RE.match(line):
             out.append(line)
             i += 1
             continue
