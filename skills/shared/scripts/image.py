@@ -25,7 +25,9 @@ import vaultlib
 
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    sub = ap.add_subparsers(dest="command", required=True)
+    sub = ap.add_subparsers(
+        dest="command", required=True,
+        help="what to do: status, key, plan or place")
     st = sub.add_parser("status", help="where picture drawing stands for a vault",
                         epilog='Example: gma image status "<vault>"')
     st.add_argument("vault", type=Path, help="the vault folder")
@@ -75,13 +77,17 @@ def status(vault: Path) -> int:
     else:
         print("service: none chosen")
     # With no service chosen yet, a key for any known service is worth saying.
-    found = next((f for f in (image_keys.find(n) for n in
-                              ([lim.service] if lim.service else sorted(image_keys.ENV)))
-                  if f), None)
-    if found:
-        print(f"key: found ({found[1]})")
+    names = ([lim.service] if lim.service in image_keys.ENV
+             else sorted(image_keys.ENV))
+    try:
+        found = next((f for f in (image_keys.find(n) for n in names) if f), None)
+    except image_keys.StoreUnavailable as e:
+        print(f"key: {e}")
     else:
-        print("key: none found")
+        if found:
+            print(f"key: found ({found[1]})")
+        else:
+            print("key: none found")
     today = _today()
     try:
         month_spent = image_money.spent(vault, today)
@@ -109,10 +115,15 @@ def key(service: str) -> int:
         print("Run this in your own terminal window: "
               f"gma image key {service}")
         return 2
-    except (subprocess.CalledProcessError, ValueError, OSError) as e:
+    except subprocess.CalledProcessError:
+        print("The key was not stored. If the two entries did not match, "
+              "run the command again.", file=sys.stderr)
+        return 1
+    except (ValueError, OSError) as e:
         print(f"error: the key was not stored ({e})", file=sys.stderr)
         return 1
-    print(f"Stored the {service} key in the {where}.")
+    print(f"Stored the {service} key in the {where}"
+          + ("" if where.endswith(".") else "."))
     return 0
 
 

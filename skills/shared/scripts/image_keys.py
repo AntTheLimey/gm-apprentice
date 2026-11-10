@@ -9,6 +9,7 @@ from __future__ import annotations
 import getpass
 import json
 import os
+import secrets
 import subprocess
 import sys
 from pathlib import Path
@@ -20,6 +21,19 @@ RUN = subprocess.run   # tests replace this
 
 class NeedsTerminal(Exception):
     """A key can only be typed in the GM's own terminal window."""
+
+
+class StoreUnavailable(Exception):
+    """The keychain did not answer; the message is for the GM."""
+
+
+KEYCHAIN_WAIT = 10   # seconds the keychain gets to answer
+SET_ASIDE = "keys.json.unreadable"
+
+
+def _known(service: str) -> None:
+    if service not in ENV:
+        raise ValueError(f"no drawing service called {service!r}")
 
 
 def config_dir() -> Path:
@@ -49,6 +63,7 @@ def _read_file(service: str) -> str | None:
 
 def find(service: str) -> tuple[str, str] | None:
     """The key for `service` and where it came from, or None."""
+    _known(service)
     for var in ENV.get(service, ()):
         value = os.environ.get(var, "").strip()
         if value:
@@ -57,7 +72,10 @@ def find(service: str) -> tuple[str, str] | None:
         try:
             done = RUN(["security", "find-generic-password", "-s",
                         KEYCHAIN_SERVICE, "-a", service, "-w"],
-                       capture_output=True, text=True)
+                       capture_output=True, text=True, timeout=KEYCHAIN_WAIT)
+        except subprocess.TimeoutExpired:
+            raise StoreUnavailable("The keychain did not answer. "
+                                   "Unlock it and try again.") from None
         except OSError:
             done = None
         # A miss (exit 44) is an answer, not an error.
@@ -70,6 +88,7 @@ def find(service: str) -> tuple[str, str] | None:
 
 def store(service: str) -> str:
     """Store a key the person types, and say where it went."""
+    _known(service)
     if not sys.stdin.isatty():
         raise NeedsTerminal()
     if sys.platform == "darwin":
@@ -81,16 +100,33 @@ def store(service: str) -> str:
     if not key:
         raise ValueError("no key was typed")
     path = _key_file()
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        data = {}
-    if not isinstance(data, dict):
-        data = {}
-    data[service] = key
     path.parent.mkdir(parents=True, exist_ok=True)
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, "w", encoding="utf-8") as f:
-        json.dump(data, f)
-    os.chmod(path, 0o600)
+    data: dict[str, str] = {}
+    aside = False
+    try:
+        loaded = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        loaded = {}
+    except ValueError:      # includes a file that is not UTF-8
+        loaded = None
+    if isinstance(loaded, dict):
+        data = loaded
+    else:
+        os.replace(path, path.with_name(SET_ASIDE))
+        aside = True
+    data[service] = key
+    # Whole or not at all, and never wider than 0600 even for a moment.
+    tmp = path.with_name(f"keys.json.{secrets.token_hex(4)}.tmp")
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        if hasattr(os, "fchmod"):
+            os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(data, f)
+        os.replace(tmp, path)
+    finally:
+        tmp.unlink(missing_ok=True)
+    if aside:
+        return ("key file. The old keys file could not be read and was set "
+                f"aside as {SET_ASIDE}.")
     return "key file"

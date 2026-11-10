@@ -492,7 +492,13 @@ def plan(vault: Path, requests: list[dict[str, Any]], unprompted: bool,
     if not lim.service or not lim.model:
         raise Stop("Choose a picture service and model first: gma publish "
                    "settings set vault.images.service gemini …")
-    if image_keys.find(lim.service) is None:
+    try:
+        key = image_keys.find(lim.service)
+    except image_keys.StoreUnavailable as busy:
+        raise Stop(str(busy)) from None
+    except ValueError:
+        raise Stop(f"There is no drawing service called {lim.service}.") from None
+    if key is None:
         raise Stop(f"No key found for {lim.service}. Run in your own "
                    f"terminal: gma image key {lim.service}")
     priced = (lim.price is not None

@@ -204,3 +204,60 @@ def test_plan_unwritable_job_folder_says_so(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(image_jobs, "save", boom)
     assert image.main(["plan", str(v), str(req)]) == 2
     assert "could not be saved (PermissionError)" in capsys.readouterr().err
+
+
+# --- minor wave: K1, K3, K4, K6, J3 ---------------------------------------
+
+def test_status_carries_on_when_the_keychain_is_silent(tmp_path, monkeypatch, capsys):
+    def silent(service):
+        raise image_keys.StoreUnavailable(
+            "The keychain did not answer. Unlock it and try again.")
+    monkeypatch.setattr(image_keys, "find", silent)
+    assert image.main(["status", str(make_vault(tmp_path))]) == 0
+    out = capsys.readouterr().out
+    assert "key: The keychain did not answer. Unlock it and try again." in out
+    assert "spent this month" in out
+
+
+def test_plan_stops_when_the_keychain_is_silent(tmp_path, monkeypatch, capsys):
+    def silent(service):
+        raise image_keys.StoreUnavailable(
+            "The keychain did not answer. Unlock it and try again.")
+    monkeypatch.setattr(image_keys, "find", silent)
+    v = plan_vault(tmp_path, "gemini-nano-banana-2.1")
+    req = requests(tmp_path, [{"for": "Anselm", "subject": "x"}])
+    assert image.main(["plan", str(v), str(req)]) == 2
+    assert capsys.readouterr().err.strip() == (
+        "The keychain did not answer. Unlock it and try again.")
+
+
+def test_key_failure_on_a_mac_is_plain(monkeypatch, capsys):
+    import subprocess
+    monkeypatch.setattr(sys, "platform", "darwin")
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+
+    def run(cmd, **kw):
+        raise subprocess.CalledProcessError(1, cmd)
+    monkeypatch.setattr(image_keys, "RUN", run)
+    assert image.main(["key", "gemini"]) == 1
+    err = capsys.readouterr().err
+    assert err.strip() == ("The key was not stored. If the two entries did "
+                           "not match, run the command again.")
+    assert "security" not in err
+
+
+def test_key_reports_a_set_aside_file(monkeypatch, tmp_path, capsys):
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr(image_keys.getpass, "getpass", lambda prompt="": SECRET)
+    cfg = tmp_path / "cfg"
+    cfg.mkdir()
+    (cfg / "keys.json").write_text("[1]")
+    assert image.main(["key", "gemini"]) == 0
+    out = capsys.readouterr().out
+    assert "set aside as keys.json.unreadable." in out and SECRET not in out
+
+
+def test_the_image_group_has_help_text():
+    ap = image.build_parser()
+    sub = next(a for a in ap._actions if a.dest == "command")
+    assert sub.help

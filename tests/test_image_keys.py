@@ -106,3 +106,97 @@ def test_store_on_a_mac_hands_the_terminal_to_security(monkeypatch):
     cmd, kw = seen[0]
     assert cmd[:2] == ["security", "add-generic-password"] and "-U" in cmd
     assert "capture_output" not in kw and "stdout" not in kw
+
+
+# --- minor wave: K1-K5 ----------------------------------------------------
+
+def test_keychain_lookup_has_a_timeout(monkeypatch):
+    monkeypatch.setattr(sys, "platform", "darwin")
+    seen = []
+
+    def run(cmd, **kw):
+        seen.append(kw)
+        return SimpleNamespace(returncode=44, stdout="")
+    monkeypatch.setattr(image_keys, "RUN", run)
+    image_keys.find("gemini")
+    assert seen[0].get("timeout") == 10
+
+
+def test_a_silent_keychain_is_store_unavailable(monkeypatch):
+    monkeypatch.setattr(sys, "platform", "darwin")
+
+    def run(cmd, **kw):
+        raise subprocess.TimeoutExpired(cmd, 10)
+    monkeypatch.setattr(image_keys, "RUN", run)
+    with pytest.raises(image_keys.StoreUnavailable) as e:
+        image_keys.find("gemini")
+    assert str(e.value) == "The keychain did not answer. Unlock it and try again."
+
+
+def _typed(monkeypatch, key="k-new"):
+    monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr(image_keys.getpass, "getpass", lambda prompt="": key)
+
+
+def test_a_wide_key_file_is_never_written_while_wide(monkeypatch, tmp_path):
+    import os
+    _typed(monkeypatch)
+    cfg = tmp_path / "cfg"
+    cfg.mkdir()
+    f = cfg / "keys.json"
+    f.write_text('{"other": "k-other"}')
+    os.chmod(f, 0o644)
+    modes = []
+    real_replace = os.replace
+
+    def spy(src, dst):
+        modes.append(os.stat(src).st_mode & 0o777)
+        return real_replace(src, dst)
+    monkeypatch.setattr(os, "replace", spy)
+    image_keys.store("gemini")
+    assert modes == [0o600]
+    assert f.stat().st_mode & 0o777 == 0o600
+    import json
+    assert json.loads(f.read_text()) == {"other": "k-other", "gemini": "k-new"}
+    assert [p.name for p in cfg.iterdir()] == ["keys.json"]
+
+
+def test_a_failed_write_keeps_the_old_keys(monkeypatch, tmp_path):
+    import json
+    import os
+    _typed(monkeypatch)
+    cfg = tmp_path / "cfg"
+    cfg.mkdir()
+    f = cfg / "keys.json"
+    f.write_text('{"other": "k-other"}')
+
+    def boom(src, dst):
+        raise OSError("disk full")
+    monkeypatch.setattr(os, "replace", boom)
+    with pytest.raises(OSError):
+        image_keys.store("gemini")
+    assert json.loads(f.read_text()) == {"other": "k-other"}
+    assert [p.name for p in cfg.iterdir()] == ["keys.json"]
+
+
+def test_a_keys_file_that_is_not_an_object_is_set_aside(monkeypatch, tmp_path):
+    import json
+    _typed(monkeypatch)
+    cfg = tmp_path / "cfg"
+    cfg.mkdir()
+    (cfg / "keys.json").write_text('["not", "an", "object"]')
+    (cfg / "keys.json.unreadable").write_text("older")
+    msg = image_keys.store("gemini")
+    assert "The old keys file could not be read and was set aside as " \
+           "keys.json.unreadable." in msg
+    assert (cfg / "keys.json.unreadable").read_text() == '["not", "an", "object"]'
+    assert json.loads((cfg / "keys.json").read_text()) == {"gemini": "k-new"}
+
+
+def test_unknown_service_is_a_value_error(monkeypatch):
+    with pytest.raises(ValueError):
+        image_keys.find("nonesuch")
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+    with pytest.raises(ValueError):
+        image_keys.store("nonesuch")

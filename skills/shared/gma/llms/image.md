@@ -11,7 +11,7 @@ gma image <command> ...
 
 | Argument | Value | Help |
 |---|---|---|
-| `<command>` | `status`, `key`, `plan`, `place` |  |
+| `<command>` | `status`, `key`, `plan`, `place` | what to do: status, key, plan or place |
 
 Example: `gma image status "<vault>"`
 <!-- END GENERATED -->
