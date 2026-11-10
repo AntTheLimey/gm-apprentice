@@ -45,3 +45,103 @@ def test_limits_read_what_the_vault_sets(tmp_path):
     lim = image_money.limits(v)
     assert (lim.auto, lim.redraws, lim.service, lim.model, lim.price) == (
         True, 0, "gemini", "some-model", 4)
+
+
+# --- the month count and the fences ---------------------------------------
+
+import json  # noqa: E402
+from datetime import date  # noqa: E402
+
+STATE = "_meta/vault-state.json"
+
+
+def months(v: Path) -> dict:
+    return json.loads((v / STATE).read_text(encoding="utf-8"))["images"]["months"]
+
+
+def test_record_adds_and_spent_reads(tmp_path):
+    v = make_vault(tmp_path, None)
+    d = date(2026, 11, 9)
+    image_money.record(v, d, 3.4)
+    image_money.record(v, d, 4.1)
+    assert image_money.spent(v, d) == 7.5
+    assert months(v)["2026-11"]["pictures"] == 2
+
+
+def test_unpriced_counts_pictures_not_cents(tmp_path):
+    v = make_vault(tmp_path, None)
+    d = date(2026, 11, 9)
+    image_money.record(v, d, None)
+    assert image_money.spent(v, d) == 0
+    assert months(v)["2026-11"]["unpriced"] == 1
+    assert months(v)["2026-11"]["pictures"] == 1
+
+
+def test_only_two_months_are_kept(tmp_path):
+    v = make_vault(tmp_path, None)
+    for m in (9, 10, 11):
+        image_money.record(v, date(2026, m, 5), 1)
+    assert set(months(v)) == {"2026-10", "2026-11"}
+
+
+def test_the_year_turns_over(tmp_path):
+    v = make_vault(tmp_path, None)
+    image_money.record(v, date(2026, 11, 5), 1)
+    image_money.record(v, date(2026, 12, 5), 1)
+    image_money.record(v, date(2027, 1, 5), 1)
+    assert set(months(v)) == {"2026-12", "2027-01"}
+
+
+def test_a_new_month_starts_at_nothing(tmp_path):
+    v = make_vault(tmp_path, None)
+    image_money.record(v, date(2026, 11, 9), 3.4)
+    assert image_money.spent(v, date(2026, 12, 1)) == 0
+
+
+def test_spent_is_nothing_with_no_state_file(tmp_path):
+    v = make_vault(tmp_path, None)
+    assert image_money.spent(v, date(2026, 11, 9)) == 0
+
+
+def test_other_state_keys_survive(tmp_path):
+    v = make_vault(tmp_path, None)
+    (v / STATE).write_text('{"gm_apprentice_version": "1.12.4"}\n', encoding="utf-8")
+    image_money.record(v, date(2026, 11, 9), 2)
+    state = json.loads((v / STATE).read_text(encoding="utf-8"))
+    assert state["gm_apprentice_version"] == "1.12.4"
+    assert "images" in state
+
+
+def test_fractions_do_not_drift(tmp_path):
+    v = make_vault(tmp_path, None)
+    d = date(2026, 11, 9)
+    for _ in range(10):
+        image_money.record(v, d, 0.1)
+    assert image_money.spent(v, d) == 1.0
+
+
+def test_fit_drops_references_to_get_under():
+    est = lambda n: 3.4 + 0.5 * n  # noqa: E731
+    assert image_money.fit(est, 4, 5) == (3, 4.9)
+
+
+def test_fit_keeps_all_references_when_they_fit():
+    assert image_money.fit(lambda n: 1 + n, 2, 5) == (2, 3)
+
+
+def test_fit_refuses_when_nothing_fits():
+    assert image_money.fit(lambda n: 5.04, 4, 5) is None
+
+
+def test_fit_accepts_exactly_the_limit_despite_float_error():
+    assert image_money.fit(lambda n: 0.1 + 0.2 + n * 0, 0, 0.3) == (0, 0.3)
+
+
+def test_room_names_the_cap_that_stops_it(tmp_path):
+    lim = image_money.limits(make_vault(tmp_path, None))
+    assert image_money.room(lim, 10, 10, 3.4) is None
+    assert image_money.room(lim, 198, 10, 3.4) == (
+        "the cap for one run (200 cents) would be passed")
+    assert image_money.room(lim, 10, 1999, 3.4) == (
+        "this month's ceiling (2000 cents) would be passed")
+    assert image_money.room(lim, 196.6, 10, 3.4) is None

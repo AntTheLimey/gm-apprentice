@@ -88,3 +88,24 @@ def test_key_stores_and_does_not_echo(tmp_path, monkeypatch, capsys):
 def test_key_unknown_service(capsys):
     assert image.main(["key", "nonesuch"]) == 2
     assert "no drawing service called" in capsys.readouterr().err
+
+
+def test_status_prints_the_real_month_count(tmp_path, capsys):
+    from datetime import date
+    import image_money
+    v = make_vault(tmp_path)
+    today = date.today()
+    image_money.record(v, today, 3.4)
+    image_money.record(v, today, 4.1)
+    image_money.record(v, today, None)
+    assert image.main(["status", str(v)]) == 0
+    out = capsys.readouterr().out
+    assert "spent this month: 7.5 of 2000 cents" in out
+    assert "unknown price: 1" in out
+
+
+def test_status_says_when_the_state_file_is_broken(tmp_path, capsys):
+    v = make_vault(tmp_path)
+    (v / "_meta" / "vault-state.json").write_text("{nope", encoding="utf-8")
+    assert image.main(["status", str(v)]) == 1
+    assert "not valid JSON" in capsys.readouterr().err

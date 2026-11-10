@@ -9,12 +9,14 @@ Usage:
 from __future__ import annotations
 
 import argparse
+from datetime import date
 import subprocess
 import sys
 from pathlib import Path
 
 import image_keys
 import image_money
+import vaultlib
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -49,7 +51,16 @@ def status(vault: Path) -> int:
         print(f"key: found ({found[1]})")
     else:
         print("key: none found")
-    print(f"spent this month: 0 of {lim.month:g} cents")
+    today = date.today()
+    try:
+        month_spent = image_money.spent(vault, today)
+        unpriced = image_money.unpriced_count(vault, today)
+    except vaultlib.StateUnreadable as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    print(f"spent this month: {month_spent:g} of {lim.month:g} cents")
+    if unpriced:
+        print(f"pictures drawn this month at an unknown price: {unpriced}")
     note = vault / lim.guidance
     print(f"guidance note: {lim.guidance}"
           + ("" if note.is_file() else " (not written yet)"))
