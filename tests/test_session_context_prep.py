@@ -134,6 +134,42 @@ class PrepTests(unittest.TestCase):
         self.assertEqual(done.returncode, 2)
 
 
+class RatioMatchTests(unittest.TestCase):
+    def test_shortcuts_never_change_the_answer(self):
+        import random
+        from difflib import SequenceMatcher
+        rng = random.Random(0)
+        words = ("lamp ferry ledger toll ford bridge salt caravan harbour "
+                 "quay rope winch tide gull net crate barrel").split()
+
+        def sentence() -> str:
+            return " ".join(rng.choice(words)
+                            for _ in range(rng.randint(1, 30)))
+
+        pairs = []
+        for _ in range(150):
+            a = sentence()
+            pairs.append((a, sentence()))
+            b = a.split()
+            for _ in range(rng.randint(0, 3)):
+                if b:
+                    b[rng.randrange(len(b))] = rng.choice(words)
+            pairs.append((a, " ".join(b)))
+        matches = 0
+        for a, b in pairs:
+            want = SequenceMatcher(None, a, sc._norm_thread(b)).ratio() >= 0.6
+            matches += want
+            self.assertEqual(sc._ratio_match(a, b), want, (a, b))
+        self.assertTrue(0 < matches < len(pairs))
+
+    def test_a_pair_that_cannot_match_skips_the_slow_ratio(self):
+        from unittest import mock
+        with mock.patch.object(sc.SequenceMatcher, "ratio",
+                               side_effect=AssertionError("slow ratio")):
+            self.assertFalse(sc._ratio_match("a", "zzzzzzzzzzzzzzzzzzzz"))
+            self.assertFalse(sc._ratio_match("abcdef", "uvwxyz"))
+
+
 class WrapupNamesTests(unittest.TestCase):
     def test_people_places_and_factions_only_once_each(self) -> None:
         files = [("NPCs/Ma Barker.md", "", {"type": "npc"}),

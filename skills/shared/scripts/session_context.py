@@ -608,8 +608,18 @@ def play_brief(files, plan_rel: str, plan_text: str) -> str:
     return "\n\n".join(parts)
 
 
+THREAD_MATCH_RATIO = 0.6
+
+
 def _ratio_match(norm: str, bullet: str) -> bool:
-    return SequenceMatcher(None, norm, _norm_thread(bullet)).ratio() >= 0.6
+    """Whether the bullet reads as the thread: `SequenceMatcher.ratio()`
+    at least `THREAD_MATCH_RATIO`. `real_quick_ratio` and `quick_ratio`
+    are upper bounds of `ratio`, so a pair below the threshold on either
+    cannot match and the slow `ratio` is not computed for it."""
+    m = SequenceMatcher(None, norm, _norm_thread(bullet))
+    return (m.real_quick_ratio() >= THREAD_MATCH_RATIO
+            and m.quick_ratio() >= THREAD_MATCH_RATIO
+            and m.ratio() >= THREAD_MATCH_RATIO)
 
 
 def _scoped_wrap_ups(files, chapter):
