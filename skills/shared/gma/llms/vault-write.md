@@ -12,7 +12,7 @@ gma vault-write <vault> <command> ...
 | Argument | Value | Help |
 |---|---|---|
 | `<vault>` |  | the vault folder |
-| `<command>` | `wrapup-new`, `wrapup-add`, `story`, `npc-story`, `status`, `threads`, `log`, `timeline`, `session-new`, `play-notes-new`, `resolve`, `promote-plan`, `chapter-new`, `scene-new`, `scene-paused`, `scene-played`, `prop-new`, `prop-hand`, `plan` |  |
+| `<command>` | `wrapup-new`, `wrapup-add`, `wrapup-settle`, `story`, `npc-story`, `status`, `threads`, `log`, `timeline`, `session-new`, `play-notes-new`, `resolve`, `promote-plan`, `chapter-new`, `scene-new`, `scene-paused`, `scene-played`, `prop-new`, `prop-hand`, `plan` |  |
 
 Example: `gma vault-write "<vault>" wrapup-add "<wrap-up>" --write`
 <!-- END GENERATED -->
@@ -51,6 +51,30 @@ inside a ## section, where it stays and players see it.
 | `--replace` |  | replace a section that already exists |
 | `--append` |  | add the text to the end of a section that already exists |
 | `--after` | `AFTER` | the heading a new section goes after |
+| `--write` |  | write it (default: preview) |
+<!-- END GENERATED -->
+
+<!-- BEGIN GENERATED: gma vault-write wrapup-settle -->
+tick Keeper Checklist items and strike answered questions (stdin rows)
+
+```text
+gma vault-write <vault> wrapup-settle <wrapup> [options]
+```
+
+```text
+stdin: one tab-separated row per item: SECTION, LEAD, RULING.
+SECTION is the title of a ### (or deeper) heading in the
+Wrap-Up, any case. LEAD names one top-level list item: its text
+(bold markers and a leading [ ] dropped) starts with LEAD, or
+its bold lead is LEAD. In Keeper Checklist the item becomes
+'- [x] ~~item~~ — RULING'; in any other section
+'~~item~~ — answered: RULING'. Nested lines stay. An item
+already ticked or struck is refused.
+```
+
+| Argument | Value | Help |
+|---|---|---|
+| `<wrapup>` |  | the Wrap-Up: vault-relative, or its name |
 | `--write` |  | write it (default: preview) |
 <!-- END GENERATED -->
 

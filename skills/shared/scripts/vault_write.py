@@ -5,6 +5,7 @@
     vault_write.py VAULT wrapup-add WRAPUP [--replace | --append]
                                [--after HEADING]
                                [--write]                                < markdown
+    vault_write.py VAULT wrapup-settle WRAPUP [--write]                 < rows
     vault_write.py VAULT story --wrapup WRAPUP [--label TEXT] [--as-of TEXT]
                                [--date YYYY-MM-DD] [--write]            < entries
     vault_write.py VAULT status PC [--write]                            < fields
@@ -91,7 +92,7 @@ DATA_FILES = frozenset({"_meta/prop-hands.json"})
 VERBS = {"WOULD-CREATE": "CREATED", "WOULD-ADD": "ADDED",
          "WOULD-MOVE": "MOVED", "WOULD-CLOSE": "CLOSED",
          "WOULD-RECORD": "RECORDED", "WOULD-REST": "RESTED",
-         "WOULD-WAKE": "WOKE"}
+         "WOULD-WAKE": "WOKE", "WOULD-SETTLE": "SETTLED"}
 
 
 class WriteError(Exception):
@@ -337,7 +338,8 @@ def emit(batch: Batch, wrote: bool) -> str:
         ("moved", count("WOULD-MOVE", "MOVED")),
         ("closed", count("WOULD-CLOSE", "CLOSED")),
         ("rested", count("WOULD-REST", "RESTED")),
-        ("woken", count("WOULD-WAKE", "WOKE"))) if n)
+        ("woken", count("WOULD-WAKE", "WOKE")),
+        ("settled", count("WOULD-SETTLE", "SETTLED"))) if n)
     total = (f"# create: {count('WOULD-CREATE', 'CREATED')}  "
              f"add: {count('WOULD-ADD', 'ADDED')}  skip: {count('SKIP')}  "
              f"{extra}warnings: {count('WARNING')}  errors: {count('ERROR')}")
@@ -1036,6 +1038,95 @@ def cmd_wrapup_add(batch: Batch, args: argparse.Namespace, text: str) -> None:
                               "see this")
     if not placed:
         raise WriteError(f"{rel}: nothing to add")
+
+
+SETTLE_ITEM_RE = re.compile(
+    r"^(?P<indent>[ \t]*)(?P<mark>[-*+]|\d+[.)])[ \t]+"
+    r"(?P<box>\[[ xX]\][ \t]+)?(?P<text>.*)$")
+KEEPER_CHECKLIST = "keeper checklist"
+
+
+def settle_section(lines: list[str], title: str) -> tuple[int, int]:
+    """(first line, end) of the body of the heading, of level 3 or deeper
+    and outside a code fence, whose title equals `title` in any case. The
+    body runs to the next heading of any level."""
+    heads = th._headings(lines)
+    want = title.strip().casefold()
+    for n, (idx, level, found) in enumerate(heads):
+        if level >= 3 and found.casefold() == want:
+            end = heads[n + 1][0] if n + 1 < len(heads) else len(lines)
+            return idx + 1, end
+    raise WriteError(f"no section titled '{title}' (### or deeper)")
+
+
+def settle_items(lines: list[str], start: int,
+                 end: int) -> list[tuple[int, re.Match[str]]]:
+    """(line, match of SETTLE_ITEM_RE) for the list items of a section at
+    its top indent; nested items are left out."""
+    found = [(i, m) for i in range(start, end)
+             if (m := SETTLE_ITEM_RE.match(lines[i].rstrip("\r")))]
+    if not found:
+        return []
+    width = [len(m["indent"].expandtabs(4)) for _i, m in found]
+    return [item for item, w in zip(found, width) if w == min(width)]
+
+
+def settle_one(lines: list[str], section: str, lead: str,
+               ruling: str) -> str:
+    """Settle the one item of `section` that `lead` names, in `lines`
+    (changed in place); returns the item's text for the row. An item
+    matches when its text, with a leading `[ ] ` and the bold markers
+    and a struck item's leading `~~` dropped, starts with `lead` (case-sensitive), or its bold lead
+    (`threads.lead`) equals `lead`."""
+    start, end = settle_section(lines, section)
+    hits = [(i, m) for i, m in settle_items(lines, start, end)
+            if m["text"].replace("**", "").lstrip("~ ").startswith(lead)
+            or th.lead(m["text"].lstrip("~ ")) == lead]
+    if not hits:
+        raise WriteError(f"'{section}': no item matches '{lead}'")
+    if len(hits) > 1:
+        raise WriteError(f"'{section}': {len(hits)} items match '{lead}'; "
+                         f"use more of its words")
+    i, m = hits[0]
+    text = m["text"].strip()
+    box = (m["box"] or "").strip()
+    if box.lower() == "[x]" or text.startswith("~~"):
+        raise WriteError(f"'{section}': '{lead}' is already settled")
+    checklist = section.strip().casefold() == KEEPER_CHECKLIST
+    ruling = " ".join(ruling.split())
+    cr = "\r" if lines[i].endswith("\r") else ""
+    tick = "[x] " if checklist or box else ""
+    said = ruling if checklist else f"answered: {ruling}"
+    lines[i] = (f"{m['indent']}{m['mark']} {tick}~~{text}~~ "
+                f"\u2014 {said}{cr}")
+    return text
+
+
+def cmd_wrapup_settle(batch: Batch, args: argparse.Namespace,
+                      text: str) -> None:
+    rel = batch.note_named(args.wrapup, vc.WRAP_TYPES, "wrapup")
+    note = batch.read(rel)
+    if vl.entity_type(vl.extract_frontmatter(note) or {}) not in vc.WRAP_TYPES:
+        raise WriteError(f"{rel}: not a Wrap-Up")
+    rows = [ln.split("\t") for ln in text.splitlines() if ln.strip()]
+    if not rows:
+        raise WriteError("no rows on stdin")
+    eol = th._eol(note)
+    lines = th._lines(note)
+    errors: list[str] = []
+    for n, cols in enumerate(rows, 1):
+        try:
+            if len(cols) != 3 or not all(c.strip() for c in cols):
+                raise WriteError("a row is SECTION, LEAD and RULING, "
+                                 "separated by tabs")
+            item = settle_one(lines, cols[0], cols[1].strip(), cols[2])
+        except WriteError as e:
+            errors.append(f"row {n}: {e}")
+            continue
+        batch.row("WOULD-SETTLE", rel, f"\u00a7{cols[0].strip()}", item)
+    if errors:
+        raise WriteError("\nERROR\t".join(errors))
+    batch.put(rel, th._join(lines, eol))
 
 
 STORY_TEMPLATES = ("character-story.md", "_Template_Character_Story.md")
@@ -4100,6 +4191,21 @@ def build_parser() -> argparse.ArgumentParser:
                           "already exists")
     add.add_argument("--after", help="the heading a new section goes after")
     add.add_argument("--write", action="store_true", help="write it (default: preview)")
+    settle = sub.add_parser(
+        "wrapup-settle", help="tick Keeper Checklist items and strike "
+        "answered questions (stdin rows)",
+        formatter_class=raw, description=(
+            "stdin: one tab-separated row per item: SECTION, LEAD, RULING.\n"
+            "SECTION is the title of a ### (or deeper) heading in the\n"
+            "Wrap-Up, any case. LEAD names one top-level list item: its text\n"
+            "(bold markers and a leading [ ] dropped) starts with LEAD, or\n"
+            "its bold lead is LEAD. In Keeper Checklist the item becomes\n"
+            "'- [x] ~~item~~ \u2014 RULING'; in any other section\n"
+            "'~~item~~ \u2014 answered: RULING'. Nested lines stay. An item\n"
+            "already ticked or struck is refused."))
+    settle.add_argument("wrapup", help="the Wrap-Up: vault-relative, or its name")
+    settle.add_argument("--write", action="store_true",
+                        help="write it (default: preview)")
     story = sub.add_parser(
         "story", help="append story entries (stdin)",
         formatter_class=raw, description=(
@@ -4391,6 +4497,7 @@ def build_parser() -> argparse.ArgumentParser:
 Command = Callable[[Batch, argparse.Namespace, str], None]
 COMMANDS: dict[str, Command] = {"wrapup-new": cmd_wrapup_new,
                                 "wrapup-add": cmd_wrapup_add,
+                                "wrapup-settle": cmd_wrapup_settle,
                                 "story": cmd_story,
                                 "npc-story": cmd_npc_story,
                                 "status": cmd_status,
