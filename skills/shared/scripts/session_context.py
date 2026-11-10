@@ -72,8 +72,11 @@ verdict, the `--brief` bundle, the reconcile scan of the Wrap-Up just
 written (when the session's status is `wrap-up`), the `--threads` and
 `--arcs` reports, the chapter's prep queue (`scene_queue.py`) and its
 narrative plans (`plans_index.py`, checked against the NPCs, locations
-and factions the Wrap-Up links). Each part is the named script's own
-output; nothing is worked out twice.
+and factions the Wrap-Up links), then a Map: the path, type and size of
+every note the Wrap-Up and the upcoming Plan link, and of the latest
+sessions' notes. It leaves out the deferred world flags and the PCs'
+`## Background`, which no prep plan used (27 runs, 2026-11-10). Each
+part is the named script's own output; nothing is worked out twice.
 
 A PC's `## Current Status` (every bundle mode) and, in `--arcs`, its
 `## Background` and `## GM Notes` print as an outline when they hold
@@ -128,7 +131,7 @@ from vaultlib import (GM_MARKER_RE, is_active_pc, marker_re,  # noqa: F401
 from vaultlib import LABEL_RE as _LABEL_RE
 from vaultlib import BULLET_RE
 from vaultlib import bullets as _bullets
-from vaultlib import fence_step, link_name, split_paused
+from vaultlib import alias_split, fence_step, link_name, split_paused
 from vaultlib import vault_files as _vault_files
 
 
@@ -1354,7 +1357,7 @@ def _fetch_path(whole: list[str], section: str, name: str) -> str | None:
 
 
 def arcs_report(files, chapter, upcoming: int, vault: Path,
-                outlines: Outlines) -> str:
+                outlines: Outlines, background: bool = True) -> str:
     """For each active PC (type pc, not *_Story.md, status not out of play
     for this vault):
       --- {stem} ({rel}, player: {player_name or ?}) ---
@@ -1386,7 +1389,10 @@ def arcs_report(files, chapter, upcoming: int, vault: Path,
 
     Plans = every type: session-plan with a parsable session number <
     upcoming, prefer_chapter semantics, sorted by number.
-    "Sessions since" = upcoming - N."""
+    "Sessions since" = upcoming - N.
+
+    `background` False (the --prep bundle) leaves the Background out: no
+    prep plan used one (27 runs, 2026-11-10); `--arcs` prints it."""
     lines = [f"===== PC Arcs — Sessions before {upcoming} ====="]
 
     plan_files = [(rel, text, fm) for rel, text, fm in files
@@ -1422,10 +1428,11 @@ def arcs_report(files, chapter, upcoming: int, vault: Path,
         stem = Path(rel).stem
         player = fm.get("player_name") or "?"
         lines.append(f"\n--- {stem} ({rel}, player: {player}) ---")
-        bg = section(text, "Background")
-        lines.append("## Background")
-        lines.append(outlines.layered(bg, vault, rel, "Background", text) if bg
-                     else "(no ## Background section)")
+        if background:
+            bg = section(text, "Background")
+            lines.append("## Background")
+            lines.append(outlines.layered(bg, vault, rel, "Background", text)
+                         if bg else "(no ## Background section)")
         gm = section(text, "GM Notes")
         lines.append("## GM Notes")
         lines.append(outlines.layered(gm, vault, rel, "GM Notes", text) if gm
@@ -1807,6 +1814,97 @@ def wrapup_names(files, wrap_text: str) -> list[str]:
     return names
 
 
+MAP_SESSIONS = 3   # how many of the latest sessions the map lists
+
+
+def map_report(files, wrap, plan, chapter, current: int) -> str:
+    """Where the notes a prep run may need are, without their text: every
+    note the Wrap-Up's body (its Resolved Threads left out) and the
+    upcoming Plan's body link, in the order first linked, found by file
+    name or alias as `gma section` finds them, PCs left out (their status
+    is in the bundle); then the latest MAP_SESSIONS sessions' notes in the
+    chapter. One line each: `{type}\t{path}\t{N} words`. A name several
+    notes answer to lists each of them; a path-style link that picks out
+    one lists that one. Links to files that are not notes (`![[map.png]]`)
+    are skipped; a name no note answers to is counted."""
+    by_rel = {rel: (text, fm) for rel, text, fm in files}
+    names = section_cmd.name_index((rel, text) for rel, text, _fm in files)
+    own = {wrap[0] if wrap else None, plan[0] if plan else None}
+    texts = ([_without_block(body_of(wrap[1]), 4, "Resolved Threads")]
+             if wrap else []) + ([body_of(plan[1])] if plan else [])
+    seen: set[str] = set()
+    listed: set[str] = set()
+    rows: list[str] = []
+    missing = 0
+    for raw in (r for t in texts for r in _ANY_LINK_RE.findall(t)):
+        target = re.split(r"[#^]", alias_split(raw), maxsplit=1)[0].strip()
+        name = link_name(raw)
+        if re.search(r"\.(?!md$)[A-Za-z0-9]{2,5}$", target):
+            continue                      # an image or other file
+        key = normalize(name)
+        if not key or normalize(target) in seen:
+            continue
+        seen.add(normalize(target))
+        hits = sorted(set(names.get(key, [])))
+        if "/" in target and len(hits) > 1:
+            tail = normalize(target.removesuffix(".md"))
+            picked = [h for h in hits
+                      if normalize(h.removesuffix(".md")).endswith(tail)]
+            hits = picked or hits
+        if not hits:
+            missing += 1
+            continue
+        for rel in hits:
+            text, fm = by_rel[rel]
+            kind = entity_type(fm) or "note"
+            if kind == "pc" or rel in own or rel in listed:
+                continue
+            listed.add(rel)
+            rows.append(f"{kind}\t{rel}\t{word_count(body_of(text))} words")
+    out = ["===== Map =====",
+           "(where the notes the Wrap-Up and the upcoming Plan link are, "
+           "and the latest sessions' notes: read one when a step needs it, "
+           "whole with Read or one section with `gma section`, instead of "
+           "searching the vault)",
+           "--- Linked from the Wrap-Up and the Plan ---"]
+    out += rows or ["(none)"]
+    if missing:
+        out.append(f"({missing} linked "
+                   + ("name has" if missing == 1 else "names have")
+                   + " no note)")
+    kinds = {"session": "index", "session-plan": "plan",
+             **{t: "wrap-up" for t in WRAP_UP_TYPES}}
+
+    def number(fm) -> int | None:
+        n = session_ref_number(fm)
+        return n if n is not None else parse_session_number(
+            fm.get("session_number"))
+
+    # Chosen as the bundle chooses its Wrap-Up and Plan (prefer_chapter):
+    # the chapter's own note, else an unfiled one.
+    candidates = [(rel, text, fm) for rel, text, fm in files
+                  if entity_type(fm) in kinds
+                  and (n := number(fm)) is not None and n <= current
+                  and (chapter is None
+                       or chapter_key(rel, fm) in (chapter, None))]
+    numbers = sorted({number(fm) or 0 for _r, _t, fm in candidates}
+                     )[-MAP_SESSIONS:]
+    out.append("--- Latest sessions ---")
+    sessions = []
+    for n in reversed(numbers):
+        for kind in sorted(set(kinds.values())):
+            picked = prefer_chapter(
+                [c for c in candidates if number(c[2]) == n
+                 and kinds[entity_type(c[2])] == kind], chapter)
+            if picked:
+                sessions.append(picked)
+                out.append(f"Session {n} {kind}\t{picked[0]}\t"
+                           f"{word_count(body_of(picked[1]))} words")
+    if not sessions:
+        out.append("(none)")
+    return "\n".join(out)
+
+
 def print_prep_rest(vault: Path, files, chosen, wrap, current: int,
                     chapter, upcoming: int, outlines: Outlines) -> None:
     """What `--prep` adds after the brief bundle."""
@@ -1818,7 +1916,7 @@ def print_prep_rest(vault: Path, files, chosen, wrap, current: int,
         print("\n===== Reconcile Scan =====\n(not run: the session's "
               f"status is {status or 'unknown'}, not wrap-up)")
     print(f"\n{thread_report(files, current, chapter, vault, 'may-wake')}")
-    print(f"\n{arcs_report(files, chapter, upcoming, vault, outlines)}")
+    print(f"\n{arcs_report(files, chapter, upcoming, vault, outlines, background=False)}")
     label = (chosen or {}).get("chapter_label")
     where = ("--chapter", label) if label else ()
     print(run_script("scene_queue.py", vault, *where, title="Scene Queue"))
@@ -1830,6 +1928,9 @@ def print_prep_rest(vault: Path, files, chosen, wrap, current: int,
     print(run_script("plans_index.py", vault, *where,
                      *(("--against", *names) if names else ()),
                      title="Narrative Plans"))
+    print("\n" + map_report(files, wrap, _upcoming_plan(files, chapter,
+                                                        upcoming),
+                            chapter, current))
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -1877,12 +1978,16 @@ def build_parser() -> argparse.ArgumentParser:
     mode.add_argument(
         "--prep", action="store_true",
         help="a prep run's opening read in one call: the version verdict, "
-             "the --brief bundle, the reconcile scan (status wrap-up only), "
+             "the --brief bundle without the deferred world flags, the "
+             "reconcile scan (status wrap-up only), "
              "--threads (its dormant part only the threads that may "
              "wake: their names are in the Wrap-Up or the upcoming Plan), "
-             "--arcs, the chapter's scene queue and its "
+             "--arcs without the PCs' Backgrounds, the chapter's scene "
+             "queue and its "
              "narrative plans checked against the NPCs, locations and "
-             "factions the Wrap-Up links")
+             "factions the Wrap-Up links, then a Map: the path and size "
+             "of every note the Wrap-Up and the upcoming Plan link, and of "
+             "the latest sessions' notes")
     mode.add_argument(
         "--carry", action="store_true",
         help="print only what the previous Wrap-Up carries forward: its "
@@ -2093,11 +2198,13 @@ def _bundle(argv: list[str] | None, outlines: Outlines) -> int:
              body_of(plan[1]) if plan else None)
 
     # --- deferred world flags ---
+    # Not in --prep: no prep plan used them (27 runs, 2026-11-10).
     flags = next(((rel, text) for rel, text, fm in files
                   if rel.endswith("_flags.md")), None)
-    emit("World Flags — Deferred",
-         flags[0] if flags else None,
-         section(flags[1], "Deferred") if flags else None)
+    if not args.prep:
+        emit("World Flags — Deferred",
+             flags[0] if flags else None,
+             section(flags[1], "Deferred") if flags else None)
 
     # --- campaign overview ---
     found = overview_of(files)

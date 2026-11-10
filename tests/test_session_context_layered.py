@@ -360,5 +360,155 @@ class PinnedPathTests(unittest.TestCase):
         self.assertIn("### Log\na", ada)            # not unique: whole
 
 
+@NEEDS_NODE
+class PrepLeavesOutTests(unittest.TestCase):
+    """--prep leaves out what no prep plan used: the PCs' Backgrounds and
+    the deferred world flags. --arcs and the default bundle keep them."""
+
+    def arcs(self, out):
+        return out.split("===== PC Arcs")[1].split("===== Scene Queue")[0]
+
+    def test_prep_has_gm_notes_but_no_background(self):
+        arcs = self.arcs(sc("--prep").stdout)
+        self.assertNotIn("## Background", arcs)
+        self.assertNotIn("A lamp-trimmer's daughter", arcs)
+        self.assertNotIn("A ferry hand with no secrets", arcs)
+        self.assertIn("## GM Notes\nCole will say yes", arcs)
+        self.assertIn("Ada is the one who can tell", arcs)
+        self.assertIn("Ada_Quill: GM Notes/Hooks)", arcs)
+        self.assertIn("Spotlight history", arcs)
+
+    def test_arcs_still_prints_background(self):
+        out = sc("--arcs").stdout
+        self.assertIn(COLE_ARCS, out)
+        self.assertIn("A lamp-trimmer's daughter", out)
+
+    def test_world_flags_only_outside_prep(self):
+        vault = copy_vault(self)
+        (vault / "_World").mkdir()
+        (vault / "_World" / "_flags.md").write_text(
+            "# Flags\n\n## Deferred\n\n- Who owns the toll house.\n",
+            encoding="utf-8")
+        prep = sc("--prep", vault=vault).stdout
+        self.assertNotIn("World Flags", prep)
+        self.assertNotIn("toll house", prep)
+        brief = sc("--brief", vault=vault).stdout
+        self.assertIn("===== World Flags — Deferred =====", brief)
+        self.assertIn("Who owns the toll house.", brief)
+
+
+class MapTests(unittest.TestCase):
+    """--prep's Map: where the linked notes and latest sessions are."""
+
+    def note(self, rel, fm, body="", head=""):
+        return (rel, f"---\n{head}---\n" + body, fm)
+
+    def files(self, wrap_body, plan_body="[[Inn]] and [[Bo]]"):
+        ch = {"chapter": "[[Chapter 1]]"}
+        wrap = self.note("Ch1/S5 Wrap.md",
+                         {"type": "session_wrap", "session": "[[Session 5]]",
+                          **ch}, wrap_body,
+                         head="session: \"[[S5 Index]]\"\n")
+        plan = self.note("Ch1/S6 Plan.md",
+                         {"type": "session-plan", "session": "[[Session 6]]",
+                          **ch}, plan_body)
+        files = [
+            wrap, plan,
+            self.note("NPCs/Bo.md", {"type": "npc"}, "one two three",
+                      head="aliases: [Bobby]\n"),
+            self.note("PCs/Ada.md", {"type": "pc"}, "x"),
+            self.note("Places/The Ford.md", {"type": "location"}, "a b"),
+            self.note("Places/Inn.md", {"type": "location"}, "c"),
+            self.note("NPCs/Gone.md", {"type": "npc"}, "g"),
+            self.note("A/Twin.md", {"type": "npc"}, "t"),
+            self.note("B/Twin.md", {"type": "npc"}, "t"),
+            self.note("Ch1/S5 Index.md", {"type": "session",
+                                          "session_number": 5, **ch}, "i"),
+        ] + [self.note(f"Ch1/S{n} Plan.md",
+                       {"type": "session-plan", "session_number": n, **ch},
+                       "p") for n in (1, 2, 3, 4)] + [
+            self.note("Ch2/S4 Plan.md", {"type": "session-plan",
+                                         "session_number": 4,
+                                         "chapter": "[[Chapter 2]]"}, "q")]
+        return files, wrap, plan
+
+    def linked(self, out):
+        part = out.split("--- Linked")[1].split("--- Latest")[0]
+        return part, [r.split("\t")[1] for r in part.split("\n")[1:]
+                      if "\t" in r]
+
+    def test_map_lists_linked_notes_and_latest_sessions(self):
+        files, wrap, plan = self.files(
+            "[[Bo]] met [[Ada]] at [[The Ford|the ford]]; [[Nowhere]]\n\n"
+            "#### Resolved Threads\n\n- [[Gone]]\n\n## Next\n\n"
+            "[[Bo]] again\n")
+        out = sctx.map_report(files, wrap[:2], plan[:2], "chapter 1", 5)
+        part, paths = self.linked(out)
+        self.assertEqual(paths, ["NPCs/Bo.md", "Places/The Ford.md",
+                                 "Places/Inn.md"])
+        self.assertIn("npc\tNPCs/Bo.md\t3 words", part)
+        self.assertIn("(1 linked name has no note)", part)
+        latest = out.split("--- Latest sessions ---")[1]
+        self.assertIn("Session 5 wrap-up\tCh1/S5 Wrap.md", latest)
+        self.assertIn("Session 5 index\tCh1/S5 Index.md", latest)
+        self.assertIn("Session 4 plan\tCh1/S4 Plan.md", latest)
+        self.assertIn("Session 3 plan\tCh1/S3 Plan.md", latest)
+        self.assertNotIn("S2 Plan", latest)       # only the latest three
+        self.assertNotIn("Ch2/", latest)          # this chapter only
+
+    def test_aliases_shared_names_paths_and_files(self):
+        files, wrap, plan = self.files(
+            "[[Bobby]] and [[Twin]]; ![[map.png]]; [[B/Twin]]; "
+            "[[Bo#Notes|him]]\n", plan_body="")
+        out = sctx.map_report(files, wrap[:2], plan[:2], "chapter 1", 5)
+        part, paths = self.linked(out)
+        # The alias finds Bo; a shared name lists both notes; the path link
+        # adds nothing new; the image is not a note; Bo is listed once.
+        self.assertEqual(paths, ["NPCs/Bo.md", "A/Twin.md", "B/Twin.md"])
+        self.assertNotIn("no note", part)
+        self.assertNotIn("S5 Index", part)   # a frontmatter link is not mapped
+
+    def test_path_link_picks_one_of_a_shared_name(self):
+        files, wrap, plan = self.files("[[B/Twin]]\n", plan_body="")
+        _part, paths = self.linked(
+            sctx.map_report(files, wrap[:2], plan[:2], "chapter 1", 5))
+        self.assertEqual(paths, ["B/Twin.md"])
+
+    def test_no_wrap_up_or_plan(self):
+        out = sctx.map_report([], None, None, None, 0)
+        self.assertIn("--- Linked from the Wrap-Up and the Plan ---\n(none)",
+                      out)
+        self.assertTrue(out.endswith("--- Latest sessions ---\n(none)"), out)
+
+    def test_unfiled_wrap_up_is_listed_like_the_bundle_picks_it(self):
+        ch = {"chapter": "[[Chapter 1]]"}
+        files = [
+            self.note("Ch1/S5 Index.md", {"type": "session",
+                                          "session_number": 5, **ch}, "i"),
+            self.note("Sessions/S5 Wrap.md", {"type": "session_wrap",
+                                               "session_number": 5}, "w"),
+        ]
+        out = sctx.map_report(files, None, None, "chapter 1", 5)
+        self.assertIn("Session 5 wrap-up\tSessions/S5 Wrap.md", out)
+        self.assertIn("Session 5 index\tCh1/S5 Index.md", out)
+
+    def test_prep_ends_with_the_map(self):
+        root = Path(tempfile.mkdtemp(prefix="map-"))
+        self.addCleanup(shutil.rmtree, root, ignore_errors=True)
+        vault = root / "vault"
+        shutil.copytree(ROOT / "tests" / "fixtures" / "mini-vault-prep", vault)
+        wrap = vault / "Chapters/Chapter 1/Sessions/Chapter_01_Session_02_Wrap_Up.md"
+        wrap.write_text(wrap.read_text(encoding="utf-8")
+                        + "\n[[Harbour Master]] waits.\n", encoding="utf-8")
+        (vault / "NPCs").mkdir()
+        (vault / "NPCs" / "Harbour Master.md").write_text(
+            "---\ntype: npc\n---\nKeeps the tide book.\n", encoding="utf-8")
+        out = sc("--prep", vault=vault).stdout
+        tail = out.split("===== Map =====")[1]
+        self.assertIn("npc\tNPCs/Harbour Master.md\t4 words", tail)
+        self.assertIn("Session 2 wrap-up\tChapters/Chapter 1/Sessions/"
+                      "Chapter_01_Session_02_Wrap_Up.md", tail)
+
+
 if __name__ == "__main__":
     unittest.main()

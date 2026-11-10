@@ -9,6 +9,13 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.9] — 2026-11-10
+
+### Changed
+
+- Prep's opening read ends with a map: where every note the last Wrap-Up and the next Plan link lives, with its size, and the latest sessions' notes. Prep finds what it needs without searching the vault; on Canticle it took fewer turns and cost less.
+- Prep's opening read leaves out the PCs' Backgrounds and the deferred world flags, which no prep plan used. `gma session-context --arcs` still prints the Backgrounds, and the default bundle the flags.
+
 ## [1.12.8] — 2026-11-10
 
 ### Added
