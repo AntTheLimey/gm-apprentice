@@ -13,24 +13,22 @@ ask: `vault.images.auto`, for drawing without asking, has no effect yet.
 2. At <https://aistudio.google.com/projects>, set up billing and add
    prepaid credit with auto-reload turned off. Then the credit you bought
    is the most Google can ever charge. When it runs out, Google draws
-   nothing more and the apprentice says the account is out of credit. A
-   limit on your Google account is reported as reached, to try later.
+   nothing more and the apprentice says the account is out of credit (a
+   limit on your account is reported as reached instead).
 3. In your own terminal window, run `gma image key gemini` and paste the
    key when asked. On a Mac it goes into your keychain. Elsewhere it goes
    into a key file only you can read.
 
-Never paste the key into a chat with the apprentice, a note or
+Never put the key in a chat with the apprentice, a note or
 `_meta/vault-config.yaml`: the vault gets published. A key in the
-`GEMINI_API_KEY` or `GOOGLE_API_KEY` environment variable is used before
-the stored one, and `gma image status "<vault>"` says where the key it
-found came from.
+`GEMINI_API_KEY` or `GOOGLE_API_KEY` environment variable is used first,
+and `gma image status "<vault>"` says where the key came from.
 
 ## Choose the service and model
 
 Set `vault.images.service` to `gemini` and `vault.images.model` to the
-model name Google uses, such as `gemini-nano-banana-2.1`. Nothing is tied
-to one model, but a model the apprentice has no price for stops before
-drawing until you decide what to do (see
+model name Google uses, such as `gemini-nano-banana-2.1`. Any model
+works, but one with no known price waits for your choice (see
 [When the price is not known](#when-the-price-is-not-known)). Ask the
 apprentice to change a setting, or edit `_meta/vault-config.yaml`. The
 [Drawing pictures](site-settings.md#drawing-pictures) settings list every
@@ -67,16 +65,18 @@ apprentice draws (prices change, so treat these as a guide):
 
 | | US cents per picture |
 |---|---|
-| Thinking off | about 3.6 to 3.9 |
-| Thinking on | about 3.7 to 4.7 |
+| Thinking off | about 3.6 to 4.5 (no likenesses to four) |
+| Thinking on | about 4.3 to 5.8, varying from picture to picture |
 | Each likeness sent | about 0.17 more |
 
-`vault.images.thinking` lets the service think before it draws: turn it
-on if likenesses or details suffer. A picture then costs more and varies,
-the limit for one try becomes a likely ceiling instead of a guarantee,
-and the usual limit leaves no room for likenesses, so raise it too. If a
-model will only draw with thinking on, the apprentice says so, and the
-same applies.
+`vault.images.thinking` lets the service think before it draws. Turn it
+on and raise `vault.images.attempt_limit` to about 7 cents too, or each
+picture is reported "over the limit for one attempt" and nothing is
+drawn. The limit then becomes a likely ceiling instead of a guarantee.
+One comparison of six pictures drawn both ways found likenesses held
+equally well, thinking on followed fine details a little more closely,
+and thinking off was cheaper and steadier. A model that "will not draw
+without thinking" needs the same raise.
 
 ## When the price is not known
 

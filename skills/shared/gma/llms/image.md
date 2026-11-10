@@ -36,7 +36,7 @@ When it stops:
 - Unknown price: put the printed choice to the GM in the tool's own words. Run the setting command it names only on their yes (for `vault.images.price`, with the price they give).
 - No service or model: ask the GM, then set `vault.images.service` and `vault.images.model`.
 - A limit (refused, trimmed, likenesses dropped, run stopped): tell the GM and change nothing.
-- "will not draw without thinking": the model forced thinking on for this batch, so pictures cost more and likenesses may be dropped. Tell the GM. Raise the limit for one attempt only on their yes.
+- "will not draw without thinking": the model forced thinking on for this batch, so pictures cost more, likenesses may be dropped, and at the usual limit for one attempt nothing is drawn. Tell the GM. Raise the limit for one attempt only on their yes.
 - Key, credit, keychain or network messages: pass them on. In a sandbox, `draw` needs network access.
 
 <!-- BEGIN GENERATED: gma image -->
