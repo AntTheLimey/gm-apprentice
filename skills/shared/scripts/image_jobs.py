@@ -70,6 +70,7 @@ class Entry:
     cost: float | None = None
     said: list[str] = field(default_factory=list)
     ext: str | None = None
+    usage: dict[str, int] | None = None   # the last billed reply's usage, if it had one
 
 
 @dataclass

@@ -191,6 +191,8 @@ class _Run:
             cents = est
         e.attempts += 1
         e.cost = cents
+        if usage is not None:
+            e.usage = dict(usage)   # evidence for later estimates; never printed
         if cents is None:
             self.result.unknown += 1
         else:

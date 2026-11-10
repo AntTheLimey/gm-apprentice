@@ -220,19 +220,19 @@ def test_rule_8_over_the_attempt_limit_is_refused(tmp_path):
 
 def test_rule_8_references_are_dropped_to_fit(tmp_path):
     cfg = ("vault:\n  images:\n    service: gemini\n"
-           "    model: gemini-nano-banana-2.1\n    attempt_limit: 4.0\n")
+           "    model: gemini-nano-banana-2.1\n    attempt_limit: 4.5\n")
     v = build(tmp_path, config=cfg)
     add_people(v, 2, "item")
     _, e = one(v, {"for": "Anselm", "subject": "x",
                    "shows": ["Marta", "Extra0", "Extra1"]})
     assert e.status == "planned"
     assert len(e.refs) < 3 and "dropped" in said(e)
-    assert e.estimate is not None and e.estimate <= 4.0
+    assert e.estimate is not None and e.estimate <= 4.5
 
 
 def test_thinking_on_plans_the_higher_estimate(tmp_path):
     base = ("vault:\n  images:\n    service: gemini\n"
-            "    model: gemini-nano-banana-2.1\n")
+            "    model: gemini-nano-banana-2.1\n    attempt_limit: 7\n")
     _, off = one(build(tmp_path / "a", config=base),
                  {"for": "Anselm", "subject": "x"})
     _, on = one(build(tmp_path / "b", config=base + "    thinking: true\n"),
@@ -244,13 +244,14 @@ def test_thinking_on_plans_the_higher_estimate(tmp_path):
 def test_dropped_references_say_why_when_thinking_is_on(tmp_path):
     base = ("vault:\n  images:\n    service: gemini\n"
             "    model: gemini-nano-banana-2.1\n")
+    on_base = base + "    attempt_limit: 6.1\n"
     shows = {"for": "Anselm", "subject": "x", "shows": ["Marta"]}
-    _, on = one(build(tmp_path / "a", config=base + "    thinking: true\n"), shows)
+    _, on = one(build(tmp_path / "a", config=on_base + "    thinking: true\n"), shows)
     assert on.refs == [] and "dropped 1 reference" in said(on)
     assert said(on).endswith(
         " Thinking is on, which costs more: raise the limit for one attempt "
         "or turn thinking off to keep likenesses.")
-    cfg = base + "    attempt_limit: 3.9\n"
+    cfg = base + "    attempt_limit: 4.2\n"
     _, off = one(build(tmp_path / "b", config=cfg), shows)
     assert "dropped" in said(off) and "Thinking is on" not in said(off)
 
@@ -453,7 +454,8 @@ def test_four_character_likenesses_at_most(tmp_path):
 
 
 def test_places_do_not_count_against_the_character_limit(tmp_path):
-    v = build(tmp_path)
+    v = build(tmp_path, config="vault:\n  images:\n    service: gemini\n"
+              "    model: gemini-nano-banana-2.1\n    attempt_limit: 100\n")
     people = add_people(v, 4)
     places = add_people(v, 3, kind="location", prefix="Place")
     _, e = one(v, {"for": "Anselm", "subject": "x", "shows": people + places})
@@ -602,7 +604,8 @@ def test_counted_is_singular_for_one():
 
 def test_one_dropped_reference_is_not_pictures(tmp_path):
     base = ("vault:\n  images:\n    service: gemini\n"
-            "    model: gemini-nano-banana-2.1\n    thinking: true\n")
+            "    model: gemini-nano-banana-2.1\n    thinking: true\n"
+            "    attempt_limit: 6.1\n")
     shows = {"for": "Anselm", "subject": "x", "shows": ["Marta"]}
     _, on = one(build(tmp_path, config=base), shows)
     assert "dropped 1 reference picture to stay" in said(on)
@@ -610,7 +613,8 @@ def test_one_dropped_reference_is_not_pictures(tmp_path):
 
 def test_a_refused_duplicate_says_only_that_it_is_a_duplicate(tmp_path):
     base = ("vault:\n  images:\n    service: gemini\n"
-            "    model: gemini-nano-banana-2.1\n    thinking: true\n")
+            "    model: gemini-nano-banana-2.1\n    thinking: true\n"
+            "    attempt_limit: 6.1\n")
     v = build(tmp_path, config=base)
     req = {"for": "Anselm", "subject": "x", "shows": ["Marta"]}
     job = image_jobs.plan(v, [req, req], False, TODAY)
@@ -618,3 +622,14 @@ def test_a_refused_duplicate_says_only_that_it_is_a_duplicate(tmp_path):
     assert (a.status, b.status) == ("planned", "refused")
     assert "dropped 1 reference picture" in said(a)
     assert b.said == ["another picture in this plan goes to the same place"]
+
+
+def test_a_job_file_from_before_usage_was_kept_still_loads(tmp_path):
+    v = build(tmp_path)
+    job = image_jobs.plan(v, [{"for": "Anselm", "subject": "x"}], False, TODAY)
+    path = image_jobs.job_file(job.id)
+    data = json.loads(path.read_text(encoding="utf-8"))
+    for entry in data["entries"]:
+        del entry["usage"]
+    path.write_text(json.dumps(data), encoding="utf-8")
+    assert image_jobs.load(job.id).entries[0].usage is None

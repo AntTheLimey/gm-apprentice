@@ -678,3 +678,26 @@ def test_live_check_with_an_unavailable_key_store_exits_plainly(
     assert capsys.readouterr().err == (
         "The keychain did not answer. Unlock it and try again.\n")
     assert live == []
+
+
+# (thinking, likenesses, prompt bytes, real cents): twelve pictures drawn on
+# 2026-11-09. The likeness counts are read back from the old estimates.
+REAL_PICTURES = [
+    (False, 0, 1400, 3.81), (False, 2, 1400, 4.27), (False, 4, 1400, 4.50),
+    (False, 0, 1400, 3.59), (False, 0, 1400, 3.65), (False, 2, 1400, 4.13),
+    (True, 0, 1400, 5.53), (True, 2, 1400, 5.66), (True, 4, 1400, 5.82),
+    (True, 0, 1400, 4.30), (True, 0, 1400, 4.72), (True, 2, 1400, 4.62),
+]
+
+
+@pytest.mark.parametrize("thinking,likenesses,prompt_bytes,real", REAL_PICTURES)
+def test_the_estimate_is_never_under_what_twelve_real_pictures_cost(
+        thinking, likenesses, prompt_bytes, real):
+    est = image_gemini.estimate("gemini-nano-banana-2.1", "1K", likenesses,
+                                prompt_bytes, thinking)
+    assert est is not None and est >= real
+
+
+def test_four_likenesses_with_thinking_off_still_fit_five_cents():
+    est = image_gemini.estimate("gemini-nano-banana-2.1", "1K", 4, 2000, False)
+    assert est is not None and est < 5

@@ -280,8 +280,8 @@ def test_the_month_figure_is_read_fresh_for_every_picture(tmp_path, monkeypatch)
 
 
 def test_the_run_cap_counts_what_the_job_spent(tmp_path, monkeypatch, capsys):
-    vault, job = start(tmp_path, config=CONFIG + "    run_cap: 8\n")
-    # planned within the cap? 3 x ~3.8 passes 8 only for two: the plan trims one
+    vault, job = start(tmp_path, config=CONFIG + "    run_cap: 9\n")
+    # planned within the cap? 3 x ~4.2 passes 9 only for two: the plan trims one
     assert [e.status for e in job.entries] == ["planned", "planned", "trimmed"]
     send = script(monkeypatch, fixture(OK))
     run(vault, job)
@@ -399,7 +399,7 @@ def test_a_picture_whose_reply_has_no_usage_is_counted_at_its_estimate(tmp_path,
 
 
 def test_thinking_needed_and_affordable_draws_with_thinking_and_remembers(tmp_path, monkeypatch):
-    vault, job = start(tmp_path, count=2)
+    vault, job = start(tmp_path, count=2, config=CONFIG + "    attempt_limit: 7\n")
     send = script(monkeypatch, fixture("gemini-error-thinking-level.json"),
                   fixture("gemini-prompt-only.json"), fixture("gemini-prompt-only.json"))
     assert run(vault, job) == 0
@@ -782,7 +782,7 @@ def test_the_job_on_disk_shows_the_attempt_and_spend_before_the_picture_is_writt
 
 
 def test_thinking_forced_by_the_model_does_not_say_turn_thinking_off(tmp_path, monkeypatch, capsys):
-    vault = make_vault(tmp_path, 1)
+    vault = make_vault(tmp_path, 1, CONFIG + "    attempt_limit: 6.2\n")
     for i in range(4):
         (vault / "NPCs" / f"R{i}.md").write_text(
             f"---\ntype: npc\nportrait: _attachments/characters/r{i}.png\n---\n",
@@ -875,3 +875,14 @@ def test_totals_that_cannot_be_read_after_a_draw_are_one_plain_line(tmp_path, mo
     monkeypatch.setattr(image_money, "unpriced_count", broken)
     assert run(vault, job) == 1
     assert capsys.readouterr().err == "vault-state.json is not valid JSON\n"
+
+
+def test_the_last_reported_usage_is_kept_in_the_job_and_never_printed(tmp_path, monkeypatch, capsys):
+    vault, job = start(tmp_path, count=2)
+    script(monkeypatch, fixture(OK), derived(OK, usage=None))
+    run(vault, job)
+    first, second = reload(job).entries
+    assert set(first.usage or {}) == {"input", "image", "other", "thought"}
+    assert second.usage is None             # that reply carried none
+    out = capsys.readouterr().out
+    assert "thought" not in out and "'input'" not in out

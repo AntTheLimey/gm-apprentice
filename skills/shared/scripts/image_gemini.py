@@ -164,11 +164,14 @@ RATES: dict[str, Rate] = {
 
 # Measured on 2026-11-09 from real replies (tests/fixtures/image), rounded up.
 REF_TOKENS = 1200     # input tokens per reference picture; measured 1120
-OTHER_TOKENS = 500    # output tokens beyond the picture; measured 171 to 425
-# Thought tokens with thinking on: measured 326 to 1088 on 2026-11-09; the model
-# chooses them and nothing caps them, so this is a likely ceiling with about 40%
-# headroom, not a guarantee.
-THINK_TOKENS = 1500
+# Output tokens beyond the picture: measured 171 to about 690 across 13 pictures
+# on 2026-11-09 (rich style prompts use more); about 45% headroom.
+OTHER_TOKENS = 1000
+# Thought tokens with thinking on: with OTHER_TOKENS this allows 3500 against a
+# measured other-plus-thought of 1170 to about 2830 on 2026-11-09; the model
+# chooses them and nothing caps them, so this is a likely ceiling, not a
+# guarantee.
+THINK_TOKENS = 2500
 
 
 def _check_count(name: str, x: float) -> None:
