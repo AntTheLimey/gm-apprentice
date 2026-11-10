@@ -85,6 +85,19 @@ def build(tmp_path, config=None, guide=GUIDE):
     return vault
 
 
+def add_people(vault, count, kind="npc", prefix="Extra"):
+    """`count` notes of `kind`, each with a real portrait; returns names."""
+    names = []
+    for i in range(count):
+        name = f"{prefix}{i}"
+        (vault / "NPCs" / f"{name}.md").write_text(
+            note(kind, f"portrait: _attachments/characters/{name}.png\n"),
+            encoding="utf-8")
+        (vault / "_attachments" / "characters" / f"{name}.png").write_bytes(PNG)
+        names.append(name)
+    return names
+
+
 def one(vault, req, unprompted=False):
     job = image_jobs.plan(vault, [req], unprompted, TODAY)
     return job, job.entries[0]
@@ -209,7 +222,9 @@ def test_rule_8_references_are_dropped_to_fit(tmp_path):
     cfg = ("vault:\n  images:\n    service: gemini\n"
            "    model: gemini-nano-banana-2.1\n    attempt_limit: 4.0\n")
     v = build(tmp_path, config=cfg)
-    _, e = one(v, {"for": "Anselm", "subject": "x", "shows": ["Marta"] * 3})
+    add_people(v, 2, "item")
+    _, e = one(v, {"for": "Anselm", "subject": "x",
+                   "shows": ["Marta", "Extra0", "Extra1"]})
     assert e.status == "planned"
     assert len(e.refs) < 3 and "dropped" in said(e)
     assert e.estimate is not None and e.estimate <= 4.0
@@ -362,3 +377,158 @@ def test_a_damaged_state_file_propagates_for_the_cli(tmp_path):
         encoding="utf-8")
     with pytest.raises(vaultlib.StateUnreadable):
         image_jobs.plan(v, [{"for": "Anselm", "subject": "x"}], False, TODAY)
+
+
+# --- fix round 1 -----------------------------------------------------------
+
+def test_the_months_ceiling_counts_what_this_run_has_planned(tmp_path):
+    cfg = ("vault:\n  images:\n    service: gemini\n    model: x\n"
+           "    price: 60\n    run_cap: 1000\n    attempt_limit: 100\n")
+    v = build(tmp_path, config=cfg)
+    (v / vaultlib.STATE_FILE).write_text(
+        json.dumps({"images": {"months": {"2026-11": {"cents": 1900}}}}),
+        encoding="utf-8")
+    job = image_jobs.plan(v, [{"for": "Anselm", "subject": "x"},
+                              {"for": "Six", "subject": "x"}], False, TODAY)
+    assert [e.status for e in job.entries] == ["planned", "trimmed"]
+    assert "this month's ceiling (2000 cents) would be passed" in said(job.entries[1])
+
+
+def test_references_outside_the_vault_are_not_used(tmp_path):
+    v = build(tmp_path)
+    outside = tmp_path / "outside.png"
+    outside.write_bytes(PNG)
+    (v / "NPCs" / "Up.md").write_text(
+        note("npc", "portrait: ../outside.png\n"), encoding="utf-8")
+    (v / "NPCs" / "Abs.md").write_text(
+        note("npc", f"portrait: {outside}\n"), encoding="utf-8")
+    (v / "_attachments" / "characters" / "link.png").symlink_to(outside)
+    (v / "NPCs" / "Link.md").write_text(
+        note("npc", "portrait: _attachments/characters/link.png\n"),
+        encoding="utf-8")
+    _, e = one(v, {"for": "Anselm", "subject": "x",
+                   "shows": ["Up", "Abs", "Link"]})
+    assert e.refs == []
+    assert e.said == [f"{n}'s picture is outside the vault; not used as a reference"
+                      for n in ("Up", "Abs", "Link")]
+
+
+def test_four_character_likenesses_at_most(tmp_path):
+    import image_gemini
+    v = build(tmp_path)
+    names = add_people(v, 6)
+    _, e = one(v, {"for": "Anselm", "subject": "x", "shows": names})
+    cap = image_gemini.ACCEPTS.characters
+    assert len(e.refs) == cap == 4
+    assert [Path(r).stem for r in e.refs] == names[:4]
+    left = [ln for ln in e.said if "character likenesses" in ln]
+    assert len(left) == 2 and left[0].startswith(
+        "only 4 character likenesses can be sent with one picture;")
+    assert "NPCs/Extra4.md was left out" in left[0]
+
+
+def test_places_do_not_count_against_the_character_limit(tmp_path):
+    v = build(tmp_path)
+    people = add_people(v, 4)
+    places = add_people(v, 3, kind="location", prefix="Place")
+    _, e = one(v, {"for": "Anselm", "subject": "x", "shows": people + places})
+    assert len(e.refs) == 7 and e.said == []
+
+
+def test_the_overall_reference_cap_is_kept(tmp_path):
+    import image_gemini
+    v = build(tmp_path, config="vault:\n  images:\n    service: gemini\n"
+              "    model: gemini-nano-banana-2.1\n    attempt_limit: 100\n")
+    places = add_people(v, image_gemini.ACCEPTS.references + 2,
+                        kind="location", prefix="Place")
+    _, e = one(v, {"for": "Anselm", "subject": "x", "shows": places})
+    assert len(e.refs) == image_gemini.ACCEPTS.references
+    assert len(e.said) == 2 and "reference pictures can be sent" in e.said[0]
+
+
+def test_two_pictures_for_one_place_are_refused_the_second_time(tmp_path):
+    v = build(tmp_path)
+    base = {"for": "Session 03 Wrap-Up", "subject": "s", "name": "Mill",
+            "after": "The party"}
+    job = image_jobs.plan(v, [
+        {"for": "Anselm", "subject": "x"}, {"for": "Anselm", "subject": "y"},
+        base, {**base, "name": "MILL"}], False, TODAY)
+    a, b, c, d = job.entries
+    assert (a.status, b.status, c.status, d.status) == (
+        "planned", "refused", "planned", "refused")
+    assert "another picture in this plan goes to the same place" in said(b)
+    assert "another picture in this plan goes to the same place" in said(d)
+
+
+def test_a_refused_earlier_entry_does_not_block_a_later_one(tmp_path):
+    v = build(tmp_path)
+    job = image_jobs.plan(v, [{"for": "Marta", "subject": "x"},
+                              {"for": "Marta", "subject": "x", "replace": True}],
+                          False, TODAY)
+    assert [e.status for e in job.entries] == ["refused", "planned"]
+
+
+def test_the_portrait_is_read_like_ingest_reads_it(tmp_path):
+    v = build(tmp_path)
+    (v / "NPCs" / "Quoted.md").write_text(
+        '---\ntype: npc\nportrait: "_attachments/characters/q.png"  # pic\n---\n',
+        encoding="utf-8")
+    _, e = one(v, {"for": "Quoted", "subject": "x"})
+    assert e.status == "refused" and "already has a picture" in said(e)
+
+
+def test_a_name_with_nothing_left_is_refused(tmp_path):
+    v = build(tmp_path)
+    _, e = one(v, {"for": "Session 03 Wrap-Up", "subject": "s", "name": "???",
+                   "after": "The party"})
+    assert e.status == "refused"
+    assert "that name leaves nothing to call the picture file" in said(e)
+
+
+@pytest.mark.parametrize("job_id", ["../x", "a/b", "..", "", "a\\b"])
+def test_load_refuses_odd_ids_without_touching_disk(job_id):
+    with pytest.raises(image_jobs.Stop) as err:
+        image_jobs.load(job_id)
+    assert "on this machine" in str(err.value)
+
+
+def test_load_missing_or_damaged_jobs_stop_plainly(tmp_path):
+    with pytest.raises(image_jobs.Stop) as err:
+        image_jobs.load("20261109-nothing")
+    assert str(err.value) == "No picture job 20261109-nothing on this machine."
+    job, _ = one(build(tmp_path), {"for": "Anselm", "subject": "x"})
+    for text in ("{not json", "[]", '{"id": "x"}'):
+        image_jobs.job_file(job.id).write_text(text, encoding="utf-8")
+        with pytest.raises(image_jobs.Stop) as err:
+            image_jobs.load(job.id)
+        assert str(err.value) == f"Picture job {job.id} could not be read."
+
+
+def test_the_same_reference_twice_is_used_once(tmp_path):
+    _, e = one(build(tmp_path), {"for": "Anselm", "subject": "x",
+                                 "shows": ["Marta", "marta", "NPCs/Marta.md"]})
+    assert len(e.refs) == 1 and e.said == []
+
+
+def test_a_wrap_up_with_no_recap_says_so(tmp_path):
+    v = build(tmp_path)
+    (v / "Sessions" / "Session 03 Wrap-Up.md").write_text(
+        RECAP.replace("## Narrative Recap", "## Notes"), encoding="utf-8")
+    _, e = one(v, {"for": "Session 03 Wrap-Up", "subject": "s", "name": "m",
+                   "after": "The party"})
+    assert "this Wrap-Up has no Narrative Recap section" in said(e)
+
+
+def test_fences_and_headings_in_the_recap_are_not_paragraphs(tmp_path):
+    v = build(tmp_path)
+    text = RECAP.replace("The miller then spoke.\n",
+                         "```\nThe party code\n```\n\n### Later\n\n"
+                         "The miller then spoke.\n")
+    (v / "Sessions" / "Session 03 Wrap-Up.md").write_text(text, encoding="utf-8")
+    base = {"for": "Session 03 Wrap-Up", "subject": "s", "name": "m"}
+    job = image_jobs.plan(v, [{**base, "after": "The party"},
+                              {**base, "name": "n", "after": "Later"},
+                              {**base, "name": "o", "after": "The party code"}],
+                          False, TODAY)
+    assert job.entries[0].status == "planned"
+    assert job.entries[1].status == job.entries[2].status == "refused"

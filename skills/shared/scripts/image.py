@@ -114,10 +114,6 @@ def plan(vault: Path, requests: Path, unprompted: bool) -> int:
     except (vaultlib.StateUnreadable, vaultlib.SettingsUnavailable) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
-    except OSError as e:
-        print(f"error: could not save the job ({e.__class__.__name__})",
-              file=sys.stderr)
-        return 2
     print(f"Job {job.id}")
     total = 0.0
     planned = 0

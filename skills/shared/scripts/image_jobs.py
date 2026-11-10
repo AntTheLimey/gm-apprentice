@@ -19,7 +19,7 @@ import unicodedata
 from dataclasses import asdict, dataclass, field
 from datetime import date
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 import image_gemini
 import image_guidance
@@ -101,9 +101,17 @@ def save(job: Job) -> Path:
 
 
 def load(job_id: str) -> Job:
-    data = json.loads(job_file(job_id).read_text(encoding="utf-8"))
-    entries = [Entry(**e) for e in data.pop("entries")]
-    return Job(**data, entries=entries)
+    if (not job_id or job_id in (".", "..") or "/" in job_id
+            or "\\" in job_id or os.sep in job_id or ".." in job_id):
+        raise Stop(f"No picture job {job_id} on this machine.")
+    try:
+        data = json.loads(job_file(job_id).read_text(encoding="utf-8"))
+        entries = [Entry(**e) for e in data.pop("entries")]
+        return Job(**data, entries=entries)
+    except FileNotFoundError:
+        raise Stop(f"No picture job {job_id} on this machine.") from None
+    except (OSError, ValueError, TypeError, KeyError, AttributeError):
+        raise Stop(f"Picture job {job_id} could not be read.") from None
 
 
 _ID_DATE = re.compile(r"^(\d{4})(\d{2})(\d{2})")
@@ -130,9 +138,11 @@ def _age_dates(path: Path) -> list[date]:
 def prune(today: date) -> None:
     """Remove job folders older than JOB_DAYS."""
     root = tool_cache.cache_root() / "images"
-    if not root.is_dir():
+    try:
+        found = sorted(root.iterdir()) if root.is_dir() else []
+    except OSError:
         return
-    for d in sorted(root.iterdir()):
+    for d in found:
         if not d.is_dir():
             continue
         dates = _age_dates(d)
@@ -202,32 +212,35 @@ def _file_at(vault: Path, dest: str) -> bool:
 
 
 def _portrait(fm: dict[str, Any] | None) -> str:
+    """The `portrait` field, read the way ingest_images reads it."""
     raw = (fm or {}).get("portrait")
-    if not isinstance(raw, str):
-        return ""
-    text = raw.strip()
-    if text.startswith("[[") and text.endswith("]]"):
-        text = re.split(r"[|#]", text[2:-2], maxsplit=1)[0].strip()
-    return text
+    return vl.scalar_value(raw) if isinstance(raw, str) else ""
 
 
 def _recap_paragraphs(text: str) -> list[str] | None:
+    """The paragraphs of the Narrative Recap (or Recap) section, or None
+    when the note has neither. Code fences and headings are not paragraphs."""
     lines = text.split("\n")
     for title in ("Narrative Recap", "Recap"):
         found = vl.find_section_lines(lines, [title], first=True)
-        if isinstance(found, tuple):
-            start, end = found
-            paras: list[str] = []
-            cur: list[str] = []
-            for ln in lines[start + 1:end]:
-                if ln.strip() and not vl.SECTION_HEADING_RE.match(ln):
-                    cur.append(ln.strip())
-                elif cur:
+        if not isinstance(found, tuple):
+            continue
+        start, end = found
+        paras: list[str] = []
+        cur: list[str] = []
+        fence: str | None = None
+        for ln in lines[start + 1:end]:
+            fence, is_fence_line = vl.fence_step(ln, fence)
+            if (is_fence_line or fence is not None
+                    or vl.SECTION_HEADING_RE.match(ln) or not ln.strip()):
+                if cur:
                     paras.append(" ".join(cur))
                     cur = []
-            if cur:
-                paras.append(" ".join(cur))
-            return paras
+                continue
+            cur.append(ln.strip())
+        if cur:
+            paras.append(" ".join(cur))
+        return paras
     return None
 
 
@@ -235,31 +248,232 @@ def _squash(s: str) -> str:
     return " ".join(unicodedata.normalize("NFC", s).split()).casefold()
 
 
-def _reference(vault: Path, batch: vw.Batch, names: dict[str, list[str]],
-               raw: str) -> tuple[str | None, str | None]:
-    """(absolute path, None) for a usable likeness picture, else (None, why)."""
+CHARACTER_KINDS = ("pc", "npc", "creature")
+
+
+class _Ref(NamedTuple):
+    note: str
+    path: str
+    character: bool
+
+
+def _reference(ctx: _Ctx, raw: str) -> tuple[_Ref | None, str | None]:
+    """A usable likeness picture, else the plain line saying why not."""
+    def skip(why: str) -> tuple[None, str]:
+        return None, f"left out the reference picture for {raw}: {why}"
     try:
-        rel = section.resolve_note(batch, raw, names)
-        fm = vl.extract_frontmatter(batch.read(rel))
+        rel = section.resolve_note(ctx.batch, raw, ctx.names)
+        fm = vl.extract_frontmatter(ctx.batch.read(rel))
     except vw.WriteError:
-        return None, f"left out the reference picture for {raw}: no such note"
+        return skip("no such note")
     portrait = _portrait(fm)
     if not portrait:
-        return None, f"left out the reference picture for {raw}: it has no portrait"
-    path = vault / portrait
+        return skip("it has no portrait")
+    root = ctx.vault.resolve()
     try:
+        path = (ctx.vault / portrait).resolve()
+        if not path.is_relative_to(root):
+            return None, (f"{raw}'s picture is outside the vault; "
+                          "not used as a reference")
         if path.stat().st_size > MAX_REF_BYTES:
-            return None, (f"left out the reference picture for {raw}: "
-                          "it is over 5 MB")
+            return skip("it is over 5 MB")
         head = path.read_bytes()[:8]
     except FileNotFoundError:
-        return None, f"left out the reference picture for {raw}: the file is missing"
-    except OSError:
-        return None, f"left out the reference picture for {raw}: it could not be read"
+        return skip("the file is missing")
+    except (OSError, ValueError, RuntimeError):
+        return skip("it could not be read")
     if not (head.startswith(b"\x89PNG\r\n\x1a\n") or head.startswith(b"\xff\xd8\xff")):
-        return None, (f"left out the reference picture for {raw}: "
-                      "it is not a PNG or JPEG")
-    return str(path.resolve()), None
+        return skip("it is not a PNG or JPEG")
+    return _Ref(rel, str(path), vl.entity_type(fm) in CHARACTER_KINDS), None
+
+
+def _gather_refs(ctx: _Ctx, e: Entry, shows: list[str]) -> list[str]:
+    """Rule 7: the likeness pictures, in order, within the service's caps."""
+    accepts = image_gemini.ACCEPTS
+    found: list[_Ref] = []
+    seen: set[str] = set()
+    for raw in shows:
+        ref, why = _reference(ctx, raw)
+        if why:
+            e.said.append(why)
+        elif ref and ref.note not in seen:
+            seen.add(ref.note)
+            found.append(ref)
+    kept: list[str] = []
+    characters = 0
+    for ref in found:
+        if ref.character and characters >= accepts.characters:
+            e.said.append(f"only {accepts.characters} character likenesses "
+                          f"can be sent with one picture; {ref.note} was left out")
+        elif len(kept) >= accepts.references:
+            e.said.append(f"only {accepts.references} reference pictures can "
+                          f"be sent with one picture; {ref.note} was left out")
+        else:
+            kept.append(ref.path)
+            characters += ref.character
+    return kept
+
+
+@dataclass
+class _Ctx:
+    vault: Path
+    lim: image_money.Limits
+    guidance: image_guidance.Guidance
+    batch: vw.Batch
+    names: dict[str, list[str]]
+    priced: bool
+    unprompted: bool
+
+
+def _refuse(e: Entry, why: str) -> None:
+    e.status = "refused"
+    e.said.append(why)
+
+
+def _read_note(ctx: _Ctx, e: Entry, raw: str) -> tuple[str, dict[str, Any] | None] | None:
+    """Find the note and its kind; refuse when it is not one we can draw."""
+    try:
+        rel = section.resolve_note(ctx.batch, raw, ctx.names)
+        text = ctx.batch.read(rel)
+    except vw.WriteError as err:
+        _refuse(e, str(err))
+        return None
+    e.note = rel
+    fm = vl.extract_frontmatter(text)
+    etype = vl.entity_type(fm)
+    e.kind = "scene" if etype in vl.WRAP_UP_TYPES else etype
+    if e.kind not in SHAPES:
+        _refuse(e, f"pictures for a {e.kind or 'plain'} note are not supported yet")
+        return None
+    e.shape = SHAPES[e.kind]
+    return text, fm
+
+
+def _check_unprompted(ctx: _Ctx, e: Entry) -> bool:
+    """Rule 4 (per picture): a PC, or a kind not listed, is not drawn unasked."""
+    if not ctx.unprompted:
+        return True
+    if e.kind == "pc":
+        _refuse(e, "a player's character is drawn only when asked for")
+    elif e.kind not in ctx.lim.kinds:
+        _refuse(e, f"{e.kind} pictures are not drawn without being asked for")
+    else:
+        return True
+    return False
+
+
+def _set_dest(e: Entry, req: dict[str, Any]) -> bool:
+    """The destination; refuse a scene missing its words or a name with
+    nothing left of it once made into a file name."""
+    name = str(req.get("name", "")).strip()
+    after = (e.after or "").strip()
+    if e.kind == "scene" and (not name or not after):
+        _refuse(e, "a scene picture needs both `after` (the opening words "
+                   "of the recap paragraph) and `name`")
+        return False
+    stem = _slug(Path(e.note).stem)
+    if not (_slug(name) if e.kind == "scene" else stem):
+        _refuse(e, "that name leaves nothing to call the picture file")
+        return False
+    e.dest = _dest(e.kind, e.note, name if e.kind == "scene" else None)
+    return True
+
+
+def _check_existing(ctx: _Ctx, e: Entry, fm: dict[str, Any] | None) -> bool:
+    """Rule 5: an existing picture stays unless the request says replace."""
+    if e.replace:
+        return True
+    if _file_at(ctx.vault, e.dest) or (e.kind != "scene" and _portrait(fm)):
+        _refuse(e, "it already has a picture")
+        return False
+    return True
+
+
+def _check_scene_place(e: Entry, text: str) -> bool:
+    """Rule 6: `after` must open exactly one paragraph of the recap."""
+    paras = _recap_paragraphs(text)
+    if paras is None:
+        _refuse(e, "this Wrap-Up has no Narrative Recap section")
+        return False
+    want = _squash(e.after or "")
+    hits = [p for p in paras if _squash(p).startswith(want)]
+    if len(hits) != 1:
+        _refuse(e, f"the opening words {e.after!r} match "
+                + ("no paragraph" if not hits else f"{len(hits)} paragraphs")
+                + " of the Narrative Recap; they must match exactly one")
+        return False
+    return True
+
+
+def _fit_cost(ctx: _Ctx, e: Entry, refs: list[str]) -> list[str] | None:
+    """Rule 8: the estimate, dropping references to fit one attempt."""
+    if not ctx.priced:
+        return refs
+    lim = ctx.lim
+    assert lim.model
+    model, price, chars = lim.model, lim.price, len(e.prompt)
+
+    def cost(k: int) -> float:
+        if price is not None:
+            return price
+        got = image_gemini.estimate(model, SIZE, k, chars)
+        assert got is not None
+        return got
+    fitted = image_money.fit(cost, len(refs), lim.attempt)
+    if fitted is None:
+        _refuse(e, "over the limit for one attempt")
+        return None
+    keep, e.estimate = fitted
+    if keep < len(refs):
+        e.said.append(f"dropped {len(refs) - keep} reference pictures "
+                      "to stay within the limit for one attempt")
+    return refs[:keep]
+
+
+def _plan_one(ctx: _Ctx, e: Entry, req: dict[str, Any],
+              claimed: set[str]) -> None:
+    """Rules 4 to 8 for one picture, in the brief's order."""
+    got = _read_note(ctx, e, req["for"])
+    if got is None or not _check_unprompted(ctx, e):
+        return
+    text, fm = got
+    if not _set_dest(e, req) or not _check_existing(ctx, e, fm):
+        return
+    if e.kind == "scene" and not _check_scene_place(e, text):
+        return
+    if e.dest.casefold() in claimed:
+        _refuse(e, "another picture in this plan goes to the same place")
+        return
+    refs = _gather_refs(ctx, e, req.get("shows", []))
+    e.prompt, missing = image_guidance.compose(
+        ctx.guidance, req.get("blocks", []), req["subject"])
+    for m in missing:
+        e.said.append(f"no block called {m!r} in the Image Guidance note")
+    kept = _fit_cost(ctx, e, refs)
+    if kept is None:
+        return
+    e.refs = kept
+    e.status = "planned"
+    claimed.add(e.dest.casefold())
+
+
+def _trim(entries: list[Entry], lim: image_money.Limits,
+          month_spent: float) -> None:
+    """Rule 9: take planned pictures in order while the caps allow."""
+    run_spent = 0.0
+    stopped: str | None = None
+    for e in entries:
+        if e.status != "planned":
+            continue
+        assert e.estimate is not None
+        why = stopped or image_money.room(lim, run_spent,
+                                          month_spent + run_spent, e.estimate)
+        if why:
+            stopped = why
+            e.status = "trimmed"
+            e.said.append(why)
+        else:
+            run_spent += e.estimate
 
 
 def plan(vault: Path, requests: list[dict[str, Any]], unprompted: bool,
@@ -287,132 +501,29 @@ def plan(vault: Path, requests: list[dict[str, Any]], unprompted: bool,
     prune(today)
 
     job_id = f"{today:%Y%m%d}-{secrets.token_hex(3)}"
-    batch = vw.Batch(vault)
-    names = section.name_index(vl.vault_files(vault))
+    ctx = _Ctx(vault, lim, guidance, vw.Batch(vault),
+               section.name_index(vl.vault_files(vault)), priced, unprompted)
     entries: list[Entry] = []
-
+    claimed: set[str] = set()
     for n, req in enumerate(requests, 1):
-        said: list[str] = []
-        if n == 1 and not guidance.found:
-            said.append("No Image Guidance note yet; pictures are drawn "
-                        "with no campaign style.")
         e = Entry(n=n, note=req["for"], kind="", prompt="", refs=[],
                   shape="", pending=str(folder(job_id) / f"{n:02d}"), dest="",
                   after=req.get("after"), replace=req.get("replace") is True,
-                  estimate=None, status="refused", said=said)
+                  estimate=None, status="refused")
+        if n == 1 and not guidance.found:
+            e.said.append("No Image Guidance note yet; pictures are drawn "
+                          "with no campaign style.")
         entries.append(e)
-
-        def refuse(why: str, e: Entry = e) -> None:
-            e.status = "refused"
-            e.said.append(why)
-
-        try:
-            rel = section.resolve_note(batch, req["for"], names)
-            text = batch.read(rel)
-        except vw.WriteError as err:
-            refuse(str(err))
-            continue
-        e.note = rel
-        fm = vl.extract_frontmatter(text)
-        etype = vl.entity_type(fm)
-        kind = "scene" if etype in vl.WRAP_UP_TYPES else etype
-        e.kind = kind
-        if kind not in SHAPES:
-            refuse(f"pictures for a {kind or 'plain'} note are not supported yet")
-            continue
-        e.shape = SHAPES[kind]
-        if unprompted:
-            if kind == "pc":
-                refuse("a player's character is drawn only when asked for")
-                continue
-            if kind not in lim.kinds:
-                refuse(f"{kind} pictures are not drawn without being asked for")
-                continue
-        if kind == "scene":
-            name = req.get("name", "").strip()
-            after = (e.after or "").strip()
-            if not name or not after:
-                refuse("a scene picture needs both `after` (the opening words "
-                       "of the recap paragraph) and `name`")
-                continue
-            e.dest = _dest(kind, rel, name)
-        else:
-            e.dest = _dest(kind, rel, None)
-        if not e.replace:
-            has = _file_at(vault, e.dest) or (
-                kind != "scene" and bool(_portrait(fm)))
-            if has:
-                refuse("it already has a picture")
-                continue
-        if kind == "scene":
-            paras = _recap_paragraphs(text)
-            want = _squash(e.after or "")
-            hits = [p for p in (paras or []) if _squash(p).startswith(want)]
-            if len(hits) != 1:
-                refuse(f"the opening words {e.after!r} match "
-                       + ("no paragraph" if not hits
-                          else f"{len(hits)} paragraphs")
-                       + " of the Narrative Recap; they must match exactly one")
-                continue
-        # References, most important first.
-        refs: list[str] = []
-        for raw in req.get("shows", []):
-            path, why = _reference(vault, batch, names, raw)
-            if why:
-                said.append(why)
-            elif path:
-                refs.append(path)
-        room_for = image_gemini.ACCEPTS.references
-        if len(refs) > room_for:
-            said.append(f"left out {len(refs) - room_for} reference pictures: "
-                        f"the service takes {room_for}")
-            refs = refs[:room_for]
-        prompt, missing = image_guidance.compose(
-            guidance, req.get("blocks", []), req["subject"])
-        for m in missing:
-            said.append(f"no block called {m!r} in the Image Guidance note")
-        e.prompt = prompt
-        if priced:
-            model = lim.model
-            price = lim.price
-
-            def cost(k: int, model: str = model, price: float | None = price,
-                     chars: int = len(prompt)) -> float:
-                if price is not None:
-                    return price
-                got = image_gemini.estimate(model, SIZE, k, chars)
-                assert got is not None
-                return got
-            fitted = image_money.fit(cost, len(refs), lim.attempt)
-            if fitted is None:
-                refuse("over the limit for one attempt")
-                continue
-            keep, e.estimate = fitted
-            if keep < len(refs):
-                said.append(f"dropped {len(refs) - keep} reference pictures "
-                            "to stay within the limit for one attempt")
-                refs = refs[:keep]
-        e.refs = refs
-        e.status = "planned"
-
+        _plan_one(ctx, e, req, claimed)
     if priced:
-        run_spent = 0.0
-        stopped: str | None = None
-        for e in entries:
-            if e.status != "planned":
-                continue
-            assert e.estimate is not None
-            why = stopped or image_money.room(lim, run_spent, month_spent,
-                                              e.estimate)
-            if why:
-                stopped = why
-                e.status = "trimmed"
-                e.said.append(why)
-            else:
-                run_spent += e.estimate
+        _trim(entries, lim, month_spent)
 
     job = Job(id=job_id, vault=str(vault), service=lim.service,
               model=lim.model, priced=priced, unprompted=unprompted,
               spent=month_spent, entries=entries)
-    save(job)
+    try:
+        save(job)
+    except OSError as err:
+        raise Stop("The picture job could not be saved "
+                   f"({err.__class__.__name__}).") from None
     return job

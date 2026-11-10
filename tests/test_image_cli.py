@@ -191,3 +191,16 @@ def test_plan_bad_requests_and_bad_state_exit_2_without_a_traceback(
     req = requests(tmp_path, [{"for": "Anselm", "subject": "x"}])
     assert image.main(["plan", str(v), str(req)]) == 2
     assert "error:" in capsys.readouterr().err
+
+
+def test_plan_unwritable_job_folder_says_so(tmp_path, monkeypatch, capsys):
+    import image_jobs
+    monkeypatch.setenv("GEMINI_API_KEY", SECRET)
+    v = plan_vault(tmp_path, "gemini-nano-banana-2.1")
+    req = requests(tmp_path, [{"for": "Anselm", "subject": "x"}])
+
+    def boom(job):
+        raise PermissionError("no")
+    monkeypatch.setattr(image_jobs, "save", boom)
+    assert image.main(["plan", str(v), str(req)]) == 2
+    assert "could not be saved (PermissionError)" in capsys.readouterr().err
