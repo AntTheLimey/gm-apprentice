@@ -748,3 +748,44 @@ def test_a_portrait_that_is_not_a_single_path_is_refused_as_place_refuses_it(
     (tmp_path / "p.png").write_bytes(PNG)
     assert image_place._prepare(v, vault_write.Batch(v), e, lines) is None
     assert lines == [f"{said(e)}; picture 1 was not placed"]
+
+
+# --- the fill's list: notes that could have a picture and have none ------
+
+BUILT_MISSING = [("location", "Locations/Mill.md"),
+                 ("npc", "NPCs/Anselm.md"),
+                 ("npc", "NPCs/Maître Anselme Godinot.md")]
+
+
+def test_missing_lists_blank_portraits_of_drawable_kinds(tmp_path):
+    # Marta has a picture; Ghost's portrait names a missing file (replacing
+    # a set portrait needs the GM to name it; a broken link is campaign-qa's);
+    # Bad and Big name files that are there; Six is a PC.
+    assert image_jobs.missing(build(tmp_path), pcs=False) == BUILT_MISSING
+
+
+def test_missing_includes_pcs_only_when_asked(tmp_path):
+    v = build(tmp_path)
+    assert ("pc", "PCs/Six.md") in image_jobs.missing(v, pcs=True)
+    assert all(t != "pc" for t, _ in image_jobs.missing(v, pcs=False))
+
+
+def test_missing_honours_the_kinds_setting(tmp_path):
+    v = build(tmp_path, config="vault:\n  images:\n    kinds: [location]\n")
+    assert image_jobs.missing(v, pcs=False) == [("location", "Locations/Mill.md")]
+
+
+def test_missing_skips_templates_scenes_odd_portraits_and_untyped(tmp_path):
+    v = build(tmp_path)
+    extra = {
+        "_Templates/_Template_NPC.md": note("npc"),
+        "Scenes/The Mill.md": note("scene"),
+        "NPCs/Listed.md": note("npc", "portrait:\n  - a.png\n"),
+        "NPCs/Untyped.md": "---\nname: x\n---\n# Body\n",
+        "NPCs/Nofront.md": "# Body\n",
+    }
+    for rel, text in extra.items():
+        p = v / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(text, encoding="utf-8")
+    assert image_jobs.missing(v, pcs=False) == BUILT_MISSING

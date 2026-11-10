@@ -417,3 +417,23 @@ def test_a_guidance_path_that_is_a_number_is_one_plain_line(command, tmp_path, m
     argv = ["status", str(v)] if command == "status" else ["plan", str(v), str(req)]
     assert image.main(argv) == 2
     assert capsys.readouterr().err == "vault.images.guidance must be the path of a note.\n"
+
+
+def test_missing_prints_rows_and_a_count(tmp_path, capsys):
+    vault = make_vault(tmp_path)
+    for rel, kind in (("NPCs/Ada.md", "npc"), ("Locations/Mill.md", "location"),
+                      ("PCs/Roy.md", "pc")):
+        p = vault / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(f"---\ntype: {kind}\n---\n", encoding="utf-8")
+    assert image.main(["missing", str(vault)]) == 0
+    assert capsys.readouterr().out.splitlines() == [
+        "location\tLocations/Mill.md", "npc\tNPCs/Ada.md",
+        "2 notes with no picture"]
+    assert image.main(["missing", str(vault), "--pcs"]) == 0
+    assert "pc\tPCs/Roy.md" in capsys.readouterr().out
+
+
+def test_missing_with_nothing_to_list(tmp_path, capsys):
+    assert image.main(["missing", str(make_vault(tmp_path))]) == 0
+    assert capsys.readouterr().out == "No notes are missing a picture.\n"

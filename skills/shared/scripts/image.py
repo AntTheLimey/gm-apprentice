@@ -87,8 +87,30 @@ def build_parser() -> argparse.ArgumentParser:
                     "(they stay in the job folder)")
     pc.add_argument("--write", action="store_true",
                     help="do it; without this, only say what would happen")
+    ms = sub.add_parser(
+        "missing", help="list the notes that could have a picture and have "
+        "none, for a fill",
+        epilog='Example: gma image missing "<vault>"')
+    ms.add_argument("vault", type=Path, help="the vault folder")
+    ms.add_argument("--pcs", action="store_true",
+                    help="list player characters too (only when the GM "
+                    "includes them)")
     ap.epilog = 'Example: gma image status "<vault>"'
     return ap
+
+
+def missing(vault: Path, pcs: bool) -> int:
+    if not vault.is_dir():
+        print(f"error: not a directory: {vault}", file=sys.stderr)
+        return 2
+    found = image_jobs.missing(vault, pcs)
+    if not found:
+        print("No notes are missing a picture.")
+        return 0
+    for kind, rel in found:
+        print(f"{kind}\t{rel}")
+    print(image_jobs.counted(len(found), "note") + " with no picture")
+    return 0
 
 
 def _today() -> date:
@@ -340,6 +362,8 @@ def _dispatch(args: argparse.Namespace) -> int:
         return draw(args.vault, args.job, args.redo, args.picture)
     if args.command == "place":
         return place(args.vault, args.job, args.keep, args.hold, args.write)
+    if args.command == "missing":
+        return missing(args.vault, args.pcs)
     return key(args.service)
 
 

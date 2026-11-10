@@ -245,6 +245,29 @@ def read_requests(path: Path) -> list[dict[str, Any]]:
     return check_requests(data)
 
 
+def missing(vault: Path, pcs: bool) -> list[tuple[str, str]]:
+    """The notes a fill would draw: (kind, vault-relative path) for every
+    note of a kind the vault's `vault.images.kinds` lists (a PC only with
+    `pcs`) whose `portrait` is blank, sorted by kind then path. Scene
+    pictures are never listed (a played session's scenes are their own
+    request). A portrait that names a file, even a missing one, is not
+    blank: replacing it is the GM's to ask for by name."""
+    kinds = set(image_money.limits(vault).kinds) - {"scene"}
+    if pcs:
+        kinds.add("pc")
+    found = []
+    for rel, text in vl.vault_files(vault):
+        if rel.startswith(("_meta/", "_attachments/")):
+            continue
+        kind = vl.entity_type(vl.extract_frontmatter(text))
+        if kind not in kinds or kind not in SHAPES:
+            continue
+        portrait, _close, why_not = read_portrait(rel, note_lines(text))
+        if why_not is None and not portrait:
+            found.append((kind, rel))
+    return sorted(found)
+
+
 def check_requests(data: Any) -> list[dict[str, Any]]:
     if not isinstance(data, list) or not all(isinstance(r, dict) for r in data):
         raise Stop("The requests must be a JSON list of objects, one per picture.")
