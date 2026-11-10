@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import NamedTuple
 
 import dnd_ddb
+import image_codex
 import image_gemini
 import image_jobs
 import image_money
@@ -61,11 +62,17 @@ def _mime(data: bytes) -> str | None:
     return {"png": "image/png", "jpg": "image/jpeg"}.get(dnd_ddb.image_type(data) or "")
 
 
-def _read_refs(e: Entry, vault: Path) -> tuple[list[tuple[str, bytes]], list[str]]:
+class _Ref(NamedTuple):
+    path: Path
+    mime: str
+    data: bytes
+
+
+def _read_refs(e: Entry, vault: Path) -> tuple[list[_Ref], list[str]]:
     """The likeness pictures as they are now; one that has gone missing or
     changed since the plan, or that is not inside the vault (a job file is
     plain text anyone can edit), is left out, with a line saying so."""
-    found: list[tuple[str, bytes]] = []
+    found: list[_Ref] = []
     notes: list[str] = []
     for raw in e.refs:
         name = Path(raw).name
@@ -93,8 +100,27 @@ def _read_refs(e: Entry, vault: Path) -> tuple[list[tuple[str, bytes]], list[str
         if mime is None:
             notes.append(f"left out the reference picture {name}: it is not a PNG or JPEG")
             continue
-        found.append((mime, data))
+        found.append(_Ref(path, mime, data))
     return found, notes
+
+
+def _write_picture(e: Entry, pic: image_gemini.Picture) -> bool:
+    """Write the bytes whole or not at all; an earlier attempt's file (of
+    any extension) is replaced."""
+    target = Path(f"{e.pending}.{pic.ext}")
+    tmp = target.with_name(f"{target.name}.{secrets.token_hex(4)}.tmp")
+    try:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        tmp.write_bytes(pic.data)
+        os.replace(tmp, target)
+    except OSError:
+        return False
+    finally:
+        tmp.unlink(missing_ok=True)
+    if e.ext and e.ext != pic.ext:
+        Path(f"{e.pending}.{e.ext}").unlink(missing_ok=True)
+    e.ext = pic.ext
+    return True
 
 
 class _Run:
@@ -210,22 +236,7 @@ class _Run:
         return cents
 
     def keep_picture(self, e: Entry, pic: image_gemini.Picture) -> bool:
-        """Write the bytes whole or not at all; an earlier attempt's file
-        (of any extension) is replaced."""
-        target = Path(f"{e.pending}.{pic.ext}")
-        tmp = target.with_name(f"{target.name}.{secrets.token_hex(4)}.tmp")
-        try:
-            target.parent.mkdir(parents=True, exist_ok=True)
-            tmp.write_bytes(pic.data)
-            os.replace(tmp, target)
-        except OSError:
-            return False
-        finally:
-            tmp.unlink(missing_ok=True)
-        if e.ext and e.ext != pic.ext:
-            Path(f"{e.pending}.{e.ext}").unlink(missing_ok=True)
-        e.ext = pic.ext
-        return True
+        return _write_picture(e, pic)
 
     def money_words(self, cents: float | None) -> str:
         return "cost unknown" if cents is None else f"{image_money.cents(cents)} cents"
@@ -263,7 +274,8 @@ class _Run:
                           + (image_jobs.thinking_why(forced) if thinking else ""))
             try:
                 pic = image_gemini.draw(job.model, self.key, prompt,
-                                        refs_all[:keep], e.shape, SIZE, thinking)
+                                        [(r.mime, r.data) for r in refs_all[:keep]],
+                                        e.shape, SIZE, thinking)
             except image_gemini.NeedsThinking:
                 # Nothing was charged. Work it out again with thinking on.
                 thinking = True
@@ -418,6 +430,15 @@ def draw(job: Job, redo: dict[int, str], today: date,
     the head of this section for the rules every paid call keeps. `result`
     may be given so a caller still holds the report if something escapes."""
     result = result if result is not None else DrawResult()
+    if job.service == "codex":
+        # Checked again now: a Codex signed in another way since the plan
+        # would be charged for every picture, outside the vault's limits.
+        state = image_codex.login()
+        if state.state != "chatgpt":
+            raise Stop(image_codex.why_not(state) + SERVICE_HINT)
+        return _draw_free(job, redo, result, _CodexRun)
+    if job.service == "self":
+        raise Stop(SELF_HOW.format(job=job.id))
     if job.service != "gemini":
         raise Stop(f"There is no drawing service called {job.service}.")
     vault = Path(job.vault)
@@ -463,4 +484,191 @@ def draw(job: Job, redo: dict[int, str], today: date,
             if result.ok:
                 result.lines.append("The job could not be saved.")
             result.ok = False
+    return result
+
+
+# --- free sources: Codex on a ChatGPT plan, and the agent's own tool --------
+#
+# No money is spent or counted. The redraw limit still holds, a picture
+# already drawn is never drawn again unasked, and a redraw that fails keeps
+# the earlier picture, as on the paid service.
+
+SELF_HOW = ("Job {job} is drawn by you: draw each planned picture with your "
+            "own image tool, save it anywhere, then hand it in with "
+            "gma image draw \"<vault>\" {job} --picture N FILE (once per "
+            "picture; again for a redraw).")
+SERVICE_HINT = (" Run this draw again later to retry with Codex at no cost. "
+                "Only if the GM agrees to pay: plan the pictures not drawn "
+                "again with --source service.")
+
+
+class _FreeRun:
+    """What one free run shares: the report, the stop and the streak."""
+
+    def __init__(self, job: Job, result: DrawResult) -> None:
+        self.job, self.result = job, result
+        self.stop: str | None = None
+        self.streak = 0
+
+    def say(self, e: Entry, text: str) -> None:
+        self.result.lines.append(f"{e.n}. {e.note}: {text}")
+
+    def remember(self, e: Entry, text: str) -> None:
+        if text not in e.said:
+            e.said.append(text)
+
+    def save(self) -> None:
+        try:
+            image_jobs.save(self.job)
+        except OSError:
+            self.result.ok = False
+            if self.stop is None:
+                self.stop = "the job could not be saved"
+
+    def failed(self, e: Entry, why: str, redo: bool) -> None:
+        self.result.ok = False
+        if redo:
+            self.remember(e, f"the redraw failed ({why}); the earlier picture is kept")
+            self.say(e, f"redraw failed, {why}; the earlier picture is kept")
+        else:
+            e.status = "failed"
+            self.remember(e, why)
+            self.say(e, f"not drawn, {why}")
+
+    def got(self, e: Entry, pic: image_gemini.Picture, how: str) -> None:
+        redo = e.status == "drawn"
+        e.attempts += 1
+        if _write_picture(e, pic):
+            e.status = "drawn"
+            self.result.drawn += 1
+            self.streak = 0
+            self.say(e, f"drawn {how}, {e.pending}.{e.ext}")
+        else:
+            self.failed(e, "the picture could not be saved", redo)
+            self.stop = "the picture could not be saved"
+        self.save()
+
+    def attempt(self, e: Entry, redo: str | None, vault: Path) -> None:
+        raise NotImplementedError
+
+
+class _CodexRun(_FreeRun):
+    def attempt(self, e: Entry, redo: str | None, vault: Path) -> None:
+        refs, notes = _read_refs(e, vault)
+        for text in notes:
+            self.remember(e, text)
+            self.result.lines.append(f"   {text}")
+        prompt = e.prompt + (
+            f"\n\nThe last attempt was wrong: {redo}. Correct it." if redo else "")
+        was_drawn = e.status == "drawn"
+        try:
+            pic = image_codex.draw(prompt, [str(r.path) for r in refs], e.shape,
+                                   Path(e.pending).parent)
+        except image_codex.Refused as no:
+            e.attempts += 1
+            self.streak = 0
+            if was_drawn:
+                self.failed(e, f"Codex declined: {no.reason}", True)
+            else:
+                e.status = "refused"
+                self.remember(e, f"Codex declined: {no.reason}")
+                self.remember(e, "plan it again with a different description")
+                self.result.ok = False
+                self.say(e, f"refused, Codex declined: {no.reason}; plan it "
+                         "again with a different description")
+            self.save()
+            return
+        except image_codex.Failed as bad:
+            self.failed(e, bad.message, was_drawn)
+            self.streak += 1
+            if bad.stop:
+                self.stop = bad.message
+            elif self.streak >= FAILURES_IN_A_ROW:
+                self.stop = (f"{FAILURES_IN_A_ROW} pictures in a row could "
+                             "not be drawn, so the run stopped")
+            self.save()
+            return
+        self.got(e, pic, "by Codex on the ChatGPT plan")
+
+
+def _draw_free(job: Job, redo: dict[int, str], result: DrawResult,
+               kind: type[_FreeRun]) -> DrawResult:
+    vault = Path(job.vault)
+    redo, cut = _check_redo(job, redo)
+    lim = image_money.limits(vault)
+    for n in cut:
+        result.lines.append(
+            f"Your note on picture {n} was cut to {REDO_CHARS} characters.")
+    run = kind(job, result)
+    allowed = 1 + lim.redraws
+    try:
+        for e in job.entries:
+            is_redo = e.n in redo
+            if not (is_redo or e.status in ("planned", "failed")):
+                run.say(e, "already drawn, nothing sent" if e.status == "drawn"
+                        else e.status)
+                continue
+            if run.stop is not None:
+                run.say(e, f"not drawn, {run.stop}")
+                result.ok = False
+                continue
+            if e.attempts >= allowed:
+                result.ok = False
+                run.say(e, "not drawn, no redraws left (the vault allows "
+                        f"{lim.redraws})" if is_redo else
+                        f"picture {e.n} has used all its attempts (the vault "
+                        f"allows {allowed})")
+                continue
+            run.attempt(e, redo.get(e.n), vault)
+    finally:
+        if run.stop is not None and job.service == "codex" and any(
+                e.status in ("planned", "failed") for e in job.entries):
+            result.lines.append(f"Stopped: {run.stop}.{SERVICE_HINT}")
+        run.save()
+    return result
+
+
+MAX_HANDED_IN = 50 * 1024 * 1024
+
+
+def hand_in(job: Job, pictures: dict[int, Path],
+            result: DrawResult | None = None) -> DrawResult:
+    """Pictures the agent drew with its own tool, copied into the job: each
+    is an attempt, under the vault's redraw limit. Checked before any is
+    taken: a number that is not in the job or a file that is not a PNG or
+    JPEG stops the lot."""
+    result = result if result is not None else DrawResult()
+    if job.service != "self":
+        raise Stop(f"Job {job.id} is drawn by {job.service}, not by you: "
+                   "run gma image draw without --picture.")
+    by_n = {e.n: e for e in job.entries}
+    read: dict[int, image_gemini.Picture] = {}
+    for n, path in pictures.items():
+        e = by_n.get(n)
+        if e is None:
+            raise Stop(f"There is no picture {n} in job {job.id}.")
+        if e.status not in ("planned", "failed", "drawn"):
+            raise Stop(f"Picture {n} is {e.status}, so no picture is taken for it.")
+        try:
+            if path.stat().st_size > MAX_HANDED_IN:
+                raise Stop(f"{path} is over 50 MB.")
+            data = path.read_bytes()
+        except OSError:
+            raise Stop(f"{path} could not be read.") from None
+        ext = dnd_ddb.image_type(data[:16])
+        if ext not in ("png", "jpg"):
+            raise Stop(f"{path} is not a PNG or JPEG picture.")
+        read[n] = image_gemini.Picture(data, ext, None)
+    lim = image_money.limits(Path(job.vault))
+    allowed = 1 + lim.redraws
+    run = _FreeRun(job, result)
+    for n in sorted(read):
+        e = by_n[n]
+        if e.attempts >= allowed:
+            result.ok = False
+            run.say(e, "not taken, no redraws left (the vault allows "
+                    f"{lim.redraws})")
+            continue
+        run.got(e, read[n], "by you")
+    run.save()
     return result

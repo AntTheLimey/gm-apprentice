@@ -9,6 +9,22 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.7] — 2026-11-10
+
+### Added
+
+- Pictures on a ChatGPT plan: choose Codex (`vault.images.source: codex`) and it draws with its own image tool on your plan, with no money counted. A Codex signed in with an API key is never used this way. See [docs/images.md](docs/images.md).
+- An apprentice running inside Codex can draw the pictures with its own image tool (`vault.images.source: self`; `draw --picture N FILE` hands them in).
+- What draws is always your choice: until `vault.images.source` is set, the apprentice asks.
+
+### Fixed
+
+- `gma image` works for an apprentice in a sandbox that may not write to the machine's cache folder (Codex's default): its picture jobs go to the temp folder instead, never the vault.
+
+### Changed
+
+- Publish tool 1.70.5: the `vault.images.source` setting (`codex`, `self` or `service`).
+
 ## [1.12.6] — 2026-11-10
 
 ### Added

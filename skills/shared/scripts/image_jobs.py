@@ -15,12 +15,14 @@ import os
 import re
 import secrets
 import shutil
+import tempfile
 import unicodedata
 from dataclasses import asdict, dataclass, field
 from datetime import date
 from pathlib import Path
 from typing import Any, NamedTuple
 
+import image_codex
 import image_gemini
 import image_guidance
 import image_keys
@@ -84,11 +86,15 @@ class Entry:
     usage: dict[str, int] | None = None   # the last billed reply's usage, if it had one
 
 
+FREE = ("codex", "self")    # job sources that spend no money
+SOURCES = ("codex", "service", "self")   # what `plan --source` takes
+
+
 @dataclass
 class Job:
     id: str
     vault: str
-    service: str
+    service: str        # gemini, or a free source: codex, self (the agent)
     model: str
     priced: bool
     unprompted: bool
@@ -99,8 +105,41 @@ class Job:
 
 # --- the job on disk ------------------------------------------------------
 
+# Jobs live in the machine's cache folder. An agent in a sandbox (Codex
+# writes only to its workspace and the temp folder) may not write there, and
+# then jobs go to the temp folder; the vault is never used. Every command
+# finds a job in either place.
+
+TEMP = tempfile.gettempdir     # tests replace this
+
+
+def roots() -> list[Path]:
+    return [tool_cache.cache_root() / "images",
+            Path(TEMP()) / "gm-apprentice-images"]
+
+
+def _writable(root: Path) -> bool:
+    try:
+        root.mkdir(parents=True, exist_ok=True)
+        probe = root / f".probe-{secrets.token_hex(4)}"
+        probe.write_bytes(b"")
+        probe.unlink()
+        return True
+    except OSError:
+        return False
+
+
 def folder(job_id: str) -> Path:
-    return tool_cache.cache_root() / "images" / job_id
+    """The job's folder: where it already is, else the first place this
+    process can write (the cache folder before the temp folder)."""
+    places = roots()
+    for root in places:
+        if (root / job_id).is_dir():
+            return root / job_id
+    for root in places:
+        if _writable(root):
+            return root / job_id
+    return places[0] / job_id
 
 
 def job_file(job_id: str) -> Path:
@@ -179,11 +218,12 @@ def _age_dates(path: Path) -> list[date]:
 
 def prune(today: date) -> None:
     """Remove job folders older than JOB_DAYS."""
-    root = tool_cache.cache_root() / "images"
-    try:
-        found = sorted(root.iterdir()) if root.is_dir() else []
-    except OSError:
-        return
+    found: list[Path] = []
+    for root in roots():
+        try:
+            found += sorted(root.iterdir()) if root.is_dir() else []
+        except OSError:
+            continue
     for d in found:
         if not d.is_dir():
             continue
@@ -480,6 +520,7 @@ class _Ctx:
     names: dict[str, list[str]]
     priced: bool
     unprompted: bool
+    model: str
 
 
 def _refuse(e: Entry, why: str) -> None:
@@ -574,8 +615,7 @@ def _fit_cost(ctx: _Ctx, e: Entry, refs: list[str]) -> list[str] | None:
     if not ctx.priced:
         return refs
     lim = ctx.lim
-    assert lim.model
-    model = lim.model
+    model = ctx.model
     prompt_bytes = len(e.prompt.encode("utf-8"))
 
     def cost(k: int) -> float:
@@ -647,17 +687,54 @@ def _settle(entries: list[Entry], lim: image_money.Limits,
         claimed.add(e.dest.casefold())
 
 
+NO_SERVICE = ("Choose a picture service and model first: gma publish "
+              "settings set vault.images.service gemini …")
+
+
+CHOOSE = ("Choose how this vault's pictures are drawn: gma publish settings "
+          "set vault.images.source codex (an installed Codex on a ChatGPT "
+          "plan, no money), self (the apprentice's own image tool, no money) "
+          "or service (a picture service and model on your key, paid).")
+
+
+def choose_source(lim: image_money.Limits, source: str | None) -> str:
+    """Who draws this job: `codex`, `self` or the configured service's name.
+    Always the GM's choice: `plan --source` (given on the GM's word), else
+    `vault.images.source`; with neither, a service and model the GM has set
+    count as choosing the service. Nothing is picked for the GM."""
+    want = source or lim.source or ("service" if lim.service else None)
+    if want is None:
+        raise Stop(CHOOSE)
+    if want == "self":
+        return "self"
+    if want == "codex":
+        state = image_codex.login()
+        if state.state != "chatgpt":
+            raise Stop(image_codex.why_not(state))
+        return "codex"
+    if want != "service":
+        raise Stop(f"There is no picture source called {want}; try: "
+                   + ", ".join(SOURCES))
+    if not lim.service or not lim.model:
+        raise Stop(NO_SERVICE)
+    return lim.service
+
+
 def plan(vault: Path, requests: list[dict[str, Any]], unprompted: bool,
-         today: date) -> Job:
+         today: date, source: str | None = None) -> Job:
     requests = check_requests(requests)
     lim = image_money.limits(vault)
-    if not lim.service or not lim.model:
-        raise Stop("Choose a picture service and model first: gma publish "
-                   "settings set vault.images.service gemini …")
-    find_key(lim.service)
-    priced = is_priced(lim.model, lim.price)
-    if not priced and not lim.unpriced:
-        raise Stop(unpriced_message(lim.model))
+    service = choose_source(lim, source)
+    free = service in FREE
+    if free:
+        model, priced = service, False
+    else:
+        assert lim.model
+        model = lim.model
+        find_key(service)
+        priced = is_priced(model, lim.price)
+        if not priced and not lim.unpriced:
+            raise Stop(unpriced_message(model))
     if unprompted and not lim.auto:
         raise Stop("Drawing without asking is off for this vault.")
     try:
@@ -669,12 +746,13 @@ def plan(vault: Path, requests: list[dict[str, Any]], unprompted: bool,
     prune(today)
 
     job_id = f"{today:%Y%m%d}-{secrets.token_hex(3)}"
+    home = folder(job_id)     # chosen once: each choice writes a probe file
     ctx = _Ctx(vault, lim, guidance, vw.Batch(vault),
-               section.name_index(vl.vault_files(vault)), priced, unprompted)
+               section.name_index(vl.vault_files(vault)), priced, unprompted, model)
     entries: list[Entry] = []
     for n, req in enumerate(requests, 1):
         e = Entry(n=n, note=req["for"], kind="", prompt="", refs=[],
-                  shape="", pending=str(folder(job_id) / f"{n:02d}"), dest="",
+                  shape="", pending=str(home / f"{n:02d}"), dest="",
                   after=req.get("after"), replace=req.get("replace") is True,
                   estimate=None, status="refused")
         if n == 1 and not guidance.found:
@@ -684,12 +762,14 @@ def plan(vault: Path, requests: list[dict[str, Any]], unprompted: bool,
         _plan_one(ctx, e, req)
     _settle(entries, lim, month_spent, priced)
 
-    job = Job(id=job_id, vault=str(vault), service=lim.service,
-              model=lim.model, priced=priced, unprompted=unprompted,
+    job = Job(id=job_id, vault=str(vault), service=service,
+              model=model, priced=priced, unprompted=unprompted,
               spent=0.0, entries=entries)
     try:
         save(job)
     except OSError as err:
         raise Stop("The picture job could not be saved "
-                   f"({err.__class__.__name__}).") from None
+                   f"({err.__class__.__name__}). It needs to write to "
+                   + " or ".join(str(r) for r in roots())
+                   + "; in a sandbox, allow one of them.") from None
     return job

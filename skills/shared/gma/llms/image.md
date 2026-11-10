@@ -1,6 +1,8 @@
 # gma image
 
-Use it when the GM asks for a picture for a note: a portrait (PC, NPC, creature, heritage, document), a location, faction, organization or item, or a scene picture in a Wrap-Up's Narrative Recap. `status` shows the service, model, key, this month's spending and the Image Guidance note's path.
+Use it when the GM asks for a picture for a note: a portrait (PC, NPC, creature, heritage, document), a location, faction, organization or item, or a scene picture in a Wrap-Up's Narrative Recap. `status` shows the source, whether Codex can draw, the service, model, key, this month's spending and the Image Guidance note's path.
+
+Who draws is the GM's choice, never yours: `vault.images.source` is `codex` (an installed Codex on a ChatGPT plan, no money), `self` (your own image tool, no money; see "Drawing them yourself" below) or `service` (the set service and model, paid). If `plan` says to choose, put the three choices to the GM (`status` says whether Codex can draw) and set the one they name. Pass `--source` only when the GM names a source for this batch. `plan`'s first line after the job number says what draws.
 
 Rules:
 
@@ -25,11 +27,11 @@ Rules:
    - `blocks`: `###` block names under the note's Blocks.
    - `shows`: notes whose `portrait` goes as a likeness (at most 4 characters and 14 pictures in all). A note with no portrait, or one that is not a PNG or JPEG under 5 MB inside the vault, is left out and `plan` says so.
    - `replace`: `true` to replace the note's existing picture.
-2. `gma image plan "<vault>" requests.json` prints a job number, each picture as `planned` (with its estimate), `refused` or `trimmed` (a limit) and why, the estimated total and the `Job file:` path. It sends nothing. Tell the GM what was not planned. If it says "No Image Guidance note yet", tell the GM the pictures will have no campaign style, and write the note from `_Templates/_Template_Image_Guidance.md` only if the GM asks.
-3. `gma image draw "<vault>" 20261109-a1b2c3` (the job number) draws each planned picture and prints its path. The files sit beside the job file, named by picture number and type (`01.png`, `02.jpg`, `03.webp`) (a later `draw` prints no paths). Run it again to retry failed ones. A drawn picture is never sent twice. A picture the service declined cannot be redone: plan it again with a different `subject`.
+2. `gma image plan "<vault>" requests.json` prints a job number, who draws it, each picture as `planned` (with its estimate), `refused` or `trimmed` (a limit) and why, the estimated total and the `Job file:` path. It sends nothing. Tell the GM what was not planned. If it says "No Image Guidance note yet", tell the GM the pictures will have no campaign style, and write the note from `_Templates/_Template_Image_Guidance.md` only if the GM asks.
+3. `gma image draw "<vault>" 20261109-a1b2c3` (the job number) draws each planned picture and prints its path. The files sit beside the job file, named by picture number and type (`01.png`, `02.jpg`, `03.webp`) (a later `draw` prints no paths). Run it again to retry failed ones. A drawn picture is never sent twice. Through Codex each picture takes a minute or two: give `draw` a long timeout or run it in the background and wait for it to finish; if it is cut off, wait until no `codex exec` is still running, then run the same `draw` again (it carries on where it stopped). A picture the service declined cannot be redone: plan it again with a different `subject`.
 4. Open every drawn file and compare it with its request: the right people and how many, period and setting, words on a document spelled as written, nothing modern. For a wrong one, run `draw` again with `--redo 2 "what was wrong"` and look again. A failed redraw keeps the earlier picture.
-5. `gma image place "<vault>" 20261109-a1b2c3 --keep 1 2 --hold 3` to preview, then again with `--write`. Give every drawn picture a verdict, and `--keep` only numbers you opened in step 4. A kept picture is copied into `_attachments/` and set as the note's `portrait`, or embedded after its recap paragraph. A held one stays in the job folder (path printed) for 14 days and can still be kept later.
-6. Tell the GM what was made and where, what the batch cost (`this job so far` on the `This run` line), the `This month` line, and what was held and where.
+5. `gma image place "<vault>" 20261109-a1b2c3 --keep 1 2 --hold 3` to preview, then again with `--write`. Give every drawn picture a verdict, and `--keep` only numbers you opened in step 4. A kept picture is copied into `_attachments/` and set as the note's `portrait`, or embedded after its recap paragraph. A held one stays in the job folder (path printed) for 14 days and can still be kept later (if `plan` said the job is in the temp folder, the system may clear it sooner).
+6. Tell the GM what was made and where, what the batch cost (`this job so far` on the `This run` line), the `This month` line, and what was held and where. For Codex or your own drawing there are no figures: say no money was spent.
 
 When it stops:
 
@@ -38,6 +40,13 @@ When it stops:
 - A limit (refused, trimmed, likenesses dropped, run stopped): tell the GM and change nothing.
 - "will not draw without thinking": the model forced thinking on for this batch. `draw` re-checks each picture against the limits at the higher cost and draws it with thinking if it fits, or its line says why not. Tell the GM. Change no setting without their yes.
 - Key, credit, keychain or network messages: pass them on. In a sandbox, `draw` needs network access.
+- Codex stopped (signed out, plan limit): tell the GM. Running the same `draw` later (signed in again, or once the plan's limit resets) retries for free. Only on the GM's yes, plan the pictures not drawn again with `--source service` (a new requests file holding just those); that costs money. Place each job's pictures from that job.
+
+Drawing them yourself (`plan --source self`):
+
+- `plan` prints each picture's `shape`, `likeness` files and `prompt`. Draw each with your own image tool from exactly that prompt, with the likeness files as references, at that shape.
+- Hand them in: `gma image draw "<vault>" <job> --picture 1 /path/one.png --picture 2 /path/two.png` (PNG or JPEG, from anywhere; they are copied). For a redraw, draw it again and hand it in again with `--picture`; the vault's redraw limit applies.
+- Then look and `place` as in steps 4 to 6. No money is counted.
 
 <!-- BEGIN GENERATED: gma image -->
 Draw a vault's pictures inside its spending limits.
@@ -65,12 +74,13 @@ gma image plan <vault> <requests> [options]
 | `<vault>` |  | the vault folder |
 | `<requests>` |  | a JSON file: a list with one object per picture (for, subject, and optionally blocks, shows, replace, after, name) |
 | `--unprompted` |  | the GM did not ask for these pictures: apply the vault's rules for drawing without asking |
+| `--source` | `codex`, `service`, `self` | who draws, for this job only, as the GM chose: codex (an installed Codex on a ChatGPT plan, no money), service (the vault's picture service and model, paid) or self (you, with your own image tool). Left out: the vault's vault.images.source |
 
 Example: `gma image plan "<vault>" requests.json`
 <!-- END GENERATED -->
 
 <!-- BEGIN GENERATED: gma image draw -->
-send the planned pictures to the drawing service (this costs money)
+draw the planned pictures (on a paid service this costs money)
 
 ```text
 gma image draw <vault> <job> [options]
@@ -80,7 +90,8 @@ gma image draw <vault> <job> [options]
 |---|---|---|
 | `<vault>` |  | the vault folder |
 | `<job>` |  | the job number `plan` printed |
-| `--redo` | `N WHAT` | draw picture N again, telling the service what was wrong with it (up to 500 characters); can be given more than once. Each attempt is paid for. Pictures are drawn one at a time; two gma image draw runs on one vault at the same time can lose a spending count (repeatable) |
+| `--redo` | `N WHAT` | draw picture N again, telling the service what was wrong with it (up to 500 characters); can be given more than once. On a paid service each attempt is paid for. Pictures are drawn one at a time; two gma image draw runs on one vault at the same time can lose a spending count (repeatable) |
+| `--picture` | `N FILE` | for a job planned with --source self: hand in the picture you drew for picture N (a PNG or JPEG); again for a redraw; can be given more than once (repeatable) |
 
 Example: `gma image draw "<vault>" 20261109-a1b2c3 --redo 2 "the cloak should be green"`
 <!-- END GENERATED -->

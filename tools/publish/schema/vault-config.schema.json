@@ -350,6 +350,14 @@
                 ]
               }
             },
+            "source": {
+              "description": "Which system draws this campaign's pictures, always your choice. `codex`: an installed Codex signed in with a ChatGPT plan, using its own image tool (no money counted). `self`: the apprentice's own image tool, when it has one (no money counted). `service`: the picture service and model below, on your key (paid, inside the limits)",
+              "type": [
+                "string",
+                "null"
+              ],
+              "pattern": "^\\s*(?:[cC][oO][dD][eE][xX]|[sS][eE][lL][fF]|[sS][eE][rR][vV][iI][cC][eE])\\s*$"
+            },
             "service": {
               "description": "Which picture service draws for this campaign",
               "type": [
