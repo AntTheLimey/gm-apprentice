@@ -225,14 +225,14 @@ test('unset removes the line, several at once, and names only what was there', (
 
 test('describe says what a hiding setting does, takes and defaults to', () => {
   const s = scratch(wrap(''));
-  const { rc, data } = run(s, 'describe', ['player_site.hide.sections']);
+  const { rc, data } = run(s, 'describe', ['player_site.hide.folders']);
   assert.equal(rc, 0);
-  assert.equal(data.name, 'player_site.hide.sections');
+  assert.equal(data.name, 'player_site.hide.folders');
   assert.equal(data.guards, true);
   assert.equal(data.kind, 'list');
   assert.ok(data.does.length > 10);
   assert.match(data.takes, /^a list of /);
-  assert.ok(data.default.includes('GM Notes'));
+  assert.ok(data.default.includes('_meta'));
   assert.deepEqual(Object.keys(data), ['name', 'kind', 'does', 'takes', 'default', 'guards', 'oldNames']);
   const other = run(s, 'describe', ['player_site.images.max_width']).data;
   assert.equal(other.guards, false);

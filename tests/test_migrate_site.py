@@ -539,6 +539,55 @@ class HideAdditionTests(unittest.TestCase):
         self.assertTrue(item.holds_stamp)
 
 
+class DormantThreadsHideTests(unittest.TestCase):
+    """1.12.8: the GM-only dormant list joins the built-in hidden headings,
+    and a vault that owns its list of headings is offered it."""
+
+    SECTIONS = "player_site.hide.sections"
+
+    def old_sections(self):
+        return [h for h in vaultlib.settings_default(self.SECTIONS)
+                if h != "Dormant Threads"]
+
+    def owning(self, sections):
+        vault = make_vault(self)
+        vaultlib.settings_set(vault, [(self.SECTIONS, sections)])
+        return vault
+
+    def test_an_owned_list_without_it_is_offered_it(self):
+        old = self.old_sections()
+        vault = self.owning(old)
+        (item,) = ms.find_hide_additions(vault, "1.12.8")
+        self.assertEqual(item.id, "hide-add:Dormant Threads")
+        self.assertEqual(item.lines, [
+            f"add Dormant Threads to the details your site hides "
+            f"({self.SECTIONS}), so the site never shows it: Dormant Threads "
+            f"is threads parked when the party left a place or arc, kept "
+            f"for the GM"])
+        self.assertTrue(item.holds_stamp)
+        item.apply(None)
+        self.assertEqual(vc.settings(vault).get(self.SECTIONS),
+                         [*old, "Dormant Threads"])
+        self.assertEqual(ms.find_hide_additions(vault, "1.12.8"), [])
+
+    def test_an_owned_list_that_has_it_is_offered_nothing(self):
+        vault = self.owning([*self.old_sections(), "Dormant Threads"])
+        self.assertEqual(ms.find_hide_additions(vault, "1.12.8"), [])
+
+    def test_a_vault_with_no_list_of_its_own_is_offered_nothing(self):
+        vault = make_vault(self)
+        self.assertEqual(ms.find_hide_additions(vault, "1.12.8"), [])
+        self.assertIn("Dormant Threads", vc.settings(vault).get(self.SECTIONS))
+
+    def test_the_check_asks_at_1_12_7(self):
+        (check,) = [c for c in ms.SITE_CHECKS
+                    if c.name == "hide-sections-dormant"]
+        self.assertEqual((check.release, check.band, check.asks_site,
+                          check.choices, check.kind),
+                         ("1.12.8", 2, True, ("hide-add:",), "asks"))
+        self.assertTrue(check.plain and check.ask and check.left)
+
+
 class HideAdditionStampTests(unittest.TestCase):
     """The 1.11.2 hide-add question holds the stamp until it is answered,
     through the low-level apply and `gma update` alike: past the stamp the

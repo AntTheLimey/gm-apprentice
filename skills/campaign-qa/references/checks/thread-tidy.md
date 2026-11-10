@@ -3,28 +3,33 @@
 Closes threads a later note says are over, moves word-for-word duplicates
 to the shared list, and reports both. It asks the GM about nothing else.
 
-A thread is an open question or obligation. Shared threads live under the
-Campaign Overview's `## Open Threads`; each PC's own sit under their
-`**Open threads:**`. A closed thread is never deleted: it moves to a
-Wrap-Up's `#### Resolved Threads` with its evidence.
+A thread is what passes the test in `shared/reconcile.md` step 5.5.
+Shared threads live under the Campaign Overview's `## Open Threads`;
+each PC's own sit under their `**Open threads:**`. A closed thread is
+never deleted: it moves to a Wrap-Up's `#### Resolved Threads` with
+its evidence. Parking what the party has left behind on the dormant
+list is Reconcile's, with the GM; Thread Tidy leaves those open.
 
 **Procedure:**
 
 1. Run `gma session-context <vault> --threads`. It lists the shared
-   threads, each PC's own, and Wrap-Up threads on no list.
+   threads, each PC's own, the dormant list, and Wrap-Up threads on no
+   list.
 2. For each thread, read the notes after it was first seen (recaps,
    Wrap-Ups, the PC's Story, the timeline) for a line that ends it.
    - **Ended:** the note says so ("Sophia's note is read", "delivered and
      paid"). Close it, that line quoted as evidence.
    - **Implied:** the note suggests an end but doesn't say it ("he's in
      custody"). Leave it open.
-   - **Dormant:** nothing new. Leave it open; age is not an ending.
+   - **Quiet:** nothing new. Leave it open; age is not an ending.
    - **Not a thread:** plainly where play stopped, or plainly an event
      that happened. Close it with evidence
      `not a thread: where play stopped in Session N` or
      `not a thread: an event, in the Session N recap`. The text itself
      shows it, so no other line is needed.
    - Anything arguable stays open and goes in the report.
+   - Leave the dormant list alone: closing a dormant thread is the
+     GM's call.
    - Leave threads marked `(hidden)`: the tool refuses them, and one
      refused row writes nothing.
 3. Duplicates: the same thread on two or more PCs.

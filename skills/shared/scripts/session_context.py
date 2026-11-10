@@ -13,6 +13,7 @@ Usage:
   session_context.py VAULT --brief
   session_context.py VAULT --prep
   session_context.py VAULT --arcs
+  session_context.py VAULT --dormant
   session_context.py VAULT --carry [--before INDEX]
 
 --session N treats N as the just-played session. Otherwise the
@@ -37,8 +38,8 @@ number present in more than one chapter), when a later session
 index in the same chapter was ignored as unplayed, when a later
 session in the same chapter is already played (the selection may be
 stale), and when the campaign
-overview's `asOfSession` names a different chapter from the one the
-selected session sits in. Confirm a `Note:` with
+overview's `asOfSession` names a chapter ("Chapter 2, Session 3")
+other than the one the selected session sits in. Confirm a `Note:` with
 the GM — a wrong bundle reads exactly as authoritative as a right
 one.
 
@@ -48,6 +49,13 @@ one-line word count each, and the Campaign Overview and the existing
 Session Plan each print as frontmatter plus a heading outline instead
 of their full bodies. Step 6 reads that Plan properly through
 `gma plan-check` with `--inventory` or `--state` when it needs to.
+
+`--dormant` prints the header and the Campaign Overview's whole
+Dormant Threads list; `--threads` carries that list too, and `--prep`
+only the entries whose names (never a PC's) the last Wrap-Up (its
+Resolved Threads left out, and not when it parked them) or the upcoming
+Plan mention. The brief leaves out the
+Keeper Checklist items and Open Questions already settled.
 
 `--arcs` replaces the default bundle with each active PC's durable
 arc material instead: `## Background` and `## GM Notes` (the
@@ -106,7 +114,8 @@ import vault_write as vw
 from schema_rules import (SESSION_PLAYED, chapter_key, chapter_of,
                           extract_frontmatter, parse_session_number,
                           wikilink_target)
-from threads import _hidden_lines, pc_thread_items, shared_threads
+from threads import (DORMANT, _hidden_lines, has_pc_threads, lead,
+                     pc_thread_items, shared_threads)
 from vaultlib import (GM_MARKER_RE, is_active_pc, marker_re,  # noqa: F401
                       is_out_of_play, out_of_play,
                       report_unreadable_settings, setting_or_builtin,
@@ -213,6 +222,15 @@ def _heading_block(text: str, level: int, title: str) -> str | None:
     return m.group(1).strip() if m else None
 
 
+def _without_block(text: str, level: int, title: str) -> str:
+    """`text` with a `#`*level heading titled `title` and its body (up to
+    the next heading of level <= `level`) cut out; unchanged if absent."""
+    marker = "#" * level
+    return re.sub(
+        rf"^{marker}\s+{re.escape(title)}\s*$.*?(?=^#{{1,{level}}}\s|\Z)",
+        "", text, flags=re.MULTILINE | re.DOTALL)
+
+
 # --------------------------------------------------------------------------
 # --brief helpers
 # --------------------------------------------------------------------------
@@ -235,7 +253,95 @@ _ANY_HEADING_RE = re.compile(r"^(#{1,6})\s")
 _ANY_MARKER_RE = marker_re()
 
 
+# The sections `--brief` leaves settled items out of, and the only ones
+# `vw wrapup-settle` settles.
+SETTLED_HEADING_RE = re.compile(
+    r"^###\s+(?:Keeper Checklist|Open Questions\b.*?)\s*$")
+_ITEM_RE = re.compile(r"^(\s*)(?:[-*+]|\d+[.)])\s+(.*)$")
+
+
+def _is_settled(text: str) -> bool:
+    """An item's text (marker dropped) that is ticked or struck through."""
+    return bool(re.match(r"\[[xX]\]", text) or text.startswith("~~"))
+
+
+def _drop_settled(text: str) -> str:
+    """`text` with the settled items of its `### Keeper Checklist` and
+    `### Open Questions…` blocks left out: an item ticked (`- [x]`) or
+    struck through (`~~`), with the nested and wrapped lines under it. A
+    block that held items and now holds nothing but blanks reads
+    `(all settled)`. Fenced lines are never touched."""
+    lines = text.splitlines()
+    out: list[str] = []
+    i, n = 0, len(lines)
+    in_fence = False
+    while i < n:
+        line = lines[i]
+        if line.strip().startswith("```"):
+            in_fence = not in_fence
+        if in_fence or not SETTLED_HEADING_RE.match(line):
+            out.append(line)
+            i += 1
+            continue
+        out.append(line)
+        j = i + 1
+        block: list[str] = []
+        dropped = False
+        fenced = False
+        while j < n:
+            cur = lines[j]
+            hm = _ANY_HEADING_RE.match(cur)
+            if not fenced and hm and len(hm.group(1)) <= 3:
+                break
+            if cur.strip().startswith("```"):
+                fenced = not fenced
+            im = None if fenced else _ITEM_RE.match(cur)
+            if im and _is_settled(im.group(2)):
+                dropped = True
+                indent = len(im.group(1))
+                j += 1
+                while j < n:
+                    nxt = lines[j]
+                    if not nxt.strip():
+                        k = j
+                        while k < n and not lines[k].strip():
+                            k += 1
+                        if (k < n and len(lines[k]) - len(lines[k].lstrip())
+                                > indent):
+                            j = k
+                            continue
+                        break
+                    ind = len(nxt) - len(nxt.lstrip())
+                    if (_ITEM_RE.match(nxt) and ind <= indent
+                            or _ANY_HEADING_RE.match(nxt)
+                            or _ANY_MARKER_RE.search(nxt)
+                            or nxt.strip().startswith("```")):
+                        break
+                    j += 1
+                continue
+            block.append(cur)
+            j += 1
+        if dropped and not any(b.strip() and not _ANY_MARKER_RE.search(b)
+                               for b in block):
+            out.append("(all settled)")
+            # blanks round the stub collapse to the one that followed it
+            rest = [b for b in block if b.strip()]
+            out.extend(rest)
+            if j < n and (not rest) and out[-1] != "":
+                out.append("")
+        else:
+            out.extend(block)
+        i = j
+    result = "\n".join(out)
+    return result + "\n" if text.endswith("\n") else result
+
+
 def brief_wrapup(body: str) -> str:
+    """The Wrap-Up for `--brief`: `_stub_provenance`, then `_drop_settled`."""
+    return _drop_settled(_stub_provenance(body))
+
+
+def _stub_provenance(body: str) -> str:
     """`body` with each BRIEF_DROP_H2 `## ` block and each BRIEF_DROP_H3
     `### ` block replaced by its heading line plus one stub line:
     `(omitted in --brief: N words — read the Wrap-Up file for it)`.
@@ -711,15 +817,30 @@ def wrap_up_threads(files, chapter) -> list[tuple[int, list[str], list[str]]]:
     return wrap_ups
 
 
+def _lead_key(text: str) -> str | None:
+    """The bold lead used for equal-lead matching, or None when the lead
+    names a session (`**Session 5:**`, `**New open threads (Session 6):**`):
+    that is a diary label, so two unrelated lines would otherwise match."""
+    key = lead(text)
+    return None if vw.SESSION_ENTRY_RE.match(key) else key
+
+
 def _match(thread: str, wrap_ups):
     """(sessions, mark, claimed): `claimed` holds the (session, bullet)
-    Unresolved bullets a close match took."""
+    Unresolved bullets a match took: every close match (a likely wording
+    or an equal bold lead, `threads.lead`, so a thread rewritten in
+    player words still reads as the line it came from), and for the
+    looser tier the first related Unresolved bullet of each Wrap-Up it
+    matched (never a PC Carry-Forward bullet), so a thread aged from a
+    line does not leave that line unlisted too."""
     norm = _norm_thread(thread)
+    key = _lead_key(thread)
     hits: list[int] = []
     claimed: set[tuple[int, str]] = set()
     for n, unresolved, carry in wrap_ups:
         for bullet in unresolved + carry:
-            if _ratio_match(norm, bullet):
+            if (_ratio_match(norm, bullet)
+                    or (key is not None and _lead_key(bullet) == key)):
                 hits.append(n)
                 if bullet in unresolved:
                     claimed.add((n, bullet))
@@ -728,8 +849,12 @@ def _match(thread: str, wrap_ups):
         return hits, "=", claimed
     # The looser tier reads only what the first missed.
     for n, unresolved, carry in wrap_ups:
-        if any(threads_related(thread, bullet)
-               for bullet in unresolved + carry):
+        related = next((b for b in unresolved
+                        if threads_related(thread, b)), None)
+        if related is not None:
+            claimed.add((n, related))
+        if related is not None or any(threads_related(thread, b)
+                                      for b in carry):
             hits.append(n)
     return hits, ("~" if hits else ""), claimed
 
@@ -743,11 +868,161 @@ def match_sessions(thread: str, wrap_ups) -> tuple[list[int], str]:
     return hits, mark
 
 
-def thread_report(files, current: int, chapter, vault: Path) -> str:
+def unlisted_wrapup_threads(files, chapter,
+                            vault: Path) -> list[tuple[int, str]]:
+    """The (session, bullet) Wrap-Up Unresolved Threads bullets that sit on
+    no thread list (thread-decay candidates), as `thread_report` prints
+    them. A bullet is claimed by a thread that matches it (`_match`, a
+    close or likely match, an equal bold lead included) or has its bold
+    lead (`threads.lead`; a parked or closed lead keeps every wording the
+    Wrap-Ups gave it), when that
+    thread is:
+
+    - a shared or PC Open thread (by `_match`);
+    - a Dormant Threads entry, at any session: a parked thread raised
+      again is still the parked thread until woken;
+    - a Resolved Threads line (its `— closed: …` tail dropped), for
+      bullets at or before the session whose Wrap-Up holds it: it is
+      done, not lost, and one raised again after the closing is open
+      again. With no chapter in scope, session numbers from different
+      chapters can collide, so any closure claims them.
+    """
+    wrap_ups = wrap_up_threads(files, chapter)
+    not_playing = out_of_play(vault)
+    overview = overview_of(files)
+    overview_text = overview[1] if overview else ""
+    threads = [t.text for t in shared_threads(overview_text)]
+    for rel, text, fm in files:
+        if is_active_pc(rel, fm, not_playing):
+            threads.extend(t.text for t in pc_thread_items(text))
+    matched: set[tuple[int, str]] = set()
+    for thread in threads:
+        matched.update(_match(thread, wrap_ups)[2])
+
+    def claim(thread: str, scope) -> None:
+        matched.update(_match(thread, scope)[2])
+        key = _lead_key(thread)
+        if key is not None:
+            matched.update((n, b) for n, unresolved, _carry in scope
+                           for b in unresolved if _lead_key(b) == key)
+
+    for t in shared_threads(overview_text, DORMANT):
+        claim(t.text, wrap_ups)
+    for closed, text in wrap_up_resolved(files, chapter):
+        claim(text, [w for w in wrap_ups
+                     if chapter is None or w[0] <= closed])
+    return [(n, bullet) for n, unresolved, _carry in wrap_ups
+            for bullet in unresolved if (n, bullet) not in matched]
+
+
+def _latest_wrapup(files, current: int, chapter):
+    """The Wrap-Up of session `current` (chapter-preferred), by its
+    frontmatter, else by the `Session N … Wrap Up` file name; None if
+    there is none."""
+    wrap = prefer_chapter(
+        [(rel, text, fm) for rel, text, fm in files
+         if entity_type(fm) in WRAP_UP_TYPES
+         and session_ref_number(fm) == current],
+        chapter)
+    if wrap is None:
+        pat = re.compile(rf"Session[ _-]0*{current}[ _-].*Wrap[ _-]?Up",
+                         re.IGNORECASE)
+        wrap = prefer_chapter([(rel, text, fm) for rel, text, fm in files
+                               if pat.search(rel)], chapter)
+    return wrap
+
+
+def _upcoming_plan(files, chapter, upcoming: int):
+    """The Session Plan note for session `upcoming`, chapter-preferred."""
+    return prefer_chapter(
+        [(rel, text, fm) for rel, text, fm in files
+         if fm.get("type") == "session-plan"
+         and session_ref_number(fm) == upcoming],
+        chapter)
+
+
+_ANY_LINK_RE = re.compile(r"\[\[([^\]]+)\]\]")
+
+
+def _link_names(text: str) -> dict[str, str]:
+    """Each wikilink target in `text`: normalised name -> name as written
+    (first spelling wins)."""
+    names: dict[str, str] = {}
+    for raw in _ANY_LINK_RE.findall(text):
+        name = link_name(raw)
+        if name:
+            names.setdefault(normalize(name), name)
+    return names
+
+
+_PARKED_RE = re.compile(r"^\s*Session\s+0*(\d+)\b", re.IGNORECASE)
+
+
+def dormant_lines(files, current: int, chapter, mode: str = "all",
+                  vault: Path | None = None) -> list[str]:
+    """The Campaign Overview's Dormant Threads part of the threads report.
+
+    `all`: every entry, with when it went dormant and whom it involves.
+    `may-wake`: only the entries with a wikilink in the latest Wrap-Up,
+    its Resolved Threads left out, or in the upcoming Plan, each followed
+    by the names that matched. A PC's name never counts (every active
+    PC of `vault`, and the names an entry involves): PCs are in every
+    session. Nor does the Wrap-Up that parked the entry (session N of its
+    `dormant since Session N`): the names that left it behind are in it.
+    Session numbers may start again in a new chapter, so only that
+    session's own Wrap-Up is passed over. Prep reads this one: the whole
+    list is never in its bundle."""
+    overview = overview_of(files)
+    entries = shared_threads(overview[1] if overview else "", DORMANT)
+    wake = mode == "may-wake"
+    lines = ["--- Dormant, may wake ---" if wake
+             else "--- Dormant (Campaign Overview) ---"]
+    wrap_names: dict[str, str] = {}
+    plan_names: dict[str, str] = {}
+    pcs: set[str] = set()
+    if wake:
+        wrap = _latest_wrapup(files, current, chapter)
+        if wrap:
+            wrap_names = _link_names(_without_block(
+                body_of(wrap[1]), 4, "Resolved Threads"))
+        plan = _upcoming_plan(files, chapter, current + 1)
+        if plan:
+            plan_names = _link_names(body_of(plan[1]))
+        if vault is not None:
+            gone = out_of_play(vault)
+            pcs = {_pc_key(rel) for rel, _text, fm in files
+                   if is_active_pc(rel, fm, gone)}
+    out: list[str] = []
+    for t in entries:
+        mark = " (hidden)" if t.hidden else ""
+        who = ("the party" if t.party else ", ".join(t.involves)
+               or "(none named)")
+        if not wake:
+            out.append(f"{t.text}{mark}\tdormant since "
+                       f"{t.dormant or '?'}\tinvolves: {who}")
+            continue
+        parked = _PARKED_RE.match(t.dormant or "")
+        here = ({} if parked and int(parked.group(1)) == current
+                else dict(wrap_names))
+        for key, name in plan_names.items():
+            here.setdefault(key, name)
+        involved = pcs | {normalize(link_name(n)) for n in t.involves}
+        hit = [name for key, name in _link_names(t.text).items()
+               if key not in involved and key in here]
+        if hit:
+            out.append(f"{t.text}{mark}\tdormant since "
+                       f"{t.dormant or '?'}\tinvolves: {who}"
+                       f"\tmatched: {', '.join(f'[[{n}]]' for n in hit)}")
+    return lines + (out or ["(none)"])
+
+
+def thread_report(files, current: int, chapter, vault: Path,
+                  dormant: str = "all") -> str:
     """The Campaign Overview's shared Open Threads, then per-PC Open-threads
     ages against Wrap-Up Unresolved Threads / PC Carry-Forward bullets,
-    plus wrap-up bullets that never made it onto any thread list
-    (thread-decay candidates).
+    the Dormant Threads (`dormant`: `all` or `may-wake`, see
+    `dormant_lines`), plus wrap-up bullets that never made it onto any
+    thread list (thread-decay candidates).
     """
     lines = ["===== Threads ====="]
     wrap_ups = wrap_up_threads(files, chapter)
@@ -760,15 +1035,11 @@ def thread_report(files, current: int, chapter, vault: Path) -> str:
     overview_text = overview[1] if overview else ""
     shared = shared_threads(overview_text)
 
-    # Unresolved bullets a thread actually matched, keyed by (session,
-    # bullet text) — everything else is reported as an orphan below.
-    matched: set[tuple[int, str]] = set()
     tentative = False
 
     def tags(thread: str) -> str:
         nonlocal tentative
-        hits, mark, claimed = _match(thread, wrap_ups)
-        matched.update(claimed)
+        hits, mark, _claimed = _match(thread, wrap_ups)
         if not hits:
             return ("first=?\tlast=?\tage=?\t"
                     "(not in any wrap-up — check it is still live)")
@@ -806,7 +1077,8 @@ def thread_report(files, current: int, chapter, vault: Path) -> str:
         # `vw threads` refuses it.
         pc_items = pc_thread_items(text)
         if not pc_items:
-            lines.append("(no ## Current Status Open threads)")
+            lines.append("(none)" if has_pc_threads(text)
+                         else "(no ## Current Status Open threads)")
             continue
         own = 0
         stem = _pc_key(Path(rel).stem)
@@ -823,25 +1095,10 @@ def thread_report(files, current: int, chapter, vault: Path) -> str:
     if tentative:
         lines.insert(1, "(~ means a likely match by shared names and words, "
                         "not the same text: check it)")
-    # A thread closed into a Resolved Threads list claims the Unresolved
-    # bullets that are the same thread (the same words, as `_norm_thread`
-    # reads them): it is done, not lost. A merely close bullet ("found"
-    # against "still missing") stays an orphan, for the GM to judge.
-    # It claims them up to the session that closed it: one raised again
-    # after that is open again. With no chapter in scope, session numbers
-    # from different chapters can collide, so any closure claims them.
-    closed: dict[str, float] = {}
-    for n, c in wrap_up_resolved(files, chapter):
-        key = _norm_thread(c)
-        closed[key] = (float("inf") if chapter is None
-                       else max(n, closed.get(key, n)))
-    matched.update((n, bullet) for n, unresolved, _carry in wrap_ups
-                   for bullet in unresolved
-                   if n <= closed.get(_norm_thread(bullet), -1))
+    lines.extend(dormant_lines(files, current, chapter, dormant, vault))
     lines.append("--- Wrap-up threads not on any thread list ---")
     orphans = [f"session {n}\t{bullet}"
-              for n, unresolved, _carry in wrap_ups
-              for bullet in unresolved if (n, bullet) not in matched]
+               for n, bullet in unlisted_wrapup_threads(files, chapter, vault)]
     lines.extend(orphans if orphans else ["(none)"])
 
     return "\n".join(lines)
@@ -1232,13 +1489,21 @@ def campaign_order(rel: str, fm: dict) -> tuple[float, float]:
     Wrap-Ups across a campaign. An unknown chapter sorts first; a Wrap-Up
     with no session number (a chapter's own Wrap-Up) sorts after the
     chapter's sessions."""
-    ch = (chapter_of(rel, fm) or "").strip()
-    m = re.fullmatch(r"(\d+(?:\.\d+)?)", ch) or _CHAPTER_NUM_RE.search(ch)
+    ch = _chapter_number(chapter_of(rel, fm) or "")
     n = parse_session_number(fm.get("session_number"))
     if n is None:
         n = session_ref_number(fm)
-    return (float(m.group(1)) if m else -1.0,
+    return (ch if ch is not None else -1.0,
             float(n) if n is not None else float("inf"))
+
+
+def _chapter_number(label: str) -> float | None:
+    """The chapter number a label gives: a bare number (`2`) or one after
+    the word chapter (`Chapter 2 - Harbour`); None for none."""
+    label = label.strip()
+    m = (re.fullmatch(r"(\d+(?:\.\d+)?)", label)
+         or _CHAPTER_NUM_RE.search(label))
+    return float(m.group(1)) if m else None
 
 
 def _blocks(body: str) -> list[tuple[int, str, list[str]]]:
@@ -1430,10 +1695,15 @@ def select_session(files, session_arg: int | None) -> tuple[dict | None, list[st
 
     overview_as_of = str((overview_fm or {}).get("asOfSession") or "")
     if chosen and overview_as_of and chapter:
-        as_of = overview_as_of.casefold()
-        head = re.split(r"[,;]", chapter.split("/")[-1])[0].strip()
-        if head and head not in as_of and not any(
-                w in as_of for w in head.split() if len(w) > 3):
+        # Only an asOfSession that names a chapter ("Chapter 2, Session
+        # 3") can disagree with the selected one: `9` or `Session 9` name
+        # none, so there is nothing to verify; nor is there when the
+        # selected chapter has no number (`Prologue`).
+        named = _CHAPTER_NUM_RE.search(overview_as_of)
+        mine = _chapter_number(chosen["chapter_label"] or "")
+        if mine is None:
+            mine = _chapter_number(chapter)
+        if named and mine is not None and float(named.group(1)) != mine:
             warnings.append(
                 f"Note: campaign overview reads asOfSession "
                 f"'{overview_as_of}', but the selected session is in "
@@ -1522,7 +1792,10 @@ def run_script(script: str, *argv, title: str) -> str:
 
 def wrapup_names(files, wrap_text: str) -> list[str]:
     """The NPCs, locations, factions and creatures a Wrap-Up links, by
-    note name, in the order first linked."""
+    note name, in the order first linked. Its `#### Resolved Threads`
+    block is left out: a name met only in a closed thread is not
+    something the next Plan may overlap."""
+    wrap_text = _without_block(wrap_text, 4, "Resolved Threads")
     types = {normalize(rel.rsplit("/", 1)[-1][:-3]): entity_type(fm)
              for rel, _text, fm in files}
     names: list[str] = []
@@ -1544,7 +1817,7 @@ def print_prep_rest(vault: Path, files, chosen, wrap, current: int,
     else:
         print("\n===== Reconcile Scan =====\n(not run: the session's "
               f"status is {status or 'unknown'}, not wrap-up)")
-    print(f"\n{thread_report(files, current, chapter, vault)}")
+    print(f"\n{thread_report(files, current, chapter, vault, 'may-wake')}")
     print(f"\n{arcs_report(files, chapter, upcoming, vault, outlines)}")
     label = (chosen or {}).get("chapter_label")
     where = ("--chapter", label) if label else ()
@@ -1573,6 +1846,8 @@ def build_parser() -> argparse.ArgumentParser:
                            "report only: each active PC's Open threads aged "
                            "against the Wrap-Ups' Unresolved Threads and "
                            "PC Carry-Forward bullets, "
+                           "then the Campaign Overview's whole Dormant "
+                           "Threads list, "
                            "age=N sessions since last touched, STALE at "
                            "the vault's stale-after number "
                            "(vault.stale_after_sessions; a candidate, not a "
@@ -1580,6 +1855,11 @@ def build_parser() -> argparse.ArgumentParser:
                            "GM's call). A thread read as first~N age~N (~ instead "
                            "of =) is a likely match by shared names and "
                            "words, not the same text: check it")
+    mode.add_argument(
+        "--dormant", action="store_true",
+        help="print the Session Context header and the Campaign "
+             "Overview's Dormant Threads only: threads parked when the "
+             "party left a place or arc")
     mode.add_argument(
         "--arcs", action="store_true",
         help="print the Session Context header and the PC Arcs report "
@@ -1598,7 +1878,9 @@ def build_parser() -> argparse.ArgumentParser:
         "--prep", action="store_true",
         help="a prep run's opening read in one call: the version verdict, "
              "the --brief bundle, the reconcile scan (status wrap-up only), "
-             "--threads, --arcs, the chapter's scene queue and its "
+             "--threads (its dormant part only the threads that may "
+             "wake: their names are in the Wrap-Up or the upcoming Plan), "
+             "--arcs, the chapter's scene queue and its "
              "narrative plans checked against the NPCs, locations and "
              "factions the Wrap-Up links")
     mode.add_argument(
@@ -1646,7 +1928,7 @@ def _bundle(argv: list[str] | None, outlines: Outlines) -> int:
     ap = build_parser()
     args = ap.parse_args(argv)
     if args.brief and (args.play or args.threads or args.arcs
-                       or args.prep):
+                       or args.prep or args.dormant):
         print("error: --brief applies to the default bundle only",
               file=sys.stderr)
         return 2
@@ -1757,6 +2039,10 @@ def _bundle(argv: list[str] | None, outlines: Outlines) -> int:
         print(f"\n{thread_report(files, current, chapter, args.vault)}")
         return 0
 
+    if args.dormant:
+        print("\n" + "\n".join(dormant_lines(files, current, chapter)))
+        return 0
+
     if args.arcs:
         print(f"\n{arcs_report(files, chapter, upcoming, args.vault, outlines)}")
         return 0
@@ -1767,17 +2053,7 @@ def _bundle(argv: list[str] | None, outlines: Outlines) -> int:
     # vault where numbering restarts they could pair the right number with the
     # wrong chapter's documents. An unknown chapter on either side matches, which
     # keeps flat vaults working exactly as before.
-    wrap = prefer_chapter(
-        [(rel, text, fm) for rel, text, fm in files
-         if entity_type(fm) in WRAP_UP_TYPES
-         and session_ref_number(fm) == current],
-        chapter)
-    if wrap is None:
-        # Fallback: filename convention Chapter_CC_Session_NN_Wrap_Up.md
-        pat = re.compile(rf"Session[ _-]0*{current}[ _-].*Wrap[ _-]?Up",
-                         re.IGNORECASE)
-        wrap = prefer_chapter([(rel, text, fm) for rel, text, fm in files
-                               if pat.search(rel)], chapter)
+    wrap = _latest_wrapup(files, current, chapter)
     wrap_content = body_of(wrap[1]) if wrap else None
     if args.brief and wrap_content is not None:
         wrap_content = brief_wrapup(wrap_content)
@@ -1803,11 +2079,7 @@ def _bundle(argv: list[str] | None, outlines: Outlines) -> int:
         print("(no active PC entities found)")
 
     # --- existing plan for the upcoming session ---
-    plan = prefer_chapter(
-        [(rel, text, fm) for rel, text, fm in files
-         if fm.get("type") == "session-plan"
-         and session_ref_number(fm) == upcoming],
-        chapter)
+    plan = _upcoming_plan(files, chapter, upcoming)
     if args.brief and plan:
         # Step 6 inspects the existing Plan through
         # `gma plan-check` with `--inventory` or `--state`, so the bundle only has to

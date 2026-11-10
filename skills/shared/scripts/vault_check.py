@@ -1691,20 +1691,44 @@ def shared_threads_tool_too_old(vault: Path) -> tuple[Path, str] | None:
     than SHARED_THREADS_TOOL (or one whose version cannot be read); None
     when it has no site or no tool, or a new enough one. The update's
     shared-threads check and `vw threads move` both wait on it."""
+    return _site_tool_too_old(
+        vault, SHARED_THREADS_TOOL,
+        "shared threads wait, since an older tool would drop moved threads "
+        "from PC pages")
+
+
+# The first publish tool whose built-in hidden sections hold Dormant Threads.
+DORMANT_THREADS_TOOL = "1.70.6"
+
+
+def dormant_threads_tool_too_old(vault: Path) -> tuple[Path, str] | None:
+    """As `shared_threads_tool_too_old`, for DORMANT_THREADS_TOOL: `vw
+    threads rest` waits on it, since an older tool would publish the
+    Campaign Overview's Dormant Threads."""
+    return _site_tool_too_old(
+        vault, DORMANT_THREADS_TOOL,
+        "dormant threads wait, since an older tool would publish the "
+        "Campaign Overview's Dormant Threads on the site")
+
+
+def _site_tool_too_old(vault: Path, need: str,
+                       waits: str) -> tuple[Path, str] | None:
+    """(site, why) when the vault's site builds with a publish tool older
+    than `need`, or one whose version cannot be read; `waits` says what
+    waits and why. None when it has no site or no tool, or a new enough
+    one."""
     site, _has_config = configured_site(vault)
     if site is None:
         return None
     pin = site_pin(site)
     if pin.source == "none":
         return None
-    if pin.version is not None and not semver_below(pin.version,
-                                                    SHARED_THREADS_TOOL):
+    if pin.version is not None and not semver_below(pin.version, need):
         return None
     return site, (f"the site's publish tool is "
                   f"{pin.version or 'of an unknown version'}, older than "
-                  f"{SHARED_THREADS_TOOL}: update the site's publish tool "
-                  f"first (`gma update`); shared threads wait, since an "
-                  f"older tool would drop moved threads from PC pages")
+                  f"{need}: update the site's publish tool first "
+                  f"(`gma update`); {waits}")
 
 
 def _publish_tool_for(site: Path) -> tuple[Path | None, str, str | None]:

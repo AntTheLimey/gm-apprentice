@@ -608,7 +608,7 @@ describe('explain reports the switches and the sheet-withheld sections (#285)', 
     assert.deepStrictEqual((await explainAll(own.configPath)).excludeSections, ['GM Notes', 'Keeper Only']);
     const none = vaultWith({});
     assert.deepStrictEqual((await explainAll(none.configPath)).excludeSections,
-      ['GM Notes', 'DM Notes', 'Player Notes', 'Source References', 'Reconciliation Context', 'Handoff to Reconcile']);
+      ['GM Notes', 'DM Notes', 'Player Notes', 'Source References', 'Reconciliation Context', 'Handoff to Reconcile', 'Dormant Threads']);
     const c = capture();
     assert.strictEqual(await runExplain({ configPath: own.configPath, target: 'Sessions/Hero.md', json: true }, c.deps), 0);
     assert.deepStrictEqual(JSON.parse(c.out.join('')).excludeSections, ['GM Notes', 'Keeper Only']);

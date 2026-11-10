@@ -490,12 +490,14 @@ class ThreadSecondTierTests(unittest.TestCase):
         self.assertNotIn("not in any wrap-up", report)
         self.assertIn("~ means a likely match", report.splitlines()[1])
 
-    def test_tentative_match_leaves_the_bullet_in_the_orphan_list(self):
+    def test_tentative_match_claims_the_bullet(self):
+        # A likely match ages the thread from the line, so the line is
+        # not printed again as one on no list (#642).
         tmp = self.reworded_vault()
         report = sc.thread_report(load_files(tmp), 5, None, tmp)
         orphans = report.split(
             "--- Wrap-up threads not on any thread list ---", 1)[1]
-        self.assertIn("session 3\tVenn drugged in study", orphans)
+        self.assertNotIn("Venn drugged in study", orphans)
 
     def test_no_legend_when_nothing_is_tentative(self):
         report = sc.thread_report(
@@ -592,6 +594,8 @@ class ThreadReportTests(unittest.TestCase):
             "Find the missing ledger\tfirst=7\tlast=7\tage=0\t\n"
             "Repay Bram\tfirst=?\tlast=?\tage=?\t"
             "(not in any wrap-up — check it is still live)\n"
+            "--- Dormant (Campaign Overview) ---\n"
+            "(none)\n"
             "--- Wrap-up threads not on any thread list ---\n"
             "session 5\tThe ledger is still missing"))
 
@@ -736,9 +740,10 @@ class ThreadReportTests(unittest.TestCase):
         self.assertIn("\nRepay Bram\tfirst=", report)
         self.assertNotIn("An old thread", report)
 
-    def test_a_closed_thread_claims_only_its_own_bullet(self):
-        # "found" and "still missing" are close enough to match a live
-        # thread, but not the same thread: the bullet stays for the GM.
+    def test_a_closed_thread_claims_a_close_bullet(self):
+        # "found" and "still missing" match closely: the Resolved line
+        # claims the earlier bullet as a live thread would (the GM closed
+        # it at Reconcile, so it is not left over for them again).
         tmp = self.shared_copy("")
         wrap = (tmp / "Chapters" / "Chapter 4 - Calcutta" / "Sessions"
                 / "Chapter_04_Session_07_Wrap_Up.md")
@@ -749,7 +754,7 @@ class ThreadReportTests(unittest.TestCase):
             encoding="utf-8")
         orphans = self.report(tmp).split(
             "--- Wrap-up threads not on any thread list ---", 1)[1]
-        self.assertIn("session 5\tThe ledger is still missing", orphans)
+        self.assertNotIn("The ledger is still missing", orphans)
 
     def test_a_hidden_shared_thread_is_marked(self):
         tmp = self.shared_copy("<!-- gm-only -->\n- Repay Bram — involves "
@@ -816,7 +821,7 @@ class ThreadReportTests(unittest.TestCase):
         self.assertIn("===== Threads =====", result.stdout)
         self.assertNotIn("Wrap-Up —", result.stdout)
         self.assertNotIn("Active PCs", result.stdout)
-        self.assertNotIn("Campaign Overview", result.stdout)
+        self.assertNotIn("===== Campaign Overview", result.stdout)
 
 
 if __name__ == "__main__":

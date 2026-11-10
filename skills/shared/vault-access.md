@@ -21,7 +21,8 @@ being open.
 | Publish-safety scan (unfenced Keeper content, fence balance; + `--fix` re-nest) | `gma vault-check VAULT gm-leak` |
 | PC body skeleton / Current Status placement / missing or unfilled Stat Sheet | `gma vault-check VAULT pc-body` |
 | A PC's Current Status fields: print them, or rewrite the ones sent in place | `gma vault-write VAULT status PC --show` / `--write` |
-| Threads: add one to the Campaign Overview's Open Threads, move a PC's onto it, close a shared or PC's one into the Wrap-Up's Resolved Threads (dry run first; `--write`) | `gma vault-write VAULT threads [--wrapup W]` |
+| Threads: add one to the Campaign Overview's Open Threads, move a PC's onto it, close one into the Wrap-Up's Resolved Threads, `rest` one on the Overview's Dormant Threads or `wake` it back, `hand` one PC's to another (dry run first; `--write`) | `gma vault-write VAULT threads [--wrapup W]` |
+| Tick Keeper Checklist items and strike answered questions in a Wrap-Up, each with its ruling (dry run first; `--write`) | `gma vault-write VAULT wrapup-settle W` |
 | Wrap-Up conformance (+ `--fix` re-nest) | `gma vault-check VAULT wrapup` |
 | Faults in the notes that change what the site shows (a named note with no page, a stray `%%`, an unclosed fence, a secret name in prose) | `gma vault-check VAULT site-faults` |
 | What the site still hides in the notes a session touched | `gma reveal-scan VAULT INDEX [--also PATH]` |
@@ -29,7 +30,8 @@ being open.
 | Active PC roster | `gma vault-check VAULT active-pcs` |
 | Session-prep context bundle (one call) | `gma session-context` |
 | At-table plan brief | `gma session-context VAULT --play` |
-| Thread ages / decay | `gma session-context VAULT --threads` |
+| Thread ages / decay, and the whole dormant list | `gma session-context VAULT --threads` |
+| The dormant list: threads parked when the party left a place or arc | `gma session-context VAULT --dormant` |
 | Prep bundle, brief form | `gma session-context VAULT --brief` |
 | A prep run's opening read: version, brief bundle, reconcile scan, threads, arcs, scene queue, plans (Step 5) | `gma session-context VAULT --prep` |
 | PC arc slice (Step 12) — replaces per-PC sheet reads | `gma session-context VAULT --arcs` |

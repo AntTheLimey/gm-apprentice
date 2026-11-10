@@ -176,8 +176,8 @@ class StatusWriteTests(unittest.TestCase):
         self.assertIn(
             f"WARNING\t{PC}\t§Current Status/Open threads\tdrops "
             "'Surlish's floor, under the godowns' from Emma's Open threads: "
-            "if it ended, close it with `vw threads close` so it is "
-            "recorded; if it is shared now, `vw threads move`\n", out)
+            "if it ended, keep it on the list for Reconcile's thread step "
+            "to close; if it is shared now, use `vw threads move`\n", out)
         self.assertEqual(out.count("WARNING\t"), 1)
         self.assertNotIn("Surlish", read(vault, PC))
 

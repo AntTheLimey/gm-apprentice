@@ -75,6 +75,10 @@ class Check:
     # One sentence, past tense, for a GM who knows nothing of the system:
     # what changed for them when this check ran.
     plain: str = ""
+    # For a check whose run does more than one thing: (apply-line prefix,
+    # sentence) pairs. The report then says each sentence only when a line
+    # of this run begins with its prefix, instead of the one `plain`.
+    plain_when: tuple[tuple[str, str], ...] = ()
     # For a check that can ask (or has an item that asks): what a yes does,
     # as a consequence ("Moves ... so ..."), and the record's line for a
     # leave ("Kept your own ...").

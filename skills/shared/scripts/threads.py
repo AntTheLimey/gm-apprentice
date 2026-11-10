@@ -26,6 +26,7 @@ from vaultlib import (ANY_LABEL_LINE_RE, BULLET_RE, GM_MARKER_RE,
                       line_headings, marker_re, scan_body)
 
 SECTION = "Open Threads"
+DORMANT = "Dormant Threads"
 RESOLVED = "Resolved Threads"
 # The path to a PC's own list (see `pc_thread_items`).
 PC_PATH = ("Current Status", "**Open threads**")
@@ -33,6 +34,7 @@ PC_PATH = ("Current Status", "**Open threads**")
 _PARTY = "the party"
 _TAIL_RE = re.compile(
     r"^(?P<text>.*)\s+—\s+(?:since\s+(?P<since>[^;]+?);\s*)?"
+    r"(?:dormant\s+since\s+(?P<dormant>[^;]+?);\s*)?"
     r"involves\s+(?P<who>.+?)\s*$")
 _LINK_RE = re.compile(r"\[\[([^\]|#]+?)(?:[|#][^\]]*)?\]\]")
 _LEAD_RE = re.compile(r"^\*\*(.+?)\*\*")
@@ -68,6 +70,9 @@ class SharedThread:
     # `%%` comment), read as `pc_thread_items` reads a PC's: players never
     # see it, so it shares nothing with them.
     hidden: bool = False
+    # A dormant entry's `dormant since …` clause (`Session 9 (left Wu)`);
+    # None for an active thread.
+    dormant: str | None = None
 
 
 def format_shared(text: str, since: str | None,
@@ -77,6 +82,16 @@ def format_shared(text: str, since: str | None,
            if involves else _PARTY)
     clause = f"since {since}; " if since else ""
     return f"- {text} — {clause}involves {who}"
+
+
+def format_dormant(text: str, since: str | None,
+                   involves: list[str] | None, dormant: str) -> str:
+    """The bullet line for a dormant thread: `format_shared`'s shape with
+    `dormant since {dormant}; ` before the `involves` part."""
+    who = (", ".join(f"[[{name}]]" for name in involves)
+           if involves else _PARTY)
+    clause = f"since {since}; " if since else ""
+    return f"- {text} — {clause}dormant since {dormant}; involves {who}"
 
 
 def format_resolved(text: str, evidence: str, label: str) -> str:
@@ -102,20 +117,24 @@ def _parse_body(body: str) -> SharedThread:
         names = [n.strip() for n in _LINK_RE.findall(who)]
         if who.casefold() == _PARTY:
             return SharedThread(tail.group("text").strip(),
-                                tail.group("since"), [], True)
+                                tail.group("since"), [], True,
+                                dormant=tail.group("dormant"))
         if names:
             return SharedThread(tail.group("text").strip(),
-                                tail.group("since"), names, False)
+                                tail.group("since"), names, False,
+                                dormant=tail.group("dormant"))
     return SharedThread(body, None, [], False)
 
 
-def shared_threads(overview_text: str) -> list[SharedThread]:
-    """The threads under the Overview's `## Open Threads` section (see
+def shared_threads(overview_text: str,
+                   section: str = SECTION) -> list[SharedThread]:
+    """The threads under the Overview's `## Open Threads` section (or
+    another level-2 `section`, `DORMANT` for the dormant list; see
     `_shared_span`): one per top-level bullet outside a code fence, read
     as `pc_thread_items` reads a PC's (its lines under it joined into one
     text, `hidden` by the same rule)."""
     lines = _lines(overview_text)
-    return [_shared_of(b)[0] for b in _shared_bullets(lines)]
+    return [_shared_of(b)[0] for b in _shared_bullets(lines, section)]
 
 
 def _shared_of(block: _Block) -> tuple[SharedThread, bool]:
@@ -133,7 +152,8 @@ def _shared_of(block: _Block) -> tuple[SharedThread, bool]:
     return replace(_parse_body(block.text), hidden=block.hidden), False
 
 
-def widen_shared(overview_text: str, text: str, names: list[str]) -> str:
+def widen_shared(overview_text: str, text: str, names: list[str],
+                 section: str = SECTION) -> str:
     """`overview_text` with each of `names` (PC note names) the visible
     shared entry whose text is `text` does not yet involve added to its
     `involves`, the rest of the line kept as written (its `since`, alias
@@ -141,7 +161,7 @@ def widen_shared(overview_text: str, text: str, names: list[str]) -> str:
     gets `— involves …`. KeyError when no visible entry has that text."""
     lines = _lines(overview_text)
     want = " ".join(text.split())
-    for block in _shared_bullets(lines):
+    for block in _shared_bullets(lines, section):
         t, own_tail = _shared_of(block)
         if t.hidden or " ".join(t.text.split()) != want:
             continue
@@ -220,21 +240,24 @@ def _headings(lines: list[str]) -> list[tuple[int, int, str]]:
             in line_headings([raw.rstrip("\r") for raw in lines])]
 
 
-def _shared_span(lines: list[str]) -> tuple[int, int] | None:
+def _shared_span(lines: list[str],
+                 section: str = SECTION) -> tuple[int, int] | None:
     """(heading index, end) of the shared list: the first level-2 heading
-    titled Open Threads in any case, outside a code fence, up to the next
-    heading of level 1 or 2. Every reader and writer of the list (and the
-    publish tool's `sectionRange`) finds it this way: the title matches by
-    case only (`Open  Threads` with two spaces is not it)."""
-    found = find_section("\n".join(lines), [SECTION], level=2, first=True,
+    titled Open Threads (or another `section`) in any case, outside a code
+    fence, up to the next heading of level 1 or 2. Every reader and writer
+    of the list (and the publish tool's `sectionRange`) finds it this way:
+    the title matches by case only (`Open  Threads` with two spaces is not
+    it)."""
+    found = find_section("\n".join(lines), [section], level=2, first=True,
                          trim=False, exact=True)
     return found if isinstance(found, tuple) else None
 
 
-def _shared_bullets(lines: list[str]) -> list[_Block]:
-    """The threads of the shared list: its top-level bullets, each with
-    everything under it (see `_blocks`)."""
-    span = _shared_span(lines)
+def _shared_bullets(lines: list[str],
+                    section: str = SECTION) -> list[_Block]:
+    """The threads of the shared list (or another `section`): its top-level
+    bullets, each with everything under it (see `_blocks`)."""
+    span = _shared_span(lines, section)
     if span is None:
         return []
     return _blocks(lines, span[0], span[1], code=True)
@@ -317,14 +340,18 @@ def _join(lines: list[str], eol: str) -> str:
     return "\n".join(lines)
 
 
-def insert_shared(overview_text: str, line: str) -> str:
-    """Add `line` under `## Open Threads`, creating the section after
-    `## Current Arc` (else before the first `## GM Notes`, else at the end
-    of the note). The section is player-facing, so the insert point is
-    always outside a gm-only fence; a path with no such point gives way to
-    the next, and ValueError means the note has none. An existing section
-    with no such point, or whose heading is itself inside a gm-only fence,
-    is a ValueError too: never a second heading."""
+def insert_shared(overview_text: str, line: str,
+                  section: str = SECTION) -> str:
+    """Add `line` under `## Open Threads` (or another level-2 `section`),
+    creating the section after `## Current Arc` (else before the first
+    `## GM Notes`, else at the end of the note); the dormant list is
+    created straight after `## Open Threads` when that exists outside a
+    gm-only fence, else by those fallbacks. The section is player-facing,
+    so the insert point is always outside a gm-only fence; a path with no
+    such point gives way to the next, and ValueError means the note has
+    none. An existing section with no such point, or whose heading is
+    itself inside a gm-only fence, is a ValueError too: never a second
+    heading."""
     eol = _eol(overview_text)
     lines = _lines(overview_text)
     heads = _headings(lines)
@@ -335,21 +362,25 @@ def insert_shared(overview_text: str, line: str) -> str:
                 return at
         return None
 
-    span = _shared_span(lines)
+    span = _shared_span(lines, section)
     if span is not None:
         idx = span[0]
         end = (None if _states(lines)[idx]
                else _valid_point(lines, idx, span[1]))
         if end is None:
-            raise ValueError("Open Threads has no place outside a gm-only "
+            raise ValueError(f"{section} has no place outside a gm-only "
                              "fence")
         new = [_new(line, eol)]
         if all(_blank(l) for l in lines[idx + 1:end]):
             new.insert(0, _new("", eol))   # an empty section: a blank first
         return _join(_put_after_content(lines, idx, end, new), eol)
     pos = None
+    if section != SECTION:
+        opened = _shared_span(lines)
+        if opened is not None and not _states(lines)[opened[0]]:
+            pos = _valid_point(lines, opened[0], opened[1])
     at = find("current arc")
-    if at is not None:
+    if pos is None and at is not None:
         pos = _valid_point(lines, heads[at][0],
                            _heading_end(lines, heads, at))
     if pos is None:
@@ -359,7 +390,7 @@ def insert_shared(overview_text: str, line: str) -> str:
     if pos is None:
         pos = _valid_point(lines, -1, len(lines))
     if pos is None:
-        raise ValueError("no place outside a gm-only fence for Open Threads")
+        raise ValueError(f"no place outside a gm-only fence for {section}")
     head = lines[:pos]
     while head and _blank(head[-1]):
         head.pop()
@@ -367,7 +398,7 @@ def insert_shared(overview_text: str, line: str) -> str:
     while tail and _blank(tail[0]):
         tail.pop(0)
     blank = _new("", eol)
-    block = [blank, _new(f"## {SECTION}", eol), blank, _new(line, eol)]
+    block = [blank, _new(f"## {section}", eol), blank, _new(line, eol)]
     if any(not _blank(t) for t in tail):
         return _join(head + block + [blank] + tail, eol)
     return _join(head + block + [""], eol)
@@ -476,6 +507,12 @@ def _hidden_lines(lines: list[str]) -> list[bool]:
     return out
 
 
+def has_pc_threads(pc_text: str) -> bool:
+    """Does the PC's `## Current Status` have an Open threads field (see
+    `_pc_span`), empty or not?"""
+    return _pc_span(_lines(pc_text)) is not None
+
+
 def pc_thread_items(pc_text: str) -> list[PcThread]:
     """The threads under a PC's `## Current Status` > `**Open threads:**`
     (see `_pc_span`): its top-level bullets, each with everything under it
@@ -508,6 +545,27 @@ class _Block:
     keep: str | None = None
 
 
+_COMMENT_MARK_RE = re.compile(r"<!--|-->")
+
+
+def _leaves_block(line: str) -> bool:
+    """Does `line` leave a comment open (a `<!--` with no `-->` after it,
+    an odd number of `%%`) or close one opened above it? A comment that
+    opens and closes on the line cannot be split by taking the thread next
+    to it away, so it does not count (a `QA-DISMISSED` marker on its own
+    line is one)."""
+    line = _FENCE_MARKER_RE.sub("", line)
+    inside = False
+    for m in _COMMENT_MARK_RE.finditer(line):
+        if m.group() == "-->":
+            if not inside:
+                return True
+            inside = False
+        else:
+            inside = True
+    return inside or line.count("%%") % 2 == 1
+
+
 def _blocks(lines: list[str], start: int, end: int,
             label: re.Match[str] | None = None,
             code: bool = False) -> list[_Block]:
@@ -534,8 +592,7 @@ def _blocks(lines: list[str], start: int, end: int,
     and the lines under it belong to it as to a bullet at the label's
     indent."""
     hidden = _hidden_lines(lines)
-    near = [any(h in _FENCE_MARKER_RE.sub("", line) for h in _HIDING)
-            for line in lines]
+    near = [_leaves_block(line) for line in lines]
     out: list[_Block] = []
     base: int | None = None
     delim: str | None = None
@@ -619,31 +676,93 @@ def _lazy(line: str) -> bool:
                 or bare.startswith(("```", "~~~", *_HIDING, ">")))
 
 
+_COMMENT_ONLY_RE = re.compile(r"\s*(?:<!--.*?-->\s*|%%.*?%%\s*)+")
+
+
 def remove_pc_thread(pc_text: str, thread: PcThread) -> str:
     """`pc_text` without `thread` (from `pc_thread_items` on this same
     text): its first line and every line under it. An inline thread's
-    label line stays, bare (`**Open threads:**`)."""
+    label line stays without its text. When that leaves the list empty
+    (only blank or comment-only lines before the next field), the label
+    gets the filler other empty fields use (`**Open threads:** \u2014`)."""
     lines = _lines(pc_text)
     if thread.keep is not None:
         cr = "\r" if lines[thread.start].endswith("\r") else ""
-        return "\n".join(lines[:thread.start] + [thread.keep + cr]
-                         + lines[thread.end:])
-    return "\n".join(lines[:thread.start] + lines[thread.end:])
+        lines = (lines[:thread.start] + [thread.keep + cr]
+                 + lines[thread.end:])
+    else:
+        lines = lines[:thread.start] + lines[thread.end:]
+    span = _pc_span(lines)
+    if span is not None:
+        m, at, end = span
+        if not m.group("rest").strip() and all(
+                _blank(l) or _COMMENT_ONLY_RE.fullmatch(l.rstrip("\r"))
+                for l in lines[at + 1:end]):
+            cr = "\r" if lines[at].endswith("\r") else ""
+            lines[at] = m.group("label") + " \u2014" + cr
+    return "\n".join(lines)
 
 
-def remove_shared(overview_text: str, index: int) -> str:
+def add_pc_thread(pc_text: str, text: str) -> str:
+    """`pc_text` with `text` as a new bullet after the last thread on the
+    PC's Open threads (the filler `\u2014`, or a placeholder, after the
+    label is dropped: the list is not empty any more). KeyError for no
+    Open threads field; ValueError for a list that is one inline thread
+    (`**Open threads:** a; b`) or whose end lies in a gm-only fence, where
+    a new bullet would be hidden."""
+    lines = _lines(pc_text)
+    span = _pc_span(lines)
+    if span is None:
+        raise KeyError(PC_PATH[1])
+    m, at, end = span
+    eol = _eol(pc_text)
+    rest = m.group("rest").strip()
+    if rest and not _filler(rest) and not _PLACEHOLDER_RE.match(rest):
+        raise ValueError("the Open threads field is one inline thread")
+    end = _stop_end(lines, at, end)
+    last = end
+    while last > at + 1 and _blank(lines[last - 1]):
+        last -= 1
+    if _states(lines)[last]:
+        raise ValueError("the end of the Open threads list is hidden")
+    existing = [b for b in _blocks(lines, at, end, m)
+                if not _PLACEHOLDER_RE.match(b.text)]
+    if existing:
+        first = lines[existing[0].start]
+        indent = first[:len(first) - len(first.lstrip())]
+    else:
+        indent = m.group("indent") + ("  " if m.group("mark") else "")
+    if rest:
+        lines[at] = m.group("label") + ("\r" if lines[at].endswith("\r")
+                                        else "")
+    bullet = _new(f"{indent}- {text}", eol)
+    return "\n".join(_put_after_content(lines, at + 1, end, [bullet]))
+
+
+def remove_shared(overview_text: str, index: int,
+                  section: str = SECTION) -> str:
     """`overview_text` without shared thread number `index` (as
     `shared_threads` numbers them): its first line and every line under
-    it. KeyError for no Open Threads section, IndexError for no such
-    bullet."""
+    it. When that leaves the section nothing but blank lines, its heading
+    goes too (`insert_shared` makes it again). KeyError for no Open
+    Threads section (or other `section`), IndexError for no such bullet."""
     lines = _lines(overview_text)
-    if _shared_span(lines) is None:
-        raise KeyError(SECTION)
-    found = _shared_bullets(lines)
+    if _shared_span(lines, section) is None:
+        raise KeyError(section)
+    found = _shared_bullets(lines, section)
     if not 0 <= index < len(found):
-        raise IndexError(f"no bullet {index} under {SECTION}")
+        raise IndexError(f"no bullet {index} under {section}")
     block = found[index]
-    return "\n".join(lines[:block.start] + lines[block.end:])
+    lines = lines[:block.start] + lines[block.end:]
+    head, end = _shared_span(lines, section) or (0, 0)
+    if all(_blank(l) for l in lines[head + 1:end]):
+        if end == len(lines):
+            # The last section: the note ends after what came before it.
+            while head > 0 and _blank(lines[head - 1]):
+                head -= 1
+            return _join(lines[:head] + [""], _eol(overview_text))
+        lines = lines[:head] + lines[end:]
+    return "\n".join(lines)
 
 
 def append_resolved(wrapup_text: str, line: str) -> str:

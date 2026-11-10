@@ -124,8 +124,8 @@ its absence as a gap.
 ### Thread Tracker
 
 Threads are tracked inline, not as entity files: the Campaign Overview's
-`## Open Threads` (shared), each PC's `## Current Status` → Open threads,
-and the Session Plan's `## Active Threads`.
+`## Open Threads` (shared) and `## Dormant Threads` (parked), each PC's
+`## Current Status` → Open threads, and the Session Plan's `## Active Threads`.
 Use this format when the GM asks for a thread tracker or a review:
 
 ```markdown
@@ -155,10 +155,15 @@ Ripeness: [Planted / Ripening / Ready / Paid Off / Retired]
 
 ### Dormant Thread Revival
 
-Dormant: untouched for as many sessions as the vault's
-`vault.stale_after_sessions` says; with no vault, three.
+Dormant: parked on the Campaign Overview's `## Dormant Threads` when
+the party left a place or arc (Reconcile does it with the GM,
+`shared/reconcile.md` step 5.5); `gma session-context <vault>
+--dormant` prints the list. An old thread on an active list is not
+dormant: its age is the `STALE` tag's job, a candidate, never a verdict.
 
-- Still relevant? → ask the GM; close it (`vw threads close`) only when the GM retires it
+- Party back that way, or the GM wants something to bite them? →
+  `wake` it back (`gma vault-write <vault> threads`)
+- Over? → close it (`close` from `dormant`) only when the GM says so
 - Connects to current events? → weave back via callback
 - Affects active NPCs/factions? → advance in background,
   let consequences surface naturally

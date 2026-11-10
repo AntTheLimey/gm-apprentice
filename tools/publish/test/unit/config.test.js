@@ -38,13 +38,14 @@ describe('exclude_sections default (issue #144)', () => {
     'Source References',
     'Reconciliation Context',
     'Handoff to Reconcile',
+    'Dormant Threads',
   ];
 
-  it('includes the six reconcile-bookkeeping sections by default', () => {
+  it('includes the reconcile-bookkeeping sections and the dormant list by default', () => {
     assert.deepStrictEqual(defaultOf('exclude_sections'), EXPECTED);
   });
 
-  it('loadPublishConfig uses the six-item default when no vault config is present', () => {
+  it('loadPublishConfig uses the built-in default when no vault config is present', () => {
     const config = loadPublishConfig('/nonexistent/path');
     assert.deepStrictEqual(config.exclude_sections, EXPECTED);
   });

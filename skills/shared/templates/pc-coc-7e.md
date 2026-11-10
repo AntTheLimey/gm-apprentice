@@ -190,7 +190,7 @@ createdSession: ""
 
 {Player-facing; sits outside any gm-only fence. Open threads: this PC's
 own open questions and obligations. Shared ones live in the Campaign
-Overview's Open Threads. A resolved one is closed by wrap-up, never just
+Overview's Open Threads. A resolved one is closed by Reconcile, never just
 deleted. See shared/pc-body-structure.md.}
 
 ## Notes

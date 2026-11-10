@@ -5,6 +5,7 @@
     vault_write.py VAULT wrapup-add WRAPUP [--replace | --append]
                                [--after HEADING]
                                [--write]                                < markdown
+    vault_write.py VAULT wrapup-settle WRAPUP [--write]                 < rows
     vault_write.py VAULT story --wrapup WRAPUP [--label TEXT] [--as-of TEXT]
                                [--date YYYY-MM-DD] [--write]            < entries
     vault_write.py VAULT status PC [--write]                            < fields
@@ -65,6 +66,7 @@ import unicodedata
 from collections import Counter
 from collections.abc import Callable, Collection, Iterable
 from dataclasses import dataclass
+from dataclasses import field as dc_field
 from datetime import date
 from functools import lru_cache
 from pathlib import Path
@@ -90,7 +92,9 @@ LIST_RE = re.compile(r"^\s*[-*+] ")
 DATA_FILES = frozenset({"_meta/prop-hands.json"})
 VERBS = {"WOULD-CREATE": "CREATED", "WOULD-ADD": "ADDED",
          "WOULD-MOVE": "MOVED", "WOULD-CLOSE": "CLOSED",
-         "WOULD-RECORD": "RECORDED"}
+         "WOULD-RECORD": "RECORDED", "WOULD-REST": "RESTED",
+         "WOULD-WAKE": "WOKE", "WOULD-HAND": "HANDED",
+         "WOULD-SETTLE": "SETTLED"}
 
 
 class WriteError(Exception):
@@ -117,6 +121,11 @@ class Batch:
         # Questions that can only be asked once the files are on disk.
         self.after_write: list[Callable[[], None]] = []
         self._listing: dict[str, str] | None = None
+        # `threads`: threads done per kind for the totals line (a thread
+        # counts once, whatever rows it printed), and the vault's thread
+        # lists as the batch found them (see `threads_scope`).
+        self.tally: Counter[str] = Counter()
+        self.scope: ThreadsScope | None = None
 
     def guard(self, rel: str) -> None:
         """Refuse a path that is not a note inside the vault."""
@@ -331,10 +340,15 @@ def emit(batch: Batch, wrote: bool) -> str:
     def count(*verbs: str) -> int:
         return sum(r.split("\t", 1)[0] in verbs for r in rows)
 
-    # `threads` alone reports moves and closes; other totals stay as they were.
+    # `threads` alone reports moves, closes, rests, wakes and hands (the
+    # last four as threads, from its tally); other totals stay as they were.
     extra = "".join(f"{name}: {n}  " for name, n in (
         ("moved", count("WOULD-MOVE", "MOVED")),
-        ("closed", count("WOULD-CLOSE", "CLOSED"))) if n)
+        ("closed", batch.tally["closed"]),
+        ("rested", batch.tally["rested"]),
+        ("woken", batch.tally["woken"]),
+        ("handed", batch.tally["handed"]),
+        ("settled", count("WOULD-SETTLE", "SETTLED"))) if n)
     total = (f"# create: {count('WOULD-CREATE', 'CREATED')}  "
              f"add: {count('WOULD-ADD', 'ADDED')}  skip: {count('SKIP')}  "
              f"{extra}warnings: {count('WARNING')}  errors: {count('ERROR')}")
@@ -1033,6 +1047,123 @@ def cmd_wrapup_add(batch: Batch, args: argparse.Namespace, text: str) -> None:
                               "see this")
     if not placed:
         raise WriteError(f"{rel}: nothing to add")
+
+
+SETTLE_ITEM_RE = re.compile(
+    r"^(?P<indent>[ \t]*)(?P<mark>[-*+]|\d+[.)])[ \t]+"
+    r"(?P<box>\[[ xX]\][ \t]+)?(?P<text>.*)$")
+KEEPER_CHECKLIST = "keeper checklist"
+
+
+def settle_section(lines: list[str], title: str) -> tuple[int, int]:
+    """(first line, end) of the body of the heading, outside a code fence,
+    whose title equals `title` in any case. The body runs to the next
+    heading of any level. Only the sections `--brief` drops settled items
+    from are settled (`session_context.SETTLED_HEADING_RE`: `### Keeper
+    Checklist`, a `###` heading starting `Open Questions`): one settled
+    anywhere else would stay in the bundle, struck through."""
+    import session_context as sc   # it imports this module at its top
+    heads = th._headings(lines)
+    want = title.strip().casefold()
+    named = [n for n, (_idx, _level, found) in enumerate(heads)
+             if found.casefold() == want]
+    for n in named:
+        idx = heads[n][0]
+        if sc.SETTLED_HEADING_RE.match(lines[idx].rstrip("\r")):
+            end = heads[n + 1][0] if n + 1 < len(heads) else len(lines)
+            return idx + 1, end
+    if named:
+        raise WriteError(f"'{title}' is not settled here: only ### Keeper "
+                         f"Checklist and ### Open Questions\u2026 sections "
+                         f"are, the ones the bundle leaves settled items "
+                         f"out of")
+    raise WriteError(f"no section titled '{title}' (only ### Keeper "
+                     f"Checklist and ### Open Questions\u2026 settle)")
+
+
+def settle_items(lines: list[str], start: int,
+                 end: int) -> list[tuple[int, re.Match[str]]]:
+    """(line, match of SETTLE_ITEM_RE) for the list items of a section at
+    its top indent, outside a code fence; nested items are left out."""
+    found = []
+    delim: str | None = None
+    for i in range(start, end):
+        line = lines[i].rstrip("\r")
+        delim, is_fence = vl.fence_step(line, delim)
+        if is_fence or delim is not None:
+            continue
+        m = SETTLE_ITEM_RE.match(line)
+        if m:
+            found.append((i, m))
+    if not found:
+        return []
+    width = [len(m["indent"].expandtabs(4)) for _i, m in found]
+    return [item for item, w in zip(found, width) if w == min(width)]
+
+
+def _unstruck(text: str) -> str:
+    """An item's text without the `~~` a struck item opens with."""
+    return text[2:] if text.startswith("~~") else text
+
+
+def settle_one(lines: list[str], section: str, lead: str,
+               ruling: str) -> str:
+    """Settle the one item of `section` that `lead` names, in `lines`
+    (changed in place); returns the item's text for the row. An item
+    matches when its text, with a leading `[ ] `, the bold markers and a
+    struck item's leading `~~` dropped, starts with `lead`
+    (case-sensitive), or its bold lead (`threads.lead`) equals `lead`."""
+    start, end = settle_section(lines, section)
+    hits = [(i, m) for i, m in settle_items(lines, start, end)
+            if _unstruck(m["text"]).replace("**", "").startswith(lead)
+            or th.lead(_unstruck(m["text"])) == lead]
+    if not hits:
+        raise WriteError(f"'{section}': no item matches '{lead}'")
+    if len(hits) > 1:
+        raise WriteError(f"'{section}': {len(hits)} items match '{lead}'; "
+                         f"use more of its words")
+    i, m = hits[0]
+    text = m["text"].strip()
+    box = (m["box"] or "").strip()
+    if box.lower() == "[x]" or text.startswith("~~"):
+        raise WriteError(f"'{section}': '{lead}' is already settled")
+    checklist = section.strip().casefold() == KEEPER_CHECKLIST
+    ruling = " ".join(ruling.split())
+    cr = "\r" if lines[i].endswith("\r") else ""
+    tick = "[x] " if checklist or box else ""
+    said = ruling if checklist else f"answered: {ruling}"
+    # A text that opens with `~` is escaped: `~~~` would open a code fence.
+    struck = "\\" + text if text.startswith("~") else text
+    lines[i] = (f"{m['indent']}{m['mark']} {tick}~~{struck}~~ "
+                f"\u2014 {said}{cr}")
+    return text
+
+
+def cmd_wrapup_settle(batch: Batch, args: argparse.Namespace,
+                      text: str) -> None:
+    rel = batch.note_named(args.wrapup, vc.WRAP_TYPES, "wrapup")
+    note = batch.read(rel)
+    if vl.entity_type(vl.extract_frontmatter(note) or {}) not in vc.WRAP_TYPES:
+        raise WriteError(f"{rel}: not a Wrap-Up")
+    rows = [ln.split("\t") for ln in text.splitlines() if ln.strip()]
+    if not rows:
+        raise WriteError("no rows on stdin")
+    eol = th._eol(note)
+    lines = th._lines(note)
+    errors: list[str] = []
+    for n, cols in enumerate(rows, 1):
+        try:
+            if len(cols) != 3 or not all(c.strip() for c in cols):
+                raise WriteError("a row is SECTION, LEAD and RULING, "
+                                 "separated by tabs")
+            item = settle_one(lines, cols[0], cols[1].strip(), cols[2])
+        except WriteError as e:
+            errors.append(f"row {n}: {e}")
+            continue
+        batch.row("WOULD-SETTLE", rel, f"\u00a7{cols[0].strip()}", item)
+    if errors:
+        raise WriteError("\nERROR\t".join(errors))
+    batch.put(rel, th._join(lines, eol))
 
 
 STORY_TEMPLATES = ("character-story.md", "_Template_Character_Story.md")
@@ -1844,8 +1975,8 @@ def cmd_status(batch: Batch, args: argparse.Namespace, text: str) -> None:
 def warn_dropped_threads(batch: Batch, rel: str, before: str) -> None:
     """One WARNING per thread on the PC's Open threads before the rewrite
     whose lead (see `threads.lead`) no thread after it has: a rewrite may
-    drop one by mistake, and a thread that ended belongs in a Wrap-Up.
-    Rewording is fine, so this warns and never refuses."""
+    drop one by mistake, and a thread that ended is Reconcile's to close,
+    with the GM. Rewording is fine, so this warns and never refuses."""
     after = [t.text for t in th.pc_thread_items(batch.read(rel))]
     pc = Path(rel).stem
     for thread in th.pc_thread_items(before):
@@ -1853,8 +1984,9 @@ def warn_dropped_threads(batch: Batch, rel: str, before: str) -> None:
         if not th.find_thread(after, name):
             batch.row("WARNING", rel, f"\u00a7{CURRENT_STATUS}/Open threads",
                       f"drops '{name}' from {pc}'s Open threads: if it "
-                      f"ended, close it with `vw threads close` so it is "
-                      f"recorded; if it is shared now, `vw threads move`")
+                      f"ended, keep it on the list for Reconcile's thread "
+                      f"step to close; if it is shared now, use "
+                      f"`vw threads move`")
 
 
 def threads_overview(batch: Batch) -> str:
@@ -1876,7 +2008,12 @@ def threads_who(batch: Batch, who: str) -> list[str] | None:
     names = [n.strip() for n in who.split(",") if n.strip()]
     if not names:
         raise WriteError("no PC named in the involves column")
-    return [Path(find_pc(batch, n)).stem for n in names]
+    out: list[str] = []
+    for name in names:
+        stem = Path(find_pc(batch, name)).stem
+        if all(stem.casefold() != o.casefold() for o in out):
+            out.append(stem)   # a PC named twice is one PC
+    return out
 
 
 def threads_find(bullets: list[str], lead_key: str, where: str) -> int:
@@ -1906,9 +2043,41 @@ def threads_take(batch: Batch, rel: str, lead_key: str,
     return thread
 
 
-def threads_hidden_shared(lead_key: str) -> str:
-    return (f"'{lead_key}' in the Overview's Open Threads is in or next "
+def threads_hidden_shared(lead_key: str, section: str = th.SECTION) -> str:
+    return (f"'{lead_key}' in the Overview's {section} is in or next "
             f"to hidden text; edit it by hand")
+
+
+def threads_take_shared(batch: Batch, overview: str, lead_key: str,
+                        section: str, verb: str) -> th.SharedThread:
+    """Take the shared thread `lead_key` off the Overview's `section`
+    (Open or Dormant Threads) and return it. One in or next to hidden
+    text is refused: taking it out could leave the secret as text and an
+    orphan comment closer."""
+    note = batch.read(overview)
+    found = th.shared_threads(note, section)
+    i = threads_find([t.text for t in found], lead_key, overview)
+    if found[i].hidden:
+        raise WriteError(threads_hidden_shared(lead_key, section))
+    try:
+        batch.put(overview, th.remove_shared(note, i, section))
+    except (KeyError, IndexError):
+        raise WriteError(f"{overview}: cannot take thread '{lead_key}' "
+                         f"off {section}") from None
+    batch.row(verb, overview, f"\u00a7{section}", lead_key)
+    return found[i]
+
+
+def threads_wrapup_session(batch: Batch, wrap_rel: str) -> str:
+    """`Session N` for the Wrap-Up, read as the rest of this file reads
+    one: its `session_number`, else the number in its `session` link."""
+    fm = vl.extract_frontmatter(batch.read(wrap_rel)) or {}
+    number = vl.parse_session_number(fm.get("session_number"))
+    if number is None:
+        number = vl.session_ref_number(fm)
+    if number is None:
+        raise WriteError(f"{wrap_rel}: no session number")
+    return f"Session {number}"
 
 
 def threads_insert(batch: Batch, overview: str, text: str, since: str | None,
@@ -1921,6 +2090,73 @@ def threads_insert(batch: Batch, overview: str, text: str, since: str | None,
             f"{overview}: the Campaign Overview has no place outside a "
             f"GM-only fence for Open Threads") from None
     batch.row(verb, overview, "\u00a7Open Threads", th.lead(text))
+
+
+@dataclass
+class ThreadsScope:
+    """The vault as a `threads` batch found it (see `threads_scope`)."""
+    files: list[tuple[str, str, dict[str, Any]]]
+    chapter: str | None
+    # Read on first use: the Wrap-Up lines on no list, as (session,
+    # bullet), and the lists a `wrapup` row's lead must not be on.
+    unlisted: list[tuple[int, str]] | None = None
+    lists: list[tuple[str, list[str]]] | None = None
+    # Indexes into `unlisted` a row of this batch has already taken.
+    taken: set[int] = dc_field(default_factory=set)
+
+
+def threads_scope(batch: Batch) -> ThreadsScope:
+    """The vault's notes and current chapter as the batch found them, read
+    once a batch. Nothing is written before the batch is applied, so the
+    files on disk are the vault before any row ran."""
+    import session_context as sc   # it imports this module at its top
+    if batch.scope is None:
+        files = list(sc.vault_files(batch.vault))
+        chosen, _warnings = sc.select_session(files, None)
+        batch.scope = ThreadsScope(files,
+                                   chosen["chapter"] if chosen else None)
+    return batch.scope
+
+
+def threads_unlisted(batch: Batch, verb: str,
+                     lead_key: str) -> tuple[int, int, str]:
+    """The Wrap-Up lines on no thread list that `lead_key` names, as one
+    thread: (the first session one appears in, the newest one's session,
+    the newest one's text). Read as the batch found the vault, so a row
+    may close a line another row of the batch has just put on a list in
+    other words; a line one row takes is gone for the rows after it.
+    Refused when the lead is on a list (that thread closes or rests
+    there, and its Wrap-Up lines are claimed by it), or when none match."""
+    import session_context as sc   # it imports this module at its top
+    scope = threads_scope(batch)
+    if scope.unlisted is None:
+        scope.unlisted = sc.unlisted_wrapup_threads(
+            scope.files, scope.chapter, batch.vault)
+        texts = {rel: text for rel, text, _fm in scope.files}
+        note = texts.get(threads_overview(batch), "")
+        scope.lists = [
+            ("the shared list", [t.text for t in th.shared_threads(note)]),
+            ("the dormant list",
+             [t.text for t in th.shared_threads(note, th.DORMANT)])]
+        gone = vl.out_of_play(batch.vault)
+        for rel, text, fm in scope.files:
+            if vl.is_active_pc(rel, fm, gone):
+                scope.lists.append((f"{Path(rel).stem}'s Open threads",
+                                    [t.text for t in th.pc_thread_items(text)]))
+    unlisted = scope.unlisted
+    hits = [i for i in th.find_thread([b for _n, b in unlisted], lead_key)
+            if i not in scope.taken]
+    for name, bullets in scope.lists or []:
+        if th.find_thread(bullets, lead_key):
+            raise WriteError(f"{verb}: '{lead_key}' is on {name}: {verb} "
+                             f"it there")
+    if not hits:
+        raise WriteError(f"{verb}: no Wrap-Up line on no list matches "
+                         f"'{lead_key}'")
+    scope.taken.update(hits)
+    newest = max(hits, key=lambda i: (unlisted[i][0], i))
+    return (min(unlisted[i][0] for i in hits),
+            unlisted[newest][0], unlisted[newest][1])
 
 
 def threads_row(batch: Batch, cols: list[str], wrapup: list[str]) -> None:
@@ -2001,6 +2237,107 @@ def threads_row(batch: Batch, cols: list[str], wrapup: list[str]) -> None:
                           lead_key)
             return
         threads_insert(batch, overview, texts[0], since, names, "WOULD-MOVE")
+    elif verb == "rest":
+        if len(cols) not in (4, 5):
+            raise WriteError("rest needs: rest TAB list TAB lead TAB why "
+                             "[TAB who, for wrapup]")
+        which, lead_key, why = (c.strip() for c in cols[1:4])
+        if not (which and lead_key and why):
+            raise WriteError("rest needs a list, a lead and a reason; "
+                             "one is empty")
+        if len(cols) == 5 and which.casefold() != "wrapup":
+            raise WriteError("rest: WHO is only for a wrapup line; a "
+                             "listed thread keeps whom it involves")
+        old_tool = vc.dormant_threads_tool_too_old(batch.vault)
+        if old_tool is not None:
+            # The site would publish the dormant list until then.
+            raise WriteError(old_tool[1])
+        # `;` ends the clause when the entry is read back.
+        why = " ".join(why.replace(";", ",").split())
+        dormant = f"{threads_wrapup_session(batch, wrapup[0])} ({why})"
+        overview = threads_overview(batch)
+        involves: list[str] | None
+        if which.casefold() == "wrapup":
+            # Every wording of the lead goes dormant as one thread: the
+            # newest words, since the first session that raised it.
+            first, _last, text = threads_unlisted(batch, "rest", lead_key)
+            since = f"Session {first}"
+            involves = (threads_who(batch, cols[4]) if len(cols) == 5
+                        else None)
+        elif which.casefold() == "shared":
+            entry = threads_take_shared(batch, overview, lead_key,
+                                        th.SECTION, "WOULD-REST")
+            since, text = entry.since, entry.text
+            involves = None if entry.party else entry.involves
+        else:
+            import session_context as sc   # it imports this module at its top
+            rel = find_pc(batch, which)
+            text = threads_take(batch, rel, lead_key, "WOULD-REST").text
+            # The first session the threads report ages it from.
+            scope = threads_scope(batch)
+            seen, _mark = sc.match_sessions(
+                text, sc.wrap_up_threads(scope.files, scope.chapter))
+            since = f"Session {min(seen)}" if seen else None
+            involves = [Path(rel).stem]
+        try:
+            batch.put(overview, th.insert_shared(
+                batch.read(overview),
+                th.format_dormant(text, since, involves, dormant),
+                th.DORMANT))
+        except ValueError:
+            raise WriteError(
+                f"{overview}: the Campaign Overview has no place "
+                f"outside a GM-only fence for Dormant Threads") from None
+        batch.row("WOULD-REST", overview, f"\u00a7{th.DORMANT}", lead_key)
+    elif verb == "wake":
+        if len(cols) not in (3, 4):
+            raise WriteError("wake needs: wake TAB lead TAB who [TAB text]")
+        lead_key = cols[1].strip()
+        if not lead_key:
+            raise WriteError("wake: the lead is empty")
+        names = threads_who(batch, cols[2])
+        overview = threads_overview(batch)
+        entry = threads_take_shared(batch, overview, lead_key, th.DORMANT,
+                                    "WOULD-WAKE")
+        # A woken thread lands on a list players read: TEXT, when given,
+        # is how it reads there.
+        text = (cols[3].strip() if len(cols) == 4 and cols[3].strip()
+                else entry.text)
+        if names is not None and len(names) == 1:
+            rel = find_pc(batch, names[0])
+            try:
+                batch.put(rel, th.add_pc_thread(batch.read(rel), text))
+            except (KeyError, ValueError) as e:
+                raise WriteError(
+                    f"{rel}: no place to add the thread on Open threads "
+                    f"({e.args[0] if e.args else e}); edit it by hand"
+                ) from None
+            batch.row("WOULD-WAKE", rel, "\u00a7Current Status/Open threads",
+                      lead_key)
+        else:
+            threads_insert(batch, overview, text, entry.since,
+                           names, "WOULD-WAKE")
+    elif verb == "hand":
+        # A PC's line about another PC's matter goes to that PC's list.
+        if len(cols) != 4:
+            raise WriteError("hand needs: hand TAB from TAB lead TAB to")
+        giver, lead_key, taker = (c.strip() for c in cols[1:])
+        if not (giver and lead_key and taker):
+            raise WriteError("hand needs a PC to take it from, a lead and "
+                             "a PC to give it to; one is empty")
+        src, dst = find_pc(batch, giver), find_pc(batch, taker)
+        if src == dst:
+            raise WriteError(f"hand: '{giver}' and '{taker}' are the same PC")
+        text = threads_take(batch, src, lead_key, "WOULD-HAND").text
+        try:
+            batch.put(dst, th.add_pc_thread(batch.read(dst), text))
+        except (KeyError, ValueError) as e:
+            raise WriteError(
+                f"{dst}: no place to add the thread on Open threads "
+                f"({e.args[0] if e.args else e}); edit it by hand"
+            ) from None
+        batch.row("WOULD-HAND", dst, "\u00a7Current Status/Open threads",
+                  lead_key)
     elif verb == "close":
         if len(cols) != 4:
             raise WriteError("close needs: close TAB list TAB lead TAB "
@@ -2009,37 +2346,36 @@ def threads_row(batch: Batch, cols: list[str], wrapup: list[str]) -> None:
         if not (which and lead_key and evidence):
             raise WriteError("close needs a list, a lead and evidence; "
                              "one is empty")
-        if which.casefold() == "shared":
-            overview = threads_overview(batch)
-            note = batch.read(overview)
-            found = th.shared_threads(note)
-            i = threads_find([t.text for t in found], lead_key, overview)
-            if found[i].hidden:
-                # Taking it out could leave the secret as text and an
-                # orphan comment closer.
-                raise WriteError(threads_hidden_shared(lead_key))
-            try:
-                batch.put(overview, th.remove_shared(note, i))
-            except (KeyError, IndexError):
-                raise WriteError(f"{overview}: cannot take thread "
-                                 f"'{lead_key}' off Open Threads") from None
-            text, label = found[i].text, "shared"
-            batch.row("WOULD-CLOSE", overview, "\u00a7Open Threads", lead_key)
+        if which.casefold() == "wrapup":
+            # Every wording of the lead closes as one line: the newest
+            # words, labelled with their session.
+            _first, last, text = threads_unlisted(batch, "close", lead_key)
+            lines = [th.format_resolved(text, evidence, f"Session {last}")]
         else:
-            rel = find_pc(batch, which)
-            label = Path(rel).stem
-            text = threads_take(batch, rel, lead_key, "WOULD-CLOSE").text
-        line = th.format_resolved(text, evidence, label)
+            if which.casefold() in ("shared", "dormant"):
+                label = which.casefold()
+                section = th.SECTION if label == "shared" else th.DORMANT
+                text = threads_take_shared(
+                    batch, threads_overview(batch), lead_key, section,
+                    "WOULD-CLOSE").text
+            else:
+                rel = find_pc(batch, which)
+                label = Path(rel).stem
+                text = threads_take(batch, rel, lead_key,
+                                    "WOULD-CLOSE").text
+            lines = [th.format_resolved(text, evidence, label)]
         try:
-            batch.put(wrapup[0], th.append_resolved(
-                batch.read(wrapup[0]), line))
+            for line in lines:
+                batch.put(wrapup[0], th.append_resolved(
+                    batch.read(wrapup[0]), line))
         except KeyError:
             raise WriteError(f"{wrapup[0]}: no What Carries Forward section "
                              f"to hold Resolved Threads") from None
         batch.row("WOULD-RECORD", wrapup[0], "\u00a7Resolved Threads",
                   lead_key)
     else:
-        raise WriteError(f"unknown row '{verb}': use add, move or close")
+        raise WriteError(f"unknown row '{verb}': use add, move, close, "
+                         f"rest, wake or hand")
 
 
 def cmd_threads(batch: Batch, args: argparse.Namespace, text: str) -> None:
@@ -2048,21 +2384,34 @@ def cmd_threads(batch: Batch, args: argparse.Namespace, text: str) -> None:
         raise WriteError("no rows on stdin")
     rows = [ln.split("\t") for ln in lines]
     wrapup: list[str] = []
-    if any(r[0].strip().casefold() == "close" for r in rows):
+    needs = {r[0].strip().casefold() for r in rows} & {"close", "rest"}
+    if needs:
         if not args.wrapup:
-            raise WriteError("close needs --wrapup: a closed thread is "
-                             "recorded in the Wrap-Up")
+            raise WriteError(
+                "close needs --wrapup: a closed thread is recorded in the "
+                "Wrap-Up" if "close" in needs else
+                "rest needs --wrapup: the dormant clause names the "
+                "Wrap-Up's session")
         wrapup = [batch.note_named(args.wrapup, vc.WRAP_TYPES, "wrapup")]
     errors: list[str] = []
+    done = {"close": "closed", "rest": "rested", "wake": "woken",
+            "hand": "handed"}
     for n, cols in enumerate(rows, 1):
-        saved = (dict(batch.texts), dict(batch.originals), len(batch.rows))
+        saved = (dict(batch.texts), dict(batch.originals), len(batch.rows),
+                 set(batch.scope.taken) if batch.scope else set())
         try:
             threads_row(batch, cols, wrapup)
         except WriteError as e:
             # A failed row leaves nothing behind for the rows after it.
             batch.texts, batch.originals = saved[0], saved[1]
             del batch.rows[saved[2]:]
+            if batch.scope:
+                batch.scope.taken = saved[3]
             errors.append(f"row {n}: {e}")
+            continue
+        verb = cols[0].strip().casefold()
+        if verb in done:
+            batch.tally[done[verb]] += 1
     if errors:
         raise WriteError("\nERROR\t".join(errors))
 
@@ -3956,6 +4305,23 @@ def build_parser() -> argparse.ArgumentParser:
                           "already exists")
     add.add_argument("--after", help="the heading a new section goes after")
     add.add_argument("--write", action="store_true", help="write it (default: preview)")
+    settle = sub.add_parser(
+        "wrapup-settle", help="tick Keeper Checklist items and strike "
+        "answered questions (stdin rows)",
+        formatter_class=raw, description=(
+            "stdin: one tab-separated row per item: SECTION, LEAD, RULING.\n"
+            "SECTION is the title, any case, of the Wrap-Up's ### Keeper\n"
+            "Checklist or a ### heading starting Open Questions (the ones\n"
+            "the bundle leaves settled items out of; any other is\n"
+            "refused). LEAD names one top-level list item: its text\n"
+            "(bold markers and a leading [ ] dropped) starts with LEAD, or\n"
+            "its bold lead is LEAD. In Keeper Checklist the item becomes\n"
+            "'- [x] ~~item~~ \u2014 RULING'; under Open Questions\n"
+            "'~~item~~ \u2014 answered: RULING'. Nested lines stay. An item\n"
+            "already ticked or struck is refused."))
+    settle.add_argument("wrapup", help="the Wrap-Up: vault-relative, or its name")
+    settle.add_argument("--write", action="store_true",
+                        help="write it (default: preview)")
     story = sub.add_parser(
         "story", help="append story entries (stdin)",
         formatter_class=raw, description=(
@@ -4016,7 +4382,7 @@ def build_parser() -> argparse.ArgumentParser:
     how_status.add_argument("--show", action="store_true", help="print the PC's Current Status fields")
     how_status.add_argument("--write", action="store_true", help="write it (default: preview)")
     threads = sub.add_parser(
-        "threads", help="add, move and close shared threads (stdin rows)",
+        "threads", help="add, move, close, rest, wake and hand threads (stdin rows)",
         formatter_class=raw, description=(
             "stdin: one row per line, fields separated by TAB.\n"
             "  add   shared  SINCE  WHO  TEXT   add to the Overview's Open Threads\n"
@@ -4025,15 +4391,34 @@ def build_parser() -> argparse.ArgumentParser:
             "                                   list involving them all (already\n"
             "                                   there word for word: the copies\n"
             "                                   just go)\n"
-            "  close LIST    LEAD   EVIDENCE    LIST is 'shared' or a PC's note\n"
-            "                                   name; the thread leaves it and is\n"
-            "                                   recorded in the Wrap-Up's\n"
-            "                                   Resolved Threads\n"
+            "  close LIST    LEAD   EVIDENCE    LIST is 'shared', 'dormant' or a PC's\n"
+            "                                   note name; the thread leaves it and\n"
+            "                                   is recorded in the Wrap-Up's\n"
+            "                                   Resolved Threads. 'wrapup': the\n"
+            "                                   Wrap-Up lines on no list with that\n"
+            "                                   lead, recorded as one, in the\n"
+            "                                   newest words\n"
+            "  rest  LIST    LEAD   WHY  [WHO]  LIST is 'shared', 'wrapup' (lines\n"
+            "                                   on no list, as one; WHO, default\n"
+            "                                   party, only here) or a PC's note\n"
+            "                                   name; the thread leaves it for the\n"
+            "                                   Overview's Dormant Threads, with\n"
+            "                                   'dormant since Session N (WHY)', N\n"
+            "                                   the Wrap-Up's session. Waits for a\n"
+            "                                   site tool that hides that list\n"
+            "  wake  LEAD    WHO    [TEXT]      a dormant thread goes back to a\n"
+            "                                   list players read: one PC names\n"
+            "                                   their Open threads; several PCs or\n"
+            "                                   'party', the shared list. TEXT:\n"
+            "                                   how it reads there\n"
+            "  hand  FROM    LEAD   TO          take LEAD off PC FROM's Open threads\n"
+            "                                   and add it, unchanged, to PC TO's\n"
+            "                                   Open threads\n"
             "SINCE is a session label, or - for none. WHO is PC note\n"
             "names separated by commas, or 'party' (for move, every active\n"
             "PC). Any ERROR row writes nothing."))
     threads.add_argument("--wrapup", help="the Wrap-Up that records closed "
-                         "threads (needed by close rows): vault-relative, or its name")
+                         "threads (needed by close and rest rows): vault-relative, or its name")
     threads.add_argument("--write", action="store_true", help="write it (default: preview)")
     log = sub.add_parser(
         "log", help="add log lines to notes (stdin rows)",
@@ -4236,6 +4621,7 @@ def build_parser() -> argparse.ArgumentParser:
 Command = Callable[[Batch, argparse.Namespace, str], None]
 COMMANDS: dict[str, Command] = {"wrapup-new": cmd_wrapup_new,
                                 "wrapup-add": cmd_wrapup_add,
+                                "wrapup-settle": cmd_wrapup_settle,
                                 "story": cmd_story,
                                 "npc-story": cmd_npc_story,
                                 "status": cmd_status,

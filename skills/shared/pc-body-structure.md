@@ -61,7 +61,7 @@ an optional one-line prose lede may precede them. Fields are omitted when empty:
 `Open threads` is the load-bearing field: this PC's own open questions
 and obligations. It carries unresolved items forward across sessions and
 gains items as they arise. Shared threads live in the Campaign
-Overview's Open Threads. A resolved one is closed by wrap-up, never just
+Overview's Open Threads. A resolved one is closed by Reconcile, never just
 deleted. NPC-relationship shifts fold into Open threads rather than a
 separate field.
 

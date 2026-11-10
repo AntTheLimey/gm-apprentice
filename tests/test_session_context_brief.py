@@ -423,5 +423,50 @@ class ArcsCLITests(unittest.TestCase):
         self.assertEqual(r.returncode, 2)
 
 
+class SettledItemsTests(unittest.TestCase):
+    """Settled Keeper Checklist items and answered questions stay out of
+    the brief (#643)."""
+
+    def test_brief_drops_settled_checklist_items(self):
+        body = (
+            "### Keeper Checklist\n\n"
+            "- [x] ~~Rule the bell~~ \u2014 it rings\n"
+            "  - nested note on the bell\n"
+            "- [ ] Name the sexton\n"
+            "- ~~Which door?~~ \u2014 answered: the east\n"
+            "  wrapped on without a marker\n"
+            "- [x] Plain ticked item\n"
+            "- [ ] Pick a port\n\n"
+            "### Open Questions for next time\n\n"
+            "1. ~~Who paid?~~ \u2014 answered: Barker\n"
+            "2. Who sailed?\n\n"
+            "### Other\n\n- [x] kept: not a settled block\n")
+        out = sc.brief_wrapup(body)
+        for gone in ("Rule the bell", "nested note", "Which door",
+                     "wrapped on", "Plain ticked", "Who paid"):
+            self.assertNotIn(gone, out)
+        for kept in ("Name the sexton", "Pick a port", "Who sailed?",
+                     "kept: not a settled block"):
+            self.assertIn(kept, out)
+        self.assertNotIn("(all settled)", out)
+
+    def test_brief_all_settled_stub(self):
+        body = ("### Keeper Checklist\n\n"
+                "- [x] ~~Rule the bell~~ \u2014 it rings\n"
+                "- [x] Done\n\n### Next\n\ntext\n")
+        out = sc.brief_wrapup(body)
+        self.assertEqual(out, "### Keeper Checklist\n(all settled)\n\n"
+                              "### Next\n\ntext\n")
+
+    def test_an_empty_checklist_is_left_alone(self):
+        body = "### Keeper Checklist\n\n### Next\n\ntext\n"
+        self.assertEqual(sc.brief_wrapup(body), body)
+
+    def test_settled_items_in_a_fence_stay(self):
+        body = ("### Keeper Checklist\n\n```\n- [x] example\n```\n"
+                "- [ ] open\n")
+        self.assertIn("- [x] example", sc.brief_wrapup(body))
+
+
 if __name__ == "__main__":
     unittest.main()

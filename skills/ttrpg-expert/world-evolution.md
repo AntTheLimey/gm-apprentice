@@ -51,13 +51,14 @@ together after Step 7; wait for GM confirmation before filing.
 
 ### Step 1: Thread State Updates
 
-Review active threads (`continuity-engine.md`). For each:
-- Active threads resolved this session
-- Dormant threads touched or revived
+Review active threads (`continuity-engine.md`). Reconcile's step 5.5
+(`shared/reconcile.md`) has already settled what ended, what was
+parked and what woke; don't repeat it. For each:
 - Chekhov elements that fired
 - Foreshadowing that paid off or needs planting
-- Dormant threads: recommend revival, retirement,
-  or background advancement
+- Dormant threads (`gma session-context <vault> --dormant`) only where
+  one connects to this session's events or an active faction or NPC:
+  propose its background advancement
 
 ### Step 2: Faction Turns
 

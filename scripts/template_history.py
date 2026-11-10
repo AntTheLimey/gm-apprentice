@@ -21,6 +21,7 @@ here can trace is not kept either.
 
 from __future__ import annotations
 
+import argparse
 import json
 import re
 import subprocess
@@ -132,7 +133,11 @@ def refusal(tags: list[str]) -> str | None:
     return None
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        description="Regenerate skills/shared/template-history.json from the "
+                    "release tags and the working tree's templates.")
+    parser.parse_args(argv)   # --help prints usage and writes nothing
     tags = release_tags()
     problem = refusal(tags)
     if problem:
