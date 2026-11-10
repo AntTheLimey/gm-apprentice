@@ -76,3 +76,26 @@ def test_a_heading_in_a_code_block_is_not_a_block(tmp_path):
     g = write_and_read(tmp_path, text)
     assert "fake" not in g.blocks
     assert "not a block" in g.blocks["oil"]
+
+
+def test_sub_headings_inside_always_stay_in_the_text(tmp_path):
+    text = NOTE.replace(
+        "## Always\nRegency, 1814. No electric light.\n",
+        "## Always\nRegency, 1814.\n### Never\nNo electric light.\n")
+    g = write_and_read(tmp_path, text)
+    assert g.always == "Regency, 1814.\n### Never\nNo electric light."
+    assert "never" not in g.blocks
+
+
+def test_sub_headings_inside_a_block_stay_in_the_text(tmp_path):
+    text = NOTE.replace("### Oil\nDark Romantic oil painting.\n",
+                        "### Oil\nDark.\n#### Light\nCandles only.\n")
+    g = write_and_read(tmp_path, text)
+    assert g.blocks["oil"] == "Dark.\n#### Light\nCandles only."
+    assert "light" not in g.blocks
+
+
+def test_a_note_with_publish_false_reads(tmp_path):
+    g = write_and_read(tmp_path, NOTE.replace(
+        "type: meta\n", "type: meta\npublish: false\n"))
+    assert g.always == "Regency, 1814. No electric light."

@@ -1,5 +1,6 @@
 ---
 type: meta
+publish: false
 tags: [image-guidance]
 ---
 
