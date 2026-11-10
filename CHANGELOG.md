@@ -13,14 +13,14 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ### Added
 
-- Pictures. Ask the apprentice for a portrait, a place, an insignia or a scene picture and it draws it with Google Gemini on your own key, looks at the result, redraws once if it is wrong, and files it: a note's `portrait`, or an embed after the recap paragraph it shows. Likenesses come from portraits already in the vault. Set-up, limits and measured costs are in [docs/images.md](docs/images.md). Nothing is drawn unless you ask; wrap-up and the other skills draw by themselves in a later release.
-- `gma image` (`status`, `key`, `plan`, `draw`, `place`). Spending limits are vault settings under `vault.images` and the tool enforces them: a limit for one attempt, a cap for a batch, a ceiling for the month. Every reply the service was paid for is counted. The key stays on your machine, never in the vault.
-- An Image Guidance note for the campaign's look (`_Templates/_Template_Image_Guidance.md`): what the pictures should show, the style sent with every picture, and named blocks to add by name. It never reaches the player site.
+- Pictures. Ask the apprentice for a portrait, a place, an insignia or a scene picture and it draws it with Google Gemini on your own key, looks at it, redraws once if it is wrong, and files it. Set-up and costs are in [docs/images.md](docs/images.md). Nothing is drawn unless you ask.
+- `gma image` (`status`, `key`, `plan`, `draw`, `place`), with spending limits in the vault's settings under `vault.images` that the tool enforces. The key stays on your machine.
+- An Image Guidance note for the campaign's look, from a new template the update offers to existing vaults. It never reaches the player site.
 
 ### Changed
 
-- A document note may hold a `portrait`. Image ingest now files pictures for heritage and document notes too, under `_attachments/heritages/` and `_attachments/documents/`.
-- Publish tool 1.70.4: the `vault.images` settings.
+- A document note may hold a `portrait`. Image ingest files pictures for heritage and document notes too.
+- Publish tool 1.70.4: the `vault.images` settings, and the Image Guidance note is never published.
 
 ## [1.12.5] — 2026-11-09
 
