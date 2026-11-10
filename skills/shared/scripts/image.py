@@ -7,6 +7,7 @@ Usage:
   image.py plan VAULT REQUESTS [--unprompted] [--source codex|service|self]
   image.py draw VAULT JOB [--redo N "what was wrong"]... [--picture N FILE]...
   image.py place VAULT JOB [--keep N...] [--hold N...] [--write]
+  image.py missing VAULT [--pcs]
 """
 
 from __future__ import annotations
@@ -30,7 +31,7 @@ def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(
         dest="command", required=True,
-        help="what to do: status, key, plan, draw or place")
+        help="what to do: status, key, plan, draw, place or missing")
     st = sub.add_parser("status", help="where picture drawing stands for a vault",
                         epilog='Example: gma image status "<vault>"')
     st.add_argument("vault", type=Path, help="the vault folder")
@@ -40,9 +41,9 @@ def build_parser() -> argparse.ArgumentParser:
                      "(" + ", ".join(sorted(image_keys.ENV)) + ")")
     pl = sub.add_parser(
         "plan", help="work out which pictures to draw, and what they cost",
-        epilog='Example: gma image plan "<vault>" requests.json')
+        epilog="Example: gma image plan \"<vault>\" - <<'EOF' (the requests, then EOF)")
     pl.add_argument("vault", type=Path, help="the vault folder")
-    pl.add_argument("requests", type=Path, help="a JSON file: a list with one "
+    pl.add_argument("requests", type=Path, help="a JSON file (or - to read it from stdin): a list with one "
                     "object per picture (for, subject, and optionally blocks, "
                     "shows, replace, after, name)")
     pl.add_argument("--unprompted", action="store_true",
@@ -87,8 +88,30 @@ def build_parser() -> argparse.ArgumentParser:
                     "(they stay in the job folder)")
     pc.add_argument("--write", action="store_true",
                     help="do it; without this, only say what would happen")
+    ms = sub.add_parser(
+        "missing", help="list the notes that could have a picture and have "
+        "none, for a fill",
+        epilog='Example: gma image missing "<vault>"')
+    ms.add_argument("vault", type=Path, help="the vault folder")
+    ms.add_argument("--pcs", action="store_true",
+                    help="list player characters too (only when the GM "
+                    "includes them)")
     ap.epilog = 'Example: gma image status "<vault>"'
     return ap
+
+
+def missing(vault: Path, pcs: bool) -> int:
+    if not vault.is_dir():
+        print(f"error: not a directory: {vault}", file=sys.stderr)
+        return 2
+    found = image_jobs.missing(vault, pcs)
+    if not found:
+        print("No notes are missing a picture.")
+        return 0
+    for kind, rel in found:
+        print(f"{kind}\t{rel}")
+    print(image_jobs.counted(len(found), "note") + " with no picture")
+    return 0
 
 
 def _today() -> date:
@@ -108,6 +131,12 @@ def status(vault: Path) -> int:
         print(f"codex: {state.line}"
               + (" (can draw with no money counted, if chosen)"
                  if state.state == "chatgpt" else ""))
+    for w in image_jobs.waiting(vault):
+        what = ", ".join(w.notes[:3]) + (
+            f" and {len(w.notes) - 3} more" if len(w.notes) > 3 else "")
+        print(f"waiting: {w.id} for {what}; {w.source}"
+              f"{', unasked' if w.unprompted else ''} ({w.to_draw} to draw, "
+              f"{w.to_place} to look at and place)")
     if lim.service:
         print(f"service: {lim.service}, model: {lim.model or 'none chosen'}")
     else:
@@ -340,6 +369,8 @@ def _dispatch(args: argparse.Namespace) -> int:
         return draw(args.vault, args.job, args.redo, args.picture)
     if args.command == "place":
         return place(args.vault, args.job, args.keep, args.hold, args.write)
+    if args.command == "missing":
+        return missing(args.vault, args.pcs)
     return key(args.service)
 
 

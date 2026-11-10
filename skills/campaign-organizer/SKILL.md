@@ -1,6 +1,6 @@
 ---
 name: campaign-organizer
-description: "Organize TTRPG campaign content into interlinked markdown files with relationship graphs and a chapter/session/scene hierarchy, in an Obsidian vault or plain folder. Use to organize campaign files, extract entities from campaign docs into linked notes, add wiki-links or relationship metadata, set up graph visualization, parse chapter outlines, or manage campaign structure. Trigger on 'organize my campaign', 'link my notes', 'graph my NPCs', 'campaign wiki', 'chapter structure', 'vault', or 'organize this' while working on TTRPG content."
+description: "Organize TTRPG campaign content into interlinked markdown files with relationship graphs and a chapter/session/scene hierarchy, in an Obsidian vault or plain folder. Use to organize campaign files, extract entities from campaign docs into linked notes, add wiki-links or relationship metadata, set up graph visualization, parse chapter outlines, or manage campaign structure. Trigger on 'organize my campaign', 'link my notes', 'graph my NPCs', 'campaign wiki', 'chapter structure', 'vault', 'fill in the missing pictures', or 'organize this' while working on TTRPG content."
 ---
 
 # Campaign Organizer
@@ -102,6 +102,9 @@ Organization, Item, Creature) accept an optional image. File it
 under `_attachments/` and set `portrait:` per
 `shared/vault-structure.md` § Image Attachments (folders, naming,
 formats, body embeds). Entities without images are fine.
+To draw pictures for notes that have none ("fill in the missing
+pictures"), follow "A fill" in `gma llms image`. After an Organize,
+Dissect or Weave pass, if the version check printed `# pictures on:`, then once everything above is done and reported, follow "When no one asked" in `gma llms image` for the notes it created.
 
 ## The Two Layers
 

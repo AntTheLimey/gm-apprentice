@@ -1,5 +1,6 @@
 """gma image: status and key."""
 
+import json
 import sys
 from pathlib import Path
 
@@ -171,6 +172,18 @@ def test_plan_prints_the_job(tmp_path, monkeypatch, capsys):
     assert "2. Nobody: refused" in out
     assert "Estimated total: about" in out and "Job file:" in out
     assert SECRET not in out
+
+
+def test_plan_reads_the_requests_from_stdin(tmp_path, monkeypatch, capsys):
+    import io
+    monkeypatch.setenv("GEMINI_API_KEY", SECRET)
+    v = plan_vault(tmp_path, "gemini-nano-banana-2.1")
+    monkeypatch.setattr(sys, "stdin", io.StringIO(
+        json.dumps([{"for": "Anselm", "subject": "A man."}])))
+    assert image.main(["plan", str(v), "-"]) == 0
+    assert "1. NPCs/Anselm.md: planned, about" in capsys.readouterr().out
+    monkeypatch.setattr(sys, "stdin", io.StringIO("not json"))
+    assert image.main(["plan", str(v), "-"]) == 2
 
 
 def test_plan_with_nothing_to_draw_exits_1(tmp_path, monkeypatch, capsys):
@@ -417,3 +430,94 @@ def test_a_guidance_path_that_is_a_number_is_one_plain_line(command, tmp_path, m
     argv = ["status", str(v)] if command == "status" else ["plan", str(v), str(req)]
     assert image.main(argv) == 2
     assert capsys.readouterr().err == "vault.images.guidance must be the path of a note.\n"
+
+
+def test_missing_prints_rows_and_a_count(tmp_path, capsys):
+    vault = make_vault(tmp_path)
+    for rel, kind in (("NPCs/Ada.md", "npc"), ("Locations/Mill.md", "location"),
+                      ("PCs/Roy.md", "pc")):
+        p = vault / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(f"---\ntype: {kind}\n---\n", encoding="utf-8")
+    assert image.main(["missing", str(vault)]) == 0
+    assert capsys.readouterr().out.splitlines() == [
+        "location\tLocations/Mill.md", "npc\tNPCs/Ada.md",
+        "2 notes with no picture"]
+    assert image.main(["missing", str(vault), "--pcs"]) == 0
+    assert "pc\tPCs/Roy.md" in capsys.readouterr().out
+
+
+def test_missing_with_nothing_to_list(tmp_path, capsys):
+    assert image.main(["missing", str(make_vault(tmp_path))]) == 0
+    assert capsys.readouterr().out == "No notes are missing a picture.\n"
+
+
+def _job(vault: Path, job_id: str, statuses: list[str]) -> None:
+    import image_jobs
+    entries = [image_jobs.Entry(
+        n=i, note=f"NPCs/N{i}.md", kind="npc", prompt="p", refs=[], shape="3:4",
+        pending="", dest="", after=None, replace=False, estimate=None,
+        status=s) for i, s in enumerate(statuses, 1)]
+    image_jobs.save(image_jobs.Job(
+        id=job_id, vault=str(vault), service="codex", model="", priced=False,
+        unprompted=True, spent=0, entries=entries))
+
+
+def test_waiting_names_this_vaults_unfinished_jobs(tmp_path):
+    import image_jobs
+    a, b = make_vault(tmp_path), tmp_path / "other"
+    b.mkdir()
+    _job(a, "20261110-aaaa01", ["kept", "drawn", "drawn", "held"])
+    _job(a, "20261110-aaaa02", ["kept", "held", "refused"])       # finished
+    _job(a, "20261110-aaaa03", ["planned", "failed", "drawn"])
+    _job(b, "20261110-bbbb01", ["planned"])                       # another vault
+    got = [(w.id, w.to_draw, w.to_place) for w in image_jobs.waiting(a)]
+    assert sorted(got) == [("20261110-aaaa01", 0, 2), ("20261110-aaaa03", 2, 1)]
+
+
+def test_waiting_finds_a_job_in_the_temp_folder(tmp_path, monkeypatch):
+    import image_jobs
+    vault = make_vault(tmp_path)
+    monkeypatch.setattr(image_jobs, "_writable",
+                        lambda root: "gm-apprentice-images" in str(root))
+    _job(vault, "20261110-temp01", ["drawn"])
+    assert [w.id for w in image_jobs.waiting(vault)] == ["20261110-temp01"]
+
+
+def test_waiting_skips_a_job_file_it_cannot_read(tmp_path):
+    import image_jobs
+    vault = make_vault(tmp_path)
+    _job(vault, "20261110-good01", ["drawn"])
+    bad = image_jobs.roots()[0] / "20261110-bad001"
+    bad.mkdir(parents=True)
+    (bad / "job.json").write_text("{not json", encoding="utf-8")
+    odd = image_jobs.roots()[0] / "20261110-odd001"
+    odd.mkdir(parents=True)
+    data = json.loads((image_jobs.job_file("20261110-good01")).read_text())
+    data["vault"] = None                        # a hand-edited job file
+    (odd / "job.json").write_text(json.dumps(data), encoding="utf-8")
+    assert [w.id for w in image_jobs.waiting(vault)] == ["20261110-good01"]
+
+
+def test_status_prints_the_waiting_line(tmp_path, capsys):
+    vault = make_vault(tmp_path)
+    _job(vault, "20261110-aaaa01", ["drawn", "drawn", "planned", "kept"])
+    assert image.main(["status", str(vault)]) == 0
+    assert ("waiting: 20261110-aaaa01 for N1, N2, N3 and 1 more; codex, "
+            "unasked (1 to draw, 2 to look at and place)"
+            in capsys.readouterr().out.splitlines())
+
+
+def test_agent_page_carries_the_unasked_and_fill_rules():
+    import vault_check
+    page = (Path(image.__file__).resolve().parents[1] / "gma" / "llms"
+            / "image.md").read_text(encoding="utf-8")
+    assert vault_check.PICTURES_ON.startswith("# pictures on:")
+    assert "`# pictures on:`" in page          # the page names the line it answers
+    assert "Pass `--unprompted` exactly when no one asked" in page
+    assert 'gma image missing "<vault>"' in page
+    assert "the GM's choice, never yours" in page
+    assert "session-play never draws unasked" in page
+    assert "more than 10 are asked for" in page
+    assert "needs no further yes" in page
+    assert "never what GM Notes" in page

@@ -2000,10 +2000,22 @@ def settings(vault: Path, *, site_config: Path | None = None) -> Settings:
             raise SettingsUnavailable(
                 "could not read the vault's settings: the publish tool's "
                 "answer was not in the shape expected") from e
+    return _from_cache(key)
+
+
+def _from_cache(key: tuple[Path, Path | None]) -> Settings:
     read = copy.deepcopy(_SETTINGS_CACHE[key])
     return Settings(
         values=read["values"], origins=read["origins"], faults=read["faults"],
         has_site_block=bool(read["file"].get("hasSiteBlock")))
+
+
+def settings_already_read(vault: Path) -> Settings | None:
+    """`settings(vault)` if this process has already read them, else None:
+    never asks the publish tool, so a caller that must stay quick when the
+    tool cannot be asked pays nothing a second time."""
+    key = (vault.resolve(), None)
+    return _from_cache(key) if key in _SETTINGS_CACHE else None
 
 
 # The vault file's own words, as against a value that came from the site

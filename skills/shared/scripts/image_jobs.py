@@ -15,6 +15,7 @@ import os
 import re
 import secrets
 import shutil
+import sys
 import tempfile
 import unicodedata
 from dataclasses import asdict, dataclass, field
@@ -86,6 +87,7 @@ class Entry:
     usage: dict[str, int] | None = None   # the last billed reply's usage, if it had one
 
 
+UNASKED_MOST = 10    # more pictures than this unasked: offered as a fill
 FREE = ("codex", "self")    # job sources that spend no money
 SOURCES = ("codex", "service", "self")   # what `plan --source` takes
 
@@ -195,6 +197,49 @@ def load(job_id: str) -> Job:
     return job
 
 
+class Waiting(NamedTuple):
+    """A job of this vault that is not finished."""
+    id: str
+    to_draw: int        # planned, or failed and can be tried again
+    to_place: int       # drawn and not yet looked at and placed
+    source: str         # codex, self or the service
+    unprompted: bool
+    notes: list[str]    # the notes it draws for, in order, each once
+
+
+def waiting(vault: Path) -> list[Waiting]:
+    """This vault's jobs that are not finished, newest first, so a later
+    session can carry on with a job a skill left. A job file that cannot be
+    read is passed over."""
+    here = vault.resolve()
+    seen: set[str] = set()
+    found: list[tuple[float, Waiting]] = []
+    for root in roots():
+        try:
+            folders = [d for d in root.iterdir() if d.is_dir()]
+        except OSError:
+            continue
+        for d in folders:
+            if d.name in seen or not (d / "job.json").is_file():
+                continue
+            seen.add(d.name)
+            try:
+                job = load(d.name)
+                if Path(job.vault).resolve() != here:
+                    continue
+                when = (d / "job.json").stat().st_mtime
+            except (Stop, OSError, TypeError, ValueError, RuntimeError):
+                continue
+            to_draw = sum(e.status in ("planned", "failed") for e in job.entries)
+            to_place = sum(e.status == "drawn" for e in job.entries)
+            if to_draw or to_place:
+                notes = list(dict.fromkeys(Path(e.note).stem for e in job.entries))
+                found.append((when, Waiting(job.id, to_draw, to_place,
+                                            job.service, job.unprompted, notes)))
+    found.sort(key=lambda f: (f[0], f[1].id), reverse=True)
+    return [w for _when, w in found]
+
+
 _ID_DATE = re.compile(r"^(\d{4})(\d{2})(\d{2})")
 
 
@@ -235,14 +280,46 @@ def prune(today: date) -> None:
 # --- the requests file ----------------------------------------------------
 
 def read_requests(path: Path) -> list[dict[str, Any]]:
+    """The requests from the file `path`, or from stdin when it is `-` (so
+    an agent needs no requests file, in the vault or anywhere)."""
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        text = (sys.stdin.read() if str(path) == "-"
+                else path.read_text(encoding="utf-8"))
+        data = json.loads(text)
     except FileNotFoundError:
         raise Stop(f"The requests file {path} was not found.") from None
     except (OSError, UnicodeDecodeError, ValueError) as e:
         raise Stop(f"The requests file {path} could not be read as JSON "
                    f"({e.__class__.__name__}).") from None
     return check_requests(data)
+
+
+def missing(vault: Path, pcs: bool) -> list[tuple[str, str]]:
+    """The notes a fill would draw: (kind, vault-relative path) for every
+    note of a kind the vault's `vault.images.kinds` lists (a PC only with
+    `pcs`) whose `portrait` is blank, sorted by kind then path. Scene
+    pictures are never listed (a played session's scenes are their own
+    request). A portrait that names a file, even a missing one, is not
+    blank: replacing it is the GM's to ask for by name. A note `plan` would
+    refuse (its picture file is already there, or its name leaves nothing to
+    call one) is not listed either."""
+    kinds = set(image_money.limits(vault).kinds) - {"scene"}
+    if pcs:
+        kinds.add("pc")
+    found = []
+    for rel, text in vl.vault_files(vault):
+        if rel.startswith(("_meta/", "_attachments/")):
+            continue
+        kind = vl.entity_type(vl.extract_frontmatter(text))
+        if kind not in kinds or kind not in SHAPES:
+            continue
+        portrait, _close, why_not = read_portrait(rel, note_lines(text))
+        if why_not or portrait or not _slug(Path(rel).stem):
+            continue
+        # `plan` refuses a note whose picture file is already there.
+        if not existing_pictures(vault, _dest(kind, rel, None)):
+            found.append((kind, rel))
+    return sorted(found)
 
 
 def check_requests(data: Any) -> list[dict[str, Any]]:
@@ -737,11 +814,19 @@ def plan(vault: Path, requests: list[dict[str, Any]], unprompted: bool,
             raise Stop(unpriced_message(model))
     if unprompted and not lim.auto:
         raise Stop("Drawing without asking is off for this vault.")
+    if unprompted and len(requests) > UNASKED_MOST:
+        raise Stop(f"{counted(len(requests))} were asked for without the GM: "
+                   f"more than {UNASKED_MOST} are never drawn unasked. Offer "
+                   "them to the GM as a fill; nothing was planned.")
     try:
         guidance = image_guidance.read(vault, lim.guidance)
     except (OSError, UnicodeDecodeError, vl.PublishToolUnavailable):
         raise Stop(f"The Image Guidance note at {lim.guidance} could not "
                    "be read.") from None
+    if unprompted and not guidance.found:
+        raise Stop("No Image Guidance note yet, so nothing is drawn without "
+                   "asking: offer to draft it with the GM first. Nothing "
+                   "was planned.")
     month_spent = image_money.spent(vault, today)
     prune(today)
 
@@ -762,7 +847,7 @@ def plan(vault: Path, requests: list[dict[str, Any]], unprompted: bool,
         _plan_one(ctx, e, req)
     _settle(entries, lim, month_spent, priced)
 
-    job = Job(id=job_id, vault=str(vault), service=service,
+    job = Job(id=job_id, vault=str(vault.resolve()), service=service,
               model=model, priced=priced, unprompted=unprompted,
               spent=0.0, entries=entries)
     try:

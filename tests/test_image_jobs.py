@@ -12,6 +12,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent
                        / "skills" / "shared" / "scripts"))
 
+import image_codex  # noqa: E402
 import image_jobs  # noqa: E402
 import image_keys  # noqa: E402
 import tool_cache  # noqa: E402
@@ -748,3 +749,88 @@ def test_a_portrait_that_is_not_a_single_path_is_refused_as_place_refuses_it(
     (tmp_path / "p.png").write_bytes(PNG)
     assert image_place._prepare(v, vault_write.Batch(v), e, lines) is None
     assert lines == [f"{said(e)}; picture 1 was not placed"]
+
+
+# --- the fill's list: notes that could have a picture and have none ------
+
+BUILT_MISSING = [("location", "Locations/Mill.md"),
+                 ("npc", "NPCs/Anselm.md"),
+                 ("npc", "NPCs/Maître Anselme Godinot.md")]
+
+
+def test_missing_lists_blank_portraits_of_drawable_kinds(tmp_path):
+    # Marta has a picture; Ghost's portrait names a missing file (replacing
+    # a set portrait needs the GM to name it; a broken link is campaign-qa's);
+    # Bad and Big name files that are there; Six is a PC.
+    assert image_jobs.missing(build(tmp_path), pcs=False) == BUILT_MISSING
+
+
+def test_missing_includes_pcs_only_when_asked(tmp_path):
+    v = build(tmp_path)
+    assert ("pc", "PCs/Six.md") in image_jobs.missing(v, pcs=True)
+    assert all(t != "pc" for t, _ in image_jobs.missing(v, pcs=False))
+
+
+def test_missing_honours_the_kinds_setting(tmp_path):
+    v = build(tmp_path, config="vault:\n  images:\n    kinds: [location]\n")
+    assert image_jobs.missing(v, pcs=False) == [("location", "Locations/Mill.md")]
+
+
+def test_missing_skips_templates_scenes_odd_portraits_and_untyped(tmp_path):
+    v = build(tmp_path)
+    extra = {
+        "_Templates/_Template_NPC.md": note("npc"),
+        "Scenes/The Mill.md": note("scene"),
+        "NPCs/Listed.md": note("npc", "portrait:\n  - a.png\n"),
+        "NPCs/Untyped.md": "---\nname: x\n---\n# Body\n",
+        "NPCs/Nofront.md": "# Body\n",
+    }
+    for rel, text in extra.items():
+        p = v / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(text, encoding="utf-8")
+    assert image_jobs.missing(v, pcs=False) == BUILT_MISSING
+
+
+def test_missing_leaves_out_a_note_whose_picture_file_is_there(tmp_path):
+    v = build(tmp_path)
+    (v / "_attachments" / "characters" / "anselm.png").write_bytes(PNG)
+    assert ("npc", "NPCs/Anselm.md") not in image_jobs.missing(v, pcs=False)
+    req = {"for": "Anselm", "subject": "x"}
+    assert one(v, req)[1].status == "refused"     # plan agrees
+
+
+UNASKED = ("vault:\n  images:\n    source: codex\n    auto: true\n")
+
+
+def test_more_than_ten_unasked_are_never_planned(tmp_path, monkeypatch):
+    monkeypatch.setattr(image_codex, "login",
+                        lambda: image_codex.Login("chatgpt", "Logged in using ChatGPT"))
+    v = build(tmp_path, config=UNASKED)
+    reqs = [{"for": "Anselm", "subject": f"x{i}"} for i in range(11)]
+    before = set(image_jobs.roots()[0].glob("*")) if image_jobs.roots()[0].exists() else set()
+    with pytest.raises(image_jobs.Stop) as err:
+        image_jobs.plan(v, reqs, True, TODAY)
+    assert "11 pictures were asked for without the GM" in str(err.value)
+    assert "fill" in str(err.value)
+    after = set(image_jobs.roots()[0].glob("*")) if image_jobs.roots()[0].exists() else set()
+    assert after == before                        # no job saved
+    assert image_jobs.plan(v, reqs[:10], True, TODAY).entries
+
+
+def test_unasked_waits_for_the_image_guidance_note(tmp_path, monkeypatch):
+    monkeypatch.setattr(image_codex, "login",
+                        lambda: image_codex.Login("chatgpt", "Logged in using ChatGPT"))
+    v = build(tmp_path, config=UNASKED, guide=None)
+    with pytest.raises(image_jobs.Stop) as err:
+        image_jobs.plan(v, [{"for": "Anselm", "subject": "x"}], True, TODAY)
+    assert "No Image Guidance note yet" in str(err.value)
+    # asked for, it still draws, with no campaign style
+    assert image_jobs.plan(v, [{"for": "Anselm", "subject": "x"}], False, TODAY).entries
+
+
+def test_a_job_records_the_vault_resolved(tmp_path, monkeypatch):
+    v = build(tmp_path)
+    monkeypatch.chdir(v.parent)
+    job = image_jobs.plan(Path("vault"), [{"for": "Anselm", "subject": "x"}], False, TODAY)
+    assert job.vault == str(v.resolve())

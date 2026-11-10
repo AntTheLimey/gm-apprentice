@@ -1090,6 +1090,26 @@ def check_version(vault: Path) -> tuple[list[str], int]:
              f"before touching this vault"], 1)
 
 
+PICTURES_ON = (
+    "# pictures on: drawing without asking is on for this vault; a skill "
+    "whose steps say so draws last (`gma llms image`, \"When no one asked\").")
+
+
+def pictures_line(vault: Path, verdict: str) -> str | None:
+    """`PICTURES_ON` when `vault.images.auto` is on, so the skills learn it
+    from the gate they already run and a vault with drawing off pays
+    nothing. Only after a verdict whose check read the vault's settings
+    (`unmoved` reads them; a MISMATCH vault is updated, then the skill
+    resumes), and only from what that read found: settings that could not
+    be read, or no Node, drop the line without asking the tool again."""
+    if verdict not in ("OK", "MISMATCH", "AHEAD"):
+        return None
+    found = vaultlib.settings_already_read(vault)
+    if found is None:
+        return None
+    return PICTURES_ON if found.get("vault.images.auto") is True else None
+
+
 def list_active_pcs(vault: Path) -> list[str]:
     """The roster the session skills open with, as `PC` rows.
 
@@ -5909,6 +5929,9 @@ def _main(argv: list[str] | None) -> int:
     if args.command == "version":
         rows, code = check_version(args.vault)
         emit("version", rows)
+        line = pictures_line(args.vault, rows[0].split("\t", 1)[0])
+        if line:
+            print(line)
         return code
     if args.command == "active-pcs":
         emit("active-pcs", list_active_pcs(args.vault))
