@@ -37,6 +37,8 @@ SHAPES = {"pc": "3:4", "npc": "3:4", "creature": "3:4", "heritage": "3:4",
 SIZE = "1K"
 JOB_DAYS = 14
 MAX_REF_BYTES = 5 * 1024 * 1024
+THINKING_WHY = (" Thinking is on, which costs more: raise the limit for one "
+                "attempt or turn thinking off to keep likenesses.")
 STATUSES = ("planned", "refused", "trimmed", "drawn", "failed", "kept", "held")
 
 
@@ -421,12 +423,13 @@ def _fit_cost(ctx: _Ctx, e: Entry, refs: list[str]) -> list[str] | None:
         return refs
     lim = ctx.lim
     assert lim.model
-    model, price, chars = lim.model, lim.price, len(e.prompt.encode("utf-8"))
+    model, price = lim.model, lim.price
+    prompt_bytes = len(e.prompt.encode("utf-8"))
 
     def cost(k: int) -> float:
         if price is not None:
             return price
-        got = image_gemini.estimate(model, SIZE, k, chars, lim.thinking)
+        got = image_gemini.estimate(model, SIZE, k, prompt_bytes, lim.thinking)
         assert got is not None
         return got
     fitted = image_money.fit(cost, len(refs), lim.attempt)
@@ -436,7 +439,8 @@ def _fit_cost(ctx: _Ctx, e: Entry, refs: list[str]) -> list[str] | None:
     keep, e.estimate = fitted
     if keep < len(refs):
         e.said.append(f"dropped {len(refs) - keep} reference pictures "
-                      "to stay within the limit for one attempt")
+                      "to stay within the limit for one attempt"
+                      + (THINKING_WHY if lim.thinking else ""))
     return refs[:keep]
 
 

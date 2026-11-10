@@ -241,6 +241,20 @@ def test_thinking_on_plans_the_higher_estimate(tmp_path):
     assert on.estimate > off.estimate
 
 
+def test_dropped_references_say_why_when_thinking_is_on(tmp_path):
+    base = ("vault:\n  images:\n    service: gemini\n"
+            "    model: gemini-nano-banana-2.1\n")
+    shows = {"for": "Anselm", "subject": "x", "shows": ["Marta"]}
+    _, on = one(build(tmp_path / "a", config=base + "    thinking: true\n"), shows)
+    assert on.refs == [] and "dropped 1 reference" in said(on)
+    assert said(on).endswith(
+        " Thinking is on, which costs more: raise the limit for one attempt "
+        "or turn thinking off to keep likenesses.")
+    cfg = base + "    attempt_limit: 3.9\n"
+    _, off = one(build(tmp_path / "b", config=cfg), shows)
+    assert "dropped" in said(off) and "Thinking is on" not in said(off)
+
+
 def test_rule_9_run_cap_trims_the_tail(tmp_path):
     cfg = ("vault:\n  images:\n    service: gemini\n    model: x\n"
            "    price: 4\n    run_cap: 10\n")

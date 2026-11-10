@@ -601,3 +601,41 @@ def test_a_cjk_prompt_estimates_higher_than_a_latin_one():
     latin = image_gemini.estimate(MODEL, "1K", 0, len("a" * 2000))
     cjk = image_gemini.estimate(MODEL, "1K", 0, len(("画" * 2000).encode("utf-8")))
     assert cjk > latin
+
+
+# -- R13: a usage that would price a picture at nothing is not believed -----------
+
+
+def test_a_picture_reported_with_too_few_image_tokens_has_no_usage(fixture_send):
+    _, raw = fixture("gemini-prompt-only.json")
+    reply = json.loads(raw)
+    for mode in reply["usage"]["output_tokens_by_modality"]:
+        if mode["modality"] == "image":
+            mode["tokens"] = 1119
+    fixture_send((200, json.dumps(reply).encode()))
+    assert draw().usage is None
+    fixture_send("gemini-prompt-only.json")
+    assert draw().usage is not None
+    assert draw(size="2K").usage is None    # 1120 tokens is under a 2K picture's 1680
+
+
+def test_a_model_without_rates_keeps_whatever_usage_it_reports(fixture_send):
+    fixture_send("gemini-prompt-only.json")
+    assert draw(model="other").usage == {
+        "input": 17, "image": 1120, "other": 287, "thought": 715}
+
+
+def test_a_billed_refusal_or_error_with_an_empty_usage_has_no_usage(fixture_send):
+    _, raw = fixture("gemini-prompt-only.json")
+    reply = json.loads(raw)
+    reply["steps"][1]["content"] = []
+    reply["usage"] = {"unknown_field": 5}
+    fixture_send((200, json.dumps(reply).encode()))
+    with pytest.raises(image_gemini.Refused) as e:
+        draw()
+    assert e.value.usage is None
+    reply["steps"][1]["content"] = [{"type": "image", "data": "!!!"}]
+    fixture_send((200, json.dumps(reply).encode()))
+    with pytest.raises(image_gemini.ServiceError) as e2:
+        draw()
+    assert e2.value.billed is True and e2.value.usage is None

@@ -148,7 +148,7 @@ const REGISTRY = [
   },
   {
     name: 'vault.images.thinking', type: 'switch', default: false, group: 'images',
-    does: 'Whether the picture service may think before it draws. Off, the apprentice asks for the least thinking the model allows, which costs less and keeps the cost of a picture steady. On, pictures cost more, the cost varies, and the limit for one attempt becomes a likely ceiling and not a guarantee (the cap per run and the month\'s ceiling still count what was really spent); turn it on if likenesses or details suffer',
+    does: 'Whether the picture service may think before it draws. Off, the apprentice asks for the least thinking the model allows, which costs less and keeps the cost of a picture steady. On, pictures cost more, the cost varies, and the limit for one attempt becomes a likely ceiling and not a guarantee (the cap per run and the month\'s ceiling still count what was really spent); turn it on if likenesses or details suffer. At the usual limit for one attempt there is then no room to send likeness pictures, so raise that limit too',
     left_out: 'Off',
   },
   {

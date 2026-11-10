@@ -226,11 +226,13 @@ def _usage(reply: dict[str, Any]) -> dict[str, int] | None:
     for mode in modes if isinstance(modes, list) else []:
         if isinstance(mode, dict) and mode.get("modality") == "image":
             image += _count(mode.get("tokens"))
-    return {"input": _count(use.get("total_input_tokens")),
-            "image": image,
-            "other": max(_count(use.get("total_output_tokens")) - image, 0)
-            + _count(use.get("total_tool_use_tokens")),
-            "thought": _count(use.get("total_thought_tokens"))}
+    counted = {"input": _count(use.get("total_input_tokens")),
+               "image": image,
+               "other": max(_count(use.get("total_output_tokens")) - image, 0)
+               + _count(use.get("total_tool_use_tokens")),
+               "thought": _count(use.get("total_thought_tokens"))}
+    # A usage object holding none of the expected figures is not a report.
+    return counted if any(counted.values()) else None
 
 
 def _clean(text: str, key: str) -> str:
@@ -289,4 +291,16 @@ def draw(model: str, key: str, prompt: str, refs: list[tuple[str, bytes]],
         if status == 400 and not thinking and "thinking level" in message.lower():
             raise NeedsThinking(_clean(message, key))
         raise ServiceError("reply", _clean(message, key))
-    return _read(reply, raw, key)
+    pic = _read(reply, raw, key)
+    return pic._replace(usage=_believed(model, size, pic.usage))
+
+
+def _believed(model: str, size: str, usage: dict[str, int] | None
+              ) -> dict[str, int] | None:
+    """A report that prices a real picture at next to nothing is not believed:
+    for a known model, fewer image tokens than the size always takes give None
+    (the caller then counts its estimate instead)."""
+    rate = RATES.get(model)
+    if usage is None or rate is None:
+        return usage
+    return usage if usage["image"] >= rate.out_tokens.get(size, 0) else None
