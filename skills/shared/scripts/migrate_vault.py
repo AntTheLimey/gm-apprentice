@@ -1267,5 +1267,9 @@ VAULT_CHECKS: list[Check] = [
     # waits for the repin: band 4, asks_site.
     Check("shared-threads", "1.12.3", 4, "shared threads", find_shared_threads,
           asks_site=True, kind="bookkeeping",
-          plain="Moved threads that sat word for word on several PC sheets into the Campaign Overview's Open Threads, once each with the PCs they involve (copies of one already there came off); struck-through threads went to the latest Wrap-Up's Resolved Threads."),
+          plain="Moved threads that sat word for word on several PC sheets into the Campaign Overview's Open Threads, once each with the PCs they involve (copies of one already there came off); struck-through threads went to the latest Wrap-Up's Resolved Threads.",
+          # The apply lines begin "moved" and "closed" (see find_shared_threads).
+          plain_when=(
+              ("moved ", "Moved threads that sat word for word on several PC sheets into the Campaign Overview's Open Threads, once each with the PCs they involve (copies of one already there came off)."),
+              ("closed ", "Struck-through threads went to the latest Wrap-Up's Resolved Threads."))),
 ]

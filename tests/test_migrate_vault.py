@@ -1541,6 +1541,36 @@ class SharedThreadsTests(unittest.TestCase):
                 item.apply(None)
                 self.assertNotIn("missing ledger", self.raw(one, "PCs/A.md"))
 
+    def test_shared_threads_report_without_struck(self):
+        # The report names the Resolved Threads move only when this run
+        # moved a struck-through thread.
+        import update
+        (check,) = [c for c in mv.VAULT_CHECKS if c.name == "shared-threads"]
+
+        def report(notes):
+            v = self.vault(notes)
+            (item,) = mv.find_shared_threads(v)
+            did: dict[str, None] = {}
+            update._did(check, item.apply(None), did)
+            return " ".join(did)
+
+        dupes = {"Campaign Overview.md": ST_OVERVIEW,
+                 "PCs/A.md": st_pc(LEDGER), "PCs/B.md": st_pc(LEDGER)}
+        said = report(dupes)
+        self.assertIn("Open Threads", said)
+        self.assertNotIn("Resolved Threads", said)
+        said = report({
+            **dupes, "PCs/A.md": st_pc(LEDGER, "~~Done~~"),
+            WRAPS + "Chapter_01_Session_03_Wrap_Up.md": st_wrap(3)})
+        self.assertIn("Open Threads", said)
+        self.assertIn("Resolved Threads", said)
+        said = report({
+            "Campaign Overview.md": ST_OVERVIEW,
+            "PCs/A.md": st_pc("~~Done~~"),
+            WRAPS + "Chapter_01_Session_03_Wrap_Up.md": st_wrap(3)})
+        self.assertNotIn("Moved threads", said)
+        self.assertIn("Resolved Threads", said)
+
     def test_crlf_kept(self):
         notes = {
             "Campaign Overview.md": ST_OVERVIEW,

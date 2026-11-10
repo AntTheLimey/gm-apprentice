@@ -675,6 +675,9 @@ def _unreadable(res: UpdateResult, lines: list[str]) -> list[str]:
 def _did(check: Check, lines: list[str], did: dict[str, None]) -> None:
     if check.name in PLAIN_LINES:
         did.update(dict.fromkeys(lines))
+    elif lines and check.plain_when:
+        did.update({said: None for prefix, said in check.plain_when
+                    if any(x.startswith(prefix) for x in lines)})
     elif lines:
         did[check.plain] = None
 
