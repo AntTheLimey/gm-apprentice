@@ -609,3 +609,33 @@ def test_a_billed_refusal_or_error_with_an_empty_usage_has_no_usage(fixture_send
     with pytest.raises(image_gemini.ServiceError) as e2:
         draw()
     assert e2.value.billed is True and e2.value.usage is None
+
+
+# -- a lost reply may have been charged ----------------------------------------
+
+
+def _send_failing_with(monkeypatch, exc):
+    def fake(req, timeout):
+        raise exc
+    _patch_urlopen(monkeypatch, fake)
+    with pytest.raises(image_gemini.ServiceError) as e:
+        image_gemini.SEND(image_gemini.URL, {}, b"{}", 5)
+    assert e.value.kind == "network" and e.value.billed is False
+    return e.value.maybe_billed
+
+
+def test_failures_before_anything_is_sent_cannot_have_been_charged(monkeypatch):
+    import errno
+    import socket
+    for reason in (socket.gaierror(8, "no such host"), ConnectionRefusedError(),
+                   OSError(errno.ENETUNREACH, "no route")):
+        assert _send_failing_with(monkeypatch, urllib.error.URLError(reason)) is False
+
+
+def test_failures_after_sending_or_unclear_may_have_been_charged(monkeypatch):
+    assert _send_failing_with(monkeypatch, TimeoutError("slow")) is True
+    assert _send_failing_with(monkeypatch, urllib.error.URLError(TimeoutError())) is True
+    assert _send_failing_with(monkeypatch, http.client.IncompleteRead(b"x")) is True
+    assert _send_failing_with(monkeypatch, http.client.RemoteDisconnected("gone")) is True
+    assert _send_failing_with(monkeypatch, ConnectionResetError()) is True
+    assert _send_failing_with(monkeypatch, urllib.error.URLError("who knows")) is True

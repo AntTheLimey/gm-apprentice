@@ -200,7 +200,13 @@ def find_key(service: str) -> str:
     return found[0]
 
 
-def _unpriced_message(model: str) -> str:
+def is_priced(model: str, price: float | None) -> bool:
+    """Whether the cost of a picture can be worked out: the GM stated a price,
+    or the adapter has rates for the model. The one rule `plan` and `draw` share."""
+    return price is not None or image_gemini.estimate(model, SIZE, 0, 0) is not None
+
+
+def unpriced_message(model: str) -> str:
     return (f"The apprentice does not know what {model} costs, so it cannot "
             "limit spending on it: the limit per attempt, the cap per run and "
             "the month's ceiling will not apply. To draw anyway: gma publish "
@@ -519,10 +525,9 @@ def plan(vault: Path, requests: list[dict[str, Any]], unprompted: bool,
         raise Stop("Choose a picture service and model first: gma publish "
                    "settings set vault.images.service gemini …")
     find_key(lim.service)
-    priced = (lim.price is not None
-              or image_gemini.estimate(lim.model, SIZE, 0, 0) is not None)
+    priced = is_priced(lim.model, lim.price)
     if not priced and not lim.unpriced:
-        raise Stop(_unpriced_message(lim.model))
+        raise Stop(unpriced_message(lim.model))
     if unprompted and not lim.auto:
         raise Stop("Drawing without asking is off for this vault.")
     try:

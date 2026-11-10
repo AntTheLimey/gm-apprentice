@@ -185,6 +185,7 @@ def draw(vault: Path, job_id: str, redo: list[list[str]]) -> int:
         print(f"error: not a directory: {vault}", file=sys.stderr)
         return 2
     notes: dict[int, str] = {}
+    result = image_draw.DrawResult()
     try:
         for n_text, what in redo:
             if not n_text.isdecimal():
@@ -196,19 +197,26 @@ def draw(vault: Path, job_id: str, redo: list[list[str]]) -> int:
             notes[int(n_text)] = what
         job = image_jobs.load(job_id)
         image_place.check_vault(job, vault)
-        result = image_draw.draw(job, notes, _today())
+        try:
+            image_draw.draw(job, notes, _today(), result)
+        finally:
+            # Whatever happens, what was already drawn and paid for is shown.
+            for line in result.lines:
+                print(line)
     except image_jobs.Stop as e:
         print(str(e), file=sys.stderr)
         return 2
     except (vaultlib.StateUnreadable, vaultlib.SettingsUnavailable) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
-    for line in result.lines:
-        print(line)
-    drawn = f"This run: {result.drawn} pictures drawn, {result.cents:.2f} cents"
-    if result.unknown:
-        drawn += f", and {result.unknown} paid for at an unknown price"
-    print(drawn)
+    pictures = f"{result.drawn} picture{'' if result.drawn == 1 else 's'}"
+    if result.unknown and result.cents == 0:
+        print(f"This run: {pictures} drawn at an unknown price")
+    else:
+        drawn = (f"This run: {pictures} drawn, {result.cents:.2f} cents")
+        if result.unknown:
+            drawn += f", and {result.unknown} paid for at an unknown price"
+        print(drawn + f" (this job so far: {result.job_cents:.2f} cents)")
     try:
         month = image_money.spent(vault, _today())
         unpriced = image_money.unpriced_count(vault, _today())

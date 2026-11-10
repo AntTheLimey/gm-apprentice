@@ -11,7 +11,9 @@ import base64
 import http.client
 import json
 import math
+import errno
 import re
+import socket
 import urllib.error
 import urllib.request
 from typing import Any, NamedTuple
@@ -40,12 +42,16 @@ class ServiceError(Exception):
 
     def __init__(self, kind: str, message: str,
                  usage: dict[str, int] | None = None,
-                 billed: bool = False) -> None:
+                 billed: bool = False, maybe_billed: bool = False) -> None:
         super().__init__(message)
         self.kind = kind
         self.message = message
         self.usage = usage      # the reply's usage, when it had one
         self.billed = billed    # True when the service answered 200: it charged
+        # True when the request may have reached the service and the reply was
+        # lost, so it may have charged. False only for failures that can happen
+        # before anything is sent (no address, refused, no route).
+        self.maybe_billed = maybe_billed
 
 
 def request(model: str, prompt: str, refs: list[tuple[str, bytes]],
@@ -73,6 +79,19 @@ def headers(key: str) -> dict[str, str]:
             "Api-Revision": API_REVISION}
 
 
+_NOT_SENT = (errno.ENETUNREACH, errno.EHOSTUNREACH, errno.ENETDOWN,
+             errno.EHOSTDOWN, errno.ECONNREFUSED)
+
+
+def _before_sending(reason: object) -> bool:
+    """Whether a URLError reason can only happen before the request is sent.
+    Anything not recognised counts as possibly sent."""
+    if isinstance(reason, (socket.gaierror, ConnectionRefusedError)):
+        return True
+    return (isinstance(reason, OSError) and not isinstance(reason, TimeoutError)
+            and reason.errno in _NOT_SENT)
+
+
 def _send(url: str, hdrs: dict[str, str], body: bytes,
           timeout: int) -> tuple[int, bytes]:
     req = urllib.request.Request(url, data=body, headers=hdrs, method="POST")
@@ -84,13 +103,17 @@ def _send(url: str, hdrs: dict[str, str], body: bytes,
             return err.code, err.read()
         except (http.client.HTTPException, OSError) as bad:
             raise ServiceError(
-                "network", f"the reply was cut short: {type(bad).__name__}") from None
+                "network", f"the reply was cut short: {type(bad).__name__}",
+                maybe_billed=True) from None
     except urllib.error.URLError as err:
-        raise ServiceError("network", f"could not reach the service: {err.reason}") from None
+        raise ServiceError("network", f"could not reach the service: {err.reason}",
+                           maybe_billed=not _before_sending(err.reason)) from None
     except http.client.HTTPException as err:
-        raise ServiceError("network", f"the reply was cut short: {type(err).__name__}") from None
+        raise ServiceError("network", f"the reply was cut short: {type(err).__name__}",
+                           maybe_billed=True) from None
     except (TimeoutError, OSError) as err:
-        raise ServiceError("network", f"the connection failed: {type(err).__name__}") from None
+        raise ServiceError("network", f"the connection failed: {type(err).__name__}",
+                           maybe_billed=True) from None
 
 
 SEND = _send   # tests replace this

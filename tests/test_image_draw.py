@@ -131,7 +131,8 @@ def test_draws_every_planned_picture_once(tmp_path, monkeypatch, capsys):
     assert saved.spent == pytest.approx(month(vault), abs=1e-3)
     out = capsys.readouterr().out
     assert "1. NPCs/P1.md: drawn," in out and "01.jpg, 3.59 cents" in out
-    assert "This run: 3 pictures drawn, 10.76 cents" in out
+    assert ("This run: 3 pictures drawn, 10.76 cents "
+                                  "(this job so far: 10.76 cents)") in out
     assert "This month: 10.76 of 2000 cents" in out
 
 
@@ -154,7 +155,7 @@ def test_a_cut_off_run_resumes_without_repaying(tmp_path, monkeypatch, capsys):
     assert len(send.calls) == 6                       # three failures stop the run
     out = capsys.readouterr().out
     assert "allow network access for gma image draw." in out
-    assert "nothing was charged" in out
+    assert "nothing was charged" not in out
     saved = reload(job)
     assert [e.status for e in saved.entries].count("drawn") == 3
     assert [e.attempts for e in saved.entries[3:]] == [0] * 6   # nothing paid, nothing used
@@ -188,10 +189,11 @@ def test_a_refusal_is_reported_and_the_rest_draw(tmp_path, monkeypatch, capsys):
     assert len(send.calls) == 3
     saved = reload(job)
     assert [e.status for e in saved.entries] == ["drawn", "refused", "drawn"]
-    assert saved.entries[1].said[-1] == "the service declined: I can't draw that"
+    assert saved.entries[1].said[-2] == "the service declined: I can't draw that"
     assert pending_files(job) == ["01.jpg", "03.jpg"]
-    assert "2. NPCs/P2.md: refused, the service declined: I can't draw that" \
-        in capsys.readouterr().out
+    assert ("2. NPCs/P2.md: refused, the service declined: I can't draw that; "
+            "plan it again with a different description") in capsys.readouterr().out
+    assert saved.entries[1].said[-1] == "plan it again with a different description"
 
 
 def test_a_refusal_is_counted(tmp_path, monkeypatch):
@@ -310,7 +312,7 @@ def test_unpriced_draws_and_counts_pictures(tmp_path, monkeypatch, capsys):
     assert saved.spent == 0
     out = capsys.readouterr().out
     assert "drawn, " in out and "cost unknown" in out
-    assert "This run: 3 pictures drawn, 0.00 cents, and 3 paid for at an unknown price" in out
+    assert "This run: 3 pictures drawn at an unknown price" in out
     assert "This month: 0.00 of 2000 cents, and 3 pictures at an unknown price" in out
 
 
@@ -554,7 +556,8 @@ def test_the_report_shows_two_decimals(tmp_path, monkeypatch, capsys):
     script(monkeypatch, fixture(OK))
     run(vault, job)
     out = capsys.readouterr().out
-    assert "4.50 cents" in out and "This run: 1 pictures drawn, 4.50 cents" in out
+    assert "4.50 cents" in out and ("This run: 1 picture drawn, 4.50 cents "
+                                  "(this job so far: 4.50 cents)") in out
 
 
 def test_a_month_count_that_cannot_be_updated_stops_the_run(tmp_path, monkeypatch, capsys):
@@ -579,3 +582,238 @@ def test_an_unreadable_month_count_stops_before_any_call(tmp_path, monkeypatch, 
     assert run(vault, job) == 1
     assert send.calls == []
     assert "the month's count could not be read" in capsys.readouterr().out
+
+
+# -- fix round 1 -----------------------------------------------------------------
+
+
+def after_first_draw(tmp_path, monkeypatch, *more, config=CONFIG):
+    """A one-picture job drawn once; `more` are the next replies."""
+    vault, job = start(tmp_path, count=1, config=config)
+    script(monkeypatch, fixture(OK))
+    assert run(vault, job) == 0
+    first = (image_jobs.folder(job.id) / "01.jpg").read_bytes()
+    send = script(monkeypatch, *more)
+    return vault, job, first, send
+
+
+def check_earlier_picture_kept(vault, job, first, capsys, attempts=2):
+    e = reload(job).entries[0]
+    assert e.status == "drawn" and e.ext == "jpg" and e.attempts == attempts
+    assert (image_jobs.folder(job.id) / "01.jpg").read_bytes() == first
+    assert pending_files(job) == ["01.jpg"]
+    assert e.said[-1].startswith("the redraw failed (")
+    assert e.said[-1].endswith("); the earlier picture is kept")
+    assert reload(job).spent == pytest.approx(month(vault), abs=1e-3)
+    assert month(vault) > OK_CENTS * 1.5          # the failed redraw was paid for
+    capsys.readouterr()
+    assert image.main(["place", str(vault), job.id, "--keep", "1"]) == 0
+    assert "Nothing was changed" in capsys.readouterr().out    # it can still be kept
+
+
+def test_a_refused_redo_keeps_the_earlier_picture(tmp_path, monkeypatch, capsys):
+    vault, job, first, send = after_first_draw(
+        tmp_path, monkeypatch, derived(content=[{"type": "text", "text": "no thanks"}]))
+    assert run(vault, job, "--redo", "1", "wrong") == 1
+    assert len(send.calls) == 1
+    check_earlier_picture_kept(vault, job, first, capsys)
+    assert "the service declined: no thanks" in reload(job).entries[0].said[-1]
+
+
+def test_a_billed_error_on_a_redo_keeps_the_earlier_picture(tmp_path, monkeypatch, capsys):
+    broken = derived(data=base64.b64encode(b"not a picture at all").decode())
+    vault, job, first, send = after_first_draw(tmp_path, monkeypatch, broken)
+    assert run(vault, job, "--redo", "1", "wrong") == 1
+    check_earlier_picture_kept(vault, job, first, capsys)
+    assert run(vault, job) == 0                      # a plain draw leaves it be
+    assert len(send.calls) == 1
+
+
+def test_a_lost_reply_on_a_redo_keeps_the_earlier_picture(tmp_path, monkeypatch, capsys):
+    lost = image_gemini.ServiceError("network", "the reply was cut short: IncompleteRead",
+                                     maybe_billed=True)
+    vault, job, first, send = after_first_draw(tmp_path, monkeypatch, lost)
+    assert run(vault, job, "--redo", "1", "wrong") == 1
+    check_earlier_picture_kept(vault, job, first, capsys)
+
+
+def test_a_lost_reply_is_counted_at_the_estimate_and_uses_an_attempt(tmp_path, monkeypatch, capsys):
+    vault, job = start(tmp_path, count=1)
+    estimate = job.entries[0].estimate
+    script(monkeypatch, image_gemini.ServiceError(
+        "network", "the reply was cut short: IncompleteRead", maybe_billed=True))
+    assert run(vault, job) == 1
+    e = reload(job).entries[0]
+    assert e.status == "failed" and e.attempts == 1 and e.cost == pytest.approx(estimate)
+    assert month(vault) == pytest.approx(estimate)
+    out = capsys.readouterr().out
+    assert (f"the reply was lost; it may have been charged, so it is counted at "
+            f"{estimate:.2f} cents to be safe") in out
+    assert "nothing was charged" not in out
+    assert "allow network access for gma image draw." in out
+
+
+def test_a_lost_reply_cannot_be_resent_past_the_attempts_across_runs(tmp_path, monkeypatch, capsys):
+    vault, job = start(tmp_path, count=1)
+    send = script(monkeypatch, image_gemini.ServiceError(
+        "network", "the connection failed: TimeoutError", maybe_billed=True))
+    for _ in range(4):
+        run(vault, job)
+    assert len(send.calls) == 2                       # 1 + redraws
+    assert reload(job).entries[0].attempts == 2
+    assert "used all its attempts (the vault allows 2)" in capsys.readouterr().out
+
+
+def test_an_unpriced_lost_reply_counts_one_picture_at_an_unknown_price(tmp_path, monkeypatch, capsys):
+    cfg = ("vault:\n  images:\n    service: gemini\n    model: mystery\n"
+           "    unpriced: true\n")
+    vault, job = start(tmp_path, count=1, config=cfg)
+    script(monkeypatch, image_gemini.ServiceError("network", "x", maybe_billed=True))
+    run(vault, job)
+    assert image_money.unpriced_count(vault, TODAY) == 1 and month(vault) == 0
+    assert "so it is counted as one picture at an unknown price" in capsys.readouterr().out
+
+
+def test_a_failure_before_sending_is_not_counted(tmp_path, monkeypatch, capsys):
+    vault, job = start(tmp_path, count=1)
+    script(monkeypatch, image_gemini.ServiceError("network", "could not reach the service: refused"))
+    run(vault, job)
+    assert month(vault) == 0 and reload(job).entries[0].attempts == 0
+    assert "nothing was charged" not in capsys.readouterr().out
+
+
+def test_a_job_planned_unpriced_is_checked_when_the_price_setting_has_gone(tmp_path, monkeypatch, capsys):
+    cfg = ("vault:\n  images:\n    service: gemini\n    model: mystery\n"
+           "    unpriced: true\n")
+    vault, job = start(tmp_path, count=2, config=cfg)
+    set_config(vault, cfg.replace("unpriced: true", "unpriced: false"))
+    send = script(monkeypatch, fixture(OK))
+    assert run(vault, job) == 2
+    assert "does not know what mystery costs" in capsys.readouterr().err
+    assert send.calls == []
+
+
+def test_a_job_planned_unpriced_gets_every_fence_once_a_price_is_stated(tmp_path, monkeypatch, capsys):
+    cfg = ("vault:\n  images:\n    service: gemini\n    model: mystery\n"
+           "    unpriced: true\n")
+    vault, job = start(tmp_path, count=2, config=cfg)
+    assert [e.estimate for e in job.entries] == [None, None]
+    set_config(vault, cfg + "    price: 9\n")             # over the 5 cent attempt limit
+    send = script(monkeypatch, fixture(OK))
+    assert run(vault, job) == 1
+    assert send.calls == []
+    assert "would pass the limit for one attempt" in capsys.readouterr().out
+    set_config(vault, cfg + "    price: 4\n    run_cap: 5\n")
+    assert run(vault, job) == 1
+    assert len(send.calls) == 1                       # the second would pass the cap
+    e = reload(job).entries
+    assert e[0].estimate == 4 and e[0].cost == 4 and e[1].status == "planned"
+    assert "the cap for one run (5 cents) would be passed" in capsys.readouterr().out
+
+
+def test_a_priced_job_turned_unpriced_keeps_its_fences(tmp_path, monkeypatch):
+    vault, job = start(tmp_path, count=1)
+    set_config(vault, CONFIG + "    attempt_limit: 1\n")
+    send = script(monkeypatch, fixture(OK))
+    assert run(vault, job) == 1 and send.calls == []
+
+
+def test_the_job_on_disk_shows_the_attempt_and_spend_before_the_picture_is_written(tmp_path, monkeypatch):
+    vault, job = start(tmp_path, count=1)
+    on_disk = {}
+
+    def watch(self, e, pic):
+        saved = reload(job)
+        on_disk.update(attempts=saved.entries[0].attempts, spent=saved.spent,
+                       status=saved.entries[0].status)
+        return False
+    monkeypatch.setattr(image_draw._Run, "keep_picture", watch)
+    script(monkeypatch, fixture(OK))
+    run(vault, job)
+    assert on_disk == {"attempts": 1, "spent": pytest.approx(OK_CENTS, abs=0.01),
+                       "status": "planned"}
+
+
+def test_thinking_forced_by_the_model_does_not_say_turn_thinking_off(tmp_path, monkeypatch, capsys):
+    vault = make_vault(tmp_path, 1)
+    for i in range(4):
+        (vault / "NPCs" / f"R{i}.md").write_text(
+            f"---\ntype: npc\nportrait: _attachments/characters/r{i}.png\n---\n",
+            encoding="utf-8")
+        (vault / "_attachments" / "characters").mkdir(parents=True, exist_ok=True)
+        (vault / "_attachments" / "characters" / f"r{i}.png").write_bytes(PNG)
+    job = image_jobs.plan(vault, [{"for": "P1", "subject": "x",
+                                   "shows": [f"R{i}" for i in range(4)]}], False, TODAY)
+    assert len(job.entries[0].refs) == 4
+    job.needs_thinking = True
+    image_jobs.save(job)
+    send = script(monkeypatch, fixture("gemini-prompt-only.json"))
+    assert run(vault, job) == 0
+    out = capsys.readouterr().out
+    assert ("This model will not draw without thinking, which costs more: raise "
+            "the limit for one attempt to keep likenesses.") in out
+    assert "turn thinking off" not in out
+    assert len(send.calls[0]["input"]) < 5
+
+
+def test_a_later_picture_that_does_not_fit_with_forced_thinking_gets_the_sentence(tmp_path, monkeypatch, capsys):
+    vault, job = start(tmp_path, count=1, config=CONFIG + "    attempt_limit: 4.5\n")
+    job.needs_thinking = True
+    image_jobs.save(job)
+    send = script(monkeypatch, fixture(OK))
+    assert run(vault, job) == 1 and send.calls == []
+    assert ("this model will not draw without thinking, and with it this "
+            "picture would pass the limit for one attempt") in capsys.readouterr().out
+
+
+def test_an_escaping_error_does_not_lose_the_report(tmp_path, monkeypatch, capsys):
+    vault, job = start(tmp_path)
+    script(monkeypatch, fixture(OK), RuntimeError("surprise"))
+    with pytest.raises(RuntimeError):
+        run(vault, job)
+    out = capsys.readouterr().out
+    assert "1. NPCs/P1.md: drawn," in out
+    assert reload(job).entries[0].status == "drawn" and month(vault) > 0
+
+
+def test_a_line_already_said_is_not_added_again(tmp_path, monkeypatch):
+    vault, job = start(tmp_path, count=1)
+    script(monkeypatch, image_gemini.ServiceError("reply", "the service is busy"))
+    for _ in range(3):
+        run(vault, job)
+    said = reload(job).entries[0].said
+    assert said.count("the service is busy") == 1
+
+
+def test_the_run_cap_stops_a_call_that_the_plan_allowed(tmp_path, monkeypatch, capsys):
+    vault, job = start(tmp_path)
+    assert [e.status for e in job.entries] == ["planned"] * 3
+    set_config(vault, CONFIG + "    run_cap: 8\n")      # lowered after the plan
+    send = script(monkeypatch, fixture(OK))
+    assert run(vault, job) == 1
+    assert len(send.calls) == 2
+    assert "3. NPCs/P3.md: not drawn, the cap for one run (8 cents) would be passed" \
+        in capsys.readouterr().out
+
+
+def test_a_redo_that_would_take_the_job_past_the_run_cap_is_not_sent(tmp_path, monkeypatch, capsys):
+    vault, job = start(tmp_path, count=1, config=CONFIG + "    run_cap: 7\n")
+    send = script(monkeypatch, fixture(OK))
+    run(vault, job)
+    assert run(vault, job, "--redo", "1", "wrong") == 1      # 3.59 + ~3.8 is over 7
+    assert len(send.calls) == 1
+    assert "the cap for one run (7 cents) would be passed" in capsys.readouterr().out
+    assert reload(job).entries[0].status == "drawn"
+
+
+def test_a_declined_first_attempt_is_final_for_the_job(tmp_path, monkeypatch, capsys):
+    vault, job = start(tmp_path, count=1)
+    send = script(monkeypatch, derived(content=[{"type": "text", "text": "no"}]))
+    assert run(vault, job) == 1
+    before = month(vault)
+    assert run(vault, job) == 0                       # nothing left to attempt
+    assert len(send.calls) == 1 and month(vault) == before
+    assert run(vault, job, "--redo", "1", "try again") == 2
+    err = capsys.readouterr().err
+    assert "plan it again with a different description" in err
+    assert len(send.calls) == 1

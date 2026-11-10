@@ -34,6 +34,8 @@ from image_jobs import (MAX_REF_BYTES, SIZE, THINKING_WHY, Entry, Job, Stop,
 REDO_CHARS = 500
 FAILURES_IN_A_ROW = 3
 SANDBOX = " If this AI runs in a sandbox, allow network access for gma image draw."
+FORCED_THINKING_WHY = (" This model will not draw without thinking, which costs "
+                       "more: raise the limit for one attempt to keep likenesses.")
 NEEDS_THINKING = ("this model will not draw without thinking, and with it "
                   "this picture would pass the limit for one attempt")
 
@@ -46,6 +48,7 @@ class DrawResult:
     drawn: int = 0          # pictures drawn this run
     cents: float = 0.0      # cents counted this run (refused and failed replies too)
     unknown: int = 0        # paid replies counted with no known price
+    job_cents: float = 0.0  # cents the whole job has spent so far
 
 
 class _No(NamedTuple):
@@ -86,10 +89,11 @@ def _read_refs(e: Entry) -> tuple[list[tuple[str, bytes]], list[str]]:
 
 class _Run:
     def __init__(self, job: Job, vault: Path, today: date,
-                 lim: image_money.Limits, key: str) -> None:
+                 lim: image_money.Limits, key: str, priced: bool,
+                 result: DrawResult) -> None:
         self.job, self.vault, self.today = job, vault, today
-        self.lim, self.key = lim, key
-        self.result = DrawResult()
+        self.lim, self.key, self.priced = lim, key, priced
+        self.result = result
         self.stop: str | None = None       # why no later picture is attempted
         self.streak = 0                    # pictures in a row that did not come
 
@@ -101,8 +105,13 @@ class _Run:
     def say(self, e: Entry, text: str) -> None:
         self.result.lines.append(f"{e.n}. {e.note}: {text}")
 
+    def remember(self, e: Entry, text: str) -> None:
+        """Add to the entry's `said` unless that line is already there."""
+        if text not in e.said:
+            e.said.append(text)
+
     def note(self, e: Entry, text: str) -> None:
-        e.said.append(text)
+        self.remember(e, text)
         self.result.lines.append(f"   {text}")
 
     def halt(self, why: str) -> None:
@@ -130,10 +139,10 @@ class _Run:
     def prepare(self, e: Entry, prompt: str, refs: int,
                 thinking: bool) -> tuple[int, float | None] | _No:
         """How many references to send and what the attempt may cost, after
-        the limit for one attempt and the run and month caps. Unpriced jobs
-        have no figures, so no limit applies."""
+        the limit for one attempt and the run and month caps. When the price
+        cannot be worked out (the GM allowed that) no limit applies."""
         job, lim = self.job, self.lim
-        if not job.priced:
+        if not self.priced:
             return refs, None
         pbytes = len(prompt.encode("utf-8"))
 
@@ -166,8 +175,9 @@ class _Run:
 
     def count(self, e: Entry, usage: dict[str, int] | None,
               est: float | None) -> float | None:
-        """Count one paid reply in the job (memory) and the month (disk).
-        Nothing may come between the reply and this."""
+        """Count one reply the service charged for (or may have) in the job
+        (memory), in the month (disk) and then in the job file. Nothing may
+        come between the reply and this."""
         lim = self.lim
         cents: float | None = None
         if lim.price is not None:
@@ -194,6 +204,7 @@ class _Run:
                 f"Picture {e.n} was paid for but this month's count could not "
                 f"be updated ({bad.__class__.__name__}).")
             self.halt("the month's count could not be updated")
+        self.save(e)    # the attempt and spend are on disk before anything else
         return cents
 
     def keep_picture(self, e: Entry, pic: image_gemini.Picture) -> bool:
@@ -225,13 +236,12 @@ class _Run:
         prompt = e.prompt + (
             f"\n\nThe last attempt was wrong: {redo}. Correct it." if redo else "")
         thinking = lim.thinking or job.needs_thinking
-        forced = False      # the service has just said it needs thinking
         while True:
+            forced = thinking and not lim.thinking   # the model needs it, not the GM
             got = self.prepare(e, prompt, len(refs_all), thinking)
             if isinstance(got, _No):
                 why = NEEDS_THINKING if forced and not got.stop else got.reason
-                if why not in e.said:
-                    e.said.append(why)
+                self.remember(e, why)
                 self.say(e, f"not drawn, {why}")
                 self.result.ok = False
                 if got.stop:
@@ -245,58 +255,92 @@ class _Run:
             if keep < len(refs_all):
                 self.note(e, f"dropped {len(refs_all) - keep} reference pictures "
                           "to stay within the limit for one attempt"
-                          + (THINKING_WHY if thinking else ""))
+                          + (FORCED_THINKING_WHY if forced
+                             else THINKING_WHY if thinking else ""))
             try:
                 pic = image_gemini.draw(job.model, self.key, prompt,
                                         refs_all[:keep], e.shape, SIZE, thinking)
             except image_gemini.NeedsThinking:
                 # Nothing was charged. Work it out again with thinking on.
-                thinking, forced = True, True
+                thinking = True
                 continue
             except image_gemini.Refused as refusal:
                 self.refused(e, refusal, est)
                 return
             except image_gemini.ServiceError as err:
-                self.service_error(e, err, est, redo is not None)
+                self.service_error(e, err, est)
                 return
             self.picture(e, pic, est)
             return
 
     def picture(self, e: Entry, pic: image_gemini.Picture, est: float | None) -> None:
+        redo = e.status == "drawn"
         cents = self.count(e, pic.usage, est)
         if self.keep_picture(e, pic):
             e.status = "drawn"
             self.result.drawn += 1
             self.streak = 0
             self.say(e, f"drawn, {e.pending}.{e.ext}, {self.money_words(cents)}")
+        elif redo:
+            self.lost_redraw(e, "the new picture could not be saved")
+            self.say(e, "the new picture was paid for but could not be saved; "
+                     f"{self.money_words(cents)} counted; the earlier picture "
+                     "is kept")
+            self.result.ok = False
+            self.halt("the picture could not be saved")
         else:
             e.status = "failed"
-            e.said.append("the picture was paid for but could not be saved")
+            self.remember(e, "the picture was paid for but could not be saved")
             self.say(e, "the picture was paid for but could not be saved to "
                      f"{e.pending}.{pic.ext}; {self.money_words(cents)} counted")
             self.result.ok = False
             self.halt("the picture could not be saved")
         self.save(e)
 
+    def lost_redraw(self, e: Entry, reason: str) -> None:
+        """A redraw failed: the earlier picture, still drawn, is kept."""
+        self.remember(e, f"the redraw failed ({reason}); the earlier picture is kept")
+
     def refused(self, e: Entry, refusal: image_gemini.Refused, est: float | None) -> None:
+        redo = e.status == "drawn"
         cents = self.count(e, refusal.usage, est)
         why = f"the service declined: {self.clean(refusal.reason)}"
-        e.status = "refused"
-        e.said.append(why)
         self.streak = 0
         self.result.ok = False
-        self.say(e, f"refused, {why} ({self.money_words(cents)} counted)")
+        if redo:
+            self.lost_redraw(e, why)
+            self.say(e, f"redraw failed, {why}; the earlier picture is kept "
+                     f"({self.money_words(cents)} counted)")
+        else:
+            e.status = "refused"
+            self.remember(e, why)
+            self.remember(e, "plan it again with a different description")
+            self.say(e, f"refused, {why}; plan it again with a different "
+                     f"description ({self.money_words(cents)} counted)")
         self.save(e)
 
     def service_error(self, e: Entry, err: image_gemini.ServiceError,
-                      est: float | None, is_redo: bool) -> None:
+                      est: float | None) -> None:
+        redo = e.status == "drawn"
         message = self.clean(err.message)
         self.result.ok = False
-        if err.billed:
+        if err.billed or err.maybe_billed:
             cents = self.count(e, err.usage, est)
-            e.status = "failed"
-            e.said.append(message)
-            self.say(e, f"failed, {message} ({self.money_words(cents)} counted)")
+            counted = (f"{self.money_words(cents)} counted" if err.billed else
+                       "the reply was lost; it may have been charged, so it is "
+                       + (f"counted at {cents:.2f} cents to be safe"
+                          if cents is not None else
+                          "counted as one picture at an unknown price"))
+            if err.kind == "network":
+                message = message.rstrip(".") + "." + SANDBOX
+            if redo:
+                self.lost_redraw(e, message)
+                self.say(e, f"redraw failed, {message} ({counted}); the earlier "
+                         "picture is kept")
+            else:
+                e.status = "failed"
+                self.remember(e, message)
+                self.say(e, f"failed, {message} ({counted})")
             self.fail_once()
             self.save(e)
             return
@@ -311,15 +355,14 @@ class _Run:
             self.halt(message)
             return
         if err.kind == "network":
-            message += SANDBOX
-        # Nothing was charged and no attempt is used. A picture already drawn
-        # (a redo) stays as it was.
-        if not is_redo:
+            message = message.rstrip(".") + "." + SANDBOX
+        # No attempt is used. A picture already drawn (a redo) stays as it was.
+        if not redo:
             e.status = "failed"
-            e.said.append(message)
-        self.say(e, f"not drawn, {message} (nothing was charged)")
+            self.remember(e, message)
+        self.say(e, f"not drawn, {message}")
         self.fail_once()
-        if not is_redo:
+        if not redo:
             self.save(e)
 
     def fail_once(self) -> None:
@@ -339,6 +382,9 @@ def _check_redo(job: Job, redo: dict[int, str]) -> tuple[dict[int, str], list[in
         e = by_n.get(n)
         if e is None:
             raise Stop(f"There is no picture {n} in job {job.id}.")
+        if e.status == "refused":
+            raise Stop(f"Picture {n} was declined by the service and cannot "
+                       "be redone: plan it again with a different description.")
         if e.status != "drawn":
             raise Stop(f"Picture {n} has not been drawn yet, so it cannot be "
                        "redone. Draw it first.")
@@ -351,18 +397,27 @@ def _check_redo(job: Job, redo: dict[int, str]) -> tuple[dict[int, str], list[in
     return out, sorted(cut)
 
 
-def draw(job: Job, redo: dict[int, str], today: date) -> DrawResult:
+def draw(job: Job, redo: dict[int, str], today: date,
+         result: DrawResult | None = None) -> DrawResult:
     """Send every planned or failed picture, and every drawn picture named in
     `redo` (picture number -> what was wrong), one at a time. See the note at
-    the head of this section for the rules every paid call keeps."""
+    the head of this section for the rules every paid call keeps. `result`
+    may be given so a caller still holds the report if something escapes."""
+    result = result if result is not None else DrawResult()
     if job.service != "gemini":
         raise Stop(f"There is no drawing service called {job.service}.")
     vault = Path(job.vault)
     redo, cut = _check_redo(job, redo)
     lim = image_money.limits(vault)
-    run = _Run(job, vault, today, lim, find_key(job.service))
+    # Whether a picture can be priced is decided now, as `plan` decides it, not
+    # read from the plan: the GM may have changed the price settings since.
+    priced = image_jobs.is_priced(job.model, lim.price)
+    if not priced and not lim.unpriced:
+        raise Stop(image_jobs.unpriced_message(job.model))
+    job.priced = priced
+    run = _Run(job, vault, today, lim, find_key(job.service), priced, result)
     for n in cut:
-        run.result.lines.append(
+        result.lines.append(
             f"Your note on picture {n} was cut to {REDO_CHARS} characters.")
     allowed = 1 + lim.redraws
     try:
@@ -374,10 +429,10 @@ def draw(job: Job, redo: dict[int, str], today: date) -> DrawResult:
                 continue
             if run.stop is not None:
                 run.say(e, f"not drawn, {run.stop}")
-                run.result.ok = False
+                result.ok = False
                 continue
             if e.attempts >= allowed:
-                run.result.ok = False
+                result.ok = False
                 if is_redo:
                     run.say(e, "not drawn, no redraws left (the vault allows "
                             f"{lim.redraws})")
@@ -387,10 +442,11 @@ def draw(job: Job, redo: dict[int, str], today: date) -> DrawResult:
                 continue
             run.attempt(e, redo.get(e.n))
     finally:
+        result.job_cents = job.spent
         try:
             image_jobs.save(job)
         except OSError:
-            if run.result.ok:
-                run.result.lines.append("The job could not be saved.")
-            run.result.ok = False
-    return run.result
+            if result.ok:
+                result.lines.append("The job could not be saved.")
+            result.ok = False
+    return result
