@@ -69,14 +69,15 @@ apprentice draws (prices change, so treat these as a guide):
 | Thinking on | about 4.3 to 5.8, varying from picture to picture |
 | Each likeness sent | about 0.17 more |
 
-`vault.images.thinking` lets the service think before it draws. Turn it
-on and raise `vault.images.attempt_limit` to about 7 cents too, or each
-picture is reported "over the limit for one attempt" and nothing is
-drawn. The limit then becomes a likely ceiling instead of a guarantee.
-One comparison of six pictures drawn both ways found likenesses held
-equally well, thinking on followed fine details a little more closely,
-and thinking off was cheaper and steadier. A model that "will not draw
-without thinking" needs the same raise.
+`vault.images.thinking` lets the service think before it draws. A picture
+then costs more and varies, but fits the usual `vault.images.attempt_limit`,
+likenesses included, though that limit becomes a likely ceiling. With a
+lower limit, a picture may be refused with "Thinking is on, which costs
+more: raise the limit for one attempt or turn thinking off." One comparison
+of six pictures drawn both ways found likenesses held equally well, thinking
+on followed fine details a little more closely, and thinking off was cheaper
+and steadier. A model that "will not draw without thinking" turns it on
+itself.
 
 ## When the price is not known
 
@@ -115,5 +116,4 @@ the apprentice tells you where. You can still keep it for 14 days.
 - **The keychain did not answer**: unlock your Mac keychain and try again.
 - **Google declines a picture**: this is rare. The apprentice describes
   it differently and plans it again.
-- **No network**: if the apprentice's network access is shut off, allow
-  it for `gma image draw`.
+- **No network**: give the apprentice network access for `gma image draw`.
