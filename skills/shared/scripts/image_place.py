@@ -22,6 +22,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import image_jobs
+import ingest_images
 import vault_write as vw
 import vaultlib as vl
 from image_jobs import Entry, Job, Stop
@@ -347,10 +348,21 @@ def _prepare(vault: Path, batch: vw.Batch, e: Entry,
 
 # --- doing it -----------------------------------------------------------------
 
-def _copy_in(c: _Copy, spare: Path) -> None:
+class _Late(Exception):
+    """A file appeared at a picture's target after the checks."""
+
+
+def _copy_in(c: _Copy, spare: Path, dest: str, n: int) -> None:
     """Copy the picture in beside its target, then swap it into place. The
-    picture it replaces is copied to the job folder first."""
+    picture it replaces is copied to the job folder first. A file the checks
+    did not see (cloud sync, say) is never overwritten, nor removed by an
+    undo: the same bytes count as placed, other bytes raise `_Late`."""
     c.target.parent.mkdir(parents=True, exist_ok=True)
+    if not c.existed and (c.target.exists() or c.target.is_symlink()):
+        c.existed = True                    # not ours: an undo leaves it
+        if _same_bytes(c.target, c.src):
+            return
+        raise _Late(f"{dest} already has a picture; picture {n} was not placed")
     if c.existed:
         shutil.copyfile(c.target, spare)
         c.backup = spare
@@ -411,9 +423,16 @@ def _retire(vault: Path, batch: vw.Batch, a: _Action, lines: list[str]) -> None:
             old = _inside(vault, o)
             if old is None:
                 lines.append(f"  Left {o} alone; it is not inside the vault.")
+            elif Path(o).suffix.lower() not in ingest_images.WEB_SAFE_EXTS:
+                lines.append(f"  The old portrait value {o} is not a picture "
+                             "file; left alone.")
             elif not old.is_file():
                 lines.append(f"  Left {o} alone; it is not a picture file "
                              "in the vault.")
+            elif a.copy.backup is not None and _same_file(old, a.copy.target):
+                lines.append(f"  Replaced {new_rel}; the picture that was there "
+                             f"is kept at {a.copy.backup} until this job is "
+                             f"tidied away ({image_jobs.JOB_DAYS} days).")
             elif _same_file(old, a.copy.target) or _fold(o) == _fold(new_rel):
                 lines.append(f"  The old picture {o} is the new picture's "
                              "own file (or differs only in case); left as it is.")
@@ -494,7 +513,7 @@ def run(job: Job, keep: set[int], hold: set[int], write: bool) -> Result:
                 continue
             done.append(a.copy)          # recorded before it is touched
             _copy_in(a.copy, spare / f"replaced-{a.entry.n:02d}"
-                     f".{a.entry.ext}")
+                     f".{a.entry.ext}", a.entry.dest, a.entry.n)
         for a in actions:
             # The disk decides the name: an existing file keeps its own.
             a.rel = _disk_rel(vault, a.copy.target,
@@ -507,7 +526,12 @@ def run(job: Job, keep: set[int], hold: set[int], write: bool) -> Result:
         if not isinstance(err, Exception):
             raise
         why = str(err) or err.__class__.__name__
-        if stuck:
+        if isinstance(err, _Late):
+            lines.append(why)
+            lines.append("Nothing was placed: run place again to file the others."
+                         if not stuck else "These files could not be put back: "
+                         + "; ".join(stuck))
+        elif stuck:
             lines.append(f"The notes could not be written ({why}), and these "
                          "files could not be put back: " + "; ".join(stuck))
         else:

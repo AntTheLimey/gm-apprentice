@@ -823,3 +823,82 @@ def test_a_case_only_replace_leaves_one_embed_when_the_disk_tells_case_apart(
     assert text.count("![[") == 1
     assert "![[session-03-mill.jpg|300]]" in text
     assert "![[Session-03-Mill.jpg" not in text
+
+
+# --- final wave: B2, B3, B9 ---------------------------------------------------
+
+@pytest.mark.parametrize("old", ["Notes/Secret Plan.md", "Notes/Map.pdf"])
+def test_a_replace_never_removes_an_old_portrait_that_is_not_a_picture(vault, capsys, old):
+    (vault / old).parent.mkdir(parents=True, exist_ok=True)
+    (vault / old).write_bytes(b"the GM's own file")
+    (vault / "NPCs/Rowan.md").write_text(npc(f'portrait: "{old}"\n'), encoding="utf-8")
+    r = entry(1, "NPCs/Rowan.md", "npc", f"{CHARS}/rowan", replace=True)
+    job = make_job(vault, [r])
+    assert run(vault, job, "--keep", "1", "--write") == 0
+    assert (vault / old).read_bytes() == b"the GM's own file"
+    out = capsys.readouterr().out
+    assert f"  The old portrait value {old} is not a picture file; left alone." in out
+    assert "Removed" not in out
+
+
+def test_a_replace_onto_the_old_file_names_where_the_original_is_kept(vault, capsys):
+    marta = entry(1, "NPCs/Marta.md", "npc", f"{CHARS}/marta", replace=True)
+    job = make_job(vault, [marta], data=JPG2)
+    assert run(vault, job, "--keep", "1") == 0           # the preview
+    preview = capsys.readouterr().out
+    assert f"The picture replaces the existing file {CHARS}/marta.jpg." in preview
+    assert run(vault, job, "--keep", "1", "--write") == 0
+    backup = image_jobs.folder(job.id) / "replaced-01.jpg"
+    assert backup.read_bytes() == JPG
+    out = capsys.readouterr().out
+    assert (f"  Replaced {CHARS}/marta.jpg; the picture that was there is kept at "
+            f"{backup} until this job is tidied away ({image_jobs.JOB_DAYS} days).") in out
+    assert "left as it is" not in out
+
+
+def test_a_file_that_appears_before_the_copy_is_never_overwritten(vault, monkeypatch, capsys):
+    job = make_job(vault, [anselm(), scene(2)])
+    target = vault / CHARS / "anselm.jpg"
+    real = image_place._copy_in
+
+    def synced(c, *rest):
+        if c.target == target:
+            target.write_bytes(JPG2)          # cloud sync, between checks and copy
+        real(c, *rest)
+    monkeypatch.setattr(image_place, "_copy_in", synced)
+    before = snapshot(vault)
+    assert run(vault, job, "--keep", "1", "2", "--write") == 1
+    assert target.read_bytes() == JPG2                    # not overwritten, not undone
+    assert snapshot(vault) == {**before, f"{CHARS}/anselm.jpg": JPG2}
+    out = capsys.readouterr().out
+    assert f"{CHARS}/anselm already has a picture; picture 1 was not placed" in out
+    assert [e.status for e in image_jobs.load(job.id).entries] == ["drawn", "drawn"]
+
+
+def test_a_file_that_appears_with_the_same_bytes_is_taken_as_placed(vault, monkeypatch):
+    job = make_job(vault, [anselm()])
+    target = vault / CHARS / "anselm.jpg"
+    real = image_place._copy_in
+
+    def synced(c, *rest):
+        target.write_bytes(JPG)               # the very picture, from elsewhere
+        real(c, *rest)
+    monkeypatch.setattr(image_place, "_copy_in", synced)
+    assert run(vault, job, "--keep", "1", "--write") == 0
+    assert target.read_bytes() == JPG
+    assert image_jobs.load(job.id).entries[0].status == "kept"
+
+
+def test_a_late_file_survives_the_undo_of_a_later_failure(vault, monkeypatch):
+    job = make_job(vault, [anselm()])
+    target = vault / CHARS / "anselm.jpg"
+    real = image_place._copy_in
+
+    def synced(c, *rest):
+        target.write_bytes(JPG)
+        real(c, *rest)
+    monkeypatch.setattr(image_place, "_copy_in", synced)
+    monkeypatch.setattr(vault_write, "apply",
+                        lambda b: (_ for _ in ()).throw(OSError("no")))
+    assert run(vault, job, "--keep", "1", "--write") == 1
+    assert target.read_bytes() == JPG          # someone else's file: the undo leaves it
