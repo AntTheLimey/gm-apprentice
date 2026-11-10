@@ -1959,11 +1959,13 @@ def threads_insert(batch: Batch, overview: str, text: str, since: str | None,
 
 
 def threads_unlisted(batch: Batch, verb: str,
-                     lead_key: str) -> list[tuple[int, str, str]]:
+                     lead_key: str) -> list[tuple[int, int, str]]:
     """The Wrap-Up lines on no thread list that `lead_key` names, one
     `(first session, last session, text)` per distinct text (the words
     `session_context` claims by), oldest first. Refused when none match,
     or when the lead is also on a list: that thread closes or rests there.
+    `rest` uses `first` (the dormant entry's `since`); `close` uses `last`
+    (the label on the Resolved line).
     Reads the vault as this batch has left it."""
     import session_context as sc   # it imports this module at its top
     files = [(rel, batch.texts.get(rel, text), fm)
@@ -2091,8 +2093,9 @@ def threads_row(batch: Batch, cols: list[str], wrapup: list[str]) -> None:
         if which.casefold() == "wrapup":
             # Each distinct line goes dormant as the party's thread, since
             # the first session that raised it.
-            parked = [(f"Session {first}", text) for first, _last, text
-                      in threads_unlisted(batch, "rest", lead_key)]
+            parked: list[tuple[str | None, str]] = [
+                (f"Session {first}", text) for first, _last, text
+                in threads_unlisted(batch, "rest", lead_key)]
             involves = None
         elif which.casefold() == "shared":
             entry = threads_take_shared(batch, overview, lead_key,

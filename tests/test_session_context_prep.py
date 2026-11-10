@@ -182,6 +182,30 @@ class WrapupNamesTests(unittest.TestCase):
                          ["Ma Barker", "The Docks", "Tide Men"])
 
 
+class UnlistedWrapupThreadsTests(unittest.TestCase):
+    def wrap(self, n: int, bullet: str) -> tuple[str, str]:
+        return (f"{SESSIONS}/Session 0{n} - Wrap-Up.md", note(
+            f'type: session-wrapup\nsession: "[[Session 0{n} - X]]"\n'
+            f'session_number: {n}\nchapter: "[[Chapter 1 - Harbour]]"',
+            "## GM Notes\n\n### What Carries Forward\n\n"
+            f"#### Unresolved Threads\n\n- {bullet}\n"))
+
+    def test_dormant_entry_claims_the_same_words_at_any_session(self) -> None:
+        bell = "**The cracked bell** \u2014 the sexton heard it ring."
+        near = "**The cracked bell** \u2014 someone saw a gull on it."
+        files = dict([self.wrap(1, bell), self.wrap(2, near),
+                      self.wrap(3, bell)])
+        files["Campaign Overview.md"] = note(
+            "type: campaign_overview",
+            "## Open Threads\n\n## Dormant Threads\n\n"
+            f"- {bell} \u2014 since Session 1; dormant since Session 2 "
+            "(quiet); involves the party\n\n## Key Factions\n")
+        vault = make_vault(self, files)
+        left = sc.unlisted_wrapup_threads(
+            list(sc.vault_files(vault)), None, vault)
+        self.assertEqual(left, [(2, near)])
+
+
 PAUSED = ("---\ntype: scene\nchapter: \"[[Chapter 1 - Harbour]]\"\n"
           "status: paused\nplayed_in:\n  - \"[[Session 01 - Landfall]]\"\n"
           "---\n\n<!-- prompt -->\n\n## Paused\n\n"
