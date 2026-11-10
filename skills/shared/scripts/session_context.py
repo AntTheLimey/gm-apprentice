@@ -106,7 +106,8 @@ import vault_write as vw
 from schema_rules import (SESSION_PLAYED, chapter_key, chapter_of,
                           extract_frontmatter, parse_session_number,
                           wikilink_target)
-from threads import _hidden_lines, pc_thread_items, shared_threads
+from threads import (DORMANT, _hidden_lines, pc_thread_items,
+                     shared_threads)
 from vaultlib import (GM_MARKER_RE, is_active_pc, marker_re,  # noqa: F401
                       is_out_of_play, out_of_play,
                       report_unreadable_settings, setting_or_builtin,
@@ -743,6 +744,48 @@ def match_sessions(thread: str, wrap_ups) -> tuple[list[int], str]:
     return hits, mark
 
 
+def unlisted_wrapup_threads(files, chapter,
+                            vault: Path) -> list[tuple[int, str]]:
+    """The (session, bullet) Wrap-Up Unresolved Threads bullets that sit on
+    no thread list (thread-decay candidates), as `thread_report` prints
+    them. A bullet is claimed when:
+
+    - a shared or PC Open thread matches it (`_match`);
+    - a Resolved Threads line carries the same words (as `_norm_thread`
+      reads them), in a Wrap-Up at or after its session: it is done, not
+      lost. A merely close bullet ("found" against "still missing") stays
+      unlisted, for the GM to judge. One raised again after the closing
+      is open again. With no chapter in scope, session numbers from
+      different chapters can collide, so any closure claims them;
+    - a Dormant Threads entry carries the same words, at any session: a
+      parked thread raised again is still the parked thread until woken.
+    """
+    wrap_ups = wrap_up_threads(files, chapter)
+    not_playing = out_of_play(vault)
+    overview = overview_of(files)
+    overview_text = overview[1] if overview else ""
+    threads = [t.text for t in shared_threads(overview_text)]
+    for rel, text, fm in files:
+        if is_active_pc(rel, fm, not_playing):
+            threads.extend(t.text for t in pc_thread_items(text))
+    matched: set[tuple[int, str]] = set()
+    for thread in threads:
+        matched.update(_match(thread, wrap_ups)[2])
+
+    closed: dict[str, float] = {}
+    for n, c in wrap_up_resolved(files, chapter):
+        key = _norm_thread(c)
+        closed[key] = (float("inf") if chapter is None
+                       else max(n, closed.get(key, n)))
+    dormant = {_norm_thread(t.text)
+               for t in shared_threads(overview_text, DORMANT)}
+    return [(n, bullet) for n, unresolved, _carry in wrap_ups
+            for bullet in unresolved
+            if (n, bullet) not in matched
+            and n > closed.get(_norm_thread(bullet), -1)
+            and _norm_thread(bullet) not in dormant]
+
+
 def thread_report(files, current: int, chapter, vault: Path) -> str:
     """The Campaign Overview's shared Open Threads, then per-PC Open-threads
     ages against Wrap-Up Unresolved Threads / PC Carry-Forward bullets,
@@ -760,15 +803,11 @@ def thread_report(files, current: int, chapter, vault: Path) -> str:
     overview_text = overview[1] if overview else ""
     shared = shared_threads(overview_text)
 
-    # Unresolved bullets a thread actually matched, keyed by (session,
-    # bullet text) — everything else is reported as an orphan below.
-    matched: set[tuple[int, str]] = set()
     tentative = False
 
     def tags(thread: str) -> str:
         nonlocal tentative
-        hits, mark, claimed = _match(thread, wrap_ups)
-        matched.update(claimed)
+        hits, mark, _claimed = _match(thread, wrap_ups)
         if not hits:
             return ("first=?\tlast=?\tage=?\t"
                     "(not in any wrap-up — check it is still live)")
@@ -823,25 +862,9 @@ def thread_report(files, current: int, chapter, vault: Path) -> str:
     if tentative:
         lines.insert(1, "(~ means a likely match by shared names and words, "
                         "not the same text: check it)")
-    # A thread closed into a Resolved Threads list claims the Unresolved
-    # bullets that are the same thread (the same words, as `_norm_thread`
-    # reads them): it is done, not lost. A merely close bullet ("found"
-    # against "still missing") stays an orphan, for the GM to judge.
-    # It claims them up to the session that closed it: one raised again
-    # after that is open again. With no chapter in scope, session numbers
-    # from different chapters can collide, so any closure claims them.
-    closed: dict[str, float] = {}
-    for n, c in wrap_up_resolved(files, chapter):
-        key = _norm_thread(c)
-        closed[key] = (float("inf") if chapter is None
-                       else max(n, closed.get(key, n)))
-    matched.update((n, bullet) for n, unresolved, _carry in wrap_ups
-                   for bullet in unresolved
-                   if n <= closed.get(_norm_thread(bullet), -1))
     lines.append("--- Wrap-up threads not on any thread list ---")
     orphans = [f"session {n}\t{bullet}"
-              for n, unresolved, _carry in wrap_ups
-              for bullet in unresolved if (n, bullet) not in matched]
+               for n, bullet in unlisted_wrapup_threads(files, chapter, vault)]
     lines.extend(orphans if orphans else ["(none)"])
 
     return "\n".join(lines)

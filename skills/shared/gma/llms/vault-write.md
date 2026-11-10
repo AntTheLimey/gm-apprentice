@@ -153,8 +153,11 @@ stdin: one row per line, fields separated by TAB.
   close LIST    LEAD   EVIDENCE    LIST is 'shared', 'dormant' or a PC's
                                    note name; the thread leaves it and
                                    is recorded in the Wrap-Up's
-                                   Resolved Threads
-  rest  LIST    LEAD   WHY         LIST is 'shared' or a PC's note name;
+                                   Resolved Threads. 'wrapup': a
+                                   Wrap-Up line on no list, recorded
+                                   as it stands
+  rest  LIST    LEAD   WHY         LIST is 'shared', 'wrapup' (a line
+                                   on no list) or a PC's note name;
                                    the thread leaves it for the
                                    Overview's Dormant Threads, with
                                    'dormant since Session N (WHY)', N

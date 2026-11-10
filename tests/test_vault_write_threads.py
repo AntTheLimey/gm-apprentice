@@ -7,6 +7,7 @@ Run: python3 -m pytest tests/test_vault_write_threads.py -q
 import io
 import json
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -781,12 +782,111 @@ class ThreadsTests(unittest.TestCase):
             self.assertEqual(data.count(b"\n"), data.count(b"\r\n"), rel)
         self.assertIn("## Dormant Threads", read(vault, OVERVIEW))
 
-    def test_rest_wrapup_list_not_yet(self):
+    # -- wrapup as a list: Wrap-Up lines that sit on no thread list --------
+
+    BELL = "**The cracked bell** \u2014 the sexton heard it ring at noon."
+
+    def unlisted_vault(self):
         vault = self.vault()
-        before = self.snapshot(vault)
+        path = vault / WRAPUP
+        text = path.read_bytes().decode("utf-8")
+        text = text.replace(
+            "- **The north-bank lamp**",
+            f"- {self.BELL}\n- **The north-bank lamp**")
+        path.write_bytes(text.encode("utf-8"))
+        return vault
+
+    def report(self, vault):
+        proc = subprocess.run(
+            [sys.executable, str(SCRIPTS / "session_context.py"),
+             str(vault), "--threads"], capture_output=True, text=True)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        return proc.stdout.split(
+            "--- Wrap-up threads not on any thread list ---")[1]
+
+    def test_close_wrapup_line_claims_it(self):
+        vault = self.unlisted_vault()
+        self.assertIn("cracked bell", self.report(vault))
+        stdin = rows(("close", "wrapup", "The cracked bell", "it was a gull"))
+        code, out = run(vault, "threads", "--wrapup", WRAPUP, stdin=stdin)
+        self.assertEqual(code, 0, out)
+        self.assertIn("WOULD-RECORD", out)
         code, out = run(vault, "threads", "--wrapup", WRAPUP, "--write",
-                        stdin=rows(("rest", "wrapup", "The north-bank lamp", "x")))
+                        stdin=stdin)
+        self.assertEqual(code, 0, out)
+        self.assertIn(f"- {self.BELL} \u2014 closed: it was a gull "
+                      "(Session 3)", read(vault, WRAPUP))
+        self.assertNotIn("(shared)", read(vault, WRAPUP))
+        self.assertNotIn("cracked bell", self.report(vault))
+
+    def test_close_wrapup_repeats_across_sessions(self):
+        vault = self.unlisted_vault()
+        two = vault / "Chapters/Chapter 1 - Harbour/Session 02 - Wrap-Up.md"
+        two.write_text(read(vault, WRAPUP).replace(
+            "session_number: 3", "session_number: 2").replace(
+            "Session 03 - The Night", "Session 02 - The Early").replace(
+            self.BELL, "**Cracked bell** \u2014 someone heard it at dawn."
+        ), encoding="utf-8")
+        report = self.report(vault)
+        self.assertIn("session 2\t", report)
+        code, out = run(vault, "threads", "--wrapup", WRAPUP, "--write",
+                        stdin=rows(("close", "wrapup", "bell", "a gull")))
         self.assertEqual(code, 1)
+        code, out = run(vault, "threads", "--wrapup", WRAPUP, "--write",
+                        stdin=rows(("close", "wrapup", "Cracked bell",
+                                    "a gull"),
+                                   ("close", "wrapup", "The cracked bell",
+                                    "a gull")))
+        self.assertEqual(code, 0, out)
+        text = read(vault, WRAPUP)
+        self.assertIn("someone heard it at dawn. \u2014 closed: a gull "
+                      "(Session 2)", text)
+        self.assertIn("heard it ring at noon. \u2014 closed: a gull "
+                      "(Session 3)", text)
+        self.assertNotIn("bell", self.report(vault).casefold())
+
+    def test_rest_wrapup_line_goes_dormant_and_is_claimed(self):
+        vault = self.unlisted_vault()
+        stdin = rows(("rest", "wrapup", "The cracked bell",
+                      "nobody is chasing it"))
+        code, out = run(vault, "threads", "--wrapup", WRAPUP, stdin=stdin)
+        self.assertEqual(code, 0, out)
+        self.assertIn("WOULD-REST", out)
+        code, out = run(vault, "threads", "--wrapup", WRAPUP, "--write",
+                        stdin=stdin)
+        self.assertEqual(code, 0, out)
+        self.assertIn(f"- {self.BELL} \u2014 since Session 3; dormant since "
+                      "Session 3 (nobody is chasing it); involves the party",
+                      read(vault, OVERVIEW))
+        self.assertIn("cracked bell", read(vault, WRAPUP))
+        self.assertNotIn("cracked bell", self.report(vault))
+
+    def test_wrapup_lead_also_listed_refused(self):
+        vault = self.unlisted_vault()
+        path = vault / OVERVIEW
+        path.write_text(read(vault, OVERVIEW).replace(
+            "## Key Factions",
+            "- **The cracked bell** \u2014 worded another way \u2014 since Session 3; "
+            "involves the party\n\n## Key Factions"), encoding="utf-8")
+        before = self.snapshot(vault)
+        for verb in ("close", "rest"):
+            code, out = run(vault, "threads", "--wrapup", WRAPUP, "--write",
+                            stdin=rows((verb, "wrapup", "The cracked bell",
+                                        "why")))
+            self.assertEqual(code, 1)
+            self.assertIn(f"'The cracked bell' is on the shared list: "
+                          f"{verb} it there", out)
+            self.assertEqual(self.snapshot(vault), before)
+
+    def test_wrapup_lead_unknown_refused(self):
+        vault = self.unlisted_vault()
+        before = self.snapshot(vault)
+        for verb in ("close", "rest"):
+            code, out = run(vault, "threads", "--wrapup", WRAPUP, "--write",
+                            stdin=rows((verb, "wrapup", "The red herring",
+                                        "why")))
+            self.assertEqual(code, 1)
+            self.assertIn("no Wrap-Up line on no list matches", out)
         self.assertEqual(self.snapshot(vault), before)
 
     def test_wake_to_one_pc(self):
