@@ -9,6 +9,16 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.5] — 2026-11-09
+
+### Fixed
+
+- Session prep now reads the Wrap-Up's Reconciliation Context, World Evolution included. The prep bundle used to hide it behind a one-line stub, so a plan could follow rulings that reconcile had already replaced.
+
+### Changed
+
+- Thread ageing on a long campaign is faster: pairs that cannot match are skipped.
+
 ## [1.12.4] — 2026-11-09
 
 ### Added

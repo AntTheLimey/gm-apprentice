@@ -226,7 +226,7 @@ def _heading_block(text: str, level: int, title: str) -> str | None:
 BRIEF_DROP_H2: tuple[str, ...] = ("Memorable Moments",)
 BRIEF_DROP_H3: tuple[str, ...] = (
     "Name Conflicts", "Cross-Entity Claims", "World Fact Findings",
-    "Quality Notes", "Reconciliation Context", "Resolved Threads")
+    "Quality Notes", "Resolved Threads")
 
 _H2_HEADING_RE = re.compile(r"^## (.+)$")
 _H3_HEADING_RE = re.compile(r"^(#{3,4}) (.+)$")
@@ -252,12 +252,16 @@ def brief_wrapup(body: str) -> str:
 
     Headings inside a fenced code block are inert, the same as in
     `outline`: a wrap-up that shows `### Quality Notes` as a markdown
-    example must not have its example stubbed out from under it."""
+    example must not have its example stubbed out from under it.
+
+    A Reconciliation Context block (`##` or `###`, to the next heading of
+    the same or higher level) prints untouched, nothing inside it stubbed."""
     lines = body.splitlines()
     out: list[str] = []
     i = 0
     n = len(lines)
     in_fence = False
+    recon_level = 0
     while i < n:
         line = lines[i]
         if line.strip().startswith("```"):
@@ -266,6 +270,17 @@ def brief_wrapup(body: str) -> str:
             i += 1
             continue
         if in_fence:
+            out.append(line)
+            i += 1
+            continue
+        hm0 = _ANY_HEADING_RE.match(line)
+        if hm0:
+            if recon_level and len(hm0.group(1)) <= recon_level:
+                recon_level = 0
+            if (not recon_level and re.match(
+                    r"^#{2,3} Reconciliation Context\s*$", line)):
+                recon_level = len(hm0.group(1))
+        if recon_level:
             out.append(line)
             i += 1
             continue
@@ -608,8 +623,18 @@ def play_brief(files, plan_rel: str, plan_text: str) -> str:
     return "\n\n".join(parts)
 
 
+THREAD_MATCH_RATIO = 0.6
+
+
 def _ratio_match(norm: str, bullet: str) -> bool:
-    return SequenceMatcher(None, norm, _norm_thread(bullet)).ratio() >= 0.6
+    """Whether the bullet reads as the thread: `SequenceMatcher.ratio()`
+    at least `THREAD_MATCH_RATIO`. `real_quick_ratio` and `quick_ratio`
+    are upper bounds of `ratio`, so a pair below the threshold on either
+    cannot match and the slow `ratio` is not computed for it."""
+    m = SequenceMatcher(None, norm, _norm_thread(bullet))
+    return (m.real_quick_ratio() >= THREAD_MATCH_RATIO
+            and m.quick_ratio() >= THREAD_MATCH_RATIO
+            and m.ratio() >= THREAD_MATCH_RATIO)
 
 
 def _scoped_wrap_ups(files, chapter):
@@ -1591,8 +1616,8 @@ def build_parser() -> argparse.ArgumentParser:
         "--brief", action="store_true",
         help="default mode only: Wrap-Up with the reconcile-provenance "
              "blocks stubbed (Memorable Moments; Name Conflicts, "
-             "Cross-Entity Claims, World Fact Findings, Quality Notes, "
-             "Reconciliation Context — heading kept, body replaced by a "
+             "Cross-Entity Claims, World Fact Findings, Quality Notes — "
+             "heading kept, body replaced by a "
              "one-line stub with its word count), and the Campaign "
              "Overview and the existing Session Plan each as frontmatter "
              "plus a heading outline with word counts. Everything else "

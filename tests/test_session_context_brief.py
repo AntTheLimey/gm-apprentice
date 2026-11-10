@@ -43,10 +43,11 @@ class BriefWrapupUnitTests(unittest.TestCase):
         for kept in ("The bay was sterile", "Keep this bullet",
                      "the Dredger's debt", "Day 12", "dawn on the quay"):
             self.assertIn(kept, out)
-        for dropped in ("A moment that --brief drops", "Drop this in brief",
-                        "reconcile provenance"):
+        for dropped in ("A moment that --brief drops", "Drop this in brief"):
             self.assertNotIn(dropped, out)
-        self.assertIn("### Reconciliation Context\n(omitted in --brief: 25 words", out)
+        # Reconciliation Context is printed in full, not stubbed.
+        self.assertIn("reconcile provenance", out)
+        self.assertNotIn("### Reconciliation Context\n(omitted", out)
         self.assertIn("## Memorable Moments\n(omitted in --brief:", out)
         self.assertIn("### Name Conflicts (export vs. vault canon)\n(omitted", out)
         self.assertIn("<!-- /gm-only -->", out)
@@ -123,6 +124,81 @@ class BriefWrapupUnitTests(unittest.TestCase):
         self.assertIn("Keep this bullet.", out)
 
 
+RECON_WRAP = (
+    "---\ntype: session-wrapup\nsession: \"[[Session 01 - Landfall]]\"\n"
+    "session_number: 1\nchapter: \"[[Chapter 1 - Harbour]]\"\n---\n\n"
+    "# Session 1\n\n## Narrative Recap\n\nThey met Ma Barker.\n\n"
+    "<!-- gm-only -->\n\n## GM Notes\n\n### Quality Notes\n\n"
+    "Quality line stubbed.\n\n### Reconciliation Context\n\n"
+    "Reconciled on 2026-10-02.\n\n#### World Evolution\n\n"
+    "- The Dredgers took the quay: BARKER RULING KEPT.\n\n"
+    "<!-- /gm-only -->\n")
+RECON_TOP = RECON_WRAP.replace("### Reconciliation Context",
+                               "## Reconciliation Context")
+
+
+class ReconciliationContextTests(unittest.TestCase):
+    """Prep and --brief print the Reconciliation Context in full."""
+
+    def vault(self, wrap: str) -> Path:
+        import shutil
+        import tempfile
+        d = Path(tempfile.mkdtemp(prefix="sc-recon-"))
+        self.addCleanup(shutil.rmtree, d, ignore_errors=True)
+        ch = d / "Chapters" / "Chapter 1 - Harbour" / "Sessions"
+        ch.mkdir(parents=True)
+        (d / "Chapters" / "Chapter 1 - Harbour"
+         / "Chapter 1 - Harbour.md").write_text("---\ntype: chapter\n---\n")
+        (ch / "Session 01 - Landfall.md").write_text(
+            "---\ntype: session\nsession_number: 1\n"
+            "chapter: \"[[Chapter 1 - Harbour]]\"\nstatus: wrap-up\n---\n\nB.\n")
+        (ch / "Session 01 - Landfall - Wrap-Up.md").write_text(wrap)
+        return d
+
+    def test_prep_and_brief_print_the_block_and_stub_the_rest(self):
+        for wrap in (RECON_WRAP, RECON_TOP):
+            for flag in ("--prep", "--brief"):
+                with self.subTest(flag=flag, top=wrap is RECON_TOP):
+                    r = run_cli(self.vault(wrap), flag)
+                    self.assertEqual(r.returncode, 0, r.stderr)
+                    out = r.stdout
+                    self.assertIn("BARKER RULING KEPT", out)
+                    self.assertIn("Reconciled on 2026-10-02.", out)
+                    if wrap is RECON_WRAP:
+                        self.assertIn("#### World Evolution", out)
+                    self.assertRegex(
+                        out, r"Reconciliation Context\n\nReconciled")
+                    self.assertNotIn("Quality line stubbed", out)
+                    self.assertIn("### Quality Notes\n(omitted in --brief",
+                                  out)
+
+    def test_sub_headings_inside_the_block_are_not_stubbed(self):
+        inner = ("#### Name Conflicts\n\nNAME LINE\n\n"
+                 "#### Resolved Threads\n\nTHREAD LINE\n\n"
+                 "#### World Evolution\n\nEVOLVE LINE\n\n")
+        for head, outer in (("### Reconciliation Context", "### Quality Notes"),
+                            ("## Reconciliation Context", "## Next")):
+            with self.subTest(head=head):
+                body = (f"{head}\n\nIntro.\n\n{inner}"
+                        f"{outer}\n\nQuality line.\n\n"
+                        "### Name Conflicts\n\nOutside conflict.\n")
+                out = sc.brief_wrapup(body)
+                for line in ("NAME LINE", "THREAD LINE", "EVOLVE LINE"):
+                    self.assertIn(line, out)
+                before = out.split(outer)[0]
+                self.assertNotIn("(omitted in --brief", before)
+                self.assertNotIn("Outside conflict.", out)
+                self.assertIn("### Name Conflicts\n(omitted in --brief", out)
+                if outer == "### Quality Notes":
+                    self.assertIn("### Quality Notes\n(omitted in --brief",
+                                  out)
+
+    def test_top_level_block_prints_in_full(self):
+        out = sc.brief_wrapup(sc.body_of(RECON_TOP))
+        self.assertIn("## Reconciliation Context\n\nReconciled", out)
+        self.assertIn("BARKER RULING KEPT", out)
+
+
 class RemoveEntitiesUnitTests(unittest.TestCase):
     def test_entities_removal_is_line_bounded(self):
         body = ("**Situation:** A thing.\n"
@@ -171,8 +247,9 @@ class BriefCLITests(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         out = r.stdout
         self.assertIn("===== Wrap-Up — Session 7 =====", out)
-        self.assertIn("(omitted in --brief: 25 words", out)
-        self.assertNotIn("reconcile provenance", out)
+        after = out.split("### Reconciliation Context", 1)[1]
+        self.assertNotIn("(omitted in --brief", after.split("\n###", 1)[0])
+        self.assertIn("reconcile provenance", out)
         self.assertIn("===== Campaign Overview (outline) =====", out)
         self.assertIn("## Chapter 1: Harbour  (", out)
         self.assertNotIn("must NOT print in full", out)
