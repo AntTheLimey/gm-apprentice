@@ -38,10 +38,14 @@ _SIZE = re.compile(r"[0-9]+K")
 class ServiceError(Exception):
     """The service could not be reached or refused. `kind` says which."""
 
-    def __init__(self, kind: str, message: str) -> None:
+    def __init__(self, kind: str, message: str,
+                 usage: dict[str, int] | None = None,
+                 billed: bool = False) -> None:
         super().__init__(message)
         self.kind = kind
         self.message = message
+        self.usage = usage      # the reply's usage, when it had one
+        self.billed = billed    # True when the service answered 200: it charged
 
 
 def request(model: str, prompt: str, refs: list[tuple[str, bytes]],
@@ -95,15 +99,21 @@ SEND = _send   # tests replace this
 class Picture(NamedTuple):
     data: bytes
     ext: str
-    usage: dict[str, int]
+    usage: dict[str, int] | None   # None: the reply gave no usable usage
 
 
 class Refused(Exception):
     """The service answered and gave no picture."""
 
-    def __init__(self, reason: str) -> None:
+    def __init__(self, reason: str, usage: dict[str, int] | None = None) -> None:
         super().__init__(reason)
         self.reason = reason
+        self.usage = usage
+
+
+class NeedsThinking(Exception):
+    """The service will not draw at the minimal thinking level. Nothing was
+    billed. The caller decides whether the picture still fits with thinking on."""
 
 
 class Rate(NamedTuple):
@@ -127,7 +137,10 @@ RATES: dict[str, Rate] = {
 # Measured on 2026-11-09 from real replies (tests/fixtures/image), rounded up.
 REF_TOKENS = 1200     # input tokens per reference picture; measured 1120
 OTHER_TOKENS = 500    # output tokens beyond the picture; measured 171 to 425
-THINK_TOKENS = 1100   # thought tokens with thinking on; measured 326 to 1088
+# Thought tokens with thinking on: measured 326 to 1088 on 2026-11-09; the model
+# chooses them and nothing caps them, so this is a likely ceiling with about 40%
+# headroom, not a guarantee.
+THINK_TOKENS = 1500
 
 
 def _check_count(name: str, x: float) -> None:
@@ -135,19 +148,21 @@ def _check_count(name: str, x: float) -> None:
         raise ValueError(f"{name} must be finite and not negative, got {x}")
 
 
-def estimate(model: str, size: str, refs: int, prompt_chars: int,
+def estimate(model: str, size: str, refs: int, prompt_bytes: int,
              thinking: bool = False) -> float | None:
-    """Worst-case cost of one picture in US cents; None for an unknown model."""
+    """Cost of one picture in US cents; None for an unknown model. With
+    thinking off the figure is built to be at or above the real cost; with
+    thinking on it is a likely ceiling. `prompt_bytes` is the UTF-8 length."""
     rate = RATES.get(model)
     if rate is None:
         return None
     if size not in rate.out_tokens:
         raise ValueError(f"no rate for size {size!r}")
     _check_count("refs", refs)
-    _check_count("prompt_chars", prompt_chars)
+    _check_count("prompt_bytes", prompt_bytes)
     text_out = OTHER_TOKENS + (THINK_TOKENS if thinking else 0)
     dollars = (rate.out_tokens[size] * rate.image_out_per_m
-               + (refs * REF_TOKENS + prompt_chars / 3) * rate.input_per_m
+               + (refs * REF_TOKENS + prompt_bytes / 3) * rate.input_per_m
                + text_out * rate.text_out_per_m) / 1_000_000
     return dollars * 100
 
@@ -158,7 +173,10 @@ def cost(model: str, usage: dict[str, int]) -> float | None:
     if rate is None:
         return None
     for name in ("input", "image", "other", "thought"):
-        _check_count(name, usage[name])
+        x = usage.get(name)
+        if isinstance(x, bool) or not isinstance(x, (int, float)):
+            raise ValueError(f"usage[{name!r}] must be a number, got {x!r}")
+        _check_count(name, x)
     dollars = (usage["input"] * rate.input_per_m
                + usage["image"] * rate.image_out_per_m
                + (usage["other"] + usage["thought"]) * rate.text_out_per_m
@@ -190,7 +208,7 @@ def _own_message(reply: Any, raw: bytes) -> str:
     if isinstance(err, dict):
         err = err.get("message")
     if isinstance(err, str) and err.strip():
-        return err.strip()
+        return err.strip()[:300]
     return raw.decode("utf-8", errors="replace")[:300]
 
 
@@ -198,9 +216,11 @@ def _count(x: Any) -> int:
     return x if isinstance(x, int) and not isinstance(x, bool) and x >= 0 else 0
 
 
-def _usage(reply: dict[str, Any]) -> dict[str, int]:
+def _usage(reply: dict[str, Any]) -> dict[str, int] | None:
+    """The four counted figures, or None when the reply has no usage object."""
     use = reply.get("usage")
-    use = use if isinstance(use, dict) else {}
+    if not isinstance(use, dict):
+        return None
     image = 0
     modes = use.get("output_tokens_by_modality")
     for mode in modes if isinstance(modes, list) else []:
@@ -208,16 +228,26 @@ def _usage(reply: dict[str, Any]) -> dict[str, int]:
             image += _count(mode.get("tokens"))
     return {"input": _count(use.get("total_input_tokens")),
             "image": image,
-            "other": max(_count(use.get("total_output_tokens")) - image, 0),
+            "other": max(_count(use.get("total_output_tokens")) - image, 0)
+            + _count(use.get("total_tool_use_tokens")),
             "thought": _count(use.get("total_thought_tokens"))}
 
 
+def _clean(text: str, key: str) -> str:
+    return text.replace(key, "<key>") if key else text
+
+
 def _read(reply: Any, raw: bytes, key: str) -> Picture:
+    """A 200 reply: a Picture, or Refused / ServiceError carrying its usage
+    (the service charged for it either way)."""
+    usage = _usage(reply) if isinstance(reply, dict) else None
+
+    def bad(message: str) -> ServiceError:
+        return ServiceError("reply", _clean(message, key), usage, billed=True)
     steps = reply.get("steps") if isinstance(reply, dict) else None
     if not isinstance(steps, list):
-        raise ServiceError("reply", _clean(
-            "the picture service's reply was not in the expected shape: "
-            + raw.decode("utf-8", errors="replace")[:300], key))
+        raise bad("the picture service's reply was not in the expected shape: "
+                  + raw.decode("utf-8", errors="replace")[:300])
     items: list[dict[str, Any]] = []
     for step in steps:
         if isinstance(step, dict) and step.get("type") == "model_output":
@@ -232,37 +262,31 @@ def _read(reply: Any, raw: bytes, key: str) -> Picture:
         status = reply.get("status")
         raise Refused(_clean(
             said or (status if isinstance(status, str) and status != "completed"
-                     else "the service returned no picture"), key))
+                     else "the service returned no picture"), key), usage)
     try:
         data = base64.b64decode(image["data"], validate=True)
     except ValueError:
-        raise ServiceError(
-            "reply", "the picture service sent a picture that could not be read") from None
+        raise bad("the picture service sent a picture that could not be read") from None
     ext = dnd_ddb.image_type(data)
     if ext not in ("jpg", "png", "webp"):
-        raise ServiceError("reply", "the picture service sent something that is not a picture")
-    return Picture(data, ext, _usage(reply))
-
-
-def _clean(text: str, key: str) -> str:
-    return text.replace(key, "<key>") if key else text
+        raise bad("the picture service sent something that is not a picture")
+    # A usage with no image tokens beside a picture means the shape changed.
+    return Picture(data, ext, usage if usage and usage["image"] > 0 else None)
 
 
 def draw(model: str, key: str, prompt: str, refs: list[tuple[str, bytes]],
          shape: str, size: str, thinking: bool = False) -> Picture:
-    """One picture, or `ServiceError` / `Refused`. When the service will not
-    take the minimal thinking level, the call is made once more without it."""
-    hdrs = headers(key)
+    """One picture, or `ServiceError` / `Refused` / `NeedsThinking`. It never
+    changes what the picture costs: when the service will not take the minimal
+    thinking level it raises `NeedsThinking` and the caller chooses."""
     body = request(model, prompt, refs, shape, size, thinking)
-    status, raw = SEND(URL, hdrs, body, TIMEOUT)
+    status, raw = SEND(URL, headers(key), body, TIMEOUT)
     reply = _json(raw)
-    if (status == 400 and not thinking
-            and "thinking level" in _own_message(reply, raw).lower()):
-        body = request(model, prompt, refs, shape, size, True)
-        status, raw = SEND(URL, hdrs, body, TIMEOUT)
-        reply = _json(raw)
     if status in _MESSAGES:
         raise ServiceError(*_MESSAGES[status])
     if status != 200:
-        raise ServiceError("reply", _clean(_own_message(reply, raw), key))
+        message = _own_message(reply, raw)
+        if status == 400 and not thinking and "thinking level" in message.lower():
+            raise NeedsThinking(_clean(message, key))
+        raise ServiceError("reply", _clean(message, key))
     return _read(reply, raw, key)

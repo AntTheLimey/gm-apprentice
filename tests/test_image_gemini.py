@@ -365,20 +365,20 @@ def test_thinking_off_asks_for_minimal_and_on_sends_no_config(fixture_send):
     assert "generation_config" not in body
 
 
-def test_an_unsupported_thinking_level_is_retried_once_without_it(fixture_send):
-    send = fixture_send("gemini-error-thinking-level.json", "gemini-thinking-minimal.json")
-    pic = draw()
-    assert len(send.calls) == 2
-    assert "generation_config" in send.calls[0]
-    assert "generation_config" not in send.calls[1]
-    assert pic.ext == "jpg"
+def test_an_unsupported_thinking_level_asks_the_caller_after_one_call(fixture_send):
+    send = fixture_send("gemini-error-thinking-level.json")
+    with pytest.raises(image_gemini.NeedsThinking):
+        draw()
+    assert len(send.calls) == 1
 
 
-def test_the_retry_happens_only_once(fixture_send):
+def test_the_same_400_with_thinking_on_is_a_plain_error(fixture_send):
     send = fixture_send("gemini-error-thinking-level.json")
     with pytest.raises(image_gemini.ServiceError) as e:
-        draw()
-    assert e.value.kind == "reply" and len(send.calls) == 2
+        draw(thinking=True)
+    assert e.value.kind == "reply" and "Thinking level" in e.value.message
+    assert e.value.billed is False and e.value.usage is None
+    assert len(send.calls) == 1
 
 
 def test_a_reply_with_no_picture_is_refused(fixture_send):
@@ -390,6 +390,7 @@ def test_a_reply_with_no_picture_is_refused(fixture_send):
     with pytest.raises(image_gemini.Refused) as e:
         draw()
     assert e.value.reason == "the service returned no picture"
+    assert e.value.usage == {"input": 17, "image": 1120, "other": 287, "thought": 715}
     reply["steps"][1]["content"] = [{"type": "text", "text": "I can't help with that"}]
     fixture_send((200, json.dumps(reply).encode()))
     with pytest.raises(image_gemini.Refused) as e:
@@ -464,6 +465,8 @@ REAL_COSTS = [
     ("gemini-thinking-minimal.json", False, 0, 3.59),
     ("gemini-scene-reference-default-thinking.json", True, 1, 4.14),
     ("gemini-scene-reference-minimal-thinking.json", False, 1, 3.86),
+    ("gemini-gore-prompt-drawn.json", True, 0, None),
+    ("gemini-told-not-to-draw-drew-anyway.json", True, 0, None),
 ]
 
 
@@ -474,6 +477,8 @@ def _usage_of(name, fixture_send):
 
 def test_cost_from_the_real_usage(fixture_send):
     for name, _, _, cents in REAL_COSTS:
+        if cents is None:
+            continue
         got = image_gemini.cost(MODEL, _usage_of(name, fixture_send))
         assert got == pytest.approx(cents, abs=0.01), name
     assert image_gemini.cost("other", {"input": 1, "image": 1, "other": 1,
@@ -518,3 +523,81 @@ def test_send_error_body_read_failure_is_a_network_error(monkeypatch):
     with pytest.raises(image_gemini.ServiceError) as e:
         image_gemini.SEND(image_gemini.URL, {}, b"{}", 5)
     assert e.value.kind == "network"
+
+
+# -- fix round 1: every billed reply is countable --------------------------------
+
+
+def test_a_200_with_an_undecodable_picture_is_billed_and_counted(fixture_send):
+    _, raw = fixture("gemini-prompt-only.json")
+    reply = json.loads(raw)
+    reply["steps"][1]["content"][0]["data"] = "!!!"
+    fixture_send((200, json.dumps(reply).encode()))
+    with pytest.raises(image_gemini.ServiceError) as e:
+        draw()
+    assert e.value.billed is True
+    assert e.value.usage == {"input": 17, "image": 1120, "other": 287, "thought": 715}
+
+
+def test_a_200_that_is_not_a_picture_or_not_the_shape_is_billed(fixture_send):
+    fixture_send((200, b"{}"))
+    with pytest.raises(image_gemini.ServiceError) as e:
+        draw()
+    assert e.value.billed is True and e.value.usage is None
+    fixture_send((200, b"not json"))
+    with pytest.raises(image_gemini.ServiceError) as e:
+        draw()
+    assert e.value.billed is True and e.value.usage is None
+
+
+def test_failures_that_were_not_billed(fixture_send):
+    for status in (401, 402, 429, 500):
+        fixture_send((status, b"{}"))
+        with pytest.raises(image_gemini.ServiceError) as e:
+            draw()
+        assert e.value.billed is False and e.value.usage is None
+
+
+def test_a_picture_reply_without_usable_usage_has_no_usage(fixture_send):
+    _, raw = fixture("gemini-prompt-only.json")
+    reply = json.loads(raw)
+    del reply["usage"]
+    fixture_send((200, json.dumps(reply).encode()))
+    assert draw().usage is None
+    _, raw = fixture("gemini-prompt-only.json")
+    reply = json.loads(raw)
+    del reply["usage"]["output_tokens_by_modality"]
+    fixture_send((200, json.dumps(reply).encode()))
+    assert draw().usage is None
+
+
+def test_tool_use_tokens_count_as_other(fixture_send):
+    _, raw = fixture("gemini-prompt-only.json")
+    reply = json.loads(raw)
+    reply["usage"]["total_tool_use_tokens"] = 40
+    fixture_send((200, json.dumps(reply).encode()))
+    assert draw().usage["other"] == 327
+
+
+def test_cost_refuses_missing_non_numbers_and_bools():
+    ok = {"input": 1, "image": 1, "other": 1, "thought": 1}
+    for field in ok:
+        for bad in ("1", None, True):
+            with pytest.raises(ValueError):
+                image_gemini.cost(MODEL, {**ok, field: bad})
+        missing = {k: v for k, v in ok.items() if k != field}
+        with pytest.raises(ValueError):
+            image_gemini.cost(MODEL, missing)
+
+
+def test_the_services_own_message_is_cut_to_300(fixture_send):
+    fixture_send((500, json.dumps({"error": {"message": "x" * 900}}).encode()))
+    with pytest.raises(image_gemini.ServiceError) as e:
+        draw()
+    assert len(e.value.message) == 300
+
+
+def test_a_cjk_prompt_estimates_higher_than_a_latin_one():
+    latin = image_gemini.estimate(MODEL, "1K", 0, len("a" * 2000))
+    cjk = image_gemini.estimate(MODEL, "1K", 0, len(("画" * 2000).encode("utf-8")))
+    assert cjk > latin

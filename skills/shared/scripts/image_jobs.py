@@ -421,7 +421,7 @@ def _fit_cost(ctx: _Ctx, e: Entry, refs: list[str]) -> list[str] | None:
         return refs
     lim = ctx.lim
     assert lim.model
-    model, price, chars = lim.model, lim.price, len(e.prompt)
+    model, price, chars = lim.model, lim.price, len(e.prompt.encode("utf-8"))
 
     def cost(k: int) -> float:
         if price is not None:
