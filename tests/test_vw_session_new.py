@@ -245,6 +245,33 @@ class SessionNewTests(unittest.TestCase):
             "NEAR\tCharacters/NPCs/Marlo Petrak.md\t§Prose\t"
             "Petrack (2x) — close to Petrak"], out)
 
+    def test_resolve_tries_a_name_without_its_title(self):
+        # "Mr. Ashworth" in Session 17's export was NONE: no note is
+        # called that. Without "Mr." it is a person, before any plan.
+        (self.vault / "Chapters").mkdir(exist_ok=True)
+        (self.vault / "Chapters/Petrak_Notes.md").write_text(
+            "---\ntype: plan\n---\n", encoding="utf-8")
+        self.export.write_text(EXPORT.replace(
+            "### Hasib Eberhardt", "### Mr. Petrak"), encoding="utf-8")
+        code, out = run(self.vault, "resolve", "--export", str(self.export))
+        self.assertEqual(code, 0, out)
+        self.assertIn("NEAR\tCharacters/NPCs/Marlo Petrak.md\t§NPCs\t"
+                      "Mr. Petrak — part", out)
+
+    def test_a_closer_match_stays_first_whatever_its_type(self):
+        # A document that is nearly the name beats a person who only
+        # shares a word with it.
+        (self.vault / "Documents").mkdir()
+        (self.vault / "Documents/Petrak Ledger.md").write_text(
+            "---\ntype: document\n---\n", encoding="utf-8")
+        self.export.write_text(EXPORT.replace(
+            "- **Jellyfish Plushie** — a souvenir.",
+            "- **Petrak Ledgr** — his accounts."), encoding="utf-8")
+        code, out = run(self.vault, "resolve", "--export", str(self.export))
+        self.assertEqual(code, 0, out)
+        self.assertIn("NEAR\tDocuments/Petrak Ledger.md\t§Items\t"
+                      "Petrak Ledgr — close", out)
+
     def test_without_an_export_the_notes_are_empty_and_nothing_resolved(self):
         code, out = self.new("--write", export=False)
         self.assertEqual(code, 0, out)

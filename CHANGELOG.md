@@ -9,6 +9,12 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.13] — 2026-11-12
+
+### Fixed
+
+- Export names with a short title ("Mr. Ashworth") now match the vault's note, and a person, place or thing comes before a plan or document that matches as well.
+
 ## [1.12.12] — 2026-11-11
 
 ### Changed
