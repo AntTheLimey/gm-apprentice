@@ -283,10 +283,152 @@ class PlanTests(unittest.TestCase):
                          "--gm-input")
         self.assertNotIn("ERROR\t", out)
 
-    def test_gm_input_without_headless_is_refused(self):
-        code, out = run(self.vault, "--number", "2", "--gm-input", "scenes")
+    def test_gm_input_implies_headless(self):
+        # Most proof runs sent --gm-input alone, were refused, and spent a
+        # turn resending: --gm-input only means anything with no GM present.
+        code, out = run(self.vault, "--number", "2", "--gm-input", "intent")
+        self.assertEqual(code, 0, out)
+        hard = [r for r in out.splitlines() if "hard-guard" in r]
+        self.assertTrue(hard and all(r.startswith("ERROR\t") for r in hard),
+                        out)
+        self.assertFalse(any("Session Intent" in r for r in hard), out)
+
+    def test_gm_input_takes_comma_separated_parts(self):
+        _code, spaced = run(self.vault, "--number", "2", "--gm-input",
+                            "intent", "scenes", "spotlight")
+        _code, commas = run(self.vault, "--number", "2", "--gm-input",
+                            "intent,scenes, spotlight")
+        self.assertEqual(spaced, commas)
+        self.assertNotIn("ERROR\t", commas)
+
+    def test_gm_input_refuses_an_unknown_part(self):
+        code, out = run(self.vault, "--number", "2", "--gm-input",
+                        "intent,plot")
         self.assertEqual(code, 1)
-        self.assertIn("pass --headless too", out)
+        self.assertIn("no part 'plot'", out)
+        self.assertFalse((self.vault / PLAN).exists())
+
+    def test_planned_vs_played_is_not_asked_for(self):
+        # Nothing fills it in prep; asking for it cost a second write.
+        _code, out = run(self.vault, "--number", "2")
+        self.assertNotIn("Planned vs Played", out)
+        self.assertIn("sections: missing '## World State'", out)
+
+    def test_the_plans_own_vault_checks_print_with_the_write(self):
+        (self.vault / "Characters/PCs").mkdir(parents=True)
+        (self.vault / "Characters/PCs/Rosa Vance.md").write_text(
+            "---\ntype: pc\nstatus: active\n---\n# Rosa Vance\n")
+        (self.vault / "Characters/NPCs").mkdir(parents=True)
+        (self.vault / "Characters/NPCs/Ma Barker.md").write_text(
+            "---\ntype: npc\n---\n# Ma Barker\n")
+        body = BODY + ("\n> Rosa sees the crane swing.\n\n"
+                       "Ask [[Old Tom]] and [[Ma Barker]].\n")
+        code, out = run(self.vault, "--number", "2", stdin=body)
+        self.assertEqual(code, 0, out)
+        self.assertIn("read-aloud blockquote names PC 'Rosa'", out)
+        self.assertIn("unresolved: [[Old Tom]]", out)
+        self.assertNotIn("[[Ma Barker]] has no note", out)
+        # Counted in the summary, which stays the last line.
+        self.assertTrue(out.rstrip().splitlines()[-1].startswith(
+            "# plan_check: errors: 0"), out)
+
+    def test_a_link_to_the_index_it_files_is_not_unresolved(self):
+        # The new index is in the same write, not yet on disk.
+        (self.vault / INDEX).unlink()
+        body = BODY + "\nBack to [[Session 02 - The Quay]].\n"
+        code, out = run(self.vault, "--number", "2", "--title", "The Quay",
+                        "--chapter", "Chapter 1 - Harbour", stdin=body)
+        self.assertEqual(code, 0, out)
+        self.assertIn("WOULD-CREATE", out)
+        self.assertIn("unresolved: [[Ma Barker]]", out)  # a real gap
+        self.assertNotIn("[[Session 02 - The Quay]] has no note", out)
+
+    def test_an_empty_gm_input_part_is_refused(self):
+        code, out = run(self.vault, "--number", "2", "--gm-input", "")
+        self.assertEqual(code, 1)
+        self.assertIn("no part given", out)
+
+    def test_a_multi_day_session_gets_the_clock_cue(self):
+        # The Plan has no date of its own: the index's in_game_date counts.
+        (self.vault / INDEX).write_text(INDEX_TEXT.replace(
+            "play_date: null",
+            'play_date: null\nin_game_date: ["1815-06-01", "1815-06-03"]'))
+        _code, out = run(self.vault, "--number", "2")
+        self.assertIn("multi-day plan", out)
+
+    def _scene(self, name, body):
+        (self.vault / CHAPTER / "Scenes").mkdir(exist_ok=True)
+        (self.vault / CHAPTER / "Scenes" / f"{name}.md").write_text(
+            "---\ntype: scene\nstatus: planned\n---\n" + body)
+
+    def test_the_scene_notes_it_points_at_are_checked_too(self):
+        (self.vault / "Characters/PCs").mkdir(parents=True)
+        (self.vault / "Characters/PCs/Rosa Vance.md").write_text(
+            "---\ntype: pc\nstatus: active\n---\n# Rosa Vance\n")
+        self._scene("The Ball", "> Rosa watches. You feel afraid.\n\n"
+                    "| Who | Where |\n|---|---|\n"
+                    "| [[Margaret Barker\\|Ma]] | hall |\n\n"
+                    "Ask [[Old Tom]].\n")
+        body = BODY + "\n### [[The Ball]]\n**Purpose:** x.\n"
+        _code, out = run(self.vault, "--number", "2", stdin=body)
+        scene = f"{CHAPTER}/Scenes/The Ball.md"
+        self.assertIn(f"{scene}:5\tread-aloud blockquote names PC 'Rosa'",
+                      out)
+        self.assertIn("dictates player feeling", out)
+        self.assertIn("escaped pipe", out)
+        self.assertIn(f"{scene}\tunresolved: [[Old Tom]]", out)
+
+    def test_a_missing_pointer_is_one_row_not_two(self):
+        body = BODY + "\n### [[The Missing Scene]]\n**Purpose:** x.\n"
+        _code, out = run(self.vault, "--number", "2", stdin=body)
+        self.assertIn("scene-pointer: no note is named", out)
+        self.assertNotIn("[[The Missing Scene]] has no note", out)
+
+    def test_the_summary_counts_the_rows_printed(self):
+        body = BODY.replace("## GM Notes\n", "## GM Notes\n\n## World State\n"
+                            "\n## Open Questions\n")
+        _code, out = run(self.vault, "--number", "2", stdin=body)
+        lines = out.splitlines()
+        start = next(i for i, ln in enumerate(lines) if ln.startswith("# create"))
+        rows = lines[start + 1:-1]
+        summary = lines[-1]
+        for level in ("ERROR", "WARNING", "INFO"):
+            n = sum(r.startswith(level + "\t") for r in rows)
+            self.assertIn(f"{level.lower() if level != 'INFO' else 'info'}"
+                          f"{'s' if level != 'INFO' else ''}: {n}", summary,
+                          (level, out))
+
+    def test_a_failing_advisory_check_warns_and_still_writes(self):
+        with mock.patch.object(vw, "after_write_rows",
+                               side_effect=RuntimeError("boom")):
+            code, out = run(self.vault, "--number", "2", "--write")
+        self.assertEqual(code, 0, out)
+        self.assertIn("checks failed (RuntimeError: boom)", out)
+        self.assertTrue((self.vault / PLAN).exists())
+
+    def test_a_failed_pc_lookup_keeps_the_other_checks(self):
+        (self.vault / INDEX).write_text(INDEX_TEXT.replace(
+            "play_date: null",
+            'play_date: null\nin_game_date: ["1815-06-01", "1815-06-03"]'))
+        self._scene("The Ball", "| Who | Where |\n|---|---|\n"
+                    "| [[Margaret Barker\\|Ma]] | hall |\n")
+        body = BODY + "\n### [[The Ball]]\n**Purpose:** x.\n"
+        with mock.patch.object(vw.vl, "active_pc_names",
+                               side_effect=RuntimeError("no settings")):
+            code, out = run(self.vault, "--number", "2", "--write",
+                            stdin=body)
+        self.assertEqual(code, 0, out)
+        self.assertIn("the PC names could not be read (RuntimeError: "
+                      "no settings)", out)
+        self.assertIn("multi-day plan", out)
+        self.assertIn("escaped pipe", out)
+        self.assertNotIn("checks failed", out)
+
+    def test_the_write_checks_its_scene_pointers(self):
+        body = BODY + "\n### [[The Missing Scene]]\n**Purpose:** x.\n"
+        _code, out = run(self.vault, "--number", "2", stdin=body)
+        self.assertIn("scene-pointer: no note is named 'The Missing Scene'",
+                      out)
 
     def test_empty_sections_are_one_line(self):
         _code, out = run(self.vault, "--number", "2")

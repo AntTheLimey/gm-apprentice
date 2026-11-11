@@ -9,6 +9,22 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.11] — 2026-11-10
+
+### Changed
+
+- Prep writes the whole Plan in one go: the skill carries the Plan's shape, and the write prints every check prep used to run by hand (read-aloud lines naming a PC, a multi-day clock, links with no note, scene pointers).
+- `--gm-input` implies `--headless` and takes its parts comma-separated too.
+
+### Removed
+
+- `## Planned vs Played` leaves the Session Plan template: nothing filled it, and each scene note and the Wrap-Up already record what was played. `gma update` updates an untouched vault template; older Plans keep theirs, unreported.
+
+### Fixed
+
+- The Plan write checks the scene notes the Plan points at (read-aloud, table cells, links), and the multi-day clock cue reads the session's date from its index, so it fires again.
+- `--gm-input ""` is refused instead of skipping the whole hard guard; a section of wikilink bullets no longer reads as template text.
+
 ## [1.12.10] — 2026-11-10
 
 ### Added

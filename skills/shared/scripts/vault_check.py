@@ -717,19 +717,23 @@ def check_timeline(vault: Path) -> list[str]:
     `type: session-plan` spans multiple days (a 2+ list, or a string range)
     and has no `## Timeline` section, surface a cue so the apprentice can
     *offer to build the clock with the GM*. Single-day plans are silent."""
-    rows = []
-    for rel, text in vault_files(vault):
-        fm = extract_frontmatter(text) or {}
-        if fm.get("type") != "session-plan":
-            continue
-        if not _is_multi_day(fm.get("in_game_date")):
-            continue
-        if TIMELINE_SECTION_RE.search(text):
-            continue
-        rows.append(f"INFO\t{rel}\tmulti-day plan (in_game_date spans "
-                    f"multiple days) — offer to build a '## Timeline' clock "
-                    f"with the GM so hours and same-day travel stay coherent")
-    return rows
+    return [r for rel, text in vault_files(vault)
+            for r in timeline_findings(rel, text)]
+
+
+def timeline_findings(rel: str, text: str,
+                      index_date: object = None) -> list[str]:
+    """`check_timeline`'s row for one note, if it is a multi-day Plan. A
+    Plan's template has no date: `index_date` is its session index's
+    `in_game_date`, used when the Plan has none."""
+    fm = extract_frontmatter(text) or {}
+    if (fm.get("type") != "session-plan"
+            or not _is_multi_day(fm.get("in_game_date") or index_date)
+            or TIMELINE_SECTION_RE.search(text)):
+        return []
+    return [f"INFO\t{rel}\tmulti-day plan (in_game_date spans "
+            f"multiple days) — offer to build a '## Timeline' clock "
+            f"with the GM so hours and same-day travel stay coherent"]
 
 
 def pc_name_regex(names: set[str]):
@@ -758,30 +762,37 @@ def check_read_aloud(vault: Path) -> list[str]:
     plan-wide 'PC name as action subject' scan is intentionally *not* here —
     it scolded the GM's own prose."""
     pc_re = pc_name_regex(active_pc_names(vault))
+    return [r for rel, text in vault_files(vault)
+            if entity_type(extract_frontmatter(text) or {})
+            in READ_ALOUD_SCAN_TYPES
+            for r in read_aloud_findings(rel, text, pc_re)]
+
+
+def read_aloud_findings(rel: str, text: str,
+                        pc_re: re.Pattern[str] | None) -> list[str]:
+    """`check_read_aloud`'s rows for one note (`pc_re`: `pc_name_regex` of
+    the vault's active PCs), so `vault-write plan` checks the Plan it
+    writes without a second call."""
     rows: list[str] = []
-    for rel, text in vault_files(vault):
-        fm = extract_frontmatter(text) or {}
-        if entity_type(fm) not in READ_ALOUD_SCAN_TYPES:
+    for lineno, line in iter_body_lines(text):
+        stripped = line.lstrip()
+        if not stripped.startswith(">"):
             continue
-        for lineno, line in iter_body_lines(text):
-            stripped = line.lstrip()
-            if not stripped.startswith(">"):
-                continue
-            bq = stripped.lstrip(">").strip()
-            pm = pc_re.search(bq) if pc_re else None
-            if pm:
-                rows.append(f"INFO\t{rel}:{lineno}\tread-aloud blockquote "
-                            f"names PC '{pm.group(0)}' — read-aloud addresses "
-                            f"the table, not one PC")
-            sm = SECOND_PERSON_RE.search(bq)
-            if sm:
-                rows.append(f"INFO\t{rel}:{lineno}\tread-aloud blockquote "
-                            f"dictates player feeling: '{sm.group(0)}'")
-            tm = THIRD_PERSON_RE.search(bq)
-            if tm:
-                rows.append(f"INFO\t{rel}:{lineno}\tread-aloud blockquote "
-                            f"uses 3rd-person pronoun '{tm.group(0)}' "
-                            f"(advisory — fine for NPCs)")
+        bq = stripped.lstrip(">").strip()
+        pm = pc_re.search(bq) if pc_re else None
+        if pm:
+            rows.append(f"INFO\t{rel}:{lineno}\tread-aloud blockquote "
+                        f"names PC '{pm.group(0)}' — read-aloud addresses "
+                        f"the table, not one PC")
+        sm = SECOND_PERSON_RE.search(bq)
+        if sm:
+            rows.append(f"INFO\t{rel}:{lineno}\tread-aloud blockquote "
+                        f"dictates player feeling: '{sm.group(0)}'")
+        tm = THIRD_PERSON_RE.search(bq)
+        if tm:
+            rows.append(f"INFO\t{rel}:{lineno}\tread-aloud blockquote "
+                        f"uses 3rd-person pronoun '{tm.group(0)}' "
+                        f"(advisory — fine for NPCs)")
     return rows
 
 

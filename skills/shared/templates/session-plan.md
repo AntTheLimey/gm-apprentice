@@ -18,8 +18,8 @@ tags: []
      document, the person and the reason in the line that uses them.
      Keep Previously On + Active Threads + NPC Quick Reference + World
      State under about 1,000 words combined, so the first scene comes
-     fast. Full guidance: the gm-apprentice plugin's
-     session-prep/references/session-templates.md. -->
+     fast. Full guidance: the gm-apprentice plugin's session-prep
+     skill, SKILL.md, Plan shape. -->
 
 ## Session Intent
 
@@ -168,12 +168,3 @@ never in settled plan content.
 
 [Missing entities, stale files, structural issues. Handouts go in
 Handouts & Props.]
-
-## Planned vs Played
-
-[Filled in after the session by session-wrapup. Leave blank during prep.]
-
-| Planned Scene | Status | Notes |
-|---------------|--------|-------|
-| [Scene Title] | Played / Paused / Dropped | Brief note |
-| [Unplanned] [Title] | Played | Origin and note |

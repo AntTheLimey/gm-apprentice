@@ -30,6 +30,7 @@ import argparse
 import fnmatch
 import os
 import sys
+from collections.abc import Iterable
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -120,6 +121,24 @@ def broken(vault: Path, names: dict[str, set[str]],
             if target and target not in known:
                 missing.setdefault(target, {})[src] = spelling
     return missing
+
+
+def known_names(vault: Path, creating: Iterable[str] = ()) -> set[str]:
+    """Every name a link can resolve to (notes, aliases, other files), plus
+    the notes (vault-relative) a write is creating beside them."""
+    _notes, names, _out, _spell = collect(vault, [])
+    return (set(names) | attachment_names(vault)
+            | {normalize(Path(rel).stem) for rel in creating})
+
+
+def unresolved_in(text: str, known: set[str]) -> list[str]:
+    """The links in one note's `text` with no name in `known` behind them,
+    as first written there, for a writer checking the note it just wrote."""
+    written: dict[str, str] = {}
+    for b in body_links(text):
+        written.setdefault(link_target(b), link_name(b))
+    return sorted(spelling for target, spelling in written.items()
+                  if target and target not in known)
 
 
 def inbound_map(notes, names, outbound):

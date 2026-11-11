@@ -46,8 +46,8 @@ adding a new field, renaming a field, changing a field's type
 
 - [ ] Update the relevant skill reference that documents
   the entity's schema. Common locations:
-  - `session-prep/references/session-templates.md` — session
-    and session-plan schemas
+  - `session-prep/references/session-templates.md` — the session
+    index; `session-prep/SKILL.md` (Plan shape) — the session Plan
   - `shared/templates/{type}.md` — every entity type (the vault copy
     is seeded by `shared/scripts/vault_scaffold.py`)
   - `campaign-organizer/references/` — other entity types

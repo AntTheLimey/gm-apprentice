@@ -24,16 +24,16 @@ section (a template H2, or a scene's own `### ` title).
 
 Checks, by id, level, and the rule they mechanise:
   type          ERROR    frontmatter `type` must be `session-plan`
-                         (session-templates.md, Session Plan)
+                         (session-prep SKILL.md, Plan shape)
   frontmatter   WARNING  `session`/`chapter` present and a wikilink
-                         (session-templates.md, Session Plan)
+                         (session-prep SKILL.md, Plan shape)
   sections      ERROR/   ERROR for a missing '## GM Notes', WARNING for
                 WARNING  any other template H2
-                         (session-templates.md, Session Plan)
+                         (session-prep SKILL.md, Plan shape)
   order         INFO     present template H2s stay in template order
-                         (session-templates.md, Session Plan)
+                         (session-prep SKILL.md, Plan shape)
   placeholder   INFO     a template H2's body is still the template's own
-                         (session-templates.md, Session Plan)
+                         (session-prep SKILL.md, Plan shape)
   preamble      WARNING  Previously On + Active Threads + NPC Quick
                          Reference + World State <= ~1000 words
                          (SKILL.md preamble discipline comment)
@@ -53,9 +53,9 @@ Checks, by id, level, and the rule they mechanise:
                          that is attempted must be spelled exactly; a
                          legacy Objective/Setup/Behaviours/Branching
                          scene is one row
-                         (session-templates.md, Planned/Contingency Scenes)
+                         (session-prep SKILL.md, Plan shape)
   scene-type    WARNING  **Type:** is one of schema_rules.SCENE_TYPES
-                         (session-templates.md, Planned Scenes)
+                         (session-prep SKILL.md, Plan shape)
   duration      ERROR/   never estimate scene durations
                 WARNING  (shared/session-principles.md, Absolute Rules)
   audit-trail   WARNING  the Plan is an instrument, not an audit trail
@@ -125,7 +125,7 @@ class Finding:
 # Template shape
 # --------------------------------------------------------------------------
 
-# skills/session-prep/references/session-templates.md, Session Plan, in
+# skills/session-prep/SKILL.md, Plan shape (and the shipped template), in
 # template order. Title match is casefold with a trailing "..."/"…"
 # tolerated (see `_norm_title`).
 TEMPLATE_SECTIONS: tuple[str, ...] = (
@@ -146,7 +146,6 @@ TEMPLATE_SECTIONS: tuple[str, ...] = (
     "Spotlight Forecast",
     "Open Questions",
     "Gaps & Actions",
-    "Planned vs Played",
 )
 
 PREAMBLE_TITLES: tuple[str, ...] = (
@@ -184,6 +183,8 @@ PLACEHOLDER_PHRASES: tuple[str, ...] = (
     "Left blank during prep",
     "Same structure",
 )
+# Planned vs Played left the template in 1.12.11 (nothing filled it); an
+# older Plan's blank one is not reported.
 PLACEHOLDER_EXEMPT_FROM_REPORTING = {"planned vs played"}
 # A template table's example row. The section is placeholder only while
 # that row is the table's sole data row and nothing but `[...]` guidance
@@ -266,6 +267,26 @@ GUARD_SECTIONS: tuple[str, ...] = (
 # `--gm-input` names for the guard sections, in GUARD_SECTIONS order.
 GM_INPUT_PARTS: dict[str, str] = dict(zip(
     ("intent", "scenes", "spotlight"), GUARD_SECTIONS))
+
+
+def gm_input_parts(values: list[str] | None) -> bool | frozenset[str]:
+    """`--gm-input`'s meaning: False when it is absent, True when bare (the
+    GM supplied the whole spine), else the guard sections its parts name.
+    Parts may be spaced or comma-separated; an unknown one is a ValueError
+    naming the parts there are."""
+    if values is None:
+        return False
+    if not values:
+        return True  # bare: the whole spine
+    parts = [p.casefold() for v in values for p in re.split(r"[,\s]+", v) if p]
+    if not parts:  # `--gm-input ""` from an empty variable: not "all three"
+        raise ValueError(f"--gm-input: no part given (name "
+                         f"{', '.join(GM_INPUT_PARTS)}, or none for all)")
+    bad = [p for p in parts if p not in GM_INPUT_PARTS]
+    if bad:
+        raise ValueError(f"--gm-input: no part {', '.join(map(repr, bad))} "
+                         f"(choose from {', '.join(GM_INPUT_PARTS)})")
+    return frozenset(GM_INPUT_PARTS[p] for p in parts)
 # A list item opener: `- `, `* `, or `1. `. A hard-wrapped continuation
 # line carries none of these and belongs to the item above it.
 LIST_MARKER_RE = re.compile(r"^(?:[-*]|\d+\.)\s+")
@@ -289,7 +310,8 @@ def _norm_title(title: str) -> str:
 
 def _bracket_only_line(line: str) -> bool:
     s = re.sub(r"^[-*]\s+", "", line.strip())
-    return bool(re.fullmatch(r"\[.*\]\.?", s))
+    # A bullet that is a wikilink (`- [[Nowhere Inn]]`) is content.
+    return not s.startswith("[[") and bool(re.fullmatch(r"\[.*\]\.?", s))
 
 
 def _is_placeholder_body(body: str) -> bool:
@@ -930,14 +952,15 @@ def _name_hits(target: str, notes: list[tuple[str, Any]]) -> list[str]:
     return [rel for rel, _ in notes if sc.normalize(Path(rel).stem) == want]
 
 
-def check_scene_pointers(rel: str, text: str, vault: Path
-                         ) -> list[Finding]:
+def check_scene_pointers(rel: str, text: str, vault: Path,
+                         vault_rel: str | None = None) -> list[Finding]:
     """A WARNING for each `### [[Scene]]` pointer the play brief could not
     follow: no note of that name, a note that does not read as
     `type: scene`, or a bare name that two chapters' scenes share."""
     import session_context as sc
-    try:
-        plan_rel = Path(rel).resolve().relative_to(vault.resolve()).as_posix()
+    try:  # `vault_rel`: a writer that knows the Plan's place says so
+        plan_rel = vault_rel or (
+            Path(rel).resolve().relative_to(vault.resolve()).as_posix())
     except ValueError:
         plan_rel = rel
     if vl.is_skipped_path(plan_rel):
@@ -994,7 +1017,8 @@ def _has_pointers(text: str) -> bool:
 
 def run_checks(rel: str, text: str, fm: dict[str, Any], headless: bool,
                gm_input: bool | frozenset[str] = False,
-               vault: Path | None = None) -> list[Finding]:
+               vault: Path | None = None,
+               vault_rel: str | None = None) -> list[Finding]:
     """`gm_input`: True when the GM supplied the whole spine, or the guard
     sections the GM's request settled. `vault`, when given, is checked for
     the scene notes the Plan points at."""
@@ -1018,7 +1042,7 @@ def run_checks(rel: str, text: str, fm: dict[str, Any], headless: bool,
     findings.extend(check_guess(rel, states))
     findings.extend(check_prep_state(rel, text))
     if vault is not None:
-        findings.extend(check_scene_pointers(rel, text, vault))
+        findings.extend(check_scene_pointers(rel, text, vault, vault_rel))
     supplied = (frozenset(GUARD_SECTIONS) if gm_input is True
                  else gm_input or frozenset())
     if headless and supplied == frozenset(GUARD_SECTIONS):
@@ -1057,11 +1081,11 @@ def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("plan", type=Path, help="the Session Plan's path")
     ap.add_argument("--headless", action="store_true", help="the plan was written with no GM present: apply the hard guard")
-    ap.add_argument("--gm-input", nargs="*", choices=sorted(GM_INPUT_PARTS),
-                    metavar="PART",
-                    help="with --headless: the GM supplied the spine, so "
-                         "skip the guard; or name the parts the GM's "
-                         "request settled (intent, scenes, spotlight)")
+    ap.add_argument("--gm-input", nargs="*", metavar="PART",
+                    help="a run with no GM present (implies --headless) "
+                         "whose request supplied the spine, so skip the "
+                         "guard; or name the parts it settled (intent, "
+                         "scenes, spotlight; spaced or comma-separated)")
     mode = ap.add_mutually_exclusive_group()
     mode.add_argument("--inventory", action="store_true", help="list the plan's sections instead of findings")
     mode.add_argument("--state", action="store_true", help="print the prep-state comment instead of findings")
@@ -1073,9 +1097,12 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     ap = build_parser()
     args = ap.parse_args(argv)
-    if args.gm_input is not None and not args.headless:
-        ap.error("--gm-input only changes what --headless reports; "
-                 "pass --headless too")
+    try:
+        gm_input = gm_input_parts(args.gm_input)
+    except ValueError as e:
+        ap.error(str(e))
+    # --gm-input says what a run with no GM present was handed.
+    headless = args.headless or args.gm_input is not None
 
     try:
         text = args.plan.read_text(encoding="utf-8", errors="replace")
@@ -1085,11 +1112,8 @@ def main(argv: list[str] | None = None) -> int:
 
     rel = str(args.plan)
     fm = vl.extract_frontmatter(text) or {}
-    gm_input: bool | frozenset[str] = (
-        False if args.gm_input is None else
-        frozenset(GM_INPUT_PARTS[p] for p in args.gm_input) or True)
     vault = vl.find_vault(args.plan)
-    findings = run_checks(rel, text, fm, args.headless, gm_input, vault)
+    findings = run_checks(rel, text, fm, headless, gm_input, vault)
     if vault is None and _has_pointers(text):
         findings.append(Finding(
             "scene-pointer", "INFO", f"{rel}:1",
