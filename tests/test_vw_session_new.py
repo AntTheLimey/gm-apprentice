@@ -267,8 +267,9 @@ class SessionNewTests(unittest.TestCase):
             encoding="utf-8")
         code, out = run(self.vault, "resolve", "--export", str(self.export))
         self.assertEqual(code, 0, out)
+        # The best tag any spelling found: "Blaise" is the alias itself.
         self.assertIn("NEAR\tCharacters/NPCs/Blaise_Fabian.md\t§NPCs\t"
-                      "Mr. Blaise —", out)
+                      "Mr. Blaise — same", out)
         self.assertNotIn("ALIAS\tCharacters/NPCs/Blaise_Fabian.md\t§NPCs\t"
                          "Mr. Blaise", out)
         self.assertNotIn('J. Blaise — as "Blaise"', out)

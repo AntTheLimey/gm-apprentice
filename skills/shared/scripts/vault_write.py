@@ -3188,13 +3188,13 @@ def resolve_export(batch: Batch, entries: list[tuple[str, str]],
             spellings = [t for t, _how in tries]
             if titled:
                 spellings.append(titled.group(1))
-            near: list[tuple[str, str]] = []
-            seen: set[str] = set()
+            best: dict[str, str] = {}      # path -> its best tag
             for spelling in spellings:
-                for c in links.candidates(spelling, index, len(live)):
-                    if c[0] not in seen:
-                        seen.add(c[0])
-                        near.append(c)
+                for rel, tag in links.candidates(spelling, index, None):
+                    if (rel not in best or links.TAGS.index(tag)
+                            < links.TAGS.index(best[rel])):
+                        best[rel] = tag
+            near = list(best.items())
             # Best match first ("same", "close", "part"); among equals,
             # people, places and things before plans and documents, then a
             # note whose file name holds one spelling's every word.

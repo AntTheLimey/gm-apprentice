@@ -163,8 +163,9 @@ def _index(names: dict[str, set[str]]) -> Index:
 
 
 def candidates(name: str, index: Index,
-               limit: int = 3) -> list[tuple[str, str]]:
-    """Up to `limit` notes `name` may mean, best first: (path, tag)."""
+               limit: int | None = 3) -> list[tuple[str, str]]:
+    """Up to `limit` notes `name` may mean, best first: (path, tag);
+    `limit=None` gives every one."""
     sq, words, numbers = squash(name), _words(name), _numbers(name)
     rank: dict[str, int] = {}
     by_squash: dict[str, set[str]] = {}
@@ -181,8 +182,10 @@ def candidates(name: str, index: Index,
         elif _part(words, known_words):
             offer(rels, 2)
     if sq:
-        for near in difflib.get_close_matches(sq, list(by_squash), n=3,
-                                              cutoff=0.85):
+        for near in difflib.get_close_matches(
+                sq, list(by_squash),
+                n=len(by_squash) if limit is None else max(limit, 3),
+                cutoff=0.85):
             offer(by_squash[near], 1)
     best = sorted(rank.items(), key=lambda kv: (kv[1], kv[0]))[:limit]
     return [(rel, TAGS[r]) for rel, r in best]
