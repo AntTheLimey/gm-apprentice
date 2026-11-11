@@ -3579,20 +3579,38 @@ def plans_naming(batch: Batch, stem: str) -> list[str]:
         and vl.normalize(vl.wikilink_target(fm.get("session"))) == want)
 
 
-def after_write_rows(batch: Batch, rel: str, plan: str) -> list[str]:
-    """The vault checks prep runs on the Plan it writes, scoped to it:
-    read-aloud lines naming a PC, a multi-day Plan with no clock, and
-    links with no note behind them."""
+def after_write_rows(batch: Batch, rel: str, plan: str, index: str
+                     ) -> list[str]:
+    """The vault checks prep runs on the Plan it writes, scoped to it and
+    the scene notes its `### [[Scene]]` pointers name: read-aloud lines
+    (a PC named, a feeling dictated), table-cell pipes in those notes, a
+    multi-day Plan with no clock, and links with no note behind them. A
+    pointer that names no note is left to plan_check's scene-pointer row."""
     import graph_check as gc
+    import session_context as sc
     pc_re = vc.pc_name_regex(vl.active_pc_names(batch.vault))
-    return (vc.read_aloud_findings(rel, plan, pc_re)
-            + vc.timeline_findings(rel, plan)
-            + [f"INFO\t{rel}\tunresolved: [[{name}]] has no note or file "
-               f"behind it: a gap to fill, or a misspelt link"
-               for name in gc.unresolved_in(
-                   batch.vault, plan, [r for r, before in
-                                       batch.originals.items()
-                                       if before is None])])
+    known = gc.known_names(batch.vault, [r for r, before in
+                                         batch.originals.items()
+                                         if before is None])
+    targets = sc.scene_pointers(plan)
+    pointed = {sc.pointer_key(t) for t in targets}
+    notes = [(r, t, vl.extract_frontmatter(t) or {})
+             for r, t in vl.vault_files(batch.vault)]
+    scenes = [(r, t) for r, t, fm in notes if vl.entity_type(fm) == "scene"
+              and (vl.normalize(Path(r).stem) in pointed
+                   or vl.normalize(r.removesuffix(".md")) in pointed)]
+    index_fm = vl.extract_frontmatter(batch.texts[index]) or {}
+    rows = (vc.read_aloud_findings(rel, plan, pc_re)
+            + vc.timeline_findings(rel, plan, index_fm.get("in_game_date")))
+    for r, t in [(rel, plan)] + scenes:
+        if r != rel:
+            rows += vc.read_aloud_findings(r, t, pc_re)
+            rows += vc.table_findings(r, t)
+        rows += [f"INFO\t{r}\tunresolved: [[{name}]] has no note or file "
+                 f"behind it: a gap to fill, or a misspelt link"
+                 for name in gc.unresolved_in(t, known)
+                 if r != rel or sc.pointer_key(name) not in pointed]
+    return rows
 
 
 def cmd_plan(batch: Batch, args: argparse.Namespace, text: str) -> None:
@@ -3652,7 +3670,7 @@ def cmd_plan(batch: Batch, args: argparse.Namespace, text: str) -> None:
     plan = batch.texts[rel]
     findings = plan_check.run_checks(
         rel, plan, vl.extract_frontmatter(plan) or {}, headless,
-        gm_input, batch.vault)
+        gm_input, batch.vault, rel)
     counts = {lv: sum(f.level == lv for f in findings)
               for lv in ("ERROR", "WARNING", "INFO")}
     # An empty section is allowed: its placeholder cues go on one line.
@@ -3662,8 +3680,17 @@ def cmd_plan(batch: Batch, args: argparse.Namespace, text: str) -> None:
     if empty:
         rows.append(f"INFO\t{rel}\tplaceholder: empty or template text: "
                     + ", ".join(empty))
-    after = after_write_rows(batch, rel, plan)
-    counts["INFO"] += len(after)
+        counts["INFO"] -= len(empty) - 1  # printed as one row
+    try:
+        after = after_write_rows(batch, rel, plan, index)
+    except Exception as e:  # an advisory check never blocks the write
+        after = [f"WARNING\t{rel}\tthe read-aloud, clock and link "
+                 f"checks failed ({type(e).__name__}: {e}): run "
+                 f"gma vault-check <vault> read-aloud, and graph-check "
+                 f"<vault> unresolved"]
+    for row in after:
+        level = row.split("\t", 1)[0]
+        counts[level] = counts.get(level, 0) + 1
     batch.after = rows + after + [
         f"# plan_check: errors: {counts['ERROR']}  warnings: "
         f"{counts['WARNING']}  info: {counts['INFO']}"]

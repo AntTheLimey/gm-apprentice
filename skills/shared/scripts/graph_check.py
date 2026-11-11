@@ -123,14 +123,17 @@ def broken(vault: Path, names: dict[str, set[str]],
     return missing
 
 
-def unresolved_in(vault: Path, text: str,
-                  creating: Iterable[str] = ()) -> list[str]:
-    """The links in one note's `text` with no note or file behind them, as
-    first written there, for a writer checking the note it just wrote;
-    `creating`: notes (vault-relative) the same write files beside it."""
+def known_names(vault: Path, creating: Iterable[str] = ()) -> set[str]:
+    """Every name a link can resolve to (notes, aliases, other files), plus
+    the notes (vault-relative) a write is creating beside them."""
     _notes, names, _out, _spell = collect(vault, [])
-    known = (set(names) | attachment_names(vault)
-             | {normalize(Path(rel).stem) for rel in creating})
+    return (set(names) | attachment_names(vault)
+            | {normalize(Path(rel).stem) for rel in creating})
+
+
+def unresolved_in(text: str, known: set[str]) -> list[str]:
+    """The links in one note's `text` with no name in `known` behind them,
+    as first written there, for a writer checking the note it just wrote."""
     written: dict[str, str] = {}
     for b in body_links(text):
         written.setdefault(link_target(b), link_name(b))

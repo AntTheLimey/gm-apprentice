@@ -101,9 +101,9 @@ or a `###` subsection (printed as heading, size and path) with
 After the bundle, vault dives are targeted reads, proportional to the
 upcoming session's complexity, not the campaign's size.
 
-**Voices:** with the bundle, run `gma vault-check <vault> voices` and
-`gma vault-check <vault> stale-drafts` (step 16)
-(`# off: vault.voices` → none, as before). Read-aloud, scene-setting,
+**Voices:** with the bundle, run `gma vault-check <vault> voices`
+(`# off: vault.voices` → none, as before), and in the same call
+`gma vault-check <vault> stale-drafts` for step 16. Read-aloud, scene-setting,
 dialogue and handouts take the campaign voice, or a voiced
 character's own when that character speaks or writes; Plan bullets
 stay plain (Two registers). A `(none)`
@@ -381,8 +381,7 @@ content (scenes, NPCs, locations) → `ttrpg-expert`; vault structure
 
 The write supplies the frontmatter. Send these sections in this order;
 one with nothing for it keeps its heading with an empty body (never
-"N/A"). Planned vs Played is the GM's, after play: leave it out. The
-GM-facing blank is `shared/templates/session-plan.md`.
+"N/A"). The GM-facing blank is `shared/templates/session-plan.md`.
 
 - `## Session Intent` — the GM's purpose in one or two sentences: what
   it is about, whose moment it is (step 11).
@@ -398,8 +397,9 @@ GM-facing blank is `shared/templates/session-plan.md`.
 - `## Planned Scenes` — the scenes, skeleton below (step 14). Every
   line a bullet, table row or one-line label; the read-aloud blockquote
   is the only prose. Not word-capped: cut bloat, not substance.
-- `## Contingency Scenes` — each `### Title`, a one-line
-  `**Trigger:**`, then `**Then**` bullets.
+- `## Contingency Scenes` — trigger and consequences only (skeleton
+  below); promote one to a full scene only if it needs its own NPCs and
+  Points to land.
 - `## Handouts & Props` — `| Document | Scene | Status | Notes |`, one
   row each in scene order, status built, print or to build; else "No
   handouts or props."
@@ -411,7 +411,8 @@ GM-facing blank is `shared/templates/session-plan.md`.
 - `## Spotlight Forecast` — per PC: role and moment, none blank (step 13).
 - `## Open Questions` — plot questions with 2–3 seeds;
   `- [ ] **Missing:** {value, whose sheet}`; guesses only here (Hard Guard).
-- `## Gaps & Actions` — missing entities, stale files (step 16).
+- `## Gaps & Actions` — missing entities, stale files, structural
+  issues (step 16); handouts go in Handouts & Props.
 
 A scene: `### Scene N: Title` (or a scene note's `### [[Title]]`, step
 14). Only **Situation:** and **Starts it:** are required; use the rest
@@ -426,16 +427,26 @@ its title, `Scene 0`, or `**Type:** transition`.
 **Entities:** [[NPC]], [[Location]], [[Item]]
 **Handouts:** [[Document]] — what this scene hands over, and how
 **NPCs**
-- **[[Name]]:** wants X. Does Y if left alone.
+- **[[Name]]:** wants X. Does Y if left alone. Two lines at most.
 **Points to land**
-- [ ] A fact the GM must convey however the improv goes.
+- [ ] A fact the GM must convey however the improv goes; the scene is
+  done when these are ticked.
 **If the players...**
 | Do | Then |
 |---|---|
 | A choice the table may make | What the situation does in reply |
+| Nobody engages by [time] | What the NPCs do on their own |
 **Complications**
-- A curveball to drop when the scene sags.
+- A curveball to drop when the scene sags; two or three.
 
 > Read-aloud: 2–4 sentences of sensory description to the table; never
 > names one PC or dictates a feeling.
+```
+
+A contingency scene, `### Title` under Contingency Scenes:
+
+```markdown
+**Trigger:** One line: what sets it off.
+**Then**
+- What happens, as bullets.
 ```

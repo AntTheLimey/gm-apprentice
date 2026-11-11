@@ -28,7 +28,7 @@ Checks, by id, level, and the rule they mechanise:
   frontmatter   WARNING  `session`/`chapter` present and a wikilink
                          (session-prep SKILL.md, Plan shape)
   sections      ERROR/   ERROR for a missing '## GM Notes', WARNING for
-                WARNING  any other template H2 but Planned vs Played
+                WARNING  any other template H2
                          (session-prep SKILL.md, Plan shape)
   order         INFO     present template H2s stay in template order
                          (session-prep SKILL.md, Plan shape)
@@ -146,7 +146,6 @@ TEMPLATE_SECTIONS: tuple[str, ...] = (
     "Spotlight Forecast",
     "Open Questions",
     "Gaps & Actions",
-    "Planned vs Played",
 )
 
 PREAMBLE_TITLES: tuple[str, ...] = (
@@ -184,10 +183,9 @@ PLACEHOLDER_PHRASES: tuple[str, ...] = (
     "Left blank during prep",
     "Same structure",
 )
+# Planned vs Played left the template in 1.12.11 (nothing filled it); an
+# older Plan's blank one is not reported.
 PLACEHOLDER_EXEMPT_FROM_REPORTING = {"planned vs played"}
-# A template H2 a Plan may leave out: nothing fills Planned vs Played in
-# prep (the GM may after play), so a Plan without it is not short of one.
-NOT_ASKED_FOR = {"Planned vs Played"}
 # A template table's example row. The section is placeholder only while
 # that row is the table's sole data row and nothing but `[...]` guidance
 # sits beside it — a GM keeps the guidance and adds rows, and may leave
@@ -278,12 +276,17 @@ def gm_input_parts(values: list[str] | None) -> bool | frozenset[str]:
     naming the parts there are."""
     if values is None:
         return False
+    if not values:
+        return True  # bare: the whole spine
     parts = [p.casefold() for v in values for p in re.split(r"[,\s]+", v) if p]
+    if not parts:  # `--gm-input ""` from an empty variable: not "all three"
+        raise ValueError(f"--gm-input: no part given (name "
+                         f"{', '.join(GM_INPUT_PARTS)}, or none for all)")
     bad = [p for p in parts if p not in GM_INPUT_PARTS]
     if bad:
         raise ValueError(f"--gm-input: no part {', '.join(map(repr, bad))} "
                          f"(choose from {', '.join(GM_INPUT_PARTS)})")
-    return frozenset(GM_INPUT_PARTS[p] for p in parts) or True
+    return frozenset(GM_INPUT_PARTS[p] for p in parts)
 # A list item opener: `- `, `* `, or `1. `. A hard-wrapped continuation
 # line carries none of these and belongs to the item above it.
 LIST_MARKER_RE = re.compile(r"^(?:[-*]|\d+\.)\s+")
@@ -307,7 +310,8 @@ def _norm_title(title: str) -> str:
 
 def _bracket_only_line(line: str) -> bool:
     s = re.sub(r"^[-*]\s+", "", line.strip())
-    return bool(re.fullmatch(r"\[.*\]\.?", s))
+    # A bullet that is a wikilink (`- [[Nowhere Inn]]`) is content.
+    return not s.startswith("[[") and bool(re.fullmatch(r"\[.*\]\.?", s))
 
 
 def _is_placeholder_body(body: str) -> bool:
@@ -425,7 +429,7 @@ def check_sections(rel: str, by_norm: dict[str, tuple[int, str, str]]
                    ) -> list[Finding]:
     findings = []
     for title in TEMPLATE_SECTIONS:
-        if _norm_title(title) in by_norm or title in NOT_ASKED_FOR:
+        if _norm_title(title) in by_norm:
             continue
         if title in SECTION_ERROR_TITLES:
             findings.append(Finding(
@@ -948,14 +952,15 @@ def _name_hits(target: str, notes: list[tuple[str, Any]]) -> list[str]:
     return [rel for rel, _ in notes if sc.normalize(Path(rel).stem) == want]
 
 
-def check_scene_pointers(rel: str, text: str, vault: Path
-                         ) -> list[Finding]:
+def check_scene_pointers(rel: str, text: str, vault: Path,
+                         vault_rel: str | None = None) -> list[Finding]:
     """A WARNING for each `### [[Scene]]` pointer the play brief could not
     follow: no note of that name, a note that does not read as
     `type: scene`, or a bare name that two chapters' scenes share."""
     import session_context as sc
-    try:
-        plan_rel = Path(rel).resolve().relative_to(vault.resolve()).as_posix()
+    try:  # `vault_rel`: a writer that knows the Plan's place says so
+        plan_rel = vault_rel or (
+            Path(rel).resolve().relative_to(vault.resolve()).as_posix())
     except ValueError:
         plan_rel = rel
     if vl.is_skipped_path(plan_rel):
@@ -1012,7 +1017,8 @@ def _has_pointers(text: str) -> bool:
 
 def run_checks(rel: str, text: str, fm: dict[str, Any], headless: bool,
                gm_input: bool | frozenset[str] = False,
-               vault: Path | None = None) -> list[Finding]:
+               vault: Path | None = None,
+               vault_rel: str | None = None) -> list[Finding]:
     """`gm_input`: True when the GM supplied the whole spine, or the guard
     sections the GM's request settled. `vault`, when given, is checked for
     the scene notes the Plan points at."""
@@ -1036,7 +1042,7 @@ def run_checks(rel: str, text: str, fm: dict[str, Any], headless: bool,
     findings.extend(check_guess(rel, states))
     findings.extend(check_prep_state(rel, text))
     if vault is not None:
-        findings.extend(check_scene_pointers(rel, text, vault))
+        findings.extend(check_scene_pointers(rel, text, vault, vault_rel))
     supplied = (frozenset(GUARD_SECTIONS) if gm_input is True
                  else gm_input or frozenset())
     if headless and supplied == frozenset(GUARD_SECTIONS):

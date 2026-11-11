@@ -343,6 +343,69 @@ class PlanTests(unittest.TestCase):
         self.assertIn("unresolved: [[Ma Barker]]", out)  # a real gap
         self.assertNotIn("[[Session 02 - The Quay]] has no note", out)
 
+    def test_an_empty_gm_input_part_is_refused(self):
+        code, out = run(self.vault, "--number", "2", "--gm-input", "")
+        self.assertEqual(code, 1)
+        self.assertIn("no part given", out)
+
+    def test_a_multi_day_session_gets_the_clock_cue(self):
+        # The Plan has no date of its own: the index's in_game_date counts.
+        (self.vault / INDEX).write_text(INDEX_TEXT.replace(
+            "play_date: null",
+            'play_date: null\nin_game_date: ["1815-06-01", "1815-06-03"]'))
+        _code, out = run(self.vault, "--number", "2")
+        self.assertIn("multi-day plan", out)
+
+    def _scene(self, name, body):
+        (self.vault / CHAPTER / "Scenes").mkdir(exist_ok=True)
+        (self.vault / CHAPTER / "Scenes" / f"{name}.md").write_text(
+            "---\ntype: scene\nstatus: planned\n---\n" + body)
+
+    def test_the_scene_notes_it_points_at_are_checked_too(self):
+        (self.vault / "Characters/PCs").mkdir(parents=True)
+        (self.vault / "Characters/PCs/Rosa Vance.md").write_text(
+            "---\ntype: pc\nstatus: active\n---\n# Rosa Vance\n")
+        self._scene("The Ball", "> Rosa watches. You feel afraid.\n\n"
+                    "| Who | Where |\n|---|---|\n"
+                    "| [[Margaret Barker\\|Ma]] | hall |\n\n"
+                    "Ask [[Old Tom]].\n")
+        body = BODY + "\n### [[The Ball]]\n**Purpose:** x.\n"
+        _code, out = run(self.vault, "--number", "2", stdin=body)
+        scene = f"{CHAPTER}/Scenes/The Ball.md"
+        self.assertIn(f"{scene}:5\tread-aloud blockquote names PC 'Rosa'",
+                      out)
+        self.assertIn("dictates player feeling", out)
+        self.assertIn("escaped pipe", out)
+        self.assertIn(f"{scene}\tunresolved: [[Old Tom]]", out)
+
+    def test_a_missing_pointer_is_one_row_not_two(self):
+        body = BODY + "\n### [[The Missing Scene]]\n**Purpose:** x.\n"
+        _code, out = run(self.vault, "--number", "2", stdin=body)
+        self.assertIn("scene-pointer: no note is named", out)
+        self.assertNotIn("[[The Missing Scene]] has no note", out)
+
+    def test_the_summary_counts_the_rows_printed(self):
+        body = BODY.replace("## GM Notes\n", "## GM Notes\n\n## World State\n"
+                            "\n## Open Questions\n")
+        _code, out = run(self.vault, "--number", "2", stdin=body)
+        lines = out.splitlines()
+        start = next(i for i, ln in enumerate(lines) if ln.startswith("# create"))
+        rows = lines[start + 1:-1]
+        summary = lines[-1]
+        for level in ("ERROR", "WARNING", "INFO"):
+            n = sum(r.startswith(level + "\t") for r in rows)
+            self.assertIn(f"{level.lower() if level != 'INFO' else 'info'}"
+                          f"{'s' if level != 'INFO' else ''}: {n}", summary,
+                          (level, out))
+
+    def test_a_failing_advisory_check_warns_and_still_writes(self):
+        with mock.patch.object(vw, "after_write_rows",
+                               side_effect=RuntimeError("boom")):
+            code, out = run(self.vault, "--number", "2", "--write")
+        self.assertEqual(code, 0, out)
+        self.assertIn("checks failed (RuntimeError: boom)", out)
+        self.assertTrue((self.vault / PLAN).exists())
+
     def test_the_write_checks_its_scene_pointers(self):
         body = BODY + "\n### [[The Missing Scene]]\n**Purpose:** x.\n"
         _code, out = run(self.vault, "--number", "2", stdin=body)

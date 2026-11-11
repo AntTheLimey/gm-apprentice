@@ -721,11 +721,14 @@ def check_timeline(vault: Path) -> list[str]:
             for r in timeline_findings(rel, text)]
 
 
-def timeline_findings(rel: str, text: str) -> list[str]:
-    """`check_timeline`'s row for one note, if it is a multi-day Plan."""
+def timeline_findings(rel: str, text: str,
+                      index_date: object = None) -> list[str]:
+    """`check_timeline`'s row for one note, if it is a multi-day Plan. A
+    Plan's template has no date: `index_date` is its session index's
+    `in_game_date`, used when the Plan has none."""
     fm = extract_frontmatter(text) or {}
     if (fm.get("type") != "session-plan"
-            or not _is_multi_day(fm.get("in_game_date"))
+            or not _is_multi_day(fm.get("in_game_date") or index_date)
             or TIMELINE_SECTION_RE.search(text)):
         return []
     return [f"INFO\t{rel}\tmulti-day plan (in_game_date spans "
