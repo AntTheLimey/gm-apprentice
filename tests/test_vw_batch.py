@@ -112,7 +112,7 @@ class BatchTests(unittest.TestCase):
         vault = self.vault()
         code, out = batch(vault, WHOLE, "--skip", "2")
         self.assertEqual(code, 1)
-        self.assertIn("blocks 2 are left out: does this block need one", out)
+        self.assertIn("block 2 is left out: does this block need it?", out)
 
     def test_escaped_separator_in_a_body(self):
         vault = self.vault()
@@ -200,6 +200,19 @@ class BatchTests(unittest.TestCase):
         # GM Notes, not the players' part.
         self.assertLess(wrap.index("## GM Notes"),
                         wrap.index("### Name Conflicts"))
+
+    def test_names_apply_to_blocks_written_later_with_only(self):
+        # --skip now, --only later: the later part, without the names
+        # block, still gets the vault's spelling, and no second table.
+        vault = self.vault()
+        text = (f"=== names --wrapup \"{WRAP_REL}\"\nMallik\tMullick\n"
+                + WHOLE.replace("sold a calf.", "fed Mallik."))
+        code, out = batch(vault, text, "--write", "--skip", "5,6")
+        self.assertEqual(code, 0, out)
+        code, out = batch(vault, text, "--write", "--only", "5,6")
+        self.assertEqual(code, 0, out)
+        self.assertIn(S2 + "fed Mullick.", read(vault, BOLA))
+        self.assertEqual(read(vault, WRAP_REL).count("Name Conflicts"), 1)
 
     def test_names_rows_must_be_pairs(self):
         vault = self.vault()

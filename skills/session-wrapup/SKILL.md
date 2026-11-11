@@ -13,7 +13,9 @@ with the whole path quoted; `gma llms` lists its commands.
 run its Version Gate, then read `shared/session-document-chain.md`.
 
 **Writing: one batch.** `vw` is `gma vault-write <vault>`: you write,
-it places. Nothing goes into the vault step by step. The steps below
+it places. Nothing else goes into the vault step by step (the
+exceptions: step 1's `session-new`/`play-notes-new`, an approved
+voice, and step 4's hand edits after the write). The steps below
 write their blocks into batch files outside the vault (your scratch
 folder, else the system temp folder), named for this session and
 numbered: `wrapup-S17-1.txt`, `wrapup-S17-2.txt` and so on, a few
@@ -66,8 +68,8 @@ this Wrap-Up's GM Notes.
 **Wrap-Up file:** after the stamp, a block `=== wrapup-new --session
 "<session index>" --source "<notes' origin>"` creates it. Its name,
 `<wrap-up>` below, is the one the stamp sets,
-`Chapter_CC_Session_NN_Wrap_Up` (two digits each); a dry run after
-these first two blocks confirms it. Sections,
+`Chapter_CC_Session_NN_Wrap_Up` (two digits each); end the first
+file there (scene blocks aside), and a dry run of it confirms the name. Sections,
 per `shared/templates/session-wrap.md` (vault copy
 `_Templates/_Template_Session_WrapUp.md` if present), go in
 `=== wrapup-add "<wrap-up>"` blocks, several sections per block
@@ -219,7 +221,7 @@ the narrative.
    the Play Notes or the GM give the amount; a missing award goes
    in the Keeper Checklist.
 
-Each PC's refreshed fields and stamp show in step 5b's review; write
+Each PC's refreshed fields show in full in step 5b's review; write
 no receipt into the Wrap-Up — the PC sheet is the record.
 
 ### 4. Update the World
@@ -246,8 +248,9 @@ creating entities.
   spoiler and gm-only blocks and GM Notes secrets as they are (the
   tool will not `--replace` a section holding one); step 5c releases
   them with the GM. A frontmatter field (`status: dead`, a location):
-  a `stamp --set` block. An existing note's relationship edges are
-  the only hand edits: make them after step 5b's write.
+  a `stamp --set` block. Hand edits, made after step 5b's write: an
+  existing note's relationship edges, and a section `--replace`
+  refuses.
 - **Cross-entity claims:** when a note asserts something about a
   *different* existing entity (e.g. an aside in a NEW-NPC line
   placing an established NPC somewhere new), never fold it silently
@@ -344,21 +347,22 @@ notes show, never awards.
 ### 5b. Review and write
 
 Run `vw batch <file1> <file2> ...` (a dry run). Show the GM one review, note by
-note: what each block creates or changes, the recap and any paused
-scene's snapshot in full, a line
-for the rest of what goes in; point out any HINT or WARNING row and
+note: what each block creates or changes; in full the recap, any
+paused scene's snapshot and each PC's refreshed fields; a line for
+the rest of what goes in; point out any HINT or WARNING row and
 any player-facing section the template lacks. A refusal names every
 block at fault: fix those blocks with a small edit to their file and
 run again; never rewrite a whole file. The GM wants changes: edit those
 blocks and show them again. Wants some for later: `--skip N,M` now,
-`--only N,M` when ready. On yes: the same command with `--write`,
+`--only N,M` when ready; doesn't want one at all: delete it from its
+file. On yes: the same command with `--write`,
 once. It writes every block or none, then runs the frontmatter,
 relationships, pc-body and wrapup checks on the notes it wrote.
 
 Fix every ERROR those checks print (a small second batch, or an edit
 for frontmatter). With moments on, also run `gma moments <vault>
 check "<wrap-up>"` and fix each moment it names. Then make step 4's
-frontmatter hand edits and run `gma vault-check <vault> relationships`
+hand edits (edges, and sections the tool won't `--replace`) and run `gma vault-check <vault> relationships`
 once, one `--file` per note edited by hand, and `frontmatter --folder
 <dir>` per folder they are in. A pc-body WARNING about a missing or
 untouched `## Stat Sheet`: `shared/pc-body-structure.md` § A sheet
@@ -379,7 +383,7 @@ gma reveal-scan \
 
 The scan lists the notes this session touched that the site still
 hides, with what each hides. Give one `--also` per note any row of
-step 5b's write names, outside the session's own folder, and per
+a batch's write names, outside the session's own folder, and per
 note edited by hand after it. On a `# warning: --also` line, fix that path and run the
 scan again. On "no publish list", skip this step silently;
 on "could not ask the publish tool", tell the GM the reason and skip.

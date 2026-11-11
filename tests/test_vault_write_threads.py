@@ -837,6 +837,27 @@ class ThreadsTests(unittest.TestCase):
         self.assertIn(f"- {self.BELL} — closed: it was a gull "
                       "(Session 3)", read(vault, WRAPUP))
 
+    def test_a_second_threads_block_sees_lines_added_between(self):
+        vault = self.vault()
+        dog = "**The black dog** \u2014 seen on the quay twice."
+        path = vault.parent / f"{vault.name}-batch2.txt"
+        path.write_text(
+            f'=== section "{WRAPUP}" "Unresolved Threads" --append\n'
+            f"- {self.BELL}\n"
+            f'=== threads --wrapup "{WRAPUP}"\n'
+            + rows(("close", "wrapup", "The cracked bell", "a gull"))
+            + f'=== section "{WRAPUP}" "Unresolved Threads" --append\n'
+            f"- {dog}\n"
+            f'=== threads --wrapup "{WRAPUP}"\n'
+            + rows(("close", "wrapup", "The black dog", "a stray")),
+            encoding="utf-8")
+        self.addCleanup(path.unlink)
+        code, out = run(vault, "batch", str(path), "--write")
+        self.assertEqual(code, 0, out)
+        text = read(vault, WRAPUP)
+        self.assertIn("closed: a gull", text)
+        self.assertIn("closed: a stray", text)
+
     def test_close_wrapup_repeats_across_sessions(self):
         vault = self.unlisted_vault()
         two = vault / "Chapters/Chapter 1 - Harbour/Session 02 - Wrap-Up.md"

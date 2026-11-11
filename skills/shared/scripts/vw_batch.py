@@ -362,8 +362,10 @@ def run_block(batch: vw.Batch, b: Block) -> None:
     elif b.command == "names":
         run_names(batch, b)
     elif b.command in vw.COMMANDS and b.command not in NOT_HERE:
-        if b.command == "threads" and batch.scope is None:
-            # The vault as earlier blocks left it, not as found on disk.
+        if b.command == "threads":
+            # The vault as earlier blocks left it, not as found on disk:
+            # built again for each threads block.
+            batch.scope = None
             vw.threads_scope(batch, {rel: t for rel, t in batch.texts.items()
                                      if batch.originals.get(rel) != t})
         run_writer(batch, b)
@@ -464,8 +466,10 @@ def run(args: argparse.Namespace) -> int:
     chosen = [b for b in blocks if (b.n in only if only else b.n not in skip)]
     left_out = [b.n for b in blocks if b not in chosen]
     batch = vw.Batch(vault)
+    # Every names block's rows apply, even one left out of this run
+    # (written with an earlier part); only a chosen one writes its table.
+    apply_names([b for b in blocks if b.command == "names"], chosen)
     names = [b for b in chosen if b.command == "names"]
-    apply_names(names, chosen)
     # `names` runs last: its table goes in a Wrap-Up a block makes.
     for b in [b for b in chosen if b not in names] + names:
         if b.error:                     # refused when it was read
@@ -484,8 +488,11 @@ def run(args: argparse.Namespace) -> int:
             b.error = str(e)
             earlier = [n for n in left_out if n < b.n]
             if earlier:
-                b.error += (f" (blocks {', '.join(map(str, earlier))} are left "
-                            f"out: does this block need one of them?)")
+                b.error += (f" ({'blocks' if len(earlier) > 1 else 'block'} "
+                            f"{', '.join(map(str, earlier))} "
+                            f"{'are' if len(earlier) > 1 else 'is'} left "
+                            f"out: does this block need "
+                            f"{'one of them' if len(earlier) > 1 else 'it'}?)")
     refused = [b for b in chosen if b.error]
     if not refused:
         try:

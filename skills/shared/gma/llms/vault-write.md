@@ -541,4 +541,4 @@ relationships, pc-body and wrapup checks on what it wrote.
 | `--only` | `N,M` | write only these blocks |
 <!-- END GENERATED -->
 
-A wrap-up's writes go in one batch file: each step adds its blocks as it goes, one dry run shows the GM everything, one `--write` places it all. A refusal or a "no" leaves the file as it was: edit the blocks named and run it again, or `--skip` them for later.
+A wrap-up's writes go in one batch: a few numbered files, each written once, read in order; one dry run shows the GM everything, one `--write` places it all. A refusal or a "no" leaves the file as it was: edit the blocks named and run it again, or `--skip` them for later.

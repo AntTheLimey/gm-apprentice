@@ -46,8 +46,9 @@ on, the wrap-up adds each one's tag.
   - A PC's details are the player's: never change them; put the
     question in the Keeper Checklist for the GM to ask the player
     at the table.
-- Names: write the export's spellings as they come; the batch puts
-  the vault's in. One `=== names --wrapup "<wrap-up>"` block, a row
+- Names: in block text, write the export's spellings as they come;
+  the batch puts the vault's in. Block headers and note paths use the
+  vault's names (from `resolve`): the block leaves them alone. One `=== names --wrapup "<wrap-up>"` block, a row
   `export spelling<TAB>vault spelling` per name `resolve` marks NEAR
   and you confirm (`§Prose` rows are names misspelt in the running
   text; a full name and its short form are a row each). It replaces

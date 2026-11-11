@@ -52,7 +52,7 @@ class WrapupStep5cTests(unittest.TestCase):
     def test_scan_gets_the_paths_step_4_wrote(self):
         self.assertIn("--also <path>", self.step)
         flat = " ".join(self.step.split())
-        self.assertIn("Give one `--also` per note any row of step 5b's write "
+        self.assertIn("Give one `--also` per note any row of a batch's write "
                       "names, outside the session's own folder, and per note "
                       "edited by hand after it", flat)
         self.assertIn("On a `# warning: --also` line, fix that path and run the "

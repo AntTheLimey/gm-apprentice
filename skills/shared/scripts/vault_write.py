@@ -3188,7 +3188,7 @@ def resolve_export(batch: Batch, entries: list[tuple[str, str]],
 
 
 # A capitalised word in running text: a name, or the start of a sentence.
-_CAP_WORD_RE = re.compile(r"\b[A-Z][^\W\d_]{3,}\b")
+_WORD4_RE = re.compile(r"\b[^\W\d_]{4,}\b")
 # Notes whose names a session's prose spells: who, where, what.
 NAME_TYPES = frozenset({"pc", "npc", "location", "faction", "organization",
                         "creature", "item"})
@@ -3214,14 +3214,15 @@ def prose_near(batch: Batch, text: str, live: dict[str, set[str]],
              for w in re.findall(r"[^\W\d_]{4,}", Path(rel).stem)}
     named = {w.casefold() for _s, n in entries
              for w in re.findall(r"[^\W\d_]+", n)}
-    lower = set(re.findall(r"\b[a-z][^\W\d_]{3,}\b", text))
+    lower = {w for w in _WORD4_RE.findall(text) if w[0].islower()}
     lower |= {d.casefold() for d in (*calendar.day_name,
                                      *calendar.month_name) if d}
     prose = "\n".join(ln for ln in text.splitlines()
                       if not ln.lstrip().startswith("#"))
     seen: dict[str, int] = {}
-    for word in _CAP_WORD_RE.findall(prose):
-        seen[word] = seen.get(word, 0) + 1
+    for word in _WORD4_RE.findall(prose):
+        if word[0].isupper():           # Ólafur as well as Oliver
+            seen[word] = seen.get(word, 0) + 1
     for word, count in seen.items():
         low = word.casefold()
         if low in known or low in named or low in lower:
