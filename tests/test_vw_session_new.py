@@ -258,6 +258,21 @@ class SessionNewTests(unittest.TestCase):
         self.assertIn("NEAR\tCharacters/NPCs/Marlo Petrak.md\t§NPCs\t"
                       "Mr. Petrak — part", out)
 
+    def test_a_stripped_title_never_matches_silently(self):
+        # "Mr. Blaise" without "Mr." is Blaise_Fabian's alias, but a
+        # stripped name only offers a candidate for the GM to check; an
+        # initial ("J. Blaise") is not a title at all.
+        self.export.write_text(EXPORT.replace(
+            "### Hasib Eberhardt", "### Mr. Blaise\nX.\n\n### J. Blaise"),
+            encoding="utf-8")
+        code, out = run(self.vault, "resolve", "--export", str(self.export))
+        self.assertEqual(code, 0, out)
+        self.assertIn("NEAR\tCharacters/NPCs/Blaise_Fabian.md\t§NPCs\t"
+                      "Mr. Blaise —", out)
+        self.assertNotIn("ALIAS\tCharacters/NPCs/Blaise_Fabian.md\t§NPCs\t"
+                         "Mr. Blaise", out)
+        self.assertNotIn('J. Blaise — as "Blaise"', out)
+
     def test_a_closer_match_stays_first_whatever_its_type(self):
         # A document that is nearly the name beats a person who only
         # shares a word with it.

@@ -3147,8 +3147,15 @@ def resolve_export(batch: Batch, entries: list[tuple[str, str]],
             for n, rels in names.items()}
     live = {n: rels for n, rels in live.items() if rels}
     index = links._index(live)
-    typed = {rel for rel, note in vl.vault_files(batch.vault)
-             if vl.entity_type(vl.extract_frontmatter(note)) in NAME_TYPES}
+    typed_cache: list[set[str]] = []
+
+    def typed() -> set[str]:
+        """The people, places and things: read once, and only if asked."""
+        if not typed_cache:
+            typed_cache.append({
+                rel for rel, note in vl.vault_files(batch.vault)
+                if vl.entity_type(vl.extract_frontmatter(note)) in NAME_TYPES})
+        return typed_cache[0]
 
     def direct(spelling: str) -> tuple[str, list[str]] | None:
         n = vl.normalize(spelling)
@@ -3165,10 +3172,10 @@ def resolve_export(batch: Batch, entries: list[tuple[str, str]],
         if paren:
             tries += [(p.strip(), f' — as "{p.strip()}"')
                       for p in paren.groups() if p.strip()]
-        # "Mr. Ashworth", "Dr. Moreau": a short title with a full stop.
-        titled = re.match(r"^[A-Z][a-z]{0,3}\.\s+(\S.*)$", name)
-        if titled:
-            tries.append((titled.group(1), f' — as "{titled.group(1)}"'))
+        # "Mr. Ashworth", "Dr. Moreau": a short title with a full stop
+        # (two letters or more: "J. Smith" is an initial). Tried only for
+        # NEAR candidates, never as an EXACT or ALIAS match.
+        titled = re.match(r"^[A-Z][a-z]{1,3}\.\s+(\S.*)$", name)
         for spelling, how in tries:
             hit = direct(spelling)
             if hit:
@@ -3178,21 +3185,30 @@ def resolve_export(batch: Batch, entries: list[tuple[str, str]],
                 batch.row(verb, rels[0], where, name + how + also)
                 break
         else:
+            spellings = [t for t, _how in tries]
+            if titled:
+                spellings.append(titled.group(1))
             near: list[tuple[str, str]] = []
-            for spelling, _how in tries:
-                near += [c for c in links.candidates(spelling, index, 50)
-                         if c[0] not in {n for n, _t in near}]
+            seen: set[str] = set()
+            for spelling in spellings:
+                for c in links.candidates(spelling, index, len(live)):
+                    if c[0] not in seen:
+                        seen.add(c[0])
+                        near.append(c)
             # Best match first ("same", "close", "part"); among equals,
             # people, places and things before plans and documents, then a
-            # note whose file name holds the name before one by alias.
-            words = set(re.findall(r"[^\W\d_]{3,}",
-                                   tries[-1][0].casefold()))
+            # note whose file name holds one spelling's every word.
+            wordsets = [set(re.findall(r"[^\W\d_]{3,}", t.casefold()))
+                        for t in spellings]
 
             def in_stem(path: str) -> bool:
-                return words <= set(re.findall(
-                    r"[^\W\d_]{3,}", Path(path).stem.casefold()))
-            near.sort(key=lambda c: (links.TAGS.index(c[1]),
-                                     c[0] not in typed, not in_stem(c[0])))
+                stem = set(re.findall(r"[^\W\d_]{3,}",
+                                      Path(path).stem.casefold()))
+                return any(w and w <= stem for w in wordsets)
+            if len(near) > 1:
+                near.sort(key=lambda c: (links.TAGS.index(c[1]),
+                                         c[0] not in typed(),
+                                         not in_stem(c[0])))
             near = near[:3]
             if near:
                 more = "".join(f"; or {rel} ({tag})" for rel, tag in near[1:])
@@ -3201,7 +3217,7 @@ def resolve_export(batch: Batch, entries: list[tuple[str, str]],
             else:
                 batch.row("NONE", "", where, name)
     if text:
-        prose_near(batch, text, live, entries, typed)
+        prose_near(batch, text, live, entries, typed())
 
 
 # A capitalised word in running text: a name, or the start of a sentence.
