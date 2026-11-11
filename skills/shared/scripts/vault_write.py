@@ -248,6 +248,8 @@ class Batch:
             raise WriteError(f"{rel}: already exists")
         self.originals[rel] = None
         self.texts[rel] = text
+        if self._listing is not None:     # a later lookup finds it by name
+            self._listing[nfc(rel)] = rel
 
     def put(self, rel: str, text: str) -> None:
         if rel not in self.texts:
@@ -4667,6 +4669,27 @@ def build_parser() -> argparse.ArgumentParser:
                     "scenes, spotlight, spaced or comma-separated; bare: all)")
     pl.add_argument("--write", action="store_true", help="write it (default: preview)")
     ap.epilog = 'Example: gma vault-write "<vault>" wrapup-add "<wrap-up>" --write'
+    bt = sub.add_parser(
+        "batch", help="many writes, one plan, one commit",
+        formatter_class=raw, description=(
+            "Runs the blocks in FILE in order against one plan: each\n"
+            "'=== <command> <args>' line starts a block whose body is that\n"
+            "command's stdin. Commands: every writer here, plus\n"
+            "'stamp FILE... <stamp-entities options>', 'note-new PATH'\n"
+            "(body: the whole note) and 'section NOTE HEADING\n"
+            "[--append|--replace]' (body: the text). A body line starting\n"
+            "'===' is written '\\==='. Without --write: each block's rows,\n"
+            "nothing written. With --write: every chosen block, or none if\n"
+            "any is refused (all refusals listed), then the frontmatter,\n"
+            "relationships, pc-body and wrapup checks on what it wrote."))
+    bt.add_argument("file", help="the batch file, or - for stdin")
+    bt.add_argument("--write", action="store_true",
+                    help="write it (default: preview)")
+    pick = bt.add_mutually_exclusive_group()
+    pick.add_argument("--skip", metavar="N,M",
+                      help="leave these blocks out, for later")
+    pick.add_argument("--only", metavar="N,M",
+                      help="write only these blocks")
     return ap
 
 
@@ -4721,6 +4744,9 @@ def main(argv: list[str] | None = None, stdin: str | None = None) -> int:
         print(f"{cli_name()}: {args.vault} is not a folder",
               file=sys.stderr)
         return 2
+    if args.command == "batch":
+        import vw_batch     # here: it imports this module
+        return vw_batch.run(args)
     needs_stdin = args.command not in NO_STDIN
     batch = Batch(args.vault)
     if args.command == "status" and args.show:
