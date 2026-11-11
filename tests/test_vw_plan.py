@@ -406,6 +406,24 @@ class PlanTests(unittest.TestCase):
         self.assertIn("checks failed (RuntimeError: boom)", out)
         self.assertTrue((self.vault / PLAN).exists())
 
+    def test_a_failed_pc_lookup_keeps_the_other_checks(self):
+        (self.vault / INDEX).write_text(INDEX_TEXT.replace(
+            "play_date: null",
+            'play_date: null\nin_game_date: ["1815-06-01", "1815-06-03"]'))
+        self._scene("The Ball", "| Who | Where |\n|---|---|\n"
+                    "| [[Margaret Barker\\|Ma]] | hall |\n")
+        body = BODY + "\n### [[The Ball]]\n**Purpose:** x.\n"
+        with mock.patch.object(vw.vl, "active_pc_names",
+                               side_effect=RuntimeError("no settings")):
+            code, out = run(self.vault, "--number", "2", "--write",
+                            stdin=body)
+        self.assertEqual(code, 0, out)
+        self.assertIn("the PC names could not be read (RuntimeError: "
+                      "no settings)", out)
+        self.assertIn("multi-day plan", out)
+        self.assertIn("escaped pipe", out)
+        self.assertNotIn("checks failed", out)
+
     def test_the_write_checks_its_scene_pointers(self):
         body = BODY + "\n### [[The Missing Scene]]\n**Purpose:** x.\n"
         _code, out = run(self.vault, "--number", "2", stdin=body)

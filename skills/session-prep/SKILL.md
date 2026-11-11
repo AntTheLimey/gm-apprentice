@@ -303,7 +303,8 @@ implies `--headless`).
   missing `## GM Notes`.
 - WARNING rows — fix silently when mechanical (`preamble`, `recap`,
   `audit-trail`, `pc-state`, `scene-type`, `scene-pointer`, the other
-  `sections`); raise as a question when they touch content.
+  `sections`); raise as a question when they touch content. A
+  `checks failed` row: run the commands it names.
 - INFO rows are cues (`read-aloud`, `scene-length`, `placeholder`). A
   read-aloud line that names a PC, dictates a feeling ("you feel…") or
   uses a 3rd-person pronoun: raise the real ones as a question ("Scene

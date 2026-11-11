@@ -3588,7 +3588,14 @@ def after_write_rows(batch: Batch, rel: str, plan: str, index: str
     pointer that names no note is left to plan_check's scene-pointer row."""
     import graph_check as gc
     import session_context as sc
-    pc_re = vc.pc_name_regex(vl.active_pc_names(batch.vault))
+    rows: list[str] = []
+    try:  # the PC lookup reads settings; losing it costs one cue, not all
+        pc_re = vc.pc_name_regex(vl.active_pc_names(batch.vault))
+    except Exception as e:
+        pc_re = None
+        rows.append(f"WARNING\t{rel}\tread-aloud: the PC names could not be "
+                    f"read ({type(e).__name__}: {e}), so no line was checked "
+                    f"for one; the other checks ran")
     known = gc.known_names(batch.vault, [r for r, before in
                                          batch.originals.items()
                                          if before is None])
@@ -3600,8 +3607,8 @@ def after_write_rows(batch: Batch, rel: str, plan: str, index: str
               and (vl.normalize(Path(r).stem) in pointed
                    or vl.normalize(r.removesuffix(".md")) in pointed)]
     index_fm = vl.extract_frontmatter(batch.texts[index]) or {}
-    rows = (vc.read_aloud_findings(rel, plan, pc_re)
-            + vc.timeline_findings(rel, plan, index_fm.get("in_game_date")))
+    rows += (vc.read_aloud_findings(rel, plan, pc_re)
+             + vc.timeline_findings(rel, plan, index_fm.get("in_game_date")))
     for r, t in [(rel, plan)] + scenes:
         if r != rel:
             rows += vc.read_aloud_findings(r, t, pc_re)
