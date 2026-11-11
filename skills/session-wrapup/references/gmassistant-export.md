@@ -46,9 +46,13 @@ on, the wrap-up adds each one's tag.
   - A PC's details are the player's: never change them; put the
     question in the Keeper Checklist for the GM to ask the player
     at the table.
-- Keep the vault's spelling of a name. Record every export-vs-vault
-  name correction made anywhere in the wrap-up in the Wrap-Up's
-  `### Name Conflicts (export vs. vault canon)` table (Export said |
-  Vault canon | Applied). The standard path omits this section.
+- Names: write the export's spellings as they come; the batch puts
+  the vault's in. One `=== names --wrapup "<wrap-up>"` block, a row
+  `export spelling<TAB>vault spelling` per name `resolve` marks NEAR
+  and you confirm (`§Prose` rows are names misspelt in the running
+  text; a full name and its short form are a row each). It replaces
+  each in every block, wherever it sits, and writes the Wrap-Up's
+  `### Name Conflicts` table: don't write that section yourself. The
+  standard path has no such block or section.
 - Use `## Scenes` as the primary source for events meeting the
   decomposition threshold.

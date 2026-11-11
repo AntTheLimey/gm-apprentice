@@ -161,6 +161,52 @@ class BatchTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("text before the first", out)
 
+    def test_an_unquoted_apostrophe_refuses_only_its_block(self):
+        vault = self.vault()
+        code, out = batch(vault, f"=== section Ashworth's_Tent.md Log\n"
+                                 f"x\n=== section {NPC_REL} \"Campaign Log\" "
+                                 f"--append\n{S2}more.\n")
+        self.assertEqual(code, 1, out)
+        self.assertIn("## 1 section", out)
+        self.assertIn("double quotes", out)
+        self.assertIn("WOULD-ADD\t" + NPC_REL, out)    # block 2 still planned
+        self.assertIn("fix block 1 ", out)
+
+    def test_names_put_vault_spellings_everywhere_and_fill_the_table(self):
+        vault = self.vault()
+        text = (f"=== names --wrapup \"{WRAP_REL}\"\n"
+                "Gosh\tGhosh\nBaijnath Mallik\tBaijnath Mullick\n"
+                "Mallik\tMullick\nNobody\tSomebody\n"
+                + WHOLE.replace("They went to the docks.",
+                                "Baijnath Mallik dined at Gosh's house; "
+                                "Mallik paid. Goshawks circled.")
+                .replace("sold a calf.", "fed Mallik.")
+                .replace('name: "Bola"', 'name: "Bola"\naliases: [Mallik]'))
+        code, out = batch(vault, text, "--write")
+        self.assertEqual(code, 0, out)
+        wrap = read(vault, WRAP_REL)
+        self.assertIn("Baijnath Mullick dined at Ghosh's house; Mullick "
+                      "paid. Goshawks circled.", wrap)
+        self.assertIn(S2 + "fed Mullick.", read(vault, BOLA))
+        self.assertIn("aliases: [Mallik]", read(vault, BOLA))  # frontmatter
+        self.assertIn("WOULD-RENAME\t\t\tMallik -> Mullick: 2 places", out
+                      .replace("RENAMED", "WOULD-RENAME"))
+        self.assertIn("names: 'Nobody' is in no block", out)
+        self.assertIn("### Name Conflicts (export vs. vault canon)", wrap)
+        self.assertIn("| Gosh | Ghosh | 1 place |", wrap)
+        self.assertIn("| Baijnath Mallik | Baijnath Mullick | 1 place |",
+                      wrap)
+        self.assertNotIn("Nobody", wrap)
+        # GM Notes, not the players' part.
+        self.assertLess(wrap.index("## GM Notes"),
+                        wrap.index("### Name Conflicts"))
+
+    def test_names_rows_must_be_pairs(self):
+        vault = self.vault()
+        code, out = batch(vault, "=== names\nGosh\n" + WHOLE)
+        self.assertEqual(code, 1, out)
+        self.assertIn("names row 1", out)
+
     def test_bad_arguments_are_a_refusal_not_an_exit(self):
         vault = self.vault()
         code, out = batch(vault, "=== stamp\n")

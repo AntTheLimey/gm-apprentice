@@ -181,6 +181,29 @@ class StatusWriteTests(unittest.TestCase):
         self.assertEqual(out.count("WARNING\t"), 1)
         self.assertNotIn("Surlish", read(vault, PC))
 
+    def test_a_rewrite_that_loses_a_sentence_warns_but_writes(self):
+        # Georgiana's Condition, Session 17: a refresh that kept only the
+        # new fact lost two sentences of what still held.
+        vault = self.vault()
+        run(vault, "status", PC, "--write", stdin=(
+            "**Condition:** The mark runs past the middle of her left "
+            "forearm. At the ball the fork tried to come to her hand and "
+            "she held it off.\n"))
+        code, out = run(vault, "status", PC, stdin=(
+            "**Condition:** The mark runs past her wrist; it itches.\n"))
+        self.assertEqual(code, 0, out)
+        self.assertEqual(out.count("WARNING\t"), 2, out)
+        self.assertIn("drops 'At the ball the fork tried to come to her hand "
+                      "and she held it off.'", out)
+        # Kept and added to, or a field replaced whole: no warning.
+        for sent in ("**Condition:** The mark runs past the middle of her "
+                     "left forearm, and itches. At the ball the fork tried "
+                     "to come to her hand and she held it off.\n",
+                     "**Location:** Garden Reach, the hunting camp.\n"):
+            with self.subTest(sent):
+                code, out = run(vault, "status", PC, stdin=sent)
+                self.assertNotIn("WARNING", out)
+
     def test_rewording_or_adding_a_thread_does_not_warn(self):
         for sent in (
                 # Reworded, same leads.

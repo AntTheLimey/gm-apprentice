@@ -34,25 +34,29 @@ class WrapupPauseTests(unittest.TestCase):
         self.text = read("session-wrapup/SKILL.md")
 
     def test_scene_paused_full_command_after_confirm(self):
-        cmd = ('vw scene-paused --scene "<scene>" --session '
-               '"<session index>" --write')
+        cmd = ('=== scene-paused --scene "<scene>" --session '
+               '"<session index>"')
         self.assertIn(cmd, self.text)
         before = self.text[:self.text.index(cmd)]
         para = before[before.rfind("\n\n"):]
         self.assertRegex(para, r"confirm\s+with\s+the\s+GM\s+that\s+it"
                                r"\s+paused")
-        self.assertRegex(para, r"[Ss]how\s+the\s+GM\s+the\s+snapshot")
-        self.assertRegex(para, r"dry\s+run\s+\(the\s+command\s+without"
-                               r"\s+`--write`\)")
+        after = self.text[self.text.index(cmd) + len(cmd):][:60]
+        self.assertRegex(after, r"with\s+the\s+snapshot\s+as\s+its\s+body")
+        # The dry run and the single --write now belong to step 5b's batch.
+        step = section(self.text, "### 5b. Review and write")
+        self.assertRegex(step, r"\(a\s+dry\s+run\)")
+        self.assertRegex(step, r"Show\s+the\s+GM\s+one\s+review")
+        self.assertRegex(step, r"same\s+command\s+with\s+`--write`")
 
     def test_new_dropped_and_carry_named(self):
         self.assertIn("--new", self.text)
         self.assertIn(
-            'vw scene-played --scene "<scene>" --dropped --write', self.text)
+            '=== scene-played --scene "<scene>" --dropped', self.text)
         self.assertRegex(self.text, r"--carry[^\n]*\n?[^\n]*Paused Scenes")
 
     def test_reveal_step_never_proposes_from_a_scene_note(self):
-        step = section(self.text, "### 4d. What came out tonight")
+        step = section(self.text, "### 5c. What came out tonight")
         self.assertRegex(step, r"[Nn]ever propose from the Plan\s+or\s+a"
                                r"\s+scene\s+note")
 

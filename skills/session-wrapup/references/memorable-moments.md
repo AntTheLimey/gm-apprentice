@@ -28,7 +28,7 @@ recap): never from GM Notes, gm-only text or a secret.
   ```
 
 - Send the section with the other `##` sections.
-- Step 5b checks the tags after the write (`gma moments check`).
+- After the write, step 5b runs `gma moments <vault> check "<wrap-up>"`.
 
 ## Back-fill, offered once per campaign
 

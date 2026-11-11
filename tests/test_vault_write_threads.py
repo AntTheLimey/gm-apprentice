@@ -822,6 +822,21 @@ class ThreadsTests(unittest.TestCase):
         self.assertNotIn("(shared)", read(vault, WRAPUP))
         self.assertNotIn("cracked bell", self.report(vault))
 
+    def test_batch_threads_block_sees_an_earlier_blocks_wrapup_line(self):
+        vault = self.vault()     # the bell is not on disk: a block adds it
+        path = vault.parent / f"{vault.name}-batch.txt"
+        path.write_text(
+            f'=== section "{WRAPUP}" "Unresolved Threads" --append\n'
+            f"- {self.BELL}\n"
+            f'=== threads --wrapup "{WRAPUP}"\n'
+            + rows(("close", "wrapup", "The cracked bell", "it was a gull")),
+            encoding="utf-8")
+        self.addCleanup(path.unlink)
+        code, out = run(vault, "batch", str(path), "--write")
+        self.assertEqual(code, 0, out)
+        self.assertIn(f"- {self.BELL} — closed: it was a gull "
+                      "(Session 3)", read(vault, WRAPUP))
+
     def test_close_wrapup_repeats_across_sessions(self):
         vault = self.unlisted_vault()
         two = vault / "Chapters/Chapter 1 - Harbour/Session 02 - Wrap-Up.md"

@@ -13,6 +13,12 @@ Commands: every `vault-write` writer with its own arguments and stdin
     stamp FILE... <stamp-entities options>   no body
     note-new PATH                            body: the whole new note
     section NOTE HEADING [--append|--replace] body: the section's text
+    names [--wrapup WRAPUP]                  body: rows `export<TAB>vault`
+
+`names` rows are spellings to put right: every other block's text has
+each export spelling (a whole word, case kept) replaced by the vault's,
+wherever the `names` block sits; a new note's frontmatter is left alone.
+With --wrapup, the Wrap-Up gets the `### Name Conflicts` table.
 
 Every block plans against one staging area, in order, so a block sees
 what an earlier one made. Without --write it prints each block's rows
@@ -42,7 +48,8 @@ import vault_write as vw
 import vaultlib as vl
 
 HEAD_RE = re.compile(r"^=== (.*?)\s*$")
-EXTRA = ("stamp", "note-new", "section")
+EXTRA = ("stamp", "note-new", "section", "names")
+NAME_CONFLICTS = "### Name Conflicts (export vs. vault canon)"
 NOT_HERE = frozenset({"resolve"})          # read-only: run it on its own
 PAST = {**vw.VERBS, "WOULD-STAMP": "STAMPED", "WOULD-REPLACE": "REPLACED"}
 
@@ -56,6 +63,8 @@ class Block:
     body: str
     rows: list[str] = field(default_factory=list)
     error: str = ""
+    # names: (export spelling, vault spelling) -> places replaced
+    renames: dict[tuple[str, str], int] = field(default_factory=dict)
 
     @property
     def label(self) -> str:
@@ -77,11 +86,16 @@ def parse_blocks(text: str) -> list[Block]:
             body = []
             try:
                 words = shlex.split(m.group(1))
+                error = ""
             except ValueError as e:
-                raise vw.WriteError(f"line {i}: {e}") from None
+                # This block is refused; the others still plan.
+                words = m.group(1).split()[:1] or ["?"]
+                error = (f"line {i}: {e}: put a path or name holding an "
+                         f"apostrophe or a space in double quotes")
             if not words:
                 raise vw.WriteError(f"line {i}: '===' with no command")
-            blocks.append(Block(len(blocks) + 1, i, words[0], words[1:], ""))
+            blocks.append(Block(len(blocks) + 1, i, words[0], words[1:], "",
+                                error=error))
         else:
             body.append(line[1:] if line.startswith("\\===") else line)
     if not blocks:
@@ -252,6 +266,76 @@ def run_section(batch: vw.Batch, b: Block) -> None:
     batch.row(verb, rel, f"§{ns.heading}", f"{len(body)} lines")
 
 
+def name_pairs(b: Block) -> list[tuple[str, str]]:
+    pairs: list[tuple[str, str]] = []
+    for i, line in enumerate(b.body.splitlines(), 1):
+        if not line.strip():
+            continue
+        cols = [c.strip() for c in line.split("\t")]
+        if len(cols) != 2 or not all(cols) or cols[0] == cols[1]:
+            raise vw.WriteError(f"names row {i}: want 'export spelling<TAB>"
+                                f"vault spelling', two different names")
+        pairs.append((cols[0], cols[1]))
+    if not pairs:
+        raise vw.WriteError("names: no rows")
+    return pairs
+
+
+def apply_names(names: list[Block], blocks: list[Block]) -> None:
+    """Put each `names` row's vault spelling in place of its export
+    spelling in every other block's body, longest spelling first, whole
+    words only; a body's frontmatter (a new note's) is left alone. Counts
+    land on the `names` block that gave the row."""
+    pairs: dict[str, tuple[Block, str]] = {}
+    for nb in names:
+        try:
+            for old, new in name_pairs(nb):
+                if pairs.get(old, (nb, new))[1] != new:
+                    raise vw.WriteError(f"names: {old!r} is given two vault "
+                                        f"spellings")
+                pairs[old] = (nb, new)
+                nb.renames.setdefault((old, new), 0)
+        except vw.WriteError as e:
+            nb.error = str(e)
+    if not pairs or any(nb.error for nb in names):
+        return
+    pattern = re.compile(r"(?<!\w)(?:" + "|".join(
+        re.escape(o) for o in sorted(pairs, key=len, reverse=True))
+        + r")(?!\w)")
+
+    def swap(m: re.Match) -> str:
+        nb, new = pairs[m.group(0)]
+        nb.renames[(m.group(0), new)] += 1
+        return new
+    for b in blocks:
+        if b in names or b.error:
+            continue
+        fm = re.match(r"(?s)\A---\r?\n.*?\r?\n---\r?\n", b.body)
+        head = fm.group(0) if fm else ""
+        b.body = head + pattern.sub(swap, b.body[len(head):])
+
+
+def run_names(batch: vw.Batch, b: Block) -> None:
+    ap = argparse.ArgumentParser(prog="names", add_help=False)
+    ap.add_argument("--wrapup")
+    ns = _parse(ap.parse_args, b.args, "names")
+    for (old, new), count in b.renames.items():
+        if count:
+            batch.row("WOULD-RENAME", "", "", f"{old} -> {new}: {count} "
+                      f"place{'s' if count != 1 else ''}")
+        else:
+            batch.row("WARNING", "", "", f"names: {old!r} is in no block")
+    if ns.wrapup:
+        table = [NAME_CONFLICTS, "",
+                 "| Export said | Vault canon | Applied |",
+                 "|-------------|-------------|---------|"]
+        table += [f"| {old} | {new} | {count} place"
+                  f"{'s' if count != 1 else ''} |"
+                  for (old, new), count in b.renames.items() if count]
+        run_writer(batch, Block(b.n, b.line, "wrapup-add", [ns.wrapup],
+                                "\n".join(table) + "\n"))
+
+
 def run_writer(batch: vw.Batch, b: Block) -> None:
     if "--write" in b.args:
         raise vw.WriteError(f"{b.command}: --write goes on the batch, not a "
@@ -275,7 +359,13 @@ def run_block(batch: vw.Batch, b: Block) -> None:
         run_note_new(batch, b)
     elif b.command == "section":
         run_section(batch, b)
+    elif b.command == "names":
+        run_names(batch, b)
     elif b.command in vw.COMMANDS and b.command not in NOT_HERE:
+        if b.command == "threads" and batch.scope is None:
+            # The vault as earlier blocks left it, not as found on disk.
+            vw.threads_scope(batch, {rel: t for rel, t in batch.texts.items()
+                                     if batch.originals.get(rel) != t})
         run_writer(batch, b)
     else:
         known = sorted(set(vw.COMMANDS) - NOT_HERE) + list(EXTRA)
@@ -374,7 +464,12 @@ def run(args: argparse.Namespace) -> int:
     chosen = [b for b in blocks if (b.n in only if only else b.n not in skip)]
     left_out = [b.n for b in blocks if b not in chosen]
     batch = vw.Batch(vault)
-    for b in chosen:
+    names = [b for b in chosen if b.command == "names"]
+    apply_names(names, chosen)
+    # `names` runs last: its table goes in a Wrap-Up a block makes.
+    for b in [b for b in chosen if b not in names] + names:
+        if b.error:                     # refused when it was read
+            continue
         snap = _snapshot(batch)
         try:
             try:

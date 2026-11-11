@@ -28,7 +28,8 @@ arguments (`wrapup-new`, `wrapup-add`, `story`, `npc-story`,
 `scene-paused`), plus `stamp <file>... <stamp-entities options>`,
 `note-new <path>` (body: the whole note) and `section <note>
 "<heading>" [--append | --replace]` (body: text for that one section,
-found by heading path; no need to read the note first). A body line
+found by heading path; no need to read the note first), and on the
+export path `names` (`references/gmassistant-export.md`). A body line
 that starts `===` is written `\===`. Blocks run in order, so a later
 one may use what an earlier one makes. Step 5b reads the files
 together, in order, as one batch, shows the GM the whole of it once
@@ -343,7 +344,8 @@ notes show, never awards.
 ### 5b. Review and write
 
 Run `vw batch <file1> <file2> ...` (a dry run). Show the GM one review, note by
-note: what each block creates or changes, the recap in full, a line
+note: what each block creates or changes, the recap and any paused
+scene's snapshot in full, a line
 for the rest of what goes in; point out any HINT or WARNING row and
 any player-facing section the template lacks. A refusal names every
 block at fault: fix those blocks with a small edit to their file and

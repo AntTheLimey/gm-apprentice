@@ -230,6 +230,21 @@ class SessionNewTests(unittest.TestCase):
         self.assertNotIn("CREATE\t", out)
         self.assertFalse((self.vault / INDEX).exists())
 
+    def test_resolve_names_a_misspelt_name_in_the_prose(self):
+        # "Petrack" is only in the prose; "Blase" is no word of a name;
+        # English words, day names, headings and an entry's own name
+        # ("Hasib") give no row.
+        self.export.write_text(EXPORT.replace(
+            "The crew went the long way round.",
+            "On Tuesday Petrack flew. Petrack's ship. Hasib waved. "
+            "Then the Pilots slept, as pilots do."), encoding="utf-8")
+        code, out = run(self.vault, "resolve", "--export", str(self.export))
+        self.assertEqual(code, 0, out)
+        prose = [ln for ln in out.splitlines() if "§Prose" in ln]
+        self.assertEqual(prose, [
+            "NEAR\tCharacters/NPCs/Marlo Petrak.md\t§Prose\t"
+            "Petrack (2x) — close to Petrak"], out)
+
     def test_without_an_export_the_notes_are_empty_and_nothing_resolved(self):
         code, out = self.new("--write", export=False)
         self.assertEqual(code, 0, out)

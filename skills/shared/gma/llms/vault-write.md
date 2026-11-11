@@ -309,7 +309,7 @@ gma vault-write <vault> resolve --export EXPORT
 ```
 
 ```text
-The name rows session-new prints, for an export whose session is already filed.
+The name rows session-new prints, for an export whose session is already filed; a §Prose NEAR row is a name the running text may misspell.
 ```
 
 | Argument | Value | Help |
@@ -522,8 +522,11 @@ against one plan: each
 '=== <command> <args>' line starts a block whose body is that
 command's stdin. Commands: every writer here, plus
 'stamp FILE... <stamp-entities options>', 'note-new PATH'
-(body: the whole note) and 'section NOTE HEADING
-[--append|--replace]' (body: the text). A body line starting
+(body: the whole note), 'section NOTE HEADING
+[--append|--replace]' (body: the text) and 'names [--wrapup
+WRAPUP]' (rows 'export spelling<TAB>vault spelling': each is
+replaced in every other block; --wrapup adds the Name
+Conflicts table). A body line starting
 '===' is written '\==='. Without --write: each block's rows,
 nothing written. With --write: every chosen block, or none if
 any is refused (all refusals listed), then the frontmatter,
