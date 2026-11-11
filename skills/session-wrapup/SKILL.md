@@ -13,12 +13,15 @@ with the whole path quoted; `gma llms` lists its commands.
 run its Version Gate, then read `shared/session-document-chain.md`.
 
 **Writing: one batch.** `vw` is `gma vault-write <vault>`: you write,
-it places. Nothing goes into the vault step by step. Start a new
-batch file outside the vault (your scratch folder, else the system
-temp folder), named for this session, e.g. `wrapup-S17-batch.txt`;
-each step
-below adds its blocks to it as it goes, a few steps per write, never
-all at the end. A block is a line `=== <command> <args>` and then
+it places. Nothing goes into the vault step by step. The steps below
+write their blocks into batch files outside the vault (your scratch
+folder, else the system temp folder), named for this session and
+numbered: `wrapup-S17-1.txt`, `wrapup-S17-2.txt` and so on, a few
+steps per file. Write each file once, straight, with your file-writing
+tool. Never generate a batch file with a script or convert one from
+another file, and never keep the text in a second copy: that writes
+everything twice, and writing is the dearest part of a wrap-up. A
+block is a line `=== <command> <args>` and then
 that command's stdin. Commands: every `vw` writer with its own
 arguments (`wrapup-new`, `wrapup-add`, `story`, `npc-story`,
 `status`, `log`, `timeline`, `threads`, `scene-played`,
@@ -27,8 +30,9 @@ arguments (`wrapup-new`, `wrapup-add`, `story`, `npc-story`,
 "<heading>" [--append | --replace]` (body: text for that one section,
 found by heading path; no need to read the note first). A body line
 that starts `===` is written `\===`. Blocks run in order, so a later
-one may use what an earlier one makes. Step 5b shows the GM the
-whole batch once and writes it.
+one may use what an earlier one makes. Step 5b reads the files
+together, in order, as one batch, shows the GM the whole of it once
+and writes it once.
 
 **Session index:** the batch's first block stamps it:
 
@@ -338,15 +342,15 @@ notes show, never awards.
 
 ### 5b. Review and write
 
-Run `vw batch <file>` (a dry run). Show the GM one review, note by
+Run `vw batch <file1> <file2> ...` (a dry run). Show the GM one review, note by
 note: what each block creates or changes, the recap in full, a line
 for the rest of what goes in; point out any HINT or WARNING row and
 any player-facing section the template lacks. A refusal names every
-block at fault: fix those blocks in the file and run again; never
-rewrite or resend the whole file. The GM wants changes: edit those
+block at fault: fix those blocks with a small edit to their file and
+run again; never rewrite a whole file. The GM wants changes: edit those
 blocks and show them again. Wants some for later: `--skip N,M` now,
-`--only N,M` when ready. On yes: `vw batch <file> --write`. It
-writes every block or none, then runs the frontmatter,
+`--only N,M` when ready. On yes: the same command with `--write`,
+once. It writes every block or none, then runs the frontmatter,
 relationships, pc-body and wrapup checks on the notes it wrote.
 
 Fix every ERROR those checks print (a small second batch, or an edit

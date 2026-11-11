@@ -345,15 +345,24 @@ def checks(vault: Path, written: list[str]) -> list[str]:
 
 def run(args: argparse.Namespace) -> int:
     vault: Path = args.vault
+    files = args.file if isinstance(args.file, list) else [args.file]
+    blocks: list[Block] = []
     try:
-        text = (vw.read_stdin() if args.file == "-" else
-                Path(args.file).read_text(encoding="utf-8-sig"))
-    except (OSError, UnicodeDecodeError, vw.WriteError) as e:
-        print(f"ERROR\t{args.file}: cannot read as UTF-8 text "
-              f"({e.__class__.__name__})")
-        return 1
-    try:
-        blocks = parse_blocks(text)
+        for name in files:
+            try:
+                text = (vw.read_stdin() if name == "-" else
+                        Path(name).read_text(encoding="utf-8-sig"))
+            except (OSError, UnicodeDecodeError, vw.WriteError) as e:
+                print(f"ERROR\t{name}: cannot read as UTF-8 text "
+                      f"({e.__class__.__name__})")
+                return 1
+            try:
+                more = parse_blocks(text)
+            except vw.WriteError as e:
+                raise vw.WriteError(f"{name}: {e}") from None
+            for b in more:
+                b.n = len(blocks) + 1
+                blocks.append(b)
         skip = numbers(args.skip, len(blocks), "--skip")
         only = numbers(args.only, len(blocks), "--only")
     except vw.WriteError as e:

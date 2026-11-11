@@ -4694,7 +4694,8 @@ def build_parser() -> argparse.ArgumentParser:
     bt = sub.add_parser(
         "batch", help="many writes, one plan, one commit",
         formatter_class=raw, description=(
-            "Runs the blocks in FILE in order against one plan: each\n"
+            "Runs the blocks in FILE (several files: one batch, in order)\n"
+            "against one plan: each\n"
             "'=== <command> <args>' line starts a block whose body is that\n"
             "command's stdin. Commands: every writer here, plus\n"
             "'stamp FILE... <stamp-entities options>', 'note-new PATH'\n"
@@ -4704,7 +4705,9 @@ def build_parser() -> argparse.ArgumentParser:
             "nothing written. With --write: every chosen block, or none if\n"
             "any is refused (all refusals listed), then the frontmatter,\n"
             "relationships, pc-body and wrapup checks on what it wrote."))
-    bt.add_argument("file", help="the batch file, or - for stdin")
+    bt.add_argument("file", nargs="+",
+                    help="the batch file(s), read in order as one batch; "
+                    "- for stdin")
     bt.add_argument("--write", action="store_true",
                     help="write it (default: preview)")
     pick = bt.add_mutually_exclusive_group()

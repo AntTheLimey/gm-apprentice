@@ -513,11 +513,12 @@ template has it.
 many writes, one plan, one commit
 
 ```text
-gma vault-write <vault> batch <file> [options]
+gma vault-write <vault> batch <file> ... [options]
 ```
 
 ```text
-Runs the blocks in FILE in order against one plan: each
+Runs the blocks in FILE (several files: one batch, in order)
+against one plan: each
 '=== <command> <args>' line starts a block whose body is that
 command's stdin. Commands: every writer here, plus
 'stamp FILE... <stamp-entities options>', 'note-new PATH'
@@ -531,7 +532,7 @@ relationships, pc-body and wrapup checks on what it wrote.
 
 | Argument | Value | Help |
 |---|---|---|
-| `<file>` |  | the batch file, or - for stdin |
+| `<file>` |  | the batch file(s), read in order as one batch; - for stdin |
 | `--write` |  | write it (default: preview) |
 | `--skip` | `N,M` | leave these blocks out, for later |
 | `--only` | `N,M` | write only these blocks |

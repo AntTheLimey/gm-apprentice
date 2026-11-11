@@ -143,7 +143,7 @@ class BatchTests(unittest.TestCase):
         text = f'=== section {NPC_REL} "GM Notes/Wants" --replace\nIn.\n'
         code, out = batch(vault, text, "--write")
         self.assertEqual(code, 0, out)
-        self.assertIn("### Wants\nIn.\n\n### Behind", read(vault, NPC_REL))
+        self.assertIn("### Wants\n\nIn.\n\n### Behind", read(vault, NPC_REL))
 
     def test_write_flag_inside_a_block_is_refused(self):
         vault = self.vault()
@@ -166,6 +166,18 @@ class BatchTests(unittest.TestCase):
         code, out = batch(vault, "=== stamp\n")
         self.assertEqual(code, 1)
         self.assertIn("ERROR", out)
+
+    def test_several_files_are_one_batch(self):
+        vault = self.vault()
+        first, second = WHOLE.split("=== note-new")
+        one = vault.parent / f"{vault.name}-1.txt"
+        two = vault.parent / f"{vault.name}-2.txt"
+        one.write_text(first, encoding="utf-8")
+        two.write_text("=== note-new" + second, encoding="utf-8")
+        code, out = run(vault, "batch", str(one), str(two), "--write")
+        self.assertEqual(code, 0, out)
+        self.assertIn("## 4 note-new " + BOLA, out)
+        self.assertIn(S2 + "sold a calf.", read(vault, BOLA))
 
 
 if __name__ == "__main__":
