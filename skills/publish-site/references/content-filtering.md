@@ -181,7 +181,7 @@ story progress.
 **`<!-- spoiler -->` is lifecycle-managed.** There's no pre-declared
 reveal date — a GM doesn't know which session will reveal a given
 secret until play gets there. Instead, session-wrapup's "What came out
-tonight" (step 4d) lists the secrets in the notes the session touched
+tonight" (step 5c) lists the secrets in the notes the session touched
 and the GM confirms which came out. The fence markers are stripped — a
 plain text edit, so the content is permanently public prose from then
 on; `_meta/reveals.json` only records it. The publish list stays the one

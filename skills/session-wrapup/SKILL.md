@@ -12,23 +12,32 @@ with the whole path quoted; `gma llms` lists its commands.
 **On first invocation:** read `shared/session-principles.md` and
 run its Version Gate, then read `shared/session-document-chain.md`.
 
-**Placing:** `vw` is `gma vault-write <vault>`: you write, it places, text on stdin (`<<'EOF'`).
+**Writing: one batch.** `vw` is `gma vault-write <vault>`: you write,
+it places. Nothing goes into the vault step by step. Start a batch
+file in your scratch folder (`<scratch>/wrapup-batch.txt`); each step
+below adds its blocks to it as it goes, a few steps per write, never
+all at the end. A block is a line `=== <command> <args>` and then
+that command's stdin. Commands: every `vw` writer with its own
+arguments (`wrapup-new`, `wrapup-add`, `story`, `npc-story`,
+`status`, `log`, `timeline`, `threads`, `scene-played`,
+`scene-paused`), plus `stamp <file>... <stamp-entities options>`,
+`note-new <path>` (body: the whole note) and `section <note>
+"<heading>" [--append | --replace]` (body: text for that one section,
+found by heading path; no need to read the note first). Blocks run in
+order, so a later one may use what an earlier one makes. Step 5b
+shows the GM the whole batch once and writes it.
 
-**Session index:** stamp it (dry-run, then `--write` on
-confirmation):
+**Session index:** the batch's first block stamps it:
 
-```bash
-gma stamp-entities \
-  <vault> "<session index>" --set status=wrap-up \
-  --set play_date=YYYY-MM-DD --set in_game_date="<fictional date>" \
-  --set documents.wrap_up="[[Chapter_CC_Session_NN_Wrap_Up]]"
+```text
+=== stamp "<session index>" --set status=wrap-up --set play_date=YYYY-MM-DD --set in_game_date="<fictional date>" --set documents.wrap_up="[[Chapter_CC_Session_NN_Wrap_Up]]"
 ```
 
 Use `play_date`/`in_game_date`, never `planned_date`/`actual_date`.
 After Step 1, account for each Plan-linked scene and each in its
 `--carry` Paused Scenes. One the GM confirms ran to its end (a
-paused one finishing tonight too):
-`vw scene-played --scene "<scene>" --session "<session index>" --write`.
+paused one finishing tonight too): a block
+`=== scene-played --scene "<scene>" --session "<session index>"`.
 One the notes show stopped part-way (planned, resumed or born at the
 table): confirm with the GM that it paused, then write from the Play
 Notes what the GM needs to pick it up cold. Examples, not a list to
@@ -36,33 +45,30 @@ fill: a fight's initiative order with NPCs and monsters, the round,
 each combatant's condition and position, PC vitals from step 1's
 `flush` summary if any; a social set piece's progress, conversations
 had, clues dropped, where everyone is, what each PC is in the middle
-of; a cliffhanger: who was there. Show the GM the snapshot text
-and the dry run (the command without `--write`); on their yes,
-place it with
-`vw scene-paused --scene "<scene>" --session "<session index>" --write <<'EOF'`
-… `EOF`; `--new` only for a scene with no note (it files one in the
-session's chapter). Others born at the table that finished get no
-file. One the GM says won't be finished:
-`vw scene-played --scene "<scene>" --dropped --write`. Unplayed ones
-go under Skipped Prep.
+of; a cliffhanger: who was there. It goes in a block
+`=== scene-paused --scene "<scene>" --session "<session index>"`
+with the snapshot as its body; `--new` only for a scene with no note
+(it files one in the session's chapter). Others born at the table
+that finished get no file. One the GM says won't be finished:
+`=== scene-played --scene "<scene>" --dropped`. Unplayed ones go
+under Skipped Prep.
 Leave the index body alone: handoffs and notes for next session go in
 this Wrap-Up's GM Notes.
 
-**Wrap-Up file:** after the stamp, `vw wrapup-new --session
-"<session index>" --source "<notes' origin>" --write` creates it.
-Sections, per `shared/templates/session-wrap.md` (vault copy
-`_Templates/_Template_Session_WrapUp.md` if present), go in with
-`vw wrapup-add "<wrap-up>" --write <<'EOF'` … `EOF`, several per
-call (`--replace` rewrites a section already there). Those not
-marked optional/conditional are required. Add any section the GM
-or the story calls for. `##` is for players and keeps every deeper
-heading sent after it in that call, up to one the template names;
-everything else at `###` or below goes under GM Notes. So send
-Keeper sections first or separately. "players will see this" rows
-name what players can read: dry-run any call (`log` and `timeline`
-too) adding a new section or sub-section for players, one the
-template lacks, and tell the GM of any they did not ask for before
-`--write`.
+**Wrap-Up file:** after the stamp, a block `=== wrapup-new --session
+"<session index>" --source "<notes' origin>"` creates it. Sections,
+per `shared/templates/session-wrap.md` (vault copy
+`_Templates/_Template_Session_WrapUp.md` if present), go in
+`=== wrapup-add "<wrap-up>"` blocks, several sections per block
+(`--replace` rewrites a section already there). Those not marked
+optional/conditional are required. Add any section the GM or the
+story calls for. `##` is for players and keeps every deeper heading
+sent after it in that block, up to one the template names; everything
+else at `###` or below goes under GM Notes. So send Keeper sections
+first or in a block of their own. "players will see this" rows name
+what players can read: in the review, point out any new section or
+sub-section for players the template lacks that the GM did not ask
+for.
 
 **Authoring vs. preserving:** five outputs are authoring
 exceptions to `shared/content-fidelity.md`, because the source is
@@ -97,8 +103,10 @@ Read the session's Play Notes (`type: session-play-notes`). A
 session with no index or Play Notes: `vw session-new --number N
 --title "T" --play-date D [--export PATH]` files both; a session
 with an index but no Play Notes: `vw play-notes-new
---session "<index>" --play-date D [--export PATH]`. Without an
-export, ask the GM for notes (paste, path, or dictation) for them.
+--session "<index>" --play-date D [--export PATH]`. These two run on
+their own with `--write`, not in the batch: the rest works from the
+notes. Without an export, ask the GM for notes (paste, path, or
+dictation) for them.
 Read the PC roster and the session's Plan for planned-vs-actual.
 `gma plan-check <plan> --inventory` gives per-section status and
 word counts but not scene titles — open the plan body for those.
@@ -121,7 +129,8 @@ recap, a PC's before their Story entry, an NPC's when the GM gives
 them a story; on a no, say `vault.voices: false` stops the asking.
 An `(ambiguous: A, B)` row: ask the GM which note.
 
-Write `## Narrative Recap` from the Play Notes, with every entity
+Write `## Narrative Recap` (a `wrapup-add` block) from the Play
+Notes, with every entity
 `[[wiki-linked]]`, in the campaign voice (off or none: tone per
 `references/recap-formats.md`, set from the chapter overview and
 recent notes; export: the Summary verbatim, in the voice only when
@@ -136,24 +145,25 @@ never regenerates it.
 
 **Active PC roster** (also used by 3b and 3c): `gma vault-check <vault> active-pcs`, minus any PC off-screen this session.
 
-Per active PC, one `#### [[PC Name]] (Player)` block with the
+Per active PC, one `#### [[PC Name]] (Player)` part with the
 template's labels (omit empty ones), under `### PC Carry-Forward`:
-send that heading with its blocks, in its own call or before any
-`##`. Focus on player intent — stated plans, unfinished actions,
+send that heading with its parts, in a `wrapup-add` block of its own
+or before any `##`. Focus on player intent — stated plans, unfinished actions,
 shifted NPC ties, exclusive information — grounded in observable
 behaviour, not generated emotional analysis.
 
 ### 3b. Character Story Entries
 
 Write each roster PC's entry per `shared/character-story-format.md`
-— read it; its Appending command takes 3c's values. Source: Steps
+— read it; its Appending command takes 3c's values and goes in the
+batch as a `=== story ...` block (no `--write`). Source: Steps
 2–3 only. Current session only — missing earlier entries are
 vault-ingest's job.
 
-**Storied NPCs** (voiced, appeared): a passage each, in voice:
-`vw npc-story --wrapup "<wrap-up>" --as-of "<asOfSession value>"`,
-entries under `# [[NPC Name]]` lines; dry-run, then `--write`. On a
-HINT, add its `--section` only if those passages are this NPC's
+**Storied NPCs** (voiced, appeared): a passage each, in voice: a
+block `=== npc-story --wrapup "<wrap-up>" --as-of "<asOfSession value>"`,
+entries under `# [[NPC Name]]` lines. On a HINT in the dry run, add
+its `--section` to the block only if those passages are this NPC's
 story, not an appearance log or notes; unsure, ask the GM.
 
 ### 3c. PC Sheet Refresh
@@ -162,20 +172,17 @@ Refresh each roster PC's `Characters/PCs/{Name}.md` so its
 frontmatter and published `## Current Status` don't fall behind
 the narrative.
 
-1. Stamp all roster PCs in one call — `asOfSession`/`lastUpdated`
+1. Stamp all roster PCs in one block — `asOfSession`/`lastUpdated`
    and the chapter tag swapped for the current chapter's, from the
-   session index or campaign overview (non-chapter tags stay).
-   Dry-run, review, then re-run with `--write`:
+   session index or campaign overview (non-chapter tags stay):
 
-   ```bash
-   gma stamp-entities \
-     <vault> Characters/PCs/A.md Characters/PCs/B.md \
-     --session "<asOfSession value>" --date YYYY-MM-DD --retag old-tag=new-tag
+   ```text
+   === stamp Characters/PCs/A.md Characters/PCs/B.md --session "<asOfSession value>" --date YYYY-MM-DD --retag old-tag=new-tag
    ```
 
    `--session` is written verbatim: match the vault's existing
    shape (`"Chapter 4, Session 9"` or `9`). On a shape `ERROR`,
-   re-run with the matching form, not `--force-shape`.
+   change the block to the matching form, not `--force-shape`.
 2. A thread is active when it is a question or an obligation that
    can plausibly bear on the sessions ahead, given where the party is
    at the end of this session. Not threads: finished or overtaken, an
@@ -191,17 +198,16 @@ the narrative.
    threads (not shared) and exclusive knowledge, refresh
    `Location`/`Condition`/`Carrying`. Never drop a thread: Reconcile
    closes it.
-   Present tense, player-facing — not Story-file narrative. Send
-   the changed fields to `vw status <PC> --write`; it rewrites
+   Present tense, player-facing — not Story-file narrative. Put
+   the changed fields in a `=== status <PC>` block; it rewrites
    them in place (fields: `shared/pc-body-structure.md`). Don't
    read or hand-edit the sheet.
 3. Write an advancement change (XP, points) to a sheet only when
    the Play Notes or the GM give the amount; a missing award goes
    in the Keeper Checklist.
 
-Show each PC's refreshed block and frontmatter changes in the
-conversation with the Step 4 receipt; write no receipt into the
-Wrap-Up — the PC sheet is the record.
+Each PC's refreshed fields and stamp show in step 5b's review; write
+no receipt into the Wrap-Up — the PC sheet is the record.
 
 ### 4. Update the World
 
@@ -209,23 +215,28 @@ Personal setting reference may sit in `systems/{system}/personal/`
 — check it for faction ties, locations and NPC relationships when
 creating entities.
 
-- **New entities:** read `_Templates/_Template_{Type}.md`, create
-  the file from it, `canon_status: DRAFT`. Content session-play
-  already saved goes in verbatim — the template supplies structure,
-  not replacement prose. Never pattern-match off existing entity
-  files.
-- **Updated entities:** edit the entity's own file — one file per
-  entity, no separate update files. A GM ruling that replaces an
-  earlier one: strike the old one through and append
-  `superseded YYYY-MM-DD` in the same edit. Leave `withheld`, spoiler
-  and gm-only blocks and GM Notes secrets as they are; step 4d
-  releases them with the GM.
+- **New entities:** read `_Templates/_Template_{Type}.md` and write
+  the whole note from it in a `=== note-new <path>` block,
+  `canon_status: DRAFT`, its relationship edges in its frontmatter.
+  Content session-play already saved goes in verbatim — the template
+  supplies structure, not replacement prose. Never pattern-match off
+  existing entity files.
+- **Updated entities:** change the entity's own file — one file per
+  entity, no separate update files: a `=== section <note> "<heading>"`
+  block per section (`--append` adds, `--replace` rewrites), no read
+  first. A GM ruling that replaces an earlier one: strike the old one
+  through and append `superseded YYYY-MM-DD`. Leave `withheld`,
+  spoiler and gm-only blocks and GM Notes secrets as they are (the
+  tool will not `--replace` a section holding one); step 5c releases
+  them with the GM. A frontmatter field (`status: dead`, a location):
+  a `stamp --set` block. An existing note's relationship edges are
+  the only hand edits: make them after step 5b's write.
 - **Cross-entity claims:** when a note asserts something about a
   *different* existing entity (e.g. an aside in a NEW-NPC line
   placing an established NPC somewhere new), never fold it silently
   into that entity's file. Ask the GM once per claim. Confirmed →
   write it there and log it under the Wrap-Up's `### Cross-Entity
-  Claims` (`vw wrapup-add --append` adds to it). Unconfirmed or
+  Claims` (a `wrapup-add --append` block adds to it). Unconfirmed or
   deferred → log it there with `<!-- UNVERIFIED (S{n}): {claim} -->`;
   reconcile scans the Wrap-Up for these and blocks promotion.
 - **Relationship edges:** every `type:` comes from
@@ -241,10 +252,11 @@ creating entities.
   saw it: `- **[[Session link]]** — {what happened}`. Other entity
   types' templates carry no such section — don't add one unless the
   GM asks. Where the truth differs, add the matching bullet to its
-  GM Notes `### Behind the Scenes`. `vw log --write` places them
+  GM Notes `### Behind the Scenes`. One `=== log` block places them
   all, no note read first: rows
   `<path><TAB>Campaign Log<TAB>{bullet}`, or
-  `GM Notes/Behind the Scenes`. If it warns that a GM Notes has no
+  `GM Notes/Behind the Scenes` (a note the batch creates first can
+  take its rows too). If it warns that a GM Notes has no
   hidden-markers, tell the GM once per wrap-up
   (`gma vault-check <vault> gm-leak --fix` repairs it). Each
   `(projected)` entry (Behind the Scenes or Under Pressure) on an
@@ -262,57 +274,22 @@ creating entities.
   container.
 - **Timeline:** `- **{in_game_date}** — {description}`
   (`[[Event_Name]] — {summary}` when linked), or the shape this
-  timeline already uses. `vw timeline --under "<the heading this
-  timeline files the session under>" --write` places them (a new
+  timeline already uses. A `=== timeline --under "<the heading this
+  timeline files the session under>"` block places them (a new
   heading takes its hashes, `--after` sites it).
-- **Events:** create an Event file from `_Templates/_Template_Event.md`
+- **Events:** a `note-new` block from `_Templates/_Template_Event.md`
   (dated with `in_game_date:`) when a moment meets its threshold — see
   `shared/templates/event.md`'s comment if the vault copy lacks one.
 
-**Validate** with one call each, then fix every ERROR before
-presenting receipts: `gma vault-check <vault> frontmatter --folder <dir>`
-per folder touched, `gma vault-check <vault> relationships` with `--file
-<path>` repeated for every vault-relative path Step 4 created,
-edited or re-pointed — new/updated entities, re-pointed container
-children, cross-entity claim targets, Event files — `gma vault-check <vault> pc-body` with `--file Characters/PCs/{Name}.md` repeated for every
-PC refreshed in 3c (a WARNING about a missing or untouched
-`## Stat Sheet`: `shared/pc-body-structure.md` § A sheet kept
-somewhere else; when `pc-body` emits no Stat Sheet rows there is
-nothing to ask, and never ask where a sheet is kept on a campaign
-that does not publish sheets), `gma vault-check <vault> wrapup --file <wrap-up>`. A tone WARNING on a relationship you wrote or changed
-this session: use the word the row names, or where it names none the
-listed word that fits (`gma publish relationships words` prints
-them). Leave any
-other tone WARNING to campaign-qa; never run `gma tones` here. If
-Step 4 ran as sub-agents, also run `relationships` once more with
-`--newer-than <session index>` (stamped once, before Step 1, and
-never touched again) as a completeness cross-check on the `--file`
-list — a row naming a path that isn't in that list, isn't a 3b/3c
-PC or Story file, the Wrap-Up or a note only `vw` wrote means a
-sub-agent under-reported. Don't re-read files to self-check.
-
-**Receipts:** show new/updated entity content in the conversation
-as `## New Entity Files` and `## Updated Entities`, never in the
-Wrap-Up file, which only wiki-links entities.
-
-Step 4's entity writes are independent: with the Agent tool, run
-them as parallel light-model sub-agents, each returning its log
-bullets and the vault-relative paths it wrote for Validate's
-`--file` list and cross-check; otherwise sequentially. The `vw`
-calls stay with you.
+Every note this step creates or changes shows in step 5b's review:
+no separate receipts, and the Wrap-Up only wiki-links entities.
 
 ### 4b. Update Campaign Overview
 
-If `_Campaign/Campaign Overview.md` exists:
+If `_Campaign/Campaign Overview.md` exists, a block:
 
-```bash
-gma stamp-entities \
-  <vault> "_Campaign/Campaign Overview.md" \
-  --set current_game_date="<in-game date at session end>" \
-  --increment sessions_played \
-  --set last_session="[[<this session's index title>]]" \
-  --set last_play_date=YYYY-MM-DD \
-  --session "<asOfSession value>" --date YYYY-MM-DD
+```text
+=== stamp "_Campaign/Campaign Overview.md" --set current_game_date="<in-game date at session end>" --increment sessions_played --set last_session="[[<this session's index title>]]" --set last_play_date=YYYY-MM-DD --session "<asOfSession value>" --date YYYY-MM-DD
 ```
 
 `--session` takes the Overview's own shape, as in 3c.
@@ -322,9 +299,7 @@ keep the one there (leave its `--set` out), or move it on only as
 far as the notes say time passed; ask the GM if unsure. "October
 1923" never replaces "October 17, 1923".
 
-Show the dry-run rows to the GM as-is — they are the confirmation
-prompt. Yes → re-run with `--write`; no → skip. Leave
-`current_arc`, `arcs_planned`, `current_chapter`,
+Leave `current_arc`, `arcs_planned`, `current_chapter`,
 `chapters_planned`, `status` and the body to the GM.
 
 ### 4c. World Fact Scan
@@ -335,7 +310,42 @@ If `_World/` exists or the notes hold likely world facts
 `### World Fact Findings`. Stage only — reconcile (step 2.5)
 presents the three-state prompts.
 
-### 4d. What came out tonight
+### 5. Remaining GM Notes
+
+Fill What Carries Forward, World State, Keeper Checklist, Quality
+Notes and Handoff to session-prep (the section session-prep reads
+first) per the template. Then one `=== threads --wrapup "<wrap-up>"`
+block: `add shared` new shared threads, `move` a PC's that now
+involves 2+ PCs, never `(hidden)` ones. Reconcile (step 6) closes and parks. If the
+notes don't show what the players enjoyed, ask the GM once. Whatever an older vault template copy says:
+Skipped Prep lists every planned scene and clue that didn't fire,
+with what the players still need; Pending Consequences are decisions
+whose effects haven't landed; Advancement records what the sheet or
+notes show, never awards.
+
+### 5b. Review and write
+
+Run `vw batch <file>` (a dry run). Show the GM one review, note by
+note: what each block creates or changes, the recap in full, a line
+for the rest of what goes in; point out any HINT or WARNING row and
+any player-facing section the template lacks. A refusal names every
+block at fault: fix those blocks in the file and run again; never
+rewrite or resend the whole file. The GM wants changes: edit those
+blocks and show them again. Wants some for later: `--skip N,M` now,
+`--only N,M` when ready. On yes: `vw batch <file> --write`. It
+writes every block or none, then runs the frontmatter,
+relationships, pc-body and wrapup checks on the notes it wrote.
+
+Fix every ERROR those checks print (a small second batch, or an edit
+for frontmatter). Then make step 4's frontmatter hand edits and run
+`gma vault-check <vault> relationships --file <path>` once, one
+`--file` per note edited by hand. A tone WARNING on a relationship
+you wrote or changed: use the word the row names, or where it names
+none the listed word that fits (`gma publish relationships words`
+prints them). Leave any other tone WARNING to campaign-qa; never run
+`gma tones` here. Don't re-read files to self-check.
+
+### 5c. What came out tonight
 
 ```bash
 gma reveal-scan \
@@ -343,9 +353,9 @@ gma reveal-scan \
 ```
 
 The scan lists the notes this session touched that the site still
-hides, with what each hides. Give one `--also` per path Step 4
-wrote: each `relationships --file` path and each path `vw log`
-wrote to. On a `# warning: --also` line, fix that path and run the
+hides, with what each hides. Give one `--also` per note step 5b
+wrote outside the session's own folder (its CREATED, ADDED and
+STAMPED rows) and per note step 4 edited by hand. On a `# warning: --also` line, fix that path and run the
 scan again. On "no publish list", skip this step silently;
 on "could not ask the publish tool", tell the GM the reason and skip.
 From the Play Notes, the Wrap-Up and the recap, propose one list of
@@ -354,8 +364,9 @@ now known, by page, from the scan's hidden parts; clues found; props
 handed over or shown; places visited. Never propose from the Plan or
 a scene note (a paused scene's unplayed part stays hidden).
 The GM picks all, some or none; nothing changes until they confirm.
-Then rewrite any Narrative Recap, Campaign Log or Timeline line this
-run wrote that states what they kept hidden, so it says only what came
+Then rewrite (a small second batch, or an edit) any Narrative Recap,
+Campaign Log or Timeline line this run wrote that states what they
+kept hidden, so it says only what came
 out (the truth can go in GM Notes `### Behind the Scenes`). Link each
 picked prop's note (`[[Note]]`) from the recap line where it came up;
 gma reveal writes its `revealed_in` itself. On none, skip the rest.
@@ -377,20 +388,6 @@ publishes, lifts `withheld` and logs the session. No, or an ERROR
 row, puts back that page's edits and any recap link to it (or a later
 publish shows it unhidden). Tell the GM the reason on any
 ERROR row. Never publish a scene, Plan or session note.
-
-### 5. Remaining GM Notes
-
-Fill What Carries Forward, World State, Keeper Checklist, Quality
-Notes and Handoff to session-prep (the section session-prep reads
-first) per the template. Then one `vw threads --wrapup "<wrap-up>"`
-dry run and `--write`: `add shared` new shared threads, `move` a
-PC's that now involves 2+ PCs, never `(hidden)` ones (one refusal
-writes nothing). Reconcile (step 6) closes and parks. If the
-notes don't show what the players enjoyed, ask the GM once. Whatever an older vault template copy says:
-Skipped Prep lists every planned scene and clue that didn't fire,
-with what the players still need; Pending Consequences are decisions
-whose effects haven't landed; Advancement records what the sheet or
-notes show, never awards.
 
 ### 6. Review (Reconcile)
 

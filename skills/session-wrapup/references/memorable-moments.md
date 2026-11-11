@@ -28,8 +28,8 @@ recap): never from GM Notes, gm-only text or a secret.
   ```
 
 - Send the section with the other `##` sections.
-- Then run `gma moments <vault> check "<wrap-up>"` and fix each
-  moment it names (`UNTAGGED`, `UNKNOWN`) before going on.
+- After step 5b's write, run `gma moments <vault> check "<wrap-up>"`
+  and fix each moment it names (`UNTAGGED`, `UNKNOWN`).
 
 ## Back-fill, offered once per campaign
 

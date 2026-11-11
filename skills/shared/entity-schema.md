@@ -134,7 +134,7 @@ publishes, and an unlabelled `[[link]]` to it prints a neutral
 placeholder in place of the name. `gm_aliases` rewrites a secret name;
 `withheld` finds one. Write `true` or `false`; the build also reads
 `yes`, `on` and `1` as true, as it does for `gm_only`. It is a note's
-own flag and is never published. Wrap-up step 4d lifts it when the
+own flag and is never published. Wrap-up step 5c lifts it when the
 GM confirms the note came out in play.
 
 `companion` (optional boolean on an NPC or creature, absent means
