@@ -13,8 +13,10 @@ with the whole path quoted; `gma llms` lists its commands.
 run its Version Gate, then read `shared/session-document-chain.md`.
 
 **Writing: one batch.** `vw` is `gma vault-write <vault>`: you write,
-it places. Nothing goes into the vault step by step. Start a batch
-file in your scratch folder (`<scratch>/wrapup-batch.txt`); each step
+it places. Nothing goes into the vault step by step. Start a new
+batch file outside the vault (your scratch folder, else the system
+temp folder), named for this session, e.g. `wrapup-S17-batch.txt`;
+each step
 below adds its blocks to it as it goes, a few steps per write, never
 all at the end. A block is a line `=== <command> <args>` and then
 that command's stdin. Commands: every `vw` writer with its own
@@ -23,9 +25,10 @@ arguments (`wrapup-new`, `wrapup-add`, `story`, `npc-story`,
 `scene-paused`), plus `stamp <file>... <stamp-entities options>`,
 `note-new <path>` (body: the whole note) and `section <note>
 "<heading>" [--append | --replace]` (body: text for that one section,
-found by heading path; no need to read the note first). Blocks run in
-order, so a later one may use what an earlier one makes. Step 5b
-shows the GM the whole batch once and writes it.
+found by heading path; no need to read the note first). A body line
+that starts `===` is written `\===`. Blocks run in order, so a later
+one may use what an earlier one makes. Step 5b shows the GM the
+whole batch once and writes it.
 
 **Session index:** the batch's first block stamps it:
 
@@ -56,7 +59,10 @@ Leave the index body alone: handoffs and notes for next session go in
 this Wrap-Up's GM Notes.
 
 **Wrap-Up file:** after the stamp, a block `=== wrapup-new --session
-"<session index>" --source "<notes' origin>"` creates it. Sections,
+"<session index>" --source "<notes' origin>"` creates it. Its name,
+`<wrap-up>` below, is the one the stamp sets,
+`Chapter_CC_Session_NN_Wrap_Up` (two digits each); a dry run after
+these first two blocks confirms it. Sections,
 per `shared/templates/session-wrap.md` (vault copy
 `_Templates/_Template_Session_WrapUp.md` if present), go in
 `=== wrapup-add "<wrap-up>"` blocks, several sections per block
@@ -127,6 +133,8 @@ vault.voices` → no voices, as before. A `(none)` voice → draft it
 per `shared/voice.md` for the GM's yes: the campaign's before the
 recap, a PC's before their Story entry, an NPC's when the GM gives
 them a story; on a no, say `vault.voices: false` stops the asking.
+An approved voice is written at once, per `shared/voice.md`, so the
+recap can use it.
 An `(ambiguous: A, B)` row: ask the GM which note.
 
 Write `## Narrative Recap` (a `wrapup-add` block) from the Play
@@ -225,7 +233,11 @@ creating entities.
   entity, no separate update files: a `=== section <note> "<heading>"`
   block per section (`--append` adds, `--replace` rewrites), no read
   first. A GM ruling that replaces an earlier one: strike the old one
-  through and append `superseded YYYY-MM-DD`. Leave `withheld`,
+  through and append `superseded YYYY-MM-DD`. Striking something
+  through, or settling a `(projected)` entry, needs the section's
+  current text: read that note, then send the whole section in a
+  `section ... --replace` block (one that holds a gm-only or spoiler
+  block, which `--replace` refuses, is a hand edit after step 5b). Leave `withheld`,
   spoiler and gm-only blocks and GM Notes secrets as they are (the
   tool will not `--replace` a section holding one); step 5c releases
   them with the GM. A frontmatter field (`status: dead`, a location):
@@ -271,7 +283,8 @@ creating entities.
   venues, a cell between a faction and its members): offer each
   child for re-pointing, yes/no each, and set the child's fields per
   `shared/relationship-normalization.md` § Interposing a new
-  container.
+  container: the scalar in a `stamp --set` block, the edge by hand
+  after step 5b.
 - **Timeline:** `- **{in_game_date}** — {description}`
   (`[[Event_Name]] — {summary}` when linked), or the shape this
   timeline already uses. A `=== timeline --under "<the heading this
@@ -337,9 +350,15 @@ writes every block or none, then runs the frontmatter,
 relationships, pc-body and wrapup checks on the notes it wrote.
 
 Fix every ERROR those checks print (a small second batch, or an edit
-for frontmatter). Then make step 4's frontmatter hand edits and run
-`gma vault-check <vault> relationships --file <path>` once, one
-`--file` per note edited by hand. A tone WARNING on a relationship
+for frontmatter). With moments on, also run `gma moments <vault>
+check "<wrap-up>"` and fix each moment it names. Then make step 4's
+frontmatter hand edits and run `gma vault-check <vault> relationships`
+once, one `--file` per note edited by hand, and `frontmatter --folder
+<dir>` per folder they are in. A pc-body WARNING about a missing or
+untouched `## Stat Sheet`: `shared/pc-body-structure.md` § A sheet
+kept somewhere else; when `pc-body` emits no Stat Sheet rows there is
+nothing to ask, and never ask where a sheet is kept on a campaign
+that does not publish sheets. A tone WARNING on a relationship
 you wrote or changed: use the word the row names, or where it names
 none the listed word that fits (`gma publish relationships words`
 prints them). Leave any other tone WARNING to campaign-qa; never run
@@ -353,9 +372,9 @@ gma reveal-scan \
 ```
 
 The scan lists the notes this session touched that the site still
-hides, with what each hides. Give one `--also` per note step 5b
-wrote outside the session's own folder (its CREATED, ADDED and
-STAMPED rows) and per note step 4 edited by hand. On a `# warning: --also` line, fix that path and run the
+hides, with what each hides. Give one `--also` per note any row of
+step 5b's write names, outside the session's own folder, and per
+note edited by hand after it. On a `# warning: --also` line, fix that path and run the
 scan again. On "no publish list", skip this step silently;
 on "could not ask the publish tool", tell the GM the reason and skip.
 From the Play Notes, the Wrap-Up and the recap, propose one list of

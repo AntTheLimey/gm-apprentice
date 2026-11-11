@@ -155,6 +155,9 @@ class Batch:
                 nfc(p.relative_to(self.vault).as_posix()):
                     p.relative_to(self.vault).as_posix()
                 for p in self.vault.rglob("*.md")}
+            for rel, before in self.originals.items():   # made by this batch
+                if before is None and rel in self.texts:
+                    self._listing.setdefault(nfc(rel), rel)
         return self._listing
 
     def with_stem(self, stem: str) -> list[str]:
@@ -775,6 +778,24 @@ def _replace(doc: Doc, head: Head, unit: list[str]) -> tuple[str, int]:
             end - head.idx)
 
 
+def out_of_hiding(doc: Doc, head: Head, at: int) -> int:
+    """`at`, moved up past a gm-only or spoiler block that is still open
+    there, so text for the section `head` opens never lands hidden."""
+    states = {s.lineno - 1: s for s in doc.states}
+    mine = states.get(head.idx)
+    if mine is None:
+        return at
+    depth = mine.gm_depth + mine.spoiler_depth
+    j = at
+    while j - 1 > head.idx:
+        st = states.get(j - 1)
+        if st is None or not (st.gm_depth + st.spoiler_depth > depth
+                              or st.marker in OPENERS):
+            break
+        j -= 1
+    return j
+
+
 def _append(doc: Doc, head: Head, unit: list[str]) -> str:
     """The text with `unit`'s body (its heading line left out) added at the
     end of the section `head` opens."""
@@ -790,6 +811,7 @@ def _append(doc: Doc, head: Head, unit: list[str]) -> str:
         # ahead of its first deeper heading.
         end = next((h.idx for h in doc.heads
                     if head.idx < h.idx < end and h.level > head.level), end)
+        end = out_of_hiding(doc, head, end)
     return place(doc, end, body, tight=bool(LIST_RE.match(body[0])))
 
 
