@@ -33,7 +33,7 @@ def section(text, heading):
 class WrapupRecapLinkTests(unittest.TestCase):
     def setUp(self):
         self.step = section(read("session-wrapup/SKILL.md"),
-                            "### 4d. What came out tonight")
+                            "### 5c. What came out tonight")
 
     def test_picked_props_are_linked_from_the_recap(self):
         self.assertRegex(self.step, r"(?s)prop.{0,80}`\[\[.*?\]\]`.{0,80}recap")

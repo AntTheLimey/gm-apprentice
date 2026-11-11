@@ -28,13 +28,12 @@ recap): never from GM Notes, gm-only text or a secret.
   ```
 
 - Send the section with the other `##` sections.
-- Then run `gma moments <vault> check "<wrap-up>"` and fix each
-  moment it names (`UNTAGGED`, `UNKNOWN`) before going on.
+- After the write, step 5b runs `gma moments <vault> check "<wrap-up>"`.
 
 ## Back-fill, offered once per campaign
 
 When status's `backfill` line says `not offered`, offer once, after
-Step 5, to tag the moments in past wrap-ups and write moments for
+step 5c, to tag the moments in past wrap-ups and write moments for
 those with none. `gma moments <vault> list --except "<this wrap-up>"` names them; the GM picks all, some or none. Then run `gma moments <vault> offered`, whatever
 the answer, so it is never offered again.
 

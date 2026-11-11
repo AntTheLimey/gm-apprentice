@@ -62,7 +62,8 @@ one (`shared/voice.md`).
 ## Appending
 
 Write the entries, then place them all in one call, on stdin
-(`<<'EOF'`), each under a `# [[PC Name]]` line:
+(`<<'EOF'`), each under a `# [[PC Name]]` line (in a wrap-up, a
+`=== story` block in its batch, without `--write`):
 
 ```bash
 gma vault-write \

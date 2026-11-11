@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Drift guard for wrap-up step 4d, "What came out tonight".
+"""Drift guard for wrap-up step 5c, "What came out tonight".
 
 The step runs reveal_scan.py and reveal.py by full command line, so the
 model never reads their source; the GM confirms before `--write`; the
 Plan is never a source of what came out. Reconcile 3.5 no longer asks
-about spoilers itself: it points at 4d, and asks as before only when
+about spoilers itself: it points at 5c, and asks as before only when
 `_meta/reveals.json` has no entry for the session. Structural, not
 behavioral: proves the wording, not a run.
 
@@ -30,17 +30,17 @@ def section(text, heading):
     return rest[:end.start()] if end else rest
 
 
-class WrapupStep4dTests(unittest.TestCase):
+class WrapupStep5cTests(unittest.TestCase):
     def setUp(self):
         self.text = read("session-wrapup/SKILL.md")
-        self.step = section(self.text, "### 4d. What came out tonight")
+        self.step = section(self.text, "### 5c. What came out tonight")
 
-    def test_step_sits_after_4c_and_before_5(self):
+    def test_step_sits_after_5b_and_before_6(self):
         at = self.text.index
-        self.assertLess(at("### 4c. World Fact Scan"),
-                        at("### 4d. What came out tonight"))
-        self.assertLess(at("### 4d. What came out tonight"),
-                        at("### 5. Remaining GM Notes"))
+        self.assertLess(at("### 5b. Review and write"),
+                        at("### 5c. What came out tonight"))
+        self.assertLess(at("### 5c. What came out tonight"),
+                        at("### 6. Review (Reconcile)"))
 
     def test_both_scripts_by_full_command_line(self):
         for script in ("reveal-scan", "reveal"):
@@ -52,8 +52,9 @@ class WrapupStep4dTests(unittest.TestCase):
     def test_scan_gets_the_paths_step_4_wrote(self):
         self.assertIn("--also <path>", self.step)
         flat = " ".join(self.step.split())
-        self.assertIn("one `--also` per path Step 4 wrote: each `relationships "
-                      "--file` path and each path `vw log` wrote to", flat)
+        self.assertIn("Give one `--also` per note any row of a batch's write "
+                      "names, outside the session's own folder, and per note "
+                      "edited by hand after it", flat)
         self.assertIn("On a `# warning: --also` line, fix that path and run the "
                       "scan again", flat)
 
@@ -70,17 +71,18 @@ class WrapupStep4dTests(unittest.TestCase):
 
     def test_kept_secrets_leave_this_runs_player_text(self):
         flat = " ".join(self.step.split())
-        self.assertIn("rewrite any Narrative Recap, Campaign Log or Timeline "
+        self.assertIn("any Narrative Recap, Campaign Log or Timeline "
                       "line this run wrote that states what they kept hidden",
                       flat)
         self.assertLess(flat.index("what they kept hidden"),
                         flat.index("On none, skip the rest."))
 
-    def test_step_4_leaves_hiding_to_4d(self):
+    def test_step_4_leaves_hiding_to_5c(self):
         step4 = " ".join(section(self.text, "### 4. Update the World").split())
         self.assertIn("Leave `withheld`, spoiler and gm-only blocks and GM "
-                      "Notes secrets as they are; step 4d releases them "
-                      "with the GM.", step4)
+                      "Notes secrets as they are (the tool will not `--replace` a "
+                      "section holding one); step 5c releases them with the "
+                      "GM.", step4)
 
     def test_not_published_row_puts_edits_back(self):
         flat = " ".join(self.step.split())
@@ -105,8 +107,8 @@ class ReconcileSpoilerPointerTests(unittest.TestCase):
         self.step = section(read("shared/reconcile.md"),
                             "### 3.5. Spoiler reveal check")
 
-    def test_points_at_wrapup_4d(self):
-        self.assertIn("4d", self.step)
+    def test_points_at_wrapup_5c(self):
+        self.assertIn("5c", self.step)
 
     def test_keeps_the_fallback_when_no_reveal_logged(self):
         self.assertIn("`_meta/reveals.json` has no entry", self.step)

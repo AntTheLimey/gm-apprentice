@@ -12,7 +12,7 @@ gma vault-write <vault> <command> ...
 | Argument | Value | Help |
 |---|---|---|
 | `<vault>` |  | the vault folder |
-| `<command>` | `wrapup-new`, `wrapup-add`, `wrapup-settle`, `story`, `npc-story`, `status`, `threads`, `log`, `timeline`, `session-new`, `play-notes-new`, `resolve`, `promote-plan`, `chapter-new`, `scene-new`, `scene-paused`, `scene-played`, `prop-new`, `prop-hand`, `plan` |  |
+| `<command>` | `wrapup-new`, `wrapup-add`, `wrapup-settle`, `story`, `npc-story`, `status`, `threads`, `log`, `timeline`, `session-new`, `play-notes-new`, `resolve`, `promote-plan`, `chapter-new`, `scene-new`, `scene-paused`, `scene-played`, `prop-new`, `prop-hand`, `plan`, `batch` |  |
 
 Example: `gma vault-write "<vault>" wrapup-add "<wrap-up>" --write`
 <!-- END GENERATED -->
@@ -309,7 +309,7 @@ gma vault-write <vault> resolve --export EXPORT
 ```
 
 ```text
-The name rows session-new prints, for an export whose session is already filed.
+The name rows session-new prints, for an export whose session is already filed; a §Prose NEAR row is a name the running text may misspell.
 ```
 
 | Argument | Value | Help |
@@ -508,3 +508,37 @@ template has it.
 | `--gm-input` | `[PART ...]` | a run with no GM (implies --headless): the parts the request supplied (intent, scenes, spotlight, spaced or comma-separated; bare: all) |
 | `--write` |  | write it (default: preview) |
 <!-- END GENERATED -->
+
+<!-- BEGIN GENERATED: gma vault-write batch -->
+many writes, one plan, one commit
+
+```text
+gma vault-write <vault> batch <file> ... [options]
+```
+
+```text
+Runs the blocks in FILE (several files: one batch, in order)
+against one plan: each
+'=== <command> <args>' line starts a block whose body is that
+command's stdin. Commands: every writer here, plus
+'stamp FILE... <stamp-entities options>', 'note-new PATH'
+(body: the whole note), 'section NOTE HEADING
+[--append|--replace]' (body: the text) and 'names [--wrapup
+WRAPUP]' (rows 'export spelling<TAB>vault spelling': each is
+replaced in every other block; --wrapup adds the Name
+Conflicts table). A body line starting
+'===' is written '\==='. Without --write: each block's rows,
+nothing written. With --write: every chosen block, or none if
+any is refused (all refusals listed), then the frontmatter,
+relationships, pc-body and wrapup checks on what it wrote.
+```
+
+| Argument | Value | Help |
+|---|---|---|
+| `<file>` |  | the batch file(s), read in order as one batch; - for stdin |
+| `--write` |  | write it (default: preview) |
+| `--skip` | `N,M` | leave these blocks out, for later |
+| `--only` | `N,M` | write only these blocks |
+<!-- END GENERATED -->
+
+A wrap-up's writes go in one batch: a few numbered files, each written once, read in order; one dry run shows the GM everything, one `--write` places it all. A refusal or a "no" leaves the file as it was: edit the blocks named and run it again, or `--skip` them for later.

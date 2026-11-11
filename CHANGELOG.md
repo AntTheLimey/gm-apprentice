@@ -9,6 +9,18 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.12] — 2026-11-11
+
+### Changed
+
+- Wrap-up writes once: it drafts everything into one batch file, shows the GM a single review, and places it all with one write (or nothing, if anything is refused). A "no" keeps the drafts: change just the parts named, or write the rest now and those later.
+
+### Added
+
+- `gma vault-write batch`: many writes, one plan, one commit, then the note checks on exactly what it wrote. Blocks for every writer, plus `stamp`, `note-new` (a whole new note) and `section` (text into one section by heading, which won't drop a hidden block).
+- Names from a table-assistant export come out in the vault's spelling: `resolve` also finds names misspelt in the export's running text, and one `names` block puts the vault's spelling in everywhere and fills the Name Conflicts table.
+- A PC sheet refresh warns in the review when it would lose a sentence the sheet already held.
+
 ## [1.12.11] — 2026-11-10
 
 ### Changed

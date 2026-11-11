@@ -59,6 +59,8 @@ written; 2 bad arguments. Stdlib only.
 from __future__ import annotations
 
 import argparse
+import calendar
+import difflib
 import json
 import re
 import sys
@@ -155,6 +157,9 @@ class Batch:
                 nfc(p.relative_to(self.vault).as_posix()):
                     p.relative_to(self.vault).as_posix()
                 for p in self.vault.rglob("*.md")}
+            for rel, before in self.originals.items():   # made by this batch
+                if before is None and rel in self.texts:
+                    self._listing.setdefault(nfc(rel), rel)
         return self._listing
 
     def with_stem(self, stem: str) -> list[str]:
@@ -248,6 +253,8 @@ class Batch:
             raise WriteError(f"{rel}: already exists")
         self.originals[rel] = None
         self.texts[rel] = text
+        if self._listing is not None:     # a later lookup finds it by name
+            self._listing[nfc(rel)] = rel
 
     def put(self, rel: str, text: str) -> None:
         if rel not in self.texts:
@@ -773,6 +780,24 @@ def _replace(doc: Doc, head: Head, unit: list[str]) -> tuple[str, int]:
             end - head.idx)
 
 
+def out_of_hiding(doc: Doc, head: Head, at: int) -> int:
+    """`at`, moved up past a gm-only or spoiler block that is still open
+    there, so text for the section `head` opens never lands hidden."""
+    states = {s.lineno - 1: s for s in doc.states}
+    mine = states.get(head.idx)
+    if mine is None:
+        return at
+    depth = mine.gm_depth + mine.spoiler_depth
+    j = at
+    while j - 1 > head.idx:
+        st = states.get(j - 1)
+        if st is None or not (st.gm_depth + st.spoiler_depth > depth
+                              or st.marker in OPENERS):
+            break
+        j -= 1
+    return j
+
+
 def _append(doc: Doc, head: Head, unit: list[str]) -> str:
     """The text with `unit`'s body (its heading line left out) added at the
     end of the section `head` opens."""
@@ -788,6 +813,7 @@ def _append(doc: Doc, head: Head, unit: list[str]) -> str:
         # ahead of its first deeper heading.
         end = next((h.idx for h in doc.heads
                     if head.idx < h.idx < end and h.level > head.level), end)
+        end = out_of_hiding(doc, head, end)
     return place(doc, end, body, tight=bool(LIST_RE.match(body[0])))
 
 
@@ -1989,6 +2015,39 @@ def warn_dropped_threads(batch: Batch, rel: str, before: str) -> None:
                       f"`vw threads move`")
 
 
+# Fields a rewrite replaces whole: where the PC is now, the load. Open
+# threads has its own warning (`warn_dropped_threads`).
+WHOLE_FIELDS = frozenset({"location", "enc", "open threads"})
+_SENTENCE_RE = re.compile(r"(?<=[.!?;])\s+")
+_WORD_RE = re.compile(r"[^\W_]{4,}")
+
+
+def _field_text(lines: list[str]) -> str:
+    """A field's text without its label and list markers, on one line."""
+    text = " ".join(ln.strip() for ln in lines)
+    return FIELD_RE.sub("", text, count=1).replace("- ", " ")
+
+
+def warn_dropped_text(batch: Batch, rel: str, where: str,
+                      old: list[str], new: list[str]) -> None:
+    """One WARNING per sentence of a rewritten field that the new text has
+    lost: half or more of its words (four letters or more) are gone. A refresh
+    keeps what still holds; a sentence that no longer holds is the GM's
+    to see go, in the review. Warns, never refuses."""
+    label = where.rsplit("/", 1)[-1]
+    if key(label) in WHOLE_FIELDS:
+        return
+    kept = {w.casefold() for w in _WORD_RE.findall(_field_text(new))}
+    for sentence in _SENTENCE_RE.split(_field_text(old)):
+        words = {w.casefold() for w in _WORD_RE.findall(sentence)}
+        if len(words) >= 3 and len(words - kept) >= len(words) / 2:
+            short = sentence.strip()
+            short = short if len(short) <= 70 else short[:67] + "..."
+            batch.row("WARNING", rel, where,
+                      f"drops '{short}': keep what still holds; if it no "
+                      f"longer does, tell the GM in the review")
+
+
 def threads_overview(batch: Batch) -> str:
     """The Campaign Overview's path (`vaultlib.campaign_overview`: never an
     archived or QA copy)."""
@@ -2105,13 +2164,25 @@ class ThreadsScope:
     taken: set[int] = dc_field(default_factory=set)
 
 
-def threads_scope(batch: Batch) -> ThreadsScope:
+def threads_scope(batch: Batch,
+                  staged: dict[str, str] | None = None) -> ThreadsScope:
     """The vault's notes and current chapter as the batch found them, read
-    once a batch. Nothing is written before the batch is applied, so the
-    files on disk are the vault before any row ran."""
+    once a batch, at its first `threads` row. Nothing is written before
+    the batch is applied, so the files on disk are the vault before any
+    row ran. `vault-write batch` passes `staged`, the notes its earlier
+    blocks changed (a Wrap-Up's Unresolved Threads), laid over them so a
+    `wrapup` row can take a line an earlier block wrote."""
     import session_context as sc   # it imports this module at its top
     if batch.scope is None:
         files = list(sc.vault_files(batch.vault))
+        if staged:
+            on_disk = {rel for rel, _t, _fm in files}
+            files = [(rel, staged[rel], vl.extract_frontmatter(staged[rel])
+                      or {}) if rel in staged else (rel, t, fm)
+                     for rel, t, fm in files]
+            files += [(rel, t, vl.extract_frontmatter(t) or {})
+                      for rel, t in sorted(staged.items())
+                      if rel not in on_disk]
         chosen, _warnings = sc.select_session(files, None)
         batch.scope = ThreadsScope(files,
                                    chosen["chapter"] if chosen else None)
@@ -2480,6 +2551,7 @@ def write_fields(batch: Batch, rel: str, note: str,
         edits.append((old.start, old.end, new))
         batch.row("WOULD-ADD", rel, where + f.label,
                   f"replaced ({old.end - old.start} lines)")
+        warn_dropped_text(batch, rel, where + f.label, old.lines, new)
     lines = list(doc.lines)
     if fresh:
         anchor = _anchor(have)
@@ -3061,11 +3133,13 @@ def export_entries(text: str) -> list[tuple[str, str]]:
     return out
 
 
-def resolve_export(batch: Batch, entries: list[tuple[str, str]]) -> None:
+def resolve_export(batch: Batch, entries: list[tuple[str, str]],
+                   text: str = "") -> None:
     """One row per export entry: EXACT (a note's file name), ALIAS, NEAR
     (the candidates `links.py` offers for a broken link) or NONE. A name
     in parentheses after another is tried too. Archived notes and Midwife
-    drafts are never a match."""
+    drafts are never a match. Then, from `text`, one `§Prose` NEAR row
+    per misspelt-looking name (`prose_near`)."""
     import graph_check
     import links
     notes, names, _out, _spelt = graph_check.collect(batch.vault, [])
@@ -3109,6 +3183,61 @@ def resolve_export(batch: Batch, entries: list[tuple[str, str]]) -> None:
                           f"{name} — {near[0][1]}{more}")
             else:
                 batch.row("NONE", "", where, name)
+    if text:
+        prose_near(batch, text, live, entries)
+
+
+# A capitalised word in running text: a name, or the start of a sentence.
+_WORD4_RE = re.compile(r"\b[^\W\d_]{4,}\b")
+# Notes whose names a session's prose spells: who, where, what.
+NAME_TYPES = frozenset({"pc", "npc", "location", "faction", "organization",
+                        "creature", "item"})
+
+
+def prose_near(batch: Batch, text: str, live: dict[str, set[str]],
+               entries: list[tuple[str, str]]) -> None:
+    """A NEAR row for each capitalised word of the export that is no word
+    of a person's, place's or thing's name or alias but is close to one
+    (`difflib`, the standard library's matcher, same first letter):
+    "Gosh" in the Summary for the vault's Ghosh. Headings, day and month
+    names, a word the export also writes in lower case (English, not a
+    name) and a word built on a name (Bengali) are skipped; words in an
+    entry's own name are left to that entry's row."""
+    typed = {rel for rel, note in vl.vault_files(batch.vault)
+             if vl.entity_type(vl.extract_frontmatter(note)) in NAME_TYPES}
+    known: dict[str, set[str]] = {}
+    for name, rels in live.items():
+        rels = rels & typed
+        for word in re.findall(r"[^\W\d_]{4,}", name) if rels else ():
+            known.setdefault(word.casefold(), set()).update(rels)
+    cased = {w.casefold(): w for rels in known.values() for rel in rels
+             for w in re.findall(r"[^\W\d_]{4,}", Path(rel).stem)}
+    named = {w.casefold() for _s, n in entries
+             for w in re.findall(r"[^\W\d_]+", n)}
+    lower = {w for w in _WORD4_RE.findall(text) if w[0].islower()}
+    lower |= {d.casefold() for d in (*calendar.day_name,
+                                     *calendar.month_name) if d}
+    prose = "\n".join(ln for ln in text.splitlines()
+                      if not ln.lstrip().startswith("#"))
+    seen: dict[str, int] = {}
+    for word in _WORD4_RE.findall(prose):
+        if word[0].isupper():           # Ólafur as well as Oliver
+            seen[word] = seen.get(word, 0) + 1
+    for word, count in seen.items():
+        low = word.casefold()
+        if low in known or low in named or low in lower:
+            continue
+        # Same first letter, and not a word built on the name (Bengali).
+        close = [w for w in difflib.get_close_matches(
+            low, list(known), n=3, cutoff=0.8) if w[0] == low[0]
+            and not (low.startswith(w) or w.startswith(low))]
+        if not close:
+            continue
+        hits = sorted(known[close[0]])
+        more = f"; also {len(hits) - 1} more" if len(hits) > 1 else ""
+        batch.row("NEAR", hits[0], "\u00a7Prose",
+                  f"{word} ({count}x) — close to "
+                  f"{cased.get(close[0], close[0])}{more}")
 
 
 def read_export(path: str) -> str:
@@ -3154,7 +3283,8 @@ BEFORE_PLAY = frozenset({"", "planned", "prepped"})
 
 
 def cmd_resolve(batch: Batch, args: argparse.Namespace, _text: str) -> None:
-    resolve_export(batch, export_entries(read_export(args.export)))
+    export = read_export(args.export)
+    resolve_export(batch, export_entries(export), export)
 
 
 def play_notes_text(stem: str, n: int, chapter_raw: str | None,
@@ -3274,7 +3404,7 @@ def cmd_play_notes_new(batch: Batch, args: argparse.Namespace,
         batch.row("WARNING", notes_rel, "", "the export is empty")
     batch.row("WOULD-ADD", index, "", ", ".join(changes))
     if args.export:
-        resolve_export(batch, export_entries(export))
+        resolve_export(batch, export_entries(export), export)
 
 
 def cmd_session_new(batch: Batch, args: argparse.Namespace,
@@ -3413,7 +3543,7 @@ def cmd_session_new(batch: Batch, args: argparse.Namespace,
         batch.row("WARNING", index_rel, "", "no earlier session in this "
                   "chapter: campaign and the vault's own keys not carried")
     if args.export:
-        resolve_export(batch, export_entries(export))
+        resolve_export(batch, export_entries(export), export)
 
 
 def cmd_promote_plan(batch: Batch, args: argparse.Namespace,
@@ -4530,7 +4660,8 @@ def build_parser() -> argparse.ArgumentParser:
     rs = sub.add_parser(
         "resolve", help="an export's names against the vault (read-only)",
         description="The name rows session-new prints, for an export "
-                    "whose session is already filed.")
+                    "whose session is already filed; a §Prose NEAR row is "
+                    "a name the running text may misspell.")
     rs.add_argument("--export", required=True, help="the export file")
     rs.add_argument("--write", action="store_true", help=argparse.SUPPRESS)
     pp = sub.add_parser(
@@ -4667,6 +4798,33 @@ def build_parser() -> argparse.ArgumentParser:
                     "scenes, spotlight, spaced or comma-separated; bare: all)")
     pl.add_argument("--write", action="store_true", help="write it (default: preview)")
     ap.epilog = 'Example: gma vault-write "<vault>" wrapup-add "<wrap-up>" --write'
+    bt = sub.add_parser(
+        "batch", help="many writes, one plan, one commit",
+        formatter_class=raw, description=(
+            "Runs the blocks in FILE (several files: one batch, in order)\n"
+            "against one plan: each\n"
+            "'=== <command> <args>' line starts a block whose body is that\n"
+            "command's stdin. Commands: every writer here, plus\n"
+            "'stamp FILE... <stamp-entities options>', 'note-new PATH'\n"
+            "(body: the whole note), 'section NOTE HEADING\n"
+            "[--append|--replace]' (body: the text) and 'names [--wrapup\n"
+            "WRAPUP]' (rows 'export spelling<TAB>vault spelling': each is\n"
+            "replaced in every other block; --wrapup adds the Name\n"
+            "Conflicts table). A body line starting\n"
+            "'===' is written '\\==='. Without --write: each block's rows,\n"
+            "nothing written. With --write: every chosen block, or none if\n"
+            "any is refused (all refusals listed), then the frontmatter,\n"
+            "relationships, pc-body and wrapup checks on what it wrote."))
+    bt.add_argument("file", nargs="+",
+                    help="the batch file(s), read in order as one batch; "
+                    "- for stdin")
+    bt.add_argument("--write", action="store_true",
+                    help="write it (default: preview)")
+    pick = bt.add_mutually_exclusive_group()
+    pick.add_argument("--skip", metavar="N,M",
+                      help="leave these blocks out, for later")
+    pick.add_argument("--only", metavar="N,M",
+                      help="write only these blocks")
     return ap
 
 
@@ -4721,6 +4879,9 @@ def main(argv: list[str] | None = None, stdin: str | None = None) -> int:
         print(f"{cli_name()}: {args.vault} is not a folder",
               file=sys.stderr)
         return 2
+    if args.command == "batch":
+        import vw_batch     # here: it imports this module
+        return vw_batch.run(args)
     needs_stdin = args.command not in NO_STDIN
     batch = Batch(args.vault)
     if args.command == "status" and args.show:

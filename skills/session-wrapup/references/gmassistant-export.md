@@ -13,9 +13,9 @@ Adopt `## Summary` verbatim as the Wrap-Up's `## Narrative Recap`:
 no rewriting, condensing or tone adjustment (the preserve-guard in
 `shared/content-fidelity.md`). Only add `[[wiki-links]]` to every
 entity reference. Rewrite it in the campaign voice only when
-the GM asks, with `vw wrapup-add "<wrap-up>" --replace` (stdin
-opens `## Narrative Recap`; dry-run,
-then `--write`); the export stays in the Play Notes, so facts still
+the GM asks, with a `=== wrapup-add "<wrap-up>" --replace` block
+(body opens `## Narrative Recap`), shown in step 5b's review; the
+export stays in the Play Notes, so facts still
 trace to it. Skip Quick Bullets — `## Scenes` already covers
 them. Memorable Moments stays optional as usual. The export's
 moments name the PCs in them: use them for each PC's Moment. They
@@ -46,9 +46,15 @@ on, the wrap-up adds each one's tag.
   - A PC's details are the player's: never change them; put the
     question in the Keeper Checklist for the GM to ask the player
     at the table.
-- Keep the vault's spelling of a name. Record every export-vs-vault
-  name correction made anywhere in the wrap-up in the Wrap-Up's
-  `### Name Conflicts (export vs. vault canon)` table (Export said |
-  Vault canon | Applied). The standard path omits this section.
+- Names: in block text, write the export's spellings as they come;
+  the batch puts the vault's in. Block headers and note paths use the
+  vault's names (from `resolve`): the block leaves them alone. One `=== names --wrapup "<wrap-up>"` block, a row
+  `export spelling<TAB>vault spelling` per name `resolve` marks NEAR
+  and you confirm (`§Prose` rows are names misspelt in the running
+  text; a full name and its short form are a row each). It replaces
+  each in every block, wherever it sits, and writes the Wrap-Up's
+  `### Name Conflicts` table: don't write that section, or explain a
+  correction anywhere else (the block rewrites the export spelling
+  there too). The standard path has no such block or section.
 - Use `## Scenes` as the primary source for events meeting the
   decomposition threshold.
