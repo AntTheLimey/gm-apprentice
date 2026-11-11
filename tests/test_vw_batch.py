@@ -14,7 +14,10 @@ from test_vault_write import (  # noqa: E402
 def batch(vault, text, *flags):
     path = vault.parent / f"{vault.name}-batch.txt"
     path.write_text(text, encoding="utf-8")
-    return run(vault, "batch", str(path), *flags)
+    try:
+        return run(vault, "batch", str(path), *flags)
+    finally:
+        path.unlink()       # beside the vault, so its cleanup misses it
 
 
 NEW_NPC = """---
@@ -87,6 +90,7 @@ class BatchTests(unittest.TestCase):
         self.assertIn("# nothing written: fix blocks 4, 5, 6", out)
         self.assertFalse((vault / WRAP_REL).exists())
         self.assertEqual(read(vault, NPC_REL), NPC)
+        self.assertEqual(read(vault, INDEX_REL), INDEX)
 
     def test_a_refused_block_leaves_no_trace_for_later_blocks(self):
         vault = self.vault()
@@ -189,8 +193,7 @@ class BatchTests(unittest.TestCase):
                       "paid. Goshawks circled.", wrap)
         self.assertIn(S2 + "fed Mullick.", read(vault, BOLA))
         self.assertIn("aliases: [Mallik]", read(vault, BOLA))  # frontmatter
-        self.assertIn("WOULD-RENAME\t\t\tMallik -> Mullick: 2 places", out
-                      .replace("RENAMED", "WOULD-RENAME"))
+        self.assertIn("RENAMED\t\t\tMallik -> Mullick: 2 places", out)
         self.assertIn("names: 'Nobody' is in no block", out)
         self.assertIn("### Name Conflicts (export vs. vault canon)", wrap)
         self.assertIn("| Gosh | Ghosh | 1 place |", wrap)
@@ -214,6 +217,32 @@ class BatchTests(unittest.TestCase):
         self.assertIn(S2 + "fed Mullick.", read(vault, BOLA))
         self.assertEqual(read(vault, WRAP_REL).count("Name Conflicts"), 1)
 
+    def test_names_leave_a_log_rows_path_alone(self):
+        vault = self.vault()
+        (vault / "Characters/NPCs/Mallik_House.md").write_text(
+            "---\ntype: location\n---\n\n# Mallik House\n\n## Campaign Log\n\n",
+            encoding="utf-8")
+        code, out = batch(vault, "=== names\nMallik\tMullick\n=== log\n"
+                          "Characters/NPCs/Mallik_House.md\tCampaign Log\t"
+                          + S2 + "Mallik dined.\n", "--write")
+        self.assertEqual(code, 0, out)
+        self.assertIn(S2 + "Mullick dined.",
+                      read(vault, "Characters/NPCs/Mallik_House.md"))
+
+    def test_a_name_both_a_new_and_an_old_note_answer_to_is_refused(self):
+        vault = self.vault()
+        hallam = NEW_NPC.replace('name: "Bola"',
+                                 'name: "Bola"\naliases: [Hallam]')
+        code, out = batch(vault, f"=== note-new {BOLA}\n{hallam}"
+                          f"=== section Hallam \"Campaign Log\" --append\n"
+                          f"{S2}x.\n")
+        self.assertEqual(code, 1, out)
+        self.assertIn("use the note's path", out)
+        code, out = batch(vault, f"=== note-new {BOLA}\n{hallam}"
+                          f"=== section {NPC_REL} \"Campaign Log\" --append\n"
+                          f"{S2}x.\n")
+        self.assertEqual(code, 0, out)
+
     def test_names_rows_must_be_pairs(self):
         vault = self.vault()
         code, out = batch(vault, "=== names\nGosh\n" + WHOLE)
@@ -233,6 +262,8 @@ class BatchTests(unittest.TestCase):
         two = vault.parent / f"{vault.name}-2.txt"
         one.write_text(first, encoding="utf-8")
         two.write_text("=== note-new" + second, encoding="utf-8")
+        self.addCleanup(one.unlink)
+        self.addCleanup(two.unlink)
         code, out = run(vault, "batch", str(one), str(two), "--write")
         self.assertEqual(code, 0, out)
         self.assertIn("## 4 note-new " + BOLA, out)

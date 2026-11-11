@@ -51,7 +51,8 @@ HEAD_RE = re.compile(r"^=== (.*?)\s*$")
 EXTRA = ("stamp", "note-new", "section", "names")
 NAME_CONFLICTS = "### Name Conflicts (export vs. vault canon)"
 NOT_HERE = frozenset({"resolve"})          # read-only: run it on its own
-PAST = {**vw.VERBS, "WOULD-STAMP": "STAMPED", "WOULD-REPLACE": "REPLACED"}
+PAST = {**vw.VERBS, "WOULD-STAMP": "STAMPED", "WOULD-REPLACE": "REPLACED",
+        "WOULD-RENAME": "RENAMED"}
 
 
 @dataclass
@@ -135,23 +136,29 @@ def _parse(parser_call, argv: list[str], what: str) -> argparse.Namespace:
 
 def find_note(batch: vw.Batch, raw: str) -> str:
     """`section.resolve_note`, with the vault's name index built once per
-    batch, and notes an earlier block created found by name or alias."""
+    batch, and notes an earlier block created found by name or alias. A
+    bare name that both a note on disk and a new note answer to is refused
+    as ambiguous; a path is taken as given."""
     names = getattr(batch, "batch_names", None)
     if names is None:
         names = sec.name_index(vl.vault_files(batch.vault))
         batch.batch_names = names       # type: ignore[attr-defined]
+    want = vl.normalize(raw.removesuffix(".md"))
+    staged = sorted(rel for rel, before in batch.originals.items()
+                    if before is None and rel in batch.texts
+                    and want in {vl.normalize(n) for n in (
+                        Path(rel).stem,
+                        *vl.frontmatter_aliases(batch.texts[rel]))})
     try:
-        return sec.resolve_note(batch, raw, names)
+        found = sec.resolve_note(batch, raw, names)
     except vw.WriteError:
-        want = vl.normalize(raw.removesuffix(".md"))
-        hits = sorted(rel for rel, before in batch.originals.items()
-                      if before is None and rel in batch.texts
-                      and want in {vl.normalize(n) for n in (
-                          Path(rel).stem,
-                          *vl.frontmatter_aliases(batch.texts[rel]))})
-        if len(hits) == 1:
-            return hits[0]
+        if len(staged) == 1:
+            return staged[0]
         raise
+    if staged and "/" not in raw and found not in staged:
+        raise vw.WriteError(f"{raw!r} names {found} and the new "
+                            f"{', '.join(staged)}: use the note's path")
+    return found
 
 
 def run_stamp(batch: vw.Batch, b: Block) -> None:
@@ -309,6 +316,13 @@ def apply_names(names: list[Block], blocks: list[Block]) -> None:
         return new
     for b in blocks:
         if b in names or b.error:
+            continue
+        if b.command == "log":          # a row's first column is a path
+            b.body = "".join(
+                (row.split("\t", 1)[0] + "\t"
+                 + pattern.sub(swap, row.split("\t", 1)[1]))
+                if "\t" in row else row
+                for row in b.body.splitlines(keepends=True))
             continue
         fm = re.match(r"(?s)\A---\r?\n.*?\r?\n---\r?\n", b.body)
         head = fm.group(0) if fm else ""
