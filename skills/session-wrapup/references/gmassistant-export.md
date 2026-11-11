@@ -52,7 +52,8 @@ on, the wrap-up adds each one's tag.
   and you confirm (`§Prose` rows are names misspelt in the running
   text; a full name and its short form are a row each). It replaces
   each in every block, wherever it sits, and writes the Wrap-Up's
-  `### Name Conflicts` table: don't write that section yourself. The
-  standard path has no such block or section.
+  `### Name Conflicts` table: don't write that section, or explain a
+  correction anywhere else (the block rewrites the export spelling
+  there too). The standard path has no such block or section.
 - Use `## Scenes` as the primary source for events meeting the
   decomposition threshold.
