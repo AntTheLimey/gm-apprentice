@@ -281,6 +281,17 @@ class SettingsNumbersTests(unittest.TestCase):
         self.assertEqual(len(rows), 1)
         self.assertIn("missing createdSession", rows[0])
 
+    def test_a_pre_play_draft_in_a_chaptered_vault_with_no_chapter_is_info(self):
+        sess = "---\ntype: session\nsession_number: 5\nchapter: {c}\n---\n"
+        rows = self.stale_rows("", {
+            "Ch1_S1.md": sess.format(c="Chapter 1"),
+            "Ch2_S1.md": sess.format(c="Chapter 2"),
+            "Draft.md": "---\ntype: npc\ncanon_status: DRAFT\ncreatedSession: \"\"\n---\n"})
+        mine = [r for r in rows if r.split("\t")[1] == "Draft.md"]
+        self.assertEqual(len(mine), 1)
+        self.assertTrue(mine[0].startswith("INFO\t"))
+        self.assertIn("names no chapter", mine[0])
+
     def test_stale_after_unset_is_the_built_in(self):
         self.assertEqual(len(self.stale("", 2)), 1)
         self.assertEqual(self.stale("", 3), [])

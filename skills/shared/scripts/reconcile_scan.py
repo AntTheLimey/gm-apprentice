@@ -193,18 +193,20 @@ def _created_this_session(note: Note, number: int | None, chapter: str | None) -
 
 
 def _pre_play(note: Note) -> bool:
-    """Made before play: blank, null or 0 `createdSession`, or none at all."""
-    return "createdSession" not in note.fm or before_play(note.fm["createdSession"])
+    """Made before play: a blank, null or 0 `createdSession`. No key at all is
+    a note never stamped, not one made before play."""
+    return "createdSession" in note.fm and before_play(note.fm["createdSession"])
 
 
-def _companions(linked: list[Note], by_name: dict[str, list[Note]]) -> list[Note]:
-    """The `{PC}_Story` note beside each linked PC. The wrap-up writes it, but
-    links the PC, so the links alone never reach it (#623)."""
+def _companions(linked: list[Note], by_rel: dict[str, Note]) -> list[Note]:
+    """The `{PC}_Story` note beside each linked PC, by path as `vault-write
+    story` names it. The wrap-up writes it, but links the PC, so the links
+    alone never reach it (#623)."""
     found: list[Note] = []
     for pc in linked:
         if pc.type != "pc" or Path(pc.rel).stem.endswith("_Story"):
             continue
-        story = _resolve(f"{Path(pc.rel).stem}_Story", by_name, pc.rel)
+        story = by_rel.get(pc.rel[:-3] + "_Story.md")
         if story is not None and story not in linked and story not in found:
             found.append(story)
     return found
@@ -266,7 +268,7 @@ def scan(vault: Path, wrap_arg: str) -> list[str]:
             if note is not None and note is not wrap and note not in linked \
                     and note.type not in STRUCTURAL_TYPES:
                 linked.append(note)
-    reviewed = [*linked, *_companions(linked, by_name)]
+    reviewed = [*linked, *_companions(linked, by_rel)]
     drafts = [n for n in reviewed if n.fm.get("canon_status") == "DRAFT"]
     chapter = _chapter(index.fm.get("chapter"), index.rel) if index else None
     new = [n for n in drafts if _created_this_session(n, number, chapter)]

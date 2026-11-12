@@ -144,6 +144,29 @@ class Scan(unittest.TestCase):
         self.assertIn("unverified in linked notes: 1", out)
         self.assertTrue(out[-1].startswith("quick path: no"))
 
+    def test_a_draft_with_no_createdsession_key_is_older_not_pre_play(self):
+        files = plain_wrap(FILES)
+        files["NPCs/The Duke.md"] = "---\ntype: npc\ncanon_status: DRAFT\n---\n"
+        out = scan(files)
+        self.assertIn("pre-play draft entities played this session: 0", out)
+        self.assertIn("  NPCs/The Duke.md (createdSession: none)", out)
+
+    def test_a_blank_createdsession_read_as_empty_string_is_pre_play(self):
+        self.assertTrue(rs.before_play(""))
+        self.assertTrue(rs.before_play([]))
+        self.assertFalse(rs.before_play("Session 2"))
+
+    def test_a_story_file_is_found_by_path_not_by_name(self):
+        files = plain_wrap(FILES)
+        files[WRAP] += "\n[[Hattie Bell]] sat up late.\n"
+        files["PCs/Hattie Bell.md"] = "---\ntype: pc\ncanon_status: AUTHORITATIVE\n---\n"
+        files["Archive/Hattie Bell_Story.md"] = (
+            "---\ntype: character-story\ncanon_status: DRAFT\n"
+            "createdSession: \"Session 5\"\n---\n")
+        out = scan(files)
+        self.assertIn("draft entities created this session: 1", out)  # Lady Grey only
+        self.assertNotIn("  Archive/Hattie Bell_Story.md", out)
+
     def test_quick_path_with_new_drafts_leaves_the_contradiction_to_judge(self):
         out = scan(plain_wrap(FILES))
         self.assertIn("plan: none", out)

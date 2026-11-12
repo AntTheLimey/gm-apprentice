@@ -591,7 +591,10 @@ def check_stale_drafts(vault: Path) -> list[str]:
         created = 0 if pre_play else parse_session_number(fm.get("createdSession"))
         own = chapter_key(rel, fm)
         if chaptered and own is None and pre_play:
-            continue  # no chapter to measure its age against
+            rows.append(f"INFO\t{rel}\tmade-before-play DRAFT cannot be dated "
+                        f"— this vault numbers sessions per chapter and the "
+                        f"note names no chapter")
+            continue
         if chaptered and own is None and created is not None:
             # Numbering restarts per chapter and this note names none, so its
             # createdSession cannot be placed on any timeline. Saying so beats
