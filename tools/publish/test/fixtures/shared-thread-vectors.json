@@ -115,6 +115,44 @@
      "party": false
     }
    ]
+  },
+  {
+   "about": "a list whose first bullet is indented deeper than a later top-level one (#631): the child of the later bullet is not a thread",
+   "markdown": "## Open Threads\n\n  - A — involves the party\n- B — involves the party\n  - child\n\n## Next\n",
+   "entries": [
+    {
+     "markdown": "- A",
+     "involves": [],
+     "party": true
+    },
+    {
+     "markdown": "- B; child",
+     "involves": [],
+     "party": true
+    }
+   ]
+  },
+  {
+   "about": "an empty heading line ends the list (#631)",
+   "markdown": "## Open Threads\n\n- A — involves the party\n## \n- B — involves the party\n\n## Next\n",
+   "entries": [
+    {
+     "markdown": "- A",
+     "involves": [],
+     "party": true
+    }
+   ]
+  },
+  {
+   "about": "a bare ## ends the list too (#631)",
+   "markdown": "## Open Threads\n\n- A — involves the party\n##\n- B — involves the party\n",
+   "entries": [
+    {
+     "markdown": "- A",
+     "involves": [],
+     "party": true
+    }
+   ]
   }
  ]
 }

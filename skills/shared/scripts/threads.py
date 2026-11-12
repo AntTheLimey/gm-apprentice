@@ -250,7 +250,19 @@ def _shared_span(lines: list[str],
     it)."""
     found = find_section("\n".join(lines), [section], level=2, first=True,
                          trim=False, exact=True)
-    return found if isinstance(found, tuple) else None
+    if not isinstance(found, tuple):
+        return None
+    # An empty heading line (`## ` or `##`) ends the list too, as the
+    # publish tool reads it.
+    start, end = found
+    delim: str | None = None
+    for k in range(start + 1, end):
+        line = lines[k].rstrip("\r")
+        delim, is_fence = fence_step(line, delim)
+        if (delim is None and not is_fence
+                and re.fullmatch(r"#{1,2}\s*", line)):
+            return start, k
+    return found
 
 
 def _shared_bullets(lines: list[str],
@@ -618,8 +630,8 @@ def _blocks(lines: list[str], start: int, end: int,
         if base is None and code and indent >= 4:
             i += 1   # indented code
             continue
-        if base is None:
-            base = indent
+        if base is None or indent < base:
+            base = indent    # a later bullet outdented past the first one
         if indent > base:
             i += 1   # nested under a bullet the walk skipped (a placeholder)
             continue
@@ -635,14 +647,22 @@ def _block_stop(lines: list[str], i: int, end: int, base: int) -> int:
     deeper than `base` under it, after blank lines too, and a lazy line
     straight under it (see `_blocks`)."""
     stop = j = i + 1
+    delim: str | None = None
     while j < end:
         nxt = lines[j].rstrip("\r")
+        if delim is not None:
+            # Inside a code fence the thread opened: every line is its own,
+            # indented or not, up to the fence's closing line.
+            delim, _is_fence = fence_step(nxt, delim)
+            stop = j = j + 1
+            continue
         if not nxt.strip():
             j += 1     # a blank: the bullet goes on only if a deeper line follows
             continue
         if (len(nxt) - len(nxt.lstrip()) <= base
                 and not (j == stop and _lazy(nxt))):
             break
+        delim, _is_fence = fence_step(nxt, delim)
         stop = j = j + 1
     return stop
 

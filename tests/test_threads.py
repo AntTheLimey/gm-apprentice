@@ -297,6 +297,20 @@ class ThreadsTests(unittest.TestCase):
                        if t.party or t.involves]
                 self.assertEqual(got, case["entries"])
 
+    def test_a_thread_holding_an_indented_fence_moves_whole(self):
+        # #631: an unindented example bullet inside the thread's indented
+        # code fence is not a thread, and removing the thread takes both
+        # fence lines.
+        pc = ("---\ntype: pc\n---\n\n# Ines\n\n## Current Status\n\n"
+              "**Open threads:**\n- Bell rings\n  ```\n- example bullet\n"
+              "  ```\n- Next thing\n\n## Notes\n\nx\n")
+        found = threads.pc_thread_items(pc)
+        self.assertEqual(len(found), 2, [t.text for t in found])
+        out = threads.remove_pc_thread(pc, found[0])
+        self.assertNotIn("```", out)
+        self.assertNotIn("example bullet", out)
+        self.assertIn("**Open threads:**\n- Next thing\n", out)
+
     def test_template_open_threads_holds_no_prose(self):
         # The section is player-facing: anything in the template would
         # publish above the shared threads for good.

@@ -32,7 +32,7 @@ function sectionRange(lines, title, open = unfenced(lines)) {
   const start = lines.findIndex((l, i) => open.has(i) && heading.test(l));
   if (start === -1) return null;
   let end = lines.length;
-  for (let i = start + 1; i < lines.length; i++) if (open.has(i) && /^#{1,2}\s/.test(lines[i])) { end = i; break; }
+  for (let i = start + 1; i < lines.length; i++) if (open.has(i) && /^#{1,2}(?:\s|$)/.test(lines[i])) { end = i; break; }
   return { start, end };
 }
 
@@ -80,7 +80,7 @@ function sharedEntries(publishedMarkdown) {
     const bullet = /^(\s*)[-*]\s+(.+)$/.exec(line);
     const indent = bullet ? bullet[1].length : 0;
     if (step.isFenceLine || fence !== null || !bullet || (base === null && indent >= 4)) { i++; continue; }
-    if (base === null) base = indent;
+    if (base === null || indent < base) base = indent;   // a later bullet outdented past the first one
     if (indent > base) { i++; continue; }   // nested under a bullet the walk skipped
     let stop = i + 1;
     for (let j = i + 1; j < range.end; j++) {
