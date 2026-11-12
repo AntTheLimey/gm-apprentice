@@ -1936,9 +1936,24 @@ def stdin_fields(text: str) -> list[Field]:
     return fields
 
 
-def reshape(field: Field, bullet: str) -> list[str]:
+def sub_indent(fields: list[Field], own: Field | None = None) -> str | None:
+    """The indent the bulleted fields' sub-bullets already have in the
+    note: the field `own`'s own items, else the first sibling's that has
+    any; None when there are none to follow."""
+    for f in ([own] if own is not None else []) + fields:
+        if not f.bullet:
+            continue
+        indents = [ln[:len(ln) - len(ln.lstrip())] for ln in f.lines[1:]
+                   if ln.strip()]
+        if indents:
+            return min(indents, key=len)
+    return None
+
+
+def reshape(field: Field, bullet: str, pad: str | None = None) -> list[str]:
     """`field`'s lines in the note's shape: `bullet` is the marker the
-    note's field carries ("" for an unbulleted one)."""
+    note's field carries ("" for an unbulleted one); `pad` is the indent
+    the note's sub-bullets already use (else the width of the marker)."""
     m = FIELD_RE.match(field.lines[0])
     assert m is not None
     head = bullet + field.lines[0][m.end("bullet") if m.group("bullet")
@@ -1949,7 +1964,7 @@ def reshape(field: Field, bullet: str) -> list[str]:
         cut = min(indents, default=0)
         rest = [ln[cut:] for ln in rest]
     if bullet:
-        pad = " " * len(bullet)
+        pad = " " * len(bullet) if pad is None else pad
         rest = [pad + ln if ln.strip() else "" for ln in rest]
     return [head, *rest]
 
@@ -2541,10 +2556,10 @@ def write_fields(batch: Batch, rel: str, note: str,
         if old is None:
             anchor = _anchor(have)
             shape = anchor.bullet if anchor else f.bullet
-            fresh += reshape(f, shape)
+            fresh += reshape(f, shape, sub_indent(have))
             batch.row("WOULD-ADD", rel, where + f.label, "new field")
             continue
-        new = reshape(f, old.bullet)
+        new = reshape(f, old.bullet, sub_indent(have, old))
         if new == old.lines:
             batch.row("SKIP", rel, where + f.label, "unchanged")
             continue
