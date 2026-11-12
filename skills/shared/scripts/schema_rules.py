@@ -308,7 +308,7 @@ def frontmatter_findings(fm: dict, setting: Callable[[str], Iterable[object]] | 
             found.append(("ERROR", f"missing required field '{field}' for type '{etype}'"))
     for field, allowed in (CHECKED_VALUES["*"] if custom else checked_values(etype)).items():
         value = fm.get(field)
-        if _empty(value):  # unset: the line reader reads `field: ""` as []
+        if _empty(value):  # unset: `field:` and `field: ""` read as empty
             continue
         if not isinstance(value, str):
             found.append(("ERROR", f"{field}: one value, not {value!r}"))
@@ -335,7 +335,7 @@ def frontmatter_findings(fm: dict, setting: Callable[[str], Iterable[object]] | 
         # leads_to: the plan node(s) this one leads to (2+ targets = a branch).
         links = fm["leads_to"]
         if not isinstance(links, list):
-            found.append(("ERROR", "leads_to must be a list of wiki-links"))
+            found.append(("ERROR", "leads_to must be a list of wiki-links, written leads_to: [\"[[Plan Name]]\"]"))
         else:
             found += [("ERROR", f"leads_to entries must be wiki-links "
                                 f"(e.g. \"[[Plan Name]]\"), got {item!r}")

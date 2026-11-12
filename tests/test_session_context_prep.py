@@ -604,6 +604,15 @@ class ArchivedPcTests(unittest.TestCase):
         self.assertNotIn("_Template_PC_x", out)
         self.assertNotIn("PLACEHOLDER", out)
 
+    def test_blank_as_of_session_prints_a_question_mark(self) -> None:
+        files = dict(FILES)
+        files["Characters/Ada Quill.md"] = note(
+            'type: pc\nstatus: active\nasOfSession: ""',
+            "## Current Status\n\nWell.\n")
+        out = run_cli(make_vault(self, files), "--prep").stdout
+        self.assertIn("asOfSession: ?)", out)
+        self.assertNotIn("asOfSession: )", out)
+
     def test_template_named_pc_outside_archive_is_skipped(self) -> None:
         files = dict(FILES)
         files["Characters/_Template_PC_y.md"] = note(

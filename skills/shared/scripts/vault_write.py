@@ -4040,11 +4040,7 @@ def _session_note(batch: Batch, raw: str) -> tuple[str, str]:
 
 
 def _played_links(have: dict[str, Any]) -> list[str]:
-    played = have.get("played_in") or []
-    if not isinstance(played, list):
-        played = [played]
-    return [vl.wikilink_target(str(x)) or bare_link(str(x))
-            for x in played]
+    return vl.link_targets(have.get("played_in"))
 
 
 def _lists(have: dict[str, Any], session: str) -> bool:
@@ -4474,10 +4470,7 @@ def link_scene(batch: Batch, rel: str, title: str) -> None:
         raise WriteError(f"{rel}: {error}")
     eol = "\r\n" if lines[0].endswith("\r\n") else "\n"
     fm = [ln.rstrip("\r\n") for ln in lines[1:end]]
-    have = (vl.extract_frontmatter(text) or {}).get("entities") or []
-    if not isinstance(have, list):
-        have = [have]
-    links = [vl.wikilink_target(str(x)) or bare_link(str(x)) for x in have]
+    links = vl.link_targets((vl.extract_frontmatter(text) or {}).get("entities"))
     if nfc(title).casefold() in {nfc(x).casefold() for x in links}:
         batch.row("SKIP", rel, "", f"entities already lists [[{title}]]")
         return

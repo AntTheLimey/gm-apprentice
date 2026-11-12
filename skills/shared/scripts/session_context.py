@@ -2180,7 +2180,7 @@ def _bundle(argv: list[str] | None, outlines: Outlines) -> int:
         if not is_active_pc(rel, fm, not_playing):
             continue
         found_pc = True
-        as_of = fm.get("asOfSession", "?")
+        as_of = fm.get("asOfSession") or "?"
         print(f"\n--- {Path(rel).stem} ({rel}, asOfSession: {as_of}) ---")
         status_block = section(text, "Current Status")
         print(outlines.layered(status_block, args.vault, rel, "Current Status",

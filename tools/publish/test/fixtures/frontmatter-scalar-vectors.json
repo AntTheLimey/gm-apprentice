@@ -144,6 +144,12 @@
         "a",
         "b"
       ]
+    },
+    {
+      "name": "empty quoted value is an empty string",
+      "text": "---\nv: \"\"\n---\nBody.\n",
+      "key": "v",
+      "value": ""
     }
   ]
 }

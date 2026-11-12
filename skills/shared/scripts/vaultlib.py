@@ -758,6 +758,26 @@ def wikilink_target(value: Any) -> str:
     return alias_split(body).split("#")[0].strip()
 
 
+_WIKILINK_BODY_RE = re.compile(r"\[\[([^\[\]]*)\]\]")
+
+
+def link_targets(value: Any) -> list[str]:
+    """Every bare link target in a frontmatter value: each `[[...]]` in a
+    string (a quoted `"[[A]], [[B]]"` holds two), or in each item of a
+    list. An item with no `[[` counts as one plain name; empty targets
+    are dropped."""
+    items = value if isinstance(value, list) else [value]
+    out: list[str] = []
+    for item in items:
+        if item is None:
+            continue
+        text = str(item)
+        found = _WIKILINK_BODY_RE.findall(text)
+        out += [wikilink_target(f"[[{b}]]") for b in found] if found \
+            else [wikilink_target(text)]
+    return [t for t in out if t]
+
+
 def link_aliases(fm: dict[str, Any]) -> list[str]:
     """Every name a link may use for this file: `aliases:` then the
     GM-only `gm_aliases:` (#212), deduplicated. An `aliases: Doc` scalar
