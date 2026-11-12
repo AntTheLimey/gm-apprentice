@@ -42,6 +42,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Iterable, Iterator, Literal
 
+import install_layout
 from install_layout import LAYOUT, MANIFESTS, MISSING_TOOL
 
 # --------------------------------------------------------------------------
@@ -2254,12 +2255,7 @@ def cli_name() -> str:
     return os.path.basename(sys.argv[0])
 
 
-def terminal_command(*words: str) -> str:
-    """A command line a GM can paste into a terminal: this plugin's `gma.py`
-    by its full path. `gma` alone is the skills' shorthand, not a command a
-    terminal has (oh-my-zsh aliases it to `git merge --abort`)."""
-    script = Path(__file__).resolve().with_name("gma.py")
-    return " ".join([f'python3 "{script}"', *words])
+terminal_command = install_layout.terminal_command
 
 
 def report_unreadable_settings(main: Callable[[], int]) -> int:

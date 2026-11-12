@@ -18,7 +18,7 @@ The apprentice never picks for you. Set `vault.images.source`:
 | `service` | The service and model you set (`vault.images.service`, `vault.images.model`) | Paid, inside your limits |
 
 Until you choose, the apprentice asks. A vault that already names a service
-and model counts as having chosen `service`. the apprentice's image status check says
+and model counts as having chosen `service`. The apprentice's image status check says
 whether Codex is installed and signed in, so you can choose knowingly.
 Codex draws with its own built-in image tool: you choose Codex, not the
 model inside it.

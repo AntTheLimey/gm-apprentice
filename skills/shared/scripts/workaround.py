@@ -37,8 +37,8 @@ import github_issues
 import update_record
 from migrate_core import StepFailed
 from update_record import WORKAROUND_KINDS, Workaround
-from vaultlib import (SettingsUnavailable, agent_files, cli_name, extract_frontmatter,
-                      parse_version, plugin_version, settings, vault_files)
+from vaultlib import (PublishToolUnavailable, agent_files, cli_name, extract_frontmatter,
+                      parse_version, plugin_version, vault_files, vault_site)
 
 MEMORY = "memory:"
 SITE = "site:"
@@ -57,6 +57,16 @@ def _today() -> str:
     return datetime.date.today().isoformat()
 
 
+_ROOTED = re.compile(r"^(?:[A-Za-z]:|[\\/])")   # C:x, \\x, /x: not inside a folder
+
+
+def _escapes(text: str, path: Path) -> bool:
+    """Whether a --where path names somewhere outside its folder, as any OS
+    reads it (a Windows drive or root counts even when this one does not)."""
+    return bool(_ROOTED.match(text) or path.anchor or path.is_absolute()
+                or ".." in path.parts)
+
+
 def slug(text: str) -> str:
     words = re.findall(r"[a-z0-9]+", text.lower())
     return "-".join(words)[:48].strip("-") or "workaround"
@@ -70,18 +80,17 @@ def _site_path(vault: Path, raw: str) -> str:
     if not raw[len(SITE):].strip() or inner == Path("."):
         raise Refused(f"--where {raw}: name a file or folder in the site "
                       f"after {SITE}")
-    if inner.is_absolute() or ".." in inner.parts:
+    if _escapes(raw[len(SITE):].strip(), inner):
         raise Refused(f"--where {raw}: write the path relative to the site "
                       f"folder")
     try:
-        folder = settings(vault).get("player_site.folder")
-    except (SettingsUnavailable, KeyError) as e:
-        raise Refused(f"--where {raw}: could not read player_site.folder "
-                      f"({e})") from e
-    if not folder:
-        raise Refused(f"--where {raw}: the vault has no site folder "
-                      f"(player_site.folder is not set)")
-    site = Path(str(folder)).expanduser()
+        _publishes, on, site = vault_site(vault)
+    except PublishToolUnavailable as e:
+        raise Refused(f"--where {raw}: could not ask the publish tool for "
+                      f"the site folder ({e})") from e
+    if not on or site is None:
+        raise Refused(f"--where {raw}: the vault has no site "
+                      f"(player_site.folder is not set, or the site is off)")
     if not site.is_absolute():
         site = vault / site
     if not (site / inner).exists():
@@ -108,7 +117,7 @@ def _check_where(vault: Path, where: list[str]) -> list[str]:
         if not raw.strip() or rel == Path("."):
             raise Refused(f"--where {raw!r}: name a file or folder in the "
                           f"vault, not the vault itself")
-        if rel.is_absolute() or ".." in rel.parts:
+        if _escapes(raw.strip(), rel):
             raise Refused(f"--where {raw}: write a path inside the vault, "
                           f"relative to it ({MEMORY}<file> for agent memory, "
                           f"{SITE}<path> for the site folder)")

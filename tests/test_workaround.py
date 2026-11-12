@@ -140,14 +140,38 @@ class AddTests(Base):
         w = workaround.add(workaround_vault, 608, "Fix in css", "css",
                            ["site:css/overrides.css"])
         self.assertEqual(w["where"], ["site:css/overrides.css"])
-        for bad in ("site:", "site:css/none.css", "site:../x", "site:/etc/hosts"):
+        for bad in ("site:", "site:css/none.css", "site:../x", "site:/etc/hosts",
+                    "site:\\etc\\x", "site:C:x"):
             with self.subTest(where=bad), self.assertRaises(workaround.Refused):
                 workaround.add(workaround_vault, 608, "x", "css", [bad])
+
+    def test_a_windows_rooted_vault_path_is_refused(self):
+        for bad in ("\\etc\\x", "C:x", "C:\\x"):
+            with self.subTest(where=bad), self.assertRaises(workaround.Refused):
+                self.add(where=(bad,))
+
+    def test_a_relative_site_folder_is_read_from_the_vault(self):
+        (self.vault / "Site" / "css").mkdir(parents=True)
+        (self.vault / "Site" / "css" / "overrides.css").write_text("a{}\n", encoding="utf-8")
+        write_config(self.vault, "---\ntype: meta\npublish:\n  site_dir: Site\n---\n")
+        vaultlib.forget_settings(self.vault)
+        w = self.add(where=("site:css/overrides.css",))
+        self.assertEqual(w["where"], ["site:css/overrides.css"])
+
+    def test_a_site_that_is_switched_off_refuses_site_paths(self):
+        site = Path(tempfile.mkdtemp(prefix="wa-site-"))
+        self.addCleanup(shutil.rmtree, site, ignore_errors=True)
+        (site / "o.css").write_text("a{}\n", encoding="utf-8")
+        write_config(self.vault, "---\ntype: meta\npublish:\n  site: false\n"
+                                 f"  site_dir: {site}\n---\n")
+        vaultlib.forget_settings(self.vault)
+        with self.assertRaises(workaround.Refused):
+            self.add(where=("site:o.css",))
 
     def test_a_site_path_needs_a_site_folder(self):
         with self.assertRaises(workaround.Refused) as cm:
             self.add(where=("site:css/overrides.css",))
-        self.assertIn("no site folder", str(cm.exception))
+        self.assertIn("has no site", str(cm.exception))
 
     def test_a_release_is_three_numbers(self):
         for bad in ("1.10", "1", "1.10.3.4", "v1.10.3"):

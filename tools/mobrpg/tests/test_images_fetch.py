@@ -129,3 +129,16 @@ def test_a_new_image_with_a_matching_size_but_other_bytes_is_still_saved(tmp_pat
     monkeypatch.setattr(images, "_download", lambda url: b"albatross ONE")
     assert images.run(["w1", "--vault", str(tmp_path), "--execute"]) == 0
     assert (tmp_path / "_attachments" / "items" / "st160 (mobRPG).png").read_bytes() == b"albatross ONE"
+
+
+def test_dry_run_downloads_when_the_server_gives_no_size_and_the_note_has_no_collision(
+        tmp_path, monkeypatch, capsys):
+    note = _ship_note(tmp_path)
+    note.write_text(note.read_text(encoding="utf-8").replace(
+        'portrait: "_attachments/items/st160.png"', 'portrait: ""'), encoding="utf-8")
+    (tmp_path / "_attachments" / "items" / "st160.png").unlink()
+    _item_pages(monkeypatch, ["a", "b"])
+    monkeypatch.setattr(images, "_remote_size", lambda url: None)
+    assert images.run(["w1", "--vault", str(tmp_path)]) == 0
+    out = capsys.readouterr().out
+    assert "would wire: 1" in out and "saved-only: 0" in out and "unchanged: 1" in out

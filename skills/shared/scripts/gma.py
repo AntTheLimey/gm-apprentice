@@ -175,11 +175,12 @@ def _ensure_tool() -> None:
         _fetch_tool(timeout=AUTO_FETCH_TIMEOUT)
     except tool_cache.FetchFailed as e:
         tool_cache.note_failure(version)
-        fix = ("ask the GM to allow `gma tool install` outside the sandbox"
+        cmd = vaultlib.terminal_command("tool", "install")
+        fix = (f"ask the GM to allow `{cmd}` outside the sandbox"
                if e.outside
-               else "run `gma tool install` with network access"
+               else f"run `{cmd}` with network access"
                if "could not download" in e.reason
-               else "run `gma tool install` to try again")
+               else f"run `{cmd}` to try again")
         print(f"gma: warning: could not install the publish tool ({e.reason}); "
               f"{fix}", file=sys.stderr)
 

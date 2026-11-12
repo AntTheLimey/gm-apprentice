@@ -497,9 +497,11 @@ def run(argv: list[str]) -> int:
                 elif sizes:
                     # nothing of this note's is in the way, but the vault may
                     # hold the picture under another name: a size that no
-                    # attachment has cannot match, so only then is it fetched
+                    # attachment has cannot match, so only then (or when the
+                    # server gives no size) is it fetched
                     comparing = True
-                    if sizes.get(_remote_size(img["url"])):
+                    size = _remote_size(img["url"])
+                    if size is None or sizes.get(size):
                         data = _download(img["url"])
                         match = _held_elsewhere(sizes, data)
                         dest = match or dest

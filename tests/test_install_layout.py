@@ -23,6 +23,9 @@ def t(tmp_path):
     d.mkdir()
     return d
 
+TAIL = 'gma.py" tool install'   # a spaced copy has its own path
+TOOL_INSTALL = install_layout.terminal_command("tool", "install")
+
 
 def _touch(p: Path) -> None:
     p.parent.mkdir(parents=True, exist_ok=True)
@@ -101,7 +104,8 @@ def test_publish_without_tool_stops_plainly(t):
     done = subprocess.run([sys.executable, str(gma), "publish", "build"],
                           capture_output=True, text=True)
     assert done.returncode == 1
-    assert MISSING_TOOL in done.stderr
+    assert MISSING_TOOL.split("run `")[0] in done.stderr
+    assert TAIL in done.stderr
     assert "Traceback" not in done.stderr
 
 
@@ -363,7 +367,7 @@ def test_plugin_layout_owns_its_tool():
 
 
 def test_missing_tool_names_the_install_command():
-    assert "gma tool install" in MISSING_TOOL
+    assert install_layout.terminal_command("tool", "install") in MISSING_TOOL
 
 
 def test_plugin_layout_never_fetches(t, server):
@@ -399,7 +403,7 @@ def test_fetch_failure_warns_once_and_runs(t):
     vault = t / "vault"
     vault.mkdir()
     done = _run_gma(gma, ["vault-check", str(vault), "version"], _env(t, _dead_base()))
-    warned = [x for x in done.stderr.splitlines() if "gma tool install" in x]
+    warned = [x for x in done.stderr.splitlines() if TAIL in x]
     assert len(warned) == 1, done.stderr
     assert "Traceback" not in done.stderr
 
@@ -436,7 +440,7 @@ def test_tool_path_without_a_tool_says_so(t):
     gma = _spaced_copy(t)
     done = _run_gma(gma, ["tool", "path"], _env(t, _dead_base()))
     assert done.returncode == 1
-    assert "gma tool install" in done.stderr
+    assert TAIL in done.stderr
 
 
 def test_no_node_skips_fetch(t, server):
@@ -578,7 +582,7 @@ def test_a_failed_automatic_fetch_is_not_retried_at_once(monkeypatch, tmp_path, 
     g._ensure_tool()
     assert len(calls) == 1
     err = capsys.readouterr().err
-    assert err.count("gma tool install") == 1
+    assert err.count(TOOL_INSTALL) == 1
     assert "network access" in err
     assert calls[0].get("timeout") == g.AUTO_FETCH_TIMEOUT
 
@@ -622,7 +626,7 @@ def test_a_blocked_cache_before_a_command_warns_without_stopping(monkeypatch, tm
     g._ensure_tool()
     err = capsys.readouterr().err
     assert "Assistants: stop" not in err
-    assert "allow `gma tool install` outside the sandbox" in err
+    assert f"allow `{TOOL_INSTALL}` outside the sandbox" in err
 
 
 def test_tool_install_with_a_blocked_cache_stops_once(monkeypatch, tmp_path, capsys):
