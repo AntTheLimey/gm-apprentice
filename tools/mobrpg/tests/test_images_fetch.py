@@ -65,3 +65,67 @@ def test_execute_still_downloads_whatever_the_size(tmp_path, monkeypatch):
     assert images.run(["w1", "--vault", str(tmp_path), "--execute"]) == 0
     saved = {p.name: p.read_bytes() for p in (tmp_path / "_attachments").rglob("*.png")}
     assert saved["vela (mobRPG).png"] == b"new picture"
+
+
+def _ship_note(tmp_path, kind="Item"):
+    note = tmp_path / "Items & Artifacts" / "st160.md"
+    note.parent.mkdir(parents=True)
+    note.write_text(
+        '---\nname: ST-160\nportrait: "_attachments/items/st160.png"\nmobrpg:\n'
+        f'  element_id: "e-9"\n  element_kind: "{kind}"\n---\nBody.\n',
+        encoding="utf-8")
+    items = tmp_path / "_attachments" / "items"
+    items.mkdir(parents=True)
+    (items / "st160.png").write_bytes(b"a different picture")
+    (items / "The Albatross.png").write_bytes(b"albatross one")
+    (items / "The Albatross 2.png").write_bytes(b"albatross two")
+    return note
+
+
+def _item_pages(monkeypatch, images_up):
+    pages = {
+        ("GET", "/world/w1/item"): {"content": [{"id": "e-9", "name": "ST-160"}],
+                                    "page": {"totalPages": 1}},
+        ("GET", "/world/w1/item/e-9"): {"files": [
+            {"type": "Image", "url": f"https://cdn/{n}.png", "name": f"{n}.png"}
+            for n in images_up]},
+        ("GET", "/world/w1/generated/images"): [],
+    }
+    monkeypatch.setattr(client, "get_access_token", lambda: "tok")
+    monkeypatch.setattr(client, "_request", lambda m, p, **k: pages.get((m, p), {}))
+    bodies = {"https://cdn/a.png": b"albatross one",
+              "https://cdn/b.png": b"albatross two"}
+    monkeypatch.setattr(images, "_download", lambda url: bodies[url])
+    monkeypatch.setattr(images, "_remote_size", lambda url: len(bodies[url]))
+
+
+def test_an_image_already_in_the_vault_under_another_name_is_not_saved_again(
+        tmp_path, monkeypatch, capsys):
+    # #630: both upstream pictures sit in _attachments under other names
+    _ship_note(tmp_path)
+    _item_pages(monkeypatch, ["a", "b"])
+    for flags in ([], ["--execute"]):
+        assert images.run(["w1", "--vault", str(tmp_path), *flags]) == 0
+        out = capsys.readouterr().out
+        assert "saved only" not in out and "saved beside it" not in out
+        assert "saved-only: 0" in out and "unchanged: 2" in out
+    assert not list((tmp_path / "_attachments").rglob("*(mobRPG)*"))
+
+
+def test_an_image_held_under_another_name_wires_an_empty_portrait(tmp_path, monkeypatch):
+    note = _ship_note(tmp_path)
+    note.write_text(note.read_text(encoding="utf-8").replace(
+        'portrait: "_attachments/items/st160.png"', 'portrait: ""'), encoding="utf-8")
+    _item_pages(monkeypatch, ["a"])
+    assert images.run(["w1", "--vault", str(tmp_path), "--execute"]) == 0
+    assert 'portrait: "_attachments/items/The Albatross.png"' in note.read_text(encoding="utf-8")
+    assert not list((tmp_path / "_attachments").rglob("*(mobRPG)*"))
+    assert not (tmp_path / "_attachments" / "items" / "st160 (mobRPG).png").exists()
+
+
+def test_a_new_image_with_a_matching_size_but_other_bytes_is_still_saved(tmp_path, monkeypatch):
+    _ship_note(tmp_path)
+    _item_pages(monkeypatch, ["a"])
+    monkeypatch.setattr(images, "_download", lambda url: b"albatross ONE")
+    assert images.run(["w1", "--vault", str(tmp_path), "--execute"]) == 0
+    assert (tmp_path / "_attachments" / "items" / "st160 (mobRPG).png").read_bytes() == b"albatross ONE"

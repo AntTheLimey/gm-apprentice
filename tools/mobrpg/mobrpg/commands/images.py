@@ -10,8 +10,9 @@ entity is linked (its element_id appears in a vault `mobrpg:` node). Existing
 attachments are never overwritten (a colliding name gets a " (mobRPG)" suffix)
 and a non-empty portrait field is left alone — both cases are reported instead.
 An upstream image whose bytes match a file the vault already holds for the note
-(the colliding name, its " (mobRPG)" copy, the current portrait) is not saved
-again; it is counted as unchanged. That check downloads the image, except in a
+(the colliding name, its " (mobRPG)" copy, the current portrait), or any image
+under `_attachments/` whatever its name, is not saved again; it is counted as
+unchanged (and wired to that file when the portrait is empty). That check downloads the image, except in a
 dry run when a HEAD request gives a size none of those local files has: then the
 bytes cannot match and nothing is downloaded.
 
@@ -253,6 +254,26 @@ def _portrait_files(vault_dir: str, txt: str, index: dict) -> list[str]:
     return hits if len(hits) == 1 else []
 
 
+def _sizes(index: dict, vault_root: str) -> dict:
+    """size -> [paths] of every image the vault already holds under
+    `_attachments/`, so an upstream picture can be checked against all of them
+    (a copy kept under another name) by size first, bytes only on a size hit."""
+    out: dict = {}
+    for paths in index.values():
+        for h in paths:
+            if (os.path.splitext(h)[1].lower() in IMAGE_EXTS
+                    and os.path.isfile(h) and _within(vault_root, h)):
+                out.setdefault(os.path.getsize(h), []).append(h)
+    return out
+
+
+def _held_elsewhere(sizes: dict, data: bytes | None) -> str | None:
+    """A file the vault already holds whose bytes are exactly `data`."""
+    if data is None:
+        return None
+    return next((h for h in sorted(sizes.get(len(data), ())) if _read(h) == data), None)
+
+
 def _sha(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
@@ -414,6 +435,7 @@ def run(argv: list[str]) -> int:
     wired = occupied = saved = unchanged = 0
     index = _attachment_index(vault_dir)
     vault_root = os.path.realpath(vault_dir)
+    sizes = _sizes(index, vault_root)
     for ent in found:
         vp = id_to_path.get(ent["id"])
         # For an unlinked entity the stem is the API-supplied name, and the
@@ -456,11 +478,13 @@ def run(argv: list[str]) -> int:
                     size = None if args.execute else _remote_size(img["url"])
                     # A dry run writes nothing, so a picture whose size no local
                     # file has needs no download: its bytes cannot match.
-                    if size is None or any(os.path.getsize(h) == size for h in held):
+                    if (size is None or sizes.get(size)
+                            or any(os.path.getsize(h) == size for h in held)):
                         data = _download(img["url"])
                     on_portrait = next((h for h in portrait if readable(h) and _read(h) == data), None)
                     match = on_portrait or next(
                         (h for h in (dest, beside) if readable(h) and _read(h) == data), None)
+                    match = match or _held_elsewhere(sizes, data)
                     differs = has_portrait and not on_portrait
                     if match:
                         dest = match
@@ -468,6 +492,17 @@ def run(argv: list[str]) -> int:
                         dest = beside
                 elif args.execute:
                     data = _download(img["url"])
+                    match = _held_elsewhere(sizes, data)
+                    dest = match or dest
+                elif sizes:
+                    # nothing of this note's is in the way, but the vault may
+                    # hold the picture under another name: a size that no
+                    # attachment has cannot match, so only then is it fetched
+                    comparing = True
+                    if sizes.get(_remote_size(img["url"])):
+                        data = _download(img["url"])
+                        match = _held_elsewhere(sizes, data)
+                        dest = match or dest
             except _FETCH_ERRORS as e:
                 what = ("could not compare {} with the upstream image" if comparing
                         else "could not download the image for {}")
@@ -483,6 +518,7 @@ def run(argv: list[str]) -> int:
                 os.makedirs(os.path.dirname(dest), exist_ok=True)
                 with open(dest, "wb") as fh:
                     fh.write(data)
+                sizes.setdefault(len(data), []).append(dest)
             if not first:
                 if match:
                     unchanged += 1
