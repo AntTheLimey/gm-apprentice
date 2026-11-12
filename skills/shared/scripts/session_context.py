@@ -129,7 +129,7 @@ from vaultlib import (GM_MARKER_RE, is_active_pc, marker_re,  # noqa: F401
                       normalize, raw_frontmatter, section,
                       session_ref_number, word_count)
 from vaultlib import LABEL_RE as _LABEL_RE
-from vaultlib import BULLET_RE
+from vaultlib import BULLET_RE, markers_in
 from vaultlib import bullets as _bullets
 from vaultlib import alias_split, fence_step, link_name, split_paused
 from vaultlib import vault_files as _vault_files
@@ -350,8 +350,10 @@ def _stub_provenance(body: str) -> str:
     `(omitted in --brief: N words — read the Wrap-Up file for it)`.
     H3 titles match whole, or followed by ` (` (the template's Name
     Conflicts heading has a parenthetical). A block ends at the next heading of the same or
-    higher level, at any line holding a gm-only or spoiler marker, or
-    EOF — either marker is a terminator, not just the closer, because the
+    higher level, at a line holding only a gm-only or spoiler marker or
+    starting with a closer, or EOF (an opener after text in the middle
+    of the block goes with it, up to its closer) — either marker is a
+    terminator, not just the closer, because the
     template opens the fence right after ## Memorable Moments' own
     content and a terminator that only recognised the closer would eat
     the opening marker into the dropped block. The terminator line itself
@@ -411,6 +413,7 @@ def _stub_provenance(body: str) -> str:
         j = i + 1
         collected: list[str] = []
         inner_fence = False
+        depth = 0
         while j < n:
             if lines[j].strip().startswith("```"):
                 inner_fence = not inner_fence
@@ -424,8 +427,15 @@ def _stub_provenance(body: str) -> str:
             hm = _ANY_HEADING_RE.match(lines[j])
             if hm and len(hm.group(1)) <= level:
                 break
-            if _ANY_MARKER_RE.search(lines[j]):
-                break
+            marks = markers_in(lines[j])
+            if marks:
+                alone = not _ANY_MARKER_RE.sub("", lines[j]).strip()
+                if depth == 0 and (alone or marks[0][2]):
+                    break
+                # An opener after text, in the middle of the block, hides
+                # what follows it up to its closer: both go with the block.
+                for _pos, _name, is_closer in marks:
+                    depth = max(0, depth - 1) if is_closer else depth + 1
             collected.append(lines[j])
             j += 1
         wc = word_count("\n".join(collected))

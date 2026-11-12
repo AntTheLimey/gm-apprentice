@@ -108,6 +108,20 @@ class BriefWrapupUnitTests(unittest.TestCase):
                 self.assertIn(f"\n{tail}\n", out)
                 self.assertNotIn("- b\n", out)
 
+    def test_an_inline_opener_mid_block_does_not_end_the_stub(self):
+        """#631: the whole block goes, up to the marker line that ends it."""
+        body = ("## Memorable Moments\n\nFirst words. <!-- gm-only --> "
+                "hidden bit\nmore hidden <!-- /gm-only --> tail words.\n"
+                "Last words of the block.\n\n<!-- gm-only -->\n\n"
+                "## Kept\n\nKept words.\n\n<!-- /gm-only -->\n")
+        out = sc.brief_wrapup(body)
+        for gone in ("First words", "hidden bit", "tail words",
+                     "Last words of the block"):
+            self.assertNotIn(gone, out)
+        self.assertIn("## Memorable Moments\n(omitted in --brief:", out)
+        self.assertIn("<!-- gm-only -->\n\n## Kept\n\nKept words.", out)
+        self.assertEqual(out.count("gm-only -->"), 2)
+
     def test_no_op_when_nothing_to_drop(self):
         body = "## Narrative Recap\n\nText.\n\n## GM Notes\n\n### World State\n\nDay 1.\n"
         self.assertEqual(sc.brief_wrapup(body), body)

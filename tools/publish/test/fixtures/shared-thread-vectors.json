@@ -102,6 +102,19 @@
    "about": "a heading with two spaces between its words is not the list",
    "markdown": "## Open  Threads\n\n- A — involves the party\n",
    "entries": []
+  },
+  {
+   "about": "the tail on a nested child bullet (#631): both read it as the thread's own",
+   "markdown": "## Open Threads\n\n- Bell\n  - child — involves [[Z]]\n\n## Next\n",
+   "entries": [
+    {
+     "markdown": "- Bell; child",
+     "involves": [
+      "Z"
+     ],
+     "party": false
+    }
+   ]
   }
  ]
 }
