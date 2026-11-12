@@ -87,6 +87,30 @@ def run_cli(vault: Path, *args: str) -> subprocess.CompletedProcess[str]:
                           capture_output=True, text=True, timeout=60)
 
 
+class PlanInNextChapterTests(unittest.TestCase):
+    """#647: prep opened Chapter 2 and filed the Plan there."""
+
+    def test_second_prep_sees_the_plan_in_the_next_chapter(self) -> None:
+        files = dict(FILES)
+        files["Chapters/Chapter 2 - Voss/Sessions/Session 02 - Plan.md"] = (
+            note('type: session-plan\nsession: "[[Session 02 - X]]"\n'
+                 'chapter: "[[Chapter 2 - Voss]]"', "Plan body.\n"))
+        out = run_cli(make_vault(self, files), "--prep").stdout
+        part = out.split("===== Existing Plan — Session 2", 1)[1]
+        self.assertNotIn("(none found)", part.split("=====", 2)[1])
+        self.assertIn("Session 02 - Plan.md", part.split("=====", 2)[1])
+
+    def test_nearest_later_chapter_wins_among_several(self) -> None:
+        def plan(ch: str) -> tuple[str, str, dict]:
+            fm = {"type": "session-plan", "session": "[[Session 02 - X]]",
+                  "chapter": f"[[{ch}]]"}
+            return (f"Chapters/{ch}/Plan.md", ch, fm)
+        files = [plan("Chapter 4 - D"), plan("Chapter 2 - B"),
+                 plan("Chapter 3 - C")]
+        got = sc._upcoming_plan(files, "chapter 1 - a", 2)
+        self.assertEqual(got[1], "Chapter 2 - B")
+
+
 class PrepTests(unittest.TestCase):
     def setUp(self) -> None:
         self.vault = make_vault(self, FILES)

@@ -948,12 +948,31 @@ def _latest_wrapup(files, current: int, chapter):
 
 
 def _upcoming_plan(files, chapter, upcoming: int):
-    """The Session Plan note for session `upcoming`, chapter-preferred."""
-    return prefer_chapter(
-        [(rel, text, fm) for rel, text, fm in files
-         if fm.get("type") == "session-plan"
-         and session_ref_number(fm) == upcoming],
-        chapter)
+    """The Session Plan note for session `upcoming`, chapter-preferred.
+
+    Prep that opens a new chapter files the Plan there, so when the played
+    chapter has none, the one in the chapter that follows it counts (or the
+    only Plan for that session anywhere, when there is just one).
+    """
+    plans = [(rel, text, fm) for rel, text, fm in files
+             if fm.get("type") == "session-plan"
+             and session_ref_number(fm) == upcoming]
+    found = prefer_chapter(plans, chapter)
+    if found is not None or not plans:
+        return found
+    if len(plans) == 1:
+        return (plans[0][0], plans[0][1])
+    here = _chapter_number(chapter or "")
+    if here is not None:
+        later = []
+        for rel, text, fm in plans:
+            num = _chapter_number(chapter_of(rel, fm) or "")
+            if num is not None and num > here:
+                later.append((num, rel, text))
+        if later:
+            _num, rel, text = min(later)
+            return (rel, text)
+    return None
 
 
 _ANY_LINK_RE = re.compile(r"\[\[([^\]]+)\]\]")
