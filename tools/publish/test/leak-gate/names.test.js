@@ -75,6 +75,20 @@ describe('leak gate: secret names', () => {
       assert.ok(runLeakGate({ configPath: s.configPath, outputDir: s.outputDir }).findings.some((x) => x.code === 'WITHHELD_PUBLISHED' && x.note === 'NPCs/Vesper.md'));
     } finally { s.cleanup(); }
   });
+  it('a withheld note kept off by its flag alone (no publish list) still has its name caught in prose (#619)', () => {
+    const notes = {
+      'NPCs/Hollis Crane.md': '---\ntype: npc\nwithheld: true\n---\nThe lodge master.\n',
+      'NPCs/Teller.md': '---\ntype: npc\n---\nThe teller says Hollis Crane waits below.\n',
+    };
+    const s = leakSite(notes, SETTINGS);
+    try {
+      assert.ok(!fs.existsSync(path.join(s.outputDir, 'npcs', 'hollis-crane.html')), 'no page for the withheld note');
+      assert.ok(fs.existsSync(path.join(s.outputDir, 'npcs', 'teller.html')));
+      const found = runLeakGate({ configPath: s.configPath, outputDir: s.outputDir }).findings
+        .filter((x) => x.code === 'WITHHELD_IN_PROSE' && x.note === 'NPCs/Hollis Crane.md');
+      assert.ok(found.some((x) => x.page === 'npcs/teller.html'), JSON.stringify(found));
+    } finally { s.cleanup(); }
+  });
   it('a name finding can be accepted, keyed by the page and the name (amendment 4)', () => {
     const s = leakSite({ ...NOTES, '_meta/publish-list.yaml': 'accepted:\n  - page: npcs/linker.html\n    text: elias crowe\n    note: NPCs/Lord Vane.md\n' }, SETTINGS);
     try {

@@ -8,12 +8,16 @@ not found) is marked `withheld: true`. A new vault has no publish list yet, so
 before #619 the first build gave both a page. Here the same scaffold builds the
 vault, the notes are written from its templates as the midwife writes them, and
 the publish tool's own `init` and `build` make the site: no page and no word of
-either secret reaches it, an ordinary place and group still publish, and a
-reveal (the publish list naming the note) publishes the secret after all.
+either secret reaches it, an ordinary place and group still publish, and the
+site doctor reports no error for the public page's link to a secret. Then the
+GM's own steps: the publish list made as publish-site's setup makes it, and
+`gma reveal` after the session that uncovers both; the secrets publish and the
+leak check passes.
 
 Run: python3 tests/test_midwife_secrets.py
 """
 
+import json
 import shutil
 import subprocess
 import sys
@@ -32,9 +36,9 @@ SECRET_WORDS = ("Library Sub-basement", "library-sub-basement", "Zanzibar Vault"
 PUBLIC_WORDS = ("Quixotic lamps", "Jubilee bake sale")
 
 
-def run(args, cwd=None):
+def run(args, cwd=None, ok=(0,)):
     r = subprocess.run(args, capture_output=True, text=True, cwd=cwd)
-    if r.returncode != 0:
+    if r.returncode not in ok:
         raise AssertionError(f"{args[:3]} exited {r.returncode}\n{r.stdout}\n{r.stderr}")
     return r.stdout
 
@@ -83,6 +87,9 @@ class SecretPlacesAndGroups(unittest.TestCase):
         cls.site = cls.root / "site"
         run(["node", str(BIN), "init", str(cls.site), "--vault", str(vault),
              "--title", "The Sloane Collection"])
+        # init pins the site to this checkout (`file:`), a pin the vault scripts
+        # cannot read; without one they ask the plugin's own tool, this checkout.
+        (cls.site / "package.json").unlink()
         cls.log = run(["node", str(BIN), "build"], cwd=cls.site)
         cls.docs = cls.site / "docs"
 
@@ -118,21 +125,49 @@ class SecretPlacesAndGroups(unittest.TestCase):
         self.assertIn(PUBLIC_WORDS[0], library)
         self.assertIn(PUBLIC_WORDS[1], friends)
 
-    def test_2_a_reveal_publishes_the_secret(self):
+    def test_1_the_doctor_reports_no_error_for_a_link_to_a_secret(self):
+        out = run(["node", str(BIN), "doctor", "--site", "--json"], cwd=self.site, ok=(0, 1))
+        findings = json.loads(out)["findings"]
+        self.assertEqual([f for f in findings if f["severity"] == "error"], [])
+        named = [f for f in findings if f["code"] == "NAMED_NO_PAGE"]
+        self.assertEqual([(f["path"], f["severity"], f["settled"]) for f in named],
+                         [("Locations/Library Sub-basement.md", "info", True)])
+        # No fix may suggest `manifest apply`: on a vault with no publish list it
+        # would make a list of one entry and empty the site.
+        self.assertNotIn("manifest apply", out)
+
+    def test_2_the_gm_sets_up_the_list_then_reveals_both(self):
         config = str(self.site / "vault.config.json")
-        everything = [p.relative_to(self.vault).as_posix()
-                      for d in ("Locations", "Factions & Organizations")
-                      for p in (self.vault / d).glob("*.md")]
+        # publish-site's setup: publish what diff says publishes, exclude the rest.
+        diff = json.loads(run(["node", str(BIN), "manifest", "diff", "--config", config, "--json"]))
         args = ["node", str(BIN), "manifest", "apply", "--config", config]
-        for rel in everything:
-            args += ["--publish", rel]
+        for row in diff["new"]:
+            if row["bucket"] == "publish":
+                args += ["--publish", row["path"]]
+            else:
+                args += ["--exclude", f"{row['path']}=stays hidden: {row['reason']}"]
         run(args)
+        run(["node", str(BIN), "build"], cwd=self.site)
+        self.assertNotIn("locations/library-sub-basement.html", self.pages())
+        self.assertIn("locations/sloane-library.html", self.pages())
+
+        secrets = ["Locations/Library Sub-basement.md",
+                   "Factions & Organizations/Silver Twilight Boston.md"]
+        reveal = [sys.executable, str(SCRIPTS / "reveal.py"), str(self.vault),
+                  "--session", "Session 03 - Below the Stacks"]
+        for rel in secrets:
+            reveal += ["--publish", rel]
+        said = run(reveal + ["--write"])
+        self.assertIn("# publish: 2 clear: 2", said)
+        for rel in secrets:
+            self.assertIn("withheld: false", (self.vault / rel).read_text(encoding="utf-8"))
         run(["node", str(BIN), "build"], cwd=self.site)
         pages = self.pages()
         self.assertIn("locations/library-sub-basement.html", pages)
         self.assertIn("factions/silver-twilight-boston.html", pages)
         self.assertIn("locations/sloane-library.html", pages)
-
+        leaks = run(["node", str(BIN), "leaks", "check", "--json"], cwd=self.site, ok=(0, 1))
+        self.assertEqual(json.loads(leaks)["findings"], [], leaks)
 
 if __name__ == "__main__":
     unittest.main()

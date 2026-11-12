@@ -15,7 +15,7 @@ after(() => { for (const dir of made) fs.rmSync(dir, { recursive: true, force: t
 // A site over a small player-mode vault. `files` maps vault paths to text; every note in
 // `publish` is listed under Publishing, every `excluded` entry ("path" or "path — reason")
 // under Excluded. Folders are mapped to themselves, lower-cased.
-function site(files, { publish = null, excluded = [], settings = {} } = {}) {
+function site(files, { publish = null, excluded = [], settings = {}, noList = false } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'note-faults-'));
   made.push(root);
   const vault = path.join(root, 'vault');
@@ -27,7 +27,7 @@ function site(files, { publish = null, excluded = [], settings = {} } = {}) {
   }
   const listed = publish || Object.keys(files).filter((rel) => !excluded.some((e) => e.startsWith(rel)) && !rel.startsWith('_') && !rel.startsWith('Quiet/'));
   fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
-  writePublishList(vault, { publishing: listed, excluded });
+  if (!noList) writePublishList(vault, { publishing: listed, excluded });
   const map = Object.fromEntries([...folders].filter((f) => !f.startsWith('Quiet')).map((f) => [f, f.toLowerCase()]));
   writeSettings(vault, { 'player_site.title': 'T', 'player_site.hide.folders': ['Quiet', '_meta', '_Templates'], 'player_site.folder_map': map, ...settings });
   const configPath = path.join(root, 'vault.config.json');
@@ -66,6 +66,35 @@ describe('NAMED_NO_PAGE', () => {
     assert.ok(!/so it gets a page/.test(byNote[0].fix), byNote[0].fix);
     assert.match(byNote[0].fix, /the publish list is not what keeps it off the site \(PUBLISH_FALSE\): run explain "Characters\/Vesper_Hale\.md" for the rule/);
     assert.match(byNote[0].fix, /stays hidden: <why>/);
+  });
+
+  // #619: on a vault with no publish list, `manifest apply` writes a list of one entry and every other
+  // note leaves the site, so no fix there suggests it.
+  it('on a vault with no publish list, no fix suggests manifest apply', async () => {
+    const found = await faults({
+      'Characters/Mara_Quill.md': npc('Mara', 'She met [[Vesper_Hale]] at the quay.'),
+      'Characters/Vesper_Hale.md': npc('Vesper', 'Secret.', 'publish: false\n'),
+    }, { noList: true }, 'NAMED_NO_PAGE');
+    assert.strictEqual(found.length, 1);
+    assert.strictEqual(found[0].why, 'PUBLISH_FALSE');
+    assert.ok(!/manifest apply/.test(found[0].fix), found[0].fix);
+  });
+
+  it('a withheld note its flag keeps off (no publish list) is settled, a note and not an error', async () => {
+    const { configPath } = site({
+      'Characters/Mara_Quill.md': npc('Mara', 'She met [[Vesper_Hale]] at the quay.'),
+      'Characters/Vesper_Hale.md': npc('Vesper', 'Secret.', 'withheld: true\n'),
+    }, { noList: true });
+    const { json, rc } = await doctor(configPath, { json: true });
+    const found = json.findings.filter((f) => f.code === 'NAMED_NO_PAGE');
+    assert.strictEqual(found.length, 1);
+    assert.strictEqual(found[0].why, 'WITHHELD');
+    assert.strictEqual(found[0].severity, 'info');
+    assert.strictEqual(found[0].settled, true);
+    assert.match(found[0].fix, /^nothing to do: Vesper_Hale is marked withheld/);
+    assert.ok(!/manifest apply/.test(found[0].fix), found[0].fix);
+    assert.strictEqual(json.counts.errors, 0);
+    assert.strictEqual(rc, 0);
   });
 
   it('finds a withheld note named, as plain words, on a published page', async () => {
