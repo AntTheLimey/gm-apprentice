@@ -367,6 +367,34 @@ def test_three_codex_failures_in_a_row_stop_the_run(codex, tmp_path, capsys):
     assert "3 pictures in a row" in capsys.readouterr().out
 
 
+def test_a_codex_run_that_leaves_no_picture_uses_an_attempt_after_the_first(
+        codex, tmp_path, capsys):
+    vault = make_vault(tmp_path, count=1)
+    plan(vault, tmp_path, count=1)
+    jid = job_id(capsys.readouterr().out)
+    codex.replies = [(drew(n), None) for n in range(1, 4)]
+    seen = []
+    for _ in range(3):
+        assert image.main(["draw", str(vault), jid]) == 1
+        seen.append(image_jobs.load(jid).entries[0].attempts)
+    assert seen == [0, 1, 2]                 # the first is forgiven
+    capsys.readouterr()
+    assert image.main(["draw", str(vault), jid]) == 1
+    assert "has used all its attempts" in capsys.readouterr().out
+    assert len(codex.execs) == 3             # and Codex is not asked again
+
+
+def test_a_codex_run_that_reports_an_error_is_not_blank(codex, tmp_path):
+    codex.replies = [(SIGNED_OUT, None)]
+    with pytest.raises(image_codex.Failed) as err:
+        image_codex.draw("x", [], "1:1", tmp_path)
+    assert not err.value.blank
+    codex.replies = [(drew(5), None)]
+    with pytest.raises(image_codex.Failed) as err:
+        image_codex.draw("x", [], "1:1", tmp_path)
+    assert err.value.blank
+
+
 def test_codex_gets_the_likeness_pictures(codex, tmp_path, capsys):
     vault = make_vault(tmp_path, count=2)
     pic = vault / "_attachments" / "npcs" / "p2.png"

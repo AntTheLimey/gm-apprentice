@@ -6,7 +6,10 @@ settings registry and nowhere else. Money is US cents, as a number.
 """
 
 import math
-from collections.abc import Callable
+import os
+import time
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from datetime import date
 from pathlib import Path
 from typing import Any, NamedTuple
@@ -145,6 +148,54 @@ def unpriced_count(vault: Path, today: date) -> int:
     return int(entry.get("unpriced", 0)) if entry else 0
 
 
+LOCK_FILE = "_meta/.vault-state.lock"   # never removed: that would race
+LOCK_WAIT = 30.0                        # seconds before giving up
+
+
+@contextmanager
+def _locked(vault: Path) -> Iterator[None]:
+    """Hold the vault's state lock, so that two runs counting pictures at
+    once each see the other's count. The operating system drops the lock
+    when the process ends, however it ends. Raises `OSError` when the lock
+    cannot be had within `LOCK_WAIT` seconds."""
+    path = vault / LOCK_FILE
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "ab") as f:
+        deadline = time.monotonic() + LOCK_WAIT
+        while True:
+            try:
+                _lock(f.fileno())
+                break
+            except OSError:
+                if time.monotonic() >= deadline:
+                    raise
+                time.sleep(0.02)
+        try:
+            yield
+        finally:
+            _unlock(f.fileno())
+
+
+try:
+    import fcntl
+
+    def _lock(fd: int) -> None:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+    def _unlock(fd: int) -> None:
+        fcntl.flock(fd, fcntl.LOCK_UN)
+except ImportError:     # Windows
+    import msvcrt
+
+    def _lock(fd: int) -> None:
+        os.lseek(fd, 0, os.SEEK_SET)
+        msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)  # type: ignore[attr-defined]
+
+    def _unlock(fd: int) -> None:
+        os.lseek(fd, 0, os.SEEK_SET)
+        msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)  # type: ignore[attr-defined]
+
+
 def record(vault: Path, today: date, cents: float | None) -> None:
     """Count one picture in `today`'s month: `cents` added, or, for `None`
     (price unknown), counted under `unpriced` with no cents. Only this month
@@ -152,17 +203,18 @@ def record(vault: Path, today: date, cents: float | None) -> None:
     zero or more raise `ValueError` and write nothing."""
     if cents is not None and (not math.isfinite(cents) or cents < 0):
         raise ValueError(f"cents must be a number of zero or more, got {cents}")
-    images = _images(vault)
-    keep = {_month_key(today), _previous_key(today)}
-    months = {k: v for k, v in images.get("months", {}).items() if k in keep}
-    entry = months.setdefault(_month_key(today),
-                              {"cents": 0, "pictures": 0, "unpriced": 0})
-    entry["pictures"] = int(entry.get("pictures", 0)) + 1
-    if cents is None:
-        entry["unpriced"] = int(entry.get("unpriced", 0)) + 1
-    else:
-        entry["cents"] = _cents(float(entry.get("cents", 0)) + cents)
-    vaultlib.set_state(vault, STATE_KEY, {**images, "months": months})
+    with _locked(vault):
+        images = _images(vault)
+        keep = {_month_key(today), _previous_key(today)}
+        months = {k: v for k, v in images.get("months", {}).items() if k in keep}
+        entry = months.setdefault(_month_key(today),
+                                  {"cents": 0, "pictures": 0, "unpriced": 0})
+        entry["pictures"] = int(entry.get("pictures", 0)) + 1
+        if cents is None:
+            entry["unpriced"] = int(entry.get("unpriced", 0)) + 1
+        else:
+            entry["cents"] = _cents(float(entry.get("cents", 0)) + cents)
+        vaultlib.set_state(vault, STATE_KEY, {**images, "months": months})
 
 
 def fit(estimate: Callable[[int], float], refs: int,

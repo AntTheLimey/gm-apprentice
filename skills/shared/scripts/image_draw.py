@@ -552,6 +552,9 @@ class _FreeRun:
         raise NotImplementedError
 
 
+BLANK = "Codex gave no picture"
+
+
 class _CodexRun(_FreeRun):
     def attempt(self, e: Entry, redo: str | None, vault: Path) -> None:
         refs, notes = _read_refs(e, vault)
@@ -579,7 +582,12 @@ class _CodexRun(_FreeRun):
             self.save()
             return
         except image_codex.Failed as bad:
+            # A run that ends well and leaves nothing still spent plan
+            # allowance: the first is forgiven, each after it is an attempt.
+            again = bad.blank and any(BLANK in t for t in e.said)
             self.failed(e, bad.message, was_drawn)
+            if again:
+                e.attempts += 1
             self.streak += 1
             if bad.stop:
                 self.stop = bad.message

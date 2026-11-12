@@ -16,6 +16,8 @@ tags: [image-guidance]
 
 {The style text sent with every picture: era, palette, light, textures, what must never appear.}
 
+No signature, watermark or lettering anywhere in the picture.
+
 ## Blocks
 
 ### {A name, such as Portrait}

@@ -170,7 +170,9 @@ keep by hand. It is never published. Without it, pictures have no
 campaign style. As on the site, comments, spoilers and Dataview are left out.
 
 - **Direction**: what pictures should show. Read, never sent.
-- **Always**: style text sent with every picture.
+- **Always**: style text sent with every picture. The template starts it
+  with a line asking for no signature, watermark or lettering, as drawn
+  pictures sometimes carry a scribbled one.
 - **Blocks**: named `###` parts, such as Portrait, added when they fit.
 
 ## Where pictures go

@@ -284,3 +284,16 @@ def test_a_guidance_path_that_is_not_text_is_one_plain_stop(tmp_path, written, s
     with pytest.raises(vaultlib.SettingsUnavailable) as e:
         image_money.limits(v)
     assert str(e.value) == said
+
+
+def test_runs_at_the_same_time_lose_no_count(tmp_path):
+    import subprocess
+    v = make_vault(tmp_path, None)
+    scripts = Path(__file__).resolve().parent.parent / "skills" / "shared" / "scripts"
+    code = ("import sys; from datetime import date; from pathlib import Path\n"
+            f"sys.path.insert(0, {str(scripts)!r}); import image_money\n"
+            "for _ in range(25): image_money.record(Path(sys.argv[1]), date(2026, 11, 5), 1)\n")
+    procs = [subprocess.Popen([sys.executable, "-c", code, str(v)])
+             for _ in range(6)]
+    assert [p.wait() for p in procs] == [0] * 6
+    assert image_money.spent(v, date(2026, 11, 5)) == 150

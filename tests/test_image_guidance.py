@@ -60,7 +60,14 @@ def test_template_placeholders_are_not_sent(tmp_path):
     text = (SCRIPTS.parent / "templates" / "image-guidance.md").read_text(
         encoding="utf-8")
     g = write_and_read(tmp_path, text)
-    assert g.found and g.always == "" and g.blocks == {}
+    # Only the template's own line is sent, never a "{placeholder}".
+    assert g.found and g.blocks == {}
+    assert g.always == "No signature, watermark or lettering anywhere in the picture."
+
+
+def test_a_placeholder_line_beside_real_text_is_not_sent(tmp_path):
+    g = write_and_read(tmp_path, "## Always\n\n{Add your style.}\n\nOil.\n")
+    assert g.always == "Oil."
 
 
 def test_no_note(tmp_path):

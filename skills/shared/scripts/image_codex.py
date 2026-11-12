@@ -87,12 +87,16 @@ class Login(NamedTuple):
 
 class Failed(Exception):
     """Codex ran and gave no picture. `stop` when no later picture in the
-    run will fare better (out of plan, signed out, not installed)."""
+    run will fare better (out of plan, signed out, not installed).
+    `blank` when Codex ran to the end, reported no error and still left no
+    picture: it used the plan's allowance for nothing."""
 
-    def __init__(self, message: str, stop: bool = False) -> None:
+    def __init__(self, message: str, stop: bool = False,
+                 blank: bool = False) -> None:
         super().__init__(message)
         self.message = message
         self.stop = stop
+        self.blank = blank
 
 
 class Refused(Exception):
@@ -248,6 +252,9 @@ def draw(prompt: str, refs: list[str], shape: str, workdir: Path) -> Picture:
                        if not ln.startswith("Reading prompt from stdin")).strip()
     problem = (ev.errors[-1] if ev.errors else "") or ev.said or stderr
     stop = bool(_STOPPING.search(problem))
+    blank = done.returncode == 0 and not ev.errors and not stop
     if problem:
-        raise Failed(f"Codex gave no picture: {_cut(problem)}", stop=stop)
-    raise Failed(f"Codex gave no picture (it exited with {done.returncode})")
+        raise Failed(f"Codex gave no picture: {_cut(problem)}", stop=stop,
+                     blank=blank)
+    raise Failed(f"Codex gave no picture (it exited with {done.returncode})",
+                 blank=blank)
