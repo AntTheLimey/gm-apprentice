@@ -1097,3 +1097,50 @@ def test_a_bare_embed_means_the_nearest_file_of_that_name_in_the_vault(tmp_path)
     p = RECAP_WITH.format("![[_attachments/scenes/a.jpg]]")
     (folder / "a.jpg").write_bytes(JPG)
     assert image_place.embed_after(p, WHERE, "a.jpg", folder, tmp_path) == p
+
+
+def two_scenes():
+    def at(n, after, dest):
+        return entry(n, "Sessions/Session 03 Wrap-Up.md", "scene",
+                     f"_attachments/scenes/{dest}", after=after, shape="16:9")
+    return [at(1, "The miller said nothing", "mill-one"),
+            at(2, "The miller then spoke", "mill-two")]
+
+
+def test_a_late_file_leaves_its_embed_out_when_two_scenes_share_a_recap(
+        vault, monkeypatch):
+    job = make_job(vault, two_scenes())
+    target = vault / "_attachments/scenes/mill-one.jpg"
+    real = image_place._copy_in
+
+    def synced(c, *rest):
+        if c.target == target:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(JPG2)
+        real(c, *rest)
+    monkeypatch.setattr(image_place, "_copy_in", synced)
+    assert run(vault, job, "--keep", "1", "2", "--write") == 1
+    text = (vault / "Sessions/Session 03 Wrap-Up.md").read_text(encoding="utf-8")
+    assert "![[mill-two.jpg]]" in text and "mill-one" not in text
+
+
+def test_two_scenes_in_one_recap_are_both_embedded(vault):
+    job = make_job(vault, two_scenes())
+    assert run(vault, job, "--keep", "1", "2", "--write") == 0
+    text = (vault / "Sessions/Session 03 Wrap-Up.md").read_text(encoding="utf-8")
+    assert text.count("![[mill-one.jpg]]") == 1
+    assert text.count("![[mill-two.jpg]]") == 1
+
+
+def test_a_same_named_file_beside_the_note_is_what_a_bare_embed_means(tmp_path):
+    folder = tmp_path / "_attachments" / "scenes"
+    notes = tmp_path / "Sessions"
+    folder.mkdir(parents=True)
+    notes.mkdir()
+    (notes / "a.jpg").write_bytes(JPG)          # beside the recap: wins
+    t = RECAP_WITH.format("![[a.jpg]]")
+    out = image_place.embed_after(t, WHERE, "a.jpg", folder, tmp_path, notes)
+    assert out is not None and out.count("![[a.jpg]]") == 2
+    # With nothing beside the note, the vault-wide rule decides as before.
+    (notes / "a.jpg").unlink()
+    assert image_place.embed_after(t, WHERE, "a.jpg", folder, tmp_path, notes) == t

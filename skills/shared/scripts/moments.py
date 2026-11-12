@@ -375,11 +375,12 @@ def cmd_tag(vault: Path, raw: str, rows_in: str, write: bool) -> str:
 
 def cmd_offered(vault: Path) -> list[str]:
     try:
-        offered = vl.read_state(vault).get(OFFERED_KEY)
-        if offered:
-            return [f"SKIP\t{vl.STATE_FILE}\t\talready offered {offered}"]
-        today = date.today().isoformat()
-        vl.set_state(vault, OFFERED_KEY, today)
+        with vl.state_lock(vault):
+            offered = vl.read_state(vault).get(OFFERED_KEY)
+            if offered:
+                return [f"SKIP\t{vl.STATE_FILE}\t\talready offered {offered}"]
+            today = date.today().isoformat()
+            vl.set_state(vault, OFFERED_KEY, today)
     except (vl.StateUnreadable, OSError) as e:
         raise Refused(f"{vl.STATE_FILE} could not be written: {e}"
                       if isinstance(e, OSError) else str(e)) from None

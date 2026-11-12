@@ -609,3 +609,18 @@ def test_codex_output_is_read_as_utf8_whatever_the_code_page(tmp_path):
          "sys.stdout.buffer.write(sys.stdin.buffer.read())"],
         input="Hôtel de Brissac", timeout=30)
     assert got.stdout == said + "Hôtel de Brissac"
+
+
+def test_an_errored_run_does_not_make_the_next_blank_run_count(codex, tmp_path, capsys):
+    import json
+    vault = make_vault(tmp_path, count=1)
+    plan(vault, tmp_path, count=1)
+    jid = job_id(capsys.readouterr().out)
+    errored = drew(1) + json.dumps({"type": "error", "message": "tool broke"}) + "\n"
+    codex.replies = [(errored, None), (drew(2), None)]
+    assert image.main(["draw", str(vault), jid]) == 1      # an error: no attempt
+    assert image.main(["draw", str(vault), jid]) == 1      # the first blank run
+    assert image_jobs.load(jid).entries[0].attempts == 0   # forgiven
+    codex.replies = [(drew(3), None)]
+    assert image.main(["draw", str(vault), jid]) == 1      # the second blank
+    assert image_jobs.load(jid).entries[0].attempts == 1

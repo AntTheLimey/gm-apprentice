@@ -85,6 +85,10 @@ class Login(NamedTuple):
     line: str
 
 
+# The words a blank run is told by: the one failure that is forgiven once.
+BLANK = "Codex finished but left no picture"
+
+
 class Failed(Exception):
     """Codex ran and gave no picture. `stop` when no later picture in the
     run will fare better (out of plan, signed out, not installed).
@@ -253,8 +257,7 @@ def draw(prompt: str, refs: list[str], shape: str, workdir: Path) -> Picture:
     problem = (ev.errors[-1] if ev.errors else "") or ev.said or stderr
     stop = bool(_STOPPING.search(problem))
     blank = done.returncode == 0 and not ev.errors and not stop
+    lead = BLANK if blank else "Codex gave no picture"
     if problem:
-        raise Failed(f"Codex gave no picture: {_cut(problem)}", stop=stop,
-                     blank=blank)
-    raise Failed(f"Codex gave no picture (it exited with {done.returncode})",
-                 blank=blank)
+        raise Failed(f"{lead}: {_cut(problem)}", stop=stop, blank=blank)
+    raise Failed(f"{lead} (it exited with {done.returncode})", blank=blank)
