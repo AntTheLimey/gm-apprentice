@@ -2090,13 +2090,33 @@ def threads_who(batch: Batch, who: str) -> list[str] | None:
     return out
 
 
-def threads_find(bullets: list[str], lead_key: str, where: str) -> int:
+def threads_find(bullets: list[str], lead_key: str, where: str,
+                 hidden: list[bool] | None = None) -> int:
+    """The index of the one thread `lead_key` names. Two that match are
+    told apart by being hidden: the visible one wins. Twins that read the
+    same cannot be told apart by more text, so those say to edit by hand."""
     hits = th.find_thread(bullets, lead_key)
     if not hits:
-        raise WriteError(f"{where}: no thread '{lead_key}'")
+        key_cf = lead_key.strip().casefold().lstrip("*").strip()
+        starts = key_cf and any(
+            b.strip().casefold().lstrip("*").strip().startswith(key_cf)
+            for b in bullets)
+        # Said without quoting the thread: its text may sit beside hidden
+        # lines.
+        hint = (f": a thread whose text starts with '{lead_key}' exists, but "
+                f"its lead is longer or it sits beside hidden text; use its "
+                f"whole text, or edit it by hand" if starts else "")
+        raise WriteError(f"{where}: no thread '{lead_key}'{hint}")
+    if len(hits) > 1 and hidden is not None:
+        shown = [i for i in hits if not hidden[i]]
+        if len(shown) == 1:
+            return shown[0]
     if len(hits) > 1:
-        raise WriteError(f"{where}: {len(hits)} threads match '{lead_key}'; "
-                         f"use more of its text")
+        same = len({" ".join(bullets[i].split()) for i in hits}) == 1
+        more = ("they read the same, so more text cannot tell them apart: "
+                "edit it by hand" if same else "use more of its text")
+        raise WriteError(f"{where}: {len(hits)} threads match "
+                         f"'{lead_key}'; {more}")
     return hits[0]
 
 
@@ -2108,7 +2128,8 @@ def threads_take(batch: Batch, rel: str, lead_key: str,
     list, and taking it out could split a hidden block."""
     note = batch.read(rel)
     found = th.pc_thread_items(note)
-    thread = found[threads_find([t.text for t in found], lead_key, rel)]
+    thread = found[threads_find([t.text for t in found], lead_key, rel,
+                                [t.hidden for t in found])]
     if thread.hidden:
         raise WriteError(f"'{lead_key}' on {Path(rel).stem} is next to "
                          f"hidden text; edit it by hand")
@@ -2130,7 +2151,8 @@ def threads_take_shared(batch: Batch, overview: str, lead_key: str,
     orphan comment closer."""
     note = batch.read(overview)
     found = th.shared_threads(note, section)
-    i = threads_find([t.text for t in found], lead_key, overview)
+    i = threads_find([t.text for t in found], lead_key, overview,
+                     [t.hidden for t in found])
     if found[i].hidden:
         raise WriteError(threads_hidden_shared(lead_key, section))
     try:
