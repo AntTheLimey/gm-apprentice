@@ -3147,6 +3147,15 @@ def resolve_export(batch: Batch, entries: list[tuple[str, str]],
             for n, rels in names.items()}
     live = {n: rels for n, rels in live.items() if rels}
     index = links._index(live)
+    typed_cache: list[set[str]] = []
+
+    def typed() -> set[str]:
+        """The people, places and things: read once, and only if asked."""
+        if not typed_cache:
+            typed_cache.append({
+                rel for rel, note in vl.vault_files(batch.vault)
+                if vl.entity_type(vl.extract_frontmatter(note)) in NAME_TYPES})
+        return typed_cache[0]
 
     def direct(spelling: str) -> tuple[str, list[str]] | None:
         n = vl.normalize(spelling)
@@ -3163,6 +3172,10 @@ def resolve_export(batch: Batch, entries: list[tuple[str, str]],
         if paren:
             tries += [(p.strip(), f' — as "{p.strip()}"')
                       for p in paren.groups() if p.strip()]
+        # "Mr. Ashworth", "Dr. Moreau": a short title with a full stop
+        # (two letters or more: "J. Smith" is an initial). Tried only for
+        # NEAR candidates, never as an EXACT or ALIAS match.
+        titled = re.match(r"^[A-Z][a-z]{1,3}\.\s+(\S.*)$", name)
         for spelling, how in tries:
             hit = direct(spelling)
             if hit:
@@ -3172,11 +3185,31 @@ def resolve_export(batch: Batch, entries: list[tuple[str, str]],
                 batch.row(verb, rels[0], where, name + how + also)
                 break
         else:
-            near: list[tuple[str, str]] = []
-            for spelling, _how in tries:
-                near = links.candidates(spelling, index)
-                if near:
-                    break
+            spellings = [t for t, _how in tries]
+            if titled:
+                spellings.append(titled.group(1))
+            best: dict[str, str] = {}      # path -> its best tag
+            for spelling in spellings:
+                for rel, tag in links.candidates(spelling, index, None):
+                    if (rel not in best or links.TAGS.index(tag)
+                            < links.TAGS.index(best[rel])):
+                        best[rel] = tag
+            near = list(best.items())
+            # Best match first ("same", "close", "part"); among equals,
+            # people, places and things before plans and documents, then a
+            # note whose file name holds one spelling's every word.
+            wordsets = [set(re.findall(r"[^\W\d_]{3,}", t.casefold()))
+                        for t in spellings]
+
+            def in_stem(path: str) -> bool:
+                stem = set(re.findall(r"[^\W\d_]{3,}",
+                                      Path(path).stem.casefold()))
+                return any(w and w <= stem for w in wordsets)
+            if len(near) > 1:
+                near.sort(key=lambda c: (links.TAGS.index(c[1]),
+                                         c[0] not in typed(),
+                                         not in_stem(c[0])))
+            near = near[:3]
             if near:
                 more = "".join(f"; or {rel} ({tag})" for rel, tag in near[1:])
                 batch.row("NEAR", near[0][0], where,
@@ -3184,7 +3217,7 @@ def resolve_export(batch: Batch, entries: list[tuple[str, str]],
             else:
                 batch.row("NONE", "", where, name)
     if text:
-        prose_near(batch, text, live, entries)
+        prose_near(batch, text, live, entries, typed())
 
 
 # A capitalised word in running text: a name, or the start of a sentence.
@@ -3195,7 +3228,7 @@ NAME_TYPES = frozenset({"pc", "npc", "location", "faction", "organization",
 
 
 def prose_near(batch: Batch, text: str, live: dict[str, set[str]],
-               entries: list[tuple[str, str]]) -> None:
+               entries: list[tuple[str, str]], typed: set[str]) -> None:
     """A NEAR row for each capitalised word of the export that is no word
     of a person's, place's or thing's name or alias but is close to one
     (`difflib`, the standard library's matcher, same first letter):
@@ -3203,8 +3236,6 @@ def prose_near(batch: Batch, text: str, live: dict[str, set[str]],
     names, a word the export also writes in lower case (English, not a
     name) and a word built on a name (Bengali) are skipped; words in an
     entry's own name are left to that entry's row."""
-    typed = {rel for rel, note in vl.vault_files(batch.vault)
-             if vl.entity_type(vl.extract_frontmatter(note)) in NAME_TYPES}
     known: dict[str, set[str]] = {}
     for name, rels in live.items():
         rels = rels & typed
