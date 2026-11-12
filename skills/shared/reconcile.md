@@ -27,13 +27,14 @@ If it passes, offer:
 
 > "Straightforward session — no conflicts found, no unplayed
 > prep. Settle the threads, then promote the Wrap-Up and {the DRAFTs
-> created this session, by name} to AUTHORITATIVE? (y/n)"
+> created or played this session, by name} to AUTHORITATIVE? (y/n)"
 
 On yes, step 5.5 first (a thread write that fails stops here: the
 session stays at `wrap-up`), then:
 - `gma stamp-entities <vault> "<wrap-up>" --promote --reconciled YYYY-MM-DD`
 - `gma stamp-entities <vault> <entity files> --promote` — the
-  scan's DRAFTs created this session, never its older ones
+  scan's DRAFTs created this session and its pre-play ones (played,
+  made before play), never its older ones
 - `gma stamp-entities <vault> "<index>" --set status=reviewed`
 - Do step 6.1, then go to step 6.5.
 

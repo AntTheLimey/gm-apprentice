@@ -92,6 +92,7 @@ class Scan(unittest.TestCase):
             "linked entities: 3",
             "draft entities created this session: 1",
             "  NPCs/Lady_Grey.md",
+            "pre-play draft entities played this session: 0",
             "older draft entities linked (the quick path leaves them): 1",
             "  Locations/Hall.md (createdSession: Session 2)",
             "unverified in linked notes: 0",
@@ -99,6 +100,49 @@ class Scan(unittest.TestCase):
             "  NPCs/Lady_Grey.md:10: She is the Duke's sister and has been lying to...",
             "quick path: no (2 UNVERIFIED markers, a Plan file)",
         ])
+
+    def test_a_pre_play_draft_the_wrap_up_links_is_offered(self):
+        files = plain_wrap(FILES)
+        files["NPCs/The Duke.md"] = ("---\ntype: npc\ncanon_status: DRAFT\n"
+                                    "createdSession: \"\"\n---\n")
+        files["Locations/Hall.md"] = ("---\ntype: location\ncanon_status: DRAFT\n"
+                                     "createdSession: 0\n---\n")
+        out = scan(files)
+        self.assertIn("pre-play draft entities played this session: 2", out)
+        self.assertIn("  NPCs/The Duke.md", out)
+        self.assertIn("  Locations/Hall.md", out)
+        self.assertIn("older draft entities linked (the quick path leaves them): 0", out)
+
+    def test_only_pre_play_drafts_still_ask_the_contradiction_question(self):
+        files = plain_wrap(FILES)
+        files["NPCs/Lady_Grey.md"] = ("---\ntype: npc\ncanon_status: DRAFT\n"
+                                     "createdSession: \"\"\naliases: [\"Lady Grey\"]\n---\n")
+        files["Locations/Hall.md"] = files["NPCs/The Duke.md"]
+        out = scan(files)
+        self.assertIn("pre-play draft entities played this session: 1", out)
+        self.assertTrue(out[-1].startswith("quick path: yes, unless"))
+
+    def test_a_pcs_story_file_is_found_through_the_linked_pc(self):
+        files = plain_wrap(FILES)
+        files[WRAP] += "\n[[Hattie Bell]] and [[Sam Rook]] sat up late.\n"
+        files["PCs/Hattie Bell.md"] = ("---\ntype: pc\ncanon_status: DRAFT\n"
+                                      "createdSession: \"\"\n---\n")
+        files["PCs/Hattie Bell_Story.md"] = (
+            "---\ntype: character-story\ncanon_status: DRAFT\n"
+            "createdSession: \"Session 5\"\n---\n<!-- UNVERIFIED -->\n")
+        files["PCs/Sam Rook.md"] = "---\ntype: pc\ncanon_status: AUTHORITATIVE\n---\n"
+        files["PCs/Sam Rook_Story.md"] = (
+            "---\ntype: character-story\ncanon_status: DRAFT\n"
+            "createdSession: \"Session 2\"\n---\n")
+        out = scan(files)
+        self.assertIn("draft entities created this session: 2", out)
+        self.assertIn("  PCs/Hattie Bell_Story.md", out)
+        self.assertIn("pre-play draft entities played this session: 1", out)
+        self.assertIn("  PCs/Hattie Bell.md", out)
+        self.assertIn("  PCs/Sam Rook_Story.md (createdSession: Session 2)", out)
+        # a marker on the Story file blocks the quick path like any linked note's
+        self.assertIn("unverified in linked notes: 1", out)
+        self.assertTrue(out[-1].startswith("quick path: no"))
 
     def test_quick_path_with_new_drafts_leaves_the_contradiction_to_judge(self):
         out = scan(plain_wrap(FILES))
