@@ -402,3 +402,47 @@ describe('publish-decision: a planned chapter note', () => {
     }
   });
 });
+
+// #619: a note whose own name is a secret (`withheld: true`) stays off the player site until the
+// publish list says to publish it, with no list as with one. Before, a vault with no publish list
+// (a new campaign's first site) published it, and the doctor called it an error afterwards.
+describe('publish-decision: a withheld note', () => {
+  it('is excluded with no publish list', () => {
+    const v = decide({ type: 'location', withheld: true });
+    assert.strictEqual(v.bucket, 'exclude');
+    assert.strictEqual(v.code, 'WITHHELD');
+    assert.strictEqual(v.reason, 'withheld: true');
+    assert.strictEqual(publishesPage(v), false);
+  });
+
+  it('reads the flag as the build does: yes, on and 1 count', () => {
+    for (const value of ['yes', 'on', '1', 'true']) {
+      assert.strictEqual(decide({ type: 'faction', withheld: value }).code, 'WITHHELD', value);
+    }
+    assert.strictEqual(decide({ type: 'faction', withheld: false }).code, 'OK');
+    assert.strictEqual(decide({ type: 'faction' }).code, 'OK');
+  });
+
+  it('is excluded when the publish list does not name it', () => {
+    const v = decide({ type: 'npc', withheld: true }, { manifest: manifestOf({ publishing: ['Characters/NPCs/Other.md'] }) });
+    assert.strictEqual(v.code, 'WITHHELD');
+  });
+
+  it('keeps the GM\'s own reason when the publish list excludes it', () => {
+    const rel = 'Characters/NPCs/Someone.md';
+    const v = decide({ type: 'npc', withheld: true }, { manifest: manifestOf({ excluded: [rel] }) });
+    assert.strictEqual(v.code, 'MANIFEST_EXCLUDED');
+  });
+
+  it('publishes when the publish list names it (a reveal puts it there)', () => {
+    const rel = 'Characters/NPCs/Someone.md';
+    const v = decide({ type: 'npc', withheld: true }, { manifest: manifestOf({ publishing: [rel] }) });
+    assert.strictEqual(v.code, 'OK');
+  });
+});
+
+describe('publish-decision: a withheld note that also says publish: false', () => {
+  it('keeps the publish: false answer', () => {
+    assert.strictEqual(decide({ type: 'npc', withheld: true, publish: false }).code, 'PUBLISH_FALSE');
+  });
+});

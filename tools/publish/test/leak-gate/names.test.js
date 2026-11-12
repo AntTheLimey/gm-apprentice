@@ -6,6 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { leakSite, leakInto } = require('../helpers/leak-site');
 const { runLeakGate } = require('../../lib/leak-gate');
+const { listFileText } = require('../helpers/publish-list');
 
 const NOTES = {
   'NPCs/Lord Vane.md': '---\ntype: npc\ngm_aliases: [Elias Crowe]\n---\nA lord.\n',
@@ -66,7 +67,9 @@ describe('leak gate: secret names', () => {
     } finally { s.cleanup(); }
   });
   it('a withheld note that publishes stops the gate', () => {
+    // A withheld note publishes only from the publish list (#619).
     const notes = { ...NOTES, 'NPCs/Vesper.md': '---\ntype: npc\nwithheld: true\n---\nA hidden one.\n' };
+    notes['_meta/publish-list.yaml'] = listFileText({ publishing: Object.keys(notes).filter((rel) => rel.endsWith('.md')) });
     const s = leakSite(notes, SETTINGS);
     try {
       assert.ok(runLeakGate({ configPath: s.configPath, outputDir: s.outputDir }).findings.some((x) => x.code === 'WITHHELD_PUBLISHED' && x.note === 'NPCs/Vesper.md'));

@@ -37,7 +37,10 @@ Which should I create as vault entities?"
 
 Approved entities are filed by campaign-organizer to the
 correct vault folders with proper frontmatter. Do not
-auto-promote — the GM chooses. Any `relationships:` edge on a
+auto-promote — the GM chooses. An entity whose existence is
+itself a secret (a hidden lodge, an unfound room, an NPC the
+players must not hear of yet) gets `withheld: true`: the site
+keeps it off until a reveal publishes it. Any `relationships:` edge on a
 promoted entity takes its `type:` from the vocabulary in
 `_meta/relationship-types.md` (see `shared/entity-schema.md`);
 map narrative verbs and normalize inverses via
