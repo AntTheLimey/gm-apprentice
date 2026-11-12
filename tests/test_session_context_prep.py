@@ -100,6 +100,18 @@ class PlanInNextChapterTests(unittest.TestCase):
         self.assertNotIn("(none found)", part.split("=====", 2)[1])
         self.assertIn("Session 02 - Plan.md", part.split("=====", 2)[1])
 
+    def test_a_lone_plan_in_an_older_chapter_is_not_the_upcoming_one(self):
+        # Numbering restarts per chapter: an older chapter's Session 2 Plan
+        # is not the Plan for the Session 2 about to be prepped.
+        def plan(ch: str) -> tuple[str, str, dict]:
+            fm = {"type": "session-plan", "session": "[[Session 02 - X]]",
+                  "chapter": f"[[{ch}]]"}
+            return (f"Chapters/{ch}/Plan.md", ch, fm)
+        self.assertIsNone(sc._upcoming_plan([plan("Chapter 1 - A")],
+                                            "chapter 2 - b", 2))
+        self.assertIsNotNone(sc._upcoming_plan([plan("Chapter 3 - C")],
+                                               "chapter 2 - b", 2))
+
     def test_nearest_later_chapter_wins_among_several(self) -> None:
         def plan(ch: str) -> tuple[str, str, dict]:
             fm = {"type": "session-plan", "session": "[[Session 02 - X]]",

@@ -158,7 +158,9 @@ class BatchTests(unittest.TestCase):
 
     def test_section_append_with_a_heading_stays_out_of_an_open_block(self):
         """#655: text holding a sub-heading now takes the hiding check too
-        (no layout was found where it differed; this pins the result)."""
+        (#655 point 1 is not reachable: `section_end` already stops at the
+        opener of a block holding a heading, so this passes on main too
+        and is kept as a pin)."""
         note = NPC.replace(
             "- **[[Session 01 - Start]]** — met the party.\n",
             "- met.\n\n<!-- gm-only -->\nsecret\n\n## Hidden\n\nmore\n"

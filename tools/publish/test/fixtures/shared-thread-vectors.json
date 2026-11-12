@@ -153,6 +153,38 @@
      "party": true
     }
    ]
+  },
+  {
+   "about": "a thread's indented code fence with an unindented blank-separated line inside: the next bullet is still a thread (#631)",
+   "markdown": "## Open Threads\n\n- A — involves the party\n  ```\n\ncode\n  ```\n- B — involves the party\n",
+   "entries": [
+    {
+     "markdown": "- A ``` code ```",
+     "involves": [],
+     "party": true
+    },
+    {
+     "markdown": "- B",
+     "involves": [],
+     "party": true
+    }
+   ]
+  },
+  {
+   "about": "a bullet inside the thread's code fence is part of the thread (#631)",
+   "markdown": "## Open Threads\n\n- A — involves the party\n  ```\n- B — involves the party\n  ```\n- C — involves the party\n",
+   "entries": [
+    {
+     "markdown": "- A ```; B — involves the party ```",
+     "involves": [],
+     "party": true
+    },
+    {
+     "markdown": "- C",
+     "involves": [],
+     "party": true
+    }
+   ]
   }
  ]
 }

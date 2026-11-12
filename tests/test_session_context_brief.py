@@ -122,6 +122,17 @@ class BriefWrapupUnitTests(unittest.TestCase):
         self.assertIn("<!-- gm-only -->\n\n## Kept\n\nKept words.", out)
         self.assertEqual(out.count("gm-only -->"), 2)
 
+    def test_hidden_text_after_a_heading_stays_in_the_dropped_block(self):
+        """#631: an inline opener whose closer comes after the next heading:
+        nothing after the heading is left unfenced or orphaned."""
+        body = ("## Memorable Moments\n\nText words here. <!-- gm-only --> "
+                "secret\n\n## Next Steps\n\nmore secret\n"
+                "<!-- /gm-only -->\npublic\n\n## Kept\n\nKept words.\n")
+        out = sc.brief_wrapup(body)
+        self.assertNotIn("secret", out)
+        self.assertNotIn("gm-only", out)
+        self.assertIn("## Kept\n\nKept words.", out)
+
     def test_no_op_when_nothing_to_drop(self):
         body = "## Narrative Recap\n\nText.\n\n## GM Notes\n\n### World State\n\nDay 1.\n"
         self.assertEqual(sc.brief_wrapup(body), body)

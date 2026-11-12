@@ -425,7 +425,7 @@ def _stub_provenance(body: str) -> str:
                 j += 1
                 continue
             hm = _ANY_HEADING_RE.match(lines[j])
-            if hm and len(hm.group(1)) <= level:
+            if hm and len(hm.group(1)) <= level and depth == 0:
                 break
             marks = markers_in(lines[j])
             if marks:
@@ -970,9 +970,16 @@ def _upcoming_plan(files, chapter, upcoming: int):
     found = prefer_chapter(plans, chapter)
     if found is not None or not plans:
         return found
-    if len(plans) == 1:
-        return (plans[0][0], plans[0][1])
     here = _chapter_number(chapter or "")
+    if len(plans) == 1:
+        # Numbering restarts per chapter: a lone Plan is this one's only
+        # when it is unfiled or in a later chapter, never an older played one.
+        rel, text, fm = plans[0]
+        num = _chapter_number(chapter_of(rel, fm) or "")
+        if chapter_key(rel, fm) is None or (
+                here is not None and num is not None and num > here):
+            return (rel, text)
+        return None
     if here is not None:
         later = []
         for rel, text, fm in plans:
