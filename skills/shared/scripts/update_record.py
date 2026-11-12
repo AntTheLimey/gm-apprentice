@@ -50,7 +50,7 @@ class Workaround(TypedDict):
     id: str                  # a slug of `what`, unique in the record
     issue: int               # the gm-apprentice GitHub issue it stands in for
     what: str                # one plain line
-    where: list[str]         # vault-relative paths, or memory:<file>
+    where: list[str]         # vault-relative paths, memory:<file>, or site:<path>
     kind: WorkaroundKind
     added: str               # ISO date
     release: Optional[str]   # by hand: the release that ships it, over GitHub's answer
