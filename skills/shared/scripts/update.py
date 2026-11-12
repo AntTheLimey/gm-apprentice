@@ -573,9 +573,11 @@ def _apply(vault: Path, todo: list[Check], given: dict[str, Given],
     _unused(given, used | offers.ids, seen, res, stopped=failed is not None)
     target = migrate.stamp_target(todo, failed, vault_v, plugin_v)
     stamping = parse_version(target) > parse_version(vault_v) and not holding
+    kept_in_record = False
     if run.wrote() or stamping:
         try:
             run.record(target if stamping else vault_v)
+            kept_in_record = True
         except Exception as e:  # noqa: BLE001 - any failure: reported below
             stamping = False   # an answer not kept must not be passed by the stamp
             why = (f"the update record could not be written ({e}); the "
@@ -597,7 +599,11 @@ def _apply(vault: Path, todo: list[Check], given: dict[str, Given],
             except (StepFailed, OSError) as e2:
                 print(f"{cli_name()}: the update record still names {target} "
                       f"as this run's version ({e2})", file=sys.stderr)
-    left = {i for i in left_ids if not i.startswith(migrate.TEMPLATE)}
+    # A leave the update record keeps is kept against the lines the GM was
+    # shown, so it is not also held by id: that hold would outlive a changed
+    # question on a vault the stamp does not move (#626).
+    left = {i for i in left_ids if not i.startswith(migrate.TEMPLATE)
+            and not (kept_in_record and i in run.new)}
     if res.stamped is None and (left or said - held["said"]):
         try:   # migrate.py's plan does not ask these again either
             run.before_write()
