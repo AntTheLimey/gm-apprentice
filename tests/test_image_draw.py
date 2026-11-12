@@ -382,7 +382,7 @@ def test_auth_failure_stops_at_once_and_names_the_fix(tmp_path, monkeypatch, cap
     assert run(vault, job) == 1
     assert len(send.calls) == 1
     out = capsys.readouterr().out
-    assert "The picture service did not accept the key. Check the key: gma image key gemini" in out
+    assert "The picture service did not accept the key. Check the key: " + vaultlib.terminal_command("image", "key", "gemini") in out
     assert "not drawn" in out
     assert month(vault) == 0
     assert [e.status for e in reload(job).entries] == ["planned"] * 3
@@ -553,7 +553,8 @@ def test_no_key_stops_before_any_call(tmp_path, monkeypatch, capsys):
     monkeypatch.delenv("GEMINI_API_KEY")
     send = script(monkeypatch, fixture(OK))
     assert run(vault, job) == 2
-    assert "No key found for gemini. Run in your own terminal: gma image key gemini" \
+    assert ("No key found for gemini. Run in your own terminal: "
+            + vaultlib.terminal_command("image", "key", "gemini")) \
         in capsys.readouterr().err
     assert send.calls == []
 

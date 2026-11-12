@@ -2254,6 +2254,14 @@ def cli_name() -> str:
     return os.path.basename(sys.argv[0])
 
 
+def terminal_command(*words: str) -> str:
+    """A command line a GM can paste into a terminal: this plugin's `gma.py`
+    by its full path. `gma` alone is the skills' shorthand, not a command a
+    terminal has (oh-my-zsh aliases it to `git merge --abort`)."""
+    script = Path(__file__).resolve().with_name("gma.py")
+    return " ".join([f'python3 "{script}"', *words])
+
+
 def report_unreadable_settings(main: Callable[[], int]) -> int:
     """`main()`'s exit code; settings that cannot be read (a typo in the
     settings file, no publish tool) end the command with one `error:` line

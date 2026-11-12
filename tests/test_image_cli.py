@@ -78,7 +78,8 @@ def test_status_not_a_vault(tmp_path, capsys):
 def test_key_needs_a_terminal(monkeypatch, capsys):
     monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
     assert image.main(["key", "gemini"]) == 2
-    assert ("Run this in your own terminal window: gma image key gemini"
+    assert ("Run this in your own terminal window: "
+            + vaultlib.terminal_command("image", "key", "gemini")
             in capsys.readouterr().out)
 
 

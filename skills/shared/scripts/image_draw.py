@@ -371,8 +371,8 @@ class _Run:
             self.save(e)
             return
         if err.kind == "auth":
-            self.say(e, f"not drawn, {message} Check the key: gma image key "
-                     f"{self.job.service}")
+            self.say(e, f"not drawn, {message} Check the key: "
+                     + vl.terminal_command("image", "key", self.job.service))
             self.halt(message)
             return
         if err.kind == "quota":

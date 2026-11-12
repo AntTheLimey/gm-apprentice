@@ -56,12 +56,12 @@ move on. An unpinned one updates with `npx skills update -g`.
 These installs don't carry the publish tool that builds the campaign
 site. The first command that needs it downloads it once (about 2 MB,
 checked against the release's checksum). If a sandbox blocks that
-download, allow `gma tool install` when asked, or run it once in a
-terminal.
+download, allow the command the agent asks about (it prints the exact
+line), or ask the agent for that line and run it once in a terminal.
 
 Agents that sandbox their commands usually let them write only inside
 the project folder. Two things gm-apprentice writes sit outside it: the
-publish tool's download, and the backup `gma update` takes before it
+publish tool's download, and the backup the vault update takes before it
 changes a vault (in `~/.gm-apprentice/backups/`). When a sandbox blocks
 either one, the agent should stop and ask you to allow that one command
 outside the sandbox.
@@ -82,7 +82,7 @@ agents install through `npx skills` but have not been tested yet.
 ### After an update
 
 When the skills are newer than a vault, the version check asks for
-`gma update` on that vault, and the skills run it for you.
+an update of that vault, and the skills run it for you.
 
 ### VS Code / Cursor
 
