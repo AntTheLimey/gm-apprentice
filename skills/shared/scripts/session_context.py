@@ -746,8 +746,11 @@ def _ratio_match(norm: str, bullet: str) -> bool:
             and m.ratio() >= THREAD_MATCH_RATIO)
 
 
-def _scoped_wrap_ups(files, chapter):
-    """(session, text) of each Wrap-Up in scope (see `wrap_up_threads`)."""
+def _scoped_wrap_ups(files, chapter, warn=False):
+    """(session, text) of each Wrap-Up in scope (see `wrap_up_threads`).
+
+    A Wrap-Up whose `session:` names no number is left out; with `warn`
+    that is said on stderr, naming the file (#638)."""
     for rel, text, fm in files:
         if entity_type(fm) not in WRAP_UP_TYPES:
             continue
@@ -758,6 +761,9 @@ def _scoped_wrap_ups(files, chapter):
         n = session_ref_number(fm)
         if n is not None:
             yield n, text
+        elif warn:
+            print(f"warning: {rel}: Wrap-Up left out, its `session:` "
+                  "names no session number", file=sys.stderr)
 
 
 def _pc_key(target: str) -> str:
@@ -811,7 +817,7 @@ def wrap_up_threads(files, chapter) -> list[tuple[int, list[str], list[str]]]:
     its threads.
     """
     wrap_ups: list[tuple[int, list[str], list[str]]] = []
-    for n, text in _scoped_wrap_ups(files, chapter):
+    for n, text in _scoped_wrap_ups(files, chapter, warn=True):
         unresolved_block = _heading_block(text, 4, "Unresolved Threads")
         carry_block = _heading_block(text, 3, "PC Carry-Forward")
         unresolved = _bullets(unresolved_block) if unresolved_block else []

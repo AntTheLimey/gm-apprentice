@@ -787,6 +787,24 @@ class ThreadReportTests(unittest.TestCase):
         hits, mark = sc.match_sessions(ledger, wrap_ups)
         self.assertEqual(hits, [3])
 
+    def test_a_wrap_up_with_no_readable_session_is_named_not_dropped_silently(self):
+        import contextlib
+        import io
+        from vaultlib import extract_frontmatter
+        good = ("---\ntype: session-wrapup\nsession: \"[[Session 06 - A Title, "
+                "With A Comma]]\"\n---\n#### Unresolved Threads\n- a\n")
+        bad = ("---\ntype: session-wrapup\nsession: \"Soon\"\n---\n"
+               "#### Unresolved Threads\n- b\n")
+        files = [(r, t, extract_frontmatter(t)) for r, t in
+                 (("Sessions/S06 Wrap-Up.md", good),
+                  ("Sessions/Odd Wrap-Up.md", bad))]
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            wrap_ups = sc.wrap_up_threads(files, None)
+        self.assertEqual([n for n, _u, _c in wrap_ups], [6])
+        self.assertIn("Sessions/Odd Wrap-Up.md", err.getvalue())
+        self.assertNotIn("S06", err.getvalue())
+
     def test_match_sessions_returns_sessions_and_mark(self):
         wrap_ups = sc.wrap_up_threads(load_files(FIXTURE),
                                       "chapter 4 - calcutta")
