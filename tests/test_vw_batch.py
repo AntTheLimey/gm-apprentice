@@ -142,6 +142,35 @@ class BatchTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("--replace would drop it", out)
 
+    def test_section_append_list_joins_the_list_above_a_closed_block(self):
+        """#655: `section --append` places a list item as `log` does."""
+        note = NPC.replace(
+            "- **[[Session 01 - Start]]** — met the party.\n",
+            "- met.\n\n<!-- gm-only -->\nsecret\n<!-- /gm-only -->\n", 1)
+        want = "- met.\n- new.\n\n<!-- gm-only -->\nsecret\n"
+        for text in (f'=== section {NPC_REL} "Campaign Log" --append\n'
+                     f"- new.\n",
+                     f"=== log\n{NPC_REL}\tCampaign Log\t- new.\n"):
+            vault = make_vault(self, {NPC_REL: note})
+            code, out = batch(vault, text, "--write")
+            self.assertEqual(code, 0, out)
+            self.assertIn(want, read(vault, NPC_REL), text)
+
+    def test_section_append_with_a_heading_stays_out_of_an_open_block(self):
+        """#655: text holding a sub-heading now takes the hiding check too
+        (no layout was found where it differed; this pins the result)."""
+        note = NPC.replace(
+            "- **[[Session 01 - Start]]** — met the party.\n",
+            "- met.\n\n<!-- gm-only -->\nsecret\n\n## Hidden\n\nmore\n"
+            "\n<!-- /gm-only -->\n", 1)
+        vault = make_vault(self, {NPC_REL: note})
+        text = (f'=== section {NPC_REL} "Campaign Log" --append\n'
+                f"### Visit\n\nPublic text.\n")
+        code, out = batch(vault, text, "--write")
+        self.assertEqual(code, 0, out)
+        got = read(vault, NPC_REL)
+        self.assertLess(got.index("Public text."), got.index("<!-- gm-only"))
+
     def test_section_replace(self):
         vault = self.vault()
         text = f'=== section {NPC_REL} "GM Notes/Wants" --replace\nIn.\n'
