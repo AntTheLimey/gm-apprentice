@@ -11,12 +11,20 @@ from typing import NamedTuple
 
 from tool_cache import cached_tool
 
+def terminal_command(*words: str) -> str:
+    """A command line a GM can paste into a terminal: this plugin's `gma.py`
+    by its full path. `gma` alone is the skills' shorthand, not a command a
+    terminal has (oh-my-zsh aliases it to `git merge --abort`)."""
+    script = Path(__file__).resolve().with_name("gma.py")
+    return " ".join([f'python3 "{script}"', *words])
+
+
 INSTALL_STOP = ("Assistants: stop here, tell the GM what is missing, and do "
                 "not work around it.")
 MISSING_TOOL = ("the publish tool is not installed. The Claude Code and "
                 "Codex plugins carry it; other installs download it once (it needs Node "
-                "22.21 or newer): run `gma tool install` with network access. "
-                + INSTALL_STOP)
+                "22.21 or newer): run `" + terminal_command("tool", "install")
+                + "` with network access. " + INSTALL_STOP)
 VERSION_UNKNOWN = ("cannot determine the version of these skills: "
                    "shared/VERSION is missing, empty or unreadable. This "
                    "install is incomplete. " + INSTALL_STOP)

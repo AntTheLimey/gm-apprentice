@@ -131,7 +131,7 @@ def test_rule_2_no_key_stops(tmp_path, monkeypatch):
         image_jobs.plan(build(tmp_path), [{"for": "Anselm", "subject": "x"}],
                         False, TODAY)
     assert str(err.value) == ("No key found for gemini. Run in your own "
-                              "terminal: gma image key gemini")
+                              "terminal: " + vaultlib.terminal_command("image", "key", "gemini"))
 
 
 def test_rule_3_unpriced_stops_unless_allowed(tmp_path):

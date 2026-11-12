@@ -18,7 +18,7 @@ The apprentice never picks for you. Set `vault.images.source`:
 | `service` | The service and model you set (`vault.images.service`, `vault.images.model`) | Paid, inside your limits |
 
 Until you choose, the apprentice asks. A vault that already names a service
-and model counts as having chosen `service`. `gma image status` says
+and model counts as having chosen `service`. The apprentice's image status check says
 whether Codex is installed and signed in, so you can choose knowingly.
 Codex draws with its own built-in image tool: you choose Codex, not the
 model inside it.
@@ -36,8 +36,8 @@ Turn on `vault.images.auto` and the apprentice draws pictures by itself:
 
 It draws last, once its own work and report are done, and tells you in
 one line how many pictures, what draws them, about how long and any
-cost. Say "not now" and the job waits for 14 days (`gma image status`
-lists it): ask later for "the pictures from the wrap-up" and it carries
+cost. Say "not now" and the job waits for 14 days (ask the apprentice for the image status
+to see it): ask later for "the pictures from the wrap-up" and it carries
 on where it stopped. More than ten pictures are never drawn unasked: the
 apprentice offers them as a fill instead. Nothing is drawn unasked until
 the vault has an Image Guidance note (the apprentice offers to draft
@@ -81,14 +81,17 @@ money when you plan it again with Gemini and see the estimate.
    is the most Google can ever charge. When it runs out, Google draws
    nothing more and the apprentice says the account is out of credit (a
    limit on your account is reported as reached instead).
-3. In your own terminal window, run `gma image key gemini` and paste the
-   key when asked. On a Mac it goes into your keychain. Elsewhere it goes
+3. In your own terminal window, ask the apprentice for the exact
+   command to store a Gemini key, run it there and paste the key when
+   asked (it is `python3 ".../gma.py" image key gemini`, with the full
+   path to the plugin's `gma.py`; plain `gma` is not a command in a
+   terminal). On a Mac it goes into your keychain. Elsewhere it goes
    into a key file only you can read.
 
 Never put the key in a chat with the apprentice, a note or
 `_meta/vault-config.yaml`: the vault gets published. A key in the
 `GEMINI_API_KEY` or `GOOGLE_API_KEY` environment variable is used first,
-and `gma image status "<vault>"` says where the key came from.
+and the apprentice's image status check says where the key came from.
 
 ## Choose the service and model
 
@@ -191,7 +194,7 @@ same temporary folder, so finish it in the same place you started it.
 - **The keychain did not answer**: unlock your Mac keychain and try again.
 - **Google declines a picture**: this is rare. The apprentice describes
   it differently and plans it again.
-- **No network**: give the apprentice network access for `gma image draw`.
+- **No network**: give the apprentice network access for the image drawing command.
 - **Codex stops part-way**: it reports why (signed out, the plan's limit
   reached). Sign it in again, wait for the limit to reset, or draw the
   rest with Gemini.

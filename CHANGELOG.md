@@ -9,6 +9,15 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.14] — 2026-11-12
+
+### Fixed
+
+- `gma workaround add --where site:<path>` records a stand-in that lives in the site folder (`css/overrides.css`), so the update that retires it can point at the file (#608).
+- A "leave" answered on an up-to-date vault no longer hides the next, changed question for a release (#626).
+- The README, the image docs and the hints a GM is shown now give the real command to type in a terminal, not the `gma` shorthand, which oh-my-zsh turns into `git merge --abort` (#627).
+- `mobrpg images` no longer saves a `(mobRPG)` copy of a picture the vault already holds under another name, and the dry run says so (#630).
+
 ## [1.12.13] — 2026-11-12
 
 ### Fixed

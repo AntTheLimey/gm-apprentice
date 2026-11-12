@@ -351,7 +351,8 @@ def find_key(service: str) -> str:
         raise Stop(f"There is no drawing service called {service}.") from None
     if found is None:
         raise Stop(f"No key found for {service}. Run in your own "
-                   f"terminal: gma image key {service}")
+                   f"terminal: "
+                   + vl.terminal_command("image", "key", service))
     return found[0]
 
 

@@ -35,7 +35,7 @@ gma workaround add <vault> --issue N --what TEXT --kind KIND [options]
 | `--issue` | `N` | the gm-apprentice GitHub issue it stands in for |
 | `--what` | `TEXT` | what it is, in one plain line; its id is made from this |
 | `--kind` | `note`, `field`, `css`, `script`, `meta`, `memory` | what sort of thing it is |
-| `--where` | `PATH` | a vault-relative path it lives in, or memory:<file> for agent memory (repeatable) |
+| `--where` | `PATH` | a vault-relative path it lives in, memory:<file> for agent memory, or site:<path> for a file in the site folder (player_site.folder) (repeatable) |
 | `--release` | `X.Y.Z` | the release that ships the issue, when the answer GitHub gives is wrong |
 <!-- END GENERATED -->
 

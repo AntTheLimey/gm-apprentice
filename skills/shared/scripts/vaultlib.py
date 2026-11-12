@@ -42,6 +42,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Iterable, Iterator, Literal
 
+import install_layout
 from install_layout import LAYOUT, MANIFESTS, MISSING_TOOL
 
 # --------------------------------------------------------------------------
@@ -1751,13 +1752,18 @@ def set_state(vault: Path, key: str, value: Any) -> None:
     _write_state(vault, state)
 
 
-def write_held(vault: Path, left: set[str], said: set[str]) -> None:
+def write_held(vault: Path, left: set[str], said: set[str],
+               drop: frozenset[str] | set[str] = frozenset()) -> None:
     """Remember the ids for the next update (merged with those already
-    remembered)."""
+    remembered); `drop` takes leaves out that the update record now keeps."""
     before = read_held(vault)
-    left, said = left | before["left"], said | before["said"]
+    left = (left | before["left"]) - set(drop)
+    said = said | before["said"]
     state = _read_state(vault)
     if not left and not said:
+        if HELD_KEY in state:
+            state.pop(HELD_KEY)
+            _write_state(vault, state)
         return
     state[HELD_KEY] = {"left": sorted(left), "said": sorted(said)}
     _write_state(vault, state)
@@ -2252,6 +2258,9 @@ def cli_name() -> str:
     `gma <command>` through gma. Same source as argparse's default prog, so
     hand-written error lines match its usage lines."""
     return os.path.basename(sys.argv[0])
+
+
+terminal_command = install_layout.terminal_command
 
 
 def report_unreadable_settings(main: Callable[[], int]) -> int:

@@ -283,6 +283,41 @@ class RunTests(Base):
         self.assertEqual(changed.exit, 3)
         self.assertEqual([q.id.split("@")[0] for q in changed.questions], ["drop"])
 
+    def test_a_leave_on_a_current_vault_is_not_held_past_a_changed_question(self):
+        # #626: the vault is already at the plugin's version, so the stamp
+        # never moves and a held id would suppress the next, changed question.
+        vault = make_vault(self, version=PLUGIN)
+        state = {"lines": ["move the old lists"]}
+        r = Check("pick", None, 3, "title of pick", lambda _v: [Item(
+            "pick", CHOICE, list(state["lines"]), lambda _x: ["moved"],
+            wants="move or leave", holds_stamp=True)],
+            kind="asks", plain="Plainly did pick.")
+        [q] = self.run_update(vault, [r]).questions
+        res = self.run_update(vault, [r], {q.id: "leave"})
+        self.assertEqual(res.exit, 0)
+        self.assertIsNone(vaultlib.read_state(vault).get("update_held"))
+        self.assertEqual(self.run_update(vault, [r]).questions, [])
+        state["lines"] = ["move the old lists, and more"]   # the next release
+        [again] = self.run_update(vault, [r]).questions
+        self.assertEqual(again.id.split("@")[0], "pick")
+
+    def test_a_recorded_leave_clears_an_earlier_hold_by_id(self):
+        # A run whose record write failed held the leave by id; the next
+        # run records it, so that hold goes and a changed question is asked.
+        vault = make_vault(self, version=PLUGIN)
+        state = {"lines": ["move the old lists"]}
+        r = Check("pick", None, 3, "title of pick", lambda _v: [Item(
+            "pick", CHOICE, list(state["lines"]), lambda _x: ["moved"],
+            wants="move or leave", holds_stamp=True)],
+            kind="asks", plain="Plainly did pick.")
+        [q] = self.run_update(vault, [r]).questions
+        vaultlib.write_held(vault, {"pick"}, set())   # held by bare id
+        self.run_update(vault, [r], {q.id: "leave"})
+        self.assertNotIn("pick", vaultlib.read_held(vault)["left"])
+        state["lines"] = ["move the old lists, and more"]
+        [again] = self.run_update(vault, [r]).questions
+        self.assertEqual(again.id.split("@")[0], "pick")
+
     def test_backup_exists_before_the_first_write(self):
         vault = make_vault(self)
         seen = []

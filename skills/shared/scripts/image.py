@@ -176,7 +176,7 @@ def key(service: str) -> int:
         where = image_keys.store(service)
     except image_keys.NeedsTerminal:
         print("Run this in your own terminal window: "
-              f"gma image key {service}")
+              + vaultlib.terminal_command("image", "key", service))
         return 2
     except subprocess.CalledProcessError:
         print("The key was not stored. If the two entries did not match, "

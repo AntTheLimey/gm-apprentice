@@ -37,10 +37,11 @@ import github_issues
 import update_record
 from migrate_core import StepFailed
 from update_record import WORKAROUND_KINDS, Workaround
-from vaultlib import (agent_files, cli_name, extract_frontmatter,
-                      parse_version, plugin_version, vault_files)
+from vaultlib import (PublishToolUnavailable, agent_files, cli_name, extract_frontmatter,
+                      parse_version, plugin_version, vault_files, vault_site)
 
 MEMORY = "memory:"
+SITE = "site:"
 SHOWN = 160   # a scan line's text is trimmed to this many characters
 _ISSUE_REFS = re.compile(
     r"github\.com/AntTheLimey/gm-apprentice/issues/(\d+)|(?<![\w&])#(\d{1,6})\b")
@@ -56,9 +57,46 @@ def _today() -> str:
     return datetime.date.today().isoformat()
 
 
+_ROOTED = re.compile(r"^(?:[A-Za-z]:|[\\/])")   # C:x, \\x, /x: not inside a folder
+
+
+def _escapes(text: str, path: Path) -> bool:
+    """Whether a --where path names somewhere outside its folder, as any OS
+    reads it (a Windows drive or root counts even when this one does not)."""
+    return bool(_ROOTED.match(text) or path.anchor or path.is_absolute()
+                or ".." in path.parts)
+
+
 def slug(text: str) -> str:
     words = re.findall(r"[a-z0-9]+", text.lower())
     return "-".join(words)[:48].strip("-") or "workaround"
+
+
+def _site_path(vault: Path, raw: str) -> str:
+    """`site:<path>`: a file or folder under the site folder
+    `player_site.folder` names (relative to the vault when not absolute).
+    Recorded as written; it must exist, as a vault path must."""
+    inner = Path(raw[len(SITE):].strip())
+    if not raw[len(SITE):].strip() or inner == Path("."):
+        raise Refused(f"--where {raw}: name a file or folder in the site "
+                      f"after {SITE}")
+    if _escapes(raw[len(SITE):].strip(), inner):
+        raise Refused(f"--where {raw}: write the path relative to the site "
+                      f"folder")
+    try:
+        _publishes, on, site = vault_site(vault)
+    except PublishToolUnavailable as e:
+        raise Refused(f"--where {raw}: could not ask the publish tool for "
+                      f"the site folder ({e})") from e
+    if not on or site is None:
+        raise Refused(f"--where {raw}: the vault has no site "
+                      f"(player_site.folder is not set, or the site is off)")
+    if not site.is_absolute():
+        site = vault / site
+    if not (site / inner).exists():
+        raise Refused(f"--where {raw}: no such file or folder in the site "
+                      f"folder ({site})")
+    return f"{SITE}{inner.as_posix()}"
 
 
 def _check_where(vault: Path, where: list[str]) -> list[str]:
@@ -72,13 +110,17 @@ def _check_where(vault: Path, where: list[str]) -> list[str]:
                               f"{MEMORY}")
             out.append(raw)
             continue
+        if raw.startswith(SITE):
+            out.append(_site_path(vault, raw))
+            continue
         rel = Path(raw.strip())
         if not raw.strip() or rel == Path("."):
             raise Refused(f"--where {raw!r}: name a file or folder in the "
                           f"vault, not the vault itself")
-        if rel.is_absolute() or ".." in rel.parts:
+        if _escapes(raw.strip(), rel):
             raise Refused(f"--where {raw}: write a path inside the vault, "
-                          f"relative to it (or {MEMORY}<file> for agent memory)")
+                          f"relative to it ({MEMORY}<file> for agent memory, "
+                          f"{SITE}<path> for the site folder)")
         if not (vault / rel).exists():
             raise Refused(f"--where {raw}: no such file or folder in the vault")
         out.append(rel.as_posix())
@@ -321,8 +363,9 @@ def build_parser() -> argparse.ArgumentParser:
     a.add_argument("--kind", required=True, choices=WORKAROUND_KINDS,
                    help="what sort of thing it is")
     a.add_argument("--where", action="append", default=[], metavar="PATH",
-                   help="a vault-relative path it lives in, or memory:<file> "
-                        "for agent memory")
+                   help="a vault-relative path it lives in, memory:<file> "
+                        "for agent memory, or site:<path> for a file in "
+                        "the site folder (player_site.folder)")
     a.add_argument("--release", metavar="X.Y.Z",
                    help="the release that ships the issue, when the "
                         "answer GitHub gives is wrong")
