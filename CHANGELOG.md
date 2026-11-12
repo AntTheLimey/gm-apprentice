@@ -9,6 +9,13 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.18] — 2026-11-12
+
+### Fixed
+
+- Reconcile now promotes notes made before play (the PCs, NPCs and places the-midwife or the scaffold wrote) once the Wrap-Up links them, and promotes each PC's Story file along with the PC (#622, #623).
+- campaign-qa no longer warns about every note made before play: a blank `createdSession` counts as "made before play" and is flagged only once it goes stale (#622).
+
 ## [1.12.17] — 2026-11-12
 
 ### Fixed
