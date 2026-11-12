@@ -1752,13 +1752,18 @@ def set_state(vault: Path, key: str, value: Any) -> None:
     _write_state(vault, state)
 
 
-def write_held(vault: Path, left: set[str], said: set[str]) -> None:
+def write_held(vault: Path, left: set[str], said: set[str],
+               drop: frozenset[str] | set[str] = frozenset()) -> None:
     """Remember the ids for the next update (merged with those already
-    remembered)."""
+    remembered); `drop` takes leaves out that the update record now keeps."""
     before = read_held(vault)
-    left, said = left | before["left"], said | before["said"]
+    left = (left | before["left"]) - set(drop)
+    said = said | before["said"]
     state = _read_state(vault)
     if not left and not said:
+        if HELD_KEY in state:
+            state.pop(HELD_KEY)
+            _write_state(vault, state)
         return
     state[HELD_KEY] = {"left": sorted(left), "said": sorted(said)}
     _write_state(vault, state)

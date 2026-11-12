@@ -1,5 +1,8 @@
 """images: a download that fails oddly is one failure, and a dry run does not
 download a picture whose size already says it differs (#353)."""
+import os
+
+import pytest
 import http.client
 
 from mobrpg import client
@@ -121,6 +124,19 @@ def test_an_image_held_under_another_name_wires_an_empty_portrait(tmp_path, monk
     assert 'portrait: "_attachments/items/The Albatross.png"' in note.read_text(encoding="utf-8")
     assert not list((tmp_path / "_attachments").rglob("*(mobRPG)*"))
     assert not (tmp_path / "_attachments" / "items" / "st160 (mobRPG).png").exists()
+
+
+@pytest.mark.skipif(os.name == "nt", reason="Windows file names cannot hold quotes")
+def test_a_wired_portrait_path_with_quotes_stays_valid_yaml(tmp_path, monkeypatch):
+    note = _ship_note(tmp_path)
+    note.write_text(note.read_text(encoding="utf-8").replace(
+        'portrait: "_attachments/items/st160.png"', 'portrait: ""'), encoding="utf-8")
+    items = tmp_path / "_attachments" / "items"
+    (items / "The Albatross.png").rename(items / 'The "Albatross" \\1.png')
+    _item_pages(monkeypatch, ["a"])
+    assert images.run(["w1", "--vault", str(tmp_path), "--execute"]) == 0
+    text = note.read_text(encoding="utf-8")
+    assert 'portrait: "_attachments/items/The \\"Albatross\\" \\\\1.png"' in text
 
 
 def test_a_new_image_with_a_matching_size_but_other_bytes_is_still_saved(tmp_path, monkeypatch):

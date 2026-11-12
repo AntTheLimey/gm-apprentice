@@ -46,6 +46,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import http.client
+import json
 import mimetypes
 import os
 import re
@@ -531,8 +532,9 @@ def run(argv: list[str]) -> int:
                 continue
             if re.search(r'^portrait:\s*""\s*$', text, flags=re.M):
                 if args.execute:
-                    text = re.sub(r'^portrait:\s*""\s*$', f'portrait: "{rel}"',
-                                   text, count=1, flags=re.M)
+                    value = json.dumps(rel, ensure_ascii=False)   # a YAML string
+                    text = re.sub(r'^portrait:\s*""\s*$', lambda _m: f"portrait: {value}",
+                                  text, count=1, flags=re.M)
                     open(full, "w", encoding="utf-8").write(text)
                 wired += 1
             elif has_portrait:

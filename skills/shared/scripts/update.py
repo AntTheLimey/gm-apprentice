@@ -604,10 +604,12 @@ def _apply(vault: Path, todo: list[Check], given: dict[str, Given],
     # question on a vault the stamp does not move (#626).
     left = {i for i in left_ids if not i.startswith(migrate.TEMPLATE)
             and not (kept_in_record and i in run.new)}
-    if res.stamped is None and (left or said - held["said"]):
+    # An earlier run's hold by id for a leave the record now keeps goes too.
+    drop = {i for i in left_ids if kept_in_record and i in run.new} & held["left"]
+    if res.stamped is None and (left or said - held["said"] or drop):
         try:   # migrate.py's plan does not ask these again either
             run.before_write()
-            write_held(vault, left, said)
+            write_held(vault, left, said, drop)
         except (StateUnreadable, OSError, StepFailed) as e:
             res.notes.append(f"What this run said could not be remembered "
                              f"({e}); it may be said again.")
