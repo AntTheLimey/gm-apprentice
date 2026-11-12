@@ -9,6 +9,19 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.17] — 2026-11-12
+
+### Fixed
+
+- Two picture draws at once on one vault no longer lose a count of the month's pictures: every writer of the vault's state file now takes the same lock.
+- A scene picture follows the recap paragraph that opens with your exact words, and a bare picture name in a recap is read the way Obsidian reads it (the note's own folder first, then the shortest path in the vault).
+- If a file turns up where a picture is going, `gma image place` skips that one picture, says so, and files the rest, even when two scene pictures share one recap.
+- A Codex run that finishes but leaves no picture uses an attempt after the first, so it stops retrying forever.
+
+### Changed
+
+- The Image Guidance template asks for no signature, watermark or lettering in a picture.
+
 ## [1.12.16] — 2026-11-12
 
 ### Fixed
