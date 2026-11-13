@@ -399,9 +399,9 @@
       if (st.footing === true) add('env', 'Bad footing', R.badFooting);
       // Gravity (B350): -1 DX per G-Increment to every attack but Beam Weapons (the build worked out the number).
       const grav = isObj(data) && isObj(data.gravity) && num(data.gravity.dx) ? data.gravity : null;
-      if (grav && st.gravity === true) {
+      if (grav && st.gravity === true && st.zerog !== true) {   // zero G is the Free Fall rule's
         if (w.beam === true) notes.push('The gravity DX penalty does not apply to Beam Weapons.');
-        else add('env', typeof grav.label === 'string' && grav.label ? grav.label : 'Gravity', -Math.abs(int(grav.dx, 0, 30)));
+        else add('env', typeof grav.label === 'string' && grav.label ? grav.label : 'Gravity', -Math.abs(int(grav.dx, 0, 999)));
       }
       add('you', 'Shock', -Math.abs(int(st.shock, -R.shockMax, R.shockMax)));
 

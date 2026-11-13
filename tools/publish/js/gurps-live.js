@@ -65,7 +65,7 @@
       if (!qual) { out.halved = true; out.assumed = true; return; }
       if (/\ball\b/i.test(qual)) { out.halved = true; return; }
       // Several gravities may be named ("0.5G, 1.2G"): any one that is this gravity will do.
-      (qual.match(/\d+(?:\.\d+)?/g) || []).forEach(function (x) {
+      (qual.match(/\d*\.?\d+/g) || []).forEach(function (x) {
         if (Math.abs(parseFloat(x) - local) < 1e-9) out.halved = true;
       });
     });

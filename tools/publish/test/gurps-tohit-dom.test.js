@@ -115,6 +115,17 @@ describe('the gravity modifier (#629)', () => {
   it('is left out when the sheet has no penalty', () => {
     assert.strictEqual(load(dataBlock()).$('#th-gravity'), null);
   });
+  it('steps aside in zero gravity, where the Free Fall rule applies', () => {
+    const p = load(dataBlock({ gravity: { dx: 1, label: 'Gravity 1.2G (DX \u22121)' } }));
+    p.set('#th-zerog', true);
+    assert.doesNotMatch(p.$('#th-lines').textContent, /Gravity 1\.2G/);
+  });
+  it('applies a penalty over 30 in full', () => {
+    const p = load(dataBlock({ gravity: { dx: 35, label: 'Gravity 8G (DX \u221235)' } }));
+    const on = Number(p.$('#th-roll').textContent);
+    p.set('#th-gravity', false);
+    assert.strictEqual(Number(p.$('#th-roll').textContent), on + 35);
+  });
 });
 
 describe('aids and targeted attacks', () => {

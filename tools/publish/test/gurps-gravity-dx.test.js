@@ -33,6 +33,8 @@ test('gravityDx: G-Experience halves it when All, naming the gravity, or unquali
   assert.equal(plain.assumed, true);
   assert.equal(dx(1.4, 1, [{ name: 'G-Experience (All)', cost: '10' }]), 1);   // 2 increments, halved
   assert.equal(dx(1.2, 1, [{ name: 'G-Experience (All)', cost: '10' }]), 0);   // 1 increment, halved, rounds down
+  assert.equal(dx(0.5, 1, [{ name: 'G-Experience (.5G)', cost: '1' }]), 1);    // a leading-dot gravity is 0.5G
+  assert.equal(dx(5, 1, [{ name: 'G-Experience (.5G)', cost: '1' }]), 20);     // and not 5G
 });
 
 test('gravityDx: Improved G-Tolerance widens the increment, any case', () => {
