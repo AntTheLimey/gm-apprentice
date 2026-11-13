@@ -195,6 +195,14 @@ describe('CoC fields on the GM site and the player site (review of #483)', () =>
     assert.match(cards['Significant People'], /^<ul>\s*<li>Lady Vane<\/li>\s*<\/ul>\s*<div class="gm-mark gm-mark--gm_only_blocks"[^>]*>[\s\S]*CGMLIST/);
     assert.doesNotMatch(record(html), /gm-mark|CGMONLY|CGMLIST/);
   });
+  it('the folio sheet\'s field strip marks the fenced field on the GM page and leaves it off the player page', () => {
+    const strip = (html) => (html.split('<div class="backstory">')[1] || '').split('<img class="portrait"')[0];
+    assert.match(strip(s.gm.read('characters', 'pcs', 'jane.html')),
+      /<span class="lab">Ideology &amp; Beliefs<\/span><span class="val"><span class="gm-mark gm-mark--gm_only_blocks"[^>]*>CGMONLY secret cultist<\/span><\/span>/);
+    const player = strip(s.player.read('characters', 'pcs', 'jane.html'));
+    assert.match(player, /<span class="lab">Traits<\/span>/);
+    assert.doesNotMatch(player, /Ideology|CGMONLY|gm-mark/);
+  });
   it('the player page has neither, and the cards it does show', () => {
     const html = s.player.read('characters', 'pcs', 'jane.html');
     assert.ok(!/CGMONLY|CGMLIST|gm-mark/.test(html));
