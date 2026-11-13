@@ -125,7 +125,8 @@ mobrpg suggest --vault <path> --write-back --out <dir> --only <name> --execute <
 approved in the report). A bare `--execute` is refused; add `--all` only when
 the GM has said to file the whole vault. If a batch went out wider than meant,
 `mobrpg withdraw <world> --batch <id> --vault <path> [--execute]` takes the
-Pending leftovers back (dry-run first) and re-stamps their notes `dismissed`. `--execute` refuses without a vault
+Pending leftovers back (dry-run first; `--only` is dry-run only and prints
+the `--id` line to execute; only our own namespace's suggestions are touched) and re-stamps their notes `dismissed`. `--execute` refuses without a vault
 unless `--no-restamp` is given, since that would leave the notes `pending`.
 
 (Drop `--write-back` if the GM only wants the API submission this pass, per

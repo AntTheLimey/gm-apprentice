@@ -164,7 +164,11 @@ Run `mobrpg <command> --help` for a command's own options.
 - `sync <world> --vault <path>` — timestamp last-writer-wins sync of each linked
   note's description prose (see "How sync decides" below).
 - `withdraw <world> (--batch ID | --id ID... | --only S) [--vault <path>]` —
-  take back Pending suggestions you filed. Dry-run by default; with
+  take back Pending suggestions you filed. Only suggestions in your vault's
+  namespace are ever touched (a world is shared); Pending relations pointing
+  at them go with them. `--only` is dry-run only: it prints the exact `--id`
+  line to run with `--execute`, which is what lets you see what will go before
+  it goes. Dry-run by default; with
   `--execute` it deletes them (relations before the creates they depend on),
   re-stamps each vault note `dismissed` with a dated `review_note`, then reads
   the queue back and reports what is left. Accepted or dismissed suggestions

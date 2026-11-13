@@ -161,7 +161,7 @@ vault whose entities already exist upstream but carry no node is linked with
                                   accept is irreversible; dismiss keeps the
                                   externalRef claimed (see resubmit note below).
     mobrpg withdraw <world> (--batch ID | --id ID... | --only S) [--vault <path>]
-                    [--no-restamp] [--execute]
+                    [--namespace NS] [--no-restamp] [--execute]
                                   Take back Pending suggestions we filed (needs
                                   ReadWriteDelete). Dry-run lists the matches.
                                   --execute DELETEs relations before the creates
@@ -170,7 +170,12 @@ vault whose entities already exist upstream but carry no node is linked with
                                   vault note (by externalRef) review_state:
                                   dismissed with a dated review_note, and
                                   reports what is left. Non-Pending suggestions
-                                  are never deleted. --execute without a vault
+                                  are never deleted. Only suggestions whose
+                                  externalRef is in our namespace (the vault's
+                                  map, or --namespace) are touched; Pending
+                                  relations pointing at them go too. --only is
+                                  dry-run only: it prints the --id line to run
+                                  with --execute. --execute without a vault
                                   (--vault / $MOBRPG_VAULT) is refused unless
                                   --no-restamp (delete without re-stamping
                                   vault notes).
