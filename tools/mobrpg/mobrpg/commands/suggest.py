@@ -1688,32 +1688,41 @@ def build_node(entity, mp, namespace, vault, *, element_id=None, review_state="p
     }
 
 
-def restamp_node(path, *, review_state, review_note, match_refs, execute=True) -> bool:
+def restamp_node(path, *, review_state, review_note, match_refs, execute=True) -> str:
     """Re-stamp the `mobrpg:` node of a vault note whose own suggestion is gone.
 
     Same text-surgery path `write_back` stamps `pending` through
     (node.read_node / node.write_node). Touches the note only when its node is
     still `pending` and was filed under one of `match_refs` (its `external_ref`,
-    or the `pending_ref` of a `sync` update). Returns True when the note changed.
+    or the `pending_ref` of a `sync` update).
+
+    Returns "stamped", "skipped" (nothing to do: no note, no node, not pending,
+    or not ours) or "failed" (the note exists but could not be read or written;
+    the caller must report it and keep it retryable).
     """
     try:
         txt = open(path, encoding="utf-8").read()
-    except OSError:
-        return False
+    except FileNotFoundError:
+        return "skipped"
+    except (OSError, UnicodeDecodeError):
+        return "failed"
     nd = node.read_node(txt)
     if not nd or nd.get("review_state") != "pending":
-        return False
+        return "skipped"
     if nd.get("external_ref") not in match_refs and nd.get("pending_ref") not in match_refs:
-        return False
+        return "skipped"
     nd = dict(nd)
     nd["review_state"] = review_state
     nd["review_note"] = review_note
     nd["last_synced"] = _now_iso()
     nd.pop("pending_ref", None)
     if execute:
-        with open(path, "w", encoding="utf-8") as fh:
-            fh.write(node.write_node(txt, nd))
-    return True
+        try:
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write(node.write_node(txt, nd))
+        except OSError:
+            return "failed"
+    return "stamped"
 
 
 def _now_iso() -> str:

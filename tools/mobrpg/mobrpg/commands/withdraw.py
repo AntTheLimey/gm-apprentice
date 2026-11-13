@@ -31,6 +31,7 @@ import argparse
 import datetime as _dt
 import json
 import os
+import shlex
 import sys
 
 from mobrpg import client
@@ -52,8 +53,8 @@ def _list(world: str, state: str, token: str) -> list[dict]:
     out: list[dict] = []
     page = 0
     while True:
-        r = client._request("GET", f"/world/{world}/suggestion?reviewState={state}",
-                            token=token, query={"page": page, "size": 200})
+        r = client._request("GET", f"/world/{world}/suggestion", token=token,
+                            query={"reviewState": state, "page": page, "size": 200})
         if isinstance(r, list):
             return [x for x in r if isinstance(x, dict)]
         if not isinstance(r, dict) or not isinstance(r.get("content"), list):
@@ -93,18 +94,21 @@ def _bare(ref) -> str:
     return ref[len("suggestion:"):] if ref.startswith("suggestion:") else ref
 
 
-def _keys(s: dict) -> set:
-    return {k for k in (s.get("externalRef"), s.get("ref"), s.get("id")) if k}
-
-
 def _links_to(rel: dict, creates: list[dict]) -> bool:
     """An AddRelation points at one of `creates` by sourceRef/targetRef (bare or
-    `suggestion:<ref>`) or lists it in dependsOn."""
+    `suggestion:<ref>`) or lists it in dependsOn. An externalRef or id is unique
+    to the world; a local `ref` (e1, e2 ...) is only unique inside its batch, so
+    it matches only a relation from the same batch."""
     p = rel.get("payload") or {}
     ends = {_bare(p.get("sourceRef")), _bare(p.get("targetRef"))}
     ends |= {_bare(d) for d in (rel.get("dependsOn") or p.get("dependsOn") or [])}
     ends.discard("")
-    return any(ends & _keys(c) for c in creates)
+    for c in creates:
+        if ends & {k for k in (c.get("externalRef"), c.get("id")) if k}:
+            return True
+        if c.get("ref") and c["ref"] in ends and c.get("batchId") == rel.get("batchId"):
+            return True
+    return False
 
 
 def delete_order(rows: list[dict]) -> list[dict]:
@@ -125,6 +129,76 @@ def _line(s: dict) -> str:
 def _vault_path(ref: str, vault: str) -> str:
     rel = node.note_ref(ref).split(":", 1)[1]
     return os.path.join(os.path.expanduser(vault), rel + ".md")
+
+
+def _links_to_any(rels: list[dict], create: dict) -> bool:
+    return any(_links_to(r, [create]) for r in rels)
+
+
+def _restamp(vault: str, refs: list[str], prefix: str) -> tuple[int, list[tuple[str, str]]]:
+    """Re-stamp the notes behind `refs`. Returns (stamped count, [(path, ref)] that
+    failed to read or write)."""
+    note = f"withdrawn {_dt.date.today().isoformat()}: suggestion deleted from the mobRPG queue"
+    by_path: dict[str, set] = {}
+    for ref in refs:
+        if ref.startswith(prefix):
+            by_path.setdefault(_vault_path(ref, vault), set()).add(ref)
+    stamped = 0
+    failed: list[tuple[str, str]] = []
+    for path, rs in by_path.items():
+        res = suggest.restamp_node(path, review_state="dismissed", review_note=note,
+                                   match_refs=rs)
+        if res == "stamped":
+            stamped += 1
+        elif res == "failed":
+            failed += [(path, r) for r in sorted(rs)]
+    return stamped, failed
+
+
+def _report_restamp_failures(args, ns: str, failed: list[tuple[str, str]]) -> None:
+    if not failed:
+        return
+    print(f"RESTAMP FAILED for {len(failed)} note(s); the suggestions are already deleted:",
+          file=sys.stderr)
+    for path, ref in failed:
+        print(f"  {path}  ({ref})", file=sys.stderr)
+    cmd = ["mobrpg", "withdraw", args.world, "--restamp-only", "--namespace", ns,
+           "--vault", args.vault, "--ref", *[r for _, r in failed]]
+    if args.map:
+        cmd[cmd.index("--vault"):cmd.index("--vault")] = ["--map", args.map]
+    print("  retry: " + " ".join(shlex.quote(c) for c in cmd), file=sys.stderr)
+
+
+def _restamp_only(args) -> int:
+    if not args.vault or not args.ref:
+        print("ERROR: --restamp-only needs --vault (or $MOBRPG_VAULT) and --ref EXTERNALREF...",
+              file=sys.stderr)
+        return 2
+    ns = _namespace(args)
+    prefix = ns + ":"
+    foreign = [r for r in args.ref if not r.startswith(prefix)]
+    if foreign:
+        print(f"ERROR: not in our namespace '{ns}': {', '.join(foreign)}", file=sys.stderr)
+        return 2
+    try:
+        token = client.get_access_token()
+        queue = _read_all(args.world, token)
+    except (client.ApiError, QueueReadError) as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        return 1
+    live = {s.get("externalRef"): st for st in STATES for s in queue[st] if s.get("externalRef")}
+    present = [r for r in args.ref if r in live]
+    for r in present:
+        print(f"  NOT re-stamped: {r} still exists in the queue ({live[r]})", file=sys.stderr)
+    todo = [r for r in args.ref if r not in live]
+    if not args.execute:
+        print(f"DRY-RUN: would re-stamp the notes for {len(todo)} suggestion(s) already gone "
+              "(add --execute)")
+        return 1 if present else 0
+    stamped, failed = _restamp(args.vault, todo, prefix)
+    print(f"Vault notes re-stamped dismissed: {stamped}")
+    _report_restamp_failures(args, ns, failed)
+    return 1 if failed or present else 0
 
 
 def _namespace(args) -> str | None:
@@ -163,11 +237,18 @@ def run(argv: list[str]) -> int:
     ap.add_argument("--map", default="", help="map file (default: <vault>/_meta/mobrpg-map.json)")
     ap.add_argument("--namespace", default="",
                     help="our externalRef namespace, when there is no --vault")
+    ap.add_argument("--restamp-only", action="store_true",
+                    help="delete nothing: re-stamp the notes for suggestions already gone "
+                         "(give their externalRefs with --ref; the retry after a failed re-stamp)")
+    ap.add_argument("--ref", nargs="+", action="extend", default=[], metavar="EXTERNALREF",
+                    help="with --restamp-only: externalRefs whose notes to re-stamp")
     ap.add_argument("--no-restamp", action="store_true",
                     help="delete without re-stamping vault notes (needed when there is no vault)")
     ap.add_argument("--execute", action="store_true", help="actually delete (default: dry-run)")
     args = ap.parse_args(argv)
 
+    if args.restamp_only:
+        return _restamp_only(args)
     if not (args.batch or args.id or args.only):
         print("ERROR: say what to withdraw: --batch ID, --id ID... or --only S", file=sys.stderr)
         return 2
@@ -203,7 +284,7 @@ def run(argv: list[str]) -> int:
     mine = [(st, s) for st, s in selected
             if s.get("operation") != "AddRelation"
             and (s.get("externalRef") or "").startswith(prefix)]
-    my_creates = [s for _, s in mine]
+    my_creates = [s for st, s in mine if st == "Pending"]
     # --batch alone: the batch's own classifier mints (creates with no externalRef)
     # go too, but only when every externalRef in the batch is ours.
     mints: list[dict] = []
@@ -223,7 +304,7 @@ def run(argv: list[str]) -> int:
         my_creates = my_creates + mints
     rels = [s for s in queue["Pending"]
             if s.get("operation") == "AddRelation" and _links_to(s, my_creates)]
-    taken = {s["id"] for s in my_creates} | {s["id"] for s in rels}
+    taken = {s["id"] for _, s in mine} | {s["id"] for s in mints} | {s["id"] for s in rels}
     foreign = [s for _, s in selected if s["id"] not in taken]
 
     if foreign:
@@ -254,24 +335,30 @@ def run(argv: list[str]) -> int:
         print("  note: no vault notes would be re-stamped", file=sys.stderr)
     if not args.execute:
         print("DRY-RUN: nothing deleted. To withdraw exactly these, run:")
-        sel = (f"--batch {args.batch}" if whole_batch
-               else f"--id {' '.join(s['id'] for s in pending)}")
-        cmd = f"mobrpg withdraw {args.world} {sel}"
-        if args.vault and not args.no_restamp:
-            cmd += f" --vault {args.vault}"
-        else:
-            cmd += f" --namespace {ns} --no-restamp"
-        print(f"  {cmd} --execute")
+        sel = (["--batch", args.batch] if whole_batch
+               else ["--id", *[x["id"] for x in pending]])
+        cmd = ["mobrpg", "withdraw", args.world, *sel, "--namespace", ns]
+        if args.map:
+            cmd += ["--map", args.map]
+        cmd += ["--vault", args.vault] if (args.vault and not args.no_restamp) else ["--no-restamp"]
+        print("  " + " ".join(shlex.quote(c) for c in cmd + ["--execute"]))
         return 0
 
     deleted_ok: set = set()
     failed = 0
+    failed_rels: list[dict] = []
     for s in pending:
+        if s.get("operation") != "AddRelation" and _links_to_any(failed_rels, s):
+            failed += 1
+            print(f"  SKIPPED {s['id']}: a relation to it could not be deleted", file=sys.stderr)
+            continue
         try:
             client._request("DELETE", f"/world/{args.world}/suggestion/{s['id']}", token=token)
             deleted_ok.add(s["id"])
         except client.ApiError as e:
             failed += 1
+            if s.get("operation") == "AddRelation":
+                failed_rels.append(s)
             print(f"  ERROR deleting {s['id']}: {e}", file=sys.stderr)
 
     # Read every state back: the DELETE responses are not evidence, and a
@@ -288,21 +375,14 @@ def run(argv: list[str]) -> int:
     still = [s for s in pending if where.get(s["id"]) == "Pending"]
 
     stamped = 0
+    restamp_failed: list[tuple[str, str]] = []
     if not no_restamp:
-        today = _dt.date.today().isoformat()
-        note = f"withdrawn {today}: suggestion deleted from the mobRPG queue"
-        refs: dict[str, set] = {}
-        for s in gone:
-            ref = s.get("externalRef") or ""
-            if ref.startswith(prefix):
-                refs.setdefault(_vault_path(ref, args.vault), set()).add(ref)
-        for path, rs in refs.items():
-            if suggest.restamp_node(path, review_state="dismissed", review_note=note,
-                                    match_refs=rs):
-                stamped += 1
+        refs = [s["externalRef"] for s in gone if (s.get("externalRef") or "").startswith(prefix)]
+        stamped, restamp_failed = _restamp(args.vault, refs, prefix)
 
     print(f"Withdrawn (delete succeeded and gone from every state): {len(gone)} of {len(pending)}")
     print(f"Vault notes re-stamped dismissed: {stamped}")
+    _report_restamp_failures(args, ns, restamp_failed)
     for s, st in turned:
         print(f"  NOT withdrawn: {s['id']} became {st} meanwhile (note not stamped)",
               file=sys.stderr)
@@ -312,4 +392,4 @@ def run(argv: list[str]) -> int:
             print(_line(s), file=sys.stderr)
     print(f"Pending queue now holds {len(after['Pending'])} suggestion(s)"
           f", of which {len(still)} we tried to withdraw")
-    return 1 if still or failed or turned else 0
+    return 1 if still or failed or turned or restamp_failed else 0

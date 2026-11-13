@@ -178,7 +178,12 @@ vault whose entities already exist upstream but carry no node is linked with
                                   with --execute. --execute without a vault
                                   (--vault / $MOBRPG_VAULT) is refused unless
                                   --no-restamp (delete without re-stamping
-                                  vault notes).
+                                  vault notes). A failed re-stamp is listed with
+                                  its path and exits non-zero; retry with
+                                  `withdraw <world> --restamp-only --ref REF...
+                                  --vault V --execute` (deletes nothing). A
+                                  failed relation DELETE skips the create it
+                                  links to.
     mobrpg write <extract.json> --out <vault-dir> [--campaign NAME]
                  [--source-doc TEXT] [--name-style plain|space] [--overwrite]
                                   Materialize a mobRPG extract (from `pull`)

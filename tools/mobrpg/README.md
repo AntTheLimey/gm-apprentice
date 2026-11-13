@@ -174,7 +174,12 @@ Run `mobrpg <command> --help` for a command's own options.
   the queue back and reports what is left. Accepted or dismissed suggestions
   are never deleted. `--execute` needs a vault (`--vault` or `$MOBRPG_VAULT`)
   unless you pass `--no-restamp` (delete without re-stamping vault notes).
-  Needs ReadWriteDelete.
+  A failed re-stamp (unreadable note) is reported with the note path and exits
+  non-zero; `withdraw --restamp-only --ref <externalRef>... --vault <path>
+  --execute` retries it without deleting anything. If a relation's DELETE
+  fails, the create it links to is left alone. The printed `--execute` line
+  is shell-quoted and carries the resolved `--namespace`. Needs
+  ReadWriteDelete.
 - `adopt <world> --vault <path>` — stamp `mobrpg:` nodes onto vault notes that
   already exist upstream but carry no node, matched by name. An element
   another note already links, or that several notes match, is reported and

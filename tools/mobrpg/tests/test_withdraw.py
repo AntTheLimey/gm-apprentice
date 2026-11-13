@@ -49,7 +49,8 @@ class Fake:
     def __call__(self, method, path, *, token=None, body=None, query=None):
         self.calls.append((method, path))
         if method == "GET":
-            state = path.split("reviewState=")[1]
+            assert "?" not in path, path          # query rides in `query`, never the path
+            state = (query or {})["reviewState"]
             rows = [r for r in self.rows if r["reviewState"] == state]
             if self.page_size:
                 pg = (query or {}).get("page", 0)
@@ -118,7 +119,7 @@ def test_dry_run_lists_prints_id_line_and_deletes_nothing(monkeypatch, tmp_path,
     out = capsys.readouterr().out
     assert rc == 0
     assert "Pending suggestions to withdraw: 2 (1 linked relation(s) included)" in out
-    assert f"mobrpg withdraw w1 --batch b1 --vault {v} --execute" in out
+    assert "mobrpg withdraw w1 --batch b1 --namespace canticle --vault" in out
     assert fake.deletes() == []
     assert node.read_node(f.read_text())["review_state"] == "pending"
 
@@ -254,7 +255,7 @@ def test_batch_dry_run_shows_mints_under_own_heading(monkeypatch, tmp_path, caps
     withdraw.run(["w1", "--batch", "b1", "--vault", str(v)])
     out = capsys.readouterr().out
     assert "Classifier types minted in this batch (deleted last): 1" in out
-    assert "--batch b1 --vault" in out and "--execute" in out
+    assert "--batch b1 --namespace canticle --vault" in out and "--execute" in out
 
 
 def test_batch_with_a_foreign_externalref_is_refused_whole(monkeypatch, tmp_path, capsys):
@@ -272,6 +273,106 @@ def test_id_and_only_leave_mints_alone(monkeypatch, tmp_path):
     _wire(monkeypatch, fake)
     withdraw.run(["w1", "--id", "c1", "--vault", str(v), "--execute"])
     assert "m1" not in fake.deletes()
+
+
+def test_listing_url_is_well_formed_through_the_real_client(monkeypatch, tmp_path,
+                                                            unblock_client_network):
+    urls = []
+
+    class Resp:
+        headers = {"Content-Type": "application/json"}
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def read(self): return b"[]"
+
+    def fake_urlopen(req, timeout=None):
+        urls.append(req.full_url)
+        return Resp()
+    monkeypatch.setattr(client.urllib.request, "urlopen", fake_urlopen)
+    withdraw._list("w1", "Pending", "tok")
+    assert urls[0].endswith("/world/w1/suggestion?reviewState=Pending&page=0&size=200")
+    assert urls[0].count("?") == 1
+
+
+def test_local_refs_match_only_within_their_own_batch(monkeypatch, tmp_path):
+    v, _ = _vault(tmp_path)
+    other = _rel("r9", "e1", batch="b2")           # another batch's e1
+    fake = Fake(rows() + [other])
+    _wire(monkeypatch, fake)
+    withdraw.run(["w1", "--id", "c1", "--vault", str(v), "--execute"])
+    assert fake.deletes() == ["r1", "c1"]
+
+
+def test_adjudicated_create_pulls_in_no_relations(monkeypatch, tmp_path):
+    v, _ = _vault(tmp_path)
+    accepted = _row("a2", state="Accepted", ref="canticle:Characters/NPCs/Acc", local="e7")
+    rel = _rel("r7", "e7")
+    fake = Fake([accepted, rel])
+    _wire(monkeypatch, fake)
+    withdraw.run(["w1", "--id", "a2", "--vault", str(v), "--execute"])
+    assert fake.deletes() == []
+
+
+def test_failed_relation_delete_skips_its_create(monkeypatch, tmp_path, capsys):
+    v, f = _vault(tmp_path)
+    fake = Fake(rows())
+    real = fake.__call__
+
+    def flaky(method, path, **kw):
+        if method == "DELETE" and path.endswith("/r1"):
+            fake.calls.append((method, path))
+            raise client.ApiError(500, "boom", path)
+        return real(method, path, **kw)
+    _wire(monkeypatch, flaky)
+    rc = withdraw.run(["w1", "--id", "c1", "--vault", str(v), "--execute"])
+    assert rc == 1
+    assert fake.deletes() == ["r1"]                  # c1 never attempted
+    assert "SKIPPED c1" in capsys.readouterr().err
+    assert node.read_node(f.read_text())["review_state"] == "pending"
+
+
+def test_unreadable_note_is_a_failed_restamp_and_retryable(monkeypatch, tmp_path, capsys):
+    v, f = _vault(tmp_path)
+    fake = Fake(rows())
+    _wire(monkeypatch, fake)
+    real = suggest.restamp_node
+    monkeypatch.setattr(suggest, "restamp_node", lambda *a, **k: "failed")
+    rc = withdraw.run(["w1", "--id", "c1", "--vault", str(v), "--execute"])
+    err = capsys.readouterr().err
+    assert rc == 1
+    assert "RESTAMP FAILED for 1 note(s)" in err and "Kate.md" in err and KATE in err
+    assert "--restamp-only" in err and "--ref" in err
+    # retry once the note is readable again: nothing is deleted, the note is stamped
+    monkeypatch.setattr(suggest, "restamp_node", real)
+    n = len(fake.calls)
+    rc = withdraw.run(["w1", "--restamp-only", "--ref", KATE, "--vault", str(v), "--execute"])
+    assert rc == 0
+    assert "DELETE" not in [m for m, _ in fake.calls[n:]]
+    assert node.read_node(f.read_text())["review_state"] == "dismissed"
+
+
+def test_restamp_only_refuses_a_ref_still_in_the_queue(monkeypatch, tmp_path, capsys):
+    v, f = _vault(tmp_path)
+    _wire(monkeypatch, Fake(rows()))
+    rc = withdraw.run(["w1", "--restamp-only", "--ref", KATE, "--vault", str(v), "--execute"])
+    assert rc == 1 and "still exists" in capsys.readouterr().err
+    assert node.read_node(f.read_text())["review_state"] == "pending"
+
+
+def test_printed_execute_line_is_quoted_and_carries_namespace(monkeypatch, tmp_path, capsys):
+    import shlex
+    d = tmp_path / "my vault $x"
+    d.mkdir()
+    v, _ = _vault(d)
+    (v / "other map.json").write_text('{"vaultNamespace": "canticle"}')
+    _wire(monkeypatch, Fake(rows()))
+    withdraw.run(["w1", "--id", "c1", "--vault", str(v), "--map", str(v / "other map.json")])
+    line = [ln for ln in capsys.readouterr().out.splitlines() if ln.strip().startswith("mobrpg withdraw")][0]
+    argv = shlex.split(line)
+    assert argv[argv.index("--vault") + 1] == str(v)
+    assert argv[argv.index("--map") + 1] == str(v / "other map.json")
+    assert argv[argv.index("--namespace") + 1] == "canticle"
+    assert argv[-1] == "--execute"
 
 
 def test_every_page_is_read(monkeypatch, tmp_path):
