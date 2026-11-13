@@ -9,6 +9,17 @@
 const { HIT_LOCATION_ROWS, SIZE_SPEED_RANGE_ROWS } = require('./blocks/reference');
 const { TOHIT_RULES } = require('./blocks/tohit-rules');
 const { levelAtEnd } = require('./weapon-level');
+const { gravityDx } = require('../../../js/gurps-live');
+
+// The DX penalty for gravity (B350) as the calculator carries it: a tickable modifier, only when it is not 0.
+function gravityModifier(model) {
+  const fx = model && model.gravityFx;
+  if (!fx) return null;
+  const { dx } = gravityDx(fx.local, fx.home, fx.traits);
+  if (!dx) return null;
+  const home = fx.home !== 1 ? `, home ${fx.home}G` : '';
+  return { dx, label: `Gravity ${fx.local}G${home} (DX -${dx})` };
+}
 
 const AID_NAMES = [
   ['Scope', /\b(?:fixed\s+)?(?:scope|telescopic sight)\b/i],
@@ -729,6 +740,7 @@ function buildTohitData(model, meta, report) {
     techniques,
     traits,
     freeFall: ff ? ff.level : null,
+    ...(gravityModifier(model) ? { gravity: gravityModifier(model) } : {}),
     locations,
     bands: buildBands(),
     rules: TOHIT_RULES,

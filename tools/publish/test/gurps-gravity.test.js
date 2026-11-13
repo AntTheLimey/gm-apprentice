@@ -170,7 +170,7 @@ test('no gravity: the live data and party manifest keep the exact shape they had
   }
   // With gravity, the two keys ride along.
   const g = sheet();
-  assert.deepEqual(Object.keys(g.liveData), [...OLD_LIVE.slice(0, 9), 'gravity', 'bodyWeight', ...OLD_LIVE.slice(9)]);
+  assert.deepEqual(Object.keys(g.liveData), [...OLD_LIVE.slice(0, 9), 'gravity', 'bodyWeight', 'gravityFx', ...OLD_LIVE.slice(9)]);
 });
 
 test('CRLF notes (a Windows checkout) read the same as LF ones (#580 CI)', () => {

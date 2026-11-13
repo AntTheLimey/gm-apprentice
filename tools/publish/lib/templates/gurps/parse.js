@@ -23,7 +23,7 @@ function emptyModel() {
     equipment: { items: [], loadouts: [] },
     chains: { melee: [], ranged: [] },
     points: [],
-    gravity: null, bodyWeight: null,
+    gravity: null, bodyWeight: null, homeGravity: null, gravityFx: null,
     warnings: [],
   };
 }
@@ -818,6 +818,30 @@ function parseGravity(model, fm) {
   if (g !== 1) model.gravity = g;
 }
 
+// The optional `home_gravity` field: the gravity a character was raised in, in G (B350). Absent, or 1,
+// is 1G and stored as null. Read like `gravity`; anything else is a build warning and 1G.
+function parseHomeGravity(model, fm) {
+  const raw = fm.home_gravity;
+  if (raw == null || raw === '') return;
+  const m = typeof raw === 'number' ? null : /^\s*(\d+(?:\.\d+)?)\s*g?\s*$/i.exec(String(raw));
+  const g = typeof raw === 'number' ? raw : (m ? parseFloat(m[1]) : NaN);
+  if (!Number.isFinite(g) || g <= 0) {
+    model.warnings.push(`GURPS \`home_gravity: ${raw}\` is not a number of G above 0 (e.g. \`home_gravity: 0.5\`); the sheet reads 1G.`);
+    return;
+  }
+  if (g !== 1) model.homeGravity = g;
+}
+
+// What the DX-penalty rule (B350) reads, set when local or home gravity is not 1G: the two gravities and
+// the sheet's G-Experience and Improved G-Tolerance rows. js/gurps-live.js `gravityDx` does the sum.
+function setGravityFx(model) {
+  if (model.gravity == null && model.homeGravity == null) return;
+  const traits = (model.traits.advantages || [])
+    .filter(t => /\bg-?\s*(experience|tolerance)/i.test(t.name))
+    .map(t => ({ name: t.name, cost: t.cost }));
+  model.gravityFx = { local: model.gravity != null ? model.gravity : 1, home: model.homeGravity != null ? model.homeGravity : 1, traits };
+}
+
 // Body weight in lb from the sheet's `Weight` row (Appearance & Social), which the gravity rule
 // needs above 1G (B350); null when the row is missing or holds no number.
 // Pounds, ounces or a bare number are read; any other unit (kg, stone) is a build warning and no
@@ -856,6 +880,8 @@ function parseGurps(frontmatter, sections) {
   parseGrimoire(model, secs);
   parseStatus(model, secs, fm);
   parseGravity(model, fm);
+  parseHomeGravity(model, fm);
+  setGravityFx(model);
   if (model.gravity != null) parseBodyWeight(model);   // only the gravity rule reads it
   resolveCurrentEncumbrance(model);
   parseChains(model, secs);

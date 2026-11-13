@@ -22,6 +22,42 @@
     return { load: Math.round(load * 1000) / 1000, gravity: gravity, bodyMissing: gravity > 1 && body === null };
   }
 
+  // B350 + B57 + B60, the DX penalty for gravity other than the one a character is used to. Each
+  // G-Increment (0.2G, wider with Improved G-Tolerance) between local and home gravity (default 1G)
+  // is -1 DX to agility and ballistic tasks, Beam Weapons exempt. G-Experience halves it (-1 per two
+  // full increments) when it is "(All)", names this gravity, or has no qualifier (then `assumed`).
+  // `traits` is the sheet's advantage rows ({name, cost}); trait names match in any case. Zero
+  // gravity is the Free Fall rule's, so no penalty here. The one place this is worked out: the sheet
+  // notice, the to-hit data and the party board all call it.
+  var TOLERANCE_STEPS = [[25, 10], [20, 5], [15, 1], [10, 0.5], [5, 0.3]];   // points -> increment in G (B60)
+  function gravityDx(local, home, traits) {
+    var out = { dx: 0, increments: 0, incrementG: 0.2, halved: false, assumed: false };
+    if (typeof local !== 'number' || !isFinite(local) || local <= 0) return out;
+    var h = typeof home === 'number' && isFinite(home) && home > 0 ? home : 1;
+    (traits || []).forEach(function (t) {
+      var name = String((t && t.name) || '');
+      var pts = parseInt(String((t && t.cost) || '').replace(/[^\d-]/g, ''), 10);
+      if (/improved\s+g-?\s*tolerance/i.test(name) && isFinite(pts)) {
+        for (var i = 0; i < TOLERANCE_STEPS.length; i++) {
+          if (pts >= TOLERANCE_STEPS[i][0]) { out.incrementG = Math.max(out.incrementG, TOLERANCE_STEPS[i][1]); break; }
+        }
+      }
+    });
+    var n = Math.floor(Math.abs(local - h) / out.incrementG + 1e-9);
+    out.increments = n;
+    (traits || []).forEach(function (t) {
+      var name = String((t && t.name) || '');
+      if (!/^\s*g-?\s*experience/i.test(name)) return;
+      var q = /\(([^)]*)\)/.exec(name);
+      var qual = q ? q[1].trim() : '';
+      var num = /\d+(?:\.\d+)?/.exec(qual);
+      if (!qual) { out.halved = true; out.assumed = true; }
+      else if (/\ball\b/i.test(qual) || (num && Math.abs(parseFloat(num[0]) - local) < 1e-9)) out.halved = true;
+    });
+    out.dx = out.halved ? Math.floor(n / 2) : n;
+    return out;
+  }
+
   function levelForWeight(total, levels) {
     for (let i = 0; i < levels.length; i++) {
       if (total <= levels[i].maxWeight) return { level: i, overloaded: false };
@@ -109,6 +145,8 @@
     }
     const g = gravityLoad(sumCarriedWeight(items, checked), pc.gravity, pc.bodyWeight);
     const level = levelForWeight(g.load, pc.levels).level;
+    const fx = pc.gravityFx || null;   // present when local or home gravity is not 1G (#629)
+    const gdx = fx ? gravityDx(fx.local, fx.home, fx.traits) : null;
     const r = applyModifiers(pc, level, vitals || undefined);
     return {
       hp: vitals ? vitals.hp : null,
@@ -122,11 +160,13 @@
       tired: r.tired,
       load: g.load,
       gravity: g.gravity,
+      gravityLocal: fx ? fx.local : null,
+      gravityDx: gdx ? gdx.dx : 0,
       bodyMissing: g.bodyMissing,
     };
   }
 
-  const api = { sumCarriedWeight, gravityLoad, levelForWeight, applyModifiers, vitalsView, deriveLive };
+  const api = { sumCarriedWeight, gravityLoad, gravityDx, levelForWeight, applyModifiers, vitalsView, deriveLive };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.__gurpsLive = api;
 

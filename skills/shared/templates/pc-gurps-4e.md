@@ -16,7 +16,8 @@ key_traits: []
 portrait: ""
 voice: ""            # how this PC is told and how they speak, a few sentences; the GM approves it; never published
 sheet_source: ""
-# gravity: 1.2  # optional: local gravity in G (B350 encumbrance on the sheet and party board); absent is 1G
+# gravity: 1.2  # optional: local gravity in G (B350 encumbrance, DX penalty and jump/throw notice on the sheet, to-hit calculator and party board); absent is 1G
+# home_gravity: 0.5  # optional: the gravity this PC was raised in, in G, for the DX penalty (B350); absent is 1G
 display_meta: [occupation, age, nationality]
 relationships:
   - target: "[[]]"
