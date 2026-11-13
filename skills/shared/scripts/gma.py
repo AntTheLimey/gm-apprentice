@@ -283,6 +283,103 @@ def _door_args(tool: Path, args: list[str]) -> list[str]:
     return [*args, "--tag", f"publish-v{version}"]
 
 
+# Windows cannot replace a process with node, so gma stays up as node's parent.
+# Stopping gma then ends only gma and leaves node serving. A Job Object with
+# kill-on-close ties the child to gma: Windows ends it when the last handle to
+# the job closes, which happens when gma dies, however it was stopped.
+_JOB_OBJECT_EXTENDED_LIMIT_INFORMATION = 9
+_JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x2000
+
+
+def _job_limit_type() -> type:
+    """JOBOBJECT_EXTENDED_LIMIT_INFORMATION as a ctypes structure, laid out
+    as winnt.h has it. Fixed-width types stand in for DWORD and LARGE_INTEGER,
+    so the layout reads the same off Windows."""
+    import ctypes
+
+    class IoCounters(ctypes.Structure):
+        _fields_ = [(n, ctypes.c_uint64) for n in (
+            "ReadOperationCount", "WriteOperationCount", "OtherOperationCount",
+            "ReadTransferCount", "WriteTransferCount", "OtherTransferCount")]
+
+    class BasicLimits(ctypes.Structure):
+        _fields_ = [("PerProcessUserTimeLimit", ctypes.c_int64),
+                    ("PerJobUserTimeLimit", ctypes.c_int64),
+                    ("LimitFlags", ctypes.c_uint32),
+                    ("MinimumWorkingSetSize", ctypes.c_size_t),
+                    ("MaximumWorkingSetSize", ctypes.c_size_t),
+                    ("ActiveProcessLimit", ctypes.c_uint32),
+                    ("Affinity", ctypes.c_size_t),
+                    ("PriorityClass", ctypes.c_uint32),
+                    ("SchedulingClass", ctypes.c_uint32)]
+
+    class ExtendedLimits(ctypes.Structure):
+        _fields_ = [("BasicLimitInformation", BasicLimits),
+                    ("IoInfo", IoCounters),
+                    ("ProcessMemoryLimit", ctypes.c_size_t),
+                    ("JobMemoryLimit", ctypes.c_size_t),
+                    ("PeakProcessMemoryUsed", ctypes.c_size_t),
+                    ("PeakJobMemoryUsed", ctypes.c_size_t)]
+
+    return ExtendedLimits
+
+
+def _kill_on_close_job(child_handle: int) -> int | None:
+    """Put the process with this handle in a new Job Object that kills it when
+    gma's handle to the job closes. Returns the job handle, which gma keeps
+    open until the child is done; None when Windows would not do it (then the
+    child runs as it always did). Windows only."""
+    import ctypes
+    from ctypes import wintypes
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)  # type: ignore[attr-defined]
+    kernel32.CreateJobObjectW.restype = wintypes.HANDLE
+    kernel32.CreateJobObjectW.argtypes = [ctypes.c_void_p, wintypes.LPCWSTR]
+    kernel32.SetInformationJobObject.argtypes = [
+        wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p, ctypes.c_uint32]
+    kernel32.AssignProcessToJobObject.argtypes = [wintypes.HANDLE, wintypes.HANDLE]
+    kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+    job = kernel32.CreateJobObjectW(None, None)
+    if not job:
+        return None
+    try:
+        limits = _job_limit_type()()
+        limits.BasicLimitInformation.LimitFlags = _JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+        if (not kernel32.SetInformationJobObject(
+                job, _JOB_OBJECT_EXTENDED_LIMIT_INFORMATION,
+                ctypes.byref(limits), ctypes.sizeof(limits))
+                or not kernel32.AssignProcessToJobObject(job, child_handle)):
+            kernel32.CloseHandle(job)
+            return None
+    except BaseException:
+        kernel32.CloseHandle(job)   # an interrupt mid-setup must not leak the job
+        raise
+    return int(job)
+
+
+def _close_job(job: int) -> None:
+    import ctypes
+    ctypes.WinDLL("kernel32").CloseHandle(ctypes.c_void_p(job))  # type: ignore[attr-defined]
+
+
+def _call_tied_to_gma(cmd: list[str]) -> int:
+    """`subprocess.call(cmd)` on Windows, with the child dying when gma does."""
+    proc = subprocess.Popen(cmd)
+    job = None
+    try:
+        try:
+            job = _kill_on_close_job(int(proc._handle))  # type: ignore[attr-defined]
+        except (OSError, AttributeError, ValueError):
+            job = None   # the child runs untied, as before
+        return proc.wait()
+    except BaseException:
+        proc.kill()   # an interrupt of gma, even during the job setup, ends its child too
+        proc.wait()
+        raise
+    finally:
+        if job is not None:
+            _close_job(job)
+
+
 def _run_tool(tool: Path, args: list[str]) -> int:
     cmd = ["node", str(tool), *args]
     try:
@@ -290,7 +387,7 @@ def _run_tool(tool: Path, args: list[str]) -> int:
             # Replace this process, so a killed background `serve` takes
             # Node with it instead of leaving it orphaned.
             os.execvp("node", cmd)
-        code = subprocess.call(cmd)
+        code = _call_tied_to_gma(cmd)
         # A signal death comes back negative; exit codes are 0..255.
         return code if 0 <= code <= 255 else 1
     except OSError:

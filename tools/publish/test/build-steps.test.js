@@ -212,7 +212,9 @@ test('a blank entry in a steps list is a warning and is skipped, never run', () 
 });
 
 test('under deploy --json a step\'s output goes to stderr, not stdout', () => {
-  const s = scratch({ settings: { before_build: [`node ${JSON.stringify(RECORD_PATH)} seen.txt && node -e "console.log('STEPOUT')"`] } });
+  // GitHub Pages: a real deploy on the Cloudflare default would reach wrangler,
+  // which writes an update check into the temp folder.
+  const s = scratch({ settings: { host: 'github-pages', before_build: [`node ${JSON.stringify(RECORD_PATH)} seen.txt && node -e "console.log('STEPOUT')"`] } });
   const r = spawnSync(process.execPath, [BIN, 'deploy', '--json', '--config', s.configPath], { encoding: 'utf8', cwd: s.site });
   assert.ok(fs.existsSync(path.join(s.site, 'seen.txt')), 'the step ran: ' + r.stderr);
   assert.ok(!r.stdout.includes('STEPOUT') && !r.stdout.includes('Running before_build'), r.stdout);

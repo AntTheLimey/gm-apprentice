@@ -70,12 +70,11 @@ class GmaTests(unittest.TestCase):
             self.assertEqual(_run(["relink", *argv])[0], 3)
 
     def test_publish_signal_death_maps_to_1(self):
-        # POSIX execs node; the Windows path (subprocess.call) is the one
-        # that maps exit codes.
+        # POSIX execs node; the Windows path is the one that maps exit codes.
         with mock.patch.object(gma.os, "name", "nt"):
-            with mock.patch.object(gma.subprocess, "call", return_value=-15):
+            with mock.patch.object(gma, "_call_tied_to_gma", return_value=-15):
                 self.assertEqual(gma.main(["publish", "doctor"]), 1)
-            with mock.patch.object(gma.subprocess, "call", return_value=7):
+            with mock.patch.object(gma, "_call_tied_to_gma", return_value=7):
                 self.assertEqual(gma.main(["publish", "doctor"]), 7)
 
     def test_error_wrappers_run_the_same_directly_and_through_gma(self):
@@ -248,11 +247,119 @@ class GmaTests(unittest.TestCase):
     def test_missing_node_exits_1(self):
         import unittest.mock as mock
         with mock.patch("os.execvp", side_effect=FileNotFoundError), \
-                mock.patch.object(gma.subprocess, "call",
+                mock.patch.object(gma.subprocess, "Popen",
                                   side_effect=FileNotFoundError):
             code, _, err = _run(["publish", "doctor"])
         self.assertEqual(code, 1)
         self.assertIn("needs node", err)
+
+
+class WindowsJobTests(unittest.TestCase):
+    """#609: on Windows gma stays up as node's parent, so stopping gma must
+    end node too. Nothing here ran on Windows: the Win32 calls are faked, and
+    only the order of the calls and the structure's layout are checked."""
+
+    def fake_kernel32(self, job=77, set_ok=1, assign_ok=1):
+        k = mock.MagicMock()
+        k.CreateJobObjectW.return_value = job
+        k.SetInformationJobObject.return_value = set_ok
+        k.AssignProcessToJobObject.return_value = assign_ok
+        return k
+
+    def test_the_limit_structure_has_the_size_windows_gives_it(self):
+        import ctypes
+        limits = gma._job_limit_type()
+        if ctypes.sizeof(ctypes.c_void_p) == 8:
+            self.assertEqual(ctypes.sizeof(limits), 144)   # winnt.h, x64
+            self.assertEqual(ctypes.sizeof(limits._fields_[0][1]), 64)
+        else:
+            self.assertEqual(ctypes.sizeof(limits), 112)   # winnt.h, x86
+
+    def test_the_child_goes_in_a_job_that_kills_it_when_it_closes(self):
+        import ctypes
+        k = self.fake_kernel32()
+        with mock.patch.object(ctypes, "WinDLL", create=True, return_value=k):
+            self.assertEqual(gma._kill_on_close_job(1234), 77)
+        (job, kind, ref, size), _ = k.SetInformationJobObject.call_args
+        self.assertEqual((job, kind), (77, 9))   # JobObjectExtendedLimitInformation
+        limits = ref._obj
+        self.assertEqual(limits.BasicLimitInformation.LimitFlags, 0x2000)
+        self.assertEqual(size, ctypes.sizeof(limits))
+        k.AssignProcessToJobObject.assert_called_once_with(77, 1234)
+        k.CloseHandle.assert_not_called()   # gma holds the job while node runs
+
+    def test_a_job_windows_refuses_is_closed_and_the_child_runs_untied(self):
+        import ctypes
+        for kwargs in ({"job": 0}, {"set_ok": 0}, {"assign_ok": 0}):
+            k = self.fake_kernel32(**kwargs)
+            with mock.patch.object(ctypes, "WinDLL", create=True, return_value=k):
+                self.assertIsNone(gma._kill_on_close_job(1234), kwargs)
+            if kwargs.get("job") != 0:
+                k.CloseHandle.assert_called_once_with(77)
+
+    def test_node_runs_in_the_job_until_it_ends_and_the_job_then_closes(self):
+        proc = mock.MagicMock(_handle=1234)
+        proc.wait.return_value = 3
+        seen = []
+        with mock.patch.object(gma.subprocess, "Popen", return_value=proc) as popen, \
+                mock.patch.object(gma, "_kill_on_close_job", side_effect=lambda h: seen.append(("job", h)) or 77), \
+                mock.patch.object(gma, "_close_job", side_effect=lambda j: seen.append(("close", j))):
+            proc.wait.side_effect = lambda: seen.append(("wait",)) or 3
+            self.assertEqual(gma._call_tied_to_gma(["node", "t.js"]), 3)
+        popen.assert_called_once_with(["node", "t.js"])
+        self.assertEqual(seen, [("job", 1234), ("wait",), ("close", 77)])
+
+    def test_a_job_that_cannot_be_made_still_runs_node(self):
+        proc = mock.MagicMock(_handle=1234)
+        proc.wait.return_value = 0
+        for refusal in ({"side_effect": OSError("no")}, {"return_value": None}):
+            with mock.patch.object(gma.subprocess, "Popen", return_value=proc), \
+                    mock.patch.object(gma, "_kill_on_close_job", **refusal), \
+                    mock.patch.object(gma, "_close_job") as close:
+                self.assertEqual(gma._call_tied_to_gma(["node"]), 0)
+            close.assert_not_called()
+
+    def test_an_interrupt_of_gma_ends_node_and_closes_the_job(self):
+        proc = mock.MagicMock(_handle=1234)
+        proc.wait.side_effect = [KeyboardInterrupt, 0]
+        with mock.patch.object(gma.subprocess, "Popen", return_value=proc), \
+                mock.patch.object(gma, "_kill_on_close_job", return_value=77), \
+                mock.patch.object(gma, "_close_job") as close:
+            with self.assertRaises(KeyboardInterrupt):
+                gma._call_tied_to_gma(["node"])
+        proc.kill.assert_called_once_with()
+        close.assert_called_once_with(77)
+
+    def test_an_interrupt_during_the_job_setup_ends_node_and_leaks_no_job(self):
+        proc = mock.MagicMock(_handle=1234)
+        proc.wait.return_value = 0
+        with mock.patch.object(gma.subprocess, "Popen", return_value=proc), \
+                mock.patch.object(gma, "_kill_on_close_job", side_effect=KeyboardInterrupt), \
+                mock.patch.object(gma, "_close_job") as close:
+            with self.assertRaises(KeyboardInterrupt):
+                gma._call_tied_to_gma(["node"])
+        proc.kill.assert_called_once_with()
+        close.assert_not_called()   # no handle was returned to close
+
+    def test_an_interrupt_after_the_job_is_made_closes_it(self):
+        import ctypes
+        k = self.fake_kernel32()
+        k.SetInformationJobObject.side_effect = KeyboardInterrupt
+        with mock.patch.object(ctypes, "WinDLL", create=True, return_value=k):
+            with self.assertRaises(KeyboardInterrupt):
+                gma._kill_on_close_job(1234)
+        k.CloseHandle.assert_called_once_with(77)
+
+    def test_the_windows_path_goes_through_it_and_posix_still_execs(self):
+        tool = Path("t.js")   # made before os.name is patched (3.10 Path reads it)
+        with mock.patch.object(gma.os, "name", "nt"), \
+                mock.patch.object(gma, "_call_tied_to_gma", return_value=0) as run:
+            self.assertEqual(gma._run_tool(tool, ["doctor"]), 0)
+        run.assert_called_once_with(["node", "t.js", "doctor"])
+        with mock.patch.object(gma.os, "name", "posix"), \
+                mock.patch("os.execvp") as ex:
+            gma._run_tool(tool, ["doctor"])
+        ex.assert_called_once_with("node", ["node", "t.js", "doctor"])
 
 
 if __name__ == "__main__":

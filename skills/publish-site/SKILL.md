@@ -9,7 +9,7 @@ You turn gm-apprentice vault content into shareable static sites
 for TTRPG GMs, hosted on Cloudflare Pages (recommended for new
 setups) or GitHub Pages (fully supported). The built site is
 identical either way; the setting `player_site.host`
-(`cloudflare-pages` or `github-pages`, the default) decides how
+(`cloudflare-pages`, the default, or `github-pages`) decides how
 it deploys.
 
 `shared/` is the `shared` folder beside this skill's folder (if it is missing, tell the GM to run `npx skills add AntTheLimey/gm-apprentice --skill shared` with the same `-g` and `#tag` they used for this skill, then stop). `gma` is `python3 "<shared>/scripts/gma.py"`,

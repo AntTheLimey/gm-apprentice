@@ -605,8 +605,8 @@
           ]
         },
         "host": {
-          "description": "Where the site is hosted: `github-pages` or `cloudflare-pages`. Any other word is reported, and `github-pages` is used",
-          "default": "github-pages",
+          "description": "Where the site is hosted: `github-pages` or `cloudflare-pages`. Only `cloudflare-pages` can run the live features (live stats, the change-request inbox). Any other word is reported, and `cloudflare-pages` is used",
+          "default": "cloudflare-pages",
           "type": [
             "string",
             "null"

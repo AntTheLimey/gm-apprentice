@@ -235,9 +235,9 @@ const REGISTRY = [
     left_out: 'No address; a Cloudflare site is then taken to be at `https://<project>.pages.dev`',
   },
   {
-    name: 'player_site.host', was: [{ name: 'host', in: 'site' }], type: 'choice', values: ['github-pages', 'cloudflare-pages'], default: 'github-pages', legacyKind: 'scalar', siteFallback: true, group: 'site',
-    does: 'Where the site is hosted: `github-pages` or `cloudflare-pages`. Any other word is reported, and `github-pages` is used',
-    left_out: '`github-pages`',
+    name: 'player_site.host', was: [{ name: 'host', in: 'site' }], type: 'choice', values: ['github-pages', 'cloudflare-pages'], default: 'cloudflare-pages', legacyKind: 'scalar', siteFallback: true, group: 'site',
+    does: 'Where the site is hosted: `github-pages` or `cloudflare-pages`. Only `cloudflare-pages` can run the live features (live stats, the change-request inbox). Any other word is reported, and `cloudflare-pages` is used',
+    left_out: '`cloudflare-pages`',
   },
   {
     name: 'player_site.output', was: [{ name: 'outputDir', in: 'site' }], type: 'text', check: 'output', stopOnFault: true, default: 'docs', legacyKind: 'scalar', siteFallback: true, group: 'site',

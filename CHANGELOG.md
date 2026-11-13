@@ -9,6 +9,20 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.21] — 2026-11-13
+
+### Fixed
+
+- CoC sheet weapon-table headers are readable on dark themes, and a long code line in a note wraps instead of widening the page (#606, #607).
+- In-line pictures no longer carry their file name as alt text (`![[pic.png|alt text]]` sets it), which also stops false leak-check hits on those names (#620).
+- Story pages put a scene's picture beside the paragraph its title describes, and an unlinked first name no longer pulls in another character's portrait when that character isn't in the recap (#614, #628).
+- The "settings written by a newer gm-apprentice" message no longer tells npx skills users to update a plugin (#616).
+- Windows: stopping a background `gma publish serve` stops the server too, so its port is freed (#609).
+
+### Changed
+
+- Live stats and the change-request inbox publish only on Cloudflare Pages, and the warning says why. A site with no host setting now defaults to Cloudflare Pages; the update first writes each existing site's host down (Cloudflare where the site shows Cloudflare signs, GitHub Pages otherwise), so no site changes host (#605).
+
 ## [1.12.20] — 2026-11-12
 
 ### Fixed

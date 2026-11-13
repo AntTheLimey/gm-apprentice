@@ -326,21 +326,25 @@ function buildSite(options) {
     );
   }
 
-  // The switches decide what the GM wants; a KV store (wrangler.toml, next to the site's
-  // vault.config.json) decides whether it can work. Templates read publishConfig.live and
-  // nothing else, so this must run before any page renders. A switch on without a KV
-  // store is withheld and said so.
+  // The switches decide what the GM wants; the host and a KV store (wrangler.toml, next to the site's
+  // vault.config.json) decide whether it can work: the live features run on Cloudflare Pages Functions and KV, so a
+  // GitHub Pages site has none, whatever a leftover wrangler.toml holds. Templates read publishConfig.live and
+  // nothing else, so this must run before any page renders. A switch on without them is withheld and said so.
   const switches = publishConfig.switches || {};
   // `assumeKv` is the local preview's (scripts/live-preview.js): a store that is in memory, with no wrangler.toml.
-  const kvWired = options.assumeKv === true || hasRealKvId(configDir);
+  const onCloudflare = config.host === 'cloudflare-pages';
+  const kvWired = options.assumeKv === true || (onCloudflare && hasRealKvId(configDir));
   // The GM site has no live stats and no inbox, whatever the player site says: it has no store to keep them.
   publishConfig.live = gm ? { stats: false, inbox: false } : {
     stats: switches.liveStats === true && kvWired,
     inbox: switches.inbox === true && kvWired,
   };
   if (!kvWired && !gm) {
-    if (switches.liveStats === true) console.warn(`  WARNING: ${nm('player_site.features.live_stats')} is on but this site has no KV store wired; live stats are not published`);
-    if (switches.inbox === true) console.warn(`  WARNING: ${nm('player_site.features.inbox')} is on but this site has no KV store wired; the change-request inbox is not published`);
+    const why = onCloudflare
+      ? 'this site has no KV store wired'
+      : `${nm('player_site.host')} is "${config.host}", and these need Cloudflare Pages (Functions and KV): set ${nm('player_site.host')} to cloudflare-pages, or turn the feature off`;
+    if (switches.liveStats === true) console.warn(`  WARNING: ${nm('player_site.features.live_stats')} is on but ${why}; live stats are not published`);
+    if (switches.inbox === true) console.warn(`  WARNING: ${nm('player_site.features.inbox')} is on but ${why}; the change-request inbox is not published`);
   }
   const genrePreset = publishConfig.theme.genre;
   publishConfig._genrePreset = genrePreset;

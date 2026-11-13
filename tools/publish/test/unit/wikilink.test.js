@@ -85,10 +85,10 @@ describe('table links with an escaped pipe, in the site build', () => {
     assert.ok(!html.includes('\\'), html);
   });
 
-  it('an escaped-pipe image embed keeps its size text and finds the file', () => {
+  it('an escaped-pipe image embed finds the file and its size is not alt text', () => {
     const used = new Set();
     const out = resolveImageEmbeds('![[map.png\\|300]]', { 'map.png': { relPath: 'map.png' } }, 'x.html', used);
-    assert.match(out, /^!\[300\]\(images\/map\.png\)$/);
+    assert.match(out, /^!\[\]\(images\/map\.png\)$/);
     assert.ok(used.has('map.png'));
   });
 

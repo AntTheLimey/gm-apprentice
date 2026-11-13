@@ -51,6 +51,7 @@ for (const preset of PRESETS) {
     settings.player_site = {
       ...settings.player_site,
       title: `The Ashford Case — ${preset.name}`,
+      host: 'github-pages',
       url: 'https://antthelimey.github.io/gm-apprentice',
       theme: { genre: preset.id, tagline: `gm-apprentice publish theme: ${preset.name}` },
     };

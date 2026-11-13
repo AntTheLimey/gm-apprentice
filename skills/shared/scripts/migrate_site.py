@@ -24,7 +24,8 @@ from vaultlib import (SettingsUnavailable,
                       settings_added, settings_add,
                       settings_file, settings_raw,
                       settings_set, settings_unset, settings_written,
-                      site_switch_written, written_in_vault_file)
+                      site_switch_written,
+                      written_in_vault_file)
 
 # --- the checks ---------------------------------------------------------------
 
@@ -264,6 +265,96 @@ def find_publish_site(vault: Path) -> list[Item]:
     return [Item("publish-site", WILL, [row], apply)]
 
 
+SITE_HOST = "site-host"
+
+
+_KV_PLACEHOLDER = "PUT-YOUR-KV-NAMESPACE-ID-HERE"
+
+
+def _has_real_kv_id(site: Path) -> bool:
+    """Whether the site folder's wrangler.toml names an INBOX KV namespace
+    that is not the scaffold's placeholder: the publish tool's own test of
+    a site wired to Cloudflare (lib/backend-flags.js hasRealKvId)."""
+    try:
+        text = (site / "wrangler.toml").read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return False
+    inbox = False
+    for line in text.splitlines():
+        t = line.strip()
+        if t == "[[kv_namespaces]]":
+            inbox = False
+        elif re.match(r'binding\s*=\s*"INBOX"', t):
+            inbox = True
+        elif inbox:
+            m = re.match(r'id\s*=\s*"([^"]+)"', t)
+            if m:
+                return m.group(1) != _KV_PLACEHOLDER
+    return False
+
+
+def _site_folder(vault: Path) -> Path | None:
+    """The folder `player_site.folder` names, whether or not the site switch
+    is on (a site switched off keeps its folder, and may be switched on)."""
+    folder = settings(vault).get("player_site.folder")
+    if not folder:
+        return None
+    site = Path(str(folder)).expanduser()
+    return site if site.is_absolute() else vault / site
+
+
+def _host_evidence(vault: Path, now: Any) -> tuple[str, str] | None:
+    """(host, what shows it) for a site whose host is not written, or None.
+    A GitHub Pages address decides first: a KV store only says the live
+    features were wired, not where the site is served."""
+    url = str(now.get("player_site.url") or "")
+    if re.match(r"https?://[^/]*\.github\.io(?:[:/]|$)", url, re.I):
+        return "github-pages", f"player_site.url is a github.io address ({url})"
+    if now.written("player_site.cloudflare_project") and now.get("player_site.cloudflare_project"):
+        return "cloudflare-pages", "player_site.cloudflare_project is set"
+    if re.match(r"https?://[^/]*\.pages\.dev(?:[:/]|$)", url, re.I):
+        return "cloudflare-pages", f"player_site.url is a pages.dev address ({url})"
+    site = _site_folder(vault)
+    if site is not None and _has_real_kv_id(site):
+        return "cloudflare-pages", "wrangler.toml in the site folder names a KV store"
+    return None
+
+
+def find_site_host(vault: Path) -> list[Item]:
+    """The host setting used to fall back to GitHub Pages and now falls back
+    to Cloudflare Pages, so no site may be left to the fallback. A vault with
+    a site and no readable `player_site.host` gets it written: cloudflare-pages
+    where the site shows Cloudflare evidence (a project name, a pages.dev
+    address, a wrangler.toml with a real KV store), github-pages otherwise,
+    which is where it has deployed. A value the tool cannot read (a typo) is
+    treated as not written, and the row names it. Written and readable, or no
+    site: nothing. Run once, in the release that changed the fallback."""
+    now = vault_settings(vault)
+    origin = now.origins["player_site.host"]
+    if origin not in ("default", "fault"):
+        return []
+    # A site switched off but still naming its folder counts: switched on
+    # later, it would otherwise land on the new fallback.
+    if _site_folder(vault) is None:
+        return []
+    found = _host_evidence(vault, now)
+    host, why = found or ("github-pages", "no sign of a Cloudflare deploy, so it has deployed through GitHub Pages")
+    where = settings_file(vault)
+    unreadable = ""
+    if origin == "fault":
+        raw = settings_raw(vault, "player_site.host")
+        unreadable = f"; the value written now ({raw!r}) is not a host the tool reads"
+
+    def apply(_value: str | None) -> list[str]:
+        _set_settings(vault, [("player_site.host", host)])
+        return [f"wrote player_site.host: {host}"]
+
+    return [Item(SITE_HOST, WILL,
+                 [f"write player_site.host: {host} in {where} ({why}{unreadable}); "
+                  "a site with no host written now defaults to Cloudflare Pages"],
+                 apply)]
+
+
 LEAK_NOTE = ("these sections no longer publish; if one was meant for "
              "players, say which and it is moved back out of GM Notes under "
              "a new heading")
@@ -411,6 +502,10 @@ SITE_CHECKS: list[Check] = [
           find_publish_site,
           kind="bookkeeping",
           plain=("Wrote down whether this vault has a site, which it had only implied.")),
+    Check(SITE_HOST, "1.12.21", 2, "the site's host written down",
+          find_site_host,
+          kind="bookkeeping",
+          plain=("Wrote down where your site is hosted (GitHub Pages, or Cloudflare Pages where it shows signs of it), so the new default of Cloudflare Pages does not move it.")),
     Check("hide-fields-voice", "1.11.2", 2, "the voice field kept off the site",
           lambda v: find_hide_additions(v, "1.11.2"), asks_site=True,
           choices=("hide-add:",),

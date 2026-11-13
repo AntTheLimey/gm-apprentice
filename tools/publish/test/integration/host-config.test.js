@@ -61,11 +61,11 @@ describe('host config warning', () => {
     );
   });
 
-  it('does not warn for the default github-pages host with a github.io URL', () => {
-    runBuild({ siteUrl: 'https://example.github.io/my-campaign/' });
+  it('does not warn for the github-pages host with a github.io URL', () => {
+    runBuild({ host: 'github-pages', siteUrl: 'https://example.github.io/my-campaign/' });
     assert.ok(
       !warnings.some((w) => w.includes('looks like a GitHub Pages URL')),
-      'default host should never trigger the Cloudflare mismatch warning'
+      'a github-pages host should never trigger the Cloudflare mismatch warning'
     );
   });
 });

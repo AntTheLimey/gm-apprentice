@@ -85,6 +85,33 @@ describe('mentionsOf', () => {
     assert.deepEqual(mentions(c, '<p>Nothing here.</p>'), []);
   });
 
+  it('a one-word alias that is the first name of another page in the recap is not a mention of this one; a link or its title still is (#628)', () => {
+    const clara = cand(page('Clara Fen', { aliases: ['Anna'] }));
+    const anna = nameHolders([page('Anna Lindqvist')], {})[0];
+    const others = { lists: [[clara], [anna]] };
+    const ofClara = (html) => mentionsOf(clara, paras(html), others);
+    // The other Anna is in the recap (by her full name, or by a link): unlinked "Anna" is hers or Clara's, so it names neither.
+    assert.deepEqual(ofClara('<p>Adler was grooming Anna.</p><p>Anna Lindqvist left.</p>'), []);
+    assert.deepEqual(ofClara('<p>Adler was grooming Anna.</p><p><a href="../npcs/anna-lindqvist.html">She</a> left.</p>'), []);
+    // She is not in this recap, or not on the site: "Anna" is Clara's alias as ever.
+    assert.deepEqual(ofClara('<p>Adler was grooming Anna.</p>'), [{ para: 0, at: 19 }]);
+    assert.deepEqual(ofClara('<p>Adler met Clara Fen.</p><p>Anna Lindqvist left.</p>'), [{ para: 0, at: 10 }]);
+    assert.deepEqual(ofClara('<p>Adler met <a href="../npcs/clara-fen.html">Anna</a>.</p><p>Anna Lindqvist left.</p>'), [{ para: 0, at: 10 }]);
+    // Her title is her name even when another page's first word is the same.
+    const six = cand(page('Six'));
+    assert.equal(mentionsOf(six, paras('<p>Six ran.</p><p>Six Pack came.</p>'), nameHolders([page('Six Pack')], {})).length, 1);
+  });
+
+  it('a scene is read page by page: Bob Smith in the recap is not Anna Lindqvist there (#628)', () => {
+    const clara = cand(page('Clara Fen', { aliases: ['Anna'] }));
+    const members = [{ href: 'npcs/anna-lindqvist.html', terms: ['Anna Lindqvist'] }, { href: 'npcs/bob-smith.html', terms: ['Bob Smith'] }];
+    const scene = { key: 'b.png', outputPath: null, title: '', terms: ['Anna Lindqvist', 'Bob Smith'], hrefs: new Set(members.map((m) => m.href)), pages: members, place: true, scene: true };
+    const ofClara = (html) => mentionsOf(clara, paras(html), { lists: [[clara], [scene]] });
+    assert.deepEqual(ofClara('<p>Adler was grooming Anna.</p><p>Bob Smith left.</p>'), [{ para: 0, at: 19 }]);
+    assert.deepEqual(ofClara('<p>Adler was grooming Anna.</p><p>Anna Lindqvist left.</p>'), []);
+    assert.deepEqual(ofClara('<p>Adler was grooming Anna.</p><p><a href="../npcs/anna-lindqvist.html">She</a> left.</p>'), []);
+  });
+
   it('a link href that is percent-encoded or outside the site still resolves or is ignored', () => {
     const c = cand(page('Dr Who'));
     assert.deepEqual(mentions(c, '<p><a href="../npcs/dr-who.html">x</a> <a href="https://x.org/npcs/dr-who.html">y</a></p>'), [{ para: 0, at: 0 }]);
@@ -427,7 +454,7 @@ describe('sceneCandidates', () => {
     const of = sceneCandidates([hub1, hub2, scene(`${S}/Session 1/Scenes/Docks`, { played_in: ['[[Session 1]]'] })], { names, imageMap, linkMap });
     const [c] = of(unit1);
     assert.deepEqual({ ...c, hrefs: [...c.hrefs] }, { key: 'a.png', outputPath: null, title: '', terms: ['The Docks', 'Docks Quarter'], hrefs: ['locations/the-docks.html'],
-      pages: [{ href: 'locations/the-docks.html', terms: ['The Docks', 'Docks Quarter'] }], place: true, scene: true });
+      pages: [{ href: 'locations/the-docks.html', terms: ['The Docks', 'Docks Quarter'] }], place: true, scene: true, words: [] });
   });
 
   it('played_in decides first: the session it names (index or wrap-up), even from another session\'s Scenes folder', () => {
@@ -625,6 +652,70 @@ describe('sceneCandidates', () => {
       assert.deepEqual(at('<p>The Bay, then the Docks and Alpha.</p>', [docksOnly, bayOnly, A]), [[0, ['c.png', 'b.png']]]);
       assert.deepEqual(at('<p>The Bay, Captain Rook, the Docks.</p><p>Later the Docks.</p>', [docksOnly, bayOnly, three]), [[0, ['c.png', 'a.png']], [1, ['b.png']]]);
     });
+  });
+
+  describe('a scene\'s title words place its picture (#614)', () => {
+    // The shape of Canticle Ch4 S1-S7: the people of the scene are named all through the recap, so by pages alone the
+    // setup paragraph ties the paragraph the picture depicts, and the earlier wins. The scene's title says which.
+    const harcourt = { outputPath: 'npcs/harcourt.html', displayTitle: 'Harcourt', frontmatter: { type: 'npc' } };
+    const endicott = { outputPath: 'npcs/endicott.html', displayTitle: 'Endicott', frontmatter: { type: 'npc' } };
+    const trieste = { outputPath: 'locations/trieste.html', displayTitle: 'Trieste', frontmatter: { type: 'location' } };
+    const all = pageNames([harcourt, endicott, trieste], {});
+    const links = { Harcourt: harcourt.outputPath, Endicott: endicott.outputPath, Trieste: trieste.outputPath };
+    const recap = '<p>Harcourt bade them farewell at Trieste.</p>'
+      + '<p>Endicott boarded with Harcourt.</p>'
+      + '<p>The ship was becalmed for three days; Endicott and Harcourt paced the deck.</p>'
+      + '<p>At last the wind came and Harcourt wept.</p>';
+    const place = (h1, entities = ['[[Harcourt]]', '[[Endicott]]']) => {
+      const [c] = sceneCandidates([hub1, scene(`${S}/Session 1/Scenes/X`, { locations: [], entities }, `# ${h1}\n\n![[a.png]]\n`)],
+        { names: all, imageMap, linkMap: links })(unit1);
+      return [...placeFigures([c], paras(recap))].map(([k]) => k);
+    };
+
+    it('without a title word in the recap the earliest paragraph naming the most of its people still wins', () => {
+      assert.deepEqual(place('The Crew'), [1]);
+      assert.deepEqual(place('Nothing Relevant Here'), [1]);
+    });
+
+    it('a title word read in one paragraph (in any ending) puts the picture there, though an earlier one ties it', () => {
+      assert.deepEqual(place('The Becalming'), [2]);
+      assert.deepEqual(place('Leaving Trieste', ['[[Harcourt]]']), [0]);
+      assert.deepEqual(place('The Wind Came', ['[[Harcourt]]']), [3]);
+      assert.deepEqual(place('Harcourt Wept', ['[[Harcourt]]', '[[Endicott]]']), [3]);
+    });
+
+    it('a title word read in a paragraph naming none of its people does not place it there', () => {
+      const [c] = sceneCandidates([hub1, scene(`${S}/Session 1/Scenes/X`, { locations: [], entities: ['[[Endicott]]'] }, '# The Wind\n\n![[a.png]]\n')],
+        { names: all, imageMap, linkMap: links })(unit1);
+      assert.deepEqual([...placeFigures([c], paras(recap))].map(([k]) => k), [1]);
+    });
+
+    it('the title words never reach the page', () => {
+      const [c] = sceneCandidates([hub1, scene(`${S}/Session 1/Scenes/X`, { locations: [], entities: ['[[Harcourt]]'] }, '# The Becalming\n\n![[a.png]]\n')],
+        { names: all, imageMap, linkMap: links })(unit1);
+      const html = withFigures(recap, { candidates: [], scenes: [c], fromPath: 'story/s1.html', imageMap });
+      assert.ok(!/alt="[^"]/.test(html) && !html.includes('<figcaption>'), html);
+    });
+  });
+
+  it('the title words of a scene whose title is underlined (setext) count too (#614)', () => {
+    const [c] = sceneCandidates([hub1, scene(`${S}/Session 1/Scenes/X`, { locations: [], entities: ['[[Harcourt]]', '[[Endicott]]'] }, 'The Becalming\n=============\n\n![[a.png]]\n')],
+      { names: pageNames([{ outputPath: 'npcs/harcourt.html', displayTitle: 'Harcourt', frontmatter: { type: 'npc' } }, { outputPath: 'npcs/endicott.html', displayTitle: 'Endicott', frontmatter: { type: 'npc' } }], {}),
+        imageMap, linkMap: { Harcourt: 'npcs/harcourt.html', Endicott: 'npcs/endicott.html' } })(unit1);
+    assert.deepEqual(c.words, ['becalming']);
+  });
+
+  it('a picture is drawn as a scene\'s when the recap as a whole puts its page elsewhere (#628)', () => {
+    const clara = cand(page('Clara Fen', { aliases: ['Anna'] }));
+    const anna = nameHolders([page('Anna Lindqvist')], {});
+    const docks = { href: 'locations/the-docks.html', terms: ['Docks Quarter'] };
+    const sc = { key: 'a.png', outputPath: null, title: '', terms: ['Docks Quarter'], hrefs: new Set([docks.href]), pages: [docks], place: true, scene: true };
+    // "Anna" in the first paragraph is Clara's alias there, but the recap has Anna Lindqvist, so it names neither: the
+    // picture stands there for the Docks, with no caption naming Clara.
+    const html = withFigures('<p>Anna at the Docks Quarter.</p><p>Anna Lindqvist left.</p>', { candidates: [clara], scenes: [sc], blockers: anna, fromPath: 'story/s1.html', imageMap });
+    assert.ok(html.includes('<figure'), html);
+    assert.ok(!html.includes('<figcaption>'), html);
+    assert.ok(!html.includes('Clara Fen'), html);
   });
 
   it('a scene joining a portrait whose address is decomposed counts the page once', () => {

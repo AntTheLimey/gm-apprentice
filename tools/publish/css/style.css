@@ -3764,7 +3764,7 @@ body.landing-full-bleed > main.content > :not(.landing-hero) {
 .coc-sheet-root .skill.dev .reg{ color:var(--oxblood);}
 .coc-sheet-root .skill .h,.coc-sheet-root .skill .f{ font-size:.92rem; text-align:right; color:var(--ink-mid); font-weight:600; font-family:var(--didone);}
 .coc-sheet-root table.weap{ width:100%; border-collapse:collapse; font-size:.86rem;}
-.coc-sheet-root table.weap th{ text-align:left; font-family:var(--font-label, var(--didone)); font-size:.6rem; letter-spacing:.1em; text-transform:uppercase; color:var(--oxblood); border-bottom:1.5px solid var(--rule); padding:.32rem .4rem;}
+.coc-sheet-root table.weap th{ text-align:left; font-family:var(--font-label, var(--didone)); font-size:.6rem; letter-spacing:.1em; text-transform:uppercase; color:var(--oxblood); background:transparent; border-bottom:1.5px solid var(--rule); padding:.32rem .4rem;}
 .coc-sheet-root table.weap td{ padding:.32rem .4rem; border-bottom:1px solid var(--rule-soft);}
 .coc-sheet-root table.weap td:first-child{ font-weight:600;}
 /* ---- Correspondence (change-request / comms) widget — same #cr-root/.cr-* structure as the
@@ -5268,6 +5268,9 @@ svg.cx-web .cx-node.cx-sel text, svg.cx-web .cx-node:focus-visible text { fill: 
 
 /* A long inline code word (a file name in a Source callout) breaks at the edge on a phone rather than running past it. */
 :not(pre) > code { overflow-wrap: anywhere; }
+
+/* A code block wraps; a long unbroken line (a URL, an image prompt) would otherwise widen the whole page. */
+pre { white-space: pre-wrap; overflow-wrap: anywhere; }
 
 /* --- Obsidian callouts (> [!type] Title) --- */
 .callout {

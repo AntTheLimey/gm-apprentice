@@ -465,7 +465,7 @@ The five keys that used to sit here are now:
 | Old key | Setting |
 |---------|---------|
 | `siteUrl` | `player_site.url`: canonical base URL. For `cloudflare-pages` set it to the `.pages.dev` (or custom) URL; Cloudflare serves at the root, so a `github.io` URL breaks the 404 page (the build warns) |
-| `host` | `player_site.host`: `github-pages` (the default) or `cloudflare-pages`. Affects only the deploy step, not the built output |
+| `host` | `player_site.host`: `cloudflare-pages` (the default) or `github-pages`. Sets how the site deploys, and only `cloudflare-pages` can run the live features (live stats, the change-request inbox) |
 | `outputDir` | `player_site.output`: the folder the pages are written to, inside the site folder (`docs` unless set) |
 | `cloudflarePagesProject` | `player_site.cloudflare_project`: the Cloudflare Pages project name; the site folder's name unless set |
 | `preserveDirs` | `player_site.keep`: folders of the output kept across builds (e.g. `["superpowers"]`) |

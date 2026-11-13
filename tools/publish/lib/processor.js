@@ -1666,8 +1666,11 @@ function resolveImageEmbeds(markdown, imageMap, currentOutputPath, usedImages, o
     const currentDir = currentOutputPath.substring(0, currentOutputPath.lastIndexOf('/'));
     const imgPath = 'images/' + entry.relPath;
     const relativeImgPath = encodeImageUrl(relativePath(currentDir, imgPath));
-    const rawAlt = alt || basename.replace(IMAGE_EXT_REGEX, '').replace(/[-_]/g, ' ');
-    const altText = rawAlt.replace(/[[\]]/g, '\\$&');
+    // Alt text is what the GM wrote after the pipe. A size (`|300`, `|300x200`) is not text, and a file name
+    // is not a description (a screen reader would read it out, and the leak check would compare it to other
+    // notes): a picture with neither gets an empty alt, which marks it as decoration.
+    const written = alt && !/^\s*\d+(x\d+)?\s*$/.test(alt) ? alt : '';
+    const altText = written.replace(/[[\]]/g, '\\$&');
     return `![${altText}](${relativeImgPath})`;
   });
 }
