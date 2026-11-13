@@ -160,6 +160,30 @@ vault whose entities already exist upstream but carry no node is linked with
                                   ReadWriteDelete). Dry-run without --execute.
                                   accept is irreversible; dismiss keeps the
                                   externalRef claimed (see resubmit note below).
+    mobrpg withdraw <world> (--batch ID | --id ID... | --only S) [--vault <path>]
+                    [--namespace NS] [--no-restamp] [--execute]
+                                  Take back Pending suggestions we filed (needs
+                                  ReadWriteDelete). Dry-run lists the matches.
+                                  --execute DELETEs relations before the creates
+                                  they depend on, reads the queue back (never
+                                  trusting the DELETE response), re-stamps each
+                                  vault note (by externalRef) review_state:
+                                  dismissed with a dated review_note, and
+                                  reports what is left. Non-Pending suggestions
+                                  are never deleted. Only suggestions whose
+                                  externalRef is in our namespace (the vault's
+                                  map, or --namespace) are touched; Pending
+                                  relations pointing at them go too. --only is
+                                  dry-run only: it prints the --id line to run
+                                  with --execute. --execute without a vault
+                                  (--vault / $MOBRPG_VAULT) is refused unless
+                                  --no-restamp (delete without re-stamping
+                                  vault notes). A failed re-stamp is listed with
+                                  its path and exits non-zero; retry with
+                                  `withdraw <world> --restamp-only --ref REF...
+                                  --vault V --execute` (deletes nothing). A
+                                  failed relation DELETE skips the create it
+                                  links to.
     mobrpg write <extract.json> --out <vault-dir> [--campaign NAME]
                  [--source-doc TEXT] [--name-style plain|space] [--overwrite]
                                   Materialize a mobRPG extract (from `pull`)
@@ -222,7 +246,7 @@ vault whose entities already exist upstream but carry no node is linked with
                                   markdown (what the suggestion will carry).
     mobrpg suggest <world> --vault <path> [--chapter CH] [--kind K] [--only S]
                   [--limit N] [--out DIR] [--write-back] [--include-pcs]
-                  [--execute]
+                  [--all] [--execute]
                                   Build the full datatype graph per vault entity
                                   (element + classifier Types via Attribute edges
                                   + reified relationship Events) and submit it as
@@ -231,6 +255,9 @@ vault whose entities already exist upstream but carry no node is linked with
                                   live element is created directly. PCs excluded
                                   unless --include-pcs; --write-back also writes a
                                   pending mobrpg: node into each entity's file.
+                                  --execute needs --only, --chapter or --kind;
+                                  a bare run (the whole vault) is refused unless
+                                  you add --all.
                                   Create descriptions strip the same vault-only
                                   sections `sync` does (see "vaultOnlySections").
     mobrpg submit-batch <world> <batch.json> [--execute]

@@ -163,6 +163,23 @@ Run `mobrpg <command> --help` for a command's own options.
   world, since either is indistinguishable from "canon deleted everything".
 - `sync <world> --vault <path>` — timestamp last-writer-wins sync of each linked
   note's description prose (see "How sync decides" below).
+- `withdraw <world> (--batch ID | --id ID... | --only S) [--vault <path>]` —
+  take back Pending suggestions you filed. Only suggestions in your vault's
+  namespace are ever touched (a world is shared); Pending relations pointing
+  at them go with them. `--only` is dry-run only: it prints the exact `--id`
+  line to run with `--execute`, which is what lets you see what will go before
+  it goes. Dry-run by default; with
+  `--execute` it deletes them (relations before the creates they depend on),
+  re-stamps each vault note `dismissed` with a dated `review_note`, then reads
+  the queue back and reports what is left. Accepted or dismissed suggestions
+  are never deleted. `--execute` needs a vault (`--vault` or `$MOBRPG_VAULT`)
+  unless you pass `--no-restamp` (delete without re-stamping vault notes).
+  A failed re-stamp (unreadable note) is reported with the note path and exits
+  non-zero; `withdraw --restamp-only --ref <externalRef>... --vault <path>
+  --execute` retries it without deleting anything. If a relation's DELETE
+  fails, the create it links to is left alone. The printed `--execute` line
+  is shell-quoted and carries the resolved `--namespace`. Needs
+  ReadWriteDelete.
 - `adopt <world> --vault <path>` — stamp `mobrpg:` nodes onto vault notes that
   already exist upstream but carry no node, matched by name. An element
   another note already links, or that several notes match, is reported and
@@ -238,6 +255,10 @@ Propose a vault chapter to a world as suggestions (dry-run first):
 mobrpg suggest <worldId> --vault /path/to/vault --chapter chapter-2            # dry-run
 mobrpg suggest <worldId> --vault /path/to/vault --chapter chapter-2 --execute
 ```
+
+`suggest --execute` needs `--only`, `--chapter` or `--kind`; a bare run would
+file the whole vault, so it is refused unless you add `--all`. If a batch goes
+out wider than intended, `mobrpg withdraw` takes the Pending leftovers back.
 
 Keep a linked note's description prose in sync going forward (dry-run first):
 

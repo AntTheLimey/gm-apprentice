@@ -118,8 +118,18 @@ edges / N relationships, across M batches.
 Only after the GM has read the report and given an explicit yes:
 
 ```bash
-mobrpg suggest --vault <path> --write-back --out <dir> --execute <world>
+mobrpg suggest --vault <path> --write-back --out <dir> --only <name> --execute <world>
 ```
+
+`--execute` needs a scope: `--only`, `--chapter` or `--kind` (whichever the GM
+approved in the report). A bare `--execute` is refused; add `--all` only when
+the GM has said to file the whole vault. If a batch went out wider than meant,
+`mobrpg withdraw <world> --batch <id> --vault <path> [--execute]` takes the
+Pending leftovers back (dry-run first; `--only` is dry-run only and prints
+the `--id` line to execute; only our own namespace's suggestions are touched) and re-stamps their notes `dismissed`. `--execute` refuses without a vault
+unless `--no-restamp` is given, since that would leave the notes `pending`. If a note could not be
+re-stamped, `withdraw --restamp-only --ref <externalRef>... --vault <path>
+--execute` retries it without deleting anything.
 
 (Drop `--write-back` if the GM only wants the API submission this pass, per
 the flag table above.)
