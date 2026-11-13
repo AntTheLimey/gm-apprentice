@@ -789,7 +789,7 @@ describe('Story pictures: an active chapter\'s Teaser', () => {
 
 // Plates: a picture across the full width of the page, between paragraphs (`player_site.story.scene_pictures`; a picture
 // the GM embeds in the recap).
-const PLATE_RE = /<figure class="story-figure story-figure--plate"><a class="story-figure__open" href="([^"]+)"><img src="([^"]+)" alt="([^"]*)" loading="lazy"><span class="story-figure__zoom" aria-hidden="true">[\s\S]*?<\/span><\/a>(?:<figcaption>([^<]*)<\/figcaption>)?<\/figure>/g;
+const PLATE_RE = /<figure class="story-figure story-figure--plate"><a class="story-figure__open" href="([^"]+)"(?: aria-label="Open picture")?><img src="([^"]+)" alt="([^"]*)" loading="lazy"><span class="story-figure__zoom" aria-hidden="true">[\s\S]*?<\/span><\/a>(?:<figcaption>([^<]*)<\/figcaption>)?<\/figure>/g;
 const plates = (html) => [...html.matchAll(PLATE_RE)].map((m) => ({ href: m[1], src: m[2], alt: m[3], caption: m[4] === undefined ? null : m[4] }));
 
 describe('Story pictures: a picture the GM embedded in the recap is a plate', () => {
