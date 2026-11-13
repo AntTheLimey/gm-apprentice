@@ -672,9 +672,31 @@ class SiteHostTests(unittest.TestCase):
         self.assertEqual(ms.find_site_host(make_vault(self, site=False)), [])
         self.assertEqual(ms.find_site_host(make_vault(self, publish=False)), [])
 
-    def test_a_site_switched_off_is_left(self):
-        self.assertEqual(
-            ms.find_site_host(make_vault(self, extra="  site: false\n")), [])
+    def test_a_site_switched_off_that_keeps_its_folder_still_gets_a_host(self):
+        # Switched on later, it would otherwise land on the new fallback.
+        vault = make_vault(self, extra="  site: false\n")
+        self.assertEqual(vc.configured_site(vault)[0], None)
+        (item,) = ms.find_site_host(vault)
+        self.assertIn("player_site.host: github-pages", item.lines[0])
+        item.apply(None)
+        self.assertEqual(vc.vault_settings(vault).get("player_site.host"), "github-pages")
+
+    def test_a_switched_off_site_with_a_real_kv_id_still_reads_its_folder(self):
+        vault = make_vault(self, extra="  site: false\n")
+        site = Path(vc.settings(vault).get("player_site.folder"))
+        (site / "wrangler.toml").write_text(
+            '[[kv_namespaces]]\nbinding = "INBOX"\nid = "abc123def456"\n', encoding="utf-8")
+        self.written_cloudflare(vault, "wrangler.toml")
+
+    def test_a_github_address_beats_a_real_kv_id(self):
+        # A KV store says the live features were wired, not where the site is served.
+        vault = make_vault(self)
+        vaultlib.settings_set(vault, [("player_site.url", "https://x.github.io/c")])
+        (site_of(vault) / "wrangler.toml").write_text(
+            '[[kv_namespaces]]\nbinding = "INBOX"\nid = "abc123def456"\n', encoding="utf-8")
+        (item,) = ms.find_site_host(vault)
+        self.assertIn("player_site.host: github-pages", item.lines[0])
+        self.assertIn("github.io", item.lines[0])
 
     def test_the_check_runs_once_at_1_12_14_as_bookkeeping(self):
         (check,) = [c for c in ms.SITE_CHECKS if c.name == ms.SITE_HOST]

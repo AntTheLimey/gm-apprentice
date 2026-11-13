@@ -24,7 +24,7 @@ from vaultlib import (SettingsUnavailable,
                       settings_added, settings_add,
                       settings_file, settings_raw,
                       settings_set, settings_unset, settings_written,
-                      site_switch_written, site_without_tool,
+                      site_switch_written,
                       written_in_vault_file)
 
 # --- the checks ---------------------------------------------------------------
@@ -293,16 +293,30 @@ def _has_real_kv_id(site: Path) -> bool:
     return False
 
 
-def _cloudflare_evidence(vault: Path, now: Any) -> str | None:
-    """What shows this site deploys through Cloudflare Pages, or None."""
-    if now.written("player_site.cloudflare_project") and now.get("player_site.cloudflare_project"):
-        return "player_site.cloudflare_project is set"
+def _site_folder(vault: Path) -> Path | None:
+    """The folder `player_site.folder` names, whether or not the site switch
+    is on (a site switched off keeps its folder, and may be switched on)."""
+    folder = settings(vault).get("player_site.folder")
+    if not folder:
+        return None
+    site = Path(str(folder)).expanduser()
+    return site if site.is_absolute() else vault / site
+
+
+def _host_evidence(vault: Path, now: Any) -> tuple[str, str] | None:
+    """(host, what shows it) for a site whose host is not written, or None.
+    A GitHub Pages address decides first: a KV store only says the live
+    features were wired, not where the site is served."""
     url = str(now.get("player_site.url") or "")
+    if re.match(r"https?://[^/]*\.github\.io(?:[:/]|$)", url, re.I):
+        return "github-pages", f"player_site.url is a github.io address ({url})"
+    if now.written("player_site.cloudflare_project") and now.get("player_site.cloudflare_project"):
+        return "cloudflare-pages", "player_site.cloudflare_project is set"
     if re.match(r"https?://[^/]*\.pages\.dev(?:[:/]|$)", url, re.I):
-        return f"player_site.url is a pages.dev address ({url})"
-    site, _ = configured_site(vault)
+        return "cloudflare-pages", f"player_site.url is a pages.dev address ({url})"
+    site = _site_folder(vault)
     if site is not None and _has_real_kv_id(site):
-        return "wrangler.toml in the site folder names a KV store"
+        return "cloudflare-pages", "wrangler.toml in the site folder names a KV store"
     return None
 
 
@@ -319,13 +333,12 @@ def find_site_host(vault: Path) -> list[Item]:
     origin = now.origins["player_site.host"]
     if origin not in ("default", "fault"):
         return []
-    if not site_without_tool(settings(vault)):
+    # A site switched off but still naming its folder counts: switched on
+    # later, it would otherwise land on the new fallback.
+    if _site_folder(vault) is None:
         return []
-    host = "cloudflare-pages"
-    why = _cloudflare_evidence(vault, now)
-    if why is None:
-        host = "github-pages"
-        why = "no sign of a Cloudflare deploy, so it has deployed through GitHub Pages"
+    found = _host_evidence(vault, now)
+    host, why = found or ("github-pages", "no sign of a Cloudflare deploy, so it has deployed through GitHub Pages")
     where = settings_file(vault)
     unreadable = ""
     if origin == "fault":
