@@ -454,7 +454,7 @@ describe('sceneCandidates', () => {
     const of = sceneCandidates([hub1, hub2, scene(`${S}/Session 1/Scenes/Docks`, { played_in: ['[[Session 1]]'] })], { names, imageMap, linkMap });
     const [c] = of(unit1);
     assert.deepEqual({ ...c, hrefs: [...c.hrefs] }, { key: 'a.png', outputPath: null, title: '', terms: ['The Docks', 'Docks Quarter'], hrefs: ['locations/the-docks.html'],
-      pages: [{ href: 'locations/the-docks.html', terms: ['The Docks', 'Docks Quarter'] }], place: true, scene: true, sceneTitle: 'Scene', words: [] });
+      pages: [{ href: 'locations/the-docks.html', terms: ['The Docks', 'Docks Quarter'] }], place: true, scene: true, words: [] });
   });
 
   it('played_in decides first: the session it names (index or wrap-up), even from another session\'s Scenes folder', () => {
@@ -800,7 +800,7 @@ describe('plates: scene pictures by player_site.story.scene_pictures, and pictur
   const NAMES = { 'a.png': 'Alpha', 'b.png': 'Beta', 'c.png': 'Gamma', 'd.png': 'Delta' };
   const sceneOf = (key) => {
     const pg = { href: `locations/${NAMES[key].toLowerCase()}.html`, terms: [`${NAMES[key]} Quarter`] };
-    return { key, outputPath: null, title: '', terms: pg.terms, hrefs: new Set([pg.href]), pages: [pg], place: true, scene: true, sceneTitle: 'Landing at the Docks' };
+    return { key, outputPath: null, title: '', terms: pg.terms, hrefs: new Set([pg.href]), pages: [pg], place: true, scene: true, };
   };
   const map = { 'a.png': { relPath: 'a.png' }, 'b.png': { relPath: 'b.png' }, 'c.png': { relPath: 'c.png' }, 'd.png': { relPath: 'd.png' } };
   // Four paragraphs, each naming the place of one scene picture, so each picture has a paragraph of its own.
@@ -848,19 +848,15 @@ describe('plates: scene pictures by player_site.story.scene_pictures, and pictur
   });
 
   describe('a picture the GM embedded', () => {
-    const embed = (img, titles) => platesHtml(`<p>Before.</p>\n${img}\n<p>After.</p>`, { fromPath: 'story/s1.html', imageMap: map, titles });
+    const embed = (img) => platesHtml(`<p>Before.</p>\n${img}\n<p>After.</p>`, { fromPath: 'story/s1.html', imageMap: map });
     it('with words after the | : alt and caption, with the zoom link', () => {
       const html = embed('<p><img src="../images/a.png" alt="The ferry at dusk"></p>');
       assert.ok(html.includes('<p>Before.</p>\n<figure class="story-figure story-figure--plate"><a class="story-figure__open" href="../images/a.png"><img src="../images/a.png" alt="The ferry at dusk" loading="lazy"><span class="story-figure__zoom" aria-hidden="true">'), html);
       assert.ok(html.includes('</a><figcaption>The ferry at dusk</figcaption></figure>\n<p>After.</p>'), html);
     });
-    it('with no words: empty alt (never the file name) and no caption; a scene picture takes the scene\'s title as its alt', () => {
+    it('with no words: empty alt (never the file name) and no caption', () => {
       const plain = embed('<p><img src="../images/a.png" alt=""></p>');
       assert.ok(plain.includes('alt="" loading="lazy"') && !plain.includes('figcaption') && !plain.includes('alt="a.png"'), plain);
-      const titled = embed('<p><img src="../images/a.png" alt=""></p>', new Map([['a.png', 'Landing at the Docks']]));
-      assert.ok(titled.includes('alt="Landing at the Docks"') && !titled.includes('figcaption'), titled);
-      const written = embed('<p><img src="../images/a.png" alt="My words"></p>', new Map([['a.png', 'Landing at the Docks']]));
-      assert.ok(written.includes('alt="My words"') && !written.includes('Landing'), written);
     });
     it('only a paragraph of one picture the site has: a web image, a picture among words, or an unknown file stays as it was', () => {
       for (const p of ['<p><img src="https://example.com/x.png" alt=""></p>', '<p>See <img src="../images/a.png" alt=""></p>', '<p><img src="../images/zzz.png" alt=""></p>', '<p><img src="../images/a.png" alt=""><img src="../images/b.png" alt=""></p>']) {
@@ -870,5 +866,12 @@ describe('plates: scene pictures by player_site.story.scene_pictures, and pictur
     it('a recap with no picture comes back byte for byte', () => {
       assert.equal(platesHtml(recap, { fromPath: 'story/s1.html', imageMap: map }), recap);
     });
+  });
+});
+
+describe('plate CSS', () => {
+  it('a plate clears any float before it, so it is full width after a short paragraph', () => {
+    const css = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', '..', 'css', 'style.css'), 'utf8');
+    assert.match(css, /\n\.story-figure--plate \{\n  clear: both;/);
   });
 });

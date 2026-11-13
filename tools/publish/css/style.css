@@ -981,6 +981,7 @@ body:has(#tab-story.active) .pull-quote-backstory {
   display: block;
 }
 .story-figure--plate {
+  clear: both;
   margin: 18px 0;
 }
 .story-figures--plate .story-figure--plate {

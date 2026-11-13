@@ -526,10 +526,9 @@ function buildStorySpine(pages, linkMap, pairs, images = null, { marked = false,
         });
       }
       // A picture the GM embedded in the recap is a plate wherever it stands (also with `player_site.story.pictures`
-      // off); one of this session's scenes names itself by the scene's title when the GM gave it no words.
-      const titles = new Map(scenes.filter((c) => c.sceneTitle).map((c) => [c.key, c.sceneTitle]));
+      // off).
       for (const [holder, name] of [[target, field], ...(target !== unit && field === 'recapHtml' ? [[unit, 'recapHtml']] : [])]) {
-        if (holder[name]) holder[name] = platesHtml(holder[name], { fromPath: unit.outputPath, imageMap: images.imageMap, titles });
+        if (holder[name]) holder[name] = platesHtml(holder[name], { fromPath: unit.outputPath, imageMap: images.imageMap });
       }
     }
   }

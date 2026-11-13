@@ -43,10 +43,7 @@ function splitOpening(html) {
   const prev = blocks[at - 1];
   const withFigure = prev && /^<div class="story-figures[\s"]/.test(prev.html) && !text.slice(prev.start + prev.html.length, blocks[at].start).trim();
   const from = withFigure ? prev.start : blocks[at].start;
-  // A plate set after the opening (a scene's picture, full width) stays with it.
-  const next = blocks[at + 1];
-  const plate = next && /^<div class="story-figures story-figures--plate"/.test(next.html) && !text.slice(blocks[at].start + blocks[at].html.length, next.start).trim();
-  const end = (plate ? next : blocks[at]).start + (plate ? next : blocks[at]).html.length;
+  const end = blocks[at].start + blocks[at].html.length;
   const open = openMarks(text.slice(0, end));
   const rest = text.slice(end);
   // A rest of only mark tokens (a mark that opened in the opening and closes after it) is no rest: it stays with the

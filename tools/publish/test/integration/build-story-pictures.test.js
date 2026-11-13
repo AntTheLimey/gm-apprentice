@@ -793,16 +793,17 @@ const PLATE_RE = /<figure class="story-figure story-figure--plate"><a class="sto
 const plates = (html) => [...html.matchAll(PLATE_RE)].map((m) => ({ href: m[1], src: m[2], alt: m[3], caption: m[4] === undefined ? null : m[4] }));
 
 describe('Story pictures: a picture the GM embedded in the recap is a plate', () => {
-  const recap = 'Captain Rook came aboard.\n\n![[rook.png|The ferry at dusk]]\n\nThen the lamps went out.\n\n![[scene-docks.png]]\n\nAt dawn nobody spoke.\n\n![[docks.png]]\n\nEnd.';
+  const recap = 'Captain Rook came aboard.\n\n![[rook.png|The ferry at dusk|300]]\n\nThen the lamps went out.\n\n![[scene-docks.png]]\n\nAt dawn nobody spoke.\n\n![[docks.png]]\n\nEnd.';
   const s = buildBoth(storyVault({ ...SCENE_FILES, 'Sessions/Session 1 Wrap-Up.md': withRecap(recap) }));
   after(() => s.cleanup());
 
-  it('keeps its place; the words after the | are its alt and its caption, a scene picture without words is named by the scene\'s title, any other has an empty alt; never the file name', () => {
+  it('keeps its place; the words after the | are its alt and its caption, a picture without words has an empty alt; never the file name or a scene\'s title', () => {
     for (const site of [s.player, s.gm]) {
       const page = read(site, STORY_1);
       const found = plates(page);
       assert.equal(found.length, 3);
-      assert.deepEqual(found.map((p) => [p.alt, p.caption]), [['The ferry at dusk', 'The ferry at dusk'], ['Scene Docks SCENETITLE-1', null], ['', null]]);
+      assert.deepEqual(found.map((p) => [p.alt, p.caption]), [['The ferry at dusk', 'The ferry at dusk'], ['', null], ['', null]]);
+      assert.ok(!page.includes('SCENETITLE-1') && !page.includes('Scene Docks'), 'nothing of the scene note reaches the page');
       assert.deepEqual(found.map((p) => p.href === p.src), [true, true, true]);
       assert.ok(page.indexOf('Captain Rook came aboard.') < page.indexOf('rook.') && page.indexOf('rook.') < page.indexOf('Then the lamps went out.'));
       assert.ok(!/alt="[^"]*\.(png|webp)"/.test(page), 'no file name as alt');

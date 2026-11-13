@@ -162,13 +162,6 @@ function titleWords(body, fallback) {
   return [...new Set(words)];
 }
 
-// A scene's title: its first H1, else its note's name. Only a hand-embedded picture of the scene is named with it
-// (platesHtml); a picture placed by the build never is.
-function sceneTitle(body, fallback) {
-  const h1 = sceneLines(body).find((x) => x.level === 1 && x.text);
-  return (h1 ? h1.text : String(fallback || '')).normalize('NFC').trim();
-}
-
 const NOT_PLAYED = new Set(['dropped', 'paused']);
 const linksOf = (value) => (Array.isArray(value) ? value : value == null || value === '' ? [] : [value]).map(linkTarget).filter(Boolean);
 const folderOf = (note) => path.dirname(note.sourcePath || '');
@@ -221,7 +214,7 @@ function sessionsOfScene(scene, vault) {
 // `folded`, the build's reading of a name in another letter case or with underscores) that are in
 // `names` (pageNames: player-site pages, not PCs). Its candidate has those pages' names and addresses, together
 // (`terms`, `hrefs`) and one by one (`pages`: [{ href, terms }], which placeFigures counts), and nothing of the scene's
-// own but its title (`sceneTitle`, for platesHtml) and its title words. A scene with no picture or no such page gives none.
+// own: no title, no words. A scene with no picture or no such page gives none.
 function sceneCandidates(notes, { names, imageMap, linkMap, folded = () => undefined }) {
   const typed = (types) => notes.filter((n) => n.frontmatter && types.has(String(n.frontmatter.type)));
   const vault = { hubs: typed(new Set(['session'])), wrapUps: typed(WRAP_UP_TYPES), plans: typed(new Set(['session-plan'])) };
@@ -244,7 +237,7 @@ function sceneCandidates(notes, { names, imageMap, linkMap, folded = () => undef
       for (const term of names.get(at)) if (!seen.has(term.toLowerCase())) { seen.add(term.toLowerCase()); terms.push(term); }
     }
     if (hrefs.size === 0) continue;
-    scenes.push({ sessions: sessionsOfScene(scene, vault), candidate: { key, outputPath: null, title: '', terms, hrefs, pages, place: true, scene: true, sceneTitle: sceneTitle(scene.body, scene.title), words: titleWords(scene.body, scene.title) } });
+    scenes.push({ sessions: sessionsOfScene(scene, vault), candidate: { key, outputPath: null, title: '', terms, hrefs, pages, place: true, scene: true, words: titleWords(scene.body, scene.title) } });
   }
   return (unit) => {
     if (!unit || unit.kind !== 'session') return [];
@@ -672,11 +665,11 @@ function figuresHtml(recapHtml, placement, { fromPath, imageMap, paragraphs, can
 
 // A picture the GM embedded in the recap, a paragraph of its own, drawn as a plate: a full-width figure with the zoom
 // link the side pictures have. Its alt text, and its caption, are what the GM wrote after the `|` of the embed (the
-// processor made it the image's alt); with none, a picture that is a scene's takes the scene's title (`titles`, a Map
-// from image key to title) for its alt, and any other has an empty alt, never the file name. Only a paragraph that holds
+// processor made it the image's alt); with none, the alt is empty, never the file name, and nothing of a scene note
+// reaches the page. Only a paragraph that holds
 // nothing but one picture of the site's is changed (a mark inside it, or other words, leave it as it was). Where the
 // picture stands is untouched.
-function platesHtml(recapHtml, { fromPath, imageMap, titles = new Map() }) {
+function platesHtml(recapHtml, { fromPath, imageMap }) {
   const html = String(recapHtml || '');
   if (!html.includes('<img')) return html;
   const byPath = new Map(Object.entries(imageMap || {}).map(([key, e]) => [canonicalNfc(`images/${e.relPath}`), key]));
@@ -690,11 +683,10 @@ function platesHtml(recapHtml, { fromPath, imageMap, titles = new Map() }) {
     const key = src !== null && byPath.get(resolveHref(src, fromPath));
     if (!key) continue;
     const written = (attr('alt') || '').trim();
-    const alt = written || escapeText(titles.get(key) || '');
-    const url = escapeText(imageSrc(imageMap[key], fromPath));
+        const url = escapeText(imageSrc(imageMap[key], fromPath));
     out += html.slice(last, el.start)
       + `<figure class="story-figure story-figure--plate"><a class="story-figure__open" href="${url}">`
-      + `<img src="${url}" alt="${alt}" loading="lazy"><span class="story-figure__zoom" aria-hidden="true">${ZOOM}</span></a>`
+      + `<img src="${url}" alt="${written}" loading="lazy"><span class="story-figure__zoom" aria-hidden="true">${ZOOM}</span></a>`
       + `${written ? `<figcaption>${written}</figcaption>` : ''}</figure>`;
     last = el.start + el.html.length;
   }
