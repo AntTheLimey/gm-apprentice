@@ -303,8 +303,10 @@ creating entities.
   that played and strike the other through with `not played`. PCs are
   exempt from this and from the Related mirror: their body follows
   `shared/pc-body-structure.md`, and their session record is the
-  Story companion. A retired PC who appears as an NPC keeps its PC
-  note, never a new NPC note: its rows go to `Further Appearances`.
+  Story companion. A retired PC (`status: retired`) who appears as an
+  NPC keeps its PC note, never a new NPC note: give it a `Campaign Log`
+  row and the writer puts it under `## Further Appearances`, making the
+  section the first time.
 - **New container entities** (a district between a station and its
   venues, a cell between a faction and its members): offer each
   child for re-pointing, yes/no each, and set the child's fields per

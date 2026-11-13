@@ -217,8 +217,13 @@ class _Move:
     """Which links point at one moved note, and what they become."""
 
     def __init__(self, notes: list[str], old: str, new: str,
-                 owners: dict[str, str | None]) -> None:
+                 owners: dict[str, str | None],
+                 keep_name: bool = False) -> None:
         self.old, self.new = old, new
+        # A bare link whose name changes keeps the old name as its display
+        # text (`[[New|Old]]`): npc_merge.py, where the words in the prose
+        # are the GM's, not the new note's name.
+        self.keep_name = keep_name
         # Where the site's build sends each bare spelling; empty when there
         # is no site to follow.
         self.owners = owners
@@ -288,13 +293,21 @@ class _Move:
             # link only if the site sends it to OLD.
             if _nfc(site_owner) != self.old_nfc:
                 return False
-            return f"{esc(_stem(self.new))}{suffix}{sub}{alias}"
+            return self._bare_new(bare, suffix, sub, alias, esc)
         owner = self._bare_owner(src)
         if owner is None:
             return None
         if owner != self.old:
             return False
-        return f"{esc(_stem(self.new))}{suffix}{sub}{alias}"
+        return self._bare_new(bare, suffix, sub, alias, esc)
+
+    def _bare_new(self, bare: str, suffix: str, sub: str, alias: str,
+                  esc: Callable[[str], str]) -> str:
+        new = _stem(self.new)
+        if (self.keep_name and not alias and not sub
+                and normalize(bare.strip("/")) != normalize(new)):
+            alias = "|" + esc(bare)
+        return f"{esc(new)}{suffix}{sub}{alias}"
 
     def markdown(self, src: str, dest: str, src_new_dir: str,
                  rebase: bool = False) -> str | None:
@@ -336,12 +349,13 @@ class _Resolver:
 
     def __init__(self, notes: list[str], moves: list[tuple[str, str]],
                  owners: dict[str, str | None] | None = None,
-                 published: set[str] | None = None) -> None:
+                 published: set[str] | None = None,
+                 keep_name: bool = False) -> None:
         owners = owners or {}
         # The notes the site publishes: only links in these are read through
         # its link map. None when there is no site to follow.
         self.published = published
-        self.moves = {old: _Move(notes, old, new, owners)
+        self.moves = {old: _Move(notes, old, new, owners, keep_name)
                       for old, new in moves}
         self.new_of = dict(moves)
 
@@ -410,6 +424,10 @@ def _rewrite_wikilinks(rel: str, lineno: int, line: str,
             p.unsure.append(Change(rel, lineno, m.group(0), m.group(0)))
             return m.group(0)
         assert isinstance(got, str)
+        if ("|" in got and "|" not in m.group(1) and not json_escape
+                and line.lstrip().startswith("|")):
+            # A display text added in a table row: its pipe is escaped.
+            got = got.replace("|", "\\|", 1)
         bang = "!" if m.group(0).startswith("!") else ""
         after = f"{bang}[[{got}]]"
         if after == m.group(0):

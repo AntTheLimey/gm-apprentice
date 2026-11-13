@@ -2735,13 +2735,46 @@ def add_line(text: str, rel: str, section: str, line: str,
 LOG_SECTION = "campaign log"
 LOG_ALIASES = frozenset({"appearances", "encounters"})
 LATER_LOG = "further appearances"
+LATER_LOG_TITLE = "Further Appearances"
+
+
+def retired_pc(note: str) -> bool:
+    """A PC note whose `status` is retired (pc templates: alive, dead,
+    missing, retired, unknown)."""
+    fm = vl.extract_frontmatter(note) or {}
+    status = fm.get("status")
+    return (vl.entity_type(fm) == "pc" and isinstance(status, str)
+            and status.strip().casefold() == "retired")
+
+
+def add_later_log(note: str) -> str:
+    """The note with an empty `## Further Appearances`: after Appearances,
+    else before Notes, else before GM Notes, else at the end."""
+    doc = parse(note)
+    heads = [h for h in doc.heads if h.level == 2]
+
+    def before(head: Head) -> int:
+        if not head.gm:
+            return head.idx
+        openers = [st.lineno - 1 for st in doc.states
+                   if st.marker in OPENERS and st.lineno - 1 < head.idx]
+        return max(openers) if openers else head.idx
+    after = next((h for h in heads if not h.gm
+                  and key(h.title) == "appearances"), None)
+    if after is not None:
+        at = section_end(doc, after)
+    else:
+        nxt = next((h for t in ("notes", GM_NOTES) for h in heads
+                    if key(h.title) == t), None)
+        at = before(nxt) if nxt is not None else len(doc.lines)
+    return place(doc, at, [f"## {LATER_LOG_TITLE}"])
 
 
 def resolve_log_section(note: str, section: str) -> str | None:
     """The name of the public log section a note keeps in place of
-    `Campaign Log` (`Further Appearances` when it has one, else
-    `Appearances` or `Encounters`, whichever comes first), or None when
-    `section` is not `Campaign Log`, the note has one, or it has no
+    `Campaign Log` (`Further Appearances` when it has one or is a retired
+    PC, else `Appearances` or `Encounters`, whichever comes first), or None
+    when `section` is not `Campaign Log`, the note has one, or it has no
     equivalent."""
     if key(section.strip().lstrip("#")) != LOG_SECTION:
         return None
@@ -2752,6 +2785,8 @@ def resolve_log_section(note: str, section: str) -> str | None:
     later = next((h.title for h in heads if key(h.title) == LATER_LOG), None)
     if later is not None:
         return later
+    if retired_pc(note):
+        return LATER_LOG_TITLE
     return next((h.title for h in heads if key(h.title) in LOG_ALIASES),
                 None)
 
@@ -2772,6 +2807,11 @@ def cmd_log(batch: Batch, _args: argparse.Namespace, text: str) -> None:
             templates[note_type] = type_template(note_type)
         tmap, fenced = templates[note_type]
         resolved = resolve_log_section(note, cells[1])
+        made = ""
+        if resolved == LATER_LOG_TITLE and not any(
+                h.level == 2 and key(h.title) == LATER_LOG
+                for h in parse(note).heads):
+            note, made = add_later_log(note), "new section (retired PC)"
         section = resolved or cells[1]
         keeper, name = split_section(section)
         where = f"\u00a7{'GM Notes/' if keeper else ''}{name}"
@@ -2781,8 +2821,8 @@ def cmd_log(batch: Batch, _args: argparse.Namespace, text: str) -> None:
             batch.row("SKIP", rel, where, detail)
             continue
         batch.put(rel, new)
-        batch.row("WOULD-ADD", rel, where, detail or ("resolved" if resolved
-                                                      else ""))
+        batch.row("WOULD-ADD", rel, where, made or detail or (
+            "resolved" if resolved else ""))
         if (keeper or key(name) == GM_NOTES) and any(
                 st.gm_depth == 0 for st in added_states(note, new)):
             batch.row("WARNING", rel, where,
@@ -4675,7 +4715,8 @@ def build_parser() -> argparse.ArgumentParser:
             "stdin: one row per line, PATH<TAB>SECTION<TAB>LINE.\n"
             "SECTION is 'Campaign Log' or 'GM Notes/Behind the Scenes';\n"
             "a note with no Campaign Log but an Appearances or Encounters\n"
-            "section gets the row there (the row says 'resolved');\n"
+            "section gets the row there (the row says 'resolved'); a\n"
+            "retired PC's go to Further Appearances, made if missing;\n"
             "any section name is accepted. A section the note's template\n"
             "keeps under GM Notes must be written as 'GM Notes/<Name>'\n"
             "unless the note already has it as a public section."))

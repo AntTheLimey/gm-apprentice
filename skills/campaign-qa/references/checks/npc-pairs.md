@@ -3,7 +3,7 @@
 **Severity:** WARNING
 **Trigger:** `gma vault-check <vault> npc-pairs` gives an ASK row: an NPC
 note and a PC note whose names match (case, spaces, underscores and
-punctuation aside), or a PC whose alias is the NPC's name. Links reach
+punctuation aside), or where one note's alias is the other's name. Links reach
 only one of the two, so the other loses its history.
 
 **Procedure:** one pair at a time.

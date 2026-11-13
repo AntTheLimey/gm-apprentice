@@ -12,26 +12,31 @@ was.
 What moves into the PC note, word for word:
 
 - Frontmatter: `aliases`, `gm_aliases` and `tags` are unioned (the NPC's
-  name joins `aliases` when the two names differ); `relationships` are
+  name joins `aliases` when the two names differ; a `withheld` NPC's
+  names all go to `gm_aliases`); `relationships` are
   unioned, one per (target, type), never a tie to the character itself;
   any other field the PC has but leaves empty (`portrait`, `voice`, ...)
   takes the NPC's value. An NPC field the PC has no counterpart for is
   listed as NOT-CARRIED: it stays in the archived copy.
-- Body: the NPC's Overview, Appearance & Manner and History go under
-  `### Before They Were a PC` at the end of the PC's `## Background`;
-  Campaign Log lines go into `## Appearances`, ahead of the PC's own;
-  Related lines into `## Relationships` (identical lines once); GM Notes
-  (its lead under `### Before They Were a PC`, then each subsection) at
-  the end of the PC's `## GM Notes`, inside a gm-only fence when the
-  NPC's was fenced. A missing section is made before `## Notes` (GM
-  Notes: at the end). A section still holding only the template's
-  prompts is not carried, and an unfilled prompt line is dropped.
+- Body: nothing is left behind but the H1 title and template
+  placeholders. Campaign Log lines go into `## Appearances`, ahead of the
+  PC's own; Related lines into `## Relationships` (a list item already
+  shown there, outside any fence, once); GM Notes (its lead under
+  `### Before They Were a PC`, then each subsection) at the end of the
+  PC's `## GM Notes`, as does any section `player_site.hide.sections`
+  hides. Every other section, and the text above the first one, goes in
+  its own order under `### Before They Were a PC` at the end of the PC's
+  `## Background`, its headings demoted to stay under it. A gm-only or
+  spoiler fence around a section goes with it. A missing section is
+  made before `## Notes` (GM Notes: at the end). An unfilled prompt
+  line is dropped; a marker line never is.
 - The NPC note moves to `_archive/<its folder>/<name> (NPC).md` with
   `merged_into` set: kept, and never a second note of the PC's name.
   Links that name it by path (wikilinks, markdown links, frontmatter,
   canvas nodes) are rewritten to the PC, by relink.py's own rewriter; a
   bare `[[Name]]` the two notes share is left as written and reaches the
-  PC once the NPC is archived. A vault with a site has the publish tool
+  PC once the NPC is archived, and one to a differently named NPC keeps
+  its words as display text (`[[PC|Name]]`). A vault with a site has the publish tool
   rewrite its publish list and settings as for a rename (relink's
   REPUBLISH); a vault without one needs no Node.
 
@@ -62,8 +67,6 @@ from vaultlib import cli_name
 ARCHIVE_DIR = vl.ARCHIVE_DIR
 BEFORE = "Before They Were a PC"
 ARCHIVE_SUFFIX = " (NPC)"
-# The NPC's player-facing sections that go under BEFORE in Background.
-CARRIED_STORY = ("Overview", "Appearance & Manner", "History")
 SHARED_TEMPLATE = Path(__file__).resolve().parent.parent / "templates" / "npc.md"
 KEY_LINE_RE = re.compile(r"^([A-Za-z_][\w-]*):")
 UNIONED = ("aliases", "gm_aliases", "tags")
@@ -232,6 +235,16 @@ def _reindent(item: list[str], to: int, eol: str) -> list[str]:
     return out
 
 
+def _withheld(text: str) -> bool:
+    """Whether the note's own name is a secret (`withheld: true`), read by
+    the publish tool where it can be, else as YAML writes true."""
+    try:
+        return vl.note_withheld(text)[0]
+    except vl.PublishToolUnavailable:
+        raw = vl.get_key(vl.raw_frontmatter(text).splitlines(), "withheld") or ""
+        return vl.scalar_value(raw).casefold() in ("true", "yes", "on")
+
+
 def merge_frontmatter(m: Merge, npc_text: str, pc_text: str) -> str:
     npc_blocks, _c, _e = split_frontmatter(npc_text, m.npc)
     pc_blocks, close, eol = split_frontmatter(pc_text, m.pc)
@@ -241,12 +254,18 @@ def merge_frontmatter(m: Merge, npc_text: str, pc_text: str) -> str:
     selves = {vl.normalize(npc_name), vl.normalize(pc_name)}
 
     # Names: every name either note goes by, once; a secret stays secret.
+    # A withheld NPC's own names are all secrets: they join gm_aliases.
+    hidden = _withheld(npc_text)
     secret = {vl.normalize(a) for a in _names(pc_fm, "gm_aliases")}
     public = {vl.normalize(a) for a in _names(pc_fm, "aliases")}
+    own = ([npc_name] if vl.normalize(npc_name) != vl.normalize(pc_name)
+           else [])
     for key in UNIONED:
         wanted = _names(npc_fm, key)
-        if key == "aliases" and vl.normalize(npc_name) != vl.normalize(pc_name):
-            wanted = [npc_name, *wanted]
+        if key == "aliases":
+            wanted = [] if hidden else [*own, *wanted]
+        elif key == "gm_aliases" and hidden:
+            wanted = [*own, *_names(npc_fm, "aliases"), *wanted]
         norm: Callable[[str], str] = (
             str.casefold if key == "tags" else vl.normalize)
         have = ({norm(t) for t in _names(pc_fm, key)} if key == "tags"
@@ -372,13 +391,23 @@ def _demote(doc: vw.Doc, lo: int, hi: int, by: int) -> dict[int, str]:
     return out
 
 
+def _dropped(doc: vw.Doc, i: int, template: set[str]) -> bool:
+    """An unfilled prompt, or a line of the template's own comments."""
+    line = doc.lines[i]
+    if _prompt_line(line, template):
+        return True
+    state = next((s for s in doc.states if s.lineno - 1 == i), None)
+    return bool(state and state.comment and line.strip() in template
+                and not vl.markers_in(line))
+
+
 def _content(doc: vw.Doc, start: int, end: int, template: set[str],
              demote: int = 0) -> list[str]:
     """Lines start..end of the doc, unfilled prompts dropped, headings
     demoted, without line endings."""
     swap = _demote(doc, start, end, demote) if demote else {}
     out = [swap.get(i, doc.lines[i]).rstrip("\r\n") for i in range(start, end)
-           if not _prompt_line(doc.lines[i], template)]
+           if not _dropped(doc, i, template)]
     return _trim(out)
 
 
@@ -397,61 +426,163 @@ def _before_head(doc: vw.Doc, head: vw.Head) -> int:
     return max(openers) if openers else head.idx
 
 
-def _npc_parts(m: Merge, text: str, template: set[str]
-               ) -> tuple[list[str], list[str], list[str], list[str], bool]:
-    """(the story block for Background, Campaign Log lines, Related lines,
-    the GM Notes block, whether GM Notes sat in a gm-only fence)."""
+GM_OPEN, GM_CLOSE = "<!-- gm-only -->", "<!-- /gm-only -->"
+SP_OPEN, SP_CLOSE = "<!-- spoiler -->", "<!-- /spoiler -->"
+
+
+@dataclass
+class Parts:
+    """What the NPC's body gives the PC note, each as lines (no endings)."""
+    story: list[tuple[str, list[str]]] = field(default_factory=list)
+    log: list[str] = field(default_factory=list)
+    related: list[str] = field(default_factory=list)
+    gm: list[tuple[str, list[str]]] = field(default_factory=list)
+
+
+def _depths(doc: vw.Doc, idx: int) -> tuple[int, int]:
+    """(gm-only, spoiler) fences open at line `idx`."""
+    state = next((s for s in doc.states if s.lineno - 1 == idx), None)
+    return (state.gm_depth, state.spoiler_depth) if state else (0, 0)
+
+
+def _wrap(lines: list[str], depths: tuple[int, int]) -> list[str]:
+    """`lines` inside the fences that were open around them in the NPC."""
+    gm, spoiler = depths
+    if not (gm or spoiler) or not lines:
+        return lines
+    opens = [GM_OPEN] * gm + [SP_OPEN] * spoiler
+    closes = [SP_CLOSE] * spoiler + [GM_CLOSE] * gm
+    return [*opens, "", *lines, "", *closes]
+
+
+def _has_marker(line: str) -> bool:
+    return bool(vl.markers_in(line))
+
+
+def _unbalanced(lines: list[str]) -> list[int]:
+    """Indexes of the marker lines in `lines` that open or close a fence
+    outside them."""
+    stacks: dict[str, list[int]] = {"gm-only": [], "spoiler": []}
+    loose: list[int] = []
+    for i, line in enumerate(lines):
+        for _pos, name, closer in vl.markers_in(line):
+            if not closer:
+                stacks[name].append(i)
+            elif stacks[name]:
+                stacks[name].pop()
+            else:
+                loose.append(i)
+    return sorted(set(loose + stacks["gm-only"] + stacks["spoiler"]))
+
+
+def _piece(doc: vw.Doc, start: int, end: int, template: set[str],
+           demote: int = 0) -> tuple[list[str], bool]:
+    """(lines start..end as carried, whether they hold anything): unfilled
+    prompts dropped, headings demoted. A placeholder keeps only the
+    marker lines a fence outside it needs."""
+    raw = doc.lines[start:end]
+    if _is_placeholder(raw, template):
+        keep = _unbalanced([ln.rstrip("\r\n") for ln in raw])
+        return [raw[i].rstrip("\r\n") for i in keep], False
+    return _content(doc, start, end, template, demote), True
+
+
+def _npc_parts(m: Merge, text: str, template: set[str]) -> Parts:
+    """Every part of the NPC's body and where it goes in the PC note.
+    Nothing is left behind but the H1 title and template placeholders."""
     doc = vw.parse(text)
     if doc.problems:
         raise MergeError(f"{m.npc}: gm-only fence is unbalanced "
                          f"({doc.problems[0]})")
-    story: list[str] = []
-    for title in CARRIED_STORY:
-        head = _h2(doc, title)
-        if head is None:
-            continue
+    hidden = {vw.key(h) for h in vw.hidden_sections(m.vault)}
+    out = Parts()
+    body = doc.states[0].lineno - 1 if doc.states else len(doc.lines)
+    covered = [False] * len(doc.lines)
+    h2s = [h for h in doc.heads if h.level == 2]
+    for head in h2s:
         end = vw.section_end(doc, head)
-        if _is_placeholder(doc.lines[head.idx + 1:end], template):
-            m.row("SKIP", m.npc, f"\u00a7{title}", "template placeholder")
+        for i in range(head.idx, end):
+            covered[i] = True
+    # Text outside every ## section (under the title, between sections):
+    # carried first, without a heading, its stray fence markers dropped.
+    loose: list[str] = []
+    run: list[int] = []
+
+    titles = {h.idx for h in doc.heads if h.level == 1}
+
+    def flush() -> None:
+        idxs = [i for i in run if i not in titles
+                and not _dropped(doc, i, template)]
+        lines = [doc.lines[i].rstrip("\r\n") for i in idxs]
+        # A marker alone on its line that opens or closes a fence around a
+        # section is that section's; it is carried with it.
+        bad = {n for n in _unbalanced(lines)
+               if not vl.marker_re().sub("", lines[n]).strip()}
+        idxs = [i for n, i in enumerate(idxs) if n not in bad]
+        lines = [ln for n, ln in enumerate(lines) if n not in bad]
+        if lines and not _is_placeholder([ln + "\n" for ln in lines],
+                                         template):
+            loose.extend(_wrap(_trim(lines), _depths(doc, idxs[0])))
+        run.clear()
+    for i in range(body, len(doc.lines)):
+        if covered[i]:
+            if run:
+                flush()
             continue
-        body = _content(doc, head.idx + 1, end, template, demote=2)
-        if body:
-            story += ["", f"#### {head.title}", "", *body]
+        run.append(i)
+    if run:
+        flush()
+    if any(ln.strip() for ln in loose):
+        out.story.append(("", loose))
+        m.row("ADD", m.pc, f"\u00a7Background/{BEFORE}",
+              "the text above the NPC's first section")
 
-    def section(title: str) -> list[str]:
-        head = _h2(doc, title)
-        if head is None:
-            return []
+    for head in h2s:
         end = vw.section_end(doc, head)
-        if _is_placeholder(doc.lines[head.idx + 1:end], template):
-            m.row("SKIP", m.npc, f"\u00a7{title}", "template placeholder")
-            return []
-        return _content(doc, head.idx + 1, end, template)
-
-    log = section("Campaign Log")
-    related = section("Related")
-    gm_block: list[str] = []
-    fenced = False
-    gm = _h2(doc, "GM Notes")
-    if gm is not None:
-        fenced = gm.gm
-        end = vw.section_end(doc, gm)
-        subs = [h for h in doc.heads if h.level == 3 and gm.idx < h.idx < end]
-        lead_end = subs[0].idx if subs else end
-        lead = doc.lines[gm.idx + 1:lead_end]
-        if lead and not _is_placeholder(lead, template):
-            body = _content(doc, gm.idx + 1, lead_end, template, demote=1)
-            if body:
-                gm_block += ["", f"### {BEFORE}", "", *body]
-        for n, sub in enumerate(subs):
-            stop = subs[n + 1].idx if n + 1 < len(subs) else end
-            if _is_placeholder(doc.lines[sub.idx + 1:stop], template):
-                m.row("SKIP", m.npc, f"\u00a7GM Notes/{sub.title}",
-                      "template placeholder")
-                continue
-            gm_block += ["", doc.lines[sub.idx].rstrip("\r\n"), "",
-                         *_content(doc, sub.idx + 1, stop, template)]
-    return story, log, related, _trim(gm_block), fenced
+        depths = _depths(doc, head.idx)
+        k = vw.key(head.title)
+        if k == vw.GM_NOTES:
+            subs = [h for h in doc.heads
+                    if h.level == 3 and head.idx < h.idx < end]
+            lead_end = subs[0].idx if subs else end
+            lines, real = _piece(doc, head.idx + 1, lead_end, template, 1)
+            block = ([f"### {BEFORE}", "", *lines] if real else lines)
+            names = [BEFORE] if real else []
+            for n, sub in enumerate(subs):
+                stop = subs[n + 1].idx if n + 1 < len(subs) else end
+                lines, real = _piece(doc, sub.idx + 1, stop, template)
+                if not real:
+                    m.row("SKIP", m.npc, f"\u00a7GM Notes/{sub.title}",
+                          "template placeholder")
+                    block += ["", *lines]
+                    continue
+                names.append(sub.title)
+                block += ["", doc.lines[sub.idx].rstrip("\r\n"), "", *lines]
+            if names:
+                out.gm.append((", ".join(names), _wrap(_trim(block),
+                                                       depths)))
+            elif any(ln.strip() for ln in block):
+                out.gm.append(("", _wrap(_trim(block), depths)))
+            continue
+        lines, real = _piece(doc, head.idx + 1, end, template,
+                             1 if k in hidden else 2)
+        if not real:
+            m.row("SKIP", m.npc, f"\u00a7{head.title}", "template placeholder")
+            if lines:
+                out.story.append(("", _wrap(lines, depths)))
+            continue
+        if k in hidden:
+            # Hidden from players on the NPC's page: kept from them here.
+            out.gm.append((head.title, _wrap(
+                [f"### {head.title}", "", *lines], depths)))
+        elif k == vw.key("Campaign Log"):
+            out.log = _wrap(lines, depths)
+        elif k == vw.key("Related"):
+            out.related = _wrap(lines, depths)
+        else:
+            out.story.append((head.title, _wrap(
+                [f"#### {head.title}", "", *lines], depths)))
+    return out
 
 
 def _place(text: str, at: int, block: list[str]) -> str:
@@ -468,33 +599,57 @@ def _new_section_at(doc: vw.Doc) -> int:
     return len(doc.lines)
 
 
+def _dedupe(lines: list[str], doc: vw.Doc, head: vw.Head,
+            end: int) -> list[str]:
+    """`lines` less the list items the PC section already shows. Only an
+    item outside every fence, on both sides, counts: a marker line, or a
+    line a fence hides, is never taken out."""
+    shown = {s.lineno - 1 for s in doc.states
+             if s.gm_depth == 0 and s.spoiler_depth == 0}
+    have = {doc.lines[i].strip() for i in range(head.idx + 1, end)
+            if i in shown and vw.LIST_RE.match(doc.lines[i])}
+    out, gm, spoiler = [], 0, 0
+    for line in lines:
+        for _pos, name, closer in vl.markers_in(line):
+            step = -1 if closer else 1
+            if name == "gm-only":
+                gm += step
+            else:
+                spoiler += step
+        if (not gm and not spoiler and not _has_marker(line)
+                and vw.LIST_RE.match(line) and line.strip() in have):
+            continue
+        out.append(line)
+    return _trim(out)
+
+
 def merge_body(m: Merge, npc_text: str, pc_text: str) -> str:
     template = _template_lines(m.vault)
-    story, log, related, gm_block, fenced = _npc_parts(m, npc_text, template)
+    parts = _npc_parts(m, npc_text, template)
+    first_row = len(m.rows)
     text = pc_text
     if vw.parse(text).problems:
         raise MergeError(f"{m.pc}: gm-only fence is unbalanced "
                          f"({vw.parse(text).problems[0]})")
 
-    if gm_block:
+    gm_block = [ln for _name, lines in parts.gm for ln in ["", *lines]]
+    if any(ln.strip() for ln in gm_block):
+        gm_block = _trim(gm_block)
         doc = vw.parse(text)
         head = _h2(doc, "GM Notes")
-        wrap = fenced and (head is None or not head.gm)
-        block = (["<!-- gm-only -->", "", *gm_block, "", "<!-- /gm-only -->"]
-                 if wrap else gm_block)
         if head is None:
-            text = _place(text, len(doc.lines), ["## GM Notes", "", *block])
-            how = "new section"
+            text = _place(text, len(doc.lines), ["## GM Notes", "", *gm_block])
+            how = "new section: "
         else:
-            text = _place(text, vw.section_end(doc, head), block)
+            text = _place(text, vw.section_end(doc, head), gm_block)
             how = ""
-        subs = [ln[4:] for ln in gm_block if ln.startswith("### ")]
-        m.row("ADD", m.pc, "\u00a7GM Notes", ", ".join(
-            x for x in [how, ", ".join(subs), "gm-only fence" if wrap else ""]
-            if x))
+        for name, _lines in parts.gm:
+            if name:
+                m.row("ADD", m.pc, "\u00a7GM Notes", how + name)
+                how = ""
 
-    for title, lines, first in (("Relationships", related, False),
-                                ("Appearances", log, True)):
+    for title, lines, first in (("Relationships", parts.related, False),
+                                ("Appearances", parts.log, True)):
         if not lines:
             continue
         doc = vw.parse(text)
@@ -506,9 +661,7 @@ def merge_body(m: Merge, npc_text: str, pc_text: str) -> str:
                   f"new section, {len(lines)} line(s)")
             continue
         end = vw.section_end(doc, head)
-        have = {doc.lines[i].strip() for i in range(head.idx + 1, end)}
-        lines = [ln for ln in lines if not ln.strip() or ln.strip() not in have]
-        lines = _trim(lines)
+        lines = _dedupe(lines, doc, head, end)
         if not any(ln.strip() for ln in lines):
             m.row("SKIP", m.pc, f"\u00a7{title}", "already there")
             continue
@@ -525,10 +678,12 @@ def merge_body(m: Merge, npc_text: str, pc_text: str) -> str:
             text = _place(text, at, lines)
         m.row("ADD", m.pc, f"\u00a7{title}", f"{len(lines)} line(s)")
 
-    if story:
+    if parts.story:
         doc = vw.parse(text)
         head = _h2(doc, "Background")
-        block = [f"### {BEFORE}", *story]
+        block = [f"### {BEFORE}"]
+        for _name, lines in parts.story:
+            block += ["", *lines]
         if head is None:
             sheet = _h2(doc, "Stat Sheet")
             nxt = (next((h for h in doc.heads if h.level <= 2
@@ -540,9 +695,15 @@ def merge_body(m: Merge, npc_text: str, pc_text: str) -> str:
         else:
             text = _place(text, vw.section_end(doc, head), block)
             how = ""
-        titles = [ln[5:] for ln in story if ln.startswith("#### ")]
-        m.row("ADD", m.pc, f"\u00a7Background/{BEFORE}",
-              how + ", ".join(titles))
+        for name, _lines in parts.story:
+            if name:
+                m.row("ADD", m.pc, f"\u00a7Background/{BEFORE}", how + name)
+                how = ""
+    # Rows in the note's own order, not the order the writes were made.
+    order = ("\u00a7Background", "\u00a7Relationships", "\u00a7Appearances",
+             "\u00a7GM Notes")
+    m.rows[first_row:] = sorted(m.rows[first_row:], key=lambda r: next(
+        (n for n, w in enumerate(order) if r[2].startswith(w)), len(order)))
     problems = vw.parse(text).problems
     if problems:
         raise MergeError(f"{m.pc}: the merge would leave a gm-only fence "
@@ -597,7 +758,7 @@ def plan(vault: Path, npc_raw: str, pc_raw: str) -> tuple[Merge, dict[str, str],
     # Links: relink's rewriter, as if the NPC note were renamed to the PC's.
     notes = relink._walk(vault, ".md")
     moves = [(npc, pc)]
-    res = relink._Resolver(notes, moves)
+    res = relink._Resolver(notes, moves, keep_name=True)
     p = relink.Plan(vault, npc, pc)
     # The NPC's own text, read as if it sat where the PC does: links to
     # itself name the PC, relative links keep their targets.

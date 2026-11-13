@@ -221,7 +221,8 @@ gma vault-write <vault> log [options]
 stdin: one row per line, PATH<TAB>SECTION<TAB>LINE.
 SECTION is 'Campaign Log' or 'GM Notes/Behind the Scenes';
 a note with no Campaign Log but an Appearances or Encounters
-section gets the row there (the row says 'resolved');
+section gets the row there (the row says 'resolved'); a
+retired PC's go to Further Appearances, made if missing;
 any section name is accepted. A section the note's template
 keeps under GM Notes must be written as 'GM Notes/<Name>'
 unless the note already has it as a public section.
@@ -511,11 +512,12 @@ template has it.
 
 Use `npc-merge` when an NPC has become a PC and both notes exist (create
 the PC from its template first), or when `gma vault-check <vault> npc-pairs`
-names a pair. It makes one note: the NPC's frontmatter unioned or filled
-into the PC's, its Overview, Appearance & Manner and History under `### Before
-They Were a PC` in Background, its Campaign Log in Appearances, its Related in
-Relationships, its GM Notes (fences kept) in GM Notes, all word for word;
-template placeholders are left behind. The NPC note moves to `_archive/` with
+names a pair. It makes one note, word for word: the NPC's frontmatter unioned
+or filled into the PC's, its Campaign Log in Appearances, its Related in
+Relationships, its GM Notes and any section the site hides in GM Notes, and
+every other section, in order, under `### Before They Were a PC` in
+Background. Fences go with what they wrap; only the H1 title and template
+placeholders are left behind. The NPC note moves to `_archive/` with
 `merged_into`, and links that name it by path are rewritten to the PC. It is
 not a batch command. Rows: `WOULD-MERGE`, `WOULD-SET`, `WOULD-FILL`,
 `WOULD-ADD`, `NOT-CARRIED` (an NPC field the PC has no place for; kept in the

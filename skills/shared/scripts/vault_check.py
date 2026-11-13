@@ -653,11 +653,11 @@ def pair_key(name: str) -> str:
 
 def check_npc_pairs(vault: Path) -> list[str]:
     """One character, two notes: an NPC note and a PC note whose names
-    match (by `pair_key`), or a PC alias that is the NPC's name. Each ASK
-    row names the merge that makes them one note. Archived and QA copies,
-    and notes already merged (`merged_into`), are not live notes."""
-    npcs: list[tuple[str, str]] = []
-    pcs: list[tuple[str, set[str], set[str]]] = []
+    match (by `pair_key`), or where one's alias is the other's name. Each
+    ASK row names the merge that makes them one note. Archived and QA
+    copies, and notes already merged (`merged_into`), are not live notes."""
+    npcs: list[tuple[str, str, set[str]]] = []
+    pcs: list[tuple[str, str, set[str]]] = []
     for rel, text in vault_files(vault):
         if vaultlib.is_record_copy(rel):
             continue
@@ -665,19 +665,19 @@ def check_npc_pairs(vault: Path) -> list[str]:
         if "merged_into" in fm:
             continue
         kind = entity_type(fm)
-        name = Path(rel).stem
-        if kind == "npc":
-            npcs.append((rel, pair_key(name)))
-        elif kind == "pc":
-            pcs.append((rel, {pair_key(name)},
-                        {pair_key(a) for a in link_aliases(fm)}))
+        if kind in ("npc", "pc"):
+            (npcs if kind == "npc" else pcs).append(
+                (rel, pair_key(Path(rel).stem),
+                 {pair_key(a) for a in link_aliases(fm)}))
     rows = []
-    for npc, key in npcs:
-        for pc, names, aliases in pcs:
-            if key in names:
+    for npc, npc_name, npc_aliases in npcs:
+        for pc, pc_name, pc_aliases in pcs:
+            if npc_name == pc_name:
                 why = "an NPC note and a PC note of one name"
-            elif key in aliases:
+            elif npc_name in pc_aliases:
                 why = "a PC whose alias is this NPC's name"
+            elif pc_name in npc_aliases:
+                why = "an NPC whose alias is this PC's name"
             else:
                 continue
             rows.append(f"ASK\t{npc} <> {pc}\t{why}: merge with "

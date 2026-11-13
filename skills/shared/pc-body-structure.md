@@ -134,7 +134,8 @@ word for word, and the NPC note goes to `_archive/` with `merged_into`.
 
 A PC who retires and goes on as an NPC keeps its PC note
 (`status: retired`); no NPC note is made. Session wrap-up logs its later
-appearances under `## Further Appearances` on that note.
+appearances under `## Further Appearances` on that note: `vw log` sends a
+retired PC's Campaign Log rows there and makes the section when needed.
 
 `gma vault-check <vault> npc-pairs` lists characters that still have
 both notes; campaign-qa offers the merge.

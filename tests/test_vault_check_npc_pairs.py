@@ -64,6 +64,14 @@ class NpcPairTests(unittest.TestCase):
         self.assertIn('npc-merge "Characters/NPCs/Bob.md" '
                       '"Characters/PCs/Robert Hale.md"', rows[0])
 
+    def test_npc_alias_names_the_pc(self):
+        v = make(self, {"Characters/NPCs/The Stranger.md":
+                            NPC.format(extra="aliases: [Robert Hale]\n"),
+                        "Characters/PCs/Robert Hale.md": PC.format(extra="")})
+        rows = vc.check_npc_pairs(v)
+        self.assertEqual(len(rows), 1)
+        self.assertIn("an NPC whose alias is this PC's name", rows[0])
+
     def test_different_people_give_no_row(self):
         v = make(self, {"Characters/NPCs/Jane Smith.md": NPC.format(extra=""),
                         "Characters/NPCs/John Smyth.md": NPC.format(extra=""),

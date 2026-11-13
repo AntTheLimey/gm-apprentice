@@ -8,6 +8,7 @@ Run: python3 -m pytest tests/test_npc_merge.py
 """
 
 import io
+import re
 import shutil
 import sys
 import tempfile
@@ -206,7 +207,8 @@ class MergeTests(unittest.TestCase):
             read(vault, "Characters/PCs/Mira Thorne.md"))
         self.assertEqual(fm["aliases"], ["Mira Vale", "Mira"])
         # A bare link to the old name names only the NPC: it follows.
-        self.assertIn("[[Mira Thorne]]", read(
+        # with its words kept as the display text.
+        self.assertIn("Met [[Mira Thorne|Mira Vale]]", read(
             vault, "Sessions/Session 01 - Arrival.md"))
 
     def test_body_mappings_word_for_word(self):
@@ -387,6 +389,208 @@ class MergeTests(unittest.TestCase):
         text = read(vault, PC_REL)
         self.assertIn("## Further Appearances\n\n- later\n- **[[Session 09]]**"
                       " — back\n", text)
+
+
+# Shaped like a real NPC note that never followed the template: its own
+# sections, per-session update sections with H3s, an H1 title.
+REAL = """---
+type: npc
+aliases: []
+---
+
+# Mira Vale
+
+Lead line under the title.
+
+## Overview
+
+A fixer.
+
+## Physical Description
+
+Tall, scarred.
+
+## Statistics
+
+| STR | DEX |
+|-----|-----|
+| 50  | 70  |
+
+## Skills
+
+Persuade 60
+
+## Personality
+
+Wry.
+
+## Agenda
+
+Pay off Rhee.
+
+## The Masquerade Beat
+
+She dances with the Duke.
+
+## Combat Notes
+
+Fights dirty.
+
+## Session Appearances
+
+- **[[Session 01]]** — met the party.
+
+## Session 3 Update — The Fire
+
+### What changed
+
+The warehouse burned.
+
+## Session 11 Plan — The Ball
+
+### Beats
+
+Masks.
+
+## DM Notes
+
+Her real debt is to the Duke.
+
+<!-- gm-only -->
+
+## GM Notes
+
+### Final Notes
+
+She dies in act three.
+
+<!-- /gm-only -->
+"""
+
+ORDER = ["Overview", "Physical Description", "Statistics", "Skills",
+         "Personality", "Agenda", "The Masquerade Beat", "Combat Notes",
+         "Session Appearances", "Session 3 Update — The Fire",
+         "Session 11 Plan — The Ball"]
+
+
+class NothingLeftBehindTests(unittest.TestCase):
+    def merge(self, npc, pc=PC_TEMPLATE, extra=None):
+        files = {NPC_REL: npc, PC_REL: pc}
+        files.update(extra or {})
+        vault = make_vault(self, files)
+        code, out, err = run(vault, NPC_REL, PC_REL, "--write")
+        self.assertEqual(code, 0, err)
+        return read(vault, PC_REL), out
+
+    def test_a_real_shaped_note_carries_every_section_in_order(self):
+        pc, out = self.merge(REAL)
+        bg = pc[pc.index("### Before They Were a PC"):pc.index("## Equipment")]
+        self.assertTrue(bg.index("Lead line under the title.")
+                        < bg.index("#### Overview"))
+        at = [bg.index(f"#### {t}\n") for t in ORDER]
+        self.assertEqual(at, sorted(at))
+        for t in ORDER:     # one row names each section carried
+            self.assertIn(f"ADDED\t{PC_REL}\t\u00a7Background/Before They "
+                          f"Were a PC\t{t}\n", out)
+        self.assertIn("##### What changed\n\nThe warehouse burned.", bg)
+        self.assertIn("| STR | DEX |\n|-----|-----|\n| 50  | 70  |", bg)
+        self.assertNotIn("# Mira Vale\n", pc)
+        # Hidden on the NPC's page (player_site.hide.sections): GM Notes here.
+        gm = pc[pc.index("## GM Notes"):]
+        self.assertIn("### DM Notes\n\nHer real debt is to the Duke.", gm)
+        self.assertIn("### Final Notes\n\nShe dies in act three.", gm)
+        self.assertNotIn("Her real debt", pc[:pc.index("## GM Notes")])
+
+    def test_fence_around_a_mapped_section_is_kept(self):
+        for title, where in (("History", "## Background"),
+                             ("Campaign Log", "## Appearances"),
+                             ("Related", "## Relationships"),
+                             ("Sworn Enemies", "## Background")):
+            with self.subTest(title):
+                npc = (f"---\ntype: npc\n---\n\n## Overview\n\nShown.\n\n"
+                       f"<!-- gm-only -->\n\n## {title}\n\n- Secret line\n\n"
+                       f"<!-- /gm-only -->\n")
+                pc, _ = self.merge(npc)
+                part = pc[pc.index(where):]
+                self.assertRegex(part, r"<!-- gm-only -->\n\n(#### "
+                                 + re.escape(title) + r"\n\n)?- Secret line"
+                                 r"\n\n<!-- /gm-only -->")
+                self.assertEqual(vault_write.parse(pc).problems, [])
+                states, _ = vault_write.vl.scan_body(pc, ())
+                shown = [st.line for st in states if st.published]
+                self.assertFalse(any("Secret line" in ln for ln in shown))
+
+    def test_dedupe_never_unfences_a_line(self):
+        npc = ("---\ntype: npc\n---\n\n## Campaign Log\n\n- shared\n"
+               "<!-- spoiler -->\n- shared secret\n<!-- /spoiler -->\n")
+        pc = PC_TEMPLATE.replace("## Notes\n", "## Appearances\n\n- shared\n"
+                                 "<!-- spoiler -->\n- shared secret\n"
+                                 "<!-- /spoiler -->\n\n## Notes\n")
+        text, _ = self.merge(npc, pc)
+        states, _ = vault_write.vl.scan_body(text, ())
+        shown = [st.line for st in states if st.published]
+        self.assertFalse(any("shared secret" in ln for ln in shown))
+        self.assertEqual(text.count("- shared\n"), 1)
+        self.assertEqual(vault_write.parse(text).problems, [])
+
+    def test_a_marker_only_lead_is_not_a_placeholder(self):
+        npc = ("---\ntype: npc\n---\n\n## GM Notes\n<!-- gm-only -->\n\n"
+               "### Secrets\n\nThe truth.\n\n<!-- /gm-only -->\n")
+        pc, _ = self.merge(npc)
+        gm = pc[pc.index("## GM Notes"):]
+        self.assertIn("<!-- gm-only -->\n\n### Secrets\n\nThe truth.\n\n"
+                      "<!-- /gm-only -->", gm)
+
+    def test_withheld_npc_names_stay_secret(self):
+        npc = NPC.replace("withheld: false", "withheld: true")
+        files = base({NPC_REL: npc})
+        files["Characters/PCs/Mira Thorne.md"] = files.pop(PC_REL)
+        vault = make_vault(self, files)
+        code, _out, err = run(vault, NPC_REL, "Characters/PCs/Mira Thorne.md",
+                              "--write")
+        self.assertEqual(code, 0, err)
+        fm = vault_write.vl.extract_frontmatter(
+            read(vault, "Characters/PCs/Mira Thorne.md"))
+        self.assertEqual(fm["aliases"], [])
+        self.assertEqual(fm["gm_aliases"], ["Mira Vale", "Mira",
+                                            "The Grey Hand"])
+
+    def test_a_display_added_in_a_table_is_escaped(self):
+        files = base({"Notes/Table.md": "---\ntype: note\n---\n\n| who |\n"
+                      "|---|\n| [[Mira Vale]] |\n"})
+        files["Characters/PCs/Mira Thorne.md"] = files.pop(PC_REL)
+        vault = make_vault(self, files)
+        code, _out, err = run(vault, NPC_REL, "Characters/PCs/Mira Thorne.md",
+                              "--write")
+        self.assertEqual(code, 0, err)
+        self.assertIn("| [[Mira Thorne\\|Mira Vale]] |",
+                      read(vault, "Notes/Table.md"))
+
+    def test_a_retired_pc_gets_further_appearances(self):
+        pc = PC_TEMPLATE.replace("status: alive", "status: retired").replace(
+            "## Notes\n", "## Appearances\n\n- old\n\n## Notes\n")
+        vault = make_vault(self, {PC_REL: pc})
+        out = io.StringIO()
+        with redirect_stdout(out):
+            code = vault_write.main(
+                [str(vault), "log", "--write"],
+                stdin=f"{PC_REL}\tCampaign Log\t- **[[Session 09]]** — back\n")
+        self.assertEqual(code, 0, out.getvalue())
+        self.assertIn("new section (retired PC)", out.getvalue())
+        text = read(vault, PC_REL)
+        self.assertIn("## Appearances\n\n- old\n\n## Further Appearances\n\n"
+                      "- **[[Session 09]]** — back\n\n## Notes", text)
+
+    def test_a_living_pc_keeps_appearances(self):
+        pc = PC_TEMPLATE.replace("## Notes\n", "## Appearances\n\n- old\n\n"
+                                 "## Notes\n")
+        vault = make_vault(self, {PC_REL: pc})
+        with redirect_stdout(io.StringIO()):
+            vault_write.main([str(vault), "log", "--write"],
+                             stdin=f"{PC_REL}\tCampaign Log\t- new\n")
+        text = read(vault, PC_REL)
+        self.assertNotIn("Further Appearances", text)
+        self.assertIn("- old\n- new\n", text)
 
 
 SITE_CONFIG = "---\npublish:\n  site: true\n  mode: player\n---\n"
