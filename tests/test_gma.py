@@ -330,6 +330,26 @@ class WindowsJobTests(unittest.TestCase):
         proc.kill.assert_called_once_with()
         close.assert_called_once_with(77)
 
+    def test_an_interrupt_during_the_job_setup_ends_node_and_leaks_no_job(self):
+        proc = mock.MagicMock(_handle=1234)
+        proc.wait.return_value = 0
+        with mock.patch.object(gma.subprocess, "Popen", return_value=proc), \
+                mock.patch.object(gma, "_kill_on_close_job", side_effect=KeyboardInterrupt), \
+                mock.patch.object(gma, "_close_job") as close:
+            with self.assertRaises(KeyboardInterrupt):
+                gma._call_tied_to_gma(["node"])
+        proc.kill.assert_called_once_with()
+        close.assert_not_called()   # no handle was returned to close
+
+    def test_an_interrupt_after_the_job_is_made_closes_it(self):
+        import ctypes
+        k = self.fake_kernel32()
+        k.SetInformationJobObject.side_effect = KeyboardInterrupt
+        with mock.patch.object(ctypes, "WinDLL", create=True, return_value=k):
+            with self.assertRaises(KeyboardInterrupt):
+                gma._kill_on_close_job(1234)
+        k.CloseHandle.assert_called_once_with(77)
+
     def test_the_windows_path_goes_through_it_and_posix_still_execs(self):
         tool = Path("t.js")   # made before os.name is patched (3.10 Path reads it)
         with mock.patch.object(gma.os, "name", "nt"), \

@@ -341,14 +341,18 @@ def _kill_on_close_job(child_handle: int) -> int | None:
     job = kernel32.CreateJobObjectW(None, None)
     if not job:
         return None
-    limits = _job_limit_type()()
-    limits.BasicLimitInformation.LimitFlags = _JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
-    if (not kernel32.SetInformationJobObject(
-            job, _JOB_OBJECT_EXTENDED_LIMIT_INFORMATION,
-            ctypes.byref(limits), ctypes.sizeof(limits))
-            or not kernel32.AssignProcessToJobObject(job, child_handle)):
-        kernel32.CloseHandle(job)
-        return None
+    try:
+        limits = _job_limit_type()()
+        limits.BasicLimitInformation.LimitFlags = _JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+        if (not kernel32.SetInformationJobObject(
+                job, _JOB_OBJECT_EXTENDED_LIMIT_INFORMATION,
+                ctypes.byref(limits), ctypes.sizeof(limits))
+                or not kernel32.AssignProcessToJobObject(job, child_handle)):
+            kernel32.CloseHandle(job)
+            return None
+    except BaseException:
+        kernel32.CloseHandle(job)   # an interrupt mid-setup must not leak the job
+        raise
     return int(job)
 
 
@@ -362,13 +366,13 @@ def _call_tied_to_gma(cmd: list[str]) -> int:
     proc = subprocess.Popen(cmd)
     job = None
     try:
-        job = _kill_on_close_job(int(proc._handle))  # type: ignore[attr-defined]
-    except (OSError, AttributeError, ValueError):
-        job = None   # the child runs untied, as before
-    try:
+        try:
+            job = _kill_on_close_job(int(proc._handle))  # type: ignore[attr-defined]
+        except (OSError, AttributeError, ValueError):
+            job = None   # the child runs untied, as before
         return proc.wait()
     except BaseException:
-        proc.kill()   # an interrupt of gma ends its child too
+        proc.kill()   # an interrupt of gma, even during the job setup, ends its child too
         proc.wait()
         raise
     finally:
