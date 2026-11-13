@@ -9,6 +9,13 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.24] — 2026-11-13
+
+### Added
+
+- `vw npc-merge` folds an NPC note into the PC it became: every section, tie and alias is carried over word for word with secrets kept fenced, links are repointed, and the NPC note is archived as `<name> (NPC).md`. `gma vault-check <vault> npc-pairs` finds same-name NPC/PC pairs, and campaign-qa offers the merge one pair at a time (#445).
+- A retired PC who carries on as an NPC keeps one note: wrap-up logs later appearances under `## Further Appearances`, which the player site shows.
+
 ## [1.12.23] — 2026-11-13
 
 ### Added
