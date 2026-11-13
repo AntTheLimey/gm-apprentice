@@ -19,7 +19,7 @@ import sys
 import tempfile
 import unicodedata
 from dataclasses import asdict, dataclass, field
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any, NamedTuple
 
@@ -39,6 +39,7 @@ SHAPES = {"pc": "3:4", "npc": "3:4", "creature": "3:4", "heritage": "3:4",
           "faction": "1:1", "organization": "1:1", "item": "1:1"}
 SIZE = "1K"
 JOB_DAYS = 14
+TODAY = date.today     # tests replace this
 MAX_REF_BYTES = 5 * 1024 * 1024
 
 
@@ -103,6 +104,7 @@ class Job:
     spent: float                    # cents this job has spent (draw adds to it)
     entries: list[Entry]
     needs_thinking: bool = False    # the model refused to draw without thinking
+    kept_on: str = ""               # ISO date of the latest replace or hold
 
 
 # --- the job on disk ------------------------------------------------------
@@ -137,11 +139,41 @@ def folder(job_id: str) -> Path:
     places = roots()
     for root in places:
         if (root / job_id).is_dir():
+            if root != places[0] and _writable(places[0]):
+                return _adopt(job_id, root / job_id, places[0] / job_id)
             return root / job_id
     for root in places:
         if _writable(root):
             return root / job_id
     return places[0] / job_id
+
+
+def _adopt(job_id: str, old: Path, new: Path) -> Path:
+    """Move a job left in the temp folder to the cache folder, now that this
+    process can write there (the system may clear the temp folder early).
+    The whole folder is copied beside its place, the picture paths in the
+    job file are pointed at the new folder, and only then is it renamed into
+    place and the old folder removed. Any failure leaves the job where it
+    was."""
+    spare = new.with_name(f".moving-{job_id}-{secrets.token_hex(4)}")
+    try:
+        if new.exists():
+            return old
+        shutil.copytree(old, spare)
+        jf = spare / "job.json"
+        data = json.loads(jf.read_text(encoding="utf-8"))
+        for e in data.get("entries", []):
+            pend = e.get("pending")
+            if isinstance(pend, str) and pend.startswith(str(old)):
+                e["pending"] = str(new) + pend[len(str(old)):]
+        jf.write_text(json.dumps(data, indent=2, ensure_ascii=False),
+                      encoding="utf-8")
+        os.rename(spare, new)
+    except (OSError, ValueError):
+        shutil.rmtree(spare, ignore_errors=True)
+        return old
+    shutil.rmtree(old, ignore_errors=True)
+    return new
 
 
 def job_file(job_id: str) -> Path:
@@ -227,7 +259,7 @@ def waiting(vault: Path) -> list[Waiting]:
                 job = load(d.name)
                 if Path(job.vault).resolve() != here:
                     continue
-                when = (d / "job.json").stat().st_mtime
+                when = job_file(d.name).stat().st_mtime
             except (Stop, OSError, TypeError, ValueError, RuntimeError):
                 continue
             to_draw = sum(e.status in ("planned", "failed") for e in job.entries)
@@ -261,8 +293,20 @@ def _age_dates(path: Path) -> list[date]:
     return found
 
 
+def _kept_on(path: Path) -> date | None:
+    """The date the job last held a file the GM may still want (a replaced
+    original or a held picture), when its job file says."""
+    try:
+        data = json.loads((path / "job.json").read_text(encoding="utf-8"))
+        return datetime.strptime(data["kept_on"], "%Y-%m-%d").date()
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+
+
 def prune(today: date) -> None:
-    """Remove job folders older than JOB_DAYS."""
+    """Remove job folders older than JOB_DAYS. A job's age counts from when
+    it was made, or from its latest replace or hold when that is later, so a
+    kept file lasts JOB_DAYS from the day it was kept."""
     found: list[Path] = []
     for root in roots():
         try:
@@ -273,7 +317,13 @@ def prune(today: date) -> None:
         if not d.is_dir():
             continue
         dates = _age_dates(d)
-        if dates and (today - min(dates)).days > JOB_DAYS:
+        if not dates:
+            continue
+        born = min(dates)
+        kept = _kept_on(d)
+        if kept is not None and kept > born:
+            born = kept
+        if (today - born).days > JOB_DAYS:
             shutil.rmtree(d, ignore_errors=True)
 
 

@@ -188,8 +188,11 @@ the apprentice tells you where. You can still keep it for 14 days. When
 the apprentice runs in a sandbox that cannot write to that folder (Codex,
 by default), the batch goes to the system's temporary folder instead,
 which the system may clear sooner, so keep a held picture within a day or
-two. A batch made there is found again only by a program that uses the
-same temporary folder, so finish it in the same place you started it.
+two. The next time the apprentice runs where it can write to the batch
+folder, it moves the batch there, and the 14 days count from then on. Until
+it does, a batch made in the temporary folder is found again only by a
+program that uses the same temporary folder, so finish it in the same place
+you started it.
 
 ## What can go wrong
 

@@ -364,6 +364,64 @@ def test_old_jobs_are_pruned(tmp_path):
     assert not (root / "old").exists() and (root / "recent").exists()
 
 
+def _aged_job(root, name, made_days_ago, kept_on=None):
+    d = root / name
+    d.mkdir(parents=True)
+    body = {} if kept_on is None else {"kept_on": kept_on}
+    (d / "job.json").write_text(json.dumps(body), encoding="utf-8")
+    t = time.time() - made_days_ago * 86400 - 3600
+    for p in (d / "job.json", d):
+        os.utime(p, (t, t))
+
+
+def test_a_replace_keeps_the_job_14_days_from_the_replace(tmp_path):
+    root = tool_cache.cache_root() / "images"
+    today = date(2026, 11, 20)
+    # made long ago; replaced 13 days before today: kept. Replaced 15 days: gone.
+    base = (date.today() - today).days   # move the file times to the fixed day
+    _aged_job(root, "replaced-lately", 40 - base, "2026-11-07")
+    _aged_job(root, "replaced-long-ago", 40 - base, "2026-11-05")
+    _aged_job(root, "never-replaced", 40 - base)
+    image_jobs.prune(today)
+    assert (root / "replaced-lately").exists()
+    assert not (root / "replaced-long-ago").exists()
+    assert not (root / "never-replaced").exists()
+
+
+def test_a_temp_job_moves_to_the_cache_folder_with_its_pictures(tmp_path, monkeypatch):
+    cache = tool_cache.cache_root() / "images"
+    temp = tmp_path / "tmp"
+    monkeypatch.setattr(image_jobs, "TEMP", lambda: str(temp))
+    old = temp / "gm-apprentice-images" / "job1"
+    old.mkdir(parents=True)
+    (old / "held-01.png").write_bytes(PNG)
+    entry = {"n": 1, "note": "n.md", "kind": "npc", "prompt": "p", "refs": [],
+             "shape": "3:4", "pending": str(old / "held-01"), "dest": "d",
+             "after": None, "replace": False, "estimate": None,
+             "status": "held", "ext": "png"}
+    job = {"id": "job1", "vault": str(tmp_path), "service": "codex",
+           "model": "m", "priced": False, "unprompted": False, "spent": 0,
+           "entries": [entry]}
+    (old / "job.json").write_text(json.dumps(job), encoding="utf-8")
+    assert image_jobs.folder("job1") == cache / "job1"
+    assert not old.exists()
+    assert (cache / "job1" / "held-01.png").read_bytes() == PNG
+    moved = image_jobs.load("job1")
+    assert moved.entries[0].pending == str(cache / "job1" / "held-01")
+    assert not list(cache.glob(".moving-*"))
+
+
+def test_a_temp_job_stays_when_the_cache_cannot_be_written(tmp_path, monkeypatch):
+    temp = tmp_path / "tmp"
+    monkeypatch.setattr(image_jobs, "TEMP", lambda: str(temp))
+    old = temp / "gm-apprentice-images" / "job2"
+    old.mkdir(parents=True)
+    (old / "job.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(image_jobs, "_writable", lambda root: root != image_jobs.roots()[0])
+    assert image_jobs.folder("job2") == old
+    assert old.exists()
+
+
 # --- rulings 2 to 5 ---------------------------------------------------------
 
 def test_a_bad_requests_list_stops_naming_the_entry(tmp_path):

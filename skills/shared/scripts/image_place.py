@@ -599,6 +599,8 @@ def run(job: Job, keep: set[int], hold: set[int], write: bool) -> Result:
         a.entry.status = "kept"
     for e in held:
         e.status = "held"
+    if held or any(a.copy.backup is not None for a in actions):
+        job.kept_on = image_jobs.TODAY().isoformat()
     try:
         image_jobs.save(job)
     except Exception as err:  # noqa: BLE001 - the vault is changed; say so

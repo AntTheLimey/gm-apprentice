@@ -1,6 +1,7 @@
 """gma image place: file the kept pictures, link them, leave the rest."""
 
 import sys
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -1168,3 +1169,12 @@ def test_a_qualified_embed_stays_as_written_and_a_new_one_is_qualified(tmp_path)
     (tmp_path / "a.jpg").unlink()
     out = image_place.embed_after(RECAP, WHERE, "a.jpg", folder, tmp_path, notes)
     assert out is not None and "![[a.jpg]]" in out
+
+
+def test_a_replace_starts_the_keeping_clock(vault, monkeypatch):
+    monkeypatch.setattr(image_jobs, "TODAY", lambda: date(2026, 11, 10))
+    marta = entry(1, "NPCs/Marta.md", "npc", f"{CHARS}/marta", replace=True)
+    job = make_job(vault, [marta], data=JPG2)
+    assert job.kept_on == ""
+    assert run(vault, job, "--keep", "1", "--write") == 0
+    assert image_jobs.load(job.id).kept_on == "2026-11-10"
