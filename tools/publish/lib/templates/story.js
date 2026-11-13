@@ -43,7 +43,13 @@ function splitOpening(html) {
   const prev = blocks[at - 1];
   const withFigure = prev && /^<div class="story-figures[\s"]/.test(prev.html) && !text.slice(prev.start + prev.html.length, blocks[at].start).trim();
   const from = withFigure ? prev.start : blocks[at].start;
-  const end = blocks[at].start + blocks[at].html.length;
+  // A plate set after the opening (a scene's picture, full width) stays with it; on the GM site a mark token may stand
+  // between the paragraph and the plate (the plate is drawn outside the mark).
+  const next = blocks[at + 1];
+  const pEnd = blocks[at].start + blocks[at].html.length;
+  const plate = next && /^<div class="story-figures story-figures--plate"/.test(next.html)
+    && !text.slice(pEnd, next.start).replace(/\uE000[0-9a-z]*\uE001|\uE002/g, '').trim();
+  const end = plate ? next.start + next.html.length : pEnd;
   const open = openMarks(text.slice(0, end));
   const rest = text.slice(end);
   // A rest of only mark tokens (a mark that opened in the opening and closes after it) is no rest: it stays with the
