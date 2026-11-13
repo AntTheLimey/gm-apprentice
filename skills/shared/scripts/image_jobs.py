@@ -17,7 +17,10 @@ import secrets
 import shutil
 import sys
 import tempfile
+import time
 import unicodedata
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
 from datetime import date, datetime
 from pathlib import Path
@@ -139,8 +142,6 @@ def folder(job_id: str) -> Path:
     places = roots()
     for root in places:
         if (root / job_id).is_dir():
-            if root != places[0] and _writable(places[0]):
-                return _adopt(job_id, root / job_id, places[0] / job_id)
             return root / job_id
     for root in places:
         if _writable(root):
@@ -148,32 +149,99 @@ def folder(job_id: str) -> Path:
     return places[0] / job_id
 
 
-def _adopt(job_id: str, old: Path, new: Path) -> Path:
-    """Move a job left in the temp folder to the cache folder, now that this
-    process can write there (the system may clear the temp folder early).
-    The whole folder is copied beside its place, the picture paths in the
-    job file are pointed at the new folder, and only then is it renamed into
-    place and the old folder removed. Any failure leaves the job where it
-    was."""
-    spare = new.with_name(f".moving-{job_id}-{secrets.token_hex(4)}")
+LOCK = "draw.lock"
+LOCK_HOURS = 2      # a lock older than this is left by a crashed run
+
+
+def _locked(d: Path) -> bool:
+    """Whether a draw is using the job folder `d` (a fresh lock file)."""
     try:
-        if new.exists():
-            return old
+        age = time.time() - (d / LOCK).stat().st_mtime
+    except OSError:
+        return False
+    return age < LOCK_HOURS * 3600
+
+
+@contextmanager
+def draw_lock(job_id: str) -> Iterator[None]:
+    """Hold the job's lock file for a whole draw, so nothing moves the job
+    underneath it. Raises Stop when another draw holds it."""
+    lock = folder(job_id) / LOCK
+    for _ in range(2):
+        try:
+            fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        except FileExistsError:
+            if _locked(lock.parent):
+                raise Stop(f"Picture job {job_id} is being drawn by another "
+                           "run; wait for it to finish.") from None
+            lock.unlink(missing_ok=True)        # stale: a crashed run's
+            continue
+        except OSError:
+            yield                               # cannot lock; the draw goes on
+            return
+        os.close(fd)
+        try:
+            yield
+        finally:
+            lock.unlink(missing_ok=True)
+        return
+    raise Stop(f"Picture job {job_id} is being drawn by another run.")
+
+
+def adopt(job_id: str) -> None:
+    """Move a job left in the temp folder to the cache folder, when this
+    process can write there (the system may clear the temp folder early).
+    Called only at the start of `plan` and `place`, never from a lookup: a
+    draw may be holding the job in memory with its temp paths, so a locked
+    job is left alone. Any failure leaves the job where it was."""
+    cache, temp = roots()
+    old, new = temp / job_id, cache / job_id
+    if not old.is_dir() or _locked(old) or not _writable(cache):
+        return
+    if (new / "job.json").is_file():
+        return
+    spare = cache / f".moving-{job_id}-{secrets.token_hex(4)}"
+    try:
         shutil.copytree(old, spare)
         jf = spare / "job.json"
         data = json.loads(jf.read_text(encoding="utf-8"))
         for e in data.get("entries", []):
             pend = e.get("pending")
-            if isinstance(pend, str) and pend.startswith(str(old)):
-                e["pending"] = str(new) + pend[len(str(old)):]
+            if isinstance(pend, str) and Path(pend).parent.name == job_id:
+                e["pending"] = str(new / Path(pend).name)
+            if e.get("status") in ("drawn", "held") and e.get("ext"):
+                if not (spare / f"{Path(str(pend)).name}.{e['ext']}").is_file():
+                    raise OSError("a picture file is missing")
         jf.write_text(json.dumps(data, indent=2, ensure_ascii=False),
                       encoding="utf-8")
+        if _locked(old):
+            raise OSError("a draw began")
         os.rename(spare, new)
     except (OSError, ValueError):
         shutil.rmtree(spare, ignore_errors=True)
-        return old
+        if not (new / "job.json").is_file():
+            return                      # failed: the job stays where it was
+        # Another process moved it first: the target is the job.
     shutil.rmtree(old, ignore_errors=True)
-    return new
+
+
+def adopt_all(vault: Path) -> None:
+    """`adopt` for each of this vault's jobs in the temp folder."""
+    here = vault.resolve()
+    try:
+        names = [d.name for d in roots()[1].iterdir()
+                 if d.is_dir() and not d.name.startswith(".")]
+    except OSError:
+        return
+    for name in names:
+        try:
+            data = json.loads((roots()[1] / name / "job.json")
+                              .read_text(encoding="utf-8"))
+            if Path(data["vault"]).resolve() != here:
+                continue
+        except (OSError, ValueError, KeyError, TypeError, RuntimeError):
+            continue
+        adopt(name)
 
 
 def job_file(job_id: str) -> Path:
@@ -252,7 +320,8 @@ def waiting(vault: Path) -> list[Waiting]:
         except OSError:
             continue
         for d in folders:
-            if d.name in seen or not (d / "job.json").is_file():
+            if (d.name in seen or d.name.startswith(".")
+                    or not (d / "job.json").is_file()):
                 continue
             seen.add(d.name)
             try:
@@ -318,6 +387,10 @@ def prune(today: date) -> None:
             continue
         dates = _age_dates(d)
         if not dates:
+            continue
+        if d.name.startswith("."):      # a move's leftover, once it is old
+            if (today - min(dates)).days > 1:
+                shutil.rmtree(d, ignore_errors=True)
             continue
         born = min(dates)
         kept = _kept_on(d)
