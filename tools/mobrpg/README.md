@@ -163,6 +163,12 @@ Run `mobrpg <command> --help` for a command's own options.
   world, since either is indistinguishable from "canon deleted everything".
 - `sync <world> --vault <path>` — timestamp last-writer-wins sync of each linked
   note's description prose (see "How sync decides" below).
+- `withdraw <world> (--batch ID | --id ID... | --only S) [--vault <path>]` —
+  take back Pending suggestions you filed. Dry-run by default; with
+  `--execute` it deletes them (relations before the creates they depend on),
+  re-stamps each vault note `dismissed` with a dated `review_note`, then reads
+  the queue back and reports what is left. Accepted or dismissed suggestions
+  are never deleted. Needs ReadWriteDelete.
 - `adopt <world> --vault <path>` — stamp `mobrpg:` nodes onto vault notes that
   already exist upstream but carry no node, matched by name. An element
   another note already links, or that several notes match, is reported and
@@ -238,6 +244,10 @@ Propose a vault chapter to a world as suggestions (dry-run first):
 mobrpg suggest <worldId> --vault /path/to/vault --chapter chapter-2            # dry-run
 mobrpg suggest <worldId> --vault /path/to/vault --chapter chapter-2 --execute
 ```
+
+`suggest --execute` needs `--only`, `--chapter` or `--kind`; a bare run would
+file the whole vault, so it is refused unless you add `--all`. If a batch goes
+out wider than intended, `mobrpg withdraw` takes the Pending leftovers back.
 
 Keep a linked note's description prose in sync going forward (dry-run first):
 

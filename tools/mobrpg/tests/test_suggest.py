@@ -1014,7 +1014,7 @@ def test_write_back_stamps_only_after_the_post_succeeds(tmp_path, monkeypatch, c
     _execute_with(monkeypatch, post)
 
     rc = suggest.run(["w1", "--vault", str(d), "--out", str(tmp_path / "out"),
-                      "--execute", "--write-back"])
+                      "--execute", "--all", "--write-back"])
     assert rc == 1
     err = capsys.readouterr().err
     assert "ERROR on batch 1" in err
@@ -1042,7 +1042,7 @@ def test_write_back_stamps_accepted_batch_but_not_refused_refs(tmp_path, monkeyp
     _execute_with(monkeypatch, post)
 
     rc = suggest.run(["w1", "--vault", str(d), "--out", str(tmp_path / "out"),
-                      "--execute", "--write-back"])
+                      "--execute", "--all", "--write-back"])
     assert rc == 0
     out = capsys.readouterr().out
     assert "write-back: batch 1 — 1 node(s) written" in out

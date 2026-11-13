@@ -1328,6 +1328,8 @@ def run(argv: list[str]) -> int:
     ap.add_argument("--batch-label", default="", help="override the batch label")
     ap.add_argument("--out", default="./push_out", help="where to write batch JSON")
     ap.add_argument("--execute", action="store_true", help="actually submit (default: dry-run)")
+    ap.add_argument("--all", action="store_true",
+                    help="allow --execute with no --only, --chapter or --kind (the whole vault)")
     ap.add_argument("--write-back", action="store_true",
                     help="write a pending mobrpg: node into each entity's vault file")
     ap.add_argument("--include-pcs", action="store_true",
@@ -1337,6 +1339,12 @@ def run(argv: list[str]) -> int:
     ap.add_argument("--exclude-provenance", default="",
                     help="skip entities with this provenance (comma-separated)")
     args = ap.parse_args(argv)
+
+    if args.execute and not (args.only or args.chapter or args.kind or args.all):
+        print("ERROR: suggest --execute with no --only, --chapter or --kind would file the "
+              "whole vault; narrow it with one of those, or pass --all if that is what you mean.",
+              file=sys.stderr)
+        return 2
 
     map_path = args.map or _default_map_path(args.vault)
     try:
@@ -1678,6 +1686,39 @@ def build_node(entity, mp, namespace, vault, *, element_id=None, review_state="p
         "relationships": rels,
         "languages": [],
     }
+
+
+def restamp_node(path, *, review_state, review_note, match_refs, execute=True) -> bool:
+    """Re-stamp the `mobrpg:` node of a vault note whose own suggestion is gone.
+
+    Same text-surgery path `write_back` stamps `pending` through
+    (node.read_node / node.write_node). Touches the note only when its node is
+    still `pending` and was filed under one of `match_refs` (its `external_ref`,
+    or the `pending_ref` of a `sync` update). Returns True when the note changed.
+    """
+    try:
+        txt = open(path, encoding="utf-8").read()
+    except OSError:
+        return False
+    nd = node.read_node(txt)
+    if not nd or nd.get("review_state") != "pending":
+        return False
+    if nd.get("external_ref") not in match_refs and nd.get("pending_ref") not in match_refs:
+        return False
+    nd = dict(nd)
+    nd["review_state"] = review_state
+    nd["review_note"] = review_note
+    nd["last_synced"] = _now_iso()
+    nd.pop("pending_ref", None)
+    if execute:
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(node.write_node(txt, nd))
+    return True
+
+
+def _now_iso() -> str:
+    from mobrpg import lww
+    return lww.now_iso()
 
 
 def write_back(entities, mp, vault, namespace, *, execute) -> tuple[int, int]:

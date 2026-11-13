@@ -30,6 +30,7 @@ from mobrpg.commands import sync_cmd as _sync
 from mobrpg.commands import write_cmd as _write
 from mobrpg.commands import images as _images
 from mobrpg.commands import link_orphans as _link_orphans
+from mobrpg.commands import withdraw as _withdraw
 
 
 def _llms(argv: list[str]) -> int:
@@ -61,6 +62,7 @@ NATIVE: dict = {
     "write": _write.run,
     "images": _images.run,
     "link-orphans": _link_orphans.run,
+    "withdraw": _withdraw.run,
     "llms": _llms,
 }
 
@@ -85,6 +87,7 @@ VERB_HELP: list[tuple[str, str]] = [
     ("images", "download element images into the vault _attachments"),
     ("link-orphans", "auto-link obvious orphans after an import (report + vault edits)"),
     ("suggest", "build + submit the full datatype graph per entity (types + edges + events)"),
+    ("withdraw", "delete Pending suggestions we filed (relations first), re-stamp their notes dismissed"),
     ("llms", "print the guide for AI agents: command model, auth, safe-write rules"),
 ]
 
