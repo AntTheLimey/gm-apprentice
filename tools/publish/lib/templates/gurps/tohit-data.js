@@ -18,7 +18,7 @@ function gravityModifier(model) {
   const { dx } = gravityDx(fx.local, fx.home, fx.traits);
   if (!dx) return null;
   const home = fx.home !== 1 ? `, home ${fx.home}G` : '';
-  return { dx, label: `Gravity ${fx.local}G${home} (DX -${dx})` };
+  return { dx, label: `Gravity ${fx.local}G${home} (DX \u2212${dx})` };
 }
 
 const AID_NAMES = [
@@ -732,6 +732,7 @@ function buildTohitData(model, meta, report) {
   }
 
   const ff = match('Free Fall');
+  const gravity = gravityModifier(model);
   return {
     pc: meta && meta.pcSlug,
     campaign: str(meta && meta.campaignId),
@@ -740,7 +741,7 @@ function buildTohitData(model, meta, report) {
     techniques,
     traits,
     freeFall: ff ? ff.level : null,
-    ...(gravityModifier(model) ? { gravity: gravityModifier(model) } : {}),
+    ...(gravity ? { gravity } : {}),
     locations,
     bands: buildBands(),
     rules: TOHIT_RULES,

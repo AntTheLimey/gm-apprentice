@@ -836,8 +836,8 @@ function parseHomeGravity(model, fm) {
 // the sheet's G-Experience and Improved G-Tolerance rows. js/gurps-live.js `gravityDx` does the sum.
 function setGravityFx(model) {
   if (model.gravity == null && model.homeGravity == null) return;
-  const traits = (model.traits.advantages || [])
-    .filter(t => /\bg-?\s*(experience|tolerance)/i.test(t.name))
+  const traits = (model.traits.advantages || []).concat(model.traits.disadvantages || [])
+    .filter(t => /\bg-?\s*(experience|tolerance|intolerance)/i.test(t.name))
     .map(t => ({ name: t.name, cost: t.cost }));
   model.gravityFx = { local: model.gravity != null ? model.gravity : 1, home: model.homeGravity != null ? model.homeGravity : 1, traits };
 }

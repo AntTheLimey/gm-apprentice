@@ -18,12 +18,14 @@ function renderGravityNotice(model) {
   } else {
     const ratio = Math.round((1 / local) * 100) / 100;
     const dxText = r.dx
-      ? `DX -${r.dx} to agility and ballistic tasks, Beam Weapons exempt`
-      : `no DX penalty (within ${say(r.incrementG)}G steps of ${say(fx.home)}G)`;
+      ? `DX \u2212${r.dx} to agility and ballistic tasks, Beam Weapons exempt`
+      : (r.increments === 0
+        ? `no DX penalty (within ${say(r.incrementG)}G steps of ${say(fx.home)}G)`
+        : `no DX penalty (${r.increments} G-Increment, halved by G-Experience)`);
     const tolerance = r.halved
       ? `; G-Experience halves it${r.assumed ? `, taken to cover ${say(local)}G` : ''}`
-      : (r.incrementG > 0.2 ? `; Improved G-Tolerance makes the step ${say(r.incrementG)}G` : '');
-    const jump = local === 1 ? '' : `; jumps and throws x${say(ratio)}`;
+      : (r.incrementG > 0.2 ? `; Improved G-Tolerance makes the step ${say(r.incrementG)}G` : (r.incrementG < 0.2 ? `; G-Intolerance (B137) makes the step ${say(r.incrementG)}G` : ''));
+    const jump = local === 1 ? '' : `; jumps and throws \u00d7${say(ratio)}`;
     text = `${say(local)}G${home}: ${dxText}${tolerance}${jump} (B350)`;
   }
   return `<div class="gl-grav-alert" role="note"><b>Gravity</b> ${text}</div>`;

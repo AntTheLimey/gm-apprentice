@@ -104,9 +104,9 @@ describe('what it draws', () => {
 
 describe('the gravity modifier (#629)', () => {
   it('is a box labelled with the penalty, ticked by default, and unticking it removes the penalty', () => {
-    const d = dataBlock({ gravity: { dx: 1, label: 'Gravity 1.2G (DX -1)' } });
+    const d = dataBlock({ gravity: { dx: 1, label: 'Gravity 1.2G (DX \u22121)' } });
     const p = load(d);
-    assert.match(p.$('#th-gravity').parent.textContent, /Gravity 1\.2G \(DX -1\)/);
+    assert.match(p.$('#th-gravity').parent.textContent, /Gravity 1\.2G \(DX \u22121\)/);
     assert.strictEqual(p.$('#th-gravity').checked, true);
     const on = Number(p.$('#th-roll').textContent);
     p.set('#th-gravity', false);

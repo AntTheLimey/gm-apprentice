@@ -35,9 +35,9 @@
     // It names the DX penalty too (#629), which Beam Weapons are exempt from.
     if (view.gravity != null || view.gravityDx) {
       var local = view.gravityLocal != null ? view.gravityLocal : view.gravity;
-      var dxText = view.gravityDx ? ' DX -' + esc(view.gravityDx) : '';
+      var dxText = view.gravityDx ? ' DX \u2212' + esc(view.gravityDx) : '';
       enc += (enc ? ' ' : '') + '<span class="gl-enc-chip gl-grav-chip" title="' + (view.gravity != null ? 'Encumbrance at ' + esc(view.gravity) +
-        'G (B350)' : 'Gravity ' + esc(local) + 'G') + (view.gravityDx ? '; DX -' + esc(view.gravityDx) + ' to agility and ballistic tasks, Beam Weapons exempt' : '') +
+        'G (B350)' : 'Gravity ' + esc(local) + 'G') + (view.gravityDx ? '; DX \u2212' + esc(view.gravityDx) + ' to agility and ballistic tasks, Beam Weapons exempt' : '') +
         (view.bodyMissing ? '; no Weight row, so body weight is not counted' : '') + '">' +
         esc(local) + 'G' + dxText + (view.bodyMissing ? '?' : '') + '</span>';
     }

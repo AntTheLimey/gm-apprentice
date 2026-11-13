@@ -38,7 +38,8 @@ Template fields: `player_name`, `occupation`, `age`, `gender`,
 | `sheet_source` | Optional | Where the sheet is kept when it is not in the file. Not shown on the site (unless listed in `display_meta`). Without it, a PC whose note gives the system's sheet nothing to render is named in the build's "published with no character sheet" warning |
 | `sheet_skin`, `sheet_frame` | Optional | This character's own look, over the campaign's. See `sheet-skins.md` |
 | `dndbeyond` | Optional | D&D only. A D&D Beyond character link or id; `gma dnd-ddb` syncs the note from it. Not shown on the site |
-| `gravity` | Optional | GURPS only. Local gravity in G (`gravity: 1.2`); absent is 1G. When not 1, the sheet and party board work encumbrance out by B350 and show the value. Above 1G it needs the sheet's `Weight` row |
+| `gravity` | Optional | GURPS only. Local gravity in G (`gravity: 1.2`); absent is 1G. When not 1, the sheet and party board work encumbrance out by B350 and show the value. Above 1G it needs the sheet's `Weight` row. It also gives the DX penalty (B350): a warning at the top of the sheet, a tickable modifier in the to-hit calculator (Beam Weapons exempt) and the party board chip |
+| `home_gravity` | Optional | GURPS only. The gravity the PC was raised in, in G (`home_gravity: 0.5`); absent is 1G. The DX penalty counts G-Increments from it (G-Experience, Improved G-Tolerance and G-Intolerance on the sheet change the count) |
 
 **Layout — single panel vs. tabbed:** When no story companion file
 exists, the PC template renders body content as collapsible accordion

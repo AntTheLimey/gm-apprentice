@@ -34,25 +34,40 @@
     var out = { dx: 0, increments: 0, incrementG: 0.2, halved: false, assumed: false };
     if (typeof local !== 'number' || !isFinite(local) || local <= 0) return out;
     var h = typeof home === 'number' && isFinite(home) && home > 0 ? home : 1;
-    (traits || []).forEach(function (t) {
+    var list = traits || [];
+    // The first whole number in the cost cell ("5 pts, 1 lvl" is 5).
+    function firstInt(t) { var m = /\d+/.exec(String((t && t.cost) || '')); return m ? parseInt(m[0], 10) : NaN; }
+    var improved = 0;
+    var intolerant = 0;
+    list.forEach(function (t) {
       var name = String((t && t.name) || '');
-      var pts = parseInt(String((t && t.cost) || '').replace(/[^\d-]/g, ''), 10);
+      var pts = firstInt(t);
       if (/improved\s+g-?\s*tolerance/i.test(name) && isFinite(pts)) {
         for (var i = 0; i < TOLERANCE_STEPS.length; i++) {
-          if (pts >= TOLERANCE_STEPS[i][0]) { out.incrementG = Math.max(out.incrementG, TOLERANCE_STEPS[i][1]); break; }
+          if (pts >= TOLERANCE_STEPS[i][0]) { improved = Math.max(improved, TOLERANCE_STEPS[i][1]); break; }
         }
+      } else if (/^\s*g-?\s*intolerance/i.test(name)) {
+        // B137: an increment of 0.1G is -10 points, 0.05G is -20; the name's own figure wins.
+        var q = /(\d*\.?\d+)\s*g/i.exec(name);
+        var inc = q ? parseFloat(q[1]) : (pts === 20 ? 0.05 : pts === 10 ? 0.1 : 0);
+        if (inc > 0 && inc < 0.2) intolerant = inc;
       }
     });
+    if (improved) out.incrementG = improved;
+    else if (intolerant) out.incrementG = intolerant;
     var n = Math.floor(Math.abs(local - h) / out.incrementG + 1e-9);
     out.increments = n;
-    (traits || []).forEach(function (t) {
+    list.forEach(function (t) {
       var name = String((t && t.name) || '');
       if (!/^\s*g-?\s*experience/i.test(name)) return;
       var q = /\(([^)]*)\)/.exec(name);
       var qual = q ? q[1].trim() : '';
-      var num = /\d+(?:\.\d+)?/.exec(qual);
-      if (!qual) { out.halved = true; out.assumed = true; }
-      else if (/\ball\b/i.test(qual) || (num && Math.abs(parseFloat(num[0]) - local) < 1e-9)) out.halved = true;
+      if (!qual) { out.halved = true; out.assumed = true; return; }
+      if (/\ball\b/i.test(qual)) { out.halved = true; return; }
+      // Several gravities may be named ("0.5G, 1.2G"): any one that is this gravity will do.
+      (qual.match(/\d+(?:\.\d+)?/g) || []).forEach(function (x) {
+        if (Math.abs(parseFloat(x) - local) < 1e-9) out.halved = true;
+      });
     });
     out.dx = out.halved ? Math.floor(n / 2) : n;
     return out;

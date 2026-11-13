@@ -60,12 +60,12 @@ function sheet(edit) {
 test('the sheet opens with a gravity warning: DX, Beam Weapons, jump and throw multiplier', () => {
   const out = sheet();
   assert.match(out.sheetHtml, /<div class="gurps-sheet"><div class="gl-grav-alert"/);
-  assert.match(out.sheetHtml, /1\.2G: DX -1 to agility and ballistic tasks, Beam Weapons exempt; jumps and throws x0\.83 \(B350\)/);
+  assert.match(out.sheetHtml, /1\.2G: DX \u22121 to agility and ballistic tasks, Beam Weapons exempt; jumps and throws \u00d70\.83 \(B350\)/);
 });
 
 test('G-Experience and a within-step gravity change the notice; no gravity has none', () => {
   const exp = sheet(raw => raw.replace('gravity: 1.2', 'gravity: 1.6').replace('| Combat Reflexes | 15 | +1 all defenses |', '| Combat Reflexes | 15 | +1 all defenses |\n| G-Experience | 5 | |'));
-  assert.match(exp.sheetHtml, /1\.6G: DX -1 .*G-Experience halves it, taken to cover 1\.6G/);
+  assert.match(exp.sheetHtml, /1\.6G: DX \u22121 .*G-Experience halves it, taken to cover 1\.6G/);
   assert.match(sheet(raw => raw.replace('gravity: 1.2', 'gravity: 1.1')).sheetHtml, /1\.1G: no DX penalty/);
   const none = sheet(raw => raw.replace('gravity: 1.2\n', ''));
   assert.doesNotMatch(none.sheetHtml, /gl-grav-alert/);
@@ -75,10 +75,10 @@ test('G-Experience and a within-step gravity change the notice; no gravity has n
 
 test('home_gravity: set alone it still counts, a bad value is a warning', () => {
   const out = sheet(raw => raw.replace('gravity: 1.2', 'home_gravity: 0.5'));
-  assert.match(out.sheetHtml, /1G \(raised at 0\.5G\): DX -2/);
+  assert.match(out.sheetHtml, /1G \(raised at 0\.5G\): DX \u22122/);
   const bad = sheet(raw => raw.replace('gravity: 1.2', 'gravity: 1.2\nhome_gravity: far'));
   assert.ok(bad.warnings.some(w => /home_gravity/.test(w)));
-  assert.match(sheet(raw => raw.replace('gravity: 1.2', 'gravity: 1.0\nhome_gravity: 0.5')).sheetHtml, /DX -2/);
+  assert.match(sheet(raw => raw.replace('gravity: 1.2', 'gravity: 1.0\nhome_gravity: 0.5')).sheetHtml, /DX \u22122/);
 });
 
 test('zero gravity: no DX penalty, the Free Fall rule is named', () => {
@@ -92,10 +92,10 @@ test('the party board chip names the DX penalty', () => {
   const m = buildPartyManifest('c', [{ name: 'G', outputPath: 'pcs/g.html', data: out.liveData }]);
   const v = gl.deriveLive(m.pcs[0], null);
   assert.equal(v.gravityDx, 1);
-  assert.match(rowCells(v).enc, /1\.2G DX -1/);
+  assert.match(rowCells(v).enc, /1\.2G DX \u22121/);
   const home = sheet(raw => raw.replace('gravity: 1.2', 'home_gravity: 0.5'));
   const v2 = gl.deriveLive(buildPartyManifest('c', [{ name: 'G', outputPath: 'p.html', data: home.liveData }]).pcs[0], null);
-  assert.match(rowCells(v2).enc, /1G DX -2/);
+  assert.match(rowCells(v2).enc, /1G DX \u22122/);
 });
 
 test('to-hit: the Gravity modifier is on by default, applies to all but Beam Weapons, and can be unticked', () => {
@@ -110,7 +110,7 @@ test('to-hit: the Gravity modifier is on by default, applies to all but Beam Wea
     traits: { ambidextrous: false, offHand: [], halfRapid: false, telescopic: 0, nightVision: 0 },
     freeFall: null, locations: [['torso', 'Torso', 0]], bands: [2, 3, 5, 7, 10], rules: TOHIT_RULES,
   };
-  const withG = Object.assign({}, data, { gravity: { dx: 1, label: 'Gravity 1.2G (DX -1)' } });
+  const withG = Object.assign({}, data, { gravity: { dx: 1, label: 'Gravity 1.2G (DX \u22121)' } });
   const s = T.defaultState(withG);
   assert.equal(s.gravity, true);
   assert.equal(T.effective(withG, Object.assign({}, s, { weapon: 'Knife' })).roll, 13);
@@ -133,6 +133,30 @@ test('buildTohitData carries the modifier only when the penalty is not 0', () =>
   };
   assert.equal(build({}).gravity, undefined);
   assert.equal(build({ gravity: 1.1 }).gravity, undefined);
-  assert.deepEqual(build({ gravity: 1.2 }).gravity, { dx: 1, label: 'Gravity 1.2G (DX -1)' });
-  assert.equal(build({ gravity: 1, home_gravity: 0.5 }).gravity.label, 'Gravity 1G, home 0.5G (DX -2)');
+  assert.deepEqual(build({ gravity: 1.2 }).gravity, { dx: 1, label: 'Gravity 1.2G (DX \u22121)' });
+  assert.equal(build({ gravity: 1, home_gravity: 0.5 }).gravity.label, 'Gravity 1G, home 0.5G (DX \u22122)');
+});
+
+test('G-Experience naming several gravities applies if any is the local one', () => {
+  assert.equal(dx(1.6, 1, [{ name: 'G-Experience (0.5G, 1.6G)', cost: '5' }]), 1);
+  assert.equal(dx(1.6, 1, [{ name: 'G-Experience (0.5G, 1.2G)', cost: '5' }]), 3);
+});
+
+test('Improved G-Tolerance reads the first number of the cost cell', () => {
+  assert.equal(gl.gravityDx(1.5, 1, [{ name: 'Improved G-Tolerance', cost: '5 pts, 1 lvl' }]).incrementG, 0.3);
+});
+
+test('G-Intolerance (B137): 0.1G or 0.05G increments, named or from the points', () => {
+  assert.equal(dx(1.2, 1, [{ name: 'G-Intolerance (0.1 G increment)', cost: '-10' }]), 2);
+  assert.equal(dx(1.2, 1, [{ name: 'G-Intolerance', cost: '-20' }]), 4);
+  assert.equal(dx(1.2, 1, [{ name: 'G-Intolerance', cost: '-10' }]), 2);
+  assert.equal(dx(1.2, 1, [{ name: 'Total G-Intolerance', cost: '-25' }]), 1);   // another book (S222): not read
+  const dis = '## Disadvantages\n\n| Trait | Cost | Notes |\n|-------|------|-------|\n| G-Intolerance (0.1 G increment) | -10 | |\n\n## Equipment';
+  assert.match(sheet(raw => raw.replace('## Equipment', dis)).sheetHtml, /DX \u22122 .*G-Intolerance \(B137\) makes the step 0\.1G/);
+});
+
+test('the notice does not say "within steps" when G-Experience halved a real increment away', () => {
+  const out = sheet(raw => raw.replace('| Combat Reflexes | 15 | +1 all defenses |', '| Combat Reflexes | 15 | +1 all defenses |\n| G-Experience (All) | 10 | |'));
+  assert.match(out.sheetHtml, /1\.2G: no DX penalty \(1 G-Increment, halved by G-Experience\)/);
+  assert.doesNotMatch(out.sheetHtml, /within/);
 });
