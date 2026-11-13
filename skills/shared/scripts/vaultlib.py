@@ -1129,6 +1129,20 @@ def line_headings(lines: list[str]) -> list[tuple[int, int, str]]:
     return heads
 
 
+def section_ends(heads: list[tuple[int, int, str]], n_lines: int) -> list[int]:
+    """Where each heading's section ends, in the order of `heads` (what
+    `line_headings` returns): the line of the next heading of the same or a
+    higher level, else `n_lines`. The one rule every reader of a section
+    uses."""
+    ends = [n_lines] * len(heads)
+    stack: list[int] = []
+    for m, (at, depth, _t) in enumerate(heads):
+        while stack and heads[stack[-1]][1] >= depth:
+            ends[stack.pop()] = at
+        stack.append(m)
+    return ends
+
+
 def _title_key(title: str) -> str:
     """A title as headings are compared: case folded, runs of spaces one,
     and no space round a "/" (`Allies / Enemies` is `Allies/Enemies`)."""
@@ -1170,13 +1184,7 @@ def find_section_lines(lines: list[str], path: list[str], *,
     heads = line_headings(lines)
     key = str.casefold if exact else _title_key
     titles = [key(atx_title(h[2])) for h in heads]
-    # Where each heading's section ends: the next heading no deeper.
-    ends = [len(lines)] * len(heads)
-    stack: list[int] = []
-    for m, (at, depth, _t) in enumerate(heads):
-        while stack and heads[stack[-1]][1] >= depth:
-            ends[stack.pop()] = at
-        stack.append(m)
+    ends = section_ends(heads, len(lines))
     head_lines = [h[0] for h in heads]
 
     found: dict[int, None] = {}      # last heading of each match, in order

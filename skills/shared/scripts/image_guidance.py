@@ -54,9 +54,7 @@ def read(vault: Path, rel: str) -> Guidance:
         return Guidance("", {}, False)
     lines = _uncommented(path.read_text(encoding="utf-8").split("\n"))
     heads = vl.line_headings(lines)
-    # A section runs to the next heading of the same or a higher level.
-    ends = [next((h2[0] for h2 in heads[i + 1:] if h2[1] <= h[1]), len(lines))
-            for i, h in enumerate(heads)]
+    ends = vl.section_ends(heads, len(lines))
     always = ""
     blocks: dict[str, str] = {}
     in_blocks = False

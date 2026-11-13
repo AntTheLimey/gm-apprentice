@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent
 import image  # noqa: E402
 import image_codex  # noqa: E402
 import image_jobs  # noqa: E402
+import tool_cache  # noqa: E402
 import image_money  # noqa: E402
 import vaultlib  # noqa: E402
 
@@ -540,8 +541,15 @@ def test_a_job_made_in_the_temp_folder_is_found_outside_the_sandbox(tmp_path, mo
     temp_root = sandboxed(monkeypatch, tmp_path)
     vault, jid, _ = self_job(tmp_path, capsys, count=1)
     monkeypatch.setattr(image_jobs, "_writable", lambda root: True)   # the GM's own terminal
+    # a lookup never moves it: a draw may be holding it in memory
     assert image_jobs.folder(jid) == temp_root / jid
     assert image_jobs.load(jid).id == jid
+    assert image.main(["status", str(vault)]) == 0
+    assert (temp_root / jid / "job.json").is_file()
+    # the next place, unsandboxed, moves it
+    moved = tool_cache.cache_root() / "images" / jid
+    assert image.main(["place", str(vault), jid, "--keep", "1"]) in (0, 1, 2)
+    assert (moved / "job.json").is_file() and not (temp_root / jid).exists()
 
 
 def test_nowhere_to_write_names_both_places(tmp_path, monkeypatch, capsys):

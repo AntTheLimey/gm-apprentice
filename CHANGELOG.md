@@ -9,6 +9,13 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.30] — 2026-11-13
+
+### Fixed
+
+- A replaced picture is kept 14 days from the replacement, not from when its job was made (#639).
+- A picture job left in the temp folder (by a sandboxed draw) moves to the cache folder the next time a plan or place runs, so the system can't clear a held picture early; a draw in progress locks its job so nothing moves underneath it (#645).
+
 ## [1.12.29] — 2026-11-13
 
 ### Added

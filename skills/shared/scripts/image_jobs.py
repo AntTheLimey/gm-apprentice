@@ -17,9 +17,12 @@ import secrets
 import shutil
 import sys
 import tempfile
+import time
 import unicodedata
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any, NamedTuple
 
@@ -39,6 +42,7 @@ SHAPES = {"pc": "3:4", "npc": "3:4", "creature": "3:4", "heritage": "3:4",
           "faction": "1:1", "organization": "1:1", "item": "1:1"}
 SIZE = "1K"
 JOB_DAYS = 14
+TODAY = date.today     # tests replace this
 MAX_REF_BYTES = 5 * 1024 * 1024
 
 
@@ -103,6 +107,7 @@ class Job:
     spent: float                    # cents this job has spent (draw adds to it)
     entries: list[Entry]
     needs_thinking: bool = False    # the model refused to draw without thinking
+    kept_on: str = ""               # ISO date of the latest replace or hold
 
 
 # --- the job on disk ------------------------------------------------------
@@ -144,6 +149,130 @@ def folder(job_id: str) -> Path:
     return places[0] / job_id
 
 
+LOCK = "draw.lock"
+LOCK_HOURS = 2      # a lock older than this is left by a crashed run
+
+
+def _locked(d: Path) -> bool:
+    """Whether a draw is using the job folder `d` (a fresh lock file)."""
+    try:
+        age = time.time() - (d / LOCK).stat().st_mtime
+    except OSError:
+        return False
+    return age < LOCK_HOURS * 3600
+
+
+@contextmanager
+def draw_lock(job_id: str) -> Iterator[None]:
+    """Hold the job's lock file for a whole draw, so nothing moves the job
+    underneath it. Raises Stop when another draw holds it."""
+    if _bad_id(job_id):
+        raise Stop(f"No picture job {job_id} on this machine.")
+    lock = folder(job_id) / LOCK
+    for _ in range(2):
+        try:
+            fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        except FileExistsError:
+            if _locked(lock.parent):
+                raise Stop(f"Picture job {job_id} is being drawn by another "
+                           "run; wait for it to finish.") from None
+            lock.unlink(missing_ok=True)        # stale: a crashed run's
+            continue
+        except OSError:
+            yield                               # cannot lock; the draw goes on
+            return
+        os.close(fd)
+        try:
+            yield
+        finally:
+            lock.unlink(missing_ok=True)
+        return
+    raise Stop(f"Picture job {job_id} is being drawn by another run.")
+
+
+def _bad_id(job_id: str) -> bool:
+    """Whether `job_id` could name anything but a folder directly in a root."""
+    return (not job_id or job_id in (".", "..") or "/" in job_id
+            or "\\" in job_id or os.sep in job_id or ".." in job_id)
+
+
+def adopt(job_id: str) -> None:
+    """Move a job left in the temp folder to the cache folder, when this
+    process can write there (the system may clear the temp folder early).
+    Called only at the start of `plan` and `place`, never from a lookup: a
+    draw may be holding the job in memory with its temp paths, so the move
+    holds the draw's own lock file for its whole length, and a locked job is
+    left alone. Any failure leaves the job where it was."""
+    if _bad_id(job_id):
+        return
+    cache, temp = roots()
+    old, new = temp / job_id, cache / job_id
+    if not old.is_dir() or _locked(old) or not _writable(cache):
+        return
+    if (new / "job.json").is_file():
+        return
+    lock = old / LOCK
+    for attempt in range(2):
+        try:
+            os.close(os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY))
+            break
+        except FileExistsError:
+            if attempt or _locked(old):
+                return
+            lock.unlink(missing_ok=True)        # stale: a crashed run's
+        except OSError:
+            return
+    spare = cache / f".moving-{job_id}-{secrets.token_hex(4)}"
+    try:
+        shutil.copytree(old, spare)
+        jf = spare / "job.json"
+        data = json.loads(jf.read_text(encoding="utf-8"))
+        entries = data.get("entries")
+        if not isinstance(entries, list) or not all(
+                isinstance(e, dict) for e in entries):
+            raise ValueError("the job's entries are unreadable")
+        for e in entries:
+            pend = e.get("pending")
+            if isinstance(pend, str) and Path(pend).parent.name == job_id:
+                e["pending"] = str(new / Path(pend).name)
+            if e.get("status") in ("drawn", "held") and e.get("ext"):
+                if not (spare / f"{Path(str(pend)).name}.{e['ext']}").is_file():
+                    raise OSError("a picture file is missing")
+        jf.write_text(json.dumps(data, indent=2, ensure_ascii=False),
+                      encoding="utf-8")
+        (spare / LOCK).unlink(missing_ok=True)  # the copy is not locked
+        os.rename(spare, new)
+    except (OSError, ValueError):
+        shutil.rmtree(spare, ignore_errors=True)
+        if not (new / "job.json").is_file():
+            lock.unlink(missing_ok=True)
+            return                      # failed: the job stays where it was
+        # Another process moved it first: the target is the job.
+    shutil.rmtree(old, ignore_errors=True)       # takes the lock with it
+
+
+def adopt_all(vault: Path) -> None:
+    """`adopt` for each of this vault's jobs in the temp folder."""
+    here = vault.resolve()
+    try:
+        names = [d.name for d in roots()[1].iterdir()
+                 if d.is_dir() and not d.name.startswith(".")]
+    except OSError:
+        return
+    for name in names:
+        try:
+            data = json.loads((roots()[1] / name / "job.json")
+                              .read_text(encoding="utf-8"))
+            if Path(data["vault"]).resolve() != here:
+                continue
+        except (OSError, ValueError, KeyError, TypeError, RuntimeError):
+            continue
+        try:
+            adopt(name)
+        except (TypeError, AttributeError, KeyError):
+            continue                    # one odd job never stops the others
+
+
 def job_file(job_id: str) -> Path:
     return folder(job_id) / "job.json"
 
@@ -181,8 +310,7 @@ def _sound(job: Job) -> bool:
 
 
 def load(job_id: str) -> Job:
-    if (not job_id or job_id in (".", "..") or "/" in job_id
-            or "\\" in job_id or os.sep in job_id or ".." in job_id):
+    if _bad_id(job_id):
         raise Stop(f"No picture job {job_id} on this machine.")
     try:
         data = json.loads(job_file(job_id).read_text(encoding="utf-8"))
@@ -220,14 +348,15 @@ def waiting(vault: Path) -> list[Waiting]:
         except OSError:
             continue
         for d in folders:
-            if d.name in seen or not (d / "job.json").is_file():
+            if (d.name in seen or d.name.startswith(".")
+                    or not (d / "job.json").is_file()):
                 continue
             seen.add(d.name)
             try:
                 job = load(d.name)
                 if Path(job.vault).resolve() != here:
                     continue
-                when = (d / "job.json").stat().st_mtime
+                when = job_file(d.name).stat().st_mtime
             except (Stop, OSError, TypeError, ValueError, RuntimeError):
                 continue
             to_draw = sum(e.status in ("planned", "failed") for e in job.entries)
@@ -261,8 +390,20 @@ def _age_dates(path: Path) -> list[date]:
     return found
 
 
+def _kept_on(path: Path) -> date | None:
+    """The date the job last held a file the GM may still want (a replaced
+    original or a held picture), when its job file says."""
+    try:
+        data = json.loads((path / "job.json").read_text(encoding="utf-8"))
+        return datetime.strptime(data["kept_on"], "%Y-%m-%d").date()
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+
+
 def prune(today: date) -> None:
-    """Remove job folders older than JOB_DAYS."""
+    """Remove job folders older than JOB_DAYS. A job's age counts from when
+    it was made, or from its latest replace or hold when that is later, so a
+    kept file lasts JOB_DAYS from the day it was kept."""
     found: list[Path] = []
     for root in roots():
         try:
@@ -273,7 +414,17 @@ def prune(today: date) -> None:
         if not d.is_dir():
             continue
         dates = _age_dates(d)
-        if dates and (today - min(dates)).days > JOB_DAYS:
+        if not dates:
+            continue
+        if d.name.startswith("."):      # a move's leftover, once it is old
+            if (today - min(dates)).days > 1:
+                shutil.rmtree(d, ignore_errors=True)
+            continue
+        born = min(dates)
+        kept = _kept_on(d)
+        if kept is not None and kept > born:
+            born = kept
+        if (today - born).days > JOB_DAYS:
             shutil.rmtree(d, ignore_errors=True)
 
 

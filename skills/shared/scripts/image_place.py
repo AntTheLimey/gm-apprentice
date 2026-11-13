@@ -550,6 +550,15 @@ def run(job: Job, keep: set[int], hold: set[int], write: bool) -> Result:
     if not write:
         return Result(lines, ok)
 
+    if held or any(a.copy.backup is not None for a in actions):
+        # Said before the swap, so a failed save later cannot leave a backup
+        # that prune would take early.
+        job.kept_on = image_jobs.TODAY().isoformat()
+        try:
+            image_jobs.save(job)
+        except Exception:  # noqa: BLE001 - the later save reports a failure
+            pass
+
     done: list[_Copy] = []
     spare = image_jobs.folder(job.id)
     try:
@@ -599,6 +608,8 @@ def run(job: Job, keep: set[int], hold: set[int], write: bool) -> Result:
         a.entry.status = "kept"
     for e in held:
         e.status = "held"
+    if held or any(a.copy.backup is not None for a in actions):
+        job.kept_on = image_jobs.TODAY().isoformat()
     try:
         image_jobs.save(job)
     except Exception as err:  # noqa: BLE001 - the vault is changed; say so

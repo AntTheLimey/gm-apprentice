@@ -96,6 +96,11 @@ class FinderTests(unittest.TestCase):
     def test_closing_hashes_are_not_part_of_the_title(self):
         self.assertEqual(vl.section("## A ##\nx\n", "A"), "x")
 
+    def test_section_ends_runs_to_the_next_heading_no_deeper(self):
+        lines = "# T\n## A\n### a\n## B\n#### b\n".split("\n")
+        heads = vl.line_headings(lines)
+        self.assertEqual(vl.section_ends(heads, len(lines)), [6, 3, 3, 6, 6])
+
     def test_crlf(self):
         self.assertEqual(vl.section("## A\r\nx\r\n## B\r\n", "A"), "x")
 

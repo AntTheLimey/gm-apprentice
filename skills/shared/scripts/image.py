@@ -200,6 +200,7 @@ def plan(vault: Path, requests: Path, unprompted: bool,
         print(f"error: not a directory: {vault}", file=sys.stderr)
         return 2
     try:
+        image_jobs.adopt_all(vault)
         job = image_jobs.plan(vault, image_jobs.read_requests(requests),
                               unprompted, _today(), source)
     except image_jobs.Stop as e:
@@ -275,21 +276,23 @@ def draw(vault: Path, job_id: str, redo: list[list[str]],
                 raise image_jobs.Stop(
                     f"Picture {int(n_text)} has two --picture files; give one.")
             handed[int(n_text)] = Path(file)
-        job = image_jobs.load(job_id)
-        image_place.check_vault(job, vault)
-        if handed and notes:
-            raise image_jobs.Stop("--picture and --redo cannot go together: for "
-                                  "a redraw of your own, hand in the new "
-                                  "picture with --picture.")
-        try:
-            if handed:
-                image_draw.hand_in(job, handed, result)
-            else:
-                image_draw.draw(job, notes, _today(), result)
-        finally:
-            # Whatever happens, what was already drawn and paid for is shown.
-            for line in result.lines:
-                print(line)
+        with image_jobs.draw_lock(job_id):
+            job = image_jobs.load(job_id)
+            image_place.check_vault(job, vault)
+            if handed and notes:
+                raise image_jobs.Stop(
+                    "--picture and --redo cannot go together: for "
+                    "a redraw of your own, hand in the new "
+                    "picture with --picture.")
+            try:
+                if handed:
+                    image_draw.hand_in(job, handed, result)
+                else:
+                    image_draw.draw(job, notes, _today(), result)
+            finally:
+                # Whatever happens, what was already drawn and paid for is shown.
+                for line in result.lines:
+                    print(line)
     except image_jobs.Stop as e:
         print(str(e), file=sys.stderr)
         return 2
@@ -331,6 +334,7 @@ def place(vault: Path, job_id: str, keep: list[int], hold: list[int],
         print(f"error: not a directory: {vault}", file=sys.stderr)
         return 2
     try:
+        image_jobs.adopt(job_id)
         job = image_jobs.load(job_id)
         image_place.check_vault(job, vault)
         result = image_place.run(job, set(keep), set(hold), write)

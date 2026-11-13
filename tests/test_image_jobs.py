@@ -2,6 +2,7 @@
 
 import json
 import os
+import shutil
 import sys
 import time
 from datetime import date, timedelta
@@ -362,6 +363,195 @@ def test_old_jobs_are_pruned(tmp_path):
             os.utime(p, (t, t))
     image_jobs.prune(date.today())
     assert not (root / "old").exists() and (root / "recent").exists()
+
+
+def _aged_job(root, name, made_days_ago, kept_on=None):
+    d = root / name
+    d.mkdir(parents=True)
+    body = {} if kept_on is None else {"kept_on": kept_on}
+    (d / "job.json").write_text(json.dumps(body), encoding="utf-8")
+    t = time.time() - made_days_ago * 86400 - 3600
+    for p in (d / "job.json", d):
+        os.utime(p, (t, t))
+
+
+def test_a_replace_keeps_the_job_14_days_from_the_replace(tmp_path):
+    root = tool_cache.cache_root() / "images"
+    today = date(2026, 11, 20)
+    # made long ago; replaced 13 days before today: kept. Replaced 15 days: gone.
+    base = (date.today() - today).days   # move the file times to the fixed day
+    _aged_job(root, "replaced-lately", 40 + base, "2026-11-07")
+    _aged_job(root, "replaced-long-ago", 40 + base, "2026-11-05")
+    _aged_job(root, "never-replaced", 40 + base)
+    image_jobs.prune(today)
+    assert (root / "replaced-lately").exists()
+    assert not (root / "replaced-long-ago").exists()
+    assert not (root / "never-replaced").exists()
+
+
+def _temp_job(tmp_path, monkeypatch, job_id="job1", pending=None, ext_file=True,
+              status="held"):
+    monkeypatch.setenv("GMA_CACHE", str(tmp_path / "cache"))
+    temp = tmp_path / "tmp"
+    monkeypatch.setattr(image_jobs, "TEMP", lambda: str(temp))
+    old = temp / "gm-apprentice-images" / job_id
+    old.mkdir(parents=True)
+    if ext_file:
+        (old / "held-01.png").write_bytes(PNG)
+    entry = {"n": 1, "note": "n.md", "kind": "npc", "prompt": "p", "refs": [],
+             "shape": "3:4", "pending": pending or str(old / "held-01"),
+             "dest": "d", "after": None, "replace": False, "estimate": None,
+             "status": status, "ext": "png"}
+    job = {"id": job_id, "vault": str(tmp_path), "service": "codex",
+           "model": "m", "priced": False, "unprompted": False, "spent": 0,
+           "entries": [entry]}
+    (old / "job.json").write_text(json.dumps(job), encoding="utf-8")
+    return old
+
+
+def test_adopt_moves_a_temp_job_with_its_pictures(tmp_path, monkeypatch):
+    old = _temp_job(tmp_path, monkeypatch)
+    cache = tool_cache.cache_root() / "images"
+    image_jobs.adopt("job1")
+    assert not old.exists()
+    assert (cache / "job1" / "held-01.png").read_bytes() == PNG
+    assert image_jobs.load("job1").entries[0].pending == str(cache / "job1" / "held-01")
+    assert not list(cache.glob(".moving-*"))
+
+
+def test_adopt_leaves_the_job_when_the_cache_cannot_be_written(tmp_path, monkeypatch):
+    old = _temp_job(tmp_path, monkeypatch)
+    monkeypatch.setattr(image_jobs, "_writable", lambda root: False)
+    image_jobs.adopt("job1")
+    assert old.exists()
+
+
+def test_lookups_never_move_a_temp_job(tmp_path, monkeypatch):
+    old = _temp_job(tmp_path, monkeypatch)
+    assert image_jobs.folder("job1") == old
+    image_jobs.load("job1")
+    image_jobs.waiting(tmp_path)
+    assert (old / "job.json").is_file()
+    assert not (tool_cache.cache_root() / "images" / "job1").exists()
+
+
+def test_a_draw_locked_job_is_not_moved_by_plan_or_place(tmp_path, monkeypatch):
+    old = _temp_job(tmp_path, monkeypatch)
+    with image_jobs.draw_lock("job1"):
+        assert (old / image_jobs.LOCK).exists()
+        image_jobs.adopt("job1")
+        image_jobs.adopt_all(tmp_path)
+        assert old.exists()
+        with pytest.raises(image_jobs.Stop):
+            with image_jobs.draw_lock("job1"):
+                pass
+    assert not (old / image_jobs.LOCK).exists()
+    image_jobs.adopt_all(tmp_path)
+    assert not old.exists()
+
+
+def test_a_stale_lock_does_not_block(tmp_path, monkeypatch):
+    old = _temp_job(tmp_path, monkeypatch)
+    lock = old / image_jobs.LOCK
+    lock.write_bytes(b"")
+    t = time.time() - 3 * 3600
+    os.utime(lock, (t, t))
+    image_jobs.adopt("job1")
+    assert not old.exists()
+
+
+def test_adopt_uses_the_target_when_another_process_moved_first(tmp_path, monkeypatch):
+    old = _temp_job(tmp_path, monkeypatch)
+    cache = tool_cache.cache_root() / "images"
+    real = os.rename
+
+    def lose_race(src, dst):
+        (cache / "job1").mkdir(parents=True)
+        (cache / "job1" / "job.json").write_text("{}", encoding="utf-8")
+        real(src, dst)          # now fails: the target exists and is not empty
+    monkeypatch.setattr(os, "rename", lose_race)
+    image_jobs.adopt("job1")
+    assert (cache / "job1" / "job.json").read_text(encoding="utf-8") == "{}"
+    assert not old.exists() and not list(cache.glob(".moving-*"))
+
+
+def test_adopt_ignores_a_bad_job_id(tmp_path, monkeypatch):
+    old = _temp_job(tmp_path, monkeypatch)
+    image_jobs.adopt("../x")
+    image_jobs.adopt("")
+    assert old.exists()
+    assert not (tool_cache.cache_root() / "images" / "job1").exists()
+
+
+def test_unreadable_entries_keep_the_source_and_other_jobs_move(tmp_path, monkeypatch):
+    bad = _temp_job(tmp_path, monkeypatch, job_id="bad")
+    data = json.loads((bad / "job.json").read_text(encoding="utf-8"))
+    for broken in (None, ["x"]):
+        data["entries"] = broken
+        (bad / "job.json").write_text(json.dumps(data), encoding="utf-8")
+        image_jobs.adopt("bad")
+        assert (bad / "job.json").is_file()
+        assert not (bad / image_jobs.LOCK).exists()
+    good = _temp_job(tmp_path, monkeypatch, job_id="good")
+    image_jobs.adopt_all(tmp_path)
+    assert bad.exists() and not good.exists()
+    cache = tool_cache.cache_root() / "images"
+    assert (cache / "good" / "job.json").is_file()
+    assert not list(cache.glob(".moving-*"))
+
+
+def test_adopt_holds_the_lock_and_leaves_none_in_the_copy(tmp_path, monkeypatch):
+    old = _temp_job(tmp_path, monkeypatch)
+    cache = tool_cache.cache_root() / "images"
+    (old / image_jobs.LOCK).write_bytes(b"")        # a fresh draw
+    image_jobs.adopt("job1")
+    assert old.exists() and not (cache / "job1").exists()
+    (old / image_jobs.LOCK).unlink()
+    seen = []
+    real = shutil.copytree
+
+    def watch(src, dst, *a, **k):
+        seen.append((Path(src) / image_jobs.LOCK).exists())
+        return real(src, dst, *a, **k)
+    monkeypatch.setattr(shutil, "copytree", watch)
+    image_jobs.adopt("job1")
+    assert seen == [True]                           # held during the copy
+    assert (cache / "job1" / "job.json").is_file()
+    assert not (cache / "job1" / image_jobs.LOCK).exists()
+    assert not old.exists()
+
+
+def test_a_failed_adopt_releases_the_lock(tmp_path, monkeypatch):
+    old = _temp_job(tmp_path, monkeypatch, ext_file=False)
+    image_jobs.adopt("job1")
+    assert not (old / image_jobs.LOCK).exists()
+
+
+def test_a_differently_spelled_path_is_still_rewritten(tmp_path, monkeypatch):
+    _temp_job(tmp_path, monkeypatch, pending="/private/elsewhere/spelling/job1/held-01")
+    cache = tool_cache.cache_root() / "images"
+    image_jobs.adopt("job1")
+    assert image_jobs.load("job1").entries[0].pending == str(cache / "job1" / "held-01")
+
+
+def test_a_missing_picture_file_blocks_the_move(tmp_path, monkeypatch):
+    old = _temp_job(tmp_path, monkeypatch, ext_file=False)
+    image_jobs.adopt("job1")
+    assert (old / "job.json").is_file()
+    assert not (tool_cache.cache_root() / "images" / "job1").exists()
+    assert not list((tool_cache.cache_root() / "images").glob(".moving-*"))
+
+
+def test_dot_folders_are_skipped_and_old_ones_pruned(tmp_path, monkeypatch):
+    monkeypatch.setenv("GMA_CACHE", str(tmp_path / "cache"))
+    root = tool_cache.cache_root() / "images"
+    _aged_job(root, ".moving-x-1234", 5)
+    _aged_job(root, ".moving-y-5678", 0)
+    d = root / ".moving-x-1234"
+    (d / "job.json").write_text(json.dumps({"vault": str(tmp_path)}), encoding="utf-8")
+    assert image_jobs.waiting(tmp_path) == []
+    image_jobs.prune(date.today())
+    assert not d.exists() and (root / ".moving-y-5678").exists()
 
 
 # --- rulings 2 to 5 ---------------------------------------------------------
@@ -834,3 +1024,10 @@ def test_a_job_records_the_vault_resolved(tmp_path, monkeypatch):
     monkeypatch.chdir(v.parent)
     job = image_jobs.plan(Path("vault"), [{"for": "Anselm", "subject": "x"}], False, TODAY)
     assert job.vault == str(v.resolve())
+
+
+def test_the_draw_lock_refuses_a_bad_job_id():
+    for bad in ("../x", "", ".."):
+        with pytest.raises(image_jobs.Stop):
+            with image_jobs.draw_lock(bad):
+                pass
