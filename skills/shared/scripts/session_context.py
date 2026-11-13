@@ -938,6 +938,12 @@ def _latest_wrapup(files, current: int, chapter):
                          re.IGNORECASE)
         wrap = prefer_chapter([(rel, text, fm) for rel, text, fm in files
                                if pat.search(rel)], chapter)
+    if wrap is None:   # it may be one whose `session:` names no number (#638)
+        for rel, _text, fm in files:
+            if (entity_type(fm) in WRAP_UP_TYPES
+                    and session_ref_number(fm) is None):
+                print(f"warning: {rel}: a Wrap-Up whose `session:` names no "
+                      "session number could not be matched", file=sys.stderr)
     return wrap
 
 

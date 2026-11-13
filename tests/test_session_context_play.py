@@ -805,6 +805,17 @@ class ThreadReportTests(unittest.TestCase):
         self.assertIn("Sessions/Odd Wrap-Up.md", err.getvalue())
         self.assertNotIn("S06", err.getvalue())
 
+    def test_the_default_bundle_names_a_wrap_up_it_cannot_match(self):
+        import contextlib
+        import io
+        from vaultlib import extract_frontmatter
+        bad = ("---\ntype: session-wrapup\nsession: \"Soon\"\n---\nx\n")
+        files = [("Sessions/Odd Wrap-Up.md", bad, extract_frontmatter(bad))]
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            self.assertIsNone(sc._latest_wrapup(files, 6, None))
+        self.assertIn("Sessions/Odd Wrap-Up.md", err.getvalue())
+
     def test_match_sessions_returns_sessions_and_mark(self):
         wrap_ups = sc.wrap_up_threads(load_files(FIXTURE),
                                       "chapter 4 - calcutta")
