@@ -188,24 +188,48 @@ def draw_lock(job_id: str) -> Iterator[None]:
     raise Stop(f"Picture job {job_id} is being drawn by another run.")
 
 
+def _bad_id(job_id: str) -> bool:
+    """Whether `job_id` could name anything but a folder directly in a root."""
+    return (not job_id or job_id in (".", "..") or "/" in job_id
+            or "\\" in job_id or os.sep in job_id or ".." in job_id)
+
+
 def adopt(job_id: str) -> None:
     """Move a job left in the temp folder to the cache folder, when this
     process can write there (the system may clear the temp folder early).
     Called only at the start of `plan` and `place`, never from a lookup: a
-    draw may be holding the job in memory with its temp paths, so a locked
-    job is left alone. Any failure leaves the job where it was."""
+    draw may be holding the job in memory with its temp paths, so the move
+    holds the draw's own lock file for its whole length, and a locked job is
+    left alone. Any failure leaves the job where it was."""
+    if _bad_id(job_id):
+        return
     cache, temp = roots()
     old, new = temp / job_id, cache / job_id
     if not old.is_dir() or _locked(old) or not _writable(cache):
         return
     if (new / "job.json").is_file():
         return
+    lock = old / LOCK
+    for attempt in range(2):
+        try:
+            os.close(os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY))
+            break
+        except FileExistsError:
+            if attempt or _locked(old):
+                return
+            lock.unlink(missing_ok=True)        # stale: a crashed run's
+        except OSError:
+            return
     spare = cache / f".moving-{job_id}-{secrets.token_hex(4)}"
     try:
         shutil.copytree(old, spare)
         jf = spare / "job.json"
         data = json.loads(jf.read_text(encoding="utf-8"))
-        for e in data.get("entries", []):
+        entries = data.get("entries")
+        if not isinstance(entries, list) or not all(
+                isinstance(e, dict) for e in entries):
+            raise ValueError("the job's entries are unreadable")
+        for e in entries:
             pend = e.get("pending")
             if isinstance(pend, str) and Path(pend).parent.name == job_id:
                 e["pending"] = str(new / Path(pend).name)
@@ -214,15 +238,15 @@ def adopt(job_id: str) -> None:
                     raise OSError("a picture file is missing")
         jf.write_text(json.dumps(data, indent=2, ensure_ascii=False),
                       encoding="utf-8")
-        if _locked(old):
-            raise OSError("a draw began")
+        (spare / LOCK).unlink(missing_ok=True)  # the copy is not locked
         os.rename(spare, new)
     except (OSError, ValueError):
         shutil.rmtree(spare, ignore_errors=True)
         if not (new / "job.json").is_file():
+            lock.unlink(missing_ok=True)
             return                      # failed: the job stays where it was
         # Another process moved it first: the target is the job.
-    shutil.rmtree(old, ignore_errors=True)
+    shutil.rmtree(old, ignore_errors=True)       # takes the lock with it
 
 
 def adopt_all(vault: Path) -> None:
@@ -241,7 +265,10 @@ def adopt_all(vault: Path) -> None:
                 continue
         except (OSError, ValueError, KeyError, TypeError, RuntimeError):
             continue
-        adopt(name)
+        try:
+            adopt(name)
+        except (TypeError, AttributeError, KeyError):
+            continue                    # one odd job never stops the others
 
 
 def job_file(job_id: str) -> Path:
@@ -281,8 +308,7 @@ def _sound(job: Job) -> bool:
 
 
 def load(job_id: str) -> Job:
-    if (not job_id or job_id in (".", "..") or "/" in job_id
-            or "\\" in job_id or os.sep in job_id or ".." in job_id):
+    if _bad_id(job_id):
         raise Stop(f"No picture job {job_id} on this machine.")
     try:
         data = json.loads(job_file(job_id).read_text(encoding="utf-8"))

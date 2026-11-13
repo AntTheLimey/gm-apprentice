@@ -2,6 +2,7 @@
 
 import json
 import os
+import shutil
 import sys
 import time
 from datetime import date, timedelta
@@ -379,9 +380,9 @@ def test_a_replace_keeps_the_job_14_days_from_the_replace(tmp_path):
     today = date(2026, 11, 20)
     # made long ago; replaced 13 days before today: kept. Replaced 15 days: gone.
     base = (date.today() - today).days   # move the file times to the fixed day
-    _aged_job(root, "replaced-lately", 40 - base, "2026-11-07")
-    _aged_job(root, "replaced-long-ago", 40 - base, "2026-11-05")
-    _aged_job(root, "never-replaced", 40 - base)
+    _aged_job(root, "replaced-lately", 40 + base, "2026-11-07")
+    _aged_job(root, "replaced-long-ago", 40 + base, "2026-11-05")
+    _aged_job(root, "never-replaced", 40 + base)
     image_jobs.prune(today)
     assert (root / "replaced-lately").exists()
     assert not (root / "replaced-long-ago").exists()
@@ -472,6 +473,58 @@ def test_adopt_uses_the_target_when_another_process_moved_first(tmp_path, monkey
     image_jobs.adopt("job1")
     assert (cache / "job1" / "job.json").read_text(encoding="utf-8") == "{}"
     assert not old.exists() and not list(cache.glob(".moving-*"))
+
+
+def test_adopt_ignores_a_bad_job_id(tmp_path, monkeypatch):
+    old = _temp_job(tmp_path, monkeypatch)
+    image_jobs.adopt("../x")
+    image_jobs.adopt("")
+    assert old.exists()
+    assert not (tool_cache.cache_root() / "images" / "job1").exists()
+
+
+def test_unreadable_entries_keep_the_source_and_other_jobs_move(tmp_path, monkeypatch):
+    bad = _temp_job(tmp_path, monkeypatch, job_id="bad")
+    data = json.loads((bad / "job.json").read_text(encoding="utf-8"))
+    for broken in (None, ["x"]):
+        data["entries"] = broken
+        (bad / "job.json").write_text(json.dumps(data), encoding="utf-8")
+        image_jobs.adopt("bad")
+        assert (bad / "job.json").is_file()
+        assert not (bad / image_jobs.LOCK).exists()
+    good = _temp_job(tmp_path, monkeypatch, job_id="good")
+    image_jobs.adopt_all(tmp_path)
+    assert bad.exists() and not good.exists()
+    cache = tool_cache.cache_root() / "images"
+    assert (cache / "good" / "job.json").is_file()
+    assert not list(cache.glob(".moving-*"))
+
+
+def test_adopt_holds_the_lock_and_leaves_none_in_the_copy(tmp_path, monkeypatch):
+    old = _temp_job(tmp_path, monkeypatch)
+    cache = tool_cache.cache_root() / "images"
+    (old / image_jobs.LOCK).write_bytes(b"")        # a fresh draw
+    image_jobs.adopt("job1")
+    assert old.exists() and not (cache / "job1").exists()
+    (old / image_jobs.LOCK).unlink()
+    seen = []
+    real = shutil.copytree
+
+    def watch(src, dst, *a, **k):
+        seen.append((Path(src) / image_jobs.LOCK).exists())
+        return real(src, dst, *a, **k)
+    monkeypatch.setattr(shutil, "copytree", watch)
+    image_jobs.adopt("job1")
+    assert seen == [True]                           # held during the copy
+    assert (cache / "job1" / "job.json").is_file()
+    assert not (cache / "job1" / image_jobs.LOCK).exists()
+    assert not old.exists()
+
+
+def test_a_failed_adopt_releases_the_lock(tmp_path, monkeypatch):
+    old = _temp_job(tmp_path, monkeypatch, ext_file=False)
+    image_jobs.adopt("job1")
+    assert not (old / image_jobs.LOCK).exists()
 
 
 def test_a_differently_spelled_path_is_still_rewritten(tmp_path, monkeypatch):
