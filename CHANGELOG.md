@@ -9,6 +9,12 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.28] — 2026-11-13
+
+### Changed
+
+- Story pages show scene pictures as full-width plates between paragraphs, like plates in a book, each with its zoom link. A picture embedded in the recap gets the same treatment, with `![[pic.png|caption]]` giving its alt text and caption. `player_site.story.scene_pictures` (`inline`, `float` or `mixed`) chooses; portraits stay beside the text (#615).
+
 ## [1.12.25] — 2026-11-13
 
 ### Fixed
