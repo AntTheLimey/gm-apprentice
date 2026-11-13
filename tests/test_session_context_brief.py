@@ -132,6 +132,8 @@ class BriefWrapupUnitTests(unittest.TestCase):
         self.assertNotIn("secret", out)
         self.assertNotIn("gm-only", out)
         self.assertIn("## Kept\n\nKept words.", out)
+        # what follows the closer belongs to the later section: kept
+        self.assertIn("\npublic\n", out)
 
     def test_no_op_when_nothing_to_drop(self):
         body = "## Narrative Recap\n\nText.\n\n## GM Notes\n\n### World State\n\nDay 1.\n"

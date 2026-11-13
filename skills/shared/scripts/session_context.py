@@ -414,6 +414,7 @@ def _stub_provenance(body: str) -> str:
         collected: list[str] = []
         inner_fence = False
         depth = 0
+        crossed = False   # a hidden span ran past the block's own end
         while j < n:
             if lines[j].strip().startswith("```"):
                 inner_fence = not inner_fence
@@ -425,8 +426,10 @@ def _stub_provenance(body: str) -> str:
                 j += 1
                 continue
             hm = _ANY_HEADING_RE.match(lines[j])
-            if hm and len(hm.group(1)) <= level and depth == 0:
-                break
+            if hm and len(hm.group(1)) <= level:
+                if depth == 0:
+                    break
+                crossed = True
             marks = markers_in(lines[j])
             if marks:
                 alone = not _ANY_MARKER_RE.sub("", lines[j]).strip()
@@ -436,6 +439,12 @@ def _stub_provenance(body: str) -> str:
                 # what follows it up to its closer: both go with the block.
                 for _pos, _name, is_closer in marks:
                     depth = max(0, depth - 1) if is_closer else depth + 1
+                if crossed and depth == 0:
+                    # the hidden span closed in a later section: what
+                    # follows it there is that section's, so it is kept
+                    collected.append(lines[j])
+                    j += 1
+                    break
             collected.append(lines[j])
             j += 1
         wc = word_count("\n".join(collected))
