@@ -94,11 +94,19 @@ def run(argv: list[str]) -> int:
                     help="substring match on the suggestion's name or externalRef")
     ap.add_argument("--vault", default=os.environ.get("MOBRPG_VAULT"),
                     help="vault root, to re-stamp the matching notes (default: $MOBRPG_VAULT)")
+    ap.add_argument("--no-restamp", action="store_true",
+                    help="delete without re-stamping vault notes (needed when there is no vault)")
     ap.add_argument("--execute", action="store_true", help="actually delete (default: dry-run)")
     args = ap.parse_args(argv)
 
     if not (args.batch or args.id or args.only):
         print("ERROR: say what to withdraw: --batch ID, --id ID... or --only S", file=sys.stderr)
+        return 2
+
+    if args.execute and not args.vault and not args.no_restamp:
+        print("ERROR: withdraw --execute needs --vault (or $MOBRPG_VAULT) to re-stamp the "
+              "notes; pass --no-restamp to delete without re-stamping vault notes.",
+              file=sys.stderr)
         return 2
 
     try:
@@ -122,9 +130,8 @@ def run(argv: list[str]) -> int:
         print(_line(s))
     if not pending:
         return 0
-    if not args.vault:
-        print("  note: no --vault (or $MOBRPG_VAULT): vault notes will not be re-stamped",
-              file=sys.stderr)
+    if not args.vault or args.no_restamp:
+        print("  note: no vault notes would be re-stamped", file=sys.stderr)
     if not args.execute:
         print("DRY-RUN: nothing deleted (add --execute to withdraw these)")
         return 0
@@ -148,7 +155,7 @@ def run(argv: list[str]) -> int:
     gone = [s for s in pending if s["id"] not in {x.get("id") for x in still}]
 
     stamped = 0
-    if args.vault:
+    if args.vault and not args.no_restamp:
         today = _dt.date.today().isoformat()
         note = f"withdrawn {today}: suggestion deleted from the mobRPG queue"
         refs: dict[str, set] = {}

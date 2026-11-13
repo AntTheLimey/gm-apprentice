@@ -168,7 +168,9 @@ Run `mobrpg <command> --help` for a command's own options.
   `--execute` it deletes them (relations before the creates they depend on),
   re-stamps each vault note `dismissed` with a dated `review_note`, then reads
   the queue back and reports what is left. Accepted or dismissed suggestions
-  are never deleted. Needs ReadWriteDelete.
+  are never deleted. `--execute` needs a vault (`--vault` or `$MOBRPG_VAULT`)
+  unless you pass `--no-restamp` (delete without re-stamping vault notes).
+  Needs ReadWriteDelete.
 - `adopt <world> --vault <path>` — stamp `mobrpg:` nodes onto vault notes that
   already exist upstream but carry no node, matched by name. An element
   another note already links, or that several notes match, is reported and

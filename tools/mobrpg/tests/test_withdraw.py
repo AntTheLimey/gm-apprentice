@@ -131,7 +131,7 @@ def test_read_back_reports_what_is_left(monkeypatch, tmp_path, capsys):
 def test_non_pending_is_never_deleted(monkeypatch, tmp_path, capsys):
     fake = Fake(ROWS)
     _wire(monkeypatch, fake)
-    rc = withdraw.run(["w1", "--id", "a1", "--execute"])
+    rc = withdraw.run(["w1", "--id", "a1", "--no-restamp", "--execute"])
     out = capsys.readouterr().out
     assert rc == 0
     assert "Not withdrawn: 1 Accepted" in out
@@ -144,6 +144,35 @@ def test_accepted_vault_node_is_left_alone(monkeypatch, tmp_path):
     _wire(monkeypatch, Fake(ROWS))
     withdraw.run(["w1", "--only", "Kate", "--vault", str(v), "--execute"])
     assert node.read_node(f.read_text())["review_state"] == "accepted"
+
+
+def test_execute_without_vault_refuses(monkeypatch, capsys):
+    monkeypatch.delenv("MOBRPG_VAULT", raising=False)
+    fake = Fake(ROWS)
+    _wire(monkeypatch, fake)
+    rc = withdraw.run(["w1", "--batch", "b1", "--execute"])
+    assert rc == 2
+    assert "--no-restamp" in capsys.readouterr().err
+    assert fake.calls == []
+
+
+def test_no_restamp_deletes_and_leaves_notes(monkeypatch, tmp_path):
+    monkeypatch.delenv("MOBRPG_VAULT", raising=False)
+    v, f = _vault(tmp_path)
+    fake = Fake(ROWS)
+    _wire(monkeypatch, fake)
+    rc = withdraw.run(["w1", "--batch", "b1", "--vault", str(v), "--no-restamp", "--execute"])
+    assert rc == 0
+    assert fake.deletes() == ["r1", "c1", "t1"]
+    assert node.read_node(f.read_text())["review_state"] == "pending"
+
+
+def test_dry_run_without_vault_allowed_and_says_so(monkeypatch, capsys):
+    monkeypatch.delenv("MOBRPG_VAULT", raising=False)
+    _wire(monkeypatch, Fake(ROWS))
+    rc = withdraw.run(["w1", "--batch", "b1"])
+    cap = capsys.readouterr()
+    assert rc == 0 and "no vault notes would be re-stamped" in cap.err
 
 
 # --- suggest guard -------------------------------------------------------
