@@ -1092,7 +1092,8 @@ def test_a_bare_embed_means_the_nearest_file_of_that_name_in_the_vault(tmp_path)
     # A same-named file nearer the top is what Obsidian shows instead.
     (tmp_path / "a.jpg").write_bytes(JPG)
     out = image_place.embed_after(t, WHERE, "a.jpg", folder, tmp_path)
-    assert out is not None and out.count("![[a.jpg]]") == 2
+    assert out is not None and out.count("![[a.jpg]]") == 1
+    assert "![[_attachments/scenes/a.jpg]]" in out     # qualified: the bare name is not ours
     # A path in the embed names exactly that file.
     p = RECAP_WITH.format("![[_attachments/scenes/a.jpg]]")
     (folder / "a.jpg").write_bytes(JPG)
@@ -1140,7 +1141,30 @@ def test_a_same_named_file_beside_the_note_is_what_a_bare_embed_means(tmp_path):
     (notes / "a.jpg").write_bytes(JPG)          # beside the recap: wins
     t = RECAP_WITH.format("![[a.jpg]]")
     out = image_place.embed_after(t, WHERE, "a.jpg", folder, tmp_path, notes)
-    assert out is not None and out.count("![[a.jpg]]") == 2
+    assert out is not None and out.count("![[a.jpg]]") == 1
+    assert "![[_attachments/scenes/a.jpg]]" in out
     # With nothing beside the note, the vault-wide rule decides as before.
     (notes / "a.jpg").unlink()
     assert image_place.embed_after(t, WHERE, "a.jpg", folder, tmp_path, notes) == t
+
+
+def test_a_qualified_embed_stays_as_written_and_a_new_one_is_qualified(tmp_path):
+    folder = tmp_path / "_attachments" / "scenes"
+    notes = tmp_path / "Sessions"
+    folder.mkdir(parents=True)
+    notes.mkdir()
+    (tmp_path / "a.jpg").write_bytes(JPG)       # a root file of the same name
+    (folder / "a.jpg").write_bytes(JPG2)
+    t = RECAP_WITH.format("![[_attachments/scenes/a.jpg|300]]")
+    # The path as written is kept, and counts as already embedded.
+    assert image_place.exact_embed_names(t, "a.jpg", folder, tmp_path, notes) == t
+    assert image_place.embed_after(t, WHERE, "a.jpg", folder, tmp_path, notes) == t
+    # Nothing embedded yet: the bare name would mean the root file, so the
+    # path is written.
+    out = image_place.embed_after(RECAP, WHERE, "a.jpg", folder, tmp_path, notes)
+    assert out is not None and "![[_attachments/scenes/a.jpg]]" in out
+    assert "![[a.jpg]]" not in out
+    # Where the bare name does mean the picture, it stays bare.
+    (tmp_path / "a.jpg").unlink()
+    out = image_place.embed_after(RECAP, WHERE, "a.jpg", folder, tmp_path, notes)
+    assert out is not None and "![[a.jpg]]" in out

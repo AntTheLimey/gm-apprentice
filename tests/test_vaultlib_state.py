@@ -149,7 +149,7 @@ def test_write_leaves_no_temporary_file_and_replaces_atomically(tmp_path, monkey
     assert len(seen) == 1 and seen[0][1] == "vault-state.json"
     assert seen[0][0] != "vault-state.json"
     assert sorted(p.name for p in (vault / "_meta").iterdir()) == [
-        "vault-config.yaml", "vault-state.json"]
+        ".vault-state.lock", "vault-config.yaml", "vault-state.json"]
 
 
 def test_a_broken_state_file_is_not_overwritten(tmp_path):

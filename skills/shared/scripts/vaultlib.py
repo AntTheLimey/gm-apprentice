@@ -27,7 +27,6 @@ from __future__ import annotations
 
 import atexit
 import copy
-import hashlib
 import json
 import os
 import re
@@ -1752,25 +1751,13 @@ except ImportError:     # Windows
         msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)  # type: ignore[attr-defined]
 
 
-def _lock_path(vault: Path) -> Path:
-    """The lock file of `vault`: outside the vault (so no sync tool carries
-    it and a vault with a read-only `_meta` still works), named by the
-    vault's path, in the cache folder or, where that cannot be written (an
-    agent's sandbox), the temp folder. Never removed: that would race."""
-    import tempfile
+LOCK_FILE = "_meta/.vault-state.lock"   # beside the state file; never removed
 
-    import tool_cache
-    name = hashlib.sha256(str(vault.resolve()).encode("utf-8")).hexdigest()[:24]
-    homes = [tool_cache.cache_root() / "locks",
-             Path(tempfile.gettempdir()) / "gm-apprentice-locks"]
-    for home in homes:
-        try:
-            home.mkdir(parents=True, exist_ok=True)
-            return home / f"{name}.lock"
-        except OSError:
-            continue
-    raise OSError("no folder to keep the vault's lock in: "
-                  + " or ".join(str(h) for h in homes))
+
+def _lock_path(vault: Path) -> Path:
+    """The lock file: next to the state file, the one place every writer of
+    this vault shares. It is never removed, which would race."""
+    return vault / LOCK_FILE
 
 
 @contextmanager
@@ -1781,8 +1768,8 @@ def state_lock(vault: Path) -> Iterator[None]:
     do), and a caller that reads first and then writes wraps both. It may be
     taken again inside itself by the same thread. The operating system drops
     the lock when the process ends, however it ends. Raises `OSError` when
-    the lock cannot be had within `LOCK_WAIT` seconds, or no folder can hold
-    the lock file. (The publish tool's own stamp write is not covered.)"""
+    the lock cannot be had within `LOCK_WAIT` seconds, or `_meta` cannot
+    be written (the state write would fail too). (The publish tool's own stamp write is not covered.)"""
     path = _lock_path(vault)
     mine: set[str] = _held.__dict__.setdefault("paths", set())
     key = str(path.resolve())

@@ -116,6 +116,20 @@ def _names_the_file(named: str, filename: str, folder: Path | None,
     return nearest == mine_rel or _same_file(vault / nearest, mine)
 
 
+def _written_name(filename: str, folder: Path | None, vault: Path | None,
+                  near: Path | None) -> str:
+    """How an embed of the picture is written: the bare file name when that
+    resolves to this picture, else its vault-relative path."""
+    if folder is None or vault is None:
+        return filename
+    if _names_the_file(filename, filename, folder, vault, near):
+        return filename
+    try:
+        return (folder / filename).relative_to(vault).as_posix()
+    except ValueError:
+        return filename
+
+
 def embed_after(text: str, after: str, filename: str,
                 folder: Path | None = None,
                 vault: Path | None = None,
@@ -136,7 +150,7 @@ def embed_after(text: str, after: str, filename: str,
         return None
     last = spans[hits[0]][1]
     lines = text.split("\n")
-    embed = f"![[{filename}]]"
+    embed = f"![[{_written_name(filename, folder, vault, near)}]]"
     for ln in lines[last + 1:]:
         if not ln.strip():
             continue
@@ -177,9 +191,14 @@ def exact_embed_names(text: str, filename: str, folder: Path,
             continue
 
         def fix(m: re.Match[str]) -> str:
-            same = _names_the_file(m.group(1).strip(), filename, folder, vault,
-                                   near)
-            return f"![[{filename}{m.group(2)}]]" if same else m.group(0)
+            named = m.group(1).strip()
+            if "/" in named:        # a path as written stays as written
+                return m.group(0)
+            same = _names_the_file(named, filename, folder, vault, near)
+            if not same:
+                return m.group(0)
+            write = _written_name(filename, folder, vault, near)
+            return f"![[{write}{m.group(2)}]]"
         start, end = found
         for i in range(start + 1, end):
             lines[i] = _EMBED.sub(fix, lines[i])
