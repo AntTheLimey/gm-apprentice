@@ -185,6 +185,8 @@ class PcBodyFileScopeTests(unittest.TestCase):
         seen_files = {r.split("\t")[1].split(":")[0]
                      for r in proc.stdout.splitlines()
                      if r.startswith(("ERROR\t", "WARNING\t", "INFO\t"))}
+        # (The settings file's own warning rows are not this section's.)
+        seen_files.discard("_meta/vault-config.yaml")
         self.assertEqual(seen_files, {FENCED, LATE})
 
 

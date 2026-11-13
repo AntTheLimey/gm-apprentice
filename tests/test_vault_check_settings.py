@@ -545,12 +545,13 @@ class StrayBlockTests(NewFileBase):
     def test_a_stray_hiding_list_is_added_to_a_list_already_set(self):
         vault = self.vault("version: 1\nplayer_site:\n  hide:\n"
                            "    sections: [Existing]\n    sectoins: [Mine]\n")
-        (row,) = self.rows(vault)
+        # (A list of its own that lacks built-in entries is warned about too: hide-list-gap.)
+        (row,) = [r for r in self.rows(vault) if r.fault["kind"] != "hide-list-gap"]
         self.assertEqual(row.kind, "certain")
         self.fix_all(vault)
         got = vc.settings(vault).get("player_site.hide.sections")
         self.assertEqual(sorted(got), ["Existing", "Mine"])
-        self.assertEqual(self.rows(vault), [])
+        self.assertEqual([r for r in self.rows(vault) if r.fault["kind"] != "hide-list-gap"], [])
 
     def test_an_old_named_list_beside_the_right_one_is_added_too(self):
         vault = self.vault("version: 1\nplayer_site:\n  exclude_sections: [Mine]\n"
