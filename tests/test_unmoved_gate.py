@@ -266,7 +266,7 @@ class OutOfSupportTests(unittest.TestCase):
         self.assertIn("no longer supported", message)
 
     def test_an_unreadable_old_stamp_is_no_stamp_not_out_of_support(self):
-        for stamp in ("unknown", "v1.9.0"):
+        for stamp in ("unknown", "v1.9.0", "1.10.invalid"):
             with self.subTest(stamp):
                 said = vc.refusal(vc.unmoved(self.old_vault(stamp), None), PLUGIN)
                 self.assertNotIn("no longer supported", said)

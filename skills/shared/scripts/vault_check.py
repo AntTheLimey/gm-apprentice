@@ -986,7 +986,9 @@ def unmoved(vault: Path, stamp: str | None,
         # names no version is no stamp.
         old = (_legacy_stamp(vault) if vaultlib.vault_layout(vault) == "legacy"
                else None)
-        found = parse_version(old) if old is not None else ()
+        whole = old is not None and re.fullmatch(
+            r"\d+(?:\.\d+)*(?:[-+].*)?", old.strip()) is not None
+        found = parse_version(old) if old is not None and whole else ()
         if old is not None and found and found < parse_version(OLDEST_SUPPORTED):
             return [Left(vaultlib.LEGACY_SETTINGS_FILE, out_of_support(old),
                          False, final=True)]

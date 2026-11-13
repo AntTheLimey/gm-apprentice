@@ -160,7 +160,8 @@ never regenerates it.
 
 **Active PC roster** (also used by 3b and 3c): `gma vault-check <vault> active-pcs`, minus any PC off-screen this session.
 A PC who acted this session but has no note: create it now as a new
-entity (Step 4) from the PC template, holding only the name, the
+entity (Step 4) from the PC template, its `=== note-new` block ahead
+of the 3b and 3c blocks that name it, holding only the name, the
 player and what they did this session; backstory, appearance and
 personality stay empty for the player (`shared/pc-body-structure.md`
 covers the sheet question). It joins the roster, and the report says
