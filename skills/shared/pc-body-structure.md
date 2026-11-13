@@ -60,10 +60,13 @@ an optional one-line prose lede may precede them. Fields are omitted when empty:
 
 `Open threads` is the load-bearing field: this PC's own open questions
 and obligations. It carries unresolved items forward across sessions and
-gains items as they arise. Shared threads live in the Campaign
-Overview's Open Threads. A resolved one is closed by Reconcile, never just
-deleted. NPC-relationship shifts fold into Open threads rather than a
-separate field.
+gains items as they arise. It holds what is open now, not a log: each
+item is the thread itself, never led by a session label or date
+(`**Session 5:** ...`; `gma session-context` works out each one's
+age), and `Knows` is one field, not one per session. Shared threads
+live in the Campaign Overview's Open Threads. A resolved one is closed
+by Reconcile, never just deleted. NPC-relationship shifts fold into
+Open threads rather than a separate field.
 
 System templates may add labelled fields; wrap-up preserves and
 reconciles any labelled field it finds, not just the canonical five.
