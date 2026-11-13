@@ -61,7 +61,10 @@ PC = Entry("pc", "PC", ["pc"], notes={
                  "`gma dnd-ddb` syncs the note from it",
 }, also=(("gravity", "optional number, GURPS only: local gravity in G, e.g. `1.2`; "
                      "the sheet and party board work encumbrance out by B350 and show "
-                     "the value; absent means 1G"),))
+                     "the value, the sheet opens with the DX penalty and jump and throw "
+                     "notice, and the to-hit calculator applies the penalty; absent means 1G"),
+                    ("home_gravity", "optional number, GURPS only: the gravity the PC was "
+                     "raised in, in G; sets the DX penalty for gravity (B350); absent means 1G")))
 STORY = Entry("character-story", "Character Story", ["character-story"], notes={
     "character": "wiki-link to the PC"},
     tail=", plus universal fields only. Body is append-only session sections; "

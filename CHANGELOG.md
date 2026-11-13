@@ -9,6 +9,13 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.23] — 2026-11-13
+
+### Added
+
+- GURPS gravity now works out the DX penalty (B350): −1 per 0.2G step from home gravity, halved by G-Experience, with wider steps for Improved G-Tolerance and narrower ones for G-Intolerance. The to-hit calculator has a ticked-by-default Gravity modifier (Beam Weapons exempt), the sheet opens with a gravity warning (DX, jump and throw), and the party board chip names the penalty (#629).
+- New optional PC field `home_gravity` (in G) for a character raised elsewhere. Nothing is backfilled: absent means 1G.
+
 ## [1.12.22] — 2026-11-13
 
 ### Changed

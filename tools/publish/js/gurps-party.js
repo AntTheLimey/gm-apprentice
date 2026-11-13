@@ -32,10 +32,14 @@
     var status = badges.length ? badges.join(' ') : '<span class="gl-badge ok">Ready</span>';
     var enc = (view.encLevel > 0) ? '<span class="gl-enc-chip">' + esc(view.encName) + '</span>' : '';
     // Local gravity (B350) moves the level, so the board names it beside the level.
-    if (view.gravity != null) {
-      enc += (enc ? ' ' : '') + '<span class="gl-enc-chip gl-grav-chip" title="Encumbrance at ' + esc(view.gravity) +
-        'G (B350)' + (view.bodyMissing ? '; no Weight row, so body weight is not counted' : '') + '">' +
-        esc(view.gravity) + 'G' + (view.bodyMissing ? '?' : '') + '</span>';
+    // It names the DX penalty too (#629), which Beam Weapons are exempt from.
+    if (view.gravity != null || view.gravityDx) {
+      var local = view.gravityLocal != null ? view.gravityLocal : view.gravity;
+      var dxText = view.gravityDx ? ' DX \u2212' + esc(view.gravityDx) : '';
+      enc += (enc ? ' ' : '') + '<span class="gl-enc-chip gl-grav-chip" title="' + (view.gravity != null ? 'Encumbrance at ' + esc(view.gravity) +
+        'G (B350)' : 'Gravity ' + esc(local) + 'G') + (view.gravityDx ? '; DX \u2212' + esc(view.gravityDx) + ' to agility and ballistic tasks, Beam Weapons exempt' : '') +
+        (view.bodyMissing ? '; no Weight row, so body weight is not counted' : '') + '">' +
+        esc(local) + 'G' + dxText + (view.bodyMissing ? '?' : '') + '</span>';
     }
     return {
       rowClass: rowClass,

@@ -397,6 +397,12 @@
       }
       add('env', 'Light and visibility', vis);
       if (st.footing === true) add('env', 'Bad footing', R.badFooting);
+      // Gravity (B350): -1 DX per G-Increment to every attack but Beam Weapons (the build worked out the number).
+      const grav = isObj(data) && isObj(data.gravity) && num(data.gravity.dx) ? data.gravity : null;
+      if (grav && st.gravity === true && st.zerog !== true) {   // zero G is the Free Fall rule's
+        if (w.beam === true) notes.push('The gravity DX penalty does not apply to Beam Weapons.');
+        else add('env', typeof grav.label === 'string' && grav.label ? grav.label : 'Gravity', -Math.abs(int(grav.dx, 0, 999)));
+      }
       add('you', 'Shock', -Math.abs(int(st.shock, -R.shockMax, R.shockMax)));
 
       add('you', 'Anything else', int(st.other, -30, 30));
@@ -564,6 +570,9 @@
         aids, aidBonus: {}, rcl: {},
       };
       for (const k of FLAGS) s[k] = false;
+      // The gravity penalty starts ticked whenever there is one.
+      // (Only a PC with the penalty has the key, so every other state keeps the shape it had.)
+      if (isObj(data) && isObj(data.gravity) && num(data.gravity.dx)) s.gravity = true;
       for (const k of BOXES) s[k] = '';
       return s;
     }
@@ -587,6 +596,7 @@
       const locs = data && Array.isArray(data.locations) ? data.locations : [];
       if (locs.some((l) => Array.isArray(l) && l[0] === raw.loc)) s.loc = raw.loc;
       for (const k of FLAGS) if (typeof raw[k] === 'boolean') s[k] = raw[k];
+      if ('gravity' in s && typeof raw.gravity === 'boolean') s.gravity = raw.gravity;
       for (const k of BOXES) {
         const v = raw[k];
         if (typeof v === 'number' && Number.isFinite(v)) s[k] = String(v);
@@ -871,6 +881,7 @@
 
     function groupFields(id, w) {
       const ranged = w.type === 'ranged';
+      const gravityTick = isObj(data.gravity) && num(data.gravity.dx) ? tick('gravity', typeof data.gravity.label === 'string' ? data.gravity.label : 'Gravity') : null;
       const zerog = freeFall === null ? null : tick('zerog', 'Zero gravity (Free Fall ' + freeFall + ')');
       switch (id) {
         case 'aiming': {
@@ -911,7 +922,7 @@
             pick('cover', 'Cover', [[0, 'In the open'], ['partial', 'Target partly exposed ' + sgn(R.cover.partial)], ['light', 'Light cover or concealment ' + sgn(R.cover.light)]], { parse: (v) => (v === '0' ? 0 : v) }),
             numBox('behind', 'Figures in the way (' + sgn(R.behind) + ' each)', 0, BEHIND_MAX, '0'),
           ] : []).concat([pick('vis', 'Light and visibility', VIS, { parse: numeric }),
-            checks((ranged ? [tick('targetLow', 'Target crouching, sitting or prone ' + sgn(R.targetLow))] : []).concat([tick('footing', 'Bad footing ' + sgn(R.badFooting)), zerog]))]);
+            checks((ranged ? [tick('targetLow', 'Target crouching, sitting or prone ' + sgn(R.targetLow))] : []).concat([tick('footing', 'Bad footing ' + sgn(R.badFooting)), zerog, gravityTick]))]);
         case 'you':
           return (ranged ? [] : [pick('posture', 'Your posture', [[0, 'Standing'], [R.posture.low, 'Crouching, kneeling, sitting ' + sgn(R.posture.low)], [R.posture.prone, 'Crawling or lying ' + sgn(R.posture.prone)]], { parse: numeric })])
             .concat([pick('shock', 'Shock from last turn', SHOCK, { parse: numeric }), numBox('other', 'Anything else (+/−)', -30, 30, '0', { signed: true })]);

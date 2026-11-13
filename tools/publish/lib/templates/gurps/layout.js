@@ -1,6 +1,7 @@
 const { escapeHtml } = require('../../processor');
 const { renderAttributes } = require('./blocks/attributes');
 const { renderIdentity } = require('./blocks/identity');
+const { renderGravityNotice } = require('./blocks/gravity-notice');
 const { renderLiftingFeats, renderSlamTable } = require('./blocks/lifting');
 const { renderSenses } = require('./blocks/senses');
 const { renderDefenses } = require('./blocks/defenses');
@@ -44,9 +45,9 @@ function buildSheet(model, rowNotes) {
   const wideBlocks = [renderMelee(model), renderRanged(model), renderGrimoire(model)].filter(Boolean);
   // Full-width and above the flow: the physical description leads the sheet rather
   // than getting buried mid-column.
-  const identity = renderIdentity(model) || '';
+  const identity = (renderGravityNotice(model) || '') + (renderIdentity(model) || '');
   // Notes alone are not a sheet: with nothing else to show the page keeps its sections as they are.
-  if (flow.length === 0 && wideBlocks.length === 0 && !identity) return null;
+  if (flow.length === 0 && wideBlocks.length === 0 && !renderIdentity(model)) return null;
   const notes = renderRowNotes(rowNotes);
   if (notes) flow.push(notes);
   return `<div class="gurps-sheet">${identity}<div class="flow">${flow.join('\n')}</div>${wideBlocks.join('\n')}</div>`;

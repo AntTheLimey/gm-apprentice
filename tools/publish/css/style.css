@@ -4279,6 +4279,9 @@ body.landing-full-bleed > main.content > :not(.landing-hero) {
 .gl-readout[hidden] { display: none; }
 /* Local gravity (B350): one line under the encumbrance table saying why the level moved. */
 .gl-grav-note { margin: 0.4rem 0.75rem 0; font-size: 0.85em; color: var(--text-muted, inherit); }
+/* The gravity warning at the top of a PC sheet (#629): the theme's warning colour, so it reads in light and dark. */
+.gl-grav-alert { margin: 0 0 0.75rem; padding: 0.5rem 0.75rem; border: 1px solid var(--warning); border-left-width: 4px; border-radius: 4px; background: var(--needs-dev-bg); color: var(--text); }
+.gl-grav-alert b { text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.85em; margin-right: 0.35em; }
 #gl-reset {
   font: inherit; font-size: 0.85em; line-height: 1; padding: 4px 10px; border: 1px solid var(--border);
   border-radius: 4px; background: var(--bg); color: var(--text); cursor: pointer;

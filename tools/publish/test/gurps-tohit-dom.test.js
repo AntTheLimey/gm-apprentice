@@ -102,6 +102,32 @@ describe('what it draws', () => {
   });
 });
 
+describe('the gravity modifier (#629)', () => {
+  it('is a box labelled with the penalty, ticked by default, and unticking it removes the penalty', () => {
+    const d = dataBlock({ gravity: { dx: 1, label: 'Gravity 1.2G (DX \u22121)' } });
+    const p = load(d);
+    assert.match(p.$('#th-gravity').parent.textContent, /Gravity 1\.2G \(DX \u22121\)/);
+    assert.strictEqual(p.$('#th-gravity').checked, true);
+    const on = Number(p.$('#th-roll').textContent);
+    p.set('#th-gravity', false);
+    assert.strictEqual(Number(p.$('#th-roll').textContent), on + 1);
+  });
+  it('is left out when the sheet has no penalty', () => {
+    assert.strictEqual(load(dataBlock()).$('#th-gravity'), null);
+  });
+  it('steps aside in zero gravity, where the Free Fall rule applies', () => {
+    const p = load(dataBlock({ gravity: { dx: 1, label: 'Gravity 1.2G (DX \u22121)' } }));
+    p.set('#th-zerog', true);
+    assert.doesNotMatch(p.$('#th-lines').textContent, /Gravity 1\.2G/);
+  });
+  it('applies a penalty over 30 in full', () => {
+    const p = load(dataBlock({ gravity: { dx: 35, label: 'Gravity 8G (DX \u221235)' } }));
+    const on = Number(p.$('#th-roll').textContent);
+    p.set('#th-gravity', false);
+    assert.strictEqual(Number(p.$('#th-roll').textContent), on + 35);
+  });
+});
+
 describe('aids and targeted attacks', () => {
   it('ticks each aid as its `on` says, a number box for one with no bonus', () => {
     const p = load(dataBlock());
