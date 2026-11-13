@@ -981,8 +981,13 @@ def unmoved(vault: Path, stamp: str | None,
     first."""
     left: list[Left] = []
     if stamp is None:
-        old = _legacy_stamp(vault)
-        if old is not None and parse_version(old) < parse_version(OLDEST_SUPPORTED):
+        # Only a vault on the old settings file alone has its stamp there
+        # (beside the new file the old one is not read), and a stamp that
+        # names no version is no stamp.
+        old = (_legacy_stamp(vault) if vaultlib.vault_layout(vault) == "legacy"
+               else None)
+        found = parse_version(old) if old is not None else ()
+        if old is not None and found and found < parse_version(OLDEST_SUPPORTED):
             return [Left(vaultlib.LEGACY_SETTINGS_FILE, out_of_support(old),
                          False, final=True)]
         left.append(Left(vaultlib.STATE_FILE, f"no update stamp ({vaultlib.STATE_FILE})", True))

@@ -220,8 +220,11 @@ the narrative.
    threads (not shared) and exclusive knowledge, refresh
    `Location`/`Condition`/`Carrying`. Never drop a thread: Reconcile
    closes it. An item led by a session label or date goes back
-   without it, and a second `Knows` label folds into the first
-   (`shared/pc-body-structure.md`).
+   without it (`shared/pc-body-structure.md`). A field that repeats
+   or carries a session label (`**Knows (Session 9):**`) is past
+   `status`: read the sheet's `## Current Status` and send it whole,
+   one field each, in a `=== section <PC> "Current Status" --replace`
+   block.
    Present tense, player-facing — not Story-file narrative. Put
    the changed fields in a `=== status <PC>` block; it rewrites
    them in place (fields: `shared/pc-body-structure.md`). Don't

@@ -265,6 +265,23 @@ class OutOfSupportTests(unittest.TestCase):
         self.assertEqual((token, where), ("REFUSED", "_meta/vault-config.md"))
         self.assertIn("no longer supported", message)
 
+    def test_an_unreadable_old_stamp_is_no_stamp_not_out_of_support(self):
+        for stamp in ("unknown", "v1.9.0"):
+            with self.subTest(stamp):
+                said = vc.refusal(vc.unmoved(self.old_vault(stamp), None), PLUGIN)
+                self.assertNotIn("no longer supported", said)
+                self.assertIn("no update stamp", said)
+
+    def test_an_old_file_beside_the_new_one_is_not_read_for_a_stamp(self):
+        vault = self.old_vault("1.9.10")
+        (vault / "_meta" / "vault-config.yaml").write_text(
+            "version: 1\n", encoding="utf-8")
+        vaultlib.forget_settings(vault)
+        with mock.patch.object(vc, "settings",
+                               side_effect=vc.SettingsUnavailable("no tool")):
+            said = vc.refusal(vc.unmoved(vault, None), PLUGIN)
+        self.assertNotIn("no longer supported", said)
+
     def test_a_bridgeable_old_vault_still_names_the_bridge(self):
         vault = self.old_vault("1.10.12")
         said = vc.refusal(vc.unmoved(vault, None), PLUGIN)
