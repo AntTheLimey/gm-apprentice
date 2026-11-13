@@ -19,6 +19,7 @@ Usage:
   vault_check.py VAULT read-aloud
   vault_check.py VAULT relationships [--folder SUB] [--file REL ...] [--newer-than REL]
   vault_check.py VAULT chapters      (a chapter with two chapter notes: ASK)
+  vault_check.py VAULT npc-pairs     (one character with an NPC and a PC note: ASK)
   vault_check.py VAULT sessions      (also: played sessions/Wrap-Ups not under Publishing)
   vault_check.py VAULT gm-leak [--folder SUB] [--fix]
   vault_check.py VAULT gm-leak --renest-excludes [--fix]
@@ -446,6 +447,8 @@ def check_names(vault: Path, threshold: float) -> list[str]:
         stem = Path(rel).stem
         if entity_type(fm) in STRUCTURAL_TYPES:
             continue
+        if "merged_into" in fm:
+            continue  # an NPC kept after its merge into a PC (npc_merge.py)
         if STRUCTURAL_NAME_RE.search(stem) and STRUCTURAL_DOC_RE.search(stem):
             continue
         etype = fm.get("type")
@@ -640,6 +643,47 @@ def check_chapters(vault: Path) -> list[str]:
     return [f"ASK\t{', '.join(sorted(rels))}\tone chapter, {len(rels)} "
             f"chapter notes: keep one and merge"
             for rels in groups.values() if len(rels) > 1]
+
+
+def pair_key(name: str) -> str:
+    """A character's name as the NPC/PC pair check compares it: case,
+    spaces, underscores and punctuation do not count."""
+    return re.sub(r"[\W_]", "", normalize(name))
+
+
+def check_npc_pairs(vault: Path) -> list[str]:
+    """One character, two notes: an NPC note and a PC note whose names
+    match (by `pair_key`), or where one's alias is the other's name. Each
+    ASK row names the merge that makes them one note. Archived and QA
+    copies, and notes already merged (`merged_into`), are not live notes."""
+    npcs: list[tuple[str, str, set[str]]] = []
+    pcs: list[tuple[str, str, set[str]]] = []
+    for rel, text in vault_files(vault):
+        if vaultlib.is_record_copy(rel):
+            continue
+        fm = extract_frontmatter(text) or {}
+        if "merged_into" in fm:
+            continue
+        kind = entity_type(fm)
+        if kind in ("npc", "pc"):
+            (npcs if kind == "npc" else pcs).append(
+                (rel, pair_key(Path(rel).stem),
+                 {pair_key(a) for a in link_aliases(fm)}))
+    rows = []
+    for npc, npc_name, npc_aliases in npcs:
+        for pc, pc_name, pc_aliases in pcs:
+            if npc_name == pc_name:
+                why = "an NPC note and a PC note of one name"
+            elif npc_name in pc_aliases:
+                why = "a PC whose alias is this NPC's name"
+            elif pc_name in npc_aliases:
+                why = "an NPC whose alias is this PC's name"
+            else:
+                continue
+            rows.append(f"ASK\t{npc} <> {pc}\t{why}: merge with "
+                        f"gma vault-write <vault> npc-merge \"{npc}\" "
+                        f"\"{pc}\"")
+    return sorted(rows)
 
 
 def check_changed(vault: Path, since: int) -> list[str]:
@@ -5856,7 +5900,7 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("command", choices=["frontmatter", "names", "index",
                                         "stale-drafts", "changed", "tables",
                                         "timeline", "read-aloud",
-                                        "relationships", "chapters", "sessions",
+                                        "relationships", "chapters", "npc-pairs", "sessions",
                                         "gm-leak", "pc-body", "wrapup",
                                         "site-faults", "settings",
                                         "version", "active-pcs", "voices", "stories",
@@ -6078,6 +6122,8 @@ def _main(argv: list[str] | None) -> int:
                                       newer_than_rel))
     if args.command in ("chapters", "all"):
         emit_rows("chapters", check_chapters(args.vault))
+    if args.command in ("npc-pairs", "all"):
+        emit_rows("npc-pairs", check_npc_pairs(args.vault))
     gm_own("sessions", lambda: check_sessions(args.vault))
     # `all` is a report, so gm-leak never writes — same reasoning as
     # `wrapup` below.

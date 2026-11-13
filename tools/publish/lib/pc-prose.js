@@ -6,6 +6,8 @@ const { headingKey } = require('./heading-key');
 
 const PC_PROSE_SECTIONS = [
   'Background', 'Current Status', 'Notes', 'Relationships', 'Appearances',
+  // A retired PC who goes on as an NPC (shared/pc-body-structure.md)
+  'Further Appearances',
   // CoC
   'Fellow Investigators', 'Encounters with Strange Entities',
   // FitD

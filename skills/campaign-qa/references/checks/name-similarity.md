@@ -48,7 +48,8 @@ For each similarity found:
    same scene; Warning if same chapter; Info if different
    chapters/locations)
 3. Propose a fix:
-   - For true duplicates: merge into one file
+   - For true duplicates: merge into one file (an NPC and a PC of
+     one name: the NPC/PC Pairs check)
    - For confusingly similar: suggest a rename for the less
      established entity; on the GM's yes, `gma relink` renames it
      and rewrites every link

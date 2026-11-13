@@ -13,6 +13,7 @@ being open.
 | Ranked/prose search | `gma vault-search` |
 | Backlinks, orphans, ambiguous links, dead ends | `gma graph-check` |
 | Rename or move a note, rewriting every link to it (dry run first; `--apply` to do it) | `gma relink VAULT OLD NEW` |
+| Merge an NPC note into its PC note, one note per character (dry run first; `--write` to do it) | `gma vault-write VAULT npc-merge NPC PC` |
 | Broken links by kind, with the note each may mean; point a misspelt link at the right note, or turn a link into plain words, vault-wide or only on named pages (dry run first; `--write`) | `gma links VAULT`, `gma links VAULT retarget NAME NOTE`, `gma links VAULT unlink NAME... [--in NOTE] [--bare]` |
 | Place text you wrote: start a Wrap-Up, add its sections, story entries, log lines, timeline lines (dry run first; `--write`) | `gma vault-write` |
 | Entity schema validation, name similarity, index drift, stale drafts, changed-since listing | `gma vault-check` |

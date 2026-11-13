@@ -39,6 +39,7 @@
     vault_write.py VAULT plan --number N [--chapter C] [--title T]
                                [--section] [--headless [--gm-input [PART ...]]]
                                [--write]                                < markdown
+    vault_write.py VAULT npc-merge NPC PC [--write]    (npc_merge.py; exit 0/1/2)
 
 Paths are vault-relative; a session index or Wrap-Up can also be named
 (`Session 05 - Beneath the Mill`, or either half). Without --write every command prints its plan and
@@ -2733,18 +2734,67 @@ def add_line(text: str, rel: str, section: str, line: str,
 
 LOG_SECTION = "campaign log"
 LOG_ALIASES = frozenset({"appearances", "encounters"})
+LATER_LOG = "further appearances"
+LATER_LOG_TITLE = "Further Appearances"
+
+
+def retired_pc(note: str) -> bool:
+    """A PC note whose `status` is retired (pc templates: alive, dead,
+    missing, retired, unknown)."""
+    fm = vl.extract_frontmatter(note) or {}
+    status = fm.get("status")
+    return (vl.entity_type(fm) == "pc" and isinstance(status, str)
+            and status.strip().casefold() == "retired")
+
+
+def add_later_log(note: str) -> str:
+    """The note with an empty `## Further Appearances`: after Appearances,
+    else before Notes, else before GM Notes, else at the end; never inside
+    a gm-only or spoiler block (it is the players' section)."""
+    doc = parse(note)
+    states = {st.lineno - 1: st for st in doc.states}
+
+    def public(i: int) -> bool:
+        st = states.get(i)
+        return st is not None and not st.gm_depth and not st.spoiler_depth
+
+    def before(head: Head) -> int:
+        if public(head.idx):
+            return head.idx
+        # Ahead of the block that holds it: after the last public line.
+        last = max((i for i in range(head.idx) if public(i)
+                    and states[i].marker is None), default=None)
+        return last + 1 if last is not None else head.idx
+    heads = [h for h in doc.heads if h.level == 2]
+    after = next((h for h in heads if public(h.idx)
+                  and key(h.title) == "appearances"), None)
+    if after is not None:
+        at = section_end(doc, after)
+    else:
+        nxt = next((h for t in ("notes", GM_NOTES) for h in heads
+                    if key(h.title) == t), None)
+        at = before(nxt) if nxt is not None else len(doc.lines)
+    return place(doc, at, [f"## {LATER_LOG_TITLE}"])
 
 
 def resolve_log_section(note: str, section: str) -> str | None:
     """The name of the public log section a note keeps in place of
-    `Campaign Log` (`Appearances` or `Encounters`, whichever comes first),
-    or None when `section` is not `Campaign Log`, the note has one, or it
-    has no equivalent."""
+    `Campaign Log`, or None when `section` is not `Campaign Log`, the note
+    has one, or it has no equivalent. A retired PC's rows always go to
+    `Further Appearances` (made if missing), even past a Campaign Log; any
+    note that has that section uses it; else `Appearances` or
+    `Encounters`, whichever comes first."""
     if key(section.strip().lstrip("#")) != LOG_SECTION:
         return None
     heads = [h for h in parse(note).heads if h.level == 2 and not h.gm]
+    # A retired PC who goes on as an NPC logs here, after its PC days.
+    later = next((h.title for h in heads if key(h.title) == LATER_LOG), None)
+    if retired_pc(note):
+        return later or LATER_LOG_TITLE
     if any(key(h.title) == LOG_SECTION for h in heads):
         return None
+    if later is not None:
+        return later
     return next((h.title for h in heads if key(h.title) in LOG_ALIASES),
                 None)
 
@@ -2765,6 +2815,11 @@ def cmd_log(batch: Batch, _args: argparse.Namespace, text: str) -> None:
             templates[note_type] = type_template(note_type)
         tmap, fenced = templates[note_type]
         resolved = resolve_log_section(note, cells[1])
+        made = ""
+        if resolved == LATER_LOG_TITLE and not any(
+                h.level == 2 and key(h.title) == LATER_LOG
+                for h in parse(note).heads):
+            note, made = add_later_log(note), "new section (retired PC)"
         section = resolved or cells[1]
         keeper, name = split_section(section)
         where = f"\u00a7{'GM Notes/' if keeper else ''}{name}"
@@ -2774,8 +2829,8 @@ def cmd_log(batch: Batch, _args: argparse.Namespace, text: str) -> None:
             batch.row("SKIP", rel, where, detail)
             continue
         batch.put(rel, new)
-        batch.row("WOULD-ADD", rel, where, detail or ("resolved" if resolved
-                                                      else ""))
+        batch.row("WOULD-ADD", rel, where, made or detail or (
+            "resolved" if resolved else ""))
         if (keeper or key(name) == GM_NOTES) and any(
                 st.gm_depth == 0 for st in added_states(note, new)):
             batch.row("WARNING", rel, where,
@@ -4668,7 +4723,8 @@ def build_parser() -> argparse.ArgumentParser:
             "stdin: one row per line, PATH<TAB>SECTION<TAB>LINE.\n"
             "SECTION is 'Campaign Log' or 'GM Notes/Behind the Scenes';\n"
             "a note with no Campaign Log but an Appearances or Encounters\n"
-            "section gets the row there (the row says 'resolved');\n"
+            "section gets the row there (the row says 'resolved'); a\n"
+            "retired PC's go to Further Appearances, made if missing;\n"
             "any section name is accepted. A section the note's template\n"
             "keeps under GM Notes must be written as 'GM Notes/<Name>'\n"
             "unless the note already has it as a public section."))
@@ -4858,6 +4914,8 @@ def build_parser() -> argparse.ArgumentParser:
                     "--headless): the parts the request supplied (intent, "
                     "scenes, spotlight, spaced or comma-separated; bare: all)")
     pl.add_argument("--write", action="store_true", help="write it (default: preview)")
+    import npc_merge    # its own module: it moves a note, which Batch cannot
+    npc_merge.add_parser(sub)
     ap.epilog = 'Example: gma vault-write "<vault>" wrapup-add "<wrap-up>" --write'
     bt = sub.add_parser(
         "batch", help="many writes, one plan, one commit",
@@ -4943,6 +5001,9 @@ def main(argv: list[str] | None = None, stdin: str | None = None) -> int:
     if args.command == "batch":
         import vw_batch     # here: it imports this module
         return vw_batch.run(args)
+    if args.command == "npc-merge":
+        import npc_merge
+        return npc_merge.run(args)
     needs_stdin = args.command not in NO_STDIN
     batch = Batch(args.vault)
     if args.command == "status" and args.show:

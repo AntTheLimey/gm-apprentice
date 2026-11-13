@@ -200,6 +200,12 @@ DRAFT entities left unreviewed too long.
 A chapter with two chapter notes, from `gma vault-check <vault> chapters`.
 The GM picks which to keep.
 
+### NPC/PC Pairs — `references/checks/npc-pairs.md`
+
+One character with an NPC note and a PC note, from `gma vault-check
+<vault> npc-pairs`. On the GM's yes, one pair at a time, the row's
+`npc-merge` command makes them one note.
+
 ### Open Spoilers — `references/checks/open-spoilers.md`
 
 Every `<!-- spoiler -->` marker still in the vault, listed for
@@ -227,7 +233,7 @@ Run in order, reading each check file as you go: Canon Audit →
 Timeline Validation → Name Similarity → Clue Redundancy → Graph
 Health → Tone Words → D&D Sheets (D&D vaults only) → Legacy Canon
 Field Repair → Stale DRAFT Detection → Wrap-Up Conformance → Chapter Notes
-→ Site Faults (vaults with a site only) → Settings → World Consistency (if
+→ NPC/PC Pairs → Site Faults (vaults with a site only) → Settings → World Consistency (if
 `_World/` exists) → Open Spoilers. Deduplicate across checks; present one report
 grouped by severity (Critical, Warning, Info), not by mode.
 
