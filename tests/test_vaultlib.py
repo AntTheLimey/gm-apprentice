@@ -47,6 +47,32 @@ class ExtractFrontmatterTests(unittest.TestCase):
         self.assertEqual(vl.extract_frontmatter(text),
                          {"aliases": ["Doc", "The Colonel"]})
 
+    def test_quoted_wikilink_is_a_string(self):
+        fm = vl.extract_frontmatter('---\nchapter: "[[Ch 1]]"\nv: "[A]"\n---\n')
+        self.assertEqual(fm, {"chapter": "[[Ch 1]]", "v": "[A]"})
+        self.assertEqual(vl.wikilink_target(fm["chapter"]), "Ch 1")
+
+    def test_a_comma_in_a_quoted_session_title_stays_one_string(self):
+        fm = vl.extract_frontmatter(
+            '---\ntype: session-wrapup\n'
+            'session: "[[Session 06 - A Title, With A Comma]]"\n---\n')
+        self.assertEqual(fm["session"],
+                         "[[Session 06 - A Title, With A Comma]]")
+        self.assertEqual(vl.session_ref_number(fm), 6)
+
+    def test_single_quoted_bracket_value_is_a_string(self):
+        fm = vl.extract_frontmatter("---\nv: '[a, b]'\n---\n")
+        self.assertEqual(fm["v"], "[a, b]")
+
+    def test_unquoted_flow_and_wikilink_lists_still_parse_as_lists(self):
+        fm = vl.extract_frontmatter(
+            '---\nnpcs: [[Doc]], [[Lady Anne]]\n'
+            'links: ["[[Doc]]", "[[Lady Anne, Dowager]]"]\n'
+            'tags: [a, b]\n---\n')
+        self.assertEqual(fm["links"], ["[[Doc]]", "[[Lady Anne, Dowager]]"])
+        self.assertEqual(fm["tags"], ["a", "b"])
+        self.assertIsInstance(fm["npcs"], list)
+
     def test_block_list(self):
         text = "---\naliases:\n  - Doc\n  - The Colonel\n---\n"
         self.assertEqual(vl.extract_frontmatter(text),

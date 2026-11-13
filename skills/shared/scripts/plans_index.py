@@ -43,7 +43,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from vaultlib import (body_of, chapter_of, extract_frontmatter,  # noqa: E402
-                      vault_files, wikilink_target)
+                      vault_files, link_targets)
 
 STATUS_RE = re.compile(r"\b(Active|Parked|Complete|Ingested)\b", re.IGNORECASE)
 _HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$", re.MULTILINE)
@@ -84,12 +84,9 @@ def _mentions_chapter(text: str, chapter: str) -> bool:
 
 
 def _list_names(value: Any) -> list[str]:
-    """Wikilink targets from a frontmatter list value (`participants`,
-    `locations`); non-lists yield nothing."""
-    if not isinstance(value, list):
-        return []
-    names = [wikilink_target(v) for v in value]
-    return [n for n in names if n]
+    """Wikilink targets from a frontmatter value (`participants`,
+    `locations`): a list, or one quoted string holding links."""
+    return link_targets(value)
 
 
 def planning_entries(vault: Path, chapter: str | None) -> list[dict]:

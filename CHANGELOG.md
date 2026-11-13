@@ -9,6 +9,14 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.16] — 2026-11-12
+
+### Fixed
+
+- A quoted value is read as the text it is: a session title with a comma no longer drops that session's Wrap-Up from the threads report and prep bundle, and `chapter: "[[Ch 1]]"` is no longer read as a list (#604, #638).
+- A Wrap-Up whose `session:` names no session number is named in a warning instead of being left out silently (#638).
+- A `played_in` or `entities` field written as one quoted string of links (`"[[A]], [[B]]"`) keeps every link when it is rewritten, and the plans index reads quoted participants.
+
 ## [1.12.14] — 2026-11-12
 
 ### Fixed

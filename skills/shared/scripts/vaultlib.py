@@ -292,10 +292,15 @@ def extract_frontmatter(content: str) -> dict[str, Any] | None:
         if ":" in line and not line.startswith(" ") and not line.startswith("\t"):
             key, _, value = line.partition(":")
             key = key.strip()
+            # A quoted value is a string whatever it holds (#604, #638);
+            # only an unquoted [..] is a flow list.
+            quoted = bool(QUOTED_SCALAR_RE.match(value.strip()))
             value = scalar_value(value)
 
+            if quoted:
+                frontmatter[key] = value
             # Handle empty value (might be start of array)
-            if value == "" or value == "[]":
+            elif value == "" or value == "[]":
                 frontmatter[key] = []
             elif value.startswith("[") and value.endswith("]"):
                 # Inline array: aliases: [Doc, "The Colonel"]
@@ -739,11 +744,9 @@ def link_target(raw: str) -> str:
 def wikilink_target(value: Any) -> str:
     """Bare target of a `[[Link|alias]]`, or the plain string.
 
-    A quoted wikilink reaches us as a one-item list, not a string: the
-    frontmatter reader treats the outer `[...]` of `"[[Note]]"` as a YAML
-    flow sequence and yields `['[Note]']`. Rejecting lists here silently
-    disabled every wikilink-valued lookup, so unwrap the single-item case
-    and strip whatever brackets survive.
+    A quoted wikilink (`"[[Note]]"`) reads as a string. An unquoted
+    `[[Note]]` is a YAML flow sequence and reads as a one-item list, so
+    unwrap that single-item case and strip whatever brackets survive.
     """
     if value is None:
         return ""
@@ -753,6 +756,26 @@ def wikilink_target(value: Any) -> str:
         value = value[0]
     body = re.sub(r"[\[\]]", "", str(value))
     return alias_split(body).split("#")[0].strip()
+
+
+_WIKILINK_BODY_RE = re.compile(r"\[\[([^\[\]]*)\]\]")
+
+
+def link_targets(value: Any) -> list[str]:
+    """Every bare link target in a frontmatter value: each `[[...]]` in a
+    string (a quoted `"[[A]], [[B]]"` holds two), or in each item of a
+    list. An item with no `[[` counts as one plain name; empty targets
+    are dropped."""
+    items = value if isinstance(value, list) else [value]
+    out: list[str] = []
+    for item in items:
+        if item is None:
+            continue
+        text = str(item)
+        found = _WIKILINK_BODY_RE.findall(text)
+        out += [wikilink_target(f"[[{b}]]") for b in found] if found \
+            else [wikilink_target(text)]
+    return [t for t in out if t]
 
 
 def link_aliases(fm: dict[str, Any]) -> list[str]:
@@ -808,13 +831,10 @@ def parse_session_number(value: Any) -> int | None:
 def session_ref_number(fm: dict[str, Any]) -> int | None:
     """The session number named by `fm["session"]`.
 
-    A `session:` value written as a wikilink ("[[Session 05]]") reaches
-    us as a one-item list of bracket-stripped text, not a string — the
-    frontmatter reader treats the quoted outer `[...]` as a YAML flow
-    sequence (see `wikilink_target`'s docstring), and
-    `parse_session_number` returns None outright for any list.
-    `wikilink_target` unwraps that case to plain text first; a bare int
-    or string session value passes through it unchanged. Since migration
+    A `session:` value written as a wikilink ("[[Session 05]]") reads as
+    a string, but `parse_session_number` returns None outright for a
+    list, so `wikilink_target` unwraps the link to plain text first; a
+    bare int or string session value passes through it unchanged. Since migration
     1.9.5 the quoted wikilink is the canonical `session:` form, so every
     `session:` lookup should come through here rather than calling
     `parse_session_number` on the raw value.

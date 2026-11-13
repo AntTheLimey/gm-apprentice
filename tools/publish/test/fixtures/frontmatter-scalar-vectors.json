@@ -117,6 +117,39 @@
         "Doe, Jane",
         "plain"
       ]
+    },
+    {
+      "name": "quoted wikilink is a string",
+      "text": "---\nchapter: \"[[Ch 1]]\"\n---\nBody.\n",
+      "key": "chapter",
+      "value": "[[Ch 1]]"
+    },
+    {
+      "name": "quoted bracket value is a string",
+      "text": "---\nv: \"[A]\"\n---\nBody.\n",
+      "key": "v",
+      "value": "[A]"
+    },
+    {
+      "name": "quoted wikilink with a comma is a string",
+      "text": "---\nsession: \"[[Session 06 - A Title, With A Comma]]\"\n---\nBody.\n",
+      "key": "session",
+      "value": "[[Session 06 - A Title, With A Comma]]"
+    },
+    {
+      "name": "unquoted flow list is a list",
+      "text": "---\nv: [a, b]\n---\nBody.\n",
+      "key": "v",
+      "value": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "name": "empty quoted value is an empty string",
+      "text": "---\nv: \"\"\n---\nBody.\n",
+      "key": "v",
+      "value": ""
     }
   ]
 }
