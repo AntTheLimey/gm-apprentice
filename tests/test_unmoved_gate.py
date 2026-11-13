@@ -232,6 +232,46 @@ class RefusalWordsTests(unittest.TestCase):
                       "older than 1.27.0:", said)
 
 
+class OutOfSupportTests(unittest.TestCase):
+    """#624: a vault stamped below 1.10.12 has no release that updates it, so
+    the refusal says so instead of naming a bridge that refuses it too."""
+
+    def old_vault(self, stamp):
+        root = Path(tempfile.mkdtemp(prefix="unmoved-old-"))
+        self.addCleanup(shutil.rmtree, root, ignore_errors=True)
+        (root / "_meta").mkdir()
+        (root / "_meta" / "vault-config.md").write_text(
+            f'---\ntype: meta\ngm_apprentice_version: "{stamp}"\n'
+            f'publish:\n  system: "coc-7e"\n---\n', encoding="utf-8")
+        vaultlib.forget_settings(root)
+        return root
+
+    def test_a_1_9_vault_is_told_it_is_out_of_support(self):
+        vault = self.old_vault("1.9.10")
+        with mock.patch.object(migrate, "plugin_version",
+                               return_value=(PLUGIN, "test")):
+            said = migrate.gate(vault)
+        self.assertIsInstance(said, str, said)
+        self.assertIn("1.9.10", said)
+        self.assertIn("no longer supported", said)
+        self.assertIn("vault-ingest", said)
+        self.assertNotIn("1.10.134", said)
+        self.assertNotIn("run this update again", said)
+        with mock.patch.object(vc, "plugin_version",
+                               return_value=(PLUGIN, "test")):
+            rows, code = vc.check_version(vault)
+        self.assertEqual(code, 1)
+        token, where, message = rows[0].split("\t")
+        self.assertEqual((token, where), ("REFUSED", "_meta/vault-config.md"))
+        self.assertIn("no longer supported", message)
+
+    def test_a_bridgeable_old_vault_still_names_the_bridge(self):
+        vault = self.old_vault("1.10.12")
+        said = vc.refusal(vc.unmoved(vault, None), PLUGIN)
+        self.assertNotIn("no longer supported", said)
+        self.assertIn("1.10.134 or later", said)
+
+
 if __name__ == "__main__":
     unittest.main()
 

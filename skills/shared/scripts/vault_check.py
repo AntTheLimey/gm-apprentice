@@ -891,6 +891,7 @@ HOP_SOURCE = ("https://github.com/AntTheLimey/gm-apprentice/archive/refs/"
 MOVED_TOOL = "1.27.0"        # the oldest site publish tool it accepts
 BRIDGE = "1.10.134"          # the first release whose update moves a vault
 LAST_BRIDGE = "1.10.137"     # the last 1.10 release (the one to install)
+OLDEST_SUPPORTED = "1.10.12"  # the oldest stamp any 1.10 bridge migrates from
 
 # Where a leftover the publish tool names is, by its `source`; a leftover
 # with no source is the vault file the fault names.
@@ -905,6 +906,28 @@ def below_floor(stamp: str) -> str:
             f"`python3 \"<unpacked folder>/skills/shared/scripts/gma.py\" "
             f"update \"<vault>\"`; if {FLOOR_HOP} refuses the vault too, do "
             f"what it names first")
+
+
+def out_of_support(stamp: str) -> str:
+    """A vault older than every bridge: no release can update it (#624)."""
+    return (f"it was last updated with {stamp} ({vaultlib.LEGACY_SETTINGS_FILE}), "
+            f"and vaults older than {OLDEST_SUPPORTED} are no longer supported: "
+            f"no release can update it. Start a new vault and bring this "
+            f"one's notes in with vault-ingest (ask to ingest your old "
+            f"campaign notes); the old vault is left as it is.")
+
+
+def _legacy_stamp(vault: Path) -> str | None:
+    """The stamp a pre-1.10.134 vault kept in its old settings file's
+    frontmatter, None when there is none."""
+    try:
+        text = (vault / vaultlib.LEGACY_SETTINGS_FILE).read_text(encoding="utf-8-sig")
+    except (OSError, UnicodeDecodeError):
+        return None
+    found = (vaultlib.extract_frontmatter(text) or {}).get(vaultlib.STAMP_KEY)
+    if not found or isinstance(found, (list, dict)):
+        return None
+    return str(found)
 
 
 def dead_checks(checks: Iterable[Any], floor: str) -> list[str]:
@@ -924,6 +947,7 @@ class Left:
     file: str
     text: str
     bridge: bool
+    final: bool = False     # out of support: nothing else is worth naming
 
 
 def _fault_file(f: dict[str, Any]) -> str:
@@ -957,6 +981,10 @@ def unmoved(vault: Path, stamp: str | None,
     first."""
     left: list[Left] = []
     if stamp is None:
+        old = _legacy_stamp(vault)
+        if old is not None and parse_version(old) < parse_version(OLDEST_SUPPORTED):
+            return [Left(vaultlib.LEGACY_SETTINGS_FILE, out_of_support(old),
+                         False, final=True)]
         left.append(Left(vaultlib.STATE_FILE, f"no update stamp ({vaultlib.STATE_FILE})", True))
     elif parse_version(stamp) < parse_version(MOVED_FLOOR):
         left.append(Left(vaultlib.STATE_FILE, below_floor(stamp), False))
@@ -1042,7 +1070,10 @@ def _sentence(text: str) -> str:
 def refusal(left: list[Left], plugin: str) -> str:
     """The one line that refuses the update: what the 1.10 bridge update
     fixes in one sentence, then each thing the GM fixes, as the tool says
-    it."""
+    it. A vault out of support gets that sentence alone."""
+    for x in left:
+        if x.final:
+            return f"Plugin {plugin} cannot update this vault: {x.text}"
     said = [f"Plugin {plugin} cannot update this vault yet."]
     bridged = [x.text for x in left if x.bridge]
     where = (f"{LAST_BRIDGE} is the last: https://github.com/AntTheLimey/"

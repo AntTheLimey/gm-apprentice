@@ -9,6 +9,18 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.22] — 2026-11-13
+
+### Changed
+
+- Wrap-up creates a note for a PC who played but has none, with only the name, the player and what they did; the player fills in the rest (#601).
+- PC Open threads stay a list of what is open now: wrap-up drops session labels from thread items and keeps one Knows field (#635).
+- A PC's voice is still the GM's to approve, and the GM may run it past the player first.
+
+### Fixed
+
+- A vault last updated before 1.10.12 is told plainly it is out of support and pointed to a new vault plus vault-ingest, instead of a chain of releases that each refuse it (#624).
+
 ## [1.12.21] — 2026-11-13
 
 ### Fixed

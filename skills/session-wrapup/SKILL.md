@@ -159,6 +159,13 @@ never regenerates it.
 ### 3. PC Carry-Forward
 
 **Active PC roster** (also used by 3b and 3c): `gma vault-check <vault> active-pcs`, minus any PC off-screen this session.
+A PC who acted this session but has no note: create it now as a new
+entity (Step 4) from the PC template, holding only the name, the
+player and what they did this session; backstory, appearance and
+personality stay empty for the player (`shared/pc-body-structure.md`
+covers the sheet question). It joins the roster, and the report says
+"Created a note for {PC}; their player fills in the rest." A PC of an
+absent player who did nothing gets no note.
 
 Per active PC, one `#### [[PC Name]] (Player)` part with the
 template's labels (omit empty ones), under `### PC Carry-Forward`:
@@ -212,7 +219,9 @@ the narrative.
    Compare `vw status <PC> --show` with Steps 2-3: add a PC's new
    threads (not shared) and exclusive knowledge, refresh
    `Location`/`Condition`/`Carrying`. Never drop a thread: Reconcile
-   closes it.
+   closes it. An item led by a session label or date goes back
+   without it, and a second `Knows` label folds into the first
+   (`shared/pc-body-structure.md`).
    Present tense, player-facing — not Story-file narrative. Put
    the changed fields in a `=== status <PC>` block; it rewrites
    them in place (fields: `shared/pc-body-structure.md`). Don't
