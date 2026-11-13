@@ -152,17 +152,18 @@ def record(vault: Path, today: date, cents: float | None) -> None:
     zero or more raise `ValueError` and write nothing."""
     if cents is not None and (not math.isfinite(cents) or cents < 0):
         raise ValueError(f"cents must be a number of zero or more, got {cents}")
-    images = _images(vault)
-    keep = {_month_key(today), _previous_key(today)}
-    months = {k: v for k, v in images.get("months", {}).items() if k in keep}
-    entry = months.setdefault(_month_key(today),
-                              {"cents": 0, "pictures": 0, "unpriced": 0})
-    entry["pictures"] = int(entry.get("pictures", 0)) + 1
-    if cents is None:
-        entry["unpriced"] = int(entry.get("unpriced", 0)) + 1
-    else:
-        entry["cents"] = _cents(float(entry.get("cents", 0)) + cents)
-    vaultlib.set_state(vault, STATE_KEY, {**images, "months": months})
+    with vaultlib.state_lock(vault):
+        images = _images(vault)
+        keep = {_month_key(today), _previous_key(today)}
+        months = {k: v for k, v in images.get("months", {}).items() if k in keep}
+        entry = months.setdefault(_month_key(today),
+                                  {"cents": 0, "pictures": 0, "unpriced": 0})
+        entry["pictures"] = int(entry.get("pictures", 0)) + 1
+        if cents is None:
+            entry["unpriced"] = int(entry.get("unpriced", 0)) + 1
+        else:
+            entry["cents"] = _cents(float(entry.get("cents", 0)) + cents)
+        vaultlib.set_state(vault, STATE_KEY, {**images, "months": months})
 
 
 def fit(estimate: Callable[[int], float], refs: int,

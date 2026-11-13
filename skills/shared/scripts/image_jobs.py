@@ -511,11 +511,19 @@ def recap_spans(text: str) -> list[tuple[str, int]] | None:
 
 
 def after_hits(spans: list[tuple[str, int]], after: str) -> list[int]:
-    """Which recap paragraphs open with the words `after` (runs of
-    whitespace as one space, case ignored): the indexes into `spans`. The
-    one rule `plan` and `place` both find a scene's paragraph by."""
+    """Which recap paragraphs open with the words `after` (ending at a word
+    boundary; runs of whitespace as one space, case ignored): the indexes
+    into `spans`. The one rule `plan` and `place` both find a scene's
+    paragraph by."""
     want = _squash(after)
-    return [i for i, (p, _) in enumerate(spans) if _squash(p).startswith(want)]
+    # The words end at a word boundary: "The miller" is not "The millers".
+    edge = not want[-1:].isalnum()
+
+    def opens(p: str) -> bool:
+        text = _squash(p)
+        return text.startswith(want) and (
+            edge or not text[len(want):len(want) + 1].isalnum())
+    return [i for i, (p, _) in enumerate(spans) if opens(p)]
 
 
 def _squash(s: str) -> str:

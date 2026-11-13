@@ -25,12 +25,13 @@ class Guidance(NamedTuple):
 
 
 def _body(lines: list[str]) -> str:
-    """A section's text: marker lines dropped, a lone `{placeholder}` empty."""
+    """A section's text: marker lines dropped, and any line that is only a
+    `{placeholder}` (the template's prompt to the GM) left out."""
     kept = [ln for ln in lines
             if not (vl.GM_MARKER_RE.search(ln)
-                    and not vl.GM_MARKER_RE.sub("", ln).strip())]
-    text = "\n".join(kept).strip()
-    return "" if _PLACEHOLDER_RE.match(text) else text
+                    and not vl.GM_MARKER_RE.sub("", ln).strip())
+            and not _PLACEHOLDER_RE.match(ln.strip())]
+    return "\n".join(kept).strip()
 
 
 def _uncommented(lines: list[str]) -> list[str]:

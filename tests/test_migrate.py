@@ -875,7 +875,10 @@ class ApplyTests(unittest.TestCase):
         code, out, err = call([str(vault), "apply"],
                               [will("a", "1.10.20")])
         self.assertEqual(code, 1)
-        self.assertEqual(len(err.strip().splitlines()), 1)
+        # The lock beside the state file cannot be opened either, so the
+        # answers too say plainly that they were not remembered.
+        self.assertEqual(len(err.strip().splitlines()), 2)
+        self.assertIn("the version stamp cannot be written", err)
         self.assertNotIn("Traceback", err)
         self.assertIn("## Did", out)
         self.assertEqual(stamp_of(vault), "1.10.12")

@@ -284,3 +284,43 @@ def test_a_guidance_path_that_is_not_text_is_one_plain_stop(tmp_path, written, s
     with pytest.raises(vaultlib.SettingsUnavailable) as e:
         image_money.limits(v)
     assert str(e.value) == said
+
+
+def test_runs_at_the_same_time_lose_no_count(tmp_path):
+    import subprocess
+    v = make_vault(tmp_path, None)
+    scripts = Path(__file__).resolve().parent.parent / "skills" / "shared" / "scripts"
+    code = ("import sys; from datetime import date; from pathlib import Path\n"
+            f"sys.path.insert(0, {str(scripts)!r}); import image_money\n"
+            "for _ in range(25): image_money.record(Path(sys.argv[1]), date(2026, 11, 5), 1)\n")
+    procs = [subprocess.Popen([sys.executable, "-c", code, str(v)])
+             for _ in range(6)]
+    assert [p.wait() for p in procs] == [0] * 6
+    assert image_money.spent(v, date(2026, 11, 5)) == 150
+
+
+def test_every_writer_of_the_state_file_takes_the_lock(tmp_path):
+    import subprocess
+    v = make_vault(tmp_path, None)
+    scripts = Path(__file__).resolve().parent.parent / "skills" / "shared" / "scripts"
+    code = ("import sys; from pathlib import Path\n"
+            f"sys.path.insert(0, {str(scripts)!r}); import vaultlib\n"
+            "v = Path(sys.argv[1]); w = sys.argv[2]\n"
+            "for i in range(15):\n"
+            "    vaultlib.set_state(v, f'k{w}-{i}', i)\n"
+            "    vaultlib.write_held(v, {f'l{w}-{i}'}, set())\n"
+            "    vaultlib.write_stamp(v, '1.0.0')\n")
+    procs = [subprocess.Popen([sys.executable, "-c", code, str(v), str(n)])
+             for n in range(5)]
+    assert [p.wait() for p in procs] == [0] * 5
+    state = vaultlib.read_state(v)
+    assert len([k for k in state if k.startswith("k")]) == 75
+
+
+def test_the_state_lock_can_be_taken_inside_itself(tmp_path):
+    v = make_vault(tmp_path, None)
+    with vaultlib.state_lock(v):
+        vaultlib.set_state(v, "a", 1)
+        with vaultlib.state_lock(v):
+            image_money.record(v, date(2026, 11, 5), 1)
+    assert image_money.spent(v, date(2026, 11, 5)) == 1

@@ -64,24 +64,84 @@ class _Action:
 _EMBED = re.compile(r"!\[\[([^\]\n|#]+)([^\]\n]*)\]\]")
 
 
-def _names_the_file(named: str, filename: str, folder: Path | None) -> bool:
+def _vault_matches(vault: Path, name: str) -> list[str]:
+    """The vault-relative paths of every file called `name` (case ignored),
+    outside hidden folders: the files a bare embed of it could mean."""
+    want = _fold(name)
+    found: list[str] = []
+    for top, dirs, files in os.walk(vault):
+        dirs[:] = [d for d in dirs if not d.startswith(".")]
+        found.extend((Path(top) / n).relative_to(vault).as_posix()
+                     for n in files if _fold(n) == want)
+    return found
+
+
+def _names_the_file(named: str, filename: str, folder: Path | None,
+                    vault: Path | None = None,
+                    near: Path | None = None) -> bool:
     """Whether an embed naming `named` points at the picture filed as
-    `filename` in `folder`: the same name, or a name that differs in case
-    only and that the disk says is the very same file."""
-    if named == filename:
-        return True
-    return (folder is not None and _fold(named) == _fold(filename)
-            and _same_file(folder / named, folder / filename))
+    `filename` in `folder`. With `vault`, as Obsidian reads it: a bare name
+    means the file of that name (case ignored) in `near`, the folder of the
+    note that links it, else the one with the shortest path anywhere in the
+    vault, the picture itself counted whether or not it is
+    there yet; a name with a folder in it means that path. Without `vault`:
+    the same name, or a name that differs in case only and that the disk
+    says is the very same file."""
+    if folder is None or vault is None:
+        if named == filename:
+            return True
+        return (folder is not None and _fold(named) == _fold(filename)
+                and _same_file(folder / named, folder / filename))
+    mine = folder / filename
+    if "/" in named:
+        return _same_file(vault / named, mine)
+    if _fold(named) != _fold(filename):
+        return False
+    try:
+        mine_rel = mine.relative_to(vault).as_posix()
+    except ValueError:
+        return False
+    if near is not None:
+        beside = [n for n in (os.listdir(near) if near.is_dir() else [])
+                  if _fold(n) == _fold(named)]
+        if near == folder:
+            beside.append(filename)
+        if beside:
+            first = near / (named if named in beside else sorted(beside)[0])
+            return first == mine or _same_file(first, mine)
+    found = {*_vault_matches(vault, named), mine_rel}
+    # Equal depth: the spelling the embed gives wins, as before.
+    nearest = min(found, key=lambda r: (r.count("/"), Path(r).name != named,
+                                        len(r), r))
+    return nearest == mine_rel or _same_file(vault / nearest, mine)
+
+
+def _written_name(filename: str, folder: Path | None, vault: Path | None,
+                  near: Path | None) -> str:
+    """How an embed of the picture is written: the bare file name when that
+    resolves to this picture, else its vault-relative path."""
+    if folder is None or vault is None:
+        return filename
+    if _names_the_file(filename, filename, folder, vault, near):
+        return filename
+    try:
+        return (folder / filename).relative_to(vault).as_posix()
+    except ValueError:
+        return filename
 
 
 def embed_after(text: str, after: str, filename: str,
-                folder: Path | None = None) -> str | None:
+                folder: Path | None = None,
+                vault: Path | None = None,
+                near: Path | None = None) -> str | None:
     """The note's text with `![[filename]]` on its own line, a blank line
     each side, directly after the one recap paragraph that starts with
     `after`; the text unchanged when an embed of that picture (a display
     size or alias after the name does not matter) is already in the run of
     embeds there; None when zero or several paragraphs match. `folder` is
-    where the picture is filed."""
+    where the picture is filed; `vault` lets a bare embed name be read the
+    way Obsidian reads it (see `_names_the_file`); `near` is the folder
+    of the note."""
     spans = image_jobs.recap_spans(text)
     if spans is None:
         return None
@@ -90,14 +150,15 @@ def embed_after(text: str, after: str, filename: str,
         return None
     last = spans[hits[0]][1]
     lines = text.split("\n")
-    embed = f"![[{filename}]]"
+    embed = f"![[{_written_name(filename, folder, vault, near)}]]"
     for ln in lines[last + 1:]:
         if not ln.strip():
             continue
         if not ln.strip().startswith("![["):
             break
         m = _EMBED.fullmatch(ln.strip())
-        if m and _names_the_file(m.group(1).strip(), filename, folder):
+        if m and _names_the_file(m.group(1).strip(), filename, folder, vault,
+                                         near):
             return text
     cr = "\r" if lines[last].endswith("\r") else ""
     if last + 1 >= len(lines):
@@ -117,7 +178,9 @@ def _retarget(text: str, old: str, new: str) -> str:
     return _EMBED.sub(swap, text)
 
 
-def exact_embed_names(text: str, filename: str, folder: Path) -> str:
+def exact_embed_names(text: str, filename: str, folder: Path,
+                      vault: Path | None = None,
+                      near: Path | None = None) -> str:
     """The text with every embed in the recap that names the picture filed
     as `filename` in `folder` in other letter case now naming it exactly:
     the name on disk wins. An embed of a different file is left alone."""
@@ -128,8 +191,14 @@ def exact_embed_names(text: str, filename: str, folder: Path) -> str:
             continue
 
         def fix(m: re.Match[str]) -> str:
-            same = _names_the_file(m.group(1).strip(), filename, folder)
-            return f"![[{filename}{m.group(2)}]]" if same else m.group(0)
+            named = m.group(1).strip()
+            if "/" in named:        # a path as written stays as written
+                return m.group(0)
+            same = _names_the_file(named, filename, folder, vault, near)
+            if not same:
+                return m.group(0)
+            write = _written_name(filename, folder, vault, near)
+            return f"![[{write}{m.group(2)}]]"
         start, end = found
         for i in range(start + 1, end):
             lines[i] = _EMBED.sub(fix, lines[i])
@@ -287,13 +356,14 @@ def _prepare(vault: Path, batch: vw.Batch, e: Entry,
     if old and not e.replace:
         no(f"{e.dest} already has a picture")
         return None
-    base = text
 
     def stage(rel: str) -> bool:
-        """Put the note edit for a picture filed at `rel` into the batch."""
+        """Put the note edit for a picture filed at `rel` into the batch,
+        on the note as the batch holds it now (other pictures' embeds in the
+        same recap included)."""
         if e.kind == "scene":
             name = Path(rel).name
-            body = base
+            body = batch.read(note)
             for o in old:
                 # An old picture that is not the very file filed has its
                 # embed pointed at the new one; the very file is only a
@@ -301,8 +371,10 @@ def _prepare(vault: Path, batch: vw.Batch, e: Entry,
                 if Path(o).name != name and not _same_file(vault / o, vault / rel):
                     body = _retarget(body, Path(o).name, name)
             filed = (vault / rel).parent
-            body = exact_embed_names(body, name, filed)
-            new_text = embed_after(body, e.after or "", name, filed)
+            near = (vault / note).parent
+            body = exact_embed_names(body, name, filed, vault, near)
+            new_text = embed_after(body, e.after or "", name, filed, vault,
+                                   near)
         else:
             new_text = _set_portrait(tlk, close, rel)
         if new_text is None:
@@ -481,12 +553,28 @@ def run(job: Job, keep: set[int], hold: set[int], write: bool) -> Result:
     done: list[_Copy] = []
     spare = image_jobs.folder(job.id)
     try:
+        late: list[_Action] = []
         for a in actions:
             if a.done:
                 continue
             done.append(a.copy)          # recorded before it is touched
-            _copy_in(a.copy, spare / f"replaced-{a.entry.n:02d}"
-                     f".{a.entry.ext}", a.entry.dest, a.entry.n)
+            try:
+                _copy_in(a.copy, spare / f"replaced-{a.entry.n:02d}"
+                         f".{a.entry.ext}", a.entry.dest, a.entry.n)
+            except _Late as bad:
+                # Someone else's file is there: leave it, file the others.
+                done.remove(a.copy)
+                late.append(a)
+                lines.append(f"{bad}; run place again once it is sorted out")
+                ok = False
+        if late:
+            actions = [a for a in actions if a not in late]
+            for a in late:
+                # Back to the note as it was; the others are staged again
+                # below, in order, on that text.
+                before = batch.originals[a.note]
+                assert before is not None       # a note read, not made
+                batch.texts[a.note] = before
         for a in actions:
             # The disk decides the name: an existing file keeps its own.
             a.rel = _disk_rel(vault, a.copy.target,
@@ -499,12 +587,7 @@ def run(job: Job, keep: set[int], hold: set[int], write: bool) -> Result:
         if not isinstance(err, Exception):
             raise
         why = str(err) or err.__class__.__name__
-        if isinstance(err, _Late):
-            lines.append(why)
-            lines.append("Nothing was placed: run place again to file the others."
-                         if not stuck else "These files could not be put back: "
-                         + "; ".join(stuck))
-        elif stuck:
+        if stuck:
             lines.append(f"The notes could not be written ({why}), and these "
                          "files could not be put back: " + "; ".join(stuck))
         else:

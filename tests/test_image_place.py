@@ -905,10 +905,16 @@ def test_a_file_that_appears_before_the_copy_is_never_overwritten(vault, monkeyp
     before = snapshot(vault)
     assert run(vault, job, "--keep", "1", "2", "--write") == 1
     assert target.read_bytes() == JPG2                    # not overwritten, not undone
-    assert snapshot(vault) == {**before, f"{CHARS}/anselm.jpg": JPG2}
+    after = snapshot(vault)
+    assert after[f"{CHARS}/anselm.jpg"] == JPG2
+    # The late one is skipped with a row; the other is filed.
+    assert after["_attachments/scenes/session-03-mill.jpg"] == JPG
+    assert b"![[session-03-mill.jpg]]" in after["Sessions/Session 03 Wrap-Up.md"]
+    assert after["NPCs/Anselm.md"] == before["NPCs/Anselm.md"]
     out = capsys.readouterr().out
     assert f"{CHARS}/anselm already has a picture; picture 1 was not placed" in out
-    assert [e.status for e in image_jobs.load(job.id).entries] == ["drawn", "drawn"]
+    assert "Filed picture 2" in out
+    assert [e.status for e in image_jobs.load(job.id).entries] == ["drawn", "kept"]
 
 
 def test_a_file_that_appears_with_the_same_bytes_is_taken_as_placed(vault, monkeypatch):
@@ -1064,3 +1070,101 @@ def test_a_case_variant_name_never_makes_two_files_one_without_the_disk(vault, m
     image_place._retire(vault, batch, act, lines)
     assert lines == [f"  Removed the old picture {CHARS}/MARTA.jpg."]
     assert not image_place._is_target(vault, act, f"{CHARS}/MARTA.jpg")
+
+
+# --- bug bash 4: word boundary, vault-wide embed names ----------------------
+
+def test_opening_words_end_at_a_word_boundary():
+    spans = image_jobs.recap_spans(RECAP.replace(
+        "The miller then spoke.", "The millers then spoke."))
+    assert image_jobs.after_hits(spans, "The miller") == [1]
+    assert image_jobs.after_hits(spans, "The millers") == [2]
+    assert image_jobs.after_hits(spans, "The miller said nothing at first.") == [1]
+    assert image_jobs.after_hits(spans, "The miller s") == []
+
+
+def test_a_bare_embed_means_the_nearest_file_of_that_name_in_the_vault(tmp_path):
+    folder = tmp_path / "_attachments" / "scenes"
+    folder.mkdir(parents=True)
+    t = RECAP_WITH.format("![[a.jpg]]")
+    # Alone, the embed is the picture: already there.
+    assert image_place.embed_after(t, WHERE, "a.jpg", folder, tmp_path) == t
+    # A same-named file nearer the top is what Obsidian shows instead.
+    (tmp_path / "a.jpg").write_bytes(JPG)
+    out = image_place.embed_after(t, WHERE, "a.jpg", folder, tmp_path)
+    assert out is not None and out.count("![[a.jpg]]") == 1
+    assert "![[_attachments/scenes/a.jpg]]" in out     # qualified: the bare name is not ours
+    # A path in the embed names exactly that file.
+    p = RECAP_WITH.format("![[_attachments/scenes/a.jpg]]")
+    (folder / "a.jpg").write_bytes(JPG)
+    assert image_place.embed_after(p, WHERE, "a.jpg", folder, tmp_path) == p
+
+
+def two_scenes():
+    def at(n, after, dest):
+        return entry(n, "Sessions/Session 03 Wrap-Up.md", "scene",
+                     f"_attachments/scenes/{dest}", after=after, shape="16:9")
+    return [at(1, "The miller said nothing", "mill-one"),
+            at(2, "The miller then spoke", "mill-two")]
+
+
+def test_a_late_file_leaves_its_embed_out_when_two_scenes_share_a_recap(
+        vault, monkeypatch):
+    job = make_job(vault, two_scenes())
+    target = vault / "_attachments/scenes/mill-one.jpg"
+    real = image_place._copy_in
+
+    def synced(c, *rest):
+        if c.target == target:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(JPG2)
+        real(c, *rest)
+    monkeypatch.setattr(image_place, "_copy_in", synced)
+    assert run(vault, job, "--keep", "1", "2", "--write") == 1
+    text = (vault / "Sessions/Session 03 Wrap-Up.md").read_text(encoding="utf-8")
+    assert "![[mill-two.jpg]]" in text and "mill-one" not in text
+
+
+def test_two_scenes_in_one_recap_are_both_embedded(vault):
+    job = make_job(vault, two_scenes())
+    assert run(vault, job, "--keep", "1", "2", "--write") == 0
+    text = (vault / "Sessions/Session 03 Wrap-Up.md").read_text(encoding="utf-8")
+    assert text.count("![[mill-one.jpg]]") == 1
+    assert text.count("![[mill-two.jpg]]") == 1
+
+
+def test_a_same_named_file_beside_the_note_is_what_a_bare_embed_means(tmp_path):
+    folder = tmp_path / "_attachments" / "scenes"
+    notes = tmp_path / "Sessions"
+    folder.mkdir(parents=True)
+    notes.mkdir()
+    (notes / "a.jpg").write_bytes(JPG)          # beside the recap: wins
+    t = RECAP_WITH.format("![[a.jpg]]")
+    out = image_place.embed_after(t, WHERE, "a.jpg", folder, tmp_path, notes)
+    assert out is not None and out.count("![[a.jpg]]") == 1
+    assert "![[_attachments/scenes/a.jpg]]" in out
+    # With nothing beside the note, the vault-wide rule decides as before.
+    (notes / "a.jpg").unlink()
+    assert image_place.embed_after(t, WHERE, "a.jpg", folder, tmp_path, notes) == t
+
+
+def test_a_qualified_embed_stays_as_written_and_a_new_one_is_qualified(tmp_path):
+    folder = tmp_path / "_attachments" / "scenes"
+    notes = tmp_path / "Sessions"
+    folder.mkdir(parents=True)
+    notes.mkdir()
+    (tmp_path / "a.jpg").write_bytes(JPG)       # a root file of the same name
+    (folder / "a.jpg").write_bytes(JPG2)
+    t = RECAP_WITH.format("![[_attachments/scenes/a.jpg|300]]")
+    # The path as written is kept, and counts as already embedded.
+    assert image_place.exact_embed_names(t, "a.jpg", folder, tmp_path, notes) == t
+    assert image_place.embed_after(t, WHERE, "a.jpg", folder, tmp_path, notes) == t
+    # Nothing embedded yet: the bare name would mean the root file, so the
+    # path is written.
+    out = image_place.embed_after(RECAP, WHERE, "a.jpg", folder, tmp_path, notes)
+    assert out is not None and "![[_attachments/scenes/a.jpg]]" in out
+    assert "![[a.jpg]]" not in out
+    # Where the bare name does mean the picture, it stays bare.
+    (tmp_path / "a.jpg").unlink()
+    out = image_place.embed_after(RECAP, WHERE, "a.jpg", folder, tmp_path, notes)
+    assert out is not None and "![[a.jpg]]" in out

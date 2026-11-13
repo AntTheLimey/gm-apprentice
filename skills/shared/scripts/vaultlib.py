@@ -34,9 +34,11 @@ import shutil
 import subprocess
 import sys
 import threading
+import time
 import unicodedata
 from bisect import bisect_left
 from collections.abc import Callable, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -1726,6 +1728,72 @@ def _read_state(vault: Path) -> dict[str, Any]:
     return data
 
 
+LOCK_WAIT = 30.0                        # seconds before giving up
+_held = threading.local()               # lock files this thread already holds
+
+try:
+    import fcntl
+
+    def _lock(fd: int) -> None:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+    def _unlock(fd: int) -> None:
+        fcntl.flock(fd, fcntl.LOCK_UN)
+except ImportError:     # Windows
+    import msvcrt
+
+    def _lock(fd: int) -> None:
+        os.lseek(fd, 0, os.SEEK_SET)
+        msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)  # type: ignore[attr-defined]
+
+    def _unlock(fd: int) -> None:
+        os.lseek(fd, 0, os.SEEK_SET)
+        msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)  # type: ignore[attr-defined]
+
+
+LOCK_FILE = "_meta/.vault-state.lock"   # beside the state file; never removed
+
+
+def _lock_path(vault: Path) -> Path:
+    """The lock file: next to the state file, the one place every writer of
+    this vault shares. It is never removed, which would race."""
+    return vault / LOCK_FILE
+
+
+@contextmanager
+def state_lock(vault: Path) -> Iterator[None]:
+    """Hold the vault's state lock around a read-then-write of the state
+    file, so that runs at the same time each see the other's change. Every
+    writer of the file takes it (`set_state`, `write_stamp`, `write_held`
+    do), and a caller that reads first and then writes wraps both. It may be
+    taken again inside itself by the same thread. The operating system drops
+    the lock when the process ends, however it ends. Raises `OSError` when
+    the lock cannot be had within `LOCK_WAIT` seconds, or `_meta` cannot
+    be written (the state write would fail too). (The publish tool's own stamp write is not covered.)"""
+    path = _lock_path(vault)
+    mine: set[str] = _held.__dict__.setdefault("paths", set())
+    key = str(path.resolve())
+    if key in mine:
+        yield
+        return
+    with open(path, "ab") as f:
+        deadline = time.monotonic() + LOCK_WAIT
+        while True:
+            try:
+                _lock(f.fileno())
+                break
+            except OSError:
+                if time.monotonic() >= deadline:
+                    raise
+                time.sleep(0.02)
+        mine.add(key)
+        try:
+            yield
+        finally:
+            mine.discard(key)
+            _unlock(f.fileno())
+
+
 def read_stamp(vault: Path) -> str | None:
     """The plugin version the vault was last updated to, None when it
     records none: `vault-state.json`'s `gm_apprentice_version` (a broken
@@ -1742,10 +1810,11 @@ def write_stamp(vault: Path, version: str) -> None:
     the form the publish tool writes it (two-space indent, a trailing
     newline, every other key and the key order kept), through a temporary
     file swapped in."""
-    state = _read_state(vault)
-    state[STAMP_KEY] = version
-    state.pop(HELD_KEY, None)
-    _write_state(vault, state)
+    with state_lock(vault):
+        state = _read_state(vault)
+        state[STAMP_KEY] = version
+        state.pop(HELD_KEY, None)
+        _write_state(vault, state)
 
 
 def read_held(vault: Path) -> dict[str, set[str]]:
@@ -1767,26 +1836,28 @@ def set_state(vault: Path, key: str, value: Any) -> None:
     """Set one key of the state file, every other key kept, written as the
     publish tool writes it. For bookkeeping a skill keeps (an offer made
     once); the version stamp has its own writer."""
-    state = _read_state(vault)
-    state[key] = value
-    _write_state(vault, state)
+    with state_lock(vault):
+        state = _read_state(vault)
+        state[key] = value
+        _write_state(vault, state)
 
 
 def write_held(vault: Path, left: set[str], said: set[str],
                drop: frozenset[str] | set[str] = frozenset()) -> None:
     """Remember the ids for the next update (merged with those already
     remembered); `drop` takes leaves out that the update record now keeps."""
-    before = read_held(vault)
-    left = (left | before["left"]) - set(drop)
-    said = said | before["said"]
-    state = _read_state(vault)
-    if not left and not said:
-        if HELD_KEY in state:
-            state.pop(HELD_KEY)
-            _write_state(vault, state)
-        return
-    state[HELD_KEY] = {"left": sorted(left), "said": sorted(said)}
-    _write_state(vault, state)
+    with state_lock(vault):
+        before = read_held(vault)
+        left = (left | before["left"]) - set(drop)
+        said = said | before["said"]
+        state = _read_state(vault)
+        if not left and not said:
+            if HELD_KEY in state:
+                state.pop(HELD_KEY)
+                _write_state(vault, state)
+            return
+        state[HELD_KEY] = {"left": sorted(left), "said": sorted(said)}
+        _write_state(vault, state)
 
 
 def _write_state(vault: Path, state: dict[str, Any]) -> None:
