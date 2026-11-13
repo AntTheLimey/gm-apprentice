@@ -152,7 +152,6 @@ test('G-Intolerance (B137): 0.1G or 0.05G increments, named or from the points',
   assert.equal(dx(1.2, 1, [{ name: 'G-Intolerance (0.1 G increment)', cost: '-10' }]), 2);
   assert.equal(dx(1.2, 1, [{ name: 'G-Intolerance', cost: '-20' }]), 4);
   assert.equal(dx(1.2, 1, [{ name: 'G-Intolerance', cost: '-10' }]), 2);
-  assert.equal(dx(1.2, 1, [{ name: 'Total G-Intolerance', cost: '-25' }]), 1);   // another book (S222): not read
   const dis = '## Disadvantages\n\n| Trait | Cost | Notes |\n|-------|------|-------|\n| G-Intolerance (0.1 G increment) | -10 | |\n\n## Equipment';
   assert.match(sheet(raw => raw.replace('## Equipment', dis)).sheetHtml, /DX \u22122 .*G-Intolerance \(B137\) makes the step 0\.1G/);
 });
@@ -161,4 +160,13 @@ test('the notice does not say "within steps" when G-Experience halved a real inc
   const out = sheet(raw => raw.replace('| Combat Reflexes | 15 | +1 all defenses |', '| Combat Reflexes | 15 | +1 all defenses |\n| G-Experience (All) | 10 | |'));
   assert.match(out.sheetHtml, /1\.2G: no DX penalty \(1 G-Increment, halved by G-Experience\)/);
   assert.doesNotMatch(out.sheetHtml, /within/);
+});
+
+test('Total G-Intolerance (S222): 0.05G steps, one more anywhere off home, G-Experience no help', () => {
+  assert.equal(dx(1.2, 1, [{ name: 'Total G-Intolerance', cost: '-25' }]), 5);    // 4 steps + 1
+  assert.equal(dx(1.01, 1, [{ name: 'Total G-Intolerance', cost: '-25' }]), 1);   // any difference is one
+  assert.equal(dx(1, 1, [{ name: 'Total G-Intolerance', cost: '-25' }]), 0);      // at home, none
+  assert.equal(dx(1.2, 1, [{ name: 'Total G-Intolerance', cost: '-25' }, { name: 'G-Experience (All)', cost: '10' }]), 5);
+  const dis = '## Disadvantages\n\n| Trait | Cost | Notes |\n|-------|------|-------|\n| Total G-Intolerance | -25 | |\n\n## Equipment';
+  assert.match(sheet(raw => raw.replace('## Equipment', dis)).sheetHtml, /DX \u22125 .*Total G-Intolerance \(S222\)/);
 });
