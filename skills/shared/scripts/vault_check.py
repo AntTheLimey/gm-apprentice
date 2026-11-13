@@ -182,6 +182,7 @@ from schema_rules import (
 import install_layout
 from install_layout import MISSING_TOOL, VERSION_UNKNOWN
 from vaultlib import (  # noqa: F401
+    before_play,
     FENCE_RE,
     HEADING_RE,
     LINK_RE,
@@ -583,8 +584,17 @@ def check_stale_drafts(vault: Path) -> list[str]:
             continue
         if fm.get("type") == "session-plan":
             continue  # prep content is always DRAFT — exempt
-        created = parse_session_number(fm.get("createdSession"))
+        # `createdSession: ""` is a note made before play (the-midwife, the
+        # scaffold): it is as old as the chapter's play, and promoting it
+        # once play confirms it is reconcile's job (#622).
+        pre_play = "createdSession" in fm and before_play(fm["createdSession"])
+        created = 0 if pre_play else parse_session_number(fm.get("createdSession"))
         own = chapter_key(rel, fm)
+        if chaptered and own is None and pre_play:
+            rows.append(f"INFO\t{rel}\tmade-before-play DRAFT cannot be dated "
+                        f"— this vault numbers sessions per chapter and the "
+                        f"note names no chapter")
+            continue
         if chaptered and own is None and created is not None:
             # Numbering restarts per chapter and this note names none, so its
             # createdSession cannot be placed on any timeline. Saying so beats
@@ -603,8 +613,10 @@ def check_stale_drafts(vault: Path) -> list[str]:
                         f"exceeds current session ({now}) — check "
                         f"the value (dates don't belong in this field)")
         elif now - created >= stale_after:
-            rows.append(f"WARNING\t{rel}\tstale DRAFT (created session "
-                        f"{created}, now session {now}) — promote "
+            made = ("made before play" if pre_play
+                    else f"created session {created}")
+            rows.append(f"WARNING\t{rel}\tstale DRAFT ({made}, "
+                        f"now session {now}) — promote "
                         f"to AUTHORITATIVE or delete")
     return rows
 

@@ -262,6 +262,36 @@ class SettingsNumbersTests(unittest.TestCase):
         return [r for r in vc.check_stale_drafts(self.vault(yaml_text, notes))
                 if "stale DRAFT" in r]
 
+    def stale_rows(self, yaml_text, notes):
+        notes = {"Session_05.md": "---\ntype: session\nsession_number: 5\n---\n", **notes}
+        return vc.check_stale_drafts(self.vault(yaml_text, notes))
+
+    def test_a_pre_play_draft_is_dated_from_before_session_one(self):
+        draft = "---\ntype: npc\ncanon_status: DRAFT\ncreatedSession: \"\"\n---\n"
+        rows = self.stale_rows("", {"Draft.md": draft})
+        self.assertEqual(len(rows), 1)
+        self.assertIn("stale DRAFT (made before play, now session 5)", rows[0])
+        self.assertNotIn("missing", rows[0])
+        # a young vault does not nag about notes made before play
+        young = {"Session_05.md": "---\ntype: session\nsession_number: 2\n---\n"}
+        self.assertEqual(self.stale_rows("", {"Draft.md": draft, **young}), [])
+
+    def test_a_note_with_no_createdsession_key_still_asks_for_one(self):
+        rows = self.stale_rows("", {"Draft.md": "---\ntype: npc\ncanon_status: DRAFT\n---\n"})
+        self.assertEqual(len(rows), 1)
+        self.assertIn("missing createdSession", rows[0])
+
+    def test_a_pre_play_draft_in_a_chaptered_vault_with_no_chapter_is_info(self):
+        sess = "---\ntype: session\nsession_number: 5\nchapter: {c}\n---\n"
+        rows = self.stale_rows("", {
+            "Ch1_S1.md": sess.format(c="Chapter 1"),
+            "Ch2_S1.md": sess.format(c="Chapter 2"),
+            "Draft.md": "---\ntype: npc\ncanon_status: DRAFT\ncreatedSession: \"\"\n---\n"})
+        mine = [r for r in rows if r.split("\t")[1] == "Draft.md"]
+        self.assertEqual(len(mine), 1)
+        self.assertTrue(mine[0].startswith("INFO\t"))
+        self.assertIn("names no chapter", mine[0])
+
     def test_stale_after_unset_is_the_built_in(self):
         self.assertEqual(len(self.stale("", 2)), 1)
         self.assertEqual(self.stale("", 3), [])

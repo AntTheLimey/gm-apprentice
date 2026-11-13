@@ -830,6 +830,18 @@ def parse_session_number(value: Any) -> int | None:
     return n if n <= MAX_PLAUSIBLE_SESSION else None
 
 
+def before_play(value: Any) -> bool:
+    """A `createdSession` that says the note was made before any session:
+    blank, null or 0. Notes the-midwife and the vault scaffold write carry
+    `createdSession: ""`; absent is not the same (that note was never
+    stamped), so callers test the key first."""
+    if value is None or value == []:  # the frontmatter reader gives [] for `""`
+        return True
+    if isinstance(value, str) and value.strip().lower() in ("", "null", "~", "0"):
+        return True
+    return isinstance(value, int) and not isinstance(value, bool) and value == 0
+
+
 def session_ref_number(fm: dict[str, Any]) -> int | None:
     """The session number named by `fm["session"]`.
 

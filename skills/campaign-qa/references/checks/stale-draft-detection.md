@@ -3,7 +3,8 @@
 **Severity:** WARNING
 **Trigger:** Entity has `canon_status: DRAFT` and either has been
 DRAFT for as many sessions as `vault.stale_after_sessions` says, or
-has a missing or future `createdSession`.
+has a missing or future `createdSession`. A blank `createdSession`
+means made before play and ages from session 0.
 
 **Procedure:** run `gma vault-check <vault> stale-drafts` and report its
 findings. It measures age against each chapter's own latest

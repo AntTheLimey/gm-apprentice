@@ -23,8 +23,15 @@ with the files under a count indented below it:
                          chapters and other structural notes left out)
     draft entities created this session
                          linked DRAFTs whose `createdSession` names this
-                         session's number (and chapter, when both name one):
+                         session's number (and chapter, when both name one),
+                         and the `{PC}_Story` companions of linked PCs that
+                         do (the Wrap-Up links the PC, not its Story file):
                          what the quick path promotes
+    pre-play draft entities played this session
+                         linked DRAFTs (and PC Story companions) with a blank
+                         or 0 `createdSession`, made before play by the-midwife
+                         or the scaffold: the Wrap-Up shows they were played,
+                         so the quick path promotes them too
     older draft entities linked
                          the other linked DRAFTs; the quick path leaves them
     open spoilers        `<!-- spoiler -->` blocks in the linked
@@ -49,7 +56,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from schema_rules import extract_frontmatter, parse_session_number, wikilink_target  # noqa: E402
 from vault_check import RECONSTRUCTION_NOTE_RE, STRUCTURAL_TYPES  # noqa: E402
-from vaultlib import (WRAP_UP_TYPES, entity_type, link_aliases, link_lines,  # noqa: E402
+from vaultlib import (WRAP_UP_TYPES, before_play, entity_type, link_aliases, link_lines,  # noqa: E402
                       link_target, live_wikilinks, markers_in, nested_mapping,
                       normalize, normalize_file_arg, same_chapter, unverified_markers,
                       Unverified, vault_files)
@@ -185,6 +192,26 @@ def _created_this_session(note: Note, number: int | None, chapter: str | None) -
     return same_chapter(chapter, _chapter(note.fm.get("createdSession")))
 
 
+def _pre_play(note: Note) -> bool:
+    """Made before play: a blank, null or 0 `createdSession`. No key at all is
+    a note never stamped, not one made before play."""
+    return "createdSession" in note.fm and before_play(note.fm["createdSession"])
+
+
+def _companions(linked: list[Note], by_rel: dict[str, Note]) -> list[Note]:
+    """The `{PC}_Story` note beside each linked PC, by path as `vault-write
+    story` names it. The wrap-up writes it, but links the PC, so the links
+    alone never reach it (#623)."""
+    found: list[Note] = []
+    for pc in linked:
+        if pc.type != "pc" or Path(pc.rel).stem.endswith("_Story"):
+            continue
+        story = by_rel.get(pc.rel[:-3] + "_Story.md")
+        if story is not None and story not in linked and story not in found:
+            found.append(story)
+    return found
+
+
 def _wrap_rel(vault: Path, raw: str) -> str:
     path = Path(raw)
     if path.is_absolute():
@@ -241,28 +268,32 @@ def scan(vault: Path, wrap_arg: str) -> list[str]:
             if note is not None and note is not wrap and note not in linked \
                     and note.type not in STRUCTURAL_TYPES:
                 linked.append(note)
-    drafts = [n for n in linked if n.fm.get("canon_status") == "DRAFT"]
+    reviewed = [*linked, *_companions(linked, by_rel)]
+    drafts = [n for n in reviewed if n.fm.get("canon_status") == "DRAFT"]
     chapter = _chapter(index.fm.get("chapter"), index.rel) if index else None
     new = [n for n in drafts if _created_this_session(n, number, chapter)]
-    older = [n for n in drafts if n not in new]
+    preplay = [n for n in drafts if n not in new and _pre_play(n)]
+    older = [n for n in drafts if n not in new and n not in preplay]
     out.append(f"linked entities: {len(linked)}")
     out.append(f"draft entities created this session: {len(new)}")
     out.extend(f"  {n.rel}" for n in new)
+    out.append(f"pre-play draft entities played this session: {len(preplay)}")
+    out.extend(f"  {n.rel}" for n in preplay)
     out.append(f"older draft entities linked (the quick path leaves them): {len(older)}")
     out.extend(f"  {n.rel} (createdSession: {n.fm.get('createdSession') or 'none'})"
                for n in older)
     # Untagged markers are of unknown session, so they block with this one's.
     held = []
     out.append(f"unverified in linked notes: "
-               f"{sum(len(unverified_markers(n.text)) for n in linked)}")
-    for n in linked:
+               f"{sum(len(unverified_markers(n.text)) for n in reviewed)}")
+    for n in reviewed:
         for mark in unverified_markers(n.text):
             other = number is not None and mark.from_session(number, chapter) is False
             out.append(f"  {n.rel}:{mark.line}: {_marker(mark)}"
                        + (" [another session]" if other else ""))
             if not other:
                 held.append(mark)
-    spoilers = [(n.rel, line, words) for n in linked for line, words in open_spoilers(n.text)]
+    spoilers = [(n.rel, line, words) for n in reviewed for line, words in open_spoilers(n.text)]
     out.append(f"open spoilers: {len(spoilers)}")
     out.extend(f"  {rel}:{line}: {words}" for rel, line, words in spoilers)
 
@@ -278,8 +309,8 @@ def scan(vault: Path, wrap_arg: str) -> list[str]:
         fails.append("a Plan file")
     if fails:
         out.append("quick path: no (" + ", ".join(fails) + ")")
-    elif new:
-        out.append("quick path: yes, unless a DRAFT entity created this session "
+    elif new or preplay:
+        out.append("quick path: yes, unless a DRAFT entity created or played this session "
                    "contradicts AUTHORITATIVE canon on the same facts")
     else:
         out.append("quick path: yes")
