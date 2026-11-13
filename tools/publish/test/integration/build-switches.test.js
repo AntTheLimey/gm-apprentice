@@ -179,7 +179,9 @@ describe('PC notes whose labels shift their headings', () => {
     it(`${name}: sheets on builds as before, with no keep-list warning`, () => {
       const { lines, root } = buildSite({ pcAppend });
       assert.ok(!lines.some((l) => l.includes('changes this note')), lines.join('\n'));
-      assert.ok(allOutput(root).some(([, body]) => body.includes(SENT)), 'the note still publishes its body');
+      // SENT, or the Background's own text: since #483 a Background of prose is the backstory, so the pull quote that
+      // once carried SENT (an excerpt of the body) is now the backstory's opening.
+      assert.ok(allOutput(root).some(([f, body]) => body.includes(SENT) || (f.endsWith('karl-brenner.html') && /<p>ok\b/.test(body))), 'the note still publishes its body');
     });
   }
   it('a normal note with links and embeds is stable and keeps its sections', () => {

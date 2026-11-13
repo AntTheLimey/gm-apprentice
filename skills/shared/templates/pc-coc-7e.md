@@ -86,6 +86,10 @@ createdSession: ""
 
 **Treasured Possessions:** {Valued items}
 
+### Backstory
+
+{The investigator's history, as the player tells it}
+
 ## Skills
 
 | Skill | Base | Regular | Half | Fifth |

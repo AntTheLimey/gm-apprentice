@@ -98,7 +98,7 @@ describe('pcTemplate pull quote', () => {
   const quoted = (frontmatter, context, body = '## Stat Sheet\n\n| STR | 50 |\n|---|---|\n') => pcTemplate(
     { frontmatter: { type: 'pc', ...frontmatter }, displayTitle: 'Hero', outputPath: 'pcs/hero.html', title: 'Hero', markdown: body, content: body },
     { html: '' }, [], noop, cfg, {}, undefined, context);
-  const quote = html => (html.match(/<div class="pull-quote">([\s\S]*?)<\/div>/) || [])[1];
+  const quote = html => (html.match(/<div class="pull-quote(?: pull-quote-backstory)?">([\s\S]*?)<\/div>/) || [])[1];
   const prose = '\n## Background\n\nA sailor out of Brest. He owes the Guild.\n';
 
   it('quotes key_traits', () => {

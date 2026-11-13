@@ -233,8 +233,11 @@ test('card carries the hook', () => {
   const card = (name) => html.split(`data-entity-name="${name}"`)[1].split('</a>')[0];
   assert.match(card('Ilse Varn'), /<p class="card-hook">She would like a discovery of her own\.<\/p>/);
   assert.doesNotMatch(card('Quiet'), /card-hook/);
-  // The CoC folio shows no hook, so its card carries none.
-  assert.doesNotMatch(indexTemplate('characters/pcs', 'PCs', [ilse], navFor, config, {}, {}, { cocFolio: true }), /card-hook/);
+  // The CoC folio shows a hook the note gives (#483), so its card carries it; never a fallback (key_traits, an excerpt).
+  assert.match(indexTemplate('characters/pcs', 'PCs', [ilse], navFor, config, {}, {}, { cocFolio: true }), /card-hook/);
+  const traitsOnly = { ...pcPage('', { key_traits: ['wry'] }), title: 'Wry', displayTitle: 'Wry', outputPath: 'characters/pcs/wry.html' };
+  assert.match(indexTemplate('characters/pcs', 'PCs', [traitsOnly], navFor, config, {}, {}), /<p class="card-hook">wry<\/p>/);
+  assert.doesNotMatch(indexTemplate('characters/pcs', 'PCs', [traitsOnly], navFor, config, {}, {}, { cocFolio: true }), /card-hook/);
 });
 
 test('hook prints the backstory as the prologue shows it: a typed [[ ]] stays, a GM link shows its label', () => {

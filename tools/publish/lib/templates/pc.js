@@ -8,9 +8,9 @@ const { getInitials } = require('./landing-data');
 const { liveDataScript } = require('./gurps/live-data');
 const { liveScriptHrefs, clientFor } = require('./live-mount');
 const { getConsumedTitleMatcher, getSheetFamily } = require('./pc-registry');
-const { backgroundParts, splitTitle } = require('../pc-background');
+const { backgroundParts, backgroundRest, splitTitle } = require('../pc-background');
 const { prologueHtml, asBlock } = require('./prologue');
-const { aboveSubheadings, cellText, isPlaceholder, filled } = require('./sheet-parse');
+const { cellText } = require('./sheet-parse');
 const { sheetSourceOf } = require('../sheet-source');
 const { resolveLook, isDressed } = require('../skins');
 const { framedPortrait } = require('../skins/portrait');
@@ -63,7 +63,8 @@ function cocSystemLabel(publishConfig) {
 // so the parchment-scoped .cr-* rules apply.
 function buildCocBody(opts) {
   const { page, fm, publishConfig, displayTitle, sheetHtml, recordHtml, statusBarHtml,
-    portraitUrl, sealUrl, crWidget, equipmentContent, storyContent, journeyContent, leftoverSections, look } = opts;
+    portraitUrl, sealUrl, crWidget, equipmentContent, storyContent, journeyContent, leftoverSections, look,
+    epithet = '', teaser = '' } = opts;
 
   // Portrait: the sheet carries an empty <img class="portrait" data-portrait> slot.
   // Inject the resolved src, or drop the framed box entirely when absent.
@@ -108,7 +109,7 @@ ${seal}
   <div class="kicker">Being a true account of the investigator</div>
   <h1>${escapeHtml(displayTitle)}</h1>
   <div class="era">${era}</div>
-</div>
+</div>${epithet ? `\n${epithet}` : ''}
 <div class="fleuron">❧ ❦ ❧</div>
 ${statusBarHtml || ''}
 ${crWidget}
@@ -122,7 +123,7 @@ ${crWidget}
   </div>
   <div class="foliopanel">
     <div class="tab-panel" id="p-sheet">
-${sheet}
+${teaser ? `${teaser}\n` : ''}${sheet}
     </div>
     <div class="tab-panel" id="p-record" hidden>
 ${recordPanel}
@@ -131,9 +132,7 @@ ${recordPanel}
 ${equipmentContent}
     </div>
     <div class="tab-panel" id="p-story" hidden>
-  <div class="story-prose">
-    ${storyContent}
-  </div>
+${storyContent}
     </div>
     <div class="tab-panel" id="p-journey" hidden>
 ${journeyContent}
@@ -263,7 +262,7 @@ document.addEventListener('click', function(e) {
 </script>`;
 }
 
-// --- Story tab (not the CoC folio, #483) ---
+// --- Story tab (every PC page, the CoC folio too: #483) ---
 
 // A root-relative address (`story/characters/x.html#session-2`) as an href from this page.
 function hrefFrom(page, address) {
@@ -329,8 +328,9 @@ const TEASER_CHARS = 280;
 // The sheet tab's teaser, and a way to the Story tab. With a `hook` the pull quote says
 // something else, so the teaser opens the backstory (its first sentence). Without one the
 // pull quote is that first sentence: the teaser goes on from it, cut at a word near
-// TEASER_CHARS, and a one-sentence backstory has no teaser.
-function storyTeaserHtml(parts, hasHook) {
+// TEASER_CHARS, and a one-sentence backstory has no teaser. On the CoC folio the link is
+// followed by coc-sheet.js, which opens the folio's Story tab (the page has no switchTab).
+function storyTeaserHtml(parts, hasHook, { folio = false } = {}) {
   if (!parts || !parts.backstoryHtml || !parts.firstSentence) return '';
   let text = parts.firstSentence;
   if (!hasHook) {
@@ -350,7 +350,7 @@ function storyTeaserHtml(parts, hasHook) {
     <p class="pc-backstory-teaser-label">From the backstory</p>
     <p class="pc-backstory-teaser-text">${escapeHtml(text)}</p>
   </div>
-  <a href="#story" onclick="switchTab('story'); return false;">Read on &rarr;</a>
+  <a href="#story"${folio ? '' : ` onclick="switchTab('story'); return false;"`}>Read on &rarr;</a>
 </section>`;
 }
 
@@ -365,32 +365,6 @@ const IDENTITY_LABELS = {
   Class: HEADER_LABELS.dnd[0], Species: HEADER_LABELS.dnd[1], Background: /^Background$/i,
   Ancestry: /^Ancestry$/i, Heritage: /^Heritage$/i, Vice: /^Vice(?:\/Purveyor)?$/i,
 };
-// The story's own fields, which the Story tab shows.
-const STORY_LABELS = [/^Backstory\s*&\s*Personality$/i, /^Appearance$/i];
-
-// The Background sub-sections the Story tab reads.
-const STORY_SUBSECTIONS = new Set(['backstory', 'appearance', 'personality']);
-
-// What the Background section holds besides its story once it is no accordion: the lines
-// above its sub-headings that neither the Story tab nor the page header shows, and every
-// sub-section the Story tab does not read (`### Allies`), heading and all. '' when none.
-function backgroundRest(section, shown) {
-  const drop = [...STORY_LABELS, ...shown];
-  const rest = aboveSubheadings(section.html).replace(/<p>([\s\S]*?)<\/p>\s*/gi, (p, inner) => {
-    const m = inner.match(/^\s*<strong>\s*([^<:]+?)\s*(?::\s*<\/strong>|<\/strong>\s*:)([\s\S]*)$/i);
-    if (m && (drop.some(re => re.test(cellText(m[1]))) || !filled(cellText(m[2])) || /^\s*[–—-]\s*$/.test(cellText(m[2])))) return '';
-    return isPlaceholder(cellText(inner)) || !cellText(inner) ? '' : p;
-  }).trim();
-  const others = [];
-  const re = /(<h3[^>]*>([\s\S]*?)<\/h3>)([\s\S]*?)(?=<h3[ >]|$)/gi;
-  let m;
-  while ((m = re.exec(section.html || '')) !== null) {
-    if (!STORY_SUBSECTIONS.has(cellText(m[2]).toLowerCase())) others.push(`${m[1]}${m[3]}`.trim());
-  }
-  const all = [rest, ...others].filter(Boolean).join('\n');
-  return all ? `<section class="pc-background-rest">\n${all}\n</section>` : '';
-}
-
 function pcTemplate(page, processedContent, sections, navFor, config, imageMap, storyHtml, context) {
   const fm = page.frontmatter;
   const publishConfig = (context || {}).publishConfig || {};
@@ -513,9 +487,10 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
   // in full, so one matcher decides both what it reads and what leaves this list.
   const sheetConsumes = getConsumedTitleMatcher(publishConfig.system);
   // The background parts (Background's Backstory, Appearance, Personality, or its older one-line
-  // fields) go to the Story tab, and Background is then no accordion (the CoC folio keeps its own).
+  // fields, or a CoC investigator's) go to the Story tab, and Background is then no accordion (on the CoC folio,
+  // its Record keeps only the rest, coc/layout.js).
   const cocFolio = usesCocFolio(publishConfig, sheetsOff);
-  const parts = cocFolio ? null : backgroundParts(sections);
+  const parts = backgroundParts(sections);
   const backgroundSection = parts ? sections.find(s => s.id === 'background') : null;
   const sheetSections = sections.filter(s => {
     if (s === backgroundSection) return false;
@@ -540,8 +515,8 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
   const shownLabels = sheetsOff
     ? ((context || {}).identity || []).map(([label]) => IDENTITY_LABELS[label]).filter(Boolean)
     : (systemHtml && HEADER_LABELS[family]) || [];
-  const restHtml = backgroundSection ? backgroundRest(backgroundSection, shownLabels) : '';
-  const teaser = storyTeaserHtml(parts, typeof fm.hook === 'string' && fm.hook.trim() !== '');
+  const restHtml = backgroundSection ? backgroundRest(backgroundSection, shownLabels, parts) : '';
+  const teaser = storyTeaserHtml(parts, typeof fm.hook === 'string' && fm.hook.trim() !== '', { folio: cocFolio });
   const lead = teaser ? `${teaser}\n` : '';
   const rest = restHtml ? `${restHtml}\n` : '';
 
@@ -590,13 +565,15 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
 
   // --- Story Tab ---
   const opts = context || {};
-  // The CoC folio's Story tab (#483 brings it the prologue).
-  const cocStoryContent = opts.storyHref
-    ? `<a class="story-read-link" href="${encodeHref(relativeHref(page.outputPath, opts.storyHref))}">Read ${escapeHtml(page.displayTitle)}'s story &rarr;</a>`
-    : (storyHtml || '<p class="text-muted">No story content available.</p>');
-  const storyContent = cocFolio ? '' : storyTabHtml(page, parts, {
+  const storyContent = storyTabHtml(page, parts, {
     portraitUrl: hasPortrait ? imgUrl : '', storyHref: opts.storyHref, storyLines: opts.storyLines, storyHtml,
   });
+  // The CoC folio's Story tab: with a background, the same one as every other page; without, the link it always had.
+  const cocStoryContent = parts ? storyContent : `  <div class="story-prose">
+    ${opts.storyHref
+    ? `<a class="story-read-link" href="${encodeHref(relativeHref(page.outputPath, opts.storyHref))}">Read ${escapeHtml(page.displayTitle)}'s story &rarr;</a>`
+    : (storyHtml || '<p class="text-muted">No story content available.</p>')}
+  </div>`;
 
   // --- Journey Tab ---
   const routeMap = buildRouteMap(page, pages);
@@ -654,6 +631,9 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
       portraitUrl, sealUrl, crWidget, look,
       equipmentContent, storyContent: cocStoryContent, journeyContent,
       leftoverSections: sheetSections,
+      // The folio shows a hook only when the note gives one (its `hook` or backstory): a PC without stays as it was.
+      epithet: ['hook', 'backstory'].includes(quote.from) ? epithet : '',
+      teaser,
     }) + cocIsland;
     return baseShell({
       pageType: page.frontmatter.type,

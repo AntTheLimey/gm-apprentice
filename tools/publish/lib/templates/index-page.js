@@ -964,7 +964,7 @@ ${rows}
 </div>`;
 }
 
-// opts.cocFolio: PC pages are the CoC folio, which shows no hook, so its cards carry none.
+// opts.cocFolio: PC pages are the CoC folio, which shows a hook only when the note gives one; its cards follow.
 function indexTemplate(dir, label, pages, navFor, config, publishConfig, imageMap = {}, opts = {}) {
   const outputPath = dir + '/index.html';
   const crumbs = generateBreadcrumbs(outputPath, {});
@@ -1031,7 +1031,7 @@ function indexTemplate(dir, label, pages, navFor, config, publishConfig, imageMa
       // where a resolved wikilink would nest one anchor inside another.
       const subtitle = plainMetaValue(fm.occupation || fm.location_type || fm.faction_type || fm.factionType || '');
       // A PC's hook, the line under its page's name (plain text: this sits inside the card's anchor).
-      const hook = isCharacters && fm.type === 'pc' && !opts.cocFolio ? pcEpithetText(p) : '';
+      const hook = isCharacters && fm.type === 'pc' ? pcEpithetText(p, { cocFolio: !!opts.cocFolio }) : '';
       return `<a class="entity-card" href="${escapeHtml(relHref(p, dir))}"
   data-entity-type="${escapeHtml(entityType || '')}"
   data-entity-name="${escapeHtml(p.displayTitle)}"

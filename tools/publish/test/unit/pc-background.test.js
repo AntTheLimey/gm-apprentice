@@ -126,3 +126,73 @@ test('facts read a colon outside the bold and drop any lone dash', () => {
   ].join('\n')));
   assert.deepEqual(s.facts, [{ label: 'Age', value: '40' }, { label: 'Eyes', value: '&co' }]);
 });
+
+// #483: the Call of Cthulhu and GURPS shapes.
+const COC = [
+  '## Background', '',
+  '**Personal Description:** Composed and watchful,', 'easy to overlook.', '',
+  '**Traits:** Patient.', '',
+  '**Ideology & Beliefs:** Reads the arrangement anyway.', '',
+  '**Significant People:** Lady Vane.', '',
+  '**Meaningful Locations:** {Places of importance}', '',
+  '**Treasured Possessions:** Her father\'s prayer book.', '',
+  '**Club:** The Athenaeum', '',
+  '---', '',
+  '## Skills', 'x',
+].join('\n');
+
+test('a CoC investigator\'s fields: Personal Description is how they look, the rest are cards in the note\'s order', () => {
+  const s = backgroundParts(sectionsOf(COC));
+  assert.equal(s.backstoryHtml, '');
+  assert.match(s.appearanceHtml, /^Composed and watchful,\s+easy to overlook\.$/);
+  assert.deepEqual(s.personality.map(p => p.label), ['Traits', 'Ideology & Beliefs', 'Significant People', 'Treasured Possessions']);
+  assert.equal(s.firstSentence, '');
+});
+
+test('a CoC Background\'s other lines are left for the page, its story fields and closing rule are not', () => {
+  const { backgroundRestHtml } = require('../../lib/pc-background');
+  const sections = sectionsOf(COC);
+  const bg = sections.find(x => x.id === 'background');
+  const rest = backgroundRestHtml(bg, [], backgroundParts(sections));
+  assert.match(rest, /Club:<\/strong> The Athenaeum/);
+  assert.doesNotMatch(rest, /Personal Description|Traits|Ideology|Significant|Treasured|<hr/);
+  const plain = sectionsOf(COC.replace('**Club:** The Athenaeum', ''));
+  assert.equal(backgroundRestHtml(plain.find(x => x.id === 'background'), [], backgroundParts(plain)), '');
+});
+
+test('a CoC Backstory sub-section under the fields is the prologue', () => {
+  const s = backgroundParts(sectionsOf(COC.replace('---', '### Backstory\n\nJane was raised in a vicarage. She reads.\n\n---')));
+  assert.equal(s.backstoryHtml, '<p>Jane was raised in a vicarage. She reads.</p>');
+  assert.equal(s.firstSentence, 'Jane was raised in a vicarage.');
+  assert.equal(s.personality.length, 4);
+});
+
+test('a Background of prose alone (the GURPS free-form template) is the backstory, all of it', () => {
+  const s = backgroundParts(sectionsOf('## Background\n\nKarl walked out of the forest. He never went back.\n\n- a list\n\n---\n\n## Skills\n'));
+  assert.equal(s.wholeSection, true);
+  assert.match(s.backstoryHtml, /^<p>Karl walked[\s\S]*<li>a list<\/li>\s*<\/ul>$/);
+  assert.equal(s.firstSentence, 'Karl walked out of the forest.');
+  const { backgroundRestHtml } = require('../../lib/pc-background');
+  const sections = sectionsOf('## Background\n\nKarl walked.\n');
+  assert.equal(backgroundRestHtml(sections[0], [], backgroundParts(sections)), '');
+});
+
+test('a Background with a field line, a table or a heading is not read as prose alone', () => {
+  assert.equal(backgroundParts(sectionsOf('## Background\n\nKarl walked.\n\n**Rank:** Sergeant\n')), null);
+  assert.equal(backgroundParts(sectionsOf('## Background\n\nKarl walked.\n\n| a | b |\n|---|---|\n| 1 | 2 |\n')), null);
+  // A bold word opening a sentence is no field.
+  assert.equal(backgroundParts(sectionsOf('## Background\n\n**Karl** walked. Far.\n')).firstSentence, 'Karl walked.');
+});
+
+test('an unfilled GURPS or CoC template has no background parts to show', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const dir = path.join(__dirname, '..', '..', '..', '..', 'skills', 'shared', 'templates');
+  for (const t of ['pc-gurps-4e.md', 'pc-coc-7e.md', 'pc-coc-7e-regency.md']) {
+    const body = fs.readFileSync(path.join(dir, t), 'utf8').replace(/^---[\s\S]*?\n---\n/, '');
+    const s = backgroundParts(sectionsOf(body));
+    assert.ok(s, t);
+    assert.equal(s.backstoryHtml + s.appearanceHtml + s.firstSentence, '', t);
+    assert.deepEqual(s.personality, [], t);
+  }
+});

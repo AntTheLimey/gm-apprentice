@@ -62,8 +62,11 @@ function pcEpithet(page) {
   return { text: excerpt, from: excerpt ? 'excerpt' : '' };
 }
 
-function pcEpithetText(page) {
-  return pcEpithet(page).text;
+// `cocFolio`: the page is the CoC folio, which shows the hook only when the note gives one (its
+// `hook` or its backstory's opening), so a card or preview of it says the same.
+function pcEpithetText(page, { cocFolio = false } = {}) {
+  const quote = pcEpithet(page);
+  return !cocFolio || quote.from === 'hook' || quote.from === 'backstory' ? quote.text : '';
 }
 
 module.exports = { headerMetaFields, headerMeta, pcEpithet, pcEpithetText };

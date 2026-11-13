@@ -416,7 +416,8 @@ describe('the GM build beside the player site', () => {
       const html = s.gm.read('pcs', 'jean.html');
       const nav = /<nav class="section-nav"[^>]*>([\s\S]*?)<\/nav>/.exec(html)[1];
       const links = [...nav.matchAll(/<a href="#([^"]*)">([\s\S]*?)<\/a>/g)];
-      assert.deepEqual(links.map((m) => m[1]), ['before-the-first-heading', 'background', 'skills', 'gm-notes']);
+      // Background is prose alone, so it is the backstory (#483): on the Story tab, not in the list.
+      assert.deepEqual(links.map((m) => m[1]), ['before-the-first-heading', 'skills', 'gm-notes']);
       for (const [, id, inner] of links) assert.match(inner, /^<span class="gm-mark gm-mark--sections"[^>]*>[^<]+<\/span>$/, id);
       const marks = markedTexts(html);
       assert.ok(marks.some((m) => m.label === 'note body (a link label changes its headings)' && /PRELUDETEXT/.test(m.text)));
