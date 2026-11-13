@@ -96,7 +96,7 @@ def rows():
         _row("c1", ref=KATE, local="e1"),
         _rel("r1", "e1"),
         _row("a1", state="Accepted", ref="canticle:Characters/NPCs/Done", name="Done"),
-        _row("x1", ref="someoneelse:Notes/Theirs", name="Theirs"),
+        _row("x1", ref="someoneelse:Notes/Theirs", name="Theirs", batch="b9"),
     ]
 
 
@@ -118,7 +118,7 @@ def test_dry_run_lists_prints_id_line_and_deletes_nothing(monkeypatch, tmp_path,
     out = capsys.readouterr().out
     assert rc == 0
     assert "Pending suggestions to withdraw: 2 (1 linked relation(s) included)" in out
-    assert f"mobrpg withdraw w1 --id r1 c1 --vault {v} --execute" in out
+    assert f"mobrpg withdraw w1 --batch b1 --vault {v} --execute" in out
     assert fake.deletes() == []
     assert node.read_node(f.read_text())["review_state"] == "pending"
 
@@ -230,6 +230,48 @@ def test_accepted_vault_node_is_left_alone(monkeypatch, tmp_path):
     _wire(monkeypatch, Fake(rows()))
     withdraw.run(["w1", "--id", "c1", "--vault", str(v), "--execute"])
     assert node.read_node(f.read_text())["review_state"] == "accepted"
+
+
+def _mint_rows():
+    mint = _row("m1", name="Unknown")                      # classifier type, no externalRef
+    return rows()[:2] + [mint, _rel("r3", "m1")]
+
+
+def test_batch_withdraws_its_classifier_mints_last(monkeypatch, tmp_path, capsys):
+    v, _ = _vault(tmp_path)
+    fake = Fake(_mint_rows())
+    _wire(monkeypatch, fake)
+    rc = withdraw.run(["w1", "--batch", "b1", "--vault", str(v), "--execute"])
+    assert rc == 0
+    d = fake.deletes()
+    assert d[-1] == "m1" and set(d[:-1]) == {"r1", "r3", "c1"}
+    assert d.index("r3") < d.index("c1")
+
+
+def test_batch_dry_run_shows_mints_under_own_heading(monkeypatch, tmp_path, capsys):
+    v, _ = _vault(tmp_path)
+    _wire(monkeypatch, Fake(_mint_rows()))
+    withdraw.run(["w1", "--batch", "b1", "--vault", str(v)])
+    out = capsys.readouterr().out
+    assert "Classifier types minted in this batch (deleted last): 1" in out
+    assert "--batch b1 --vault" in out and "--execute" in out
+
+
+def test_batch_with_a_foreign_externalref_is_refused_whole(monkeypatch, tmp_path, capsys):
+    v, _ = _vault(tmp_path)
+    fake = Fake(_mint_rows() + [_row("x9", ref="someoneelse:Y", name="Y")])
+    _wire(monkeypatch, fake)
+    rc = withdraw.run(["w1", "--batch", "b1", "--vault", str(v), "--execute"])
+    assert rc == 2 and "refusing the whole batch" in capsys.readouterr().err
+    assert fake.deletes() == []
+
+
+def test_id_and_only_leave_mints_alone(monkeypatch, tmp_path):
+    v, _ = _vault(tmp_path)
+    fake = Fake(_mint_rows())
+    _wire(monkeypatch, fake)
+    withdraw.run(["w1", "--id", "c1", "--vault", str(v), "--execute"])
+    assert "m1" not in fake.deletes()
 
 
 def test_every_page_is_read(monkeypatch, tmp_path):

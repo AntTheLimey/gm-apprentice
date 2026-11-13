@@ -204,6 +204,23 @@ def run(argv: list[str]) -> int:
             if s.get("operation") != "AddRelation"
             and (s.get("externalRef") or "").startswith(prefix)]
     my_creates = [s for _, s in mine]
+    # --batch alone: the batch's own classifier mints (creates with no externalRef)
+    # go too, but only when every externalRef in the batch is ours.
+    mints: list[dict] = []
+    whole_batch = bool(args.batch) and not args.id and not args.only
+    if whole_batch:
+        in_batch = [s for st in STATES for s in queue[st] if s.get("batchId") == args.batch]
+        alien = [s for s in in_batch if s.get("externalRef")
+                 and not s["externalRef"].startswith(prefix)]
+        if alien:
+            print(f"ERROR: batch {args.batch} holds {len(alien)} suggestion(s) outside "
+                  f"namespace '{ns}'; refusing the whole batch.", file=sys.stderr)
+            for s in alien:
+                print(_line(s), file=sys.stderr)
+            return 2
+        mints = [s for s in queue["Pending"] if s.get("batchId") == args.batch
+                 and s.get("operation") == "CreateElement" and not s.get("externalRef")]
+        my_creates = my_creates + mints
     rels = [s for s in queue["Pending"]
             if s.get("operation") == "AddRelation" and _links_to(s, my_creates)]
     taken = {s["id"] for s in my_creates} | {s["id"] for s in rels}
@@ -219,11 +236,17 @@ def run(argv: list[str]) -> int:
             print(f"Not withdrawn: {len(done)} {st} (only Pending suggestions are deleted):")
             for s in done:
                 print(_line(s))
-    pending = delete_order([s for t, s in mine if t == "Pending"] + rels)
-    print(f"Pending suggestions to withdraw: {len(pending)} "
+    pending = delete_order([s for t, s in mine if t == "Pending"] + rels + mints)
+    mint_ids = {s["id"] for s in mints}
+    print(f"Pending suggestions to withdraw: {len(pending) - len(mints)} "
           f"({len(rels)} linked relation(s) included)")
     for s in pending:
-        print(_line(s))
+        if s["id"] not in mint_ids:
+            print(_line(s))
+    if mints:
+        print(f"Classifier types minted in this batch (deleted last): {len(mints)}")
+        for s in mints:
+            print(_line(s))
     if not pending:
         return 0
     no_restamp = args.no_restamp or not args.vault
@@ -231,7 +254,9 @@ def run(argv: list[str]) -> int:
         print("  note: no vault notes would be re-stamped", file=sys.stderr)
     if not args.execute:
         print("DRY-RUN: nothing deleted. To withdraw exactly these, run:")
-        cmd = f"mobrpg withdraw {args.world} --id {' '.join(s['id'] for s in pending)}"
+        sel = (f"--batch {args.batch}" if whole_batch
+               else f"--id {' '.join(s['id'] for s in pending)}")
+        cmd = f"mobrpg withdraw {args.world} {sel}"
         if args.vault and not args.no_restamp:
             cmd += f" --vault {args.vault}"
         else:
