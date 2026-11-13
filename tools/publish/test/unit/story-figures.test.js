@@ -857,6 +857,7 @@ describe('plates: scene pictures by player_site.story.scene_pictures, and pictur
     it('with no words: empty alt (never the file name) and no caption', () => {
       const plain = embed('<p><img src="../images/a.png" alt=""></p>');
       assert.ok(plain.includes('alt="" loading="lazy"') && !plain.includes('figcaption') && !plain.includes('alt="a.png"'), plain);
+      assert.ok(plain.includes('<a class="story-figure__open" href="../images/a.png" aria-label="Open picture">'), plain);
     });
     it('only a paragraph of one picture the site has: a web image, a picture among words, or an unknown file stays as it was', () => {
       for (const p of ['<p><img src="https://example.com/x.png" alt=""></p>', '<p>See <img src="../images/a.png" alt=""></p>', '<p><img src="../images/zzz.png" alt=""></p>', '<p><img src="../images/a.png" alt=""><img src="../images/b.png" alt=""></p>']) {

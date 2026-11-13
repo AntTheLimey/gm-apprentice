@@ -683,9 +683,11 @@ function platesHtml(recapHtml, { fromPath, imageMap }) {
     const key = src !== null && byPath.get(resolveHref(src, fromPath));
     if (!key) continue;
     const written = (attr('alt') || '').trim();
-        const url = escapeText(imageSrc(imageMap[key], fromPath));
+    const url = escapeText(imageSrc(imageMap[key], fromPath));
+    // With no words of its own the link still needs a name, as the automatic scene plates have.
+    const label = written ? '' : ' aria-label="Open picture"';
     out += html.slice(last, el.start)
-      + `<figure class="story-figure story-figure--plate"><a class="story-figure__open" href="${url}">`
+      + `<figure class="story-figure story-figure--plate"><a class="story-figure__open" href="${url}"${label}>`
       + `<img src="${url}" alt="${written}" loading="lazy"><span class="story-figure__zoom" aria-hidden="true">${ZOOM}</span></a>`
       + `${written ? `<figcaption>${written}</figcaption>` : ''}</figure>`;
     last = el.start + el.html.length;
