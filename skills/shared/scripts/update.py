@@ -654,7 +654,9 @@ def _one(run: _Run, check: Check, item: Item, given: dict[str, Given],
     run.before_write()
     lines: list[str] = []
     if answer == "leave" and not item.wants:
-        left_ids.add(item.id)   # a yes/no left: nothing runs
+        left_ids.add(item.id)   # a yes/no left: nothing runs...
+        if item.on_leave:   # ...unless the no is to be recorded
+            item.on_leave()
     else:
         if item.apply is None:
             raise StepFailed(f"{item.id} has nothing to run")

@@ -260,7 +260,7 @@ These decide which notes, and which parts of a note, reach the site.
 | `player_site.hide.callouts`<br>was `publish.exclude_callouts`, `excludeCallouts` | Whether Obsidian callouts (`> [!note]`) are left out | `on` for all, `off` for none, or a list of callout types | Off; a site set up by the apprentice starts with it on |
 | `player_site.hide.drafts`<br>was `publish.exclude_drafts` | Whether a note with `canon_status: DRAFT` at its top is left off the site | A switch | Off: drafts publish with a "Draft" badge |
 | `player_site.hide.field_exceptions`<br>was `publish.overrides.fields` | Lets one note show a field that `player_site.hide.fields` hides everywhere else | A note's path from the top of the vault, in quotes, then `include:` and the field names | No exceptions |
-| `player_site.hide.keep_showing` | Built-in entries of `player_site.hide.sections` or `player_site.hide.fields` that your own list leaves out on purpose, so the site shows them. The build warns when a list of your own lacks a built-in entry, and says nothing about one named here. A name that is in neither built-in list is warned about, since it does nothing | A list of built-in entries | None: every built-in entry your own list lacks is warned about |
+| `player_site.hide.declined` | Built-in entries of `player_site.hide.sections` or `player_site.hide.fields` that you chose not to hide in your own list. Naming an entry here does not show it: leave it out of your own list to show it. This only stops the build warning that your own list lacks it, and it has no effect while the vault uses the built-in list. A name that is in neither built-in list is warned about, since it does nothing | A list of built-in entries | None: every built-in entry your own list lacks is warned about |
 | `player_site.never_show` | Words or phrases that must never reach players: a name, a twist, a word from your prep. The build does not remove them; `deploy` stops when the finished player site holds one (any case, as a whole word, or its plural written with a capital), names the page, and `leaks check` lists them. A finding you mean to keep is accepted like any other (`leaks accept`) | A list of words or phrases | None |
 | `player_site.withheld_words.person` | The word that stands in for the name of a withheld person (a character or an NPC) when a note links to them with no label of their own. It cannot hold `[`, `]` or `\|` | Text | `someone` |
 | `player_site.withheld_words.place` | The word that stands in for the name of a withheld place. It cannot hold `[`, `]` or `\|` | Text | `somewhere` |
@@ -644,7 +644,7 @@ mark always means hidden from players. The GM site's folder is
 - `player_site.hide.callouts`
 - `player_site.hide.drafts`
 - `player_site.hide.field_exceptions`
-- `player_site.hide.keep_showing`
+- `player_site.hide.declined`
 - `player_site.never_show`
 - `player_site.features.live_stats`
 - `player_site.features.inbox`

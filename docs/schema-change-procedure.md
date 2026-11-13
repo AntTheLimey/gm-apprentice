@@ -142,7 +142,10 @@ one. So a heading or field added to a default reaches a new vault and
 one with no list, and never a vault that owns a list, unless a
 migration step proposes it. Such a release ships that step: it tells
 the GM what the new entry is for and adds it to their list on a yes,
-and it never adds it unasked.
+and it never adds it unasked. A no is not silence: the step runs the
+tool's `settings add player_site.hide.declined <entry>` (the item's
+`on_leave`), so the build's warning about a list lacking a built-in
+entry goes quiet for it and the update does not offer it again.
 
 The step is `find_hide_additions(vault, since)` in
 `skills/shared/scripts/migrate_site.py`, first used by the
@@ -158,11 +161,13 @@ release:
    `asks_site=True`, `choices=("hide-add:",)` and `kind="asks"`, with
    its own `plain`, `ask` and `left`. The items it finds hold the stamp
    (`holds_stamp=True`, set by `find_hide_additions`), so an apply that
-   leaves the question unanswered does not stamp past it.
+   leaves the question unanswered does not stamp past it. Its `left`
+   text says the no is recorded in `player_site.hide.declined`.
 3. Test it as `HideAdditionTests` and `HideAdditionStampTests` in
    `tests/test_migrate_site.py` do: a vault owning the old list is
    offered the entry, the stamp holds until it is answered, and one with
-   no list of its own is offered nothing.
+   no list of its own is offered nothing. A no leaves the entry in
+   `player_site.hide.declined`.
 
 There is no other copy to change. The three default lists (folders,
 headings and fields) live only in the registry. The Python scripts and

@@ -478,6 +478,21 @@ class HideAdditionTests(unittest.TestCase):
         self.assertEqual(s.get(self.FIELDS), [*old, "voice"])
         self.assertEqual(ms.find_hide_additions(vault, "1.11.2"), [])
 
+    def test_hide_additions_a_no_is_recorded_and_not_offered_again(self):
+        vault = self.owning(self.old_fields())
+        (item,) = ms.find_hide_additions(vault, "1.11.2")
+        item.on_leave()
+        vaultlib.forget_settings(vault)
+        self.assertEqual(vc.settings(vault).get(self.FIELDS),
+                         self.old_fields())
+        self.assertEqual(vc.settings(vault).get(ms.DECLINED), ["voice"])
+        self.assertEqual(ms.find_hide_additions(vault, "1.11.2"), [])
+
+    def test_hide_additions_the_left_text_says_the_no_is_recorded(self):
+        for check in ms.SITE_CHECKS:
+            if check.name in ("hide-fields-voice", "hide-sections-dormant"):
+                self.assertIn(ms.DECLINED, check.left)
+
     def test_hide_additions_keep_the_gms_own_entries(self):
         vault = self.owning(["mine"])
         (item,) = ms.find_hide_additions(vault, "1.11.2")
@@ -777,6 +792,8 @@ class HideAdditionStampTests(unittest.TestCase):
         self.assertEqual(self.stamp(vault), "1.11.2")
         vaultlib.forget_settings(vault)
         self.assertEqual(vc.settings(vault).get(self.FIELDS), old)
+        # The no is written down by the tool, so the build stops warning.
+        self.assertEqual(vc.settings(vault).get(ms.DECLINED), ["voice"])
 
     def update(self, vault, answers=None, headless=False):
         import update
@@ -806,6 +823,7 @@ class HideAdditionStampTests(unittest.TestCase):
         self.assertEqual(self.stamp(vault), "1.11.2")
         vaultlib.forget_settings(vault)
         self.assertEqual(vc.settings(vault).get(self.FIELDS), old)
+        self.assertEqual(vc.settings(vault).get(ms.DECLINED), ["voice"])
 
 
 class VoicesSwitchTests(unittest.TestCase):

@@ -406,6 +406,9 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
                         # and the release gate does not offer it again.
                         left_ids.add(item.id)
                         did.append((item.id, f"{item.id}\tleft as it is"))
+                        if item.on_leave:
+                            did.extend((item.id, f"{item.id}\t{line}")
+                                       for line in item.on_leave())
                         used.add(item.id)
                         continue
                     if item.wants and not value:

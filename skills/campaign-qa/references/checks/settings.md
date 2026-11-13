@@ -20,7 +20,7 @@ groups.
    run the command again with `--apply player_site.features.inbx` (the name in the
    row), several names allowed.
 3. A row that says a hide list "is your own list and lacks" built-in
-   entries is walked in `site-faults/hide-list-gap.md`.
+   entries is walked in `settings/hide-list-gap.md`.
 4. Other rows with no fix give what the setting takes (`<name>` is as shown
    in the row in full: `settings describe player_site.features.link_previews`).
    With no suggested name, ask the GM what the key was meant to do

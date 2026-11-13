@@ -422,11 +422,27 @@ test('remove takes a custom entry out, and reports one that was not there', () =
   assert.deepEqual(run(s, 'remove', ['publish.exclude_sections', '"Nope"']).data.written, []);
 });
 
+test('remove of a built-in entry of a hide list also records it in player_site.hide.declined, in the same write', () => {
+  const s = scratch(wrap('  exclude_fields: [secrets, voice, plans]\n'));
+  const { rc, data } = run(s, 'remove', ['player_site.hide.fields', '"voice"']);
+  assert.equal(rc, 0);
+  assert.deepEqual(data.declined, ['voice']);
+  assert.match(data.notes[0], /"voice" was built in to player_site\.hide\.fields .*recorded in player_site\.hide\.declined/);
+  const after = run(s, 'get', ['player_site.hide.declined']).data;
+  assert.deepEqual(view(after)['player_site.hide.declined'].value, ['voice']);
+  // The warning is quiet about voice (the other missing built-ins are still named).
+  const gap = run(s, 'get', ['player_site.hide.fields']).data.faults.find((f) => f.kind === 'hide-list-gap');
+  assert.ok(!gap.entries.includes('voice'));
+  // A custom entry is not built in: nothing is recorded.
+  assert.equal(run(s, 'remove', ['player_site.hide.fields', '"plans"']).data.declined, undefined);
+});
+
 test('remove of a built-in entry from a hiding list says it is no longer hidden; the last entry gives the empty-list note', () => {
   const s = scratch(wrap('  site_title: Tt\n'));
   const { data } = run(s, 'remove', ['publish.exclude_sections', `"${SECTIONS[0]}"`]);
-  assert.deepEqual(data.notes, [`"${SECTIONS[0]}" was built in to player_site.hide.sections and is no longer hidden.`]);
+  assert.deepEqual(data.notes, [`"${SECTIONS[0]}" was built in to player_site.hide.sections and is no longer hidden; it is recorded in player_site.hide.declined, so the build does not warn about it.`]);
   assert.deepEqual(data.list, SECTIONS.slice(1));
+  assert.deepEqual(data.declined, [SECTIONS[0]]);
   const t = scratch(wrap('  exclude_sections: [Plans]\n'));
   const last = run(t, 'remove', ['publish.exclude_sections', '"Plans"']);
   assert.deepEqual(last.data.list, []);

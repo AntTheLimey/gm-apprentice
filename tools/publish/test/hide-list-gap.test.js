@@ -1,6 +1,6 @@
 'use strict';
 // A hide list the vault wrote itself replaces the built-in one, so a built-in entry it lacks shows on the site. The reader
-// warns, one fault per list (`hide-list-gap`), naming each missing entry and what it is for; keep_showing silences an entry.
+// warns, one fault per list (`hide-list-gap`), naming each missing entry and what it is for; declined silences an entry.
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -39,9 +39,9 @@ test('a list of the vault\'s own that lacks built-in entries is one warning nami
   assert.equal(found[0].level, 'warn');
   assert.deepEqual(found[0].entries, ['reliability', 'voice']);
   assert.equal(found[0].message,
-    'player_site.hide.fields is your own list and lacks 2 built-in entries, so the site shows them wherever a page names them: '
+    'player_site.hide.fields is your own list and lacks 2 built-in entries, so the site shows them on any page that has them: '
     + 'reliability (how sure a clue is, for the GM); voice (how a character or the campaign is told, for the GM only). '
-    + 'Add them, or name one you want shown in player_site.hide.keep_showing');
+    + 'Add them, or record the ones you mean to leave out in player_site.hide.declined');
   const printed = [];
   loadPublishConfig(dir, { vaultPath: dir }, (m) => printed.push(m));
   assert.deepEqual(printed.filter((m) => m.includes('your own list')), [found[0].message]);
@@ -62,20 +62,20 @@ test('a heading written another way still counts as present', () => {
   assert.deepEqual(gaps(dir), []);
 });
 
-test('keep_showing silences the entry it names; a built-in-only list and the full list say nothing', () => {
-  const dir = vaultWith({ player_site: { hide: { fields: FIELDS.filter((f) => f !== 'voice' && f !== 'reliability'), keep_showing: ['voice'] } } });
+test('declined silences the entry it names; a built-in-only list and the full list say nothing', () => {
+  const dir = vaultWith({ player_site: { hide: { fields: FIELDS.filter((f) => f !== 'voice' && f !== 'reliability'), declined: ['voice'] } } });
   assert.deepEqual(gaps(dir).map((f) => f.entries), [['reliability']]);
-  const both = vaultWith({ player_site: { hide: { fields: FIELDS.filter((f) => f !== 'voice'), keep_showing: ['voice'] } } });
+  const both = vaultWith({ player_site: { hide: { fields: FIELDS.filter((f) => f !== 'voice'), declined: ['voice'] } } });
   assert.deepEqual(readSettings({ vaultPath: both }).faults, []);
   assert.deepEqual(readSettings({ vaultPath: vaultWith({}) }).faults, []);
   assert.deepEqual(readSettings({ vaultPath: vaultWith({ player_site: { hide: { fields: FIELDS, sections: SECTIONS } } }) }).faults, []);
 });
 
-test('a keep_showing name that is no built-in entry is a quiet warning; with no list of its own the built-in entry is not a gap', () => {
-  const dir = vaultWith({ player_site: { hide: { keep_showing: ['voice', 'voicce'] } } });
+test('a declined name that is no built-in entry is a quiet warning; with no list of its own the built-in entry is not a gap', () => {
+  const dir = vaultWith({ player_site: { hide: { declined: ['voice', 'voicce'] } } });
   const faults = readSettings({ vaultPath: dir }).faults;
   assert.deepEqual(faults.map((f) => f.kind), ['dropped']);
-  assert.match(faults[0].message, /^player_site\.hide\.keep_showing holds "voicce", which is in neither built-in list .*it does nothing$/);
+  assert.match(faults[0].message, /^player_site\.hide\.declined holds "voicce", which is in neither built-in list .*it does nothing$/);
 });
 
 test('the code is in `settings check --json` and `settings get --json`, where campaign-qa reads faults', () => {
