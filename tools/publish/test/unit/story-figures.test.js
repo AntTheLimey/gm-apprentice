@@ -873,6 +873,6 @@ describe('plates: scene pictures by player_site.story.scene_pictures, and pictur
 describe('plate CSS', () => {
   it('a plate clears any float before it, so it is full width after a short paragraph', () => {
     const css = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', '..', 'css', 'style.css'), 'utf8');
-    assert.match(css, /\n\.story-figure--plate \{\n  clear: both;/);
+    assert.match(css, /\r?\n\.story-figure--plate \{\r?\n  clear: both;/);
   });
 });
