@@ -1249,6 +1249,10 @@ p.story-playnotes a {
   color: var(--accent);
 }
 .pc-drive p { margin: 0; font-family: var(--font-reading); font-size: var(--font-size-1000); line-height: 1.5; overflow-wrap: break-word; }
+/* A field written as a list (a CoC investigator's Significant People, one per line). */
+.pc-drive :is(ul, ol) { margin: 0; padding-left: 1.1em; font-family: var(--font-reading); font-size: var(--font-size-1000); line-height: 1.5; overflow-wrap: break-word; }
+.pc-drive li { margin: 0 0 var(--space-250); }
+.pc-drive p + :is(ul, ol) { margin-top: var(--space-250); }
 .pc-sofar ol { list-style: none; margin: 0; padding: 0; }
 .pc-sofar li {
   display: grid; grid-template-columns: 5.5rem minmax(0, 1fr); gap: 0.9rem;

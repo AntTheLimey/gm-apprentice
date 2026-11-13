@@ -119,6 +119,22 @@ describe('CoC investigator with a backstory (the folio)', () => {
   });
 });
 
+describe('CoC investigator whose fields are lists, with GM text in them', () => {
+  it('each list is its card, and no fenced or commented text reaches the site', () => {
+    const { page, index } = site('with-coc-pc', 'regency-cthulhu', {
+      'Jane_Ashford.md': (t) => t.replace(/\*\*Significant People:\*\*[\s\S]*?(?=\*\*Meaningful)/, [
+        '**Significant People:**', '- Lady Vane, her employer', '<!-- gm-only -->', '- GMSECRET, the cultist', '<!-- /gm-only -->',
+        '- The Reverend Ashford %%GMCOMMENT%%', '', '<!-- spoiler -->', 'SPOILERTEXT', '<!-- /spoiler -->', '', '',
+      ].join('\n')).replace('**Treasured Possessions:**', '**Treasured Possession:**'),
+    });
+    const html = page('jane-ashford');
+    const cards = [...html.matchAll(/<div class="pc-drive"><h4>([^<]*)<\/h4>([\s\S]*?)<\/div>/g)];
+    assert.deepStrictEqual(cards.map(m => m[1]), ['Traits', 'Ideology &amp; Beliefs', 'Significant People', 'Meaningful Locations', 'Treasured Possessions']);
+    assert.match(cards[2][2], /^<ul>[\s\S]*Lady Vane[\s\S]*The Reverend Ashford[\s\S]*<\/ul>$/);
+    for (const secret of ['GMSECRET', 'GMCOMMENT', 'SPOILERTEXT']) assert.ok(!html.includes(secret) && !index.includes(secret), secret);
+  });
+});
+
 describe('CoC investigator with only the sheet\'s fields', () => {
   it('shows how they look and the cards, with no prologue, teaser or hook to invent', () => {
     const { page, index } = site('with-coc-pc', 'regency-cthulhu', {});

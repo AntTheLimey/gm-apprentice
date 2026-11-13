@@ -71,24 +71,87 @@ function oldField(html, labelPattern) {
   return real(cellText(value)) ? value : '';
 }
 
-// A CoC investigator's one-line Background fields, as their sheet has them: Personal Description
-// is how they look, the rest are cards beside each other (D&D's traits, ideals, bonds and flaws).
-const APPEARANCE_FIELD = 'Personal\\s+Description';
-const CARD_FIELDS = ['Traits', 'Ideology\\s*(?:&amp;|&|/|and)\\s*Beliefs', 'Significant\\s+People', 'Meaningful\\s+Locations', 'Treasured\\s+Possessions'];
-// Every label the Story tab shows from a one-line field, as a whole-label pattern (the Background
-// lines left over for the page are the others).
-const STORY_FIELD_LABELS = ['Backstory\\s*&\\s*Personality', 'Appearance', 'Personal\\s+Description', ...CARD_FIELDS.map(f => f.replace('(?:&amp;|&|/|and)', '(?:&|/|and)'))]
-  .map(f => new RegExp(`^${f}$`, 'i'));
+// A CoC investigator's Background fields, as their sheet has them: Personal Description is how
+// they look, the rest are cards beside each other (D&D's traits, ideals, bonds and flaws). Each is
+// [the card's name, the labels notes write for it]. A field's value is the rest of its line, and
+// the list under it when the line ends the paragraph (`**Significant People:**` then `- ...` lines).
+const APPEARANCE_FIELD = ['Personal Description', /^Personal\s+Description$/i];
+const CARD_FIELDS = [
+  ['Traits', /^Traits?$/i],
+  ['Ideology & Beliefs', /^Ideology(?:\s*(?:&|\/|and)\s*Beliefs?)?$/i],
+  ['Significant People', /^Significant\s+(?:People|Persons?)$/i],
+  ['Meaningful Locations', /^Meaningful\s+(?:Locations?|Places?)$/i],
+  ['Treasured Possessions', /^(?:Treasured\s+)?Possessions?$/i],
+];
+// Every label the Story tab shows from a one-line field (the Background lines left over for the
+// page are the others).
+const STORY_FIELD_LABELS = [/^Backstory\s*&\s*Personality$/i, /^Appearance$/i, APPEARANCE_FIELD[1], ...CARD_FIELDS.map(([, re]) => re)];
 
-// The CoC card fields a note has, in the note's order: [{ label, html }].
-function cardFields(top) {
-  const found = [];
-  for (const pattern of CARD_FIELDS) {
-    const m = String(top || '').match(new RegExp(`<strong>\\s*(${pattern})\\s*:\\s*</strong>`, 'i'));
-    const html = m ? oldField(top, pattern) : '';
-    if (html) found.push({ at: m.index, label: cellText(m[1]), html });
+// The top-level blocks of a fragment, in order: [{ tag, html, start, end }]. Lists nest, so an
+// element ends at its own closing tag.
+function topBlocks(html) {
+  const text = String(html || '');
+  const out = [];
+  const open = /<([a-z][a-z0-9]*)\b[^>]*>/gi;
+  let m;
+  while ((m = open.exec(text)) !== null) {
+    const tag = m[1].toLowerCase();
+    if (/^(?:hr|br|img)$/.test(tag)) { out.push({ tag, html: m[0], start: m.index, end: open.lastIndex }); continue; }
+    const re = new RegExp(`<(/?)${tag}\\b[^>]*>`, 'gi');
+    re.lastIndex = open.lastIndex;
+    let depth = 1;
+    let t;
+    while (depth > 0 && (t = re.exec(text)) !== null) depth += t[1] ? -1 : 1;
+    const end = depth === 0 ? re.lastIndex : text.length;
+    out.push({ tag, html: text.slice(m.index, end), start: m.index, end });
+    open.lastIndex = end;
   }
-  return found.sort((a, b) => a.at - b.at).map(({ label, html }) => ({ label, html }));
+  return out;
+}
+
+// The `**Label:** value` fields of a fragment's paragraphs: [{ label, html, block }], `block` the
+// index (in topBlocks) of the last block the value takes. A label starts its paragraph or a line.
+function labelledFields(html) {
+  const blocks = topBlocks(html);
+  const out = [];
+  blocks.forEach((b, i) => {
+    if (b.tag !== 'p') return;
+    const inner = b.html.slice(3, -4);
+    const starts = [...inner.matchAll(/(?:^|<br\s*\/?>|\n)\s*<strong>\s*([^<:]+?)\s*:\s*<\/strong>/gi)];
+    starts.forEach((s, k) => {
+      const from = s.index + s[0].length;
+      const to = k + 1 < starts.length ? starts[k + 1].index : inner.length;
+      let value = inner.slice(from, to).trim();
+      let last = i;
+      // The line that ends the paragraph takes the lists right under it.
+      if (k === starts.length - 1) {
+        const lists = [];
+        while (blocks[last + 1] && /^(?:ul|ol)$/.test(blocks[last + 1].tag)) lists.push(blocks[++last].html);
+        if (lists.length) value = `${real(cellText(value)) ? `<p>${value}</p>\n` : ''}${lists.join('\n')}`;
+      }
+      out.push({ label: cellText(s[1]), html: value, block: last });
+    });
+  });
+  return out;
+}
+
+// The value of the first field whose label `re` matches ('' when none says anything).
+function fieldValue(fields, re) {
+  const f = fields.find(x => re.test(x.label) && real(cellText(x.html)));
+  return f ? f.html : '';
+}
+
+// The CoC card fields a note has, in the note's order, under their card names: [{ label, html }].
+function cardFields(fields) {
+  const out = [];
+  const taken = new Set();
+  for (const f of fields) {
+    const card = CARD_FIELDS.find(([, re]) => re.test(f.label));
+    if (!card || taken.has(card[0]) || !real(cellText(f.html))) continue;
+    taken.add(card[0]);
+    out.push({ label: card[0], html: f.html });
+  }
+  return out;
 }
 
 // A Background with no sub-sections and no `**Label:**` field lines, only prose, is the backstory
@@ -153,9 +216,10 @@ function backgroundParts(sections) {
   }
   // A part with no sub-section text falls back to its old one-line field (a half-migrated note).
   const top = aboveSubheadings(background.html);
+  const fields = labelledFields(top);
   backstoryHtml = backstoryHtml || oldField(top, 'Backstory\\s*(?:&amp;|&)\\s*Personality');
-  appearanceHtml = appearanceHtml || oldField(top, 'Appearance') || oldField(top, APPEARANCE_FIELD);
-  const cards = [...readPersonality(personality || ''), ...cardFields(top)];
+  appearanceHtml = appearanceHtml || oldField(top, 'Appearance') || fieldValue(fields, APPEARANCE_FIELD[1]);
+  const cards = [...readPersonality(personality || ''), ...cardFields(fields)];
   // The whole section is the backstory: nothing else of it is left for the page.
   const wholeSection = !hasSections && !backstoryHtml && !appearanceHtml && !cards.length && !!freeFormBackstory(background.html);
   if (wholeSection) backstoryHtml = freeFormBackstory(background.html);
@@ -182,7 +246,16 @@ const STORY_SUBSECTIONS = new Set(['backstory', 'appearance', 'personality']);
 function backgroundRestHtml(section, shown, parts) {
   if (parts && parts.wholeSection) return '';
   const drop = [...STORY_FIELD_LABELS, ...(shown || [])];
-  const rest = aboveSubheadings(section.html).replace(/<p>([\s\S]*?)<\/p>\s*/gi, (p, inner) => {
+  // The lists under a story field are its value: they go with it.
+  const top = aboveSubheadings(section.html);
+  const blocks = topBlocks(top);
+  const taken = new Set();
+  for (const f of labelledFields(top)) {
+    if (!STORY_FIELD_LABELS.some(re => re.test(f.label))) continue;
+    for (let i = f.block; i >= 0 && /^(?:ul|ol)$/.test(blocks[i].tag); i--) taken.add(i);
+  }
+  const unlisted = taken.size ? blocks.reduceRight((h, b, i) => (taken.has(i) ? h.slice(0, b.start) + h.slice(b.end) : h), top) : top;
+  const rest = unlisted.replace(/<p>([\s\S]*?)<\/p>\s*/gi, (p, inner) => {
     const m = inner.match(/^\s*<strong>\s*([^<:]+?)\s*(?::\s*<\/strong>|<\/strong>\s*:)([\s\S]*)$/i);
     if (m && (drop.some(re => re.test(cellText(m[1]))) || !filled(cellText(m[2])) || /^\s*[–—-]\s*$/.test(cellText(m[2])))) return '';
     return isPlaceholder(cellText(inner)) || !cellText(inner) ? '' : p;

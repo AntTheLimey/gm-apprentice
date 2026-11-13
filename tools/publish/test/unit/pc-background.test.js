@@ -196,3 +196,46 @@ test('an unfilled GURPS or CoC template has no background parts to show', () => 
     assert.deepEqual(s.personality, [], t);
   }
 });
+
+// A field written as a list under its label, and the label variants real notes use (#483 proof run).
+test('a CoC field\'s list is its value: label-line text, a list alone, text and a list', () => {
+  const md = [
+    '## Background', '',
+    '**Personal Description:** Tall.', '',
+    '**Ideology:** Order above all.', '',
+    '**Significant People:**', '- [[Jonathan_Pike|Jonathan Pike]] — mentor', '- Ann, her sister', '',
+    '**Meaningful Locations:** Bath, and:', '', '- The Pump Room', '- Lansdown', '',
+    '**Treasured Possession:** A locket.', '',
+    '**Club:** The Athenaeum', '',
+    '## Skills', 'x',
+  ].join('\n');
+  const sections = sectionsOf(md);
+  const s = backgroundParts(sections);
+  assert.deepEqual(s.personality.map(p => p.label), ['Ideology & Beliefs', 'Significant People', 'Meaningful Locations', 'Treasured Possessions']);
+  const card = (l) => s.personality.find(p => p.label === l).html;
+  assert.equal(card('Ideology & Beliefs'), 'Order above all.');
+  assert.match(card('Significant People'), /^<ul>\s*<li>[\s\S]*Jonathan Pike[\s\S]*<li>Ann, her sister<\/li>\s*<\/ul>$/);
+  assert.match(card('Meaningful Locations'), /^<p>Bath, and:<\/p>\s*<ul>[\s\S]*The Pump Room[\s\S]*Lansdown[\s\S]*<\/ul>$/);
+  assert.equal(card('Treasured Possessions'), 'A locket.');
+  const { backgroundRestHtml } = require('../../lib/pc-background');
+  const rest = backgroundRestHtml(sections.find(x => x.id === 'background'), [], s);
+  assert.equal(rest, '<p><strong>Club:</strong> The Athenaeum</p>');
+});
+
+test('the short Possessions label and the first of two spellings', () => {
+  const s = backgroundParts(sectionsOf('## Background\n\n**Possessions:** A cane.\n\n**Treasured Possessions:** A second.\n'));
+  assert.deepEqual(s.personality, [{ label: 'Treasured Possessions', html: 'A cane.' }]);
+});
+
+test('a gm-only or spoiler fence, or a %% comment, in a field never reaches its card', () => {
+  const md = [
+    '## Background', '',
+    '**Significant People:**', '- Ann', '<!-- gm-only -->', '- GMSECRET the cultist', '<!-- /gm-only -->', '- Tom', '',
+    '**Traits:** Calm %%GMCOMMENT%% and kind.', '',
+    '**Meaningful Locations:** Bath.', '', '<!-- spoiler -->', 'SPOILERTEXT under the abbey.', '<!-- /spoiler -->', '',
+  ].join('\n');
+  const s = backgroundParts(sectionsOf(md));
+  const all = JSON.stringify(s);
+  for (const secret of ['GMSECRET', 'GMCOMMENT', 'SPOILERTEXT']) assert.ok(!all.includes(secret), secret);
+  assert.match(s.personality.find(p => p.label === 'Significant People').html, /Ann[\s\S]*Tom/);
+});

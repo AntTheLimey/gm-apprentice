@@ -301,7 +301,7 @@ ${parts.appearanceHtml ? asBlock(parts.appearanceHtml) : ''}${facts}
     blocks.push(`<section class="pc-story-box pc-drives">
   <h3 class="pc-story-label">What drives them</h3>
   <div class="pc-drives-grid">
-${parts.personality.map(p => `    <div class="pc-drive"><h4>${escapeHtml(p.label)}</h4><p>${p.html}</p></div>`).join('\n')}
+${parts.personality.map(p => `    <div class="pc-drive"><h4>${escapeHtml(p.label)}</h4>${asBlock(p.html)}</div>`).join('\n')}
   </div>
 </section>`);
   }
