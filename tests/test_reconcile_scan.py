@@ -171,7 +171,7 @@ class Scan(unittest.TestCase):
         out = scan(plain_wrap(FILES))
         self.assertIn("plan: none", out)
         self.assertIn("unverified: 0", out)
-        self.assertEqual(out[-1], "quick path: yes, unless a DRAFT entity created "
+        self.assertEqual(out[-1], "quick path: yes, unless a DRAFT entity created or played "
                          "this session contradicts AUTHORITATIVE canon on the same facts")
 
     def test_a_same_numbered_draft_from_another_chapter_is_older(self):
@@ -277,7 +277,7 @@ class Scan(unittest.TestCase):
         out = scan(files)
         self.assertIn(f"session: {INDEX} (status: wrap-up, session_number: 5)", out)
         self.assertIn("plan: none", out)
-        self.assertEqual(out[-1], "quick path: yes, unless a DRAFT entity created "
+        self.assertEqual(out[-1], "quick path: yes, unless a DRAFT entity created or played "
                          "this session contradicts AUTHORITATIVE canon on the same facts")
 
     def test_plan_found_by_its_session_link(self):

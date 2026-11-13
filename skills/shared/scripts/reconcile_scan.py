@@ -310,7 +310,7 @@ def scan(vault: Path, wrap_arg: str) -> list[str]:
     if fails:
         out.append("quick path: no (" + ", ".join(fails) + ")")
     elif new or preplay:
-        out.append("quick path: yes, unless a DRAFT entity created this session "
+        out.append("quick path: yes, unless a DRAFT entity created or played this session "
                    "contradicts AUTHORITATIVE canon on the same facts")
     else:
         out.append("quick path: yes")

@@ -19,7 +19,7 @@ dry-run first, `--write` on GM confirmation (see
 Session prep's `gma session-context <vault> --prep` output holds the scan;
 otherwise run `gma reconcile-scan <vault> "<wrap-up>"` (reads only). The rule its `quick path:` line
 applies: no UNVERIFIED marker (bar those tagged with another
-session), no Plan file, and no DRAFT created this
+session), no Plan file, and no DRAFT created or played this
 session that contradicts AUTHORITATIVE canon (that last is yours to
 judge).
 
