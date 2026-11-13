@@ -11,8 +11,9 @@ Weeks of runs before that clean-up left over a million folders behind.
 
 Some names are allowed to appear: Node's compile cache and pytest's own base
 folder for `tmp_path`, which are each made once and reused, not one per run,
-and the `com.apple.*` folders macOS's own services make in the same folder
-while the tests run.
+the `com.apple.*` folders macOS's own services make in the same folder
+while the tests run, and the `systemd-private-*` folders a Linux runner's own
+services make there.
 """
 
 import fnmatch
@@ -20,7 +21,7 @@ import os
 import sys
 import tempfile
 
-ALLOWED = ("node-compile-cache", "pytest-of-*", "com.apple.*")
+ALLOWED = ("node-compile-cache", "pytest-of-*", "com.apple.*", "systemd-private-*")
 
 
 def entries() -> set[str]:
