@@ -945,7 +945,10 @@ function startNoteAudit(input) {
         const { record } = entry;
         const listed = reasons().get(rel);
         const reason = (listed && listed.annotation) || null;
-        const settled = !!(listed && listed.section === 'excluded' && reason && STAYS_HIDDEN.test(reason));
+        // A note kept off by its own `withheld: true` (no list entry needed, #619) prints the neutral word by
+        // design: the flag itself is the GM's "stays hidden", so the row is settled and only a note.
+        const keptByFlag = record.why === 'WITHHELD';
+        const settled = keptByFlag || !!(listed && listed.section === 'excluded' && reason && STAYS_HIDDEN.test(reason));
         const type = typeOfNote(record, readFile, input.vaultPath);
         const kind = kindOfType(type);
         // A note whose own page prints the name, and a note an index or listing page prints
@@ -959,26 +962,31 @@ function startNoteAudit(input) {
         // and the words it prints are the placeholder, not its name.
         const withheld = isWithheld(record.frontmatter);
         let fix;
+        // Recording a decision on the publish list is advice only for a vault that has one: on a vault with none,
+        // `manifest apply` would write a list holding that one entry, and every other note would leave the site.
+        const orRecord = (what) => (input.manifest ? `; or ${what}` : '');
         // The command that turns the links on one page into words, whole, so the row stands alone: it prints a
         // preview, and writes when run again with --write.
         const unlink = (extra = '') => `gma links "<vault>" unlink "${rel.replace(/\.md$/, '')}" --in "<page>"${extra}; it prints a preview; run it again with --write`;
         if (record.why === 'LISTED_ONLY') {
           fix = `its container lists it; write words in the body of ${rel}, or a tie, to give it a page of its own, or turn the link to ${name} into plain words (${unlink()})`;
+        } else if (withheld && keptByFlag) {
+          fix = `nothing to do: ${name} is marked withheld, so it stays off the site and links to it print a neutral word; to print the words the players know instead: ${unlink(' --as "<words>"')}`;
         } else if (withheld) {
-          fix = `${name} is marked withheld, so it stays off the site: turn the links to it into the words the players know (${unlink(' --as "<words>"')}), or leave the neutral word it prints and record that with manifest apply --exclude "${rel}=stays hidden: <why>"`;
+          fix = `${name} is marked withheld, so it stays off the site: turn the links to it into the words the players know (${unlink(' --as "<words>"')})${orRecord(`leave the neutral word it prints and record that with manifest apply --exclude "${rel}=stays hidden: <why>"`)}`;
         } else if (kind === 'entity') {
           // Listing a note under Publishing gives it a page only when the manifest is what holds it back.
           const page = String(record.why).startsWith('MANIFEST_')
             ? `then put it on the publish list so it gets a page: manifest apply --publish "${rel}"`
             : `but the publish list is not what keeps it off the site (${record.why}): run explain "${rel}" for the rule`;
-          fix = `move what only you should know under a ## GM Notes heading in ${rel}, ${page}; or leave it hidden and record that with manifest apply --exclude "${rel}=stays hidden: <why>"`;
+          fix = `move what only you should know under a ## GM Notes heading in ${rel}, ${page}${orRecord(`leave it hidden and record that with manifest apply --exclude "${rel}=stays hidden: <why>"`)}`;
         } else if (kind === 'working') {
           fix = `turn the link to ${name} into plain words (${unlink()}) or reword the sentence; a working note like this never gets a page`;
         } else {
           fix = `give ${rel} a type: in its frontmatter, then decide whether it gets a page or the link becomes plain words`;
         }
         found.push({
-          code: 'NAMED_NO_PAGE', severity: withheld ? 'error' : 'warning', path: rel,
+          code: 'NAMED_NO_PAGE', severity: keptByFlag ? 'info' : withheld ? 'error' : 'warning', path: rel,
           detail: `has no page (${record.why}) but is ${withheld ? 'linked from' : 'named on'} ${plural(pagesNaming.length, '1 published page', `${pagesNaming.length} published pages`)} as ${printed.slice(0, 3).map((w) => `"${w}"`).join(', ')}${printed.length > 3 ? ', …' : ''}`
             + (viaListing.length > 0 ? `; for ${viaListing.length} of them it is an index or listing page that prints the name, from that note (${listings.slice(0, 2).join(', ')}${listings.length > 2 ? ', …' : ''})` : ''),
           fix,

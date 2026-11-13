@@ -22,7 +22,8 @@
 // auto-excluded, and still is. The order is:
 //
 //   directory checks → IMAGE_GUIDANCE → NO_TYPE → PREP_TYPE → STORY_COMPANION → DRAFT_EXCLUDED →
-//   AUTO_EXCLUDED_* → manifest codes → PUBLISH_FALSE/NONE →
+//   AUTO_EXCLUDED_* → MANIFEST_EXCLUDED/NEEDS_DECISION → WITHHELD → MANIFEST_UNLISTED →
+//   PUBLISH_FALSE/NONE →
 //   SUPERSEDED_NO_TARGET → OK
 //
 // SUPERSEDED_NO_TARGET sits last, immediately before OK, and that placement is
@@ -30,7 +31,7 @@
 // ahead of any real exclusion would make a superseded page outrank the manifest
 // allowlist or an explicit `publish: false` and reach the site when the old build
 // dropped it.
-const { publishMode } = require('./processor');
+const { publishMode, isWithheld } = require('./processor');
 const { storyOwnerPath, isStoryCompanion, matchExcludedDir } = require('./scanner');
 const { getCanonStatus } = require('./templates/base');
 const { entry } = require('./settings');
@@ -229,6 +230,15 @@ function decidePage(page, options) {
   if (manifest && !listedForPublish) {
     if (index.excluded.has(rel)) return verdict('exclude', 'MANIFEST_EXCLUDED', 'publish list: excluded');
     if (index.needsDecision.has(rel)) return verdict('decide', 'MANIFEST_NEEDS_DECISION', 'publish list: needs a decision');
+  }
+
+  // A note whose own name is a secret (a cult the players have not heard of, a room they have
+  // not found) publishes only when the publish list says so: a reveal puts it there (#619).
+  // With no list it would otherwise publish, and the site would give the secret a page. A note that
+  // also says `publish: false` keeps that answer below.
+  if (!listedForPublish && isWithheld(frontmatter) && publishMode(frontmatter) !== 'none') return verdict('exclude', 'WITHHELD', 'withheld: true');
+
+  if (manifest && !listedForPublish) {
     return verdict('decide', 'MANIFEST_UNLISTED', 'not on the publish list');
   }
 
@@ -264,7 +274,7 @@ function publishesPage(verdict) {
 const NOTE_CODES = new Set([
   'DRAFT_EXCLUDED', 'AUTO_EXCLUDED_STATUS', 'AUTO_EXCLUDED_STAGE', 'AUTO_EXCLUDED_SOURCE',
   'PREP_TYPE', 'MANIFEST_EXCLUDED', 'MANIFEST_NEEDS_DECISION', 'MANIFEST_UNLISTED',
-  'PUBLISH_FALSE', 'PUBLISH_NONE',
+  'WITHHELD', 'PUBLISH_FALSE', 'PUBLISH_NONE',
 ]);
 
 // A session's Play Notes note (either spelling of its type).

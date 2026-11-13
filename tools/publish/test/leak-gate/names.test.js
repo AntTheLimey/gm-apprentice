@@ -6,6 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { leakSite, leakInto } = require('../helpers/leak-site');
 const { runLeakGate } = require('../../lib/leak-gate');
+const { listFileText } = require('../helpers/publish-list');
 
 const NOTES = {
   'NPCs/Lord Vane.md': '---\ntype: npc\ngm_aliases: [Elias Crowe]\n---\nA lord.\n',
@@ -66,10 +67,26 @@ describe('leak gate: secret names', () => {
     } finally { s.cleanup(); }
   });
   it('a withheld note that publishes stops the gate', () => {
+    // A withheld note publishes only from the publish list (#619).
     const notes = { ...NOTES, 'NPCs/Vesper.md': '---\ntype: npc\nwithheld: true\n---\nA hidden one.\n' };
+    notes['_meta/publish-list.yaml'] = listFileText({ publishing: Object.keys(notes).filter((rel) => rel.endsWith('.md')) });
     const s = leakSite(notes, SETTINGS);
     try {
       assert.ok(runLeakGate({ configPath: s.configPath, outputDir: s.outputDir }).findings.some((x) => x.code === 'WITHHELD_PUBLISHED' && x.note === 'NPCs/Vesper.md'));
+    } finally { s.cleanup(); }
+  });
+  it('a withheld note kept off by its flag alone (no publish list) still has its name caught in prose (#619)', () => {
+    const notes = {
+      'NPCs/Hollis Crane.md': '---\ntype: npc\nwithheld: true\n---\nThe lodge master.\n',
+      'NPCs/Teller.md': '---\ntype: npc\n---\nThe teller says Hollis Crane waits below.\n',
+    };
+    const s = leakSite(notes, SETTINGS);
+    try {
+      assert.ok(!fs.existsSync(path.join(s.outputDir, 'npcs', 'hollis-crane.html')), 'no page for the withheld note');
+      assert.ok(fs.existsSync(path.join(s.outputDir, 'npcs', 'teller.html')));
+      const found = runLeakGate({ configPath: s.configPath, outputDir: s.outputDir }).findings
+        .filter((x) => x.code === 'WITHHELD_IN_PROSE' && x.note === 'NPCs/Hollis Crane.md');
+      assert.ok(found.some((x) => x.page === 'npcs/teller.html'), JSON.stringify(found));
     } finally { s.cleanup(); }
   });
   it('a name finding can be accepted, keyed by the page and the name (amendment 4)', () => {

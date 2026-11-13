@@ -9,6 +9,17 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.20] — 2026-11-12
+
+### Fixed
+
+- A place, group or person marked `withheld: true` no longer gets a page on a new campaign's first player site: it stays off until a reveal publishes it, and the GM site still shows it, marked (#619).
+- The site check no longer calls a link to such a note an error when its withheld mark is what keeps it off, and never suggests a publish-list change that would create a list on a vault without one.
+
+### Changed
+
+- The-midwife marks an entity whose existence is itself the secret (a hidden lodge, an unfound room) as withheld when it hands the campaign to the vault (#619).
+
 ## [1.12.19] — 2026-11-12
 
 ### Fixed

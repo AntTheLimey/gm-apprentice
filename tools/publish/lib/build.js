@@ -1194,6 +1194,9 @@ function buildSite(options) {
     console.log(`Manifest filter: ${reachedManifest.length} → ${kept.length} pages`);
   }
 
+  const heldBack = withCode('WITHHELD');
+  if (!gm && heldBack.length > 0) console.log(`Kept off ${heldBack.length} note(s) marked withheld (a reveal publishes them)`);
+
   const neverPublish = withCode('PUBLISH_FALSE', 'PUBLISH_NONE');
   if (!gm && neverPublish.length > 0) {
     console.log(`publish: false — skipped ${neverPublish.length} file(s)`);

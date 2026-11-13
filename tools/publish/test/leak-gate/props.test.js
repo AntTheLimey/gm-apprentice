@@ -141,7 +141,7 @@ describe('leak gate: a file two props share', () => {
   it('a withheld second prop is published on the shared file too', () => within((s) => {
     const found = gate(s).findings.filter((f) => f.code === 'WITHHELD_PUBLISHED').map((f) => f.page).sort();
     assert.deepEqual(found, ['letters/beta.html', 'props/beta.html', 'props/style.css']);
-  }, VAULT('withheld: true\n')));
+  }, { ...VAULT('withheld: true\n'), ...LIST(['Documents/Alpha.md', 'Letters/Beta.md']) }));   // withheld publishes from the list only (#619)
 });
 
 describe('leak gate: a held prop page in UTF-16', () => {
@@ -246,7 +246,7 @@ describe('leak gate: withheld names and props', () => {
       ['documents/invitation.html', 'Documents/Invitation.md'],
       ['props/invitation.html', 'Documents/Invitation.md'],
     ]);
-  }, { 'Documents/Invitation.md': PROP('withheld: true\n'), 'Documents/inv.html': PAGE().replace('<link rel="stylesheet" href="props.css">', '') }));
+  }, { 'Documents/Invitation.md': PROP('withheld: true\n'), 'Documents/inv.html': PAGE().replace('<link rel="stylesheet" href="props.css">', ''), ...LIST(['Documents/Invitation.md']) }));
 
   it('a prop file named after a withheld note is a finding', () => within((s) => {
     assert.ok(fs.existsSync(path.join(s.outputDir, 'props', 'lord-zorn.html')));
@@ -267,6 +267,8 @@ const NOTES = {
   'NPCs/Draft.md': '---\ntype: npc\nstatus: planned\n---\nThe harbourmaster takes bribes from smugglers.\n',
   'NPCs/Zorn.md': '---\ntype: npc\nwithheld: true\npublish: false\n---\nA man.\n',
   'NPCs/Vesper.md': '---\ntype: npc\nwithheld: true\n---\nA hidden one.\n',
+  // A withheld note publishes from the publish list only (#619): it lists what published before.
+  ...LIST(['NPCs/Sections.md', 'NPCs/Fields.md', 'NPCs/Blocks.md', 'NPCs/Vesper.md']),
 };
 const SETTINGS = { player: { folder_map: { NPCs: 'npcs' }, never_show: ['Kestrel'] } };
 const BEFORE = [

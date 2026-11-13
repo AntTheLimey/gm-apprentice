@@ -92,7 +92,7 @@ describe('leak gate: a styled prop page', () => {
     fs.rmSync(path.join(s.outputDir, 'props', 'letter.html'));
     fs.mkdirSync(path.join(s.outputDir, 'props', 'letter.html'));
     assert.deepEqual(found(), ['documents/letter.html']);
-  }, { ...STYLE, 'Documents/Letter.md': LETTER('withheld: true\n') }));
+  }, { ...STYLE, 'Documents/Letter.md': LETTER('withheld: true\n'), ...LIST(['Documents/Letter.md']) }));   // withheld publishes from the list only (#619)
 
   it('a styled page at an address naming a withheld note is a finding', () => within((s) => {
     assert.ok(fs.existsSync(path.join(s.outputDir, 'props', 'lord-zorn.html')));
@@ -105,7 +105,7 @@ describe('leak gate: a styled prop page', () => {
   it('a withheld styled prop that publishes is a finding on its styled page too', () => within((s) => {
     const found = gate(s).findings.filter((f) => f.code === 'WITHHELD_PUBLISHED').map((f) => f.page).sort();
     assert.deepEqual(found, ['documents/letter.html', 'props/letter.html']);
-  }, { ...STYLE, 'Documents/Letter.md': LETTER('withheld: true\n') }));
+  }, { ...STYLE, 'Documents/Letter.md': LETTER('withheld: true\n'), ...LIST(['Documents/Letter.md']) }));   // withheld publishes from the list only (#619)
 });
 
 describe('leak gate: a sealed title on its listings', () => {
