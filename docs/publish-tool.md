@@ -113,8 +113,9 @@ To trigger it, say something like:
 You build the site the same way regardless of host (`npm run build`
 produces a `docs/` folder). Only the final deploy step differs. Set the
 `player_site.host` setting to pick one (the apprentice sets it when it
-sets up the site); if it's absent, GitHub Pages is assumed. Steps you want
-run around a build, such as shrinking pictures, are listed in
+sets up the site); if it's absent, Cloudflare Pages is assumed. Only Cloudflare Pages can
+run the live features (live stats and the change-request inbox). Steps you
+want run around a build, such as shrinking pictures, are listed in
 `player_site.before_build` and `player_site.after_build`: see
 [Build steps](site-settings.md#build-steps).
 

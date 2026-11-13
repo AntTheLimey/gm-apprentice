@@ -309,8 +309,8 @@ describe('init', () => {
         const { runDeploy } = require('../../lib/deploy-cli');
         const dry = [];
         assert.strictEqual(await runDeploy({ configPath, dryRun: true }, { out: (l) => dry.push(String(l)), runCommand: () => ({ code: 1, stdout: '', stderr: '' }) }), 0);
-        assert.match(dry.join('\n'), /git add docs/, dry.join('\n'));
-        assert.doesNotMatch(dry.join('\n'), /WARNING|differs/);
+        assert.match(dry.join('\n'), /wrangler/, dry.join('\n'));
+        assert.doesNotMatch(dry.join('\n'), /WARNING|differs|git push/);
         const { runSiteDoctor } = require('../../lib/site-doctor');
         const doc = [];
         await runSiteDoctor({ configPath, json: true }, { out: (l) => doc.push(String(l)), detect: () => null });
@@ -320,11 +320,11 @@ describe('init', () => {
         assert.ok(existsSync(path.join(site, 'docs', 'index.html')));
         assert.deepStrictEqual(said.filter((l) => /WARNING|differs/.test(l)), []);
         // A host and address in the vault's settings take effect.
-        require('../helpers/vault-files').mergeSettings(vault, { 'player_site.host': 'cloudflare-pages', 'player_site.url': 'https://dead.pages.dev' });
-        const cf = [];
-        assert.strictEqual(await runDeploy({ configPath, dryRun: true }, { out: (l) => cf.push(String(l)) }), 0);
-        assert.match(cf.join('\n'), /wrangler/, cf.join('\n'));
-        assert.doesNotMatch(cf.join('\n'), /git push/);
+        require('../helpers/vault-files').mergeSettings(vault, { 'player_site.host': 'github-pages', 'player_site.url': 'https://dead.github.io/light' });
+        const gh = [];
+        assert.strictEqual(await runDeploy({ configPath, dryRun: true }, { out: (l) => gh.push(String(l)), runCommand: () => ({ code: 1, stdout: '', stderr: '' }) }), 0);
+        assert.match(gh.join('\n'), /git add docs/, gh.join('\n'));
+        assert.doesNotMatch(gh.join('\n'), /wrangler/);
       } finally {
         Object.assign(console, real);
         await removeTmpDir(tmpDir);

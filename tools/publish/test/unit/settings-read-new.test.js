@@ -108,7 +108,7 @@ test('version absent reads as 1 with no fault', () => {
 
 test('version 1 is fine; above 1 throws the newer-plugin line', () => {
   assert.deepEqual(read('version: 1\n').faults, []);
-  assert.throws(() => read('version: 2\n'), /^Error: this vault's settings were written by a newer gm-apprentice; update the plugin$/);
+  assert.throws(() => read('version: 2\n'), /^Error: this vault's settings were written by a newer gm-apprentice; update gm-apprentice$/);
 });
 
 test('a version that is not a whole number stops', () => {

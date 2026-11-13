@@ -472,7 +472,20 @@ describe('resolveImageEmbeds (issues #86b, #88)', () => {
 
   it('percent-encodes spaces so the link parses as an image', () => {
     const out = resolveImageEmbeds('![[Chrome Jockey.png]]', imageMap, 'heritages/chrome-jockey.html');
-    assert.strictEqual(out, '![Chrome Jockey](../images/heritages/Chrome%20Jockey.png)');
+    assert.strictEqual(out, '![](../images/heritages/Chrome%20Jockey.png)');
+  });
+
+  it('an in-line picture without alt text gets an empty alt, not its file name (#620)', () => {
+    const out = resolveImageEmbeds('![[ch3-s11-scene-the-duel-at-dawn.png]]',
+      { 'ch3-s11-scene-the-duel-at-dawn.png': { relPath: 'a.png' } }, 'x.html');
+    assert.strictEqual(out, '![](images/a.png)');
+  });
+
+  it('![[file|alt text]] keeps the alt text; a size after the pipe is not alt text (#620)', () => {
+    const map = { 'a.png': { relPath: 'a.png' } };
+    assert.strictEqual(resolveImageEmbeds('![[a.png|The duel]]', map, 'x.html'), '![The duel](images/a.png)');
+    assert.strictEqual(resolveImageEmbeds('![[a.png|300]]', map, 'x.html'), '![](images/a.png)');
+    assert.strictEqual(resolveImageEmbeds('![[a.png|300x200]]', map, 'x.html'), '![](images/a.png)');
   });
 
   it('encodes parentheses in the destination', () => {
@@ -490,13 +503,13 @@ describe('resolveImageEmbeds (issues #86b, #88)', () => {
   it('keeps the embed when the portrait names a different file', () => {
     const out = resolveImageEmbeds('![[Chrome Jockey.png]]', imageMap, 'heritages/chrome-jockey.html',
       null, { portraitBasename: 'Other.png' });
-    assert.match(out, /<img|!\[Chrome Jockey\]/);
+    assert.match(out, /^!\[\]\(/);
   });
 
   it('keeps the embed when the portrait is not a scanned image', () => {
     const out = resolveImageEmbeds('![[Chrome Jockey.png]]', imageMap, 'heritages/chrome-jockey.html',
       null, { portraitBasename: 'Missing.png' });
-    assert.match(out, /!\[Chrome Jockey\]/);
+    assert.match(out, /^!\[\]\(/);
   });
 
   it('removes a missing embed rather than leaving a visible comment', () => {

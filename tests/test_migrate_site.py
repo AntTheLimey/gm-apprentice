@@ -588,6 +588,101 @@ class DormantThreadsHideTests(unittest.TestCase):
         self.assertTrue(check.plain and check.ask and check.left)
 
 
+class SiteHostTests(unittest.TestCase):
+    """The host setting falls back to Cloudflare Pages now; a site that named
+    none has deployed through GitHub Pages, and keeps doing so (#605)."""
+
+    def text(self, vault):
+        return (vault / "_meta" / "vault-config.yaml").read_text(encoding="utf-8")
+
+    def test_a_site_with_no_host_gets_github_pages_written(self):
+        vault = make_vault(self)
+        self.assertEqual(vc.vault_settings(vault).get("player_site.host"),
+                         "cloudflare-pages")
+        (item,) = ms.find_site_host(vault)
+        self.assertEqual((item.id, item.group), (ms.SITE_HOST, WILL))
+        self.assertIn("player_site.host: github-pages", item.lines[0])
+        self.assertEqual(item.apply(None), ["wrote player_site.host: github-pages"])
+        self.assertEqual(vc.vault_settings(vault).get("player_site.host"),
+                         "github-pages")
+        self.assertEqual(ms.find_site_host(vault), [])
+
+    def written_cloudflare(self, vault, why):
+        (item,) = ms.find_site_host(vault)
+        self.assertIn("player_site.host: cloudflare-pages", item.lines[0])
+        self.assertIn(why, item.lines[0])
+        self.assertEqual(item.apply(None), ["wrote player_site.host: cloudflare-pages"])
+
+    def test_a_cloudflare_project_means_cloudflare(self):
+        vault = make_vault(self)
+        vaultlib.settings_set(vault, [("player_site.cloudflare_project", "dead-light")])
+        self.written_cloudflare(vault, "cloudflare_project")
+
+    def test_a_pages_dev_address_means_cloudflare(self):
+        vault = make_vault(self)
+        vaultlib.settings_set(vault, [("player_site.url", "https://dead.pages.dev")])
+        self.written_cloudflare(vault, "pages.dev")
+
+    def test_a_github_address_does_not(self):
+        vault = make_vault(self)
+        vaultlib.settings_set(vault, [("player_site.url", "https://x.github.io/c")])
+        (item,) = ms.find_site_host(vault)
+        self.assertIn("player_site.host: github-pages", item.lines[0])
+
+    def test_a_wrangler_toml_with_a_real_kv_id_means_cloudflare(self):
+        vault = make_vault(self)
+        (site_of(vault) / "wrangler.toml").write_text(
+            '[[kv_namespaces]]\nbinding = "INBOX"\nid = "abc123def456"\n', encoding="utf-8")
+        self.written_cloudflare(vault, "wrangler.toml")
+
+    def test_a_wrangler_toml_with_the_placeholder_or_no_inbox_does_not(self):
+        for text in ('[[kv_namespaces]]\nbinding = "INBOX"\nid = "PUT-YOUR-KV-NAMESPACE-ID-HERE"\n',
+                     'account_id = "abc"\n[[kv_namespaces]]\nbinding = "OTHER"\nid = "zzz"\n'):
+            vault = make_vault(self)
+            (site_of(vault) / "wrangler.toml").write_text(text, encoding="utf-8")
+            (item,) = ms.find_site_host(vault)
+            self.assertIn("player_site.host: github-pages", item.lines[0], text)
+
+    def test_a_host_the_tool_cannot_read_is_treated_as_not_written(self):
+        for evidence, host in ((False, "github-pages"), (True, "cloudflare-pages")):
+            vault = make_vault(self)
+            vaultlib.settings_set(vault, [("player_site.host", "github-pages")])
+            path = vault / "_meta" / "vault-config.yaml"
+            path.write_text(path.read_text(encoding="utf-8").replace(
+                "host: github-pages", "host: github"), encoding="utf-8")
+            vaultlib.forget_settings(vault)
+            self.assertEqual(vc.vault_settings(vault).origins["player_site.host"], "fault")
+            if evidence:
+                (site_of(vault) / "wrangler.toml").write_text(
+                    '[[kv_namespaces]]\nbinding = "INBOX"\nid = "abc123def456"\n', encoding="utf-8")
+            (item,) = ms.find_site_host(vault)
+            self.assertIn(f"player_site.host: {host}", item.lines[0])
+            self.assertIn("'github'", item.lines[0])
+            item.apply(None)
+            self.assertEqual(vc.vault_settings(vault).get("player_site.host"), host)
+            self.assertEqual(ms.find_site_host(vault), [])
+
+    def test_a_host_already_written_is_left(self):
+        for host in ("cloudflare-pages", "github-pages"):
+            vault = make_vault(self)
+            vaultlib.settings_set(vault, [("player_site.host", host)])
+            self.assertEqual(ms.find_site_host(vault), [], host)
+
+    def test_a_vault_with_no_site_is_left(self):
+        self.assertEqual(ms.find_site_host(make_vault(self, site=False)), [])
+        self.assertEqual(ms.find_site_host(make_vault(self, publish=False)), [])
+
+    def test_a_site_switched_off_is_left(self):
+        self.assertEqual(
+            ms.find_site_host(make_vault(self, extra="  site: false\n")), [])
+
+    def test_the_check_runs_once_at_1_12_14_as_bookkeeping(self):
+        (check,) = [c for c in ms.SITE_CHECKS if c.name == ms.SITE_HOST]
+        self.assertEqual((check.release, check.band, check.kind),
+                         ("1.12.21", 2, "bookkeeping"))
+        self.assertTrue(check.plain)
+
+
 class HideAdditionStampTests(unittest.TestCase):
     """The 1.11.2 hide-add question holds the stamp until it is answered,
     through the low-level apply and `gma update` alike: past the stamp the

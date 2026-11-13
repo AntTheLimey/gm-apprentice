@@ -136,6 +136,17 @@ function firstImage(line) {
   return hit ? canonicalNfc(hit.name.split('/').pop()) : null;
 }
 
+// The words of a scene's title (its first H1, else its note's name) that say what its picture shows: lowercased, four
+// letters or more, without the words every scene title carries. They only rank the paragraphs that name the scene's
+// people and places (sceneSpots); they are never printed.
+const TITLE_STOP = new Set(['scene', 'session', 'chapter', 'part', 'with', 'from', 'that', 'this', 'into', 'their', 'there', 'about']);
+function titleWords(body, fallback) {
+  const h1 = /^ {0,3}#[ \t]+(.+?)[ \t#]*$/m.exec(String(body == null ? '' : body));
+  const text = (h1 ? h1[1] : String(fallback || '')).normalize('NFC');
+  const words = (text.match(/[\p{L}]+/gu) || []).map((w) => w.toLowerCase()).filter((w) => w.length >= 4 && !TITLE_STOP.has(w));
+  return [...new Set(words)];
+}
+
 const NOT_PLAYED = new Set(['dropped', 'paused']);
 const linksOf = (value) => (Array.isArray(value) ? value : value == null || value === '' ? [] : [value]).map(linkTarget).filter(Boolean);
 const folderOf = (note) => path.dirname(note.sourcePath || '');
@@ -211,7 +222,7 @@ function sceneCandidates(notes, { names, imageMap, linkMap, folded = () => undef
       for (const term of names.get(at)) if (!seen.has(term.toLowerCase())) { seen.add(term.toLowerCase()); terms.push(term); }
     }
     if (hrefs.size === 0) continue;
-    scenes.push({ sessions: sessionsOfScene(scene, vault), candidate: { key, outputPath: null, title: '', terms, hrefs, pages, place: true, scene: true } });
+    scenes.push({ sessions: sessionsOfScene(scene, vault), candidate: { key, outputPath: null, title: '', terms, hrefs, pages, place: true, scene: true, words: titleWords(scene.body, scene.title) } });
   }
   return (unit) => {
     if (!unit || unit.kind !== 'session') return [];
@@ -321,6 +332,9 @@ function openMarks(text) {
   return stack;
 }
 
+// The first word of a name, its quotes read straight, lowercased.
+const firstWord = (term) => straightQuotes(String(term)).trim().split(/\s+/)[0].toLowerCase();
+
 const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 // One whole-word pattern per name, its quotes read straight. A name of several words matches in any case; a one-word
@@ -372,16 +386,17 @@ function nameSpans(candidate, p) {
 function readSpans(candidate, p) {
   const out = [];
   const words = wordsOf(p);
-  for (const term of candidate.terms || []) {
+  (candidate.terms || []).forEach((term, i) => {
     const runs = termRuns(term);
-    if (runs !== null && !runs.every((w) => words.has(w))) continue;
+    if (runs !== null && !runs.every((w) => words.has(w))) return;
     const pattern = termPattern(term);
-    if (!pattern) continue;
+    if (!pattern) return;
     for (const m of wholeWords(pattern, p.text)) {
       if (pattern.single && !/^\p{Lu}/u.test(m[0])) continue;
-      out.push({ start: m.index, end: m.index + m[0].length });
+      // `alias`: a one-word name after the title (a candidate's first name is its title).
+      out.push({ start: m.index, end: m.index + m[0].length, alias: pattern.single && i > 0, word: m[0] });
     }
-  }
+  });
   return out;
 }
 
@@ -462,6 +477,24 @@ function mentionsOf(candidate, paragraphs, others = []) {
   // A candidate among `others` (placeFigures) is read only in the paragraphs the index says may name it.
   const indexed = lists.some((list) => membersOf(list).has(candidate));
   const out = [];
+  // A one-word alias that another page's longer name begins with ("Anna" for Clara Fen; "Anna Lindqvist") is, unlinked,
+  // that page's first name as likely as this alias: it names neither, so only a link or a fuller name counts. This holds
+  // only where that page is in the recap, by its full name or a link to it; where it is not, the alias is this page's.
+  // (A name another page has whole is not a first name: two pages with one name both count.) Read once, when asked.
+  let firstNames = null;
+  const firstNamesInRecap = () => {
+    if (firstNames) return firstNames;
+    firstNames = new Set();
+    for (const o of lists.flatMap((list) => list).filter(rival)) {
+      const full = (o.terms || []).filter((t) => /\s/.test(String(t).trim()));
+      if (full.length === 0) continue;
+      const addresses = (o.hrefs ? [...o.hrefs] : [o.outputPath]).filter(Boolean).map(canonicalNfc);
+      if (paragraphs.some((q) => addresses.some((h) => q.hrefs.has(h)) || nameSpans({ terms: full }, q).length > 0)) {
+        for (const t of full) firstNames.add(firstWord(t));
+      }
+    }
+    return firstNames;
+  };
   paragraphs.forEach((p, para) => {
     let at = Infinity;
     for (const t of targets) {
@@ -474,6 +507,7 @@ function mentionsOf(candidate, paragraphs, others = []) {
     const elsewhere = spans.length && p.linkSpans ? p.linkSpans.filter((l) => !targets.includes(l.target)) : [];
     const within = (n) => (l) => l.start <= n.start && n.end <= l.end;
     for (const n of spans) {
+      if (n.alias && firstNamesInRecap().has(straightQuotes(n.word).toLowerCase())) continue;
       const inside = longer.some((l) => l.end - l.start > n.end - n.start && within(n)(l)) || elsewhere.some(within(n));
       if (!inside) at = Math.min(at, n.start);
     }
@@ -512,20 +546,34 @@ function placeFigures(candidates, paragraphs, { perParagraph = 2, taken = new Se
   return slots;
 }
 
+// A title word is read in a paragraph by its first five letters (or the whole word, when it has four): "becalming"
+// is read in "becalmed", "confession" in "confessed".
+function readsWord(words, title) {
+  const stem = title.slice(0, 5);
+  for (const w of words) if (w.length >= 4 && w.startsWith(stem)) return true;
+  return false;
+}
+
 // The paragraphs a scene's picture may go beside, best first: each that mentions at least one of its `pages` (by
-// mentionsOf's rules, each page read on its own against `others`), by how many of them it mentions, most first, then
-// earliest. `at`: where the first of them stands in it.
+// mentionsOf's rules, each page read on its own against `others`). The scene's title words come first: a paragraph
+// that reads one ranks above one that does not, a word weighing the more the fewer paragraphs read it ("cylinder" in
+// every paragraph says little, "becalmed" in one says where). Then by how many of the pages a paragraph mentions, most
+// first, then earliest. `at`: where the first of them stands in it.
 function sceneSpots(scene, paragraphs, others) {
   const byPara = new Map();
   for (const { href, terms } of scene.pages) {
     for (const { para, at } of mentionsOf({ outputPath: href, terms }, paragraphs, others)) {
-      const spot = byPara.get(para) || { para, at, count: 0 };
+      const spot = byPara.get(para) || { para, at, count: 0, weight: 0 };
       spot.count++;
       spot.at = Math.min(spot.at, at);
       byPara.set(para, spot);
     }
   }
-  return [...byPara.values()].sort((a, b) => b.count - a.count || a.para - b.para);
+  for (const word of scene.words || []) {
+    const reading = paragraphs.map((_, para) => para).filter((para) => readsWord(wordsOf(paragraphs[para]), word));
+    for (const para of reading) if (byPara.has(para)) byPara.get(para).weight += 1 / reading.length;
+  }
+  return [...byPara.values()].sort((a, b) => b.weight - a.weight || b.count - a.count || a.para - b.para);
 }
 
 const ZOOM = '<svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg>';
@@ -612,7 +660,7 @@ function withFigures(recapHtml, { candidates, scenes = [], exclude = new Set(), 
     const own = held.own || (held.scene ? null : { terms: held.terms || [], hrefs: new Set(heldHrefs) });
     const pages = [...(held.pages || [{ href: heldHrefs[0], terms: held.terms || [] }])];
     for (const pg of c.pages || []) if (!pages.some((x) => canonicalNfc(x.href) === canonicalNfc(pg.href))) pages.push(pg);
-    all[at] = { ...held, terms, hrefs: new Set([...heldHrefs, ...c.hrefs]), pages, own };
+    all[at] = { ...held, terms, hrefs: new Set([...heldHrefs, ...c.hrefs]), pages, own, words: [...new Set([...(held.words || []), ...(c.words || [])])] };
   }
   if (!recapHtml) return recapHtml;
   const taken = all.length > 0 || pictured ? shownImages(recapHtml, { fromPath, imageMap, marks }) : null;

@@ -17,7 +17,7 @@ const { normalizeExcludeDirs, outputProblem, keepProblem, tidyChecked } = requir
 const { packageScripts, packageJsonProblem } = require('./steps');
 
 const LAYOUT_VERSION = 1;
-const NEWER_VERSION = "this vault's settings were written by a newer gm-apprentice; update the plugin";
+const NEWER_VERSION = "this vault's settings were written by a newer gm-apprentice; update gm-apprentice";
 const MAP_ENTRY = { type: 'map', shape: 'settings, one to a line' };
 const TOP = ['version', ...GROUPS];
 
