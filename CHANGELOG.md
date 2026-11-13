@@ -9,6 +9,16 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.29] — 2026-11-13
+
+### Added
+
+- `mobrpg withdraw` takes back Pending suggestions you filed: preview first, your own namespace only, relations before what they point at, then each vault note re-stamped `dismissed` once the queue confirms it is gone. `--only` previews and prints the exact `--id` command to run (#504).
+
+### Changed
+
+- `mobrpg suggest --execute` needs a scope (`--only`, `--chapter`, `--kind`) or an explicit `--all` (#504).
+
 ## [1.12.28] — 2026-11-13
 
 ### Changed
