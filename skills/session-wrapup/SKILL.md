@@ -248,7 +248,11 @@ creating entities.
   `canon_status: DRAFT`, its relationship edges in its frontmatter.
   Content session-play already saved goes in verbatim — the template
   supplies structure, not replacement prose. Never pattern-match off
-  existing entity files.
+  existing entity files. An NPC who joins the party as a PC: the PC
+  note from its template in the batch, then, once it is written,
+  `vw npc-merge "<NPC note>" "<PC note>"` (shown with the batch's
+  review, then `--write`): one note per character
+  (`shared/pc-body-structure.md`).
 - **Updated entities:** change the entity's own file — one file per
   entity, no separate update files: a `=== section <note> "<heading>"`
   block per section (`--append` adds, `--replace` rewrites), no read
@@ -299,7 +303,8 @@ creating entities.
   that played and strike the other through with `not played`. PCs are
   exempt from this and from the Related mirror: their body follows
   `shared/pc-body-structure.md`, and their session record is the
-  Story companion.
+  Story companion. A retired PC who appears as an NPC keeps its PC
+  note, never a new NPC note: its rows go to `Further Appearances`.
 - **New container entities** (a district between a station and its
   venues, a cell between a faction and its members): offer each
   child for re-pointing, yes/no each, and set the child's fields per

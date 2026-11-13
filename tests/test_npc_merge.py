@@ -1,0 +1,417 @@
+#!/usr/bin/env python3
+"""`vault_write.py npc-merge`: an NPC note merged into its PC note, one note
+per character (#445). Frontmatter union and fill, every body mapping word
+for word, fences kept, placeholders left behind, the archive move, links
+rewritten by path only, refusals, dry run, and all-or-nothing writes.
+
+Run: python3 -m pytest tests/test_npc_merge.py
+"""
+
+import io
+import shutil
+import sys
+import tempfile
+import unittest
+from contextlib import redirect_stderr, redirect_stdout
+from pathlib import Path
+from unittest import mock
+
+ROOT = Path(__file__).resolve().parent.parent
+SCRIPTS = ROOT / "skills" / "shared" / "scripts"
+sys.path.insert(0, str(SCRIPTS))
+
+import npc_merge  # noqa: E402
+import vault_write  # noqa: E402
+
+NPC_REL = "Characters/NPCs/Mira Vale.md"
+PC_REL = "Characters/PCs/Mira Vale.md"
+ARCHIVE_REL = "_archive/Characters/NPCs/Mira Vale (NPC).md"
+PC_TEMPLATE = (ROOT / "skills" / "shared" / "templates" /
+               "pc-generic.md").read_text(encoding="utf-8")
+
+SECRETS = """### Secrets
+
+<!-- spoiler -->
+She is the Grey Hand.
+<!-- /spoiler -->
+"""
+
+NPC = """---
+type: npc
+canon_status: DRAFT
+aliases: [Mira]
+gm_aliases: ["The Grey Hand"]
+withheld: false
+tags: [chapter-1, smuggler]
+occupation: "Smuggler"
+location: "[[The Docks]]"
+portrait: "mira.png"
+voice: "Low and quick."
+relationships:
+  - target: "[[Captain Rhee]]"
+    type: works_for
+    tone: wary
+    strength: 6
+    bidirectional: false
+    description: "runs cargo"
+  - target: "[[Old Tom]]"
+    type: knows
+  - target: "[[]]"
+    type: knows
+---
+
+<!-- {braces} = replace with content. Everything above the gm-only
+fence is what players see on the site: write it as the PCs know this
+person. Omit a section rather than leave its heading empty. -->
+
+## Overview
+
+A smuggler who knows every tide. See [[Characters/NPCs/Mira Vale|her]].
+
+## Appearance & Manner
+
+{What the PCs notice first: one physical detail, one habit. Enough to
+picture them, not a portrait.}
+
+## History
+
+Grew up on the [[The Docks|docks]].
+
+### Early years
+
+Ran with the gulls.
+
+## Related
+
+- **People:** [[Captain Rhee]] — her employer
+- **Places:** [[{Name}]] — {…}
+
+## Campaign Log
+
+- **[[Session 01 - Arrival]]** — sold the party passage.
+- **[[Session 02 - Storm]]** — fished them out of the bay.
+
+<!-- gm-only -->
+
+## GM Notes
+
+STR 50 DEX 70
+
+### Playing Them
+
+- **Speech:** {accent, pace, a verbal tic}
+- **Tell:** {the gesture you do at the table}
+- **Line:** "{something they'd say the first time the PCs meet them}"
+
+### Wants
+
+Out of debt to Rhee.
+
+""" + SECRETS + """
+<!-- /gm-only -->
+"""
+
+
+def make_vault(case, files):
+    vault = Path(tempfile.mkdtemp(prefix="npc-merge-"))
+    case.addCleanup(shutil.rmtree, vault, ignore_errors=True)
+    for rel, text in files.items():
+        path = vault / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(text.encode("utf-8"))
+    return vault
+
+
+def read(vault, rel):
+    return (vault / rel).read_bytes().decode("utf-8")
+
+
+def snapshot(vault):
+    return {p.relative_to(vault).as_posix(): p.read_bytes()
+            for p in sorted(vault.rglob("*")) if p.is_file()}
+
+
+def run(vault, *args):
+    out, err = io.StringIO(), io.StringIO()
+    with redirect_stdout(out), redirect_stderr(err):
+        code = vault_write.main([str(vault), "npc-merge", *args])
+    return code, out.getvalue(), err.getvalue()
+
+
+def base(extra=None, pc=PC_TEMPLATE):
+    files = {NPC_REL: NPC, PC_REL: pc,
+             "Sessions/Session 01 - Arrival.md":
+                 "---\ntype: session\n---\n\nMet [[Mira Vale]] and "
+                 "[[Characters/NPCs/Mira Vale|the smuggler]]; see "
+                 "[her](../Characters/NPCs/Mira%20Vale.md).\n",
+             "Characters/NPCs/Captain Rhee.md":
+                 "---\ntype: npc\nrelationships:\n  - target: "
+                 "\"[[Characters/NPCs/Mira Vale]]\"\n    type: employs\n---\n\n"
+                 "## Overview\n\nEmploys [[Mira Vale]].\n",
+             "Board.canvas":
+                 '{"nodes":[{"id":"1","type":"file","file":'
+                 '"Characters/NPCs/Mira Vale.md"}],"edges":[]}\n'}
+    files.update(extra or {})
+    return files
+
+
+class MergeTests(unittest.TestCase):
+    def merged(self, files=None):
+        vault = make_vault(self, files or base())
+        code, out, err = run(vault, "Mira Vale", PC_REL, "--write")
+        self.assertEqual(code, 0, err)
+        return vault, out
+
+    def test_frontmatter_union_and_fill(self):
+        vault, out = self.merged()
+        pc = read(vault, PC_REL)
+        fm = vault_write.vl.extract_frontmatter(pc)
+        self.assertEqual(fm["aliases"], ["Mira"])
+        self.assertEqual(fm["gm_aliases"], ["The Grey Hand"])
+        self.assertEqual(fm["tags"], ["chapter-1", "smuggler"])
+        self.assertEqual(fm["occupation"], "Smuggler")
+        self.assertEqual(fm["portrait"], "mira.png")
+        self.assertIn('voice: "Low and quick."', pc)
+        self.assertEqual(fm["type"], "pc")
+        # Relationships: the real ties, the template placeholder gone.
+        self.assertIn('target: "[[Captain Rhee]]"', pc)
+        self.assertIn('target: "[[Old Tom]]"', pc)
+        self.assertNotIn('target: "[[]]"', pc)
+        self.assertIn("NOT-CARRIED\tCharacters/NPCs/Mira Vale.md\tlocation",
+                      out)
+        self.assertNotIn("NOT-CARRIED\tCharacters/NPCs/Mira Vale.md\twithheld",
+                         out)
+
+    def test_pc_values_win_and_lists_dedupe(self):
+        pc = PC_TEMPLATE.replace('portrait: ""', 'portrait: "pc.png"').replace(
+            "aliases: []", "aliases:\n  - mira\n  - Captain Vale").replace(
+            '  - target: "[[]]"\n    type: located_at',
+            '  - target: "[[Captain Rhee]]"\n    type: works_for')
+        vault, _ = self.merged(base(pc=pc))
+        text = read(vault, PC_REL)
+        fm = vault_write.vl.extract_frontmatter(text)
+        self.assertEqual(fm["portrait"], "pc.png")
+        self.assertEqual(fm["aliases"], ["mira", "Captain Vale"])
+        self.assertEqual(text.count("[[Captain Rhee]]\"\n    type: works_for"), 1)
+        self.assertIn('target: "[[Old Tom]]"', text)
+
+    def test_npc_name_joins_aliases_when_names_differ(self):
+        files = base()
+        files["Characters/PCs/Mira Thorne.md"] = files.pop(PC_REL)
+        vault = make_vault(self, files)
+        code, out, err = run(vault, NPC_REL, "Characters/PCs/Mira Thorne.md",
+                             "--write")
+        self.assertEqual(code, 0, err)
+        fm = vault_write.vl.extract_frontmatter(
+            read(vault, "Characters/PCs/Mira Thorne.md"))
+        self.assertEqual(fm["aliases"], ["Mira Vale", "Mira"])
+        # A bare link to the old name names only the NPC: it follows.
+        self.assertIn("[[Mira Thorne]]", read(
+            vault, "Sessions/Session 01 - Arrival.md"))
+
+    def test_body_mappings_word_for_word(self):
+        vault, _ = self.merged()
+        pc = read(vault, PC_REL)
+        bg = pc.index("## Background")
+        before = pc.index("### Before They Were a PC", bg)
+        self.assertLess(before, pc.index("## Equipment"))
+        self.assertIn("#### Overview\n\nA smuggler who knows every tide.", pc)
+        self.assertIn("#### History\n\nGrew up on the [[The Docks|docks]].\n\n"
+                      "##### Early years\n\nRan with the gulls.", pc)
+        self.assertIn("## Relationships\n\n- **People:** [[Captain Rhee]] — "
+                      "her employer\n", pc)
+        self.assertIn("## Appearances\n\n- **[[Session 01 - Arrival]]** — sold "
+                      "the party passage.\n- **[[Session 02 - Storm]]** — "
+                      "fished them out of the bay.\n", pc)
+        self.assertLess(pc.index("## Appearances"), pc.index("## Notes"))
+        self.assertLess(pc.index("## Relationships"), pc.index("## Notes"))
+        gm = pc.index("## GM Notes")
+        self.assertIn("### Wants\n\nOut of debt to Rhee.", pc[gm:])
+        self.assertIn("### Before They Were a PC\n\nSTR 50 DEX 70", pc[gm:])
+
+    def test_fences_kept_byte_for_byte(self):
+        vault, _ = self.merged()
+        pc = read(vault, PC_REL)
+        gm = pc[pc.index("## GM Notes"):]
+        self.assertIn(SECRETS, gm)
+        # The NPC's GM Notes sat in a gm-only fence: so do they here.
+        self.assertIn("<!-- gm-only -->\n\n### Before They Were a PC", gm)
+        self.assertTrue(gm.rstrip().endswith("<!-- /gm-only -->"))
+        self.assertEqual(vault_write.parse(pc).problems, [])
+
+    def test_placeholders_not_carried(self):
+        vault, out = self.merged()
+        pc = read(vault, PC_REL)
+        self.assertNotIn("Appearance & Manner", pc)
+        self.assertNotIn("Playing Them", pc)
+        self.assertNotIn("{…}", pc)
+        self.assertIn("SKIP\tCharacters/NPCs/Mira Vale.md\t§Appearance "
+                      "& Manner\ttemplate placeholder", out)
+
+    def test_existing_sections_receive_lines(self):
+        pc = PC_TEMPLATE.replace(
+            "## Notes\n",
+            "## Appearances\n\n- **[[Session 03 - Joins]]** — joins the "
+            "party.\n\n## Relationships\n\n- **People:** [[Captain Rhee]] — "
+            "her employer\n- **People:** [[Ana]] — friend\n\n## Notes\n")
+        vault, out = self.merged(base(pc=pc))
+        text = read(vault, PC_REL)
+        self.assertIn("- **[[Session 01 - Arrival]]** — sold the party "
+                      "passage.\n- **[[Session 02 - Storm]]** — fished them "
+                      "out of the bay.\n- **[[Session 03 - Joins]]**", text)
+        self.assertEqual(text.count("[[Captain Rhee]] — her employer"), 1)
+        self.assertEqual(text.count("## Appearances"), 1)
+        self.assertIn("SKIP\tCharacters/PCs/Mira Vale.md\t§Relationships"
+                      "\talready there", out)
+
+    def test_missing_background_and_gm_notes_are_made(self):
+        pc = "---\ntype: pc\naliases: []\n---\n\n## Stat Sheet\n\nST 10\n"
+        vault, _ = self.merged(base(pc=pc))
+        text = read(vault, PC_REL)
+        self.assertLess(text.index("## Stat Sheet"), text.index("## Background"))
+        self.assertIn("## Background\n\n### Before They Were a PC", text)
+        self.assertIn("## GM Notes\n\n<!-- gm-only -->", text)
+        self.assertEqual(vault_write.parse(text).problems, [])
+
+    def test_archive_move_with_merged_into(self):
+        vault, _ = self.merged()
+        self.assertFalse((vault / NPC_REL).exists())
+        arch = read(vault, ARCHIVE_REL)
+        self.assertIn('merged_into: "[[Mira Vale]]"', arch)
+        # Otherwise the note as it was.
+        self.assertEqual(arch.replace('merged_into: "[[Mira Vale]]"\n', ""), NPC)
+
+    def test_no_second_note_of_the_name(self):
+        import graph_check
+        vault, _ = self.merged()
+        out = io.StringIO()
+        with redirect_stdout(out):
+            graph_check.main([str(vault), "ambiguous"])
+        self.assertIn("# count: 0", out.getvalue())
+
+    def test_path_links_rewritten_bare_links_untouched(self):
+        vault, _ = self.merged()
+        sess = read(vault, "Sessions/Session 01 - Arrival.md")
+        self.assertIn("Met [[Mira Vale]] and "
+                      "[[Characters/PCs/Mira Vale|the smuggler]]", sess)
+        self.assertIn("[her](../Characters/PCs/Mira%20Vale.md)", sess)
+        rhee = read(vault, "Characters/NPCs/Captain Rhee.md")
+        self.assertIn('target: "[[Characters/PCs/Mira Vale]]"', rhee)
+        self.assertIn("Employs [[Mira Vale]].", rhee)
+        self.assertIn('"file":"Characters/PCs/Mira Vale.md"',
+                      read(vault, "Board.canvas"))
+        # The NPC's link to itself now names the PC.
+        self.assertIn("See [[Characters/PCs/Mira Vale|her]].",
+                      read(vault, PC_REL))
+
+    def test_dry_run_writes_nothing(self):
+        vault = make_vault(self, base())
+        before = snapshot(vault)
+        code, out, err = run(vault, "Mira Vale", "Mira Vale")
+        self.assertEqual(code, 0, err)
+        self.assertEqual(snapshot(vault), before)
+        self.assertIn("WOULD-MERGE\tCharacters/NPCs/Mira Vale.md\t-> "
+                      "Characters/PCs/Mira Vale.md", out)
+        self.assertIn("WOULD-ARCHIVE", out)
+        self.assertIn("WOULD-RELINK", out)
+        self.assertTrue(out.rstrip().splitlines()[-1].startswith("# 1 merge"))
+
+    def test_refusals(self):
+        vault = make_vault(self, base({"Places/Inn.md": "---\ntype: location\n---\n"}))
+        before = snapshot(vault)
+        for args in (["Characters/PCs/Mira Vale.md", PC_REL],   # not npc
+                     [NPC_REL, "Places/Inn.md"],                 # not pc
+                     ["Nobody", PC_REL],                          # missing
+                     [NPC_REL, "Characters/PCs/Nobody.md"]):      # missing
+            code, out, err = run(vault, *args, "--write")
+            self.assertEqual(code, 1, (args, out, err))
+            self.assertTrue(err.strip(), args)
+        self.assertEqual(snapshot(vault), before)
+
+    def test_refuses_when_archive_is_taken(self):
+        vault = make_vault(self, base({ARCHIVE_REL: NPC}))
+        code, _out, err = run(vault, NPC_REL, PC_REL)
+        self.assertEqual(code, 1)
+        self.assertIn("already exists", err)
+
+    def test_usage_error(self):
+        vault = make_vault(self, base())
+        with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as e:
+            vault_write.main([str(vault), "npc-merge", NPC_REL])
+        self.assertEqual(e.exception.code, 2)
+
+    def test_failure_mid_write_restores_everything(self):
+        vault = make_vault(self, base())
+        before = snapshot(vault)
+        real = npc_merge.write_text_atomic
+        calls = []
+
+        def flaky(path, text):
+            calls.append(path)
+            if len(calls) == 3:
+                raise npc_merge.StepFailed("disk full")
+            real(path, text)
+        with mock.patch.object(npc_merge, "write_text_atomic", flaky):
+            code, _out, err = run(vault, NPC_REL, PC_REL, "--write")
+        self.assertEqual(code, 1)
+        self.assertIn("the vault is as it was", err)
+        self.assertEqual(snapshot(vault), before)
+
+    def test_failure_after_the_move_restores_everything(self):
+        vault = make_vault(self, base())
+        before = snapshot(vault)
+        real = npc_merge.write_text_atomic
+
+        def flaky(path, text):
+            if "_archive" in str(path) and "merged_into" in text:
+                raise npc_merge.StepFailed("disk full")
+            real(path, text)
+        with mock.patch.object(npc_merge, "write_text_atomic", flaky):
+            code, _out, _err = run(vault, NPC_REL, PC_REL, "--write")
+        self.assertEqual(code, 1)
+        self.assertEqual(snapshot(vault), before)
+        self.assertFalse((vault / "_archive").exists())
+
+    def test_retired_pc_logs_to_further_appearances(self):
+        pc = PC_TEMPLATE.replace("## Notes\n",
+                                 "## Appearances\n\n- old\n\n"
+                                 "## Further Appearances\n\n- later\n\n"
+                                 "## Notes\n")
+        vault = make_vault(self, {PC_REL: pc})
+        out = io.StringIO()
+        with redirect_stdout(out):
+            code = vault_write.main(
+                [str(vault), "log", "--write"],
+                stdin=f"{PC_REL}\tCampaign Log\t- **[[Session 09]]** — back\n")
+        self.assertEqual(code, 0, out.getvalue())
+        text = read(vault, PC_REL)
+        self.assertIn("## Further Appearances\n\n- later\n- **[[Session 09]]**"
+                      " — back\n", text)
+
+
+SITE_CONFIG = "---\npublish:\n  site: true\n  mode: player\n---\n"
+
+
+@unittest.skipUnless(shutil.which("node"), "needs Node")
+class SiteTests(unittest.TestCase):
+    """A vault with a site: the publish list follows, as for a rename."""
+
+    def test_publish_list_entry_follows_the_merge(self):
+        from layouts import write_config
+        files = base({"_meta/publish-list.yaml":
+                      f"publishing:\n  - {NPC_REL}\nexcluded: []\n"
+                      f"needs_decision: []\n"})
+        vault = make_vault(self, files)
+        write_config(vault, SITE_CONFIG)
+        code, out, err = run(vault, NPC_REL, PC_REL)
+        self.assertEqual(code, 0, err)
+        self.assertIn(f"WOULD-REPUBLISH\t_meta/publish-list.yaml\t"
+                      f"{NPC_REL} -> {PC_REL}", out)
+        code, out, err = run(vault, NPC_REL, PC_REL, "--write")
+        self.assertEqual(code, 0, err)
+        self.assertIn(f"  - {PC_REL}\n", read(vault, "_meta/publish-list.yaml"))
+        self.assertNotIn(NPC_REL, read(vault, "_meta/publish-list.yaml"))
+
+
+if __name__ == "__main__":
+    unittest.main()

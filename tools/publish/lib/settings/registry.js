@@ -512,7 +512,7 @@ const REGISTRY = [
   {
     name: 'player_site.sheets.prose_sections', was: [{ name: 'publish.pc_prose_sections', in: 'vault' }], type: 'list', same: 'heading', of: 'headings', default: [], group: 'sheets',
     does: "With sheets off, extra sections of a character's note that are still published",
-    left_out: 'Only the built-in ones: Background, Current Status, Notes, Relationships, Appearances, Fellow Investigators, Encounters with Strange Entities, Friends & Rivals and Long-Term Projects',
+    left_out: 'Only the built-in ones: Background, Current Status, Notes, Relationships, Appearances, Further Appearances, Fellow Investigators, Encounters with Strange Entities, Friends & Rivals and Long-Term Projects',
   },
   {
     name: 'player_site.sheets.skin', was: [{ name: 'publish.sheet_skin', in: 'vault' }], type: 'choice', values: Object.keys(SKINS), fallback: SKIN_FALLBACK, group: 'sheets',

@@ -39,6 +39,7 @@
     vault_write.py VAULT plan --number N [--chapter C] [--title T]
                                [--section] [--headless [--gm-input [PART ...]]]
                                [--write]                                < markdown
+    vault_write.py VAULT npc-merge NPC PC [--write]    (npc_merge.py; exit 0/1/2)
 
 Paths are vault-relative; a session index or Wrap-Up can also be named
 (`Session 05 - Beneath the Mill`, or either half). Without --write every command prints its plan and
@@ -2733,18 +2734,24 @@ def add_line(text: str, rel: str, section: str, line: str,
 
 LOG_SECTION = "campaign log"
 LOG_ALIASES = frozenset({"appearances", "encounters"})
+LATER_LOG = "further appearances"
 
 
 def resolve_log_section(note: str, section: str) -> str | None:
     """The name of the public log section a note keeps in place of
-    `Campaign Log` (`Appearances` or `Encounters`, whichever comes first),
-    or None when `section` is not `Campaign Log`, the note has one, or it
-    has no equivalent."""
+    `Campaign Log` (`Further Appearances` when it has one, else
+    `Appearances` or `Encounters`, whichever comes first), or None when
+    `section` is not `Campaign Log`, the note has one, or it has no
+    equivalent."""
     if key(section.strip().lstrip("#")) != LOG_SECTION:
         return None
     heads = [h for h in parse(note).heads if h.level == 2 and not h.gm]
     if any(key(h.title) == LOG_SECTION for h in heads):
         return None
+    # A retired PC who goes on as an NPC logs here, after its PC days.
+    later = next((h.title for h in heads if key(h.title) == LATER_LOG), None)
+    if later is not None:
+        return later
     return next((h.title for h in heads if key(h.title) in LOG_ALIASES),
                 None)
 
@@ -4858,6 +4865,8 @@ def build_parser() -> argparse.ArgumentParser:
                     "--headless): the parts the request supplied (intent, "
                     "scenes, spotlight, spaced or comma-separated; bare: all)")
     pl.add_argument("--write", action="store_true", help="write it (default: preview)")
+    import npc_merge    # its own module: it moves a note, which Batch cannot
+    npc_merge.add_parser(sub)
     ap.epilog = 'Example: gma vault-write "<vault>" wrapup-add "<wrap-up>" --write'
     bt = sub.add_parser(
         "batch", help="many writes, one plan, one commit",
@@ -4943,6 +4952,9 @@ def main(argv: list[str] | None = None, stdin: str | None = None) -> int:
     if args.command == "batch":
         import vw_batch     # here: it imports this module
         return vw_batch.run(args)
+    if args.command == "npc-merge":
+        import npc_merge
+        return npc_merge.run(args)
     needs_stdin = args.command not in NO_STDIN
     batch = Batch(args.vault)
     if args.command == "status" and args.show:

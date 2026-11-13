@@ -74,7 +74,10 @@ def agent_files(vault: Path) -> list[str]:
 # Top-level folders whose notes are records of the past (QA reports,
 # archives). Links written in them are not reported as broken; notes in
 # them still count as link targets.
-UNCHECKED_DIRS: tuple[str, ...] = ("_QA", "_archive")
+# Where a note goes when it is kept but no longer live (an NPC merged into
+# its PC note: npc_merge.py).
+ARCHIVE_DIR = "_archive"
+UNCHECKED_DIRS: tuple[str, ...] = ("_QA", ARCHIVE_DIR)
 LINK_RE = re.compile(r"!?\[\[([^\[\]]+?)\]\]")
 # A note may open with a UTF-8 byte-order mark (some Windows editors add one,
 # #593); the block is read past it.

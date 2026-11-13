@@ -113,7 +113,8 @@ arrive.
 publishes no character sheets, and `pc-body` emits no Stat Sheet rows and
 asks about no `sheet_source`. `sheet_source` is the per-PC answer. With
 sheets off a PC page publishes only the keep-list sections: Background,
-Current Status, Notes, Relationships and Appearances; for CoC, Fellow
+Current Status, Notes, Relationships, Appearances and Further
+Appearances; for CoC, Fellow
 Investigators and Encounters with Strange Entities; for FitD, Friends &
 Rivals and Long-Term Projects. `player_site.sheets.prose_sections` extends the
 list; every other section, `## Stat Sheet` included, stays off the site.
@@ -122,6 +123,21 @@ A sheet is read from the note body only, never from frontmatter fields.
 **Consumed by:** session-prep (Context Source, Threads, PC arc check),
 the-midwife (new-chapter hooks), ttrpg-expert (arc/thread analysis),
 campaign-qa (Current Status consistency check).
+
+## One note per character
+
+An NPC who becomes a PC ends with one note, the PC's. Create the PC
+note from its template, then run `gma vault-write <vault> npc-merge
+"<NPC note>" "<PC note>"`, show the GM its plan and run it again with
+`--write`. The NPC's fields, sections and links move into the PC note
+word for word, and the NPC note goes to `_archive/` with `merged_into`.
+
+A PC who retires and goes on as an NPC keeps its PC note
+(`status: retired`); no NPC note is made. Session wrap-up logs its later
+appearances under `## Further Appearances` on that note.
+
+`gma vault-check <vault> npc-pairs` lists characters that still have
+both notes; campaign-qa offers the merge.
 
 ## Story Companion Convention
 

@@ -12,7 +12,7 @@ gma vault-write <vault> <command> ...
 | Argument | Value | Help |
 |---|---|---|
 | `<vault>` |  | the vault folder |
-| `<command>` | `wrapup-new`, `wrapup-add`, `wrapup-settle`, `story`, `npc-story`, `status`, `threads`, `log`, `timeline`, `session-new`, `play-notes-new`, `resolve`, `promote-plan`, `chapter-new`, `scene-new`, `scene-paused`, `scene-played`, `prop-new`, `prop-hand`, `plan`, `batch` |  |
+| `<command>` | `wrapup-new`, `wrapup-add`, `wrapup-settle`, `story`, `npc-story`, `status`, `threads`, `log`, `timeline`, `session-new`, `play-notes-new`, `resolve`, `promote-plan`, `chapter-new`, `scene-new`, `scene-paused`, `scene-played`, `prop-new`, `prop-hand`, `plan`, `npc-merge`, `batch` |  |
 
 Example: `gma vault-write "<vault>" wrapup-add "<wrap-up>" --write`
 <!-- END GENERATED -->
@@ -506,6 +506,43 @@ template has it.
 | `--section` |  | replace or add sections of the existing Plan |
 | `--headless` |  | check as a run with no GM (plan_check --headless) |
 | `--gm-input` | `[PART ...]` | a run with no GM (implies --headless): the parts the request supplied (intent, scenes, spotlight, spaced or comma-separated; bare: all) |
+| `--write` |  | write it (default: preview) |
+<!-- END GENERATED -->
+
+Use `npc-merge` when an NPC has become a PC and both notes exist (create
+the PC from its template first), or when `gma vault-check <vault> npc-pairs`
+names a pair. It makes one note: the NPC's frontmatter unioned or filled
+into the PC's, its Overview, Appearance & Manner and History under `### Before
+They Were a PC` in Background, its Campaign Log in Appearances, its Related in
+Relationships, its GM Notes (fences kept) in GM Notes, all word for word;
+template placeholders are left behind. The NPC note moves to `_archive/` with
+`merged_into`, and links that name it by path are rewritten to the PC. It is
+not a batch command. Rows: `WOULD-MERGE`, `WOULD-SET`, `WOULD-FILL`,
+`WOULD-ADD`, `NOT-CARRIED` (an NPC field the PC has no place for; kept in the
+archived copy), `SKIP`, `WOULD-ARCHIVE`, `WOULD-RELINK`, `WOULD-REPUBLISH`,
+`UNSURE`, `WARNING`, then a `#` total. Exit 0 done or a clean plan, 1
+refused, 2 usage.
+
+<!-- BEGIN GENERATED: gma vault-write npc-merge -->
+merge an NPC note into its PC note
+
+```text
+gma vault-write <vault> npc-merge <npc> <pc> [options]
+```
+
+```text
+Merges the NPC note into the PC note of the same character:
+frontmatter unioned or filled, the NPC's sections placed
+word for word in the PC's, the NPC note moved to _archive/
+with merged_into, path-written links rewritten to the PC.
+Both notes must exist. Not a batch command.
+Exit: 0 done or a clean plan, 1 refused, 2 usage.
+```
+
+| Argument | Value | Help |
+|---|---|---|
+| `<npc>` |  | the NPC note: vault-relative, or its name |
+| `<pc>` |  | the PC note: vault-relative, or its name |
 | `--write` |  | write it (default: preview) |
 <!-- END GENERATED -->
 

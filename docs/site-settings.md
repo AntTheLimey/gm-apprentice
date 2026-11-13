@@ -358,7 +358,7 @@ With `local`, each font file is listed under `player_site.theme.fonts.files`.
 | Setting | What it does | Values | Left out |
 |---------|--------------|--------|----------|
 | `player_site.sheets.show`<br>was `publish.character_sheets` | Whether a character's page carries its sheet | A switch | On |
-| `player_site.sheets.prose_sections`<br>was `publish.pc_prose_sections` | With sheets off, extra sections of a character's note that are still published | A list of headings | Only the built-in ones: Background, Current Status, Notes, Relationships, Appearances, Fellow Investigators, Encounters with Strange Entities, Friends & Rivals and Long-Term Projects |
+| `player_site.sheets.prose_sections`<br>was `publish.pc_prose_sections` | With sheets off, extra sections of a character's note that are still published | A list of headings | Only the built-in ones: Background, Current Status, Notes, Relationships, Appearances, Further Appearances, Fellow Investigators, Encounters with Strange Entities, Friends & Rivals and Long-Term Projects |
 | `player_site.sheets.skin`<br>was `publish.sheet_skin` | The look of every character sheet | `plain`, `parchment`, `case-file`, `console` or `ledger` | `plain` |
 | `player_site.sheets.frame`<br>was `publish.sheet_frame` | The ornament round each portrait | `none`, `ring`, `laurel`, `thorns`, `gilt`, `steel`, `corners`, `hex` or `cracked` | The skin's own frame |
 | `player_site.sheets.crest`<br>was `publish.sheet_crest`, `sheet_crest` | A crest or wax seal at the head of a Call of Cthulhu sheet | A picture's path in the vault | No crest |
