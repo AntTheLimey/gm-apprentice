@@ -166,6 +166,8 @@ def _locked(d: Path) -> bool:
 def draw_lock(job_id: str) -> Iterator[None]:
     """Hold the job's lock file for a whole draw, so nothing moves the job
     underneath it. Raises Stop when another draw holds it."""
+    if _bad_id(job_id):
+        raise Stop(f"No picture job {job_id} on this machine.")
     lock = folder(job_id) / LOCK
     for _ in range(2):
         try:

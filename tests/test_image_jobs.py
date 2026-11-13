@@ -1024,3 +1024,10 @@ def test_a_job_records_the_vault_resolved(tmp_path, monkeypatch):
     monkeypatch.chdir(v.parent)
     job = image_jobs.plan(Path("vault"), [{"for": "Anselm", "subject": "x"}], False, TODAY)
     assert job.vault == str(v.resolve())
+
+
+def test_the_draw_lock_refuses_a_bad_job_id():
+    for bad in ("../x", "", ".."):
+        with pytest.raises(image_jobs.Stop):
+            with image_jobs.draw_lock(bad):
+                pass
