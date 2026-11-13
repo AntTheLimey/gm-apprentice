@@ -170,3 +170,44 @@ describe('PCs with no backstory keep their pages', () => {
     assert.doesNotMatch(card(index, 'Jane Ashford'), /card-hook/);
   });
 });
+
+describe('CoC fields on the GM site and the player site (review of #483)', () => {
+  const { buildBoth } = require('../helpers/gm-build');
+  const note = [
+    '---', 'type: pc', 'player_name: P', 'status: alive', '---', '',
+    '## Background', '',
+    '**Personal Description:** Tall.', '**Secret Shame:** gambles', '',
+    '**Occupation:** clerk', '**Traits**: Kind', '',
+    '<!-- gm-only -->', '**Ideology & Beliefs:** CGMONLY secret cultist', '<!-- /gm-only -->', '',
+    '**Significant People:**', '- Lady Vane', '<!-- gm-only -->', '- CGMLIST the cultist', '<!-- /gm-only -->', '',
+    '### Backstory', '', 'Jane grew up in a vicarage. She reads.', '',
+  ].join('\n');
+  let s;
+  before(() => { s = buildBoth({ 'Characters/PCs/Jane.md': note }, { vault: { system: 'coc-7e' } }); });
+  after(() => s.cleanup());
+  const drives = (html) => [...html.matchAll(/<div class="pc-drive"><h4>([^<]*)<\/h4>([\s\S]*?)<\/div>\n/g)].map(m => [m[1], m[2]]);
+  const record = (html) => (html.split('<summary>Background</summary>')[1] || '').split('</details>')[0];
+
+  it('the GM page marks a fenced field and list item on their cards, and leaves no empty mark in the Record', () => {
+    const html = s.gm.read('characters', 'pcs', 'jane.html');
+    const cards = Object.fromEntries(drives(html));
+    assert.match(cards['Ideology &amp; Beliefs'], /^<div class="gm-mark gm-mark--gm_only_blocks"[^>]*><p class="gm-mark__label">[^<]*<\/p>\s*<p>CGMONLY secret cultist<\/p>/);
+    assert.match(cards['Significant People'], /^<ul>\s*<li>Lady Vane<\/li>\s*<\/ul>\s*<div class="gm-mark gm-mark--gm_only_blocks"[^>]*>[\s\S]*CGMLIST/);
+    assert.doesNotMatch(record(html), /gm-mark|CGMONLY|CGMLIST/);
+  });
+  it('the player page has neither, and the cards it does show', () => {
+    const html = s.player.read('characters', 'pcs', 'jane.html');
+    assert.ok(!/CGMONLY|CGMLIST|gm-mark/.test(html));
+    assert.deepStrictEqual(drives(html).map(([l]) => l), ['Traits', 'Significant People']);
+  });
+  it('two fields in one paragraph: each line goes its own way', () => {
+    for (const html of [s.player.read('characters', 'pcs', 'jane.html'), s.gm.read('characters', 'pcs', 'jane.html')]) {
+      const rec = record(html);
+      assert.match(rec, /<strong>Secret Shame:<\/strong> gambles/);
+      assert.match(rec, /<strong>Occupation:<\/strong> clerk/);
+      assert.doesNotMatch(rec, /Personal Description|Traits|Kind/);
+      assert.match(html, /<div class="pc-drive"><h4>Traits<\/h4><p>Kind<\/p><\/div>/);
+      assert.match(html, /class="pc-look-text">\s*<p>Tall\.<\/p>/);
+    }
+  });
+});

@@ -109,27 +109,74 @@ function topBlocks(html) {
   return out;
 }
 
-// The `**Label:** value` fields of a fragment's paragraphs: [{ label, html, block }], `block` the
-// index (in topBlocks) of the last block the value takes. A label starts its paragraph or a line.
+// A field label starting a paragraph or a line: `<strong>Label:</strong>` or `<strong>Label</strong>:`.
+const LABEL_START = /(?:^|<br\s*\/?>|\n)\s*<strong>\s*([^<:]+?)\s*(?::\s*<\/strong>|<\/strong>\s*:)/gi;
+// On the GM site a gm-only or spoiler block is a paragraph holding its open token (U+E000, its number, U+E001)
+// and one holding the close (U+E002), drawn as a mark when the page is written (gm-marks.js). None on the player site.
+const MARK_OPEN = /^<p>\s*[0-9a-z]+\s*<\/p>$/;
+const MARK_CLOSE = /^<p>\s*\s*<\/p>$/;
+
+// The fragment's blocks: [{ tag, html, start, end, marks }], `marks` the open tokens' paragraphs it sits inside
+// (outermost first). A mark's own token paragraphs have tag 'open' and 'close'.
+function readBlocks(html) {
+  const stack = [];
+  return topBlocks(html).map((b) => {
+    if (b.tag === 'p' && MARK_OPEN.test(b.html)) { const item = { ...b, tag: 'open', marks: [...stack] }; stack.push(b.html); return item; }
+    if (b.tag === 'p' && MARK_CLOSE.test(b.html)) { stack.pop(); return { ...b, tag: 'close', marks: [...stack] }; }
+    return { ...b, marks: [...stack] };
+  });
+}
+
+// A paragraph's lines as segments: [{ label (null for text before the first label), raw, html }].
+function segmentsOf(inner) {
+  const starts = [...inner.matchAll(LABEL_START)];
+  const segs = [];
+  const head = starts.length ? inner.slice(0, starts[0].index) : inner;
+  if (head.trim()) segs.push({ label: null, raw: head.replace(/(?:<br\s*\/?>|\s)+$/, ''), html: head.trim() });
+  starts.forEach((s, k) => {
+    const to = k + 1 < starts.length ? starts[k + 1].index : inner.length;
+    const raw = inner.slice(s.index, to).replace(/^(?:<br\s*\/?>|\n)/, '').replace(/(?:<br\s*\/?>|\s)+$/, '');
+    segs.push({ label: cellText(s[1]), raw, html: inner.slice(s.index + s[0].length, to).replace(/<br\s*\/?>\s*$/, '').trim() });
+  });
+  return segs;
+}
+
+// `html` in its GM marks, as the GM site shows it; as it is with none.
+const inMark = (marks, html) => marks.reduceRight((h, open) => `${open}\n${h}\n<p>\uE002</p>`, html);
+const sameMarks = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
+
+// The `**Label:** value` fields of a fragment's paragraphs: [{ label, html, text, lists }]. A label
+// starts its paragraph or a line; the value runs to the next one. The line that ends its paragraph
+// takes the lists right under it (`**Significant People:**` then `- ...` lines), as `lists` (their
+// indexes in readBlocks). A value inside a GM mark keeps the mark.
 function labelledFields(html) {
-  const blocks = topBlocks(html);
+  const items = readBlocks(html);
   const out = [];
-  blocks.forEach((b, i) => {
+  items.forEach((b, i) => {
     if (b.tag !== 'p') return;
-    const inner = b.html.slice(3, -4);
-    const starts = [...inner.matchAll(/(?:^|<br\s*\/?>|\n)\s*<strong>\s*([^<:]+?)\s*:\s*<\/strong>/gi)];
-    starts.forEach((s, k) => {
-      const from = s.index + s[0].length;
-      const to = k + 1 < starts.length ? starts[k + 1].index : inner.length;
-      let value = inner.slice(from, to).trim();
-      let last = i;
-      // The line that ends the paragraph takes the lists right under it.
-      if (k === starts.length - 1) {
-        const lists = [];
-        while (blocks[last + 1] && /^(?:ul|ol)$/.test(blocks[last + 1].tag)) lists.push(blocks[++last].html);
-        if (lists.length) value = `${real(cellText(value)) ? `<p>${value}</p>\n` : ''}${lists.join('\n')}`;
+    const segs = segmentsOf(b.html.slice(3, -4)).filter(x => x.label !== null);
+    segs.forEach((seg, k) => {
+      const lists = [];
+      if (k === segs.length - 1) {
+        // Mark tokens between a label and its lists (a gm-only item at the list's end) are no break.
+        for (let j = i + 1; items[j] && /^(?:ul|ol|open|close)$/.test(items[j].tag); j++) if (/^(?:ul|ol)$/.test(items[j].tag)) lists.push(j);
       }
-      out.push({ label: cellText(s[1]), html: value, block: last });
+      const text = real(cellText(seg.html)) ? seg.html : '';
+      let value;
+      if (!lists.length) value = b.marks.length && text ? inMark(b.marks, `<p>${text}</p>`) : text;
+      else {
+        // Each run of parts in one mark (or none) is one block.
+        const parts = [...(text ? [{ html: `<p>${text}</p>`, marks: b.marks }] : []), ...lists.map(j => ({ html: items[j].html, marks: items[j].marks }))];
+        const runs = [];
+        for (const part of parts) {
+          const last = runs[runs.length - 1];
+          if (last && sameMarks(last.marks, part.marks)) last.html.push(part.html);
+          else runs.push({ marks: part.marks, html: [part.html] });
+        }
+        value = runs.map(r => inMark(r.marks, r.html.join('\n'))).join('\n');
+      }
+      const plain = [text, ...lists.map(j => items[j].html)].join(' ');
+      out.push({ label: seg.label, html: value, text: cellText(plain), lists });
     });
   });
   return out;
@@ -137,7 +184,7 @@ function labelledFields(html) {
 
 // The value of the first field whose label `re` matches ('' when none says anything).
 function fieldValue(fields, re) {
-  const f = fields.find(x => re.test(x.label) && real(cellText(x.html)));
+  const f = fields.find(x => re.test(x.label) && real(x.text));
   return f ? f.html : '';
 }
 
@@ -147,7 +194,7 @@ function cardFields(fields) {
   const taken = new Set();
   for (const f of fields) {
     const card = CARD_FIELDS.find(([, re]) => re.test(f.label));
-    if (!card || taken.has(card[0]) || !real(cellText(f.html))) continue;
+    if (!card || taken.has(card[0]) || !real(f.text)) continue;
     taken.add(card[0]);
     out.push({ label: card[0], html: f.html });
   }
@@ -246,20 +293,44 @@ const STORY_SUBSECTIONS = new Set(['backstory', 'appearance', 'personality']);
 function backgroundRestHtml(section, shown, parts) {
   if (parts && parts.wholeSection) return '';
   const drop = [...STORY_FIELD_LABELS, ...(shown || [])];
-  // The lists under a story field are its value: they go with it.
   const top = aboveSubheadings(section.html);
-  const blocks = topBlocks(top);
+  const items = readBlocks(top);
+  // The lists under a story field are its value: they go with it.
   const taken = new Set();
-  for (const f of labelledFields(top)) {
-    if (!STORY_FIELD_LABELS.some(re => re.test(f.label))) continue;
-    for (let i = f.block; i >= 0 && /^(?:ul|ol)$/.test(blocks[i].tag); i--) taken.add(i);
+  for (const f of labelledFields(top)) if (STORY_FIELD_LABELS.some(re => re.test(f.label))) f.lists.forEach(j => taken.add(j));
+  const said = (html) => filled(cellText(html)) && !/^\s*[–—-]\s*$/.test(cellText(html));
+  // Each block as the rest keeps it: a paragraph less its story lines and its empty fields.
+  const keptHtml = items.map((b, i) => {
+    if (taken.has(i)) return '';
+    if (b.tag !== 'p') return b.html;  // a mark's tokens stay unless the mark is left empty (below)
+    const inner = b.html.slice(3, -4);
+    const segs = segmentsOf(inner);
+    if (!segs.some(x => x.label !== null)) return isPlaceholder(cellText(inner)) || !cellText(inner) ? '' : b.html;
+    const keep = segs.filter(x => (x.label === null ? !isPlaceholder(cellText(x.html)) && cellText(x.html)
+      : !drop.some(re => re.test(x.label)) && (said(x.html) || /^(?:ul|ol)$/.test((items[i + 1] || {}).tag || ''))));
+    if (keep.length === segs.length) return b.html;
+    return keep.length ? `<p>${keep.map(x => x.raw).join('\n')}</p>` : '';
+  });
+  // A mark left with nothing in it goes, its two token paragraphs with it.
+  const pairs = [];
+  const opens = [];
+  items.forEach((b, i) => {
+    if (b.tag === 'open') opens.push(i);
+    else if (b.tag === 'close' && opens.length) pairs.push([opens.pop(), i]);
+  });
+  for (const [o, c] of pairs.sort((x, y) => (y[0] - x[0]))) {
+    const inside = keptHtml.slice(o + 1, c).filter((h, k) => h && !/^(?:open|close)$/.test(items[o + 1 + k].tag));
+    if (!inside.some(h => hasContent(h))) for (let i = o; i <= c; i++) keptHtml[i] = '';
   }
-  const unlisted = taken.size ? blocks.reduceRight((h, b, i) => (taken.has(i) ? h.slice(0, b.start) + h.slice(b.end) : h), top) : top;
-  const rest = unlisted.replace(/<p>([\s\S]*?)<\/p>\s*/gi, (p, inner) => {
-    const m = inner.match(/^\s*<strong>\s*([^<:]+?)\s*(?::\s*<\/strong>|<\/strong>\s*:)([\s\S]*)$/i);
-    if (m && (drop.some(re => re.test(cellText(m[1]))) || !filled(cellText(m[2])) || /^\s*[–—-]\s*$/.test(cellText(m[2])))) return '';
-    return isPlaceholder(cellText(inner)) || !cellText(inner) ? '' : p;
-  }).trim();
+  // Put back together in the fragment's own spacing.
+  let rest = top;
+  for (let i = items.length - 1; i >= 0; i--) {
+    const b = items[i];
+    if (keptHtml[i] === b.html) continue;
+    const after = keptHtml[i] ? b.end : b.end + rest.slice(b.end).match(/^\s*/)[0].length;
+    rest = rest.slice(0, b.start) + keptHtml[i] + rest.slice(after);
+  }
+  rest = rest.trim();
   const kept = hasContent(trimRules(rest)) ? trimRules(rest) : '';
   const others = [];
   const re = /(<h3[^>]*>([\s\S]*?)<\/h3>)([\s\S]*?)(?=<h3[ >]|$)/gi;
