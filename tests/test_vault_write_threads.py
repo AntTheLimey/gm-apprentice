@@ -637,6 +637,48 @@ class ThreadsTests(unittest.TestCase):
                                   "edit it by hand", out)
                 self.assertEqual(self.snapshot(vault), before)
 
+    def test_a_hidden_twin_does_not_block_close_shared(self):
+        # #631: a public entry and a hidden copy with the same text; the
+        # visible one is the one named.
+        vault = self.vault()
+        self.edit(vault, OVERVIEW, "\n\n## Key Factions",
+                  "\n- The bell rings \u2014 involves the party\n\n"
+                  "<!-- gm-only -->\n- The bell rings \u2014 involves the "
+                  "party\n<!-- /gm-only -->\n\n## Key Factions")
+        code, out = run(vault, "threads", "--wrapup", WRAPUP, "--write",
+                        stdin=rows(("close", "shared", "The bell rings",
+                                    "rung")))
+        self.assertEqual(code, 0, out)
+        text = read(vault, OVERVIEW)
+        self.assertEqual(text.count("The bell rings"), 1)
+        self.assertIn("<!-- gm-only -->\n- The bell rings", text)
+
+    def test_twins_that_read_the_same_say_to_edit_by_hand(self):
+        vault = self.vault()
+        self.edit(vault, OVERVIEW, "\n\n## Key Factions",
+                  "\n- The bell rings \u2014 involves the party\n"
+                  "- The bell rings \u2014 involves the party\n\n"
+                  "## Key Factions")
+        code, out = run(vault, "threads", "--wrapup", WRAPUP, "--write",
+                        stdin=rows(("close", "shared", "The bell rings",
+                                    "rung")))
+        self.assertEqual(code, 1)
+        self.assertIn("edit it by hand", out)
+
+    def test_no_thread_hint_when_one_starts_with_the_lead(self):
+        # #631: a secret line straight under a bullet opens a comment, so
+        # the bullet's whole text is no longer its lead.
+        vault = self.vault()
+        self.edit(vault, OVERVIEW, "\n\n## Key Factions",
+                  "\n- The bell rings <!--\nthe sexton did it\n-->\n\n"
+                  "## Key Factions")
+        code, out = run(vault, "threads", "--wrapup", WRAPUP, "--write",
+                        stdin=rows(("close", "shared", "The bell", "rung")))
+        self.assertEqual(code, 1)
+        self.assertIn("a thread whose text starts with 'The bell' exists",
+                      out)
+        self.assertNotIn("sexton", out)
+
     def test_close_shared_takes_its_nested_lines(self):
         vault = self.vault()
         self.edit(vault, OVERVIEW, "\n\n## Key Factions",

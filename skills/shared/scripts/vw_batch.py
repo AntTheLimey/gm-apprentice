@@ -262,11 +262,21 @@ def run_section(batch: vw.Batch, b: Block) -> None:
         new_text = "".join(lines)
         verb = "WOULD-REPLACE"
     else:
-        at = end
-        if not vl.fenced_headings("\n".join(body)):
+        glue = False
+        if vl.fenced_headings("\n".join(body)):
+            # Text with a sub-heading goes at the section's end, but never
+            # inside a gm-only block still open there.
+            at = vw.out_of_hiding(doc, head, end)
+        else:
             at = vw.out_of_hiding(doc, head, stop)
+            if vw._listy(body[0]):
+                # A list item or table row joins the section's list, as
+                # `log` places it: above a gm-only block that follows it.
+                joined = vw.list_end(doc, head, stop, body[0])
+                if joined is not None:
+                    at, glue = joined
         at = vw._before_dataview(doc, head, at)
-        new_text = vw.place(doc, at, body,
+        new_text = vw.place(doc, at, body, glue=glue,
                             tight=bool(vw.LIST_RE.match(body[0])))
         verb = "WOULD-ADD"
     batch.put(rel, new_text)

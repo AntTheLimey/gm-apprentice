@@ -386,6 +386,46 @@ class StatusWriteTests(unittest.TestCase):
         self.assertIn("**Location:** Bath.\r\n", text)
 
 
+class StatusIndentTests(unittest.TestCase):
+    """#637: a field's sub-bullets keep the sheet's own indent."""
+
+    SHEET = """---
+type: pc
+---
+
+# Six
+
+## Current Status
+
+- **Open threads:**
+    - First thread.
+    - Second thread.
+- **Knows (exclusive):**
+    - a fact
+"""
+
+    def test_four_space_sub_bullets_stay_four(self):
+        vault = make_vault(self, {BULLETED: self.SHEET})
+        code, out = run(vault, "status", BULLETED, "--write", stdin=(
+            "**Open threads:**\n- First thread.\n- Second thread.\n"
+            "- Third thread.\n"))
+        self.assertEqual(code, 0, out)
+        self.assertEqual(read(vault, BULLETED), self.SHEET.replace(
+            "    - Second thread.\n",
+            "    - Second thread.\n    - Third thread.\n"))
+
+    def test_a_field_with_no_items_follows_its_siblings(self):
+        sheet = self.SHEET.replace(
+            "- **Open threads:**\n    - First thread.\n"
+            "    - Second thread.\n", "- **Open threads:** none.\n")
+        vault = make_vault(self, {BULLETED: sheet})
+        code, out = run(vault, "status", BULLETED, "--write",
+                        stdin="**Open threads:**\n- One.\n")
+        self.assertEqual(code, 0, out)
+        self.assertIn("- **Open threads:**\n    - One.\n",
+                      read(vault, BULLETED))
+
+
 class StatusShowTests(unittest.TestCase):
     def test_show_prints_the_fields_and_names_what_it_leaves(self):
         vault = make_vault(self, {BULLETED: DRIFTED})

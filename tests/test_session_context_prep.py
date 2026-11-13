@@ -87,6 +87,42 @@ def run_cli(vault: Path, *args: str) -> subprocess.CompletedProcess[str]:
                           capture_output=True, text=True, timeout=60)
 
 
+class PlanInNextChapterTests(unittest.TestCase):
+    """#647: prep opened Chapter 2 and filed the Plan there."""
+
+    def test_second_prep_sees_the_plan_in_the_next_chapter(self) -> None:
+        files = dict(FILES)
+        files["Chapters/Chapter 2 - Voss/Sessions/Session 02 - Plan.md"] = (
+            note('type: session-plan\nsession: "[[Session 02 - X]]"\n'
+                 'chapter: "[[Chapter 2 - Voss]]"', "Plan body.\n"))
+        out = run_cli(make_vault(self, files), "--prep").stdout
+        part = out.split("===== Existing Plan — Session 2", 1)[1]
+        self.assertNotIn("(none found)", part.split("=====", 2)[1])
+        self.assertIn("Session 02 - Plan.md", part.split("=====", 2)[1])
+
+    def test_a_lone_plan_in_an_older_chapter_is_not_the_upcoming_one(self):
+        # Numbering restarts per chapter: an older chapter's Session 2 Plan
+        # is not the Plan for the Session 2 about to be prepped.
+        def plan(ch: str) -> tuple[str, str, dict]:
+            fm = {"type": "session-plan", "session": "[[Session 02 - X]]",
+                  "chapter": f"[[{ch}]]"}
+            return (f"Chapters/{ch}/Plan.md", ch, fm)
+        self.assertIsNone(sc._upcoming_plan([plan("Chapter 1 - A")],
+                                            "chapter 2 - b", 2))
+        self.assertIsNotNone(sc._upcoming_plan([plan("Chapter 3 - C")],
+                                               "chapter 2 - b", 2))
+
+    def test_nearest_later_chapter_wins_among_several(self) -> None:
+        def plan(ch: str) -> tuple[str, str, dict]:
+            fm = {"type": "session-plan", "session": "[[Session 02 - X]]",
+                  "chapter": f"[[{ch}]]"}
+            return (f"Chapters/{ch}/Plan.md", ch, fm)
+        files = [plan("Chapter 4 - D"), plan("Chapter 2 - B"),
+                 plan("Chapter 3 - C")]
+        got = sc._upcoming_plan(files, "chapter 1 - a", 2)
+        self.assertEqual(got[1], "Chapter 2 - B")
+
+
 class PrepTests(unittest.TestCase):
     def setUp(self) -> None:
         self.vault = make_vault(self, FILES)

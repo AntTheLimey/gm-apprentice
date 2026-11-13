@@ -32,7 +32,7 @@ function sectionRange(lines, title, open = unfenced(lines)) {
   const start = lines.findIndex((l, i) => open.has(i) && heading.test(l));
   if (start === -1) return null;
   let end = lines.length;
-  for (let i = start + 1; i < lines.length; i++) if (open.has(i) && /^#{1,2}\s/.test(lines[i])) { end = i; break; }
+  for (let i = start + 1; i < lines.length; i++) if (open.has(i) && /^#{1,2}(?:\s|$)/.test(lines[i])) { end = i; break; }
   return { start, end };
 }
 
@@ -80,13 +80,16 @@ function sharedEntries(publishedMarkdown) {
     const bullet = /^(\s*)[-*]\s+(.+)$/.exec(line);
     const indent = bullet ? bullet[1].length : 0;
     if (step.isFenceLine || fence !== null || !bullet || (base === null && indent >= 4)) { i++; continue; }
-    if (base === null) base = indent;
+    if (base === null || indent < base) base = indent;   // a later bullet outdented past the first one
     if (indent > base) { i++; continue; }   // nested under a bullet the walk skipped
     let stop = i + 1;
+    let inner = null;   // a code fence the thread opened: every line in it is the thread's, indented or not
     for (let j = i + 1; j < range.end; j++) {
       const next = lines[j];
+      if (inner !== null) { inner = fenceStep(next, inner).fenceDelim; stop = j + 1; continue; }
       if (!next.trim()) continue;   // a blank: the bullet goes on only if a deeper line follows
       if (next.length - next.trimStart().length <= base && !(j === stop && lazy(next))) break;
+      inner = fenceStep(next, inner).fenceDelim;
       stop = j + 1;
     }
     const parts = [bullet[2].trim()];

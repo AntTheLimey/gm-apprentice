@@ -9,6 +9,15 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.19] — 2026-11-12
+
+### Fixed
+
+- A second prep finds the Plan the first one filed in the new chapter, so it no longer writes a second Plan; an older chapter's Plan with the same number is never taken for the next one (#647).
+- `vault-write status` keeps the sheet's own sub-bullet indent instead of rewriting 4 spaces as 2 (#637).
+- In a wrap-up batch, `section --append` puts list items above a closed gm-only block, the way `log` does (#655).
+- Shared threads: closing one works when a hidden copy exists, a near-miss lead gets a hint, and the site and the scripts read a code fence inside a thread, a list that outdents and an empty `##` heading the same way; the prep brief keeps hidden text fenced (#631).
+
 ## [1.12.18] — 2026-11-12
 
 ### Fixed
