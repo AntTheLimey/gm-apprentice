@@ -9,7 +9,7 @@ const { optimizeImages, resolveImageConfig, imageCacheDir, ignoreCacheInGit, det
 const { indexTextPath, writeIndexText } = require('./leak-gate/index-text');
 const { readStoryAddresses, writeStoryAddresses, movedSessions, sharedSessionNames } = require('./story-addresses');
 const { resolveBanner, renderBanner, normalizeEntry, attachmentRef, isAddress, defaultAlt, isSvg, bannerSlug, copiedBannerFiles } = require('./banners');
-const { pcKeepList, storyMomentsOn, storyPicturesOn, retiredSheetFieldsFor, retiredSheetFieldsMessage } = require('./pc-prose');
+const { pcKeepList, storyMomentsOn, storyPicturesOn, scenePicturesMode, retiredSheetFieldsFor, retiredSheetFieldsMessage } = require('./pc-prose');
 const { nameList, gmAliasList, strippedLines, sectionWithholder, noteFacts, keptFlags, stubCut, stubMarked, hiddenFieldsOf, unstableBodyMarked, unstableSectionsMarked, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, processContent, playerSafeMarkdown, extractSections, filterSections, filterFields, publishedFrontmatter, isGmOnlyEdge, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, plainMetaValue, portraitBasename, encodeHref, isWebImageAddress } = require('./processor');
 const { pairHubs, isPlayedSession, REGISTRABLE_TYPES } = require('./session-hub');
 const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, heritageTemplate, worldDomainTemplate, wikiTemplate, sessionBodyHtml, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
@@ -1512,7 +1512,7 @@ function buildSite(options) {
     marks: mark ? mark.marks : null };
   const scenesOf = storyPictures ? sceneCandidates(allNotes, { names: pageNames(pages, figureRules), imageMap: playerImages, linkMap,
     folded: (name) => foldedPagePath(linkMap, name) }) : null;
-  const storyFigures = storyPictures ? { candidates: figureCandidates(pages, { imageMap: playerImages, ...figureRules })
+  const storyFigures = storyPictures ? { scenePictures: scenePicturesMode(hideFrom), candidates: figureCandidates(pages, { imageMap: playerImages, ...figureRules })
     .filter((c) => c.key in imageMap),
     blockers: nameHolders(pages, figureRules),
     scenesFor: (unit) => scenesOf(unit).filter((c) => c.key in imageMap) } : null;

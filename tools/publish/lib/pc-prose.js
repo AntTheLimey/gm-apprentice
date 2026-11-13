@@ -82,8 +82,14 @@ function storyPicturesOn(publishConfig) {
   return !(publishConfig && publishConfig.story && publishConfig.story.pictures === false);
 }
 
+// `player_site.story.scene_pictures`: 'inline' (the default), 'float' or 'mixed'; anything else, or no `story`, is 'inline'.
+function scenePicturesMode(publishConfig) {
+  const mode = publishConfig && publishConfig.story && publishConfig.story.scenePictures;
+  return mode === 'float' || mode === 'mixed' ? mode : 'inline';
+}
+
 module.exports = {
-  storyMomentsOn, storyPicturesOn,
+  storyMomentsOn, storyPicturesOn, scenePicturesMode,
   PC_PROSE_SECTIONS, RETIRED_BY_SYSTEM, RETIRED_SHEET_FIELDS, retiredSheetFieldsFor, retiredSheetFieldsMessage,
   pcKeepList, bareSectionTitle,
 };

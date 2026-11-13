@@ -447,6 +447,7 @@ from players.
 |---------|--------------|--------|----------|
 | `player_site.story.moments` | The Memorable Moments section of a session's wrap-up, shown as cards after the story on its Story page. Off, the section is left out of the site: no page, search entry, link preview or Connections text holds it. The GM site still shows the cards, marked | A switch | On |
 | `player_site.story.pictures` | Pictures of the people and places a Story page's recap names, set in the text beside the first paragraph that mentions each (two at most beside one paragraph), once a chapter: a page pictured on an earlier session Story page of its chapter is not pictured again. The chapter's own Story page pictures on its own and uses up nothing for its sessions. A picture comes from the page's `portrait`, or from a scene played that session, beside the paragraph naming the most of its places and people; player characters and NPCs marked `companion: true` are left out. Off, no pictures are added; pictures you put in the recap stay | A switch | On |
+| `player_site.story.scene_pictures` | How the pictures of scenes played in a session are set on its Story page (people and places keep to the side, whatever this says): `inline` puts each across the full width of the page, after the paragraph it depicts, like a plate in a book; `float` sets it beside that paragraph, to the right and the left in turn; `mixed` goes in threes, the first a full-width picture and the next two beside their paragraphs, and so on. A picture you embed in the recap yourself (`![[pic.png]]`, or `![[pic.png\|caption]]` for a caption) is always a full-width picture, where you put it. Only used while `player_site.story.pictures` is on | `inline`, `float` or `mixed` | Inline |
 
 <!-- /settings:story -->
 
@@ -647,6 +648,7 @@ mark always means hidden from players. The GM site's folder is
 - `player_site.features.inbox`
 - `player_site.story.moments`
 - `player_site.story.pictures`
+- `player_site.story.scene_pictures`
 
 <!-- /settings:gm-not-per-site -->
 

@@ -207,3 +207,16 @@ describe('splitOpening', () => {
     assert.strictEqual(r4.opening, `<p>a ${open}x</p>${close}`);
   });
 });
+
+describe('splitOpening with a plate', () => {
+  const { splitOpening } = require('../../lib/templates/story');
+  it('a scene picture set as a plate right after the opening paragraph stays with the opening', () => {
+    const plate = '<div class="story-figures story-figures--plate"><figure class="story-figure story-figure--plate"><img src="x.png" alt=""></figure></div>';
+    assert.deepStrictEqual(splitOpening(`<p>a</p>${plate}<p>b</p>`), { before: '', opening: `<p>a</p>${plate}`, rest: '<p>b</p>' });
+    assert.deepStrictEqual(splitOpening(`<p>a</p>${plate}`), { before: '', opening: `<p>a</p>${plate}`, rest: '' });
+  });
+  it('a plate the GM embedded after the opening paragraph is the rest\'s, as any picture of theirs is', () => {
+    const hand = '<figure class="story-figure story-figure--plate"><img src="x.png" alt=""></figure>';
+    assert.deepStrictEqual(splitOpening(`<p>a</p>${hand}<p>b</p>`), { before: '', opening: '<p>a</p>', rest: `${hand}<p>b</p>` });
+  });
+});
