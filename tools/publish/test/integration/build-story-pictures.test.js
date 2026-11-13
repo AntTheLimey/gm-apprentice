@@ -17,6 +17,8 @@ const STORY_1 = 'story/chapter-1-docks-session-1.html';
 const STORY_2 = 'story/chapter-1-docks-session-2.html';
 const read = (site, p) => site.read(...p.split('/'));
 const png = (w = 30, h = 40) => makePng(w, h);
+// Scene pictures beside their paragraphs, as before `player_site.story.scene_pictures` (its default is a full-width plate).
+const FLOAT = { story: { scene_pictures: 'float' } };
 
 const note = (type, title, portrait, extra = '') => `---\ntype: ${type}\ntitle: ${title}\n${portrait ? `portrait: ${portrait}\n` : ''}${extra}---\n\n# ${title}\n\nBODY of ${title}.\n`;
 const withRecap = (recap) => WRAP_1.replace(/## Narrative Recap\n\n[^\n]*\n/, `## Narrative Recap\n\n${recap}\n`);
@@ -106,7 +108,7 @@ describe('Story pictures: a picture the GM placed', () => {
   it('stays where it is, and its page gets no second one', () => {
     for (const site of [s.player, s.gm]) {
       const page = read(site, STORY_1);
-      assert.equal((page.match(/images\/rook\./g) || []).length, 1, 'one picture of Rook');
+      assert.equal((page.match(/<img [^>]*images\/rook\./g) || []).length, 1, 'one picture of Rook');
       assert.deepEqual(captions(page), ['Mara Quill']);
     }
     assert.deepEqual(brokenLinks(s.player.dir), []);
@@ -321,7 +323,7 @@ const builtText = (site, { gm = false } = {}) => site.files()
   .map((f) => [f, fs.readFileSync(f, 'latin1')]);
 
 describe('Story pictures: the scenes played that session', () => {
-  const s = buildBoth(storyVault({ ...SCENE_FILES, 'Sessions/Session 1 Wrap-Up.md': withRecap(SCENE_RECAP) }));
+  const s = buildBoth(storyVault({ ...SCENE_FILES, 'Sessions/Session 1 Wrap-Up.md': withRecap(SCENE_RECAP) }), { player: FLOAT });
   after(() => s.cleanup());
 
   it('the scene\'s picture is beside the paragraph naming its place, with no caption and an empty alt', () => {
@@ -368,7 +370,7 @@ describe('Story pictures: a scene linking its place in another case, or with und
     [SCENE_AT]: scene({ locations: '["[[the docks]]"]' }),
     'Chapters/Chapter 1/Scenes/Scene_Rook.md': scene({ locations: '[]', entities: '["[[captain_rook]]"]', picture: '![[scene-gm.png]]', tag: 'R' }),
     'Sessions/Session 1 Wrap-Up.md': withRecap(SCENE_RECAP),
-  }));
+  }), { player: FLOAT });
   after(() => s.cleanup());
 
   it('is pictured as if linked by the page\'s own name', () => {
@@ -385,7 +387,7 @@ describe('Story pictures: a scene whose picture is a page\'s portrait', () => {
     ...SCENE_FILES,
     'Locations/The Docks.md': note('location', 'The Docks', 'scene-docks.png'),
     'Sessions/Session 1 Wrap-Up.md': withRecap(SCENE_RECAP),
-  }));
+  }), { player: FLOAT });
   after(() => s.cleanup());
 
   it('gives one picture, the portrait, not two', () => {
@@ -402,7 +404,7 @@ describe('Story pictures: a scene whose picture is the portrait of a page the re
     ...SCENE_FILES,
     'NPCs/Mara Quill.md': note('npc', 'Mara Quill', 'scene-docks.png'),
     'Sessions/Session 1 Wrap-Up.md': withRecap(SCENE_RECAP),
-  }));
+  }), { player: FLOAT });
   after(() => s.cleanup());
 
   it('is placed at the first mention of the scene\'s places, as the scene\'s picture: no name of a page the paragraph never names; both sites agree and no scene text shows', () => {
@@ -455,7 +457,7 @@ describe('Story pictures: scenes that give no picture', () => {
     [at('Gmnotes')]: scene({ picture: '', tag: 'G' }).replace('![[scene-gm.png]]', '![[gmnotes.png]]'),
     [at('Unnamed')]: scene({ locations: '["[[Salt Row]]"]', picture: '![[unnamed.png]]', tag: 'U' }),
     'Sessions/Session 1 Wrap-Up.md': withRecap(SCENE_RECAP),
-  }));
+  }), { player: FLOAT });
   after(() => s.cleanup());
 
   it('a dropped or paused scene, one played in another session, prep not marked played, a picture in a callout or under GM Notes, and a scene whose places the recap never names: no picture on either site', () => {
@@ -515,8 +517,8 @@ describe('Story pictures: player_site.story.pictures off', () => {
   it('off: no story-figures on either site; a GM-placed picture stays; the portrait file is not copied for the Story page alone', () => {
     for (const site of [s.player, s.gm]) {
       const page = read(site, STORY_1);
-      assert.ok(!page.includes('story-figure'), 'no story figure');
-      assert.equal((page.match(/images\/rook\./g) || []).length, 1, 'the picture the GM placed stays');
+      assert.ok(!page.includes('story-figures'), 'no story figures block');
+      assert.equal((page.match(/<img [^>]*images\/rook\./g) || []).length, 1, 'the picture the GM placed stays');
       assert.ok(!page.includes('scene-docks'), 'no scene picture either');
     }
     // Player site only: the GM site builds the scene's own page, which shows the picture, so it copies the file anyway.
@@ -566,7 +568,7 @@ describe('Story pictures: once per chapter, and companions', () => {
     for (const site of [s.player, s.gm]) {
       assert.deepEqual(captions(read(site, 'story/chapter-1-docks.html')), []);
       assert.deepEqual(captions(read(site, STORY_1)), ['Mara Quill', 'The Docks']);
-      assert.equal((read(site, STORY_1).match(/images\/rook\./g) || []).length, 1, 'the picture the GM placed stays');
+      assert.equal((read(site, STORY_1).match(/<img [^>]*images\/rook\./g) || []).length, 1, 'the picture the GM placed stays');
       assert.deepEqual(captions(read(site, STORY_2)), ['Old Smith']);
     }
   });
@@ -784,3 +786,85 @@ describe('Story pictures: an active chapter\'s Teaser', () => {
     assert.deepEqual(runLeakGate({ configPath: s.configPath, outputDir: s.player.dir }).findings, []);
   });
 });
+
+// Plates: a picture across the full width of the page, between paragraphs (`player_site.story.scene_pictures`; a picture
+// the GM embeds in the recap).
+const PLATE_RE = /<figure class="story-figure story-figure--plate"><a class="story-figure__open" href="([^"]+)"(?: aria-label="Open picture")?><img src="([^"]+)" alt="([^"]*)" loading="lazy"><span class="story-figure__zoom" aria-hidden="true">[\s\S]*?<\/span><\/a>(?:<figcaption>([^<]*)<\/figcaption>)?<\/figure>/g;
+const plates = (html) => [...html.matchAll(PLATE_RE)].map((m) => ({ href: m[1], src: m[2], alt: m[3], caption: m[4] === undefined ? null : m[4] }));
+
+describe('Story pictures: a picture the GM embedded in the recap is a plate', () => {
+  const recap = 'Captain Rook came aboard.\n\n![[rook.png|The ferry at dusk|300]]\n\nThen the lamps went out.\n\n![[scene-docks.png]]\n\nAt dawn nobody spoke.\n\n![[docks.png]]\n\nEnd.';
+  const s = buildBoth(storyVault({ ...SCENE_FILES, 'Sessions/Session 1 Wrap-Up.md': withRecap(recap) }));
+  after(() => s.cleanup());
+
+  it('keeps its place; the words after the | are its alt and its caption, a picture without words has an empty alt; never the file name or a scene\'s title', () => {
+    for (const site of [s.player, s.gm]) {
+      const page = read(site, STORY_1);
+      const found = plates(page);
+      assert.equal(found.length, 3);
+      assert.deepEqual(found.map((p) => [p.alt, p.caption]), [['The ferry at dusk', 'The ferry at dusk'], ['', null], ['', null]]);
+      assert.ok(!page.includes('SCENETITLE-1') && !page.includes('Scene Docks'), 'nothing of the scene note reaches the page');
+      assert.deepEqual(found.map((p) => p.href === p.src), [true, true, true]);
+      assert.ok(page.indexOf('Captain Rook came aboard.') < page.indexOf('rook.') && page.indexOf('rook.') < page.indexOf('Then the lamps went out.'));
+      assert.ok(!/alt="[^"]*\.(png|webp)"/.test(page), 'no file name as alt');
+      assert.ok(!/<p><img /.test(page), 'no bare in-line picture left');
+    }
+  });
+
+  it('a picture the GM placed is never placed a second time by the build; every link resolves', () => {
+    const page = read(s.player, STORY_1);
+    assert.equal((page.match(/<img [^>]*scene-docks\./g) || []).length, 1);
+    assert.equal((page.match(/<img [^>]*images\/rook\./g) || []).length, 1);
+    assert.deepEqual(brokenLinks(s.player.dir), []);
+    assert.deepEqual(brokenLinks(s.gm.dir), []);
+  });
+});
+
+describe('Story pictures: player_site.story.scene_pictures', () => {
+  const files = (extra = {}) => storyVault({ ...SCENE_FILES, 'Sessions/Session 1 Wrap-Up.md': withRecap(SCENE_RECAP), ...extra });
+  const built = {};
+  for (const mode of [undefined, 'inline', 'float', 'mixed']) built[mode] = buildBoth(files(), mode ? { player: { story: { scene_pictures: mode } } } : {});
+  after(() => Object.values(built).forEach((b) => b.cleanup()));
+
+  it('inline, the default: the scene picture is a full-width plate right after its paragraph; the portrait stays a side figure', () => {
+    for (const mode of [undefined, 'inline']) {
+      for (const site of [built[mode].player, built[mode].gm]) {
+        const page = read(site, STORY_1);
+        assert.match(page, /<p>The party reached <a[^>]*>The Docks<\/a> at dusk and waited\.<\/p><div class="story-figures story-figures--plate"><figure class="story-figure story-figure--plate"><a class="story-figure__open" href="\.\.\/images\/scene-docks\.(png|webp)" aria-label="Open picture">/);
+        assert.ok(/<\/figure><\/div><p>Later Captain Rook/.test(page), 'the portrait floats before its paragraph');
+        assert.deepEqual(captions(page), ['Captain Rook']);
+      }
+    }
+    assert.equal(read(built[undefined].player, STORY_1), read(built.inline.player, STORY_1));
+  });
+
+  it('float: the old side figure; mixed: the first scene picture of three is a plate', () => {
+    const page = read(built.float.player, STORY_1);
+    assert.ok(!page.includes('story-figure--plate') && !page.includes('story-figures--plate'));
+    assert.match(page, /<\/figure><\/div><p>The party reached/);
+    // One scene picture here: the first of its three, so a plate.
+    assert.equal(read(built.mixed.player, STORY_1), read(built.inline.player, STORY_1));
+  });
+
+  it('the setting is the player site\'s alone, a choice with the three values', () => {
+    const { entry, NOT_PER_SITE } = require('../../lib/settings/registry');
+    assert.deepEqual(entry('player_site.story.scene_pictures').values, ['inline', 'float', 'mixed']);
+    assert.equal(entry('player_site.story.scene_pictures').default, 'inline');
+    assert.ok(NOT_PER_SITE.has('player_site.story.scene_pictures'));
+    assert.equal(entry('gm_site.story.scene_pictures'), undefined);
+  });
+
+  it('a Story page with no pictures is byte for byte the same whatever the setting, and with pictures off', () => {
+    const plain = (opts) => read(buildBothOnce(storyVault({ ...PEOPLE, 'Sessions/Session 1 Wrap-Up.md': withRecap('Nobody came.\n\nNobody left.') }), opts), STORY_1);
+    const base = plain({});
+    for (const mode of ['inline', 'float', 'mixed']) assert.equal(plain({ player: { story: { scene_pictures: mode } } }), base, mode);
+    assert.equal(plain({ player: { story: { pictures: false } } }), base);
+  });
+});
+
+function buildBothOnce(vault, opts) {
+  const b = buildBoth(vault, { ...opts, sites: ['player'] });
+  const html = b.player;
+  process.on('exit', () => b.cleanup());
+  return html;
+}

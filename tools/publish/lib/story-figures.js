@@ -600,44 +600,98 @@ const escapeText = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
 // The picture's address from the page at `fromPath`: under images/, encoded as the recap's own pictures are.
 const imageSrc = (entry, fromPath) => encodeImageUrl(relativeHref(fromPath, `images/${entry.relPath}`));
 
-// The recap with each placed paragraph's float put just before its `<p>`: sides alternate from the right, one per
-// paragraph that has pictures, in reading order. Nothing else in the recap changes. `paragraphs` is what `placement`
-// was made from (paragraphsOf), so its `block` numbers count the same top-level elements. On the GM site a mark still
-// open where the paragraph starts is closed before the float and opened again just inside the `<p>`, so a picture
-// players also see is never drawn inside a GM mark. `candidates` and `blockers`: what placement was read against, read
-// as mentionsOf reads them.
-function figuresHtml(recapHtml, placement, { fromPath, imageMap, paragraphs, candidates = [], blockers = [] }) {
+// The recap with each placed paragraph's pictures put in: a float just before its `<p>` (sides alternate from the
+// right, one per paragraph that has floats, in reading order), a plate just after it. A scene's picture follows
+// `mode` (`player_site.story.scene_pictures`): 'inline', a plate; 'float', a float; 'mixed', in threes in reading order,
+// the first a plate and the next two floats. A page's picture is always a float. Nothing else in the recap changes.
+// `paragraphs` is what `placement` was made from (paragraphsOf), so its `block` numbers count the same top-level
+// elements. On the GM site a mark still open where a picture goes is closed before it and opened again after it
+// (for a float, just inside the `<p>`), so a picture players also see is never drawn inside a GM mark. `candidates`
+// and `blockers`: what placement was read against, read as mentionsOf reads them.
+function figuresHtml(recapHtml, placement, { fromPath, imageMap, paragraphs, candidates = [], blockers = [], mode = 'inline' }) {
   const html = String(recapHtml || '');
   if (!placement || placement.size === 0) return html;
-  const starts = topLevelElements(html).map((el) => el.start);
-  let out = '';
-  let last = 0;
-  [...placement.keys()].sort((a, b) => a - b).forEach((para, n) => {
-    const at = starts[paragraphs[para].block];
-    const shown = placement.get(para);
-    const classes = ['story-figures', ...(n % 2 ? ['story-figures--left'] : []), ...(shown.length > 1 ? ['story-figures--two'] : [])];
-    const figs = shown.map((c) => {
-      const src = escapeText(imageSrc(imageMap[c.key], fromPath));
+  const elements = topLevelElements(html);
+  const edits = [];   // { at, text, skip }: `text` goes in at `at`, and `skip` characters after it are kept as they are
+  let floats = 0;
+  let scenes = 0;
+  [...placement.keys()].sort((a, b) => a - b).forEach((para) => {
+    const el = elements[paragraphs[para].block];
+    const at = el.start;
+    const floating = [];
+    const plates = [];
+    for (const c of placement.get(para)) {
       // A scene's picture has no caption and an empty alt, and its link a name that says nothing of it: nothing of the
       // scene note reaches the page. A page's picture that a scene joined (withFigures) is drawn as the scene's beside
       // a paragraph that never names the page.
       const scene = c.scene || (c.own && !mentionsOf(c.own, paragraphs, { lists: [candidates, blockers], except: c }).some((m) => m.para === para));
+      const plate = scene && (mode === 'inline' || (mode === 'mixed' && scenes % 3 === 0));
+      if (scene) scenes++;
+      (plate ? plates : floating).push({ c, scene });
+    }
+    const draw = ({ c, scene }, plate) => {
+      const src = escapeText(imageSrc(imageMap[c.key], fromPath));
       const title = scene ? '' : escapeText(c.title);
-      return `<figure class="story-figure${c.place || scene ? ' story-figure--place' : ''}">`
+      return `<figure class="story-figure${plate ? ' story-figure--plate' : c.place || scene ? ' story-figure--place' : ''}">`
         + `<a class="story-figure__open" href="${src}"${scene ? ' aria-label="Open picture"' : ''}>`
         + `<img src="${src}" alt="${title}" loading="lazy"><span class="story-figure__zoom" aria-hidden="true">${ZOOM}</span></a>`
         + `${scene ? '' : `<figcaption>${title}</figcaption>`}</figure>`;
-    }).join('');
-    const open = openMarks(html.slice(0, at));
-    if (open.length === 0) {
-      out += `${html.slice(last, at)}<div class="${classes.join(' ')}">${figs}</div>`;
-      last = at;
-      return;
+    };
+    if (floating.length) {
+      const classes = ['story-figures', ...(floats++ % 2 ? ['story-figures--left'] : []), ...(floating.length > 1 ? ['story-figures--two'] : [])];
+      const div = `<div class="${classes.join(' ')}">${floating.map((x) => draw(x, false)).join('')}</div>`;
+      const open = openMarks(html.slice(0, at));
+      if (open.length === 0) edits.push({ at, text: div, skip: 0 });
+      else {
+        const tag = /^<p\b(?:"[^"]*"|'[^']*'|[^>"'])*>/i.exec(html.slice(at))[0];
+        edits.push({ at, text: `${''.repeat(open.length)}${div}${tag}${open.join('')}`, skip: tag.length });
+      }
     }
-    const tag = /^<p\b(?:"[^"]*"|'[^']*'|[^>"'])*>/i.exec(html.slice(at))[0];
-    out += `${html.slice(last, at)}${'\uE002'.repeat(open.length)}<div class="${classes.join(' ')}">${figs}</div>${tag}${open.join('')}`;
-    last = at + tag.length;
+    if (plates.length) {
+      const end = at + el.html.length;
+      const open = openMarks(html.slice(0, end));
+      const div = `<div class="story-figures story-figures--plate">${plates.map((x) => draw(x, true)).join('')}</div>`;
+      edits.push({ at: end, text: `${''.repeat(open.length)}${div}${open.join('')}`, skip: 0 });
+    }
   });
+  let out = '';
+  let last = 0;
+  for (const e of edits.sort((x, y) => x.at - y.at)) {   // stable: a paragraph's plate comes before the next one's float
+    out += html.slice(last, e.at) + e.text;
+    last = e.at + e.skip;
+  }
+  return out + html.slice(last);
+}
+
+// A picture the GM embedded in the recap, a paragraph of its own, drawn as a plate: a full-width figure with the zoom
+// link the side pictures have. Its alt text, and its caption, are what the GM wrote after the `|` of the embed (the
+// processor made it the image's alt); with none, the alt is empty, never the file name, and nothing of a scene note
+// reaches the page. Only a paragraph that holds
+// nothing but one picture of the site's is changed (a mark inside it, or other words, leave it as it was). Where the
+// picture stands is untouched.
+function platesHtml(recapHtml, { fromPath, imageMap }) {
+  const html = String(recapHtml || '');
+  if (!html.includes('<img')) return html;
+  const byPath = new Map(Object.entries(imageMap || {}).map(([key, e]) => [canonicalNfc(`images/${e.relPath}`), key]));
+  let out = '';
+  let last = 0;
+  for (const el of topLevelElements(html)) {
+    const one = el.tag === 'p' && /^<p(?:\s[^>]*)?>\s*(<img\b(?:"[^"]*"|'[^']*'|[^>"'])*>)\s*<\/p>$/i.exec(el.html);
+    if (!one) continue;
+    const attr = (name) => { const m = new RegExp(`\\s${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)')`, 'i').exec(one[1]); return m ? (m[1] !== undefined ? m[1] : m[2]) : null; };
+    const src = attr('src');
+    const key = src !== null && byPath.get(resolveHref(src, fromPath));
+    if (!key) continue;
+    const written = (attr('alt') || '').trim();
+    const url = escapeText(imageSrc(imageMap[key], fromPath));
+    // With no words of its own the link still needs a name, as the automatic scene plates have.
+    const label = written ? '' : ' aria-label="Open picture"';
+    out += html.slice(last, el.start)
+      + `<figure class="story-figure story-figure--plate"><a class="story-figure__open" href="${url}"${label}>`
+      + `<img src="${url}" alt="${written}" loading="lazy"><span class="story-figure__zoom" aria-hidden="true">${ZOOM}</span></a>`
+      + `${written ? `<figcaption>${written}</figcaption>` : ''}</figure>`;
+    last = el.start + el.html.length;
+  }
   return out + html.slice(last);
 }
 
@@ -664,7 +718,7 @@ function shownImages(recapHtml, { fromPath, imageMap, marks = null }) {
 // Once per chapter: a page's picture whose key is in `shown` (pictured on an earlier Story page of the chapter) is left
 // out; a scene's never is, as a scene is pictured where it is played. `pictured`, a Set, is given the keys of the page
 // pictures placed here (one a scene joined among them) and of the pictures the recap already shows, for the next page.
-function withFigures(recapHtml, { candidates, scenes = [], exclude = new Set(), blockers = [], fromPath, imageMap, usedImages = null, marks = null, shown = null, pictured = null }) {
+function withFigures(recapHtml, { candidates, scenes = [], exclude = new Set(), blockers = [], fromPath, imageMap, usedImages = null, marks = null, shown = null, pictured = null, mode = 'inline' }) {
   const all = [];
   const pages = (candidates || []).filter((x) => !exclude.has(x.page) && !(shown && shown.has(x.key)));
   for (const c of [...pages, ...scenes]) {
@@ -692,7 +746,7 @@ function withFigures(recapHtml, { candidates, scenes = [], exclude = new Set(), 
       if (pictured && !c.scene) pictured.add(c.key);
     }
   }
-  return figuresHtml(recapHtml, placement, { fromPath, imageMap, paragraphs, candidates: all, blockers });
+  return figuresHtml(recapHtml, placement, { fromPath, imageMap, paragraphs, candidates: all, blockers, mode });
 }
 
-module.exports = { figureCandidates, pageNames, nameHolders, scenePicture, sceneCandidates, paragraphsOf, mentionsOf, placeFigures, figuresHtml, shownImages, withFigures, topLevelElements, openMarks };
+module.exports = { platesHtml, figureCandidates, pageNames, nameHolders, scenePicture, sceneCandidates, paragraphsOf, mentionsOf, placeFigures, figuresHtml, shownImages, withFigures, topLevelElements, openMarks };

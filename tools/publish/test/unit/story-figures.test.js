@@ -546,7 +546,7 @@ describe('sceneCandidates', () => {
   it('the scene\'s mention is a link to or a name of one of its pages; it renders with no caption and an empty alt', () => {
     const [c] = sceneCandidates([hub1, scene(`${S}/Session 1/Scenes/Docks`, {})], { names, imageMap, linkMap })(unit1);
     assert.deepEqual(mentions(c, '<p>Then to Docks Quarter.</p>'), [{ para: 0, at: 8 }]);
-    const html = withFigures('<p>Off to <a href="../locations/the-docks.html">the pier</a>.</p>', { candidates: [], scenes: [c], fromPath: 'story/s1.html', imageMap });
+    const html = withFigures('<p>Off to <a href="../locations/the-docks.html">the pier</a>.</p>', { candidates: [], scenes: [c], fromPath: 'story/s1.html', imageMap, mode: 'float' });
     assert.match(html, /<figure class="story-figure story-figure--place"><a class="story-figure__open" href="\.\.\/images\/a\.png" aria-label="Open picture"><img src="\.\.\/images\/a\.png" alt="" loading="lazy">/);
     assert.ok(!html.includes('<figcaption>'));
   });
@@ -557,7 +557,7 @@ describe('sceneCandidates', () => {
     const portrait = cand(smith);
     const before = { ...portrait, terms: [...portrait.terms] };
     const used = new Set();
-    const html = withFigures('<p>Nothing yet.</p><p>Off to the Docks Quarter.</p><p>Old Smith waits.</p>', { candidates: [portrait], scenes: [c], fromPath: 'story/s1.html', imageMap, usedImages: used });
+    const html = withFigures('<p>Nothing yet.</p><p>Off to the Docks Quarter.</p><p>Old Smith waits.</p>', { candidates: [portrait], scenes: [c], fromPath: 'story/s1.html', imageMap, usedImages: used, mode: 'float' });
     assert.equal((html.match(/<figure /g) || []).length, 1);
     assert.ok(html.indexOf('<figure') < html.indexOf('Off to'), html);
     assert.deepEqual([...used], ['a.png']);
@@ -570,7 +570,7 @@ describe('sceneCandidates', () => {
     const smith = { outputPath: 'npcs/old-smith.html', displayTitle: 'Old Smith', frontmatter: { type: 'npc', portrait: 'a.png' } };
     const [c] = sceneCandidates([hub1, scene(`${S}/Session 1/Scenes/Docks`, {})], { names, imageMap, linkMap })(unit1);
     const portrait = cand(smith);
-    const draw = (recap) => withFigures(recap, { candidates: [portrait], scenes: [c], fromPath: 'story/s1.html', imageMap });
+    const draw = (recap) => withFigures(recap, { candidates: [portrait], scenes: [c], fromPath: 'story/s1.html', imageMap, mode: 'float' });
     for (const recap of ['<p>Nothing yet.</p><p>Off to the Docks Quarter.</p><p>Old Smith waits.</p>', '<p>To <a href="../locations/the-docks.html">the pier</a>.</p>']) {
       const html = draw(recap);
       assert.equal((html.match(/<figure /g) || []).length, 1, html);
@@ -792,5 +792,87 @@ describe('withFigures: once per chapter (shown, pictured)', () => {
     assert.equal((html.match(/images\/a\.png" alt=""/g) || []).length, 1, html);
     assert.ok(!html.includes('alt="Mara Quill"'), html);
     assert.deepEqual([...pictured], []);
+  });
+});
+
+describe('plates: scene pictures by player_site.story.scene_pictures, and pictures the GM embeds', () => {
+  const { platesHtml } = require('../../lib/story-figures');
+  const NAMES = { 'a.png': 'Alpha', 'b.png': 'Beta', 'c.png': 'Gamma', 'd.png': 'Delta' };
+  const sceneOf = (key) => {
+    const pg = { href: `locations/${NAMES[key].toLowerCase()}.html`, terms: [`${NAMES[key]} Quarter`] };
+    return { key, outputPath: null, title: '', terms: pg.terms, hrefs: new Set([pg.href]), pages: [pg], place: true, scene: true, };
+  };
+  const map = { 'a.png': { relPath: 'a.png' }, 'b.png': { relPath: 'b.png' }, 'c.png': { relPath: 'c.png' }, 'd.png': { relPath: 'd.png' } };
+  // Four paragraphs, each naming the place of one scene picture, so each picture has a paragraph of its own.
+  const recap = '<p>Alpha Quarter one.</p><p>Beta Quarter two.</p><p>Gamma Quarter three.</p><p>Delta Quarter four.</p>';
+  const ALL = ['a.png', 'b.png', 'c.png', 'd.png'].map(sceneOf);
+  const draw = (mode, scenes = ALL) => withFigures(recap, { candidates: [], scenes, fromPath: 'story/s1.html', imageMap: map, mode });
+  const shape = (html) => [...html.matchAll(/<div class="(story-figures[^"]*)">|<p>\w+ Quarter (\w+)\./g)].map((m) => m[1] || m[2]).join(' | ');
+  const PLATE = 'story-figures story-figures--plate';
+
+  it('inline (the default): each scene picture is a full-width plate after its paragraph, no caption, empty alt, with the zoom link', () => {
+    const html = draw('inline');
+    assert.equal(shape(html), `one | ${PLATE} | two | ${PLATE} | three | ${PLATE} | four | ${PLATE}`);
+    assert.match(html, /<p>Alpha Quarter one\.<\/p><div class="story-figures story-figures--plate"><figure class="story-figure story-figure--plate"><a class="story-figure__open" href="\.\.\/images\/a\.png" aria-label="Open picture"><img src="\.\.\/images\/a\.png" alt="" loading="lazy"><span class="story-figure__zoom"/);
+    assert.ok(!html.includes('<figcaption>'));
+    assert.equal(withFigures(recap, { candidates: [], scenes: ALL, fromPath: 'story/s1.html', imageMap: map }), html, 'inline is the default');
+  });
+
+  it('float: beside the paragraph, to the right and the left in turn, as before', () => {
+    const html = draw('float');
+    assert.equal(shape(html), 'story-figures | one | story-figures story-figures--left | two | story-figures | three | story-figures story-figures--left | four');
+    assert.ok(!html.includes('story-figure--plate'));
+  });
+
+  it('mixed: in threes, a plate then two floats (the floats alternate right, left), in reading order', () => {
+    const html = draw('mixed');
+    assert.equal(shape(html), `one | ${PLATE} | story-figures | two | story-figures story-figures--left | three | four | ${PLATE}`);
+  });
+
+  it('a portrait is a side figure whatever the mode', () => {
+    const portrait = cand(page('Mara Quill'));
+    for (const mode of ['inline', 'float', 'mixed']) {
+      const html = withFigures('<p>Mara Quill smiled.</p>', { candidates: [portrait], fromPath: 'story/s1.html', imageMap, mode });
+      assert.match(html, /^<div class="story-figures"><figure class="story-figure"><a class="story-figure__open"/, mode);
+      assert.ok(html.includes('<figcaption>Mara Quill</figcaption>') && !html.includes('plate'), mode);
+    }
+  });
+
+  it('a plate after a paragraph inside a GM mark closes the mark before it and opens it again after', () => {
+    const marks = createMarks();
+    const open = marks.open('gm_only', 'gm only');
+    const html = withFigures(`<p>Alpha Quarter ${open}secret.</p><p>More${marks.close()} out.</p>`, { candidates: [], scenes: [sceneOf('a.png')], fromPath: 'story/s1.html', imageMap: map, mode: 'inline', marks });
+    const at = html.indexOf('</p>') + 4;
+    assert.equal(html.slice(0, at), `<p>Alpha Quarter ${open}secret.</p>`);
+    assert.match(html.slice(at), new RegExp(`^\uE002<div class="story-figures story-figures--plate">.*</div>${open}<p>More`, 's'));
+  });
+
+  describe('a picture the GM embedded', () => {
+    const embed = (img) => platesHtml(`<p>Before.</p>\n${img}\n<p>After.</p>`, { fromPath: 'story/s1.html', imageMap: map });
+    it('with words after the | : alt and caption, with the zoom link', () => {
+      const html = embed('<p><img src="../images/a.png" alt="The ferry at dusk"></p>');
+      assert.ok(html.includes('<p>Before.</p>\n<figure class="story-figure story-figure--plate"><a class="story-figure__open" href="../images/a.png"><img src="../images/a.png" alt="The ferry at dusk" loading="lazy"><span class="story-figure__zoom" aria-hidden="true">'), html);
+      assert.ok(html.includes('</a><figcaption>The ferry at dusk</figcaption></figure>\n<p>After.</p>'), html);
+    });
+    it('with no words: empty alt (never the file name) and no caption', () => {
+      const plain = embed('<p><img src="../images/a.png" alt=""></p>');
+      assert.ok(plain.includes('alt="" loading="lazy"') && !plain.includes('figcaption') && !plain.includes('alt="a.png"'), plain);
+      assert.ok(plain.includes('<a class="story-figure__open" href="../images/a.png" aria-label="Open picture">'), plain);
+    });
+    it('only a paragraph of one picture the site has: a web image, a picture among words, or an unknown file stays as it was', () => {
+      for (const p of ['<p><img src="https://example.com/x.png" alt=""></p>', '<p>See <img src="../images/a.png" alt=""></p>', '<p><img src="../images/zzz.png" alt=""></p>', '<p><img src="../images/a.png" alt=""><img src="../images/b.png" alt=""></p>']) {
+        assert.equal(embed(p), `<p>Before.</p>\n${p}\n<p>After.</p>`, p);
+      }
+    });
+    it('a recap with no picture comes back byte for byte', () => {
+      assert.equal(platesHtml(recap, { fromPath: 'story/s1.html', imageMap: map }), recap);
+    });
+  });
+});
+
+describe('plate CSS', () => {
+  it('a plate clears any float before it, so it is full width after a short paragraph', () => {
+    const css = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', '..', 'css', 'style.css'), 'utf8');
+    assert.match(css, /\r?\n\.story-figure--plate \{\r?\n  clear: both;/);
   });
 });

@@ -669,6 +669,11 @@ const REGISTRY = [
     does: "Pictures of the people and places a Story page's recap names, set in the text beside the first paragraph that mentions each (two at most beside one paragraph), once a chapter: a page pictured on an earlier session Story page of its chapter is not pictured again. The chapter's own Story page pictures on its own and uses up nothing for its sessions. A picture comes from the page's `portrait`, or from a scene played that session, beside the paragraph naming the most of its places and people; player characters and NPCs marked `companion: true` are left out. Off, no pictures are added; pictures you put in the recap stay",
     left_out: 'On',
   },
+  {
+    name: 'player_site.story.scene_pictures', type: 'choice', values: ['inline', 'float', 'mixed'], default: 'inline', group: 'story',
+    does: "How the pictures of scenes played in a session are set on its Story page (people and places keep to the side, whatever this says): `inline` puts each across the full width of the page, after the paragraph it depicts, like a plate in a book; `float` sets it beside that paragraph, to the right and the left in turn; `mixed` goes in threes, the first a full-width picture and the next two beside their paragraphs, and so on. A picture you embed in the recap yourself (`![[pic.png]]`, or `![[pic.png|caption]]` for a caption) is always a full-width picture, where you put it. Only used while `player_site.story.pictures` is on",
+    left_out: 'Inline',
+  },
 
   // The props page: one page listing every prop the site shows, and its box on the landing page
   { name: 'player_site.props', type: 'map', container: true },
@@ -834,7 +839,7 @@ const NOT_PER_SITE = new Set(['player_site.publish', 'player_site.folder', 'play
   'player_site.hide.folders', 'player_site.hide.sections', 'player_site.hide.fields', 'player_site.hide.callouts',
   'player_site.hide.drafts', 'player_site.hide.field_exceptions', 'player_site.never_show',
   'player_site.features.live_stats', 'player_site.features.inbox', 'player_site.story.moments',
-  'player_site.story.pictures']);
+  'player_site.story.pictures', 'player_site.story.scene_pictures']);
 // A twin that does not inherit when unset: the player site's build steps never run for the GM site.
 const GM_OWN_DEFAULT = { 'player_site.before_build': [], 'player_site.after_build': [] };
 // What a twin does not copy: it has no old names, no default of its own (unset, it takes the player site's value), and

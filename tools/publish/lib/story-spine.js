@@ -8,7 +8,7 @@ const { parseWikilink } = require('./wikilink');
 const { isLinkedWrapUp, WRAP_UP_TYPES } = require('./session-hub');
 const { isSessionHub } = require('./processor');
 const { storySections } = require('./story-sections');
-const { withFigures } = require('./story-figures');
+const { withFigures, platesHtml } = require('./story-figures');
 const { chapterStatusOf } = require('./shared-lists');
 
 const RECAP_TITLES = ['narrative recap', 'recap'];
@@ -496,7 +496,7 @@ function buildStorySpine(pages, linkMap, pairs, images = null, { marked = false,
     for (const unit of units.slice(before)) chapterOf.set(unit, chapter);
   }
 
-  if (figures && images) {
+  if (images) {
     // A page is pictured once per chapter: on the chapter's first Story page, in reading order, that pictures it (or
     // shows its picture where the GM placed it). On the GM site only the Story pages the player site has count
     // towards that, so a GM page never pictures less than the player page at its address; a GM page players do not
@@ -516,12 +516,20 @@ function buildStorySpine(pages, linkMap, pairs, images = null, { marked = false,
       // An active chapter's page is pictured in its Teaser; every other page in its recap.
       const field = target === unit && unit.kind === 'chapter' && unit.status === 'active' ? 'teaserHtml' : 'recapHtml';
       if (target[field] == null) continue;
-      target[field] = withFigures(target[field], {
-        candidates: figures.candidates, scenes: figures.scenesFor ? figures.scenesFor(unit) : [], blockers: figures.blockers || [],
-        exclude: new Set([unit.sourcePage, unit.wrapUpPage, unit.heldBack && unit.heldBack.wrapUp].filter(Boolean)),
-        fromPath: unit.outputPath, imageMap: images.imageMap, usedImages: images.usedImages, marks,
-        shown: new Set(shown), pictured: counts ? shown : null,
-      });
+      const scenes = figures && figures.scenesFor ? figures.scenesFor(unit) : [];
+      if (figures) {
+        target[field] = withFigures(target[field], {
+          candidates: figures.candidates, scenes, blockers: figures.blockers || [],
+          exclude: new Set([unit.sourcePage, unit.wrapUpPage, unit.heldBack && unit.heldBack.wrapUp].filter(Boolean)),
+          fromPath: unit.outputPath, imageMap: images.imageMap, usedImages: images.usedImages, marks,
+          shown: new Set(shown), pictured: counts ? shown : null, mode: figures.scenePictures,
+        });
+      }
+      // A picture the GM embedded in the recap is a plate wherever it stands (also with `player_site.story.pictures`
+      // off).
+      for (const [holder, name] of [[target, field], ...(target !== unit && field === 'recapHtml' ? [[unit, 'recapHtml']] : [])]) {
+        if (holder[name]) holder[name] = platesHtml(holder[name], { fromPath: unit.outputPath, imageMap: images.imageMap });
+      }
     }
   }
 

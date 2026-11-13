@@ -238,7 +238,8 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}, warn = console.wa
   // Whether a session's Memorable Moments show as cards on its Story page, and whether its story is pictured. Not
   // listed, like `limits`. Not per site: the GM site reads the player site's values, so a mark on it always means
   // "hidden from players", and both sites picture the same.
-  Object.defineProperty(merged, 'story', { value: { moments: p.story.moments !== false, pictures: p.story.pictures !== false }, enumerable: false });
+  Object.defineProperty(merged, 'story', { value: { moments: p.story.moments !== false, pictures: p.story.pictures !== false,
+    scenePictures: ['float', 'mixed'].includes(p.story.scene_pictures) ? p.story.scene_pictures : 'inline' }, enumerable: false });
 
   // The numbers, the header facts and the withheld words the build used to fix in code. Not listed, like
   // `menu_extra`: a site that sets none builds as it did. Each is passed down to the code that uses it.

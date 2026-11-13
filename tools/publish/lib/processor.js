@@ -1669,7 +1669,8 @@ function resolveImageEmbeds(markdown, imageMap, currentOutputPath, usedImages, o
     // Alt text is what the GM wrote after the pipe. A size (`|300`, `|300x200`) is not text, and a file name
     // is not a description (a screen reader would read it out, and the leak check would compare it to other
     // notes): a picture with neither gets an empty alt, which marks it as decoration.
-    const written = alt && !/^\s*\d+(x\d+)?\s*$/.test(alt) ? alt : '';
+    const words = (alt || '').replace(/\|\s*\d+(x\d+)?\s*$/, '');
+    const written = words && !/^\s*\d+(x\d+)?\s*$/.test(words) ? words : '';
     const altText = written.replace(/[[\]]/g, '\\$&');
     return `![${altText}](${relativeImgPath})`;
   });

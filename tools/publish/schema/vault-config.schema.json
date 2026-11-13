@@ -1488,6 +1488,15 @@
                   "type": "null"
                 }
               ]
+            },
+            "scene_pictures": {
+              "description": "How the pictures of scenes played in a session are set on its Story page (people and places keep to the side, whatever this says): `inline` puts each across the full width of the page, after the paragraph it depicts, like a plate in a book; `float` sets it beside that paragraph, to the right and the left in turn; `mixed` goes in threes, the first a full-width picture and the next two beside their paragraphs, and so on. A picture you embed in the recap yourself (`![[pic.png]]`, or `![[pic.png|caption]]` for a caption) is always a full-width picture, where you put it. Only used while `player_site.story.pictures` is on",
+              "default": "inline",
+              "type": [
+                "string",
+                "null"
+              ],
+              "pattern": "^\\s*(?:[iI][nN][lL][iI][nN][eE]|[fF][lL][oO][aA][tT]|[mM][iI][xX][eE][dD])\\s*$"
             }
           }
         },

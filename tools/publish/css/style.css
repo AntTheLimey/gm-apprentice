@@ -971,6 +971,47 @@ body:has(#tab-story.active) .pull-quote-backstory {
   opacity: 1;
   background: rgba(0, 0, 0, .55);
 }
+/* A plate: a picture across the full width of the story, between paragraphs, like a plate in a book. A scene's picture
+   after its paragraph (`player_site.story.scene_pictures`), and any picture the GM embeds in the recap. */
+.story-figures--plate {
+  float: none;
+  clear: both;
+  width: auto;
+  margin: 18px 0;
+  display: block;
+}
+.story-figure--plate {
+  clear: both;
+  margin: 18px 0;
+}
+.story-figures--plate .story-figure--plate {
+  margin: 0;
+}
+.story-figures--plate .story-figure--plate + .story-figure--plate {
+  margin-top: 14px;
+}
+.story-figure--plate .story-figure__open {
+  max-width: 100%;
+}
+.story-figure--plate .story-figure__open img {
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  aspect-ratio: auto;
+  object-fit: contain;
+}
+.story-figure--plate figcaption {
+  font-size: 13px;
+  text-align: center;
+  margin-top: 6px;
+}
+.story-figure--plate .story-figure__zoom {
+  width: 22px;
+  height: 22px;
+  border-radius: 11px;
+  top: 8px;
+  right: 8px;
+}
 @media (max-width: 600px) {
   .story-figures {
     width: 110px;
@@ -988,6 +1029,13 @@ body:has(#tab-story.active) .pull-quote-backstory {
   }
   .story-figure figcaption {
     font-size: 11px;
+  }
+  .story-figures--plate {
+    width: auto;
+    margin: 14px 0;
+  }
+  .story-figure--plate figcaption {
+    font-size: 12px;
   }
   .story-figure__zoom {
     width: 16px;
