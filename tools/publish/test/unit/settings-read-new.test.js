@@ -48,7 +48,7 @@ test('a value is read from the file and says so', () => {
   assert.equal(r.values.player_site.features.connections, 'web');
   assert.equal(r.origins['player_site.features.connections'], 'file');
   assert.deepEqual(r.values.player_site.hide.sections, ['Rumours']);
-  assert.deepEqual(r.faults, []);
+  assert.deepEqual(r.faults.filter((f) => f.kind !== 'hide-list-gap'), []);
 });
 
 // 2

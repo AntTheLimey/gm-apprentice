@@ -98,6 +98,7 @@ function faultJson(f) {
   if (f.use) out.use = f.use;
   if (f.leftover) out.leftover = true;
   if (f.source) out.source = f.source;
+  if (f.entries) out.entries = f.entries;
   return out;
 }
 // Stops first, otherwise in the order found.
@@ -764,4 +765,4 @@ function runSettings(options, deps = {}) {
   }
 }
 
-module.exports = { runSettings, settingsOptions, helpText };
+module.exports = { runSettings, settingsOptions, helpText, sameRule };

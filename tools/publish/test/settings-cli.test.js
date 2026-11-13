@@ -614,7 +614,7 @@ test('new file: get reads it, under both the new names and main\'s old ones', ()
   assert.deepEqual(view(data)['player_site.hide.sections'], { value: ['Rumours'], origin: 'file' });
   assert.equal(data.file.exists, true);
   assert.equal(data.file.leftover, false);
-  assert.deepEqual(data.faults, []);
+  assert.deepEqual(data.faults.filter((f) => f.kind !== 'hide-list-gap'), []); // a list of its own lacking built-ins: hide-list-gap.test.js
   assert.deepEqual(view(run(s, 'get', ['player_site.features.connections']).data), { 'player_site.features.connections': { value: 'web', origin: 'file' } });
 });
 

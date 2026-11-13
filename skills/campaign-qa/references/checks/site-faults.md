@@ -88,13 +88,16 @@ every page that names it. Use it to confirm each fix.
 | `SESSION_NO_CHAPTER` | Warning | A played session is missing from the Story |
 | `CHAPTER_REF_UNSHOWN` | Warning | A played session is missing from the Story |
 
-Three codes are walked in files of their own, in the `site-faults/`
+Four codes are walked in files of their own, in the `site-faults/`
 folder beside this file. Read one only when a row of this run names its
 code, before the first such row, and once a run:
 
 - `NAMED_NO_PAGE`: `site-faults/named-no-page.md`
 - `TOHIT_UNREAD`: `site-faults/tohit-unread.md`
 - `PROP_NOT_COPIED`: `site-faults/prop-not-copied.md`
+- `hide-list-gap` (a row of the `settings` check, not of this one, about
+  a hide list of the GM's own that lacks a built-in entry):
+  `site-faults/hide-list-gap.md`
 
 Every other code's section is below.
 

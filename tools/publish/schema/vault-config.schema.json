@@ -831,6 +831,21 @@
                 "object",
                 "null"
               ]
+            },
+            "keep_showing": {
+              "description": "Built-in entries of `player_site.hide.sections` or `player_site.hide.fields` that your own list leaves out on purpose, so the site shows them. The build warns when a list of your own lacks a built-in entry, and says nothing about one named here. A name that is in neither built-in list is warned about, since it does nothing",
+              "default": [],
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": [
+                  "string",
+                  "number",
+                  "boolean"
+                ]
+              }
             }
           },
           "additionalProperties": false

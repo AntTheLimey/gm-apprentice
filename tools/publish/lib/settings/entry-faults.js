@@ -16,6 +16,37 @@ const menuKey = (item) => `${canonicalNfc(String(item.label).trim())}\n${String(
 
 const words = (list) => new Set((list || []).map((w) => String(w).trim().toLowerCase()).filter(Boolean));
 
+const HIDE_LISTS = ['player_site.hide.sections', 'player_site.hide.fields'];
+
+// A hide list the vault wrote itself replaces the built-in one, so a built-in entry it lacks is shown wherever a page names
+// it, and the leak gate stays silent (the list is the GM's). One warning per list, naming each missing entry and what it is
+// for, unless the GM listed the entry in `player_site.hide.keep_showing`. A vault on the built-in list is never told.
+// A name in keep_showing that is no built-in entry of either list does nothing, so it is warned about (a typo guard).
+function hideListGaps(values, origins, get, add, faults) {
+  const { REGISTRY } = require('./registry');
+  const { sameRule } = require('./cli');
+  const kept = get('player_site.hide.keep_showing');
+  const keep = Array.isArray(kept) ? kept.filter((k) => typeof k === 'string') : [];
+  const known = new Set();
+  for (const setting of HIDE_LISTS) {
+    const e = REGISTRY.find((x) => x.name === setting);
+    const same = sameRule(e);
+    for (const k of keep) if (e.default.some((d) => same(d, k))) known.add(k);
+    if (origins[setting] !== 'file') continue;
+    const own = Array.isArray(get(setting)) ? get(setting) : [];
+    const missing = e.default.filter((d) => !own.some((o) => same(o, d)) && !keep.some((k) => same(k, d)));
+    if (!missing.length) continue;
+    const name = nameIn(setting);
+    const list = missing.map((m) => `${m} (${e.whys[m]})`).join('; ');
+    faults.push(makeFault({ name, setting, kind: 'hide-list-gap', level: 'warn', entries: missing,
+      message: `${name} is your own list and lacks ${missing.length === 1 ? 'a built-in entry' : `${missing.length} built-in entries`}, so the site shows ${missing.length === 1 ? 'it' : 'them'} wherever a page names ${missing.length === 1 ? 'it' : 'them'}: ${list}. Add ${missing.length === 1 ? 'it' : 'them'}, or name ${missing.length === 1 ? 'it' : 'one you want shown'} in ${nameIn('player_site.hide.keep_showing')}` }));
+  }
+  const strays = keep.filter((k) => !known.has(k));
+  if (strays.length) {
+    add('player_site.hide.keep_showing', (name) => `${name} holds ${strays.map((k) => `"${k}"`).join(', ')}, which ${strays.length === 1 ? 'is' : 'are'} in neither built-in list (${nameIn('player_site.hide.sections')}, ${nameIn('player_site.hide.fields')}); ${strays.length === 1 ? 'it does' : 'they do'} nothing`);
+  }
+}
+
 // `values` and `origins` are the reader's, `deps` the reader's own file access (the folder checks look through it), under the list's names. Returns the faults, all warnings but one: a GM site on a vault kept by a player.
 function entryFaults(vaultPath, values, origins, deps) {
   const faults = [];
@@ -49,6 +80,8 @@ function entryFaults(vaultPath, values, origins, deps) {
       }
     }
   }
+
+  hideListGaps(values, origins, get, add, faults);
 
   // A vault kept by a player has no GM site.
   if (get('gm_site.publish') === true && get('vault.kept_by') === 'player') {

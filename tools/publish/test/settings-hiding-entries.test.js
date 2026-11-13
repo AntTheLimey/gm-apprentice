@@ -42,7 +42,7 @@ describe('a hiding-list entry YAML would read as other than its text stops', () 
     it(`${list}: '007' quoted and 1999 bare read cleanly`, () => {
       const { vault } = vaultWith(`player_site:\n  hide:\n    ${list}:\n      - '007'\n      - 1999\n`);
       const read = readSettings({ vaultPath: vault });
-      assert.deepStrictEqual(read.faults.filter((f) => f.setting === name), []);
+      assert.deepStrictEqual(read.faults.filter((f) => f.setting === name && f.kind !== 'hide-list-gap'), []);
       assert.ok(read.values.player_site.hide[list].includes('007'));
     });
   }
