@@ -2749,17 +2749,24 @@ def retired_pc(note: str) -> bool:
 
 def add_later_log(note: str) -> str:
     """The note with an empty `## Further Appearances`: after Appearances,
-    else before Notes, else before GM Notes, else at the end."""
+    else before Notes, else before GM Notes, else at the end; never inside
+    a gm-only or spoiler block (it is the players' section)."""
     doc = parse(note)
-    heads = [h for h in doc.heads if h.level == 2]
+    states = {st.lineno - 1: st for st in doc.states}
+
+    def public(i: int) -> bool:
+        st = states.get(i)
+        return st is not None and not st.gm_depth and not st.spoiler_depth
 
     def before(head: Head) -> int:
-        if not head.gm:
+        if public(head.idx):
             return head.idx
-        openers = [st.lineno - 1 for st in doc.states
-                   if st.marker in OPENERS and st.lineno - 1 < head.idx]
-        return max(openers) if openers else head.idx
-    after = next((h for h in heads if not h.gm
+        # Ahead of the block that holds it: after the last public line.
+        last = max((i for i in range(head.idx) if public(i)
+                    and states[i].marker is None), default=None)
+        return last + 1 if last is not None else head.idx
+    heads = [h for h in doc.heads if h.level == 2]
+    after = next((h for h in heads if public(h.idx)
                   and key(h.title) == "appearances"), None)
     if after is not None:
         at = section_end(doc, after)
@@ -2772,21 +2779,22 @@ def add_later_log(note: str) -> str:
 
 def resolve_log_section(note: str, section: str) -> str | None:
     """The name of the public log section a note keeps in place of
-    `Campaign Log` (`Further Appearances` when it has one or is a retired
-    PC, else `Appearances` or `Encounters`, whichever comes first), or None
-    when `section` is not `Campaign Log`, the note has one, or it has no
-    equivalent."""
+    `Campaign Log`, or None when `section` is not `Campaign Log`, the note
+    has one, or it has no equivalent. A retired PC's rows always go to
+    `Further Appearances` (made if missing), even past a Campaign Log; any
+    note that has that section uses it; else `Appearances` or
+    `Encounters`, whichever comes first."""
     if key(section.strip().lstrip("#")) != LOG_SECTION:
         return None
     heads = [h for h in parse(note).heads if h.level == 2 and not h.gm]
-    if any(key(h.title) == LOG_SECTION for h in heads):
-        return None
     # A retired PC who goes on as an NPC logs here, after its PC days.
     later = next((h.title for h in heads if key(h.title) == LATER_LOG), None)
+    if retired_pc(note):
+        return later or LATER_LOG_TITLE
+    if any(key(h.title) == LOG_SECTION for h in heads):
+        return None
     if later is not None:
         return later
-    if retired_pc(note):
-        return LATER_LOG_TITLE
     return next((h.title for h in heads if key(h.title) in LOG_ALIASES),
                 None)
 

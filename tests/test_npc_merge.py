@@ -374,6 +374,21 @@ class MergeTests(unittest.TestCase):
         self.assertEqual(snapshot(vault), before)
         self.assertFalse((vault / "_archive").exists())
 
+    def test_a_disk_that_stays_full_still_moves_the_note_back(self):
+        vault = make_vault(self, base())
+        before = snapshot(vault)
+        real = npc_merge.write_text_atomic
+
+        def flaky(path, text):
+            if "_archive" in str(path):
+                raise npc_merge.StepFailed("disk full")
+            real(path, text)
+        with mock.patch.object(npc_merge, "write_text_atomic", flaky):
+            code, _out, err = run(vault, NPC_REL, PC_REL, "--write")
+        self.assertEqual(code, 1)
+        self.assertIn("the vault is as it was", err)
+        self.assertEqual(snapshot(vault), before)
+
     def test_retired_pc_logs_to_further_appearances(self):
         pc = PC_TEMPLATE.replace("## Notes\n",
                                  "## Appearances\n\n- old\n\n"
@@ -555,7 +570,8 @@ class NothingLeftBehindTests(unittest.TestCase):
         self.assertEqual(fm["gm_aliases"], ["Mira Vale", "Mira",
                                             "The Grey Hand"])
 
-    def test_a_display_added_in_a_table_is_escaped(self):
+    def test_a_table_cell_gets_a_bare_link(self):
+        import vault_check
         files = base({"Notes/Table.md": "---\ntype: note\n---\n\n| who |\n"
                       "|---|\n| [[Mira Vale]] |\n"})
         files["Characters/PCs/Mira Thorne.md"] = files.pop(PC_REL)
@@ -563,8 +579,84 @@ class NothingLeftBehindTests(unittest.TestCase):
         code, _out, err = run(vault, NPC_REL, "Characters/PCs/Mira Thorne.md",
                               "--write")
         self.assertEqual(code, 0, err)
-        self.assertIn("| [[Mira Thorne\\|Mira Vale]] |",
-                      read(vault, "Notes/Table.md"))
+        text = read(vault, "Notes/Table.md")
+        self.assertIn("| [[Mira Thorne]] |", text)
+        self.assertEqual(vault_check.table_findings("Notes/Table.md", text), [])
+        # Outside a table the words stay as display text.
+        self.assertIn("Met [[Mira Thorne|Mira Vale]]",
+                      read(vault, "Sessions/Session 01 - Arrival.md"))
+
+    def test_scalar_aliases_are_kept(self):
+        pc = PC_TEMPLATE.replace("aliases: []", "aliases: Captain Vale")
+        text, _ = self.merge(NPC, pc)
+        fm = vault_write.vl.extract_frontmatter(text)
+        self.assertEqual(fm["aliases"], ["Captain Vale", "Mira"])
+
+    def test_flow_style_pc_relationships_are_refused(self):
+        pc = PC_TEMPLATE.replace(
+            'relationships:\n  - target: "[[]]"\n    type: located_at\n'
+            '    tone: neutral\n    strength: 5\n    bidirectional: false\n'
+            '    description: ""\n',
+            'relationships: [{target: "[[Old Tom]]", type: knows}]\n')
+        self.assertIn("relationships: [{", pc)
+        vault = make_vault(self, {NPC_REL: NPC, PC_REL: pc})
+        before = snapshot(vault)
+        code, _out, err = run(vault, NPC_REL, PC_REL, "--write")
+        self.assertEqual(code, 1)
+        self.assertIn("flow list", err)
+        self.assertEqual(snapshot(vault), before)
+
+    def test_flow_style_npc_relationships_are_listed_not_carried(self):
+        npc = ("---\ntype: npc\nrelationships: [{target: \"[[A]]\", "
+               "type: knows}]\n---\n\n## Overview\n\nHi.\n")
+        text, out = self.merge(npc)
+        self.assertIn("NOT-CARRIED\tCharacters/NPCs/Mira Vale.md\t"
+                      "relationships", out)
+        self.assertNotIn("[[A]]", text)
+
+    def test_a_custom_comment_is_carried(self):
+        npc = ("---\ntype: npc\n---\n\n## GM Notes\n\n"
+               "<!-- Owes the Duke three favours. -->\n")
+        text, _ = self.merge(npc)
+        self.assertIn("<!-- Owes the Duke three favours. -->", text)
+
+    def test_loose_prose_keeps_each_fence(self):
+        npc = ("---\ntype: npc\n---\n\nPublic introduction.\n"
+               "<!-- gm-only -->\nSecret introduction.\n\n## History\n\n"
+               "Secret history.\n<!-- /gm-only -->\n")
+        text, _ = self.merge(npc)
+        states, _ = vault_write.vl.scan_body(text, ())
+        shown = "".join(st.line for st in states if st.published)
+        self.assertIn("Public introduction.", shown)
+        self.assertNotIn("Secret introduction", shown)
+        self.assertNotIn("Secret history", shown)
+        self.assertIn("Secret introduction.", text)
+        self.assertIn("Secret history.", text)
+        self.assertEqual(vault_write.parse(text).problems, [])
+
+    def test_repeated_mapped_sections_accumulate(self):
+        npc = ("---\ntype: npc\n---\n\n## Campaign Log\n\n- one\n\n"
+               "## Related\n\n- r1\n\n## Campaign Log\n\n- two\n\n"
+               "## Related\n\n- r2\n")
+        text, _ = self.merge(npc)
+        app = text[text.index("## Appearances"):text.index("## Notes")]
+        self.assertIn("- one", app)
+        self.assertIn("- two", app)
+        rel = text[text.index("## Relationships"):text.index("## Appearances")]
+        self.assertIn("- r1", rel)
+        self.assertIn("- r2", rel)
+
+    def test_never_inserted_into_a_code_block(self):
+        pc = PC_TEMPLATE.replace("## Notes\n", "## Appearances\n\n```\n"
+                                 "- example\n```\n\n- real\n\n## Notes\n")
+        npc = ("---\ntype: npc\n---\n\n<!-- gm-only -->\n\n## Campaign Log"
+               "\n\n- secret visit\n\n<!-- /gm-only -->\n")
+        text, _ = self.merge(npc, pc)
+        self.assertIn("```\n- example\n```", text)
+        states, _ = vault_write.vl.scan_body(text, ())
+        self.assertFalse(any("secret visit" in st.line for st in states
+                             if st.in_code or st.published))
+        self.assertLess(text.index("secret visit"), text.index("- real"))
 
     def test_a_retired_pc_gets_further_appearances(self):
         pc = PC_TEMPLATE.replace("status: alive", "status: retired").replace(
@@ -580,6 +672,32 @@ class NothingLeftBehindTests(unittest.TestCase):
         text = read(vault, PC_REL)
         self.assertIn("## Appearances\n\n- old\n\n## Further Appearances\n\n"
                       "- **[[Session 09]]** — back\n\n## Notes", text)
+
+    def test_a_retired_pc_with_a_campaign_log_logs_later(self):
+        pc = PC_TEMPLATE.replace("status: alive", "status: retired").replace(
+            "## Notes\n", "## Campaign Log\n\n- old\n\n## Notes\n")
+        vault = make_vault(self, {PC_REL: pc})
+        with redirect_stdout(io.StringIO()):
+            vault_write.main([str(vault), "log", "--write"],
+                             stdin=f"{PC_REL}\tCampaign Log\t- new\n")
+        text = read(vault, PC_REL)
+        self.assertIn("## Further Appearances\n\n- new\n", text)
+        self.assertNotIn("- old\n- new", text)
+
+    def test_further_appearances_is_made_outside_a_spoiler(self):
+        pc = PC_TEMPLATE.replace("status: alive", "status: retired").replace(
+            "## Notes\n", "<!-- spoiler -->\n\n## Notes\n").replace(
+            "## GM Notes\n", "<!-- /spoiler -->\n\n## GM Notes\n")
+        self.assertEqual(vault_write.parse(pc).problems, [])
+        vault = make_vault(self, {PC_REL: pc})
+        with redirect_stdout(io.StringIO()):
+            vault_write.main([str(vault), "log", "--write"],
+                             stdin=f"{PC_REL}\tCampaign Log\t- seen again\n")
+        text = read(vault, PC_REL)
+        states, _ = vault_write.vl.scan_body(text, ())
+        shown = [st.line for st in states if st.published]
+        self.assertIn("## Further Appearances", shown)
+        self.assertTrue(any("seen again" in ln for ln in shown))
 
     def test_a_living_pc_keeps_appearances(self):
         pc = PC_TEMPLATE.replace("## Notes\n", "## Appearances\n\n- old\n\n"
@@ -599,6 +717,43 @@ SITE_CONFIG = "---\npublish:\n  site: true\n  mode: player\n---\n"
 @unittest.skipUnless(shutil.which("node"), "needs Node")
 class SiteTests(unittest.TestCase):
     """A vault with a site: the publish list follows, as for a rename."""
+
+    def test_bare_links_follow_the_site_link_map(self):
+        from layouts import write_config
+        files = {"Characters/NPCs/Bo.md": "---\ntype: npc\n---\n\n## Overview"
+                 "\n\nA boatman.\n",
+                 "Characters/PCs/Bo Hale.md": PC_TEMPLATE,
+                 "Places/Bo.md": "---\ntype: location\n---\n\nA town.\n",
+                 "Sessions/S1.md": "---\ntype: session\n---\n\nWent to "
+                 "[[Bo]].\n"}
+        vault = make_vault(self, files)
+        code, out, err = run(vault, "Characters/NPCs/Bo.md",
+                             "Characters/PCs/Bo Hale.md")
+        self.assertEqual(code, 0, err)
+        self.assertIn("UNSURE\tSessions/S1.md", out)   # no site: unsure
+        write_config(vault, SITE_CONFIG)
+        asked = []
+        real = npc_merge.relink._ask_publish
+
+        def spy(*a, **k):
+            asked.append(a[5] if len(a) > 5 else ())
+            return real(*a, **k)
+        with mock.patch.object(npc_merge.relink, "_ask_publish", spy):
+            code, out, err = run(vault, "Characters/NPCs/Bo.md",
+                                 "Characters/PCs/Bo Hale.md")
+        self.assertEqual(code, 0, err)
+        # The link map is asked for every bare spelling, as relink asks it.
+        self.assertIn(("Bo",), asked)
+        made = []
+        real_res = npc_merge.relink._Resolver
+
+        def resolver(*a, **k):
+            made.append(a)
+            return real_res(*a, **k)
+        with mock.patch.object(npc_merge.relink, "_Resolver", resolver):
+            run(vault, "Characters/NPCs/Bo.md", "Characters/PCs/Bo Hale.md")
+        self.assertIn("Bo", made[0][2])          # its owners
+        self.assertIsNotNone(made[0][3])         # what the site publishes
 
     def test_publish_list_entry_follows_the_merge(self):
         from layouts import write_config

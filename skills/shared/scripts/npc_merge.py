@@ -36,7 +36,8 @@ What moves into the PC note, word for word:
   canvas nodes) are rewritten to the PC, by relink.py's own rewriter; a
   bare `[[Name]]` the two notes share is left as written and reaches the
   PC once the NPC is archived, and one to a differently named NPC keeps
-  its words as display text (`[[PC|Name]]`). A vault with a site has the publish tool
+  its words as display text (`[[PC|Name]]`; a bare `[[PC]]` in a table
+  cell, which takes no display text). A vault with a site has the publish tool
   rewrite its publish list and settings as for a rename (relink's
   REPUBLISH); a vault without one needs no Node.
 
@@ -173,6 +174,10 @@ def _add_list_items(block: Block, items: list[str], eol: str) -> None:
         block.lines[last + 1:last + 1] = [f"{pad}- {v}{eol}" for v in items]
         return
     have = _flow_items(block.rest)
+    value = vl.scalar_value(block.rest)
+    if not have and value.casefold() not in EMPTY_VALUES:
+        # A single name written as a scalar (`aliases: Captain Vale`) stays.
+        have = [vl.yaml_scalar(value)]
     tail = block.lines[0][len(block.lines[0].rstrip("\r\n")):] or eol
     block.lines[0] = f"{block.key}: [{', '.join(have + items)}]{tail}"
 
@@ -182,6 +187,12 @@ def _names(fm: dict[str, Any], key: str) -> list[str]:
     if isinstance(value, str):
         return [value] if value.strip() else []
     return [str(v).strip() for v in value or [] if str(v).strip()]
+
+
+def _flow_style(block: Block) -> bool:
+    """A field written on its key's line (`relationships: [{...}]`), not
+    as a block list: not empty, and no item lines under it."""
+    return not block.children and not block.empty()
 
 
 def _rel_items(block: Block | None) -> list[list[str]]:
@@ -290,13 +301,25 @@ def merge_frontmatter(m: Merge, npc_text: str, pc_text: str) -> str:
                 vl.normalize(v) for v in new)
         m.row("SET", m.pc, key, "+ " + ", ".join(new))
 
-    # Relationships: one per (target, type), never to the character.
+    # Relationships: one per (target, type), never to the character. The
+    # scripts read YAML line by line, so a flow-style list is not one they
+    # can extend: refused on the PC, listed as not carried from the NPC.
     pc_rel = _find(pc_blocks, "relationships")
+    npc_rel = _find(npc_blocks, "relationships")
+    if npc_rel is not None and _flow_style(npc_rel):
+        m.row("NOT-CARRIED", m.npc, "relationships",
+              "written as a flow list (kept in the archived copy)")
+        npc_rel = None
+    if (pc_rel is not None and _flow_style(pc_rel) and npc_rel is not None
+            and _rel_items(npc_rel)):
+        raise MergeError(f"{m.pc}: its relationships are written as a flow "
+                         f"list ([{{...}}]); write them one per line first; "
+                         f"nothing was changed")
     pc_items = _rel_items(pc_rel)
     real = [it for it in pc_items if _rel_key(it)[0]]
     seen = {_rel_key(it) for it in real}
     added: list[list[str]] = []
-    for item in _rel_items(_find(npc_blocks, "relationships")):
+    for item in _rel_items(npc_rel):
         k = _rel_key(item)
         if not k[0] or k[0] in selves or k in seen:
             continue
@@ -359,7 +382,13 @@ COMMENT_RE = re.compile(r"<!--.*?-->", re.DOTALL)
 
 
 def _is_placeholder(lines: list[str], template: set[str]) -> bool:
-    text = COMMENT_RE.sub("", "".join(lines))
+    """Only the template's prompts, its own comments and fence markers. A
+    comment the GM wrote is content."""
+    def drop(c: re.Match[str]) -> str:
+        own = [ln.strip() for ln in c.group(0).splitlines() if ln.strip()]
+        return ("" if vl.markers_in(c.group(0))
+                or all(ln in template for ln in own) else c.group(0))
+    text = COMMENT_RE.sub(drop, "".join(lines))
     rest = [ln.strip() for ln in text.splitlines() if ln.strip()]
     return all(ln in template or re.fullmatch(r"\{.*\}", ln) or
                ln.startswith("#") for ln in rest)
@@ -504,34 +533,33 @@ def _npc_parts(m: Merge, text: str, template: set[str]) -> Parts:
         for i in range(head.idx, end):
             covered[i] = True
     # Text outside every ## section (under the title, between sections):
-    # carried first, without a heading, its stray fence markers dropped.
+    # carried first, without a heading. A fence marker splits it, so each
+    # stretch keeps the fences that were open around it.
     loose: list[str] = []
     run: list[int] = []
-
     titles = {h.idx for h in doc.heads if h.level == 1}
 
     def flush() -> None:
-        idxs = [i for i in run if i not in titles
-                and not _dropped(doc, i, template)]
-        lines = [doc.lines[i].rstrip("\r\n") for i in idxs]
-        # A marker alone on its line that opens or closes a fence around a
-        # section is that section's; it is carried with it.
-        bad = {n for n in _unbalanced(lines)
-               if not vl.marker_re().sub("", lines[n]).strip()}
-        idxs = [i for n, i in enumerate(idxs) if n not in bad]
-        lines = [ln for n, ln in enumerate(lines) if n not in bad]
+        lines = [doc.lines[i].rstrip("\r\n") for i in run]
         if lines and not _is_placeholder([ln + "\n" for ln in lines],
                                          template):
-            loose.extend(_wrap(_trim(lines), _depths(doc, idxs[0])))
+            if loose:
+                loose.append("")
+            loose.extend(_wrap(_trim(lines), _depths(doc, run[0])))
         run.clear()
     for i in range(body, len(doc.lines)):
-        if covered[i]:
-            if run:
+        if covered[i] or i in titles or _dropped(doc, i, template):
+            flush()
+            continue
+        if vl.markers_in(doc.lines[i]):
+            flush()
+            if vl.marker_re().sub("", doc.lines[i]).strip():
+                # Text beside a marker: its own stretch, markers and all.
+                run.append(i)
                 flush()
             continue
         run.append(i)
-    if run:
-        flush()
+    flush()
     if any(ln.strip() for ln in loose):
         out.story.append(("", loose))
         m.row("ADD", m.pc, f"\u00a7Background/{BEFORE}",
@@ -576,9 +604,9 @@ def _npc_parts(m: Merge, text: str, template: set[str]) -> Parts:
             out.gm.append((head.title, _wrap(
                 [f"### {head.title}", "", *lines], depths)))
         elif k == vw.key("Campaign Log"):
-            out.log = _wrap(lines, depths)
+            out.log += ([""] if out.log else []) + _wrap(lines, depths)
         elif k == vw.key("Related"):
-            out.related = _wrap(lines, depths)
+            out.related += ([""] if out.related else []) + _wrap(lines, depths)
         else:
             out.story.append((head.title, _wrap(
                 [f"#### {head.title}", "", *lines], depths)))
@@ -606,7 +634,7 @@ def _dedupe(lines: list[str], doc: vw.Doc, head: vw.Head,
     line a fence hides, is never taken out."""
     shown = {s.lineno - 1 for s in doc.states
              if s.gm_depth == 0 and s.spoiler_depth == 0}
-    have = {doc.lines[i].strip() for i in range(head.idx + 1, end)
+    have = {doc.lines[i].strip() for i in vw.own_lines(doc, head, end)
             if i in shown and vw.LIST_RE.match(doc.lines[i])}
     out, gm, spoiler = [], 0, 0
     for line in lines:
@@ -668,7 +696,8 @@ def merge_body(m: Merge, npc_text: str, pc_text: str) -> str:
         at = end
         if first:
             # The NPC's appearances came first: ahead of the PC's own list.
-            at = next((i for i in range(head.idx + 1, end)
+            # Its own lines only: never into a code block or an aside.
+            at = next((i for i in vw.own_lines(doc, head, end)
                        if vw.LIST_RE.match(doc.lines[i])), end)
         if at < end:
             new = list(doc.lines)
@@ -755,11 +784,36 @@ def plan(vault: Path, npc_raw: str, pc_raw: str) -> tuple[Merge, dict[str, str],
     if "merged_into" in (vl.extract_frontmatter(npc_text) or {}):
         raise MergeError(f"{npc} is already merged (merged_into)")
 
-    # Links: relink's rewriter, as if the NPC note were renamed to the PC's.
+    # The site, asked as relink asks it: what the merge changes in its own
+    # files, and where its link map sends each bare spelling of the NPC's
+    # name. A vault with no site is not asked and needs no Node.
     notes = relink._walk(vault, ".md")
     moves = [(npc, pc)]
-    res = relink._Resolver(notes, moves, keep_name=True)
     p = relink.Plan(vault, npc, pc)
+    site = relink._has_site(vault)
+    listed = (vault / relink.MANIFEST_REL).is_file()
+    try:
+        answer = relink._ask_publish(vault, npc, pc, listed, site)
+        if site and answer is not None:
+            sources = [t for t in (relink._read(vault, r) for r in notes)
+                       if t is not None]
+            sources += [t for t in (relink._read(vault, c) for c in
+                                    relink._walk(vault, ".canvas"))
+                        if t is not None]
+            names = relink._spellings(sources, moves)
+            if names:
+                asked = relink._ask_publish(vault, npc, pc, listed, site,
+                                            names)
+                if asked is not None and asked.get("owners"):
+                    p.owners = dict(asked["owners"])
+                    p.published = {relink._nfc(x)
+                                   for x in asked.get("published", [])}
+    except relink.RelinkError as e:
+        raise MergeError(str(e).replace("a rename", "the merge")) from None
+
+    # Links: relink's rewriter, as if the NPC note were renamed to the PC's.
+    res = relink._Resolver(notes, moves, p.owners, p.published,
+                           keep_name=True)
     # The NPC's own text, read as if it sat where the PC does: links to
     # itself name the PC, relative links keep their targets.
     moved_npc = relink._rewrite_note(npc, npc_text, res,
@@ -797,12 +851,6 @@ def plan(vault: Path, npc_raw: str, pc_raw: str) -> tuple[Merge, dict[str, str],
         p.unsure = []
 
     # The site's own files that name the note, as for a rename.
-    site = relink._has_site(vault)
-    listed = (vault / relink.MANIFEST_REL).is_file()
-    try:
-        answer = relink._ask_publish(vault, npc, pc, listed, site)
-    except relink.RelinkError as e:
-        raise MergeError(str(e).replace("a rename", "the merge")) from None
     if answer:
         for why in ("detaches", "refusal"):
             if answer.get(why):
@@ -896,7 +944,8 @@ def apply(m: Merge, originals: dict[str, str], texts: dict[str, str]) -> list[st
         stuck: list[str] = []
         if made is not None:
             try:
-                write_text_atomic(m.vault / m.archive, m.npc_text)
+                if vw._on_disk(m.vault / m.archive) != m.npc_text:
+                    write_text_atomic(m.vault / m.archive, m.npc_text)
                 relink._move(m.vault, m.archive, m.npc)
                 for d in reversed(made):
                     try:

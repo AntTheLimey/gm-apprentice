@@ -131,11 +131,14 @@ note from its template, then run `gma vault-write <vault> npc-merge
 "<NPC note>" "<PC note>"`, show the GM its plan and run it again with
 `--write`. The NPC's fields, sections and links move into the PC note
 word for word, and the NPC note goes to `_archive/` with `merged_into`.
+A field the PC note has no place for (a `NOT-CARRIED` row in the plan)
+stays only in that archived NPC note.
 
 A PC who retires and goes on as an NPC keeps its PC note
 (`status: retired`); no NPC note is made. Session wrap-up logs its later
 appearances under `## Further Appearances` on that note: `vw log` sends a
-retired PC's Campaign Log rows there and makes the section when needed.
+retired PC's Campaign Log rows there, even on a note that has a
+`## Campaign Log`, and makes the section when needed.
 
 `gma vault-check <vault> npc-pairs` lists characters that still have
 both notes; campaign-qa offers the merge.

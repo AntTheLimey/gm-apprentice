@@ -249,10 +249,10 @@ creating entities.
   Content session-play already saved goes in verbatim — the template
   supplies structure, not replacement prose. Never pattern-match off
   existing entity files. An NPC who joins the party as a PC: the PC
-  note from its template in the batch, then, once it is written,
-  `vw npc-merge "<NPC note>" "<PC note>"` (shown with the batch's
-  review, then `--write`): one note per character
-  (`shared/pc-body-structure.md`).
+  note from its template in the batch; after the batch is written,
+  run `vw npc-merge "<NPC note>" "<PC note>"` as its own step, show
+  the GM its plan, and on a yes run it with `--write`: one note per
+  character (`shared/pc-body-structure.md`).
 - **Updated entities:** change the entity's own file — one file per
   entity, no separate update files: a `=== section <note> "<heading>"`
   block per section (`--append` adds, `--replace` rewrites), no read

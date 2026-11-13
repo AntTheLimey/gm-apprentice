@@ -426,8 +426,9 @@ def _rewrite_wikilinks(rel: str, lineno: int, line: str,
         assert isinstance(got, str)
         if ("|" in got and "|" not in m.group(1) and not json_escape
                 and line.lstrip().startswith("|")):
-            # A display text added in a table row: its pipe is escaped.
-            got = got.replace("|", "\\|", 1)
+            # A table cell takes a bare link only (vault_check's tables
+            # check): the display text the move added is left off there.
+            got = got.rsplit("|", 1)[0]
         bang = "!" if m.group(0).startswith("!") else ""
         after = f"{bang}[[{got}]]"
         if after == m.group(0):
