@@ -22,7 +22,9 @@ function renderGravityNotice(model) {
       : (r.increments === 0
         ? `no DX penalty (within ${say(r.incrementG)}G steps of ${say(fx.home)}G)`
         : `no DX penalty (${r.increments} G-Increment, halved by G-Experience)`);
-    const tolerance = r.halved
+    const tolerance = r.total
+      ? '; Total G-Intolerance (S222) makes the step 0.05G, plus one anywhere off home gravity'
+      : r.halved
       ? `; G-Experience halves it${r.assumed ? `, taken to cover ${say(local)}G` : ''}`
       : (r.incrementG > 0.2 ? `; Improved G-Tolerance makes the step ${say(r.incrementG)}G` : (r.incrementG < 0.2 ? `; G-Intolerance (B137) makes the step ${say(r.incrementG)}G` : ''));
     const jump = local === 1 ? '' : `; jumps and throws \u00d7${say(ratio)}`;

@@ -27,11 +27,12 @@
   // is -1 DX to agility and ballistic tasks, Beam Weapons exempt. G-Experience halves it (-1 per two
   // full increments) when it is "(All)", names this gravity, or has no qualifier (then `assumed`).
   // `traits` is the sheet's advantage rows ({name, cost}); trait names match in any case. Zero
-  // gravity is the Free Fall rule's, so no penalty here. The one place this is worked out: the sheet
+  // gravity is the Free Fall rule's, so no penalty here. Total G-Intolerance (S222, #665): 0.05G steps,
+  // one more step anywhere off home gravity, and G-Experience does not halve it. The one place this is worked out: the sheet
   // notice, the to-hit data and the party board all call it.
   var TOLERANCE_STEPS = [[25, 10], [20, 5], [15, 1], [10, 0.5], [5, 0.3]];   // points -> increment in G (B60)
   function gravityDx(local, home, traits) {
-    var out = { dx: 0, increments: 0, incrementG: 0.2, halved: false, assumed: false };
+    var out = { dx: 0, increments: 0, incrementG: 0.2, halved: false, assumed: false, total: false };
     if (typeof local !== 'number' || !isFinite(local) || local <= 0) return out;
     var h = typeof home === 'number' && isFinite(home) && home > 0 ? home : 1;
     var list = traits || [];
@@ -46,6 +47,8 @@
         for (var i = 0; i < TOLERANCE_STEPS.length; i++) {
           if (pts >= TOLERANCE_STEPS[i][0]) { improved = Math.max(improved, TOLERANCE_STEPS[i][1]); break; }
         }
+      } else if (/^\s*total\s+g-?\s*intolerance/i.test(name)) {
+        out.total = true;   // S222: 0.05G steps, one more step anywhere off home, no G-Experience
       } else if (/^\s*g-?\s*intolerance/i.test(name)) {
         // B137: an increment of 0.1G is -10 points, 0.05G is -20; the name's own figure wins.
         var q = /(\d*\.?\d+)\s*g/i.exec(name);
@@ -53,10 +56,14 @@
         if (inc > 0 && inc < 0.2) intolerant = inc;
       }
     });
-    if (improved) out.incrementG = improved;
+    if (out.total) out.incrementG = 0.05;
+    else if (improved) out.incrementG = improved;
     else if (intolerant) out.incrementG = intolerant;
-    var n = Math.floor(Math.abs(local - h) / out.incrementG + 1e-9);
+    var off = Math.abs(local - h);
+    var n = Math.floor(off / out.incrementG + 1e-9);
+    if (out.total && off > 1e-9) n += 1;
     out.increments = n;
+    if (out.total) { out.dx = n; return out; }
     list.forEach(function (t) {
       var name = String((t && t.name) || '');
       if (!/^\s*g-?\s*experience/i.test(name)) return;

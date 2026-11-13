@@ -9,6 +9,12 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.25] — 2026-11-13
+
+### Fixed
+
+- GURPS gravity counts Total G-Intolerance (S222): 0.05G steps plus one anywhere off home gravity, and G-Experience does not halve it (#665).
+
 ## [1.12.24] — 2026-11-13
 
 ### Added
