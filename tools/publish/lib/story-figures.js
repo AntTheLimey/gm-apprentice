@@ -80,14 +80,11 @@ function nameHolders(pages, { marks = null, ...options } = {}) {
   return out;
 }
 
-// A scene's picture: the file name of the first image embed (`![[x.png]]` or `![](x.png)`) after its H1 (from the top
-// when it has none) and before its next heading (`#`, an HTML `<h1>`-`<h6>` line, or text underlined with `===` or
-// `---`), read with gm-only and spoiler fences, comments and callouts taken out and code left alone; null when there
-// is none. Any other picture in the scene is never used.
-function scenePicture(body) {
+// A scene's lines outside code, as { line, level, text }: a heading's level (and its words, `text`), 0 for any other
+// line. Read with gm-only and spoiler fences, comments and callouts taken out. A setext heading's text lines become one
+// heading when its underline is reached; an underline after a blank line is a rule.
+function sceneLines(body) {
   const lines = strippedLines(String(body == null ? '' : body).replace(/\r\n?/g, '\n'), true).lines;
-  // Each line outside code as { line, level }: a heading's level, 0 for any other line. A setext heading's text lines
-  // become one heading when its underline is reached; an underline after a blank line is a rule.
   const read = [];
   let para = [];   // where the paragraph so far starts in `read`, while it has lines
   let fence = null;
@@ -100,11 +97,29 @@ function scenePicture(body) {
     const tag = /^ {0,3}<h([1-6])[\s>]/i.exec(line);
     const atx = hashes ? hashes[1].length : tag ? Number(tag[1]) : 0;
     const under = /^ {0,3}(=+|-+)\s*$/.exec(line);
-    if (under && para.length) { read.splice(para[0]); read.push({ line: '', level: under[1][0] === '=' ? 1 : 2 }); para = []; continue; }
-    if (atx || under || !line.trim()) { read.push({ line, level: atx }); para = []; continue; }
+    if (under && para.length) {
+      const text = read.splice(para[0]).map((x) => x.line.trim()).join(' ');
+      read.push({ line: '', level: under[1][0] === '=' ? 1 : 2, text });
+      para = [];
+      continue;
+    }
+    if (atx || under || !line.trim()) {
+      const text = hashes ? line.replace(/^ {0,3}#{1,6}[ \t]*/, '').replace(/[ \t]+#+[ \t]*$/, '').trim() : tag ? line.replace(/<[^>]*>/g, '').trim() : '';
+      read.push({ line, level: atx, text });
+      para = [];
+      continue;
+    }
     if (!para.length) para = [read.length];
-    read.push({ line, level: 0 });
+    read.push({ line, level: 0, text: '' });
   }
+  return read;
+}
+
+// A scene's picture: the file name of the first image embed (`![[x.png]]` or `![](x.png)`) after its H1 (from the top
+// when it has none) and before its next heading (`#`, an HTML `<h1>`-`<h6>` line, or text underlined with `===` or
+// `---`), read as sceneLines reads; null when there is none. Any other picture in the scene is never used.
+function scenePicture(body) {
+  const read = sceneLines(body);
   let started = false;
   for (const { line, level } of read) {
     if (level) {
@@ -141,8 +156,8 @@ function firstImage(line) {
 // people and places (sceneSpots); they are never printed.
 const TITLE_STOP = new Set(['scene', 'session', 'chapter', 'part', 'with', 'from', 'that', 'this', 'into', 'their', 'there', 'about']);
 function titleWords(body, fallback) {
-  const h1 = /^ {0,3}#[ \t]+(.+?)[ \t#]*$/m.exec(String(body == null ? '' : body));
-  const text = (h1 ? h1[1] : String(fallback || '')).normalize('NFC');
+  const h1 = sceneLines(body).find((x) => x.level === 1 && x.text);
+  const text = (h1 ? h1.text : String(fallback || '')).normalize('NFC');
   const words = (text.match(/[\p{L}]+/gu) || []).map((w) => w.toLowerCase()).filter((w) => w.length >= 4 && !TITLE_STOP.has(w));
   return [...new Set(words)];
 }
@@ -485,10 +500,13 @@ function mentionsOf(candidate, paragraphs, others = []) {
   const firstNamesInRecap = () => {
     if (firstNames) return firstNames;
     firstNames = new Set();
-    for (const o of lists.flatMap((list) => list).filter(rival)) {
-      const full = (o.terms || []).filter((t) => /\s/.test(String(t).trim()));
+    // A scene's pages are read one by one: Bob Smith in the recap is not Anna Lindqvist there.
+    const members = lists.flatMap((list) => list).filter(rival)
+      .flatMap((o) => (o.pages ? o.pages.map((pg) => ({ addresses: [pg.href], terms: pg.terms })) : [{ addresses: o.hrefs ? [...o.hrefs] : [o.outputPath], terms: o.terms }]));
+    for (const m of members) {
+      const full = (m.terms || []).filter((t) => /\s/.test(String(t).trim()));
       if (full.length === 0) continue;
-      const addresses = (o.hrefs ? [...o.hrefs] : [o.outputPath]).filter(Boolean).map(canonicalNfc);
+      const addresses = m.addresses.filter(Boolean).map(canonicalNfc);
       if (paragraphs.some((q) => addresses.some((h) => q.hrefs.has(h)) || nameSpans({ terms: full }, q).length > 0)) {
         for (const t of full) firstNames.add(firstWord(t));
       }
@@ -603,7 +621,7 @@ function figuresHtml(recapHtml, placement, { fromPath, imageMap, paragraphs, can
       // A scene's picture has no caption and an empty alt, and its link a name that says nothing of it: nothing of the
       // scene note reaches the page. A page's picture that a scene joined (withFigures) is drawn as the scene's beside
       // a paragraph that never names the page.
-      const scene = c.scene || (c.own && mentionsOf(c.own, [paragraphs[para]], { lists: [candidates, blockers], except: c }).length === 0);
+      const scene = c.scene || (c.own && !mentionsOf(c.own, paragraphs, { lists: [candidates, blockers], except: c }).some((m) => m.para === para));
       const title = scene ? '' : escapeText(c.title);
       return `<figure class="story-figure${c.place || scene ? ' story-figure--place' : ''}">`
         + `<a class="story-figure__open" href="${src}"${scene ? ' aria-label="Open picture"' : ''}>`
