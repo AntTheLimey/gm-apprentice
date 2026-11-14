@@ -261,13 +261,13 @@ test('shared threads: a PC whose Current Status players do not see gets none, on
 });
 
 // The Overview is left off the publish list, as a real vault's usually is.
-function unpublishedOverview(site) {
+function unpublishedOverview(site, { thread = '' } = {}) {
   const secret = 'Nobody must know about the sunken bell';
   const loose = 'The harbourmaster is the Pale Man';
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'shared-threads-unpub-'));
   const vault = path.join(root, 'vault');
   const notes = {
-    'Campaign Overview.md': overview().replace('## Key Factions',
+    'Campaign Overview.md': overview().replace('\n## Key Factions', `${thread ? `- ${thread}\n` : ''}\n## Key Factions`).replace('## Key Factions',
       `<!-- gm-only -->\n- ${secret} — since Session 1; involves the party\n<!-- /gm-only -->\n\n## Key Factions`).replace('## Premise', `## Premise\n\n${loose}.`),
     'PCs/Corwin_Hale.md': pc('Corwin_Hale'),
     'PCs/Ines_Marlowe.md': pc('Ines_Marlowe'),
@@ -309,6 +309,37 @@ for (const site of ['player', 'gm']) {
   });
 }
 
+test('the leak check counts the shared threads a PC page shows as published, and the rest of an unpublished Overview as hidden (#674)', () => {
+  const { runLeakGate } = require('../lib/leak-gate');
+  // Whole sentences before the tail, as a GM writes them: each sentence is a hidden piece of the Overview on its own.
+  const thread = 'Corwin carries a forged toll pass that will not survive a close look. The Guild clerk has started asking questions — since Session 4; involves [[Corwin_Hale]]';
+  const { out, loose, secret } = unpublishedOverview('player', { thread });
+  const configPath = path.join(path.dirname(out), 'vault.config.json');
+  const threads = (r) => r.findings.filter((f) => /ledger|ferrywoman|toll pass|clerk/i.test(String(f.text)));
+  const corwin = fs.readFileSync(path.join(out, 'pcs', 'corwin-hale.html'), 'utf8');
+  assert.match(corwin, /forged toll pass/, 'the build puts the thread on the PC page');
+  assert.deepEqual(threads(runLeakGate({ configPath, outputDir: out })), []);
+  // The Overview's other prose is still hidden text: planted on a PC page, it is found.
+  const page = path.join(out, 'pcs', 'corwin-hale.html');
+  fs.writeFileSync(page, fs.readFileSync(page, 'utf8').replace('</body>', `<p>${loose}. The Toll Guild keeps the bridges.</p></body>`));
+  const found = runLeakGate({ configPath, outputDir: out }).findings;
+  assert.ok(found.some((f) => f.code === 'HIDDEN_TEXT' && f.page === 'pcs/corwin-hale.html' && /toll guild keeps the bridges/i.test(f.text)), JSON.stringify(found.map((f) => f.text)));
+  assert.deepEqual(threads({ findings: found }), []);
+  // A gm-only thread never reaches a PC page, so it is still hidden text: planted there, it is found.
+  fs.writeFileSync(page, fs.readFileSync(page, 'utf8').replace('</body>', `<p>${secret} — since Session 1; involves the party</p></body>`));
+  assert.ok(runLeakGate({ configPath, outputDir: out }).findings.some((f) => /sunken bell/i.test(f.text) && f.page === 'pcs/corwin-hale.html'));
+});
+
+test('the leak check keeps a shared thread hidden on a stub PC page that cuts it (#674)', () => {
+  const { runLeakGate } = require('../lib/leak-gate');
+  const { html, configPath, out } = stubVault('player');
+  assert.doesNotMatch(html, /missing ledger/, 'the stub cuts its Current Status, threads and all');
+  const page = path.join(out, 'pcs', 'corwin-hale.html');
+  // The thread as a page that kept it would print it.
+  fs.writeFileSync(page, html.replace('</body>', '<ul><li><strong>The missing ledger</strong> — Harrow Ford’s toll keeper wants it back — since Session 2</li></ul></body>'));
+  assert.ok(runLeakGate({ configPath, outputDir: out }).findings.some((f) => /toll keeper wants it back/i.test(f.text)));
+});
+
 function stubVault(site, { throwView = false, fm = 'publish: stub\npublish_include_sections: [Notes]\n' } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'shared-threads-stub-'));
   const vault = path.join(root, 'vault');
@@ -333,7 +364,7 @@ function stubVault(site, { throwView = false, fm = 'publish: stub\npublish_inclu
   if (throwView) pv.publishView = () => { throw new Error('boom'); };
   try { build({ configPath, site }); } finally { pv.publishView = original; console.log = real; console.warn = warn; }
   const out = site === 'gm' ? path.join(root, 'campaign-gm') : path.join(siteDir, 'docs');
-  return { html: fs.readFileSync(path.join(out, 'pcs', 'corwin-hale.html'), 'utf8'), warnings };
+  return { html: fs.readFileSync(path.join(out, 'pcs', 'corwin-hale.html'), 'utf8'), warnings, configPath, out };
 }
 
 for (const site of ['player', 'gm']) {
@@ -416,13 +447,15 @@ test('shared threads: an Overview in a hidden folder still feeds PC pages; an ar
 });
 
 // A long hidden span left open to the section's end costs one strip, not one per line (2,000 lines took seconds).
+// Timed as a ratio, not against a clock (a loaded machine is slow at any length): four times the lines take about four
+// times as long; one strip per line took about sixteen.
 test('shared threads: a long unclosed hidden span puts them before its opener, fast', () => {
-  const hidden = Array.from({ length: 2000 }, (_, i) => `secret line ${i}`).join('\n');
-  const md = `# P\n\n## Current Status\n\n**Location:** x\n\n%%\n${hidden}\n\n## Notes\n`;
-  const started = Date.now();
-  const out = withSharedThreads(md, [{ markdown: '- a', involves: [], party: true }]);
-  assert.match(out, /x\n\n\*\*Shared threads:\*\*\n- a\n\n%%\nsecret line 0/);
-  assert.ok(Date.now() - started < 2000, `took ${Date.now() - started} ms`);
+  const md = (n) => `# P\n\n## Current Status\n\n**Location:** x\n\n%%\n${Array.from({ length: n }, (_, i) => `secret line ${i}`).join('\n')}\n\n## Notes\n`;
+  const timed = (n) => { const started = process.hrtime.bigint(); const out = withSharedThreads(md(n), [{ markdown: '- a', involves: [], party: true }]); return { out, ms: Number(process.hrtime.bigint() - started) / 1e6 }; };
+  const small = timed(500);
+  const big = timed(2000);
+  assert.match(big.out, /x\n\n\*\*Shared threads:\*\*\n- a\n\n%%\nsecret line 0/);
+  assert.ok(big.ms < small.ms * 10 + 50, `500 lines ${small.ms.toFixed(0)} ms, 2000 lines ${big.ms.toFixed(0)} ms`);
 });
 
 // The Overview the site reads is the one Python picks: first by vault path, in a folder no folder_map entry covers too.

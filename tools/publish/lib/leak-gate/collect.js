@@ -36,6 +36,7 @@ const { cutHtml } = require('../props/html-cut');
 const { styledPageProblem } = require('../props/page');
 const { pathProblem } = require('../props/files');
 const { buildConnections } = require('../connections');
+const { overviewThreads, threadsOnPage, withSharedThreads } = require('../shared-threads');
 const { sitePathOf } = require('../templates/four-oh-four');
 
 const sha1 = (bytes) => crypto.createHash('sha1').update(bytes).digest('hex');
@@ -128,6 +129,18 @@ function collectHidden({ configPath, outputDir = null }) {
   const addMarked = (markdown, note) => {
     for (const span of markedSpans(markdown, mark.marks)) add(hiddenOf(span.text), note, span.label);
   };
+
+  // Each PC page carries the Overview's shared threads that name it, as the build puts them there (#674): added to its
+  // markdown before it is read, so they count as published text there and its stub cut and strips treat them as the
+  // build's do. The Overview is usually left off the publish list, so its body is hidden text everywhere else.
+  const sharedAll = overviewThreads({ allNotes: notes, corpus, config: scanConfig,
+    viewOptions: { gm: false, mark: null, excludeCallouts, excludeSections, pcKeepSections, storyMoments: storyMomentsOn(playerConfig) } });
+  if (sharedAll.length) {
+    for (const page of published) {
+      if (String((page.frontmatter || {}).type).trim().toLowerCase() !== 'pc') continue;
+      page.markdown = withSharedThreads(page.markdown, threadsOnPage(page, sharedAll, { linkMap, pages: published, outOfPlay: playerConfig.statuses.out_of_play }));
+    }
+  }
 
   const publishedRels = new Set();
   const outputOf = new Map();
