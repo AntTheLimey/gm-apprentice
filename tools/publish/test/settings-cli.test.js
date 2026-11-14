@@ -437,6 +437,15 @@ test('remove of a built-in entry of a hide list also records it in player_site.h
   assert.equal(run(s, 'remove', ['player_site.hide.fields', '"plans"']).data.declined, undefined);
 });
 
+test('a field already declined in another case is still recorded as the field, so the warning and the record agree', () => {
+  const s = scratch(wrap('  exclude_fields: [secrets, voice, plans]\n'));
+  assert.equal(run(s, 'add', ['player_site.hide.declined', '"VOICE"']).rc, 0);
+  const { data } = run(s, 'remove', ['player_site.hide.fields', '"voice"']);
+  assert.deepEqual(data.declined, ['voice']);
+  const gap = run(s, 'get', ['player_site.hide.fields']).data.faults.find((f) => f.kind === 'hide-list-gap');
+  assert.ok(!gap.entries.includes('voice'));
+});
+
 test('remove of a built-in entry from a hiding list says it is no longer hidden; the last entry gives the empty-list note', () => {
   const s = scratch(wrap('  site_title: Tt\n'));
   const { data } = run(s, 'remove', ['publish.exclude_sections', `"${SECTIONS[0]}"`]);

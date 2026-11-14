@@ -9,7 +9,7 @@ has it, and nothing else warns. The row names each entry and what it is
 for. A vault with no list of its own (it uses the built-in one) gets no
 row; an empty list of its own does get one.
 
-Report the row as High: GM-only text can reach players.
+Report the row as a Warning: GM-only text can reach players.
 
 One row per list. Say it plainly: "your list of hidden details lacks
 `voice` and `reliability`, so the site shows them on any page that has

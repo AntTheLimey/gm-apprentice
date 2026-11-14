@@ -488,6 +488,15 @@ class HideAdditionTests(unittest.TestCase):
         self.assertEqual(vc.settings(vault).get(ms.DECLINED), ["voice"])
         self.assertEqual(ms.find_hide_additions(vault, "1.11.2"), [])
 
+    def test_hide_additions_a_declined_heading_matches_in_any_spelling(self):
+        sections = "player_site.hide.sections"
+        old = [x for x in vaultlib.settings_default(sections)
+               if x != "Dormant Threads"]
+        vault = make_vault(self)
+        vaultlib.settings_set(vault, [(sections, old),
+                                      (ms.DECLINED, ["**dormant threads**"])])
+        self.assertEqual(ms.find_hide_additions(vault, "1.12.8"), [])
+
     def test_hide_additions_the_left_text_says_the_no_is_recorded(self):
         for check in ms.SITE_CHECKS:
             if check.name in ("hide-fields-voice", "hide-sections-dormant"):
@@ -782,6 +791,17 @@ class HideAdditionStampTests(unittest.TestCase):
         self.assertIn("stamped 1.11.2", out)
         vaultlib.forget_settings(vault)
         self.assertEqual(vc.settings(vault).get(self.FIELDS), [*old, "voice"])
+
+    def test_apply_a_failed_record_leaves_the_question_open(self):
+        from unittest import mock
+        vault, old = self.owned()
+        with mock.patch.object(ms, "_add_entry",
+                               side_effect=ms.StepFailed("refused")):
+            code, out = self.apply(vault, "hide-add:voice=leave")
+        self.assertNotEqual(code, 0, out)
+        self.assertNotIn("left as it is", out)
+        self.assertEqual(self.stamp(vault), "1.11.1")
+        self.assertEqual(len(ms.find_hide_additions(vault, "1.11.2")), 1)
 
     def test_apply_leave_stamps_without_adding(self):
         vault, old = self.owned()

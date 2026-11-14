@@ -17,7 +17,7 @@ import install_layout
 import tool_cache
 from migrate_core import (CHOICE, PERSON, WILL, Check, Item,
                           StepFailed, cells, plugin_tool, stopped)
-from vault_check import (check_gm_leak, configured_site,
+from vault_check import (_bare_section_title, check_gm_leak, configured_site,
                          _kept_by_player, vault_settings)
 from vaultlib import (SettingsUnavailable,
                       forget_settings, settings,
@@ -467,10 +467,13 @@ def find_hide_additions(vault: Path, since: str) -> list[Item]:
             continue
         has = now.get(name)
         has = has if isinstance(has, list) else []
+        # As the build compares: a heading by its bare title, a field exactly.
+        key = (_bare_section_title if name == "player_site.hide.sections"
+               else (lambda x: x))
+        held = {key(x) for x in [*has, *declined] if isinstance(x, str)}
         for added in settings_added(name):
             entry = added["entry"]
-            if (added["since"] != since or entry in has
-                    or entry in declined):
+            if added["since"] != since or key(entry) in held:
                 continue
 
             def apply(_value: str | None, name: str = name,

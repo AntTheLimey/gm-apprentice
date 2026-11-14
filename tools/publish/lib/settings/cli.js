@@ -562,17 +562,16 @@ function changeList(options, verb, args) {
     // Taking a built-in entry out of the hide list the vault owns is the GM's answer to the build's warning about it, so the
     // same write records it in player_site.hide.declined.
     if (verb === 'remove' && HIDE_LIST_NAMES.includes(e.name)) {
-      const declinedEntry = REGISTRY.find((x) => x.name === DECLINED);
-      const sameDeclined = sameRule(declinedEntry);
       const held = getPath(read.values, DECLINED.split('.'));
       const base = Array.isArray(held) ? held : [];
       const fresh = [];
       for (const x of result.removed) {
         const builtIn = e.default.find((d) => isSame(d, x));
-        if (builtIn !== undefined && ![...base, ...fresh].some((b) => sameDeclined(b, builtIn))) fresh.push(builtIn);
+        // Compared by the hide list's own rule (exact for fields, the heading rule for sections), as the warning does.
+        if (builtIn !== undefined && ![...base, ...fresh].some((b) => isSame(b, builtIn))) fresh.push(builtIn);
       }
       if (fresh.length) {
-        changes.push({ op: 'add', name: DECLINED, label: DECLINED, entries: fresh, same: sameDeclined, base });
+        changes.push({ op: 'add', name: DECLINED, label: DECLINED, entries: fresh, same: isSame, base });
         result.declined = fresh;
       }
     }

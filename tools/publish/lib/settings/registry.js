@@ -429,7 +429,7 @@ const REGISTRY = [
     left_out: 'No exceptions',
   },
   {
-    name: 'player_site.hide.declined', type: 'list', same: 'heading', of: 'built-in entries', default: [], group: 'published',
+    name: 'player_site.hide.declined', type: 'list', of: 'built-in entries', default: [], group: 'published',
     does: 'Built-in entries of `player_site.hide.sections` or `player_site.hide.fields` that you chose not to hide in your own list. Naming an entry here does not show it: leave it out of your own list to show it. This only stops the build warning that your own list lacks it, and it has no effect while the vault uses the built-in list. A name that is in neither built-in list is warned about, since it does nothing',
     left_out: 'None: every built-in entry your own list lacks is warned about',
   },
