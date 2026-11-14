@@ -261,7 +261,7 @@ test('shared threads: a PC whose Current Status players do not see gets none, on
 });
 
 // The Overview is left off the publish list, as a real vault's usually is.
-function unpublishedOverview(site, { thread = '' } = {}) {
+function unpublishedOverview(site, { thread = '', extra = {} } = {}) {
   const secret = 'Nobody must know about the sunken bell';
   const loose = 'The harbourmaster is the Pale Man';
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'shared-threads-unpub-'));
@@ -271,12 +271,13 @@ function unpublishedOverview(site, { thread = '' } = {}) {
       `<!-- gm-only -->\n- ${secret} — since Session 1; involves the party\n<!-- /gm-only -->\n\n## Key Factions`).replace('## Premise', `## Premise\n\n${loose}.`),
     'PCs/Corwin_Hale.md': pc('Corwin_Hale'),
     'PCs/Ines_Marlowe.md': pc('Ines_Marlowe'),
+    ...extra,
   };
   for (const [rel, text] of Object.entries(notes)) {
     fs.mkdirSync(path.dirname(path.join(vault, rel)), { recursive: true });
     fs.writeFileSync(path.join(vault, rel), text);
   }
-  writePublishList(vault, { publishing: ['PCs/Corwin_Hale.md', 'PCs/Ines_Marlowe.md'], excluded: ['Campaign Overview.md'] });
+  writePublishList(vault, { publishing: ['PCs/Corwin_Hale.md', 'PCs/Ines_Marlowe.md', ...Object.keys(extra)], excluded: ['Campaign Overview.md'] });
   const siteDir = path.join(root, 'campaign');
   fs.mkdirSync(siteDir);
   writeNewConfig(vault, { version: 1, player_site: { folder: siteDir, folder_map: { PCs: 'pcs' } }, gm_site: { publish: true, folder: path.join(root, 'campaign-gm') } });
@@ -328,6 +329,25 @@ test('the leak check counts the shared threads a PC page shows as published, and
   // A gm-only thread never reaches a PC page, so it is still hidden text: planted there, it is found.
   fs.writeFileSync(page, fs.readFileSync(page, 'utf8').replace('</body>', `<p>${secret} — since Session 1; involves the party</p></body>`));
   assert.ok(runLeakGate({ configPath, outputDir: out }).findings.some((f) => /sunken bell/i.test(f.text) && f.page === 'pcs/corwin-hale.html'));
+});
+
+test('the leak check reads a shared thread after the GM-alias rewrite, as the site prints it (#674)', () => {
+  const { runLeakGate } = require('../lib/leak-gate');
+  // Two sentences: the first, alias and all, is a hidden piece of the Overview on its own.
+  const thread = '[[Elias Crowe]] pays the toll keeper in silver every night. Nobody has asked him why — since Session 4; involves [[Corwin_Hale]]';
+  const extra = { 'NPCs/Lord_Vane.md': '---\ntype: npc\ngm_aliases: ["Elias Crowe"]\n---\n# Lord Vane\n\nA lord.\n' };
+  const { out } = unpublishedOverview('player', { thread, extra });
+  const configPath = path.join(path.dirname(out), 'vault.config.json');
+  const page = path.join(out, 'pcs', 'corwin-hale.html');
+  const html = fs.readFileSync(page, 'utf8');
+  assert.match(html, /pays the toll keeper in silver every night/);
+  assert.doesNotMatch(html, /Elias Crowe/, 'the site prints the public name');
+  assert.deepEqual(runLeakGate({ configPath, outputDir: out }).findings, []);
+  // The thread as the GM wrote it, alias and all, is still hidden text: planted on a page it is found as a sentence,
+  // not only as the alias.
+  fs.writeFileSync(page, html.replace('</body>', '<p>Elias Crowe pays the toll keeper in silver every night.</p></body>'));
+  const found = runLeakGate({ configPath, outputDir: out }).findings;
+  assert.ok(found.some((f) => f.code === 'HIDDEN_TEXT' && /pays the toll keeper in silver/i.test(f.text)), JSON.stringify(found.map((f) => [f.code, f.text])));
 });
 
 test('the leak check keeps a shared thread hidden on a stub PC page that cuts it (#674)', () => {

@@ -159,8 +159,10 @@ function withSharedThreads(pcMarkdown, entries) {
 // folder the player site hides, or one no folder_map entry covers, does not matter: its threads are player-facing
 // wherever the note sits, and the writer has taken them off the PC notes. When the note is no scanned page, it is
 // scanned once with its folder added to the map. Its view is made on a copy by the site's player-safe strip chain
-// (`viewOptions`, as publishView takes them); a view that cannot be made gives nothing, never the raw text.
-function overviewThreads({ allNotes, corpus, config, viewOptions, warn = () => {} }) {
+// (`viewOptions`, as publishView takes them); a view that cannot be made gives nothing, never the raw text. A caller
+// whose corpus has not had the GM-alias rewrite the build applies in place (the leak check) passes `rewrite`, the
+// rewriter's markdown function, and the copy is rewritten first, so its threads read as the site prints them.
+function overviewThreads({ allNotes, corpus, config, viewOptions, rewrite = null, warn = () => {} }) {
   const path = require('path');
   const { scanVaultReport } = require('./scanner');
   const { ALWAYS_EXCLUDE_DIRS } = require('./publish-decision');
@@ -186,6 +188,7 @@ function overviewThreads({ allNotes, corpus, config, viewOptions, warn = () => {
   }
   try {
     const copy = { ...overviewPage };
+    if (rewrite) copy.markdown = rewrite(copy.markdown || '');
     require('./published-view').publishView(copy, viewOptions);   // looked up at the call: a test can make it throw
     return sharedEntries(String(copy.publishedMarkdown || ''));
   } catch (err) {
