@@ -88,7 +88,7 @@ every page that names it. Use it to confirm each fix.
 | `SESSION_NO_CHAPTER` | Warning | A played session is missing from the Story |
 | `CHAPTER_REF_UNSHOWN` | Warning | A played session is missing from the Story |
 
-Three codes are walked in files of their own, in the `site-faults/`
+Four codes are walked in files of their own, in the `site-faults/`
 folder beside this file. Read one only when a row of this run names its
 code, before the first such row, and once a run:
 

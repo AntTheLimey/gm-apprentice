@@ -51,6 +51,27 @@ const GROUPS = [
 
 const ON_OFF = { true: 'on', yes: 'on', false: 'off', no: 'off' };
 
+// What each built-in hide entry is for, in a few plain words: the build says it when a list the vault owns lacks the entry
+// (entry-faults.js, `hide-list-gap`), and the update says it when it offers a new one (`added`). Every entry of `default` has one.
+const SECTION_WHYS = {
+  'GM Notes': 'the GM\'s own notes on a page',
+  'DM Notes': 'the GM\'s own notes on a page, under the other common name',
+  'Player Notes': 'what one player wrote down, not for the others',
+  'Source References': "where a note's facts came from",
+  'Reconciliation Context': 'what the last session left to settle, for prep',
+  'Handoff to Reconcile': 'what the wrap-up hands to the next prep',
+  'Dormant Threads': 'threads parked when the party left a place or arc, kept for the GM',
+};
+const FIELD_WHYS = {
+  secrets: 'what the GM knows about a note and the players do not',
+  current_plan: "the GM's plan for a character or faction right now",
+  plan_progress: 'how far that plan has got',
+  gm_notes: "the GM's own notes in a note's header",
+  prep_notes: 'prep for a session, for the GM',
+  reliability: 'how sure a clue is, for the GM',
+  voice: 'how a character or the campaign is told, for the GM only',
+};
+
 const REGISTRY = [
   // The vault itself
   {
@@ -373,7 +394,8 @@ const REGISTRY = [
     does: 'Headings whose text is never published, on any page, however the heading is dressed (bold, a colon, a link)',
     left_out: '`GM Notes`, `DM Notes`, `Player Notes`, `Source References`, `Reconciliation Context`, `Handoff to Reconcile`, `Dormant Threads`',
     // See player_site.hide.fields: the update offers this to a list the vault owns.
-    added: [{ entry: 'Dormant Threads', since: '1.12.8', why: 'threads parked when the party left a place or arc, kept for the GM' }],
+    added: [{ entry: 'Dormant Threads', since: '1.12.8', why: SECTION_WHYS['Dormant Threads'] }],
+    whys: SECTION_WHYS,
   },
   {
     name: 'player_site.hide.fields', was: [{ name: 'publish.exclude_fields', in: 'vault' }, { name: 'excludeFields', in: 'site' }], type: 'list', of: 'field names',
@@ -383,7 +405,8 @@ const REGISTRY = [
     left_out: '`secrets`, `current_plan`, `plan_progress`, `gm_notes`, `prep_notes`, `reliability`, `voice`',
     // Entries put in the default after vaults began owning their lists: the update offers each to a list the
     // vault owns (migrate_site.find_hide_additions), since a list the GM owns replaces the default.
-    added: [{ entry: 'voice', since: '1.11.2', why: 'how a character or the campaign is told, for the GM only' }],
+    added: [{ entry: 'voice', since: '1.11.2', why: FIELD_WHYS.voice }],
+    whys: FIELD_WHYS,
   },
   {
     name: 'player_site.hide.callouts', was: [{ name: 'publish.exclude_callouts', in: 'vault' }, { name: 'excludeCallouts', in: 'site' }], type: 'switchOrList', same: 'callout', of: 'callout types', default: false, onFault: true, guards: true,
@@ -404,6 +427,11 @@ const REGISTRY = [
     shape: "a note's path from the top of the vault, in quotes, then `include:` and the field names",
     does: 'Lets one note show a field that `player_site.hide.fields` hides everywhere else',
     left_out: 'No exceptions',
+  },
+  {
+    name: 'player_site.hide.declined', type: 'list', of: 'built-in entries', default: [], group: 'published',
+    does: 'Built-in entries of `player_site.hide.sections` or `player_site.hide.fields` that you chose not to hide in your own list. Naming an entry here does not show it: leave it out of your own list to show it. This only stops the build warning that your own list lacks it, and it has no effect while the vault uses the built-in list. A name that is in neither built-in list is warned about, since it does nothing',
+    left_out: 'None: every built-in entry your own list lacks is warned about',
   },
 
   // Theme
@@ -837,7 +865,7 @@ const REGISTRY = [
 const NOT_PER_SITE = new Set(['player_site.publish', 'player_site.folder', 'player_site.url', 'player_site.host',
   'player_site.output', 'player_site.cloudflare_project', 'player_site.keep',
   'player_site.hide.folders', 'player_site.hide.sections', 'player_site.hide.fields', 'player_site.hide.callouts',
-  'player_site.hide.drafts', 'player_site.hide.field_exceptions', 'player_site.never_show',
+  'player_site.hide.drafts', 'player_site.hide.field_exceptions', 'player_site.hide.declined', 'player_site.never_show',
   'player_site.features.live_stats', 'player_site.features.inbox', 'player_site.story.moments',
   'player_site.story.pictures', 'player_site.story.scene_pictures']);
 // A twin that does not inherit when unset: the player site's build steps never run for the GM site.

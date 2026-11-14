@@ -188,7 +188,7 @@ asked again.
 ### Settings — `references/checks/settings.md`
 
 Faults in the vault's settings file (a misspelt name, a value a setting
-cannot take, an old name, a retired setting), from `gma vault-check <vault> settings`. Fixes the certain ones on a yes; puts the rest to the GM.
+cannot take, an old name, a retired setting, a hide list lacking built-in entries), from `gma vault-check <vault> settings`. Fixes the certain ones on a yes; puts the rest to the GM.
 Also run when a build stopped with a settings fault.
 
 ### Stale DRAFT Detection — `references/checks/stale-draft-detection.md`

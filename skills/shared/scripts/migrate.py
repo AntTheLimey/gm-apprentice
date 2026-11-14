@@ -404,7 +404,10 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
                     if value == "leave" and not item.wants:
                         # A yes/no choice declined by name: nothing is run,
                         # and the release gate does not offer it again.
-                        left_ids.add(item.id)
+                        if item.on_leave:   # recorded first: a failed
+                            did.extend((item.id, f"{item.id}\t{line}")
+                                       for line in item.on_leave())
+                        left_ids.add(item.id)   # write is asked again
                         did.append((item.id, f"{item.id}\tleft as it is"))
                         used.add(item.id)
                         continue

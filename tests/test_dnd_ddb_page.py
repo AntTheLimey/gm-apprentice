@@ -54,7 +54,7 @@ def build_site(tmp_path, notes):
     (vault / "_meta" / "vault-config.yaml").write_text(
         "version: 1\nvault:\n  attachments: _attachments\n  system: dnd-5e-2024\n"
         f"player_site:\n  output: {json.dumps(str(tmp_path / 'docs'))}\n  title: D&D Page Test\n"
-        "  hide:\n    folders: [_meta, _Templates]\n    sections: [GM Notes]\n"
+        "  hide:\n    folders: [_meta, _Templates]\n    sections: [GM Notes]\n    declined: [DM Notes, Player Notes, Source References, Reconciliation Context, Handoff to Reconcile, Dormant Threads]\n"
         "  folder_map:\n    Characters/PCs: characters/pcs\n", encoding="utf-8")
     done = subprocess.run([NODE, "-e", BUILD_JS, str(BUILD_LIB), str(config)], capture_output=True, text=True,
                           encoding="utf-8", timeout=180, cwd=str(tmp_path))

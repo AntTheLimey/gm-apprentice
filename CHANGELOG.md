@@ -9,6 +9,13 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.32] — 2026-11-13
+
+### Added
+
+- The build warns when your own list of hidden details or headings lacks one the plugin now hides by default (such as `voice` or `Dormant Threads`), naming each and what it is for; campaign-qa offers to add them (#594).
+- `player_site.hide.declined` records the built-in entries you chose to leave off your own list, so the warning stays quiet about them. Removing a built-in entry, or saying no when an update offers one, records it there for you.
+
 ## [1.12.31] — 2026-11-13
 
 ### Added

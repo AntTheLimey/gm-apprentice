@@ -10,7 +10,7 @@ file to read it (one exception, at the end).
 gma vault-check "<vault>" settings
 ```
 
-"Settings: no faults": say so and stop. Otherwise rows come in three
+"Settings: no faults": say so and stop. Otherwise rows come in these
 groups.
 
 1. `fix:` rows are certain: they cannot show players more or switch
@@ -19,7 +19,9 @@ groups.
    says what it does. Put them three to five at a time. For each yes
    run the command again with `--apply player_site.features.inbx` (the name in the
    row), several names allowed.
-3. Rows with no fix give what the setting takes (`<name>` is as shown
+3. A row that says a hide list "is your own list and lacks" built-in
+   entries is walked in `settings/hide-list-gap.md`.
+4. Other rows with no fix give what the setting takes (`<name>` is as shown
    in the row in full: `settings describe player_site.features.link_previews`).
    With no suggested name, ask the GM what the key was meant to do
    and find the setting with `settings list`. Apply the answer:

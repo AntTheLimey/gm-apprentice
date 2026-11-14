@@ -26,6 +26,7 @@ const { row, isLeaf } = require('./describe');
 const { normalizeExcludeDir, normalizeExcludeDirs } = require('./folders');
 const { readState, writeState } = require('./state');
 const { siteFileNamedBy } = require('./site-tool');
+const { sameRule } = require('./same-rule');
 const { readerFrom } = require('../vault-reader');
 const { parseSubcommandArgs } = require('../subcommand-args');
 
@@ -98,6 +99,7 @@ function faultJson(f) {
   if (f.use) out.use = f.use;
   if (f.leftover) out.leftover = true;
   if (f.source) out.source = f.source;
+  if (f.entries) out.entries = f.entries;
   return out;
 }
 // Stops first, otherwise in the order found.
@@ -438,36 +440,6 @@ function set(options, pairs) {
   return { result, lines: [...lines, ...done.ok.notes, ...notes], notices: noticesFor(planned.written) };
 }
 
-// Whether two entries of a list setting are one entry, by the rule the build itself uses for
-// that list (the entry's `same`), each asked of the code where the rule lives.
-function sameRule(e, vaultPath) {
-  if (e.same === 'heading') {
-    const { headingKey } = require('../heading-key');
-    return (a, b) => (headingKey(a) || a) === (headingKey(b) || b);
-  }
-  if (e.same === 'folder') {
-    const { dirIsExcluded } = require('../scanner');
-    return (a, b) => dirIsExcluded(a, [b]) && dirIsExcluded(b, [a]);
-  }
-  if (e.same === 'phrase') {
-    // The leak gate reads a phrase in any case, with any run of spaces between its words.
-    const { canonicalNfc } = require('../unicode');
-    const key = (x) => canonicalNfc(String(x)).replace(/\s+/g, ' ').trim().toLowerCase();
-    return (a, b) => key(a) === key(b);
-  }
-  if (e.same === 'callout') return (a, b) => a.toLowerCase() === b.toLowerCase(); // the build lower-cases both sides
-  if (e.same === 'name') {
-    const { canonicalNfc } = require('../unicode');
-    return (a, b) => canonicalNfc(a) === canonicalNfc(b);
-  }
-  // A list of entries that are maps: two are one when the field named here is the same.
-  if (e.type === 'listOfMaps') {
-    const { canonicalNfc } = require('../unicode');
-    return (a, b) => canonicalNfc(String(a[e.same]).trim()) === canonicalNfc(String(b[e.same]).trim());
-  }
-  return (a, b) => a === b;
-}
-
 // add and remove on a list of maps. `add` takes the words of one entry, `key=value` each; `remove` takes the
 // `same` field (the label) of each entry to take out.
 function changeMaps(options, verb, name, e, words) {
@@ -522,6 +494,9 @@ function changeMaps(options, verb, name, e, words) {
   if (other.length) lines.push(`${labels(other)} ${other.length > 1 ? 'were' : 'was'} ${verb === 'add' ? 'already in' : 'not in'} ${shownAs}.`);
   return { result, lines, notices: noticesFor([name]) };
 }
+
+const HIDE_LIST_NAMES = ['player_site.hide.sections', 'player_site.hide.fields'];
+const DECLINED = 'player_site.hide.declined';
 
 // add and remove: the setting's current resolved list, changed, written whole through the same
 // validation and writer as set.
@@ -583,7 +558,24 @@ function changeList(options, verb, args) {
   }
   result.list = list || current;
   if (list) {
-    const done = write(options, [{ op: verb, name: e.name, label: name, entries: verb === 'add' ? result.added : result.removed, same: isSame, base: current }]);
+    const changes = [{ op: verb, name: e.name, label: name, entries: verb === 'add' ? result.added : result.removed, same: isSame, base: current }];
+    // Taking a built-in entry out of the hide list the vault owns is the GM's answer to the build's warning about it, so the
+    // same write records it in player_site.hide.declined.
+    if (verb === 'remove' && HIDE_LIST_NAMES.includes(e.name)) {
+      const held = getPath(read.values, DECLINED.split('.'));
+      const base = Array.isArray(held) ? held : [];
+      const fresh = [];
+      for (const x of result.removed) {
+        const builtIn = e.default.find((d) => isSame(d, x));
+        // Compared by the hide list's own rule (exact for fields, the heading rule for sections), as the warning does.
+        if (builtIn !== undefined && ![...base, ...fresh].some((b) => isSame(b, builtIn))) fresh.push(builtIn);
+      }
+      if (fresh.length) {
+        changes.push({ op: 'add', name: DECLINED, label: DECLINED, entries: fresh, same: isSame, base });
+        result.declined = fresh;
+      }
+    }
+    const done = write(options, changes);
     if (done.errors) return done;
     result.written = [shownAs];
     if (verb === 'remove') {
@@ -592,7 +584,7 @@ function changeList(options, verb, args) {
         if (Array.isArray(after) && after.some((a) => isSame(a, x))) result.notes.push(`${JSON.stringify(x)} still applies, because vault.config.json also lists it; remove it there too.`);
         else if (e.guards && Array.isArray(e.default) && e.default.some((d) => isSame(d, x))) {
           // One note for each built-in entry, however many spellings of it were taken out.
-          const note = `${JSON.stringify(e.default.find((d) => isSame(d, x)))} was built in to ${shownAs} and is no longer hidden.`;
+          const note = `${JSON.stringify(e.default.find((d) => isSame(d, x)))} was built in to ${shownAs} and is no longer hidden${HIDE_LIST_NAMES.includes(e.name) ? `; it is recorded in ${DECLINED}, so the build does not warn about it` : ''}.`;
           if (!result.notes.includes(note)) result.notes.push(note);
         }
       }

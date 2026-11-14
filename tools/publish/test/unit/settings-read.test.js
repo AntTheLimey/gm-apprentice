@@ -74,9 +74,9 @@ test('an empty switch is unreadable, so off', () => {
 test('hiding lists read a number that reads back as written as text, no fault; a boolean stops', () => {
   const r = readYaml('  exclude_sections: [Alpha, 3]\n');
   assert.deepEqual(r.values.player_site.hide.sections, ['Alpha', '3']);
-  assert.deepEqual(r.faults, []);
+  assert.deepEqual(r.faults.filter((f) => f.kind !== 'hide-list-gap'), []);
   const b = readYaml('  exclude_sections: [Alpha, true]\n');
-  assert.deepEqual(b.faults.map((f) => [f.level, f.message]), [['stop', "player_site.hide.sections entry true is read as true, not text, so it would not match; write it in quotes: 'true'"]]);
+  assert.deepEqual(b.faults.filter((f) => f.kind !== 'hide-list-gap').map((f) => [f.level, f.message]), [['stop', "player_site.hide.sections entry true is read as true, not text, so it would not match; write it in quotes: 'true'"]]);
 });
 
 test('an unknown image format is kept as written, and said', () => {

@@ -44,6 +44,9 @@ class Item:
     # A wants-CHOICE whose answers include "leave it": until it is answered
     # `apply` does not stamp, or its release gate would hide it for good.
     holds_stamp: bool = False
+    # What a yes/no CHOICE runs when the GM says no (`leave`), so the "no"
+    # is recorded and not asked or warned about again. Its lines are reported.
+    on_leave: Callable[[], list[str]] | None = None
     # A PERSON row that only tells the GM something: said once, even while
     # the stamp is held and the plan comes back.
     notice: bool = False

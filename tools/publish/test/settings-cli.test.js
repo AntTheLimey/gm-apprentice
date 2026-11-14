@@ -422,11 +422,36 @@ test('remove takes a custom entry out, and reports one that was not there', () =
   assert.deepEqual(run(s, 'remove', ['publish.exclude_sections', '"Nope"']).data.written, []);
 });
 
+test('remove of a built-in entry of a hide list also records it in player_site.hide.declined, in the same write', () => {
+  const s = scratch(wrap('  exclude_fields: [secrets, voice, plans]\n'));
+  const { rc, data } = run(s, 'remove', ['player_site.hide.fields', '"voice"']);
+  assert.equal(rc, 0);
+  assert.deepEqual(data.declined, ['voice']);
+  assert.match(data.notes[0], /"voice" was built in to player_site\.hide\.fields .*recorded in player_site\.hide\.declined/);
+  const after = run(s, 'get', ['player_site.hide.declined']).data;
+  assert.deepEqual(view(after)['player_site.hide.declined'].value, ['voice']);
+  // The warning is quiet about voice (the other missing built-ins are still named).
+  const gap = run(s, 'get', ['player_site.hide.fields']).data.faults.find((f) => f.kind === 'hide-list-gap');
+  assert.ok(!gap.entries.includes('voice'));
+  // A custom entry is not built in: nothing is recorded.
+  assert.equal(run(s, 'remove', ['player_site.hide.fields', '"plans"']).data.declined, undefined);
+});
+
+test('a field already declined in another case is still recorded as the field, so the warning and the record agree', () => {
+  const s = scratch(wrap('  exclude_fields: [secrets, voice, plans]\n'));
+  assert.equal(run(s, 'add', ['player_site.hide.declined', '"VOICE"']).rc, 0);
+  const { data } = run(s, 'remove', ['player_site.hide.fields', '"voice"']);
+  assert.deepEqual(data.declined, ['voice']);
+  const gap = run(s, 'get', ['player_site.hide.fields']).data.faults.find((f) => f.kind === 'hide-list-gap');
+  assert.ok(!gap.entries.includes('voice'));
+});
+
 test('remove of a built-in entry from a hiding list says it is no longer hidden; the last entry gives the empty-list note', () => {
   const s = scratch(wrap('  site_title: Tt\n'));
   const { data } = run(s, 'remove', ['publish.exclude_sections', `"${SECTIONS[0]}"`]);
-  assert.deepEqual(data.notes, [`"${SECTIONS[0]}" was built in to player_site.hide.sections and is no longer hidden.`]);
+  assert.deepEqual(data.notes, [`"${SECTIONS[0]}" was built in to player_site.hide.sections and is no longer hidden; it is recorded in player_site.hide.declined, so the build does not warn about it.`]);
   assert.deepEqual(data.list, SECTIONS.slice(1));
+  assert.deepEqual(data.declined, [SECTIONS[0]]);
   const t = scratch(wrap('  exclude_sections: [Plans]\n'));
   const last = run(t, 'remove', ['publish.exclude_sections', '"Plans"']);
   assert.deepEqual(last.data.list, []);
@@ -614,7 +639,7 @@ test('new file: get reads it, under both the new names and main\'s old ones', ()
   assert.deepEqual(view(data)['player_site.hide.sections'], { value: ['Rumours'], origin: 'file' });
   assert.equal(data.file.exists, true);
   assert.equal(data.file.leftover, false);
-  assert.deepEqual(data.faults, []);
+  assert.deepEqual(data.faults.filter((f) => f.kind !== 'hide-list-gap'), []); // a list of its own lacking built-ins: hide-list-gap.test.js
   assert.deepEqual(view(run(s, 'get', ['player_site.features.connections']).data), { 'player_site.features.connections': { value: 'web', origin: 'file' } });
 });
 

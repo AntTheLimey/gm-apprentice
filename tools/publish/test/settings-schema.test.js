@@ -149,7 +149,9 @@ test('a file that sets every setting to a valid, non-default value validates and
   fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
   fs.writeFileSync(at(vault, NEW_FILE), require('yaml').stringify(tree));
   const read = readSettings({ vaultPath: vault });
-  assert.deepEqual(read.faults.map((f) => `${f.level} ${f.name}`), []);
+  // The sample lists are made-up words: a hide list lacking the built-ins and a declined name that is none are warned about (hide-list-gap.test.js).
+  const sample = (f) => f.kind === 'hide-list-gap' || (f.kind === 'dropped' && f.setting === 'player_site.hide.declined');
+  assert.deepEqual(read.faults.filter((f) => !sample(f)).map((f) => `${f.level} ${f.name}`), []);
   fs.rmSync(root, { recursive: true, force: true });
 });
 

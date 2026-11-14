@@ -17,7 +17,7 @@ import install_layout
 import tool_cache
 from migrate_core import (CHOICE, PERSON, WILL, Check, Item,
                           StepFailed, cells, plugin_tool, stopped)
-from vault_check import (check_gm_leak, configured_site,
+from vault_check import (_bare_section_title, check_gm_leak, configured_site,
                          _kept_by_player, vault_settings)
 from vaultlib import (SettingsUnavailable,
                       forget_settings, settings,
@@ -443,6 +443,8 @@ def _set_settings(vault: Path, pairs: list[tuple[str, object]]) -> None:
 
 # The two lists the vault file holds in plain sight.
 EXCLUDE_LISTS = ("player_site.hide.sections", "player_site.hide.fields")
+# Where a "no" to an entry is written down, so the build stops warning.
+DECLINED = "player_site.hide.declined"
 
 
 def find_hide_additions(vault: Path, since: str) -> list[Item]:
@@ -452,28 +454,36 @@ def find_hide_additions(vault: Path, since: str) -> list[Item]:
     publish. One item per entry missing from a list the vault owns; none for
     a vault with no list of its own (the built-in list, which holds the
     entry, is what it uses). A site is not needed: a list the vault owns
-    that lacks the entry would publish it the day a site is set up."""
+    that lacks the entry would publish it the day a site is set up. A no is
+    recorded with the tool (`settings add player_site.hide.declined`), so
+    the build stops warning about the entry; an entry already declined is
+    not offered again."""
     now = vault_settings(vault)
     items: list[Item] = []
+    declined = now.get(DECLINED)
+    declined = declined if isinstance(declined, list) else []
     for name in EXCLUDE_LISTS:
         if now.origins[name] != "file":
             continue
         has = now.get(name)
         has = has if isinstance(has, list) else []
+        # As the build compares: a heading by its bare title, a field exactly.
+        key = (_bare_section_title if name == "player_site.hide.sections"
+               else (lambda x: x))
+        held = {key(x) for x in [*has, *declined] if isinstance(x, str)}
         for added in settings_added(name):
             entry = added["entry"]
-            if added["since"] != since or entry in has:
+            if added["since"] != since or key(entry) in held:
                 continue
 
             def apply(_value: str | None, name: str = name,
                       entry: str = entry) -> list[str]:
-                try:
-                    settings_add(vault, name, [entry])
-                except SettingsUnavailable as e:
-                    if not e.refused:
-                        raise
-                    raise StepFailed(str(e)) from e
-                return [f"added {entry} to {name}"]
+                return _add_entry(vault, name, entry,
+                                  f"added {entry} to {name}")
+
+            def decline(entry: str = entry) -> list[str]:
+                return _add_entry(vault, DECLINED, entry,
+                                  f"recorded {entry} in {DECLINED}")
 
             # Held: silence is not an answer, and once the vault is
             # stamped the release gate would never offer this again.
@@ -481,8 +491,19 @@ def find_hide_additions(vault: Path, since: str) -> list[Item]:
                 f"hide-add:{entry}", CHOICE,
                 [f"add {entry} to the details your site hides ({name}), "
                  f"so the site never shows it: {entry} is {added['why']}"],
-                apply, holds_stamp=True))
+                apply, holds_stamp=True, on_leave=decline))
     return items
+
+
+def _add_entry(vault: Path, name: str, entry: str, done: str) -> list[str]:
+    """One `settings add`; a refusal stops the step with the tool's reason."""
+    try:
+        settings_add(vault, name, [entry])
+    except SettingsUnavailable as e:
+        if not e.refused:
+            raise
+        raise StepFailed(str(e)) from e
+    return [done]
 
 
 AFTER_BUILD = "player_site.after_build"
@@ -512,14 +533,14 @@ SITE_CHECKS: list[Check] = [
           kind="asks",
           plain=("Added voice to the details your site hides, so the voice you keep for the campaign and its characters never shows on the site."),
           ask=("Adds voice to the details your site hides, so the voice you keep for the campaign and its characters never shows on the site."),
-          left=("Kept your list of hidden details without voice, so a voice can show on your site wherever a page names that detail.")),
+          left=("Kept your list of hidden details without voice, so a voice can show on any page that has one. Your answer is recorded in player_site.hide.declined, so the build does not warn about it.")),
     Check("hide-sections-dormant", "1.12.8", 2, "the dormant threads list kept off the site",
           lambda v: find_hide_additions(v, "1.12.8"), asks_site=True,
           choices=("hide-add:",),
           kind="asks",
           plain=("Added Dormant Threads to the headings your site hides, so the threads you have parked for the GM never show on the site."),
           ask=("Adds Dormant Threads to the headings your site hides, so the threads you have parked for the GM never show on the site."),
-          left=("Kept your list of hidden headings without Dormant Threads, so your parked threads can show on your site.")),
+          left=("Kept your list of hidden headings without Dormant Threads, so your parked threads can show on your site. Your answer is recorded in player_site.hide.declined, so the build does not warn about it.")),
     Check("gm-leak", None, 4, "sections the site withholds are nested under "
           "GM Notes", find_gm_leak, asks_site=True,
           kind="bookkeeping",
