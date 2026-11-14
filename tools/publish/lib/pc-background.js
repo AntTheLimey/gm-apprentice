@@ -10,6 +10,9 @@
 // firstSentence. Trusted processor HTML: backstoryHtml, appearanceHtml, personality[].html.
 const { subsections, aboveSubheadings, cellText, filled, hasContent, isPlaceholder } = require('./templates/sheet-parse');
 
+// An inline value as a paragraph of its own; a block (paragraph, list, table...) as it is.
+const asBlock = (html) => (/^\s*<(?:p|ul|ol|blockquote|h[1-6]|div|table|pre|hr)\b/i.test(html) ? html : `<p>${html}</p>`);
+
 const FACT_LABELS = ['Age', 'Height', 'Weight', 'Eyes', 'Hair', 'Skin', 'Faith'];
 // A full stop after one of these (or after a lone letter) is not the end of a sentence.
 const ABBREVIATION_RE = /^(?:Mr|Mrs|Ms|Dr|St|Mt|Ft|Prof|Sr|Jr|Capt|Lt|Col|Gen|Sgt|Rev|vs|etc)$/i;
@@ -189,14 +192,22 @@ function fieldValue(fields, re) {
 }
 
 // The CoC card fields a note has, in the note's order, under their card names: [{ label, html }].
+// Two fields for one card (`**Possessions:**` and `**Treasured Possessions:**`) share it, in
+// order, so neither is lost (the rest of the section never shows a card's field).
 function cardFields(fields) {
   const out = [];
-  const taken = new Set();
+  const byCard = new Map();
   for (const f of fields) {
     const card = CARD_FIELDS.find(([, re]) => re.test(f.label));
-    if (!card || taken.has(card[0]) || !real(f.text)) continue;
-    taken.add(card[0]);
-    out.push({ label: card[0], html: f.html });
+    if (!card || !real(f.text)) continue;
+    const had = byCard.get(card[0]);
+    if (had) {
+      had.html = `${asBlock(had.html)}\n${asBlock(f.html)}`;
+      continue;
+    }
+    const entry = { label: card[0], html: f.html };
+    byCard.set(card[0], entry);
+    out.push(entry);
   }
   return out;
 }
@@ -347,4 +358,4 @@ function backgroundRest(section, shown, parts) {
   return all ? `<section class="pc-background-rest">\n${all}\n</section>` : '';
 }
 
-module.exports = { backgroundParts, backgroundRest, backgroundRestHtml, firstSentence, splitTitle };
+module.exports = { asBlock, backgroundParts, backgroundRest, backgroundRestHtml, firstSentence, splitTitle };

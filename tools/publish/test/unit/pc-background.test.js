@@ -222,9 +222,11 @@ test('a CoC field\'s list is its value: label-line text, a list alone, text and 
   assert.equal(rest, '<p><strong>Club:</strong> The Athenaeum</p>');
 });
 
-test('the short Possessions label and the first of two spellings', () => {
+test('the short Possessions label, and two spellings share one card', () => {
   const s = backgroundParts(sectionsOf('## Background\n\n**Possessions:** A cane.\n\n**Treasured Possessions:** A second.\n'));
-  assert.deepEqual(s.personality, [{ label: 'Treasured Possessions', html: 'A cane.' }]);
+  assert.deepEqual(s.personality, [{ label: 'Treasured Possessions', html: '<p>A cane.</p>\n<p>A second.</p>' }]);
+  const one = backgroundParts(sectionsOf('## Background\n\n**Possessions:** A cane.\n'));
+  assert.deepEqual(one.personality, [{ label: 'Treasured Possessions', html: 'A cane.' }]);
 });
 
 test('a gm-only or spoiler fence, or a %% comment, in a field never reaches its card', () => {
