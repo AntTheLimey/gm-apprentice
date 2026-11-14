@@ -9,6 +9,12 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.33] — 2026-11-13
+
+### Fixed
+
+- The leak check no longer stops a deploy over the Campaign Overview's shared threads that the build itself puts on PC pages: they count as published there, and the rest of an unpublished Overview is still checked (#674).
+
 ## [1.12.32] — 2026-11-13
 
 ### Added
