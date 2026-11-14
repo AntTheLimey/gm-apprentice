@@ -654,7 +654,8 @@ describe('a page that fails to render', () => {
   it('the same vault with nothing failing has no such error, and reads the PC too', async () => {
     const found = await fromDoctor(site(files).configPath);
     assert.deepStrictEqual(found.map((f) => f.code), ['COMMENT_STRAY', 'NAMED_NO_PAGE']);
-    assert.deepStrictEqual(found[1].pages, ['PCs/Doomed.md', 'People/Bo_Pike.md']);
+    // The story page opens on the PC's backstory (its Background of prose, #483), which names Old_Tam too.
+    assert.deepStrictEqual(found[1].pages, ['PCs/Doomed.md', 'PCs/Doomed_Story.md', 'People/Bo_Pike.md']);
   });
 });
 

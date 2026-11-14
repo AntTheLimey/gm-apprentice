@@ -88,8 +88,8 @@ function cardFor(page, ctx) {
   const facts = factsFor(page, ctx);
   if (facts.length) card.f = facts;
 
-  // ctx.cocFolio: the CoC folio shows no epithet to repeat (and no header badges, see rowsFor).
-  const opening = fm.type === 'pc' ? (ctx && ctx.cocFolio ? '' : pcEpithetText(page)) : excerptFromMarkdown(publishedSource(page), {
+  // ctx.cocFolio: the CoC folio shows its hook only when the note gives one (and no header badges, see rowsFor).
+  const opening = fm.type === 'pc' ? pcEpithetText(page, { cocFolio: !!(ctx && ctx.cocFolio) }) : excerptFromMarkdown(publishedSource(page), {
     sentences: 2, limit: ctx.limits.card_excerpt_chars, excludeSections: (ctx && ctx.excludeSections) || [], wordUnderscores: true, prose: true,
   });
   if (opening) card.x = capped(opening, ctx.limits.card_excerpt_chars);

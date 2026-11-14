@@ -126,3 +126,118 @@ test('facts read a colon outside the bold and drop any lone dash', () => {
   ].join('\n')));
   assert.deepEqual(s.facts, [{ label: 'Age', value: '40' }, { label: 'Eyes', value: '&co' }]);
 });
+
+// #483: the Call of Cthulhu and GURPS shapes.
+const COC = [
+  '## Background', '',
+  '**Personal Description:** Composed and watchful,', 'easy to overlook.', '',
+  '**Traits:** Patient.', '',
+  '**Ideology & Beliefs:** Reads the arrangement anyway.', '',
+  '**Significant People:** Lady Vane.', '',
+  '**Meaningful Locations:** {Places of importance}', '',
+  '**Treasured Possessions:** Her father\'s prayer book.', '',
+  '**Club:** The Athenaeum', '',
+  '---', '',
+  '## Skills', 'x',
+].join('\n');
+
+test('a CoC investigator\'s fields: Personal Description is how they look, the rest are cards in the note\'s order', () => {
+  const s = backgroundParts(sectionsOf(COC));
+  assert.equal(s.backstoryHtml, '');
+  assert.match(s.appearanceHtml, /^Composed and watchful,\s+easy to overlook\.$/);
+  assert.deepEqual(s.personality.map(p => p.label), ['Traits', 'Ideology & Beliefs', 'Significant People', 'Treasured Possessions']);
+  assert.equal(s.firstSentence, '');
+});
+
+test('a CoC Background\'s other lines are left for the page, its story fields and closing rule are not', () => {
+  const { backgroundRestHtml } = require('../../lib/pc-background');
+  const sections = sectionsOf(COC);
+  const bg = sections.find(x => x.id === 'background');
+  const rest = backgroundRestHtml(bg, [], backgroundParts(sections));
+  assert.match(rest, /Club:<\/strong> The Athenaeum/);
+  assert.doesNotMatch(rest, /Personal Description|Traits|Ideology|Significant|Treasured|<hr/);
+  const plain = sectionsOf(COC.replace('**Club:** The Athenaeum', ''));
+  assert.equal(backgroundRestHtml(plain.find(x => x.id === 'background'), [], backgroundParts(plain)), '');
+});
+
+test('a CoC Backstory sub-section under the fields is the prologue', () => {
+  const s = backgroundParts(sectionsOf(COC.replace('---', '### Backstory\n\nJane was raised in a vicarage. She reads.\n\n---')));
+  assert.equal(s.backstoryHtml, '<p>Jane was raised in a vicarage. She reads.</p>');
+  assert.equal(s.firstSentence, 'Jane was raised in a vicarage.');
+  assert.equal(s.personality.length, 4);
+});
+
+test('a Background of prose alone (the GURPS free-form template) is the backstory, all of it', () => {
+  const s = backgroundParts(sectionsOf('## Background\n\nKarl walked out of the forest. He never went back.\n\n- a list\n\n---\n\n## Skills\n'));
+  assert.equal(s.wholeSection, true);
+  assert.match(s.backstoryHtml, /^<p>Karl walked[\s\S]*<li>a list<\/li>\s*<\/ul>$/);
+  assert.equal(s.firstSentence, 'Karl walked out of the forest.');
+  const { backgroundRestHtml } = require('../../lib/pc-background');
+  const sections = sectionsOf('## Background\n\nKarl walked.\n');
+  assert.equal(backgroundRestHtml(sections[0], [], backgroundParts(sections)), '');
+});
+
+test('a Background with a field line, a table or a heading is not read as prose alone', () => {
+  assert.equal(backgroundParts(sectionsOf('## Background\n\nKarl walked.\n\n**Rank:** Sergeant\n')), null);
+  assert.equal(backgroundParts(sectionsOf('## Background\n\nKarl walked.\n\n| a | b |\n|---|---|\n| 1 | 2 |\n')), null);
+  // A bold word opening a sentence is no field.
+  assert.equal(backgroundParts(sectionsOf('## Background\n\n**Karl** walked. Far.\n')).firstSentence, 'Karl walked.');
+});
+
+test('an unfilled GURPS or CoC template has no background parts to show', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const dir = path.join(__dirname, '..', '..', '..', '..', 'skills', 'shared', 'templates');
+  for (const t of ['pc-gurps-4e.md', 'pc-coc-7e.md', 'pc-coc-7e-regency.md']) {
+    const body = fs.readFileSync(path.join(dir, t), 'utf8').replace(/^---[\s\S]*?\n---\n/, '');
+    const s = backgroundParts(sectionsOf(body));
+    assert.ok(s, t);
+    assert.equal(s.backstoryHtml + s.appearanceHtml + s.firstSentence, '', t);
+    assert.deepEqual(s.personality, [], t);
+  }
+});
+
+// A field written as a list under its label, and the label variants real notes use (#483 proof run).
+test('a CoC field\'s list is its value: label-line text, a list alone, text and a list', () => {
+  const md = [
+    '## Background', '',
+    '**Personal Description:** Tall.', '',
+    '**Ideology:** Order above all.', '',
+    '**Significant People:**', '- [[Jonathan_Pike|Jonathan Pike]] — mentor', '- Ann, her sister', '',
+    '**Meaningful Locations:** Bath, and:', '', '- The Pump Room', '- Lansdown', '',
+    '**Treasured Possession:** A locket.', '',
+    '**Club:** The Athenaeum', '',
+    '## Skills', 'x',
+  ].join('\n');
+  const sections = sectionsOf(md);
+  const s = backgroundParts(sections);
+  assert.deepEqual(s.personality.map(p => p.label), ['Ideology & Beliefs', 'Significant People', 'Meaningful Locations', 'Treasured Possessions']);
+  const card = (l) => s.personality.find(p => p.label === l).html;
+  assert.equal(card('Ideology & Beliefs'), 'Order above all.');
+  assert.match(card('Significant People'), /^<ul>\s*<li>[\s\S]*Jonathan Pike[\s\S]*<li>Ann, her sister<\/li>\s*<\/ul>$/);
+  assert.match(card('Meaningful Locations'), /^<p>Bath, and:<\/p>\s*<ul>[\s\S]*The Pump Room[\s\S]*Lansdown[\s\S]*<\/ul>$/);
+  assert.equal(card('Treasured Possessions'), 'A locket.');
+  const { backgroundRestHtml } = require('../../lib/pc-background');
+  const rest = backgroundRestHtml(sections.find(x => x.id === 'background'), [], s);
+  assert.equal(rest, '<p><strong>Club:</strong> The Athenaeum</p>');
+});
+
+test('the short Possessions label, and two spellings share one card', () => {
+  const s = backgroundParts(sectionsOf('## Background\n\n**Possessions:** A cane.\n\n**Treasured Possessions:** A second.\n'));
+  assert.deepEqual(s.personality, [{ label: 'Treasured Possessions', html: '<p>A cane.</p>\n<p>A second.</p>' }]);
+  const one = backgroundParts(sectionsOf('## Background\n\n**Possessions:** A cane.\n'));
+  assert.deepEqual(one.personality, [{ label: 'Treasured Possessions', html: 'A cane.' }]);
+});
+
+test('a gm-only or spoiler fence, or a %% comment, in a field never reaches its card', () => {
+  const md = [
+    '## Background', '',
+    '**Significant People:**', '- Ann', '<!-- gm-only -->', '- GMSECRET the cultist', '<!-- /gm-only -->', '- Tom', '',
+    '**Traits:** Calm %%GMCOMMENT%% and kind.', '',
+    '**Meaningful Locations:** Bath.', '', '<!-- spoiler -->', 'SPOILERTEXT under the abbey.', '<!-- /spoiler -->', '',
+  ].join('\n');
+  const s = backgroundParts(sectionsOf(md));
+  const all = JSON.stringify(s);
+  for (const secret of ['GMSECRET', 'GMCOMMENT', 'SPOILERTEXT']) assert.ok(!all.includes(secret), secret);
+  assert.match(s.personality.find(p => p.label === 'Significant People').html, /Ann[\s\S]*Tom/);
+});

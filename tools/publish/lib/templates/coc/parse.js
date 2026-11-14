@@ -133,12 +133,25 @@ function parseBackstory(sections) {
   const sec = findSectionByTitle(sections || [], 'background');
   if (!sec || !sec.html) return [];
   const out = [];
+  // On the GM site a gm-only or spoiler block is a paragraph holding its open token and one holding the close
+  // (gm-marks.js). A field inside one keeps its mark: its value is wrapped in the innermost open token and a close,
+  // which the page draws as a mark. The player site has no tokens.
+  const marks = [...sec.html.matchAll(/<p>\s*(?:(\uE000[0-9a-z]+\uE001)|\uE002)\s*<\/p>/g)];
+  const markAt = (at) => {
+    const open = [];
+    for (const t of marks) {
+      if (t.index >= at) break;
+      if (t[1]) open.push(t[1]); else open.pop();
+    }
+    return open[open.length - 1] || '';
+  };
   const re = /<strong>([^<]+?)<\/strong>\s*:?\s*([\s\S]*?)(?=<strong>|<\/p>|<p>|$)/gi;
   let m;
   while ((m = re.exec(sec.html)) !== null) {
     const label = decodeEntities(m[1].replace(/[:.]\s*$/, '')).trim();
     const value = decodeEntities(m[2].replace(/<[^>]+>/g, '')).trim();
-    if (label && value) out.push({ label, value });
+    const open = markAt(m.index);
+    if (label && value) out.push({ label, value: open ? `${open}${value}\uE002` : value });
   }
   return out;
 }

@@ -73,8 +73,18 @@ createdSession: ""
 
 ## Background
 
-{Free-form character background: personality, history,
-motivations, and description.}
+### Backstory
+
+{The character's history, as the player tells it}
+
+### Appearance
+
+{How they look}
+
+### Personality
+
+- **Personality:** —
+- **Motivations:** —
 
 ## Advantages & Perks
 

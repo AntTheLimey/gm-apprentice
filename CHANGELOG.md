@@ -9,6 +9,12 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.31] — 2026-11-13
+
+### Added
+
+- GURPS and Call of Cthulhu PC pages get the backstory showcase D&D pages have: a prologue on the Story tab, the look beside the portrait, "what drives them" cards (CoC's backstory fields, GURPS's Personality and Motivations), a teaser on the sheet tab and the hook on party cards. A Background written as plain prose counts as the backstory. The PC templates gain a `### Backstory` section; the update offers it to unchanged templates (#483).
+
 ## [1.12.30] — 2026-11-13
 
 ### Fixed

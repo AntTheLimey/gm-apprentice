@@ -8,6 +8,7 @@
 // mockup markup verbatim, swapping its hard-coded values for model fields.
 const { escapeHtml } = require('../../processor');
 const { findSectionByTitle, parseTableRows } = require('../gurps/tables');
+const { backgroundParts, backgroundRestHtml } = require('../../pc-background');
 
 // Plain-text cell -> escaped string; null/undefined -> '' (never "null").
 function txt(v) {
@@ -259,15 +260,20 @@ const RECORD_SECTIONS = [
   'Current Status',
 ];
 
+// Background's story (backstory, Personal Description, the fields the cards show) is on the Story
+// tab (templates/pc.js), so its accordion here holds only what else the section has.
 function buildRecord(model, sections) {
   const secs = sections || [];
+  const story = backgroundParts(secs);
   const parts = [];
   for (const title of RECORD_SECTIONS) {
     const sec = findSectionByTitle(secs, title);
     if (!sec || !sec.html || !sec.html.trim()) continue;
+    const html = story && title === 'Background' ? backgroundRestHtml(sec, [], story) : sec.html;
+    if (!html.trim()) continue;
     // sec.html is already-rendered HTML — inject as-is; escape only the title.
     parts.push(`<details class="acc"><summary>${escapeHtml(title)}</summary>` +
-      `<div class="acc-body">${sec.html}</div></details>`);
+      `<div class="acc-body">${html}</div></details>`);
   }
   if (parts.length === 0) return null;
   return `<div class="rechead">The Investigator's Record</div>${parts.join('')}`;

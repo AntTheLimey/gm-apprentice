@@ -12,6 +12,15 @@
         if (t) t.removeAttribute('hidden');
       });
     });
+    // The sheet's backstory teaser reads on in the Story tab.
+    document.querySelectorAll('.coc-sheet-root a[href="#story"]').forEach(function (a) {
+      a.addEventListener('click', function (e) {
+        var story = document.querySelector('.foliotab[data-target="p-story"]');
+        if (!story) return;
+        e.preventDefault();
+        story.click();
+      });
+    });
     // The status bar and the skill ticks belong to coc-live.js whenever the
     // sheet is live-tracked. Binding them here as well made every tap run
     // twice: a stepper moved 2, a chip toggled back off, a pip landed one

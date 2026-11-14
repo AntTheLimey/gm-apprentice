@@ -15,6 +15,14 @@ any skill creating or updating a PC file follows the same skeleton.
 ## GM Notes            — keeper-only, protected, excluded from publish
 ```
 
+Under `## Background`, CoC keeps its investigator fields
+(`**Personal Description:**`, `**Traits:**`, `**Ideology & Beliefs:**`,
+`**Significant People:**`, `**Meaningful Locations:**`,
+`**Treasured Possessions:**`) above `### Backstory`; the published
+page shows Personal Description as Appearance and the rest as
+Personality. A Background of prose alone (an older GURPS note) is
+published as the backstory.
+
 Templates may omit inapplicable sections (e.g., FitD crews
 have no `## Equipment` — gear is handled through Quality).
 
