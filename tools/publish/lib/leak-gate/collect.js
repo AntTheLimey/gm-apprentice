@@ -25,7 +25,7 @@ const { isWrapUp } = require('../session-hub');
 const { parseNote } = require('../frontmatter');
 const { canonicalNfc } = require('../unicode');
 const {
-  playerSafeMarkdown, stubMarked, stubCut, hiddenFieldsOf, publishedFrontmatter, pcHeadingsUnstable, publishMode, isWithheld, stripLeadingH1,
+  playerSafeMarkdown, stubMarked, stubCut, hiddenFieldsOf, publishedFrontmatter, pcHeadingsUnstable, publishMode, isWithheld, stripLeadingH1, gmAliasRewriter,
 } = require('../processor');
 const { createMarks, markKinds, sanitize, markedSpans } = require('../gm-marks');
 const { piecesOfMarkdown, piecesOfValue, piecesOfHtml, fieldRunsOf, tableRunsOf, textsOfMarkdown, wordsOf, stringsOfValue, MIN_WORDS } = require('./text');
@@ -36,6 +36,7 @@ const { cutHtml } = require('../props/html-cut');
 const { styledPageProblem } = require('../props/page');
 const { pathProblem } = require('../props/files');
 const { buildConnections } = require('../connections');
+const { overviewThreads, threadsOnPage, withSharedThreads } = require('../shared-threads');
 const { sitePathOf } = require('../templates/four-oh-four');
 
 const sha1 = (bytes) => crypto.createHash('sha1').update(bytes).digest('hex');
@@ -128,6 +129,22 @@ function collectHidden({ configPath, outputDir = null }) {
   const addMarked = (markdown, note) => {
     for (const span of markedSpans(markdown, mark.marks)) add(hiddenOf(span.text), note, span.label);
   };
+
+  // Each PC page carries the Overview's shared threads that name it, as the build puts them there (#674): added to its
+  // markdown before it is read, so they count as published text there and its stub cut and strips treat them as the
+  // build's do. The Overview is usually left off the publish list, so its body is hidden text everywhere else.
+  // The build reads them after its GM-alias rewrite (pairHubs `apply`), which this check does not make on its pages: the
+  // Overview's copy is rewritten the same way first, so a thread reads as the site prints it.
+  const scannedPaths = new Set(corpus.map((p) => p.sourcePath));
+  const aliasRewriter = gmAliasRewriter(corpus.concat(notes.filter((n) => !scannedPaths.has(n.sourcePath))), published, notes, playerConfig.withheld_words);
+  const sharedAll = overviewThreads({ allNotes: notes, corpus, config: scanConfig, rewrite: aliasRewriter ? aliasRewriter.markdown : null,
+    viewOptions: { gm: false, mark: null, excludeCallouts, excludeSections, pcKeepSections, storyMoments: storyMomentsOn(playerConfig) } });
+  if (sharedAll.length) {
+    for (const page of published) {
+      if (String((page.frontmatter || {}).type).trim().toLowerCase() !== 'pc') continue;
+      page.markdown = withSharedThreads(page.markdown, threadsOnPage(page, sharedAll, { linkMap, pages: published, outOfPlay: playerConfig.statuses.out_of_play }));
+    }
+  }
 
   const publishedRels = new Set();
   const outputOf = new Map();

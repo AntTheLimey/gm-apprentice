@@ -152,4 +152,62 @@ function withSharedThreads(pcMarkdown, entries) {
   return lines.join(nl);
 }
 
-module.exports = { sharedEntries, withSharedThreads };
+// The Overview's shared threads as one site's PC pages show them: the build places them, and the leak check reads the
+// same ones as published text (#674), so the two never disagree.
+// The Overview is the one vaultlib.campaign_overview picks, from every note in the vault (allNotes): the first by
+// vault path, never in a folder Python skips (hidden, templates, the inbox) or an archived, QA or Midwife copy. A
+// folder the player site hides, or one no folder_map entry covers, does not matter: its threads are player-facing
+// wherever the note sits, and the writer has taken them off the PC notes. When the note is no scanned page, it is
+// scanned once with its folder added to the map. Its view is made on a copy by the site's player-safe strip chain
+// (`viewOptions`, as publishView takes them); a view that cannot be made gives nothing, never the raw text. A caller
+// whose corpus has not had the GM-alias rewrite the build applies in place (the leak check) passes `rewrite`, the
+// rewriter's markdown function, and the copy is rewritten first, so its threads read as the site prints them.
+function overviewThreads({ allNotes, corpus, config, viewOptions, rewrite = null, warn = () => {} }) {
+  const path = require('path');
+  const { scanVaultReport } = require('./scanner');
+  const { ALWAYS_EXCLUDE_DIRS } = require('./publish-decision');
+  const { vaultRelPath } = require('./config');
+  const overviewNote = (allNotes || [])
+    .map((n) => [`${n.vaultPath}.md`, n])
+    .filter(([rel, n]) => String((n.frontmatter || {}).type || '').trim().toLowerCase() === 'campaign_overview'
+      && !rel.split('/').some((seg) => seg.startsWith('.'))
+      && !(rel.includes('/') && ['_Templates', '_templates', '_inbox', '_QA', '_archive', '_midwife'].includes(rel.split('/')[0])))
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([, n]) => n)[0];
+  if (!overviewNote) return [];
+  const overviewPage = (corpus || []).find((p) => p.sourcePath === overviewNote.sourcePath)
+    || (() => {
+      const dir = path.posix.dirname(overviewNote.vaultPath);
+      const folderMap = { ...(config.folderMap || {}), [dir === '.' ? '' : dir]: '_overview' };
+      const report = scanVaultReport(Object.assign({}, config, { excludeDirs: ALWAYS_EXCLUDE_DIRS, folderMap }), { quiet: true });
+      return report.pages.find((p) => p.sourcePath === overviewNote.sourcePath);
+    })();
+  if (!overviewPage) {
+    warn(`${overviewNote.vaultPath}.md: shared threads were left off the PC pages because the site never reads that folder`);
+    return [];
+  }
+  try {
+    const copy = { ...overviewPage };
+    if (rewrite) copy.markdown = rewrite(copy.markdown || '');
+    require('./published-view').publishView(copy, viewOptions);   // looked up at the call: a test can make it throw
+    return sharedEntries(String(copy.publishedMarkdown || ''));
+  } catch (err) {
+    warn(`${vaultRelPath(config.vaultPath, overviewPage.sourcePath)}: shared threads were left off the PC pages because the Overview's published view could not be made (${err.message})`);
+    return [];
+  }
+}
+
+// The shared threads one PC page shows: those that name it, by a link the site resolves to that page, and the party's
+// while the PC is in play (as `vw threads move … party` reads it: an out-of-play PC gets one only by name).
+function threadsOnPage(page, entries, { linkMap, pages, outOfPlay }) {
+  const { resolveSiteLink } = require('./build');
+  const { isOutOfPlay } = require('./pc-status');
+  const names = (target) => {
+    const found = resolveSiteLink(`[[${target}]]`, { linkMap, pages });
+    return found.kind === 'page' && found.href === page.outputPath;
+  };
+  const active = !isOutOfPlay(page.frontmatter, outOfPlay);
+  return entries.filter((e) => (e.party && active) || e.involves.some(names));
+}
+
+module.exports = { sharedEntries, withSharedThreads, overviewThreads, threadsOnPage };

@@ -28,7 +28,7 @@ const { loadManifest } = require('./manifest');
 const { canonicalNfc } = require('./unicode');
 const { real, resolveGmFolder, gmFolderProblem, insideGitWorkTree, gmPage, writeMarker, ROBOTS_TXT } = require('./gm-site');
 const { publishView: sharedPublishView } = require('./published-view');
-const { sharedEntries, withSharedThreads } = require('./shared-threads');
+const { overviewThreads, threadsOnPage, withSharedThreads } = require('./shared-threads');
 const { createMarks, markKinds, sanitize, unmark, withoutMarked } = require('./gm-marks');
 const { generateThemeCSS, googleFontNames, FONT_FORMATS, fontOutputPath } = require('./theme');
 const fontsLib = require('./fonts');
@@ -1329,49 +1329,11 @@ function buildSite(options) {
   // not (it is usually left off the publish list), by the same player-safe strip chain, and only its `## Open Threads`
   // section is read from it. A gm-only shared thread stays off the GM site's PC page too. A view that cannot be made
   // gives nothing, never the raw text. The Overview itself gets no page.
-  // The Overview is the one vaultlib.campaign_overview picks, from every note in the vault (allNotes): the first by
-  // vault path, never in a folder Python skips (hidden, templates, the inbox) or an archived, QA or Midwife copy. A
-  // folder the player site hides, or one no folder_map entry covers, does not matter: its threads are player-facing
-  // wherever the note sits, and the writer has taken them off the PC notes. When the note is no scanned page, it is
-  // scanned once with its folder added to the map.
-  const overviewNote = allNotes
-    .map((n) => [`${n.vaultPath}.md`, n])
-    .filter(([rel, n]) => String((n.frontmatter || {}).type || '').trim().toLowerCase() === 'campaign_overview'
-      && !rel.split('/').some((seg) => seg.startsWith('.'))
-      && !(rel.includes('/') && ['_Templates', '_templates', '_inbox', '_QA', '_archive', '_midwife'].includes(rel.split('/')[0])))
-    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-    .map(([, n]) => n)[0];
-  const overviewPage = overviewNote && (corpus.find((p) => p.sourcePath === overviewNote.sourcePath)
-    || (() => {
-      const dir = path.posix.dirname(overviewNote.vaultPath);
-      const folderMap = { ...(config.folderMap || {}), [dir === '.' ? '' : dir]: '_overview' };
-      const report = scanVaultReport(Object.assign({}, config, { excludeDirs: ALWAYS_EXCLUDE_DIRS, folderMap }), { quiet: true });
-      return report.pages.find((p) => p.sourcePath === overviewNote.sourcePath);
-    })());
-  if (overviewNote && !overviewPage) {
-    console.warn(`  WARNING: ${overviewNote.vaultPath}.md: shared threads were left off the PC pages because the site never reads that folder`);
-  }
-  let overviewView = '';
-  if (overviewPage) {
-    try {
-      const copy = { ...overviewPage };
-      require('./published-view').publishView(copy, { gm, mark, excludeCallouts, excludeSections, pcKeepSections, storyMoments });   // looked up at the call: a test can make it throw
-      overviewView = String(copy.publishedMarkdown || '');
-    } catch (err) {
-      overviewView = '';
-      console.warn(`  WARNING: ${vaultRelPathOf(overviewPage)}: shared threads were left off the PC pages because the Overview's published view could not be made (${err.message})`);
-    }
-  }
-  const sharedAll = sharedEntries(overviewView);
-  const namesPage = (target, page) => {
-    const found = resolveSiteLink(`[[${target}]]`, { linkMap, pages });
-    return found.kind === 'page' && found.href === page.outputPath;
-  };
+  const sharedAll = overviewThreads({ allNotes, corpus, config, viewOptions: { gm, mark, excludeCallouts, excludeSections, pcKeepSections, storyMoments },
+    warn: (message) => console.warn(`  WARNING: ${message}`) });
   for (const page of pages) {
     if (sharedAll.length && String((page.frontmatter || {}).type).trim().toLowerCase() === 'pc') {
-      // A party thread is the active PCs' (as `vw threads move … party` reads it): an out-of-play PC gets it only by name.
-      const active = !isOutOfPlay(page.frontmatter, publishConfig.statuses.out_of_play);
-      page.markdown = withSharedThreads(page.markdown, sharedAll.filter((e) => (e.party && active) || e.involves.some((t) => namesPage(t, page))));
+      page.markdown = withSharedThreads(page.markdown, threadsOnPage(page, sharedAll, { linkMap, pages, outOfPlay: publishConfig.statuses.out_of_play }));
     }
     if (hubWrapUps.has(page)) page.markdown = '';
     // `publish: stub` — emit the page shell so navigation and links still work,
