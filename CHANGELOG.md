@@ -9,6 +9,13 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.40] — 2026-11-17
+
+### Fixed
+
+- Fewer false near-matches when an export's names are resolved: a capitalised word that only ever starts a sentence ("Later") is no longer offered as a misspelt name, a "Dr." or "Mr." is no sentence end, and a word-in-common match is offered only for a note of the section's kind (a faction or organization fits a person or a place), so a place is never its battle map and an item named for a person is never that person (#694).
+- Play Notes and Export notes say who filed them: `session-new`, `play-notes-new` and `export-new` take `--created-by session-play | vault-ingest | manual` (default `manual`); session-play and vault-ingest pass their own name (#695).
+
 ## [1.12.39] — 2026-11-17
 
 ### Fixed

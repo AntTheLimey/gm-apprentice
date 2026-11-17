@@ -82,6 +82,24 @@ class PlayNotesNewTests(unittest.TestCase):
             fm, None, vl.raw_frontmatter(text)) if level == "ERROR"]
         self.assertEqual(errors, [])
 
+    def test_created_by_names_who_filed_it(self):
+        # #695: session-play files its notes as session-play; the default
+        # is manual, on both records.
+        code, out = self.new("--write", "--created-by", "session-play")
+        self.assertEqual(code, 0, out)
+        for rel in (NOTES, EXPORT_NOTE):
+            fm = vl.extract_frontmatter(self.read(rel))
+            self.assertEqual(fm["created_by"], "session-play", rel)
+
+    def test_created_by_defaults_to_manual_and_takes_only_known_names(self):
+        code, out = self.new("--write")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(vl.extract_frontmatter(self.read(NOTES))
+                         ["created_by"], "manual")
+        with self.assertRaises(SystemExit):
+            run(self.vault, "play-notes-new", "--session", INDEX,
+                "--created-by", "someone")
+
     def test_index_gets_the_link_and_date_and_keeps_the_rest(self):
         code, out = self.new("--write")
         self.assertEqual(code, 0, out)

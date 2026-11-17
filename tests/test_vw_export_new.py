@@ -86,6 +86,13 @@ class ExportNewTests(unittest.TestCase):
                          f"{SESSION} - Play Notes")
         self.assertIn("status: played\n", self.read(INDEX))
 
+    def test_created_by_names_who_filed_it(self):
+        # #695: vault-ingest files an export as vault-ingest.
+        code, out = self.new("--write", "--created-by", "vault-ingest")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(vl.extract_frontmatter(self.read(EXPORT_NOTE))
+                         ["created_by"], "vault-ingest")
+
     def test_play_notes_can_follow_the_export(self):
         code, out = self.new("--write", "--play-date", "2026-10-18")
         self.assertEqual(code, 0, out)

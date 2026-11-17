@@ -14,11 +14,12 @@
     vault_write.py VAULT timeline --under HEADING [--after HEADING]
                                [--file REL] [--write]                   < entries
     vault_write.py VAULT session-new --number N --title T [--play-date D]
-                               [--chapter C] [--export PATH | --upcoming] [--write]
+                               [--chapter C] [--export PATH | --upcoming]
+                               [--created-by WHO] [--write]
     vault_write.py VAULT play-notes-new --session INDEX [--play-date D]
-                               [--export PATH] [--write]
+                               [--export PATH] [--created-by WHO] [--write]
     vault_write.py VAULT export-new --session INDEX --export PATH
-                               [--play-date D] [--write]
+                               [--play-date D] [--created-by WHO] [--write]
     vault_write.py VAULT resolve --export PATH                (read-only)
     vault_write.py VAULT chapter-new --title T [--sort-order N]
                                [--status S] [--write]
@@ -3264,15 +3265,27 @@ def resolve_export(batch: Batch, entries: list[tuple[str, str]],
             for n, rels in names.items()}
     live = {n: rels for n, rels in live.items() if rels}
     index = links._index(live)
-    typed_cache: list[set[str]] = []
+    types_cache: list[tuple[dict[str, str], set[str]]] = []
+
+    def types() -> dict[str, str]:
+        """Each person's, place's and thing's type: read once, if asked."""
+        if not types_cache:
+            found = {rel: t for rel, note in vl.vault_files(batch.vault)
+                     if (t := vl.entity_type(vl.extract_frontmatter(note)))
+                     in NAME_TYPES}
+            types_cache.append((found, set(found)))
+        return types_cache[0][0]
 
     def typed() -> set[str]:
-        """The people, places and things: read once, and only if asked."""
-        if not typed_cache:
-            typed_cache.append({
-                rel for rel, note in vl.vault_files(batch.vault)
-                if vl.entity_type(vl.extract_frontmatter(note)) in NAME_TYPES})
-        return typed_cache[0]
+        types()
+        return types_cache[0][1]
+
+    def fits(rel: str, tag: str, section: str) -> bool:
+        """A `part` match (a word or two in common) only of a note of the
+        section's kind: "The Wayside Shrine" is not its battle map, and
+        "Gilt's Chest" is not Master Orrin Gilt. A close spelling is
+        offered whatever its kind."""
+        return tag != "part" or types().get(rel) in SECTION_TYPES[section]
 
     def direct(spelling: str) -> tuple[str, list[str]] | None:
         n = vl.normalize(spelling)
@@ -3308,6 +3321,8 @@ def resolve_export(batch: Batch, entries: list[tuple[str, str]],
             best: dict[str, str] = {}      # path -> its best tag
             for spelling in spellings:
                 for rel, tag in links.candidates(spelling, index, None):
+                    if not fits(rel, tag, section):
+                        continue
                     if (rel not in best or links.TAGS.index(tag)
                             < links.TAGS.index(best[rel])):
                         best[rel] = tag
@@ -3342,6 +3357,24 @@ _WORD4_RE = re.compile(r"\b[^\W\d_]{4,}\b")
 # Notes whose names a session's prose spells: who, where, what.
 NAME_TYPES = frozenset({"pc", "npc", "location", "faction", "organization",
                         "creature", "item"})
+# The kinds of note an export section's entry can be a part match for.
+# A group goes with either: a faction's lodge or guildhall is often
+# written up on the faction's own note.
+GROUP_TYPES = frozenset({"faction", "organization"})
+SECTION_TYPES = {"NPCs": frozenset({"pc", "npc", "creature"}) | GROUP_TYPES,
+                 "Locations": frozenset({"location"}) | GROUP_TYPES,
+                 "Items": frozenset({"item"})}
+# A sentence's start: the line's start, a list or quote marker, or a
+# sentence's end (closing quotes and brackets after it) that is not a
+# title's full stop ("Dr. Voss"); then spaces, opening quotes and
+# brackets, emphasis marks.
+_TITLES = ("Mr", "Mrs", "Ms", "Dr", "St", "Mt", "Fr", "Sr", "Jr", "Lt",
+           "Col", "Rev", "Sgt", "Capt", "Prof")
+_SENTENCE_OPEN_RE = re.compile(
+    r"(?:^|^\s*(?:[-*+>]|\d+[.)])|"
+    + "".join(rf"(?<!\b{t})" for t in _TITLES)
+    + r"(?<!\be\.g)(?<!\bi\.e)[.!?:][\"'”’)\]*_]*)"
+    r"[\s\"'“‘(\[*_]*$")
 
 
 def prose_near(batch: Batch, text: str, live: dict[str, set[str]],
@@ -3365,14 +3398,23 @@ def prose_near(batch: Batch, text: str, live: dict[str, set[str]],
     lower = {w for w in _WORD4_RE.findall(text) if w[0].islower()}
     lower |= {d.casefold() for d in (*calendar.day_name,
                                      *calendar.month_name) if d}
-    prose = "\n".join(ln for ln in text.splitlines()
-                      if not ln.lstrip().startswith("#"))
     seen: dict[str, int] = {}
-    for word in _WORD4_RE.findall(prose):
-        if word[0].isupper():           # Ólafur as well as Oliver
-            seen[word] = seen.get(word, 0) + 1
+    mid: set[str] = set()     # capitalised somewhere other than a sentence start
+    for line in text.splitlines():
+        if line.lstrip().startswith("#"):
+            continue
+        for m in _WORD4_RE.finditer(line):
+            word = m.group(0)
+            if word[0].isupper():       # Ólafur as well as Oliver
+                seen[word] = seen.get(word, 0) + 1
+                if not _SENTENCE_OPEN_RE.search(line[:m.start()]):
+                    mid.add(word)
     for word, count in seen.items():
         low = word.casefold()
+        # A word only ever capitalised to start a sentence is English
+        # ("Later"), not a name: a name turns up mid-sentence somewhere.
+        if word not in mid:
+            continue
         if low in known or low in named or low in lower:
             continue
         # Same first letter, and not a word built on the name (Bengali).
@@ -3449,6 +3491,9 @@ def cmd_resolve(batch: Batch, args: argparse.Namespace, _text: str) -> None:
     resolve_export(batch, export_entries(export), export)
 
 
+# Who files a play record, as its `created_by` says (--created-by).
+CREATED_BY = ("session-play", "vault-ingest", "manual")
+
 # Each play record: (its label, the file name's suffix, its `type:`).
 PLAY_RECORDS = {
     "play_notes": ("Play Notes", "Play Notes", "session-play-notes"),
@@ -3458,7 +3503,8 @@ PLAY_RECORDS = {
 
 def record_text(key: str, stem: str, n: int, chapter_raw: str | None,
                 campaign_raw: str | None, play_date: str | None,
-                export_path: str | None = None, export: str = "") -> str:
+                export_path: str | None = None, export: str = "",
+                created_by: str = "manual") -> str:
     """A play record for the session index `stem`: Play Notes (empty), or
     an Export holding the export whole and unedited."""
     _label, suffix, rtype = PLAY_RECORDS[key]
@@ -3469,7 +3515,7 @@ def record_text(key: str, stem: str, n: int, chapter_raw: str | None,
     # A raw table record: off the player site even in a vault with no
     # publish list. The GM site still pages it (decideGmPage).
     note_fm += [f"campaign: {campaign_raw or chr(34) * 2}",
-                "canon_status: AUTHORITATIVE", "created_by: manual",
+                "canon_status: AUTHORITATIVE", f"created_by: {created_by}",
                 "publish: false"]
     if export_path:
         note_fm.append(f"source_file: {json.dumps(Path(export_path).name)}")
@@ -3484,7 +3530,8 @@ def record_text(key: str, stem: str, n: int, chapter_raw: str | None,
 
 
 def file_record(batch: Batch, index: str, key: str, play_date: str | None,
-                export_path: str | None = None, export: str = "") -> str:
+                export_path: str | None = None, export: str = "",
+                created_by: str = "manual") -> str:
     """File one play record beside an index (already filed, or created
     earlier in this batch): the note, and on the index `documents.<key>`,
     play_date (when given) and status played (from planned or prepped
@@ -3540,7 +3587,7 @@ def file_record(batch: Batch, index: str, key: str, play_date: str | None,
     rec_text = record_text(
         key, stem, n, chapter_raw, campaign_raw,
         played if ISO_DATE_RE.fullmatch(played) else None,
-        export_path, export)
+        export_path, export, created_by)
     batch.create(rec_rel, rec_text)
     schema_check(batch, rec_rel, rec_text)
 
@@ -3594,10 +3641,11 @@ def cmd_play_notes_new(batch: Batch, args: argparse.Namespace,
     check_play_date(args.play_date)
     export = read_export(args.export) if args.export else ""
     index = batch.note_named(args.session, {"session"}, "--session")
-    file_record(batch, index, "play_notes", args.play_date)
+    file_record(batch, index, "play_notes", args.play_date,
+                created_by=args.created_by)
     if args.export:
         file_record(batch, index, "export", args.play_date,
-                    args.export, export)
+                    args.export, export, args.created_by)
         resolve_export(batch, export_entries(export), export)
 
 
@@ -3608,7 +3656,8 @@ def cmd_export_new(batch: Batch, args: argparse.Namespace,
     check_play_date(args.play_date)
     export = read_export(args.export)
     index = batch.note_named(args.session, {"session"}, "--session")
-    file_record(batch, index, "export", args.play_date, args.export, export)
+    file_record(batch, index, "export", args.play_date, args.export, export,
+                args.created_by)
     resolve_export(batch, export_entries(export), export)
 
 
@@ -3730,7 +3779,8 @@ def cmd_session_new(batch: Batch, args: argparse.Namespace,
     batch.create(index_rel, index_text)
     schema_check(batch, index_rel, index_text)
     notes_text = record_text("play_notes", stem, n, chapter_raw,
-                             campaign_raw, args.play_date)
+                             campaign_raw, args.play_date,
+                             created_by=args.created_by)
     if not upcoming:
         batch.create(notes_rel, notes_text)
         schema_check(batch, notes_rel, notes_text)
@@ -3747,7 +3797,7 @@ def cmd_session_new(batch: Batch, args: argparse.Namespace,
                   "chapter: campaign and the vault's own keys not carried")
     if args.export:
         file_record(batch, index_rel, "export", args.play_date,
-                    args.export, export)
+                    args.export, export, args.created_by)
         resolve_export(batch, export_entries(export), export)
 
 
@@ -4114,7 +4164,8 @@ def cmd_plan(batch: Batch, args: argparse.Namespace, text: str) -> None:
                              f"(and --chapter) to file one as upcoming")
         cmd_session_new(batch, argparse.Namespace(
             number=args.number, title=args.title, play_date=None,
-            chapter=args.chapter, upcoming=True, export=None), "")
+            chapter=args.chapter, upcoming=True, export=None,
+            created_by="manual"), "")
         index = next(rel for rel, before in batch.originals.items()
                      if before is None)
     index_text = batch.read(index)
@@ -4988,6 +5039,8 @@ def build_parser() -> argparse.ArgumentParser:
                     help="a session not yet played (prep): the index "
                     "alone, status planned, no Play Notes")
     sn.add_argument("--export", help="the export file (any path)")
+    sn.add_argument("--created-by", dest="created_by", choices=CREATED_BY,
+                    default="manual", help="the skill filing it, stamped as created_by on the play records (default manual)")
     sn.add_argument("--write", action="store_true", help="write it (default: preview)")
     pn = sub.add_parser(
         "play-notes-new", help="Play Notes beside a session index prep "
@@ -5001,6 +5054,8 @@ def build_parser() -> argparse.ArgumentParser:
                     help="the session index: path or name")
     pn.add_argument("--play-date", dest="play_date", help="YYYY-MM-DD")
     pn.add_argument("--export", help="the export file (any path)")
+    pn.add_argument("--created-by", dest="created_by", choices=CREATED_BY,
+                    default="manual", help="the skill filing it, stamped as created_by on the play records (default manual)")
     pn.add_argument("--write", action="store_true", help="write it (default: preview)")
     en = sub.add_parser(
         "export-new", help="a table-assistant export beside a session "
@@ -5015,6 +5070,8 @@ def build_parser() -> argparse.ArgumentParser:
     en.add_argument("--session", required=True,
                     help="the session index: path or name")
     en.add_argument("--export", required=True, help="the export file (any path)")
+    en.add_argument("--created-by", dest="created_by", choices=CREATED_BY,
+                    default="manual", help="the skill filing it, stamped as created_by on the play records (default manual)")
     en.add_argument("--play-date", dest="play_date", help="YYYY-MM-DD")
     en.add_argument("--write", action="store_true", help="write it (default: preview)")
     rs = sub.add_parser(

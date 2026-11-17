@@ -146,7 +146,7 @@ session_number: N
 chapter: "[[Chapter N - Title]]"
 campaign: ""
 canon_status: AUTHORITATIVE
-created_by: manual
+created_by: manual          # or: session-play | vault-ingest (--created-by)
 publish: false
 source_file: "export.md"
 tags: []
