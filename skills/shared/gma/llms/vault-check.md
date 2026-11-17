@@ -25,7 +25,7 @@ gma vault-check <vault> <command> [<NAME> ...] [options]
 | `--dry-run` |  | report-stats only: print each count's old and new value and write nothing |
 | `--force` |  | report-stats only: allow a count to drop below a non-zero one already in the report |
 | `--apply` | `NAME ...` | settings only: apply the fix for each named fault (a proposed fix needs the GM's yes by name) |
-| `--fix` |  | apply the settings check's certain fixes, or the wrapup or gm-leak check's mechanical repairs (frontmatter backfills and the Keeper-facing re-nest for wrapup; the bold-wrapped ERROR heading re-nest for gm-leak); without it the repairs print as WOULD-FIX rows and nothing is written. Ignored by `all`. |
+| `--fix` |  | apply the settings check's certain fixes, rewrite the frontmatter check's escaped-quote values (\"\") to empty, or the wrapup or gm-leak check's mechanical repairs (frontmatter backfills and the Keeper-facing re-nest for wrapup; the bold-wrapped ERROR heading re-nest for gm-leak); without it the repairs print as WOULD-FIX rows and nothing is written. Ignored by `all`. |
 | `--renest-excludes` |  | gm-leak only, vault-wide: the 1.8.3 migration — re-nest every heading titled with a current exclude_sections entry under ## GM Notes, then collapse exclude_sections to ["GM Notes"]. Dry run unless --fix. |
 | `--settle` | `NOTE:LINE` | gm-leak only: the Keeper-looking heading at NOTE:LINE (as a gm-leak row names it) is for players; the publish tool records it and gm-leak stops flagging it until the heading changes |
 | `--threshold` | `THRESHOLD` | similarity ratio for names (default: the vault's vault.name_match setting) |

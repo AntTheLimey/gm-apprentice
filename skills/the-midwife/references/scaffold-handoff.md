@@ -194,6 +194,8 @@ question per trigger — so file them without re-asking:
    `status` is `stub` while it holds no fact and `active` once it
    does (`inactive`: a domain the campaign has set aside); the
    vault check refuses any other word
+   A domain file keeps the template's `createdSession: ""` (made
+   before play), so the first session's reconcile can promote it
 3. Unresolved three-state flags (deferred heritage prompts and
    the like) go to `_World/_flags.md`
 

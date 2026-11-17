@@ -505,7 +505,9 @@ def voice_read(text: str) -> str | None:
         return None
     value = "" if raw.startswith("#") else re.split(r"\s#", raw, maxsplit=1)[0]
     value = value.strip()
-    return "" if value.casefold() in YAML_NULL_WORDS else value
+    if value.casefold() in YAML_NULL_WORDS or is_escaped_empty(value):
+        return ""
+    return value
 
 
 def voice_value(text: str) -> str:
@@ -831,6 +833,51 @@ def parse_session_number(value: Any) -> int | None:
         return None
     n = int(m.group(1))
     return n if n <= MAX_PLAUSIBLE_SESSION else None
+
+
+# A value that is only backslash-escaped empty quotes, as `voice: \"\"` (#715):
+# the midwife scaffold of 2026-11-16 wrote twelve NPC notes so. YAML reads a bare
+# `\"\"` as a four-character string, not an empty one. Exactly the two escaped
+# quotes of one kind, nothing around them.
+ESCAPED_EMPTY_RE = re.compile(r"""\\(["'])\\\1""")
+
+
+def is_escaped_empty(value: Any) -> bool:
+    """True for a value that is only escaped empty quotes."""
+    return isinstance(value, str) and ESCAPED_EMPTY_RE.fullmatch(value.strip()) is not None
+
+
+def effectively_empty(value: Any) -> bool:
+    """Whether a frontmatter value says nothing: absent, `""`, `[]`, `{}`,
+    only whitespace, or only escaped empty quotes."""
+    return (value is None or value in ("", [], {})
+            or (isinstance(value, str)
+                and (not value.strip() or is_escaped_empty(value))))
+
+
+ESCAPED_EMPTY_LINE_RE = re.compile(
+    r"""^([^\s#:][^:]*):([ \t]*)\\(["'])\\\3([ \t]*(?:#.*)?)$""")
+
+
+def escaped_empty_keys(text: str, fix: bool = False) -> tuple[list[str], str]:
+    """(keys, text) for a note: the top-level frontmatter keys whose whole
+    value is escaped empty quotes, and the text with each rewritten to `""`
+    when `fix` (a trailing comment and the line ending stay). Only the
+    frontmatter block is read; a list item or nested value is left alone."""
+    lines = text.splitlines(keepends=True)
+    end, err = frontmatter_span(lines)
+    if err or end <= 0:
+        return [], text
+    keys = []
+    for i in range(1, end):
+        body = lines[i].rstrip("\r\n")
+        m = ESCAPED_EMPTY_LINE_RE.match(body)
+        if m:
+            keys.append(m.group(1).strip())
+            if fix:
+                lines[i] = (f'{m.group(1)}:{m.group(2) or " "}""{m.group(4)}'
+                            + lines[i][len(body):])
+    return keys, "".join(lines)
 
 
 def before_play(value: Any) -> bool:

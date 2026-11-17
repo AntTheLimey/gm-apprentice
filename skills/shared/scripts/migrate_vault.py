@@ -24,7 +24,7 @@ from template_compare import compare, summary
 from vault_check import (PLAY_RECORD_TYPES, WRAP_TYPES, publish_list_sets,
                          shared_threads_tool_too_old,
                          wrapup_filename_findings)
-from vaultlib import (WRAP_UP_TYPES, StateUnreadable, campaign_overview,
+from vaultlib import (WRAP_UP_TYPES, effectively_empty, StateUnreadable, campaign_overview,
                       entity_type, extract_frontmatter, is_active_pc, out_of_play,
                       set_key, frontmatter_span,
                       parse_version, plugin_version,
@@ -973,6 +973,50 @@ def find_null_last_updated(vault: Path) -> list[Item]:
                  apply)]
 
 
+# --- scaffold notes made before play -------------------------------------------
+
+# 1.12.52 (#717): the-midwife's adventure brief and `_World/` notes were written
+# with no `createdSession`, so `vault-check stale-drafts` could not date them
+# and reconcile never took them to canon. From 1.12.52 their templates carry
+# `createdSession: ""` (made before play). An older DRAFT of those two types
+# with no `createdSession` key and no `asOfSession` value (nothing at the
+# table touched it) gets the blank one; a note with either is left alone.
+SCAFFOLD_TYPES = frozenset({"adventure-brief", "world_domain"})
+CREATED_KEY_RE = re.compile(r"""^["']?createdSession["']?[ \t]*:""")
+
+
+def _unstamped_scaffold(fm: list[str], _rel: str) -> bool:
+    if _fm_type(fm) not in SCAFFOLD_TYPES:
+        return False
+    vals = extract_frontmatter("".join(["---\n", *fm, "---\n"])) or {}
+    return (vals.get("canon_status") == "DRAFT"
+            and not any(CREATED_KEY_RE.match(line) for line in fm)
+            and effectively_empty(vals.get("asOfSession")))
+
+
+def find_scaffold_pre_play(vault: Path) -> list[Item]:
+    """1.12.52: a DRAFT adventure brief or world note with no
+    `createdSession` gets `createdSession: ""`, the stamp for a note made
+    before play, so stale-drafts can date it and reconcile can promote it."""
+    found = _notes_with(vault, _unstamped_scaffold)
+    if not found:
+        return []
+
+    def apply(_value: str | None) -> list[str]:
+        done = []
+        for rel in found:
+            def change(fm: list[str], eol: str, rel: str = rel) -> None:
+                if _unstamped_scaffold(fm, rel):
+                    set_key(fm, "createdSession", '""', eol)
+            edit_frontmatter(vault / rel, change)
+            done.append(f'stamped createdSession: "" (made before play) in {rel}')
+        return done
+
+    return [Item("scaffold-pre-play", WILL,
+                 [f'stamp {rel} as made before play (createdSession: "")'
+                  for rel in found], apply)]
+
+
 # --- the `publish` row of the schema table -----------------------------------
 
 # 1.11.3: the stock schema table in `_meta/entity-types.md` once wrote the
@@ -1338,4 +1382,8 @@ VAULT_CHECKS: list[Check] = [
           "play records off the player site", find_play_records_publish,
           asks_site=True, kind="bookkeeping",
           plain=("Marked older Play Notes and Export notes publish: false, so a site with no publish list no longer shows your raw table records to the players.")),
+    Check("scaffold-pre-play", "1.12.52", 3,
+          "scaffold notes made before play", find_scaffold_pre_play,
+          kind="bookkeeping",
+          plain=("Marked the adventure brief and world notes the Midwife wrote before play as made before play, so the stale-draft check stops warning about them and the first session's reconcile can promote them.")),
 ]

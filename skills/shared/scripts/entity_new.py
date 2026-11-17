@@ -613,6 +613,13 @@ def run(batch: vw.Batch, args: argparse.Namespace, text: str) -> None:
         if key in ("type", "name", "relationships"):
             continue
         value = block[0].partition(":")[2].strip()
+        if len(block) == 1 and vl.is_escaped_empty(vw.strip_comment(value)):
+            # `voice: \"\"` is a four-character string, not an empty one
+            # (#715): written as the empty value it was meant to be.
+            block = [f'{key}: ""']
+            value = '""'
+            batch.row("INFO", rel, "", f'{key}: escaped quotes (\\"\\") '
+                      f'written as ""')
         if key == name_field and len(block) == 1 \
                 and not vw.strip_comment(value).strip("\"' "):
             continue        # an empty title leaves the note its name

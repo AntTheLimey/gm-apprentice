@@ -9,6 +9,13 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.52] — 2026-11-17
+
+### Fixed
+
+- A value written as escaped empty quotes (`voice: \"\"`) no longer counts as a voice or a filled field: the voices check reads it as none, `gma vault-check <vault> frontmatter` warns on it and `--fix` rewrites it to `""` (campaign-qa offers it), and `entity-new` writes `""` when it is sent the escaped form (#715).
+- The Midwife's adventure brief and `_World/` notes are stamped as made before play, so `stale-drafts` stops warning that they cannot be dated and the first session's reconcile can promote them. The update stamps older ones (check `scaffold-pre-play`) (#717).
+
 ## [1.12.51] — 2026-11-17
 
 ### Fixed
