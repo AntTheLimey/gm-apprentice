@@ -20,6 +20,7 @@ stub_count: 0
   - [[Session 01]] (status: played)
     - plan: [[Session_01_Plan]]
     - play notes: [[Session_01_Play_Notes]]
+    - export: [[Session_01_Export]]
     - wrap-up: [[Chapter_01_Session_01_Wrap_Up]]
   - [[Scene Title]] (status: planned)
 - [[Chapter 2 - Title]] (sessions: N, scenes: N, status: active)
@@ -70,7 +71,7 @@ stub_count: 0
 ```
 
 Sessions and scenes (chapter prep) nest under their chapter; a
-session's own plan, play notes, and wrap-up nest under that session in
+session's own plan, play notes, export and wrap-up nest under that session in
 turn. A PC's `*_Story.md`
 companion nests directly under the PC. Every `type: plan` entity gets its
 own `### Plans (N)` line instead of appearing under Entities by Type. A

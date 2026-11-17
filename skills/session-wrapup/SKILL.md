@@ -112,24 +112,28 @@ flush` in the site directory and report its per-PC summary
 (publish-site `references/live-state-flush.md`). No Tier-2 site →
 skip.
 
-Read the session's Play Notes (`type: session-play-notes`). A
-session with no index or Play Notes: `vw session-new --number N
---title "T" --play-date D [--export PATH]` files both; a session
-with an index but no Play Notes: `vw play-notes-new
---session "<index>" --play-date D [--export PATH]`. These two run on
-their own with `--write`, not in the batch: the rest works from the
-notes. Without an export, ask the GM for notes (paste, path, or
-dictation) for them.
+Read the session's play records: its Play Notes (`type:
+session-play-notes`) and its Export (`type: session-export`), each
+its own note, linked as `documents.play_notes` and `documents.export`;
+either may be missing. A session with no index: `vw session-new
+--number N --title "T" --play-date D [--export PATH]` files the index
+and Play Notes (and the Export); an index but no Play Notes: `vw
+play-notes-new --session "<index>" --play-date D`; a gmassistant.app
+export the session has no Export for, Play Notes or not: `vw
+export-new --session "<index>" --export PATH`. These run on their own
+with `--write`, not in the batch: the rest works from the records.
+With neither notes nor an export, ask the GM for notes (paste, path,
+or dictation) for the Play Notes.
 Read the PC roster and the session's Plan for planned-vs-actual.
 `gma plan-check <plan> --inventory` gives per-section status and
 word counts but not scene titles — open the plan body for those.
 What the last session left open (for What Carries Forward and the
 Keeper Checklist) comes from `gma session-context <vault> --carry --before "<session index>"`; don't read that Wrap-Up.
 
-**gmassistant.app export:** if the Play Notes contain a
-`## Memorable Moments` heading, they are a gmassistant.app
-export — read `references/gmassistant-export.md`, which changes
-Steps 2 and 4.
+**gmassistant.app export:** if the session has an Export, or (an
+older vault) its Play Notes contain a `## Memorable Moments` heading,
+read `references/gmassistant-export.md`, which changes Steps 2 and 4.
+Play Notes beside an Export are the GM's jottings: use them too.
 
 ### 2. Narrative Recap
 

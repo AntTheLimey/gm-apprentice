@@ -26,6 +26,8 @@ PREV = f"{SESSIONS}/Session 12/Session 12 - That Would Be a Mistake.md"
 INDEX = f"{SESSIONS}/Session 13/Session 13 - The Long Way Round.md"
 NOTES = (f"{SESSIONS}/Session 13/"
          "Session 13 - The Long Way Round - Play Notes.md")
+EXPORT_NOTE = (f"{SESSIONS}/Session 13/"
+               "Session 13 - The Long Way Round - Export.md")
 
 PREV_TEXT = """---
 type: session
@@ -183,18 +185,23 @@ class SessionNewTests(unittest.TestCase):
             fm, None, vl.raw_frontmatter(text)) if level == "ERROR"]
         self.assertEqual(errors, [])
 
-    def test_play_notes_hold_the_export_whole(self):
+    def test_the_export_is_its_own_note_beside_empty_play_notes(self):
         code, out = self.new("--write")
         self.assertEqual(code, 0, out)
-        text = self.read(NOTES)
+        self.assertNotIn("## Summary", self.read(NOTES))
+        text = self.read(EXPORT_NOTE)
         fm = vl.extract_frontmatter(text)
-        self.assertEqual(fm["type"], "session-play-notes")
+        self.assertEqual(fm["type"], "session-export")
         self.assertEqual(vl.wikilink_target(fm["session"]),
                          "Session 13 - The Long Way Round")
         self.assertEqual(fm["canon_status"], "AUTHORITATIVE")
         self.assertEqual(fm["campaign"], "Dead End")
-        self.assertIn("\n## Narrative Record\n", text)
         self.assertTrue(text.endswith(EXPORT), text)
+        documents = vl.nested_mapping(self.read(INDEX), "documents")
+        self.assertEqual(vl.wikilink_target(documents["export"]),
+                         "Session 13 - The Long Way Round - Export")
+        self.assertEqual(vl.wikilink_target(documents["play_notes"]),
+                         "Session 13 - The Long Way Round - Play Notes")
         errors = [m for level, m in schema_rules.frontmatter_findings(
             fm, None, vl.raw_frontmatter(text)) if level == "ERROR"]
         self.assertEqual(errors, [])
@@ -321,6 +328,7 @@ class SessionNewTests(unittest.TestCase):
             if idx.exists():
                 idx.unlink()
                 (self.vault / NOTES).unlink()
+                (self.vault / EXPORT_NOTE).unlink()
             code, out = self.new("--write")
             self.assertEqual(code, 0, out)
             text = self.read(INDEX)
@@ -429,7 +437,7 @@ class SessionNewTests(unittest.TestCase):
         code, out = run(self.vault, "session-new", "--number", "14",
                         "--title", "X", "--upcoming", "--export", "x.md")
         self.assertEqual(code, 1, out)
-        self.assertIn("--upcoming has no Play Notes", out)
+        self.assertIn("--upcoming is a session not yet played", out)
 
     def test_a_title_that_cannot_be_a_file_name_is_refused(self):
         code, out = run(self.vault, "session-new", "--number", "13",

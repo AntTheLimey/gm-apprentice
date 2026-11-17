@@ -277,10 +277,11 @@ const NOTE_CODES = new Set([
   'WITHHELD', 'PUBLISH_FALSE', 'PUBLISH_NONE',
 ]);
 
-// A session's Play Notes note (either spelling of its type).
-const PLAY_NOTES_TYPES = new Set(['session-play-notes', 'session_play_notes']);
-function isPlayNotes(frontmatter) {
-  return !!frontmatter && PLAY_NOTES_TYPES.has(frontmatter.type);
+// A session's play records, either spelling of each type: its Play Notes, and a table assistant's export filed as
+// its own Export note (#691).
+const PLAY_RECORD_TYPES = new Set(['session-play-notes', 'session_play_notes', 'session-export', 'session_export']);
+function isPlayRecord(frontmatter) {
+  return !!frontmatter && PLAY_RECORD_TYPES.has(frontmatter.type);
 }
 
 // The GM site's verdict for one page. `options` is decidePage's plus `show` (a Set of the kinds the GM
@@ -298,8 +299,8 @@ function decideGmPage(page, options) {
   if (alwaysExcludedSegment(rel)) return withPlayer(decidePage(page, { ...opts, publishConfig: opts.playerConfig }));
 
   const outputPath = (page && page.outputPath) || null;
-  // A session's Play Notes always get a page here, whatever the notes switch says: its Story page links them.
-  const playNotes = isPlayNotes(page && (page.sourceFrontmatter || page.frontmatter));
+  // A session's play records always get a page here, whatever the notes switch says: its Story page links them.
+  const playNotes = isPlayRecord(page && (page.sourceFrontmatter || page.frontmatter));
   const folder = matchExcludedDir(String(rel == null ? '' : rel), opts.hiddenFolders);
   if (folder !== undefined) {
     const publishConfig = opts.playerConfig;
@@ -324,7 +325,7 @@ function decideGmPage(page, options) {
 module.exports = {
   decidePage,
   decideGmPage,
-  isPlayNotes,
+  isPlayRecord,
   NOTE_CODES,
   storyCompanionPc,
   publishesPage,

@@ -17,6 +17,8 @@
                                [--chapter C] [--export PATH | --upcoming] [--write]
     vault_write.py VAULT play-notes-new --session INDEX [--play-date D]
                                [--export PATH] [--write]
+    vault_write.py VAULT export-new --session INDEX --export PATH
+                               [--play-date D] [--write]
     vault_write.py VAULT resolve --export PATH                (read-only)
     vault_write.py VAULT chapter-new --title T [--sort-order N]
                                [--status S] [--write]
@@ -597,11 +599,13 @@ def raw_value(text: str, name: str) -> str | None:
     return None if value is None else strip_comment(value).strip()
 
 
-def find_play_notes(batch: Batch, index: str, stem: str) -> list[str]:
-    """Stems of the Play Notes notes in the index's own folder whose
-    `session:` link names this index."""
+def find_play_notes(batch: Batch, index: str, stem: str,
+                    key: str = "play_notes") -> list[str]:
+    """Stems of the notes of one play record (`key`: play_notes or
+    export) in the index's own folder whose `session:` link names this
+    index."""
     folder = index.rpartition("/")[0]
-    types = vc.SESSION_DOC_TYPES["play_notes"][1]
+    types = vc.SESSION_DOC_TYPES[key][1]
     want = vl.normalize(stem)
     out = []
     for rel, text in vl.vault_files(batch.vault, folder or None):
@@ -644,20 +648,35 @@ def cmd_wrapup_new(batch: Batch, args: argparse.Namespace, _text: str) -> None:
         have = batch.with_stem(stem_of.rsplit("/", 1)[-1].strip())
         if have:
             raise WriteError(f"{index}: already has a Wrap-Up: {have[0]}")
-    notes = documents.get("play_notes") or ""
-    if is_blank(notes):
-        notes = ""
-    notes_warning = ""
-    if not notes:
-        hits = find_play_notes(batch, index, stem)
+    # The source is the Export, which holds the whole table record, else
+    # the Play Notes: a link that names a note, else the one note that
+    # names the session. Several notes of one record leave it blank. When
+    # nothing is found, a link as written stands (its note may come later).
+    notes, notes_warning, as_written = "", "", ""
+    for key in ("export", "play_notes"):
+        link = documents.get(key) or ""
+        if is_blank(link):
+            link = ""
+        if link and batch.with_stem(
+                re.split(r"[#^|]", vl.wikilink_target(link), maxsplit=1)[0]
+                .replace("\\", "/").rsplit("/", 1)[-1].strip()):
+            notes = link
+            break
+        if link and (key == "play_notes" or not as_written):
+            as_written = link   # the Play Notes link wins, as before
+        hits = find_play_notes(batch, index, stem, key)
         if len(hits) == 1:
             notes = f"[[{hits[0]}]]"
-        else:
-            notes_warning = (
-                "no Play Notes found for this session: source_document "
-                "left blank" if not hits else
-                "several Play Notes notes link this session: "
-                "source_document left blank")
+            break
+        if hits:
+            notes_warning = (f"several {PLAY_RECORDS[key][1]} notes link "
+                             "this session: source_document left blank")
+            break
+    if not notes and not notes_warning:
+        notes = as_written
+    if not notes and not notes_warning:
+        notes_warning = ("no Play Notes or Export found for this session: "
+                         "source_document left blank")
     values = {
         "session": f'"[[{stem}]]"',
         "session_number": str(number),
@@ -3403,10 +3422,12 @@ def check_play_date(value: str | None) -> None:
         raise WriteError("--play-date must be a real date, YYYY-MM-DD")
 
 
-def play_notes_naming(batch: Batch, stem: str) -> list[str]:
-    """Vault-relative paths (without .md) of the Play Notes notes anywhere
-    in the vault whose `session:` link names the index `stem`."""
-    types = vc.SESSION_DOC_TYPES["play_notes"][1]
+def play_notes_naming(batch: Batch, stem: str,
+                      key: str = "play_notes") -> list[str]:
+    """Vault-relative paths (without .md) of the notes of one play record
+    (`key`: play_notes or export) anywhere in the vault whose `session:`
+    link names the index `stem`."""
+    types = vc.SESSION_DOC_TYPES[key][1]
     want = vl.normalize(stem)
     out = []
     for rel, text in vl.vault_files(batch.vault):
@@ -3428,60 +3449,71 @@ def cmd_resolve(batch: Batch, args: argparse.Namespace, _text: str) -> None:
     resolve_export(batch, export_entries(export), export)
 
 
-def play_notes_text(stem: str, n: int, chapter_raw: str | None,
-                    campaign_raw: str | None, play_date: str | None,
-                    export_path: str | None, export: str) -> str:
-    """A Play Notes note for the session index `stem`: its frontmatter,
-    and the export, if any, whole under `## Narrative Record`."""
-    note_fm = ["type: session-play-notes", f'session: "[[{stem}]]"',
+# Each play record: (its label, the file name's suffix, its `type:`).
+PLAY_RECORDS = {
+    "play_notes": ("Play Notes", "Play Notes", "session-play-notes"),
+    "export": ("an Export", "Export", "session-export"),
+}
+
+
+def record_text(key: str, stem: str, n: int, chapter_raw: str | None,
+                campaign_raw: str | None, play_date: str | None,
+                export_path: str | None = None, export: str = "") -> str:
+    """A play record for the session index `stem`: Play Notes (empty), or
+    an Export holding the export whole and unedited."""
+    _label, suffix, rtype = PLAY_RECORDS[key]
+    note_fm = [f"type: {rtype}", f'session: "[[{stem}]]"',
                f"session_number: {n}"]
     if chapter_raw:
         note_fm.append(f"chapter: {chapter_raw}")
+    # A raw table record: off the player site even in a vault with no
+    # publish list. The GM site still pages it (decideGmPage).
     note_fm += [f"campaign: {campaign_raw or chr(34) * 2}",
-                "canon_status: AUTHORITATIVE", "created_by: manual"]
+                "canon_status: AUTHORITATIVE", "created_by: manual",
+                "publish: false"]
+    if export_path:
+        note_fm.append(f"source_file: {json.dumps(Path(export_path).name)}")
     if play_date:
         note_fm.append(f'play_date: "{play_date}"')
     note_fm.append("tags: []")
     text = ("---\n" + "\n".join(note_fm) + "\n---\n\n"
-            f"# {stem} - Play Notes\n")
+            f"# {stem} - {suffix}\n")
     if export_path:
-        text += (f"\n## Narrative Record\n\nExport "
-                 f"`{Path(export_path).name}`, placed whole and "
-                 f"unedited.\n\n" + export)
+        text += "\n" + export
     return text
 
 
-def cmd_play_notes_new(batch: Batch, args: argparse.Namespace,
-                       _text: str) -> None:
-    """Play Notes beside an index already filed: the note, and on the
-    index documents.play_notes, play_date (when given) and status played
-    (from planned or prepped only). The Plan link stays as it is."""
-    check_play_date(args.play_date)
-    export = read_export(args.export) if args.export else ""
-    index = batch.note_named(args.session, {"session"}, "--session")
+def file_record(batch: Batch, index: str, key: str, play_date: str | None,
+                export_path: str | None = None, export: str = "") -> str:
+    """File one play record beside an index (already filed, or created
+    earlier in this batch): the note, and on the index `documents.<key>`,
+    play_date (when given) and status played (from planned or prepped
+    only). The other records and the Plan link stay as they are. Returns
+    the new note's path."""
+    label, suffix, _rtype = PLAY_RECORDS[key]
     text = batch.read(index)
     fm = vl.extract_frontmatter(text) or {}
     if vl.entity_type(fm) != "session":
         raise WriteError(f"{index}: not a session index (type: session)")
     stem = Path(index).stem
     documents = vl.nested_mapping(text, "documents")
-    link = vl.wikilink_target(documents.get("play_notes"))
+    link = vl.wikilink_target(documents.get(key))
     replaced = ""
     if link and not is_blank(link):
         linked = batch.with_stem(re.split(r"[#^|]", link, maxsplit=1)[0]
                                  .replace("\\", "/").rsplit("/", 1)[-1].strip())
-        types = vc.SESSION_DOC_TYPES["play_notes"][1]
+        types = vc.SESSION_DOC_TYPES[key][1]
         for rel in linked:
             if vl.entity_type(vl.extract_frontmatter(batch.read(rel))
                               or {}) not in types:
                 raise WriteError(
-                    f"{index}: documents.play_notes links {rel}, which is "
-                    f"not Play Notes: fix that link first")
-            raise WriteError(f"{index}: already has Play Notes: {rel}")
+                    f"{index}: documents.{key} links {rel}, which is "
+                    f"not {suffix}: fix that link first")
+            raise WriteError(f"{index}: already has {label}: {rel}")
         replaced = f" (replaces [[{link}]], which names no note)"
-    have = play_notes_naming(batch, stem)
+    have = play_notes_naming(batch, stem, key)
     if have:
-        raise WriteError(f"{index}: already has Play Notes: {have[0]}")
+        raise WriteError(f"{index}: already has {label}: {have[0]}")
     n = vl.parse_session_number(fm.get("session_number"))
     if n is None:
         n = vl.session_ref_number(fm)
@@ -3495,19 +3527,22 @@ def cmd_play_notes_new(batch: Batch, args: argparse.Namespace,
     old_date = (raw_value(text, "play_date") or "").strip("\"'")
     if is_blank(old_date):
         old_date = ""
-    played = args.play_date or old_date
+    played = play_date or old_date
     if played and not ISO_DATE_RE.fullmatch(played):
         batch.row("WARNING", index, "", f"play_date {played!r} is not "
-                  "YYYY-MM-DD, so the Play Notes do not copy it")
+                  f"YYYY-MM-DD, so the {suffix} do not copy it"
+                  if key == "play_notes" else
+                  f"play_date {played!r} is not YYYY-MM-DD, so the "
+                  f"{suffix} does not copy it")
     folder = index.rpartition("/")[0]
-    notes_stem = f"{stem} - Play Notes"
-    notes_rel = f"{folder}/{notes_stem}.md" if folder else f"{notes_stem}.md"
-    notes_text = play_notes_text(
-        stem, n, chapter_raw, campaign_raw,
+    rec_stem = f"{stem} - {suffix}"
+    rec_rel = f"{folder}/{rec_stem}.md" if folder else f"{rec_stem}.md"
+    rec_text = record_text(
+        key, stem, n, chapter_raw, campaign_raw,
         played if ISO_DATE_RE.fullmatch(played) else None,
-        args.export, export)
-    batch.create(notes_rel, notes_text)
-    schema_check(batch, notes_rel, notes_text)
+        export_path, export)
+    batch.create(rec_rel, rec_text)
+    schema_check(batch, rec_rel, rec_text)
 
     lines = text.splitlines(keepends=True)
     end, error = vl.frontmatter_span(lines)
@@ -3516,15 +3551,15 @@ def cmd_play_notes_new(batch: Batch, args: argparse.Namespace,
     eol = "\r\n" if "\r\n" in text else "\n"
     fm_lines = lines[1:end]
     try:
-        vl.set_nested_key(fm_lines, "documents", "play_notes",
-                          f'"[[{notes_stem}]]"', eol)
+        vl.set_nested_key(fm_lines, "documents", key,
+                          f'"[[{rec_stem}]]"', eol)
     except ValueError as e:
         raise WriteError(f"{index}: {e}") from None
-    changes = [f"documents.play_notes [[{notes_stem}]]{replaced}"]
-    if args.play_date and args.play_date != old_date:
-        vl.set_key(fm_lines, "play_date", f'"{args.play_date}"', eol)
-        changes.append(f"play_date {old_date} -> {args.play_date}"
-                       if old_date else f"play_date {args.play_date}")
+    changes = [f"documents.{key} [[{rec_stem}]]{replaced}"]
+    if play_date and play_date != old_date:
+        vl.set_key(fm_lines, "play_date", f'"{play_date}"', eol)
+        changes.append(f"play_date {old_date} -> {play_date}"
+                       if old_date else f"play_date {play_date}")
     status = (raw_value(text, "status") or "").strip("\"'").casefold()
     if status in BEFORE_PLAY:
         at = next((i for i, ln in enumerate(fm_lines)
@@ -3538,14 +3573,43 @@ def cmd_play_notes_new(batch: Batch, args: argparse.Namespace,
                 "status: played", fm_lines[at])
         changes.append(f"status {status or '(none)'} -> played")
     batch.put(index, "".join([lines[0], *fm_lines, *lines[end:]]))
-    batch.row("WOULD-CREATE", notes_rel, "",
-              f"export {Path(args.export).name} under ## Narrative Record"
-              if args.export else "no export: the notes are empty")
-    if args.export and not export.strip():
-        batch.row("WARNING", notes_rel, "", "the export is empty")
-    batch.row("WOULD-ADD", index, "", ", ".join(changes))
+    if key == "export":
+        batch.row("WOULD-CREATE", rec_rel, "",
+                  f"export {Path(export_path or '').name}, whole and "
+                  "unedited")
+        if not export.strip():
+            batch.row("WARNING", rec_rel, "", "the export is empty")
+    else:
+        batch.row("WOULD-CREATE", rec_rel, "", "the notes are empty")
+    if batch.originals.get(index, "") is not None:
+        # An index this batch creates is one CREATE row, not an add too.
+        batch.row("WOULD-ADD", index, "", ", ".join(changes))
+    return rec_rel
+
+
+def cmd_play_notes_new(batch: Batch, args: argparse.Namespace,
+                       _text: str) -> None:
+    """Play Notes beside an index already filed; with --export, the
+    export beside them as its own Export note."""
+    check_play_date(args.play_date)
+    export = read_export(args.export) if args.export else ""
+    index = batch.note_named(args.session, {"session"}, "--session")
+    file_record(batch, index, "play_notes", args.play_date)
     if args.export:
+        file_record(batch, index, "export", args.play_date,
+                    args.export, export)
         resolve_export(batch, export_entries(export), export)
+
+
+def cmd_export_new(batch: Batch, args: argparse.Namespace,
+                   _text: str) -> None:
+    """A table-assistant export beside a session index already filed, as
+    its own Export note: Play Notes there or not, it leaves them alone."""
+    check_play_date(args.play_date)
+    export = read_export(args.export)
+    index = batch.note_named(args.session, {"session"}, "--session")
+    file_record(batch, index, "export", args.play_date, args.export, export)
+    resolve_export(batch, export_entries(export), export)
 
 
 def cmd_session_new(batch: Batch, args: argparse.Namespace,
@@ -3560,7 +3624,8 @@ def cmd_session_new(batch: Batch, args: argparse.Namespace,
     check_play_date(args.play_date)
     upcoming = args.upcoming
     if upcoming and args.export:
-        raise WriteError("--upcoming has no Play Notes to place an export in")
+        raise WriteError("--upcoming is a session not yet played: it has "
+                         "no export")
     export = read_export(args.export) if args.export else ""
     # A chapter with sessions but no chapter note is still named by them.
     found = (find_chapter(batch.vault, args.chapter, missing_ok=True)
@@ -3664,8 +3729,8 @@ def cmd_session_new(batch: Batch, args: argparse.Namespace,
     index_text = "---\n" + "\n".join(fm + carried) + "\n---\n" + body
     batch.create(index_rel, index_text)
     schema_check(batch, index_rel, index_text)
-    notes_text = play_notes_text(stem, n, chapter_raw, campaign_raw,
-                                 args.play_date, args.export, export)
+    notes_text = record_text("play_notes", stem, n, chapter_raw,
+                             campaign_raw, args.play_date)
     if not upcoming:
         batch.create(notes_rel, notes_text)
         schema_check(batch, notes_rel, notes_text)
@@ -3676,14 +3741,13 @@ def cmd_session_new(batch: Batch, args: argparse.Namespace,
               + (f"; its own keys carried: {', '.join(kept)}" if kept
                  else ""))
     if not upcoming:
-        batch.row("WOULD-CREATE", notes_rel, "",
-                  f"export {Path(args.export).name} under ## Narrative "
-                  f"Record" if args.export else "no export: the notes are "
-                  "empty")
+        batch.row("WOULD-CREATE", notes_rel, "", "the notes are empty")
     if not prev:
         batch.row("WARNING", index_rel, "", "no earlier session in this "
                   "chapter: campaign and the vault's own keys not carried")
     if args.export:
+        file_record(batch, index_rel, "export", args.play_date,
+                    args.export, export)
         resolve_export(batch, export_entries(export), export)
 
 
@@ -4911,8 +4975,9 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=raw, description=(
             "Files both beside the previous session, from the session\n"
             "template; the previous index's own keys come forward empty.\n"
-            "--export places a table-assistant export whole under\n"
-            "## Narrative Record and resolves its NPCs, Locations and\n"
+            "--export files a table-assistant export beside them as its\n"
+            "own <index> - Export note, whole and unedited, linked as\n"
+            "documents.export, and resolves its NPCs, Locations and\n"
             "Items: EXACT, ALIAS, NEAR (candidates) or NONE, one row each."))
     sn.add_argument("--number", type=int, required=True, help="the session's number")
     sn.add_argument("--title", required=True, help="the session's title")
@@ -4931,12 +4996,27 @@ def build_parser() -> argparse.ArgumentParser:
             "documents.play_notes, play_date (with --play-date) and a\n"
             "planned or prepped status to played; the Plan link stays.\n"
             "Refused when Play Notes anywhere name the session. --export\n"
-            "works as in session-new."))
+            "works as in session-new; export-new files an export alone."))
     pn.add_argument("--session", required=True,
                     help="the session index: path or name")
     pn.add_argument("--play-date", dest="play_date", help="YYYY-MM-DD")
     pn.add_argument("--export", help="the export file (any path)")
     pn.add_argument("--write", action="store_true", help="write it (default: preview)")
+    en = sub.add_parser(
+        "export-new", help="a table-assistant export beside a session "
+        "index, as its own Export note", formatter_class=raw, description=(
+            "Files <index> - Export beside the index, the export whole and\n"
+            "unedited, and sets its documents.export, play_date (with\n"
+            "--play-date) and a planned or prepped status to played.\n"
+            "Play Notes there or not, it leaves them alone, so it runs\n"
+            "after session-play as well as before. Refused when an Export\n"
+            "already names the session. Resolves the export's names as\n"
+            "session-new does."))
+    en.add_argument("--session", required=True,
+                    help="the session index: path or name")
+    en.add_argument("--export", required=True, help="the export file (any path)")
+    en.add_argument("--play-date", dest="play_date", help="YYYY-MM-DD")
+    en.add_argument("--write", action="store_true", help="write it (default: preview)")
     rs = sub.add_parser(
         "resolve", help="an export's names against the vault (read-only)",
         description="The name rows session-new prints, for an export "
@@ -5143,6 +5223,7 @@ COMMANDS: dict[str, Command] = {"wrapup-new": cmd_wrapup_new,
                                 "timeline": cmd_timeline,
                                 "session-new": cmd_session_new,
                                 "play-notes-new": cmd_play_notes_new,
+                                "export-new": cmd_export_new,
                                 "resolve": cmd_resolve,
                                 "promote-plan": cmd_promote_plan,
                                 "plan": cmd_plan,
@@ -5153,7 +5234,8 @@ COMMANDS: dict[str, Command] = {"wrapup-new": cmd_wrapup_new,
                                 "prop-new": cmd_prop_new,
                                 "entity-new": cmd_entity_new,
                                 "prop-hand": cmd_prop_hand}
-NO_STDIN = frozenset({"wrapup-new", "session-new", "play-notes-new", "resolve",
+NO_STDIN = frozenset({"wrapup-new", "session-new", "play-notes-new",
+                      "export-new", "resolve",
                       "promote-plan", "chapter-new", "scene-new",
                       "scene-played", "prop-new", "prop-hand"})
 

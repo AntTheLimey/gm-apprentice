@@ -116,13 +116,15 @@ content, not live capture.
 7. **A Session export is not synthesized.** A survey row
    `DECIDED` as "Session export (assistant summary)" — a table
    assistant's own write-up with `## Summary`, `## Memorable
-   Moments`, `## Scenes`, `## NPCs` headings — is already a
-   finished Play Notes file. Copy it into place with those
-   headings intact and skip synthesis and the Keeper Interview
-   for it. session-wrapup detects that shape by its
-   `## Memorable Moments` heading and adopts the Summary verbatim
-   (its gmassistant.app path); reformatting the export here would
-   silently send it down the rewriting path instead.
+   Moments`, `## Scenes`, `## NPCs` headings — is filed whole as
+   the session's Export note, never pasted into Play Notes:
+   `gma vault-write <vault> export-new --session "<index>"
+   --export <file>` (or `session-new ... --export <file>` when the
+   session has no index yet), preview then `--write`. Skip
+   synthesis and the Keeper Interview for it. session-wrapup finds
+   the Export and adopts its Summary verbatim (its gmassistant.app
+   path); reformatting the export would silently send it down the
+   rewriting path instead.
 
 ## Character Story Backstory Entries
 

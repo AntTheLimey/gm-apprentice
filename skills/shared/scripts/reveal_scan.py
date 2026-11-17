@@ -42,7 +42,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from reconcile_scan import Note, _documents, _index, _resolve, open_spoilers  # noqa: E402
+from reconcile_scan import (Note, _documents, _index, _linked, _resolve,  # noqa: E402
+                            open_spoilers)
 from vault_check import ask_publish_tool  # noqa: E402
 from vaultlib import (WRAP_UP_TYPES, PublishToolUnavailable, link_lines,  # noqa: E402
                       live_wikilinks, markers_in, normalize_file_arg,
@@ -50,14 +51,17 @@ from vaultlib import (WRAP_UP_TYPES, PublishToolUnavailable, link_lines,  # noqa
 
 NEVER_CANDIDATES = frozenset({
     "session", "plan", "session-plan", "scene", "play-notes",
-    "session-play-notes", "wrap-up", "chapter", "meta", *WRAP_UP_TYPES,
+    "session-play-notes", "session-export", "wrap-up", "chapter", "meta",
+    *WRAP_UP_TYPES,
 })
 FALLBACK_TYPES = {
     "play_notes": {"session-play-notes", "play-notes"},
+    "export": {"session-export"},
     "wrap_up": {*WRAP_UP_TYPES, "wrap-up"},
 }
 # (documents key, label) in print order. `recap` is read when the index has it.
-SOURCE_KEYS = (("play_notes", "Play Notes"), ("wrap_up", "Wrap-Up"), ("recap", "Recap"))
+SOURCE_KEYS = (("play_notes", "Play Notes"), ("export", "Export"), ("wrap_up", "Wrap-Up"),
+               ("recap", "Recap"))
 
 
 @dataclass
@@ -106,9 +110,11 @@ def _sources(index: Note, notes: list[Note],
     for key, label in SOURCE_KEYS:
         doc = _documents(index, key, by_name)
         if doc is None and key in FALLBACK_TYPES:
-            # Not linked from the index: the one note of that type beside it.
+            # Not linked from the index: the one note of that type beside
+            # it, unless its `session:` names another session.
             here = [n for n in notes if n.type in FALLBACK_TYPES[key]
-                    and Path(n.rel).parent == Path(index.rel).parent]
+                    and Path(n.rel).parent == Path(index.rel).parent
+                    and _linked(n, n.fm.get("session"), by_name) in (None, index)]
             doc = here[0] if len(here) == 1 else None
         if doc is not None:
             found.append((label, doc))

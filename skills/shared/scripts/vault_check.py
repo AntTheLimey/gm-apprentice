@@ -68,8 +68,9 @@ INFO (context the auditing skill should triage, not a defect).
 `gm-leak` skips a note the publish tool says it does not publish (under
 `player_site.hide.folders`, no `type:`, a draft), and otherwise by
 frontmatter: a `type:` of
-`session-plan`, `session-play-notes`, `plan`, or `meta` is never
-published and always skipped, even under `_meta/`; `publish: none`
+`session-plan`, a play record (`session-play-notes`, `session-export`,
+which the commands file with `publish: false`), `plan`, or `meta` is
+skipped as never meant for players, even under `_meta/`; `publish: none`
 pages are skipped and `publish: stub` pages are scanned only over
 the sections they ship. ERROR is an orphan `<!-- /gm-only -->`
 closer (everything above it publishes); WARNING is an unclosed opener or a
@@ -365,7 +366,7 @@ DIGITS_RE = re.compile(r"\d+(?:\.\d+)?")
 # wrap-ups, chapter overviews — share names by convention and
 # only flood the report.
 STRUCTURAL_TYPES = {
-    "session", "session-plan", "session-play-notes",
+    "session", "session-plan", "session-play-notes", "session-export",
     *WRAP_UP_TYPES, "scene", "chapter",
     "meta", "timeline", "world_flags", "plan",
 }
@@ -1290,8 +1291,15 @@ YAML_NULLS = {"", "null", "~"}
 SESSION_DOC_TYPES: dict[str, tuple[str, set[str]]] = {
     "plan": ("plan", {"session-plan"}),
     "play_notes": ("play notes", {"session-play-notes"}),
+    "export": ("export", {"session-export"}),
     "wrap_up": ("wrap-up", set(WRAP_UP_TYPES)),
 }
+# The play records: what happened at the table, each its own note with one
+# writer (session-play or the GM; a table-assistant export dropped in
+# whole). Any one of them makes a session played; wrap-up reads them all.
+PLAY_RECORD_KEYS = ("play_notes", "export")
+PLAY_RECORD_TYPES = frozenset().union(
+    *(SESSION_DOC_TYPES[k][1] for k in PLAY_RECORD_KEYS))
 
 
 def _chain_document(files: list[tuple[str, str, dict]], stems: dict[str, str],
@@ -2816,17 +2824,19 @@ def check_sessions(vault: Path) -> list[str]:
             derived = ("reviewed"
                        if by_rel.get(wrap, {}).get("canon_status")
                        == "AUTHORITATIVE" else "wrap-up")
-        elif chain["play_notes"]:
+        elif any(chain[k] for k in PLAY_RECORD_KEYS):
             derived = "played"
         elif chain["plan"]:
             derived = "prepped"
         else:
             derived = "planned"
 
+        # The export shows only when there is one: most sessions have none.
         flags = " ".join(
             f"{label}={'✓' if chain[key] else '–'}"
             for key, label in (("plan", "plan"), ("play_notes", "play-notes"),
-                               ("wrap_up", "wrap-up")))
+                               ("export", "export"), ("wrap_up", "wrap-up"))
+            if key != "export" or chain[key])
         status = fm.get("status")
         declared = (str(status) if status and not isinstance(status, list)
                     else "?")
@@ -2895,10 +2905,12 @@ GM_AFTER_POSSESSIVE = frozenset((
     "guidance", "advice", "tips", "secrets", "discretion", "control",
     "hands", "reference", "background", "section"))
 
-# Types the publish pipeline never builds a page for. Nothing in them can
-# leak however it is written, and flagging their (correctly) Keeper-facing
-# headings would bury the findings that matter.
-GM_LEAK_SKIP_TYPES = {"session-plan", "session-play-notes", "plan", "meta"}
+# Types never meant for players: prep, meta, and the raw play records
+# (filed with `publish: false`; the player site does not page them). Flagging
+# their (correctly) Keeper-facing headings would bury the findings that
+# matter. A play record without `publish: false` in a vault with no publish
+# list does publish; that older case is #692.
+GM_LEAK_SKIP_TYPES = {"session-plan", *PLAY_RECORD_TYPES, "plan", "meta"}
 
 # A bold label opening a paragraph: `**Secret:** he lied.` The colon is
 # optional; `_bold_label` reads either as the label, colon and all.
@@ -3213,7 +3225,11 @@ def _gm_leak(vault: Path, folder: str | None, fix: bool = False,
                 "handout's Context, Clues and Prop Notes, were not checked",
                 tool.used))
     for rel, text, fm in notes:
-        if entity_type(fm) in GM_LEAK_SKIP_TYPES:
+        # A play record is skipped by type only when the publish tool has
+        # not said what publishes; when it has, one that does publish (a
+        # vault with no publish list, no `publish: false`) is scanned.
+        if entity_type(fm) in GM_LEAK_SKIP_TYPES and (
+                entity_type(fm) not in PLAY_RECORD_TYPES or published is None):
             continue
         if publish_mode(fm) == "none":
             continue
@@ -4056,11 +4072,32 @@ def _wrap_context(rel: str, fm: dict,
         elif found:
             ctx.ambiguous_index = True
 
-    notes = [r for r, _t, f in entries
-             if f.get("type") == "session-play-notes"
-             and ctx.number is not None
-             and _session_number_of(r, f) == ctx.number
-             and _chapters_agree(chapter, chapter_key(r, f))]
+    # The source is the Export, which holds the whole table record, else
+    # the Play Notes (as wrapup-new chooses). A Wrap-Up with no chapter of
+    # its own takes its resolved index's, so another chapter's session of
+    # the same number is not taken for it.
+    if chapter is None and ctx.index_rel is not None:
+        chapter = next((chapter_key(r, f) for r, _t, f in indexes
+                        if r == ctx.index_rel), None)
+    # A record whose `session:` names another index is not this session's.
+    own = (normalize(Path(ctx.index_rel).stem)
+           if ctx.index_rel is not None else None)
+
+    def names_another(f: dict) -> bool:
+        target = wikilink_target(f.get("session"))
+        return bool(own and target and link_target(target) != own)
+
+    notes: list[str] = []
+    for key in ("export", "play_notes"):
+        notes = [r for r, _t, f in entries
+                 if isinstance(f.get("type"), str)
+                 and f["type"] in SESSION_DOC_TYPES[key][1]
+                 and ctx.number is not None
+                 and _session_number_of(r, f) == ctx.number
+                 and _chapters_agree(chapter, chapter_key(r, f))
+                 and not names_another(f)]
+        if notes:
+            break
     if len(notes) == 1:
         ctx.notes_rel = notes[0]
     elif notes:

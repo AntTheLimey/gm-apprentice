@@ -241,20 +241,21 @@ describe('publishedPages with a site', () => {
 
 // A session's Play Notes always get a page on the GM site (#543): the Story page links them, whatever show.notes says.
 describe('decideGmPage: a session\'s Play Notes', () => {
-  const { isPlayNotes } = require('../lib/publish-decision');
+  const { isPlayRecord } = require('../lib/publish-decision');
   const OFF = new Set();
 
-  it('isPlayNotes reads both spellings of the type, and nothing else', () => {
-    assert.strictEqual(isPlayNotes({ type: 'session-play-notes' }), true);
-    assert.strictEqual(isPlayNotes({ type: 'session_play_notes' }), true);
-    assert.strictEqual(isPlayNotes({ type: 'session' }), false);
-    assert.strictEqual(isPlayNotes({ type: 'session_wrap' }), false);
-    assert.strictEqual(isPlayNotes(null), false);
-    assert.strictEqual(isPlayNotes({}), false);
+  it('isPlayRecord reads both spellings of the Play Notes and Export types, and nothing else', () => {
+    for (const type of ['session-play-notes', 'session_play_notes', 'session-export', 'session_export']) {
+      assert.strictEqual(isPlayRecord({ type }), true, type);
+    }
+    assert.strictEqual(isPlayRecord({ type: 'session' }), false);
+    assert.strictEqual(isPlayRecord({ type: 'session_wrap' }), false);
+    assert.strictEqual(isPlayRecord(null), false);
+    assert.strictEqual(isPlayRecord({}), false);
   });
 
-  it('a Play Notes note the player site keeps off is GM_SHOWN with show.notes off', () => {
-    for (const type of ['session-play-notes', 'session_play_notes']) {
+  it('a play record the player site keeps off is GM_SHOWN with show.notes off', () => {
+    for (const type of ['session-play-notes', 'session_play_notes', 'session-export']) {
       const kept = gm({ type, publish: false }, { show: OFF, rel: 'Sessions/S1 Play Notes.md' });
       assert.strictEqual(kept.player.code, 'PUBLISH_FALSE');
       assert.strictEqual(kept.code, 'GM_SHOWN', type);

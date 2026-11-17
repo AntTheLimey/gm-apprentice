@@ -51,7 +51,8 @@ file (`type: session-play-notes`). If none exists, create it per
 `shared/session-document-chain.md` with `created_by: session-play`,
 set the session index's `documents.play_notes` to it and `status`
 to `played` — frontmatter only; the index body publishes, so never
-note anything there. Acknowledge and hold — no editing or reorganizing;
+note anything there. An Export note beside it (`type:
+session-export`) is not Play Notes: leave it alone. Acknowledge and hold — no editing or reorganizing;
 wrap-up processes it. Mark entities with:
 
 | Marker | Use when |
