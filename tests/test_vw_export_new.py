@@ -232,5 +232,76 @@ class ExportInTheChainTests(unittest.TestCase):
         self.assertIn("source_file", shown)
 
 
+
+class ExportReviewFixTests(unittest.TestCase):
+    """The PR #693 review: a play record that does publish is scanned, a
+    dangling export link is not a source, and the Story page link."""
+
+    def test_gm_leak_scans_a_play_record_the_tool_says_publishes(self):
+        from unittest import mock
+        from test_vault_check_slice_a import make_vault as vc_vault
+        from test_vault_check_slice_a import stub_publish_tool
+        vault = vc_vault(self)
+        rel = "Sessions/Session 1 - Export.md"
+        (vault / "Sessions").mkdir()
+        (vault / rel).write_text(
+            '---\ntype: session-export\nsession: "[[Session 1]]"\n---\n\n'
+            "# Export\n\n## Keeper Notes\n\nThe butler did it.\n",
+            encoding="utf-8")
+        stub_publish_tool(self, vault)
+        with mock.patch.object(vc, "pages_published", return_value={rel}):
+            rows = [r for r in vc.check_gm_leak(vault, None) if rel in r]
+        self.assertTrue(rows, "a published Export is scanned")
+        with mock.patch.object(vc, "pages_published", return_value=set()):
+            rows = [r for r in vc.check_gm_leak(vault, None) if rel in r]
+        self.assertFalse(rows, rows)
+
+    def test_a_dangling_export_link_is_not_the_wrapup_source(self):
+        vault = make_vault(self, {**VAULT_FILES, INDEX: PREPPED.replace(
+            "  wrap_up: null", '  wrap_up: null\n  export: "[[Gone]]"')})
+        code, out = run(vault, "play-notes-new", "--session", SESSION, "--write")
+        self.assertEqual(code, 0, out)
+        code, out = run(vault, "wrapup-new", "--session", INDEX, "--write")
+        self.assertEqual(code, 0, out)
+        wrap = next(vault.rglob("Chapter_01_Session_13_Wrap_Up.md"))
+        fm = vl.extract_frontmatter(wrap.read_text(encoding="utf-8"))
+        self.assertEqual(vl.wikilink_target(fm["source_document"]),
+                         f"{SESSION} - Play Notes")
+
+    def test_reveal_scan_takes_an_unlinked_record_only_if_it_names_the_session(self):
+        import reveal_scan as rs
+        from reconcile_scan import Note, _index
+        index = Note("S/Session 2.md", "---\ntype: session\nsession_number: 2\n---\n")
+        other = Note("S/Session 1 - Export.md",
+                     '---\ntype: session-export\nsession: "[[Session 1]]"\n---\n')
+        own = Note("S/Session 2 - Export.md",
+                   '---\ntype: session-export\nsession: "[[Session 2]]"\n---\n')
+        first = Note("S/Session 1.md", "---\ntype: session\nsession_number: 1\n---\n")
+        notes = [index, other, first]
+        self.assertEqual(rs._sources(index, notes, _index(notes)), [])
+        notes = [index, other, own, first]
+        self.assertEqual([(label, n.rel) for label, n in rs._sources(index, notes, _index(notes))],
+                         [("Export", own.rel)])
+
+    def test_wrapup_repair_without_a_chapter_keeps_to_its_index_chapter(self):
+        def note(rel, text):
+            return (rel, text, vl.extract_frontmatter(text) or {})
+        ch1, ch2 = "Chapters/Chapter 1 - A", "Chapters/Chapter 2 - B"
+        entries = [
+            note(f"{ch1}/Sessions/Session 01/Session 01 - Arrival.md",
+                 '---\ntype: session\nsession_number: 1\nchapter: "[[Chapter 1 - A]]"\n---\n'),
+            note(f"{ch1}/Sessions/Session 01/Session 01 - Arrival - Play Notes.md",
+                 '---\ntype: session-play-notes\nsession: "[[Session 01 - Arrival]]"\n'
+                 'session_number: 1\nchapter: "[[Chapter 1 - A]]"\n---\n'),
+            note(f"{ch2}/Sessions/Session 01/Session 01 - Return - Export.md",
+                 '---\ntype: session-export\nsession: "[[Session 01 - Return]]"\n'
+                 'session_number: 1\nchapter: "[[Chapter 2 - B]]"\n---\n'),
+        ]
+        wrap = "Chapter_01_Session_01_Wrap_Up.md"
+        fm = {"type": "session_wrap", "session": "[[Session 01 - Arrival]]",
+              "session_number": "1"}
+        ctx = vc._wrap_context(wrap, fm, entries)
+        self.assertEqual(ctx.notes_rel, entries[1][0])
+
 if __name__ == "__main__":
     unittest.main()

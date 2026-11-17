@@ -161,6 +161,23 @@ describe('the GM Story page', () => {
     } finally { s.cleanup(); }
   });
 
+  it('an export-only session whose wrap-up names the Export as its source links it once, as the Export', () => {
+    const exportNote = '---\ntype: session-export\nsession: "[[Session 1]]"\npublish: false\n---\n\n# Session 1 - Export\n\nEXPORT-ONLY-1.\n';
+    const vault = storyVault({
+      'Sessions/Session 1.md': SESSION(1).replace(/\n {2}play_notes:[^\n]*/, '\n  export: "[[Session 1 Export]]"'),
+      'Sessions/Session 1 Export.md': exportNote,
+      'Sessions/Session 1 Play Notes.md': null,
+    });
+    for (const [rel, text] of Object.entries(vault)) {
+      if (/source_document: "\[\[Session 1 Play Notes\]\]"/.test(text)) vault[rel] = text.replace('Session 1 Play Notes', 'Session 1 Export');
+    }
+    const s = buildBoth(vault, { gm: { show: { notes: false } } });
+    try {
+      const links = [...read(s.gm, STORY_1).matchAll(/<p class="story-playnotes"><a href="([^"]+)">([^<]+)<\/a><\/p>/g)];
+      assert.deepEqual(links.map((m) => m[2]), ['Export for this session →']);
+    } finally { s.cleanup(); }
+  });
+
   it('show.notes off still keeps every other note the player site leaves out off the GM site', () => {
     const s = buildBoth(storyVault({ 'NPCs/Hidden Man.md': '---\ntype: npc\npublish: false\n---\n\n# Hidden Man\n\nHIDDEN-MAN-1.\n' }), { gm: { show: { notes: false } } });
     try {

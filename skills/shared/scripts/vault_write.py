@@ -655,8 +655,11 @@ def cmd_wrapup_new(batch: Batch, args: argparse.Namespace, _text: str) -> None:
         notes = documents.get(key) or ""
         if is_blank(notes):
             notes = ""
-        if notes:
+        if notes and batch.with_stem(
+                re.split(r"[#^|]", vl.wikilink_target(notes), maxsplit=1)[0]
+                .replace("\\", "/").rsplit("/", 1)[-1].strip()):
             break
+        notes = ""   # unlinked, or a link that names no note: look for one
         hits = find_play_notes(batch, index, stem, key)
         if len(hits) == 1:
             notes = f"[[{hits[0]}]]"

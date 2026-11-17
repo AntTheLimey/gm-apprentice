@@ -2708,13 +2708,15 @@ function buildSite(options) {
   // session's Play Notes and its Export when they have a page.
   function gmAfter(unit) {
     const parts = (unit.after || []).map((a) => a.html).join('\n');
-    const href = unit.kind === 'session' ? playNotesHrefOf(unit) : null;
     const exportHref = unit.kind === 'session' ? exportHrefOf(unit) : null;
+    // A wrap-up whose source_document names the Export is not naming Play Notes: that page is linked as the Export.
+    const notesHref = unit.kind === 'session' ? playNotesHrefOf(unit) : null;
+    const href = notesHref && notesHref !== exportHref ? notesHref : null;
     if (href) unit.playNotesHref = href;
     unit.afterHtml = parts ? `<section class="story-gm-after">\n${parts}\n</section>` : '';
     const link = (to, label) => `<p class="story-playnotes"><a href="${encodeHref(relativeHref(unit.outputPath, to))}">${label}</a></p>`;
     unit.playNotesHtml = [href && link(href, 'Play Notes for this session →'),
-      exportHref && exportHref !== href && link(exportHref, 'Export for this session →')].filter(Boolean).join('\n');
+      exportHref && link(exportHref, 'Export for this session →')].filter(Boolean).join('\n');
     // A chapter page links its chapter note's own page, the GM's workbench, where the GM site writes one.
     const note = unit.kind === 'chapter' ? unit.sourcePage : null;
     unit.gmNoteHtml = note && pages.includes(note) && !getsNoPage(note) && !isFolded(note)

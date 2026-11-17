@@ -3225,7 +3225,11 @@ def _gm_leak(vault: Path, folder: str | None, fix: bool = False,
                 "handout's Context, Clues and Prop Notes, were not checked",
                 tool.used))
     for rel, text, fm in notes:
-        if entity_type(fm) in GM_LEAK_SKIP_TYPES:
+        # A play record is skipped by type only when the publish tool has
+        # not said what publishes; when it has, one that does publish (a
+        # vault with no publish list, no `publish: false`) is scanned.
+        if entity_type(fm) in GM_LEAK_SKIP_TYPES and (
+                entity_type(fm) not in PLAY_RECORD_TYPES or published is None):
             continue
         if publish_mode(fm) == "none":
             continue
@@ -4069,7 +4073,12 @@ def _wrap_context(rel: str, fm: dict,
             ctx.ambiguous_index = True
 
     # The source is the Export, which holds the whole table record, else
-    # the Play Notes (as wrapup-new chooses).
+    # the Play Notes (as wrapup-new chooses). A Wrap-Up with no chapter of
+    # its own takes its resolved index's, so another chapter's session of
+    # the same number is not taken for it.
+    if chapter is None and ctx.index_rel is not None:
+        chapter = next((chapter_key(r, f) for r, _t, f in indexes
+                        if r == ctx.index_rel), None)
     notes: list[str] = []
     for key in ("export", "play_notes"):
         notes = [r for r, _t, f in entries
