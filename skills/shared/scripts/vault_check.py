@@ -68,9 +68,9 @@ INFO (context the auditing skill should triage, not a defect).
 `gm-leak` skips a note the publish tool says it does not publish (under
 `player_site.hide.folders`, no `type:`, a draft), and otherwise by
 frontmatter: a `type:` of
-`session-plan`, a play record (`session-play-notes`, `session-export`),
-`plan`, or `meta` is never
-published and always skipped, even under `_meta/`; `publish: none`
+`session-plan`, a play record (`session-play-notes`, `session-export`,
+which the commands file with `publish: false`), `plan`, or `meta` is
+skipped as never meant for players, even under `_meta/`; `publish: none`
 pages are skipped and `publish: stub` pages are scanned only over
 the sections they ship. ERROR is an orphan `<!-- /gm-only -->`
 closer (everything above it publishes); WARNING is an unclosed opener or a
@@ -2905,9 +2905,11 @@ GM_AFTER_POSSESSIVE = frozenset((
     "guidance", "advice", "tips", "secrets", "discretion", "control",
     "hands", "reference", "background", "section"))
 
-# Types the publish pipeline never builds a page for. Nothing in them can
-# leak however it is written, and flagging their (correctly) Keeper-facing
-# headings would bury the findings that matter.
+# Types never meant for players: prep, meta, and the raw play records
+# (filed with `publish: false`; the player site does not page them). Flagging
+# their (correctly) Keeper-facing headings would bury the findings that
+# matter. A play record without `publish: false` in a vault with no publish
+# list does publish; that older case is #692.
 GM_LEAK_SKIP_TYPES = {"session-plan", *PLAY_RECORD_TYPES, "plan", "meta"}
 
 # A bold label opening a paragraph: `**Secret:** he lied.` The colon is
@@ -4066,11 +4068,17 @@ def _wrap_context(rel: str, fm: dict,
         elif found:
             ctx.ambiguous_index = True
 
-    notes = [r for r, _t, f in entries
-             if f.get("type") == "session-play-notes"
-             and ctx.number is not None
-             and _session_number_of(r, f) == ctx.number
-             and _chapters_agree(chapter, chapter_key(r, f))]
+    # The source is the Play Notes; a session whose only play record is
+    # an Export names that.
+    notes: list[str] = []
+    for key in PLAY_RECORD_KEYS:
+        notes = [r for r, _t, f in entries
+                 if f.get("type") in SESSION_DOC_TYPES[key][1]
+                 and ctx.number is not None
+                 and _session_number_of(r, f) == ctx.number
+                 and _chapters_agree(chapter, chapter_key(r, f))]
+        if notes:
+            break
     if len(notes) == 1:
         ctx.notes_rel = notes[0]
     elif notes:

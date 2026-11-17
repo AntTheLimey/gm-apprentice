@@ -73,6 +73,8 @@ class ExportNewTests(unittest.TestCase):
         self.assertEqual(fm["type"], "session-export")
         self.assertEqual(vl.wikilink_target(fm["session"]), SESSION)
         self.assertEqual(fm["source_file"], "session_2026_10_18.md")
+        # A raw table record: off the player site even with no publish list.
+        self.assertEqual(fm["publish"], "false")
         self.assertTrue(text.endswith(EXPORT), text)
         errors = [m for level, m in schema_rules.frontmatter_findings(
             fm, None, vl.raw_frontmatter(text)) if level == "ERROR"]
@@ -93,6 +95,8 @@ class ExportNewTests(unittest.TestCase):
                         "--write")
         self.assertEqual(code, 0, out)
         self.assertTrue((self.vault / NOTES).exists())
+        self.assertEqual(vl.extract_frontmatter(self.read(NOTES))["publish"],
+                         "false")
         self.assertEqual(vl.wikilink_target(self.documents()["export"]),
                          f"{SESSION} - Export")
         self.assertTrue(self.read(EXPORT_NOTE).endswith(EXPORT))

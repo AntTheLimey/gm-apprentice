@@ -18,6 +18,7 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 ### Changed
 
 - `session-new --export` and `play-notes-new --export` file the export as its own Export note too, beside empty Play Notes, instead of inside them. A vault's existing Play Notes that already hold an export still wrap up as before.
+- The Play Notes and Export notes these commands file carry `publish: false`, so a raw table record stays off the player site even in a vault with no publish list; the GM site still shows them (older notes: #692).
 - The session template's `documents:` gains `export: null`; the update brings `_Templates/_Template_Session.md` up to date. The session check counts an Export as played, and the GM site gives it a page linked from the session's Story page, as it does the Play Notes (tool 1.70.18).
 
 ## [1.12.37] — 2026-11-17

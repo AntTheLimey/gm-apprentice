@@ -3457,8 +3457,11 @@ def record_text(key: str, stem: str, n: int, chapter_raw: str | None,
                f"session_number: {n}"]
     if chapter_raw:
         note_fm.append(f"chapter: {chapter_raw}")
+    # A raw table record: off the player site even in a vault with no
+    # publish list. The GM site still pages it (decideGmPage).
     note_fm += [f"campaign: {campaign_raw or chr(34) * 2}",
-                "canon_status: AUTHORITATIVE", "created_by: manual"]
+                "canon_status: AUTHORITATIVE", "created_by: manual",
+                "publish: false"]
     if export_path:
         note_fm.append(f"source_file: {json.dumps(Path(export_path).name)}")
     if play_date:

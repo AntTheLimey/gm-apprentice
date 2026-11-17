@@ -120,6 +120,7 @@ chapter: "[[Chapter N - Title]]"
 campaign: ""
 canon_status: AUTHORITATIVE
 created_by: session-play    # or: vault-ingest | manual
+publish: false              # raw notes: the GM site still shows them
 tags: []
 ---
 ```
@@ -133,9 +134,9 @@ by `vw export-new --session "<index>" --export PATH` (or `--export` on
 `documents.export`. It sits beside the Play Notes, never inside them:
 each play record is its own file with one writer, so session-play can
 keep writing the Play Notes while the export arrives, in either order.
-The site treats it as it treats the Play Notes: the GM site always
-gives it a page, linked from the session's Story page, and the player
-site leaves it out unless the publish list names it.
+The site treats it as it treats the Play Notes: `publish: false`
+keeps it off the player site, with or without a publish list, and the
+GM site still gives it a page, linked from the session's Story page.
 
 ```yaml
 ---
@@ -146,6 +147,7 @@ chapter: "[[Chapter N - Title]]"
 campaign: ""
 canon_status: AUTHORITATIVE
 created_by: manual
+publish: false
 source_file: "export.md"
 tags: []
 ---
