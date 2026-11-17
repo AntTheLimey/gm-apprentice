@@ -534,9 +534,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     for item in args.advance:
         key, sep, pair = item.partition("=")
         old, colon, new = pair.partition(":")
-        key, old, new = key.strip(), unquote(old.strip()), unquote(new.strip())
+        # FROM is compared unquoted; TO keeps its quotes for the YAML
+        # typing (`"9"` stays a string).
+        key, old, new = key.strip(), unquote(old.strip()), new.strip()
         if (not sep or not colon or ":" in new or not KEY_RE.match(key)
-                or not old or not new):
+                or not old or not unquote(new)):
             ap.error(f"--advance needs KEY=FROM:TO, got {item!r}")
         args.advance_triples.append((key, old, new))
 

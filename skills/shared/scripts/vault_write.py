@@ -1940,6 +1940,9 @@ def stdin_status(text: str) -> tuple[list[str] | None, list[Field]]:
     are dropped."""
     lines = [ln for ln in text.replace("\r\n", "\n").replace(
         "\r", "\n").split("\n") if not SHOW_COMMENT_RE.match(ln)]
+    # Before the lede is taken: a heading must never pass as one.
+    if vl.fenced_headings("\n".join(lines)):
+        raise WriteError("stdin holds a heading: send labelled fields only")
     while lines and not lines[0].strip():
         lines.pop(0)
     lede: list[str] = []

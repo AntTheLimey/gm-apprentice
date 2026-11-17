@@ -581,6 +581,14 @@ class StatusLedeTests(unittest.TestCase):
                 self.assertEqual(code, 0, out)
                 self.assertEqual(read(vault, PC), note)
 
+    def test_a_heading_first_is_refused_not_taken_as_the_lede(self):
+        vault = make_vault(self, {PC: SPEC})
+        code, out = run(vault, "status", PC, "--write",
+                        stdin="## Notes\n\n**Location:** Bath.\n")
+        self.assertEqual(code, 1, out)
+        self.assertIn("heading", out)
+        self.assertEqual(read(vault, PC), SPEC)
+
     def test_a_heading_line_on_stdin_is_still_refused(self):
         vault = make_vault(self, {PC: SPEC})
         code, out = run(vault, "status", PC, "--write",

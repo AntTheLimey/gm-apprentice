@@ -337,6 +337,13 @@ class AdvanceTests(ScriptCase):
                 self.assertIn("left as it is", out)
                 self.assertEqual(path.read_bytes(), before)
 
+    def test_a_quoted_to_value_stays_a_string(self):
+        path = self.note("Campaign_Overview.md", OVERVIEW.replace(
+            "sessions_played: 3", "code: old\nsessions_played: 3"))
+        self.run_script("Campaign_Overview.md", "--advance", 'code=old:"9"',
+                        "--write")
+        self.assertIn('code: "9"\n', path.read_text(encoding="utf-8"))
+
     def test_an_absent_field_is_left_absent(self):
         path = self.note("Campaign_Overview.md", OVERVIEW)
         self.run_script("Campaign_Overview.md", "--advance",
