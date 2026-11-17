@@ -367,7 +367,7 @@ def _undo(vault: Path, made: list[Path]) -> list[str]:
         except OSError:
             rel = path.relative_to(vault).as_posix()
             if rel == ".":
-                rel = vault.name
+                rel = vault.resolve().name
             left.append(f"{rel}/" if is_dir else rel)
     return left
 

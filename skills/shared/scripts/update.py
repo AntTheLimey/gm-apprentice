@@ -398,7 +398,7 @@ def run(vault: Path, answers: dict[str, str], headless: bool, *,
         checks: list[Check] | None = None,
         home: Path | None = None) -> UpdateResult:
     """Update the vault; see the module docstring."""
-    res = UpdateResult(vault=vault.name, headless=headless)
+    res = UpdateResult(vault=vault.resolve().name, headless=headless)
     if headless and answers:
         return _refuse(res, "a headless run takes no --answer: there is no "
                             "GM to have given one")
@@ -838,7 +838,7 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as e:  # noqa: BLE001 - the report says it, exit 1
         if not isinstance(e, SettingsUnavailable):
             traceback.print_exc(file=sys.stderr)
-        res = UpdateResult(exit=1, vault=vault.name, headless=args.headless,
+        res = UpdateResult(exit=1, vault=vault.resolve().name, headless=args.headless,
                            error=(str(e) if isinstance(e, SettingsUnavailable)
                                   else f"unexpected {e.__class__.__name__}: {e}"))
     _emit(res, args.json)
