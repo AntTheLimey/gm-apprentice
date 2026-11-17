@@ -9,6 +9,12 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.50] — 2026-11-17
+
+### Fixed
+
+- With drawing without asking off but a picture source set, wrap-up no longer skips its scene pictures in silence: its report ends with one line offering them, and draws nothing unless asked. `gma llms image` says Event notes get their picture as a recap scene, not one of their own (#712).
+
 ## [1.12.49] — 2026-11-17
 
 ### Fixed

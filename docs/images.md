@@ -44,6 +44,9 @@ the vault has an Image Guidance note (the apprentice offers to draft
 it), and a picture shows only what the players have seen. Player
 characters are never drawn unasked, and nothing is drawn at the table.
 
+With it off but a picture source chosen, a wrap-up draws nothing and
+ends its report with one line offering the session's scene pictures.
+
 ## Filling in missing pictures
 
 Ask the apprentice to "fill in the missing pictures". It lists the notes
