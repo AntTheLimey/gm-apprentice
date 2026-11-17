@@ -207,3 +207,62 @@ def test_update_stamps_unstamped_scaffold_drafts_only(tmp_path):
     for rel, text in before.items():
         assert (v / rel).read_text() == text, rel
     assert mv.find_scaffold_pre_play(v) == []
+
+
+# --- campaign-wide notes made before play are canon at the first reconcile (#717) ---
+
+def _first_session(tmp_path, extra):
+    sessions = "Chapters/Chapter 1/Sessions"
+    wrap = f"{sessions}/Session 01 - Start - Wrap-Up.md"
+    files = {
+        f"{sessions}/Session 01 - Start.md":
+            "---\ntype: session\nsession_number: 1\nstatus: wrap-up\ndocuments:\n"
+            "  wrap_up: \"[[Session 01 - Start - Wrap-Up]]\"\n---\n",
+        wrap: "---\ntype: session_wrap\nsession: \"[[Session 01 - Start]]\"\n"
+              "canon_status: DRAFT\n---\n\nThey met nobody.\n",
+        "Adventures/B/B.md":
+            "---\ntype: adventure-brief\ncanon_status: DRAFT\ncreatedSession: \"\"\n---\n",
+        "_World/geography.md":
+            "---\ntype: world_domain\ndomain: geography\nstatus: active\n"
+            "canon_status: DRAFT\ncreatedSession: \"\"\n---\n",
+        "_World/world-index.md":
+            "---\ntype: world_domain\ndomain: index\nstatus: stub\n"
+            "canon_status: DRAFT\ncreatedSession: \"\"\n---\n",
+        "NPCs/Tom.md":
+            "---\ntype: npc\ncanon_status: DRAFT\ncreatedSession: \"\"\n---\n",
+        **extra}
+    return vault_with(tmp_path, files), wrap
+
+
+def test_scan_lists_campaign_wide_notes_unlinked(tmp_path):
+    v, wrap = _first_session(tmp_path, {})
+    out = rs.scan(v, wrap)
+    assert "campaign-wide draft notes made before play: 3" in out
+    assert "  Adventures/B/B.md (campaign-wide, made before play)" in out
+    assert not any("NPCs/Tom.md" in line and "campaign-wide" in line for line in out)
+    assert "pre-play draft entities played this session: 0" in out
+
+
+def test_promote_takes_campaign_wide_not_ordinary_unlinked(tmp_path):
+    import reconcile_promote as rp
+    v, wrap = _first_session(tmp_path, {})
+    rows, _orig, texts, errors = rp.plan(v, wrap, "2026-11-17")
+    assert errors == 0
+    assert {"Adventures/B/B.md", "_World/geography.md", "_World/world-index.md"} <= set(texts)
+    assert "NPCs/Tom.md" not in texts
+    # --except still works on them
+    rows, _o, texts, _e = rp.plan(v, wrap, "2026-11-17", ["geography"])
+    assert "_World/geography.md" not in texts and "Adventures/B/B.md" in texts
+    assert any(r.startswith("KEPT\t_World/geography.md") for r in rows)
+
+
+def test_authoritative_brief_is_untouched(tmp_path):
+    import reconcile_promote as rp
+    v, wrap = _first_session(tmp_path, {
+        "Adventures/B/B.md":
+            "---\ntype: adventure-brief\ncanon_status: AUTHORITATIVE\ncreatedSession: \"\"\n---\n"})
+    _rows, _o, texts, _e = rp.plan(v, wrap, "2026-11-17")
+    assert "Adventures/B/B.md" not in texts
+    assert "campaign-wide draft notes made before play: 2" in rs.scan(v, wrap)
+    assert not any("campaign-wide" in line for line in rs.scan(vault_with(
+        tmp_path / "plain", {"Wrap.md": "---\ntype: session_wrap\n---\n"}), "Wrap.md"))

@@ -33,6 +33,12 @@ the files under a count indented below it:
                          or 0 `createdSession`, made before play by the-midwife
                          or the scaffold: the Wrap-Up shows they were played,
                          so the quick path promotes them too
+    campaign-wide draft notes made before play
+                         every DRAFT adventure brief and world note (type
+                         adventure-brief, world_domain) with a blank or 0
+                         `createdSession`, linked or not: the campaign's own
+                         notes are canon once play starts; the quick path
+                         promotes them too
     older draft entities linked
                          the other linked DRAFTs; the quick path leaves them
     open spoilers        `<!-- spoiler -->` blocks in the linked
@@ -51,7 +57,7 @@ from __future__ import annotations
 import argparse
 import re
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -65,6 +71,10 @@ from vaultlib import (WRAP_UP_TYPES, before_play, entity_type, is_record_copy,  
                       Unverified, vault_files)
 
 FIRST_WORDS = 10
+# Notes about the whole campaign, not one session: the adventure brief and the
+# `_World/` domain notes (the world index is a `world_domain`). A pre-play DRAFT
+# of these is promoted at the first reconcile, linked or not (#717).
+CAMPAIGN_WIDE_TYPES = frozenset({"adventure-brief", "world-domain"})
 
 
 class Note:
@@ -258,6 +268,7 @@ class Survey:
     index: Note | None
     new: list[Note]         # DRAFTs created this session
     preplay: list[Note]     # pre-play DRAFTs played this session
+    campaign_wide: list[Note] = field(default_factory=list)  # made before play, linked or not
 
 
 def scan(vault: Path, wrap_arg: str) -> list[str]:
@@ -315,11 +326,21 @@ def survey(vault: Path, wrap_arg: str) -> Survey:
     new = [n for n in drafts if _created_this_session(n, number, chapter)]
     preplay = [n for n in drafts if n not in new and _pre_play(n)]
     older = [n for n in drafts if n not in new and n not in preplay]
+    # The brief and the world notes belong to the whole campaign: once play
+    # starts they are canon, whether or not this Wrap-Up links them (#717).
+    wide = [n for n in notes
+            if n.type.replace("_", "-") in CAMPAIGN_WIDE_TYPES
+            and n.fm.get("canon_status") == "DRAFT" and _pre_play(n)
+            and not is_record_copy(n.rel) and n not in new and n not in preplay]
+    older = [n for n in older if n not in wide]
     out.append(f"linked entities: {len(linked)}")
     out.append(f"draft entities created this session: {len(new)}")
     out.extend(f"  {n.rel}" for n in new)
     out.append(f"pre-play draft entities played this session: {len(preplay)}")
     out.extend(f"  {n.rel}" for n in preplay)
+    if wide:
+        out.append(f"campaign-wide draft notes made before play: {len(wide)}")
+        out.extend(f"  {n.rel} (campaign-wide, made before play)" for n in wide)
     out.append(f"older draft entities linked (the quick path leaves them): {len(older)}")
     out.extend(f"  {n.rel} (createdSession: {n.fm.get('createdSession') or 'none'})"
                for n in older)
@@ -350,12 +371,12 @@ def survey(vault: Path, wrap_arg: str) -> Survey:
         fails.append("a Plan file")
     if fails:
         out.append("quick path: no (" + ", ".join(fails) + ")")
-    elif new or preplay:
+    elif new or preplay or wide:
         out.append("quick path: yes, unless a DRAFT entity created or played this session "
                    "contradicts AUTHORITATIVE canon on the same facts")
     else:
         out.append("quick path: yes")
-    return Survey(out, wrap, index, new, preplay)
+    return Survey(out, wrap, index, new, preplay, wide)
 
 
 def build_parser() -> argparse.ArgumentParser:
