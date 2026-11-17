@@ -263,6 +263,7 @@ def _with_values(target: str, source: str, keys: set[str]) -> str:
 # A plain name for each template the plugin ships (by its file in
 # skills/shared/templates/), for what the GM is told about it.
 TEMPLATE_LABELS = {
+    "adventure-brief.md": "Adventure Brief",
     "campaign-overview.md": "Campaign Overview",
     "chapter.md": "Chapter",
     "character-story.md": "character story",

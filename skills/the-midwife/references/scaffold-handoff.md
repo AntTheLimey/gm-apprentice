@@ -59,7 +59,8 @@ section, and no `#` title. The command files the brief at
 section under `## GM Notes` inside the gm-only fence and Open
 Questions in its spoiler block: write neither fence nor the
 `## GM Notes` heading. A GM Notes section written as `##` is
-refused, since it would publish.
+refused, since it would publish. So is a name another note has:
+give the brief another `--name` and keep the adventure's in `title`.
 
 - **Existing vault:** `<vault>` is the vault. Use `[[wiki-links]]`
   for existing entities. Flag entity updates the adventure implies.

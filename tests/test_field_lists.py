@@ -78,6 +78,8 @@ class Generated(unittest.TestCase):
         "session_wrap": "the session document chain describes it",
     }
     NOT_IN_REFERENCE = {
+        "adventure-brief": "a plain page once the GM publishes its folder: "
+                           "the site reads none of its fields",
         "campaign_overview": "its fields are prose in the Campaign Overview section",
         "character-story": "it renders inside its PC's page",
         "meta": "the Image Guidance note is GM-only and never publishes",

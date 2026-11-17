@@ -404,7 +404,9 @@ def template_shape(template: str) -> Shape:
                 (shape.gm_h2 if gm else shape.spoiler_h2
                  if state.spoiler_depth > 0 else shape.public_h2).append(k)
         elif level == 3:
-            if parent_gm or gm:
+            # One the template hides in a spoiler block is hidden here too:
+            # under GM Notes, never left with the players' section above it.
+            if parent_gm or gm or state.spoiler_depth > 0:
                 shape.gm_h3.append(k)
             else:
                 shape.public_h3.add(k)
@@ -501,6 +503,9 @@ def build_body(template: str, body: str, ties: list[dict[str, Any]],
         if level == 3:
             # Always the GM's, wherever it was written.
             hidden.append((k, k in gm_order, lines))
+            if k in shape.spoiler_h2:
+                warn(f"{head} goes under GM Notes for good: write it as "
+                     f"'## {title}' for the spoiler block it is lifted from")
         elif k == vw.GM_NOTES:
             lead = lines[1:]
         elif k in shape.gm_h2:
@@ -558,6 +563,9 @@ def run(batch: vw.Batch, args: argparse.Namespace, text: str) -> None:
         if args.folder:
             raise vw.WriteError(f"--folder: each {etype} note has a folder "
                                 f"of its own, here {kinds[etype]}/{name}")
+        if name.startswith(".") or name.endswith("."):
+            raise vw.WriteError(f"--name {args.name!r} cannot be a folder's "
+                                f"name (no dot first or last)")
         folder = f"{kinds[etype]}/{name}"
     else:
         folder = kinds[etype] + vw.chapter_subfolder(args.folder)
@@ -597,13 +605,16 @@ def run(batch: vw.Batch, args: argparse.Namespace, text: str) -> None:
 
     # A template with no `name` (the adventure brief) is named by `title`,
     # which stdin may set to something longer than the file's name.
-    vw.set_block(fm, "title" if has("title") and not has("name") else "name",
-                 vl.yaml_scalar(name))
+    name_field = "title" if has("title") and not has("name") else "name"
+    vw.set_block(fm, name_field, vl.yaml_scalar(name))
     takes_date = has("lastUpdated")
     for key, block in blocks.items():
         if key in ("type", "name", "relationships"):
             continue
         value = block[0].partition(":")[2].strip()
+        if key == name_field and len(block) == 1 \
+                and not vw.strip_comment(value).strip("\"' "):
+            continue        # an empty title leaves the note its name
         if (len(block) == 1 and value[:1] not in ('"', "'", "[", "{")
                 and re.search(r":(\s|$)", vw.strip_comment(value))):
             raise vw.WriteError(f"{key}: put the value in quotes: {value!r} "

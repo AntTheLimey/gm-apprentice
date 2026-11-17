@@ -848,6 +848,63 @@ class AdventureBriefTests(unittest.TestCase):
         self.assertIn("<!-- spoiler -->\n\n## Open Questions",
                       (self.vault / self.rel).read_text(encoding="utf-8"))
 
+    def test_a_section_the_vault_s_template_spoilers_is_never_in_the_open(self):
+        # A vault's own template: a ### under the spoilered Open Questions,
+        # and a ### it keeps in a spoiler block inside a players' section.
+        own = (TEMPLATES / "adventure-brief.md").read_text(encoding="utf-8")
+        own = own.replace(
+            "## Open Questions\n", "## Open Questions\n\n### Unresolved\n\n{x}\n", 1)
+        own = own.replace(
+            "## Entry Points\n", "<!-- spoiler -->\n\n### Hidden Place\n\n{x}\n\n"
+            "<!-- /spoiler -->\n\n## Entry Points\n", 1)
+        self.assertEqual(own.count("### Unresolved") + own.count("### Hidden Place"), 2)
+        (self.vault / "_Templates" / schema_rules.TEMPLATE_NAMES[
+            "adventure-brief.md"]).write_text(own, encoding="utf-8")
+        code, out = self.brief(
+            "---\nscope: one-shot\n---\n\n## Premise\n\nA lamp.\n\n"
+            "### Unresolved\n\nQUOKKA one.\n\n## Locations\n\nThe inn.\n\n"
+            "### Hidden Place\n\nQUOKKA two.\n\n## Open Questions\n\n- Who?\n",
+            "--write")
+        self.assertEqual(code, 0, out)
+        text = (self.vault / self.rel).read_text(encoding="utf-8")
+        self.assertEqual(text.count("QUOKKA"), 2)
+        states, problems = vl.scan_body(text)
+        self.assertEqual(problems, [])
+        shown = "\n".join(s.line for s in states if s.published)
+        self.assertIn("The inn.", shown)
+        self.assertNotIn("QUOKKA", shown)
+        self.assertNotIn("Who?", shown)
+
+    def test_open_questions_written_as_a_gm_section_is_said(self):
+        code, out = self.brief(
+            "---\nscope: one-shot\n---\n\n## Premise\n\nA lamp.\n\n"
+            "### Open Questions\n\n- Who?\n", "--write")
+        self.assertEqual(code, 0, out)
+        self.assertIn("WARNING", out)
+        self.assertIn("write it as '## Open Questions'", out)
+        text = (self.vault / self.rel).read_text(encoding="utf-8")
+        self.assertNotIn("<!-- spoiler -->", text)
+        self.assertLess(text.index("<!-- gm-only -->"), text.index("- Who?"))
+
+    def test_a_name_that_is_no_folder_name_is_refused(self):
+        for name in ("..", ".", "The Marrow Light.", ".hidden"):
+            with self.subTest(name=name):
+                code, out = self.brief(BRIEF, "--write", name=name)
+                self.assertEqual(code, 1, out)
+                self.assertIn("--name", out)
+        self.assertEqual([p.name for p in self.vault.iterdir()
+                          if p.name.startswith(".")], [])
+        self.assertFalse((self.vault / "Adventures").exists())
+
+    def test_an_empty_title_on_stdin_leaves_the_name(self):
+        code, out = self.brief(
+            '---\ntitle: ""\nscope: one-shot\n---\n\n## Premise\n\nA lamp.\n',
+            "--write")
+        self.assertEqual(code, 0, out)
+        fm = vl.extract_frontmatter((self.vault / self.rel).read_text(
+            encoding="utf-8"))
+        self.assertEqual(fm["title"], "The Marrow Light")
+
     def test_a_vault_s_own_brief_template_is_the_one_used(self):
         own = (TEMPLATES / "adventure-brief.md").read_text(encoding="utf-8")
         own = own.replace("### The Truth", "### What Is Really Going On", 1)
