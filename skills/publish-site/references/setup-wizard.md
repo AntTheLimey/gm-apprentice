@@ -539,7 +539,8 @@ gma publish deploy --verify --config vault.config.json
 `--force` belongs to this one command: without it wrangler hands the
 create to Cloudflare Workers and stops with "Missing entry-point to
 Worker script or to assets directory", and nothing is created. No later
-command takes it. If `project create` reports "a project with this name
+command takes it. A wrangler too old to know the flag says so (an older
+copy in the npx cache): run the create without it. If `project create` reports "a project with this name
 already exists," skip it and run `deploy` directly.
 
 `deploy --verify` builds, deploys, and

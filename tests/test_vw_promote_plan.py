@@ -280,6 +280,52 @@ class PromotePlanTests(unittest.TestCase):
                 self.assertIn(flag, out)
                 self.assertFalse((self.vault / TARGET).exists())
 
+    def test_a_path_that_names_no_note_is_not_answered_by_another_folder_s(self):
+        # Locations/Baranagar.md exists; Locations/New Town/Baranagar does not.
+        (self.vault / DRAFT).write_text(
+            "Then [[Locations/New Town/Baranagar]].\n", encoding="utf-8")
+        code, out = promote(self.vault, "--write", "--location",
+                            "Locations/New Town/Baranagar.md")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.fm()["locations"],
+                         ["[[Locations/New Town/Baranagar]]"])
+        warned = [ln for ln in out.splitlines() if ln.startswith("WARNING")]
+        self.assertEqual(len(warned), 1, out)
+        self.assertIn("no note of that name yet", warned[0])
+
+    def test_a_note_an_earlier_block_of_the_batch_made_is_found(self):
+        (self.vault / DRAFT).write_text(
+            "[[The Lascar]] waits at [[Baranagar]].\n", encoding="utf-8")
+        blocks = ('=== note-new "Characters/NPCs/Ibrahim Sarang.md"\n'
+                  + entity("npc", ["The Lascar"])
+                  + f'=== promote-plan "{DRAFT}" --to "{TARGET}" '
+                    "--plan-type scene\n")
+        (self.vault / "batch.txt").write_text(blocks, encoding="utf-8")
+        code, out = run(self.vault, "batch", str(self.vault / "batch.txt"),
+                        "--write")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.fm()["participants"], ["[[Ibrahim Sarang]]"])
+
+    def test_section_keeps_all_of_a_section_that_holds_a_marker_pair(self):
+        section = ("## Timeline\n\nA.\n\n<!-- gm-only -->\nHidden.\n"
+                   "<!-- /gm-only -->\n\nB, after the block.\n\n")
+        (self.vault / DRAFT).write_text(
+            section + "## Investigation\n\nC.\n", encoding="utf-8")
+        code, out = promote(self.vault, "--write", "--section", "Timeline")
+        self.assertEqual(code, 0, out)
+        self.assertTrue(self.written().endswith("---\n" + section))
+
+    def test_section_refuses_half_a_marker_block_and_drops_nothing(self):
+        # The opener is above the heading and the closer inside the section:
+        # copying to the closer would lose B without a word.
+        (self.vault / DRAFT).write_text(
+            "<!-- gm-only -->\n## Timeline\n\nA.\n\n<!-- /gm-only -->\n\n"
+            "B.\n\n## Investigation\n\nC.\n", encoding="utf-8")
+        code, out = promote(self.vault, "--write", "--section", "Timeline")
+        self.assertEqual(code, 1, out)
+        self.assertIn("half of a gm-only or spoiler block", out)
+        self.assertFalse((self.vault / TARGET).exists())
+
     def test_campaign_is_the_vault_s_own_overview(self):
         # No Overview: the template's link stands, and it names the note
         # the scaffold makes (#677), not a note of one old vault.
@@ -297,6 +343,13 @@ class PromotePlanTests(unittest.TestCase):
         code, out = promote(self.vault, "--write")
         self.assertEqual(code, 0, out)
         self.assertEqual(self.fm()["campaign"], "[[The Long Winter]]")
+        # Another note of the Overview's name: the link says which, by path.
+        (self.vault / TARGET).unlink()
+        (self.vault / "Locations/The Long Winter.md").write_text(
+            entity("location"), encoding="utf-8")
+        code, out = promote(self.vault, "--write")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.fm()["campaign"], "[[_Campaign/The Long Winter]]")
 
     def test_date_stamps_last_updated_and_no_date_leaves_it_empty(self):
         code, out = promote(self.vault, "--write")

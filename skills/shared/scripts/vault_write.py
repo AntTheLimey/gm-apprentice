@@ -3690,9 +3690,12 @@ def plan_cast(batch: Batch, body: str, people: list[str], places: list[str],
     stems: dict[str, list[str]] = {}
     aliases: dict[str, list[str]] = {}
     kinds: dict[str, str] = {}
-    for rel, text in vl.vault_files(batch.vault):
-        if is_record(rel):
+    # The vault as this batch has left it: a note an earlier block made or
+    # changed is read as it will be written, not as the disk has it.
+    for rel in sorted(batch._files().values()):
+        if is_record(rel) or vl.is_skipped_path(rel):
             continue
+        text = batch.read(rel)
         kinds[rel] = vl.entity_type(vl.extract_frontmatter(text) or {})
         stems.setdefault(vl.normalize(Path(rel).stem), []).append(rel)
         for alias in vl.frontmatter_aliases(text):
@@ -3706,12 +3709,12 @@ def plan_cast(batch: Batch, body: str, people: list[str], places: list[str],
         if path.casefold().endswith(".md"):
             path = path[:-3]
         if "/" in path.strip("/"):
+            # A path says which note: when no note is there, none is
+            # meant, least of all another folder's note of that name.
             want = vl.normalize(path.strip("/"))
-            hits = sorted(rel for rel in kinds
+            return sorted(rel for rel in kinds
                           if ("/" + vl.normalize(rel[:-3])).endswith(
                               "/" + want))
-            if hits:
-                return hits
         name = vl.link_target(raw)
         return sorted(stems.get(name) or set(aliases.get(name, ())))
 
@@ -3732,7 +3735,8 @@ def plan_cast(batch: Batch, body: str, people: list[str], places: list[str],
                 f"{flag} {raw!r} matches {', '.join(hits)}: pass the vault "
                 f"path of the one meant, e.g. {flag} \"{hits[0][:-3]}\"")
         if not hits:
-            value = vl.link_name(value) or value
+            value = re.split(r"[|#^]", value, maxsplit=1)[0].strip()
+            value = value[:-3] if value.casefold().endswith(".md") else value
             batch.row("WARNING", target, "", f"{flag} {value!r}: no note of "
                       f"that name yet (linked as written)")
             return value
@@ -3762,7 +3766,7 @@ def plan_cast(batch: Batch, body: str, people: list[str], places: list[str],
             (out_people if kinds[rel] in PLAN_PEOPLE
              else out_places).append(link_to(rel))
     return (list(dict.fromkeys(out_people)), list(dict.fromkeys(out_places)),
-            Path(overview).stem if overview else None)
+            link_to(overview) if overview else None)
 
 
 def cmd_promote_plan(batch: Batch, args: argparse.Namespace,
@@ -3797,7 +3801,18 @@ def cmd_promote_plan(batch: Batch, args: argparse.Namespace,
                    else f"{len(hits)} '{'#' * hits[0].level} {hits[0].title}' "
                         f"headings: promote the heading above the one "
                         f"meant, or make their titles differ"))
-        body = "".join(doc.lines[hits[0].idx:section_end(doc, hits[0])])
+        # To the next heading of its level or above, markers and all: a
+        # gm-only or spoiler marker ends no section here (section_end stops
+        # at one, and would drop the text after it without a word).
+        end = next((h.idx for h in doc.heads if h.idx > hits[0].idx
+                    and h.level <= hits[0].level), len(doc.lines))
+        body = "".join(doc.lines[hits[0].idx:end])
+        _states, problems = scan_body(body)
+        if problems:
+            raise WriteError(
+                f"--section {args.section!r}: the section holds half of a "
+                f"gm-only or spoiler block ({problems[0]}): promote the "
+                f"heading above it, or close the block in the draft")
         part = f", section '{hits[0].title}'"
     target = vl.normalize_file_arg(args.to)
     if not re.fullmatch(r"[\w-]+", args.plan_type):
