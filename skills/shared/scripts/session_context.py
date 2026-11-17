@@ -131,7 +131,8 @@ from vaultlib import (GM_MARKER_RE, is_active_pc, marker_re,  # noqa: F401
 from vaultlib import LABEL_RE as _LABEL_RE
 from vaultlib import BULLET_RE, markers_in
 from vaultlib import bullets as _bullets
-from vaultlib import alias_split, fence_step, link_name, split_paused
+from vaultlib import (alias_split, fence_step, link_aliases, link_name,
+                      split_paused)
 from vaultlib import vault_files as _vault_files
 
 
@@ -545,6 +546,70 @@ def threads_related(a: str, b: str) -> bool:
     return extra >= need and extra * 2 >= smaller
 
 
+_NAMED_TYPES = frozenset({"npc", "creature", "faction", "organization",
+                          "location", "item", "document", "prop"})
+
+
+class NameIndex:
+    """The names the vault knows, for the last matching tier (#718): a
+    thread and a Wrap-Up line that name the same person, place or thing
+    are about it, however each is worded.
+
+    A name is a note's title (file stem) or `aliases:` / `gm_aliases:`
+    entry, plus each capitalised word of a title of two words or more
+    ("Durgan" for "Durgan Flintmere") when no other note has that word. Only
+    the notes of a person, place or thing count (not PCs, who are in every
+    thread; not sessions, plans or scenes), so a common word never
+    matches. `mentions` reads a text's links by target and its bare text
+    whole-word, a trailing `'s` allowed. `pending` holds each session's
+    Pending Consequences bullets, which `wrap_up_threads` does not."""
+
+    def __init__(self, files, chapter=None):
+        owners: dict[str, set[str]] = {}
+        first_words: dict[str, set[str]] = {}
+        for rel, _text, fm in files:
+            if entity_type(fm) not in _NAMED_TYPES:
+                continue
+            stem = Path(rel).stem.replace("_", " ").strip()
+            names = [stem, *link_aliases(fm)]
+            for name in names:
+                if name:
+                    owners.setdefault(normalize(name), set()).add(rel)
+            parts = stem.split()
+            if len(parts) > 1:
+                for w in parts:
+                    if (len(w) >= 3 and w[:1].isupper()
+                            and w.casefold() not in _THREAD_STOP):
+                        first_words.setdefault(w.casefold(), set()).add(rel)
+        for w, rels in first_words.items():
+            if w not in owners and len(rels) == 1:
+                owners[w] = rels
+        # An alias shared by two notes names neither.
+        self._owner = {n: next(iter(r)) for n, r in owners.items()
+                       if len(r) == 1}
+        names = sorted(self._owner, key=len, reverse=True)
+        self._re = (re.compile(
+            r"(?<![^\W_])(?:" + "|".join(re.escape(n) for n in names)
+            + r")(?:['\u2019]s)?(?![^\W_])") if names else None)
+        self.pending: dict[int, list[str]] = {}
+        for n, text in _scoped_wrap_ups(files, chapter):
+            block = _heading_block(text, 4, "Pending Consequences")
+            if block:
+                self.pending[n] = _bullets(block)
+
+    def mentions(self, text: str) -> set[str]:
+        """The notes `text` names: by link target, alias or bare name."""
+        if self._re is None:
+            return set()
+        found: set[str] = set()
+        for m in self._re.finditer(_norm_thread(text)):
+            name = re.sub(r"['\u2019]s$", "", m.group(0))
+            owner = self._owner.get(name)
+            if owner:
+                found.add(owner)
+        return found
+
+
 _POINTER_RE = re.compile(r"\[\[([^\[\]|#]+)(?:[#|][^\[\]]*)?\]\]")
 
 
@@ -853,7 +918,7 @@ def _lead_key(text: str) -> str | None:
     return None if vw.SESSION_ENTRY_RE.match(key) else key
 
 
-def _match(thread: str, wrap_ups):
+def _match(thread: str, wrap_ups, names: NameIndex | None = None):
     """(sessions, mark, claimed): `claimed` holds the (session, bullet)
     Unresolved bullets a match took: every close match (a likely wording
     or an equal bold lead, `threads.lead`, so a thread rewritten in
@@ -884,6 +949,19 @@ def _match(thread: str, wrap_ups):
         if related is not None or any(threads_related(thread, b)
                                       for b in carry):
             hits.append(n)
+    if not hits and names is not None:
+        theirs = names.mentions(thread)
+        for n, unresolved, carry in wrap_ups:
+            if not theirs:
+                break
+            related = next((b for b in unresolved
+                            if theirs & names.mentions(b)), None)
+            if related is not None:
+                claimed.add((n, related))
+            if related is not None or any(
+                    theirs & names.mentions(b)
+                    for b in carry + names.pending.get(n, [])):
+                hits.append(n)
     return hits, ("~" if hits else ""), claimed
 
 
@@ -916,6 +994,7 @@ def unlisted_wrapup_threads(files, chapter,
       chapters can collide, so any closure claims them.
     """
     wrap_ups = wrap_up_threads(files, chapter)
+    names = NameIndex(files, chapter)
     not_playing = out_of_play(vault)
     overview = overview_of(files)
     overview_text = overview[1] if overview else ""
@@ -925,7 +1004,7 @@ def unlisted_wrapup_threads(files, chapter,
             threads.extend(t.text for t in pc_thread_items(text))
     matched: set[tuple[int, str]] = set()
     for thread in threads:
-        matched.update(_match(thread, wrap_ups)[2])
+        matched.update(_match(thread, wrap_ups, names)[2])
 
     def claim(thread: str, scope) -> None:
         matched.update(_match(thread, scope)[2])
@@ -1086,6 +1165,7 @@ def thread_report(files, current: int, chapter, vault: Path,
     """
     lines = ["===== Threads ====="]
     wrap_ups = wrap_up_threads(files, chapter)
+    names = NameIndex(files, chapter)
 
     not_playing = out_of_play(vault)
     stale_after = setting_or_builtin(vault, "vault.stale_after_sessions")
@@ -1099,10 +1179,10 @@ def thread_report(files, current: int, chapter, vault: Path,
 
     def tags(thread: str) -> str:
         nonlocal tentative
-        hits, mark, _claimed = _match(thread, wrap_ups)
+        hits, mark, _claimed = _match(thread, wrap_ups, names)
         if not hits:
             return ("first=?\tlast=?\tage=?\t"
-                    "(not in any wrap-up — check it is still live)")
+                    "(no match found in a wrap-up — check it is still live)")
         tentative = tentative or mark == "~"
         first, last = min(hits), max(hits)
         age = current - last

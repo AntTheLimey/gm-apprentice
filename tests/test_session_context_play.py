@@ -487,7 +487,7 @@ class ThreadSecondTierTests(unittest.TestCase):
         report = sc.thread_report(load_files(tmp), 5, None, tmp)
         self.assertIn("first~3\tlast~3\tage~2", report)
         self.assertNotIn("first=", report)
-        self.assertNotIn("not in any wrap-up", report)
+        self.assertNotIn("no match found", report)
         self.assertIn("~ means a likely match", report.splitlines()[1])
 
     def test_tentative_match_claims_the_bullet(self):
@@ -506,6 +506,101 @@ class ThreadSecondTierTests(unittest.TestCase):
         self.assertNotIn("likely match", report)
 
 
+class ThreadNameTierTests(unittest.TestCase):
+    """A thread and a Wrap-Up line that share an entity the vault knows
+    (title, alias or first name; linked or bare; possessive) match, even
+    worded apart (#718). Pending Consequences count as a Wrap-Up line."""
+
+    def make(self, pc_threads, wrap_body, extra_notes=()):
+        tmp = Path(tempfile.mkdtemp(prefix="thread-names-"))
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        (tmp / "Ilsa Marrow.md").write_text(
+            "---\ntype: pc\n---\n\n## Current Status\n\n**Open threads:**\n"
+            + "".join(f"- {t}\n" for t in pc_threads), encoding="utf-8")
+        notes = [("Tam Rowe", "npc", ""),
+                 ("Durgan Flintmere", "npc", ""),
+                 ("Widow's Stair", "location", ""),
+                 ("Lamp of Ash", "item", "aliases: [The Whole Lamp]"),
+                 ("Cart", "item", "")] + list(extra_notes)
+        for name, typ, extra in notes:
+            (tmp / f"{name}.md").write_text(
+                f"---\ntype: {typ}\n{extra}\n---\n\n# {name}\n",
+                encoding="utf-8")
+        (tmp / "Wrap.md").write_text(
+            "---\ntype: session_wrap\nsession: 1\n---\n\n## GM Notes\n\n"
+            "### What Carries Forward\n\n" + wrap_body, encoding="utf-8")
+        return tmp
+
+    def line(self, tmp, thread_start):
+        report = sc.thread_report(load_files(tmp), 2, None, tmp)
+        return next(ln for ln in report.splitlines()
+                    if ln.startswith(thread_start))
+
+    def test_linked_bold_entry_matches_a_wants_to_find_thread(self):
+        tmp = self.make(
+            ["Wants to find Tam Rowe before the thaw"],
+            "#### Unresolved Threads\n\n"
+            "- **The road south is shut.** ([[Tam Rowe]], [[Ilsa Marrow]])\n")
+        self.assertIn("first~1", self.line(tmp, "Wants to find Tam"))
+        self.assertNotIn("no match", self.line(tmp, "Wants to find Tam"))
+
+    def test_possessive_first_name_matches_a_pending_consequence(self):
+        tmp = self.make(
+            ["Wants to find Durgan Flintmere and see the rest of the "
+             "carving"],
+            "#### Unresolved Threads\n\n- Nothing relevant here\n\n"
+            "#### Pending Consequences\n\n- **Durgan's tower** is watched\n")
+        self.assertIn("first~1", self.line(tmp, "Wants to find Durgan"))
+
+    def test_alias_matches_in_bare_text(self):
+        tmp = self.make(
+            ["Who forged the lamp of ash, and why?"],
+            "#### Unresolved Threads\n\n- The whole lamp is still lit\n")
+        self.assertIn("first~1", self.line(tmp, "Who forged"))
+
+    def test_shared_place_matches_across_wording(self):
+        tmp = self.make(
+            ["How did the cook mend the boy, and how does he know the "
+             "Widow's Stair?"],
+            "#### Unresolved Threads\n\n"
+            "- **The cook's luck.** He named the fork on the Widow's "
+            "Stair\n")
+        self.assertIn("first~1", self.line(tmp, "How did the cook"))
+
+    def test_a_pc_name_alone_does_not_match(self):
+        tmp = self.make(
+            ["Ilsa Marrow owes the ferryman a debt"],
+            "#### Unresolved Threads\n\n"
+            "- **Ilsa Marrow** slept badly\n")
+        self.assertIn("no match found in a wrap-up",
+                      self.line(tmp, "Ilsa Marrow owes"))
+
+    def test_common_words_are_not_entities(self):
+        tmp = self.make(
+            ["Find a way to mend the broken lock"],
+            "#### Unresolved Threads\n\n- The cart is a way out\n")
+        self.assertIn("no match found in a wrap-up",
+                      self.line(tmp, "Find a way"))
+
+    def test_a_first_name_two_notes_share_is_not_a_match(self):
+        tmp = self.make(
+            ["Wants to find Tam Rowe"],
+            "#### Unresolved Threads\n\n- **Tam the ferryman** waits\n",
+            extra_notes=[("Tam Orrin", "npc", "")])
+        self.assertIn("no match found in a wrap-up",
+                      self.line(tmp, "Wants to find Tam"))
+
+    def test_matched_bullet_is_not_listed_as_on_no_thread_list(self):
+        tmp = self.make(
+            ["Wants to find Tam Rowe before the thaw"],
+            "#### Unresolved Threads\n\n"
+            "- **The road south is shut.** ([[Tam Rowe]])\n")
+        report = sc.thread_report(load_files(tmp), 2, None, tmp)
+        orphans = report.split(
+            "--- Wrap-up threads not on any thread list ---", 1)[1]
+        self.assertNotIn("road south", orphans)
+
+
 class ThreadReportTests(unittest.TestCase):
     """`thread_report(files, current, chapter, vault)` and `--threads`."""
 
@@ -521,7 +616,7 @@ class ThreadReportTests(unittest.TestCase):
             "Find the missing ledger\tfirst=7\tlast=7\tage=0\t", report)
         self.assertIn(
             "Repay Bram\tfirst=?\tlast=?\tage=?\t"
-            "(not in any wrap-up — check it is still live)", report)
+            "(no match found in a wrap-up — check it is still live)", report)
 
     def test_threads_orphans(self):
         report = sc.thread_report(self.files, 7, "chapter 4 - calcutta", FIXTURE)
@@ -593,7 +688,7 @@ class ThreadReportTests(unittest.TestCase):
             "--- Hero ---\n"
             "Find the missing ledger\tfirst=7\tlast=7\tage=0\t\n"
             "Repay Bram\tfirst=?\tlast=?\tage=?\t"
-            "(not in any wrap-up — check it is still live)\n"
+            "(no match found in a wrap-up — check it is still live)\n"
             "--- Dormant (Campaign Overview) ---\n"
             "(none)\n"
             "--- Wrap-up threads not on any thread list ---\n"
@@ -640,7 +735,7 @@ class ThreadReportTests(unittest.TestCase):
             "\tinvolves: the party")
         self.assertEqual(
             lines[3], "The harbour toll\tfirst=?\tlast=?\tage=?\t"
-            "(not in any wrap-up — check it is still live)"
+            "(no match found in a wrap-up — check it is still live)"
             "\tinvolves: Hero, Bram")
         self.assertLess(lines.index("--- Shared (Campaign Overview) ---"),
                         lines.index("--- Hero ---"))
@@ -767,7 +862,7 @@ class ThreadReportTests(unittest.TestCase):
     def test_shared_bullet_with_no_tail_names_nobody(self):
         tmp = self.shared_copy("- A loose end with no tail")
         self.assertIn("A loose end with no tail\tfirst=?\tlast=?\tage=?\t"
-                      "(not in any wrap-up \u2014 check it is still live)"
+                      "(no match found in a wrap-up \u2014 check it is still live)"
                       "\tinvolves: (none named)", self.report(tmp))
 
     def test_only_shared_threads_say_so_under_the_pc(self):
