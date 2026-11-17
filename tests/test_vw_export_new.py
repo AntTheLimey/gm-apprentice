@@ -303,5 +303,24 @@ class ExportReviewFixTests(unittest.TestCase):
         ctx = vc._wrap_context(wrap, fm, entries)
         self.assertEqual(ctx.notes_rel, entries[1][0])
 
+    def test_wrapup_repair_skips_a_record_naming_another_session(self):
+        def note(rel, text):
+            return (rel, text, vl.extract_frontmatter(text) or {})
+        entries = [
+            note("Session 01 - Arrival.md",
+                 "---\ntype: session\nsession_number: 1\n---\n"),
+            note("Session 01 - Arrival - Play Notes.md",
+                 '---\ntype: session-play-notes\nsession: "[[Session 01 - Arrival]]"\n'
+                 "session_number: 1\n---\n"),
+            # No chapter, same number, but it names another session's index.
+            note("Session 01 - Return - Export.md",
+                 '---\ntype: session-export\nsession: "[[Session 01 - Return]]"\n'
+                 "session_number: 1\n---\n"),
+        ]
+        fm = {"type": "session_wrap", "session": "[[Session 01 - Arrival]]",
+              "session_number": "1"}
+        ctx = vc._wrap_context("Chapter_01_Session_01_Wrap_Up.md", fm, entries)
+        self.assertEqual(ctx.notes_rel, "Session 01 - Arrival - Play Notes.md")
+
 if __name__ == "__main__":
     unittest.main()

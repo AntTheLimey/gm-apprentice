@@ -4079,6 +4079,14 @@ def _wrap_context(rel: str, fm: dict,
     if chapter is None and ctx.index_rel is not None:
         chapter = next((chapter_key(r, f) for r, _t, f in indexes
                         if r == ctx.index_rel), None)
+    # A record whose `session:` names another index is not this session's.
+    own = (normalize(Path(ctx.index_rel).stem)
+           if ctx.index_rel is not None else None)
+
+    def names_another(f: dict) -> bool:
+        target = wikilink_target(f.get("session"))
+        return bool(own and target and link_target(target) != own)
+
     notes: list[str] = []
     for key in ("export", "play_notes"):
         notes = [r for r, _t, f in entries
@@ -4086,7 +4094,8 @@ def _wrap_context(rel: str, fm: dict,
                  and f["type"] in SESSION_DOC_TYPES[key][1]
                  and ctx.number is not None
                  and _session_number_of(r, f) == ctx.number
-                 and _chapters_agree(chapter, chapter_key(r, f))]
+                 and _chapters_agree(chapter, chapter_key(r, f))
+                 and not names_another(f)]
         if notes:
             break
     if len(notes) == 1:
