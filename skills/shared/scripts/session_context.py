@@ -106,6 +106,7 @@ import argparse
 import re
 import subprocess
 import sys
+import unicodedata
 from collections.abc import Callable
 from difflib import SequenceMatcher
 from pathlib import Path
@@ -548,6 +549,7 @@ def threads_related(a: str, b: str) -> bool:
 
 _NAMED_TYPES = frozenset({"npc", "creature", "faction", "organization",
                           "location", "item", "document", "prop"})
+_GIVEN_NAME_TYPES = frozenset({"npc", "creature"})
 
 
 class NameIndex:
@@ -556,57 +558,99 @@ class NameIndex:
     are about it, however each is worded.
 
     A name is a note's title (file stem) or `aliases:` / `gm_aliases:`
-    entry, plus each capitalised word of a title of two words or more
-    ("Durgan" for "Durgan Flintmere") when no other note has that word. Only
-    the notes of a person, place or thing count (not PCs, who are in every
-    thread; not sessions, plans or scenes), so a common word never
-    matches. `mentions` reads a text's links by target and its bare text
-    whole-word, a trailing `'s` allowed. `pending` holds each session's
-    Pending Consequences bullets, which `wrap_up_threads` does not."""
+    entry. A name of two words or more, and any `[[link]]` target, matches
+    whatever its case. A single word (a one-word title or alias, or the
+    given name taken from an npc or creature title: "Durgan" for "Durgan
+    Flintmere", when no other note has it) matches only as written, so
+    "Order" is not "order" nor "Captain" "the captain". Only the notes of a
+    person, place or thing count (not PCs, who are in every thread; not
+    sessions, plans or scenes). A name two notes share names neither. A
+    trailing `'s` is allowed. An entity that every Wrap-Up names, with
+    three or more of them, is not evidence (the home town, the party's
+    faction) and is left out. `lines` holds each in-scope Wrap-Up's
+    Unresolved Threads, PC Carry-Forward and Pending Consequences bullets;
+    `mentions` is asked once per text."""
 
     def __init__(self, files, chapter=None):
-        owners: dict[str, set[str]] = {}
-        first_words: dict[str, set[str]] = {}
+        owners: dict[str, set[str]] = {}    # casefolded full name -> notes
+        words: dict[str, set[str]] = {}     # single word, as written -> notes
+        given: dict[str, set[str]] = {}     # npc/creature title word
         for rel, _text, fm in files:
-            if entity_type(fm) not in _NAMED_TYPES:
+            kind = entity_type(fm)
+            if kind not in _NAMED_TYPES:
                 continue
-            stem = Path(rel).stem.replace("_", " ").strip()
-            names = [stem, *link_aliases(fm)]
-            for name in names:
-                if name:
-                    owners.setdefault(normalize(name), set()).add(rel)
+            stem = unicodedata.normalize(
+                "NFC", Path(rel).stem.replace("_", " ").strip())
+            for name in [stem, *link_aliases(fm)]:
+                name = unicodedata.normalize("NFC", name).strip()
+                if not name:
+                    continue
+                owners.setdefault(normalize(name), set()).add(rel)
+                if (len(name.split()) == 1 and len(name) >= 3
+                        and name.casefold() not in _THREAD_STOP):
+                    words.setdefault(name, set()).add(rel)
             parts = stem.split()
-            if len(parts) > 1:
+            if kind in _GIVEN_NAME_TYPES and len(parts) > 1:
                 for w in parts:
                     if (len(w) >= 3 and w[:1].isupper()
                             and w.casefold() not in _THREAD_STOP):
-                        first_words.setdefault(w.casefold(), set()).add(rel)
-        for w, rels in first_words.items():
-            if w not in owners and len(rels) == 1:
-                owners[w] = rels
-        # An alias shared by two notes names neither.
-        self._owner = {n: next(iter(r)) for n, r in owners.items()
+                        given.setdefault(w, set()).add(rel)
+        for w, rels in given.items():
+            words.setdefault(w, set()).update(rels)
+        self._links = {n: next(iter(r)) for n, r in owners.items()
                        if len(r) == 1}
-        names = sorted(self._owner, key=len, reverse=True)
-        self._re = (re.compile(
-            r"(?<![^\W_])(?:" + "|".join(re.escape(n) for n in names)
-            + r")(?:['\u2019]s)?(?![^\W_])") if names else None)
-        self.pending: dict[int, list[str]] = {}
+        self._words = {n: next(iter(r)) for n, r in words.items()
+                       if len(r) == 1}
+        multi = sorted((n for n in self._links if " " in n),
+                       key=len, reverse=True)
+        single = sorted(self._words, key=len, reverse=True)
+        edge = (r"(?<![^\W_])(?:", r")(?:['\u2019]s)?(?![^\W_])")
+        self._multi_re = (re.compile(
+            edge[0] + "|".join(re.escape(n) for n in multi) + edge[1],
+            re.IGNORECASE) if multi else None)
+        self._word_re = (re.compile(
+            edge[0] + "|".join(re.escape(n) for n in single) + edge[1])
+            if single else None)
+        self._cache: dict[str, set[str]] = {}
+        self.lines: list[tuple[int, list[str]]] = []
         for n, text in _scoped_wrap_ups(files, chapter):
-            block = _heading_block(text, 4, "Pending Consequences")
-            if block:
-                self.pending[n] = _bullets(block)
+            bullets: list[str] = []
+            for level, title in ((4, "Unresolved Threads"),
+                                 (3, "PC Carry-Forward"),
+                                 (4, "Pending Consequences")):
+                block = _heading_block(text, level, title)
+                if block:
+                    bullets.extend(_bullets(block))
+            self.lines.append((n, bullets))
+        self._everywhere: set[str] = set()
+        if len(self.lines) >= 3:
+            per = [set().union(*(self.mentions(b) for b in bullets))
+                   for _n, bullets in self.lines]
+            self._everywhere = set.intersection(*per)
+            self._cache.clear()
 
     def mentions(self, text: str) -> set[str]:
         """The notes `text` names: by link target, alias or bare name."""
-        if self._re is None:
-            return set()
+        if text in self._cache:
+            return self._cache[text]
+        text_nfc = unicodedata.normalize("NFC", text)
         found: set[str] = set()
-        for m in self._re.finditer(_norm_thread(text)):
-            name = re.sub(r"['\u2019]s$", "", m.group(0))
-            owner = self._owner.get(name)
+        for m in _THREAD_LINK_RE.finditer(text_nfc):
+            name = normalize(m.group(1).rpartition("/")[2])
+            owner = (self._links.get(name)
+                     or self._links.get(re.sub(r"^(the|a|an) ", "", name)))
             if owner:
                 found.add(owner)
+        bare = re.sub(r"\[\[([^\]|]+)(?:\|[^\]]+)?\]\]", r"\1", text_nfc)
+        for rx in (self._multi_re, self._word_re):
+            for m in (rx.finditer(bare) if rx else ()):
+                name = re.sub(r"['\u2019]s$", "", m.group(0))
+                owner = (self._links.get(normalize(name)) if rx is
+                         self._multi_re else self._words.get(name))
+                if owner:
+                    found.add(owner)
+        found -= self._everywhere
+        self._cache[text] = found
         return found
 
 
@@ -951,17 +995,9 @@ def _match(thread: str, wrap_ups, names: NameIndex | None = None):
             hits.append(n)
     if not hits and names is not None:
         theirs = names.mentions(thread)
-        for n, unresolved, carry in wrap_ups:
-            if not theirs:
-                break
-            related = next((b for b in unresolved
-                            if theirs & names.mentions(b)), None)
-            if related is not None:
-                claimed.add((n, related))
-            if related is not None or any(
-                    theirs & names.mentions(b)
-                    for b in carry + names.pending.get(n, [])):
-                hits.append(n)
+        if theirs:
+            hits = [n for n, bullets in names.lines
+                    if any(theirs & names.mentions(b) for b in bullets)]
     return hits, ("~" if hits else ""), claimed
 
 
@@ -994,7 +1030,6 @@ def unlisted_wrapup_threads(files, chapter,
       chapters can collide, so any closure claims them.
     """
     wrap_ups = wrap_up_threads(files, chapter)
-    names = NameIndex(files, chapter)
     not_playing = out_of_play(vault)
     overview = overview_of(files)
     overview_text = overview[1] if overview else ""
@@ -1004,7 +1039,7 @@ def unlisted_wrapup_threads(files, chapter,
             threads.extend(t.text for t in pc_thread_items(text))
     matched: set[tuple[int, str]] = set()
     for thread in threads:
-        matched.update(_match(thread, wrap_ups, names)[2])
+        matched.update(_match(thread, wrap_ups)[2])
 
     def claim(thread: str, scope) -> None:
         matched.update(_match(thread, scope)[2])

@@ -590,15 +590,92 @@ class ThreadNameTierTests(unittest.TestCase):
         self.assertIn("no match found in a wrap-up",
                       self.line(tmp, "Wants to find Tam"))
 
-    def test_matched_bullet_is_not_listed_as_on_no_thread_list(self):
+    def test_a_name_match_does_not_claim_the_bullet(self):
+        # The name tier is tentative: the line still shows as on no list.
         tmp = self.make(
             ["Wants to find Tam Rowe before the thaw"],
             "#### Unresolved Threads\n\n"
             "- **The road south is shut.** ([[Tam Rowe]])\n")
         report = sc.thread_report(load_files(tmp), 2, None, tmp)
+        self.assertIn("first~1", self.line(tmp, "Wants to find Tam"))
         orphans = report.split(
             "--- Wrap-up threads not on any thread list ---", 1)[1]
-        self.assertNotIn("road south", orphans)
+        self.assertIn("road south", orphans)
+
+    def test_single_words_and_given_names_keep_their_case(self):
+        tmp = self.make(
+            ["Find who set the old well alight",
+             "Put things in order before the thaw",
+             "Ask the captain about wages"],
+            "#### Unresolved Threads\n\n"
+            "- The old man in the tavern knows a secret\n"
+            "- Everything must be put in order, says the Mayor\n"
+            "- The captain of the guard is bribed\n",
+            extra_notes=[("The Old Mill", "location", ""),
+                         ("Order of the Veil", "faction", ""),
+                         ("Captain Reyes", "npc", "")])
+        for start in ("Find who set", "Put things", "Ask the captain"):
+            self.assertIn("no match found", self.line(tmp, start))
+
+    def test_a_capitalised_given_name_still_matches(self):
+        tmp = self.make(
+            ["Ask Reyes about wages"],
+            "#### Unresolved Threads\n\n- Reyes's pay is late\n",
+            extra_notes=[("Captain Reyes", "npc", "")])
+        self.assertIn("first~1", self.line(tmp, "Ask Reyes"))
+
+    def test_a_given_name_comes_only_from_npc_titles(self):
+        tmp = self.make(
+            ["Search Veil country for the tower"],
+            "#### Unresolved Threads\n\n- The Veil is thin tonight\n",
+            extra_notes=[("Veil Ridge", "location", "")])
+        self.assertIn("no match found", self.line(tmp, "Search Veil"))
+
+    def test_an_entity_in_every_wrapup_is_no_evidence(self):
+        tmp = self.make(
+            ["Wants to find Tam Rowe before the thaw"],
+            "#### Unresolved Threads\n\n- **Tam Rowe** is gone\n")
+        for n in (2, 3):
+            (tmp / f"Wrap{n}.md").write_text(
+                f"---\ntype: session_wrap\nsession: {n}\n---\n\n"
+                "## GM Notes\n\n### What Carries Forward\n\n"
+                "#### Unresolved Threads\n\n- [[Tam Rowe]] again\n",
+                encoding="utf-8")
+        report = sc.thread_report(load_files(tmp), 4, None, tmp)
+        line = next(ln for ln in report.splitlines()
+                    if ln.startswith("Wants to find Tam"))
+        self.assertIn("no match found", line)
+        orphans = report.split(
+            "--- Wrap-up threads not on any thread list ---", 1)[1]
+        self.assertIn("Tam Rowe", orphans)
+
+    def test_an_entity_in_two_wrapups_still_counts(self):
+        tmp = self.make(
+            ["Wants to find Tam Rowe before the thaw"],
+            "#### Unresolved Threads\n\n- **Tam Rowe** is gone\n")
+        (tmp / "Wrap2.md").write_text(
+            "---\ntype: session_wrap\nsession: 2\n---\n\n## GM Notes\n\n"
+            "### What Carries Forward\n\n#### Unresolved Threads\n\n"
+            "- [[Tam Rowe]] again\n", encoding="utf-8")
+        report = sc.thread_report(load_files(tmp), 4, None, tmp)
+        self.assertIn("first~1", next(
+            ln for ln in report.splitlines()
+            if ln.startswith("Wants to find Tam")))
+
+    def test_mentions_is_asked_once_per_text(self):
+        tmp = self.make(["x"], "#### Unresolved Threads\n\n- a\n")
+        idx = sc.NameIndex(load_files(tmp))
+        first = idx.mentions("Tam Rowe is here")
+        self.assertIs(idx.mentions("Tam Rowe is here"), first)
+
+    def test_a_decomposed_file_name_matches_composed_text(self):
+        import unicodedata
+        tmp = self.make(
+            ["Wants to find Éloïse about the deed"],
+            "#### Unresolved Threads\n\n- Éloïse is gone\n",
+            extra_notes=[(unicodedata.normalize("NFD", "Éloïse Durand"),
+                          "npc", "")])
+        self.assertIn("first~1", self.line(tmp, "Wants to find Élo"))
 
 
 class ThreadReportTests(unittest.TestCase):
