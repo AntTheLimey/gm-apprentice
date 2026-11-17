@@ -116,6 +116,7 @@ decision rather than pure score.
 
 ## Completed
 
+- ~~Leak check: a Wrap-Up's World State date trips every deploy~~ — a paired session's printed in-game date counts as visible (#704, v1.12.48)
 - ~~A played session Excluded as prep is skipped in silence~~ — publish-played lists it as unclear with the way out (#703, v1.12.47)
 - ~~`gma update .` prints a blank vault name~~ — the resolved folder's name (#709, v1.12.46)
 - ~~Stories without a calendar~~ — unsortable-date warnings only once the campaign's dates carry a year; relative days or no dates are normal (#697, v1.12.42)

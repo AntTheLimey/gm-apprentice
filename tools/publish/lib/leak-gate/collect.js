@@ -49,8 +49,11 @@ const neverShown = (rel) => rel.split('/').slice(0, -1).some((s) => NEVER_SHOWN.
 const WORKING_DIRS = [...WORKSPACE_DIRS, '_archive'].map((d) => d.toLowerCase());
 const inWorkingDir = (rel) => WORKING_DIRS.includes(rel.split('/')[0].toLowerCase());
 // The fields a page prints under the tool's own labels (occupation as "Role"), as "label value".
-function printedRows(page) {
-  try { return rowsFor(page, {}).filter(([, text]) => text).map(([label, text]) => `${label} ${text}`); } catch (e) { return []; }
+// `wrapUp` is the Wrap-Up a session index pairs with, if any: its page, and its preview, then print its in-game date
+// (previews.js rowsFor), so the date a GM-only World State repeats is no secret (#704).
+function printedRows(page, wrapUp = null) {
+  const ctx = { hubWrapUps: { get: () => wrapUp } };
+  try { return rowsFor(page, ctx).filter(([, text]) => text).map(([label, text]) => `${label} ${text}`); } catch (e) { return []; }
 }
 const HELD_TITLE = 'the title of an unpublished prop';
 const HELD_FIELD = 'a field of an unpublished prop';
@@ -179,7 +182,7 @@ function collectHidden({ configPath, outputDir = null }) {
       // prop_title, prop_line and the state fields), never a field nothing prints.
       visible.push(String(page.displayTitle || ''), ...stringsOfValue([shownFields.prop_title, shownFields.prop_line, ...Object.values(stateFieldsOf(shownFields))]));
     } else {
-      visible.push(String(page.displayTitle || ''), ...fieldRunsOf(shownFields, page.displayTitle), ...printedRows({ ...page, frontmatter: shownFields }));
+      visible.push(String(page.displayTitle || ''), ...fieldRunsOf(shownFields, page.displayTitle), ...printedRows({ ...page, frontmatter: shownFields }, hubs.get(page) || null));
       if (foldLabels.size) visible.push(...fieldRunsOf(relabelValue(shownFields), page.displayTitle));
     }
     if (hubs.has(page)) {
