@@ -21,12 +21,12 @@ A topic file's premise is written for the GM and usually holds the
 secret: it goes under GM Notes as written, and the public Premise is
 the pitch the players hear, written from it.
 
-Write it with one command: dry-run, show the GM the rows, then
-`--write`.
+Write it with one command, the body straight on its stdin (a brief
+it cannot place is refused and nothing is written):
 
 ```bash
 gma vault-write <vault> entity-new --type adventure-brief \
-  --name "<adventure-name>" <<'EOF'
+  --name "<adventure-name>" --write <<'EOF'
 ---
 title: "<title, when it says more than the name>"
 system: <id, or undecided>
@@ -58,9 +58,11 @@ section, and no `#` title. The command files the brief at
 `Adventures/<adventure-name>/<adventure-name>.md`, puts every `###`
 section under `## GM Notes` inside the gm-only fence and Open
 Questions in its spoiler block: write neither fence nor the
-`## GM Notes` heading. A GM Notes section written as `##` is
-refused, since it would publish. So is a name another note has:
-give the brief another `--name` and keep the adventure's in `title`.
+`## GM Notes` heading. It refuses a GM Notes section written as
+`##`, and a name another note has (give the brief another `--name`
+and keep the adventure's in `title`). It places sections and does
+not read them: what a Public section says is still yours to keep to
+the pitch.
 
 - **Existing vault:** `<vault>` is the vault. Use `[[wiki-links]]`
   for existing entities. Flag entity updates the adventure implies.
