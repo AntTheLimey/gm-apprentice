@@ -162,7 +162,7 @@ function moments(text, excludeCallouts) {
       title: head.title,
       hidden: false,
       cards: parsed.cards.map((c) => ({
-        kind: c.kind, shape: c.shape, main: c.main, speaker: c.speaker, context: c.context,
+        kind: c.kind, shape: c.shape, main: c.main, ...(c.quote ? { quote: c.quote } : {}), speaker: c.speaker, context: c.context,
         first: line(c.lines && c.lines.first), last: line(c.lines && c.lines.last),
         taggable: Boolean(c.lines) && !['heading_open', 'table_open'].includes(c.lines.token),
         tags: c.lines ? c.lines.tags.map((t) => ({ line: line(t.line), lone: t.lone })) : [],

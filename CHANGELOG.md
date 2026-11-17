@@ -9,6 +9,12 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.49] — 2026-11-17
+
+### Fixed
+
+- A table assistant's moment (a bold beat, its italic context, then the quote said in it) is one Memorable Moments card on the Story page, not two, and `gma moments` tags it once, after the speaker line. A tag ends a moment, so a beat that carries its own tag, or a quote with a context line of its own, stays a card of its own: Canticle, Dead End and Special Forces render exactly as before (#705, tool 1.70.22).
+
 ## [1.12.48] — 2026-11-17
 
 ### Fixed

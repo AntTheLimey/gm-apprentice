@@ -1,7 +1,10 @@
 'use strict';
 // Memorable Moments as cards on the Story page. The wrap-up template writes each moment as a bold beat line with an
 // italic context line under it, or a block-quote of table dialogue ending in a `— Speaker` line; a moment may end with
-// a `#moment/<kind>` tag, at its end or in a paragraph of its own under it. The build shows the note as written: a card
+// a `#moment/<kind>` tag, at its end or in a paragraph of its own under it. A table assistant's export writes a beat,
+// its context and the quote said in it as one moment (#705): a quote right after an untagged beat is that beat's, one
+// card. A tag ends a moment, so a quote after a beat that carries its own tag is a card of its own.
+// The build shows the note as written: a card
 // adds no quote marks and drops none, a quote in the note is a quote card and a bold line is narration. The only text
 // taken out is the tag, which is structure.
 const { createRenderer } = require('./markdown');
@@ -93,6 +96,7 @@ function parseMoments(markdown) {
   const cards = [];
   const unknownTags = [];
   let card = null;   // the last card, while a context line may still follow it
+  let beat = null;   // an untagged narration card a block quote may still finish
   // The last card outside a marked span since the last rule: the one a paragraph that is only a tag names. A marked
   // span (the GM site's) is passed over, so the tag names the card the player site, which has no such span, names.
   let prior = null;
@@ -121,25 +125,30 @@ function parseMoments(markdown) {
     if (part.marked) {
       // A marked span is one card: its blocks, as written. A tag ending its last block is structure here too: taken off
       // (the mark tokens after it stay), its kind the card's.
+      // As for `prior`: the player site has no such span, so a beat before it still takes the quote after it.
       card = null;
       const before = prior;
+      const keptBeat = beat;
       const tagged = {};
       const [, body, tail] = SPAN_TAIL.exec(part.text.replace(/^\s+|\s+$/g, ''));
       const untagged = strip(body, tagged);
       add(fresh('other', untagged === body ? body + tail : untagged.replace(/\s+$/, '') + tail), tagged);
       prior = before;
+      beat = keptBeat;
       continue;
     }
     card = null;
-    for (const block of blocksOf(part.text, part.start)) {
+    const blocks = blocksOf(part.text, part.start);
+    for (const [at, block] of blocks.entries()) {
       // A `---` rule divides the section; it is no moment, and no context line reaches back across it.
-      if (block.type === 'rule') { card = null; prior = null; continue; }
+      if (block.type === 'rule') { card = null; beat = null; prior = null; continue; }
       // A paragraph that is only a tag is no card: it names the kind of the card before it, when that card has none. A
       // word that is no kind is reported wherever it stands; with no card before it, the tag is dropped.
       const lone = block.type === 'paragraph' ? LONE_TAG.exec(block.text.trim()) : null;
       if (lone) {
         const word = lone[1];
         const tag = { word, line: block.first, lone: true };
+        if (beat !== null && beat === prior) beat = null;   // tagged: its moment is done
         if (prior && prior.kind === null) kindOf(prior, tag);
         else {
           // The tag is still the card's to replace, though it gives no kind.
@@ -157,18 +166,38 @@ function parseMoments(markdown) {
         last.context = text.trim();
         if (last.lines) Object.assign(last.lines, { last: block.last, token: block.token });
         kindOf(last, tagged);
+        if (tagged.word !== undefined) beat = null;   // tagged: its moment is done
         card = null;
         continue;
       }
-      if (block.type === 'quote') {
+      const quoteOf = () => {
         const body = text.split('\n').map((l) => l.replace(/^\s*> ?/, ''));
         while (body.length && !body[body.length - 1].trim()) body.pop();
         const m = body.length ? DASH.exec(body[body.length - 1].trim()) : null;
         if (m) body.pop();
-        card = add(stand(fresh('speech', body.join('\n').trim(), m ? m[3].trim() : null), block), tagged);
+        return { said: body.join('\n').trim(), m };
+      };
+      // A quote with an italic context line of its own under it is a moment of its own (beat, context, quote, context).
+      const next = blocks[at + 1];
+      const ownContext = next && next.type === 'paragraph' && wholly(strip(next.text, {}), 'em');
+      if (block.type === 'quote' && beat && !ownContext) {
+        // The quote said in the beat before it: the same card, its speaker the card's; its tag names that card.
+        const { said, m } = quoteOf();
+        beat.quote = said;
+        if (m) { beat.speaker = m[3].trim(); beat.speakerDash = m[1] + m[2]; }
+        if (beat.lines) Object.assign(beat.lines, { last: block.last, token: block.token });
+        kindOf(beat, tagged);
+        beat = null;
+        continue;
+      }
+      beat = null;
+      if (block.type === 'quote') {
+        const { said, m } = quoteOf();
+        card = add(stand(fresh('speech', said, m ? m[3].trim() : null), block), tagged);
         if (m) card.speakerDash = m[1] + m[2];
       } else if (block.type === 'paragraph' && wholly(text, 'strong')) {
         card = add(stand(fresh('narration', text.trim()), block), tagged);
+        if (tagged.word === undefined) beat = card;
       } else if (block.type === 'paragraph' && text.includes('\n')) {
         // The template's two lines in one paragraph: a bold beat, then its italic context.
         const rows = text.split('\n');
@@ -177,7 +206,8 @@ function parseMoments(markdown) {
           if (wholly(rows.slice(0, i).join('\n'), 'strong') && wholly(rows.slice(i).join('\n'), 'em')) split = i;
         }
         if (split > 0) {
-          add(stand(fresh('narration', rows.slice(0, split).join('\n').trim(), null, rows.slice(split).join('\n').trim()), block), tagged);
+          const c = add(stand(fresh('narration', rows.slice(0, split).join('\n').trim(), null, rows.slice(split).join('\n').trim()), block), tagged);
+          if (tagged.word === undefined) beat = c;
         } else {
           add(stand(fresh('other', text.trim()), block), tagged);
         }
@@ -194,9 +224,15 @@ const svg = (kind) => `<svg viewBox="0 0 24 24" width="15" height="15" fill="non
 function cardHtml(c) {
   const parts = [];
   if (c.kind) parts.push(`<p class="moment-kind" data-kind="${c.kind}">${svg(c.kind)}${LABEL(c.kind)}</p>`);
-  parts.push(c.shape === 'narration'
-    ? `<p class="moment-main">${renderInline(c.main)}</p>`
-    : `<div class="moment-main">${renderMarkdown(c.main)}</div>`);
+  if (c.quote) {
+    // A beat and the quote said in it (#705): one main block, the beat then the quote, as the note has them.
+    const quoted = c.quote.split('\n').map((l) => `> ${l}`).join('\n');
+    parts.push(`<div class="moment-main">${renderMarkdown(`${c.main}\n\n${quoted}`)}</div>`);
+  } else {
+    parts.push(c.shape === 'narration'
+      ? `<p class="moment-main">${renderInline(c.main)}</p>`
+      : `<div class="moment-main">${renderMarkdown(c.main)}</div>`);
+  }
   if (c.speaker) parts.push(`<p class="moment-speaker">${escapeHtml(c.speakerDash || '— ')}${renderInline(c.speaker)}</p>`);
   if (c.context) parts.push(`<hr class="moment-rule">`, `<p class="moment-context">${renderInline(c.context)}</p>`);
   return `<article class="moment-card">${parts.join('')}</article>`;
