@@ -359,7 +359,14 @@ far as the notes say time passed; ask the GM if unsure. "October
 1923" never replaces "October 17, 1923".
 
 Leave `current_arc`, `arcs_planned`, `current_chapter`,
-`chapters_planned`, `status` and the body to the GM.
+`chapters_planned` and the body to the GM; `status` only moves from
+`not_started` (the `--advance` above). One exception: a `## Current
+Arc` that still opens "Not yet begun." gets a `=== section
+"_Campaign/Campaign Overview.md" "Current Arc" --replace` block: in
+place of those three words, two sentences from the Handoff (where
+things stand, the live tension), written for the players since the
+section publishes; then the rest of the section exactly as it is.
+5b shows it for the GM's yes.
 
 ### 4c. World Fact Scan
 
