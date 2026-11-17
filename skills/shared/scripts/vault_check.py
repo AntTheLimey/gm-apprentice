@@ -2909,7 +2909,8 @@ GM_AFTER_POSSESSIVE = frozenset((
 # (filed with `publish: false`; the player site does not page them). Flagging
 # their (correctly) Keeper-facing headings would bury the findings that
 # matter. A play record without `publish: false` in a vault with no publish
-# list does publish; that older case is #692.
+# list would publish; the update's `play-records-publish` check marks those
+# older notes (#692).
 GM_LEAK_SKIP_TYPES = {"session-plan", *PLAY_RECORD_TYPES, "plan", "meta"}
 
 # A bold label opening a paragraph: `**Secret:** he lied.` The colon is

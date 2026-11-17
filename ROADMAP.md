@@ -116,6 +116,7 @@ decision rather than pure score.
 
 ## Completed
 
+- ~~Older Play Notes publish on a site with no publish list~~ — the update marks them `publish: false` when the vault has no list (#692, v1.12.39)
 - ~~A gmassistant.app export beside session-play's Play Notes~~ — the export is its own Export note (`vw export-new`), linked as `documents.export`; one writer per play record, in any order, and wrap-up reads them all (#691, v1.12.38)
 - ~~Wrap-up and vault-ingest write new entity notes through `entity-new`~~ — Step 4 sends an `entity-new` block (fields, ties, sections) where it wrote the whole note; six runs an arm: same cost, judges 7-5, and no new note whose Related list disagrees with its relationships (13 of 20 on main) (#684, v1.12.37)
 - ~~A template for the adventure brief~~ — `_Templates/_Template_Adventure_Brief.md`, seeded by the scaffold and copied in by the update; `entity-new --type adventure-brief` writes the brief from its sections, the GM's fenced under GM Notes and Open Questions in a spoiler block, and the Midwife's Step 1 uses it (#681, v1.12.36)
