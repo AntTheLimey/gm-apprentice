@@ -649,17 +649,21 @@ def cmd_wrapup_new(batch: Batch, args: argparse.Namespace, _text: str) -> None:
         if have:
             raise WriteError(f"{index}: already has a Wrap-Up: {have[0]}")
     # The source is the Export, which holds the whole table record, else
-    # the Play Notes. Several notes of one record leave it blank.
-    notes, notes_warning = "", ""
+    # the Play Notes: a link that names a note, else the one note that
+    # names the session. Several notes of one record leave it blank. When
+    # nothing is found, a link as written stands (its note may come later).
+    notes, notes_warning, as_written = "", "", ""
     for key in ("export", "play_notes"):
-        notes = documents.get(key) or ""
-        if is_blank(notes):
-            notes = ""
-        if notes and batch.with_stem(
-                re.split(r"[#^|]", vl.wikilink_target(notes), maxsplit=1)[0]
+        link = documents.get(key) or ""
+        if is_blank(link):
+            link = ""
+        if link and batch.with_stem(
+                re.split(r"[#^|]", vl.wikilink_target(link), maxsplit=1)[0]
                 .replace("\\", "/").rsplit("/", 1)[-1].strip()):
+            notes = link
             break
-        notes = ""   # unlinked, or a link that names no note: look for one
+        if link and (key == "play_notes" or not as_written):
+            as_written = link   # the Play Notes link wins, as before
         hits = find_play_notes(batch, index, stem, key)
         if len(hits) == 1:
             notes = f"[[{hits[0]}]]"
@@ -668,6 +672,8 @@ def cmd_wrapup_new(batch: Batch, args: argparse.Namespace, _text: str) -> None:
             notes_warning = (f"several {PLAY_RECORDS[key][1]} notes link "
                              "this session: source_document left blank")
             break
+    if not notes and not notes_warning:
+        notes = as_written
     if not notes and not notes_warning:
         notes_warning = ("no Play Notes or Export found for this session: "
                          "source_document left blank")
