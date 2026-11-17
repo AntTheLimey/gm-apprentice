@@ -440,10 +440,24 @@ function planPublishPlayed(survey, { only = null, includeUnreviewed = false, pub
     if (only !== null && publishBody) bodyTicks.push(rel);
     else unclear.push({ path: rel, reason, wrapUp: wrapRel });
   }
+  // A played session whose index the GM Excluded (often before play, as prep: #703) is
+  // never ticked, but it is said, with the way out: excluded before play, it would
+  // otherwise stay off the site in silence.
+  const excludedReason = (rel) => {
+    const why = (listed.get(rel) || {}).annotation;
+    return `the session index is Excluded${why ? ` ("${why}")` : ''}: if it should publish now it has been played, `
+      + `\`manifest apply --decide "${rel}"\`, then publish-played`;
+  };
+  if (only === null) {
+    for (const [rel, p] of pagesByRel) {
+      if (!onDisk.has(rel) || sectionOf(rel) !== 'excluded' || !isPlayedSession(p.frontmatter || {})) continue;
+      unclear.push({ path: rel, reason: excludedReason(rel), wrapUp: null });
+    }
+  }
   // The named path is not a played session index this call could tick: say which.
   if (only !== null && hubs.length === 0) {
     const fm = (pagesByRel.get(only) || {}).frontmatter || {};
-    const reason = sectionOf(only) === 'excluded' ? 'the session index is Excluded'
+    const reason = sectionOf(only) === 'excluded' ? excludedReason(only)
       : `not a played session index (type ${fm.type || 'none'}, status ${fm.status || 'none'})`;
     unclear.push({ path: only, reason, wrapUp: null });
   }

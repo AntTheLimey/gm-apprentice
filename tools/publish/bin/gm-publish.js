@@ -408,7 +408,10 @@ excluded versus missing is the GM's call.
                      reason (no Wrap-Up, Wrap-Up not reviewed yet, Excluded
                      or not publishing, or a site pinned to a tool too old
                      to withhold the body) and not ticked: that is the GM's
-                     call (manifest apply). Leaves Excluded entries alone.
+                     call (manifest apply). Never ticks an Excluded entry;
+                     a played session whose index is Excluded is listed
+                     as unclear, with \`manifest apply --decide\` as the
+                     way out.
                      Needs a publish list; without one it does
                      nothing. --session <index> (vault-relative) handles
                      just that session; --include-unreviewed (only with

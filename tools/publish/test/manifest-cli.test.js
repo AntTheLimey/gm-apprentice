@@ -489,16 +489,19 @@ describe('manifest publish-played (#277)', () => {
     fs.rmSync(vault, { recursive: true, force: true });
   });
 
-  it('leaves Excluded entries and unplayed sessions alone', async () => {
-    const vault = playedVault({ excluded: [{ path: 'Sessions/Played Session.md', reason: 'private' }] });
+  it('leaves Excluded entries and unplayed sessions alone, and says so for a played one', async () => {
+    const vault = playedVault({ excluded: [{ path: 'Sessions/Played Session.md', reason: 'private' }, 'Sessions/Planned Session.md'] });
     const { configPath } = siteFor(vault);
     const c = capture();
     await runManifest({ verb: 'publish-played', configPath }, c.deps);
     // Nothing is ticked: the excluded index stays excluded, the prepped session is not
     // played, and the Wrap-Up of a session the GM excluded is not published behind the
-    // GM's back — its recap is that session's record.
+    // GM's back — its recap is that session's record. But the played session is named
+    // with the way out, never skipped in silence (#703); the unplayed one is not.
     assert.deepStrictEqual(c.writes, {});
     assert.match(c.text(), /no finished session needed publishing/);
+    assert.match(c.text(), /Unclear, not ticked \(1\):\n {2}Sessions\/Played Session\.md — the session index is Excluded \("private"\): .*manifest apply --decide "Sessions\/Played Session\.md"/);
+    assert.doesNotMatch(c.text(), /Planned Session/);
     fs.rmSync(vault, { recursive: true, force: true });
   });
 
@@ -862,7 +865,7 @@ describe('manifest publish-played --session --include-unreviewed (#278)', () => 
     const { payload, c } = await run(configPath, { session, publishBody: true });
     assert.deepStrictEqual(c.writes, {});
     assert.deepStrictEqual(payload.published, []);
-    assert.strictEqual(payload.unclear[0].reason, 'the session index is Excluded');
+    assert.match(payload.unclear[0].reason, /^the session index is Excluded \("private"\): .*manifest apply --decide/);
     fs.rmSync(vault, { recursive: true, force: true });
   });
 
