@@ -20,7 +20,9 @@ and what the PCs are to find out under GM Notes, no word of the twist reaches
 the site, on the Overview's page or on the brief's own page once the GM
 publishes it. This pins the tool's side: that shape is safe on an
 adventure-brief page. That a model following the skill text writes that shape
-is shown by proof runs, not by this file.
+is shown by proof runs, not by this file. The brief is checked twice: as
+`gma vault-write entity-new` writes it from the sections the Midwife sends
+(#681), and written whole by hand, as briefs made before that command are.
 
 Run: python3 tests/test_midwife_secrets.py
 """
@@ -251,9 +253,7 @@ class BriefAndOverview(unittest.TestCase):
         vault = cls.vault = cls.root / "V"
         run([sys.executable, str(SCRIPTS / "vault_scaffold.py"), str(vault),
              "--system", "dnd-5e-2024", "--name", "The Long Tide", "--write"])
-        brief = vault / "Adventures" / "The Long Tide" / "The Long Tide.md"
-        brief.parent.mkdir(parents=True)
-        brief.write_text(BRIEF, encoding="utf-8")
+        cls.write_brief(vault)
         # Step 3: the Overview from its template, its Premise the brief's
         # public Premise, its factions as the players know them, the rest
         # under GM Notes.
@@ -274,6 +274,13 @@ class BriefAndOverview(unittest.TestCase):
         (cls.site / "package.json").unlink()
         cls.config = str(cls.site / "vault.config.json")
         cls.docs = cls.site / "docs"
+
+    @classmethod
+    def write_brief(cls, vault):
+        """The brief written whole by hand: every brief made before #681."""
+        brief = vault / "Adventures" / "The Long Tide" / "The Long Tide.md"
+        brief.parent.mkdir(parents=True)
+        brief.write_text(BRIEF, encoding="utf-8")
 
     @classmethod
     def tearDownClass(cls):
@@ -317,6 +324,120 @@ class BriefAndOverview(unittest.TestCase):
         leaks = run(["node", str(BIN), "leaks", "check", "--json"],
                     cwd=self.site, ok=(0, 1))
         self.assertEqual(json.loads(leaks)["findings"], [], leaks)
+
+
+# What the Midwife sends `entity-new` for the same brief: the fields to set,
+# then the sections, the GM's as `###` wherever they fall and Open Questions
+# plain. No fence but the one aside, no `## GM Notes`, no `#` title.
+BRIEF_SECTIONS = """---
+canon_status: AUTHORITATIVE
+system: "dnd-5e-2024"
+scope: few-shot
+---
+
+## Premise
+
+Carry the new keeper's stores out to the Marzipan Light before the autumn
+gales close the causeway.
+
+### The Truth
+
+The keeper wrecks ships for the Zebrawyrm under the reef. She is a
+Quokkapriest, and the stores are its tithe.
+
+## Core Tension
+
+The causeway is under water, and the lamp has begun to go out at night.
+
+## Key NPCs
+
+- **Keeper Odalie Marsh** - the new keeper: brisk, tired, glad of company.
+
+## Open Questions
+
+- Does the Vexillary pilot know the keeper by sight?
+
+## CATS Pitch
+
+**Concept:** an autumn mystery on a rock with one door.
+
+<!-- gm-only -->
+The keeper puts the lamp out herself: the Quokkapriest twist.
+<!-- /gm-only -->
+
+### Escalation
+
+A darker night each night: the Xenoclock.
+
+### Driving Forces
+
+**The Reefwardens:** keep the Zebrawyrm fed.
+
+### If They Do Nothing
+
+The mail packet is wrecked on Long Night.
+"""
+
+
+@NEEDS_NODE
+class BriefWrittenByEntityNew(BriefAndOverview):
+    """#681: the same checks on the brief as the command writes it."""
+
+    @classmethod
+    def write_brief(cls, vault):
+        r = subprocess.run(
+            [sys.executable, str(SCRIPTS / "vault_write.py"), str(vault),
+             "entity-new", "--type", "adventure-brief", "--name",
+             "The Long Tide", "--write"],
+            input=BRIEF_SECTIONS, capture_output=True, text=True, encoding="utf-8")
+        if r.returncode != 0 or "WARNING" in r.stdout:
+            raise AssertionError(f"entity-new: {r.stdout}\n{r.stderr}")
+        text = (vault / "Adventures" / "The Long Tide" / "The Long Tide.md"
+                ).read_text(encoding="utf-8")
+        # Every secret is in the note, and the command made both fences.
+        for word in BRIEF_SECRETS:
+            assert word in text, word
+        assert "<!-- gm-only -->\n\n## GM Notes\n\n### The Truth" in text, text
+        assert "<!-- spoiler -->\n\n## Open Questions" in text, text
+
+
+class TheReferenceMatchesTheSchema(unittest.TestCase):
+    """The values `scaffold-handoff.md` shows for the brief's fields are the
+    schema's, so the example cannot drift from what the check accepts."""
+
+    def test_the_example_s_values_are_the_checked_ones(self):
+        sys.path.insert(0, str(SCRIPTS))
+        import schema_rules
+        text = (ROOT / "skills" / "the-midwife" / "references"
+                / "scaffold-handoff.md").read_text(encoding="utf-8")
+        checked = schema_rules.CHECKED_VALUES["adventure-brief"]
+        for field in ("scope", "continuation_type", "adventure_shape"):
+            line = next(ln for ln in text.splitlines() if ln.startswith(f"{field}: <"))
+            shown = {v.strip() for v in line.split("<", 1)[1].rstrip(">").split("|")}
+            self.assertEqual(shown, set(checked[field]), field)
+
+    def test_every_section_of_the_table_is_in_the_template(self):
+        import re
+        text = (ROOT / "skills" / "the-midwife" / "references"
+                / "scaffold-handoff.md").read_text(encoding="utf-8")
+        table = text.split("## Adventure Brief Sections", 1)[1]
+        rows = re.findall(r"^\| ([^|]+?) \| [^|]+ \| ([^|]+?) \|$", table, re.M)
+        rows = [(name, who) for name, who in rows
+                if name != "Section" and not set(name) <= {"-"}]
+        self.assertEqual(len(rows), 15, rows)
+        template = (ROOT / "skills" / "shared" / "templates"
+                    / "adventure-brief.md").read_text(encoding="utf-8")
+        public, rest = template.split("<!-- gm-only -->", 1)
+        gm, spoiler = rest.split("<!-- /gm-only -->", 1)
+        for name, who in rows:
+            with self.subTest(section=name):
+                if who.startswith("Public"):
+                    self.assertIn(f"\n## {name}\n", public)
+                elif who == "GM Notes":
+                    self.assertIn(f"\n### {name}\n", gm)
+                else:
+                    self.assertEqual(who, "Spoiler")
+                    self.assertIn(f"<!-- spoiler -->\n\n## {name}\n", spoiler)
 
 
 if __name__ == "__main__":

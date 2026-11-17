@@ -9,6 +9,16 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.36] — 2026-11-17
+
+### Added
+
+- The adventure brief has a template, `_Templates/_Template_Adventure_Brief.md`: a new vault gets it, and the update copies it into an existing one (the `templates` check). `gma vault-write entity-new --type adventure-brief --name "<adventure>"` writes the brief at `Adventures/<adventure>/<adventure>.md` from the sections sent to it (#681).
+
+### Changed
+
+- The Midwife writes the adventure brief with that command. It sends the sections; the command puts the GM's under `## GM Notes` inside the gm-only fence and Open Questions in its spoiler block, and refuses a GM section written where players would read it.
+
 ## [1.12.35] — 2026-11-17
 
 ### Added

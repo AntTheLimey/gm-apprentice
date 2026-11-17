@@ -364,11 +364,11 @@ note does.
 (wiki-link), `participants` (wiki-links), `locations` (wiki-links),
 `leads_to` (wiki-links)
 
-**Adventure Brief:** `title`, `system`, `scope`
-(campaign/few-shot/one-shot), `sessions_estimated`,
-`continuation_type`
-(new/new-arc/new-chapter/new-pcs/parallel/prequel/time-jump),
-`adventure_shape` (branching/hub-and-spoke/linear/open-node/sandbox)
+**Adventure Brief:** `title`, `system` (the game system's id, or
+undecided), `scope` (campaign/one-shot/few-shot), `sessions_estimated`
+(a number or a range), `continuation_type`
+(new/new-chapter/new-arc/time-jump/prequel/parallel/new-pcs),
+`adventure_shape` (linear/branching/hub-and-spoke/open-node/sandbox)
 
 **Campaign Overview:** `campaign`, `game_system`, `setting_year`,
 `current_game_date`, `genre_tags`, `scope`

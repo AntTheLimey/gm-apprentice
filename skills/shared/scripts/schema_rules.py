@@ -81,6 +81,10 @@ TYPE_FOLDERS: dict[str, frozenset[str]] = {
     f["folder"]: frozenset().union(*(_descendants(t) for t in f["types"]))
     for f in _ontology()["vault_folders"]}
 
+# Types whose every note has a folder of its own, named for the note, under
+# this one: `Adventures/<name>/<name>.md`.
+OWN_FOLDER_TYPES = {"adventure-brief": "Adventures"}
+
 # Valid enum values
 CANON_STATUS_VALUES = {"DRAFT", "AUTHORITATIVE", "SUPERSEDED", "STUB"}
 SESSION_STATUS = set(SESSION_NOT_YET_RUN | SESSION_PLAYED)
@@ -217,6 +221,7 @@ TEMPLATE_NAMES = {
     "heritage.md": "_Template_Heritage.md",
     "world-domain.md": "_Template_World_Domain.md",
     "plan.md": "_Template_Plan.md",
+    "adventure-brief.md": "_Template_Adventure_Brief.md",
     "campaign-overview.md": "_Template_Campaign_Overview.md",
     "session.md": "_Template_Session.md",
     "session-plan.md": "_Template_Session_Plan.md",
@@ -232,7 +237,6 @@ WORLD_STUBS = {"world-index.md": "_World/world-index.md", "world-flags.md": "_Wo
 # Types with no template: the example frontmatter their fields are read from,
 # under skills/ (an `npx skills` install holds the skills beside shared/).
 EXAMPLE_FILES = {
-    "adventure-brief": "the-midwife/references/scaffold-handoff.md",
     "session-play-notes": "shared/session-document-chain.md",
 }
 SKILLS_DIR = TEMPLATES_DIR.parent.parent
@@ -562,6 +566,8 @@ def show(etype: str) -> str | None:
     elif example_fields(etype):
         lines.append(f"template: none; fields from the example in {EXAMPLE_FILES[etype]}")
     folders = [f for f, types in TYPE_FOLDERS.items() if etype in types]
+    if etype in OWN_FOLDER_TYPES:
+        folders.append(f"{OWN_FOLDER_TYPES[etype]}/<name>/ (a folder of its own)")
     if folders:
         lines.append("folder: " + ", ".join(folders))
     required = REQUIRED_FIELDS.get(etype, [])

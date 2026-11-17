@@ -425,6 +425,26 @@ class CompareDetailTests(unittest.TestCase):
         self.assertEqual(c.table_rows_only_vault, [])
 
 
+class AdventureBriefTemplateTests(unittest.TestCase):
+    """#681: a vault made before the brief had a template is given it."""
+
+    BRIEF = "_Template_Adventure_Brief.md"
+
+    def test_a_vault_without_the_brief_template_is_given_it(self):
+        vault = make_vault(self, system="dnd-5e-2024")
+        (vault / "_Templates" / self.BRIEF).unlink()
+        items = by_id(mv.find_templates(vault))
+        self.assertEqual(list(items), [f"template:{self.BRIEF}"])
+        item = items[f"template:{self.BRIEF}"]
+        self.assertEqual(item.group, WILL)
+        self.assertEqual(item.apply(None),
+                         ["Added the missing Adventure Brief template."])
+        self.assertEqual(
+            (vault / "_Templates" / self.BRIEF).read_text(encoding="utf-8"),
+            (mv.TEMPLATES / "adventure-brief.md").read_text(encoding="utf-8"))
+        self.assertEqual(mv.find_templates(vault), [])
+
+
 class LabelTests(unittest.TestCase):
     def test_every_shipped_template_has_a_label(self):
         shipped = sorted(p.name for p in mv.TEMPLATES.glob("*.md"))
