@@ -160,7 +160,8 @@ Every relationship on a non-PC entity also appears in the body,
 readable (a PC's body follows `shared/pc-body-structure.md`): under
 `## Related` (grouped People, Places, Groups, Things, one line per
 tie), or under `### Hidden Ties` in GM Notes when `gm_only: true`.
-Write, change or remove both together.
+Write, change or remove both together; for a new note the
+`entity-new` command of `gma vault-write` writes both from the ties.
 
 Extraction defaults: `tone: neutral` and `strength: 5` when the
 source is ambiguous; `bidirectional: false` unless inherently

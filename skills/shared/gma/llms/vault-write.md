@@ -12,7 +12,7 @@ gma vault-write <vault> <command> ...
 | Argument | Value | Help |
 |---|---|---|
 | `<vault>` |  | the vault folder |
-| `<command>` | `wrapup-new`, `wrapup-add`, `wrapup-settle`, `story`, `npc-story`, `status`, `threads`, `log`, `timeline`, `session-new`, `play-notes-new`, `resolve`, `promote-plan`, `chapter-new`, `scene-new`, `scene-paused`, `scene-played`, `prop-new`, `prop-hand`, `plan`, `npc-merge`, `batch` |  |
+| `<command>` | `wrapup-new`, `wrapup-add`, `wrapup-settle`, `story`, `npc-story`, `status`, `threads`, `log`, `timeline`, `session-new`, `play-notes-new`, `resolve`, `promote-plan`, `chapter-new`, `scene-new`, `scene-paused`, `scene-played`, `prop-new`, `prop-hand`, `plan`, `npc-merge`, `entity-new`, `batch` |  |
 
 Example: `gma vault-write "<vault>" wrapup-add "<wrap-up>" --write`
 <!-- END GENERATED -->
@@ -465,6 +465,43 @@ entities. The publish list is never touched.
 | `--scene` | `SCENE` | the scene that hands it over |
 | `--container` | `CONTAINER` | the container prop it sits in |
 | `--folder` | `FOLDER` | a sub-folder of the chapter |
+| `--write` |  | write it (default: preview) |
+<!-- END GENERATED -->
+
+<!-- BEGIN GENERATED: gma vault-write entity-new -->
+create an entity note from its template (stdin)
+
+```text
+gma vault-write <vault> entity-new --type TYPE --name NAME [options]
+```
+
+```text
+stdin: the note as you have it. An optional frontmatter block
+with only the fields to set and `relationships:`, then the
+body's sections. A ## section is the players'; every ###
+section goes under ## GM Notes, inside the template's gm-only
+fence, wherever it is written. A #### heading stays with its
+section: inside a ## section the players see it, and a warning
+says so, as it does for a ## the template lacks. Sections go
+in the template's order and one left
+out is left out. ## Related and ### Hidden Ties are written
+from relationships (a gm_only tie is hidden): never send
+them. gm_only is true or false; any other word is refused.
+A tie whose type runs both ways is written bidirectional, and
+parent_location and its part_of tie are kept as a pair (never
+from a gm_only tie: the field is published). A tie
+to a note that does not exist yet takes `target_type: <type>`
+(not written) unless a later block of the same batch makes
+that note. Every other relationship rule: gma vault-check
+<vault> relationships --file <note>.
+```
+
+| Argument | Value | Help |
+|---|---|---|
+| `--type` | `TYPE` | the note's type: clue, creature, document, event, faction, heritage, item, location, npc, organization |
+| `--name` | `NAME` | the note's name: its file name |
+| `--folder` | `FOLDER` | a sub-folder of the type's folder |
+| `--date` | `DATE` | lastUpdated value, YYYY-MM-DD |
 | `--write` |  | write it (default: preview) |
 <!-- END GENERATED -->
 

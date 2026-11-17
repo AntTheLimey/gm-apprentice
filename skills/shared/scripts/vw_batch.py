@@ -490,6 +490,9 @@ def run(args: argparse.Namespace) -> int:
     chosen = [b for b in blocks if (b.n in only if only else b.n not in skip)]
     left_out = [b.n for b in blocks if b not in chosen]
     batch = vw.Batch(vault)
+    # A tie may point at a note a later entity-new block makes.
+    import entity_new
+    batch.coming = entity_new.coming_types(chosen)
     # Every names block's rows apply, even one left out of this run
     # (written with an earlier part); only a chosen one writes its table.
     apply_names([b for b in blocks if b.command == "names"], chosen)
