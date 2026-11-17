@@ -120,19 +120,23 @@ test('a lock one live process keeps past a turn is given up on, with a plain mes
 // on one holder that keeps the browser past a turn.
 test('a lock passed from holder to holder is waited for longer than one turn may last', async (t) => {
   const dir = privateLock(t);
-  // Twelve turns of 150 ms, 1.8 s in all; the waiter allows one holder 600 ms (wide enough for a slow Windows runner,
-  // whose waiter can miss a hand-off between two polls and see one holder twice running). Each turn hands the lock straight to the
+  // Twelve turns of 150 ms, 1.8 s in all; the waiter allows one holder 1.2 s. Each turn hands the lock straight to the
   // next (a new live holder's pid written into it), so the lock is never free until the last turn ends: a waiter
   // that gets it has waited out every turn, and one that counted the whole wait would have given up.
+  // Two things keep a slow runner from failing it (#683). Every turn writes its pid with one more leading zero, so
+  // each is a holder the waiter has not seen, as real holders are (each makes its own lock folder): with two pids
+  // written the same way turn about, a waiter that missed a hand-off between two polls saw one holder twice running
+  // and counted both turns against it. And the allowance is eight turns long, so a turn that stalls for most of a
+  // second is still waited out.
   const turns = `const fs = require('fs'); const path = require('path'); const nap = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
     const pids = [process.pid, ${process.pid}];
     fs.mkdirSync(${JSON.stringify(dir)});
-    for (let i = 0; i < 12; i++) { fs.writeFileSync(path.join(${JSON.stringify(dir)}, 'pid'), String(pids[i % 2])); if (i === 0) process.stdout.write('go'); nap(150); }
+    for (let i = 0; i < 12; i++) { fs.writeFileSync(path.join(${JSON.stringify(dir)}, 'pid'), '0'.repeat(i) + pids[i % 2]); if (i === 0) process.stdout.write('go'); nap(150); }
     fs.writeFileSync(${JSON.stringify(`${dir}.done`)}, '');
     fs.rmSync(${JSON.stringify(dir)}, { recursive: true, force: true });`;
   const kid = require('node:child_process').spawn(process.execPath, ['-e', turns], { stdio: ['ignore', 'pipe', 'inherit'] });
   await new Promise((resolve) => kid.stdout.once('data', resolve));
-  assert.equal(withChromeLock(() => (fs.existsSync(`${dir}.done`) ? 'ran' : 'ran before the last turn ended'), { dir, holdMs: 600 }), 'ran');
+  assert.equal(withChromeLock(() => (fs.existsSync(`${dir}.done`) ? 'ran' : 'ran before the last turn ended'), { dir, holdMs: 1200 }), 'ran');
   await new Promise((resolve) => (kid.exitCode !== null ? resolve() : kid.on('exit', resolve)));
 });
 
