@@ -21,7 +21,8 @@ from migrate_core import (CHOICE, PERSON, WILL, Check, Item, StepFailed,
 from schema_rules import system_id as _system_id
 from schema_rules import TEMPLATE_NAMES
 from template_compare import compare, summary
-from vault_check import (WRAP_TYPES, shared_threads_tool_too_old,
+from vault_check import (PLAY_RECORD_TYPES, WRAP_TYPES, publish_list_sets,
+                         shared_threads_tool_too_old,
                          wrapup_filename_findings)
 from vaultlib import (WRAP_UP_TYPES, StateUnreadable, campaign_overview,
                       entity_type, extract_frontmatter, is_active_pc, out_of_play,
@@ -1006,6 +1007,60 @@ def find_publish_row_pipe(vault: Path) -> list[Item]:
                   f"`false` or `stub`, so the table check passes"], apply)]
 
 
+# --- play records off a site with no publish list -----------------------------
+
+# 1.12.39 (#692): the player site holds Play Notes and Export notes back by
+# type only through a publish list. With no list, one without `publish:`
+# publishes the raw table record. From 1.12.38 the writers file them with
+# `publish: false`; older and hand-written ones get it here. A vault with a
+# list is left alone: an unlisted note is already off, and `publish: false`
+# would beat a GM who listed one on purpose. Both spellings of each type.
+PLAY_RECORD_SPELLINGS = frozenset(
+    set(PLAY_RECORD_TYPES) | {t.replace("-", "_")
+                                      for t in PLAY_RECORD_TYPES})
+PUBLISH_KEY_RE = re.compile(r"""^(["']?)publish\1[ \t]*:""")
+
+
+def _unmarked_play_record(fm: list[str], _rel: str) -> bool:
+    """A play record whose frontmatter has no top-level `publish:` key."""
+    return (_fm_type(fm) in PLAY_RECORD_SPELLINGS
+            and not any(PUBLISH_KEY_RE.match(line) for line in fm))
+
+
+def find_play_records_publish(vault: Path) -> list[Item]:
+    """1.12.39: on a vault with no publish list, `publish: false` is added
+    to each Play Notes and Export note that has no `publish:` key, so the
+    player site keeps the table record off. While the publish tool cannot
+    say whether there is a list, nothing changes and the stamp waits."""
+    found = _notes_with(vault, _unmarked_play_record)
+    if not found:
+        return []
+    sets, answer = publish_list_sets(vault)
+    if sets is not None:
+        return []
+    if answer.why:
+        return [Item("play-records-publish-wait", PERSON,
+                     [f"(vault)\tcould not ask the publish tool whether the "
+                      f"vault has a publish list ({answer.why}), so "
+                      f"{len(found)} play record note(s) without publish: "
+                      f"false were left as they are; run the update again "
+                      f"once it can be asked"], holds_stamp=True)]
+
+    def apply(_value: str | None) -> list[str]:
+        done = []
+        for rel in found:
+            def change(fm: list[str], eol: str, rel: str = rel) -> None:
+                if _unmarked_play_record(fm, rel):
+                    set_key(fm, "publish", "false", eol)
+            edit_frontmatter(vault / rel, change)
+            done.append(f"added publish: false to {rel}")
+        return done
+
+    return [Item("play-records-publish", WILL,
+                 [f"add publish: false to {rel}, so the player site keeps "
+                  f"this table record off" for rel in found], apply)]
+
+
 # --- shared threads ------------------------------------------------------------
 
 # 1.12.3: before the shared list, a thread several PCs shared was written
@@ -1277,4 +1332,10 @@ VAULT_CHECKS: list[Check] = [
           asks_site=True, kind="bookkeeping",
           plain=" ".join(said for _prefix, said in SHARED_THREADS_SAID),
           plain_when=SHARED_THREADS_SAID),
+    # Whether the vault has a publish list is the site's publish tool's
+    # answer, so it waits for the repin: band 4, asks_site.
+    Check("play-records-publish", "1.12.39", 4,
+          "play records off the player site", find_play_records_publish,
+          asks_site=True, kind="bookkeeping",
+          plain=("Marked older Play Notes and Export notes publish: false, so a site with no publish list no longer shows your raw table records to the players.")),
 ]

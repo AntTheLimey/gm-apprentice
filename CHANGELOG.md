@@ -9,6 +9,12 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.39] — 2026-11-17
+
+### Fixed
+
+- The update marks older Play Notes and Export notes `publish: false` when the vault has no publish list, so a site with no list stops showing raw table records to the players. A vault with a publish list is left alone: those notes are already off unless the GM listed them (#692).
+
 ## [1.12.38] — 2026-11-17
 
 ### Added
