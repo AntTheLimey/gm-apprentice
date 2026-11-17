@@ -3,6 +3,7 @@
 import contextlib
 import dataclasses
 import io
+import os
 import json
 import shutil
 import sys
@@ -150,6 +151,17 @@ class RunTests(Base):
         self.assertIsNone(res.backup)
         self.assertEqual(self.backups(), [])
         self.assertFalse((vault / update_record.RECORD_FILE).exists())
+
+    def test_run_from_inside_the_vault_names_it(self):
+        # #709: `gma update .` printed "Updated  from": the name of `.` is "".
+        vault = make_vault(self, PLUGIN)
+        c, _ = check("tidy", "bookkeeping", lambda: [])
+        here = os.getcwd()
+        os.chdir(vault)
+        self.addCleanup(os.chdir, here)
+        res = self.run_update(Path("."), [c])
+        self.assertEqual(res.vault, vault.resolve().name)
+        self.assertNotEqual(res.vault, "")
 
     def test_bookkeeping_runs_without_asking_and_is_reported_in_plain_words(self):
         vault = make_vault(self)

@@ -9,6 +9,12 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.46] — 2026-11-17
+
+### Fixed
+
+- `gma update .`, run from inside a vault, names the vault in its report instead of a blank ("Updated  from …"); so does the scaffold's clean-up note (#709).
+
 ## [1.12.42] — 2026-11-17
 
 ### Changed
