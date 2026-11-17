@@ -304,7 +304,9 @@ describe('lines: dates (vault_check timeline --order asks it, so the two never r
     const got = answer({ op: 'dates', values: ['Day 2', 'Night 1', 'Day 9', 'Week 3', 'Day 2, morning'] }).dates;
     assert.deepStrictEqual(got.map((d) => d.iso), [null, null, null, null, null]);
     // A month with no year is still placed, as before: one unnamed year.
-    assert.notStrictEqual(answer({ op: 'dates', values: ['March 5'] }).dates[0].iso, null);
+    for (const v of ['March 5', 'Mar 5', '5 Mar', '1 March']) {
+      assert.notStrictEqual(answer({ op: 'dates', values: [v] }).dates[0].iso, null, v);
+    }
     const page = { frontmatter: { type: 'event', in_game_date: 'Day 2' }, displayTitle: 'E', outputPath: 'e.html' };
     assert.strictEqual(buildTimelineData([page]).events.length, 0);
   });

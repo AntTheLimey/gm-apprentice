@@ -2876,26 +2876,38 @@ ENTRY_DATE_RE = re.compile(r"^[-*+]\s+\*\*(.+?)\*\*")
 LABEL_START_RE = re.compile(r"(?i)^(session|chapter)\b")
 
 
+def _year_date(value: object) -> bool:
+    """A date with a 4-digit year, never a label ("Session 3 (played
+    2026-11-01)")."""
+    text = str(value) if isinstance(value, (str, int)) else ""
+    return bool(YEAR_RE.search(text)) and not LABEL_START_RE.match(text)
+
+
 def dated_campaign(batch: Batch, timeline: str) -> bool:
     """Whether the campaign keeps a calendar: some session's or event's
     `in_game_date`, or a timeline entry's date, carries a 4-digit year.
     A story told in "Day 2, morning" and "Night 1" has none, and that is
     normal (#697); a campaign that gains a year later counts from then.
-    Read from disk: a date this same batch writes elsewhere counts on the
-    next run."""
+    A note this batch has written is read as written; an example in a
+    code fence is no entry."""
+    fence = False
     for line in timeline.splitlines():
+        if line.lstrip().startswith(("```", "~~~")):
+            fence = not fence
+            continue
         dated = ENTRY_DATE_RE.match(line)
-        if dated and YEAR_RE.search(dated.group(1)) \
-                and not LABEL_START_RE.match(dated.group(1)):
-            return True     # "Session 3 (played 2026-11-01)" is a label
-    for _rel, text in vl.vault_files(batch.vault):
+        if not fence and dated and _year_date(dated.group(1)):
+            return True
+    texts = dict(vl.vault_files(batch.vault))
+    texts.update({rel: t for rel, t in batch.texts.items()
+                  if rel.endswith(".md") and t is not None})
+    for rel, text in texts.items():
         fm = vl.extract_frontmatter(text) or {}
-        if vl.entity_type(fm) not in ("session", "event") or is_record(_rel):
+        if vl.entity_type(fm) not in ("session", "event") or is_record(rel):
             continue
         value = fm.get("in_game_date") or fm.get("date")    # an event's old key
         values = value if isinstance(value, list) else [value]
-        if any(isinstance(v, (str, int)) and YEAR_RE.search(str(v))
-               for v in values):
+        if any(_year_date(v) for v in values):
             return True
     return False
 

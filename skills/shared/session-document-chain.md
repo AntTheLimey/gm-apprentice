@@ -33,9 +33,9 @@ tags: []
 `YYYY-MM-DD`. `in_game_date` is the fictional date, in whatever form
 the story keeps. A story without a calendar is normal: `"Day 2,
 morning"`, `"Night 1"`, or nothing at all. A relative date like that
-stays off the site's sorted timeline (it never invents a year for
-one), the Timeline page shows the story in the order it was written,
-and nothing warns. Once
+stays off the site's date-sorted timeline (it never invents a year
+for one); with no date the site can sort, the menu's Timeline is the
+campaign's own Timeline note, published as written, and nothing warns. Once
 the campaign's dates carry a **4-digit year** (some session's, event's
 or timeline entry's; a game may gain one later), the site's timeline
 sorts by it and accepts ISO dates, month-name dates (`"August 11,

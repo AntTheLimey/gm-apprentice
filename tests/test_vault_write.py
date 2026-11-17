@@ -1429,6 +1429,44 @@ class TimelineTests(unittest.TestCase):
         self.assertEqual(code, 0, out)
         self.assertNotIn("WARNING\t", out)
 
+    def test_an_example_in_a_code_fence_is_no_calendar(self):
+        free = TL.replace("3 August 1814", "Day 1, evening").replace(
+            "(3 August)", "(Day 1)").replace("12 August 1814", "Day 9")
+        free = free.replace("<!-- gm-only -->",
+                            "```\n- **August 1814** — an example\n```\n\n"
+                            "<!-- gm-only -->", 1)
+        vault = make_vault(self, {TL_REL: free})
+        code, out = tl(vault, "- **Night 2** — A.\n",
+                       "--under", "### Session 1 — Arrival (Day 1)")
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("WARNING\t", out)
+
+    def test_a_session_label_in_in_game_date_is_no_calendar(self):
+        free = TL.replace("3 August 1814", "Day 1, evening").replace(
+            "(3 August)", "(Day 1)").replace("12 August 1814", "Day 9")
+        vault = make_vault(self, {
+            TL_REL: free,
+            "Sessions/Session 03.md": "---\ntype: session\nin_game_date: "
+                                      "\"Session 3 (played 2026-11-01)\"\n---\n"})
+        code, out = tl(vault, "- **Day 2, morning** — A.\n",
+                       "--under", "### Session 1 — Arrival (Day 1)")
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("WARNING\t", out)
+
+    def test_a_date_written_earlier_in_the_batch_counts(self):
+        free = TL.replace("3 August 1814", "Day 1, evening").replace(
+            "(3 August)", "(Day 1)").replace("12 August 1814", "Day 9")
+        vault = make_vault(self, {
+            TL_REL: free,
+            "Sessions/Session 03.md": "---\ntype: session\nin_game_date: null\n---\n"})
+        (vault / "b.txt").write_text(
+            '=== stamp "Sessions/Session 03.md" --set in_game_date="Spring 1985"\n'
+            '=== timeline --under "### Session 1 — Arrival (Day 1)"\n'
+            "- **Day 2, morning** — A.\n", encoding="utf-8")
+        code, out = run(vault, "batch", str(vault / "b.txt"))
+        self.assertEqual(code, 0, out)
+        self.assertEqual(out.count("has a time of day"), 1, out)
+
     def test_a_campaign_that_gains_a_year_is_warned_from_then(self):
         # Special Forces had a year before it had dates: once a session's
         # in_game_date names one, an entry without one is flagged.
