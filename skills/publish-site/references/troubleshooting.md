@@ -170,7 +170,10 @@ gma publish settings set 'player_site.folder_map={<existing entries>,"Bestiary":
 
 **Folder hidden (`player_site.hide.folders`):**
 On the GM's yes, `settings remove player_site.hide.folders <folder>`,
-or move the entity to a different folder.
+or move the entity to a different folder. A note under `_midwife/`,
+`_QA/` or `_inbox/` is the plugin's own working paper and never
+publishes, whatever the list holds: move it into the campaign's
+folders to publish it.
 
 **Missing type field:**
 Add `type: npc` (or the appropriate type) to the entity's

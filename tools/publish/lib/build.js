@@ -44,6 +44,7 @@ const { partyDataScript } = require('./party-manifest');
 const { boardFor } = require('./party-board-registry');
 const { hasRealKvId, detectInbox, detectStatusBar } = require('./backend-flags');
 const { publishesPage, autoExcludeCode, isHousekeepingNote, ALWAYS_EXCLUDE_DIRS } = require('./publish-decision');
+const { WORKSPACE_DIRS } = require('./excluding-values');
 const { publishedPages } = require('./published-pages');
 const { isOutOfPlay } = require('./pc-status');
 const { sheetSourceOf } = require('./sheet-source');
@@ -1046,10 +1047,11 @@ function buildSite(options) {
   // (#209), and scanAttachments applies the same skip list to the attachments tree (#210).
   // `explain`, `manifest diff` and `doctor --site` use the same helper so all four predict
   // exactly the same exclusions the build applies.
-  // The GM site showing whole notes reads every folder but the plugin's own and the GM's personal one; a page in a
+  // The GM site showing whole notes reads every folder but the plugin's own (its working folders among them: no site
+  // shows those, and no build asks the GM about them) and the GM's personal one; a page in a
   // folder the player site hides is then marked with that reason.
   const scanConfig = gm && show.has('notes')
-    ? Object.assign({}, config, { excludeDirs: ALWAYS_EXCLUDE_DIRS })
+    ? Object.assign({}, config, { excludeDirs: [...ALWAYS_EXCLUDE_DIRS, ...WORKSPACE_DIRS] })
     : scanConfigFor(config, hideFrom);
   console.log('Scanning vault:', config.vaultPath);
   const scanReport = scanVaultReport(scanConfig);

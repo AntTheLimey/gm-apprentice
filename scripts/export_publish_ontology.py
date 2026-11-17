@@ -27,10 +27,12 @@ KEYS = ("type", "inverse", "category", "symmetric", "genre")
 # `relationships check` (Task 7) reads the verbs, same-fact pairs, place fields and the
 # entity types an edge may not point at. The rest are the short lists the vault scripts
 # share with the tool (lib/shared-lists.js reads them): session and chapter statuses, the
-# wrap-up type spellings, the game systems and their aliases, and the type folders.
+# wrap-up type spellings, the game systems and their aliases, the type folders, and the
+# plugin's own working folders (never on a site).
 TOP_KEYS = ("tones", "tone_near", "strength_scale", "storage_rule", "verbs", "same_fact",
             "place_fields", "not_edge_target_types", "session_status", "stage_hides",
-            "chapter_status", "wrap_up_types", "game_systems", "vault_folders")
+            "chapter_status", "wrap_up_types", "game_systems", "vault_folders",
+            "workspace_folders")
 FAMILIES = ("positive", "negative", "neutral")
 
 

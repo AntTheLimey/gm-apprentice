@@ -307,7 +307,7 @@ test('createPagesProject names and tracks the project, falling back to the name 
   const id = resources.createPagesProject('site');
 
   assert.strictEqual(id, 'e2e-run1-site');
-  assert.deepStrictEqual(calls[0], ['pages', 'project', 'create', 'e2e-run1-site', '--production-branch=main']);
+  assert.deepStrictEqual(calls[0], ['pages', 'project', 'create', 'e2e-run1-site', '--production-branch=main', '--force']);
   assert.strictEqual(resources._records[0].name, 'e2e-run1-site');
 });
 

@@ -586,6 +586,11 @@
       "site": "clues"
     }
   ],
+  "workspace_folders": [
+    "_midwife",
+    "_QA",
+    "_inbox"
+  ],
   "predicates": [
     {
       "type": "parent_of",

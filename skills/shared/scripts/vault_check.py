@@ -252,8 +252,7 @@ from vaultlib import (  # noqa: F401
     set_key,
     vault_files,
     wikilink_target,
-    yaml_scalar,
-)
+    yaml_scalar,)
 
 # A frontmatter line carrying an unquoted wikilink (Juggl breaks on these)
 UNQUOTED_LINK_RE = re.compile(r'^\s*(?:[\w-]+:|-)\s*\[\[')
@@ -5123,8 +5122,12 @@ def renest_excludes_migration(vault: Path, fix: bool) -> list[str]:
 
     Walks every file the publisher might ship, not just the ones the
     `gm-leak` report reads — a played session-plan publishes too — so
-    only the publisher's `exclude_dirs`, untyped files and `publish:
-    none` pages are skipped. Every file is planned and leak-checked
+    only the vault's own hidden folders (`player_site.hide.folders`),
+    untyped files and `publish: none` pages are skipped. A note in one
+    of the plugin's working folders (`_inbox`, `_midwife`, `_QA`), which
+    the publisher never ships, is still re-nested: it may be moved into
+    the campaign's folders later, and by then the list no longer names
+    its heading. Every file is planned and leak-checked
     against the new config before anything is written; one refusal, or
     an `exclude_sections` the tool cannot read, writes nothing.
     """

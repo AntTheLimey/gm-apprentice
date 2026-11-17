@@ -327,8 +327,13 @@ gma vault-write <vault> promote-plan <draft> --to TO --plan-type PLAN_TYPE [opti
 
 ```text
 Scaffolds from the plan template, copies the draft's body
-exactly and runs the schema check. participants and locations
-are left for the caller to fill.
+exactly and runs the schema check. campaign is the vault's
+own Campaign Overview. participants and locations are the
+notes named with --participant and --location, then the
+people, groups, creatures and places the body links to; a
+name in the body's prose is never matched. --section
+promotes one heading's section of a draft that holds
+several plans.
 ```
 
 | Argument | Value | Help |
@@ -337,7 +342,11 @@ are left for the caller to fill.
 | `--to` | `TO` | the plan, vault-relative |
 | `--plan-type` | `PLAN_TYPE` | the plan's type, one word |
 | `--chapter` | `CHAPTER` | default: the chapter folder of --to |
-| `--leads-to` | `LEADS_TO` | a plan this one leads to (repeatable) (repeatable) |
+| `--leads-to` | `LEADS_TO` | a plan this one leads to (repeatable) |
+| `--participant` | `PARTICIPANT` | an NPC, PC, faction or creature in the plan, by its note's name or alias (repeatable) |
+| `--location` | `LOCATION` | a place in the plan, by its note's name or alias (repeatable) |
+| `--date` | `DATE` | lastUpdated value, YYYY-MM-DD |
+| `--section` | `SECTION` | copy this heading's section of the draft alone (its title, or the heading with its hashes): a draft that holds several plans |
 | `--write` |  | write it (default: preview) |
 <!-- END GENERATED -->
 

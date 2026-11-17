@@ -384,7 +384,7 @@ const REGISTRY = [
   {
     name: 'player_site.hide.folders', was: [{ name: 'publish.exclude_dirs', in: 'vault' }, { name: 'excludeDirs', in: 'site' }], type: 'list', same: 'folder', of: 'folders', default: ['_meta', '_Templates'], guards: true,
  legacyKind: 'list', legacyMerge: 'union', group: 'published',
-    does: 'Vault folders never published',
+    does: 'Vault folders never published. The plugin\'s own working folders (`_midwife`, `_QA`, `_inbox`) never are, whatever this list holds',
     left_out: '`_meta`, `_Templates`',
   },
   {

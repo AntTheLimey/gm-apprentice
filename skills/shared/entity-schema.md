@@ -388,7 +388,7 @@ GM Notes to hide them.
 **Heritage:** `lifespan_range` (min/max age array), `maturity_age`,
 `average_height`, `notable_traits`, `portrait`
 
-**World Domain:** `domain`, `status` (active/inactive/stub),
+**World Domain:** `domain`, `status` (stub/active/inactive),
 `summary`, `rules` (array of world rules, a sentence each)
 
 **World Flags:** `last_reviewed`

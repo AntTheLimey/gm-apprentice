@@ -10,7 +10,7 @@ aliases: []
 tags: []
 plan_type: ""               # arc | scene | investigation | timeline
 chapter: "[[]]"
-campaign: "[[Campaign_Overview_Updated]]"
+campaign: "[[Campaign Overview]]"
 participants: []
 locations: []
 leads_to: []                # wiki-links to the plan node(s) this leads to

@@ -45,10 +45,12 @@ function systemId(raw) {
 
 // The type folders, in order: { folder, types, site }.
 const VAULT_FOLDERS = data.vault_folders.map((f) => ({ folder: f.folder, types: [...f.types], site: f.site }));
+// The plugin's own working folders at the top of a vault: the Midwife's drafts, QA reports and the ingest inbox.
+const WORKSPACE_FOLDERS = [...data.workspace_folders];
 
 module.exports = {
   SESSION_NOT_YET_RUN, SESSION_PLAYED, STAGE_HIDES, CHAPTER_STATUSES, CHAPTER_STATUS_ALIASES, chapterStatusOf,
   WRAP_UP_TYPE, WRAP_UP_TYPES,
   SYSTEM_IDS, SYSTEM_NAMES, SYSTEM_ALIASES, systemId,
-  VAULT_FOLDERS,
+  VAULT_FOLDERS, WORKSPACE_FOLDERS,
 };

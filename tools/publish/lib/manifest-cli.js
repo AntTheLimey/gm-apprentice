@@ -21,6 +21,7 @@ const { pairHubs, isWrapUp, isPlayedSession } = require('./session-hub');
 const { getCanonStatus } = require('./templates/base');
 const { sitePin } = require('./site-pin');
 const { nameIn } = require('./settings');
+const { isWorkspaceDir } = require('./excluding-values');
 
 const TITLE_OF = { publishing: 'Publishing', excluded: 'Excluded', needsDecision: 'Needs Decision' };
 
@@ -245,7 +246,9 @@ async function runApply(options, deps, survey) {
   const missing = moves.filter((m) => !onDisk.has(m.rel) && !(m.section !== 'publishing' && inVault(m.rel)));
   if (missing.length > 0) {
     for (const m of missing) {
-      out(inVault(m.rel)
+      out(inVault(m.rel) && isWorkspaceDir(m.rel)
+        ? `cannot list under Publishing: ${m.rel} is in the plugin's own working notes, which are never published. To publish it, move the note into the campaign's own folders.`
+        : inVault(m.rel)
         ? `cannot list under Publishing: ${m.rel} is in a folder the site leaves out (${nameIn('player_site.hide.folders')}), so no page would be built. Put the folder on the site first, or record a decision with --exclude or --decide.`
         : `no such file in the vault: ${m.rel}`);
     }

@@ -17,6 +17,7 @@ const { decideNoPage, listedOnly } = require('./previews');
 const { surveyVault, pairsWith } = require('./manifest-cli');
 const { playerFoldPlan } = require('./published-view');
 const { assertNoStops, outputFolderOf, scanConfigFor } = require('./config');
+const { isWorkspaceDir, hiddenFolderReason } = require('./excluding-values');
 const { canonicalPath, loadPublishList } = require('./manifest');
 const { settledHeadingsOf } = require('./settled-headings');
 const { strippedSectionTitles, sheetWithheldTitles, publishMode } = require('./processor');
@@ -123,7 +124,7 @@ async function runExplain(options, deps) {
       ? { bucket: 'exclude', code: 'AGENT_FILE', reason: "the vault agent's instructions at the vault's root, not a note", outputPath: null }
       : null)
     || (configExcluded && !alwaysExcluded
-      ? { bucket: 'exclude', code: 'DIR_CONFIG_EXCLUDED', reason: `in ${configExcluded}/ — listed in ${nameIn('player_site.hide.folders')}`, outputPath: null }
+      ? { bucket: 'exclude', code: 'DIR_CONFIG_EXCLUDED', reason: hiddenFolderReason(configExcluded, nameIn('player_site.hide.folders')), outputPath: null }
       : decidePage(page || { rel: target, frontmatter: null }, {
         rel: target,
         publishConfig,
@@ -255,7 +256,7 @@ async function runExplain(options, deps) {
   out('');
   out('  exists: yes');
   out(`  directory: ${dir || '(vault root)'} — ${
-    configExcluded ? `listed in ${nameIn('player_site.hide.folders')} (${configExcluded})`
+    configExcluded ? (isWorkspaceDir(configExcluded) ? `the plugin's own working notes (${configExcluded}), never published` : `listed in ${nameIn('player_site.hide.folders')} (${configExcluded})`)
       : mappedTo ? `mapped to ${mappedTo}`
         : dir ? `not in ${nameIn('player_site.folder_map')}` : 'the vault root'}`);
   if (frontmatterError) out(`  frontmatter: could not be parsed — ${frontmatterError}`);

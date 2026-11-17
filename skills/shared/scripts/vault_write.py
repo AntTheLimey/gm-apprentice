@@ -3669,6 +3669,106 @@ def cmd_session_new(batch: Batch, args: argparse.Namespace,
         resolve_export(batch, export_entries(export), export)
 
 
+# Who a plan's `participants` may be, and what its `locations` are.
+PLAN_PEOPLE = frozenset({"pc", "npc", "faction", "organization", "creature"})
+PLAN_PLACES = frozenset({"location"})
+
+
+def plan_cast(batch: Batch, body: str, people: list[str], places: list[str],
+              target: str) -> tuple[list[str], list[str], str | None]:
+    """(participants, locations, the Campaign Overview's name) for a plan.
+
+    The two lists hold the notes the caller names with --participant and
+    --location, then the notes the body links to: a link is the writer's
+    own word for who and where, a name in prose is not (#464: "King" and
+    "Crow" are English words too). Each is written as the note's file
+    name (its vault path when two notes share one). A name resolves as a link does: by vault path when it has a
+    folder, else by file name, and by alias only when no file has that
+    name. One the caller gives that no note has is kept, with a warning;
+    one two notes share is refused, and a body link two notes share is
+    left out with a warning."""
+    stems: dict[str, list[str]] = {}
+    aliases: dict[str, list[str]] = {}
+    kinds: dict[str, str] = {}
+    # The vault as this batch has left it: a note an earlier block made or
+    # changed is read as it will be written, not as the disk has it.
+    for rel in sorted(batch._files().values()):
+        if is_record(rel) or vl.is_skipped_path(rel):
+            continue
+        text = batch.read(rel)
+        kinds[rel] = vl.entity_type(vl.extract_frontmatter(text) or {})
+        stems.setdefault(vl.normalize(Path(rel).stem), []).append(rel)
+        for alias in vl.frontmatter_aliases(text):
+            aliases.setdefault(vl.normalize(alias), []).append(rel)
+    overview = vl.campaign_overview((rel, {"type": kind})
+                                    for rel, kind in kinds.items())
+
+    def find(raw: str) -> list[str]:
+        """The live notes a link body or a name means."""
+        path = re.split(r"[#^]", vl.alias_split(raw), maxsplit=1)[0].strip()
+        if path.casefold().endswith(".md"):
+            path = path[:-3]
+        if "/" in path.strip("/"):
+            # A path says which note: when no note is there, none is
+            # meant, least of all another folder's note of that name.
+            want = vl.normalize(path.strip("/"))
+            return sorted(rel for rel in kinds
+                          if ("/" + vl.normalize(rel[:-3])).endswith(
+                              "/" + want))
+        name = vl.link_target(raw)
+        return sorted(stems.get(name) or set(aliases.get(name, ())))
+
+    def link_to(rel: str) -> str:
+        """What a link to `rel` is written as: its file name, or its
+        vault path when another note has that file name."""
+        stem = Path(rel).stem
+        return stem if len(stems[vl.normalize(stem)]) == 1 else rel[:-3]
+
+    def named(raw: str, flag: str, want: frozenset[str]) -> str:
+        value = bare_link(raw)
+        if not value or re.search(r'["\r\n]', value):
+            raise WriteError(f"{flag} {raw!r} cannot be a link "
+                             f"(no quote or line break)")
+        hits = find(value)
+        if len(hits) > 1:
+            raise WriteError(
+                f"{flag} {raw!r} matches {', '.join(hits)}: pass the vault "
+                f"path of the one meant, e.g. {flag} \"{hits[0][:-3]}\"")
+        if not hits:
+            value = re.split(r"[|#^]", value, maxsplit=1)[0].strip()
+            value = value[:-3] if value.casefold().endswith(".md") else value
+            batch.row("WARNING", target, "", f"{flag} {value!r}: no note of "
+                      f"that name yet (linked as written)")
+            return value
+        if kinds[hits[0]] not in want:
+            batch.row("WARNING", target, "", f"{flag} {value!r}: "
+                      f"{hits[0]} is type {kinds[hits[0]] or 'none'}")
+        return link_to(hits[0])
+
+    out_people = [named(x, "--participant", PLAN_PEOPLE) for x in people]
+    out_places = [named(x, "--location", PLAN_PLACES) for x in places]
+    import graph_check
+    shared: set[str] = set()
+    for link in graph_check.body_links(body):
+        hits = find(link)
+        cast = [rel for rel in hits if kinds[rel] in PLAN_PEOPLE | PLAN_PLACES]
+        if len(hits) > 1:
+            # Never a silent guess, and never a silent drop: the caller
+            # names the one meant.
+            if cast and link not in shared and not any(
+                    link_to(rel) in out_people + out_places for rel in cast):
+                shared.add(link)
+                batch.row("WARNING", target, "", f"[[{link}]] in the body "
+                          f"matches {', '.join(hits)}: left out; name the "
+                          f"one meant with --participant or --location")
+            continue
+        for rel in cast:
+            (out_people if kinds[rel] in PLAN_PEOPLE
+             else out_places).append(link_to(rel))
+    return (list(dict.fromkeys(out_people)), list(dict.fromkeys(out_places)),
+            link_to(overview) if overview else None)
+
+
 def cmd_promote_plan(batch: Batch, args: argparse.Namespace,
                      _text: str) -> None:
     draft = batch.resolve(args.draft)
@@ -3681,6 +3781,39 @@ def cmd_promote_plan(batch: Batch, args: argparse.Namespace,
         body = text
     else:
         raise WriteError(f"{draft}: {error}")
+    part = ""
+    if args.section:
+        # One plan of a draft that holds several: that heading's section,
+        # heading and all, byte for byte.
+        doc = parse(body)
+        m = HEADING_ARG_RE.match(args.section)
+        level, title = (len(m.group(1)), m.group(2)) if m else (
+            None, args.section.strip())
+        hits = [h for h in doc.heads if key(h.title) == key(title)
+                and level in (None, h.level)]
+        if len(hits) != 1:
+            raise WriteError(
+                f"--section {args.section!r}: {draft} has "
+                + ("no such heading" if not hits
+                   else f"{len(hits)} headings of that title: give the one "
+                        f"meant with its hashes"
+                   if len({h.level for h in hits}) > 1
+                   else f"{len(hits)} '{'#' * hits[0].level} {hits[0].title}' "
+                        f"headings: promote the heading above the one "
+                        f"meant, or make their titles differ"))
+        # To the next heading of its level or above, markers and all: a
+        # gm-only or spoiler marker ends no section here (section_end stops
+        # at one, and would drop the text after it without a word).
+        end = next((h.idx for h in doc.heads if h.idx > hits[0].idx
+                    and h.level <= hits[0].level), len(doc.lines))
+        body = "".join(doc.lines[hits[0].idx:end])
+        _states, problems = scan_body(body)
+        if problems:
+            raise WriteError(
+                f"--section {args.section!r}: the section holds half of a "
+                f"gm-only or spoiler block ({problems[0]}): promote the "
+                f"heading above it, or close the block in the draft")
+        part = f", section '{hits[0].title}'"
     target = vl.normalize_file_arg(args.to)
     if not re.fullmatch(r"[\w-]+", args.plan_type):
         raise WriteError(f"--plan-type {args.plan_type!r} is not one word")
@@ -3706,12 +3839,31 @@ def cmd_promote_plan(batch: Batch, args: argparse.Namespace,
     set_block(fm, "leads_to", *link_list(
         [link_arg(x, "--leads-to") for x in args.leads_to or []]))
     set_block(fm, "relationships", "[]")
+    if args.date:
+        try:
+            real = bool(ISO_DATE_RE.fullmatch(args.date)) and bool(
+                date.fromisoformat(args.date))
+        except ValueError:
+            real = False
+        if not real:
+            raise WriteError("--date must be a real date, YYYY-MM-DD")
+    people, places, overview = plan_cast(
+        batch, body, args.participant or [], args.location or [], target)
+    set_block(fm, "participants", *link_list(people))
+    set_block(fm, "locations", *link_list(places))
+    if overview:
+        # The vault's own Overview, whatever it is called: the template's
+        # name is only right for a vault that kept it.
+        set_block(fm, "campaign", vl.yaml_scalar(f"[[{overview}]]"))
+    if args.date:
+        set_block(fm, "lastUpdated", f'"{args.date}"')
     new = "---" + eol + eol.join(fm) + eol + "---" + eol + body
     batch.create(target, new)
     schema_check(batch, target, new)
     batch.row("WOULD-CREATE", target, "",
-              f"from {draft}: body copied as written ({len(body.encode())} "
-              f"bytes)")
+              f"from {draft}{part}: body copied as written ({len(body.encode())} "
+              f"bytes); participants {len(people)}, locations {len(places)}"
+              + ("" if args.date else "; no --date: lastUpdated left empty"))
 
 # --- plan ---------------------------------------------------------------------
 
@@ -4785,14 +4937,28 @@ def build_parser() -> argparse.ArgumentParser:
         "promote-plan", help="file a Midwife draft as a vault plan",
         formatter_class=raw, description=(
             "Scaffolds from the plan template, copies the draft's body\n"
-            "exactly and runs the schema check. participants and locations\n"
-            "are left for the caller to fill."))
+            "exactly and runs the schema check. campaign is the vault's\n"
+            "own Campaign Overview. participants and locations are the\n"
+            "notes named with --participant and --location, then the\n"
+            "people, groups, creatures and places the body links to; a\n"
+            "name in the body's prose is never matched. --section\n"
+            "promotes one heading's section of a draft that holds\n"
+            "several plans."))
     pp.add_argument("draft", help="the draft, vault-relative")
     pp.add_argument("--to", required=True, help="the plan, vault-relative")
     pp.add_argument("--plan-type", dest="plan_type", required=True, help="the plan's type, one word")
     pp.add_argument("--chapter", help="default: the chapter folder of --to")
     pp.add_argument("--leads-to", dest="leads_to", action="append",
-                    help="a plan this one leads to (repeatable)")
+                    help="a plan this one leads to")
+    pp.add_argument("--participant", action="append",
+                    help="an NPC, PC, faction or creature in the plan, by "
+                         "its note's name or alias")
+    pp.add_argument("--location", action="append",
+                    help="a place in the plan, by its note's name or alias")
+    pp.add_argument("--date", help="lastUpdated value, YYYY-MM-DD")
+    pp.add_argument("--section", help="copy this heading's section of the "
+                    "draft alone (its title, or the heading with its "
+                    "hashes): a draft that holds several plans")
     pp.add_argument("--write", action="store_true", help="write it (default: preview)")
     ch = sub.add_parser(
         "chapter-new", help="file a new chapter note",

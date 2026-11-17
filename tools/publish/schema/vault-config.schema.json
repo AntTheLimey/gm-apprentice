@@ -719,7 +719,7 @@
           "properties": {
             "mode": {},
             "folders": {
-              "description": "Vault folders never published",
+              "description": "Vault folders never published. The plugin's own working folders (`_midwife`, `_QA`, `_inbox`) never are, whatever this list holds",
               "default": [
                 "_meta",
                 "_Templates"

@@ -69,8 +69,8 @@ adventure; read topic files only as the conversation needs them.
 guaranteed): `discoveries.md`, `chapter-shape.md`,
 `weather-atmosphere.md`, `cover-stories.md`, `social-events.md`,
 `romance-threads.md`, and folders `adventures/`, `npcs/`,
-`entity-sketches/`, `image-prompts/`, `session-0/` (one
-`{name}.md` each).
+`locations/`, `factions/` (one per entity type sketched),
+`image-prompts/`, `session-0/` (one `{name}.md` each).
 
 **Filing:** when the GM confirms content ("done", "let's move
 on"), write it to its topic file, update the adventure index, and
@@ -164,7 +164,9 @@ Write confirmed decisions to `chapter-shape.md`.
   locations and look for tie-ins in the relationship graph, so it
   reads as continuation rather than a bolted-on module.
 
-File confirmed NPCs to `npcs/`, sub-adventures to `adventures/`.
+File confirmed NPCs to `npcs/`, other entities to a folder named
+for their type (`locations/`, `factions/`, `creatures/`,
+`items/`), sub-adventures to `adventures/`.
 
 ### Woven Worldbuilding (Adventure Creation)
 

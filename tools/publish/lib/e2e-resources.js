@@ -94,7 +94,8 @@ function createE2eResources({ runWrangler, runId }) {
 
   function createPagesProject(label) {
     const name = trackedName(runId, label);
-    const r = runWrangler(['pages', 'project', 'create', name, '--production-branch=main']);
+    // --force: without it wrangler 4.163 hands the create to Workers, which fails for want of a Worker script (#679).
+    const r = runWrangler(['pages', 'project', 'create', name, '--production-branch=main', '--force']);
     if (r.code !== 0) {
       throw new Error(`Could not create Pages project "${name}": ${(r.stderr || r.stdout || '').trim()}`);
     }
