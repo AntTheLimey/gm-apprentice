@@ -4073,7 +4073,8 @@ def _wrap_context(rel: str, fm: dict,
     notes: list[str] = []
     for key in ("export", "play_notes"):
         notes = [r for r, _t, f in entries
-                 if f.get("type") in SESSION_DOC_TYPES[key][1]
+                 if isinstance(f.get("type"), str)
+                 and f["type"] in SESSION_DOC_TYPES[key][1]
                  and ctx.number is not None
                  and _session_number_of(r, f) == ctx.number
                  and _chapters_agree(chapter, chapter_key(r, f))]
