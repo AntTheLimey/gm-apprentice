@@ -3370,6 +3370,8 @@ SECTION_TYPES = {"NPCs": frozenset({"pc", "npc", "creature"}) | GROUP_TYPES,
 # brackets, emphasis marks.
 _TITLES = ("Mr", "Mrs", "Ms", "Dr", "St", "Mt", "Fr", "Sr", "Jr", "Lt",
            "Col", "Rev", "Sgt", "Capt", "Prof")
+# A line that starts a block of its own: a list item or a quote.
+_BLOCK_START_RE = re.compile(r"^\s*(?:[-*+>]|\d+[.)])\s")
 _SENTENCE_OPEN_RE = re.compile(
     r"(?:^|^\s*(?:[-*+>]|\d+[.)])|"
     + "".join(rf"(?<!\b{t})" for t in _TITLES)
@@ -3400,15 +3402,24 @@ def prose_near(batch: Batch, text: str, live: dict[str, set[str]],
                                      *calendar.month_name) if d}
     seen: dict[str, int] = {}
     mid: set[str] = set()     # capitalised somewhere other than a sentence start
+    before = ""               # the paragraph's text so far, for a wrapped line
     for line in text.splitlines():
-        if line.lstrip().startswith("#"):
+        if line.lstrip().startswith("#") or not line.strip():
+            before = ""
             continue
+        if _BLOCK_START_RE.match(line):
+            before = ""         # a list item or quote starts afresh
         for m in _WORD4_RE.finditer(line):
             word = m.group(0)
             if word[0].isupper():       # Ólafur as well as Oliver
                 seen[word] = seen.get(word, 0) + 1
-                if not _SENTENCE_OPEN_RE.search(line[:m.start()]):
+                prefix = line[:m.start()]
+                # A soft line break carries the sentence on: "met\nPetrack".
+                if before and not prefix.strip():
+                    prefix = before.rstrip() + " "
+                if not _SENTENCE_OPEN_RE.search(prefix):
                     mid.add(word)
+        before = line
     for word, count in seen.items():
         low = word.casefold()
         # A word only ever capitalised to start a sentence is English

@@ -277,6 +277,23 @@ class SessionNewTests(unittest.TestCase):
             "NEAR\tCreatures/The Lantern at the Pass.md\t§Prose\t"
             "Latern (1x) — close to Lantern"], out)
 
+    def test_a_wrapped_line_carries_its_sentence_on(self):
+        # A hand-wrapped export: "Petrack" begins a line, not a sentence.
+        # A wrapped line after a full stop still begins one ("Later").
+        (self.vault / "Creatures").mkdir()
+        (self.vault / "Creatures/The Lantern at the Pass.md").write_text(
+            entity("creature"), encoding="utf-8")
+        self.export.write_text(EXPORT.replace(
+            "The crew went the long way round.",
+            "The crew met\nPetrack near the dock.\nLater the crew slept."),
+            encoding="utf-8")
+        code, out = run(self.vault, "resolve", "--export", str(self.export))
+        self.assertEqual(code, 0, out)
+        prose = [ln for ln in out.splitlines() if "§Prose" in ln]
+        self.assertEqual(prose, [
+            "NEAR\tCharacters/NPCs/Marlo Petrak.md\t§Prose\t"
+            "Petrack (1x) — close to Petrak"], out)
+
     def test_a_part_match_is_only_of_the_sections_kind(self):
         # #694: a place is not its battle map, and an item named for a
         # person is not the person. A close spelling still crosses kinds.
