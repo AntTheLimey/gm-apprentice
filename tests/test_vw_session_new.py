@@ -157,6 +157,13 @@ class SessionNewTests(unittest.TestCase):
         self.assertEqual(fm["type"], "session-play-notes")
         self.assertEqual(fm["session_number"], "13")
 
+    def test_created_by_stamps_both_play_records(self):
+        code, out = self.new("--write", "--created-by", "vault-ingest")
+        self.assertEqual(code, 0, out)
+        for rel in (NOTES, EXPORT_NOTE):
+            self.assertEqual(vl.extract_frontmatter(self.read(rel))
+                             ["created_by"], "vault-ingest", rel)
+
     def test_index_is_the_template_filled_from_the_previous_session(self):
         code, out = self.new("--write")
         self.assertEqual(code, 0, out)
@@ -251,6 +258,93 @@ class SessionNewTests(unittest.TestCase):
         self.assertEqual(prose, [
             "NEAR\tCharacters/NPCs/Marlo Petrak.md\t§Prose\t"
             "Petrack (2x) — close to Petrak"], out)
+
+    def test_a_word_that_only_starts_sentences_is_not_a_name(self):
+        # Snowbound's "Later" read as "Lantern" (#694): a capitalised word
+        # never seen mid-sentence is English. "Latern" mid-sentence is
+        # still a misspelt name.
+        (self.vault / "Creatures").mkdir()
+        (self.vault / "Creatures/The Lantern at the Pass.md").write_text(
+            entity("creature"), encoding="utf-8")
+        self.export.write_text(EXPORT.replace(
+            "The crew went the long way round.",
+            "Later the crew slept. \"Later,\" said Six.\n"
+            "- Later still, the crew saw Latern."), encoding="utf-8")
+        code, out = run(self.vault, "resolve", "--export", str(self.export))
+        self.assertEqual(code, 0, out)
+        prose = [ln for ln in out.splitlines() if "§Prose" in ln]
+        self.assertEqual(prose, [
+            "NEAR\tCreatures/The Lantern at the Pass.md\t§Prose\t"
+            "Latern (1x) — close to Lantern"], out)
+
+    def test_a_wrapped_line_carries_its_sentence_on(self):
+        # A hand-wrapped export: "Petrack" begins a line, not a sentence.
+        # A wrapped line after a full stop still begins one ("Later").
+        (self.vault / "Creatures").mkdir()
+        (self.vault / "Creatures/The Lantern at the Pass.md").write_text(
+            entity("creature"), encoding="utf-8")
+        self.export.write_text(EXPORT.replace(
+            "The crew went the long way round.",
+            "The crew met\nPetrack near the dock.\nLater the crew slept."),
+            encoding="utf-8")
+        code, out = run(self.vault, "resolve", "--export", str(self.export))
+        self.assertEqual(code, 0, out)
+        prose = [ln for ln in out.splitlines() if "§Prose" in ln]
+        self.assertEqual(prose, [
+            "NEAR\tCharacters/NPCs/Marlo Petrak.md\t§Prose\t"
+            "Petrack (1x) — close to Petrak"], out)
+
+    def test_a_part_match_is_only_of_the_sections_kind(self):
+        # #694: a place is not its battle map, and an item named for a
+        # person is not the person. A close spelling still crosses kinds.
+        (self.vault / "Documents").mkdir()
+        (self.vault / "Documents/Battle Map of the Wayside Shrine.md"
+         ).write_text("---\ntype: document\ndoc_type: map\n---\n",
+                      encoding="utf-8")
+        self.export.write_text(EXPORT.replace(
+            "### Katha V (Furosuto Supaia)", "### The Wayside Shrine").replace(
+            "- **Jellyfish Plushie** — a souvenir.",
+            "- **Marlo Petrak's Ledger** — his accounts."), encoding="utf-8")
+        code, out = run(self.vault, "resolve", "--export", str(self.export))
+        self.assertEqual(code, 0, out)
+        self.assertIn("NONE\t\t§Locations\tThe Wayside Shrine", out)
+        self.assertIn("NONE\t\t§Items\tMarlo Petrak's Ledger", out)
+        # A part match of the section's kind is still offered.
+        self.assertIn("NEAR\tLocations/Chae-gul 147.md\t§Locations\t"
+                      "Chae-Gul 147 Station — part", out)
+
+    def test_a_place_can_part_match_the_group_it_belongs_to(self):
+        # A faction's lodge is often written up on the faction's note
+        # (the benchmark's Silver Twilight Lodge), so a group still fits
+        # a Locations entry.
+        (self.vault / "Factions").mkdir()
+        (self.vault / "Factions/Order of the Silver Twilight.md"
+         ).write_text(entity("faction", ["Silver Twilight"]),
+                      encoding="utf-8")
+        self.export.write_text(EXPORT.replace(
+            "### Katha V (Furosuto Supaia)", "### Silver Twilight Lodge"),
+            encoding="utf-8")
+        code, out = run(self.vault, "resolve", "--export", str(self.export))
+        self.assertEqual(code, 0, out)
+        self.assertIn("NEAR\tFactions/Order of the Silver Twilight.md\t"
+                      "§Locations\tSilver Twilight Lodge — part", out)
+
+    def test_a_titled_name_is_mid_sentence(self):
+        # "Dr." is no sentence end: a misspelt name always written with
+        # its title is still found. A curly-quoted line's end is one.
+        (self.vault / "Creatures").mkdir()
+        (self.vault / "Creatures/The Lantern at the Pass.md").write_text(
+            entity("creature"), encoding="utf-8")
+        self.export.write_text(EXPORT.replace(
+            "The crew went the long way round.",
+            "Dr. Petrack flew. “We go.” Later the crew slept."),
+            encoding="utf-8")
+        code, out = run(self.vault, "resolve", "--export", str(self.export))
+        self.assertEqual(code, 0, out)
+        prose = [ln for ln in out.splitlines() if "§Prose" in ln]
+        self.assertEqual(prose, [
+            "NEAR\tCharacters/NPCs/Marlo Petrak.md\t§Prose\t"
+            "Petrack (1x) — close to Petrak"], out)
 
     def test_resolve_tries_a_name_without_its_title(self):
         # "Mr. Ashworth" in Session 17's export was NONE: no note is

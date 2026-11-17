@@ -277,6 +277,7 @@ Items: EXACT, ALIAS, NEAR (candidates) or NONE, one row each.
 | `--chapter` | `CHAPTER` | the chapter, when the number alone does not say which |
 | `--upcoming` |  | a session not yet played (prep): the index alone, status planned, no Play Notes |
 | `--export` | `EXPORT` | the export file (any path) |
+| `--created-by` | `session-play`, `vault-ingest`, `manual` | the skill filing it, stamped as created_by on the play records (default manual) |
 | `--write` |  | write it (default: preview) |
 <!-- END GENERATED -->
 
@@ -300,6 +301,7 @@ works as in session-new; export-new files an export alone.
 | `--session` | `SESSION` | the session index: path or name |
 | `--play-date` | `PLAY_DATE` | YYYY-MM-DD |
 | `--export` | `EXPORT` | the export file (any path) |
+| `--created-by` | `session-play`, `vault-ingest`, `manual` | the skill filing it, stamped as created_by on the play records (default manual) |
 | `--write` |  | write it (default: preview) |
 <!-- END GENERATED -->
 
@@ -324,6 +326,7 @@ session-new does.
 |---|---|---|
 | `--session` | `SESSION` | the session index: path or name |
 | `--export` | `EXPORT` | the export file (any path) |
+| `--created-by` | `session-play`, `vault-ingest`, `manual` | the skill filing it, stamped as created_by on the play records (default manual) |
 | `--play-date` | `PLAY_DATE` | YYYY-MM-DD |
 | `--write` |  | write it (default: preview) |
 <!-- END GENERATED -->

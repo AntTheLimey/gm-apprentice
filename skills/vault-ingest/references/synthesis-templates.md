@@ -119,8 +119,9 @@ content, not live capture.
    Moments`, `## Scenes`, `## NPCs` headings — is filed whole as
    the session's Export note, never pasted into Play Notes:
    `gma vault-write <vault> export-new --session "<index>"
-   --export <file>` (or `session-new ... --export <file>` when the
-   session has no index yet), preview then `--write`. Skip
+   --export <file> --created-by vault-ingest` (or `session-new ...
+   --export <file> --created-by vault-ingest` when the session has
+   no index yet), preview then `--write`. Skip
    synthesis and the Keeper Interview for it. session-wrapup finds
    the Export and adopts its Summary verbatim (its gmassistant.app
    path); reformatting the export would silently send it down the
