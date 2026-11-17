@@ -116,6 +116,7 @@ decision rather than pure score.
 
 ## Completed
 
+- ~~Wrap-up and vault-ingest write new entity notes through `entity-new`~~ — Step 4 sends an `entity-new` block (fields, ties, sections) where it wrote the whole note; six runs an arm: same cost, judges 7-5, and no new note whose Related list disagrees with its relationships (13 of 20 on main) (#684, v1.12.37)
 - ~~A template for the adventure brief~~ — `_Templates/_Template_Adventure_Brief.md`, seeded by the scaffold and copied in by the update; `entity-new --type adventure-brief` writes the brief from its sections, the GM's fenced under GM Notes and Open Questions in a spoiler block, and the Midwife's Step 1 uses it (#681, v1.12.36)
 - ~~A command that creates an entity note from its template~~ — `gma vault-write entity-new` fills the vault's template from the fields, ties and sections sent to it, writes `## Related` and `### Hidden Ties` from the ties so the two cannot drift, and keeps every `###` section under GM Notes; the Midwife's entity promotion and campaign-organizer use it (#676, this PR, v1.12.35). Wrap-up and vault-ingest still write new entities by hand.
 - ~~Update floor on a schedule~~ — for release X.Y.Z the update takes stamps from X.(Y-1).0; a vault behind is told to update first with that minor's newest release, run from its download; CI fails a minor bump until the floor moves and the checks below it are deleted. First raise: 1.11.0 (27 checks and their tests gone) (this PR, v1.12.2).

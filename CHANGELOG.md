@@ -9,6 +9,12 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.37] — 2026-11-17
+
+### Changed
+
+- Session wrap-up and vault-ingest create a new NPC, place, group, item or event note through `entity-new`: the wrap-up sends the fields, the ties and the sections, and the command fills the template and writes `## Related` and `### Hidden Ties` from the ties, so a new note's Related list and its relationships can no longer disagree (#684).
+
 ## [1.12.36] — 2026-11-17
 
 ### Added
