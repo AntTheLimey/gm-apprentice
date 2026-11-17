@@ -27,7 +27,7 @@ block is a line `=== <command> <args>` and then
 that command's stdin. Commands: every `vw` writer with its own
 arguments (`wrapup-new`, `wrapup-add`, `story`, `npc-story`,
 `status`, `log`, `timeline`, `threads`, `scene-played`,
-`scene-paused`), plus `stamp <file>... <stamp-entities options>`,
+`scene-paused`, `entity-new`), plus `stamp <file>... <stamp-entities options>`,
 `note-new <path>` (body: the whole note) and `section <note>
 "<heading>" [--append | --replace]` (body: text for that one section,
 found by heading path; no need to read the note first), and on the
@@ -243,10 +243,18 @@ Personal setting reference may sit in `systems/{system}/personal/`
 — check it for faction ties, locations and NPC relationships when
 creating entities.
 
-- **New entities:** read `_Templates/_Template_{Type}.md` and write
-  the whole note from it in a `=== note-new <path>` block,
-  `canon_status: DRAFT`, its relationship edges in its frontmatter.
-  Content session-play already saved goes in verbatim — the template
+- **New entities:** read `_Templates/_Template_{Type}.md` for its
+  fields and section names, then a
+  `=== entity-new --type <type> --name "<Name>" --date <play date>`
+  block each. Its body is a frontmatter block holding only the fields
+  to set and the `relationships:` edges, then the sections that have
+  text: `##` for what the players know, `###` for a GM Notes one. The
+  command fills the rest from the template (`canon_status: DRAFT`),
+  puts every `###` under GM Notes inside its fence and writes
+  `## Related` and `### Hidden Ties` from the edges: send neither. A
+  tie to a note that neither exists nor is made earlier in the batch
+  takes `target_type: <its type>`. A PC is not an `entity-new` type:
+  its note is a `note-new` block from the PC template. Content session-play already saved goes in verbatim — the template
   supplies structure, not replacement prose. Never pattern-match off
   existing entity files. An NPC who joins the party as a PC: the PC
   note from its template in the batch; after the batch is written,
@@ -281,8 +289,10 @@ creating entities.
   sanctioned predicate, store the base direction (`owned_by A→B` →
   `owns B→A`), and drop non-edges (`appears_in <session>`). Table:
   `shared/relationship-normalization.md`. Never invent a `type:`.
-  Mirror each edge in the body's `## Related` (a `gm_only` edge in
-  `### Hidden Ties`), per `shared/entity-schema.md` § Relationships.
+  An edge added to an existing note is mirrored in its body's
+  `## Related` (a `gm_only` edge in `### Hidden Ties`), per
+  `shared/entity-schema.md` § Relationships; `entity-new` writes a new
+  note's.
 - **Campaign logs:** each NPC, Location, Item, Organization or
   Creature that appeared this session gets one bullet in its
   `## Campaign Log` (a Creature's is `## Encounters`), as the party
@@ -318,7 +328,7 @@ creating entities.
   timeline already uses. A `=== timeline --under "<the heading this
   timeline files the session under>"` block places them (a new
   heading takes its hashes, `--after` sites it).
-- **Events:** a `note-new` block from `_Templates/_Template_Event.md`
+- **Events:** an `entity-new --type event --date <play date>` block
   (dated with `in_game_date:`) when a moment meets its threshold — see
   `shared/templates/event.md`'s comment if the vault copy lacks one.
 
