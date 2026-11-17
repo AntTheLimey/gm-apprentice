@@ -47,7 +47,7 @@ and `_meta/` schema to file correctly.
 
 ## Gotchas
 
-1. **A new entity goes in through `entity-new`** (session-wrapup Step 4: a block of the batch, or `gma vault-write <vault> entity-new --type <type> --name "<Name>"`) — it fills the vault's template, which is canonical; read `_Templates/_Template_{Type}.md` for its section names. Copying existing entities propagates drift and deprecated fields.
+1. **A new entity goes in through `entity-new`** (session-wrapup Step 4: a block of the batch, or `gma vault-write <vault> entity-new --type <type> --name "<Name>"` with the body on stdin: preview, then `--write`) — it fills the vault's template, which is canonical; read `_Templates/_Template_{Type}.md` for its section names. Copying existing entities propagates drift and deprecated fields.
 2. **One file per entity** — multiple entities per file break wiki-links and publish rendering.
 3. **Never modify external source files** — they are the GM's backup and proof of ownership.
 4. **Process buckets chronologically, earliest first**, each through Phases 3-6 before the next — later buckets reference entities created by earlier ones.

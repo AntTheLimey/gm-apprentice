@@ -251,8 +251,10 @@ creating entities.
   text: `##` for what the players know, `###` for a GM Notes one. The
   command fills the rest from the template (`canon_status: DRAFT`),
   puts every `###` under GM Notes inside its fence and writes
-  `## Related` and `### Hidden Ties` from the edges: send neither.
-  Content session-play already saved goes in verbatim — the template
+  `## Related` and `### Hidden Ties` from the edges: send neither. A
+  tie to a note that neither exists nor is made earlier in the batch
+  takes `target_type: <its type>`. A PC is not an `entity-new` type:
+  its note is a `note-new` block from the PC template. Content session-play already saved goes in verbatim — the template
   supplies structure, not replacement prose. Never pattern-match off
   existing entity files. An NPC who joins the party as a PC: the PC
   note from its template in the batch; after the batch is written,
@@ -326,7 +328,7 @@ creating entities.
   timeline already uses. A `=== timeline --under "<the heading this
   timeline files the session under>"` block places them (a new
   heading takes its hashes, `--after` sites it).
-- **Events:** an `entity-new --type event` block
+- **Events:** an `entity-new --type event --date <play date>` block
   (dated with `in_game_date:`) when a moment meets its threshold — see
   `shared/templates/event.md`'s comment if the vault copy lacks one.
 
