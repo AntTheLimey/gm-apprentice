@@ -300,6 +300,14 @@ describe('lines: dates (vault_check timeline --order asks it, so the two never r
     assert.deepStrictEqual(got.map((d) => d.iso), ['1814-08-03', '1814-08-12', '1814-09-10', '1814-09-01', '1813-10-01', '1921-03-01', null]);
     assert.deepStrictEqual(got.map((d) => d.day), [true, true, true, false, false, true, false]);
   });
+  it('never guesses a year: "Day 2" and "Night 1" stay undated (#697)', () => {
+    const got = answer({ op: 'dates', values: ['Day 2', 'Night 1', 'Day 9', 'Week 3', 'Day 2, morning'] }).dates;
+    assert.deepStrictEqual(got.map((d) => d.iso), [null, null, null, null, null]);
+    // A month with no year is still placed, as before: one unnamed year.
+    assert.notStrictEqual(answer({ op: 'dates', values: ['March 5'] }).dates[0].iso, null);
+    const page = { frontmatter: { type: 'event', in_game_date: 'Day 2' }, displayTitle: 'E', outputPath: 'e.html' };
+    assert.strictEqual(buildTimelineData([page]).events.length, 0);
+  });
   it('agrees with the timeline page for the same value', () => {
     const page = { frontmatter: { type: 'session', in_game_date: 'August 12-20, 1814', session_number: 1 }, displayTitle: 'S', outputPath: 's.html' };
     const fromTimeline = buildTimelineData([page]);

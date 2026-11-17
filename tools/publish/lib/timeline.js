@@ -46,7 +46,12 @@ function parseDateDetail(value) {
     return { date: new Date(Date.UTC(year, month, 1)), dayKnown: false };
   }
 
-  return { date: new Date(s), dayKnown: false };
+  // A month with no year ("1 March", "March 5"): one unnamed year, placed as it always
+  // was. Anything else with no year is no calendar date: handing it to `new Date` made
+  // "Day 2" 1 February 2001 and "Night 1" 1 January 2001 (#697), so a story told without
+  // a calendar got a timeline of invented dates.
+  if (monthName) return { date: new Date(s), dayKnown: false };
+  return { date: new Date(NaN), dayKnown: false };
 }
 
 function buildTimelineData(pages) {

@@ -30,14 +30,19 @@ tags: []
 ```
 
 **Date fields:** `play_date` is the real-world play date, always
-`YYYY-MM-DD`. `in_game_date` is the fictional date; the published
-timeline sorts it by its **4-digit year** and accepts ISO dates,
-month-name dates (`"August 11, 1814"`, `"July 1814"`) and seasonal
-phrases (`"Autumn 1813"`). Keep time-of-day out of the field
-(`"Evening, 11 August 1814"` loses its date) — put it in prose. For a
-non-Earth calendar, record the world's own format and never fabricate
-a Gregorian date; without a 4-digit year it is left off the timeline
-(not an error).
+`YYYY-MM-DD`. `in_game_date` is the fictional date, in whatever form
+the story keeps. A story without a calendar is normal: `"Day 2,
+morning"`, `"Night 1"`, or nothing at all. A relative date like that
+stays off the site's sorted timeline (it never invents a year for
+one), the Timeline page shows the story in the order it was written,
+and nothing warns. Once
+the campaign's dates carry a **4-digit year** (some session's, event's
+or timeline entry's; a game may gain one later), the site's timeline
+sorts by it and accepts ISO dates, month-name dates (`"August 11,
+1814"`, `"July 1814"`) and seasonal phrases (`"Autumn 1813"`). From
+then keep time-of-day out of the field (`"Evening, 11 August 1814"`
+loses its date) — put it in prose. For a non-Earth calendar, record
+the world's own format and never fabricate a Gregorian date.
 
 **Status** is the furthest document that exists:
 
@@ -175,7 +180,7 @@ session_number: N
 chapter: "[[Chapter N - Title]]"
 campaign: ""
 play_date: null                # "YYYY-MM-DD"
-in_game_date: null             # timeline format (see Session Index)
+in_game_date: null             # the story's own form (see Session Index)
 source_document: "[[Session NN - Title - Play Notes]]"
 canon_status: DRAFT
 created_by: session-wrapup

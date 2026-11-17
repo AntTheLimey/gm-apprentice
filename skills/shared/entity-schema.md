@@ -323,10 +323,10 @@ consumable), `current_holder` (wiki-link: who has it now), `origin`
 (wiki-link: where or who it came from), `portrait`
 
 **Event:** `event_type` (battle, ritual, disaster, discovery,
-betrayal, meeting, celebration), `in_game_date` (the in-game date, in
-the campaign's calendar), `location` (wiki-link: where it happened),
-`participants` (wiki-links), `outcome` (one line; shown on the
-location's What Happened Here timeline)
+betrayal, meeting, celebration), `in_game_date` (the in-game date, as
+the story tells it ("Day 2", "May 1814")), `location` (wiki-link:
+where it happened), `participants` (wiki-links), `outcome` (one line;
+shown on the location's What Happened Here timeline)
 
 **Clue:** `clue_type` (physical, testimonial, documentary), `found_at`
 (wiki-link: where it is, or was found), `found_by` (wiki-link: who

@@ -1394,8 +1394,54 @@ class TimelineTests(unittest.TestCase):
                        "--under", "### Session 1 — Arrival (3 August)")
         self.assertEqual(code, 0, out)
         self.assertEqual(out.count("WARNING\t"), 3)
-        self.assertIn("a published timeline cannot sort it", out)
+        self.assertIn("this campaign's dates carry years", out)
         self.assertIn("- **3rd of Harvestmoon** — C.\n", read(vault, TL_REL))
+
+    def test_a_story_without_a_calendar_is_not_warned(self):
+        # #697: Snowbound tells its days as "Day 1, morning"; nothing in
+        # the vault carries a year, so nothing is unsortable.
+        free = TL.replace("3 August 1814", "Day 1, evening").replace(
+            "(3 August)", "(Day 1)").replace("12 August 1814", "Day 9")
+        vault = make_vault(self, {TL_REL: free})
+        code, out = tl(vault, "- **Day 2, morning** — A.\n"
+                              "- **Night 2** — B.\n",
+                       "--under", "### Session 1 — Arrival (Day 1)")
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("WARNING\t", out)
+
+    def test_an_entry_with_a_year_in_the_same_write_counts(self):
+        free = TL.replace("3 August 1814", "Day 1, evening").replace(
+            "(3 August)", "(Day 1)").replace("12 August 1814", "Day 9")
+        vault = make_vault(self, {TL_REL: free})
+        code, out = tl(vault, "- **Evening, 4 August 1814** — A.\n",
+                       "--under", "### Session 1 — Arrival (Day 1)")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(out.count("WARNING\t"), 1, out)
+        self.assertIn("has a time of day", out)
+
+    def test_a_year_in_a_session_label_is_no_calendar(self):
+        free = TL.replace("3 August 1814", "Day 1, evening").replace(
+            "(3 August)", "(Day 1)").replace(
+            "12 August 1814", "Session 3 (played 2026-11-01)")
+        vault = make_vault(self, {TL_REL: free})
+        code, out = tl(vault, "- **Day 2, morning** — A.\n",
+                       "--under", "### Session 1 — Arrival (Day 1)")
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("WARNING\t", out)
+
+    def test_a_campaign_that_gains_a_year_is_warned_from_then(self):
+        # Special Forces had a year before it had dates: once a session's
+        # in_game_date names one, an entry without one is flagged.
+        free = TL.replace("3 August 1814", "Day 1, evening").replace(
+            "(3 August)", "(Day 1)").replace("12 August 1814", "Day 9")
+        vault = make_vault(self, {
+            TL_REL: free,
+            "Sessions/Session 03.md": "---\ntype: session\n"
+                                      "in_game_date: \"Spring 1985\"\n---\n"})
+        code, out = tl(vault, "- **Day 2, morning** — A.\n",
+                       "--under", "### Session 1 — Arrival (Day 1)")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(out.count("WARNING\t"), 1, out)
 
     def test_a_repeat_is_a_skip(self):
         vault = make_vault(self, {TL_REL: TL})

@@ -9,6 +9,12 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.42] — 2026-11-17
+
+### Changed
+
+- A story without a calendar is normal: timeline entries dated "Day 2, morning", "Night 1" or not at all no longer warn. The unsortable-date warning comes only once the campaign's dates carry a year (a session's, an event's or a timeline entry's), so a game that gains a calendar later is checked from then. The site's timeline no longer turns a relative date into one in 2001 ("Day 2" was 1 February 2001), so a story without a calendar gets no invented timeline; a month with no year ("1 March") is placed as before (tool 1.70.19). The date guidance and the templates say so (#697).
+
 ## [1.12.41] — 2026-11-17
 
 ### Fixed

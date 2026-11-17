@@ -9,7 +9,7 @@ lastUpdated: ""
 aliases: []
 tags: []
 event_type: ""        # battle, ritual, disaster, discovery, betrayal, meeting, celebration
-in_game_date: ""      # the in-game date, in the campaign's calendar
+in_game_date: ""      # the in-game date, as the story tells it ("Day 2", "May 1814")
 location: ""          # "[[Where it happened]]"
 participants:
   - ""                # "[[Entity]] (what they did)"

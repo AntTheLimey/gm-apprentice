@@ -135,7 +135,8 @@ Read `references/synthesis-templates.md`.
 Check each entity as you write it: entity mentions are
 `[[Entity Name]]` wiki-links; `play_date` is `YYYY-MM-DD`;
 `in_game_date` follows `shared/session-document-chain.md` (never a
-fabricated Gregorian date or a time of day). Per bucket, run
+fabricated Gregorian date; no time of day once the campaign's dates
+carry a year). Per bucket, run
 `gma vault-check <vault> frontmatter --folder <dir>` (see
 `shared/vault-access.md`) and fix every ERROR before the next
 bucket.
