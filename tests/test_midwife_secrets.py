@@ -14,6 +14,14 @@ GM's own steps: the publish list made as publish-site's setup makes it, and
 `gma reveal` after the session that uncovers both; the secrets publish and the
 leak check passes.
 
+The adventure brief and the Campaign Overview built from it (#678): written in
+the shape `scaffold-handoff.md` asks for, with the pitch in the public sections
+and what the PCs are to find out under GM Notes, no word of the twist reaches
+the site, on the Overview's page or on the brief's own page once the GM
+publishes it. This pins the tool's side: that shape is safe on an
+adventure-brief page. That a model following the skill text writes that shape
+is shown by proof runs, not by this file.
+
 Run: python3 tests/test_midwife_secrets.py
 """
 
@@ -168,6 +176,148 @@ class SecretPlacesAndGroups(unittest.TestCase):
         self.assertIn("locations/sloane-library.html", pages)
         leaks = run(["node", str(BIN), "leaks", "check", "--json"], cwd=self.site, ok=(0, 1))
         self.assertEqual(json.loads(leaks)["findings"], [], leaks)
+
+
+# The brief as scaffold-handoff.md's table has it: the pitch public, the truth
+# under GM Notes, one twist sentence of the CATS pitch fenced on its own lines,
+# and Open Questions in a spoiler block.
+BRIEF = """---
+type: adventure-brief
+canon_status: AUTHORITATIVE
+title: "The Long Tide"
+system: "dnd-5e-2024"
+scope: "few-shot"
+---
+
+# The Long Tide
+
+## Premise
+
+Carry the new keeper's stores out to the Marzipan Light before the autumn
+gales close the causeway.
+
+## Core Tension
+
+The causeway is under water, and the lamp has begun to go out at night.
+
+## Key NPCs
+
+- **Keeper Odalie Marsh** - the new keeper: brisk, tired, glad of company.
+
+## CATS Pitch
+
+**Concept:** an autumn mystery on a rock with one door.
+
+<!-- gm-only -->
+The keeper puts the lamp out herself: the Quokkapriest twist.
+<!-- /gm-only -->
+
+## GM Notes
+
+### The Truth
+
+The keeper wrecks ships for the Zebrawyrm under the reef. She is a
+Quokkapriest, and the stores are its tithe.
+
+### Escalation
+
+A darker night each night: the Xenoclock.
+
+### Driving Forces
+
+**The Reefwardens:** keep the Zebrawyrm fed.
+
+### If They Do Nothing
+
+The mail packet is wrecked on Long Night.
+
+<!-- spoiler -->
+## Open Questions
+
+- Does the Vexillary pilot know the keeper by sight?
+<!-- /spoiler -->
+"""
+BRIEF_SECRETS = ("Zebrawyrm", "Quokkapriest", "Xenoclock", "Vexillary",
+                 "puts the lamp out herself", "Long Night")
+BRIEF_PUBLIC = ("Marzipan Light", "the lamp has begun to go out at night",
+                "an autumn mystery on a rock with one door")
+
+
+@NEEDS_NODE
+class BriefAndOverview(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.root = Path(tempfile.mkdtemp(prefix="midwife-brief-"))
+        vault = cls.vault = cls.root / "V"
+        run([sys.executable, str(SCRIPTS / "vault_scaffold.py"), str(vault),
+             "--system", "dnd-5e-2024", "--name", "The Long Tide", "--write"])
+        brief = vault / "Adventures" / "The Long Tide" / "The Long Tide.md"
+        brief.parent.mkdir(parents=True)
+        brief.write_text(BRIEF, encoding="utf-8")
+        # Step 3: the Overview from its template, its Premise the brief's
+        # public Premise, its factions as the players know them, the rest
+        # under GM Notes.
+        text = (vault / "_Templates" / "_Template_Campaign_Overview.md"
+                ).read_text(encoding="utf-8")
+        head, body = text.split("\n---\n", 1)
+        head = head.replace('campaign: ""', 'campaign: "The Long Tide"', 1)
+        body = ("\n# The Long Tide\n\n## Premise\n\nCarry the new keeper's stores "
+                "out to the Marzipan Light before the autumn gales close the "
+                "causeway.\n\n## Key Factions\n\n- **The Reefwardens** - "
+                "the pilots who keep the Juniper Buoys.\n\n## GM Notes\n\n"
+                "The Reefwardens serve the Zebrawyrm.\n")
+        (vault / "_Campaign" / "Campaign Overview.md").write_text(
+            head + "\n---\n" + body, encoding="utf-8")
+        cls.site = cls.root / "site"
+        run(["node", str(BIN), "init", str(cls.site), "--vault", str(vault),
+             "--title", "The Long Tide"])
+        (cls.site / "package.json").unlink()
+        cls.config = str(cls.site / "vault.config.json")
+        cls.docs = cls.site / "docs"
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.root, ignore_errors=True)
+
+    def site_text(self):
+        return {p.relative_to(self.docs).as_posix():
+                p.read_text(encoding="utf-8", errors="replace")
+                for p in self.docs.rglob("*") if p.is_file()}
+
+    def assert_no_secret(self, files):
+        for rel, text in files.items():
+            leaked = [w for w in BRIEF_SECRETS if w.lower() in text.lower()]
+            self.assertEqual(leaked, [], f"in {rel}")
+
+    def test_1_first_build_the_overview_publishes_the_pitch_alone(self):
+        run(["node", str(BIN), "build"], cwd=self.site)
+        files = self.site_text()
+        overview = files["campaign/campaign-overview.html"]
+        self.assertIn("Marzipan Light", overview)
+        self.assertIn("Juniper Buoys", overview)
+        self.assert_no_secret(files)
+        # The brief is not on the site until the GM says so.
+        self.assertFalse(any("the-long-tide.html" in rel for rel in files), files.keys())
+
+    def test_2_the_brief_published_shows_its_public_sections_alone(self):
+        folders = json.loads(run(["node", str(BIN), "settings", "get",
+                                  "player_site.folder_map", "--config",
+                                  self.config, "--json"]))
+        folder_map = folders["values"]["player_site.folder_map"]
+        folder_map["Adventures"] = "adventures"
+        run(["node", str(BIN), "settings", "set", "--config", self.config,
+             "player_site.folder_map=" + json.dumps(folder_map)])
+        run(["node", str(BIN), "build"], cwd=self.site)
+        files = self.site_text()
+        page = next(text for rel, text in files.items()
+                    if rel.startswith("adventures/") and rel.endswith("the-long-tide.html"))
+        for words in BRIEF_PUBLIC:
+            self.assertIn(words, page)
+        self.assert_no_secret(files)
+        leaks = run(["node", str(BIN), "leaks", "check", "--json"],
+                    cwd=self.site, ok=(0, 1))
+        self.assertEqual(json.loads(leaks)["findings"], [], leaks)
+
 
 if __name__ == "__main__":
     unittest.main()

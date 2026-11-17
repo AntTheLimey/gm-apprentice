@@ -17,6 +17,11 @@ author only the connective seams and fragment-derived text. Do
 not restyle writing that is already written.
 (rationale: `shared/content-fidelity.md`)
 
+Place each piece by who may read it (the Visibility column below).
+A topic file's premise is written for the GM and usually holds the
+secret: it goes under GM Notes as written, and the public Premise is
+the pitch the players hear, written from it.
+
 - **Existing vault:** Write to
   `Adventures/{adventure-name}/{adventure-name}.md`.
   Use `[[wiki-links]]` for existing entities. Flag entity
@@ -27,8 +32,10 @@ not restyle writing that is already written.
 
 ### Step 2: Entity & Plan Promotion
 
-**2a. Entity promotion** — List all entity sketches from
-`_midwife/{adventure}/entity-sketches/` and ask which
+**2a. Entity promotion** — List all entity sketches under
+`_midwife/{adventure}/` (`npcs/`, the folders named for other
+types such as `locations/` and `factions/`, and
+`entity-sketches/` in an older workspace) and ask which
 to promote to real vault entities:
 
 "These entities emerged during design:
@@ -77,14 +84,20 @@ For each approved plan, dry-run, show the GM the rows, then
 gma vault-write \
   <vault> promote-plan "_midwife/{adventure}/{file}.md" \
   --to "Chapters/{chapter}/Planning/{Plan_Name}.md" \
-  --plan-type <type> [--leads-to "<Plan_Name>"]...
+  --plan-type <type> --date <today> [--leads-to "<Plan_Name>"]... \
+  [--participant "<name>"]... [--location "<name>"]... \
+  [--section "<heading>"]
 ```
 
 It fills the template and copies the body unchanged.
-`--leads-to` (a branch when repeated) records sequencing,
-never a `relationships:` edge. Then fill `participants` and
-`locations` in the written plan with wiki-links to the NPCs,
-factions, creatures and locations it names.
+`--participant` and `--location` name the NPCs, factions,
+creatures and places the plan is about, each by its note's name
+or an alias (promote the entities first); notes the body links
+to are added for you. `--leads-to` (a branch when repeated)
+records sequencing, never a `relationships:` edge. A topic file
+that holds several plans (a timeline and an investigation in one
+draft) is promoted once per plan with `--section`, which copies
+that heading's section alone.
 
 A scene goes in with the same script's `scene-new --chapter
 "<chapter>" --title "<Title>"` (dry run first; no chapter note yet:
@@ -101,7 +114,10 @@ question per trigger — so file them without re-asking:
    and `_flags.md` copied from `shared/templates/world-index.md`
    and `shared/templates/world-flags.md`
 2. Write each fact to its domain file, creating a stub from
-   `shared/templates/world-domain.md` when the domain is new
+   `shared/templates/world-domain.md` when the domain is new. Its
+   `status` is `stub` while it holds no fact and `active` once it
+   does (`inactive`: a domain the campaign has set aside); the
+   vault check refuses any other word
 3. Unresolved three-state flags (deferred heritage prompts and
    the like) go to `_World/_flags.md`
 
@@ -146,14 +162,20 @@ If the GM said yes to that question:
    - `scope`: from adventure brief scope
    - `status`: `not_started`
    - `sessions_played`: 0
-   - Premise section: from the adventure brief premise
+   - Premise section: the brief's public Premise, the pitch
    - Setting section: from worldbuilding discussion
    - Key Themes section: from tone and genre conversation
-   - Key Factions section: from driving forces in the brief
+   - Key Factions section: each driving force as the players know
+     it at the start; its goal, plan and timeline stay in the
+     brief's GM Notes
    - Current Arc section: "Not yet begun."
    - GM Notes section: empty (a bare `## GM Notes` heading — the
      canonical single heading for whole-section GM-only content,
      see `shared/entity-schema.md`)
+
+   The Overview is a page of the player site: every section above
+   GM Notes is published, so none of them holds what the PCs are
+   to find out in play.
 
 ### Step 4: Update Status
 
@@ -196,16 +218,17 @@ source_document: ""
 
 | Section | Content | Visibility |
 |---------|---------|------------|
-| Premise | One paragraph elevator pitch | Public |
+| Premise | One paragraph: the pitch the players hear | Public |
 | Tone & Genre | Sensory and emotional descriptors | Public |
-| Adventure Shape | Structure type and rationale | Public |
-| Core Tension | Central conflict or mystery | Public |
-| Key NPCs | Per-NPC: role, motivation, connection, first appearance | Public |
-| Locations | Per-location: atmosphere, significance, connections | Public |
+| Core Tension | The conflict or mystery as the players meet it | Public |
+| Key NPCs | Per-NPC, as first met: role, connection, first appearance | Public |
+| Locations | Per-location, as first seen: atmosphere, significance, connections | Public |
 | Entry Points | ≥3 hooks (Three Clue Rule at adventure scale) | Public |
-| Escalation | How pressure increases | Public |
 | CATS Pitch | Concept/Aim/Tone/Subject for Session 0 | Public — see note below |
 | Session 0 Agenda | Checklist items for player buy-in | Public — see note below |
+| The Truth | What is really going on, where the public sections stop short: the true premise, the twist, each NPC's real motive, each place's secret | GM Notes |
+| Adventure Shape | Structure type and rationale: the sessions' spine, to its end | GM Notes |
+| Escalation | How pressure increases | GM Notes |
 | Driving Forces | Per-faction: goal, victory state, plan, timeline, resources | GM Notes |
 | If They Do Nothing | Antagonist plan runs to completion | GM Notes |
 | Vault Notes | Existing entities, updates implied (vault only) | GM Notes |
@@ -215,7 +238,13 @@ source_document: ""
 — never invent answers for things the GM was undecided on.
 
 **Visibility column meaning:**
-- **Public** — plain section, no fence, publishes as written.
+- **Public** — plain section, no fence, publishes as written, and
+  feeds the Campaign Overview. It holds only what the players are
+  told at the start. Whatever the PCs are to find out in play (who
+  the villain is, what the monster is, who is in disguise, how it
+  ends) goes under GM Notes, The Truth first; one such sentence
+  inside a public section goes in a `<!-- gm-only -->` block on its
+  own lines. An adventure with no secret has no The Truth section.
 - **GM Notes** — write as a `###` subsection under one `## GM Notes`
   heading in the brief, not its own top-level section (see
   `shared/pc-body-structure.md`).
