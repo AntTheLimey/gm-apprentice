@@ -513,6 +513,60 @@ He wrecked the Arden.
         self.assertEqual(text.count("type: part_of"), 1)
         self.assertNotIn("## Related", text)
 
+    def test_a_template_s_own_parent_is_paired_like_a_given_one(self):
+        # A vault whose location template names a parent for every place.
+        shared = (TEMPLATES / "location.md").read_text(encoding="utf-8")
+        own = shared.replace('parent_location: ""',
+                             'parent_location: "[[Marrow Light]]"', 1)
+        self.assertNotEqual(own, shared)
+        (self.vault / "_Templates" / schema_rules.TEMPLATE_NAMES[
+            "location.md"]).write_text(own, encoding="utf-8")
+        code, out = new(self.vault, "location", "The Lamp Room",
+                        "## Description\n\nBright.\n", "--write")
+        self.assertEqual(code, 0, out)
+        text = self.read("Locations/The Lamp Room.md")
+        self.assertIn('  - target: "[[Marrow Light]]"\n    type: part_of\n',
+                      text)
+        self.assertIn("its part_of tie added", out)
+        # The template's field is published too: a hidden tie to the same
+        # place is said, not passed over.
+        code, out = new(self.vault, "location", "The Old Kiln", (
+            "---\nrelationships:\n"
+            '  - target: "[[Marrow Light]]"\n    type: part_of\n'
+            "    gm_only: true\n---\n"), "--write")
+        self.assertEqual(code, 0, out)
+        self.assertIn("drop the field to keep it hidden", out)
+        self.assertEqual(self.read("Locations/The Old Kiln.md").count(
+            "type: part_of"), 1)
+
+    def test_a_tie_that_would_close_the_fence_is_refused(self):
+        tie = ("---\nrelationships:\n"
+               '  - target: "[[Pilot Hale]]"\n    type: knows\n'
+               '    description: "{said}"\n    gm_only: {hidden}\n---\n\n'
+               "### Secrets\n\nQUOKKA.\n")
+        for said, hidden in (("Old friends <!-- /gm-only --> no more", "true"),
+                             ("Old friends --> no more", "true"),
+                             ("Old friends <!-- gm-only --> no more", "false"),
+                             ("Old friends <!-- aside", "false")):
+            with self.subTest(said=said):
+                code, out = new(self.vault, "npc", "Jem",
+                                tie.format(said=said, hidden=hidden), "--write")
+                self.assertEqual(code, 1, out)
+                self.assertIn("relationships[1]", out)
+                self.assertIn("<!--", out)
+                self.assertFalse((self.vault / "Characters/NPCs/Jem.md"
+                                  ).exists())
+        code, out = new(self.vault, "npc", "Jem", (
+            "---\nrelationships:\n"
+            '  - target: "[[Pilot <!-- /gm-only --> Hale]]"\n'
+            "    type: knows\n    target_type: npc\n    gm_only: true\n---\n"),
+            "--write")
+        self.assertEqual(code, 1, out)
+        # A plain arrow is no marker.
+        code, out = new(self.vault, "npc", "Jem", tie.format(
+            said="Hale -> Jem, a debt", hidden="true"), "--write")
+        self.assertEqual(code, 0, out)
+
     def test_a_hidden_flag_that_is_not_yes_or_no_is_refused(self):
         tie = ('---\nrelationships:\n  - target: "[[Nan Tolliver]]"\n'
                "    type: knows\n    gm_only: {value}\n---\n")
@@ -702,6 +756,31 @@ class EntityNewBatchTests(unittest.TestCase):
         guild = (vault / "Factions & Organizations/The Lamp Guild.md"
                  ).read_text(encoding="utf-8")
         self.assertIn("- **People:** [[Captain Imre Voss]]\n", guild)
+
+    def test_a_later_block_s_type_is_read_however_its_flags_are_written(self):
+        vault = make_vault(self)
+        (vault / "batch.txt").write_text(
+            BATCH.replace('--type location --name "The Sea Stair"',
+                          '--name="The Sea Stair" --type=location')
+            .replace('--type faction --name "The Lamp Guild"',
+                     '--folder Guilds --type faction --name "The Lamp Guild"'),
+            encoding="utf-8")
+        code, out = run(vault, "batch", str(vault / "batch.txt"), "--write")
+        self.assertEqual(code, 0, out)
+        voss = (vault / "Characters/NPCs/Captain Imre Voss.md").read_text(
+            encoding="utf-8")
+        self.assertIn("- **Places:** [[The Sea Stair]]\n"
+                      "- **Groups:** [[The Lamp Guild]]\n", voss)
+
+    def test_a_block_whose_flags_cannot_be_read_is_said_once(self):
+        vault = make_vault(self)
+        (vault / "batch.txt").write_text(
+            BATCH.replace('--type location --name "The Sea Stair"',
+                          '--type location'), encoding="utf-8")
+        code, out = run(vault, "batch", str(vault / "batch.txt"))
+        self.assertEqual(code, 1, out)
+        self.assertIn("--name", out)
+        self.assertNotIn("Traceback", out)
 
     def test_a_block_left_out_does_not_count_as_coming(self):
         vault = make_vault(self)

@@ -40,6 +40,8 @@ vault-write command.
 from __future__ import annotations
 
 import argparse
+import contextlib
+import io
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -285,10 +287,18 @@ def read_ties(raw: list[dict[str, Any]], types: Types,
                 f"{where}: [[{target}]] has no note yet, so its Related "
                 f"group is unknown: create that note first, or add "
                 f"`target_type: <its type>` to the tie (it is not written)")
+        description = " ".join(str(item.get("description") or "").split())
+        if any(mark in said for said in (target, description)
+               for mark in ("<!--", "-->")):
+            # Both are written into the body, a hidden tie's inside the
+            # fence: a comment mark there would open or close a block.
+            raise vw.WriteError(f"{where}: a target or description takes no "
+                                f"'<!--' or '-->': it would open or close a "
+                                f"hidden block in the note's body")
         ties.append({
             "target": target, "type": kind, "tone": tone,
             "strength": strength, "bidirectional": both,
-            "description": " ".join(str(item.get("description") or "").split()),
+            "description": description,
             "gm_only": hidden,
             "group": GROUP_OF.get(target_type, "Things")})
     return ties, notes
@@ -572,10 +582,13 @@ def run(batch: vw.Batch, args: argparse.Namespace, text: str) -> None:
     ties, notes = read_ties(parse_ties(blocks.get("relationships",
                                                   ["relationships: []"])),
                             types, name)
+    # As the note will hold them: a field stdin leaves alone keeps the
+    # template's value, and is published like one that was sent.
+    set_now = vl.extract_frontmatter("---\n" + "\n".join(fm) + "\n---\n") or {}
     for field, kind in self_pairs():
         if not any(line.startswith(f"{field}:") for line in fm):
             continue
-        want = link_of(given.get(field))
+        want = link_of(set_now.get(field))
         same = [t for t in ties if t["type"] == kind]
         shown = [t["target"] for t in same if not t["gm_only"]]
         secret = [t["target"] for t in same if t["gm_only"]]
@@ -621,13 +634,20 @@ def coming_types(blocks: list[Any]) -> dict[str, str]:
     """name -> type of every note the batch's entity-new blocks will make,
     so a tie may point at a note a later block creates."""
     out: dict[str, str] = {}
+    parser = None
     for b in blocks:
         if b.command != "entity-new":
             continue
-        got = {flag: b.args[i + 1] for i, flag in enumerate(b.args[:-1])
-               if flag in ("--type", "--name")}
-        if "--type" in got and "--name" in got:
-            out[vl.normalize(got["--name"])] = got["--type"].strip().casefold()
+        # The parser the block itself is run with, so `--type=npc` and
+        # every other way of writing a flag is read the same here.
+        parser = parser or vw.build_parser()
+        try:
+            with contextlib.redirect_stderr(io.StringIO()), \
+                    contextlib.redirect_stdout(io.StringIO()):
+                ns = parser.parse_args([".", "entity-new", *b.args])
+        except SystemExit:
+            continue        # the block says what is wrong when it runs
+        out[vl.normalize(ns.name)] = ns.type.strip().casefold()
     return out
 
 

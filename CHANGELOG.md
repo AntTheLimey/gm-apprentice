@@ -13,7 +13,7 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ### Added
 
-- `gma vault-write entity-new` creates an NPC, place, group, creature, item, event, document, clue or heritage note from its template. You send the fields to set, the ties and the sections; it writes `## Related` and `### Hidden Ties` from the ties, puts every `###` section under GM Notes inside the fence, and marks two-way ties. Several notes go in as blocks of one `batch`, and the Midwife's entity promotion uses it (#676).
+- `gma vault-write entity-new` creates an NPC, place, group, creature, item, event, document, clue or heritage note from its template. You send the fields to set, the ties and the sections; it writes `## Related` and `### Hidden Ties` from the ties, puts every `###` section under GM Notes (inside the template's fence when it has one), and marks two-way ties. Several notes go in as blocks of one `batch`, and the Midwife's entity promotion uses it (#676).
 
 ## [1.12.34] — 2026-11-16
 
