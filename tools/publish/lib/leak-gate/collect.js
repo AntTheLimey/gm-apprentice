@@ -19,7 +19,7 @@ const { playerFoldPlan } = require('../published-view');
 const { foldLabelsOf, labelFoldedLinks } = require('../story-fold');
 const { chapterShownMarkdown } = require('../story-spine');
 const { chapterStatusOf } = require('../shared-lists');
-const { ruleValue } = require('../excluding-values');
+const { ruleValue, WORKSPACE_DIRS } = require('../excluding-values');
 const { labelsForLinks } = require('../wikilink');
 const { isWrapUp } = require('../session-hub');
 const { parseNote } = require('../frontmatter');
@@ -46,7 +46,7 @@ const NEVER_SHOWN = ALWAYS_EXCLUDE_DIRS.map((d) => d.toLowerCase());
 const neverShown = (rel) => rel.split('/').slice(0, -1).some((s) => NEVER_SHOWN.includes(s.toLowerCase()));
 // The plugin's own working folders, at the top of the vault: reports, inbox, archive and drafts that routinely quote the
 // published site. Only these: a folder the GM lists in hide.folders (a "Secrets" folder) is collected like any other.
-const WORKING_DIRS = ['_qa', '_inbox', '_archive', '_midwife'];
+const WORKING_DIRS = [...WORKSPACE_DIRS, '_archive'].map((d) => d.toLowerCase());
 const inWorkingDir = (rel) => WORKING_DIRS.includes(rel.split('/')[0].toLowerCase());
 // The fields a page prints under the tool's own labels (occupation as "Role"), as "label value".
 function printedRows(page) {

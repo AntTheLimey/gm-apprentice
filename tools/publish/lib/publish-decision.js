@@ -39,7 +39,7 @@ const { chapterStatusOf } = require('./shared-lists');
 const { canonicalNfc } = require('./unicode');
 
 // The values that keep a note off a player site are listed once, in excluding-values.js.
-const { AUTO_EXCLUDE_STATUS, AUTO_EXCLUDE_STAGE, AUTO_EXCLUDE_SOURCE, PREP_TYPES, DRAFT, ruleValue } = require('./excluding-values');
+const { AUTO_EXCLUDE_STATUS, AUTO_EXCLUDE_STAGE, AUTO_EXCLUDE_SOURCE, PREP_TYPES, DRAFT, ruleValue, hiddenFolderReason } = require('./excluding-values');
 
 // Directories that never publish, whatever the config says. `_templates` is the
 // lowercase spelling some vaults use; `personal` holds the GM's own licensed
@@ -306,7 +306,7 @@ function decideGmPage(page, options) {
     const player = {
       bucket: 'exclude',
       code: 'DIR_CONFIG_EXCLUDED',
-      reason: `in ${folder}/ — listed in player_site.hide.folders`,
+      reason: hiddenFolderReason(folder, 'player_site.hide.folders'),
       outputPath,
     };
     if (!show.has('notes') && !playNotes) return withPlayer(player);

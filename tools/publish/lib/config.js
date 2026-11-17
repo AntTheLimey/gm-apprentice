@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { canonicalPath } = require('./manifest');
+const { withWorkspaceDirs } = require('./excluding-values');
 const { isBlankStep, menuKey, words: statusWords } = require('./settings/entry-faults');
 const { readSettings, forSite, formatFault, makeFault, stops, entry, REGISTRY, legacyNameOf, siteKeyOf, siteFolderKeys, nameIn, fileLabel } = require('./settings');
 
@@ -152,7 +153,8 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}, warn = console.wa
     exclude_callouts: p.hide.callouts,
     exclude_sections: p.hide.sections,
     exclude_fields: p.hide.fields,
-    exclude_dirs: p.hide.folders,
+    // The vault's hidden folders, and the plugin's own working folders whatever that list holds (#680).
+    exclude_dirs: withWorkspaceDirs(p.hide.folders),
     landing: setOnly(p.landing, 'player_site.landing', origins),
     theme: {
       ...theme,

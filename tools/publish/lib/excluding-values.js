@@ -6,7 +6,7 @@
 // holds one of these is read as that value and not as a joined text no rule matches.
 // A leaf module: both of those sit on different sides of the scanner. The session status words
 // and the stage words that hide a note are shared lists (shared-lists.js, read from the ontology).
-const { SESSION_NOT_YET_RUN, STAGE_HIDES } = require('./shared-lists');
+const { SESSION_NOT_YET_RUN, STAGE_HIDES, WORKSPACE_FOLDERS } = require('./shared-lists');
 
 // status: prep that has not been played.
 const AUTO_EXCLUDE_STATUS = SESSION_NOT_YET_RUN;
@@ -22,7 +22,24 @@ const DRAFT = 'DRAFT';
 // type: a note the build never writes a page for.
 const NO_PAGE_TYPES = new Set(['world_flags']);
 
+// The plugin's own working folders, at the top of a vault: the Midwife's drafts (the whole design, secrets and all), QA
+// reports and the ingest inbox. They are hidden folders on every site, whatever player_site.hide.folders holds (#680): a
+// list the vault owns replaces the built-in one, and these are no campaign notes for a GM to decide about one by one.
+// The list itself is shared with the vault scripts (the ontology's workspace_folders).
+const WORKSPACE_DIRS = WORKSPACE_FOLDERS;
+
 const lower = (value) => String(value == null ? '' : value).toLowerCase();
+
+const isWorkspaceDir = (folder) => WORKSPACE_DIRS.some((d) => lower(d) === lower(String(folder).split('/')[0]));
+// `folders` (a hide.folders list, already normalized) with each working folder it lacks added, the GM's own spelling kept.
+function withWorkspaceDirs(folders) {
+  const own = Array.isArray(folders) ? folders : [];
+  return [...own, ...WORKSPACE_DIRS.filter((d) => !own.some((o) => lower(o) === lower(d)))];
+}
+// Why a note in the hidden folder `folder` is off the site: `listed` names the setting, as the caller prints it.
+const hiddenFolderReason = (folder, listed) => (isWorkspaceDir(folder)
+  ? `in ${folder}/ — the plugin's own working notes, never published`
+  : `in ${folder}/ — listed in ${listed}`);
 
 // Per field, whether one value keeps a note off the site. Each is compared the way its rule
 // compares it: a status, a stage and a source in any capitals, a canon status as written.
@@ -55,5 +72,6 @@ function ruleValue(field, value) {
 
 module.exports = {
   AUTO_EXCLUDE_STATUS, AUTO_EXCLUDE_STAGE, AUTO_EXCLUDE_SOURCE, PREP_TYPES, DRAFT, NO_PAGE_TYPES,
+  WORKSPACE_DIRS, isWorkspaceDir, withWorkspaceDirs, hiddenFolderReason,
   excludingValue, ruleValue,
 };

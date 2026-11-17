@@ -8,6 +8,9 @@ All campaign content falls into three categories:
 
 - The folders in `player_site.hide.folders` (the vault's own `_meta` and
   template folders among them), and `personal/` directories
+- The plugin's own working folders, whatever that list holds:
+  `_midwife/` (adventure drafts), `_QA/` (reports) and `_inbox/`
+  (ingest staging). The publish list never asks about their files
 - All prep files: sessions/scenes with `status: planned | prepped`,
   or any note with the retired `stage: outline | draft | ready`
 - Files with `source: "prep"` that have no played counterpart
