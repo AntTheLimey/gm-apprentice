@@ -2,16 +2,15 @@
 
 The Midwife's Phase 4 procedure — adventure brief synthesis,
 entity and plan promotion, vault scaffold, Session 0 handoff —
-plus the Adventure Brief Template. Extracted from SKILL.md
+plus the adventure brief's sections. Extracted from SKILL.md
 (which keeps the phase trigger). File paths are relative to
 the skill root, as in SKILL.md.
 
 ### Step 1: Synthesize Adventure Brief
 
-Fields:
-`gma schema-rules show adventure-brief`.
-Assemble the adventure index and topic files into the brief
-using the template below. Apply the block/seam test: where a
+Assemble the adventure index and topic files into the brief's
+sections (Adventure Brief Sections, below). Apply the block/seam
+test: where a
 topic file already holds finished prose, lift it verbatim;
 author only the connective seams and fragment-derived text. Do
 not restyle writing that is already written.
@@ -22,13 +21,50 @@ A topic file's premise is written for the GM and usually holds the
 secret: it goes under GM Notes as written, and the public Premise is
 the pitch the players hear, written from it.
 
-- **Existing vault:** Write to
-  `Adventures/{adventure-name}/{adventure-name}.md`.
-  Use `[[wiki-links]]` for existing entities. Flag entity
-  updates the adventure implies.
-- **Greenfield:** Write to CWD. The adventure brief is
-  written to `Adventures/{adventure-name}/{adventure-name}.md`
-  relative to CWD — Step 3 builds the vault around it.
+Write it with one command: dry-run, show the GM the rows, then
+`--write`.
+
+```bash
+gma vault-write <vault> entity-new --type adventure-brief \
+  --name "<adventure-name>" <<'EOF'
+---
+title: "<title, when it says more than the name>"
+system: <id, or undecided>
+scope: <campaign | one-shot | few-shot>
+sessions_estimated: "<number or range>"
+campaign: "<name, in an existing vault>"
+continuation_type: <new | new-chapter | new-arc | time-jump | prequel | parallel | new-pcs>
+adventure_shape: <linear | branching | hub-and-spoke | open-node | sandbox>
+---
+
+## Premise
+
+<the pitch the players hear>
+
+### The Truth
+
+<what is really going on>
+
+## Open Questions
+
+<what the GM has still to decide>
+EOF
+```
+
+The frontmatter holds the fields to set; the body is the sections
+of the table, each once: `##` for a Public one and for Open
+Questions, `###` for a GM Notes one, `####` for a heading inside a
+section, and no `#` title. The command files the brief at
+`Adventures/<adventure-name>/<adventure-name>.md`, puts every `###`
+section under `## GM Notes` inside the gm-only fence and Open
+Questions in its spoiler block: write neither fence nor the
+`## GM Notes` heading. A GM Notes section written as `##` is
+refused, since it would publish.
+
+- **Existing vault:** `<vault>` is the vault. Use `[[wiki-links]]`
+  for existing entities. Flag entity updates the adventure implies.
+- **Greenfield:** `<vault>` is the CWD: Step 3 builds the vault
+  around the brief.
 
 ### Step 2: Entity & Plan Promotion
 
@@ -232,26 +268,7 @@ Do not auto-invoke session-prep. Offer it — the GM may want
 to sit with the concept, discuss with players, or revise the
 brief before committing to prep work.
 
-## Adventure Brief Template
-
-```yaml
----
-type: adventure-brief
-canon_status: DRAFT
-title: "[title]"
-system: "[system or undecided]"
-scope: "[campaign | one-shot | few-shot]"
-sessions_estimated: "[number or range]"
-campaign: "[name, if existing vault]"
-continuation_type: "[new | new-chapter | new-arc | time-jump | prequel | parallel | new-pcs]"
-adventure_shape: "[linear | branching | hub-and-spoke | open-node | sandbox]"
-tags: []
-aliases: []
-source_document: ""
----
-```
-
-### Required Sections
+## Adventure Brief Sections
 
 | Section | Content | Visibility |
 |---------|---------|------------|
@@ -282,15 +299,14 @@ source_document: ""
   ends) goes under GM Notes, The Truth first; one such sentence
   inside a public section goes in a `<!-- gm-only -->` block on its
   own lines. An adventure with no secret has no The Truth section.
-- **GM Notes** — write as a `###` subsection under one `## GM Notes`
-  heading in the brief, not its own top-level section (see
-  `shared/pc-body-structure.md`).
+- **GM Notes** — a `###` section. The command puts it under the
+  brief's one `## GM Notes`, inside the fence, wherever it is written.
 - **Spoiler** — Open Questions get resolved into canon as play
   reaches them (wrap-up's "What came out tonight", step 5c;
-  `shared/reconcile.md` 3.5 is the fallback); wrap the whole section in
-  `<!-- spoiler -->` / `<!-- /spoiler -->` rather than `## GM Notes`,
-  since it's meant to eventually publish once resolved, not stay
-  permanently hidden.
+  `shared/reconcile.md` 3.5 is the fallback); a `##` section the
+  command keeps in a `<!-- spoiler -->` block rather than under
+  `## GM Notes`, since it's meant to eventually publish once resolved,
+  not stay permanently hidden.
 
 **CATS Pitch and Session 0 Agenda are meant to be shared with
 players** — don't hide the whole section. If a specific line reveals

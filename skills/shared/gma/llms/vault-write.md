@@ -494,11 +494,14 @@ to a note that does not exist yet takes `target_type: <type>`
 (not written) unless a later block of the same batch makes
 that note. Every other relationship rule: gma vault-check
 <vault> relationships --file <note>.
+--type adventure-brief files the brief at
+Adventures/NAME/NAME.md, named by `title`, with ## Open
+Questions kept in the template's spoiler block.
 ```
 
 | Argument | Value | Help |
 |---|---|---|
-| `--type` | `TYPE` | the note's type: clue, creature, document, event, faction, heritage, item, location, npc, organization |
+| `--type` | `TYPE` | the note's type: adventure-brief, clue, creature, document, event, faction, heritage, item, location, npc, organization |
 | `--name` | `NAME` | the note's name: its file name |
 | `--folder` | `FOLDER` | a sub-folder of the type's folder |
 | `--date` | `DATE` | lastUpdated value, YYYY-MM-DD |

@@ -14,7 +14,7 @@ being open.
 | Backlinks, orphans, ambiguous links, dead ends | `gma graph-check` |
 | Rename or move a note, rewriting every link to it (dry run first; `--apply` to do it) | `gma relink VAULT OLD NEW` |
 | Merge an NPC note into its PC note, one note per character (dry run first; `--write` to do it) | `gma vault-write VAULT npc-merge NPC PC` |
-| Create an NPC, place, group, creature, item, event, document, clue or heritage note from its template: you send the fields, the ties and the sections; it writes `## Related` and `### Hidden Ties` from the ties (dry run first; `--write`; several as blocks of one `batch`) | `gma vault-write VAULT entity-new --type T --name N` |
+| Create an NPC, place, group, creature, item, event, document, clue, heritage or adventure brief note from its template: you send the fields, the ties and the sections; it writes `## Related` and `### Hidden Ties` from the ties (dry run first; `--write`; several as blocks of one `batch`) | `gma vault-write VAULT entity-new --type T --name N` |
 | Broken links by kind, with the note each may mean; point a misspelt link at the right note, or turn a link into plain words, vault-wide or only on named pages (dry run first; `--write`) | `gma links VAULT`, `gma links VAULT retarget NAME NOTE`, `gma links VAULT unlink NAME... [--in NOTE] [--bare]` |
 | Place text you wrote: start a Wrap-Up, add its sections, story entries, log lines, timeline lines (dry run first; `--write`) | `gma vault-write` |
 | Entity schema validation, name similarity, index drift, stale drafts, changed-since listing | `gma vault-check` |

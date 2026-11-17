@@ -33,6 +33,11 @@ In a batch (`vault-write batch`) a block is `=== entity-new --type npc
 --name "Abbot Severin"` and its body is the stdin above; a tie may point
 at a note a later block makes.
 
+An adventure brief (`--type adventure-brief`, #681) is filed in a folder
+of its own, `Adventures/NAME/NAME.md`, and is named by `title` (stdin may
+give a longer one). A `##` its template keeps in a spoiler block (Open
+Questions) is written in one.
+
 Rows: WOULD-CREATE / CREATED and WARNING. Exit and --write as every
 vault-write command.
 """
@@ -68,12 +73,16 @@ PLAIN_WORD_RE = re.compile(r"[A-Za-z_][\w-]*")
 def entity_types() -> dict[str, str]:
     """type -> its vault folder, for every type this command makes: one
     with a folder of its own and a shared template, never a PC (a PC's
-    sheet is its system's own)."""
+    sheet is its system's own). A type in OWN_FOLDER_TYPES (the adventure
+    brief) has a folder for each note, under the one given here."""
     out = {}
     for row in vl.ontology()["vault_folders"]:
         for etype in row["types"]:
             if etype != "pc" and f"{etype}.md" in schema_rules.TEMPLATE_NAMES:
                 out[etype] = row["folder"]
+    for etype, folder in schema_rules.OWN_FOLDER_TYPES.items():
+        if f"{etype}.md" in schema_rules.TEMPLATE_NAMES:
+            out[etype] = folder
     return out
 
 
@@ -372,6 +381,7 @@ class Shape:
     renamed."""
     public_h2: list[str]
     gm_h2: list[str]            # a `##` the template keeps inside its fence
+    spoiler_h2: list[str]       # a `##` the template keeps in a spoiler block
     gm_h3: list[str]
     public_h3: set[str]         # a `###` the template has in a players' section
     titles: dict[str, str]
@@ -379,23 +389,28 @@ class Shape:
 
 
 def template_shape(template: str) -> Shape:
-    shape = Shape([], [], [], set(), {}, any(
+    shape = Shape([], [], [], [], set(), {}, any(
         not m.group(1) for m in vl.GM_MARKER_RE.finditer(template)))
     parent_gm = False
-    for h in vw.parse(template).heads:
-        k = hkey(h.title)
-        if h.level == 2:
-            parent_gm = h.gm or k == vw.GM_NOTES
+    for state in vw.parse(template).states:
+        if state.heading is None:
+            continue
+        level, title = state.heading
+        gm = state.gm_depth > 0
+        k = hkey(title)
+        if level == 2:
+            parent_gm = gm or k == vw.GM_NOTES
             if k != vw.GM_NOTES:
-                (shape.gm_h2 if h.gm else shape.public_h2).append(k)
-        elif h.level == 3:
-            if parent_gm or h.gm:
+                (shape.gm_h2 if gm else shape.spoiler_h2
+                 if state.spoiler_depth > 0 else shape.public_h2).append(k)
+        elif level == 3:
+            if parent_gm or gm:
                 shape.gm_h3.append(k)
             else:
                 shape.public_h3.add(k)
         else:
             continue
-        shape.titles.setdefault(k, vl.atx_title(h.title))
+        shape.titles.setdefault(k, vl.atx_title(title))
     # A name that is the GM's anywhere in the template is never the
     # players' on stdin.
     shape.public_h3 -= set(shape.gm_h3)
@@ -468,6 +483,7 @@ def build_body(template: str, body: str, ties: list[dict[str, Any]],
     public: list[tuple[str, bool, list[str]]] = []
     hidden: list[tuple[str, bool, list[str]]] = []
     hidden_h2: list[tuple[str, bool, list[str]]] = []
+    spoiled: list[tuple[str, bool, list[str]]] = []
     lead: list[str] = []
     seen: set[tuple[int, str]] = set()
     for level, title, lines in body_units(body, shape.public_h3):
@@ -489,6 +505,8 @@ def build_body(template: str, body: str, ties: list[dict[str, Any]],
             lead = lines[1:]
         elif k in shape.gm_h2:
             hidden_h2.append((k, True, lines))
+        elif k in shape.spoiler_h2:
+            spoiled.append((k, True, lines))
         elif k in gm_order:
             raise vw.WriteError(f"{head} is a GM Notes section of this "
                                 f"template: write it as '### {title}', or "
@@ -522,6 +540,10 @@ def build_body(template: str, body: str, ties: list[dict[str, Any]],
     gm += ordered(hidden_h2, shape.gm_h2)
     if shape.fenced:
         gm = [["<!-- gm-only -->"], *gm, ["<!-- /gm-only -->"]]
+    # Each in a spoiler block of its own, as the template has it: hidden
+    # until the GM lifts the block, not for good as GM Notes is.
+    for lines in ordered(spoiled, shape.spoiler_h2):
+        gm += [["<!-- spoiler -->"], lines, ["<!-- /spoiler -->"]]
     return "\n" + "\n\n".join("\n".join(b) for b in blocks + gm) + "\n"
 
 
@@ -532,7 +554,13 @@ def run(batch: vw.Batch, args: argparse.Namespace, text: str) -> None:
         raise vw.WriteError(f"--type {args.type!r}: one of "
                             f"{', '.join(sorted(kinds))}")
     name = vw.clean_name(args.name, "--name")
-    folder = kinds[etype] + vw.chapter_subfolder(args.folder)
+    if etype in schema_rules.OWN_FOLDER_TYPES:
+        if args.folder:
+            raise vw.WriteError(f"--folder: each {etype} note has a folder "
+                                f"of its own, here {kinds[etype]}/{name}")
+        folder = f"{kinds[etype]}/{name}"
+    else:
+        folder = kinds[etype] + vw.chapter_subfolder(args.folder)
     rel = f"{folder}/{name}.md"
     types = Types(batch)
     clash = sorted(set(vw.live_stem_clash(batch, name)) | set(
@@ -563,7 +591,15 @@ def run(batch: vw.Batch, args: argparse.Namespace, text: str) -> None:
         batch.vault, (schema_rules.TEMPLATE_NAMES[f"{etype}.md"],),
         f"{etype}.md")
     fm = vw.template_frontmatter(template)
-    vw.set_block(fm, "name", vl.yaml_scalar(name))
+
+    def has(field: str) -> bool:
+        return any(line.startswith(f"{field}:") for line in fm)
+
+    # A template with no `name` (the adventure brief) is named by `title`,
+    # which stdin may set to something longer than the file's name.
+    vw.set_block(fm, "title" if has("title") and not has("name") else "name",
+                 vl.yaml_scalar(name))
+    takes_date = has("lastUpdated")
     for key, block in blocks.items():
         if key in ("type", "name", "relationships"):
             continue
@@ -586,7 +622,7 @@ def run(batch: vw.Batch, args: argparse.Namespace, text: str) -> None:
     # template's value, and is published like one that was sent.
     set_now = vl.extract_frontmatter("---\n" + "\n".join(fm) + "\n---\n") or {}
     for field, kind in self_pairs():
-        if not any(line.startswith(f"{field}:") for line in fm):
+        if not has(field):
             continue
         want = link_of(set_now.get(field))
         same = [t for t in ties if t["type"] == kind]
@@ -614,7 +650,8 @@ def run(batch: vw.Batch, args: argparse.Namespace, text: str) -> None:
             # Only from a tie the players may see: the field is published.
             vw.set_block(fm, field, vl.yaml_scalar(f"[[{shown[0]}]]"))
             notes.append(f"{kind} [[{shown[0]}]]: {field} set")
-    vw.set_block(fm, "relationships", *tie_lines(ties))
+    if ties or has("relationships"):
+        vw.set_block(fm, "relationships", *tie_lines(ties))
 
     new = "---\n" + "\n".join(fm) + "\n---\n" + build_body(
         template, body, ties, lambda said: batch.row("WARNING", rel, "", said))
@@ -626,7 +663,7 @@ def run(batch: vw.Batch, args: argparse.Namespace, text: str) -> None:
               f"{'tie' if len(ties) == 1 else 'ties'}"
               + (f" ({hidden} under Hidden Ties)" if hidden else "")
               + "".join(f"; {note}" for note in notes)
-              + ("" if args.date or "lastUpdated" in blocks
+              + ("" if args.date or "lastUpdated" in blocks or not takes_date
                  else "; no --date: lastUpdated left empty"))
 
 
@@ -674,7 +711,10 @@ def add_parser(sub: Any) -> None:
             "to a note that does not exist yet takes `target_type: <type>`\n"
             "(not written) unless a later block of the same batch makes\n"
             "that note. Every other relationship rule: gma vault-check\n"
-            "<vault> relationships --file <note>."))
+            "<vault> relationships --file <note>.\n"
+            "--type adventure-brief files the brief at\n"
+            "Adventures/NAME/NAME.md, named by `title`, with ## Open\n"
+            "Questions kept in the template's spoiler block."))
     ap.add_argument("--type", required=True,
                     help="the note's type: " + ", ".join(sorted(entity_types())))
     ap.add_argument("--name", required=True, help="the note's name: its file name")
