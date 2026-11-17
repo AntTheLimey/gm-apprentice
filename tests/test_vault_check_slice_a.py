@@ -468,20 +468,54 @@ class VersionCommandTests(unittest.TestCase):
 
 class VersionPicturesLineTests(unittest.TestCase):
     """With `vault.images.auto` on, the gate every drawing skill runs carries
-    one `# pictures on:` line; off, its output is what it always was."""
+    one `# pictures on:` line; off with a picture source chosen, one
+    `# pictures off:` line (#712); off with none, its output is what it
+    always was."""
 
-    def vault(self, version=None, auto=None):
+    def vault(self, version=None, auto=None, source=None, service=None):
         version = version or plugin_version_string()
         vault = make_vault(
             self, f'---\ngm_apprentice_version: "{version}"\n---\n', site=False)
+        images = []
         if auto is not None:
+            images.append(f"    auto: {'true' if auto else 'false'}\n")
+        if source is not None:
+            images.append(f"    source: {source}\n")
+        if service is not None:
+            images.append(f"    service: {service}\n")
+        if images:
             config = vault / "_meta" / "vault-config.yaml"
             config.write_text(
                 config.read_text(encoding="utf-8")
-                + f"vault:\n  images:\n    auto: {'true' if auto else 'false'}\n",
+                + "vault:\n  images:\n" + "".join(images),
                 encoding="utf-8")
             vc.vaultlib.forget_settings(vault)
         return vault
+
+    def test_off_with_a_source_set_says_so(self):
+        # #712: a wrap-up skipped its pictures without a word.
+        for auto in (False, None):
+            with self.subTest(auto=auto):
+                proc = run_cli(self.vault(auto=auto, source="codex"), "version")
+                lines = proc.stdout.splitlines()
+                self.assertTrue(lines[2].startswith("OK\t"), lines)
+                self.assertEqual(lines[3:], [vc.PICTURES_OFF])
+                self.assertEqual(proc.returncode, 0)
+
+    def test_off_with_only_a_service_set_says_so(self):
+        # A service set counts as choosing `service` (the settings registry).
+        proc = run_cli(self.vault(auto=False, service="gemini"), "version")
+        self.assertEqual(proc.stdout.splitlines()[3:], [vc.PICTURES_OFF])
+
+    def test_off_and_behind_still_prints_it(self):
+        proc = run_cli(self.vault(version="1.11.1", auto=False,
+                                  source="codex"), "version")
+        self.assertIn("MISMATCH\t", proc.stdout)
+        self.assertIn(vc.PICTURES_OFF, proc.stdout.splitlines())
+
+    def test_on_with_a_source_set_is_still_on(self):
+        proc = run_cli(self.vault(auto=True, source="codex"), "version")
+        self.assertEqual(proc.stdout.splitlines()[3:], [vc.PICTURES_ON])
 
     def test_on_prints_the_line_after_the_verdict(self):
         proc = run_cli(self.vault(auto=True), "version")

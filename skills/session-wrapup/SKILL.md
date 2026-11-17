@@ -473,3 +473,5 @@ else.
 ### 7. Pictures
 
 Only if the version check printed `# pictures on:`, then once everything above is done and reported, follow "When no one asked" in `gma llms image` for the notes this session created and the session's big moments.
+
+If it printed `# pictures off:` instead, end the report with one line, not a question: this session has no scene pictures because drawing without asking is off; say "draw them" for this session's pictures, or ask to turn drawing without asking on for every session. Draw nothing unless the GM then asks; on "draw them", follow `gma llms image` as an asked-for run (no `--unprompted`) for the same pictures as above: the session's big moments and the notes it created that have none.

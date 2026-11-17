@@ -1,6 +1,6 @@
 # gma image
 
-Use it when the GM asks for a picture for a note: a portrait (PC, NPC, creature, heritage, document), a location, faction, organization or item, or a scene picture in a Wrap-Up's Narrative Recap. Use it unasked only as "When no one asked" below says, and for a fill as "A fill" says. `status` shows the source, whether Codex can draw, the service, model, key, this month's spending, the Image Guidance note's path and any job still `waiting`.
+Use it when the GM asks for a picture for a note: a portrait (PC, NPC, creature, heritage, document), a location, faction, organization or item, or a scene picture in a Wrap-Up's Narrative Recap. Event notes are not a kind it draws: a session's events get their picture as a scene picture in the recap, so never promise an Event its own. Use it unasked only as "When no one asked" below says, and for a fill as "A fill" says. `status` shows the source, whether Codex can draw, the service, model, key, this month's spending, the Image Guidance note's path and any job still `waiting`.
 
 Who draws is the GM's choice, never yours: `vault.images.source` is `codex` (an installed Codex on a ChatGPT plan, no money), `self` (your own image tool, no money; see "Drawing them yourself" below) or `service` (the set service and model, paid). If `plan` says to choose, put the three choices to the GM (`status` says whether Codex can draw) and set the one they name. Pass `--source` only when the GM names a source for this batch. `plan`'s first line after the job number says what draws.
 

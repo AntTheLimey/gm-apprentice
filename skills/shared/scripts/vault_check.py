@@ -1200,19 +1200,32 @@ PICTURES_ON = (
     "whose steps say so draws last (`gma llms image`, \"When no one asked\").")
 
 
+PICTURES_OFF = (
+    "# pictures off: drawing without asking is off, but this vault has a "
+    "picture source set; a wrap-up offers its scene pictures in one line "
+    "and draws nothing.")
+
+
 def pictures_line(vault: Path, verdict: str) -> str | None:
     """`PICTURES_ON` when `vault.images.auto` is on, so the skills learn it
-    from the gate they already run and a vault with drawing off pays
-    nothing. Only after a verdict whose check read the vault's settings
-    (`unmoved` reads them; a MISMATCH vault is updated, then the skill
-    resumes), and only from what that read found: settings that could not
-    be read, or no Node, drop the line without asking the tool again."""
+    from the gate they already run. `PICTURES_OFF` when it is off but the
+    GM has chosen who draws (a source, or a service, which counts as
+    choosing one), so a skipped wrap-up is not silent; a vault with no
+    pictures set up pays nothing. Only after a verdict whose check read the
+    vault's settings (`unmoved` reads them; a MISMATCH vault is updated,
+    then the skill resumes), and only from what that read found: settings
+    that could not be read, or no Node, drop the line without asking the
+    tool again."""
     if verdict not in ("OK", "MISMATCH", "AHEAD"):
         return None
     found = vaultlib.settings_already_read(vault)
     if found is None:
         return None
-    return PICTURES_ON if found.get("vault.images.auto") is True else None
+    if found.get("vault.images.auto") is True:
+        return PICTURES_ON
+    if found.get("vault.images.source") or found.get("vault.images.service"):
+        return PICTURES_OFF
+    return None
 
 
 def list_active_pcs(vault: Path) -> list[str]:
