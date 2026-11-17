@@ -9,6 +9,22 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.34] — 2026-11-16
+
+Publish tool 1.70.17.
+
+### Fixed
+
+- A new adventure's twist no longer reaches the player site through its brief: the Midwife writes the brief's public sections, and the Campaign Overview's Premise and Key Factions, as what the players are told at the start, and puts what they are to find out under GM Notes (The Truth, Adventure Shape, Escalation) (#678).
+- The Midwife's workspace (`_midwife/`), QA reports (`_QA/`) and the ingest inbox (`_inbox/`) are never published, on the player site or the GM site, and neither the publish list nor a build asks about their files, whatever your own list of hidden folders holds (#680).
+- A plan promoted from a Midwife draft links to your vault's own Campaign Overview; the plan template no longer names `[[Campaign_Overview_Updated]]`, a note a new vault never has (#677).
+- The site set-up creates the Cloudflare Pages project with `--force`: without it the current wrangler hands the create to Workers and fails, so the first deploy found no project (#679).
+- The Midwife's scaffold reads entity sketches from the folders the skill files them in (`npcs/`, `locations/`, `factions/` and the like), and says which `status` words a `_World` note takes.
+
+### Changed
+
+- `gma vault-write promote-plan` fills a plan's participants and locations from `--participant` and `--location` (a note's name, alias or vault path) and from the notes the plan links to, stamps `lastUpdated` with `--date`, and promotes one heading of a draft that holds several plans with `--section`.
+
 ## [1.12.33] — 2026-11-13
 
 ### Fixed
