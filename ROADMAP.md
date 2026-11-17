@@ -116,6 +116,7 @@ decision rather than pure score.
 
 ## Completed
 
+- ~~An export moment splits into two Story cards~~ — an untagged beat, its context and its quote are one card; a tag ends a moment (#705, v1.12.49)
 - ~~Leak check: a Wrap-Up's World State date trips every deploy~~ — a paired session's printed in-game date counts as visible (#704, v1.12.48)
 - ~~A played session Excluded as prep is skipped in silence~~ — publish-played lists it as unclear with the way out (#703, v1.12.47)
 - ~~`gma update .` prints a blank vault name~~ — the resolved folder's name (#709, v1.12.46)

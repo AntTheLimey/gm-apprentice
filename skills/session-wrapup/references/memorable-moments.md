@@ -18,9 +18,11 @@ recap): never from GM Notes, gm-only text or a secret.
   none is a fine answer. Each is one bold beat line, or a
   block-quoted line of table dialogue with a speaker line, then one
   italic context line. Faithful to the notes: invent nothing.
-- Tag every moment: end its last line, the italic one, with
-  ` #moment/<kind>`, one of status's `kinds`, picked from what the
-  moment says:
+- Tag every moment once, on its last line: the italic one, or the
+  speaker line when the moment ends with its quote (an export's bold
+  beat, context and quote are one moment; a tag ends a moment, so
+  never tag the beat as well). End it with ` #moment/<kind>`, one of
+  status's `kinds`, picked from what the moment says:
 
   ```markdown
   **Mal lit a match and watched the flame lean toward the wall.**

@@ -96,7 +96,7 @@ class StatusTests(unittest.TestCase):
         self.assertEqual(code, 0, out)
         self.assertEqual(out.splitlines(), [
             "# 1 wrap-up without moments, 1 with untagged ones",
-            f"{S1}\t3 moments\t3 untagged",
+            f"{S1}\t2 moments\t2 untagged",
             f"{S2}\tno moments"])
 
 
@@ -112,25 +112,26 @@ class ShowAndTagTests(unittest.TestCase):
         code, out = run(self.vault, "show", S1)
         self.assertEqual(code, 0, out)
         self.assertEqual(out.splitlines(), [
-            f"# {S1} §Memorable Moments: 3 moments, 3 untagged",
-            "1\t-\t**Six crawled through the sewer.** / *Nobody planned it.*",
-            "2\t-\t> \"Mission incomplete.\" / > — Six",
-            "3\t-\t**Mara laughed.** #moment/sad"])
+            # The beat, its context and the quote said in it are one moment (#705).
+            f"# {S1} §Memorable Moments: 2 moments, 2 untagged",
+            "1\t-\t**Six crawled through the sewer.** / *Nobody planned it.* / > \"Mission incomplete.\" / > — Six",
+            "2\t-\t**Mara laughed.** #moment/sad"])
         _c, out = run(self.vault, "show", S2)
         self.assertEqual(out.strip(), f"# {S2}: no Memorable Moments section")
 
     def test_tag_dry_run_writes_nothing_then_write_puts_each_tag_at_the_end(self):
         before = self.text()
-        rows = "1\tfunny\n2\tDramatic\n3\tfunny\n"
+        rows = "1\tDramatic\n2\tfunny\n"
         code, out = run(self.vault, "tag", S1, stdin=rows)
         self.assertEqual(code, 0, out)
         self.assertEqual(self.text(), before)
         self.assertIn("WOULD-ADD", out)
         code, out = run(self.vault, "tag", S1, "--write", stdin=rows)
         self.assertEqual(code, 0, out)
-        self.assertIn("# create: 0  add: 3", out)
+        self.assertIn("# create: 0  add: 2", out)
         after = self.text()
-        self.assertIn("*Nobody planned it.* #moment/funny\n", after)
+        # A moment ending with its quote is tagged after the speaker line, once.
+        self.assertIn("*Nobody planned it.*\n", after)
         self.assertIn("> — Six #moment/dramatic\n", after)
         # The word that is no kind is replaced, not left beside the tag.
         self.assertIn("**Mara laughed.** #moment/funny\n", after)
@@ -138,8 +139,8 @@ class ShowAndTagTests(unittest.TestCase):
         self.assertEqual(after.replace(" #moment/funny", "").replace(
             " #moment/dramatic", ""), before.replace(" #moment/sad", ""))
         _c, out = run(self.vault, "show", S1)
-        self.assertIn("3 moments, 0 untagged", out)
-        _c, out = run(self.vault, "tag", S1, "--write", stdin="1\tfunny\n")
+        self.assertIn("2 moments, 0 untagged", out)
+        _c, out = run(self.vault, "tag", S1, "--write", stdin="1\tdramatic\n")
         self.assertIn("SKIP", out)
 
     def test_crlf_note_keeps_its_line_ends(self):
@@ -147,7 +148,7 @@ class ShowAndTagTests(unittest.TestCase):
         code, out = run(crlf, "tag", S1, "--write", stdin="1\tepic\n")
         self.assertEqual(code, 0, out)
         text = (crlf / S1).read_bytes().decode("utf-8")
-        self.assertIn("*Nobody planned it.* #moment/epic\r\n", text)
+        self.assertIn("> — Six #moment/epic\r\n", text)
         self.assertNotIn("\n", text.replace("\r\n", ""))
 
     def test_refusals_write_nothing(self):
@@ -169,15 +170,14 @@ class ShowAndTagTests(unittest.TestCase):
         code, out = run(self.vault, "check", S1)
         self.assertEqual(code, 1, out)
         self.assertEqual(out.splitlines(), [
-            "UNTAGGED\t1\t**Six crawled through the sewer.** / *Nobody planned it.*",
-            "UNTAGGED\t2\t> \"Mission incomplete.\" / > \u2014 Six",
-            "UNTAGGED\t3\t**Mara laughed.** #moment/sad",
+            "UNTAGGED\t1\t**Six crawled through the sewer.** / *Nobody planned it.* / > \"Mission incomplete.\" / > \u2014 Six",
+            "UNTAGGED\t2\t**Mara laughed.** #moment/sad",
             "UNKNOWN\t#moment/sad\tnot a kind (dramatic, intriguing, funny, epic, tragic)",
-            "# 3 moments: 3 untagged, 1 unknown kind"])
-        run(self.vault, "tag", S1, "--write", stdin="1\tfunny\n3\tepic\n")
+            "# 2 moments: 2 untagged, 1 unknown kind"])
+        run(self.vault, "tag", S1, "--write", stdin="2\tepic\n")
         code, out = run(self.vault, "check", S1)
         self.assertEqual(code, 0, out)
-        self.assertEqual(out.splitlines()[-1], "# 3 moments: 1 untagged, 0 unknown kinds")
+        self.assertEqual(out.splitlines()[-1], "# 2 moments: 1 untagged, 0 unknown kinds")
         code, out = run(self.vault, "check", S3)
         self.assertEqual((code, out.strip()), (0, "# 1 moment: 0 untagged, 0 unknown kinds"))
         code, out = run(self.vault, "check", S2)

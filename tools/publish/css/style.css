@@ -1125,7 +1125,7 @@ p.moment-kind[data-kind="tragic"] { color: var(--moment-tragic); }
   border: 0;
   background: none;
 }
-.moment-main p + p { margin-top: .6em; }
+.moment-main p + p, .moment-main p + blockquote { margin-top: .6em; }
 .moment-main p::before, .moment-main p::after, .moment-main blockquote::before, .moment-main blockquote::after { content: none; }
 .moment-speaker {
   font-family: var(--font-label, var(--font-body));

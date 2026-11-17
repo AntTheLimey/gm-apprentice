@@ -20,6 +20,45 @@ describe('parseMoments', () => {
     assert.deepEqual(cards, [{ shape: 'narration', main: '**Mara walked off the pier.**', context: '*Nobody moved to help her.*', kind: 'funny', speaker: null }]);
   });
 
+  it('an export moment: the beat, its context and the quote said in it are one card (#705)', () => {
+    const md = '**Gilt clutches Brannoc\'s arm while the mule slides toward the drop.**\n\n*The merchant\'s only concern was his chest.*\n\n'
+      + '> "Mind the chest! The mule can look after itself!"\n> — Master Orrin Gilt #moment/funny\n\n'
+      + '**Ilyra holds her rubbing against the shrine.**\n\n> "It matches."\n> — Ilyra';
+    const { cards } = parseMoments(md);
+    assert.equal(cards.length, 2);
+    assert.deepEqual({ ...cards[0] }, {
+      shape: 'narration', main: '**Gilt clutches Brannoc\'s arm while the mule slides toward the drop.**',
+      context: '*The merchant\'s only concern was his chest.*', quote: '"Mind the chest! The mule can look after itself!"',
+      speaker: 'Master Orrin Gilt', speakerDash: '— ', kind: 'funny',
+    });
+    assert.equal(cards[1].quote, '"It matches."');
+    assert.equal(cards[0].lines.last, 5, 'a tag added to the card goes after its quote');
+    const out = html(md);
+    assert.match(out, /<div class="moment-main"><p><strong>Gilt clutches[^]*?<\/p>\n<blockquote>\n<p>“Mind the chest/);
+    assert.match(out, /<p class="moment-speaker">— Master Orrin Gilt<\/p><hr class="moment-rule"><p class="moment-context">/);
+    assert.equal((out.match(/<article class="moment-card">/g) || []).length, 2);
+  });
+
+  it('a tag ends a moment: a quote after a tagged beat is its own card', () => {
+    const { cards } = parseMoments('**The beat.** #moment/epic\n\n> "The line."\n> — X');
+    assert.deepEqual(cards.map((c) => c.shape), ['narration', 'speech']);
+    const ctx = parseMoments('**The beat.**\n\n*Its context.* #moment/epic\n\n> "The line."\n> — X');
+    assert.deepEqual(ctx.cards.map((c) => c.shape), ['narration', 'speech']);
+    const lone = parseMoments('**The beat.**\n\n#moment/epic\n\n> "The line."\n> — X');
+    assert.deepEqual(lone.cards.map((c) => c.shape), ['narration', 'speech']);
+  });
+
+  it('a quote with its own context line is its own moment (beat, context, quote, context)', () => {
+    const { cards } = parseMoments('**Brittany shimmers into eight copies.**\n\n*The room was unsettled.*\n\n'
+      + '> "I see eight of you."\n> — Sammy\n\n*Sammy\'s deadpan reply.*');
+    assert.deepEqual(cards.map((c) => [c.shape, c.context]), [['narration', '*The room was unsettled.*'], ['speech', '*Sammy\'s deadpan reply.*']]);
+  });
+
+  it('a rule between a beat and a quote keeps them apart', () => {
+    const { cards } = parseMoments('**The beat.**\n\n---\n\n> "The line."\n> — X');
+    assert.deepEqual(cards.map((c) => c.shape), ['narration', 'speech']);
+  });
+
   it('a quote keeps its marks exactly; the speaker comes from the dash line', () => {
     const { cards } = parseMoments('> "Nobody planned this."\n> — GM\n\n*Commentary.*');
     assert.equal(cards.length, 1);
@@ -169,6 +208,25 @@ describe('parseMoments', () => {
     assert.deepEqual(cards.map((c) => [c.main, c.kind]), [['**B.**', 'funny'], [`${open}\nhidden\n\uE002`, null]]);
   });
 
+  it('a GM-only span between a beat and its quote: the beat takes the quote, as on the player site (#705)', () => {
+    const open = '\uE000a1\uE001';
+    const { cards } = parseMoments(`**B.**\n\n${open}\nhidden\n\uE002\n\n> "Q."\n> — X`);
+    assert.deepEqual(cards.map((c) => [c.main, c.quote || null]), [['**B.**', '"Q."'], [`${open}\nhidden\n\uE002`, null]]);
+    assert.deepEqual(parseMoments('**B.**\n\n> "Q."\n> — X').cards.map((c) => [c.main, c.quote]), [['**B.**', '"Q."']]);
+  });
+
+  it('the beat and its context in one paragraph take the quote after them (#705)', () => {
+    const { cards } = parseMoments('**Beat.**\n*Context.*\n\n> "Q."\n> — X #moment/epic');
+    assert.deepEqual(cards.map((c) => [c.main, c.context, c.quote, c.speaker, c.kind]), [['**Beat.**', '*Context.*', '"Q."', 'X', 'epic']]);
+  });
+
+  it('a quote with no speaker joins its beat with none; a lone tag after it names the card (#705)', () => {
+    const { cards } = parseMoments('**Beat.**\n\n> "Q."\n\n#moment/funny');
+    assert.equal(cards.length, 1);
+    assert.deepEqual([cards[0].quote, cards[0].speaker, cards[0].kind], ['"Q."', null, 'funny']);
+    assert.doesNotMatch(html('**Beat.**\n\n> "Q."'), /moment-speaker/);
+  });
+
   it('empty text has no cards', () => {
     assert.deepEqual(parseMoments('').cards, []);
     assert.equal(html(''), '');
@@ -184,9 +242,10 @@ describe('parseMoments', () => {
 describe('parseMoments: where each card stands (`lines`, for the wrap-up tagger)', () => {
   const at = (md) => parseMoments(md).cards.map((c) => c.lines && [c.lines.first, c.lines.last]);
 
-  it('a card spans its own lines; a context line after it extends it; the field is not enumerable', () => {
+  it('a card spans its own lines; a context line or the quote said in it extends it; the field is not enumerable', () => {
+    // The first moment is an export's (#705): the beat, its context and its quote, one card.
     const md = '**Beat one.**\n\n*Its context.*\n\n> "Said."\n> \u2014 Mara\n\n**Mara walked off.**\n*Nobody helped.*\n\n- a list\n';
-    assert.deepEqual(at(md), [[0, 2], [4, 5], [7, 8], [10, 10]]);
+    assert.deepEqual(at(md), [[0, 5], [7, 8], [10, 10]]);
     assert.deepEqual(Object.keys(parseMoments(md).cards[0]).includes('lines'), false);
   });
 

@@ -55,7 +55,7 @@ OFFERED_KEY = "moments_backfill_offered"
 END_TAG_RE = re.compile(r"\s#moment/[\w-]+([*_]*)\s*$")
 ROW_RE = re.compile(r"^\s*(\d+)\t\s*([^\t]+?)\s*$")
 # What a card shows; a tag may change only its kind.
-SHOWN = ("shape", "main", "speaker", "context")
+SHOWN = ("shape", "main", "quote", "speaker", "context")
 HIDDEN = "Memorable Moments hidden from players (gm-only); nothing to do"
 
 

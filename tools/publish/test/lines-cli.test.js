@@ -325,6 +325,12 @@ describe('lines: dates (vault_check timeline --order asks it, so the two never r
 
 describe('lines: moments (moments.py asks it, so the wrap-up tagger reads cards as the Story page does)', () => {
   const { KINDS } = require('../lib/story-moments');
+  it('a merged card carries its quote; any other card has no quote field (#705)', () => {
+    const got = answer({ op: 'moments', text: '## Memorable Moments\n\n**Beat.**\n\n> "Q."\n> — X\n\n**Alone.** #moment/epic\n' });
+    assert.strictEqual(got.section.cards[0].quote, '"Q."');
+    assert.strictEqual(got.section.cards[0].last, 5);
+    assert.strictEqual('quote' in got.section.cards[1], false);
+  });
   const WRAP = '# S1\n\n## Narrative Recap\n\nThey went.\n\n## Memorable Moments\n\n**Beat.**\n\n*Context.* #moment/funny\n\n> "Hi."\n> — Mara\n\n<!-- gm-only -->\n\n## GM Notes\n\n**Hidden.**\n\n<!-- /gm-only -->\n';
   const card = (over) => ({ kind: null, shape: 'narration', main: '', speaker: null, context: null, first: 0, last: 0, taggable: true, tags: [], ...over });
 
