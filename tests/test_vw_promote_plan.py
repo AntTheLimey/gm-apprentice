@@ -2,7 +2,9 @@
 """vault_write.py promote-plan: a Midwife draft filed as a vault plan (#464).
 
 The plan's text is never changed: only the frontmatter is written. Who is in
-the plan (participants, locations) is left for the caller to fill."""
+the plan (participants, locations) is what the caller names and what the body
+links to, never a name matched in its prose; the campaign link is the vault's
+own Campaign Overview (#677)."""
 
 import io
 import shutil
@@ -136,7 +138,7 @@ class PromotePlanTests(unittest.TestCase):
         self.assertTrue(text.endswith("---\n" + body), text)
         self.assertNotIn("topic: arc", text)
 
-    def test_participants_and_locations_are_left_for_the_caller(self):
+    def test_a_name_in_the_prose_is_never_matched(self):
         # Who is in a plan is the caller's judgment, not a name match:
         # "Dean", "King" and "Crow" are English words as well as surnames.
         (self.vault / "Characters/NPCs/Captain_King.md").write_text(
@@ -151,6 +153,215 @@ class PromotePlanTests(unittest.TestCase):
         self.assertNotIn("PARTICIPANT", out)
         self.assertNotIn("LOCATION", out)
         self.assertNotIn("WARNING", out)
+
+    def fm(self, rel=TARGET):
+        return vl.extract_frontmatter(
+            (self.vault / rel).read_bytes().decode("utf-8"))
+
+    def test_the_body_s_links_fill_participants_and_locations(self):
+        (self.vault / DRAFT).write_text(
+            "[[The Magistrate]] and [[Thuggee|the stranglers]] meet at "
+            "[[Mandir_Mahakali#The Steps]], then [[Baranagar]].\n"
+            "[[The Colonel]] is two men; [[Kali Idol]] is a thing; "
+            "[[Ghost Sketch]] is a draft; [[Nobody]] has no note.\n"
+            "`[[Colonel Hart]]` is quoted.\n\n"
+            "```\n[[Colonel Pyke]]\n```\n", encoding="utf-8")
+        code, out = promote(self.vault, "--write")
+        self.assertEqual(code, 0, out)
+        fm = self.fm()
+        self.assertEqual(fm["participants"],
+                         ["[[Charles_Ashworth]]", "[[Thuggee]]"])
+        self.assertEqual(fm["locations"],
+                         ["[[Mandir_Mahakali]]", "[[Baranagar]]"])
+        self.assertIn("participants 2, locations 2", out)
+        # A link two notes share is never guessed and never dropped in
+        # silence; a link to no note, or to a thing, says nothing.
+        warned = [ln for ln in out.splitlines() if ln.startswith("WARNING")]
+        self.assertEqual(len(warned), 1, out)
+        self.assertIn("[[The Colonel]]", warned[0])
+        self.assertIn("Colonel Hart.md", warned[0])
+        self.assertIn("Colonel Pyke.md", warned[0])
+
+    def test_a_shared_body_link_the_caller_settles_is_not_warned_about(self):
+        (self.vault / DRAFT).write_text("[[The Colonel]] arrives.\n",
+                                        encoding="utf-8")
+        code, out = promote(self.vault, "--write", "--participant",
+                            "Characters/NPCs/Colonel Pyke")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.fm()["participants"], ["[[Colonel Pyke]]"])
+        self.assertNotIn("WARNING", out)
+
+    def test_a_file_name_beats_another_note_s_alias_as_a_link_does(self):
+        # Obsidian and the site send [[Meg]] to Meg.md, whatever aliases
+        # other notes carry.
+        (self.vault / "Characters/NPCs/Meg.md").write_text(
+            entity("npc"), encoding="utf-8")
+        (self.vault / DRAFT).write_text("[[Meg]] and [[meg|her]].\n",
+                                        encoding="utf-8")
+        code, out = promote(self.vault, "--write", "--participant", "Meg")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.fm()["participants"], ["[[Meg]]"])
+        self.assertNotIn("WARNING", out)
+
+    def test_a_vault_path_names_one_of_two_notes_that_share_a_name(self):
+        (self.vault / "Locations/Old Town/Baranagar.md").parent.mkdir()
+        (self.vault / "Locations/Old Town/Baranagar.md").write_text(
+            entity("location"), encoding="utf-8")
+        (self.vault / "Locations/Old Town/Ghat.md").write_text(
+            entity("location"), encoding="utf-8")
+        (self.vault / DRAFT).write_text(
+            "[[Characters/NPCs/Colonel Hart|Hart]] at "
+            "[[Locations/Old Town/Baranagar.md#The Steps]], then "
+            "[[Old Town/Ghat]] and [[Charles_Ashworth.md]].\n",
+            encoding="utf-8")
+        code, out = promote(self.vault, "--write", "--location",
+                            "Locations/Baranagar")
+        self.assertEqual(code, 0, out)
+        fm = self.fm()
+        self.assertEqual(fm["participants"],
+                         ["[[Colonel Hart]]", "[[Charles_Ashworth]]"])
+        # Two notes named Baranagar: each link says which, by its path.
+        self.assertEqual(fm["locations"],
+                         ["[[Locations/Baranagar]]",
+                          "[[Locations/Old Town/Baranagar]]", "[[Ghat]]"])
+        self.assertNotIn("WARNING", out)
+
+    def test_the_caller_names_who_and_where_by_name_or_alias(self):
+        code, out = promote(self.vault, "--write",
+                            "--participant", "The Magistrate",
+                            "--participant", "[[Thuggee]]",
+                            "--participant", "Charles Ashworth",
+                            "--location", "temple of mahakali")
+        self.assertEqual(code, 0, out)
+        fm = self.fm()
+        self.assertEqual(fm["participants"],
+                         ["[[Charles_Ashworth]]", "[[Thuggee]]"])
+        # The caller's first, then the body's own link, once each.
+        self.assertEqual(fm["locations"],
+                         ["[[Mandir_Mahakali]]", "[[Baranagar]]"])
+        self.assertNotIn("WARNING", out)
+
+    def test_a_name_two_notes_share_is_refused_and_nothing_written(self):
+        code, out = promote(self.vault, "--write",
+                            "--participant", "The Colonel")
+        self.assertEqual(code, 1, out)
+        self.assertIn("Colonel Hart.md", out)
+        self.assertIn("Colonel Pyke.md", out)
+        # The way out it names is one that works.
+        self.assertIn('--participant "Characters/NPCs/Colonel Hart"', out)
+        self.assertFalse((self.vault / TARGET).exists())
+        code, out = promote(self.vault, "--write", "--participant",
+                            "Characters/NPCs/Colonel Hart")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.fm()["participants"], ["[[Colonel Hart]]"])
+
+    def test_a_name_with_no_note_or_the_wrong_kind_is_kept_with_a_warning(self):
+        code, out = promote(self.vault, "--write",
+                            "--participant", "Sister Unwritten",
+                            "--location", "Thuggee",
+                            "--participant", "Ghost Sketch")
+        self.assertEqual(code, 0, out)
+        fm = self.fm()
+        # A Midwife sketch is not a note yet: linked as written, with a warning.
+        self.assertEqual(fm["participants"],
+                         ["[[Sister Unwritten]]", "[[Ghost Sketch]]"])
+        self.assertEqual(fm["locations"], ["[[Thuggee]]", "[[Baranagar]]"])
+        warned = [ln for ln in out.splitlines() if ln.startswith("WARNING")]
+        self.assertEqual(len(warned), 3, out)
+        self.assertIn("Sister Unwritten", warned[0])
+        self.assertIn("Ghost Sketch", warned[1])
+        self.assertIn("type faction", warned[2])
+
+    def test_a_quote_in_a_participant_or_location_is_refused(self):
+        for flag in ("--participant", "--location"):
+            with self.subTest(flag=flag):
+                code, out = promote(self.vault, "--write", flag, 'A" \nkey: v')
+                self.assertEqual(code, 1, out)
+                self.assertIn(flag, out)
+                self.assertFalse((self.vault / TARGET).exists())
+
+    def test_campaign_is_the_vault_s_own_overview(self):
+        # No Overview: the template's link stands, and it names the note
+        # the scaffold makes (#677), not a note of one old vault.
+        code, out = promote(self.vault, "--write")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.fm()["campaign"], "[[Campaign Overview]]")
+        (self.vault / TARGET).unlink()
+        overview = "---\ntype: campaign_overview\n---\n"
+        for rel in ("_Campaign/The Long Winter.md",
+                    "_archive/An Older Overview.md",
+                    "_midwife/calcutta/A Draft Overview.md"):
+            path = self.vault / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(overview, encoding="utf-8")
+        code, out = promote(self.vault, "--write")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.fm()["campaign"], "[[The Long Winter]]")
+
+    def test_date_stamps_last_updated_and_no_date_leaves_it_empty(self):
+        code, out = promote(self.vault, "--write")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.fm()["lastUpdated"], "")
+        self.assertIn("no --date: lastUpdated left empty", out)
+        (self.vault / TARGET).unlink()
+        code, out = promote(self.vault, "--write", "--date", "2026-11-16")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.fm()["lastUpdated"], "2026-11-16")
+        self.assertNotIn("no --date", out)
+        (self.vault / TARGET).unlink()
+        for bad in ("16/11/2026", "2026-02-30", "today"):
+            with self.subTest(date=bad):
+                code, out = promote(self.vault, "--write", "--date", bad)
+                self.assertEqual(code, 1, out)
+                self.assertIn("--date", out)
+                self.assertFalse((self.vault / TARGET).exists())
+
+    def test_section_promotes_one_heading_s_section_byte_for_byte(self):
+        timeline = ("## Timeline\r\n\r\n| When | What |\r\n|---|---|\r\n"
+                    "| Night 1 | [[Thuggee]] move.  |\r\n\r\n"
+                    "### Day 2\r\n\r\nThe Colonel wakes.\r\n\r\n")
+        draft = ("# Structure\r\n\r\nIntro, at [[Baranagar]].\r\n\r\n"
+                 + timeline
+                 + "## Investigation\r\n\r\nNo clue is required.\r\n\r\n"
+                 "### Day 2\r\n\r\nAnother day two.\r\n")
+        (self.vault / DRAFT).write_bytes(draft.encode("utf-8"))
+        code, out = promote(self.vault, "--write", "--section", "timeline",
+                            plan_type="timeline")
+        self.assertEqual(code, 0, out)
+        self.assertIn("section 'Timeline'", out)
+        self.assertTrue(self.written().endswith("---\r\n" + timeline))
+        fm = self.fm()
+        # Only what that section links to: Baranagar is in the intro.
+        self.assertEqual((fm["participants"], fm["locations"]),
+                         (["[[Thuggee]]"], []))
+        # The draft is untouched, and the other plan comes from the same file.
+        self.assertEqual((self.vault / DRAFT).read_bytes(),
+                         draft.encode("utf-8"))
+        other = f"{CHAPTER}/Planning/Chapter_4_Investigation.md"
+        code, out = promote(self.vault, "--write", "--section",
+                            "## Investigation", target=other,
+                            plan_type="investigation")
+        self.assertEqual(code, 0, out)
+        self.assertTrue((self.vault / other).read_bytes().decode("utf-8")
+                        .endswith("---\r\n## Investigation\r\n\r\nNo clue is "
+                                  "required.\r\n\r\n### Day 2\r\n\r\n"
+                                  "Another day two.\r\n"))
+
+    def test_a_section_that_is_missing_or_named_twice_is_refused(self):
+        (self.vault / DRAFT).write_text(
+            "## Timeline\n\nA.\n\n### Day 2\n\nB.\n\n## Investigation\n\n"
+            "C.\n\n### Day 2\n\nD.\n", encoding="utf-8")
+        for section, said in (("Beats", "no such heading"),
+                              ("Day 2", "2 '### Day 2' headings: promote "
+                                        "the heading above"),
+                              ("### Day 2", "2 '### Day 2' headings"),
+                              ("# Timeline", "no such heading")):
+            with self.subTest(section=section):
+                code, out = promote(self.vault, "--write", "--section",
+                                    section)
+                self.assertEqual(code, 1, out)
+                self.assertIn(said, out)
+                self.assertFalse((self.vault / TARGET).exists())
 
     def test_frontmatter_is_the_template_filled_and_passes_the_schema(self):
         code, out = promote(self.vault, "--write", "--leads-to",

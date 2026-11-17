@@ -460,11 +460,16 @@ class TemplateTests(unittest.TestCase):
 
     def test_a_placeholder_campaign_and_a_commented_blank_list_are_the_vaults_to_fill(self):
         vault = make_vault(self)
-        self.write_template(vault, "_Template_Plan.md", lambda t: t
-                            .replace('campaign: "[[Campaign_Overview_Updated]]"', 'campaign: "[[Canticle]]"', 1)
-                            .replace("leads_to: []", 'leads_to: ["[[Next]]"]', 1))
-        self.write_template(vault, "_Template_Session_WrapUp.md",
-                            lambda t: t.replace("play_date: null", "play_date: 2026-10-01", 1))
+        plan, _ = self.write_template(vault, "_Template_Plan.md", lambda t: t
+                                      .replace('campaign: "[[Campaign Overview]]"', 'campaign: "[[Canticle]]"', 1)
+                                      .replace("leads_to: []", 'leads_to: ["[[Next]]"]', 1))
+        wrap, _ = self.write_template(vault, "_Template_Session_WrapUp.md",
+                                      lambda t: t.replace("play_date: null", "play_date: 2026-10-01", 1))
+        # The edits took: a replace that matched nothing would leave the
+        # shipped text, and the test would pass without testing the rule.
+        self.assertIn('campaign: "[[Canticle]]"', plan.read_text(encoding="utf-8"))
+        self.assertIn('leads_to: ["[[Next]]"]', plan.read_text(encoding="utf-8"))
+        self.assertIn("play_date: 2026-10-01", wrap.read_text(encoding="utf-8"))
         found = by_id(mv.find_templates(vault))
         self.assertNotIn("template:_Template_Plan.md", found)
         self.assertNotIn("template:_Template_Session_WrapUp.md", found)
