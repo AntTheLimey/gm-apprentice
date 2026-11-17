@@ -308,6 +308,28 @@ class Scan(unittest.TestCase):
         self.assertIn("  line 11: lower", out)
         self.assertIn("  line 12: the claim runs on", out)
 
+    def test_a_note_entity_new_files_with_session_is_created_this_session(self):
+        # #698 end to end: wrap-up's entity-new block with --session, the
+        # note linked from the Wrap-Up, found by the scan's name lookup.
+        import io
+        from contextlib import redirect_stdout
+        import vault_write as vw
+        files = plain_wrap(FILES)
+        files[WRAP] += "\n- Met [[Old Tam]] on the stair.\n"
+        files["_Templates/_Template_NPC.md"] = (
+            ROOT / "skills/shared/templates/npc.md").read_text(encoding="utf-8")
+        with tempfile.TemporaryDirectory() as tmp:
+            vault = make_vault(tmp, files)
+            with redirect_stdout(io.StringIO()) as said:
+                code = vw.main([str(vault), "entity-new", "--type", "npc",
+                                "--name", "Old Tam", "--session", "5",
+                                "--write"], stdin="## Description\n\nA porter.\n")
+            self.assertEqual(code, 0, said.getvalue())
+            out = rs.scan(vault, "Session 05 - The Ball - Wrap-Up")
+        at = out.index("draft entities created this session: 2")
+        self.assertIn("  Characters/NPCs/Old Tam.md", out[at:at + 3])
+        self.assertIn("pre-play draft entities played this session: 0", out)
+
     def test_benchmark_reviewed_session(self):
         out = rs.scan(BENCH, f"{SESSIONS}/Chapter_01_Session_04_Wrap_Up.md")
         self.assertIn("skip: status is already reviewed", out)
@@ -319,10 +341,39 @@ class Scan(unittest.TestCase):
         self.assertEqual(rs.scan(BENCH, str(wrap))[0],
                          f"wrap-up: {SESSIONS}/Chapter_01_Session_04_Wrap_Up.md")
 
+    def test_a_wrap_up_by_its_name(self):
+        # #699: the name the vault-write commands take, bare or linked.
+        want = f"wrap-up: {SESSIONS}/Chapter_01_Session_04_Wrap_Up.md"
+        for raw in ("Chapter_01_Session_04_Wrap_Up",
+                    "Chapter_01_Session_04_Wrap_Up.md",
+                    "[[Chapter_01_Session_04_Wrap_Up]]",
+                    "chapter 01 session 04 wrap up"):
+            self.assertEqual(rs.scan(BENCH, raw)[0], want, raw)
+
+    def test_a_name_skips_record_copies_and_refuses_twins(self):
+        files = plain_wrap(FILES)
+        copy = files[WRAP]
+        files["_archive/Session 05 - The Ball - Wrap-Up.md"] = copy
+        self.assertEqual(scan(files, "Session 05 - The Ball - Wrap-Up")[0],
+                         f"wrap-up: {WRAP}")
+        files["Elsewhere/Session 05 - The Ball - Wrap-Up.md"] = copy
+        with self.assertRaisesRegex(LookupError, "2 Wrap-Ups named"):
+            scan(files, "Session 05 - The Ball - Wrap-Up")
+
+    def test_a_path_in_the_wrong_folder_is_not_looked_up_by_name(self):
+        with self.assertRaisesRegex(LookupError, "^no note at Wrong/"):
+            rs.scan(BENCH, "Wrong/Chapter_01_Session_04_Wrap_Up.md")
+
+    def test_a_name_that_is_no_wrap_up_is_not_found(self):
+        # The session index's name names no Wrap-Up.
+        with self.assertRaisesRegex(LookupError, "Wrap-Up named"):
+            rs.scan(BENCH, "Session 04 - The Reckoning")
+
     def test_errors(self):
         with self.assertRaisesRegex(LookupError, "is not a Wrap-Up \\(type: session\\)"):
             rs.scan(BENCH, f"{SESSIONS}/Session 04 - The Reckoning.md")
-        with self.assertRaisesRegex(LookupError, "^no note at nope.md$"):
+        with self.assertRaisesRegex(LookupError,
+                                    "^no note at or Wrap-Up named 'nope.md'$"):
             rs.scan(BENCH, "nope.md")
         with self.assertRaisesRegex(LookupError, "is not inside the vault"):
             rs.scan(BENCH, str(ROOT / "README.md"))
@@ -340,7 +391,7 @@ class Cli(unittest.TestCase):
         bad = subprocess.run([sys.executable, script, str(BENCH), "nope.md"],
                              capture_output=True, text=True, check=False)
         self.assertEqual(bad.returncode, 2)
-        self.assertIn("no note at nope.md", bad.stderr)
+        self.assertIn("no note at or Wrap-Up named 'nope.md'", bad.stderr)
 
 
 if __name__ == "__main__":

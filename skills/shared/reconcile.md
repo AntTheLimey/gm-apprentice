@@ -10,7 +10,7 @@ scan's `skip:` line gives a reason.
 You need the Wrap-Up path, its related entity files and timeline
 entries, and the session index.
 
-All stamps below use `gma stamp-entities`:
+All stamps below use `gma reconcile-promote` or `gma stamp-entities`:
 dry-run first, `--write` on GM confirmation (see
 `shared/vault-access.md`).
 
@@ -31,12 +31,11 @@ If it passes, offer:
 
 On yes, step 5.5 first (a thread write that fails stops here: the
 session stays at `wrap-up`), then:
-- `gma stamp-entities <vault> "<wrap-up>" --promote --reconciled YYYY-MM-DD`
-- `gma stamp-entities <vault> <entity files> --promote` — the
-  scan's DRAFTs created this session and its pre-play ones (played,
-  made before play), never its older ones
-- `gma stamp-entities <vault> "<index>" --set status=reviewed`
-- Do step 6.1, then go to step 6.5.
+- `gma reconcile-promote <vault> "<wrap-up>" --reconciled YYYY-MM-DD`,
+  then again with `--write`: it promotes the Wrap-Up, marks the index
+  `reviewed`, and promotes exactly the scan's DRAFTs created or played
+  this session, never its older ones
+- Do step 6.1 (publish registration), then go to step 6.5.
 
 Otherwise run the full procedure.
 
@@ -191,18 +190,20 @@ it `?`: the GM would rather add one back than prune a long list.
 ### 6. Promote canon status
 
 On GM approval:
-1. `gma stamp-entities <vault> "<wrap-up>" --promote --reconciled YYYY-MM-DD`
-2. `gma stamp-entities <vault> "<index>" --set status=reviewed`
-3. `gma stamp-entities <vault> <entity files> --promote` for confirmed
-   content. First, if `_World/` exists, check each entity against its
-   rules; on a violation ask ("This NPC is 400 years old, but world
+1. If `_World/` exists, check each entity the scan lists as created or
+   played this session against its rules; on a violation ask ("This NPC is 400 years old, but world
    rules say humans live 60-85 years. Is that intentional?"):
    - **Intentional** → promote with a note explaining the exception
    - **Correct it** → update the entity, then promote; a replaced
      GM ruling is struck through and marked `superseded YYYY-MM-DD`
    - **Defer** → promote and set `needs_review: true`
-4. `gma stamp-entities <vault> "<loser>" --supersede-by "[[Winner]]"`
+2. `gma stamp-entities <vault> "<loser>" --supersede-by "[[Winner]]"`
    for contradicted content
+3. `gma reconcile-promote <vault> "<wrap-up>" --reconciled YYYY-MM-DD`,
+   then with `--write`: the Wrap-Up, the index (`reviewed`) and the
+   scan's DRAFTs created or played this session. One of those the GM
+   has not confirmed stays DRAFT: `--except "<note>"` (repeatable). An
+   older DRAFT the GM confirms: `gma stamp-entities <vault> <file> --promote`.
 
 Do the bookkeeping now rather than leaving the GM a list. Hand off to
 campaign-organizer if entity filing is needed.

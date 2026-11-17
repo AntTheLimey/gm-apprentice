@@ -249,8 +249,9 @@ creating entities.
 
 - **New entities:** read `_Templates/_Template_{Type}.md` for its
   fields and section names, then a
-  `=== entity-new --type <type> --name "<Name>" --date <play date>`
-  block each. Its body is a frontmatter block holding only the fields
+  `=== entity-new --type <type> --name "<Name>" --date <play date>
+  --session "<asOfSession value>"` block each (born at the table, so
+  reconcile reads it as this session's). Its body is a frontmatter block holding only the fields
   to set and the `relationships:` edges, then the sections that have
   text: `##` for what the players know, `###` for a GM Notes one. The
   command fills the rest from the template (`canon_status: DRAFT`),
@@ -332,9 +333,11 @@ creating entities.
   timeline already uses. A `=== timeline --under "<the heading this
   timeline files the session under>"` block places them (a new
   heading takes its hashes, `--after` sites it).
-- **Events:** an `entity-new --type event --date <play date>` block
-  (dated with `in_game_date:`) when a moment meets its threshold — see
-  `shared/templates/event.md`'s comment if the vault copy lacks one.
+- **Events:** an `entity-new --type event --date <play date> --session
+  "<asOfSession value>"` block (dated with `in_game_date:`) when a moment
+  meets its threshold — see `shared/templates/event.md`'s comment if the
+  vault copy lacks one — linked from the Wrap-Up (its Memorable Moments
+  bullet, or the recap line that tells it).
 
 Every note this step creates or changes shows in step 5b's review:
 no separate receipts, and the Wrap-Up only wiki-links entities.

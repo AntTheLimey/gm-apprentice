@@ -9,6 +9,17 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.41] — 2026-11-17
+
+### Fixed
+
+- Notes made at the table count as this session's: `entity-new --session` stamps `createdSession`, `asOfSession` and an empty `source` as `play`. Wrap-up's new entities and events and session-play's saved notes pass it, so reconcile no longer lists them as pre-play prep. A new event is linked from the Wrap-Up, so reconcile sees it (#698).
+- `gma reconcile-scan` finds a Wrap-Up by its name or `[[link]]`, as the vault-write commands do (#699).
+
+### Added
+
+- `gma reconcile-promote <vault> <wrap-up> --reconciled D [--write]` does reconcile's promotion in one step: the Wrap-Up promoted and stamped, the session index set to reviewed, and exactly the DRAFTs the scan lists as created or played this session promoted, never older ones. Nothing is copied across by hand, `--except` keeps a note the GM has not confirmed as DRAFT, and it writes every note or none. Reconcile's quick path and step 6 use it (#701).
+
 ## [1.12.40] — 2026-11-17
 
 ### Fixed

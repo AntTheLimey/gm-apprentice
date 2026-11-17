@@ -258,9 +258,12 @@ def _tokens(rest):
     """The arguments of a command line, placeholders as `1`.
 
     `1` rather than `x`: it also satisfies a flag typed int (`--number N`).
-    A placeholder is `<...>` or a bare capital word (`N`, `INDEX`).
+    A placeholder is `<...>` or a bare capital word (`N`, `INDEX`);
+    `YYYY-MM-DD` becomes a real date.
     """
     rest = rest.split("<<", 1)[0]
+    # A date placeholder is a date: a flag may check its shape as it parses.
+    rest = rest.replace("YYYY-MM-DD", "2026-01-01")
     rest = re.sub(r'<[^<>\n]+>', '1', rest)
     rest = re.sub(r'(?<![\w"=-])[A-Z][A-Z0-9_-]*(?![\w"])', '1', rest)
     lex = shlex.shlex(rest, posix=True, punctuation_chars=True)

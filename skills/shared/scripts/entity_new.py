@@ -2,7 +2,8 @@
 """entity_new.py: a new entity note, filled from its template (#676).
 
     vault_write.py VAULT entity-new --type TYPE --name NAME [--folder SUB]
-                                    [--date YYYY-MM-DD] [--write]   < note
+                                    [--date YYYY-MM-DD] [--session S]
+                                    [--write]                       < note
 
 Stdin is the note as its writer has it: an optional frontmatter block
 holding only the fields to set (and `relationships:`), then the body's
@@ -625,6 +626,7 @@ def run(batch: vw.Batch, args: argparse.Namespace, text: str) -> None:
                       f"{etype} template: kept as written")
     if args.date and "lastUpdated" not in blocks:
         vw.set_block(fm, "lastUpdated", f'"{args.date}"')
+    born = born_in_play(fm, args.session)
 
     ties, notes = read_ties(parse_ties(blocks.get("relationships",
                                                   ["relationships: []"])),
@@ -673,9 +675,36 @@ def run(batch: vw.Batch, args: argparse.Namespace, text: str) -> None:
               f"{etype} template; {len(ties)} "
               f"{'tie' if len(ties) == 1 else 'ties'}"
               + (f" ({hidden} under Hidden Ties)" if hidden else "")
-              + "".join(f"; {note}" for note in notes)
+              + "".join(f"; {note}" for note in [*born, *notes])
               + ("" if args.date or "lastUpdated" in blocks or not takes_date
                  else "; no --date: lastUpdated left empty"))
+
+
+def born_in_play(fm: list[str], session: str | None) -> list[str]:
+    """With --session, a note born at the table (#698): `createdSession`
+    and `asOfSession` name the session, written as `stamp-entities
+    --session` writes them (a bare number stays bare), and an empty
+    `source` is `play`. A field the template lacks, or that already holds
+    a value (stdin's), is left alone; one stdin sent empty is filled.
+    Without it the note is prep: reconcile reads a blank `createdSession`
+    as made before play. Returns what it set."""
+    if session is None:
+        return []
+    session = session.strip()
+    if not session:
+        raise vw.WriteError("--session: empty (a session number or label)")
+    value = vl.yaml_scalar(session)
+    done = []
+    for field, want in (("createdSession", value), ("asOfSession", value),
+                        ("source", "play")):
+        now = next((line for line in fm if line.startswith(f"{field}:")),
+                   None)
+        if now is None or vw.strip_comment(now.partition(":")[2]).strip(
+                "\"' ") not in ("", "null", "~"):
+            continue
+        vw.set_block(fm, field, want)
+        done.append(f"{field} {want}")
+    return [", ".join(done)] if done else []
 
 
 def coming_types(blocks: list[Any]) -> dict[str, str]:
@@ -731,5 +760,9 @@ def add_parser(sub: Any) -> None:
     ap.add_argument("--name", required=True, help="the note's name: its file name")
     ap.add_argument("--folder", help="a sub-folder of the type's folder")
     ap.add_argument("--date", help="lastUpdated value, YYYY-MM-DD")
+    ap.add_argument("--session", help="a note born at the table: the "
+                    "session, in the vault's asOfSession shape (9 or "
+                    "\"Session 9\"), for createdSession and asOfSession; "
+                    "an empty source becomes play")
     ap.add_argument("--write", action="store_true",
                     help="write it (default: preview)")
