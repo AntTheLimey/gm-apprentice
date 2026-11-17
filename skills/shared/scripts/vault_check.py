@@ -68,7 +68,8 @@ INFO (context the auditing skill should triage, not a defect).
 `gm-leak` skips a note the publish tool says it does not publish (under
 `player_site.hide.folders`, no `type:`, a draft), and otherwise by
 frontmatter: a `type:` of
-`session-plan`, `session-play-notes`, `plan`, or `meta` is never
+`session-plan`, a play record (`session-play-notes`, `session-export`),
+`plan`, or `meta` is never
 published and always skipped, even under `_meta/`; `publish: none`
 pages are skipped and `publish: stub` pages are scanned only over
 the sections they ship. ERROR is an orphan `<!-- /gm-only -->`
@@ -365,7 +366,7 @@ DIGITS_RE = re.compile(r"\d+(?:\.\d+)?")
 # wrap-ups, chapter overviews — share names by convention and
 # only flood the report.
 STRUCTURAL_TYPES = {
-    "session", "session-plan", "session-play-notes",
+    "session", "session-plan", "session-play-notes", "session-export",
     *WRAP_UP_TYPES, "scene", "chapter",
     "meta", "timeline", "world_flags", "plan",
 }
@@ -1290,8 +1291,15 @@ YAML_NULLS = {"", "null", "~"}
 SESSION_DOC_TYPES: dict[str, tuple[str, set[str]]] = {
     "plan": ("plan", {"session-plan"}),
     "play_notes": ("play notes", {"session-play-notes"}),
+    "export": ("export", {"session-export"}),
     "wrap_up": ("wrap-up", set(WRAP_UP_TYPES)),
 }
+# The play records: what happened at the table, each its own note with one
+# writer (session-play or the GM; a table-assistant export dropped in
+# whole). Any one of them makes a session played; wrap-up reads them all.
+PLAY_RECORD_KEYS = ("play_notes", "export")
+PLAY_RECORD_TYPES = frozenset().union(
+    *(SESSION_DOC_TYPES[k][1] for k in PLAY_RECORD_KEYS))
 
 
 def _chain_document(files: list[tuple[str, str, dict]], stems: dict[str, str],
@@ -2816,17 +2824,19 @@ def check_sessions(vault: Path) -> list[str]:
             derived = ("reviewed"
                        if by_rel.get(wrap, {}).get("canon_status")
                        == "AUTHORITATIVE" else "wrap-up")
-        elif chain["play_notes"]:
+        elif any(chain[k] for k in PLAY_RECORD_KEYS):
             derived = "played"
         elif chain["plan"]:
             derived = "prepped"
         else:
             derived = "planned"
 
+        # The export shows only when there is one: most sessions have none.
         flags = " ".join(
             f"{label}={'✓' if chain[key] else '–'}"
             for key, label in (("plan", "plan"), ("play_notes", "play-notes"),
-                               ("wrap_up", "wrap-up")))
+                               ("export", "export"), ("wrap_up", "wrap-up"))
+            if key != "export" or chain[key])
         status = fm.get("status")
         declared = (str(status) if status and not isinstance(status, list)
                     else "?")
@@ -2898,7 +2908,7 @@ GM_AFTER_POSSESSIVE = frozenset((
 # Types the publish pipeline never builds a page for. Nothing in them can
 # leak however it is written, and flagging their (correctly) Keeper-facing
 # headings would bury the findings that matter.
-GM_LEAK_SKIP_TYPES = {"session-plan", "session-play-notes", "plan", "meta"}
+GM_LEAK_SKIP_TYPES = {"session-plan", *PLAY_RECORD_TYPES, "plan", "meta"}
 
 # A bold label opening a paragraph: `**Secret:** he lied.` The colon is
 # optional; `_bold_label` reads either as the label, colon and all.

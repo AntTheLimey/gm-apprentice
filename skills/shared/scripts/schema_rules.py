@@ -181,6 +181,7 @@ REQUIRED_FIELDS = {
     "session": ["type", "session_number", "status", "documents"],
     "session-plan": ["type", "canon_status", "session"],
     "session-play-notes": ["type", "canon_status", "session"],
+    "session-export": ["type", "canon_status", "session"],
     **{t: ["type", "canon_status", "session"] for t in sorted(WRAP_UP_TYPES)},
     "scene": ["type", "status"],
     "chapter": ["type", "title"],
@@ -238,6 +239,7 @@ WORLD_STUBS = {"world-index.md": "_World/world-index.md", "world-flags.md": "_Wo
 # under skills/ (an `npx skills` install holds the skills beside shared/).
 EXAMPLE_FILES = {
     "session-play-notes": "shared/session-document-chain.md",
+    "session-export": "shared/session-document-chain.md",
 }
 SKILLS_DIR = TEMPLATES_DIR.parent.parent
 

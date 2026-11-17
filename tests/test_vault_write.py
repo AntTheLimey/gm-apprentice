@@ -413,7 +413,7 @@ class WrapupNewTests(unittest.TestCase):
         vault = make_vault(self, {INDEX_REL: self._no_notes_index()})
         code, out = run(vault, "wrapup-new", "--session", INDEX_REL, "--write")
         self.assertEqual(code, 0, out)
-        self.assertIn("no Play Notes found for this session: "
+        self.assertIn("no Play Notes or Export found for this session: "
                       "source_document left blank", out)
         self.assertIn('source_document: "[[]]"\n', read(vault, WRAP_REL))
 

@@ -2704,14 +2704,17 @@ function buildSite(options) {
   for (const page of pages) {
     if (isFolded(page)) foldedOnto.set(page.outputPath, (foldedOnto.get(page.outputPath) || []).concat(page));
   }
-  // What the GM Story page shows after the cards: the wrap-up's parts that go there (its GM Notes), then a link to the
-  // session's Play Notes when they have a page.
+  // What the GM Story page shows after the cards: the wrap-up's parts that go there (its GM Notes), then links to the
+  // session's Play Notes and its Export when they have a page.
   function gmAfter(unit) {
     const parts = (unit.after || []).map((a) => a.html).join('\n');
     const href = unit.kind === 'session' ? playNotesHrefOf(unit) : null;
+    const exportHref = unit.kind === 'session' ? exportHrefOf(unit) : null;
     if (href) unit.playNotesHref = href;
     unit.afterHtml = parts ? `<section class="story-gm-after">\n${parts}\n</section>` : '';
-    unit.playNotesHtml = href ? `<p class="story-playnotes"><a href="${encodeHref(relativeHref(unit.outputPath, href))}">Play Notes for this session →</a></p>` : '';
+    const link = (to, label) => `<p class="story-playnotes"><a href="${encodeHref(relativeHref(unit.outputPath, to))}">${label}</a></p>`;
+    unit.playNotesHtml = [href && link(href, 'Play Notes for this session →'),
+      exportHref && exportHref !== href && link(exportHref, 'Export for this session →')].filter(Boolean).join('\n');
     // A chapter page links its chapter note's own page, the GM's workbench, where the GM site writes one.
     const note = unit.kind === 'chapter' ? unit.sourcePage : null;
     unit.gmNoteHtml = note && pages.includes(note) && !getsNoPage(note) && !isFolded(note)
@@ -2724,6 +2727,14 @@ function buildSite(options) {
     const docs = fmOf(unit.sourcePage).documents;
     const ref = [docs && docs.play_notes, fmOf(unit.wrapUpPage).source_document].find((r) => typeof r === 'string' && r.trim());
     if (!ref) return null;
+    const found = resolveSiteLink(ref.trim(), { linkMap });
+    return found.kind === 'page' ? found.href : null;
+  }
+  // A session's Export (#691): the note its `documents.export` names; the address of its page, or null.
+  function exportHrefOf(unit) {
+    const fm = (unit.sourcePage && (unit.sourcePage.sourceFrontmatter || unit.sourcePage.frontmatter)) || {};
+    const ref = fm.documents && fm.documents.export;
+    if (typeof ref !== 'string' || !ref.trim()) return null;
     const found = resolveSiteLink(ref.trim(), { linkMap });
     return found.kind === 'page' ? found.href : null;
   }

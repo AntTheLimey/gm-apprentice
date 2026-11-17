@@ -130,7 +130,7 @@
     {"folder": "Clues", "types": ["clue"], "site": "clues"}
   ],
   "workspace_folders": ["_midwife", "_QA", "_inbox"],
-  "not_edge_target_types": ["session", "session_plan", "session_play_notes", "session_wrap", "session_wrap_up", "session_wrapup"],
+  "not_edge_target_types": ["session", "session_plan", "session_play_notes", "session_export", "session_wrap", "session_wrap_up", "session_wrapup"],
   "strength_scale": {"1-2": "weak", "3-4": "moderate", "5-6": "significant", "7-8": "strong", "9-10": "defining"},
   "storage_rule": "Single-direction only; inverse is implied, not stored. Symmetric predicates stored once with bidirectional=true.",
   "mobrpg_event_type_enum": ["Employ", "Membership", "Leadership", "Reign", "War", "Score", "Generic"],

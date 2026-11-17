@@ -50,14 +50,17 @@ from vaultlib import (WRAP_UP_TYPES, PublishToolUnavailable, link_lines,  # noqa
 
 NEVER_CANDIDATES = frozenset({
     "session", "plan", "session-plan", "scene", "play-notes",
-    "session-play-notes", "wrap-up", "chapter", "meta", *WRAP_UP_TYPES,
+    "session-play-notes", "session-export", "wrap-up", "chapter", "meta",
+    *WRAP_UP_TYPES,
 })
 FALLBACK_TYPES = {
     "play_notes": {"session-play-notes", "play-notes"},
+    "export": {"session-export"},
     "wrap_up": {*WRAP_UP_TYPES, "wrap-up"},
 }
 # (documents key, label) in print order. `recap` is read when the index has it.
-SOURCE_KEYS = (("play_notes", "Play Notes"), ("wrap_up", "Wrap-Up"), ("recap", "Recap"))
+SOURCE_KEYS = (("play_notes", "Play Notes"), ("export", "Export"), ("wrap_up", "Wrap-Up"),
+               ("recap", "Recap"))
 
 
 @dataclass

@@ -9,6 +9,17 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.38] — 2026-11-17
+
+### Added
+
+- A gmassistant.app export can join a session at any time, before or after session-play's Play Notes: `gma vault-write <vault> export-new --session "<index>" --export <file>` files it whole as its own Export note beside the index and links it as `documents.export`, leaving the Play Notes alone. Wrap-up reads both: the export's Summary for the recap, the Play Notes as the GM's jottings (#691).
+
+### Changed
+
+- `session-new --export` and `play-notes-new --export` file the export as its own Export note too, beside empty Play Notes, instead of inside them. A vault's existing Play Notes that already hold an export still wrap up as before.
+- The session template's `documents:` gains `export: null`; the update brings `_Templates/_Template_Session.md` up to date. The session check counts an Export as played, and the GM site gives it a page linked from the session's Story page, as it does the Play Notes (tool 1.70.18).
+
 ## [1.12.37] — 2026-11-17
 
 ### Changed

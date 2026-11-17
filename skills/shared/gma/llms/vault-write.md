@@ -12,7 +12,7 @@ gma vault-write <vault> <command> ...
 | Argument | Value | Help |
 |---|---|---|
 | `<vault>` |  | the vault folder |
-| `<command>` | `wrapup-new`, `wrapup-add`, `wrapup-settle`, `story`, `npc-story`, `status`, `threads`, `log`, `timeline`, `session-new`, `play-notes-new`, `resolve`, `promote-plan`, `chapter-new`, `scene-new`, `scene-paused`, `scene-played`, `prop-new`, `prop-hand`, `plan`, `npc-merge`, `entity-new`, `batch` |  |
+| `<command>` | `wrapup-new`, `wrapup-add`, `wrapup-settle`, `story`, `npc-story`, `status`, `threads`, `log`, `timeline`, `session-new`, `play-notes-new`, `export-new`, `resolve`, `promote-plan`, `chapter-new`, `scene-new`, `scene-paused`, `scene-played`, `prop-new`, `prop-hand`, `plan`, `npc-merge`, `entity-new`, `batch` |  |
 
 Example: `gma vault-write "<vault>" wrapup-add "<wrap-up>" --write`
 <!-- END GENERATED -->
@@ -263,8 +263,9 @@ gma vault-write <vault> session-new --number NUMBER --title TITLE [options]
 ```text
 Files both beside the previous session, from the session
 template; the previous index's own keys come forward empty.
---export places a table-assistant export whole under
-## Narrative Record and resolves its NPCs, Locations and
+--export files a table-assistant export beside them as its
+own <index> - Export note, whole and unedited, linked as
+documents.export, and resolves its NPCs, Locations and
 Items: EXACT, ALIAS, NEAR (candidates) or NONE, one row each.
 ```
 
@@ -291,7 +292,7 @@ Files <index> - Play Notes beside the index and sets its
 documents.play_notes, play_date (with --play-date) and a
 planned or prepped status to played; the Plan link stays.
 Refused when Play Notes anywhere name the session. --export
-works as in session-new.
+works as in session-new; export-new files an export alone.
 ```
 
 | Argument | Value | Help |
@@ -299,6 +300,31 @@ works as in session-new.
 | `--session` | `SESSION` | the session index: path or name |
 | `--play-date` | `PLAY_DATE` | YYYY-MM-DD |
 | `--export` | `EXPORT` | the export file (any path) |
+| `--write` |  | write it (default: preview) |
+<!-- END GENERATED -->
+
+<!-- BEGIN GENERATED: gma vault-write export-new -->
+a table-assistant export beside a session index, as its own Export note
+
+```text
+gma vault-write <vault> export-new --session SESSION --export EXPORT [options]
+```
+
+```text
+Files <index> - Export beside the index, the export whole and
+unedited, and sets its documents.export, play_date (with
+--play-date) and a planned or prepped status to played.
+Play Notes there or not, it leaves them alone, so it runs
+after session-play as well as before. Refused when an Export
+already names the session. Resolves the export's names as
+session-new does.
+```
+
+| Argument | Value | Help |
+|---|---|---|
+| `--session` | `SESSION` | the session index: path or name |
+| `--export` | `EXPORT` | the export file (any path) |
+| `--play-date` | `PLAY_DATE` | YYYY-MM-DD |
 | `--write` |  | write it (default: preview) |
 <!-- END GENERATED -->
 

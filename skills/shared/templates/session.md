@@ -9,6 +9,7 @@ status: planned
 documents:
   plan: "[[Session NN - Title - Plan]]"
   play_notes: "[[Session NN - Title - Play Notes]]"
+  export: null
   wrap_up: "[[Chapter_CC_Session_NN_Wrap_Up]]"
 world_evolved: null
 tags: []

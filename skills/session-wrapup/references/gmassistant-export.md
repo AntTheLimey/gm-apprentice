@@ -1,7 +1,8 @@
 # gmassistant.app Export Path
 
-Read when the Play Notes contain a `## Memorable Moments` heading:
-they are a gmassistant.app export with pre-written narrative
+Read when the session has an Export note (`type: session-export`,
+`documents.export`), or older Play Notes hold an export (a
+`## Memorable Moments` heading): a gmassistant.app export, with pre-written narrative
 (`## Summary`), entity sections (`## NPCs`, `## Locations`,
 `## Items`) and a scene breakdown (`## Scenes`). These rules
 replace the matching parts of Steps 2 and 4; everything else in
@@ -15,7 +16,7 @@ no rewriting, condensing or tone adjustment (the preserve-guard in
 entity reference. Rewrite it in the campaign voice only when
 the GM asks, with a `=== wrapup-add "<wrap-up>" --replace` block
 (body opens `## Narrative Recap`), shown in step 5b's review; the
-export stays in the Play Notes, so facts still
+export stays in its note, so facts still
 trace to it. Skip Quick Bullets — `## Scenes` already covers
 them. Memorable Moments stays optional as usual. The export's
 moments name the PCs in them: use them for each PC's Moment. They
@@ -27,7 +28,7 @@ on, the wrap-up adds each one's tag.
 - Build entities from the export's `## NPCs`, `## Locations` and
   `## Items` entries instead of extracting from raw notes; there
   are no `NEW-NPC:`/`UPDATE:` markers. `vw resolve --export
-  <file>` (the export, or the Play Notes holding it) gives one
+  <file>` (the Export note, or older Play Notes holding it) gives one
   row each:
   EXACT/ALIAS → update that note, NEAR → check its candidates,
   NONE → new.

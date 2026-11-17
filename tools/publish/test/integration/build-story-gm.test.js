@@ -144,6 +144,23 @@ describe('the GM Story page', () => {
     } finally { s.cleanup(); }
   });
 
+  // #691: a table assistant's export filed as its own Export note, linked as documents.export.
+  it('a session\'s Export gets a GM page and its own link after the Play Notes one', () => {
+    const exportNote = '---\ntype: session-export\nsession: "[[Session 1]]"\npublish: false\n---\n\n# Session 1 - Export\n\n## Summary\n\nEXPORT-SUMMARY-1.\n';
+    const s = buildBoth(storyVault({
+      'Sessions/Session 1.md': SESSION(1).replace('  play_notes:', '  export: "[[Session 1 Export]]"\n  play_notes:'),
+      'Sessions/Session 1 Export.md': exportNote,
+    }), { gm: { show: { notes: false } } });
+    try {
+      const page = read(s.gm, STORY_1);
+      const links = [...page.matchAll(/<p class="story-playnotes"><a href="([^"]+)">([^<]+)<\/a><\/p>/g)];
+      assert.deepEqual(links.map((m) => m[2]), ['Play Notes for this session →', 'Export for this session →']);
+      assert.equal(path.posix.join('story', decodeURI(links[1][1])), 'sessions/session-1-export.html');
+      assert.ok(s.gm.exists('sessions', 'session-1-export.html'));
+      for (const [file, text] of texts(s.player)) assert.ok(!text.includes('EXPORT-SUMMARY-1'), file);
+    } finally { s.cleanup(); }
+  });
+
   it('show.notes off still keeps every other note the player site leaves out off the GM site', () => {
     const s = buildBoth(storyVault({ 'NPCs/Hidden Man.md': '---\ntype: npc\npublish: false\n---\n\n# Hidden Man\n\nHIDDEN-MAN-1.\n' }), { gm: { show: { notes: false } } });
     try {
