@@ -188,7 +188,7 @@ class ExportInTheChainTests(unittest.TestCase):
         self.assertEqual(vl.wikilink_target(fm["source_document"]),
                          f"{SESSION} - Export")
 
-    def test_wrapup_source_stays_the_play_notes_when_both_exist(self):
+    def test_wrapup_source_is_the_export_when_both_exist(self):
         self.file_export()
         code, out = run(self.vault, "play-notes-new", "--session", SESSION,
                         "--write")
@@ -198,7 +198,29 @@ class ExportInTheChainTests(unittest.TestCase):
         wrap = next(self.vault.rglob("Chapter_01_Session_13_Wrap_Up.md"))
         fm = vl.extract_frontmatter(wrap.read_text(encoding="utf-8"))
         self.assertEqual(vl.wikilink_target(fm["source_document"]),
-                         f"{SESSION} - Play Notes")
+                         f"{SESSION} - Export")
+
+    def test_the_wrapup_repair_backfills_the_export_as_source(self):
+        self.file_export()
+        wrap = f"{SESSIONS}/Session 13/Chapter_01_Session_13_Wrap_Up.md"
+        (self.vault / wrap).write_text(
+            f'---\ntype: session_wrap\nsession: "[[{SESSION}]]"\n'
+            'session_number: 13\ncanon_status: DRAFT\ntags: []\n---\n\n'
+            '# Wrap-Up\n', encoding="utf-8")
+        fm = vl.extract_frontmatter((self.vault / wrap).read_text(encoding="utf-8"))
+        entries = [(r, t, vl.extract_frontmatter(t) or {})
+                   for r, t in vl.vault_files(self.vault)]
+        ctx = vc._wrap_context(wrap, fm, entries)
+        self.assertEqual(ctx.notes_rel, EXPORT_NOTE)
+
+    def test_session_new_with_an_export_reports_the_index_once(self):
+        (self.vault / INDEX).unlink()
+        code, out = run(self.vault, "session-new", "--number", "13",
+                        "--title", "The Long Way Round",
+                        "--export", str(self.export))
+        self.assertEqual(code, 0, out)
+        self.assertNotIn(f"WOULD-ADD\t{INDEX}", out)
+        self.assertIn(f"WOULD-CREATE\t{EXPORT_NOTE}", out)
 
     def test_the_gm_leak_check_skips_it_as_it_skips_play_notes(self):
         self.assertIn("session-export", vc.GM_LEAK_SKIP_TYPES)

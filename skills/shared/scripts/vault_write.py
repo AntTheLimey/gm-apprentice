@@ -648,10 +648,10 @@ def cmd_wrapup_new(batch: Batch, args: argparse.Namespace, _text: str) -> None:
         have = batch.with_stem(stem_of.rsplit("/", 1)[-1].strip())
         if have:
             raise WriteError(f"{index}: already has a Wrap-Up: {have[0]}")
-    # The source is the Play Notes; a session whose only record is an
-    # export names that. Several notes of one record leave it blank.
+    # The source is the Export, which holds the whole table record, else
+    # the Play Notes. Several notes of one record leave it blank.
     notes, notes_warning = "", ""
-    for key in vc.PLAY_RECORD_KEYS:
+    for key in ("export", "play_notes"):
         notes = documents.get(key) or ""
         if is_blank(notes):
             notes = ""
@@ -3572,7 +3572,9 @@ def file_record(batch: Batch, index: str, key: str, play_date: str | None,
             batch.row("WARNING", rec_rel, "", "the export is empty")
     else:
         batch.row("WOULD-CREATE", rec_rel, "", "the notes are empty")
-    batch.row("WOULD-ADD", index, "", ", ".join(changes))
+    if batch.originals.get(index, "") is not None:
+        # An index this batch creates is one CREATE row, not an add too.
+        batch.row("WOULD-ADD", index, "", ", ".join(changes))
     return rec_rel
 
 

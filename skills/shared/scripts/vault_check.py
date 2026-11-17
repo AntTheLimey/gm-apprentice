@@ -4068,10 +4068,10 @@ def _wrap_context(rel: str, fm: dict,
         elif found:
             ctx.ambiguous_index = True
 
-    # The source is the Play Notes; a session whose only play record is
-    # an Export names that.
+    # The source is the Export, which holds the whole table record, else
+    # the Play Notes (as wrapup-new chooses).
     notes: list[str] = []
-    for key in PLAY_RECORD_KEYS:
+    for key in ("export", "play_notes"):
         notes = [r for r, _t, f in entries
                  if f.get("type") in SESSION_DOC_TYPES[key][1]
                  and ctx.number is not None

@@ -119,8 +119,8 @@ Read `references/synthesis-templates.md`.
    `shared/session-document-chain.md`. Block/seam test: keep
    finished-prose blocks from the sources verbatim; author only
    fragment-derived text and seams. A `Session export` row is
-   copied into place, not synthesized (synthesis-templates.md §
-   Synthesis Rules, rule 7).
+   filed whole as an Export note with `export-new`, not synthesized
+   (synthesis-templates.md § Synthesis Rules, rule 7).
 3. Follow the session-wrapup workflow for the Wrap-Up file and
    entities. One new entity often implies others (an NPC brings
    locations) — create them too.

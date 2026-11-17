@@ -14,4 +14,4 @@ A session's Story page shows its wrap-up's Memorable Moments as cards
 after the story, and on the GM site GM Notes follow the cards, with the
 other hidden parts in place, marked. `player_site.story.moments` off
 keeps the cards from players; the GM page still shows them, marked. A
-session's Play Notes always get a page on the GM site.
+session's Play Notes and Export always get a page on the GM site.
