@@ -40,6 +40,10 @@
                                [--section] [--headless [--gm-input [PART ...]]]
                                [--write]                                < markdown
     vault_write.py VAULT npc-merge NPC PC [--write]    (npc_merge.py; exit 0/1/2)
+    vault_write.py VAULT entity-new --type T --name N [--folder SUB]
+                               [--date YYYY-MM-DD] [--write]              < note
+                               (entity_new.py: an NPC, place, group, creature,
+                               item, event, document, clue or heritage)
 
 Paths are vault-relative; a session index or Wrap-Up can also be named
 (`Session 05 - Beneath the Mill`, or either half). Without --write every command prints its plan and
@@ -129,6 +133,8 @@ class Batch:
         # lists as the batch found them (see `threads_scope`).
         self.tally: Counter[str] = Counter()
         self.scope: ThreadsScope | None = None
+        # name -> type of the notes later entity-new blocks of a batch make
+        self.coming: dict[str, str] = {}
 
     def guard(self, rel: str) -> None:
         """Refuse a path that is not a note inside the vault."""
@@ -3373,6 +3379,18 @@ def read_export(path: str) -> str:
     return text.replace("\r\n", "\n").replace("\r", "\n")
 
 
+def check_date(value: str | None, flag: str) -> None:
+    """Refuse a date that is not a real YYYY-MM-DD one."""
+    if not value:
+        return
+    try:
+        ok = bool(ISO_DATE_RE.fullmatch(value)) and bool(date.fromisoformat(value))
+    except ValueError:
+        ok = False
+    if not ok:
+        raise WriteError(f"{flag} must be a real date, YYYY-MM-DD")
+
+
 def check_play_date(value: str | None) -> None:
     """Refuse a --play-date that is not a real YYYY-MM-DD date."""
     if not value:
@@ -3839,14 +3857,7 @@ def cmd_promote_plan(batch: Batch, args: argparse.Namespace,
     set_block(fm, "leads_to", *link_list(
         [link_arg(x, "--leads-to") for x in args.leads_to or []]))
     set_block(fm, "relationships", "[]")
-    if args.date:
-        try:
-            real = bool(ISO_DATE_RE.fullmatch(args.date)) and bool(
-                date.fromisoformat(args.date))
-        except ValueError:
-            real = False
-        if not real:
-            raise WriteError("--date must be a real date, YYYY-MM-DD")
+    check_date(args.date, "--date")
     people, places, overview = plan_cast(
         batch, body, args.participant or [], args.location or [], target)
     set_block(fm, "participants", *link_list(people))
@@ -5082,6 +5093,8 @@ def build_parser() -> argparse.ArgumentParser:
     pl.add_argument("--write", action="store_true", help="write it (default: preview)")
     import npc_merge    # its own module: it moves a note, which Batch cannot
     npc_merge.add_parser(sub)
+    import entity_new   # its own module: it imports this one
+    entity_new.add_parser(sub)
     ap.epilog = 'Example: gma vault-write "<vault>" wrapup-add "<wrap-up>" --write'
     bt = sub.add_parser(
         "batch", help="many writes, one plan, one commit",
@@ -5113,6 +5126,11 @@ def build_parser() -> argparse.ArgumentParser:
     return ap
 
 
+def cmd_entity_new(batch: Batch, args: argparse.Namespace, text: str) -> None:
+    import entity_new
+    entity_new.run(batch, args, text)
+
+
 Command = Callable[[Batch, argparse.Namespace, str], None]
 COMMANDS: dict[str, Command] = {"wrapup-new": cmd_wrapup_new,
                                 "wrapup-add": cmd_wrapup_add,
@@ -5133,6 +5151,7 @@ COMMANDS: dict[str, Command] = {"wrapup-new": cmd_wrapup_new,
                                 "scene-played": cmd_scene_played,
                                 "scene-paused": cmd_scene_paused,
                                 "prop-new": cmd_prop_new,
+                                "entity-new": cmd_entity_new,
                                 "prop-hand": cmd_prop_hand}
 NO_STDIN = frozenset({"wrapup-new", "session-new", "play-notes-new", "resolve",
                       "promote-plan", "chapter-new", "scene-new",

@@ -125,8 +125,15 @@ wiki-links; entity notes link back to sessions in their
 
 - **Writing an entity:** read `_Templates/_Template_{Type}.md`
   first and use it as the structure — never pattern-match off
-  existing entity files. Carry the source's prose about the
-  entity into the body verbatim; don't summarize or restyle it
+  existing entity files. A new NPC, place, group, creature, item,
+  event, document, clue or heritage goes in through
+  `gma vault-write <vault> entity-new --type <type> --name "<Name>"`
+  (preview, then `--write`; several: blocks of one `batch`, the
+  same two steps): send the fields to set, the ties and the
+  sections on stdin, and it fills the template and writes
+  `## Related` and `### Hidden Ties` from the ties. Carry the
+  source's prose about the entity into the body verbatim; don't
+  summarize or restyle it
   (an over-long entity is recoverable, a summarized one is lossy).
   (rationale: `shared/content-fidelity.md`)
 - **One note per character:** an NPC who becomes a PC gets the PC

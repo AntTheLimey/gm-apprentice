@@ -42,8 +42,45 @@ to promote to real vault entities:
 [Name] ([type]), [Name] ([type]), ...
 Which should I create as vault entities?"
 
-Approved entities are filed by campaign-organizer to the
-correct vault folders with proper frontmatter. Do not
+Approved entities go in as one batch, a block each: dry-run, show
+the GM the rows, then `--write`.
+
+```bash
+gma vault-write <vault> batch - <<'EOF'
+=== entity-new --type npc --name "<Name>" --date <today>
+---
+aliases: ["<a name the table uses>"]
+status: alive
+relationships:
+  - target: "[[<Other Note>]]"
+    type: member_of
+    tone: loyal
+    strength: 7
+    description: "<how they are tied, a few words>"
+    gm_only: true
+---
+
+## Overview
+
+<what the players learn, from the sketch as written>
+
+### Secrets
+
+<what they do not>
+EOF
+```
+
+A block's frontmatter holds only the fields to set (the rest are
+the template's: `gma schema-rules show <type>`) and the ties; its
+body is the sketch's text under the template's headings, a `##`
+section for the players and a `###` one for GM Notes (a `####`
+stays with the section it is in, so under a `##` it is published).
+The command
+fills the template, writes `## Related` and `### Hidden Ties` from
+the ties (never send those two), marks a two-way tie and pairs
+`parent_location` with its `part_of` tie, and the batch then runs
+the frontmatter and relationship checks on what it wrote: fix what
+they report. Do not
 auto-promote — the GM chooses. An entity whose existence is
 itself a secret (a hidden lodge, an unfound room, an NPC the
 players must not hear of yet) gets `withheld: true`: the site
