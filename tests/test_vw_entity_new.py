@@ -155,6 +155,69 @@ class EntityNewTests(unittest.TestCase):
             fm, None, vl.raw_frontmatter(text)) if level == "ERROR"]
         self.assertEqual(errors, [])
 
+    def test_session_marks_a_note_born_at_the_table(self):
+        # #698: wrap-up's notes said createdSession "", so reconcile
+        # listed them as pre-play prep.
+        code, out = new(self.vault, "npc", "Captain Imre Voss", VOSS,
+                        "--session", "3", "--write")
+        self.assertEqual(code, 0, out)
+        self.assertIn("createdSession 3, asOfSession 3, source play", out)
+        text = self.read("Characters/NPCs/Captain Imre Voss.md")
+        self.assertIn("\ncreatedSession: 3\nasOfSession: 3\n", text)
+        self.assertEqual(vl.extract_frontmatter(text)["source"], "play")
+        errors = [m for level, m in schema_rules.frontmatter_findings(
+            vl.extract_frontmatter(text), None, vl.raw_frontmatter(text))
+            if level == "ERROR"]
+        self.assertEqual(errors, [])
+
+    def test_session_keeps_a_label_and_what_stdin_set(self):
+        stdin = VOSS.replace("---\naliases", '---\nsource: "backstory"\naliases')
+        code, out = new(self.vault, "npc", "Captain Imre Voss", stdin,
+                        "--session", "Chapter 2, Session 3", "--write")
+        self.assertEqual(code, 0, out)
+        fm = vl.extract_frontmatter(self.read(
+            "Characters/NPCs/Captain Imre Voss.md"))
+        self.assertEqual(fm["createdSession"], "Chapter 2, Session 3")
+        self.assertEqual(fm["asOfSession"], "Chapter 2, Session 3")
+        self.assertEqual(fm["source"], "backstory")
+
+    def test_session_fills_fields_stdin_sent_empty(self):
+        # A writer copying the template sends them blank: still stamped.
+        stdin = VOSS.replace("---\naliases", '---\nsource: ""\n'
+                             "createdSession: ''\nasOfSession: null\naliases")
+        code, out = new(self.vault, "npc", "Captain Imre Voss", stdin,
+                        "--session", "4", "--write")
+        self.assertEqual(code, 0, out)
+        fm = vl.extract_frontmatter(self.read(
+            "Characters/NPCs/Captain Imre Voss.md"))
+        self.assertEqual((fm["createdSession"], fm["asOfSession"],
+                          fm["source"]), ("4", "4", "play"))
+
+    def test_session_in_a_batch(self):
+        batch = ('=== entity-new --type npc --name "Captain Imre Voss" '
+                 '--session "Chapter 2, Session 3"\n' + VOSS)
+        (self.vault / "batch.txt").write_text(batch, encoding="utf-8")
+        code, out = run(self.vault, "batch", str(self.vault / "batch.txt"),
+                        "--write")
+        self.assertEqual(code, 0, out)
+        fm = vl.extract_frontmatter(self.read(
+            "Characters/NPCs/Captain Imre Voss.md"))
+        self.assertEqual(fm["createdSession"], "Chapter 2, Session 3")
+
+    def test_without_session_the_note_is_prep(self):
+        code, out = new(self.vault, "npc", "Captain Imre Voss", VOSS, "--write")
+        self.assertEqual(code, 0, out)
+        fm = vl.extract_frontmatter(self.read(
+            "Characters/NPCs/Captain Imre Voss.md"))
+        self.assertIn(fm["createdSession"], ("", None))
+        self.assertIn(fm["source"], ("", None))
+
+    def test_an_empty_session_is_refused(self):
+        code, out = new(self.vault, "npc", "Captain Imre Voss", VOSS,
+                        "--session", " ")
+        self.assertNotEqual(code, 0, out)
+        self.assertIn("--session: empty", out)
+
     def test_ties_are_written_whole_and_a_two_way_type_is_marked(self):
         code, out = new(self.vault, "npc", "Captain Imre Voss", VOSS, "--write")
         self.assertEqual(code, 0, out)

@@ -41,7 +41,12 @@ vault. Essentials only.
 table-ready. Then ask **"Want me to save this to the vault?"** The
 GM may defer (e.g. three options, players haven't chosen) — flag
 unsaved content for wrap-up. Create a vault file only on the GM's
-yes: `canon_status: DRAFT`, and any `relationships:` `type:` from
+yes, with `gma vault-write <vault> entity-new --type <type> --name
+"<Name>" --session "<asOfSession value>" --date <today> --write` (the
+session in the shape the vault's notes already use, `9` or `"Chapter
+4, Session 9"`; the note on stdin; it comes out DRAFT and marked as
+born this session), and any
+`relationships:` `type:` from
 `_meta/relationship-types.md`, never invented (normalize via
 `shared/relationship-normalization.md`; deeper authoring waits for
 wrap-up). Note a saved entity in the Play Notes too.

@@ -30,7 +30,7 @@ gma <command> ... [options]
 | Argument | Value | Help |
 |---|---|---|
 | `--version` |  | print the plugin version |
-| `<command>` | `dnd-ddb`, `dnd-sheet`, `graph-check`, `gurps-check`, `gurps-skill-default`, `image`, `index-build`, `ingest-images`, `ingest-survey`, `links`, `migrate`, `moments`, `plan-check`, `plans-index`, `prop-move`, `reconcile-scan`, `relink`, `reveal`, `reveal-scan`, `rules-lookup`, `scene-queue`, `schema-rules`, `section`, `session-context`, `stamp-entities`, `tones`, `update`, `vault-check`, `vault-scaffold`, `vault-search`, `vault-write`, `workaround`, `publish`, `tool`, `llms` | the command to run; each has its own --help |
+| `<command>` | `dnd-ddb`, `dnd-sheet`, `graph-check`, `gurps-check`, `gurps-skill-default`, `image`, `index-build`, `ingest-images`, `ingest-survey`, `links`, `migrate`, `moments`, `plan-check`, `plans-index`, `prop-move`, `reconcile-promote`, `reconcile-scan`, `relink`, `reveal`, `reveal-scan`, `rules-lookup`, `scene-queue`, `schema-rules`, `section`, `session-context`, `stamp-entities`, `tones`, `update`, `vault-check`, `vault-scaffold`, `vault-search`, `vault-write`, `workaround`, `publish`, `tool`, `llms` | the command to run; each has its own --help |
 <!-- END GENERATED -->
 
 <!-- BEGIN GENERATED: gma llms -->
@@ -67,6 +67,7 @@ Example: `gma llms relink`
 | `plan-check` | `gma llms plan-check` | Session Plan conformance checks. |
 | `plans-index` | `gma llms plans-index` | Narrative-plan and midwife-adventure discovery. |
 | `prop-move` | `gma llms prop-move` | Move a vault's own props into prop notes. |
+| `reconcile-promote` | `gma llms reconcile-promote` | Promote a reconciled session: Wrap-Up, index, and the DRAFTs the scan lists. |
 | `reconcile-scan` | `gma llms reconcile-scan` | What reconcile counts before it talks to the GM. |
 | `relink` | `gma llms relink` | Rename or move a note and rewrite every link to it. |
 | `reveal` | `gma llms reveal` | Apply the GM's yes to what a session let the players learn. |

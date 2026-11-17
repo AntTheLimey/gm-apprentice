@@ -4,8 +4,9 @@
     reconcile_scan.py VAULT WRAP_UP
 
 WRAP_UP is the Wrap-Up's path, vault-relative or absolute inside the
-vault. Reads only; writes nothing. Prints one `label: value` line each,
-with the files under a count indented below it:
+vault, or its name or [[link]] as the vault-write commands take it.
+Reads only; writes nothing. Prints one `label: value` line each, with
+the files under a count indented below it:
 
     wrap-up, session (the index, its status and number)
     skip       why reconcile does not run, or `no`: the index is already
@@ -50,13 +51,15 @@ from __future__ import annotations
 import argparse
 import re
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from schema_rules import extract_frontmatter, parse_session_number, wikilink_target  # noqa: E402
 from vault_check import RECONSTRUCTION_NOTE_RE, STRUCTURAL_TYPES  # noqa: E402
-from vaultlib import (WRAP_UP_TYPES, before_play, entity_type, link_aliases, link_lines,  # noqa: E402
+from vaultlib import (WRAP_UP_TYPES, before_play, entity_type, is_record_copy,  # noqa: E402
+                      link_aliases, link_lines,
                       link_target, live_wikilinks, markers_in, nested_mapping,
                       normalize, normalize_file_arg, same_chapter, unverified_markers,
                       Unverified, vault_files)
@@ -222,13 +225,51 @@ def _wrap_rel(vault: Path, raw: str) -> str:
     return normalize_file_arg(raw)
 
 
+def _wrap_named(notes: list[Note], by_rel: dict[str, Note],
+                raw: str, wrap_rel: str) -> Note:
+    """The Wrap-Up `raw` names: its path, or its name or [[link]] as the
+    vault-write commands take it (`Chapter_01_Session_01_Wrap_Up`). A
+    path is never looked up by name, and an archived or working copy is
+    never a match."""
+    for rel in (wrap_rel, f"{wrap_rel}.md"):
+        if rel in by_rel:
+            return by_rel[rel]
+    target = wikilink_target(raw) or raw
+    if "/" in target.replace("\\", "/"):
+        raise LookupError(f"no note at {wrap_rel}")
+    name = normalize(target.removesuffix(".md"))
+    hits = [n for n in notes if n.type in WRAP_UP_TYPES
+            and not is_record_copy(n.rel)
+            and normalize(Path(n.rel).stem) == name]
+    if len(hits) == 1:
+        return hits[0]
+    if hits:
+        raise LookupError(f"{len(hits)} Wrap-Ups named {raw!r}: "
+                          + ", ".join(n.rel for n in hits) + "; pass its path")
+    raise LookupError(f"no note at or Wrap-Up named {raw!r}")
+
+
+@dataclass
+class Survey:
+    """What one scan found: the printed lines, and the notes behind them
+    that reconcile-promote acts on."""
+    lines: list[str]
+    wrap: Note
+    index: Note | None
+    new: list[Note]         # DRAFTs created this session
+    preplay: list[Note]     # pre-play DRAFTs played this session
+
+
 def scan(vault: Path, wrap_arg: str) -> list[str]:
+    return survey(vault, wrap_arg).lines
+
+
+def survey(vault: Path, wrap_arg: str) -> Survey:
     wrap_rel = _wrap_rel(vault, wrap_arg)
     notes = [Note(rel, text) for rel, text in vault_files(vault)]
     by_rel = {n.rel: n for n in notes}
-    wrap = by_rel.get(wrap_rel)
-    if wrap is None:
-        raise LookupError(f"no note at {wrap_rel}")
+    wrap = _wrap_named(notes, by_rel, wrap_arg, wrap_rel)
+    wrap_rel = wrap.rel
     if wrap.type not in WRAP_UP_TYPES:
         raise LookupError(f"{wrap_rel} is not a Wrap-Up (type: {wrap.type or 'none'})")
     by_name = _index(notes)
@@ -314,14 +355,15 @@ def scan(vault: Path, wrap_arg: str) -> list[str]:
                    "contradicts AUTHORITATIVE canon on the same facts")
     else:
         out.append("quick path: yes")
-    return out
+    return Survey(out, wrap, index, new, preplay)
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Count what reconcile reviews in one Wrap-Up. Writes nothing.")
     parser.add_argument("vault", type=Path, help="the vault folder")
-    parser.add_argument("wrap_up", help="the Wrap-Up's path, vault-relative or absolute")
+    parser.add_argument("wrap_up", help="the Wrap-Up: its path (vault-relative "
+                        "or absolute) or its name")
     parser.epilog = 'Example: gma reconcile-scan "<vault>" "<wrap-up>"'
     return parser
 

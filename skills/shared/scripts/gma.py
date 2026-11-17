@@ -52,6 +52,7 @@ COMMANDS: dict[str, Command] = {
     "plan-check": Command("plan_check", "Session Plan conformance checks."),
     "plans-index": Command("plans_index", "Narrative-plan and midwife-adventure discovery."),
     "prop-move": Command("prop_move", "Move a vault's own props into prop notes."),
+    "reconcile-promote": Command("reconcile_promote", "Promote a reconciled session: Wrap-Up, index, and the DRAFTs the scan lists."),
     "reconcile-scan": Command("reconcile_scan", "What reconcile counts before it talks to the GM."),
     "relink": Command("relink", "Rename or move a note and rewrite every link to it."),
     "reveal": Command("reveal", "Apply the GM's yes to what a session let the players learn."),

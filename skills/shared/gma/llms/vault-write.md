@@ -534,6 +534,7 @@ Questions kept in the template's spoiler block.
 | `--name` | `NAME` | the note's name: its file name |
 | `--folder` | `FOLDER` | a sub-folder of the type's folder |
 | `--date` | `DATE` | lastUpdated value, YYYY-MM-DD |
+| `--session` | `SESSION` | a note born at the table: the session, in the vault's asOfSession shape (9 or "Session 9"), for createdSession and asOfSession; an empty source becomes play |
 | `--write` |  | write it (default: preview) |
 <!-- END GENERATED -->
 
