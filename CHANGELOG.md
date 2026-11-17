@@ -9,6 +9,12 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.48] — 2026-11-17
+
+### Fixed
+
+- The leak check no longer stops a deploy over a Wrap-Up's GM-only World State date: the session page and its preview print the session's in-game date once a Wrap-Up pairs with it, so the same date in World State is no secret. A date the GM hides from players (`hide.fields`) is still checked (#704, tool 1.70.21).
+
 ## [1.12.47] — 2026-11-17
 
 ### Fixed
