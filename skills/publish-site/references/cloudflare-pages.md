@@ -173,9 +173,13 @@ From the site directory:
 
 ```bash
 npm run build                                   # generate docs/
-npx wrangler@4 pages project create <project-name> --production-branch=main
+npx wrangler@4 pages project create <project-name> --production-branch=main --force
 npx wrangler@4 pages deploy --branch=main
 ```
+
+`--force` goes on the create alone: without it wrangler hands the
+create to Cloudflare Workers and stops with "Missing entry-point to
+Worker script or to assets directory".
 
 The scaffold ships a `wrangler.toml` with `pages_build_output_dir = "docs"`,
 so the deploy is `npx wrangler@4 pages deploy --branch=main` — no `docs/`

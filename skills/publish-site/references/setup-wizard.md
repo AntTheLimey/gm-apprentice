@@ -532,12 +532,17 @@ error dump.
 Create the Cloudflare Pages project once, then deploy:
 
 ```bash
-npx wrangler@4 pages project create <project_name> --production-branch=main   # once per site
+npx wrangler@4 pages project create <project_name> --production-branch=main --force   # once per site
 gma publish deploy --verify --config vault.config.json
 ```
 
-If `project create` reports "a project with this name already exists,"
-skip it and run `deploy` directly. `deploy --verify` builds, deploys, and
+`--force` belongs to this one command: without it wrangler hands the
+create to Cloudflare Workers and stops with "Missing entry-point to
+Worker script or to assets directory", and nothing is created. No later
+command takes it. If `project create` reports "a project with this name
+already exists," skip it and run `deploy` directly.
+
+`deploy --verify` builds, deploys, and
 probes the deployment wrangler printed in one step (exit 1 when it
 cannot tell which build is served) — relay its final line to the GM
 verbatim. If it fails on authentication, re-check the token dance
