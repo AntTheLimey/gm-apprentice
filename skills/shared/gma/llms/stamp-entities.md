@@ -18,6 +18,7 @@ gma stamp-entities <vault> [<files> ...] [options]
 | `--retag` | `RETAG` | OLD=NEW chapter tag swap |
 | `--set` | `KEY=VALUE` | set a top-level or one-level dotted key; repeatable (repeatable) |
 | `--increment` | `KEY` | add one to an integer field; repeatable (repeatable) |
+| `--advance` | `KEY=FROM:TO` | set KEY to TO only when it is FROM; repeatable (repeatable) |
 | `--promote` |  | canon_status DRAFT or absent -> AUTHORITATIVE |
 | `--supersede-by` | `LINK` | canon_status: SUPERSEDED plus superseded_by |
 | `--reconciled` | `YYYY-MM-DD` | reconciled date |

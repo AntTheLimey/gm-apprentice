@@ -116,6 +116,8 @@ decision rather than pure score.
 
 ## Completed
 
+- ~~A PC's Current Status lede stays from the session before~~ — `status --show` shows it and `status` rewrites it (#714, v1.12.51)
+- ~~Campaign Overview stays not_started after a session~~ — wrap-up advances it to in_progress (#716, v1.12.51)
 - ~~Wrap-up says nothing about pictures when drawing without asking is off~~ — one closing line offers the scene pictures when a source is set (#712, v1.12.50)
 - ~~An export moment splits into two Story cards~~ — an untagged beat, its context and its quote are one card; a tag ends a moment (#705, v1.12.49)
 - ~~Leak check: a Wrap-Up's World State date trips every deploy~~ — a paired session's printed in-game date counts as visible (#704, v1.12.48)

@@ -329,7 +329,7 @@ class StatusWriteTests(unittest.TestCase):
                                   "NPCs/Hallam.md": "---\ntype: npc\n---\n"})
         for args, stdin, why in (
                 (("NPCs/Hallam.md",), "**Location:** x\n", "not a PC"),
-                ((PC,), "She is fine.\n", "labelled field"),
+                ((PC,), "She is fine.\n\nAnd more.\n", "labelled field"),
                 ((PC,), "**Location:** a\n**Location:** b\n", "twice"),
                 ((PC,), "**Location:** a\n### Sub\n", "heading"),
                 ((PC,), "", "nothing on stdin")):
@@ -433,7 +433,7 @@ class StatusShowTests(unittest.TestCase):
         self.assertEqual(code, 0, out)
         self.assertIn("- **Open threads:** Hunted by the Republic.\n"
                       "  - **Session 5:** fled the system.\n", out)
-        self.assertNotIn("He has seen the jellyfish", out)
+        self.assertIn("He has seen the jellyfish", out)   # the lede
         self.assertNotIn("took a blaster hit", out)
         self.assertIn("### God Tokens", out)
         self.assertEqual(read(vault, BULLETED), DRIFTED)
@@ -494,6 +494,141 @@ class StatusRoundTripTests(unittest.TestCase):
         vault = make_vault(self, {PC: DRIFTED})
         text = show_fields(vault, PC)
         self.assertIn("**FP:** 12/12\n\n- **Location:**", text)
+
+
+class StatusLedeTests(unittest.TestCase):
+    """#714: the lede above the fields is shown and can be rewritten, so a
+    wrap-up keeps it current like the fields."""
+
+    def test_show_prints_the_lede_first(self):
+        vault = make_vault(self, {PC: SPEC})
+        _code, out = run(vault, "status", PC, "--show")
+        lines = out.splitlines()
+        self.assertEqual(lines[1], "She found the cylinder dead.")
+        self.assertIn("# left alone: 1 other lines", out)   # the aside
+
+    def test_show_says_when_there_is_no_lede(self):
+        vault = make_vault(self, {PC: SPEC.replace(
+            "She found the cylinder dead.\n\n", "")})
+        _code, out = run(vault, "status", PC, "--show")
+        self.assertEqual(out.splitlines()[1], "# no lede")
+
+    def test_a_lede_under_vitals_is_the_lede(self):
+        vault = make_vault(self, {BULLETED: DRIFTED})
+        _code, out = run(vault, "status", BULLETED, "--show")
+        self.assertEqual(out.splitlines()[1], "He has seen the jellyfish.")
+        code, out = run(vault, "status", BULLETED, "--write",
+                        stdin="He has left the system.\n")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(read(vault, BULLETED), DRIFTED.replace(
+            "He has seen the jellyfish.", "He has left the system."))
+
+    def test_an_aside_after_the_last_field_is_not_the_lede(self):
+        vault = make_vault(self, {PC: SPEC.replace(
+            "She found the cylinder dead.\n\n", "").replace(
+            "**Knows (exclusive):** The creatures' name.\n",
+            "**Knows (exclusive):** The creatures' name.\n\nAn aside.\n")})
+        _code, out = run(vault, "status", PC, "--show")
+        self.assertEqual(out.splitlines()[1], "# no lede")
+
+    def test_writing_a_new_lede_twice_adds_it_once(self):
+        shapes = {
+            "list first": "## Current Status\n\n- an item\n\n**Location:** x\n",
+            "fence first": ("## Current Status\n\n<!-- gm-only -->\nAside.\n"
+                            "<!-- /gm-only -->\n\n**Location:** x\n"),
+            "fence only": ("## Current Status\n\n<!-- gm-only -->\nAside.\n"
+                           "<!-- /gm-only -->\n"),
+            "empty": "## Current Status\n",
+        }
+        for name, section in shapes.items():
+            with self.subTest(name):
+                note = ("---\ntype: pc\n---\n\n# Emma\n\n" + section
+                        + "\n## Notes\n\nNotes.\n")
+                vault = make_vault(self, {PC: note})
+                for _ in range(2):
+                    code, out = run(vault, "status", PC, "--write",
+                                    stdin="New lede.\n")
+                    self.assertEqual(code, 0, out)
+                text = read(vault, PC)
+                self.assertEqual(text.count("New lede."), 1, text)
+                self.assertNotIn("\n\n\n", text)
+                self.assertIn("\nNew lede.\n\n", text)
+                _c, show = run(vault, "status", PC, "--show")
+                self.assertEqual(show.splitlines()[1], "New lede.")
+
+    def test_a_lede_and_fields_into_an_empty_section(self):
+        note = ("---\ntype: pc\n---\n\n# Emma\n\n## Current Status\n\n"
+                "## Notes\n\nNotes.\n")
+        vault = make_vault(self, {PC: note})
+        code, out = run(vault, "status", PC, "--write",
+                        stdin="C.\n\n**Location:** y\n")
+        self.assertEqual(code, 0, out)
+        self.assertIn("## Current Status\n\nC.\n\n**Location:** y\n\n"
+                      "## Notes", read(vault, PC))
+
+    def test_show_round_trips_with_a_lede(self):
+        for name, note in (
+                ("two-line lede", SPEC.replace(
+                    "She found the cylinder dead.",
+                    "She found the cylinder dead.\nThe ship sails at dawn.")),
+                ("crlf", SPEC.replace("\n", "\r\n")),
+                ("no lede", SPEC.replace("She found the cylinder dead.\n\n",
+                                         ""))):
+            with self.subTest(name):
+                vault = make_vault(self, {PC: note})
+                code, out = run(vault, "status", PC, "--write",
+                                stdin=show_fields(vault, PC))
+                self.assertEqual(code, 0, out)
+                self.assertEqual(read(vault, PC), note)
+
+    def test_a_heading_line_on_stdin_is_still_refused(self):
+        vault = make_vault(self, {PC: SPEC})
+        code, out = run(vault, "status", PC, "--write",
+                        stdin="**Location:** a\n# Heading\n")
+        self.assertEqual(code, 1, out)
+        self.assertIn("heading", out)
+
+    def test_a_sent_lede_replaces_the_old_one(self):
+        vault = make_vault(self, {PC: SPEC})
+        code, out = run(vault, "status", PC, "--write",
+                        stdin="Back in Calcutta, the cylinder lost.\n\n"
+                              "**Location:** Calcutta.\n")
+        self.assertEqual(code, 0, out)
+        text = read(vault, PC)
+        self.assertNotIn("She found the cylinder dead.", text)
+        self.assertIn("## Current Status\n\nBack in Calcutta, the cylinder "
+                      "lost.\n\n**Location:** Calcutta.\n**Condition:**",
+                      text)
+
+    def test_a_lede_alone_is_enough(self):
+        vault = make_vault(self, {PC: SPEC})
+        code, out = run(vault, "status", PC, "--write",
+                        stdin="Back in Calcutta.\n")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(read(vault, PC), SPEC.replace(
+            "She found the cylinder dead.", "Back in Calcutta."))
+
+    def test_a_lede_goes_in_before_the_fields_when_there_was_none(self):
+        vault = make_vault(self, {PC: SPEC.replace(
+            "She found the cylinder dead.\n\n", "")})
+        code, out = run(vault, "status", PC, "--write",
+                        stdin="Back in Calcutta.\n")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(read(vault, PC), SPEC.replace(
+            "She found the cylinder dead.", "Back in Calcutta."))
+
+    def test_no_lede_sent_leaves_it_alone(self):
+        vault = make_vault(self, {PC: SPEC})
+        run(vault, "status", PC, "--write", stdin="**Location:** Calcutta.\n")
+        self.assertIn("She found the cylinder dead.", read(vault, PC))
+
+    def test_a_new_section_takes_the_lede(self):
+        vault = make_vault(self, {PC: "---\ntype: pc\n---\n\n# Emma\n"})
+        code, out = run(vault, "status", PC, "--write",
+                        stdin="Back in Calcutta.\n\n**Location:** Calcutta.\n")
+        self.assertEqual(code, 0, out)
+        self.assertIn("## Current Status\n\nBack in Calcutta.\n\n"
+                      "**Location:** Calcutta.", read(vault, PC))
 
 
 if __name__ == "__main__":

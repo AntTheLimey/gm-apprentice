@@ -51,7 +51,8 @@ session (Step 3c). It is distinct from the `_Story.md` companion
 per-session delta that feeds this block).
 
 It uses **stable labelled fields**, publishable and machine-readable;
-an optional one-line prose lede may precede them. Fields are omitted when empty:
+an optional one-line prose lede may precede them (wrap-up keeps it
+current with `vw status`, like the fields). Fields are omitted when empty:
 
 ```markdown
 ## Current Status

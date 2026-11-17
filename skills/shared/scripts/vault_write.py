@@ -1927,6 +1927,30 @@ def _status_region(doc: Doc) -> tuple[Head | None, list[int]]:
     return head, own_lines(doc, head, end)
 
 
+# The comment lines `status --show` prints, dropped when its output is
+# fed back; any other `#` line still reaches the heading check.
+SHOW_COMMENT_RE = re.compile(
+    rf"^# (no lede|left alone: .*|\S.* §{CURRENT_STATUS})\s*$")
+
+
+def stdin_status(text: str) -> tuple[list[str] | None, list[Field]]:
+    """(the lede, the fields) `status` was sent: plain lines before the
+    first field are the PC's new lede (`--show` prints the lede first, so
+    its output feeds straight back). `#` lines, as `--show` prints them,
+    are dropped."""
+    lines = [ln for ln in text.replace("\r\n", "\n").replace(
+        "\r", "\n").split("\n") if not SHOW_COMMENT_RE.match(ln)]
+    while lines and not lines[0].strip():
+        lines.pop(0)
+    lede: list[str] = []
+    while (lines and lines[0].strip() and not FIELD_RE.match(lines[0])
+           and not LIST_RE.match(lines[0]) and not lines[0][:1].isspace()):
+        lede.append(lines.pop(0).rstrip())
+    if lede and not any(ln.strip() for ln in lines):
+        return lede, []
+    return lede or None, stdin_fields("\n".join(lines))
+
+
 def stdin_fields(text: str) -> list[Field]:
     lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
     while lines and not lines[-1].strip():
@@ -2007,9 +2031,35 @@ def status_target(batch: Batch, raw: str) -> tuple[str, str]:
     return rel, text
 
 
+def _lede(lines: list[str], rows: list[int],
+          fields: list[Field]) -> tuple[int, int] | None:
+    """(start, end) of the Current Status lede: the first run of plain
+    lines (no field, no list item, not inside a field) with a field still
+    after it (or in a section with no fields), so a lede under vitals
+    lines (`**HP:**`) counts and an aside after the last field does not. None when the section has none
+    (`shared/pc-body-structure.md`: optional, one line)."""
+    used = {i for f in fields for i in range(f.start, f.end)}
+    last = max((f.start for f in fields), default=-1)
+    span: list[int] = []
+    for i in rows:
+        line = lines[i]
+        plain = (i not in used and line.strip() and not FIELD_RE.match(line)
+                 and not LIST_RE.match(line) and not line[:1].isspace()
+                 and not line.startswith("<!--"))   # a fence marker
+        if span:
+            if plain and i == span[-1] + 1:
+                span.append(i)
+                continue
+            break
+        if plain and (i < last or not fields):
+            span.append(i)
+    return (span[0], span[-1] + 1) if span else None
+
+
 def show_status(batch: Batch, raw: str) -> str:
-    """The labelled fields of a PC's Current Status, verbatim, and a line
-    naming what else the section holds (left alone by `status`)."""
+    """The lede and labelled fields of a PC's Current Status, verbatim,
+    and a line naming what else the section holds (left alone by
+    `status`). The output feeds straight back to `status --write`."""
     rel, text = status_target(batch, raw)
     doc = parse(text)
     head, rows = _status_region(doc)
@@ -2017,15 +2067,21 @@ def show_status(batch: Batch, raw: str) -> str:
         return f"{rel}: no ## {CURRENT_STATUS}\n"
     fields = read_fields(doc.lines, rows)
     used = {i for f in fields for i in range(f.start, f.end)}
+    lede = _lede(doc.lines, rows, fields)
+    if lede:
+        used |= set(range(*lede))
     other = sum(1 for i in rows if i not in used and doc.lines[i].strip())
     subs = [f"{'#' * h.level} {h.title}" for h in doc.heads
             if head.idx < h.idx < section_end(doc, head)]
     out = [f"# {rel} §{CURRENT_STATUS}"]
+    if lede:
+        out += [doc.lines[i].rstrip() for i in range(*lede)]
+    else:
+        out.append("# no lede")
     # A blank line between fields marks where each run ends, so the text
     # fed back to `--write` splits the way the note does.
-    for n, f in enumerate(fields):
-        if n:
-            out.append("")
+    for f in fields:
+        out.append("")
         out += f.lines
     out.append(f"# left alone: {other} other lines"
                + "".join(f"; {s}" for s in subs))
@@ -2034,8 +2090,8 @@ def show_status(batch: Batch, raw: str) -> str:
 
 def cmd_status(batch: Batch, args: argparse.Namespace, text: str) -> None:
     rel, note = status_target(batch, args.pc)
-    given = stdin_fields(text)
-    write_fields(batch, rel, note, given)
+    lede, given = stdin_status(text)
+    write_fields(batch, rel, note, given, lede)
     if any(key(f.label) == key(th.PC_PATH[1].strip("*:")) for f in given):
         warn_dropped_threads(batch, rel, note)
 
@@ -2565,10 +2621,12 @@ def _anchor(have: list[Field]) -> Field | None:
 
 
 def write_fields(batch: Batch, rel: str, note: str,
-                 given: list[Field]) -> None:
+                 given: list[Field], lede: list[str] | None = None) -> None:
     """Put `given` into the PC note's Current Status: each replaces the
     field with its label, in that field's shape; a new label goes after
-    the last field; a missing section is created before Notes/GM Notes."""
+    the last field; a missing section is created before Notes/GM Notes.
+    `lede`, when sent, replaces the section's lede or goes in before its
+    first field."""
     doc = parse(note)
     if doc.problems:
         raise WriteError(f"{rel}: gm-only fence is unbalanced "
@@ -2577,6 +2635,9 @@ def write_fields(batch: Batch, rel: str, note: str,
     where = f"§{CURRENT_STATUS}/"
     if head is None:
         block = [f"## {CURRENT_STATUS}", ""]
+        if lede:
+            block += [*lede, ""]
+            batch.row("WOULD-ADD", rel, where + "lede", "new lede")
         for f in given:
             block += reshape(f, f.bullet)
             batch.row("WOULD-ADD", rel, where + f.label, "new field")
@@ -2600,6 +2661,26 @@ def write_fields(batch: Batch, rel: str, note: str,
         by_key.setdefault(key(f.label), f)
     edits: list[tuple[int, int, list[str]]] = []
     fresh: list[str] = []
+    if lede:
+        span = _lede(doc.lines, rows, have)
+        # A fence's closing marker sits among the section's own lines:
+        # never insert before it (that is inside the fence).
+        first = next((i for i in rows if doc.lines[i].strip()
+                      and not doc.lines[i].lstrip().startswith("<!--")), None)
+        if span is None:
+            # Before the section's first line (outside any fence there),
+            # so the next run finds it as the lede; an empty section takes
+            # it straight under the heading.
+            if first is None:
+                edits.append((head.idx + 1, head.idx + 1, ["", *lede]))
+            else:
+                edits.append((first, first, [*lede, ""]))
+            batch.row("WOULD-ADD", rel, where + "lede", "new lede")
+        elif [doc.lines[i].rstrip() for i in range(*span)] == lede:
+            batch.row("SKIP", rel, where + "lede", "unchanged")
+        else:
+            edits.append((span[0], span[1], lede))
+            batch.row("WOULD-ADD", rel, where + "lede", "replaced")
     for f in given:
         old = by_key.get(key(f.label))
         if old is None:
@@ -5006,12 +5087,14 @@ def build_parser() -> argparse.ArgumentParser:
             "the margin; lines under it (an Open threads list) belong to it.\n"
             "Each field sent replaces the one with that label in\n"
             "## Current Status, in the note's own shape; a label the note\n"
-            "lacks is added after its last field. Fields not sent, the\n"
-            "lede, subsections and asides are left alone. --show prints\n"
-            "the fields as they stand, and reads no stdin."))
+            "lacks is added after its last field. Plain lines before the\n"
+            "first field are the PC's new lede (one present-tense line),\n"
+            "replacing the old one. Fields not sent, the lede when none\n"
+            "is sent, subsections and asides are left alone. --show\n"
+            "prints the lede and fields as they stand, and reads no stdin."))
     status.add_argument("pc", help="the PC note, vault-relative, or its name")
     how_status = status.add_mutually_exclusive_group()
-    how_status.add_argument("--show", action="store_true", help="print the PC's Current Status fields")
+    how_status.add_argument("--show", action="store_true", help="print the PC's Current Status lede and fields")
     how_status.add_argument("--write", action="store_true", help="write it (default: preview)")
     threads = sub.add_parser(
         "threads", help="add, move, close, rest, wake and hand threads (stdin rows)",

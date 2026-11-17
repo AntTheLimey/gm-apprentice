@@ -307,6 +307,56 @@ class IncrementTests(ScriptCase):
         self.assertEqual(path.read_bytes(), before)
 
 
+class AdvanceTests(ScriptCase):
+    """#716: a wrap-up moves a campaign from not_started to in_progress,
+    and never undoes a paused or completed one."""
+
+    def overview(self, status):
+        return self.note("Campaign_Overview.md", OVERVIEW.replace(
+            "sessions_played: 3", f'status: {status}\nsessions_played: 3'))
+
+    def test_moves_from_the_named_value(self):
+        for status in ('"not_started"', "not_started", "Not_Started"):
+            with self.subTest(status=status):
+                path = self.overview(status)
+                out = self.run_script("Campaign_Overview.md", "--advance",
+                                      "status=not_started:in_progress",
+                                      "--write")
+                self.assertIn("-> in_progress", out)
+                self.assertIn('status: "in_progress"\n',
+                              path.read_text(encoding="utf-8"))
+
+    def test_leaves_any_other_value_alone(self):
+        for status in ("paused", "completed", "abandoned", "in_progress"):
+            with self.subTest(status=status):
+                path = self.overview(status)
+                before = path.read_bytes()
+                out = self.run_script("Campaign_Overview.md", "--advance",
+                                      "status=not_started:in_progress",
+                                      "--write")
+                self.assertIn("left as it is", out)
+                self.assertEqual(path.read_bytes(), before)
+
+    def test_an_absent_field_is_left_absent(self):
+        path = self.note("Campaign_Overview.md", OVERVIEW)
+        self.run_script("Campaign_Overview.md", "--advance",
+                        "status=not_started:in_progress", "--write")
+        self.assertNotIn("\nstatus:", path.read_text(encoding="utf-8"))
+
+    def test_a_malformed_advance_is_a_usage_error(self):
+        self.note("Campaign_Overview.md", OVERVIEW)
+        for bad in ("status", "status=not_started", "status=:x", "=a:b",
+                    "t=10:30:11:45"):
+            with self.subTest(bad=bad):
+                self.run_script("Campaign_Overview.md", "--advance", bad,
+                                rc=2)
+
+    def test_reserved_fields_are_refused(self):
+        self.note("Campaign_Overview.md", OVERVIEW)
+        self.run_script("Campaign_Overview.md", "--advance",
+                        "canon_status=DRAFT:AUTHORITATIVE", rc=1)
+
+
 class CanonStatusTests(ScriptCase):
     def test_promote_draft(self):
         path = self.note("NPCs/Doc.md", SESSION_INDEX)
