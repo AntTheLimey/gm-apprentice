@@ -9,6 +9,12 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.47] — 2026-11-17
+
+### Fixed
+
+- `manifest publish-played` names a played session whose index is Excluded (often excluded before play, as prep) as unclear, with the way out (`manifest apply --decide`), instead of skipping it in silence; it is still never published behind the GM's back (#703, tool 1.70.20).
+
 ## [1.12.46] — 2026-11-17
 
 ### Fixed

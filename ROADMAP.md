@@ -116,6 +116,7 @@ decision rather than pure score.
 
 ## Completed
 
+- ~~A played session Excluded as prep is skipped in silence~~ — publish-played lists it as unclear with the way out (#703, v1.12.47)
 - ~~`gma update .` prints a blank vault name~~ — the resolved folder's name (#709, v1.12.46)
 - ~~Stories without a calendar~~ — unsortable-date warnings only once the campaign's dates carry a year; relative days or no dates are normal (#697, v1.12.42)
 - ~~Notes born at the table read as pre-play; reconcile-scan by name; one-step promote~~ — `entity-new --session`, passed by wrap-up and session-play; reconcile-scan takes a Wrap-Up's name; `gma reconcile-promote` (#698, #699, #701, v1.12.41)

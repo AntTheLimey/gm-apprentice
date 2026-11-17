@@ -54,7 +54,8 @@ that will publish, so the site withholds the hub body. It skips
 Excluded entries and does nothing without a publish list.
 Report the paths it ticked. Every other played session is listed as
 "unclear" with its reason (no Wrap-Up, Wrap-Up not reviewed yet, one
-that is Excluded or won't publish, or a stale site pin). Ask the GM
+that is Excluded or won't publish, the index itself Excluded, or a
+stale site pin). Ask the GM
 once, in one question listing them with their reasons. For one with no
 Wrap-Up that will publish, say its index body will publish as written
 and suggest fencing any Keeper notes first. Register each approved one
@@ -64,7 +65,9 @@ with `manifest publish-played --config <dir>/vault.config.json
 any reason it still gives) or `--publish-body` when it has none.
 Never tick a session index with `manifest apply`. Don't tick them
 silently; if the GM says "not yet", leave them and don't ask again in
-this run. When a reason says the site is pinned to an older tool,
+this run. A played session whose own index is Excluded is reported,
+not asked about: excluding it may be deliberate. If the GM wants it
+published, `manifest apply --decide "<index>"`, then publish-played. When a reason says the site is pinned to an older tool,
 offer `update-pin --site <dir>` first. The build itself stays
 read-only on the vault, so this lives in the skill, not in
 `build`/`deploy`.

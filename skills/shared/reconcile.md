@@ -228,7 +228,8 @@ as "unclear", with the reason (no Wrap-Up, Wrap-Up not reviewed yet,
 Excluded or won't publish, or a stale site pin), and is not ticked.
 Report the unclear list as it stands. Don't ask about it and don't
 tick anything yourself: publish-site asks the GM. Excluded entries are
-left alone.
+never ticked; a played session whose index is Excluded is named, with
+the way out.
 
 ### 6.5. World evolution (conditional)
 
