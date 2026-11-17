@@ -2876,6 +2876,42 @@ ENTRY_DATE_RE = re.compile(r"^[-*+]\s+\*\*(.+?)\*\*")
 LABEL_START_RE = re.compile(r"(?i)^(session|chapter)\b")
 
 
+def _year_date(value: object) -> bool:
+    """A date with a 4-digit year, never a label ("Session 3 (played
+    2026-11-01)")."""
+    text = str(value) if isinstance(value, (str, int)) else ""
+    return bool(YEAR_RE.search(text)) and not LABEL_START_RE.match(text)
+
+
+def dated_campaign(batch: Batch, timeline: str) -> bool:
+    """Whether the campaign keeps a calendar: some session's or event's
+    `in_game_date`, or a timeline entry's date, carries a 4-digit year.
+    A story told in "Day 2, morning" and "Night 1" has none, and that is
+    normal (#697); a campaign that gains a year later counts from then.
+    A note this batch has written is read as written; an example in a
+    code fence is no entry."""
+    fence = False
+    for line in timeline.splitlines():
+        if line.lstrip().startswith(("```", "~~~")):
+            fence = not fence
+            continue
+        dated = ENTRY_DATE_RE.match(line)
+        if not fence and dated and _year_date(dated.group(1)):
+            return True
+    texts = dict(vl.vault_files(batch.vault))
+    texts.update({rel: t for rel, t in batch.texts.items()
+                  if rel.endswith(".md") and t is not None})
+    for rel, text in texts.items():
+        fm = vl.extract_frontmatter(text) or {}
+        if vl.entity_type(fm) not in ("session", "event") or is_record(rel):
+            continue
+        value = fm.get("in_game_date") or fm.get("date")    # an event's old key
+        values = value if isinstance(value, list) else [value]
+        if any(_year_date(v) for v in values):
+            return True
+    return False
+
+
 def split_timeline(text: str) -> list[list[str]]:
     """The entries on stdin, exactly as written. A line that starts at the
     margin opens an entry; indented lines and blank lines between them
@@ -3073,6 +3109,7 @@ def cmd_timeline(batch: Batch, args: argparse.Namespace, text: str) -> None:
                   f"the entries go above '{'#' * later.level} {later.title}', "
                   f"which also holds entries: if they belong after it, "
                   f"use --under '{'#' * later.level} {later.title}'")
+    keeps_calendar: list[bool] = []   # dated_campaign, read once if asked
     for entry, fresh in plan:
         if not fresh:
             batch.row("SKIP", rel, where, "already there")
@@ -3085,12 +3122,21 @@ def cmd_timeline(batch: Batch, args: argparse.Namespace, text: str) -> None:
         date = dated.group(1) if dated else ""
         if not date or LABEL_START_RE.match(date):
             continue        # undated, or a label like "Session 2"
+        if YEAR_RE.search(date) and not TIME_OF_DAY_RE.search(date):
+            continue
+        if not keeps_calendar:
+            keeps_calendar.append(dated_campaign(batch, batch.read(rel)))
+        if not keeps_calendar[0]:
+            continue        # a story without a calendar: normal
         if TIME_OF_DAY_RE.search(date):
             batch.row("WARNING", rel, where, f"'{date}' has a time of day: "
-                      f"a published timeline cannot sort it")
-        elif not YEAR_RE.search(date):
+                      f"this campaign's dates carry years, and a date "
+                      f"sort cannot place this one (put the time in the "
+                      f"text)")
+        else:
             batch.row("WARNING", rel, where, f"'{date}' has no 4-digit "
-                      f"year: a published timeline cannot sort it")
+                      f"year: this campaign's dates carry years, and a "
+                      f"date sort cannot place this one")
 
 
 # --- session-new and promote-plan --------------------------------------------

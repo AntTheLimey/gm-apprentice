@@ -2,6 +2,8 @@ const { escapeHtml, encodeHref, relativeHref } = require('./processor');
 const { firstWikilinkTarget, parseWikilink, linkText } = require('./wikilink');
 const { canonicalNfc } = require('./unicode');
 
+// A month's short name ("Mar 5", "5 Sept"), for a date that gives no year.
+const MONTH_ABBR = /\b(jan|feb|mar|apr|may|jun|jul|aug|sept?|oct|nov|dec)\.?\b/i;
 const MONTHS = { january:0, february:1, march:2, april:3, may:4, june:5,
   july:6, august:7, september:8, october:9, november:10, december:11 };
 
@@ -46,7 +48,12 @@ function parseDateDetail(value) {
     return { date: new Date(Date.UTC(year, month, 1)), dayKnown: false };
   }
 
-  return { date: new Date(s), dayKnown: false };
+  // A month with no year ("1 March", "March 5"): one unnamed year, placed as it always
+  // was. Anything else with no year is no calendar date: handing it to `new Date` made
+  // "Day 2" 1 February 2001 and "Night 1" 1 January 2001 (#697), so a story told without
+  // a calendar got a timeline of invented dates.
+  if (monthName || MONTH_ABBR.test(s)) return { date: new Date(s), dayKnown: false };
+  return { date: new Date(NaN), dayKnown: false };
 }
 
 function buildTimelineData(pages) {
