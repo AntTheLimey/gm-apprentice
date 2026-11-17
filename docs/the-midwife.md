@@ -78,6 +78,8 @@ Throughout the process, the-midwife files confirmed decisions and parked ideas t
 
 At the end, it produces an adventure brief with everything you need for Session 0: premise, tone, adventure shape, core tension, driving forces, key NPCs, locations, entry points, escalation plan, and a "what if they do nothing?" answer. It then offers to scaffold the vault (for new campaigns) or hand off to session-prep (for Session 0 planning).
 
+The brief's public sections, and the Campaign Overview built from them, hold only what your players are told at the start. What they are meant to find out (who the villain is, what is really going on, how it ends) is written under GM Notes, so publishing the campaign's site cannot spoil a mystery. The `_midwife/` workspace itself is never published.
+
 The-midwife never decides for you. It sparks, shapes, and refines — but every creative decision is yours.
 
 ## Tips
