@@ -1410,8 +1410,13 @@ def publish_list_sets(vault: Path) -> tuple[dict[str, set[str]] | None,
     ToolAnswer says which (its `why`)."""
     answer = ask_publish_tool(vault, ["manifest", "list"], site_optional=True)
     data = answer.data
-    if not isinstance(data, dict):
+    if data is None:
         return None, answer
+    if not isinstance(data, dict):
+        # An answer of the wrong shape is not "no list".
+        return None, ToolAnswer(
+            why="manifest list did not return the expected JSON",
+            used=answer.used)
     if data.get("listed") is False:
         return None, ToolAnswer(used=answer.used)
     try:

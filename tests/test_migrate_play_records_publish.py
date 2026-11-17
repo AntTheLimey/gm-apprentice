@@ -106,6 +106,25 @@ class FindTests(unittest.TestCase):
         self.assertIn("node is not on PATH", item.lines[0])
         self.assertEqual(raw(v, "Sessions/S3.md"), PLAY)
 
+    def test_a_quoted_publish_key_counts(self):
+        for key in ('"publish"', "'publish'"):
+            v = make_vault(self, {"Sessions/S3.md": PLAY.replace(
+                "---\n\n#", f"{key}: true\n---\n\n#")})
+            with mock.patch.object(mv, "publish_list_sets") as ask:
+                self.assertEqual(mv.find_play_records_publish(v), [], key)
+            ask.assert_not_called()
+
+    def test_a_tool_answer_of_the_wrong_shape_is_not_no_list(self):
+        # Through the real parser: a successful `[]` must not read as "no list".
+        import vault_check
+        v = make_vault(self, {"Sessions/S3.md": PLAY})
+        with mock.patch.object(vault_check, "ask_publish_tool",
+                               return_value=ToolAnswer(data=[])):
+            (item,) = mv.find_play_records_publish(v)
+        self.assertEqual(item.id, "play-records-publish-wait")
+        self.assertIn("expected JSON", item.lines[0])
+        self.assertEqual(raw(v, "Sessions/S3.md"), PLAY)
+
     def test_crlf_kept(self):
         v = make_vault(self, {"Sessions/S3.md": PLAY.replace("\n", "\r\n")})
         with mock.patch.object(mv, "publish_list_sets",

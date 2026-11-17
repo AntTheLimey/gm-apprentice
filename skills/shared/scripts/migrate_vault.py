@@ -1018,7 +1018,7 @@ def find_publish_row_pipe(vault: Path) -> list[Item]:
 PLAY_RECORD_SPELLINGS = frozenset(
     set(PLAY_RECORD_TYPES) | {t.replace("-", "_")
                                       for t in PLAY_RECORD_TYPES})
-PUBLISH_KEY_RE = re.compile(r"^publish[ \t]*:")
+PUBLISH_KEY_RE = re.compile(r"""^(["']?)publish\1[ \t]*:""")
 
 
 def _unmarked_play_record(fm: list[str], _rel: str) -> bool:
