@@ -235,6 +235,13 @@ DURATION_RANGE_RE = re.compile(
 DURATION_TILDE_RE = re.compile(
     r"~\s*\d+\s*(?:min|mins|minutes|hours?|hrs?)\b", re.IGNORECASE)
 DURATION_BARE_RE = re.compile(r"\b\d+\s*(?:minutes|mins)\b", re.IGNORECASE)
+# Time left or gone on the session's own clock ("15 minutes left", "an
+# hour in") is the GM's pacing trigger, not a scene estimate (#726).
+SESSION_CLOCK_RE = re.compile(
+    r"\s*(?:of\s+(?:play|the\s+session|session|game)\s+)?"
+    r"(?:(?:are|is|have|has)\s+(?:been\s+)?)?"
+    r"(?:left|to go|remaining|in\b|into|gone|elapsed|before the end)",
+    re.IGNORECASE)
 
 AUDIT_TRAIL_PHRASES: tuple[str, ...] = (
     "formally dropped", "this plan revises", "this plan supersedes",
@@ -716,11 +723,15 @@ def check_duration(rel: str, states: list[vl.LineState]) -> list[Finding]:
     for lineno, line, section, in_code, is_heading in _walk_body(states):
         if in_code or is_heading or not _is_session_running(section):
             continue
-        m = DURATION_RANGE_RE.search(line) or DURATION_TILDE_RE.search(line)
-        level = "ERROR"
-        if m is None:
-            m = DURATION_BARE_RE.search(line)
-            level = "WARNING"
+        m, level = None, "ERROR"
+        for rx, lv in ((DURATION_RANGE_RE, "ERROR"),
+                       (DURATION_TILDE_RE, "ERROR"),
+                       (DURATION_BARE_RE, "WARNING")):
+            m = next((x for x in rx.finditer(line)
+                      if not SESSION_CLOCK_RE.match(line, x.end())), None)
+            if m:
+                level = lv
+                break
         if m:
             findings.append(Finding(
                 "duration", level, f"{rel}:{lineno}",
