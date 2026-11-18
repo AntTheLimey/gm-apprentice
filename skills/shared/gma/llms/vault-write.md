@@ -566,16 +566,24 @@ that note. Every other relationship rule: gma vault-check
 --type adventure-brief files the brief at
 Adventures/NAME/NAME.md, named by `title`, with ## Open
 Questions kept in the template's spoiler block.
+--type pc files the PC at Characters/PCs/NAME.md from the
+vault's system sheet (_Templates/pc-<system>.md, else the
+plugin's; the generic sheet when the vault has no system).
+Send what you have (player_name, Background, Current Status,
+Notes); a ## section left out keeps the template's text, so
+the sheet's tables are there to fill. Then, for a D&D sheet's
+numbers: gma dnd-sheet <note>
 
 Several writes at once: put this as a '=== entity-new ...' block in `gma vault-write <vault> batch FILE`.
 ```
 
 | Argument | Value | Help |
 |---|---|---|
-| `--type` | `TYPE` | the note's type: adventure-brief, clue, creature, document, event, faction, heritage, item, location, npc, organization |
+| `--type` | `TYPE` | the note's type: adventure-brief, clue, creature, document, event, faction, heritage, item, location, npc, organization, pc |
 | `--name` | `NAME` | the note's name: its file name |
 | `--folder` | `FOLDER` | a sub-folder of the type's folder |
 | `--date` | `DATE` | lastUpdated value, YYYY-MM-DD |
+| `--from-npc` | `NPC` | --type pc only: the NPC note this character was, which the PC may share its name with; after the write, run npc-merge NPC PC |
 | `--session` | `SESSION` | a note born at the table: the session, in the vault's asOfSession shape (9 or "Session 9"), for createdSession and asOfSession; an empty source becomes play |
 | `--write` |  | write it (default: preview) |
 <!-- END GENERATED -->
@@ -636,7 +644,8 @@ Several writes at once: put this as a '=== plan ...' block in `gma vault-write <
 <!-- END GENERATED -->
 
 Use `npc-merge` when an NPC has become a PC and both notes exist (create
-the PC from its template first), or when `gma vault-check <vault> npc-pairs`
+the PC first with `entity-new --type pc --from-npc "<NPC note>"`, which may
+keep the NPC's name), or when `gma vault-check <vault> npc-pairs`
 names a pair. It makes one note, word for word: the NPC's frontmatter unioned
 or filled into the PC's, its Campaign Log in Appearances, its Related in
 Relationships, its GM Notes and any section the site hides in GM Notes, and

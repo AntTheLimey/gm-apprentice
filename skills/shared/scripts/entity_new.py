@@ -39,6 +39,14 @@ of its own, `Adventures/NAME/NAME.md`, and is named by `title` (stdin may
 give a longer one). A `##` its template keeps in a spoiler block (Open
 Questions) is written in one.
 
+A PC (`--type pc`, #750) is made from its system's sheet: the template
+the vault's templates check keeps (`migrate_vault.pc_template`), the
+vault's own copy first, the generic sheet for a vault with no system. It
+is filed in the PC folder and takes no `name` field. A `##` section stdin
+leaves out is kept as the template has it, so the sheet's tables are
+there to fill (`gma dnd-sheet` for a D&D one), and so is the GM Notes
+text when stdin sends nothing for GM Notes.
+
 Rows: WOULD-CREATE / CREATED and WARNING. Exit and --write as every
 vault-write command.
 """
@@ -68,18 +76,20 @@ GROUPS = ("People", "Places", "Groups", "Things")
 GROUP_OF = {"pc": "People", "npc": "People", "location": "Places",
             "faction": "Groups", "organization": "Groups"}
 RELATED, HIDDEN_TIES = "related", "hidden ties"
+PC = "pc"
 PLAIN_WORD_RE = re.compile(r"[A-Za-z_][\w-]*")
 
 
 def entity_types() -> dict[str, str]:
     """type -> its vault folder, for every type this command makes: one
-    with a folder of its own and a shared template, never a PC (a PC's
-    sheet is its system's own). A type in OWN_FOLDER_TYPES (the adventure
-    brief) has a folder for each note, under the one given here."""
+    with a folder of its own and a shared template, or the PC, whose
+    template is its system's sheet (`pc_template`). A type in
+    OWN_FOLDER_TYPES (the adventure brief) has a folder for each note,
+    under the one given here."""
     out = {}
     for row in vl.ontology()["vault_folders"]:
         for etype in row["types"]:
-            if etype != "pc" and f"{etype}.md" in schema_rules.TEMPLATE_NAMES:
+            if etype == PC or f"{etype}.md" in schema_rules.TEMPLATE_NAMES:
                 out[etype] = row["folder"]
     for etype, folder in schema_rules.OWN_FOLDER_TYPES.items():
         if f"{etype}.md" in schema_rules.TEMPLATE_NAMES:
@@ -478,8 +488,43 @@ def body_units(body: str, keep_with_parent: set[str]
     return units
 
 
+def template_sections(template: str, shape: Shape
+                      ) -> tuple[dict[str, list[str]], list[str]]:
+    """(each players' `##` section of a template as written, key -> its
+    lines; the text under its `## GM Notes` before any heading): what a PC
+    note keeps of its sheet where stdin sends nothing."""
+    doc = vw.parse(template)
+    sections: dict[str, list[str]] = {}
+    lead: list[str] = []
+    for head in doc.heads:
+        k = hkey(head.title)
+        # GM Notes is read even inside the sheet's gm-only fence, where a
+        # vault's own sheet may keep it; any other fenced section is not
+        # the players'.
+        if head.level != 2 or k in sections or k == RELATED \
+                or (head.gm and k != vw.GM_NOTES):
+            continue
+        lines = [ln.rstrip("\r\n")
+                 for ln in doc.lines[head.idx:vw.section_end(doc, head)]]
+        while lines and not lines[-1].strip():
+            lines.pop()
+        if k == vw.GM_NOTES:
+            more = [i for i, _lvl, _t in vl.line_headings(lines[1:])]
+            lead = lines[1:1 + more[0]] if more else lines[1:]
+        elif k in shape.public_h2:
+            sections[k] = lines
+    while lead and not lead[-1].strip():
+        lead.pop()
+    return sections, lead
+
+
 def build_body(template: str, body: str, ties: list[dict[str, Any]],
-               warn: Callable[[str], None]) -> str:
+               warn: Callable[[str], None], whole: bool = False,
+               info: Callable[[str], None] | None = None) -> str:
+    """The note's body. With `whole` (a PC: the template is its sheet), a
+    `##` section stdin leaves out is kept as the template has it, so the
+    sheet's tables are there to fill, and so is `## GM Notes`'s own text
+    when stdin sends nothing for GM Notes."""
     shape = template_shape(template)
     public_order, gm_order = list(shape.public_h2), list(shape.gm_h3)
 
@@ -489,6 +534,7 @@ def build_body(template: str, body: str, ties: list[dict[str, Any]],
     spoiled: list[tuple[str, bool, list[str]]] = []
     lead: list[str] = []
     seen: set[tuple[int, str]] = set()
+    under: str | None = None    # the players' `##` the last unit sat in
     for level, title, lines in body_units(body, shape.public_h3):
         k = hkey(title)
         head = f"'{'#' * level} {title}'"
@@ -507,7 +553,16 @@ def build_body(template: str, body: str, ties: list[dict[str, Any]],
             if k in shape.spoiler_h2:
                 warn(f"{head} goes under GM Notes for good: write it as "
                      f"'## {title}' for the spoiler block it is lifted from")
-        elif k == vw.GM_NOTES:
+            elif info and under:
+                # A sheet's ### parts are mostly the players' (Backstory in
+                # D&D's Background), so one this sheet lacks is said.
+                info(f"{head} was written under '## {under}' and goes under "
+                     f"GM Notes, hidden: this sheet has no such part of a "
+                     f"players' section (write it as **{title}:** to keep "
+                     f"it there)")
+            continue
+        under = None
+        if k == vw.GM_NOTES:
             lead = lines[1:]
         elif k in shape.gm_h2:
             hidden_h2.append((k, True, lines))
@@ -518,6 +573,7 @@ def build_body(template: str, body: str, ties: list[dict[str, Any]],
                                 f"template: write it as '### {title}', or "
                                 f"it would be published")
         else:
+            under = title
             public.append((k, k in public_order, lines))
             if k not in public_order:
                 warn(f"{head}: {vw.PLAYERS_SEE}")
@@ -526,6 +582,13 @@ def build_body(template: str, body: str, ties: list[dict[str, Any]],
                     warn(f"'{'#' * deep} {vl.atx_title(sub)}' stays inside "
                          f"{head}: players will see it (a ### section "
                          f"goes under GM Notes)")
+
+    if whole:
+        kept, kept_lead = template_sections(template, shape)
+        public += [(k, True, lines) for k, lines in kept.items()
+                   if (2, k) not in seen]
+        if not hidden and not any(line.strip() for line in lead):
+            lead = kept_lead
 
     if any(not t["gm_only"] for t in ties):
         if RELATED not in public_order:
@@ -572,8 +635,15 @@ def run(batch: vw.Batch, args: argparse.Namespace, text: str) -> None:
         folder = kinds[etype] + vw.chapter_subfolder(args.folder)
     rel = f"{folder}/{name}.md"
     types = Types(batch)
-    clash = sorted(set(vw.live_stem_clash(batch, name)) | set(
-        types.holders(name)))
+    # An NPC who joins the party: the PC may take the NPC note's name, as
+    # npc-merge then folds that note into it and archives it.
+    npc = None
+    if args.from_npc:
+        if etype != PC:
+            raise vw.WriteError("--from-npc: only with --type pc")
+        npc = vw.find_npc(batch, args.from_npc)
+    clash = sorted((set(vw.live_stem_clash(batch, name)) | set(
+        types.holders(name))) - {npc})
     if clash:
         raise vw.WriteError(f"a note named {name!r} exists, or has that "
                             f"name as an alias: {', '.join(clash)}")
@@ -596,18 +666,29 @@ def run(batch: vw.Batch, args: argparse.Namespace, text: str) -> None:
         raise vw.WriteError(f"stdin says name {given['name']!r}, --name "
                             f"says {name!r}")
 
-    template = vw.template_text(
-        batch.vault, (schema_rules.TEMPLATE_NAMES[f"{etype}.md"],),
-        f"{etype}.md")
+    if etype == PC:
+        import migrate_vault   # heavy, and only a PC needs it
+        names, shared = migrate_vault.pc_template(batch.vault)
+        template = vw.template_text(batch.vault, tuple(names), shared)
+        if shared == "pc-generic.md":
+            batch.row("INFO", rel, "", "the generic sheet: the vault records "
+                      "no game system with a sheet of its own (gma publish "
+                      "settings get vault.system --vault <vault>)")
+    else:
+        shared = f"{etype}.md"
+        template = vw.template_text(
+            batch.vault, (schema_rules.TEMPLATE_NAMES[shared],), shared)
     fm = vw.template_frontmatter(template)
 
     def has(field: str) -> bool:
         return any(line.startswith(f"{field}:") for line in fm)
 
     # A template with no `name` (the adventure brief) is named by `title`,
-    # which stdin may set to something longer than the file's name.
+    # which stdin may set to something longer than the file's name. A PC's
+    # sheet takes neither: its name is its file's.
     name_field = "title" if has("title") and not has("name") else "name"
-    vw.set_block(fm, name_field, vl.yaml_scalar(name))
+    if etype != PC or has(name_field):
+        vw.set_block(fm, name_field, vl.yaml_scalar(name))
     takes_date = has("lastUpdated")
     for key, block in blocks.items():
         if key in ("type", "name", "relationships"):
@@ -678,12 +759,21 @@ def run(batch: vw.Batch, args: argparse.Namespace, text: str) -> None:
         vw.set_block(fm, "relationships", *tie_lines(ties))
 
     new = "---\n" + "\n".join(fm) + "\n---\n" + build_body(
-        template, body, ties, lambda said: batch.row("WARNING", rel, "", said))
+        template, body, ties, lambda said: batch.row("WARNING", rel, "", said),
+        whole=etype == PC,
+        info=(lambda said: batch.row("INFO", rel, "", said))
+        if etype == PC else None)
     batch.create(rel, new)
     vw.schema_check(batch, rel, new)
     hidden = sum(1 for t in ties if t["gm_only"])
+    if npc:
+        notes.append(f'then npc-merge "{npc}" "{rel}" folds the NPC note '
+                     f'into it')
+    if shared == "pc-dnd-5e-2024.md":
+        notes.append(f'then gma dnd-sheet "<vault>/{rel}" fills the numbers')
     batch.row("WOULD-CREATE", rel, "",
-              f"{etype} template; {len(ties)} "
+              f"{etype} template" + (f" ({shared})" if etype == PC else "")
+              + f"; {len(ties)} "
               f"{'tie' if len(ties) == 1 else 'ties'}"
               + (f" ({hidden} under Hidden Ties)" if hidden else "")
               + "".join(f"; {note}" for note in [*born, *notes])
@@ -765,12 +855,22 @@ def add_parser(sub: Any) -> None:
             "<vault> relationships --file <note>.\n"
             "--type adventure-brief files the brief at\n"
             "Adventures/NAME/NAME.md, named by `title`, with ## Open\n"
-            "Questions kept in the template's spoiler block."))
+            "Questions kept in the template's spoiler block.\n"
+            "--type pc files the PC at Characters/PCs/NAME.md from the\n"
+            "vault's system sheet (_Templates/pc-<system>.md, else the\n"
+            "plugin's; the generic sheet when the vault has no system).\n"
+            "Send what you have (player_name, Background, Current Status,\n"
+            "Notes); a ## section left out keeps the template's text, so\n"
+            "the sheet's tables are there to fill. Then, for a D&D sheet's\n"
+            "numbers: gma dnd-sheet <note>"))
     ap.add_argument("--type", required=True,
                     help="the note's type: " + ", ".join(sorted(entity_types())))
     ap.add_argument("--name", required=True, help="the note's name: its file name")
     ap.add_argument("--folder", help="a sub-folder of the type's folder")
     ap.add_argument("--date", help="lastUpdated value, YYYY-MM-DD")
+    ap.add_argument("--from-npc", metavar="NPC", help="--type pc only: the "
+                    "NPC note this character was, which the PC may share "
+                    "its name with; after the write, run npc-merge NPC PC")
     ap.add_argument("--session", help="a note born at the table: the "
                     "session, in the vault's asOfSession shape (9 or "
                     "\"Session 9\"), for createdSession and asOfSession; "

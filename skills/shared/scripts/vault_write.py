@@ -45,8 +45,9 @@
     vault_write.py VAULT npc-merge NPC PC [--write]    (npc_merge.py; exit 0/1/2)
     vault_write.py VAULT entity-new --type T --name N [--folder SUB]
                                [--date YYYY-MM-DD] [--write]              < note
-                               (entity_new.py: an NPC, place, group, creature,
-                               item, event, document, clue or heritage)
+                               (entity_new.py: an NPC, PC, place, group,
+                               creature, item, event, document, clue or
+                               heritage)
 
 Paths are vault-relative; a session index or Wrap-Up can also be named
 (`Session 05 - Beneath the Mill`, or either half). Without --write every command prints its plan and

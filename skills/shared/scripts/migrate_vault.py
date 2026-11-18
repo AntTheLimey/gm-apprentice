@@ -84,6 +84,13 @@ def _stat_block(kind: str, system: str | None, source: Path) -> str:
     return GENERIC_BLOCK
 
 
+def pc_template_name(system: str | None, source: Path = TEMPLATES) -> str:
+    """The PC sheet template a vault of this system gets: `pc-{system}.md`,
+    or `pc-generic.md` for no system or one with no sheet of its own."""
+    return (f"pc-{system}.md" if system and (source / f"pc-{system}.md").is_file()
+            else "pc-generic.md")
+
+
 def templates_for(system: str | None, source: Path = TEMPLATES,
                   skip_missing: bool = False) -> dict[str, str]:
     """What `_Templates/` holds for a vault of this system, built from the
@@ -104,8 +111,7 @@ def templates_for(system: str | None, source: Path = TEMPLATES,
             block = _stat_block(src[:-3], system, source)
             text = STAT_BLOCK_RE.sub(lambda _m: block, text, count=1)
         out[name] = text
-    pc = f"pc-{system}.md" if system and (source / f"pc-{system}.md").is_file() \
-        else "pc-generic.md"
+    pc = pc_template_name(system, source)
     text = read(pc)
     if text is not None:
         out[pc] = text
@@ -178,6 +184,21 @@ def _regency_pc_template(vault: Path) -> bool:
                    for f in folder.iterdir())
     except OSError:
         return False
+
+
+def pc_template(vault: Path) -> tuple[list[str], str]:
+    """(the `_Templates/` names a new PC note is made from, the first found
+    winning; the plugin's template, for a vault holding none of them). It
+    is the one the templates check keeps: the system's sheet, the generic
+    one for a vault with no system, and the Regency sheet in a CoC vault
+    that holds one."""
+    system = vault_system(vault)
+    if system == "coc-7e" and _regency_pc_template(vault):
+        return sorted(f.name for f in (vault / "_Templates").iterdir()
+                      if f.is_file() and REGENCY_PC_NAME_RE.search(f.name)), \
+            pc_template_name("coc-7e-regency")
+    name = pc_template_name(system)
+    return [name], name
 
 
 GENERIC = "generic"   # the history's key for a vault with no known system

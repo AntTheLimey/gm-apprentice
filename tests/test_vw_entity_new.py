@@ -737,7 +737,7 @@ He wrecked the Arden.
 
     def test_arguments_that_cannot_stand_are_refused(self):
         for argv, said in (
-                (("pc", "Jem"), "--type"),
+                (("session", "Jem"), "--type"),
                 (("monster", "Jem"), "--type"),
                 (("npc", "Jem/Pike"), "cannot be a file name"),
                 (("npc", "Pilot Hale"), "exists"),
@@ -1003,6 +1003,226 @@ relationships:
     type: employs
 ---
 """
+
+
+OSWIN = """---
+player_name: "Tam"
+occupation: "Monk"
+relationships:
+  - target: "[[Marrow Light]]"
+    type: located_at
+---
+
+## Background
+
+**Species:** Goliath
+
+### Backstory
+
+Came down the mountain in the first snow.
+
+## Current Status
+
+**Location:** the lighthouse
+"""
+
+
+def overview(system):
+    return ("---\ntype: campaign_overview\ncanon_status: DRAFT\n"
+            f"game_system: {system}\n---\n")
+
+
+def section(text, title):
+    """A `##` section of a note, heading to the next `##`."""
+    start = text.index(f"\n## {title}\n") + 1
+    end = text.find("\n## ", start + 1)
+    return text[start:] if end < 0 else text[start:end + 1]
+
+
+class PcTests(unittest.TestCase):
+    """--type pc (#750): the vault's system sheet, filed in the PC folder."""
+
+    def pc_vault(self, system, files=None):
+        files = dict(WORLD, **(files or {}))
+        if system is not None:
+            files["_Campaign/Campaign Overview.md"] = overview(system)
+        return make_vault(self, files)
+
+    def test_each_system_takes_its_own_sheet(self):
+        for system in (*schema_rules.SYSTEMS, None, "undecided"):
+            with self.subTest(system=system):
+                vault = self.pc_vault(system)
+                want = (f"pc-{system}.md" if system in schema_rules.SYSTEMS
+                        else "pc-generic.md")
+                code, out = new(vault, "pc", "Oswin", OSWIN, "--write")
+                self.assertEqual(code, 0, out)
+                self.assertIn(f"pc template ({want})", out)
+                text = (vault / "Characters/PCs/Oswin.md").read_text(
+                    encoding="utf-8")
+                sheet = (TEMPLATES / want).read_text(encoding="utf-8")
+                self.assertEqual(section(text, "Stat Sheet"),
+                                 section(sheet, "Stat Sheet"))
+                self.assertEqual("generic sheet" in out,
+                                 want == "pc-generic.md", out)
+
+    def test_the_system_setting_picks_the_sheet(self):
+        vault = make_vault(self, WORLD)
+        sys.path.insert(0, str(REPO / "tests"))
+        from layouts import write_config
+        write_config(vault, "---\npublish:\n  system: gurps-4e\n---\n")
+        code, out = new(vault, "pc", "Oswin", OSWIN)
+        self.assertEqual(code, 0, out)
+        self.assertIn("pc template (pc-gurps-4e.md)", out)
+
+    def test_the_note_is_the_sheet_with_what_was_sent(self):
+        vault = self.pc_vault("dnd-5e-2024")
+        code, out = new(vault, "pc", "Oswin", OSWIN + "\n### Debts\n\nOwes "
+                        "the abbot.\n", "--session", "3", "--write")
+        self.assertEqual(code, 0, out)
+        self.assertIn('then gma dnd-sheet "<vault>/Characters/PCs/Oswin.md"',
+                      out)
+        text = (vault / "Characters/PCs/Oswin.md").read_text(encoding="utf-8")
+        fm = vl.extract_frontmatter(text)
+        self.assertEqual((fm["type"], fm["player_name"], fm["status"]),
+                         ("pc", "Tam", "alive"))
+        self.assertEqual(str(fm["createdSession"]), "3")
+        self.assertNotIn("name", fm)      # the sheet has no name field
+        sheet = (TEMPLATES / "pc-dnd-5e-2024.md").read_text(encoding="utf-8")
+        # Sent: the writer's text, in the template's order. Left out: the
+        # template's own section, tables and all.
+        self.assertIn("Came down the mountain", section(text, "Background"))
+        self.assertNotIn("{Species name}", text)
+        self.assertEqual(section(text, "Current Status"),
+                         "## Current Status\n\n**Location:** the lighthouse\n\n")
+        for kept in ("Skills", "Spellcasting", "Equipment", "Notes"):
+            self.assertEqual(section(text, kept), section(sheet, kept))
+        heads = [line for line in text.split("\n") if line.startswith("## ")]
+        self.assertEqual(heads, [line for line in sheet.split("\n")
+                                 if line.startswith("## ")
+                                 and line != "## GM Notes"]
+                         + ["## Related", "## GM Notes"])
+        self.assertIn("- **Places:** [[Marrow Light]]", text)
+        # A ### is the GM's; the template's GM Notes prompt gives way to it.
+        self.assertTrue(text.rstrip().endswith(
+            "## GM Notes\n\n### Debts\n\nOwes the abbot."), text)
+
+    def test_gm_notes_keeps_the_template_s_text_when_nothing_is_sent(self):
+        vault = self.pc_vault("fitd")
+        code, out = new(vault, "pc", "Oswin", OSWIN.replace(
+            "### Backstory\n\n", ""), "--write")
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("INFO", out)
+        text = (vault / "Characters/PCs/Oswin.md").read_text(encoding="utf-8")
+        sheet = (TEMPLATES / "pc-fitd.md").read_text(encoding="utf-8")
+        self.assertEqual(section(text, "GM Notes"), section(sheet, "GM Notes"))
+
+    def test_a_part_the_sheet_lacks_is_hidden_and_said(self):
+        # FitD's Background has no ### Backstory: it goes under GM Notes,
+        # as any ### does, and the row says so.
+        vault = self.pc_vault("fitd")
+        code, out = new(vault, "pc", "Oswin", OSWIN, "--write")
+        self.assertEqual(code, 0, out)
+        self.assertIn("'### Backstory' was written under '## Background' and "
+                      "goes under GM Notes, hidden", out)
+        text = (vault / "Characters/PCs/Oswin.md").read_text(encoding="utf-8")
+        self.assertIn("### Backstory", section(text, "GM Notes"))
+
+    def test_the_vault_s_own_sheet_is_the_one_used(self):
+        mine = (TEMPLATES / "pc-pf2e.md").read_text(encoding="utf-8").replace(
+            "## Stat Sheet\n", "## Stat Sheet\n\nHouse sheet.\n", 1)
+        vault = self.pc_vault("pf2e", {"_Templates/pc-pf2e.md": mine})
+        code, out = new(vault, "pc", "Oswin", OSWIN, "--write")
+        self.assertEqual(code, 0, out)
+        self.assertIn("House sheet.", (vault / "Characters/PCs/Oswin.md")
+                      .read_text(encoding="utf-8"))
+
+    def test_a_coc_vault_holding_the_regency_sheet_uses_it(self):
+        regency = (TEMPLATES / "pc-coc-7e-regency.md").read_text(
+            encoding="utf-8")
+        vault = self.pc_vault("coc-7e",
+                              {"_Templates/pc-coc-7e-regency.md": regency})
+        code, out = new(vault, "pc", "Oswin", OSWIN, "--write")
+        self.assertEqual(code, 0, out)
+        self.assertIn("pc template (pc-coc-7e-regency.md)", out)
+        text = (vault / "Characters/PCs/Oswin.md").read_text(encoding="utf-8")
+        self.assertEqual(section(text, "Stat Sheet"),
+                         section(regency, "Stat Sheet"))
+
+    def test_the_note_is_filed_in_the_pc_folder(self):
+        vault = self.pc_vault("coc-7e")
+        code, out = new(vault, "pc", "Oswin", OSWIN, "--folder", "Retired",
+                        "--write")
+        self.assertEqual(code, 0, out)
+        self.assertTrue((vault / "Characters/PCs/Retired/Oswin.md").is_file())
+
+    def test_a_name_that_is_taken_is_refused(self):
+        vault = self.pc_vault("coc-7e", {
+            "Characters/PCs/Grenna.md": note("pc", aliases=["Fallowmere"])})
+        for name in ("Grenna", "Fallowmere", "Pilot Hale"):
+            with self.subTest(name=name):
+                code, out = new(vault, "pc", name, OSWIN, "--write")
+                self.assertEqual(code, 1, out)
+                self.assertIn("exists", out)
+        self.assertFalse((vault / "Characters/PCs/Fallowmere.md").exists())
+        self.assertFalse((vault / "Characters/PCs/Pilot Hale.md").exists())
+
+    def test_an_npc_who_joins_the_party_may_keep_its_name(self):
+        # --from-npc lets the PC take the NPC note's name, so npc-merge can
+        # fold that note into it; every other clash is still refused.
+        vault = self.pc_vault("coc-7e", {
+            "Characters/NPCs/Grenna.md": note("npc", aliases=["Fallowmere"])})
+        code, out = new(vault, "pc", "Grenna", OSWIN, "--write")
+        self.assertEqual(code, 1, out)
+        for name, npc, said in (("Pilot Hale", "Grenna", "exists"),
+                                ("Grenna", "Nobody", "not found")):
+            with self.subTest(name=name, npc=npc):
+                code, out = new(vault, "pc", name, OSWIN, "--from-npc", npc,
+                                "--write")
+                self.assertEqual(code, 1, out)
+                self.assertIn(said, out)
+        code, out = new(vault, "npc", "Grenna Two", "## Overview\n\nX.\n",
+                        "--from-npc", "Grenna")
+        self.assertEqual(code, 1, out)
+        self.assertIn("--from-npc: only with --type pc", out)
+        code, out = new(vault, "pc", "Grenna", OSWIN, "--from-npc",
+                        "Fallowmere", "--write")
+        self.assertEqual(code, 0, out)
+        self.assertIn('then npc-merge "Characters/NPCs/Grenna.md" '
+                      '"Characters/PCs/Grenna.md"', out)
+        code, out = run(vault, "npc-merge", "Characters/NPCs/Grenna.md",
+                        "Characters/PCs/Grenna.md", "--write")
+        self.assertEqual(code, 0, out)
+        self.assertFalse((vault / "Characters/NPCs/Grenna.md").exists())
+        self.assertTrue((vault / "Characters/PCs/Grenna.md").is_file())
+
+    def test_gm_notes_text_inside_the_sheet_s_fence_is_kept(self):
+        mine = (TEMPLATES / "pc-fitd.md").read_text(encoding="utf-8").replace(
+            "## GM Notes\n\n{Keeper-only notes. Protected — skills never "
+            "modify.}", "<!-- gm-only -->\n## GM Notes\n\nHouse prompt.\n"
+            "<!-- /gm-only -->", 1)
+        self.assertIn("House prompt.", mine)
+        vault = self.pc_vault("fitd", {"_Templates/pc-fitd.md": mine})
+        code, out = new(vault, "pc", "Oswin", OSWIN.replace(
+            "### Backstory\n\n", ""), "--write")
+        self.assertEqual(code, 0, out)
+        text = (vault / "Characters/PCs/Oswin.md").read_text(encoding="utf-8")
+        self.assertIn("## GM Notes\n\nHouse prompt.", text)
+
+    def test_a_pc_in_a_batch(self):
+        vault = self.pc_vault("dnd-5e-2024")
+        (vault / "batch.txt").write_text(
+            '=== entity-new --type npc --name "Abbot Severin"\n'
+            "---\nrelationships:\n  - target: \"[[Oswin]]\"\n"
+            "    type: knows\n---\n\n## Overview\n\nX.\n"
+            '=== entity-new --type pc --name "Oswin" --session 3\n'
+            + OSWIN, encoding="utf-8")
+        code, out = run(vault, "batch", str(vault / "batch.txt"), "--write")
+        self.assertEqual(code, 0, out)
+        self.assertIn("## Stat Sheet", (vault / "Characters/PCs/Oswin.md")
+                      .read_text(encoding="utf-8"))
+        self.assertIn("- **People:** [[Oswin]]",
+                      (vault / "Characters/NPCs/Abbot Severin.md")
+                      .read_text(encoding="utf-8"))
 
 
 class EntityNewBatchTests(unittest.TestCase):

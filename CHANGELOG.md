@@ -9,6 +9,12 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.80] — 2026-11-18
+
+### Added
+
+- `gma vault-write <vault> entity-new --type pc` makes a PC note: the vault's own system sheet, filed in the PC folder, with the fields, ties and sections you send and the sheet's tables kept to fill; `--from-npc` lets an NPC who joins the party keep its name, ready for `npc-merge` (#750).
+
 ## [1.12.79] — 2026-11-18
 
 ### Changed
