@@ -20,6 +20,7 @@ Usage:
   vault_check.py VAULT relationships [--folder SUB] [--file REL ...] [--newer-than REL]
   vault_check.py VAULT chapters      (a chapter with two chapter notes: ASK)
   vault_check.py VAULT npc-pairs     (one character with an NPC and a PC note: ASK)
+  vault_check.py VAULT npc-stats [--plan PLAN] [--played]   (NPCs with no stat block)
   vault_check.py VAULT sessions      (also: played sessions/Wrap-Ups not under Publishing)
   vault_check.py VAULT gm-leak [--folder SUB] [--fix]
   vault_check.py VAULT gm-leak --renest-excludes [--fix]
@@ -143,6 +144,16 @@ row and not listed. A row names the first three pages that name a note;
 row for a vault with no site, and one for a site whose tool is from before
 these findings. It sits outside `all`: the list is long and has its own
 procedure (campaign-qa's Site Faults).
+
+`npc-stats` lists the NPC notes whose stat block is missing or a
+placeholder, one row each: `MISSING`, `PLACEHOLDER` (the template's
+`{STAT BLOCK: …}` paragraph, a system block's `{…}` fields, or words
+saying it comes later), `BLANK` (an empty stat heading or score table) or
+`STOCK` (a major NPC with only a stock creature's name), then whether the
+NPC is major (`companion: true`, or linked from an adventure brief's
+`## Key NPCs`) or other. `--plan PLAN` keeps the NPCs that Plan's scenes
+name; `--played` those a Wrap-Up or a played scene links. A `# system:`
+line closes it. The rules are `npc_stats.py`'s; it stays outside `all`.
 
 Two commands are gates rather than reports and sit outside `all`:
 `version` emits one row whose first column is a verdict
@@ -5989,7 +6000,8 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("command", choices=["frontmatter", "names", "index",
                                         "stale-drafts", "changed", "tables",
                                         "timeline", "read-aloud",
-                                        "relationships", "chapters", "npc-pairs", "sessions",
+                                        "relationships", "chapters", "npc-pairs",
+                                        "npc-stats", "sessions",
                                         "gm-leak", "pc-body", "wrapup",
                                         "site-faults", "settings",
                                         "version", "active-pcs", "voices", "stories",
@@ -6019,6 +6031,12 @@ def build_parser() -> argparse.ArgumentParser:
                          "file's own mtime — a backstop scope, or a "
                          "completeness cross-check against an explicit "
                          "--file list")
+    ap.add_argument("--plan", metavar="PLAN",
+                    help="npc-stats only: just the NPCs this Session Plan's "
+                         "scenes name (its path, or its note name)")
+    ap.add_argument("--played", action="store_true",
+                    help="npc-stats only: just the NPCs a Wrap-Up or a "
+                         "played scene links")
     ap.add_argument("--json", action="store_true",
                     help="settings only: print the rows as JSON")
     ap.add_argument("--dry-run", action="store_true",
@@ -6082,6 +6100,10 @@ def _main(argv: list[str] | None) -> int:
 
     if not args.vault.is_dir():
         print(f"error: not a directory: {args.vault}", file=sys.stderr)
+        return 2
+    if (args.plan is not None or args.played) and args.command != "npc-stats":
+        print("error: --plan and --played need the npc-stats command",
+              file=sys.stderr)
         return 2
     if args.renest_excludes and (args.command != "gm-leak" or args.folder):
         print("error: --renest-excludes needs the gm-leak command and the "
@@ -6177,6 +6199,16 @@ def _main(argv: list[str] | None) -> int:
 
     if args.command == "settings":
         return check_settings(args.vault, args.fix, args.apply, args.json)
+    if args.command == "npc-stats":
+        import npc_stats  # its own module: it reads Plans and scenes
+        rows, error = npc_stats.check_npc_stats(args.vault, args.plan,
+                                                args.played)
+        if error:
+            print(f"error: {error}", file=sys.stderr)
+            return 2
+        emit("npc-stats", rows)
+        print(npc_stats.system_line(args.vault))
+        return 0
 
     explain = ExplainAll(args.vault)
     emit_rows = _emit_tool_once() if args.command == "all" else emit

@@ -130,6 +130,17 @@ promoted entity takes its `type:` from the vocabulary in
 map narrative verbs and normalize inverses via
 `shared/relationship-normalization.md` — never invent a predicate.
 
+A major NPC (companion, or in the brief's Key NPCs) gets a full
+workup now, built for who they are: abilities, spells, equipment, a
+signature feature, and tactics, through `ttrpg-expert/npc-generation.md`
+and the system's files, in its batch block's GM Notes (a `### Stats`
+section). Any other NPC planned to fight or cast gets at least a stock
+block. Never write that a block will be built later. After the batch,
+run `gma vault-check <vault> npc-stats`: any row for an NPC just
+promoted is built before the handoff. If the game system is still
+undecided, that is the one allowed gap, and it goes in the brief's Open
+Questions.
+
 **2b. Plan promotion** — List all topic files from
 `_midwife/{adventure}/` that contain narrative planning
 content (arc design, scene designs, investigation flows,
