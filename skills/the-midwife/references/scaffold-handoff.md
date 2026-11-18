@@ -132,7 +132,8 @@ map narrative verbs and normalize inverses via
 
 A major NPC (companion, or in the brief's Key NPCs) gets a full
 workup now, built for who they are: abilities, spells, equipment, a
-signature feature, and tactics, through `ttrpg-expert/npc-generation.md`
+signature feature, and tactics, with numbers of its own (never a
+reskinned stock block), through `ttrpg-expert/npc-generation.md`
 and the system's files, in its batch block's GM Notes (a `### Stats`
 section). Any other NPC the plans put in a fight or casting gets at
 least a stock block. Never write that a block will be built later.
