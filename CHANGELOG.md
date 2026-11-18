@@ -10,6 +10,12 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 ---
 
 
+## [1.12.88] — 2026-11-19
+
+### Fixed
+
+- After a workaround is answered `retire`, the update's report says nothing is retired yet and gives the `gma workaround retire` command to run once it is swapped for the built-in way (#774).
+
 ## [1.12.87] — 2026-11-19
 
 ### Changed

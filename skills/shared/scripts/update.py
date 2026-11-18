@@ -370,7 +370,10 @@ def _offers(record: update_record.Record, plugin_v: str,
         elif answer in ("keep", "leave"):
             out.keep.append(str(w["id"]))
         elif answer == "retire":
-            out.notes.append(f"Retire {w['id']}: {where}")
+            out.notes.append(
+                f"Retire {w['id']}: {where}. Nothing is retired yet: swap it "
+                f"for the built-in way, then run gma workaround retire "
+                f"\"<vault>\" {w['id']} --reason \"<why>\".")
         else:
             out.questions.append(Question(
                 qid, "asks", text, list(WORKAROUND_OPTIONS),
