@@ -718,6 +718,27 @@ class ThreadNameTierTests(unittest.TestCase):
         self.assertEqual(idx.mentions("Dorothea wrote back"), {her})
         self.assertEqual(idx.mentions("Dorothea's letter came"), {her})
 
+    def test_phrases_survive_a_sentence_start_and_skip_pc_names(self):
+        tmp = self.make(["x"], "#### Unresolved Threads\n\n- a\n")
+        idx = sc.NameIndex(load_files(tmp))
+        road = "phrase:pale road"
+        self.assertIn(road, idx.mentions("Visit Pale Road before dusk"))
+        self.assertIn(road, idx.mentions("The Pale Road is flooded"))
+        # A PC's name (whole or given) builds no phrase.
+        self.assertEqual(idx.mentions("Ask Ilsa Marrow about the debt"), set())
+        self.assertEqual(idx.mentions("Ask Ilsa about the debt"), set())
+        # Capitals outside A-Z count.
+        self.assertIn("phrase:ébène noire", idx.mentions("Meet at Ébène Noire"))
+
+    def test_particles_and_accented_names_mark_another_person(self):
+        tmp = self.make(["x"], "#### Unresolved Threads\n\n- a\n",
+                        extra_notes=[("Miss_Dorothea_Bexley", "npc", "")])
+        idx = sc.NameIndex(load_files(tmp))
+        her = "Miss_Dorothea_Bexley.md"
+        self.assertNotIn(her, idx.mentions("Dorothea van der Courlande signed"))
+        self.assertNotIn(her, idx.mentions("Dorothea Évrard signed"))
+        self.assertIn(her, idx.mentions("Dorothea, again"))
+
     def test_a_decomposed_file_name_matches_composed_text(self):
         import unicodedata
         tmp = self.make(

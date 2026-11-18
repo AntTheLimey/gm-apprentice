@@ -552,15 +552,34 @@ _NAMED_TYPES = frozenset({"npc", "creature", "faction", "organization",
 _GIVEN_NAME_TYPES = frozenset({"npc", "creature"})
 
 
-# Two or more capitalised words in a row: "Widow's Stair", "The Pale Road".
-_PHRASE_RE = re.compile(
-    r"(?<![\w'\u2019])[A-Z][\w'\u2019]*(?:[ \t]+[A-Z][\w'\u2019]*)+")
+# A word, for finding runs of capitalised ones (any script's capitals).
+_WORD_RE = re.compile(r"[^\W\d_][\w'\u2019]*")
 
 
-# The capitalised word that follows a given name, past a particle.
+def _capital_runs(text: str) -> list[list[str]]:
+    """Each run of two or more capitalised words with only spaces between
+    them: "Widow's Stair", "The Pale Road", "Ébène Noire"."""
+    runs: list[list[str]] = []
+    run: list[str] = []
+    end = -1
+    for m in _WORD_RE.finditer(text):
+        if m.group(0)[0].isupper() and (run and not text[end:m.start()].strip(" \t")
+                                        or not run):
+            run.append(m.group(0))
+        else:
+            if len(run) >= 2:
+                runs.append(run)
+            run = [m.group(0)] if m.group(0)[0].isupper() else []
+        end = m.end()
+    if len(run) >= 2:
+        runs.append(run)
+    return runs
+
+
+# The word that follows a given name, past any particles ("de", "van der").
 _NEXT_NAME_RE = re.compile(
     r"[ \t]+(?:(?:de|du|des|da|di|del|della|von|van|der|den|la|le|of|bin|ibn|al)"
-    r"[ \t]+)?([A-Z][\w'\u2019-]*)")
+    r"[ \t]+)*([^\W\d_][\w'\u2019-]*)")
 
 
 class NameIndex:
@@ -590,11 +609,16 @@ class NameIndex:
         words: dict[str, set[str]] = {}     # single word, as written -> notes
         given: dict[str, set[str]] = {}     # npc/creature title word
         self._own: dict[str, set[str]] = {}  # note -> its name words, casefolded
+        blank: set[str] = set()     # names a phrase must not be built from
         for rel, _text, fm in files:
             kind = entity_type(fm)
-            self._any_name.update(
-                normalize(n.replace("_", " ")) for n in
-                [Path(rel).stem, *link_aliases(fm)] if n.strip())
+            names_here = [unicodedata.normalize("NFC", n.replace("_", " ")).strip()
+                          for n in [Path(rel).stem, *link_aliases(fm)]]
+            self._any_name.update(normalize(n) for n in names_here if n)
+            blank.update(n for n in names_here if " " in n)
+            if kind == "pc":     # a PC's given name alone is no phrase either
+                blank.update(n.split()[0] for n in names_here
+                             if len(n.split()) > 1 and len(n.split()[0]) >= 3)
             if kind not in _NAMED_TYPES:
                 continue
             stem = unicodedata.normalize(
@@ -641,6 +665,10 @@ class NameIndex:
         self._shared_re = (re.compile(
             edge[0] + "|".join(re.escape(n) for n in shared) + edge[1],
             re.IGNORECASE) if shared else None)
+        known = sorted(blank, key=len, reverse=True)
+        self._known_re = (re.compile(
+            edge[0] + "|".join(re.escape(n) for n in known) + edge[1],
+            re.IGNORECASE) if known else None)
         self._cache: dict[str, set[str]] = {}
         self.lines: list[tuple[int, list[str]]] = []
         for n, text in _scoped_wrap_ups(files, chapter):
@@ -665,7 +693,7 @@ class NameIndex:
         is none of the note's own name words."""
         after = _NEXT_NAME_RE.match(bare, m.end())
         owner = self._words.get(m.group(0))
-        return bool(after and owner
+        return bool(after and owner and after.group(1)[0].isupper()
                     and after.group(1).casefold() not in self._own.get(owner, set()))
 
     def mentions(self, text: str) -> set[str]:
@@ -700,13 +728,22 @@ class NameIndex:
         # note is named ("the Widow's Stair", described inside another
         # note) is evidence too. A note's own name is the tiers above (or,
         # a PC's or a shared name, deliberately none).
-        for m in _PHRASE_RE.finditer(bare):
-            whole = re.sub(r"^(?:The|A|An)\s+", "", m.group(0))
-            phrase = re.sub(r"['\u2019]s$", "", whole)
-            if (len(phrase.split()) >= 2
-                    and normalize(whole) not in self._any_name
-                    and normalize(phrase) not in self._any_name):
-                found.add("phrase:" + normalize(phrase))
+        # Known names are taken out first, so "Ask Ilsa Marrow" (a PC) builds
+        # no phrase. A run's first word may only start the sentence ("Visit
+        # Pale Road"), so the run without it counts as well.
+        plain = (self._known_re.sub(lambda m: " " * len(m.group(0)), bare)
+                 if self._known_re else bare)
+        for run in _capital_runs(plain):
+            if run[0] in ("The", "A", "An"):
+                run = run[1:]
+            for words in (run, run[1:]):
+                if len(words) < 2:
+                    continue
+                whole = " ".join(words)
+                phrase = re.sub(r"['\u2019]s$", "", whole)
+                if (normalize(whole) not in self._any_name
+                        and normalize(phrase) not in self._any_name):
+                    found.add("phrase:" + normalize(phrase))
         found -= self._everywhere
         self._cache[text] = found
         return found
