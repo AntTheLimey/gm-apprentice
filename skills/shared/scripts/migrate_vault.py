@@ -25,7 +25,7 @@ from vault_check import (PLAY_RECORD_TYPES, WRAP_TYPES, publish_list_sets,
                          shared_threads_tool_too_old,
                          wrapup_filename_findings)
 from vaultlib import (WRAP_UP_TYPES, StateUnreadable, campaign_overview,
-                      effectively_empty, entity_type, extract_frontmatter, is_active_pc, out_of_play,
+                      delete_key, effectively_empty, opens_a_block, entity_type, extract_frontmatter, is_active_pc, out_of_play,
                       set_key, frontmatter_span,
                       parse_version, plugin_version,
                       read_held, read_stamp, settings,
@@ -1018,6 +1018,94 @@ def find_scaffold_pre_play(vault: Path) -> list[Item]:
                   for rel in found], apply)]
 
 
+# --- the adventure brief's adventure_shape field ------------------------------
+
+# 1.12.63 (#735): the brief's `adventure_shape` took one of five words
+# (linear, branching, hub-and-spoke, open-node, sandbox). It could not say
+# what a GM chose ("a fixed spine with session 2 open"), so it misstated it,
+# and it was read as the GM's decision. The shape is the brief's
+# `### Adventure Shape` section, in the GM's words. The line goes as
+# bookkeeping when the field is empty or the brief has that section written;
+# a word in the field with no section to hold it is asked first.
+SHAPE_KEY = "adventure_shape"
+SHAPE_HEADING_RE = re.compile(r"^(#{2,3})[ \t]+Adventure Shape[ \t]*$", re.M)
+
+
+def _shape_field(fm: list[str], _rel: str) -> bool:
+    return (_fm_type(fm) == "adventure-brief"
+            and any(line.startswith(f"{SHAPE_KEY}:") for line in fm)
+            and not opens_a_block(fm, SHAPE_KEY))
+
+
+def _shape_written(text: str) -> bool:
+    """Whether the brief's Adventure Shape section holds the GM's words
+    (not only the template's {hint} or a comment)."""
+    text = re.sub(r"<!--.*?-->", "", text, flags=re.S)
+    m = SHAPE_HEADING_RE.search(text)
+    if not m:
+        return False
+    rest = text[m.end():]
+    stop = re.search(rf"^#{{1,{len(m.group(1))}}}[ \t]", rest, re.M)
+    body = re.sub(r"<!--.*?-->", "", rest[:stop.start()] if stop else rest, flags=re.S)
+    return any(line.strip() and not re.fullmatch(r"\{.*\}", line.strip(), re.S)
+               for line in body.splitlines())
+
+
+def _shape_kinds(vault: Path) -> tuple[list[str], dict[str, str]]:
+    """(briefs whose line goes as bookkeeping, {brief: its word} for those
+    with a word and no Adventure Shape writing to hold it)."""
+    plain: list[str] = []
+    asked: dict[str, str] = {}
+    for rel in _notes_with(vault, _shape_field):
+        text = (vault / rel).read_text(encoding="utf-8")
+        value = (extract_frontmatter(text) or {}).get(SHAPE_KEY)
+        word = "" if effectively_empty(value) else str(value).strip()
+        if word and not _shape_written(text):
+            asked[rel] = word
+        else:
+            plain.append(rel)
+    return plain, asked
+
+
+def _drop_shape(vault: Path, rels: list[str]) -> list[str]:
+    done = []
+    for rel in rels:
+        said: list[str] = []
+
+        def change(fm: list[str], _eol: str) -> None:
+            if _shape_field(fm, rel):
+                gone = delete_key(fm, SHAPE_KEY)
+                if gone:
+                    said.append(gone)
+        edit_frontmatter(vault / rel, change)
+        done += [f"removed {line.strip()} from {rel}" for line in said]
+    return done
+
+
+def find_adventure_shape(vault: Path) -> list[Item]:
+    """1.12.63: the adventure brief's `adventure_shape` line is removed.
+    The brief's `### Adventure Shape` section holds the shape."""
+    plain, asked = _shape_kinds(vault)
+    items: list[Item] = []
+    if plain:
+        items.append(Item(
+            "adventure-shape", WILL,
+            [f"remove {SHAPE_KEY} from {rel} (its Adventure Shape section "
+             f"says the shape)" for rel in plain],
+            lambda _v: _drop_shape(vault, _shape_kinds(vault)[0])))
+    if asked:
+        items.append(Item(
+            "adventure-shape-word", CHOICE,
+            [f"remove {SHAPE_KEY}: {word} from {rel} (the brief has no "
+             f"Adventure Shape section written; write the shape there in "
+             f"your own words first if you want it kept)"
+             for rel, word in asked.items()],
+            lambda _v: _drop_shape(vault, [r for r in _shape_kinds(vault)[1]
+                                           if r in asked]),
+            kind="removes"))
+    return items
+
+
 # --- the `publish` row of the schema table -----------------------------------
 
 # 1.11.3: the stock schema table in `_meta/entity-types.md` once wrote the
@@ -1387,4 +1475,10 @@ VAULT_CHECKS: list[Check] = [
           "scaffold notes made before play", find_scaffold_pre_play,
           kind="bookkeeping",
           plain=("Marked the adventure brief and world notes the Midwife wrote before play as made before play, so the stale-draft check can date them and the next reconcile promotes them. Until it runs, an old one may show as a stale draft made before play.")),
+    Check("adventure-shape", "1.12.63", 3,
+          "the adventure brief's adventure_shape field", find_adventure_shape,
+          choices=("adventure-shape-word",), kind="bookkeeping",
+          plain=("Removed the adventure brief's adventure_shape field, a one-word label that could not say what you chose; the brief's Adventure Shape section keeps the shape in your words."),
+          ask=("Removes the adventure brief's one-word adventure_shape field; the brief has no Adventure Shape section written, so the word is not kept anywhere."),
+          left=("Kept the adventure_shape line in your brief; nothing reads it.")),
 ]

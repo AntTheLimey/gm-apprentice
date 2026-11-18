@@ -116,6 +116,7 @@ decision rather than pure score.
 
 ## Completed
 
+- ~~The adventure brief's `adventure_shape` misstates the GM's choice~~ — field removed; the brief's Adventure Shape section holds the shape (#735, v1.12.68)
 - ~~An NPC's hidden fate has no plain place~~ — wrap-up's Behind the Scenes line opens with the fate; `status:` stays what players know (#739, v1.12.67)
 - ~~plan-check flags "15 minutes left" as a scene estimate~~ — session-clock times are left alone (#726, v1.12.66)
 - ~~Unfilled template placeholders publish on NPC pages~~ — a lone `{…}` paragraph or bullet and the heading it empties are left off; build warning plus a Site Faults row (#720, v1.12.65)

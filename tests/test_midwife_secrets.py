@@ -411,10 +411,13 @@ class TheReferenceMatchesTheSchema(unittest.TestCase):
         text = (ROOT / "skills" / "the-midwife" / "references"
                 / "scaffold-handoff.md").read_text(encoding="utf-8")
         checked = schema_rules.CHECKED_VALUES["adventure-brief"]
-        for field in ("scope", "continuation_type", "adventure_shape"):
+        for field in ("scope", "continuation_type"):
             line = next(ln for ln in text.splitlines() if ln.startswith(f"{field}: <"))
             shown = {v.strip() for v in line.split("<", 1)[1].rstrip(">").split("|")}
             self.assertEqual(shown, set(checked[field]), field)
+        # #735: the shape is the brief's own section, not a one-word field.
+        self.assertNotIn("adventure_shape", text)
+        self.assertNotIn("adventure_shape", checked)
 
     def test_every_section_of_the_table_is_in_the_template(self):
         import re

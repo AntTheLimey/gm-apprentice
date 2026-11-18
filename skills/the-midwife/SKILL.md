@@ -123,8 +123,10 @@ Stress Test, anti-patterns table — plus
 `ttrpg-expert/gm-session-patterns.md` (session 0) and
 `ttrpg-expert/arc-spotlight-reference.md` (long-term arcs).
 
-- **Shape:** help the GM choose linear, branching,
-  hub-and-spoke, open-node or sandbox deliberately.
+- **Shape:** work out with the GM how the sessions run (which
+  go in order, which are open for the players to choose, and why),
+  in the GM's words. Adventure Shapes are patterns to offer, not a
+  label to pick; the brief's `### Adventure Shape` holds the answer.
 - **Scope:** reflect what is emerging rather than asking
   "campaign or one-shot?"; an existing vault inherits scope.
   Campaign → arcs, long-term factions, PC growth. One-shot →

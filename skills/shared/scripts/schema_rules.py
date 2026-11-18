@@ -105,9 +105,6 @@ ADVENTURE_BRIEF_CONTINUATION = {
     "new", "new-chapter", "new-arc", "time-jump",
     "prequel", "parallel", "new-pcs"
 }
-ADVENTURE_BRIEF_SHAPE = {
-    "linear", "branching", "hub-and-spoke", "open-node", "sandbox"
-}
 WORLD_DOMAIN_STATUS = {"active", "stub", "inactive"}
 PLAN_TYPES = {"arc", "scene", "investigation", "timeline"}
 # Named by the schema, checked by nothing: how a note entered canon, and
@@ -132,8 +129,7 @@ CHECKED_VALUES: dict[str, dict[str, frozenset[str]]] = {
     "npc": {"status": frozenset(NPC_STATUS)},
     "pc": {"status": PC_STATUS},
     "adventure-brief": {"scope": frozenset(ADVENTURE_BRIEF_SCOPE),
-                        "continuation_type": frozenset(ADVENTURE_BRIEF_CONTINUATION),
-                        "adventure_shape": frozenset(ADVENTURE_BRIEF_SHAPE)},
+                        "continuation_type": frozenset(ADVENTURE_BRIEF_CONTINUATION)},
     "campaign_overview": {"status": frozenset(CAMPAIGN_OVERVIEW_STATUS),
                           "scope": frozenset(ADVENTURE_BRIEF_SCOPE)},
     "world_domain": {"status": frozenset(WORLD_DOMAIN_STATUS)},

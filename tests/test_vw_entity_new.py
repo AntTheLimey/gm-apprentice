@@ -785,7 +785,6 @@ BRIEF = """---
 system: dnd-5e-2024
 scope: few-shot
 sessions_estimated: "3-4"
-adventure_shape: branching
 ---
 
 ## Open Questions
@@ -839,8 +838,7 @@ class AdventureBriefTests(unittest.TestCase):
                                            ).read_text(encoding="utf-8"))
         self.assertEqual(list(fm), list(template))
         self.assertEqual(fm["title"], "The Marrow Light")
-        self.assertEqual((fm["scope"], fm["adventure_shape"], fm["campaign"]),
-                         ("few-shot", "branching", ""))
+        self.assertEqual((fm["scope"], fm["campaign"]), ("few-shot", ""))
 
     def test_its_title_may_say_more_than_its_file_name(self):
         code, out = self.brief(

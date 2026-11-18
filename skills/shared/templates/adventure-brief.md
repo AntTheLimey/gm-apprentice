@@ -8,7 +8,6 @@ scope: ""                 # campaign / one-shot / few-shot
 sessions_estimated: ""    # a number or a range
 campaign: ""              # the campaign's name, in an existing vault
 continuation_type: ""     # new / new-chapter / new-arc / time-jump / prequel / parallel / new-pcs
-adventure_shape: ""       # linear / branching / hub-and-spoke / open-node / sandbox
 tags: []
 aliases: []
 source_document: ""
