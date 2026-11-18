@@ -127,7 +127,7 @@ from vaultlib import (GM_MARKER_RE, is_active_pc, marker_re,  # noqa: F401
                       entity_type,
                       atx_title, fenced_headings, find_section_lines,
                       h3_blocks, line_headings, nested_mapping,
-                      normalize, raw_frontmatter, section,
+                      link_name, normalize, raw_frontmatter, section,
                       session_ref_number, word_count)
 from vaultlib import LABEL_RE as _LABEL_RE
 from vaultlib import BULLET_RE, markers_in
@@ -603,6 +603,10 @@ class NameIndex:
                        if len(r) == 1}
         multi = sorted((n for n in self._links if " " in n),
                        key=len, reverse=True)
+        # A full name two notes share names neither, and its words must
+        # not name one of them either: those spans are blanked first.
+        shared = sorted((n for n, r in owners.items()
+                         if len(r) > 1 and " " in n), key=len, reverse=True)
         single = sorted(self._words, key=len, reverse=True)
         edge = (r"(?<![^\W_])(?:", r")(?:['\u2019]s)?(?![^\W_])")
         self._multi_re = (re.compile(
@@ -611,6 +615,9 @@ class NameIndex:
         self._word_re = (re.compile(
             edge[0] + "|".join(re.escape(n) for n in single) + edge[1])
             if single else None)
+        self._shared_re = (re.compile(
+            edge[0] + "|".join(re.escape(n) for n in shared) + edge[1],
+            re.IGNORECASE) if shared else None)
         self._cache: dict[str, set[str]] = {}
         self.lines: list[tuple[int, list[str]]] = []
         for n, text in _scoped_wrap_ups(files, chapter):
@@ -636,19 +643,23 @@ class NameIndex:
         text_nfc = unicodedata.normalize("NFC", text)
         found: set[str] = set()
         for m in _THREAD_LINK_RE.finditer(text_nfc):
-            name = normalize(m.group(1).rpartition("/")[2])
+            name = normalize(link_name(m.group(1)))
             owner = (self._links.get(name)
                      or self._links.get(re.sub(r"^(the|a|an) ", "", name)))
             if owner:
                 found.add(owner)
         bare = re.sub(r"\[\[([^\]|]+)(?:\|[^\]]+)?\]\]", r"\1", text_nfc)
+        if self._shared_re:
+            bare = self._shared_re.sub(lambda m: " " * len(m.group(0)), bare)
         for rx in (self._multi_re, self._word_re):
             for m in (rx.finditer(bare) if rx else ()):
-                name = re.sub(r"['\u2019]s$", "", m.group(0))
-                owner = (self._links.get(normalize(name)) if rx is
-                         self._multi_re else self._words.get(name))
-                if owner:
-                    found.add(owner)
+                # The whole match first: a title may end in 's ("St James's").
+                for name in (m.group(0), re.sub(r"['\u2019]s$", "", m.group(0))):
+                    owner = (self._links.get(normalize(name)) if rx is
+                             self._multi_re else self._words.get(name))
+                    if owner:
+                        found.add(owner)
+                        break
         found -= self._everywhere
         self._cache[text] = found
         return found

@@ -668,6 +668,27 @@ class ThreadNameTierTests(unittest.TestCase):
         first = idx.mentions("Tam Rowe is here")
         self.assertIs(idx.mentions("Tam Rowe is here"), first)
 
+    def test_a_link_written_with_md_names_its_note(self):
+        tmp = self.make(["x"], "#### Unresolved Threads\n\n- a\n")
+        idx = sc.NameIndex(load_files(tmp))
+        self.assertEqual(idx.mentions("took [[cart.md|it]] south"), {"Cart.md"})
+        self.assertEqual(idx.mentions("took [[cart|it]] south"), {"Cart.md"})
+
+    def test_a_full_name_two_notes_share_names_neither_by_its_words(self):
+        tmp = self.make(["x"], "#### Unresolved Threads\n\n- a\n",
+                        extra_notes=[("Old Hand", "npc", "aliases: [Tam Rowe]")])
+        idx = sc.NameIndex(load_files(tmp))
+        self.assertEqual(idx.mentions("[[Tam Rowe]] left"), set())
+        self.assertEqual(idx.mentions("Tam Rowe left"), set())
+
+    def test_a_title_ending_in_s_matches_whole(self):
+        tmp = self.make(["x"], "#### Unresolved Threads\n\n- a\n",
+                        extra_notes=[("St James's", "location", "")])
+        idx = sc.NameIndex(load_files(tmp))
+        self.assertEqual(idx.mentions("Meet at St James's tonight"), {"St James's.md"})
+        # An ordinary possessive still names its note.
+        self.assertEqual(idx.mentions("Durgan Flintmere's cart"), {"Durgan Flintmere.md"})
+
     def test_a_decomposed_file_name_matches_composed_text(self):
         import unicodedata
         tmp = self.make(
