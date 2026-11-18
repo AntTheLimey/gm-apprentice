@@ -186,9 +186,10 @@ the GM.
   --help, -h         Show this help
 
 sheet set writes the values given into the PC's sheet with the writers flush
-uses, and prints flush's per-PC line ("✓ Brannoc — HP (Current) 34→41"). Only
-cells the sheet already has change: a key whose row is missing is reported
-("no writable Temp HP row on this sheet") and left alone. An unknown key, or a
+uses, and prints flush's per-PC line ("✓ Brannoc — HP (Current) 34→41"). On a
+D&D or CoC sheet only cells it already has change: a key whose row is missing is
+reported ("no writable Temp HP row on this sheet") and left alone. GURPS HP and
+FP go to Current Status's **HP:**/**FP:** lines, added if missing, as flush does. An unknown key, or a
 value of the wrong shape, writes nothing. Keys by system:
 
   D&D 5e     hp, temp, exhaustion (0-6), conditions (comma list, or none),

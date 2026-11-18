@@ -25,8 +25,9 @@ list it ends with.
 
 `sheet` writes a PC's vitals (`hp=41 hit-dice=1/5`) into the Stat
 Sheet's own cells, by the publish tool's writers (the ones `flush` uses,
-`gm-publish sheet set --help` lists the keys): a key with no row on the
-sheet is a WARNING and left alone; an unknown key refuses the block.
+`gm-publish sheet set --help` lists the keys; D&D, CoC and GURPS only):
+a key with no row on the sheet is a WARNING and left alone; an unknown
+key refuses the block.
 
 `names` rows are spellings to put right: every other block's text has
 each export spelling (a whole word, case kept) replaced by the vault's,

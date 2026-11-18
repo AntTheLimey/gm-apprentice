@@ -240,9 +240,9 @@ the narrative. Apply the house rules as you would the book.
    in the Keeper Checklist.
 4. End-of-session vitals the Play Notes or the GM give (HP, Hit
    Dice spent, Sanity, conditions) go in the Current Status prose and
-   in a `=== sheet <PC> hp=41 hit-dice=1/5` block, which writes the
-   Stat Sheet the party board reads (a wrong key's refusal lists the
-   keys). A value not given is left alone, never guessed. A field
+   in a `=== sheet <PC> hp=41 hit-dice=1/5` block after them, which
+   writes the Stat Sheet the party board reads (D&D, CoC, GURPS; a
+   wrong key's refusal lists the keys). A value not given is left alone, never guessed. A field
    step 1's flush changed is the player's: leave it as flush wrote
    it, and where the notes disagree, 5b's review names both for the
    GM.

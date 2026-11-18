@@ -21,6 +21,7 @@ const { systemId } = require('./shared-lists');
 const { resolveSystem, summarize, WRITERS } = require('./flush-cli');
 const { findPc, displayNameOf } = require('./sheet-cli');
 const { liveSheet } = require('./flush/dnd-writeback');
+const { fitConditions } = require('../js/dnd-live');
 
 class SheetSetError extends Error {}
 
@@ -30,6 +31,30 @@ function whole(key, value, most) {
   const n = Number(value);
   if (most !== undefined && n > most) throw new SheetSetError(`${key}=${value}: at most ${most}`);
   return n;
+}
+
+// A whole number that may go below 0 (GURPS HP and FP do).
+function signed(key, value) {
+  if (!/^-?\d+$/.test(value)) throw new SheetSetError(`${key}=${value}: want a whole number (it may be negative)`);
+  return Number(value);
+}
+
+// A comma list of D&D conditions. The writer keeps only names that pass the page's own
+// rule (fitConditions), so a name it would drop is refused here instead of lost quietly.
+function conditionList(value) {
+  if (/^(—|–|-|none)?$/i.test(value.trim())) return [];
+  const names = [];
+  for (const n of value.split(',').map(s => s.trim()).filter(Boolean)) {
+    if (!names.some(m => m.toLowerCase() === n.toLowerCase())) names.push(n);
+  }
+  const bad = names.filter(n => fitConditions([n]).length === 0);
+  if (bad.length) {
+    throw new SheetSetError(`conditions=${value}: the sheet can't hold ${bad.map(n => `"${n}"`).join(', ')} (letters, digits, spaces, ' - and ( ) only, up to 60 characters a name); nothing written`);
+  }
+  if (fitConditions(names).length !== names.length) {
+    throw new SheetSetError(`conditions=${value}: at most 20 conditions; nothing written`);
+  }
+  return names;
 }
 
 // yes/no, read with the settings' own switch words.
@@ -57,7 +82,7 @@ const DND = {
   conditions: {
     row: 'Conditions',
     // A comma list; a dash or "none" clears it.
-    record: v => ({ conditions: /^(—|–|-|none)?$/i.test(v.trim()) ? [] : v.split(',').map(s => s.trim()).filter(Boolean) }),
+    record: v => ({ conditions: conditionList(v) }),
     probes: [{ conditions: [] }, { conditions: ['Prone'] }],
   },
   inspiration: { row: 'Heroic Inspiration', record: v => ({ inspiration: yesNo('inspiration', v) }), probes: [{ inspiration: true }, { inspiration: false }] },
@@ -88,8 +113,8 @@ function cocKeys(regency) {
 }
 
 const GURPS = {
-  hp: { row: '**HP:** line in Current Status', record: v => ({ hp: whole('hp', v) }), probes: NUMBER_PROBES.map(n => ({ hp: n })) },
-  fp: { row: '**FP:** line in Current Status', record: v => ({ fp: whole('fp', v) }), probes: NUMBER_PROBES.map(n => ({ fp: n })) },
+  hp: { row: '**HP:** line in Current Status', record: v => ({ hp: signed('hp', v) }), probes: NUMBER_PROBES.map(n => ({ hp: n })) },
+  fp: { row: '**FP:** line in Current Status', record: v => ({ fp: signed('fp', v) }), probes: NUMBER_PROBES.map(n => ({ fp: n })) },
 };
 
 // A Hit Dice row's key on the command line: `hit-dice`, or `hit-dice-d10` beside a second row.

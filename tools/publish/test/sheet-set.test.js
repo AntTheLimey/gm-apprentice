@@ -70,6 +70,9 @@ test('D&D: every key lands in its own cell', async () => {
   assert.match(row(r.text, /^\| Death Saves/), /\| 2\/1 \|/);
   assert.match(row(r.text, /^\| Hit Dice/), /\| 3\/5 \|/);
   assert.match(row(r.text, /^\| HP \(Current\)/), /\| 34 \|/, 'hp was not given, so it stays');
+  const twice = await run(BRANNOC, ['conditions=Poisoned, poisoned']);
+  assert.equal(twice.code, 0, twice.err);
+  assert.match(twice.text, /\| Conditions \| Poisoned \|/);
   const cleared = await run(r.text, ['conditions=none']);
   assert.match(row(cleared.text, /^\| Conditions/), /\| — \|/);
 });
@@ -106,6 +109,8 @@ test('a value of the wrong shape writes nothing', async () => {
     [['exhaustion=7'], /exhaustion=7: at most 6/],
     [['inspiration=maybe'], /want yes or no/],
     [['death-saves=4/0'], /death-saves=4\/0/],
+    [['conditions=Poisoned, Restrained/Grappled, Cursed: no healing'], /can't hold "Restrained\/Grappled", "Cursed: no healing"/],
+    [['conditions=Grappled.'], /can't hold "Grappled\."/],
     [['hp=41', 'hp=40'], /hp is given twice/],
     [['hp'], /hp: want key=value/],
     [[], /at least one key=value/],
@@ -207,6 +212,10 @@ test("GURPS: hp and fp go to Current Status's HP/FP lines through flush's writer
   assert.equal(r.code, 0, r.err);
   assert.match(r.text, /## Current Status[\s\S]*\*\*HP:\*\* 5\/11/);
   assert.match(r.text, /\*\*FP:\*\* 3\/11/);
+  const down = await run(KARL, ['hp=-4', 'fp=-1'], { name: 'Karl', system: 'gurps-4e' });
+  assert.equal(down.code, 0, down.err);
+  assert.match(down.text, /\*\*HP:\*\* -4\/11/);
+  assert.match(down.text, /\*\*FP:\*\* -1\/11/);
   const pinned = KARL.replace('status: active', 'status:\n  hp: 9');
   const p = await run(pinned, ['hp=5'], { name: 'Karl', system: 'gurps-4e' });
   assert.equal(p.code, 1);
