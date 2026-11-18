@@ -125,7 +125,7 @@ wiki-links; entity notes link back to sessions in their
 
 - **Writing an entity:** read `_Templates/_Template_{Type}.md`
   first and use it as the structure — never pattern-match off
-  existing entity files. A new NPC, place, group, creature, item,
+  existing entity files. A new NPC, PC, place, group, creature, item,
   event, document, clue or heritage goes in through
   `gma vault-write <vault> entity-new --type <type> --name "<Name>"`
   (preview, then `--write`; several: blocks of one `batch`, the
@@ -136,8 +136,8 @@ wiki-links; entity notes link back to sessions in their
   summarize or restyle it
   (an over-long entity is recoverable, a summarized one is lossy).
   (rationale: `shared/content-fidelity.md`)
-- **One note per character:** an NPC who becomes a PC gets the PC
-  note from its template, then `gma vault-write <vault> npc-merge
+- **One note per character:** an NPC who becomes a PC gets a PC
+  note (`entity-new --type pc`), then `gma vault-write <vault> npc-merge
   "<NPC note>" "<PC note>"` (preview, then `--write`); a retired PC
   keeps its PC note. See `shared/pc-body-structure.md`.
 - **World rules:** if `_World/` exists, check each created or

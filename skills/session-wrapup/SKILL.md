@@ -164,7 +164,7 @@ never regenerates it.
 
 **Active PC roster** (also used by 3b and 3c): `gma vault-check <vault> active-pcs`, minus any PC off-screen this session.
 A PC who acted this session but has no note: create it now as a new
-entity (Step 4) from the PC template, its `=== note-new` block ahead
+entity (Step 4), its `=== entity-new --type pc` block ahead
 of the 3b and 3c blocks that name it, holding only the name, the
 player and what they did this session; backstory, appearance and
 personality stay empty for the player (`shared/pc-body-structure.md`
@@ -267,11 +267,12 @@ creating entities.
   puts every `###` under GM Notes inside its fence and writes
   `## Related` and `### Hidden Ties` from the edges: send neither. A
   tie to a note that neither exists nor is made earlier in the batch
-  takes `target_type: <its type>`. A PC is not an `entity-new` type:
-  its note is a `note-new` block from the PC template. Content session-play already saved goes in verbatim — the template
+  takes `target_type: <its type>`. A PC is `--type pc`: it is made
+  from the vault's system sheet (`_Templates/pc-<system>.md`), and a
+  `##` section you leave out keeps the sheet's own. Content session-play already saved goes in verbatim — the template
   supplies structure, not replacement prose. Never pattern-match off
   existing entity files. An NPC who joins the party as a PC: the PC
-  note from its template in the batch; after the batch is written,
+  note (`--type pc`) in the batch; after the batch is written,
   run `vw npc-merge "<NPC note>" "<PC note>"` as its own step, show
   the GM its plan, and on a yes run it with `--write`: one note per
   character (`shared/pc-body-structure.md`).

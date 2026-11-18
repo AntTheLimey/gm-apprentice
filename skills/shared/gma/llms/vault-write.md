@@ -566,13 +566,20 @@ that note. Every other relationship rule: gma vault-check
 --type adventure-brief files the brief at
 Adventures/NAME/NAME.md, named by `title`, with ## Open
 Questions kept in the template's spoiler block.
+--type pc files the PC at Characters/PCs/NAME.md from the
+vault's system sheet (_Templates/pc-<system>.md, else the
+plugin's; the generic sheet when the vault has no system).
+Send what you have (player_name, Background, Current Status,
+Notes); a ## section left out keeps the template's text, so
+the sheet's tables are there to fill. Then, for a D&D sheet's
+numbers: gma dnd-sheet <note>
 
 Several writes at once: put this as a '=== entity-new ...' block in `gma vault-write <vault> batch FILE`.
 ```
 
 | Argument | Value | Help |
 |---|---|---|
-| `--type` | `TYPE` | the note's type: adventure-brief, clue, creature, document, event, faction, heritage, item, location, npc, organization |
+| `--type` | `TYPE` | the note's type: adventure-brief, clue, creature, document, event, faction, heritage, item, location, npc, organization, pc |
 | `--name` | `NAME` | the note's name: its file name |
 | `--folder` | `FOLDER` | a sub-folder of the type's folder |
 | `--date` | `DATE` | lastUpdated value, YYYY-MM-DD |
