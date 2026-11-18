@@ -34,7 +34,6 @@ scope: <campaign | one-shot | few-shot>
 sessions_estimated: "<number or range>"
 campaign: "<name, in an existing vault>"
 continuation_type: <new | new-chapter | new-arc | time-jump | prequel | parallel | new-pcs>
-adventure_shape: <linear | branching | hub-and-spoke | open-node | sandbox>
 ---
 
 ## Premise

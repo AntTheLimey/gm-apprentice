@@ -9,6 +9,12 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.68] — 2026-11-18
+
+### Removed
+
+- The adventure brief's `adventure_shape` field, a one-word label (linear, branching…) that couldn't say what the GM chose and was read as the GM's decision. The shape lives in the brief's Adventure Shape section, in the GM's words, and the Midwife works it out that way. The update (check `adventure-shape`) removes the line, and asks first when the brief has a word there but no Adventure Shape section written (#735).
+
 ## [1.12.67] — 2026-11-18
 
 ### Fixed

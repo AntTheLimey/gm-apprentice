@@ -367,8 +367,7 @@ note does.
 **Adventure Brief:** `title`, `system` (the game system's id, or
 undecided), `scope` (campaign/one-shot/few-shot), `sessions_estimated`
 (a number or a range), `continuation_type`
-(new/new-chapter/new-arc/time-jump/prequel/parallel/new-pcs),
-`adventure_shape` (linear/branching/hub-and-spoke/open-node/sandbox)
+(new/new-chapter/new-arc/time-jump/prequel/parallel/new-pcs)
 
 **Campaign Overview:** `campaign`, `game_system`, `setting_year`,
 `current_game_date`, `genre_tags`, `scope`

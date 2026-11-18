@@ -7,7 +7,6 @@ scope: few-shot
 sessions_estimated: "3-4"
 campaign: "The Haunting of Briarwood"
 continuation_type: new-chapter
-adventure_shape: branching
 tags:
   - horror
   - investigation

@@ -1,8 +1,9 @@
 {
  "coc-7e": {
   "_Template_Adventure_Brief.md": {
-   "2480fe6cfb5522dd8fed0dbc8c8388efd17f0ef42953eb0e5429a98be81343e0": null,
-   "791a691166a797cb08c67fd010ee2e8e54cb919991572daf8bd242da818fefbb": "1.12.51"
+   "2480fe6cfb5522dd8fed0dbc8c8388efd17f0ef42953eb0e5429a98be81343e0": "1.12.57",
+   "791a691166a797cb08c67fd010ee2e8e54cb919991572daf8bd242da818fefbb": "1.12.51",
+   "7e86cd2c49bb8b6443c3c05905ccbd26d22e59a0bfb347033fc2dca25f69ae8c": null
   },
   "_Template_Campaign_Overview.md": {
    "4653a514b4d29d5307eaa00e75c69bbc0d48d99e121b842aa690c0b3bfeac4e8": "1.11.1",
@@ -92,8 +93,9 @@
  },
  "coc-7e-regency": {
   "_Template_Adventure_Brief.md": {
-   "2480fe6cfb5522dd8fed0dbc8c8388efd17f0ef42953eb0e5429a98be81343e0": null,
-   "791a691166a797cb08c67fd010ee2e8e54cb919991572daf8bd242da818fefbb": "1.12.51"
+   "2480fe6cfb5522dd8fed0dbc8c8388efd17f0ef42953eb0e5429a98be81343e0": "1.12.57",
+   "791a691166a797cb08c67fd010ee2e8e54cb919991572daf8bd242da818fefbb": "1.12.51",
+   "7e86cd2c49bb8b6443c3c05905ccbd26d22e59a0bfb347033fc2dca25f69ae8c": null
   },
   "_Template_Campaign_Overview.md": {
    "4653a514b4d29d5307eaa00e75c69bbc0d48d99e121b842aa690c0b3bfeac4e8": "1.11.1",
@@ -183,8 +185,9 @@
  },
  "dnd-5e-2024": {
   "_Template_Adventure_Brief.md": {
-   "2480fe6cfb5522dd8fed0dbc8c8388efd17f0ef42953eb0e5429a98be81343e0": null,
-   "791a691166a797cb08c67fd010ee2e8e54cb919991572daf8bd242da818fefbb": "1.12.51"
+   "2480fe6cfb5522dd8fed0dbc8c8388efd17f0ef42953eb0e5429a98be81343e0": "1.12.57",
+   "791a691166a797cb08c67fd010ee2e8e54cb919991572daf8bd242da818fefbb": "1.12.51",
+   "7e86cd2c49bb8b6443c3c05905ccbd26d22e59a0bfb347033fc2dca25f69ae8c": null
   },
   "_Template_Campaign_Overview.md": {
    "4653a514b4d29d5307eaa00e75c69bbc0d48d99e121b842aa690c0b3bfeac4e8": "1.11.1",
@@ -273,8 +276,9 @@
  },
  "fitd": {
   "_Template_Adventure_Brief.md": {
-   "2480fe6cfb5522dd8fed0dbc8c8388efd17f0ef42953eb0e5429a98be81343e0": null,
-   "791a691166a797cb08c67fd010ee2e8e54cb919991572daf8bd242da818fefbb": "1.12.51"
+   "2480fe6cfb5522dd8fed0dbc8c8388efd17f0ef42953eb0e5429a98be81343e0": "1.12.57",
+   "791a691166a797cb08c67fd010ee2e8e54cb919991572daf8bd242da818fefbb": "1.12.51",
+   "7e86cd2c49bb8b6443c3c05905ccbd26d22e59a0bfb347033fc2dca25f69ae8c": null
   },
   "_Template_Campaign_Overview.md": {
    "4653a514b4d29d5307eaa00e75c69bbc0d48d99e121b842aa690c0b3bfeac4e8": "1.11.1",
@@ -366,8 +370,9 @@
  },
  "generic": {
   "_Template_Adventure_Brief.md": {
-   "2480fe6cfb5522dd8fed0dbc8c8388efd17f0ef42953eb0e5429a98be81343e0": null,
-   "791a691166a797cb08c67fd010ee2e8e54cb919991572daf8bd242da818fefbb": "1.12.51"
+   "2480fe6cfb5522dd8fed0dbc8c8388efd17f0ef42953eb0e5429a98be81343e0": "1.12.57",
+   "791a691166a797cb08c67fd010ee2e8e54cb919991572daf8bd242da818fefbb": "1.12.51",
+   "7e86cd2c49bb8b6443c3c05905ccbd26d22e59a0bfb347033fc2dca25f69ae8c": null
   },
   "_Template_Campaign_Overview.md": {
    "4653a514b4d29d5307eaa00e75c69bbc0d48d99e121b842aa690c0b3bfeac4e8": "1.11.1",
@@ -456,8 +461,9 @@
  },
  "gurps-4e": {
   "_Template_Adventure_Brief.md": {
-   "2480fe6cfb5522dd8fed0dbc8c8388efd17f0ef42953eb0e5429a98be81343e0": null,
-   "791a691166a797cb08c67fd010ee2e8e54cb919991572daf8bd242da818fefbb": "1.12.51"
+   "2480fe6cfb5522dd8fed0dbc8c8388efd17f0ef42953eb0e5429a98be81343e0": "1.12.57",
+   "791a691166a797cb08c67fd010ee2e8e54cb919991572daf8bd242da818fefbb": "1.12.51",
+   "7e86cd2c49bb8b6443c3c05905ccbd26d22e59a0bfb347033fc2dca25f69ae8c": null
   },
   "_Template_Campaign_Overview.md": {
    "4653a514b4d29d5307eaa00e75c69bbc0d48d99e121b842aa690c0b3bfeac4e8": "1.11.1",
@@ -548,8 +554,9 @@
  },
  "pf2e": {
   "_Template_Adventure_Brief.md": {
-   "2480fe6cfb5522dd8fed0dbc8c8388efd17f0ef42953eb0e5429a98be81343e0": null,
-   "791a691166a797cb08c67fd010ee2e8e54cb919991572daf8bd242da818fefbb": "1.12.51"
+   "2480fe6cfb5522dd8fed0dbc8c8388efd17f0ef42953eb0e5429a98be81343e0": "1.12.57",
+   "791a691166a797cb08c67fd010ee2e8e54cb919991572daf8bd242da818fefbb": "1.12.51",
+   "7e86cd2c49bb8b6443c3c05905ccbd26d22e59a0bfb347033fc2dca25f69ae8c": null
   },
   "_Template_Campaign_Overview.md": {
    "4653a514b4d29d5307eaa00e75c69bbc0d48d99e121b842aa690c0b3bfeac4e8": "1.11.1",

@@ -185,9 +185,9 @@ class ShowReadsTheTemplates(unittest.TestCase):
         brief = shown("adventure-brief")
         self.assertEqual(brief["template"], "_Templates/_Template_Adventure_Brief.md")
         self.assertIn("Adventures/<name>/", brief["folder"])
-        for field in ("title", "system", "sessions_estimated", "continuation_type",
-                      "adventure_shape"):
+        for field in ("title", "system", "sessions_estimated", "continuation_type"):
             self.assertIn(field, brief["optional"].split(", "))
+        self.assertNotIn("adventure_shape", brief["optional"].split(", "))   # #735
 
     def test_types_with_no_template_read_their_example(self):
         self.assertIn("shared/session-document-chain.md",
