@@ -65,6 +65,39 @@ SCENE = SCENE_FM + """
 
 """ + SCENE_GM
 
+# A paused scene as scene-paused leaves it (#758): the snapshot on top, the
+# real lead below its end line.
+PAUSED_LEAD = """**Situation:** Night 2. The lamps are out.
+
+**Starts it:** Hollis brings round warm cups.
+
+**NPCs**
+- Hollis
+
+**If the players...**
+
+| Do | Then |
+|---|---|
+| Run | Caught |
+
+"""
+PAUSED = SCENE_FM.replace("planned", "paused") + """
+## Paused
+
+After [[Session 02 - The Docks]].
+
+Paused on "Roll initiative." The cups are poured.
+
+- **Where:** the kitchen
+- **The PCs:** Ada at the door
+<!-- /paused -->
+
+""" + PAUSED_LEAD + SCENE_GM
+PAUSED_PROMPT = PAUSED.replace("---\n\n## Paused", "---\n\n<!-- A scene is "
+                               "prep.\n     Keep what helps. -->\n\n## Paused")
+PAUSED_REPLACE = (f'=== section "{SCENE_REL}" --lead --replace\n'
+                  "**Situation:** Night 3.\n\n**Starts it:** The well bell.\n")
+
 WHOLE = f"""=== stamp "{INDEX_REL}" --set status=wrap-up
 === wrapup-new --session "{INDEX_REL}"
 === wrapup-add "{WRAP_REL}"
@@ -473,6 +506,104 @@ class BatchTests(unittest.TestCase):
                           "--write")
         self.assertEqual(code, 0, out)
         self.assertEqual(read(vault, "n.md"), note + "\n\nNew.\n")
+
+    # --- #758: a paused scene's lead is below its ## Paused section
+
+    def paused_vault(self, note=None):
+        return make_vault(self, {SCENE_REL: note or PAUSED})
+
+    def test_paused_lead_replace_leaves_the_snapshot_alone(self):
+        """The write went above `## Paused`, where the lead was empty, and
+        left the real Situation below the snapshot: two Situation lines."""
+        for note in (PAUSED, PAUSED_PROMPT):
+            vault = self.paused_vault(note)
+            code, out = batch(vault, PAUSED_REPLACE)
+            self.assertEqual(code, 0, out)
+            self.assertIn(f"WOULD-REPLACE\t{SCENE_REL}\t§(lead)\t3 lines", out)
+            code, out = batch(vault, PAUSED_REPLACE, "--write")
+            self.assertEqual(code, 0, out)
+            got = read(vault, SCENE_REL)
+            head = note.split(PAUSED_LEAD)[0]
+            self.assertEqual(got, head + "**Situation:** Night 3.\n\n"
+                             "**Starts it:** The well bell.\n\n" + SCENE_GM)
+            self.assertEqual(got.count("**Situation:**"), 1)
+
+    def test_paused_lead_append_lands_at_the_end_of_the_real_lead(self):
+        vault = self.paused_vault()
+        code, out = batch(vault, f'=== section "{SCENE_REL}" --lead --append\n'
+                          "| Hide | Found by dawn |\n", "--write")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(read(vault, SCENE_REL), PAUSED.replace(
+            "| Run | Caught |\n", "| Run | Caught |\n| Hide | Found by dawn |\n"))
+
+    def test_paused_lead_read_then_written_back_changes_nothing(self):
+        for note in (PAUSED, PAUSED_PROMPT):
+            vault = self.paused_vault(note)
+            got = subprocess.run([sys.executable, str(SECTION), str(vault),
+                                  SCENE_REL, "--lead"], capture_output=True)
+            self.assertEqual(got.returncode, 0, got.stderr)
+            self.assertEqual(got.stdout.decode("utf-8"), PAUSED_LEAD.strip()
+                             + "\n")
+            code, out = batch(vault, f'=== section "{SCENE_REL}" --lead '
+                              "--replace\n" + got.stdout.decode("utf-8"),
+                              "--write")
+            self.assertEqual(code, 0, out)
+            self.assertEqual(read(vault, SCENE_REL), note)
+
+    def test_an_empty_paused_lead_is_written_below_the_end_line(self):
+        note = PAUSED.replace(PAUSED_LEAD, "")
+        for mode in ("--replace", "--append"):
+            vault = self.paused_vault(note)
+            code, out = batch(vault, f'=== section "{SCENE_REL}" --lead {mode}'
+                              "\n**Situation:** Night 3.\n", "--write")
+            self.assertEqual(code, 0, out)
+            self.assertEqual(read(vault, SCENE_REL), note.replace(
+                "<!-- /paused -->\n\n", "<!-- /paused -->\n\n**Situation:** "
+                "Night 3.\n\n"), mode)
+        self.assertIn("no text below its ## Paused section",
+                      self.lead_read(note))
+
+    def test_a_scene_paused_by_the_writer_takes_a_lead_write(self):
+        """End to end: scene-paused puts its section under the template's
+        prompt; the lead written next goes below it, the snapshot stays."""
+        note = SCENE.replace("---\n\n**Situation", "---\n\n<!-- A scene is "
+                             "prep. -->\n\n**Situation")
+        vault = make_vault(self, {SCENE_REL: note, INDEX_REL: INDEX})
+        code, out = run(vault, "scene-paused", "--scene", "The Second Night",
+                        "--session", "Session 02 - The Docks", "--write",
+                        stdin="Paused on \"Roll initiative.\"\n\n- **Where:** "
+                        "the kitchen\n")
+        self.assertEqual(code, 0, out)
+        paused = read(vault, SCENE_REL)
+        snap = paused.split("<!-- /paused -->\n")[0]
+        code, out = batch(vault, f'=== section "{SCENE_REL}" --lead --replace'
+                          "\n**Situation:** Night 3.\n", "--write")
+        self.assertEqual(code, 0, out)
+        got = read(vault, SCENE_REL)
+        self.assertEqual(got, snap + "<!-- /paused -->\n\n**Situation:** "
+                         "Night 3.\n\n" + SCENE_GM)
+
+    def test_a_paused_section_with_no_end_line_is_refused(self):
+        note = PAUSED.replace("<!-- /paused -->\n", "")
+        for mode in ("--replace", "--append"):
+            self.lead_refused(note, "**Situation:** New.\n",
+                              "has no <!-- /paused --> line", mode)
+        self.assertIn("has no <!-- /paused --> line", self.lead_read(note))
+
+    def test_text_above_a_paused_section_is_refused(self):
+        note = PAUSED.replace("\n## Paused", "\nStray text.\n\n## Paused")
+        for mode in ("--replace", "--append"):
+            self.lead_refused(note, "**Situation:** New.\n",
+                              "text above its ## Paused section", mode)
+
+    def test_an_empty_lead_with_a_situation_further_down_is_refused(self):
+        """The misread-lead guard (#758): any heading the lead was not
+        expected under."""
+        note = SCENE_FM + "\n## Setup\n\n" + SCENE.split("---\n\n", 1)[1]
+        for mode in ("--replace", "--append"):
+            self.lead_refused(note, "**Situation:** New.\n",
+                              "reads like one", mode)
+        self.assertIn("reads like a lead", self.lead_read(note))
 
     def test_section_text_may_not_land_inside_a_fence_left_open(self):
         """Appended to a last section that ends inside an unclosed fence, a

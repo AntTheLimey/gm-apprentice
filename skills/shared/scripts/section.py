@@ -7,7 +7,8 @@ Usage:
 
 `--lead` prints the note's lead instead: the text above its first heading
 or gm-only/spoiler block, where a scene keeps its Situation, Starts it and
-If-table (#738); a batch's `=== section NOTE --lead` block writes it.
+If-table (#738); on a paused scene, the text after its `## Paused` section
+(#758). A batch's `=== section NOTE --lead` block writes it.
 
 NOTE is a vault-relative path, a note's name or one of its aliases. PATH
 is `Heading` or `Heading/Sub/...`, matched without regard to case and
@@ -92,7 +93,8 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--lead", action="store_true",
                     help="print the note's lead instead: the text above its "
                     "first heading or hidden block (a scene's Situation, "
-                    "Starts it and If-table)")
+                    "Starts it and If-table; on a paused scene, the text "
+                    "below its Paused section)")
     ap.epilog = 'Example: gma section "<vault>" "<note>" "Current Status/Session Log"'
     return ap
 
@@ -130,7 +132,15 @@ def main(argv: list[str] | None = None) -> int:
             body.pop()
         lead = doc.eol.join(body)
         if not lead.strip():
-            print(f"error: {rel} has no text above its first heading",
+            paused = first > 0 and vl.PAUSED_END_RE.match(
+                doc.lines[first - 1].rstrip("\r\n"))
+            where = ("below its ## Paused section" if paused
+                     else "above its first heading")
+            shape = vw.lead_shape_below(doc, end)
+            print(f"error: {rel} has no text {where}"
+                  + (f"; line {shape + 1} ({doc.lines[shape].strip()!r}) "
+                     f"reads like a lead, so the lead is not where it "
+                     f"seems" if shape is not None else ""),
                   file=sys.stderr)
             return 1
         sys.stdout.buffer.write((lead + doc.eol).encode("utf-8"))

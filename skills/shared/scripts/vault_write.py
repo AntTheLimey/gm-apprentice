@@ -489,21 +489,60 @@ def comment_walk(lines: list[str]) -> list[Walk]:
     return out
 
 
+def lead_regions(doc: Doc) -> tuple[tuple[int, int],
+                                    tuple[int, int, bool] | None]:
+    """The two places a note's lead can be (#738, #758): (first, end) of the
+    body text above its first heading or gm-only/spoiler marker, `first`
+    the line after the frontmatter; and, when that heading opens the
+    `## Paused` section scene-paused writes, (start, end, closed): the text
+    after the section, up to the next heading or marker, and whether the
+    section ends with its `<!-- /paused -->` line (without it, where the
+    section stops is a guess). A heading inside a comment ends neither."""
+    if not doc.states:
+        return (len(doc.lines), len(doc.lines)), None
+    first = doc.states[0].lineno - 1
+    walk = comment_walk(doc.lines[first:])
+
+    def stop(at: int) -> int:
+        return next((s.lineno - 1 for s in doc.states
+                     if s.lineno - 1 >= at and (
+                         s.marker is not None or s.heading is not None
+                         and not s.comment
+                         and not walk[s.lineno - 1 - first].inside)),
+                    len(doc.lines))
+    end = stop(first)
+    span = vl.paused_span(doc.lines[end:]) if end < len(doc.lines) else None
+    if span is None or span[0] != 0:
+        return (first, end), None
+    after = end + span[1]
+    closed = bool(vl.PAUSED_END_RE.match(doc.lines[after - 1].rstrip("\r\n")))
+    return (first, end), (after, stop(after), closed)
+
+
 def lead_span(doc: Doc) -> tuple[int, int]:
     """(first, end) line indexes of the note's lead (#738): the body text
     above its first heading or gm-only/spoiler marker, where a scene keeps
-    its Situation, Starts it and If-table. `first` is the line after the
-    frontmatter; the span is empty when the body opens with a heading. A
-    heading inside a comment does not end it."""
-    if not doc.states:
-        return len(doc.lines), len(doc.lines)
-    first = doc.states[0].lineno - 1
-    walk = comment_walk(doc.lines[first:])
-    end = next((s.lineno - 1 for s in doc.states
-                if s.marker is not None or s.heading is not None
-                and not s.comment and not walk[s.lineno - 1 - first].inside),
-               len(doc.lines))
-    return first, end
+    its Situation, Starts it and If-table; on a paused scene, the text
+    after its `## Paused` section's end line (#758), so the snapshot is
+    never the lead. The span is empty when the body opens with another
+    heading."""
+    above, paused = lead_regions(doc)
+    return paused[:2] if paused and paused[2] else above
+
+
+LEAD_SHAPE_RE = re.compile(r"^ {0,3}\*\*(?:Situation|Starts it|If the "
+                           r"players)\b", re.I)
+
+
+def lead_shape_below(doc: Doc, end: int) -> int | None:
+    """The index of the first lead-shaped line (`**Situation:**`, `**Starts
+    it:**`, `**If the players...**`) below line `end`, outside code fences
+    and comments, or None. Found under an empty lead, it says the lead was
+    misread: a write there would make a second one (#758)."""
+    walk = comment_walk(doc.lines[end:])
+    return next((i for i in range(end, len(doc.lines))
+                 if not walk[i - end].code and not walk[i - end].inside
+                 and LEAD_SHAPE_RE.match(doc.lines[i])), None)
 
 
 ANY_MARKER_RE = re.compile(r"<!--\s*/?\s*(?:gm-only|spoiler)\s*-->", re.I)
@@ -541,13 +580,33 @@ def checked_lead(doc: Doc, rel: str) -> tuple[int, int, list[Walk]]:
     tool reads the lead, one ending inside a comment or code fence (text
     put there would be hidden, or shown as code) or holding a heading the
     body reader missed (a `---` underline, or a heading after a fence
-    opened inside a comment): the lead is not what it seems."""
-    first, end = lead_span(doc)
-    if (first == 0 and doc.lines
+    opened inside a comment): the lead is not what it seems. On a paused
+    scene (#758) it refuses a `## Paused` section with no end line, and
+    text above the section, where scene-paused writes none: either way
+    which text is the lead is a guess."""
+    top, paused = lead_regions(doc)
+    if (top[0] == 0 and doc.lines
             and doc.lines[0].lstrip("﻿").strip() == "---"):
         # The body reader found no frontmatter, yet the note opens with one.
         raise WriteError(f"{rel}: its frontmatter is not closed; fix it "
                          f"before writing the lead")
+    first, end = top
+    if paused is not None:
+        if not paused[2]:
+            raise WriteError(
+                f"{rel}: its ## Paused section (line {top[1] + 1}) has no "
+                f"{vl.PAUSED_END} line, so where the lead starts below it is "
+                f"a guess; put that line after the snapshot, or edit by hand")
+        visible = [kept for kept, _code in tool_reading(
+            [ln.rstrip("\r\n") for ln in doc.lines[first:end]], rel)
+            if kept is not None and kept.strip()]
+        if visible:
+            raise WriteError(
+                f"{rel}: it has text above its ## Paused section "
+                f"({visible[0].strip()!r}); a paused scene's lead goes below "
+                f"the section's {vl.PAUSED_END} line: move it there, or edit "
+                f"by hand")
+        first, end = paused[:2]
     walk = comment_walk(doc.lines[first:end])
     for i in range(first, end):
         if not walk[i - first].code and ANY_MARKER_RE.search(doc.lines[i]):

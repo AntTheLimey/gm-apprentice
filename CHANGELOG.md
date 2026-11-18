@@ -9,6 +9,12 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.81] — 2026-11-18
+
+### Fixed
+
+- On a paused scene, `section --lead` reads and writes the Situation, Starts it and If-table below the `## Paused` snapshot instead of the empty space above it, and leaves the snapshot alone; an empty lead with a Situation further down is refused rather than written twice (#758).
+
 ## [1.12.80] — 2026-11-18
 
 ### Added
