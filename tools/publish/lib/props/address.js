@@ -11,7 +11,7 @@ const PROP_FILE_EXTS = new Set(['.html', '.htm', '.svg', '.pdf', '.png', '.jpg',
 // What `has()` says of an address a built page holds.
 const PAGE_TAKER = 'a page the site builds';
 
-const RESERVED_FILES = ['index.html', '404.html', 'story.html', 'timeline.html', 'previews.json', 'search-index.json', 'robots.txt', 'gm-build.json', 'NOTICE.txt', '.nojekyll', 'props/index.html'];
+const RESERVED_FILES = ['index.html', '404.html', 'story.html', 'timeline.html', 'house-rules.html', 'previews.json', 'search-index.json', 'robots.txt', 'gm-build.json', 'NOTICE.txt', '.nojekyll', 'props/index.html'];
 const RESERVED_PREFIXES = ['css/', 'js/', 'images/', 'fonts/', 'story/', 'props/styles/'];
 
 // Two addresses are the same file when they match after NFC and case folding.

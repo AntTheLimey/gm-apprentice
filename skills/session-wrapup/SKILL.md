@@ -128,7 +128,7 @@ Read the PC roster and the session's Plan for planned-vs-actual.
 `gma plan-check <plan> --inventory` gives per-section status and
 word counts but not scene titles — open the plan body for those.
 What the last session left open (for What Carries Forward and the
-Keeper Checklist) comes from `gma session-context <vault> --carry --before "<session index>"`; don't read that Wrap-Up.
+Keeper Checklist) comes from `gma session-context <vault> --carry --before "<session index>"` (it also prints the Overview's House Rules); don't read that Wrap-Up.
 
 **gmassistant.app export:** if the session has an Export, or (an
 older vault) its Play Notes contain a `## Memorable Moments` heading,
@@ -197,7 +197,7 @@ story, not an appearance log or notes; unsure, ask the GM.
 
 Refresh each roster PC's `Characters/PCs/{Name}.md` so its
 frontmatter and published `## Current Status` don't fall behind
-the narrative.
+the narrative. Apply the house rules as you would the book.
 
 1. Stamp all roster PCs in one block — `asOfSession`/`lastUpdated`
    and the chapter tag swapped for the current chapter's, from the

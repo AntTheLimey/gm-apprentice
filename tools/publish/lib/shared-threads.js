@@ -162,7 +162,7 @@ function withSharedThreads(pcMarkdown, entries) {
 // (`viewOptions`, as publishView takes them); a view that cannot be made gives nothing, never the raw text. A caller
 // whose corpus has not had the GM-alias rewrite the build applies in place (the leak check) passes `rewrite`, the
 // rewriter's markdown function, and the copy is rewritten first, so its threads read as the site prints them.
-function overviewThreads({ allNotes, corpus, config, viewOptions, rewrite = null, warn = () => {} }) {
+function overviewView({ allNotes, corpus, config, viewOptions, rewrite = null, rewriteFreshOnly = false, warn = () => {}, what = 'shared threads were left off the PC pages' }) {
   const path = require('path');
   const { scanVaultReport } = require('./scanner');
   const { ALWAYS_EXCLUDE_DIRS } = require('./publish-decision');
@@ -174,27 +174,47 @@ function overviewThreads({ allNotes, corpus, config, viewOptions, rewrite = null
       && !(rel.includes('/') && ['_Templates', '_templates', '_inbox', '_QA', '_archive', '_midwife'].includes(rel.split('/')[0])))
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
     .map(([, n]) => n)[0];
-  if (!overviewNote) return [];
+  if (!overviewNote) return null;
+  // `rewriteFreshOnly`: the build has already rewritten the pages of its corpus in place, so `rewrite` is for a copy it
+  // scans afresh (an Overview in a folder the site never reads).
+  let fresh = false;
   const overviewPage = (corpus || []).find((p) => p.sourcePath === overviewNote.sourcePath)
     || (() => {
+      fresh = true;
       const dir = path.posix.dirname(overviewNote.vaultPath);
       const folderMap = { ...(config.folderMap || {}), [dir === '.' ? '' : dir]: '_overview' };
       const report = scanVaultReport(Object.assign({}, config, { excludeDirs: ALWAYS_EXCLUDE_DIRS, folderMap }), { quiet: true });
       return report.pages.find((p) => p.sourcePath === overviewNote.sourcePath);
     })();
   if (!overviewPage) {
-    warn(`${overviewNote.vaultPath}.md: shared threads were left off the PC pages because the site never reads that folder`);
-    return [];
+    warn(`${overviewNote.vaultPath}.md: ${what} because the site never reads that folder`);
+    return null;
   }
   try {
     const copy = { ...overviewPage };
-    if (rewrite) copy.markdown = rewrite(copy.markdown || '');
+    if (rewrite && (fresh || !rewriteFreshOnly)) copy.markdown = rewrite(copy.markdown || '');
     require('./published-view').publishView(copy, viewOptions);   // looked up at the call: a test can make it throw
-    return sharedEntries(String(copy.publishedMarkdown || ''));
+    return String(copy.publishedMarkdown || '');
   } catch (err) {
-    warn(`${vaultRelPath(config.vaultPath, overviewPage.sourcePath)}: shared threads were left off the PC pages because the Overview's published view could not be made (${err.message})`);
-    return [];
+    warn(`${vaultRelPath(config.vaultPath, overviewPage.sourcePath)}: ${what} because the Overview's published view could not be made (${err.message})`);
+    return null;
   }
+}
+
+function overviewThreads(opts) {
+  const view = overviewView(opts);
+  return view === null ? [] : sharedEntries(view);
+}
+
+// The Overview's `## House Rules` section as its published view shows it (player-safe: the gm-only, spoiler and comment
+// strips, and the hidden headings, have run), as markdown without its heading; '' when there is none or it is empty.
+// The section is found as the shared list is, outside code fences, up to the next heading of level 1 or 2.
+function houseRulesOf(publishedMarkdown) {
+  const lines = String(publishedMarkdown || '').split(/\r?\n/);
+  const range = sectionRange(lines, 'House Rules');
+  if (!range) return '';
+  // A template's `{hint}` line left in place is no rule.
+  return lines.slice(range.start + 1, range.end).filter((l) => !/^\s*\{[^{}]*\}\s*$/.test(l)).join('\n').trim();
 }
 
 // The shared threads one PC page shows: those that name it, by a link the site resolves to that page, and the party's
@@ -210,4 +230,4 @@ function threadsOnPage(page, entries, { linkMap, pages, outOfPlay }) {
   return entries.filter((e) => (e.party && active) || e.involves.some(names));
 }
 
-module.exports = { sharedEntries, withSharedThreads, overviewThreads, threadsOnPage };
+module.exports = { overviewView, houseRulesOf, sharedEntries, withSharedThreads, overviewThreads, threadsOnPage };

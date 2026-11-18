@@ -10,7 +10,7 @@ const { indexTextPath, writeIndexText } = require('./leak-gate/index-text');
 const { readStoryAddresses, writeStoryAddresses, movedSessions, sharedSessionNames } = require('./story-addresses');
 const { resolveBanner, renderBanner, normalizeEntry, attachmentRef, isAddress, defaultAlt, isSvg, bannerSlug, copiedBannerFiles } = require('./banners');
 const { pcKeepList, storyMomentsOn, storyPicturesOn, scenePicturesMode, retiredSheetFieldsFor, retiredSheetFieldsMessage } = require('./pc-prose');
-const { nameList, gmAliasList, strippedLines, sectionWithholder, noteFacts, keptFlags, stubCut, stubMarked, hiddenFieldsOf, unstableBodyMarked, unstableSectionsMarked, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, processContent, playerSafeMarkdown, extractSections, filterSections, filterFields, publishedFrontmatter, isGmOnlyEdge, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, plainMetaValue, portraitBasename, encodeHref, isWebImageAddress } = require('./processor');
+const { nameList, gmAliasList, gmAliasRewriter, strippedLines, sectionWithholder, noteFacts, keptFlags, stubCut, stubMarked, hiddenFieldsOf, unstableBodyMarked, unstableSectionsMarked, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, processContent, playerSafeMarkdown, extractSections, filterSections, filterFields, publishedFrontmatter, isGmOnlyEdge, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, plainMetaValue, portraitBasename, encodeHref, isWebImageAddress } = require('./processor');
 const { pairHubs, isPlayedSession, REGISTRABLE_TYPES } = require('./session-hub');
 const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, heritageTemplate, worldDomainTemplate, wikiTemplate, sessionBodyHtml, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
 const { isRoster } = require('./templates/nav');
@@ -28,7 +28,7 @@ const { loadManifest } = require('./manifest');
 const { canonicalNfc } = require('./unicode');
 const { real, resolveGmFolder, gmFolderProblem, insideGitWorkTree, gmPage, writeMarker, ROBOTS_TXT } = require('./gm-site');
 const { publishView: sharedPublishView } = require('./published-view');
-const { overviewThreads, threadsOnPage, withSharedThreads } = require('./shared-threads');
+const { overviewView, houseRulesOf, sharedEntries, threadsOnPage, withSharedThreads } = require('./shared-threads');
 const { createMarks, markKinds, sanitize, unmark, withoutMarked } = require('./gm-marks');
 const { generateThemeCSS, googleFontNames, FONT_FORMATS, fontOutputPath } = require('./theme');
 const fontsLib = require('./fonts');
@@ -1331,8 +1331,23 @@ function buildSite(options) {
   // not (it is usually left off the publish list), by the same player-safe strip chain, and only its `## Open Threads`
   // section is read from it. A gm-only shared thread stays off the GM site's PC page too. A view that cannot be made
   // gives nothing, never the raw text. The Overview itself gets no page.
-  const sharedAll = overviewThreads({ allNotes, corpus, config, viewOptions: { gm, mark, excludeCallouts, excludeSections, pcKeepSections, storyMoments },
+  // The same view gives the House Rules page its section: house rules are always public, so the page is made from the
+  // Overview's published view whether or not the Overview itself publishes (`houseRulesMd`, '' with none).
+  // An Overview in a folder the site never reads is scanned afresh and has not had the GM-alias rewrite the corpus has
+  // (pairHubs, above): the leak check makes the same rewrite, so the page and the check read one text.
+  const scannedPaths = new Set(corpus.map((p) => p.sourcePath));
+  const aliasRewriter = gmAliasRewriter(corpus.concat(allNotes.filter((n) => !scannedPaths.has(n.sourcePath))), gm ? pages.filter((p) => onPlayerSite.has(p)) : pages, allNotes, publishConfig.withheld_words, gm ? mark : undefined);
+  const overviewMd = overviewView({ allNotes, corpus, config, rewrite: aliasRewriter ? aliasRewriter.markdown : null, rewriteFreshOnly: true, viewOptions: { gm, mark, excludeCallouts, excludeSections, pcKeepSections, storyMoments },
+    what: 'shared threads were left off the PC pages and the House Rules page was not built',
     warn: (message) => console.warn(`  WARNING: ${message}`) });
+  const sharedAll = overviewMd === null ? [] : sharedEntries(overviewMd);
+  let houseRulesMd = overviewMd === null ? '' : houseRulesOf(overviewMd);
+  // A note of the GM's already at house-rules.html keeps it: no generated page, no second menu link.
+  const houseRulesOwner = houseRulesMd ? pages.find((p) => p.outputPath === 'house-rules.html') : null;
+  if (houseRulesOwner) {
+    console.warn(`  WARNING: ${vaultRelPathOf(houseRulesOwner)} owns house-rules.html, so the Overview's House Rules section is not published as a page of its own while that note keeps the address`);
+    houseRulesMd = '';
+  }
   for (const page of pages) {
     if (sharedAll.length && String((page.frontmatter || {}).type).trim().toLowerCase() === 'pc') {
       page.markdown = withSharedThreads(page.markdown, threadsOnPage(page, sharedAll, { linkMap, pages, outOfPlay: publishConfig.statuses.out_of_play }));
@@ -1874,7 +1889,8 @@ function buildSite(options) {
     }
     menuExtra.push({ label: item.label, href: read.href, external: read.kind === 'outside', group: item.group || null });
   }
-  const navFor = generateNav(pages, { hasStory, timelineHref, merged: chaptersMerged ? ['chapters'] : [], extra: menuExtra, collection: collection ? { href: collection.address, label: collection.title } : null });
+  const navFor = generateNav(pages, { hasStory, timelineHref, merged: chaptersMerged ? ['chapters'] : [], extra: menuExtra, collection: collection ? { href: collection.address, label: collection.title } : null,
+    houseRules: houseRulesMd ? { href: 'house-rules.html', label: 'House Rules' } : null });
   // The props page's link from a page at `out`, for its bar: relative, encoded; null when the site has none.
   const collectionHrefFrom = (out) => (collection ? encodeHref(relativeHref(out, collection.address)) : null);
 
@@ -2512,6 +2528,10 @@ function buildSite(options) {
   // `manifest` just meant a manifest-less player build shipped every GM-only image.
   // A recap's picture counts as used: the story pages are rendered once here, for the set only.
   if (!onlySheets) buildStorySpine(pages, linkMap, storyPairs, { imageMap, usedImages, warn: true }, { marked: gm, marks: mark ? mark.marks : null, players: storyPlayers, figures: storyFigures });
+  // The House Rules page is rendered here, before the pictures are chosen, so a picture used only in a rule is copied.
+  const houseRulesHtml = houseRulesMd
+    ? processContent({ markdown: houseRulesMd, frontmatter: {}, outputPath: 'house-rules.html' }, linkMap, excludeSections, imageMap, { usedImages, excludeCallouts }).html
+    : '';
   const filteredMap = {};
   for (const [basename, entry] of Object.entries(imageMap)) {
     if (usedImages.has(basename)) filteredMap[basename] = entry;
@@ -2690,6 +2710,7 @@ function buildSite(options) {
   const pcRedirectTarget = pcRoster ? pcRoster.outputPath : null;
 
   const { timelineTemplate } = require('./templates/timeline-page');
+  const { houseRulesTemplate } = require('./templates/house-rules-page');
 
   // Every page of the site that is not one note's own, in the order the build writes them:
   // the section indexes, the timeline, the story chapters, the story's contents page and the
@@ -2956,6 +2977,11 @@ function buildSite(options) {
     if (live) characterStories = buildCharacterStories();
     if (spine.length || characterStories.length || npcStories.length) {
       emit('story.html', storyLanding(spine, characterStories, config, publishConfig, navFor, npcStories), '  wrote story.html');
+    }
+
+    // The House Rules page: the Overview's `## House Rules` section, as players see it, whenever it holds a rule.
+    if (houseRulesMd) {
+      emit('house-rules.html', houseRulesTemplate(houseRulesHtml, navFor, config, publishConfig), '  wrote house-rules.html');
     }
 
     // The props page. One set in a kept folder replaces the file there, and the build says so.

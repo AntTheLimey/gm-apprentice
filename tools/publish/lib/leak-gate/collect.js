@@ -36,7 +36,7 @@ const { cutHtml } = require('../props/html-cut');
 const { styledPageProblem } = require('../props/page');
 const { pathProblem } = require('../props/files');
 const { buildConnections } = require('../connections');
-const { overviewThreads, threadsOnPage, withSharedThreads } = require('../shared-threads');
+const { overviewView, houseRulesOf, sharedEntries, threadsOnPage, withSharedThreads } = require('../shared-threads');
 const { sitePathOf } = require('../templates/four-oh-four');
 
 const sha1 = (bytes) => crypto.createHash('sha1').update(bytes).digest('hex');
@@ -140,8 +140,13 @@ function collectHidden({ configPath, outputDir = null }) {
   // Overview's copy is rewritten the same way first, so a thread reads as the site prints it.
   const scannedPaths = new Set(corpus.map((p) => p.sourcePath));
   const aliasRewriter = gmAliasRewriter(corpus.concat(notes.filter((n) => !scannedPaths.has(n.sourcePath))), published, notes, playerConfig.withheld_words);
-  const sharedAll = overviewThreads({ allNotes: notes, corpus, config: scanConfig, rewrite: aliasRewriter ? aliasRewriter.markdown : null,
+  const overviewMd = overviewView({ allNotes: notes, corpus, config: scanConfig, rewrite: aliasRewriter ? aliasRewriter.markdown : null,
     viewOptions: { gm: false, mark: null, excludeCallouts, excludeSections, pcKeepSections, storyMoments: storyMomentsOn(playerConfig) } });
+  const sharedAll = overviewMd === null ? [] : sharedEntries(overviewMd);
+  // The Overview's House Rules section is the House Rules page's text, public whether or not the Overview publishes, so
+  // it is visible text: the Overview's body is hidden text otherwise, and the page would match it.
+  const houseRulesMd = overviewMd === null ? '' : houseRulesOf(overviewMd);
+  if (houseRulesMd) visible.push('House Rules', ...bothWays(houseRulesMd).flatMap((md) => [textsOfMarkdown(md, { headings: true }).join('\n'), ...tableRunsOf(md)]));
   if (sharedAll.length) {
     for (const page of published) {
       if (String((page.frontmatter || {}).type).trim().toLowerCase() !== 'pc') continue;
