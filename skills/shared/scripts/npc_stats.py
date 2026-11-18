@@ -26,7 +26,9 @@ list item or paragraph led by its link or bold name). Majors sort first.
 and Contingency Scenes, and in the scene notes they point at (`### [[Scene]]`).
 `--played` keeps the NPCs play has shown: linked from a Wrap-Up, or from a
 scene note marked played (`status: played` or a `played_in` session). Without
-`--plan`, an NPC whose `status` is dead is left out. Archived, QA and Midwife
+`--plan`, a dead NPC is left out: its `status` is dead, or its current hidden
+fate is (the last bullet of GM Notes `### Behind the Scenes` not struck
+through that opens with a bold fate, `**Dead.**`). Archived, QA and Midwife
 copies are never read as NPCs. Writes nothing.
 """
 
@@ -39,7 +41,8 @@ from typing import Any, Callable, Iterable
 import session_context as sc
 from migrate_vault import vault_system
 from vaultlib import (LINK_RE, WRAP_UP_TYPES, body_of, entity_type,
-                      extract_frontmatter, fenced_headings, h3_blocks,
+                      extract_frontmatter, fenced_headings, find_section,
+                      h3_blocks,
                       is_record_copy, link_aliases, link_lines, link_name,
                       link_target,
                       live_wikilinks, normalize, normalize_file_arg, section,
@@ -373,6 +376,39 @@ def played_npcs(notes: Notes) -> set[str]:
     return notes.npcs_named(names)
 
 
+# A Behind the Scenes bullet that opens with a fate: an optional bold
+# session link and dash, then the fate in bold (`- **[[Session 01 - …]]**
+# — **Dead.** …`). A `~~` before either part strikes it through.
+_FATE_RE = re.compile(
+    r"^[-*+]\s+(?P<s1>~~)?\s*(?:(?:\*\*)?\[\[[^\]\n]+\]\](?:\*\*)?"
+    r"\s*[—–-]+\s*)?(?P<s2>~~)?\*\*(?P<fate>(?!\[\[)[^*\n]+?)\*\*")
+_DEAD_RE = re.compile(r"dead\b", re.I)
+
+
+def hidden_dead(text: str) -> bool:
+    """Whether an NPC's current hidden fate is death: the last bullet of
+    its GM Notes `### Behind the Scenes` that is not struck through and
+    opens with a bold fate, a bold sentence ending in a full stop (a
+    `**Label:**` or a bold name is no fate), says **Dead…**.
+    A later fate that is not death (**Alive, freed.**) beats an earlier
+    one; death named anywhere else in a bullet is not a fate."""
+    body = body_of(text)
+    found = find_section(body, ["GM Notes", "Behind the Scenes"], first=True)
+    if not isinstance(found, tuple):
+        return False
+    fate = None
+    for line in body.split("\n")[found[0] + 1:found[1]]:
+        m = _FATE_RE.match(line)
+        # A fate is a bold sentence (`**Dead.**`, `**Alive, freed.**`): a
+        # bold lead with no full stop (`**The Lodge**`, `**Motive:**`) is
+        # not one, and neither is a struck one, tildes inside the bold too.
+        if m and not (m["s1"] or m["s2"]) \
+                and m["fate"].rstrip().endswith(".") \
+                and not m["fate"].lstrip().startswith("~~"):
+            fate = m["fate"].strip()
+    return fate is not None and bool(_DEAD_RE.match(fate))
+
+
 def system_line(vault: Path) -> str:
     """The `# system:` line printed under the rows."""
     system = vault_system(vault)
@@ -405,7 +441,9 @@ def check_npc_stats(vault: Path, plan: str | None = None,
     for rel, text, fm in notes.npcs:
         if keep is not None and rel not in keep:
             continue
-        if plan is None and str(fm.get("status", "")).strip().lower() == "dead":
+        if plan is None and (
+                str(fm.get("status", "")).strip().lower() == "dead"
+                or hidden_dead(text)):
             continue
         verdict = classify(text, system, notes.exists)
         if verdict is None:
