@@ -279,7 +279,9 @@ creating entities.
   spoiler and gm-only blocks and GM Notes secrets as they are (the
   tool will not `--replace` a section holding one); step 5c releases
   them with the GM. A frontmatter field (`status: dead`, a location):
-  a `stamp --set` block. Hand edits, made after step 5b's write: an
+  a `stamp --set` block. `status:` is what the players know (the site
+  shows it): a fate they haven't learned stays in Behind the Scenes, and
+  `status:` changes in the session they learn it (5c). Hand edits, made after step 5b's write: an
   existing note's relationship edges, and a section `--replace`
   refuses.
 - **Cross-entity claims:** when a note asserts something about a
@@ -305,7 +307,9 @@ creating entities.
   saw it: `- **[[Session link]]** — {what happened}`. Other entity
   types' templates carry no such section — don't add one unless the
   GM asks. Where the truth differs, add the matching bullet to its
-  GM Notes `### Behind the Scenes`. One `=== log` block places them
+  GM Notes `### Behind the Scenes`; a fate the players haven't learned
+  (dead, captive, missing, turned) opens it in plain words, **Dead.**
+  or **Captive, in the ice crypt.**, never the brief's euphemism. One `=== log` block places them
   all, no note read first: rows
   `<path><TAB>Campaign Log<TAB>{bullet}`, or
   `GM Notes/Behind the Scenes` (a note the batch creates first can

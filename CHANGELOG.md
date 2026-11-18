@@ -9,6 +9,12 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.67] — 2026-11-18
+
+### Fixed
+
+- Wrap-up states an NPC's hidden fate plainly in their GM Notes ("**Dead.**", "**Captive, in the ice crypt.**") and leaves `status:` at what the players know until they learn it. Prep reads that fate over `status:`, so a dead NPC isn't planned as a helper (#739).
+
 ## [1.12.66] — 2026-11-18
 
 ### Fixed
