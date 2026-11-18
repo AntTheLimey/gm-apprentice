@@ -9,6 +9,12 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.72] — 2026-11-18
+
+### Added
+
+- A scene's Situation, Starts it and If-table can be changed through vault-write: a batch's `=== section "<scene>" --lead --replace` (or `--append`, which adds a row to the If-table) writes the text above a note's first heading or hidden block, with the usual dry run and checks, and `gma section <vault> "<scene>" --lead` reads it (#738).
+
 ## [1.12.71] — 2026-11-18
 
 ### Fixed

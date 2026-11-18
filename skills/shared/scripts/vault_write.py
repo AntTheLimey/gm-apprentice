@@ -434,6 +434,20 @@ def section_end(doc: Doc, head: Head) -> int:
     return len(doc.lines)
 
 
+def lead_span(doc: Doc) -> tuple[int, int]:
+    """(first, end) line indexes of the note's lead (#738): the body text
+    above its first heading or gm-only/spoiler marker, where a scene keeps
+    its Situation, Starts it and If-table. `first` is the line after the
+    frontmatter; the span is empty when the body opens with a heading."""
+    if not doc.states:
+        return len(doc.lines), len(doc.lines)
+    first = doc.states[0].lineno - 1
+    end = next((s.lineno - 1 for s in doc.states
+                if s.heading is not None or s.marker is not None),
+               len(doc.lines))
+    return first, end
+
+
 def _tight_with(above: str, first: str) -> bool:
     """Whether `first` follows `above` with no blank line between: a list
     item under a list item, or a table row under a table row."""
@@ -5385,7 +5399,10 @@ def build_parser() -> argparse.ArgumentParser:
             "command's stdin. Commands: every writer here, plus\n"
             "'stamp FILE... <stamp-entities options>', 'note-new PATH'\n"
             "(body: the whole note), 'section NOTE HEADING\n"
-            "[--append|--replace]' (body: the text) and 'names [--wrapup\n"
+            "[--append|--replace]' (body: the text; 'section NOTE --lead'\n"
+            "writes the text above the note's first heading or hidden\n"
+            "block, a scene's Situation, Starts it and If-table) and\n"
+            "'names [--wrapup\n"
             "WRAPUP]' (rows 'export spelling<TAB>vault spelling': each is\n"
             "replaced in every other block; --wrapup adds the Name\n"
             "Conflicts table). A body line starting\n"

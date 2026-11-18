@@ -687,7 +687,10 @@ against one plan: each
 command's stdin. Commands: every writer here, plus
 'stamp FILE... <stamp-entities options>', 'note-new PATH'
 (body: the whole note), 'section NOTE HEADING
-[--append|--replace]' (body: the text) and 'names [--wrapup
+[--append|--replace]' (body: the text; 'section NOTE --lead'
+writes the text above the note's first heading or hidden
+block, a scene's Situation, Starts it and If-table) and
+'names [--wrapup
 WRAPUP]' (rows 'export spelling<TAB>vault spelling': each is
 replaced in every other block; --wrapup adds the Name
 Conflicts table). A body line starting

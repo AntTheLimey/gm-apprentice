@@ -262,7 +262,9 @@ alongside new ideas. The propose-before-write gate is the
    > opens the door.
 2. The GM shapes it — yes / no / tweak / their own premise.
 3. Write it with `gma vault-write <vault> scene-new --chapter "<chapter>" --title "<title>" --write`, then fill its body and its
-   `entities`/`locations` links. In the Plan it, or a queued scene, is
+   `entities`/`locations` links. The body above GM Notes (Situation,
+   Starts it, the If-table) is the scene's lead: change it with a
+   batch's `=== section "<scene>" --lead --replace` block. In the Plan it, or a queued scene, is
    `### [[<title>]]` and a line each: purpose, who, how it starts;
    prep it needs (paused: where it picks up, what may come next) is
    an edit to its note, for the GM's yes. Read a paused scene's

@@ -13,7 +13,14 @@ Commands: every `vault-write` writer with its own arguments and stdin
     stamp FILE... <stamp-entities options>   no body
     note-new PATH                            body: the whole new note
     section NOTE HEADING [--append|--replace] body: the section's text
+    section NOTE --lead [--append|--replace]  body: the note's lead
     names [--wrapup WRAPUP]                  body: rows `export<TAB>vault`
+
+A note's lead is the text above its first heading or gm-only/spoiler
+block: a scene's Situation, Starts it and If-table (#738). --replace
+keeps a comment at its top (the template's prompt) and refuses one
+further down; a table row or list item appended joins the table or
+list it ends with.
 
 `names` rows are spellings to put right: every other block's text has
 each export spelling (a whole word, case kept) replaced by the vault's,
@@ -197,17 +204,97 @@ def run_note_new(batch: vw.Batch, b: Block) -> None:
     batch.row("WOULD-CREATE", rel, "", f"type: {kind}" if kind else "")
 
 
+COMMENT_LINE_RE = re.compile(r"^\s*(?:<!--|%%)")
+
+
+def run_lead(batch: vw.Batch, rel: str, body: list[str],
+             replace: bool) -> None:
+    """A `section NOTE --lead` block (#738): write the note's lead, the text
+    above its first heading or hidden block. A comment at the lead's top
+    (the scene template's prompt) stays; one further down refuses
+    --replace, which would drop it."""
+    text = batch.read(rel)
+    doc = vw.parse(text)
+    first, end = vw.lead_span(doc)
+    for s in vw.parse("\n".join(body) + "\n").states:
+        if s.heading is not None or s.marker is not None:
+            raise vw.WriteError(
+                f"{rel}: the lead's text holds a heading or a gm-only/spoiler "
+                f"marker ({s.line.strip()!r}), which would end the lead")
+    lines = list(doc.lines)
+    if replace:
+        states = {s.lineno - 1: s for s in doc.states}
+        keep = first
+        for i in range(first, end):
+            st = states.get(i)
+            if (st is not None and st.comment) or COMMENT_LINE_RE.match(lines[i]):
+                keep = i + 1
+            elif lines[i].strip():
+                break
+        dropped = [lines[i].strip() for i in range(keep, end)
+                   if (st := states.get(i)) is not None and st.comment
+                   or COMMENT_LINE_RE.match(lines[i])]
+        if dropped:
+            raise vw.WriteError(
+                f"{rel}: the lead holds a comment ({dropped[0]!r}): --replace "
+                f"would drop it; use --append, or edit around the comment")
+        # Text read with `section --lead` holds that comment too: it is
+        # matched, not written twice.
+        kept = [ln.strip() for ln in lines[first:keep] if ln.strip()]
+        solid = [i for i, ln in enumerate(body) if ln.strip()]
+        if kept and [body[i].strip() for i in solid[:len(kept)]] == kept:
+            body = body[solid[len(kept) - 1] + 1:]
+            while body and not body[0].strip():
+                body = body[1:]
+            if not body:
+                raise vw.WriteError(f"{rel}: no text to write below the "
+                                    f"lead's comment")
+        solid = [i for i in range(keep, end) if lines[i].strip()]
+        if solid:
+            # Only the old text goes: the blank lines round it, and a last
+            # line with no line end, are the note's own and stay as they are.
+            a, z = solid[0], solid[-1] + 1
+            new = [ln + doc.eol for ln in body]
+            if z == len(lines) and not lines[z - 1].endswith(("\n", "\r")):
+                new[-1] = new[-1][:-len(doc.eol)]
+            new_text = "".join(lines[:a] + new + lines[z:])
+        else:
+            new_text = vw.place(doc, end, body)
+        verb = "WOULD-REPLACE"
+    else:
+        above = next((lines[i] for i in range(end - 1, first - 1, -1)
+                      if lines[i].strip()), "")
+        glue = bool(above.lstrip().startswith("|")
+                    and body[0].lstrip().startswith("|")
+                    or vw.LIST_RE.match(above) and vw.LIST_RE.match(body[0]))
+        new_text = vw.place(doc, end, body, glue=glue)
+        verb = "WOULD-ADD"
+    batch.put(rel, new_text)
+    batch.row(verb, rel, "§(lead)", f"{len(body)} lines")
+
+
 def run_section(batch: vw.Batch, b: Block) -> None:
     ap = argparse.ArgumentParser(prog="section", add_help=False)
     ap.add_argument("note")
-    ap.add_argument("heading")
+    ap.add_argument("heading", nargs="?")
+    ap.add_argument("--lead", action="store_true")
     how = ap.add_mutually_exclusive_group()
     how.add_argument("--append", action="store_true")
     how.add_argument("--replace", action="store_true")
     ns = _parse(ap.parse_args, b.args, "section")
+    if ns.lead and ns.heading is not None:
+        raise vw.WriteError("section: a HEADING or --lead, not both")
+    if not ns.lead and ns.heading is None:
+        raise vw.WriteError("section: name a HEADING or --lead (the text "
+                            "above the note's first heading)")
     if not b.body.strip():
         raise vw.WriteError("section: no text to write")
     rel = find_note(batch, ns.note)
+    if ns.lead:
+        run_lead(batch, rel, [ln.rstrip("\r") for ln in b.body
+                              .replace("\r\n", "\n").strip("\n").split("\n")],
+                 ns.replace)
+        return
     text = batch.read(rel)
     path = [p.strip() for p in ns.heading.split("/")]
     pin = sec.PIN_RE.match(path[0])

@@ -191,6 +191,26 @@ class SectionCommandTests(unittest.TestCase):
             self.assertEqual(r.returncode, 0, r.stderr)
             self.assertTrue(r.stdout.startswith("## Properties / Stats\n"))
 
+    def test_lead_prints_the_text_above_the_first_heading_or_fence(self):
+        """#738: a scene's Situation and If-table, which no heading names."""
+        vault = copy_vault(self)
+        scene = vault / "Scene.md"
+        scene.write_text("---\ntype: scene\n---\n\n**Situation:** Night.\n\n"
+                         "| Do | Then |\n|---|---|\n| Run | Caught |\n\n"
+                         "<!-- gm-only -->\n\n## GM Notes\n\nx\n\n"
+                         "<!-- /gm-only -->\n", encoding="utf-8")
+        r = subprocess.run(
+            [sys.executable, str(SCRIPTS / "section.py"), str(vault), "Scene",
+             "--lead"], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(r.stdout, "**Situation:** Night.\n\n| Do | Then |\n"
+                         "|---|---|\n| Run | Caught |\n")
+        r = subprocess.run(
+            [sys.executable, str(SCRIPTS / "section.py"), str(vault), "Scene",
+             "GM Notes", "--lead"], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("a PATH or --lead, not both", r.stderr)
+
     def test_runs_through_gma(self):
         r = subprocess.run(
             [sys.executable, str(SCRIPTS / "gma.py"), "section",

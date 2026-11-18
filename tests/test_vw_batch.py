@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """vault-write batch: many writes, one plan, one commit."""
 
+import subprocess
 import sys
 import unittest
 from pathlib import Path
@@ -33,6 +34,34 @@ canon_status: DRAFT
 """
 
 BOLA = "Characters/NPCs/Bola.md"
+
+SCENE_REL = "Chapters/Chapter 1/Scenes/The Second Night.md"
+SCENE_FM = """---
+type: scene
+chapter: "[[Chapter 1]]"
+status: planned
+---
+"""
+SCENE_GM = """<!-- gm-only -->
+
+## GM Notes
+
+- Night 2 is Marda's.
+
+<!-- /gm-only -->
+"""
+SCENE = SCENE_FM + """
+**Situation:** The house goes to bed.
+
+**Starts it:** Hollis brings round warm cups.
+
+**If the players...**
+
+| Do | Then |
+|---|---|
+| Refuse the cups | The draught fails |
+
+""" + SCENE_GM
 
 WHOLE = f"""=== stamp "{INDEX_REL}" --set status=wrap-up
 === wrapup-new --session "{INDEX_REL}"
@@ -155,6 +184,97 @@ class BatchTests(unittest.TestCase):
             code, out = batch(vault, text, "--write")
             self.assertEqual(code, 0, out)
             self.assertIn(want, read(vault, NPC_REL), text)
+
+    def test_lead_replace_rewrites_a_scenes_text_above_its_fence(self):
+        """#738: a scene's Situation, Starts it and If-table have no heading;
+        `--lead` names them, and nothing above or below them moves."""
+        vault = make_vault(self, {SCENE_REL: SCENE})
+        text = (f"=== section \"{SCENE_REL}\" --lead --replace\n"
+                "**Situation:** Night 2.\n\n"
+                "| Do | Then |\n|---|---|\n| Refuse the cups | Teodor finds "
+                "them awake |\n")
+        code, out = batch(vault, text)
+        self.assertEqual(code, 0, out)
+        self.assertIn(f"WOULD-REPLACE\t{SCENE_REL}\t§(lead)\t", out)
+        self.assertEqual(read(vault, SCENE_REL), SCENE)
+        code, out = batch(vault, text, "--write")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(read(vault, SCENE_REL), SCENE_FM + (
+            "\n**Situation:** Night 2.\n\n| Do | Then |\n|---|---|\n"
+            "| Refuse the cups | Teodor finds them awake |\n\n") + SCENE_GM)
+
+    def test_lead_append_joins_the_if_table(self):
+        vault = make_vault(self, {SCENE_REL: SCENE})
+        text = (f"=== section \"{SCENE_REL}\" --lead --append\n"
+                "| Sleep through | A Long Rest |\n")
+        code, out = batch(vault, text, "--write")
+        self.assertEqual(code, 0, out)
+        self.assertIn("| Refuse the cups | The draught fails |\n"
+                      "| Sleep through | A Long Rest |\n\n<!-- gm-only -->",
+                      read(vault, SCENE_REL))
+
+    def test_lead_replace_keeps_the_templates_comment_at_the_top(self):
+        note = SCENE.replace("---\n\n**Situation", "---\n\n<!-- A scene is "
+                             "prep.\n     Keep what helps. -->\n\n**Situation")
+        vault = make_vault(self, {SCENE_REL: note})
+        code, out = batch(vault, f"=== section \"{SCENE_REL}\" --lead --replace\n"
+                          "**Situation:** New.\n", "--write")
+        self.assertEqual(code, 0, out)
+        self.assertIn("---\n\n<!-- A scene is prep.\n     Keep what helps. -->"
+                      "\n\n**Situation:** New.\n\n<!-- gm-only -->",
+                      read(vault, SCENE_REL))
+
+    def test_lead_read_then_written_back_changes_nothing(self):
+        """What `gma section --lead` prints, written back, leaves the note
+        byte for byte: its top comment is not doubled, and its own blank
+        lines and a last line with no line end stay."""
+        script = (Path(__file__).resolve().parent.parent / "skills" / "shared"
+                  / "scripts" / "section.py")
+        notes = {
+            "a.md": SCENE.replace("---\n\n**Situation", "---\n\n<!-- A scene"
+                                  " is prep. -->\n\n**Situation"),
+            "b.md": "\nNo frontmatter.\n\n\n\n## Notes\n\nx\n",
+            "c.md": "---\ntype: npc\n---\nTight under the frontmatter.",
+        }
+        for rel, note in notes.items():
+            vault = make_vault(self, {rel: note})
+            got = subprocess.run([sys.executable, str(script), str(vault), rel,
+                                  "--lead"], capture_output=True)
+            self.assertEqual(got.returncode, 0, got.stderr)
+            lead = got.stdout.decode("utf-8")
+            code, out = batch(vault, f'=== section "{rel}" --lead --replace\n'
+                              + lead, "--write")
+            self.assertEqual(code, 0, out)
+            self.assertEqual(read(vault, rel), note, rel)
+
+    def test_lead_replace_refuses_to_drop_a_comment_inside_it(self):
+        note = SCENE.replace("**Starts it:**", "%% check the map %%\n\n"
+                             "**Starts it:**")
+        vault = make_vault(self, {SCENE_REL: note})
+        code, out = batch(vault, f"=== section \"{SCENE_REL}\" --lead --replace\n"
+                          "**Situation:** New.\n")
+        self.assertEqual(code, 1)
+        self.assertIn("--replace would drop it", out)
+
+    def test_lead_refuses_a_heading_or_a_fence_in_its_text(self):
+        vault = make_vault(self, {SCENE_REL: SCENE})
+        for body, why in (("## Oops\n", "would end the lead"),
+                          ("<!-- gm-only -->\nx\n<!-- /gm-only -->\n",
+                           "would end the lead")):
+            code, out = batch(vault, f"=== section \"{SCENE_REL}\" --lead "
+                              f"--replace\n{body}")
+            self.assertEqual(code, 1, body)
+            self.assertIn(why, out)
+
+    def test_lead_and_a_heading_are_one_or_the_other(self):
+        vault = make_vault(self, {SCENE_REL: SCENE})
+        code, out = batch(vault, f'=== section \"{SCENE_REL}\" "GM Notes" --lead\n'
+                          "x\n")
+        self.assertEqual(code, 1)
+        self.assertIn("a HEADING or --lead, not both", out)
+        code, out = batch(vault, f"=== section \"{SCENE_REL}\"\nx\n")
+        self.assertEqual(code, 1)
+        self.assertIn("a HEADING or --lead", out)
 
     def test_section_append_with_a_heading_stays_out_of_an_open_block(self):
         """#655: text holding a sub-heading now takes the hiding check too
