@@ -117,6 +117,7 @@ decision rather than pure score.
 
 ## Completed
 
+- ~~The leak check flags a paused scene's `After [[Session]].` line~~ — the tool's own line under `## Paused` is not hidden when its session is published (#765, v1.12.83, tool 1.70.30)
 - ~~`stamp-entities --set` writes a list as one string~~ — it writes real lists, `--add` appends, and link fields take names (#761, v1.12.82)
 - ~~`section --lead` on a paused scene writes above the snapshot and leaves the real lead~~ — the lead is the text below the `## Paused` section's end line, and below an older scene's `# Title` line; a misread empty lead is refused (#758, v1.12.81)
 - ~~`entity-new` can't make a PC~~ — `--type pc` takes the vault's system sheet and files it in the PC folder; chargen and wrap-up use it (#750, v1.12.80)
