@@ -25,7 +25,6 @@ Folders may be added or renamed afterwards.
 │   └── _flags.md
 ├── _Campaign/
 │   ├── Campaign Overview.md
-│   ├── Player Characters.md
 │   └── Timeline.md
 ├── _Templates/      (one per type)
 ├── _inbox/          (staging area for vault-ingest)
@@ -52,8 +51,6 @@ Folders may be added or renamed afterwards.
 
 **Campaign Overview** — front page: campaign name, game system,
 setting/era, chapter list with links, premise.
-**Player Characters** — PC roster: player name, character name,
-key traits, status, link to the full PC note.
 **Timeline** — master timeline of campaign events.
 
 **Templates** — one per schema type: create all on setup, and one

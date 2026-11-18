@@ -80,8 +80,8 @@ Then `npm run build` and deploy as usual.
 
 Tell the GM the one that applies when they choose:
 
-- A skin dresses PC pages only, on screen only. NPC pages, the roster,
-  the party board, the nav and footer keep the site's theme. On paper
+- A skin dresses PC pages only, on screen only. NPC pages, the party
+  page and its board, the nav and footer keep the site's theme. On paper
   a sheet prints as it always has, and a framed portrait prints
   without its ornament, as the plain portrait.
 - A dialog opened from the site's own controls (History) keeps the

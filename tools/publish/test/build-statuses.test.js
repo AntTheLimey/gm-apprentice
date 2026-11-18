@@ -97,7 +97,7 @@ function build_(vault, settings) {
   return { warnings, read: (...p) => fs.readFileSync(path.join(root, 'docs', ...p), 'utf8').replace(/\r\n/g, '\n') };
 }
 
-// The party-roster fixture: Karl Brenner (active) and Otto Weiss (retired), each with a GURPS sheet.
+// The party fixture: Karl Brenner (active) and Otto Weiss (retired), each with a GURPS sheet.
 function rosterSite(statuses) {
   const root = tmp('statuses-site-');
   const vault = path.join(root, 'vault');
@@ -105,18 +105,25 @@ function rosterSite(statuses) {
   return build_(vault, { vault: { system: 'gurps-4e', ...(statuses ? { statuses } : {}) } });
 }
 const teamZone = (html) => { const at = html.indexOf('<h2>The Team</h2>'); return at < 0 ? '' : html.slice(at, html.indexOf('</div>\n</div>', at)); };
+// The party page (the PCs' index) without its Out of Play list: the board, its data and the cards of the PCs in play.
+const PARTY = ['characters', 'pcs', 'index.html'];
+const inPlay = (html) => html.replace(/<section class="dashboard-section party-out-of-play">[\s\S]*?<\/section>/, '');
+// The Party Status board alone (one <section>, holding none).
+const boardOf = (html) => { const at = html.indexOf('<section class="gl-party"'); return at < 0 ? '' : html.slice(at, html.indexOf('</section>', at)); };
 
 test('nothing set: a retired PC is off the team and the party board', () => {
   const site = rosterSite(null);
   assert.match(teamZone(site.read('index.html')), /karl-brenner/);
   assert.doesNotMatch(teamZone(site.read('index.html')), /otto-weiss/);
-  assert.doesNotMatch(site.read('characters', 'pcs', 'player-characters.html'), /otto-weiss/);
+  assert.doesNotMatch(inPlay(site.read(...PARTY)), /otto-weiss/);
+  assert.match(site.read(...PARTY), /<h2>Out of Play<\/h2>[\s\S]*otto-weiss\.html">Otto Weiss<\/a> \(Retired\)/);
 });
 
 test('out_of_play set to [dead]: a retired PC is on the team and the party board', () => {
   const site = rosterSite({ out_of_play: ['dead'], fallen: [] });
   assert.match(teamZone(site.read('index.html')), /otto-weiss/);
-  assert.match(site.read('characters', 'pcs', 'player-characters.html'), /otto-weiss/);
+  assert.match(boardOf(site.read(...PARTY)), /otto-weiss/);
+  assert.doesNotMatch(site.read(...PARTY), /Out of Play/);
   assert.doesNotMatch(site.read('index.html'), /In Memoriam/);
 });
 

@@ -578,7 +578,7 @@ def test_party_prints_only_findings_with_the_note_name(tmp_path):
     pcs = vault / "Characters" / "PCs"
     (pcs / "Ada.md").write_text(sheet(), encoding="utf-8")
     (pcs / "Bryn.md").write_text(sheet(hit_dice=(("d6", "0/4"),)), encoding="utf-8")
-    (pcs / "Player Characters.md").write_text("---\ntype: pc_roster\n---\n\n# Party\n", encoding="utf-8")
+    (pcs / "Party.md").write_text("---\ntype: reference\n---\n\n# Party\n", encoding="utf-8")
     (pcs / "Cass.md").write_text("---\ntype: pc\nsheet_source: paper\n---\n\n## Notes\n", encoding="utf-8")
     code, out, _ = party("--party", str(vault))
     assert code == 0

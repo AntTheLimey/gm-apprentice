@@ -8,9 +8,6 @@ function wikiTemplate(page, processedContent, navFor, config, imageMap, context)
   const fm = page.frontmatter;
   const publishConfig = (context || {}).publishConfig || {};
   const pages = (context || {}).pages || [];
-  const partyBoardHtml = (context || {}).partyBoardHtml || null;
-  const partyDataScript = (context || {}).partyDataScript || null;
-  const partyClientScripts = (context || {}).partyClientScripts || [];
   const badges = metadataBadgesFor(fm);
   const portrait = portraitImg(fm, page.outputPath, imageMap || {});
 
@@ -54,15 +51,12 @@ function wikiTemplate(page, processedContent, navFor, config, imageMap, context)
     cssHref: cssPath(page.outputPath),
     navHtml: navFor(page.outputPath, config),
     rootHref: rootPath(page.outputPath),
-    content: (partyBoardHtml ? partyBoardHtml + '\n' : '') + mainContent + (partyDataScript ? '\n' + partyDataScript : ''),
+    content: mainContent,
     footer: config.footer,
     genrePreset: publishConfig._genrePreset,
     overridesCss: publishConfig._overridesCss,
     breadcrumbsHtml,
-    scripts: [
-      ...clientScripts(page.outputPath),
-      ...(partyBoardHtml ? partyClientScripts.map(s => rootPath(page.outputPath) + 'js/' + s) : []),
-    ],
+    scripts: clientScripts(page.outputPath),
   });
 }
 

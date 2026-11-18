@@ -202,7 +202,8 @@ The vault does not change. The sheet stays in each PC note and
   already shows is not repeated.
   The header badges come from `display_meta`, which is your own
   choice, so a stat field listed there still shows and is published.
-- There is no live status bar, and the roster page has no party board.
+- There is no live status bar, and the party page (Player Characters
+  in the menu) has no party board.
 - With the inbox on the widget stays, as a question channel labelled
   "Ask the GM" (see `change-request-loop.md`).
 

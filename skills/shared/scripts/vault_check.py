@@ -1267,20 +1267,42 @@ def pictures_line(vault: Path, verdict: str) -> str | None:
     return None
 
 
-def list_active_pcs(vault: Path) -> list[str]:
-    """The roster the session skills open with, as `PC` rows.
+def _shown(value: Any) -> str:
+    """A frontmatter scalar as a roster cell, on one line (a tab or line
+    break in it would split the row): `?` when unset."""
+    if isinstance(value, list):
+        value = value[0] if len(value) == 1 else ""
+    text = " ".join(str(value).split()) if value is not None else ""
+    return text or "?"
+
+
+def list_active_pcs(vault: Path, everyone: bool = False) -> list[str]:
+    """The roster the session skills open with, as `PC` rows: each PC's
+    note, aliases, asOfSession, player and status, read from the PC notes
+    themselves, the one source (#729). `everyone` adds the PCs out of play
+    (dead, retired, ...), so a status is never guessed.
 
     Level column is `PC` rather than INFO/WARNING/ERROR: nothing here is
     a finding, and labelling a roster INFO invites a triage pass over
     rows that only ever needed reading.
     """
+    if everyone:
+        pcs = [(rel, fm) for rel, text in vaultlib.vault_files(vault)
+               for fm in [vaultlib.extract_frontmatter(text) or {}]
+               if vaultlib.is_active_pc(rel, fm, frozenset())]
+    else:
+        pcs = active_pcs(vault)
     rows = []
-    for rel, fm in active_pcs(vault):
+    # A Midwife draft is no PC at the table (`_archive/` and `_QA/` are
+    # already left out), in either list.
+    for rel, fm in [(r, f) for r, f in pcs if not vaultlib.is_record_copy(r)]:
         names = ", ".join(link_aliases(fm))
         as_of = fm.get("asOfSession")
         stamp = str(as_of) if as_of not in (None, "", []) else "?"
         rows.append(f"PC\t{rel}\t{Path(rel).stem}; "
-                    f"aliases: {names or 'none'}; asOfSession: {stamp}")
+                    f"aliases: {names or 'none'}; asOfSession: {stamp}; "
+                    f"player: {_shown(fm.get('player_name'))}; "
+                    f"status: {_shown(fm.get('status'))}")
     return rows
 
 
@@ -6072,6 +6094,9 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--threshold", type=float,
                     help="similarity ratio for names (default: the vault's "
                          "vault.name_match setting)")
+    ap.add_argument("--all", dest="all_pcs", action="store_true",
+                    help="active-pcs only: also list the PCs out of play "
+                         "(dead, retired, ...) with their status")
     ap.add_argument("--since", type=int,
                     help="session number for the changed command")
     ap.epilog = 'Example: gma vault-check "<vault>" version'
@@ -6152,7 +6177,7 @@ def _main(argv: list[str] | None) -> int:
             print(line)
         return code
     if args.command == "active-pcs":
-        emit("active-pcs", list_active_pcs(args.vault))
+        emit("active-pcs", list_active_pcs(args.vault, args.all_pcs))
         return 0
     if args.command == "voices":
         if not vaultlib.setting_or_builtin(args.vault, "vault.voices"):

@@ -73,7 +73,7 @@ function pcFor(system) {
   return { body: b, fm, identity };
 }
 
-// Builds a vault of one PC, one NPC and a roster. `publish` is a YAML fragment for
+// Builds a vault of one PC and one NPC. `publish` is a YAML fragment for
 // the vault's settings file (by their new names). Returns the output root plus every line the build printed.
 function buildSite({ system, sheets = false, settings = {}, pcBody, pcFm = '', npc = true, wrangler = false }) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-sheets-off-'));
@@ -90,8 +90,6 @@ function buildSite({ system, sheets = false, settings = {}, pcBody, pcFm = '', n
   });
   fs.writeFileSync(path.join(vault, 'Characters', 'PCs', 'Test Hero.md'),
     `---\ntype: pc\nplayer_name: Pat\nstatus: alive\n${pcFm}---\n\n# Test Hero\n\n${pcBody}`);
-  fs.writeFileSync(path.join(vault, 'Characters', 'PCs', 'Player Characters.md'),
-    '---\ntype: pc_roster\n---\n\n# Player Characters\n\nThe Cold Fleet.\n');
   if (npc) {
     fs.writeFileSync(path.join(vault, 'Characters', 'NPCs', 'Marta.md'),
       '---\ntype: npc\noccupation: Harbormaster\n---\n\n# Marta\n\n## Background\n\nKeeps the docks.\n\n## Stat Sheet\n\n| Attribute | Value |\n|---|---|\n| STR | 12 |\n');
@@ -175,9 +173,9 @@ describe('character sheets off: nothing from the sheet is published', () => {
         assert.ok(!/class="[^"]*\b(quick-stats|stat-item|sheet-section|gurps-|dnd-|fitd-|pf2e-|coc-sheet)/.test(html), 'sheet classes');
       });
 
-      it('the roster page has no party board', () => {
-        assert.ok(!off.read('characters/pcs/player-characters.html').includes('gl-party'));
-        assert.ok(off.read('characters/pcs/player-characters.html').includes('The Cold Fleet.'));
+      it('the party page has no party board', () => {
+        assert.ok(!off.read('characters/pcs/index.html').includes('gl-party'));
+        assert.match(off.read('characters/pcs/index.html'), /<a class="entity-card" href="test-hero\.html"/);
       });
 
       it('the build prints no sheetless or empty-sheet line', () => {
@@ -294,7 +292,7 @@ describe('character sheets off: more cases', () => {
     assert.ok(on.includes('id="cr-root"') && !on.includes('data-sheets'));
   });
 
-  it('the roster of a vault with real party stats shows a board with sheets on and none with sheets off', () => {
+  it('the party page of a vault with real party stats shows a board with sheets on and none with sheets off', () => {
     const roster = (sheets) => {
       const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-sheets-off-'));
       roots.push(root);
@@ -306,11 +304,11 @@ describe('character sheets off: more cases', () => {
       const real = { warn: console.warn, log: console.log };
       console.warn = () => {}; console.log = () => {};
       try { build({ configPath }); } finally { Object.assign(console, real); }
-      return fs.readFileSync(path.join(root, 'docs', 'characters', 'pcs', 'player-characters.html'), 'utf8');
+      return fs.readFileSync(path.join(root, 'docs', 'characters', 'pcs', 'index.html'), 'utf8');
     };
     assert.ok(roster(true).includes('gl-party'), 'control: the board renders with sheets on');
     const off = roster(false);
     assert.ok(!off.includes('gl-party') && !off.includes('Party Status'));
-    assert.ok(off.includes('The Cold Fleet'));
+    assert.ok(off.includes('karl-brenner.html'));
   });
 });

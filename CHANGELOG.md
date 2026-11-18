@@ -9,6 +9,16 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.71] — 2026-11-18
+
+### Fixed
+
+- The session skills' first rule reads the PC roster from the PC notes (`gma vault-check <vault> active-pcs`, now with each PC's player and status; `--all` adds those out of play) instead of `_Campaign/Player Characters.md`, which a Midwife vault left empty and some vaults never had (#729).
+
+### Removed
+
+- The PC roster note (`_Campaign/Player Characters.md`) is gone: each PC's player and status live on the PC's own note, and new vaults no longer get one. The update (check `pc-roster-retired`) deletes an empty one with any empty `_Templates/` copy, asks before deleting one you wrote in (saying first anything the PC notes may not hold), and waits while it names a PC with no note of their own. Links to it become plain words, a frontmatter entry that is only the link comes out (any other is named for you), it leaves the publish list, and any line of your vault's CLAUDE.md or AGENTS.md that sends the agent to it is named for you to change. Archived and QA copies are left alone. The site makes its party page itself, the PCs' index with the Party Status board and a list of the PCs out of play; the old roster address sends readers there unless a page of yours is at it (tool 1.70.27, #729).
+
 ## [1.12.70] — 2026-11-18
 
 ### Fixed

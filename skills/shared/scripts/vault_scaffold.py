@@ -8,7 +8,7 @@ Without --write it prints what it would create and writes nothing. With
 --write it creates everything or nothing. It never overwrites, moves or
 deletes what is already there, and writes no campaign content: the folders,
 the templates for the game system, the `_meta/` files (settings, state, entity and relationship types, index), two world stubs
-and an empty Timeline and Player Characters page.
+and an empty Timeline page.
 
 Rows are tab-separated: verb, path. WOULD-CREATE in a plan, CREATED when
 written (WOULD-UPDATE and UPDATED for a state file the stamp is merged
@@ -183,9 +183,6 @@ ATTACHMENT_SUBS = ("characters", "locations", "factions", "items",
 # A type folder counts as present when the vault already keeps a note of one
 # of its types anywhere: that is how a renamed folder is recognised. The
 # folders and their types are schema_rules.TYPE_FOLDERS (from the ontology).
-# `pc_roster` is the name; `player-characters` is an older one still found
-# in vaults.
-ROSTER_TYPES = frozenset({"pc_roster", "player-characters"})
 INBOX = ("_inbox", "_inbox/_processed")
 # In the layout tree, and deliberately not made here: the midwife makes its
 # own workspace; the inbox is made on request (--inbox).
@@ -250,8 +247,8 @@ def missing(vault: Path, system: str | None, *, campaign: str, version: str,
             today: str | None = None) -> list[Piece]:
     """What the vault's skeleton lacks, in the order to create it. Nothing
     that exists is listed. `templates=False` leaves `_Templates/` files to
-    the update tool's own check; `pages=False` leaves out the four one-off
-    pages (world index, world flags, Timeline, Player Characters)."""
+    the update tool's own check; `pages=False` leaves out the one-off
+    pages (world index, world flags, Timeline, the first chapter)."""
     types, has_world_index, has_chapter = _types_in(vault)
     fresh = not (vault.is_dir() and any(True for _ in vault_files(vault)))
     day = today or datetime.date.today().isoformat()
@@ -297,9 +294,6 @@ def missing(vault: Path, system: str | None, *, campaign: str, version: str,
              present="world_flags" in types)
         file(TIMELINE, lambda: seed("timeline.md", campaign),
              present="timeline" in types)
-        file("_Campaign/Player Characters.md",
-             lambda: seed("player-characters.md", campaign),
-             present=bool(ROSTER_TYPES & types))
         file(FIRST_CHAPTER, first_chapter_text, present=has_chapter)
     file("_meta/entity-types.md", entity_types_text)
     file("_meta/relationship-types.md", relationship_types_text)

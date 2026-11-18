@@ -23,7 +23,7 @@ describe('live features and the host', () => {
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
-  function roster({ host, toml }) {
+  function partyPage({ host, toml }) {
     const vault = path.join(dir, 'vault');
     fs.cpSync(path.join(__dirname, '..', 'fixtures', 'with-party-roster'), vault, { recursive: true });
     mergeSettings(vault, { 'player_site.features.live_stats': true, 'player_site.features.inbox': true });
@@ -36,11 +36,11 @@ describe('live features and the host', () => {
       ...(host ? { host } : {}),
     }, 2);
     build({ configPath });
-    return fs.readFileSync(path.join(dir, 'docs', 'characters', 'pcs', 'player-characters.html'), 'utf-8');
+    return fs.readFileSync(path.join(dir, 'docs', 'characters', 'pcs', 'index.html'), 'utf-8');
   }
 
   it('a GitHub Pages site with a KV id left in wrangler.toml publishes no live features, and the warning names the host', () => {
-    const html = roster({ host: 'github-pages', toml: true });
+    const html = partyPage({ host: 'github-pages', toml: true });
     assert.doesNotMatch(html, /id="gurps-party-data"/);
     const said = warnings.filter((w) => /live_stats|inbox/.test(w));
     assert.equal(said.length, 2, said.join('\n'));
@@ -53,23 +53,23 @@ describe('live features and the host', () => {
   });
 
   it('a GitHub Pages site with no KV store gets the host as the reason too', () => {
-    roster({ host: 'github-pages', toml: false });
+    partyPage({ host: 'github-pages', toml: false });
     assert.ok(warnings.some((w) => /live_stats/.test(w) && /Cloudflare/.test(w)), warnings.join('\n'));
   });
 
   it('a Cloudflare Pages site with a KV id publishes them, with no warning', () => {
-    const html = roster({ host: 'cloudflare-pages', toml: true });
+    const html = partyPage({ host: 'cloudflare-pages', toml: true });
     assert.match(html, /id="gurps-party-data"/);
     assert.ok(!warnings.some((w) => /live_stats|inbox/.test(w)), warnings.join('\n'));
   });
 
   it('a Cloudflare Pages site with no KV store keeps the KV warning', () => {
-    roster({ host: 'cloudflare-pages', toml: false });
+    partyPage({ host: 'cloudflare-pages', toml: false });
     assert.ok(warnings.some((w) => /live_stats/.test(w) && /no KV store wired/.test(w)), warnings.join('\n'));
   });
 
   it('a site that names no host is a Cloudflare Pages site', () => {
-    const html = roster({ toml: true });
+    const html = partyPage({ toml: true });
     assert.match(html, /id="gurps-party-data"/);
   });
 });

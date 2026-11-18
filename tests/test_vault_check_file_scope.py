@@ -78,7 +78,7 @@ def make_scoped_vault(case, tmp_dir=None):
     (vault / "_Templates").mkdir()
     (vault / "_Templates" / "Ignored.md").write_text(DIRTY_TABLE,
                                                       encoding="utf-8")
-    (vault / "Player Characters.md").write_text(DIRTY_TABLE,
+    (vault / "Spaced Note.md").write_text(DIRTY_TABLE,
                                                 encoding="utf-8")
     (parent / "Outside.md").write_text(
         "---\ntype: reference\n---\n\noutside the vault\n", encoding="utf-8")
@@ -268,8 +268,8 @@ class PathNormalizationTests(unittest.TestCase):
                                  ([note], []))
         # A name with spaces, matched on its own.
         self.assertEqual(
-            vc._resolve_vault_paths(vault, ["Player Characters.md"]),
-            (["Player Characters.md"], []))
+            vc._resolve_vault_paths(vault, ["Spaced Note.md"]),
+            (["Spaced Note.md"], []))
 
     def test_an_absolute_path_under_a_symlinked_tmp_still_matches(self):
         # Forced under /tmp, which is itself a symlink to /private/tmp on
@@ -331,43 +331,43 @@ class NewerThanScopeTests(unittest.TestCase):
     def test_newer_than_excludes_files_older_than_the_marker(self):
         parent, vault = make_scoped_vault(self)
         marker = vault / "Notes" / "Dirty Note.md"
-        older = vault / "Player Characters.md"
+        older = vault / "Spaced Note.md"
         now = time.time()
         self._touch(older, now - 3600)
         self._touch(marker, now)
         proc = run_cli(vault, "tables", "--newer-than", "Notes/Dirty Note.md")
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertIn("Notes/Dirty Note.md", proc.stdout)
-        self.assertNotIn("Player Characters.md", proc.stdout)
+        self.assertNotIn("Spaced Note.md", proc.stdout)
 
     def test_newer_than_includes_files_at_or_after_the_marker(self):
         parent, vault = make_scoped_vault(self)
         marker = vault / "Notes" / "Dirty Note.md"
-        newer = vault / "Player Characters.md"
+        newer = vault / "Spaced Note.md"
         now = time.time()
         self._touch(marker, now - 3600)
         self._touch(newer, now)
         proc = run_cli(vault, "tables", "--newer-than", "Notes/Dirty Note.md")
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertIn("Notes/Dirty Note.md", proc.stdout)
-        self.assertIn("Player Characters.md", proc.stdout)
+        self.assertIn("Spaced Note.md", proc.stdout)
 
     def test_newer_than_combines_with_file_by_and(self):
         parent, vault = make_scoped_vault(self)
         marker = vault / "Notes" / "Dirty Note.md"
-        newer = vault / "Player Characters.md"
+        newer = vault / "Spaced Note.md"
         now = time.time()
         self._touch(marker, now - 3600)
         self._touch(newer, now)
         # --file names only the marker; --newer-than alone would also
-        # include "Player Characters.md", but the AND with --file must
+        # include "Spaced Note.md", but the AND with --file must
         # still exclude it.
         proc = run_cli(vault, "tables",
                        "--file", "Notes/Dirty Note.md",
                        "--newer-than", "Notes/Dirty Note.md")
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertIn("Notes/Dirty Note.md", proc.stdout)
-        self.assertNotIn("Player Characters.md", proc.stdout)
+        self.assertNotIn("Spaced Note.md", proc.stdout)
 
     def test_newer_than_naming_no_file_is_a_clear_error(self):
         parent, vault = make_scoped_vault(self)

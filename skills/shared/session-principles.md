@@ -27,9 +27,9 @@ gma vault-check <vault> version
 
 ## Absolute Rules
 
-- **Read the PC roster first** (`_Campaign/Player Characters.md`):
-  every PC, their player, and status (active/retired/dead/NPC).
-  Getting status wrong is a serious error.
+- **Read the PC roster first**: `gma vault-check <vault> active-pcs`
+  (add `--all` for PCs out of play) gives every PC, their player and
+  status from the PC notes. Getting status wrong is a serious error.
 - **Never estimate scene durations** ("45-60 minutes") — they
   constrain the GM.
 - **Characters are the story.** Foreground PC arcs; campaign plot

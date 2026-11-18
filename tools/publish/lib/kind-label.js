@@ -7,7 +7,7 @@ const KIND_LABELS = {
   npc: 'NPC', pc: 'Player character', creature: 'Creature', location: 'Location',
   faction: 'Faction', item: 'Item', event: 'Event', session: 'Session',
   chapter: 'Chapter', clue: 'Clue', document: 'Document',
-  pc_roster: 'PC roster', npc_group: 'NPC group',
+  npc_group: 'NPC group',
   // A Wrap-Up reads as the session it records, in every spelling of its type.
   ...Object.fromEntries([...WRAP_UP_TYPES].map((t) => [t, 'Session'])),
 };

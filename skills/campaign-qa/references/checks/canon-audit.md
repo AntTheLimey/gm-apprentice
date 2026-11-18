@@ -84,7 +84,8 @@ is out of scope here. Detect only; Validate mode handles the fix.
 
 ### Step 3: Check PC Roster Consistency
 
-Read `_Campaign/Player Characters.md`. For each entry, verify:
+The roster is the PC notes: `gma vault-check <vault> active-pcs --all`
+(player and status per PC). For each PC, verify:
 - The player/character mapping matches references in session
   notes
 - Character status (active, retired, dead, NPC) is consistent

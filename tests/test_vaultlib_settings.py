@@ -433,8 +433,11 @@ def test_python_and_the_build_agree_on_who_is_out_of_play(tmp_path):
         [node, str(TOOL), "build", "--config", str(tmp_path / "vault.config.json")],
         capture_output=True, text=True)
     assert done.returncode == 0, done.stdout + done.stderr
-    board = (tmp_path / "docs" / "characters" / "pcs" / "player-characters.html"
+    # The party page (the PCs' index, #729) also lists those out of play: the
+    # board is its own section.
+    party = (tmp_path / "docs" / "characters" / "pcs" / "index.html"
              ).read_text(encoding="utf-8")
+    board = re.search(r'<section class="gl-party".*?</section>', party, re.S).group(0)
     on_board = set(re.findall(r"pc-\d\d", board))
     kept = {"pc-" + Path(rel).stem.split()[1]
             for rel, _fm in vaultlib.active_pcs(vault)}

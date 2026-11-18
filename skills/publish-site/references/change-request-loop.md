@@ -106,7 +106,7 @@ the cell being changed, on a PC that is not live), read first from the PC's
    session code, not the name — so neither is ever pasted into a shell command.
    Match `character` yourself against the roster: the names
    `gm-apprentice-publish sheet show` lists back on a miss (`No PC named "…".
-   PCs: …`), or the published site's roster. Then **type the matched roster
+   PCs: …`), or the site's party page (the PCs' index). Then **type the matched roster
    name into the command by hand**, and use only that name for the rest of
    this entry. A name that matches no roster entry may belong to a PC
    renamed since: that PC's note carries `live_key`, the site's slug of

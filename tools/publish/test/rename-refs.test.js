@@ -408,14 +408,14 @@ describe('a pinned key reaches the build', () => {
 
   it('without live_key the slug is the filename slug, as today', () => {
     const { read, root } = buildRoster(false);
-    assert.match(read('characters', 'pcs', 'player-characters.html'), /"pcSlug":"karl-brenner"/);
+    assert.match(read('characters', 'pcs', 'index.html'), /"pcSlug":"karl-brenner"/);
     assert.match(read('characters', 'pcs', 'karl-brenner.html'), /"pcSlug":"karl-brenner"/);
     fs.rmSync(root, { recursive: true, force: true });
   });
 
   it('with live_key the pinned slug is in the page data and the party manifest, at the new URL', () => {
     const { read, root } = buildRoster(true);
-    assert.match(read('characters', 'pcs', 'player-characters.html'), /"pcSlug":"karl-brenner"/);
+    assert.match(read('characters', 'pcs', 'index.html'), /"pcSlug":"karl-brenner"/);
     const page = read('characters', 'pcs', 'karl-hale.html');
     assert.match(page, /"pcSlug":"karl-brenner"/);
     fs.rmSync(root, { recursive: true, force: true });

@@ -28,8 +28,11 @@ runs here — the vault starts at the current version.
    nothing was written.
 
 The script makes the skeleton only: folders, `_Templates/` for the
-system, the `_meta/` files, the two `_World/` stubs and an
-empty Timeline and Player Characters page. You write the content:
+system, the `_meta/` files, the two `_World/` stubs, an
+empty Timeline page and, when the vault has no chapter yet, a starter
+`Chapters/Chapter 1/Chapter 1.md`. You write the content:
 the Campaign Overview (from `_Templates/_Template_Campaign_Overview.md`),
-the roster, chapters (each with a `Planning/` subfolder) and
-entities. Folders may be added or renamed afterwards.
+chapters (fill in the starter Chapter 1 rather than making another;
+each chapter has a `Planning/` subfolder) and entities; each PC's
+player and status live on the PC's own note. Folders may be added or
+renamed afterwards.

@@ -31,6 +31,7 @@ gma vault-check <vault> <command> [<NAME> ...] [options]
 | `--renest-excludes` |  | gm-leak only, vault-wide: the 1.8.3 migration — re-nest every heading titled with a current exclude_sections entry under ## GM Notes, then collapse exclude_sections to ["GM Notes"]. Dry run unless --fix. |
 | `--settle` | `NOTE:LINE` | gm-leak only: the Keeper-looking heading at NOTE:LINE (as a gm-leak row names it) is for players; the publish tool records it and gm-leak stops flagging it until the heading changes |
 | `--threshold` | `THRESHOLD` | similarity ratio for names (default: the vault's vault.name_match setting) |
+| `--all` |  | active-pcs only: also list the PCs out of play (dead, retired, ...) with their status |
 | `--since` | `SINCE` | session number for the changed command |
 
 Example: `gma vault-check "<vault>" version`

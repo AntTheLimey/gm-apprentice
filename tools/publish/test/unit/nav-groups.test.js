@@ -103,17 +103,15 @@ describe('generateNav', () => {
   });
 });
 
-describe('generateNavGroups roster target (#300)', () => {
-  for (const type of ['pc_roster', 'player-characters']) {
-    it(`points Player Characters at a roster of type ${type}`, () => {
-      const pages = [
-        { outputDir: 'characters/pcs', outputPath: 'characters/pcs/hero.html', frontmatter: { type: 'pc' } },
-        { outputDir: 'campaign', outputPath: 'campaign/player-characters.html', frontmatter: { type } },
-      ];
-      const chars = generateNavGroups(pages).find(g => g.name === 'Characters');
-      assert.strictEqual(chars.links.find(l => l.href.includes('player-characters')).href, 'campaign/player-characters.html');
-    });
-  }
+describe('generateNavGroups party page (#729)', () => {
+  it('points Player Characters at the PCs\' index, whatever note says it is a roster', () => {
+    const pages = [
+      { outputDir: 'characters/pcs', outputPath: 'characters/pcs/hero.html', frontmatter: { type: 'pc' } },
+      { outputDir: 'campaign', outputPath: 'campaign/player-characters.html', frontmatter: { type: 'pc_roster' } },
+    ];
+    const chars = generateNavGroups(pages).find(g => g.name === 'Characters');
+    assert.strictEqual(chars.links.find(l => l.label === 'Player Characters').href, 'characters/pcs/index.html');
+  });
 });
 
 describe('generateNavGroups timeline target (issue #83)', () => {

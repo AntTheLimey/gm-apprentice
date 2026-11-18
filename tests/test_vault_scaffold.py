@@ -101,10 +101,6 @@ class TextTests(unittest.TestCase):
             text, encoding="utf-8")
         return str(root / "V")
 
-    def test_the_seeded_roster_has_the_type_a_site_recognises(self):
-        fm = extract_frontmatter(vs.seed("player-characters.md", "X"))
-        self.assertEqual(fm["type"], "pc_roster")
-
     def test_a_missing_seed_is_a_refusal(self):
         with mock.patch.object(vs, "SEEDS", SHARED / "no-such-folder"):
             with self.assertRaises(vs.ScaffoldError):
@@ -193,7 +189,6 @@ class PlanTests(unittest.TestCase):
                        "_Templates/_Template_Chapter.md",
                        "_Templates/pc-coc-7e.md", "_World/world-index.md",
                        "_World/_flags.md", "_Campaign/Timeline.md",
-                       "_Campaign/Player Characters.md",
                        "_meta/entity-types.md", "_meta/relationship-types.md",
                        "_meta/index.md", "_meta/vault-config.yaml",
                        "_meta/vault-state.json"):
@@ -202,7 +197,8 @@ class PlanTests(unittest.TestCase):
         self.assertEqual(got[-3:], ["_meta/index.md", "_meta/vault-config.yaml",
                                     "_meta/vault-state.json"])
         self.assertEqual(len(got), len(set(got)))
-        for unwanted in ("_inbox/", "_midwife/"):
+        for unwanted in ("_inbox/", "_midwife/",
+                         "_Campaign/Player Characters.md"):   # retired, #729
             self.assertNotIn(unwanted, got)
 
     def test_templates_match_the_update_tools_set(self):
@@ -239,10 +235,8 @@ class PlanTests(unittest.TestCase):
     def test_a_timeline_under_another_name_counts(self):
         vault = scratch(self) / "V"
         note(vault, "Lore/When.md", "---\ntype: timeline\n---\n")
-        note(vault, "Lore/Party.md", "---\ntype: player-characters\n---\n")
         got = paths(plan(vault))
         self.assertNotIn("_Campaign/Timeline.md", got)
-        self.assertNotIn("_Campaign/Player Characters.md", got)
 
     def test_a_world_index_under_another_name_counts(self):
         vault = scratch(self) / "V"
@@ -258,11 +252,6 @@ class PlanTests(unittest.TestCase):
         vault = scratch(self) / "V"
         note(vault, "Lore/flags.md", "---\ntype: world_flags\n---\n")
         self.assertNotIn("_World/_flags.md", paths(plan(vault)))
-
-    def test_a_roster_of_either_type_counts(self):
-        vault = scratch(self) / "V"
-        note(vault, "Lore/Party.md", "---\ntype: pc_roster\n---\n")
-        self.assertNotIn("_Campaign/Player Characters.md", paths(plan(vault)))
 
     def test_templates_do_not_count_as_notes(self):
         vault = scratch(self) / "V"
@@ -356,8 +345,7 @@ class PlanTests(unittest.TestCase):
     def test_pages_can_be_left_out(self):
         got = paths(plan(scratch(self) / "V", pages=False))
         for page in ("_World/world-index.md", "_World/_flags.md",
-                     "_Campaign/Timeline.md",
-                     "_Campaign/Player Characters.md"):
+                     "_Campaign/Timeline.md"):
             self.assertNotIn(page, got)
         for kept in ("_World/", "_Campaign/", "Clues/",
                      "_Templates/_Template_NPC.md", "_meta/entity-types.md",

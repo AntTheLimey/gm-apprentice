@@ -9,10 +9,12 @@ import hashlib
 import json
 import posixpath
 import re
+import unicodedata
 from collections.abc import Callable
 from pathlib import Path
-from typing import Literal
+from typing import Literal, NamedTuple
 
+import links
 import relink
 import threads as th
 import update_record
@@ -21,8 +23,8 @@ from migrate_core import (CHOICE, PERSON, WILL, Check, Item, StepFailed,
 from schema_rules import system_id as _system_id
 from schema_rules import TEMPLATE_NAMES
 from template_compare import compare, summary
-from vault_check import (PLAY_RECORD_TYPES, WRAP_TYPES, publish_list_sets,
-                         shared_threads_tool_too_old,
+from vault_check import (PLAY_RECORD_TYPES, WRAP_TYPES, ask_publish_tool,
+                         publish_list_sets, shared_threads_tool_too_old,
                          wrapup_filename_findings)
 from vaultlib import (WRAP_UP_TYPES, StateUnreadable, campaign_overview,
                       delete_key, effectively_empty, opens_a_block, entity_type, extract_frontmatter, is_active_pc, out_of_play,
@@ -31,6 +33,8 @@ from vaultlib import (WRAP_UP_TYPES, StateUnreadable, campaign_overview,
                       read_held, read_stamp, settings,
                       vault_files, vault_layout,
                       wrapup_filename)
+from vaultlib import (ARCHIVE_DIR, LINK_RE, agent_files, inside_spans, is_record_copy,
+                      link_aliases, link_lines, link_name, normalize)
 
 SHARED = Path(__file__).resolve().parent.parent
 TEMPLATES = SHARED / "templates"
@@ -1195,6 +1199,651 @@ def find_play_records_publish(vault: Path) -> list[Item]:
                   f"this table record off" for rel in found], apply)]
 
 
+# --- the PC roster note ------------------------------------------------------
+
+# 1.12.71 (#729): the PC roster note (`_Campaign/Player Characters.md`) is
+# retired. Every PC's player and status are on the PC's own note
+# (`player_name`, `status`), which the session skills read with `vault-check
+# active-pcs --all`, and the site makes its party page itself.
+# `player-characters` is the type's older name. A record copy (`_archive/`,
+# `_QA/`, `_midwife/`) is a record: neither deleted nor rewritten.
+ROSTER_TYPES = frozenset({"pc_roster", "player-characters"})
+TEMPLATE_DIRS = ("_Templates", "_templates")
+ACTIVE_PCS = "gma vault-check <vault> active-pcs --all"
+
+
+def _is_roster(text: str) -> bool:
+    kind = entity_type(extract_frontmatter(text) or {})
+    return kind.strip().lower() in ROSTER_TYPES
+
+
+def _roster_files(vault: Path) -> list[tuple[str, bool]]:
+    """(vault-relative path, is a template) of every file of a roster type:
+    the notes (not the `_inbox/` staging area, not a record copy) and the
+    vault's `_Templates/` copy, if it keeps one."""
+    found = [(rel, False) for rel, text in vault_files(vault)
+             if not is_record_copy(rel) and _is_roster(text)]
+    # By the names the folder has on disk: on a disk blind to case the two
+    # spellings are one folder.
+    for root in sorted(d for d in vault.iterdir()
+                       if d.is_dir() and d.name in TEMPLATE_DIRS):
+        for path in sorted(root.rglob("*.md")):
+            try:
+                text = path.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError):
+                continue
+            if _is_roster(text):
+                found.append((path.relative_to(vault).as_posix(), True))
+    return found
+
+
+def _body(text: str) -> str:
+    """A note's text after its frontmatter (all of it when it has none)."""
+    lines = text.splitlines(keepends=True)
+    close, _err = frontmatter_span(lines)
+    return "".join(lines[close + 1:]) if close > 0 else text
+
+
+# The heading the scaffold seeded ("# Player Characters"), the note's own
+# name, or a template's placeholder: a heading that says nothing of a PC.
+SEEDED_HEADING_RE = re.compile(r"^#{1,6}\s+(.*?)\s*#*$")
+PLACEHOLDER_HEADING_RE = re.compile(r"^(\{\{.*\}\}|<%.*%>)$")
+
+
+def _roster_written(text: str, stem: str = "") -> bool:
+    """Whether a roster note holds writing: anything past its frontmatter
+    beyond the one heading the scaffold seeded ("Player Characters", the
+    note's own name `stem`, or a template's placeholder). A heading that
+    links a PC or says anything else is writing. HTML comments are not."""
+    body = re.sub(r"<!--.*?-->", "", _body(text), flags=re.S)
+    lines = [line.strip() for line in body.splitlines() if line.strip()]
+    if not lines:
+        return False
+    m = SEEDED_HEADING_RE.match(lines[0])
+    if len(lines) > 1 or not m:
+        return True
+    said = m.group(1).strip()
+    return not (normalize(said) in {"player characters", normalize(stem)}
+                or PLACEHOLDER_HEADING_RE.match(said))
+
+
+def _fold(name: str) -> frozenset[str]:
+    """A name's words, in any script, case and accents set aside: "José
+    Ruiz", "jose ruiz" and "李华" each fold to their words."""
+    bare = "".join(c for c in unicodedata.normalize("NFKD", normalize(name))
+                   if not unicodedata.combining(c))
+    return frozenset(re.findall(r"[^\W_]+", bare))
+
+
+def _is_pc(fm: dict) -> bool:
+    return entity_type(fm).strip().lower() == "pc"
+
+
+def _note_names(vault: Path, skip: set[str]) -> set[str]:
+    """Every name a note outside `skip` and the record copies answers to,
+    `normalize`d: its file name, `title` and aliases."""
+    known: set[str] = set()
+    for rel, text in vault_files(vault):
+        if rel in skip or is_record_copy(rel):
+            continue
+        known.update(normalize(n) for n in _names_of(rel, extract_frontmatter(text) or {}))
+    return known
+
+
+def _names_of(rel: str, fm: dict) -> list[str]:
+    names = [Path(rel).stem, *link_aliases(fm)]
+    if isinstance(fm.get("title"), str) and fm["title"].strip():
+        names.append(fm["title"])
+    return names
+
+
+ONE_LINK_RE = re.compile(r"""^(["']?)\[\[[^\[\]]+\]\]\1$""")
+TABLE_SEPARATOR_RE = re.compile(r"^\s*\|?\s*:?-{3,}")
+
+
+PC_COLUMNS = frozenset({"character", "characters", "pc", "pcs",
+                        "investigator", "investigators", "name"})
+HEADING_LINK_RE = re.compile(r"^#{2,6}\s+\[\[([^\[\]]+?)\]\]\s*$")
+LIST_LINK_RE = re.compile(r"^\s*[-*+]\s+(?:\*\*)?\[\[([^\[\]]+?)\]\]")
+
+
+def _cells(row: str) -> list[str]:
+    """A table row's cells; a pipe inside a link (an alias) splits nothing."""
+    held: list[str] = []
+
+    def hold(m: re.Match[str]) -> str:
+        held.append(m.group(0))
+        return f"\0{len(held) - 1}\0"
+    inner = LINK_RE.sub(hold, row.strip())
+    inner = inner[1:] if inner.startswith("|") else inner
+    inner = inner[:-1] if inner.endswith("|") else inner
+    return [re.sub(r"\0(\d+)\0", lambda m: held[int(m.group(1))], c).strip()
+            for c in inner.split("|")]
+
+
+def _cell_name(cell: str) -> str:
+    """The PC a cell names: its first link's target, else its words."""
+    m = LINK_RE.search(cell)
+    if m:
+        return link_name(m.group(1).replace("\\|", "|"))
+    return re.sub(r"[*_`]", "", cell).strip()
+
+
+def _named_pcs(text: str) -> list[str]:
+    """The PCs a roster note names, by the shapes a roster names them in:
+    the cell under a table's Character (PC, Investigator, Name) header, a
+    heading that is one link, and a list item that opens with a link. Any
+    other link (an NPC in prose, a Player or Replaced column) names no PC,
+    and a table with no such header names none: a guess at its column
+    would hold the update on a player's name."""
+    names: list[str] = []
+    body = [ll.line.rstrip("\r\n") for ll in link_lines(text)
+            if not ll.in_frontmatter and not ll.in_code]
+    column: int | None = None
+    in_table = False
+    for i, line in enumerate(body):
+        if not line.lstrip().startswith("|"):
+            in_table = False
+            m = HEADING_LINK_RE.match(line) or LIST_LINK_RE.match(line)
+            if m:
+                names.append(link_name(m.group(1).replace("\\|", "|")))
+            continue
+        if TABLE_SEPARATOR_RE.match(line):
+            continue
+        if not in_table:
+            in_table = True
+            column = None
+            if i + 1 < len(body) and TABLE_SEPARATOR_RE.match(body[i + 1]):
+                heads = [re.sub(r"[*_`]", "", c).strip().lower()
+                         for c in _cells(line)]
+                column = next((n for n, h in enumerate(heads)
+                               if h in PC_COLUMNS), None)
+            continue
+        cells = _cells(line)
+        if column is not None and column < len(cells):
+            names.append(_cell_name(cells[column]))
+    return list(dict.fromkeys(n for n in names if n.strip()))
+
+
+# A Character cell still waiting for its PC ("TBD", "—", "(none yet)").
+PLACEHOLDER_WORDS = frozenset({"tbd", "tba", "tbc", "none", "yet", "n", "a",
+                               "na", "unknown", "vacant", "pending"})
+
+
+PC_FIELDS = ("player_name", "status")
+
+
+def _pc_notes(vault: Path) -> list[tuple[str, dict, set[str], list[frozenset[str]]]]:
+    """(path, frontmatter, its `normalize`d names, their folded words) of
+    every PC note: the live ones and the archived (`_archive/`: an archived
+    PC has a note). A QA report or a Midwife draft is no PC's note."""
+    out = []
+    for rel, text in vault_files(vault):
+        if is_record_copy(rel) and rel.split("/", 1)[0] != ARCHIVE_DIR:
+            continue
+        fm = extract_frontmatter(text) or {}
+        if not _is_pc(fm):
+            continue
+        names = _names_of(rel, fm)
+        out.append((rel, fm, {normalize(n) for n in names},
+                    [w for w in (_fold(n) for n in names) if w]))
+    return out
+
+
+def _roster_pcs(vault: Path, rel: str, text: str) -> tuple[list[str], list[str]]:
+    """(the PCs the roster note names, `_named_pcs`, that no PC note
+    stands for; what the GM should know before it is deleted). A name is a
+    PC note's when it is one of the note's names; one that only shares
+    words with a PC note's name ("Bo" for "Bo Reyes") is taken as that PC
+    and said, and so is a name only a note of another type answers to. A
+    PC note it is taken for that has no player_name or status is said: the
+    roster may be the only place they are written. A placeholder names no
+    one."""
+    pcs = _pc_notes(vault)
+    known = _note_names(vault, {rel})
+    missing: list[str] = []
+    said: list[str] = []
+    matched: dict[str, str] = {}   # PC note -> the roster's name for it
+    for name in _named_pcs(text):
+        words = _fold(name)
+        if not words or words <= PLACEHOLDER_WORDS:
+            continue
+        exact = [p for p in pcs if normalize(name) in p[2]]
+        partial = [p for p in pcs if any(w <= words or words <= w for w in p[3])]
+        if exact or len(partial) == 1:
+            pc = (exact or partial)[0][0]
+            matched.setdefault(pc, name)
+            if not exact:
+                said.append(f'{rel}: takes "{name}" to be the PC {pc} (the '
+                            f'names only partly match); if that is wrong, '
+                            f'answer leave and make {name}\'s PC note')
+        elif partial:
+            said.append(f'{rel}: takes "{name}" to be one of the PCs '
+                        f'{", ".join(p[0] for p in partial)} (the names only '
+                        f'partly match); if none is, answer leave and make '
+                        f'{name}\'s PC note')
+        elif normalize(name) in known:
+            said.append(f'{rel}: names "{name}", whose note is not a PC '
+                        f'note (type: pc); what the roster says of them goes '
+                        f'with it')
+        else:
+            missing.append(name)
+    for pc, name in matched.items():
+        fm = next(p[1] for p in pcs if p[0] == pc)
+        lacks = [f for f in PC_FIELDS if not _value_set(fm.get(f))]
+        if lacks:
+            said.append(f"{pc} has no {' or '.join(lacks)}: copy what {rel} "
+                        f"says of {name} there first, or it goes with it")
+    return missing, said
+
+
+def _value_set(value: object) -> bool:
+    if isinstance(value, list):
+        return any(_value_set(v) for v in value)
+    return value is not None and str(value).strip() != ""
+
+
+def _roster_match(vault: Path, gone: list[str]) -> links.Match:
+    """The links that lead to the notes in `gone`: by their path, their
+    name, or an alias no other note answers to. A link with no path to a
+    name another live note shares is not one of them (it leads there once
+    these go); a record copy of the name is no such note."""
+    notes = sorted(relink._nfc(n) for n in relink._walk(vault, ".md"))
+    gone_set = {relink._nfc(r) for r in gone}
+    survivors = [n for n in notes if n not in gone_set and not is_record_copy(n)]
+    stems = {normalize(Path(r).stem) for r in gone}
+    take_bare = not any(normalize(Path(n).stem) in stems for n in survivors)
+    known = _note_names(vault, set(gone))
+    names = list(gone)
+    for rel in gone:
+        try:
+            fm = extract_frontmatter((vault / rel).read_text(encoding="utf-8")) or {}
+        except (OSError, UnicodeDecodeError):
+            continue
+        names += [a for a in link_aliases(fm) if normalize(a) not in known]
+    # The notes a link can mean, record copies left out: an archived copy
+    # of a roster at the vault's root would make its bare name two notes'
+    # and stop the update (its links are never rewritten anyway).
+    live = [n for n in notes if not is_record_copy(n)]
+    try:
+        return links._names_match(vault, names, live, take_bare)
+    except links.LinksError as e:
+        raise StepFailed(str(e)) from e
+
+
+def _roster_unlink(vault: Path, gone: list[str]) -> links.Plan | None:
+    """`gma links unlink`'s plan for every body link to the notes in `gone`,
+    in every other note but a record copy: each becomes its display text,
+    else the name as written. None when there is nothing to turn."""
+    if not gone:
+        return None
+    gone_set = {relink._nfc(r) for r in gone}
+    only = {relink._nfc(n) for n in relink._walk(vault, ".md")
+            if relink._nfc(n) not in gone_set and not is_record_copy(n)}
+    if not only:
+        return None
+    try:
+        withheld = links._withheld_names(vault, gone)
+        plan = links._plan(vault, set(), links._unlink_as(None, withheld),
+                           only, _roster_match(vault, gone))
+    except links.LinksError as e:
+        raise StepFailed(str(e)) from e
+    plan.kept = [k for k in plan.kept if k[3] != "frontmatter"]
+    return plan if plan.texts or plan.kept else None
+
+
+def _list_items(lines: list[str]) -> list[tuple[int, int]]:
+    """The items of a block list (a key's lines after its own), as
+    [start, end) indexes into `lines`."""
+    items: list[tuple[int, int]] = []
+    pad: int | None = None
+    for i, line in enumerate(lines):
+        if i == 0:
+            continue
+        stripped = line.lstrip()
+        depth = len(line) - len(stripped)
+        if stripped.startswith("- ") and (pad is None or depth <= pad):
+            pad = depth
+            items.append((i, i + 1))
+        elif items and line.strip():
+            items[-1] = (items[-1][0], i + 1)
+    return items
+
+
+ITEM_LINK_RE = re.compile(
+    r"""^\s*(?:-\s+)?(?:([A-Za-z_][\w-]*):\s*)?(["']?)\[\[[^\[\]]+\]\]\2\s*$""")
+
+
+def _only_the_link(line: str) -> bool:
+    """A list line whose value is one link and nothing else: a list's own
+    item (`- "[[X]]"`) or a relationship's `target:`."""
+    m = ITEM_LINK_RE.match(line.rstrip("\r\n"))
+    return m is not None and m.group(1) in (None, "target")
+
+
+def _drop_fm_links(rel: str, text: str, match: links.Match
+                   ) -> tuple[str, list[str], list[str]]:
+    """`text` with each frontmatter value that links a deleted note taken
+    out: a list item (a relationship entry whole), a flow list's item, or a
+    one-link value emptied. (new text, what was taken out, what was left
+    and why)."""
+    import npc_merge   # it imports vault_write, which imports this module's peers
+
+    hit: set[int] = set()
+    for ll in link_lines(text):
+        if not ll.in_frontmatter:
+            continue
+        for m in LINK_RE.finditer(ll.line):
+            if not inside_spans(m.start(), ll.spans) and match(m.group(1)) is True:
+                hit.add(ll.lineno)
+    if not hit:
+        return text, [], []
+    try:
+        blocks, close, eol = npc_merge.split_frontmatter(text, rel)
+    except npc_merge.MergeError as e:
+        return text, [], [f"the link to the PC roster in {rel}'s frontmatter: "
+                          f"it cannot be edited ({e}); take it out by hand"]
+    done: list[str] = []
+    left: list[str] = []
+    lineno = 2
+    for block in blocks:
+        first, count = lineno, len(block.lines)
+        lineno += count
+        rows = {first + i for i in range(count)} & hit
+        if not rows or block.key is None:
+            continue
+        key = block.key
+        handled: set[int] = set()
+        tail = block.lines[0][len(block.lines[0].rstrip("\r\n")):] or eol
+        if first in rows:
+            rest = block.rest.strip()
+            flow = npc_merge._flow_items(rest)
+            if ONE_LINK_RE.match(rest):
+                # The value is the link and nothing else (quoted or not).
+                block.lines[0] = f'{key}: ""{tail}'
+                done.append(f"emptied {key} in {rel} (it linked the PC roster)")
+                handled.add(first)
+            elif flow and key != "relationships":
+                keep = [v for v in flow if not any(
+                    match(m.group(1)) is True for m in LINK_RE.finditer(v))]
+                if len(keep) < len(flow):
+                    block.lines[0] = f"{key}: [{', '.join(keep)}]{tail}"
+                    done += [f"took {v} out of {key} in {rel}"
+                             for v in flow if v not in keep]
+                    handled.add(first)
+        # A block list only (`key:` with nothing after it): a `|` or `>`
+        # text block's lines that start "- " are prose, never items.
+        items = _list_items(block.lines) if not block.rest.strip() else []
+        # An item goes whole only when each line of it that links the
+        # roster is that link and nothing else, as the list's own value or
+        # a relationship's target: an item with prose or another link
+        # round it, or a relationship whose description links the roster,
+        # is said, never cut.
+        drop = [(a, b) for a, b in items
+                if any(first + i in rows for i in range(a, b))
+                and all(_only_the_link(block.lines[i])
+                        for i in range(a, b) if first + i in rows)]
+        handled |= {first + i for a, b in drop for i in range(a, b)}
+        if rows - handled:
+            # Prose around the link, a nested mapping, a shape not edited:
+            # said, never guessed at.
+            left.append(f"the link to the PC roster in {key} of {rel}: the "
+                        f"update does not edit that form; take it out by hand")
+        for a, b in reversed(drop):
+            what = " ".join(line.strip() for line in block.lines[a:b])
+            del block.lines[a:b]
+            done.append(f"took {'the relationship ' if key == 'relationships' else ''}"
+                        f"{what.lstrip('- ').strip()} out of {key} in {rel}")
+        if drop and len(drop) == len(items):
+            block.lines[0] = f"{key}: []{tail}"
+    return npc_merge.join_frontmatter(text, blocks, close), done, left
+
+
+def _agent_lines(vault: Path, gone: list[str]) -> list[str]:
+    """PERSON rows for each line of the vault's own agent files (CLAUDE.md,
+    AGENTS.md at its root) that points the agent at a roster note going,
+    outside the plugin's managed block: the GM's prose is theirs to change."""
+    import agent_block
+
+    match = _roster_match(vault, gone)
+    # A link, or the note's path ("_Campaign/Player Characters.md"); the bare
+    # words "Player Characters" also name a folder or a heading.
+    words = {r for r in gone if "/" in r} | {r[:-3] for r in gone if "/" in r}
+    rows = []
+    for name in agent_files(vault):
+        try:
+            text = (vault / name).read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        managed = False
+        for lineno, line in enumerate(text.splitlines(), 1):
+            bare = line.lstrip("﻿").strip()
+            if bare.startswith(agent_block.BEGIN_PREFIX):
+                managed = True
+            if managed:
+                managed = bare != agent_block.END
+                continue
+            linked = any(match(m.group(1)) is True for m in LINK_RE.finditer(line))
+            if linked or any(w in line for w in words):
+                rows.append(f"{name}:{lineno}\ttells the vault's agent to read "
+                            f"the PC roster note, which this update deletes; "
+                            f"change it to run `{ACTIVE_PCS}` instead "
+                            f"(\"{bare[:80]}\")")
+    return rows
+
+
+def _fm_edits(vault: Path, gone: list[str], write: bool) -> list[str]:
+    """Every frontmatter value outside a record copy that links the notes
+    in `gone`, taken out (`write`) or, for the preview, said as it will be.
+    The report's lines."""
+    if not gone:
+        return []
+    match = _roster_match(vault, gone)
+    gone_set = set(gone)
+    lines: list[str] = []
+    for rel, text in vault_files(vault, newline=""):
+        if rel in gone_set or is_record_copy(rel):
+            continue
+        new, said, left = _drop_fm_links(rel, text, match)
+        if write and new != text:
+            write_text_atomic(vault / rel, new)
+        if not write:
+            said = [re.sub(r"^(took|emptied) ",
+                           lambda m: {"took": "take ", "emptied": "empty "}[m.group(1)], s)
+                    for s in said]
+        lines += said + [f"{'left' if write else 'leave'} {row}" for row in left]
+    return lines
+
+
+def _retire(vault: Path, gone: list[str]) -> list[str]:
+    """Turn every link to the notes in `gone` into plain words (frontmatter
+    links taken out), delete them, and take them off the publish list. The
+    report's lines."""
+    done: list[str] = []
+    plan = _roster_unlink(vault, gone)
+    if plan is not None:
+        try:
+            links.apply(plan)
+        except links.LinksError as e:
+            raise StepFailed(str(e)) from e
+        done += [f"turned {_links_in(plan, rel)} to the PC roster into "
+                 f"plain words in {rel}" for rel in sorted(plan.texts)]
+        done += [f"left {link} in {rel} as written: {links.KEPT[why]}"
+                 for rel, _line, link, why in plan.kept]
+    done += _fm_edits(vault, gone, write=True)
+    listed, read = publish_list_sets(vault)
+    on_list = set().union(*listed.values()) if listed else set()
+    for rel in gone:
+        (vault / rel).unlink()
+        done.append(f"deleted {rel}")
+    if listed is None and read.why:
+        # A list that could not be read is not "no list": said, not passed.
+        done += [f"left {rel} on the publish list, if it is there: the list "
+                 f"could not be read ({read.why}); the site's doctor reports "
+                 f"it until it comes off" for rel in gone]
+    stale = [unicodedata.normalize("NFC", rel) for rel in gone
+             if unicodedata.normalize("NFC", rel) in on_list]
+    if stale:
+        # Only the entries of the notes deleted here: an entry whose file is
+        # away for now (moved out, not yet synced) keeps its decision.
+        answer = ask_publish_tool(
+            vault, ["manifest", "apply",
+                    *[a for rel in stale for a in ("--prune-path", rel)]],
+            site_optional=True)
+        if answer.why or answer.data is None:
+            why = answer.why or "the vault has no site to ask"
+            done += [f"left {rel} on the publish list ({why}); the "
+                     f"site's doctor reports it until the list is pruned"
+                     for rel in stale]
+        else:
+            done += [f"took {rel} off the publish list" for rel in stale]
+    return done
+
+
+def _links_in(plan: links.Plan, rel: str) -> str:
+    count = sum(1 for c in plan.changes if c.rel == rel)
+    return f"{count} link{'s' if count != 1 else ''}"
+
+
+class _Rosters(NamedTuple):
+    empty: list[str]                # notes holding no writing
+    written: list[str]              # notes holding writing, every PC with a note
+    missing: dict[str, list[str]]   # note -> the PCs it names with no note
+    said: list[str]                 # what the GM should know before `written` go
+    templates: list[str]            # `_Templates/` copies holding no writing
+    written_templates: list[str]    # `_Templates/` copies holding writing
+    texts: dict[str, str]           # each written note's and copy's text as read
+
+
+def _roster_kinds(vault: Path) -> _Rosters:
+    """The roster notes and `_Templates/` copies, by what the update does
+    with each (`_Rosters`)."""
+    r = _Rosters([], [], {}, [], [], [], {})
+    for rel, template in _roster_files(vault):
+        text = (vault / rel).read_text(encoding="utf-8")
+        if not _roster_written(text, Path(rel).stem):
+            (r.templates if template else r.empty).append(rel)
+            continue
+        r.texts[rel] = text
+        if template:
+            # A copy the GM wrote in (the plugin never shipped one) names
+            # no PC of the campaign: asked about, never held.
+            r.written_templates.append(rel)
+            continue
+        lost, said = _roster_pcs(vault, rel, text)
+        if lost:
+            r.missing[rel] = lost
+        else:
+            r.written.append(rel)
+            r.said.extend(said)
+    return r
+
+
+def _delete_lines(rels: list[str], why: str, sure: bool = True) -> list[str]:
+    """`sure`: every PC's player and status are on the PC notes (nothing
+    said says otherwise)."""
+    held = ("; each PC's player and status are on the PC's own note"
+            if sure else "")
+    return [f"delete {rel} ({why}{held})" for rel in rels]
+
+
+def _unlink_lines(vault: Path, gone: list[str]) -> list[str]:
+    """The preview of what deleting `gone` does to other notes: body links
+    turned to plain words, frontmatter values taken out."""
+    plan = _roster_unlink(vault, gone)
+    body = [] if plan is None else [
+        f"turn {_links_in(plan, rel)} to the PC roster into plain words in "
+        f"{rel}" for rel in sorted(plan.texts)]
+    return body + _fm_edits(vault, gone, write=False)
+
+
+def find_pc_roster_retired(vault: Path) -> list[Item]:
+    """1.12.71: the PC roster note (`type: pc_roster` or
+    `player-characters`) goes. One holding nothing but the heading the
+    scaffold seeded is deleted, with any `_Templates/` copy holding no
+    more. One holding writing (or a copy that does) is a question: its
+    text goes, and the PC notes hold each PC's player and status; the
+    question says first a roster name taken for a PC by part of its name,
+    a name only a note of another type answers to, and a PC note with no
+    player_name or status. One naming a PC that has no note waits, holding
+    the stamp, until the PC notes are made. Every link to a note deleted
+    becomes plain words (its display text, else the name), a frontmatter
+    value linking it is taken out, and it comes off the publish list. A
+    line of the vault's own agent files that sends the agent to the roster
+    is said, for the GM to change."""
+    r = _roster_kinds(vault)
+    if not (r.empty or r.written or r.missing or r.templates
+            or r.written_templates):
+        return []
+    items: list[Item] = []
+
+    if r.empty or r.templates:
+        def apply_empty(_value: str | None) -> list[str]:
+            now = _roster_kinds(vault)
+            done = _retire(vault, now.empty)
+            for rel in now.templates:
+                (vault / rel).unlink()
+                done.append(f"deleted {rel}")
+            return done
+        items.append(Item(
+            "pc-roster-retired", WILL,
+            _delete_lines(r.empty, "the PC roster note; it holds no writing")
+            + _delete_lines(r.templates, "the PC roster's template; it holds "
+                                         "no writing")
+            + _unlink_lines(vault, r.empty), apply_empty))
+
+    if r.written or r.written_templates:
+        asked = r.written + r.written_templates
+        seen = dict(r.texts)
+
+        def apply_written(_value: str | None) -> list[str]:
+            # Only the text the GM was shown goes: one changed since is
+            # asked about again (gma update's answer names it, texts_sha).
+            for rel in asked:
+                try:
+                    now_text: str | None = (vault / rel).read_text(encoding="utf-8")
+                except (OSError, UnicodeDecodeError):
+                    now_text = None
+                if now_text is not None and now_text != seen[rel]:
+                    raise StepFailed(f"{rel} changed since you were asked; "
+                                     f"nothing was deleted, run the update "
+                                     f"again to see it as it is now")
+            now = _roster_kinds(vault)
+            done = _retire(vault, [x for x in now.written if x in r.written])
+            for rel in now.written_templates:
+                if rel in r.written_templates:
+                    (vault / rel).unlink()
+                    done.append(f"deleted {rel}")
+            return done
+        lines = (r.said
+                 + _delete_lines(r.written, "the PC roster note and the text "
+                                            "in it", sure=not r.said)
+                 + _delete_lines(r.written_templates, "the PC roster's "
+                                 "template and the text in it", sure=False)
+                 + _unlink_lines(vault, r.written))
+        shown = "\0".join(lines) + "".join(
+            f"\0{rel}\0{seen[rel]}" for rel in sorted(seen))
+        # Silence is not an answer (`leave` is): past the stamp the release
+        # gate would never offer this again.
+        items.append(Item(
+            "pc-roster-written", CHOICE, lines, apply_written, kind="removes",
+            holds_stamp=True,
+            detail={"texts_sha": hashlib.sha256(shown.encode("utf-8")).hexdigest()}))
+
+    if r.missing:
+        items.append(Item(
+            "pc-roster-pcs-missing", PERSON,
+            [f"{rel}\tnames {name}, who has no PC note; make the PC's note "
+             f"(with player_name and status) before the roster note can go"
+             for rel, names in r.missing.items() for name in names],
+            holds_stamp=True))
+
+    agents = _agent_lines(vault, r.empty + r.written)
+    if agents:
+        items.append(Item("pc-roster-agent-files", PERSON, agents, notice=True))
+    return items
+
+
 # --- shared threads ------------------------------------------------------------
 
 # 1.12.3: before the shared list, a thread several PCs shared was written
@@ -1482,4 +2131,13 @@ VAULT_CHECKS: list[Check] = [
           plain=("Removed the adventure brief's adventure_shape field, a one-word label that could not say what you chose; the brief's Adventure Shape section keeps the shape in your words."),
           ask=("Removes the adventure brief's one-word adventure_shape field; the brief has no Adventure Shape section written, so the word is not kept anywhere."),
           left=("Kept the adventure_shape line in your brief; nothing reads it.")),
+    # The site's publish tool before 1.70.27 hangs the party board on the
+    # roster note's page, so the note goes only after the repin: band 4,
+    # asks_site.
+    Check("pc-roster-retired", "1.12.71", 4, "the PC roster note",
+          find_pc_roster_retired, asks_site=True,
+          choices=("pc-roster-written",), kind="bookkeeping",
+          plain=("Deleted the PC roster note (Player Characters) and turned any links to it into plain words: each PC's player and status are on the PC's own note, which the skills read, and the site makes its party page itself."),
+          ask=("Deletes the PC roster note and the text you wrote in it, and turns the links to it into plain words: each PC's player and status are on the PC's own note, which the skills read, and the site makes its party page itself."),
+          left=("Kept your PC roster note; the skills no longer read it, and the site no longer hangs the party board on it.")),
 ]

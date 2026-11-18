@@ -69,7 +69,7 @@ class TimelinePageTests(unittest.TestCase):
 
     def test_no_other_page_is_added(self):
         vault = whole_vault(self)
-        for rel in ("_Campaign/Timeline.md", "_Campaign/Player Characters.md",
+        for rel in ("_Campaign/Timeline.md",
                     "_World/world-index.md", "_World/_flags.md"):
             (vault / rel).unlink()
         self.assertEqual(mv.find_skeleton(vault), [])
@@ -105,7 +105,7 @@ class SkeletonTests(unittest.TestCase):
     def test_a_page_that_can_publish_is_never_added(self):
         vault = whole_vault(self)
         for rel in ("_World/world-index.md", "_World/_flags.md",
-                    "_Campaign/Timeline.md", "_Campaign/Player Characters.md"):
+                    "_Campaign/Timeline.md"):
             (vault / rel).unlink()
         self.assertEqual(mv.find_skeleton(vault), [])
 
