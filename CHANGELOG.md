@@ -9,6 +9,12 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.82] — 2026-11-18
+
+### Fixed
+
+- `gma stamp-entities --set` wrote a list as one quoted string, so a scene's `entities` and `locations` were set by hand; it now writes a JSON list as a real list, `--add` appends one item, and in link fields a bare name becomes a link to its note (#761).
+
 ## [1.12.81] — 2026-11-18
 
 ### Fixed

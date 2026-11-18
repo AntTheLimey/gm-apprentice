@@ -10,7 +10,8 @@ written `\\===`; the backslash is dropped. Blocks are numbered from 1.
 Commands: every `vault-write` writer with its own arguments and stdin
 (`wrapup-add`, `log`, `status`, `timeline`, `threads`, `story`, ...), and
 
-    stamp FILE... <stamp-entities options>   no body
+    stamp FILE... <stamp-entities options>   no body (--set KEY=[...]
+                                             and --add KEY=ITEM write lists)
     note-new PATH                            body: the whole new note
     section NOTE HEADING [--append|--replace] body: the section's text
     section NOTE --lead [--append|--replace]  body: the note's lead
@@ -185,11 +186,15 @@ def run_stamp(batch: vw.Batch, b: Block) -> None:
                             "a batch (--write goes on the batch)")
     if b.body.strip():
         raise vw.WriteError("stamp takes no body")
+    rel = ""
+    # Built once per block, over the vault as earlier blocks left it.
+    link = (se.vault_linker(batch, lambda message: batch.row(
+        "WARNING", rel, "", message)) if se.needs_links(ns) else None)
     for raw in ns.files:
         rel = find_note(batch, raw)
         before = batch.read(rel)
         lines = before.splitlines(keepends=True)
-        actions, _override, error = se.plan_file(rel, lines, ns)
+        actions, _override, error = se.plan_file(rel, lines, ns, link)
         if error:
             raise vw.WriteError(f"{rel}: {'; '.join(actions)}")
         after = "".join(lines)

@@ -17,7 +17,8 @@ to apply. Stdlib only.
 
 Usage:
   stamp_entities.py VAULT [FILE ...] [--session S] [--date YYYY-MM-DD]
-      [--retag OLD=NEW] [--set KEY=VALUE]... [--increment KEY]...
+      [--retag OLD=NEW] [--set KEY=VALUE]... [--add KEY=VALUE]...
+      [--increment KEY]...
       [--advance KEY=FROM:TO]... [--promote] [--reconciled YYYY-MM-DD] [--supersede-by "[[Winner]]"]
       [--repair-canon] [--force-shape] [--write]
 
@@ -47,6 +48,26 @@ Actions
                 `asOfSession`, `lastUpdated`, `reconciled` — are
                 refused here, dotted forms included, because those
                 flags carry the guards.
+                A VALUE that opens with `[` (but not `[[`, a wikilink)
+                is a list, written as JSON: `'entities=["[[Ada]]",
+                "Bram"]'`, or `[]` to empty it. It replaces the field
+                with a block list of quoted items, one per line, the
+                way `vault-write` writes a scene's entities. A list
+                that is not JSON, or holds anything but text, is
+                refused; to set text that opens with `[`, quote it.
+                Top-level keys only.
+--add KEY=VALUE Append one item to a top-level list field, making the
+                list when the field is absent or empty. An item the
+                list already holds (same link target, case ignored) is
+                skipped; a field holding text, a number or a mapping is
+                refused. Repeatable.
+
+In `entities`, `locations`, `participants` and `leads_to`, the fields
+that hold links, each item of a list --set or --add is a note: a bare
+name, a `[[link]]` or a vault path, resolved as a link resolves (file
+name, then alias) and written `[[File Name]]`. A name no note has yet
+is written as given, with a WARNING row (a red link is the GM's to-do);
+a name two notes share is refused: pass the path.
 --increment KEY Add one to an integer field (absent counts as 0), for
                 counters like `sessions_played`. Writes bare. A
                 non-integer value is an error, not a reset, and the
@@ -87,7 +108,8 @@ the same way still counts as agreeing with it.
 Output
 ------
 One tab-separated row per file: `MODE<TAB>path<TAB>actions`, actions
-joined with `; `. MODE is STAMPED / WOULD-STAMP / UNCHANGED / ERROR,
+joined with `; `, after any `WARNING<TAB>path<TAB>message` rows for
+it. MODE is STAMPED / WOULD-STAMP / UNCHANGED / ERROR,
 or REPAIRED / WOULD-REPAIR / CONFLICT / WOULD-CONFLICT / UNCHANGED /
 ERROR under --repair-canon — the WOULD- forms are what a dry run
 prints. Trailers:
@@ -106,19 +128,24 @@ Exit status
 1  at least one ERROR row. Every ERROR leaves its file byte-identical.
 2  usage. No action flag; FILE missing for anything but --repair-canon;
    --repair-canon mixed with another action; --promote with
-   --supersede-by; a malformed --set / --increment / --advance / --retag / --session
-   / --supersede-by argument; a --date or --reconciled that is not
+   --supersede-by; a malformed --set / --add / --increment / --advance /
+   --retag / --session / --supersede-by argument (a --set list that is
+   not a JSON list of text included); a --date or --reconciled that is not
    YYYY-MM-DD.
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import vaultlib as vl  # noqa: E402
 from vaultlib import (  # noqa: E402,F401 — YAML_LINE_RE re-exported
     YAML_LINE_RE,
     delete_key,
@@ -157,6 +184,16 @@ RESERVED_KEYS = {
 
 KEY_RE = re.compile(r"^[A-Za-z_][\w-]*$")
 ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+# The list fields that hold links to notes (`shared/entity-schema.md`: a
+# scene's entities and locations, a plan's participants, locations and
+# leads_to). An item given to one is resolved to a note and written as a
+# [[link]] (#761).
+LINK_FIELDS = ("entities", "locations", "participants", "leads_to")
+
+# (field, item as given) -> the link body to write. Raises ValueError for
+# a name it refuses (two notes answer to it).
+Linker = Callable[[str, str], str]
 
 
 def session_shape(raw: str | None) -> str | None:
@@ -282,13 +319,15 @@ def _plan_repair(fm: list[str]) -> tuple[list[str], str | None, bool]:
     return actions, None, False
 
 
-def _plan_set(fm: list[str], key: str, value: str,
-              eol: str) -> tuple[str, bool]:
+def _plan_set(fm: list[str], key: str, value: str | list[str],
+              eol: str, link: Linker | None = None) -> tuple[str, bool]:
     """One --set write. Returns (action text, error)."""
     parent, dot, child = key.partition(".")
     hint = RESERVED_KEYS.get(parent)
     if hint:
         return f"refusing --set {key} — {hint}", True
+    if isinstance(value, list):
+        return _plan_set_list(fm, key, value, eol, link)
     if not dot:
         return set_key(fm, key, yaml_value_for_cli(value), eol), False
     try:
@@ -300,6 +339,170 @@ def _plan_set(fm: list[str], key: str, value: str,
         # a YAML reader resolves last-wins — the inline entries would
         # vanish from the whole toolchain while this reported STAMPED.
         return str(e), True
+
+
+def list_value(raw: str) -> list[str] | None:
+    """A --set VALUE as a list, or None when it is not written as one.
+
+    A list opens with `[`; a `[[link]]` is a scalar, as it always was.
+    Read with the standard JSON reader (the plugin is stdlib only, and a
+    JSON list is also a YAML flow list). Raises ValueError for one that
+    is not a JSON list of text."""
+    text = raw.strip()
+    if not text.startswith("[") or text.startswith("[["):
+        return None
+    try:
+        value = json.loads(text)
+    except ValueError:
+        raise ValueError(
+            f"{text!r} is not a list written as JSON: quote each item, "
+            f"as in [\"[[Ada]]\", \"Bram\"]; to set text that opens with "
+            f"[, quote the whole value") from None
+    if not isinstance(value, list) or not all(
+            isinstance(item, str) and item.strip() for item in value):
+        raise ValueError(f"{text!r}: every item of a list must be quoted, "
+                         f"non-empty text")
+    return [item.strip() for item in value]
+
+
+def _item_key(item: str) -> tuple[str, str]:
+    """(folder, name) an item names, case ignored; folder "" when the
+    item gives none."""
+    body = vl.wikilink_target(item).split("|", 1)[0].split("#", 1)[0]
+    folder = body.rsplit("/", 1)[0] if "/" in body else ""
+    return vl.normalize(folder), vl.link_target(body)
+
+
+def _same_item(a: str, b: str) -> bool:
+    """Do two items name the same note? The same name, and the same
+    folder when both give one: `[[Ada]]` and `[[NPCs/Ada]]` are one note,
+    `[[NPCs/Ada]]` and `[[Places/Ada]]` are two."""
+    (fa, na), (fb, nb) = _item_key(a), _item_key(b)
+    return na == nb and (not fa or not fb or fa == fb)
+
+
+def _list_item(key: str, raw: str, link: Linker | None) -> str:
+    """One item as it is written: a link field's item as a [[link]] to
+    the note it names (as given when there is no vault to ask)."""
+    if key not in LINK_FIELDS:
+        return raw
+    body = (link(key, raw) if link is not None
+            else raw.strip().removeprefix("[[").removesuffix("]]").strip())
+    return f"[[{body}]]"
+
+
+def _current(fm: list[str]) -> dict[str, Any]:
+    """The frontmatter as the toolchain's reader reads it now."""
+    return vl.extract_frontmatter("---\n" + "".join(fm) + "---\n") or {}
+
+
+def _block_span(fm: list[str], key: str) -> tuple[int, int] | None:
+    """(first, end) of the top-level `key:` line and the indented lines
+    it owns; blank lines after them stay outside. (`frontmatter_span`
+    refuses a list whose items sit at column zero before this runs.)"""
+    pattern = re.compile(rf"^{re.escape(key)}:")
+    start = next((i for i, line in enumerate(fm) if pattern.match(line)),
+                 None)
+    if start is None:
+        return None
+    end = start + 1
+    while end < len(fm):
+        text = fm[end].rstrip("\r\n")
+        if text.strip() and not text[:1].isspace():
+            # A comment at column zero between the key's items is still
+            # inside it: the block runs on if an indented line follows.
+            if not text.startswith("#"):
+                break
+            nxt = next((ln for ln in fm[end + 1:] if ln.strip()
+                        and not ln.startswith("#")), "")
+            if not nxt[:1].isspace():
+                break
+        end += 1
+    while end > start + 1 and not fm[end - 1].strip():
+        end -= 1
+    return start, end
+
+
+def _holds_mapping(fm: list[str], key: str) -> bool:
+    """Does `key:` own a nested mapping (`documents:` and its children)?"""
+    span = _block_span(fm, key)
+    if span is None:
+        return False
+    # An inline mapping (`documents: {plan: "[[P]]"}`) is one too.
+    if fm[span[0]].partition(":")[2].strip().startswith("{"):
+        return True
+    if not opens_a_block(fm, key):
+        return False
+    first = next((line for line in fm[span[0] + 1:span[1]]
+                  if line.strip() and not line.lstrip().startswith("#")), "-")
+    return not first.lstrip().startswith("-")
+
+
+def _write_list(fm: list[str], key: str, items: list[str], eol: str) -> None:
+    """Write `key` as a block list of quoted items (`[]` when empty), the
+    shape `vault_write.link_list` gives a scene's entities."""
+    new = ([f"{key}: []{eol}"] if not items else
+           [f"{key}:{eol}"] + [f"  - {yaml_scalar(item, quoted_int=True)}"
+                               f"{eol}" for item in items])
+    span = _block_span(fm, key)
+    if span is None:
+        fm.extend(new)
+        return
+    start, end = span
+    # The last line keeps its own ending: none, at the end of a file
+    # whose frontmatter has none, stays none.
+    own = fm[end - 1][len(fm[end - 1].rstrip("\r\n")):]
+    new[-1] = new[-1][:-len(eol)] + own
+    fm[start:end] = new
+
+
+def _show(value: Any) -> str:
+    return json.dumps(value, ensure_ascii=False)
+
+
+def _plan_set_list(fm: list[str], key: str, items: list[str], eol: str,
+                   link: Linker | None) -> tuple[str, bool]:
+    """One --set of a list. Returns (action text, error)."""
+    if _holds_mapping(fm, key):
+        return f"{key} holds a mapping — not replaced by a list", True
+    try:
+        written = [_list_item(key, item, link) for item in items]
+    except ValueError as e:
+        return str(e), True
+    # One entry per note: a name and its [[link]] are the same item.
+    kept: list[str] = []
+    for item in written:
+        if not any(_same_item(item, k) for k in kept):
+            kept.append(item)
+    written = kept
+    before = _current(fm).get(key)
+    _write_list(fm, key, written, eol)
+    if before is None:
+        return f"added {key}: {_show(written)}", False
+    return f"{key}: {_show(before)} -> {key}: {_show(written)}", False
+
+
+def _plan_add(fm: list[str], key: str, raw: str, eol: str,
+              link: Linker | None) -> tuple[str, bool]:
+    """One --add. Returns (action text, error)."""
+    hint = RESERVED_KEYS.get(key)
+    if hint:
+        return f"refusing --add {key} — {hint}", True
+    if _holds_mapping(fm, key):
+        return f"{key} holds a mapping, not a list — --add refused", True
+    have = _current(fm).get(key)
+    if have is not None and not isinstance(have, list):
+        return (f"{key} is {get_key(fm, key)} — not a list; --add refused "
+                f"(--set it to a list first)", True)
+    try:
+        item = _list_item(key, raw, link)
+    except ValueError as e:
+        return str(e), True
+    items = list(have or [])
+    if any(_same_item(item, str(x)) for x in items):
+        return f"{key} already lists {item}", False
+    _write_list(fm, key, [*items, item], eol)
+    return f"{key} + {item}", False
 
 
 def _plan_increment(fm: list[str], key: str,
@@ -352,13 +555,16 @@ def _plan_promote(fm: list[str], eol: str) -> tuple[str, bool]:
     return f"canon_status is {raw} — not a promotable status", True
 
 
-def plan_file(rel: str, lines: list[str],
-              opts: argparse.Namespace) -> tuple[list[str], str | None, bool]:
+def plan_file(rel: str, lines: list[str], opts: argparse.Namespace,
+              link: Linker | None = None
+              ) -> tuple[list[str], str | None, bool]:
     """Plan one file's edits, mutating `lines` in place when they hold.
 
     Returns (actions, mode override, error). On an error nothing is
     spliced back, so the caller's `"".join(lines)` is byte-identical to
-    what it read and the file is never half-written.
+    what it read and the file is never half-written. `link` resolves the
+    items of a link field's list (`vault_linker`); without it they are
+    written as given.
     """
     close, err = frontmatter_span(lines)
     if err:
@@ -399,7 +605,12 @@ def plan_file(rel: str, lines: list[str],
         actions.append(act if act else
                        f"tag {tag_old} not present in tags — no swap")
     for key, value in opts.set_pairs:
-        act, error = _plan_set(fm, key, value, eol)
+        act, error = _plan_set(fm, key, value, eol, link)
+        if error:
+            return [act], None, True
+        actions.append(act)
+    for key, value in getattr(opts, "add_pairs", []):
+        act, error = _plan_add(fm, key, value, eol, link)
         if error:
             return [act], None, True
         actions.append(act)
@@ -442,8 +653,13 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--retag", help="OLD=NEW chapter tag swap")
     ap.add_argument("--set", dest="sets", action="append", default=[],
                     metavar="KEY=VALUE",
-                    help="set a top-level or one-level dotted key; "
-                         "repeatable")
+                    help="set a top-level or one-level dotted key; a "
+                         "JSON list ([\"[[A]]\", \"B\"]) sets a "
+                         "top-level list; repeatable")
+    ap.add_argument("--add", dest="adds", action="append", default=[],
+                    metavar="KEY=VALUE",
+                    help="append one item to a top-level list field, "
+                         "skipping one it already holds")
     ap.add_argument("--increment", action="append", default=[],
                     metavar="KEY",
                     help="add one to an integer field; repeatable")
@@ -465,7 +681,10 @@ def build_parser() -> argparse.ArgumentParser:
                          "bare number) in files that already use one")
     ap.add_argument("--write", action="store_true",
                     help="apply changes (default: dry run)")
-    ap.epilog = 'Example: gma stamp-entities "<vault>" "<note>" --set status=active --write'
+    ap.epilog = ('Example: gma stamp-entities "<vault>" "<note>" --set '
+                 'status=active --write\n'
+                 '  gma stamp-entities "<vault>" "<scene>" --set '
+                 '\'entities=["Ada", "Bram"]\' --add locations=Mill --write')
     return ap
 
 
@@ -474,11 +693,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     args = ap.parse_args(argv)
 
     stamping = bool(args.session or args.date or args.retag or args.sets
-                    or args.increment or args.advance or args.promote or args.reconciled
+                    or args.adds or args.increment or args.advance or args.promote or args.reconciled
                     or args.supersede_by)
     if not stamping and not args.repair_canon:
         ap.error("at least one action is required: --session, --date, "
-                 "--retag, --set, --increment, --advance, --promote, --reconciled, "
+                 "--retag, --set, --add, --increment, --advance, --promote, --reconciled, "
                  "--supersede-by or --repair-canon")
     if args.repair_canon and stamping:
         # The repair has its own row vocabulary and its own summary; a
@@ -523,7 +742,22 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         if not KEY_RE.match(parent) or (dot and not KEY_RE.match(child)):
             ap.error(f"--set key must be `key` or `parent.child`, got "
                      f"{key!r}")
-        args.set_pairs.append((key, value))
+        try:
+            items = list_value(value)
+        except ValueError as e:
+            ap.error(f"--set {key}: {e}")
+        if items is not None and dot:
+            ap.error(f"--set {key}: a list goes on a top-level key")
+        args.set_pairs.append((key, value if items is None else items))
+
+    args.add_pairs = []
+    for item in args.adds:
+        key, sep, value = item.partition("=")
+        key, value = key.strip(), value.strip()
+        if not sep or not KEY_RE.match(key) or not unquote(value):
+            ap.error(f"--add needs KEY=VALUE with a top-level key and an "
+                     f"item, got {item!r}")
+        args.add_pairs.append((key, unquote(value)))
 
     for key in args.increment:
         if not KEY_RE.match(key.strip()):
@@ -586,6 +820,29 @@ def targets(args: argparse.Namespace) -> list[str]:
             if legacy.search(_legacy_scan_region(text))]
 
 
+def needs_links(args: argparse.Namespace) -> bool:
+    """Does the run write a list to a link field?"""
+    return any(key in LINK_FIELDS and isinstance(value, list) and value
+               for key, value in args.set_pairs) or any(
+        key in LINK_FIELDS for key, _ in getattr(args, "add_pairs", []))
+
+
+def vault_linker(batch: Any, warn: Callable[[str], None]) -> Linker:
+    """A `Linker` over `batch` (a `vault_write.Batch`): names resolved by
+    `vault_write.NoteLinks`, the resolver `promote-plan` writes a plan's
+    participants and locations with, red links reported through `warn`."""
+    import vault_write as vw   # here: only a link field needs it
+    notes = vw.NoteLinks(batch)
+    want = {"locations": vw.PLAN_PLACES, "participants": vw.PLAN_PEOPLE}
+
+    def link(key: str, raw: str) -> str:
+        try:
+            return notes.named(raw, key, want.get(key), warn)
+        except vw.WriteError as e:
+            raise ValueError(str(e)) from None
+    return link
+
+
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     repairing = args.repair_canon
@@ -599,6 +856,11 @@ def main(argv: list[str] | None = None) -> int:
     would = 0
     conflicts = 0
     vault_root = args.vault.resolve()
+    warnings: list[str] = []
+    link: Linker | None = None
+    if needs_links(args):
+        import vault_write as vw
+        link = vault_linker(vw.Batch(args.vault), warnings.append)
     for rel in targets(args):
         path = (args.vault / rel).resolve()
         if not path.is_relative_to(vault_root):
@@ -619,7 +881,10 @@ def main(argv: list[str] | None = None) -> int:
             errors += 1
             continue
         lines = text.splitlines(keepends=True)
-        actions, override, error = plan_file(rel, lines, args)
+        warnings.clear()
+        actions, override, error = plan_file(rel, lines, args, link)
+        for message in warnings:
+            print(f"WARNING\t{rel}\t{message}")
         if error:
             print(f"ERROR\t{rel}\t{'; '.join(actions)}")
             errors += 1
