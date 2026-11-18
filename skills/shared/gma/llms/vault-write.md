@@ -583,6 +583,7 @@ Several writes at once: put this as a '=== entity-new ...' block in `gma vault-w
 | `--name` | `NAME` | the note's name: its file name |
 | `--folder` | `FOLDER` | a sub-folder of the type's folder |
 | `--date` | `DATE` | lastUpdated value, YYYY-MM-DD |
+| `--from-npc` | `NPC` | --type pc only: the NPC note this character was, which the PC may share its name with; after the write, run npc-merge NPC PC |
 | `--session` | `SESSION` | a note born at the table: the session, in the vault's asOfSession shape (9 or "Session 9"), for createdSession and asOfSession; an empty source becomes play |
 | `--write` |  | write it (default: preview) |
 <!-- END GENERATED -->
@@ -643,7 +644,8 @@ Several writes at once: put this as a '=== plan ...' block in `gma vault-write <
 <!-- END GENERATED -->
 
 Use `npc-merge` when an NPC has become a PC and both notes exist (create
-the PC from its template first), or when `gma vault-check <vault> npc-pairs`
+the PC first with `entity-new --type pc --from-npc "<NPC note>"`, which may
+keep the NPC's name), or when `gma vault-check <vault> npc-pairs`
 names a pair. It makes one note, word for word: the NPC's frontmatter unioned
 or filled into the PC's, its Campaign Log in Appearances, its Related in
 Relationships, its GM Notes and any section the site hides in GM Notes, and

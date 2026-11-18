@@ -1166,6 +1166,48 @@ class PcTests(unittest.TestCase):
         self.assertFalse((vault / "Characters/PCs/Fallowmere.md").exists())
         self.assertFalse((vault / "Characters/PCs/Pilot Hale.md").exists())
 
+    def test_an_npc_who_joins_the_party_may_keep_its_name(self):
+        # --from-npc lets the PC take the NPC note's name, so npc-merge can
+        # fold that note into it; every other clash is still refused.
+        vault = self.pc_vault("coc-7e", {
+            "Characters/NPCs/Grenna.md": note("npc", aliases=["Fallowmere"])})
+        code, out = new(vault, "pc", "Grenna", OSWIN, "--write")
+        self.assertEqual(code, 1, out)
+        for name, npc, said in (("Pilot Hale", "Grenna", "exists"),
+                                ("Grenna", "Nobody", "not found")):
+            with self.subTest(name=name, npc=npc):
+                code, out = new(vault, "pc", name, OSWIN, "--from-npc", npc,
+                                "--write")
+                self.assertEqual(code, 1, out)
+                self.assertIn(said, out)
+        code, out = new(vault, "npc", "Grenna Two", "## Overview\n\nX.\n",
+                        "--from-npc", "Grenna")
+        self.assertEqual(code, 1, out)
+        self.assertIn("--from-npc: only with --type pc", out)
+        code, out = new(vault, "pc", "Grenna", OSWIN, "--from-npc",
+                        "Fallowmere", "--write")
+        self.assertEqual(code, 0, out)
+        self.assertIn('then npc-merge "Characters/NPCs/Grenna.md" '
+                      '"Characters/PCs/Grenna.md"', out)
+        code, out = run(vault, "npc-merge", "Characters/NPCs/Grenna.md",
+                        "Characters/PCs/Grenna.md", "--write")
+        self.assertEqual(code, 0, out)
+        self.assertFalse((vault / "Characters/NPCs/Grenna.md").exists())
+        self.assertTrue((vault / "Characters/PCs/Grenna.md").is_file())
+
+    def test_gm_notes_text_inside_the_sheet_s_fence_is_kept(self):
+        mine = (TEMPLATES / "pc-fitd.md").read_text(encoding="utf-8").replace(
+            "## GM Notes\n\n{Keeper-only notes. Protected — skills never "
+            "modify.}", "<!-- gm-only -->\n## GM Notes\n\nHouse prompt.\n"
+            "<!-- /gm-only -->", 1)
+        self.assertIn("House prompt.", mine)
+        vault = self.pc_vault("fitd", {"_Templates/pc-fitd.md": mine})
+        code, out = new(vault, "pc", "Oswin", OSWIN.replace(
+            "### Backstory\n\n", ""), "--write")
+        self.assertEqual(code, 0, out)
+        text = (vault / "Characters/PCs/Oswin.md").read_text(encoding="utf-8")
+        self.assertIn("## GM Notes\n\nHouse prompt.", text)
+
     def test_a_pc_in_a_batch(self):
         vault = self.pc_vault("dnd-5e-2024")
         (vault / "batch.txt").write_text(

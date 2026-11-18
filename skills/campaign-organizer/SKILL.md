@@ -137,7 +137,8 @@ wiki-links; entity notes link back to sessions in their
   (an over-long entity is recoverable, a summarized one is lossy).
   (rationale: `shared/content-fidelity.md`)
 - **One note per character:** an NPC who becomes a PC gets a PC
-  note (`entity-new --type pc`), then `gma vault-write <vault> npc-merge
+  note (`entity-new --type pc --from-npc "<NPC note>"`, which may keep
+  the NPC's name), then `gma vault-write <vault> npc-merge
   "<NPC note>" "<PC note>"` (preview, then `--write`); a retired PC
   keeps its PC note. See `shared/pc-body-structure.md`.
 - **World rules:** if `_World/` exists, check each created or

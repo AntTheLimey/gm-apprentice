@@ -498,7 +498,11 @@ def template_sections(template: str, shape: Shape
     lead: list[str] = []
     for head in doc.heads:
         k = hkey(head.title)
-        if head.level != 2 or head.gm or k in sections or k == RELATED:
+        # GM Notes is read even inside the sheet's gm-only fence, where a
+        # vault's own sheet may keep it; any other fenced section is not
+        # the players'.
+        if head.level != 2 or k in sections or k == RELATED \
+                or (head.gm and k != vw.GM_NOTES):
             continue
         lines = [ln.rstrip("\r\n")
                  for ln in doc.lines[head.idx:vw.section_end(doc, head)]]
@@ -631,8 +635,15 @@ def run(batch: vw.Batch, args: argparse.Namespace, text: str) -> None:
         folder = kinds[etype] + vw.chapter_subfolder(args.folder)
     rel = f"{folder}/{name}.md"
     types = Types(batch)
-    clash = sorted(set(vw.live_stem_clash(batch, name)) | set(
-        types.holders(name)))
+    # An NPC who joins the party: the PC may take the NPC note's name, as
+    # npc-merge then folds that note into it and archives it.
+    npc = None
+    if args.from_npc:
+        if etype != PC:
+            raise vw.WriteError("--from-npc: only with --type pc")
+        npc = vw.find_npc(batch, args.from_npc)
+    clash = sorted((set(vw.live_stem_clash(batch, name)) | set(
+        types.holders(name))) - {npc})
     if clash:
         raise vw.WriteError(f"a note named {name!r} exists, or has that "
                             f"name as an alias: {', '.join(clash)}")
@@ -755,6 +766,9 @@ def run(batch: vw.Batch, args: argparse.Namespace, text: str) -> None:
     batch.create(rel, new)
     vw.schema_check(batch, rel, new)
     hidden = sum(1 for t in ties if t["gm_only"])
+    if npc:
+        notes.append(f'then npc-merge "{npc}" "{rel}" folds the NPC note '
+                     f'into it')
     if shared == "pc-dnd-5e-2024.md":
         notes.append(f'then gma dnd-sheet "<vault>/{rel}" fills the numbers')
     batch.row("WOULD-CREATE", rel, "",
@@ -854,6 +868,9 @@ def add_parser(sub: Any) -> None:
     ap.add_argument("--name", required=True, help="the note's name: its file name")
     ap.add_argument("--folder", help="a sub-folder of the type's folder")
     ap.add_argument("--date", help="lastUpdated value, YYYY-MM-DD")
+    ap.add_argument("--from-npc", metavar="NPC", help="--type pc only: the "
+                    "NPC note this character was, which the PC may share "
+                    "its name with; after the write, run npc-merge NPC PC")
     ap.add_argument("--session", help="a note born at the table: the "
                     "session, in the vault's asOfSession shape (9 or "
                     "\"Session 9\"), for createdSession and asOfSession; "

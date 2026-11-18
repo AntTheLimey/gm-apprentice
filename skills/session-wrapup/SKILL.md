@@ -272,7 +272,8 @@ creating entities.
   `##` section you leave out keeps the sheet's own. Content session-play already saved goes in verbatim — the template
   supplies structure, not replacement prose. Never pattern-match off
   existing entity files. An NPC who joins the party as a PC: the PC
-  note (`--type pc`) in the batch; after the batch is written,
+  note (`--type pc --from-npc "<NPC note>"`, which may keep the NPC's
+  name) in the batch; after the batch is written,
   run `vw npc-merge "<NPC note>" "<PC note>"` as its own step, show
   the GM its plan, and on a yes run it with `--write`: one note per
   character (`shared/pc-body-structure.md`).

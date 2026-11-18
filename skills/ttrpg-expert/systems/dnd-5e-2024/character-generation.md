@@ -135,7 +135,7 @@ Game assumes PCs are not evil. Check with GM before making an evil character.
 
 ### Write the Sheet and Fill the Numbers
 
-Make the PC note with `gma vault-write <vault> entity-new --type pc --name "<Name>"` (preview, then `--write`): it files the note in the PC folder with the template's sheet, and stdin sets `player_name` and the rest. A character already built on D&D Beyond is not written by hand: make the note, put the character's link in `dndbeyond`, and sync it, story and portrait too (character-sheet.md, "D&D Beyond sync").
+Make the PC note with `gma vault-write <vault> entity-new --type pc --name "<Name>"` (preview, then `--write`): it files the note in the PC folder with the template's sheet, and stdin sets `player_name` and the rest. A character already built on D&D Beyond is not written by hand: make the note, put the character's link in `dndbeyond`, and sync it, story and portrait too (character-sheet.md, "D&D Beyond sync"). Sync writes the rows and the numbers, so the steps below are for a character written by hand: after a sync, add only what it left empty, never a second row beside one it wrote, and answer the check rows it prints.
 
 Fill the PC note in the template's layout, following "Writing the Sheet in the Vault" in character-sheet.md. The order matters, because the attack lines are built from numbers the tool fills:
 

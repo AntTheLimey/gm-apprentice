@@ -136,8 +136,9 @@ campaign-qa (Current Status consistency check).
 ## One note per character
 
 An NPC who becomes a PC ends with one note, the PC's. Create the PC
-note with `gma vault-write <vault> entity-new --type pc --name "<PC>"`,
-then run `gma vault-write <vault> npc-merge
+note with `gma vault-write <vault> entity-new --type pc --name "<PC>"
+--from-npc "<NPC note>"` (preview, then `--write`; `--from-npc` lets the
+PC keep the NPC's name), then run `gma vault-write <vault> npc-merge
 "<NPC note>" "<PC note>"`, show the GM its plan and run it again with
 `--write`. The NPC's fields, sections and links move into the PC note
 word for word, and the NPC note goes to `_archive/` with `merged_into`.

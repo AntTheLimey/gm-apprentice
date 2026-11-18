@@ -4,8 +4,8 @@
     vault_write.py VAULT npc-merge NPC PC [--write]
 
 NPC is a `type: npc` note and PC a `type: pc` note, each a vault-relative
-path or a name. Both must exist: a skill creates the PC from its template
-first. Without --write it prints the plan and writes nothing; with --write
+path or a name. Both must exist: a skill creates the PC first with
+`entity-new --type pc --from-npc NPC`, which may take the NPC's name. Without --write it prints the plan and writes nothing; with --write
 it carries the whole plan out or, on any failure, leaves the vault as it
 was.
 
