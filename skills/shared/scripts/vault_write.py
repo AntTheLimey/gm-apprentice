@@ -3793,10 +3793,16 @@ def prose_near(batch: Batch, text: str, live: dict[str, set[str]],
                   f"{cased.get(close[0], close[0])}{more}")
 
 
-def read_export(path: str) -> str:
-    """An export file's text, UTF-8, with LF line endings."""
+def read_export(path: str, vault: Path | None = None) -> str:
+    """An export file's text, UTF-8, with LF line endings. The path as
+    given (a download anywhere), else relative to the vault: an Export
+    note already filed is named as every other note is (#766)."""
+    given = Path(path)
+    if vault is not None and not given.is_absolute() \
+            and not given.exists() and (vault / given).is_file():
+        given = vault / given
     try:
-        text = Path(path).read_bytes().decode("utf-8-sig")
+        text = given.read_bytes().decode("utf-8-sig")
     except (OSError, UnicodeDecodeError) as e:
         raise WriteError(f"{path}: unreadable "
                          f"({e.__class__.__name__})") from e
@@ -3850,7 +3856,7 @@ BEFORE_PLAY = frozenset({"", "planned", "prepped"})
 
 
 def cmd_resolve(batch: Batch, args: argparse.Namespace, _text: str) -> None:
-    export = read_export(args.export)
+    export = read_export(args.export, batch.vault)
     resolve_export(batch, export_entries(export), export)
 
 
@@ -4002,7 +4008,7 @@ def cmd_play_notes_new(batch: Batch, args: argparse.Namespace,
     """Play Notes beside an index already filed; with --export, the
     export beside them as its own Export note."""
     check_play_date(args.play_date)
-    export = read_export(args.export) if args.export else ""
+    export = read_export(args.export, batch.vault) if args.export else ""
     index = batch.note_named(args.session, {"session"}, "--session")
     file_record(batch, index, "play_notes", args.play_date,
                 created_by=args.created_by)
@@ -4017,7 +4023,7 @@ def cmd_export_new(batch: Batch, args: argparse.Namespace,
     """A table-assistant export beside a session index already filed, as
     its own Export note: Play Notes there or not, it leaves them alone."""
     check_play_date(args.play_date)
-    export = read_export(args.export)
+    export = read_export(args.export, batch.vault)
     index = batch.note_named(args.session, {"session"}, "--session")
     file_record(batch, index, "export", args.play_date, args.export, export,
                 args.created_by)
@@ -4038,7 +4044,7 @@ def cmd_session_new(batch: Batch, args: argparse.Namespace,
     if upcoming and args.export:
         raise WriteError("--upcoming is a session not yet played: it has "
                          "no export")
-    export = read_export(args.export) if args.export else ""
+    export = read_export(args.export, batch.vault) if args.export else ""
     # A chapter with sessions but no chapter note is still named by them.
     found = (find_chapter(batch.vault, args.chapter, missing_ok=True)
              if args.chapter else None)
@@ -5465,7 +5471,9 @@ def build_parser() -> argparse.ArgumentParser:
         description="The name rows session-new prints, for an export "
                     "whose session is already filed; a §Prose NEAR row is "
                     "a name the running text may misspell.")
-    rs.add_argument("--export", required=True, help="the export file")
+    rs.add_argument("--export", required=True,
+                    help="the export file (any path, or the Export note's "
+                         "path in the vault)")
     rs.add_argument("--write", action="store_true", help=argparse.SUPPRESS)
     pp = sub.add_parser(
         "promote-plan", help="file a Midwife draft as a vault plan",

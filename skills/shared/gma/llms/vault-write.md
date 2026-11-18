@@ -372,7 +372,7 @@ The name rows session-new prints, for an export whose session is already filed; 
 
 | Argument | Value | Help |
 |---|---|---|
-| `--export` | `EXPORT` | the export file |
+| `--export` | `EXPORT` | the export file (any path, or the Export note's path in the vault) |
 <!-- END GENERATED -->
 
 <!-- BEGIN GENERATED: gma vault-write promote-plan -->

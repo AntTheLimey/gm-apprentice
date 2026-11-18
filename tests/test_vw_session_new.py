@@ -244,6 +244,22 @@ class SessionNewTests(unittest.TestCase):
         self.assertNotIn("CREATE\t", out)
         self.assertFalse((self.vault / INDEX).exists())
 
+    def test_resolve_reads_an_export_note_by_its_path_in_the_vault(self):
+        # The wrap-up names the Export note already filed as every other
+        # vault-write command names a note: relative to the vault, not to
+        # the shell's folder (#766).
+        rel = "Sessions/Session 01 - Export.md"
+        (self.vault / "Sessions").mkdir(exist_ok=True)
+        (self.vault / rel).write_bytes(EXPORT.encode("utf-8"))
+        self.assertFalse(Path(rel).exists())
+        code, out = run(self.vault, "resolve", "--export", rel)
+        self.assertEqual(code, 0, out)
+        self.assertIn("EXACT\tCharacters/NPCs/Marlo Petrak.md\t§NPCs", out)
+        # A path in neither place is still unreadable, by the name given.
+        code, out = run(self.vault, "resolve", "--export", "Sessions/Nope.md")
+        self.assertNotEqual(code, 0)
+        self.assertIn("Sessions/Nope.md: unreadable", out)
+
     def test_resolve_names_a_misspelt_name_in_the_prose(self):
         # "Petrack" is only in the prose; "Blase" is no word of a name;
         # English words, day names, headings and an entry's own name
