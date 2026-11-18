@@ -388,7 +388,8 @@ _DEAD_RE = re.compile(r"dead\b", re.I)
 def hidden_dead(text: str) -> bool:
     """Whether an NPC's current hidden fate is death: the last bullet of
     its GM Notes `### Behind the Scenes` that is not struck through and
-    opens with a bold fate (a `**Label:**` is no fate) says **Dead…**.
+    opens with a bold fate, a bold sentence ending in a full stop (a
+    `**Label:**` or a bold name is no fate), says **Dead…**.
     A later fate that is not death (**Alive, freed.**) beats an earlier
     one; death named anywhere else in a bullet is not a fate."""
     body = body_of(text)
@@ -398,8 +399,12 @@ def hidden_dead(text: str) -> bool:
     fate = None
     for line in body.split("\n")[found[0] + 1:found[1]]:
         m = _FATE_RE.match(line)
+        # A fate is a bold sentence (`**Dead.**`, `**Alive, freed.**`): a
+        # bold lead with no full stop (`**The Lodge**`, `**Motive:**`) is
+        # not one, and neither is a struck one, tildes inside the bold too.
         if m and not (m["s1"] or m["s2"]) \
-                and not m["fate"].rstrip().endswith(":"):
+                and m["fate"].rstrip().endswith(".") \
+                and not m["fate"].lstrip().startswith("~~"):
             fate = m["fate"].strip()
     return fate is not None and bool(_DEAD_RE.match(fate))
 

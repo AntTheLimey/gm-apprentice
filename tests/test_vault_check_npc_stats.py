@@ -425,6 +425,16 @@ class RowTests(unittest.TestCase):
             "- **[[Session 02 - The Thaw]]** — his dog came home alone.",
             "- **Motive:** he owed the Lodge."), [])
 
+    def test_a_bold_lead_that_is_no_sentence_keeps_the_dead_fate(self):
+        self.assertEqual(self.fate(
+            "- **Dead.** Fell through the ice.",
+            "- **The Lodge** recovered his coat."), [])
+
+    def test_a_struck_fate_inside_the_bold_is_no_fate(self):
+        self.assertEqual(self.fate(
+            "- **Dead.** Fell through the ice.",
+            "- **~~Alive.~~** The report was wrong."), [])
+
     def test_only_death_leaves_an_npc_out(self):
         for fate in ("**Captive, in the ice crypt.**", "**Missing.**",
                      "**Turned; serves the Lodge now.**"):
