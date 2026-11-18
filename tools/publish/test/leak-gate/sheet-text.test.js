@@ -43,6 +43,25 @@ describe('leak gate: a PC sheet\'s own rows (#752)', () => {
     } finally { site.cleanup(); }
   });
 
+  it('a picture in a section heading is read as the build reads it, so a leak under it is still found', () => {
+    // The build turns the embed into a picture, the heading no longer names Class Features, and the sheet prints no
+    // Bonus action block: the hidden line is not on the page from the PC's note. The gate's copy, made with the same
+    // attachments, does not excuse it.
+    const png = Buffer.from('89504e470d0a1a0a0000000d49484452000000010000000108060000', 'hex');
+    const pc = PC.replace('## Class Features\n', '## Class Features ![[badge.png]]\n');
+    const site = leakSite({ ...NOTES, 'Characters/PCs/Oswin.md': pc, '_attachments/badge.png': png }, SETTINGS);
+    try {
+      const page = site.player.read('characters', 'pcs', 'oswin.html');
+      assert.match(page, /badge/);
+      assert.doesNotMatch(page, /Flurry of Blows<\/span><\/div><div class="dnd5e-entry-text">1 Focus/);
+      assert.deepEqual(runLeakGate({ configPath: site.configPath, outputDir: site.outputDir }).findings, []);
+      leakInto(site.outputDir, 'characters/pcs/oswin.html', 'Flurry of Blows (1 Focus).');
+      const r = runLeakGate({ configPath: site.configPath, outputDir: site.outputDir });
+      assert.equal(r.findings.length, 1, JSON.stringify(r.findings));
+      assert.equal(r.findings[0].note, 'Characters/NPCs/Brother Teodor.md');
+    } finally { site.cleanup(); }
+  });
+
   it('with sheets off the rows are not run together, and nothing is excused for them', () => {
     // No sheet is built: the page prints the Class Features table as a table, the Action cell between a row's name
     // and its summary, so the hidden line is not on it unless something leaks it.

@@ -26,7 +26,7 @@ const { parseNote } = require('../frontmatter');
 const { canonicalNfc } = require('../unicode');
 const {
   playerSafeMarkdown, stubMarked, stubCut, hiddenFieldsOf, publishedFrontmatter, pcHeadingsUnstable, publishMode, isWithheld, stripLeadingH1, gmAliasRewriter,
-  resolveImageEmbeds, resolveWikiLinks, extractSections,
+  resolveImageEmbeds, resolveWikiLinks, extractSections, portraitBasename,
 } = require('../processor');
 const { getRenderer } = require('../templates/pc-registry');
 const { pageText } = require('../note-faults');
@@ -64,8 +64,9 @@ function printedRows(page, wrapUp = null) {
 // into its summary), so a hidden line with the same rules words (an NPC stat block's "Flurry of Blows (1 Focus).") is
 // shown there from the PC's note, not from the hidden one (#752). Only words of the published body and the sheet's own
 // labels: with sheets off (a PC keep list) the build makes no sheet, and none is read. A sheet that cannot be made here
-// excuses nothing.
-function sheetTexts(shownMd, fields, { system, playerConfig, linkMap, outputPath }) {
+// excuses nothing. Its pictures resolve against the player site's attachments, as the build's do: an embed the build
+// turns into a picture (in a section's heading, say) is not dropped here.
+function sheetTexts(shownMd, fields, { system, playerConfig, linkMap, outputPath, imageMap }) {
   const renderer = getRenderer(system);
   if (!renderer) return [];
   const rules = playerConfig.rules_lists || {};
@@ -75,7 +76,7 @@ function sheetTexts(shownMd, fields, { system, playerConfig, linkMap, outputPath
   };
   let rendered;
   try {
-    const md = resolveWikiLinks(resolveImageEmbeds(shownMd, {}, outputPath, null, { warn: false }), linkMap, outputPath);
+    const md = resolveWikiLinks(resolveImageEmbeds(shownMd, imageMap, outputPath, null, { warn: false, portraitBasename: portraitBasename(fields) }), linkMap, outputPath);
     rendered = renderer(fields, extractSections(md), meta);
   } catch (e) { return []; }
   const parts = typeof rendered === 'string' ? [rendered]
@@ -129,7 +130,9 @@ function collectHidden({ configPath, outputDir = null }) {
   // A wrap-up the player site folds into a Story page (story-fold.js) is linked, unaliased, by that page's title: the
   // build prints the label. So such a link is read both ways, by the note it names and by the label, in hidden text
   // and in what players may already read. The plan is the one explain reads (published-view.js playerFoldPlan).
-  const foldPlanned = playerFoldPlan(published, hubs, playerConfig, scanAttachments(scanConfigFor(Object.assign({}, config, { vaultPath }), playerConfig)), vaultPath);
+  // The player site's attachments, as its build scans them: for the fold plan and a PC sheet's pictures.
+  const playerImages = scanAttachments(scanConfigFor(Object.assign({}, config, { vaultPath }), playerConfig));
+  const foldPlanned = playerFoldPlan(published, hubs, playerConfig, playerImages, vaultPath);
   const foldLabels = foldLabelsOf(foldPlanned, linkMap);
   const relabel = (md) => (foldLabels.size ? labelFoldedLinks(md, linkMap, { labels: foldLabels }) : md);
   const bothWays = (md) => { const r = relabel(md); return r === md ? [md] : [md, r]; };
@@ -263,7 +266,7 @@ function collectHidden({ configPath, outputDir = null }) {
         if (source === page.markdown) for (const title of titles) visible.push([title, ...textsOfMarkdown(stripLeadingH1(shownMd), { headings: true })].join('\n'));
         visible.push(...tableRunsOf(shownMd));
         if (source === page.markdown && isPc && !pcKeepSections) {
-          visible.push(...sheetTexts(shownMd, shownFields, { system: playerConfig.system, playerConfig, linkMap, outputPath: page.outputPath }));
+          visible.push(...sheetTexts(shownMd, shownFields, { system: playerConfig.system, playerConfig, linkMap, outputPath: page.outputPath, imageMap: playerImages }));
         }
       }
     }
