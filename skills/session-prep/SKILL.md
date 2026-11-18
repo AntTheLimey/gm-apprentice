@@ -39,10 +39,13 @@ When the GM asks what an item on your list is or why you need it,
 answer from context — no tool calls, no re-reading — and act only
 after they reply.
 
-A row's Then answers the attempt with what happens next, never cancels
-it or runs on as though it wasn't made; a Points-to-land line is
-something to put in front of the players, never an outcome settled
-before play.
+A Then, in a row, a scene or a Contingency, answers the attempt with
+what happens next: what it is up against, what it costs, what it
+risks. It never cancels it, runs on as though it wasn't made, or stops
+play where prep ends ("that is next session: don't run it"); past the
+edge of the prep, say what's there for the GM to improvise from. A
+Points-to-land line is something to put in front of the players, never
+an outcome settled before play or the PC who meets it.
 
 **Two registers.** Seeds you speak may be evocative ("the anklet debt is
 owed"). The Plan file is read cold, days later, mid-session, by a
