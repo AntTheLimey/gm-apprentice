@@ -34,6 +34,7 @@ from vaultlib import (  # noqa: E402,F401
     WRAP_UP_TYPES,
     chapter_key,
     chapter_of,
+    effectively_empty,
     extract_frontmatter,
     has_nested_block,
     parse_session_number,
@@ -281,7 +282,7 @@ def is_schema_type(etype: str) -> bool:
 
 
 def _empty(value: object) -> bool:
-    return value is None or value in ("", [], {}) or (isinstance(value, str) and not value.strip())
+    return effectively_empty(value)
 
 
 def frontmatter_findings(fm: dict, setting: Callable[[str], Iterable[object]] | None = None,

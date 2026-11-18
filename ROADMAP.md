@@ -116,6 +116,8 @@ decision rather than pure score.
 
 ## Completed
 
+- ~~Escaped empty quotes (`\"\"`) read as a real value~~ — the voices check ignores them; frontmatter check warns and `--fix` empties them; `entity-new` writes `""` (#715, v1.12.52)
+- ~~Midwife scaffold's brief and world notes warn forever in stale-drafts~~ — stamped before play like `entity-new` notes; update check `scaffold-pre-play` stamps older ones (#717, v1.12.52)
 - ~~A PC's Current Status lede stays from the session before~~ — `status --show` shows it and `status` rewrites it (#714, v1.12.51)
 - ~~Campaign Overview stays not_started after a session~~ — wrap-up advances it to in_progress (#716, v1.12.51)
 - ~~Wrap-up says nothing about pictures when drawing without asking is off~~ — one closing line offers the scene pictures when a source is set (#712, v1.12.50)

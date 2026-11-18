@@ -27,14 +27,16 @@ If it passes, offer:
 
 > "Straightforward session — no conflicts found, no unplayed
 > prep. Settle the threads, then promote the Wrap-Up and {the DRAFTs
-> created or played this session, by name} to AUTHORITATIVE? (y/n)"
+> created or played this session, and the campaign-wide notes made before
+> play (the adventure brief, `_World/` notes), by name} to AUTHORITATIVE? (y/n)"
 
 On yes, step 5.5 first (a thread write that fails stops here: the
 session stays at `wrap-up`), then:
 - `gma reconcile-promote <vault> "<wrap-up>" --reconciled YYYY-MM-DD`,
   then again with `--write`: it promotes the Wrap-Up, marks the index
   `reviewed`, and promotes exactly the scan's DRAFTs created or played
-  this session, never its older ones
+  this session, plus the campaign's own brief and world notes made before
+  play (linked or not), never its older ones
 - Do step 6.1 (publish registration), then go to step 6.5.
 
 Otherwise run the full procedure.
@@ -201,8 +203,12 @@ On GM approval:
    for contradicted content
 3. `gma reconcile-promote <vault> "<wrap-up>" --reconciled YYYY-MM-DD`,
    then with `--write`: the Wrap-Up, the index (`reviewed`) and the
-   scan's DRAFTs created or played this session. One of those the GM
-   has not confirmed stays DRAFT: `--except "<note>"` (repeatable). An
+   scan's DRAFTs created or played this session and its campaign-wide notes
+   made before play (the adventure brief, `_World/`; a stub holds no fact and
+   is left out). One of those the GM has not confirmed stays DRAFT:
+   `--except "<note>"` (repeatable; for one run only, so a campaign-wide
+   note kept as a draft is listed again next time, until its
+   `createdSession` holds a session number). An
    older DRAFT the GM confirms: `gma stamp-entities <vault> <file> --promote`.
 
 Do the bookkeeping now rather than leaving the GM a list. Hand off to

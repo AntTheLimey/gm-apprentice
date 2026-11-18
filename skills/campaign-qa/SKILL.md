@@ -58,7 +58,9 @@ wrong vault path; ask for it.
   drafts) — ignore in every mode; never flag them.
 
 **Schema:** field, enum and legacy-key checks come from
-`gma vault-check <vault> frontmatter`; a type's fields and place in the
+`gma vault-check <vault> frontmatter`; a value that is only escaped quotes
+(`voice: \"\"`, a four-character string and not empty) is one of its
+warnings (the Escaped Quotes fix below); a type's fields and place in the
 hierarchy from `gma schema-rules show <type>`; canon states are in
 `shared/canon-status.md`.
 
@@ -75,6 +77,11 @@ follow-up recommendations.
   on. Never silently fix, even obvious errors — the GM may have a
   reason (unreliable narrator, misdirection, planned retcon).
 - Thread Tidy closes threads a note explicitly ends, and moves duplicates, without asking; it reports each one, and asks about nothing else.
+- Escaped Quotes: a frontmatter value that is only `\"\"` is an empty value
+  written wrong, never a choice. `gma vault-check <vault> frontmatter --fix`
+  rewrites each to `""`; run it, report the notes it changed, ask nothing.
+  In a folder or chapter audit add `--folder "<the selected folder>"`; the
+  whole vault only for a whole-vault audit.
 - **Severity:**
   - **Critical** — visibly breaks at the table (dead NPC alive,
     timeline impossibility players can spot).

@@ -1,6 +1,7 @@
 ---
 type: adventure-brief
 canon_status: DRAFT
+createdSession: ""     # "" = made before play; reconcile promotes it once play confirms it
 title: ""
 system: ""                # the game system's id, or undecided
 scope: ""                 # campaign / one-shot / few-shot

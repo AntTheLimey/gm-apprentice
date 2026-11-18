@@ -280,8 +280,30 @@ def _emit_tool_once() -> Callable[[str, list[str]], None]:
 
 
 
+def _escaped_empty_rows(vault: Path, rel: str, fix: bool) -> list[str]:
+    """The rows for a note's escaped-empty-quote values (see
+    `check_frontmatter`), writing the repair when `fix`. Read raw, so line
+    endings survive."""
+    path = vault / rel
+    with path.open("r", encoding="utf-8", newline="") as f:
+        raw = f.read()
+    keys, new = vaultlib.escaped_empty_keys(raw, fix=fix)
+    if not keys:
+        return []
+    shown = ", ".join(keys)
+    if not fix:
+        return [f"WARNING\t{rel}\t{shown}: the value is escaped quotes "
+                f"(\\\"\\\"), a four-character string and not empty — "
+                f"vault-check frontmatter --fix writes \"\" instead"]
+    with path.open("w", encoding="utf-8", newline="") as f:
+        f.write(new)
+    return [f"FIXED\t{rel}\t{shown}: escaped quotes rewritten to an empty "
+            f"value (\"\")"]
+
+
 def check_frontmatter(vault: Path, folder: str | None,
-                      explain: ExplainAll | None = None) -> list[str]:
+                      explain: ExplainAll | None = None,
+                      fix: bool = False) -> list[str]:
     """Schema rules, read by vaultlib's line reader, then the one thing
     that reader cannot see: a note the site's build cannot parse at all
     (#287). The line reader takes the last of a duplicated key and accepts
@@ -289,7 +311,12 @@ def check_frontmatter(vault: Path, folder: str | None,
     page. Which notes those are is the publish tool's answer (`explain
     --all`), never a second YAML reading here. An ERROR, like the schema
     rows: the post-write loops fix ERRORs, and a skill that has just
-    written such a note must not leave it."""
+    written such a note must not leave it.
+
+    A value that is only escaped empty quotes (`voice: \\"\\"`, #715) reads
+    as a four-character string, not as empty: a WARNING each. With `fix`
+    the value is rewritten to `""` (nothing else in the note changes) and
+    the row reads FIXED."""
     rows = []
     unparsed: set[str] = set()
     notes = list(vault_files(vault, folder))
@@ -340,6 +367,7 @@ def check_frontmatter(vault: Path, folder: str | None,
         if fm is None:
             rows.append(f"INFO\t{rel}\tno frontmatter")
             continue
+        rows += _escaped_empty_rows(vault, rel, fix)
         # The schema's rules, from the one place they live (the repo's
         # validator asks the same function); custom types are INFO.
         rows += [f"{level}\t{rel}\t{message}"
@@ -6001,7 +6029,9 @@ def build_parser() -> argparse.ArgumentParser:
                     help="settings only: apply the fix for each named fault "
                          "(a proposed fix needs the GM's yes by name)")
     ap.add_argument("--fix", action="store_true",
-                    help="apply the settings check's certain fixes, or the "
+                    help="apply the settings check's certain fixes, rewrite the "
+                         "frontmatter check's escaped-quote values (\\\"\\\") to "
+                         "empty, or the "
                          "wrapup or gm-leak check's mechanical "
                          "repairs (frontmatter backfills and the "
                          "Keeper-facing re-nest for wrapup; the "
@@ -6160,8 +6190,9 @@ def _main(argv: list[str] | None) -> int:
                       else run_check())
 
     if args.command in ("frontmatter", "all"):
-        emit_rows("frontmatter", check_frontmatter(args.vault, args.folder,
-                                                   explain))
+        emit_rows("frontmatter", check_frontmatter(
+            args.vault, args.folder, explain,
+            args.fix and args.command == "frontmatter"))
     if args.command in ("names", "all"):
         threshold = (args.threshold if args.threshold is not None
                      else setting_or_builtin(args.vault, "vault.name_match"))

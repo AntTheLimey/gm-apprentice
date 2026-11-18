@@ -11,7 +11,9 @@ disagree about which notes qualify:
 - the Wrap-Up: DRAFT -> AUTHORITATIVE, `reconciled:` stamped;
 - the session index: `status: reviewed`;
 - the scan's "draft entities created this session" and "pre-play draft
-  entities played this session": DRAFT -> AUTHORITATIVE. Older DRAFTs the
+  entities played this session" and the campaign-wide notes made before
+  play (the adventure brief and `_World/` notes, linked or not): DRAFT ->
+  AUTHORITATIVE. Older DRAFTs the
   Wrap-Up links are never touched, nor one named with --except (a note
   the GM has not confirmed: it stays DRAFT).
 
@@ -54,7 +56,7 @@ def plan(vault: Path, wrap_arg: str, reconciled: str,
     if found.index is None:
         raise LookupError(f"{found.wrap.rel}: no session index links this "
                           f"Wrap-Up, so none can be marked reviewed")
-    listed = [*found.new, *found.preplay]
+    listed = [*found.new, *found.preplay, *found.campaign_wide]
     kept: set[str] = set()
     for raw in keep:
         rel = normalize_file_arg(raw)
@@ -73,7 +75,7 @@ def plan(vault: Path, wrap_arg: str, reconciled: str,
         (found.wrap.rel, ["--promote", "--reconciled", reconciled]),
         (found.index.rel, ["--set", "status=reviewed"]),
         *((n.rel, ["--promote"]) for n in listed if n.rel not in kept)]
-    rows: list[str] = [f"KEPT\t{rel}\tleft DRAFT (--except)"
+    rows: list[str] = [f"KEPT\t{rel}\tleft DRAFT (--except); a campaign-wide note is listed again next time"
                        for rel in sorted(kept)]
     originals: dict[str, str] = {}
     texts: dict[str, str] = {}
