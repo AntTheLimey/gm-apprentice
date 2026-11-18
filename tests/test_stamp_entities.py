@@ -863,6 +863,16 @@ class ListTests(ScriptCase):
                               'entities=["Ada"]'])
         self.assertTrue(se.needs_links(args))
 
+    def test_a_list_already_holding_those_items_is_unchanged(self):
+        text = SCENE.replace("entities: []", 'entities: ["[[Ada Vane]]", '
+                             '"[[The Mill]]"]')
+        self.scene.write_text(text, encoding="utf-8")
+        out = self.run_script(self.REL, "--set",
+                              'entities=["Ada", "The Mill"]', "--write")
+        self.assertIn("UNCHANGED", out)
+        self.assertIn('entities already ["[[Ada Vane]]", "[[The Mill]]"]', out)
+        self.assertEqual(self.scene.read_text(encoding="utf-8"), text)
+
     def test_a_dotted_key_takes_no_list(self):
         self.run_script(self.REL, "--set", 'documents.x=["A"]', rc=2)
 

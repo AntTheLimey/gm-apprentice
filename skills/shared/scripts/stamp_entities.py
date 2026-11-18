@@ -476,6 +476,10 @@ def _plan_set_list(fm: list[str], key: str, items: list[str], eol: str,
             kept.append(item)
     written = kept
     before = _current(fm).get(key)
+    if before == written:
+        # The same items, in whatever list shape they are written: left
+        # as they are, so the note is UNCHANGED.
+        return f"{key} already {_show(written)}", False
     _write_list(fm, key, written, eol)
     if before is None:
         return f"added {key}: {_show(written)}", False

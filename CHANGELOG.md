@@ -10,6 +10,12 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 ---
 
 
+## [1.12.90] — 2026-11-19
+
+### Fixed
+
+- `stamp-entities --set` of a list that already holds those items leaves the note alone and says UNCHANGED, whatever list shape it is written in (#778).
+
 ## [1.12.89] — 2026-11-19
 
 ### Fixed
