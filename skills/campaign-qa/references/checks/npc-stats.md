@@ -18,7 +18,7 @@ template.
 
 1. Build the block through ttrpg-expert (`npc-generation.md` and the
    system's files), from the NPC's note as it stands. A major NPC's block
-   has numbers of its own: a stock block reskinned (the same numbers,
+   has stats of its own: a stock block reskinned (the same numbers,
    new flavour) is not a workup, even where the note suggests one; take
    the note's idea and build them up from it.
 2. Show the GM the block, and on a yes write it into the note's

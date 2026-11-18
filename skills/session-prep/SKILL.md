@@ -336,7 +336,7 @@ Apply fixes in place; there is no audit-notes report.
 - NPCs the Plan's scenes name without a stat block (`gma vault-check
   <vault> npc-stats --plan <plan>`): build each through ttrpg-expert
   before handoff and show it in the review: a full workup for a major
-  NPC (numbers of its own, never a reskinned stock block), a stock
+  NPC (stats of its own, never a reskinned stock block), a stock
   block allowed for the rest. On the GM's yes it goes in
   the NPC note's `## GM Notes` as its `### Stats` section. With
   `# system: none recorded`, build nothing: it is an Open Question.

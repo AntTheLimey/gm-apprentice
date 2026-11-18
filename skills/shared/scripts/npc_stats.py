@@ -4,7 +4,8 @@ block is missing or a placeholder (#725).
 
 A row a note, `WHY<TAB>path<TAB>who: what is there`, where WHY is
 
-  MISSING      no stat block at all
+  MISSING      no stat block at all, or only an embed of a note the vault
+               does not have
   PLACEHOLDER  the NPC template's `{STAT BLOCK: …}` paragraph, a system
                block (`shared/templates/npc-stats/<system>.md`) with its
                `{…}` fields unfilled, or words saying the block comes later
@@ -33,17 +34,19 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Callable, Iterable
 
 import session_context as sc
 from migrate_vault import vault_system
 from vaultlib import (LINK_RE, WRAP_UP_TYPES, body_of, entity_type,
                       extract_frontmatter, fenced_headings, h3_blocks,
-                      is_record_copy, link_aliases, link_lines, link_target,
+                      is_record_copy, link_aliases, link_lines, link_name,
+                      link_target,
                       live_wikilinks, normalize, normalize_file_arg, section,
                       section_ends, vault_files)
 
 BRIEF_TYPES = ("adventure-brief", "adventure_brief")
+PLAN_TYPES = ("session-plan", "session_plan")
 PLAN_SECTIONS = ("Planned Scenes", "Contingency Scenes")
 TRUE_WORDS = ("true", "yes", "on", "1")
 
@@ -62,6 +65,9 @@ DEFER_RE = re.compile(
     r"(?:it|them|one|these) (?:when|later|at)|TBD|TBC|TBA|TODO|to follow|"
     r"to come|later|not yet (?:built|written|statted)|not statted|will be "
     r"statted|placeholder|pending)\b", re.I)
+# A line that is itself a deferral marker (`TODO`, `- TBD: stats`).
+LEAD_DEFER_RE = re.compile(r"(?:TODO|TBD|TBC|TBA|to follow|to come|"
+                           r"placeholder)\b", re.I)
 # A line about stat blocks, where a deferral or a stock name outside a stat
 # heading counts.
 STAT_WORD_RE = re.compile(r"\b(?:stats?|stat ?blocks?|statted|SRD)\b", re.I)
@@ -84,7 +90,11 @@ STAT_PAIR_RE = re.compile(
 NUMBER_RE = re.compile(r"(?<![\w.])[+-]?\d+(?:\.\d+)?%?")
 # A block with this many numbers of its own is more than a stock name.
 OWN_NUMBERS = 6
-EMBED_RE = re.compile(r"!\[\[[^\[\]]+\]\]")
+EMBED_RE = re.compile(r"!\[\[([^\[\]]+)\]\]")
+# The score rows a block must fill: a row of empty cells (CoC's) or one
+# that names a score and leaves the rest empty (`| STR | | | |`).
+SCORE_NAMES = frozenset(("STR", "CON", "SIZ", "DEX", "APP", "POW", "EDU",
+                         "INT", "WIS", "CHA", "ST", "DX", "IQ", "HT"))
 TABLE_ROW_RE = re.compile(r"^\s*\|(.*)\|\s*$")
 TABLE_RULE_RE = re.compile(r"^[\s|:]*-[\s|:-]*$")
 
@@ -98,15 +108,18 @@ def _is_true(value: Any) -> bool:
     return value is True or str(value).strip().lower() in TRUE_WORDS
 
 
-def _blank_table(text: str) -> bool:
+def _blank_table(text: str, scores_only: bool = False) -> bool:
     """A table in `text` with a row whose cells after the first are all
-    empty: a score table nobody filled."""
+    empty: a score table nobody filled. `scores_only` counts only score
+    rows, not a weapons table's `| **Melee** | | |` group row."""
     for line in text.splitlines():
         m = TABLE_ROW_RE.match(line)
         if not m or TABLE_RULE_RE.match(line):
             continue
         cells = [c.strip() for c in m.group(1).split("|")]
-        if len(cells) > 1 and not any(cells[1:]):
+        if len(cells) > 1 and not any(cells[1:]) and (
+                not scores_only or not cells[0]
+                or cells[0].strip("*_ ").upper() in SCORE_NAMES):
             return True
     return False
 
@@ -132,6 +145,14 @@ def _stat_sections(body: str) -> list[str]:
             if STAT_TITLE_RE.search(title)]
 
 
+def _standalone(line: str) -> bool:
+    """A line that is itself a stock name or a deferral (`As Priest.`,
+    `TODO`), read even in a long block; `poses as a Bluecoat` is not."""
+    core = line.strip().lstrip("-*+>_#([ ")
+    return (any(rx.match(core) for rx in STOCK_RES)
+            or bool(LEAD_DEFER_RE.match(core)))
+
+
 def _said(lines: list[str]) -> tuple[str, str] | None:
     """A stock name (it wins: a stock block is enough for most NPCs) or,
     on a line with none, words putting the block off."""
@@ -144,20 +165,25 @@ def _said(lines: list[str]) -> tuple[str, str] | None:
     return None
 
 
-def _section_verdict(block: str, system: str | None
+def _section_verdict(block: str, system: str | None,
+                     exists: Callable[[str], bool] | None = None
                      ) -> tuple[str, str] | None:
     """`classify`'s verdict on the text under one stat heading."""
     if not block:
         return "blank", "a stat heading with nothing under it"
     # Enough numbers of its own make it the NPC's block, whatever optional
-    # field or group row was left.
+    # field or group row was left; not with its scores unfilled.
     if len(NUMBER_RE.findall(BRACE_RE.sub("", block))) >= OWN_NUMBERS:
+        if _blank_table(block, scores_only=True):
+            return "blank", "the score table is empty"
         return None
     lines = [ln for ln in block.splitlines() if ln.strip()]
     # A short block is read whole; in a longer one (a FitD block has few
-    # numbers) only the lines about stat blocks.
+    # numbers) only the lines about stat blocks, or a stock name or
+    # deferral standing as a line of its own.
     if len(lines) > 3:
-        lines = [ln for ln in lines if STAT_WORD_RE.search(ln)]
+        lines = [ln for ln in lines
+                 if STAT_WORD_RE.search(ln) or _standalone(ln)]
     verdict = _said(lines)
     if verdict is not None:
         return verdict
@@ -167,24 +193,33 @@ def _section_verdict(block: str, system: str | None
                 f"placeholders ({_short(brace.group(0), 30)})")
     if _blank_table(block):
         return "blank", "the score table is empty"
-    if system == "fitd" or EMBED_RE.search(block):
+    embeds = EMBED_RE.findall(block)
+    if (embeds and exists is not None and not EMBED_RE.sub("", block).strip()
+            and not any(exists(e) for e in embeds)):
+        return ("missing", f"embeds a note that is not in the vault "
+                f"(\"![[{_short(embeds[0], 40)}]]\")")
+    if system == "fitd" or embeds:
         return None  # an embedded note is a block kept elsewhere
     first = next(ln for ln in block.splitlines() if ln.strip())
     return ("placeholder", f"no block under the stat heading, only words "
             f"(\"{_short(first)}\")")
 
 
-def classify(text: str, system: str | None = None
+def classify(text: str, system: str | None = None,
+             exists: Callable[[str], bool] | None = None
              ) -> tuple[str, str] | None:
     """(why, what is there) for a note's stat block; None when it has a
     block of its own. `why` is `missing`, `placeholder`, `blank` or
     `stock` (a stock name with no block of its own: a row only for a
     major NPC). `system` is the vault's: in every one but `fitd` a block
-    has numbers. Of several stat headings, one block of its own is enough."""
+    has numbers. `exists` says whether an embed's target is in the vault
+    (unchecked without it). Of several stat headings, one block of its own
+    is enough."""
     body = body_of(text)
     found = _stat_sections(body)
     if found:
-        verdicts = [_section_verdict(block, system) for block in found]
+        verdicts = [_section_verdict(block, system, exists)
+                    for block in found]
         return None if None in verdicts else verdicts[0]
     plain = COMMENT_RE.sub("", body)
     if TEMPLATE_SLOT_RE.search(plain):
@@ -205,6 +240,7 @@ class Notes:
     """The vault's notes, read once: (path, text, frontmatter)."""
 
     def __init__(self, vault: Path):
+        self.vault = vault
         self.all = [(rel, text, extract_frontmatter(text) or {})
                     for rel, text in vault_files(vault)
                     if not is_record_copy(rel)]
@@ -215,6 +251,16 @@ class Notes:
         for rel, _t, fm in self.npcs:
             for name in (Path(rel).stem, *link_aliases(fm)):
                 self.by_name.setdefault(normalize(name), set()).add(rel)
+
+    def exists(self, embed: str) -> bool:
+        """Whether an embed's target (`Monk Stats#Stats`, `card.png|200`)
+        is in the vault: a note by name, any other file by its name."""
+        name = link_name(embed)
+        key = normalize(name)
+        if any(normalize(Path(rel).stem) == key for rel, _t, _f in self.all):
+            return True
+        return (bool(re.search(r"\.\w{1,5}$", name))
+                and any(p.name == name for p in self.vault.rglob("*.*")))
 
     def npcs_named(self, targets: Iterable[str]) -> set[str]:
         out: set[str] = set()
@@ -284,16 +330,18 @@ def find_plan(notes: Notes, given: str) -> tuple[str, str] | str:
     """(path, text) of the Plan `given` names, by vault path or by note
     name (`[[Name]]` too); otherwise the error to print."""
     want = normalize_file_arg(given.strip().strip("[]"))
-    exact = [(r, t) for r, t, _f in notes.all if r == want]
-    if exact:
-        return exact[0]
+    exact = [n for n in notes.all if n[0] == want]
     key = normalize(want.removesuffix(".md"))
-    hits = [(r, t) for r, t, _f in notes.all if normalize(Path(r).stem) == key]
-    if len(hits) == 1:
-        return hits[0]
+    hits = exact or [n for n in notes.all if normalize(Path(n[0]).stem) == key]
+    plans = [(r, t) for r, t, fm in hits if entity_type(fm) in PLAN_TYPES]
+    if len(plans) == 1:
+        return plans[0]
+    if plans:
+        return (f"--plan {given}: {len(plans)} Plans of that name ("
+                + ", ".join(r for r, _t in plans) + "); give its path")
     if hits:
-        return (f"--plan {given}: {len(hits)} notes of that name ("
-                + ", ".join(r for r, _t in hits) + "); give its path")
+        return (f"--plan {given}: {hits[0][0]} is not a Session Plan "
+                f"(type: {entity_type(hits[0][2]) or 'none'})")
     return f"--plan {given}: no note of that name or path in the vault"
 
 
@@ -359,7 +407,7 @@ def check_npc_stats(vault: Path, plan: str | None = None,
             continue
         if plan is None and str(fm.get("status", "")).strip().lower() == "dead":
             continue
-        verdict = classify(text, system)
+        verdict = classify(text, system, notes.exists)
         if verdict is None:
             continue
         why, what = verdict

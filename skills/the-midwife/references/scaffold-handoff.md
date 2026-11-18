@@ -132,7 +132,7 @@ map narrative verbs and normalize inverses via
 
 A major NPC (companion, or in the brief's Key NPCs) gets a full
 workup now, built for who they are: abilities, spells, equipment, a
-signature feature, and tactics, with numbers of its own (never a
+signature feature, and tactics, with stats of its own (never a
 reskinned stock block), through `ttrpg-expert/npc-generation.md`
 and the system's files, in its batch block's GM Notes (a `### Stats`
 section). Any other NPC the plans put in a fight or casting gets at
@@ -296,7 +296,7 @@ brief before committing to prep work.
 | Premise | One paragraph: the pitch the players hear | Public |
 | Tone & Genre | Sensory and emotional descriptors | Public |
 | Core Tension | The conflict or mystery as the players meet it | Public |
-| Key NPCs | Per-NPC, as first met: role, connection, first appearance; each entry names its NPC with a `[[link]]` | Public |
+| Key NPCs | Per-NPC, as first met: role, connection, first appearance; each entry starts with its NPC's `[[link]]` | Public |
 | Locations | Per-location, as first seen: atmosphere, significance, connections | Public |
 | Entry Points | ≥3 hooks (Three Clue Rule at adventure scale) | Public |
 | CATS Pitch | Concept/Aim/Tone/Subject for Session 0 | Public — see note below |

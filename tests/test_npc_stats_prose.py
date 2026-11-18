@@ -40,7 +40,8 @@ class SessionPrepGapCheckTests(unittest.TestCase):
         self.assertIn("`## GM Notes` as its `### Stats` section", self.line)
 
     def test_no_system_is_an_open_question(self):
-        self.assertIn("`# system: none recorded`", self.line)
+        clause = self.line[self.line.index("`# system: none recorded`"):]
+        self.assertIn("build nothing", clause.split(".", 1)[0])
         self.assertIn("Open Question", self.line)
 
 
@@ -60,7 +61,7 @@ class MidwifeTests(unittest.TestCase):
         row = next(ln for ln in read(
             "the-midwife/references/scaffold-handoff.md").splitlines()
             if ln.startswith("| Key NPCs |"))
-        self.assertIn("each entry names its NPC with a `[[link]]`", row)
+        self.assertIn("each entry starts with its NPC's `[[link]]`", row)
 
 
 if __name__ == "__main__":

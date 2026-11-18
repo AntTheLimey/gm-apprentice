@@ -105,7 +105,9 @@ class ShapeTests(unittest.TestCase):
         self.assertEqual(self.why(npc(SLOT)), "placeholder")
 
     def test_every_systems_unfilled_block_is_a_placeholder(self):
-        for path in sorted(STATS.glob("*.md")):
+        paths = sorted(STATS.glob("*.md"))
+        self.assertTrue(paths)
+        for path in paths:
             with self.subTest(path.name):
                 block = path.read_text(encoding="utf-8")
                 self.assertEqual(self.why(npc(block)), "placeholder")
@@ -143,10 +145,17 @@ class ShapeTests(unittest.TestCase):
         self.assertEqual(self.why(npc("### Stats\n")), "blank")
 
     def test_an_empty_score_table_is_blank(self):
-        block = ("### Stats\n\n**HP** 22 · **AC** 12 · **Speed** 30 ft.\n\n"
-                 "| STR | CON | SIZ | DEX |\n|-----|-----|-----|-----|\n"
+        # Review: six numbers elsewhere do not fill the scores.
+        table = ("| STR | CON | SIZ | DEX |\n|-----|-----|-----|-----|\n"
                  "|     |     |     |     |\n")
-        self.assertEqual(self.why(npc(block)), "blank")
+        for line in ("**HP** 22 · **AC** 12 · **Speed** 30 ft.",
+                     "**HP** 22 · **AC** 12 · **Speed** 30 ft. · "
+                     "Initiative +2 · Passive Perception 13 · Proficiency +2"):
+            with self.subTest(line):
+                block = f"### Stats\n\n{line}\n\n{table}"
+                self.assertEqual(self.why(npc(block)), "blank")
+        dnd = DND_FILLED.replace("| CHA | 13 | +1 | +1 |", "| CHA | | | |")
+        self.assertEqual(self.why(npc(dnd)), "blank")
 
     def test_a_short_block_with_an_empty_score_row_is_blank(self):
         block = ("### Stats\n\n| STR | DEX |\n|---|---|\n| 10 | |\n"
@@ -188,6 +197,18 @@ class ShapeTests(unittest.TestCase):
     def test_a_filled_fitd_block_is_its_own(self):
         # Few numbers, a "later" and an "as Gentry": still a block.
         self.assertIsNone(self.why(npc(FITD_FILLED), "fitd"))
+
+    def test_a_stock_line_in_a_long_block_is_stock(self):
+        # Review: a stock name on a line of its own, with prose after it.
+        block = ("### Stats\n\nAs Priest.\n\nCarries a heavy mace.\n"
+                 "Flees when the candles go out.\nKnows every crypt door.")
+        self.assertEqual(self.why(npc(block)), "stock")
+
+    def test_a_todo_line_in_a_long_fitd_block_is_a_placeholder(self):
+        # Review: a deferral on a line of its own, with planning after it.
+        block = ("### Stats\n\nTODO\n\n- wants the ledger back\n"
+                 "- carries a sword-cane\n- knows the canal gangs")
+        self.assertEqual(self.why(npc(block), "fitd"), "placeholder")
 
     def test_a_long_fitd_block_opening_with_as_is_not_stock(self):
         # Review finding 8: in a long block only stat-word lines are read
@@ -329,6 +350,22 @@ class RowTests(unittest.TestCase):
         self.assertEqual(found, {"NPCs/Wren.md": "major (key-npc)",
                                  "NPCs/Cole.md": "other"})
 
+    def test_an_embed_of_a_missing_note_is_missing(self):
+        # Review: embed syntax alone is not a block; its note must exist.
+        v = make(self, {
+            "NPCs/Brother Tam.md": npc("### Stats\n\n![[Monk Stats]]"),
+            "NPCs/Brother Hale.md": npc("### Stats\n\n![[Monk Stats#Stats]]"),
+            "NPCs/Sister Ilse.md": npc("### Stats\n\n![[Abbess Card.png]]"),
+            "NPCs/Old Vessel.md": npc("### Stats\n\n![[Vessel Stats]]"),
+            "NPCs/Dr. Pell.md": npc("### Stats\n\n![[Dr. Pell Stats]]"),
+            "Stats/Monk Stats.md": "---\ntype: note\n---\n\nST 10 · DX 11\n",
+            "Stats/Dr. Pell Stats.md": "---\ntype: note\n---\n\nST 9\n",
+            "Images/Abbess Card.png": "png",
+        })
+        self.assertEqual(rows(v), [
+            "MISSING\tNPCs/Old Vessel.md\tother: embeds a note that is not "
+            "in the vault (\"![[Vessel Stats]]\") — a stock block will do"])
+
     def test_a_built_npc_gives_no_row(self):
         v = make(self, {"NPCs/Wenna.md": npc(DND_FILLED,
                                              extra="companion: true\n")})
@@ -416,7 +453,19 @@ class PlanTests(unittest.TestCase):
     def test_two_notes_of_the_name_ask_for_a_path(self):
         v = make(self, {"A/Plan.md": PLAN, "B/Plan.md": PLAN})
         _found, error = npc_stats.check_npc_stats(v, "Plan")
-        self.assertIn("2 notes of that name", error)
+        self.assertIn("2 Plans of that name", error)
+
+    def test_a_note_that_is_not_a_plan_is_an_error(self):
+        # Review: an NPC or session note is not read as a Plan with no gaps.
+        v = make(self, {
+            "NPCs/Brother Tam.md": npc(),
+            "Chapters/C1/Sessions/Session 04.md":
+                "---\ntype: session\n---\n\n[[Brother Tam]]\n"})
+        for given in ("NPCs/Brother Tam.md", "Session 04"):
+            with self.subTest(given):
+                found, error = npc_stats.check_npc_stats(v, given)
+                self.assertEqual(found, [])
+                self.assertIn("is not a Session Plan", error)
 
 
 class PlayedTests(unittest.TestCase):
@@ -466,6 +515,15 @@ class CommandTests(unittest.TestCase):
         _code, out, _err = run([str(v), "npc-stats"])
         self.assertIn("# system: none recorded", out)
         self.assertIn("# count: 1", out)
+
+    def test_an_undecided_brief_is_no_system(self):
+        # Review: the Midwife's `system: undecided` is not a system id.
+        v = make(self, {
+            "NPCs/Brother Tam.md": npc(),
+            "Adventures/A/A.md": "---\ntype: adventure-brief\n"
+                                 "system: undecided\n---\n"}, system=None)
+        _code, out, _err = run([str(v), "npc-stats"])
+        self.assertIn("# system: none recorded", out)
 
     def test_a_bad_plan_exits_2(self):
         v = make(self, {})
