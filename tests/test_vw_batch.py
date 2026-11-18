@@ -34,6 +34,8 @@ canon_status: DRAFT
 """
 
 BOLA = "Characters/NPCs/Bola.md"
+SECTION = (Path(__file__).resolve().parent.parent / "skills" / "shared"
+           / "scripts" / "section.py")
 
 SCENE_REL = "Chapters/Chapter 1/Scenes/The Second Night.md"
 SCENE_FM = """---
@@ -358,8 +360,9 @@ class BatchTests(unittest.TestCase):
                           "\n\n## H\n", "Appended.\n", "mid-line", "--append")
 
     def test_unclosed_frontmatter_is_refused(self):
-        self.lead_refused("---\ntype: npc\n\nOld text.\n\n## H\n", "New.\n",
-                          "frontmatter")
+        for opener in ("---", "--- "):
+            self.lead_refused(f"{opener}\ntype: npc\n\nOld text.\n\n## H\n",
+                              "New.\n", "frontmatter is not closed")
 
     def test_the_publish_tool_has_the_last_word_on_the_rest_of_the_note(self):
         """Second review pass: text the Python reading passed still hid or
@@ -368,15 +371,19 @@ class BatchTests(unittest.TestCase):
         note = ("---\ntype: npc\n---\n\nOld.\n\n## Public\n\nPublic text.\n\n"
                 "<!-- private note: UNVERIFIED -->\n\n<!-- gm-only -->\n\n"
                 "## GM Notes\n\nSecret.\n\n<!-- /gm-only -->\n")
+        # Each passes the Python reading of the text and reaches the tool:
+        # the refusal must be the tool's (CodeRabbit, #743).
         for body in (f"{fence}\nx\n{fence} not-a-close\n<!-- c -->\n{fence}\n",
                      f"Text\n    {fence}\nmore\n",
                      f"{'`' * 4}\n{fence}\n{'`' * 4}\n",
-                     "Text `%%` x %% y\n",
+                     "Text ``a %% ``` x\n",
                      "%% a <!-- b %%\nVisible c -->\nVisible d\n"):
             vault = make_vault(self, {"n.md": note})
             code, out = batch(vault, '=== section "n.md" --lead --replace\n'
                               + body, "--write")
             self.assertEqual(code, 1, body + out)
+            self.assertIn("would change what the rest of the note shows", out,
+                          body)
             self.assertEqual(read(vault, "n.md"), note, body)
         note = note.replace("Public text.\n\n", "Public text.\n\n## Later\n\n", 1)
         vault = make_vault(self, {"n.md": note})
@@ -391,12 +398,14 @@ class BatchTests(unittest.TestCase):
         nothing below the section to compare, and was never checked."""
         note = ("---\ntype: npc\n---\n\nLead.\n\n## Notes\n\n- one\n\n"
                 "Closing para.\n\n<!-- private note -->\n")
-        for body in ("- two `%%` x %%\n",
+        for body in ("- two ``a %% ``` x\n",
                      "- two\n\n````\n```\n````\n"):
             vault = make_vault(self, {"n.md": note})
             code, out = batch(vault, '=== section "n.md" "Notes" --append\n'
                               + body, "--write")
             self.assertEqual(code, 1, body + out)
+            self.assertIn("would change what the rest of the note shows", out,
+                          body)
             self.assertEqual(read(vault, "n.md"), note, body)
 
     def test_the_check_splits_lines_as_the_build_does(self):
@@ -409,13 +418,123 @@ class BatchTests(unittest.TestCase):
         code, out = batch(vault, '=== section "n.md" --lead --replace\n'
                           + body, "--write")
         self.assertEqual(code, 1, out)
+        self.assertIn("would change what the rest of the note shows", out)
         self.assertEqual(read(vault, "n.md"), note)
 
     def test_a_fence_opened_inside_a_comment_cannot_swallow_sections(self):
+        """A read and an append are refused too (CodeRabbit, #743): the read
+        printed the Public section as the lead."""
         fence = "`" * 3
         note = (f"---\ntype: npc\n---\n\n<!--\n{fence}\n-->\nOld.\n\n"
                 "## Public\n\nPublic text.\n")
+        for mode in ("--replace", "--append"):
+            self.lead_refused(note, "New.\n", "run past a heading", mode)
+        self.assertIn("run past a heading", self.lead_read(note))
+
+    def lead_read(self, note):
+        """What `gma section --lead` says of the note: its output, or its
+        error."""
+        vault = make_vault(self, {"n.md": note})
+        got = subprocess.run([sys.executable, str(SECTION), str(vault), "n.md",
+                              "--lead"], capture_output=True, text=True)
+        return got.stdout if got.returncode == 0 else got.stderr
+
+    def test_a_setext_heading_ends_no_lead_silently(self):
+        """`Public` over `======` is a heading on the site; the body reader
+        missed it, and --replace deleted it and its text (CodeRabbit, #743).
+        A table's `|---|` row and a `---` after a blank line are no heading."""
+        note = "Old.\n\nPublic\n======\n\nDetails.\n"
         self.lead_refused(note, "New.\n", "run past a heading")
+        self.assertIn("run past a heading", self.lead_read(note))
+        fine = "| Do | Then |\n|---|---|\n| a | b |\n\n---\n\nMore.\n\n## H\n"
+        self.assertEqual(self.lead_read(fine), fine.split("\n\n## H")[0] + "\n")
+
+    def test_a_heading_in_a_real_fence_in_the_lead_is_no_heading(self):
+        fence = "`" * 3
+        note = f"Old.\n\n{fence}\n## Example\n{fence}\n\n## H\n\nx\n"
+        vault = make_vault(self, {"n.md": note})
+        code, out = batch(vault, '=== section "n.md" --lead --replace\nNew.\n',
+                          "--write")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(read(vault, "n.md"), "New.\n\n## H\n\nx\n")
+
+    def test_a_lead_ending_inside_a_comment_or_fence_at_the_end_of_the_note(self):
+        """With no final newline the old check never looked: the append went
+        inside the comment, or into the code block (CodeRabbit, #743)."""
+        fence = "`" * 3
+        for note, why in (("Old.\n<!-- unfinished", "inside a comment"),
+                          ("Old.\n%% unfinished\n", "inside a comment"),
+                          (f"Old.\n\n{fence}\nexample", "inside a code fence")):
+            self.lead_refused(note, "New.\n", why, "--append")
+            self.assertIn(why, self.lead_read(note))
+        note = f"Old.\n\n{fence}\nexample\n{fence}"
+        vault = make_vault(self, {"n.md": note})
+        code, out = batch(vault, '=== section "n.md" --lead --append\nNew.\n',
+                          "--write")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(read(vault, "n.md"), note + "\n\nNew.\n")
+
+    def test_section_text_may_not_land_inside_a_fence_left_open(self):
+        """Appended to a last section that ends inside an unclosed fence, a
+        gm-only block was code: its markers did nothing and the secret
+        published (found checking CodeRabbit's #743 lead case)."""
+        fence = "`" * 3
+        note = f"---\ntype: npc\n---\n\n## Notes\n\nx\n\n{fence}\nexample\n"
+        vault = make_vault(self, {"n.md": note})
+        code, out = batch(vault, '=== section "n.md" "Notes" --append\n'
+                          "<!-- gm-only -->\nsecret\n<!-- /gm-only -->\n",
+                          "--write")
+        self.assertEqual(code, 1, out)
+        self.assertIn("a code fence or comment left open above it", out)
+        self.assertEqual(read(vault, "n.md"), note)
+
+    def test_section_text_with_a_hidden_sections_heading_is_checked(self):
+        """A `### GM Notes` written over `## Public`'s text hid the
+        `#### Details` below it on the site (CodeRabbit, #743); an ordinary
+        `###` does not, and an append into a hidden section is fine."""
+        note = ("---\ntype: npc\n---\n\nLead.\n\n## Public\n\nOld.\n\n"
+                "#### Details\n\nShown.\n\n## GM Notes\n\n- a\n")
+        vault = make_vault(self, {"n.md": note})
+        code, out = batch(vault, '=== section "n.md" "Public" --replace\n'
+                          "New.\n\n### GM Notes\n\nhidden\n", "--write")
+        self.assertEqual(code, 1, out)
+        self.assertIn("a hidden section's heading", out)
+        self.assertEqual(read(vault, "n.md"), note)
+        code, out = batch(vault, '=== section "n.md" "Public" --replace\n'
+                          "New.\n\n### Aside\n\nshown\n"
+                          '=== section "n.md" "GM Notes" --append\n- b\n',
+                          "--write")
+        self.assertEqual(code, 0, out)
+        self.assertIn("### Aside\n\nshown\n\n#### Details", read(vault, "n.md"))
+        self.assertIn("- a\n- b\n", read(vault, "n.md"))
+
+    def test_percent_signs_in_a_code_span_open_no_comment(self):
+        """`%%` in an inline code span is literal to the publish tool; the
+        writer refused it as an open comment (CodeRabbit, #743). A real one
+        is still refused."""
+        note = "---\ntype: npc\n---\n\nLead.\n\n## Notes\n\nOld.\n\n## Other\n\nx\n"
+        vault = make_vault(self, {"n.md": note})
+        code, out = batch(vault, '=== section "n.md" "Notes" --replace\n'
+                          "The token is `%%`.\n", "--write")
+        self.assertEqual(code, 0, out)
+        self.assertIn("## Notes\n\nThe token is `%%`.\n\n## Other", read(vault, "n.md"))
+        code, out = batch(vault, '=== section "n.md" "Notes" --replace\n'
+                          "The token is %%.\n", "--write")
+        self.assertEqual(code, 1, out)
+        self.assertIn("a %% comment open", out)
+        self.lead_refused(SCENE, "Text `%%` x %% y\n", "a %% comment open")
+
+    def test_a_prompt_sharing_a_line_with_lead_text_refuses_replace(self):
+        """`<!-- prompt --> Old.` was kept whole: Old. stayed, New. went
+        below it (CodeRabbit, #743)."""
+        for top in ("<!-- prompt --> Old.\n", "<!-- a\nb --> Old.\n",
+                    "%% p %% Old.\n"):
+            self.lead_refused(SCENE_FM + "\n" + top + "\n" + SCENE_GM,
+                              "New.\n", "shares a line with text")
+
+    def test_a_bom_frontmatter_opener_in_lead_text_is_refused(self):
+        self.lead_refused("Old.\n\n## H\n\nx\n", "\ufeff---\ntitle: x\n---\n",
+                          "read as frontmatter")
 
     def test_lead_on_a_crlf_note_and_an_empty_lead(self):
         crlf = SCENE.replace("\n", "\r\n")

@@ -447,7 +447,8 @@ class Walk:
 def comment_walk(lines: list[str]) -> list[Walk]:
     """Each line read for code fences, HTML comments and `%%` comments,
     which hide text in Obsidian and on the site alike. `scan_body` models
-    no `%%` comment, so the lead's writer reads them here (#738)."""
+    no `%%` comment, so the lead's writer reads them here (#738). A `%%` in
+    an inline code span is literal, as the publish tool reads it."""
     fence: str | None = None
     html = pct = False
     out: list[Walk] = []
@@ -462,6 +463,7 @@ def comment_walk(lines: list[str]) -> list[Walk]:
                                 "code fence" if fence else ""))
                 continue
         touches, i = inside, 0
+        spans = vl.inline_code_spans(line)
         while i < len(line):
             if html or pct:
                 close = "-->" if html else "%%"
@@ -472,6 +474,8 @@ def comment_walk(lines: list[str]) -> list[Walk]:
                 i = j + len(close)
                 continue
             a, b = line.find("<!--", i), line.find("%%", i)
+            while b >= 0 and vl.inside_spans(b, spans):
+                b = line.find("%%", b + 1)
             if a < 0 and b < 0:
                 break
             touches = True
@@ -502,29 +506,71 @@ def lead_span(doc: Doc) -> tuple[int, int]:
 
 
 ANY_MARKER_RE = re.compile(r"<!--\s*/?\s*(?:gm-only|spoiler)\s*-->", re.I)
+ATX_RE = re.compile(r"^ {0,3}#{1,6}(?:[ \t]|$)")
+SETEXT_RE = re.compile(r"^ {0,3}(?:=+|-+)[ \t]*$")
+
+
+def tool_reading(lines: list[str], rel: str) -> list[tuple[str | None, bool]]:
+    """Each line as the publish tool's strips leave it (None when they cut
+    it), and whether it is code, the fences read from what is left as
+    `build_lines` reads them. The tool's answer, not a model of it."""
+    try:
+        cut = vl.cut_lines(lines)
+    except vl.PublishToolUnavailable as e:
+        raise WriteError(f"{rel}: the publish tool could not be asked how "
+                         f"the note reads ({e}); nothing written") from e
+    out: list[tuple[str | None, bool]] = []
+    fence: str | None = None
+    for kept in cut:
+        if kept is None:
+            out.append((None, False))
+            continue
+        fence, flag = vl.fence_step(kept, fence)
+        out.append((kept, fence is not None or flag))
+    return out
+
+
+LEAD_END = "⁣lead ends here"
 
 
 def checked_lead(doc: Doc, rel: str) -> tuple[int, int, list[Walk]]:
     """`lead_span`, with the lead's lines walked, refusing a lead no tool
     should write: a frontmatter never closed (it would read as the lead), a
-    lead ending inside a comment (text put there would be hidden), and a
-    gm-only or spoiler marker part-way along a line."""
+    gm-only or spoiler marker part-way along a line, and, as the publish
+    tool reads the lead, one ending inside a comment or code fence (text
+    put there would be hidden, or shown as code) or holding a heading the
+    body reader missed (a `---` underline, or a heading after a fence
+    opened inside a comment): the lead is not what it seems."""
     first, end = lead_span(doc)
     if (first == 0 and doc.lines
-            and doc.lines[0].lstrip("﻿").rstrip("\r\n") == "---"):
+            and doc.lines[0].lstrip("﻿").strip() == "---"):
         # The body reader found no frontmatter, yet the note opens with one.
         raise WriteError(f"{rel}: its frontmatter is not closed; fix it "
                          f"before writing the lead")
-    walk = comment_walk(doc.lines[first:end + 1])
-    if end < len(doc.lines) and walk[end - first].inside:
-        raise WriteError(f"{rel}: the lead ends inside a comment, so text "
-                         f"written there would be hidden; edit it by hand")
+    walk = comment_walk(doc.lines[first:end])
     for i in range(first, end):
         if not walk[i - first].code and ANY_MARKER_RE.search(doc.lines[i]):
             raise WriteError(f"{rel}: the lead holds a gm-only or spoiler "
                              f"marker mid-line ({doc.lines[i].strip()!r}); "
                              f"edit it by hand")
-    return first, end, walk[:end - first]
+    read = tool_reading([ln.rstrip("\r\n") for ln in doc.lines[first:end]]
+                        + [LEAD_END], rel)
+    if read[-1][0] != LEAD_END or read[-1][1]:
+        what = "a code fence" if read[-1][1] else "a comment"
+        raise WriteError(f"{rel}: the lead ends inside {what}, so text "
+                         f"written there would not read as written; edit it "
+                         f"by hand")
+    for i, (kept, code) in enumerate(read[:-1]):
+        above, above_code = read[i - 1] if i else (None, False)
+        if kept is not None and not code and (ATX_RE.match(kept) or (
+                SETEXT_RE.match(kept) and above is not None
+                and above.strip() and not above_code)):
+            # A `---` under a line is the tool's own setext risk rule.
+            shown = kept if ATX_RE.match(kept) else f"{above} / {kept}"
+            raise WriteError(f"{rel}: the lead seems to run past a heading "
+                             f"({shown.strip()!r}), so it is not what it "
+                             f"seems; edit it by hand")
+    return first, end, walk
 
 
 def _tight_with(above: str, first: str) -> bool:

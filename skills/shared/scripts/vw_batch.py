@@ -204,10 +204,6 @@ def run_note_new(batch: vw.Batch, b: Block) -> None:
     batch.row("WOULD-CREATE", rel, "", f"type: {kind}" if kind else "")
 
 
-HEADING_RE = re.compile(r"^ {0,3}#{1,6}(?:[ \t]|$)")
-SETEXT_RE = re.compile(r"^ {0,3}(?:=+|-+)[ \t]*$")
-
-
 def text_left_open(body: list[str]) -> str:
     """What the text leaves open at its end (a code fence, an HTML comment
     or a %% comment), or "". Text that does would hide, or publish, what
@@ -228,7 +224,7 @@ def check_text(rel: str, body: list[str], where: str) -> None:
 def check_lead_text(rel: str, body: list[str], at_top: bool) -> None:
     """The lead's own checks on the new text: no heading, marker, setext
     underline or frontmatter, and nothing left open."""
-    if at_top and body[0].strip() == "---":
+    if at_top and body[0].lstrip("\ufeff").strip() == "---":
         raise vw.WriteError(f"{rel}: the lead's text opens with '---', which "
                             f"would read as frontmatter")
     walk = vw.comment_walk(body)
@@ -239,7 +235,7 @@ def check_lead_text(rel: str, body: list[str], at_top: bool) -> None:
             raise vw.WriteError(f"{rel}: the lead's text holds a gm-only or "
                                 f"spoiler marker ({ln.strip()!r}); the lead "
                                 f"is for text players may see in the note")
-        if (i and SETEXT_RE.match(ln) and body[i - 1].strip()
+        if (i and vw.SETEXT_RE.match(ln) and body[i - 1].strip()
                 and not walk[i - 1].code):
             raise vw.WriteError(f"{rel}: the lead's text line {ln.strip()!r} "
                                 f"would turn the line above into a heading; "
@@ -252,33 +248,64 @@ def check_lead_text(rel: str, body: list[str], at_top: bool) -> None:
     check_text(rel, body, "the lead")
 
 
-def _cut(lines: list[str], rel: str) -> list[str | None]:
-    """The publish tool's own reading of the body lines (`cut_lines`)."""
+def site_reading(batch: vw.Batch, rel: str, text: str) -> list[vl.BuildLine]:
+    """The note's body lines as the build reads them for this site: the
+    publish tool's strips and its section rules (the hidden sections, the
+    note's type, the hidden callouts), with the code fences read from what
+    is left (`build_lines`)."""
+    kind = (vl.extract_frontmatter(text) or {}).get("type")
     try:
-        return vl.cut_lines(lines)
-    except vl.PublishToolUnavailable as e:
+        states, _problems = vl.build_lines(
+            text, vw.hidden_sections(batch.vault),
+            note_type=kind if isinstance(kind, str) else None,
+            callouts=vl.setting_or_builtin(batch.vault,
+                                           "player_site.hide.callouts"))
+    except (vl.PublishToolUnavailable, vl.SettingsUnavailable) as e:
         raise vw.WriteError(f"{rel}: the publish tool could not be asked "
                             f"whether the rest of the note still reads the "
                             f"same ({e}); nothing written") from e
+    return states
 
 
-def check_rest_unchanged(rel: str, old_text: str, new_text: str) -> None:
-    """The last word on a `section` write: the publish tool reads every
-    line below the written text (the lines the old and new note end with
-    alike) as it did before, so the text hid nothing and published nothing
-    (#738 review: a loose fence, a %% in a code span or an open comment
-    did). The lines are the build's own: the body split at `\n` alone,
-    `\r` dropped. It asks the tool, not a model of it."""
-    old = vl.body_text(old_text).split("\n")
-    new = vl.body_text(new_text).split("\n")
+def check_rest_unchanged(batch: vw.Batch, rel: str, old_text: str,
+                         new_text: str) -> None:
+    """The last word on a `section` write, the publish tool's under the
+    site's section rules: every line below the written text (the lines the
+    old and new note end with alike) reads, publishes and is code or not
+    as before, so the text hid nothing and published nothing (#738 review:
+    a loose fence, a %% in a code span, an open comment or a hidden
+    section's heading did); and the written text reads where it lands as
+    it reads on its own, so no fence left open above it takes it in. The
+    lines are the build's own: split at `\n` alone, `\r` dropped."""
+    old = site_reading(batch, rel, old_text)
+    new = site_reading(batch, rel, new_text)
     same = 0
     while (same < min(len(old), len(new))
-           and old[len(old) - 1 - same] == new[len(new) - 1 - same]):
+           and old[len(old) - 1 - same].written
+           == new[len(new) - 1 - same].written):
         same += 1
-    if same and _cut(old, rel)[-same:] != _cut(new, rel)[-same:]:
+
+    def view(b: vl.BuildLine) -> tuple[str | None, bool, bool]:
+        return None if b.cut else b.line, b.published, b.in_code
+    if same and ([view(b) for b in old[len(old) - same:]]
+                 != [view(b) for b in new[len(new) - same:]]):
         raise vw.WriteError(f"{rel}: this text would change what the rest "
                             f"of the note shows (a fence or comment opened "
-                            f"or closed); nothing written")
+                            f"or closed, or a hidden section's heading); "
+                            f"nothing written")
+    top = 0
+    while (top < min(len(old), len(new)) - same
+           and old[top].written == new[top].written):
+        top += 1
+    mine = new[top:len(new) - same]
+    alone = vw.tool_reading([b.written for b in mine], rel)
+    for b, (kept, code) in zip(mine, alone):
+        # A line hidden where it lands (in a gm-only block) hides nothing.
+        if not b.cut and (b.line, b.in_code) != (kept, code):
+            raise vw.WriteError(
+                f"{rel}: the text would not read where it lands as it does "
+                f"on its own: a code fence or comment left open above it "
+                f"takes it in; nothing written")
 
 
 def run_lead(batch: vw.Batch, rel: str, body: list[str],
@@ -302,15 +329,16 @@ def run_lead(batch: vw.Batch, rel: str, body: list[str],
                 keep = i + 1
             elif lines[i].strip():
                 break
-        # The lead is read by `scan_body`; where the tool reads a heading
-        # inside it (a fence opened inside a comment fools the reader), the
-        # lead is not what it seems, and replacing it would drop sections.
-        cut = _cut([ln.rstrip("\r\n") for ln in lines[first:end]], rel)
-        heads = [c for c in cut if c is not None and HEADING_RE.match(c)]
-        if heads:
+        # A prompt kept is kept whole: lead text on its line would stay
+        # behind, and the new text be put below it.
+        mixed = [kept for kept, _code in vw.tool_reading(
+            [ln.rstrip("\r\n") for ln in lines[first:keep]], rel)
+            if kept is not None and kept.strip()] if keep > first else []
+        if mixed:
             raise vw.WriteError(
-                f"{rel}: the lead seems to run past a heading ({heads[0]!r}), "
-                f"so --replace could drop sections; edit it by hand")
+                f"{rel}: the comment at the lead's top shares a line with "
+                f"text ({mixed[0].strip()!r}); put the comment on a line of "
+                f"its own, or edit it by hand")
         dropped = [lines[i].strip() for i in range(keep, end)
                    if walk[i - first].touches]
         if dropped:
@@ -348,7 +376,7 @@ def run_lead(batch: vw.Batch, rel: str, body: list[str],
                     or vw.LIST_RE.match(above) and vw.LIST_RE.match(body[0]))
         new_text = vw.place(doc, end, body, glue=glue)
         verb = "WOULD-ADD"
-    check_rest_unchanged(rel, text, new_text)
+    check_rest_unchanged(batch, rel, text, new_text)
     batch.put(rel, new_text)
     batch.row(verb, rel, "§(lead)", f"{len(body)} lines")
 
@@ -447,7 +475,7 @@ def run_section(batch: vw.Batch, b: Block) -> None:
         new_text = vw.place(doc, at, body, glue=glue,
                             tight=bool(vw.LIST_RE.match(body[0])))
         verb = "WOULD-ADD"
-    check_rest_unchanged(rel, text, new_text)
+    check_rest_unchanged(batch, rel, text, new_text)
     batch.put(rel, new_text)
     batch.row(verb, rel, f"§{ns.heading}", f"{len(body)} lines")
 
