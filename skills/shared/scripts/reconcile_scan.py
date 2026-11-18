@@ -205,6 +205,10 @@ def _created_this_session(note: Note, number: int | None, chapter: str | None) -
     return same_chapter(chapter, _chapter(note.fm.get("createdSession")))
 
 
+def _campaign_wide(note: Note) -> bool:
+    return note.type.replace("_", "-") in CAMPAIGN_WIDE_TYPES
+
+
 def _pre_play(note: Note) -> bool:
     """Made before play: a blank, null or 0 `createdSession`. No key at all is
     a note never stamped, not one made before play."""
@@ -321,7 +325,9 @@ def survey(vault: Path, wrap_arg: str) -> Survey:
                     and note.type not in STRUCTURAL_TYPES:
                 linked.append(note)
     reviewed = [*linked, *_companions(linked, by_rel)]
-    drafts = [n for n in reviewed if n.fm.get("canon_status") == "DRAFT"]
+    drafts = [n for n in reviewed if n.fm.get("canon_status") == "DRAFT"
+              # a campaign-wide stub made before play holds no fact: never promoted
+              and not (_campaign_wide(n) and _pre_play(n) and n.fm.get("status") == "stub")]
     chapter = _chapter(index.fm.get("chapter"), index.rel) if index else None
     new = [n for n in drafts if _created_this_session(n, number, chapter)]
     preplay = [n for n in drafts if n not in new and _pre_play(n)]
@@ -329,7 +335,7 @@ def survey(vault: Path, wrap_arg: str) -> Survey:
     # The brief and the world notes belong to the whole campaign: once play
     # starts they are canon, whether or not this Wrap-Up links them (#717).
     wide = [n for n in notes
-            if n.type.replace("_", "-") in CAMPAIGN_WIDE_TYPES
+            if _campaign_wide(n)
             and n.fm.get("canon_status") == "DRAFT" and _pre_play(n)
             and n.fm.get("status") != "stub"       # a stub holds no fact
             and not is_record_copy(n.rel) and n not in new and n not in preplay]
@@ -347,16 +353,18 @@ def survey(vault: Path, wrap_arg: str) -> Survey:
                for n in older)
     # Untagged markers are of unknown session, so they block with this one's.
     held = []
+    # The campaign-wide notes about to be promoted are read for markers too.
+    checked = [*reviewed, *(n for n in wide if n not in reviewed)]
     out.append(f"unverified in linked notes: "
-               f"{sum(len(unverified_markers(n.text)) for n in reviewed)}")
-    for n in reviewed:
+               f"{sum(len(unverified_markers(n.text)) for n in checked)}")
+    for n in checked:
         for mark in unverified_markers(n.text):
             other = number is not None and mark.from_session(number, chapter) is False
             out.append(f"  {n.rel}:{mark.line}: {_marker(mark)}"
                        + (" [another session]" if other else ""))
             if not other:
                 held.append(mark)
-    spoilers = [(n.rel, line, words) for n in reviewed for line, words in open_spoilers(n.text)]
+    spoilers = [(n.rel, line, words) for n in checked for line, words in open_spoilers(n.text)]
     out.append(f"open spoilers: {len(spoilers)}")
     out.extend(f"  {rel}:{line}: {words}" for rel, line, words in spoilers)
 

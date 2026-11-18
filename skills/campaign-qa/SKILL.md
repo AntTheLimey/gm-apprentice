@@ -80,6 +80,8 @@ follow-up recommendations.
 - Escaped Quotes: a frontmatter value that is only `\"\"` is an empty value
   written wrong, never a choice. `gma vault-check <vault> frontmatter --fix`
   rewrites each to `""`; run it, report the notes it changed, ask nothing.
+  In a folder or chapter audit add `--folder "<the selected folder>"`; the
+  whole vault only for a whole-vault audit.
 - **Severity:**
   - **Critical** — visibly breaks at the table (dead NPC alive,
     timeline impossibility players can spot).

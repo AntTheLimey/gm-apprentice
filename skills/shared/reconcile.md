@@ -27,7 +27,8 @@ If it passes, offer:
 
 > "Straightforward session — no conflicts found, no unplayed
 > prep. Settle the threads, then promote the Wrap-Up and {the DRAFTs
-> created or played this session, by name} to AUTHORITATIVE? (y/n)"
+> created or played this session, and the campaign-wide notes made before
+> play (the adventure brief, `_World/` notes), by name} to AUTHORITATIVE? (y/n)"
 
 On yes, step 5.5 first (a thread write that fails stops here: the
 session stays at `wrap-up`), then:

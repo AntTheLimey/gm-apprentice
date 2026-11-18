@@ -338,3 +338,48 @@ def test_escaped_empty_comment_needs_a_space():
     assert vl.escaped_empty_keys('---\nvoice: \\"\\"#c\n---\n')[0] == []
     keys, fixed = vl.escaped_empty_keys('---\nvoice: \\"\\" # c\n---\n', fix=True)
     assert keys == ["voice"] and 'voice: "" # c' in fixed
+
+
+# --- CodeRabbit round on #724 -----------------------------------------------------
+
+def test_entity_new_escaped_quotes_with_a_comment_line_and_a_real_continuation(tmp_path):
+    subprocess.run([sys.executable, str(SCRIPTS / "vault_scaffold.py"), str(tmp_path),
+                    "--name", "T", "--no-system", "--write"],
+                   capture_output=True, text=True, check=True)
+
+    def write(name, head):
+        run = subprocess.run(
+            [sys.executable, str(SCRIPTS / "vault_write.py"), str(tmp_path),
+             "entity-new", "--type", "npc", "--name", name, "--write"],
+            input=f"---\n{head}---\n\n## Overview\n\nx\n", capture_output=True, text=True)
+        assert run.returncode == 0, run.stdout + run.stderr
+        return (tmp_path / f"Characters/NPCs/{name}.md").read_text()
+
+    note = write("Cee", f"voice: {ESC}\n  # none yet\n")
+    assert 'voice: ""' in note and ESC not in note and "# none yet" in note
+    # a real continuation is refused as bad YAML before it reaches the rewrite
+    run = subprocess.run(
+        [sys.executable, str(SCRIPTS / "vault_write.py"), str(tmp_path), "entity-new",
+         "--type", "npc", "--name", "Dee", "--write"],
+        input=f"---\nvoice: {ESC}\n  and more\n---\n\nx\n", capture_output=True, text=True)
+    assert run.returncode != 0 and not (tmp_path / "Characters/NPCs/Dee.md").exists()
+
+
+def test_a_linked_campaign_wide_stub_is_not_promoted(tmp_path):
+    import reconcile_promote as rp
+    v, wrap = _first_session(tmp_path, {})
+    w = v / wrap
+    w.write_text(w.read_text() + "\nSee [[world-index]] and [[geography]].\n")
+    _r, _o, texts, _e = rp.plan(v, wrap, "2026-11-17")
+    assert "_World/world-index.md" not in texts
+    assert "_World/geography.md" in texts
+    assert "  _World/world-index.md" not in rs.scan(v, wrap)
+
+
+def test_campaign_wide_notes_are_read_for_markers(tmp_path):
+    v, wrap = _first_session(tmp_path, {})
+    brief = v / "Adventures/B/B.md"
+    brief.write_text(brief.read_text() + "\n<!-- UNVERIFIED: the duke -->\n")
+    out = rs.scan(v, wrap)
+    assert "unverified in linked notes: 1" in out
+    assert any(line.startswith("quick path: no") and "UNVERIFIED" in line for line in out)

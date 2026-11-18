@@ -613,10 +613,14 @@ def run(batch: vw.Batch, args: argparse.Namespace, text: str) -> None:
         if key in ("type", "name", "relationships"):
             continue
         value = block[0].partition(":")[2].strip()
-        if len(block) == 1 and vl.is_escaped_empty(vw.strip_comment(value)):
+        # Only blank or comment-only lines after it: a real continuation
+        # (a value on the next line) is left as written.
+        if vl.is_escaped_empty(vw.strip_comment(value)) and all(
+                not ln.strip() or ln.lstrip().startswith("#")
+                for ln in block[1:]):
             # `voice: \"\"` is a four-character string, not an empty one
             # (#715): written as the empty value it was meant to be.
-            block = [f'{key}: ""']
+            block = [f'{key}: ""', *block[1:]]
             value = '""'
             batch.row("INFO", rel, "", f'{key}: escaped quotes (\\"\\") '
                       f'written as ""')
