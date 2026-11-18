@@ -96,7 +96,7 @@ class ExistingSceneTests(PausedBase):
         self.assertEqual(rest, want)
         for keep in ("**Starts it:**", "<!-- gm-only -->", "## GM Notes",
                      "<!-- /gm-only -->", "entities: []",
-                     "scene_type:"):
+                     "maps: []"):
             self.assertIn(keep, after)
 
     def test_second_pause_replaces_in_place(self):

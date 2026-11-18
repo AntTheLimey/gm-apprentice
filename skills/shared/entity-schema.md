@@ -257,8 +257,6 @@ chapter: "[[Chapter 1 - Title]]"
 status: planned            # planned | paused
                            # played | dropped
 played_in: []              # sessions, written by wrap-up
-scene_type:                # optional: investigation | social | combat | chase
-                           # transition | horror | downtime | other
 entities: []
 locations: []
 maps: []

@@ -79,7 +79,6 @@ Checklists for improvisation, not prose to read. Every line is a bullet,
 a table row or a one-line label; the only prose is the read-aloud quote.
 
 ### Scene 1: [Title]
-**Type:** investigation | social | combat | chase | transition | horror | downtime | other
 **Situation:** *(required)* One line. What is happening when the scene
 opens — a thing in motion, not a theme.
 **Starts it:** *(required)* One line. The named NPC or household schedule
@@ -105,7 +104,7 @@ from *this* PC.
 <!-- Add Scene 2, Scene 3 ... with the same structure. A routing or hub
      scene (a menu of where the party is and what is available, not a
      scene) needs neither required label. Mark it with "(routing)" or
-     "(hub)" in its title, `Scene 0`, or `**Type:** transition`. -->
+     "(hub)" in its title, or call it `Scene 0`. -->
 
 ### [[Scene Note Title]]
 **Purpose:** A scene already written as a scene note: one line on why.

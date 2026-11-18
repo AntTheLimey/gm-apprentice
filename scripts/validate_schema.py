@@ -4,7 +4,7 @@ Validate campaign entity frontmatter against the schema defined in entity-schema
 
 Checks:
 - Required fields exist per entity type
-- Enum values are valid (canon_status, status, scene_type, etc.)
+- Enum values are valid (canon_status, status, etc.)
 - Universal temporal fields are present where expected
 
 Usage:

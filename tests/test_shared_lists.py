@@ -54,10 +54,6 @@ PROSE: list[tuple[str, str, frozenset[str] | set[str]]] = [
      r"\| `canon_status` \| ([A-Z /]+) —", sr.CANON_STATUS_VALUES),
     # Scenes
     ("shared/entity-schema.md",
-     r"^scene_type: +# optional: (.+\n +# .+)$", sr.SCENE_TYPES),
-    ("shared/templates/session-plan.md", r"^\*\*Type:\*\* (.+)$", sr.SCENE_TYPES),
-    ("session-prep/SKILL.md", r"^\*\*Type:\*\* (.+)$", sr.SCENE_TYPES),
-    ("shared/entity-schema.md",
      r"^status: planned {12}# (.+\n +# .+)$", sr.SCENE_STATUS),
     ("shared/session-principles.md", r"Scene status:\n`([^`]+)`", sr.SCENE_STATUS),
     # NPC and PC status
@@ -106,8 +102,8 @@ class ProseListsTest(unittest.TestCase):
         self.assertIn(re.search(r"^status: (\S+)", text, re.M).group(1), sr.SCENE_STATUS)
         self.assertEqual(_words(re.search(r"^status: planned +# (.+)$", text, re.M).group(1)),
                          set(sr.SCENE_STATUS))
-        self.assertEqual(_words(re.search(r"^scene_type: +# optional: (.+)$", text,
-                                          re.M).group(1)), set(sr.SCENE_TYPES))
+        # Scene types are gone (#759): nothing read them.
+        self.assertNotRegex(text, r"(?m)^scene_type:")
 
 
 class OntologyListsTest(unittest.TestCase):

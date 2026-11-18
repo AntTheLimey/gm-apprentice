@@ -1,7 +1,6 @@
 ---
 type: scene
 canon_status: AUTHORITATIVE
-scene_type: combat
 status: played
 session: 4
 ---
