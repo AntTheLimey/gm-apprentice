@@ -237,7 +237,7 @@ def _first_session(tmp_path, extra):
 def test_scan_lists_campaign_wide_notes_unlinked(tmp_path):
     v, wrap = _first_session(tmp_path, {})
     out = rs.scan(v, wrap)
-    assert "campaign-wide draft notes made before play: 3" in out
+    assert "campaign-wide draft notes made before play: 2" in out
     assert "  Adventures/B/B.md (campaign-wide, made before play)" in out
     assert not any("NPCs/Tom.md" in line and "campaign-wide" in line for line in out)
     assert "pre-play draft entities played this session: 0" in out
@@ -248,7 +248,7 @@ def test_promote_takes_campaign_wide_not_ordinary_unlinked(tmp_path):
     v, wrap = _first_session(tmp_path, {})
     rows, _orig, texts, errors = rp.plan(v, wrap, "2026-11-17")
     assert errors == 0
-    assert {"Adventures/B/B.md", "_World/geography.md", "_World/world-index.md"} <= set(texts)
+    assert {"Adventures/B/B.md", "_World/geography.md"} <= set(texts)
     assert "NPCs/Tom.md" not in texts
     # --except still works on them
     rows, _o, texts, _e = rp.plan(v, wrap, "2026-11-17", ["geography"])
@@ -263,6 +263,78 @@ def test_authoritative_brief_is_untouched(tmp_path):
             "---\ntype: adventure-brief\ncanon_status: AUTHORITATIVE\ncreatedSession: \"\"\n---\n"})
     _rows, _o, texts, _e = rp.plan(v, wrap, "2026-11-17")
     assert "Adventures/B/B.md" not in texts
-    assert "campaign-wide draft notes made before play: 2" in rs.scan(v, wrap)
+    assert "campaign-wide draft notes made before play: 1" in rs.scan(v, wrap)
     assert not any("campaign-wide" in line for line in rs.scan(vault_with(
         tmp_path / "plain", {"Wrap.md": "---\ntype: session_wrap\n---\n"}), "Wrap.md"))
+
+
+# --- reviewer follow-ups (#717, #715) ---------------------------------------------
+
+def test_update_skips_a_note_touched_in_play_and_is_crlf_safe_and_idempotent(tmp_path):
+    world = ("---\r\ntype: world_domain\r\ndomain: {d}\r\nstatus: active\r\n"
+             "canon_status: DRAFT\r\n{extra}asOfSession: \"\"\r\n---\r\n\r\n## Overview\r\n")
+    v = vault_with(tmp_path, {
+        "_World/a.md": world.format(d="a", extra=""),
+        "_World/played.md": world.format(d="p", extra="source: play\r\n")})
+    (item,) = mv.find_scaffold_pre_play(v)
+    assert item.lines == ['stamp _World/a.md as made before play (createdSession: "")']
+    item.apply(None)
+    data = (v / "_World/a.md").read_bytes().decode()
+    assert 'createdSession: ""\r\n' in data and "\n" not in data.replace("\r\n", "")
+    assert (v / "_World/played.md").read_bytes().decode() == world.format(
+        d="p", extra="source: play\r\n")
+    once = data
+    assert mv.find_scaffold_pre_play(v) == []
+    assert (v / "_World/a.md").read_bytes().decode() == once
+
+
+def test_entity_new_brief_with_session_is_not_pre_play(tmp_path):
+    subprocess.run([sys.executable, str(SCRIPTS / "vault_scaffold.py"), str(tmp_path),
+                    "--name", "T", "--no-system", "--write"],
+                   capture_output=True, text=True, check=True)
+    run = subprocess.run(
+        [sys.executable, str(SCRIPTS / "vault_write.py"), str(tmp_path), "entity-new",
+         "--type", "adventure-brief", "--name", "Late", "--session", "5", "--write"],
+        input=("---\nscope: one-shot\nsystem: undecided\nsessions_estimated: \"1\"\n"
+               "continuation_type: new\nadventure_shape: linear\n---\n\n"
+               "## Premise\n\nHi\n\n### The Truth\n\nSecret\n"),
+        capture_output=True, text=True)
+    assert run.returncode == 0, run.stdout + run.stderr
+    fm = vl.extract_frontmatter((tmp_path / "Adventures/Late/Late.md").read_text())
+    assert vl.parse_session_number(fm["createdSession"]) == 5
+    assert not vl.before_play(fm["createdSession"])
+
+
+def test_except_lasts_one_run_and_a_session_number_leaves_the_set(tmp_path):
+    import reconcile_promote as rp
+    v, wrap = _first_session(tmp_path, {})
+    _r, _o, texts, _e = rp.plan(v, wrap, "2026-11-17", ["geography"])
+    assert "_World/geography.md" not in texts
+    # nothing was written, and the next scan lists it again
+    assert "  _World/geography.md (campaign-wide, made before play)" in rs.scan(v, wrap)
+    kept_row = rp.plan(v, wrap, "2026-11-17", ["geography"])[0][0]
+    assert "listed again next time" in kept_row
+    geo = v / "_World/geography.md"
+    geo.write_text(geo.read_text().replace('createdSession: ""', "createdSession: 1"))
+    assert "_World/geography.md" not in "\n".join(rs.scan(v, wrap))
+
+
+def test_a_stub_is_not_campaign_wide(tmp_path):
+    import reconcile_promote as rp
+    v, wrap = _first_session(tmp_path, {})
+    _r, _o, texts, _e = rp.plan(v, wrap, "2026-11-17")
+    assert "_World/world-index.md" not in texts          # status: stub
+    assert "  _World/world-index.md (campaign-wide, made before play)" not in rs.scan(v, wrap)
+
+
+def test_quoted_wrapped_escapes_are_deliberately_not_empty():
+    # `'\"\"'` and `"\"\""` are real two-character strings, not the escaped bare form.
+    for line in ("voice: '\\\"\\\"'", 'voice: "\\"\\""'):
+        assert vl.voice_read(f"---\n{line}\n---\n") != ""
+        assert vl.escaped_empty_keys(f"---\n{line}\n---\n")[0] == []
+
+
+def test_escaped_empty_comment_needs_a_space():
+    assert vl.escaped_empty_keys('---\nvoice: \\"\\"#c\n---\n')[0] == []
+    keys, fixed = vl.escaped_empty_keys('---\nvoice: \\"\\" # c\n---\n', fix=True)
+    assert keys == ["voice"] and 'voice: "" # c' in fixed

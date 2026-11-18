@@ -64,7 +64,9 @@ and keep the adventure's in `title`). It places sections and does
 not read them: what a Public section says is still yours to keep to
 the pitch.
 
-- **Existing vault:** `<vault>` is the vault. Use `[[wiki-links]]`
+- **Existing vault:** `<vault>` is the vault. Once sessions exist,
+  add `--session <number>` to the command: a brief written mid-campaign
+  is stamped with that session, never as made before play. Use `[[wiki-links]]`
   for existing entities. Flag entity updates the adventure implies.
 - **Greenfield:** `<vault>` is the CWD: Step 3 builds the vault
   around the brief.
@@ -195,7 +197,8 @@ question per trigger — so file them without re-asking:
    does (`inactive`: a domain the campaign has set aside); the
    vault check refuses any other word
    A domain file keeps the template's `createdSession: ""` (made
-   before play), so the first session's reconcile can promote it
+   before play), so the next reconcile promotes it; once sessions
+   exist, write the current session number there instead
 3. Unresolved three-state flags (deferred heritage prompts and
    the like) go to `_World/_flags.md`
 

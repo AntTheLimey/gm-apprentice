@@ -24,8 +24,8 @@ from template_compare import compare, summary
 from vault_check import (PLAY_RECORD_TYPES, WRAP_TYPES, publish_list_sets,
                          shared_threads_tool_too_old,
                          wrapup_filename_findings)
-from vaultlib import (WRAP_UP_TYPES, effectively_empty, StateUnreadable, campaign_overview,
-                      entity_type, extract_frontmatter, is_active_pc, out_of_play,
+from vaultlib import (WRAP_UP_TYPES, StateUnreadable, campaign_overview,
+                      effectively_empty, entity_type, extract_frontmatter, is_active_pc, out_of_play,
                       set_key, frontmatter_span,
                       parse_version, plugin_version,
                       read_held, read_stamp, settings,
@@ -990,6 +990,7 @@ def _unstamped_scaffold(fm: list[str], _rel: str) -> bool:
         return False
     vals = extract_frontmatter("".join(["---\n", *fm, "---\n"])) or {}
     return (vals.get("canon_status") == "DRAFT"
+            and vals.get("source") != "play"
             and not any(CREATED_KEY_RE.match(line) for line in fm)
             and effectively_empty(vals.get("asOfSession")))
 
@@ -1385,5 +1386,5 @@ VAULT_CHECKS: list[Check] = [
     Check("scaffold-pre-play", "1.12.52", 3,
           "scaffold notes made before play", find_scaffold_pre_play,
           kind="bookkeeping",
-          plain=("Marked the adventure brief and world notes the Midwife wrote before play as made before play, so the stale-draft check stops warning about them and the first session's reconcile can promote them.")),
+          plain=("Marked the adventure brief and world notes the Midwife wrote before play as made before play, so the stale-draft check can date them and the next reconcile promotes them. Until it runs, an old one may show as a stale draft made before play.")),
 ]

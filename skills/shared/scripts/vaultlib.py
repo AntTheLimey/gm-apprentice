@@ -856,7 +856,7 @@ def effectively_empty(value: Any) -> bool:
 
 
 ESCAPED_EMPTY_LINE_RE = re.compile(
-    r"""^([^\s#:][^:]*):([ \t]*)\\(["'])\\\3([ \t]*(?:#.*)?)$""")
+    r"""^([^\s#:][^:]*):([ \t]*)\\(["'])\\\3((?:[ \t]+#.*)?[ \t]*)$""")
 
 
 def escaped_empty_keys(text: str, fix: bool = False) -> tuple[list[str], str]:

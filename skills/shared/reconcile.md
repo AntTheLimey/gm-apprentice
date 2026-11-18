@@ -203,8 +203,11 @@ On GM approval:
 3. `gma reconcile-promote <vault> "<wrap-up>" --reconciled YYYY-MM-DD`,
    then with `--write`: the Wrap-Up, the index (`reviewed`) and the
    scan's DRAFTs created or played this session and its campaign-wide notes
-   made before play (the adventure brief, `_World/`). One of those the GM
-   has not confirmed stays DRAFT: `--except "<note>"` (repeatable). An
+   made before play (the adventure brief, `_World/`; a stub holds no fact and
+   is left out). One of those the GM has not confirmed stays DRAFT:
+   `--except "<note>"` (repeatable; for one run only, so a campaign-wide
+   note kept as a draft is listed again next time, until its
+   `createdSession` holds a session number). An
    older DRAFT the GM confirms: `gma stamp-entities <vault> <file> --promote`.
 
 Do the bookkeeping now rather than leaving the GM a list. Hand off to

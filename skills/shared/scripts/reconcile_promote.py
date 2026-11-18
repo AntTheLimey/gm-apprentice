@@ -75,7 +75,7 @@ def plan(vault: Path, wrap_arg: str, reconciled: str,
         (found.wrap.rel, ["--promote", "--reconciled", reconciled]),
         (found.index.rel, ["--set", "status=reviewed"]),
         *((n.rel, ["--promote"]) for n in listed if n.rel not in kept)]
-    rows: list[str] = [f"KEPT\t{rel}\tleft DRAFT (--except)"
+    rows: list[str] = [f"KEPT\t{rel}\tleft DRAFT (--except); a campaign-wide note is listed again next time"
                        for rel in sorted(kept)]
     originals: dict[str, str] = {}
     texts: dict[str, str] = {}

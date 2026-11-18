@@ -331,6 +331,7 @@ def survey(vault: Path, wrap_arg: str) -> Survey:
     wide = [n for n in notes
             if n.type.replace("_", "-") in CAMPAIGN_WIDE_TYPES
             and n.fm.get("canon_status") == "DRAFT" and _pre_play(n)
+            and n.fm.get("status") != "stub"       # a stub holds no fact
             and not is_record_copy(n.rel) and n not in new and n not in preplay]
     older = [n for n in older if n not in wide]
     out.append(f"linked entities: {len(linked)}")
