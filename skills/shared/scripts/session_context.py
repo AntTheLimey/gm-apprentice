@@ -557,6 +557,12 @@ _PHRASE_RE = re.compile(
     r"(?<![\w'\u2019])[A-Z][\w'\u2019]*(?:[ \t]+[A-Z][\w'\u2019]*)+")
 
 
+# The capitalised word that follows a given name, past a particle.
+_NEXT_NAME_RE = re.compile(
+    r"[ \t]+(?:(?:de|du|des|da|di|del|della|von|van|der|den|la|le|of|bin|ibn|al)"
+    r"[ \t]+)?([A-Z][\w'\u2019-]*)")
+
+
 class NameIndex:
     """The names the vault knows, for the last matching tier (#718): a
     thread and a Wrap-Up line that name the same person, place or thing
@@ -583,6 +589,7 @@ class NameIndex:
         self._any_name: set[str] = set()    # every note's names, any type
         words: dict[str, set[str]] = {}     # single word, as written -> notes
         given: dict[str, set[str]] = {}     # npc/creature title word
+        self._own: dict[str, set[str]] = {}  # note -> its name words, casefolded
         for rel, _text, fm in files:
             kind = entity_type(fm)
             self._any_name.update(
@@ -597,6 +604,8 @@ class NameIndex:
                 if not name:
                     continue
                 owners.setdefault(normalize(name), set()).add(rel)
+                self._own.setdefault(rel, set()).update(
+                    w.casefold() for w in name.split())
                 if (len(name.split()) == 1 and len(name) >= 3
                         and name.casefold() not in _THREAD_STOP):
                     words.setdefault(name, set()).add(rel)
@@ -606,6 +615,9 @@ class NameIndex:
                     if (len(w) >= 3 and w[:1].isupper()
                             and w.casefold() not in _THREAD_STOP):
                         given.setdefault(w, set()).add(rel)
+        # A given name only (not a one-word title or alias): "Dorothea" of
+        # "Miss Dorothea Bexley" is not "Dorothea de Courlande" (#734).
+        self._given = {w for w in given if w not in words}
         for w, rels in given.items():
             words.setdefault(w, set()).update(rels)
         self._links = {n: next(iter(r)) for n, r in owners.items()
@@ -647,6 +659,15 @@ class NameIndex:
             self._everywhere = set.intersection(*per)
             self._cache.clear()
 
+    def _other_person(self, m: re.Match[str], bare: str) -> bool:
+        """Whether the given name `m` starts someone else's full name: the
+        capitalised word after it (past a particle: de, von, van, of...)
+        is none of the note's own name words."""
+        after = _NEXT_NAME_RE.match(bare, m.end())
+        owner = self._words.get(m.group(0))
+        return bool(after and owner
+                    and after.group(1).casefold() not in self._own.get(owner, set()))
+
     def mentions(self, text: str) -> set[str]:
         """The notes `text` names (by link target, alias or bare name), and
         `phrase:<words>` for each proper-noun phrase no note is named."""
@@ -666,6 +687,9 @@ class NameIndex:
         for rx in (self._multi_re, self._word_re):
             for m in (rx.finditer(bare) if rx else ()):
                 # The whole match first: a title may end in 's ("St James's").
+                if (rx is self._word_re and m.group(0) in self._given
+                        and self._other_person(m, bare)):
+                    continue
                 for name in (m.group(0), re.sub(r"['\u2019]s$", "", m.group(0))):
                     owner = (self._links.get(normalize(name)) if rx is
                              self._multi_re else self._words.get(name))

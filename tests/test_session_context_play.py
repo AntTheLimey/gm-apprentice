@@ -705,6 +705,19 @@ class ThreadNameTierTests(unittest.TestCase):
         self.assertEqual(idx.mentions("The Ferry is late."), set())
         self.assertEqual(idx.mentions("Down the Pale Road's end"), {"phrase:pale road"})
 
+    def test_a_given_name_in_someone_elses_full_name_is_not_the_npc(self):
+        # #734: "Dorothea" of Miss Dorothea Bexley is not Dorothea de Courlande.
+        tmp = self.make(["x"], "#### Unresolved Threads\n\n- a\n",
+                        extra_notes=[("Miss_Dorothea_Bexley", "npc", "")])
+        idx = sc.NameIndex(load_files(tmp))
+        her = "Miss_Dorothea_Bexley.md"
+        # (Another person's full name may still be a shared phrase, #733.)
+        self.assertNotIn(her, idx.mentions("an introduction to Dorothea de Courlande"))
+        self.assertNotIn(her, idx.mentions("Dorothea Courlande signed"))
+        self.assertIn(her, idx.mentions("Dorothea Bexley wrote"))
+        self.assertEqual(idx.mentions("Dorothea wrote back"), {her})
+        self.assertEqual(idx.mentions("Dorothea's letter came"), {her})
+
     def test_a_decomposed_file_name_matches_composed_text(self):
         import unicodedata
         tmp = self.make(

@@ -14,6 +14,7 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 ### Fixed
 
 - The prep Threads list matches a thread to a Wrap-Up line that shares a place or other proper name no note is named for, such as "the Widow's Stair" (#733).
+- An NPC's given name no longer counts as that NPC inside someone else's full name: "Dorothea" of Miss Dorothea Bexley is not "Dorothea de Courlande" (#734).
 
 ## [1.12.58] — 2026-11-17
 
