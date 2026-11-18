@@ -689,6 +689,22 @@ class ThreadNameTierTests(unittest.TestCase):
         # An ordinary possessive still names its note.
         self.assertEqual(idx.mentions("Durgan Flintmere's cart"), {"Durgan Flintmere.md"})
 
+    def test_a_place_phrase_no_note_carries_matches(self):
+        # #733: Snowbound's Gilt thread shares only a PC's name and a place
+        # described inside another note.
+        tmp = self.make(
+            ["How did a cloth merchant heal Brannoc, and how does he know the Pale Road?"],
+            "#### Unresolved Threads\n\n- **Gilt's \"luck\".** Gilt healed Brannoc "
+            "with a murmured prayer; he named the left fork on the Pale Road.\n")
+        self.assertIn("first~1", self.line(tmp, "How did a cloth merchant"))
+
+    def test_a_pc_name_or_one_capitalised_word_is_no_phrase(self):
+        tmp = self.make(["x"], "#### Unresolved Threads\n\n- a\n")
+        idx = sc.NameIndex(load_files(tmp))
+        self.assertEqual(idx.mentions("Ilsa Marrow crossed the Bridge."), set())
+        self.assertEqual(idx.mentions("The Ferry is late."), set())
+        self.assertEqual(idx.mentions("Down the Pale Road's end"), {"phrase:pale road"})
+
     def test_a_decomposed_file_name_matches_composed_text(self):
         import unicodedata
         tmp = self.make(

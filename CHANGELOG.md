@@ -9,6 +9,12 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.62] — 2026-11-18
+
+### Fixed
+
+- The prep Threads list matches a thread to a Wrap-Up line that shares a place or other proper name no note is named for, such as "the Widow's Stair" (#733).
+
 ## [1.12.58] — 2026-11-17
 
 ### Fixed

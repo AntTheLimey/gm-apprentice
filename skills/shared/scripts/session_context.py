@@ -552,6 +552,11 @@ _NAMED_TYPES = frozenset({"npc", "creature", "faction", "organization",
 _GIVEN_NAME_TYPES = frozenset({"npc", "creature"})
 
 
+# Two or more capitalised words in a row: "Widow's Stair", "The Pale Road".
+_PHRASE_RE = re.compile(
+    r"(?<![\w'\u2019])[A-Z][\w'\u2019]*(?:[ \t]+[A-Z][\w'\u2019]*)+")
+
+
 class NameIndex:
     """The names the vault knows, for the last matching tier (#718): a
     thread and a Wrap-Up line that name the same person, place or thing
@@ -567,16 +572,22 @@ class NameIndex:
     sessions, plans or scenes). A name two notes share names neither. A
     trailing `'s` is allowed. An entity that every Wrap-Up names, with
     three or more of them, is not evidence (the home town, the party's
-    faction) and is left out. `lines` holds each in-scope Wrap-Up's
+    faction) and is left out. A phrase of two or more capitalised words
+    that no note is named for ("the Widow's Stair") counts as a name too
+    (#733). `lines` holds each in-scope Wrap-Up's
     Unresolved Threads, PC Carry-Forward and Pending Consequences bullets;
     `mentions` is asked once per text."""
 
     def __init__(self, files, chapter=None):
         owners: dict[str, set[str]] = {}    # casefolded full name -> notes
+        self._any_name: set[str] = set()    # every note's names, any type
         words: dict[str, set[str]] = {}     # single word, as written -> notes
         given: dict[str, set[str]] = {}     # npc/creature title word
         for rel, _text, fm in files:
             kind = entity_type(fm)
+            self._any_name.update(
+                normalize(n.replace("_", " ")) for n in
+                [Path(rel).stem, *link_aliases(fm)] if n.strip())
             if kind not in _NAMED_TYPES:
                 continue
             stem = unicodedata.normalize(
@@ -637,7 +648,8 @@ class NameIndex:
             self._cache.clear()
 
     def mentions(self, text: str) -> set[str]:
-        """The notes `text` names: by link target, alias or bare name."""
+        """The notes `text` names (by link target, alias or bare name), and
+        `phrase:<words>` for each proper-noun phrase no note is named."""
         if text in self._cache:
             return self._cache[text]
         text_nfc = unicodedata.normalize("NFC", text)
@@ -660,6 +672,17 @@ class NameIndex:
                     if owner:
                         found.add(owner)
                         break
+        # A proper-noun phrase of two or more capitalised words that no
+        # note is named ("the Widow's Stair", described inside another
+        # note) is evidence too. A note's own name is the tiers above (or,
+        # a PC's or a shared name, deliberately none).
+        for m in _PHRASE_RE.finditer(bare):
+            whole = re.sub(r"^(?:The|A|An)\s+", "", m.group(0))
+            phrase = re.sub(r"['\u2019]s$", "", whole)
+            if (len(phrase.split()) >= 2
+                    and normalize(whole) not in self._any_name
+                    and normalize(phrase) not in self._any_name):
+                found.add("phrase:" + normalize(phrase))
         found -= self._everywhere
         self._cache[text] = found
         return found
