@@ -26,7 +26,10 @@ const { parseNote } = require('../frontmatter');
 const { canonicalNfc } = require('../unicode');
 const {
   playerSafeMarkdown, stubMarked, stubCut, hiddenFieldsOf, publishedFrontmatter, pcHeadingsUnstable, publishMode, isWithheld, stripLeadingH1, gmAliasRewriter,
+  resolveImageEmbeds, resolveWikiLinks, extractSections,
 } = require('../processor');
+const { getRenderer } = require('../templates/pc-registry');
+const { pageText } = require('../note-faults');
 const { createMarks, markKinds, sanitize, markedSpans } = require('../gm-marks');
 const { piecesOfMarkdown, piecesOfValue, piecesOfHtml, fieldRunsOf, tableRunsOf, textsOfMarkdown, wordsOf, stringsOfValue, MIN_WORDS } = require('./text');
 const { TEXT_EXT, fileText } = require('./match');
@@ -55,6 +58,31 @@ function printedRows(page, wrapUp = null) {
   const ctx = { hubWrapUps: { get: () => wrapUp } };
   try { return rowsFor(page, ctx).filter(([, text]) => text).map(([label, text]) => `${label} ${text}`); } catch (e) { return []; }
 }
+// The text of a PC's character sheet, made as the build makes it (build.js, case 'pc') from the note's published body
+// and fields: each part the sheet puts on the page (the sheet, its combat, spells and equipment tabs, its vitals), as
+// the page reads. A sheet prints the note's own rows in its own order (D&D's Bonus action block runs a feature's name
+// into its summary), so a hidden line with the same rules words (an NPC stat block's "Flurry of Blows (1 Focus).") is
+// shown there from the PC's note, not from the hidden one (#752). Only words of the published body and the sheet's own
+// labels: with sheets off (a PC keep list) the build makes no sheet, and none is read. A sheet that cannot be made here
+// excuses nothing.
+function sheetTexts(shownMd, fields, { system, playerConfig, linkMap, outputPath }) {
+  const renderer = getRenderer(system);
+  if (!renderer) return [];
+  const rules = playerConfig.rules_lists || {};
+  const meta = {
+    system, live: false, tohit: playerConfig.tohit_calculator === 'on',
+    gurpsReference: rules.gurpsReference !== false, cocSkillList: rules.cocSkillList !== false,
+  };
+  let rendered;
+  try {
+    const md = resolveWikiLinks(resolveImageEmbeds(shownMd, {}, outputPath, null, { warn: false }), linkMap, outputPath);
+    rendered = renderer(fields, extractSections(md), meta);
+  } catch (e) { return []; }
+  const parts = typeof rendered === 'string' ? [rendered]
+    : Object.entries(rendered || {}).filter(([key, html]) => /Html$/.test(key) && typeof html === 'string').map(([, html]) => html);
+  return parts.map((html) => pageText(html, { attributes: true })).filter((text) => text.trim());
+}
+
 const HELD_TITLE = 'the title of an unpublished prop';
 const HELD_FIELD = 'a field of an unpublished prop';
 const clip = (s, max = 160) => (s.length > max ? `${s.slice(0, max - 1)}…` : s);
@@ -202,6 +230,8 @@ function collectHidden({ configPath, outputDir = null }) {
       continue;
     }
     const options = { excludeSections, excludeCallouts, frontmatter: fm, pcKeepSections, storyMoments: storyMomentsOn(playerConfig) };
+    // As the build picks a PC page (build.js, case 'pc').
+    const isPc = fm.type === 'pc';
     for (const source of [page.markdown, page.storyMarkdown].filter((t) => typeof t === 'string')) {
       let text = sanitize(source);
       let shownText = source;
@@ -232,6 +262,9 @@ function collectHidden({ configPath, outputDir = null }) {
         // next.
         if (source === page.markdown) for (const title of titles) visible.push([title, ...textsOfMarkdown(stripLeadingH1(shownMd), { headings: true })].join('\n'));
         visible.push(...tableRunsOf(shownMd));
+        if (source === page.markdown && isPc && !pcKeepSections) {
+          visible.push(...sheetTexts(shownMd, shownFields, { system: playerConfig.system, playerConfig, linkMap, outputPath: page.outputPath }));
+        }
       }
     }
   }

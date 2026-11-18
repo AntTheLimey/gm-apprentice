@@ -116,6 +116,7 @@ decision rather than pure score.
 
 ## Completed
 
+- ~~The leak check flags a PC sheet's own class features~~ — the sheet's text, made from the PC's own note, counts as already shown, so a hidden NPC stat block with the same rules words is no finding (#752, v1.12.77, tool 1.70.29)
 - ~~Wrap-up leaves the Stat Sheet vitals behind Current Status~~ — a batch `sheet` block writes them with flush's writers, and the party board shows them (#749, v1.12.74, tool 1.70.28)
 - ~~`npc-stats` asks for a stat block for an NPC whose hidden fate is Dead~~ — it reads the current fate in Behind the Scenes, as prep does (#747, v1.12.73)
 - ~~The PC roster rule reads an empty page~~ — `active-pcs` gives player and status from the PC notes; the roster note is retired and the site makes its own party page (#729, v1.12.71, tool 1.70.27)

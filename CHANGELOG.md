@@ -9,6 +9,12 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.77] — 2026-11-18
+
+### Fixed
+
+- The leak check no longer flags a PC sheet for printing its own class features or spells when a hidden NPC stat block uses the same words (a Monk PC's "Flurry of Blows (1 Focus)" against a monk villain's): it reads the sheet as the build makes it from the PC's own note, and hidden text that note does not hold is still found (#752, tool 1.70.29).
+
 ## [1.12.74] — 2026-11-18
 
 ### Added
