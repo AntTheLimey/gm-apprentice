@@ -116,6 +116,7 @@ decision rather than pure score.
 
 ## Completed
 
+- ~~`section --lead` on a paused scene writes above the snapshot and leaves the real lead~~ — the lead is the text below the `## Paused` section's end line, and below an older scene's `# Title` line; a misread empty lead is refused (#758, v1.12.81)
 - ~~`entity-new` can't make a PC~~ — `--type pc` takes the vault's system sheet and files it in the PC folder; chargen and wrap-up use it (#750, v1.12.80)
 - ~~Session prep railroads the players~~ — prep asks the GM about the world, never what the players will do: player-driven outcomes are `Do | Then` rows that answer the attempt, every PC gets a hook, and spotlight history counts what the wrap-ups recorded (#719, v1.12.79)
 - ~~`dnd-sheet` ignores Powerful Build, so a goliath's carrying capacity comes out half~~ — a Powerful Build row counts one size up for capacity and drag/lift/push (#751, v1.12.78)
