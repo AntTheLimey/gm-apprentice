@@ -4169,36 +4169,30 @@ PLAN_PEOPLE = frozenset({"pc", "npc", "faction", "organization", "creature"})
 PLAN_PLACES = frozenset({"location"})
 
 
-def plan_cast(batch: Batch, body: str, people: list[str], places: list[str],
-              target: str) -> tuple[list[str], list[str], str | None]:
-    """(participants, locations, the Campaign Overview's name) for a plan.
+class NoteLinks:
+    """Names and links resolved to notes, the way a link resolves: by
+    vault path when it has a folder, else by file name, and by alias only
+    when no file has that name. Built from the vault as the batch has left
+    it: a note an earlier block made or changed is read as it will be
+    written, not as the disk has it. `plan_cast` and `stamp-entities`
+    (#761) write their link lists through it."""
 
-    The two lists hold the notes the caller names with --participant and
-    --location, then the notes the body links to: a link is the writer's
-    own word for who and where, a name in prose is not (#464: "King" and
-    "Crow" are English words too). Each is written as the note's file
-    name (its vault path when two notes share one). A name resolves as a link does: by vault path when it has a
-    folder, else by file name, and by alias only when no file has that
-    name. One the caller gives that no note has is kept, with a warning;
-    one two notes share is refused, and a body link two notes share is
-    left out with a warning."""
-    stems: dict[str, list[str]] = {}
-    aliases: dict[str, list[str]] = {}
-    kinds: dict[str, str] = {}
-    # The vault as this batch has left it: a note an earlier block made or
-    # changed is read as it will be written, not as the disk has it.
-    for rel in sorted(batch._files().values()):
-        if is_record(rel) or vl.is_skipped_path(rel):
-            continue
-        text = batch.read(rel)
-        kinds[rel] = vl.entity_type(vl.extract_frontmatter(text) or {})
-        stems.setdefault(vl.normalize(Path(rel).stem), []).append(rel)
-        for alias in vl.frontmatter_aliases(text):
-            aliases.setdefault(vl.normalize(alias), []).append(rel)
-    overview = vl.campaign_overview((rel, {"type": kind})
-                                    for rel, kind in kinds.items())
+    def __init__(self, batch: Batch) -> None:
+        self.stems: dict[str, list[str]] = {}
+        self.aliases: dict[str, list[str]] = {}
+        self.kinds: dict[str, str] = {}
+        for rel in sorted(batch._files().values()):
+            if is_record(rel) or vl.is_skipped_path(rel):
+                continue
+            text = batch.read(rel)
+            self.kinds[rel] = vl.entity_type(
+                vl.extract_frontmatter(text) or {})
+            self.stems.setdefault(vl.normalize(Path(rel).stem),
+                                  []).append(rel)
+            for alias in vl.frontmatter_aliases(text):
+                self.aliases.setdefault(vl.normalize(alias), []).append(rel)
 
-    def find(raw: str) -> list[str]:
+    def find(self, raw: str) -> list[str]:
         """The live notes a link body or a name means."""
         path = re.split(r"[#^]", vl.alias_split(raw), maxsplit=1)[0].strip()
         if path.casefold().endswith(".md"):
@@ -4207,24 +4201,29 @@ def plan_cast(batch: Batch, body: str, people: list[str], places: list[str],
             # A path says which note: when no note is there, none is
             # meant, least of all another folder's note of that name.
             want = vl.normalize(path.strip("/"))
-            return sorted(rel for rel in kinds
+            return sorted(rel for rel in self.kinds
                           if ("/" + vl.normalize(rel[:-3])).endswith(
                               "/" + want))
         name = vl.link_target(raw)
-        return sorted(stems.get(name) or set(aliases.get(name, ())))
+        return sorted(self.stems.get(name) or set(self.aliases.get(name, ())))
 
-    def link_to(rel: str) -> str:
+    def link_to(self, rel: str) -> str:
         """What a link to `rel` is written as: its file name, or its
         vault path when another note has that file name."""
         stem = Path(rel).stem
-        return stem if len(stems[vl.normalize(stem)]) == 1 else rel[:-3]
+        return stem if len(self.stems[vl.normalize(stem)]) == 1 else rel[:-3]
 
-    def named(raw: str, flag: str, want: frozenset[str]) -> str:
+    def named(self, raw: str, flag: str, want: Collection[str] | None,
+              warn: Callable[[str], None]) -> str:
+        """The link body for a name or link the caller gives. One no note
+        has is kept as written, with a warning (a red link is the GM's
+        to-do); one two notes share is refused. `want` is the types the
+        note may be, or None for any: another type is a warning."""
         value = bare_link(raw)
         if not value or re.search(r'["\r\n]', value):
             raise WriteError(f"{flag} {raw!r} cannot be a link "
                              f"(no quote or line break)")
-        hits = find(value)
+        hits = self.find(value)
         if len(hits) > 1:
             raise WriteError(
                 f"{flag} {raw!r} matches {', '.join(hits)}: pass the vault "
@@ -4232,13 +4231,35 @@ def plan_cast(batch: Batch, body: str, people: list[str], places: list[str],
         if not hits:
             value = re.split(r"[|#^]", value, maxsplit=1)[0].strip()
             value = value[:-3] if value.casefold().endswith(".md") else value
-            batch.row("WARNING", target, "", f"{flag} {value!r}: no note of "
-                      f"that name yet (linked as written)")
+            warn(f"{flag} {value!r}: no note of that name yet (linked as "
+                 f"written)")
             return value
-        if kinds[hits[0]] not in want:
-            batch.row("WARNING", target, "", f"{flag} {value!r}: "
-                      f"{hits[0]} is type {kinds[hits[0]] or 'none'}")
-        return link_to(hits[0])
+        if want is not None and self.kinds[hits[0]] not in want:
+            warn(f"{flag} {value!r}: {hits[0]} is type "
+                 f"{self.kinds[hits[0]] or 'none'}")
+        return self.link_to(hits[0])
+
+
+def plan_cast(batch: Batch, body: str, people: list[str], places: list[str],
+              target: str) -> tuple[list[str], list[str], str | None]:
+    """(participants, locations, the Campaign Overview's name) for a plan.
+
+    The two lists hold the notes the caller names with --participant and
+    --location, then the notes the body links to: a link is the writer's
+    own word for who and where, a name in prose is not (#464: "King" and
+    "Crow" are English words too). Each is written as the note's file
+    name (its vault path when two notes share one), resolved by
+    `NoteLinks`. One the caller gives that no note has is kept, with a
+    warning; one two notes share is refused, and a body link two notes
+    share is left out with a warning."""
+    notes = NoteLinks(batch)
+    kinds, find, link_to = notes.kinds, notes.find, notes.link_to
+    overview = vl.campaign_overview((rel, {"type": kind})
+                                    for rel, kind in kinds.items())
+
+    def named(raw: str, flag: str, want: frozenset[str]) -> str:
+        return notes.named(raw, flag, want, lambda message: batch.row(
+            "WARNING", target, "", message))
 
     out_people = [named(x, "--participant", PLAN_PEOPLE) for x in people]
     out_places = [named(x, "--location", PLAN_PLACES) for x in places]

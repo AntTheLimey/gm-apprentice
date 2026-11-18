@@ -887,6 +887,29 @@ class BatchTests(unittest.TestCase):
         self.assertIn("## 4 note-new " + BOLA, out)
         self.assertIn(S2 + "sold a calf.", read(vault, BOLA))
 
+    def test_stamp_writes_lists_and_links(self):
+        # #761: the batch's stamp reads lists and resolves names the way
+        # stamp-entities does, a note an earlier block made included.
+        vault = make_vault(self, {SCENE_REL: SCENE.replace(
+            "status: planned\n", "status: planned\nentities: []\n")})
+        code, out = batch(vault, f"""=== note-new {BOLA}
+{NEW_NPC}=== stamp "{SCENE_REL}" --set 'entities=["Bola", "Zed"]' --add locations=Mill
+""", "--write")
+        self.assertEqual(code, 0, out)
+        self.assertIn("entities 'Zed': no note of that name yet", out)
+        self.assertIn("locations 'Mill': no note of that name yet", out)
+        text = read(vault, SCENE_REL)
+        self.assertIn('entities:\n  - "[[Bola]]"\n  - "[[Zed]]"\n', text)
+        self.assertIn('locations:\n  - "[[Mill]]"\n', text)
+
+    def test_stamp_refuses_a_malformed_list(self):
+        vault = make_vault(self, {SCENE_REL: SCENE})
+        code, out = batch(vault, f"""=== stamp "{SCENE_REL}" --set 'entities=[Bola]'
+""", "--write")
+        self.assertEqual(code, 1, out)
+        self.assertIn("not a list written as JSON", out)
+        self.assertEqual(read(vault, SCENE_REL), SCENE)
+
 
 if __name__ == "__main__":
     unittest.main()
