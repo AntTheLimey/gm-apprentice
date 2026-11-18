@@ -689,11 +689,15 @@ command's stdin. Commands: every writer here, plus
 (body: the whole note), 'section NOTE HEADING
 [--append|--replace]' (body: the text; 'section NOTE --lead'
 writes the text above the note's first heading or hidden
-block, a scene's Situation, Starts it and If-table) and
+block, a scene's Situation, Starts it and If-table),
 'names [--wrapup
 WRAPUP]' (rows 'export spelling<TAB>vault spelling': each is
 replaced in every other block; --wrapup adds the Name
-Conflicts table). A body line starting
+Conflicts table) and 'sheet PC-NOTE KEY=VALUE...' (no body:
+the PC's vitals, hp=41 hit-dice=1/5, into the Stat Sheet's own
+cells by the publish tool's writers; a key with no row is a
+WARNING; `gma publish sheet set --help` lists the keys). A body
+line starting
 '===' is written '\==='. Without --write: each block's rows,
 nothing written. With --write: every chosen block, or none if
 any is refused (all refusals listed), then the frontmatter,

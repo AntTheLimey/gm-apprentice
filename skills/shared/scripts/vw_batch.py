@@ -15,12 +15,19 @@ Commands: every `vault-write` writer with its own arguments and stdin
     section NOTE HEADING [--append|--replace] body: the section's text
     section NOTE --lead [--append|--replace]  body: the note's lead
     names [--wrapup WRAPUP]                  body: rows `export<TAB>vault`
+    sheet PC-NOTE KEY=VALUE...               no body
 
 A note's lead is the text above its first heading or gm-only/spoiler
 block: a scene's Situation, Starts it and If-table (#738). --replace
 keeps a comment at its top (the template's prompt) and refuses one
 further down; a table row or list item appended joins the table or
 list it ends with.
+
+`sheet` writes a PC's vitals (`hp=41 hit-dice=1/5`) into the Stat
+Sheet's own cells, by the publish tool's writers (the ones `flush` uses,
+`gm-publish sheet set --help` lists the keys; D&D, CoC and GURPS only):
+a key with no row on the sheet is a WARNING and left alone; an unknown
+key refuses the block.
 
 `names` rows are spellings to put right: every other block's text has
 each export spelling (a whole word, case kept) replaced by the vault's,
@@ -55,11 +62,11 @@ import vault_write as vw
 import vaultlib as vl
 
 HEAD_RE = re.compile(r"^=== (.*?)\s*$")
-EXTRA = ("stamp", "note-new", "section", "names")
+EXTRA = ("stamp", "note-new", "section", "names", "sheet")
 NAME_CONFLICTS = "### Name Conflicts (export vs. vault canon)"
 NOT_HERE = vw.NOT_IN_BATCH                 # read-only: run it on its own
 PAST = {**vw.VERBS, "WOULD-STAMP": "STAMPED", "WOULD-REPLACE": "REPLACED",
-        "WOULD-RENAME": "RENAMED"}
+        "WOULD-RENAME": "RENAMED", "WOULD-SET": "SET"}
 
 
 @dataclass
@@ -480,6 +487,39 @@ def run_section(batch: vw.Batch, b: Block) -> None:
     batch.row(verb, rel, f"§{ns.heading}", f"{len(body)} lines")
 
 
+# The sheet tool's line kinds, as batch rows.
+SHEET_ROWS = {"set": "WOULD-SET", "same": "SKIP", "missing": "WARNING"}
+
+
+def run_sheet(batch: vw.Batch, b: Block) -> None:
+    """A `sheet PC-NOTE KEY=VALUE...` block (#749): the publish tool sets
+    the vitals on the note as the batch holds it, and the batch writes the
+    result with everything else. Without Node or the tool the block is
+    refused: the values would otherwise be dropped without a word."""
+    if b.body.strip():
+        raise vw.WriteError("sheet takes no body")
+    if not b.args:
+        raise vw.WriteError("sheet: name the PC's note, then KEY=VALUE pairs")
+    note, pairs = b.args[0], b.args[1:]
+    bad = [p for p in pairs if p.startswith("-") or "=" not in p]
+    if bad:
+        raise vw.WriteError(f"sheet: {bad[0]!r} is not KEY=VALUE "
+                            f"(--write goes on the batch)")
+    if not pairs:
+        raise vw.WriteError("sheet: give at least one KEY=VALUE")
+    rel = find_note(batch, note)
+    try:
+        answer = vl.run_sheet_set(batch.vault, rel, batch.read(rel), pairs)
+    except vl.PublishToolUnavailable as e:
+        raise vw.WriteError(f"sheet {rel}: {e}; nothing written") from e
+    if answer.get("changed"):
+        batch.put(rel, answer["markdown"])
+    for line in answer["lines"]:
+        kind = line.get("kind") if isinstance(line, dict) else None
+        text = str(line.get("text", "")).strip() if isinstance(line, dict) else ""
+        batch.row(SHEET_ROWS.get(str(kind), "WARNING"), rel, "", text)
+
+
 def name_pairs(b: Block) -> list[tuple[str, str]]:
     pairs: list[tuple[str, str]] = []
     for i, line in enumerate(b.body.splitlines(), 1):
@@ -582,6 +622,8 @@ def run_block(batch: vw.Batch, b: Block) -> None:
         run_section(batch, b)
     elif b.command == "names":
         run_names(batch, b)
+    elif b.command == "sheet":
+        run_sheet(batch, b)
     elif b.command in vw.COMMANDS and b.command not in NOT_HERE:
         if b.command == "threads":
             # The vault as earlier blocks left it, not as found on disk:
@@ -765,6 +807,7 @@ def run(args: argparse.Namespace) -> int:
                f"stamp: {count('WOULD-STAMP')}  "
                + "".join(f"{name}: {n}  " for name, n in (
                    ("moved", count("WOULD-MOVE")),
+                   ("set", count("WOULD-SET")),
                    ("closed", batch.tally["closed"]),
                    ("rested", batch.tally["rested"]),
                    ("woken", batch.tally["woken"]),

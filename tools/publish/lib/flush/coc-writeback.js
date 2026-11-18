@@ -72,7 +72,9 @@ function applyCoCFlush(markdown, blob) {
         const wasOn = m[2].toLowerCase() === 'x';
         const plain = m[3].replace(/\*\*/g, '').trim(); // authored label without bold
         const cond = CONDITIONS.find(function (c) { return plain.toLowerCase().indexOf(c[0]) !== -1; });
-        if (cond) {
+        // A condition the record does not name is left as the note has it. The live page
+        // always saves all five; `sheet set dying=yes` names one.
+        if (cond && Object.prototype.hasOwnProperty.call(blob.conditions, cond[1])) {
           const isOn = !!blob.conditions[cond[1]];
           if (isOn !== wasOn) {
             lines[i] = indent + '- [' + (isOn ? 'x' : ' ') + '] ' + (isOn ? '**' + plain + '**' : plain);

@@ -36,6 +36,7 @@ Usage:
   gm-apprentice-publish inbox <cmd> [args]   Change-request queue (used by the loop)
   gm-apprentice-publish flush [options]      Write players' current KV live-state back into the vault sheets
   gm-apprentice-publish sheet show [options] Print one PC's sheet (--player-safe shows only what players see)
+  gm-apprentice-publish sheet set [options]  Write named vitals (hp=41 hit-dice=1/5) into one PC's sheet
   gm-apprentice-publish update-pin [options] Repoint this site at the newest installed build tool
   gm-apprentice-publish manifest <cmd>       Compare the publish manifest with the vault, or update it
   gm-apprentice-publish leaks <cmd>          Check the built player site for hidden text (list, check, accept, prune, settle)
@@ -166,6 +167,8 @@ source only — no rebuild, no deploy.
 `,
   sheet: `
 gm-apprentice-publish sheet show --pc <name> [--player-safe] [--json] [--config <path>]
+gm-apprentice-publish sheet set --pc <name> key=value [key=value…] [--dry-run] [--config <path>]
+gm-apprentice-publish sheet set --vault <dir> --file <note> --stdin key=value [key=value…]
 
 Prints one PC's character sheet from the vault. The default view is the raw
 source file, exactly as it sits on disk. --player-safe prints the sheet with
@@ -181,6 +184,31 @@ the GM.
   --json             Emit { pc, sourcePath, playerSafe, frontmatter, markdown }
   --config <path>    Path to vault.config.json (default: ./vault.config.json)
   --help, -h         Show this help
+
+sheet set writes the values given into the PC's sheet with the writers flush
+uses, and prints flush's per-PC line ("✓ Brannoc — HP (Current) 34→41"). On a
+D&D or CoC sheet only cells it already has change: a key whose row is missing is
+reported ("no writable Temp HP row on this sheet") and left alone. GURPS HP and
+FP go to Current Status's **HP:**/**FP:** lines, added if missing, as flush does. An unknown key, or a
+value of the wrong shape, writes nothing. Keys by system:
+
+  D&D 5e     hp, temp, exhaustion (0-6), conditions (comma list, or none),
+             inspiration (yes/no), hit-dice (spent or spent/max; a sheet
+             with two Hit Dice rows names them hit-dice-d10, hit-dice-d6),
+             death-saves (made/failed)
+  CoC 7e     hp, mp, luck, san, and yes/no: temporary-insanity,
+             indefinite-insanity, major-wound, unconscious, dying
+  Regency    the CoC keys and rep (Current Reputation)
+  GURPS      hp, fp (the **HP:**/**FP:** lines in Current Status)
+
+Pathfinder and Forged in the Dark have no live sheet to write.
+
+  --dry-run, -n      Print the same lines, write nothing
+  --vault <dir>      With --file and --stdin: the note's text comes on stdin and
+                     goes back as JSON { pc, markdown, changed, lines }; nothing
+                     is written (vault-write batch's sheet block)
+  --file <note>      The PC note, relative to --vault
+  --stdin            Read the note from stdin (needs --vault and --file)
 `,
   relationships: `
 gm-apprentice-publish relationships words [--vault <path>] [--json]
@@ -993,10 +1021,55 @@ if (command === 'flush') {
   return;
 }
 
+if (command === 'sheet' && args[1] === 'set') {
+  // key=value words are the values; everything else is a flag. A flag's own value is
+  // never read as a pair (`--pc a=b` names a PC).
+  const VALUE_FLAGS = { '--pc': 'pc', '--vault': 'vault', '--file': 'file' };
+  const rest = args.slice(2);
+  const pairs = [];
+  const flagArgs = [];
+  for (let i = 0; i < rest.length; i++) {
+    const a = rest[i];
+    if (a === '--config' || Object.prototype.hasOwnProperty.call(VALUE_FLAGS, a)) {
+      flagArgs.push(a);
+      if (i + 1 < rest.length) flagArgs.push(rest[++i]);
+    } else if (!a.startsWith('-') && a.includes('=')) pairs.push(a);
+    else flagArgs.push(a);
+  }
+  const parsed = parseSubcommandArgs(flagArgs, { '--dry-run': 'dryRun', '-n': 'dryRun', '--stdin': 'stdin' }, VALUE_FLAGS);
+  if (parsed.error) {
+    console.error(`Error: ${parsed.error}`);
+    printSubcommandHelp('sheet');
+    process.exit(1);
+  }
+  const f = parsed.flags;
+  const usage = (msg) => { console.error(`Error: ${msg}`); printSubcommandHelp('sheet'); process.exit(1); };
+  if (f.stdin && !(f.vault && f.file)) usage('sheet set --stdin needs --vault <dir> and --file <note>');
+  if ((f.vault || f.file) && !f.stdin) usage('sheet set --vault and --file go with --stdin; otherwise name the PC with --pc');
+  if (f.vault && (f.pc || parsed.configGiven)) usage('sheet set takes --pc (with --config) or --vault with --file, not both');
+  if (!f.vault && !f.pc) usage('sheet set needs --pc <name>');
+  const { runSheetSet } = require('../lib/sheet-set.js');
+  const go = (stdinText) => runSheetSet({
+    configPath: parsed.configPath, pc: f.pc, vault: f.vault, file: f.file,
+    pairs, dryRun: !!f.dryRun, stdinText,
+  });
+  const run = f.stdin
+    ? new Promise((resolve, reject) => {
+      let text = '';
+      process.stdin.setEncoding('utf8');
+      process.stdin.on('data', (c) => { text += c; });
+      process.stdin.on('end', () => resolve(text));
+      process.stdin.on('error', reject);
+    }).then(go)
+    : go(undefined);
+  run.then(exitAfterFlush).catch(failAfterFlush);
+  return;
+}
+
 if (command === 'sheet') {
   const verb = args[1];
   if (verb !== 'show') {
-    console.error(verb ? `Error: Unknown sheet command: ${verb}` : 'Error: sheet needs a command (show)');
+    console.error(verb ? `Error: Unknown sheet command: ${verb}` : 'Error: sheet needs a command (show, set)');
     printSubcommandHelp('sheet');
     process.exit(1);
   }
