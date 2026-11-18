@@ -255,27 +255,27 @@ def check_lead_text(rel: str, body: list[str], at_top: bool) -> None:
 def _cut(lines: list[str], rel: str) -> list[str | None]:
     """The publish tool's own reading of the body lines (`cut_lines`)."""
     try:
-        return vl.cut_lines([ln.rstrip("\r\n") for ln in lines])
+        return vl.cut_lines(lines)
     except vl.PublishToolUnavailable as e:
         raise vw.WriteError(f"{rel}: the publish tool could not be asked "
                             f"whether the rest of the note still reads the "
                             f"same ({e}); nothing written") from e
 
 
-def check_rest_unchanged(rel: str, doc: vw.Doc, new_text: str,
-                         end: int) -> None:
+def check_rest_unchanged(rel: str, old_text: str, new_text: str) -> None:
     """The last word on a `section` write: the publish tool reads every
-    line from `end` (the written region's end) down as it did before, so
-    text written above them hid nothing and published nothing (#738
-    review: a loose fence, a %% in a code span or an open comment did). It
-    asks the tool, not a model of it."""
-    tail = len(doc.lines) - end
-    if not tail or not doc.states:
-        return
-    first = doc.states[0].lineno - 1
-    new_lines = new_text.splitlines(keepends=True)
-    if (_cut(doc.lines[first:], rel)[-tail:]
-            != _cut(new_lines[first:], rel)[-tail:]):
+    line below the written text (the lines the old and new note end with
+    alike) as it did before, so the text hid nothing and published nothing
+    (#738 review: a loose fence, a %% in a code span or an open comment
+    did). The lines are the build's own: the body split at `\n` alone,
+    `\r` dropped. It asks the tool, not a model of it."""
+    old = vl.body_text(old_text).split("\n")
+    new = vl.body_text(new_text).split("\n")
+    same = 0
+    while (same < min(len(old), len(new))
+           and old[len(old) - 1 - same] == new[len(new) - 1 - same]):
+        same += 1
+    if same and _cut(old, rel)[-same:] != _cut(new, rel)[-same:]:
         raise vw.WriteError(f"{rel}: this text would change what the rest "
                             f"of the note shows (a fence or comment opened "
                             f"or closed); nothing written")
@@ -305,7 +305,7 @@ def run_lead(batch: vw.Batch, rel: str, body: list[str],
         # The lead is read by `scan_body`; where the tool reads a heading
         # inside it (a fence opened inside a comment fools the reader), the
         # lead is not what it seems, and replacing it would drop sections.
-        cut = _cut(lines[first:end], rel)
+        cut = _cut([ln.rstrip("\r\n") for ln in lines[first:end]], rel)
         heads = [c for c in cut if c is not None and HEADING_RE.match(c)]
         if heads:
             raise vw.WriteError(
@@ -348,7 +348,7 @@ def run_lead(batch: vw.Batch, rel: str, body: list[str],
                     or vw.LIST_RE.match(above) and vw.LIST_RE.match(body[0]))
         new_text = vw.place(doc, end, body, glue=glue)
         verb = "WOULD-ADD"
-    check_rest_unchanged(rel, doc, new_text, end)
+    check_rest_unchanged(rel, text, new_text)
     batch.put(rel, new_text)
     batch.row(verb, rel, "§(lead)", f"{len(body)} lines")
 
@@ -447,7 +447,7 @@ def run_section(batch: vw.Batch, b: Block) -> None:
         new_text = vw.place(doc, at, body, glue=glue,
                             tight=bool(vw.LIST_RE.match(body[0])))
         verb = "WOULD-ADD"
-    check_rest_unchanged(rel, doc, new_text, end)
+    check_rest_unchanged(rel, text, new_text)
     batch.put(rel, new_text)
     batch.row(verb, rel, f"§{ns.heading}", f"{len(body)} lines")
 

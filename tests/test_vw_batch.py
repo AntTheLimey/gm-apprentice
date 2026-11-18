@@ -386,6 +386,31 @@ class BatchTests(unittest.TestCase):
         self.assertEqual(code, 1, out)
         self.assertIn("would change what the rest of the note shows", out)
 
+    def test_text_appended_in_the_last_section_is_checked_below_it(self):
+        """Third review pass: an append inside the note's last section had
+        nothing below the section to compare, and was never checked."""
+        note = ("---\ntype: npc\n---\n\nLead.\n\n## Notes\n\n- one\n\n"
+                "Closing para.\n\n<!-- private note -->\n")
+        for body in ("- two `%%` x %%\n",
+                     "- two\n\n````\n```\n````\n"):
+            vault = make_vault(self, {"n.md": note})
+            code, out = batch(vault, '=== section "n.md" "Notes" --append\n'
+                              + body, "--write")
+            self.assertEqual(code, 1, body + out)
+            self.assertEqual(read(vault, "n.md"), note, body)
+
+    def test_the_check_splits_lines_as_the_build_does(self):
+        """A U+2028 inside a line is no line break to the build."""
+        fence = "`" * 3
+        note = ("---\ntype: npc\n---\n\nOld.\n\n## Public\n\n"
+                "<!-- private note: UNVERIFIED -->\n")
+        body = f"````\n{fence} info\nx {fence}\n````\n"
+        vault = make_vault(self, {"n.md": note})
+        code, out = batch(vault, '=== section "n.md" --lead --replace\n'
+                          + body, "--write")
+        self.assertEqual(code, 1, out)
+        self.assertEqual(read(vault, "n.md"), note)
+
     def test_a_fence_opened_inside_a_comment_cannot_swallow_sections(self):
         fence = "`" * 3
         note = (f"---\ntype: npc\n---\n\n<!--\n{fence}\n-->\nOld.\n\n"
