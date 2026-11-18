@@ -116,6 +116,7 @@ decision rather than pure score.
 
 ## Completed
 
+- ~~The adventure-shape update step is skipped by vaults past 1.12.63~~ — moved to the release that ships it; a test holds every check to its release (#745, v1.12.70)
 - ~~NPCs reach play without stat blocks~~ — `vault-check npc-stats` finds them; the Midwife, session prep and campaign-qa build them, a full workup for a major NPC (#725, v1.12.69)
 - ~~The adventure brief's `adventure_shape` misstates the GM's choice~~ — field removed; the brief's Adventure Shape section holds the shape (#735, v1.12.68)
 - ~~An NPC's hidden fate has no plain place~~ — wrap-up's Behind the Scenes line opens with the fate; `status:` stays what players know (#739, v1.12.67)

@@ -1,4 +1,4 @@
-"""1.12.63 update step `adventure-shape` (#735): the adventure brief's
+"""1.12.70 update step `adventure-shape` (#735): the adventure brief's
 one-word `adventure_shape` field is removed; the brief's
 `### Adventure Shape` section holds the shape in the GM's words."""
 import shutil
@@ -34,10 +34,10 @@ def make_vault(case, notes):
 
 
 class AdventureShapeTests(unittest.TestCase):
-    def test_the_check_is_declared_for_1_12_63(self):
+    def test_the_check_is_declared_for_1_12_70(self):
         check = next(c for c in mv.VAULT_CHECKS if c.name == "adventure-shape")
         self.assertEqual((check.release, check.band, check.kind, check.choices),
-                         ("1.12.63", 3, "bookkeeping", ("adventure-shape-word",)))
+                         ("1.12.70", 3, "bookkeeping", ("adventure-shape-word",)))
 
     def test_a_brief_with_its_shape_written_loses_the_line(self):
         v = make_vault(self, {BRIEF: brief('adventure_shape: "linear"\n',
