@@ -106,6 +106,7 @@ import argparse
 import re
 import subprocess
 import sys
+import unicodedata
 from collections.abc import Callable
 from difflib import SequenceMatcher
 from pathlib import Path
@@ -126,12 +127,13 @@ from vaultlib import (GM_MARKER_RE, is_active_pc, marker_re,  # noqa: F401
                       entity_type,
                       atx_title, fenced_headings, find_section_lines,
                       h3_blocks, line_headings, nested_mapping,
-                      normalize, raw_frontmatter, section,
+                      link_name, normalize, raw_frontmatter, section,
                       session_ref_number, word_count)
 from vaultlib import LABEL_RE as _LABEL_RE
 from vaultlib import BULLET_RE, markers_in
 from vaultlib import bullets as _bullets
-from vaultlib import alias_split, fence_step, link_name, split_paused
+from vaultlib import (alias_split, fence_step, link_aliases, link_name,
+                      split_paused)
 from vaultlib import vault_files as _vault_files
 
 
@@ -545,6 +547,124 @@ def threads_related(a: str, b: str) -> bool:
     return extra >= need and extra * 2 >= smaller
 
 
+_NAMED_TYPES = frozenset({"npc", "creature", "faction", "organization",
+                          "location", "item", "document", "prop"})
+_GIVEN_NAME_TYPES = frozenset({"npc", "creature"})
+
+
+class NameIndex:
+    """The names the vault knows, for the last matching tier (#718): a
+    thread and a Wrap-Up line that name the same person, place or thing
+    are about it, however each is worded.
+
+    A name is a note's title (file stem) or `aliases:` / `gm_aliases:`
+    entry. A name of two words or more, and any `[[link]]` target, matches
+    whatever its case. A single word (a one-word title or alias, or the
+    given name taken from an npc or creature title: "Durgan" for "Durgan
+    Flintmere", when no other note has it) matches only as written, so
+    "Order" is not "order" nor "Captain" "the captain". Only the notes of a
+    person, place or thing count (not PCs, who are in every thread; not
+    sessions, plans or scenes). A name two notes share names neither. A
+    trailing `'s` is allowed. An entity that every Wrap-Up names, with
+    three or more of them, is not evidence (the home town, the party's
+    faction) and is left out. `lines` holds each in-scope Wrap-Up's
+    Unresolved Threads, PC Carry-Forward and Pending Consequences bullets;
+    `mentions` is asked once per text."""
+
+    def __init__(self, files, chapter=None):
+        owners: dict[str, set[str]] = {}    # casefolded full name -> notes
+        words: dict[str, set[str]] = {}     # single word, as written -> notes
+        given: dict[str, set[str]] = {}     # npc/creature title word
+        for rel, _text, fm in files:
+            kind = entity_type(fm)
+            if kind not in _NAMED_TYPES:
+                continue
+            stem = unicodedata.normalize(
+                "NFC", Path(rel).stem.replace("_", " ").strip())
+            for name in [stem, *link_aliases(fm)]:
+                name = unicodedata.normalize("NFC", name).strip()
+                if not name:
+                    continue
+                owners.setdefault(normalize(name), set()).add(rel)
+                if (len(name.split()) == 1 and len(name) >= 3
+                        and name.casefold() not in _THREAD_STOP):
+                    words.setdefault(name, set()).add(rel)
+            parts = stem.split()
+            if kind in _GIVEN_NAME_TYPES and len(parts) > 1:
+                for w in parts:
+                    if (len(w) >= 3 and w[:1].isupper()
+                            and w.casefold() not in _THREAD_STOP):
+                        given.setdefault(w, set()).add(rel)
+        for w, rels in given.items():
+            words.setdefault(w, set()).update(rels)
+        self._links = {n: next(iter(r)) for n, r in owners.items()
+                       if len(r) == 1}
+        self._words = {n: next(iter(r)) for n, r in words.items()
+                       if len(r) == 1}
+        multi = sorted((n for n in self._links if " " in n),
+                       key=len, reverse=True)
+        # A full name two notes share names neither, and its words must
+        # not name one of them either: those spans are blanked first.
+        shared = sorted((n for n, r in owners.items()
+                         if len(r) > 1 and " " in n), key=len, reverse=True)
+        single = sorted(self._words, key=len, reverse=True)
+        edge = (r"(?<![^\W_])(?:", r")(?:['\u2019]s)?(?![^\W_])")
+        self._multi_re = (re.compile(
+            edge[0] + "|".join(re.escape(n) for n in multi) + edge[1],
+            re.IGNORECASE) if multi else None)
+        self._word_re = (re.compile(
+            edge[0] + "|".join(re.escape(n) for n in single) + edge[1])
+            if single else None)
+        self._shared_re = (re.compile(
+            edge[0] + "|".join(re.escape(n) for n in shared) + edge[1],
+            re.IGNORECASE) if shared else None)
+        self._cache: dict[str, set[str]] = {}
+        self.lines: list[tuple[int, list[str]]] = []
+        for n, text in _scoped_wrap_ups(files, chapter):
+            bullets: list[str] = []
+            for level, title in ((4, "Unresolved Threads"),
+                                 (3, "PC Carry-Forward"),
+                                 (4, "Pending Consequences")):
+                block = _heading_block(text, level, title)
+                if block:
+                    bullets.extend(_bullets(block))
+            self.lines.append((n, bullets))
+        self._everywhere: set[str] = set()
+        if len(self.lines) >= 3:
+            per = [set().union(*(self.mentions(b) for b in bullets))
+                   for _n, bullets in self.lines]
+            self._everywhere = set.intersection(*per)
+            self._cache.clear()
+
+    def mentions(self, text: str) -> set[str]:
+        """The notes `text` names: by link target, alias or bare name."""
+        if text in self._cache:
+            return self._cache[text]
+        text_nfc = unicodedata.normalize("NFC", text)
+        found: set[str] = set()
+        for m in _THREAD_LINK_RE.finditer(text_nfc):
+            name = normalize(link_name(m.group(1)))
+            owner = (self._links.get(name)
+                     or self._links.get(re.sub(r"^(the|a|an) ", "", name)))
+            if owner:
+                found.add(owner)
+        bare = re.sub(r"\[\[([^\]|]+)(?:\|[^\]]+)?\]\]", r"\1", text_nfc)
+        if self._shared_re:
+            bare = self._shared_re.sub(lambda m: " " * len(m.group(0)), bare)
+        for rx in (self._multi_re, self._word_re):
+            for m in (rx.finditer(bare) if rx else ()):
+                # The whole match first: a title may end in 's ("St James's").
+                for name in (m.group(0), re.sub(r"['\u2019]s$", "", m.group(0))):
+                    owner = (self._links.get(normalize(name)) if rx is
+                             self._multi_re else self._words.get(name))
+                    if owner:
+                        found.add(owner)
+                        break
+        found -= self._everywhere
+        self._cache[text] = found
+        return found
+
+
 _POINTER_RE = re.compile(r"\[\[([^\[\]|#]+)(?:[#|][^\[\]]*)?\]\]")
 
 
@@ -853,7 +973,7 @@ def _lead_key(text: str) -> str | None:
     return None if vw.SESSION_ENTRY_RE.match(key) else key
 
 
-def _match(thread: str, wrap_ups):
+def _match(thread: str, wrap_ups, names: NameIndex | None = None):
     """(sessions, mark, claimed): `claimed` holds the (session, bullet)
     Unresolved bullets a match took: every close match (a likely wording
     or an equal bold lead, `threads.lead`, so a thread rewritten in
@@ -884,6 +1004,11 @@ def _match(thread: str, wrap_ups):
         if related is not None or any(threads_related(thread, b)
                                       for b in carry):
             hits.append(n)
+    if not hits and names is not None:
+        theirs = names.mentions(thread)
+        if theirs:
+            hits = [n for n, bullets in names.lines
+                    if any(theirs & names.mentions(b) for b in bullets)]
     return hits, ("~" if hits else ""), claimed
 
 
@@ -1086,6 +1211,7 @@ def thread_report(files, current: int, chapter, vault: Path,
     """
     lines = ["===== Threads ====="]
     wrap_ups = wrap_up_threads(files, chapter)
+    names = NameIndex(files, chapter)
 
     not_playing = out_of_play(vault)
     stale_after = setting_or_builtin(vault, "vault.stale_after_sessions")
@@ -1099,10 +1225,10 @@ def thread_report(files, current: int, chapter, vault: Path,
 
     def tags(thread: str) -> str:
         nonlocal tentative
-        hits, mark, _claimed = _match(thread, wrap_ups)
+        hits, mark, _claimed = _match(thread, wrap_ups, names)
         if not hits:
             return ("first=?\tlast=?\tage=?\t"
-                    "(not in any wrap-up — check it is still live)")
+                    "(no match found in a wrap-up — check it is still live)")
         tentative = tentative or mark == "~"
         first, last = min(hits), max(hits)
         age = current - last

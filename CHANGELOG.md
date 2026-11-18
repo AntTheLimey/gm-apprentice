@@ -9,6 +9,12 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.58] — 2026-11-17
+
+### Fixed
+
+- The prep Threads list no longer says a thread is "not in any wrap-up" when the last Wrap-Up lists it in other words. A thread and a Wrap-Up line (Pending Consequences too) that name the same person, place or thing now match, linked or bare, alias or first name, with `~`; when nothing matches it says "no match found in a wrap-up" (#718).
+
 ## [1.12.57] — 2026-11-17
 
 ### Changed
