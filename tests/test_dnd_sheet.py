@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Tests for dnd_sheet.py: report and fill a D&D PC note's derived cells."""
 
+import re
 import shutil
 import subprocess
 import sys
@@ -397,6 +398,46 @@ def test_over_capacity_and_size(tmp_path):
     _, out, _ = run(note(tmp_path, text, "o.md"))
     fills = {r[1]: r[2] for r in rows(out, "FILL")}
     assert fills["Equipment / Carrying / Encumbrance"] == "Within capacity -> Over capacity (Speed 5 ft)"
+
+
+def str_12(text):
+    return re.sub(r"\| STR \| 18 \|", "| STR | 12 |", text, count=1)
+
+
+POWERFUL_BUILD = """
+## Species Traits
+
+| Name | Action | Uses | Used | Recovers | Summary |
+|------|--------|------|------|----------|---------|
+| Powerful Build | | | | | counts as one size larger |
+"""
+
+
+def carrying_fills(tmp_path, text):
+    _, out, _ = run(note(tmp_path, text))
+    return {r[1]: r[2] for r in rows(out, "FILL")}
+
+
+def test_powerful_build_counts_one_size_up(tmp_path):
+    text = str_12(clean()) + EQUIPMENT + POWERFUL_BUILD
+    fills = carrying_fills(tmp_path, text)
+    # 12 x 15 x 2 and 12 x 30 x 2, said in the row like a Bonuses row.
+    assert fills["Equipment / Carrying / Carrying Capacity"] == "(blank) -> 360 lb (incl. Powerful Build)"
+    assert fills["Equipment / Carrying / Drag / Lift / Push"] == "(blank) -> 720 lb (incl. Powerful Build)"
+
+
+def test_no_powerful_build_leaves_capacity_alone(tmp_path):
+    fills = carrying_fills(tmp_path, str_12(clean()) + EQUIPMENT)
+    assert fills["Equipment / Carrying / Carrying Capacity"] == "(blank) -> 180 lb"
+    assert fills["Equipment / Carrying / Drag / Lift / Push"] == "(blank) -> 360 lb"
+
+
+def test_powerful_build_on_a_large_character_goes_to_huge_once(tmp_path):
+    text = str_12(clean()).replace("| Size | Medium |", "| Size | Large |") + EQUIPMENT + POWERFUL_BUILD
+    fills = carrying_fills(tmp_path, text)
+    assert fills["Equipment / Carrying / Carrying Capacity"] == "(blank) -> 720 lb (incl. Powerful Build)"
+    plain = carrying_fills(tmp_path, str_12(clean()).replace("| Size | Medium |", "| Size | Large |") + EQUIPMENT)
+    assert plain["Equipment / Carrying / Carrying Capacity"] == "(blank) -> 360 lb"
 
 
 def test_bare_and_reasoned_carrying_cells(tmp_path):

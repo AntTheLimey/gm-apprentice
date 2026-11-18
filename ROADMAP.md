@@ -116,6 +116,7 @@ decision rather than pure score.
 
 ## Completed
 
+- ~~`dnd-sheet` ignores Powerful Build, so a goliath's carrying capacity comes out half~~ — a Powerful Build row counts one size up for capacity and drag/lift/push (#751, v1.12.78)
 - ~~The leak check flags a PC sheet's own class features~~ — the sheet's text, made from the PC's own note, counts as already shown, so a hidden NPC stat block with the same rules words is no finding (#752, v1.12.77, tool 1.70.29)
 - ~~Wrap-up leaves the Stat Sheet vitals behind Current Status~~ — a batch `sheet` block writes them with flush's writers, and the party board shows them (#749, v1.12.74, tool 1.70.28)
 - ~~`npc-stats` asks for a stat block for an NPC whose hidden fate is Dead~~ — it reads the current fate in Behind the Scenes, as prep does (#747, v1.12.73)

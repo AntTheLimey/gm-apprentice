@@ -27,7 +27,8 @@ skill's Modifier; Passive Perception / Investigation / Insight;
 Initiative; Spell Attack Modifier and Spell Save DC; and the four
 `### Carrying` values (Carried Weight, Carrying Capacity, Drag / Lift /
 Push, Encumbrance) when the note has that table. AC, HP, Speed, attacks
-and slot totals are never touched.
+and slot totals are never touched. A Powerful Build row in Species Traits,
+Class Features or Feats raises the size for capacity and Drag / Lift / Push.
 
 `### Bonuses` (`Applies To | Bonus | Source`) is added in. Applies To,
 comma-separated: Saves, Ability Checks (every skill and initiative),
@@ -391,7 +392,13 @@ def plan(text: str) -> list[Row]:
         if unweighed:
             said.append("no weight: " + ", ".join(unweighed))
         carried = gear + coin_lb
+        # Powerful Build, as a row in Species Traits, Class Features or Feats: one size up.
+        build = any(clean(cells[0]).lower() == "powerful build" for key in ("species traits", "class features", "feats")
+                    for _i, _h, cells in table(key) if cells)
+        if build:
+            size = dc.one_size_up(size)
         capacity = dc.carrying_capacity(scores["STR"], size)
+        build_note = "incl. Powerful Build" if build else ""
         # `Drag/Lift/Push` and `Drag / Lift / Push` are the same row.
         cells_by_label: dict[str, Cell | None] = dict.fromkeys(
             ("carried weight", "carrying capacity", "drag / lift / push", "encumbrance"))
@@ -403,10 +410,10 @@ def plan(text: str) -> list[Row]:
         if cells_by_label["carried weight"]:
             rows.append(judge_weight(at + "Carried Weight", cells_by_label["carried weight"], carried, "; ".join(said)))
         if cells_by_label["carrying capacity"]:
-            rows.append(judge_weight(at + "Carrying Capacity", cells_by_label["carrying capacity"], capacity))
+            rows.append(judge_weight(at + "Carrying Capacity", cells_by_label["carrying capacity"], capacity, build_note))
         if cells_by_label["drag / lift / push"]:
             rows.append(judge_weight(at + "Drag / Lift / Push", cells_by_label["drag / lift / push"],
-                                     dc.drag_lift_push(scores["STR"], size)))
+                                     dc.drag_lift_push(scores["STR"], size), build_note))
         if cells_by_label["encumbrance"]:
             over = (effective_weight(cells_by_label["carried weight"], carried)
                     > effective_weight(cells_by_label["carrying capacity"], capacity))
