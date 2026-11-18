@@ -50,7 +50,7 @@ import vaultlib as vl
 HEAD_RE = re.compile(r"^=== (.*?)\s*$")
 EXTRA = ("stamp", "note-new", "section", "names")
 NAME_CONFLICTS = "### Name Conflicts (export vs. vault canon)"
-NOT_HERE = frozenset({"resolve"})          # read-only: run it on its own
+NOT_HERE = vw.NOT_IN_BATCH                 # read-only: run it on its own
 PAST = {**vw.VERBS, "WOULD-STAMP": "STAMPED", "WOULD-REPLACE": "REPLACED",
         "WOULD-RENAME": "RENAMED"}
 

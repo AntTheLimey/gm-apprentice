@@ -648,8 +648,12 @@ class BatchHintTests(unittest.TestCase):
                    if isinstance(a, vw.argparse._SubParsersAction))
         for name in vw.COMMANDS:
             with self.subTest(name=name):
-                self.assertIn(f"'=== {name} ...' block",
-                              sub.choices[name].description)
+                if name in vw.NOT_IN_BATCH:     # batch refuses it: no hint
+                    self.assertNotIn("batch FILE",
+                                     sub.choices[name].description or "")
+                else:
+                    self.assertIn(f"'=== {name} ...' block",
+                                  sub.choices[name].description)
 
 if __name__ == "__main__":
     unittest.main()

@@ -368,8 +368,6 @@ gma vault-write <vault> resolve --export EXPORT
 
 ```text
 The name rows session-new prints, for an export whose session is already filed; a §Prose NEAR row is a name the running text may misspell.
-
-Several writes at once: put this as a '=== resolve ...' block in `gma vault-write <vault> batch FILE`.
 ```
 
 | Argument | Value | Help |

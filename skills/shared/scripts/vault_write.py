@@ -5406,7 +5406,7 @@ def build_parser() -> argparse.ArgumentParser:
     # #730: every writer says it is also a batch block, so several writes
     # are previewed together and written all or nothing.
     for name, parser in sub.choices.items():
-        if name in COMMANDS:
+        if name in COMMANDS and name not in NOT_IN_BATCH:
             hint = (f"Several writes at once: put this as a '=== {name} ...' "
                     f"block in `gma vault-write <vault> batch FILE`.")
             parser.description = (parser.description + "\n\n" + hint
@@ -5420,6 +5420,8 @@ def cmd_entity_new(batch: Batch, args: argparse.Namespace, text: str) -> None:
 
 
 Command = Callable[[Batch, argparse.Namespace, str], None]
+# Commands batch will not run as a block (read-only: run them on their own).
+NOT_IN_BATCH = frozenset({"resolve"})
 COMMANDS: dict[str, Command] = {"wrapup-new": cmd_wrapup_new,
                                 "wrapup-add": cmd_wrapup_add,
                                 "wrapup-settle": cmd_wrapup_settle,
