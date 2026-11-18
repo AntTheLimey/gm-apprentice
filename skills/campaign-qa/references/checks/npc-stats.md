@@ -29,6 +29,7 @@ Never invent numbers without the system's rules. With no system recorded
 (`# system: none recorded`), build nothing: ask the GM which system first.
 
 **Not flagged:** NPCs play has not shown yet (session-prep builds those),
-dead NPCs (`status: dead`, or a current, unstruck fate in GM Notes
-Behind the Scenes that starts **Dead**, such as **Dead, under the ice.**), and notes under
+dead NPCs (a current, unstruck fate in GM Notes Behind the Scenes that
+starts **Dead**, such as **Dead, under the ice.**, or `status: dead` with no
+fate; a later fate such as **Risen.** beats both), and notes under
 `_archive/`, `_QA/` or `_midwife/`.

@@ -10,6 +10,12 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 ---
 
 
+## [1.12.89] — 2026-11-19
+
+### Fixed
+
+- `npc-stats --plan`, the run session prep uses, no longer asks for a stat block for a dead NPC the Plan names (a body found, a grave visited); a hidden fate beats `status`, so one who rises again takes a later fate such as **Risen.**; `--plan` also takes a full path to a Plan inside the vault (#776).
+
 ## [1.12.88] — 2026-11-19
 
 ### Fixed
