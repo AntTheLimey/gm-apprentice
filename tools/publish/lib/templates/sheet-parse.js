@@ -25,9 +25,7 @@ function yesNo(cell) {
   return null;
 }
 
-function isPlaceholder(text) {
-  return /^\{[^}]*\}$/.test(String(text || '').trim());
-}
+const { isPlaceholder } = require('../placeholders');   // one reading of "a template placeholder" (#720)
 
 // A header value: template placeholders and dashes are not values.
 function filled(text) {

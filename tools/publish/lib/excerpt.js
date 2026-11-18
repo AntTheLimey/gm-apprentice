@@ -9,6 +9,7 @@
 const HEADING_RE = /^\s*(#{1,6})\s+(.+?)\s*$/;
 const { wikilinkRe, parseWikilink } = require('./wikilink');
 const { titleNamedIn } = require('./heading-key');
+const { PLACEHOLDER_RE, withoutPlaceholderLines } = require('./placeholders');
 
 // Elements whose text is structure, not prose, and must never reach a pull-quote:
 // section headings, callout titles, tables, and figure captions.
@@ -31,7 +32,6 @@ const BLOCK_BOUNDARY_RE = /<\/?(p|div|li|ul|ol|blockquote|h[1-6]|tr|td|th|sectio
 // it sits and however many lines it runs to. So does a bullet label left at "—"
 // ("- **Traits:** —"); a facts line is a label line already.
 const SHEET_LINE_RE = /^\*\*[^*]+\*\*:?$|^\*\*[^*]+:\*\*|^\*\*[^*]+\*\*:|^\*\*[^*]+\*\*\s+[-+]?\d[\d.,/+-]*%?$|^[-*+] \[[ xX]\]|^[-*+]$|^[-*+]\s+\*\*[^*]+:\*\*\s*—$/;
-const PLACEHOLDER_RE = /(?:^[ \t]*[-*+][ \t]+)?\{[^{}]{0,400}\}/gm;
 
 // A full stop after one of these is not the end of a sentence.
 // A callout that says where a note came from, not what happens in it: the wrap-up template's
@@ -138,7 +138,8 @@ function excerptFromMarkdown(source, opts = {}) {
     kept.push(cleaned);
   }
 
-  let text = kept.join('\n');
+  // A line that is only a placeholder is no prose for any excerpt: a pull-quote or card never opens on one (#720).
+  let text = withoutPlaceholderLines(kept.join('\n'));
   // Only now, on what survived the excluded-section cut: a placeholder stripped any
   // earlier could swallow an excluded heading and let what follows it through. Sheet
   // lines go after it, so a label whose placeholder ran over two lines goes whole.
