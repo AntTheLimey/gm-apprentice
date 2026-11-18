@@ -31,6 +31,8 @@
 //                     is lost (information; the build says so per page)
 //   MOMENT_KIND_UNKNOWN  a Memorable Moments tag, `#moment/<tag>`, that names none of the five kinds
 //                     (the moment shows with no kind; the build says so per note)
+//   UNFILLED_PLACEHOLDER  a paragraph or list item that is only a template placeholder (`{To flesh out.}`), left
+//                     off the page with any heading it emptied; the row names the section (#720)
 //   PROP_NOT_COPIED  a prop note's file, its address or a file it links that the site cannot
 //                     publish (missing, outside the note's folder, a kind it does not copy, an
 //                     address taken or not a path, a link in the site folder), or a prop's
@@ -73,7 +75,7 @@ const { STORY_SUFFIX } = require('./scanner');
 const { NO_PAGE_TYPES } = require('./excluding-values');
 const { decodeEntities } = require('./templates/gurps/tables');
 
-const CODES = ['ALIAS_IN_PROSE', 'NEVER_SHOW_IN_PROSE', 'WITHHELD_PUBLISHED', 'WITHHELD_IN_PROSE', 'WITHHELD_NAME_PUBLIC', 'WITHHELD_FLAG_UNREADABLE', 'COMPANION_FLAG_UNREADABLE', 'FENCE_UNCLOSED', 'COMMENT_STRAY', 'NAMED_NO_PAGE', 'TOHIT_UNREAD', 'SKILL_BELOW_BASE', 'HEADING_IN_HIDDEN_BLOCK', 'TABLE_OVERWIDE', 'PROP_NOT_COPIED', 'MOMENT_KIND_UNKNOWN', 'CHAPTER_STATUS_UNKNOWN', 'CHAPTER_NO_TEASER', 'CHAPTER_ACTIVE_MANY', 'CHAPTER_PLANNED_PLAYED', 'CHAPTER_TITLE_SHARED', 'SESSION_NO_CHAPTER', 'CHAPTER_REF_UNSHOWN'];
+const CODES = ['ALIAS_IN_PROSE', 'NEVER_SHOW_IN_PROSE', 'WITHHELD_PUBLISHED', 'WITHHELD_IN_PROSE', 'WITHHELD_NAME_PUBLIC', 'WITHHELD_FLAG_UNREADABLE', 'COMPANION_FLAG_UNREADABLE', 'FENCE_UNCLOSED', 'COMMENT_STRAY', 'NAMED_NO_PAGE', 'TOHIT_UNREAD', 'SKILL_BELOW_BASE', 'HEADING_IN_HIDDEN_BLOCK', 'TABLE_OVERWIDE', 'PROP_NOT_COPIED', 'MOMENT_KIND_UNKNOWN', 'UNFILLED_PLACEHOLDER', 'CHAPTER_STATUS_UNKNOWN', 'CHAPTER_NO_TEASER', 'CHAPTER_ACTIVE_MANY', 'CHAPTER_PLANNED_PLAYED', 'CHAPTER_TITLE_SHARED', 'SESSION_NO_CHAPTER', 'CHAPTER_REF_UNSHOWN'];
 // The Story's chapter bookkeeping: one closing line for all of them.
 const CHAPTER_CODES = new Set(CODES.slice(CODES.indexOf('CHAPTER_STATUS_UNKNOWN')));
 const WORST = 3;
@@ -1009,7 +1011,8 @@ function startNoteAudit(input) {
   // The to-hit calculator's report for one PC sheet (`rel`, the PC's note).
   const calcRows = [];
   function calculator(rel, rows) {
-    for (const r of rows || []) if (r && r.detail) calcRows.push({ rel, code: r.code, severity: r.severity, detail: r.detail, fix: r.fix || '' });
+    // The same row twice (a PC's Story note is rendered for its page and for its own Story page) is one finding.
+    for (const r of rows || []) if (r && r.detail && !calcRows.some((c) => c.rel === rel && c.detail === r.detail && c.code === r.code)) calcRows.push({ rel, code: r.code, severity: r.severity, detail: r.detail, fix: r.fix || '' });
   }
 
   // A Memorable Moments tag that names no kind: `rel` is the wrap-up note, `tag` the word after `#moment/`.
@@ -1109,6 +1112,10 @@ function summaryLines(findings) {
       const notes = [...new Set(rows.map((f) => f.path))];
       const k = rows.length;
       lines.push(`${k} moment ${plural(k, 'tag names', 'tags name')} no kind (${notes.slice(0, WORST).map((p) => baseName(p)).join(', ')}) — ${where} ${plural(k, 'it', 'these')}.`);
+    } else if (code === 'UNFILLED_PLACEHOLDER') {
+      const notes = [...new Set(rows.map((f) => f.path))];
+      const k = rows.length;
+      lines.push(`${k} unfilled ${plural(k, 'placeholder is', 'placeholders are')} left off pages (${notes.slice(0, WORST).map((p) => baseName(p)).join(', ')}) — ${where} ${plural(k, 'it', 'these')}.`);
     } else if (CHAPTER_CODES.has(code)) {
       // Each was said on its own line as the Story was built; the closing line counts them all, once.
       if (code !== CODES.find((c) => CHAPTER_CODES.has(c) && open.some((f) => f.code === c))) continue;

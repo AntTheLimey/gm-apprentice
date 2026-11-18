@@ -2023,7 +2023,7 @@ function buildSite(options) {
     const processed = processContent(page, linkMap, excludeSections, imageMap, { usedImages, excludeCallouts, pcKeepSections, storyMoments, ...markOpt });
     processed.bannerHtml = bannerHtml;
     fx.warn(page.outputPath, processed.warnings);
-    if (processed.overwide.length) fx.tableRows.push({ rel: vaultRelPathOf(page), rows: processed.overwide });
+    if (processed.overwide.length || processed.unfilled.length) fx.tableRows.push({ rel: vaultRelPathOf(page), rows: [...processed.overwide, ...processed.unfilled] });
     let html;
 
     if (isRoster(page)) return { roster: processed };
@@ -2056,6 +2056,7 @@ function buildSite(options) {
           };
           const storyProcessed = processContent(storyPage, linkMap, excludeSections, imageMap, { usedImages: fx.usedImages, excludeCallouts, ...markOpt });
           if (fx === liveFx) fx.warn(page.outputPath, storyProcessed.warnings);
+          if (fx === liveFx && audit && storyProcessed.unfilled.length) fx.tableRows.push({ rel: audit.storyRelOf(page), rows: storyProcessed.unfilled });
           storyHtml = storyProcessed.html && storyProcessed.html.trim() ? storyProcessed.html : undefined;
           storyLines = sessionLines(storyHtml).map((l) => ({ ...l, href: storyPath + l.href }));
         }
@@ -3014,7 +3015,7 @@ function buildSite(options) {
     const storyObj = { markdown: pc.storyMarkdown, frontmatter: {}, outputPath };
     const processed = processContent(storyObj, linkMap, excludeSections, imageMap, { usedImages: fx.usedImages, excludeCallouts, ...markOpt });
     fx.warn(outputPath, processed.warnings);
-    if (processed.overwide.length && audit) fx.tableRows.push({ rel: audit.storyRelOf(pc), rows: processed.overwide });
+    if ((processed.overwide.length || processed.unfilled.length) && audit) fx.tableRows.push({ rel: audit.storyRelOf(pc), rows: [...processed.overwide, ...processed.unfilled] });
     const story = {
       title: pc.displayTitle, outputPath, html: processed.html,
       sheetOutputPath: pc.outputPath, prologueHtml: backstoryOf.get(pc) || '', group: characterStoryGroup(pc.frontmatter, publishConfig.statuses.fallen),

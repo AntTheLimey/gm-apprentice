@@ -9,6 +9,12 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.65] — 2026-11-18
+
+### Fixed
+
+- A page no longer prints a lone template placeholder like `{To flesh out for colour.}`: the paragraph or bullet is left off, and so is a heading it empties. The build warns with the note and section, and campaign-qa's Site Faults check asks whether to fill it or remove the line. Only note-like braces with a space in them count (`{REDACTED}` and `{1d6}` stay), `\{…\}` keeps a literal, and PC sheets are skipped (#720, tool 1.70.26).
+
 ## [1.12.64] — 2026-11-18
 
 ### Added

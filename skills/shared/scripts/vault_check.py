@@ -2262,9 +2262,10 @@ NOTE_FAULT_CODES = ("ALIAS_IN_PROSE", "NEVER_SHOW_IN_PROSE",
                     "COMMENT_STRAY", "NAMED_NO_PAGE", "TOHIT_UNREAD",
                     "SKILL_BELOW_BASE", "HEADING_IN_HIDDEN_BLOCK",
                     "TABLE_OVERWIDE", "PROP_NOT_COPIED",
-                    "MOMENT_KIND_UNKNOWN", "CHAPTER_STATUS_UNKNOWN",
-                    "CHAPTER_NO_TEASER", "CHAPTER_ACTIVE_MANY",
-                    "CHAPTER_PLANNED_PLAYED", "CHAPTER_TITLE_SHARED",
+                    "MOMENT_KIND_UNKNOWN", "UNFILLED_PLACEHOLDER",
+                    "CHAPTER_STATUS_UNKNOWN", "CHAPTER_NO_TEASER",
+                    "CHAPTER_ACTIVE_MANY", "CHAPTER_PLANNED_PLAYED",
+                    "CHAPTER_TITLE_SHARED",
                     "SESSION_NO_CHAPTER", "CHAPTER_REF_UNSHOWN")
 # How many of the pages naming a note a row lists; `--file` lists them all.
 SITE_FAULT_PAGES = 3
@@ -2313,7 +2314,8 @@ def _site_fault_row(f: dict[str, Any], whole: bool) -> str:
     elif code in ("TOHIT_UNREAD", "SKILL_BELOW_BASE",
                   "HEADING_IN_HIDDEN_BLOCK", "TABLE_OVERWIDE",
                   "PROP_NOT_COPIED", "MOMENT_KIND_UNKNOWN",
-                  "CHAPTER_STATUS_UNKNOWN", "CHAPTER_NO_TEASER",
+                  "UNFILLED_PLACEHOLDER", "CHAPTER_STATUS_UNKNOWN",
+                  "CHAPTER_NO_TEASER",
                   "CHAPTER_ACTIVE_MANY", "CHAPTER_PLANNED_PLAYED",
                   "CHAPTER_TITLE_SHARED", "SESSION_NO_CHAPTER",
                   "CHAPTER_REF_UNSHOWN", "WITHHELD_NAME_PUBLIC", "WITHHELD_PUBLISHED",

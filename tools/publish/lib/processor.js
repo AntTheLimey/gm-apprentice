@@ -8,6 +8,7 @@ const { bareSectionTitle } = require('./pc-prose');
 const { wikilinkRe, parseWikilink, labelsForLinks, labelsForLinksFully } = require('./wikilink');
 const { WRAP_UP_TYPES } = require('./shared-lists');
 const { headingKey, headingKeys, squashedKeys, titleNamedIn, isMomentsHeading } = require('./heading-key');
+const { dropPlaceholders } = require('./placeholders');
 const md = createRenderer();
 
 function renderMarkdown(markdown) {
@@ -2192,11 +2193,27 @@ function processContent(page, linkMap, excludeSections, imageMap = {}, options =
   markdown = resolveImageEmbeds(markdown, imageMap, page.outputPath, options.usedImages, {
     portraitBasename: portraitBasename(page.frontmatter),
   });
+  // Braces holding a wikilink are text, never a placeholder (#720): once the link is resolved `{[[Bob]]}` reads
+  // `{Bob}`, so they are escaped first, within one paragraph, which renders the same braces (CodeRabbit, #728).
+  markdown = markdown.replace(/(?<!\\)\{((?:[^{}\n]|\n(?![ \t]*\n))*\[\[(?:[^{}\n]|\n(?![ \t]*\n))*)\}/g, '\\{$1\\}');
   markdown = resolveWikiLinks(markdown, linkMap, page.outputPath);
   // The renderer widens a table whose row has more cells than its header (nothing is lost);
   // say so, once per table, so the GM can give the extra column a header.
   const env = {};
-  const html = md.render(markdown, env);
+  // A paragraph or list item that is only a template placeholder is not content (#720): it and any heading it
+  // leaves empty are dropped, and the note is an UNFILLED_PLACEHOLDER finding, with the section it stood in.
+  const parsed = dropPlaceholders(md.parse(markdown, env));
+  const html = md.renderer.render(parsed.tokens, md.options, env);
+  const unfilled = [];
+  // PC sheets carry their placeholders by design (pc-background.js drops them from the sections), so only other notes warn.
+  const isPc = String((page.frontmatter || {}).type || '').toLowerCase() === 'pc';
+  for (const d of isPc ? [] : parsed.dropped) {
+    const where = d.section ? `under "${d.section}"` : 'above its first heading';
+    const detail = `${d.text} is an unfilled placeholder ${where}; it is left off the page`;
+    const fix = 'Fill it in, or remove the line (write \\{like this\\} to keep braces as text)';
+    unfilled.push({ code: 'UNFILLED_PLACEHOLDER', severity: 'warning', detail, fix, section: d.section, text: d.text });
+    warnings.push(`unfilled placeholder: ${d.text} ${where}. ${fix}.`);
+  }
   // The same words go to the note-faults audit as TABLE_OVERWIDE rows (`overwide`: { detail, fix }).
   const overwide = [];
   for (const t of env.widenedTables || []) {
@@ -2207,7 +2224,7 @@ function processContent(page, linkMap, excludeSections, imageMap = {}, options =
     overwide.push({ code: 'TABLE_OVERWIDE', severity: 'info', detail, fix });
     warnings.push(`${detail}. ${fix}.`);
   }
-  return { html, warnings, overwide };
+  return { html, warnings, overwide, unfilled };
 }
 
 // Extract ## sections for accordion rendering (used by PC/NPC templates). The
