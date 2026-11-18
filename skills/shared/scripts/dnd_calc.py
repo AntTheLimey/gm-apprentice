@@ -69,6 +69,14 @@ def _factors(size: str) -> tuple[Fraction, Fraction]:
     return CARRY_FACTORS.get(size.strip().lower(), CARRY_FACTORS["medium"])
 
 
+def one_size_up(size: str) -> str:
+    """The next size in the table (Powerful Build); Gargantuan stays. An unknown size counts as Medium."""
+    order = list(CARRY_FACTORS)
+    key = size.strip().lower()
+    i = order.index(key) if key in CARRY_FACTORS else order.index("medium")
+    return order[min(i + 1, len(order) - 1)]
+
+
 def carrying_capacity(strength: int, size: str) -> Fraction:
     return strength * _factors(size)[0]
 

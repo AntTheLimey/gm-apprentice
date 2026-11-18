@@ -9,6 +9,12 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.78] — 2026-11-18
+
+### Fixed
+
+- `dnd-sheet` counts a Powerful Build row (Species Traits, Class Features or Feats) as one size larger, so a goliath with STR 12 gets 360 lb carrying capacity and 720 lb drag/lift/push, and says "incl. Powerful Build" (#751).
+
 ## [1.12.77] — 2026-11-18
 
 ### Fixed
