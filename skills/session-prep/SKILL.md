@@ -160,8 +160,9 @@ is quiet by design (`skills/ttrpg-expert/continuity-engine.md`).
 **9. Key NPCs** — likely NPCs with status, motivations, off-screen
 activity; read vault files only for those flagged in carry-forward or
 threads. From any entity file, cite only its latest GM ruling (the
-one not struck through). An NPC's fate in its GM Notes Behind the
-Scenes beats its `status:`, which says only what the players know.
+one not struck through). An NPC's current fate in its GM Notes
+Behind the Scenes (the latest one not struck through) beats its
+`status:`, which says only what the players know.
 → `## NPC Quick Reference`
 
 **10. World state** — date, location, threats, factions, clocks from

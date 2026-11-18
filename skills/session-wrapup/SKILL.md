@@ -309,7 +309,9 @@ creating entities.
   GM asks. Where the truth differs, add the matching bullet to its
   GM Notes `### Behind the Scenes`; a fate the players haven't learned
   (dead, captive, missing, turned) opens it in plain words, **Dead.**
-  or **Captive, in the ice crypt.**, never the brief's euphemism. One `=== log` block places them
+  or **Captive, in the ice crypt.**, never the brief's euphemism.
+  When a later session changes that fate, seen or not, strike the old
+  one through and state the new one. One `=== log` block places them
   all, no note read first: rows
   `<path><TAB>Campaign Log<TAB>{bullet}`, or
   `GM Notes/Behind the Scenes` (a note the batch creates first can
