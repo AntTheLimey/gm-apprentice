@@ -639,5 +639,21 @@ class StatusLedeTests(unittest.TestCase):
                       "**Location:** Calcutta.", read(vault, PC))
 
 
+
+class BatchHintTests(unittest.TestCase):
+    """#730: every writer's help says it can be a block of `batch`."""
+
+    def test_every_writer_names_batch(self):
+        sub = next(a for a in vw.build_parser()._actions
+                   if isinstance(a, vw.argparse._SubParsersAction))
+        for name in vw.COMMANDS:
+            with self.subTest(name=name):
+                if name in vw.NOT_IN_BATCH:     # batch refuses it: no hint
+                    self.assertNotIn("batch FILE",
+                                     sub.choices[name].description or "")
+                else:
+                    self.assertIn(f"'=== {name} ...' block",
+                                  sub.choices[name].description)
+
 if __name__ == "__main__":
     unittest.main()

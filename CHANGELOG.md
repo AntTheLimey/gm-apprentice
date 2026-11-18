@@ -9,6 +9,12 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.57] — 2026-11-17
+
+### Changed
+
+- Several vault writes at once are easier to find: the shared tool table has a row for `gma vault-write <vault> batch`, and every writer's `--help` says it can be a block of one, previewed together and written all or nothing (#730).
+
 ## [1.12.52] — 2026-11-17
 
 ### Fixed
