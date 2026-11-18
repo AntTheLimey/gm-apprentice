@@ -10,6 +10,12 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 ---
 
 
+## [1.12.87] — 2026-11-19
+
+### Changed
+
+- A wrap-up's unasked scene pictures put action first: each fight or chase shown in motion (a long fight may take its opening, its turn and its end), then the dramatic beats, and a quiet beat or an aftermath only when nothing bigger happened (#770).
+
 ## [1.12.86] — 2026-11-19
 
 ### Fixed
