@@ -90,7 +90,8 @@ Per bucket, read all AUTHORITATIVE material. Source priority:
 1. `_Campaign/Timeline.md`
 2. Existing session wrap-ups
 3. Play transcripts and fragments
-4. `_Campaign/Player Characters.md` — deaths, transitions, rosters
+4. The PC notes (`gma vault-check <vault> active-pcs --all`) — each
+   PC's player and status
 5. Existing entity files — current canon
 
 **Output:** confirmed events (with source citations) and gaps
@@ -131,6 +132,11 @@ Read `references/synthesis-templates.md`.
    campaign that does not publish sheets (`player_site.sheets.show`
    off) do not ask where one is kept; when `gma vault-check <vault> pc-body`
    emits no Stat Sheet rows there is nothing to ask.
+5. A PC who died, retired or left play in the period: record it in
+   the period's session material, and set `status:` on that PC's own
+   note only to where the PC stands now (a PC who left and came back
+   is active); the PC note is the only place a PC's player and
+   current status are kept.
 
 Check each entity as you write it: entity mentions are
 `[[Entity Name]]` wiki-links; `play_date` is `YYYY-MM-DD`;

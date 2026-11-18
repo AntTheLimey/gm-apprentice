@@ -227,17 +227,19 @@ test('hook order', () => {
 });
 
 test('card carries the hook', () => {
+  // The PCs' index is the party page: it reads the out-of-play list (none here).
+  const PARTY_CONFIG = { statuses: { out_of_play: new Set() } };
   const ilse = { ...pcPage(NEW_LAYOUT, { hook: 'She would like a discovery of her own.' }), outputPath: 'characters/pcs/ilse-varn.html' };
   const quiet = { ...pcPage(''), title: 'Quiet', displayTitle: 'Quiet', outputPath: 'characters/pcs/quiet.html' };
-  const html = indexTemplate('characters/pcs', 'PCs', [ilse, quiet], navFor, config, {}, {});
+  const html = indexTemplate('characters/pcs', 'PCs', [ilse, quiet], navFor, config, PARTY_CONFIG, {});
   const card = (name) => html.split(`data-entity-name="${name}"`)[1].split('</a>')[0];
   assert.match(card('Ilse Varn'), /<p class="card-hook">She would like a discovery of her own\.<\/p>/);
   assert.doesNotMatch(card('Quiet'), /card-hook/);
   // The CoC folio shows a hook the note gives (#483), so its card carries it; never a fallback (key_traits, an excerpt).
-  assert.match(indexTemplate('characters/pcs', 'PCs', [ilse], navFor, config, {}, {}, { cocFolio: true }), /card-hook/);
+  assert.match(indexTemplate('characters/pcs', 'PCs', [ilse], navFor, config, PARTY_CONFIG, {}, { cocFolio: true }), /card-hook/);
   const traitsOnly = { ...pcPage('', { key_traits: ['wry'] }), title: 'Wry', displayTitle: 'Wry', outputPath: 'characters/pcs/wry.html' };
-  assert.match(indexTemplate('characters/pcs', 'PCs', [traitsOnly], navFor, config, {}, {}), /<p class="card-hook">wry<\/p>/);
-  assert.doesNotMatch(indexTemplate('characters/pcs', 'PCs', [traitsOnly], navFor, config, {}, {}, { cocFolio: true }), /card-hook/);
+  assert.match(indexTemplate('characters/pcs', 'PCs', [traitsOnly], navFor, config, PARTY_CONFIG, {}), /<p class="card-hook">wry<\/p>/);
+  assert.doesNotMatch(indexTemplate('characters/pcs', 'PCs', [traitsOnly], navFor, config, PARTY_CONFIG, {}, { cocFolio: true }), /card-hook/);
 });
 
 test('hook prints the backstory as the prologue shows it: a typed [[ ]] stays, a GM link shows its label', () => {

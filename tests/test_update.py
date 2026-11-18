@@ -178,6 +178,23 @@ class RunTests(Base):
         self.assertEqual(stamp_of(vault), PLUGIN)
         self.assertIn("Backup: ", out)
 
+    def test_what_the_roster_check_left_is_worth_knowing_word_for_word(self):
+        # #732 review: a link left for the GM to take out by hand, or a
+        # publish list entry left, is never folded into the plain line.
+        vault = make_vault(self)
+        left = ("left the link to the PC roster in notes of NPCs/A.md: the "
+                "update does not edit that form; take it out by hand")
+        c, _ = check("pc-roster-retired", "bookkeeping", lambda: [Item(
+            "pc-roster-retired", WILL, ["delete it"],
+            lambda _v: ["deleted _Campaign/Player Characters.md", left])],
+            plain="Deleted the PC roster note.")
+        code, out, _ = self.main(vault, [c])
+        self.assertEqual(code, 0)
+        self.assertIn("Done:\n- Deleted the PC roster note.", out)
+        self.assertIn("Worth knowing:\n- Left the link to the PC roster in notes "
+                      "of NPCs/A.md: the update does not edit that form; take it "
+                      "out by hand.", out)
+
     def test_a_yes_no_choice_in_a_bookkeeping_check_runs_too(self):
         vault = make_vault(self)
         log = []

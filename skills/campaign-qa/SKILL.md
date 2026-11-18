@@ -51,8 +51,8 @@ wrong vault path; ask for it.
 - `_meta/entity-types.md`, `_meta/relationship-types.md` — schema.
 - `_Campaign/Timeline.md` (or `campaign-timeline.md` at the root)
   — master timeline.
-- `_Campaign/Player Characters.md` — PC
-  roster.
+- `gma vault-check <vault> active-pcs --all` — the PC roster: every
+  PC note with its player and status.
 - `Chapters/` — session notes, scenes, prep plans.
 - `_inbox/` (vault-ingest staging) and `_midwife/` (creative
   drafts) — ignore in every mode; never flag them.
@@ -107,7 +107,7 @@ Read the named check file when the mode runs.
 - Dead/retired entities referenced as active
 - AUTHORITATIVE entries contradicted by newer content
 - NPC profiles that don't match their session appearances
-- PC roster mismatches (roster vs session plans)
+- PC mismatches (a PC note's player or status vs session plans)
 - Session-plan facts not traceable to entity files (canon
   fabrication)
 - PC `## Current Status` consistency: an active PC (not

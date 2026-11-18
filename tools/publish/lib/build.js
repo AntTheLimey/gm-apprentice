@@ -13,7 +13,6 @@ const { pcKeepList, storyMomentsOn, storyPicturesOn, scenePicturesMode, retiredS
 const { nameList, gmAliasList, gmAliasRewriter, strippedLines, sectionWithholder, noteFacts, keptFlags, stubCut, stubMarked, hiddenFieldsOf, unstableBodyMarked, unstableSectionsMarked, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, processContent, playerSafeMarkdown, extractSections, filterSections, filterFields, publishedFrontmatter, isGmOnlyEdge, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, plainMetaValue, portraitBasename, encodeHref, isWebImageAddress } = require('./processor');
 const { pairHubs, isPlayedSession, REGISTRABLE_TYPES } = require('./session-hub');
 const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, heritageTemplate, worldDomainTemplate, wikiTemplate, sessionBodyHtml, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
-const { isRoster } = require('./templates/nav');
 const { noticeText } = require('./notice');
 const { fontNamesOfFile, licenceOf } = require('./font-names');
 const { getsNoPage, decideNoPage, noPageFor, listedOnly } = require('./previews');
@@ -57,6 +56,9 @@ const { styleFontFamilies, FONTS_CSS, BASE_CSS } = require('./props/page');
 const { COLLECTION_ADDRESS, COLLECTION_FALLBACK, collectionSettingsOf, placeCollection, propTaken, latestProps, shownRows, containerItems, stateFieldsOfListed } = require('./props/collection');
 const { makeProps } = require('./props/make');
 const { collectionTemplate } = require('./templates/props-page');
+
+// Where the retired PC roster note's page was (#729); it now sends the reader to the party page.
+const OLD_ROSTER_ADDRESS = 'campaign/player-characters.html';
 
 const TOOL_VERSION = require('../package.json').version;
 
@@ -1922,13 +1924,11 @@ function buildSite(options) {
   const tableRows = [];
   const SHEETLESS_NAMED = 8;   // names printed before "and N more"
   const partyCampaignId = require('./scanner').slugify(config.siteTitle || 'campaign');
-  const deferredRosters = [];
-  // The party board the roster page carries, made once every PC page has been rendered.
-  const roster = { board: null, partyManifest: null, live: false };
+  // The Party Status board on the party page (the PCs' index), made once every PC page has been rendered.
+  const party = { board: null, partyManifest: null, live: false };
   const dressedSkins = new Set();
   let anyDressed = false;
-  // One page as the site prints it: { html }, or { roster: processed } for the party roster,
-  // which is rendered once every PC has been (renderRoster). `fx` is where the render's side
+  // One page as the site prints it: { html }. `fx` is where the render's side
   // effects go (images used, warnings, party-board entries, the sheet tallies, a dressed
   // sheet): the build's own (`liveFx`), or throwaway ones when the audit renders a page again.
   // The body of a PC note whose headings a link label changes: none on the player site; on the GM site the whole note
@@ -2026,8 +2026,6 @@ function buildSite(options) {
     if (processed.overwide.length || processed.unfilled.length) fx.tableRows.push({ rel: vaultRelPathOf(page), rows: [...processed.overwide, ...processed.unfilled] });
     let html;
 
-    if (isRoster(page)) return { roster: processed };
-
     switch (page.frontmatter.type) {
       case 'pc': {
         // Warnings are dropped here, not ignored: processContent above ran this same
@@ -2122,7 +2120,7 @@ function buildSite(options) {
           fx.tohitRows.push({ rel: vaultRelPathOf(page), rows: systemOut.tohitRows });
         }
         // Out-of-play PCs (retired, dead, missing…) keep their sheet page but stay
-        // off the roster's Party Status board (#265).
+        // off the party page's Party Status board (#265).
         if ((systemOut.liveData || systemOut.boardOnly) && !isOutOfPlay(page.frontmatter, publishConfig.statuses.out_of_play)) {
           // Root-relative output path of the PC portrait, for the party-board
           // thumbnail. Resolved the same way portraitImg does (imageMap keyed
@@ -2201,17 +2199,13 @@ function buildSite(options) {
     return { html };
   }
 
-  function renderRoster(page, processed) {
-    const boardHtml = (roster.board && roster.partyManifest)
-      ? roster.board.renderBoard(roster.partyManifest, page.outputPath, { live: roster.live })
-      : null;
-    const islandHtml = (roster.live && roster.board && roster.partyManifest)
-      ? partyDataScript(roster.partyManifest, roster.board.scriptId) : null;
-    return wikiTemplate(page, processed, navFor, config, imageMap, {
-      publishConfig, linkMap, pages,
-      partyBoardHtml: boardHtml, partyDataScript: islandHtml,
-      partyClientScripts: (roster.live && boardHtml) ? roster.board.clientScripts : [],
-    });
+  // The party page's Party Status board, for the page at `outputPath`: { boardHtml, dataScript, clientScripts }, empty
+  // when the site has no board.
+  function partyBoard(outputPath) {
+    if (!party.board || !party.partyManifest) return {};
+    const boardHtml = party.board.renderBoard(party.partyManifest, outputPath, { live: party.live });
+    if (!party.live) return { boardHtml };
+    return { boardHtml, dataScript: partyDataScript(party.partyManifest, party.board.scriptId), clientScripts: party.board.clientScripts };
   }
 
   const liveFx = {
@@ -2386,7 +2380,6 @@ function buildSite(options) {
       // A fast build renders the PC pages and no others.
       if (onlySheets && page.frontmatter.type !== 'pc') continue;
       const out = renderPage(page, liveFx);
-      if (out.roster) { deferredRosters.push({ page, processed: out.roster }); continue; }
       seen(vaultRelPathOf(page), out.html, page, false);
       if (TOHIT_SCRIPT_TAG.test(out.html)) tohitScriptLoaded = true;
       // A fast build writes no page of the people a PC page lists, so their pictures are copied for this one.
@@ -2458,37 +2451,23 @@ function buildSite(options) {
     copyFontFiles(faces.files);
   }
 
-  if (deferredRosters.length) {
-    // The roster/party board always renders as a static initiative table from
+  if (!onlySheets) {
+    // The party board always renders as a static initiative table from
     // published values. When the status-bar tier is on it also goes live
     // (JSON island + client poll of /api/loadout-list). When off, the same
     // table renders without the live layer.
     // The GM site has no party board: it is the live layer's, which the GM site never has.
-    roster.board = sheetsOff || gm ? null : boardFor(publishConfig.system);
-    roster.live = publishConfig.live.stats;
+    party.board = sheetsOff || gm || !partyEntries.length ? null : boardFor(publishConfig.system);
+    party.live = publishConfig.live.stats;
     // Guarded like every other render path so a manifest-build failure
     // does not abort the banners/story/timeline/landing stages that follow.
-    if (roster.board) {
+    if (party.board) {
       try {
-        roster.partyManifest = roster.board.buildManifest(partyCampaignId, partyEntries);
+        party.partyManifest = party.board.buildManifest(partyCampaignId, partyEntries);
       } catch (e) {
         errorCount++;
         renderErrors.push(`the party board: ${e.message}`);
         console.error(`  ERROR building party manifest: ${e.message}`);
-      }
-    }
-    for (const deferredRoster of deferredRosters) {
-      try {
-        const html = renderRoster(deferredRoster.page, deferredRoster.processed);
-        seen(vaultRelPathOf(deferredRoster.page), html, deferredRoster.page, false);
-        if (writes !== 'all') continue;
-        const outPath = path.join(outputDir, deferredRoster.page.outputPath);
-        ensureDir(outPath);
-        if (writeHtml(outPath, html, deferredRoster.page)) console.log(`  wrote ${deferredRoster.page.outputPath} (party board)`);
-      } catch (e) {
-        errorCount++;
-        renderErrors.push(`${deferredRoster.page.outputPath}: ${e.message}`);
-        console.error(`  ERROR rendering roster ${deferredRoster.page.outputPath}: ${e.message}`);
       }
     }
   }
@@ -2707,9 +2686,6 @@ function buildSite(options) {
       : null;
   }
 
-  const pcRoster = pages.find(isRoster);
-  const pcRedirectTarget = pcRoster ? pcRoster.outputPath : null;
-
   const { timelineTemplate } = require('./templates/timeline-page');
   const { houseRulesTemplate } = require('./templates/house-rules-page');
 
@@ -2776,10 +2752,6 @@ function buildSite(options) {
         if (live && !pages.some((p) => p.outputPath === `${dir}/index.html` && !isFolded(p))) emit(`${dir}/index.html`, redirectPage(`${dir}/index.html`, 'story.html', 'Story so far'), `  wrote ${dir}/index.html (redirect → story.html)`);
         continue;
       }
-      if (dir === 'characters/pcs' && pcRedirectTarget) {
-        if (live) emit(`${dir}/index.html`, redirectPage(`${dir}/index.html`, pcRedirectTarget, 'Player Characters'), `  wrote ${dir}/index.html (redirect → ${pcRedirectTarget})`);
-        continue;
-      }
       // Redirect events/ at the timeline only when one exists; with no timeline the redirect
       // would dangle, so fall through and give events its own index.
       if (dir === 'events' && timelineHref) {
@@ -2792,15 +2764,31 @@ function buildSite(options) {
           dirPages = dirPages.concat(pageDirPages);
         }
       }
+      const isParty = dir === 'characters/pcs';
+      // The party page was once a note's (the PC roster, `_Campaign/Player Characters.md`, retired in #729): the
+      // address that note had sends a reader to the PCs' index, generated or the GM's own, unless a note has its own
+      // page there now.
+      const oldRosterRedirect = () => {
+        if (isParty && live && !pages.some((p) => p.outputPath === OLD_ROSTER_ADDRESS)) {
+          emit(OLD_ROSTER_ADDRESS, redirectPage(OLD_ROSTER_ADDRESS, `${dir}/index.html`, label), `  wrote ${OLD_ROSTER_ADDRESS} (redirect → ${dir}/index.html)`);
+        }
+      };
       const authoredIndex = dirPages.find(p => p.outputPath === dir + '/index.html');
       if (authoredIndex) {
-        if (live) console.log(`  skipped ${dir}/index.html (authored index page)`);
+        // A note the GM wrote as the PCs' index is the party page, as written: the Party Status board is the
+        // generated page's (publish-site's cloudflare-pages.md says so).
+        if (live) console.log(`  skipped ${dir}/index.html (authored index page${isParty && party.board ? '; the Party Status board is on the generated party page only' : ''})`);
+        oldRosterRedirect();
         continue;
       }
       // A section with nothing in it has no index (a Sessions folder holding only folded wrap-ups). The menu and the
       // landing page's cards already leave it out, and a page that lists nothing is only a dead end.
       if (dirPages.length === 0) continue;
-      emit(`${dir}/index.html`, indexTemplate(dir, label, dirPages, navFor, config, publishConfig, imageMap, { cocFolio: require('./templates/pc').usesCocFolio(publishConfig, sheetsOff) }), `  wrote ${dir}/index.html`);
+      emit(`${dir}/index.html`, indexTemplate(dir, label, dirPages, navFor, config, publishConfig, imageMap, {
+        cocFolio: require('./templates/pc').usesCocFolio(publishConfig, sheetsOff),
+        party: isParty ? partyBoard(`${dir}/index.html`) : undefined,
+      }), `  wrote ${dir}/index.html${isParty && party.board ? ' (party board)' : ''}`);
+      oldRosterRedirect();
     }
 
     // Timeline page
@@ -3339,7 +3327,7 @@ function buildSite(options) {
       let storyHtml = '';
       try {
         const out = renderPage(page, scratchFx());
-        html = out.roster ? renderRoster(page, out.roster) : out.html;
+        html = out.html;
       } catch (e) { auditGaps++; }
       try {
         if (own.storyMarkdown && page.frontmatter.type === 'pc') storyHtml = renderCharacterStory(page, scratchFx()).html;

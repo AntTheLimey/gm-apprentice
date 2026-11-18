@@ -234,12 +234,12 @@ test('the constants that became settings do not return', () => {
 
 // (b) The words that take a character out of play are written once, in the list. A file outside the settings
 // package that quotes three or more of them close together (within 250 characters, so a stray `'npc'` far from
-// `'dead'` is not a list) is stating the list again. The one exception is the In Memoriam card labels in
-// landing.js: a label for each status word, which is not a list of what counts.
+// `'dead'` is not a list) is stating the list again. The one exception is the out-of-play labels in
+// pc-status.js: a label for each status word, which is not a list of what counts.
 test('the out-of-play words are not restated', () => {
   const words = entry('vault.statuses.out_of_play').default;
   assert.ok(words.length >= 8, 'the list to check is missing');
-  const exempt = new Set(['lib/templates/landing.js']);
+  const exempt = new Set(['lib/pc-status.js']);
   const nearby = (src) => {
     const hits = [];
     for (const w of words) for (const m of src.matchAll(new RegExp(`['"\`]${w}['"\`]|\\b${w}\\s*:`, 'g'))) hits.push({ w, at: m.index });
@@ -249,7 +249,7 @@ test('the out-of-play words are not restated', () => {
   const found = sources.filter((f) => !exempt.has(rel(f)) && nearby(code(f))).map(rel);
   assert.deepEqual(found, []);
   // The exception still earns its place.
-  assert.ok(nearby(code(path.join(ROOT, 'lib', 'templates', 'landing.js'))), 'landing.js no longer needs its exception');
+  assert.ok(nearby(code(path.join(ROOT, 'lib', 'pc-status.js'))), 'pc-status.js no longer needs its exception');
 });
 
 // (c) The five site-folder keys are the vault's settings now. The site file is read for the path to the vault

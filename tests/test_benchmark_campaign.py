@@ -66,10 +66,10 @@ class PlantedFaultTests(unittest.TestCase):
 
     def test_2_name_confusion(self):
         # Rev. Silas Marsh (a PC), Dr. Eleanor Voss (a PC), and a Dr. Marsh
-        # nobody can place.
-        pcs = self.read("_Campaign/Player Characters.md")
-        self.assertIn("## Reverend Silas Marsh", pcs)
-        self.assertIn("## Dr. Eleanor Voss", pcs)
+        # nobody can place. The PCs are their own notes (the roster note went
+        # in #729).
+        self.assertIn("type: pc\n", self.read("PCs/Reverend Silas Marsh.md"))
+        self.assertIn("type: pc\n", self.read("PCs/Dr. Eleanor Voss.md"))
         self.assertIn("[[Dr. Marsh]]", self.read(
             "Chapters/Chapter 1/Sessions/"
             "Session 02 - The Docks at Night - Play Notes.md"))

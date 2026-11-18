@@ -272,6 +272,11 @@ async function runApply(options, deps, survey) {
       if (!exists(path.join(vaultPath, rel))) { entries.delete(rel); pruned++; }
     }
   }
+  // --prune-path: the named entries only, each only once its file is gone (the update that deletes a note takes its
+  // entry off and leaves every other one, a note away for now among them, with its decision).
+  for (const rel of (options.prunePaths || []).map((a) => canonicalPath(String(a).trim()))) {
+    if (entries.has(rel) && !exists(path.join(vaultPath, rel))) { entries.delete(rel); pruned++; }
+  }
 
   mkdir(path.dirname(manifestPath));
   // The accepted leak findings ride along; a vault whose file holds only them (no list yet) keeps them too.

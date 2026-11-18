@@ -180,7 +180,7 @@ def find_stale_pcs(campaign_dir: Path) -> FreshnessResult:
     """Find active PC entity sheets lagging the campaign overview's asOfSession.
 
     Only `type: pc` sheets are inspected — never `character-story`
-    companions or the `pc_roster` digest. The check no-ops when
+    companions. The check no-ops when
     there is no campaign overview asOfSession to compare against.
     """
     campaign_asof = None

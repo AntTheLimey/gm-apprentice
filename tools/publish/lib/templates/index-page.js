@@ -6,6 +6,7 @@ const { getInitials } = require('./landing-data');
 const { canonicalNfc, nfcLookupTable } = require('../unicode');
 const { isPlayedStatus } = require('../session-hub');
 const { pcEpithetText } = require('../pc-header-meta');
+const { isOutOfPlay, statusLabel } = require('../pc-status');
 
 const GENRE_SECTION_TITLES = {
   military: {
@@ -964,11 +965,36 @@ ${rows}
 </div>`;
 }
 
+// The party page is the PCs' index (#729): the Party Status board (`opts.party`, the player site's, when the system
+// has one), a card for each PC in play, and a plain list of those out of play (`vault.statuses.out_of_play`).
+const PARTY_DIR = 'characters/pcs';
+
+function outOfPlayList(pcs, dir) {
+  if (!pcs.length) return '';
+  const rows = pcs.map((p) => {
+    const status = statusLabel(p.frontmatter.status) || String(p.frontmatter.status || '').trim() || 'Out of play';
+    return `  <li><a href="${escapeHtml(relHref(p, dir))}">${escapeHtml(p.displayTitle)}</a> (${escapeHtml(status)})</li>`;
+  }).join('\n');
+  return `\n<section class="dashboard-section party-out-of-play">
+<h2>Out of Play</h2>
+<ul${noPreviewAttr()}>
+${rows}
+</ul>
+</section>`;
+}
+
 // opts.cocFolio: PC pages are the CoC folio, which shows a hook only when the note gives one; its cards follow.
-function indexTemplate(dir, label, pages, navFor, config, publishConfig, imageMap = {}, opts = {}) {
+// opts.party: the party page's board, { boardHtml, dataScript, clientScripts } (build.js partyBoard).
+function indexTemplate(dir, label, allPages, navFor, config, publishConfig, imageMap = {}, opts = {}) {
   const outputPath = dir + '/index.html';
   const crumbs = generateBreadcrumbs(outputPath, {});
   const breadcrumbsHtml = renderBreadcrumbs(crumbs);
+  const isParty = dir === PARTY_DIR;
+  const outOfPlay = isParty
+    ? allPages.filter((p) => p.frontmatter.type === 'pc' && isOutOfPlay(p.frontmatter, publishConfig.statuses.out_of_play))
+    : [];
+  const pages = outOfPlay.length ? allPages.filter((p) => !outOfPlay.includes(p)) : allPages;
+  const party = (isParty && opts.party) || {};
   const total = pages.length;
   const isChapters = dir === 'chapters';
   const isLocations = dir === 'locations';
@@ -1041,7 +1067,9 @@ function indexTemplate(dir, label, pages, navFor, config, publishConfig, imageMa
   ${subtitle ? `<div class="card-subtitle">${escapeHtml(subtitle)}</div>` : ''}${hook ? `\n  <p class="card-hook">${escapeHtml(hook)}</p>` : ''}
 </a>`;
     }).join('\n');
-    bodyContent = `<div class="card-grid"${noPreviewAttr()}>${cardItems}</div>`;
+    bodyContent = (cardItems ? `<div class="card-grid"${noPreviewAttr()}>${cardItems}</div>` : '')
+      + (isParty ? outOfPlayList(outOfPlay, dir) : '')
+      + (party.dataScript ? '\n' + party.dataScript : '');
   }
 
   let locationTreeHtml = '';
@@ -1097,13 +1125,24 @@ ${bodyContent}`;
   <h1 class="page-title">${escapeHtml(campaignName)}</h1>
 </div>
 ${bodyContent}`;
+  } else if (isParty && total === 0) {
+    // No PC card here (every PC in this folder is out of play): the page is their list, with no count, sort or
+    // filters of cards it has none of. A board with PCs on it (in play, their pages elsewhere) still shows.
+    content = `
+<div class="index-header">
+  <h1 class="page-title">${escapeHtml(label)}</h1>
+</div>
+${party.boardHtml || ''}
+${bodyContent}`;
   } else {
+    // The party page's board sits under its title, above the cards' filters.
     content = `
 <div class="index-header">
   <h1 class="page-title">${escapeHtml(label)}</h1>
   <span class="index-count">Showing ${total} of ${total}</span>
   ${sortHtml}
 </div>
+${party.boardHtml || ''}
 ${pillsHtml}
 ${nameFilterHtml}
 ${locationTreeHtml}
@@ -1125,7 +1164,8 @@ ${bodyContent}`;
     genrePreset: (publishConfig || {})._genrePreset,
     overridesCss: (publishConfig || {})._overridesCss,
     breadcrumbsHtml,
-    scripts: [...clientScripts(outputPath), rootPath(outputPath) + 'js/filters.js'],
+    scripts: [...clientScripts(outputPath), rootPath(outputPath) + 'js/filters.js',
+      ...(party.boardHtml ? (party.clientScripts || []).map((s) => rootPath(outputPath) + 'js/' + s) : [])],
   });
 }
 

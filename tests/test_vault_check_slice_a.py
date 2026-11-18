@@ -597,19 +597,69 @@ class ActivePcsCommandTests(unittest.TestCase):
         rows = vc.list_active_pcs(vault)
         self.assertEqual(
             rows, ['PC\tAda.md\tAda; aliases: Doc, The Colonel; '
-                   'asOfSession: 7'])
+                   'asOfSession: 7; player: ?; status: active'])
 
     def test_missing_aliases_and_as_of_session_render_as_placeholders(self):
         vault = make_vault(self)
         (vault / "Bo.md").write_text("---\ntype: pc\n---\n", encoding="utf-8")
         self.assertEqual(vc.list_active_pcs(vault),
-                         ["PC\tBo.md\tBo; aliases: none; asOfSession: ?"])
+                         ["PC\tBo.md\tBo; aliases: none; asOfSession: ?; "
+                          "player: ?; status: ?"])
 
     def test_retired_pcs_are_excluded(self):
         vault = make_vault(self)
         (vault / "Gone.md").write_text("---\ntype: pc\nstatus: retired\n---\n",
                                        encoding="utf-8")
         self.assertEqual(vc.list_active_pcs(vault), [])
+
+    def test_row_carries_player_and_status(self):
+        # #729: the roster comes from the PC notes, player and status too.
+        vault = make_vault(self)
+        (vault / "Ada.md").write_text(
+            '---\ntype: pc\nplayer_name: "Sam"\nstatus: alive\n---\n',
+            encoding="utf-8")
+        self.assertEqual(vc.list_active_pcs(vault),
+                         ["PC\tAda.md\tAda; aliases: none; asOfSession: ?; "
+                          "player: Sam; status: alive"])
+
+    def test_all_adds_the_pcs_out_of_play(self):
+        vault = make_vault(self)
+        (vault / "Ada.md").write_text("---\ntype: pc\nstatus: alive\n---\n",
+                                      encoding="utf-8")
+        (vault / "Gone.md").write_text("---\ntype: pc\nstatus: dead\n---\n",
+                                       encoding="utf-8")
+        (vault / "Gone_Story.md").write_text("---\ntype: pc\n---\n",
+                                             encoding="utf-8")
+        (vault / "_Template_PC.md").write_text("---\ntype: pc\n---\n",
+                                               encoding="utf-8")
+        self.assertEqual(len(vc.list_active_pcs(vault)), 1)
+        rows = vc.list_active_pcs(vault, everyone=True)
+        self.assertEqual(len(rows), 2, rows)
+        self.assertTrue(any("Gone; " in r and "status: dead" in r
+                            for r in rows), rows)
+        proc = run_cli(vault, "active-pcs", "--all")
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertIn("status: dead", proc.stdout)
+
+    def test_a_midwife_draft_is_no_pc_in_either_list(self):
+        vault = make_vault(self)
+        (vault / "Ada.md").write_text("---\ntype: pc\nstatus: alive\n---\n",
+                                      encoding="utf-8")
+        (vault / "_midwife").mkdir()
+        (vault / "_midwife" / "Draft.md").write_text(
+            "---\ntype: pc\nstatus: alive\n---\n", encoding="utf-8")
+        for everyone in (False, True):
+            rows = vc.list_active_pcs(vault, everyone)
+            self.assertEqual([r.split("\t")[1] for r in rows], ["Ada.md"])
+
+    def test_a_value_with_a_tab_or_line_break_stays_on_its_row(self):
+        vault = make_vault(self)
+        (vault / "Ada.md").write_text(
+            '---\ntype: pc\nplayer_name: "Sam\\tand\\nJo"\nstatus: alive\n---\n',
+            encoding="utf-8")
+        (row,) = vc.list_active_pcs(vault)
+        self.assertEqual(row.count("\t"), 2, row)
+        self.assertIn("player: Sam and Jo;", row)
 
     def test_cli_emits_the_section(self):
         proc = run_cli(VAULT_CHECK_FIXTURE, "active-pcs")

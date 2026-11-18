@@ -32,6 +32,11 @@ Professor Henry Ashford, a respected antiquarian at Miskatonic University, has g
 
 ## Entity Index
 
+### Player Characters
+- [[Dr. Eleanor Voss]] — Physician
+- [[Malcolm Bridges]] — Private investigator
+- [[Reverend Silas Marsh]] — Episcopal pastor
+
 ### NPCs
 - [[Professor Ashford]] — The missing antiquarian (central figure)
 - [[Inspector Crane]] — Kingsport police detective assigned to the case

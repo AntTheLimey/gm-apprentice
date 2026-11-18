@@ -51,6 +51,10 @@ HOME: Path | None = None   # where backups go; None is the home folder
 UNREADABLE = ("template-unreadable:", "agent-block-unreadable:")
 # Checks whose apply lines are already written for the GM.
 PLAIN_LINES = {"templates", "agent-block"}
+# Checks whose apply lines starting "left " say what was not done and is the
+# GM's to finish (a link to take out by hand, a publish list entry left):
+# Worth knowing, word for word, never folded into the check's plain line.
+LEFT_APART = {"pc-roster-retired"}
 YES_NO = ["yes", "leave"]
 SHOWN_LINES = 3   # a question's text shows this many of its lines
 HASH_LEN = 8      # an answer id's hash: `<id>@<8 hex>`
@@ -633,8 +637,8 @@ def _one(run: _Run, check: Check, item: Item, given: dict[str, Given],
         return
     if not _asks(check, item):
         run.before_write()
-        _did(check, _unreadable(res, item.apply(None) if item.apply else []),
-             run.did)
+        _did(check, _left_apart(check, res, _unreadable(
+            res, item.apply(None) if item.apply else [])), run.did)
         return
     answer, now = _answer_for(item, given, known, res)
     if answer is not None and not now:
@@ -666,7 +670,7 @@ def _one(run: _Run, check: Check, item: Item, given: dict[str, Given],
     if answer == "leave" and check.name not in PLAIN_LINES:
         run.did[check.left or "Left that as it is, as you asked."] = None
     else:
-        _did(check, lines, run.did)
+        _did(check, _left_apart(check, res, lines), run.did)
     run.asked.append(item.id)
     run.new[item.id] = {"answer": answer, "lines_sha": lines_sha(item.lines),
                         "on": _today(), "plugin": run.plugin_v}
@@ -680,6 +684,17 @@ def _unreadable(res: UpdateResult, lines: list[str]) -> list[str]:
     res.read_problems.extend(_row(x[len(mark):]) for x in lines
                              if x.startswith(mark))
     return [x for x in lines if not x.startswith(mark)]
+
+
+def _left_apart(check: Check, res: UpdateResult, lines: list[str]) -> list[str]:
+    """The apply lines for Done; for a `LEFT_APART` check, those saying
+    what was left go to Worth knowing instead, as written."""
+    if check.name not in LEFT_APART:
+        return lines
+    for x in lines:
+        if x.startswith("left ") and (note := f"L{x[1:]}.") not in res.notes:
+            res.notes.append(note)
+    return [x for x in lines if not x.startswith("left ")]
 
 
 def _did(check: Check, lines: list[str], did: dict[str, None]) -> None:

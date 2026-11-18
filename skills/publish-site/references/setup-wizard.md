@@ -613,8 +613,9 @@ and each can be set up later:
 - **Live status bar** — players see and update their hit points and the
   like (HP and FP in GURPS; hit points, Sanity and Luck in Call of Cthulhu;
   hit points, spell slots and uses in D&D) from their phones during play,
-  in real time. (The roster page already shows a static party table at
-  Tier 1 — this is what makes it live.)
+  in real time. (With character sheets shown, the party page already
+  shows a static party table at Tier 1 for a system that has one — this
+  is what makes it live.)
 - **At-table change-request inbox** — players submit sheet edits and
   questions from their phones during a session; you review and apply
   them.

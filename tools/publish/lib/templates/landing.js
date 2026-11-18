@@ -6,7 +6,7 @@ const {
   getRecentEvents, getExploreDescriptions,
 } = require('./landing-data');
 const { canonicalNfc } = require('../unicode');
-const { isOutOfPlay } = require('../pc-status');
+const { isOutOfPlay, statusLabel } = require('../pc-status');
 const { isPlayedSession } = require('../session-hub');
 const { propListHtml } = require('./props-page');
 const { isPropNote } = require('../props/note');
@@ -24,21 +24,6 @@ function formatDate(dateStr) {
   return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 }
 
-
-// Label for an In Memoriam card, or null. Every status on the default out-of-play list gets one; for a status the
-// GM added the card shows it as written.
-function statusLabel(status) {
-  const s = String(status || '').trim().toLowerCase();
-  if (s === 'dead' || s === 'deceased' || s === 'kia') return 'KIA';
-  if (s === 'missing' || s === 'unknown') return 'MIA';
-  if (s === 'retired') return 'Retired';
-  if (s === 'departed') return 'Departed';
-  if (s === 'inactive') return 'Inactive';
-  if (s === 'npc') return 'Now an NPC';
-  if (s === 'destroyed') return 'Destroyed';
-  if (s === 'dissolved') return 'Dissolved';
-  return null;
-}
 
 // Resolve a wiki-link such as "[[Session 03 - Give Rest]]" to its session page by matching the
 // page's source filename (page.title). Returns null when no matching session page is present.

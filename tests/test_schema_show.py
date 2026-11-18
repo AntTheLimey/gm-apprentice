@@ -218,7 +218,6 @@ class ShowReadsTheTemplates(unittest.TestCase):
                          "parent_location (part_of)")
 
     def test_older_names_and_subtypes(self):
-        self.assertIn("write pc_roster", sr.show("player-characters") or "")
         self.assertIn("write session_wrap", sr.show("session-wrapup") or "")
         self.assertIn("abstract", sr.show("character") or "")
         self.assertIn("no rules of its own", sr.show("weapon") or "")

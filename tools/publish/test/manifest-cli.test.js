@@ -400,6 +400,25 @@ describe('manifest apply', () => {
     fs.rmSync(vault, { recursive: true, force: true });
   });
 
+  it('--prune-path drops only the named entry, and only once its file is gone (#729)', async () => {
+    const vault = copyVault('auto-exclude');
+    fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
+    // The roster the update deleted, a handout away for now (its decision and reason must stay), and a note still there.
+    writePublishList(vault, { publishing: ['Sessions/Played Session.md', '_Campaign/Player Characters.md'], excluded: ['Handouts/Away.md'] });
+    const { configPath } = siteFor(vault);
+    const c = capture();
+
+    const rc = await runManifest({ verb: 'apply', configPath, json: true,
+      prunePaths: ['_Campaign/Player Characters.md', 'Sessions/Played Session.md'] }, c.deps);
+    assert.strictEqual(rc, 0, c.text());
+    const written = c.writes[path.join(vault, '_meta', 'publish-list.yaml')];
+    const list = readListText(written);
+    assert.deepStrictEqual(list.publishing, ['Sessions/Played Session.md']);
+    assert.deepStrictEqual(list.excluded, ['Handouts/Away.md']);
+    assert.strictEqual(JSON.parse(c.out.join('')).pruned, 1);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
   // M9: --prune used to drop any entry whose path fell under excludeDirs, because
   // the scanned `files` list never contains those paths at all — indistinguishable
   // from a file that was actually deleted. Adding a folder to excludeDirs must not

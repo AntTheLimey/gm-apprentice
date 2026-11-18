@@ -37,7 +37,7 @@ function buildSite({ publish = '', wrangler = false, functions = false, pcAppend
   console.log = (...a) => lines.push(a.join(' '));
   try { build({ configPath }); } finally { Object.assign(console, real); }
   const pcDir = path.join(root, 'docs', 'characters', 'pcs');
-  const pcFile = fs.readdirSync(pcDir).find((f) => f.endsWith('.html') && !f.startsWith('index') && !f.includes('player-characters'));
+  const pcFile = fs.readdirSync(pcDir).find((f) => f.endsWith('.html') && !f.startsWith('index'));
   return { html: fs.readFileSync(path.join(pcDir, pcFile), 'utf8'), lines, root };
 }
 

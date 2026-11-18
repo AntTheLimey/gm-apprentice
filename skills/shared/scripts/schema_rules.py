@@ -187,9 +187,6 @@ REQUIRED_FIELDS = {
     "chapter": ["type", "title"],
     "meta": ["type"],
     "timeline": ["type"],
-    "pc_roster": ["type"],
-    # An older name for pc_roster, still accepted.
-    "player-characters": ["type"],
     "character-story": ["type", "canon_status"],
     "campaign_overview": ["type", "canon_status"],
     "heritage": ["type", "canon_status"],
@@ -444,7 +441,6 @@ def tone_proposal(raw: object) -> str | None:
 
 # Older spellings of a type: the name to write instead.
 OLDER_TYPE_NAMES: dict[str, str] = {
-    "player-characters": "pc_roster",
     **{t: WRAP_UP_TYPE for t in sorted(WRAP_UP_TYPES) if t != WRAP_UP_TYPE},
 }
 

@@ -359,10 +359,11 @@ excluded versus missing is the GM's call.
                      folder the site leaves out is listed apart: its file is
                      there, and --prune keeps it.
   manifest apply [--publish <path>]... [--exclude "<path>=<reason>"]...
-                 [--decide <path>]... [--prune] [--config <path>] [--vault <dir>]
-                 [--json]
+                 [--decide <path>]... [--prune] [--prune-path <path>]...
+                 [--config <path>] [--vault <dir>] [--json]
                      Move paths between the three sections and rewrite the file.
-                     --prune drops entries with no file on disk. A path that
+                     --prune drops entries with no file on disk; --prune-path
+                     drops that one entry, only if its file is gone. A path that
                      matches no vault file is an error and nothing is written.
                      --vault (diff and apply): read and write this vault's
                      manifest through the site's rules, as doctor --site --vault
@@ -1131,7 +1132,7 @@ if (command === 'manifest') {
     // one the site's vaultPath names (explain --all takes it for the same reason).
     verb === 'publish-played' ? { '--vault': 'vault', '--session': 'session' }
       : verb === 'rename' ? { '--vault': 'vault', '--from': 'from', '--to': 'to' } : { '--vault': 'vault' },
-    verb === 'apply' ? { '--publish': 'publish', '--exclude': 'exclude', '--decide': 'decide' }
+    verb === 'apply' ? { '--publish': 'publish', '--exclude': 'exclude', '--decide': 'decide', '--prune-path': 'prunePaths' }
       : verb === 'rename' ? { '--name': 'names' }
         : verb === 'never-publish' ? { '--path': 'paths' } : {},
   );
@@ -1159,6 +1160,7 @@ if (command === 'manifest') {
     untyped: !!parsed.flags.untyped,
     write: !!parsed.flags.write,
     prune: !!parsed.flags.prune,
+    prunePaths: parsed.flags.prunePaths,
     dryRun: !!parsed.flags.dryRun,
     json: !!parsed.flags.json,
   })
