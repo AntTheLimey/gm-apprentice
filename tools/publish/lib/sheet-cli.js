@@ -205,4 +205,4 @@ async function runSheetShow(deps) {
   return 0;
 }
 
-module.exports = { runSheetShow };
+module.exports = { runSheetShow, findPc, displayNameOf };

@@ -9,6 +9,16 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.74] — 2026-11-18
+
+### Added
+
+- A wrap-up now writes a PC's end-of-session vitals to the Stat Sheet as well as Current Status: a batch's `=== sheet <PC> hp=41 hit-dice=1/5` block sets them with the writers flush uses, shows them in the dry run, leaves alone any value not given, and says so when the sheet has no row for one. `gma publish sheet set` does the same from the command line, with the keys for D&D, Call of Cthulhu, Regency and GURPS in its help (#749, tool 1.70.28).
+
+### Fixed
+
+- After a wrap-up, the party page's Party Status board showed a PC's hit points from before the session, because the wrap-up changed only the Current Status text; the wrap-up now writes the same numbers to the sheet the board reads (#749, tool 1.70.28).
+
 ## [1.12.73] — 2026-11-18
 
 ### Fixed

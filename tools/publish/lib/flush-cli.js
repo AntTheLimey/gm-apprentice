@@ -206,4 +206,4 @@ async function runFlush(deps) {
   return 0;
 }
 
-module.exports = { runFlush, resolveSystem, defaultRunWrangler, WRANGLER_TIMEOUT_MS };
+module.exports = { runFlush, resolveSystem, summarize, WRITERS, defaultRunWrangler, WRANGLER_TIMEOUT_MS };

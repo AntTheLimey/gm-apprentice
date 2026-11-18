@@ -135,27 +135,6 @@ function applyDnDFlush(markdown, record, options) {
     return true;
   };
 
-  // A table's rows the build would place, for an `Attribute | Value` table. The first
-  // table of the subsection; none when its header is not that shape.
-  const attributeRows = (sec, key, everyRow) => {
-    const table = subsection(sec, key) && subsection(sec, key).tables[0];
-    if (!table || !ATTRIBUTE_COLUMNS.every((p, i) => p.test(table.header[i] || ''))) return [];
-    return table.rows.filter(row => {
-      if (!row.cells.some(c => plain(c))) return false;
-      if (everyRow) return true;
-      if (row.cells.slice(2).some(c => plain(c))) return false;
-      if (hasLink(row.cells[0] || '')) return false;
-      return linkInReason(asHtml(row.cells[1])) !== false;   // only a reason may hold a link
-    }).map(row => ({ row, label: plain(row.cells[0]), raw: row.cells[1] || '' }));
-  };
-  // A cell read as the build reads a number: blank, a whole number (a reason may follow), or other.
-  // `words`: a word that says none (None, N/A) is a blank too, as for Temp HP and Exhaustion.
-  const readNumber = (raw, words) => {
-    const t = filled(plain(raw));
-    if (words ? saysNone(t) : holdsNothing(t)) return { blank: true };
-    const v = splitReason(t).value;
-    return /^\d+$/.test(v) ? { value: Number(v) } : { other: true };
-  };
   // Change only the digits of a raw cell, keeping emphasis marks, a reason, spacing. The digit
   // runs the page reads (from the rendered text) must be the raw cell's own first runs, with
   // nothing but emphasis marks before them (and a slash between a pair); a link or markup that
@@ -183,7 +162,7 @@ function applyDnDFlush(markdown, record, options) {
   };
 
   const stat = section('stat sheet');
-  const combat = stat ? attributeRows({ subs: firstOfEach(stat.subs) }, 'combat') : [];
+  const combat = combatRows(sections);
   const core = stat ? attributeRows({ subs: firstOfEach(stat.subs) }, 'core') : [];
   const firstRow = re => combat.find(r => re.test(r.label));
 
@@ -201,8 +180,7 @@ function applyDnDFlush(markdown, record, options) {
   };
   // Hit points are live when the maximum is a number and the current cell is a number or
   // holds nothing, as the build has it (live-data.js); a missing current row reads as the maximum.
-  const maxRow = firstRow(/^HP\s*\(\s*max(imum)?\.?\s*\)$/i);
-  const maxRead = maxRow ? readNumber(maxRow.raw) : {};
+  const maxRead = hpMaxOf(combat);
   const curRow = firstRow(/^HP\s*(\(\s*cur(r(ent)?)?\.?\s*\))?$/i);
   const cur = curRow ? readNumber(curRow.raw) : { blank: true };
   const hpMax = maxRead.value !== undefined && !cur.other ? maxRead.value : null;
@@ -258,22 +236,13 @@ function applyDnDFlush(markdown, record, options) {
     else tried.add(key);
   };
 
-  const hitDiceSeen = new Set();
-  for (const { row, label, raw } of combat) {
-    if (/^hit dice/i.test(label)) {
-      const m = filled(plain(raw)).match(/^(\d+)\s*\/\s*(\d+)$/);
-      if (!m) continue;
-      const key = liveKey('hd', shown(label.replace(/\s*\(\s*spent\s*\/\s*max\s*\)\s*$/i, '')));
-      if (hitDiceSeen.has(key)) continue;
-      hitDiceSeen.add(key);
-      if (!trackable(+m[2], +m[1])) continue;
-      if (!has(key)) continue;
-      const spent = fitted(used[key], +m[2]);
-      if (spent === +m[1]) { resolved.add(key); continue; }
-      const to = swapDigits(raw, [spent]);
-      if (to !== null && write(row, 1, label, to)) resolved.add(key);
-      else tried.add(key);
-    }
+  for (const { row, label, raw, key, spent: was, max } of hitDiceRows(combat)) {
+    if (!has(key)) continue;
+    const spent = fitted(used[key], max);
+    if (spent === was) { resolved.add(key); continue; }
+    const to = swapDigits(raw, [spent]);
+    if (to !== null && write(row, 1, label, to)) resolved.add(key);
+    else tried.add(key);
   }
   const ds = combat.find(r => /^death saves/i.test(r.label));
   if (ds) {
@@ -348,4 +317,70 @@ function firstOfEach(subs) {
   return subs.filter(s => (seen.has(s.key) ? false : (seen.add(s.key), true)));
 }
 
-module.exports = { applyDnDFlush };
+// A table's rows the build would place, for an `Attribute | Value` table. The first
+// table of the subsection; none when its header is not that shape.
+function attributeRows(sec, key, everyRow) {
+  const sub = sec && sec.subs.find(s => s.key === key);
+  const table = sub && sub.tables[0];
+  if (!table || !ATTRIBUTE_COLUMNS.every((p, i) => p.test(table.header[i] || ''))) return [];
+  return table.rows.filter(row => {
+    if (!row.cells.some(c => plain(c))) return false;
+    if (everyRow) return true;
+    if (row.cells.slice(2).some(c => plain(c))) return false;
+    if (hasLink(row.cells[0] || '')) return false;
+    return linkInReason(asHtml(row.cells[1])) !== false;   // only a reason may hold a link
+  }).map(row => ({ row, label: plain(row.cells[0]), raw: row.cells[1] || '' }));
+}
+
+// The Stat Sheet's Combat rows the build places.
+function combatRows(sections) {
+  const stat = sections.find(s => s.norm === normalizeTitle('stat sheet'));
+  return stat ? attributeRows({ subs: firstOfEach(stat.subs) }, 'combat') : [];
+}
+
+// A cell read as the build reads a number: blank, a whole number (a reason may follow), or other.
+// `words`: a word that says none (None, N/A) is a blank too, as for Temp HP and Exhaustion.
+function readNumber(raw, words) {
+  const t = filled(plain(raw));
+  if (words ? saysNone(t) : holdsNothing(t)) return { blank: true };
+  const v = splitReason(t).value;
+  return /^\d+$/.test(v) ? { value: Number(v) } : { other: true };
+}
+
+// The first HP (Max) row, read as a number: { value }, { blank } or { other }; {} with no row.
+function hpMaxOf(combat) {
+  const maxRow = combat.find(r => /^HP\s*\(\s*max(imum)?\.?\s*\)$/i.test(r.label));
+  return maxRow ? readNumber(maxRow.raw) : {};
+}
+
+// The Hit Dice rows the page keeps live: a `spent/max` cell, the first row of each name,
+// something to count. Each with its live key (`hd:hit dice`, `hd:hit dice d10`).
+function hitDiceRows(combat) {
+  const seen = new Set();
+  const out = [];
+  for (const r of combat) {
+    if (!/^hit dice/i.test(r.label)) continue;
+    const m = filled(plain(r.raw)).match(/^(\d+)\s*\/\s*(\d+)$/);
+    if (!m) continue;
+    const key = liveKey('hd', shown(r.label.replace(/\s*\(\s*spent\s*\/\s*max\s*\)\s*$/i, '')));
+    if (seen.has(key)) continue;
+    seen.add(key);
+    if (!trackable(+m[2], +m[1])) continue;
+    out.push({ ...r, key, spent: +m[1], max: +m[2] });
+  }
+  return out;
+}
+
+// What a caller naming values needs (`sheet set hp=41 hit-dice=1/5`), read exactly as the
+// write-back reads it: the live Hit Dice rows [{ key, label, spent, max }], and the HP
+// maximum (null when the sheet gives none) that a written HP is fitted to.
+function liveSheet(markdown) {
+  const combat = combatRows(readNote(String(markdown).split('\n')));
+  const max = hpMaxOf(combat).value;
+  return {
+    hitDice: hitDiceRows(combat).map(({ key, label, spent, max }) => ({ key, label, spent, max })),
+    hpMax: max === undefined ? null : max,
+  };
+}
+
+module.exports = { applyDnDFlush, liveSheet };

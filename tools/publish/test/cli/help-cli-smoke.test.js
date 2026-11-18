@@ -72,6 +72,14 @@ describe('CLI: gm-publish <cmd> --help is per-subcommand', () => {
     assert.doesNotMatch(r.stdout, /Static site generator/);
   });
 
+  it('sheet set --help prints the keys for each system and exits 0', async () => {
+    const r = await runIn(['sheet', 'set', '--help']);
+    assert.strictEqual(r.code, 0);
+    assert.match(r.stdout, /sheet set --pc <name> key=value/);
+    assert.match(r.stdout, /D&D 5e {5}hp, temp, exhaustion/);
+    assert.match(r.stdout, /Regency {4}the CoC keys and rep/);
+  });
+
   it('sheet with an unknown verb prints the sheet usage and exits 1', async () => {
     const r = await runIn(['sheet', 'summon', '--pc', 'Jane']);
     assert.strictEqual(r.code, 1);

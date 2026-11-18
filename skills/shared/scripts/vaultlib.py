@@ -2134,6 +2134,52 @@ def run_relationships(vault: Path, args: list[str]) -> Any:
         raise fail("it did not answer in JSON") from e
 
 
+def run_sheet_set(vault: Path, rel: str, text: str,
+                  pairs: list[str]) -> dict[str, Any]:
+    """`gm-publish sheet set --vault VAULT --file REL --stdin KEY=VALUE...`
+    on the note's text `text`: the publish tool's per-system writers (the
+    ones `flush` uses) put the values in the Stat Sheet's own cells. Returns
+    its JSON, { pc, markdown, changed, lines: [{kind, text}] }; it writes
+    nothing. The tool's own refusal (an unknown key, a bad value) is raised
+    as its one-line reason; any other failure says the tool could not be
+    asked."""
+    def fail(reason: str) -> PublishToolUnavailable:
+        return PublishToolUnavailable(
+            f"could not ask the publish tool to set the sheet: {reason}")
+
+    node = shutil.which("node")
+    if not node:
+        raise fail("node is not on PATH")
+    if PUBLISH_TOOL is None:
+        raise fail(MISSING_TOOL)
+    if not PUBLISH_TOOL.is_file():
+        raise fail(f"the publish tool is not at {PUBLISH_TOOL.as_posix()}")
+    try:
+        done = subprocess.run(
+            [node, str(PUBLISH_TOOL), "sheet", "set", "--vault", str(vault),
+             "--file", rel, "--stdin", *pairs],
+            input=text.encode("utf-8"), capture_output=True,
+            timeout=PUBLISH_LINES_TIMEOUT)
+    except subprocess.TimeoutExpired as e:
+        raise fail(f"it did not answer within {PUBLISH_LINES_TIMEOUT}s") from e
+    except OSError as e:
+        raise fail(f"node could not run ({e.__class__.__name__})") from e
+    if done.returncode != 0:
+        reason, own = _stderr_reason(done.stderr.decode("utf-8", "replace"))
+        if own:
+            raise PublishToolUnavailable(reason)
+        raise fail(reason or f"exit code {done.returncode}")
+    try:
+        answer = json.loads(done.stdout.decode("utf-8", "replace"))
+    except ValueError as e:
+        raise fail("it did not answer in JSON") from e
+    if not (isinstance(answer, dict) and isinstance(answer.get("markdown"), str)
+            and isinstance(answer.get("lines"), list)):
+        raise fail("its answer was not understood (a tool older than "
+                   "1.70.28 has no `sheet set`)")
+    return answer
+
+
 def _target_args(vault: Path, site_config: Path | None = None) -> list[str]:
     args = ["--vault", str(vault)]
     if site_config is not None:
