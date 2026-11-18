@@ -2193,6 +2193,9 @@ function processContent(page, linkMap, excludeSections, imageMap = {}, options =
   markdown = resolveImageEmbeds(markdown, imageMap, page.outputPath, options.usedImages, {
     portraitBasename: portraitBasename(page.frontmatter),
   });
+  // Braces holding a wikilink are text, never a placeholder (#720): once the link is resolved `{[[Bob]]}` reads
+  // `{Bob}`, so they are escaped first, within one paragraph, which renders the same braces (CodeRabbit, #728).
+  markdown = markdown.replace(/(?<!\\)\{((?:[^{}\n]|\n(?![ \t]*\n))*\[\[(?:[^{}\n]|\n(?![ \t]*\n))*)\}/g, '\\{$1\\}');
   markdown = resolveWikiLinks(markdown, linkMap, page.outputPath);
   // The renderer widens a table whose row has more cells than its header (nothing is lost);
   // say so, once per table, so the GM can give the extra column a header.

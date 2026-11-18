@@ -92,4 +92,30 @@ describe('dropPlaceholders on a page', () => {
     assert.equal(run('## A\n\n{Fill this in}\n', 'npc').unfilled.length, 1);
     assert.match(run('## A\n\n{Fill this in}\n').unfilled[0].fix, /\\\{like this\\\}/);
   });
+  it('braces holding a wikilink stay whole once the link is resolved: {[[Bob]]} is text (CodeRabbit, #728)', () => {
+    const r = run('## A\n\n{[[Bob]]}\n\n{see [[Bob]] now}\n\n{[[Bob|the man]]}\n\n{Fill this in}\n');
+    assert.match(r.html, /\{Bob\}/);
+    assert.match(r.html, /\{see Bob now\}/);
+    assert.match(r.html, /\{the man\}/);
+    assert.equal(r.unfilled.length, 1);
+    assert.match(run('## A\n\n{see\n[[Bob]] now}\n').html, /see\nBob now\}/);
+    const apart = run('## A\n\n{Fill this in}\n\n[[Bob]] said }\n');
+    assert.equal(apart.unfilled.length, 1);
+  });
+  it('a list item that held no placeholder keeps its nested list when one is dropped elsewhere (CodeRabbit, #728)', () => {
+    const { html } = run('{Fill this in}\n\n- one\n-\n  - child\n');
+    assert.match(html, /<li>\s*<ul>\s*<li>child/);
+  });
+});
+
+describe('placeholder edges (CodeRabbit, #728)', () => {
+  it('a placeholder paragraph over two lines leaves an excerpt too', () => {
+    assert.equal(excerptFromMarkdown('{To flesh out\nfor colour.}\n\nReal text.\n'), 'Real text.');
+    const kept = withoutPlaceholderLines('{To flesh out\nfor colour.}\n\nKept {as is}.\n');
+    assert.doesNotMatch(kept, /flesh/);
+    assert.match(kept, /Kept \{as is\}\./);
+  });
+  it('a sheet value in braces of any length is unfilled, as before #720', () => {
+    assert.equal(isPlaceholder(`{${'a'.repeat(401)}}`), true);
+  });
 });

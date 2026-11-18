@@ -8,7 +8,8 @@ const BRACED_SOURCE = '\\{[^{}]{0,400}\\}';
 // Lone braced text on a page or in a card reads as a note to the GM only with a space in it, or as one capitalised word
 // (`{Name}`, `{Backstory}`: the shipped templates' own), and never with a link: `{REDACTED}`, `{1d6}`, `{[[Bob]]}` are text.
 const NOTE_RE = /^\{(?=[^{}]*\s|[A-Z][a-z][^{}\s]*\})(?![^{}]*\[\[)[^{}]{0,400}\}$/;
-const WHOLE_RE = new RegExp(`^${BRACED_SOURCE}$`);
+// A labelled sheet value in braces, any length: the sheet readers' reading before #720, kept (CodeRabbit, #728).
+const WHOLE_RE = /^\{[^}]*\}$/;
 
 // Excerpt text: a placeholder anywhere on a line, with the bullet in front of it when it stands alone on its line.
 const PLACEHOLDER_RE = new RegExp(`(?:^[ \\t]*[-*+][ \\t]+)?${BRACED_SOURCE}`, 'gm');
@@ -61,6 +62,7 @@ function dropPlaceholders(tokens) {
   const onlyGone = (a, b) => b > a + 1 && out.slice(a + 1, b).every((x) => x.type === GONE);
   // `- {x}` with a list of the same kind nested in it: the nested items take the emptied item's place.
   const hoist = (a, b) => {
+    if (!out[a + 1] || out[a + 1].type !== GONE) return false;   // only an item whose own text was the placeholder
     const inner = out.slice(a + 1, b).filter((x) => x.type !== GONE);
     if (inner.length === 0 || inner[0].nesting !== 1 || !/^(bullet|ordered)_list_open$/.test(inner[0].type)) return false;
     if (inner[inner.length - 1].type !== inner[0].type.replace('_open', '_close') || inner[0].level !== out[a].level + 1) return false;
@@ -99,9 +101,15 @@ function dropPlaceholders(tokens) {
   return { tokens: out.filter((x) => x.type !== GONE), dropped };
 }
 
-// Text with every line that is only a placeholder (a bullet in front allowed) taken out; braces inside a sentence stay.
+// Text with every paragraph or line that is only a placeholder (a bullet in front allowed) taken out, a placeholder
+// over several lines included; braces inside a sentence stay.
 function withoutPlaceholderLines(text) {
-  return String(text == null ? '' : text).split('\n').filter((l) => !isTemplateNote(l.replace(/^\s*[-*+]\s+/, ''))).join('\n');
+  const bare = (s) => s.replace(/^\s*[-*+]\s+/, '');
+  return String(text == null ? '' : text).split(/(\n[ \t]*\n)/).map((part, i) => {
+    if (i % 2 === 1) return part;   // the blank line between two paragraphs
+    if (part.includes('\n') && isTemplateNote(bare(part))) return '';
+    return part.split('\n').filter((l) => !isTemplateNote(bare(l))).join('\n');
+  }).join('');
 }
 
 module.exports = { PLACEHOLDER_RE, isPlaceholder, isTemplateNote, withoutPlaceholderLines, dropPlaceholders };
