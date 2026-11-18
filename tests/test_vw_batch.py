@@ -95,6 +95,11 @@ Paused on "Roll initiative." The cups are poured.
 """ + PAUSED_LEAD + SCENE_GM
 PAUSED_PROMPT = PAUSED.replace("---\n\n## Paused", "---\n\n<!-- A scene is "
                                "prep.\n     Keep what helps. -->\n\n## Paused")
+# An older scene with a title line above its lead, and the same paused.
+TITLED = (SCENE_FM + "\n# The Hour Before Light\n\n" + PAUSED_LEAD
+          + SCENE_GM)
+TITLED_PAUSED = PAUSED.replace("---\n\n## Paused", "---\n\n# The Hour "
+                               "Before Light\n\n## Paused")
 PAUSED_REPLACE = (f'=== section "{SCENE_REL}" --lead --replace\n'
                   "**Situation:** Night 3.\n\n**Starts it:** The well bell.\n")
 
@@ -600,6 +605,62 @@ class BatchTests(unittest.TestCase):
         """The misread-lead guard (#758): any heading the lead was not
         expected under."""
         note = SCENE_FM + "\n## Setup\n\n" + SCENE.split("---\n\n", 1)[1]
+        for mode in ("--replace", "--append"):
+            self.lead_refused(note, "**Situation:** New.\n",
+                              "reads like one", mode)
+        self.assertIn("reads like a lead", self.lead_read(note))
+
+    # --- #758: an older scene's `# Title` line sits above its lead
+
+    def test_titled_lead_is_read_replaced_and_appended_below_the_title(self):
+        for note in (TITLED, TITLED_PAUSED):
+            self.assertEqual(self.lead_read(note), PAUSED_LEAD.strip() + "\n")
+            head = note.split(PAUSED_LEAD)[0]
+            vault = make_vault(self, {"n.md": note})
+            code, out = batch(vault, PAUSED_REPLACE.replace(SCENE_REL, "n.md"),
+                              "--write")
+            self.assertEqual(code, 0, out)
+            got = read(vault, "n.md")
+            self.assertEqual(got, head + "**Situation:** Night 3.\n\n"
+                             "**Starts it:** The well bell.\n\n" + SCENE_GM)
+            self.assertEqual(got.count("# The Hour Before Light\n"), 1)
+            vault = make_vault(self, {"n.md": note})
+            code, out = batch(vault, '=== section "n.md" --lead --append\n'
+                              "| Hide | Found by dawn |\n", "--write")
+            self.assertEqual(code, 0, out)
+            self.assertEqual(read(vault, "n.md"), note.replace(
+                "| Run | Caught |\n", "| Run | Caught |\n"
+                "| Hide | Found by dawn |\n"))
+
+    def test_titled_lead_read_then_written_back_changes_nothing(self):
+        for note in (TITLED, TITLED_PAUSED):
+            vault = make_vault(self, {"n.md": note})
+            lead = self.lead_read(note)
+            code, out = batch(vault, '=== section "n.md" --lead --replace\n'
+                              + lead, "--write")
+            self.assertEqual(code, 0, out)
+            self.assertEqual(read(vault, "n.md"), note)
+
+    def test_an_empty_titled_lead_is_written_below_the_title(self):
+        note = TITLED.replace(PAUSED_LEAD, "")
+        self.assertIn("no text below its title", self.lead_read(note))
+        vault = make_vault(self, {"n.md": note})
+        code, out = batch(vault, '=== section "n.md" --lead --replace\n'
+                          "**Situation:** Night 3.\n", "--write")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(read(vault, "n.md"), note.replace(
+            "Light\n\n", "Light\n\n**Situation:** Night 3.\n\n"))
+
+    def test_text_above_a_title_is_the_lead(self):
+        """Nothing visible may stand above a title the lead skips."""
+        note = SCENE_FM + "\nIntro.\n\n# Title\n\n**Situation:** x\n"
+        self.assertEqual(self.lead_read(note), "Intro.\n")
+
+    def test_a_titled_lead_below_a_top_gm_only_block_is_refused(self):
+        """Out of scope for now: the guard holds, nothing is written."""
+        note = TITLED.replace(
+            "Light\n\n", "Light\n\n<!-- gm-only -->\nSecret.\n"
+            "<!-- /gm-only -->\n\n", 1)
         for mode in ("--replace", "--append"):
             self.lead_refused(note, "**Situation:** New.\n",
                               "reads like one", mode)

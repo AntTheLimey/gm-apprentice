@@ -230,6 +230,20 @@ class SectionCommandTests(unittest.TestCase):
         self.assertEqual(r.stdout, "**Situation:** Night.\n\n| Do | Then |\n"
                          "|---|---|\n| Run | Caught |\n")
 
+    def test_lead_of_a_titled_scene_is_below_its_title(self):
+        """#758: an older scene opens with a `# Title` line; the lead is the
+        text below it, the title never part of it."""
+        vault = copy_vault(self)
+        (vault / "Scene.md").write_text(
+            "---\ntype: scene\n---\n\n# Before Light\n\n**Situation:** Dark."
+            "\n\n<!-- gm-only -->\n\n## GM Notes\n\nx\n\n<!-- /gm-only -->\n",
+            encoding="utf-8")
+        r = subprocess.run(
+            [sys.executable, str(SCRIPTS / "section.py"), str(vault), "Scene",
+             "--lead"], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(r.stdout, "**Situation:** Dark.\n")
+
     def test_runs_through_gma(self):
         r = subprocess.run(
             [sys.executable, str(SCRIPTS / "gma.py"), "section",

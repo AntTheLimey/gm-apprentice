@@ -14,7 +14,7 @@ gma section <vault> <note> [<path>] [options]
 | `<vault>` |  | the vault folder |
 | `<note>` |  | the note: a vault-relative path, name or alias |
 | `<path>` |  | the heading path: Heading or Heading/Sub; '## Heading/Sub' pins the first heading's level |
-| `--lead` |  | print the note's lead instead: the text above its first heading or hidden block (a scene's Situation, Starts it and If-table; on a paused scene, the text below its Paused section) |
+| `--lead` |  | print the note's lead instead: the text above its first heading or hidden block (a scene's Situation, Starts it and If-table; below a # title line, and on a paused scene below its Paused section) |
 
 Example: `gma section "<vault>" "<note>" "Current Status/Session Log"`
 <!-- END GENERATED -->
