@@ -162,7 +162,7 @@ function withSharedThreads(pcMarkdown, entries) {
 // (`viewOptions`, as publishView takes them); a view that cannot be made gives nothing, never the raw text. A caller
 // whose corpus has not had the GM-alias rewrite the build applies in place (the leak check) passes `rewrite`, the
 // rewriter's markdown function, and the copy is rewritten first, so its threads read as the site prints them.
-function overviewView({ allNotes, corpus, config, viewOptions, rewrite = null, warn = () => {}, what = 'shared threads were left off the PC pages' }) {
+function overviewView({ allNotes, corpus, config, viewOptions, rewrite = null, rewriteFreshOnly = false, warn = () => {}, what = 'shared threads were left off the PC pages' }) {
   const path = require('path');
   const { scanVaultReport } = require('./scanner');
   const { ALWAYS_EXCLUDE_DIRS } = require('./publish-decision');
@@ -175,8 +175,12 @@ function overviewView({ allNotes, corpus, config, viewOptions, rewrite = null, w
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
     .map(([, n]) => n)[0];
   if (!overviewNote) return null;
+  // `rewriteFreshOnly`: the build has already rewritten the pages of its corpus in place, so `rewrite` is for a copy it
+  // scans afresh (an Overview in a folder the site never reads).
+  let fresh = false;
   const overviewPage = (corpus || []).find((p) => p.sourcePath === overviewNote.sourcePath)
     || (() => {
+      fresh = true;
       const dir = path.posix.dirname(overviewNote.vaultPath);
       const folderMap = { ...(config.folderMap || {}), [dir === '.' ? '' : dir]: '_overview' };
       const report = scanVaultReport(Object.assign({}, config, { excludeDirs: ALWAYS_EXCLUDE_DIRS, folderMap }), { quiet: true });
@@ -188,7 +192,7 @@ function overviewView({ allNotes, corpus, config, viewOptions, rewrite = null, w
   }
   try {
     const copy = { ...overviewPage };
-    if (rewrite) copy.markdown = rewrite(copy.markdown || '');
+    if (rewrite && (fresh || !rewriteFreshOnly)) copy.markdown = rewrite(copy.markdown || '');
     require('./published-view').publishView(copy, viewOptions);   // looked up at the call: a test can make it throw
     return String(copy.publishedMarkdown || '');
   } catch (err) {

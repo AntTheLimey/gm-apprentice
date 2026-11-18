@@ -10,7 +10,7 @@ const { indexTextPath, writeIndexText } = require('./leak-gate/index-text');
 const { readStoryAddresses, writeStoryAddresses, movedSessions, sharedSessionNames } = require('./story-addresses');
 const { resolveBanner, renderBanner, normalizeEntry, attachmentRef, isAddress, defaultAlt, isSvg, bannerSlug, copiedBannerFiles } = require('./banners');
 const { pcKeepList, storyMomentsOn, storyPicturesOn, scenePicturesMode, retiredSheetFieldsFor, retiredSheetFieldsMessage } = require('./pc-prose');
-const { nameList, gmAliasList, strippedLines, sectionWithholder, noteFacts, keptFlags, stubCut, stubMarked, hiddenFieldsOf, unstableBodyMarked, unstableSectionsMarked, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, processContent, playerSafeMarkdown, extractSections, filterSections, filterFields, publishedFrontmatter, isGmOnlyEdge, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, plainMetaValue, portraitBasename, encodeHref, isWebImageAddress } = require('./processor');
+const { nameList, gmAliasList, gmAliasRewriter, strippedLines, sectionWithholder, noteFacts, keptFlags, stubCut, stubMarked, hiddenFieldsOf, unstableBodyMarked, unstableSectionsMarked, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, processContent, playerSafeMarkdown, extractSections, filterSections, filterFields, publishedFrontmatter, isGmOnlyEdge, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, plainMetaValue, portraitBasename, encodeHref, isWebImageAddress } = require('./processor');
 const { pairHubs, isPlayedSession, REGISTRABLE_TYPES } = require('./session-hub');
 const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, heritageTemplate, worldDomainTemplate, wikiTemplate, sessionBodyHtml, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
 const { isRoster } = require('./templates/nav');
@@ -1333,11 +1333,21 @@ function buildSite(options) {
   // gives nothing, never the raw text. The Overview itself gets no page.
   // The same view gives the House Rules page its section: house rules are always public, so the page is made from the
   // Overview's published view whether or not the Overview itself publishes (`houseRulesMd`, '' with none).
-  const overviewMd = overviewView({ allNotes, corpus, config, viewOptions: { gm, mark, excludeCallouts, excludeSections, pcKeepSections, storyMoments },
+  // An Overview in a folder the site never reads is scanned afresh and has not had the GM-alias rewrite the corpus has
+  // (pairHubs, above): the leak check makes the same rewrite, so the page and the check read one text.
+  const scannedPaths = new Set(corpus.map((p) => p.sourcePath));
+  const aliasRewriter = gmAliasRewriter(corpus.concat(allNotes.filter((n) => !scannedPaths.has(n.sourcePath))), gm ? pages.filter((p) => onPlayerSite.has(p)) : pages, allNotes, publishConfig.withheld_words, gm ? mark : undefined);
+  const overviewMd = overviewView({ allNotes, corpus, config, rewrite: aliasRewriter ? aliasRewriter.markdown : null, rewriteFreshOnly: true, viewOptions: { gm, mark, excludeCallouts, excludeSections, pcKeepSections, storyMoments },
     what: 'shared threads were left off the PC pages and the House Rules page was not built',
     warn: (message) => console.warn(`  WARNING: ${message}`) });
   const sharedAll = overviewMd === null ? [] : sharedEntries(overviewMd);
-  const houseRulesMd = overviewMd === null ? '' : houseRulesOf(overviewMd);
+  let houseRulesMd = overviewMd === null ? '' : houseRulesOf(overviewMd);
+  // A note of the GM's already at house-rules.html keeps it: no generated page, no second menu link.
+  const houseRulesOwner = houseRulesMd ? pages.find((p) => p.outputPath === 'house-rules.html') : null;
+  if (houseRulesOwner) {
+    console.warn(`  WARNING: ${vaultRelPathOf(houseRulesOwner)} owns house-rules.html, so the Overview's House Rules section is not published as a page of its own while that note keeps the address`);
+    houseRulesMd = '';
+  }
   for (const page of pages) {
     if (sharedAll.length && String((page.frontmatter || {}).type).trim().toLowerCase() === 'pc') {
       page.markdown = withSharedThreads(page.markdown, threadsOnPage(page, sharedAll, { linkMap, pages, outOfPlay: publishConfig.statuses.out_of_play }));

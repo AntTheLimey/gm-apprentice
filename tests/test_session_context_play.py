@@ -1134,3 +1134,36 @@ class HouseRulesTests(unittest.TestCase):
         self.assertNotIn("House Rules", run_cli(self.vault(None), "--play").stdout)
         self.assertNotIn("House Rules", run_cli(
             self.vault("\n## House Rules\n\n"), "--play").stdout)
+
+
+class HouseRuleCaptureLineTests(unittest.TestCase):
+    """session-play's capture line writes the rule with the Overview's vault path."""
+
+    SKILL = ROOT / "skills" / "session-play" / "SKILL.md"
+    WRITER = SCRIPTS / "vault_write.py"
+
+    def row_works(self, path):
+        tmp = Path(tempfile.mkdtemp(prefix="sc-hr-log-"))
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        (tmp / "_Campaign").mkdir()
+        (tmp / "_Campaign" / "Campaign Overview.md").write_text(
+            "---\ntype: campaign_overview\n---\n\n# O\n\n## Premise\n\nx\n",
+            encoding="utf-8")
+        done = subprocess.run(
+            [sys.executable, str(self.WRITER), str(tmp), "log", "--write"],
+            input=f"{path}\tHouse Rules\t- A rule.\n",
+            capture_output=True, text=True, timeout=60)
+        return done.returncode == 0 and "- A rule." in (
+            tmp / "_Campaign" / "Campaign Overview.md").read_text("utf-8")
+
+    def test_the_writer_takes_the_vault_path_and_not_the_bare_name(self):
+        self.assertTrue(self.row_works("_Campaign/Campaign Overview.md"))
+        self.assertFalse(self.row_works("Overview.md"))
+
+    def test_the_skill_line_names_the_path_and_where_it_comes_from(self):
+        text = self.SKILL.read_text(encoding="utf-8")
+        line = text[text.index("The GM says to add a house rule"):]
+        line = line[:line.index("**Player sheet changes**")]
+        self.assertNotIn("Overview.md\\t", line)
+        self.assertIn("<Overview path>", line)
+        self.assertIn("(source:", line)
