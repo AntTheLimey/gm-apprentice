@@ -204,6 +204,7 @@ def run_note_new(batch: vw.Batch, b: Block) -> None:
     batch.row("WOULD-CREATE", rel, "", f"type: {kind}" if kind else "")
 
 
+HEADING_RE = re.compile(r"^ {0,3}#{1,6}(?:[ \t]|$)")
 SETEXT_RE = re.compile(r"^ {0,3}(?:=+|-+)[ \t]*$")
 
 
@@ -251,18 +252,33 @@ def check_lead_text(rel: str, body: list[str], at_top: bool) -> None:
     check_text(rel, body, "the lead")
 
 
-def _reading(doc: vw.Doc, start: int) -> list[tuple]:
-    """How each line from `start` reads: code, hidden depth, comment,
-    heading and marker, the `%%` walk included."""
-    states = {s.lineno - 1: s for s in doc.states}
-    walk = vw.comment_walk(doc.lines)
-    out = []
-    for i in range(start, len(doc.lines)):
-        s = states.get(i)
-        out.append((walk[i].inside, walk[i].code, None if s is None else
-                    (s.in_code, s.gm_depth, s.spoiler_depth, s.comment,
-                     s.heading, s.marker)))
-    return out
+def _cut(lines: list[str], rel: str) -> list[str | None]:
+    """The publish tool's own reading of the body lines (`cut_lines`)."""
+    try:
+        return vl.cut_lines([ln.rstrip("\r\n") for ln in lines])
+    except vl.PublishToolUnavailable as e:
+        raise vw.WriteError(f"{rel}: the publish tool could not be asked "
+                            f"whether the rest of the note still reads the "
+                            f"same ({e}); nothing written") from e
+
+
+def check_rest_unchanged(rel: str, doc: vw.Doc, new_text: str,
+                         end: int) -> None:
+    """The last word on a `section` write: the publish tool reads every
+    line from `end` (the written region's end) down as it did before, so
+    text written above them hid nothing and published nothing (#738
+    review: a loose fence, a %% in a code span or an open comment did). It
+    asks the tool, not a model of it."""
+    tail = len(doc.lines) - end
+    if not tail or not doc.states:
+        return
+    first = doc.states[0].lineno - 1
+    new_lines = new_text.splitlines(keepends=True)
+    if (_cut(doc.lines[first:], rel)[-tail:]
+            != _cut(new_lines[first:], rel)[-tail:]):
+        raise vw.WriteError(f"{rel}: this text would change what the rest "
+                            f"of the note shows (a fence or comment opened "
+                            f"or closed); nothing written")
 
 
 def run_lead(batch: vw.Batch, rel: str, body: list[str],
@@ -286,6 +302,15 @@ def run_lead(batch: vw.Batch, rel: str, body: list[str],
                 keep = i + 1
             elif lines[i].strip():
                 break
+        # The lead is read by `scan_body`; where the tool reads a heading
+        # inside it (a fence opened inside a comment fools the reader), the
+        # lead is not what it seems, and replacing it would drop sections.
+        cut = _cut(lines[first:end], rel)
+        heads = [c for c in cut if c is not None and HEADING_RE.match(c)]
+        if heads:
+            raise vw.WriteError(
+                f"{rel}: the lead seems to run past a heading ({heads[0]!r}), "
+                f"so --replace could drop sections; edit it by hand")
         dropped = [lines[i].strip() for i in range(keep, end)
                    if walk[i - first].touches]
         if dropped:
@@ -323,13 +348,7 @@ def run_lead(batch: vw.Batch, rel: str, body: list[str],
                     or vw.LIST_RE.match(above) and vw.LIST_RE.match(body[0]))
         new_text = vw.place(doc, end, body, glue=glue)
         verb = "WOULD-ADD"
-    # The last word: everything from the lead's end down reads as before.
-    new_doc = vw.parse(new_text)
-    tail = len(doc.lines) - end
-    if _reading(doc, end) != _reading(new_doc, len(new_doc.lines) - tail):
-        raise vw.WriteError(f"{rel}: this lead would change how the rest of "
-                            f"the note reads (a fence or comment opened or "
-                            f"closed); nothing written")
+    check_rest_unchanged(rel, doc, new_text, end)
     batch.put(rel, new_text)
     batch.row(verb, rel, "§(lead)", f"{len(body)} lines")
 
@@ -428,6 +447,7 @@ def run_section(batch: vw.Batch, b: Block) -> None:
         new_text = vw.place(doc, at, body, glue=glue,
                             tight=bool(vw.LIST_RE.match(body[0])))
         verb = "WOULD-ADD"
+    check_rest_unchanged(rel, doc, new_text, end)
     batch.put(rel, new_text)
     batch.row(verb, rel, f"§{ns.heading}", f"{len(body)} lines")
 

@@ -361,6 +361,37 @@ class BatchTests(unittest.TestCase):
         self.lead_refused("---\ntype: npc\n\nOld text.\n\n## H\n", "New.\n",
                           "frontmatter")
 
+    def test_the_publish_tool_has_the_last_word_on_the_rest_of_the_note(self):
+        """Second review pass: text the Python reading passed still hid or
+        published lines below it as the site reads them. The tool is asked."""
+        fence = "`" * 3
+        note = ("---\ntype: npc\n---\n\nOld.\n\n## Public\n\nPublic text.\n\n"
+                "<!-- private note: UNVERIFIED -->\n\n<!-- gm-only -->\n\n"
+                "## GM Notes\n\nSecret.\n\n<!-- /gm-only -->\n")
+        for body in (f"{fence}\nx\n{fence} not-a-close\n<!-- c -->\n{fence}\n",
+                     f"Text\n    {fence}\nmore\n",
+                     f"{'`' * 4}\n{fence}\n{'`' * 4}\n",
+                     "Text `%%` x %% y\n",
+                     "%% a <!-- b %%\nVisible c -->\nVisible d\n"):
+            vault = make_vault(self, {"n.md": note})
+            code, out = batch(vault, '=== section "n.md" --lead --replace\n'
+                              + body, "--write")
+            self.assertEqual(code, 1, body + out)
+            self.assertEqual(read(vault, "n.md"), note, body)
+        note = note.replace("Public text.\n\n", "Public text.\n\n## Later\n\n", 1)
+        vault = make_vault(self, {"n.md": note})
+        code, out = batch(vault, '=== section "n.md" "Public" --replace\n'
+                          f"{fence}\nx\n{fence} not-a-close\n<!-- c -->\n"
+                          f"{fence}\n", "--write")
+        self.assertEqual(code, 1, out)
+        self.assertIn("would change what the rest of the note shows", out)
+
+    def test_a_fence_opened_inside_a_comment_cannot_swallow_sections(self):
+        fence = "`" * 3
+        note = (f"---\ntype: npc\n---\n\n<!--\n{fence}\n-->\nOld.\n\n"
+                "## Public\n\nPublic text.\n")
+        self.lead_refused(note, "New.\n", "run past a heading")
+
     def test_lead_on_a_crlf_note_and_an_empty_lead(self):
         crlf = SCENE.replace("\n", "\r\n")
         vault = make_vault(self, {"c.md": crlf, "e.md": "---\ntype: npc\n"
