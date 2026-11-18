@@ -22,6 +22,10 @@ const { resolveSystem, summarize, WRITERS } = require('./flush-cli');
 const { findPc, displayNameOf } = require('./sheet-cli');
 const { liveSheet } = require('./flush/dnd-writeback');
 const { fitConditions } = require('../js/dnd-live');
+const { parseNote } = require('./frontmatter');
+const { extractSections } = require('./processor');
+const { parseCoC } = require('./templates/coc/parse');
+const { deriveGurpsMax } = require('./flush/gurps-max');
 
 class SheetSetError extends Error {}
 
@@ -29,6 +33,7 @@ class SheetSetError extends Error {}
 function whole(key, value, most) {
   if (!/^\d+$/.test(value)) throw new SheetSetError(`${key}=${value}: want a whole number`);
   const n = Number(value);
+  if (!Number.isSafeInteger(n)) throw new SheetSetError(`${key}=${value}: too large`);
   if (most !== undefined && n > most) throw new SheetSetError(`${key}=${value}: at most ${most}`);
   return n;
 }
@@ -36,7 +41,9 @@ function whole(key, value, most) {
 // A whole number that may go below 0 (GURPS HP and FP do).
 function signed(key, value) {
   if (!/^-?\d+$/.test(value)) throw new SheetSetError(`${key}=${value}: want a whole number (it may be negative)`);
-  return Number(value);
+  const n = Number(value);
+  if (!Number.isSafeInteger(n)) throw new SheetSetError(`${key}=${value}: too large`);
+  return n;
 }
 
 // A comma list of D&D conditions. The writer keeps only names that pass the page's own
@@ -102,9 +109,26 @@ const COC_CONDITIONS = [
   ['unconscious', 'unconscious', 'Unconscious'],
   ['dying', 'dying', 'Dying'],
 ];
-function cocKeys(regency) {
-  const scalar = (field, row) => ({ row, record: v => ({ [field]: whole(field, v) }), probes: NUMBER_PROBES.map(n => ({ [field]: n })) });
-  const keys = { hp: scalar('hp', 'HP'), mp: scalar('mp', 'MP'), luck: scalar('luck', 'Luck'), san: scalar('san', 'Sanity') };
+// A value over the sheet's own maximum is refused, never written: the maximum comes from
+// the same parser the site reads the sheet with.
+function underMax(key, n, most, label) {
+  if (typeof most === 'number' && isFinite(most) && n > most) throw new SheetSetError(`${key}=${n}: this sheet's ${label} is ${most}`);
+  return n;
+}
+
+// The CoC Derived table's Max column (HP, MP, Sanity), as the site parses it.
+function cocMaxima(markdown, frontmatter, system) {
+  try {
+    const d = parseCoC(frontmatter || {}, extractSections(parseNote(String(markdown)).content), system).derived;
+    return { hp: d.hp.max, mp: d.mp.max, san: d.sanity.max };
+  } catch (e) {
+    return {};
+  }
+}
+
+function cocKeys(regency, maxima = {}) {
+  const scalar = (field, row, most) => ({ row, record: v => ({ [field]: underMax(field, whole(field, v), most, `${row} maximum`) }), probes: NUMBER_PROBES.map(n => ({ [field]: n })) });
+  const keys = { hp: scalar('hp', 'HP', maxima.hp), mp: scalar('mp', 'MP', maxima.mp), luck: scalar('luck', 'Luck'), san: scalar('san', 'Sanity', maxima.san) };
   if (regency) keys.rep = scalar('rep', 'Current Reputation');
   for (const [key, field, row] of COC_CONDITIONS) {
     keys[key] = { row, record: v => ({ conditions: { [field]: yesNo(key, v) } }), probes: [true, false].map(b => ({ conditions: { [field]: b } })) };
@@ -112,10 +136,14 @@ function cocKeys(regency) {
   return keys;
 }
 
-const GURPS = {
-  hp: { row: '**HP:** line in Current Status', record: v => ({ hp: signed('hp', v) }), probes: NUMBER_PROBES.map(n => ({ hp: n })) },
-  fp: { row: '**FP:** line in Current Status', record: v => ({ fp: signed('fp', v) }), probes: NUMBER_PROBES.map(n => ({ fp: n })) },
-};
+// GURPS HP and FP may go below 0 but not over the maximum flush derives for the sheet.
+function gurpsKeys(markdown, frontmatter) {
+  const { maxHp, maxFp } = deriveGurpsMax(markdown, frontmatter);
+  return {
+    hp: { row: '**HP:** line in Current Status', record: v => ({ hp: underMax('hp', signed('hp', v), maxHp, 'HP maximum') }), probes: NUMBER_PROBES.map(n => ({ hp: n })) },
+    fp: { row: '**FP:** line in Current Status', record: v => ({ fp: underMax('fp', signed('fp', v), maxFp, 'FP maximum') }), probes: NUMBER_PROBES.map(n => ({ fp: n })) },
+  };
+}
 
 // A Hit Dice row's key on the command line: `hit-dice`, or `hit-dice-d10` beside a second row.
 const hitDiceName = liveKeyName => 'hit-dice' + liveKeyName.replace(/^hd:hit dice/, '').toLowerCase()
@@ -161,9 +189,9 @@ function writerFor(frontmatter, campaignSystem, markdown) {
     throw new SheetSetError(`no live-sheet writer for ${named || 'a campaign with no system set'}`);
   }
   if (writer === 'dnd') return { writer, ...dndKeys(markdown) };
-  if (writer === 'gurps') return { writer, keys: GURPS, hitDice: [] };
+  if (writer === 'gurps') return { writer, keys: gurpsKeys(markdown, frontmatter), hitDice: [] };
   const regency = id === 'coc-7e-regency' || /regency/i.test(named);
-  return { writer, keys: cocKeys(regency), hitDice: [] };
+  return { writer, keys: cocKeys(regency, cocMaxima(markdown, frontmatter, id || named)), hitDice: [] };
 }
 
 // Split `key=value` words. A key is lower-case letters, digits and dashes.

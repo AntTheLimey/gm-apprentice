@@ -196,6 +196,20 @@ test('CoC 7e: rep is not a key; a missing row or a blank cell is said', async ()
   assert.match(noBox.out, /no writable Dying row on this sheet/);
 });
 
+test('CoC 7e: HP, MP or Sanity over the sheet\'s maximum is refused and nothing is written', async () => {
+  const opts = { name: 'Jane', system: 'coc-7e' };
+  for (const [pair, said] of [['hp=12', /hp=12: this sheet's HP maximum is 11/], ['mp=14', /mp=14: this sheet's MP maximum is 13/]]) {
+    const r = await run(JANE_7E, [pair, 'luck=60'], opts);
+    assert.equal(r.code, 1, pair);
+    assert.match(r.err, said);
+    assert.deepEqual(r.writes, []);
+  }
+  const big = await run(JANE_7E, ['luck=1' + '0'.repeat(309)], opts);
+  assert.equal(big.code, 1);
+  assert.match(big.err, /too large/);
+  assert.deepEqual(big.writes, []);
+});
+
 test('CoC Regency: rep writes Current Reputation, and the CoC keys work too', async () => {
   const opts = { name: 'Jane', system: 'regency-cthulhu' };
   const r = await run(JANE, ['rep=64', 'san=34'], opts);
@@ -212,6 +226,10 @@ test("GURPS: hp and fp go to Current Status's HP/FP lines through flush's writer
   assert.equal(r.code, 0, r.err);
   assert.match(r.text, /## Current Status[\s\S]*\*\*HP:\*\* 5\/11/);
   assert.match(r.text, /\*\*FP:\*\* 3\/11/);
+  const over = await run(KARL, ['hp=12'], { name: 'Karl', system: 'gurps-4e' });
+  assert.equal(over.code, 1);
+  assert.match(over.err, /hp=12: this sheet's HP maximum is 11/);
+  assert.deepEqual(over.writes, []);
   const down = await run(KARL, ['hp=-4', 'fp=-1'], { name: 'Karl', system: 'gurps-4e' });
   assert.equal(down.code, 0, down.err);
   assert.match(down.text, /\*\*HP:\*\* -4\/11/);
