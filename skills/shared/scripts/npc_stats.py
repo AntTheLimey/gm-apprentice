@@ -18,7 +18,8 @@ A row a note, `WHY<TAB>path<TAB>who: what is there`, where WHY is
 
 and `who` is `major (companion, key-npc)` or `other`. Major is read from the
 vault, never judged: the note has `companion: true`, or an adventure brief's
-`## Key NPCs` section links it. Majors sort first.
+`## Key NPCs` section names it in an entry of its own (a `###` heading, or a
+list item or paragraph led by its link or bold name). Majors sort first.
 
 `--plan PLAN` keeps the NPCs that Plan's scenes name: links in its Planned
 and Contingency Scenes, and in the scene notes they point at (`### [[Scene]]`).
@@ -36,10 +37,11 @@ from typing import Any, Iterable
 
 import session_context as sc
 from migrate_vault import vault_system
-from vaultlib import (WRAP_UP_TYPES, body_of, entity_type, extract_frontmatter,
-                      fenced_headings, is_record_copy, link_aliases,
-                      link_lines, link_target, live_wikilinks, normalize,
-                      normalize_file_arg, section, section_ends, vault_files)
+from vaultlib import (LINK_RE, WRAP_UP_TYPES, body_of, entity_type,
+                      extract_frontmatter, fenced_headings, h3_blocks,
+                      is_record_copy, link_aliases, link_lines, link_target,
+                      live_wikilinks, normalize, normalize_file_arg, section,
+                      section_ends, vault_files)
 
 BRIEF_TYPES = ("adventure-brief", "adventure_brief")
 PLAN_SECTIONS = ("Planned Scenes", "Contingency Scenes")
@@ -56,9 +58,10 @@ BRACE_RE = re.compile(r"\{[^{}\n]+\}")
 COMMENT_RE = re.compile(r"<!--.*?-->", re.S)
 # Words that put the block off to some other time.
 DEFER_RE = re.compile(
-    r"\b(?:built when|to be built|to be written|build (?:it|them|one|these)"
-    r" (?:when|later|at)|TBD|TBC|to follow|to come|later|not yet (?:built|"
-    r"written|statted)|pending)\b", re.I)
+    r"\b(?:built when|to be built|to be written|to be determined|build "
+    r"(?:it|them|one|these) (?:when|later|at)|TBD|TBC|TBA|TODO|to follow|"
+    r"to come|later|not yet (?:built|written|statted)|not statted|will be "
+    r"statted|placeholder|pending)\b", re.I)
 # A line about stat blocks, where a deferral or a stock name outside a stat
 # heading counts.
 STAT_WORD_RE = re.compile(r"\b(?:stats?|stat ?blocks?|statted|SRD)\b", re.I)
@@ -81,6 +84,7 @@ STAT_PAIR_RE = re.compile(
 NUMBER_RE = re.compile(r"(?<![\w.])[+-]?\d+(?:\.\d+)?%?")
 # A block with this many numbers of its own is more than a stock name.
 OWN_NUMBERS = 6
+EMBED_RE = re.compile(r"!\[\[[^\[\]]+\]\]")
 TABLE_ROW_RE = re.compile(r"^\s*\|(.*)\|\s*$")
 TABLE_RULE_RE = re.compile(r"^[\s|:]*-[\s|:-]*$")
 
@@ -128,51 +132,67 @@ def _stat_sections(body: str) -> list[str]:
             if STAT_TITLE_RE.search(title)]
 
 
-def classify(text: str) -> tuple[str, str] | None:
+def _said(lines: list[str]) -> tuple[str, str] | None:
+    """A stock name (it wins: a stock block is enough for most NPCs) or,
+    on a line with none, words putting the block off."""
+    stock = _stock("\n".join(lines))
+    if stock is not None:
+        return "stock", f"names a stock block (\"{stock}\")"
+    defer = next((ln for ln in lines if DEFER_RE.search(ln)), None)
+    if defer is not None:
+        return "placeholder", f"says it comes later (\"{_short(defer)}\")"
+    return None
+
+
+def _section_verdict(block: str, system: str | None
+                     ) -> tuple[str, str] | None:
+    """`classify`'s verdict on the text under one stat heading."""
+    if not block:
+        return "blank", "a stat heading with nothing under it"
+    # Enough numbers of its own make it the NPC's block, whatever optional
+    # field or group row was left.
+    if len(NUMBER_RE.findall(BRACE_RE.sub("", block))) >= OWN_NUMBERS:
+        return None
+    lines = [ln for ln in block.splitlines() if ln.strip()]
+    # A short block is read whole; in a longer one (a FitD block has few
+    # numbers) only the lines about stat blocks.
+    if len(lines) > 3:
+        lines = [ln for ln in lines if STAT_WORD_RE.search(ln)]
+    verdict = _said(lines)
+    if verdict is not None:
+        return verdict
+    brace = BRACE_RE.search(block)
+    if brace:
+        return ("placeholder", f"the system block's fields are still "
+                f"placeholders ({_short(brace.group(0), 30)})")
+    if _blank_table(block):
+        return "blank", "the score table is empty"
+    if system == "fitd" or EMBED_RE.search(block):
+        return None  # an embedded note is a block kept elsewhere
+    first = next(ln for ln in block.splitlines() if ln.strip())
+    return ("placeholder", f"no block under the stat heading, only words "
+            f"(\"{_short(first)}\")")
+
+
+def classify(text: str, system: str | None = None
+             ) -> tuple[str, str] | None:
     """(why, what is there) for a note's stat block; None when it has a
     block of its own. `why` is `missing`, `placeholder`, `blank` or
     `stock` (a stock name with no block of its own: a row only for a
-    major NPC)."""
+    major NPC). `system` is the vault's: in every one but `fitd` a block
+    has numbers. Of several stat headings, one block of its own is enough."""
     body = body_of(text)
     found = _stat_sections(body)
     if found:
-        block = found[0]
-        if not block:
-            return "blank", "a stat heading with nothing under it"
-        brace = BRACE_RE.search(block)
-        if brace:
-            return ("placeholder", f"the system block's fields are still "
-                    f"placeholders ({_short(brace.group(0), 30)})")
-        if _blank_table(block):
-            return "blank", "the score table is empty"
-        if len(NUMBER_RE.findall(block)) >= OWN_NUMBERS:
-            return None
-        # A short block is read whole; in a longer one (a FitD block has
-        # few numbers) only its first line and lines about stat blocks.
-        said = [ln for ln in block.splitlines() if ln.strip()]
-        if len(said) > 3:
-            said = [said[0], *(ln for ln in said[1:]
-                               if STAT_WORD_RE.search(ln))]
-        defer = next((ln for ln in said if DEFER_RE.search(ln)), None)
-        if defer is not None:
-            return "placeholder", f"says it comes later (\"{_short(defer)}\")"
-        stock = _stock("\n".join(said))
-        if stock is not None:
-            return "stock", f"names a stock block (\"{stock}\")"
-        return None
+        verdicts = [_section_verdict(block, system) for block in found]
+        return None if None in verdicts else verdicts[0]
     plain = COMMENT_RE.sub("", body)
     if TEMPLATE_SLOT_RE.search(plain):
         return "placeholder", "the template's {STAT BLOCK: …} paragraph"
     if len({m.group(1).upper() for m in STAT_PAIR_RE.finditer(plain)}) >= 3:
         return None
-    stat_lines = [ln for ln in plain.splitlines() if STAT_WORD_RE.search(ln)]
-    defer = next((ln for ln in stat_lines if DEFER_RE.search(ln)), None)
-    if defer is not None:
-        return "placeholder", f"says it comes later (\"{_short(defer)}\")"
-    stock = _stock("\n".join(stat_lines))
-    if stock is not None:
-        return "stock", f"names a stock block (\"{stock}\")"
-    return "missing", "no stat block"
+    return (_said([ln for ln in plain.splitlines() if STAT_WORD_RE.search(ln)])
+            or ("missing", "no stat block"))
 
 
 def _links(text: str) -> set[str]:
@@ -203,14 +223,60 @@ class Notes:
         return out
 
 
+_LEAD_BOLD_RE = re.compile(r"^\*\*([^*]+?)\*\*")
+_NAME_CUT_RE = re.compile(r"\s+[—–-]\s+|\s*\(|,|:")
+_ENTRY_RE = re.compile(r"^[-*+]\s+")
+
+
+def _entry_npcs(notes: Notes, entry: str) -> set[str]:
+    """The NPC one Key NPCs entry names: its first link, else its leading
+    bold name (or a heading's text), matched against NPC names and aliases.
+    Links further inside the entry are other people."""
+    m = LINK_RE.search(entry)
+    first = entry.split("\n", 1)[0]
+    bold = _LEAD_BOLD_RE.match(first)
+    if m and (bold is None or m.start() < bold.end()):
+        return notes.npcs_named([link_target(m.group(1))])
+    name = bold.group(1) if bold else first
+    name = name.strip(" *_#").rstrip(":")
+    for candidate in (name, _NAME_CUT_RE.split(name, 1)[0]):
+        found = notes.npcs_named([normalize(candidate)])
+        if found:
+            return found
+    return set()
+
+
+def _entries(part: str) -> list[str]:
+    """A Key NPCs section's entries: its `###` headings when it has them,
+    else each top-level list item or paragraph."""
+    heads = h3_blocks(part)
+    if heads:
+        return [title for title, _body in heads]
+    entries: list[str] = []
+    current: list[str] = []
+    for line in part.splitlines():
+        starts = (bool(_ENTRY_RE.match(line))
+                  or (not line.startswith((" ", "\t")) and not current))
+        if not line.strip() or starts:
+            if current:
+                entries.append("\n".join(current))
+            current = [_ENTRY_RE.sub("", line)] if line.strip() else []
+        else:
+            current.append(line)
+    if current:
+        entries.append("\n".join(current))
+    return entries
+
+
 def key_npcs(notes: Notes) -> set[str]:
-    """The NPCs an adventure brief's `## Key NPCs` section links."""
+    """The NPCs an adventure brief's `## Key NPCs` section names, one an
+    entry (`_entries`, `_entry_npcs`)."""
     found: set[str] = set()
     for _rel, text, fm in notes.all:
         if entity_type(fm) in BRIEF_TYPES:
             part = section(body_of(text), "Key NPCs")
-            if part:
-                found |= notes.npcs_named(_links(part))
+            for entry in _entries(part or ""):
+                found |= _entry_npcs(notes, entry)
     return found
 
 
@@ -274,6 +340,7 @@ def check_npc_stats(vault: Path, plan: str | None = None,
     """(rows, error): the rows for `npc-stats`, or the error that stopped it
     (a `--plan` that names no single note)."""
     notes = Notes(vault)
+    system = vault_system(vault)
     keep: set[str] | None = None
     if plan is not None:
         found = find_plan(notes, plan)
@@ -292,7 +359,7 @@ def check_npc_stats(vault: Path, plan: str | None = None,
             continue
         if plan is None and str(fm.get("status", "")).strip().lower() == "dead":
             continue
-        verdict = classify(text)
+        verdict = classify(text, system)
         if verdict is None:
             continue
         why, what = verdict

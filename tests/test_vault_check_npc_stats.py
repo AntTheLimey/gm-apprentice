@@ -94,8 +94,8 @@ def run(argv: list[str]) -> tuple[int, str, str]:
 class ShapeTests(unittest.TestCase):
     """What `classify` makes of a block, note by note."""
 
-    def why(self, text: str):
-        found = npc_stats.classify(text)
+    def why(self, text: str, system: str | None = "dnd-5e-2024"):
+        found = npc_stats.classify(text, system)
         return found[0] if found else None
 
     def test_no_block_is_missing(self):
@@ -110,11 +110,34 @@ class ShapeTests(unittest.TestCase):
                 block = path.read_text(encoding="utf-8")
                 self.assertEqual(self.why(npc(block)), "placeholder")
 
-    def test_one_field_left_is_a_placeholder(self):
-        block = DND_FILLED.replace("13 · **Initiative**", "{12} · **Initiative**")
-        verdict = npc_stats.classify(npc(block))
+    def test_a_short_block_with_a_field_left_is_a_placeholder(self):
+        verdict = npc_stats.classify(npc("### Stats\n\n**AC** {12} · HP 9"),
+                                     "dnd-5e-2024")
         self.assertEqual(verdict[0], "placeholder")
         self.assertIn("{12}", verdict[1])
+
+    def test_a_full_block_with_an_optional_field_left_is_its_own(self):
+        # Review finding 2: the numbers decide before any `{…}` left over.
+        for name, block in (
+                ("dnd", DND_FILLED + "\n\n**Bonus Actions / Reactions**\n"
+                        "- ***{Name}.*** {what it does}"),
+                ("gurps", "### Stats\n\nST 12 · DX 12 · IQ 10 · HT 11\n"
+                          "HP 12 · Will 10 · Per 10 · FP 11\n"
+                          "Dodge 8 · Parry 10 (Broadsword) · Block {—} · DR 2"),
+                ("coc", "### Stats\n\n| STR | CON | SIZ | DEX |\n"
+                        "|-----|-----|-----|-----|\n| 45 | 50 | 60 | 40 |\n\n"
+                        "**HP** 11 · **MP** 14 · **SAN** 60 · "
+                        "**Luck** {n or —}")):
+            with self.subTest(name):
+                self.assertIsNone(self.why(npc(block)))
+
+    def test_a_full_block_with_a_table_group_row_is_its_own(self):
+        # Review finding 3: a weapons table's `| **Melee** | | |` row.
+        block = ("### Stats\n\n**HP** 13 · **MP** 10 · **SAN** 55\n\n"
+                 "| Weapon | Skill | Damage |\n|---|---|---|\n"
+                 "| **Melee** | | |\n| Brawl | 55% | 1D3+DB |\n"
+                 "| Club | 40% | 1D6+DB |\n")
+        self.assertIsNone(self.why(npc(block)))
 
     def test_an_empty_stat_heading_is_blank(self):
         self.assertEqual(self.why(npc("### Stats\n")), "blank")
@@ -125,8 +148,9 @@ class ShapeTests(unittest.TestCase):
                  "|     |     |     |     |\n")
         self.assertEqual(self.why(npc(block)), "blank")
 
-    def test_a_score_row_left_empty_is_blank(self):
-        block = DND_FILLED.replace("| WIS | 16 | +3 | +5 |", "| WIS |  |  |  |")
+    def test_a_short_block_with_an_empty_score_row_is_blank(self):
+        block = ("### Stats\n\n| STR | DEX |\n|---|---|\n| 10 | |\n"
+                 "| WIS |  |\n")
         self.assertEqual(self.why(npc(block)), "blank")
 
     def test_later_words_in_the_slot_are_a_placeholder(self):
@@ -163,7 +187,40 @@ class ShapeTests(unittest.TestCase):
 
     def test_a_filled_fitd_block_is_its_own(self):
         # Few numbers, a "later" and an "as Gentry": still a block.
-        self.assertIsNone(self.why(npc(FITD_FILLED)))
+        self.assertIsNone(self.why(npc(FITD_FILLED), "fitd"))
+
+    def test_a_long_fitd_block_opening_with_as_is_not_stock(self):
+        # Review finding 8: in a long block only stat-word lines are read
+        # for a stock name, not the first line.
+        block = FITD_FILLED.replace("ink-stained, never sits",
+                                    "poses as a Bluecoat Sergeant")
+        self.assertIsNone(self.why(npc(block), "fitd"))
+
+    def test_words_with_no_numbers_under_a_stat_heading(self):
+        # Review finding 1: no numbers, no stock name: not a block, in
+        # every system but FitD.
+        for said in ("To be determined at session prep.", "TODO",
+                     "Will be statted for session 3.", "Not statted yet.",
+                     "(placeholder)", "A tough old soldier, slow but strong."):
+            with self.subTest(said):
+                block = npc(f"### Stats\n\n{said}")
+                self.assertEqual(self.why(block), "placeholder")
+                self.assertEqual(self.why(block, None), "placeholder")
+        self.assertIsNone(self.why(
+            npc("### Stats\n\nA tough old soldier, slow but strong."),
+            "fitd"))
+
+    def test_a_stock_name_beats_later_words_on_its_line(self):
+        # Review finding 4: a stock block is enough for an "other" NPC.
+        for said in ("Use the Veteran stat block; she may gain a level later.",
+                     "Bandit Captain (SRD). Loyalty pending."):
+            with self.subTest(said):
+                self.assertEqual(self.why(npc(f"### Stats\n\n{said}")),
+                                 "stock")
+                self.assertEqual(self.why(npc(said)), "stock")
+
+    def test_an_embedded_block_counts(self):
+        self.assertIsNone(self.why(npc("### Stats\n\n![[Monk Stats]]")))
 
     def test_an_old_top_level_stats_heading_counts(self):
         block = ("## Stats (CoC 7e)\n- **STR:** 60 | **CON:** 55 | "
@@ -221,6 +278,56 @@ class RowTests(unittest.TestCase):
                                  "## Key NPCs\n\n- [[Sela|the guide]]\n",
         })
         self.assertIn("major (key-npc)", rows(v)[0])
+
+    def test_links_inside_a_key_npc_entry_are_not_major(self):
+        # Review finding 5: only the entry's own NPC is major.
+        v = make(self, {
+            "NPCs/Martha Hale.md": npc(),
+            "NPCs/Tom Hale.md": npc(),
+            "NPCs/Silas Marsh.md": npc(),
+            "NPCs/Ida Crane.md": npc(),
+            "Adventures/A/A.md": "---\ntype: adventure-brief\n---\n\n"
+                "## Key NPCs\n\n### [[Martha Hale]]\n\n- **Connection:** "
+                "Her husband [[Tom Hale]] vanished.\n\n### Silas Marsh "
+                "(the harbourmaster)\n\n- Owes [[Ida Crane]] money.\n",
+        })
+        found = {r.split("\t")[1]: r.split("\t")[2].split(":")[0]
+                 for r in rows(v)}
+        self.assertEqual(found, {"NPCs/Martha Hale.md": "major (key-npc)",
+                                 "NPCs/Silas Marsh.md": "major (key-npc)",
+                                 "NPCs/Tom Hale.md": "other",
+                                 "NPCs/Ida Crane.md": "other"})
+
+    def test_an_unlinked_bold_key_npc_is_major(self):
+        # Review finding 5: a list item or paragraph led by a bold name.
+        v = make(self, {
+            "NPCs/Abbot Gerrit.md": npc(),
+            "NPCs/Sela Marrow.md": npc(extra="aliases: [Sela]\n"),
+            "NPCs/Prior Wend.md": npc(),
+            "NPCs/Old Tobin.md": npc(),
+            "Adventures/A/A.md": "---\ntype: adventure-brief\n---\n\n"
+                "## Key NPCs\n\n- **Abbot Gerrit** — head of the priory, "
+                "rival of [[Prior Wend]]\n  and friend of [[Old Tobin]].\n"
+                "- **Sela:** the guide\n",
+        })
+        found = {r.split("\t")[1]: r.split("\t")[2].split(":")[0]
+                 for r in rows(v)}
+        self.assertEqual(found["NPCs/Abbot Gerrit.md"], "major (key-npc)")
+        self.assertEqual(found["NPCs/Sela Marrow.md"], "major (key-npc)")
+        self.assertEqual(found["NPCs/Prior Wend.md"], "other")
+        self.assertEqual(found["NPCs/Old Tobin.md"], "other")
+
+    def test_a_key_npc_paragraph_is_named_by_its_first_link(self):
+        v = make(self, {
+            "NPCs/Wren.md": npc(), "NPCs/Cole.md": npc(),
+            "Adventures/A/A.md": "---\ntype: adventure-brief\n---\n\n"
+                "## Key NPCs\n\n[[Wren]] runs the ferry; she hates\n"
+                "[[Cole]].\n",
+        })
+        found = {r.split("\t")[1]: r.split("\t")[2].split(":")[0]
+                 for r in rows(v)}
+        self.assertEqual(found, {"NPCs/Wren.md": "major (key-npc)",
+                                 "NPCs/Cole.md": "other"})
 
     def test_a_built_npc_gives_no_row(self):
         v = make(self, {"NPCs/Wenna.md": npc(DND_FILLED,

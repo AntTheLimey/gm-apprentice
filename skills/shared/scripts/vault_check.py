@@ -150,7 +150,7 @@ placeholder, one row each: `MISSING`, `PLACEHOLDER` (the template's
 `{STAT BLOCK: …}` paragraph, a system block's `{…}` fields, or words
 saying it comes later), `BLANK` (an empty stat heading or score table) or
 `STOCK` (a major NPC with only a stock creature's name), then whether the
-NPC is major (`companion: true`, or linked from an adventure brief's
+NPC is major (`companion: true`, or an entry of an adventure brief's
 `## Key NPCs`) or other. `--plan PLAN` keeps the NPCs that Plan's scenes
 name; `--played` those a Wrap-Up or a played scene links. A `# system:`
 line closes it. The rules are `npc_stats.py`'s; it stays outside `all`.
