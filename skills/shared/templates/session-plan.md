@@ -23,12 +23,12 @@ tags: []
 
 ## Session Intent
 
-[What you want this session to be about, and whose moment it is. One or
-two sentences, in your words.]
+[What's on the table this session and where the pressure is, in a line,
+in your words.]
 
 ## Session Overview
 
-[What this session is about dramatically, in a short synopsis.]
+[The situation going in, in a short synopsis: what's on the table, never what the players will do.]
 
 ## GM Notes
 
@@ -44,7 +44,7 @@ two sentences, in your words.]
 [What follows from last session.]
 
 #### Salvageable Prep
-[Unplayed prep: dropped / recycled / must-happen.]
+[Unplayed prep: dropped / recycled / still on the table.]
 
 #### GM Decisions
 [Resolved decisions with outcomes, one at a time.]
@@ -147,7 +147,7 @@ none, write "No handouts or props."]
 
 ## Spotlight Forecast
 
-[Per-PC role and moment; none left blank.]
+[Per-PC hook on the table: a place, person or thread that pulls on them; none left blank.]
 
 ## Open Questions
 

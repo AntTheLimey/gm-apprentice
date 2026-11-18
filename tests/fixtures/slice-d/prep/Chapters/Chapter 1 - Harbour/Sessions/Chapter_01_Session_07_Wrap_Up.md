@@ -27,10 +27,12 @@ The bay was sterile. Keep this recap line.
 
 #### [[Hero]] (Alex)
 
+- **Moment:** took the harbourmaster's coin and kept quiet
 - Open threads: the Dredger's debt
 
 #### [[Second_Name]] (Sam)
 
+- **Moment:** none
 - Open threads: the missing sister
 
 ### What Carries Forward

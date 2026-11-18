@@ -52,10 +52,12 @@ longer.
 
 ## Spotlight Theory
 
-Every PC at the table gets a moment every session. Beyond that,
-spotlight is the GM's call over a run of sessions: notice a PC who
-has had little lately, or a player gone quiet; say so and offer
-options (a B-plot, a touchpoint, a scene built on their strengths).
+Every PC at the table gets a moment every session. The players choose
+where the light falls; the GM's part is that every PC has a hook on the
+table and the world answers what they do. Over a run of
+sessions, notice a PC who has had little lately, or a player gone
+quiet; say so and offer hooks that pull on them (a thread of theirs,
+a touchpoint, a situation built on their strengths).
 
 ## Weaving Personal Content into Group Scenes
 

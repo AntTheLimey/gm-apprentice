@@ -446,9 +446,21 @@ class ShippedTemplateTests(unittest.TestCase):
         self.assertTrue(pc._is_placeholder_body(self._handouts_body()))
 
     def test_spotlight_forecast_guidance_old_and_new_is_placeholder(self):
-        for line in ("Per-PC role and moment; none left blank. A note.",
+        for line in ("Per-PC hook on the table: a place, person or thread "
+                     "that pulls on them; none left blank. A note.",
+                     "Per-PC role and moment; none left blank. A note.",
                      "Per-PC estimated spotlight share, and any imbalance."):
             self.assertTrue(pc._is_placeholder_body(line + "\n"), line)
+
+    def test_spotlight_guidance_kept_above_real_hooks_is_not_placeholder(self):
+        # The shipped bracketed guidance left above what the GM wrote: the
+        # section holds the hooks, and step 6 must read them.
+        guidance = ("[Per-PC hook on the table: a place, person or thread "
+                    "that pulls on them; none left blank.]\n\n")
+        self.assertTrue(pc._is_placeholder_body(guidance))
+        body = guidance + ("| PC | Hook |\n|---|---|\n"
+                           "| [[Oswin]] | Teodor owes him the ledger |\n")
+        self.assertFalse(pc._is_placeholder_body(body))
 
     def test_handouts_guidance_kept_with_filled_table_is_not_placeholder(self):
         guidance = self._handouts_body().split("|", 1)[0]
@@ -742,7 +754,7 @@ class StateTests(unittest.TestCase):
 
 # skills/session-prep/SKILL.md, Resumable prep — the exact worked example.
 SKILL_MD_EXAMPLE_MARKER = (
-    "<!-- prep-state: intent=set spotlight=Emma(B) scenes=1of3 "
+    "<!-- prep-state: intent=set spotlight=hooks(3of4) scenes=1of3 "
     "open=[Freddy beat?] -->"
 )
 
@@ -764,7 +776,7 @@ class PrepStateTokenizerTests(unittest.TestCase):
     def test_bracketed_value_keeps_its_internal_space(self):
         state = pc.build_state(self._text())
         self.assertEqual(
-            state, {"intent": "set", "spotlight": "Emma(B)",
+            state, {"intent": "set", "spotlight": "hooks(3of4)",
                     "scenes": "1of3", "open": "[Freddy beat?]"})
 
     def test_cli_state_output(self):

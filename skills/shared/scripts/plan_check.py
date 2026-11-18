@@ -179,6 +179,7 @@ PLACEHOLDER_PHRASES: tuple[str, ...] = (
     "Per-PC touchpoint assignments",
     "Per-PC estimated spotlight share",
     "Per-PC role and moment",
+    "Per-PC hook on the table",
     "Missing entities, stale files",
     "Left blank during prep",
     "Same structure",
@@ -339,7 +340,10 @@ def _is_placeholder_body(body: str) -> bool:
             any(p in r for p in EXAMPLE_ROW_PHRASES) for r in data)
     if lines and all(_bracket_only_line(ln) for ln in lines):
         return True
-    low = stripped.casefold()
+    # The template's bracketed guidance, kept above what the GM wrote, is
+    # not what makes the section a placeholder: only the rest is read.
+    low = "\n".join(ln for ln in lines
+                    if not _bracket_only_line(ln)).casefold()
     return any(phrase.casefold() in low for phrase in PLACEHOLDER_PHRASES)
 
 
