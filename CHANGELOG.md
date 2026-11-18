@@ -9,6 +9,13 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.51] — 2026-11-17
+
+### Fixed
+
+- Wrap-up keeps a PC's Current Status lede current: `vw status --show` prints the one-line lede above the fields, and a plain first line sent to `status` replaces it, so the line written before play no longer stays on the live PC page (#714).
+- The first wrap-up moves the Campaign Overview from `not_started` to `in_progress` (new `stamp --advance KEY=FROM:TO`); a paused, completed or abandoned campaign is never touched; a Current Arc still reading "Not yet begun." gets a two-sentence draft in the wrap-up's review, the rest of the section kept (#716).
+
 ## [1.12.50] — 2026-11-17
 
 ### Fixed

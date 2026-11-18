@@ -149,15 +149,17 @@ stdin: labelled fields, each opened by '**Label:** value' at
 the margin; lines under it (an Open threads list) belong to it.
 Each field sent replaces the one with that label in
 ## Current Status, in the note's own shape; a label the note
-lacks is added after its last field. Fields not sent, the
-lede, subsections and asides are left alone. --show prints
-the fields as they stand, and reads no stdin.
+lacks is added after its last field. Plain lines before the
+first field are the PC's new lede (one present-tense line),
+replacing the old one. Fields not sent, the lede when none
+is sent, subsections and asides are left alone. --show
+prints the lede and fields as they stand, and reads no stdin.
 ```
 
 | Argument | Value | Help |
 |---|---|---|
 | `<pc>` |  | the PC note, vault-relative, or its name |
-| `--show` |  | print the PC's Current Status fields |
+| `--show` |  | print the PC's Current Status lede and fields |
 | `--write` |  | write it (default: preview) |
 <!-- END GENERATED -->
 

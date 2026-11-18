@@ -18,7 +18,7 @@ to apply. Stdlib only.
 Usage:
   stamp_entities.py VAULT [FILE ...] [--session S] [--date YYYY-MM-DD]
       [--retag OLD=NEW] [--set KEY=VALUE]... [--increment KEY]...
-      [--promote] [--reconciled YYYY-MM-DD] [--supersede-by "[[Winner]]"]
+      [--advance KEY=FROM:TO]... [--promote] [--reconciled YYYY-MM-DD] [--supersede-by "[[Winner]]"]
       [--repair-canon] [--force-shape] [--write]
 
 FILE paths are vault-relative, and at least one is required for every
@@ -51,6 +51,14 @@ Actions
                 counters like `sessions_played`. Writes bare. A
                 non-integer value is an error, not a reset, and the
                 fields with their own flags are refused here too.
+--advance KEY=FROM:TO
+                Set a top-level field to TO only when it is FROM now
+                (case ignored); any other value, or none, is left as
+                it is and reported. Neither value may hold a colon.
+                For one-way moves such as a
+                campaign's `status=not_started:in_progress`, which must
+                never undo a paused or completed one. Repeatable; the
+                fields with their own flags are refused.
 --promote       `canon_status` DRAFT or absent -> AUTHORITATIVE, in
                 whatever case the file writes it. STUB and SUPERSEDED
                 are refused: a stub needs content first, and a
@@ -98,7 +106,7 @@ Exit status
 1  at least one ERROR row. Every ERROR leaves its file byte-identical.
 2  usage. No action flag; FILE missing for anything but --repair-canon;
    --repair-canon mixed with another action; --promote with
-   --supersede-by; a malformed --set / --increment / --retag / --session
+   --supersede-by; a malformed --set / --increment / --advance / --retag / --session
    / --supersede-by argument; a --date or --reconciled that is not
    YYYY-MM-DD.
 """
@@ -315,6 +323,20 @@ def _plan_increment(fm: list[str], key: str,
     return f"{key}: {raw or '(empty)'} -> {new}", False
 
 
+def _plan_advance(fm: list[str], key: str, old: str, new: str,
+                  eol: str) -> tuple[str, bool]:
+    """One --advance. Returns (action text, error)."""
+    hint = RESERVED_KEYS.get(key)
+    if hint:
+        return f"refusing --advance {key} — {hint}", True
+    raw = get_key(fm, key)
+    have = scalar_value(raw) if raw is not None else ""
+    if have.casefold() != old.casefold():
+        return f"{key} is {have or '(none)'}, not {old} — left as it is", False
+    set_key(fm, key, yaml_value_for_cli(new), eol)
+    return f"{key}: {have} -> {new}", False
+
+
 def _plan_promote(fm: list[str], eol: str) -> tuple[str, bool]:
     """--promote. Returns (action text, error)."""
     raw = get_key(fm, "canon_status")
@@ -386,6 +408,11 @@ def plan_file(rel: str, lines: list[str],
         if error:
             return [act], None, True
         actions.append(act)
+    for key, old, new in opts.advance_triples:
+        act, error = _plan_advance(fm, key, old, new, eol)
+        if error:
+            return [act], None, True
+        actions.append(act)
     if opts.promote:
         act, error = _plan_promote(fm, eol)
         if error:
@@ -420,6 +447,9 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--increment", action="append", default=[],
                     metavar="KEY",
                     help="add one to an integer field; repeatable")
+    ap.add_argument("--advance", action="append", default=[],
+                    metavar="KEY=FROM:TO",
+                    help="set KEY to TO only when it is FROM; repeatable")
     status = ap.add_mutually_exclusive_group()
     status.add_argument("--promote", action="store_true",
                         help="canon_status DRAFT or absent -> AUTHORITATIVE")
@@ -444,11 +474,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     args = ap.parse_args(argv)
 
     stamping = bool(args.session or args.date or args.retag or args.sets
-                    or args.increment or args.promote or args.reconciled
+                    or args.increment or args.advance or args.promote or args.reconciled
                     or args.supersede_by)
     if not stamping and not args.repair_canon:
         ap.error("at least one action is required: --session, --date, "
-                 "--retag, --set, --increment, --promote, --reconciled, "
+                 "--retag, --set, --increment, --advance, --promote, --reconciled, "
                  "--supersede-by or --repair-canon")
     if args.repair_canon and stamping:
         # The repair has its own row vocabulary and its own summary; a
@@ -499,6 +529,18 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         if not KEY_RE.match(key.strip()):
             ap.error(f"--increment takes a top-level key, got {key!r}")
     args.increment = [key.strip() for key in args.increment]
+
+    args.advance_triples = []
+    for item in args.advance:
+        key, sep, pair = item.partition("=")
+        old, colon, new = pair.partition(":")
+        # FROM is compared unquoted; TO keeps its quotes for the YAML
+        # typing (`"9"` stays a string).
+        key, old, new = key.strip(), unquote(old.strip()), new.strip()
+        if (not sep or not colon or ":" in new or not KEY_RE.match(key)
+                or not old or not unquote(new)):
+            ap.error(f"--advance needs KEY=FROM:TO, got {item!r}")
+        args.advance_triples.append((key, old, new))
 
     if args.supersede_by is not None and not unquote(args.supersede_by):
         ap.error("--supersede-by must not be empty")

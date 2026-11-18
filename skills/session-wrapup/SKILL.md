@@ -223,7 +223,8 @@ the narrative.
 
    Compare `vw status <PC> --show` with Steps 2-3: add a PC's new
    threads (not shared) and exclusive knowledge, refresh
-   `Location`/`Condition`/`Carrying`. Never drop a thread: Reconcile
+   `Location`/`Condition`/`Carrying`, and the lede above the fields
+   when it no longer holds (one present-tense line, sent first). Never drop a thread: Reconcile
    closes it. An item led by a session label or date goes back
    without it (`shared/pc-body-structure.md`). A field that repeats
    or carries a session label (`**Knows (Session 9):**`) is past
@@ -347,7 +348,7 @@ no separate receipts, and the Wrap-Up only wiki-links entities.
 If `_Campaign/Campaign Overview.md` exists, a block:
 
 ```text
-=== stamp "_Campaign/Campaign Overview.md" --set current_game_date="<in-game date at session end>" --increment sessions_played --set last_session="[[<this session's index title>]]" --set last_play_date=YYYY-MM-DD --session "<asOfSession value>" --date YYYY-MM-DD
+=== stamp "_Campaign/Campaign Overview.md" --set current_game_date="<in-game date at session end>" --increment sessions_played --set last_session="[[<this session's index title>]]" --set last_play_date=YYYY-MM-DD --advance status=not_started:in_progress --session "<asOfSession value>" --date YYYY-MM-DD
 ```
 
 `--session` takes the Overview's own shape, as in 3c.
@@ -358,7 +359,14 @@ far as the notes say time passed; ask the GM if unsure. "October
 1923" never replaces "October 17, 1923".
 
 Leave `current_arc`, `arcs_planned`, `current_chapter`,
-`chapters_planned`, `status` and the body to the GM.
+`chapters_planned` and the body to the GM; `status` only moves from
+`not_started` (the `--advance` above). One exception: a `## Current
+Arc` that still opens "Not yet begun." gets a `=== section
+"_Campaign/Campaign Overview.md" "Current Arc" --replace` block: in
+place of those three words, two sentences from the Handoff (where
+things stand, the live tension), written for the players since the
+section publishes; then the rest of the section exactly as it is.
+5b shows it for the GM's yes.
 
 ### 4c. World Fact Scan
 
