@@ -9,6 +9,12 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.64] — 2026-11-18
+
+### Added
+
+- House rules have a home: a `## House Rules` section in the Campaign Overview, one bullet per rule in your words. The player site gets its own House Rules page and menu link from it, and the play brief, prep bundle and wrap-up's carry read it; the Midwife asks for them at session 0. Existing vaults get the section when the first rule is written (#721, tool 1.70.25).
+
 ## [1.12.62] — 2026-11-18
 
 ### Fixed
