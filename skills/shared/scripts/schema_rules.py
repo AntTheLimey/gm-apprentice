@@ -64,8 +64,11 @@ SYSTEM_RULES: dict[str, str] = {
 
 def system_id(raw: object) -> str | None:
     """The canonical id a written system names (trimmed, any case); the
-    text itself, lowered, when it is no known alias; None when blank."""
+    text itself, lowered, when it is no known alias; None when blank or
+    `undecided` (the Midwife's brief before the GM picks one)."""
     text = str(raw or "").strip().lower()
+    if text == "undecided":
+        return None
     return SYSTEM_ALIASES.get(text, text) or None
 
 

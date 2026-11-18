@@ -9,6 +9,13 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.69] — 2026-11-18
+
+### Added
+
+- `gma vault-check <vault> npc-stats` lists the NPCs with no real stat block (missing, a placeholder, blank, or a major NPC given only a stock block), and says which are major: a companion or one of the brief's Key NPCs. `--plan` keeps a Plan's NPCs, `--played` those met in play (#725).
+- Missing stat blocks get built once the game system is known: the Midwife builds a full workup for each major NPC at scaffold, session prep builds the blocks its Plan's scenes need, and campaign-qa's new NPC Stats check offers the rest for the GM's yes. With no system recorded, nothing is built: it becomes a question for the GM (#725).
+
 ## [1.12.68] — 2026-11-18
 
 ### Removed

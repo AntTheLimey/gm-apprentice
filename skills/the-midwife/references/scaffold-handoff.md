@@ -130,6 +130,19 @@ promoted entity takes its `type:` from the vocabulary in
 map narrative verbs and normalize inverses via
 `shared/relationship-normalization.md` — never invent a predicate.
 
+A major NPC (companion, or in the brief's Key NPCs) gets a full
+workup now, built for who they are: abilities, spells, equipment, a
+signature feature, and tactics, with stats of its own (never a
+reskinned stock block), through `ttrpg-expert/npc-generation.md`
+and the system's files, in its batch block's GM Notes (a `### Stats`
+section). Any other NPC the plans put in a fight or casting gets at
+least a stock block. Never write that a block will be built later.
+After the batch, run `gma vault-check <vault> npc-stats`: before the
+handoff, build each row for a major NPC or one the plans put in a
+fight or casting; other rows may be left. If the game system is still
+undecided, that is the one allowed gap, and it goes in the brief's Open
+Questions.
+
 **2b. Plan promotion** — List all topic files from
 `_midwife/{adventure}/` that contain narrative planning
 content (arc design, scene designs, investigation flows,
@@ -283,7 +296,7 @@ brief before committing to prep work.
 | Premise | One paragraph: the pitch the players hear | Public |
 | Tone & Genre | Sensory and emotional descriptors | Public |
 | Core Tension | The conflict or mystery as the players meet it | Public |
-| Key NPCs | Per-NPC, as first met: role, connection, first appearance | Public |
+| Key NPCs | Per-NPC, as first met: role, connection, first appearance; each entry starts with its NPC's `[[link]]` | Public |
 | Locations | Per-location, as first seen: atmosphere, significance, connections | Public |
 | Entry Points | ≥3 hooks (Three Clue Rule at adventure scale) | Public |
 | CATS Pitch | Concept/Aim/Tone/Subject for Session 0 | Public — see note below |

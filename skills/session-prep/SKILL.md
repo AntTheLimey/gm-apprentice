@@ -333,6 +333,13 @@ Apply fixes in place; there is no audit-notes report.
   vault lacks: the write's `unresolved` rows.
 - Stale entity files to update or retire: the `stale-drafts` rows run
   with the bundle.
+- NPCs the Plan's scenes name without a stat block (`gma vault-check
+  <vault> npc-stats --plan <plan>`): build each through ttrpg-expert
+  before handoff and show it in the review: a full workup for a major
+  NPC (stats of its own, never a reskinned stock block), a stock
+  block allowed for the rest. On the GM's yes it goes in
+  the NPC note's `## GM Notes` as its `### Stats` section. With
+  `# system: none recorded`, build nothing: it is an Open Question.
 - Unresolved calls — plot questions the GM deferred or you couldn't
   ground — each with 2–3 seeds, sorted per Stance. "Does Sophia know
   what her husband has become?" is a plot question; "Georgiana's

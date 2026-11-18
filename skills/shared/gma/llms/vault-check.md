@@ -12,7 +12,7 @@ gma vault-check <vault> <command> [<NAME> ...] [options]
 | Argument | Value | Help |
 |---|---|---|
 | `<vault>` |  | the vault folder |
-| `<command>` | `frontmatter`, `names`, `index`, `stale-drafts`, `changed`, `tables`, `timeline`, `read-aloud`, `relationships`, `chapters`, `npc-pairs`, `sessions`, `gm-leak`, `pc-body`, `wrapup`, `site-faults`, `settings`, `version`, `active-pcs`, `voices`, `stories`, `report-new`, `report-stats`, `all` | the check to run |
+| `<command>` | `frontmatter`, `names`, `index`, `stale-drafts`, `changed`, `tables`, `timeline`, `read-aloud`, `relationships`, `chapters`, `npc-pairs`, `npc-stats`, `sessions`, `gm-leak`, `pc-body`, `wrapup`, `site-faults`, `settings`, `version`, `active-pcs`, `voices`, `stories`, `report-new`, `report-stats`, `all` | the check to run |
 | `<NAME>` |  | voices only: the characters to read, by name, alias or [[link]] |
 | `--order` |  | timeline only: check the sessions' in_game_date never goes backwards (qa_checks.py) |
 | `--mode` | `MODE` | report-new only: canon_audit, full_audit... |
@@ -21,6 +21,8 @@ gma vault-check <vault> <command> [<NAME> ...] [options]
 | `--folder` | `FOLDER` | restrict the frontmatter, tables, relationships, gm-leak and pc-body checks to a subfolder |
 | `--file` | `FILE` | restrict the check to one vault-relative file (e.g. "Chapters/C3/Sessions/Session 07/Chapter_03_Session_07_Wrap_Up.md") — repeatable for tables, relationships, pc-body and site-faults; wrapup takes only the first if given more than one (repeatable) |
 | `--newer-than` | `NEWER_THAN` | restrict tables/relationships/pc-body to files with an mtime at or after this vault-relative file's own mtime — a backstop scope, or a completeness cross-check against an explicit --file list |
+| `--plan` | `PLAN` | npc-stats only: just the NPCs this Session Plan's scenes name (its path, or its note name) |
+| `--played` |  | npc-stats only: just the NPCs a Wrap-Up or a played scene links |
 | `--json` |  | settings only: print the rows as JSON |
 | `--dry-run` |  | report-stats only: print each count's old and new value and write nothing |
 | `--force` |  | report-stats only: allow a count to drop below a non-zero one already in the report |

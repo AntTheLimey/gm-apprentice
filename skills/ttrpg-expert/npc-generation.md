@@ -181,6 +181,10 @@ Stat Block: [System-specific]
 [Running context]
 ```
 
+In a vault, the finished block goes in the NPC note's `## GM Notes` as
+its `### Stats` section, in place of the template's `{STAT BLOCK: …}`
+paragraph or the system block's `{…}` fields.
+
 ## Generation from Constraints
 
 When user provides partial info, fill gaps while respecting
