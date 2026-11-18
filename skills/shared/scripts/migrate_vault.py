@@ -1020,7 +1020,8 @@ def find_scaffold_pre_play(vault: Path) -> list[Item]:
 
 # --- the adventure brief's adventure_shape field ------------------------------
 
-# 1.12.63 (#735): the brief's `adventure_shape` took one of five words
+# 1.12.70 (#735). 1.12.68 shipped it marked 1.12.63, so a vault already
+# past 1.12.63 never ran it (#745). The brief's `adventure_shape` took one of five words
 # (linear, branching, hub-and-spoke, open-node, sandbox). It could not say
 # what a GM chose ("a fixed spine with session 2 open"), so it misstated it,
 # and it was read as the GM's decision. The shape is the brief's
@@ -1083,7 +1084,7 @@ def _drop_shape(vault: Path, rels: list[str]) -> list[str]:
 
 
 def find_adventure_shape(vault: Path) -> list[Item]:
-    """1.12.63: the adventure brief's `adventure_shape` line is removed.
+    """1.12.70: the adventure brief's `adventure_shape` line is removed.
     The brief's `### Adventure Shape` section holds the shape."""
     plain, asked = _shape_kinds(vault)
     items: list[Item] = []
@@ -1475,7 +1476,7 @@ VAULT_CHECKS: list[Check] = [
           "scaffold notes made before play", find_scaffold_pre_play,
           kind="bookkeeping",
           plain=("Marked the adventure brief and world notes the Midwife wrote before play as made before play, so the stale-draft check can date them and the next reconcile promotes them. Until it runs, an old one may show as a stale draft made before play.")),
-    Check("adventure-shape", "1.12.63", 3,
+    Check("adventure-shape", "1.12.70", 3,
           "the adventure brief's adventure_shape field", find_adventure_shape,
           choices=("adventure-shape-word",), kind="bookkeeping",
           plain=("Removed the adventure brief's adventure_shape field, a one-word label that could not say what you chose; the brief's Adventure Shape section keeps the shape in your words."),

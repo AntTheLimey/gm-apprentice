@@ -9,6 +9,12 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.70] — 2026-11-18
+
+### Fixed
+
+- The update now removes the adventure brief's `adventure_shape` line (check `adventure-shape`). 1.12.68 shipped that step marked with an earlier release, so a vault already past it skipped it. A test now holds each update check to the release that ships it (#745).
+
 ## [1.12.69] — 2026-11-18
 
 ### Added
@@ -137,7 +143,7 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ### Fixed
 
-- The update marks older Play Notes and Export notes `publish: false` when the vault has no publish list, so a site with no list stops showing raw table records to the players. A vault with a publish list is left alone: those notes are already off unless the GM listed them (#692).
+- The update marks older Play Notes and Export notes `publish: false` when the vault has no publish list, so a site with no list stops showing raw table records to the players. A vault with a publish list is left alone: those notes are already off unless the GM listed them (check `play-records-publish`) (#692).
 
 ## [1.12.38] — 2026-11-17
 
@@ -275,7 +281,7 @@ Publish tool 1.70.17.
 
 ### Changed
 
-- Live stats and the change-request inbox publish only on Cloudflare Pages, and the warning says why. A site with no host setting now defaults to Cloudflare Pages; the update first writes each existing site's host down (Cloudflare where the site shows Cloudflare signs, GitHub Pages otherwise), so no site changes host (#605).
+- Live stats and the change-request inbox publish only on Cloudflare Pages, and the warning says why. A site with no host setting now defaults to Cloudflare Pages; the update first writes each existing site's host down (Cloudflare where the site shows Cloudflare signs, GitHub Pages otherwise), so no site changes host (check `site-host`) (#605).
 
 ## [1.12.20] — 2026-11-12
 
@@ -395,7 +401,7 @@ Publish tool 1.70.17.
 ### Changed
 
 - Wrap-up writes only active threads; settled and dormant ones stay out of what prep reads.
-- The player site never publishes a Dormant Threads heading: threads are parked only once the site's publish tool hides it, and the update offers the entry to vaults that keep their own hidden-headings list.
+- The player site never publishes a Dormant Threads heading: threads are parked only once the site's publish tool hides it, and the update offers the entry to vaults that keep their own hidden-headings list (check `hide-sections-dormant`).
 - Publish tool 1.70.6: `Dormant Threads` joins the hidden headings.
 
 ### Fixed
