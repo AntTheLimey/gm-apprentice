@@ -17,6 +17,7 @@ being open.
 | Create an NPC, place, group, creature, item, event, document, clue, heritage or adventure brief note from its template: you send the fields, the ties and the sections; it writes `## Related` and `### Hidden Ties` from the ties (dry run first; `--write`; several as blocks of one `batch`) | `gma vault-write VAULT entity-new --type T --name N` |
 | Broken links by kind, with the note each may mean; point a misspelt link at the right note, or turn a link into plain words, vault-wide or only on named pages (dry run first; `--write`) | `gma links VAULT`, `gma links VAULT retarget NAME NOTE`, `gma links VAULT unlink NAME... [--in NOTE] [--bare]` |
 | Place text you wrote: start a Wrap-Up, add its sections, story entries, log lines, timeline lines (dry run first; `--write`) | `gma vault-write` |
+| Several writes at once (statuses, stamps, sections, new notes): previewed together, written all or nothing (dry run first; `--write`) | `gma vault-write VAULT batch FILE`, one `=== <writer> <args>` block each |
 | Entity schema validation, name similarity, index drift, stale drafts, changed-since listing | `gma vault-check` |
 | Vault/plugin version gate | `gma vault-check VAULT version` |
 | Session document chain status | `gma vault-check VAULT sessions` |

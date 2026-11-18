@@ -5403,6 +5403,14 @@ def build_parser() -> argparse.ArgumentParser:
                       help="leave these blocks out, for later")
     pick.add_argument("--only", metavar="N,M",
                       help="write only these blocks")
+    # #730: every writer says it is also a batch block, so several writes
+    # are previewed together and written all or nothing.
+    for name, parser in sub.choices.items():
+        if name in COMMANDS:
+            hint = (f"Several writes at once: put this as a '=== {name} ...' "
+                    f"block in `gma vault-write <vault> batch FILE`.")
+            parser.description = (parser.description + "\n\n" + hint
+                                  if parser.description else hint)
     return ap
 
 
