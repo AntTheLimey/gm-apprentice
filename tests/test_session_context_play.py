@@ -1110,3 +1110,27 @@ class PointerKeyPeriodTests(unittest.TestCase):
 
     def test_a_written_md_suffix_is_still_dropped(self):
         self.assertEqual(sc.pointer_key("The Ball.md"), sc.pointer_key("The Ball"))
+
+
+class HouseRulesTests(unittest.TestCase):
+    def vault(self, rules):
+        tmp = Path(tempfile.mkdtemp(prefix="sc-play-hr-"))
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        vault = tmp / "v"
+        shutil.copytree(FIXTURE, vault)
+        if rules is not None:
+            with (vault / "Overview.md").open("a", encoding="utf-8") as f:
+                f.write(rules)
+        return vault
+
+    def test_play_prints_the_section(self):
+        out = run_cli(self.vault(
+            "\n## House Rules\n\n- Anyone on time gets a bankable +1 token.\n"
+            "- Criticals on a 5 or under.\n"), "--play").stdout
+        self.assertIn("## House Rules\n- Anyone on time gets a bankable +1 "
+                      "token.\n- Criticals on a 5 or under.", out)
+
+    def test_play_prints_nothing_without_rules(self):
+        self.assertNotIn("House Rules", run_cli(self.vault(None), "--play").stdout)
+        self.assertNotIn("House Rules", run_cli(
+            self.vault("\n## House Rules\n\n"), "--play").stdout)

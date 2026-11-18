@@ -655,3 +655,24 @@ class ArchivedPcTests(unittest.TestCase):
             "type: pc\nstatus: active", "## Current Status\n\nPLACEHOLDER\n")
         out = run_cli(make_vault(self, files), "--prep").stdout
         self.assertNotIn("PLACEHOLDER", out)
+
+
+class HouseRulesTests(unittest.TestCase):
+    OVERVIEW = note("type: campaign_overview",
+                    "# Overview\n\nPremise.\n\n## House Rules\n\n"
+                    "- Anyone on time gets a bankable +1 token.\n"
+                    "- Criticals on a 5 or under.\n\n## Key Themes\n\n- A\n")
+
+    def test_prep_prints_the_section(self) -> None:
+        files = dict(FILES, **{"Overview.md": self.OVERVIEW})
+        out = run_cli(make_vault(self, files), "--prep").stdout
+        self.assertIn("===== House Rules =====\n- Anyone on time gets a "
+                      "bankable +1 token.\n- Criticals on a 5 or under.", out)
+
+    def test_prep_prints_nothing_without_it(self) -> None:
+        files = dict(FILES, **{"Overview.md": self.OVERVIEW.replace(
+            "House Rules", "Other")})
+        out = run_cli(make_vault(self, files), "--prep").stdout
+        self.assertNotIn("House Rules", out)
+        out = run_cli(make_vault(self, FILES), "--prep").stdout
+        self.assertNotIn("House Rules", out)

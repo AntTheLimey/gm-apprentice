@@ -152,6 +152,24 @@ def overview_of(files) -> tuple[str, str, dict] | None:
     return next((f for f in files if f[0] == rel), None)
 
 
+_HINT_LINE_RE = re.compile(r"^\s*\{[^{}]*\}\s*$")
+
+
+def house_rules_of(files) -> str:
+    """The Campaign Overview's `## House Rules` text as written, or ""."""
+    found = overview_of(files)
+    text = section(body_of(found[1]), "House Rules") if found else None
+    # A template's `{hint}` line left in place is no rule.
+    return "\n".join(line for line in (text or "").splitlines()
+                     if not _HINT_LINE_RE.match(line)).strip()
+
+
+def house_rules_block(files, heading: str) -> str:
+    """The House Rules block under `heading`, or "" when there are none."""
+    rules = house_rules_of(files)
+    return f"{heading}\n{rules}" if rules else ""
+
+
 def stem_of(entry) -> str:
     """Filename stem of a session record, casefolded, for ref matching."""
     return entry["rel"].rsplit("/", 1)[-1][:-3].casefold()
@@ -2327,6 +2345,9 @@ def _bundle(argv: list[str] | None, outlines: Outlines) -> int:
             print(f"error: {error}", file=sys.stderr)
             return 2
         print(report)
+        rules = house_rules_block(files, "===== House Rules =====")
+        if rules:
+            print(f"\n{rules}")
         block = paused_line_block(
             paused_scenes(args.vault, files),
             "===== Paused Scenes =====")
@@ -2380,6 +2401,9 @@ def _bundle(argv: list[str] | None, outlines: Outlines) -> int:
                 [p for p in paused_scenes(args.vault, files)
                  if not is_pointed_at(p.rel, pointed)],
                 "## Paused, not in this Plan")
+        rules = house_rules_block(files, "## House Rules")
+        if rules:
+            print(f"\n{rules}")
         if block:
             print(f"\n{block}")
         return 0
@@ -2485,6 +2509,9 @@ def _bundle(argv: list[str] | None, outlines: Outlines) -> int:
              overview[0] if overview else None,
              body_of(overview[1]) if overview else None)
     if args.prep:
+        rules = house_rules_block(files, "===== House Rules =====")
+        if rules:
+            print(f"\n{rules}")
         print_prep_rest(args.vault, files, chosen, wrap, current, chapter,
                         upcoming, outlines)
     return 0

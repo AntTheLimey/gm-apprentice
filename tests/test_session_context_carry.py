@@ -293,5 +293,35 @@ class PausedScenesTests(unittest.TestCase):
         self.assertNotIn("Paused Scenes", out)
 
 
+OVERVIEW = ("---\ntype: campaign_overview\n---\n\n# Overview\n\nPremise.\n\n"
+            "## House Rules\n\n- Anyone on time gets a bankable +1 token.\n"
+            "- Criticals on a 5 or under.\n\n## Key Themes\n\n- Dread\n")
+
+
+class HouseRulesTests(unittest.TestCase):
+    def carry(self, overview):
+        vault = campaign(self)
+        if overview is not None:
+            (vault / "Overview.md").write_text(overview, encoding="utf-8")
+        return run(vault, "--carry", "--before",
+                   f"{CH2}/Session 02/Session 02.md")
+
+    def test_the_section_is_printed_as_written(self):
+        out = self.carry(OVERVIEW).stdout
+        self.assertIn("===== House Rules =====\n- Anyone on time gets a "
+                      "bankable +1 token.\n- Criticals on a 5 or under.", out)
+        self.assertNotIn("Dread", out)
+
+    def test_nothing_when_absent_or_empty(self):
+        for text in (None, OVERVIEW.replace(
+                "- Anyone on time gets a bankable +1 token.\n"
+                "- Criticals on a 5 or under.\n", ""),
+                OVERVIEW.replace("## House Rules", "## Other"),
+                OVERVIEW.replace("- Anyone on time gets a bankable +1 token.\n"
+                                 "- Criticals on a 5 or under.\n",
+                                 "{Standing changes, one bullet each.}\n")):
+            self.assertNotIn("House Rules", self.carry(text).stdout)
+
+
 if __name__ == "__main__":
     unittest.main()

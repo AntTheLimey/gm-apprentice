@@ -266,7 +266,8 @@ The working directory stays as creative archive.
 ### Step 5: Session 0 Handoff
 
 Read `ttrpg-expert/gm-session-patterns.md`, Session Zero and
-CATS sections.
+CATS sections. Ask the GM for their house rules, and write each as a
+bullet in the Overview's `## House Rules`, in their words.
 
 "You've got enough to run Session 0. When you're ready,
 session-prep can help you plan it — or if you'd like to stop

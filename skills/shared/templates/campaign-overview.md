@@ -36,6 +36,10 @@ The world in broad strokes — era, geography, atmosphere, tone. Not
 exhaustive worldbuilding, just enough to orient someone picking this
 up cold.
 
+## House Rules
+
+{Standing changes to the game's rules for this campaign, one bullet each, as you'd say it at the table.}
+
 ## Key Themes
 
 - Theme 1

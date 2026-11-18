@@ -39,7 +39,7 @@ narrative units (story beats). These rarely align perfectly.
 | Start Date | In-game starting date |
 | Player Count | Active players |
 | Schedule | Frequency and session duration |
-| Custom Rules | House rules, optional mechanics |
+| Custom Rules | House rules (the Overview's `## House Rules`), optional mechanics |
 
 ## Session Prep Frameworks
 

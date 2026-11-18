@@ -75,6 +75,9 @@ Scene 3: PCs searched the harbour. UPDATE: The Merry Widow —
   confirmed abandoned, signs of struggle below decks
 ```
 
+The GM says to add a house rule: add it as a bullet to the Overview's
+"House Rules" (`printf 'Overview.md\tHouse Rules\t- <rule>\n' | gma vault-write <vault> log --write`, the Overview's own path in the first column; the section is made if missing).
+
 **Player sheet changes** — players' sheet edits from the published
 site are handled by publish-site's "start your checking loop"
 (`references/change-request-loop.md`) in a separate terminal; point
@@ -86,7 +89,7 @@ Load the file directly — don't search.
 
 | Need | Go to |
 |------|-------|
-| Rules dispute | `gma rules-lookup {system} "<term>"` first — one row, cited `file:line`, is the answer at the table. No python: `ttrpg-expert/systems/{system}/rules-reference.md` (CoC, D&D, PF2e, FitD, Generic) or `mechanics.md` (GURPS) |
+| Rules dispute | House rules first (the brief's House Rules), then the book. `gma rules-lookup {system} "<term>"` first — one row, cited `file:line`, is the answer at the table. No python: `ttrpg-expert/systems/{system}/rules-reference.md` (CoC, D&D, PF2e, FitD, Generic) or `mechanics.md` (GURPS) |
 | Combat mechanics | `ttrpg-expert/systems/{system}/combat-reference.md` (CoC) or `combat.md` (GURPS — for sheet arithmetic disputes, run `gma gurps-check <sheet> defenses` or `damage` instead of hand-checking) or `conditions-rules.md` (D&D) or `rules-reference.md` (PF2e) or `mechanics.md` (FitD) |
 | Improvise NPC | `ttrpg-expert/npc-generation.md` §The 3-Line NPC (Quick Generation) |
 | Random encounter | `ttrpg-expert/random-generation.md` §Random Encounter Generation |
