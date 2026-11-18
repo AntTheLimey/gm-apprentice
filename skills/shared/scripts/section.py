@@ -3,6 +3,11 @@
 
 Usage:
   section.py VAULT NOTE PATH
+  section.py VAULT NOTE --lead
+
+`--lead` prints the note's lead instead: the text above its first heading
+or gm-only/spoiler block, where a scene keeps its Situation, Starts it and
+If-table (#738); a batch's `=== section NOTE --lead` block writes it.
 
 NOTE is a vault-relative path, a note's name or one of its aliases. PATH
 is `Heading` or `Heading/Sub/...`, matched without regard to case and
@@ -81,14 +86,24 @@ def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("vault", type=Path, help="the vault folder")
     ap.add_argument("note", help="the note: a vault-relative path, name or alias")
-    ap.add_argument("path", help="the heading path: Heading or Heading/Sub; "
+    ap.add_argument("path", nargs="?",
+                    help="the heading path: Heading or Heading/Sub; "
                     "'## Heading/Sub' pins the first heading's level")
+    ap.add_argument("--lead", action="store_true",
+                    help="print the note's lead instead: the text above its "
+                    "first heading or hidden block (a scene's Situation, "
+                    "Starts it and If-table)")
     ap.epilog = 'Example: gma section "<vault>" "<note>" "Current Status/Session Log"'
     return ap
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    ap = build_parser()
+    args = ap.parse_args(argv)
+    if args.lead and args.path is not None:
+        ap.error("a PATH or --lead, not both")
+    if not args.lead and args.path is None:
+        ap.error("name a PATH, or --lead for the text above the first heading")
     if not args.vault.is_dir():
         print(f"error: not a directory: {args.vault}", file=sys.stderr)
         return 2
@@ -99,6 +114,27 @@ def main(argv: list[str] | None = None) -> int:
     except vw.WriteError as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
+    if args.lead:
+        doc = vw.parse(text)
+        try:
+            first, end, _walk = vw.checked_lead(doc, rel)
+        except vw.WriteError as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 1
+        # Blank and whitespace-only lines round the text are the note's
+        # own: `--replace` keeps them, so they are not printed (#738).
+        body = [ln.rstrip("\r\n") for ln in doc.lines[first:end]]
+        while body and not body[0].strip():
+            body.pop(0)
+        while body and not body[-1].strip():
+            body.pop()
+        lead = doc.eol.join(body)
+        if not lead.strip():
+            print(f"error: {rel} has no text above its first heading",
+                  file=sys.stderr)
+            return 1
+        sys.stdout.buffer.write((lead + doc.eol).encode("utf-8"))
+        return 0
     path = [p.strip() for p in args.path.split("/")]
     pin = PIN_RE.match(path[0])
     level = None
