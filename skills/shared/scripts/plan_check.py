@@ -240,7 +240,10 @@ DURATION_BARE_RE = re.compile(r"\b\d+\s*(?:minutes|mins)\b", re.IGNORECASE)
 SESSION_CLOCK_RE = re.compile(
     r"\s*(?:of\s+(?:play|the\s+session|session|game)\s+)?"
     r"(?:(?:are|is|have|has)\s+(?:been\s+)?)?"
-    r"(?:left|to go|remaining|in\b|into|gone|elapsed|before the end)",
+    r"(?:left|to go|remaining|into|gone|elapsed|before the end"
+    # A bare "in" counts only where the phrase ends ("30 minutes in, the
+    # bell"), so "20 minutes in total" stays an estimate.
+    r"|in(?=\s*(?:[,.;:)!?—–]|$)))",
     re.IGNORECASE)
 
 AUDIT_TRAIL_PHRASES: tuple[str, ...] = (

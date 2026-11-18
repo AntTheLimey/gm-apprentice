@@ -871,7 +871,10 @@ class DurationSessionClockTests(unittest.TestCase):
     def test_scene_estimates_still_flagged(self):
         for line, level in (("Scene 3 runs 20 minutes.", "WARNING"),
                             ("The chase (20-30 minutes).", "ERROR"),
-                            ("A short beat, ~10 min.", "ERROR")):
+                            ("A short beat, ~10 min.", "ERROR"),
+                            ("Scene 3 runs 20 minutes in total.", "WARNING"),
+                            ("The chase takes 20-30 minutes in length.",
+                             "ERROR")):
             with self.subTest(line=line):
                 found = self.findings(line)
                 self.assertEqual([f.level for f in found], [level])
