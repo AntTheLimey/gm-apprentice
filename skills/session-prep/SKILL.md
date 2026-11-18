@@ -409,7 +409,7 @@ one with nothing for it keeps its heading with an empty body (never
 
 - `## Session Intent` — what's on the table and where the pressure is
   (step 11).
-- `## Session Overview` — a short dramatic synopsis from the intent.
+- `## Session Overview` — the situation going in, in a short synopsis, never what the players will do.
 - `## GM Notes` — Keeper-only content goes under it (the players' site
   hides it), never in a new top-level section.
 - `## Prior Prep Review` — what earlier prep was kept or updated (step 6).

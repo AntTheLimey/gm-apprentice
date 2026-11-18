@@ -28,7 +28,7 @@ in your words.]
 
 ## Session Overview
 
-[What this session is about dramatically, in a short synopsis.]
+[The situation going in, in a short synopsis: what's on the table, never what the players will do.]
 
 ## GM Notes
 
@@ -44,7 +44,7 @@ in your words.]
 [What follows from last session.]
 
 #### Salvageable Prep
-[Unplayed prep: dropped / recycled / must-happen.]
+[Unplayed prep: dropped / recycled / still on the table.]
 
 #### GM Decisions
 [Resolved decisions with outcomes, one at a time.]
