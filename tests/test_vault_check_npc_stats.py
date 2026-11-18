@@ -390,6 +390,62 @@ class RowTests(unittest.TestCase):
         self.assertEqual(rows(v), [])
         self.assertEqual(len(rows(v, plan="Plans/S3 Plan.md")), 1)
 
+    def fate(self, *bullets: str) -> list[str]:
+        """The rows for one NPC, `status: alive`, whose GM Notes Behind
+        the Scenes holds `bullets`."""
+        scenes = "\n".join(bullets)
+        v = make(self, {"NPCs/Tam Rowe.md":
+                        npc(f"### Behind the Scenes\n\n{scenes}")})
+        return rows(v)
+
+    def test_a_hidden_dead_fate_is_left_out(self):
+        self.assertEqual(self.fate(
+            "- **[[Session 01 - The Pass]]** — **Dead.** Fell in the "
+            "crevasse; the party think he went for help."), [])
+        self.assertEqual(self.fate(
+            "- **Dead, under the ice.** Nobody saw it."), [])
+
+    def test_a_struck_dead_fate_and_a_later_one_is_kept(self):
+        self.assertEqual(len(self.fate(
+            "- ~~**[[Session 01 - The Pass]]** — **Dead.** Fell in the "
+            "crevasse.~~",
+            "- **[[Session 02 - The Thaw]]** — **Alive, freed by the "
+            "party.** He was in the ice crypt all along.")), 1)
+
+    def test_a_later_unstruck_fate_beats_an_earlier_dead(self):
+        self.assertEqual(len(self.fate(
+            "- **[[Session 01 - The Pass]]** — **Dead.** So it seemed.",
+            "- **[[Session 02 - The Thaw]]** — **Alive, freed by the "
+            "party.**")), 1)
+
+    def test_a_later_bullet_with_no_fate_keeps_the_dead_fate(self):
+        self.assertEqual(self.fate(
+            "- **[[Session 01 - The Pass]]** — **Dead.** Fell in the "
+            "crevasse.",
+            "- **[[Session 02 - The Thaw]]** — his dog came home alone.",
+            "- **Motive:** he owed the Lodge."), [])
+
+    def test_only_death_leaves_an_npc_out(self):
+        for fate in ("**Captive, in the ice crypt.**", "**Missing.**",
+                     "**Turned; serves the Lodge now.**"):
+            with self.subTest(fate=fate):
+                self.assertEqual(len(self.fate(
+                    f"- **[[Session 01 - The Pass]]** — {fate}")), 1)
+
+    def test_death_in_passing_is_no_fate(self):
+        for line in (
+                "- **[[Session 01 - The Pass]]** — he told the party his "
+                "brother was dead. **Dead** men tell no tales, he said.",
+                "- **[[Session 01 - The Pass]]** — the dead dog was his.",
+                "- He fears the **Dead.**"):
+            with self.subTest(line=line):
+                self.assertEqual(len(self.fate(line)), 1)
+
+    def test_a_dead_fate_elsewhere_in_the_note_is_no_fate(self):
+        v = make(self, {"NPCs/Tam Rowe.md": npc(
+            "### Secrets\n\n- **[[Session 01 - The Pass]]** — **Dead.**")})
+        self.assertEqual(len(rows(v)), 1)
+
 
 PLAN = """---
 type: session-plan

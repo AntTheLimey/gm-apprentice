@@ -9,6 +9,12 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.73] — 2026-11-18
+
+### Fixed
+
+- `npc-stats` no longer asks for a stat block for an NPC who is secretly dead: it reads the current fate in the note's GM Notes Behind the Scenes, as session prep does, and leaves out one whose fate is **Dead.** while `status:` still says alive (#747).
+
 ## [1.12.72] — 2026-11-18
 
 ### Added
