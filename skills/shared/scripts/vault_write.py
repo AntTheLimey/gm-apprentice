@@ -434,18 +434,97 @@ def section_end(doc: Doc, head: Head) -> int:
     return len(doc.lines)
 
 
+@dataclass
+class Walk:
+    """One line as `comment_walk` reads it."""
+    inside: bool    # starts inside an HTML or %% comment
+    touches: bool   # holds comment syntax, or starts inside a comment
+    code: bool      # a code-fence line, or inside a fence
+    open: str       # what is still open at the line's end: "", "code
+                    # fence", "HTML comment" or "%% comment"
+
+
+def comment_walk(lines: list[str]) -> list[Walk]:
+    """Each line read for code fences, HTML comments and `%%` comments,
+    which hide text in Obsidian and on the site alike. `scan_body` models
+    no `%%` comment, so the lead's writer reads them here (#738)."""
+    fence: str | None = None
+    html = pct = False
+    out: list[Walk] = []
+    for raw in lines:
+        line = raw.rstrip("\r\n")
+        inside = html or pct
+        if not inside:
+            delim, flag = vl.fence_step(line, fence)
+            if fence is not None or flag:
+                fence = delim
+                out.append(Walk(False, False, True,
+                                "code fence" if fence else ""))
+                continue
+        touches, i = inside, 0
+        while i < len(line):
+            if html or pct:
+                close = "-->" if html else "%%"
+                j = line.find(close, i)
+                if j < 0:
+                    break
+                html = pct = False
+                i = j + len(close)
+                continue
+            a, b = line.find("<!--", i), line.find("%%", i)
+            if a < 0 and b < 0:
+                break
+            touches = True
+            if a >= 0 and (b < 0 or a < b):
+                html, i = True, a + 4
+            else:
+                pct, i = True, b + 2
+        out.append(Walk(inside, touches, False, "HTML comment" if html
+                        else "%% comment" if pct else ""))
+    return out
+
+
 def lead_span(doc: Doc) -> tuple[int, int]:
     """(first, end) line indexes of the note's lead (#738): the body text
     above its first heading or gm-only/spoiler marker, where a scene keeps
     its Situation, Starts it and If-table. `first` is the line after the
-    frontmatter; the span is empty when the body opens with a heading."""
+    frontmatter; the span is empty when the body opens with a heading. A
+    heading inside a comment does not end it."""
     if not doc.states:
         return len(doc.lines), len(doc.lines)
     first = doc.states[0].lineno - 1
+    walk = comment_walk(doc.lines[first:])
     end = next((s.lineno - 1 for s in doc.states
-                if s.heading is not None or s.marker is not None),
+                if s.marker is not None or s.heading is not None
+                and not s.comment and not walk[s.lineno - 1 - first].inside),
                len(doc.lines))
     return first, end
+
+
+ANY_MARKER_RE = re.compile(r"<!--\s*/?\s*(?:gm-only|spoiler)\s*-->", re.I)
+
+
+def checked_lead(doc: Doc, rel: str) -> tuple[int, int, list[Walk]]:
+    """`lead_span`, with the lead's lines walked, refusing a lead no tool
+    should write: a frontmatter never closed (it would read as the lead), a
+    lead ending inside a comment (text put there would be hidden), and a
+    gm-only or spoiler marker part-way along a line."""
+    first, end = lead_span(doc)
+    if (first == 0 and doc.lines
+            and doc.lines[0].lstrip("﻿").rstrip("\r\n") == "---"):
+        # The body reader found no frontmatter, yet the note opens with one.
+        raise WriteError(f"{rel}: its frontmatter is not closed; fix it "
+                         f"before writing the lead")
+    walk = comment_walk(doc.lines[first:end + 1])
+    if end < len(doc.lines) and walk[end - first].inside:
+        raise WriteError(f"{rel}: the lead ends inside a comment, so text "
+                         f"written there would be hidden; edit it by hand")
+    for i in range(first, end):
+        if not walk[i - first].code and ANY_MARKER_RE.search(doc.lines[i]):
+            raise WriteError(f"{rel}: the lead holds a gm-only or spoiler "
+                             f"marker mid-line ({doc.lines[i].strip()!r}); "
+                             f"edit it by hand")
+    return first, end, walk[:end - first]
 
 
 def _tight_with(above: str, first: str) -> bool:

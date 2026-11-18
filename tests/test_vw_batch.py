@@ -235,6 +235,7 @@ class BatchTests(unittest.TestCase):
                                   " is prep. -->\n\n**Situation"),
             "b.md": "\nNo frontmatter.\n\n\n\n## Notes\n\nx\n",
             "c.md": "---\ntype: npc\n---\nTight under the frontmatter.",
+            "d.md": "---\ntype: scene\n---\n   \n**S:** a\n\n## H\n",
         }
         for rel, note in notes.items():
             vault = make_vault(self, {rel: note})
@@ -260,7 +261,7 @@ class BatchTests(unittest.TestCase):
         vault = make_vault(self, {SCENE_REL: SCENE})
         for body, why in (("## Oops\n", "would end the lead"),
                           ("<!-- gm-only -->\nx\n<!-- /gm-only -->\n",
-                           "would end the lead")):
+                           "gm-only or spoiler marker")):
             code, out = batch(vault, f"=== section \"{SCENE_REL}\" --lead "
                               f"--replace\n{body}")
             self.assertEqual(code, 1, body)
@@ -275,6 +276,105 @@ class BatchTests(unittest.TestCase):
         code, out = batch(vault, f"=== section \"{SCENE_REL}\"\nx\n")
         self.assertEqual(code, 1)
         self.assertIn("a HEADING or --lead", out)
+
+    # --- #738 review: nothing a lead write does may hide or publish other text
+
+    def lead_refused(self, note, body, why, *mode):
+        vault = make_vault(self, {"n.md": note})
+        mode = mode or ("--replace",)
+        code, out = batch(vault, f'=== section "n.md" --lead {mode[0]}\n'
+                          + body, "--write")
+        self.assertEqual(code, 1, out)
+        self.assertIn(why, out)
+        self.assertEqual(read(vault, "n.md"), note)
+
+    def test_lead_text_may_not_leave_a_fence_or_comment_open(self):
+        """An open fence above the GM Notes fence switched it off: the
+        secret published (reviewers, #738)."""
+        for body, why in (("New\n```\nunclosed\n", "a code fence open"),
+                          ("New <!-- note\nmore\n", "an HTML comment open"),
+                          ("New %% note\nmore\n", "a %% comment open")):
+            for mode in ("--replace", "--append"):
+                self.lead_refused(SCENE, body, why, mode)
+
+    def test_heading_section_text_may_not_leave_a_fence_open(self):
+        vault = self.vault()
+        code, out = batch(vault, f'=== section {NPC_REL} "Campaign Log" '
+                          "--append\n```\nunclosed\n")
+        self.assertEqual(code, 1, out)
+        self.assertIn("a code fence open", out)
+
+    def test_lead_text_may_not_hold_a_marker_anywhere(self):
+        self.lead_refused(SCENE, "Public <!-- gm-only --> hidden\n",
+                          "gm-only or spoiler marker")
+
+    def test_lead_text_may_not_make_a_setext_heading_or_frontmatter(self):
+        self.lead_refused(SCENE, "New\n---\n", "into a heading")
+        self.lead_refused("Old.\n\n## H\n\nx\n", "---\ntitle: x\n---\n",
+                          "read as frontmatter")
+
+    def test_a_multi_line_percent_comment_at_the_top_is_kept_whole(self):
+        note = SCENE.replace("---\n\n**Situation", "---\n\n%% prompt one\n"
+                             "prompt two %%\n\n**Situation")
+        vault = make_vault(self, {SCENE_REL: note})
+        code, out = batch(vault, f'=== section "{SCENE_REL}" --lead '
+                          "--replace\n**Situation:** New.\n", "--write")
+        self.assertEqual(code, 0, out)
+        self.assertIn("---\n\n%% prompt one\nprompt two %%\n\n**Situation:** "
+                      "New.\n\n<!-- gm-only -->", read(vault, SCENE_REL))
+
+    def test_a_comment_opened_mid_line_or_inline_refuses_replace(self):
+        for lead in ("**S:** a <!-- aside\nstill aside -->\n\nmore\n",
+                     "x <!-- note -->\n", "x %% note %%\n"):
+            self.lead_refused(SCENE_FM + "\n" + lead + "\n" + SCENE_GM,
+                              "**S:** new\n", "would drop it")
+
+    def test_comment_syntax_inside_a_fence_is_not_a_comment(self):
+        note = SCENE_FM + "\n**S:** a\n\n```\n%% x\n<!-- y\n```\n\n" + SCENE_GM
+        vault = make_vault(self, {SCENE_REL: note})
+        code, out = batch(vault, f'=== section "{SCENE_REL}" --lead '
+                          "--replace\n**S:** b\n", "--write")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(read(vault, SCENE_REL),
+                         SCENE_FM + "\n**S:** b\n\n" + SCENE_GM)
+
+    def test_a_heading_inside_a_comment_does_not_end_the_lead(self):
+        note = (SCENE_FM + "\n<!-- prompt\n## Example\n-->\n\nOld text.\n\n"
+                + SCENE_GM)
+        vault = make_vault(self, {SCENE_REL: note})
+        code, out = batch(vault, f'=== section "{SCENE_REL}" --lead '
+                          "--replace\nNew text.\n", "--write")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(read(vault, SCENE_REL), note.replace(
+            "Old text.", "New text."))
+
+    def test_a_lead_ending_inside_a_comment_is_refused(self):
+        self.lead_refused("Old.\n%% aside\n<!-- gm-only -->\nx\n"
+                          "<!-- /gm-only -->\n%%\n", "New.\n",
+                          "ends inside a comment", "--append")
+
+    def test_a_mid_line_marker_in_the_lead_is_refused(self):
+        self.lead_refused("Public <!-- gm-only -->\nsecret\n<!-- /gm-only -->"
+                          "\n\n## H\n", "Appended.\n", "mid-line", "--append")
+
+    def test_unclosed_frontmatter_is_refused(self):
+        self.lead_refused("---\ntype: npc\n\nOld text.\n\n## H\n", "New.\n",
+                          "frontmatter")
+
+    def test_lead_on_a_crlf_note_and_an_empty_lead(self):
+        crlf = SCENE.replace("\n", "\r\n")
+        vault = make_vault(self, {"c.md": crlf, "e.md": "---\ntype: npc\n"
+                                  "---\n\n## H\n\nx\n"})
+        code, out = batch(vault, '=== section "c.md" --lead --append\n'
+                          "| Sleep | Rest |\n"
+                          '=== section "e.md" --lead --append\nLead.\n',
+                          "--write")
+        self.assertEqual(code, 0, out)
+        self.assertIn("| Refuse the cups | The draught fails |\r\n"
+                      "| Sleep | Rest |\r\n\r\n<!-- gm-only -->",
+                      read(vault, "c.md"))
+        self.assertEqual(read(vault, "e.md"),
+                         "---\ntype: npc\n---\n\nLead.\n\n## H\n\nx\n")
 
     def test_section_append_with_a_heading_stays_out_of_an_open_block(self):
         """#655: text holding a sub-heading now takes the hiding check too

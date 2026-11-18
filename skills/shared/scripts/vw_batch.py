@@ -204,36 +204,90 @@ def run_note_new(batch: vw.Batch, b: Block) -> None:
     batch.row("WOULD-CREATE", rel, "", f"type: {kind}" if kind else "")
 
 
-COMMENT_LINE_RE = re.compile(r"^\s*(?:<!--|%%)")
+SETEXT_RE = re.compile(r"^ {0,3}(?:=+|-+)[ \t]*$")
+
+
+def text_left_open(body: list[str]) -> str:
+    """What the text leaves open at its end (a code fence, an HTML comment
+    or a %% comment), or "". Text that does would hide, or publish, what
+    follows it in the note: an open fence switches off the gm-only fence
+    below it (#738 review)."""
+    return vw.comment_walk(body)[-1].open if body else ""
+
+
+def check_text(rel: str, body: list[str], where: str) -> None:
+    """Refuse text that would leave a fence or comment open below it."""
+    left = text_left_open(body)
+    if left:
+        raise vw.WriteError(f"{rel}: the text for {where} leaves {'an' if left[0] == 'H' else 'a'} "
+                            f"{left} open, which would change how the rest "
+                            f"of the note reads; close it")
+
+
+def check_lead_text(rel: str, body: list[str], at_top: bool) -> None:
+    """The lead's own checks on the new text: no heading, marker, setext
+    underline or frontmatter, and nothing left open."""
+    if at_top and body[0].strip() == "---":
+        raise vw.WriteError(f"{rel}: the lead's text opens with '---', which "
+                            f"would read as frontmatter")
+    walk = vw.comment_walk(body)
+    for i, ln in enumerate(body):
+        if walk[i].code:
+            continue
+        if vw.ANY_MARKER_RE.search(ln):
+            raise vw.WriteError(f"{rel}: the lead's text holds a gm-only or "
+                                f"spoiler marker ({ln.strip()!r}); the lead "
+                                f"is for text players may see in the note")
+        if (i and SETEXT_RE.match(ln) and body[i - 1].strip()
+                and not walk[i - 1].code):
+            raise vw.WriteError(f"{rel}: the lead's text line {ln.strip()!r} "
+                                f"would turn the line above into a heading; "
+                                f"put a blank line before it")
+    for s in vw.parse("\n".join(body) + "\n").states:
+        if s.heading is not None or s.marker is not None:
+            raise vw.WriteError(
+                f"{rel}: the lead's text holds a heading or a gm-only/spoiler "
+                f"marker ({s.line.strip()!r}), which would end the lead")
+    check_text(rel, body, "the lead")
+
+
+def _reading(doc: vw.Doc, start: int) -> list[tuple]:
+    """How each line from `start` reads: code, hidden depth, comment,
+    heading and marker, the `%%` walk included."""
+    states = {s.lineno - 1: s for s in doc.states}
+    walk = vw.comment_walk(doc.lines)
+    out = []
+    for i in range(start, len(doc.lines)):
+        s = states.get(i)
+        out.append((walk[i].inside, walk[i].code, None if s is None else
+                    (s.in_code, s.gm_depth, s.spoiler_depth, s.comment,
+                     s.heading, s.marker)))
+    return out
 
 
 def run_lead(batch: vw.Batch, rel: str, body: list[str],
              replace: bool) -> None:
     """A `section NOTE --lead` block (#738): write the note's lead, the text
     above its first heading or hidden block. A comment at the lead's top
-    (the scene template's prompt) stays; one further down refuses
-    --replace, which would drop it."""
+    (the scene template's prompt) stays; any other comment in it refuses
+    --replace, which would drop it. Nothing below the lead may read any
+    differently afterwards."""
     text = batch.read(rel)
     doc = vw.parse(text)
-    first, end = vw.lead_span(doc)
-    for s in vw.parse("\n".join(body) + "\n").states:
-        if s.heading is not None or s.marker is not None:
-            raise vw.WriteError(
-                f"{rel}: the lead's text holds a heading or a gm-only/spoiler "
-                f"marker ({s.line.strip()!r}), which would end the lead")
+    first, end, walk = vw.checked_lead(doc, rel)
+    check_lead_text(rel, body, at_top=first == 0)
     lines = list(doc.lines)
     if replace:
-        states = {s.lineno - 1: s for s in doc.states}
         keep = first
         for i in range(first, end):
-            st = states.get(i)
-            if (st is not None and st.comment) or COMMENT_LINE_RE.match(lines[i]):
+            w = walk[i - first]
+            if w.inside or (w.touches and not w.code and lines[i].lstrip()
+                            .startswith(("<!--", "%%"))):
                 keep = i + 1
             elif lines[i].strip():
                 break
         dropped = [lines[i].strip() for i in range(keep, end)
-                   if (st := states.get(i)) is not None and st.comment
-                   or COMMENT_LINE_RE.match(lines[i])]
+                   if walk[i - first].touches]
         if dropped:
             raise vw.WriteError(
                 f"{rel}: the lead holds a comment ({dropped[0]!r}): --replace "
@@ -269,6 +323,13 @@ def run_lead(batch: vw.Batch, rel: str, body: list[str],
                     or vw.LIST_RE.match(above) and vw.LIST_RE.match(body[0]))
         new_text = vw.place(doc, end, body, glue=glue)
         verb = "WOULD-ADD"
+    # The last word: everything from the lead's end down reads as before.
+    new_doc = vw.parse(new_text)
+    tail = len(doc.lines) - end
+    if _reading(doc, end) != _reading(new_doc, len(new_doc.lines) - tail):
+        raise vw.WriteError(f"{rel}: this lead would change how the rest of "
+                            f"the note reads (a fence or comment opened or "
+                            f"closed); nothing written")
     batch.put(rel, new_text)
     batch.row(verb, rel, "§(lead)", f"{len(body)} lines")
 
@@ -315,6 +376,7 @@ def run_section(batch: vw.Batch, b: Block) -> None:
         raise vw.WriteError(f"{rel}: cannot place text under {ns.heading!r}")
     body = [ln.rstrip("\r") for ln in b.body.replace("\r\n", "\n")
             .strip("\n").split("\n")]
+    check_text(rel, body, f"section {ns.heading!r}")
     for ln in body:
         m = re.match(r"^(#{1,6})\s", ln)
         if m and len(m.group(1)) <= head.level:

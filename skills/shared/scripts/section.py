@@ -116,8 +116,19 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     if args.lead:
         doc = vw.parse(text)
-        first, end = vw.lead_span(doc)
-        lead = "".join(doc.lines[first:end]).strip("\r\n")
+        try:
+            first, end, _walk = vw.checked_lead(doc, rel)
+        except vw.WriteError as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 1
+        # Blank and whitespace-only lines round the text are the note's
+        # own: `--replace` keeps them, so they are not printed (#738).
+        body = [ln.rstrip("\r\n") for ln in doc.lines[first:end]]
+        while body and not body[0].strip():
+            body.pop(0)
+        while body and not body[-1].strip():
+            body.pop()
+        lead = doc.eol.join(body)
         if not lead.strip():
             print(f"error: {rel} has no text above its first heading",
                   file=sys.stderr)
