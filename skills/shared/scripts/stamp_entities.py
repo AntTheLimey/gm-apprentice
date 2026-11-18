@@ -365,9 +365,20 @@ def list_value(raw: str) -> list[str] | None:
     return [item.strip() for item in value]
 
 
-def _same_item(item: str) -> str:
-    """What two items are compared by: the link target, case ignored."""
-    return vl.link_target(vl.wikilink_target(item))
+def _item_key(item: str) -> tuple[str, str]:
+    """(folder, name) an item names, case ignored; folder "" when the
+    item gives none."""
+    body = vl.wikilink_target(item).split("|", 1)[0].split("#", 1)[0]
+    folder = body.rsplit("/", 1)[0] if "/" in body else ""
+    return vl.normalize(folder), vl.link_target(body)
+
+
+def _same_item(a: str, b: str) -> bool:
+    """Do two items name the same note? The same name, and the same
+    folder when both give one: `[[Ada]]` and `[[NPCs/Ada]]` are one note,
+    `[[NPCs/Ada]]` and `[[Places/Ada]]` are two."""
+    (fa, na), (fb, nb) = _item_key(a), _item_key(b)
+    return na == nb and (not fa or not fb or fa == fb)
 
 
 def _list_item(key: str, raw: str, link: Linker | None) -> str:
@@ -398,7 +409,14 @@ def _block_span(fm: list[str], key: str) -> tuple[int, int] | None:
     while end < len(fm):
         text = fm[end].rstrip("\r\n")
         if text.strip() and not text[:1].isspace():
-            break
+            # A comment at column zero between the key's items is still
+            # inside it: the block runs on if an indented line follows.
+            if not text.startswith("#"):
+                break
+            nxt = next((ln for ln in fm[end + 1:] if ln.strip()
+                        and not ln.startswith("#")), "")
+            if not nxt[:1].isspace():
+                break
         end += 1
     while end > start + 1 and not fm[end - 1].strip():
         end -= 1
@@ -408,7 +426,12 @@ def _block_span(fm: list[str], key: str) -> tuple[int, int] | None:
 def _holds_mapping(fm: list[str], key: str) -> bool:
     """Does `key:` own a nested mapping (`documents:` and its children)?"""
     span = _block_span(fm, key)
-    if span is None or not opens_a_block(fm, key):
+    if span is None:
+        return False
+    # An inline mapping (`documents: {plan: "[[P]]"}`) is one too.
+    if fm[span[0]].partition(":")[2].strip().startswith("{"):
+        return True
+    if not opens_a_block(fm, key):
         return False
     first = next((line for line in fm[span[0] + 1:span[1]]
                   if line.strip() and not line.lstrip().startswith("#")), "-")
@@ -447,10 +470,11 @@ def _plan_set_list(fm: list[str], key: str, items: list[str], eol: str,
     except ValueError as e:
         return str(e), True
     # One entry per note: a name and its [[link]] are the same item.
-    seen: dict[str, str] = {}
+    kept: list[str] = []
     for item in written:
-        seen.setdefault(_same_item(item), item)
-    written = list(seen.values())
+        if not any(_same_item(item, k) for k in kept):
+            kept.append(item)
+    written = kept
     before = _current(fm).get(key)
     _write_list(fm, key, written, eol)
     if before is None:
@@ -475,7 +499,7 @@ def _plan_add(fm: list[str], key: str, raw: str, eol: str,
     except ValueError as e:
         return str(e), True
     items = list(have or [])
-    if _same_item(item) in {_same_item(x) for x in items}:
+    if any(_same_item(item, str(x)) for x in items):
         return f"{key} already lists {item}", False
     _write_list(fm, key, [*items, item], eol)
     return f"{key} + {item}", False
@@ -798,7 +822,7 @@ def targets(args: argparse.Namespace) -> list[str]:
 
 def needs_links(args: argparse.Namespace) -> bool:
     """Does the run write a list to a link field?"""
-    return any(key in LINK_FIELDS and isinstance(value, list)
+    return any(key in LINK_FIELDS and isinstance(value, list) and value
                for key, value in args.set_pairs) or any(
         key in LINK_FIELDS for key, _ in getattr(args, "add_pairs", []))
 

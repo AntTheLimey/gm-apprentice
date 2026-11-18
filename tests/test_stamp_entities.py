@@ -829,6 +829,40 @@ class ListTests(ScriptCase):
             self.assertIn("--set entities", out.stderr)
             self.assertEqual(self.scene.read_text(encoding="utf-8"), SCENE)
 
+    def test_two_notes_of_one_name_in_two_folders_stay_two(self):
+        self.run_script(self.REL, "--set", 'tags=["NPCs/Ada", "Places/Ada", '
+                        '"places/ada", "Ada"]', "--write")
+        # A folder tells two notes apart; the same folder, or none, is one.
+        self.assertIn('tags:\n  - "NPCs/Ada"\n  - "Places/Ada"\n',
+                      self.fm_block())
+        out = self.run_script(self.REL, "--add", "tags=Lanes/Ada", "--write")
+        self.assertIn("tags + Lanes/Ada", out)
+
+    def test_a_comment_between_items_does_not_end_the_list(self):
+        text = SCENE.replace("tags: []\n", 'tags:\n  - "old-a"\n'
+                             '# kept for later\n  - "old-b"\n')
+        self.scene.write_text(text, encoding="utf-8")
+        self.run_script(self.REL, "--set", 'tags=["new"]', "--write")
+        self.assertIn('tags:\n  - "new"\n---', self.scene.read_text(
+            encoding="utf-8"))
+        self.assertNotIn("old-b", self.scene.read_text(encoding="utf-8"))
+
+    def test_an_inline_mapping_is_not_replaced_by_a_list(self):
+        text = SCENE.replace("tags: []\n", 'tags: []\ndocuments: {plan: '
+                             '"[[P]]"}\n')
+        self.scene.write_text(text, encoding="utf-8")
+        out = self.run_script(self.REL, "--set", 'documents=["X"]', rc=1)
+        self.assertIn("documents holds a mapping", out)
+        self.assertEqual(self.scene.read_text(encoding="utf-8"), text)
+
+    def test_an_empty_list_needs_no_link_index(self):
+        args = se.parse_args([str(self.vault), self.REL, "--set",
+                              "entities=[]"])
+        self.assertFalse(se.needs_links(args))
+        args = se.parse_args([str(self.vault), self.REL, "--set",
+                              'entities=["Ada"]'])
+        self.assertTrue(se.needs_links(args))
+
     def test_a_dotted_key_takes_no_list(self):
         self.run_script(self.REL, "--set", 'documents.x=["A"]', rc=2)
 
