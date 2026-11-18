@@ -689,6 +689,56 @@ class ThreadNameTierTests(unittest.TestCase):
         # An ordinary possessive still names its note.
         self.assertEqual(idx.mentions("Durgan Flintmere's cart"), {"Durgan Flintmere.md"})
 
+    def test_a_place_phrase_no_note_carries_matches(self):
+        # #733: Snowbound's Gilt thread shares only a PC's name and a place
+        # described inside another note.
+        tmp = self.make(
+            ["How did a cloth merchant heal Brannoc, and how does he know the Pale Road?"],
+            "#### Unresolved Threads\n\n- **Gilt's \"luck\".** Gilt healed Brannoc "
+            "with a murmured prayer; he named the left fork on the Pale Road.\n")
+        self.assertIn("first~1", self.line(tmp, "How did a cloth merchant"))
+
+    def test_a_pc_name_or_one_capitalised_word_is_no_phrase(self):
+        tmp = self.make(["x"], "#### Unresolved Threads\n\n- a\n")
+        idx = sc.NameIndex(load_files(tmp))
+        self.assertEqual(idx.mentions("Ilsa Marrow crossed the Bridge."), set())
+        self.assertEqual(idx.mentions("The Ferry is late."), set())
+        self.assertEqual(idx.mentions("Down the Pale Road's end"), {"phrase:pale road"})
+
+    def test_a_given_name_in_someone_elses_full_name_is_not_the_npc(self):
+        # #734: "Dorothea" of Miss Dorothea Bexley is not Dorothea de Courlande.
+        tmp = self.make(["x"], "#### Unresolved Threads\n\n- a\n",
+                        extra_notes=[("Miss_Dorothea_Bexley", "npc", "")])
+        idx = sc.NameIndex(load_files(tmp))
+        her = "Miss_Dorothea_Bexley.md"
+        # (Another person's full name may still be a shared phrase, #733.)
+        self.assertNotIn(her, idx.mentions("an introduction to Dorothea de Courlande"))
+        self.assertNotIn(her, idx.mentions("Dorothea Courlande signed"))
+        self.assertIn(her, idx.mentions("Dorothea Bexley wrote"))
+        self.assertEqual(idx.mentions("Dorothea wrote back"), {her})
+        self.assertEqual(idx.mentions("Dorothea's letter came"), {her})
+
+    def test_phrases_survive_a_sentence_start_and_skip_pc_names(self):
+        tmp = self.make(["x"], "#### Unresolved Threads\n\n- a\n")
+        idx = sc.NameIndex(load_files(tmp))
+        road = "phrase:pale road"
+        self.assertIn(road, idx.mentions("Visit Pale Road before dusk"))
+        self.assertIn(road, idx.mentions("The Pale Road is flooded"))
+        # A PC's name (whole or given) builds no phrase.
+        self.assertEqual(idx.mentions("Ask Ilsa Marrow about the debt"), set())
+        self.assertEqual(idx.mentions("Ask Ilsa about the debt"), set())
+        # Capitals outside A-Z count.
+        self.assertIn("phrase:ébène noire", idx.mentions("Meet at Ébène Noire"))
+
+    def test_particles_and_accented_names_mark_another_person(self):
+        tmp = self.make(["x"], "#### Unresolved Threads\n\n- a\n",
+                        extra_notes=[("Miss_Dorothea_Bexley", "npc", "")])
+        idx = sc.NameIndex(load_files(tmp))
+        her = "Miss_Dorothea_Bexley.md"
+        self.assertNotIn(her, idx.mentions("Dorothea van der Courlande signed"))
+        self.assertNotIn(her, idx.mentions("Dorothea Évrard signed"))
+        self.assertIn(her, idx.mentions("Dorothea, again"))
+
     def test_a_decomposed_file_name_matches_composed_text(self):
         import unicodedata
         tmp = self.make(

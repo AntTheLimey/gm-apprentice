@@ -116,6 +116,8 @@ decision rather than pure score.
 
 ## Completed
 
+- ~~Thread check takes an NPC's given name inside another person's full name~~ — a following name word that isn't the NPC's own says it is someone else (#734, v1.12.62)
+- ~~Thread check misses a thread whose only shared name is a place no note carries~~ — a proper-noun phrase of two or more words both lines hold counts as a shared name (#733, v1.12.62)
 - ~~Thread check says "not in any wrap-up" for threads the Wrap-Up lists~~ — threads and Wrap-Up lines naming the same person, place or thing match; no match says "no match found" (#718, v1.12.58)
 - ~~`batch` is hard to find outside a skill's steps~~ — a tool-table row and a line in every writer's help (#730, v1.12.57)
 - ~~Escaped empty quotes (`\"\"`) read as a real value~~ — the voices check ignores them; frontmatter check warns and `--fix` empties them; `entity-new` writes `""` (#715, v1.12.52)

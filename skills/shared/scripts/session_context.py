@@ -552,6 +552,36 @@ _NAMED_TYPES = frozenset({"npc", "creature", "faction", "organization",
 _GIVEN_NAME_TYPES = frozenset({"npc", "creature"})
 
 
+# A word, for finding runs of capitalised ones (any script's capitals).
+_WORD_RE = re.compile(r"[^\W\d_][\w'\u2019]*")
+
+
+def _capital_runs(text: str) -> list[list[str]]:
+    """Each run of two or more capitalised words with only spaces between
+    them: "Widow's Stair", "The Pale Road", "Ébène Noire"."""
+    runs: list[list[str]] = []
+    run: list[str] = []
+    end = -1
+    for m in _WORD_RE.finditer(text):
+        if m.group(0)[0].isupper() and (run and not text[end:m.start()].strip(" \t")
+                                        or not run):
+            run.append(m.group(0))
+        else:
+            if len(run) >= 2:
+                runs.append(run)
+            run = [m.group(0)] if m.group(0)[0].isupper() else []
+        end = m.end()
+    if len(run) >= 2:
+        runs.append(run)
+    return runs
+
+
+# The word that follows a given name, past any particles ("de", "van der").
+_NEXT_NAME_RE = re.compile(
+    r"[ \t]+(?:(?:de|du|des|da|di|del|della|von|van|der|den|la|le|of|bin|ibn|al)"
+    r"[ \t]+)*([^\W\d_][\w'\u2019-]*)")
+
+
 class NameIndex:
     """The names the vault knows, for the last matching tier (#718): a
     thread and a Wrap-Up line that name the same person, place or thing
@@ -567,16 +597,28 @@ class NameIndex:
     sessions, plans or scenes). A name two notes share names neither. A
     trailing `'s` is allowed. An entity that every Wrap-Up names, with
     three or more of them, is not evidence (the home town, the party's
-    faction) and is left out. `lines` holds each in-scope Wrap-Up's
+    faction) and is left out. A phrase of two or more capitalised words
+    that no note is named for ("the Widow's Stair") counts as a name too
+    (#733). `lines` holds each in-scope Wrap-Up's
     Unresolved Threads, PC Carry-Forward and Pending Consequences bullets;
     `mentions` is asked once per text."""
 
     def __init__(self, files, chapter=None):
         owners: dict[str, set[str]] = {}    # casefolded full name -> notes
+        self._any_name: set[str] = set()    # every note's names, any type
         words: dict[str, set[str]] = {}     # single word, as written -> notes
         given: dict[str, set[str]] = {}     # npc/creature title word
+        self._own: dict[str, set[str]] = {}  # note -> its name words, casefolded
+        blank: set[str] = set()     # names a phrase must not be built from
         for rel, _text, fm in files:
             kind = entity_type(fm)
+            names_here = [unicodedata.normalize("NFC", n.replace("_", " ")).strip()
+                          for n in [Path(rel).stem, *link_aliases(fm)]]
+            self._any_name.update(normalize(n) for n in names_here if n)
+            blank.update(n for n in names_here if " " in n)
+            if kind == "pc":     # a PC's given name alone is no phrase either
+                blank.update(n.split()[0] for n in names_here
+                             if len(n.split()) > 1 and len(n.split()[0]) >= 3)
             if kind not in _NAMED_TYPES:
                 continue
             stem = unicodedata.normalize(
@@ -586,6 +628,8 @@ class NameIndex:
                 if not name:
                     continue
                 owners.setdefault(normalize(name), set()).add(rel)
+                self._own.setdefault(rel, set()).update(
+                    w.casefold() for w in name.split())
                 if (len(name.split()) == 1 and len(name) >= 3
                         and name.casefold() not in _THREAD_STOP):
                     words.setdefault(name, set()).add(rel)
@@ -595,6 +639,9 @@ class NameIndex:
                     if (len(w) >= 3 and w[:1].isupper()
                             and w.casefold() not in _THREAD_STOP):
                         given.setdefault(w, set()).add(rel)
+        # A given name only (not a one-word title or alias): "Dorothea" of
+        # "Miss Dorothea Bexley" is not "Dorothea de Courlande" (#734).
+        self._given = {w for w in given if w not in words}
         for w, rels in given.items():
             words.setdefault(w, set()).update(rels)
         self._links = {n: next(iter(r)) for n, r in owners.items()
@@ -618,6 +665,10 @@ class NameIndex:
         self._shared_re = (re.compile(
             edge[0] + "|".join(re.escape(n) for n in shared) + edge[1],
             re.IGNORECASE) if shared else None)
+        known = sorted(blank, key=len, reverse=True)
+        self._known_re = (re.compile(
+            edge[0] + "|".join(re.escape(n) for n in known) + edge[1],
+            re.IGNORECASE) if known else None)
         self._cache: dict[str, set[str]] = {}
         self.lines: list[tuple[int, list[str]]] = []
         for n, text in _scoped_wrap_ups(files, chapter):
@@ -636,8 +687,18 @@ class NameIndex:
             self._everywhere = set.intersection(*per)
             self._cache.clear()
 
+    def _other_person(self, m: re.Match[str], bare: str) -> bool:
+        """Whether the given name `m` starts someone else's full name: the
+        capitalised word after it (past a particle: de, von, van, of...)
+        is none of the note's own name words."""
+        after = _NEXT_NAME_RE.match(bare, m.end())
+        owner = self._words.get(m.group(0))
+        return bool(after and owner and after.group(1)[0].isupper()
+                    and after.group(1).casefold() not in self._own.get(owner, set()))
+
     def mentions(self, text: str) -> set[str]:
-        """The notes `text` names: by link target, alias or bare name."""
+        """The notes `text` names (by link target, alias or bare name), and
+        `phrase:<words>` for each proper-noun phrase no note is named."""
         if text in self._cache:
             return self._cache[text]
         text_nfc = unicodedata.normalize("NFC", text)
@@ -654,12 +715,35 @@ class NameIndex:
         for rx in (self._multi_re, self._word_re):
             for m in (rx.finditer(bare) if rx else ()):
                 # The whole match first: a title may end in 's ("St James's").
+                if (rx is self._word_re and m.group(0) in self._given
+                        and self._other_person(m, bare)):
+                    continue
                 for name in (m.group(0), re.sub(r"['\u2019]s$", "", m.group(0))):
                     owner = (self._links.get(normalize(name)) if rx is
                              self._multi_re else self._words.get(name))
                     if owner:
                         found.add(owner)
                         break
+        # A proper-noun phrase of two or more capitalised words that no
+        # note is named ("the Widow's Stair", described inside another
+        # note) is evidence too. A note's own name is the tiers above (or,
+        # a PC's or a shared name, deliberately none).
+        # Known names are taken out first, so "Ask Ilsa Marrow" (a PC) builds
+        # no phrase. A run's first word may only start the sentence ("Visit
+        # Pale Road"), so the run without it counts as well.
+        plain = (self._known_re.sub(lambda m: " " * len(m.group(0)), bare)
+                 if self._known_re else bare)
+        for run in _capital_runs(plain):
+            if run[0] in ("The", "A", "An"):
+                run = run[1:]
+            for words in (run, run[1:]):
+                if len(words) < 2:
+                    continue
+                whole = " ".join(words)
+                phrase = re.sub(r"['\u2019]s$", "", whole)
+                if (normalize(whole) not in self._any_name
+                        and normalize(phrase) not in self._any_name):
+                    found.add("phrase:" + normalize(phrase))
         found -= self._everywhere
         self._cache[text] = found
         return found
