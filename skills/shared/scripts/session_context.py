@@ -1429,13 +1429,20 @@ def moment_rows(wrap_text: str) -> list[tuple[str, str]] | None:
             role = "MAJOR"
         elif moment is None:
             continue
-        elif moment.group(1).strip(" \t*_\"'{").casefold().startswith(
-                "none"):
+        elif _NONE_MOMENT_RE.match(
+                moment.group(1).strip(" \t*_\"'{}").casefold()):
             role = "none"
         else:
             role = "moment"
         rows.append((name, role))
     return rows
+
+
+# The template's "none" for a PC nothing touched tonight: the word alone, or
+# with a reason after it ("none (absent)", "none — off sick"). A sentence
+# that starts with the word ("None of the guards saw through her") is a
+# moment.
+_NONE_MOMENT_RE = re.compile(r"none(?:[\s\"'*_}.]*$|\s*[(\u2014\u2013:;,-])")
 
 
 def pc_matches(cell: str, rel: str, fm: dict) -> bool:
@@ -1638,10 +1645,15 @@ def arcs_report(files, chapter, upcoming: int, vault: Path,
     pcs = [(rel, text, fm) for rel, text, fm in files
            if is_active_pc(rel, fm, not_playing)]
 
-    def since(last: int | None, label: str) -> str:
+    def since(last: int | None, label: str, seen: int) -> str:
+        # Only a wrap-up with a row for this PC is evidence: one that does
+        # not name them says nothing about their spotlight.
+        if last is None and not seen:
+            return (f"Sessions since last {label}: unknown (no wrap-up read "
+                    f"has a Moment line for this PC)")
         if last is None:
             return (f"Sessions since last {label}: never "
-                    f"(in {len(recorded)} wrap-ups read)")
+                    f"(in {seen} wrap-ups read)")
         return (f"Sessions since last {label}: {upcoming - last} "
                 f"(Session {last})")
 
@@ -1662,19 +1674,21 @@ def arcs_report(files, chapter, upcoming: int, vault: Path,
                      "Wrap-Ups' Moment lines):")
         last_major: int | None = None
         last_moment: int | None = None
+        seen = 0
         for n, rows in recorded:
             match = next((r for r in rows if pc_matches(r[0], rel, fm)), None)
             if match is None:
                 lines.append(f"  Session {n}: (no Moment line for this PC)")
                 continue
+            seen += 1
             role = match[1]
             lines.append(f"  Session {n}: {role}")
             if role == "MAJOR":
                 last_major = n
             if role in ("MAJOR", "moment"):
                 last_moment = n
-        lines.append(since(last_major, "MAJOR beat"))
-        lines.append(since(last_moment, "moment"))
+        lines.append(since(last_major, "MAJOR beat", seen))
+        lines.append(since(last_moment, "moment", seen))
 
     lines.append("")
     lines.append("Wrap-Ups with no Moment lines (read those directly): "

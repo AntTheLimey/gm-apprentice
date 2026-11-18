@@ -364,6 +364,16 @@ class SpotlightUnitTests(unittest.TestCase):
         self.assertEqual(sc.moment_rows(body), [
             ("Hero", "MAJOR"), ("Second_Name", "moment"), ("Third", "none")])
 
+    def test_a_moment_that_starts_with_the_word_none_is_a_moment(self):
+        # Only the template's marker is "none": the word alone or with a
+        # reason after it. A sentence that opens with it is what happened.
+        body = ("### PC Carry-Forward\n\n"
+                "#### Hero (Alex)\n\n- **Moment:** None of the guards saw through her disguise.\n\n"
+                "#### Second (Sam)\n\n- **Moment:** none — off sick\n\n"
+                "#### Third (Jo)\n\n- **Moment:** \"none\"\n")
+        self.assertEqual(sc.moment_rows(body), [
+            ("Hero", "moment"), ("Second", "none"), ("Third", "none")])
+
     def test_rows_none_when_nothing_recorded(self):
         # No PC Carry-Forward, or one from before moments were recorded:
         # unknown, which is not a drought.
@@ -393,6 +403,25 @@ class SpotlightUnitTests(unittest.TestCase):
 
 
 class ArcsCLITests(unittest.TestCase):
+    def test_a_pc_no_wrap_up_names_is_unknown_not_never(self):
+        # A wrap-up with no row for a PC says nothing about their spotlight:
+        # a PC who joined after the last wrap-up has no history, not a drought.
+        import shutil
+        import tempfile
+        vault = Path(tempfile.mkdtemp(prefix="arcs-new-pc-")) / "prep"
+        self.addCleanup(shutil.rmtree, vault.parent, ignore_errors=True)
+        shutil.copytree(FIXTURE, vault)
+        (vault / "Characters" / "PCs" / "Newcomer.md").write_text(
+            "---\ntype: pc\nstatus: alive\nplayer_name: \"Kim\"\n---\n\n"
+            "## GM Notes\n\nJoined at the inn.\n", encoding="utf-8")
+        r = run_cli(vault, "--arcs")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        new = r.stdout.split("--- Newcomer (", 1)[1].split("\n--- ", 1)[0]
+        self.assertIn("  Session 7: (no Moment line for this PC)\n"
+                      "Sessions since last MAJOR beat: unknown (no wrap-up "
+                      "read has a Moment line for this PC)", new)
+        self.assertNotIn("never", new)
+
     def test_arcs_report(self):
         r = run_cli(FIXTURE, "--arcs")
         self.assertEqual(r.returncode, 0, r.stderr)

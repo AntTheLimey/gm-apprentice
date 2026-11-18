@@ -452,6 +452,16 @@ class ShippedTemplateTests(unittest.TestCase):
                      "Per-PC estimated spotlight share, and any imbalance."):
             self.assertTrue(pc._is_placeholder_body(line + "\n"), line)
 
+    def test_spotlight_guidance_kept_above_real_hooks_is_not_placeholder(self):
+        # The shipped bracketed guidance left above what the GM wrote: the
+        # section holds the hooks, and step 6 must read them.
+        guidance = ("[Per-PC hook on the table: a place, person or thread "
+                    "that pulls on them; none left blank.]\n\n")
+        self.assertTrue(pc._is_placeholder_body(guidance))
+        body = guidance + ("| PC | Hook |\n|---|---|\n"
+                           "| [[Oswin]] | Teodor owes him the ledger |\n")
+        self.assertFalse(pc._is_placeholder_body(body))
+
     def test_handouts_guidance_kept_with_filled_table_is_not_placeholder(self):
         guidance = self._handouts_body().split("|", 1)[0]
         body = (guidance + "| Document | Scene | Status | Notes |\n"
