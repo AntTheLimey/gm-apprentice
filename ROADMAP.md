@@ -116,6 +116,7 @@ decision rather than pure score.
 
 ## Completed
 
+- ~~plan-check flags "15 minutes left" as a scene estimate~~ — session-clock times are left alone (#726, v1.12.66)
 - ~~Unfilled template placeholders publish on NPC pages~~ — a lone `{…}` paragraph or bullet and the heading it empties are left off; build warning plus a Site Faults row (#720, v1.12.65)
 - ~~House rules have no home~~ — a `## House Rules` section in the Campaign Overview, its own page and menu link on the player site, read by play, prep and wrap-up; the Midwife asks at session 0 (#721, v1.12.64, tool 1.70.25)
 - ~~Thread check takes an NPC's given name inside another person's full name~~ — a following name word that isn't the NPC's own says it is someone else (#734, v1.12.62)

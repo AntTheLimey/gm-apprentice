@@ -849,6 +849,41 @@ class SessionRunningTitleNormTests(unittest.TestCase):
         self.assertEqual(pc.check_duration("plan.md", states), [])
 
 
+class DurationSessionClockTests(unittest.TestCase):
+    """#726: time left or gone in the session is the GM's pacing trigger,
+    not a scene estimate."""
+
+    def findings(self, line):
+        text = "# Plan\n\n## Session Intent\n\n" + line + "\n"
+        states, _problems = pc.vl.scan_body(text)
+        return pc.check_duration("plan.md", states)
+
+    def test_session_clock_is_left_alone(self):
+        for line in ("If the party is bumbling with about 15 minutes left: "
+                     "Gilt pulls them together.",
+                     "With 20 minutes to go, start the fight.",
+                     "About 30 minutes in, the bell rings.",
+                     "Once 45 minutes are gone, cut to the tower.",
+                     "Or about 15 minutes of play are left."):
+            with self.subTest(line=line):
+                self.assertEqual(self.findings(line), [])
+
+    def test_scene_estimates_still_flagged(self):
+        for line, level in (("Scene 3 runs 20 minutes.", "WARNING"),
+                            ("The chase (20-30 minutes).", "ERROR"),
+                            ("A short beat, ~10 min.", "ERROR"),
+                            ("Scene 3 runs 20 minutes in total.", "WARNING"),
+                            ("The chase takes 20-30 minutes in length.",
+                             "ERROR")):
+            with self.subTest(line=line):
+                found = self.findings(line)
+                self.assertEqual([f.level for f in found], [level])
+
+    def test_an_estimate_beside_a_clock_time_is_still_flagged(self):
+        found = self.findings("With 15 minutes left, run the 20 minutes fight.")
+        self.assertEqual(len(found), 1)
+        self.assertIn("20 minutes", found[0].message)
+
 class PcStateSceneScopingTests(unittest.TestCase):
     """M14: `pc-state` must not fire inside `## Planned Scenes` /
     `## Contingency Scenes` — a scene's own `**Location:**` field names

@@ -9,6 +9,12 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.66] — 2026-11-18
+
+### Fixed
+
+- plan-check's duration rule no longer flags time left or gone on the session's clock ("with about 15 minutes left", "15 minutes of play are left", "30 minutes in"): that is the GM's pacing trigger, not a scene estimate (#726).
+
 ## [1.12.65] — 2026-11-18
 
 ### Fixed
