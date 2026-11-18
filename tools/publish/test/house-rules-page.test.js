@@ -15,7 +15,7 @@ const overview = (section) => `---\ntype: campaign_overview\n---\n\n# Overview\n
 const TWO = '## House Rules\n\n- Anyone on time gets a bankable +1 token for any roll.\n- Criticals on a 5 or under.\n\n';
 const npc = '---\ntype: npc\n---\n\nA person.\n';
 
-function site(section, { published = false, gm = false, extra = {}, overviewRel = 'Campaign Overview.md', folderMap = { NPCs: 'npcs' }, publishing = ['NPCs/Mara.md'], warnings = null } = {}) {
+function site(section, { published = false, gm = false, extra = {}, overviewRel = 'Campaign Overview.md', folderMap = { NPCs: 'npcs' }, publishing = ['NPCs/Mara.md'], warnings = null, files = {} } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'house-rules-'));
   const vault = path.join(root, 'vault');
   const notes = { 'NPCs/Mara.md': npc, ...extra };
@@ -23,6 +23,10 @@ function site(section, { published = false, gm = false, extra = {}, overviewRel 
   for (const [rel, text] of Object.entries(notes)) {
     fs.mkdirSync(path.dirname(path.join(vault, rel)), { recursive: true });
     fs.writeFileSync(path.join(vault, rel), text);
+  }
+  for (const [rel, bytes] of Object.entries(files)) {
+    fs.mkdirSync(path.dirname(path.join(vault, rel)), { recursive: true });
+    fs.writeFileSync(path.join(vault, rel), bytes);
   }
   writePublishList(vault, published
     ? { publishing: [...publishing, overviewRel] }
@@ -125,4 +129,13 @@ test('house rules: an alias link in a rule reads as the public name when the Ove
   assert.doesNotMatch(html, /Elias Crowe/);
   assert.match(html, /<a href="npcs\/mara\.html">Mara<\/a>/);
   assert.deepEqual(runLeakGate({ configPath: path.join(path.dirname(s.out), 'vault.config.json'), outputDir: s.out }).findings, []);
+});
+
+test('house rules: a picture used only in a rule is copied to the site and linked by the page', () => {
+  const { makePng } = require('./helpers/make-png');
+  const s = site('## House Rules\n\n- The token looks like this: ![[token-only.png]]\n\n', { files: { '_attachments/token-only.png': makePng(8, 8) } });
+  const html = s.read('house-rules.html');
+  const src = (html.match(/<img[^>]*src="([^"]+)"/) || [])[1];
+  assert.ok(src, html);
+  assert.ok(s.exists(src), `the page links ${src}, which the build wrote`);
 });

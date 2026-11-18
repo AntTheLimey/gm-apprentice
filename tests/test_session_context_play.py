@@ -1166,4 +1166,21 @@ class HouseRuleCaptureLineTests(unittest.TestCase):
         line = line[:line.index("**Player sheet changes**")]
         self.assertNotIn("Overview.md\\t", line)
         self.assertIn("<Overview path>", line)
+        self.assertIn("""printf '%s\\tHouse Rules\\t- %s\\n' "<Overview path>" "<the rule>" """.strip(), line)
         self.assertIn("(source:", line)
+
+    def test_the_printf_form_keeps_an_apostrophe_and_a_percent_sign_intact(self):
+        tmp = Path(tempfile.mkdtemp(prefix="sc-hr-printf-"))
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        (tmp / "Overview.md").write_text(
+            "---\ntype: campaign_overview\n---\n\n# O\n\n## Premise\n\nx\n",
+            encoding="utf-8")
+        rule = "Don't award XP for attendance, 100% of the time."
+        row = subprocess.run(
+            ["printf", "%s\tHouse Rules\t- %s\n", "Overview.md", rule],
+            capture_output=True, text=True, timeout=60)
+        done = subprocess.run(
+            [sys.executable, str(self.WRITER), str(tmp), "log", "--write"],
+            input=row.stdout, capture_output=True, text=True, timeout=60)
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertIn(f"- {rule}\n", (tmp / "Overview.md").read_text("utf-8"))

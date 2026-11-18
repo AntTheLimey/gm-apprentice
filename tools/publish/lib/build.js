@@ -2528,6 +2528,10 @@ function buildSite(options) {
   // `manifest` just meant a manifest-less player build shipped every GM-only image.
   // A recap's picture counts as used: the story pages are rendered once here, for the set only.
   if (!onlySheets) buildStorySpine(pages, linkMap, storyPairs, { imageMap, usedImages, warn: true }, { marked: gm, marks: mark ? mark.marks : null, players: storyPlayers, figures: storyFigures });
+  // The House Rules page is rendered here, before the pictures are chosen, so a picture used only in a rule is copied.
+  const houseRulesHtml = houseRulesMd
+    ? processContent({ markdown: houseRulesMd, frontmatter: {}, outputPath: 'house-rules.html' }, linkMap, excludeSections, imageMap, { usedImages, excludeCallouts }).html
+    : '';
   const filteredMap = {};
   for (const [basename, entry] of Object.entries(imageMap)) {
     if (usedImages.has(basename)) filteredMap[basename] = entry;
@@ -2977,8 +2981,7 @@ function buildSite(options) {
 
     // The House Rules page: the Overview's `## House Rules` section, as players see it, whenever it holds a rule.
     if (houseRulesMd) {
-      const rules = processContent({ markdown: houseRulesMd, frontmatter: {}, outputPath: 'house-rules.html' }, linkMap, excludeSections, imageMap, { excludeCallouts });
-      emit('house-rules.html', houseRulesTemplate(rules.html, navFor, config, publishConfig), '  wrote house-rules.html');
+      emit('house-rules.html', houseRulesTemplate(houseRulesHtml, navFor, config, publishConfig), '  wrote house-rules.html');
     }
 
     // The props page. One set in a kept folder replaces the file there, and the build says so.

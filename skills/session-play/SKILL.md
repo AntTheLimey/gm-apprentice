@@ -76,7 +76,7 @@ Scene 3: PCs searched the harbour. UPDATE: The Merry Widow —
 ```
 
 The GM says to add a house rule: add it as a bullet to the Overview's
-"House Rules" with `printf '<Overview path>\tHouse Rules\t- <rule>\n' | gma vault-write <vault> log --write` (the section is made if missing; the path, like `_Campaign/Campaign Overview.md`, is the `(source: ...)` line under "Campaign Overview" in `gma session-context <vault> --brief`).
+"House Rules" with `printf '%s\tHouse Rules\t- %s\n' "<Overview path>" "<the rule>" | gma vault-write <vault> log --write` (the section is made if missing; the path, like `_Campaign/Campaign Overview.md`, is the `(source: ...)` line under "Campaign Overview" in `gma session-context <vault> --brief`).
 
 **Player sheet changes** — players' sheet edits from the published
 site are handled by publish-site's "start your checking loop"
