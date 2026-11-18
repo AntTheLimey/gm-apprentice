@@ -2202,12 +2202,12 @@ function processContent(page, linkMap, excludeSections, imageMap = {}, options =
   const parsed = dropPlaceholders(md.parse(markdown, env));
   const html = md.renderer.render(parsed.tokens, md.options, env);
   const unfilled = [];
-  // A PC's sheet notes carry their placeholders by design (pc-background.js drops them from the sections), so only other notes warn.
+  // PC sheets carry their placeholders by design (pc-background.js drops them from the sections), so only other notes warn.
   const isPc = String((page.frontmatter || {}).type || '').toLowerCase() === 'pc';
   for (const d of isPc ? [] : parsed.dropped) {
     const where = d.section ? `under "${d.section}"` : 'above its first heading';
     const detail = `${d.text} is an unfilled placeholder ${where}; it is left off the page`;
-    const fix = 'Fill it in, or remove the line';
+    const fix = 'Fill it in, or remove the line (write \\{like this\\} to keep braces as text)';
     unfilled.push({ code: 'UNFILLED_PLACEHOLDER', severity: 'warning', detail, fix, section: d.section, text: d.text });
     warnings.push(`unfilled placeholder: ${d.text} ${where}. ${fix}.`);
   }

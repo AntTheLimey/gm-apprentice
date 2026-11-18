@@ -66,6 +66,6 @@ describe('#720: an unfilled placeholder is left off the page and warned', () => 
     assert.equal(found.length, 4, JSON.stringify(found));
     assert.ok(found.every((f) => f.path === 'NPCs/Rosie Tallowby.md' && f.severity === 'warning'));
     assert.equal(found[0].detail, '{To flesh out for colour.} is an unfilled placeholder under "Appearance & Manner"; it is left off the page');
-    assert.equal(found[0].fix, 'Fill it in, or remove the line');
+    assert.equal(found[0].fix, 'Fill it in, or remove the line (write \\{like this\\} to keep braces as text)');
   });
 });

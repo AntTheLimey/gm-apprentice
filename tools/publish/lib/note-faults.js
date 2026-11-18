@@ -1011,7 +1011,8 @@ function startNoteAudit(input) {
   // The to-hit calculator's report for one PC sheet (`rel`, the PC's note).
   const calcRows = [];
   function calculator(rel, rows) {
-    for (const r of rows || []) if (r && r.detail) calcRows.push({ rel, code: r.code, severity: r.severity, detail: r.detail, fix: r.fix || '' });
+    // The same row twice (a PC's Story note is rendered for its page and for its own Story page) is one finding.
+    for (const r of rows || []) if (r && r.detail && !calcRows.some((c) => c.rel === rel && c.detail === r.detail && c.code === r.code)) calcRows.push({ rel, code: r.code, severity: r.severity, detail: r.detail, fix: r.fix || '' });
   }
 
   // A Memorable Moments tag that names no kind: `rel` is the wrap-up note, `tag` the word after `#moment/`.

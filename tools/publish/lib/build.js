@@ -2056,6 +2056,7 @@ function buildSite(options) {
           };
           const storyProcessed = processContent(storyPage, linkMap, excludeSections, imageMap, { usedImages: fx.usedImages, excludeCallouts, ...markOpt });
           if (fx === liveFx) fx.warn(page.outputPath, storyProcessed.warnings);
+          if (fx === liveFx && audit && storyProcessed.unfilled.length) fx.tableRows.push({ rel: audit.storyRelOf(page), rows: storyProcessed.unfilled });
           storyHtml = storyProcessed.html && storyProcessed.html.trim() ? storyProcessed.html : undefined;
           storyLines = sessionLines(storyHtml).map((l) => ({ ...l, href: storyPath + l.href }));
         }

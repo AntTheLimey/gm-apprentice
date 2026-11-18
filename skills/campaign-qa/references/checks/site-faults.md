@@ -258,7 +258,8 @@ row, ask the GM whether to fill it (they say what to write) or remove
 the line; the site leaves it off the page either way, so nothing is
 urgent. Never invent the content, and write only what they say. Offer
 to remove all of a note's placeholder lines at once if they want it
-gone.
+gone. A placeholder is braced text with a space in it and no `[[`; if
+the GM means the braces as text, write `\{like this\}` to keep them.
 
 ## CHAPTER_STATUS_UNKNOWN
 
