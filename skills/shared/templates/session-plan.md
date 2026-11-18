@@ -23,8 +23,8 @@ tags: []
 
 ## Session Intent
 
-[What you want this session to be about, and whose moment it is. One or
-two sentences, in your words.]
+[What's on the table this session and where the pressure is, in a line,
+in your words.]
 
 ## Session Overview
 
@@ -147,7 +147,7 @@ none, write "No handouts or props."]
 
 ## Spotlight Forecast
 
-[Per-PC role and moment; none left blank.]
+[Per-PC hook on the table: a place, person or thread that pulls on them; none left blank.]
 
 ## Open Questions
 

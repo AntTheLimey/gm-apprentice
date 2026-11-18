@@ -60,12 +60,11 @@ Keeper Checklist items and Open Questions already settled.
 `--arcs` replaces the default bundle with each active PC's durable
 arc material instead: `## Background` and `## GM Notes` (the
 bundle's `## Current Status` block is not repeated), plus a
-chapter-scoped spotlight history built from every earlier Plan's
-`## Spotlight Forecast` table, with sessions since the PC last
-carried the B- and C-plot. A forecast section has three states, kept
-apart because they mean different things: absent, present but written
-as prose (listed for direct reading, never counted as evidence of a
-spotlight drought), and a real table.
+chapter-scoped spotlight history built from every earlier Wrap-Up's
+PC Carry-Forward Moment and MAJOR lines (what play gave each PC, never
+what a Plan forecast), with sessions since the PC's last MAJOR beat
+and last moment. A Wrap-Up that records no Moment line at all is listed
+for direct reading, never counted as evidence of a spotlight drought.
 
 `--prep` is a prep run's opening read in one call: the version check's
 verdict, the `--brief` bundle, the reconcile scan of the Wrap-Up just
@@ -1396,102 +1395,46 @@ def thread_report(files, current: int, chapter, vault: Path,
 # --arcs helpers
 # --------------------------------------------------------------------------
 
-SPOTLIGHT_TITLE = "Spotlight Forecast"
-
-_SEPARATOR_CELL_RE = re.compile(r"^[-:]+$")
 _TRAILING_PAREN_RE = re.compile(r"\s*\([^)]*\)\s*$")
 _WIKILINK_RE = re.compile(r"\[\[([^\]|]+)(?:\|[^\]]*)?\]\]")
+_PC_HEADING_RE = re.compile(r"^####[ \t]+(.+?)[ \t#]*$", re.M)
+_MOMENT_RE = re.compile(r"^[ \t]*[-*+][ \t]+\*\*Moment[ \t]*:?[ \t]*\*\*:?(.*)$",
+                        re.I | re.M)
+_MAJOR_RE = re.compile(r"^[ \t]*[-*+][ \t]+\*\*MAJOR\b", re.M)
 
 
-def _row_cells(line: str) -> list[str]:
-    r"""Cells of a `|`-delimited table row. Splits only on pipes that are
-    a real cell boundary: an escaped `\|` and the alias pipe inside
-    `[[Target|Alias]]` stay inside their cell. The table contract forbids
-    both forms, but a plan reaches `--arcs` before `vault_check` has ever
-    seen it, and a mis-split PC cell silently reports the wrong drought.
-
-    An unbalanced `[[` would otherwise swallow the rest of the row, which
-    is the same silent mis-read from the other side, so a row that ends
-    mid-wikilink falls back to the naive split."""
-    inner = line.strip()
-    if inner.startswith("|"):
-        inner = inner[1:]
-    if inner.endswith("|") and not inner.endswith("\\|"):
-        inner = inner[:-1]
-    cells: list[str] = []
-    buf: list[str] = []
-    depth = 0
-    i = 0
-    while i < len(inner):
-        if inner.startswith("\\|", i):
-            buf.append("\\|")
-            i += 2
-        elif inner.startswith("[[", i):
-            depth += 1
-            buf.append("[[")
-            i += 2
-        elif inner.startswith("]]", i):
-            depth = max(0, depth - 1)
-            buf.append("]]")
-            i += 2
-        elif inner[i] == "|" and depth == 0:
-            cells.append("".join(buf).strip())
-            buf = []
-            i += 1
-        else:
-            buf.append(inner[i])
-            i += 1
-    cells.append("".join(buf).strip())
-    if depth != 0:
-        return [c.strip() for c in inner.split("|")]
-    return cells
-
-
-def spotlight_rows(plan_body: str) -> list[tuple[str, str]] | None:
-    """(pc_cell, role) per data row of the first table under
-    `## Spotlight Forecast`; None when the section is absent. Only the
-    first `|`-delimited table is read: collection starts at the first
-    `|` line and stops at the first non-`|` line seen after that (a
-    blank line or prose ends the table), so a second table later in
-    the same section is never ingested. pc_cell = first cell with
-    `[[Target|Alias]]` reduced to its target, `**`, `[[`, `]]` removed
-    and a trailing `(...)` dropped, stripped.
-    role = "B" if "b-plot" in the row (casefold) else "C" if "c-plot"
-    else "A" if "a-plot" else "-". A share percentage in the row is not
-    read: it was an estimate, not a fact. Header and separator rows
-    skipped."""
-    block = section(plan_body, SPOTLIGHT_TITLE)
-    if block is None:
+def moment_rows(wrap_text: str) -> list[tuple[str, str]] | None:
+    """(pc_name, role) per `#### [[PC]] (Player)` block under a Wrap-Up's
+    `### PC Carry-Forward`: what the session gave each PC, as the wrap-up
+    recorded it. role = "MAJOR" with a `**MAJOR —**` bullet, else "none"
+    when its `**Moment:**` line starts with "none", else "moment"; a block
+    with neither line is left out. None when the Wrap-Up records no Moment
+    or MAJOR line at all (no PC Carry-Forward, or one written before
+    moments were recorded): that is not evidence of a drought.
+    pc_name = the heading with `[[Target|Alias]]` reduced to its target,
+    `**`, `[[`, `]]` removed and a trailing `(...)` dropped."""
+    block = _heading_block(wrap_text, 3, "PC Carry-Forward")
+    if not block or not (_MOMENT_RE.search(block) or _MAJOR_RE.search(block)):
         return None
-    table_lines: list[str] = []
-    started = False
-    for ln in block.splitlines():
-        if ln.strip().startswith("|"):
-            table_lines.append(ln)
-            started = True
-        elif started:
-            break
+    heads = list(_PC_HEADING_RE.finditer(block))
     rows: list[tuple[str, str]] = []
-    for line in table_lines[1:]:  # skip header row
-        cells = _row_cells(line)
-        if cells and all(_SEPARATOR_CELL_RE.match(c) for c in cells if c):
-            continue  # separator row
-        if not cells or not cells[0]:
+    for i, m in enumerate(heads):
+        body = block[m.end():heads[i + 1].start() if i + 1 < len(heads)
+                     else len(block)]
+        name = _WIKILINK_RE.sub(lambda w: w.group(1), m.group(1))
+        name = name.replace("**", "").replace("[[", "").replace("]]", "")
+        name = _TRAILING_PAREN_RE.sub("", name).strip()
+        moment = _MOMENT_RE.search(body)
+        if _MAJOR_RE.search(body):
+            role = "MAJOR"
+        elif moment is None:
             continue
-        first = _WIKILINK_RE.sub(lambda m: m.group(1), cells[0])
-        first = (first.replace("**", "").replace("[[", "")
-                 .replace("]]", "").replace("\\|", "|"))
-        first = _TRAILING_PAREN_RE.sub("", first).strip()
-        low = line.casefold()
-        if "b-plot" in low:
-            role = "B"
-        elif "c-plot" in low:
-            role = "C"
-        elif "a-plot" in low:
-            role = "A"
+        elif moment.group(1).strip(" \t*_\"'{").casefold().startswith(
+                "none"):
+            role = "none"
         else:
-            role = "-"
-        rows.append((first, role))
+            role = "moment"
+        rows.append((name, role))
     return rows
 
 
@@ -1650,29 +1593,23 @@ def arcs_report(files, chapter, upcoming: int, vault: Path,
       {section or "(no ## Background section)"}
       ## GM Notes
       {section or "(no ## GM Notes section)"}
-      Spotlight history (chapter-scoped, from ## Spotlight Forecast tables):
-        Session 6: B
-        Session 7: (no row for this PC)
-      Sessions since last B-plot: 2 (Session 6)     or  never (in N plans read)
-      Sessions since last C-plot: never (in 2 plans read)
+      Spotlight history (chapter-scoped, from the Wrap-Ups' Moment lines):
+        Session 6: MAJOR
+        Session 7: (no Moment line for this PC)
+      Sessions since last MAJOR beat: 2 (Session 6)  or  never (in N wrap-ups read)
+      Sessions since last moment: 2 (Session 6)
 
-    A Plan's `## Spotlight Forecast` has three states, and they are not
-    interchangeable — 6 of 9 chapter plans on the campaign this was
-    measured against write the forecast as prose, and folding those into
-    "no row for this PC" reported a spotlight drought that did not exist:
-      - section absent      -> named under `Plans without a
-                               ## Spotlight Forecast: ...`;
-      - section present but carrying no table rows -> named under `Plans
-                               whose ## Spotlight Forecast has no table
-                               (read those sections directly): ...`, with
-                               no per-PC line and no place in the
-                               `(in N plans read)` denominator;
-      - table with rows     -> one `Session N: role` line per PC,
-                               `(no row for this PC)` where the PC is
-                               genuinely absent from a table that exists.
-    Both buckets print once, after the PCs (`(none)` when empty).
+    Spotlight history is what play gave each PC, as each Wrap-Up's
+    `### PC Carry-Forward` recorded it (`moment_rows`), never what a
+    Plan forecast. A MAJOR beat is also a moment; a Moment line of
+    "none" is neither. A Wrap-Up that records no Moment or MAJOR line
+    at all (one written before moments were recorded) is named once,
+    after the PCs, under `Wrap-Ups with no Moment lines (read those
+    directly): ...` (`(none)` when empty), with no per-PC line and no
+    place in the `(in N wrap-ups read)` denominator: counting it would
+    report a spotlight drought that did not exist.
 
-    Plans = every type: session-plan with a parsable session number <
+    Wrap-Ups = every wrap-up type with a parsable session number <
     upcoming, prefer_chapter semantics, sorted by number.
     "Sessions since" = upcoming - N.
 
@@ -1680,23 +1617,22 @@ def arcs_report(files, chapter, upcoming: int, vault: Path,
     prep plan used one (27 runs, 2026-11-10); `--arcs` prints it."""
     lines = [f"===== PC Arcs — Sessions before {upcoming} ====="]
 
-    plan_files = [(rel, text, fm) for rel, text, fm in files
-                  if fm.get("type") == "session-plan"]
-    numbers = sorted({n for rel, text, fm in plan_files
+    wrap_files = [(rel, text, fm) for rel, text, fm in files
+                  if entity_type(fm) in WRAP_UP_TYPES]
+    numbers = sorted({n for rel, text, fm in wrap_files
                       if (n := session_ref_number(fm)) is not None
                       and n < upcoming})
 
-    plans: list[tuple[int, list[tuple[str, str]] | None]] = []
+    wraps: list[tuple[int, list[tuple[str, str]] | None]] = []
     for n in numbers:
-        candidates = [c for c in plan_files if session_ref_number(c[2]) == n]
+        candidates = [c for c in wrap_files if session_ref_number(c[2]) == n]
         picked = prefer_chapter(candidates, chapter)
         if picked is None:
             continue
-        plans.append((n, spotlight_rows(picked[1])))
+        wraps.append((n, moment_rows(picked[1])))
 
-    tables = [(n, rows) for n, rows in plans if rows]
-    prose_forecast = [n for n, rows in plans if rows == []]
-    no_section = [n for n, rows in plans if rows is None]
+    recorded = [(n, rows) for n, rows in wraps if rows is not None]
+    unrecorded = [n for n, rows in wraps if rows is None]
 
     not_playing = out_of_play(vault)
     pcs = [(rel, text, fm) for rel, text, fm in files
@@ -1704,9 +1640,9 @@ def arcs_report(files, chapter, upcoming: int, vault: Path,
 
     def since(last: int | None, label: str) -> str:
         if last is None:
-            return (f"Sessions since last {label}-plot: never "
-                     f"(in {len(tables)} plans read)")
-        return (f"Sessions since last {label}-plot: {upcoming - last} "
+            return (f"Sessions since last {label}: never "
+                    f"(in {len(recorded)} wrap-ups read)")
+        return (f"Sessions since last {label}: {upcoming - last} "
                 f"(Session {last})")
 
     for rel, text, fm in pcs:
@@ -1722,32 +1658,28 @@ def arcs_report(files, chapter, upcoming: int, vault: Path,
         lines.append("## GM Notes")
         lines.append(outlines.layered(gm, vault, rel, "GM Notes", text) if gm
                      else "(no ## GM Notes section)")
-        lines.append("Spotlight history (chapter-scoped, from "
-                     "## Spotlight Forecast tables):")
-        last_b: int | None = None
-        last_c: int | None = None
-        for n, rows in tables:
+        lines.append("Spotlight history (chapter-scoped, from the "
+                     "Wrap-Ups' Moment lines):")
+        last_major: int | None = None
+        last_moment: int | None = None
+        for n, rows in recorded:
             match = next((r for r in rows if pc_matches(r[0], rel, fm)), None)
             if match is None:
-                lines.append(f"  Session {n}: (no row for this PC)")
+                lines.append(f"  Session {n}: (no Moment line for this PC)")
                 continue
             role = match[1]
             lines.append(f"  Session {n}: {role}")
-            if role == "B":
-                last_b = n
-            elif role == "C":
-                last_c = n
-        lines.append(since(last_b, "B"))
-        lines.append(since(last_c, "C"))
+            if role == "MAJOR":
+                last_major = n
+            if role in ("MAJOR", "moment"):
+                last_moment = n
+        lines.append(since(last_major, "MAJOR beat"))
+        lines.append(since(last_moment, "moment"))
 
     lines.append("")
-    lines.append("Plans without a ## Spotlight Forecast: "
-                 + (", ".join(f"Session {n}" for n in no_section)
-                    if no_section else "(none)"))
-    lines.append("Plans whose ## Spotlight Forecast has no table (read "
-                 "those sections directly): "
-                 + (", ".join(f"Session {n}" for n in prose_forecast)
-                    if prose_forecast else "(none)"))
+    lines.append("Wrap-Ups with no Moment lines (read those directly): "
+                 + (", ".join(f"Session {n}" for n in unrecorded)
+                    if unrecorded else "(none)"))
 
     return "\n".join(lines)
 
@@ -2253,13 +2185,13 @@ def build_parser() -> argparse.ArgumentParser:
              "sections (the durable arc material the bundle does not "
              "carry — ## Current Status is already in the bundle and is "
              "not repeated) plus a chapter-scoped spotlight history "
-             "parsed from every earlier Plan's ## Spotlight Forecast "
-             "table (role A/B/C from the row text) with sessions since the PC last carried the "
-             "B- and C-plot. A forecast section is one of three states: "
-             "absent, present but prose (listed once for direct reading "
-             "— no per-PC row, and not counted in the 'plans read' "
-             "denominator), or a table. Arc stage is not a field: judge "
-             "it against the five-stage model from this evidence.")
+             "read from every earlier Wrap-Up's PC Carry-Forward "
+             "(MAJOR, moment or none per PC, from its MAJOR and Moment "
+             "lines) with sessions since the PC's last MAJOR beat and "
+             "last moment. A Wrap-Up with no Moment line at all is listed "
+             "once for direct reading (no per-PC row, and not counted in "
+             "the 'wrap-ups read' denominator). Arc stage is not a field: "
+             "judge it against the five-stage model from this evidence.")
     mode.add_argument(
         "--prep", action="store_true",
         help="a prep run's opening read in one call: the version verdict, "

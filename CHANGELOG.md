@@ -9,6 +9,12 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.79] — 2026-11-18
+
+### Changed
+
+- Session prep no longer asks the GM to pick or predict what the players do: it asks about the world, writes player-driven outcomes as `Do | Then` rows that answer the attempt, gives every PC a hook, and counts spotlight history from what the wrap-ups recorded (#719).
+
 ## [1.12.78] — 2026-11-18
 
 ### Fixed

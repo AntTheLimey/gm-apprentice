@@ -446,7 +446,9 @@ class ShippedTemplateTests(unittest.TestCase):
         self.assertTrue(pc._is_placeholder_body(self._handouts_body()))
 
     def test_spotlight_forecast_guidance_old_and_new_is_placeholder(self):
-        for line in ("Per-PC role and moment; none left blank. A note.",
+        for line in ("Per-PC hook on the table: a place, person or thread "
+                     "that pulls on them; none left blank. A note.",
+                     "Per-PC role and moment; none left blank. A note.",
                      "Per-PC estimated spotlight share, and any imbalance."):
             self.assertTrue(pc._is_placeholder_body(line + "\n"), line)
 
@@ -742,7 +744,7 @@ class StateTests(unittest.TestCase):
 
 # skills/session-prep/SKILL.md, Resumable prep — the exact worked example.
 SKILL_MD_EXAMPLE_MARKER = (
-    "<!-- prep-state: intent=set spotlight=Emma(B) scenes=1of3 "
+    "<!-- prep-state: intent=set spotlight=hooks(3of4) scenes=1of3 "
     "open=[Freddy beat?] -->"
 )
 
@@ -764,7 +766,7 @@ class PrepStateTokenizerTests(unittest.TestCase):
     def test_bracketed_value_keeps_its_internal_space(self):
         state = pc.build_state(self._text())
         self.assertEqual(
-            state, {"intent": "set", "spotlight": "Emma(B)",
+            state, {"intent": "set", "spotlight": "hooks(3of4)",
                     "scenes": "1of3", "open": "[Freddy beat?]"})
 
     def test_cli_state_output(self):

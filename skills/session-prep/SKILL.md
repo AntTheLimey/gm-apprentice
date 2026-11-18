@@ -12,6 +12,9 @@ with the whole path quoted; `gma llms` lists its commands.
 
 ## Stance — you draw the session out of the GM
 
+The players can try anything. Prep says how the world answers. Ask the
+GM about the world, never about what the players will do.
+
 You spark, shape and refine; the GM decides. Every creative call
 (intent, spotlight, scenes) is offered as 2–3 seeds to react to. Lead
 harder with more concrete options when the GM is low on energy, but
@@ -24,7 +27,8 @@ checks).
 question (changes what an NPC wants, knows or does, a scene's shape,
 or what the players can discover) is asked with 2–3 seeds; a player
 decision (which way, who with, what they say) becomes a `Do | Then`
-row, never asked; bookkeeping (a die result, a sheet number, a date no
+row, never asked, and so does any outcome that turns on what the
+players do; bookkeeping (a die result, a sheet number, a date no
 scene turns on) takes its default where it applies, listed in your
 reply, never noted in the Plan — but a value missing from an entity or
 PC sheet is never defaulted onto it: it goes to `## Open Questions`
@@ -34,6 +38,11 @@ silently. Test: would a different answer change a scene this session?
 When the GM asks what an item on your list is or why you need it,
 answer from context — no tool calls, no re-reading — and act only
 after they reply.
+
+A row's Then answers the attempt with what happens next, never cancels
+it or runs on as though it wasn't made; a Points-to-land line is
+something to put in front of the players, never an outcome settled
+before play.
 
 **Two registers.** Seeds you speak may be evocative ("the anklet debt is
 owed"). The Plan file is read cold, days later, mid-session, by a
@@ -136,7 +145,8 @@ then separately `--state` (one mode per invocation). Gather the
 Reconcile may have invalidated. To find what the session should
 *cover*, read the `leads_to` of the narrative-plan entity
 (`type: plan`) the last session resolved; two or more targets are
-branches — offer them as the GM's choice.
+branches: prep each as a lead entry or `Do | Then` row. What the
+players do picks among them.
 → `## Prior Prep Review`
 
 **7. Recap** — Use the "Previously on..." recap from last session's
@@ -205,46 +215,40 @@ chapter" — not a vault gap.
 Everything here is drawn out of the GM (Stance). One question at a
 time, light touch.
 
-**11. Session Intent** — Surface what's live as seeds and ask the GM
-to set the intent:
+**11. Session Intent** — Lay out what's live (owed beats, clocks,
+threads, arcs due, what NPCs do on their own schedule, from steps
+8–10) as what's on the table. Ask the GM only about the world: what
+someone wants, what happens if nobody steps in, where they want
+pressure. Session Intent says what's on the table and where the
+pressure is, in a line ("The monastery's secrets, Gilt's clock,
+Brannoc's debt; everything on the table.").
 
-> Here's what's live going into this session: [owed beats, ticking
-> clocks, dormant threads, PC arcs due — from steps 8–10]. What do you
-> want this one to be *about*? Whose moment is it?
-
-If the GM is unsure, offer 2–3 directions grounded in what's live.
 Don't move to spotlight until intent is set or deferred to
 `## Open Questions`.
-→ `## Session Intent` (their purpose) and a one-line
-`## Session Overview`
+→ `## Session Intent` and a one-line `## Session Overview`
 
 **12. PC Roster + Arc Check** — Each PC's `## Current Status` is
 already in the bundle (`###` subsections outlined); don't re-read it. `--prep`'s PC Arcs gives every
-active PC's `## GM Notes` (outlined too; the `## Background` is left out, one `gma section` away) plus spotlight history from earlier Plans' `## Spotlight Forecast`
-(role, sessions since last B- and C-plot). Don't open full PC
+active PC's `## GM Notes` (outlined too; the `## Background` is left out, one `gma section` away) plus spotlight history from earlier Wrap-Ups' Moment lines
+(sessions since the PC's last moment and MAJOR beat). Don't open full PC
 sheets. Judge arc stage (five-stage model) from that evidence. Per PC:
 - hooks, stated goals, arc stage and theme, relationships
 - a PC's own `Open threads` → decisions needing consequences, next arc beat;
   `Knows (exclusive)` → personalized touchpoint fuel
 - mechanical highlights (signature abilities, resources)
-- last spotlight role, sessions since last B-plot; next beat
+- sessions since last moment and MAJOR beat; next beat
 
-This is evidence for the GM's spotlight call, not the call.
+This is evidence for step 13's hooks.
 → `## PC Roster & Arcs` — durable analysis only (arc stage, theme,
 spotlight history, next beat). For mutable state (SAN/HP, location,
 conditions, current threads) point at the PC's `## Current Status`;
 never copy a snapshot into the plan.
 
-**13. Spotlight** — Offer a lean plus alternatives from the arc data:
-
-> I'd lean Emma for the B-plot — the anklet debt is owed — or
-> Katherine, who hasn't had a solo beat in three sessions. Or someone
-> else entirely?
-
-Last session's Moment lines show who had none. The GM picks who
-the session leans on. Then sketch a touchpoint
-for every PC at the table from the six types in
-arc-spotlight-reference.md; a PC with none is a gap to fill:
+**13. Spotlight** — Check every PC at the table has a hook on the
+table: a place, person or thread that pulls on them, offered, never
+forced. Their Spotlight Forecast row is the hook and what pulls. The
+six touchpoint types in arc-spotlight-reference.md are ways to build
+one; last session's Moment lines show who had none. A PC with none:
 
 > Freddy has nothing yet. What touches him?
 
@@ -275,11 +279,19 @@ alongside new ideas. The propose-before-write gate is the
    are required; every other label is optional, and a two-line routing
    scene is finished.
 
+Scenes are situations the party may walk into, in their likely order,
+never a required one. Where the party has committed to a place, build
+it out; where they're at a crossroads, one (hub) scene lists each lead
+(what's there, who notices, what changes when they arrive). What turns
+on the players is `Do | Then` rows or a Contingency scene's
+**Trigger**; the only fixed times are what NPCs do on their own
+schedule.
+
 Prefer embedding personal content in group scenes over splitting the
 party, and leave open windows for PC initiative. The GM may propose
-scenes at any point — confirm understanding, then write. Check
-spotlight balance against the GM's choices and raise gaps as
-questions. → each scene to `## Planned Scenes`
+scenes at any point — confirm understanding, then write. Check every
+PC still has a hook and raise gaps as questions.
+→ each scene to `## Planned Scenes`
 
 **Check the shape early.** Every `gma vault-write <vault> plan [options]` call prints the
 check; fix each ERROR and mechanical WARNING with `--section` while a
@@ -372,7 +384,7 @@ After each decision lands, update a prep-state comment near the top of
 the Plan:
 
 ```html
-<!-- prep-state: intent=set spotlight=Emma(B) scenes=1of3 open=[Freddy beat?] -->
+<!-- prep-state: intent=set spotlight=hooks(3of4) scenes=1of3 open=[Freddy beat?] -->
 ```
 
 On resume, read it first (`gma plan-check <plan> --state` prints the
@@ -395,8 +407,8 @@ The write supplies the frontmatter. Send these sections in this order;
 one with nothing for it keeps its heading with an empty body (never
 "N/A"). The GM-facing blank is `shared/templates/session-plan.md`.
 
-- `## Session Intent` — the GM's purpose in one or two sentences: what
-  it is about, whose moment it is (step 11).
+- `## Session Intent` — what's on the table and where the pressure is
+  (step 11).
 - `## Session Overview` — a short dramatic synopsis from the intent.
 - `## GM Notes` — Keeper-only content goes under it (the players' site
   hides it), never in a new top-level section.
@@ -417,10 +429,10 @@ one with nothing for it keeps its heading with an empty body (never
   handouts or props."
 - `## Session End Objectives` — two or three good stopping points, not
   a railroad.
-- `## PC Roster & Arcs` — per PC: arc stage, theme, next beat, plot
-  (step 12).
+- `## PC Roster & Arcs` — per PC: arc stage, theme, next beat (step
+  12).
 - `## Touchpoint Plan` — per PC: type, what, when (step 13).
-- `## Spotlight Forecast` — per PC: role and moment, none blank (step 13).
+- `## Spotlight Forecast` — per PC: their hook on the table, none blank (step 13).
 - `## Open Questions` — plot questions with 2–3 seeds;
   `- [ ] **Missing:** {value, whose sheet}`; guesses only here (Hard Guard).
 - `## Gaps & Actions` — missing entities, stale files, structural

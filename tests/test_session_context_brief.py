@@ -346,53 +346,37 @@ class SessionRefTests(unittest.TestCase):
         self.assertIn("===== Play Brief — Session 8 =====", r.stdout)
 
 
+WRAP_HEAD = "---\ntype: session_wrap\nsession: \"[[Session {n}]]\"\n---\n\n"
+
+
 class SpotlightUnitTests(unittest.TestCase):
-    def test_rows_parse_bold_wikilink_and_roles(self):
-        body = ("## Spotlight Forecast\n\n| PC | Share | Notes |\n|---|---|---|\n"
-                "| **Hero** (Alex) | ~30% | **B-plot featured.** |\n"
-                "| [[Second Name]] | 15% | C-plot featured. |\n"
-                "| **Third** | — | A-plot participant. |\n\n## Next\n\n| x | y |\n")
-        self.assertEqual(sc.spotlight_rows(body), [
-            ("Hero", "B"), ("Second Name", "C"), ("Third", "A")])
+    """#719: spotlight history is what the Wrap-Up recorded each PC got,
+    never what a Plan forecast."""
 
-    def test_rows_none_when_section_absent(self):
-        self.assertIsNone(sc.spotlight_rows("## Planned Scenes\n\ntext\n"))
+    def test_rows_read_major_moment_and_none(self):
+        body = ("## GM Notes\n\n### PC Carry-Forward\n\n"
+                "#### [[Hero]] (Alex)\n\n- **MAJOR —** broke with the guild\n"
+                "- **Moment:** the guild letter\n\n"
+                "#### [[Second_Name|Second]] (Sam)\n\n- **Moment:** the bell\n\n"
+                "#### **Third** (Jo)\n\n- **Moment:** none (absent)\n\n"
+                "#### Fourth (Kim)\n\n- Open threads: no moment line\n\n"
+                "### What Carries Forward\n\n- **Moment:** not a PC's\n")
+        self.assertEqual(sc.moment_rows(body), [
+            ("Hero", "MAJOR"), ("Second_Name", "moment"), ("Third", "none")])
 
-    def test_only_first_table_read_when_section_has_two(self):
-        body = ("## Spotlight Forecast\n\n"
-                "| PC | Share | Notes |\n|---|---|---|\n"
-                "| **Hero** | ~30% | B-plot featured. |\n\n"
-                "A prose line separating two tables in the same section.\n\n"
-                "| PC | Share | Notes |\n|---|---|---|\n"
-                "| **Second** | ~15% | C-plot featured. |\n")
-        self.assertEqual(sc.spotlight_rows(body), [("Hero", "B")])
+    def test_rows_none_when_nothing_recorded(self):
+        # No PC Carry-Forward, or one from before moments were recorded:
+        # unknown, which is not a drought.
+        self.assertIsNone(sc.moment_rows("## GM Notes\n\ntext\n"))
+        self.assertIsNone(sc.moment_rows(
+            "### PC Carry-Forward\n\n#### [[Hero]] (Alex)\n\n"
+            "- Open threads: the debt\n"))
 
-    def test_aliased_wikilink_first_cell_resolves_to_its_target(self):
-        # The alias pipe inside `[[Hero_Name|Hero Alias]]` is not a cell
-        # boundary. Split there and the role came from a row
-        # whose PC never matched, so the drought count was silently wrong.
-        body = ("## Spotlight Forecast\n\n| PC | Share | Notes |\n|---|---|---|\n"
-                "| [[Hero_Name|Hero Alias]] (Alex) | ~10% | A-plot. |\n")
-        self.assertEqual(sc.spotlight_rows(body), [("Hero_Name", "A")])
-        self.assertTrue(sc.pc_matches(
-            "Hero_Name", "Characters/PCs/Hero_Name.md", {}))
-
-    def test_unclosed_wikilink_falls_back_to_the_naive_split(self):
-        # Bracket tracking must not swallow the rest of the row: a row
-        # that opens `[[` and never closes it would otherwise put the
-        # whole line in the PC cell and report a false drought.
-        body = ("## Spotlight Forecast\n\n| PC | Share | Notes |\n|---|---|---|\n"
-                "| [[Hero | ~30% | B-plot. |\n")
-        self.assertEqual(sc.spotlight_rows(body), [("Hero", "B")])
-
-    def test_row_ending_in_an_escaped_pipe_keeps_it(self):
-        self.assertEqual(sc._row_cells(r"| Hero \|"), [r"Hero \|"])
-
-    def test_escaped_pipe_in_pc_cell_is_not_a_cell_boundary(self):
-        body = ("## Spotlight Forecast\n\n| PC | Share | Notes |\n|---|---|---|\n"
-                "| Hero \\| Sidekick | ~20% | B-plot. |\n")
-        self.assertEqual(sc.spotlight_rows(body),
-                         [("Hero | Sidekick", "B")])
+    def test_a_plan_forecast_is_not_read(self):
+        # A Plan names who it hoped would shine; only play counts.
+        body = ("## Spotlight Forecast\n\n| PC | Role |\n|---|---|\n"
+                "| **Hero** | B-plot featured. |\n")
+        self.assertIsNone(sc.moment_rows(body))
 
     def test_pc_matches_stem_first_token_and_alias(self):
         fm = {"aliases": ["The Hero"]}
@@ -419,31 +403,57 @@ class ArcsCLITests(unittest.TestCase):
         self.assertIn("Arc stage note the Keeper wrote", out)
         self.assertNotIn("STR 60", out)
         self.assertNotIn("Open threads: the Dredger's debt", out)
-        self.assertIn("Session 6: B", out)
-        self.assertIn("Session 7: A", out)
-        self.assertIn("Sessions since last B-plot: 2 (Session 6)", out)
-        self.assertIn("Sessions since last C-plot: never", out)
+        self.assertIn("Spotlight history (chapter-scoped, from the "
+                      "Wrap-Ups' Moment lines):\n  Session 7: moment\n"
+                      "Sessions since last MAJOR beat: never "
+                      "(in 1 wrap-ups read)\n"
+                      "Sessions since last moment: 1 (Session 7)", out)
         self.assertIn("--- Second_Name (", out)
         self.assertIn("(no ## Background section)", out)
-        self.assertIn("Session 7: (no row for this PC)", out)
-        self.assertIn("Session 6: C", out)
-        self.assertIn("Plans without a ## Spotlight Forecast: Session 5", out)
+        self.assertIn("  Session 7: none\nSessions since last MAJOR beat: "
+                      "never (in 1 wrap-ups read)\nSessions since last "
+                      "moment: never (in 1 wrap-ups read)", out)
+        self.assertIn("Wrap-Ups with no Moment lines (read those directly): "
+                      "(none)", out)
+        # The Plans' Spotlight Forecast tables are no longer read.
+        self.assertNotIn("Session 6: B", out)
+        self.assertNotIn("plans read", out)
         self.assertNotIn("Retired", out)
         self.assertNotIn("===== Wrap-Up", out)
 
-    def test_prose_forecast_is_its_own_bucket(self):
-        r = run_cli(FIXTURE, "--arcs")
+    def test_counts_from_every_wrap_up_and_lists_unrecorded(self):
+        import shutil
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            vault = Path(tmp) / "prep"
+            shutil.copytree(FIXTURE, vault)
+            sessions = vault / "Chapters" / "Chapter 1 - Harbour" / "Sessions"
+            (sessions / "Chapter_01_Session_06_Wrap_Up.md").write_text(
+                WRAP_HEAD.format(n="06")
+                + "## GM Notes\n\n### PC Carry-Forward\n\n"
+                "#### [[Hero]] (Alex)\n\n- **MAJOR —** sold the boat\n"
+                "- **Moment:** sold the boat\n\n"
+                "#### [[Second_Name]] (Sam)\n\n"
+                "- **Moment:** the keeper named her\n", encoding="utf-8")
+            (sessions / "Chapter_01_Session_05_Wrap_Up.md").write_text(
+                WRAP_HEAD.format(n="05")
+                + "## GM Notes\n\n### PC Carry-Forward\n\n"
+                "#### [[Hero]] (Alex)\n\n- Open threads: older shape\n",
+                encoding="utf-8")
+            r = run_cli(vault, "--arcs")
         self.assertEqual(r.returncode, 0, r.stderr)
         out = r.stdout
-        self.assertIn(
-            "Plans whose ## Spotlight Forecast has no table "
-            "(read those sections directly): Session 4", out)
-        self.assertIn("Plans without a ## Spotlight Forecast: Session 5", out)
-        # No per-PC row is emitted for a prose forecast, under any PC...
-        self.assertNotIn("Session 4:", out)
-        # ...and Session 4 is not counted in the "plans read" denominator.
-        self.assertIn("Sessions since last C-plot: never (in 2 plans read)",
-                      out)
+        self.assertIn("  Session 6: MAJOR\n  Session 7: moment\n"
+                      "Sessions since last MAJOR beat: 2 (Session 6)\n"
+                      "Sessions since last moment: 1 (Session 7)", out)
+        self.assertIn("  Session 6: moment\n  Session 7: none\n"
+                      "Sessions since last MAJOR beat: never "
+                      "(in 2 wrap-ups read)\n"
+                      "Sessions since last moment: 2 (Session 6)", out)
+        # Session 5 recorded no moments: listed, never counted.
+        self.assertNotIn("Session 5:", out)
+        self.assertIn("Wrap-Ups with no Moment lines (read those directly): "
+                      "Session 5", out)
 
     def test_arcs_excludes_brief(self):
         r = run_cli(FIXTURE, "--arcs", "--brief")
