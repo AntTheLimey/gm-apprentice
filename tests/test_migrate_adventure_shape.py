@@ -75,6 +75,21 @@ class AdventureShapeTests(unittest.TestCase):
         self.assertEqual(mv.find_adventure_shape(v), [])
         self.assertEqual((v / "NPCs/A.md").read_text(encoding="utf-8"), npc)
 
+    def test_a_list_at_column_zero_is_not_orphaned(self):
+        text = ("---\ntype: adventure-brief\nadventure_shape:\n- sandbox\n"
+                "tags: []\n---\n\n### Adventure Shape\n\nOpen.\n")
+        v = make_vault(self, {BRIEF: text})
+        self.assertEqual(mv.find_adventure_shape(v), [])
+        self.assertEqual((v / BRIEF).read_text(encoding="utf-8"), text)
+
+    def test_a_commented_out_heading_is_not_written_prose(self):
+        text = brief("adventure_shape: sandbox\n", "{The structure.}\n").replace(
+            "### Adventure Shape\n\n{The structure.}\n",
+            "<!--\n### Adventure Shape\n\ndraft idea\n-->\n")
+        v = make_vault(self, {BRIEF: text})
+        (item,) = mv.find_adventure_shape(v)
+        self.assertEqual(item.id, "adventure-shape-word")
+
 
 if __name__ == "__main__":
     unittest.main()

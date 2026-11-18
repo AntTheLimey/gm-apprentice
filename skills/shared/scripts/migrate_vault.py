@@ -1040,6 +1040,7 @@ def _shape_field(fm: list[str], _rel: str) -> bool:
 def _shape_written(text: str) -> bool:
     """Whether the brief's Adventure Shape section holds the GM's words
     (not only the template's {hint} or a comment)."""
+    text = re.sub(r"<!--.*?-->", "", text, flags=re.S)
     m = SHAPE_HEADING_RE.search(text)
     if not m:
         return False

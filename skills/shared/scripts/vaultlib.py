@@ -622,7 +622,8 @@ def delete_key(fm: list[str], key: str) -> str | None:
 
 
 def opens_a_block(fm: list[str], key: str) -> bool:
-    """Does `key:` carry an indented block rather than a scalar?
+    """Does `key:` carry an indented block (or a list whose `- ` items sit at
+    column zero, as Obsidian writes them) rather than a scalar?
 
     `delete_key` and `set_key` both edit exactly one line. On a key whose
     value is a block list or a nested mapping that leaves the indented
@@ -637,7 +638,7 @@ def opens_a_block(fm: list[str], key: str) -> bool:
         for nxt in fm[i + 1:]:
             if not nxt.strip():
                 continue
-            return nxt[:1].isspace()
+            return nxt[:1].isspace() or nxt.startswith("- ") or nxt.rstrip() == "-"
         return False
     return False
 

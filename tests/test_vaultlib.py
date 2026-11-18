@@ -277,6 +277,11 @@ class FrontmatterEditorTests(unittest.TestCase):
         self.assertFalse(vl.opens_a_block(fm, "status"))
         self.assertFalse(vl.opens_a_block(fm, "absent"))
 
+    def test_opens_a_block_sees_a_list_at_column_zero(self):
+        fm = ["tags:\n", "- one\n", "status: DRAFT\n"]
+        self.assertTrue(vl.opens_a_block(fm, "tags"))
+        self.assertFalse(vl.opens_a_block(fm, "status"))
+
     def test_delete_key_first_top_level_only(self):
         fm = self.fm("---\ntype: npc\ndocuments:\n  type: nested\n"
                      "type: duplicate\n---\n")
