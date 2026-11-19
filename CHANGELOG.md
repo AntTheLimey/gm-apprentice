@@ -10,6 +10,12 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 ---
 
 
+## [1.12.91] — 2026-11-19
+
+### Added
+
+- The publish tool reads a session Plan into the run sheet's model, the first step of the GM's run sheet (#556); nothing on the site changes yet.
+
 ## [1.12.90] — 2026-11-19
 
 ### Fixed
