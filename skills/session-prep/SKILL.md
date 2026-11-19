@@ -331,7 +331,9 @@ implies `--headless`).
   an **NPCs** block: everyone in the room, never everyone referred to),
   `hub-no-places`, `hub-place-not-location`, `label-form`,
   `if-table-unlabelled`. They check shape only, never story. A
-  `checks failed` row: run the commands it names.
+  `checks failed` row: run the commands it names. A `DROPPED` row
+  names a labelled block (`**Treasure**`) a rewrite lost: put it back
+  unless the GM's change removed it.
 - INFO rows are cues (`read-aloud`, `scene-length`, `placeholder`). A
   read-aloud line that names a PC, dictates a feeling ("you feel…") or
   uses a 3rd-person pronoun: raise the real ones as a question ("Scene

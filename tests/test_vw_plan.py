@@ -435,5 +435,63 @@ class PlanTests(unittest.TestCase):
         self.assertEqual(out.count("placeholder"), 1, out)
 
 
+FIGHT = """### The Yard
+
+**Situation:** Durgan blocks the gate.
+**Starts it:** He drops his coat.
+
+**Treasure**
+- A purse of silver
+
+**Complications**
+- Rain
+"""
+FIGHT_NO_TREASURE = FIGHT.replace("**Treasure**\n- A purse of silver\n\n", "")
+
+
+class DroppedBlockTests(unittest.TestCase):
+    def setUp(self):
+        self.vault = make_vault(self, {
+            f"{CHAPTER}/Chapter 1 - Harbour.md": "---\ntype: chapter\n---\n",
+            PREV: PREV_TEXT,
+            INDEX: INDEX_TEXT,
+            "_Templates/_Template_Session.md":
+                (TEMPLATES / "session.md").read_text(encoding="utf-8"),
+        })
+        code, out = run(self.vault, "--number", "2", "--write",
+                        stdin=BODY + "\n" + FIGHT)
+        self.assertEqual(code, 0, out)
+
+    def test_plan_rewrite_that_drops_a_treasure_block_says_dropped(self):
+        for flags in ((), ("--write",)):
+            code, out = run(self.vault, "--number", "2", "--section",
+                            *flags, stdin=FIGHT_NO_TREASURE)
+            self.assertEqual(code, 0, out)
+            self.assertIn("DROPPED\tThe Yard\t**Treasure**", out)
+            self.assertNotIn("**Complications**", out)
+        self.assertNotIn("Treasure",
+                         (self.vault / PLAN).read_text(encoding="utf-8"))
+
+    def test_plan_section_rewrite_that_keeps_every_block_says_nothing(self):
+        code, out = run(self.vault, "--number", "2", "--section",
+                        stdin=FIGHT.replace("silver", "gold"))
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("DROPPED", out)
+
+    def test_a_new_scene_is_not_compared(self):
+        code, out = run(self.vault, "--number", "2", "--section",
+                        stdin="## Planned Scenes\n\n" + FIGHT_NO_TREASURE.replace(
+                            "The Yard", "The Cellar"))
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("DROPPED", out)
+
+    def test_a_label_in_a_fence_or_comment_is_not_a_block(self):
+        fenced = FIGHT.replace("**Treasure**", "```\n**Treasure**\n```")
+        run(self.vault, "--number", "2", "--section", "--write", stdin=fenced)
+        code, out = run(self.vault, "--number", "2", "--section",
+                        stdin=FIGHT_NO_TREASURE)
+        self.assertNotIn("DROPPED", out)
+
+
 if __name__ == "__main__":
     unittest.main()

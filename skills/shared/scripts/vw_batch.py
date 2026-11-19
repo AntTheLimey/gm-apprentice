@@ -324,6 +324,17 @@ def check_rest_unchanged(batch: vw.Batch, rel: str, old_text: str,
                 f"takes it in; nothing written")
 
 
+def note_dropped(batch: vw.Batch, rel: str, old: str, new: str,
+                 replace: bool) -> None:
+    """A replace that loses a labelled block says so (a warning, never a
+    refusal). A scene note is one scene, named by its file."""
+    if not replace:
+        return
+    whole = vl.entity_type(vl.extract_frontmatter(old)) == "scene"
+    for row in vw.dropped_blocks(old, new, Path(rel).stem if whole else ""):
+        batch.rows.append(row)
+
+
 def run_lead(batch: vw.Batch, rel: str, body: list[str],
              replace: bool) -> None:
     """A `section NOTE --lead` block (#738): write the note's lead, the text
@@ -398,6 +409,7 @@ def run_lead(batch: vw.Batch, rel: str, body: list[str],
     check_rest_unchanged(batch, rel, text, new_text)
     batch.put(rel, new_text)
     batch.row(verb, rel, "§(lead)", f"{len(body)} lines")
+    note_dropped(batch, rel, text, new_text, replace)
 
 
 def run_section(batch: vw.Batch, b: Block) -> None:
@@ -497,6 +509,7 @@ def run_section(batch: vw.Batch, b: Block) -> None:
     check_rest_unchanged(batch, rel, text, new_text)
     batch.put(rel, new_text)
     batch.row(verb, rel, f"§{ns.heading}", f"{len(body)} lines")
+    note_dropped(batch, rel, text, new_text, ns.replace)
 
 
 # The sheet tool's line kinds, as batch rows.
@@ -824,7 +837,7 @@ def run(args: argparse.Namespace) -> int:
                    ("rested", batch.tally["rested"]),
                    ("woken", batch.tally["woken"]),
                    ("handed", batch.tally["handed"])) if n)
-               + f"warnings: {count('WARNING')}")
+               + f"warnings: {count('WARNING', 'DROPPED')}")
     if refused:
         out.append(f"# nothing written: fix block"
                    f"{'s' if len(refused) > 1 else ''} "

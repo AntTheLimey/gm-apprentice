@@ -627,7 +627,9 @@ Plan's read-aloud, clock and unresolved-link rows. No index yet:
 --title (and --chapter) files one as upcoming. An existing
 Plan is never overwritten: --section replaces each section
 on stdin by level and title, and adds a missing ## where the
-template has it.
+template has it. A --section write that drops a labelled
+block a scene had prints DROPPED<TAB>scene<TAB>**label**
+(a warning; the write still happens).
 
 Several writes at once: put this as a '=== plan ...' block in `gma vault-write <vault> batch FILE`.
 ```
