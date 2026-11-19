@@ -49,6 +49,18 @@ describe('leak gate: a paused scene\'s After line (#765)', () => {
     } finally { site.cleanup(); }
   });
 
+  it('an After line whose link carries a label is still hidden', () => {
+    // scene-paused writes a bare link; a label is the GM's own words, which the site never printed.
+    const notes = { ...NOTES, 'Scenes/What Sleeps Below.md': SCENE.replace('[[Session 01 - The Climb]]', '[[Session 01 - The Climb|the night Tam died]]') };
+    const site = leakSite(notes, SETTINGS);
+    try {
+      leakInto(site.outputDir, PAGE, 'After the night Tam died.');
+      const r = runLeakGate({ configPath: site.configPath, outputDir: site.outputDir });
+      assert.equal(r.findings.length, 1, JSON.stringify(r.findings));
+      assert.equal(r.findings[0].note, 'Scenes/What Sleeps Below.md');
+    } finally { site.cleanup(); }
+  });
+
   it('the same words anywhere else in a scene are still hidden', () => {
     const notes = { ...NOTES, 'Scenes/What Sleeps Below.md': SCENE.replace('**Situation:**', 'After [[Session 01 - The Climb]].\n\n**Situation:**') };
     const site = leakSite(notes, SETTINGS);

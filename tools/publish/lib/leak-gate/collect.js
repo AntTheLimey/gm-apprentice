@@ -89,7 +89,7 @@ function sheetTexts(shownMd, fields, { system, playerConfig, linkMap, outputPath
 // prints, so it is not hidden text (#765). Only that one line, only when its link names a published note: the snapshot
 // under it is still hidden, and so is the line when the session is not on the site.
 const PAUSED_HEADING = /^##[ \t]+Paused[ \t]*$/;
-const PAUSED_AFTER = /^After (\[\[[^\]]+\]\])\.$/;
+const PAUSED_AFTER = /^After (\[\[[^\]|]+\]\])\.$/;   // a bare link only: a label is the GM's own words
 function withoutPausedAfter(md, linkMap) {
   const lines = md.split('\n');
   const at = lines.findIndex((l) => PAUSED_HEADING.test(l.replace(/\r$/, '')));
