@@ -10,6 +10,12 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 ---
 
 
+## [1.12.92] — 2026-11-19
+
+### Fixed
+
+- Session prep can write a scene's Situation when a hidden picture block sits above it (#760); an older scene whose Situation sits under a heading further down is refused safely rather than given a second one.
+
 ## [1.12.91] — 2026-11-19
 
 ### Added

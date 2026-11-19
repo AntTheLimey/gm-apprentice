@@ -20,9 +20,10 @@ Commands: every `vault-write` writer with its own arguments and stdin
 
 A note's lead is the text above its first heading or gm-only/spoiler
 block: a scene's Situation, Starts it and If-table (#738); below a
-`# Title` line, and on a paused scene after its `## Paused` section,
-neither of which is ever written (#758). An empty lead with a `**Situation:**` line further down is
-refused as misread. --replace
+`# Title` line, below a gm-only block at the very top (#760), and on a
+paused scene after its `## Paused` section, none of which is ever
+written (#758). A lead with no `**Situation:**`-shaped line, while one
+sits further down, is refused as misread. --replace
 keeps a comment at its top (the template's prompt) and refuses one
 further down; a table row or list item appended joins the table or
 list it ends with.
@@ -326,8 +327,9 @@ def check_rest_unchanged(batch: vw.Batch, rel: str, old_text: str,
 def run_lead(batch: vw.Batch, rel: str, body: list[str],
              replace: bool) -> None:
     """A `section NOTE --lead` block (#738): write the note's lead, the text
-    above its first heading or hidden block, below a `# Title` line or a
-    paused scene's `## Paused` section (#758). A comment at the lead's top
+    above its first heading or hidden block, below a `# Title` line, a
+    gm-only block at the top (#760) or a paused scene's `## Paused` section
+    (#758). A comment at the lead's top
     (the scene template's prompt) stays; any other comment in it refuses
     --replace, which would drop it. Nothing below the lead may read any
     differently afterwards."""
@@ -336,17 +338,6 @@ def run_lead(batch: vw.Batch, rel: str, body: list[str],
     first, end, walk = vw.checked_lead(doc, rel)
     check_lead_text(rel, body, at_top=first == 0)
     lines = list(doc.lines)
-    shape = vw.lead_shape_below(doc, end)
-    if shape is not None and not any(
-            kept is not None and kept.strip() for kept, _code in
-            vw.tool_reading([ln.rstrip("\r\n") for ln in lines[first:end]],
-                            rel)):
-        # An empty lead with a Situation further down was misread: the
-        # write would make a second one (#758).
-        raise vw.WriteError(
-            f"{rel}: its lead is empty, but line {shape + 1} "
-            f"({lines[shape].strip()!r}) below it reads like one, so the lead "
-            f"is not where it seems; edit the note by hand")
     if replace:
         keep = first
         for i in range(first, end):

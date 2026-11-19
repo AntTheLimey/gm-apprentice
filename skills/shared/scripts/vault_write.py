@@ -527,11 +527,37 @@ def paused_at(doc: Doc, at: int) -> tuple[int, bool] | None:
         doc.lines[after - 1].rstrip("\r\n")))
 
 
+GM_OPEN_LINE_RE = re.compile(r"^\s*<!--\s*gm-only\s*-->\s*$", re.I)
+GM_CLOSE_LINE_RE = re.compile(r"^\s*<!--\s*/\s*gm-only\s*-->\s*$", re.I)
+
+
+def top_block_end(doc: Doc, at: int) -> int | None:
+    """When line `at` opens a gm-only block on a line of its own, closed on a
+    line of its own with no marker or heading between (an older scene's
+    hidden picture above its lead, #760): the index one past the closing
+    line. Else None: any other shape is left to the guards, which refuse it.
+    A block holding a heading is a section (the template's `## GM Notes`
+    straight under an empty lead), never skipped: the lead goes above it."""
+    if at >= len(doc.lines) or not GM_OPEN_LINE_RE.match(doc.lines[at]):
+        return None
+    for i in range(at + 1, len(doc.lines)):
+        line = doc.lines[i]
+        if GM_CLOSE_LINE_RE.match(line):
+            return i + 1
+        if ANY_MARKER_RE.search(line) or ATX_RE.match(line) or (
+                SETEXT_RE.match(line) and doc.lines[i - 1].strip()
+                and i - 1 > at):
+            return None
+    return None
+
+
 def lead_where(doc: Doc, first: int) -> str:
     """Where `checked_lead` found the lead starting at `first`, in words."""
     above = doc.lines[first - 1].rstrip("\r\n") if first > 0 else ""
     if vl.PAUSED_END_RE.match(above):
         return "below its ## Paused section"
+    if GM_CLOSE_LINE_RE.match(above):
+        return "below the gm-only block at its top"
     if title_at(doc, first - 1):
         return "below its title"
     return "above its first heading"
@@ -539,17 +565,32 @@ def lead_where(doc: Doc, first: int) -> str:
 
 LEAD_SHAPE_RE = re.compile(r"^ {0,3}\*\*(?:Situation|Starts it|If the "
                            r"players)\b", re.I)
+# The lines only a lead holds: an If-table may also sit in a later section.
+LEAD_OPENER_RE = re.compile(r"^ {0,3}\*\*(?:Situation|Starts it)\b", re.I)
 
 
-def lead_shape_below(doc: Doc, end: int) -> int | None:
+def lead_shape_below(doc: Doc, end: int,
+                     shape: re.Pattern[str] = LEAD_SHAPE_RE) -> int | None:
     """The index of the first lead-shaped line (`**Situation:**`, `**Starts
-    it:**`, `**If the players...**`) below line `end`, outside code fences
-    and comments, or None. Found under an empty lead, it says the lead was
-    misread: a write there would make a second one (#758)."""
+    it:**`, `**If the players...**`, or what `shape` matches) below line
+    `end`, outside code fences and comments, or None. Found under an empty
+    lead, it says the lead was misread: a write there would make a second
+    one (#758)."""
     walk = comment_walk(doc.lines[end:])
     return next((i for i in range(end, len(doc.lines))
                  if not walk[i - end].code and not walk[i - end].inside
-                 and LEAD_SHAPE_RE.match(doc.lines[i])), None)
+                 and shape.match(doc.lines[i])), None)
+
+
+def opener_shown_below(doc: Doc, end: int, rel: str) -> int | None:
+    """The index of the first `**Situation:**` or `**Starts it:**` line below
+    line `end` that the site shows (outside code, comments and gm-only or
+    spoiler blocks, as the publish tool reads them), or None. A hidden one
+    (an alternative opening in the GM Notes) is no misread lead (#760)."""
+    read = tool_reading([ln.rstrip("\r\n") for ln in doc.lines[end:]], rel)
+    return next((end + i for i, (kept, code) in enumerate(read)
+                 if kept is not None and not code
+                 and LEAD_OPENER_RE.match(kept)), None)
 
 
 ANY_MARKER_RE = re.compile(r"<!--\s*/?\s*(?:gm-only|spoiler)\s*-->", re.I)
@@ -584,9 +625,10 @@ def checked_lead(doc: Doc, rel: str) -> tuple[int, int, list[Walk]]:
     """(first, end, walk) of the note's lead (#738): the body text above its
     first heading or gm-only/spoiler marker, where a scene keeps its
     Situation, Starts it and If-table. Below an older scene's `# Title`
-    line with nothing visible above it, and below a paused scene's
-    `## Paused` section (#758): neither the title nor the snapshot is ever
-    part of the lead. The span is empty when the body opens with another
+    line, a gm-only block at the top such as a hidden picture (#760) and a
+    paused scene's `## Paused` section (#758), in any order, each with
+    nothing visible above it: none of them is ever part of the lead. The
+    span is empty when the body opens with another
     heading. The lead's lines are walked, refusing a lead no tool
     should write: a frontmatter never closed (it would read as the lead), a
     gm-only or spoiler marker part-way along a line, and, as the publish
@@ -596,7 +638,10 @@ def checked_lead(doc: Doc, rel: str) -> tuple[int, int, list[Walk]]:
     opened inside a comment): the lead is not what it seems. On a paused
     scene (#758) it refuses a `## Paused` section with no end line, and
     text above the section, where scene-paused writes none: either way
-    which text is the lead is a guess."""
+    which text is the lead is a guess. It refuses a lead that is empty with
+    a lead-shaped line further down (#758), or that has no Situation or
+    Starts it line while the site shows one further down (#760): the lead
+    was misread, and a write would make a second one."""
     first, stop = lead_stops(doc)
     end = stop(first)
     if (first == 0 and doc.lines
@@ -610,25 +655,46 @@ def checked_lead(doc: Doc, rel: str) -> tuple[int, int, list[Walk]]:
         return [kept for kept, _code in tool_reading(
             [ln.rstrip("\r\n") for ln in doc.lines[a:b]], rel)
             if kept is not None and kept.strip()]
-    if title_at(doc, end) and not visible_in(first, end):
-        # An older scene's `# Title` line: the lead starts below it.
-        first = end + 1
-        end = stop(first)
-    paused = paused_at(doc, end)
-    if paused is not None:
-        if not paused[1]:
-            raise WriteError(
-                f"{rel}: its ## Paused section (line {end + 1}) has no "
-                f"{vl.PAUSED_END} line, so where the lead starts below it is "
-                f"a guess; put that line after the snapshot, or edit by hand")
-        visible = visible_in(first, end)
-        if visible:
-            raise WriteError(
-                f"{rel}: it has text above its ## Paused section "
-                f"({visible[0].strip()!r}); a paused scene's lead goes below "
-                f"the section's {vl.PAUSED_END} line: move it there, or edit "
-                f"by hand")
-        first = paused[0]
+    top = first
+
+    def closed_to(at: int) -> bool:
+        """Whether the publish tool reads the body down to line `at` as
+        closed: no comment or code fence left open (one wrapped round a top
+        block would take the lead in)."""
+        read = tool_reading([ln.rstrip("\r\n") for ln in doc.lines[top:at]]
+                            + [LEAD_END], rel)
+        return read[-1] == (LEAD_END, False)
+    # What stands above the lead, in any order (scene-paused puts its
+    # section at the very top, above a title or a block): an older scene's
+    # `# Title` line, a gm-only block at the top such as a hidden picture
+    # (#760; no lead write touches it), and a paused scene's `## Paused`
+    # section (#758). Each is skipped only with nothing visible above it.
+    titled = paused_seen = False
+    while True:
+        below = top_block_end(doc, end)
+        if (not titled and title_at(doc, end) and not visible_in(first, end)
+                and closed_to(end + 1)):
+            titled, first = True, end + 1
+        elif (below is not None and not visible_in(first, end)
+              and closed_to(below)):
+            first = below
+        elif not paused_seen and (paused := paused_at(doc, end)) is not None:
+            if not paused[1]:
+                raise WriteError(
+                    f"{rel}: its ## Paused section (line {end + 1}) has no "
+                    f"{vl.PAUSED_END} line, so where the lead starts below it "
+                    f"is a guess; put that line after the snapshot, or edit "
+                    f"by hand")
+            visible = visible_in(first, end)
+            if visible:
+                raise WriteError(
+                    f"{rel}: it has text above its ## Paused section "
+                    f"({visible[0].strip()!r}); a paused scene's lead goes "
+                    f"below the section's {vl.PAUSED_END} line: move it there, "
+                    f"or edit by hand")
+            paused_seen, first = True, paused[0]
+        else:
+            break
         end = stop(first)
     walk = comment_walk(doc.lines[first:end])
     for i in range(first, end):
@@ -653,6 +719,24 @@ def checked_lead(doc: Doc, rel: str) -> tuple[int, int, list[Walk]]:
             raise WriteError(f"{rel}: the lead seems to run past a heading "
                              f"({shown.strip()!r}), so it is not what it "
                              f"seems; edit it by hand")
+    # The lead was misread, and a write would make a second one, when it is
+    # empty and a lead-shaped line sits further down (#758), or when it has
+    # no Situation or Starts it line and one sits further down (#760: a
+    # draft's intro above `### Scene N:`, an older scene's above `## Setup`).
+    in_lead = [kept for kept, code in read[:-1]
+               if kept is not None and not code and kept.strip()]
+    if not in_lead:
+        shape = lead_shape_below(doc, end)
+    elif any(LEAD_OPENER_RE.match(k) for k in in_lead):
+        shape = None
+    else:
+        shape = opener_shown_below(doc, end, rel)
+    if shape is not None:
+        raise WriteError(
+            f"{rel}: line {shape + 1} ({doc.lines[shape].strip()!r}) below "
+            f"the lead reads like a lead, and the lead "
+            f"{lead_where(doc, first)} has none, so the lead is not where it "
+            f"seems; edit the note by hand")
     return first, end, walk
 
 
