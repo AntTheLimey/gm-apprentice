@@ -185,12 +185,27 @@ In a vault, the finished block goes in the NPC note's `## GM Notes` as
 its `### Stats` section, in place of the template's `{STAT BLOCK: …}`
 paragraph or the system block's `{…}` fields.
 
-An NPC in disguise is filed under the name the PCs know. Its true name
-goes in `unmasked_name` and its true face, if it has one, in
-`unmasked_portrait`; neither is published. When the true self plays
-differently, add `- **Unmasked:** {how they speak}` to Playing Them.
-Wrap-up makes all three the NPC's own once the players see them
-unmasked.
+### An NPC in disguise
+
+File it under the name the PCs know. Its true name goes in
+`unmasked_name` and its true face, if it has one, in
+`unmasked_portrait`; neither is published. Write both voices in
+Playing Them, in this shape, with these labels:
+
+```markdown
+### Playing Them
+
+- **Speech:** {the voice the PCs meet: the disguise's}
+- **Unmasked:** {how the true self speaks once the mask is off}
+- **Tell:** {the gesture you do at the table}
+```
+
+`**Unmasked:**` is a voice, not the moment of the reveal; leave it out
+when the true self sounds the same. The run sheet and wrap-up read
+only these labels: an "As Edric:" line is not read, and neither voice
+goes in frontmatter `voice:` (that is only for an NPC the GM gives a
+story of their own). Wrap-up makes the name, face and Unmasked voice
+the NPC's own once the players see them unmasked.
 
 ## Generation from Constraints
 

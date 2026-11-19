@@ -75,9 +75,11 @@ the vault's system (campaign-organizer references/vault-setup.md).}
 
 ### Playing Them
 
-<!-- A disguised NPC whose true self plays differently adds
-`- **Unmasked:** {how the true self speaks}`; wrap-up turns it into
-Speech, and Speech into Disguise, when they are unmasked. -->
+<!-- A disguised NPC (unmasked_name set): Speech is the disguise's
+voice, and `- **Unmasked:** {how the true self speaks once the mask is
+off}` goes after it when that voice differs. A voice, not the reveal;
+no other labels ("As X:") are read, and neither voice goes in `voice:`.
+Wrap-up turns Unmasked into Speech, and Speech into Disguise. -->
 
 - **Speech:** {accent, pace, a verbal tic}
 - **Tell:** {the gesture you do at the table}
