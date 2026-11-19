@@ -27,7 +27,7 @@ const { loadManifest } = require('./manifest');
 const { canonicalNfc } = require('./unicode');
 const { real, resolveGmFolder, gmFolderProblem, insideGitWorkTree, gmPage, writeMarker, ROBOTS_TXT } = require('./gm-site');
 const { publishView: sharedPublishView } = require('./published-view');
-const { overviewView, houseRulesOf, sharedEntries, threadsOnPage, withSharedThreads } = require('./shared-threads');
+const { overviewView, houseRulesOf, sharedEntries, threadsOnPage, withSharedThreads, pcOwnThreads, newestFirst } = require('./shared-threads');
 const { createMarks, markKinds, sanitize, unmark, withoutMarked } = require('./gm-marks');
 const { generateThemeCSS, googleFontNames, FONT_FORMATS, fontOutputPath } = require('./theme');
 const fontsLib = require('./fonts');
@@ -1343,6 +1343,8 @@ function buildSite(options) {
     what: 'shared threads were left off the PC pages and the House Rules page was not built',
     warn: (message) => console.warn(`  WARNING: ${message}`) });
   const sharedAll = overviewMd === null ? [] : sharedEntries(overviewMd);
+  // The party page lists every shared thread, one with no `involves` tail too (a PC page shows only those naming it).
+  const partyShared = overviewMd === null ? [] : sharedEntries(overviewMd, { all: true });
   let houseRulesMd = overviewMd === null ? '' : houseRulesOf(overviewMd);
   // A note of the GM's already at house-rules.html keeps it: no generated page, no second menu link.
   const houseRulesOwner = houseRulesMd ? pages.find((p) => p.outputPath === 'house-rules.html') : null;
@@ -2201,6 +2203,28 @@ function buildSite(options) {
 
   // The party page's Party Status board, for the page at `outputPath`: { boardHtml, dataScript, clientScripts }, empty
   // when the site has no board.
+  // The party page's Open Threads: the Overview's shared threads, newest first, each with the PCs in play it names
+  // (`everyone` for the party's), and each PC in play's own Open threads from its published view. `dirPages` are the
+  // party page's pages. Nothing on a site with no shared or own thread.
+  function partyThreads(dirPages) {
+    const inPlay = dirPages
+      .filter((p) => String((p.frontmatter || {}).type).trim().toLowerCase() === 'pc'
+        && !isOutOfPlay(p.frontmatter, publishConfig.statuses.out_of_play))
+      .sort((a, b) => String(a.displayTitle).localeCompare(String(b.displayTitle)));
+    const names = (target, page) => {
+      const found = resolveSiteLink(`[[${target}]]`, { linkMap, pages });
+      return found.kind === 'page' && found.href === page.outputPath;
+    };
+    // A thread naming every PC in play, one by one, is everyone's too.
+    const shared = newestFirst(partyShared).map((e) => {
+      const pcs = e.party ? [] : inPlay.filter((p) => e.involves.some((t) => names(t, p)));
+      const everyone = e.party || (inPlay.length > 1 && pcs.length === inPlay.length);
+      return { markdown: e.text, since: e.since, everyone, pcs: everyone ? [] : pcs };
+    });
+    const own = inPlay.map((page) => ({ page, markdown: pcOwnThreads(page.publishedMarkdown) })).filter((o) => o.markdown);
+    return shared.length || own.length ? { shared, own } : null;
+  }
+
   function partyBoard(outputPath) {
     if (!party.board || !party.partyManifest) return {};
     const boardHtml = party.board.renderBoard(party.partyManifest, outputPath, { live: party.live });
@@ -2787,6 +2811,7 @@ function buildSite(options) {
       emit(`${dir}/index.html`, indexTemplate(dir, label, dirPages, navFor, config, publishConfig, imageMap, {
         cocFolio: require('./templates/pc').usesCocFolio(publishConfig, sheetsOff),
         party: isParty ? partyBoard(`${dir}/index.html`) : undefined,
+        threads: isParty ? partyThreads(dirPages) : null,
       }), `  wrote ${dir}/index.html${isParty && party.board ? ' (party board)' : ''}`);
       oldRosterRedirect();
     }

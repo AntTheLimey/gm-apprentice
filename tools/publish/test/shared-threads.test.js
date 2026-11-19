@@ -16,6 +16,8 @@ const FIXTURE = path.join(__dirname, '..', '..', '..', 'tests', 'fixtures', 'sha
 const lf = (text) => text.replace(/\r\n/g, '\n');
 const overview = () => lf(fs.readFileSync(path.join(FIXTURE, 'Campaign Overview.md'), 'utf8'));
 const pc = (name) => lf(fs.readFileSync(path.join(FIXTURE, 'PCs', `${name}.md`), 'utf8'));
+// The fields the Python writer's vectors pin (the party page's `text` and `since` are read off the same tail).
+const core = ({ markdown, involves, party }) => ({ markdown, involves, party });
 const VECTORS = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'shared-thread-vectors.json'), 'utf8'));
 
 function buildVault(files) {
@@ -60,11 +62,15 @@ const CONFIG = settingsText({ 'player_site.title': 'T', 'player_site.folder_map'
 test('shared threads: reads the entries the Python writer writes', () => {
   const entries = sharedEntries(overview());
   assert.strictEqual(entries.length, 2, 'the plain bullet under GM Notes is not read');
-  assert.deepStrictEqual(entries[0], { markdown: "- **The missing ledger** — Harrow Ford's toll keeper wants it back — since Session 2", involves: [], party: true });
+  assert.deepStrictEqual(entries[0], { markdown: "- **The missing ledger** — Harrow Ford's toll keeper wants it back — since Session 2", involves: [], party: true,
+    text: "**The missing ledger** — Harrow Ford's toll keeper wants it back", since: 'Session 2' });
   assert.deepStrictEqual(entries[1].involves, ['Ines_Marlowe', 'Corwin_Hale']);
   assert.strictEqual(entries[1].party, false);
   const noSince = sharedEntries('## Open Threads\n\n- A thing — involves [[Tobin]]\n- Hand-written, no tail\n');
-  assert.deepStrictEqual(noSince, [{ markdown: '- A thing', involves: ['Tobin'], party: false }]);
+  assert.deepStrictEqual(noSince, [{ markdown: '- A thing', involves: ['Tobin'], party: false, text: 'A thing', since: undefined }]);
+  // The party page reads every bullet, one with no tail too.
+  assert.deepStrictEqual(sharedEntries('## Open Threads\n\n- A thing — involves [[Tobin]]\n- Hand-written, no tail\n', { all: true }).map((e) => [e.text, e.involves, e.party]),
+    [['A thing', ['Tobin'], false], ['Hand-written, no tail', [], false]]);
 });
 
 // The same input as tests/test_threads.py NESTED: a nested bullet belongs to the thread above it.
@@ -75,7 +81,7 @@ const NESTED = '# T\n\n## Open Threads\n\n'
   + '- **Ledger** — involves the party\n\n## Key\n\nK.\n';
 
 test('shared threads: a nested bullet is part of the thread above, as Python reads it', () => {
-  assert.deepStrictEqual(sharedEntries(NESTED), [
+  assert.deepStrictEqual(sharedEntries(NESTED).map(core), [
     { markdown: '- **Bell** — rings at dusk; the sexton knows more of the sexton — since Session 2', involves: ['Ines_Marlowe'], party: false },
     { markdown: '- **Ledger**', involves: [], party: true },
   ]);
@@ -86,9 +92,9 @@ test('shared threads: a nested bullet is part of the thread above, as Python rea
 
 // The same vectors pin threads.py `shared_threads` (tests/test_threads.py), so the two read one thread alike.
 test('shared threads: each thread is read whole, as Python reads it', () => {
-  for (const c of VECTORS.cases) assert.deepStrictEqual(sharedEntries(c.markdown), c.entries, c.about);
+  for (const c of VECTORS.cases) assert.deepStrictEqual(sharedEntries(c.markdown).map(core), c.entries, c.about);
   // CRLF reads as LF.
-  for (const c of VECTORS.cases) assert.deepStrictEqual(sharedEntries(c.markdown.replace(/\n/g, '\r\n')), c.entries, c.about);
+  for (const c of VECTORS.cases) assert.deepStrictEqual(sharedEntries(c.markdown.replace(/\n/g, '\r\n')).map(core), c.entries, c.about);
 });
 
 test('shared threads: they go in before the first subsection of Current Status', () => {
@@ -230,7 +236,7 @@ test('shared threads: the tail is split at the last valid one, as Python does', 
     '',
   ].join('\n');
   const [ring, debt] = sharedEntries(md);
-  assert.deepStrictEqual(ring, { markdown: '- **Smuggling ring** — involves the harbourmaster — since Session 4', involves: [], party: true });
+  assert.deepStrictEqual(core(ring), { markdown: '- **Smuggling ring** — involves the harbourmaster — since Session 4', involves: [], party: true });
   assert.deepStrictEqual(debt.involves, ['Corwin_Hale']);
   assert.strictEqual(debt.markdown, '- **Debt** — involves the ferrywoman — since Session 5');
 });
@@ -503,4 +509,117 @@ test('shared threads: the Overview is the first by path, mapped or not, as Pytho
   assert.match(html, /The first by path/);
   assert.doesNotMatch(html, /A later copy/);
   assert.ok(!fs.existsSync(path.join(siteDir, 'docs', '_overview')), 'the rescan makes no page');
+});
+
+// --- The party page's Open Threads (2026-11-19)
+
+const { pcOwnThreads, newestFirst } = require('../lib/shared-threads');
+
+test('party threads: a PC\'s own Open threads are read as threads.py reads them', () => {
+  const status = (body) => `# P\n\n## Current Status\n\n**Location:** the ford\n${body}\n## Notes\n\nN.\n`;
+  // A plain label, its list ending at the next bold label line (the Shared threads the build adds, or Knows).
+  assert.strictEqual(pcOwnThreads(status('**Open threads:**\n- One\n- Two\n  - nested\n**Knows (exclusive):** x\n')), '- One\n- Two\n  - nested');
+  assert.strictEqual(pcOwnThreads(status('**Open threads:**\n- One\n\n**Shared threads:**\n- Party\n')), '- One');
+  // A bulleted label (Dead End's form), its threads nested under it, ending at the next field's bullet.
+  assert.strictEqual(pcOwnThreads(status('- **Open threads:**\n    - One\n    - Two\n- **Knows (exclusive):**\n    - k\n')), '- One\n- Two');
+  // Text on the label line is a thread; filler and a placeholder are none.
+  assert.strictEqual(pcOwnThreads(status('**Open threads:** The well\n- Two\n')), '- The well\n- Two');
+  for (const none of ['None.', '—', '*none yet*', '{unresolved, forward-looking item}']) {
+    assert.strictEqual(pcOwnThreads(status(`**Open threads:** ${none}\n`)), '', none);
+  }
+  assert.strictEqual(pcOwnThreads(status('**Open threads:**\n- {unresolved, forward-looking item}\n')), '');
+  // Under a subsection it is a journal's label, not the field; no Current Status, no threads.
+  assert.strictEqual(pcOwnThreads(status('### Log\n**Open threads:**\n- One\n')), '');
+  assert.strictEqual(pcOwnThreads('# P\n\n## Notes\n\n**Open threads:**\n- One\n'), '');
+  // A paragraph after the list, past a blank line, is no thread (threads.py gives ['a', 'b']).
+  assert.strictEqual(pcOwnThreads('## Current Status\n**Open threads:**\n- a\n- b\n\nLast seen in Arkham, wounded.\n\n## Background\n'), '- a\n- b');
+  // A deeper line after a blank still belongs to its bullet; a lazy line straight under it too.
+  assert.strictEqual(pcOwnThreads(status('**Open threads:**\n- a\n\n  more of a\n- b\nlazy b\n')), '- a\n\n  more of a\n- b\nlazy b');
+  // Nesting is kept when the first bullet is deeper than its list's base.
+  assert.strictEqual(pcOwnThreads(status('**Open threads:**\n  - a\n    - under a\n  - b\n')), '- a\n  - under a\n- b');
+});
+
+test('party threads: a hand-written bullet with no involves still gives its since date', () => {
+  const [e] = sharedEntries('## Open Threads\n\n- Who killed the vicar — since Session 4\n', { all: true });
+  assert.deepStrictEqual([e.text, e.since, e.involves], ['Who killed the vicar', 'Session 4', []]);
+  assert.deepStrictEqual(sharedEntries('## Open Threads\n\n- Who killed the vicar — since Session 4\n'), [], 'a PC page still reads only tailed ones');
+});
+
+test('party threads: newest first by since, undated last in their own order', () => {
+  const e = (name, since) => ({ name, since });
+  assert.deepStrictEqual(newestFirst([e('a'), e('b', 'Session 3'), e('c', 'Session 12'), e('d'), e('f', 'Session 3')]).map((x) => x.name),
+    ['c', 'b', 'f', 'a', 'd']);
+});
+
+function partyVault(overviewText, pcs, extra = {}) {
+  const files = { '_meta/vault-config.yaml': settingsText({ 'player_site.title': 'T', 'player_site.folder_map': { 'Characters/PCs': 'characters/pcs', _Campaign: 'campaign' } }),
+    '_Campaign/Campaign Overview.md': overviewText, ...extra };
+  for (const [name, text] of Object.entries(pcs)) files[`Characters/PCs/${name}.md`] = text;
+  return buildVault(files);
+}
+
+const PARTY_OVERVIEW = overview().replace('## Key Factions', '- Hand-written, no tail\n- **The old bell** — rings at dusk — since Session 12; involves [[Corwin_Hale]]\n'
+  + '- The well — since [[Session 1|the first night]]; involves [[Corwin_Hale]]\n\n## Key Factions');
+
+test('party threads: the party page lists the shared threads newest first, then each PC\'s own', () => {
+  const site = partyVault(PARTY_OVERVIEW, { Corwin_Hale: pc('Corwin_Hale'), Ines_Marlowe: pc('Ines_Marlowe') });
+  const html = site.read('characters', 'pcs', 'index.html');
+  const section = /<section class="dashboard-section party-threads"[\s\S]*?<\/section>/.exec(html);
+  assert.ok(section, 'the party page has an Open Threads section');
+  const s = section[0];
+  const order = ['The old bell', 'Corwin.s debt to the ferrywoman', 'The missing ledger', 'Hand-written, no tail'].map((t) => s.search(new RegExp(t)));
+  assert.ok(order.every((at, i) => at > 0 && (i === 0 || at > order[i - 1])), `newest first, undated last: ${order}`);
+  assert.match(s, /since Session 12/);
+  assert.match(s, /since the first night/, 'a linked since prints as its words');
+  assert.doesNotMatch(s, /\[\[/);
+  assert.match(s, /No date yet/);
+  assert.match(s, /class="ot-who ot-everyone">Everyone</, 'the party\'s thread says Everyone');
+  assert.match(s, /title="Corwin Hale"/, 'a named PC is shown by face');
+  // The ferrywoman thread names both PCs in play, one by one: everyone's too.
+  const ferry = /<li class="ot-item">(?:(?!<\/li>)[\s\S])*ferrywoman[\s\S]*?<\/li>/.exec(s)[0];
+  assert.match(ferry, /Everyone/);
+  assert.doesNotMatch(ferry, /class="ot-av"/);
+  // Each PC's own, from their Current Status, and nothing past the list (Ines's Knows line stays on her page).
+  assert.match(s, /Ferrywoman.s debt/);
+  assert.match(s, /The ledger page in her coat/);
+  assert.match(s, /who lit the lamp on the north bank/);
+  assert.doesNotMatch(s, /brother drowned/);
+  // It sits under the title, above the cards.
+  assert.ok(html.indexOf('party-threads') < html.indexOf('entity-card'));
+});
+
+test('party threads: an out-of-play PC\'s own threads are left off; a page with no threads has no section', () => {
+  const retired = pc('Ines_Marlowe').replace(/^status: .*$/m, 'status: retired');
+  const withStatus = /^status:/m.test(retired) ? retired : retired.replace('---\n', '---\nstatus: retired\n');
+  const site = partyVault(PARTY_OVERVIEW, { Corwin_Hale: pc('Corwin_Hale'), Ines_Marlowe: withStatus });
+  const s = /<section class="dashboard-section party-threads"[\s\S]*?<\/section>/.exec(site.read('characters', 'pcs', 'index.html'))[0];
+  assert.doesNotMatch(s, /The ledger page in her coat/);
+  assert.match(s, /Ferrywoman.s debt/);
+  const bare = partyVault(overview().replace(/## Open Threads[\s\S]*?## Key Factions/, '## Key Factions'),
+    { Corwin_Hale: pc('Corwin_Hale').replace(/\*\*Open threads:\*\*\n- .*\n/, '') });
+  assert.doesNotMatch(bare.read('characters', 'pcs', 'index.html'), /party-threads/);
+});
+
+test('party threads: the leak check reads the party page\'s threads as published, a tail-less one too', () => {
+  const { runLeakGate } = require('../lib/leak-gate');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'party-threads-leak-'));
+  const vault = path.join(root, 'vault');
+  const notes = { '_Campaign/Campaign Overview.md': PARTY_OVERVIEW.replace('- Hand-written, no tail', '- The lamplighter on the north bank was paid in salt'),
+    'Characters/PCs/Corwin_Hale.md': pc('Corwin_Hale') };
+  for (const [rel, text] of Object.entries(notes)) {
+    fs.mkdirSync(path.dirname(path.join(vault, rel)), { recursive: true });
+    fs.writeFileSync(path.join(vault, rel), text);
+  }
+  writePublishList(vault, { publishing: ['Characters/PCs/Corwin_Hale.md'], excluded: ['_Campaign/Campaign Overview.md'] });
+  const siteDir = path.join(root, 'campaign');
+  fs.mkdirSync(siteDir);
+  writeNewConfig(vault, { version: 1, player_site: { folder: siteDir, folder_map: { 'Characters/PCs': 'characters/pcs' } } });
+  const configPath = path.join(siteDir, 'vault.config.json');
+  fs.writeFileSync(configPath, JSON.stringify({ vaultPath: vault }));
+  const real = console.log; const warn = console.warn; console.log = () => {}; console.warn = () => {};
+  try { build({ configPath }); } finally { console.log = real; console.warn = warn; }
+  const out = path.join(siteDir, 'docs');
+  assert.match(fs.readFileSync(path.join(out, 'characters', 'pcs', 'index.html'), 'utf8'), /paid in salt/);
+  const found = runLeakGate({ configPath, outputDir: out }).findings;
+  assert.deepEqual(found.filter((f) => /salt|bell|ledger|ferrywoman/i.test(String(f.text))), []);
 });

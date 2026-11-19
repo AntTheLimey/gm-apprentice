@@ -10,6 +10,16 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 ---
 
 
+## [1.12.94] — 2026-11-19
+
+### Added
+
+- The party page lists the open threads: the party's, newest first, with when each began and who it involves, then each PC's own.
+
+### Changed
+
+- A `section --replace` or `--lead --replace` with the text already there reports UNCHANGED (#784).
+
 ## [1.12.93] — 2026-11-19
 
 ### Added

@@ -14,6 +14,11 @@ The generated site has one page per entity in your vault:
   status, and body content. Player character pages use collapsible
   accordion sections so you can organize stats, skills, and equipment
   without overwhelming the reader.
+- **The party page** — the PCs' index: the Party Status board, the
+  open threads (the Campaign Overview's shared threads, newest first,
+  each with when it began and who it involves, then each PC's own from
+  their Current Status), a card for each PC in play and a list of those
+  out of play.
 - **Locations** — Location pages with a parent-location breadcrumb so
   readers can orient themselves geographically.
 - **Factions and organizations** — Faction pages whose Connections list
