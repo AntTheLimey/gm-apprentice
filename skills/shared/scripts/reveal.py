@@ -33,9 +33,10 @@ refused; `--released` still logs.
 
 `--unmask` makes a disguised NPC's true self its own, once the GM releases
 the unmasking: `unmasked_name` goes into `aliases` (unless it is there
-already) and `unmasked_portrait` into `portrait`, each then emptied; in
-Playing Them, `**Speech:**` becomes `**Disguise:**` and `**Unmasked:**`
-becomes `**Speech:**`. Each is logged as its own entry,
+already, in the list style the note uses) and `unmasked_portrait` into
+`portrait`, each then emptied; when Playing Them has an `**Unmasked:**`
+line, `**Speech:**` becomes `**Disguise:**` and `**Unmasked:**` becomes
+`**Speech:**` (without one it is left alone: the same voice). Each is logged as its own entry,
 `{"kind": "unmask", "path", "name", "old_portrait", "session", "date"}`,
 so the disguise's face is kept; an entry without `kind` is a session's
 reveal. A note with no `unmasked_name` is refused with an ERROR row.
@@ -233,6 +234,45 @@ def _frontmatter_edit(vault: Path, rel: str, *, clear: bool,
     return "---" + eol + eol.join(fm) + eol + "---" + eol + "".join(lines[end + 1:]), None
 
 
+ALIASES_KEY_RE = re.compile(r"""^["']?aliases["']?[ \t]*:""")
+FLOW_LIST_RE = re.compile(r"^(?P<open>[ \t]*\[)(?P<items>.*?)\](?P<rest>[ \t]+#.*)?[ \t]*$")
+
+
+def _add_alias(head: list[str], name: str) -> None:
+    """Add `name` to `aliases` in the list style the note already uses:
+    a block list gets an item in its own indent after its last item, a
+    flow list stays flow; every other line, comments too, is kept. A
+    lone scalar, an empty key or none becomes a block list."""
+    item = yaml_scalar(name)
+    at = next((i for i, ln in enumerate(head) if ALIASES_KEY_RE.match(ln)), None)
+    if at is None:
+        head.extend(["aliases:", f"  - {item}"])
+        return
+    key, _, value = head[at].partition(":")
+    flow = FLOW_LIST_RE.match(value)
+    if flow:
+        items = flow["items"].strip()
+        head[at] = (f"{key}:{flow['open']}{items + ', ' if items else ''}{item}]"
+                    f"{flow['rest'] or ''}")
+        return
+    end = at + 1
+    while end < len(head) and (not head[end].strip() or head[end][:1].isspace()):
+        end += 1
+    owned = head[at + 1:end]
+    last = max((i for i, ln in enumerate(owned) if ln.lstrip().startswith("-")), default=None)
+    if last is not None:
+        line = owned[last]
+        head.insert(at + 1 + last + 1, f"{line[:len(line) - len(line.lstrip())]}- {item}")
+        return
+    if scalar_value(value).lower() not in EMPTY_VALUES:
+        # `aliases: Gilt` is one alias: kept, as written, as the list's first item.
+        head[at:at + 1] = [f"{key}:", f"  - {value.strip()}"]
+        at += 1
+    elif value.strip() and not value.strip().startswith("#"):
+        head[at] = f"{key}:"    # `aliases: ""` or `~`: an empty value, now a list
+    head.insert(at + 1, f"  - {item}")
+
+
 def _unmask_edit(vault: Path, rel: str) -> tuple[str | None, dict[str, Any] | None, str]:
     """(new text, the log entry less its session, what changes), or
     (None, None, why not)."""
@@ -266,8 +306,10 @@ def _unmask_edit(vault: Path, rel: str) -> tuple[str | None, dict[str, Any] | No
     aliases = [raw] if isinstance(raw, str) and raw.strip() else \
         [a for a in raw if isinstance(a, str)] if isinstance(raw, list) else []
     if _nfc(name).casefold() not in {_nfc(a).strip().casefold() for a in aliases}:
-        set_block(head, "aliases", "[" + ", ".join(yaml_scalar(a) for a in [*aliases, name]) + "]")
+        _add_alias(head, name)
         changes.append(f"aliases + {name}")
+    else:
+        changes.append(f"aliases already hold {name}")
     set_block(head, "unmasked_name", '""')
     old_face = None
     if face:
@@ -276,19 +318,25 @@ def _unmask_edit(vault: Path, rel: str) -> tuple[str | None, dict[str, Any] | No
         set_block(head, "portrait", yaml_scalar(face))
         set_block(head, "unmasked_portrait", '""')
         changes.append(f"portrait {face}")
-    # Playing Them: the first Speech becomes Disguise and the first Unmasked becomes Speech,
-    # each line keeping its own ending.
+    # Playing Them, only when it has an Unmasked line (without one the true self
+    # speaks as the disguise does): the first Speech becomes Disguise and the first
+    # Unmasked becomes Speech, each line keeping its own ending.
     body = lines[end + 1:]
+    section: list[int] = []
     inside = False
-    renamed = {"Speech": False, "Unmasked": False}
     for i, line in enumerate(body):
         if PLAYING_THEM_RE.match(line.rstrip("\r\n")):
             inside = True
             continue
         if inside and HEADING_RE.match(line):
             inside = False
-        if not inside:
-            continue
+        if inside:
+            section.append(i)
+    if not any(LABEL_RE["Unmasked"].match(body[i]) for i in section):
+        section = []
+    renamed = {"Speech": False, "Unmasked": False}
+    for i in section:
+        line = body[i]
         for old_label, new_label in (("Speech", "Disguise"), ("Unmasked", "Speech")):
             m = LABEL_RE[old_label].match(line)
             if m and not renamed[old_label]:

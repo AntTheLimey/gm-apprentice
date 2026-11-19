@@ -715,8 +715,11 @@ class UnmaskTests(unittest.TestCase):
         self.assertEqual(fm["gm_aliases"], ["Sister Hesper"])
         self.assertTrue(fm["voice"].startswith("Since the unmasking"))
         text = (self.root / "NPCs/Wick.md").read_text(encoding="utf-8")
-        self.assertIn("- **Disguise:** loud, quick to complain.\n", text)
-        self.assertNotIn("**Speech:**", text, "no Unmasked line takes Speech's place")
+        self.assertIn("- **Speech:** loud, quick to complain.\n", text,
+                      "no Unmasked line: the same voice, Playing Them left alone")
+        self.assertNotIn("**Disguise:**", text)
+        self.assertNotIn("Speech is now Disguise", out)
+        self.assertIn("aliases already hold hesper", out)
         entry = next(e for e in log_of(self.root)["entries"] if e.get("kind") == "unmask")
         self.assertEqual(entry["name"], "hesper")
         self.assertIsNone(entry["old_portrait"])
@@ -758,6 +761,39 @@ class UnmaskTests(unittest.TestCase):
         code, out, _ = run(self.root, "--unmask", MASK, "--write")
         self.assertEqual(code, 0, out)
         self.assertEqual(self.fm(MASK)["aliases"], ["Pedlar Jack", "Captain Rook"])
+
+    def _aliases_written_as(self, before: str) -> str:
+        (self.root / MASK).write_text(MASKED.replace('aliases: ["The Pedlar"]\n', before),
+                                      encoding="utf-8")
+        code, out, _ = run(self.root, "--unmask", MASK, "--write")
+        self.assertEqual(code, 0, out)
+        return (self.root / MASK).read_text(encoding="utf-8")
+
+    def test_unmask_adds_to_a_block_list_in_its_own_indent_keeping_comments(self) -> None:
+        text = self._aliases_written_as(
+            "aliases:   # names the PCs use\n    - \"The Pedlar\"  # market name\n"
+            "    # an old one, struck\n    - Ribbon Man\nportrait_note: x\n")
+        self.assertIn("aliases:   # names the PCs use\n    - \"The Pedlar\"  # market name\n"
+                      "    # an old one, struck\n    - Ribbon Man\n    - \"Captain Rook\"\n"
+                      "portrait_note: x\n", text)
+        self.assertEqual(self.fm(MASK)["aliases"], ["The Pedlar", "Ribbon Man", "Captain Rook"])
+
+    def test_unmask_keeps_a_flow_list_flow(self) -> None:
+        text = self._aliases_written_as('aliases: ["The Pedlar", "a]b"]  # see [notes]\n')
+        self.assertIn('aliases: ["The Pedlar", "a]b", "Captain Rook"]  # see [notes]\n', text)
+        text = self._aliases_written_as("aliases: []\n")
+        self.assertIn('aliases: ["Captain Rook"]\n', text)
+
+    def test_unmask_with_no_aliases_key_writes_a_block_list(self) -> None:
+        for before in ("", "aliases:\n", 'aliases: ""\n', "aliases: ~  # none yet\n"):
+            text = self._aliases_written_as(before)
+            self.assertEqual(self.fm(MASK)["aliases"], ["Captain Rook"], before)
+            self.assertIn('  - "Captain Rook"\n', text, before)
+
+    def test_unmask_renames_speech_only_with_an_unmasked_line(self) -> None:
+        code, out, _ = run(self.root, "--unmask", MASK, "--write")
+        self.assertEqual(code, 0, out)
+        self.assertIn("Speech is now Disguise; Unmasked is now Speech", out)
 
     def test_unmask_keeps_crlf(self) -> None:
         (self.root / MASK).write_bytes(MASKED.replace("\n", "\r\n").encode("utf-8"))
