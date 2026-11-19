@@ -378,7 +378,9 @@ class SourceTests(FillCase):
 
     def test_every_shipped_creature_writes_a_block_the_reader_can_use(self):
         srd = stat_fill.load_srd(stat_fill.SYSTEMS_DIR)
-        self.assertGreater(len(srd), 200)
+        self.assertEqual(len(srd), 329)
+        self.assertEqual(srd["bandit"].size, "M/S")
+        self.assertEqual(srd["imp"].size, "T")
         for c in srd.values():
             with self.subTest(c.name):
                 block = "\n".join(stat_fill.stats_block(c))

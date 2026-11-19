@@ -4,12 +4,12 @@
 
 **Format:** Enriched stat blocks — see Response Templates in monsters.md (index)
 
-**Size codes:** T=Tiny, S=Small, M=Medium, L=Large, H=Huge, G=Gargantuan
+**Size codes:** T=Tiny, S=Small, M=Medium, L=Large, H=Huge, G=Gargantuan; M/S=Medium or Small
 
 ## CR 17 (18,000 XP)
 
 **Adult Gold Dragon** | Dragon | H | CR 17 (18,000 XP)
-AC 19 | HP 243 (18d12+126) | Init +6 (16) | Speed 40 ft., Fly 80 ft., Swim 40 ft.
+AC 19 | HP 243 (18d12+126) | Init +14 (24) | Speed 40 ft., Fly 80 ft., Swim 40 ft.
 STR 27 DEX 14 CON 25 INT 16 WIS 15 CHA 24
 Saves: DEX +8, WIS +8 | Senses: blindsight 60 ft., darkvision 120 ft.
 Immunities: Fire
@@ -22,7 +22,7 @@ Multiattack: 3× Rend
 Spellcasting (CHA, DC 21): At Will — Detect Magic, Guiding Bolt, Shapechange
 
 **Adult Red Dragon** | Dragon | H | CR 17 (18,000 XP)
-AC 19 | HP 256 (19d12+133) | Init +4 (14) | Speed 40 ft., Climb 40 ft., Fly 80 ft.
+AC 19 | HP 256 (19d12+133) | Init +12 (22) | Speed 40 ft., Climb 40 ft., Fly 80 ft.
 STR 27 DEX 10 CON 25 INT 16 WIS 13 CHA 23
 Saves: DEX +6, WIS +7 | Senses: blindsight 60 ft., darkvision 120 ft.
 Immunities: Fire
@@ -44,7 +44,7 @@ Multiattack: 3× Bite
 - Steam Breath (Recharge 5-6): 60-ft cone, DC 19 CON, 16d6 fire (half)
 
 **Sphinx of Valor** | Celestial | L | CR 17 (18,000 XP)
-AC 17 | HP 199 (19d10+95) | Init +4 (14) | Speed 40 ft., Fly 60 ft.
+AC 17 | HP 199 (19d10+95) | Init +12 (22) | Speed 40 ft., Fly 60 ft.
 STR 22 DEX 10 CON 20 INT 16 WIS 23 CHA 18
 Saves: DEX +6, CON +11, INT +9, WIS +12 | Senses: truesight 120 ft.
 Resistances: Necrotic, Radiant | Immunities: Psychic; Charmed, Frightened
@@ -76,7 +76,7 @@ Multiattack: one Flame Whip + one Lightning Blade
 ## CR 20 (25,000 XP)
 
 **Ancient Brass Dragon** | Dragon | G | CR 20 (25,000 XP)
-AC 20 | HP 332 (19d20+133) | Init +4 (14) | Speed 40 ft., Burrow 40 ft., Fly 80 ft.
+AC 20 | HP 332 (19d20+133) | Init +12 (22) | Speed 40 ft., Burrow 40 ft., Fly 80 ft.
 STR 27 DEX 10 CON 25 INT 16 WIS 15 CHA 22
 Saves: DEX +6, WIS +8 | Senses: blindsight 60 ft., darkvision 120 ft.
 Immunities: Fire
@@ -89,7 +89,7 @@ Multiattack: 3× Rend
 Spellcasting (CHA, DC 20): At Will — Detect Magic, Minor Illusion, Scorching Ray, Shapechange
 
 **Ancient White Dragon** | Dragon | G | CR 20 (25,000 XP)
-AC 20 | HP 333 (18d20+144) | Init +4 (14) | Speed 40 ft., Burrow 40 ft., Fly 80 ft., Swim 40 ft.
+AC 20 | HP 333 (18d20+144) | Init +12 (22) | Speed 40 ft., Burrow 40 ft., Fly 80 ft., Swim 40 ft.
 STR 26 DEX 10 CON 26 INT 10 WIS 13 CHA 18
 Saves: DEX +6, WIS +7 | Senses: blindsight 60 ft., darkvision 120 ft.
 Immunities: Cold
@@ -118,7 +118,7 @@ Multiattack: The pit fiend makes one Bite, 2× Devilish Claw, + one Fiery Mace
 ## CR 21 (33,000 XP)
 
 **Ancient Black Dragon** | Dragon | G | CR 21 (33,000 XP)
-AC 22 | HP 367 (21d20+147) | Init +6 (16) | Speed 40 ft., Fly 80 ft., Swim 40 ft.
+AC 22 | HP 367 (21d20+147) | Init +16 (26) | Speed 40 ft., Fly 80 ft., Swim 40 ft.
 STR 27 DEX 14 CON 25 INT 16 WIS 15 CHA 22
 Saves: DEX +9, WIS +9 | Senses: blindsight 60 ft., darkvision 120 ft.
 Immunities: Acid
@@ -130,7 +130,7 @@ Multiattack: 3× Rend
 Spellcasting (CHA, DC 21): At Will — Detect Magic, Fear, Acid Arrow
 
 **Ancient Copper Dragon** | Dragon | G | CR 21 (33,000 XP)
-AC 21 | HP 367 (21d20+147) | Init +5 (15) | Speed 40 ft., Climb 40 ft., Fly 80 ft.
+AC 21 | HP 367 (21d20+147) | Init +15 (25) | Speed 40 ft., Climb 40 ft., Fly 80 ft.
 STR 27 DEX 12 CON 25 INT 20 WIS 17 CHA 22
 Saves: DEX +8, WIS +10 | Senses: blindsight 60 ft., darkvision 120 ft.
 Immunities: Acid
@@ -143,7 +143,7 @@ Multiattack: 3× Rend
 Spellcasting (CHA, DC 21): At Will — Detect Magic, Mind Spike, Minor Illusion, Shapechange
 
 **Lich** | Undead | M | CR 21 (33,000 XP)
-AC 20 | HP 315 (42d8+126) | Init +7 (17) | Speed 30 ft.
+AC 20 | HP 315 (42d8+126) | Init +17 (27) | Speed 30 ft.
 STR 11 DEX 16 CON 16 INT 21 WIS 14 CHA 16
 Saves: DEX +10, CON +10, INT +12, WIS +9 | Senses: truesight 120 ft.
 Resistances: Cold, Lightning | Immunities: Necrotic, Poison; Charmed, Exhaustion, Frightened, Paralyzed, Poisoned
@@ -175,7 +175,7 @@ Spellcasting (CHA, DC 25): At Will — Detect Evil and Good
 ## CR 22 (41,000 XP)
 
 **Ancient Bronze Dragon** | Dragon | G | CR 22 (41,000 XP)
-AC 22 | HP 444 (24d20+192) | Init +4 (14) | Speed 40 ft., Fly 80 ft., Swim 40 ft.
+AC 22 | HP 444 (24d20+192) | Init +14 (24) | Speed 40 ft., Fly 80 ft., Swim 40 ft.
 STR 29 DEX 10 CON 27 INT 18 WIS 17 CHA 25
 Saves: DEX +7, WIS +10 | Senses: blindsight 60 ft., darkvision 120 ft.
 Immunities: Lightning
@@ -188,7 +188,7 @@ Multiattack: 3× Rend
 Spellcasting (CHA, DC 22): At Will — Detect Magic, Guiding Bolt, Shapechange, Speak with Animals
 
 **Ancient Green Dragon** | Dragon | G | CR 22 (41,000 XP)
-AC 21 | HP 402 (23d20+161) | Init +5 (15) | Speed 40 ft., Fly 80 ft., Swim 40 ft.
+AC 21 | HP 402 (23d20+161) | Init +15 (25) | Speed 40 ft., Fly 80 ft., Swim 40 ft.
 STR 27 DEX 12 CON 25 INT 20 WIS 17 CHA 22
 Saves: DEX +8, WIS +10 | Senses: blindsight 60 ft., darkvision 120 ft.
 Immunities: Poison; Poisoned
@@ -203,7 +203,7 @@ Spellcasting (CHA, DC 21): At Will — Detect Magic, Mind Spike
 ## CR 23 (50,000 XP)
 
 **Ancient Blue Dragon** | Dragon | G | CR 23 (50,000 XP)
-AC 22 | HP 481 (26d20+208) | Init +4 (14) | Speed 40 ft., Burrow 40 ft., Fly 80 ft.
+AC 22 | HP 481 (26d20+208) | Init +14 (24) | Speed 40 ft., Burrow 40 ft., Fly 80 ft.
 STR 29 DEX 10 CON 27 INT 18 WIS 17 CHA 25
 Saves: DEX +7, WIS +10 | Senses: blindsight 60 ft., darkvision 120 ft.
 Immunities: Lightning
@@ -215,7 +215,7 @@ Multiattack: 3× Rend
 Spellcasting (CHA, DC 22): At Will — Detect Magic, Invisibility, Mage Hand, Shatter
 
 **Ancient Silver Dragon** | Dragon | G | CR 23 (50,000 XP)
-AC 22 | HP 468 (24d20+216) | Init +4 (14) | Speed 40 ft., Fly 80 ft.
+AC 22 | HP 468 (24d20+216) | Init +14 (24) | Speed 40 ft., Fly 80 ft.
 STR 30 DEX 10 CON 29 INT 18 WIS 15 CHA 26
 Saves: DEX +7, WIS +9 | Senses: blindsight 60 ft., darkvision 120 ft.
 Immunities: Cold
@@ -228,7 +228,7 @@ Multiattack: 3× Rend
 Spellcasting (CHA, DC 23): At Will — Detect Magic, Hold Monster, Ice Knife, Shapechange
 
 **Kraken** | Monstrosity | G | CR 23 (50,000 XP)
-AC 18 | HP 481 (26d20+208) | Init +4 (14) | Speed 30 ft., Swim 120 ft.
+AC 18 | HP 481 (26d20+208) | Init +14 (24) | Speed 30 ft., Swim 120 ft.
 STR 30 DEX 11 CON 26 INT 22 WIS 18 CHA 20
 Saves: STR +17, DEX +7, CON +15, WIS +11 | Senses: truesight 120 ft.
 Immunities: Cold, Lightning; Frightened, Grappled, Paralyzed, Restrained
@@ -245,7 +245,7 @@ Multiattack: 2× Tentacle + Fling, Lightning Strike, or Swallow
 ## CR 24 (62,000 XP)
 
 **Ancient Gold Dragon** | Dragon | G | CR 24 (62,000 XP)
-AC 22 | HP 546 (28d20+252) | Init +6 (16) | Speed 40 ft., Fly 80 ft., Swim 40 ft.
+AC 22 | HP 546 (28d20+252) | Init +16 (26) | Speed 40 ft., Fly 80 ft., Swim 40 ft.
 STR 30 DEX 14 CON 29 INT 18 WIS 17 CHA 28
 Saves: DEX +9, WIS +10 | Senses: blindsight 60 ft., darkvision 120 ft.
 Immunities: Fire
@@ -258,7 +258,7 @@ Multiattack: 3× Rend
 Spellcasting (CHA, DC 24): At Will — Detect Magic, Guiding Bolt, Shapechange
 
 **Ancient Red Dragon** | Dragon | G | CR 24 (62,000 XP)
-AC 22 | HP 507 (26d20+234) | Init +4 (14) | Speed 40 ft., Climb 40 ft., Fly 80 ft.
+AC 22 | HP 507 (26d20+234) | Init +14 (24) | Speed 40 ft., Climb 40 ft., Fly 80 ft.
 STR 30 DEX 10 CON 29 INT 18 WIS 15 CHA 27
 Saves: DEX +7, WIS +9 | Senses: blindsight 60 ft., darkvision 120 ft.
 Immunities: Fire

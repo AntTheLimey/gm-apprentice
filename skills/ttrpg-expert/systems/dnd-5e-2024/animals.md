@@ -4,7 +4,7 @@
 
 **Format:** Enriched stat blocks, as in the monsters files
 
-**Size codes:** T=Tiny, S=Small, M=Medium, L=Large, H=Huge, G=Gargantuan
+**Size codes:** T=Tiny, S=Small, M=Medium, L=Large, H=Huge, G=Gargantuan; M/S=Medium or Small
 
 ## CR 0 (0 XP)
 
@@ -15,27 +15,27 @@ Senses: Passive Perception 11
 Pack Tactics
 - Bite: +1, 1d4-1 piercing
 
-**Bat** | Beast | S | CR 0 (0 XP)
+**Bat** | Beast | T | CR 0 (0 XP)
 AC 12 | HP 1 (1d4-1) | Init +2 (12) | Speed 5 ft., Fly 30 ft.
 STR 2 DEX 15 CON 8 INT 2 WIS 12 CHA 4
 Senses: blindsight 60 ft.
 - Bite: +4, 1 piercing
 
-**Badger** | Beast | S | CR 0 (0 XP)
+**Badger** | Beast | T | CR 0 (0 XP)
 AC 11 | HP 5 (1d4+3) | Init +0 (10) | Speed 20 ft., Burrow 5 ft.
 STR 10 DEX 11 CON 16 INT 2 WIS 12 CHA 5
 Senses: darkvision 30 ft.
 Resistances: Poison
 - Bite: +2, 1 piercing
 
-**Cat** | Beast | S | CR 0 (0 XP)
+**Cat** | Beast | T | CR 0 (0 XP)
 AC 12 | HP 2 (1d4) | Init +2 (12) | Speed 40 ft., Climb 40 ft.
 STR 3 DEX 15 CON 10 INT 3 WIS 12 CHA 7
 Saves: DEX +4 | Senses: darkvision 60 ft.
 Jumper
 - Scratch: +4, 1 slashing
 
-**Crab** | Beast | S | CR 0 (0 XP)
+**Crab** | Beast | T | CR 0 (0 XP)
 AC 11 | HP 3 (1d4+1) | Init +0 (10) | Speed 20 ft., Swim 20 ft.
 STR 6 DEX 11 CON 12 INT 1 WIS 8 CHA 2
 Senses: blindsight 30 ft.
@@ -54,7 +54,7 @@ STR 6 DEX 15 CON 12 INT 2 WIS 14 CHA 7
 Senses: Passive Perception 16
 - Talons: +4
 
-**Frog** | Beast | S | CR 0 (0 XP)
+**Frog** | Beast | T | CR 0 (0 XP)
 AC 11 | HP 1 (1d4-1) | Init +1 (11) | Speed 20 ft., Swim 20 ft.
 STR 1 DEX 13 CON 8 INT 1 WIS 8 CHA 3
 Senses: darkvision 30 ft.
@@ -74,7 +74,7 @@ STR 11 DEX 10 CON 11 INT 2 WIS 10 CHA 5
 Saves: STR +2 | Senses: darkvision 60 ft.
 - Ram: +2, 1 bludgeoning
 
-**Hawk** | Beast | S | CR 0 (0 XP)
+**Hawk** | Beast | T | CR 0 (0 XP)
 AC 13 | HP 1 (1d4-1) | Init +3 (13) | Speed 10 ft., Fly 60 ft.
 STR 5 DEX 16 CON 8 INT 2 WIS 14 CHA 6
 Senses: Passive Perception 16
@@ -93,51 +93,51 @@ STR 8 DEX 15 CON 11 INT 3 WIS 12 CHA 6
 Senses: darkvision 90 ft.
 - Bite: +1, 1d4-1 piercing
 
-**Lizard** | Beast | S | CR 0 (0 XP)
+**Lizard** | Beast | T | CR 0 (0 XP)
 AC 10 | HP 2 (1d4) | Init +0 (10) | Speed 20 ft., Climb 20 ft.
 STR 2 DEX 11 CON 10 INT 1 WIS 8 CHA 3
 Senses: darkvision 30 ft.
 Spider Climb
 - Bite: +2, 1 piercing
 
-**Owl** | Beast | S | CR 0 (0 XP)
+**Owl** | Beast | T | CR 0 (0 XP)
 AC 11 | HP 1 (1d4-1) | Init +1 (11) | Speed 5 ft., Fly 60 ft.
 STR 3 DEX 13 CON 8 INT 2 WIS 12 CHA 7
 Senses: darkvision 120 ft.
 Flyby
 - Talons: +3, 1 slashing
 
-**Piranha** | Beast | S | CR 0 (0 XP)
+**Piranha** | Beast | T | CR 0 (0 XP)
 AC 13 | HP 1 (1d4-1) | Init +3 (13) | Speed 5 ft., Swim 40 ft.
 STR 2 DEX 16 CON 9 INT 1 WIS 7 CHA 2
 Senses: darkvision 60 ft.
 - Bite: +5, 1 piercing
 
-**Rat** | Beast | S | CR 0 (0 XP)
+**Rat** | Beast | T | CR 0 (0 XP)
 AC 10 | HP 1 (1d4-1) | Init +0 (10) | Speed 20 ft., Climb 20 ft.
 STR 2 DEX 11 CON 9 INT 2 WIS 10 CHA 4
 Senses: darkvision 30 ft.
 Agile
 - Bite: +2, 1 piercing
 
-**Raven** | Beast | S | CR 0 (0 XP)
+**Raven** | Beast | T | CR 0 (0 XP)
 AC 12 | HP 2 (1d4) | Init +2 (12) | Speed 10 ft., Fly 50 ft.
 STR 2 DEX 14 CON 10 INT 5 WIS 13 CHA 6
 Senses: Passive Perception 13
 - Beak: +4, 1 piercing
 
-**Scorpion** | Beast | S | CR 0 (0 XP)
+**Scorpion** | Beast | T | CR 0 (0 XP)
 AC 11 | HP 1 (1d4-1) | Init +0 (10) | Speed 10 ft.
 STR 2 DEX 11 CON 8 INT 1 WIS 8 CHA 2
 Senses: blindsight 10 ft.
 - Sting: +2, 1 piercing + 1d6 poison
 
-**Seahorse** | Beast | S | CR 0 (0 XP)
+**Seahorse** | Beast | T | CR 0 (0 XP)
 AC 12 | HP 1 (1d4-1) | Init +1 (11) | Speed 5 ft., Swim 20 ft.
 STR 1 DEX 12 CON 8 INT 1 WIS 10 CHA 2
 Senses: Passive Perception 12
 
-**Spider** | Beast | S | CR 0 (0 XP)
+**Spider** | Beast | T | CR 0 (0 XP)
 AC 12 | HP 1 (1d4-1) | Init +2 (12) | Speed 20 ft., Climb 20 ft.
 STR 2 DEX 14 CON 8 INT 1 WIS 10 CHA 2
 Senses: darkvision 30 ft.
@@ -152,7 +152,7 @@ Senses: Passive Perception 13
 Pack Tactics
 - Beak: +2, 1d4 piercing
 
-**Weasel** | Beast | S | CR 0 (0 XP)
+**Weasel** | Beast | T | CR 0 (0 XP)
 AC 13 | HP 1 (1d4-1) | Init +3 (13) | Speed 30 ft., Climb 30 ft.
 STR 3 DEX 16 CON 8 INT 2 WIS 12 CHA 3
 Senses: darkvision 60 ft.
@@ -174,7 +174,7 @@ STR 15 DEX 8 CON 17 INT 2 WIS 11 CHA 5
 Saves: CON +5 | Senses: darkvision 60 ft.
 - Bite: +4, 1d4+2 bludgeoning
 
-**Flying Snake** | Monstrosity | S | CR 1/8 (25 XP)
+**Flying Snake** | Monstrosity | T | CR 1/8 (25 XP)
 AC 14 | HP 5 (2d4) | Init +2 (12) | Speed 30 ft., Fly 60 ft., Swim 30 ft.
 STR 4 DEX 15 CON 11 INT 2 WIS 12 CHA 5
 Senses: blindsight 10 ft.
@@ -219,7 +219,7 @@ STR 15 DEX 10 CON 13 INT 2 WIS 11 CHA 7
 Saves: STR +4 | Senses: Passive Perception 10
 - Hooves: +4, 1d4+2 bludgeoning
 
-**Venomous Snake** | Beast | S | CR 1/8 (25 XP)
+**Venomous Snake** | Beast | T | CR 1/8 (25 XP)
 AC 12 | HP 5 (2d4) | Init +2 (12) | Speed 30 ft., Swim 30 ft.
 STR 2 DEX 15 CON 11 INT 1 WIS 10 CHA 3
 Senses: blindsight 10 ft.
@@ -411,7 +411,7 @@ Pack Tactics
 - Bite: +4, 2d4+2 piercing
 
 **Swarm of Insects** | Beast | M | CR 1/2 (100 XP)
-AC 11 | HP 19 (3d8+6) | Init +1 (11) | Speed 20 ft., Climb or Fly 20 ft.
+AC 11 | HP 19 (3d8+6) | Init +1 (11) | Speed 20 ft., Climb or Fly 20 ft. (GM's choice)
 STR 3 DEX 13 CON 14 INT 1 WIS 7 CHA 1
 Senses: blindsight 30 ft.
 Resistances: Bludgeoning, Piercing, Slashing | Immunities: Charmed, Frightened, Grappled, Paralyzed, Petrified, Prone, Restrained, Stunned

@@ -5,7 +5,7 @@
 **Format:** Enriched stat blocks — see Response Templates in monsters.md (index)
 **Ability scores:** STR/DEX/CON/INT/WIS/CHA
 
-**Size codes:** T=Tiny, S=Small, M=Medium, L=Large, H=Huge, G=Gargantuan
+**Size codes:** T=Tiny, S=Small, M=Medium, L=Large, H=Huge, G=Gargantuan; M/S=Medium or Small
 
 ## CR 5 (1,800 XP)
 
@@ -64,7 +64,7 @@ Magic Resistance (advantage on saves vs spells)
 Multiattack: 2× Slam
 - Slam: +7, 2d8+4 bludgeoning + 1d8 lightning
 
-**Gladiator** | Humanoid | S | CR 5 (1,800 XP)
+**Gladiator** | Humanoid | M/S | CR 5 (1,800 XP)
 AC 16 | HP 112 (15d8+45) | Init +5 (15) | Speed 30 ft.
 18/15/16/10/12/15
 Saves: STR +7, DEX +5, CON +6, WIS +4 | Senses: Passive Perception 11
@@ -164,7 +164,7 @@ Multiattack: one Hooves + one Radiant Horn
 - Radiant Horn: +7, 1d10+4 radiant
 Spellcasting (CHA, DC 14)
 
-**Vampire Spawn** | Undead | S | CR 5 (1,800 XP)
+**Vampire Spawn** | Undead | M/S | CR 5 (1,800 XP)
 AC 16 | HP 90 (12d8+36) | Init +3 (13) | Speed 30 ft.
 16/16/16/11/10/12
 Saves: DEX +6, WIS +3 | Senses: darkvision 60 ft.
@@ -183,8 +183,8 @@ Multiattack: 2× Slam
 - Slam: +7, 2d8+4 bludgeoning
 - Whelm (Recharge 4-6): the elemental's space, DC 15 STR, 4d8+4 bludgeoning (half)
 
-**Werebear** | Monstrosity | S | CR 5 (1,800 XP)
-AC 15 | HP 135 (18d8+54) | Init +3 (13) | Speed 30 ft., 40 ft. (bear form), Climb 30 ft. (bear form only)
+**Werebear** | Monstrosity | M/S | CR 5 (1,800 XP)
+AC 15 | HP 135 (18d8+54) | Init +3 (13) | Speed 30 ft., 40 ft. (bear form only), Climb 30 ft. (bear form only)
 19/10/17/11/12/12
 Senses: darkvision 60 ft.
 Multiattack: 2× (Handaxe/Rend)
@@ -192,7 +192,7 @@ Multiattack: 2× (Handaxe/Rend)
 - Handaxe (Humanoid or Hybrid Form Only): +7, 3d6+4 slashing
 - Rend (Bear or Hybrid Form Only): +7, 2d8+4 slashing
 
-**Wraith** | Undead | S | CR 5 (1,800 XP)
+**Wraith** | Undead | M/S | CR 5 (1,800 XP)
 AC 13 | HP 67 (9d8+27) | Init +3 (13) | Speed 5 ft., Fly 60 ft. (hover)
 6/16/16/12/14/15
 Senses: darkvision 60 ft.
@@ -232,7 +232,7 @@ Multiattack: 3× (Foreleg/Poison Burst)
 - Poison Burst: +6, 3d6+3 poison
 
 **Invisible Stalker** | Elemental | L | CR 6 (2,300 XP)
-AC 14 | HP 97 (13d10+26) | Init +7 (17) | Speed 50 ft., Fly 50 ft. (hover)
+AC 14 | HP 97 (13d10+26) | Init +7 (22) | Speed 50 ft., Fly 50 ft. (hover)
 16/19/14/10/15/11
 Senses: darkvision 60 ft.
 Resistances: Bludgeoning, Piercing, Slashing | Immunities: Poison; Exhaustion, Grappled, Paralyzed, Petrified, Poisoned, Prone, Restrained, Unconscious
@@ -240,7 +240,7 @@ Multiattack: 3× Wind Swipe
 - Wind Swipe: +7, 2d6+4 force
 - Vortex: one Large or smaller creature in the stalker's space, DC 14 CON, 1d8+3 thunder
 
-**Mage** | Humanoid | S | CR 6 (2,300 XP)
+**Mage** | Humanoid | M/S | CR 6 (2,300 XP)
 AC 15 | HP 81 (18d8) | Init +2 (12) | Speed 30 ft.
 9/14/11/17/12/11
 Saves: INT +6, WIS +4 | Senses: Passive Perception 14
@@ -257,7 +257,7 @@ Multiattack: 2× Claw + one Snake Hair, or it makes 3× Poison Ray
 - Snake Hair: +6, 1d4+3 piercing + 4d6 poison
 - Poison Ray: +5, 2d8+2 poison
 
-**Pirate Captain** | Humanoid | S | CR 6 (2,300 XP)
+**Pirate Captain** | Humanoid | M/S | CR 6 (2,300 XP)
 AC 17 | HP 84 (13d8+26) | Init +7 (17) | Speed 30 ft.
 10/18/14/10/14/17
 Saves: STR +3, DEX +7, WIS +5, CHA +6 | Senses: Passive Perception 15
@@ -356,7 +356,7 @@ Multiattack: 3× Rend
 
 ## CR 8 (3,900 XP)
 
-**Assassin** | Humanoid | S | CR 8 (3,900 XP)
+**Assassin** | Humanoid | M/S | CR 8 (3,900 XP)
 AC 16 | HP 97 (15d8+30) | Init +10 (20) | Speed 30 ft.
 11/18/14/16/11/10
 Saves: DEX +7, INT +6 | Senses: Passive Perception 16
@@ -453,7 +453,7 @@ Multiattack: 2× Claw + one Infernal Sting
 - Infernal Sting: +8, reach 10 ft., 2d10+4 piercing + 4d8 poison
 
 **Clay Golem** | Construct | L | CR 9 (5,000 XP)
-AC 14 | HP 123 (13d10+52) | Init +3 (13) | Speed 20 ft.
+AC 14 | HP 123 (13d10+52) | Init +3 (13) | Speed 30 ft.
 20/9/18/3/8/1
 Senses: darkvision 60 ft.
 Resistances: Bludgeoning, Piercing, Slashing | Immunities: Acid, Poison, Psychic; Charmed, Exhaustion, Frightened, Paralyzed, Petrified, Poisoned
@@ -523,7 +523,7 @@ Multiattack: 3× Rend
 ## CR 10 (5,900 XP)
 
 **Aboleth** | Aberration | L | CR 10 (5,900 XP)
-AC 17 | HP 150 (20d10+40) | Init +3 (13) | Speed 10 ft., Swim 40 ft.
+AC 17 | HP 150 (20d10+40) | Init +7 (17) | Speed 10 ft., Swim 40 ft.
 21/9/15/18/15/18
 Saves: DEX +3, CON +6, INT +8, WIS +6 | Senses: darkvision 120 ft.
 Legendary Resistance (3/Day)

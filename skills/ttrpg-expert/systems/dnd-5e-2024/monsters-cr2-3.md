@@ -4,7 +4,7 @@
 
 **Format:** Enriched stat blocks — see Response Templates in monsters.md (index)
 
-**Size codes:** T=Tiny, S=Small, M=Medium, L=Large, H=Huge, G=Gargantuan
+**Size codes:** T=Tiny, S=Small, M=Medium, L=Large, H=Huge, G=Gargantuan; M/S=Medium or Small
 
 ## CR 2 (450 XP)
 
@@ -38,7 +38,7 @@ Immunities: Fire, Poison; Poisoned
 Fire Aura
 - Burning Hammer: +5, 1d10+3 bludgeoning + 1d6 fire
 
-**Bandit Captain** | Humanoid | S | CR 2 (450 XP)
+**Bandit Captain** | Humanoid | M/S | CR 2 (450 XP)
 AC 15 | HP 52 (8d8+16) | Init +3 (13) | Speed 30 ft.
 STR 15 DEX 16 CON 14 INT 14 WIS 11 CHA 14
 Saves: STR +4, DEX +5, WIS +2 | Senses: Passive Perception 10
@@ -46,7 +46,7 @@ Multiattack: 2× (Scimitar and Pistol)
 - Scimitar: +5, 1d6+3 slashing
 - Pistol: +5, 1d10+3 piercing
 
-**Berserker** | Humanoid | S | CR 2 (450 XP)
+**Berserker** | Humanoid | M/S | CR 2 (450 XP)
 AC 13 | HP 67 (9d8+27) | Init +1 (11) | Speed 30 ft.
 STR 16 DEX 12 CON 17 INT 9 WIS 11 CHA 9
 Senses: Passive Perception 10
@@ -81,14 +81,14 @@ Multiattack: 2× (Pike/Longbow)
 - Longbow: +4, 1d8+2 piercing
 - [B] Trampling Charge (Recharge 5-6): 4, DC 1 STR, 7 (1d6 + 4) Bludgeoning damage, and the target has the Prone condition
 
-**Cultist Fanatic** | Humanoid | S | CR 2 (450 XP)
+**Cultist Fanatic** | Humanoid | M/S | CR 2 (450 XP)
 AC 13 | HP 44 (8d8+8) | Init +2 (12) | Speed 30 ft.
 STR 11 DEX 14 CON 12 INT 10 WIS 14 CHA 13
 Saves: WIS +4 | Senses: Passive Perception 12
 - Pact Blade: +4, 1d8+2 slashing + 2d6 necrotic
 Spellcasting (WIS, DC 12): At Will — Light, Thaumaturgy; 1/day — Hold Person
 
-**Druid** | Humanoid | S | CR 2 (450 XP)
+**Druid** | Humanoid | M/S | CR 2 (450 XP)
 AC 13 | HP 44 (8d8+8) | Init +1 (11) | Speed 30 ft.
 STR 10 DEX 12 CON 13 INT 12 WIS 16 CHA 11
 Senses: Passive Perception 15
@@ -225,7 +225,7 @@ STR 18 DEX 15 CON 16 INT 10 WIS 15 CHA 13
 Saves: DEX +4, CON +5, WIS +4, CHA +3 | Senses: Passive Perception 16
 - Hooves: +6, 1d6+4 bludgeoning + 2d4 radiant
 
-**Priest** | Humanoid | S | CR 2 (450 XP)
+**Priest** | Humanoid | M/S | CR 2 (450 XP)
 AC 13 | HP 38 (7d8+7) | Init +0 (10) | Speed 30 ft.
 STR 16 DEX 10 CON 12 INT 13 WIS 16 CHA 13
 Senses: Passive Perception 15
@@ -253,7 +253,7 @@ Multiattack: 2× Rend
 - Cold Breath (Recharge 5-6): 15-ft cone, DC 13 CON, 4d8 cold (half)
 - Paralyzing Breath: 15-ft cone, DC 13 CON, 1st: Incapacitated; 2nd: Paralyzed
 
-**Wererat** | Monstrosity | S | CR 2 (450 XP)
+**Wererat** | Monstrosity | M/S | CR 2 (450 XP)
 AC 13 | HP 60 (11d8+11) | Init +3 (13) | Speed 30 ft., Climb 30 ft.
 STR 10 DEX 16 CON 12 INT 11 WIS 10 CHA 8
 Senses: darkvision 60 ft.
@@ -272,7 +272,7 @@ Multiattack: 2× Rend
 - Rend: +4, 1d8+2 slashing + 1d4 cold
 - Cold Breath (Recharge 5-6): 15-ft cone, DC 12 CON, 5d8 cold (half)
 
-**Will-o'-Wisp** | Undead | S | CR 2 (450 XP)
+**Will-o'-Wisp** | Undead | T | CR 2 (450 XP)
 AC 19 | HP 27 (11d4) | Init +9 (19) | Speed 5 ft., Fly 50 ft. (hover)
 STR 1 DEX 28 CON 10 INT 13 WIS 14 CHA 11
 Senses: darkvision 120 ft.
@@ -368,7 +368,7 @@ Multiattack: 2× (Greatsword/Longbow)
 - Greatsword: +4, 2d6+2 slashing + 1d6 poison
 - Longbow: +4, 1d8+2 piercing + 2d4 poison
 
-**Knight** | Humanoid | S | CR 3 (700 XP)
+**Knight** | Humanoid | M/S | CR 3 (700 XP)
 AC 18 | HP 52 (8d8+16) | Init +0 (10) | Speed 30 ft.
 STR 16 DEX 11 CON 14 INT 11 WIS 11 CHA 15
 Saves: CON +4, WIS +2 | Senses: Passive Perception 10
@@ -392,7 +392,7 @@ Senses: darkvision 60 ft.
 - Abyssal Glaive: +6, reach 10 ft., 1d12+4 slashing + 3d6 necrotic
 - Gore (Recharge 5-6): +6, 4d6+4 piercing
 
-**Mummy** | Undead | S | CR 3 (700 XP)
+**Mummy** | Undead | M/S | CR 3 (700 XP)
 AC 11 | HP 58 (9d8+18) | Init -1 (9) | Speed 20 ft.
 STR 16 DEX 8 CON 15 INT 6 WIS 12 CHA 12
 Saves: WIS +3 | Senses: darkvision 60 ft.
@@ -425,7 +425,7 @@ Web Walker
 Multiattack: 2× Bite
 - Bite: +5, 1d10+3 piercing + 2d8 poison
 
-**Vampire Familiar** | Humanoid | S | CR 3 (700 XP)
+**Vampire Familiar** | Humanoid | M/S | CR 3 (700 XP)
 AC 15 | HP 65 (10d8+20) | Init +5 (15) | Speed 30 ft., Climb 30 ft.
 STR 17 DEX 16 CON 15 INT 10 WIS 10 CHA 14
 Saves: DEX +5, WIS +2 | Senses: darkvision 60 ft.
@@ -434,7 +434,7 @@ Vampiric Connection
 Multiattack: 2× Umbral Dagger
 - Umbral Dagger: +5, 1d4+3 piercing + 3d4 necrotic
 
-**Warrior Veteran** | Humanoid | S | CR 3 (700 XP)
+**Warrior Veteran** | Humanoid | M/S | CR 3 (700 XP)
 AC 17 | HP 65 (10d8+20) | Init +3 (13) | Speed 30 ft.
 STR 16 DEX 13 CON 14 INT 10 WIS 11 CHA 10
 Senses: Passive Perception 12
@@ -442,8 +442,8 @@ Multiattack: 2× Greatsword or Heavy Crossbow
 - Greatsword: +5, 2d6+3 slashing
 - Heavy Crossbow: +3, 2d10+1 piercing
 
-**Werewolf** | Monstrosity | S | CR 3 (700 XP)
-AC 15 | HP 71 (11d8+22) | Init +4 (14) | Speed 30 ft.
+**Werewolf** | Monstrosity | M/S | CR 3 (700 XP)
+AC 15 | HP 71 (11d8+22) | Init +4 (14) | Speed 30 ft., 40 ft. (wolf form only)
 STR 16 DEX 14 CON 14 INT 10 WIS 11 CHA 10
 Senses: darkvision 60 ft.
 Pack Tactics

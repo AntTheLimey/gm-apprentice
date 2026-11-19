@@ -53,7 +53,7 @@ NO_SRD_LINE = ("the SRD creature files are not installed in this copy of the "
 ABILITIES = ("STR", "DEX", "CON", "INT", "WIS", "CHA")
 
 HEAD_RE = re.compile(
-    r"^\*\*(?P<name>[^*]+)\*\* \| (?P<type>[^|]+) \| (?P<size>[TSMLHG]) \| "
+    r"^\*\*(?P<name>[^*]+)\*\* \| (?P<type>[^|]+) \| (?P<size>[TSMLHG](?:/[TSMLHG])?) \| "
     r"CR (?P<cr>[\d/]+) \((?P<xp>[\d,]+) XP\)$")
 TOP_RE = re.compile(
     r"^AC (?P<ac>\d+) \| HP (?P<hp>\d+) \((?P<dice>[^)]+)\)"

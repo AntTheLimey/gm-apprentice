@@ -4,7 +4,7 @@
 
 **Format:** Enriched stat blocks — see Response Templates in monsters.md (index)
 
-**Size codes:** T=Tiny, S=Small, M=Medium, L=Large, H=Huge, G=Gargantuan
+**Size codes:** T=Tiny, S=Small, M=Medium, L=Large, H=Huge, G=Gargantuan; M/S=Medium or Small
 
 ## CR 11 (7,200 XP)
 
@@ -73,7 +73,7 @@ Multiattack: 2× Beak
 - Talons: +13, 4d6+9 slashing; grapple (escape DC 19)
 
 **Sphinx of Lore** | Celestial | L | CR 11 (7,200 XP)
-AC 17 | HP 170 (20d10+60) | Init +6 (16) | Speed 40 ft., Fly 60 ft.
+AC 17 | HP 170 (20d10+60) | Init +10 (20) | Speed 40 ft., Fly 60 ft.
 STR 18 DEX 15 CON 16 INT 18 WIS 18 CHA 18
 Senses: truesight 120 ft.
 Resistances: Necrotic, Radiant | Immunities: Psychic; Charmed, Frightened
@@ -88,8 +88,8 @@ Spellcasting (INT, DC 16): At Will — Detect Magic, Identify, Mage Hand, Minor 
 
 ## CR 12 (8,400 XP)
 
-**Archmage** | Humanoid | S | CR 12 (8,400 XP)
-AC 17 | HP 170 (31d8+31) | Init +6 (16) | Speed 30 ft.
+**Archmage** | Humanoid | M/S | CR 12 (8,400 XP)
+AC 17 | HP 170 (31d8+31) | Init +7 (17) | Speed 30 ft.
 STR 10 DEX 14 CON 12 INT 20 WIS 15 CHA 16
 Saves: INT +9, WIS +6 | Senses: Passive Perception 16
 Immunities: Psychic; Charmed ((with Mind Blank))
@@ -114,7 +114,7 @@ Multiattack: 3× Withering Sword + can use Entangling Rope
 ## CR 13 (10,000 XP)
 
 **Adult Brass Dragon** | Dragon | H | CR 13 (10,000 XP)
-AC 18 | HP 172 (15d12+75) | Init +4 (14) | Speed 40 ft., Burrow 30 ft., Fly 80 ft.
+AC 18 | HP 172 (15d12+75) | Init +10 (20) | Speed 40 ft., Burrow 30 ft., Fly 80 ft.
 STR 23 DEX 10 CON 21 INT 14 WIS 13 CHA 17
 Saves: DEX +5, WIS +6 | Senses: blindsight 60 ft., darkvision 120 ft.
 Immunities: Fire
@@ -127,7 +127,7 @@ Multiattack: 3× Rend
 Spellcasting (CHA, DC 16): At Will — Detect Magic, Minor Illusion, Scorching Ray, Shapechange
 
 **Adult White Dragon** | Dragon | H | CR 13 (10,000 XP)
-AC 18 | HP 200 (16d12+96) | Init +4 (14) | Speed 40 ft., Burrow 30 ft., Fly 80 ft., Swim 40 ft.
+AC 18 | HP 200 (16d12+96) | Init +10 (20) | Speed 40 ft., Burrow 30 ft., Fly 80 ft., Swim 40 ft.
 STR 22 DEX 10 CON 22 INT 8 WIS 12 CHA 12
 Saves: DEX +5, WIS +6 | Senses: blindsight 60 ft., darkvision 120 ft.
 Immunities: Cold
@@ -172,8 +172,8 @@ Multiattack: 2× (Storm Sword/Thunderbolt)
 - Lightning Storm (Recharge 5-6): 10-ft-radius, 40-ft-high Cylinder [Area of Effect]|XPHB|Cylinder originating from a point the giant can see within 500 feet, DC 18 DEX, 10d10 lightning (half)
 Spellcasting (WIS, DC 18): At Will — Detect Magic, Light; 1/day — Control Weather
 
-**Vampire** | Undead | S | CR 13 (10,000 XP)
-AC 16 | HP 195 (23d8+92) | Init +8 (18) | Speed 40 ft., Climb 40 ft.
+**Vampire** | Undead | M/S | CR 13 (10,000 XP)
+AC 16 | HP 195 (23d8+92) | Init +14 (24) | Speed 40 ft., Climb 40 ft.
 STR 18 DEX 18 CON 18 INT 17 WIS 15 CHA 18
 Saves: DEX +9, CON +9, WIS +7, CHA +9 | Senses: darkvision 120 ft.
 Resistances: Necrotic
@@ -190,7 +190,7 @@ Legendary (3/round): Deathless Strike (Grave attack), Beguile (DC 17)
 ## CR 14 (11,500 XP)
 
 **Adult Black Dragon** | Dragon | H | CR 14 (11,500 XP)
-AC 19 | HP 195 (17d12+85) | Init +6 (16) | Speed 40 ft., Fly 80 ft., Swim 40 ft.
+AC 19 | HP 195 (17d12+85) | Init +12 (22) | Speed 40 ft., Fly 80 ft., Swim 40 ft.
 STR 23 DEX 14 CON 21 INT 14 WIS 13 CHA 19
 Saves: DEX +7, WIS +6 | Senses: blindsight 60 ft., darkvision 120 ft.
 Immunities: Acid
@@ -202,7 +202,7 @@ Multiattack: 3× Rend
 Spellcasting (CHA, DC 17): At Will — Detect Magic, Fear, Acid Arrow
 
 **Adult Copper Dragon** | Dragon | H | CR 14 (11,500 XP)
-AC 18 | HP 184 (16d12+80) | Init +5 (15) | Speed 40 ft., Climb 40 ft., Fly 80 ft.
+AC 18 | HP 184 (16d12+80) | Init +11 (21) | Speed 40 ft., Climb 40 ft., Fly 80 ft.
 STR 23 DEX 12 CON 21 INT 18 WIS 15 CHA 18
 Saves: DEX +6, WIS +7 | Senses: blindsight 60 ft., darkvision 120 ft.
 Immunities: Acid
@@ -229,7 +229,7 @@ Multiattack: 3× Ice Spear
 ## CR 15 (13,000 XP)
 
 **Adult Bronze Dragon** | Dragon | H | CR 15 (13,000 XP)
-AC 18 | HP 212 (17d12+102) | Init +4 (14) | Speed 40 ft., Fly 80 ft., Swim 40 ft.
+AC 18 | HP 212 (17d12+102) | Init +10 (20) | Speed 40 ft., Fly 80 ft., Swim 40 ft.
 STR 25 DEX 10 CON 23 INT 16 WIS 15 CHA 20
 Saves: DEX +5, WIS +7 | Senses: blindsight 60 ft., darkvision 120 ft.
 Immunities: Lightning
@@ -242,7 +242,7 @@ Multiattack: 3× Rend
 Spellcasting (CHA, DC 17): At Will — Detect Magic, Guiding Bolt, Shapechange, Speak with Animals
 
 **Adult Green Dragon** | Dragon | H | CR 15 (13,000 XP)
-AC 19 | HP 207 (18d12+90) | Init +5 (15) | Speed 40 ft., Fly 80 ft., Swim 40 ft.
+AC 19 | HP 207 (18d12+90) | Init +11 (21) | Speed 40 ft., Fly 80 ft., Swim 40 ft.
 STR 23 DEX 12 CON 21 INT 18 WIS 15 CHA 18
 Saves: DEX +6, WIS +7 | Senses: blindsight 60 ft., darkvision 120 ft.
 Immunities: Poison; Poisoned
@@ -253,8 +253,8 @@ Multiattack: 3× Rend
 - Poison Breath (Recharge 5-6): 60-ft cone, DC 18 CON, 16d6 poison (half)
 Spellcasting (CHA, DC 17): At Will — Detect Magic, Mind Spike; 1/day — Geas
 
-**Mummy Lord** | Undead | S | CR 15 (13,000 XP)
-AC 17 | HP 187 (25d8+75) | Init +4 (14) | Speed 30 ft.
+**Mummy Lord** | Undead | M/S | CR 15 (13,000 XP)
+AC 17 | HP 187 (25d8+75) | Init +10 (20) | Speed 30 ft.
 STR 18 DEX 10 CON 17 INT 11 WIS 19 CHA 16
 Saves: INT +5, WIS +9 | Senses: truesight 60 ft.
 Immunities: Necrotic, Poison; Charmed, Exhaustion, Frightened, Paralyzed, Poisoned | Vulnerabilities: Fire
@@ -282,7 +282,7 @@ Multiattack: one Bite + one Tail Stinger
 ## CR 16 (15,000 XP)
 
 **Adult Blue Dragon** | Dragon | H | CR 16 (15,000 XP)
-AC 19 | HP 212 (17d12+102) | Init +4 (14) | Speed 40 ft., Burrow 30 ft., Fly 80 ft.
+AC 19 | HP 212 (17d12+102) | Init +10 (20) | Speed 40 ft., Burrow 30 ft., Fly 80 ft.
 STR 25 DEX 10 CON 23 INT 16 WIS 15 CHA 20
 Saves: DEX +5, WIS +7 | Senses: blindsight 60 ft., darkvision 120 ft.
 Immunities: Lightning
@@ -294,7 +294,7 @@ Multiattack: 3× Rend
 Spellcasting (CHA, DC 18): At Will — Detect Magic, Invisibility, Mage Hand, Shatter
 
 **Adult Silver Dragon** | Dragon | H | CR 16 (15,000 XP)
-AC 19 | HP 216 (16d12+112) | Init +4 (14) | Speed 40 ft., Fly 80 ft.
+AC 19 | HP 216 (16d12+112) | Init +10 (20) | Speed 40 ft., Fly 80 ft.
 STR 27 DEX 10 CON 25 INT 16 WIS 13 CHA 22
 Saves: DEX +5, WIS +6 | Senses: blindsight 60 ft., darkvision 120 ft.
 Immunities: Cold

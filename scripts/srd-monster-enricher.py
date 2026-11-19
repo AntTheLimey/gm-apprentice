@@ -9,14 +9,22 @@ files the rules advisor reads. Run it after the SRD source changes:
 
 It rewrites those files in place, and an unchanged SRD gives byte-identical
 files. The SRD 5.2 is CC-BY 4.0 (see ATTRIBUTION.md).
+
+The community markdown transcription has wrong Initiative, size and Speed
+figures for some creatures, so those three come from the official SRD 5.2.1
+(`scripts/srd521-figures.json`, made by `scripts/srd521_figures.py`) whenever
+the creature is in it. A creature the file lacks keeps the transcription's
+figures, with a warning.
 """
 
 import argparse
+import json
 import re
 import sys
 from pathlib import Path
 
 OUT_DIR = Path("skills/ttrpg-expert/systems/dnd-5e-2024")
+FIGURES = Path(__file__).resolve().parent / "srd521-figures.json"
 MAX_REF_BYTES = 25 * 1024
 
 SIZE_MAP = {"Tiny": "T", "Small": "S", "Medium": "M", "Large": "L", "Huge": "H", "Gargantuan": "G"}
@@ -45,6 +53,29 @@ CR_XP = {
 CR_LABELS = {
     0: "0", 0.125: "1/8", 0.25: "1/4", 0.5: "1/2",
 }
+
+
+def size_code(size):
+    """`Huge` -> `H`; `Medium or Small` -> `M/S`."""
+    return '/'.join(SIZE_MAP[w] for w in size.split(' or '))
+
+
+def apply_figures(m, figures):
+    """Take Initiative, size and Speed from the official SRD 5.2.1 figures."""
+    fig = figures.get(m['name'].casefold())
+    if fig is None:
+        print(f"WARNING: {m['name']} is not in the SRD 5.2.1 figures; "
+              "keeping the transcription's Initiative, size and Speed",
+              file=sys.stderr)
+        return
+    m['size'] = size_code(fig['size'])
+    m['init'] = f"{fig['init']}({fig['init_score']})" if fig['init'] else None
+    m['speed'] = fig['speed']
+
+
+def load_figures(path):
+    data = json.loads(path.read_text(encoding='utf-8'))
+    return {name.casefold(): fig for name, fig in data.items()}
 
 
 def parse_cr(cr_line):
@@ -744,7 +775,7 @@ def build_file(tier_key, tier_info, cr_groups, budget_tight=False):
     if budget_tight:
         lines.append("**Ability scores:** STR/DEX/CON/INT/WIS/CHA")
     lines.append("")
-    lines.append("**Size codes:** T=Tiny, S=Small, M=Medium, L=Large, H=Huge, G=Gargantuan")
+    lines.append("**Size codes:** T=Tiny, S=Small, M=Medium, L=Large, H=Huge, G=Gargantuan; M/S=Medium or Small")
 
     for cr in sorted(cr_groups.keys(), key=cr_sort_key):
         cr_str = cr_display(cr)
@@ -780,18 +811,22 @@ def main():
     parser.add_argument('--animals', type=Path, default=None,
                         help='the SRD 13_Animals.md: also write animals.md')
     parser.add_argument('--out-dir', type=Path, default=OUT_DIR, help='Output directory')
+    parser.add_argument('--figures', type=Path, default=FIGURES,
+                        help='the SRD 5.2.1 Initiative, size and Speed figures')
     args = parser.parse_args()
 
     if not args.srd_path.exists():
         print(f"Error: SRD file not found: {args.srd_path}", file=sys.stderr)
         sys.exit(1)
 
+    figures = load_figures(args.figures)
     text = args.srd_path.read_text(encoding='utf-8')
     monsters = parse_monsters(text)
     print(f"Parsed {len(monsters)} monsters", file=sys.stderr)
 
     for m in monsters:
         fixup_speed(m)
+        apply_figures(m, figures)
 
     tier_monsters = {k: [] for k in TIERS}
     for m in monsters:
@@ -808,6 +843,7 @@ def main():
         beasts = parse_monsters(args.animals.read_text(encoding='utf-8'))
         for m in beasts:
             fixup_speed(m)
+            apply_figures(m, figures)
         print(f"Parsed {len(beasts)} animals", file=sys.stderr)
         content = write_tier('animals', {'label': 'Animals'}, beasts)
         out_path = args.out_dir / 'animals.md'

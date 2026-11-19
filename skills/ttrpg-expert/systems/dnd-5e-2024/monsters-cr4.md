@@ -4,7 +4,7 @@
 
 **Format:** Enriched stat blocks — see Response Templates in monsters.md (index)
 
-**Size codes:** T=Tiny, S=Small, M=Medium, L=Large, H=Huge, G=Gargantuan
+**Size codes:** T=Tiny, S=Small, M=Medium, L=Large, H=Huge, G=Gargantuan; M/S=Medium or Small
 
 ## CR 4 (1,100 XP)
 
@@ -58,7 +58,7 @@ Multiattack: 2× Withering Touch
 - Horrific Visage: 60-ft cone that can see the ghost and isn't an Undead, DC 13 WIS, 2d6+3 psychic
 - Possession (Recharge 6): DC 13 CHA, The target is possessed by the ghost; the ghost disappears, and the target has the Incapacitated and loses control of...
 
-**Guard Captain** | Humanoid | S | CR 4 (1,100 XP)
+**Guard Captain** | Humanoid | M/S | CR 4 (1,100 XP)
 AC 18 | HP 75 (10d8+30) | Init +4 (14) | Speed 30 ft.
 STR 18 DEX 14 CON 16 INT 12 WIS 14 CHA 13
 Senses: Passive Perception 14
@@ -106,7 +106,7 @@ Multiattack: one Fiendish Touch + Charm or Draining Kiss
 - Charm: casts Dominate Person (level 8) (DC 15)
 - Draining Kiss: one creature Charmed by the succubus within 5 feet, DC 15 CON, 3d8 psychic (half)
 
-**Tough Boss** | Humanoid | S | CR 4 (1,100 XP)
+**Tough Boss** | Humanoid | M/S | CR 4 (1,100 XP)
 AC 16 | HP 82 (11d8+33) | Init +2 (12) | Speed 30 ft.
 STR 17 DEX 14 CON 16 INT 11 WIS 10 CHA 11
 Saves: STR +5, CON +5, CHA +2 | Senses: Passive Perception 10
@@ -115,8 +115,8 @@ Multiattack: 2× (Warhammer/Heavy Crossbow)
 - Warhammer: +5, 2d8+3 bludgeoning
 - Heavy Crossbow: +4, 2d10+2 piercing
 
-**Wereboar** | Monstrosity | S | CR 4 (1,100 XP)
-AC 15 | HP 97 (15d8+30) | Init +2 (12) | Speed 30 ft.
+**Wereboar** | Monstrosity | M/S | CR 4 (1,100 XP)
+AC 15 | HP 97 (15d8+30) | Init +2 (12) | Speed 30 ft., 40 ft. (boar form only)
 STR 17 DEX 10 CON 15 INT 10 WIS 11 CHA 8
 Senses: Passive Perception 12
 Multiattack: 2× (Javelin/Tusk)
@@ -124,8 +124,8 @@ Multiattack: 2× (Javelin/Tusk)
 - Javelin (Humanoid or Hybrid Form Only): +5, 3d6+3 piercing
 - Tusk (Boar or Hybrid Form Only): +5, 2d6+3 piercing
 
-**Weretiger** | Monstrosity | S | CR 4 (1,100 XP)
-AC 12 | HP 120 (16d8+48) | Init +2 (12) | Speed 30 ft.
+**Weretiger** | Monstrosity | M/S | CR 4 (1,100 XP)
+AC 12 | HP 120 (16d8+48) | Init +2 (12) | Speed 30 ft., 40 ft. (tiger form only)
 STR 17 DEX 15 CON 16 INT 10 WIS 13 CHA 11
 Senses: darkvision 60 ft.
 Multiattack: 2× (Scratch/Longbow)
