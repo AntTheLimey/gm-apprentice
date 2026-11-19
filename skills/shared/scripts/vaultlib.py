@@ -260,10 +260,12 @@ FLOW_ITEM_RE = re.compile(
 
 def _list_item(raw: str) -> str:
     """One list item: a quoted one decoded as a quoted value is (#597);
-    anything else kept as before (`- #tag` is not dropped as a comment)."""
+    anything else up to a ` #` comment, as a value is (`- #tag` is not
+    dropped as a comment)."""
     item = raw.strip()
     if QUOTED_SCALAR_RE.match(item):
         return scalar_value(item)
+    item = re.split(r"\s+#", item, maxsplit=1)[0].strip()
     return item.strip('"').strip("'")
 
 
