@@ -471,7 +471,8 @@ parenthesis in the bold. **Place:** is one link, which may be followed
 by words (`[[The Cloister]], the yard`), or just the words when no
 location note fits (`the drive ground beyond the camp`). **NPCs** holds everyone in the room, never everyone referred
 to; a lead of two links (`- **[[Sister Wren]] and [[Durgan Flintmere]]:**
-want ...`) is one person each. **Treasure** (one item per bullet) goes on
+want ...`) is one person each, and a count goes in brackets after the link
+(`- **[[Ice Mephit]] (6):** ...`). **Treasure** (one item per bullet) goes on
 a fight or hoard beat. A hub is any scene holding a **Where they can
 go** block (legacy: **Open to the party**), "(hub)" in its title or not;
 it, a "(routing)" title and `Scene 0` need no Situation, Starts it,
