@@ -64,6 +64,18 @@ describe('run sheet note index', () => {
     assert.strictEqual(idx.warnings.filter((w) => w.kind === 'ambiguous-name').length, 1);
   });
 
+  it('a superseded note does not resolve a name two live notes share', () => {
+    const dir = copy();
+    for (const [d, extra] of [['Dup/A', ''], ['Dup/B', ''], ['Dup/Old', 'canon_status: SUPERSEDED\n']]) {
+      fs.mkdirSync(path.join(dir, d), { recursive: true });
+      fs.writeFileSync(path.join(dir, d, 'Twin.md'), `---\ntype: npc\n${extra}---\n\nTwin.\n`);
+    }
+    const idx = buildIndex(dir);
+    assert.strictEqual(idx.isAmbiguous('Twin'), true);
+    assert.strictEqual(idx.resolve('Twin'), null);
+    for (const d of ['A', 'B', 'Old']) assert.strictEqual(idx.resolve(`Dup/${d}/Twin`), `Dup/${d}/Twin.md`);
+  });
+
   it('left-out folders are skipped', () => {
     const dir = copy();
     for (const d of ['_archive', '_Templates', '_midwife', '_meta', '_QA', 'node_modules']) {

@@ -132,7 +132,7 @@ function buildIndex(vaultPath, { deps } = {}) {
     if (live.length === 1) table[k] = live[0].path;
   }
   for (const [k, group] of stems) {
-    if (k in table || !group.some(superseded)) continue;
+    if (k in table || ambiguous.has(k) || !group.some(superseded)) continue;
     const p = group.find(superseded);
     const target = p.fm.superseded_by ? canonicalNfc(wikiTarget(p.fm.superseded_by)) : null;
     table[k] = (target && table[target]) || p.path;
