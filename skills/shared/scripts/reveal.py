@@ -36,7 +36,9 @@ the unmasking: `unmasked_name` goes into `aliases` (unless it is there
 already, in the list style the note uses) and `unmasked_portrait` into
 `portrait`, each then emptied; when Playing Them has an `**Unmasked:**`
 line, `**Speech:**` becomes `**Disguise:**` and `**Unmasked:**` becomes
-`**Speech:**` (without one it is left alone: the same voice). Each is logged as its own entry,
+`**Speech:**` (without one it is left alone: the same voice). Every
+`gm_aliases` entry holding the true name as whole words goes (the secret
+is out). Each is logged as its own entry,
 `{"kind": "unmask", "path", "name", "old_portrait", "session", "date"}`,
 so the disguise's face is kept; an entry without `kind` is a session's
 reveal. A note with no `unmasked_name` is refused with an ERROR row.
@@ -305,36 +307,70 @@ def _add_to_list(head: list[str], key: str, name: str) -> None:
     head.insert(at + 1, f"  - {item}")
 
 
-def _drop_from_list(head: list[str], key: str, name: str) -> bool:
-    """Take `name` out of the list `key`, keeping its style and every other
-    line; a list left empty is `[]`. True when it was there."""
+def _holds_name(entry: str, name: str) -> bool:
+    """Does `entry` hold `name` as whole words, case ignored ("Brother
+    Lucan" holds "Lucan")?"""
+    words = re.escape(_nfc(name).strip()).replace(r"\ ", r"\s+")
+    return re.search(rf"(?<!\w){words}(?!\w)", _nfc(entry), re.I) is not None
+
+
+def _drop_from_list(head: list[str], key: str, name: str) -> list[str]:
+    """Take every entry holding `name` (`_holds_name`) out of the list
+    `key`, keeping its style and every other line; a list left empty is
+    `[]`. The entries taken out, as the note had them."""
     at = next((i for i, ln in enumerate(head) if _key_re(key).match(ln)), None)
     if at is None:
-        return False
+        return []
     k, _, value = head[at].partition(":")
     flow = _flow(key, value)
     if flow:
         raw = [x.strip() for x in FLOW_ITEM_RE.findall(flow["items"]) if x.strip()]
-        kept = [x for x in raw if not _same_name(scalar_value(x), name)]
-        if len(kept) == len(raw):
-            return False
-        head[at] = f"{k}:{flow['open']}{', '.join(kept)}]{flow['rest'] or ''}"
-        return True
+        gone = [scalar_value(x) for x in raw if _holds_name(scalar_value(x), name)]
+        if gone:
+            kept = [x for x in raw if not _holds_name(scalar_value(x), name)]
+            head[at] = f"{k}:{flow['open']}{', '.join(kept)}]{flow['rest'] or ''}"
+        return gone
     end, _ = _list_lines(head, at)
     items = [i for i in range(at + 1, end) if head[i].lstrip().startswith("-")]
-    gone = [i for i in items
-            if _same_name(scalar_value(head[i].lstrip()[1:].strip()), name)]
-    if not gone:
-        if items or not _same_name(scalar_value(value), name):
-            return False
-        head[at] = f"{k}: []"     # `gm_aliases: Lucan`, the one name
-        return True
-    for i in reversed(gone):
+    hit = [i for i in items if _holds_name(scalar_value(head[i].lstrip()[1:].strip()), name)]
+    if not hit:
+        lone = scalar_value(value)
+        if items or not lone or not _holds_name(lone, name):
+            return []
+        head[at] = f"{k}: []"     # `gm_aliases: Brother Lucan`, the one name
+        return [lone]
+    gone = [scalar_value(head[i].lstrip()[1:].strip()) for i in hit]
+    for i in reversed(hit):
         del head[i]
-    if len(gone) == len(items):
+    if len(hit) == len(items):
         comment = value[value.index("#"):] if "#" in value and not scalar_value(value) else ""
         head[at] = f"{k}: []" + (f"  {comment}" if comment else "")
-    return True
+    return gone
+
+
+def _unmask_span(lines: list[str]) -> tuple[int, str | None]:
+    """frontmatter_span, except that a block list written flush (`- A` at
+    column zero under an empty key, valid YAML) is taken: the shared
+    reader refuses it, and --unmask edits such a list in place."""
+    end, error = frontmatter_span(lines)
+    if not error or error == "no frontmatter":
+        return end, error
+    indented = list(lines)
+    under_empty_key = False
+    for i, line in enumerate(lines[1:], start=1):
+        text = line.rstrip("\r\n")
+        if text.startswith("---"):
+            break
+        if text.startswith("- ") or text == "-":
+            if under_empty_key:
+                indented[i] = "  " + line
+            continue
+        if text.strip() and not text[:1].isspace() and not text.startswith("#"):
+            under_empty_key = ":" in text and not scalar_value(text.partition(":")[2])
+    if indented == lines:
+        return end, error
+    end2, error2 = frontmatter_span(indented)
+    return (end2, None) if not error2 else (end, error)
 
 
 def _unmask_edit(vault: Path, rel: str) -> tuple[str | None, dict[str, Any] | None, str]:
@@ -352,7 +388,7 @@ def _unmask_edit(vault: Path, rel: str) -> tuple[str | None, dict[str, Any] | No
     with open(full, encoding="utf-8", newline="") as f:
         text = f.read()     # no newline translation: a CRLF note stays CRLF
     lines = text.splitlines(keepends=True)
-    end, error = frontmatter_span(lines)
+    end, error = _unmask_span(lines)
     if error:
         return None, None, f"nothing changed: {error}"
     fm = extract_frontmatter(text) or {}
@@ -381,10 +417,11 @@ def _unmask_edit(vault: Path, rel: str) -> tuple[str | None, dict[str, Any] | No
         else:
             _add_to_list(head, "aliases", name)
             changes.append(f"aliases + {name}")
-        # The secret is out: a gm_aliases entry for the same name would keep the
-        # site stripping it and the leak check flagging it.
-        if _drop_from_list(head, "gm_aliases", name):
-            changes.append(f"gm_aliases - {name}")
+        # The secret is out: a gm_aliases entry holding the true name ("Brother
+        # Lucan" for "Lucan") would keep the site stripping it and the leak check
+        # flagging it.
+        for gone in _drop_from_list(head, "gm_aliases", name):
+            changes.append(f"gm_aliases - {gone}")
     except ListShapeError as e:
         return None, None, f"nothing changed: {e}"
     set_block(head, "unmasked_name", '""')
