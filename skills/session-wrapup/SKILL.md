@@ -473,6 +473,11 @@ gma reveal \
   --publish <path> --released "<path>=<what came out>"
 ```
 
+When a disguised NPC (one with `unmasked_name`) was unmasked at the
+table, offer the unmasking in the same list; on the GM's yes add
+`--unmask <path>`, which makes the true name, face and `**Unmasked:**`
+line the NPC's own and logs the old face.
+
 Show the dry-run rows as-is. Yes → re-run with `--write`; it
 publishes, lifts `withheld` and logs the session. No, or an ERROR
 row, puts back that page's edits and any recap link to it (or a later

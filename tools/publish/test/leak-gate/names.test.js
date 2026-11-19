@@ -34,6 +34,21 @@ describe('leak gate: secret names', () => {
       assert.equal(f.text, 'elias crowe');
     } finally { s.cleanup(); }
   });
+  it('a disguised NPC\'s unmasked_name printed on a page stops the gate, as a GM alias does', () => {
+    const notes = {
+      'NPCs/Pedlar.md': '---\ntype: npc\nunmasked_name: "Captain Rook"\n---\nSells ribbons.\n',
+      'NPCs/Gossip.md': '---\ntype: npc\n---\nShe swears the pedlar is Captain Rook.\n',
+    };
+    const s = leakSite(notes, SETTINGS);
+    try {
+      const f = runLeakGate({ configPath: s.configPath, outputDir: s.outputDir }).findings.filter((x) => x.code === 'ALIAS_IN_PROSE');
+      const page = f.find((x) => x.page === 'npcs/gossip.html');
+      assert.deepEqual(page && [page.note, page.text], ['NPCs/Pedlar.md', 'captain rook'], JSON.stringify(f));
+      assert.match(page.reason, /unmasked_name/);
+      // the build's own note audit finds it too
+      assert.ok(s.logs.some((l) => /printed on published pages \(Captain Rook 1 page\)/.test(l)), s.logs.join('\n'));
+    } finally { s.cleanup(); }
+  });
   it('a withheld name written back by a step, in a JSON file, stops the gate', () => {
     const s = leakSite(NOTES, SETTINGS);
     try {

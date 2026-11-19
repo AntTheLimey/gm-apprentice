@@ -15,10 +15,11 @@ const { readPcs, SECTIONS: PC_SECTIONS } = require('./party');
 const { readPeople, TITLE: PEOPLE_TITLE } = require('./people');
 const { readHandouts, TITLE: HANDOUTS_TITLE } = require('./handouts');
 const { foesFor } = require('./foes');
+const { unmaskedPlayAsOf } = require('./people-from-notes');
 const { parseNote } = require('../frontmatter');
 const { readSettings } = require('../settings/read');
 const { readerFrom } = require('../vault-reader');
-const { isWithheld, nameList } = require('../processor');
+const { isWithheld, nameList, unmaskedNames } = require('../processor');
 const { canonicalNfc } = require('../unicode');
 
 const toPosix = (p) => p.split(path.sep).join('/');
@@ -128,6 +129,7 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
 
   const warnings = [];
   const portraits = new Map();
+  const unmasks = new Map();
   const add = (list) => { for (const w of list || []) warnings.push(w); };
   let fm = {};
   let body = text;
@@ -300,9 +302,9 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
   add(completeness(body, model, { resolve: (t) => index.resolve(t) }));
   // The index's warnings about notes this sheet touches (a note a warning names among them, such
   // as a PC whose frontmatter does not parse), and those about the vault as a whole. Each touched
-  // note's portrait is looked for first, so a portrait that matches no picture warns here.
+  // note's portraits (its unmasked one too) are looked for first, so one that matches no picture warns here.
   const touched = new Set([...stringsOf(model), ...warnings.map((w) => w.note)].filter((x) => index.has(x)));
-  for (const p of touched) portraitOf(p);
+  for (const p of touched) { portraitOf(p); unmaskOf(p); }
   add(index.warnings.filter((w) => w.note === null || w.kind === 'unreadable-folder' || touched.has(w.note)));
   const kept = new Set();
   for (const w of warnings) {
@@ -340,7 +342,19 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
       location: typeof nfm.location === 'string' ? nfm.location : '',
       docType: low(nfm.doc_type),
       aliases: nameList(nfm.aliases),
+      unmask: unmaskOf(p),
     };
+  }
+
+  // A disguised NPC's true self, behind the sheet's Unmask: only a note with an `unmasked_name` has
+  // one (a `gm_aliases` name alone is no disguise). Its face is null and its play-as '' when the
+  // note gives none. Asked once per note, as the portrait is.
+  function unmaskOf(p) {
+    if (!unmasks.has(p)) {
+      const name = index.has(p) ? unmaskedNames(index.read(p).fm || {})[0] : undefined;
+      unmasks.set(p, name ? { name, portrait: index.portrait(p, 'unmasked_portrait'), playAs: unmaskedPlayAsOf(p, index) } : null);
+    }
+    return unmasks.get(p);
   }
 
   // If you run long: never above the chapter. The chapter folder is the chapter note's folder,

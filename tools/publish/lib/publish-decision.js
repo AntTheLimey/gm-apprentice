@@ -60,14 +60,14 @@ const LOWER_TEMPLATE_DIRS = ['_templates'];   // folder names are read in any ca
 // no campaign secret, so their names are not names a site link must avoid. Everything else stays a hidden name,
 // whatever folder or type it has: the "personal" folder (the GM's own reference copies), a campaign note moved into
 // `_meta` or written over one of the plugin's files there, a note typed "meta" by mistake. A note that names secrets
-// of its own (withheld, gm_aliases) or says publish: false is never housekeeping.
+// of its own (withheld, gm_aliases, unmasked_name) or says publish: false is never housekeeping.
 function hasEntries(value) {
   if (Array.isArray(value)) return value.some((v) => v != null && String(v).trim() !== '');
   return value != null && String(value).trim() !== '';
 }
 function isHousekeepingNote(vaultPath, frontmatter) {
   const fm = frontmatter || {};
-  if (fm.withheld === true || fm.withheld === 'true' || hasEntries(fm.gm_aliases)) return false;
+  if (fm.withheld === true || fm.withheld === 'true' || hasEntries(fm.gm_aliases) || hasEntries(fm.unmasked_name)) return false;
   if (fm.publish === false || fm.publish === 'false') return false;
   const parts = String(vaultPath == null ? '' : vaultPath).replace(/\\/g, '/').split('/');
   if (parts.slice(0, -1).some((part) => LOWER_TEMPLATE_DIRS.includes(part.toLowerCase()))) return true;

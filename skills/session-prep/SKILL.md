@@ -354,7 +354,11 @@ Apply fixes in place; there is no audit-notes report.
 
 **16. Gap Check** — as questions or a short actionable list:
 - NPCs, locations or entity stubs the planned scenes need but the
-  vault lacks: the write's `unresolved` rows.
+  vault lacks: the write's `unresolved` rows. A new NPC in disguise
+  gets its true name in `unmasked_name` (the run sheet's Unmask reads
+  it, not `gm_aliases`), its true face in `unmasked_portrait` if it has
+  one, and an `**Unmasked:**` line in Playing Them when the true self
+  plays differently.
 - Stale entity files to update or retire: the `stale-drafts` rows run
   with the bundle.
 - NPCs the Plan's scenes name without a stat block (`gma vault-check

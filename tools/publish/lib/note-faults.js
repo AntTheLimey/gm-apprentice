@@ -7,7 +7,7 @@
 //   COMMENT_STRAY   a `%%` that is not a comment (unclosed, or straight after a number);
 //                   in a frontmatter value, also a comment or hidden block never closed
 //   FENCE_UNCLOSED  a code fence never closed, so a hidden marker below it is not obeyed
-//   ALIAS_IN_PROSE  a `gm_aliases` name printed on a published page
+//   ALIAS_IN_PROSE  a `gm_aliases` name (or a disguised NPC's `unmasked_name`) printed on a published page
 //   WITHHELD_IN_PROSE    the file name, title or alias of a note marked `withheld: true`,
 //                        printed on a published page, in the search index or in the file
 //                        name of a copied attachment (#291)
@@ -72,7 +72,7 @@ const { canonicalNfc } = require('./unicode');
 const { isAgentFile } = require('./agent-files');
 const { SWITCH_WORDS } = require('./settings/types');
 const { decidePage, publishesPage } = require('./publish-decision');
-const { gmAliasList, nameList, gmAliasKey, wikiTargetLabel, humanizeName, isWithheld } = require('./processor');
+const { gmAliasList, unmaskedNames, nameList, gmAliasKey, wikiTargetLabel, humanizeName, isWithheld } = require('./processor');
 const { kindOfType } = require('./kind-label');
 const { STORY_SUFFIX } = require('./scanner');
 const { NO_PAGE_TYPES } = require('./excluding-values');
@@ -290,9 +290,9 @@ function fileLine(readFile, abs, source, bodyLine) {
 }
 
 /**
- * The secret names of a vault and how to look for them: every gm_aliases name and the names of the notes marked
- * withheld, with the matcher for each. Shared by the build's note audit and by the leak gate, which runs it over the
- * finished folder.
+ * The secret names of a vault and how to look for them: every gm_aliases name, every disguised NPC's unmasked_name,
+ * and the names of the notes marked withheld, with the matcher for each. Shared by the build's note audit and by the
+ * leak gate, which runs it over the finished folder.
  *
  * @param {object} input
  * @param {object[]} input.notes          scanAllNotes(vaultPath)
@@ -317,7 +317,11 @@ function secretNamesOf(input) {
     const fm = note.frontmatter || {};
     for (const alias of gmAliasList(fm)) {
       secretKeys.add(gmAliasKey(alias));
-      if (!aliasOwners.has(fold(alias))) aliasOwners.set(fold(alias), { alias, rel });
+      if (!aliasOwners.has(fold(alias))) aliasOwners.set(fold(alias), { alias, rel, field: 'gm_aliases' });
+    }
+    // A disguised NPC's true name is searched as a gm_aliases name is; it resolves no link, so it is no secret key.
+    for (const alias of unmaskedNames(fm)) {
+      if (!aliasOwners.has(fold(alias))) aliasOwners.set(fold(alias), { alias, rel, field: 'unmasked_name' });
     }
     // A withheld note's own names: its file name, its title and its aliases (its gm_aliases
     // are searched as every gm_aliases name is).
@@ -481,7 +485,7 @@ function findSecretNames(html, names, { publicWords, holders = null, listing = f
     const start = Math.max(text.lastIndexOf('\n', at) + 1, at - CONTEXT);
     const stop = Math.min(...[text.indexOf('\n', at), at + matches[0][0].length + CONTEXT, text.length].filter((x) => x >= 0));
     hits.push({
-      kind: a.kind, alias: a.alias, owner: a.rel, re: a.re, count,
+      kind: a.kind, alias: a.alias, owner: a.rel, re: a.re, count, field: a.field,
       // A one-word name the page also writes in lower case reads as an everyday word there (#454).
       lowerCase: a.re.oneWord && matches.some((m) => /^\p{Ll}/u.test(m.groups.last)),
       context: clip(text.slice(start, stop).replace(/[\u0002\u0003]/g, '').trim(), 2 * CONTEXT + a.alias.length),
@@ -798,7 +802,7 @@ function startNoteAudit(input) {
     // ordinary use of it is a row, and rewording each would be endless. The name has to go: a file name by renaming
     // the note, a title or alias by taking it off (a title adds a name to look for; it never replaces the file name).
     const everyday = new Set(secretHits.filter((h) => h.kind === 'withheld' && h.lowerCase).map((h) => h.alias));
-    const fixLine = (alias, owner, file) => {
+    const fixLine = (alias, owner, file, field) => {
       if (file) return `rename the file, and the embeds that name it, so that its name does not hold "${alias}"`;
       if (never) return `reword it, or move it into a part of the note players do not see (a GM Notes section, a gm-only block); deploy stops while the player site shows it. If the word no longer needs guarding, take it off player_site.never_show`;
       if (withheld && everyday.has(alias)) {
@@ -810,11 +814,12 @@ function startNoteAudit(input) {
       if (withheld) {
         return `reword it to a name the players know, in the text or in the frontmatter field or title that holds it; or, in the text, link the note ([[${alias}]]): a link with no label of its own prints a neutral word (${[...new Set(Object.values(input.publishConfig.withheld_words))].join(', ')}) in place of a withheld note's name; where it is an ordinary word and not the name, the finding stays until the note is no longer marked withheld`;
       }
+      if (field === 'unmasked_name') return `reword it to the public name, in the text or in the frontmatter field or title that holds it, until wrap-up unmasks ${owner} (gma reveal --unmask)`;
       return `reword it to the public name, in the text or in the frontmatter field or title that holds it; or, in the text, link the name ([[${alias}]]): the build prints the page's public title for a linked GM alias`;
     };
     const told = (hit, rel) => (never ? `"${hit.alias}", a word you listed under player_site.never_show` : withheld
       ? `"${hit.alias}", the name of ${hit.owner === rel ? 'this note, which you marked withheld' : `a note you marked withheld (${hit.owner})`}`
-      : `"${hit.alias}", a name you keep secret in gm_aliases${hit.owner === rel ? '' : ` (of ${hit.owner})`}`);
+      : `"${hit.alias}", a name you keep secret in ${hit.field || 'gm_aliases'}${hit.owner === rel ? '' : ` (of ${hit.owner})`}`);
     const base = (hit) => (never ? { word: hit.alias } : withheld ? { name: hit.alias, ...(everyday.has(hit.alias) ? { everyday: true } : {}) } : { alias: hit.alias });
     const hits = secretHits.filter((h) => h.kind === kind);
     for (const hit of hits.filter((h) => h.out === null)) {
@@ -827,7 +832,7 @@ function startNoteAudit(input) {
           ? `${told(hit, hit.rel)}, is in the file name of an attachment the site copies`
           : hit.where === 'address' ? `${told(hit, hit.rel)}, is in the address of a link on the page`
             : `${told(hit, hit.rel)}, is printed on ${hit.where}${hit.count > 1 ? ` ${hit.count} times` : ''}`,
-        fix: fixLine(hit.alias, hit.owner, hit.where === 'file'),
+        fix: fixLine(hit.alias, hit.owner, hit.where === 'file', hit.field),
         ...base(hit), owner: hit.owner, count: hit.count, context: hit.context, listings: [],
       });
     }
@@ -866,9 +871,9 @@ function startNoteAudit(input) {
             code, severity: 'warning', path: rel,
             detail: named ? (sources.length > 0 ? `${named} is in this note's title, frontmatter or text, and an index or listing page prints it` : `${named} is printed on this page of the site, which is not built from one note`)
               : sources.length > 0
-              ? `"${hit.alias}", ${withheld ? `the name of ${hit.owner === rel ? 'this note, which you marked withheld' : `${secret} (${hit.owner})`}` : `a name you keep secret in gm_aliases${hit.owner === rel ? '' : ` (of ${hit.owner})`}`}, is in this note's title, frontmatter or text, and an index or listing page prints it`
-              : `"${hit.alias}", ${withheld ? `the name of ${secret} (${hit.owner})` : `a name you keep secret in gm_aliases (of ${hit.owner})`}, is printed on this page of the site, which is not built from one note`,
-            fix: fixLine(hit.alias, hit.owner, false),
+              ? `"${hit.alias}", ${withheld ? `the name of ${hit.owner === rel ? 'this note, which you marked withheld' : `${secret} (${hit.owner})`}` : `a name you keep secret in ${hit.field || 'gm_aliases'}${hit.owner === rel ? '' : ` (of ${hit.owner})`}`}, is in this note's title, frontmatter or text, and an index or listing page prints it`
+              : `"${hit.alias}", ${withheld ? `the name of ${secret} (${hit.owner})` : `a name you keep secret in ${hit.field || 'gm_aliases'} (of ${hit.owner})`}, is printed on this page of the site, which is not built from one note`,
+            fix: fixLine(hit.alias, hit.owner, false, hit.field),
             ...base(hit), owner: hit.owner, count: hit.count, context: hit.context, listings: [],
           });
         }

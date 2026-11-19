@@ -2377,6 +2377,10 @@ function publishedFrontmatter(frontmatter, excludeFields = [], overrides = {}) {
   // links through `aliases`, so a GM alias is also removed from that list.
   const secret = new Set(gmAliasList(frontmatter).map(gmAliasKey));
   delete filtered.gm_aliases;
+  // A disguised NPC's true name and face stay off the site until wrap-up unmasks them
+  // (`gma reveal --unmask` moves them into `aliases` and `portrait`).
+  delete filtered.unmasked_name;
+  delete filtered.unmasked_portrait;
   // `withheld` is the note's own flag for the build; nothing on the site says a note has it.
   delete filtered.withheld;
   if (Array.isArray(filtered.aliases) && secret.size > 0) {
@@ -2443,6 +2447,12 @@ function gmAliasList(frontmatter) {
   }
   if (!Array.isArray(raw)) return [];
   return raw.map(a => String(a).trim()).filter(Boolean);
+}
+
+// A disguised NPC's true name (`unmasked_name`), as a list of names: one the site keeps secret until wrap-up
+// unmasks them. A secret name for the leak checks, as gm_aliases names are; it resolves no link.
+function unmaskedNames(frontmatter) {
+  return nameList(frontmatter && frontmatter.unmasked_name);
 }
 
 // How a name is compared against GM aliases: the way Obsidian resolves a link,
@@ -2674,4 +2684,4 @@ function gmAliasRewriter(pages, published, rawNotes, words, mark) {
   };
 }
 
-module.exports = { IMAGE_EXT_REGEX, isDocumentPage, fenceStep, unstableBodyMarked, unstableSectionsMarked, markedBlocksForTest: markedBlocks, htmlCommentsForTest: htmlComments, obsidianCommentsForTest: obsidianComments, calloutLinesForTest: calloutLines, strippedLines, cutLines, sectionWithholder, renderInline, findHeadings, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, renderMarkdown, processContent, playerSafeMarkdown, noteFacts, keptFlags, stubCut, extractSections, resolveWikiLinks, filterSections, isExcludedSection, strippedSectionTitles, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, uncommentedLines, stripLeadingH1, stripLeadingH1Marked, relativePath, relativeHref, humanizeName, wikiTargetLabel, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, campaignImageSrc, isWebImageAddress, encodeHref, encodeAddress, publishedSource, isSessionHub, renderMetaValue, plainMetaValue, plainRefValue, NOTE_NAME_FIELDS, refMetaValue, referenceOf, valueText, dateText, portraitBasename, filterFields, publishedFrontmatter, hiddenFieldsOf, gmAliasList, nameList, gmAliasKey, gmAliasRewriter, publishMode, isGmOnlyEdge, isWithheld, flagIsYes, withheldPlaceholder, withheldNameMarked, keepOnlySections, keptSectionFlags, stubMarked, sectionVerdicts, sheetWithheldTitles };
+module.exports = { IMAGE_EXT_REGEX, isDocumentPage, fenceStep, unstableBodyMarked, unstableSectionsMarked, markedBlocksForTest: markedBlocks, htmlCommentsForTest: htmlComments, obsidianCommentsForTest: obsidianComments, calloutLinesForTest: calloutLines, strippedLines, cutLines, sectionWithholder, renderInline, findHeadings, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, renderMarkdown, processContent, playerSafeMarkdown, noteFacts, keptFlags, stubCut, extractSections, resolveWikiLinks, filterSections, isExcludedSection, strippedSectionTitles, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, uncommentedLines, stripLeadingH1, stripLeadingH1Marked, relativePath, relativeHref, humanizeName, wikiTargetLabel, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, campaignImageSrc, isWebImageAddress, encodeHref, encodeAddress, publishedSource, isSessionHub, renderMetaValue, plainMetaValue, plainRefValue, NOTE_NAME_FIELDS, refMetaValue, referenceOf, valueText, dateText, portraitBasename, filterFields, publishedFrontmatter, hiddenFieldsOf, gmAliasList, unmaskedNames, nameList, gmAliasKey, gmAliasRewriter, publishMode, isGmOnlyEdge, isWithheld, flagIsYes, withheldPlaceholder, withheldNameMarked, keepOnlySections, keptSectionFlags, stubMarked, sectionVerdicts, sheetWithheldTitles };

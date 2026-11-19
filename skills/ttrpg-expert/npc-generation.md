@@ -185,6 +185,13 @@ In a vault, the finished block goes in the NPC note's `## GM Notes` as
 its `### Stats` section, in place of the template's `{STAT BLOCK: …}`
 paragraph or the system block's `{…}` fields.
 
+An NPC in disguise is filed under the name the PCs know. Its true name
+goes in `unmasked_name` and its true face, if it has one, in
+`unmasked_portrait`; neither is published. When the true self plays
+differently, add `- **Unmasked:** {how they speak}` to Playing Them.
+Wrap-up makes all three the NPC's own once the players see them
+unmasked.
+
 ## Generation from Constraints
 
 When user provides partial info, fill gaps while respecting

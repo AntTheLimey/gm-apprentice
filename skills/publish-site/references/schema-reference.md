@@ -71,13 +71,14 @@ beneath them. No accordion — the content flows as continuous prose.
 <!-- generated:fields-npc (scripts/gen_field_lists.py) -->
 Template fields: `companion`, `occupation`, `age`, `gender`,
 `nationality`, `status` (alive/dead/missing/unknown), `location`,
-`portrait`, `voice`.
+`portrait`, `voice`, `unmasked_name`, `unmasked_portrait`.
 <!-- /generated:fields-npc -->
 
 | Field | Status | Description |
 |-------|--------|-------------|
 | `rank` | Optional | Military or organizational rank |
 | `companion` | Optional | `true`: travels with the party, so Story pages never picture them, as with a PC |
+| `unmasked_name`, `unmasked_portrait` | Optional | A disguised NPC's true name and face: never published, and the leak check treats the name as a secret name, as a `gm_aliases` name |
 
 Body content renders below the header card. To keep a body section
 such as `Relationships` off the public site, `settings add` its

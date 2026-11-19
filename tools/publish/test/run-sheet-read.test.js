@@ -267,6 +267,47 @@ describe('run sheet reader', () => {
     });
   });
 
+  describe('unmask', () => {
+    const ASH = 'Characters/NPCs/Brother Ash.md';
+    const LUCAN = 'Characters/NPCs/Lucan Grey.md';
+
+    it('gm_aliases alone is not a disguise', () => {
+      const m = readRunSheet(copy(), PLAN, { party: PARTY });
+      assert.strictEqual(m.notes[LUCAN].unmask, null);
+      assert.strictEqual(m.notes[ASH].unmask, null);
+    });
+
+    it('unmasked_name gives an unmask', () => {
+      const dir = copy();
+      const ash = fs.readFileSync(path.join(dir, ASH), 'utf8')
+        .replace('type: npc\n', 'type: npc\nunmasked_name: " The Ember Abbot "\nunmasked_portrait: "_attachments/ember.png"\n')
+        .replace('- **Tell:**', '- **Unmasked:** cold, never says "indeed"\n- **Tell:**');
+      write(dir, ASH, ash);
+      write(dir, '_attachments/ember.png', 'x');
+      const m = readRunSheet(dir, PLAN, { party: PARTY });
+      assert.deepStrictEqual(m.notes[ASH].unmask, {
+        name: 'The Ember Abbot',
+        portrait: '_attachments/ember.png',
+        playAs: 'cold, never says "indeed" rubs his thumb along the rope scar',
+      });
+      // the disguise's own name and play-as are unchanged
+      assert.strictEqual(m.notes[ASH].name, 'Brother Ash');
+      assert.match(m.people.find((p) => p.note === ASH).playAs, /^slow, fond of the word/);
+    });
+
+    it('an unmask with no face or Unmasked line has what the note gives, and a missing face warns', () => {
+      const dir = copy();
+      const ash = fs.readFileSync(path.join(dir, ASH), 'utf8');
+      write(dir, ASH, ash.replace('type: npc\n', 'type: npc\nunmasked_name: The Ember Abbot\nunmasked_portrait: ""\n'));
+      let m = readRunSheet(dir, PLAN, { party: PARTY });
+      assert.deepStrictEqual(m.notes[ASH].unmask, { name: 'The Ember Abbot', portrait: null, playAs: 'rubs his thumb along the rope scar' });
+      write(dir, ASH, ash.replace('type: npc\n', 'type: npc\nunmasked_name: The Ember Abbot\nunmasked_portrait: nowhere.png\n'));
+      m = readRunSheet(dir, PLAN, { party: PARTY });
+      assert.strictEqual(m.notes[ASH].unmask.portrait, null);
+      assert.ok(m.warnings.some((w) => w.kind === 'no-portrait' && w.note === ASH && /unmasked_portrait nowhere\.png/.test(w.text)), JSON.stringify(m.warnings));
+    });
+  });
+
   it('plan with only a title reads to an empty model', () => {
     const dir = copy();
     write(dir, 'Lonely - Plan.md', '# Lonely\n');

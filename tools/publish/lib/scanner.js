@@ -465,14 +465,14 @@ function scanAllNotes(vaultPath, deps) {
       // A note that cannot be read stops the scan; one that reads but does not parse keeps its name below.
       const text = reading(rd, vaultPath, full);
       try {
-        // Only a note that declares aliases (or is `withheld`, or has a `companion:` value to check) needs its frontmatter parsed — or a session
-        // index or Wrap-Up the scan skipped, which session-hub.js still counts when it
+        // Only a note that declares aliases (or an `unmasked_name`, or is `withheld`, or has a `companion:` value to check)
+        // needs its frontmatter parsed — or a session index or Wrap-Up the scan skipped, which session-hub.js still counts when it
         // resolves a pairing link (a same-titled hub elsewhere makes a link ambiguous).
         // A note directly in _meta is read too: its type says whether it is the plugin's own (publish-decision.js).
         // A key written `withheld :` or `"withheld":` is the same key to YAML, so it is looked for so too (#352).
         const inMeta = path.relative(vaultPath, full).split(path.sep)[0] === '_meta';
         // A scene or a session Plan is read too (story-figures.js sceneCandidates), and a scene keeps its body.
-        if (inMeta || /^["']?(?:(?:gm_)?aliases|withheld|companion|title|publish)["']?[ \t]*:/m.test(text) || HOUSEKEEPING_TYPE_LINE.test(text) || SESSION_TYPE_LINE.test(text) || PREP_TYPE_LINE.test(text) || CHAPTER_TYPE_LINE.test(text) || OVERVIEW_TYPE_LINE.test(text)) {
+        if (inMeta || /^["']?(?:(?:gm_)?aliases|unmasked_name|withheld|companion|title|publish)["']?[ \t]*:/m.test(text) || HOUSEKEEPING_TYPE_LINE.test(text) || SESSION_TYPE_LINE.test(text) || PREP_TYPE_LINE.test(text) || CHAPTER_TYPE_LINE.test(text) || OVERVIEW_TYPE_LINE.test(text)) {
           const note = parseNote(text);
           frontmatter = note.data || {};
           if (frontmatter.type === 'scene') body = note.content;
@@ -480,9 +480,10 @@ function scanAllNotes(vaultPath, deps) {
       } catch (err) {
         // Its name still counts. A secret that silently stops being
         // protected is the one failure that must not be quiet.
-        if (/^gm_aliases[ \t]*:/m.test(text)) {
-          console.warn(`WARNING: ${path.relative(vaultPath, full)} has gm_aliases but its frontmatter `
-            + `can't be read (${err.message.split('\n')[0]}); those names are NOT hidden on the site.`);
+        const secretField = (/^(gm_aliases|unmasked_name)[ \t]*:/m.exec(text) || [])[1];
+        if (secretField) {
+          console.warn(`WARNING: ${path.relative(vaultPath, full)} has ${secretField} but its frontmatter `
+            + `can't be read (${err.message.split('\n')[0]}); ${secretField === 'gm_aliases' ? 'those names are NOT hidden' : 'its true name is NOT looked for'} on the site.`);
         }
         if (/^withheld[ \t]*:/m.test(text)) {
           console.warn(`WARNING: ${path.relative(vaultPath, full)} has withheld but its frontmatter `

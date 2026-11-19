@@ -2,7 +2,7 @@
 """reveal.py: apply the GM's yes to what a session let the players learn.
 
     reveal.py VAULT --session "Session 12" [--publish PATH]...
-              [--released "PATH=what came out"]... [--write]
+              [--released "PATH=what came out"]... [--unmask PATH]... [--write]
 
 Without `--write` it only says what it would do. With it, in this order:
 
@@ -31,8 +31,17 @@ stamped or logged. Prep notes
 never published here. With no site to publish through, `--publish` is
 refused; `--released` still logs.
 
+`--unmask` makes a disguised NPC's true self its own, once the GM releases
+the unmasking: `unmasked_name` goes into `aliases` (unless it is there
+already) and `unmasked_portrait` into `portrait`, each then emptied; in
+Playing Them, `**Speech:**` becomes `**Disguise:**` and `**Unmasked:**`
+becomes `**Speech:**`. Each is logged as its own entry,
+`{"kind": "unmask", "path", "name", "old_portrait", "session", "date"}`,
+so the disguise's face is kept; an entry without `kind` is a session's
+reveal. A note with no `unmasked_name` is refused with an ERROR row.
+
 Rows are `verb <TAB> path <TAB> detail`, then
-`# publish: N clear: N stamp: N log: N errors: N`.
+`# publish: N clear: N stamp: N unmask: N log: N errors: N`.
 Exit: 0 ok; 1 a path was refused or failed; 2 bad arguments.
 """
 
@@ -54,11 +63,17 @@ from vault_check import _site_config, ask_publish_tool  # noqa: E402
 from vault_write import set_block  # noqa: E402
 from vaultlib import (  # noqa: E402
     WITHHELD_KEY_RE, PublishToolUnavailable, entity_type, extract_frontmatter,
-    frontmatter_span, normalize_file_arg, note_withheld, publish_mode, scalar_value)
+    frontmatter_span, normalize_file_arg, note_withheld, publish_mode, scalar_value,
+    yaml_scalar)
 
 LOG = "_meta/reveals.json"
 EMPTY_VALUES = ("", "[]", "null", "~")     # YAML's empty values, as scalar_value reads them
 REVEALED_IN_KEY_RE = re.compile(r"""^["']?revealed_in["']?[ \t]*:""")
+PLAYING_THEM_RE = re.compile(r"^###[ \t]+Playing Them[ \t]*$")
+HEADING_RE = re.compile(r"^#{1,3}[ \t]")
+# A `**Label:**` line, bulleted or not, read as the run sheet reads one (any case).
+LABEL_RE = {name: re.compile(rf"^(\s*(?:[-*+][ \t]+)?)\*\*[ \t]*{name}[ \t]*:\*\*", re.I)
+            for name in ("Speech", "Unmasked")}
 
 
 def _nfc(s: str) -> str:
@@ -218,6 +233,77 @@ def _frontmatter_edit(vault: Path, rel: str, *, clear: bool,
     return "---" + eol + eol.join(fm) + eol + "---" + eol + "".join(lines[end + 1:]), None
 
 
+def _unmask_edit(vault: Path, rel: str) -> tuple[str | None, dict[str, Any] | None, str]:
+    """(new text, the log entry less its session, what changes), or
+    (None, None, why not)."""
+    if rel.startswith("_meta/"):
+        return None, None, "not a note to unmask: _meta notes are the vault's own"
+    full = vault / rel
+    if not rel.lower().endswith(".md") or not full.is_file():
+        return None, None, "no such note"
+    try:
+        full.resolve().relative_to(vault.resolve())
+    except ValueError:
+        return None, None, "outside the vault"
+    with open(full, encoding="utf-8", newline="") as f:
+        text = f.read()     # no newline translation: a CRLF note stays CRLF
+    lines = text.splitlines(keepends=True)
+    end, error = frontmatter_span(lines)
+    if error:
+        return None, None, f"nothing changed: frontmatter {error}"
+    fm = extract_frontmatter(text) or {}
+    name = fm.get("unmasked_name")
+    if not isinstance(name, str) or not name.strip():
+        return None, None, "nothing to unmask: the note has no unmasked_name"
+    name = name.strip()
+    face = fm.get("unmasked_portrait")
+    face = face.strip() if isinstance(face, str) else ""
+    eol = "\r\n" if lines[0].endswith("\r\n") else "\n"
+    head = [ln.rstrip("\r\n") for ln in lines[1:end]]
+    changes: list[str] = []
+    raw = fm.get("aliases")
+    # `aliases: Gilt` written alone is one alias, kept.
+    aliases = [raw] if isinstance(raw, str) and raw.strip() else \
+        [a for a in raw if isinstance(a, str)] if isinstance(raw, list) else []
+    if _nfc(name).casefold() not in {_nfc(a).strip().casefold() for a in aliases}:
+        set_block(head, "aliases", "[" + ", ".join(yaml_scalar(a) for a in [*aliases, name]) + "]")
+        changes.append(f"aliases + {name}")
+    set_block(head, "unmasked_name", '""')
+    old_face = None
+    if face:
+        old = fm.get("portrait")
+        old_face = old.strip() if isinstance(old, str) and old.strip() else None
+        set_block(head, "portrait", yaml_scalar(face))
+        set_block(head, "unmasked_portrait", '""')
+        changes.append(f"portrait {face}")
+    # Playing Them: the first Speech becomes Disguise and the first Unmasked becomes Speech,
+    # each line keeping its own ending.
+    body = lines[end + 1:]
+    inside = False
+    renamed = {"Speech": False, "Unmasked": False}
+    for i, line in enumerate(body):
+        if PLAYING_THEM_RE.match(line.rstrip("\r\n")):
+            inside = True
+            continue
+        if inside and HEADING_RE.match(line):
+            inside = False
+        if not inside:
+            continue
+        for old_label, new_label in (("Speech", "Disguise"), ("Unmasked", "Speech")):
+            m = LABEL_RE[old_label].match(line)
+            if m and not renamed[old_label]:
+                body[i] = f"{m.group(1)}**{new_label}:**{line[m.end():]}"
+                renamed[old_label] = True
+                break
+    if renamed["Speech"]:
+        changes.append("Speech is now Disguise")
+    if renamed["Unmasked"]:
+        changes.append("Unmasked is now Speech")
+    new = "---" + eol + eol.join(head) + eol + "---" + eol + "".join(body)
+    entry = {"kind": "unmask", "path": rel, "name": name, "old_portrait": old_face}
+    return new, entry, "; ".join(changes)
+
+
 def _load_log(vault: Path) -> dict[str, Any]:
     target = vault / LOG
     if not target.is_file():
@@ -235,7 +321,8 @@ def _merge_entry(log: dict[str, Any], session: str, published: list[str],
                  released: list[dict[str, str]]) -> None:
     today = date.today().isoformat()
     entry = next((e for e in log["entries"]
-                  if isinstance(e, dict) and e.get("session") == session), None)
+                  if isinstance(e, dict) and e.get("session") == session
+                  and "kind" not in e), None)
     if entry is None:
         entry = {"session": session, "date": today, "published": [], "released": []}
         log["entries"].append(entry)
@@ -269,9 +356,9 @@ def _write_log(vault: Path, log: dict[str, Any]) -> None:
 
 
 def run(vault: Path, session: str, publish: list[str], released: list[tuple[str, str]],
-        write: bool) -> tuple[list[str], int]:
+        write: bool, unmask: list[str] | None = None) -> tuple[list[str], int]:
     rows: list[str] = []
-    counts = {"publish": 0, "clear": 0, "stamp": 0, "log": 0, "errors": 0}
+    counts = {"publish": 0, "clear": 0, "stamp": 0, "unmask": 0, "log": 0, "errors": 0}
 
     def row(verb: str, path: str, detail: str = "") -> None:
         rows.append(f"{verb}\t{path}\t{detail}")
@@ -403,35 +490,59 @@ def run(vault: Path, session: str, publish: list[str], released: list[tuple[str,
                 if rel in unstamped:
                     row("SKIP", rel, unstamped[rel])
 
+    unmasked: list[dict[str, Any]] = []
+    for raw in dict.fromkeys(normalize_file_arg(r) for r in unmask or []):
+        new, entry, said = _unmask_edit(vault, raw)
+        if new is None or entry is None:
+            error(raw, said)
+            continue
+        if write:
+            try:
+                (vault / raw).write_text(new, encoding="utf-8", newline="")
+            except OSError as e:
+                error(raw, f"not unmasked: {e}")
+                continue
+        counts["unmask"] += 1
+        row("UNMASKED" if write else "WOULD-UNMASK", raw, said)
+        unmasked.append({**entry, "session": session, "date": date.today().isoformat()})
+
     # What came out on a page that was refused is not logged either.
     refused_paths = {os.path.normpath(r) for r in refused}
     items = [{"page": normalize_file_arg(p), "what": w} for p, w in released
              if os.path.normpath(normalize_file_arg(p)) not in refused_paths]
-    if published or items:
+    if published or items or unmasked:
         counts["log"] = 1
-        row("LOGGED" if write else "WOULD-LOG", LOG,
-            f"{session}: {len(published)} published, {len(items)} released")
+        said = f"{session}: {len(published)} published, {len(items)} released"
+        if unmasked:
+            said += f", {len(unmasked)} unmasked"
+        row("LOGGED" if write else "WOULD-LOG", LOG, said)
         if write:
             try:
                 log = _load_log(vault)
-                _merge_entry(log, session, published, items)
+                if published or items:
+                    _merge_entry(log, session, published, items)
+                log["entries"].extend(unmasked)
                 _write_log(vault, log)
             except (OSError, ValueError) as e:
                 counts["log"] = 0
                 error(LOG, f"not logged: {e}")
     rows.append(f"# publish: {counts['publish']} clear: {counts['clear']} "
-                f"stamp: {counts['stamp']} log: {counts['log']} errors: {counts['errors']}")
+                f"stamp: {counts['stamp']} unmask: {counts['unmask']} "
+                f"log: {counts['log']} errors: {counts['errors']}")
     return rows, (1 if counts["errors"] else 0)
 
 
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
         description="Publish what a session let the players learn, lift "
-                    "withheld, and log it. Dry run unless --write.")
+                    "withheld, unmask a disguised NPC, and log it. Dry run unless --write.")
     ap.add_argument("vault", type=Path, help="the vault folder")
     ap.add_argument("--session", required=True, help="the session's name, e.g. 'Session 12'")
     ap.add_argument("--publish", action="append", default=[], metavar="PATH", help="a note to publish")
     ap.add_argument("--released", action="append", default=[], metavar="PATH=WHAT", help="a note and what came out of it, to log")
+    ap.add_argument("--unmask", action="append", default=[], metavar="PATH",
+                    help="a disguised NPC the players saw unmasked: its unmasked_name "
+                         "and unmasked_portrait become its own")
     ap.add_argument("--write", action="store_true", help="make the changes (default: preview)")
     ap.epilog = 'Example: gma reveal "<vault>" --session "<title>" --publish "<path>" --write'
     return ap
@@ -457,7 +568,8 @@ def main(argv: list[str] | None = None) -> int:
     except SystemExit as e:
         return int(e.code) if isinstance(e.code, int) else 2
     released = [(p.strip(), w.strip()) for p, _, w in (r.partition("=") for r in args.released)]
-    rows, code = run(args.vault, args.session.strip(), args.publish, released, args.write)
+    rows, code = run(args.vault, args.session.strip(), args.publish, released, args.write,
+                     args.unmask)
     print("\n".join(rows))
     return code
 

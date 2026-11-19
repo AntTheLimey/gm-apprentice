@@ -19,6 +19,8 @@ status: alive         # alive / dead / missing / unknown
 location: ""          # "[[Where they can usually be found]]"
 portrait: ""
 voice: ""            # set only when the GM gives this NPC their own story; how they are told and speak; never published
+unmasked_name: ""     # a disguise's true name: behind the run sheet's Unmask; never published
+unmasked_portrait: "" # a disguise's true face; never published
 relationships:
   - target: "[[]]"
     type: knows
@@ -72,6 +74,10 @@ slip she knows the Bishop.` session-wrapup adds a bullet each session.}
 the vault's system (campaign-organizer references/vault-setup.md).}
 
 ### Playing Them
+
+<!-- A disguised NPC whose true self plays differently adds
+`- **Unmasked:** {how the true self speaks}`; wrap-up turns it into
+Speech, and Speech into Disguise, when they are unmasked. -->
 
 - **Speech:** {accent, pace, a verbal tic}
 - **Tell:** {the gesture you do at the table}

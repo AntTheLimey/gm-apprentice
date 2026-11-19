@@ -114,8 +114,8 @@ next time it is published.
 
 ## ALIAS_IN_PROSE
 
-A name the GM keeps in a note's `gm_aliases` is printed on a published
-page. The row gives the note the page is built from (a PC's
+A name the GM keeps in a note's `gm_aliases`, or a disguised NPC's
+`unmasked_name`, is printed on a published page. The row gives the note the page is built from (a PC's
 `…_Story.md` for its story page), the name, the note that owns it, how
 often it is printed and the sentence as the page prints it.
 
@@ -132,7 +132,10 @@ rewording is the only fix.
   creature's `subtype`, a chapter's `overview`). Reword that field.
 
 If the GM says the name is no longer a secret, move it from
-`gm_aliases` to `aliases` on the owning note instead.
+`gm_aliases` to `aliases` on the owning note instead. An
+`unmasked_name` has no link fix; when the players have seen the
+unmasking, run `gma reveal <vault> --session "<title>" --unmask <path>`
+(session-wrapup 5c).
 
 ## NEVER_SHOW_IN_PROSE
 

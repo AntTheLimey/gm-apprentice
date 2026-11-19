@@ -341,9 +341,10 @@ gm-apprentice-publish leaks <list|check|accept|prune|settle> [--config <path>] [
 
 The leak check reads the built player site (the folder deploy uploads) for
 hidden text and secret names: any hidden sentence, list item or table cell of
-four words or more, a gm_aliases name, a withheld note's name, and any word
-player_site.never_show lists. deploy runs it and stops on a finding (unless
-deploy --ignore-leaks); these commands run it without deploying.
+four words or more, a gm_aliases name, a disguised NPC's unmasked_name, a
+withheld note's name, and any word player_site.never_show lists. deploy runs
+it and stops on a finding (unless deploy --ignore-leaks); these commands run it
+without deploying.
 
   leaks list                 Print the findings, each with a short id
   leaks check                The same, and exit 1 on a finding; also names
@@ -603,7 +604,8 @@ change what the site shows:
                   frontmatter value
   FENCE_UNCLOSED  a code fence never properly closed, with a hidden marker
                   below it that the page prints
-  ALIAS_IN_PROSE  a gm_aliases name printed on a page
+  ALIAS_IN_PROSE  a gm_aliases name, or a disguised NPC's unmasked_name,
+                  printed on a page
   WITHHELD_IN_PROSE
                   the file name, title or alias of a note marked withheld: true,
                   printed on a page, in the address of a link, held by the

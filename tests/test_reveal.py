@@ -104,7 +104,7 @@ class RevealTests(unittest.TestCase):
         ap.assert_called_once()
         self.assertEqual(ap.call_args.args[1], [VEX])
         self.assertIn("withheld: false", (self.root / VEX).read_text(encoding="utf-8"))
-        self.assertIn("# publish: 1 clear: 1 stamp: 0 log: 1 errors: 0", out)
+        self.assertIn("# publish: 1 clear: 1 stamp: 0 unmask: 0 log: 1 errors: 0", out)
         entries = log_of(self.root)["entries"]
         self.assertTrue(entries[0]["before_tracking"])
         self.assertEqual(entries[1]["session"], "Session 12")
@@ -195,7 +195,7 @@ class RevealTests(unittest.TestCase):
         self.assertIn(f"CLEARED\t{VEX}\twithheld: false", out)
         self.assertIn("withheld: false", (self.root / VEX).read_text(encoding="utf-8"))
         self.assertEqual(log_of(self.root)["entries"][-1]["published"], [VEX, "Places/Mill.md"])
-        self.assertIn("# publish: 2 clear: 1 stamp: 0 log: 1 errors: 0", out)
+        self.assertIn("# publish: 2 clear: 1 stamp: 0 unmask: 0 log: 1 errors: 0", out)
 
     def test_withheld_note_already_listed_dry_run(self) -> None:
         before = (self.root / VEX).read_bytes()
@@ -250,7 +250,7 @@ class RevealTests(unittest.TestCase):
             code, out, _ = run(self.root, "--publish", VEX, "--write")
         self.assertEqual(code, 1)
         self.assertIn(f"ERROR\t{VEX}\twithheld not cleared", out)
-        self.assertIn("# publish: 1 clear: 0 stamp: 0 log: 1 errors: 1", out)
+        self.assertIn("# publish: 1 clear: 0 stamp: 0 unmask: 0 log: 1 errors: 1", out)
         self.assertEqual(log_of(self.root)["entries"][-1]["published"], [VEX])
 
     def test_other_spellings_of_the_key_are_cleared(self) -> None:
@@ -391,7 +391,7 @@ class RevealTests(unittest.TestCase):
         text = (self.root / LEDGER).read_text(encoding="utf-8")
         self.assertIn("withheld: false", text)
         self.assertNotIn("revealed_in", text)
-        self.assertIn("# publish: 1 clear: 1 stamp: 0 log: 1 errors: 0", out)
+        self.assertIn("# publish: 1 clear: 1 stamp: 0 unmask: 0 log: 1 errors: 0", out)
 
     def test_explain_answer_not_understood_warns(self) -> None:
         self._props()
@@ -448,7 +448,7 @@ class RevealTests(unittest.TestCase):
         self.assertEqual(code, 0, out)
         self.assertEqual((self.root / LETTER).read_bytes(), before)
         self.assertIn(f"SKIP\t{LETTER}\talready published; not logged for this session", out)
-        self.assertIn("# publish: 0 clear: 0 stamp: 0 log: 0 errors: 0", out)
+        self.assertIn("# publish: 0 clear: 0 stamp: 0 unmask: 0 log: 0 errors: 0", out)
 
     def test_listed_withheld_prop_is_lifted_stamped_and_logged(self) -> None:
         self._props()
@@ -462,7 +462,7 @@ class RevealTests(unittest.TestCase):
         self.assertIn(f"PUBLISHED\t{LEDGER}\talready on the publish list; withheld lifted", out)
         self.assertIn(f"STAMPED\t{LEDGER}\trevealed_in: [[{S05}]]", out)
         self.assertEqual(log_of(self.root)["entries"][-1]["published"], [LEDGER])
-        self.assertIn("# publish: 1 clear: 1 stamp: 1 log: 1 errors: 0", out)
+        self.assertIn("# publish: 1 clear: 1 stamp: 1 unmask: 0 log: 1 errors: 0", out)
 
     def test_unstampable_frontmatter_refuses_the_path(self) -> None:
         self._props()
@@ -506,7 +506,7 @@ class RevealTests(unittest.TestCase):
         self.assertIn("withheld: false", ledger)
         self.assertNotIn("revealed_in", (self.root / PELL).read_text(encoding="utf-8"))
         self.assertNotIn("revealed_in", (self.root / LETTER).read_text(encoding="utf-8"))
-        self.assertIn("# publish: 2 clear: 1 stamp: 1 log: 1 errors: 0", out)
+        self.assertIn("# publish: 2 clear: 1 stamp: 1 unmask: 0 log: 1 errors: 0", out)
 
     def test_unmapped_prop_dry_run_says_it_would_be_stamped(self) -> None:
         self._props()
@@ -632,7 +632,7 @@ class RevealTests(unittest.TestCase):
         self.assertIn(f"ERROR\t{LEDGER}\twithheld not cleared, revealed_in not written: "
                       "read-only", out)
         self.assertNotIn("STAMPED", out)
-        self.assertIn("# publish: 1 clear: 0 stamp: 0 log: 1 errors: 1", out)
+        self.assertIn("# publish: 1 clear: 0 stamp: 0 unmask: 0 log: 1 errors: 1", out)
 
     def test_count_line(self) -> None:
         self._props()
@@ -640,12 +640,132 @@ class RevealTests(unittest.TestCase):
                            explain=explain_answer((LEDGER,)))
         self.assertEqual(code, 0, out)
         self.assertEqual(out.splitlines()[-1],
-                         "# publish: 2 clear: 1 stamp: 1 log: 1 errors: 0")
+                         "# publish: 2 clear: 1 stamp: 1 unmask: 0 log: 1 errors: 0")
 
     def test_released_only_does_not_ask_explain(self) -> None:
         asked: list[list[str]] = []
         run(self.root, "--released", "Places/Mill.md=the wheel", "--write", asked=asked)
         self.assertEqual(asked, [])
+
+
+MASK = "NPCs/Pedlar.md"
+MASKED = (
+    "---\ntype: npc\naliases: [\"The Pedlar\"]\n"
+    "unmasked_name: \"Captain Rook\"\n"
+    "unmasked_portrait: \"_attachments/rook.png\"\n"
+    "portrait: \"_attachments/pedlar.png\"\n---\n\n"
+    "## Overview\n\nSells ribbons.\n\n<!-- gm-only -->\n\n## GM Notes\n\n"
+    "### Playing Them\n\n"
+    "- **Speech:** sing-song, haggles over farthings\n"
+    "- **Tell:** counts on his fingers\n"
+    "- **Unmasked:** clipped, a soldier's orders\n\n"
+    "### Wants\n\n- **Speech:** not this one\n\n<!-- /gm-only -->\n")
+# The shape a real unmasking left behind by hand: the true name already in
+# `aliases`, a `voice:` set, and Playing Them still the disguise's.
+GILT_SHAPED = (
+    "---\ntype: npc\naliases: [\"Old Wick\", \"Wick\", \"Hesper\"]\n"
+    "gm_aliases: [\"Sister Hesper\"]\n"
+    "unmasked_name: \"hesper\"\n"
+    "voice: \"Since the unmasking, Hesper: plain and urgent.\"\n"
+    "portrait: \"_attachments/wick.png\"\n---\n\n"
+    "## GM Notes\n\n### Playing Them\n\n"
+    "- **Speech:** loud, quick to complain.\n"
+    "- **Tell:** goes still at the hymn\n")
+
+
+class UnmaskTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name)
+        make(self.root, {MASK: MASKED, "NPCs/Wick.md": GILT_SHAPED})
+
+    def fm(self, rel: str) -> dict:
+        return reveal.extract_frontmatter((self.root / rel).read_text(encoding="utf-8")) or {}
+
+    def test_unmask_moves_the_name_and_face_and_logs_the_old_face(self) -> None:
+        code, out, _ = run(self.root, "--unmask", MASK, "--write")
+        self.assertEqual(code, 0, out)
+        fm = self.fm(MASK)
+        self.assertEqual(fm["aliases"], ["The Pedlar", "Captain Rook"])
+        self.assertEqual(fm["unmasked_name"], "")
+        self.assertEqual(fm["portrait"], "_attachments/rook.png")
+        self.assertEqual(fm["unmasked_portrait"], "")
+        text = (self.root / MASK).read_text(encoding="utf-8")
+        self.assertIn("- **Disguise:** sing-song, haggles over farthings\n", text)
+        self.assertIn("- **Speech:** clipped, a soldier's orders\n", text)
+        self.assertNotIn("**Unmasked:**", text)
+        self.assertIn("- **Speech:** not this one", text, "only Playing Them changes")
+        self.assertIn("UNMASKED\t" + MASK, out)
+        self.assertIn("unmask: 1", out.splitlines()[-1])
+        entries = log_of(self.root)["entries"]
+        unmask = [e for e in entries if e.get("kind") == "unmask"]
+        self.assertEqual(len(unmask), 1)
+        self.assertEqual({k: unmask[0][k] for k in ("kind", "path", "name", "old_portrait", "session")},
+                         {"kind": "unmask", "path": MASK, "name": "Captain Rook",
+                          "old_portrait": "_attachments/pedlar.png", "session": "Session 12"})
+
+    def test_unmask_on_a_gilt_shaped_note_adds_no_duplicate_alias(self) -> None:
+        code, out, _ = run(self.root, "--unmask", "NPCs/Wick.md", "--write")
+        self.assertEqual(code, 0, out)
+        fm = self.fm("NPCs/Wick.md")
+        self.assertEqual(fm["aliases"], ["Old Wick", "Wick", "Hesper"])
+        self.assertEqual(fm["unmasked_name"], "")
+        self.assertEqual(fm["portrait"], "_attachments/wick.png", "no unmasked face: the face stays")
+        self.assertEqual(fm["gm_aliases"], ["Sister Hesper"])
+        self.assertTrue(fm["voice"].startswith("Since the unmasking"))
+        text = (self.root / "NPCs/Wick.md").read_text(encoding="utf-8")
+        self.assertIn("- **Disguise:** loud, quick to complain.\n", text)
+        self.assertNotIn("**Speech:**", text, "no Unmasked line takes Speech's place")
+        entry = next(e for e in log_of(self.root)["entries"] if e.get("kind") == "unmask")
+        self.assertEqual(entry["name"], "hesper")
+        self.assertIsNone(entry["old_portrait"])
+
+    def test_unmask_needs_unmasked_name(self) -> None:
+        code, out, _ = run(self.root, "--unmask", VEX, "--write")
+        self.assertEqual(code, 1, out)
+        self.assertIn("ERROR\t" + VEX + "\t", out)
+        self.assertIn("unmasked_name", out)
+        self.assertFalse((self.root / "_meta" / "reveals.json").exists())
+        for missing in ("NPCs/Nobody.md", "_meta/x.md"):
+            code, out, _ = run(self.root, "--unmask", missing)
+            self.assertEqual(code, 1, out)
+            self.assertIn("ERROR\t" + missing, out)
+
+    def test_unmask_dry_run_writes_nothing(self) -> None:
+        before = (self.root / MASK).read_text(encoding="utf-8")
+        code, out, _ = run(self.root, "--unmask", MASK)
+        self.assertEqual(code, 0, out)
+        self.assertIn("WOULD-UNMASK\t" + MASK, out)
+        self.assertIn("Captain Rook", out)
+        self.assertIn("WOULD-LOG", out)
+        self.assertEqual((self.root / MASK).read_text(encoding="utf-8"), before)
+        self.assertFalse((self.root / "_meta" / "reveals.json").exists())
+
+    def test_unmask_and_reveal_in_one_session_keep_their_own_entries(self) -> None:
+        run(self.root, "--unmask", MASK, "--write")
+        code, out, _ = run(self.root, "--publish", VEX, "--write")
+        self.assertEqual(code, 0, out)
+        entries = log_of(self.root)["entries"]
+        reveal_entry = next(e for e in entries if e.get("session") == "Session 12" and "kind" not in e)
+        self.assertEqual(reveal_entry["published"], [VEX])
+        unmask = next(e for e in entries if e.get("kind") == "unmask")
+        self.assertNotIn("published", unmask)
+
+    def test_unmask_keeps_a_lone_alias(self) -> None:
+        (self.root / MASK).write_text(MASKED.replace('aliases: ["The Pedlar"]', "aliases: Pedlar Jack"),
+                                      encoding="utf-8")
+        code, out, _ = run(self.root, "--unmask", MASK, "--write")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.fm(MASK)["aliases"], ["Pedlar Jack", "Captain Rook"])
+
+    def test_unmask_keeps_crlf(self) -> None:
+        (self.root / MASK).write_bytes(MASKED.replace("\n", "\r\n").encode("utf-8"))
+        code, out, _ = run(self.root, "--unmask", MASK, "--write")
+        self.assertEqual(code, 0, out)
+        raw = (self.root / MASK).read_bytes().decode("utf-8")
+        self.assertNotIn("\n", raw.replace("\r\n", ""))
+        self.assertIn("- **Speech:** clipped, a soldier's orders\r\n", raw)
 
 
 @unittest.skipUnless(shutil.which("node"), "node is not installed")

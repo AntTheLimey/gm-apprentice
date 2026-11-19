@@ -29,7 +29,7 @@ being open.
 | Wrap-Up conformance (+ `--fix` re-nest) | `gma vault-check VAULT wrapup` |
 | Faults in the notes that change what the site shows (a named note with no page, a stray `%%`, an unclosed fence, a secret name in prose) | `gma vault-check VAULT site-faults` |
 | What the site still hides in the notes a session touched | `gma reveal-scan VAULT INDEX [--also PATH]` |
-| Publish what a session revealed, lift `withheld`, log it in `_meta/reveals.json` (dry run first; `--write`) | `gma reveal VAULT --session NAME` |
+| Publish what a session revealed, lift `withheld`, unmask a disguised NPC (`--unmask PATH`), log it in `_meta/reveals.json` (dry run first; `--write`) | `gma reveal VAULT --session NAME` |
 | Active PC roster | `gma vault-check VAULT active-pcs` |
 | Session-prep context bundle (one call) | `gma session-context` |
 | At-table plan brief | `gma session-context VAULT --play` |

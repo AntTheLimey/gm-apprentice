@@ -246,16 +246,18 @@ function buildIndex(vaultPath, { deps } = {}) {
     notes() { return pages.map((p) => p.path); },
     has(p) { return typeof p === 'string' && byPath.has(p); },
     // The note's portrait picture, vault-relative, or null. A portrait the frontmatter names that no
-    // picture the reader sees matches warns `no-portrait` on that note.
-    portrait(p) {
-      const name = portraitBasename(need(p).fm);
+    // picture the reader sees matches warns `no-portrait` on that note. `field` names another
+    // picture field read the same way (a disguised NPC's `unmasked_portrait`).
+    portrait(p, field = 'portrait') {
+      const name = portraitBasename({ portrait: need(p).fm[field] });
       if (!name) return null;
       const hit = attached()[name];
       const rel = hit ? toPosix(path.relative(vaultPath, hit.sourcePath)) : null;
       if (rel && !isLeftOut(rel)) return rel;
+      const what = field === 'portrait' ? 'portrait' : field;
       warn('no-portrait', p, rel
-        ? `its portrait ${name} is in a folder the reader skips: no portrait on the sheet`
-        : `its portrait ${name} matches no picture in the vault: no portrait on the sheet`);
+        ? `its ${what} ${name} is in a folder the reader skips: no portrait on the sheet`
+        : `its ${what} ${name} matches no picture in the vault: no portrait on the sheet`);
       return null;
     },
     warnings,

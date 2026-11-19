@@ -277,7 +277,9 @@ familiar, cohort); never pictured on Story pages), `occupation`,
 `age`, `gender`, `nationality`, `status` (alive/dead/missing/unknown),
 `location` (wiki-link: where they can usually be found), `portrait`,
 `voice` (set only when the GM gives this NPC their own story; how they
-are told and speak; never published)
+are told and speak; never published), `unmasked_name` (a disguise's
+true name: behind the run sheet's Unmask; never published),
+`unmasked_portrait` (a disguise's true face; never published)
 
 **PC:** `player_name`, `occupation`, `age`, `gender`, `nationality`,
 `status` (alive/dead/missing/retired/unknown), `key_traits`,

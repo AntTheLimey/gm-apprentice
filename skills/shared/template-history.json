@@ -22,7 +22,7 @@
   },
   "_Template_Document.md": {
    "a5f4cffbada9bea72a597fe2aa1ccdf2beece400b0bf1f4412b9a3330a246ae2": null,
-   "d7a80349cdf5643982ab4a24636c5b8953a1a8752155850bfa21d00a78700b15": "1.12.94"
+   "d7a80349cdf5643982ab4a24636c5b8953a1a8752155850bfa21d00a78700b15": "1.12.95"
   },
   "_Template_Event.md": {
    "201fef02eb94a48c434c3fc6ace02ee8cea384afff2f0939b55c5c07020cd2fc": null,
@@ -45,7 +45,8 @@
    "edd1d0e2b88fe22fc41eb12a6bc26762fc1775127e236551b86c591622295db6": null
   },
   "_Template_NPC.md": {
-   "a9976ae52a10a18e8e9f9cbcea5e88695a63ab0c2a67ba48a1ecd0b288dd0b1e": null,
+   "93c3f8b25e0e8407fb88564a8914b59d5cbee6982aef7aec610a2c629e8ef81d": null,
+   "a9976ae52a10a18e8e9f9cbcea5e88695a63ab0c2a67ba48a1ecd0b288dd0b1e": "1.12.95",
    "cba7b7df7dd8963b9134615dc7aacb496fa24c9121752e369abaee7ee2633104": "1.11.1"
   },
   "_Template_Organization.md": {
@@ -119,7 +120,7 @@
   },
   "_Template_Document.md": {
    "a5f4cffbada9bea72a597fe2aa1ccdf2beece400b0bf1f4412b9a3330a246ae2": null,
-   "d7a80349cdf5643982ab4a24636c5b8953a1a8752155850bfa21d00a78700b15": "1.12.94"
+   "d7a80349cdf5643982ab4a24636c5b8953a1a8752155850bfa21d00a78700b15": "1.12.95"
   },
   "_Template_Event.md": {
    "201fef02eb94a48c434c3fc6ace02ee8cea384afff2f0939b55c5c07020cd2fc": null,
@@ -142,8 +143,9 @@
    "edd1d0e2b88fe22fc41eb12a6bc26762fc1775127e236551b86c591622295db6": null
   },
   "_Template_NPC.md": {
-   "6d123b1f8ecbe8e60c513fd7d791f6803d2e4e9b3dd2db33054fea2439b67f9c": null,
-   "990a9cd37c1d076646f685be02dfd5318db449446f7d189f4203296f351fbf60": "1.11.1"
+   "6d123b1f8ecbe8e60c513fd7d791f6803d2e4e9b3dd2db33054fea2439b67f9c": "1.12.95",
+   "990a9cd37c1d076646f685be02dfd5318db449446f7d189f4203296f351fbf60": "1.11.1",
+   "a562315bf735fc93784ed7a7d79ff66578f6fb191eca4eb6166fb7a6f757cf58": null
   },
   "_Template_Organization.md": {
    "91d409ba7bd15cf111f20337c62f37f08b6d18e944e7a84f9700c8926fd0232b": null
@@ -216,7 +218,7 @@
   },
   "_Template_Document.md": {
    "a5f4cffbada9bea72a597fe2aa1ccdf2beece400b0bf1f4412b9a3330a246ae2": null,
-   "d7a80349cdf5643982ab4a24636c5b8953a1a8752155850bfa21d00a78700b15": "1.12.94"
+   "d7a80349cdf5643982ab4a24636c5b8953a1a8752155850bfa21d00a78700b15": "1.12.95"
   },
   "_Template_Event.md": {
    "201fef02eb94a48c434c3fc6ace02ee8cea384afff2f0939b55c5c07020cd2fc": null,
@@ -240,7 +242,8 @@
   },
   "_Template_NPC.md": {
    "62c9361d13575025f18a976398c8522afc179f035a09a7a094263fdb837c66ea": "1.11.1",
-   "83fc97703fb329bb9b712606a5956f22362f7c67b37aa189d0dfc3bb18a4de18": null
+   "83fc97703fb329bb9b712606a5956f22362f7c67b37aa189d0dfc3bb18a4de18": "1.12.95",
+   "d867456f5d2f0d4ab5ba397a19ed5d5af30d69ad3e57b54ba0b46f3ef54958e9": null
   },
   "_Template_Organization.md": {
    "91d409ba7bd15cf111f20337c62f37f08b6d18e944e7a84f9700c8926fd0232b": null
@@ -312,7 +315,7 @@
   },
   "_Template_Document.md": {
    "a5f4cffbada9bea72a597fe2aa1ccdf2beece400b0bf1f4412b9a3330a246ae2": null,
-   "d7a80349cdf5643982ab4a24636c5b8953a1a8752155850bfa21d00a78700b15": "1.12.94"
+   "d7a80349cdf5643982ab4a24636c5b8953a1a8752155850bfa21d00a78700b15": "1.12.95"
   },
   "_Template_Event.md": {
    "201fef02eb94a48c434c3fc6ace02ee8cea384afff2f0939b55c5c07020cd2fc": null,
@@ -335,8 +338,9 @@
    "edd1d0e2b88fe22fc41eb12a6bc26762fc1775127e236551b86c591622295db6": null
   },
   "_Template_NPC.md": {
+   "2dc4a59b7236196ea7a08d31d6f6b96ac91414d103ba59f7870f90926afc460a": null,
    "677c2321e34aff9b5cd56e704d4de56c02997a076c8927d790943f06d5fc739a": "1.11.1",
-   "9bac78aca0c3599fb04c00f8eaa49826975c7ded8540854e5b5b94c6d1b0c37c": null
+   "9bac78aca0c3599fb04c00f8eaa49826975c7ded8540854e5b5b94c6d1b0c37c": "1.12.95"
   },
   "_Template_Organization.md": {
    "91d409ba7bd15cf111f20337c62f37f08b6d18e944e7a84f9700c8926fd0232b": null
@@ -411,7 +415,7 @@
   },
   "_Template_Document.md": {
    "a5f4cffbada9bea72a597fe2aa1ccdf2beece400b0bf1f4412b9a3330a246ae2": null,
-   "d7a80349cdf5643982ab4a24636c5b8953a1a8752155850bfa21d00a78700b15": "1.12.94"
+   "d7a80349cdf5643982ab4a24636c5b8953a1a8752155850bfa21d00a78700b15": "1.12.95"
   },
   "_Template_Event.md": {
    "201fef02eb94a48c434c3fc6ace02ee8cea384afff2f0939b55c5c07020cd2fc": null,
@@ -434,8 +438,9 @@
    "edd1d0e2b88fe22fc41eb12a6bc26762fc1775127e236551b86c591622295db6": null
   },
   "_Template_NPC.md": {
+   "cdc770c0b1ae93db52d751fd6c3115330b8a950fe8a5cbd7678f652e01a521aa": null,
    "e7a53c88aa4a7c27b845d891f08488ddd4cd786b9498a0d4a8544878172f3d49": "1.11.1",
-   "ea4e06848270c229a4f03853785d58345306849bd906f41324977485842185e5": null
+   "ea4e06848270c229a4f03853785d58345306849bd906f41324977485842185e5": "1.12.95"
   },
   "_Template_Organization.md": {
    "91d409ba7bd15cf111f20337c62f37f08b6d18e944e7a84f9700c8926fd0232b": null
@@ -507,7 +512,7 @@
   },
   "_Template_Document.md": {
    "a5f4cffbada9bea72a597fe2aa1ccdf2beece400b0bf1f4412b9a3330a246ae2": null,
-   "d7a80349cdf5643982ab4a24636c5b8953a1a8752155850bfa21d00a78700b15": "1.12.94"
+   "d7a80349cdf5643982ab4a24636c5b8953a1a8752155850bfa21d00a78700b15": "1.12.95"
   },
   "_Template_Event.md": {
    "201fef02eb94a48c434c3fc6ace02ee8cea384afff2f0939b55c5c07020cd2fc": null,
@@ -531,7 +536,8 @@
   },
   "_Template_NPC.md": {
    "0c2a0a0ea6f580b99e884af6df111bf21db1bb05ec6b0e65252503317ec2d601": "1.11.1",
-   "b3f8e6c64e52e1975d1fd572aa27ad2fcbd6bc06830df429ffb6c32c42a43019": null
+   "b3f8e6c64e52e1975d1fd572aa27ad2fcbd6bc06830df429ffb6c32c42a43019": "1.12.95",
+   "c296031fbe43377b2964d9adb9075a390aefa38de0af877ec5e2c2d8e8be5a46": null
   },
   "_Template_Organization.md": {
    "91d409ba7bd15cf111f20337c62f37f08b6d18e944e7a84f9700c8926fd0232b": null
@@ -605,7 +611,7 @@
   },
   "_Template_Document.md": {
    "a5f4cffbada9bea72a597fe2aa1ccdf2beece400b0bf1f4412b9a3330a246ae2": null,
-   "d7a80349cdf5643982ab4a24636c5b8953a1a8752155850bfa21d00a78700b15": "1.12.94"
+   "d7a80349cdf5643982ab4a24636c5b8953a1a8752155850bfa21d00a78700b15": "1.12.95"
   },
   "_Template_Event.md": {
    "201fef02eb94a48c434c3fc6ace02ee8cea384afff2f0939b55c5c07020cd2fc": null,
@@ -629,7 +635,8 @@
   },
   "_Template_NPC.md": {
    "8dbc533409713b76522bf5ebcf445352b2669762e90969d31e26ca509edf45c8": "1.11.1",
-   "cb1f2be11aad9e76cfd55268fab0e4285de9b4b50d85a57ebc4a75466787fcda": null
+   "b85b54062ec070324829d6323f5d692ba89f2fd94767af56834bf16ed2a3d5b9": null,
+   "cb1f2be11aad9e76cfd55268fab0e4285de9b4b50d85a57ebc4a75466787fcda": "1.12.95"
   },
   "_Template_Organization.md": {
    "91d409ba7bd15cf111f20337c62f37f08b6d18e944e7a84f9700c8926fd0232b": null
