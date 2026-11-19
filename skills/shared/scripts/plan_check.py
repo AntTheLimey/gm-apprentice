@@ -80,10 +80,10 @@ Checks, by id, level, and the rule they mechanise:
                          (`- words — Scene N`, `- [[Scene note]] ...`); a
                          bold lead with a colon is always a place
   hub-plain-bullet
-                WARNING  a hub with at least one place bullet and also a
+                WARNING  a hub with at least one place or pointer bullet and also a
                          bullet that is neither a place nor a pointer: the
                          sheet shows that line as a place (a plain line,
-                         not a bullet, below the block is read as a note)
+                         not a bullet, after a blank line is read as a note)
   hub-place-not-location
                 WARNING  a place bullet whose bold lead links a note that
                          is not `type: location` (needs a vault)
@@ -155,7 +155,7 @@ import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any, Callable, Iterator
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import vaultlib as vl                                  # noqa: E402
@@ -845,6 +845,8 @@ _PAREN_LABEL_RE = re.compile(
 _KNOWN_LABEL_NORMS: frozenset[str] = frozenset(
     {n.rstrip(".…").casefold() for n in (
         *SCENE_LABELS, *CONTINGENCY_LABELS, "Open to the party")})
+_INLINE_LABEL_NORMS: frozenset[str] = frozenset(
+    n.casefold() for n in _INLINE_LABELS)
 _NPC_TYPES = frozenset({"npc", "creature"})
 
 
@@ -856,6 +858,7 @@ class VaultIndex:
     def __init__(self, vault: Path | None) -> None:
         self.vault = vault
         self._by_name: dict[str, list[dict[str, Any]]] | None = None
+        self._bodies: dict[str, list[str]] = {}
         self._texts: dict[str, list[tuple[str, str]]] | None = None
         self._major: set[str] | None = None
         self._system: str | None = None
@@ -870,9 +873,28 @@ class VaultIndex:
             for rel, text in vl.vault_files(self.vault):
                 fm = vl.extract_frontmatter(text) or {}
                 for name in (Path(rel).stem, *vl.link_aliases(fm)):
-                    self._by_name.setdefault(
-                        vl.normalize(name), []).append(fm)
+                    key = vl.normalize(name)
+                    self._by_name.setdefault(key, []).append(fm)
+                    self._bodies.setdefault(key, []).append(vl.body_of(text))
         return self._by_name.get(vl.link_target(link), [])
+
+    def public_lines(self, link: str) -> list[str]:
+        """The lines of each note a link names that sit outside its
+        gm-only fences, as the run sheet reads a scene note's own text."""
+        if not self.notes(link):
+            return []
+        out: list[str] = []
+        for body in self._bodies.get(vl.link_target(link), []):
+            open_, at = False, 0
+            for m in vl.GM_MARKER_RE.finditer(body):
+                if bool(m.group(1)) != open_:
+                    continue
+                if not open_:
+                    out.extend(body[at:m.start()].splitlines())
+                open_, at = not open_, m.end()
+            if not open_:
+                out.extend(body[at:].splitlines())
+        return out
 
     def types(self, link: str) -> set[str] | None:
         """The `type`s of the notes a link names; None when the vault is
@@ -970,11 +992,13 @@ def _label_form_findings(locus: str, title: str, lines: list[str]
                 not in _KNOWN_LABEL_NORMS:
             continue
         name = m.group("name").strip()
+        fixed = (f"**{name}:**" if name.rstrip(".…").casefold()
+                 in _INLINE_LABEL_NORMS else f"**{name}**")
         out.append(Finding(
             "label-form", "WARNING", locus,
             f"label-form: '{title}' has {m.group(0)!r} — the run sheet "
             f"reads no label with a parenthesis inside the bold, so it "
-            f"will lack that part; write '**{name}**' and move the "
+            f"will lack that part; write '{fixed}' and move the "
             f"words out"))
     return out
 
@@ -1000,14 +1024,19 @@ def _if_table_findings(locus: str, title: str, lines: list[str]
         in_table = False
         if _BOLD_HEAD_RE.match(line):
             label = line.strip()
+        elif line.lstrip().startswith((">", "#")):
+            label = None  # a quote or a heading ends the block for the reader
     return out
 
 
-def _hub_findings(locus: str, title: str, lines: list[str],
-                  index: VaultIndex) -> list[Finding]:
+def _hub_menu(lines: list[str], index: VaultIndex
+              ) -> tuple[list[str], list[str], list[str], Callable[[str], list[str]]]:
+    """A hub's menu bullets and how the reader sorts them: (all bullets,
+    places, pointers to another scene, the links a bullet leads with)."""
     heads = [i for i, ln in enumerate(lines) if _WHERE_HEAD_RE.match(ln)]
     bullets = [ln for i in heads for ln in _block_after(lines, i)
                if ln[:1] in "-*+" and ln[1:2] == " "]
+
     def lead_links(ln: str) -> list[str]:
         m = _PLACE_BULLET_RE.match(ln)
         if m is not None:
@@ -1028,6 +1057,12 @@ def _hub_findings(locus: str, title: str, lines: list[str],
               if not is_pointer(ln)
               and (lead_links(ln) or _PLACE_BULLET_RE.match(ln))]
     pointers = [ln for ln in bullets if is_pointer(ln)]
+    return bullets, places, pointers, lead_links
+
+
+def _hub_findings(locus: str, title: str, lines: list[str],
+                  index: VaultIndex) -> list[Finding]:
+    bullets, places, pointers, lead_links = _hub_menu(lines, index)
     out = []
     if not places and not pointers:
         if bullets:
@@ -1044,9 +1079,9 @@ def _hub_findings(locus: str, title: str, lines: list[str],
             "hub-no-places", "WARNING", locus,
             f"hub-no-places: hub '{title}' lists no places and no leads — "
             f"{lack}"))
-    if places:
+    if places or pointers:
         for ln in bullets:
-            if ln in places or is_pointer(ln):
+            if ln in places or ln in pointers:
                 continue
             shown = ln[2:].strip()
             shown = shown if len(shown) <= 50 else shown[:47] + "..."
@@ -1055,7 +1090,8 @@ def _hub_findings(locus: str, title: str, lines: list[str],
                 f"hub-plain-bullet: hub '{title}' has the plain bullet "
                 f"{shown!r} among its places — the sheet shows this line "
                 f"as a place; move a note for the GM to a plain line, not "
-                f"a bullet, below the block, or write it as a bold place"))
+                f"a bullet, after a blank line below the block, or write it "
+                f"as a bold place"))
     for ln in places:
         for link in lead_links(ln):
             kinds = index.types(link)
@@ -1115,6 +1151,20 @@ def _foe_links(lines: list[str]) -> list[str]:
     return links
 
 
+def _spot_foe_links(lines: list[str], index: VaultIndex) -> list[str]:
+    """The links in a hub's place bullets beyond the bullet's own lead: the
+    reader adds each NPC or creature one to who. Pointer bullets are left."""
+    _bullets, places, _pointers, lead_links = _hub_menu(lines, index)
+    links: list[str] = []
+    for ln in places:
+        rest = list(_LINK_RE.findall(ln))
+        for lead in lead_links(ln):
+            if lead in rest:
+                rest.remove(lead)
+        links.extend(rest)
+    return links
+
+
 def _foe_findings(locus: str, title: str, lines: list[str],
                   index: VaultIndex) -> list[Finding]:
     """A person the beat names whose note only names a stock creature: the
@@ -1122,7 +1172,7 @@ def _foe_findings(locus: str, title: str, lines: list[str],
     import npc_stats
     out: list[Finding] = []
     seen: set[str] = set()
-    for link in _foe_links(lines):
+    for link in (*_foe_links(lines), *_spot_foe_links(lines, index)):
         for note, text in index.foes(link):
             if note in seen:
                 continue
@@ -1182,8 +1232,11 @@ def _run_sheet_scene(rel: str, title: str, body: str, planned: bool,
             has_locations: bool | None = False
         else:  # the scene note may hold the place; with no vault, unknown
             notes = index.notes(link)
-            has_locations = (any(vl.link_targets(fm.get("locations"))
-                                 for fm in notes) if notes else None)
+            # a place is a link to a location note; the reader skips others
+            has_locations = (any(
+                "location" in (index.types(t) or ())
+                for fm in notes for t in vl.link_targets(fm.get("locations"))
+            ) if notes else None)
         if has_locations is False:
             where = _entity_places(lines, index)
             if where:
@@ -1199,16 +1252,20 @@ def _run_sheet_scene(rel: str, title: str, body: str, planned: bool,
                 f"no-place: '{title}' has no '**Place:**' line — {lack}"))
     people = _entity_people(lines, index)
     if people:
-        head = next((i for i, ln in enumerate(lines)
-                     if _NPCS_HEAD_RE.match(ln)), None)
-        readable = head is not None and any(
+        # the scene note's own public text is read with the Plan's
+        link = _scene_note_link(title)
+        seen = lines + (index.public_lines(link) if link else [])
+        heads = [i for i, ln in enumerate(seen) if _NPCS_HEAD_RE.match(ln)]
+        readable = any(
             _NPC_LINE_RE.match(ln) and not _field_bullet(ln)
-            for ln in _block_after(lines, head))
+            for i in heads for ln in _block_after(seen, i))
         if not readable and not any(
-                _WHO_LINE_RE.match(ln) and _LINK_RE.search(ln)
-                for ln in lines):
+                _WHO_LINE_RE.match(ln) and any(
+                    (kinds := index.types(k)) is None or kinds & _NPC_TYPES
+                    for k in _LINK_RE.findall(ln))
+                for ln in seen):
             why = ("has an '**NPCs**' block with no '- **[[Name]]:**' line "
-                   "the sheet can read" if head is not None
+                   "the sheet can read" if heads
                    else "has no '**NPCs**' block")
             out.append(Finding(
                 "no-npcs-block", "WARNING", locus,

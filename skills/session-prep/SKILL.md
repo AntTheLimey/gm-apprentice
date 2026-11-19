@@ -506,8 +506,8 @@ A hub, `### Scene 0: Title (hub)`. A place bullet is somewhere the party
 can stand (a bold lead with a colon is always one); a pointer bullet,
 with no colon after its lead, is a lead to another scene, which has its
 own Place. Link the people who are standing at a place, and name
-anyone else without a link. A GM's note in a hub is a plain line, not a
-bullet, below the block.
+anyone else without a link. A GM's note in a hub is a plain line after a
+blank line, not a bullet (a bullet is a place wherever it sits).
 
 ```markdown
 **Where they can go**

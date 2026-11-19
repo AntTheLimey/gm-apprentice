@@ -1233,6 +1233,36 @@ class RunSheetChecksTests(unittest.TestCase):
     def test_a_scene_note_not_in_the_vault_is_scene_pointers_to_say(self):
         self.assertEqual(self.ids("### [[Ghost]]\n**Starts it:** t\n"), [])
 
+    def test_the_scene_notes_own_npcs_block_is_read_too(self):
+        # the run sheet reads a scene note's public text with the Plan's
+        self.note("Orme", "npc")
+        (self.vault / "Supper.md").write_text(
+            "---\ntype: scene\nlocations: [\"[[Orchard]]\"]\n---\n\n"
+            "**NPCs**\n- **[[Orme]]:** wants a word\n", encoding="utf-8")
+        self.note("Orchard", "location")
+        plan = "### [[Supper]]\n**Entities:** [[Orme]]\n**Starts it:** t\n"
+        self.assertEqual(self.ids(plan), [])
+        # a block behind a gm-only fence is not public
+        (self.vault / "Supper.md").write_text(
+            "---\ntype: scene\nlocations: [\"[[Orchard]]\"]\n---\n\n"
+            "<!-- gm-only -->\n**NPCs**\n- **[[Orme]]:** wants a word\n"
+            "<!-- /gm-only -->\n", encoding="utf-8")
+        self.assertEqual(self.ids(plan), ["no-npcs-block"])
+
+    def test_a_who_line_needs_a_person_to_clear_no_npcs_block(self):
+        self.note("Orme", "npc")
+        self.note("Orchard", "location")
+        ent = "**Entities:** [[Orme]]\n"
+        self.assertEqual(self.ids(self.scene(rest=ent + "**Who:** [[Orchard]]\n")),
+                         ["no-npcs-block"])
+        self.assertEqual(self.ids(self.scene(rest=ent + "**Who:** [[Orme]]\n")), [])
+
+    def test_a_scene_notes_locations_must_include_a_location(self):
+        self.note("Orme", "npc")
+        self.note("Supper", "scene", 'locations: ["[[Orme]]"]\n')
+        self.assertEqual(self.ids("### [[Supper]]\n**Starts it:** t\n"),
+                         ["no-place"])
+
     # foe-no-numbers
 
     def stock_note(self, name: str, body: str, type_: str = "npc",
@@ -1446,12 +1476,30 @@ class RunSheetChecksTests(unittest.TestCase):
         found = self.found(self.HUB.format(bullets=bullets))
         rows = rows_for(found, "hub-plain-bullet")
         self.assertEqual(len(rows), 1, found)
-        self.assertIn("a plain line, not a bullet, below the block",
+        self.assertIn("a plain line, not a bullet, after a blank line",
                       rows[0].message)
         # alone, or with only pointers, a plain bullet is hub-no-places' call
         self.assertEqual(self.ids(self.HUB.format(
             bullets="- **The yard:** hens\n- the cellar door — Scene 3\n")), [])
         self.assertIn("hub-plain-bullet", pc.RUN_SHEET_CHECKS)
+
+    def test_a_plain_bullet_beside_only_pointers_warns_hub_plain_bullet(self):
+        bullets = ("- the cellar door — Scene 3\n"
+                   "- GM: keep the clock secret\n")
+        found = self.found(self.HUB.format(bullets=bullets))
+        self.assertEqual(len(rows_for(found, "hub-plain-bullet")), 1, found)
+        self.assertEqual(self.ids(self.HUB.format(
+            bullets="- the cellar door — Scene 3\n")), [])
+
+    def test_a_stock_foe_linked_in_a_place_bullet_warns_foe_no_numbers(self):
+        self.stock_note("Hound", "Wolf (SRD)", type_="creature")
+        found = self.found(self.HUB.format(
+            bullets="- **The yard:** [[Hound]] guards the gate\n"))
+        self.assertEqual(len(rows_for(found, "foe-no-numbers")), 1, found)
+        # pointer text is left out of foe discovery
+        found = self.found(self.HUB.format(
+            bullets="- [[Hound]] bays — Scene 3\n"))
+        self.assertEqual(rows_for(found, "foe-no-numbers"), [])
 
     def test_a_bold_plain_name_npc_line_is_readable(self):
         self.note("Orme", "npc")
@@ -1603,6 +1651,15 @@ class RunSheetChecksTests(unittest.TestCase):
         self.assertEqual(self.ids(self.scene(
             rest="- **Entities:** the orchard\n")), [])
 
+    def test_an_inline_label_with_a_parenthesis_is_repaired_with_its_colon(self):
+        for line, fix in (("- **Place (where):** the yard", "'**Place:**'"),
+                          ("**NPCs (who is here)**", "'**NPCs**'")):
+            with self.subTest(line=line):
+                rows = rows_for(self.found(self.scene(
+                    place="", rest=f"{line}\n")), "label-form")
+                self.assertEqual(len(rows), 1)
+                self.assertIn(f"write {fix}", rows[0].message)
+
     def test_npcs_in_parentheses_warns_label_form(self):
         found = self.found(self.scene(
             rest="**NPCs (who is here)**\n- **[[Orme]]:** x\n"))
@@ -1666,8 +1723,27 @@ class RunSheetChecksTests(unittest.TestCase):
             rest="```\n" + self.TABLE + "```\n")), [])
 
     def test_a_mistyped_if_label_is_reported_once_not_twice(self):
-        ids = self.ids(self.scene(rest="**If the players:**\n" + self.TABLE))
-        self.assertNotIn("if-table-unlabelled", ids)
+        found = self.found(self.scene(rest="**If the players..**\n" + self.TABLE))
+        self.assertEqual(len(rows_for(found, "scene-labels")), 1, found)
+        self.assertEqual(rows_for(found, "if-table-unlabelled"), [])
+
+    def test_the_colon_form_of_the_if_label_is_clean(self):
+        found = self.found(self.scene(rest="**If the players:**\n" + self.TABLE))
+        self.assertEqual(rows_for(found, "scene-labels"), [])
+        self.assertEqual(rows_for(found, "if-table-unlabelled"), [])
+
+    def test_a_table_after_a_quote_is_no_longer_under_the_if_label(self):
+        # the reader ends the If block at the quote, so the second table is lost
+        rest = ("**If the players...**\n" + self.TABLE
+                + "\n> Read this aloud.\n\n" + self.TABLE)
+        self.assertEqual(self.ids(self.scene(rest=rest)),
+                         ["if-table-unlabelled"])
+
+    def test_a_table_after_a_heading_is_no_longer_under_the_if_label(self):
+        rest = ("**If the players...**\n" + self.TABLE
+                + "\n#### Later\n\n" + self.TABLE)
+        self.assertEqual(self.ids(self.scene(rest=rest)),
+                         ["if-table-unlabelled"])
 
 
 if __name__ == "__main__":
