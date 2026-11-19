@@ -681,6 +681,9 @@ class UnmaskTests(unittest.TestCase):
         self.addCleanup(self._tmp.cleanup)
         self.root = Path(self._tmp.name)
         make(self.root, {MASK: MASKED, "NPCs/Wick.md": GILT_SHAPED})
+        # The true faces the notes name are real pictures in the vault.
+        (self.root / "_attachments").mkdir()
+        (self.root / "_attachments" / "rook.png").write_bytes(b"png")
 
     def fm(self, rel: str) -> dict:
         return reveal.extract_frontmatter((self.root / rel).read_text(encoding="utf-8")) or {}
@@ -1074,6 +1077,69 @@ class UnmaskTests(unittest.TestCase):
         self.assertFalse((self.root / "_meta" / "reveals.json").exists())
         self.assertEqual([f.name for f in (self.root / "NPCs").iterdir() if f.name.startswith(".")], [],
                          "no temp file is left behind")
+
+    def test_unmask_refuses_a_true_face_that_is_no_picture(self) -> None:
+        """PR #799 B1: a face that names no file is refused, and the batch with it."""
+        self._write_mask('unmasked_portrait: "_attachments/rook.png"\n',
+                         'unmasked_portrait: "_attachments/not-there.png"\n')
+        before = {r: (self.root / r).read_bytes() for r in (MASK, "NPCs/Wick.md")}
+        code, out, _ = run(self.root, "--unmask", MASK, "--unmask", "NPCs/Wick.md", "--write")
+        self.assertEqual(code, 1, out)
+        self.assertIn(f"ERROR\t{MASK}\tnothing changed: unmasked_portrait names _attachments/not-there.png, "
+                      "which is no picture in the vault", out)
+        self.assertIn("ERROR\tNPCs/Wick.md\tnot unmasked, nothing changed", out)
+        for r, b in before.items():
+            self.assertEqual((self.root / r).read_bytes(), b, r)
+        # a bare file name is found wherever the picture sits, as the site finds it
+        self._write_mask('unmasked_portrait: "_attachments/rook.png"\n', 'unmasked_portrait: "rook.png"\n')
+        code, out, _ = run(self.root, "--unmask", MASK, "--write")
+        self.assertEqual(code, 0, out)
+
+    def test_unmask_a_second_time_skips_a_note_already_unmasked(self) -> None:
+        """PR #799 B2: a repeat run says the note is done and does not refuse the batch."""
+        code, out, _ = run(self.root, "--unmask", MASK, "--write", session="Session 11")
+        self.assertEqual(code, 0, out)
+        code, out, _ = run(self.root, "--unmask", MASK, "--unmask", "NPCs/Wick.md", "--write")
+        self.assertEqual(code, 0, out)
+        self.assertIn(f"SKIP\t{MASK}\talready unmasked in Session 11", out)
+        self.assertIn("UNMASKED\tNPCs/Wick.md", out)
+        self.assertEqual(self.fm("NPCs/Wick.md")["unmasked_name"], "")
+        # a note with no unmasked_name the log does not know is still an error
+        code, out, _ = run(self.root, "--unmask", VEX, "--write")
+        self.assertEqual(code, 1, out)
+        self.assertIn(f"ERROR\t{VEX}\tnothing to unmask", out)
+
+    def test_unmask_refuses_an_anchor_in_a_list_it_edits(self) -> None:
+        """PR #799 B3: the shape that once came out as [["Gilt"], "Lucan"]."""
+        self._write_mask('aliases: ["The Pedlar"]\n', "aliases: &a [Gilt]\n")
+        before = (self.root / MASK).read_bytes()
+        code, out, _ = run(self.root, "--unmask", MASK, "--write")
+        self.assertEqual(code, 1, out)
+        self.assertIn(f"ERROR\t{MASK}\tnothing changed: aliases uses a YAML anchor, alias or tag (&a)", out)
+        self.assertEqual((self.root / MASK).read_bytes(), before)
+
+    def test_unmask_check_finds_an_alias_or_secret_lost_on_the_way(self) -> None:
+        """PR #799 B3: every old aliases and kept gm_aliases entry must still be there."""
+        self._write_mask('aliases: ["The Pedlar"]\n',
+                         'aliases: ["The Pedlar", "Ribbon Man"]\ngm_aliases: ["The Ninth", "Captain Rook"]\n')
+        before = (self.root / MASK).read_bytes()
+        real_add, real_drop = reveal._add_to_list, reveal._drop_from_list
+
+        def lossy_add(head: list[str], key: str, name: str) -> None:
+            real_add(head, key, name)
+            head[:] = [h.replace('"Ribbon Man", ', "") for h in head]
+
+        def lossy_drop(head: list[str], key: str, name: str) -> list[str]:
+            gone = real_drop(head, key, name)
+            head[:] = [h.replace('"The Ninth"', "") for h in head]
+            return gone
+        for patch, why in ((mock.patch.object(reveal, "_add_to_list", lossy_add), "aliases lost Ribbon Man"),
+                           (mock.patch.object(reveal, "_drop_from_list", lossy_drop), "gm_aliases lost The Ninth")):
+            with patch:
+                code, out, _ = run(self.root, "--unmask", MASK, "--write")
+            self.assertEqual(code, 1, out)
+            self.assertIn(f"nothing changed: the edit did not come out right ({why})", out)
+            self.assertEqual((self.root / MASK).read_bytes(), before)
 
     def test_unmask_refuses_before_writing_when_the_log_cannot_be_written(self) -> None:
         """M1: a log folder that cannot be written to stops the unmask before any note changes."""

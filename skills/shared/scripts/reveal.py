@@ -44,8 +44,11 @@ links; a face written as a link or a list of one is that picture. Each is
 logged as its own entry,
 `{"kind": "unmask", "path", "name", "old_portrait", "session", "date"}`,
 so the disguise's face is kept; an entry without `kind` is a session's
-reveal. A note with no `unmasked_name`, or one this cannot read (several
-names, several faces, a link to nothing), is refused with an ERROR row.
+reveal. A note the log says is already unmasked (its true name in
+`aliases`, `unmasked_name` empty) is a SKIP row. A note with no
+`unmasked_name`, or one this cannot read (several names, several faces,
+a link to nothing, a face that is no picture in the vault, a YAML anchor,
+alias or tag on a list it edits), is refused with an ERROR row.
 Each edit is read back before it is written; one that did not come out
 right is an ERROR row and is not written. The unmaskings of one run are
 all or nothing: every note is checked first, and one refused, or a write
@@ -519,10 +522,68 @@ def _top_keys(head: list[str]) -> list[str]:
     return keys
 
 
-def _check_edit(new: str, name: str, face: str) -> str | None:
+EDITED_KEYS = ("aliases", "gm_aliases", "unmasked_name", "unmasked_portrait", "portrait")
+
+
+def _not_plain(head: list[str]) -> str | None:
+    """Why a key --unmask edits is written in a YAML shape it will not
+    touch (an anchor `&a`, an alias `*a` or a tag `!x` on its value or an
+    item), or None."""
+    for key in EDITED_KEYS:
+        at = next((i for i, ln in enumerate(head) if _key_re(key).match(ln)), None)
+        if at is None:
+            continue
+        end, _ = _list_lines(head, at)
+        values = [head[at].partition(":")[2]] + [
+            ln.lstrip()[1:] for ln in head[at + 1:end] if ln.lstrip().startswith("-")]
+        for v in values:
+            word = v.strip().split(" ", 1)[0]
+            if word[:1] in ("&", "*", "!"):
+                return (f"{key} uses a YAML anchor, alias or tag ({word}); "
+                        f"write it plainly, then run again")
+    return None
+
+
+def _picture_in_vault(vault: Path, face: str) -> bool:
+    """Whether `face` is a picture in the vault: at that path, or a file of
+    that name anywhere in it, as the site finds a portrait by its file
+    name (dot folders left out)."""
+    if (vault / face).is_file():
+        return True
+    want = _nfc(face.replace("\\", "/").rsplit("/", 1)[-1])
+    for folder, dirs, files in os.walk(vault):
+        dirs[:] = [d for d in dirs if not d.startswith(".") and d != "node_modules"]
+        if any(_nfc(f) == want for f in files):
+            return True
+    return False
+
+
+def _names_of(fm: dict[str, Any], key: str) -> list[str]:
+    """A list field's entries as read (`aliases: Gilt` alone is one)."""
+    raw = fm.get(key)
+    if isinstance(raw, str):     # `~` and `null` are YAML's empty values
+        return [raw.strip()] if raw.strip().lower() not in EMPTY_VALUES else []
+    return [a.strip() for a in raw if isinstance(a, str) and a.strip()] if isinstance(raw, list) else []
+
+
+def _lost(before: list[str], after: list[str]) -> list[str]:
+    left = list(after)
+    lost = []
+    for b in before:
+        hit = next((i for i, a in enumerate(left) if _same_name(a, b)), None)
+        if hit is None:
+            lost.append(b)
+        else:
+            del left[hit]
+    return lost
+
+
+def _check_edit(new: str, name: str, face: str, aliases_before: list[str],
+                gm_kept: list[str]) -> str | None:
     """Why the edited note is not what --unmask set out to write, or None:
     its frontmatter is read again (the strict span, one line per key) and
-    unmasked_name must be empty, aliases must hold the name, and with a
+    unmasked_name must be empty, aliases must hold every entry it held and
+    the name, gm_aliases every entry not taken out (`gm_kept`), and with a
     true face, portrait must be it and unmasked_portrait empty."""
     lines = new.splitlines(keepends=True)
     end, error = _unmask_span(lines)
@@ -541,6 +602,10 @@ def _check_edit(new: str, name: str, face: str) -> str | None:
         if isinstance(raw, list) else []
     if not any(_same_name(a, name) for a in aliases):
         return f"aliases do not hold {name}"
+    for key, kept in (("aliases", aliases_before), ("gm_aliases", gm_kept)):
+        lost = _lost(kept, _names_of(fm, key))
+        if lost:
+            return f"{key} lost {', '.join(lost)}"
     if face:
         if _one_picture(fm, "portrait") != (face, None):
             return f"portrait is not {face}"
@@ -579,6 +644,9 @@ def _unmask_edit(vault: Path, rel: str) -> tuple[str | None, dict[str, Any] | No
     face, why = _one_picture(fm, "unmasked_portrait")
     if why:
         return None, None, f"nothing changed: {why}"
+    if face and not _picture_in_vault(vault, face):
+        return None, None, (f"nothing changed: unmasked_portrait names {face}, which is no picture "
+                            f"in the vault; put the picture in the vault or fix the name, then run again")
     old_face = None
     if face:
         old_face, why = _one_picture(fm, "portrait")
@@ -587,7 +655,11 @@ def _unmask_edit(vault: Path, rel: str) -> tuple[str | None, dict[str, Any] | No
         old_face = old_face or None
     eol = "\r\n" if lines[0].endswith("\r\n") else "\n"
     head = [ln.rstrip("\r\n") for ln in lines[1:end]]
+    why = _not_plain(head)
+    if why:
+        return None, None, f"nothing changed: {why}"
     changes: list[str] = []
+    gone_all: list[str] = []
     raw = fm.get("aliases")
     # `aliases: Gilt` written alone is one alias, kept.
     aliases = [raw] if isinstance(raw, str) and raw.strip() else \
@@ -603,6 +675,7 @@ def _unmask_edit(vault: Path, rel: str) -> tuple[str | None, dict[str, Any] | No
         # flagging it.
         for gone in _drop_from_list(head, "gm_aliases", name):
             changes.append(f"gm_aliases - {gone}")
+            gone_all.append(gone)
     except ListShapeError as e:
         return None, None, f"nothing changed: {e}"
     _set_value(head, "unmasked_name", '""')
@@ -633,7 +706,12 @@ def _unmask_edit(vault: Path, rel: str) -> tuple[str | None, dict[str, Any] | No
         if renamed["unmasked"]:
             changes.append("Unmasked is now Speech")
     new = "---" + eol + eol.join(head) + eol + "---" + eol + "".join(body)
-    wrong = _check_edit(new, name, face)
+    gm_kept = list(_names_of(fm, "gm_aliases"))
+    for g in gone_all:
+        hit = next((i for i, k in enumerate(gm_kept) if _same_name(k, g)), None)
+        if hit is not None:
+            del gm_kept[hit]
+    wrong = _check_edit(new, name, face, _names_of(fm, "aliases"), gm_kept)
     if wrong:
         return None, None, f"nothing changed: the edit did not come out right ({wrong})"
     entry = {"kind": "unmask", "path": rel, "name": name, "old_portrait": old_face}
@@ -689,6 +767,25 @@ def _write_log(vault: Path, log: dict[str, Any]) -> None:
     except OSError:
         tmp.unlink(missing_ok=True)
         raise
+
+
+def _unmasked_before(vault: Path, rel: str, log: dict[str, Any]) -> str | None:
+    """The session a note was unmasked in, when it is done: the log holds an
+    unmask entry for it, its unmasked_name is empty and its aliases hold
+    that entry's name. None otherwise."""
+    entries = [e for e in log.get("entries", []) if isinstance(e, dict)
+               and e.get("kind") == "unmask" and e.get("path") == rel]
+    if not entries:
+        return None
+    try:
+        fm = extract_frontmatter((vault / rel).read_text(encoding="utf-8")) or {}
+    except (OSError, UnicodeDecodeError):
+        return None
+    last = entries[-1]
+    if not value_blank(fm.get("unmasked_name")) or \
+            not any(_same_name(a, str(last.get("name", ""))) for a in _names_of(fm, "aliases")):
+        return None
+    return str(last.get("session") or "an earlier session")
 
 
 def _replace_file(target: Path, data: bytes) -> None:
@@ -860,8 +957,9 @@ def run(vault: Path, session: str, publish: list[str], released: list[tuple[str,
         # The log is checked first, read and (on --write) written to: a note must
         # never be unmasked with its old face logged nowhere.
         problem = None
+        log_now: dict[str, Any] = {"entries": []}
         try:
-            _load_log(vault)
+            log_now = _load_log(vault)
         except (OSError, ValueError) as e:
             problem = f"{LOG} cannot be read ({e})"
         if problem is None and write:
@@ -876,7 +974,10 @@ def run(vault: Path, session: str, publish: list[str], released: list[tuple[str,
     refused_unmask: list[str] = []
     for raw in asked:
         new_text, entry, said = _unmask_edit(vault, raw)
-        if new_text is None or entry is None:
+        done_in = _unmasked_before(vault, raw, log_now) if new_text is None else None
+        if done_in is not None:
+            row("SKIP", raw, f"already unmasked in {done_in}; nothing to do")
+        elif new_text is None or entry is None:
             error(raw, said)
             refused_unmask.append(raw)
         else:
