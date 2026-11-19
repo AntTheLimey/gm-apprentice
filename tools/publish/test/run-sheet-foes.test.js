@@ -122,14 +122,21 @@ describe('run sheet foes', () => {
 
   it('a foe note\'s treasure joins the beat once', () => {
     const { index, beats } = setup();
+    const c = beats.find((b) => b.contingency);
+    assert.deepStrictEqual(c.treasure, []);
+    const r = foesFor({ ...c, who: [...c.who, ...c.who] }, index);
+    assert.strictEqual(r.treasure.length, 1);
+    assert.strictEqual(r.treasure[0].text, 'A wolf-tooth necklace');
+    assert.strictEqual(r.treasure[0].box, false);
+    assert.ok(r.treasure[0].key.includes('.loot.'));
+  });
+
+  it('a beat with its own treasure gets none from the foe note', () => {
+    const { index, beats } = setup();
     const gate = beats[0];
-    const r = foesFor({ ...gate, who: [...gate.who, ...gate.who] }, index);
-    const loot = r.treasure.filter((t) => t.text === 'A wolf-tooth necklace');
-    assert.strictEqual(loot.length, 1);
-    assert.strictEqual(loot[0].box, false);
-    assert.ok(loot[0].key.includes('.loot.'));
-    const keys = [...gate.treasure, ...r.treasure].map((t) => t.key);
-    assert.strictEqual(new Set(keys).size, keys.length);
+    assert.ok(gate.treasure.length > 0);
+    assert.ok(gate.who.some((w) => w.note === 'Creatures/Frost Wolf.md'));
+    assert.deepStrictEqual(foesFor(gate, index).treasure, []);
   });
 
   it('numbers stay on their line and a typeset minus reads', () => {

@@ -92,10 +92,10 @@ function foesFor(beat, index, seen = new Set()) {
     doneNotes.add(w.note);
     for (const b of bullets(r.info.treasure)) texts.push({ text: b.text, box: b.box });
   }
-  // Loot keys follow the beat's own so the same words keep one key apiece.
+  // A scene that lists its own treasure stands alone: a note's hoard is the same loot in other words.
   const own = (beat.treasure || []).map((t) => t.text);
-  const fresh = texts.filter((t) => !own.includes(t.text));
-  const keys = itemKeys(beat.key, 'loot', [...own, ...fresh.map((t) => t.text)]).slice(own.length);
+  const fresh = own.length ? [] : texts;
+  const keys = itemKeys(beat.key, 'loot', fresh.map((t) => t.text));
   const treasure = fresh.map((t, i) => ({ key: keys[i], text: t.text, box: t.box }));
   return { foes, treasure, warnings };
 }
