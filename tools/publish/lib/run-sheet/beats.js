@@ -262,6 +262,7 @@ function readBeats(planBody, index) {
         const q = plain ? itemText.match(PLAIN_NPC_LINE) : null;
         if (!q) return null;
         const name = q[1].trim();
+        if (pt.FIELD_NAMES.has(nameKey(name))) return null;
         const p = q[2] === undefined ? '' : q[2].trim();
         const counted = /^\d+$/.test(p);
         return { target: '', name, knownAs: p && !counted ? p : name, count: counted ? Number(p) : 1, counted, wants: q[4].replace(/\s+/g, ' ').trim() };

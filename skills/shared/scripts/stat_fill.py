@@ -307,10 +307,12 @@ def kept_lines(old: list[str]) -> list[str]:
 
 def kept_beside_placeholder(old: list[str]) -> list[str]:
     """What the GM wrote under a placeholder or blank block: every line but
-    the one deferral line itself (`Stats to come.`) and embeds. The deferral is the line that is itself a marker, or
-    one that names stats and defers; only with neither is it the first line
-    holding a deferral word (`later`, `pending` are ordinary words). The note
-    has no numbers here, so a table is the GM's own and stays."""
+    the one deferral line itself (`Stats to come.`), embeds and an unfilled
+    system template (`{...}` fields, an empty score table, its bare heads).
+    The deferral is the line that is itself a marker, or one that names
+    stats and defers; only with neither is it the first line holding a
+    deferral word (`later`, `pending` are ordinary words). Any other table
+    is the GM's own and stays."""
     lines = [ln for ln in old if npc_stats.DEFER_RE.search(ln)]
     drop = next((ln for ln in lines if npc_stats._standalone(ln)), None)
     if drop is None:
@@ -320,12 +322,43 @@ def kept_beside_placeholder(old: list[str]) -> list[str]:
         drop = lines[0]
     out: list[str] = []
     gone = False
+    run: list[str] = []
+
+    def flush() -> None:
+        # A table run: an empty score table is the template's, any other is
+        # the GM's own.
+        if run and not npc_stats._blank_table("\n".join(run)):
+            out.extend(run)
+        run.clear()
+
     for line in old:
+        if line.lstrip().startswith("|"):
+            run.append(line)
+            continue
+        flush()
         if not gone and line is drop:
             gone = True
-        elif not npc_stats.EMBED_RE.search(line):
+        elif not (npc_stats.EMBED_RE.search(line)
+                  or npc_stats.BRACE_RE.search(line)):
             out.append(line)
-    return _tidy(out)
+    flush()
+    return _tidy(_without_bare_heads(out))
+
+
+_BARE_HEAD_RE = re.compile(r"^\*\*[^*\n]+\*\*:?\s*$")
+
+
+def _without_bare_heads(lines: list[str]) -> list[str]:
+    """The template's bold heads (`**Traits**`) left with nothing under
+    them once its field lines are gone."""
+    keep: list[str] = []
+    for i, line in enumerate(lines):
+        if _BARE_HEAD_RE.match(line):
+            nxt = next((ln for ln in lines[i + 1:] if ln.strip()), None)
+            if nxt is None or _BARE_HEAD_RE.match(nxt):
+                continue
+        keep.append(line)
+    return keep
 
 
 def written(text: str, rel: str, c: Creature, stock_words: str | None

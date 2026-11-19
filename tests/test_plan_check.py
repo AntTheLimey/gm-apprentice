@@ -1245,6 +1245,12 @@ class RunSheetChecksTests(unittest.TestCase):
         self.assertIn("gma stat-fill", rows[0].message)
         self.assertIn("run sheet", rows[0].message)
 
+    def test_a_note_type_in_another_case_still_warns_foe_no_numbers(self):
+        self.stock_note("Tomas", "Commoner (SRD)", type_="NPC")
+        rest = "**NPCs**\n- **[[Tomas]]:** wants his cart back\n"
+        self.assertEqual(len(rows_for(
+            self.found(self.scene(rest=rest)), "foe-no-numbers")), 1)
+
     def test_a_stock_foe_in_another_system_says_write_the_numbers(self):
         self.stock_note("Tomas", "Commoner (SRD)", system="gurps-4e")
         found = self.found(self.scene(rest="**Entities:** [[Tomas]]\n"))

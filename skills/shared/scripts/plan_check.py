@@ -881,7 +881,7 @@ class VaultIndex:
             self._texts = {}
             for rel, text in vl.vault_files(self.vault):
                 fm = vl.extract_frontmatter(text) or {}
-                if vl.entity_type(fm) not in _NPC_TYPES:
+                if vl.entity_type(fm).strip().casefold() not in _NPC_TYPES:
                     continue
                 for name in (Path(rel).stem, *vl.link_aliases(fm)):
                     self._texts.setdefault(

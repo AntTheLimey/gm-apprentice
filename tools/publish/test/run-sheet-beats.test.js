@@ -693,6 +693,12 @@ describe('run sheet beats: the Plan shape', () => {
       }
     });
 
+    it('a bulleted field label under NPCs is no person, in both', () => {
+      const r = bothSides(SCENE('**Entities:** [[Name]]\n**NPCs**\n- **Handouts:** the letter\n'));
+      assert.ok(r.ids.includes('no-npcs-block'));
+      assert.ok(!r.beats[0].who.some((w) => w.name === 'Handouts'));
+    });
+
     it('a bold plain-name NPCs bullet: a who entry with no note, no no-npcs-block, in both', () => {
       const r = bothSides(SCENE('**Entities:** [[Name]]\n**NPCs**\n- **The shikarri:** wants a clean drive.\n'));
       assert.ok(!r.ids.includes('no-npcs-block'));

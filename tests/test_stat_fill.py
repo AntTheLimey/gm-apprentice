@@ -170,9 +170,25 @@ class FillTests(FillCase):
 
     def test_a_gm_table_beside_a_placeholder_is_kept(self):
         old = ["Stats to come.", "", "| Roll | Loot |", "|---|---|",
-               "| 1 | a knife {rusty} |"]
+               "| 1 | a rusty knife |"]
         out = stat_fill.kept_beside_placeholder(old)
         self.assertEqual(out, old[2:])
+
+    def test_a_pasted_template_beside_a_stock_name_leaves_nothing_of_itself(self):
+        tpl = (stat_fill.Path(stat_fill.__file__).parent.parent / "templates"
+               / "npc-stats" / "dnd-5e-2024.md").read_text()
+        body = tpl.split("### Stats\n", 1)[1]
+        v = self.vault({"Tomas.md": npc(body, type_="npc")})
+        self.run_cli(v, "Tomas.md", "--as", "Bandit", "--write")
+        text = self.read(v, "Tomas.md")
+        self.assertIn("**AC** 12", text)
+        for gone in ("{", "| STR |       |", "**Bonus Actions / Reactions**"):
+            self.assertNotIn(gone, text)
+
+    def test_a_blank_score_table_is_dropped_and_a_gm_table_kept(self):
+        old = ["|     | Score |", "|-----|-------|", "| STR |       |", "",
+               "| Roll | Loot |", "|---|---|", "| 1 | a knife |"]
+        self.assertEqual(stat_fill.kept_beside_placeholder(old), old[4:])
 
     def test_keeps_a_tuned_hp_line(self):
         v = self.vault({"Tomas.md": npc("Bandit (SRD)\n\nHP 5 after the fall.")})
