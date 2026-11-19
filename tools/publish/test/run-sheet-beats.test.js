@@ -132,6 +132,68 @@ describe('run sheet beats', () => {
     assert.doesNotMatch(b.extra, /waiting with the map/);
   });
 
+  it('real hub: a spot group of bold-named bullets', () => {
+    const index = buildIndex(copy());
+    const plan = fs.readFileSync(path.join(__dirname, 'fixtures', 'run-sheet-hub-plan.md'), 'utf8');
+    const { beats, warnings } = readBeats(plan, index);
+    const b = beats[0];
+    assert.deepStrictEqual(b.spots.map((s) => [s.name, s.note]), [
+      ['The guest wing', null], ['The chapel', null], ['The walls', null],
+      ['The Chapel Yard', 'Locations/The Chapel Yard.md'], ['The yard', null],
+    ]);
+    assert.deepStrictEqual(b.who.map((w) => [w.name, w.wants]), [
+      ['Brother Ash', 'at the stair'], ['Lucan Grey', 'kept the fire.'],
+      ['Sister Fen', 'caught with a knife.'], ['Frost Wolf', 'prowling.'],
+    ]);
+    // words no field holds stay, with their head; a PC is not a person here
+    assert.strictEqual(b.extra, '**Open to the party**\n- **The walls:** the lamp carvings.\n- **The yard:** [[Ada Moss]] keeps watch.');
+    assert.ok(!warnings.some((w) => w.kind === 'no-npcs-block'));
+  });
+
+  it('real hub: a spot group of plain bullets keeps its parenthesis', () => {
+    const index = buildIndex(copy());
+    const plan = fs.readFileSync(path.join(__dirname, 'fixtures', 'run-sheet-hub-plan.md'), 'utf8');
+    const b = readBeats(plan, index).beats[1];
+    assert.deepStrictEqual(b.spots.map((s) => [s.name, s.note]), [
+      ['The guest register (Hollis)', null], ['Crane by the fire', null],
+      ['The Gate House at dusk', 'Locations/The Gate House.md'],
+    ]);
+    assert.ok(!b.spots.some((s) => s.name === 'Open to the party'));
+    assert.deepStrictEqual(b.who, []);
+    assert.strictEqual(b.extra,
+      '**Open to the party** (scenes 1–8, any order, any number)\n- The guest register (Hollis) — Scene 1\n- Crane by the fire — Scene 4');
+  });
+
+  it('scene note text after the GM fence is kept', () => {
+    const dir = copy();
+    const note = path.join(dir, 'Chapters/Chapter 1/Scenes/The Bell Tower.md');
+    fs.appendFileSync(note, '\nAfter the fence.\n\n<!-- gm-only -->\nSecond secret.\n<!-- /gm-only -->\n');
+    const index = buildIndex(dir);
+    const b = byTitle(readBeats(index.read(PLAN).body, index).beats, 'The Bell Tower');
+    assert.match(b.extra, /After the fence\./);
+    assert.strictEqual(b.gmNotes, 'Fen cut the rope herself.\n\nSecond secret.');
+    assert.doesNotMatch(b.extra, /secret/i);
+  });
+
+  it('an If table with its own header keeps the header in extra', () => {
+    const { beats } = read((s) => s.replace('| Do | Then |', '| If | Then | Who |'));
+    assert.match(beats[0].extra, /\| If \| Then \| Who \|/);
+    assert.strictEqual(beats[0].ifs.length, 2);
+  });
+
+  it('a titled callout keeps its title in extra', () => {
+    const { beats } = read((s) => s.replace('> Read-aloud: A black gate', '> [!quote] At the gate\n> Read-aloud: A black gate'));
+    assert.strictEqual(beats[0].readAloud, 'Read-aloud: A black gate in a white wall, and a rope that ends in air.');
+    assert.match(beats[0].extra, /> \[!quote\] At the gate/);
+  });
+
+  it('an NPCs block with no readable lines says so', () => {
+    const { warnings } = read((s) => s.replace('**Starts it:** The bell has rung and the wolves are quiet.',
+      '**Starts it:** The bell has rung and the wolves are quiet.\n**NPCs**\n- the night watch'));
+    const w = warnings.find((x) => x.kind === 'no-npcs-block');
+    assert.match(w.text, /has no NPC lines the sheet can read/);
+  });
+
   it('a wrapped label keeps its second line', () => {
     const { beats } = read();
     assert.strictEqual(beats[0].situation,

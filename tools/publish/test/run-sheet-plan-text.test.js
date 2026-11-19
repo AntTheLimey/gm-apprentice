@@ -102,6 +102,23 @@ test('ranges: tableRanges and readAloudRanges cover what was read', () => {
   assert.deepEqual(t.readAloudRanges(''), []);
 });
 
+test('blocks finds every match and a link-named label is block content', () => {
+  const x = '**NPCs**\n- **[[Ash]]:** wants it\n- **[[Fen]] (2):** waits\n**Then:** z\n**npcs:**\n- c';
+  const bs = t.blocks(x, 'NPCs');
+  assert.deepEqual(bs.map((b) => [b.start, b.end, b.value]), [
+    [0, 2, '- **[[Ash]]:** wants it\n- **[[Fen]] (2):** waits'],
+    [4, 5, '- c'],
+  ]);
+  assert.equal(bs[0].sub, '- **[[Ash]]:** wants it\n- **[[Fen]] (2):** waits');
+  assert.deepEqual(t.block(x, 'NPCs'), { value: bs[0].value, start: 0, end: 2 });
+  assert.equal(t.endsBlock('- **[[Ash]]:** x'), false);
+  assert.equal(t.endsBlock('**Then:** z'), true);
+  assert.equal(t.endsBlock('**Then**'), true);
+  assert.equal(t.endsBlock('> q'), true);
+  assert.equal(t.endsBlock('- plain'), false);
+  assert.equal(t.endsBlock('**Open to the party** (any order)'), true);
+});
+
 test('a comment opener inside a fenced block stays literal', () => {
   const x = '```\n<!-- not a comment\n```\n**A:** v <!-- c -->\nafter';
   assert.equal(t.cleanText(x), '```\n<!-- not a comment\n```\n**A:** v \nafter');

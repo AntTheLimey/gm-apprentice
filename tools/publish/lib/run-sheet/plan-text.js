@@ -120,23 +120,40 @@ function label(text, name) {
   return labels(text).filter((l) => nameKey(l.name) === key && l.value !== '').map((l) => l.value).join('\n\n');
 }
 
-// The lines after a line that is only `**Name**` or `**Name:**`, up to the next label line, bare
-// bold heading line, quote or heading. Blank lines inside are kept; the value is trimmed.
-// Not found: { value: '', start: -1, end: -1 }.
-function block(text, name) {
+// True for a line that ends a block: a label line, a bare bold heading line (a parenthesis after it
+// allowed: `**Open to the party** (any order)`), a quote or a heading. A label whose name is a link
+// (`- **[[Ash]]:** wants X`) is an entry in the block, not a new label.
+const HEAD_PAREN = /^\*\*[^*\n]+?\*\*[ \t]*\([^)]*\)[ \t]*$/;
+function endsBlock(line) {
+  const l = String(line == null ? '' : line);
+  const lb = l.match(LABEL);
+  return Boolean((lb && !lb[1].trim().startsWith('[[')) || BLOCK_HEAD.test(l) || HEAD_PAREN.test(l) || isQuote(l) || HEADING.test(l));
+}
+
+// Every block headed by a line that is only `**Name**` or `**Name:**` (case-insensitive), in order:
+// the lines after the head up to the next line `endsBlock` stops at. Blank lines inside are kept;
+// `value` is trimmed. `start` is the head line, `end` the last non-blank body line, `sub` the body
+// lines (`start + 1` to `end`) as written, for a helper whose line indexes are then offset by `start + 1`.
+function blocks(text, name) {
   const key = nameKey(name);
   const lines = linesOf(text);
-  const at = lines.findIndex((l) => { const m = l.match(BLOCK_HEAD); return m && nameKey(m[1]) === key; });
-  if (at === -1) return { value: '', start: -1, end: -1 };
-  let end = at;
-  const body = [];
-  for (let i = at + 1; i < lines.length; i++) {
-    const l = lines[i];
-    if (LABEL.test(l) || BLOCK_HEAD.test(l) || isQuote(l) || HEADING.test(l)) break;
-    body.push(l);
-    if (!isBlank(l)) end = i;
+  const out = [];
+  for (let at = 0; at < lines.length; at++) {
+    const h = lines[at].match(BLOCK_HEAD);
+    if (!h || nameKey(h[1]) !== key) continue;
+    let end = at;
+    for (let i = at + 1; i < lines.length && !endsBlock(lines[i]); i++) if (!isBlank(lines[i])) end = i;
+    const sub = lines.slice(at + 1, end + 1).join('\n');
+    out.push({ value: sub.trim(), start: at, end, sub });
+    at = end;
   }
-  return { value: body.join('\n').trim(), start: at, end };
+  return out;
+}
+
+// The first of `blocks`. Not found: { value: '', start: -1, end: -1 }.
+function block(text, name) {
+  const b = blocks(text, name)[0];
+  return b ? { value: b.value, start: b.start, end: b.end } : { value: '', start: -1, end: -1 };
 }
 
 // The body rows of the first-found table lines: header and separator dropped, cells trimmed.
@@ -261,4 +278,4 @@ function unclaimed(text, claimed) {
   return linesOf(text).filter((_, i) => !taken.has(i)).join('\n').replace(/^(?:[ \t]*\n)+/, '').replace(/(?:\n[ \t]*)+$/, '').trim();
 }
 
-module.exports = { cleanText, sections, labels, label, block, tableRows, tableRanges, bullets, links, readAloud, readAloudRanges, unclaimed };
+module.exports = { cleanText, sections, labels, label, endsBlock, blocks, block, tableRows, tableRanges, bullets, links, readAloud, readAloudRanges, unclaimed };
