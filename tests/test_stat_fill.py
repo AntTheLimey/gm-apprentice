@@ -128,6 +128,14 @@ class FillTests(FillCase):
         _c, rows = self.run_cli(v, "Tomas.md", "--as", "Guard")
         self.assertEqual(rows[0], "FILLED\tTomas.md\tGuard")
 
+    def test_fills_a_wolf(self):
+        v = self.vault({"Pup.md": npc("As Wolf.", type_="creature")})
+        _c, rows = self.run_cli(v, "Pup.md", "--write")
+        self.assertEqual(rows[0], "FILLED\tPup.md\tWolf")
+        text = self.read(v, "Pup.md")
+        self.assertIn("**AC** 12 · **Initiative** +2 (12) · **HP** 11 (2d8+2)",
+                      text)
+
     def test_the_note_name_is_the_last_resort(self):
         v = self.vault({"Ghoul.md": npc("", type_="creature")})
         _c, rows = self.run_cli(v, "Ghoul.md", "--write")
@@ -204,14 +212,16 @@ class SourceTests(FillCase):
         shutil.copytree(stat_fill.SYSTEMS_DIR / "dnd-5e-2024", folder,
                         ignore=shutil.ignore_patterns("personal"))
         (folder / "personal").mkdir()
-        (folder / "personal" / "monsters-cr0-1.md").write_text(
-            "**Gloomwraith** | Undead | M | CR 0 (0 XP)\n"
-            "AC 99 | HP 99 (9d8) | Init +0 (10) | Speed 30 ft.\n"
-            "STR 10 DEX 10 CON 10 INT 10 WIS 10 CHA 10\n\n",
-            encoding="utf-8")
+        for name in ("monsters-cr0-1.md", "animals.md"):
+            (folder / "personal" / name).write_text(
+                "**Gloomwraith** | Undead | M | CR 0 (0 XP)\n"
+                "AC 99 | HP 99 (9d8) | Init +0 (10) | Speed 30 ft.\n"
+                "STR 10 DEX 10 CON 10 INT 10 WIS 10 CHA 10\n\n",
+                encoding="utf-8")
         self.assertEqual(
             [p.name for p in stat_fill.srd_files(systems)],
-            sorted(p.name for p in folder.glob("monsters-cr*.md")))
+            sorted(p.name for p in folder.glob("monsters-cr*.md"))
+            + ["animals.md"])
         self.assertNotIn("gloomwraith", stat_fill.load_srd(systems))
         v = self.vault({"Tomas.md": npc("As Gloomwraith.")})
         _c, rows = self.run_cli(v, "Tomas.md", "--systems-dir", str(systems))

@@ -20,8 +20,8 @@ One row a note, `STATUS<TAB>path<TAB>what`:
   NO-SRD         the creature files are not installed
 
 The creature is `--as`, else the name the note's stock line gives, else the
-note's `name`. It reads only the top-level `monsters-cr*.md` files of the
-D&D folder (never a `personal/` copy). It previews unless --write is given.
+note's `name`. It reads only the top-level `monsters-cr*.md` and `animals.md` files of
+the D&D folder (never a `personal/` copy). It previews unless --write is given.
 The SRD 5.2 is CC-BY 4.0 (see ATTRIBUTION.md).
 """
 
@@ -98,9 +98,11 @@ class Creature:
 # --- reading the shipped creature files -----------------------------------
 
 def srd_files(systems_dir: Path) -> list[Path]:
-    """The top-level `monsters-cr*.md` of the D&D folder: never a
-    subfolder's copy, so a `personal/` file is never read."""
-    return sorted((systems_dir / SYSTEM).glob("monsters-cr*.md"))
+    """The top-level `monsters-cr*.md` and `animals.md` of the D&D folder:
+    never a subfolder's copy, so a `personal/` file is never read."""
+    folder = systems_dir / SYSTEM
+    return [*sorted(folder.glob("monsters-cr*.md")),
+            *(p for p in (folder / "animals.md",) if p.is_file())]
 
 
 def split_top(text: str, sep: str = ", ") -> list[str]:

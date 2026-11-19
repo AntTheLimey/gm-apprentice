@@ -13,7 +13,7 @@ INIT_RE = re.compile(r"\| Init (?P<init>[+-]\d+ \(\d+\)) \|")
 
 def blocks() -> dict[str, str]:
     found: dict[str, str] = {}
-    for path in sorted(DIR.glob("monsters-cr*.md")):
+    for path in [*sorted(DIR.glob("monsters-cr*.md")), DIR / "animals.md"]:
         text = path.read_text(encoding="utf-8")
         heads = list(HEAD_RE.finditer(text))
         for i, m in enumerate(heads):
@@ -29,6 +29,12 @@ class InitiativeTests(unittest.TestCase):
         missing = [n for n, b in shipped.items()
                    if not INIT_RE.search(b.split("\n", 2)[1])]
         self.assertEqual(missing, [])
+
+    def test_every_animal_block_has_an_init_figure(self):
+        text = (DIR / "animals.md").read_text(encoding="utf-8")
+        heads = HEAD_RE.findall(text)
+        self.assertEqual(len(heads), 94)
+        self.assertEqual(len(INIT_RE.findall(text)), 94)
 
     def test_the_young_white_dragons_is_the_srds_not_dexs(self):
         block = blocks()["Young White Dragon"]

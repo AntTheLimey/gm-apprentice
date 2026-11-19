@@ -4,7 +4,8 @@
 This builds the five `skills/ttrpg-expert/systems/dnd-5e-2024/monsters-cr*.md`
 files the rules advisor reads. Run it after the SRD source changes:
 
-    python3 scripts/srd-monster-enricher.py <srd>/src/12_MonstersA-Z.md
+    python3 scripts/srd-monster-enricher.py <srd>/src/12_MonstersA-Z.md \
+        [--animals <srd>/src/13_Animals.md]
 
 It rewrites the five files in place, and an unchanged SRD gives byte-identical
 files. The SRD 5.2 is CC-BY 4.0 (see ATTRIBUTION.md).
@@ -721,13 +722,23 @@ def write_tier(tier_key, tier_info, monsters, max_bytes=MAX_REF_BYTES):
 
 def build_file(tier_key, tier_info, cr_groups, budget_tight=False):
     total = sum(len(ms) for ms in cr_groups.values())
-    lines = [
-        f"# D&D 5e 2024 — Monsters: {tier_info['label']}",
-        "",
-        f"{total} monsters from SRD 5.2. Enriched stat blocks for encounter building.",
-        "",
-        "**Format:** Enriched stat blocks — see Response Templates in monsters.md (index)",
-    ]
+    if tier_key == "animals":
+        lines = [
+            "# D&D 5e 2024 -- Animals",
+            "",
+            f"{total} animals from SRD 5.2, grouped by CR. Separate from monsters "
+            "-- used for wildlife encounters, companions, mounts, and Wild Shape forms.",
+            "",
+            "**Format:** Enriched stat blocks, as in the monsters files",
+        ]
+    else:
+        lines = [
+            f"# D&D 5e 2024 — Monsters: {tier_info['label']}",
+            "",
+            f"{total} monsters from SRD 5.2. Enriched stat blocks for encounter building.",
+            "",
+            "**Format:** Enriched stat blocks — see Response Templates in monsters.md (index)",
+        ]
     if budget_tight:
         lines.append("**Ability scores:** STR/DEX/CON/INT/WIS/CHA")
     lines.append("")
@@ -760,6 +771,8 @@ def fixup_speed(m):
 def main():
     parser = argparse.ArgumentParser(description='Enrich D&D 5e monster stat blocks from SRD 5.2')
     parser.add_argument('srd_path', type=Path, help='Path to SRD 12_MonstersA-Z.md')
+    parser.add_argument('--animals', type=Path, default=None,
+                        help='the SRD 13_Animals.md: also write animals.md')
     parser.add_argument('--out-dir', type=Path, default=OUT_DIR, help='Output directory')
     args = parser.parse_args()
 
@@ -784,6 +797,16 @@ def main():
 
     for tk in TIERS:
         print(f"  {tk}: {len(tier_monsters[tk])} monsters", file=sys.stderr)
+
+    if args.animals is not None:
+        beasts = parse_monsters(args.animals.read_text(encoding='utf-8'))
+        for m in beasts:
+            fixup_speed(m)
+        print(f"Parsed {len(beasts)} animals", file=sys.stderr)
+        content = write_tier('animals', {'label': 'Animals'}, beasts)
+        out_path = args.out_dir / 'animals.md'
+        out_path.write_text(content.rstrip('\n') + '\n', encoding='utf-8')
+        print(f"  {out_path.name}: {len(content.encode('utf-8')):,} bytes", file=sys.stderr)
 
     for tk, tv in TIERS.items():
         content = write_tier(tk, tv, tier_monsters[tk])

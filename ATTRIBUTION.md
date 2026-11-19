@@ -48,7 +48,8 @@ https://creativecommons.org/licenses/by/4.0/legalcode.
 Content derived from the SRD 5.2 includes: spell indexes and
 descriptions, magic item indexes and descriptions, and full
 monster stat blocks (ability scores, attacks, damage dice, save
-DCs, traits, legendary actions) for 235 creatures.
+DCs, traits, legendary actions) for 235 creatures, and the same
+compact blocks for 94 animals.
 `gma stat-fill` writes those creatures' SRD 5.2 names and numbers into a
 vault's notes, each with the SRD credit line (CC-BY 4.0).
 
