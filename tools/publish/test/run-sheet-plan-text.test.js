@@ -103,7 +103,7 @@ test('ranges: tableRanges and readAloudRanges cover what was read', () => {
 
 test('a comment opener inside a fenced block stays literal', () => {
   const x = '```\n<!-- not a comment\n```\n**A:** v <!-- c -->\nafter';
-  assert.equal(t.normalise(x), '```\n<!-- not a comment\n```\n**A:** v \nafter');
+  assert.equal(t.cleanText(x), '```\n<!-- not a comment\n```\n**A:** v \nafter');
   assert.equal(t.labels(x)[0].start, 3);
 });
 

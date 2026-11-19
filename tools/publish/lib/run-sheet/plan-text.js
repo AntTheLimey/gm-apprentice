@@ -2,14 +2,14 @@
 // Pure string helpers the run sheet reader builds on. Every one takes text that may be CRLF, may
 // hold <!-- comments -->, may be empty or odd, and never throws: empty input gives '' or [].
 //
-// LINE INDEXES. `start` and `end` are line indexes into `normalise(text)`: CRLF turned to LF, each
+// LINE INDEXES. `start` and `end` are line indexes into `cleanText(text)`: CRLF turned to LF, each
 // <!-- ... --> comment cut out but its line breaks kept, so a multi-line comment leaves blank lines
 // and never shifts the lines after it. `end` is INCLUSIVE. A caller that wants to know what no
-// field took passes the same text to `unclaimed`, which normalises it the same way.
+// field took passes the same text to `unclaimed`, which cleans it the same way.
 
 const { splitTableRow, wikilinkSpans, parseWikilink } = require('../wikilink');
 
-function normalise(text) {
+function cleanText(text) {
   const src = String(text == null ? '' : text).replace(/\r\n?/g, '\n').split('\n');
   const out = [];
   let inComment = false;
@@ -44,7 +44,7 @@ function normalise(text) {
   return out.join('\n');
 }
 
-const linesOf = (text) => normalise(text).split('\n');
+const linesOf = (text) => cleanText(text).split('\n');
 // true for each line inside a fenced code block, fence lines included
 function fenceMask(lines) {
   let fence = null;
@@ -261,4 +261,4 @@ function unclaimed(text, claimed) {
   return linesOf(text).filter((_, i) => !taken.has(i)).join('\n').replace(/^(?:[ \t]*\n)+/, '').replace(/(?:\n[ \t]*)+$/, '').trim();
 }
 
-module.exports = { normalise, sections, labels, label, block, tableRows, tableRanges, bullets, links, readAloud, readAloudRanges, unclaimed };
+module.exports = { cleanText, sections, labels, label, block, tableRows, tableRanges, bullets, links, readAloud, readAloudRanges, unclaimed };
