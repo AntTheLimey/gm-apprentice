@@ -1013,7 +1013,10 @@ function startNoteAudit(input) {
       found.push({
         code: 'ALIAS_NAME_PUBLIC', severity: 'warning', path: c.rel,
         detail: `"${c.alias}", ${kept}, is also the name of ${pageRel ? `the published page ${pageRel}` : 'a published page'}, so it is not looked for on the site`,
-        fix: `if the name is a secret, give ${pageRel || 'the published page'} another title or alias; if it is not, take it out of ${c.field}`,
+        // A name that is the page's own file name or path stays its name whatever its title or aliases say.
+        fix: `if the name is a secret, ${pageRel && [fold(baseName(pageRel)), fold(pageRel.replace(/\.md$/i, ''))].includes(c.key)
+          ? `rename ${pageRel} (campaign-qa offers to rename it, links included)`
+          : `give ${pageRel || 'the published page'} another title or alias`}; if it is not, take it out of ${c.field}`,
         name: c.alias, field: c.field, owner: c.rel, page: pageRel,
       });
     }

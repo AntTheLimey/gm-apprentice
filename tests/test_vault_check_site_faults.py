@@ -435,6 +435,9 @@ class SiteFaultRowsTests(unittest.TestCase):
         self.assertTrue(rows[0].startswith(
             f"WARNING\t{ZORN}\tALIAS_NAME_PUBLIC: \"Mara Quill\", the true name in "
             f"unmasked_name, is also the name of the published page {MARA}"), rows)
+        # the page's own file name: retitling it would not help, renaming the note does
+        self.assertIn(f"rename {MARA} (campaign-qa offers to rename it, links included)", rows[0])
+        self.assertNotIn("another title or alias", rows[0])
 
     def test_an_unmasked_name_that_names_no_one_is_a_row(self):
         vault, _site = make(self, {

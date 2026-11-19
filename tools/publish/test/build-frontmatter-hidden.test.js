@@ -61,7 +61,7 @@ test('unmasked_name and unmasked_portrait never reach a page and the picture is 
         if (e.isDirectory()) walk(path.join(dir, e.name)); else files.push(e.name);
       }
     })(path.join(v.root, 'docs'));
-    assert.ok(files.some((f) => f.startsWith('pedlar')), 'the portrait itself is copied');
+    assert.ok(files.includes('pedlar.png'), `the portrait itself is copied: ${files.join(', ')}`);
     assert.ok(!files.some((f) => f.startsWith('true-face')), 'the unmasked face is not');
   } finally { v.cleanup(); }
 });
