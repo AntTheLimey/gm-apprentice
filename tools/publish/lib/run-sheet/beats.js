@@ -167,6 +167,7 @@ function readBeats(planBody, index) {
     let sceneNote = null;
     let gmNotes = '';
     let text = planText;
+    let planStart = 0; // the first line of the Plan's own text in `text`
     let noteFm = null;
     // `### [[Note]]`, `### Scene 2: [[Note]]` and `### [[Note]] (hub)` all name a scene note.
     const mark = heading.match(HUB_MARK);
@@ -185,6 +186,7 @@ function readBeats(planBody, index) {
         const { pub, gm } = splitGm(note.body);
         gmNotes = gm;
         text = pub ? `${pub}\n\n${planText}` : planText;
+        planStart = pub ? pub.split('\n').length + 1 : 0;
       }
     }
 
@@ -239,9 +241,11 @@ function readBeats(planBody, index) {
     // punctuation trimmed) are the placeText; anything else is words, kept as placeText, and gives
     // no place. A link to a note of another type is words too.
     let placeText = '';
-    const placeLines = labelsNamed('Place');
+    // The Plan's own Place line, when it has one, is the scene's; else the scene note's.
+    const allPlace = labelsNamed('Place');
+    const placeLines = allPlace.some((l) => l.start >= planStart) ? allPlace.filter((l) => l.start >= planStart) : allPlace;
     if (placeLines.length) {
-      placeLines.forEach((l) => claim(l.start, l.end));
+      allPlace.forEach((l) => claim(l.start, l.end));
       const lm = placeLines.length === 1 ? placeLines[0].value.match(PLACE_LINK_FIRST) : null;
       let linked = lm ? resolve(linkParts(lm[1]).target) : null;
       if (linked && typeOf(linked) !== 'location') linked = null;
@@ -276,7 +280,8 @@ function readBeats(planBody, index) {
         if (!q) return null;
         const name = q[1].trim();
         if (pt.FIELD_NAMES.has(blockKey(name))) return null;
-        const p = q[2] === undefined ? '' : q[2].trim();
+        // the count or alias sits inside the bold (`**Guards (2):**`) or after it (`**Guards** (2):`)
+        const p = (q[2] !== undefined ? q[2] : (q[3] === undefined ? '' : q[3])).trim();
         const counted = /^\d+$/.test(p);
         return { target: '', name, knownAs: p && !counted ? p : name, count: counted ? Number(p) : 1, counted, wants: q[4].replace(/\s+/g, ' ').trim() };
       }
@@ -480,7 +485,7 @@ function readBeats(planBody, index) {
     const left = pt.unclaimed(text, ranges).replace(/\n[ \t]*\n(?:[ \t]*\n)+/g, '\n\n');
     const extra = left;
 
-    const type = nameKey(pt.label(text, 'Type'));
+    const type = nameKey(pt.label(text, 'Type').split(/[.\n]/)[0]); // plan-check reads the value up to its first period
     const hubLike = isHub || /\((?:hub|routing)\)/i.test(heading) || /^\s*scene\s+0\b/i.test(heading) || type === 'transition';
     for (const w of who) {
       if (isDead(w.note)) warnings.push({ kind: 'dead-in-scene', note: sceneNote, text: `${title} lists ${w.name}, whose note says dead, as here; the page shows them as written.` });

@@ -753,6 +753,56 @@ describe('run sheet beats: the Plan shape', () => {
       assert.strictEqual(ok.beats[0].ifs.length, 1);
     });
 
+    it('a table after a quote is outside the If block, in both', () => {
+      const t = '| Do | Then |\n|---|---|\n| a | b |\n';
+      const r = bothSides(SCENE(`**If the players...**\n${t}\n> Read this.\n\n${t.replace('| a | b |', '| c | d |')}`));
+      assert.ok(r.ids.includes('if-table-unlabelled'));
+      assert.deepStrictEqual(r.beats[0].ifs.map((x) => x.do), ['a']);
+    });
+
+    it('the first NPC bullet is read after a blank line, in both; a bulleted Place ends a Treasure block', () => {
+      const r = bothSides(SCENE('**Entities:** [[Name]]\n**NPCs**\n\n- **[[Name]]:** wants a word\n'));
+      assert.ok(!r.ids.includes('no-npcs-block'));
+      assert.deepStrictEqual(r.beats[0].who.map((w) => w.name), ['Name']);
+      const t = bothSides(SCENE('**Treasure**\n- a gem\n- **Place:** The yard\n', ''));
+      assert.deepStrictEqual(t.beats[0].treasure.map((x) => x.text), ['a gem']);
+      assert.strictEqual(t.beats[0].placeText, 'The yard');
+    });
+
+    it('a count after a bold plain NPC name is read, outside the bold or inside it', () => {
+      for (const line of ['- **Guards** (2): wait', '- **Guards (2):** wait']) {
+        const r = bothSides(SCENE(`**NPCs**\n${line}\n`));
+        assert.deepStrictEqual(r.beats[0].who.map((w) => [w.name, w.count]), [['Guards', 2]], line);
+      }
+    });
+
+    it('a Type that is transition before its first period is a transition in both', () => {
+      const r = bothSides(SCENE('**Type:** transition. A brief handoff.\n', ''));
+      assert.ok(!r.ids.includes('no-place'));
+      assert.ok(!r.warnings.some((w) => w.kind === 'no-place'));
+    });
+
+    it('the Plan\'s Place wins over a Place line in the scene note, in both', () => {
+      const notes = { 'Scenes/Supper.md': '---\nname: Supper\ntype: scene\n---\n\n**Place:** [[The Vicarage]]\n' };
+      const dir = skeletonVault();
+      for (const [rel, text] of Object.entries(notes)) {
+        fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
+        fs.writeFileSync(path.join(dir, rel), text);
+      }
+      const plan = '## Planned Scenes\n\n### [[Supper]]\n**Place:** [[Location]]\n**Starts it:** t\n';
+      const b = readBeats(plan, buildIndex(dir)).beats[0];
+      assert.deepStrictEqual([b.place, b.placeFrom], ['Locations/Location.md', 'place']);
+    });
+
+    it('a GM note in a hub is a plain line after a blank line; a bullet there is still a place, in both', () => {
+      const plain = bothSides(HUB('- **The yard:** hens\n\nGM: keep the clock secret.\n'));
+      assert.ok(!plain.ids.includes('hub-plain-bullet'));
+      assert.deepStrictEqual(plain.beats[0].spots.map((x) => x.name), ['The yard']);
+      const bullet = bothSides(HUB('- **The yard:** hens\n\n- GM: keep the clock secret.\n'));
+      assert.ok(bullet.ids.includes('hub-plain-bullet'));
+      assert.strictEqual(bullet.beats[0].spots.length, 2);
+    });
+
     it('a bare link first: a pointer only when it links a scene note, in both', () => {
       const lead = (link) => `### Scene 0: Out (hub)\n**Where they can go**\n- ${link} at dusk\n`;
       for (const [link, pointer] of [['[[Location]]', false], ['[[Scene note]]', true], ['[[No Such Note]]', false]]) {

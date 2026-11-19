@@ -169,8 +169,11 @@ function blocks(text, name) {
     if (!h || blockKey(h[1]) !== key) continue;
     let end = at;
     // a bulleted `- **Lead:** words` that continues the list (no blank line before it) is an item
-    // of the block; after a blank line it is the next field
-    const ends = (l, i) => fenced[i] || endsBlock(l) && !((i > at + 1 ? !isBlank(lines[i - 1]) && /^[-*+]\s/.test(l) && LABEL.test(l) : firstItem(l)) && !BLOCK_HEAD.test(l));
+    // of the block, unless it names a field the scene reads itself; after a blank line it is the
+    // next field. The first item is read whether or not blank lines come between it and the head.
+    let first = at + 1;
+    while (first < lines.length && isBlank(lines[first])) first++;
+    const ends = (l, i) => fenced[i] || endsBlock(l) && !(firstItem(l) && (i <= first || !isBlank(lines[i - 1])) && !BLOCK_HEAD.test(l));
     for (let i = at + 1; i < lines.length && !ends(lines[i], i); i++) if (!isBlank(lines[i])) end = i;
     const sub = lines.slice(at + 1, end + 1).join('\n');
     out.push({ value: sub.trim(), start: at, end, sub });
