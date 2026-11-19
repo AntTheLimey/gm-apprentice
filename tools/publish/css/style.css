@@ -1680,10 +1680,14 @@ tr:nth-child(even) {
   font-size: var(--font-size-900);
   overflow: hidden;
 }
+/* Inside .content the article picture rule would add its margin and corner radius (#769). */
 .npc-icon img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  margin: 0;
+  border-radius: 0;
+  max-width: none;
 }
 .npc-card h4 {
   font-size: var(--font-size-900);
@@ -3097,6 +3101,7 @@ body.landing-full-bleed > main.content > :not(.landing-hero) {
   float: right;
   margin: 0 0 var(--space-500) var(--space-750);
 }
+/* margin: .content img (the article picture rule) would add its own (#769). */
 .loc-card-thumb img.portrait,
 .intel-card-thumb img.portrait {
   width: 3.5rem;
@@ -3104,6 +3109,8 @@ body.landing-full-bleed > main.content > :not(.landing-hero) {
   object-fit: cover;
   border-radius: var(--radius-375);
   display: block;
+  margin: 0;
+  max-width: none;
 }
 .loc-type-badge {
   font-size: var(--font-size-700);
@@ -5328,7 +5335,8 @@ svg.cx-web .cx-node.cx-sel text, svg.cx-web .cx-node:focus-visible text { fill: 
   width: 1.75rem; height: 1.75rem; border-radius: 50%;
   overflow: hidden; flex-shrink: 0; background: var(--accent-dim);
 }
-.npc-row-avatar img.portrait { width: 100%; height: 100%; object-fit: cover; }
+/* .content img would add its margin and corner radius inside the circle (#769). */
+.npc-row-avatar img.portrait { width: 100%; height: 100%; object-fit: cover; margin: 0; border-radius: 0; max-width: none; }
 .npc-row-initials { font-size: 0.65rem; font-weight: 700; color: var(--accent); }
 
 /* A long inline code word (a file name in a Source callout) breaks at the edge on a phone rather than running past it. */
@@ -5440,7 +5448,9 @@ td.gl-pc a { display: flex; align-items: center; gap: 10px; text-decoration: non
    (height:100% doesn't resolve against a grid track, which left the portrait
    rendering as a clipped sliver). */
 .gl-av-img { display: block; padding: 0; overflow: hidden; background: none; }
-.gl-av-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* .content img (the article picture rule) would add its margin and corner radius here: the board sits inside
+   .content, so the picture slid 12px down its circle and left the top empty (#769). */
+.gl-av-img img { width: 100%; height: 100%; object-fit: cover; display: block; margin: 0; border-radius: 0; max-width: none; }
 .gl-pc-txt { display: flex; flex-direction: column; line-height: 1.15; }
 .gl-pc-name { font-weight: 600; }
 .gl-pc-sub { font-size: 0.7rem; color: var(--text-muted); min-height: 0; }

@@ -117,6 +117,7 @@ decision rather than pure score.
 
 ## Completed
 
+- ~~Party board portraits sit half-empty in their circles~~ — the article picture margin no longer reaches the board's portraits or the list pages' small pictures (#769, v1.12.86, tool 1.70.31)
 - ~~Scene types mix a tone (horror) with activities~~ — `scene_type` and the Plan's `**Type:**` line deleted; nothing read them; the update removes the field (#759, v1.12.85)
 - ~~`resolve --export` refuses an Export note's path in the vault~~ — it tries the path as given, then in the vault (#766, v1.12.84)
 - ~~The leak check flags a paused scene's `After [[Session]].` line~~ — the tool's own line under `## Paused` is not hidden when its session is published (#765, v1.12.83, tool 1.70.30)

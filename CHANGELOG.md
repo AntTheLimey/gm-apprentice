@@ -10,6 +10,12 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 ---
 
 
+## [1.12.86] — 2026-11-19
+
+### Fixed
+
+- The party page's portraits sat 12px low in their circles, the top of each circle empty: the article picture rule's margin reached them. The same margin no longer shifts the small pictures on the characters, NPC, faction and location lists (#769, tool 1.70.31).
+
 ## [1.12.85] — 2026-11-19
 
 ### Removed
