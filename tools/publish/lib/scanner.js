@@ -72,15 +72,17 @@ function dirIsExcluded(relPath, excludeDirs) {
   return matchExcludedDir(relPath, excludeDirs) !== undefined;
 }
 
-function mapFolder(vaultRelPath, folderMap) {
+// The folder_map entry a vault folder is published by: [its vault folder, its address], the longest that holds it,
+// or null when none does.
+function folderMapEntry(vaultRelPath, folderMap) {
   const rel = toPosix(vaultRelPath);
   const entries = Object.entries(folderMap).sort(([a], [b]) => b.length - a.length);
-  for (const [vaultDir, outputDir] of entries) {
-    if (rel === vaultDir || rel.startsWith(vaultDir + '/')) {
-      return outputDir + rel.substring(vaultDir.length);
-    }
-  }
-  return null;
+  return entries.find(([vaultDir]) => rel === vaultDir || rel.startsWith(vaultDir + '/')) || null;
+}
+
+function mapFolder(vaultRelPath, folderMap) {
+  const entry = folderMapEntry(vaultRelPath, folderMap);
+  return entry ? entry[1] + toPosix(vaultRelPath).substring(entry[0].length) : null;
 }
 
 // The walk, and everything it learned — including the two classes of file it could
@@ -496,4 +498,4 @@ function scanAllNotes(vaultPath, deps) {
   return out;
 }
 
-module.exports = { scanAllNotes, slugify, pcLiveKey, storyPathOf, storyOwnerPath, isStoryCompanion, STORY_SUFFIX, scanVault, scanVaultReport, warnScanReport, buildLinkMap, linkKeys, mapFolder, scanAttachments, pairStoryFiles, dirIsExcluded, matchExcludedDir };
+module.exports = { scanAllNotes, slugify, pcLiveKey, storyPathOf, storyOwnerPath, isStoryCompanion, STORY_SUFFIX, scanVault, scanVaultReport, warnScanReport, buildLinkMap, linkKeys, mapFolder, folderMapEntry, scanAttachments, pairStoryFiles, dirIsExcluded, matchExcludedDir };

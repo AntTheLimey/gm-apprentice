@@ -269,6 +269,17 @@ class SiteFaultRowsTests(unittest.TestCase):
                 self.assertEqual(row, f"WARNING\tChapters/C/C.md\t{code}: d — f")
                 self.assertIn(code, vc.NOTE_FAULT_CODES)
 
+    def test_a_pcs_folder_away_from_the_party_page_is_a_row_with_the_tools_fix(self):
+        row = vc._site_fault_row({
+            "code": "PCS_ADDRESS", "severity": "warning", "path": "PCs",
+            "detail": "2 character pages publish at people/",
+            "fix": 'set "PCs" in player_site.folder_map back to characters/pcs'},
+            False)
+        self.assertEqual(row, "WARNING\tPCs\tPCS_ADDRESS: 2 character pages "
+                              "publish at people/ — set \"PCs\" in "
+                              "player_site.folder_map back to characters/pcs")
+        self.assertIn("PCS_ADDRESS", vc.NOTE_FAULT_CODES)
+
     def test_the_real_tool_reports_an_active_chapter_with_no_teaser(self):
         chapter = ("---\ntype: chapter\ntitle: The Docks\nsort_order: 1\n"
                    "status: active\n---\n\n# The Docks\n\nGM summary.\n")

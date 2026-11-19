@@ -613,6 +613,15 @@ test('party threads: an out-of-play PC\'s own threads are left off; a page with 
   assert.doesNotMatch(bare.read('characters', 'pcs', 'index.html'), /party-threads/);
 });
 
+test('party threads: a PC out of play stays off when the site hides the status field', () => {
+  const retired = pc('Ines_Marlowe').replace('---\n', '---\nstatus: retired\n');
+  const files = { '_meta/vault-config.yaml': settingsText({ 'player_site.title': 'T', 'player_site.folder_map': { 'Characters/PCs': 'characters/pcs', _Campaign: 'campaign' }, 'player_site.hide.fields': ['status'] }),
+    '_Campaign/Campaign Overview.md': PARTY_OVERVIEW, 'Characters/PCs/Corwin_Hale.md': pc('Corwin_Hale'), 'Characters/PCs/Ines_Marlowe.md': retired };
+  const s = /<section class="dashboard-section party-threads"[\s\S]*?<\/section>/.exec(buildVault(files).read('characters', 'pcs', 'index.html'))[0];
+  assert.doesNotMatch(s, /The ledger page in her coat/);
+  assert.match(s, /Ferrywoman.s debt/);
+});
+
 test('party threads: the leak check reads the party page\'s threads as published, a tail-less one too', () => {
   const { runLeakGate } = require('../lib/leak-gate');
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'party-threads-leak-'));

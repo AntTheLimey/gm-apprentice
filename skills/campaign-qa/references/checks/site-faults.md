@@ -88,6 +88,7 @@ every page that names it. Use it to confirm each fix.
 | `CHAPTER_TITLE_SHARED` | Warning | Sessions of one chapter may be listed under the other |
 | `SESSION_NO_CHAPTER` | Warning | A played session is missing from the Story |
 | `CHAPTER_REF_UNSHOWN` | Warning | A played session is missing from the Story |
+| `PCS_ADDRESS` | Warning | Characters are missing from the party page and its Party Status board |
 
 Four codes are walked in files of their own, in the `site-faults/`
 folder beside this file. Read one only when a row of this run names its
@@ -300,6 +301,24 @@ Ask the GM which chapter the session was played in, and write
 Rows naming one chapter come together. A misspelt link: propose the
 chapter note it meant and fix the sessions' `chapter:` on a yes. A
 chapter note kept off the site: ask whether it should publish.
+
+## PCS_ADDRESS
+
+The party page and its Party Status board are built at
+`characters/pcs` only. The row names a vault folder of PCs that
+`player_site.folder_map` publishes somewhere else, and the one change
+to the map that brings them back. Offer it in plain words: those
+characters show on the party page again, and links to their old
+addresses stop working. On a yes, read the map
+(`gma publish settings get player_site.folder_map --vault "<vault>"`),
+make that one change and write the whole map back:
+
+```bash
+gma publish settings set 'player_site.folder_map={"Characters/PCs":"characters/pcs","NPCs":"npcs"}' --vault "<vault>"
+```
+
+Run the check again to confirm the row is gone. If the GM keeps the
+other address, log it as left as is; the row comes back on each run.
 
 ## Reporting
 

@@ -4,7 +4,7 @@ const { hasSheetStructure } = require('./templates/sheet-parse');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { scanVaultReport, warnScanReport, buildLinkMap, scanAttachments, scanAllNotes, pcLiveKey, STORY_SUFFIX, slugify } = require('./scanner');
+const { scanVaultReport, warnScanReport, buildLinkMap, scanAttachments, scanAllNotes, pcLiveKey, STORY_SUFFIX, slugify, folderMapEntry } = require('./scanner');
 const { optimizeImages, resolveImageConfig, imageCacheDir, ignoreCacheInGit, detectEncoder, CACHE_FOLDER } = require('./image-optimize');
 const { indexTextPath, writeIndexText } = require('./leak-gate/index-text');
 const { readStoryAddresses, writeStoryAddresses, movedSessions, sharedSessionNames } = require('./story-addresses');
@@ -1451,6 +1451,8 @@ function buildSite(options) {
 
   // Every page but a PC's first: the Story spine reads the wrap-ups' published views to decide which wrap-up folds.
   const isPcPage = (page) => String((page.sourceFrontmatter || page.frontmatter || {}).type).trim().toLowerCase() === 'pc';
+  // Out of play by the note's own status: a site that hides the status field has taken it off `frontmatter` only.
+  const outOfPlay = (page) => isOutOfPlay(page.sourceFrontmatter || page.frontmatter, publishConfig.statuses.out_of_play);
   for (const page of pages) if (!isPcPage(page)) publishView(page);
 
   // One page per session (#543): a wrap-up a Story unit claims has no page of its own. It moves onto its Story page's
@@ -2118,12 +2120,12 @@ function buildSite(options) {
           fx.warn(page.outputPath, systemOut.warnings);
         }
         // A dead or retired PC's calculator is used by no one: its rows are not reported.
-        if (systemOut.tohitRows && systemOut.tohitRows.length && !isOutOfPlay(page.frontmatter, publishConfig.statuses.out_of_play)) {
+        if (systemOut.tohitRows && systemOut.tohitRows.length && !outOfPlay(page)) {
           fx.tohitRows.push({ rel: vaultRelPathOf(page), rows: systemOut.tohitRows });
         }
         // Out-of-play PCs (retired, dead, missing…) keep their sheet page but stay
         // off the party page's Party Status board (#265).
-        if ((systemOut.liveData || systemOut.boardOnly) && !isOutOfPlay(page.frontmatter, publishConfig.statuses.out_of_play)) {
+        if ((systemOut.liveData || systemOut.boardOnly) && !outOfPlay(page)) {
           // Root-relative output path of the PC portrait, for the party-board
           // thumbnail. Resolved the same way portraitImg does (imageMap keyed
           // by bare basename → the scanner's relPath under images/).
@@ -2209,7 +2211,7 @@ function buildSite(options) {
   function partyThreads(dirPages) {
     const inPlay = dirPages
       .filter((p) => String((p.frontmatter || {}).type).trim().toLowerCase() === 'pc'
-        && !isOutOfPlay(p.frontmatter, publishConfig.statuses.out_of_play))
+        && !outOfPlay(p))
       .sort((a, b) => String(a.displayTitle).localeCompare(String(b.displayTitle)));
     const names = (target, page) => {
       const found = resolveSiteLink(`[[${target}]]`, { linkMap, pages });
@@ -2553,6 +2555,35 @@ function buildSite(options) {
   const suffix = campaignImageCopied ? ' (+ campaign image)' : '';
   if (!onlySheets) console.log(`${gm ? 'GM site' : 'Player site'}: copied ${Object.keys(filteredMap).length} referenced images${suffix}`);
 
+  const PARTY_DIR = 'characters/pcs';
+  // The party page and its Party Status board are built at characters/pcs and nowhere else (#744): a PC in play whose
+  // folder player_site.folder_map sends to another address is on neither. Said once per folder, with the change that
+  // brings it back; the Site Faults check offers it.
+  if (!onlySheets) {
+    const away = new Map();
+    for (const p of pages) {
+      if (!isPcPage(p) || outOfPlay(p)) continue;
+      if (p.outputPath.startsWith(`${PARTY_DIR}/`)) continue;
+      const folder = path.posix.dirname(vaultRelPathOf(p));
+      if (!away.has(folder)) away.set(folder, []);
+      away.get(folder).push(p);
+    }
+    for (const [folder, pcs] of away) {
+      const names = pcs.map((p) => p.displayTitle).join(', ');
+      const at = path.posix.dirname(pcs[0].outputPath);
+      const detail = `${pcs.length} ${pcs.length === 1 ? 'character page publishes' : 'character pages publish'} at ${at === '.' ? 'the top of the site' : `${at}/`} (${names}), so ${pcs.length === 1 ? 'it is' : 'they are'} not on the party page, which is built (with its Party Status board) only at ${PARTY_DIR}/`;
+      // A note at the vault's top level has no folder for the map to name: it moves into the PCs' folder instead.
+      const entry = folder === '.' ? null : folderMapEntry(folder, config.folderMap || {});
+      let fix;
+      if (!entry) fix = `move ${pcs.length === 1 ? 'the note' : 'the notes'} into the folder player_site.folder_map publishes at ${PARTY_DIR}`;
+      else if (entry[0] === folder) fix = `set "${folder}" in player_site.folder_map back to ${PARTY_DIR} (it says ${entry[1]})`;
+      else fix = `add "${folder}": "${PARTY_DIR}" to player_site.folder_map (now "${entry[0]}" sends it to ${entry[1]}${folder.slice(entry[0].length)})`;
+      const where = folder === '.' ? 'the vault\'s top level' : folder;
+      console.warn(`  WARNING: ${where}: ${detail}: ${fix}`);
+      if (audit) audit.calculator(folder === '.' ? vaultRelPathOf(pcs[0]) : folder, [{ code: 'PCS_ADDRESS', severity: 'warning', detail, fix }]);
+    }
+  }
+
   // Generate index pages for each output directory
   const dirs = {};
   for (const page of pages) {
@@ -2790,7 +2821,7 @@ function buildSite(options) {
           dirPages = dirPages.concat(pageDirPages);
         }
       }
-      const isParty = dir === 'characters/pcs';
+      const isParty = dir === PARTY_DIR;
       // The party page was once a note's (the PC roster, `_Campaign/Player Characters.md`, retired in #729): the
       // address that note had sends a reader to the PCs' index, generated or the GM's own, unless a note has its own
       // page there now.

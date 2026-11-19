@@ -49,6 +49,9 @@
 //   CHAPTER_REF_UNSHOWN  a played session whose `chapter:` names no chapter page on this site (a misspelt link,
 //                     or a chapter note that does not publish here), so it has no Story page
 //                     (these seven: the Story's chapter bookkeeping, from build.js, one row per note)
+//   PCS_ADDRESS     a vault folder of PCs in play that player_site.folder_map publishes outside characters/pcs, where
+//                     the party page and its Party Status board are built, so they are on neither (one row per
+//                     folder, its path the folder; from build.js, with the folder_map change as its fix) (#744)
 //
 // Nothing here reads a page a second way, and nothing here knows which field a template
 // prints. The names are decided by the page as the build makes it: every link to a note
@@ -75,9 +78,9 @@ const { STORY_SUFFIX } = require('./scanner');
 const { NO_PAGE_TYPES } = require('./excluding-values');
 const { decodeEntities } = require('./templates/gurps/tables');
 
-const CODES = ['ALIAS_IN_PROSE', 'NEVER_SHOW_IN_PROSE', 'WITHHELD_PUBLISHED', 'WITHHELD_IN_PROSE', 'WITHHELD_NAME_PUBLIC', 'WITHHELD_FLAG_UNREADABLE', 'COMPANION_FLAG_UNREADABLE', 'FENCE_UNCLOSED', 'COMMENT_STRAY', 'NAMED_NO_PAGE', 'TOHIT_UNREAD', 'SKILL_BELOW_BASE', 'HEADING_IN_HIDDEN_BLOCK', 'TABLE_OVERWIDE', 'PROP_NOT_COPIED', 'MOMENT_KIND_UNKNOWN', 'UNFILLED_PLACEHOLDER', 'CHAPTER_STATUS_UNKNOWN', 'CHAPTER_NO_TEASER', 'CHAPTER_ACTIVE_MANY', 'CHAPTER_PLANNED_PLAYED', 'CHAPTER_TITLE_SHARED', 'SESSION_NO_CHAPTER', 'CHAPTER_REF_UNSHOWN'];
+const CODES = ['ALIAS_IN_PROSE', 'NEVER_SHOW_IN_PROSE', 'WITHHELD_PUBLISHED', 'WITHHELD_IN_PROSE', 'WITHHELD_NAME_PUBLIC', 'WITHHELD_FLAG_UNREADABLE', 'COMPANION_FLAG_UNREADABLE', 'FENCE_UNCLOSED', 'COMMENT_STRAY', 'NAMED_NO_PAGE', 'TOHIT_UNREAD', 'SKILL_BELOW_BASE', 'HEADING_IN_HIDDEN_BLOCK', 'TABLE_OVERWIDE', 'PROP_NOT_COPIED', 'MOMENT_KIND_UNKNOWN', 'UNFILLED_PLACEHOLDER', 'CHAPTER_STATUS_UNKNOWN', 'CHAPTER_NO_TEASER', 'CHAPTER_ACTIVE_MANY', 'CHAPTER_PLANNED_PLAYED', 'CHAPTER_TITLE_SHARED', 'SESSION_NO_CHAPTER', 'CHAPTER_REF_UNSHOWN', 'PCS_ADDRESS'];
 // The Story's chapter bookkeeping: one closing line for all of them.
-const CHAPTER_CODES = new Set(CODES.slice(CODES.indexOf('CHAPTER_STATUS_UNKNOWN')));
+const CHAPTER_CODES = new Set(CODES.slice(CODES.indexOf('CHAPTER_STATUS_UNKNOWN'), CODES.indexOf('CHAPTER_REF_UNSHOWN') + 1));
 const WORST = 3;
 // The human report names this many of the pages that link a note with no page.
 const PAGES_SHOWN = 3;
@@ -1131,6 +1134,8 @@ function summaryLines(findings) {
       const worst = [...new Set(props.map((p) => baseName(p)))].slice(0, WORST);
       const k = props.length;
       lines.push(`${k} ${plural(k, 'prop', 'props')} could not be put on the site as asked (${worst.join(', ')}) — ${where} ${plural(k, 'it', 'these')}.`);
+    } else if (code === 'PCS_ADDRESS') {
+      continue;   // the build said it per folder as it went, with the fix
     } else if (code === 'WITHHELD_NAME_PUBLIC') {
       const names = [...new Set(rows.map((f) => f.name))];
       lines.push(`${names.length} withheld ${plural(names.length, 'name is also the name of a published page', 'names are also the names of published pages')}, so ${plural(names.length, 'it is', 'they are')} not looked for (${names.slice(0, WORST).join(', ')}) — ${where} ${plural(names.length, 'it', 'these')}.`);
