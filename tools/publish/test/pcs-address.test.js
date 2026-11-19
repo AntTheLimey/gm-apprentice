@@ -11,7 +11,7 @@ const { writeNewConfig } = require('./helpers/settings-files');
 
 const pc = (name, status = 'active') => `---\ntype: pc\nstatus: ${status}\nplayer_name: P\n---\n\n# ${name}\n\nA traveller.\n`;
 
-function run(folderMap, notes) {
+function run(folderMap, notes, settings = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pcs-address-'));
   const vault = path.join(root, 'vault');
   for (const [rel, text] of Object.entries(notes)) {
@@ -20,7 +20,7 @@ function run(folderMap, notes) {
   }
   const siteDir = path.join(root, 'campaign');
   fs.mkdirSync(siteDir);
-  writeNewConfig(vault, { version: 1, player_site: { folder: siteDir, folder_map: folderMap } });
+  writeNewConfig(vault, { version: 1, player_site: { folder: siteDir, folder_map: folderMap, ...settings } });
   const configPath = path.join(siteDir, 'vault.config.json');
   fs.writeFileSync(configPath, JSON.stringify({ vaultPath: vault }));
   const warnings = [];
@@ -47,7 +47,7 @@ test('a PCs folder sent elsewhere: one warning and one row for the folder, with 
   assert.equal(row.path, 'PCs');
   assert.equal(row.severity, 'warning');
   assert.match(row.detail, /2 character pages publish at people\/ \(Ada, Bram\)/);
-  assert.match(row.detail, /party page or the Party Status board/);
+  assert.match(row.detail, /not on the party page, which is built \(with its Party Status board\) only at characters\/pcs\//);
   assert.equal(row.fix, 'set "PCs" in player_site.folder_map back to characters/pcs (it says people)');
   assert.ok(warnings[0].includes(row.fix));
 });
@@ -64,4 +64,20 @@ test('a PC out of play kept at another address is left alone', () => {
     { 'PCs/Ada.md': pc('Ada'), 'Fallen/Bram.md': pc('Bram', 'dead') });
   assert.deepEqual(warnings, []);
   assert.deepEqual(rows, []);
+});
+
+test('a dead PC whose status the site hides is still out of play, and left alone', () => {
+  const { warnings, rows } = run({ PCs: 'characters/pcs', Fallen: 'fallen' },
+    { 'PCs/Ada.md': pc('Ada'), 'Fallen/Bram.md': pc('Bram', 'dead') }, { hide: { fields: ['status'] } });
+  assert.deepEqual(warnings, []);
+  assert.deepEqual(rows, []);
+});
+
+test('a PC at the vault\'s top level: the fix moves the note into the PCs folder, not a map entry', () => {
+  const { warnings, rows } = run({ PCs: 'characters/pcs' }, { 'PCs/Ada.md': pc('Ada'), 'Bram.md': pc('Bram') });
+  assert.equal(rows.length, 1, JSON.stringify(rows));
+  assert.equal(rows[0].path, 'Bram.md');
+  assert.match(rows[0].detail, /publishes at the top of the site \(Bram\)/);
+  assert.equal(rows[0].fix, 'move the note into the folder player_site.folder_map publishes at characters/pcs');
+  assert.match(warnings[0], /WARNING: the vault's top level:/);
 });
