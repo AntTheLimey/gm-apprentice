@@ -145,7 +145,7 @@ describe('run sheet reader', () => {
     const body = bodyOf(skeleton);
     assert.deepStrictEqual(missingLines(body, m), []);
     assert.deepStrictEqual(strayLines(dir, body, m), []);
-    assert.deepStrictEqual(m.beats.map((b) => b.placeFrom), [null, null, null, 'place', null]);
+    assert.deepStrictEqual(m.beats.map((b) => b.placeFrom), ['place', null, null, 'place', null]);
     assert.deepStrictEqual(m.beats[1].spots.map((x) => x.md).filter(Boolean).length, 2);
     // the place and the hub's location are on the page's places
     assert.deepStrictEqual(m.places, ['Locations/Location.md', 'Locations/The Vicarage.md']);

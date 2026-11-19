@@ -173,25 +173,25 @@ describe('run sheet beats', () => {
     assert.ok(!warnings.some((w) => w.kind === 'no-npcs-block'));
   });
 
-  it('real hub: a group of pointer bullets keeps its parenthesis and holds no spot', () => {
+  it('real hub: pointer bullets are no spots, a bare location link is', () => {
     const index = buildIndex(copy());
     const plan = readText(path.join(__dirname, 'fixtures', 'run-sheet-hub-plan.md'));
     const b = readBeats(plan, index).beats[1];
-    // all three bullets lead to other scenes (`— Scene N`, or a bare link first): none is a spot
-    assert.deepStrictEqual(b.spots, []);
+    // the two `— Scene N` bullets lead to other scenes; the bare link to a location leads a place, as in #781
+    assert.deepStrictEqual(b.spots.map((s) => [s.name, s.note]), [['The Gate House at dusk', 'Locations/The Gate House.md']]);
     assert.deepStrictEqual(b.who, []);
     assert.strictEqual(b.extra,
-      '**Open to the party** (scenes 1–8, any order, any number)\n- The guest register (Hollis) — Scene 1\n- Crane by the fire — Scene 4\n- [[The Gate House]] at dusk');
+      '**Open to the party** (scenes 1–8, any order, any number)\n- The guest register (Hollis) — Scene 1\n- Crane by the fire — Scene 4');
   });
 
   it('a plain hub bullet is named by its first line', () => {
     const index = buildIndex(copy());
     const plan = readText(path.join(__dirname, 'fixtures', 'run-sheet-hub-plan.md'))
-      .replace('- Crane by the fire — Scene 4\n', '- Crane by the fire\n  - he has the key\n');
+      .replace('- Crane by the fire — Scene 4\n', '- Crane by the fire\n  - he has the key\n')
+      .replace('- [[The Gate House]] at dusk\n', '- [[The Gate House]] at dusk\n\n  The door sticks.\n');
     const b = readBeats(plan, index).beats[1];
-    // the pointers stay out; the plain bullet is a spot named by its first line, its nested line its words
-    assert.deepStrictEqual(b.spots.map((s) => [s.name, s.md]), [['Crane by the fire', '- he has the key']]);
-    assert.doesNotMatch(b.extra, /he has the key/);
+    assert.deepStrictEqual(b.spots.map((s) => [s.name, s.md]), [['Crane by the fire', '- he has the key'], ['The Gate House at dusk', 'The door sticks.']]);
+    assert.doesNotMatch(b.extra, /he has the key|The door sticks/);
   });
 
   it('scene note text after the GM fence is kept', () => {
@@ -453,10 +453,7 @@ describe('run sheet beats: the Plan shape', () => {
     const { beats, warnings } = read2();
     const [s1, hub, harbour, supper] = beats;
     assert.deepStrictEqual(beats.map((b) => b.title), ['[Title]', '[Title] (hub)', 'The Harbour Office', 'The Quiet Supper', '[Contingency Title]']);
-    // Scene 1's Place line holds a link and words: the words are kept, no place is given
-    assert.strictEqual(s1.place, null);
-    assert.strictEqual(s1.placeFrom, null);
-    assert.strictEqual(s1.placeText, '[[Location]], or plain words when no location note fits.');
+    assert.deepStrictEqual([s1.place, s1.placeFrom, s1.placeText], ['Locations/Location.md', 'place', '']);
     assert.deepStrictEqual(s1.who.map((w) => [w.name, w.wants]), [['Name', 'wants X. Does Y if left alone.']]);
     assert.deepStrictEqual(s1.ifs.map((x) => x.do), ['A choice the table may make', 'Nobody engages by [time]']);
     assert.deepStrictEqual(s1.treasure.map((x) => x.text), ['An item the scene holds, one per bullet.']);
@@ -466,7 +463,9 @@ describe('run sheet beats: the Plan shape', () => {
       ['Location', 'Locations/Location.md', 'what is there, who is there ([[NPC]]), what changes when they arrive.'],
       ['Plain name', null, 'the same, when no location note fits.'],
     ]);
+    assert.deepStrictEqual(hub.spots.map((x) => x.people), [['Characters/NPCs/NPC.md'], []]);
     assert.deepStrictEqual(hub.who.map((w) => [w.name, w.wants]), [['NPC', '']]);
+    assert.deepStrictEqual(s1.spots.map((x) => x.people), [[]]);
     assert.match(hub.extra, /- A lead in words — Scene 3/);
     assert.match(hub.extra, /- \[\[Scene note\]\] — a lead to a scene/);
     // a place in plain words, then a place that is one link
@@ -488,7 +487,7 @@ describe('run sheet beats: the Plan shape', () => {
   });
 
   it('pointer bullets are not spots', () => {
-    const { beats } = read2(() => `## Planned Scenes\n\n### Scene 4: The yard\n**Where they can go**\n- the cellar door — Scene 3\n- **Cellar door** — Scene 3\n- **[[Name]]** — Scene 3 (locked)\n- **[[Scene note]]:** what follows\n- [[Location]] and the road on\n- **The orchard:** hens\n`);
+    const { beats } = read2(() => `## Planned Scenes\n\n### Scene 4: The yard\n**Where they can go**\n- the cellar door — Scene 3\n- **Cellar door** — Scene 3\n- **[[Name]]** — Scene 3 (locked)\n- **[[Scene note]]:** what follows\n- **The orchard:** hens\n`);
     assert.deepStrictEqual(beats[0].spots.map((x) => x.name), ['The orchard']);
     // a pointer's words are not dropped: they stay in extra, and name no person
     assert.match(beats[0].extra, /the cellar door — Scene 3/);
@@ -533,12 +532,12 @@ describe('run sheet beats: the Plan shape', () => {
       for (const x of b.spots) assert.strictEqual(x.md, '');
     }
     assert.deepStrictEqual(warnings.filter((w) => w.kind === 'no-place'), []);
-    // its hub Plan (`**Open to the party**`): the one S2-shape group is all pointer bullets,
-    // so its three spots are gone and their lines stay in extra; the S1 group's people lose
-    // their wants to the spot's md. Nothing else differs.
+    // its hub Plan (`**Open to the party**`): the two `— Scene N` bullets are pointers, so their
+    // spots are gone and their lines stay in extra; the S1 group's people lose their wants to the
+    // spot's md. Nothing else differs.
     const hubPlan = readText(path.join(__dirname, 'fixtures', 'run-sheet-hub-plan.md'));
     const hub = readBeats(hubPlan, buildIndex(copy())).beats;
-    assert.deepStrictEqual(hub[1].spots, []);
+    assert.deepStrictEqual(hub[1].spots.map((x) => x.name), ['The Gate House at dusk']);
     assert.strictEqual(hub[0].spots.length, 5);
   });
 
@@ -590,6 +589,16 @@ describe('run sheet beats: the Plan shape', () => {
       const ok = bothSides(SCENE('**If the players...**\n| Do | Then |\n|---|---|\n| a | b |\n'));
       assert.ok(!ok.ids.includes('if-table-unlabelled'));
       assert.strictEqual(ok.beats[0].ifs.length, 1);
+    });
+
+    it('a bare link first: a pointer only when it links a scene note, in both', () => {
+      const lead = (link) => `### Scene 0: Out (hub)\n**Where they can go**\n- ${link} at dusk\n`;
+      for (const [link, pointer] of [['[[Location]]', false], ['[[Scene note]]', true], ['[[No Such Note]]', false]]) {
+        const r = bothSides(lead(link));
+        // plan-check: a lead is a pointer, a link is a place; either way the hub is not empty
+        assert.ok(!r.ids.includes('hub-no-places'), link);
+        assert.strictEqual(r.beats[0].spots.length, pointer ? 0 : 1, link);
+      }
     });
 
     it('a pointer with trailing words is a pointer in both', () => {

@@ -100,7 +100,7 @@ once; `tests/test_plan_check.py` holds them equal to the template's.
 ### Scene 1: [Title]
 **Situation:** *(required)* One line. What is happening when the scene
 opens — a thing in motion, not a theme.
-**Place:** [[Location]], or plain words when no location note fits.
+**Place:** [[Location]]
 **Starts it:** *(required)* One line. The named NPC or household schedule
 that brings the PCs here in the first sixty seconds, and what they want
 from *this* PC.

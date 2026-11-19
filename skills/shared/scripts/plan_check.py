@@ -770,13 +770,16 @@ _WHERE_HEAD_RE = re.compile(
     r"(?:\([^)]*\))?[ \t]*$", re.I)
 _PLACE_BULLET_RE = re.compile(r"^[-*+]\s+\*\*([^*\n]+?)\*\*")
 # A pointer bullet leads to another scene: it ends `— Scene N` (a parenthesis
-# or up to three words may follow, `— Scene 3 (locked)`), or opens with a bare
-# link. A bold lead that ends so, or links a scene note, is a pointer too
-# (`- **Cellar door** — Scene 3`); a place bullet is a bold lead with none.
-# tools/publish/lib/run-sheet/beats.js holds the same rule.
+# or up to three words may follow, `— Scene 3 (locked)`), or its lead (a bold
+# lead, or a bare link first) links a note of type scene. A bold lead that
+# ends so is a pointer too (`- **Cellar door** — Scene 3`). Any other bullet
+# led by a bold name or a link is a place; a link to a note of unknown type
+# (no vault, or no such note) is a place. tools/publish/lib/run-sheet/beats.js
+# holds the same rule.
 _POINTER_BULLET_RE = re.compile(
-    r"^[-*+]\s+(?:\[\[|.*[—–-]\s*Scenes?\s+\d+"
-    r"(?:\s*\([^)]*\)|,?\s+\S+(?:\s+\S+){0,2})?[\s.]*$)")
+    r"^[-*+]\s+.*[—–-]\s*Scenes?\s+\d+"
+    r"(?:\s*\([^)]*\)|,?\s+\S+(?:\s+\S+){0,2})?[\s.]*$")
+_BARE_LINK_LEAD_RE = re.compile(r"^[-*+]\s+\[\[([^\[\]]+)\]\]")
 _LINK_RE = re.compile(r"(?<!!)\[\[([^\[\]]+)\]\]")
 _IF_LABEL_RE = re.compile(r"^\*\*If the players", re.I)
 _BOLD_HEAD_RE = re.compile(r"^(?:[-*+]\s+)?\*\*[^*\n]+\*\*")
@@ -893,17 +896,22 @@ def _hub_findings(locus: str, title: str, lines: list[str],
     heads = [i for i, ln in enumerate(lines) if _WHERE_HEAD_RE.match(ln)]
     bullets = [ln for i in heads for ln in _block_after(lines, i)
                if ln[:1] in "-*+" and ln[1:2] == " "]
+    def lead_links(ln: str) -> list[str]:
+        m = _PLACE_BULLET_RE.match(ln)
+        if m is not None:
+            return _LINK_RE.findall(m.group(1))
+        bare = _BARE_LINK_LEAD_RE.match(ln)
+        return [bare.group(1)] if bare else []
+
     def is_pointer(ln: str) -> bool:
         if _POINTER_BULLET_RE.match(ln):
             return True
-        m = _PLACE_BULLET_RE.match(ln)
-        if m is None:
-            return False
         return any("scene" in (index.types(k) or ())
-                   for k in _LINK_RE.findall(m.group(1)))
+                   for k in lead_links(ln))
 
-    places = [m for ln in bullets
-              if not is_pointer(ln) and (m := _PLACE_BULLET_RE.match(ln))]
+    places = [ln for ln in bullets
+              if not is_pointer(ln)
+              and (lead_links(ln) or _PLACE_BULLET_RE.match(ln))]
     pointers = [ln for ln in bullets if is_pointer(ln)]
     out = []
     if not places and not pointers:
@@ -914,8 +922,8 @@ def _hub_findings(locus: str, title: str, lines: list[str],
             f"'- **[[Location]]:** ...' or '- **Plain name:** ...' bullets "
             f"under '**Where they can go**', and '- words — Scene N' for "
             f"a lead to another scene"))
-    for m in places:
-        for link in _LINK_RE.findall(m.group(1)):
+    for ln in places:
+        for link in lead_links(ln):
             kinds = index.types(link)
             if kinds is not None and "location" not in kinds:
                 shown = ", ".join(sorted(k or "none" for k in kinds))

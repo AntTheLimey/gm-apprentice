@@ -34,9 +34,11 @@ const GROUP_HEAD = /^\*\*([^*\n]+?):?\*\*[ \t]*(\([^)]*\))?[ \t]*$/;
 const NAMED_BULLET = /^\*\*([^*\n]+?):?\*\*:?[ \t]*([\s\S]*)$/;
 // The hub block heads (`**Where they can go**`, legacy `**Open to the party**`): a scene holding one is a hub.
 const WHERE_HEAD = /^\*\*(?:Where they can go|Open to the party):?\*\*[ \t]*(?:\([^)]*\))?[ \t]*$/i;
-// A pointer bullet leads to another scene: it opens with a bare link, or ends `— Scene N` (a
-// parenthesis or a few words may follow). plan_check.py holds the same rule, bullet marker and all.
-const POINTER_BULLET = /^(?:\[\[|.*[—–-]\s*Scenes?\s+\d+(?:\s*\([^)]*\)|,?\s+\S+(?:\s+\S+){0,2})?[\s.]*$)/;
+// A pointer bullet leads to another scene: it ends `— Scene N` (a parenthesis or a few words may
+// follow), or its lead (a bold lead, or a bare link first) links a note of type scene. A link whose
+// note is no scene, or is unknown, leads a place. plan_check.py holds the same rule.
+const POINTER_BULLET = /^.*[—–-]\s*Scenes?\s+\d+(?:\s*\([^)]*\)|,?\s+\S+(?:\s+\S+){0,2})?[\s.]*$/;
+const BARE_LINK_LEAD = /^(!?\[\[[^\]]+\]\])/;
 const BOLD_LEAD = /^\*\*([^*\n]+?)\*\*/;
 const BLOCK_NAMES = new Set(['npcs', 'points to land', 'if the players...', 'treasure', 'complications', 'then']);
 
@@ -134,7 +136,7 @@ function readBeats(planBody, index) {
   // Keys first in each object, in the model's field order.
   const ordered = beats.map((b) => ({
     key: b.key, title: b.title, contingency: b.contingency, sceneNote: b.sceneNote, place: b.place, placeText: b.placeText, placeFrom: b.placeFrom,
-    spots: b.spots.map((s) => ({ key: s.key, name: s.name, note: s.note, md: s.md })),
+    spots: b.spots.map((s) => ({ key: s.key, name: s.name, note: s.note, md: s.md, people: s.people })),
     situation: b.situation, startsIt: b.startsIt, readAloud: b.readAloud, gmNotes: b.gmNotes,
     complications: b.complications, trigger: b.trigger, then: b.then,
     who: b.who.map((w) => ({ key: w.key, note: w.note, name: w.name, knownAs: w.knownAs, count: w.count, wants: w.wants, playAs: w.playAs })),
@@ -310,8 +312,9 @@ function readBeats(planBody, index) {
           const [first, ...more] = item.text.split('\n');
           // a pointer bullet leads to another scene: no spot, and its line stays in extra
           const lead = first.match(BOLD_LEAD);
+          const leadLinks = lead ? (lead[1].match(LINK) || []) : (first.match(BARE_LINK_LEAD) || []).slice(1);
           if (POINTER_BULLET.test(first)
-              || (lead && (lead[1].match(LINK) || []).some((m) => typeOf(resolve(linkParts(m.replace(/^!?\[\[|\]\]$/g, '')).target)) === 'scene'))) continue;
+              || leadLinks.some((m) => typeOf(resolve(linkParts(m.replace(/^!?\[\[|\]\]$/g, '')).target)) === 'scene')) continue;
           const nb = item.text.match(NAMED_BULLET);
           let name;
           let rest;
@@ -327,12 +330,15 @@ function readBeats(planBody, index) {
           // The bullet's words are the spot's (`md`); the NPCs and creatures it links join who, without
           // those words as their wants. The bullet is held whole.
           const md = rest.trim();
-          found.push({ i: item.start, name, note, md });
+          const people = [];
+          found.push({ i: item.start, name, note, md, people });
           for (const m of (md.match(LINK) || []).filter((x) => !x.startsWith('!'))) {
             const lp = linkParts(m.slice(2, -2));
             const p = resolve(lp.target);
             const type = typeOf(p);
-            if (!p || (type !== 'npc' && type !== 'creature') || taken(p, lp.name)) continue;
+            if (!p || type === 'location') continue;
+            if (!people.includes(p)) people.push(p);
+            if ((type !== 'npc' && type !== 'creature') || taken(p, lp.name)) continue;
             who.push(person(p, { name: lp.name, knownAs: lp.display, count: 1, wants: '' }));
           }
           claim(item.start, item.end);
@@ -363,9 +369,9 @@ function readBeats(planBody, index) {
           claim(item.start, item.end);
         }
       });
-      spots = found.sort((a, b) => a.i - b.i).map((x) => ({ name: x.name, note: x.note, md: x.md || '' }));
+      spots = found.sort((a, b) => a.i - b.i).map((x) => ({ name: x.name, note: x.note, md: x.md || '', people: x.people || [] }));
     } else if (place) {
-      spots = [{ name: stemOf(place), note: place, md: '' }];
+      spots = [{ name: stemOf(place), note: place, md: '', people: [] }];
     }
 
     // Lists and tables.

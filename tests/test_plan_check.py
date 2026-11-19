@@ -1284,6 +1284,25 @@ class RunSheetChecksTests(unittest.TestCase):
                 self.assertEqual(
                     self.ids(self.HUB.format(bullets=bullets)), [])
 
+    def test_a_bare_link_lead_is_a_pointer_only_for_a_scene_note(self):
+        self.note("Supper", "scene")
+        self.note("Orchard", "location")
+        self.assertEqual(self.ids(self.HUB.format(
+            bullets="- [[Supper]] and what follows\n")), [])
+        self.assertEqual(self.ids(self.HUB.format(
+            bullets="- [[Orchard]] at dusk\n")), [])
+
+    def test_a_bare_link_lead_to_a_non_location_is_a_place_that_warns(self):
+        self.note("Orme", "npc")
+        self.assertEqual(self.ids(self.HUB.format(
+            bullets="- [[Orme]] at dusk\n")), ["hub-place-not-location"])
+
+    def test_a_bare_link_lead_with_no_vault_is_a_place(self):
+        found = self.found(self.HUB.format(bullets="- [[Orchard]] at dusk\n"),
+                           index=False)
+        self.assertEqual(
+            [f.id for f in found if f.id in pc.RUN_SHEET_CHECKS], [])
+
     def test_a_bold_lead_linking_a_scene_note_is_a_pointer(self):
         self.note("Supper", "scene")
         self.assertEqual(self.ids(self.HUB.format(
