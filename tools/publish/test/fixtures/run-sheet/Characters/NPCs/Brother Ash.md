@@ -12,9 +12,13 @@ The gate warden.
 
 ## GM Notes
 
+### Stats
+
 Commoner (SRD)
 
-AC 12, HP 9, Initiative +1
+AC 12
+HP 9
+Initiative +1
 
 ### Playing Them
 

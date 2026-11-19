@@ -9,7 +9,7 @@ const { parseNote } = require('../frontmatter');
 const { nameList, gmAliasList, portraitBasename } = require('../processor');
 const { canonicalNfc, nfcLookupTable } = require('../unicode');
 const { readSettings } = require('../settings/read');
-const { readerFrom, readError } = require('../vault-reader');
+const { readerFrom } = require('../vault-reader');
 
 const LEFT_OUT = new Set(['_Templates', '_midwife', '_meta', '_archive', '_QA', 'node_modules']);
 
@@ -19,7 +19,8 @@ const stemOf = (rel) => path.posix.basename(rel, path.posix.extname(rel));
 
 function wikiTarget(value) {
   const m = /\[\[([^\]|#]+)/.exec(String(value || ''));
-  return (m ? m[1] : String(value || '')).trim();
+  if (m) return m[1].trim();
+  return String(value || '').split(/[|#]/)[0].trim();
 }
 
 // The heading lines of a body: [{ level, title, start, end }] (start: line of the heading), fences skipped.
@@ -30,7 +31,7 @@ function headings(lines) {
     const f = /^\s*(```|~~~)/.exec(line);
     if (f) { fence = fence === null ? f[1] : (fence === f[1] ? null : fence); return; }
     if (fence) return;
-    const m = /^(#{1,6})[ \t]+(.*?)[ \t#]*$/.exec(line);
+    const m = /^(#{1,6})[ \t]+(.*?)(?:[ \t]+#+)?[ \t]*$/.exec(line);
     if (m) out.push({ level: m[1].length, title: m[2].trim(), at: i });
   });
   return out;
@@ -60,16 +61,22 @@ function buildIndex(vaultPath, { deps } = {}) {
   };
 
   const pages = [];
-  for (const page of scanAllNotes(vaultPath, deps)) {
+  // The scan reads every note once; a file it cannot read is answered empty there, so the walk goes on,
+  // and is read (and fails) again below, where it is marked unreadable. A folder that cannot be listed still throws.
+  const scanDeps = { ...(deps || {}), readFile: (p) => { try { return rd.readFile(p); } catch { return ''; } } };
+  for (const page of scanAllNotes(vaultPath, scanDeps)) {
     const rel = toPosix(path.relative(vaultPath, page.sourcePath));
     if (isLeftOut(rel)) continue;
-    let text;
-    try { text = rd.readFile(page.sourcePath); } catch (err) { throw readError(rel, err); }
-    text = text.replace(/\r\n?/g, '\n');
+    let text = null;
     let fm = {};
     let body = '';
     let unreadable = false;
-    try {
+    // A file that cannot be read keeps its name, like one whose frontmatter does not parse.
+    try { text = rd.readFile(page.sourcePath).replace(/\r\n?/g, '\n'); } catch (err) {
+      unreadable = true;
+      warn('unreadable-note', rel, `could not be read: ${String(err.message).split('\n')[0]}`);
+    }
+    if (text !== null) try {
       const parsed = parseNote(text);
       fm = parsed.data || {};
       body = parsed.content;
@@ -92,11 +99,13 @@ function buildIndex(vaultPath, { deps } = {}) {
     if (!stems.has(k)) stems.set(k, []);
     stems.get(k).push(p);
   }
+  const ambiguous = new Set();
   const superseded = (p) => String(p.fm.canon_status || '').toUpperCase() === 'SUPERSEDED';
   for (const [k, group] of stems) {
     const live = group.filter((p) => !superseded(p));
     if (live.length > 1) {
       warn('ambiguous-name', null, `${group[0].stem} names ${live.length} notes (${live.map((p) => p.path).join(', ')}); link them by path`);
+      ambiguous.add(k);
       continue;
     }
     if (live.length === 1) table[k] = live[0].path;
@@ -114,7 +123,7 @@ function buildIndex(vaultPath, { deps } = {}) {
   for (const p of pages) {
     for (const a of [...nameList(p.fm.aliases), ...gmAliasList(p.fm)]) {
       const k = canonicalNfc(a);
-      if (!(k in table)) table[k] = p.path;
+      if (!(k in table) && !ambiguous.has(k)) table[k] = p.path;
     }
   }
   const lookup = nfcLookupTable(table);

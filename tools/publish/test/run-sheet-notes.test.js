@@ -89,4 +89,56 @@ describe('run sheet note index', () => {
     assert.match(idx.gmSection('Characters/NPCs/Brother Ash.md', 'Playing Them'), /Speech/);
     assert.strictEqual(idx.gmSection('Characters/NPCs/Brother Ash.md', 'Nope'), '');
   });
+
+  it('resolve strips an alias or heading tail from a bare string', () => {
+    const idx = buildIndex(copy());
+    assert.strictEqual(idx.resolve('Brother Ash|Ash'), 'Characters/NPCs/Brother Ash.md');
+    assert.strictEqual(idx.resolve('Brother Ash#Wants'), 'Characters/NPCs/Brother Ash.md');
+    assert.strictEqual(idx.resolve('[[Brother Ash#Wants|Ash]]'), 'Characters/NPCs/Brother Ash.md');
+  });
+
+  it('gmSection finds the Stats under GM Notes in both stat forms', () => {
+    const idx = buildIndex(copy());
+    const ash = idx.gmSection('Characters/NPCs/Brother Ash.md', 'Stats');
+    assert.match(ash, /Commoner \(SRD\)/);
+    assert.match(ash, /AC 12/);
+    assert.match(ash, /Initiative \+1/);
+    const lucan = idx.gmSection('Characters/NPCs/Lucan Grey.md', 'Stats');
+    assert.match(lucan, /\*\*AC\*\* 13/);
+    assert.match(lucan, /as an ally/i);
+  });
+
+  it('a note file that cannot be read keeps its name, unreadable, one warning', () => {
+    const dir = copy();
+    const bad = path.join(dir, 'Characters', 'NPCs', 'Sister Fen.md');
+    const deps = { readFile: (p) => { if (p === bad) throw Object.assign(new Error('EACCES: denied'), { code: 'EACCES' }); return fs.readFileSync(p, 'utf8'); } };
+    const idx = buildIndex(dir, { deps });
+    const p = idx.resolve('Sister Fen');
+    assert.strictEqual(p, 'Characters/NPCs/Sister Fen.md');
+    const r = idx.read(p);
+    assert.deepStrictEqual({ fm: r.fm, body: r.body, unreadable: r.unreadable }, { fm: {}, body: '', unreadable: true });
+    assert.strictEqual(idx.warnings.filter((w) => w.kind === 'unreadable-note').length, 1);
+  });
+
+  it('read of an unknown path throws', () => {
+    assert.throws(() => buildIndex(copy()).read('Nowhere.md'), /no note at/);
+  });
+
+  it('headings in code fences are ignored; a closing # needs a space before it', () => {
+    const dir = copy();
+    fs.writeFileSync(path.join(dir, 'Fenced.md'), '---\ntype: npc\n---\n\n## GM Notes\n\n```\n### Stats\nfake\n```\n\n### Stats\nreal\n\n## C#\n\nsharp\n\n## Closed ##\n\nshut\n');
+    const idx = buildIndex(dir);
+    assert.strictEqual(idx.gmSection('Fenced.md', 'Stats'), 'real');
+    assert.strictEqual(idx.section('Fenced.md', 'Stats', 3), 'real');
+    assert.strictEqual(idx.section('Fenced.md', 'C#'), 'sharp');
+    assert.strictEqual(idx.section('Fenced.md', 'Closed'), 'shut');
+  });
+
+  it('an alias equal to an ambiguous file name does not claim it', () => {
+    const dir = copy();
+    fs.writeFileSync(path.join(dir, 'Characters', 'NPCs', 'Lucan Grey.md'), fs.readFileSync(path.join(dir, 'Characters', 'NPCs', 'Lucan Grey.md'), 'utf8').replace('aliases: [Lucan]', 'aliases: [Lucan, index]'));
+    const idx = buildIndex(dir);
+    assert.strictEqual(idx.resolve('index'), null);
+    assert.strictEqual(idx.resolve('Lucan'), 'Characters/NPCs/Lucan Grey.md');
+  });
 });

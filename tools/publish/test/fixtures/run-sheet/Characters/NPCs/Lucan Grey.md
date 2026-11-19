@@ -14,7 +14,13 @@ A scout the party met on the road.
 
 ## GM Notes
 
-Scout (SRD), AC 13, HP 16, Initiative +2, run as an ally
+### Stats
+
+Scout (SRD)
+
+**AC** 13 · **Initiative** +2 (12) · **HP** 16 (3d8 + 3)
+
+Run as an ally
 
 ### Playing Them
 
