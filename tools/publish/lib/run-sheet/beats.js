@@ -264,9 +264,11 @@ function readBeats(planBody, index) {
           let name;
           let rest;
           if (nb) { name = nb[1].trim(); rest = nb[2]; } else {
-            const dash = item.text.indexOf(' — ');
-            name = dash === -1 ? item.text : item.text.slice(0, dash);
-            rest = dash === -1 ? '' : item.text.slice(dash + 3);
+            // a plain bullet is named by its first line; nested or wrapped lines stay in extra
+            const [first, ...more] = item.text.split('\n');
+            const dash = first.indexOf(' — ');
+            name = dash === -1 ? first : first.slice(0, dash);
+            rest = (dash === -1 ? '' : first.slice(dash + 3)) + more.join('\n');
           }
           const nameLinks = name.match(LINK) || [];
           const note = nameLinks.length ? resolve(linkParts(nameLinks[0].replace(/^!?\[\[|\]\]$/g, '')).target) : null;

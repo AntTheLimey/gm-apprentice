@@ -164,6 +164,17 @@ describe('run sheet beats', () => {
       '**Open to the party** (scenes 1–8, any order, any number)\n- The guest register (Hollis) — Scene 1\n- Crane by the fire — Scene 4');
   });
 
+  it('a plain hub bullet is named by its first line', () => {
+    const index = buildIndex(copy());
+    const plan = fs.readFileSync(path.join(__dirname, 'fixtures', 'run-sheet-hub-plan.md'), 'utf8')
+      .replace('- Crane by the fire — Scene 4\n', '- Crane by the fire\n  - he has the key\n')
+      .replace('- [[The Gate House]] at dusk\n', '- [[The Gate House]] at dusk\n\n  The door sticks.\n');
+    const b = readBeats(plan, index).beats[1];
+    assert.deepStrictEqual(b.spots.map((s) => s.name), ['The guest register (Hollis)', 'Crane by the fire', 'The Gate House at dusk']);
+    assert.match(b.extra, /- Crane by the fire\n  - he has the key/);
+    assert.match(b.extra, /The door sticks\./);
+  });
+
   it('scene note text after the GM fence is kept', () => {
     const dir = copy();
     const note = path.join(dir, 'Chapters/Chapter 1/Scenes/The Bell Tower.md');
