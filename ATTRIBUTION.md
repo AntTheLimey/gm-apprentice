@@ -36,24 +36,24 @@ feature names (such as `Rope, Hempen` and `Crossbow, Light`) used in the
 D&D Beyond sync tests and comments, where D&D Beyond still spells them
 that way.
 
-### Dungeons & Dragons System Reference Document 5.2
+### Dungeons & Dragons System Reference Document 5.2.1
 
 This work includes material from the System Reference Document
-5.2 ("SRD 5.2") by Wizards of the Coast LLC, available at
-https://www.dndbeyond.com/srd. The SRD 5.2 is licensed under
+5.2.1 ("SRD 5.2.1") by Wizards of the Coast LLC, available at
+https://www.dndbeyond.com/srd. The SRD 5.2.1 is licensed under
 the Creative Commons Attribution 4.0 International License,
 available at
 https://creativecommons.org/licenses/by/4.0/legalcode.
 
-Content derived from the SRD 5.2 includes: spell indexes and
+Content derived from the SRD 5.2.1 includes: spell indexes and
 descriptions, magic item indexes and descriptions, and full
 monster stat blocks (ability scores, attacks, damage dice, save
 DCs, traits, legendary actions) for 235 creatures, and the same
 compact blocks for 94 animals. Their Initiative, size and Speed
-figures come from SRD 5.2.1 (`scripts/srd521-figures.json`, names and
-figures only).
-`gma stat-fill` writes those creatures' condensed SRD 5.2 blocks into a
-vault's notes, each with the SRD credit line (CC-BY 4.0).
+figures, and three spell save DCs, come from the official PDF
+(`scripts/srd521-figures.json`, names and figures only).
+`gma stat-fill` writes those creatures' condensed SRD blocks into the
+GM's own notes.
 
 The publish tool's D&D test fixtures
 (`tools/publish/test/fixtures/with-dnd-pc/`) are seven original
@@ -84,7 +84,7 @@ Warlock's pact slots, the Warlock levels at which a spell of level 6 to 9
 is gained, the most cantrips a class option adds, and the level-20 ability
 score caps of the Barbarian and Monk. Numbers only; no rules text is
 copied. `shared` can install as a skill of its own without this document,
-so `skills/shared/NOTICE.md` carries the SRD 5.2 notice for this file and
+so `skills/shared/NOTICE.md` carries the SRD 5.2.1 notice for this file and
 the SJG notice for `skills/shared/scripts/gurps_calc.py`.
 
 The Python tools' D&D test characters (`tests/fixtures/dnd-pcs/*.md`)
