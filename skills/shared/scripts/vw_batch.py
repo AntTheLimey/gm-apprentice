@@ -406,6 +406,8 @@ def run_lead(batch: vw.Batch, rel: str, body: list[str],
                     or vw.LIST_RE.match(above) and vw.LIST_RE.match(body[0]))
         new_text = vw.place(doc, end, body, glue=glue)
         verb = "WOULD-ADD"
+    if new_text == text:
+        verb = "UNCHANGED"   # the text already there (#784)
     check_rest_unchanged(batch, rel, text, new_text)
     batch.put(rel, new_text)
     batch.row(verb, rel, "§(lead)", f"{len(body)} lines")
@@ -506,6 +508,8 @@ def run_section(batch: vw.Batch, b: Block) -> None:
         new_text = vw.place(doc, at, body, glue=glue,
                             tight=bool(vw.LIST_RE.match(body[0])))
         verb = "WOULD-ADD"
+    if new_text == text:
+        verb = "UNCHANGED"   # the text already there (#784)
     check_rest_unchanged(batch, rel, text, new_text)
     batch.put(rel, new_text)
     batch.row(verb, rel, f"§{ns.heading}", f"{len(body)} lines")
@@ -832,6 +836,7 @@ def run(args: argparse.Namespace) -> int:
                f"stamp: {count('WOULD-STAMP')}  "
                + "".join(f"{name}: {n}  " for name, n in (
                    ("moved", count("WOULD-MOVE")),
+                   ("unchanged", count("UNCHANGED")),
                    ("set", count("WOULD-SET")),
                    ("closed", batch.tally["closed"]),
                    ("rested", batch.tally["rested"]),

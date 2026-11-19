@@ -287,6 +287,29 @@ class BatchTests(unittest.TestCase):
                               + lead, "--write")
             self.assertEqual(code, 0, out)
             self.assertEqual(read(vault, rel), note, rel)
+            # #784: the preview says so, not WOULD-REPLACE.
+            code, out = batch(vault, f'=== section "{rel}" --lead --replace\n'
+                              + lead)
+            self.assertEqual(code, 0, out)
+            self.assertIn("UNCHANGED\t", out, rel)
+            self.assertNotIn("WOULD-REPLACE", out, rel)
+            self.assertIn("unchanged: 1", out, rel)
+
+    def test_a_section_replaced_with_its_own_text_is_unchanged(self):
+        """#784: as `stamp --set` reports a no-op (#779)."""
+        note = "---\ntype: npc\n---\n\n## Notes\n\n- one\n- two\n\n## More\n\nx\n"
+        vault = make_vault(self, {"n.md": note})
+        for mode in ("", "--write"):
+            code, out = batch(vault, '=== section "n.md" "Notes" --replace\n'
+                              "- one\n- two\n", *([mode] if mode else []))
+            self.assertEqual(code, 0, out)
+            self.assertIn("UNCHANGED\tn.md\t§Notes", out, mode)
+            self.assertNotIn("REPLACE", out, mode)
+            self.assertEqual(read(vault, "n.md"), note)
+        code, out = batch(vault, '=== section "n.md" "Notes" --replace\n'
+                          "- three\n")
+        self.assertIn("WOULD-REPLACE\tn.md", out)
+        self.assertNotIn("UNCHANGED", out)
 
     def test_lead_replace_refuses_to_drop_a_comment_inside_it(self):
         note = SCENE.replace("**Starts it:**", "%% check the map %%\n\n"
