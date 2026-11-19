@@ -620,6 +620,13 @@ change what the site shows:
   WITHHELD_NAME_PUBLIC
                   a withheld name a published page answers to as well, which so
                   cannot be looked for
+  ALIAS_NAME_PUBLIC
+                  a gm_aliases or unmasked_name name a published page answers
+                  to as well, which so cannot be looked for (a name the note
+                  only lists in its own aliases is still looked for)
+  UNMASKED_NAME_UNREAD
+                  an unmasked_name that names no one ("[[]]"), so no true name
+                  is looked for
   WITHHELD_FLAG_UNREADABLE
                   a withheld: value that is not true or false, read as not
                   withheld

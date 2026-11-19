@@ -2375,7 +2375,9 @@ function publishedFrontmatter(frontmatter, excludeFields = [], overrides = {}) {
   // `gm_aliases` resolve links and are never shown (#212). A GM on Obsidian
   // may list the same name under `aliases` too, since Obsidian only resolves
   // links through `aliases`, so a GM alias is also removed from that list.
-  const secret = new Set(gmAliasList(frontmatter).map(gmAliasKey));
+  // A disguised NPC's true name (`unmasked_name`) is kept the same way: a GM may list it under
+  // `aliases` too, so that `[[True Name]]` resolves in Obsidian before the unmasking (#796).
+  const secret = new Set(noteSecretNames(frontmatter).map(gmAliasKey));
   delete filtered.gm_aliases;
   // A disguised NPC's true name and face stay off the site until wrap-up unmasks them
   // (`gma reveal --unmask` moves them into `aliases` and `portrait`).
@@ -2402,6 +2404,8 @@ function hiddenFieldsOf(frontmatter, excludeFields = [], overrides = {}) {
   // taken out by a field rule (a name in the exclude lists), not by one of those steps.
   const probe = { ...fm };
   delete probe.gm_aliases;
+  delete probe.unmasked_name;
+  const unmaskedKeys = new Set(unmaskedNames(fm).map(gmAliasKey));
   if (Array.isArray(fm.relationships)) probe.relationships = [{ target: '' }];
   const ruled = publishedFrontmatter(probe, excludeFields, overrides);
   const field = (name, value, label = `field: ${name}`) => ({ kind: 'fields', label, name, value });
@@ -2418,7 +2422,10 @@ function hiddenFieldsOf(frontmatter, excludeFields = [], overrides = {}) {
     } else if (key === 'aliases' && key in ruled) {
       const shown = Array.isArray(out.aliases) ? out.aliases : [];
       const all = Array.isArray(value) ? value : [];
-      for (const a of all) if (!shown.includes(a) && !blank(a)) hidden.push(field('aliases', a, 'field: gm_aliases'));
+      for (const a of all) {
+        if (shown.includes(a) || blank(a)) continue;
+        hidden.push(field('aliases', a, `field: ${unmaskedKeys.has(gmAliasKey(a)) && !gmAliasList(fm).some((g) => gmAliasKey(g) === gmAliasKey(a)) ? 'unmasked_name' : 'gm_aliases'}`));
+      }
     } else if (key === 'relationships' && Array.isArray(value) && key in ruled) {
       const shown = Array.isArray(out.relationships) ? out.relationships : [];
       for (const edge of value) if (!shown.includes(edge) && !blank(edge)) hidden.push({ kind: 'relationships', label: 'GM-only relationship', name: 'relationships', value: edge });
@@ -2450,9 +2457,38 @@ function gmAliasList(frontmatter) {
 }
 
 // A disguised NPC's true name (`unmasked_name`), as a list of names: one the site keeps secret until wrap-up
-// unmasks them. A secret name for the leak checks, as gm_aliases names are; it resolves no link.
+// unmasks them. A secret name for the leak checks, as gm_aliases names are; it resolves no link of its own.
+// One name or a list, each plain or a wiki-link read as the name of the note it links: `[[Captain Rook]]`,
+// `[[NPCs/Captain Rook|the captain]]` and an unquoted `[[Captain Rook]]` (a list in a list to YAML) are all
+// "Captain Rook". reveal.py reads it the same way (vaultlib.py `unmasked_names`).
 function unmaskedNames(frontmatter) {
-  return nameList(frontmatter && frontmatter.unmasked_name);
+  const value = frontmatter && frontmatter.unmasked_name;
+  const out = [];
+  const linkName = (inner) => String(inner).split('|')[0].split('#')[0].split('/').pop().trim();
+  const take = (v, inLink) => {
+    if (Array.isArray(v)) { for (const x of v) take(x, true); return; }
+    if (typeof v !== 'string' || !v.trim()) return;
+    const link = /^!?\[\[([\s\S]*?)\]\]$/.exec(v.trim());
+    const name = link ? linkName(link[1]) : inLink ? linkName(v) : v.trim();
+    if (name) out.push(name);
+  };
+  for (const v of Array.isArray(value) ? value : [value]) take(v, false);
+  return out;
+}
+
+// The unmasked_name value of a note that is there but names no one (`"[[]]"`, a map), as written; null when the
+// note has none or it names someone. Told by the build (note-faults.js) and the run sheet, never dropped silently.
+function unmaskedNameUnread(frontmatter) {
+  const value = frontmatter && frontmatter.unmasked_name;
+  const blank = (v) => v == null || (typeof v === 'string' && !v.trim()) || (Array.isArray(v) && v.every(blank));
+  if (blank(value) || unmaskedNames(frontmatter).length > 0) return null;
+  return typeof value === 'string' ? value.trim() : JSON.stringify(value);
+}
+
+// Every secret name of one note: its gm_aliases names and its unmasked_name. A name in this list that the note's
+// own `aliases` also holds is no public name: the site drops it from `aliases` and the leak checks search it.
+function noteSecretNames(frontmatter) {
+  return [...gmAliasList(frontmatter), ...unmaskedNames(frontmatter)];
 }
 
 // How a name is compared against GM aliases: the way Obsidian resolves a link,
@@ -2504,7 +2540,11 @@ function gmAliasRewriter(pages, published, rawNotes, words, mark) {
   // some other page's public name and was deleted below).
   const secretKeys = new Set();
   for (const page of pages) {
-    for (const key of gmAliasList(page.frontmatter || {}).map(gmAliasKey)) {
+    const fm = page.frontmatter || {};
+    // A true name (unmasked_name) resolves no link, unless the note also lists it under `aliases`: then a link
+    // to it reaches the page, and is printed with the page's public name as a gm_aliases name is (#796).
+    const own = new Set(nameList(fm.aliases).map(gmAliasKey));
+    for (const key of [...gmAliasList(fm).map(gmAliasKey), ...unmaskedNames(fm).map(gmAliasKey).filter((k) => own.has(k))]) {
       secretKeys.add(key);
       if (!owners.has(key)) owners.set(key, page);
     }
@@ -2514,7 +2554,7 @@ function gmAliasRewriter(pages, published, rawNotes, words, mark) {
   // would leave the name showing as plain text, so it never claims it.
   for (const page of published || pages) {
     const fm = page.frontmatter || {};
-    const secret = new Set(gmAliasList(fm).map(gmAliasKey));
+    const secret = new Set(noteSecretNames(fm).map(gmAliasKey));
     owners.delete(gmAliasKey(page.title));
     for (const a of Array.isArray(fm.aliases) ? fm.aliases : []) {
       if (!secret.has(gmAliasKey(a))) owners.delete(gmAliasKey(a));
@@ -2550,7 +2590,7 @@ function gmAliasRewriter(pages, published, rawNotes, words, mark) {
       const fm = page.frontmatter || {};
       withheldKeys.delete(gmAliasKey(page.title));
       // Not an alias that is also the page's own gm_aliases name: that one is no public name (publishedFrontmatter drops it).
-      const secret = new Set(gmAliasList(fm).map(gmAliasKey));
+      const secret = new Set(noteSecretNames(fm).map(gmAliasKey));
       for (const a of Array.isArray(fm.aliases) ? fm.aliases : []) if (!secret.has(gmAliasKey(a))) withheldKeys.delete(gmAliasKey(a));
     }
   }
@@ -2684,4 +2724,4 @@ function gmAliasRewriter(pages, published, rawNotes, words, mark) {
   };
 }
 
-module.exports = { IMAGE_EXT_REGEX, isDocumentPage, fenceStep, unstableBodyMarked, unstableSectionsMarked, markedBlocksForTest: markedBlocks, htmlCommentsForTest: htmlComments, obsidianCommentsForTest: obsidianComments, calloutLinesForTest: calloutLines, strippedLines, cutLines, sectionWithholder, renderInline, findHeadings, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, renderMarkdown, processContent, playerSafeMarkdown, noteFacts, keptFlags, stubCut, extractSections, resolveWikiLinks, filterSections, isExcludedSection, strippedSectionTitles, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, uncommentedLines, stripLeadingH1, stripLeadingH1Marked, relativePath, relativeHref, humanizeName, wikiTargetLabel, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, campaignImageSrc, isWebImageAddress, encodeHref, encodeAddress, publishedSource, isSessionHub, renderMetaValue, plainMetaValue, plainRefValue, NOTE_NAME_FIELDS, refMetaValue, referenceOf, valueText, dateText, portraitBasename, filterFields, publishedFrontmatter, hiddenFieldsOf, gmAliasList, unmaskedNames, nameList, gmAliasKey, gmAliasRewriter, publishMode, isGmOnlyEdge, isWithheld, flagIsYes, withheldPlaceholder, withheldNameMarked, keepOnlySections, keptSectionFlags, stubMarked, sectionVerdicts, sheetWithheldTitles };
+module.exports = { IMAGE_EXT_REGEX, isDocumentPage, fenceStep, unstableBodyMarked, unstableSectionsMarked, markedBlocksForTest: markedBlocks, htmlCommentsForTest: htmlComments, obsidianCommentsForTest: obsidianComments, calloutLinesForTest: calloutLines, strippedLines, cutLines, sectionWithholder, renderInline, findHeadings, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, renderMarkdown, processContent, playerSafeMarkdown, noteFacts, keptFlags, stubCut, extractSections, resolveWikiLinks, filterSections, isExcludedSection, strippedSectionTitles, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, uncommentedLines, stripLeadingH1, stripLeadingH1Marked, relativePath, relativeHref, humanizeName, wikiTargetLabel, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, campaignImageSrc, isWebImageAddress, encodeHref, encodeAddress, publishedSource, isSessionHub, renderMetaValue, plainMetaValue, plainRefValue, NOTE_NAME_FIELDS, refMetaValue, referenceOf, valueText, dateText, portraitBasename, filterFields, publishedFrontmatter, hiddenFieldsOf, gmAliasList, unmaskedNames, unmaskedNameUnread, noteSecretNames, nameList, gmAliasKey, gmAliasRewriter, publishMode, isGmOnlyEdge, isWithheld, flagIsYes, withheldPlaceholder, withheldNameMarked, keepOnlySections, keptSectionFlags, stubMarked, sectionVerdicts, sheetWithheldTitles };

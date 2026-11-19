@@ -18,6 +18,10 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 - `gma reveal --unmask` makes an unmasking canon at wrap-up: the true name joins `aliases` (and leaves `gm_aliases`), the true face becomes the portrait, the true voice becomes Speech, and the old face is kept in the reveals log.
 - A GM map Document can name the map players see in `player_version`. The run sheet pairs the two, and pairs `X (GM)` with `X` by name when the field is not set.
 
+### Fixed
+
+- A secret name (`gm_aliases` or `unmasked_name`) also written in the note's `aliases` is now kept off the player site and still searched by the leak check; a secret name that is really a published page's own name is told in the build log (#796).
+
 ## [1.12.100] — 2026-11-19
 
 ### Fixed

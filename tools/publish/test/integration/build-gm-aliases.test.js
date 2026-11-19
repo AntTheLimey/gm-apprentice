@@ -6,7 +6,7 @@ const os = require('os');
 const path = require('path');
 const { build } = require('../../lib/build');
 const { writeSiteConfig } = require('../helpers/vault-files');
-const { publishedFrontmatter, gmAliasList, gmAliasRewriter } = require('../../lib/processor');
+const { publishedFrontmatter, hiddenFieldsOf, gmAliasList, gmAliasRewriter } = require('../../lib/processor');
 
 // #212: a `gm_aliases` entry resolves links to its page but its text never
 // reaches the site: not the search index, not the portrait alt text, not the
@@ -209,6 +209,30 @@ describe('scanAllNotes (#212)', () => {
     console.warn = m => warned.push(String(m));
     try { scanAllNotes(dir); } finally { console.warn = orig; fs.rmSync(dir, { recursive: true, force: true }); }
     assert.ok(warned.some(w => w.includes('Mara.md') && w.includes('NOT hidden')), warned.join('\n'));
+  });
+
+  it('warns for a quoted secret key too (M4)', () => {
+    const { scanAllNotes } = require('../../lib/scanner');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-alias-bad-'));
+    fs.writeFileSync(path.join(dir, 'Pedlar.md'), '---\n"unmasked_name": "Captain Rook"\nbad: [x\n---\nBody.\n');
+    fs.writeFileSync(path.join(dir, 'Mara.md'), "---\n'gm_aliases': [The Veiled One\n---\nBody.\n");
+    const warned = [];
+    const orig = console.warn;
+    console.warn = m => warned.push(String(m));
+    try { scanAllNotes(dir); } finally { console.warn = orig; fs.rmSync(dir, { recursive: true, force: true }); }
+    assert.ok(warned.some(w => w.includes('Pedlar.md') && w.includes('unmasked_name') && w.includes('NOT looked for')), warned.join('\n'));
+    assert.ok(warned.some(w => w.includes('Mara.md') && w.includes('NOT hidden')), warned.join('\n'));
+  });
+});
+
+describe('publishedFrontmatter and unmasked_name (#796)', () => {
+  it('takes a true name out of aliases, written plain or as a link, and the GM panel names its field', () => {
+    for (const unmasked of ['Captain Rook', '[[Captain Rook]]', [['Captain Rook']]]) {
+      const fm = { aliases: ['The Pedlar', 'Captain Rook'], unmasked_name: unmasked };
+      assert.deepStrictEqual(publishedFrontmatter(fm).aliases, ['The Pedlar'], JSON.stringify(unmasked));
+      const hidden = hiddenFieldsOf(fm).filter((h) => h.name === 'aliases');
+      assert.deepStrictEqual(hidden.map((h) => [h.label, h.value]), [['field: unmasked_name', 'Captain Rook']], JSON.stringify(unmasked));
+    }
   });
 });
 

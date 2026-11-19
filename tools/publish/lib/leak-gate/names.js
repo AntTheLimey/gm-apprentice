@@ -45,7 +45,7 @@ function nameFindings({ files, allFiles, hidden, findingId }) {
     found.push({ id: findingId(page, text), kind: 'name', code: CODE[kind], page, text, shown: context, note: owner, reason });
   };
   if (secrets.probe) {
-    const publicWords = publicWordsOf(hidden.linkMap, hidden.published);
+    const publicWords = publicWordsOf(hidden.linkMap, hidden.published, secrets.privateNames);
     const holders = holdersOf(secrets.names, publicWords);
     for (const file of files) {
       const html = nameTextOf(file);

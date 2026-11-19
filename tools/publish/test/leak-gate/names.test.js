@@ -49,6 +49,72 @@ describe('leak gate: secret names', () => {
       assert.ok(s.logs.some((l) => /1 unmasked name is printed on published pages \(Captain Rook 1 page\)/.test(l)), s.logs.join('\n'));
     } finally { s.cleanup(); }
   });
+  // #796 and the run sheet's unmasking: a secret name the GM also lists under `aliases` (so the link resolves in
+  // Obsidian) is kept off the site and still searched, whether it is an unmasked_name or a gm_aliases name.
+  for (const [field, line] of [['unmasked_name', 'unmasked_name: "Captain Rook"'], ['unmasked_name link', 'unmasked_name: [[Captain Rook|the captain]]'],
+    ['gm_aliases', 'gm_aliases: ["Captain Rook"]']]) {
+    it(`a ${field} name also written in aliases is on no page, and the gate finds it when a page prints it (#796)`, () => {
+      const notes = {
+        'NPCs/Pedlar.md': `---\ntype: npc\naliases: ["The Pedlar", "Captain Rook"]\n${line}\n---\nSells ribbons.\n`,
+        'NPCs/Gossip.md': '---\ntype: npc\n---\nShe buys from [[Captain Rook]] and [[The Pedlar]].\n',
+      };
+      const s = leakSite(notes, SETTINGS);
+      try {
+        // `rook` alone: the search index holds a name as single words
+        const holding = s.player.files().filter((f) => /rook/i.test(fs.readFileSync(f, 'utf8')));
+        assert.deepEqual(holding.map((f) => path.relative(s.outputDir, f)), [], 'no built file holds the true name');
+        assert.ok(s.player.exists('search-index.json') && s.player.exists('previews.json'), 'the index and previews were built');
+        assert.match(s.player.read('npcs', 'gossip.html'), /She buys from <a [^>]*>Pedlar<\/a>/);
+        assert.deepEqual(runLeakGate({ configPath: s.configPath, outputDir: s.outputDir }).findings, []);
+        leakInto(s.outputDir, 'npcs/gossip.html', 'the pedlar is Captain Rook');
+        const f = runLeakGate({ configPath: s.configPath, outputDir: s.outputDir }).findings.filter((x) => x.code === 'ALIAS_IN_PROSE');
+        assert.deepEqual(f.filter((x) => x.page.endsWith('.html')).map((x) => [x.page, x.note, x.text]), [['npcs/gossip.html', 'NPCs/Pedlar.md', 'captain rook']]);
+      } finally { s.cleanup(); }
+    });
+  }
+  it('a page that prints a secret name in aliases is found by the build too (#796)', () => {
+    const notes = {
+      'NPCs/Pedlar.md': '---\ntype: npc\naliases: ["The Pedlar", "Captain Rook"]\nunmasked_name: "Captain Rook"\n---\nSells ribbons.\n',
+      'NPCs/Gossip.md': '---\ntype: npc\n---\nShe swears the pedlar is Captain Rook.\n',
+    };
+    const s = leakSite(notes, SETTINGS);
+    try {
+      assert.ok(s.logs.some((l) => /1 unmasked name is printed on published pages \(Captain Rook 1 page\)/.test(l)), s.logs.join('\n'));
+      const f = runLeakGate({ configPath: s.configPath, outputDir: s.outputDir }).findings.filter((x) => x.code === 'ALIAS_IN_PROSE');
+      assert.deepEqual(f.filter((x) => x.page.endsWith('.html')).map((x) => x.page), ['npcs/gossip.html']);
+    } finally { s.cleanup(); }
+  });
+  it('a secret name that is a published page\'s own name is not searched, and the build says so (#796)', () => {
+    const notes = {
+      'NPCs/Pedlar.md': '---\ntype: npc\nunmasked_name: "Captain Rook"\ngm_aliases: [Mara Quill]\n---\nSells ribbons.\n',
+      'NPCs/Captain Rook.md': '---\ntype: npc\n---\nA famous pirate.\n',
+      'NPCs/Mara.md': '---\ntype: npc\naliases: [Mara Quill]\n---\nA clerk.\n',
+    };
+    const s = leakSite(notes, SETTINGS);
+    try {
+      assert.ok(s.logs.some((l) => /2 secret names are also the names of published pages, so they are not looked for \(Captain Rook, Mara Quill\)/.test(l)), s.logs.join('\n'));
+    } finally { s.cleanup(); }
+  });
+  for (const value of ['"[[Captain Rook]]"', '"[[Captain Rook|the captain]]"', '[[Captain Rook]]', '[[Captain Rook|the captain]]']) {
+    it(`an unmasked_name written as a link (${value}) is searched as the name it links (C1)`, () => {
+      const notes = {
+        'NPCs/Pedlar.md': `---\ntype: npc\nunmasked_name: ${value}\n---\nSells ribbons.\n`,
+        'NPCs/Gossip.md': '---\ntype: npc\n---\nShe swears the pedlar is Captain Rook.\n',
+      };
+      const s = leakSite(notes, SETTINGS);
+      try {
+        const f = runLeakGate({ configPath: s.configPath, outputDir: s.outputDir }).findings.filter((x) => x.code === 'ALIAS_IN_PROSE');
+        assert.deepEqual(f.filter((x) => x.page.endsWith('.html')).map((x) => [x.page, x.text]), [['npcs/gossip.html', 'captain rook']], value);
+      } finally { s.cleanup(); }
+    });
+  }
+  it('an unmasked_name that names no one is told by the build (C1)', () => {
+    const notes = { 'NPCs/Pedlar.md': '---\ntype: npc\nunmasked_name: "[[]]"\n---\nSells ribbons.\n' };
+    const s = leakSite(notes, SETTINGS);
+    try {
+      assert.ok(s.logs.some((l) => /NPCs\/Pedlar\.md: unmasked_name holds \[\[\]\], which names no one, so no true name is looked for on the site/.test(l)), s.logs.join('\n'));
+    } finally { s.cleanup(); }
+  });
   it('a withheld name written back by a step, in a JSON file, stops the gate', () => {
     const s = leakSite(NOTES, SETTINGS);
     try {

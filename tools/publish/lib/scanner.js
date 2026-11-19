@@ -480,12 +480,13 @@ function scanAllNotes(vaultPath, deps) {
       } catch (err) {
         // Its name still counts. A secret that silently stops being
         // protected is the one failure that must not be quiet.
-        const secretField = (/^(gm_aliases|unmasked_name)[ \t]*:/m.exec(text) || [])[1];
+        // A key written `"gm_aliases":` or `'unmasked_name':` is the same key to YAML.
+        const secretField = (/^["']?(gm_aliases|unmasked_name)["']?[ \t]*:/m.exec(text) || [])[1];
         if (secretField) {
           console.warn(`WARNING: ${path.relative(vaultPath, full)} has ${secretField} but its frontmatter `
             + `can't be read (${err.message.split('\n')[0]}); ${secretField === 'gm_aliases' ? 'those names are NOT hidden' : 'its true name is NOT looked for'} on the site.`);
         }
-        if (/^withheld[ \t]*:/m.test(text)) {
+        if (/^["']?withheld["']?[ \t]*:/m.test(text)) {
           console.warn(`WARNING: ${path.relative(vaultPath, full)} has withheld but its frontmatter `
             + `can't be read (${err.message.split('\n')[0]}); its name is NOT looked for on the site.`);
         }

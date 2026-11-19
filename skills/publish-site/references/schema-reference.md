@@ -78,7 +78,7 @@ Template fields: `companion`, `occupation`, `age`, `gender`,
 |-------|--------|-------------|
 | `rank` | Optional | Military or organizational rank |
 | `companion` | Optional | `true`: travels with the party, so Story pages never picture them, as with a PC |
-| `unmasked_name`, `unmasked_portrait` | Optional | A disguised NPC's true name and face: never published, and the leak check treats the name as a secret name, as a `gm_aliases` name |
+| `unmasked_name`, `unmasked_portrait` | Optional | A disguised NPC's true name and face: never published, and the leak check treats the name as a secret name, as a `gm_aliases` name (also when it is written in `aliases`, or as a `[[link]]`) |
 
 Body content renders below the header card. To keep a body section
 such as `Relationships` off the public site, `settings add` its

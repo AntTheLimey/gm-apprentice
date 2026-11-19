@@ -67,6 +67,8 @@ every page that names it. Use it to confirm each fix.
 | `NAMED_NO_PAGE`, withheld (`ERROR`) | Critical | A published page links a withheld note |
 | `WITHHELD_PUBLISHED` (`ERROR`) | Critical | A withheld note is on the site under its name |
 | `WITHHELD_NAME_PUBLIC` | Warning | A withheld name is not looked for |
+| `ALIAS_NAME_PUBLIC` | Warning | A secret name is not looked for |
+| `UNMASKED_NAME_UNREAD` | Warning | A disguised NPC's true name is not looked for |
 | `WITHHELD_FLAG_UNREADABLE` | Warning | The flag does nothing until it is fixed |
 | `COMPANION_FLAG_UNREADABLE` | Warning | The companion may be pictured on Story pages |
 | `FENCE_UNCLOSED` | Critical | Hidden text is on the site now |
@@ -180,6 +182,19 @@ on a yes; the publish-list one is `SITE manifest apply --exclude
 ## WITHHELD_NAME_PUBLIC
 
 Offer the row's two fixes, and make the one the GM picks.
+
+## ALIAS_NAME_PUBLIC
+
+A `gm_aliases` or `unmasked_name` name is also the name of a published
+page, so the site cannot search for it. A name the note lists only in
+its own `aliases` is not this row: the site keeps that one off and
+searches it. Offer the row's two fixes, and make the one the GM picks.
+
+## UNMASKED_NAME_UNREAD
+
+The note's `unmasked_name` names no one (`"[[]]"`, a value that is not
+a name), so the site looks for no true name. Ask the GM for the true
+name and write it as plain text, or as one `[[link]]` to its note.
 
 ## WITHHELD_FLAG_UNREADABLE
 
