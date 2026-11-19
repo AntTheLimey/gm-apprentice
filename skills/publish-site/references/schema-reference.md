@@ -285,7 +285,7 @@ false clue would publish as "misleading".
 
 <!-- generated:fields-document (scripts/gen_field_lists.py) -->
 Template fields: `doc_type`, `author`, `date`, `condition`,
-`current_holder`, `portrait`.
+`current_holder`, `portrait`, `player_version`.
 <!-- /generated:fields-document -->
 
 Badges rendered: `document_type`, `author`, `classification`,

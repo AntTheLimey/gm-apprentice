@@ -336,8 +336,9 @@ PC)
 spell, tome), `author` (wiki-link: who wrote it, or as the PCs
 believe), `date` (when written), `condition` (pristine, water-stained,
 torn, partly burned), `current_holder` (wiki-link: who has it now),
-`portrait` (a scan or prop image, if you have one). The text goes in
-the body under `## The Text`; an older `content` field moves there.
+`portrait` (a scan or prop image, if you have one), `player_version`
+(on a GM map, wiki-link: the map players see). The text goes in the
+body under `## The Text`; an older `content` field moves there.
 
 **Prop:** `prop_kind` (document, object, diagram, supplied,
 container), `prop_file` (a hand-made page, PDF or picture beside the

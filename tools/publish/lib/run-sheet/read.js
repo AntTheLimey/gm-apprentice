@@ -235,6 +235,31 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
   const places = uniq(linked).filter((p) => low(fmOf(p).type) === 'location');
   const maps = uniq(linked).filter((p) => low(fmOf(p).doc_type) === 'map');
 
+  // Map pairs: a GM map and the map players see. The GM map's `player_version` names it, else the
+  // `X (GM)` / `X` name pair; a twin the Plan does not link is found in the index. A map with no
+  // partner is not listed, and a broken `player_version` link is no pair (and no throw).
+  const isMap = (p) => p !== null && index.has(p) && low(fmOf(p).doc_type) === 'map';
+  const GM_SUFFIX = /\s*\(GM\)\s*$/i;
+  const mapPairs = [];
+  const pairSeen = new Set();
+  const pair = (gm, player) => {
+    if (!isMap(gm) || !isMap(player) || gm === player || pairSeen.has(`${gm}\n${player}`)) return;
+    pairSeen.add(`${gm}\n${player}`);
+    mapPairs.push({ gm, player });
+  };
+  const allMaps = index.notes().filter(isMap);
+  const playerOf = (gm) => {
+    const t = fmTarget(fmOf(gm).player_version);
+    if (t) return index.resolve(t);
+    const stem = stemOf(gm);
+    return GM_SUFFIX.test(stem) ? index.resolve(stem.replace(GM_SUFFIX, '')) : null;
+  };
+  for (const p of maps) {
+    pair(p, playerOf(p));
+    // p as the player map: any GM map that points at it, by field or by name
+    for (const g of allMaps) if (g !== p && playerOf(g) === p) pair(g, p);
+  }
+
   // A link to nowhere anywhere in the Plan warns once (beats warn for theirs; the same text merges).
   for (const w of warnings) if (w.note === null) warnedLinks.add(low(w.text));
   for (const t of pt.links(body)) if (index.resolve(t) === null) warnLink(t);
@@ -253,6 +278,7 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
     people: peopleRead.people,
     places,
     maps,
+    mapPairs,
     threads: joined('threads'),
     runLong,
     prep,

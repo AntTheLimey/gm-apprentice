@@ -14,6 +14,7 @@ date: ""              # when it was written, in-game
 condition: ""         # pristine, water-stained, torn, partly burned…
 current_holder: ""    # "[[Who has it now]]"
 portrait: ""          # a scan or prop image, if you have one
+player_version: ""    # on a GM map, "[[the map players see]]"
 relationships: []
 ---
 

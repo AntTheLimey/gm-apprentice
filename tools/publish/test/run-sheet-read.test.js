@@ -208,13 +208,63 @@ describe('run sheet reader', () => {
     assert.strictEqual(f.session.title, 'Session 05 - Flat');
   });
 
+  describe('map pairs', () => {
+    const mapNote = (name, extra = '') => `---\nname: ${name}\ntype: document\ndoc_type: map\n${extra}---\n\nA map.\n`;
+    const withPlanLine = (dir, line) => {
+      const text = fs.readFileSync(path.join(dir, PLAN), 'utf8');
+      fs.writeFileSync(path.join(dir, PLAN), `${text}\n${line}\n`);
+    };
+
+    it('maps pair by player_version', () => {
+      const dir = copy();
+      write(dir, 'Documents/Cellar Plan (GM).md', mapNote('Cellar Plan (GM)', 'player_version: "[[Cellar Sketch]]"\n'));
+      write(dir, 'Documents/Cellar Sketch.md', mapNote('Cellar Sketch'));
+      withPlanLine(dir, 'See [[Cellar Plan (GM)]].');
+      const m = readRunSheet(dir, PLAN, { party: PARTY });
+      assert.deepStrictEqual(m.mapPairs, [{ gm: 'Documents/Cellar Plan (GM).md', player: 'Documents/Cellar Sketch.md' }]);
+    });
+
+    it('maps pair by name when the field is absent', () => {
+      const dir = copy();
+      write(dir, 'Documents/Map of the Gate (GM).md', mapNote('Map of the Gate (GM)'));
+      const m = readRunSheet(dir, PLAN, { party: PARTY });
+      assert.deepStrictEqual(m.mapPairs, [{ gm: 'Documents/Map of the Gate (GM).md', player: 'Documents/Map of the Gate.md' }]);
+    });
+
+    it('an unlinked twin is paired', () => {
+      const dir = copy();
+      write(dir, 'Documents/Map of the Gate (GM).md', mapNote('Map of the Gate (GM)'));
+      const m = readRunSheet(dir, PLAN, { party: PARTY });
+      assert.ok(!m.maps.includes('Documents/Map of the Gate (GM).md'));
+      assert.strictEqual(m.mapPairs.length, 1);
+      // and the GM map links its player map while the Plan names only the GM map
+      write(dir, 'Documents/Cellar Plan (GM).md', mapNote('Cellar Plan (GM)', 'player_version: "[[Cellar Sketch]]"\n'));
+      write(dir, 'Documents/Cellar Sketch.md', mapNote('Cellar Sketch'));
+      withPlanLine(dir, 'See [[Cellar Sketch]].');
+      const m2 = readRunSheet(dir, PLAN, { party: PARTY });
+      assert.deepStrictEqual(m2.mapPairs.map((p) => p.gm), ['Documents/Map of the Gate (GM).md', 'Documents/Cellar Plan (GM).md']);
+    });
+
+    it('maps keeps its strings, a lone map is not paired, a broken link does not throw', () => {
+      const dir = copy();
+      let m = readRunSheet(dir, PLAN, { party: PARTY });
+      assert.deepStrictEqual(m.maps, ['Documents/Map of the Gate.md']);
+      assert.deepStrictEqual(m.mapPairs, []);
+      write(dir, 'Documents/Lone (GM).md', mapNote('Lone (GM)', 'player_version: "[[Nowhere At All]]"\n'));
+      withPlanLine(dir, 'See [[Lone (GM)]].');
+      m = readRunSheet(dir, PLAN, { party: PARTY });
+      assert.deepStrictEqual(m.maps, ['Documents/Map of the Gate.md', 'Documents/Lone (GM).md']);
+      assert.deepStrictEqual(m.mapPairs, []);
+    });
+  });
+
   it('plan with only a title reads to an empty model', () => {
     const dir = copy();
     write(dir, 'Lonely - Plan.md', '# Lonely\n');
     const m = readRunSheet(dir, 'Lonely - Plan.md');
     assert.deepStrictEqual(m.session, { index: null, title: 'Lonely', chapter: null, number: null });
     assert.deepStrictEqual(m.brief, { overview: '', world: '', stops: '' });
-    for (const f of ['handouts', 'pcs', 'unmatchedPcLines', 'beats', 'people', 'places', 'maps']) assert.deepStrictEqual(m[f], [], f);
+    for (const f of ['handouts', 'pcs', 'unmatchedPcLines', 'beats', 'people', 'places', 'maps', 'mapPairs']) assert.deepStrictEqual(m[f], [], f);
     assert.strictEqual(m.threads, '');
     assert.deepStrictEqual(m.runLong, { nextPlan: null, scenes: [], planning: [], contingencies: [] });
     // the title line is the lead text: kept, not dropped
