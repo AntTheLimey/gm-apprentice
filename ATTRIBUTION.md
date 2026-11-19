@@ -49,7 +49,9 @@ Content derived from the SRD 5.2 includes: spell indexes and
 descriptions, magic item indexes and descriptions, and full
 monster stat blocks (ability scores, attacks, damage dice, save
 DCs, traits, legendary actions) for 235 creatures, and the same
-compact blocks for 94 animals.
+compact blocks for 94 animals. Their Initiative, size and Speed
+figures come from SRD 5.2.1 (`scripts/srd521-figures.json`, names and
+figures only).
 `gma stat-fill` writes those creatures' condensed SRD 5.2 blocks into a
 vault's notes, each with the SRD credit line (CC-BY 4.0).
 
