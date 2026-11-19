@@ -10,6 +10,14 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 ---
 
 
+## [1.12.101] — 2026-11-19
+
+### Added
+
+- A disguised NPC keeps its true name in `unmasked_name`, its true face in `unmasked_portrait` and its true voice in an `**Unmasked:**` line, ready for the run sheet's Unmask (#556). None of them reaches the player site, and the leak check flags the true name on any page.
+- `gma reveal --unmask` makes an unmasking canon at wrap-up: the true name joins `aliases` (and leaves `gm_aliases`), the true face becomes the portrait, the true voice becomes Speech, and the old face is kept in the reveals log.
+- A GM map Document can name the map players see in `player_version`. The run sheet pairs the two, and pairs `X (GM)` with `X` by name when the field is not set.
+
 ## [1.12.100] — 2026-11-19
 
 ### Fixed
