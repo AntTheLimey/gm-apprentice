@@ -122,7 +122,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.lead:
         doc = vw.parse(text)
         try:
-            first, end, _walk = vw.checked_lead(doc, rel)
+            first, end, _walk = vw.checked_lead(
+                doc, rel, vw.hidden_sections(args.vault))
         except vw.WriteError as e:
             print(f"error: {e}", file=sys.stderr)
             return 1

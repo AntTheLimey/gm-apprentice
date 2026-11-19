@@ -703,6 +703,9 @@ class BatchTests(unittest.TestCase):
         is not the lead: the plain lead above it stays writable."""
         for tail in ("<!-- gm-only -->\n\n## GM Notes\n\n**Starts it:** alt\n"
                      "\n<!-- /gm-only -->\n",
+                     # A section the site hides, unfenced (the built-in
+                     # player_site.hide.sections names GM Notes).
+                     "## GM Notes\n\n**Starts it:** alt\n",
                      "<!-- spoiler -->\n**Situation:** x\n<!-- /spoiler -->\n"):
             note = SCENE_FM + "\nA quiet scene.\n\n" + tail
             self.assertEqual(self.lead_read(note), "A quiet scene.\n")
@@ -733,6 +736,17 @@ class BatchTests(unittest.TestCase):
             self.assertEqual(read(vault, "n.md"), SCENE_FM + "\n" + head
                              + "**Situation:** Night 3.\n\n**Starts it:** The "
                              "well bell.\n\n" + SCENE_GM)
+
+    def test_a_paused_section_leaving_a_comment_open_is_refused(self):
+        """Read past it, the lead would seem visible and a write land inside
+        the open `%%` comment, hidden (CodeRabbit on #783)."""
+        snapshot = PAUSED.split("---\n\n", 1)[1].split(PAUSED_LEAD)[0]
+        note = (SCENE_FM + "\n" + snapshot.replace(
+            "- **Where:**", "%% unfinished\n- **Where:**") + self.TOP_BLOCK
+            + "**Situation:** Old.\n")
+        for mode in ("--replace", "--append"):
+            self.lead_refused(note, "**Situation:** New.\n",
+                              "leaves a comment or code fence open", mode)
 
     def test_a_top_block_on_a_crlf_note_in_capitals(self):
         note = (SCENE_FM + "\n# Title\n\n<!-- GM-ONLY -->\n![[p.png]]\n"

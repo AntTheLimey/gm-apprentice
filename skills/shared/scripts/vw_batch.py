@@ -335,7 +335,8 @@ def run_lead(batch: vw.Batch, rel: str, body: list[str],
     differently afterwards."""
     text = batch.read(rel)
     doc = vw.parse(text)
-    first, end, walk = vw.checked_lead(doc, rel)
+    first, end, walk = vw.checked_lead(doc, rel,
+                                       vw.hidden_sections(batch.vault))
     check_lead_text(rel, body, at_top=first == 0)
     lines = list(doc.lines)
     if replace:

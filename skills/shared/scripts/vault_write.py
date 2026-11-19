@@ -582,14 +582,22 @@ def lead_shape_below(doc: Doc, end: int,
                  and shape.match(doc.lines[i])), None)
 
 
-def opener_shown_below(doc: Doc, end: int, rel: str) -> int | None:
+def opener_shown_below(doc: Doc, end: int, rel: str,
+                       hides: Iterable[str] = ()) -> int | None:
     """The index of the first `**Situation:**` or `**Starts it:**` line below
-    line `end` that the site shows (outside code, comments and gm-only or
-    spoiler blocks, as the publish tool reads them), or None. A hidden one
-    (an alternative opening in the GM Notes) is no misread lead (#760)."""
-    read = tool_reading([ln.rstrip("\r\n") for ln in doc.lines[end:]], rel)
+    line `end` that the site shows (outside code, comments, gm-only or
+    spoiler blocks and the sections `hides` names, as the publish tool reads
+    them), or None. A hidden one (an alternative opening in the GM Notes) is
+    no misread lead (#760)."""
+    lines = [ln.rstrip("\r\n") for ln in doc.lines[end:]]
+    read = tool_reading(lines, rel)
+    try:
+        withheld = vl.withheld_by(lines, hides)
+    except vl.PublishToolUnavailable as e:
+        raise WriteError(f"{rel}: the publish tool could not be asked how "
+                         f"the note reads ({e}); nothing written") from e
     return next((end + i for i, (kept, code) in enumerate(read)
-                 if kept is not None and not code
+                 if kept is not None and not code and withheld[i] is None
                  and LEAD_OPENER_RE.match(kept)), None)
 
 
@@ -621,7 +629,8 @@ def tool_reading(lines: list[str], rel: str) -> list[tuple[str | None, bool]]:
 LEAD_END = "⁣lead ends here"
 
 
-def checked_lead(doc: Doc, rel: str) -> tuple[int, int, list[Walk]]:
+def checked_lead(doc: Doc, rel: str, hides: Iterable[str] = ()
+                 ) -> tuple[int, int, list[Walk]]:
     """(first, end, walk) of the note's lead (#738): the body text above its
     first heading or gm-only/spoiler marker, where a scene keeps its
     Situation, Starts it and If-table. Below an older scene's `# Title`
@@ -640,8 +649,9 @@ def checked_lead(doc: Doc, rel: str) -> tuple[int, int, list[Walk]]:
     text above the section, where scene-paused writes none: either way
     which text is the lead is a guess. It refuses a lead that is empty with
     a lead-shaped line further down (#758), or that has no Situation or
-    Starts it line while the site shows one further down (#760): the lead
-    was misread, and a write would make a second one."""
+    Starts it line while the site shows one further down (#760; `hides`,
+    the vault's `player_site.hide.sections`, are not shown): the lead was
+    misread, and a write would make a second one."""
     first, stop = lead_stops(doc)
     end = stop(first)
     if (first == 0 and doc.lines
@@ -692,6 +702,11 @@ def checked_lead(doc: Doc, rel: str) -> tuple[int, int, list[Walk]]:
                     f"({visible[0].strip()!r}); a paused scene's lead goes "
                     f"below the section's {vl.PAUSED_END} line: move it there, "
                     f"or edit by hand")
+            if not closed_to(paused[0]):
+                raise WriteError(
+                    f"{rel}: its ## Paused section leaves a comment or code "
+                    f"fence open, so text below it would not read as "
+                    f"written; edit it by hand")
             paused_seen, first = True, paused[0]
         else:
             break
@@ -730,7 +745,7 @@ def checked_lead(doc: Doc, rel: str) -> tuple[int, int, list[Walk]]:
     elif any(LEAD_OPENER_RE.match(k) for k in in_lead):
         shape = None
     else:
-        shape = opener_shown_below(doc, end, rel)
+        shape = opener_shown_below(doc, end, rel, hides)
     if shape is not None:
         raise WriteError(
             f"{rel}: line {shape + 1} ({doc.lines[shape].strip()!r}) below "
