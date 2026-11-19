@@ -431,14 +431,19 @@ function skeletonVault() {
 const planOf = (planned) => `---\ntype: session-plan\nsession: "[[S1]]"\nchapter: "[[C1]]"\n---\n\n## Planned Scenes\n\n${planned}\n`;
 
 // One Plan through both programs: plan-check's finding ids, and the reader's beats.
-function bothSides(planned) {
+function bothSides(planned, notes = {}) {
   const dir = skeletonVault();
+  for (const [rel, text] of Object.entries(notes)) {
+    fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
+    fs.writeFileSync(path.join(dir, rel), text);
+  }
   const file = path.join(dir, 'Plan.md');
   fs.writeFileSync(file, planOf(planned));
   const run = spawnSync('python3', [PLAN_CHECK, file, '--json'], { encoding: 'utf8' });
-  const ids = JSON.parse(run.stdout).findings.map((f) => f.id);
+  const findings = JSON.parse(run.stdout).findings;
+  const ids = findings.map((f) => f.id);
   const index = buildIndex(dir);
-  return { ids, ...readBeats(bodyOnly(readText(file)), index), index };
+  return { ids, findings, ...readBeats(bodyOnly(readText(file)), index), index };
 }
 
 describe('run sheet beats: the Plan shape', () => {
@@ -625,8 +630,107 @@ describe('run sheet beats: the Plan shape', () => {
     it('a hub place that is no location: plan-check hub-place-not-location, reader gives no place there', () => {
       const r = bothSides('### Scene 0: Out (hub)\n**Where they can go**\n- **[[Name]]:** the clerk\n');
       assert.ok(r.ids.includes('hub-place-not-location'));
-      const note = r.beats[0].spots[0].note;
-      assert.strictEqual(r.index.read(note).fm.type, 'npc'); // the spot's note is no location
+      assert.strictEqual(r.beats[0].spots[0].note, null); // the spot's note is no location
+      assert.deepStrictEqual(r.beats[0].spots[0].people, []);
+      const f = r.findings.find((x) => x.id === 'hub-place-not-location');
+      assert.match(f.message, /names the place by that line's words/);
+    });
+
+    const note = (type, name) => `---\nname: ${name}\ntype: ${type}\n---\n\nx\n`;
+    const NOTES = {
+      'Characters/PCs/Oswin.md': note('pc', 'Oswin'),
+      'Items/Tams Boot.md': note('item', "Tam's Boot"),
+      'Factions/The Order of Saint Aubren.md': note('faction', 'The Order of Saint Aubren'),
+      'Characters/NPCs/Sister Wren.md': note('npc', 'Sister Wren'),
+      'Characters/NPCs/Durgan Flintmere.md': note('npc', 'Durgan Flintmere'),
+      'Characters/NPCs/Tomas.md': `---\nname: Tomas\ntype: npc\n---\n\n## GM Notes\n\n### Stats\n\nCommoner (SRD)\n`,
+      '_Campaign/Overview.md': '---\ntype: campaign_overview\ngame_system: dnd-5e-2024\n---\n',
+    };
+    const HUB = (rest) => `### Scene 0: Out (hub)\n**Where they can go**\n${rest}`;
+
+    it('only a Do or If table is flagged; a table of the GM\'s own is read by neither', () => {
+      for (const head of ['Rumour | True?', 'd10 | Encounter']) {
+        const r = bothSides(SCENE(`| ${head} |\n|---|---|\n| a | b |\n`));
+        assert.ok(!r.ids.includes('if-table-unlabelled'), head);
+        assert.deepStrictEqual(r.beats[0].ifs, [], head);
+        assert.match(r.beats[0].extra, /\| a \| b \|/);
+      }
+      const bad = bothSides(SCENE('| If they go to | They find |\n|---|---|\n| a | b |\n'));
+      assert.ok(bad.ids.includes('if-table-unlabelled'));
+      assert.deepStrictEqual(bad.beats[0].ifs, []);
+    });
+
+    it('block labels read with a colon, in both; a one-line label without one is an error', () => {
+      for (const head of ['**NPCs:**', '**NPCs**']) {
+        const r = bothSides(SCENE(`${head}\n- **[[Name]]:** x\n`));
+        assert.ok(!r.ids.includes('scene-labels'), head);
+        assert.deepStrictEqual(r.beats[0].who.map((w) => w.name), ['Name'], head);
+      }
+      const r = bothSides(SCENE('', '**Place** the yard\n'));
+      assert.ok(r.ids.includes('scene-labels'));
+      assert.strictEqual(r.beats[0].placeText, '');
+    });
+
+    it('If the players with three dots, one ellipsis character, none or a colon reads the table', () => {
+      for (const head of ['**If the players...**', '**If the players…**', '**If the players**', '**If the players:**']) {
+        const r = bothSides(SCENE(`${head}\n| Do | Then |\n|---|---|\n| a | b |\n`));
+        assert.ok(!r.ids.includes('if-table-unlabelled') && !r.ids.includes('scene-labels'), head);
+        assert.deepStrictEqual(r.beats[0].ifs.map((x) => x.do), ['a'], head);
+      }
+    });
+
+    it('a two-link NPC lead is one person per link, and plan-check sees both', () => {
+      const lead = SCENE('**Entities:** [[Sister Wren]], [[Tomas]]\n**NPCs**\n- **[[Sister Wren]] and [[Tomas]]:** want the cart back\n');
+      const r = bothSides(lead, NOTES);
+      assert.ok(!r.ids.includes('no-npcs-block'));
+      assert.deepStrictEqual(r.beats[0].who.map((w) => [w.name, w.wants]), [['Sister Wren', 'want the cart back'], ['Tomas', 'want the cart back']]);
+      // the second person is a stock-only foe: plan-check warns for them alone
+      const foes = r.findings.filter((f) => f.id === 'foe-no-numbers');
+      assert.strictEqual(foes.length, 1);
+      assert.match(foes[0].message, /Tomas/);
+    });
+
+    it('a Who line counts as people only with a link, in both', () => {
+      const base = '**Entities:** [[Sister Wren]]\n';
+      const bare = bothSides(SCENE(`${base}- **Who:** Wren and the cook.\n`), NOTES);
+      assert.ok(bare.ids.includes('no-npcs-block'));
+      assert.deepStrictEqual(bare.beats[0].who, []);
+      const linked = bothSides(SCENE(`${base}- **Who:** [[Sister Wren]] and the cook.\n`), NOTES);
+      assert.ok(!linked.ids.includes('no-npcs-block'));
+      assert.deepStrictEqual(linked.beats[0].who.map((w) => w.name), ['Sister Wren']);
+    });
+
+    it('with a Where they can go block, places come from it alone; a hub without one keeps the old rule', () => {
+      const hub = bothSides(HUB('- **The yard:** hens\n- **The cellar:** damp\n\n**Rumours in the house**\n- Someone is stealing candles\n- The cook is leaving\n\n**Clocks**\n- Dawn\n'));
+      assert.deepStrictEqual(hub.beats[0].spots.map((x) => x.name), ['The yard', 'The cellar']);
+      assert.match(hub.beats[0].extra, /Rumours in the house/);
+      assert.match(hub.beats[0].extra, /Someone is stealing candles/);
+      const old = bothSides('### Scene 0: Out (hub)\n**The grounds**\n- **The yard:** hens\n- **The cellar:** damp\n');
+      assert.deepStrictEqual(old.beats[0].spots.map((x) => x.name), ['The yard', 'The cellar']);
+    });
+
+    it('a place bullet gives its people only npcs and creatures, and a spot note only a location', () => {
+      const crypt = bothSides(HUB("- **The Ice Crypt:** a cold room. [[Tams Boot]] is on the shelf; [[Oswin]] has the key; [[The Order of Saint Aubren]] guards it.\n"), NOTES);
+      assert.deepStrictEqual(crypt.beats[0].spots.map((x) => [x.name, x.note, x.people]), [['The Ice Crypt', null, []]]);
+      const wren = bothSides(HUB('- [[Sister Wren]] can be found in the infirmary.\n'), NOTES);
+      assert.strictEqual(wren.beats[0].spots[0].note, null);
+      assert.ok(wren.ids.includes('hub-place-not-location'));
+      const mixed = bothSides(HUB('- **The Ice Crypt:** [[Sister Wren]] keeps it, [[Oswin]] has the key.\n'), NOTES);
+      assert.deepStrictEqual(mixed.beats[0].spots[0].people, ['Characters/NPCs/Sister Wren.md']);
+    });
+
+    it('foe-no-numbers reads Who and NPCs, not Entities', () => {
+      const ent = bothSides(SCENE('**Entities:** [[Tomas]]\n'), NOTES);
+      assert.ok(!ent.ids.includes('foe-no-numbers'));
+      const who = bothSides(SCENE('**Who:** [[Tomas]]\n'), NOTES);
+      assert.ok(who.ids.includes('foe-no-numbers'));
+    });
+
+    it('a link in another case still finds its note, in both', () => {
+      const r = bothSides(SCENE('', '**Place:** [[the vicarage]]\n'));
+      assert.ok(!r.ids.includes('no-place') && !r.ids.includes('place-not-location'));
+      assert.strictEqual(r.beats[0].place, 'Locations/The Vicarage.md');
+      assert.ok(!r.warnings.some((w) => w.kind === 'missing-note'));
     });
 
     it('npcs in parentheses: plan-check label-form, reader who 0', () => {

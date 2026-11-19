@@ -16,6 +16,7 @@ const { parseWikilink } = require('../wikilink');
 const { markersIn } = require('../markers');
 
 const { LABEL, isBlank, nameKey } = pt;
+const { blockKey } = pt;
 
 const SCENE_N = /^\s*scene\s+\d+\s*:\s*/i;
 const HUB_MARK = /\s*\((hub|routing)\)\s*/i;
@@ -48,7 +49,9 @@ const PLAIN_NPC_LINE = /^\*\*([^*\[\]\n(]+?)(?:\s*\(([^)]*)\))?:?\*\*:?[ \t]*(?:
 const BARE_LINK_LEAD = /^(!?\[\[[^\]]+\]\])/;
 const BOLD_LEAD = /^\*\*([^*\n]+?)\*\*/;
 const COLON_LEAD = /^\*\*[^*\n]+?(?::\*\*|\*\*:)/;
-const BLOCK_NAMES = new Set(['npcs', 'points to land', 'if the players...', 'treasure', 'complications', 'then']);
+// Two or more links led together: `**[[Sister Wren]] and [[Durgan Flintmere]]:** want X` (bullet marker removed).
+const MULTI_NPC = /^\*\*(\[\[[^\]]+\]\](?:(?:\s*,\s*and\s+|\s*,\s*|\s+and\s+|\s*&\s*)\[\[[^\]]+\]\])+):?\*\*:?[ \t]*([\s\S]*)$/;
+const BLOCK_NAMES = new Set(['npcs', 'points to land', 'if the players', 'treasure', 'complications', 'then']);
 
 const linesOf = (text) => pt.cleanText(text).split('\n');
 const offset = (items, by) => items.map((x) => ({ ...x, start: x.start + by, end: x.end + by }));
@@ -60,13 +63,13 @@ const linkParts = (body) => {
 // A bare bold head that names no field and no note opens a hub's spot group.
 const isGroupHead = (line) => {
   const g = line.match(GROUP_HEAD);
-  return Boolean(g) && !g[1].trim().startsWith('[[') && !BLOCK_NAMES.has(nameKey(g[1]));
+  return Boolean(g) && !g[1].trim().startsWith('[[') && !BLOCK_NAMES.has(blockKey(g[1]));
 };
 // The brief's hub shape: `**[[The Gate House]]**: words` or `**The orchard**: words` on its own line.
 const isSpotLine = (line) => {
   const m = line.match(SPOT);
   return Boolean(m) && !LABEL.test(line) && !m[1].trim().endsWith(':') && !isGroupHead(line)
-    && !(GROUP_HEAD.test(line) && BLOCK_NAMES.has(nameKey(m[1])));
+    && !(GROUP_HEAD.test(line) && BLOCK_NAMES.has(blockKey(m[1])));
 };
 const endsSpot = (line) => pt.endsBlock(line) || GROUP_HEAD.test(line) || isSpotLine(line);
 
@@ -256,13 +259,23 @@ function readBeats(planBody, index) {
     // Who: the NPCs blocks, then the Who lines, then (in a hub) each spot's NPC lines.
     const who = [];
     const inWho = (note, name) => who.some((w) => (note ? w.note === note : !w.note && w.name === name));
+    // Every person a bullet's lead names: one for `**[[Note]]:**` or a plain bold name, one per link
+    // for a lead of several links, all sharing the words after it.
+    const npcsFrom = (itemText, plain = false) => {
+      const multi = itemText.match(MULTI_NPC);
+      if (multi) {
+        return (multi[1].match(LINK) || []).map((lk) => npcFrom(`**${lk}:** ${multi[2]}`, false)).filter(Boolean);
+      }
+      const one = npcFrom(itemText, plain);
+      return one ? [one] : [];
+    };
     const npcFrom = (itemText, plain = false) => {
       const m = itemText.match(NPC_LINE);
       if (!m) {
         const q = plain ? itemText.match(PLAIN_NPC_LINE) : null;
         if (!q) return null;
         const name = q[1].trim();
-        if (pt.FIELD_NAMES.has(nameKey(name))) return null;
+        if (pt.FIELD_NAMES.has(blockKey(name))) return null;
         const p = q[2] === undefined ? '' : q[2].trim();
         const counted = /^\d+$/.test(p);
         return { target: '', name, knownAs: p && !counted ? p : name, count: counted ? Number(p) : 1, counted, wants: q[4].replace(/\s+/g, ' ').trim() };
@@ -283,22 +296,26 @@ function readBeats(planBody, index) {
     for (const b of npcBlocks) {
       blockHeads.push(b);
       for (const item of offset(pt.bullets(b.sub), b.start)) {
-        const n = npcFrom(item.text, true);
-        if (!n) continue;
-        const note = n.target ? resolve(n.target) : null;
-        const at = who.findIndex((w) => (note ? w.note === note : !w.note && w.name === n.name));
-        if (at !== -1) {
-          // One person listed twice: two written counts add up, and the second line's words join the
-          // first's unless they say the same; otherwise the second line stays in extra.
-          if (!(countedAt[at] && n.counted)) continue;
-          who[at].count += n.count;
-          const same = (a, b) => a.replace(/\s+/g, ' ').trim().toLowerCase() === b.replace(/\s+/g, ' ').trim().toLowerCase();
-          if (n.wants && !same(n.wants, who[at].wants)) who[at].wants = who[at].wants ? `${who[at].wants}; ${n.wants}` : n.wants;
-        } else {
-          countedAt[who.length] = n.counted;
-          who.push(person(note, n));
+        const ns = npcsFrom(item.text, true);
+        if (!ns.length) continue;
+        let held = false;
+        for (const n of ns) {
+          const note = n.target ? resolve(n.target) : null;
+          const at = who.findIndex((w) => (note ? w.note === note : !w.note && w.name === n.name));
+          if (at !== -1) {
+            // One person listed twice: two written counts add up, and the second line's words join the
+            // first's unless they say the same; otherwise the second line stays in extra.
+            if (!(countedAt[at] && n.counted)) continue;
+            who[at].count += n.count;
+            const same = (a, b) => a.replace(/\s+/g, ' ').trim().toLowerCase() === b.replace(/\s+/g, ' ').trim().toLowerCase();
+            if (n.wants && !same(n.wants, who[at].wants)) who[at].wants = who[at].wants ? `${who[at].wants}; ${n.wants}` : n.wants;
+          } else {
+            countedAt[who.length] = n.counted;
+            who.push(person(note, n));
+          }
+          held = true;
         }
-        claim(item.start, item.end);
+        if (held) claim(item.start, item.end);
       }
     }
 
@@ -322,13 +339,16 @@ function readBeats(planBody, index) {
     }
 
     let spots = [];
-    const isHub = /\(hub\)/i.test(heading) || lines.some((l, i) => !fenced[i] && WHERE_HEAD.test(l));
+    const hasWhere = lines.some((l, i) => !fenced[i] && WHERE_HEAD.test(l));
+    const isHub = /\(hub\)/i.test(heading) || hasWhere;
     if (isHub) {
       const found = [];
       const taken = (note, name) => (note && typeOf(note) === 'pc') || inWho(note, name);
       // Spot groups: a bare bold head with no field slot, one spot per top-level bullet under it.
       lines.forEach((line, i) => {
-        if (fenced[i] || !isGroupHead(line)) return;
+        // a scene with a Where they can go block takes its places from that block alone: other bold
+        // lists below it stay in extra. A hub without one keeps the old rule, any bare bold head.
+        if (fenced[i] || !isGroupHead(line) || (hasWhere && !WHERE_HEAD.test(line))) return;
         let end = i;
         // every bullet is a spot here, a bold-named one (`- **The chapel:** …`) included
         for (let j = i + 1; j < lines.length && !fenced[j] && (/^[-*+]\s/.test(lines[j]) || !endsSpot(lines[j])); j++) if (!isBlank(lines[j])) end = j;
@@ -351,7 +371,8 @@ function readBeats(planBody, index) {
             rest = (dash === -1 ? '' : first.slice(dash + 3)) + (more.length ? `\n${more.join('\n')}` : '');
           }
           const nameLinks = name.match(LINK) || [];
-          const note = nameLinks.length ? resolve(linkParts(nameLinks[0].replace(/^!?\[\[|\]\]$/g, '')).target) : null;
+          let note = nameLinks.length ? resolve(linkParts(nameLinks[0].replace(/^!?\[\[|\]\]$/g, '')).target) : null;
+          if (note && typeOf(note) !== 'location') note = null; // a spot's note is a location, never a person or a thing
           name = name.replace(LINK, (m) => { const l = linkParts(m.replace(/^!?\[\[|\]\]$/g, '')); return l.display || l.name; }).trim();
           // The bullet's words are the spot's (`md`); the NPCs and creatures it links join who, without
           // those words as their wants. The bullet is held whole.
@@ -362,9 +383,9 @@ function readBeats(planBody, index) {
             const lp = linkParts(m.slice(2, -2));
             const p = resolve(lp.target);
             const type = typeOf(p);
-            if (!p || type === 'location' || isDead(p)) continue;
+            if (!p || isDead(p) || (type !== 'npc' && type !== 'creature')) continue;
             if (!people.includes(p)) people.push(p);
-            if ((type !== 'npc' && type !== 'creature') || taken(p, lp.name)) continue;
+            if (taken(p, lp.name)) continue;
             who.push(person(p, { name: lp.name, knownAs: lp.display, count: 1, wants: '' }));
           }
           claim(item.start, item.end);
@@ -372,7 +393,7 @@ function readBeats(planBody, index) {
       });
       // Bold-name spot lines, each followed by its `- **[[Note]]:**` NPC lines.
       lines.forEach((line, i) => {
-        if (fenced[i] || !isSpotLine(line)) return;
+        if (fenced[i] || hasWhere || !isSpotLine(line)) return;
         const raw = line.match(SPOT)[1].trim();
         const lm = raw.match(LINK_ONLY);
         let note = null;
@@ -382,17 +403,21 @@ function readBeats(planBody, index) {
           note = resolve(l.target);
           name = l.display || l.name;
         }
+        if (note && typeOf(note) !== 'location') note = null;
         found.push({ i, name, note });
         let end = i;
         for (let j = i + 1; j < lines.length && !fenced[j] && !endsSpot(lines[j]); j++) end = j;
         for (const item of offset(pt.bullets(lines.slice(i + 1, end + 1).join('\n')), i + 1)) {
           if (isClaimed(item.start)) continue;
-          const n = npcFrom(item.text);
-          if (!n) continue;
-          const p = resolve(n.target);
-          if (taken(p, n.name)) continue; // left in extra
-          who.push(person(p, n));
-          claim(item.start, item.end);
+          const ns = npcsFrom(item.text);
+          let held = false;
+          for (const n of ns) {
+            const p = resolve(n.target);
+            if (taken(p, n.name)) continue; // left in extra
+            who.push(person(p, n));
+            held = true;
+          }
+          if (held) claim(item.start, item.end);
         }
       });
       spots = found.sort((a, b) => a.i - b.i).map((x) => ({ name: x.name, note: x.note, md: x.md || '', people: x.people || [] }));
@@ -415,7 +440,7 @@ function readBeats(planBody, index) {
     const points = listOf('Points to land');
     const treasure = listOf('Treasure');
     const ifs = [];
-    for (const b of blocksOf('If the players...')) {
+    for (const b of blocksOf('If the players')) {
       blockHeads.push(b);
       for (const r of pt.tableRows(b.sub)) ifs.push({ do: r[0] || '', then: r.slice(1).filter(Boolean).join(' · ') });
       for (const r of offset(pt.tableRanges(b.sub), b.start)) {

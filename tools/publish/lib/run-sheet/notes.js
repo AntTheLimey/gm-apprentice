@@ -192,6 +192,7 @@ function buildIndex(vaultPath, { deps } = {}) {
     }
     return attachments;
   };
+  let folded = null;
   const keyOf = (target) => canonicalNfc(wikiTarget(target)).replace(/\.md$/i, '');
 
   const self = {
@@ -200,7 +201,17 @@ function buildIndex(vaultPath, { deps } = {}) {
       const key = keyOf(target);
       if (!key) return null;
       const hit = lookup[key];
-      return typeof hit === 'string' ? hit : null;
+      if (typeof hit === 'string') return hit;
+      // Obsidian ignores case in a link: `[[the cloister]]` finds `The Cloister`, unless two notes
+      // differ only by case (then it names neither).
+      if (!folded) {
+        folded = new Map();
+        for (const k of Object.keys(table)) {
+          const f = k.toLowerCase();
+          folded.set(f, folded.has(f) && folded.get(f) !== table[k] ? null : table[k]);
+        }
+      }
+      return folded.get(key.toLowerCase()) || null;
     },
     // True when the target names several notes and so resolves to none.
     isAmbiguous(target) {
