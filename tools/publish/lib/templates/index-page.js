@@ -1,5 +1,5 @@
 const { refTarget, parseWikilink, linkText } = require('../wikilink');
-const { escapeHtml, relativePath, resolveWikiLinks, renderMetaValue, plainMetaValue, encodeHref, publishedSource, renderMarkdown } = require('../processor');
+const { escapeHtml, relativePath, resolveWikiLinks, resolveImageEmbeds, renderMetaValue, plainMetaValue, encodeHref, publishedSource, renderMarkdown } = require('../processor');
 const { baseShell, cssPath, rootPath, clientScripts, portraitImg, noPreviewAttr, getCanonStatus, DIR_LABELS } = require('./base');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 const { getInitials } = require('./landing-data');
@@ -983,6 +983,61 @@ ${rows}
 </section>`;
 }
 
+// The party page's Open Threads (build.js partyThreads: { shared, own }, or null): the party's threads, newest first,
+// each with when it began and the PCs it involves (their portraits, or "Everyone" for the party's), then each PC in
+// play's own. Markdown is resolved against the party page and rendered as the site renders prose.
+// Pictures first, as on every page (a link pass would read `![[map.png]]` as a link). The build registers the
+// shared threads' pictures for copying before the party page is made; a PC's own were registered by its page.
+function threadMarkdownHtml(md, outputPath, linkMap, imageMap) {
+  const withImages = resolveImageEmbeds(md, imageMap || {}, outputPath, null, { warn: false });
+  return renderMarkdown(resolveWikiLinks(withImages, linkMap, outputPath)).trim();
+}
+
+function threadFace(page, outputPath, imageMap) {
+  return portraitImg(page.frontmatter || {}, outputPath, imageMap)
+    || `<span class="ot-initials" aria-hidden="true">${escapeHtml(getInitials(page.displayTitle))}</span>`;
+}
+
+function threadAvatar(page, outputPath, imageMap) {
+  const name = escapeHtml(page.displayTitle);
+  return `<a class="ot-av" href="${escapeHtml(relHref(page, PARTY_DIR))}" title="${name}" aria-label="${name}">${threadFace(page, outputPath, imageMap)}</a>`;
+}
+
+function openThreadsSection(threads, dir, imageMap, publishConfig) {
+  if (!threads) return '';
+  const outputPath = dir + '/index.html';
+  const linkMap = (publishConfig || {})._linkMap || {};
+  const shared = threads.shared.map((t) => {
+    // A hand-written `since [[Session 4]]` prints as its words, as the link's label would read.
+    const since = String(t.since || '').replace(/\[\[([^\]|]*)(?:\|([^\]]*))?\]\]/g, (all, target, label) => (label || target).trim());
+    const when = since ? `since ${escapeHtml(since)}` : 'No date yet';
+    const who = t.everyone
+      ? '<span class="ot-who ot-everyone">Everyone</span>'
+      : (t.pcs.length ? `<span class="ot-who">${t.pcs.map((p) => threadAvatar(p, outputPath, imageMap)).join('')}</span>` : '');
+    const text = threadMarkdownHtml(t.markdown, outputPath, linkMap, imageMap).replace(/^<p>([\s\S]*)<\/p>$/, '$1');
+    return `  <li class="ot-item"><div class="ot-text">${text}</div><div class="ot-meta"><span class="ot-since">${when}</span>${who}</div></li>`;
+  }).join('\n');
+  const own = threads.own.map(({ page, markdown }) => {
+    const count = (markdown.match(/^[-*]\s/gm) || []).length;
+    return `  <div class="ot-pc">
+    <a class="ot-pc-head" href="${escapeHtml(relHref(page, dir))}"><span class="ot-av ot-face">${threadFace(page, outputPath, imageMap)}</span><span>${escapeHtml(page.displayTitle)}</span><span class="ot-count">${count}</span></a>
+    ${threadMarkdownHtml(markdown, outputPath, linkMap, imageMap)}
+  </div>`;
+  }).join('\n');
+  const parts = [];
+  if (shared) {
+    parts.push(`<h3 class="ot-sub">The party <span class="ot-count">${threads.shared.length}</span></h3>
+<ul class="ot-list"${noPreviewAttr()}>
+${shared}
+</ul>`);
+  }
+  if (own) parts.push(`<h3 class="ot-sub">Each character's own</h3>\n<div class="ot-pcs"${noPreviewAttr()}>\n${own}\n</div>`);
+  return `<section class="dashboard-section party-threads" aria-label="Open threads">
+<h2>Open Threads</h2>
+${parts.join('\n')}
+</section>`;
+}
+
 // opts.cocFolio: PC pages are the CoC folio, which shows a hook only when the note gives one; its cards follow.
 // opts.party: the party page's board, { boardHtml, dataScript, clientScripts } (build.js partyBoard).
 function indexTemplate(dir, label, allPages, navFor, config, publishConfig, imageMap = {}, opts = {}) {
@@ -1133,6 +1188,7 @@ ${bodyContent}`;
   <h1 class="page-title">${escapeHtml(label)}</h1>
 </div>
 ${party.boardHtml || ''}
+${openThreadsSection(opts.threads, dir, imageMap, publishConfig)}
 ${bodyContent}`;
   } else {
     // The party page's board sits under its title, above the cards' filters.
@@ -1143,6 +1199,7 @@ ${bodyContent}`;
   ${sortHtml}
 </div>
 ${party.boardHtml || ''}
+${isParty ? openThreadsSection(opts.threads, dir, imageMap, publishConfig) : ''}
 ${pillsHtml}
 ${nameFilterHtml}
 ${locationTreeHtml}

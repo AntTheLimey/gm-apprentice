@@ -64,7 +64,9 @@ function parseBody(body) {
 // after a space and a nested bullet's text after "; ". The tail is read off the first line when it has one, else off
 // the end of the joined text (also when the first line's `involves` list ends on a comma). A bullet-like line indented
 // four or more spaces before the list starts is indented code, not a thread.
-function sharedEntries(publishedMarkdown) {
+// With `all`, a bullet with no valid tail is an entry too (`involves: []`, `party: false`): the party page lists every
+// open thread, while a PC page shows only those that name it. Each entry also carries `text` (no tail) and `since`.
+function sharedEntries(publishedMarkdown, { all = false } = {}) {
   const lines = String(publishedMarkdown || '').split(/\r?\n/);
   const range = sectionRange(lines, 'Open Threads');
   if (!range) return [];
@@ -103,8 +105,12 @@ function sharedEntries(publishedMarkdown) {
     const first = parseBody(parts[0]);
     const cut = parts.length > 1 && parts[0].trimEnd().endsWith(',');
     const entry = first.tailed && !cut ? { ...first, text: first.text + joined.slice(parts[0].length) } : parseBody(joined);
-    if (entry.tailed) {
-      entries.push({ markdown: `- ${entry.text}${entry.since ? ` — since ${entry.since.trim()}` : ''}`, involves: entry.involves, party: entry.party });
+    if (entry.tailed || all) {
+      // A hand-written bullet with no `involves` may still end `— since Session 4`: the party page reads that date.
+      const dated = !entry.tailed && /^(.*\S)\s+—\s+since\s+(\S.*?)\s*$/.exec(entry.text);
+      const text = dated ? dated[1] : entry.text;
+      const since = dated ? dated[2] : (entry.since ? entry.since.trim() : undefined);
+      entries.push({ markdown: `- ${text}${since ? ` — since ${since}` : ''}`, involves: entry.involves, party: entry.party, text, since });
     }
     i = stop;
   }
@@ -217,6 +223,110 @@ function houseRulesOf(publishedMarkdown) {
   return lines.slice(range.start + 1, range.end).filter((l) => !/^\s*\{[^{}]*\}\s*$/.test(l)).join('\n').trim();
 }
 
+// A PC's own threads, from the published (player-safe) view of its note: the `**Open threads:**` field under
+// `## Current Status`, before its first subsection, read as threads.py `_pc_span` and `_blocks` read it. The label is
+// bold, bulleted or not; its list ends at the next heading, and at the next line no deeper than the label that is a
+// bold label line (`**Knows:**`, the `**Shared threads:**` the build adds) or, for a bulleted label, a bullet. Text on
+// the label line is a thread of its own unless it only says there are none (`None.`, `—`) or is a `{placeholder}`.
+// Returns the list as markdown (`- ` bullets, each with the lines under it), '' when there is none.
+const LABEL_RE = /^(?<indent>[ \t]*)(?<mark>[-*][ \t]+)?\*\*(?<name>[^*:]+):\*\*(?<rest>.*)$/;
+// threads.py `_filler`: inline text that only says there are none, with case and the punctuation and emphasis round
+// it dropped.
+const NONE_WORDS = new Set(['none', 'nothing', 'n/a', 'na', '-', '—', '–', 'nothing yet', 'none yet', '']);
+const filler = (text) => NONE_WORDS.has(text.replace(/^[ \t.,;:!?*_()]+|[ \t.,;:!?*_()]+$/g, '').toLowerCase().split(/\s+/).filter(Boolean).join(' '));
+function width(line) { return line.replace(/\t/g, '    ').length - line.replace(/\t/g, '    ').trimStart().length; }
+function pcOwnThreads(publishedMarkdown) {
+  const lines = String(publishedMarkdown || '').split(/\r?\n/);
+  const open = unfenced(lines);
+  const range = sectionRange(lines, 'Current Status', open);
+  if (!range) return '';
+  let label = -1;
+  let m = null;
+  for (let i = range.start + 1; i < range.end; i++) {
+    if (!open.has(i)) continue;
+    if (/^#{1,6}\s/.test(lines[i])) return '';   // a subsection's label is not the field
+    m = LABEL_RE.exec(lines[i]);
+    if (m && m.groups.name.trim().toLowerCase() === 'open threads') { label = i; break; }
+  }
+  if (label < 0) return '';
+  const level = width(m.groups.indent);
+  let end = range.end;
+  for (let j = label + 1; j < range.end; j++) {
+    if (!open.has(j)) continue;
+    const line = lines[j];
+    if (/^#{1,6}\s/.test(line)) { end = j; break; }
+    if (!line.trim() || width(line) > level) continue;
+    if (/^\*\*[^*]+\*\*/.test(line.trim()) || (m.groups.mark && /^\s*[-*]\s+/.test(line))) { end = j; break; }
+  }
+  // The threads, as `_blocks` reads them: text on the label line is one, with the lines under it as under a bullet at
+  // the label's indent; then each top-level bullet with the lines under it (`blockStop`). Anything else between them
+  // (a paragraph after a blank line) is no thread, and a `{placeholder}` bullet is none.
+  const blocks = [];
+  const rest = m.groups.rest.trim();
+  let i = label + 1;
+  if (!filler(rest) && !/^\{.*\}$/.test(rest)) {
+    const stop = blockStop(lines, label, end, m.groups.indent.length);
+    blocks.push({ lines: [`- ${rest}`, ...lines.slice(label + 1, stop)], indent: level });
+    i = stop;
+  }
+  let base = null;
+  let fence = null;
+  while (i < end) {
+    const line = lines[i];
+    const step = fenceStep(line, fence);
+    fence = step.fenceDelim;
+    const bullet = /^(\s*)[-*]\s+(.+)$/.exec(line);
+    if (step.isFenceLine || fence !== null || !bullet) { i++; continue; }
+    const indent = bullet[1].length;
+    if (base === null || indent < base) base = indent;   // a later bullet outdented past the first one
+    if (indent > base) { i++; continue; }
+    const stop = blockStop(lines, i, end, base);
+    if (!/^\{.*\}$/.test(bullet[2].trim())) blocks.push({ lines: lines.slice(i, stop), indent: width(line) });
+    i = stop;
+  }
+  // Each thread out-dented to the list's own level, its nesting kept, its trailing blank lines dropped.
+  return blocks.map((b) => {
+    const kept = b.lines.map((l) => l.replace(/\t/g, '    ')).map((l) => l.slice(Math.min(b.indent, width(l))));
+    while (kept.length > 1 && !kept[kept.length - 1].trim()) kept.pop();
+    return kept.join('\n');
+  }).join('\n');
+}
+
+// threads.py `_block_stop`: the index just past the thread whose first line is `i`: the lines deeper than `base`
+// under it, after blank lines too, and a lazy line straight under it; inside a code fence it opened, every line.
+function blockStop(lines, i, end, base) {
+  let stop = i + 1;
+  let j = i + 1;
+  let fence = null;
+  while (j < end) {
+    const next = lines[j];
+    if (fence !== null) {
+      fence = fenceStep(next, fence).fenceDelim;
+      stop = j = j + 1;
+      continue;
+    }
+    if (!next.trim()) { j++; continue; }   // a blank: the bullet goes on only if a deeper line follows
+    if (next.length - next.trimStart().length <= base && !(j === stop && lazy(next))) break;
+    fence = fenceStep(next, fence).fenceDelim;
+    stop = j = j + 1;
+  }
+  return stop;
+}
+
+// "Session 12" -> 12: the number a `since` names, for ordering newest first; null when it names none.
+function sinceNumber(since) {
+  const n = /(\d+)/.exec(String(since || ''));
+  return n ? Number(n[1]) : null;
+}
+
+// Newest first by `since`; threads with no date after the dated ones, in their own order (the party page's Open
+// Threads, decided 2026-11-19). Stable.
+function newestFirst(entries) {
+  return entries.map((e, i) => ({ e, i, n: sinceNumber(e.since) }))
+    .sort((a, b) => (a.n === null) - (b.n === null) || (b.n || 0) - (a.n || 0) || a.i - b.i)
+    .map((x) => x.e);
+}
+
 // The shared threads one PC page shows: those that name it, by a link the site resolves to that page, and the party's
 // while the PC is in play (as `vw threads move … party` reads it: an out-of-play PC gets one only by name).
 function threadsOnPage(page, entries, { linkMap, pages, outOfPlay }) {
@@ -230,4 +340,4 @@ function threadsOnPage(page, entries, { linkMap, pages, outOfPlay }) {
   return entries.filter((e) => (e.party && active) || e.involves.some(names));
 }
 
-module.exports = { overviewView, houseRulesOf, sharedEntries, withSharedThreads, overviewThreads, threadsOnPage };
+module.exports = { overviewView, houseRulesOf, sharedEntries, withSharedThreads, overviewThreads, threadsOnPage, pcOwnThreads, newestFirst };

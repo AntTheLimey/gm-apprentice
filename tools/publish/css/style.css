@@ -1935,6 +1935,25 @@ body.landing-full-bleed > main.content > :not(.landing-hero) {
   margin-bottom: var(--space-1000);
 }
 
+/* The party page's Open Threads: the party's threads, newest first, then each PC's own */
+.party-threads .ot-sub { font-size: 1rem; margin: var(--space-1250) 0 var(--space-500); display: flex; align-items: center; gap: var(--space-500); }
+.party-threads .ot-count { font-size: 0.75rem; font-weight: 600; color: var(--text-muted); border: 1px solid var(--border); border-radius: 999px; padding: 0 0.45rem; line-height: 1.5; font-variant-numeric: tabular-nums; }
+.party-threads .ot-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-500); }
+.party-threads .ot-item { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-375); padding: var(--space-750) var(--space-1000); display: grid; gap: var(--space-500); }
+.party-threads .ot-text { line-height: 1.55; min-width: 0; overflow-wrap: anywhere; }
+.party-threads .ot-meta { display: flex; align-items: center; justify-content: space-between; gap: var(--space-750); flex-wrap: wrap; }
+.party-threads .ot-since { font-size: 0.78rem; color: var(--text-muted); }
+.party-threads .ot-who { display: flex; gap: var(--space-250); margin-left: auto; align-items: center; }
+.party-threads .ot-everyone { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.party-threads .ot-av { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 50%; overflow: hidden; border: 1px solid var(--border); flex: none; background: var(--bg); color: var(--text-muted); font-size: 0.65rem; text-decoration: none; }
+.party-threads .ot-initials { font-weight: 600; letter-spacing: 0.02em; }
+.party-threads .ot-av img { width: 100%; height: 100%; object-fit: cover; object-position: top; display: block; }
+.party-threads .ot-pcs { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr)); gap: var(--space-750); align-items: start; }
+.party-threads .ot-pc { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-375); padding: var(--space-750) var(--space-1000); min-width: 0; overflow-wrap: anywhere; }
+.party-threads .ot-pc-head { display: flex; align-items: center; gap: var(--space-500); font-weight: 600; color: var(--text); text-decoration: none; margin-bottom: var(--space-500); }
+.party-threads .ot-pc-head .ot-face { width: 34px; height: 34px; }
+.party-threads .ot-pc ul { margin: 0; padding-left: 1.1rem; display: grid; gap: var(--space-500); line-height: 1.5; }
+
 /* Recap */
 .recap {
   background: var(--bg-card);

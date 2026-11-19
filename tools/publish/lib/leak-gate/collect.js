@@ -195,6 +195,14 @@ function collectHidden({ configPath, outputDir = null }) {
   // it is visible text: the Overview's body is hidden text otherwise, and the page would match it.
   const houseRulesMd = overviewMd === null ? '' : houseRulesOf(overviewMd);
   if (houseRulesMd) visible.push('House Rules', ...bothWays(houseRulesMd).flatMap((md) => [textsOfMarkdown(md, { headings: true }).join('\n'), ...tableRunsOf(md)]));
+  // The party page (the PCs' generated index) lists every shared thread, one that names nobody too: visible text there,
+  // as the build prints it (build.js partyThreads). Not when the GM wrote that index, or no PC page is in the folder.
+  const partyPage = published.some((p) => String(p.outputPath || '').startsWith('characters/pcs/'))
+    && !published.some((p) => p.outputPath === 'characters/pcs/index.html');
+  if (partyPage && overviewMd !== null) {
+    const partyMd = sharedEntries(overviewMd, { all: true }).map((e) => `- ${e.text}${e.since ? ` (since ${e.since})` : ''}`).join('\n');
+    if (partyMd) visible.push('Open Threads', ...bothWays(partyMd).flatMap((md) => [textsOfMarkdown(md, { headings: true }).join('\n'), ...tableRunsOf(md)]));
+  }
   if (sharedAll.length) {
     for (const page of published) {
       if (String((page.frontmatter || {}).type).trim().toLowerCase() !== 'pc') continue;
