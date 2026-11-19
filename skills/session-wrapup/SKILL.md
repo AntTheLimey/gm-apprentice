@@ -476,7 +476,9 @@ gma reveal \
 When a disguised NPC (a scan row with `unmasked_name:`) was unmasked
 at the table, offer the unmasking in the same list; on the GM's yes add
 `--unmask <path>`, which makes the true name, face and `**Unmasked:**`
-line the NPC's own and logs the old face.
+line the NPC's own and logs the old face. A `gm_aliases - <entry>` row
+names each secret name taken out because it holds the true name: show
+the GM each one, so they can check it was not a separate secret.
 
 Show the dry-run rows as-is. Yes → re-run with `--write`; it
 publishes, lifts `withheld` and logs the session. No, or an ERROR
