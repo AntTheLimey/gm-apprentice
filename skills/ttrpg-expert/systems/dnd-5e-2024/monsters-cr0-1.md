@@ -13,7 +13,7 @@ AC 9 | HP 10 (3d6) | Init -1 (9) | Speed 20 ft.
 STR 3 DEX 8 CON 11 INT 10 WIS 10 CHA 6
 Senses: Passive Perception 10
 Resistances: Piercing | Vulnerabilities: Fire
-- Rake: +1
+- Rake: +1, 1 slashing
 
 **Commoner** | Humanoid | S | CR 0 (0 XP)
 AC 10 | HP 4 (1d8) | Init +0 (10) | Speed 30 ft.
@@ -28,7 +28,7 @@ STR 4 DEX 15 CON 14 INT 10 WIS 10 CHA 7
 Saves: WIS +2, CHA +0 | Senses: darkvision 60 ft.
 Immunities: Poison; Charmed, Poisoned
 Telepathic Bond
-- Bite: +4
+- Bite: +4, 1 piercing; DC 12 CON or Poisoned until the end of the homunculus's next turn. *Failure by 5 or More:* Poisoned for 1 minute.
 
 **Lemure** | Fiend | M | CR 0 (0 XP)
 AC 9 | HP 9 (2d8) | Init -3 (7) | Speed 20 ft.
@@ -178,7 +178,7 @@ AC 15 | HP 10 (4d4) | Init +4 (14) | Speed 10 ft., Fly 40 ft.
 STR 3 DEX 18 CON 10 INT 14 WIS 13 CHA 11
 Senses: Passive Perception 13
 - Needle Sword: +6, 1d4+4 piercing
-- Enchanting Bow: +6
+- Enchanting Bow: +6, 1 piercing
 - Heart Sight: DC 10 CHA, The sprite knows the target's emotions and alignment
 
 **Steam Mephit** | Elemental | S | CR 1/4 (50 XP)

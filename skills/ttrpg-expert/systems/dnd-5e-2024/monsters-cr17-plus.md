@@ -252,7 +252,7 @@ Immunities: Fire
 Legendary Resistance (4/Day)
 Legendary (3/round): Banish (DC 24, 7d6), Guiding Light (Guiding Bolt), Pounce (Rend attack)
 Multiattack: 3× Rend
-- Rend: +17
+- Rend: +17, reach 15 ft., 2d8+10 slashing + 2d8 fire
 - Fire Breath (Recharge 5-6): 90-ft cone, DC 24 DEX, 13d10 fire (half)
 - Weakening Breath: 90-ft cone, DC 24 STR, The target has Disadvantage on Strength-based D20 Test and subtracts 5 (1d10) from its damage rolls.
 Spellcasting (CHA, DC 24): At Will — Detect Magic, Guiding Bolt, Shapechange

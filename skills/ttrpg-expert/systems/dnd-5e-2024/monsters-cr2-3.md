@@ -443,7 +443,7 @@ Multiattack: 2× Greatsword or Heavy Crossbow
 - Heavy Crossbow: +3, 2d10+1 piercing
 
 **Werewolf** | Monstrosity | S | CR 3 (700 XP)
-AC 15 | HP 71 (11d8+22) | Init +4 (14) | Speed 30 ft., Alternate ? ft.
+AC 15 | HP 71 (11d8+22) | Init +4 (14) | Speed 30 ft.
 STR 16 DEX 14 CON 14 INT 10 WIS 11 CHA 10
 Senses: darkvision 60 ft.
 Pack Tactics

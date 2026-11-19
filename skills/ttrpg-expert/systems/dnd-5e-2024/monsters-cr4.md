@@ -116,7 +116,7 @@ Multiattack: 2× (Warhammer/Heavy Crossbow)
 - Heavy Crossbow: +4, 2d10+2 piercing
 
 **Wereboar** | Monstrosity | S | CR 4 (1,100 XP)
-AC 15 | HP 97 (15d8+30) | Init +2 (12) | Speed 30 ft., Alternate ? ft.
+AC 15 | HP 97 (15d8+30) | Init +2 (12) | Speed 30 ft.
 STR 17 DEX 10 CON 15 INT 10 WIS 11 CHA 8
 Senses: Passive Perception 12
 Multiattack: 2× (Javelin/Tusk)
@@ -125,7 +125,7 @@ Multiattack: 2× (Javelin/Tusk)
 - Tusk (Boar or Hybrid Form Only): +5, 2d6+3 piercing
 
 **Weretiger** | Monstrosity | S | CR 4 (1,100 XP)
-AC 12 | HP 120 (16d8+48) | Init +2 (12) | Speed 30 ft., Alternate ? ft.
+AC 12 | HP 120 (16d8+48) | Init +2 (12) | Speed 30 ft.
 STR 17 DEX 15 CON 16 INT 10 WIS 13 CHA 11
 Senses: darkvision 60 ft.
 Multiattack: 2× (Scratch/Longbow)

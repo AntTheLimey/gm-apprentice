@@ -222,17 +222,18 @@ def format_attack(name, desc, budget_tight=False):
     # Melee/Ranged attack — allow parenthetical after +N (e.g. "+5 (with Advantage ...)")
     atk_match = re.search(
         r'\*(Melee|Ranged)(?: or (?:Melee|Ranged))? Attack Roll:\*\s*\+(\d+)'
-        r'(?:\s*\([^)]*\))?'
+        r'(?:\s+to hit)?(?:\s*\([^)]*\))?'
         r',?\s*(?:reach\s*(\d+)\s*ft\.?)?'
         r'(?:,?\s*(?:or\s+)?range\s*[\d/]+\s*ft\.?)?'
-        r'\s*(\d+)\s*\(([^)]+)\)\s*(\w+)\s*damage',
+        r'\s*(\d+)(?:\s*\(([^)]+)\))?\s*(\w+)\s*damage',
         desc
     )
 
     if atk_match:
         hit = atk_match.group(2)
         reach = atk_match.group(3)
-        dice = atk_match.group(5).replace(' ', '')
+        # a fixed amount ("1 Piercing damage") has no dice in brackets
+        dice = (atk_match.group(5) or atk_match.group(4)).replace(' ', '')
         dmg_type = atk_match.group(6).lower()
 
         parts = [f"- {name}: +{hit}"]
@@ -762,11 +763,15 @@ def build_file(tier_key, tier_info, cr_groups, budget_tight=False):
 def fixup_speed(m):
     """Fix known SRD data issues."""
     speed = m.get('speed', '')
-    # Werebear SRD has "Alternate ? ft." — should be 40 ft. (bear form)
+    # Swarm of Insects SRD has "Choose ? ft." — its Climb or Fly 20 ft.
+    if 'Choose ? ft.' in speed:
+        m['speed'] = speed = speed.replace('Choose ? ft.', 'Climb or Fly 20 ft.')
+    # Werebear SRD has "Alternate ? ft." — should be 40 ft. (bear form);
+    # the other were-creatures give no figure, so the placeholder goes
     if 'Alternate ? ft.' in speed and 'werebear' in m['name'].lower():
         m['speed'] = speed.replace('Alternate ? ft.', '40 ft. (bear form)')
     elif 'Alternate ? ft.' in speed:
-        m['speed'] = speed.replace('Alternate ? ft., ', '')
+        m['speed'] = re.sub(r',? ?Alternate \? ft\.(?:, )?', '', speed)
 
 
 def main():
