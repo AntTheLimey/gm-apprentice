@@ -10,6 +10,18 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 ---
 
 
+## [1.12.93] — 2026-11-19
+
+### Added
+
+- Session Plans give every scene a **Place:** line, a hub a **Where they can go** block of places and pointers, and fights and hoards a **Treasure** block; plan-check warns, and prep fixes its own draft, when a part the run sheet reads is missing (#556).
+- `gma stat-fill` writes a stock D&D creature's SRD numbers, Initiative included, into an NPC or creature note, keeping the GM's own words; the shipped D&D creature and animal blocks now carry Initiative.
+- Rewriting a Plan or scene says DROPPED when a labelled block such as Treasure goes missing, so prep can put it back.
+
+### Changed
+
+- The run sheet reader reads the Place line and the hub block, and records who stands at each place in a hub (#556).
+
 ## [1.12.92] — 2026-11-19
 
 ### Fixed
