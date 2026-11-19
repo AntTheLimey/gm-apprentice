@@ -72,6 +72,25 @@ describe('leak gate: secret names', () => {
       } finally { s.cleanup(); }
     });
   }
+  // A name with an apostrophe: straight or curly, in a secret field alone or also in aliases, printed either way.
+  for (const [quote, field, inAliases] of [["'", 'unmasked_name', true], ["'", 'gm_aliases', true], ['’', 'unmasked_name', false],
+    ['’', 'gm_aliases', false], ['’', 'unmasked_name', true], ['’', 'gm_aliases', true]]) {
+    const name = `Captain O${quote}Rook`;
+    for (const printed of [...new Set([name, 'Captain O\'Rook', 'Captain O’Rook'])]) {
+      it(`the gate finds ${printed} for ${name} in ${field}${inAliases ? ' and aliases' : ''} (#796, quotes)`, () => {
+        const secret = field === 'unmasked_name' ? `unmasked_name: "${name}"` : `gm_aliases: ["${name}"]`;
+        const notes = {
+          'NPCs/Pedlar.md': `---\ntype: npc\naliases: ["The Pedlar"${inAliases ? `, "${name}"` : ''}]\n${secret}\n---\nSells ribbons.\n`,
+          'NPCs/Gossip.md': `---\ntype: npc\n---\nThe pedlar is ${printed}.\n`,
+        };
+        const s = leakSite(notes, SETTINGS);
+        try {
+          const f = runLeakGate({ configPath: s.configPath, outputDir: s.outputDir }).findings.filter((x) => x.code === 'ALIAS_IN_PROSE');
+          assert.ok(f.some((x) => x.page === 'npcs/gossip.html' && x.note === 'NPCs/Pedlar.md'), JSON.stringify(f));
+        } finally { s.cleanup(); }
+      });
+    }
+  }
   it('a page that prints a secret name in aliases is found by the build too (#796)', () => {
     const notes = {
       'NPCs/Pedlar.md': '---\ntype: npc\naliases: ["The Pedlar", "Captain Rook"]\nunmasked_name: "Captain Rook"\n---\nSells ribbons.\n',

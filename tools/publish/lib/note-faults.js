@@ -409,7 +409,9 @@ function secretNamesOf(input) {
 // The words that are a public name of the site (a page's name or title): a link to one prints it, so it is no leak.
 // `privateNames` (secretNamesOf): link-map keys that are a note's own secret name, which no link prints.
 function publicWordsOf(linkMap, published, privateNames = new Set()) {
-  const set = new Set(Object.keys(linkMap).map((k) => fold(foldQuotes(k))).filter((k) => !privateNames.has(fold(k))));
+  // Both sides with their quotes straightened: a private `Captain O’Rook` must drop the key it is.
+  const priv = new Set([...privateNames].map((k) => fold(foldQuotes(k))));
+  const set = new Set(Object.keys(linkMap).map((k) => fold(foldQuotes(k))).filter((k) => !priv.has(k)));
   for (const page of published) set.add(fold(foldQuotes(page.displayTitle || '')));
   return set;
 }
