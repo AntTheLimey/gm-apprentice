@@ -1,5 +1,5 @@
 'use strict';
-const { describe, it } = require('node:test');
+const { describe, it, after } = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -10,11 +10,16 @@ const { buildIndex } = require('../lib/run-sheet/notes');
 const { readBeats } = require('../lib/run-sheet/beats');
 const { playAsOf, wantsOf } = require('../lib/run-sheet/people-from-notes');
 
+// Every scratch dir is removed when the file's tests finish.
+const made = [];
+const mkTmp = (prefix) => { const d = fs.mkdtempSync(path.join(os.tmpdir(), prefix)); made.push(d); return d; };
+after(() => { for (const d of made) fs.rmSync(d, { recursive: true, force: true }); });
+
 const FIXTURE = path.join(__dirname, 'fixtures', 'run-sheet');
 const PLAN = 'Chapters/Chapter 1/Sessions/Session 02/Session 02 - The Test - Plan.md';
 
 function copy() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rs-'));
+  const dir = mkTmp('rs-');
   fs.cpSync(FIXTURE, dir, { recursive: true });
   return dir;
 }
@@ -422,7 +427,7 @@ const bodyOnly = (t) => t.replace(/^---\n[\s\S]*?\n---\n/, '');
 
 // A scratch vault: the skeleton's linked notes, a `_meta` folder (plan-check finds its vault by it).
 function skeletonVault() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rs-skel-'));
+  const dir = mkTmp('rs-skel-');
   fs.cpSync(SKELETON_VAULT, dir, { recursive: true });
   fs.mkdirSync(path.join(dir, '_meta'));
   return dir;

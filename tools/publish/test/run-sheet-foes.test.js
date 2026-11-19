@@ -1,5 +1,5 @@
 'use strict';
-const { describe, it } = require('node:test');
+const { describe, it, after } = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -10,12 +10,17 @@ const { buildIndex } = require('../lib/run-sheet/notes');
 const { readBeats } = require('../lib/run-sheet/beats');
 const { foesOf, foesFor } = require('../lib/run-sheet/foes');
 
+// Every scratch dir is removed when the file's tests finish.
+const made = [];
+const mkTmp = (prefix) => { const d = fs.mkdtempSync(path.join(os.tmpdir(), prefix)); made.push(d); return d; };
+after(() => { for (const d of made) fs.rmSync(d, { recursive: true, force: true }); });
+
 const FIXTURE = path.join(__dirname, 'fixtures', 'run-sheet');
 const GMA = path.join(__dirname, '..', '..', '..', 'skills', 'shared', 'scripts', 'gma.py');
 const PLAN = 'Chapters/Chapter 1/Sessions/Session 02/Session 02 - The Test - Plan.md';
 
 function setup(edit) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rs-'));
+  const dir = mkTmp('rs-');
   fs.cpSync(FIXTURE, dir, { recursive: true });
   if (edit) {
     const p = path.join(dir, PLAN);
@@ -94,7 +99,7 @@ describe('run sheet foes', () => {
   });
 
   it('Armor Class reads as AC, and each missing figure warns on its own', () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rs-'));
+    const dir = mkTmp('rs-');
     fs.cpSync(FIXTURE, dir, { recursive: true });
     const note = (n, stats) => fs.writeFileSync(path.join(dir, 'Creatures', `${n}.md`),
       `---\nname: ${n}\ntype: creature\n---\n\n## GM Notes\n\n### Stats\n\n${stats}\n`);
@@ -144,7 +149,7 @@ describe('run sheet foes', () => {
   });
 
   it('a block with numbers but no initiative warns for the initiative', () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rs-'));
+    const dir = mkTmp('rs-');
     fs.cpSync(FIXTURE, dir, { recursive: true });
     const wolf = path.join(dir, 'Creatures/Frost Wolf.md');
     fs.writeFileSync(wolf, readText(wolf).replace('AC 13, Hit Points 11, Initiative +2', 'AC 13, Hit Points 11'));
@@ -179,7 +184,7 @@ describe('run sheet foes', () => {
   });
 
   it('numbers stay on their line and a typeset minus reads', () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rs-'));
+    const dir = mkTmp('rs-');
     fs.cpSync(FIXTURE, dir, { recursive: true });
     const note = (n, stats) => fs.writeFileSync(path.join(dir, 'Creatures', `${n}.md`),
       `---\nname: ${n}\ntype: creature\n---\n\n## GM Notes\n\n### Stats\n\n${stats}\n`);
@@ -194,7 +199,7 @@ describe('run sheet foes', () => {
   });
 
   it('a filled note gives init, hp, ac and recharge', () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rs-'));
+    const dir = mkTmp('rs-');
     fs.cpSync(FIXTURE, dir, { recursive: true });
     fs.mkdirSync(path.join(dir, '_Campaign'));
     fs.writeFileSync(path.join(dir, '_Campaign', 'Overview.md'),
