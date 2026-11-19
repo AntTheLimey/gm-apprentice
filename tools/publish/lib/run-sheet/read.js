@@ -9,7 +9,7 @@
 
 const path = require('node:path');
 const pt = require('./plan-text');
-const { buildIndex } = require('./notes');
+const { buildIndex, stemOf } = require('./notes');
 const { readBeats, sceneSection } = require('./beats');
 const { readPcs, SECTIONS: PC_SECTIONS } = require('./party');
 const { readPeople, TITLE: PEOPLE_TITLE } = require('./people');
@@ -22,7 +22,6 @@ const { isWithheld, nameList } = require('../processor');
 const { canonicalNfc } = require('../unicode');
 
 const toPosix = (p) => p.split(path.sep).join('/');
-const stemOf = (p) => path.posix.basename(p, path.posix.extname(p));
 const low = (s) => canonicalNfc(String(s == null ? '' : s)).trim().toLowerCase();
 const firstLine = (s) => String(s || '').split('\n')[0];
 
@@ -54,8 +53,6 @@ const fmTarget = (v) => {
   const s = x == null ? '' : String(x);
   return pt.links(s)[0] || s.trim();
 };
-
-const missingText = (target) => `[[${target}]] matches no note in the vault`;
 
 // For each `##` section, every link in it must be on the page: in what came from that section
 // (its fields' strings and paths, or its `prep` entry); a party PC counts in every section, its row
@@ -130,6 +127,7 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
   text = String(text).replace(/\r\n?/g, '\n');
 
   const warnings = [];
+  const portraits = new Map();
   const add = (list) => { for (const w of list || []) warnings.push(w); };
   let fm = {};
   let body = text;
@@ -151,13 +149,20 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
   }
 
   const index = buildIndex(vaultPath, { deps });
-  const known = new Set(index.notes());
-  const fmOf = (p) => (p && known.has(p) ? index.read(p).fm || {} : {});
+  const fmOf = (p) => (index.has(p) ? index.read(p).fm || {} : {});
+  // A link that resolves to no note warns once, saying why (missing, ambiguous, in a skipped folder).
+  const warnedLinks = new Set();
+  const warnLink = (t) => {
+    const why = index.linkProblem(t);
+    if (!why || warnedLinks.has(low(why.text))) return;
+    warnedLinks.add(low(why.text));
+    warnings.push({ kind: why.kind, note: null, text: why.text });
+  };
   const resolveFm = (v) => {
     const t = fmTarget(v);
     if (!t) return null;
     const p = index.resolve(t);
-    if (p === null) warnings.push({ kind: 'missing-note', note: null, text: missingText(t) });
+    if (p === null) warnLink(t);
     return p;
   };
 
@@ -196,19 +201,20 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
 
   // Prep: every section no field takes, World State too, and what a reader left over, in Plan order.
   const prep = [];
+  // Each leftover is pushed once, keyed as its reader keyed it: a scene section's preamble by its
+  // exact title (beats.js), the handouts' and people's by field (each reader joins its sections).
   const leftOnce = new Set();
-  const leftover = (sec, md) => {
-    const k = low(sec.title);
-    if (leftOnce.has(k)) return;
-    leftOnce.add(k);
+  const leftover = (sec, key, md) => {
+    if (leftOnce.has(key)) return;
+    leftOnce.add(key);
     if (md) prep.push({ title: sec.title, md });
   };
   for (const sec of sections) {
     const f = fieldOf(sec.title);
     if (f === null || f === 'world') prep.push({ title: sec.title, md: sec.text });
-    else if (f === 'planned' || f === 'contingency') leftover(sec, beatsRead.preamble[sec.title] || '');
-    else if (f === 'handouts') leftover(sec, handoutsRead.leftover);
-    else if (f === 'people') leftover(sec, peopleRead.leftover);
+    else if (f === 'planned' || f === 'contingency') leftover(sec, `scenes:${sec.title}`, beatsRead.preamble[sec.title] || '');
+    else if (f === 'handouts') leftover(sec, f, handoutsRead.leftover);
+    else if (f === 'people') leftover(sec, f, peopleRead.leftover);
   }
 
   // Places and maps: every note the Plan links, first seen first; a beat's own paths (a scene
@@ -225,17 +231,13 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
     }
     for (const t of pt.links(sec.text)) linked.push(index.resolve(t));
   }
-  const uniq = (list) => [...new Set(list.filter((p) => p && known.has(p)))];
+  const uniq = (list) => [...new Set(list.filter((p) => index.has(p)))];
   const places = uniq(linked).filter((p) => low(fmOf(p).type) === 'location');
   const maps = uniq(linked).filter((p) => low(fmOf(p).doc_type) === 'map');
 
   // A link to nowhere anywhere in the Plan warns once (beats warn for theirs; the same text merges).
-  const warnedMissing = new Set(warnings.filter((w) => w.kind === 'missing-note').map((w) => low(w.text)));
-  for (const t of pt.links(body)) {
-    if (index.resolve(t) !== null || warnedMissing.has(low(missingText(t)))) continue;
-    warnedMissing.add(low(missingText(t)));
-    warnings.push({ kind: 'missing-note', note: null, text: missingText(t) });
-  }
+  for (const w of warnings) if (w.note === null) warnedLinks.add(low(w.text));
+  for (const t of pt.links(body)) if (index.resolve(t) === null) warnLink(t);
 
   const runLong = readRunLong();
 
@@ -267,8 +269,11 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
   }
 
   add(completeness(body, model, { resolve: (t) => index.resolve(t) }));
-  // The index's warnings about notes this sheet touches, and those about the vault as a whole.
-  const touched = new Set(stringsOf(model).filter((x) => known.has(x)));
+  // The index's warnings about notes this sheet touches (a note a warning names among them, such
+  // as a PC whose frontmatter does not parse), and those about the vault as a whole. Each touched
+  // note's portrait is looked for first, so a portrait that matches no picture warns here.
+  const touched = new Set([...stringsOf(model), ...warnings.map((w) => w.note)].filter((x) => index.has(x)));
+  for (const p of touched) portraitOf(p);
   add(index.warnings.filter((w) => w.note === null || w.kind === 'unreadable-folder' || touched.has(w.note)));
   const kept = new Set();
   for (const w of warnings) {
@@ -280,17 +285,22 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
 
   // Notes: one per note path anywhere in the model.
   for (const s of stringsOf(model)) {
-    if (!known.has(s) || model.notes[s]) continue;
+    if (!index.has(s) || model.notes[s]) continue;
     model.notes[s] = noteOf(s);
   }
   if (!model.notes[plan]) model.notes[plan] = noteOf(plan, fm);
   return model;
 
+  // The index's answer, asked once per note (a picture that cannot be found is its warning).
+  function portraitOf(p) {
+    if (!portraits.has(p)) portraits.set(p, index.has(p) ? index.portrait(p) : null);
+    return portraits.get(p);
+  }
+
   function noteOf(p, ownFm) {
-    const read = known.has(p) ? index.read(p) : { fm: ownFm || {}, unreadable: false };
+    const read = index.has(p) ? index.read(p) : { fm: ownFm || {}, unreadable: false };
     const nfm = read.fm || {};
-    let portrait = null;
-    if (known.has(p)) { try { portrait = index.portrait(p); } catch { portrait = null; } }
+    const portrait = portraitOf(p);
     return {
       path: p,
       name: typeof nfm.name === 'string' && nfm.name.trim() ? nfm.name.trim() : stemOf(p),
@@ -312,7 +322,7 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
     if (!dir || dir === '.') {
       dir = null;
       for (let d = path.posix.dirname(plan); d && d !== '.' && !d.startsWith('..'); d = path.posix.dirname(d)) {
-        if ([...known].some((n) => n.startsWith(`${d}/Sessions/`))) { dir = d; break; }
+        if (index.notes().some((n) => n.startsWith(`${d}/Sessions/`))) { dir = d; break; }
       }
     }
     if (!dir) {

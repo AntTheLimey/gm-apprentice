@@ -8,18 +8,20 @@
 // all of it; a line it can hold only part of (a Handouts line with words after the link, a link the
 // vault lacks) stays whole in `extra` as well.
 
-const path = require('node:path');
 const pt = require('./plan-text');
+const { stemOf } = require('./notes');
 const { beatKeys, itemKeys } = require('./keys');
 const { playAsOf } = require('./people-from-notes');
 const { parseWikilink } = require('../wikilink');
+const { markersIn } = require('../markers');
 
-// The same line shapes plan-text.js reads.
-const LABEL = /^(?:[-*+]\s+)?\*\*([^*\n]+?):\*\*[ \t]*(.*)$/;
-const isBlank = (l) => l.trim() === '';
-const nameKey = (s) => String(s == null ? '' : s).trim().toLowerCase();
+const { LABEL, isBlank, nameKey } = pt;
 
 const SCENE_N = /^\s*scene\s+\d+\s*:\s*/i;
+const HUB_MARK = /\s*\((hub|routing)\)\s*/i;
+// What a list of links may hold between them and still be only links: `and`, spaces, punctuation.
+const SEPARATORS = /[\s,;&.·]+/g;
+const onlySeparators = (s) => s.replace(/\band\b/gi, '').replace(SEPARATORS, '') === '';
 const LINK_ONLY = /^\s*\[\[([^\]]+)\]\]\s*$/;
 const LINK = /!?\[\[[^\]]*\]\]/g;
 // `**[[Note]]:** wants`, `**[[Note]] (3):** wants`, `**[[Note]]** (known as): wants` (bullet marker removed)
@@ -31,12 +33,9 @@ const GROUP_HEAD = /^\*\*([^*\n]+?):?\*\*[ \t]*(\([^)]*\))?[ \t]*$/;
 // A spot group bullet led by a bold name: `**The guest wing:** rest` (bullet marker removed).
 const NAMED_BULLET = /^\*\*([^*\n]+?):?\*\*:?[ \t]*([\s\S]*)$/;
 const BLOCK_NAMES = new Set(['npcs', 'points to land', 'if the players...', 'treasure', 'complications', 'then']);
-const GM_OPEN = '<!-- gm-only -->';
-const GM_CLOSE = '<!-- /gm-only -->';
 
 const linesOf = (text) => pt.cleanText(text).split('\n');
 const offset = (items, by) => items.map((x) => ({ ...x, start: x.start + by, end: x.end + by }));
-const stemOf = (p) => path.posix.basename(p, path.posix.extname(p));
 const linkParts = (body) => {
   const w = parseWikilink(body);
   const target = String(w.target || '').trim();
@@ -55,21 +54,22 @@ const isSpotLine = (line) => {
 };
 const endsSpot = (line) => pt.endsBlock(line) || GROUP_HEAD.test(line) || isSpotLine(line);
 
-// A scene note's body split at its GM fences: the public text, and each fenced part.
+// A scene note's body split at its GM fences: the public text, and each fenced part. The fences are
+// read the one way the publish tool reads them (markers.js): `<!--gm-only-->` and `<!-- GM-ONLY -->`
+// are fences too. An opener inside a fence, or a closer outside one, is a comment and changes nothing.
 function splitGm(body) {
+  const src = String(body || '');
   const pub = [];
   const gm = [];
-  let rest = String(body || '');
-  for (;;) {
-    const at = rest.indexOf(GM_OPEN);
-    if (at === -1) { pub.push(rest); break; }
-    pub.push(rest.slice(0, at));
-    rest = rest.slice(at + GM_OPEN.length);
-    const close = rest.indexOf(GM_CLOSE);
-    if (close === -1) { gm.push(rest); break; }
-    gm.push(rest.slice(0, close));
-    rest = rest.slice(close + GM_CLOSE.length);
+  let from = 0;
+  let open = false;
+  for (const m of markersIn(src)) {
+    if (m.name !== 'gm-only' || m.close !== open) continue;
+    (open ? gm : pub).push(src.slice(from, m.index));
+    from = m.index + m.length;
+    open = !open;
   }
+  (open ? gm : pub).push(src.slice(from));
   return {
     pub: pub.map((x) => x.trim()).filter(Boolean).join('\n\n'),
     gm: gm.map((x) => pt.cleanText(x).replace(/^##[ \t]+GM Notes[ \t#]*$/im, '').trim()).filter(Boolean).join('\n\n'),
@@ -86,7 +86,8 @@ function readBeats(planBody, index) {
     const k = nameKey(target);
     if (missing.has(k)) return;
     missing.add(k);
-    warnings.push({ kind: 'missing-note', note: null, text: `[[${target}]] matches no note in the vault` });
+    const why = index.linkProblem(target);
+    if (why) warnings.push({ kind: why.kind, note: null, text: why.text });
   };
   const resolve = (target) => {
     const p = index.resolve(target);
@@ -145,11 +146,16 @@ function readBeats(planBody, index) {
     let gmNotes = '';
     let text = planText;
     let noteFm = null;
-    const sm = heading.match(LINK_ONLY);
+    // `### [[Note]]`, `### Scene 2: [[Note]]` and `### [[Note]] (hub)` all name a scene note.
+    const mark = heading.match(HUB_MARK);
+    const sm = title.replace(HUB_MARK, ' ').trim().match(LINK_ONLY);
+    if (!sm && pt.links(heading).length) {
+      warnings.push({ kind: 'scene-note-not-read', note: null, text: `${heading} holds a link but not only a link, so no scene note is read for it: make the heading the link alone` });
+    }
     if (sm) {
       // The scene lives in its own note: its public text, then the Plan's lines; its fenced parts are gmNotes.
       const l = linkParts(sm[1]);
-      title = l.display || l.name;
+      title = (l.display || l.name) + (mark ? ` (${mark[1].toLowerCase()})` : '');
       sceneNote = resolve(l.target);
       if (sceneNote) {
         const note = index.read(sceneNote);
@@ -184,8 +190,7 @@ function readBeats(planBody, index) {
           const p = resolve(t);
           if (p) out.push(p); else whole = false;
         }
-        const rest = l.value.replace(LINK, '').replace(/\band\b/gi, '').replace(/[\s,;&·]+/g, '');
-        if (whole && rest === '') claim(l.start, l.end);
+        if (whole && onlySeparators(l.value.replace(LINK, ''))) claim(l.start, l.end);
       }
       return out;
     };
@@ -214,19 +219,31 @@ function readBeats(planBody, index) {
       const l = linkParts(m[1]);
       const paren = (m[2] !== undefined ? m[2] : m[3]);
       const p = paren === undefined ? '' : paren.trim();
-      const count = /^\d+$/.test(p) ? Number(p) : 1;
-      const knownAs = p && !/^\d+$/.test(p) ? p : l.display;
-      return { target: l.target, name: l.name, knownAs, count, wants: m[4].replace(/\s+/g, ' ').trim() };
+      const counted = /^\d+$/.test(p);
+      const count = counted ? Number(p) : 1;
+      const knownAs = p && !counted ? p : l.display;
+      return { target: l.target, name: l.name, knownAs, count, counted, wants: m[4].replace(/\s+/g, ' ').trim() };
     };
     const person = (note, n) => ({ note, name: n.name, knownAs: n.knownAs, count: n.count, wants: n.wants, playAs: playAsOf(note, index) });
 
+    // Whether each entry's count was written as a number (`(3)`), by who index.
+    const countedAt = [];
     const npcBlocks = blocksOf('NPCs');
     for (const b of npcBlocks) {
       blockHeads.push(b);
       for (const item of offset(pt.bullets(b.sub), b.start)) {
         const n = npcFrom(item.text);
         if (!n) continue;
-        who.push(person(resolve(n.target), n));
+        const note = resolve(n.target);
+        const at = who.findIndex((w) => (note ? w.note === note : !w.note && w.name === n.name));
+        if (at !== -1) {
+          // One person listed twice: two written counts add up; otherwise the second line stays in extra.
+          if (!(countedAt[at] && n.counted)) continue;
+          who[at].count += n.count;
+        } else {
+          countedAt[who.length] = n.counted;
+          who.push(person(note, n));
+        }
         claim(item.start, item.end);
       }
     }
@@ -247,7 +264,7 @@ function readBeats(planBody, index) {
       }
       // Nothing left but list separators: the line is held. Any other words (`or`, `the bell-ringer`,
       // a place's link) mean the line is only partly held, so it stays whole in extra.
-      if (rest.replace(/\band\b/gi, '').replace(/[\s,;&.]+/g, '') === '') claim(l.start, l.end);
+      if (onlySeparators(rest)) claim(l.start, l.end);
     }
 
     let spots = [];
@@ -348,7 +365,7 @@ function readBeats(planBody, index) {
       for (const r of pt.tableRows(b.sub)) ifs.push({ do: r[0] || '', then: r.slice(1).filter(Boolean).join(' · ') });
       for (const r of offset(pt.tableRanges(b.sub), b.start)) {
         // A header other than `| Do | Then |` says something: it stays in extra.
-        const sep = r.start + 1 <= r.end && /^\s*\|?[\s:|-]*-[\s:|-]*$/.test(lines[r.start + 1]);
+        const sep = r.start + 1 <= r.end && pt.isSeparatorRow(lines[r.start + 1]);
         const cells = lines[r.start].split('|').map((c) => nameKey(c)).filter(Boolean);
         const plain = cells.length === 2 && cells[0] === 'do' && cells[1] === 'then';
         claim(sep && !plain ? r.start + 1 : r.start, r.end);

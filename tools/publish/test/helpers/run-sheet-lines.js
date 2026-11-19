@@ -1,6 +1,11 @@
 'use strict';
+const fs = require('node:fs');
 const { normalise } = require('../../lib/run-sheet/keys');
 const { cleanText } = require('../../lib/run-sheet/plan-text');
+
+// A text file as the reader sees it: a Windows checkout's CRLF (or a lone CR) turned to LF, so a
+// test's `.replace('a\nb', …)` on fixture text finds its line on every platform.
+const readText = (p) => fs.readFileSync(p, 'utf8').replace(/\r\n?/g, '\n');
 
 // Every primitive in the model, as one normalised string.
 function haystack(model) {
@@ -60,4 +65,4 @@ function missingLines(planBody, model) {
   return out;
 }
 
-module.exports = { haystack, missingLines };
+module.exports = { haystack, missingLines, readText };

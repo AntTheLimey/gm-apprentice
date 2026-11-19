@@ -3,31 +3,34 @@
 // what to do with them); the Plan's Spotlight, Touchpoint and Roster lines are matched onto them.
 // Never throws: a PC missing rows reads with null numbers and '' text, and a warning where it helps.
 
-const path = require('node:path');
 const { canonicalNfc } = require('../unicode');
 const { replaceWikilinks, parseWikilink } = require('../wikilink');
 const { sections, tableRows, tableRanges, bullets, unclaimed, labels, cleanText, links } = require('./plan-text');
+const { stemOf } = require('./notes');
+const { SIGNED_SOURCE, toNumber } = require('./signed');
 
-const stemOf = (p) => path.posix.basename(p, path.posix.extname(p));
 const low = (s) => canonicalNfc(String(s || '')).trim().toLowerCase();
-const wordsOf = (cell) => replaceWikilinks(String(cell), (_l, body) => parseWikilink(body).name)
+// The note names a cell links, as plain words: `[[Ada Moss|Ada]]` is `Ada Moss`. Matches a PC by name.
+const linkedNames = (cell) => replaceWikilinks(String(cell), (_l, body) => parseWikilink(body).name)
   .replace(/[*_`]/g, '').trim();
 
-// A bullet line's subject and the rest: `**Name:** rest`, `**[[Name]]:** rest`, `**[[Name]]** (Player): rest`.
+// A bullet line's subject, the parenthesis after a bold name (or ''), and the rest:
+// `**Name:** rest`, `**[[Name]]:** rest`, `**[[Name]]** (Player): rest`.
 function bulletSubject(text) {
   const m = text.match(/^\*\*(.+?)\*\*[ \t]*(.*)$/s);
   if (!m) return null;
   let name = m[1];
   let rest = m[2];
+  let paren = '';
   if (/:\s*$/.test(name)) {
     name = name.replace(/:\s*$/, '');
   } else {
+    const p = rest.match(/^\(([^)]*)\)/);
+    if (p) paren = p[1].trim();
     rest = rest.replace(/^(?:\([^)]*\))?[ \t]*:?[ \t]*/, '');
   }
-  return { name: wordsOf(name), link: links(name)[0] || null, rest: rest.trim() };
+  return { name: linkedNames(name), link: links(name)[0] || null, paren, rest: rest.trim() };
 }
-
-const { SIGNED_SOURCE, toNumber } = require('./signed');
 
 const SECTIONS = [
   { re: /^spotlight/i, field: 'spotlight' },
@@ -85,13 +88,14 @@ function readPcs(planBody, index, party) {
     const fm = note ? index.read(note).fm : null;
     if (!note || String(fm.type || '').toLowerCase() !== 'pc') {
       if (!note) warn('missing-pc', null, `${given} is in the party but not in the vault`);
+      else if (index.read(note).unreadable) warn('unreadable-pc', note, `${given}: frontmatter does not parse, so it cannot be read as a PC: left out of the party`);
       else warn('not-a-pc', note, `${given} is not a PC note in the vault: left out of the party`);
       continue;
     }
     if (pcs.some((x) => x.note === note)) continue;
     const body = index.read(note).body;
-    let portrait = null;
-    try { portrait = index.portrait(note); } catch { portrait = null; }
+    // a portrait that cannot be found is the index's warning, never a throw
+    const portrait = index.portrait(note);
     pcs.push({
       note,
       name: stemOf(note),
@@ -124,25 +128,27 @@ function readPcs(planBody, index, party) {
   for (const sec of sections(planBody, 2)) {
     const kind = SECTIONS.find((s) => s.re.test(sec.title));
     if (!kind) continue;
-    const apply = (name, link, cells, rest, raw) => {
+    const apply = (name, link, cells, given, raw, paren = '') => {
       const pc = matchPc(name, link);
       if (!pc) { unmatched.push({ section: sec.title, text: raw }); return; }
+      // a parenthesis that is not the PC's player says something about the line: it is kept
+      const rest = paren && low(paren) !== low(pc.player) ? `(${paren}) ${given}`.trim() : given;
       if (kind.field === 'spotlight') {
         if (cells) { add(pc, 'role', cells[1] || ''); add(pc, 'moment', cells.slice(2).join(' · ')); } else add(pc, 'moment', rest);
       } else if (kind.field === 'touchpoint') {
-        add(pc, 'touch', cells ? cells.slice(1, 4).join(' · ') : rest);
+        add(pc, 'touch', cells ? cells.slice(1).join(' · ') : rest);
       } else {
         add(pc, 'arc', cells ? cells.slice(1).join(' · ') : rest);
       }
     };
     for (const cells of tableRows(sec.text)) {
       if (!cells[0]) { if (cells.some(Boolean)) unmatched.push({ section: sec.title, text: cells.join(' | ').trim() }); continue; }
-      apply(wordsOf(cells[0]), links(cells[0])[0] || null, cells, '', cells.join(' | '));
+      apply(linkedNames(cells[0]), links(cells[0])[0] || null, cells, '', cells.join(' | '));
     }
     for (const b of bullets(sec.text)) {
       const s = bulletSubject(b.text);
       if (!s) { unmatched.push({ section: sec.title, text: b.text }); continue; }
-      apply(s.name, s.link, null, s.rest, b.text);
+      apply(s.name, s.link, null, s.rest, b.text, s.paren);
     }
     // prose lines no row or bullet took are kept, one per line
     for (const line of unclaimed(sec.text, [...tableRanges(sec.text), ...bullets(sec.text)]).split('\n')) {

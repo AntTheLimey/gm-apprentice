@@ -153,3 +153,21 @@ test('a bulleted bold-label line inside a block is block content; a bare label s
   const y = '**Treasure**\n- loot\n\n- **Purpose:** the stub field';
   assert.equal(t.block(y, 'Treasure').value, '- loot');
 });
+
+test('a separator is the second line of a table only; a dash row is a row', () => {
+  assert.deepEqual(t.tableRows('| A | B |\n|---|---|\n| - | - |\n| x | y |'), [['-', '-'], ['x', 'y']]);
+  // no separator: every line is a row, the first included
+  assert.deepEqual(t.tableRows('| a | b |\n| c | d |'), [['a', 'b'], ['c', 'd']]);
+  // a dash row lower down is a row, not a second header
+  assert.deepEqual(t.tableRows('| a |\n| b |\n|---|'), [['a'], ['b'], ['---']]);
+  // two tables each drop their own header
+  assert.deepEqual(t.tableRows('| H |\n|---|\n| 1 |\n\ntext\n\n| G |\n|:-:|\n| 2 |'), [['1'], ['2']]);
+  assert.equal(t.isSeparatorRow('| - | - |'), true);
+  assert.equal(t.isSeparatorRow('| - | x |'), false);
+  assert.equal(t.isSeparatorRow('no table'), false);
+});
+
+test('a closing run of # needs a space before it, as notes.js reads note headings', () => {
+  assert.deepEqual(t.sections('## C#\nx\n## Done ##\ny', 2), [{ title: 'C#', text: 'x' }, { title: 'Done', text: 'y' }]);
+  assert.equal(t.HEADING_LINE.exec('## C#')[2], 'C#');
+});

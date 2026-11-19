@@ -4,6 +4,7 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { readText } = require('./helpers/run-sheet-lines');
 const { buildIndex } = require('../lib/run-sheet/notes');
 const { readBeats } = require('../lib/run-sheet/beats');
 const { foesOf, foesFor } = require('../lib/run-sheet/foes');
@@ -16,7 +17,7 @@ function setup(edit) {
   fs.cpSync(FIXTURE, dir, { recursive: true });
   if (edit) {
     const p = path.join(dir, PLAN);
-    fs.writeFileSync(p, edit(fs.readFileSync(p, 'utf8')));
+    fs.writeFileSync(p, edit(readText(p)));
   }
   const index = buildIndex(dir);
   return { index, beats: readBeats(index.read(PLAN).body, index).beats };
@@ -74,9 +75,45 @@ describe('run sheet foes', () => {
   it('no stats, no foe', () => {
     const { index } = setup();
     for (const p of ['Creatures/Hollow Stalker.md', 'Characters/NPCs/Sister Fen.md', 'Chapters/Chapter 1/Sessions/Session 02/Session 02 - The Test - Plan.md']) {
-      assert.deepStrictEqual(foesOf(p, index, 2, 'b-test'), { foes: [], warnings: [] });
+      assert.deepStrictEqual(foesOf(p, index, 2, 'b-test').foes, []);
     }
     assert.deepStrictEqual(foesOf('Nowhere.md', index, 1, 'b-test'), { foes: [], warnings: [] });
+  });
+
+  it('a creature with no stats, or a crowd with none, warns no-stats; a lone social NPC does not', () => {
+    const { index } = setup();
+    const kinds = (p, n) => foesOf(p, index, n, 'b-test').warnings.map((w) => [w.kind, w.note]);
+    assert.deepStrictEqual(kinds('Creatures/Hollow Stalker.md', 1), [['no-stats', 'Creatures/Hollow Stalker.md']]);
+    assert.deepStrictEqual(kinds('Characters/NPCs/Sister Fen.md', 3), [['no-stats', 'Characters/NPCs/Sister Fen.md']]);
+    assert.deepStrictEqual(kinds('Characters/NPCs/Sister Fen.md', 1), []);
+    const { beats, index: ix } = setup((t) => t.replace('- **[[Missing Person]]:** watching from the trees', '- **[[Hollow Stalker]]:** watching from the trees'));
+    const c = beats.find((b) => b.contingency);
+    assert.ok(foesFor(c, ix).warnings.some((w) => w.kind === 'no-stats' && w.note === 'Creatures/Hollow Stalker.md'));
+  });
+
+  it('Armor Class reads as AC, and each missing figure warns on its own', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rs-'));
+    fs.cpSync(FIXTURE, dir, { recursive: true });
+    const note = (n, stats) => fs.writeFileSync(path.join(dir, 'Creatures', `${n}.md`),
+      `---\nname: ${n}\ntype: creature\n---\n\n## GM Notes\n\n### Stats\n\n${stats}\n`);
+    note('Spelled', '**Armor Class** 14 · **Hit Points** 22 · **Initiative** +1');
+    note('NoAc', '**Hit Points** 22 · **Initiative** +1');
+    note('NoHp', '**AC** 12');
+    const index = buildIndex(dir);
+    const s = one(index, 'Spelled');
+    assert.deepStrictEqual([s.foes[0].ac, s.foes[0].hp, s.foes[0].init], [14, 22, 1]);
+    assert.deepStrictEqual(s.warnings, []);
+    assert.deepStrictEqual(one(index, 'NoAc').warnings.map((w) => w.kind), ['no-ac']);
+    assert.deepStrictEqual(one(index, 'NoHp').warnings.map((w) => w.kind), ['no-hp', 'no-initiative']);
+  });
+
+  it('one creature on two lines of a beat: unique keys, numbered across the beat', () => {
+    const { index, beats } = setup();
+    const c = beats.find((b) => b.contingency);
+    const wolf = c.who.find((w) => w.note === 'Creatures/Frost Wolf.md');
+    const { foes } = foesFor({ ...c, who: [wolf, { ...wolf, count: 1 }] }, index);
+    assert.deepStrictEqual(foes.map((f) => f.name), ['Frost Wolf 1', 'Frost Wolf 2', 'Frost Wolf 3']);
+    assert.strictEqual(new Set(foes.map((f) => f.key)).size, 3);
   });
 
   it('a stock name with no numbers warns once, hp null', () => {
@@ -108,7 +145,7 @@ describe('run sheet foes', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rs-'));
     fs.cpSync(FIXTURE, dir, { recursive: true });
     const wolf = path.join(dir, 'Creatures/Frost Wolf.md');
-    fs.writeFileSync(wolf, fs.readFileSync(wolf, 'utf8').replace('AC 13, Hit Points 11, Initiative +2', 'AC 13, Hit Points 11'));
+    fs.writeFileSync(wolf, readText(wolf).replace('AC 13, Hit Points 11, Initiative +2', 'AC 13, Hit Points 11'));
     const { warnings } = one(buildIndex(dir), 'Frost Wolf');
     assert.deepStrictEqual(warnings.map((w) => w.kind), ['no-initiative']);
   });

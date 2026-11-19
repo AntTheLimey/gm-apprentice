@@ -55,4 +55,4 @@ function personKey(pathOrName) {
   return `p-${textHash(pathOrName)}`;
 }
 
-module.exports = { normalise, textHash, beatKeys, itemKeys, personKey };
+module.exports = { normalise, textHash, dedupe, beatKeys, itemKeys, personKey };

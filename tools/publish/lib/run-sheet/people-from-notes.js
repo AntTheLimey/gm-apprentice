@@ -4,7 +4,7 @@
 
 const { label, cleanText } = require('./plan-text');
 
-const known = (p, index) => typeof p === 'string' && p !== '' && index.notes().includes(p);
+const known = (p, index) => index.has(p);
 
 // Playing Them **Speech:** and **Tell:** joined by a space; a value still holding a template
 // placeholder (`{...}`) is skipped. A creature with neither: its ### Behaviour first paragraph.

@@ -4,6 +4,7 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { readText } = require('./helpers/run-sheet-lines');
 const { buildIndex } = require('../lib/run-sheet/notes');
 const { readBeats } = require('../lib/run-sheet/beats');
 const { playAsOf, wantsOf } = require('../lib/run-sheet/people-from-notes');
@@ -21,7 +22,7 @@ function read(edit) {
   const dir = copy();
   if (edit) {
     const p = path.join(dir, PLAN);
-    fs.writeFileSync(p, edit(fs.readFileSync(p, 'utf8')));
+    fs.writeFileSync(p, edit(readText(p)));
   }
   const index = buildIndex(dir);
   return { index, ...readBeats(index.read(PLAN).body, index) };
@@ -151,7 +152,7 @@ describe('run sheet beats', () => {
 
   it('real hub: a spot group of bold-named bullets', () => {
     const index = buildIndex(copy());
-    const plan = fs.readFileSync(path.join(__dirname, 'fixtures', 'run-sheet-hub-plan.md'), 'utf8');
+    const plan = readText(path.join(__dirname, 'fixtures', 'run-sheet-hub-plan.md'));
     const { beats, warnings } = readBeats(plan, index);
     const b = beats[0];
     assert.deepStrictEqual(b.spots.map((s) => [s.name, s.note]), [
@@ -169,7 +170,7 @@ describe('run sheet beats', () => {
 
   it('real hub: a spot group of plain bullets keeps its parenthesis', () => {
     const index = buildIndex(copy());
-    const plan = fs.readFileSync(path.join(__dirname, 'fixtures', 'run-sheet-hub-plan.md'), 'utf8');
+    const plan = readText(path.join(__dirname, 'fixtures', 'run-sheet-hub-plan.md'));
     const b = readBeats(plan, index).beats[1];
     assert.deepStrictEqual(b.spots.map((s) => [s.name, s.note]), [
       ['The guest register (Hollis)', null], ['Crane by the fire', null],
@@ -183,7 +184,7 @@ describe('run sheet beats', () => {
 
   it('a plain hub bullet is named by its first line', () => {
     const index = buildIndex(copy());
-    const plan = fs.readFileSync(path.join(__dirname, 'fixtures', 'run-sheet-hub-plan.md'), 'utf8')
+    const plan = readText(path.join(__dirname, 'fixtures', 'run-sheet-hub-plan.md'))
       .replace('- Crane by the fire — Scene 4\n', '- Crane by the fire\n  - he has the key\n')
       .replace('- [[The Gate House]] at dusk\n', '- [[The Gate House]] at dusk\n\n  The door sticks.\n');
     const b = readBeats(plan, index).beats[1];
@@ -323,5 +324,74 @@ describe('run sheet beats', () => {
     assert.deepStrictEqual(out.claimed, {});
     assert.deepStrictEqual(readBeats('', index).beats, []);
     assert.deepStrictEqual(readBeats(null, index).beats, []);
+  });
+  it('a numbered or hub heading that is one link still reads its scene note', () => {
+    for (const [heading, title] of [['### Scene 2: [[The Bell Tower]]', 'The Bell Tower'], ['### [[The Bell Tower]] (hub)', 'The Bell Tower (hub)']]) {
+      const { beats, warnings } = read((s) => s.replace('### [[The Bell Tower]]', heading));
+      const b = byTitle(beats, title);
+      assert.ok(b, heading);
+      assert.strictEqual(b.sceneNote, 'Chapters/Chapter 1/Scenes/The Bell Tower.md', heading);
+      assert.strictEqual(b.gmNotes, 'Fen cut the rope herself.');
+      assert.ok(!warnings.some((w) => w.kind === 'scene-note-not-read'), heading);
+    }
+    // the hub flag is kept: a hub beat gives no NPCs warning and reads spots
+    const hub = read((s) => s.replace('### [[The Bell Tower]]', '### [[The Bell Tower]] (hub)'));
+    assert.ok(!hub.warnings.some((w) => w.kind === 'no-npcs-block' && /Bell Tower/.test(w.text)));
+  });
+
+  it('a heading holding a link and other words warns that no scene note is read', () => {
+    const { beats, warnings } = read((s) => s.replace('### [[The Bell Tower]]', '### Up [[The Bell Tower]] at night'));
+    const b = byTitle(beats, 'Up [[The Bell Tower]] at night');
+    assert.strictEqual(b.sceneNote, null);
+    const w = warnings.filter((x) => x.kind === 'scene-note-not-read');
+    assert.strictEqual(w.length, 1);
+    assert.match(w[0].text, /Up \[\[The Bell Tower\]\] at night/);
+  });
+
+  it('one person on two NPC lines: written counts add up, otherwise the second line stays in extra', () => {
+    const { beats } = read((s) => s.replace('- **[[Frost Wolf]] (3):** hunting', '- **[[Frost Wolf]] (3):** hunting\n- **[[Frost Wolf]] (2):** circling')
+      .replace('- **[[Brother Ash]]:** wants the bell rung', '- **[[Brother Ash]]:** wants the bell rung\n- **[[Brother Ash]]:** again, at the gate'));
+    const b = beats[0];
+    assert.deepStrictEqual(b.who.map((w) => w.name), ['Brother Ash', 'Frost Wolf', 'Lucan Grey']);
+    assert.strictEqual(whoOf(b, 'Frost Wolf').count, 5);
+    assert.strictEqual(whoOf(b, 'Brother Ash').wants, 'wants the bell rung');
+    assert.doesNotMatch(b.extra, /circling/);
+    assert.match(b.extra, /\*\*\[\[Brother Ash\]\]:\*\* again, at the gate/);
+    assert.strictEqual(new Set(b.who.map((w) => w.key)).size, b.who.length);
+  });
+
+  it('GM fences are read however they are typed', () => {
+    const dir = copy();
+    const note = path.join(dir, 'Chapters/Chapter 1/Scenes/The Bell Tower.md');
+    fs.writeFileSync(note, readText(note).replace('<!-- gm-only -->', '<!--gm-only-->').replace('<!-- /gm-only -->', '<!-- / GM-ONLY -->')
+      + '\nAfter.\n\n<!-- GM-ONLY -->\nSecond secret.\n<!--/gm-only-->\n');
+    const index = buildIndex(dir);
+    const b = byTitle(readBeats(index.read(PLAN).body, index).beats, 'The Bell Tower');
+    assert.strictEqual(b.gmNotes, 'Fen cut the rope herself.\n\nSecond secret.');
+    assert.doesNotMatch(b.extra, /secret|rope herself/i);
+    assert.match(b.extra, /After\./);
+  });
+
+  it('a link list with a full stop or a middle dot is held whole', () => {
+    const { beats } = read((s) => s.replace("**Handouts:** [[Ash's Note]]", "**Handouts:** [[Ash's Note]].")
+      .replace('**Who:** [[Sister Fen]], [[Ada Moss]] and the bell-ringer', '**Who:** [[Sister Fen]] · [[Brother Venn]]'));
+    assert.doesNotMatch(beats[0].extra, /Handouts/);
+    assert.deepStrictEqual(beats[0].handouts, ["Chapters/Chapter 1/Props/Ash's Note.md"]);
+    const tower = byTitle(beats, 'The Bell Tower');
+    assert.deepStrictEqual(tower.who.map((w) => w.name), ['Sister Fen', 'Brother Venn']);
+    assert.doesNotMatch(tower.extra, /Who/);
+  });
+
+  it('a link to several notes or to a skipped folder says so, not "matches no note"', () => {
+    const dir = copy();
+    fs.mkdirSync(path.join(dir, '_archive'), { recursive: true });
+    fs.writeFileSync(path.join(dir, '_archive', 'Old Ruin.md'), '---\ntype: location\n---\n');
+    const p = path.join(dir, PLAN);
+    fs.writeFileSync(p, readText(p).replace('**Entities:** [[The Gate]], [[Missing Person]]', '**Entities:** [[The Gate]], [[index]], [[Old Ruin]]'));
+    const index = buildIndex(dir);
+    const { warnings } = readBeats(index.read(PLAN).body, index);
+    assert.ok(warnings.some((w) => w.kind === 'ambiguous-link' && /\[\[index\]\] names several notes/.test(w.text)));
+    assert.ok(warnings.some((w) => w.kind === 'excluded-note' && /\[\[Old Ruin\]\]/.test(w.text)));
+    assert.ok(!warnings.some((w) => w.kind === 'missing-note' && /index|Old Ruin/.test(w.text)));
   });
 });

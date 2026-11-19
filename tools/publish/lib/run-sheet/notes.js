@@ -1,7 +1,9 @@
 'use strict';
 // The run sheet's view of a vault: every note by path, how a [[link]] resolves, and the sections a
-// note holds. Read-only. A read that fails throws (vault-reader.js); the one soft answer is a note
-// whose frontmatter does not parse, which keeps its name, reads as `{}`, and is marked unreadable.
+// note holds. Read-only. Only the vault root not listing throws. The soft answers, each with a
+// warning in `warnings`: a note whose frontmatter does not parse, or a file that cannot be read,
+// keeps its name, reads as `{}` and is marked unreadable; a sub-folder that cannot be listed is
+// left out; pictures that cannot be listed give no portraits.
 
 const path = require('node:path');
 const { scanAllNotes, scanAttachments } = require('../scanner');
@@ -10,6 +12,7 @@ const { nameList, gmAliasList, portraitBasename } = require('../processor');
 const { canonicalNfc, nfcLookupTable } = require('../unicode');
 const { readSettings } = require('../settings/read');
 const { readerFrom } = require('../vault-reader');
+const { HEADING_LINE } = require('./plan-text');
 
 const LEFT_OUT = new Set(['_Templates', '_midwife', '_meta', '_archive', '_QA', 'node_modules']);
 
@@ -31,7 +34,7 @@ function headings(lines) {
     const f = /^\s*(```|~~~)/.exec(line);
     if (f) { fence = fence === null ? f[1] : (fence === f[1] ? null : fence); return; }
     if (fence) return;
-    const m = /^(#{1,6})[ \t]+(.*?)(?:[ \t]+#+)?[ \t]*$/.exec(line);
+    const m = HEADING_LINE.exec(line);
     if (m) out.push({ level: m[1].length, title: m[2].trim(), at: i });
   });
   return out;
@@ -61,6 +64,12 @@ function buildIndex(vaultPath, { deps } = {}) {
   };
 
   const pages = [];
+  // Notes in a folder the reader leaves out, by stem and by path without `.md`: a link to one says so.
+  const excluded = new Set();
+  const markExcluded = (rel) => {
+    excluded.add(canonicalNfc(stemOf(rel)));
+    excluded.add(canonicalNfc(rel.replace(/\.md$/i, '')));
+  };
   // The scan reads every note once; a file it cannot read is answered empty there, so the walk goes on,
   // and is read (and fails) again below, where it is marked unreadable. A folder that cannot be listed still throws.
   const scanDeps = {
@@ -78,7 +87,7 @@ function buildIndex(vaultPath, { deps } = {}) {
   };
   for (const page of scanAllNotes(vaultPath, scanDeps)) {
     const rel = toPosix(path.relative(vaultPath, page.sourcePath));
-    if (isLeftOut(rel)) continue;
+    if (isLeftOut(rel)) { markExcluded(rel); continue; }
     let text = null;
     let fm = {};
     let body = '';
@@ -140,18 +149,70 @@ function buildIndex(vaultPath, { deps } = {}) {
   }
   const lookup = nfcLookupTable(table);
 
-  // Pictures: found lazily, once.
+  // Notes in dot folders (`.trash`): the scan never walks them, so they are listed only when a link
+  // fails to resolve, once. `.git` and node_modules hold no notes of the GM's.
+  let dotWalked = false;
+  const walkDotFolders = () => {
+    if (dotWalked) return;
+    dotWalked = true;
+    const walk = (dir, inDot) => {
+      for (const e of scanDeps.readdir(dir)) {
+        const full = path.join(dir, e.name);
+        const dot = inDot || e.name.startsWith('.');
+        if (e.isDirectory()) {
+          // a dot folder can sit at any depth, so every folder is listed (names only)
+          if (e.name !== '.git' && e.name !== 'node_modules') walk(full, dot);
+        } else if (dot && e.isFile() && e.name.toLowerCase().endsWith('.md')) {
+          markExcluded(toPosix(path.relative(vaultPath, full)));
+        }
+      }
+    };
+    walk(vaultPath, false);
+  };
+
+  // Pictures: found lazily, once. A picture folder that cannot be listed gives no portraits and a warning.
   let attachments = null;
   const attached = () => {
     if (attachments) return attachments;
-    const settings = readSettings({ vaultPath, deps });
-    // Settings values are nested by group: `vault.attachments` is values.vault.attachments.
-    const values = settings.values || {};
-    const dir = values.vault && values.vault.attachments;
-    // The GM sees every portrait: the players' hide list does not apply, only the workspace
-    // folders the index itself leaves out.
-    attachments = scanAttachments({ vaultPath, attachmentsDir: dir, excludeDirs: [...LEFT_OUT] }, deps);
+    try {
+      const settings = readSettings({ vaultPath, deps });
+      // Settings values are nested by group: `vault.attachments` is values.vault.attachments.
+      const values = settings.values || {};
+      const dir = values.vault && values.vault.attachments;
+      // The GM sees every portrait: the players' hide list does not apply, only the workspace
+      // folders the index itself leaves out.
+      attachments = scanAttachments({ vaultPath, attachmentsDir: dir, excludeDirs: [...LEFT_OUT] }, deps);
+    } catch (err) {
+      attachments = {};
+      warn('unreadable-attachments', null, `the vault's pictures could not be listed (${String(err.message).split('\n')[0]}): the sheet shows no portraits`);
+    }
     return attachments;
+  };
+  const keyOf = (target) => canonicalNfc(wikiTarget(target)).replace(/\.md$/i, '');
+
+  const self = {
+    resolve(target) {
+      if (target === null || target === undefined) return null;
+      const key = keyOf(target);
+      if (!key) return null;
+      const hit = lookup[key];
+      return typeof hit === 'string' ? hit : null;
+    },
+    // True when the target names several notes and so resolves to none.
+    isAmbiguous(target) {
+      if (target === null || target === undefined || self.resolve(target) !== null) return false;
+      return ambiguous.has(keyOf(target));
+    },
+    // Why `target` resolves to no note, as a warning's kind and text: it names several notes, it is a
+    // note in a folder the reader skips, or it matches none. Null when it resolves.
+    linkProblem(target) {
+      const t = String(target == null ? '' : target).trim();
+      if (!t || self.resolve(t) !== null) return null;
+      if (self.isAmbiguous(t)) return { kind: 'ambiguous-link', text: `[[${t}]] names several notes in the vault: link it by path` };
+      walkDotFolders();
+      if (excluded.has(keyOf(t))) return { kind: 'excluded-note', text: `[[${t}]] is a note in a folder the reader skips (a dot or workspace folder)` };
+      return { kind: 'missing-note', text: `[[${t}]] matches no note in the vault` };
+    },
   };
 
   const need = (p) => {
@@ -160,14 +221,7 @@ function buildIndex(vaultPath, { deps } = {}) {
     return page;
   };
 
-  return {
-    resolve(target) {
-      if (target === null || target === undefined) return null;
-      const key = canonicalNfc(wikiTarget(target)).replace(/\.md$/i, '');
-      if (!key) return null;
-      const hit = lookup[key];
-      return typeof hit === 'string' ? hit : null;
-    },
+  return Object.assign(self, {
     read(p) {
       const page = need(p);
       return { fm: page.fm, body: page.body, unreadable: page.unreadable };
@@ -185,15 +239,22 @@ function buildIndex(vaultPath, { deps } = {}) {
       return sec ? sec.text : '';
     },
     notes() { return pages.map((p) => p.path); },
+    has(p) { return typeof p === 'string' && byPath.has(p); },
+    // The note's portrait picture, vault-relative, or null. A portrait the frontmatter names that no
+    // picture the reader sees matches warns `no-portrait` on that note.
     portrait(p) {
       const name = portraitBasename(need(p).fm);
       if (!name) return null;
       const hit = attached()[name];
       const rel = hit ? toPosix(path.relative(vaultPath, hit.sourcePath)) : null;
-      return rel && !isLeftOut(rel) ? rel : null;
+      if (rel && !isLeftOut(rel)) return rel;
+      warn('no-portrait', p, rel
+        ? `its portrait ${name} is in a folder the reader skips: no portrait on the sheet`
+        : `its portrait ${name} matches no picture in the vault: no portrait on the sheet`);
+      return null;
     },
     warnings,
-  };
+  });
 }
 
-module.exports = { buildIndex };
+module.exports = { buildIndex, stemOf };

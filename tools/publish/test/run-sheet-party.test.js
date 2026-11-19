@@ -4,6 +4,7 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { readText } = require('./helpers/run-sheet-lines');
 const { buildIndex } = require('../lib/run-sheet/notes');
 const { readHandouts } = require('../lib/run-sheet/handouts');
 const { readPcs } = require('../lib/run-sheet/party');
@@ -67,7 +68,7 @@ describe('run sheet handouts, party and people', () => {
   it('a typeset minus reads in a signed row', () => {
     const { dir, index: i0, body } = setup();
     const f = path.join(dir, ADA);
-    fs.writeFileSync(f, fs.readFileSync(f, 'utf8').replace('| Initiative | +2 |', '| Initiative | \u22121 |'));
+    fs.writeFileSync(f, readText(f).replace('| Initiative | +2 |', '| Initiative | \u22121 |'));
     const ada = readPcs(body, buildIndex(dir), [ADA]).pcs[0];
     assert.strictEqual(ada.init, -1);
   });
@@ -87,7 +88,7 @@ describe('run sheet handouts, party and people', () => {
     assert.strictEqual(ada.thread, 'The tracks at the gate');
     assert.strictEqual(ben.thread, '');
     const { dir } = setup();
-    fs.writeFileSync(path.join(dir, BEN), fs.readFileSync(path.join(dir, BEN), 'utf8').replace('**Open threads:** —', '**Open threads:** the sealed letter'));
+    fs.writeFileSync(path.join(dir, BEN), readText(path.join(dir, BEN)).replace('**Open threads:** —', '**Open threads:** the sealed letter'));
     const i2 = buildIndex(dir);
     assert.strictEqual(readPcs(body, i2, [BEN]).pcs[0].thread, 'the sealed letter');
   });
@@ -189,5 +190,58 @@ describe('run sheet handouts, party and people', () => {
     assert.strictEqual(r.leftover, '| a | b | c');
     const p = readPcs('## Spotlight Forecast\n\n| PC | Role | Moment |\n|---|---|---|\n| | Scout | sees it |\n', index, [ADA]);
     assert.deepStrictEqual(p.unmatched, [{ section: 'Spotlight Forecast', text: '| Scout | sees it' }]);
+  });
+  it('a touchpoint row keeps every cell', () => {
+    const { index } = setup();
+    const plan = '## Touchpoint Plan\n\n| PC | When | What | Who | Why |\n|---|---|---|---|---|\n| [[Ben Hart]] | scene 2 | the letter | Ash | it is his | \n';
+    const r = readPcs(plan, index, [BEN]);
+    assert.strictEqual(r.pcs[0].touch, 'scene 2 · the letter · Ash · it is his');
+  });
+
+  it('a bullet\'s parenthesis is kept unless it names the player', () => {
+    const { index } = setup();
+    const plan = '## PC Roster & Arcs\n\n- **[[Ben Hart]]** (whisper, scene 2): the letter\n- **[[Ada Moss]]** (Pat): the tracks\n';
+    const r = readPcs(plan, index, [ADA, BEN]);
+    assert.strictEqual(r.pcs.find((p) => p.name === 'Ben Hart').arc, '(whisper, scene 2) the letter');
+    assert.strictEqual(r.pcs.find((p) => p.name === 'Ada Moss').arc, 'the tracks');
+  });
+
+  it('a party PC whose frontmatter does not parse warns unreadable-pc', () => {
+    const { dir } = setup();
+    fs.writeFileSync(path.join(dir, BEN), '---\ntype: pc\nname: [unclosed\n---\n\nHi.\n');
+    const index = buildIndex(dir);
+    const r = readPcs('', index, [ADA, BEN]);
+    assert.deepStrictEqual(r.pcs.map((p) => p.name), ['Ada Moss']);
+    assert.deepStrictEqual(r.warnings.map((w) => [w.kind, w.note]), [['unreadable-pc', BEN]]);
+    assert.match(r.warnings[0].text, /frontmatter does not parse, so it cannot be read as a PC/);
+  });
+
+  it('a handout keeps its first cell as its name', () => {
+    const { index } = setup();
+    const h = readHandouts('## Handouts & Props\n\n| Handout | Scene | Status | Notes |\n|---|---|---|---|\n'
+      + '| A bloodied glove | Scene 1 | ready | |\n| [[Lost Letter]] | Scene 2 | to build | |\n'
+      + "| [[Ash's Note]] (water-stained) | Scene 1 | ready | soaked |\n\n- A coin\n", index).handouts;
+    assert.deepStrictEqual(h.map((x) => [x.name, x.note]), [
+      ['A bloodied glove', null],
+      ['[[Lost Letter]]', null],
+      ["[[Ash's Note]] (water-stained)", "Chapters/Chapter 1/Props/Ash's Note.md"],
+      ['A coin', null],
+    ]);
+    assert.deepStrictEqual(Object.keys(h[0]), ['key', 'note', 'name', 'scene', 'status', 'text']);
+  });
+
+  it('one NPC on two Quick Reference rows gets two keys', () => {
+    const { index } = setup();
+    const r = readPeople('## NPC Quick Reference\n\n| NPC | Role | Detail | Location |\n|---|---|---|---|\n'
+      + '| [[Brother Ash]] | warden | a | b |\n| [[Brother Ash]] | later | c | d |\n', index);
+    assert.strictEqual(r.people.length, 2);
+    assert.strictEqual(r.people[1].key, `${r.people[0].key}~2`);
+  });
+
+  it('a Quick Reference link to several notes says so', () => {
+    const { index } = setup();
+    const r = readPeople('## NPC Quick Reference\n\n| NPC | Role | Detail | Location |\n|---|---|---|---|\n| [[index]] | a | b | c |\n', index);
+    assert.deepStrictEqual(r.warnings.map((w) => w.kind), ['ambiguous-link']);
+    assert.match(r.warnings[0].text, /\[\[index\]\] names several notes/);
   });
 });

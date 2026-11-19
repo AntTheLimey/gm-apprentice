@@ -1,6 +1,8 @@
 'use strict';
 // The Plan's Handouts & Props section, one Handout per table row or bullet; `leftover` is the
 // section's other lines ("No handouts or props."). Never throws: a missing section reads empty.
+// `name` is the row's first cell as written (plain words, a link to nowhere, `[[X]] (water-stained)`),
+// or a bullet's first line, so a handout with no note still has its name on the page.
 
 const { sections, tableRows, tableRanges, bullets, links, unclaimed } = require('./plan-text');
 const { itemKeys } = require('./keys');
@@ -13,16 +15,17 @@ function readHandouts(planBody, index) {
   const nameless = all0.filter((c) => !c[0] && c.some(Boolean)).map((c) => c.join(' | ').trim());
   const rows = all0.filter((c) => c[0]).map((cells) => ({
     note: noteOf(cells[0] || '', index),
+    name: cells[0],
     scene: cells[1] || '',
     status: cells[2] || '',
     text: cells.slice(3).join(' · '),
     id: cells.join(' | '),
   }));
-  const items = bullets(sec).map((b) => ({ note: noteOf(b.text, index), scene: '', status: '', text: b.text, id: b.text }));
+  const items = bullets(sec).map((b) => ({ note: noteOf(b.text, index), name: b.text.split('\n')[0].trim(), scene: '', status: '', text: b.text, id: b.text }));
   const all = rows.concat(items);
   const keys = itemKeys('handouts', 'ho', all.map((h) => h.id));
   const leftover = [unclaimed(sec, [...tableRanges(sec), ...bullets(sec)]), ...nameless].filter(Boolean).join('\n');
-  const handouts = all.map((h, i) => ({ key: keys[i], note: h.note, scene: h.scene, status: h.status, text: h.text }));
+  const handouts = all.map((h, i) => ({ key: keys[i], note: h.note, name: h.name, scene: h.scene, status: h.status, text: h.text }));
   return { handouts, leftover };
 }
 

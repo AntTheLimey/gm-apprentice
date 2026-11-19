@@ -4,14 +4,14 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
 const { readRunSheet } = require('../lib/run-sheet/read');
-const { missingLines } = require('./helpers/run-sheet-lines');
+const { missingLines, readText } = require('./helpers/run-sheet-lines');
 
 const VAULT = path.join(__dirname, '..', '..', '..', 'tests', 'benchmark-campaign');
 const PLAN = 'Chapters/Chapter 1/Sessions/Session 03 - The Inner Sanctum - Plan.md';
 
 describe('run sheet reader on the benchmark Plan', () => {
   it('benchmark plan keeps every line', () => {
-    const text = fs.readFileSync(path.join(VAULT, PLAN), 'utf8').replace(/\r\n/g, '\n');
+    const text = readText(path.join(VAULT, PLAN));
     const body = text.replace(/^---\n[\s\S]*?\n---\n/, '');
     const titles = [...body.matchAll(/^## (.+?)\s*$/gm)].map((m) => m[1]);
     assert.strictEqual(titles.length, 6);

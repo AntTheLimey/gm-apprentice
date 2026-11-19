@@ -64,22 +64,39 @@ const BULLET = /^(?:[-*+]|\d+[.)])\s+/;
 const isQuote = (l) => /^\s*>/.test(l);
 const isTableRow = (l) => /^\s*\|/.test(l);
 const nameKey = (s) => String(s == null ? '' : s).trim().toLowerCase();
+// A heading line: group 1 the #s, group 2 the title. A closing run of #s counts only after a space
+// (`## C#` is titled `C#`); notes.js reads note headings with the same rule.
+const HEADING_LINE = /^(#{1,6})[ \t]+(.*?)(?:[ \t]+#+)?[ \t]*$/;
+// A table's separator row cell: dashes, a colon either side allowed (`:-:` is one, as in GFM).
+const SEP_CELL = /^:?-+:?$/;
+const cellsOf = (l) => {
+  const cells = splitTableRow(l.trim());
+  if (cells[0].trim() === '') cells.shift();
+  if (cells.length && cells[cells.length - 1].trim() === '') cells.pop();
+  return cells.map((c) => c.trim());
+};
+// True for a table row whose every cell is a separator cell. Only the second line of a table is
+// read as one (see tableRows); a `| - | - |` row is a row.
+const isSeparatorRow = (l) => {
+  if (!isTableRow(l)) return false;
+  const cells = cellsOf(l);
+  return cells.length > 0 && cells.every((c) => SEP_CELL.test(c));
+};
 
 // The `level` sections of a body, in order, duplicates kept. `text` is trimmed of blank edges.
 // Text before the first heading comes back as { title: '', text } when it is not blank.
 function sections(body, level) {
   const n = Number(level);
-  const head = new RegExp(`^#{${n}}[ \\t]+(.*?)[ \\t#]*$`);
   const out = [];
   let cur = { title: '', lines: [] };
   let fence = null;
   for (const line of linesOf(body)) {
     const f = line.match(FENCE);
     if (f) fence = fence === null ? f[1] : (fence === f[1] ? null : fence);
-    const m = fence === null && !f && n >= 1 ? line.match(head) : null;
-    if (m) {
+    const h = fence === null && !f && n >= 1 ? line.match(HEADING_LINE) : null;
+    if (h && h[1].length === n) {
       out.push(cur);
-      cur = { title: m[1].trim(), lines: [] };
+      cur = { title: h[2].trim(), lines: [] };
     } else {
       cur.lines.push(line);
     }
@@ -159,24 +176,15 @@ function block(text, name) {
   return b ? { value: b.value, start: b.start, end: b.end } : { value: '', start: -1, end: -1 };
 }
 
-// The body rows of the first-found table lines: header and separator dropped, cells trimmed.
-// An escaped pipe stays as written (`\|`).
+// The body rows of every table, in order: cells trimmed, an escaped pipe kept as written (`\\|`).
+// A table whose second line is a separator row has a header: both are dropped. Any other line,
+// a `| - | - |` row among them, is a row.
 function tableRows(text) {
   const all = linesOf(text);
-  const fenced = fenceMask(all);
-  const rows = all.filter((l, i) => !fenced[i] && isTableRow(l)).map((l) => {
-    const cells = splitTableRow(l.trim());
-    if (cells[0].trim() === '') cells.shift();
-    if (cells.length && cells[cells.length - 1].trim() === '') cells.pop();
-    return cells.map((c) => c.trim());
-  });
-  const isSep = (r) => r.length > 0 && r.every((c) => /^:?-{1,}:?$/.test(c));
   const out = [];
-  for (let i = 0; i < rows.length; i++) {
-    if (isSep(rows[i])) continue;
-    // the row just before a separator is a header
-    if (i + 1 < rows.length && isSep(rows[i + 1])) continue;
-    out.push(rows[i]);
+  for (const r of tableRanges(text)) {
+    const from = r.start + 1 <= r.end && isSeparatorRow(all[r.start + 1]) ? r.start + 2 : r.start;
+    for (let i = from; i <= r.end; i++) out.push(cellsOf(all[i]));
   }
   return out;
 }
@@ -281,4 +289,4 @@ function unclaimed(text, claimed) {
   return linesOf(text).filter((_, i) => !taken.has(i)).join('\n').replace(/^(?:[ \t]*\n)+/, '').replace(/(?:\n[ \t]*)+$/, '').trim();
 }
 
-module.exports = { cleanText, sections, labels, label, endsBlock, blocks, block, tableRows, tableRanges, bullets, links, readAloud, readAloudRanges, unclaimed };
+module.exports = { LABEL, HEADING_LINE, isBlank, nameKey, isSeparatorRow, cleanText, sections, labels, label, endsBlock, blocks, block, tableRows, tableRanges, bullets, links, readAloud, readAloudRanges, unclaimed };

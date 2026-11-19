@@ -7,7 +7,7 @@ const path = require('node:path');
 const { readRunSheet, completeness } = require('../lib/run-sheet/read');
 const { normalise } = require('../lib/run-sheet/keys');
 const { writeSettings } = require('./helpers/vault-files');
-const { haystack, missingLines } = require('./helpers/run-sheet-lines');
+const { haystack, missingLines, readText } = require('./helpers/run-sheet-lines');
 
 const FIXTURE = path.join(__dirname, 'fixtures', 'run-sheet');
 const PLAN = 'Chapters/Chapter 1/Sessions/Session 02/Session 02 - The Test - Plan.md';
@@ -31,7 +31,7 @@ const bodyOf = (text) => text.replace(/^---\n[\s\S]*?\n---\n/, '');
 // The reverse: each line a beat keeps in `extra` is a line its sources hold (the Plan, the scene
 // notes), never words a reader made up, such as a `**Who:** or .` residue.
 function strayLines(dir, planBody, model) {
-  const notes = model.beats.map((b) => b.sceneNote).filter(Boolean).map((p) => fs.readFileSync(path.join(dir, p), 'utf8'));
+  const notes = model.beats.map((b) => b.sceneNote).filter(Boolean).map((p) => readText(path.join(dir, p)));
   const src = normalise([planBody, ...notes].join('\n¶\n'));
   return model.beats.flatMap((b) => b.extra.split('\n')).filter((l) => l.trim() && !src.includes(normalise(l)));
 }
@@ -99,7 +99,7 @@ describe('run sheet reader', () => {
   it('every plan line is kept somewhere', () => {
     const dir = copy();
     const m = readRunSheet(dir, PLAN, { party: PARTY });
-    const body = bodyOf(fs.readFileSync(path.join(dir, PLAN), 'utf8'));
+    const body = bodyOf(readText(path.join(dir, PLAN)));
     assert.deepStrictEqual(missingLines(body, m), []);
     assert.deepStrictEqual(strayLines(dir, body, m), []);
     // the checks can fail: a field emptied shows up, and so does a made-up residue
@@ -114,10 +114,10 @@ describe('run sheet reader', () => {
     assert.deepStrictEqual(missingLines(body, alone), []);
     // a Who line joined by `or` is kept as written, not as a residue
     const p = path.join(dir, PLAN);
-    fs.writeFileSync(p, fs.readFileSync(p, 'utf8').replace('**Who:** [[Sister Fen]], [[Ada Moss]] and the bell-ringer',
+    fs.writeFileSync(p, readText(p).replace('**Who:** [[Sister Fen]], [[Ada Moss]] and the bell-ringer',
       '**Who:** [[Sister Fen]], [[Brother Venn]] or [[Abbot Rime]].'));
     const or = readRunSheet(dir, PLAN, { party: PARTY });
-    const orBody = bodyOf(fs.readFileSync(p, 'utf8'));
+    const orBody = bodyOf(readText(p));
     assert.deepStrictEqual(missingLines(orBody, or), []);
     assert.deepStrictEqual(strayLines(dir, orBody, or), []);
   });
@@ -125,7 +125,7 @@ describe('run sheet reader', () => {
   it('every line of a real hub plan is kept somewhere', () => {
     const dir = copy();
     const rel = 'Chapters/Chapter 1/Sessions/Session 04/Session 04 - The Abbey - Plan.md';
-    const hub = fs.readFileSync(path.join(__dirname, 'fixtures', 'run-sheet-hub-plan.md'), 'utf8');
+    const hub = readText(path.join(__dirname, 'fixtures', 'run-sheet-hub-plan.md'));
     write(dir, rel, `---\ntype: session-plan\nsession: "[[Session 04 - The Abbey]]"\nchapter: "[[Chapter 1]]"\n---\n\n${hub}`);
     const m = readRunSheet(dir, rel, { party: PARTY });
     assert.strictEqual(m.beats.length, 2);
@@ -138,7 +138,7 @@ describe('run sheet reader', () => {
   it('completeness reports a link a field dropped', () => {
     const dir = copy();
     const m = readRunSheet(dir, PLAN, { party: PARTY });
-    const body = bodyOf(fs.readFileSync(path.join(dir, PLAN), 'utf8'));
+    const body = bodyOf(readText(path.join(dir, PLAN)));
     assert.deepStrictEqual(completeness(body, m).filter((w) => w.kind === 'not-on-page'), []);
     const edited = JSON.parse(JSON.stringify(m));
     // a reader that took the Who line whole and lost Sister Fen from it
@@ -156,7 +156,7 @@ describe('run sheet reader', () => {
   it('the links map resolves aliases', () => {
     const dir = copy();
     const p = path.join(dir, PLAN);
-    fs.writeFileSync(p, fs.readFileSync(p, 'utf8').replace('The players like the wolves.', 'The players like the wolves and [[Lucan]].'));
+    fs.writeFileSync(p, readText(p).replace('The players like the wolves.', 'The players like the wolves and [[Lucan]].'));
     const m = readRunSheet(dir, PLAN, { party: PARTY });
     assert.strictEqual(m.links.Lucan, 'Characters/NPCs/Lucan Grey.md');
     assert.strictEqual(m.links['Brother Ash'], 'Characters/NPCs/Brother Ash.md');
@@ -167,7 +167,7 @@ describe('run sheet reader', () => {
     // a Plan outside its chapter folder still finds the chapter by its link
     const dir = copy();
     const moved = 'Elsewhere/Session 02 - The Test - Plan.md';
-    write(dir, moved, fs.readFileSync(path.join(dir, PLAN), 'utf8'));
+    write(dir, moved, readText(path.join(dir, PLAN)));
     fs.rmSync(path.join(dir, PLAN));
     const m = readRunSheet(dir, moved, { party: PARTY });
     assert.strictEqual(m.runLong.nextPlan, 'Chapters/Chapter 1/Sessions/Session 03/Session 03 - Next - Plan.md');
@@ -222,7 +222,7 @@ describe('run sheet reader', () => {
     const dir = copy();
     writeSettings(dir, ': : not yaml [');
     const p = path.join(dir, PLAN);
-    fs.writeFileSync(p, fs.readFileSync(p, 'utf8').replace('canon_status: DRAFT', 'canon_status: [DRAFT'));
+    fs.writeFileSync(p, readText(p).replace('canon_status: DRAFT', 'canon_status: [DRAFT'));
     const m = readRunSheet(dir, PLAN, { party: PARTY });
     assert.strictEqual(m.system, null);
     assert.strictEqual(m.beats.length, 6);
@@ -246,5 +246,65 @@ describe('run sheet reader', () => {
     const before = snap();
     readRunSheet(dir, PLAN, { party: PARTY });
     assert.deepStrictEqual(snap(), before);
+  });
+  it('every key in the model is unique', () => {
+    const dir = copy();
+    const p = path.join(dir, PLAN);
+    fs.writeFileSync(p, readText(p)
+      .replace('- **[[Frost Wolf]] (3):** hunting', '- **[[Frost Wolf]] (3):** hunting\n- **[[Frost Wolf]] (2):** circling')
+      .replace('| [[Lucan Grey]] | Ally scout |', '| [[Brother Ash]] | Bell keeper | Second row | [[The Gate]] |\n| [[Lucan Grey]] | Ally scout |'));
+    const m = readRunSheet(dir, PLAN, { party: PARTY });
+    const keys = [];
+    const walk = (v) => {
+      if (Array.isArray(v)) v.forEach(walk);
+      else if (v && typeof v === 'object') for (const [k, x] of Object.entries(v)) { if (k === 'key') keys.push(x); else walk(x); }
+    };
+    walk(m);
+    assert.ok(keys.length > 20);
+    assert.deepStrictEqual(keys.filter((k, i) => keys.indexOf(k) !== i), []);
+    assert.strictEqual(m.beats[0].foes.filter((f) => f.note === 'Creatures/Frost Wolf.md').length, 5);
+    assert.strictEqual(m.people.filter((x) => x.note === 'Characters/NPCs/Brother Ash.md').length, 2);
+  });
+
+  it('a party PC whose frontmatter does not parse keeps both its warnings', () => {
+    const dir = copy();
+    write(dir, BEN, '---\ntype: pc\nname: [unclosed\n---\n\nHi.\n');
+    const m = readRunSheet(dir, PLAN, { party: PARTY });
+    const ben = m.warnings.filter((w) => w.note === BEN).map((w) => w.kind).sort();
+    assert.deepStrictEqual(ben, ['unreadable-frontmatter', 'unreadable-pc']);
+  });
+
+  it('a PC portrait no picture matches is a warning in the model', () => {
+    const m = readRunSheet(copy(), PLAN, { party: PARTY });
+    assert.strictEqual(m.pcs.find((x) => x.note === ADA).portrait, null);
+    assert.ok(m.warnings.some((w) => w.kind === 'no-portrait' && w.note === ADA));
+  });
+
+  it('a second scene section keeps its own preamble', () => {
+    const dir = copy();
+    const p = path.join(dir, PLAN);
+    fs.writeFileSync(p, readText(p).replace('## Contingency Scenes', '## Planned scenes\n\nA late addition.\n\n### The Late Scene\n**Situation:** late.\n\n## Contingency Scenes'));
+    const m = readRunSheet(dir, PLAN, { party: PARTY });
+    assert.deepStrictEqual(m.prep.filter((x) => /^planned scenes$/i.test(x.title)).map((x) => [x.title, x.md]), [
+      ['Planned Scenes', 'Checklists for improvisation, not prose to read.'],
+      ['Planned scenes', 'A late addition.'],
+    ]);
+    assert.deepStrictEqual(missingLines(bodyOf(readText(p)), m), []);
+  });
+
+  it('a Windows checkout (CRLF) reads to the same model', () => {
+    const lf = copy();
+    const crlf = copy();
+    const walk = (d) => {
+      for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+        const full = path.join(d, e.name);
+        if (e.isDirectory()) walk(full);
+        else if (e.name.endsWith('.md')) fs.writeFileSync(full, fs.readFileSync(full, 'utf8').replace(/\r?\n/g, '\r\n'));
+      }
+    };
+    walk(crlf);
+    assert.match(fs.readFileSync(path.join(crlf, PLAN), 'utf8'), /\r\n/);
+    assert.doesNotMatch(readText(path.join(crlf, PLAN)), /\r/);
+    assert.deepStrictEqual(readRunSheet(crlf, PLAN, { party: PARTY }), readRunSheet(lf, PLAN, { party: PARTY }));
   });
 });

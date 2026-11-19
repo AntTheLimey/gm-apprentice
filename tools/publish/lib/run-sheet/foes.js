@@ -15,7 +15,7 @@ const number = (m) => (m ? toNumber(m[1]) : null);
 
 // Only a number AFTER the HP / Hit Points word counts ("regains 10 HP" and "DC 14" are not figures).
 function readNumbers(stats, behaviour) {
-  const ac = number(/\bAC[ \t*:]*(\d+)/.exec(stats));
+  const ac = number(/\b(?:AC|Armor Class)[ \t*:]*(\d+)/.exec(stats));
   // The last HP figure stated wins: a session's tuning is written after the stock block.
   const hps = [...stats.matchAll(/\b(?:HP|Hit Points)[ \t*:]*(\d+)/g)];
   const hp = hps.length ? Number(hps[hps.length - 1][1]) : null;
@@ -32,66 +32,99 @@ function readNumbers(stats, behaviour) {
   };
 }
 
+// What a note gives a fight row: null for a note the index lacks; `stats` '' when it has none.
 function inspect(notePath, index) {
-  if (!notePath || !index.notes().includes(notePath)) return null;
-  const note = index.read(notePath);
-  const fm = note.fm || {};
-  if (!FOE_TYPES.has(String(fm.type || '').toLowerCase())) return null;
-  const stats = index.gmSection(notePath, 'Stats');
-  if (!stats) return null;
+  if (!index.has(notePath)) return null;
+  const fm = index.read(notePath).fm || {};
+  const type = String(fm.type || '').toLowerCase();
   const name = String(fm.name || path.posix.basename(notePath, '.md'));
-  return { name, stats, behaviour: index.gmSection(notePath, 'Behaviour'), treasure: index.gmSection(notePath, 'Treasure') };
+  const stats = FOE_TYPES.has(type) ? index.gmSection(notePath, 'Stats') : '';
+  return { name, type, stats, behaviour: stats ? index.gmSection(notePath, 'Behaviour') : '', treasure: stats ? index.gmSection(notePath, 'Treasure') : '' };
 }
 
-function warnFor(notePath, name, nums, seen, warnings) {
-  const add = (kind, text) => {
+function warner(seen, warnings) {
+  return (kind, notePath, text) => {
     const k = JSON.stringify([kind, notePath, text]);
     if (seen.has(k)) return;
     seen.add(k);
     warnings.push({ kind, note: notePath, text });
   };
-  // A block with no numbers at all says so once; its missing initiative is part of that.
-  if (nums.ac === null && nums.hp === null) add('no-numbers', `${name} names a stat block with no numbers in the vault: fill them in prep`);
-  else if (nums.init === null) add('no-initiative', `${name} has no initiative modifier in its Stats (rolled at +0)`);
 }
 
-function build(notePath, index, count, beatKey, seen) {
+function warnFor(notePath, name, nums, add) {
+  // A block with no numbers at all says so once; its missing initiative is part of that.
+  if (nums.ac === null && nums.hp === null) {
+    add('no-numbers', notePath, `${name} names a stat block with no numbers in the vault: fill them in prep`);
+    return;
+  }
+  if (nums.ac === null) add('no-ac', notePath, `${name} has no AC in its Stats: fill it in prep`);
+  if (nums.hp === null) add('no-hp', notePath, `${name} has no hit points in its Stats: fill them in prep`);
+  if (nums.init === null) add('no-initiative', notePath, `${name} has no initiative modifier in its Stats (rolled at +0)`);
+}
+
+// One who entry read for a fight: its note's numbers and how many, or null when it makes no foe. A
+// creature with no Stats, or any entry counted more than once with none, is a fight the sheet
+// cannot run: it warns `no-stats`. An NPC listed once with no Stats is a social NPC: no warning.
+function entry(notePath, index, count, add) {
   const info = inspect(notePath, index);
-  if (!info) return { foes: [], warnings: [], info: null };
+  if (!info) return null;
   const n = Number.isInteger(count) && count > 0 ? count : 1;
+  if (!info.stats) {
+    if (info.type === 'creature' || n > 1) {
+      add('no-stats', notePath, `${info.name} has no ### Stats under ## GM Notes: no fight row for ${n > 1 ? 'them' : 'it'}`);
+    }
+    return null;
+  }
   const nums = readNumbers(info.stats, info.behaviour);
-  const warnings = [];
-  warnFor(notePath, info.name, nums, seen, warnings);
-  const keys = itemKeys(beatKey, 'foe', Array(n).fill(notePath));
-  const foes = keys.map((key, i) => ({
-    key, note: notePath, name: n > 1 ? `${info.name} ${i + 1}` : info.name,
-    ally: nums.ally, ac: nums.ac, hp: nums.hp, init: nums.init,
-    legendaryResistance: nums.legendaryResistance, legendaryActions: nums.legendaryActions,
-    recharge: nums.recharge, lair: nums.lair, stats: info.stats,
+  warnFor(notePath, info.name, nums, add);
+  return { notePath, n, info, nums };
+}
+
+// The fight rows for a list of entries, keyed together so no two share a key, and numbered per
+// note across the list (two lines of one creature give `Wolf 1` to `Wolf 5`).
+function rows(entries, beatKey) {
+  const paths = entries.flatMap((e) => Array(e.n).fill(e.notePath));
+  const keys = itemKeys(beatKey, 'foe', paths);
+  const total = new Map();
+  for (const p of paths) total.set(p, (total.get(p) || 0) + 1);
+  const at = new Map();
+  let k = 0;
+  return entries.flatMap((e) => Array.from({ length: e.n }, () => {
+    const i = (at.get(e.notePath) || 0) + 1;
+    at.set(e.notePath, i);
+    const { info, nums } = e;
+    return {
+      key: keys[k++], note: e.notePath, name: total.get(e.notePath) > 1 ? `${info.name} ${i}` : info.name,
+      ally: nums.ally, ac: nums.ac, hp: nums.hp, init: nums.init,
+      legendaryResistance: nums.legendaryResistance, legendaryActions: nums.legendaryActions,
+      recharge: nums.recharge, lair: nums.lair, stats: info.stats,
+    };
   }));
-  return { foes, warnings, info };
 }
 
 // One note's foes, `count` of them. Exported for the Fight's Add (step 5).
 function foesOf(notePath, index, count = 1, beatKey, seen = new Set()) {
-  const { foes, warnings } = build(notePath, index, count, beatKey, seen);
-  return { foes, warnings };
+  const warnings = [];
+  const e = entry(notePath, index, count, warner(seen, warnings));
+  return { foes: e ? rows([e], beatKey) : [], warnings };
 }
 
 // Every `who` entry of a beat, planned or contingency. `seen` carries one Plan's warnings across beats.
 function foesFor(beat, index, seen = new Set()) {
-  const foes = [];
   const warnings = [];
+  const add = warner(seen, warnings);
+  const entries = [];
   const texts = [];
   const doneNotes = new Set();
   for (const w of beat.who || []) {
-    const r = build(w.note, index, w.count, beat.key, seen);
-    foes.push(...r.foes);
-    warnings.push(...r.warnings);
-    if (!r.info || doneNotes.has(w.note)) continue;
+    const e = entry(w.note, index, w.count, add);
+    if (!e) continue;
+    entries.push(e);
+    if (doneNotes.has(w.note)) continue;
     doneNotes.add(w.note);
-    for (const b of bullets(r.info.treasure)) texts.push({ text: b.text, box: b.box });
+    for (const b of bullets(e.info.treasure)) texts.push({ text: b.text, box: b.box });
   }
+  const foes = rows(entries, beat.key);
   // A scene that lists its own treasure stands alone: a note's hoard is the same loot in other words.
   const own = (beat.treasure || []).map((t) => t.text);
   const fresh = own.length ? [] : texts;

@@ -4,6 +4,7 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { readText } = require('./helpers/run-sheet-lines');
 const { buildIndex } = require('../lib/run-sheet/notes');
 const { writeSettings } = require('./helpers/vault-files');
 const { makePng } = require('./helpers/make-png');
@@ -159,7 +160,7 @@ describe('run sheet note index', () => {
 
   it('an alias equal to an ambiguous file name does not claim it', () => {
     const dir = copy();
-    fs.writeFileSync(path.join(dir, 'Characters', 'NPCs', 'Lucan Grey.md'), fs.readFileSync(path.join(dir, 'Characters', 'NPCs', 'Lucan Grey.md'), 'utf8').replace('aliases: [Lucan]', 'aliases: [Lucan, index]'));
+    fs.writeFileSync(path.join(dir, 'Characters', 'NPCs', 'Lucan Grey.md'), readText(path.join(dir, 'Characters', 'NPCs', 'Lucan Grey.md')).replace('aliases: [Lucan]', 'aliases: [Lucan, index]'));
     const idx = buildIndex(dir);
     assert.strictEqual(idx.resolve('index'), null);
     assert.strictEqual(idx.resolve('Lucan'), 'Characters/NPCs/Lucan Grey.md');
@@ -177,5 +178,69 @@ describe('run sheet note index', () => {
     assert.strictEqual(w[0].note, 'Creatures');
     const root = { readdir: (p) => { if (p === dir) throw new Error('EIO'); return fs.readdirSync(p, { withFileTypes: true }); } };
     assert.throws(() => buildIndex(dir, { deps: root }), /EIO/);
+  });
+  it('a portrait no picture matches warns no-portrait on its note, never silently null', () => {
+    const dir = copy();
+    fs.rmSync(path.join(dir, '_attachments', 'ada.png'));
+    const idx = buildIndex(dir);
+    assert.strictEqual(idx.portrait('Characters/PCs/Ada Moss.md'), null);
+    const w = idx.warnings.filter((x) => x.kind === 'no-portrait');
+    assert.deepStrictEqual(w.map((x) => x.note), ['Characters/PCs/Ada Moss.md']);
+    assert.match(w[0].text, /ada\.png matches no picture/);
+    // a note that names no portrait says nothing
+    assert.strictEqual(idx.portrait('Characters/PCs/Ben Hart.md'), null);
+    assert.strictEqual(idx.warnings.filter((x) => x.kind === 'no-portrait').length, 1);
+  });
+
+  it('a portrait in a left-out folder warns that the reader skips it', () => {
+    const dir = copy();
+    fs.mkdirSync(path.join(dir, '_attachments', '_archive'), { recursive: true });
+    fs.renameSync(path.join(dir, '_attachments', 'ada.png'), path.join(dir, '_attachments', '_archive', 'ada.png'));
+    const idx = buildIndex(dir);
+    assert.strictEqual(idx.portrait('Characters/PCs/Ada Moss.md'), null);
+    const w = idx.warnings.find((x) => x.kind === 'no-portrait');
+    assert.strictEqual(w.note, 'Characters/PCs/Ada Moss.md');
+    assert.match(w.text, /in a folder the reader skips/);
+  });
+
+  it('pictures that cannot be listed warn once and give no portraits', () => {
+    const dir = copy();
+    const pics = path.join(dir, '_attachments');
+    const deps = { readdir: (p) => { if (p === pics) throw Object.assign(new Error('EIO: share dropped'), { code: 'EIO' }); return fs.readdirSync(p, { withFileTypes: true }); } };
+    const idx = buildIndex(dir, { deps });
+    assert.strictEqual(idx.portrait('Characters/PCs/Ada Moss.md'), null);
+    assert.strictEqual(idx.portrait('Characters/PCs/Ada Moss.md'), null);
+    const w = idx.warnings.filter((x) => x.kind === 'unreadable-attachments');
+    assert.strictEqual(w.length, 1);
+    assert.strictEqual(w[0].note, null);
+    assert.match(w[0].text, /EIO: share dropped/);
+  });
+
+  it('has() answers by path', () => {
+    const idx = buildIndex(copy());
+    assert.strictEqual(idx.has('Characters/NPCs/Brother Ash.md'), true);
+    assert.strictEqual(idx.has('Characters/NPCs/Brother Ash'), false);
+    assert.strictEqual(idx.has(null), false);
+    assert.strictEqual(idx.has('constructor'), false);
+  });
+
+  it('a link to nowhere says why: several notes, a skipped folder, or none', () => {
+    const dir = copy();
+    fs.mkdirSync(path.join(dir, '_archive'), { recursive: true });
+    fs.writeFileSync(path.join(dir, '_archive', 'Old Ruin.md'), '---\ntype: location\n---\n');
+    fs.mkdirSync(path.join(dir, 'Locations', '.trash'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'Locations', '.trash', 'Gone Inn.md'), '---\ntype: location\n---\n');
+    const idx = buildIndex(dir);
+    assert.strictEqual(idx.isAmbiguous('index'), true);
+    assert.strictEqual(idx.isAmbiguous('Brother Ash'), false);
+    assert.strictEqual(idx.isAmbiguous('Nobody Here'), false);
+    assert.strictEqual(idx.linkProblem('Brother Ash'), null);
+    assert.strictEqual(idx.linkProblem('index').kind, 'ambiguous-link');
+    assert.match(idx.linkProblem('index').text, /names several notes/);
+    assert.strictEqual(idx.linkProblem('Old Ruin').kind, 'excluded-note');
+    assert.match(idx.linkProblem('Old Ruin').text, /in a folder the reader skips/);
+    assert.strictEqual(idx.linkProblem('Gone Inn').kind, 'excluded-note');
+    assert.strictEqual(idx.linkProblem('Nobody Here').kind, 'missing-note');
+    assert.strictEqual(idx.linkProblem('Nobody Here').text, '[[Nobody Here]] matches no note in the vault');
   });
 });
