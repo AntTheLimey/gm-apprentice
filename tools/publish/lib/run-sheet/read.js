@@ -10,10 +10,10 @@
 const path = require('node:path');
 const pt = require('./plan-text');
 const { buildIndex } = require('./notes');
-const { readBeats } = require('./beats');
-const { readPcs } = require('./party');
-const { readPeople } = require('./people');
-const { readHandouts } = require('./handouts');
+const { readBeats, sceneSection } = require('./beats');
+const { readPcs, SECTIONS: PC_SECTIONS } = require('./party');
+const { readPeople, TITLE: PEOPLE_TITLE } = require('./people');
+const { readHandouts, TITLE: HANDOUTS_TITLE } = require('./handouts');
 const { foesFor } = require('./foes');
 const { parseNote } = require('../frontmatter');
 const { readSettings } = require('../settings/read');
@@ -26,19 +26,19 @@ const stemOf = (p) => path.posix.basename(p, path.posix.extname(p));
 const low = (s) => canonicalNfc(String(s == null ? '' : s)).trim().toLowerCase();
 const firstLine = (s) => String(s || '').split('\n')[0];
 
-// The Plan's sections a field takes, by the test each section's reader uses.
+// The Plan's sections a field takes: the part readers' own tests, and the brief's three plus threads.
 const FIELDS = [
-  ['overview', (t) => t === 'session overview'],
-  ['world', (t) => t === 'world state'],
-  ['stops', (t) => t === 'session end objectives'],
-  ['threads', (t) => t === 'active threads'],
-  ['handouts', (t) => /^handouts\s*(?:&|and)\s*props$/.test(t)],
-  ['people', (t) => /^npc\s+quick\s+reference$/.test(t)],
-  ['planned', (t) => t === 'planned scenes'],
-  ['contingency', (t) => t === 'contingency scenes'],
-  ['pc', (t) => /^spotlight/.test(t) || /^touchpoint/.test(t) || /^pc\s+roster/.test(t)],
+  ['overview', (t) => low(t) === 'session overview'],
+  ['world', (t) => low(t) === 'world state'],
+  ['stops', (t) => low(t) === 'session end objectives'],
+  ['threads', (t) => low(t) === 'active threads'],
+  ['handouts', (t) => HANDOUTS_TITLE.test(t)],
+  ['people', (t) => PEOPLE_TITLE.test(t)],
+  ['planned', (t) => sceneSection(t) === 'planned'],
+  ['contingency', (t) => sceneSection(t) === 'contingency'],
+  ['pc', (t) => PC_SECTIONS.some((s) => s.re.test(t))],
 ];
-const fieldOf = (title) => (FIELDS.find(([, test]) => test(low(title))) || [null])[0];
+const fieldOf = (title) => (FIELDS.find(([, test]) => test(String(title || ''))) || [null])[0];
 
 // Every primitive string under `value`, depth first.
 function stringsOf(value, out = []) {
@@ -117,6 +117,10 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
   const rd = readerFrom(deps);
   const abs = path.resolve(vaultPath, planPath);
   const plan = toPosix(path.relative(vaultPath, abs));
+  // A Plan outside the vault cannot be read as part of it: the one error, like an unreadable file.
+  if (plan === '' || plan === '..' || plan.startsWith('../') || path.isAbsolute(plan)) {
+    throw new Error(`run sheet: the Plan ${planPath} is not inside the vault ${vaultPath}`);
+  }
   let text;
   try {
     text = rd.readFile(abs);
@@ -147,7 +151,6 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
   }
 
   const index = buildIndex(vaultPath, { deps });
-  add(index.warnings);
   const known = new Set(index.notes());
   const fmOf = (p) => (p && known.has(p) ? index.read(p).fm || {} : {});
   const resolveFm = (v) => {
@@ -209,17 +212,16 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
   }
 
   // Places and maps: every note the Plan links, first seen first; a beat's own paths (a scene
-  // note's locations among them) count where the beat stands.
+  // note's locations among them) count where its section stands.
   const linked = [];
-  let cursor = 0;
+  const beatsDone = new Set();
   for (const sec of sections) {
-    const f = fieldOf(sec.title);
-    if (f === 'planned' || f === 'contingency') {
-      const n = pt.sections(sec.text, 3).filter((s, i) => !(i === 0 && s.title === '')).length;
-      for (const b of beats.slice(cursor, cursor + n)) {
+    if (!beatsDone.has(sec.title)) {
+      beatsDone.add(sec.title);
+      beats.forEach((b, i) => {
+        if (beatsRead.sections[i] !== sec.title) return;
         linked.push(b.sceneNote, b.place, ...b.spots.map((s) => s.note), ...b.entities, ...b.handouts, ...b.who.map((w) => w.note));
-      }
-      cursor += n;
+      });
     }
     for (const t of pt.links(sec.text)) linked.push(index.resolve(t));
   }
@@ -265,6 +267,9 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
   }
 
   add(completeness(body, model, { resolve: (t) => index.resolve(t) }));
+  // The index's warnings about notes this sheet touches, and those about the vault as a whole.
+  const touched = new Set(stringsOf(model).filter((x) => known.has(x)));
+  add(index.warnings.filter((w) => w.note === null || w.kind === 'unreadable-folder' || touched.has(w.note)));
   const kept = new Set();
   for (const w of warnings) {
     const k = JSON.stringify([w.kind, w.note, w.text]);
@@ -323,10 +328,6 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
         const ix = index.resolve(fmTarget(nfm.session) || null);
         return numberOf(nfm, ix, fmTarget(nfm.session) || stemOf(n)) === number + 1;
       }) || null;
-      if (!nextPlan) {
-        const nn = String(number + 1).padStart(2, '0');
-        warnings.push({ kind: 'no-next-plan', note: null, text: `no Session ${nn} Plan yet: if you run long, the page falls back to unplayed scenes and the chapter's Planning notes` });
-      }
     }
     const scenes = inChapter.filter((n) => {
       const nfm = fmOf(n);

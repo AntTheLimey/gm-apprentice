@@ -53,4 +53,4 @@ function readPeople(planBody, index) {
   return { people, warnings, leftover };
 }
 
-module.exports = { readPeople };
+module.exports = { readPeople, TITLE };

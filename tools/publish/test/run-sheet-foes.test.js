@@ -100,7 +100,17 @@ describe('run sheet foes', () => {
     assert.strictEqual(none.length, 1);
     assert.strictEqual(none[0].note, 'Creatures/Ice Drake.md');
     assert.ok(none[0].text.includes('Ice Drake names a stat block with no numbers in the vault'));
-    assert.strictEqual(warnings.filter((w) => w.kind === 'no-initiative' && w.note === 'Creatures/Ice Drake.md').length, 1);
+    // no numbers at all is one warning, not a second one for the initiative
+    assert.strictEqual(warnings.filter((w) => w.kind === 'no-initiative' && w.note === 'Creatures/Ice Drake.md').length, 0);
+  });
+
+  it('a block with numbers but no initiative warns for the initiative', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rs-'));
+    fs.cpSync(FIXTURE, dir, { recursive: true });
+    const wolf = path.join(dir, 'Creatures/Frost Wolf.md');
+    fs.writeFileSync(wolf, fs.readFileSync(wolf, 'utf8').replace('AC 13, Hit Points 11, Initiative +2', 'AC 13, Hit Points 11'));
+    const { warnings } = one(buildIndex(dir), 'Frost Wolf');
+    assert.deepStrictEqual(warnings.map((w) => w.kind), ['no-initiative']);
   });
 
   it('a contingency gets its foes', () => {

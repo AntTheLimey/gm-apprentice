@@ -148,8 +148,9 @@ function buildIndex(vaultPath, { deps } = {}) {
     // Settings values are nested by group: `vault.attachments` is values.vault.attachments.
     const values = settings.values || {};
     const dir = values.vault && values.vault.attachments;
-    const hide = values.player_site && values.player_site.hide && values.player_site.hide.folders;
-    attachments = scanAttachments({ vaultPath, attachmentsDir: dir, excludeDirs: hide }, deps);
+    // The GM sees every portrait: the players' hide list does not apply, only the workspace
+    // folders the index itself leaves out.
+    attachments = scanAttachments({ vaultPath, attachmentsDir: dir, excludeDirs: [...LEFT_OUT] }, deps);
     return attachments;
   };
 
@@ -188,7 +189,8 @@ function buildIndex(vaultPath, { deps } = {}) {
       const name = portraitBasename(need(p).fm);
       if (!name) return null;
       const hit = attached()[name];
-      return hit ? toPosix(path.relative(vaultPath, hit.sourcePath)) : null;
+      const rel = hit ? toPosix(path.relative(vaultPath, hit.sourcePath)) : null;
+      return rel && !isLeftOut(rel) ? rel : null;
     },
     warnings,
   };

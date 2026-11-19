@@ -50,8 +50,9 @@ function warnFor(notePath, name, nums, seen, warnings) {
     seen.add(k);
     warnings.push({ kind, note: notePath, text });
   };
+  // A block with no numbers at all says so once; its missing initiative is part of that.
   if (nums.ac === null && nums.hp === null) add('no-numbers', `${name} names a stat block with no numbers in the vault: fill them in prep`);
-  if (nums.init === null) add('no-initiative', `${name} has no initiative modifier in its Stats (rolled at +0)`);
+  else if (nums.init === null) add('no-initiative', `${name} has no initiative modifier in its Stats (rolled at +0)`);
 }
 
 function build(notePath, index, count, beatKey, seen) {

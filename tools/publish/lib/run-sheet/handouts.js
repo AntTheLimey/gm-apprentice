@@ -31,4 +31,4 @@ function noteOf(text, index) {
   return first ? index.resolve(first) : null;
 }
 
-module.exports = { readHandouts };
+module.exports = { readHandouts, TITLE };

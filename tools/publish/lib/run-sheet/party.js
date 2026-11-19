@@ -152,4 +152,4 @@ function readPcs(planBody, index, party) {
   return { pcs, unmatched, warnings };
 }
 
-module.exports = { readPcs };
+module.exports = { readPcs, SECTIONS };

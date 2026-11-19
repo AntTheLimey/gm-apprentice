@@ -91,6 +91,21 @@ describe('run sheet note index', () => {
     assert.strictEqual(buildIndex(dir).portrait('Characters/PCs/Ada Moss.md'), 'Pics/ada.png');
   });
 
+  it('a portrait in a folder hidden from the players still resolves for the GM', () => {
+    const dir = copy();
+    writeSettings(dir, { 'vault.system': 'dnd5e', 'player_site.hide.folders': ['_attachments/gm'] });
+    fs.mkdirSync(path.join(dir, '_attachments', 'gm'), { recursive: true });
+    fs.renameSync(path.join(dir, '_attachments', 'ada.png'), path.join(dir, '_attachments', 'gm', 'ada.png'));
+    assert.strictEqual(buildIndex(dir).portrait('Characters/PCs/Ada Moss.md'), '_attachments/gm/ada.png');
+  });
+
+  it('a portrait in a workspace folder the index leaves out does not resolve', () => {
+    const dir = copy();
+    fs.mkdirSync(path.join(dir, '_attachments', '_archive'), { recursive: true });
+    fs.renameSync(path.join(dir, '_attachments', 'ada.png'), path.join(dir, '_attachments', '_archive', 'ada.png'));
+    assert.strictEqual(buildIndex(dir).portrait('Characters/PCs/Ada Moss.md'), null);
+  });
+
   it('section and gmSection read headings', () => {
     const idx = buildIndex(copy());
     assert.match(idx.section('Chapters/Chapter 1/Sessions/Session 02/Session 02 - The Test - Plan.md', 'Session Intent'), /wolves are listening/);

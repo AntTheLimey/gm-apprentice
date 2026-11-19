@@ -102,8 +102,25 @@ describe('run sheet beats', () => {
     const b = byTitle(beats, 'The Bell Tower');
     assert.deepStrictEqual(b.who.map((w) => w.name), ['Sister Fen']);
     assert.strictEqual(b.who[0].note, 'Characters/NPCs/Sister Fen.md');
-    assert.match(b.extra, /the bell-ringer/);
-    assert.doesNotMatch(b.extra, /Ada Moss/);
+    // words no field holds keep the whole line, as written
+    assert.match(b.extra, /\*\*Who:\*\* \[\[Sister Fen\]\], \[\[Ada Moss\]\] and the bell-ringer/);
+  });
+
+  it('a Who line with a connective keeps its line, not a residue', () => {
+    const { beats } = read((t) => t.replace('**Who:** [[Sister Fen]], [[Ada Moss]] and the bell-ringer',
+      '**Who:** [[Sister Fen]], [[Brother Venn]] or [[Abbot Rime]].'));
+    const b = byTitle(beats, 'The Bell Tower');
+    assert.deepStrictEqual(b.who.map((w) => w.name), ['Sister Fen', 'Brother Venn', 'Abbot Rime']);
+    assert.match(b.extra, /\*\*Who:\*\* \[\[Sister Fen\]\], \[\[Brother Venn\]\] or \[\[Abbot Rime\]\]\./);
+    assert.doesNotMatch(b.extra, /\*\*Who:\*\* or/);
+  });
+
+  it('a Who line of names and list separators is held whole', () => {
+    const { beats } = read((t) => t.replace('**Who:** [[Sister Fen]], [[Ada Moss]] and the bell-ringer',
+      '**Who:** [[Sister Fen]], [[Ada Moss]] and [[Brother Venn]].'));
+    const b = byTitle(beats, 'The Bell Tower');
+    assert.deepStrictEqual(b.who.map((w) => w.name), ['Sister Fen', 'Brother Venn']);
+    assert.doesNotMatch(b.extra, /Who/);
   });
 
   it('placeholder play-as is left blank', () => {

@@ -76,6 +76,9 @@ function splitGm(body) {
   };
 }
 
+// 'planned' or 'contingency' for the two `##` sections beats are read from, else null.
+const sceneSection = (title) => ({ 'planned scenes': 'planned', 'contingency scenes': 'contingency' })[nameKey(title)] || null;
+
 function readBeats(planBody, index) {
   const warnings = [];
   const missing = new Set();
@@ -96,15 +99,15 @@ function readBeats(planBody, index) {
   const preamble = {};
   const heads = [];
   for (const sec of pt.sections(planBody, 2)) {
-    const want = nameKey(sec.title);
-    if (want !== 'planned scenes' && want !== 'contingency scenes') continue;
+    const kind = sceneSection(sec.title);
+    if (!kind) continue;
     claimed[sec.title] = true;
     pt.sections(sec.text, 3).forEach((s, i) => {
       if (i === 0 && s.title === '') {
         preamble[sec.title] = preamble[sec.title] ? `${preamble[sec.title]}\n\n${s.text}` : s.text;
         return;
       }
-      heads.push({ heading: s.title, text: s.text, contingency: want === 'contingency scenes' });
+      heads.push({ heading: s.title, text: s.text, contingency: kind === 'contingency', section: sec.title });
     });
   }
 
@@ -133,7 +136,8 @@ function readBeats(planBody, index) {
     treasure: b.treasure.map((x) => ({ key: x.key, text: x.text, box: x.box })),
     handouts: b.handouts, entities: b.entities, foes: [], extra: b.extra,
   }));
-  return { beats: ordered, claimed, preamble, warnings };
+  // `sections[i]` is the `##` title beat i was read under.
+  return { beats: ordered, sections: heads.map((h) => h.section), claimed, preamble, warnings };
 
   function readBeat({ heading, text: planText, contingency }) {
     let title = heading.replace(SCENE_N, '').trim();
@@ -227,7 +231,6 @@ function readBeats(planBody, index) {
       }
     }
 
-    const whoWords = [];
     for (const l of labelsNamed('Who')) {
       let rest = l.value;
       for (const m of l.value.match(LINK) || []) {
@@ -242,9 +245,9 @@ function readBeats(planBody, index) {
         }
         rest = rest.replace(m, '');
       }
-      claim(l.start, l.end);
-      const words = rest.split(/\s*(?:,|;|&|\band\b)\s*/i).map((w) => w.trim()).filter(Boolean).join(', ');
-      if (words) whoWords.push(`**Who:** ${words}`);
+      // Nothing left but list separators: the line is held. Any other words (`or`, `the bell-ringer`,
+      // a place's link) mean the line is only partly held, so it stays whole in extra.
+      if (rest.replace(/\band\b/gi, '').replace(/[\s,;&.]+/g, '') === '') claim(l.start, l.end);
     }
 
     let spots = [];
@@ -378,7 +381,7 @@ function readBeats(planBody, index) {
     }
 
     const left = pt.unclaimed(text, ranges).replace(/\n[ \t]*\n(?:[ \t]*\n)+/g, '\n\n');
-    const extra = [left, ...whoWords].filter(Boolean).join('\n\n');
+    const extra = left;
 
     const type = nameKey(pt.label(text, 'Type'));
     if (!contingency && who.length === 0 && !/\((?:hub|routing)\)/i.test(heading)
@@ -394,4 +397,4 @@ function readBeats(planBody, index) {
   }
 }
 
-module.exports = { readBeats };
+module.exports = { readBeats, sceneSection };

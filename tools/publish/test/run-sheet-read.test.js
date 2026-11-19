@@ -48,7 +48,9 @@ const isRow = (l) => /^\s*\|/.test(l);
 const isSep = (l) => /^\s*\|?[\s:|-]*-[\s:|-]*$/.test(l) && isRow(l);
 
 // The Plan lines the model holds nowhere. A line is found whole, or with its markup taken off, or
-// (a line a field split up, such as an NPC line) as each of its parts.
+// (a line a field split up, such as an NPC line) as each of its parts. A short part (`or`, `3`)
+// would be found anywhere, so only link targets and parts of three or more characters count, and
+// a line needs at least one that counts.
 function missingLines(planBody, model) {
   const hay = haystack(model);
   const has = (s) => s === '' || hay.includes(s);
@@ -59,8 +61,13 @@ function missingLines(planBody, model) {
     .replace(/^\s*(?:[-*+]|\d+[.)])\s+(?:\[[ xX]\]\s*)?/, '')
     .replace(/^\*\*(?:situation|starts it|trigger|entities|handouts|who):\*\*\s*/i, '');
   // Each link's target and each run of words between them and the punctuation fields split on.
-  const parts = (l) => normalise(l.replace(/\[\[([^\]|#]+)[^\]]*\]\]/g, ';$1;'))
-    .split(/[(),:;|—–]|\band\b/).map((x) => x.trim()).filter(Boolean);
+  const parts = (l) => {
+    const targets = new Set([...l.matchAll(/\[\[([^\]|#]+)[^\]]*\]\]/g)].map((x) => normalise(x[1])));
+    return normalise(l.replace(/\[\[([^\]|#]+)[^\]]*\]\]/g, ';$1;'))
+      .split(/[(),:;|—–]|\band\b/).map((x) => x.trim())
+      .filter((x) => x.length >= 3 || targets.has(x));
+  };
+  const partsHeld = (l) => { const ps = parts(l); return ps.length > 0 && ps.every(has); };
   const lines = cleanText(planBody).split('\n');
   const out = [];
   lines.forEach((line, i) => {
@@ -73,10 +80,18 @@ function missingLines(planBody, model) {
     }
     if (has(normalise(line))) return;
     const core = strip(line);
-    if (has(normalise(core)) || parts(core).every(has)) return;
+    if (has(normalise(core)) || partsHeld(core)) return;
     out.push(line);
   });
   return out;
+}
+
+// The reverse: each line a beat keeps in `extra` is a line its sources hold (the Plan, the scene
+// notes), never words a reader made up, such as a `**Who:** or .` residue.
+function strayLines(dir, planBody, model) {
+  const notes = model.beats.map((b) => b.sceneNote).filter(Boolean).map((p) => fs.readFileSync(path.join(dir, p), 'utf8'));
+  const src = normalise([planBody, ...notes].join('\n¶\n'));
+  return model.beats.flatMap((b) => b.extra.split('\n')).filter((l) => l.trim() && !src.includes(normalise(l)));
 }
 
 describe('run sheet reader', () => {
@@ -99,8 +114,9 @@ describe('run sheet reader', () => {
     assert.strictEqual(m.beats.length, 6);
     assert.strictEqual(m.pcs.length, 2);
     assert.deepStrictEqual(m.people.map((p) => p.name), ['Brother Ash', 'Sister Fen', 'Lucan Grey']);
-    assert.deepStrictEqual([...m.places].sort(), [
-      'Locations/The Bell Tower Room.md', 'Locations/The Chapel Yard.md', 'Locations/The Gate House.md', 'Locations/The Gate.md',
+    // first seen: the Quick Reference names three before the scenes, the scene note adds the fourth
+    assert.deepStrictEqual(m.places, [
+      'Locations/The Gate.md', 'Locations/The Chapel Yard.md', 'Locations/The Gate House.md', 'Locations/The Bell Tower Room.md',
     ]);
     assert.strictEqual(new Set(m.places).size, m.places.length);
     assert.deepStrictEqual(m.maps, ['Documents/Map of the Gate.md']);
@@ -143,13 +159,25 @@ describe('run sheet reader', () => {
     const m = readRunSheet(dir, PLAN, { party: PARTY });
     const body = bodyOf(fs.readFileSync(path.join(dir, PLAN), 'utf8'));
     assert.deepStrictEqual(missingLines(body, m), []);
-    // the check can fail: a field emptied shows up
+    assert.deepStrictEqual(strayLines(dir, body, m), []);
+    // the checks can fail: a field emptied shows up, and so does a made-up residue
+    const stray = JSON.parse(JSON.stringify(m));
+    stray.beats[1].extra += '\n\n**Who:** or .';
+    assert.deepStrictEqual(strayLines(dir, body, stray), ['**Who:** or .']);
     const cut = JSON.parse(JSON.stringify(m));
     cut.beats[0].situation = '';
     assert.deepStrictEqual(missingLines(body, cut), ['**Situation:** The gate is shut and the bell', 'rope hangs cut; Brother Ash will not open it until it rings.']);
     // with no party, the PC lines are still kept
     const alone = readRunSheet(dir, PLAN);
     assert.deepStrictEqual(missingLines(body, alone), []);
+    // a Who line joined by `or` is kept as written, not as a residue
+    const p = path.join(dir, PLAN);
+    fs.writeFileSync(p, fs.readFileSync(p, 'utf8').replace('**Who:** [[Sister Fen]], [[Ada Moss]] and the bell-ringer',
+      '**Who:** [[Sister Fen]], [[Brother Venn]] or [[Abbot Rime]].'));
+    const or = readRunSheet(dir, PLAN, { party: PARTY });
+    const orBody = bodyOf(fs.readFileSync(p, 'utf8'));
+    assert.deepStrictEqual(missingLines(orBody, or), []);
+    assert.deepStrictEqual(strayLines(dir, orBody, or), []);
   });
 
   it('every line of a real hub plan is kept somewhere', () => {
@@ -161,6 +189,7 @@ describe('run sheet reader', () => {
     assert.strictEqual(m.beats.length, 2);
     assert.strictEqual(m.session.number, 4);
     assert.deepStrictEqual(missingLines(hub, m), []);
+    assert.deepStrictEqual(strayLines(dir, hub, m), []);
     assert.deepStrictEqual(m.warnings.filter((w) => w.kind === 'not-on-page'), []);
   });
 
@@ -170,7 +199,11 @@ describe('run sheet reader', () => {
     const body = bodyOf(fs.readFileSync(path.join(dir, PLAN), 'utf8'));
     assert.deepStrictEqual(completeness(body, m).filter((w) => w.kind === 'not-on-page'), []);
     const edited = JSON.parse(JSON.stringify(m));
-    for (const b of edited.beats) b.who = b.who.filter((w) => w.name !== 'Sister Fen');
+    // a reader that took the Who line whole and lost Sister Fen from it
+    for (const b of edited.beats) {
+      b.who = b.who.filter((w) => w.name !== 'Sister Fen');
+      b.extra = b.extra.replace(/^\*\*Who:\*\*.*$/m, '');
+    }
     const rows = completeness(body, edited).filter((w) => w.kind === 'not-on-page');
     assert.strictEqual(rows.length, 1);
     assert.strictEqual(rows[0].note, PLAN);
@@ -222,15 +255,25 @@ describe('run sheet reader', () => {
     // the title line is the lead text: kept, not dropped
     assert.deepStrictEqual(m.prep, [{ title: '', md: '# Lonely' }]);
     assert.deepStrictEqual(m.links, {});
-    // the Plan's own note, and the notes the warnings name (the fixture's broken note)
-    assert.deepStrictEqual(Object.keys(m.notes).sort(), ['Characters/NPCs/Broken.md', 'Lonely - Plan.md']);
-    assert.ok(m.warnings.some((w) => w.note === 'Characters/NPCs/Broken.md'));
+    // only the Plan's own note: the index's warning about a broken note this sheet never touches is left out
+    assert.deepStrictEqual(Object.keys(m.notes), ['Lonely - Plan.md']);
+    assert.ok(!m.warnings.some((w) => w.note === 'Characters/NPCs/Broken.md'));
+    // a vault-wide one (note null) stays
+    assert.ok(m.warnings.some((w) => w.kind === 'ambiguous-name'));
     assert.ok(m.warnings.some((w) => w.kind === 'no-party'));
   });
 
   it('a Plan that cannot be read is the one error', () => {
     const dir = copy();
     assert.throws(() => readRunSheet(dir, 'No Such - Plan.md'), /No Such - Plan\.md/);
+  });
+
+  it('a Plan outside the vault is that same error', () => {
+    const dir = copy();
+    assert.throws(() => readRunSheet(dir, '../Elsewhere - Plan.md'), /the Plan \.\.\/Elsewhere - Plan\.md is not inside the vault/);
+    const away = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'rs-')), 'Away - Plan.md');
+    fs.writeFileSync(away, '## Session Overview\n\nAway.\n');
+    assert.throws(() => readRunSheet(dir, away), (err) => err.message.includes(away) && /not inside the vault/.test(err.message));
   });
 
   it('odd settings and frontmatter read with warnings, never a throw', () => {
