@@ -553,5 +553,34 @@ class DroppedBlockTests(unittest.TestCase):
         self.assertEqual(rows, ["DROPPED\tThe Yard\t**Treasure**"])
 
 
+    def test_a_scene_renamed_in_place_is_compared_under_both_names(self):
+        # #787: the renamed scene was in neither set, so a Treasure it lost said nothing.
+        gate = FIGHT.replace("### The Yard", "### The Docks")
+        old = gate + "\n" + FIGHT + "\n" + gate.replace("The Docks", "The Pier")
+        new = (gate + "\n" + FIGHT_NO_TREASURE.replace("### The Yard", "### The Gate")
+               + "\n" + gate.replace("The Docks", "The Pier"))
+        self.assertEqual(vw.dropped_blocks(old, new),
+                         ["DROPPED\tThe Yard (now The Gate)\t**Treasure**"])
+        # A rename that keeps its blocks says nothing.
+        self.assertEqual(vw.dropped_blocks(old, old.replace("### The Yard", "### The Gate")), [])
+        # At the start and at the end too.
+        self.assertEqual(vw.dropped_blocks(FIGHT, FIGHT_NO_TREASURE.replace("The Yard", "The Gate")),
+                         ["DROPPED\tThe Yard (now The Gate)\t**Treasure**"])
+
+    def test_scenes_that_are_not_one_for_one_are_not_paired(self):
+        # Two scenes gone and two new in one place: which became which is a guess, so none is compared.
+        old = FIGHT + "\n" + FIGHT.replace("The Yard", "The Loft")
+        new = (FIGHT_NO_TREASURE.replace("The Yard", "The Gate") + "\n"
+               + FIGHT_NO_TREASURE.replace("The Yard", "The Roof"))
+        self.assertEqual(vw.dropped_blocks(old, new), [])
+        # A scene removed and none added is a removal, not a rename.
+        self.assertEqual(vw.dropped_blocks(FIGHT + "\n" + FIGHT.replace("The Yard", "The Loft"),
+                                           FIGHT.replace("The Yard", "The Loft")), [])
+        # Shared scenes in another order pair nothing.
+        a, b = FIGHT.replace("The Yard", "A"), FIGHT.replace("The Yard", "B")
+        self.assertEqual(vw.dropped_blocks(a + "\n" + FIGHT + "\n" + b,
+                                           b + "\n" + FIGHT_NO_TREASURE.replace("The Yard", "C") + "\n" + a), [])
+
+
 if __name__ == "__main__":
     unittest.main()

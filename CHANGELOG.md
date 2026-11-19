@@ -10,6 +10,12 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 ---
 
 
+## [1.12.97] — 2026-11-19
+
+### Fixed
+
+- A prep rewrite that renames a scene and loses its Treasure (or any labelled block) now says so (#787): the scene is compared under its new title, and the warning names both.
+
 ## [1.12.96] — 2026-11-19
 
 ### Added

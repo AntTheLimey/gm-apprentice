@@ -4599,17 +4599,54 @@ def labelled_blocks(text: str) -> dict[tuple[str, int], list[str]]:
     return scenes
 
 
+def _renamed_scenes(a: dict[tuple[str, int], list[str]],
+                    b: dict[tuple[str, int], list[str]]
+                    ) -> dict[tuple[str, int], tuple[str, int]]:
+    """Each old scene renamed in place, mapped to its new title: between
+    two scenes both texts have (or the start or the end), exactly one
+    scene only the old text has and one only the new text has (#787).
+    Scenes both texts have but in another order pair nothing."""
+    old = [k for k in a if k[0]]
+    new = [k for k in b if k[0]]
+    if [k for k in old if k in b] != [k for k in new if k in a]:
+        return {}
+
+    def gaps(seq: list[tuple[str, int]], other: dict[tuple[str, int], list[str]]
+             ) -> list[list[tuple[str, int]]]:
+        out: list[list[tuple[str, int]]] = [[]]
+        for k in seq:
+            if k in other:
+                out.append([])
+            else:
+                out[-1].append(k)
+        return out
+
+    return {was[0]: now[0] for was, now in zip(gaps(old, b), gaps(new, a))
+            if len(was) == 1 and len(now) == 1}
+
+
 def dropped_blocks(old: str, new: str, stem: str = "") -> list[str]:
     """`DROPPED` rows: a labelled block head the old text had in a scene
-    the new text still has, and the new one lacks. A scene only one side
-    has is not compared. With `stem`, a note with no `###` scenes on
-    either side is compared whole, as the scene `stem`."""
+    the new text still has, and the new one lacks. A scene renamed in
+    place is compared with its new title, and the row names both (`old
+    (now new)`); a scene only one side has is not compared. With `stem`,
+    a note with no `###` scenes on either side is compared whole, as the
+    scene `stem`."""
     a, b = labelled_blocks(old), labelled_blocks(new)
     if stem and len(a) == 1 and len(b) == 1:
         a, b = {(stem, 1): a[("", 1)]}, {(stem, 1): b[("", 1)]}
-    return [f"DROPPED\t{scene[0]}\t**{label}**"
-            for scene, labels in a.items() if scene[0] and scene in b
-            for label in labels if label not in b[scene]]
+    renamed = _renamed_scenes(a, b)
+    rows = []
+    for scene, labels in a.items():
+        if not scene[0]:
+            continue
+        now = scene if scene in b else renamed.get(scene)
+        if now is None:
+            continue
+        name = scene[0] if now == scene else f"{scene[0]} (now {now[0]})"
+        rows += [f"DROPPED\t{name}\t**{label}**"
+                 for label in labels if label not in b[now]]
+    return rows
 
 
 def plan_body(text: str, batch: Batch, rel: str) -> str:
@@ -5789,7 +5826,8 @@ def build_parser() -> argparse.ArgumentParser:
             "on stdin by level and title, and adds a missing ## where the\n"
             "template has it. A --section write that drops a labelled\n"
             "block a scene had prints DROPPED<TAB>scene<TAB>**label**\n"
-            "(a warning; the write still happens)."))
+            "(a warning; the write still happens). A scene renamed in\n"
+            "place is named 'old (now new)'."))
     pl.add_argument("--number", type=int, required=True, help="the session's number")
     pl.add_argument("--chapter", help="the chapter, when the number "
                     "alone does not say which")

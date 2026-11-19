@@ -629,7 +629,8 @@ Plan is never overwritten: --section replaces each section
 on stdin by level and title, and adds a missing ## where the
 template has it. A --section write that drops a labelled
 block a scene had prints DROPPED<TAB>scene<TAB>**label**
-(a warning; the write still happens).
+(a warning; the write still happens). A scene renamed in
+place is named 'old (now new)'.
 
 Several writes at once: put this as a '=== plan ...' block in `gma vault-write <vault> batch FILE`.
 ```
