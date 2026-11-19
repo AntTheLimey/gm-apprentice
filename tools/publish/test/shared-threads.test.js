@@ -31,7 +31,7 @@ function buildVault(files) {
   fs.writeFileSync(configPath, JSON.stringify({ vaultPath: vault }));
   const real = console.log; console.log = () => {};
   try { build({ configPath }); } finally { console.log = real; }
-  return { read: (...p) => fs.readFileSync(path.join(root, 'docs', ...p), 'utf8') };
+  return { read: (...p) => fs.readFileSync(path.join(root, 'docs', ...p), 'utf8'), docs: path.join(root, 'docs') };
 }
 
 // The page with every GM-marked block (and its nested divs) taken out: what a reader of the GM page sees unmarked.
@@ -586,6 +586,19 @@ test('party threads: the party page lists the shared threads newest first, then 
   assert.doesNotMatch(s, /brother drowned/);
   // It sits under the title, above the cards.
   assert.ok(html.indexOf('party-threads') < html.indexOf('entity-card'));
+});
+
+test('party threads: a picture in a thread shows as a picture and is copied, one on no PC page too', () => {
+  const overviewText = PARTY_OVERVIEW.replace('- Hand-written, no tail', '- The harbour chart ![[harbour-chart.png]]');
+  const corwin = pc('Corwin_Hale').replace('due at the next full moon', 'due at the next full moon ![[ferry-token.png]]');
+  const site = partyVault(overviewText, { Corwin_Hale: corwin }, { '_attachments/harbour-chart.png': 'png', '_attachments/ferry-token.png': 'png' });
+  const s = /<section class="dashboard-section party-threads"[\s\S]*?<\/section>/.exec(site.read('characters', 'pcs', 'index.html'))[0];
+  for (const name of ['harbour-chart.png', 'ferry-token.png']) {
+    const img = new RegExp(`<img[^>]*src="([^"]*${name.replace('.', '\\.')})"`).exec(s);
+    assert.ok(img, `${name} shows as a picture`);
+    assert.ok(fs.existsSync(path.join(site.docs, 'characters', 'pcs', img[1])), `${name} is copied to ${img[1]}`);
+  }
+  assert.doesNotMatch(s, /!<a|!\[\[/);
 });
 
 test('party threads: an out-of-play PC\'s own threads are left off; a page with no threads has no section', () => {

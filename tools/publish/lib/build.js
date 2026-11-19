@@ -2536,6 +2536,8 @@ function buildSite(options) {
   const houseRulesHtml = houseRulesMd
     ? processContent({ markdown: houseRulesMd, frontmatter: {}, outputPath: 'house-rules.html' }, linkMap, excludeSections, imageMap, { usedImages, excludeCallouts }).html
     : '';
+  // The party page lists every shared thread, the ones on no PC page too: their pictures are copied with the rest.
+  for (const e of partyShared) resolveImageEmbeds(e.text, imageMap, 'characters/pcs/index.html', usedImages, { warn: false });
   const filteredMap = {};
   for (const [basename, entry] of Object.entries(imageMap)) {
     if (usedImages.has(basename)) filteredMap[basename] = entry;
