@@ -189,7 +189,9 @@ paragraph or the system block's `{…}` fields.
 
 File it under the name the PCs know. Its true name goes in
 `unmasked_name` and its true face, if it has one, in
-`unmasked_portrait`; neither is published. Write both voices in
+`unmasked_portrait`; neither is published. `unmasked_name` is
+enough: don't also list the true name in `aliases` or `gm_aliases`
+(a link to it would then print the disguise's name). Write both voices in
 Playing Them, in this shape, with these labels:
 
 ```markdown
