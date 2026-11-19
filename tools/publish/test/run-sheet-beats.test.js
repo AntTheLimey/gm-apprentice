@@ -356,6 +356,11 @@ describe('run sheet beats', () => {
     assert.strictEqual(whoOf(b, 'Frost Wolf').count, 5);
     assert.strictEqual(whoOf(b, 'Brother Ash').wants, 'wants the bell rung');
     assert.doesNotMatch(b.extra, /circling/);
+    // the merged line's words are kept on the entry, not lost
+    assert.strictEqual(whoOf(b, 'Frost Wolf').wants, 'hunting; circling');
+    const same = read((s) => s.replace('- **[[Frost Wolf]] (3):** hunting', '- **[[Frost Wolf]] (3):** hunting\n- **[[Frost Wolf]] (2):** Hunting'));
+    assert.strictEqual(whoOf(same.beats[0], 'Frost Wolf').wants, 'hunting');
+    assert.strictEqual(whoOf(same.beats[0], 'Frost Wolf').count, 5);
     assert.match(b.extra, /\*\*\[\[Brother Ash\]\]:\*\* again, at the gate/);
     assert.strictEqual(new Set(b.who.map((w) => w.key)).size, b.who.length);
   });

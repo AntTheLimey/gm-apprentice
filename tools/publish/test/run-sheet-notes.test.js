@@ -243,4 +243,16 @@ describe('run sheet note index', () => {
     assert.strictEqual(idx.linkProblem('Nobody Here').kind, 'missing-note');
     assert.strictEqual(idx.linkProblem('Nobody Here').text, '[[Nobody Here]] matches no note in the vault');
   });
+  it('a dot folder that cannot be listed while naming skipped notes warns nothing', () => {
+    const dir = copy();
+    const trash = path.join(dir, 'Locations', '.trash');
+    fs.mkdirSync(trash, { recursive: true });
+    fs.writeFileSync(path.join(trash, 'Gone Inn.md'), '---\ntype: location\n---\n');
+    const deps = { readdir: (p) => { if (p === trash) throw Object.assign(new Error('EACCES: denied'), { code: 'EACCES' }); return fs.readdirSync(p, { withFileTypes: true }); } };
+    const idx = buildIndex(dir, { deps });
+    const before = idx.warnings.length;
+    assert.strictEqual(idx.linkProblem('Gone Inn').kind, 'missing-note');
+    assert.strictEqual(idx.warnings.length, before);
+    assert.ok(!idx.warnings.some((w) => w.kind === 'unreadable-folder'));
+  });
 });

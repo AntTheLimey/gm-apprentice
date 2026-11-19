@@ -156,7 +156,11 @@ function buildIndex(vaultPath, { deps } = {}) {
     if (dotWalked) return;
     dotWalked = true;
     const walk = (dir, inDot) => {
-      for (const e of scanDeps.readdir(dir)) {
+      // Listed only to name excluded notes: a folder that cannot be listed here names none. The
+      // scan already warned about any folder it needed and could not list.
+      let entries;
+      try { entries = rd.readdir(dir); } catch { return; }
+      for (const e of entries) {
         const full = path.join(dir, e.name);
         const dot = inDot || e.name.startsWith('.');
         if (e.isDirectory()) {

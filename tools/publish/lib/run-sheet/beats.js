@@ -237,9 +237,12 @@ function readBeats(planBody, index) {
         const note = resolve(n.target);
         const at = who.findIndex((w) => (note ? w.note === note : !w.note && w.name === n.name));
         if (at !== -1) {
-          // One person listed twice: two written counts add up; otherwise the second line stays in extra.
+          // One person listed twice: two written counts add up, and the second line's words join the
+          // first's unless they say the same; otherwise the second line stays in extra.
           if (!(countedAt[at] && n.counted)) continue;
           who[at].count += n.count;
+          const same = (a, b) => a.replace(/\s+/g, ' ').trim().toLowerCase() === b.replace(/\s+/g, ' ').trim().toLowerCase();
+          if (n.wants && !same(n.wants, who[at].wants)) who[at].wants = who[at].wants ? `${who[at].wants}; ${n.wants}` : n.wants;
         } else {
           countedAt[who.length] = n.counted;
           who.push(person(note, n));
