@@ -138,10 +138,22 @@ class Stock(NamedTuple):
 _EDGE_LEAD_RE = re.compile(r"^[\s,;:.)(*_—–-]+")
 _SRD_MARK_RE = re.compile(r"\((?:SRD|stock|stat block)\)", re.I)
 _EDGE_TAIL_RE = re.compile(r"[\s,;:(*_—–-]+$")
+# The label a stock line may open with: `**Stat block:**`, `Stats —`.
+_LABEL_RE = re.compile(
+    r"^(?:[-*+]\s+)?(?:\*\*|__|\*|_)?(?:stat ?blocks?|stats?|statistics)\s*"
+    r"(?:\*\*|__|\*|_)?\s*[:—–-]\s*(?:\*\*|__|\*|_)?\s*", re.I)
+_BULLET_RE = re.compile(r"^[-*+]\s+")
+
+
+def _unlabelled(raw: str) -> str:
+    """The line without its list mark and a leading `**Stat block:**`."""
+    return _LABEL_RE.sub("", _BULLET_RE.sub("", raw, count=1), count=1).strip()
 
 
 def _stock(text: str) -> Stock | None:
-    """The stock creature `text` names in place of a block, else None."""
+    """The stock creature `text` names in place of a block, else None.
+    `words` is the GM's line whole (minus a leading label), or "" when the
+    line holds nothing but the creature's name and the `(SRD)` mark."""
     for line in text.splitlines():
         raw = line.strip()
         for rx in STOCK_RES:
@@ -149,9 +161,12 @@ def _stock(text: str) -> Stock | None:
             if m:
                 rest = _SRD_MARK_RE.sub(
                     "", raw[:m.start()] + " " + raw[m.end():])
+                rest = _LABEL_RE.sub("", _BULLET_RE.sub("", rest.strip(), 1), 1)
                 rest = _EDGE_TAIL_RE.sub("", _EDGE_LEAD_RE.sub("", rest))
-                return Stock(_short(line.strip(" -*")), m.group("n"),
-                             " ".join(rest.split()))
+                whole = _unlabelled(raw)
+                return Stock(_short(whole.strip(" -*")), m.group("n"),
+                             " ".join(whole.split()) if re.search(r"\w", rest)
+                             else "")
     return None
 
 

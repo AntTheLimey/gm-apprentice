@@ -62,7 +62,7 @@ class FillTests(FillCase):
         code, rows = self.run_cli(v, "Tomas.md", "--write")
         self.assertEqual((code, rows[0]), (0, "FILLED\tTomas.md\tIce Mephit"))
         text = self.read(v, "Tomas.md")
-        for want in ("### Stats\n\n**Ice Mephit**\n*Small Elemental*",
+        for want in ("### Stats\n\n**Ice Mephit**\n\n**AC** 11",
                      "**AC** 11 · **Initiative** +1 (11) · **HP** 21 (6d6)",
                      "| DEX | 13 | +1 | +1 |",
                      "***Frost Breath (Recharge 6).***", CREDIT,
@@ -147,8 +147,58 @@ class FillTests(FillCase):
             "A.md": npc("Commoner (SRD). Blinded."),
             "B.md": npc("As a Bandit, with a knife")})
         self.run_cli(v, "A.md", "B.md", "--write")
-        self.assertIn("**As written:** Blinded.", self.read(v, "A.md"))
-        self.assertIn("**As written:** with a knife", self.read(v, "B.md"))
+        self.assertIn("**As written:** Commoner (SRD). Blinded.",
+                      self.read(v, "A.md"))
+        self.assertIn("**As written:** As a Bandit, with a knife",
+                      self.read(v, "B.md"))
+
+    def test_the_templates_stock_line_keeps_its_words_without_its_label(self):
+        v = self.vault({
+            "A.md": npc("**Stat block:** Commoner (SRD), with a knife."),
+            "B.md": npc("**Stat block:** Commoner (SRD).")})
+        self.run_cli(v, "A.md", "B.md", "--write")
+        a, b = self.read(v, "A.md"), self.read(v, "B.md")
+        self.assertIn("**As written:** Commoner (SRD), with a knife.", a)
+        self.assertNotIn("Stat block:**", a)
+        self.assertNotIn("As written", b)
+        self.assertNotIn("Stat block", b)
+
+    def test_the_stock_quote_has_no_stray_label_marks(self):
+        stock = stat_fill.npc_stats._stock("**Stat block:** Commoner (SRD).")
+        self.assertEqual((stock.line, stock.name, stock.words),
+                         ("Commoner (SRD).", "Commoner", ""))
+
+    def test_a_sentence_that_wraps_the_name_is_kept_whole(self):
+        v = self.vault({"A.md": npc(
+            "No stats needed: he poses as a Priest and never fights.")})
+        self.run_cli(v, "A.md", "--write")
+        self.assertIn("**As written:** No stats needed: he poses as a Priest "
+                      "and never fights.", self.read(v, "A.md"))
+
+    def test_a_placeholder_line_with_words_keeps_them_under_as_written(self):
+        v = self.vault({"A.md": npc(
+            "Stats to come; he fights with a boat hook and never alone.")})
+        _c, rows = self.run_cli(v, "A.md", "--as", "Commoner", "--write")
+        self.assertEqual(rows[0], "FILLED\tA.md\tCommoner")
+        self.assertIn("**As written:** Stats to come; he fights with a boat "
+                      "hook and never alone.", self.read(v, "A.md"))
+
+    def test_a_sentence_with_later_in_it_is_not_a_deferral(self):
+        line = ("Later, if it comes to blows, he uses the cellar stairs to "
+                "his advantage.")
+        self.assertEqual(stat_fill.kept_beside_placeholder([line]), [line])
+        v = self.vault({"A.md": npc(line)})
+        self.run_cli(v, "A.md", "--as", "Commoner", "--write")
+        text = self.read(v, "A.md")
+        self.assertIn(f"\n{line}\n", text)
+        self.assertNotIn("As written", text)
+
+    def test_the_block_leaves_off_a_size_line(self):
+        v = self.vault({"A.md": npc("As Commoner.")})
+        self.run_cli(v, "A.md", "--write")
+        text = self.read(v, "A.md")
+        self.assertIn("**AC** 10", text)
+        self.assertNotRegex(text, r"\*(?:Tiny|Small|Medium|Large) ")
 
     def test_keeps_the_gms_words_beside_a_placeholder(self):
         v = self.vault({"Wolf.md": npc(
