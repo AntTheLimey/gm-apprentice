@@ -2,7 +2,7 @@
 
 235 monsters from SRD 5.2. CR-grouped index for encounter building.
 
-**Detail files:** `monsters-cr0-1.md`, `monsters-cr2-4.md`, `monsters-cr5-10.md`, `monsters-cr11-16.md`, `monsters-cr17-plus.md`
+**Detail files:** `monsters-cr0-1.md`, `monsters-cr2-3.md`, `monsters-cr4.md`, `monsters-cr5-10.md`, `monsters-cr11-16.md`, `monsters-cr17-plus.md`
 **Sub-file format:** Name | Type | Size | AC | HP | Speed | Notable | XP
 
 ## Response Templates
@@ -97,7 +97,7 @@ Always include Tactics (1–2 sentences). For browse queries, use the standard t
 - **Sphinx of Wonder** | Celestial | S | CR 1
 - **Spy** | Humanoid | S | CR 1
 
-## CR 2–4 → `monsters-cr2-4.md`
+## CR 2–3 → `monsters-cr2-3.md`
 
 - **Animated Rug of Smothering** | Construct | L | CR 2
 - **Ankheg** | Monstrosity | L | CR 2
@@ -153,6 +153,9 @@ Always include Tactics (1–2 sentences). For browse queries, use the standard t
 - **Werewolf** | Monstrosity | S | CR 3
 - **Wight** | Undead | M | CR 3
 - **Winter Wolf** | Monstrosity | L | CR 3
+
+## CR 4 → `monsters-cr4.md`
+
 - **Black Pudding** | Ooze | L | CR 4
 - **Chuul** | Aberration | L | CR 4
 - **Couatl** | Celestial | M | CR 4
