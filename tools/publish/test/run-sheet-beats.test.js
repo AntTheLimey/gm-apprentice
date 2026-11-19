@@ -247,6 +247,16 @@ describe('run sheet beats', () => {
     assert.deepStrictEqual(b.entities, ['Characters/NPCs/Brother Ash.md', 'Locations/The Gate.md', 'Creatures/Frost Wolf.md']);
   });
 
+  it('fenced code in a Plan is no field, quote or hub group, and stays in extra', () => {
+    const fence = '```\n**Situation:** fake\n> example\n**Open to the party**\n- **The moat:** deep.\n**The orchard**: trees\n```';
+    const { beats } = read((s) => s.replace('### [[The Bell Tower]]', `### [[The Bell Tower]] (hub)\n\n${fence}\n\n### Spare [[The Bell Tower]]`));
+    const b = byTitle(beats, 'The Bell Tower (hub)');
+    assert.notStrictEqual(b.situation, 'fake');
+    assert.ok(!b.readAloud.includes('example'));
+    assert.ok(!b.spots.some((x) => /moat|orchard/.test(x.name)));
+    assert.ok(b.extra.includes(fence));
+  });
+
   it('unlabelled text and unknown labels land in extra', () => {
     const { beats } = read();
     assert.strictEqual(beats[0].extra, '**Weather:** sleet, going to snow\n\nThe wolves are close enough to hear.');

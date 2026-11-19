@@ -167,6 +167,7 @@ function readBeats(planBody, index) {
     }
 
     const lines = linesOf(text);
+    const fenced = pt.fenceMask(lines);
     const ranges = [];
     const claim = (start, end = start) => ranges.push({ start, end });
     const isClaimed = (i) => ranges.some((r) => i >= r.start && i <= r.end);
@@ -276,10 +277,10 @@ function readBeats(planBody, index) {
       const taken = (note, name) => (note && typeOf(note) === 'pc') || inWho(note, name);
       // Spot groups: a bare bold head with no field slot, one spot per top-level bullet under it.
       lines.forEach((line, i) => {
-        if (!isGroupHead(line)) return;
+        if (fenced[i] || !isGroupHead(line)) return;
         let end = i;
         // every bullet is a spot here, a bold-named one (`- **The chapel:** …`) included
-        for (let j = i + 1; j < lines.length && (/^[-*+]\s/.test(lines[j]) || !endsSpot(lines[j])); j++) if (!isBlank(lines[j])) end = j;
+        for (let j = i + 1; j < lines.length && !fenced[j] && (/^[-*+]\s/.test(lines[j]) || !endsSpot(lines[j])); j++) if (!isBlank(lines[j])) end = j;
         const paren = Boolean(line.match(GROUP_HEAD)[2]);
         if (!paren) blockHeads.push({ head: i, start: i + 1, end }); // a parenthesis keeps the head in extra
         for (const item of offset(pt.bullets(lines.slice(i + 1, end + 1).join('\n')), i + 1)) {
@@ -320,7 +321,7 @@ function readBeats(planBody, index) {
       });
       // Bold-name spot lines, each followed by its `- **[[Note]]:**` NPC lines.
       lines.forEach((line, i) => {
-        if (!isSpotLine(line)) return;
+        if (fenced[i] || !isSpotLine(line)) return;
         const raw = line.match(SPOT)[1].trim();
         const lm = raw.match(LINK_ONLY);
         let note = null;
@@ -332,7 +333,7 @@ function readBeats(planBody, index) {
         }
         found.push({ i, name, note });
         let end = i;
-        for (let j = i + 1; j < lines.length && !endsSpot(lines[j]); j++) end = j;
+        for (let j = i + 1; j < lines.length && !fenced[j] && !endsSpot(lines[j]); j++) end = j;
         for (const item of offset(pt.bullets(lines.slice(i + 1, end + 1).join('\n')), i + 1)) {
           if (isClaimed(item.start)) continue;
           const n = npcFrom(item.text);

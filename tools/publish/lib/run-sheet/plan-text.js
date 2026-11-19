@@ -112,16 +112,17 @@ function sections(body, level) {
 // with a space.
 function labels(text) {
   const lines = linesOf(text);
+  const fenced = fenceMask(lines);
   const out = [];
   for (let i = 0; i < lines.length; i++) {
-    const m = lines[i].match(LABEL);
+    const m = fenced[i] ? null : lines[i].match(LABEL);
     if (!m) continue;
     const parts = m[2].trim() === '' ? [] : [m[2].trim()];
     let end = i;
     // an empty value makes this line a block head: the lines after it belong to block()
     while (parts.length > 0 && end + 1 < lines.length) {
       const nx = lines[end + 1];
-      if (isBlank(nx) || LABEL.test(nx) || BLOCK_HEAD.test(nx) || BULLET.test(nx) || isTableRow(nx) || isQuote(nx) || HEADING.test(nx)) break;
+      if (fenced[end + 1] || isBlank(nx) || LABEL.test(nx) || BLOCK_HEAD.test(nx) || BULLET.test(nx) || isTableRow(nx) || isQuote(nx) || HEADING.test(nx)) break;
       parts.push(nx.trim());
       end++;
     }
@@ -154,14 +155,15 @@ function endsBlock(line) {
 function blocks(text, name) {
   const key = nameKey(name);
   const lines = linesOf(text);
+  const fenced = fenceMask(lines);
   const out = [];
   for (let at = 0; at < lines.length; at++) {
-    const h = lines[at].match(BLOCK_HEAD);
+    const h = fenced[at] ? null : lines[at].match(BLOCK_HEAD);
     if (!h || nameKey(h[1]) !== key) continue;
     let end = at;
     // a bulleted `- **Lead:** words` that continues the list (no blank line before it) is an item
     // of the block; after a blank line it is the next field
-    const ends = (l, i) => endsBlock(l) && !(i > at + 1 && !isBlank(lines[i - 1]) && /^[-*+]\s/.test(l) && LABEL.test(l) && !BLOCK_HEAD.test(l));
+    const ends = (l, i) => fenced[i] || endsBlock(l) && !(i > at + 1 && !isBlank(lines[i - 1]) && /^[-*+]\s/.test(l) && LABEL.test(l) && !BLOCK_HEAD.test(l));
     for (let i = at + 1; i < lines.length && !ends(lines[i], i); i++) if (!isBlank(lines[i])) end = i;
     const sub = lines.slice(at + 1, end + 1).join('\n');
     out.push({ value: sub.trim(), start: at, end, sub });
@@ -257,8 +259,10 @@ function links(text) {
 function readAloud(text) {
   const groups = [];
   let cur = null;
-  for (const l of linesOf(text)) {
-    if (!isQuote(l)) { cur = null; continue; }
+  const all = linesOf(text);
+  const fenced = fenceMask(all);
+  for (const [i, l] of all.entries()) {
+    if (fenced[i] || !isQuote(l)) { cur = null; continue; }
     const t = l.replace(/^\s*>[ \t]?/, '');
     if (!cur) { cur = []; groups.push(cur); }
     if (/^\s*\[![^\]]*\]/.test(t)) continue;
@@ -271,8 +275,10 @@ function readAloud(text) {
 function readAloudRanges(text) {
   const out = [];
   let cur = null;
-  linesOf(text).forEach((l, i) => {
-    if (!isQuote(l)) { cur = null; return; }
+  const all = linesOf(text);
+  const fenced = fenceMask(all);
+  all.forEach((l, i) => {
+    if (fenced[i] || !isQuote(l)) { cur = null; return; }
     if (!cur) { cur = { start: i, end: i }; out.push(cur); } else cur.end = i;
   });
   return out;
@@ -289,4 +295,4 @@ function unclaimed(text, claimed) {
   return linesOf(text).filter((_, i) => !taken.has(i)).join('\n').replace(/^(?:[ \t]*\n)+/, '').replace(/(?:\n[ \t]*)+$/, '').trim();
 }
 
-module.exports = { LABEL, HEADING_LINE, isBlank, nameKey, isSeparatorRow, cleanText, sections, labels, label, endsBlock, blocks, block, tableRows, tableRanges, bullets, links, readAloud, readAloudRanges, unclaimed };
+module.exports = { LABEL, fenceMask, HEADING_LINE, isBlank, nameKey, isSeparatorRow, cleanText, sections, labels, label, endsBlock, blocks, block, tableRows, tableRanges, bullets, links, readAloud, readAloudRanges, unclaimed };

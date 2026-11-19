@@ -171,3 +171,30 @@ test('a closing run of # needs a space before it, as notes.js reads note heading
   assert.deepEqual(t.sections('## C#\nx\n## Done ##\ny', 2), [{ title: 'C#', text: 'x' }, { title: 'Done', text: 'y' }]);
   assert.equal(t.HEADING_LINE.exec('## C#')[2], 'C#');
 });
+
+test('nothing is read as a field from inside fenced code', () => {
+  const F = '```\n';
+  const fl = `${F}**Situation:** fake\n${F}`;
+  assert.deepEqual(t.labels(fl), []);
+  assert.equal(t.label(fl, 'Situation'), '');
+  assert.equal(t.labels('**Situation:** real')[0].value, 'real');
+  // a value does not wrap into a fence
+  const wrap = t.labels(`**Situation:** a\n${F}b\n${F}`);
+  assert.equal(wrap[0].value, 'a');
+  assert.equal(wrap[0].end, 0);
+  // a block head inside a fence is no block; a real block stops at a fence opener
+  assert.deepEqual(t.blocks(`${F}**NPCs**\n- x\n${F}`, 'NPCs'), []);
+  const b = t.block(`**NPCs**\n- x\n${F}- y\n${F}`, 'NPCs');
+  assert.equal(b.value, '- x');
+  assert.equal(b.end, 1);
+  assert.equal(t.block('**NPCs**\n- x', 'NPCs').value, '- x');
+  // quotes in a fence are not read aloud
+  assert.equal(t.readAloud(`${F}> example\n${F}`), '');
+  assert.deepEqual(t.readAloudRanges(`${F}> example\n${F}`), []);
+  assert.equal(t.readAloud('> real'), 'real');
+  assert.deepEqual(t.readAloudRanges('> real'), [{ start: 0, end: 0 }]);
+  // so the fenced lines stay unclaimed
+  const text = `**Situation:** real\n${F}**Situation:** fake\n> example\n${F}`;
+  const claimed = t.labels(text).map((l) => ({ start: l.start, end: l.end }));
+  assert.equal(t.unclaimed(text, claimed), `${F}**Situation:** fake\n> example\n${F}`.trim());
+});
