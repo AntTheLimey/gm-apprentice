@@ -466,7 +466,10 @@ class OfferTests(Base):
         res = self.update({self.asked(): "retire"})
         self.assertEqual(res.exit, 0)
         self.assertIn("Retire gravity-by-hand-on-the-sheet: PCs/Six.md, "
-                      "memory:gravity.md", res.notes)
+                      "memory:gravity.md. Nothing is retired yet: swap it for "
+                      "the built-in way, then run gma workaround retire "
+                      "\"<vault>\" gravity-by-hand-on-the-sheet --reason "
+                      "\"<why>\".", res.notes)
         self.assertTrue((self.vault / "PCs" / "Six.md").exists())
         self.assertEqual((self.vault / "_meta" / "update-record.json").read_text(),
                          before)
