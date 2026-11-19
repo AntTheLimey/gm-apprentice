@@ -51,6 +51,28 @@ const BOLD_LEAD = /^\*\*([^*\n]+?)\*\*/;
 const COLON_LEAD = /^\*\*[^*\n]+?(?::\*\*|\*\*:)/;
 // Two or more links led together: `**[[Sister Wren]] and [[Durgan Flintmere]]:** want X` (bullet marker removed).
 const MULTI_NPC = /^\*\*(\[\[[^\]]+\]\](?:(?:\s*,\s*and\s+|\s*,\s*|\s+and\s+|\s*&\s*)\[\[[^\]]+\]\])+):?\*\*:?[ \t]*([\s\S]*)$/;
+// A bold lead that holds a link and other words: `**[[Pip Callow]] the stable boy:** wants` or
+// `**[[Ice Mephit]] ×6:** wants`. Group 1 the lead (a colon may end it), group 2 the words after.
+const WORDY_LEAD = /^\*\*([^*\n]*?\[\[[^*\n]*?)\*\*:?[ \t]*([\s\S]*)$/;
+const NUMBER_WORDS = { two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12 };
+const NUMBER_WORD_COUNT = new RegExp(`^(${Object.keys(NUMBER_WORDS).join('|')})\\s+(\\S[\\s\\S]*)$`, 'i');
+// The count a person's words carry: a leading digit (`6 ice mephits`), a leading number word
+// (`Six ice mephits`, for a creature note only: `Three Fingers` is a name), or `×6` / `6×` at the end.
+// plan_check.py needs no copy of this: it counts no people.
+const countIn = (text, wordsOk) => {
+  const t = text.trim();
+  let m = t.match(/^(\d+)$/);
+  if (m) return Number(m[1]) > 0 ? { count: Number(m[1]), rest: '' } : null;
+  m = t.match(/^(\d+)(?:\s*[×x])?\s+(\S[\s\S]*)$/i);
+  if (m && Number(m[1]) > 0) return { count: Number(m[1]), rest: m[2].trim() };
+  m = wordsOk ? t.match(NUMBER_WORD_COUNT) : null;
+  if (m) return { count: NUMBER_WORDS[m[1].toLowerCase()], rest: m[2].trim() };
+  m = t.match(/^([\s\S]*?)(?:^|\s)(?:[×x]\s*(\d+)|(\d+)\s*[×x])$/i);
+  const n = m ? Number(m[2] || m[3]) : 0;
+  return n > 0 ? { count: n, rest: m[1].trim() } : null;
+};
+// A hub place bullet led by a bare link and a separator: `[[The Chapel]]: Rosie is here`, `[[The Chapel]] - …`.
+const LINK_THEN_SEP = /^(\[\[[^\]]+\]\])\s*(?:[:,;]|[—–-](?=\s)|$)\s*([\s\S]*)$/;
 const BLOCK_NAMES = new Set(['npcs', 'points to land', 'if the players', 'treasure', 'complications', 'then']);
 
 const linesOf = (text) => pt.cleanText(text).split('\n');
@@ -264,14 +286,56 @@ function readBeats(planBody, index) {
     const who = [];
     const inWho = (note, name) => who.some((w) => (note ? w.note === note : !w.note && w.name === name));
     // Every person a bullet's lead names: one for `**[[Note]]:**` or a plain bold name, one per link
-    // for a lead of several links, all sharing the words after it.
+    // for a lead of several links, all sharing the words after it. Only npc and creature notes are
+    // people there: a linked item, place or PC is not.
+    const isFolk = (note) => ['npc', 'creature'].includes(typeOf(note));
     const npcsFrom = (itemText, plain = false) => {
       const multi = itemText.match(MULTI_NPC);
       if (multi) {
-        return (multi[1].match(LINK) || []).map((lk) => npcFrom(`**${lk}:** ${multi[2]}`, false)).filter(Boolean);
+        return (multi[1].match(LINK) || []).map((lk) => npcFrom(`**${lk}:** ${multi[2]}`, false)).filter((n) => {
+          const note = n && n.target ? resolve(n.target) : null;
+          return n && (!note || isFolk(note));
+        });
       }
       const one = npcFrom(itemText, plain);
-      return one ? [one] : [];
+      return one ? [one] : wordyNpcs(itemText);
+    };
+    // A person's count, as written in their words (`Six ice mephits`, `×6`), and the words left.
+    const withCount = (known, note, base) => {
+      const c = countIn(known, typeOf(note) === 'creature');
+      return c ? { count: c.count, counted: true, rest: c.rest } : { count: base, counted: false, rest: known };
+    };
+    // `**[[Pip Callow]] the stable boy:** wants`: the lead's npc and creature links are people (a
+    // first link to a note the vault lacks too); the lead's other words go with theirs.
+    const wordyNpcs = (itemText) => {
+      const m = itemText.match(WORDY_LEAD);
+      if (!m) return [];
+      const lead = m[1].replace(/[\s:]+$/, '');
+      const after = m[2].replace(/\s+/g, ' ').trim();
+      const found = (lead.match(LINK) || []).map((raw) => {
+        const lp = raw.startsWith('!') ? null : linkParts(raw.slice(2, -2));
+        return { raw, lp, note: lp ? resolve(lp.target) : null };
+      });
+      const folks = found.filter((f, i) => f.lp && (f.note ? isFolk(f.note) : i === 0));
+      if (!folks.length) return [];
+      let at = 0;
+      let extra = lead.replace(LINK, () => {
+        const f = found[at++];
+        return folks.includes(f) || !f.lp ? '' : f.lp.display || f.lp.name;
+      }).replace(/\s+/g, ' ').replace(/^[\s,;:.—–-]+|[\s,;:—–-]+$/g, '');
+      let loose = null;
+      if (folks.length === 1 && extra) {
+        loose = countIn(extra, typeOf(folks[0].note) === 'creature');
+        if (loose) extra = loose.rest;
+      }
+      const wants = extra && after ? `${extra}: ${after}` : (extra || after);
+      return folks.map((f) => {
+        const w = withCount(f.lp.display, f.note, 1);
+        return {
+          target: f.lp.target, name: f.lp.name, knownAs: w.rest,
+          count: w.counted ? w.count : (loose ? loose.count : 1), counted: w.counted || Boolean(loose), wants,
+        };
+      });
     };
     const npcFrom = (itemText, plain = false) => {
       const m = itemText.match(NPC_LINE);
@@ -289,9 +353,10 @@ function readBeats(planBody, index) {
       const paren = (m[2] !== undefined ? m[2] : m[3]);
       const p = paren === undefined ? '' : paren.trim();
       const counted = /^\d+$/.test(p);
-      const count = counted ? Number(p) : 1;
-      const knownAs = p && !counted ? p : l.display;
-      return { target: l.target, name: l.name, knownAs, count, counted, wants: m[4].replace(/\s+/g, ' ').trim() };
+      const known = p && !counted ? p : l.display;
+      // `(6)` is the count; else a number in the alias or name (`[[Ice Mephit|Six ice mephits]]`) is
+      const w = counted ? { count: Number(p), counted: true, rest: known } : withCount(known, resolve(l.target), 1);
+      return { target: l.target, name: l.name, knownAs: w.rest, count: w.count, counted: w.counted, wants: m[4].replace(/\s+/g, ' ').trim() };
     };
     const person = (note, n) => ({ note, name: n.name, knownAs: n.knownAs, count: n.count, wants: n.wants, playAs: playAsOf(note, index) });
 
@@ -371,9 +436,14 @@ function readBeats(planBody, index) {
           let rest;
           if (nb) { name = nb[1].trim(); rest = nb[2]; } else {
             // a plain bullet is named by its first line
+            // a bare link first ends the name when a separator follows it (`: `, ` - `, `,`, ` — `)
+            const led = first.match(LINK_THEN_SEP);
             const dash = first.indexOf(' — ');
-            name = dash === -1 ? first : first.slice(0, dash);
-            rest = (dash === -1 ? '' : first.slice(dash + 3)) + (more.length ? `\n${more.join('\n')}` : '');
+            if (led) { name = led[1]; rest = led[2]; } else {
+              name = dash === -1 ? first : first.slice(0, dash);
+              rest = dash === -1 ? '' : first.slice(dash + 3);
+            }
+            rest += more.length ? `\n${more.join('\n')}` : '';
           }
           const nameLinks = name.match(LINK) || [];
           let note = nameLinks.length ? resolve(linkParts(nameLinks[0].replace(/^!?\[\[|\]\]$/g, '')).target) : null;

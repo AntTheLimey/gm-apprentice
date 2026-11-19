@@ -695,6 +695,56 @@ describe('run sheet beats: the Plan shape', () => {
       assert.match(foes[0].message, /Tomas/);
     });
 
+    const MORE = {
+      ...NOTES,
+      'Characters/NPCs/Pip Callow.md': `---\nname: Pip Callow\ntype: npc\n---\n\n## GM Notes\n\n### Stats\n\nCommoner (SRD)\n`,
+      'Items/Silver Votive Lamp.md': note('item', 'Silver Votive Lamp'),
+      'Creatures/Ice Mephit.md': `---\nname: Ice Mephit\ntype: creature\n---\n\n## GM Notes\n\n### Stats\n\nIce Mephit (SRD)\n`,
+      'Locations/The Chapel.md': note('location', 'The Chapel'),
+      'Characters/NPCs/Rosie Tallowby.md': `---\nname: Rosie Tallowby\ntype: npc\n---\n\n## GM Notes\n\n### Stats\n\nCommoner (SRD)\n`,
+    };
+    const npcs = (line, ent = '**Entities:** [[Pip Callow]], [[Sister Wren]]\n') => bothSides(SCENE(`${ent}**NPCs**\n${line}\n`), MORE);
+
+    it('an NPC lead with words after the link reads the npc and creature links, in both', () => {
+      const pip = npcs('- **[[Pip Callow]] the stable boy:** wants the cart back');
+      assert.deepStrictEqual(pip.beats[0].who.map((w) => [w.name, w.wants]), [['Pip Callow', 'the stable boy: wants the cart back']]);
+      assert.ok(!pip.ids.includes('no-npcs-block'));
+      assert.strictEqual(pip.findings.filter((f) => f.id === 'foe-no-numbers').length, 1);
+      // a linked item is not a person; the extra words go with the person's
+      const wren = npcs('- **[[Sister Wren]], keeper of the [[Silver Votive Lamp]]:** counts the wicks');
+      assert.deepStrictEqual(wren.beats[0].who.map((w) => [w.name, w.wants]), [['Sister Wren', 'keeper of the Silver Votive Lamp: counts the wicks']]);
+    });
+
+    it('a two-link lead makes people of npcs and creatures only (an item or a PC is not one)', () => {
+      const r = npcs('- **[[Sister Wren]] and [[Silver Votive Lamp]]:** polish it\n- **[[Oswin]] and [[Pip Callow]]:** argue');
+      assert.deepStrictEqual(r.beats[0].who.map((w) => w.name), ['Sister Wren', 'Pip Callow']);
+    });
+
+    it('a count in the alias or the lead words is the count, in both', () => {
+      for (const line of ['- **[[Ice Mephit|Six ice mephits]]:** hover', '- **[[Ice Mephit|6 ice mephits]]:** hover', '- **[[Ice Mephit]] ×6:** hover', '- **[[Ice Mephit]] (6):** hover', '- **[[Ice Mephit]] x6:** hover']) {
+        const r = npcs(line, '**Entities:** [[Ice Mephit]]\n');
+        assert.deepStrictEqual(r.beats[0].who.map((w) => [w.name, w.count, w.wants]), [['Ice Mephit', 6, 'hover']], line);
+      }
+      const alias = npcs('- **[[Ice Mephit|Six ice mephits]]:** hover', '**Entities:** [[Ice Mephit]]\n');
+      assert.strictEqual(alias.beats[0].who[0].knownAs, 'ice mephits');
+      // a number word in an npc's name is a name, not a count
+      const three = npcs('- **[[Sister Wren|Three Fingers Wren]]:** hides', '**Entities:** [[Sister Wren]]\n');
+      assert.strictEqual(three.beats[0].who[0].count, 1);
+    });
+
+    it('a hub place led by a bare link splits at the separator, and both sides read the people', () => {
+      for (const sep of [': ', ' - ', ', ', ' — ']) {
+        const r = bothSides(HUB(`- [[The Chapel]]${sep}[[Rosie Tallowby]] is here\n`), MORE);
+        const spot = r.beats[0].spots[0];
+        assert.deepStrictEqual([spot.name, spot.note, spot.people], ['The Chapel', 'Locations/The Chapel.md', ['Characters/NPCs/Rosie Tallowby.md']], sep);
+        assert.strictEqual(r.beats[0].who.length, 1, sep);
+        assert.strictEqual(r.findings.filter((f) => f.id === 'foe-no-numbers').length, 1, sep);
+      }
+      // words straight after the link, with no separator, keep the old whole-line name
+      const words = bothSides(HUB('- [[The Chapel]] and the yard — Rosie waits\n'), MORE);
+      assert.strictEqual(words.beats[0].spots[0].name, 'The Chapel and the yard');
+    });
+
     it('a Who line counts as people only with a link, in both', () => {
       const base = '**Entities:** [[Sister Wren]]\n';
       const bare = bothSides(SCENE(`${base}- **Who:** Wren and the cook.\n`), NOTES);
