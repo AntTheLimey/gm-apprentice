@@ -607,8 +607,177 @@ class BatchTests(unittest.TestCase):
         note = SCENE_FM + "\n## Setup\n\n" + SCENE.split("---\n\n", 1)[1]
         for mode in ("--replace", "--append"):
             self.lead_refused(note, "**Situation:** New.\n",
-                              "reads like one", mode)
+                              "reads like a lead", mode)
         self.assertIn("reads like a lead", self.lead_read(note))
+
+    def test_a_lead_with_no_situation_while_one_sits_below_is_refused(self):
+        """#760: a draft scene's intro above a `### Scene N:` heading, its
+        Situation under the heading. The intro is no lead: replacing it
+        would leave the real one below, two Situations."""
+        note = (SCENE_FM + "\n*Draft for the Plan.*\n\n### Scene N: Mill\n\n"
+                + PAUSED_LEAD + SCENE_GM)
+        for mode in ("--replace", "--append"):
+            self.lead_refused(note, "**Situation:** New.\n",
+                              "reads like a lead", mode)
+        self.assertIn("reads like a lead", self.lead_read(note))
+        # A lead with no Situation and none below is still a lead, and so is
+        # one whose only lead-shaped line below is an If-table in a later
+        # section (Canticle's Governor's Ball).
+        for tail in ("## Notes\n\nx\n",
+                     "## Contingencies\n\n**If the players...**\n\n| a | b |\n"):
+            plain = SCENE_FM + "\nA quiet scene.\n\n" + tail
+            self.assertEqual(self.lead_read(plain), "A quiet scene.\n")
+
+    # --- #760: a gm-only block at the top (an older scene's hidden picture)
+
+    TOP_BLOCK = "<!-- gm-only -->\n![[scene-picture.png]]\n<!-- /gm-only -->\n\n"
+
+    def test_lead_below_a_top_gm_only_block_is_read_and_written(self):
+        """With a title above the block or none, the lead is the text below
+        the block, and no write touches the block."""
+        for head in ("\n# The Hour Before Light\n\n", "\n"):
+            note = SCENE_FM + head + self.TOP_BLOCK + PAUSED_LEAD + SCENE_GM
+            above = SCENE_FM + head + self.TOP_BLOCK
+            self.assertEqual(self.lead_read(note), PAUSED_LEAD.strip() + "\n")
+            vault = make_vault(self, {"n.md": note})
+            code, out = batch(vault, PAUSED_REPLACE.replace(SCENE_REL, "n.md"),
+                              "--write")
+            self.assertEqual(code, 0, out)
+            self.assertEqual(read(vault, "n.md"), above + "**Situation:** "
+                             "Night 3.\n\n**Starts it:** The well bell.\n\n"
+                             + SCENE_GM)
+            vault = make_vault(self, {"n.md": note})
+            code, out = batch(vault, '=== section "n.md" --lead --append\n'
+                              "| Hide | Found by dawn |\n", "--write")
+            self.assertEqual(code, 0, out)
+            self.assertEqual(read(vault, "n.md"), note.replace(
+                "| Run | Caught |\n", "| Run | Caught |\n"
+                "| Hide | Found by dawn |\n"))
+
+    def test_lead_below_a_top_gm_only_block_round_trips(self):
+        note = (SCENE_FM + "\n# The Hour Before Light\n\n" + self.TOP_BLOCK
+                + PAUSED_LEAD + SCENE_GM)
+        vault = make_vault(self, {"n.md": note})
+        code, out = batch(vault, '=== section "n.md" --lead --replace\n'
+                          + self.lead_read(note), "--write")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(read(vault, "n.md"), note)
+
+    def test_an_empty_lead_below_a_top_gm_only_block_is_written_below_it(self):
+        note = SCENE_FM + "\n# Title\n\n" + self.TOP_BLOCK + SCENE_GM
+        self.assertIn("no text below the gm-only block at its top",
+                      self.lead_read(note))
+        vault = make_vault(self, {"n.md": note})
+        code, out = batch(vault, '=== section "n.md" --lead --replace\n'
+                          "**Situation:** Night 3.\n", "--write")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(read(vault, "n.md"), note.replace(
+            "/gm-only -->\n\n", "/gm-only -->\n\n**Situation:** Night 3.\n\n",
+            1))
+
+    def test_an_older_scenes_setup_section_below_a_top_block_is_refused(self):
+        """Canticle's older Plan scenes: title, hidden picture, an italic
+        intro, then the Situation under `## Setup`. The intro is no lead."""
+        note = (SCENE_FM + "\n# Scene 6\n\n" + self.TOP_BLOCK
+                + "*Part of the Plan.*\n\n## Setup\n\n" + PAUSED_LEAD
+                + SCENE_GM)
+        for mode in ("--replace", "--append"):
+            self.lead_refused(note, "**Situation:** New.\n",
+                              "reads like a lead", mode)
+        self.assertIn("reads like a lead", self.lead_read(note))
+
+    def test_a_comment_wrapped_round_the_top_block_is_not_skipped(self):
+        """Skipped, the block would leave the comment's `-->` in the lead,
+        and --replace would put the new text inside the comment, hidden."""
+        note = (SCENE_FM + "\n<!-- prompt\n" + self.TOP_BLOCK.rstrip("\n")
+                + "\n-->\n\n**Situation:** old\n")
+        for mode in ("--replace", "--append"):
+            vault = make_vault(self, {"n.md": note})
+            code, out = batch(vault, f'=== section "n.md" --lead {mode}\n'
+                              "**Situation:** NEW.\n", "--write")
+            self.assertEqual(code, 1, out)
+            self.assertEqual(read(vault, "n.md"), note)
+
+    def test_a_hidden_situation_below_a_plain_lead_is_no_misread(self):
+        """An alternative opening in the GM Notes, or one in a spoiler block,
+        is not the lead: the plain lead above it stays writable."""
+        for tail in ("<!-- gm-only -->\n\n## GM Notes\n\n**Starts it:** alt\n"
+                     "\n<!-- /gm-only -->\n",
+                     # A section the site hides, unfenced (the built-in
+                     # player_site.hide.sections names GM Notes).
+                     "## GM Notes\n\n**Starts it:** alt\n",
+                     "<!-- spoiler -->\n**Situation:** x\n<!-- /spoiler -->\n"):
+            note = SCENE_FM + "\nA quiet scene.\n\n" + tail
+            self.assertEqual(self.lead_read(note), "A quiet scene.\n")
+            vault = make_vault(self, {"n.md": note})
+            code, out = batch(vault, '=== section "n.md" --lead --replace\n'
+                              "**Situation:** New.\n", "--write")
+            self.assertEqual(code, 0, out)
+            self.assertEqual(read(vault, "n.md"), note.replace(
+                "A quiet scene.", "**Situation:** New."))
+
+    def test_a_paused_scene_with_a_top_block_takes_a_lead_write(self):
+        """scene-paused puts its section at the very top, above a title and
+        a hidden picture: all three are skipped, in any order."""
+        snapshot = PAUSED.split("---\n\n", 1)[1].split(PAUSED_LEAD)[0]
+        for head in (snapshot + "# The Hour Before Light\n\n" + self.TOP_BLOCK,
+                     snapshot + self.TOP_BLOCK,
+                     "# The Hour Before Light\n\n" + snapshot + self.TOP_BLOCK,
+                     self.TOP_BLOCK + "# The Hour Before Light\n\n",
+                     self.TOP_BLOCK + self.TOP_BLOCK.replace("scene-picture",
+                                                             "source")):
+            note = SCENE_FM + "\n" + head + PAUSED_LEAD + SCENE_GM
+            self.assertEqual(self.lead_read(note), PAUSED_LEAD.strip() + "\n",
+                             head)
+            vault = make_vault(self, {"n.md": note})
+            code, out = batch(vault, PAUSED_REPLACE.replace(SCENE_REL, "n.md"),
+                              "--write")
+            self.assertEqual(code, 0, (head, out))
+            self.assertEqual(read(vault, "n.md"), SCENE_FM + "\n" + head
+                             + "**Situation:** Night 3.\n\n**Starts it:** The "
+                             "well bell.\n\n" + SCENE_GM)
+
+    def test_a_paused_section_leaving_a_comment_open_is_refused(self):
+        """Read past it, the lead would seem visible and a write land inside
+        the open `%%` comment, hidden (CodeRabbit on #783)."""
+        snapshot = PAUSED.split("---\n\n", 1)[1].split(PAUSED_LEAD)[0]
+        note = (SCENE_FM + "\n" + snapshot.replace(
+            "- **Where:**", "%% unfinished\n- **Where:**") + self.TOP_BLOCK
+            + "**Situation:** Old.\n")
+        for mode in ("--replace", "--append"):
+            self.lead_refused(note, "**Situation:** New.\n",
+                              "leaves a comment or code fence open", mode)
+
+    def test_a_top_block_on_a_crlf_note_in_capitals(self):
+        note = (SCENE_FM + "\n# Title\n\n<!-- GM-ONLY -->\n![[p.png]]\n"
+                "<!--/GM-ONLY-->\n\n" + PAUSED_LEAD + SCENE_GM)
+        crlf = note.replace("\n", "\r\n")
+        vault = make_vault(self, {"n.md": crlf})
+        code, out = batch(vault, PAUSED_REPLACE.replace(SCENE_REL, "n.md"),
+                          "--write")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(read(vault, "n.md"), note.replace(
+            PAUSED_LEAD, "**Situation:** Night 3.\n\n**Starts it:** The well "
+            "bell.\n\n").replace("\n", "\r\n"))
+
+    def test_only_a_plain_top_gm_only_block_is_skipped(self):
+        """A spoiler block, a block whose marker shares a line with text, or
+        one never closed is not skipped: the guard refuses the scene."""
+        for top in ("<!-- spoiler -->\nx\n<!-- /spoiler -->\n\n",
+                    "<!-- gm-only -->x\n<!-- /gm-only -->\n\n",
+                    "<!-- gm-only -->\nx\n<!-- /gm-only --> y\n\n",
+                    "<!-- gm-only -->\nx\n<!-- spoiler -->\ny\n<!-- /spoiler -->"
+                    "\n<!-- /gm-only -->\n\n",
+                    "<!-- gm-only -->\n## Secret\nx\n<!-- /gm-only -->\n\n",
+                    "<!-- gm-only -->\nGM Notes\n--------\nx\n<!-- /gm-only -->"
+                    "\n\n"):
+            note = SCENE_FM + "\n# Title\n\n" + top + PAUSED_LEAD + SCENE_GM
+            for mode in ("--replace", "--append"):
+                vault = make_vault(self, {"n.md": note})
+                code, out = batch(vault, f'=== section "n.md" --lead {mode}\n'
+                                  "**Situation:** New.\n", "--write")
+                self.assertEqual(code, 1, (top, out))
+                self.assertEqual(read(vault, "n.md"), note)
 
     # --- #758: an older scene's `# Title` line sits above its lead
 
@@ -653,18 +822,17 @@ class BatchTests(unittest.TestCase):
 
     def test_text_above_a_title_is_the_lead(self):
         """Nothing visible may stand above a title the lead skips."""
-        note = SCENE_FM + "\nIntro.\n\n# Title\n\n**Situation:** x\n"
+        note = SCENE_FM + "\nIntro.\n\n# Title\n\nBody.\n"
         self.assertEqual(self.lead_read(note), "Intro.\n")
-
-    def test_a_titled_lead_below_a_top_gm_only_block_is_refused(self):
-        """Out of scope for now: the guard holds, nothing is written."""
-        note = TITLED.replace(
-            "Light\n\n", "Light\n\n<!-- gm-only -->\nSecret.\n"
-            "<!-- /gm-only -->\n\n", 1)
-        for mode in ("--replace", "--append"):
-            self.lead_refused(note, "**Situation:** New.\n",
-                              "reads like one", mode)
+        # With a Situation below the title, which text is the lead is a guess.
+        note = SCENE_FM + "\nIntro.\n\n# Title\n\n**Situation:** x\n"
         self.assertIn("reads like a lead", self.lead_read(note))
+
+    def test_a_top_gm_only_block_under_text_is_not_skipped(self):
+        """Nothing visible may stand above a block the lead skips."""
+        note = (SCENE_FM + "\n# Title\n\nIntro.\n\n" + self.TOP_BLOCK
+                + "Body.\n")
+        self.assertEqual(self.lead_read(note), "Intro.\n")
 
     def test_section_text_may_not_land_inside_a_fence_left_open(self):
         """Appended to a last section that ends inside an unclosed fence, a

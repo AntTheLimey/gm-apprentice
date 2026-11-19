@@ -7,8 +7,10 @@ Usage:
 
 `--lead` prints the note's lead instead: the text above its first heading
 or gm-only/spoiler block, where a scene keeps its Situation, Starts it and
-If-table (#738); below a `# Title` line, and on a paused scene after its
-`## Paused` section (#758). A batch's `=== section NOTE --lead` block writes it.
+If-table (#738); below a `# Title` line, a gm-only block at the top (#760),
+and on a paused scene after its `## Paused` section (#758). A lead that
+seems misread (a Situation further down) is refused. A batch's
+`=== section NOTE --lead` block writes it.
 
 NOTE is a vault-relative path, a note's name or one of its aliases. PATH
 is `Heading` or `Heading/Sub/...`, matched without regard to case and
@@ -93,8 +95,9 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--lead", action="store_true",
                     help="print the note's lead instead: the text above its "
                     "first heading or hidden block (a scene's Situation, "
-                    "Starts it and If-table; below a # title line, and on a "
-                    "paused scene below its Paused section)")
+                    "Starts it and If-table; below a # title line and a "
+                    "gm-only block at the top, and on a paused scene below "
+                    "its Paused section)")
     ap.epilog = 'Example: gma section "<vault>" "<note>" "Current Status/Session Log"'
     return ap
 
@@ -119,7 +122,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.lead:
         doc = vw.parse(text)
         try:
-            first, end, _walk = vw.checked_lead(doc, rel)
+            first, end, _walk = vw.checked_lead(
+                doc, rel, vw.hidden_sections(args.vault))
         except vw.WriteError as e:
             print(f"error: {e}", file=sys.stderr)
             return 1
@@ -132,12 +136,9 @@ def main(argv: list[str] | None = None) -> int:
             body.pop()
         lead = doc.eol.join(body)
         if not lead.strip():
-            where = vw.lead_where(doc, first)
-            shape = vw.lead_shape_below(doc, end)
-            print(f"error: {rel} has no text {where}"
-                  + (f"; line {shape + 1} ({doc.lines[shape].strip()!r}) "
-                     f"reads like a lead, so the lead is not where it "
-                     f"seems" if shape is not None else ""),
+            # (A lead-shaped line below an empty lead is refused by
+            # checked_lead itself.)
+            print(f"error: {rel} has no text {vw.lead_where(doc, first)}",
                   file=sys.stderr)
             return 1
         sys.stdout.buffer.write((lead + doc.eol).encode("utf-8"))
