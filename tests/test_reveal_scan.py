@@ -205,6 +205,18 @@ class RevealScan(unittest.TestCase):
                        publishing=["Places/Mill.md"])
         self.assertEqual(res.rows[0].hidden, ["gm_aliases: The Widow"])
 
+    def test_a_disguised_npc_shows_its_true_name_and_face(self) -> None:
+        pedlar = ("---\ntype: npc\nunmasked_name: \"Captain Rook\"\n"
+                  "unmasked_portrait: rook.png\n---\n\n# Pedlar\n")
+        res = run_scan({**base(play="Met [[Pedlar]].\n"), "NPCs/Pedlar.md": pedlar},
+                       publishing=["NPCs/Pedlar.md"])
+        self.assertEqual(res.rows[0].hidden,
+                         ["unmasked_name: Captain Rook", "unmasked_portrait: rook.png"])
+        plain = "---\ntype: npc\nunmasked_name: \"\"\nunmasked_portrait: \"\"\n---\n\n# Pedlar\n"
+        res = run_scan({**base(play="Met [[Pedlar]].\n"), "NPCs/Pedlar.md": plain},
+                       publishing=["NPCs/Pedlar.md"])
+        self.assertEqual([r.hidden for r in res.rows if r.path == "NPCs/Pedlar.md"], [])
+
     def test_cli_no_such_index_exits_2(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, \
                 mock.patch.object(rv, "ask_publish_tool", tool()):

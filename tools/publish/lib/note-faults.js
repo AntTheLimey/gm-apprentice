@@ -820,6 +820,8 @@ function startNoteAudit(input) {
     const told = (hit, rel) => (never ? `"${hit.alias}", a word you listed under player_site.never_show` : withheld
       ? `"${hit.alias}", the name of ${hit.owner === rel ? 'this note, which you marked withheld' : `a note you marked withheld (${hit.owner})`}`
       : `"${hit.alias}", a name you keep secret in ${hit.field || 'gm_aliases'}${hit.owner === rel ? '' : ` (of ${hit.owner})`}`);
+    // A finding for a disguised NPC's true name says so, for the build's summary line.
+    const unmaskedField = (hit) => (hit.field === 'unmasked_name' ? { field: 'unmasked_name' } : {});
     const base = (hit) => (never ? { word: hit.alias } : withheld ? { name: hit.alias, ...(everyday.has(hit.alias) ? { everyday: true } : {}) } : { alias: hit.alias });
     const hits = secretHits.filter((h) => h.kind === kind);
     for (const hit of hits.filter((h) => h.out === null)) {
@@ -833,7 +835,7 @@ function startNoteAudit(input) {
           : hit.where === 'address' ? `${told(hit, hit.rel)}, is in the address of a link on the page`
             : `${told(hit, hit.rel)}, is printed on ${hit.where}${hit.count > 1 ? ` ${hit.count} times` : ''}`,
         fix: fixLine(hit.alias, hit.owner, hit.where === 'file', hit.field),
-        ...base(hit), owner: hit.owner, count: hit.count, context: hit.context, listings: [],
+        ...base(hit), ...unmaskedField(hit), owner: hit.owner, count: hit.count, context: hit.context, listings: [],
       });
     }
     const listed = hits.filter((h) => h.out !== null);
@@ -874,7 +876,7 @@ function startNoteAudit(input) {
               ? `"${hit.alias}", ${withheld ? `the name of ${hit.owner === rel ? 'this note, which you marked withheld' : `${secret} (${hit.owner})`}` : `a name you keep secret in ${hit.field || 'gm_aliases'}${hit.owner === rel ? '' : ` (of ${hit.owner})`}`}, is in this note's title, frontmatter or text, and an index or listing page prints it`
               : `"${hit.alias}", ${withheld ? `the name of ${secret} (${hit.owner})` : `a name you keep secret in ${hit.field || 'gm_aliases'} (of ${hit.owner})`}, is printed on this page of the site, which is not built from one note`,
             fix: fixLine(hit.alias, hit.owner, false, hit.field),
-            ...base(hit), owner: hit.owner, count: hit.count, context: hit.context, listings: [],
+            ...base(hit), ...unmaskedField(hit), owner: hit.owner, count: hit.count, context: hit.context, listings: [],
           });
         }
         const finding = out.get(key);
@@ -1192,11 +1194,16 @@ function summaryLines(findings) {
       const names = [...new Set(rows.map((f) => f.name))];
       lines.push(`${names.length} withheld ${plural(names.length, 'name is also the name of a published page', 'names are also the names of published pages')}, so ${plural(names.length, 'it is', 'they are')} not looked for (${names.slice(0, WORST).join(', ')}) — ${where} ${plural(names.length, 'it', 'these')}.`);
     } else {
-      const byAlias = new Map();
-      for (const f of rows) byAlias.set(f.alias, (byAlias.get(f.alias) || 0) + 1);
-      const worst = [...byAlias].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1)).slice(0, WORST)
-        .map(([alias, pages]) => `${alias} ${pages} ${plural(pages, 'page', 'pages')}`);
-      lines.push(`${byAlias.size} GM ${plural(byAlias.size, 'alias is', 'aliases are')} printed on published pages (${worst.join(', ')}) — ${where} ${plural(byAlias.size, 'it', 'these')}.`);
+      // A gm_aliases name and a disguised NPC's unmasked name each get their own line.
+      for (const [what, group] of [[['GM alias is', 'GM aliases are'], rows.filter((f) => f.field !== 'unmasked_name')],
+        [['unmasked name is', 'unmasked names are'], rows.filter((f) => f.field === 'unmasked_name')]]) {
+        if (group.length === 0) continue;
+        const byAlias = new Map();
+        for (const f of group) byAlias.set(f.alias, (byAlias.get(f.alias) || 0) + 1);
+        const worst = [...byAlias].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1)).slice(0, WORST)
+          .map(([alias, pages]) => `${alias} ${pages} ${plural(pages, 'page', 'pages')}`);
+        lines.push(`${byAlias.size} ${plural(byAlias.size, ...what)} printed on published pages (${worst.join(', ')}) — ${where} ${plural(byAlias.size, 'it', 'these')}.`);
+      }
     }
   }
   return lines;

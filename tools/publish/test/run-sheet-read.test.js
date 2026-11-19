@@ -300,11 +300,12 @@ describe('run sheet reader', () => {
       const ash = fs.readFileSync(path.join(dir, ASH), 'utf8');
       write(dir, ASH, ash.replace('type: npc\n', 'type: npc\nunmasked_name: The Ember Abbot\nunmasked_portrait: ""\n'));
       let m = readRunSheet(dir, PLAN, { party: PARTY });
-      assert.deepStrictEqual(m.notes[ASH].unmask, { name: 'The Ember Abbot', portrait: null, playAs: 'rubs his thumb along the rope scar' });
+      // no Unmasked line: the true self speaks as the disguise does (Speech is kept by --unmask)
+      assert.deepStrictEqual(m.notes[ASH].unmask, { name: 'The Ember Abbot', portrait: null, playAs: 'slow, fond of the word "indeed" rubs his thumb along the rope scar' });
       write(dir, ASH, ash.replace('type: npc\n', 'type: npc\nunmasked_name: The Ember Abbot\nunmasked_portrait: nowhere.png\n'));
       m = readRunSheet(dir, PLAN, { party: PARTY });
       assert.strictEqual(m.notes[ASH].unmask.portrait, null);
-      assert.ok(m.warnings.some((w) => w.kind === 'no-portrait' && w.note === ASH && /unmasked_portrait nowhere\.png/.test(w.text)), JSON.stringify(m.warnings));
+      assert.ok(m.warnings.some((w) => w.kind === 'no-portrait' && w.note === ASH && /unmasked_portrait nowhere\.png .*the Unmask has no face/.test(w.text)), JSON.stringify(m.warnings));
     });
   });
 

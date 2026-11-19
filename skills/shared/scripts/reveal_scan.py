@@ -19,7 +19,8 @@ Each listed note is one tab-separated row:
 The hidden parts, joined by `; `: each section title the site withholds
 (as the publish tool names them, e.g. `GM Notes`), `gm-only xN` for N
 `<!-- gm-only -->` blocks, `spoiler: <first words>` per spoiler block, and
-`gm_aliases: a, b`. `prop` marks a note the publish tool says is a prop.
+`gm_aliases: a, b`, and for a disguised NPC `unmasked_name: <name>` and
+`unmasked_portrait: <picture>`. `prop` marks a note the publish tool says is a prop.
 A published note with nothing hidden is left out. An unpublished note is
 always listed.
 
@@ -140,6 +141,13 @@ def _hidden_parts(note: Note, stripped: list[str]) -> list[str]:
         names = [n for n in names if n]
         if names:
             hidden.append("gm_aliases: " + ", ".join(names))
+    # A disguised NPC: its true name and face, which `reveal --unmask` makes its own.
+    for key in ("unmasked_name", "unmasked_portrait"):
+        value = note.fm.get(key)
+        values = value if isinstance(value, list) else [value]
+        shown = [str(v).strip() for v in values if isinstance(v, str) and v.strip()]
+        if shown:
+            hidden.append(f"{key}: " + ", ".join(shown))
     return hidden
 
 

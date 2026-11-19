@@ -64,8 +64,8 @@ from vault_check import _site_config, ask_publish_tool  # noqa: E402
 from vault_write import set_block  # noqa: E402
 from vaultlib import (  # noqa: E402
     WITHHELD_KEY_RE, PublishToolUnavailable, entity_type, extract_frontmatter,
-    frontmatter_span, normalize_file_arg, note_withheld, publish_mode, scalar_value,
-    yaml_scalar)
+    FLOW_ITEM_RE, frontmatter_span, normalize_file_arg, note_withheld, publish_mode,
+    scalar_value, yaml_scalar)
 
 LOG = "_meta/reveals.json"
 EMPTY_VALUES = ("", "[]", "null", "~")     # YAML's empty values, as scalar_value reads them
@@ -234,43 +234,107 @@ def _frontmatter_edit(vault: Path, rel: str, *, clear: bool,
     return "---" + eol + eol.join(fm) + eol + "---" + eol + "".join(lines[end + 1:]), None
 
 
-ALIASES_KEY_RE = re.compile(r"""^["']?aliases["']?[ \t]*:""")
 FLOW_LIST_RE = re.compile(r"^(?P<open>[ \t]*\[)(?P<items>.*?)\](?P<rest>[ \t]+#.*)?[ \t]*$")
 
 
-def _add_alias(head: list[str], name: str) -> None:
-    """Add `name` to `aliases` in the list style the note already uses:
-    a block list gets an item in its own indent after its last item, a
-    flow list stays flow; every other line, comments too, is kept. A
-    lone scalar, an empty key or none becomes a block list."""
-    item = yaml_scalar(name)
-    at = next((i for i, ln in enumerate(head) if ALIASES_KEY_RE.match(ln)), None)
-    if at is None:
-        head.extend(["aliases:", f"  - {item}"])
-        return
-    key, _, value = head[at].partition(":")
+class ListShapeError(ValueError):
+    """A list written in a shape this edit will not touch."""
+
+
+def _key_re(key: str) -> re.Pattern[str]:
+    return re.compile(rf"""^["']?{re.escape(key)}["']?[ \t]*:""")
+
+
+def _list_lines(head: list[str], at: int) -> tuple[int, bool]:
+    """(end, whether the items sit at column zero) of the lines the key at
+    `at` owns: indented or blank lines, and `- ` items at column zero (a
+    block list written flush, as PyYAML and many editors write it)."""
+    value = head[at].partition(":")[2]
+    flush = not scalar_value(value) and at + 1 < len(head) and head[at + 1].startswith("-")
+    end = at + 1
+    while end < len(head) and (not head[end].strip() or head[end][:1].isspace()
+                               or (flush and head[end].startswith(("-", "#")))):
+        end += 1
+    while end > at + 1 and not head[end - 1].strip():
+        end -= 1
+    return end, flush
+
+
+def _flow(key: str, value: str) -> re.Match[str] | None:
+    """The one-line flow list `value` holds, or None for another shape. A
+    flow list that runs over several lines is refused."""
     flow = FLOW_LIST_RE.match(value)
+    if flow is None and value.strip().startswith("["):
+        raise ListShapeError(f"{key} is a list written over several lines: "
+                             f"write it on one line or as a block list, then run again")
+    return flow
+
+
+def _same_name(a: str, b: str) -> bool:
+    return _nfc(a).strip().casefold() == _nfc(b).strip().casefold()
+
+
+def _add_to_list(head: list[str], key: str, name: str) -> None:
+    """Add `name` to the list `key` in the style the note already uses: a
+    block list gets an item in its last item's indent, a flow list stays
+    flow; every other line, comments too, is kept. A lone scalar, an
+    empty key or none becomes a block list."""
+    item = yaml_scalar(name)
+    at = next((i for i, ln in enumerate(head) if _key_re(key).match(ln)), None)
+    if at is None:
+        head.extend([f"{key}:", f"  - {item}"])
+        return
+    k, _, value = head[at].partition(":")
+    flow = _flow(key, value)
     if flow:
         items = flow["items"].strip()
-        head[at] = (f"{key}:{flow['open']}{items + ', ' if items else ''}{item}]"
-                    f"{flow['rest'] or ''}")
+        head[at] = f"{k}:{flow['open']}{items + ', ' if items else ''}{item}]{flow['rest'] or ''}"
         return
-    end = at + 1
-    while end < len(head) and (not head[end].strip() or head[end][:1].isspace()):
-        end += 1
-    owned = head[at + 1:end]
-    last = max((i for i, ln in enumerate(owned) if ln.lstrip().startswith("-")), default=None)
+    end, _ = _list_lines(head, at)
+    last = max((i for i in range(at + 1, end) if head[i].lstrip().startswith("-")), default=None)
     if last is not None:
-        line = owned[last]
-        head.insert(at + 1 + last + 1, f"{line[:len(line) - len(line.lstrip())]}- {item}")
+        line = head[last]
+        head.insert(last + 1, f"{line[:len(line) - len(line.lstrip())]}- {item}")
         return
     if scalar_value(value).lower() not in EMPTY_VALUES:
         # `aliases: Gilt` is one alias: kept, as written, as the list's first item.
-        head[at:at + 1] = [f"{key}:", f"  - {value.strip()}"]
+        head[at:at + 1] = [f"{k}:", f"  - {value.strip()}"]
         at += 1
     elif value.strip() and not value.strip().startswith("#"):
-        head[at] = f"{key}:"    # `aliases: ""` or `~`: an empty value, now a list
+        head[at] = f"{k}:"    # `aliases: ""` or `~`: an empty value, now a list
     head.insert(at + 1, f"  - {item}")
+
+
+def _drop_from_list(head: list[str], key: str, name: str) -> bool:
+    """Take `name` out of the list `key`, keeping its style and every other
+    line; a list left empty is `[]`. True when it was there."""
+    at = next((i for i, ln in enumerate(head) if _key_re(key).match(ln)), None)
+    if at is None:
+        return False
+    k, _, value = head[at].partition(":")
+    flow = _flow(key, value)
+    if flow:
+        raw = [x.strip() for x in FLOW_ITEM_RE.findall(flow["items"]) if x.strip()]
+        kept = [x for x in raw if not _same_name(scalar_value(x), name)]
+        if len(kept) == len(raw):
+            return False
+        head[at] = f"{k}:{flow['open']}{', '.join(kept)}]{flow['rest'] or ''}"
+        return True
+    end, _ = _list_lines(head, at)
+    items = [i for i in range(at + 1, end) if head[i].lstrip().startswith("-")]
+    gone = [i for i in items
+            if _same_name(scalar_value(head[i].lstrip()[1:].strip()), name)]
+    if not gone:
+        if items or not _same_name(scalar_value(value), name):
+            return False
+        head[at] = f"{k}: []"     # `gm_aliases: Lucan`, the one name
+        return True
+    for i in reversed(gone):
+        del head[i]
+    if len(gone) == len(items):
+        comment = value[value.index("#"):] if "#" in value and not scalar_value(value) else ""
+        head[at] = f"{k}: []" + (f"  {comment}" if comment else "")
+    return True
 
 
 def _unmask_edit(vault: Path, rel: str) -> tuple[str | None, dict[str, Any] | None, str]:
@@ -290,9 +354,15 @@ def _unmask_edit(vault: Path, rel: str) -> tuple[str | None, dict[str, Any] | No
     lines = text.splitlines(keepends=True)
     end, error = frontmatter_span(lines)
     if error:
-        return None, None, f"nothing changed: frontmatter {error}"
+        return None, None, f"nothing changed: {error}"
     fm = extract_frontmatter(text) or {}
     name = fm.get("unmasked_name")
+    if isinstance(name, list):
+        names = [n for n in name if isinstance(n, str) and n.strip()]
+        if len(names) > 1:
+            return None, None, (f"nothing changed: unmasked_name is a list of {len(names)} "
+                                f"names; give it the one true name")
+        name = names[0] if names else ""
     if not isinstance(name, str) or not name.strip():
         return None, None, "nothing to unmask: the note has no unmasked_name"
     name = name.strip()
@@ -305,11 +375,18 @@ def _unmask_edit(vault: Path, rel: str) -> tuple[str | None, dict[str, Any] | No
     # `aliases: Gilt` written alone is one alias, kept.
     aliases = [raw] if isinstance(raw, str) and raw.strip() else \
         [a for a in raw if isinstance(a, str)] if isinstance(raw, list) else []
-    if _nfc(name).casefold() not in {_nfc(a).strip().casefold() for a in aliases}:
-        _add_alias(head, name)
-        changes.append(f"aliases + {name}")
-    else:
-        changes.append(f"aliases already hold {name}")
+    try:
+        if any(_same_name(a, name) for a in aliases):
+            changes.append(f"aliases already hold {name}")
+        else:
+            _add_to_list(head, "aliases", name)
+            changes.append(f"aliases + {name}")
+        # The secret is out: a gm_aliases entry for the same name would keep the
+        # site stripping it and the leak check flagging it.
+        if _drop_from_list(head, "gm_aliases", name):
+            changes.append(f"gm_aliases - {name}")
+    except ListShapeError as e:
+        return None, None, f"nothing changed: {e}"
     set_block(head, "unmasked_name", '""')
     old_face = None
     if face:
@@ -317,7 +394,7 @@ def _unmask_edit(vault: Path, rel: str) -> tuple[str | None, dict[str, Any] | No
         old_face = old.strip() if isinstance(old, str) and old.strip() else None
         set_block(head, "portrait", yaml_scalar(face))
         set_block(head, "unmasked_portrait", '""')
-        changes.append(f"portrait {face}")
+        changes.append(f"portrait {old_face or '(none)'} → {face}")
     # Playing Them, only when it has an Unmasked line (without one the true self
     # speaks as the disguise does): the first Speech becomes Disguise and the first
     # Unmasked becomes Speech, each line keeping its own ending.
@@ -539,7 +616,17 @@ def run(vault: Path, session: str, publish: list[str], released: list[tuple[str,
                     row("SKIP", rel, unstamped[rel])
 
     unmasked: list[dict[str, Any]] = []
-    for raw in dict.fromkeys(normalize_file_arg(r) for r in unmask or []):
+    asked = list(dict.fromkeys(normalize_file_arg(r) for r in unmask or []))
+    if asked:
+        # The log is read first: one that cannot be written to must not leave a
+        # note unmasked with its old face nowhere.
+        try:
+            _load_log(vault)
+        except (OSError, ValueError) as e:
+            for raw in asked:
+                error(raw, f"not unmasked, nothing changed: {LOG} cannot be read ({e})")
+            asked = []
+    for raw in asked:
         new, entry, said = _unmask_edit(vault, raw)
         if new is None or entry is None:
             error(raw, said)

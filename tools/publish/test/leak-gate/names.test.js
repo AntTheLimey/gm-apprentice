@@ -46,7 +46,7 @@ describe('leak gate: secret names', () => {
       assert.deepEqual(page && [page.note, page.text], ['NPCs/Pedlar.md', 'captain rook'], JSON.stringify(f));
       assert.match(page.reason, /unmasked_name/);
       // the build's own note audit finds it too
-      assert.ok(s.logs.some((l) => /printed on published pages \(Captain Rook 1 page\)/.test(l)), s.logs.join('\n'));
+      assert.ok(s.logs.some((l) => /1 unmasked name is printed on published pages \(Captain Rook 1 page\)/.test(l)), s.logs.join('\n'));
     } finally { s.cleanup(); }
   });
   it('a withheld name written back by a step, in a JSON file, stops the gate', () => {

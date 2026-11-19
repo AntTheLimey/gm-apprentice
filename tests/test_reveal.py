@@ -10,6 +10,7 @@ import contextlib
 import io
 import json
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -691,12 +692,8 @@ class UnmaskTests(unittest.TestCase):
         self.assertEqual(fm["unmasked_name"], "")
         self.assertEqual(fm["portrait"], "_attachments/rook.png")
         self.assertEqual(fm["unmasked_portrait"], "")
-        text = (self.root / MASK).read_text(encoding="utf-8")
-        self.assertIn("- **Disguise:** sing-song, haggles over farthings\n", text)
-        self.assertIn("- **Speech:** clipped, a soldier's orders\n", text)
-        self.assertNotIn("**Unmasked:**", text)
-        self.assertIn("- **Speech:** not this one", text, "only Playing Them changes")
         self.assertIn("UNMASKED\t" + MASK, out)
+        self.assertIn("portrait _attachments/pedlar.png → _attachments/rook.png", out)
         self.assertIn("unmask: 1", out.splitlines()[-1])
         entries = log_of(self.root)["entries"]
         unmask = [e for e in entries if e.get("kind") == "unmask"]
@@ -712,13 +709,9 @@ class UnmaskTests(unittest.TestCase):
         self.assertEqual(fm["aliases"], ["Old Wick", "Wick", "Hesper"])
         self.assertEqual(fm["unmasked_name"], "")
         self.assertEqual(fm["portrait"], "_attachments/wick.png", "no unmasked face: the face stays")
-        self.assertEqual(fm["gm_aliases"], ["Sister Hesper"])
+        self.assertEqual(fm["gm_aliases"], ["Sister Hesper"], "another secret name stays")
+        self.assertNotIn("gm_aliases -", out)
         self.assertTrue(fm["voice"].startswith("Since the unmasking"))
-        text = (self.root / "NPCs/Wick.md").read_text(encoding="utf-8")
-        self.assertIn("- **Speech:** loud, quick to complain.\n", text,
-                      "no Unmasked line: the same voice, Playing Them left alone")
-        self.assertNotIn("**Disguise:**", text)
-        self.assertNotIn("Speech is now Disguise", out)
         self.assertIn("aliases already hold hesper", out)
         entry = next(e for e in log_of(self.root)["entries"] if e.get("kind") == "unmask")
         self.assertEqual(entry["name"], "hesper")
@@ -791,9 +784,107 @@ class UnmaskTests(unittest.TestCase):
             self.assertIn('  - "Captain Rook"\n', text, before)
 
     def test_unmask_renames_speech_only_with_an_unmasked_line(self) -> None:
+        code, out, _ = run(self.root, "--unmask", MASK, "--unmask", "NPCs/Wick.md", "--write")
+        self.assertEqual(code, 0, out)
+        # With an Unmasked line: Speech becomes Disguise, Unmasked becomes Speech.
+        text = (self.root / MASK).read_text(encoding="utf-8")
+        self.assertIn("- **Disguise:** sing-song, haggles over farthings\n", text)
+        self.assertIn("- **Speech:** clipped, a soldier's orders\n", text)
+        self.assertNotIn("**Unmasked:**", text)
+        self.assertIn("- **Speech:** not this one", text, "only Playing Them changes")
+        self.assertIn("Speech is now Disguise; Unmasked is now Speech", out)
+        # Without one: the same voice, Playing Them left alone.
+        text = (self.root / "NPCs/Wick.md").read_text(encoding="utf-8")
+        self.assertIn("- **Speech:** loud, quick to complain.\n", text)
+        self.assertNotIn("**Disguise:**", text)
+        wick_row = next(r for r in out.splitlines() if r.startswith("UNMASKED\tNPCs/Wick.md"))
+        self.assertNotIn("Speech", wick_row)
+
+    def test_unmask_takes_the_true_name_out_of_gm_aliases(self) -> None:
+        for before, after in (
+                ('gm_aliases: ["Sister Hesper", "Hesper"]  # secret\n',
+                 'gm_aliases: ["Sister Hesper"]  # secret\n'),
+                ("gm_aliases:\n  - Sister Hesper  # the order\n  - \"HESPER\"\n",
+                 "gm_aliases:\n  - Sister Hesper  # the order\n"),
+                ("gm_aliases: Hesper\n", "gm_aliases: []\n"),
+                ("gm_aliases:  # only one\n  - Hesper\n", "gm_aliases: []  # only one\n")):
+            (self.root / "NPCs/Wick.md").write_text(
+                GILT_SHAPED.replace('gm_aliases: ["Sister Hesper"]\n', before), encoding="utf-8")
+            code, out, _ = run(self.root, "--unmask", "NPCs/Wick.md", "--write")
+            self.assertEqual(code, 0, out)
+            text = (self.root / "NPCs/Wick.md").read_text(encoding="utf-8")
+            self.assertIn(after, text, before)
+            self.assertIn("gm_aliases - hesper", out, before)
+            self.assertNotIn("hesper", [a.lower() for a in self.fm("NPCs/Wick.md")["gm_aliases"]])
+
+    def test_unmask_refuses_a_list_written_over_several_lines(self) -> None:
+        for field, before in (("aliases", 'aliases: ["The Pedlar",\n  "Ribbon Man"]\n'),
+                              ("gm_aliases", 'aliases: []\ngm_aliases: ["Captain Rook",\n  "X"]\n')):
+            (self.root / MASK).write_text(MASKED.replace('aliases: ["The Pedlar"]\n', before),
+                                          encoding="utf-8")
+            text = (self.root / MASK).read_text(encoding="utf-8")
+            code, out, _ = run(self.root, "--unmask", MASK, "--write")
+            self.assertEqual(code, 1, out)      # the frontmatter reader refuses it first
+            self.assertIn("ERROR\t" + MASK + "\tnothing changed", out)
+            self.assertEqual((self.root / MASK).read_text(encoding="utf-8"), text)
+            # and the list helpers refuse it themselves, rather than write a broken list
+            head = [ln for ln in before.splitlines()]
+            with self.assertRaisesRegex(reveal.ListShapeError, f"{field} is a list written over several lines"):
+                reveal._add_to_list(head, field, "Captain Rook") if field == "aliases" \
+                    else reveal._drop_from_list(head, field, "Captain Rook")
+
+    def test_unmask_refuses_a_flush_block_list_and_writes_nothing(self) -> None:
+        # Items at column zero: the toolchain's frontmatter reader refuses the note.
+        (self.root / MASK).write_text(MASKED.replace('aliases: ["The Pedlar"]\n', "aliases:\n- A\n- B\n"),
+                                      encoding="utf-8")
+        text = (self.root / MASK).read_text(encoding="utf-8")
+        code, out, _ = run(self.root, "--unmask", MASK, "--write")
+        self.assertEqual(code, 1, out)
+        self.assertIn("ERROR\t" + MASK, out)
+        self.assertEqual((self.root / MASK).read_text(encoding="utf-8"), text)
+        # and the list helper itself adds to such a list at its own indent
+        head = ["type: npc", "aliases:", "- A", "- B", "x: 1"]
+        reveal._add_to_list(head, "aliases", "Captain Rook")
+        self.assertEqual(head, ["type: npc", "aliases:", "- A", "- B", '- "Captain Rook"', "x: 1"])
+
+    def test_unmask_list_valued_unmasked_name(self) -> None:
+        (self.root / MASK).write_text(MASKED.replace('unmasked_name: "Captain Rook"\n',
+                                                     "unmasked_name:\n  - Captain Rook\n"), encoding="utf-8")
         code, out, _ = run(self.root, "--unmask", MASK, "--write")
         self.assertEqual(code, 0, out)
-        self.assertIn("Speech is now Disguise; Unmasked is now Speech", out)
+        self.assertEqual(self.fm(MASK)["unmasked_name"], "")
+        self.assertIn("Captain Rook", self.fm(MASK)["aliases"])
+        (self.root / MASK).write_text(MASKED.replace('unmasked_name: "Captain Rook"\n',
+                                                     "unmasked_name: [Rook, Captain Rook]\n"), encoding="utf-8")
+        code, out, _ = run(self.root, "--unmask", MASK, "--write")
+        self.assertEqual(code, 1, out)
+        self.assertIn("unmasked_name is a list of 2 names", out)
+
+    def test_unmask_refuses_before_writing_when_the_log_cannot_be_read(self) -> None:
+        (self.root / "_meta").mkdir()
+        (self.root / "_meta" / "reveals.json").write_text("{not json", encoding="utf-8")
+        before = (self.root / MASK).read_text(encoding="utf-8")
+        code, out, _ = run(self.root, "--unmask", MASK, "--write")
+        self.assertEqual(code, 1, out)
+        self.assertIn("not unmasked, nothing changed", out)
+        self.assertEqual((self.root / MASK).read_text(encoding="utf-8"), before)
+
+    @unittest.skipUnless(shutil.which("node"), "node is not installed")
+    def test_unmasked_frontmatter_reads_strictly(self) -> None:
+        """Each written shape is YAML the publish tool's own parser takes."""
+        shapes = ("aliases:   # c\n    - \"The Pedlar\"  # m\n    # old\n    - Ribbon Man\n",
+                  'aliases: ["The Pedlar", "a]b"]  # see [x]\n', "aliases: Pedlar Jack\n",
+                  'aliases: ""\n', "")
+        parse = ("const {parseNote}=require(process.argv[1]);const fs=require('fs');"
+                 "const d=parseNote(fs.readFileSync(process.argv[2],'utf8')).data;"
+                 "process.stdout.write(JSON.stringify(d.aliases))")
+        lib = str(ROOT / "tools" / "publish" / "lib" / "frontmatter.js")
+        for before in shapes:
+            self._aliases_written_as(before)
+            got = subprocess.run(["node", "-e", parse, lib, str(self.root / MASK)],
+                                 capture_output=True, text=True, check=False)
+            self.assertEqual(got.returncode, 0, f"{before!r}: {got.stderr}")
+            self.assertEqual(json.loads(got.stdout)[-1], "Captain Rook", before)
 
     def test_unmask_keeps_crlf(self) -> None:
         (self.root / MASK).write_bytes(MASKED.replace("\n", "\r\n").encode("utf-8"))

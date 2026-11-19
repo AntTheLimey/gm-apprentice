@@ -254,10 +254,10 @@ function buildIndex(vaultPath, { deps } = {}) {
       const hit = attached()[name];
       const rel = hit ? toPosix(path.relative(vaultPath, hit.sourcePath)) : null;
       if (rel && !isLeftOut(rel)) return rel;
-      const what = field === 'portrait' ? 'portrait' : field;
+      const lacks = field === 'portrait' ? 'no portrait on the sheet' : 'the Unmask has no face';
       warn('no-portrait', p, rel
-        ? `its ${what} ${name} is in a folder the reader skips: no portrait on the sheet`
-        : `its ${what} ${name} matches no picture in the vault: no portrait on the sheet`);
+        ? `its ${field} ${name} is in a folder the reader skips: ${lacks}`
+        : `its ${field} ${name} matches no picture in the vault: ${lacks}`);
       return null;
     },
     warnings,

@@ -18,12 +18,14 @@ function playAsOf(p, index) {
   return para ? para.split('\n').map((l) => l.trim()).join(' ') : '';
 }
 
-// How to play a disguised NPC once unmasked: Playing Them **Unmasked:** and **Tell:**, the play-as
-// the note has after `gma reveal --unmask` renames Unmasked to Speech. '' when it gives neither.
+// How to play a disguised NPC once unmasked, as the note will read after `gma reveal --unmask`:
+// Playing Them **Unmasked:** (else **Speech:**, the same voice) and **Tell:**. '' when it gives none.
 function unmaskedPlayAsOf(p, index) {
   if (!known(p, index)) return '';
   const pt = index.gmSection(p, 'Playing Them');
-  return [label(pt, 'Unmasked'), label(pt, 'Tell')].filter((x) => x && !x.includes('{')).join(' ');
+  const usable = (x) => (x && !x.includes('{') ? x : '');
+  const voice = usable(label(pt, 'Unmasked')) || usable(label(pt, 'Speech'));
+  return [voice, usable(label(pt, 'Tell'))].filter(Boolean).join(' ');
 }
 
 // The note's ### Wants under ## GM Notes.
