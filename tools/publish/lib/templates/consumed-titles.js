@@ -1,7 +1,9 @@
 // The sections the GURPS and CoC sheets read into their own blocks, so the page shows no
 // accordion for them (pc.js). Here so the renderers can name them too (overflowNotes).
-// GURPS: when a GURPS system sheet is present these leave the accordion list.
-const GURPS_CONSUMED_TITLES = new Set(['stat sheet', 'skills', 'advantages & perks', 'disadvantages & quirks', 'techniques', 'spells', 'languages', 'cultural familiarities', 'combat action chains', 'active defenses', 'dr by hit location', 'points summary', 'reaction modifiers', 'current status', 'multi-action combat skill chains', 'combat summary']);
+// GURPS: when a GURPS system sheet is present these leave the accordion list. Current Status stays: the
+// sheet reads its HP/FP lines for the live stats, and the page shows the section (its lede, open threads and
+// the shared threads the build adds) as an accordion, as on the D&D, PF2e and FitD pages (#782).
+const GURPS_CONSUMED_TITLES = new Set(['stat sheet', 'skills', 'advantages & perks', 'disadvantages & quirks', 'techniques', 'spells', 'languages', 'cultural familiarities', 'combat action chains', 'active defenses', 'dr by hit location', 'points summary', 'reaction modifiers', 'multi-action combat skill chains', 'combat summary']);
 
 // CoC: 'connections' and 'cover identity' are deliberately NOT here: the structured renderer
 // doesn't place them, so consuming them would silently drop the sections. Left un-consumed,
