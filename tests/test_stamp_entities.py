@@ -863,6 +863,27 @@ class ListTests(ScriptCase):
                               'entities=["Ada"]'])
         self.assertTrue(se.needs_links(args))
 
+    def test_a_list_already_holding_those_items_is_unchanged(self):
+        text = SCENE.replace("entities: []", 'entities: ["[[Ada Vane]]", '
+                             '"[[The Mill]]"]')
+        self.scene.write_text(text, encoding="utf-8")
+        out = self.run_script(self.REL, "--set",
+                              'entities=["Ada", "The Mill"]', "--write")
+        self.assertIn("UNCHANGED", out)
+        self.assertIn('entities already ["[[Ada Vane]]", "[[The Mill]]"]', out)
+        self.assertEqual(self.scene.read_text(encoding="utf-8"), text)
+
+    def test_a_comment_after_an_item_is_not_part_of_it(self):
+        # `- foo # why` holds foo; the same --set leaves the comment be.
+        text = SCENE.replace("entities: []", "entities:\n"
+                             '  - "[[Ada Vane]]" # met in S1\n'
+                             "  - [[The Mill]] # burned down")
+        self.scene.write_text(text, encoding="utf-8")
+        out = self.run_script(self.REL, "--set",
+                              'entities=["Ada", "The Mill"]', "--write")
+        self.assertIn("UNCHANGED", out)
+        self.assertEqual(self.scene.read_text(encoding="utf-8"), text)
+
     def test_a_dotted_key_takes_no_list(self):
         self.run_script(self.REL, "--set", 'documents.x=["A"]', rc=2)
 

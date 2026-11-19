@@ -290,6 +290,13 @@ class FrontmatterEditorTests(unittest.TestCase):
         fm = ["scene_type:\n", "# a note\n", "status: DRAFT\n"]
         self.assertFalse(vl.opens_a_block(fm, "scene_type"))
 
+    def test_a_list_item_ends_at_a_comment_as_a_value_does(self):
+        fm = vl.extract_frontmatter(
+            "---\nname: a # b\ntags:\n  - foo # why\n  - #tag\n"
+            '  - "x # y"\n  - Room#3\n---\n')
+        self.assertEqual(fm["name"], "a")
+        self.assertEqual(fm["tags"], ["foo", "#tag", "x # y", "Room#3"])
+
     def test_delete_key_first_top_level_only(self):
         fm = self.fm("---\ntype: npc\ndocuments:\n  type: nested\n"
                      "type: duplicate\n---\n")

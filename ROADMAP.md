@@ -117,6 +117,7 @@ decision rather than pure score.
 
 ## Completed
 
+- ~~`stamp --set` of the same list reports WOULD-STAMP~~ — the same items leave the note UNCHANGED (#778, v1.12.90)
 - ~~Prep asks for a stat block for a dead NPC the Plan names~~ — dead is left out in every mode, a hidden fate beating `status` (#776, v1.12.89)
 - ~~A workaround answered `retire` reads as retired when it is not~~ — the report says nothing is retired yet and names the retire command (#774, v1.12.88)
 - ~~A wrap-up's pictures show the aftermath, not the fight~~ — the image guide puts action in motion first, then dramatic beats, a quiet beat only when nothing bigger happened (#770, v1.12.87)
