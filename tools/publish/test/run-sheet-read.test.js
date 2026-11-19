@@ -254,6 +254,26 @@ describe('run sheet reader', () => {
       assert.deepStrictEqual(m.mapPairs, [{ gm: 'Documents/Foo (GM).md', player: 'Documents/Foo.md' }]);
     });
 
+    it('a player_version that names no note, or no map, warns on the GM map and falls back (I4)', () => {
+      const dir = copy();
+      write(dir, 'Documents/Lone (GM).md', mapNote('Lone (GM)', 'player_version: "[[Cellar Sketchh]]"\n'));
+      withPlanLine(dir, 'See [[Lone (GM)]].');
+      let m = readRunSheet(dir, PLAN, { party: PARTY });
+      assert.deepStrictEqual(m.mapPairs, []);
+      assert.ok(m.warnings.some((w) => w.kind === 'map-pair' && w.note === 'Documents/Lone (GM).md'
+        && /player_version \[\[Cellar Sketchh\]\] matches no note in the vault/.test(w.text)), JSON.stringify(m.warnings));
+      write(dir, 'Documents/Cellar Sketch.md', '---\ntype: document\n---\n\nNot a map.\n');
+      write(dir, 'Documents/Lone (GM).md', mapNote('Lone (GM)', 'player_version: "[[Cellar Sketch]]"\n'));
+      m = readRunSheet(dir, PLAN, { party: PARTY });
+      assert.ok(m.warnings.some((w) => w.kind === 'map-pair' && w.note === 'Documents/Lone (GM).md'
+        && /player_version \[\[Cellar Sketch\]\] is not a map \(no doc_type: map\)/.test(w.text)), JSON.stringify(m.warnings));
+      // the name pair still stands in
+      write(dir, 'Documents/Lone.md', mapNote('Lone'));
+      m = readRunSheet(dir, PLAN, { party: PARTY });
+      assert.deepStrictEqual(m.mapPairs, [{ gm: 'Documents/Lone (GM).md', player: 'Documents/Lone.md' }]);
+      assert.ok(m.warnings.some((w) => w.kind === 'map-pair'));
+    });
+
     it('maps keeps its strings, a lone map is not paired, a broken link does not throw', () => {
       const dir = copy();
       let m = readRunSheet(dir, PLAN, { party: PARTY });
@@ -306,6 +326,41 @@ describe('run sheet reader', () => {
       m = readRunSheet(dir, PLAN, { party: PARTY });
       assert.strictEqual(m.notes[ASH].unmask.portrait, null);
       assert.ok(m.warnings.some((w) => w.kind === 'no-portrait' && w.note === ASH && /unmasked_portrait nowhere\.png .*the Unmask has no face/.test(w.text)), JSON.stringify(m.warnings));
+    });
+
+    const withFm = (dir, lines) => {
+      const ash = fs.readFileSync(path.join(FIXTURE, ASH), 'utf8');
+      write(dir, ASH, ash.replace('type: npc\n', `type: npc\n${lines}`));
+      return readRunSheet(dir, PLAN, { party: PARTY });
+    };
+    const unmaskWarnings = (m) => m.warnings.filter((w) => w.kind === 'unmask' && w.note === ASH);
+
+    it('a true name written as a link is the name it links (C1)', () => {
+      for (const value of ['"[[The Ember Abbot]]"', '"[[The Ember Abbot|the abbot]]"', '[[The Ember Abbot]]', '"[[NPCs/The Ember Abbot]]"']) {
+        const m = withFm(copy(), `unmasked_name: ${value}\n`);
+        assert.strictEqual(m.notes[ASH].unmask && m.notes[ASH].unmask.name, 'The Ember Abbot', value);
+        assert.deepStrictEqual(unmaskWarnings(m), [], value);
+      }
+    });
+
+    it('an unmasked_name that names no one warns and gives no Unmask (C1)', () => {
+      const m = withFm(copy(), 'unmasked_name: "[[]]"\n');
+      assert.strictEqual(m.notes[ASH].unmask, null);
+      assert.ok(unmaskWarnings(m).some((w) => /unmasked_name holds \[\[\]\], which names no one: no Unmask on the sheet/.test(w.text)), JSON.stringify(m.warnings));
+    });
+
+    it('a face with no true name warns (M2)', () => {
+      const dir = copy();
+      write(dir, '_attachments/ember.png', 'x');
+      const m = withFm(dir, 'unmasked_portrait: "_attachments/ember.png"\n');
+      assert.strictEqual(m.notes[ASH].unmask, null);
+      assert.ok(unmaskWarnings(m).some((w) => w.text === 'unmasked_portrait is set but unmasked_name is empty: no Unmask on the sheet'), JSON.stringify(m.warnings));
+    });
+
+    it('several true names warn and show none, as reveal refuses them (M3)', () => {
+      const m = withFm(copy(), 'unmasked_name: [The Ember Abbot, Old Cinders]\n');
+      assert.strictEqual(m.notes[ASH].unmask, null);
+      assert.ok(unmaskWarnings(m).some((w) => w.text === 'unmasked_name is a list of 2 names; give it the one true name: no Unmask on the sheet'), JSON.stringify(m.warnings));
     });
   });
 

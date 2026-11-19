@@ -19,7 +19,7 @@ const { unmaskedPlayAsOf } = require('./people-from-notes');
 const { parseNote } = require('../frontmatter');
 const { readSettings } = require('../settings/read');
 const { readerFrom } = require('../vault-reader');
-const { isWithheld, nameList, unmaskedNames } = require('../processor');
+const { isWithheld, nameList, unmaskedNames, unmaskedNameUnread } = require('../processor');
 const { canonicalNfc } = require('../unicode');
 
 const toPosix = (p) => p.split(path.sep).join('/');
@@ -250,7 +250,17 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
     mapPairs.push({ gm, player });
   };
   const allMaps = index.notes().filter(isMap);
-  // A GM map's player map: its `player_version` when that resolves to a map, else the name pair.
+  // A GM map's player map: its `player_version` when that resolves to a map, else the name pair. A
+  // `player_version` that names no note, or a note that is no map, warns on a GM map the Plan links: the
+  // GM asked for a pair the sheet cannot make from it.
+  const playerVersionWarning = (gm) => {
+    const t = fmTarget(fmOf(gm).player_version);
+    const named = t ? index.resolve(t) : null;
+    if (!t || isMap(named)) return;
+    const why = named !== null ? 'is not a map (no doc_type: map)'
+      : ((index.linkProblem(t) || {}).text || `[[${t}]] matches no note in the vault`).replace(`[[${t}]] `, '');
+    warnings.push({ kind: 'map-pair', note: gm, text: `its player_version [[${t}]] ${why}; the sheet pairs it by name if it can` });
+  };
   const playerOf = (gm) => {
     const t = fmTarget(fmOf(gm).player_version);
     const named = t ? index.resolve(t) : null;
@@ -260,6 +270,7 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
   };
   const playerFor = new Map(allMaps.map((g) => [g, playerOf(g)]));
   for (const p of maps) {
+    playerVersionWarning(p);
     pair(p, playerFor.get(p));
     // p as the player map: any GM map that points at it, by field or by name
     for (const g of allMaps) if (g !== p && playerFor.get(g) === p) pair(g, p);
@@ -346,12 +357,23 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
     };
   }
 
-  // A disguised NPC's true self, behind the sheet's Unmask: only a note with an `unmasked_name` has
-  // one (a `gm_aliases` name alone is no disguise). Its face is null and its play-as '' when the
+  // A disguised NPC's true self, behind the sheet's Unmask: only a note with one `unmasked_name` has
+  // one (a `gm_aliases` name alone is no disguise). The name is read as reveal reads it (a link is the
+  // name it links); a value that names no one, or several names (which reveal refuses), gives no Unmask
+  // and a warning, as does a true face with no true name. Its face is null and its play-as '' when the
   // note gives none. Asked once per note, as the portrait is.
   function unmaskOf(p) {
     if (!unmasks.has(p)) {
-      const name = index.has(p) ? unmaskedNames(index.read(p).fm || {})[0] : undefined;
+      const nfm = index.has(p) ? index.read(p).fm || {} : {};
+      const names = unmaskedNames(nfm);
+      const unread = unmaskedNameUnread(nfm);
+      const noSheet = ': no Unmask on the sheet';
+      if (names.length > 1) warnings.push({ kind: 'unmask', note: p, text: `unmasked_name is a list of ${names.length} names; give it the one true name${noSheet}` });
+      else if (unread !== null) warnings.push({ kind: 'unmask', note: p, text: `unmasked_name holds ${unread}, which names no one${noSheet}` });
+      else if (names.length === 0 && nameList(nfm.unmasked_portrait).length > 0) {
+        warnings.push({ kind: 'unmask', note: p, text: `unmasked_portrait is set but unmasked_name is empty${noSheet}` });
+      }
+      const name = names.length === 1 ? names[0] : null;
       unmasks.set(p, name ? { name, portrait: index.portrait(p, 'unmasked_portrait'), playAs: unmaskedPlayAsOf(p, index) } : null);
     }
     return unmasks.get(p);
