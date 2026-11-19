@@ -345,7 +345,10 @@ def kept_beside_placeholder(old: list[str]) -> list[str]:
     return _tidy(_without_bare_heads(out))
 
 
-_BARE_HEAD_RE = re.compile(r"^\*\*[^*\n]+\*\*:?\s*$")
+# The bold heads the shipped npc-stats templates use (templates/npc-stats/).
+_BARE_HEAD_RE = re.compile(
+    r"^\*\*(?:Traits|Actions|Attacks|Combat|Bonus Actions / Reactions)\*\*:?"
+    r"\s*$")
 
 
 def _without_bare_heads(lines: list[str]) -> list[str]:

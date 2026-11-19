@@ -185,6 +185,12 @@ class FillTests(FillCase):
         for gone in ("{", "| STR |       |", "**Bonus Actions / Reactions**"):
             self.assertNotIn(gone, text)
 
+    def test_a_gm_bare_bold_line_beside_a_placeholder_survives(self):
+        old = ["Stats to come.", "", "**Boss fight**", "", "**Phase two**",
+               "", "**Traits**", "", "**Actions**"]
+        self.assertEqual(stat_fill.kept_beside_placeholder(old),
+                         ["**Boss fight**", "", "**Phase two**"])
+
     def test_a_blank_score_table_is_dropped_and_a_gm_table_kept(self):
         old = ["|     | Score |", "|-----|-------|", "| STR |       |", "",
                "| Roll | Loot |", "|---|---|", "| 1 | a knife |"]
