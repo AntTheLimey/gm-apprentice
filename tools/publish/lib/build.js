@@ -4,7 +4,7 @@ const { hasSheetStructure } = require('./templates/sheet-parse');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { scanVaultReport, warnScanReport, buildLinkMap, scanAttachments, scanAllNotes, pcLiveKey, STORY_SUFFIX, slugify } = require('./scanner');
+const { scanVaultReport, warnScanReport, buildLinkMap, scanAttachments, scanAllNotes, pcLiveKey, STORY_SUFFIX, slugify, folderMapEntry } = require('./scanner');
 const { optimizeImages, resolveImageConfig, imageCacheDir, ignoreCacheInGit, detectEncoder, CACHE_FOLDER } = require('./image-optimize');
 const { indexTextPath, writeIndexText } = require('./leak-gate/index-text');
 const { readStoryAddresses, writeStoryAddresses, movedSessions, sharedSessionNames } = require('./story-addresses');
@@ -2553,6 +2553,31 @@ function buildSite(options) {
   const suffix = campaignImageCopied ? ' (+ campaign image)' : '';
   if (!onlySheets) console.log(`${gm ? 'GM site' : 'Player site'}: copied ${Object.keys(filteredMap).length} referenced images${suffix}`);
 
+  const PARTY_DIR = 'characters/pcs';
+  // The party page and its Party Status board are built at characters/pcs and nowhere else (#744): a PC in play whose
+  // folder player_site.folder_map sends to another address is on neither. Said once per folder, with the change that
+  // brings it back; the Site Faults check offers it.
+  if (!onlySheets) {
+    const away = new Map();
+    for (const p of pages) {
+      if (String((p.frontmatter || {}).type).trim().toLowerCase() !== 'pc' || isOutOfPlay(p.frontmatter, publishConfig.statuses.out_of_play)) continue;
+      if (p.outputPath.startsWith(`${PARTY_DIR}/`)) continue;
+      const folder = path.posix.dirname(vaultRelPathOf(p));
+      if (!away.has(folder)) away.set(folder, []);
+      away.get(folder).push(p);
+    }
+    for (const [folder, pcs] of away) {
+      const [key, address] = folderMapEntry(folder, config.folderMap || {}) || [folder, path.posix.dirname(pcs[0].outputPath)];
+      const names = pcs.map((p) => p.displayTitle).join(', ');
+      const detail = `${pcs.length} ${pcs.length === 1 ? 'character page publishes' : 'character pages publish'} at ${path.posix.dirname(pcs[0].outputPath)}/ (${names}), so ${pcs.length === 1 ? 'it is' : 'they are'} not on the party page or the Party Status board, which are built only at ${PARTY_DIR}/`;
+      const fix = key === folder
+        ? `set "${key}" in player_site.folder_map back to ${PARTY_DIR} (it says ${address})`
+        : `add "${folder}": "${PARTY_DIR}" to player_site.folder_map (now "${key}" sends it to ${address}${folder.slice(key.length)})`;
+      console.warn(`  WARNING: ${folder}: ${detail}: ${fix}`);
+      if (audit) audit.calculator(folder, [{ code: 'PCS_ADDRESS', severity: 'warning', detail, fix }]);
+    }
+  }
+
   // Generate index pages for each output directory
   const dirs = {};
   for (const page of pages) {
@@ -2790,7 +2815,7 @@ function buildSite(options) {
           dirPages = dirPages.concat(pageDirPages);
         }
       }
-      const isParty = dir === 'characters/pcs';
+      const isParty = dir === PARTY_DIR;
       // The party page was once a note's (the PC roster, `_Campaign/Player Characters.md`, retired in #729): the
       // address that note had sends a reader to the PCs' index, generated or the GM's own, unless a note has its own
       // page there now.

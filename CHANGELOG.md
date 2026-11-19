@@ -10,6 +10,12 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 ---
 
 
+## [1.12.96] — 2026-11-19
+
+### Added
+
+- The build warns when the PCs' folder is published at an address other than `characters/pcs`, where the party page and its Party Status board are built (#744). Campaign-qa's Site Faults check offers to set it back.
+
 ## [1.12.95] — 2026-11-19
 
 ### Fixed

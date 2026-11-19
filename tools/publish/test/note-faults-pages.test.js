@@ -46,7 +46,8 @@ function fromBuild(configPath) {
   const saved = { log: console.log, warn: console.warn, error: console.error };
   console.log = console.warn = console.error = () => {};
   try { build({ configPath, onNoteFaults: (f) => { found = f; } }); } finally { Object.assign(console, saved); }
-  return found;
+  // The codes this file is about, as fromDoctor reads them (these vaults publish their PCs at pcs/, a PCS_ADDRESS row).
+  return found.filter((f) => NOTE_FAULT.test(f.code));
 }
 
 // The doctor's findings, after checking the build returns the very same list.

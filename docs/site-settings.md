@@ -293,7 +293,9 @@ to "stop publishing the Rumours section".
 
 In that folder map, notes in `Characters/NPCs` appear on the site at
 `characters/npcs/`. A folder that holds notes but has no line in the map
-is skipped, and the build says so.
+is skipped, and the build says so. The party page and its Party Status
+board are built at `characters/pcs/` only: keep your PCs' folder at that
+address, or the build warns that they are missing from both.
 
 ## Theme
 
