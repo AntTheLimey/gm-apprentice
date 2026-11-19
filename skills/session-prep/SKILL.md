@@ -518,6 +518,9 @@ own Place. People named in a place bullet are there.
 - [[Scene note]] — a lead to a scene that has its own Place.
 ```
 
+A bold lead with a colon is always a place, whatever its words end in;
+a pointer has no colon after its lead.
+
 A contingency scene, `### Title` under Contingency Scenes:
 
 ```markdown

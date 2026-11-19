@@ -676,6 +676,17 @@ describe('run sheet beats: the Plan shape', () => {
       }
     });
 
+    it('a bold lead with a colon is a place whatever its tail says; without one, a pointer, in both', () => {
+      for (const bullet of ['- **Great hall:** the feast, Scene 1 ended here', '- **Great hall**: the feast — Scene 3', '- **[[Hall]]:** the feast, Scene 1']) {
+        const r = bothSides(`### Scene 0: Out (hub)\n**Where they can go**\n${bullet}\n`);
+        assert.deepStrictEqual(r.ids.filter((id) => id.startsWith('hub-')), [], bullet);
+        assert.strictEqual(r.beats[0].spots.length, 1, bullet);
+      }
+      const p = bothSides('### Scene 0: Out (hub)\n**Where they can go**\n- **Cellar door** — Scene 3\n');
+      assert.deepStrictEqual(p.beats[0].spots, []);
+      assert.deepStrictEqual(p.ids.filter((id) => id.startsWith('hub-')), []);
+    });
+
     it('a scene reference after a comma or in parentheses is a pointer in both', () => {
       for (const bullet of ['- the yard: shouting, Scene 1.', '- the yard shouting (Scene 1)', '- [what draws them there] — Scene 3']) {
         const r = bothSides(`### Scene 0: Out (hub)\n**Where they can go**\n${bullet}\n`);

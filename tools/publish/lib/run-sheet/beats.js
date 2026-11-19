@@ -39,10 +39,12 @@ const WHERE_HEAD = /^\*\*(?:Where they can go|Open to the party):?\*\*[ \t]*(?:\
 // A pointer bullet leads to another scene: it ends `— Scene N` or `, Scene N` (a parenthesis or a few
 // words may follow) or `(Scene N)`, or its lead (a bold lead, or a bare link first) links a note of
 // type scene. A lead linking a location note keeps the bullet a place whatever its words end in. A
-// link whose note is no scene, or is unknown, leads a place. plan_check.py holds the same rule.
+// link whose note is no scene, or is unknown, leads a place. A bold lead with a colon (`**Great hall:** …,
+// Scene 1`) is a place whatever its tail says. plan_check.py holds the same rule.
 const POINTER_BULLET = /^.*(?:[—–-]\s*|,\s*)Scenes?\s+\d+(?:\s*\([^)]*\)|,?\s+\S+(?:\s+\S+){0,2})?[\s.]*$|^.*\(\s*Scenes?\s+\d+\s*\)[\s.]*$/;
 const BARE_LINK_LEAD = /^(!?\[\[[^\]]+\]\])/;
 const BOLD_LEAD = /^\*\*([^*\n]+?)\*\*/;
+const COLON_LEAD = /^\*\*[^*\n]+?(?::\*\*|\*\*:)/;
 const BLOCK_NAMES = new Set(['npcs', 'points to land', 'if the players...', 'treasure', 'complications', 'then']);
 
 const linesOf = (text) => pt.cleanText(text).split('\n');
@@ -324,7 +326,7 @@ function readBeats(planBody, index) {
           const lead = first.match(BOLD_LEAD);
           const leadLinks = lead ? (lead[1].match(LINK) || []) : (first.match(BARE_LINK_LEAD) || []).slice(1);
           const leadTypes = leadLinks.map((m) => typeOf(resolve(linkParts(m.replace(/^!?\[\[|\]\]$/g, '')).target)));
-          if (leadTypes.includes('scene') || (POINTER_BULLET.test(first) && !leadTypes.includes('location'))) continue;
+          if (leadTypes.includes('scene') || (!COLON_LEAD.test(first) && POINTER_BULLET.test(first) && !leadTypes.includes('location'))) continue;
           const nb = item.text.match(NAMED_BULLET);
           let name;
           let rest;

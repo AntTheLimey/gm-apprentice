@@ -68,7 +68,8 @@ Checks, by id, level, and the rule they mechanise:
                          `**Open to the party**`, or "(hub)" in the title)
                          with neither place bullets (`- **[[Location]]:**`,
                          `- **Plain name:**`) nor pointer bullets
-                         (`- words — Scene N`, `- [[Scene note]] ...`)
+                         (`- words — Scene N`, `- [[Scene note]] ...`); a
+                         bold lead with a colon is always a place
   hub-place-not-location
                 WARNING  a place bullet whose bold lead links a note that
                          is not `type: location` (needs a vault)
@@ -80,8 +81,8 @@ Checks, by id, level, and the rule they mechanise:
                          (`**NPCs (who is here)**`): the run sheet reads
                          `**NPCs**` or `**NPCs:**` at the left margin
                          (`- **Treasure:**` and the other block labels,
-                         bulleted with nothing after the colon, are read
-                         as none); the one-line labels (Situation, Place,
+                         bulleted, with or without words after the colon,
+                         are read as none); the one-line labels (Situation, Place,
                          Starts it, Entities, Handouts) may be bulleted
   if-table-unlabelled
                 WARNING  a table in a planned scene that is not under
@@ -791,7 +792,9 @@ _PLACE_BULLET_RE = re.compile(r"^[-*+]\s+\*\*([^*\n]+?)\*\*")
 # closing `(Scene 3)` serves too), or its lead (a bold lead, or a bare link
 # first) links a note of type scene. A bold lead that ends so is a pointer
 # too (`- **Cellar door** — Scene 3`), unless it links a location note: that
-# bullet is a place whatever its words end in. Any other bullet
+# bullet is a place whatever its words end in. A bold lead with a colon
+# (`- **Great hall:** …, Scene 1 ended here`) is a place whatever its tail
+# says; only a scene-typed lead link makes it a pointer. Any other bullet
 # led by a bold name or a link is a place; a link to a note of unknown type
 # (no vault, or no such note) is a place. tools/publish/lib/run-sheet/beats.js
 # holds the same rule.
@@ -799,6 +802,7 @@ _POINTER_BULLET_RE = re.compile(
     r"^[-*+]\s+.*(?:[—–-]\s*|,\s*)Scenes?\s+\d+"
     r"(?:\s*\([^)]*\)|,?\s+\S+(?:\s+\S+){0,2})?[\s.]*$"
     r"|^[-*+]\s+.*\(\s*Scenes?\s+\d+\s*\)[\s.]*$")
+_COLON_LEAD_RE = re.compile(r"^[-*+]\s+\*\*[^*\n]+?(?::\*\*|\*\*:)")
 _BARE_LINK_LEAD_RE = re.compile(r"^[-*+]\s+\[\[([^\[\]]+)\]\]")
 _LINK_RE = re.compile(r"(?<!!)\[\[([^\[\]]+)\]\]")
 _IF_LABEL_RE = re.compile(r"^\*\*If the players", re.I)
@@ -806,10 +810,10 @@ _BOLD_HEAD_RE = re.compile(r"^(?:[-*+]\s+)?\*\*[^*\n]+\*\*")
 # A scene label with a parenthesis inside its bold: the reader finds none.
 _BLOCK_LABEL_NORMS: frozenset[str] = frozenset(
     n.rstrip(".…").casefold() for n in SCENE_LABELS_BLOCK)
-# A block label written as a bullet with nothing after it: the sheet reads
-# a block head only at the left margin.
+# A block label written as a bullet, with or without words after it: the
+# sheet reads a block head only at the left margin.
 _BULLET_BLOCK_HEAD_RE = re.compile(
-    r"^[-*+]\s+\*\*(?P<name>[^*\n]+?):?\*\*:?[ \t]*$")
+    r"^[-*+]\s+\*\*(?P<name>[^*\n]+?):?\*\*:?(?:[ \t].*)?$")
 _PAREN_LABEL_RE = re.compile(
     r"^(?:[-*+]\s+)?\*\*(?P<name>[^*\n(]+?)\s*\([^)*\n]*\)\s*:?\*\*")
 _KNOWN_LABEL_NORMS: frozenset[str] = frozenset(
@@ -848,7 +852,8 @@ class VaultIndex:
         """The `type`s of the notes a link names; None when the vault is
         unknown or holds no such note (a missing link is not this check's)."""
         found = self.notes(link)
-        return {vl.entity_type(fm) for fm in found} if found else None
+        return ({vl.entity_type(fm).strip().casefold() for fm in found}
+                if found else None)
 
     def foes(self, link: str) -> list[tuple[str, str]]:
         """(path, text) of each NPC or creature note a link names; empty
@@ -930,8 +935,8 @@ def _label_form_findings(locus: str, title: str, lines: list[str]
             out.append(Finding(
                 "label-form", "WARNING", locus,
                 f"label-form: '{title}' has {line.strip()!r} — the run "
-                f"sheet will not read this block, a bulleted block label "
-                f"with nothing after it; write '**{name}**' at the left "
+                f"sheet will not read this block, a bulleted block label; "
+                f"write '**{name}**' at the left "
                 f"margin, with the bullets under it"))
             continue
         m = _PAREN_LABEL_RE.match(line)
@@ -986,6 +991,8 @@ def _hub_findings(locus: str, title: str, lines: list[str],
         kinds = [index.types(k) or () for k in lead_links(ln)]
         if any("scene" in k for k in kinds):
             return True
+        if _COLON_LEAD_RE.match(ln):
+            return False
         return bool(_POINTER_BULLET_RE.match(ln)) and not any(
             "location" in k for k in kinds)
 
@@ -996,8 +1003,9 @@ def _hub_findings(locus: str, title: str, lines: list[str],
     out = []
     if not places and not pointers:
         if bullets:
-            lack = ("the run sheet shows these plain bullets as spots but "
-                    "cannot name them; write each place as a bold lead, "
+            lack = ("the run sheet shows each whole line of these plain "
+                    "bullets as a place; write each as a bold lead so it "
+                    "reads cleanly, "
                     "'- **Plain name:** ...' or '- **[[Location]]:** ...'")
         else:
             lack = ("the run sheet will show the party nowhere to go; add "

@@ -1435,11 +1435,40 @@ class RunSheetChecksTests(unittest.TestCase):
         self.assertEqual(self.ids(self.HUB.format(
             bullets="- the yard shouting\n")), ["hub-no-places"])
 
+    def test_a_bold_lead_with_a_colon_is_a_place_whatever_its_tail_says(self):
+        for bullets in ("- **Great hall:** the feast, Scene 1 ended here\n",
+                        "- **Great hall**: the feast — Scene 3\n",
+                        "- **[[Hall]]:** the feast, Scene 1\n"):
+            with self.subTest(bullets=bullets):
+                found = self.found(self.HUB.format(bullets=bullets))
+                self.assertEqual(
+                    [f.id for f in found if f.id in pc.RUN_SHEET_CHECKS], [])
+                self.assertEqual(self.ids(self.HUB.format(
+                    bullets=bullets + "- **Cellar door** — Scene 3\n")), [])
+        # a place, not a lead: alone it still leaves the hub with a place
+        # only, and a colon-less bold lead alone is a pointer
+        self.assertEqual(self.ids(self.HUB.format(
+            bullets="- **Cellar door** — Scene 3\n")), [])
+
+    def test_a_scene_typed_lead_link_is_a_pointer_even_with_a_colon(self):
+        self.note("Supper", "scene")
+        self.assertEqual(self.ids(self.HUB.format(
+            bullets="- **[[Supper]]:** the feast, Scene 1\n")), [])
+
+    def test_a_type_in_another_case_still_counts_as_a_location(self):
+        self.note("Orchard", "Location")
+        self.assertEqual(self.ids(self.HUB.format(
+            bullets="- **[[Orchard]]:** apples\n")), [])
+        self.assertEqual(self.ids(
+            "### Scene 4: Y\n**Situation:** s\n**Place:** [[Orchard]] at dusk\n"
+            "**Starts it:** t\n"), [])
+
     def test_a_hub_of_plain_bullets_says_the_sheet_cannot_name_them(self):
         rows = rows_for(self.found(self.HUB.format(
             bullets="- the yard\n")), "hub-no-places")
         self.assertEqual(len(rows), 1)
         self.assertIn("bold lead", rows[0].message)
+        self.assertNotIn("cannot name", rows[0].message)
         self.assertNotIn("nowhere to go", rows[0].message)
         bare = rows_for(self.found(self.HUB.format(bullets="")),
                         "hub-no-places")
@@ -1482,6 +1511,14 @@ class RunSheetChecksTests(unittest.TestCase):
                     rest=f"{head}\n  - a gem\n")), "label-form")
                 self.assertEqual(len(rows), 1, head)
                 self.assertIn("will not read", rows[0].message)
+
+    def test_a_bulleted_block_label_with_words_after_it_warns(self):
+        for head in ("- **Treasure:** a gem", "- **NPCs:** [[Orme]] is here",
+                     "- **Complications**: a storm"):
+            with self.subTest(head=head):
+                rows = rows_for(self.found(self.scene(
+                    rest=f"{head}\n")), "label-form")
+                self.assertEqual(len(rows), 1, head)
 
     def test_a_bulleted_one_line_label_is_fine(self):
         self.assertEqual(self.ids(self.scene(
