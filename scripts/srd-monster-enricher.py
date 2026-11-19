@@ -724,7 +724,7 @@ def build_file(tier_key, tier_info, cr_groups, budget_tight=False):
     total = sum(len(ms) for ms in cr_groups.values())
     if tier_key == "animals":
         lines = [
-            "# D&D 5e 2024 -- Animals",
+            "# D&D 5e 2024 — Animals",
             "",
             f"{total} animals from SRD 5.2, grouped by CR. Separate from monsters "
             "-- used for wildlife encounters, companions, mounts, and Wild Shape forms.",

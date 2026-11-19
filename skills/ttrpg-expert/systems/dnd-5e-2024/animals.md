@@ -1,4 +1,4 @@
-# D&D 5e 2024 -- Animals
+# D&D 5e 2024 — Animals
 
 94 animals from SRD 5.2, grouped by CR. Separate from monsters -- used for wildlife encounters, companions, mounts, and Wild Shape forms.
 
