@@ -1,0 +1,37 @@
+---
+name: Frost Wolf
+type: creature
+creature_type: beast
+---
+
+## What the PCs Know
+
+Grey shapes at the edge of the lamplight.
+
+<!-- gm-only -->
+
+## GM Notes
+
+### Behaviour
+
+Hunts in packs and flees when the alpha falls.
+
+### Stats
+
+AC 13, Hit Points 11, Initiative +2
+
+***Howl (Recharge 5-6).*** The pack calls; allies within 30 feet gain advantage.
+
+Legendary Resistance (1/Day). If it fails a save, it succeeds instead.
+
+Legendary Actions (2). The alpha may act after another creature's turn.
+
+Lair Actions. On initiative 20 the ice cracks.
+
+An elder pack-leader has Hit Points 15.
+
+### Treasure
+
+- A wolf-tooth necklace
+
+<!-- /gm-only -->
