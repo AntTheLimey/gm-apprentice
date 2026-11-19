@@ -511,6 +511,41 @@ class DroppedBlockTests(unittest.TestCase):
                             "**Then**\n- The crane falls\n", ""))
         self.assertIn("DROPPED\tIf they torch the quay\t**Then**", out)
 
+    def test_a_later_plan_block_keeps_an_earlier_blocks_dropped_row(self):
+        text = ("=== plan --number 2 --section\n" + FIGHT_NO_TREASURE
+                + "=== plan --number 2 --section\n## Session Intent\n\n"
+                "Changed.\n")
+        path = self.vault.parent / f"{self.vault.name}-batch.txt"
+        path.write_text(text, encoding="utf-8")
+        self.addCleanup(path.unlink)
+        out = io.StringIO()
+        with mock.patch("sys.stdout", out), mock.patch("sys.stderr",
+                                                       io.StringIO()):
+            code = vw.main([str(self.vault), "batch", str(path)], stdin="")
+        got = out.getvalue()
+        self.assertEqual(code, 0, got)
+        self.assertEqual(got.count("DROPPED\tThe Yard\t**Treasure**"), 1, got)
+        self.assertRegex(got, r"# blocks: 2 .*warnings: [1-9]")
+
+    def test_a_fence_holding_a_comment_opener_hides_nothing_after_it(self):
+        old = FIGHT.replace(
+            "**Starts it:** He drops his coat.",
+            "**Starts it:** He drops his coat.\n\n```\n<!-- example\n```")
+        text = old + "\n<!-- note -->\n"
+        rows = vw.dropped_blocks(text, text.replace(
+            "**Treasure**\n- A purse of silver\n\n", ""))
+        self.assertEqual(rows, ["DROPPED\tThe Yard\t**Treasure**"])
+
+    def test_a_label_under_a_higher_heading_is_not_the_scenes(self):
+        old = FIGHT + "\n## GM Notes\n\n**Treasure**\n- hidden\n"
+        new = FIGHT_NO_TREASURE
+        self.assertEqual(vw.dropped_blocks(old, new + "\n## GM Notes\n"),
+                         ["DROPPED\tThe Yard\t**Treasure**"])
+        self.assertEqual(
+            vw.dropped_blocks(FIGHT_NO_TREASURE + "\n## GM Notes\n\n"
+                              "**Treasure**\n- hidden\n", FIGHT_NO_TREASURE),
+            [])
+
     def test_repeated_scene_titles_are_compared_one_by_one(self):
         old = FIGHT + "\n" + FIGHT.replace("silver", "gold")
         new = FIGHT + "\n" + FIGHT_NO_TREASURE

@@ -4538,7 +4538,6 @@ def stamp_index(batch: Batch, rel: str, plan_stem: str) -> None:
 
 
 _BLOCK_HEAD_RE = re.compile(r"^(?:[-*+]\s+)?\*\*([^*\n]+?)\*\*")
-_COMMENT_RE = re.compile(r"<!--.*?-->", re.S)
 _BLOCK_LABELS: dict[str, str] = {
     name.rstrip(".\u2026").casefold(): name
     for name in (*plan_check.SCENE_LABELS_INLINE,
@@ -4550,17 +4549,38 @@ def labelled_blocks(text: str) -> dict[tuple[str, int], list[str]]:
     """Each `###` scene of `text` -> the labelled block heads it holds, as
     plan_check names them (`**X:**`, `**X**`, `- **X:**`), fences and
     comments left out. A note with no `###` is one scene under ''."""
-    text = _COMMENT_RE.sub(lambda m: "\n" * m.group(0).count("\n"), text)
     scenes: dict[tuple[str, int], list[str]] = {("", 1): []}
     seen: Counter[str] = Counter()
     here = ("", 1)
     fence: str | None = None
-    for line in text.splitlines():
-        mark = re.match(r"^\s*(```|~~~)", line)
-        if mark:
-            fence = None if fence == mark.group(1) else (fence or mark.group(1))
-            continue
-        if fence:
+    in_comment = False
+    # Fences and comments are read in source order: a `<!--` inside a fence
+    # opens nothing, and a fence mark inside a comment closes nothing.
+    for raw in text.splitlines():
+        if not in_comment:
+            mark = re.match(r"^\s*(```|~~~)", raw)
+            if mark:
+                fence = (None if fence == mark.group(1)
+                         else (fence or mark.group(1)))
+                continue
+            if fence:
+                continue
+        line, pos = "", 0
+        while True:
+            if in_comment:
+                close = raw.find("-->", pos)
+                if close == -1:
+                    break
+                in_comment, pos = False, close + 3
+            else:
+                opened = raw.find("<!--", pos)
+                if opened == -1:
+                    line += raw[pos:]
+                    break
+                line += raw[pos:opened]
+                in_comment, pos = True, opened + 4
+        if re.match(r"^#{1,2}\s", line):
+            here = ("", 1)      # a higher heading ends the scene
             continue
         head = re.match(r"^###\s+(.*?)\s*#*\s*$", line)
         if head and not line.startswith("####"):
@@ -4776,7 +4796,10 @@ def cmd_plan(batch: Batch, args: argparse.Namespace, text: str) -> None:
     for row in after:
         level = row.split("\t", 1)[0]
         counts[level] = counts.get(level, 0) + 1
-    batch.after = rows + after + lost + [
+    # DROPPED rows go with the block's own rows, so a batch keeps each
+    # plan block's and counts them; `after` is the last block's alone.
+    batch.rows.extend(lost)
+    batch.after = rows + after + [
         f"# plan_check: errors: {counts['ERROR']}  warnings: "
         f"{counts['WARNING'] + len(lost)}  info: {counts['INFO']}"]
 
