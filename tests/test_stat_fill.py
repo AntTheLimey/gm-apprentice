@@ -56,6 +56,38 @@ class FillCase(unittest.TestCase):
         return (vault / rel).read_text(encoding="utf-8")
 
 
+class LookupPickTests(FillCase):
+    def filled(self, stats: str) -> str:
+        v = self.vault({"Tomas.md": npc(stats)})
+        _code, rows = self.run_cli(v, "Tomas.md")
+        return rows[0].split("\t")[-1]
+
+    def test_the_noun_at_the_end_wins_over_a_leading_word(self):
+        self.assertEqual(self.filled("A tough Commoner (SRD)."), "Commoner")
+
+    def test_a_leading_adjective_run_does_not_win(self):
+        self.assertEqual(
+            self.filled("A tough old Guard (SRD), half blind."), "Guard")
+
+    def test_the_last_word_of_a_long_name_wins(self):
+        self.assertEqual(self.filled("Old Cat Burglar Spy (SRD)."), "Spy")
+
+    def test_the_docstring_example(self):
+        srd = stat_fill.load_srd(stat_fill.SYSTEMS_DIR) \
+            if hasattr(stat_fill, "SYSTEMS_DIR") else None
+        if not srd:
+            self.skipTest("no SRD creature files")
+        self.assertEqual(
+            stat_fill.lookup(srd, "A tough Commoner", False).name, "Commoner")
+
+    def test_as_stays_exact(self):
+        srd = stat_fill.load_srd(stat_fill.SYSTEMS_DIR) \
+            if hasattr(stat_fill, "SYSTEMS_DIR") else None
+        if not srd:
+            self.skipTest("no SRD creature files")
+        self.assertIsNone(stat_fill.lookup(srd, "A tough Commoner", True))
+
+
 class FillTests(FillCase):
     def test_fills_ice_mephit_in_the_vault_stats_form(self):
         v = self.vault({"Tomas.md": npc("Ice Mephit (SRD).")})

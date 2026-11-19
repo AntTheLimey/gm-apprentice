@@ -184,12 +184,13 @@ def lookup(srd: dict[str, Creature], name: str, exact: bool
            ) -> Creature | None:
     """The creature `name` names. A stock line's words may carry extra
     ones (`A tough Commoner`), so each run of its words is tried, longest
-    first; `--as` is exact."""
+    first and, at each length, from the right: the noun comes last, so
+    `A tough old Guard` is a Guard, not a Tough. `--as` is exact."""
     words = name.split()
     if exact:
         return srd.get(" ".join(words).casefold())
     for size in range(len(words), 0, -1):
-        for at in range(len(words) - size + 1):
+        for at in range(len(words) - size, -1, -1):
             hit = srd.get(" ".join(words[at:at + size]).casefold())
             if hit is not None:
                 return hit
