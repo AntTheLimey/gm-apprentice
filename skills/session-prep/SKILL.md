@@ -365,9 +365,13 @@ Apply fixes in place; there is no audit-notes report.
   block allowed for the rest. On the GM's yes it goes in
   the NPC note's `## GM Notes` as its `### Stats` section. With
   `# system: none recorded`, build nothing: it is an Open Question.
-- A `foe-no-numbers` warning (a CoC, GURPS or PF2e foe whose stats the
-  run sheet cannot read): one line under `## Gaps & Actions` naming the
-  foe. No question to the GM.
+- A `foe-no-numbers` warning (a foe whose stats the run sheet cannot
+  read): in a D&D vault run `gma stat-fill "<vault>" "<note>" --write`
+  for each, with no yes from the GM (the SRD's numbers; their own words
+  stay below the block). `REFUSED-MAJOR` goes to the full workup above;
+  `NOT-FOUND` is one line under `## Gaps & Actions` naming the foe. In a
+  CoC, GURPS or PF2e vault: one line under `## Gaps & Actions` naming
+  the foe. No question to the GM.
 - Unresolved calls — plot questions the GM deferred or you couldn't
   ground — each with 2–3 seeds, sorted per Stance. "Does Sophia know
   what her husband has become?" is a plot question; "Georgiana's

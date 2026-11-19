@@ -635,5 +635,41 @@ class CommandTests(unittest.TestCase):
         self.assertNotIn("## npc-stats", run([str(v), "all"])[1])
 
 
+
+class StockRowsTests(unittest.TestCase):
+    """`--stock`: the notes `gma stat-fill` can fill."""
+
+    def test_stock_prints_other_npcs_and_creatures_that_name_a_stock_block(self):
+        notes = {
+            "NPCs/Tomas.md": npc("### Stats\n\nCommoner (SRD). Blinded."),
+            "Creatures/Hound.md": npc("### Stats\n\nAs Wolf.").replace(
+                "type: npc", "type: creature"),
+            "NPCs/Wenna.md": npc(DND_FILLED),
+            "NPCs/Orme.md": npc("### Stats\n\nAs Bandit.",
+                                "companion: true\n"),
+            "NPCs/Gone.md": npc("### Stats\n\nAs Bandit.\n\n"
+                                "### Behind the Scenes\n\n- **Dead.**"),
+            "NPCs/Plain.md": npc(),
+        }
+        root = make(self, notes)
+        self.assertEqual(
+            npc_stats.stock_rows(root),
+            ["STOCK\tCreatures/Hound.md\tother: Wolf",
+             "STOCK\tNPCs/Tomas.md\tother: Commoner"])
+
+    def test_the_cli_prints_them_under_the_system_line(self):
+        root = make(self, {"NPCs/Tomas.md": npc("### Stats\n\nBandit (SRD)")})
+        code, out, _err = run([str(root), "npc-stats", "--stock"])
+        self.assertEqual(code, 0)
+        self.assertIn("STOCK\tNPCs/Tomas.md\tother: Bandit", out)
+        self.assertIn("# system:", out)
+
+    def test_stock_goes_with_npc_stats_alone(self):
+        root = make(self, {})
+        self.assertEqual(run([str(root), "npc-stats", "--stock",
+                              "--played"])[0], 2)
+        self.assertEqual(run([str(root), "names", "--stock"])[0], 2)
+
+
 if __name__ == "__main__":
     unittest.main()

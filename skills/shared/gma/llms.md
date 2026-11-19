@@ -30,7 +30,7 @@ gma <command> ... [options]
 | Argument | Value | Help |
 |---|---|---|
 | `--version` |  | print the plugin version |
-| `<command>` | `dnd-ddb`, `dnd-sheet`, `graph-check`, `gurps-check`, `gurps-skill-default`, `image`, `index-build`, `ingest-images`, `ingest-survey`, `links`, `migrate`, `moments`, `plan-check`, `plans-index`, `prop-move`, `reconcile-promote`, `reconcile-scan`, `relink`, `reveal`, `reveal-scan`, `rules-lookup`, `scene-queue`, `schema-rules`, `section`, `session-context`, `stamp-entities`, `tones`, `update`, `vault-check`, `vault-scaffold`, `vault-search`, `vault-write`, `workaround`, `publish`, `tool`, `llms` | the command to run; each has its own --help |
+| `<command>` | `dnd-ddb`, `dnd-sheet`, `graph-check`, `gurps-check`, `gurps-skill-default`, `image`, `index-build`, `ingest-images`, `ingest-survey`, `links`, `migrate`, `moments`, `plan-check`, `plans-index`, `prop-move`, `reconcile-promote`, `reconcile-scan`, `relink`, `reveal`, `reveal-scan`, `rules-lookup`, `scene-queue`, `schema-rules`, `section`, `session-context`, `stamp-entities`, `stat-fill`, `tones`, `update`, `vault-check`, `vault-scaffold`, `vault-search`, `vault-write`, `workaround`, `publish`, `tool`, `llms` | the command to run; each has its own --help |
 <!-- END GENERATED -->
 
 <!-- BEGIN GENERATED: gma llms -->
@@ -78,6 +78,7 @@ Example: `gma llms relink`
 | `section` | `gma llms section` | Print one section of a note by heading path. |
 | `session-context` | `gma llms session-context` | Session-prep context bundle in one call. |
 | `stamp-entities` | `gma llms stamp-entities` | Batch frontmatter writes for the session workflows. |
+| `stat-fill` | `gma llms stat-fill` | Write a stock D&D creature's SRD numbers into its note. |
 | `tones` | `gma llms tones` | List a vault's stray tone words, and tidy them. |
 | `update` | `gma llms update` | Update a vault and its site to the plugin's version, with a plain report. |
 | `vault-check` | `gma llms vault-check` | Vault content checks: frontmatter, names, index, drafts and more. |

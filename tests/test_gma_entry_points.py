@@ -16,7 +16,7 @@ CLI_SCRIPTS = [
     "gurps_skill_default", "image", "index_build", "ingest_images", "ingest_survey",
     "links", "migrate", "moments", "plan_check", "plans_index", "prop_move",
     "reconcile_promote", "reconcile_scan", "relink", "reveal", "reveal_scan", "rules_lookup",
-    "scene_queue", "schema_rules", "section", "session_context", "stamp_entities",
+    "scene_queue", "schema_rules", "section", "session_context", "stamp_entities", "stat_fill",
     "tones", "update", "vault_check", "vault_scaffold", "vault_search", "vault_write",
     "workaround",
 ]

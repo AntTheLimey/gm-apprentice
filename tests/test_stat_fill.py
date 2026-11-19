@@ -1,0 +1,250 @@
+"""`gma stat-fill`: a stock D&D creature's SRD numbers, written into the note
+that names it. All the NPCs here are invented.
+
+Run: python3 -m pytest tests/test_stat_fill.py
+"""
+
+import contextlib
+import io
+import shutil
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "skills" / "shared" / "scripts"))
+
+import stat_fill  # noqa: E402
+
+CREDIT = ("*Stats condensed from the SRD 5.2 by Wizards of the Coast LLC "
+          "(dndbeyond.com/srd), CC-BY 4.0 "
+          "(creativecommons.org/licenses/by/4.0/legalcode).*")
+
+
+def npc(stats: str, extra: str = "", type_: str = "npc") -> str:
+    body = f"### Stats\n\n{stats}\n\n" if stats else ""
+    return (f"---\ntype: {type_}\nstatus: alive\n{extra}---\n\n## Overview\n\n"
+            f"A lamplighter on the canal.\n\n<!-- gm-only -->\n\n"
+            f"## GM Notes\n\n{body}### Playing Them\n\n- **Speech:** slow\n\n"
+            f"<!-- /gm-only -->\n")
+
+
+class FillCase(unittest.TestCase):
+    system = "dnd-5e-2024"
+
+    def vault(self, notes: dict[str, str], system: str | None = None) -> Path:
+        root = Path(tempfile.mkdtemp(prefix="stat-fill-"))
+        self.addCleanup(shutil.rmtree, root, ignore_errors=True)
+        notes = {"_Campaign/Overview.md":
+                 f"---\ntype: campaign_overview\n"
+                 f"game_system: {system or self.system}\n---\n", **notes}
+        for rel, text in notes.items():
+            p = root / rel
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text(text, encoding="utf-8")
+        return root
+
+    def run_cli(self, vault: Path, *args: str) -> tuple[int, list[str]]:
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out), \
+                contextlib.redirect_stderr(io.StringIO()):
+            code = stat_fill.main([str(vault), *args])
+        return code, out.getvalue().splitlines()
+
+    def read(self, vault: Path, rel: str) -> str:
+        return (vault / rel).read_text(encoding="utf-8")
+
+
+class FillTests(FillCase):
+    def test_fills_ice_mephit_in_the_vault_stats_form(self):
+        v = self.vault({"Tomas.md": npc("Ice Mephit (SRD).")})
+        code, rows = self.run_cli(v, "Tomas.md", "--write")
+        self.assertEqual((code, rows[0]), (0, "FILLED\tTomas.md\tIce Mephit"))
+        text = self.read(v, "Tomas.md")
+        for want in ("### Stats\n\n**Ice Mephit**\n*Small Elemental*",
+                     "**AC** 11 · **Initiative** +1 (11) · **HP** 21 (6d6)",
+                     "| DEX | 13 | +1 | +1 |",
+                     "***Frost Breath (Recharge 6).***", CREDIT,
+                     "### Playing Them"):
+            self.assertIn(want, text)
+        self.assertNotIn("Ice Mephit (SRD)", text)
+
+    def test_fills_young_white_dragon_with_the_srd_initiative_not_dex(self):
+        v = self.vault({"Wyrmling.md": npc("As Young White Dragon.")})
+        self.run_cli(v, "Wyrmling.md", "--write")
+        text = self.read(v, "Wyrmling.md")
+        self.assertIn("**Initiative** +3 (13)", text)
+        self.assertIn("| DEX | 10 | +0 | +3 |", text)
+
+    def test_a_legendary_creature_writes_legendary_actions_and_resistance(self):
+        v = self.vault({"Wyrm.md": npc("As Adult Red Dragon.")})
+        self.run_cli(v, "Wyrm.md", "--write")
+        text = self.read(v, "Wyrm.md")
+        self.assertIn("**Legendary Actions (3)**", text)
+        self.assertIn("Legendary Resistance (3/Day)", text)
+        self.assertIn("***Fire Breath (Recharge 5–6).***", text)
+
+    def test_refuses_a_major_npc(self):
+        v = self.vault({"Tomas.md": npc("As Bandit.", "companion: true\n")})
+        before = self.read(v, "Tomas.md")
+        code, rows = self.run_cli(v, "Tomas.md", "--write")
+        self.assertTrue(rows[0].startswith("REFUSED-MAJOR\tTomas.md\t"), rows)
+        self.assertIn("companion", rows[0])
+        self.assertEqual(self.read(v, "Tomas.md"), before)
+
+    def test_refuses_a_key_npc_of_the_brief(self):
+        v = self.vault({
+            "Tomas.md": npc("As Bandit."),
+            "Brief.md": "---\ntype: adventure-brief\n---\n\n## Key NPCs\n\n"
+                        "- **[[Tomas]]** — the lamplighter\n"})
+        _code, rows = self.run_cli(v, "Tomas.md")
+        self.assertTrue(rows[0].startswith("REFUSED-MAJOR"), rows)
+        self.assertIn("key-npc", rows[0])
+
+    def test_leaves_numbers_alone(self):
+        own = ("**AC** 13 · **Initiative** +2 (12) · **HP** 27 (6d8)\n\n"
+               "| STR | 10 | +0 | +0 |\n| DEX | 14 | +2 | +2 |\n"
+               "| CON | 12 | +1 | +1 |\n| INT | 11 | +0 | +0 |\n"
+               "| WIS | 16 | +3 | +5 |\n| CHA | 13 | +1 | +1 |")
+        v = self.vault({"Wenna.md": npc(own)})
+        before = self.read(v, "Wenna.md")
+        _code, rows = self.run_cli(v, "Wenna.md", "--write")
+        self.assertTrue(rows[0].startswith("UNCHANGED\tWenna.md"), rows)
+        self.assertEqual(self.read(v, "Wenna.md"), before)
+
+    def test_unknown_creature(self):
+        v = self.vault({"Tomas.md": npc("As Gloomwraith.")})
+        before = self.read(v, "Tomas.md")
+        _code, rows = self.run_cli(v, "Tomas.md", "--write")
+        self.assertTrue(rows[0].startswith("NOT-FOUND\tTomas.md"), rows)
+        self.assertIn("Gloomwraith", rows[0])
+        self.assertEqual(self.read(v, "Tomas.md"), before)
+
+    def test_as_matches_srd_names_only(self):
+        v = self.vault({"Tomas.md": npc("As Bandit.")})
+        _c, rows = self.run_cli(v, "Tomas.md", "--as", "Bandi")
+        self.assertTrue(rows[0].startswith("NOT-FOUND"), rows)
+        _c, rows = self.run_cli(v, "Tomas.md", "--as", "Guard")
+        self.assertEqual(rows[0], "FILLED\tTomas.md\tGuard")
+
+    def test_the_note_name_is_the_last_resort(self):
+        v = self.vault({"Ghoul.md": npc("", type_="creature")})
+        _c, rows = self.run_cli(v, "Ghoul.md", "--write")
+        self.assertEqual(rows[0], "FILLED\tGhoul.md\tGhoul")
+        self.assertIn("**AC** 12", self.read(v, "Ghoul.md"))
+
+    def test_keeps_the_gms_words_from_the_stock_line(self):
+        v = self.vault({
+            "A.md": npc("Commoner (SRD). Blinded."),
+            "B.md": npc("As a Bandit, with a knife")})
+        self.run_cli(v, "A.md", "B.md", "--write")
+        self.assertIn("**As written:** Blinded.", self.read(v, "A.md"))
+        self.assertIn("**As written:** with a knife", self.read(v, "B.md"))
+
+    def test_keeps_a_tuned_hp_line(self):
+        v = self.vault({"Tomas.md": npc("Bandit (SRD)\n\nHP 5 after the fall.")})
+        self.run_cli(v, "Tomas.md", "--write")
+        text = self.read(v, "Tomas.md")
+        self.assertIn("**HP** 11 (2d8+2)", text)
+        self.assertLess(text.index("**HP** 11"), text.index("HP 5 after"))
+        self.assertLess(text.index("HP 5 after"), text.index(CREDIT))
+
+    def test_a_note_with_no_stats_section_gets_one_first_in_gm_notes(self):
+        v = self.vault({"Tomas.md": npc("")})
+        self.run_cli(v, "Tomas.md", "--as", "Commoner", "--write")
+        text = self.read(v, "Tomas.md")
+        self.assertLess(text.index("## GM Notes"), text.index("### Stats"))
+        self.assertLess(text.index("### Stats"), text.index("### Playing"))
+        self.assertIn("<!-- /gm-only -->", text)
+
+    def test_the_templates_slot_paragraph_is_replaced(self):
+        slot = ("{STAT BLOCK: vault setup replaces this paragraph with the "
+                "block for\nthe vault's system (campaign-organizer "
+                "references/vault-setup.md).}")
+        text = npc("").replace("## GM Notes\n\n",
+                               f"## GM Notes\n\n{slot}\n\n")
+        v = self.vault({"Tomas.md": text})
+        self.run_cli(v, "Tomas.md", "--as", "Commoner", "--write")
+        out = self.read(v, "Tomas.md")
+        self.assertNotIn("STAT BLOCK", out)
+        self.assertIn("### Stats", out)
+
+    def test_dry_run_writes_nothing(self):
+        v = self.vault({"Tomas.md": npc("As Bandit.")})
+        before = self.read(v, "Tomas.md")
+        _c, rows = self.run_cli(v, "Tomas.md")
+        self.assertEqual(rows[0], "FILLED\tTomas.md\tBandit")
+        self.assertIn("dry run", rows[-1])
+        self.assertEqual(self.read(v, "Tomas.md"), before)
+
+    def test_a_second_run_changes_nothing(self):
+        v = self.vault({"Tomas.md": npc("As Bandit.")})
+        self.run_cli(v, "Tomas.md", "--write")
+        done = self.read(v, "Tomas.md")
+        _c, rows = self.run_cli(v, "Tomas.md", "--write")
+        self.assertTrue(rows[0].startswith("UNCHANGED"), rows)
+        self.assertEqual(self.read(v, "Tomas.md"), done)
+
+    def test_a_note_without_gm_notes_is_an_error_and_nothing_is_written(self):
+        v = self.vault({"A.md": npc("As Bandit."),
+                        "B.md": "---\ntype: npc\n---\n\nStats: as Bandit.\n"})
+        before = self.read(v, "A.md")
+        code, rows = self.run_cli(v, "A.md", "B.md", "--write")
+        self.assertEqual(code, 1)
+        self.assertTrue(any(r.startswith("ERROR\tB.md") for r in rows), rows)
+        self.assertEqual(self.read(v, "A.md"), before)
+
+
+class SourceTests(FillCase):
+    def test_reads_only_the_top_level_monster_files(self):
+        systems = Path(tempfile.mkdtemp(prefix="stat-fill-sys-"))
+        self.addCleanup(shutil.rmtree, systems, ignore_errors=True)
+        folder = systems / "dnd-5e-2024"
+        shutil.copytree(stat_fill.SYSTEMS_DIR / "dnd-5e-2024", folder,
+                        ignore=shutil.ignore_patterns("personal"))
+        (folder / "personal").mkdir()
+        (folder / "personal" / "monsters-cr0-1.md").write_text(
+            "**Gloomwraith** | Undead | M | CR 0 (0 XP)\n"
+            "AC 99 | HP 99 (9d8) | Init +0 (10) | Speed 30 ft.\n"
+            "STR 10 DEX 10 CON 10 INT 10 WIS 10 CHA 10\n\n",
+            encoding="utf-8")
+        self.assertEqual(
+            [p.name for p in stat_fill.srd_files(systems)],
+            sorted(p.name for p in folder.glob("monsters-cr*.md")))
+        self.assertNotIn("gloomwraith", stat_fill.load_srd(systems))
+        v = self.vault({"Tomas.md": npc("As Gloomwraith.")})
+        _c, rows = self.run_cli(v, "Tomas.md", "--systems-dir", str(systems))
+        self.assertTrue(rows[0].startswith("NOT-FOUND"), rows)
+
+    def test_no_srd_files_says_so(self):
+        empty = Path(tempfile.mkdtemp(prefix="stat-fill-none-"))
+        self.addCleanup(shutil.rmtree, empty, ignore_errors=True)
+        v = self.vault({"Tomas.md": npc("As Bandit.")})
+        _c, rows = self.run_cli(v, "Tomas.md", "--write",
+                                "--systems-dir", str(empty))
+        self.assertTrue(rows[0].startswith("NO-SRD\tTomas.md\t"), rows)
+        self.assertIn("not installed", rows[0])
+        self.assertIn("As Bandit.", self.read(v, "Tomas.md"))
+
+    def test_refuses_a_non_dnd_vault(self):
+        v = self.vault({"Tomas.md": npc("As Bandit.")}, system="gurps-4e")
+        before = self.read(v, "Tomas.md")
+        _c, rows = self.run_cli(v, "Tomas.md", "--write")
+        self.assertTrue(rows[0].startswith("NOT-DND\tTomas.md"), rows)
+        self.assertEqual(self.read(v, "Tomas.md"), before)
+
+    def test_every_shipped_creature_writes_a_block_the_reader_can_use(self):
+        srd = stat_fill.load_srd(stat_fill.SYSTEMS_DIR)
+        self.assertGreater(len(srd), 200)
+        for c in srd.values():
+            with self.subTest(c.name):
+                block = "\n".join(stat_fill.stats_block(c))
+                self.assertIn(f"**AC** {c.ac}", block)
+                self.assertIn(f"**HP** {c.hp}", block)
+                self.assertRegex(block, r"Initiative\*\* [+-]\d+ \(\d+\)")
+                self.assertEqual(len(c.scores), 6)
+
+
+if __name__ == "__main__":
+    unittest.main()

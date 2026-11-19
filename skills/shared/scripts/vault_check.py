@@ -20,7 +20,7 @@ Usage:
   vault_check.py VAULT relationships [--folder SUB] [--file REL ...] [--newer-than REL]
   vault_check.py VAULT chapters      (a chapter with two chapter notes: ASK)
   vault_check.py VAULT npc-pairs     (one character with an NPC and a PC note: ASK)
-  vault_check.py VAULT npc-stats [--plan PLAN] [--played]   (NPCs with no stat block)
+  vault_check.py VAULT npc-stats [--plan PLAN] [--played] [--stock]   (NPCs with no stat block)
   vault_check.py VAULT sessions      (also: played sessions/Wrap-Ups not under Publishing)
   vault_check.py VAULT gm-leak [--folder SUB] [--fix]
   vault_check.py VAULT gm-leak --renest-excludes [--fix]
@@ -154,6 +154,9 @@ NPC is major (`companion: true`, or an entry of an adventure brief's
 `## Key NPCs`) or other. `--plan PLAN` keeps the NPCs that Plan's scenes
 name; `--played` those a Wrap-Up or a played scene links. A `# system:`
 line closes it. The rules are `npc_stats.py`'s; it stays outside `all`.
+`--stock` lists instead `STOCK` rows for the other NPCs and the creature
+notes whose block only names a stock creature (`other: Commoner`): the
+notes `gma stat-fill` fills.
 
 Two commands are gates rather than reports and sit outside `all`:
 `version` emits one row whose first column is a verdict
@@ -6059,6 +6062,10 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--played", action="store_true",
                     help="npc-stats only: just the NPCs a Wrap-Up or a "
                          "played scene links")
+    ap.add_argument("--stock", action="store_true",
+                    help="npc-stats only: list the other NPCs and creatures "
+                         "whose block only names a stock creature (the "
+                         "notes gma stat-fill fills) instead")
     ap.add_argument("--json", action="store_true",
                     help="settings only: print the rows as JSON")
     ap.add_argument("--dry-run", action="store_true",
@@ -6126,8 +6133,13 @@ def _main(argv: list[str] | None) -> int:
     if not args.vault.is_dir():
         print(f"error: not a directory: {args.vault}", file=sys.stderr)
         return 2
-    if (args.plan is not None or args.played) and args.command != "npc-stats":
-        print("error: --plan and --played need the npc-stats command",
+    if ((args.plan is not None or args.played or args.stock)
+            and args.command != "npc-stats"):
+        print("error: --plan, --played and --stock need the npc-stats "
+              "command", file=sys.stderr)
+        return 2
+    if args.stock and (args.plan is not None or args.played):
+        print("error: --stock does not go with --plan or --played",
               file=sys.stderr)
         return 2
     if args.renest_excludes and (args.command != "gm-leak" or args.folder):
@@ -6226,6 +6238,10 @@ def _main(argv: list[str] | None) -> int:
         return check_settings(args.vault, args.fix, args.apply, args.json)
     if args.command == "npc-stats":
         import npc_stats  # its own module: it reads Plans and scenes
+        if args.stock:
+            emit("npc-stats", npc_stats.stock_rows(args.vault))
+            print(npc_stats.system_line(args.vault))
+            return 0
         rows, error = npc_stats.check_npc_stats(args.vault, args.plan,
                                                 args.played)
         if error:

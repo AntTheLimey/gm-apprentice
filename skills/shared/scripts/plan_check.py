@@ -79,6 +79,11 @@ Checks, by id, level, and the rule they mechanise:
                 WARNING  a table in a planned scene that is not under
                          `**If the players...**`: the run sheet reads
                          Do | Then rows only from there
+  foe-no-numbers
+                WARNING  a person a scene names (Who, Entities or NPCs
+                         block) whose note only names a stock creature:
+                         the sheet has no AC or HP for them (needs a
+                         vault; in a D&D vault, `gma stat-fill` fixes it)
                          (the checks above: tools/publish/lib/run-sheet;
                          shape only, never story)
   duration      ERROR/   never estimate scene durations
@@ -754,7 +759,7 @@ def check_scenes(rel: str, by_norm: dict[str, tuple[int, str, str]]
 
 RUN_SHEET_CHECKS: tuple[str, ...] = (
     "no-place", "no-npcs-block", "hub-no-places", "hub-place-not-location",
-    "label-form", "if-table-unlabelled")
+    "label-form", "if-table-unlabelled", "foe-no-numbers")
 
 _SCENE_N_RE = re.compile(r"^\s*scene\s+\d+\s*:\s*", re.I)
 _HUB_MARK_RE = re.compile(r"\s*\((?:hub|routing)\)\s*", re.I)
@@ -800,6 +805,9 @@ class VaultIndex:
     def __init__(self, vault: Path | None) -> None:
         self.vault = vault
         self._by_name: dict[str, list[dict[str, Any]]] | None = None
+        self._texts: dict[str, list[tuple[str, str]]] | None = None
+        self._system: str | None = None
+        self._system_read = False
 
     def notes(self, link: str) -> list[dict[str, Any]] | None:
         """Frontmatter of each note the link names; None with no vault."""
@@ -819,6 +827,32 @@ class VaultIndex:
         unknown or holds no such note (a missing link is not this check's)."""
         found = self.notes(link)
         return {vl.entity_type(fm) for fm in found} if found else None
+
+    def foes(self, link: str) -> list[tuple[str, str]]:
+        """(path, text) of each NPC or creature note a link names; empty
+        with no vault."""
+        if self.vault is None:
+            return []
+        if self._texts is None:
+            self._texts = {}
+            for rel, text in vl.vault_files(self.vault):
+                fm = vl.extract_frontmatter(text) or {}
+                if vl.entity_type(fm) not in _NPC_TYPES:
+                    continue
+                for name in (Path(rel).stem, *vl.link_aliases(fm)):
+                    self._texts.setdefault(
+                        vl.normalize(name), []).append((rel, text))
+        return self._texts.get(vl.link_target(link), [])
+
+    def system(self) -> str | None:
+        """The vault's game system, read once."""
+        if self.vault is None:
+            return None
+        if not self._system_read:
+            from migrate_vault import vault_system
+            self._system = vault_system(self.vault)
+            self._system_read = True
+        return self._system
 
 
 def _unfenced(body: str) -> list[str]:
@@ -950,11 +984,56 @@ def _entity_people(lines: list[str], index: VaultIndex) -> list[str]:
     return names
 
 
+def _foe_links(lines: list[str]) -> list[str]:
+    """Every note a beat names as someone in the room: its Who and Entities
+    lines' links, and the lead link of each `**NPCs**` bullet."""
+    links: list[str] = []
+    for ln in lines:
+        m = _ENTITIES_LINE_RE.match(ln)
+        if m:
+            links.extend(_LINK_RE.findall(m.group(1)))
+        elif _WHO_LINE_RE.match(ln):
+            links.extend(_LINK_RE.findall(ln))
+    for i, ln in enumerate(lines):
+        if _NPCS_HEAD_RE.match(ln):
+            for b in _block_after(lines, i):
+                if _NPC_LINE_RE.match(b):
+                    links.extend(_LINK_RE.findall(b)[:1])
+    return links
+
+
+def _foe_findings(locus: str, title: str, lines: list[str],
+                  index: VaultIndex) -> list[Finding]:
+    """A person the beat names whose note only names a stock creature: the
+    run sheet has no AC or HP for them."""
+    import npc_stats
+    out: list[Finding] = []
+    seen: set[str] = set()
+    for link in _foe_links(lines):
+        for note, text in index.foes(link):
+            if note in seen:
+                continue
+            seen.add(note)
+            verdict = npc_stats.classify(text, index.system())
+            if verdict is None or verdict[0] != "stock":
+                continue
+            fix = (f"run: gma stat-fill \"<vault>\" \"{note}\" --write"
+                   if index.system() == "dnd-5e-2024" else
+                   "write the numbers into its note's ### Stats")
+            out.append(Finding(
+                "foe-no-numbers", "WARNING", locus,
+                f"foe-no-numbers: '{title}' names {vl.link_name(link)}, "
+                f"whose note {verdict[1]} — the run sheet will "
+                f"lack its AC and HP; {fix}"))
+    return out
+
+
 def _run_sheet_scene(rel: str, title: str, body: str, planned: bool,
                      index: VaultIndex) -> list[Finding]:
     locus = f"{rel}:§{title}"
     lines = _unfenced(body)
     out = _label_form_findings(locus, title, lines)
+    out.extend(_foe_findings(locus, title, lines, index))
     if not planned:
         return out
     out.extend(_if_table_findings(locus, title, lines))

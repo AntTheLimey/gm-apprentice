@@ -4,12 +4,14 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { spawnSync } = require('node:child_process');
 const { readText } = require('./helpers/run-sheet-lines');
 const { buildIndex } = require('../lib/run-sheet/notes');
 const { readBeats } = require('../lib/run-sheet/beats');
 const { foesOf, foesFor } = require('../lib/run-sheet/foes');
 
 const FIXTURE = path.join(__dirname, 'fixtures', 'run-sheet');
+const GMA = path.join(__dirname, '..', '..', '..', 'skills', 'shared', 'scripts', 'gma.py');
 const PLAN = 'Chapters/Chapter 1/Sessions/Session 02/Session 02 - The Test - Plan.md';
 
 function setup(edit) {
@@ -189,5 +191,28 @@ describe('run sheet foes', () => {
     assert.strictEqual(one(index, 'Dash').foes[0].init, -1);
     const w = one(index, 'Wrap').foes[0];
     assert.deepStrictEqual([w.hp, w.ac], [null, 12]);
+  });
+
+  it('a filled note gives init, hp, ac and recharge', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rs-'));
+    fs.cpSync(FIXTURE, dir, { recursive: true });
+    fs.mkdirSync(path.join(dir, '_Campaign'));
+    fs.writeFileSync(path.join(dir, '_Campaign', 'Overview.md'),
+      '---\ntype: campaign_overview\ngame_system: dnd-5e-2024\n---\n');
+    const note = (n, stats) => fs.writeFileSync(path.join(dir, 'Creatures', `${n}.md`),
+      `---\nname: ${n}\ntype: creature\n---\n\n<!-- gm-only -->\n\n## GM Notes\n\n### Stats\n\n${stats}\n\n<!-- /gm-only -->\n`);
+    note('Blinded Mephit', 'Ice Mephit (SRD). Blinded.\n\nHP 9 after the fall.');
+    note('Wyrmling', 'As Young White Dragon.');
+    const run = spawnSync('python3', [GMA, 'stat-fill', dir, 'Creatures/Blinded Mephit.md', 'Creatures/Wyrmling.md', '--write'],
+      { encoding: 'utf8' });
+    assert.strictEqual(run.status, 0, run.stdout + run.stderr);
+    const index = buildIndex(dir);
+    const m = one(index, 'Blinded Mephit');
+    assert.deepStrictEqual(m.warnings, []);
+    // The tuned line is written after the block, so it wins.
+    assert.deepStrictEqual([m.foes[0].ac, m.foes[0].hp, m.foes[0].init, m.foes[0].recharge], [11, 9, 1, ['Frost Breath']]);
+    const d = one(index, 'Wyrmling');
+    assert.deepStrictEqual(d.warnings, []);
+    assert.deepStrictEqual([d.foes[0].ac, d.foes[0].hp, d.foes[0].init], [17, 123, 3]);
   });
 });

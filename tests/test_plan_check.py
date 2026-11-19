@@ -1220,6 +1220,63 @@ class RunSheetChecksTests(unittest.TestCase):
     def test_a_scene_note_not_in_the_vault_is_scene_pointers_to_say(self):
         self.assertEqual(self.ids("### [[Ghost]]\n**Starts it:** t\n"), [])
 
+    # foe-no-numbers
+
+    def stock_note(self, name: str, body: str, type_: str = "npc",
+                   system: str | None = "dnd-5e-2024") -> None:
+        (self.vault / f"{name}.md").write_text(
+            f"---\ntype: {type_}\n---\n\n## Overview\n\nx\n\n"
+            f"<!-- gm-only -->\n\n## GM Notes\n\n### Stats\n\n{body}\n\n"
+            f"<!-- /gm-only -->\n", encoding="utf-8")
+        if system:
+            (self.vault / "_Campaign").mkdir(exist_ok=True)
+            (self.vault / "_Campaign" / "Overview.md").write_text(
+                f"---\ntype: campaign_overview\ngame_system: {system}\n---\n",
+                encoding="utf-8")
+
+    def test_a_stock_foe_warns_foe_no_numbers(self):
+        self.stock_note("Tomas", "Commoner (SRD)")
+        rest = "**NPCs**\n- **[[Tomas]]:** wants his cart back\n"
+        found = self.found(self.scene(rest=rest))
+        rows = rows_for(found, "foe-no-numbers")
+        self.assertEqual(len(rows), 1, found)
+        self.assertEqual(rows[0].level, "WARNING")
+        self.assertIn("gma stat-fill", rows[0].message)
+        self.assertIn("run sheet", rows[0].message)
+
+    def test_a_stock_foe_in_another_system_says_write_the_numbers(self):
+        self.stock_note("Tomas", "Commoner (SRD)", system="gurps-4e")
+        found = self.found(self.scene(rest="**Entities:** [[Tomas]]\n"))
+        rows = rows_for(found, "foe-no-numbers")
+        self.assertEqual(len(rows), 1, found)
+        self.assertNotIn("stat-fill", rows[0].message)
+        self.assertIn("write the numbers", rows[0].message)
+
+    def test_a_social_npc_with_no_stats_does_not(self):
+        self.note("Orme", "npc")
+        rest = "**NPCs**\n- **[[Orme]]:** wants x\n"
+        self.assertEqual(self.ids(self.scene(rest=rest)), [])
+
+    def test_a_foe_with_numbers_does_not(self):
+        self.stock_note(
+            "Tomas", "**AC** 10 · **Initiative** +0 (10) · **HP** 4 (1d8)\n"
+            "STR 10 DEX 10 CON 10 INT 10 WIS 10 CHA 10")
+        rest = "**Who:** [[Tomas]] (2)\n"
+        self.assertEqual(self.ids(self.scene(rest=rest)), [])
+
+    def test_a_stock_creature_in_a_contingency_warns(self):
+        self.stock_note("Hound", "Wolf (SRD)", type_="creature")
+        found = self.found(contingency=(
+            "### If they run\n**Trigger:** t\n**Who:** [[Hound]]\n"
+            "**Then**\n- x\n"))
+        self.assertEqual(len(rows_for(found, "foe-no-numbers")), 1, found)
+
+    def test_no_vault_skips_foe_no_numbers(self):
+        self.stock_note("Tomas", "Commoner (SRD)")
+        self.assertEqual(
+            self.ids(self.scene(rest="**Entities:** [[Tomas]]\n"),
+                     index=False), [])
+
     # no-npcs-block
 
     def test_npc_in_entities_without_a_block_warns(self):

@@ -49,6 +49,8 @@ Content derived from the SRD 5.2 includes: spell indexes and
 descriptions, magic item indexes and descriptions, and full
 monster stat blocks (ability scores, attacks, damage dice, save
 DCs, traits, legendary actions) for 235 creatures.
+`gma stat-fill` writes those creatures' SRD 5.2 names and numbers into a
+vault's notes, each with the SRD credit line (CC-BY 4.0).
 
 The publish tool's D&D test fixtures
 (`tools/publish/test/fixtures/with-dnd-pc/`) are seven original

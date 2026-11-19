@@ -25,6 +25,14 @@ template.
    `## GM Notes` as its `### Stats` section, in place of any placeholder.
 3. On a no, or "this one never fights", dismiss the finding.
 
+**Stock blocks in a D&D vault:** `gma vault-check <vault> npc-stats
+--stock` lists the other NPCs and the creature notes whose block only
+names a stock creature (`STOCK` rows, `other: Commoner`). Run `gma
+stat-fill <vault> <note> --write` on each: it writes the SRD creature's
+numbers and keeps the GM's own words below, so no yes is needed. A
+`NOT-FOUND` row names a creature the SRD lacks: ask the GM which one it
+is, then pass it with `--as`.
+
 Never invent numbers without the system's rules. With no system recorded
 (`# system: none recorded`), build nothing: ask the GM which system first.
 
