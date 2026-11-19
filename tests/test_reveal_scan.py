@@ -222,6 +222,7 @@ class RevealScan(unittest.TestCase):
         for value, shown in (('"[[Captain Rook]]"', "unmasked_name: Captain Rook"),
                              ("[[Captain Rook|the captain]]", "unmasked_name: Captain Rook"),
                              ('"[[]]"', "unmasked_name: [[]] (names no one: write the true name)"),
+                             ('["[[]]", ""]', "unmasked_name: [[]] (names no one: write the true name)"),
                              ("[[rook.png]]", "unmasked_name: rook.png")):
             pedlar = f"---\ntype: npc\nunmasked_name: {value}\n---\n\n# Pedlar\n"
             res = run_scan({**base(play="Met [[Pedlar]].\n"), "NPCs/Pedlar.md": pedlar},

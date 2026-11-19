@@ -691,6 +691,20 @@ def _write_log(vault: Path, log: dict[str, Any]) -> None:
         raise
 
 
+def _replace_file(target: Path, data: bytes) -> None:
+    """Write `data` to `target` whole or not at all: into a temp file in the
+    same folder, then moved over it (`os.replace`), as `_write_log` does. A
+    write that fails (a full disk) leaves `target` as it was."""
+    tmp = target.with_name(f".{target.name}.{os.getpid()}.tmp")
+    try:
+        with open(tmp, "wb") as f:
+            f.write(data)
+        os.replace(tmp, target)
+    except OSError:
+        tmp.unlink(missing_ok=True)
+        raise
+
+
 def _log_writable(vault: Path) -> str | None:
     """Why the log cannot be written, or None: a file is made beside it
     and taken away again."""
@@ -873,23 +887,27 @@ def run(vault: Path, session: str, publish: list[str], released: list[tuple[str,
                        f"was refused, and an unmasking is all or nothing; fix it or leave it out, then run again")
         unmasks = {}
     if write and unmasks:
+        # Each note is written whole or not at all (`_replace_file`). When one
+        # fails, the notes this run already wrote are put back, the ones after it
+        # are not touched, and every note gets a row saying which.
         written: list[tuple[str, bytes]] = []
-        for raw, (new_text, _, _) in unmasks.items():
+        order = list(unmasks)
+        for n, raw in enumerate(order):
             try:
                 was = (vault / raw).read_bytes()
-                (vault / raw).write_text(new_text, encoding="utf-8", newline="")
+                _replace_file(vault / raw, unmasks[raw][0].encode("utf-8"))
             except OSError as e:
                 error(raw, f"not unmasked, nothing changed: {e}")
-                # What this run already wrote is put back; a note that cannot be is
-                # unmasked, and is told and logged as such.
                 stuck: list[str] = []
                 for put, text_before in written:
                     try:
-                        (vault / put).write_bytes(text_before)
+                        _replace_file(vault / put, text_before)
                         error(put, f"not unmasked, put back as it was: {raw} could not be written")
                     except OSError as e2:
                         error(put, f"could not be put back after {raw} failed ({e2}); it is unmasked")
                         stuck.append(put)
+                for later in order[n + 1:]:
+                    error(later, f"not unmasked, nothing changed: {raw} could not be written")
                 unmasks = {d: unmasks[d] for d in stuck}
                 break
             written.append((raw, was))

@@ -149,7 +149,7 @@ def _hidden_parts(note: Note, stripped: list[str]) -> list[str]:
     if not value_blank(value):
         names = unmasked_names(value)
         hidden.append("unmasked_name: " + (", ".join(names) if names else
-                                           f"{_shown(value)} (names no one: write the true name)"))
+                                           f"{_shown(value) or '(empty)'} (names no one: write the true name)"))
     value = note.fm.get("unmasked_portrait")
     if not value_blank(value):
         faces = [link_value(v) for v in _strings(value)]
@@ -165,7 +165,10 @@ def _strings(value: object) -> list[str]:
 
 
 def _shown(value: object) -> str:
-    return value.strip() if isinstance(value, str) else str(value)
+    """A value as the other hidden parts print one: its words, a list's
+    joined by `, `."""
+    words = [v.strip() for v in _strings(value) if v.strip()]
+    return ", ".join(words) if words or isinstance(value, (str, list)) else str(value)
 
 
 def _stripped_by_path(vault: Path) -> tuple[dict[str, list[str]], set[str], str | None]:

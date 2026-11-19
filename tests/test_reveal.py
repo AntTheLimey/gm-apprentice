@@ -1020,13 +1020,13 @@ class UnmaskTests(unittest.TestCase):
         """I2: a write that fails mid-batch puts the earlier notes back; nothing is logged."""
         before = (self.root / MASK).read_text(encoding="utf-8")
         wick = (self.root / "NPCs/Wick.md").read_text(encoding="utf-8")
-        real = Path.write_text
+        real = reveal._replace_file
 
-        def failing(path: Path, *a: object, **k: object) -> int:
+        def failing(path: Path, data: bytes) -> None:
             if path.name == "Wick.md":
                 raise PermissionError("Permission denied")
-            return real(path, *a, **k)  # type: ignore[arg-type]
-        with mock.patch.object(Path, "write_text", failing):
+            real(path, data)
+        with mock.patch.object(reveal, "_replace_file", failing):
             code, out, _ = run(self.root, "--unmask", MASK, "--unmask", "NPCs/Wick.md", "--write")
         self.assertEqual(code, 1, out)
         self.assertIn("ERROR\tNPCs/Wick.md\tnot unmasked, nothing changed: Permission denied", out)
@@ -1035,6 +1035,45 @@ class UnmaskTests(unittest.TestCase):
         self.assertEqual((self.root / MASK).read_text(encoding="utf-8"), before)
         self.assertEqual((self.root / "NPCs/Wick.md").read_text(encoding="utf-8"), wick)
         self.assertFalse((self.root / "_meta" / "reveals.json").exists())
+
+    def test_unmask_write_that_fails_after_truncating_leaves_every_note_whole(self) -> None:
+        """A disk-full write mid-batch: every note keeps its bytes and every note gets a row."""
+        third = "NPCs/Third.md"
+        (self.root / third).write_text(MASKED.replace("Captain Rook", "Old Cinders"), encoding="utf-8")
+        paths = [MASK, "NPCs/Wick.md", third]
+        before = {r: (self.root / r).read_bytes() for r in paths}
+        real_open = open
+        real_write_text = Path.write_text
+
+        def full(path: object) -> bool:
+            return "Wick" in str(path)
+
+        def disk_full_open(file: object, mode: str = "r", *a: object, **k: object) -> object:
+            f = real_open(file, mode, *a, **k)  # type: ignore[call-overload]
+            if "w" in mode and full(file):
+                f.close()
+                raise OSError(28, "No space left on device")
+            return f
+
+        def disk_full_write_text(path: Path, *a: object, **k: object) -> int:
+            if full(path):
+                real_open(path, "w").close()        # truncated, then the disk is full
+                raise OSError(28, "No space left on device")
+            return real_write_text(path, *a, **k)  # type: ignore[arg-type]
+        with mock.patch("builtins.open", disk_full_open), \
+                mock.patch.object(Path, "write_text", disk_full_write_text):
+            code, out, _ = run(self.root, *[a for r in paths for a in ("--unmask", r)], "--write")
+        self.assertEqual(code, 1, out)
+        for r in paths:
+            self.assertEqual((self.root / r).read_bytes(), before[r], r)
+            self.assertIn(f"ERROR\t{r}\t", out, r)
+        self.assertIn("ERROR\tNPCs/Wick.md\tnot unmasked, nothing changed: [Errno 28] No space left on device", out)
+        self.assertIn(f"ERROR\t{MASK}\tnot unmasked, put back as it was: NPCs/Wick.md could not be written", out)
+        self.assertIn(f"ERROR\t{third}\tnot unmasked, nothing changed: NPCs/Wick.md could not be written", out)
+        self.assertNotIn("UNMASKED", out)
+        self.assertFalse((self.root / "_meta" / "reveals.json").exists())
+        self.assertEqual([f.name for f in (self.root / "NPCs").iterdir() if f.name.startswith(".")], [],
+                         "no temp file is left behind")
 
     def test_unmask_refuses_before_writing_when_the_log_cannot_be_written(self) -> None:
         """M1: a log folder that cannot be written to stops the unmask before any note changes."""
