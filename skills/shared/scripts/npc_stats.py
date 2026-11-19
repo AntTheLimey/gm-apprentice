@@ -155,12 +155,6 @@ def _stock(text: str) -> Stock | None:
     return None
 
 
-def stock_name(text: str) -> str | None:
-    """The stock creature's name `text` gives in place of a block."""
-    found = _stock(text)
-    return found.name if found else None
-
-
 def _stat_sections(body: str) -> list[str]:
     """The text under each stat heading, to the next heading of its level
     or higher, comments dropped."""

@@ -279,6 +279,16 @@ def old_section(doc: vw.Doc, rel: str, gm: tuple[int, int]
     return head, vw.section_end(doc, head)
 
 
+def _tidy(out: list[str]) -> list[str]:
+    tidy: list[str] = []
+    for line in out:
+        if line.strip() or (tidy and tidy[-1].strip()):
+            tidy.append(line)
+    while tidy and not tidy[-1].strip():
+        tidy.pop()
+    return tidy
+
+
 def kept_lines(old: list[str]) -> list[str]:
     """What the GM wrote under a stock block, to sit below the new one: the
     words of the stock line, then every other line as it was."""
@@ -292,13 +302,23 @@ def kept_lines(old: list[str]) -> list[str]:
                 out.insert(0, f"**As written:** {stock.words}")
         else:
             out.append(line)
-    tidy: list[str] = []
-    for line in out:
-        if line.strip() or (tidy and tidy[-1].strip()):
-            tidy.append(line)
-    while tidy and not tidy[-1].strip():
-        tidy.pop()
-    return tidy
+    return _tidy(out)
+
+
+def kept_beside_placeholder(old: list[str]) -> list[str]:
+    """What the GM wrote under a placeholder or blank block: every line but
+    the deferral line itself (`Stats to come.`) and the empty block's own
+    fields, table rows and embeds."""
+    out: list[str] = []
+    deferral = False
+    for line in old:
+        if not deferral and npc_stats.DEFER_RE.search(line):
+            deferral = True
+        elif not (line.lstrip().startswith("|")
+                  or npc_stats.BRACE_RE.search(line)
+                  or npc_stats.EMBED_RE.search(line)):
+            out.append(line)
+    return _tidy(out)
 
 
 def written(text: str, rel: str, c: Creature, stock_words: str | None
@@ -311,8 +331,9 @@ def written(text: str, rel: str, c: Creature, stock_words: str | None
     if head is not None:
         old = [ln.rstrip("\r\n") for ln in doc.lines[head.idx + 1:end]]
         verdict = npc_stats.classify(text, SYSTEM)
-        if verdict is not None and verdict[0] == "stock":
-            keep = kept_lines(old)
+        if verdict is not None:
+            keep = (kept_lines(old) if verdict[0] == "stock"
+                    else kept_beside_placeholder(old))
     elif stock_words:
         keep = [f"**As written:** {stock_words}"]
     unit = ["### Stats", "", *stats_block(c)]

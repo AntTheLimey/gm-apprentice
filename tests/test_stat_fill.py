@@ -150,6 +150,17 @@ class FillTests(FillCase):
         self.assertIn("**As written:** Blinded.", self.read(v, "A.md"))
         self.assertIn("**As written:** with a knife", self.read(v, "B.md"))
 
+    def test_keeps_the_gms_words_beside_a_placeholder(self):
+        v = self.vault({"Wolf.md": npc(
+            "Stats to come.\n\nHunts in packs; flees at half HP.",
+            type_="creature")})
+        _c, rows = self.run_cli(v, "Wolf.md", "--write")
+        self.assertEqual(rows[0], "FILLED\tWolf.md\tWolf")
+        text = self.read(v, "Wolf.md")
+        self.assertIn("Hunts in packs; flees at half HP.", text)
+        self.assertNotIn("Stats to come", text)
+        self.assertIn("**AC** 12", text)
+
     def test_keeps_a_tuned_hp_line(self):
         v = self.vault({"Tomas.md": npc("Bandit (SRD)\n\nHP 5 after the fall.")})
         self.run_cli(v, "Tomas.md", "--write")
