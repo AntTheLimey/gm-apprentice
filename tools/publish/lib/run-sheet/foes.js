@@ -6,19 +6,20 @@
 
 const path = require('node:path');
 const { itemKeys } = require('./keys');
+const { SIGNED_SOURCE, toNumber } = require('./signed');
 const { bullets } = require('./plan-text');
 
 const FOE_TYPES = new Set(['npc', 'creature']);
 
-const number = (m) => (m ? Number(m[1]) : null);
+const number = (m) => (m ? toNumber(m[1]) : null);
 
 // Only a number AFTER the HP / Hit Points word counts ("regains 10 HP" and "DC 14" are not figures).
 function readNumbers(stats, behaviour) {
-  const ac = number(/\bAC[*:]*\s*(\d+)/.exec(stats));
+  const ac = number(/\bAC[ \t*:]*(\d+)/.exec(stats));
   // The last HP figure stated wins: a session's tuning is written after the stock block.
-  const hps = [...stats.matchAll(/\b(?:HP|Hit Points)[*:]*\s*(\d+)/g)];
+  const hps = [...stats.matchAll(/\b(?:HP|Hit Points)[ \t*:]*(\d+)/g)];
   const hp = hps.length ? Number(hps[hps.length - 1][1]) : null;
-  const init = number(/Initiative\D{0,3}([+-]\d+)/.exec(stats));
+  const init = number(new RegExp(`Initiative[^\\d\\n]{0,3}(${SIGNED_SOURCE})`).exec(stats));
   const full = `${stats}\n${behaviour}`;
   const recharge = [...new Set([...full.matchAll(/\*\*\*([^*]+?)\s*\(Recharge [0-9–-]+\)/g)].map((m) => m[1].trim()))].sort();
   return {

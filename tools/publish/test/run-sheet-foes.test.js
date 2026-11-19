@@ -121,4 +121,19 @@ describe('run sheet foes', () => {
     const keys = [...gate.treasure, ...r.treasure].map((t) => t.key);
     assert.strictEqual(new Set(keys).size, keys.length);
   });
+
+  it('numbers stay on their line and a typeset minus reads', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rs-'));
+    fs.cpSync(FIXTURE, dir, { recursive: true });
+    const note = (n, stats) => fs.writeFileSync(path.join(dir, 'Creatures', `${n}.md`),
+      `---\nname: ${n}\ntype: creature\n---\n\n## GM Notes\n\n### Stats\n\n${stats}\n`);
+    note('Minus', '**AC** 12 · **Initiative** \u22121 (9) · **HP** 9');
+    note('Dash', '**Initiative** \u20131 (9) **AC** 12 **HP** 5');
+    note('Wrap', 'AC 12 Initiative +1\ntrait ends in HP\n1d6 more\nAC\n14');
+    const index = buildIndex(dir);
+    assert.strictEqual(one(index, 'Minus').foes[0].init, -1);
+    assert.strictEqual(one(index, 'Dash').foes[0].init, -1);
+    const w = one(index, 'Wrap').foes[0];
+    assert.deepStrictEqual([w.hp, w.ac], [null, 12]);
+  });
 });

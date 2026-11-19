@@ -64,6 +64,14 @@ describe('run sheet handouts, party and people', () => {
     assert.strictEqual(r.warnings.length, 0);
   });
 
+  it('a typeset minus reads in a signed row', () => {
+    const { dir, index: i0, body } = setup();
+    const f = path.join(dir, ADA);
+    fs.writeFileSync(f, fs.readFileSync(f, 'utf8').replace('| Initiative | +2 |', '| Initiative | \u22121 |'));
+    const ada = readPcs(body, buildIndex(dir), [ADA]).pcs[0];
+    assert.strictEqual(ada.init, -1);
+  });
+
   it('pc numbers: first numeric row wins', () => {
     const { index, body } = setup();
     const ada = readPcs(body, index, [ADA]).pcs[0];

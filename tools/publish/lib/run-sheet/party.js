@@ -27,6 +27,8 @@ function bulletSubject(text) {
   return { name: wordsOf(name), link: links(name)[0] || null, rest: rest.trim() };
 }
 
+const { SIGNED_SOURCE, toNumber } = require('./signed');
+
 const SECTIONS = [
   { re: /^spotlight/i, field: 'spotlight' },
   { re: /^touchpoint/i, field: 'touchpoint' },
@@ -35,7 +37,8 @@ const SECTIONS = [
 
 const numberFrom = (cell, signed) => {
   const t = String(cell || '').trim();
-  return (signed ? /^[+-]?\d+(?:\.\d+)?$/ : /^\d+(?:\.\d+)?$/).test(t) ? Number(t) : null;
+  if (signed && new RegExp(`^(?:${SIGNED_SOURCE}|\\d+)(?:\\.\\d+)?$`).test(t)) return toNumber(t);
+  return /^\d+(?:\.\d+)?$/.test(t) ? Number(t) : null;
 };
 
 function statsOf(body) {
