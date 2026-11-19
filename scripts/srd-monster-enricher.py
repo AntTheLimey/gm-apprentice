@@ -1,28 +1,38 @@
 #!/usr/bin/env python3
 """Transform SRD 5.2 monster stat blocks into compact enriched reference format.
 
-This builds the five `skills/ttrpg-expert/systems/dnd-5e-2024/monsters-cr*.md`
+This builds the `skills/ttrpg-expert/systems/dnd-5e-2024/monsters-cr*.md`
 files the rules advisor reads. Run it after the SRD source changes:
 
-    python3 scripts/srd-monster-enricher.py <srd>/src/12_MonstersA-Z.md
+    python3 scripts/srd-monster-enricher.py <srd>/src/12_MonstersA-Z.md \
+        [--animals <srd>/src/13_Animals.md]
 
-It rewrites the five files in place, and an unchanged SRD gives byte-identical
+It rewrites those files in place, and an unchanged SRD gives byte-identical
 files. The SRD 5.2 is CC-BY 4.0 (see ATTRIBUTION.md).
+
+The community markdown transcription has wrong Initiative, size and Speed
+figures for some creatures, so those three come from the official SRD 5.2.1
+(`scripts/srd521-figures.json`, made by `scripts/srd521_figures.py`) whenever
+the creature is in it. A creature the file lacks keeps the transcription's
+figures, with a warning.
 """
 
 import argparse
+import json
 import re
 import sys
 from pathlib import Path
 
 OUT_DIR = Path("skills/ttrpg-expert/systems/dnd-5e-2024")
+FIGURES = Path(__file__).resolve().parent / "srd521-figures.json"
 MAX_REF_BYTES = 25 * 1024
 
 SIZE_MAP = {"Tiny": "T", "Small": "S", "Medium": "M", "Large": "L", "Huge": "H", "Gargantuan": "G"}
 
 TIERS = {
     "cr0-1":     {"label": "CR 0–1", "min": 0, "max": 1},
-    "cr2-4":     {"label": "CR 2–4", "min": 2, "max": 4},
+    "cr2-3":     {"label": "CR 2–3", "min": 2, "max": 3},
+    "cr4":       {"label": "CR 4", "min": 4, "max": 4},
     "cr5-10":    {"label": "CR 5–10", "min": 5, "max": 10},
     "cr11-16":   {"label": "CR 11–16", "min": 11, "max": 16},
     "cr17-plus": {"label": "CR 17+", "min": 17, "max": 999},
@@ -43,6 +53,31 @@ CR_XP = {
 CR_LABELS = {
     0: "0", 0.125: "1/8", 0.25: "1/4", 0.5: "1/2",
 }
+
+
+def size_code(size):
+    """`Huge` -> `H`; `Medium or Small` -> `M/S`."""
+    return '/'.join(SIZE_MAP[w] for w in size.split(' or '))
+
+
+def apply_figures(m, figures):
+    """Take Initiative, size and Speed from the official SRD 5.2.1 figures."""
+    fig = figures.get(m['name'].casefold())
+    if fig is None:
+        print(f"WARNING: {m['name']} is not in the SRD 5.2.1 figures; "
+              "keeping the transcription's Initiative, size and Speed",
+              file=sys.stderr)
+        return
+    m['size'] = size_code(fig['size'])
+    m['init'] = f"{fig['init']}({fig['init_score']})" if fig['init'] else None
+    m['speed'] = fig['speed']
+    if 'spell_dc' in fig:
+        m['spell_dc'] = fig['spell_dc']
+
+
+def load_figures(path):
+    data = json.loads(path.read_text(encoding='utf-8'))
+    return {name.casefold(): fig for name, fig in data.items()}
 
 
 def parse_cr(cr_line):
@@ -104,6 +139,11 @@ def parse_one(name, body):
     else:
         m['hp'] = '1'
         m['hp_dice'] = '1d4'
+
+    # Initiative, as the SRD gives it: "+3 (13)". It is never worked out from
+    # DEX, because the SRD adds proficiency to some creatures' Initiative.
+    init_match = re.search(r'\*\*Initiative\*\*:\s*([+-−]?\s*\d+\s*\(\d+\))', body)
+    m['init'] = re.sub(r'\s+', '', init_match.group(1)).replace('−', '-') if init_match else None
 
     # Speed
     spd_match = re.search(r'\*\*Speed:\*\*\s*(.+)', body)
@@ -215,17 +255,18 @@ def format_attack(name, desc, budget_tight=False):
     # Melee/Ranged attack — allow parenthetical after +N (e.g. "+5 (with Advantage ...)")
     atk_match = re.search(
         r'\*(Melee|Ranged)(?: or (?:Melee|Ranged))? Attack Roll:\*\s*\+(\d+)'
-        r'(?:\s*\([^)]*\))?'
-        r',?\s*(?:reach\s*(\d+)\s*ft\.?)?'
-        r'(?:,?\s*(?:or\s+)?range\s*[\d/]+\s*ft\.?)?'
-        r'\s*(\d+)\s*\(([^)]+)\)\s*(\w+)\s*damage',
+        r'(?:\s+to hit)?(?:\s*\([^)]*\))?'
+        r',?\s*(?:reach\s*(\d+)\s*(?:ft|feet)\.?)?'
+        r'(?:,?\s*(?:or\s+)?range\s*[\d/]+\s*(?:ft|feet)\.?)?'
+        r'\s*(\d+)(?:\s*\(([^)]+)\))?\s*(\w+)\s*damage',
         desc
     )
 
     if atk_match:
         hit = atk_match.group(2)
         reach = atk_match.group(3)
-        dice = atk_match.group(5).replace(' ', '')
+        # a fixed amount ("1 Piercing damage") has no dice in brackets
+        dice = (atk_match.group(5) or atk_match.group(4)).replace(' ', '')
         dmg_type = atk_match.group(6).lower()
 
         parts = [f"- {name}: +{hit}"]
@@ -263,7 +304,7 @@ def format_attack(name, desc, budget_tight=False):
     atk_nodmg = re.search(
         r'\*(Melee|Ranged)(?: or (?:Melee|Ranged))? Attack Roll:\*\s*\+(\d+)'
         r'(?:\s*\([^)]*\))?'
-        r',?\s*(?:reach\s*(\d+)\s*ft\.?)?',
+        r',?\s*(?:reach\s*(\d+)\s*(?:ft|feet)\.?)?',
         desc
     )
     if atk_nodmg and 'damage' not in desc.split('Attack Roll')[0]:
@@ -503,12 +544,15 @@ def format_spellcasting_trait(name, desc):
     return f"Spellcasting (DC {dc})"
 
 
-def format_spellcasting_action(name, desc, budget_tight=False):
-    """Format spellcasting action."""
+def format_spellcasting_action(name, desc, budget_tight=False, spell_dc=None):
+    """Format spellcasting action. `spell_dc` is the SRD 5.2.1's own figure
+    when the figures file has one: "" means the trait prints no DC."""
     dc_match = re.search(r'DC\s*(\d+)', desc)
     ability_match = re.search(r'using (\w+)', desc)
 
     dc = dc_match.group(1) if dc_match else '?'
+    if spell_dc is not None:
+        dc = spell_dc
     ability = ability_match.group(1)[:3].upper() if ability_match else ''
 
     # Named spellcasting abilities (Hellfire Spellcasting, etc.)
@@ -531,8 +575,9 @@ def format_spellcasting_action(name, desc, budget_tight=False):
             return f"{base_name}{recharge_str} (DC {dc}): {' '.join(spell_parts)}"
         return f"{base_name}{recharge_str} (DC {dc})"
 
+    dc_part = f", DC {dc}" if dc else ""
     if budget_tight:
-        return f"Spellcasting ({ability}, DC {dc})"
+        return f"Spellcasting ({ability}{dc_part})"
 
     at_will = []
     daily = []
@@ -545,7 +590,7 @@ def format_spellcasting_action(name, desc, budget_tight=False):
         freq_str = f"{daily_match.group(1)}/day"
         daily = re.findall(r'\*([A-Z][^*]+)\*', daily_match.group(2))
 
-    parts = [f"Spellcasting ({ability}, DC {dc}):"]
+    parts = [f"Spellcasting ({ability}{dc_part}):"]
     if at_will:
         parts[0] += f" At Will — {', '.join(at_will[:4])}"
     if daily:
@@ -600,7 +645,8 @@ def format_monster(m, budget_tight=False):
 
     out = []
     out.append(f"**{m['name']}** | {m['type']} | {m['size']} | CR {cr_str} ({xp_str} XP)")
-    out.append(f"AC {m['ac']} | HP {m['hp']} ({m['hp_dice']}) | Speed {m['speed']}")
+    init = f" | Init {m['init'].replace('(', ' (')}" if m.get('init') else ""
+    out.append(f"AC {m['ac']} | HP {m['hp']} ({m['hp_dice']}){init} | Speed {m['speed']}")
 
     if budget_tight:
         stat_line = '/'.join(str(stats.get(s, 10)) for s in ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'])
@@ -653,7 +699,8 @@ def format_monster(m, budget_tight=False):
         if aname == 'Multiattack':
             multiattack = format_multiattack(adesc)
         elif aname == 'Spellcasting':
-            spellcasting = format_spellcasting_action(aname, adesc, budget_tight)
+            spellcasting = format_spellcasting_action(
+                aname, adesc, budget_tight, m.get('spell_dc'))
         else:
             formatted = format_attack(aname, adesc, budget_tight)
             if formatted:
@@ -715,17 +762,27 @@ def write_tier(tier_key, tier_info, monsters, max_bytes=MAX_REF_BYTES):
 
 def build_file(tier_key, tier_info, cr_groups, budget_tight=False):
     total = sum(len(ms) for ms in cr_groups.values())
-    lines = [
-        f"# D&D 5e 2024 — Monsters: {tier_info['label']}",
-        "",
-        f"{total} monsters from SRD 5.2. Enriched stat blocks for encounter building.",
-        "",
-        "**Format:** Enriched stat blocks — see Response Templates in monsters.md (index)",
-    ]
+    if tier_key == "animals":
+        lines = [
+            "# D&D 5e 2024 — Animals",
+            "",
+            f"{total} animals from SRD 5.2, grouped by CR. Separate from monsters "
+            "-- used for wildlife encounters, companions, mounts, and Wild Shape forms.",
+            "",
+            "**Format:** Enriched stat blocks, as in the monsters files",
+        ]
+    else:
+        lines = [
+            f"# D&D 5e 2024 — Monsters: {tier_info['label']}",
+            "",
+            f"{total} monsters from SRD 5.2. Enriched stat blocks for encounter building.",
+            "",
+            "**Format:** Enriched stat blocks — see Response Templates in monsters.md (index)",
+        ]
     if budget_tight:
         lines.append("**Ability scores:** STR/DEX/CON/INT/WIS/CHA")
     lines.append("")
-    lines.append("**Size codes:** T=Tiny, S=Small, M=Medium, L=Large, H=Huge, G=Gargantuan")
+    lines.append("**Size codes:** T=Tiny, S=Small, M=Medium, L=Large, H=Huge, G=Gargantuan; M/S=Medium or Small")
 
     for cr in sorted(cr_groups.keys(), key=cr_sort_key):
         cr_str = cr_display(cr)
@@ -744,29 +801,39 @@ def build_file(tier_key, tier_info, cr_groups, budget_tight=False):
 def fixup_speed(m):
     """Fix known SRD data issues."""
     speed = m.get('speed', '')
-    # Werebear SRD has "Alternate ? ft." — should be 40 ft. (bear form)
+    # Swarm of Insects SRD has "Choose ? ft." — its Climb or Fly 20 ft.
+    if 'Choose ? ft.' in speed:
+        m['speed'] = speed = speed.replace('Choose ? ft.', 'Climb or Fly 20 ft.')
+    # Werebear SRD has "Alternate ? ft." — should be 40 ft. (bear form);
+    # the other were-creatures give no figure, so the placeholder goes
     if 'Alternate ? ft.' in speed and 'werebear' in m['name'].lower():
         m['speed'] = speed.replace('Alternate ? ft.', '40 ft. (bear form)')
     elif 'Alternate ? ft.' in speed:
-        m['speed'] = speed.replace('Alternate ? ft., ', '')
+        m['speed'] = re.sub(r',? ?Alternate \? ft\.(?:, )?', '', speed)
 
 
 def main():
     parser = argparse.ArgumentParser(description='Enrich D&D 5e monster stat blocks from SRD 5.2')
     parser.add_argument('srd_path', type=Path, help='Path to SRD 12_MonstersA-Z.md')
+    parser.add_argument('--animals', type=Path, default=None,
+                        help='the SRD 13_Animals.md: also write animals.md')
     parser.add_argument('--out-dir', type=Path, default=OUT_DIR, help='Output directory')
+    parser.add_argument('--figures', type=Path, default=FIGURES,
+                        help='the SRD 5.2.1 Initiative, size and Speed figures')
     args = parser.parse_args()
 
     if not args.srd_path.exists():
         print(f"Error: SRD file not found: {args.srd_path}", file=sys.stderr)
         sys.exit(1)
 
+    figures = load_figures(args.figures)
     text = args.srd_path.read_text(encoding='utf-8')
     monsters = parse_monsters(text)
     print(f"Parsed {len(monsters)} monsters", file=sys.stderr)
 
     for m in monsters:
         fixup_speed(m)
+        apply_figures(m, figures)
 
     tier_monsters = {k: [] for k in TIERS}
     for m in monsters:
@@ -778,6 +845,17 @@ def main():
 
     for tk in TIERS:
         print(f"  {tk}: {len(tier_monsters[tk])} monsters", file=sys.stderr)
+
+    if args.animals is not None:
+        beasts = parse_monsters(args.animals.read_text(encoding='utf-8'))
+        for m in beasts:
+            fixup_speed(m)
+            apply_figures(m, figures)
+        print(f"Parsed {len(beasts)} animals", file=sys.stderr)
+        content = write_tier('animals', {'label': 'Animals'}, beasts)
+        out_path = args.out_dir / 'animals.md'
+        out_path.write_text(content.rstrip('\n') + '\n', encoding='utf-8')
+        print(f"  {out_path.name}: {len(content.encode('utf-8')):,} bytes", file=sys.stderr)
 
     for tk, tv in TIERS.items():
         content = write_tier(tk, tv, tier_monsters[tk])

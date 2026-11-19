@@ -189,7 +189,7 @@ investigation. No keyword or tag → base files only.
 
 | Request | File | kind |
 |---------|------|------|
-| Monsters (by CR) | `monsters.md` index → `monsters-cr{0-1,2-4,5-10,11-16,17-plus}.md` | monster |
+| Monsters (by CR) | `monsters.md` index → `monsters-cr{0-1,2-3,4,5-10,11-16,17-plus}.md` | monster |
 | Animals / beasts | `animals.md` | monster |
 | Spells (by level) | `spells.md` index → `spells-cantrips.md`, `spells-{1-9}.md` | spell |
 | Magic items | `magic-items.md` index → `magic-items-{category}.md` | item |

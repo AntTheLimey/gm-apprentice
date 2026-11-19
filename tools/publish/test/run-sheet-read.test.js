@@ -1,5 +1,5 @@
 'use strict';
-const { describe, it } = require('node:test');
+const { describe, it, after } = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -9,6 +9,11 @@ const { normalise } = require('../lib/run-sheet/keys');
 const { writeSettings } = require('./helpers/vault-files');
 const { haystack, missingLines, readText } = require('./helpers/run-sheet-lines');
 
+// Every scratch dir is removed when the file's tests finish.
+const made = [];
+const mkTmp = (prefix) => { const d = fs.mkdtempSync(path.join(os.tmpdir(), prefix)); made.push(d); return d; };
+after(() => { for (const d of made) fs.rmSync(d, { recursive: true, force: true }); });
+
 const FIXTURE = path.join(__dirname, 'fixtures', 'run-sheet');
 const PLAN = 'Chapters/Chapter 1/Sessions/Session 02/Session 02 - The Test - Plan.md';
 const ADA = 'Characters/PCs/Ada Moss.md';
@@ -16,7 +21,7 @@ const BEN = 'Characters/PCs/Ben Hart.md';
 const PARTY = [ADA, BEN];
 
 function copy() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rs-'));
+  const dir = mkTmp('rs-');
   fs.cpSync(FIXTURE, dir, { recursive: true });
   writeSettings(dir, { 'vault.system': 'dnd5e' });
   return dir;
@@ -135,6 +140,24 @@ describe('run sheet reader', () => {
     assert.deepStrictEqual(m.warnings.filter((w) => w.kind === 'not-on-page'), []);
   });
 
+  it('every line of the plan skeleton is kept somewhere, and its places and spots are on the model', () => {
+    const dir = mkTmp('rs-skel-');
+    fs.cpSync(path.join(__dirname, 'fixtures', 'run-sheet-skeleton'), dir, { recursive: true });
+    const skeleton = readText(path.join(__dirname, '..', '..', '..', 'tests', 'fixtures', 'plan-skeleton.md'));
+    const rel = 'Plan.md';
+    write(dir, rel, skeleton);
+    const m = readRunSheet(dir, rel, { party: [] });
+    const body = bodyOf(skeleton);
+    assert.deepStrictEqual(missingLines(body, m), []);
+    assert.deepStrictEqual(strayLines(dir, body, m), []);
+    assert.deepStrictEqual(m.beats.map((b) => b.placeFrom), ['place', null, null, 'place', null]);
+    assert.deepStrictEqual(m.beats[1].spots.map((x) => x.md).filter(Boolean).length, 2);
+    // the place and the hub's location are on the page's places
+    assert.deepStrictEqual(m.places, ['Locations/Location.md', 'Locations/The Vicarage.md']);
+    assert.deepStrictEqual(m.warnings.filter((w) => w.kind === 'no-place'), []);
+    assert.deepStrictEqual(JSON.parse(JSON.stringify(m)), m);
+  });
+
   it('completeness reports a link a field dropped', () => {
     const dir = copy();
     const m = readRunSheet(dir, PLAN, { party: PARTY });
@@ -213,7 +236,7 @@ describe('run sheet reader', () => {
   it('a Plan outside the vault is that same error', () => {
     const dir = copy();
     assert.throws(() => readRunSheet(dir, '../Elsewhere - Plan.md'), /the Plan \.\.\/Elsewhere - Plan\.md is not inside the vault/);
-    const away = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'rs-')), 'Away - Plan.md');
+    const away = path.join(mkTmp('rs-'), 'Away - Plan.md');
     fs.writeFileSync(away, '## Session Overview\n\nAway.\n');
     assert.throws(() => readRunSheet(dir, away), (err) => err.message.includes(away) && /not inside the vault/.test(err.message));
   });

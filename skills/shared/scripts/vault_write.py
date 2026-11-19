@@ -4537,6 +4537,81 @@ def stamp_index(batch: Batch, rel: str, plan_stem: str) -> None:
                   f"[[{plan_stem}]]")
 
 
+_BLOCK_HEAD_RE = re.compile(r"^(?:[-*+]\s+)?\*\*([^*\n]+?)\*\*")
+_BLOCK_LABELS: dict[str, str] = {
+    name.rstrip(".\u2026").casefold(): name
+    for name in (*plan_check.SCENE_LABELS_INLINE,
+                 *plan_check.SCENE_LABELS_BLOCK,
+                 *plan_check.CONTINGENCY_LABELS, "Open to the party")}
+
+
+def labelled_blocks(text: str) -> dict[tuple[str, int], list[str]]:
+    """Each `###` scene of `text` -> the labelled block heads it holds, as
+    plan_check names them (`**X:**`, `**X**`, `- **X:**`), fences and
+    comments left out. A note with no `###` is one scene under ''."""
+    scenes: dict[tuple[str, int], list[str]] = {("", 1): []}
+    seen: Counter[str] = Counter()
+    here = ("", 1)
+    fence: str | None = None
+    in_comment = False
+    # Fences and comments are read in source order: a `<!--` inside a fence
+    # opens nothing, and a fence mark inside a comment closes nothing.
+    for raw in text.splitlines():
+        if not in_comment:
+            mark = re.match(r"^\s*(```|~~~)", raw)
+            if mark:
+                fence = (None if fence == mark.group(1)
+                         else (fence or mark.group(1)))
+                continue
+            if fence:
+                continue
+        line, pos = "", 0
+        while True:
+            if in_comment:
+                close = raw.find("-->", pos)
+                if close == -1:
+                    break
+                in_comment, pos = False, close + 3
+            else:
+                opened = raw.find("<!--", pos)
+                if opened == -1:
+                    line += raw[pos:]
+                    break
+                line += raw[pos:opened]
+                in_comment, pos = True, opened + 4
+        if re.match(r"^#{1,2}\s", line):
+            here = ("", 1)      # a higher heading ends the scene
+            continue
+        head = re.match(r"^###\s+(.*?)\s*#*\s*$", line)
+        if head and not line.startswith("####"):
+            seen[head.group(1)] += 1
+            here = (head.group(1), seen[head.group(1)])
+            scenes[here] = []
+            continue
+        m = _BLOCK_HEAD_RE.match(line)
+        if not m:
+            continue
+        inner = re.sub(r"\s*\([^)]*\)\s*$", "", m.group(1)).strip()
+        name = _BLOCK_LABELS.get(inner.rstrip(":").strip().rstrip(".\u2026")
+                                 .casefold())
+        if name and name not in scenes[here]:
+            scenes[here].append(name)
+    return scenes
+
+
+def dropped_blocks(old: str, new: str, stem: str = "") -> list[str]:
+    """`DROPPED` rows: a labelled block head the old text had in a scene
+    the new text still has, and the new one lacks. A scene only one side
+    has is not compared. With `stem`, a note with no `###` scenes on
+    either side is compared whole, as the scene `stem`."""
+    a, b = labelled_blocks(old), labelled_blocks(new)
+    if stem and len(a) == 1 and len(b) == 1:
+        a, b = {(stem, 1): a[("", 1)]}, {(stem, 1): b[("", 1)]}
+    return [f"DROPPED\t{scene[0]}\t**{label}**"
+            for scene, labels in a.items() if scene[0] and scene in b
+            for label in labels if label not in b[scene]]
+
+
 def plan_body(text: str, batch: Batch, rel: str) -> str:
     """The Plan's body from stdin. Frontmatter sent with it is dropped:
     the Plan's own comes from the template and the index."""
@@ -4677,8 +4752,11 @@ def cmd_plan(batch: Batch, args: argparse.Namespace, text: str) -> None:
         if not batch.exists(rel):
             raise WriteError(f"{rel}: no Plan yet: send the whole Plan "
                              f"without --section")
+        was = batch.read(rel)
         put_sections(batch, rel, text, template)
+        lost = dropped_blocks(was, batch.texts[rel])
     else:
+        lost = []
         if batch.exists(rel):
             raise WriteError(f"{rel}: the Plan exists: pass --section to "
                              f"replace or add sections")
@@ -4718,9 +4796,12 @@ def cmd_plan(batch: Batch, args: argparse.Namespace, text: str) -> None:
     for row in after:
         level = row.split("\t", 1)[0]
         counts[level] = counts.get(level, 0) + 1
+    # DROPPED rows go with the block's own rows, so a batch keeps each
+    # plan block's and counts them; `after` is the last block's alone.
+    batch.rows.extend(lost)
     batch.after = rows + after + [
         f"# plan_check: errors: {counts['ERROR']}  warnings: "
-        f"{counts['WARNING']}  info: {counts['INFO']}"]
+        f"{counts['WARNING'] + len(lost)}  info: {counts['INFO']}"]
 
 
 # --- chapter-new, scene-new and scene-played ---------------------------------
@@ -5706,7 +5787,9 @@ def build_parser() -> argparse.ArgumentParser:
             "--title (and --chapter) files one as upcoming. An existing\n"
             "Plan is never overwritten: --section replaces each section\n"
             "on stdin by level and title, and adds a missing ## where the\n"
-            "template has it."))
+            "template has it. A --section write that drops a labelled\n"
+            "block a scene had prints DROPPED<TAB>scene<TAB>**label**\n"
+            "(a warning; the write still happens)."))
     pl.add_argument("--number", type=int, required=True, help="the session's number")
     pl.add_argument("--chapter", help="the chapter, when the number "
                     "alone does not say which")
@@ -5735,7 +5818,9 @@ def build_parser() -> argparse.ArgumentParser:
             "command's stdin. Commands: every writer here, plus\n"
             "'stamp FILE... <stamp-entities options>', 'note-new PATH'\n"
             "(body: the whole note), 'section NOTE HEADING\n"
-            "[--append|--replace]' (body: the text; 'section NOTE --lead'\n"
+            "[--append|--replace]' (body: the text; --replace prints DROPPED\n"
+            "for a labelled block the old section had and the new lacks;\n"
+            "'section NOTE --lead'\n"
             "writes the text above the note's first heading or hidden\n"
             "block, a scene's Situation, Starts it and If-table),\n"
             "'names [--wrapup\n"

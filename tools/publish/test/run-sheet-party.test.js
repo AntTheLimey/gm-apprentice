@@ -1,5 +1,5 @@
 'use strict';
-const { describe, it } = require('node:test');
+const { describe, it, after } = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -12,13 +12,18 @@ const { readPeople } = require('../lib/run-sheet/people');
 const { writeSettings } = require('./helpers/vault-files');
 const { makePng } = require('./helpers/make-png');
 
+// Every scratch dir is removed when the file's tests finish.
+const made = [];
+const mkTmp = (prefix) => { const d = fs.mkdtempSync(path.join(os.tmpdir(), prefix)); made.push(d); return d; };
+after(() => { for (const d of made) fs.rmSync(d, { recursive: true, force: true }); });
+
 const FIXTURE = path.join(__dirname, 'fixtures', 'run-sheet');
 const PLAN = 'Chapters/Chapter 1/Sessions/Session 02/Session 02 - The Test - Plan.md';
 const ADA = 'Characters/PCs/Ada Moss.md';
 const BEN = 'Characters/PCs/Ben Hart.md';
 
 function setup() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rs-'));
+  const dir = mkTmp('rs-');
   fs.cpSync(FIXTURE, dir, { recursive: true });
   writeSettings(dir, { 'vault.system': 'dnd5e' });
   fs.mkdirSync(path.join(dir, '_attachments'), { recursive: true });

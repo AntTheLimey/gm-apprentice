@@ -4,12 +4,12 @@
 
 **Format:** Enriched stat blocks — see Response Templates in monsters.md (index)
 
-**Size codes:** T=Tiny, S=Small, M=Medium, L=Large, H=Huge, G=Gargantuan
+**Size codes:** T=Tiny, S=Small, M=Medium, L=Large, H=Huge, G=Gargantuan; M/S=Medium or Small
 
 ## CR 11 (7,200 XP)
 
 **Behir** | Monstrosity | H | CR 11 (7,200 XP)
-AC 17 | HP 168 (16d12+64) | Speed 50 ft., Climb 50 ft.
+AC 17 | HP 168 (16d12+64) | Init +3 (13) | Speed 50 ft., Climb 50 ft.
 STR 23 DEX 16 CON 18 INT 7 WIS 14 CHA 12
 Senses: darkvision 90 ft.
 Immunities: Lightning
@@ -20,20 +20,20 @@ Multiattack: one Bite + Constrict
 - [B] Swallow: DC 18 DEX, The behir swallows the target, which is no longer Grappled.
 
 **Djinni** | Elemental | L | CR 11 (7,200 XP)
-AC 17 | HP 218 (19d10+114) | Speed 30 ft., Fly 90 ft. (hover)
+AC 17 | HP 218 (19d10+114) | Init +2 (12) | Speed 30 ft., Fly 90 ft. (hover)
 STR 21 DEX 15 CON 22 INT 15 WIS 16 CHA 20
 Saves: DEX +6, WIS +7 | Senses: darkvision 120 ft.
 Immunities: Lightning, Thunder
 Magic Resistance (advantage on saves vs spells)
 Wishes
 Multiattack: 3× (Storm Blade/Storm Bolt)
-- Storm Blade: +9
-- Storm Bolt: +9
+- Storm Blade: +9, 2d6+5 slashing + 2d6 lightning
+- Storm Bolt: +9, 3d8 thunder
 - Create Whirlwind: (a creature makes this save only once per turn, and the djinni is unaffected), DC 17 STR, While in the whirlwind, the target has the Restrained and moves with the whirlwind.
 Spellcasting (CHA, DC 17): At Will — Detect Evil and Good, Detect Magic
 
 **Efreeti** | Elemental | L | CR 11 (7,200 XP)
-AC 17 | HP 212 (17d10+119) | Speed 40 ft., Fly 60 ft. (hover)
+AC 17 | HP 212 (17d10+119) | Init +1 (11) | Speed 40 ft., Fly 60 ft. (hover)
 STR 22 DEX 12 CON 24 INT 16 WIS 15 CHA 19
 Saves: WIS +6, CHA +8 | Senses: darkvision 120 ft.
 Immunities: Fire
@@ -45,7 +45,7 @@ Multiattack: 3× (Heated Blade/Hurl Flame)
 Spellcasting (CHA, DC 16): At Will — Detect Magic, Elementalism
 
 **Horned Devil** | Fiend | L | CR 11 (7,200 XP)
-AC 18 | HP 199 (19d10+95) | Speed 30 ft., Fly 60 ft.
+AC 18 | HP 199 (19d10+95) | Init +7 (17) | Speed 30 ft., Fly 60 ft.
 STR 22 DEX 17 CON 21 INT 12 WIS 16 CHA 18
 Saves: STR +10, DEX +7, WIS +7, CHA +8 | Senses: darkvision 150 ft. (unimpeded by magical darkness)
 Immunities: Fire, Poison; Poisoned
@@ -56,7 +56,7 @@ Multiattack: 3× (Searing Fork/Hurl Flame)
 - Infernal Tail: one creature the devil can see within 10 feet, DC 17 DEX, 1d8+6 necrotic
 
 **Remorhaz** | Monstrosity | H | CR 11 (7,200 XP)
-AC 17 | HP 195 (17d12+85) | Speed 40 ft., Burrow 30 ft.
+AC 17 | HP 195 (17d12+85) | Init +5 (15) | Speed 40 ft., Burrow 30 ft.
 STR 24 DEX 13 CON 21 INT 4 WIS 10 CHA 5
 Senses: darkvision 60 ft., tremorsense 60 ft.
 Immunities: Cold, Fire
@@ -65,7 +65,7 @@ Heat Aura
 - [B] Swallow: DC 19 STR, The target is swallowed by the remorhaz, and the Grappled condition ends.
 
 **Roc** | Monstrosity | G | CR 11 (7,200 XP)
-AC 15 | HP 248 (16d20+80) | Speed 20 ft., Fly 120 ft.
+AC 15 | HP 248 (16d20+80) | Init +8 (18) | Speed 20 ft., Fly 120 ft.
 STR 28 DEX 10 CON 20 INT 3 WIS 10 CHA 9
 Saves: DEX +4, WIS +4 | Senses: Passive Perception 18
 Multiattack: 2× Beak
@@ -73,7 +73,7 @@ Multiattack: 2× Beak
 - Talons: +13, 4d6+9 slashing; grapple (escape DC 19)
 
 **Sphinx of Lore** | Celestial | L | CR 11 (7,200 XP)
-AC 17 | HP 170 (20d10+60) | Speed 40 ft., Fly 60 ft.
+AC 17 | HP 170 (20d10+60) | Init +10 (20) | Speed 40 ft., Fly 60 ft.
 STR 18 DEX 15 CON 16 INT 18 WIS 18 CHA 18
 Senses: truesight 120 ft.
 Resistances: Necrotic, Radiant | Immunities: Psychic; Charmed, Frightened
@@ -88,8 +88,8 @@ Spellcasting (INT, DC 16): At Will — Detect Magic, Identify, Mage Hand, Minor 
 
 ## CR 12 (8,400 XP)
 
-**Archmage** | Humanoid | S | CR 12 (8,400 XP)
-AC 17 | HP 170 (31d8+31) | Speed 30 ft.
+**Archmage** | Humanoid | M/S | CR 12 (8,400 XP)
+AC 17 | HP 170 (31d8+31) | Init +7 (17) | Speed 30 ft.
 STR 10 DEX 14 CON 12 INT 20 WIS 15 CHA 16
 Saves: INT +9, WIS +6 | Senses: Passive Perception 16
 Immunities: Psychic; Charmed ((with Mind Blank))
@@ -100,7 +100,7 @@ Spellcasting (INT, DC 17): At Will — Detect Magic, Detect Thoughts, Disguise S
 - [R] Protective Magic (3/Day)
 
 **Erinyes** | Fiend | M | CR 12 (8,400 XP)
-AC 18 | HP 178 (21d8+84) | Speed 30 ft., Fly 60 ft.
+AC 18 | HP 178 (21d8+84) | Init +7 (17) | Speed 30 ft., Fly 60 ft.
 STR 18 DEX 16 CON 18 INT 14 WIS 14 CHA 18
 Saves: DEX +7, CON +8, CHA +8 | Senses: truesight 120 ft.
 Resistances: Cold | Immunities: Fire, Poison; Poisoned
@@ -114,7 +114,7 @@ Multiattack: 3× Withering Sword + can use Entangling Rope
 ## CR 13 (10,000 XP)
 
 **Adult Brass Dragon** | Dragon | H | CR 13 (10,000 XP)
-AC 18 | HP 172 (15d12+75) | Speed 40 ft., Burrow 30 ft., Fly 80 ft.
+AC 18 | HP 172 (15d12+75) | Init +10 (20) | Speed 40 ft., Burrow 30 ft., Fly 80 ft.
 STR 23 DEX 10 CON 21 INT 14 WIS 13 CHA 17
 Saves: DEX +5, WIS +6 | Senses: blindsight 60 ft., darkvision 120 ft.
 Immunities: Fire
@@ -127,7 +127,7 @@ Multiattack: 3× Rend
 Spellcasting (CHA, DC 16): At Will — Detect Magic, Minor Illusion, Scorching Ray, Shapechange
 
 **Adult White Dragon** | Dragon | H | CR 13 (10,000 XP)
-AC 18 | HP 200 (16d12+96) | Speed 40 ft., Burrow 30 ft., Fly 80 ft., Swim 40 ft.
+AC 18 | HP 200 (16d12+96) | Init +10 (20) | Speed 40 ft., Burrow 30 ft., Fly 80 ft., Swim 40 ft.
 STR 22 DEX 10 CON 22 INT 8 WIS 12 CHA 12
 Saves: DEX +5, WIS +6 | Senses: blindsight 60 ft., darkvision 120 ft.
 Immunities: Cold
@@ -139,7 +139,7 @@ Multiattack: 3× Rend
 - Cold Breath (Recharge 5-6): 60-ft cone, DC 19 CON, 12d8 cold (half)
 
 **Nalfeshnee** | Fiend | L | CR 13 (10,000 XP)
-AC 18 | HP 184 (16d10+96) | Speed 20 ft., Fly 30 ft.
+AC 18 | HP 184 (16d10+96) | Init +5 (15) | Speed 20 ft., Fly 30 ft.
 STR 21 DEX 10 CON 22 INT 19 WIS 12 CHA 15
 Saves: CON +11, INT +9, WIS +6, CHA +7 | Senses: truesight 120 ft.
 Resistances: Cold, Fire, Lightning | Immunities: Poison; Frightened, Poisoned
@@ -150,7 +150,7 @@ Multiattack: 3× Rend
 - [B] Horror Nimbus (Recharge 5-6): 15-ft Emanation originating from the nalfeshnee, DC 15 WIS, 8d6 psychic
 
 **Rakshasa** | Fiend | M | CR 13 (10,000 XP)
-AC 17 | HP 221 (26d8+104) | Speed 40 ft.
+AC 17 | HP 221 (26d8+104) | Init +8 (18) | Speed 40 ft.
 STR 14 DEX 17 CON 18 INT 13 WIS 16 CHA 20
 Senses: truesight 60 ft.
 Immunities: Charmed, Frightened | Vulnerabilities: Piercing
@@ -162,7 +162,7 @@ Multiattack: 3× Cursed Touch
 Spellcasting (CHA, DC 18): At Will — Detect Magic, Detect Thoughts, Disguise Self, Mage Hand
 
 **Storm Giant** | Giant | H | CR 13 (10,000 XP)
-AC 16 | HP 230 (20d12+100) | Speed 50 ft., Fly 25 ft. (hover), Swim 50 ft.
+AC 16 | HP 230 (20d12+100) | Init +7 (17) | Speed 50 ft., Fly 25 ft. (hover), Swim 50 ft.
 STR 29 DEX 14 CON 20 INT 16 WIS 20 CHA 18
 Saves: STR +14, CON +10, WIS +10, CHA +9 | Senses: darkvision 120 ft., truesight 30 ft.
 Resistances: Cold | Immunities: Lightning, Thunder
@@ -172,8 +172,8 @@ Multiattack: 2× (Storm Sword/Thunderbolt)
 - Lightning Storm (Recharge 5-6): 10-ft-radius, 40-ft-high Cylinder [Area of Effect]|XPHB|Cylinder originating from a point the giant can see within 500 feet, DC 18 DEX, 10d10 lightning (half)
 Spellcasting (WIS, DC 18): At Will — Detect Magic, Light; 1/day — Control Weather
 
-**Vampire** | Undead | S | CR 13 (10,000 XP)
-AC 16 | HP 195 (23d8+92) | Speed 40 ft., Climb 40 ft.
+**Vampire** | Undead | M/S | CR 13 (10,000 XP)
+AC 16 | HP 195 (23d8+92) | Init +14 (24) | Speed 40 ft., Climb 40 ft.
 STR 18 DEX 18 CON 18 INT 17 WIS 15 CHA 18
 Saves: DEX +9, CON +9, WIS +7, CHA +9 | Senses: darkvision 120 ft.
 Resistances: Necrotic
@@ -190,7 +190,7 @@ Legendary (3/round): Deathless Strike (Grave attack), Beguile (DC 17)
 ## CR 14 (11,500 XP)
 
 **Adult Black Dragon** | Dragon | H | CR 14 (11,500 XP)
-AC 19 | HP 195 (17d12+85) | Speed 40 ft., Fly 80 ft., Swim 40 ft.
+AC 19 | HP 195 (17d12+85) | Init +12 (22) | Speed 40 ft., Fly 80 ft., Swim 40 ft.
 STR 23 DEX 14 CON 21 INT 14 WIS 13 CHA 19
 Saves: DEX +7, WIS +6 | Senses: blindsight 60 ft., darkvision 120 ft.
 Immunities: Acid
@@ -202,7 +202,7 @@ Multiattack: 3× Rend
 Spellcasting (CHA, DC 17): At Will — Detect Magic, Fear, Acid Arrow
 
 **Adult Copper Dragon** | Dragon | H | CR 14 (11,500 XP)
-AC 18 | HP 184 (16d12+80) | Speed 40 ft., Climb 40 ft., Fly 80 ft.
+AC 18 | HP 184 (16d12+80) | Init +11 (21) | Speed 40 ft., Climb 40 ft., Fly 80 ft.
 STR 23 DEX 12 CON 21 INT 18 WIS 15 CHA 18
 Saves: DEX +6, WIS +7 | Senses: blindsight 60 ft., darkvision 120 ft.
 Immunities: Acid
@@ -215,7 +215,7 @@ Multiattack: 3× Rend
 Spellcasting (CHA, DC 17): At Will — Detect Magic, Mind Spike, Minor Illusion, Shapechange
 
 **Ice Devil** | Fiend | L | CR 14 (11,500 XP)
-AC 18 | HP 228 (24d10+96) | Speed 40 ft.
+AC 18 | HP 228 (24d10+96) | Init +7 (17) | Speed 40 ft.
 STR 21 DEX 14 CON 18 INT 18 WIS 15 CHA 18
 Saves: DEX +7, CON +9, WIS +7, CHA +9 | Senses: blindsight 120 ft.
 Immunities: Cold, Fire, Poison; Poisoned
@@ -229,7 +229,7 @@ Multiattack: 3× Ice Spear
 ## CR 15 (13,000 XP)
 
 **Adult Bronze Dragon** | Dragon | H | CR 15 (13,000 XP)
-AC 18 | HP 212 (17d12+102) | Speed 40 ft., Fly 80 ft., Swim 40 ft.
+AC 18 | HP 212 (17d12+102) | Init +10 (20) | Speed 40 ft., Fly 80 ft., Swim 40 ft.
 STR 25 DEX 10 CON 23 INT 16 WIS 15 CHA 20
 Saves: DEX +5, WIS +7 | Senses: blindsight 60 ft., darkvision 120 ft.
 Immunities: Lightning
@@ -242,7 +242,7 @@ Multiattack: 3× Rend
 Spellcasting (CHA, DC 17): At Will — Detect Magic, Guiding Bolt, Shapechange, Speak with Animals
 
 **Adult Green Dragon** | Dragon | H | CR 15 (13,000 XP)
-AC 19 | HP 207 (18d12+90) | Speed 40 ft., Fly 80 ft., Swim 40 ft.
+AC 19 | HP 207 (18d12+90) | Init +11 (21) | Speed 40 ft., Fly 80 ft., Swim 40 ft.
 STR 23 DEX 12 CON 21 INT 18 WIS 15 CHA 18
 Saves: DEX +6, WIS +7 | Senses: blindsight 60 ft., darkvision 120 ft.
 Immunities: Poison; Poisoned
@@ -253,8 +253,8 @@ Multiattack: 3× Rend
 - Poison Breath (Recharge 5-6): 60-ft cone, DC 18 CON, 16d6 poison (half)
 Spellcasting (CHA, DC 17): At Will — Detect Magic, Mind Spike; 1/day — Geas
 
-**Mummy Lord** | Undead | S | CR 15 (13,000 XP)
-AC 17 | HP 187 (25d8+75) | Speed 30 ft.
+**Mummy Lord** | Undead | M/S | CR 15 (13,000 XP)
+AC 17 | HP 187 (25d8+75) | Init +10 (20) | Speed 30 ft.
 STR 18 DEX 10 CON 17 INT 11 WIS 19 CHA 16
 Saves: INT +5, WIS +9 | Senses: truesight 60 ft.
 Immunities: Necrotic, Poison; Charmed, Exhaustion, Frightened, Paralyzed, Poisoned | Vulnerabilities: Fire
@@ -269,7 +269,7 @@ Multiattack: one Rotting Fist or Channel Negative Energy, + it uses Dreadful Gla
 Spellcasting (WIS, DC 17): At Will — Dispel Magic, Thaumaturgy
 
 **Purple Worm** | Monstrosity | G | CR 15 (13,000 XP)
-AC 18 | HP 247 (15d20+90) | Speed 50 ft., Burrow 50 ft.
+AC 18 | HP 247 (15d20+90) | Init +3 (13) | Speed 50 ft., Burrow 50 ft.
 STR 28 DEX 7 CON 22 INT 1 WIS 8 CHA 4
 Saves: CON +11, WIS +4 | Senses: blindsight 30 ft., tremorsense 60 ft.
 Tunneler
@@ -282,7 +282,7 @@ Multiattack: one Bite + one Tail Stinger
 ## CR 16 (15,000 XP)
 
 **Adult Blue Dragon** | Dragon | H | CR 16 (15,000 XP)
-AC 19 | HP 212 (17d12+102) | Speed 40 ft., Burrow 30 ft., Fly 80 ft.
+AC 19 | HP 212 (17d12+102) | Init +10 (20) | Speed 40 ft., Burrow 30 ft., Fly 80 ft.
 STR 25 DEX 10 CON 23 INT 16 WIS 15 CHA 20
 Saves: DEX +5, WIS +7 | Senses: blindsight 60 ft., darkvision 120 ft.
 Immunities: Lightning
@@ -294,7 +294,7 @@ Multiattack: 3× Rend
 Spellcasting (CHA, DC 18): At Will — Detect Magic, Invisibility, Mage Hand, Shatter
 
 **Adult Silver Dragon** | Dragon | H | CR 16 (15,000 XP)
-AC 19 | HP 216 (16d12+112) | Speed 40 ft., Fly 80 ft.
+AC 19 | HP 216 (16d12+112) | Init +10 (20) | Speed 40 ft., Fly 80 ft.
 STR 27 DEX 10 CON 25 INT 16 WIS 13 CHA 22
 Saves: DEX +5, WIS +6 | Senses: blindsight 60 ft., darkvision 120 ft.
 Immunities: Cold
@@ -307,7 +307,7 @@ Multiattack: 3× Rend
 Spellcasting (CHA, DC 19): At Will — Detect Magic, Hold Monster, Ice Knife, Shapechange
 
 **Iron Golem** | Construct | L | CR 16 (15,000 XP)
-AC 20 | HP 252 (24d10+120) | Speed 30 ft.
+AC 20 | HP 252 (24d10+120) | Init +9 (19) | Speed 30 ft.
 STR 24 DEX 9 CON 20 INT 3 WIS 11 CHA 1
 Senses: darkvision 120 ft.
 Immunities: Fire, Poison, Psychic; Charmed, Exhaustion, Frightened, Paralyzed, Petrified, Poisoned
@@ -320,7 +320,7 @@ Multiattack: 2× (Bladed Arm/Fiery Bolt)
 - Poison Breath (Recharge 6): 60-ft cone, DC 18 CON, 10d10 poison (half)
 
 **Marilith** | Fiend | L | CR 16 (15,000 XP)
-AC 16 | HP 220 (21d10+105) | Speed 40 ft., Climb 40 ft.
+AC 16 | HP 220 (21d10+105) | Init +10 (20) | Speed 40 ft., Climb 40 ft.
 STR 18 DEX 20 CON 20 INT 18 WIS 16 CHA 20
 Saves: STR +9, CON +10, WIS +8, CHA +10 | Senses: truesight 120 ft.
 Resistances: Cold, Fire, Lightning | Immunities: Poison; Poisoned
@@ -332,7 +332,7 @@ Multiattack: six Pact Blade + Constrict
 - Constrict: one Medium or smaller creature the marilith can see within 5 feet, DC 17 STR, 2d10+4 bludgeoning
 
 **Planetar** | Celestial | L | CR 16 (15,000 XP)
-AC 19 | HP 262 (21d10+147) | Speed 40 ft., Fly 120 ft. (hover)
+AC 19 | HP 262 (21d10+147) | Init +10 (20) | Speed 40 ft., Fly 120 ft. (hover)
 STR 24 DEX 20 CON 24 INT 19 WIS 22 CHA 25
 Saves: STR +12, CON +12, WIS +11, CHA +12 | Senses: truesight 120 ft.
 Resistances: Radiant | Immunities: Charmed, Exhaustion, Frightened

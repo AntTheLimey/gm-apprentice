@@ -435,5 +435,123 @@ class PlanTests(unittest.TestCase):
         self.assertEqual(out.count("placeholder"), 1, out)
 
 
+FIGHT = """### The Yard
+
+**Situation:** Durgan blocks the gate.
+**Starts it:** He drops his coat.
+
+**Treasure**
+- A purse of silver
+
+**Complications**
+- Rain
+"""
+FIGHT_NO_TREASURE = FIGHT.replace("**Treasure**\n- A purse of silver\n\n", "")
+
+
+class DroppedBlockTests(unittest.TestCase):
+    def setUp(self):
+        self.vault = make_vault(self, {
+            f"{CHAPTER}/Chapter 1 - Harbour.md": "---\ntype: chapter\n---\n",
+            PREV: PREV_TEXT,
+            INDEX: INDEX_TEXT,
+            "_Templates/_Template_Session.md":
+                (TEMPLATES / "session.md").read_text(encoding="utf-8"),
+        })
+        code, out = run(self.vault, "--number", "2", "--write",
+                        stdin=BODY + "\n" + FIGHT)
+        self.assertEqual(code, 0, out)
+
+    def test_plan_rewrite_that_drops_a_treasure_block_says_dropped(self):
+        for flags in ((), ("--write",)):
+            code, out = run(self.vault, "--number", "2", "--section",
+                            *flags, stdin=FIGHT_NO_TREASURE)
+            self.assertEqual(code, 0, out)
+            self.assertIn("DROPPED\tThe Yard\t**Treasure**", out)
+            self.assertNotIn("**Complications**", out)
+        self.assertNotIn("Treasure",
+                         (self.vault / PLAN).read_text(encoding="utf-8"))
+
+    def test_plan_section_rewrite_that_keeps_every_block_says_nothing(self):
+        code, out = run(self.vault, "--number", "2", "--section",
+                        stdin=FIGHT.replace("silver", "gold"))
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("DROPPED", out)
+
+    def test_a_new_scene_is_not_compared(self):
+        code, out = run(self.vault, "--number", "2", "--section",
+                        stdin="## Planned Scenes\n\n" + FIGHT_NO_TREASURE.replace(
+                            "The Yard", "The Cellar"))
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("DROPPED", out)
+
+    def test_a_label_in_a_fence_or_comment_is_not_a_block(self):
+        fenced = FIGHT.replace("**Treasure**", "```\n**Treasure**\n```")
+        run(self.vault, "--number", "2", "--section", "--write", stdin=fenced)
+        code, out = run(self.vault, "--number", "2", "--section",
+                        stdin=FIGHT_NO_TREASURE)
+        self.assertNotIn("DROPPED", out)
+
+    def test_a_label_in_a_comment_is_not_a_block(self):
+        hidden = FIGHT.replace("**Treasure**\n- A purse of silver",
+                               "<!-- **Treasure**\n- A purse -->")
+        run(self.vault, "--number", "2", "--section", "--write", stdin=hidden)
+        code, out = run(self.vault, "--number", "2", "--section",
+                        stdin=FIGHT_NO_TREASURE)
+        self.assertNotIn("DROPPED", out)
+
+    def test_a_contingency_that_loses_its_then_says_dropped(self):
+        cont = ("### If they torch the quay\n\n**Trigger:** Fire.\n\n"
+                "**Then**\n- The crane falls\n")
+        sect = "## Planned Scenes\n\n" + FIGHT + "\n"
+        run(self.vault, "--number", "2", "--section", "--write",
+            stdin=sect + cont)
+        code, out = run(self.vault, "--number", "2", "--section",
+                        stdin=sect + cont.replace(
+                            "**Then**\n- The crane falls\n", ""))
+        self.assertIn("DROPPED\tIf they torch the quay\t**Then**", out)
+
+    def test_a_later_plan_block_keeps_an_earlier_blocks_dropped_row(self):
+        text = ("=== plan --number 2 --section\n" + FIGHT_NO_TREASURE
+                + "=== plan --number 2 --section\n## Session Intent\n\n"
+                "Changed.\n")
+        path = self.vault.parent / f"{self.vault.name}-batch.txt"
+        path.write_text(text, encoding="utf-8")
+        self.addCleanup(path.unlink)
+        out = io.StringIO()
+        with mock.patch("sys.stdout", out), mock.patch("sys.stderr",
+                                                       io.StringIO()):
+            code = vw.main([str(self.vault), "batch", str(path)], stdin="")
+        got = out.getvalue()
+        self.assertEqual(code, 0, got)
+        self.assertEqual(got.count("DROPPED\tThe Yard\t**Treasure**"), 1, got)
+        self.assertRegex(got, r"# blocks: 2 .*warnings: [1-9]")
+
+    def test_a_fence_holding_a_comment_opener_hides_nothing_after_it(self):
+        old = FIGHT.replace(
+            "**Starts it:** He drops his coat.",
+            "**Starts it:** He drops his coat.\n\n```\n<!-- example\n```")
+        text = old + "\n<!-- note -->\n"
+        rows = vw.dropped_blocks(text, text.replace(
+            "**Treasure**\n- A purse of silver\n\n", ""))
+        self.assertEqual(rows, ["DROPPED\tThe Yard\t**Treasure**"])
+
+    def test_a_label_under_a_higher_heading_is_not_the_scenes(self):
+        old = FIGHT + "\n## GM Notes\n\n**Treasure**\n- hidden\n"
+        new = FIGHT_NO_TREASURE
+        self.assertEqual(vw.dropped_blocks(old, new + "\n## GM Notes\n"),
+                         ["DROPPED\tThe Yard\t**Treasure**"])
+        self.assertEqual(
+            vw.dropped_blocks(FIGHT_NO_TREASURE + "\n## GM Notes\n\n"
+                              "**Treasure**\n- hidden\n", FIGHT_NO_TREASURE),
+            [])
+
+    def test_repeated_scene_titles_are_compared_one_by_one(self):
+        old = FIGHT + "\n" + FIGHT.replace("silver", "gold")
+        new = FIGHT + "\n" + FIGHT_NO_TREASURE
+        rows = vw.dropped_blocks(old, new)
+        self.assertEqual(rows, ["DROPPED\tThe Yard\t**Treasure**"])
+
+
 if __name__ == "__main__":
     unittest.main()

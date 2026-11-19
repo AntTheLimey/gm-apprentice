@@ -73,6 +73,7 @@ quiet exit is ever needed.
 
 **Type:** social
 **Situation:** Bruyère has Ada briefly alone by the antechamber door with champagne in hand.
+**Place:** The antechamber, off the ballroom
 **Starts it:** Bruyère. Wants to learn whether Ada remembers the courier without naming him.
 **Entities:** [[Bruyère]], [[Ada]], Hofburg Antechamber
 **Handouts:** [[Courier's Calling Card]] — Bruyère slips it to Ada as he leaves
@@ -95,6 +96,7 @@ quiet exit is ever needed.
 
 **Type:** investigation
 **Situation:** A footman waves Marlowe through a side door — the storeroom past it is off-limits to guests.
+**Place:** The service corridor behind the ballroom
 **Starts it:** Marlowe. Wants to know what the staff won't discuss.
 **Entities:** [[Marlowe]], Service Corridor, Locked Store Room
 **NPCs**

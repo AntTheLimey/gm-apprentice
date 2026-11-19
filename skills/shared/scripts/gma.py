@@ -63,6 +63,7 @@ COMMANDS: dict[str, Command] = {
     "section": Command("section", "Print one section of a note by heading path."),
     "session-context": Command("session_context", "Session-prep context bundle in one call."),
     "stamp-entities": Command("stamp_entities", "Batch frontmatter writes for the session workflows."),
+    "stat-fill": Command("stat_fill", "Write a stock D&D creature's SRD numbers into its note."),
     "tones": Command("tones", "List a vault's stray tone words, and tidy them."),
     "update": Command("update", "Update a vault and its site to the plugin's version, with a plain report."),
     "vault-check": Command("vault_check", "Vault content checks: frontmatter, names, index, drafts and more."),

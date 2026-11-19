@@ -2,8 +2,10 @@
 
 235 monsters from SRD 5.2. CR-grouped index for encounter building.
 
-**Detail files:** `monsters-cr0-1.md`, `monsters-cr2-4.md`, `monsters-cr5-10.md`, `monsters-cr11-16.md`, `monsters-cr17-plus.md`
+**Detail files:** `monsters-cr0-1.md`, `monsters-cr2-3.md`, `monsters-cr4.md`, `monsters-cr5-10.md`, `monsters-cr11-16.md`, `monsters-cr17-plus.md`
 **Sub-file format:** Name | Type | Size | AC | HP | Speed | Notable | XP
+**Size codes:** T, S, M, L, H, G (Tiny to Gargantuan); M/S = Medium or Small
+**Initiative:** the figures, and the score in brackets, are as printed in SRD 5.2.1; do not "correct" them (Gray Ooze −2 (13), Invisible Stalker +7 (22)).
 
 ## Response Templates
 
@@ -36,29 +38,29 @@ Always include Tactics (1–2 sentences). For browse queries, use the standard t
 ## CR 0–1 → `monsters-cr0-1.md`
 
 - **Awakened Shrub** | Plant | S | CR 0
-- **Commoner** | Humanoid | S | CR 0
-- **Homunculus** | Construct | S | CR 0
+- **Commoner** | Humanoid | M/S | CR 0
+- **Homunculus** | Construct | T | CR 0
 - **Lemure** | Fiend | M | CR 0
 - **Shrieker Fungus** | Plant | M | CR 0
-- **Bandit** | Humanoid | S | CR 1/8
-- **Cultist** | Humanoid | S | CR 1/8
+- **Bandit** | Humanoid | M/S | CR 1/8
+- **Cultist** | Humanoid | M/S | CR 1/8
 - **Goblin Minion** | Fey | S | CR 1/8
-- **Guard** | Humanoid | S | CR 1/8
+- **Guard** | Humanoid | M/S | CR 1/8
 - **Kobold Warrior** | Dragon | S | CR 1/8
 - **Merfolk Skirmisher** | Elemental | M | CR 1/8
-- **Noble** | Humanoid | S | CR 1/8
-- **Stirge** | Monstrosity | S | CR 1/8
-- **Warrior Infantry** | Humanoid | S | CR 1/8
+- **Noble** | Humanoid | M/S | CR 1/8
+- **Stirge** | Monstrosity | T | CR 1/8
+- **Warrior Infantry** | Humanoid | M/S | CR 1/8
 - **Animated Flying Sword** | Construct | S | CR 1/4
 - **Axe Beak** | Monstrosity | L | CR 1/4
 - **Blink Dog** | Fey | M | CR 1/4
 - **Dretch** | Fiend | S | CR 1/4
 - **Goblin Warrior** | Fey | S | CR 1/4
 - **Grimlock** | Aberration | M | CR 1/4
-- **Priest Acolyte** | Humanoid | S | CR 1/4
-- **Pseudodragon** | Dragon | S | CR 1/4
+- **Priest Acolyte** | Humanoid | M/S | CR 1/4
+- **Pseudodragon** | Dragon | T | CR 1/4
 - **Skeleton** | Undead | M | CR 1/4
-- **Sprite** | Fey | S | CR 1/4
+- **Sprite** | Fey | T | CR 1/4
 - **Steam Mephit** | Elemental | S | CR 1/4
 - **Violet Fungus** | Plant | M | CR 1/4
 - **Zombie** | Undead | M | CR 1/4
@@ -74,9 +76,9 @@ Always include Tactics (1–2 sentences). For browse queries, use the standard t
 - **Rust Monster** | Monstrosity | M | CR 1/2
 - **Sahuagin Warrior** | Fiend | M | CR 1/2
 - **Satyr** | Fey | M | CR 1/2
-- **Scout** | Humanoid | S | CR 1/2
+- **Scout** | Humanoid | M/S | CR 1/2
 - **Shadow** | Undead | M | CR 1/2
-- **Tough** | Humanoid | S | CR 1/2
+- **Tough** | Humanoid | M/S | CR 1/2
 - **Troll Limb** | Giant | S | CR 1/2
 - **Warhorse Skeleton** | Undead | L | CR 1/2
 - **Worg** | Fey | L | CR 1/2
@@ -90,26 +92,26 @@ Always include Tactics (1–2 sentences). For browse queries, use the standard t
 - **Goblin Boss** | Fey | S | CR 1
 - **Harpy** | Monstrosity | M | CR 1
 - **Hippogriff** | Monstrosity | L | CR 1
-- **Imp** | Fiend | S | CR 1
-- **Pirate** | Humanoid | S | CR 1
-- **Quasit** | Fiend | S | CR 1
+- **Imp** | Fiend | T | CR 1
+- **Pirate** | Humanoid | M/S | CR 1
+- **Quasit** | Fiend | T | CR 1
 - **Specter** | Undead | M | CR 1
-- **Sphinx of Wonder** | Celestial | S | CR 1
-- **Spy** | Humanoid | S | CR 1
+- **Sphinx of Wonder** | Celestial | T | CR 1
+- **Spy** | Humanoid | M/S | CR 1
 
-## CR 2–4 → `monsters-cr2-4.md`
+## CR 2–3 → `monsters-cr2-3.md`
 
 - **Animated Rug of Smothering** | Construct | L | CR 2
 - **Ankheg** | Monstrosity | L | CR 2
 - **Awakened Tree** | Plant | H | CR 2
 - **Azer Sentinel** | Elemental | M | CR 2
-- **Bandit Captain** | Humanoid | S | CR 2
-- **Berserker** | Humanoid | S | CR 2
+- **Bandit Captain** | Humanoid | M/S | CR 2
+- **Berserker** | Humanoid | M/S | CR 2
 - **Black Dragon Wyrmling** | Dragon | M | CR 2
 - **Bronze Dragon Wyrmling** | Dragon | M | CR 2
 - **Centaur Trooper** | Fey | L | CR 2
-- **Cultist Fanatic** | Humanoid | S | CR 2
-- **Druid** | Humanoid | S | CR 2
+- **Cultist Fanatic** | Humanoid | M/S | CR 2
+- **Druid** | Humanoid | M/S | CR 2
 - **Ettercap** | Monstrosity | M | CR 2
 - **Gargoyle** | Elemental | M | CR 2
 - **Gelatinous Cube** | Ooze | L | CR 2
@@ -125,12 +127,12 @@ Always include Tactics (1–2 sentences). For browse queries, use the standard t
 - **Ogre** | Giant | L | CR 2
 - **Ogre Zombie** | Undead | L | CR 2
 - **Pegasus** | Celestial | L | CR 2
-- **Priest** | Humanoid | S | CR 2
+- **Priest** | Humanoid | M/S | CR 2
 - **Sea Hag** | Fey | M | CR 2
 - **Silver Dragon Wyrmling** | Dragon | M | CR 2
-- **Wererat** | Monstrosity | S | CR 2
+- **Wererat** | Monstrosity | M/S | CR 2
 - **White Dragon Wyrmling** | Dragon | M | CR 2
-- **Will-o'-Wisp** | Undead | S | CR 2
+- **Will-o'-Wisp** | Undead | T | CR 2
 - **Basilisk** | Monstrosity | M | CR 3
 - **Bearded Devil** | Fiend | M | CR 3
 - **Blue Dragon Wyrmling** | Dragon | M | CR 3
@@ -140,32 +142,35 @@ Always include Tactics (1–2 sentences). For browse queries, use the standard t
 - **Green Hag** | Fey | M | CR 3
 - **Hell Hound** | Fiend | M | CR 3
 - **Hobgoblin Captain** | Fey | M | CR 3
-- **Knight** | Humanoid | S | CR 3
+- **Knight** | Humanoid | M/S | CR 3
 - **Manticore** | Monstrosity | L | CR 3
 - **Minotaur of Baphomet** | Monstrosity | L | CR 3
-- **Mummy** | Undead | S | CR 3
+- **Mummy** | Undead | M/S | CR 3
 - **Nightmare** | Fiend | L | CR 3
 - **Owlbear** | Monstrosity | L | CR 3
 - **Phase Spider** | Monstrosity | L | CR 3
 - **Swarm of Crawling Claws** | Undead | M | CR 3
-- **Vampire Familiar** | Humanoid | S | CR 3
-- **Warrior Veteran** | Humanoid | S | CR 3
-- **Werewolf** | Monstrosity | S | CR 3
+- **Vampire Familiar** | Humanoid | M/S | CR 3
+- **Warrior Veteran** | Humanoid | M/S | CR 3
+- **Werewolf** | Monstrosity | M/S | CR 3
 - **Wight** | Undead | M | CR 3
 - **Winter Wolf** | Monstrosity | L | CR 3
+
+## CR 4 → `monsters-cr4.md`
+
 - **Black Pudding** | Ooze | L | CR 4
 - **Chuul** | Aberration | L | CR 4
 - **Couatl** | Celestial | M | CR 4
 - **Ettin** | Giant | L | CR 4
 - **Ghost** | Undead | M | CR 4
-- **Guard Captain** | Humanoid | S | CR 4
+- **Guard Captain** | Humanoid | M/S | CR 4
 - **Incubus** | Fiend | M | CR 4
 - **Lamia** | Fiend | L | CR 4
 - **Red Dragon Wyrmling** | Dragon | M | CR 4
 - **Succubus** | Fiend | M | CR 4
-- **Tough Boss** | Humanoid | S | CR 4
-- **Wereboar** | Monstrosity | S | CR 4
-- **Weretiger** | Monstrosity | S | CR 4
+- **Tough Boss** | Humanoid | M/S | CR 4
+- **Wereboar** | Monstrosity | M/S | CR 4
+- **Weretiger** | Monstrosity | M/S | CR 4
 
 ## CR 5–10 → `monsters-cr5-10.md`
 
@@ -175,7 +180,7 @@ Always include Tactics (1–2 sentences). For browse queries, use the standard t
 - **Earth Elemental** | Elemental | L | CR 5
 - **Fire Elemental** | Elemental | L | CR 5
 - **Flesh Golem** | Construct | M | CR 5
-- **Gladiator** | Humanoid | S | CR 5
+- **Gladiator** | Humanoid | M/S | CR 5
 - **Gorgon** | Construct | L | CR 5
 - **Half-Dragon** | Dragon | M | CR 5
 - **Hill Giant** | Giant | H | CR 5
@@ -186,17 +191,17 @@ Always include Tactics (1–2 sentences). For browse queries, use the standard t
 - **Shambling Mound** | Plant | L | CR 5
 - **Troll** | Giant | L | CR 5
 - **Unicorn** | Celestial | L | CR 5
-- **Vampire Spawn** | Undead | S | CR 5
+- **Vampire Spawn** | Undead | M/S | CR 5
 - **Water Elemental** | Elemental | L | CR 5
-- **Werebear** | Monstrosity | S | CR 5
-- **Wraith** | Undead | S | CR 5
+- **Werebear** | Monstrosity | M/S | CR 5
+- **Wraith** | Undead | M/S | CR 5
 - **Xorn** | Elemental | M | CR 5
 - **Chimera** | Monstrosity | L | CR 6
 - **Drider** | Monstrosity | L | CR 6
 - **Invisible Stalker** | Elemental | L | CR 6
-- **Mage** | Humanoid | S | CR 6
+- **Mage** | Humanoid | M/S | CR 6
 - **Medusa** | Monstrosity | M | CR 6
-- **Pirate Captain** | Humanoid | S | CR 6
+- **Pirate Captain** | Humanoid | M/S | CR 6
 - **Vrock** | Fiend | L | CR 6
 - **Wyvern** | Dragon | L | CR 6
 - **Young Brass Dragon** | Dragon | L | CR 6
@@ -206,7 +211,7 @@ Always include Tactics (1–2 sentences). For browse queries, use the standard t
 - **Stone Giant** | Giant | H | CR 7
 - **Young Black Dragon** | Dragon | L | CR 7
 - **Young Copper Dragon** | Dragon | L | CR 7
-- **Assassin** | Humanoid | S | CR 8
+- **Assassin** | Humanoid | M/S | CR 8
 - **Chain Devil** | Fiend | M | CR 8
 - **Cloaker** | Aberration | L | CR 8
 - **Frost Giant** | Giant | H | CR 8
@@ -239,20 +244,20 @@ Always include Tactics (1–2 sentences). For browse queries, use the standard t
 - **Remorhaz** | Monstrosity | H | CR 11
 - **Roc** | Monstrosity | G | CR 11
 - **Sphinx of Lore** | Celestial | L | CR 11
-- **Archmage** | Humanoid | S | CR 12
+- **Archmage** | Humanoid | M/S | CR 12
 - **Erinyes** | Fiend | M | CR 12
 - **Adult Brass Dragon** | Dragon | H | CR 13
 - **Adult White Dragon** | Dragon | H | CR 13
 - **Nalfeshnee** | Fiend | L | CR 13
 - **Rakshasa** | Fiend | M | CR 13
 - **Storm Giant** | Giant | H | CR 13
-- **Vampire** | Undead | S | CR 13
+- **Vampire** | Undead | M/S | CR 13
 - **Adult Black Dragon** | Dragon | H | CR 14
 - **Adult Copper Dragon** | Dragon | H | CR 14
 - **Ice Devil** | Fiend | L | CR 14
 - **Adult Bronze Dragon** | Dragon | H | CR 15
 - **Adult Green Dragon** | Dragon | H | CR 15
-- **Mummy Lord** | Undead | S | CR 15
+- **Mummy Lord** | Undead | M/S | CR 15
 - **Purple Worm** | Monstrosity | G | CR 15
 - **Adult Blue Dragon** | Dragon | H | CR 16
 - **Adult Silver Dragon** | Dragon | H | CR 16

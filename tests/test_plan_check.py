@@ -278,14 +278,26 @@ class LabelHelperUnitTests(unittest.TestCase):
         body = "**Complications (drop when the scene sags)**\n- x"
         self.assertTrue(pc._label_present(body, "Complications"))
 
-    def test_block_label_rejects_colon_suffixed_form(self):
-        # Ruling 2: the block regex must not swallow `**NPCs:**` — that
-        # near-miss form has to fall through to `_label_near_miss`.
-        self.assertFalse(pc._label_present("**NPCs:**\n- x", "NPCs"))
+    def test_block_label_accepts_colon_suffixed_form(self):
+        # The run sheet reads `**NPCs:**` as it reads `**NPCs**`.
+        self.assertTrue(pc._label_present("**NPCs:**\n- x", "NPCs"))
+        self.assertIsNone(pc._label_near_miss("**NPCs:**\n- x", "NPCs"))
 
-    def test_block_label_near_miss_reports_colon_suffixed_form(self):
-        near = pc._label_near_miss("**NPCs:**\n- x", "NPCs")
-        self.assertEqual(near, "**NPCs:**")
+    def test_block_label_near_miss_still_reports_a_period(self):
+        self.assertFalse(pc._label_present("**NPCs.**\n- x", "NPCs"))
+        self.assertEqual(pc._label_near_miss("**NPCs.**\n- x", "NPCs"),
+                         "**NPCs.**")
+
+    def test_inline_label_without_a_colon_is_still_a_near_miss(self):
+        self.assertFalse(pc._label_present("**Place** the yard", "Place"))
+        self.assertEqual(
+            pc._label_near_miss("**Place** the yard", "Place"), "**Place**")
+
+    def test_if_label_with_dots_ellipsis_or_none(self):
+        for head in ("**If the players...**", "**If the players…**",
+                     "**If the players**", "**If the players:**"):
+            with self.subTest(head=head):
+                self.assertTrue(pc._label_present(head + "\n| Do |", "If the players..."))
 
     def test_inline_label_near_miss_semicolon(self):
         near = pc._label_near_miss("**Setup;** foo", "Setup")
@@ -362,17 +374,18 @@ class LabelHelperUnitTests(unittest.TestCase):
         self.assertIn("rewrite as Trigger", legacy[0].message)
         self.assertNotIn("Situation", legacy[0].message)
 
-    def test_if_the_players_colon_form_is_a_near_miss(self):
+    def test_if_the_players_colon_form_is_read(self):
         body = "**If the players:**\n| Do | Then |\n|---|---|"
-        self.assertFalse(pc._label_present(body, "If the players..."))
-        self.assertEqual(pc._label_near_miss(body, "If the players..."),
-                         "**If the players:**")
+        self.assertTrue(pc._label_present(body, "If the players..."))
         findings = pc._scene_findings("P.md", body, "Scene 1",
                                       ("If the players...",))
-        rows = [f for f in findings if f.id == "scene-labels"]
-        self.assertEqual(len(rows), 1, rows)
-        self.assertIn("has '**If the players:**' — write "
-                      "'**If the players...**'", rows[0].message)
+        self.assertEqual([f for f in findings if f.id == "scene-labels"], [])
+
+    def test_if_the_players_short_ellipsis_is_a_near_miss(self):
+        body = "**If the players..**\n| Do | Then |\n|---|---|"
+        self.assertFalse(pc._label_present(body, "If the players..."))
+        self.assertEqual(pc._label_near_miss(body, "If the players..."),
+                         "**If the players..**")
 
 
 class SectionsOrderTests(unittest.TestCase):
@@ -1072,6 +1085,665 @@ class SkeletonTests(unittest.TestCase):
             found = findings_for(bad)
         self.assertTrue(any(f.level == "ERROR" and f.id == "scene-labels"
                             for f in found), found)
+
+
+class SkeletonShapeTests(unittest.TestCase):
+    """The template's scene and hub skeletons are the shape the run sheet
+    reads; the fixture prep checks its draft against carries them verbatim."""
+
+    TEMPLATE = (Path(__file__).resolve().parent.parent / "skills" / "shared"
+                / "templates" / "session-plan.md")
+    FIXTURE = Path(__file__).resolve().parent / "fixtures" / "plan-skeleton.md"
+
+    @staticmethod
+    def skeleton(path: Path, name: str) -> str:
+        m = pc.re.search(rf"<!-- {name} -->\n(.*?)\n<!-- /{name} -->",
+                         path.read_text(encoding="utf-8"), pc.re.S)
+        assert m, f"{path.name} has no {name} markers"
+        return m.group(1).strip()
+
+    def test_the_skeleton_is_clean(self):
+        loud = [f.row for f in findings_for(self.FIXTURE)
+                if f.level in ("ERROR", "WARNING")]
+        self.assertEqual(loud, [])
+
+    def test_the_fixtures_scene_and_hub_skeletons_are_the_templates(self):
+        for name in ("scene-skeleton", "hub-skeleton"):
+            with self.subTest(name=name):
+                self.assertEqual(self.skeleton(self.FIXTURE, name),
+                                 self.skeleton(self.TEMPLATE, name))
+
+    def test_the_skeletons_carry_every_new_shape(self):
+        scene = self.skeleton(self.TEMPLATE, "scene-skeleton")
+        hub = self.skeleton(self.TEMPLATE, "hub-skeleton")
+        for shape in ("**Place:** [[Location]]", "**Treasure**", "**NPCs**"):
+            self.assertIn(shape, scene)
+        self.assertIn("**Where they can go**", hub)
+        self.assertIn("- **[[Location]]:**", hub)   # a place bullet, linked
+        self.assertIn("- **Plain name:**", hub)     # a place bullet, words
+        self.assertIn("— Scene 3", hub)             # a pointer bullet
+        self.assertIn("- [[Scene note]]", hub)      # a pointer bullet
+
+    def test_the_reference_carries_the_same_skeletons(self):
+        ref = (self.TEMPLATE.parent.parent.parent / "session-prep"
+               / "SKILL.md").read_text(encoding="utf-8")
+        shape = ref.split("\n## Plan shape\n", 1)[1]
+        for text in ("**Place:**", "**Treasure**", "**Where they can go**",
+                     "— Scene"):
+            self.assertIn(text, shape)
+
+
+class RunSheetChecksTests(unittest.TestCase):
+    """Warnings for what the run sheet reads (beats.js): each names what the
+    sheet will lack. Shape only, never story."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.vault = Path(self._tmp.name)
+        (self.vault / "_meta").mkdir()
+        (self.vault / "Plans").mkdir()
+
+    def note(self, name: str, type_: str, extra: str = "") -> None:
+        (self.vault / f"{name}.md").write_text(
+            f"---\ntype: {type_}\n{extra}---\n\nBody.\n", encoding="utf-8")
+
+    @staticmethod
+    def plan(planned: str = "", contingency: str = "") -> str:
+        return ("---\ntype: session-plan\nsession: \"[[S1]]\"\n"
+                "chapter: \"[[C1]]\"\n---\n\n## GM Notes\n\n"
+                f"## Planned Scenes\n\n{planned}\n\n"
+                f"## Contingency Scenes\n\n{contingency}\n")
+
+    def found(self, planned: str = "", contingency: str = "",
+              index: bool = True) -> list[pc.Finding]:
+        text = self.plan(planned, contingency)
+        return pc.run_checks(
+            str(self.vault / "Plans" / "P.md"), text,
+            pc.vl.extract_frontmatter(text) or {}, False,
+            vault=self.vault if index else None)
+
+    def ids(self, planned: str = "", **kw) -> list[str]:
+        return [f.id for f in self.found(planned, **kw)
+                if f.id in pc.RUN_SHEET_CHECKS]
+
+    SCENE = ("### Scene 1: Supper\n**Situation:** s\n{place}"
+             "**Starts it:** t\n{rest}")
+
+    def scene(self, place: str = "**Place:** The orchard\n",
+              rest: str = "") -> str:
+        return self.SCENE.format(place=place, rest=rest)
+
+    # no-place
+
+    def test_no_place_warns(self):
+        found = self.found(self.scene(place=""))
+        rows = rows_for(found, "no-place")
+        self.assertEqual(len(rows), 1, found)
+        self.assertEqual(rows[0].level, "WARNING")
+        self.assertIn("run sheet", rows[0].message)
+
+    def test_a_place_line_with_words_is_not_no_place(self):
+        self.assertEqual(self.ids(self.scene("**Place:** the cold cellar\n")), [])
+
+    def test_a_place_link_is_not_no_place(self):
+        self.assertEqual(self.ids(self.scene("**Place:** [[Orchard]]\n")), [])
+
+    def test_a_bulleted_place_label_counts(self):
+        self.assertEqual(self.ids(self.scene("- **Place:** [[Orchard]]\n")), [])
+
+    def test_an_empty_place_line_is_no_place(self):
+        self.assertEqual(self.ids(self.scene("**Place:**\n")), ["no-place"])
+
+    def test_a_contingency_needs_no_place(self):
+        self.assertEqual(
+            self.ids(contingency="### If they run\n**Trigger:** t\n"
+                                 "**Then**\n- x\n"), [])
+
+    def test_a_hub_needs_no_place_or_npcs(self):
+        hub = ("### Scene 0: Where they can go (hub)\n**Where they can go**\n"
+               "- **The orchard:** apples\n")
+        self.assertEqual(self.ids(hub), [])
+
+    def test_a_hub_without_hub_in_its_title_is_still_a_hub(self):
+        for head in ("**Where they can go**", "**Open to the party**"):
+            with self.subTest(head=head):
+                hub = f"### Scene 4: The yard\n{head}\n- **The orchard:** x\n"
+                self.assertEqual(self.ids(hub), [])
+                self.assertEqual(
+                    [f.row for f in self.found(hub)
+                     if f.id == "scene-labels"], [])
+
+    def test_a_scene_note_heading_with_locations_needs_no_place_line(self):
+        self.note("Orchard", "location")
+        self.note("Supper", "scene", 'locations: ["[[Orchard]]"]\n')
+        self.assertEqual(self.ids("### [[Supper]]\n**Starts it:** t\n"), [])
+
+    def test_a_scene_note_heading_without_locations_warns(self):
+        self.note("Supper", "scene")
+        self.assertEqual(self.ids("### [[Supper]]\n**Starts it:** t\n"),
+                         ["no-place"])
+
+    def test_a_scene_note_heading_with_a_place_line_is_fine(self):
+        self.note("Supper", "scene")
+        self.assertEqual(
+            self.ids("### [[Supper]]\n**Place:** the hall\n**Starts it:** t\n"),
+            [])
+
+    def test_a_scene_note_not_in_the_vault_is_scene_pointers_to_say(self):
+        self.assertEqual(self.ids("### [[Ghost]]\n**Starts it:** t\n"), [])
+
+    def test_the_scene_notes_own_npcs_block_is_read_too(self):
+        # the run sheet reads a scene note's public text with the Plan's
+        self.note("Orme", "npc")
+        (self.vault / "Supper.md").write_text(
+            "---\ntype: scene\nlocations: [\"[[Orchard]]\"]\n---\n\n"
+            "**NPCs**\n- **[[Orme]]:** wants a word\n", encoding="utf-8")
+        self.note("Orchard", "location")
+        plan = "### [[Supper]]\n**Entities:** [[Orme]]\n**Starts it:** t\n"
+        self.assertEqual(self.ids(plan), [])
+        # a block behind a gm-only fence is not public
+        (self.vault / "Supper.md").write_text(
+            "---\ntype: scene\nlocations: [\"[[Orchard]]\"]\n---\n\n"
+            "<!-- gm-only -->\n**NPCs**\n- **[[Orme]]:** wants a word\n"
+            "<!-- /gm-only -->\n", encoding="utf-8")
+        self.assertEqual(self.ids(plan), ["no-npcs-block"])
+
+    def test_a_who_line_needs_a_person_to_clear_no_npcs_block(self):
+        self.note("Orme", "npc")
+        self.note("Orchard", "location")
+        ent = "**Entities:** [[Orme]]\n"
+        self.assertEqual(self.ids(self.scene(rest=ent + "**Who:** [[Orchard]]\n")),
+                         ["no-npcs-block"])
+        self.assertEqual(self.ids(self.scene(rest=ent + "**Who:** [[Orme]]\n")), [])
+
+    def test_a_scene_notes_locations_must_include_a_location(self):
+        self.note("Orme", "npc")
+        self.note("Supper", "scene", 'locations: ["[[Orme]]"]\n')
+        self.assertEqual(self.ids("### [[Supper]]\n**Starts it:** t\n"),
+                         ["no-place"])
+
+    # foe-no-numbers
+
+    def stock_note(self, name: str, body: str, type_: str = "npc",
+                   system: str | None = "dnd-5e-2024",
+                   extra: str = "") -> None:
+        (self.vault / f"{name}.md").write_text(
+            f"---\ntype: {type_}\n{extra}---\n\n## Overview\n\nx\n\n"
+            f"<!-- gm-only -->\n\n## GM Notes\n\n### Stats\n\n{body}\n\n"
+            f"<!-- /gm-only -->\n", encoding="utf-8")
+        if system:
+            (self.vault / "_Campaign").mkdir(exist_ok=True)
+            (self.vault / "_Campaign" / "Overview.md").write_text(
+                f"---\ntype: campaign_overview\ngame_system: {system}\n---\n",
+                encoding="utf-8")
+
+    def test_a_stock_foe_warns_foe_no_numbers(self):
+        self.stock_note("Tomas", "Commoner (SRD)")
+        rest = "**NPCs**\n- **[[Tomas]]:** wants his cart back\n"
+        found = self.found(self.scene(rest=rest))
+        rows = rows_for(found, "foe-no-numbers")
+        self.assertEqual(len(rows), 1, found)
+        self.assertEqual(rows[0].level, "WARNING")
+        self.assertIn("gma stat-fill", rows[0].message)
+        self.assertIn("run sheet", rows[0].message)
+
+    def test_a_note_type_in_another_case_still_warns_foe_no_numbers(self):
+        self.stock_note("Tomas", "Commoner (SRD)", type_="NPC")
+        rest = "**NPCs**\n- **[[Tomas]]:** wants his cart back\n"
+        self.assertEqual(len(rows_for(
+            self.found(self.scene(rest=rest)), "foe-no-numbers")), 1)
+
+    def test_a_stock_foe_in_another_system_says_write_the_numbers(self):
+        self.stock_note("Tomas", "Commoner (SRD)", system="gurps-4e")
+        found = self.found(self.scene(rest="**Who:** [[Tomas]]\n"))
+        rows = rows_for(found, "foe-no-numbers")
+        self.assertEqual(len(rows), 1, found)
+        self.assertNotIn("stat-fill", rows[0].message)
+        self.assertIn("one Gaps & Actions line", rows[0].message)
+        self.assertNotIn("write the numbers", rows[0].message)
+
+    def test_a_foe_only_in_entities_is_not_in_the_room(self):
+        self.stock_note("Tomas", "Commoner (SRD)")
+        rest = "**Entities:** [[Tomas]]\n"
+        self.assertEqual(
+            rows_for(self.found(self.scene(rest=rest)), "foe-no-numbers"), [])
+
+    def test_a_two_link_npc_lead_checks_each_person(self):
+        self.note("Orme", "npc")
+        self.stock_note("Tomas", "Commoner (SRD)")
+        rest = ("**NPCs**\n- **[[Orme]] and [[Tomas]]:** want the cart "
+                "back\n")
+        found = self.found(self.scene(rest=rest))
+        rows = rows_for(found, "foe-no-numbers")
+        self.assertEqual(len(rows), 1, found)
+        self.assertIn("Tomas", rows[0].message)
+        self.assertEqual(self.ids(self.scene(rest=rest)), ["foe-no-numbers"])
+
+    def test_a_companion_or_key_npc_is_sent_to_the_full_workup(self):
+        self.stock_note("Tomas", "Commoner (SRD)", extra="companion: true\n")
+        (self.vault / "Brief.md").write_text(
+            "---\ntype: adventure-brief\n---\n\n## Key NPCs\n\n"
+            "- **[[Garrick]]** the smith\n", encoding="utf-8")
+        self.stock_note("Garrick", "As Bandit.")
+        for who in ("Tomas", "Garrick"):
+            with self.subTest(who):
+                found = self.found(self.scene(
+                    rest=f"**Who:** [[{who}]]\n"))
+                rows = rows_for(found, "foe-no-numbers")
+                self.assertEqual(len(rows), 1, found)
+                self.assertIn("full stat workup", rows[0].message)
+                self.assertNotIn("stat-fill", rows[0].message)
+
+    def test_a_social_npc_with_no_stats_does_not(self):
+        self.note("Orme", "npc")
+        rest = "**NPCs**\n- **[[Orme]]:** wants x\n"
+        self.assertEqual(self.ids(self.scene(rest=rest)), [])
+
+    def test_a_foe_with_numbers_does_not(self):
+        self.stock_note(
+            "Tomas", "**AC** 10 · **Initiative** +0 (10) · **HP** 4 (1d8)\n"
+            "STR 10 DEX 10 CON 10 INT 10 WIS 10 CHA 10")
+        rest = "**Who:** [[Tomas]] (2)\n"
+        self.assertEqual(self.ids(self.scene(rest=rest)), [])
+
+    def test_a_stock_creature_in_a_contingency_warns(self):
+        self.stock_note("Hound", "Wolf (SRD)", type_="creature")
+        found = self.found(contingency=(
+            "### If they run\n**Trigger:** t\n**Who:** [[Hound]]\n"
+            "**Then**\n- x\n"))
+        self.assertEqual(len(rows_for(found, "foe-no-numbers")), 1, found)
+
+    def test_no_vault_skips_foe_no_numbers(self):
+        self.stock_note("Tomas", "Commoner (SRD)")
+        self.assertEqual(
+            self.ids(self.scene(rest="**Entities:** [[Tomas]]\n"),
+                     index=False), [])
+
+    # no-npcs-block
+
+    def test_npc_in_entities_without_a_block_warns(self):
+        self.note("Orme", "npc")
+        found = self.found(self.scene(rest="**Entities:** [[Orme]]\n"))
+        rows = rows_for(found, "no-npcs-block")
+        self.assertEqual(len(rows), 1, found)
+        self.assertIn("nobody", rows[0].message)
+
+    def test_creature_in_entities_without_a_block_warns(self):
+        self.note("Hound", "creature")
+        self.assertEqual(
+            self.ids(self.scene(rest="**Entities:** [[Hound]]\n")),
+            ["no-npcs-block"])
+
+    def test_an_npcs_block_clears_it(self):
+        self.note("Orme", "npc")
+        rest = "**Entities:** [[Orme]]\n**NPCs**\n- **[[Orme]]:** wants x\n"
+        self.assertEqual(self.ids(self.scene(rest=rest)), [])
+
+    def test_a_block_with_no_readable_npc_line_warns(self):
+        self.note("Orme", "npc")
+        rest = "**Entities:** [[Orme]]\n**NPCs**\n- Mrs Orme, wary\n"
+        self.assertEqual(self.ids(self.scene(rest=rest)), ["no-npcs-block"])
+
+    def test_a_who_line_counts_only_with_a_link(self):
+        self.note("Orme", "npc")
+        base = "**Entities:** [[Orme]]\n"
+        self.assertEqual(self.ids(self.scene(
+            rest=base + "**Who:** Orme and the cook.\n")), ["no-npcs-block"])
+        self.assertEqual(self.ids(self.scene(
+            rest=base + "- **Who:** Orme and the cook.\n")),
+            ["no-npcs-block"])
+        self.assertEqual(self.ids(self.scene(
+            rest=base + "**Who:** [[Orme]] and the cook.\n")), [])
+
+    def test_a_two_link_npc_lead_is_readable(self):
+        self.note("Orme", "npc")
+        self.note("Tomas", "npc")
+        rest = ("**Entities:** [[Orme]], [[Tomas]]\n**NPCs**\n"
+                "- **[[Orme]] and [[Tomas]]:** want the cart back\n")
+        self.assertEqual(self.ids(self.scene(rest=rest)), [])
+
+    def test_a_location_in_entities_needs_no_block(self):
+        self.note("Orchard", "location")
+        self.assertEqual(
+            self.ids(self.scene(rest="**Entities:** [[Orchard]]\n")), [])
+
+    def test_no_index_skips_the_type_checks(self):
+        self.note("Orme", "npc")
+        self.assertEqual(
+            self.ids(self.scene(rest="**Entities:** [[Orme]]\n"), index=False),
+            [])
+
+    def test_a_contingency_needs_no_npcs_block(self):
+        self.note("Orme", "npc")
+        self.assertEqual(
+            self.ids(contingency="### If they run\n**Trigger:** t\n"
+                                 "**Entities:** [[Orme]]\n"), [])
+
+    # hubs
+
+    HUB = "### Scene 0: Out and about (hub)\n**Where they can go**\n{bullets}"
+
+    def test_a_hub_with_no_bullets_warns_hub_no_places(self):
+        found = self.found(self.HUB.format(bullets=""))
+        self.assertEqual(len(rows_for(found, "hub-no-places")), 1, found)
+
+    def test_a_hub_of_pointer_bullets_is_not_hub_no_places(self):
+        bullets = "- the cellar door — Scene 3\n- [[Supper]] and what follows\n"
+        self.assertEqual(self.ids(self.HUB.format(bullets=bullets)), [])
+
+    def test_a_bold_lead_ending_in_scene_n_is_a_pointer(self):
+        self.note("Orme", "npc")
+        for bullets in ("- **Cellar door** — Scene 3\n",
+                        "- **[[Orme]]** — Scene 3\n",
+                        "- **[[Orme]]** — Scene 3 (locked)\n",
+                        "- **[[Orme]]** — Scene 3, locked tight\n"):
+            with self.subTest(bullets=bullets):
+                self.assertEqual(
+                    self.ids(self.HUB.format(bullets=bullets)), [])
+
+    def test_a_bare_link_lead_is_a_pointer_only_for_a_scene_note(self):
+        self.note("Supper", "scene")
+        self.note("Orchard", "location")
+        self.assertEqual(self.ids(self.HUB.format(
+            bullets="- [[Supper]] and what follows\n")), [])
+        self.assertEqual(self.ids(self.HUB.format(
+            bullets="- [[Orchard]] at dusk\n")), [])
+
+    def test_a_bare_link_lead_to_a_non_location_is_a_place_that_warns(self):
+        self.note("Orme", "npc")
+        self.assertEqual(self.ids(self.HUB.format(
+            bullets="- [[Orme]] at dusk\n")), ["hub-place-not-location"])
+
+    def test_a_bare_link_lead_with_no_vault_is_a_place(self):
+        found = self.found(self.HUB.format(bullets="- [[Orchard]] at dusk\n"),
+                           index=False)
+        self.assertEqual(
+            [f.id for f in found if f.id in pc.RUN_SHEET_CHECKS], [])
+
+    def test_a_bold_lead_linking_a_scene_note_is_a_pointer(self):
+        self.note("Supper", "scene")
+        self.assertEqual(self.ids(self.HUB.format(
+            bullets="- **[[Supper]]:** what follows\n")), [])
+
+    def test_a_hub_of_place_bullets_is_not_hub_no_places(self):
+        bullets = "- **[[Orchard]]:** apples\n- **The yard:** hens\n"
+        self.assertEqual(self.ids(self.HUB.format(bullets=bullets)), [])
+
+    def test_a_plain_bullet_among_place_bullets_warns_hub_plain_bullet(self):
+        bullets = ("- **The yard:** hens\n"
+                   "- The ambush clues are marked in [[Chapter_4]]; use it.\n")
+        found = self.found(self.HUB.format(bullets=bullets))
+        rows = rows_for(found, "hub-plain-bullet")
+        self.assertEqual(len(rows), 1, found)
+        self.assertIn("a plain line, not a bullet, after a blank line",
+                      rows[0].message)
+        # alone, or with only pointers, a plain bullet is hub-no-places' call
+        self.assertEqual(self.ids(self.HUB.format(
+            bullets="- **The yard:** hens\n- the cellar door — Scene 3\n")), [])
+        self.assertIn("hub-plain-bullet", pc.RUN_SHEET_CHECKS)
+
+    def test_a_plain_bullet_beside_only_pointers_warns_hub_plain_bullet(self):
+        bullets = ("- the cellar door — Scene 3\n"
+                   "- GM: keep the clock secret\n")
+        found = self.found(self.HUB.format(bullets=bullets))
+        self.assertEqual(len(rows_for(found, "hub-plain-bullet")), 1, found)
+        self.assertEqual(self.ids(self.HUB.format(
+            bullets="- the cellar door — Scene 3\n")), [])
+
+    def test_a_stock_foe_linked_in_a_place_bullet_warns_foe_no_numbers(self):
+        self.stock_note("Hound", "Wolf (SRD)", type_="creature")
+        found = self.found(self.HUB.format(
+            bullets="- **The yard:** [[Hound]] guards the gate\n"))
+        self.assertEqual(len(rows_for(found, "foe-no-numbers")), 1, found)
+        # pointer text is left out of foe discovery
+        found = self.found(self.HUB.format(
+            bullets="- [[Hound]] bays — Scene 3\n"))
+        self.assertEqual(rows_for(found, "foe-no-numbers"), [])
+
+    def test_a_bold_plain_name_npc_line_is_readable(self):
+        self.note("Orme", "npc")
+        self.assertEqual(self.ids(self.scene(
+            rest="**Entities:** [[Orme]]\n**NPCs**\n"
+                 "- **The shikarri:** wants a clean drive.\n")), [])
+        self.assertEqual(self.ids(self.scene(
+            rest="**Entities:** [[Orme]]\n**NPCs**\n"
+                 "- **Place:** the yard\n")), ["no-npcs-block"])
+
+    def test_a_hub_title_with_no_block_warns_hub_no_places(self):
+        self.assertEqual(self.ids("### Scene 5: Streets (hub)\n**Situation:** s\n"),
+                         ["hub-no-places"])
+
+    def test_a_place_bullet_linking_a_non_location_warns(self):
+        self.note("Orme", "npc")
+        found = self.found(self.HUB.format(bullets="- **[[Orme]]:** here\n"))
+        rows = rows_for(found, "hub-place-not-location")
+        self.assertEqual(len(rows), 1, found)
+        self.assertIn("npc", rows[0].message)
+        self.assertNotIn("no place there", rows[0].message)
+        self.assertIn("by that line's words", rows[0].message)
+
+    def test_a_place_bullet_linking_a_location_is_fine(self):
+        self.note("Orchard", "location")
+        self.assertEqual(
+            self.ids(self.HUB.format(bullets="- **[[Orchard]]:** apples\n")), [])
+
+    def test_a_place_bullet_with_no_index_is_not_type_checked(self):
+        self.note("Orme", "npc")
+        self.assertEqual(
+            self.ids(self.HUB.format(bullets="- **[[Orme]]:** here\n"),
+                     index=False), [])
+
+    def test_a_place_bullets_people_do_not_need_an_npcs_block(self):
+        self.note("Orchard", "location")
+        self.note("Orme", "npc")
+        bullets = "- **[[Orchard]]:** [[Orme]] is picking\n"
+        self.assertEqual(self.ids(self.HUB.format(bullets=bullets)), [])
+
+    def test_a_bold_lead_linking_a_location_stays_a_place_whatever_ends_it(self):
+        self.note("Orchard", "location")
+        for bullets in ("- **[[Orchard]]** — Scene 3\n",
+                        "- [[Orchard]], Scene 3\n"):
+            with self.subTest(bullets=bullets):
+                found = self.found(self.HUB.format(bullets=bullets))
+                self.assertEqual(
+                    [f.id for f in found if f.id in pc.RUN_SHEET_CHECKS], [])
+        self.note("Orme", "npc")
+        self.assertEqual(self.ids(self.HUB.format(
+            bullets="- **[[Orme]]** — Scene 3\n")), [])
+
+    def test_a_scene_reference_after_a_comma_or_in_parentheses_is_a_pointer(self):
+        for bullets in ("- the yard: shouting, Scene 1.\n",
+                        "- the yard shouting (Scene 1)\n"):
+            with self.subTest(bullets=bullets):
+                self.assertEqual(
+                    self.ids(self.HUB.format(bullets=bullets)), [])
+        # a plain bullet with no scene reference is neither place nor lead
+        self.assertEqual(self.ids(self.HUB.format(
+            bullets="- the yard shouting\n")), ["hub-no-places"])
+
+    def test_a_bold_lead_with_a_colon_is_a_place_whatever_its_tail_says(self):
+        for bullets in ("- **Great hall:** the feast, Scene 1 ended here\n",
+                        "- **Great hall**: the feast — Scene 3\n",
+                        "- **[[Hall]]:** the feast, Scene 1\n"):
+            with self.subTest(bullets=bullets):
+                found = self.found(self.HUB.format(bullets=bullets))
+                self.assertEqual(
+                    [f.id for f in found if f.id in pc.RUN_SHEET_CHECKS], [])
+                self.assertEqual(self.ids(self.HUB.format(
+                    bullets=bullets + "- **Cellar door** — Scene 3\n")), [])
+        # a place, not a lead: alone it still leaves the hub with a place
+        # only, and a colon-less bold lead alone is a pointer
+        self.assertEqual(self.ids(self.HUB.format(
+            bullets="- **Cellar door** — Scene 3\n")), [])
+
+    def test_a_scene_typed_lead_link_is_a_pointer_even_with_a_colon(self):
+        self.note("Supper", "scene")
+        self.assertEqual(self.ids(self.HUB.format(
+            bullets="- **[[Supper]]:** the feast, Scene 1\n")), [])
+
+    def test_a_type_in_another_case_still_counts_as_a_location(self):
+        self.note("Orchard", "Location")
+        self.assertEqual(self.ids(self.HUB.format(
+            bullets="- **[[Orchard]]:** apples\n")), [])
+        self.assertEqual(self.ids(
+            "### Scene 4: Y\n**Situation:** s\n**Place:** [[Orchard]] at dusk\n"
+            "**Starts it:** t\n"), [])
+
+    def test_a_hub_of_plain_bullets_says_the_sheet_cannot_name_them(self):
+        rows = rows_for(self.found(self.HUB.format(
+            bullets="- the yard\n")), "hub-no-places")
+        self.assertEqual(len(rows), 1)
+        self.assertIn("bold lead", rows[0].message)
+        self.assertNotIn("cannot name", rows[0].message)
+        self.assertNotIn("nowhere to go", rows[0].message)
+        bare = rows_for(self.found(self.HUB.format(bullets="")),
+                        "hub-no-places")
+        self.assertIn("nowhere to go", bare[0].message)
+
+    # place-not-location
+
+    def test_a_place_line_linking_a_non_location_warns(self):
+        self.note("Orme", "npc")
+        rows = rows_for(self.found(self.scene("**Place:** [[Orme]], the yard\n")),
+                        "place-not-location")
+        self.assertEqual(len(rows), 1)
+        self.assertIn("npc", rows[0].message)
+
+    def test_a_place_line_linking_a_location_with_words_is_clean(self):
+        self.note("Cloister", "location")
+        self.assertEqual(self.ids(
+            self.scene("**Place:** [[Cloister]], the yard\n")), [])
+
+    def test_a_place_line_link_with_no_vault_is_not_type_checked(self):
+        self.note("Orme", "npc")
+        self.assertEqual(self.ids(
+            self.scene("**Place:** [[Orme]]\n"), index=False), [])
+
+    def test_no_place_with_a_location_in_entities_says_so(self):
+        self.note("Orchard", "location")
+        rows = rows_for(self.found(self.scene(
+            place="", rest="**Entities:** [[Orchard]]\n")), "no-place")
+        self.assertEqual(len(rows), 1)
+        self.assertIn("makes it explicit", rows[0].message)
+        self.assertNotIn("will not say where", rows[0].message)
+
+    # label-form
+
+    def test_a_bulleted_block_label_with_nothing_after_it_warns(self):
+        for head in ("- **Treasure:**", "- **Treasure**", "- **Points to land:**",
+                     "- **NPCs:**"):
+            with self.subTest(head=head):
+                rows = rows_for(self.found(self.scene(
+                    rest=f"{head}\n  - a gem\n")), "label-form")
+                self.assertEqual(len(rows), 1, head)
+                self.assertIn("will not read", rows[0].message)
+
+    def test_a_bulleted_block_label_with_words_after_it_warns(self):
+        for head in ("- **Treasure:** a gem", "- **NPCs:** [[Orme]] is here",
+                     "- **Complications**: a storm"):
+            with self.subTest(head=head):
+                rows = rows_for(self.found(self.scene(
+                    rest=f"{head}\n")), "label-form")
+                self.assertEqual(len(rows), 1, head)
+
+    def test_a_bulleted_one_line_label_is_fine(self):
+        self.assertEqual(self.ids(self.scene(
+            rest="- **Entities:** the orchard\n")), [])
+
+    def test_an_inline_label_with_a_parenthesis_is_repaired_with_its_colon(self):
+        for line, fix in (("- **Place (where):** the yard", "'**Place:**'"),
+                          ("**NPCs (who is here)**", "'**NPCs**'")):
+            with self.subTest(line=line):
+                rows = rows_for(self.found(self.scene(
+                    place="", rest=f"{line}\n")), "label-form")
+                self.assertEqual(len(rows), 1)
+                self.assertIn(f"write {fix}", rows[0].message)
+
+    def test_npcs_in_parentheses_warns_label_form(self):
+        found = self.found(self.scene(
+            rest="**NPCs (who is here)**\n- **[[Orme]]:** x\n"))
+        rows = rows_for(found, "label-form")
+        self.assertEqual(len(rows), 1, found)
+        self.assertIn("**NPCs**", rows[0].message)
+
+    def test_parenthesis_inside_the_bold_of_any_label_warns(self):
+        for line in ("**Complications (drop when it sags)**",
+                     "- **Place (where):** the yard",
+                     "**If the players... (the table)**"):
+            with self.subTest(line=line):
+                self.assertIn("label-form", self.ids(
+                    self.scene(place="", rest=line + "\n")))
+
+    def test_a_parenthesis_outside_the_bold_is_fine(self):
+        self.assertEqual(self.ids(self.scene(
+            rest="**Open to the party** (any order)\n- **The yard:** x\n")), [])
+
+    def test_a_label_in_prose_is_not_label_form(self):
+        self.assertEqual(self.ids(self.scene(
+            rest="- **The Note (torn):** is on the table\n")), [])
+
+    def test_the_three_label_forms_are_all_read(self):
+        for place in ("**Place:** [[Orchard]]\n", "- **Place:** [[Orchard]]\n",
+                      "**Place:** [[Orchard]]  \n"):
+            self.assertEqual(self.ids(self.scene(place)), [])
+
+    # if-table-unlabelled
+
+    TABLE = "| Do | Then |\n|---|---|\n| a | b |\n"
+
+    def test_a_table_under_the_if_label_is_fine(self):
+        self.assertEqual(self.ids(self.scene(
+            rest="**If the players...**\n" + self.TABLE)), [])
+
+    def test_a_table_with_no_label_warns(self):
+        found = self.found(self.scene(rest=self.TABLE))
+        rows = rows_for(found, "if-table-unlabelled")
+        self.assertEqual(len(rows), 1, found)
+        self.assertIn("If the players", rows[0].message)
+
+    def test_a_table_under_another_label_warns(self):
+        self.assertEqual(self.ids(self.scene(
+            rest="**Points to land**\n" + self.TABLE)), ["if-table-unlabelled"])
+
+    def test_only_a_do_or_if_table_warns(self):
+        for head in ("Rumour | True?", "d10 | Encounter", "Outcome | Effect"):
+            with self.subTest(head=head):
+                table = f"| {head} |\n|---|---|\n| a | b |\n"
+                self.assertEqual(self.ids(self.scene(rest=table)), [])
+        for head in ("If | Then", "If they go to | They find", "Do | Then",
+                     "If a PC… | Result"):
+            with self.subTest(head=head):
+                table = f"| {head} |\n|---|---|\n| a | b |\n"
+                self.assertEqual(self.ids(self.scene(rest=table)),
+                                 ["if-table-unlabelled"])
+
+    def test_a_table_in_a_code_fence_is_ignored(self):
+        self.assertEqual(self.ids(self.scene(
+            rest="```\n" + self.TABLE + "```\n")), [])
+
+    def test_a_mistyped_if_label_is_reported_once_not_twice(self):
+        found = self.found(self.scene(rest="**If the players..**\n" + self.TABLE))
+        self.assertEqual(len(rows_for(found, "scene-labels")), 1, found)
+        self.assertEqual(rows_for(found, "if-table-unlabelled"), [])
+
+    def test_the_colon_form_of_the_if_label_is_clean(self):
+        found = self.found(self.scene(rest="**If the players:**\n" + self.TABLE))
+        self.assertEqual(rows_for(found, "scene-labels"), [])
+        self.assertEqual(rows_for(found, "if-table-unlabelled"), [])
+
+    def test_a_table_after_a_quote_is_no_longer_under_the_if_label(self):
+        # the reader ends the If block at the quote, so the second table is lost
+        rest = ("**If the players...**\n" + self.TABLE
+                + "\n> Read this aloud.\n\n" + self.TABLE)
+        self.assertEqual(self.ids(self.scene(rest=rest)),
+                         ["if-table-unlabelled"])
+
+    def test_a_table_after_a_heading_is_no_longer_under_the_if_label(self):
+        rest = ("**If the players...**\n" + self.TABLE
+                + "\n#### Later\n\n" + self.TABLE)
+        self.assertEqual(self.ids(self.scene(rest=rest)),
+                         ["if-table-unlabelled"])
 
 
 if __name__ == "__main__":

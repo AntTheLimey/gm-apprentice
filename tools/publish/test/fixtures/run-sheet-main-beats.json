@@ -1,0 +1,470 @@
+{
+ "plan": {
+  "beats": [
+   {
+    "key": "b-d5e382792a",
+    "title": "The Gate",
+    "contingency": false,
+    "sceneNote": null,
+    "place": "Locations/The Gate.md",
+    "spots": [
+     {
+      "key": "b-d5e382792a.spot.3c5e8a9eb2",
+      "name": "The Gate",
+      "note": "Locations/The Gate.md"
+     }
+    ],
+    "situation": "The gate is shut and the bell rope hangs cut; Brother Ash will not open it until it rings.",
+    "startsIt": "Ash calls down from the wall and asks who rings.",
+    "readAloud": "Read-aloud: A black gate in a white wall, and a rope that ends in air.",
+    "gmNotes": "",
+    "complications": "",
+    "trigger": "",
+    "then": "",
+    "who": [
+     {
+      "key": "b-d5e382792a.who.558de52d09",
+      "note": "Characters/NPCs/Brother Ash.md",
+      "name": "Brother Ash",
+      "knownAs": "",
+      "count": 1,
+      "wants": "wants the bell rung",
+      "playAs": "slow, fond of the word \"indeed\" rubs his thumb along the rope scar"
+     },
+     {
+      "key": "b-d5e382792a.who.2c58b4b83c",
+      "note": "Creatures/Frost Wolf.md",
+      "name": "Frost Wolf",
+      "knownAs": "",
+      "count": 3,
+      "wants": "hunting",
+      "playAs": "Hunts in packs and flees when the alpha falls."
+     },
+     {
+      "key": "b-d5e382792a.who.cf1a96a6e2",
+      "note": "Characters/NPCs/Lucan Grey.md",
+      "name": "Lucan Grey",
+      "knownAs": "Lucan",
+      "count": 1,
+      "wants": "helps",
+      "playAs": "quick and dry counts exits"
+     }
+    ],
+    "points": [
+     {
+      "key": "b-d5e382792a.pt.61071fc450",
+      "text": "the tracks",
+      "box": true
+     },
+     {
+      "key": "b-d5e382792a.pt.3e20eade2d",
+      "text": "the bell",
+      "box": false
+     },
+     {
+      "key": "b-d5e382792a.pt.3e20eade2d~2",
+      "text": "the bell",
+      "box": false
+     }
+    ],
+    "ifs": [
+     {
+      "key": "b-d5e382792a.if.61071fc450",
+      "do": "the tracks",
+      "then": "the wolves close in"
+     },
+     {
+      "key": "b-d5e382792a.if.a5a56086ae",
+      "do": "Nobody engages by midnight",
+      "then": "Ash rings it himself"
+     }
+    ],
+    "treasure": [
+     {
+      "key": "b-d5e382792a.loot.a3547dd037",
+      "text": "A silver bell clapper",
+      "box": false
+     },
+     {
+      "key": "b-d5e382792a.loot.9cb2ff1137",
+      "text": "Forty coins in the wall niche",
+      "box": false
+     }
+    ],
+    "handouts": [
+     "Chapters/Chapter 1/Props/Ash's Note.md"
+    ],
+    "entities": [
+     "Characters/NPCs/Brother Ash.md",
+     "Locations/The Gate.md",
+     "Creatures/Frost Wolf.md"
+    ],
+    "foes": [],
+    "extra": "**Weather:** sleet, going to snow\n\nThe wolves are close enough to hear."
+   },
+   {
+    "key": "b-5b66cfef25",
+    "title": "The Bell Tower",
+    "contingency": false,
+    "sceneNote": "Chapters/Chapter 1/Scenes/The Bell Tower.md",
+    "place": "Locations/The Bell Tower Room.md",
+    "spots": [
+     {
+      "key": "b-5b66cfef25.spot.e7212077c2",
+      "name": "The Bell Tower Room",
+      "note": "Locations/The Bell Tower Room.md"
+     }
+    ],
+    "situation": "Sister Fen stands at the foot of the tower and will not climb.",
+    "startsIt": "the note's start\n\ntonight's start",
+    "readAloud": "",
+    "gmNotes": "Fen cut the rope herself.",
+    "complications": "",
+    "trigger": "",
+    "then": "",
+    "who": [
+     {
+      "key": "b-5b66cfef25.who.b7ebef9634",
+      "note": "Characters/NPCs/Sister Fen.md",
+      "name": "Sister Fen",
+      "knownAs": "",
+      "count": 1,
+      "wants": "",
+      "playAs": ""
+     }
+    ],
+    "points": [],
+    "ifs": [],
+    "treasure": [],
+    "handouts": [],
+    "entities": [
+     "Locations/The Bell Tower Room.md",
+     "Chapters/Chapter 1/Scenes/The Bell Tower.md",
+     "Characters/NPCs/Brother Ash.md"
+    ],
+    "foes": [],
+    "extra": "## Paused\n\nThe party left mid-climb.\nFen is still waiting at the foot.\n\n**Who:** [[Sister Fen]], [[Ada Moss]] and the bell-ringer"
+   },
+   {
+    "key": "b-038c340fe7",
+    "title": "Dawn (hub)",
+    "contingency": false,
+    "sceneNote": null,
+    "place": null,
+    "spots": [
+     {
+      "key": "b-038c340fe7.spot.56c8eab37e",
+      "name": "The Gate House",
+      "note": "Locations/The Gate House.md"
+     },
+     {
+      "key": "b-038c340fe7.spot.b9ea1ab8a9",
+      "name": "The Chapel Yard",
+      "note": "Locations/The Chapel Yard.md"
+     },
+     {
+      "key": "b-038c340fe7.spot.0b8308ac2c",
+      "name": "The orchard",
+      "note": null
+     }
+    ],
+    "situation": "",
+    "startsIt": "",
+    "readAloud": "",
+    "gmNotes": "",
+    "complications": "",
+    "trigger": "",
+    "then": "",
+    "who": [
+     {
+      "key": "b-038c340fe7.who.cf1a96a6e2",
+      "note": "Characters/NPCs/Lucan Grey.md",
+      "name": "Lucan Grey",
+      "knownAs": "",
+      "count": 1,
+      "wants": "waiting with the map.",
+      "playAs": "quick and dry counts exits"
+     },
+     {
+      "key": "b-038c340fe7.who.b7ebef9634",
+      "note": "Characters/NPCs/Sister Fen.md",
+      "name": "Sister Fen",
+      "knownAs": "",
+      "count": 1,
+      "wants": "tends the lamps.",
+      "playAs": ""
+     }
+    ],
+    "points": [],
+    "ifs": [],
+    "treasure": [],
+    "handouts": [],
+    "entities": [],
+    "foes": [],
+    "extra": "**[[The Gate House]]**: the party can warm up here.\n**[[The Chapel Yard]]**: graves under the snow.\n**The orchard**: bare trees and a ladder.\n- Nobody is there."
+   },
+   {
+    "key": "b-d5e382792a~2",
+    "title": "The Gate",
+    "contingency": false,
+    "sceneNote": null,
+    "place": "Locations/The Gate.md",
+    "spots": [
+     {
+      "key": "b-d5e382792a~2.spot.3c5e8a9eb2",
+      "name": "The Gate",
+      "note": "Locations/The Gate.md"
+     }
+    ],
+    "situation": "The same gate, the next evening.",
+    "startsIt": "The bell has rung and the wolves are quiet.",
+    "readAloud": "",
+    "gmNotes": "",
+    "complications": "",
+    "trigger": "",
+    "then": "",
+    "who": [],
+    "points": [],
+    "ifs": [],
+    "treasure": [],
+    "handouts": [],
+    "entities": [
+     "Locations/The Gate.md"
+    ],
+    "foes": [],
+    "extra": "**Entities:** [[The Gate]], [[Missing Person]]"
+   },
+   {
+    "key": "b-50c3b36050",
+    "title": "On the Road (routing)",
+    "contingency": false,
+    "sceneNote": null,
+    "place": null,
+    "spots": [],
+    "situation": "",
+    "startsIt": "",
+    "readAloud": "",
+    "gmNotes": "",
+    "complications": "",
+    "trigger": "",
+    "then": "",
+    "who": [],
+    "points": [],
+    "ifs": [],
+    "treasure": [],
+    "handouts": [],
+    "entities": [],
+    "foes": [],
+    "extra": "Wherever the party goes next."
+   },
+   {
+    "key": "c-94278469d6",
+    "title": "The Wolves Return",
+    "contingency": true,
+    "sceneNote": null,
+    "place": null,
+    "spots": [],
+    "situation": "",
+    "startsIt": "",
+    "readAloud": "",
+    "gmNotes": "",
+    "complications": "",
+    "trigger": "The bell rings twice.",
+    "then": "- The pack comes down from the ridge.",
+    "who": [
+     {
+      "key": "c-94278469d6.who.2c58b4b83c",
+      "note": "Creatures/Frost Wolf.md",
+      "name": "Frost Wolf",
+      "knownAs": "",
+      "count": 2,
+      "wants": "hunting the bell-ringer",
+      "playAs": "Hunts in packs and flees when the alpha falls."
+     },
+     {
+      "key": "c-94278469d6.who.6e3ba61b85",
+      "note": null,
+      "name": "Missing Person",
+      "knownAs": "",
+      "count": 1,
+      "wants": "watching from the trees",
+      "playAs": ""
+     }
+    ],
+    "points": [],
+    "ifs": [],
+    "treasure": [],
+    "handouts": [],
+    "entities": [],
+    "foes": [],
+    "extra": ""
+   }
+  ],
+  "sections": [
+   "Planned Scenes",
+   "Planned Scenes",
+   "Planned Scenes",
+   "Planned Scenes",
+   "Planned Scenes",
+   "Contingency Scenes"
+  ],
+  "claimed": {
+   "Planned Scenes": true,
+   "Contingency Scenes": true
+  },
+  "preamble": {
+   "Planned Scenes": "Checklists for improvisation, not prose to read.",
+   "Contingency Scenes": "Scenes that fire on a player choice or a clock, not by default."
+  },
+  "warnings": [
+   {
+    "kind": "missing-note",
+    "note": null,
+    "text": "[[Missing Person]] matches no note in the vault"
+   },
+   {
+    "kind": "no-npcs-block",
+    "note": null,
+    "text": "The Gate has no **NPCs** block, so the page shows nobody here."
+   }
+  ]
+ },
+ "hub": {
+  "beats": [
+   {
+    "key": "b-36ea908dbb",
+    "title": "The Abbey (hub)",
+    "contingency": false,
+    "sceneNote": null,
+    "place": null,
+    "spots": [
+     {
+      "key": "b-36ea908dbb.spot.9f31e6429e",
+      "name": "The guest wing",
+      "note": null
+     },
+     {
+      "key": "b-36ea908dbb.spot.a139e279b2",
+      "name": "The chapel",
+      "note": null
+     },
+     {
+      "key": "b-36ea908dbb.spot.c1b3bf028e",
+      "name": "The walls",
+      "note": null
+     },
+     {
+      "key": "b-36ea908dbb.spot.b9ea1ab8a9",
+      "name": "The Chapel Yard",
+      "note": "Locations/The Chapel Yard.md"
+     },
+     {
+      "key": "b-36ea908dbb.spot.a1364315ed",
+      "name": "The yard",
+      "note": null
+     }
+    ],
+    "situation": "",
+    "startsIt": "",
+    "readAloud": "",
+    "gmNotes": "",
+    "complications": "",
+    "trigger": "",
+    "then": "",
+    "who": [
+     {
+      "key": "b-36ea908dbb.who.558de52d09",
+      "note": "Characters/NPCs/Brother Ash.md",
+      "name": "Brother Ash",
+      "knownAs": "",
+      "count": 1,
+      "wants": "at the stair",
+      "playAs": "slow, fond of the word \"indeed\" rubs his thumb along the rope scar"
+     },
+     {
+      "key": "b-36ea908dbb.who.cf1a96a6e2",
+      "note": "Characters/NPCs/Lucan Grey.md",
+      "name": "Lucan Grey",
+      "knownAs": "",
+      "count": 1,
+      "wants": "kept the fire.",
+      "playAs": "quick and dry counts exits"
+     },
+     {
+      "key": "b-36ea908dbb.who.b7ebef9634",
+      "note": "Characters/NPCs/Sister Fen.md",
+      "name": "Sister Fen",
+      "knownAs": "",
+      "count": 1,
+      "wants": "caught with a knife.",
+      "playAs": ""
+     },
+     {
+      "key": "b-36ea908dbb.who.2c58b4b83c",
+      "note": "Creatures/Frost Wolf.md",
+      "name": "Frost Wolf",
+      "knownAs": "",
+      "count": 1,
+      "wants": "prowling.",
+      "playAs": "Hunts in packs and flees when the alpha falls."
+     }
+    ],
+    "points": [],
+    "ifs": [],
+    "treasure": [],
+    "handouts": [],
+    "entities": [],
+    "foes": [],
+    "extra": "**Open to the party**\n- **The walls:** the lamp carvings.\n- **The yard:** [[Ada Moss]] keeps watch."
+   },
+   {
+    "key": "b-af3840ebda",
+    "title": "The Inn (hub)",
+    "contingency": false,
+    "sceneNote": null,
+    "place": null,
+    "spots": [
+     {
+      "key": "b-af3840ebda.spot.868a5582a8",
+      "name": "The guest register (Hollis)",
+      "note": null
+     },
+     {
+      "key": "b-af3840ebda.spot.3196a99ab7",
+      "name": "Crane by the fire",
+      "note": null
+     },
+     {
+      "key": "b-af3840ebda.spot.56c8eab37e",
+      "name": "The Gate House at dusk",
+      "note": "Locations/The Gate House.md"
+     }
+    ],
+    "situation": "",
+    "startsIt": "",
+    "readAloud": "",
+    "gmNotes": "",
+    "complications": "",
+    "trigger": "",
+    "then": "",
+    "who": [],
+    "points": [],
+    "ifs": [],
+    "treasure": [],
+    "handouts": [],
+    "entities": [],
+    "foes": [],
+    "extra": "**Open to the party** (scenes 1–8, any order, any number)\n- The guest register (Hollis) — Scene 1\n- Crane by the fire — Scene 4"
+   }
+  ],
+  "sections": [
+   "Planned Scenes",
+   "Planned Scenes"
+  ],
+  "claimed": {
+   "Planned Scenes": true
+  },
+  "preamble": {},
+  "warnings": []
+ }
+}

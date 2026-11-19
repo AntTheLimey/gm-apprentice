@@ -23,6 +23,7 @@ gma vault-check <vault> <command> [<NAME> ...] [options]
 | `--newer-than` | `NEWER_THAN` | restrict tables/relationships/pc-body to files with an mtime at or after this vault-relative file's own mtime — a backstop scope, or a completeness cross-check against an explicit --file list |
 | `--plan` | `PLAN` | npc-stats only: just the NPCs this Session Plan's scenes name (its path, or its note name) |
 | `--played` |  | npc-stats only: just the NPCs a Wrap-Up or a played scene links |
+| `--stock` |  | npc-stats only: list the other NPCs and creatures whose block only names a stock creature (the notes gma stat-fill fills) instead |
 | `--json` |  | settings only: print the rows as JSON |
 | `--dry-run` |  | report-stats only: print each count's old and new value and write nothing |
 | `--force` |  | report-stats only: allow a count to drop below a non-zero one already in the report |

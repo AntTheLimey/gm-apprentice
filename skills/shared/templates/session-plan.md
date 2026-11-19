@@ -12,8 +12,19 @@ tags: []
      [bracket]. Keep every "##" section heading, and always keep
      "## GM Notes"; leave a section's body empty if you have nothing for
      it ("N/A" is worse than empty). Inside a scene, delete any label you
-     do not need. Only two scene labels are required: **Situation:** and
-     **Starts it:**; the rest are tools, used where they earn their place.
+     do not need. Two scene labels are required: **Situation:** and
+     **Starts it:**. Two more are expected, because the run sheet is
+     built from them: **Place:** on every scene (a link, or plain words
+     when no location note fits) and an **NPCs** block on any scene with
+     people in it. The rest are tools, used where they earn their place.
+     One-line labels (Situation, Place, Starts it, Entities, Handouts)
+     are **X:** or - **X:**. Block labels (NPCs, Where they can go,
+     Points to land, If the players..., Treasure, Complications) are
+     **X** or **X:** at the left margin, never bulleted: the sheet does
+     not read a bulleted block. Never put a parenthesis inside the bold
+     (**NPCs**, not **NPCs (who is here)**). **Place:** is one link,
+     which may be followed by words ([[Location]], the yard), or plain
+     words when no location note fits.
      Write for a Keeper who has forgotten the prep conversation: name the
      document, the person and the reason in the line that uses them.
      Keep Previously On + Active Threads + NPC Quick Reference + World
@@ -78,9 +89,11 @@ clocks. Bullets, two lines each.]
 Checklists for improvisation, not prose to read. Every line is a bullet,
 a table row or a one-line label; the only prose is the read-aloud quote.
 
+<!-- scene-skeleton -->
 ### Scene 1: [Title]
 **Situation:** *(required)* One line. What is happening when the scene
 opens — a thing in motion, not a theme.
+**Place:** [[Location]]
 **Starts it:** *(required)* One line. The named NPC or household schedule
 that brings the PCs here in the first sixty seconds, and what they want
 from *this* PC.
@@ -95,16 +108,28 @@ from *this* PC.
 |---|---|
 | A choice the table may make | What the situation does in reply |
 | Nobody engages by [time] | What the NPCs do on their own |
+**Treasure**
+- An item the scene holds, one per bullet.
 **Complications**
 - A curveball to drop when the scene sags.
 
 > Read-aloud: 2–4 sentences of objective sensory description addressed to
 > the table. Never names one PC or dictates a feeling.
+<!-- /scene-skeleton -->
 
-<!-- Add Scene 2, Scene 3 ... with the same structure. A routing or hub
-     scene (a menu of where the party is and what is available, not a
-     scene) needs neither required label. Mark it with "(routing)" or
-     "(hub)" in its title, or call it `Scene 0`. -->
+<!-- Add Scene 2, Scene 3 ... with the same structure. A hub is any scene
+     holding a **Where they can go** block: a menu of where the party can
+     stand and what leads on, not a scene. It needs no Situation, Starts
+     it, Place or NPCs, and "(hub)" in its title is optional. -->
+
+<!-- hub-skeleton -->
+### Scene 0: [Title] (hub)
+**Where they can go**
+- **[[Location]]:** what is there, who is there ([[NPC]]), what changes when they arrive.
+- **Plain name:** the same, when no location note fits.
+- [what draws them there] — Scene 3
+- [[Scene note]] — a lead to a scene that has its own Place.
+<!-- /hub-skeleton -->
 
 ### [[Scene Note Title]]
 **Purpose:** A scene already written as a scene note: one line on why.

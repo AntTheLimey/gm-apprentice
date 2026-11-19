@@ -85,22 +85,67 @@ Sir Nathaniel, Ashworth's chit to Adrien, and Harriet's note to Meg
 arrive at breakfast". The GM teases the players; the plan never
 teases the GM.
 
-Only **Situation:** and **Starts it:** are required. Use the other
-labels where they earn their place and leave the rest out; never write
-"N/A" to fill one. A routing or hub scene (a menu of where the party is
-and what is available) owes neither required label: mark it with
-"(routing)" or "(hub)" in its title, `Scene 0`, or
-`**Type:** transition`.
+Required: **Situation:** and **Starts it:**. Expected, because the run
+sheet is built from them: **Place:** on every scene (a link, or plain
+words when no location note fits) and an **NPCs** block on any scene
+with people in it. Use the other labels where they earn their place
+and leave the rest out; never write "N/A" to fill one. A hub is any
+scene holding a **Where they can go** block (a menu of where the party
+can stand): it owes none of the four.
 
-### Scene 1: The Harbour Office
-**Type:** investigation
+The first two scenes below are the template's skeletons, written out
+once; `tests/test_plan_check.py` holds them equal to the template's.
+
+<!-- scene-skeleton -->
+### Scene 1: [Title]
+**Situation:** *(required)* One line. What is happening when the scene
+opens — a thing in motion, not a theme.
+**Place:** [[Location]]
+**Starts it:** *(required)* One line. The named NPC or household schedule
+that brings the PCs here in the first sixty seconds, and what they want
+from *this* PC.
+**Entities:** [[NPC]], [[Location]], [[Item]]
+**Handouts:** [[Document]] — what this scene hands over, and how
+**NPCs**
+- **[[Name]]:** wants X. Does Y if left alone.
+**Points to land**
+- [ ] A fact you must convey however the improv goes.
+**If the players...**
+| Do | Then |
+|---|---|
+| A choice the table may make | What the situation does in reply |
+| Nobody engages by [time] | What the NPCs do on their own |
+**Treasure**
+- An item the scene holds, one per bullet.
+**Complications**
+- A curveball to drop when the scene sags.
+
+> Read-aloud: 2–4 sentences of objective sensory description addressed to
+> the table. Never names one PC or dictates a feeling.
+<!-- /scene-skeleton -->
+
+<!-- hub-skeleton -->
+### Scene 0: [Title] (hub)
+**Where they can go**
+- **[[Location]]:** what is there, who is there ([[NPC]]), what changes when they arrive.
+- **Plain name:** the same, when no location note fits.
+- [what draws them there] — Scene 3
+- [[Scene note]] — a lead to a scene that has its own Place.
+<!-- /hub-skeleton -->
+
+### Scene 2: The Harbour Office
 **Situation:** The harbourmaster is burning ledgers before the tide.
+**Place:** The harbour office, up the stairs from the quay.
 **Starts it:** Mrs Orme waves the party in and asks them to hold the door.
+**NPCs**
+- **Mrs Orme:** wants the ledgers burnt before the tide.
 
-### Scene 2: The Quiet Supper
-**Type:** social
-**Situation:** The Vicar hosts a supper where nobody mentions the missing boat.
+### Scene 3: The Quiet Supper
+- **Situation:** The Vicar hosts a supper where nobody mentions the missing boat.
+- **Place:** [[The Vicarage]]
 **Starts it:** The Vicar's housekeeper seats the party beside Harriet.
+**NPCs**
+- **[[The Vicar]]:** wants the boat not mentioned.
 
 ## Contingency Scenes
 

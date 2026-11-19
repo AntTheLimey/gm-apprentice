@@ -37,7 +37,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Any, Callable, Iterable
+from typing import Any, Callable, Iterable, NamedTuple
 
 import session_context as sc
 from migrate_vault import vault_system
@@ -128,13 +128,45 @@ def _blank_table(text: str, scores_only: bool = False) -> bool:
     return False
 
 
-def _stock(text: str) -> str | None:
-    """The stock creature `text` names in place of a block, else None."""
+class Stock(NamedTuple):
+    """A stock creature a line names in place of a block."""
+    line: str    # the line, shortened, as a row quotes it
+    name: str    # the creature it names (`Priest`)
+    words: str   # what else the line says (`with a mace`), or ""
+
+
+_EDGE_LEAD_RE = re.compile(r"^[\s,;:.)(*_—–-]+")
+_SRD_MARK_RE = re.compile(r"\((?:SRD|stock|stat block)\)", re.I)
+_EDGE_TAIL_RE = re.compile(r"[\s,;:(*_—–-]+$")
+# The label a stock line may open with: `**Stat block:**`, `Stats —`.
+_LABEL_RE = re.compile(
+    r"^(?:[-*+]\s+)?(?:\*\*|__|\*|_)?(?:stat ?blocks?|stats?|statistics)\s*"
+    r"(?:\*\*|__|\*|_)?\s*[:—–-]\s*(?:\*\*|__|\*|_)?\s*", re.I)
+_BULLET_RE = re.compile(r"^[-*+]\s+")
+
+
+def _unlabelled(raw: str) -> str:
+    """The line without its list mark and a leading `**Stat block:**`."""
+    return _LABEL_RE.sub("", _BULLET_RE.sub("", raw, count=1), count=1).strip()
+
+
+def _stock(text: str) -> Stock | None:
+    """The stock creature `text` names in place of a block, else None.
+    `words` is the GM's line whole (minus a leading label), or "" when the
+    line holds nothing but the creature's name and the `(SRD)` mark."""
     for line in text.splitlines():
+        raw = line.strip()
         for rx in STOCK_RES:
-            m = rx.search(line.strip())
+            m = rx.search(raw)
             if m:
-                return _short(line.strip(" -*"))
+                rest = _SRD_MARK_RE.sub(
+                    "", raw[:m.start()] + " " + raw[m.end():])
+                rest = _LABEL_RE.sub("", _BULLET_RE.sub("", rest.strip(), 1), 1)
+                rest = _EDGE_TAIL_RE.sub("", _EDGE_LEAD_RE.sub("", rest))
+                whole = _unlabelled(raw)
+                return Stock(_short(whole.strip(" -*")), m.group("n"),
+                             " ".join(whole.split()) if re.search(r"\w", rest)
+                             else "")
     return None
 
 
@@ -162,7 +194,7 @@ def _said(lines: list[str]) -> tuple[str, str] | None:
     on a line with none, words putting the block off."""
     stock = _stock("\n".join(lines))
     if stock is not None:
-        return "stock", f"names a stock block (\"{stock}\")"
+        return "stock", f"names a stock block (\"{stock.line}\")"
     defer = next((ln for ln in lines if DEFER_RE.search(ln)), None)
     if defer is not None:
         return "placeholder", f"says it comes later (\"{_short(defer)}\")"
@@ -478,3 +510,49 @@ def check_npc_stats(vault: Path, plan: str | None = None,
         rows.append((not major, rel,
                      f"{why.upper()}\t{rel}\t{who}: {what} — {need}"))
     return [r for _m, _rel, r in sorted(rows)], None
+
+
+def note_stock(text: str) -> Stock | None:
+    """The stock creature a note's stat block names, read as `classify`
+    reads it: the lines under its stat heading, else its lines about stat
+    blocks (in a block of more than three lines, those and the lines that
+    are a stock name on their own)."""
+    body = body_of(text)
+    found = _stat_sections(body)
+    if not found:
+        plain = COMMENT_RE.sub("", body)
+        return _stock("\n".join(
+            ln for ln in plain.splitlines() if STAT_WORD_RE.search(ln)))
+    for block in found:
+        lines = [ln for ln in block.splitlines() if ln.strip()]
+        if len(lines) > 3:
+            lines = [ln for ln in lines
+                     if STAT_WORD_RE.search(ln) or _standalone(ln)]
+        stock = _stock("\n".join(lines))
+        if stock is not None:
+            return stock
+    return None
+
+
+def stock_rows(vault: Path) -> list[str]:
+    """`STOCK<TAB>path<TAB>other: <creature>` for each NPC that is not major
+    and each creature note whose block only names a stock creature: the
+    notes `gma stat-fill` can fill. The dead are left out."""
+    notes = Notes(vault)
+    system = vault_system(vault)
+    major = ({rel for rel, _t, fm in notes.npcs
+              if _is_true(fm.get("companion"))} | key_npcs(notes))
+    npcs = {rel for rel, _t, _fm in notes.npcs}
+    rows = []
+    for rel, text, fm in notes.all:
+        kind = entity_type(fm)
+        if rel in major or not (rel in npcs or kind == "creature") \
+                or is_dead(text, fm):
+            continue
+        verdict = classify(text, system, notes.exists)
+        if verdict is None or verdict[0] != "stock":
+            continue
+        found = note_stock(text)
+        rows.append(f"STOCK\t{rel}\tother: "
+                    f"{found.name if found else verdict[1]}")
+    return sorted(rows)

@@ -64,6 +64,8 @@ const BULLET = /^(?:[-*+]|\d+[.)])\s+/;
 const isQuote = (l) => /^\s*>/.test(l);
 const isTableRow = (l) => /^\s*\|/.test(l);
 const nameKey = (s) => String(s == null ? '' : s).trim().toLowerCase();
+// A block head's name: `If the players...`, `If the players…` and `If the players` are one block.
+const blockKey = (s) => nameKey(s).replace(/(?:\.{3}|…)$/, '');
 // A heading line: group 1 the #s, group 2 the title. A closing run of #s counts only after a space
 // (`## C#` is titled `C#`); notes.js reads note headings with the same rule.
 const HEADING_LINE = /^(#{1,6})[ \t]+(.*?)(?:[ \t]+#+)?[ \t]*$/;
@@ -152,18 +154,26 @@ function endsBlock(line) {
 // the lines after the head up to the next line `endsBlock` stops at. Blank lines inside are kept;
 // `value` is trimmed. `start` is the head line, `end` the last non-blank body line, `sub` the body
 // lines (`start + 1` to `end`) as written, for a helper whose line indexes are then offset by `start + 1`.
+// A bulleted `- **Name:**` straight under a block head is the block's first item unless it names a label
+// the scene reads itself (`- **Place:** …`).
+const FIELD_NAMES = new Set(['situation', 'place', 'starts it', 'entities', 'handouts', 'who', 'type', 'trigger', 'then', 'npcs', 'where they can go', 'open to the party', 'points to land', 'if the players', 'treasure', 'complications']);
+const firstItem = (l) => { const m = /^[-*+]\s/.test(l) && l.match(LABEL); return Boolean(m) && !FIELD_NAMES.has(blockKey(m[1])); };
+
 function blocks(text, name) {
-  const key = nameKey(name);
+  const key = blockKey(name);
   const lines = linesOf(text);
   const fenced = fenceMask(lines);
   const out = [];
   for (let at = 0; at < lines.length; at++) {
     const h = fenced[at] ? null : lines[at].match(BLOCK_HEAD);
-    if (!h || nameKey(h[1]) !== key) continue;
+    if (!h || blockKey(h[1]) !== key) continue;
     let end = at;
     // a bulleted `- **Lead:** words` that continues the list (no blank line before it) is an item
-    // of the block; after a blank line it is the next field
-    const ends = (l, i) => fenced[i] || endsBlock(l) && !(i > at + 1 && !isBlank(lines[i - 1]) && /^[-*+]\s/.test(l) && LABEL.test(l) && !BLOCK_HEAD.test(l));
+    // of the block, unless it names a field the scene reads itself; after a blank line it is the
+    // next field. The first item is read whether or not blank lines come between it and the head.
+    let first = at + 1;
+    while (first < lines.length && isBlank(lines[first])) first++;
+    const ends = (l, i) => fenced[i] || endsBlock(l) && !(firstItem(l) && (i <= first || !isBlank(lines[i - 1])) && !BLOCK_HEAD.test(l));
     for (let i = at + 1; i < lines.length && !ends(lines[i], i); i++) if (!isBlank(lines[i])) end = i;
     const sub = lines.slice(at + 1, end + 1).join('\n');
     out.push({ value: sub.trim(), start: at, end, sub });
@@ -295,4 +305,4 @@ function unclaimed(text, claimed) {
   return linesOf(text).filter((_, i) => !taken.has(i)).join('\n').replace(/^(?:[ \t]*\n)+/, '').replace(/(?:\n[ \t]*)+$/, '').trim();
 }
 
-module.exports = { LABEL, fenceMask, HEADING_LINE, isBlank, nameKey, isSeparatorRow, cleanText, sections, labels, label, endsBlock, blocks, block, tableRows, tableRanges, bullets, links, readAloud, readAloudRanges, unclaimed };
+module.exports = { FIELD_NAMES, LABEL, fenceMask, HEADING_LINE, isBlank, nameKey, blockKey, isSeparatorRow, cleanText, sections, labels, label, endsBlock, blocks, block, tableRows, tableRanges, bullets, links, readAloud, readAloudRanges, unclaimed };

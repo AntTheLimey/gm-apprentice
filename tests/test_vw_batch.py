@@ -533,6 +533,16 @@ class BatchTests(unittest.TestCase):
                              "**Starts it:** The well bell.\n\n" + SCENE_GM)
             self.assertEqual(got.count("**Situation:**"), 1)
 
+    def test_scene_lead_replace_names_the_blocks_it_drops(self):
+        vault = self.paused_vault()
+        code, out = batch(vault, PAUSED_REPLACE)
+        self.assertEqual(code, 0, out)
+        self.assertIn("DROPPED\tThe Second Night\t**NPCs**", out)
+        self.assertIn("DROPPED\tThe Second Night\t**If the players...**", out)
+        self.assertRegex(out, r"warnings: 2")
+        code, out = batch(vault, PAUSED_REPLACE, "--write")
+        self.assertIn("DROPPED\tThe Second Night\t**NPCs**", out)
+
     def test_paused_lead_append_lands_at_the_end_of_the_real_lead(self):
         vault = self.paused_vault()
         code, out = batch(vault, f'=== section "{SCENE_REL}" --lead --append\n'
