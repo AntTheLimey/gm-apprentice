@@ -56,7 +56,7 @@ describe('leak gate: secret names', () => {
     it(`a ${field} name also written in aliases is on no page, and the gate finds it when a page prints it (#796)`, () => {
       const notes = {
         'NPCs/Pedlar.md': `---\ntype: npc\naliases: ["The Pedlar", "Captain Rook"]\n${line}\n---\nSells ribbons.\n`,
-        'NPCs/Gossip.md': '---\ntype: npc\n---\nShe buys from [[Captain Rook]] and [[The Pedlar]].\n',
+        'NPCs/Gossip.md': '---\ntype: npc\n---\nShe buys from [[The Pedlar]].\n',
       };
       const s = leakSite(notes, SETTINGS);
       try {
@@ -64,7 +64,6 @@ describe('leak gate: secret names', () => {
         const holding = s.player.files().filter((f) => /rook/i.test(fs.readFileSync(f, 'utf8')));
         assert.deepEqual(holding.map((f) => path.relative(s.outputDir, f)), [], 'no built file holds the true name');
         assert.ok(s.player.exists('search-index.json') && s.player.exists('previews.json'), 'the index and previews were built');
-        assert.match(s.player.read('npcs', 'gossip.html'), /She buys from <a [^>]*>Pedlar<\/a>/);
         assert.deepEqual(runLeakGate({ configPath: s.configPath, outputDir: s.outputDir }).findings, []);
         leakInto(s.outputDir, 'npcs/gossip.html', 'the pedlar is Captain Rook');
         const f = runLeakGate({ configPath: s.configPath, outputDir: s.outputDir }).findings.filter((x) => x.code === 'ALIAS_IN_PROSE');
@@ -72,6 +71,41 @@ describe('leak gate: secret names', () => {
       } finally { s.cleanup(); }
     });
   }
+  // A link to a true name prints it as plain text: printing the disguise's name would tell players the two are one
+  // (Ant, 2026-11-19; #802 redesigns it). The page is then a finding. A gm_aliases name still prints the owner (#212).
+  for (const line of ['unmasked_name: "Captain Rook"', 'unmasked_name: [[Captain Rook|the captain]]']) {
+    for (const inAliases of [true, false]) {
+      it(`a link to a true name prints as plain text and the gate stops it (${line}${inAliases ? ', also in aliases' : ''})`, () => {
+        const notes = {
+          'NPCs/Pedlar.md': `---\ntype: npc\naliases: ["The Pedlar"${inAliases ? ', "Captain Rook"' : ''}]\n${line}\n---\nSells ribbons.\n`,
+          'NPCs/Gossip.md': '---\ntype: npc\n---\nShe buys from [[Captain Rook]], says [[Captain Rook|the old salt]].\n',
+        };
+        const s = leakSite(notes, SETTINGS);
+        try {
+          const page = s.player.read('npcs', 'gossip.html');
+          assert.match(page, /She buys from Captain Rook, says the old salt\./);
+          assert.doesNotMatch(page, /<a [^>]*>(?:Captain Rook|Pedlar|the old salt)<\/a>/);
+          const previews = s.player.read('previews.json');
+          assert.match(previews, /Captain Rook/);
+          assert.doesNotMatch(previews, /Pedlar[^"]*sank|buys from Pedlar/);
+          const f = runLeakGate({ configPath: s.configPath, outputDir: s.outputDir }).findings.filter((x) => x.code === 'ALIAS_IN_PROSE');
+          assert.ok(f.some((x) => x.page === 'npcs/gossip.html' && x.note === 'NPCs/Pedlar.md'), JSON.stringify(f));
+        } finally { s.cleanup(); }
+      });
+    }
+  }
+  it('a link to a gm_aliases name also in aliases still prints the owner\'s public name (#212)', () => {
+    const notes = {
+      'NPCs/Pedlar.md': '---\ntype: npc\naliases: ["The Pedlar", "Captain Rook"]\ngm_aliases: ["Captain Rook"]\n---\nSells ribbons.\n',
+      'NPCs/Gossip.md': '---\ntype: npc\n---\nShe buys from [[Captain Rook]].\n',
+    };
+    const s = leakSite(notes, SETTINGS);
+    try {
+      assert.match(s.player.read('npcs', 'gossip.html'), /She buys from <a [^>]*>Pedlar<\/a>/);
+      assert.deepEqual(s.player.files().filter((f) => /rook/i.test(fs.readFileSync(f, 'utf8'))), []);
+      assert.deepEqual(runLeakGate({ configPath: s.configPath, outputDir: s.outputDir }).findings, []);
+    } finally { s.cleanup(); }
+  });
   // A name with an apostrophe: straight or curly, in a secret field alone or also in aliases, printed either way.
   for (const [quote, field, inAliases] of [["'", 'unmasked_name', true], ["'", 'gm_aliases', true], ['’', 'unmasked_name', false],
     ['’', 'gm_aliases', false], ['’', 'unmasked_name', true], ['’', 'gm_aliases', true]]) {

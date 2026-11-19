@@ -2539,25 +2539,29 @@ function gmAliasRewriter(pages, published, rawNotes, words, mark) {
   // even when `owners` itself no longer has the key (e.g. it collided with
   // some other page's public name and was deleted below).
   const secretKeys = new Set();
+  // A disguised NPC's true name (unmasked_name), by any note: a link to it prints as plain text (its label, or the
+  // name as written) on the player site, never as a link and never as the disguise's name, which would tell players
+  // the two are one. The page is then a leak finding, as plain prose is (Ant, 2026-11-19; #802 redesigns this).
+  const unmaskedKeys = new Set();
   for (const page of pages) {
-    const fm = page.frontmatter || {};
-    // A true name (unmasked_name) resolves no link, unless the note also lists it under `aliases`: then a link
-    // to it reaches the page, and is printed with the page's public name as a gm_aliases name is (#796).
-    const own = new Set(nameList(fm.aliases).map(gmAliasKey));
-    for (const key of [...gmAliasList(fm).map(gmAliasKey), ...unmaskedNames(fm).map(gmAliasKey).filter((k) => own.has(k))]) {
+    for (const key of gmAliasList(page.frontmatter || {}).map(gmAliasKey)) {
       secretKeys.add(key);
       if (!owners.has(key)) owners.set(key, page);
     }
+    for (const key of unmaskedNames(page.frontmatter || {}).map(gmAliasKey)) unmaskedKeys.add(key);
   }
   // Only a published page can claim a name: its title is on the site anyway.
   // An unpublished note named after the secret (a GM's `Elias Crowe.md`)
   // would leave the name showing as plain text, so it never claims it.
   for (const page of published || pages) {
     const fm = page.frontmatter || {};
-    const secret = new Set(noteSecretNames(fm).map(gmAliasKey));
+    const secret = new Set(gmAliasList(fm).map(gmAliasKey));
+    const ownSecret = new Set(noteSecretNames(fm).map(gmAliasKey));
     owners.delete(gmAliasKey(page.title));
+    unmaskedKeys.delete(gmAliasKey(page.title));
     for (const a of Array.isArray(fm.aliases) ? fm.aliases : []) {
       if (!secret.has(gmAliasKey(a))) owners.delete(gmAliasKey(a));
+      if (!ownSecret.has(gmAliasKey(a))) unmaskedKeys.delete(gmAliasKey(a));
     }
   }
   // Withheld notes (#291): every name an unlabelled link may reach one by, minus any name a
@@ -2590,11 +2594,11 @@ function gmAliasRewriter(pages, published, rawNotes, words, mark) {
       const fm = page.frontmatter || {};
       withheldKeys.delete(gmAliasKey(page.title));
       // Not an alias that is also the page's own gm_aliases name: that one is no public name (publishedFrontmatter drops it).
-      const secret = new Set(noteSecretNames(fm).map(gmAliasKey));
+      const secret = new Set(gmAliasList(fm).map(gmAliasKey));
       for (const a of Array.isArray(fm.aliases) ? fm.aliases : []) if (!secret.has(gmAliasKey(a))) withheldKeys.delete(gmAliasKey(a));
     }
   }
-  if (owners.size === 0 && secretKeys.size === 0 && withheldKeys.size === 0) return null;
+  if (owners.size === 0 && secretKeys.size === 0 && withheldKeys.size === 0 && unmaskedKeys.size === 0) return null;
   // The page a gm_aliases name belongs to, unless the name is a withheld note's own file name.
   const ownerOf = (name) => {
     const key = gmAliasKey(String(name).split('/').pop());
@@ -2623,6 +2627,8 @@ function gmAliasRewriter(pages, published, rawNotes, words, mark) {
       // The owner is looked up by the name alone (no `.md`, `#heading` or `^block`); the anchor
       // stays on the link.
       const target = w.name;
+      // A true name on the player site: plain text, no link (see unmaskedKeys).
+      if (!mark && unmaskedKeys.has(gmAliasKey(String(target).split('/').pop()))) return w.display || String(target).split('/').pop();
       const anchor = w.raw.slice(w.target.length);
       const bar = w.escapedPipe ? '\\|' : '|';
       const label = w.display ? bar + w.display : '';

@@ -348,8 +348,9 @@ function secretNamesOf(input) {
 
   const publicNames = new Set(Object.keys(input.linkMap).map(fold));
   // A secret name a note also lists under its own `aliases` (so a link to it resolves in Obsidian) is in the link
-  // map, but it is no public name: the site takes it out of `aliases` (publishedFrontmatter) and prints the page's
-  // public name for a link to it, so it is searched like any secret (#796). Only a name a published page really
+  // map, but it is no public name: the site takes it out of `aliases` (publishedFrontmatter), and a link to it prints
+  // the owner's public name (gm_aliases) or the name as plain text (unmasked_name, then a finding), so it is searched
+  // like any secret (#796). Only a name a published page really
   // answers to (its file name, its path, an alias that is not its own secret) is public.
   const ownSecretAliases = new Set();
   const answered = new Set();

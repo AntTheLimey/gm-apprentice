@@ -20,7 +20,7 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ### Fixed
 
-- A secret name (`gm_aliases` or `unmasked_name`) also written in the note's `aliases` is now kept off the player site and still searched by the leak check; a secret name that is really a published page's own name is told in the build log (#796).
+- A secret name (`gm_aliases` or `unmasked_name`) also written in the note's `aliases` is now kept off the player site and still searched by the leak check; a secret name that is really a published page's own name is told in the build log (#796). A link to a disguised NPC's true name prints as plain text on the player site, never as the disguise's name, and the leak check stops the deploy until it is reworded.
 
 ## [1.12.100] — 2026-11-19
 
