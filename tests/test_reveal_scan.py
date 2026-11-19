@@ -233,6 +233,13 @@ class RevealScan(unittest.TestCase):
                        publishing=["NPCs/Pedlar.md"])
         self.assertEqual(res.rows[0].hidden, ["unmasked_name: Rook", "unmasked_portrait: rook.png"])
 
+    def test_true_name_readers_agree_on_nested_and_suffixed_links(self) -> None:
+        """PR #799 review: a quoted link body in a nested list, and a `.md` link, read as the note's name."""
+        from vaultlib import unmasked_names
+        for value in ([["Captain Rook|the captain"]], [["NPCs/Captain Rook|the captain"]], ["[NPCs/Captain Rook.md]"],
+                      "[[NPCs/Captain Rook.md|x]]", "[[Captain Rook#Past]]", '["Captain Rook"]'):
+            self.assertEqual(unmasked_names(value), ["Captain Rook"], value)
+
     def test_cli_no_such_index_exits_2(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, \
                 mock.patch.object(rv, "ask_publish_tool", tool()):

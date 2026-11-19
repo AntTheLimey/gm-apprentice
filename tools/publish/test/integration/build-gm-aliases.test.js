@@ -6,7 +6,7 @@ const os = require('os');
 const path = require('path');
 const { build } = require('../../lib/build');
 const { writeSiteConfig } = require('../helpers/vault-files');
-const { publishedFrontmatter, hiddenFieldsOf, gmAliasList, gmAliasRewriter } = require('../../lib/processor');
+const { publishedFrontmatter, hiddenFieldsOf, gmAliasList, gmAliasRewriter, unmaskedNames } = require('../../lib/processor');
 
 // #212: a `gm_aliases` entry resolves links to its page but its text never
 // reaches the site: not the search index, not the portrait alt text, not the
@@ -222,6 +222,22 @@ describe('scanAllNotes (#212)', () => {
     try { scanAllNotes(dir); } finally { console.warn = orig; fs.rmSync(dir, { recursive: true, force: true }); }
     assert.ok(warned.some(w => w.includes('Pedlar.md') && w.includes('unmasked_name') && w.includes('NOT looked for')), warned.join('\n'));
     assert.ok(warned.some(w => w.includes('Mara.md') && w.includes('NOT hidden')), warned.join('\n'));
+  });
+});
+
+describe('unmaskedNames: the note a link names (PR #799 review)', () => {
+  it('reads a .md suffix, a heading and a quoted body in a nested list as the note\'s name, as reveal does', () => {
+    for (const v of ['[[NPCs/Captain Rook.md]]', '[[NPCs/Captain Rook.md|x]]', '[[Captain Rook#Past]]', [['Captain Rook|the captain']], [['NPCs/Captain Rook|the captain']]]) {
+      assert.deepStrictEqual(unmaskedNames({ unmasked_name: v }), ['Captain Rook'], JSON.stringify(v));
+      assert.deepStrictEqual(publishedFrontmatter({ aliases: ['The Pedlar', 'Captain Rook'], unmasked_name: v }).aliases, ['The Pedlar'], JSON.stringify(v));
+    }
+  });
+  it('the player-safe sheet path, which rewrites the frontmatter first, still takes the true name out of aliases', () => {
+    const pedlar = { title: 'Pedlar', displayTitle: 'Pedlar', frontmatter: { aliases: ['The Pedlar', 'Captain Rook'], unmasked_name: '[[Captain Rook|the captain]]' } };
+    const rw = gmAliasRewriter([pedlar], undefined, undefined, WORDS);
+    const out = rw.frontmatter(pedlar.frontmatter);
+    assert.strictEqual(out.unmasked_name, '[[Captain Rook|the captain]]', 'the declaration is kept as written');
+    assert.deepStrictEqual(publishedFrontmatter(out).aliases, ['The Pedlar']);
   });
 });
 

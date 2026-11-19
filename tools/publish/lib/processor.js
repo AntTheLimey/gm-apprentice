@@ -2464,7 +2464,9 @@ function gmAliasList(frontmatter) {
 function unmaskedNames(frontmatter) {
   const value = frontmatter && frontmatter.unmasked_name;
   const out = [];
-  const linkName = (inner) => String(inner).split('|')[0].split('#')[0].split('/').pop().trim();
+  // The note a link's body names: no `|label`, `#heading`, folder or `.md` (vaultlib.py `_link_name`).
+  const linkName = (inner) => String(inner).trim().replace(/^["']+|["']+$/g, '').split('|')[0].split('#')[0]
+    .replace(/\\/g, '/').split('/').pop().trim().replace(/\.md$/i, '').trim();
   const take = (v, inLink) => {
     if (Array.isArray(v)) { for (const x of v) take(x, true); return; }
     if (typeof v !== 'string' || !v.trim()) return;
@@ -2715,12 +2717,12 @@ function gmAliasRewriter(pages, published, rawNotes, words, mark) {
   }
   return {
     markdown: text => links(text, true),
-    // `aliases` and `gm_aliases` are the declarations themselves;
-    // publishedFrontmatter removes the secret names from them.
+    // `aliases`, `gm_aliases` and `unmasked_name` are the declarations themselves;
+    // publishedFrontmatter removes the secret names from them (and the last two whole).
     frontmatter(fm) {
       const out = {};
       for (const [k, v] of Object.entries(fm || {})) {
-        if (k === 'aliases' || k === 'gm_aliases') out[k] = v;
+        if (k === 'aliases' || k === 'gm_aliases' || k === 'unmasked_name') out[k] = v;
         else if (k === 'relationships') out[k] = relationships(v);
         else if (GM_ALIAS_NAME_FIELDS.has(k)) out[k] = nameIn(v);
         else out[k] = linksIn(v);
