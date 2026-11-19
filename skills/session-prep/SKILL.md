@@ -325,11 +325,17 @@ implies `--headless`).
 - WARNING rows — fix silently when mechanical (`preamble`, `recap`,
   `audit-trail`, `pc-state`, `scene-type`, `scene-pointer`, the other
   `sections`); raise as a question when they touch content. The run-sheet
-  rows are all fixed in the draft, none left for the GM: `no-place` (write
+  rows are all fixed in the draft, none left for the GM (`no-npcs-block`
+  keeps its one exception, below): `no-place` (write
   the scene's **Place** line: a link, or plain words when no location
   note fits; never a stub note, never a question), `no-npcs-block` (add
-  an **NPCs** block: everyone in the room, never everyone referred to),
-  `hub-no-places`, `hub-place-not-location`, `label-form`,
+  an **NPCs** block: everyone in the room, never everyone referred to;
+  it stands when nobody named is in the room),
+  `hub-no-places`, `hub-plain-bullet` (a GM note in a hub's list: move it
+  below the block, or write it as a bold place), `hub-place-not-location`,
+  `place-not-location` (link a location note, or write the place in plain
+  words), `foe-no-numbers` (step 16: `gma stat-fill` in D&D, a full workup
+  for a key NPC, a Gaps & Actions line elsewhere), `label-form`,
   `if-table-unlabelled`. They check shape only, never story. A
   `checks failed` row: run the commands it names. A `DROPPED` row
   names a labelled block (`**Treasure**`) a rewrite lost: put it back

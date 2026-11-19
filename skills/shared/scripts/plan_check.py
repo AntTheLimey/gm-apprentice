@@ -70,6 +70,10 @@ Checks, by id, level, and the rule they mechanise:
                          `- **Plain name:**`) nor pointer bullets
                          (`- words — Scene N`, `- [[Scene note]] ...`); a
                          bold lead with a colon is always a place
+  hub-plain-bullet
+                WARNING  a hub with at least one place bullet and also a
+                         bullet that is neither a place nor a pointer: the
+                         sheet shows that line as a place
   hub-place-not-location
                 WARNING  a place bullet whose bold lead links a note that
                          is not `type: location` (needs a vault)
@@ -767,7 +771,8 @@ def check_scenes(rel: str, by_norm: dict[str, tuple[int, str, str]]
 # --------------------------------------------------------------------------
 
 RUN_SHEET_CHECKS: tuple[str, ...] = (
-    "no-place", "no-npcs-block", "hub-no-places", "hub-place-not-location",
+    "no-place", "no-npcs-block", "hub-no-places", "hub-plain-bullet",
+    "hub-place-not-location",
     "place-not-location", "label-form", "if-table-unlabelled", "foe-no-numbers")
 
 _SCENE_N_RE = re.compile(r"^\s*scene\s+\d+\s*:\s*", re.I)
@@ -782,7 +787,19 @@ _PLACE_LINK_FIRST_RE = re.compile(
 _ENTITIES_LINE_RE = re.compile(r"^(?:[-*+]\s+)?\*\*Entities:\*\*[ \t]*(.*)$")
 _WHO_LINE_RE = re.compile(r"^(?:[-*+]\s+)?\*\*Who:\*\*[ \t]*\S")
 _NPCS_HEAD_RE = re.compile(r"^\*\*NPCs:?\*\*[ \t]*$")
-_NPC_LINE_RE = re.compile(r"^[-*+]\s+\*\*\[\[[^\]]+\]\]")
+_NPC_LINE_RE = re.compile(
+    r"^[-*+]\s+\*\*(?:\[\[[^\]]+\]\]|[^*\[\]\n(]+?[\s:]*(?:\([^)\n]*\))?[\s:]*\*\*)")
+_FIELD_BULLET_RE = re.compile(r"^[-*+]\s+\*\*([^*\n]+?):?\*\*")
+
+
+def _field_bullet(line: str) -> bool:
+    """A bullet led by a label the scene reads itself (`- **Place:** …`):
+    never a person in an NPCs block."""
+    m = _FIELD_BULLET_RE.match(line)
+    return m is not None and m.group(1).strip().rstrip(".…").casefold() in {
+        *_KNOWN_LABEL_NORMS, "who", "type"}
+
+
 _WHERE_HEAD_RE = re.compile(
     r"^\*\*(?:Where they can go|Open to the party):?\*\*[ \t]*"
     r"(?:\([^)]*\))?[ \t]*$", re.I)
@@ -1016,6 +1033,18 @@ def _hub_findings(locus: str, title: str, lines: list[str],
             "hub-no-places", "WARNING", locus,
             f"hub-no-places: hub '{title}' lists no places and no leads — "
             f"{lack}"))
+    if places:
+        for ln in bullets:
+            if ln in places or is_pointer(ln):
+                continue
+            shown = ln[2:].strip()
+            shown = shown if len(shown) <= 50 else shown[:47] + "..."
+            out.append(Finding(
+                "hub-plain-bullet", "WARNING", locus,
+                f"hub-plain-bullet: hub '{title}' has the plain bullet "
+                f"{shown!r} among its places — the sheet shows this line "
+                f"as a place; move a note for the GM below the block, or "
+                f"write it as a bold place"))
     for ln in places:
         for link in lead_links(ln):
             kinds = index.types(link)
@@ -1161,7 +1190,8 @@ def _run_sheet_scene(rel: str, title: str, body: str, planned: bool,
         head = next((i for i, ln in enumerate(lines)
                      if _NPCS_HEAD_RE.match(ln)), None)
         readable = head is not None and any(
-            _NPC_LINE_RE.match(ln) for ln in _block_after(lines, head))
+            _NPC_LINE_RE.match(ln) and not _field_bullet(ln)
+            for ln in _block_after(lines, head))
         if not readable and not any(_WHO_LINE_RE.match(ln) for ln in lines):
             why = ("has an '**NPCs**' block with no '- **[[Name]]:**' line "
                    "the sheet can read" if head is not None

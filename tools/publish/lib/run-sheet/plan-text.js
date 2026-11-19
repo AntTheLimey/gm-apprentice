@@ -152,6 +152,11 @@ function endsBlock(line) {
 // the lines after the head up to the next line `endsBlock` stops at. Blank lines inside are kept;
 // `value` is trimmed. `start` is the head line, `end` the last non-blank body line, `sub` the body
 // lines (`start + 1` to `end`) as written, for a helper whose line indexes are then offset by `start + 1`.
+// A bulleted `- **Name:**` straight under a block head is the block's first item unless it names a label
+// the scene reads itself (`- **Place:** …`).
+const FIELD_NAMES = new Set(['situation', 'place', 'starts it', 'entities', 'handouts', 'who', 'type', 'trigger', 'then', 'npcs', 'where they can go', 'open to the party', 'points to land', 'if the players...', 'treasure', 'complications']);
+const firstItem = (l) => { const m = /^[-*+]\s/.test(l) && l.match(LABEL); return Boolean(m) && !FIELD_NAMES.has(nameKey(m[1])); };
+
 function blocks(text, name) {
   const key = nameKey(name);
   const lines = linesOf(text);
@@ -163,7 +168,7 @@ function blocks(text, name) {
     let end = at;
     // a bulleted `- **Lead:** words` that continues the list (no blank line before it) is an item
     // of the block; after a blank line it is the next field
-    const ends = (l, i) => fenced[i] || endsBlock(l) && !(i > at + 1 && !isBlank(lines[i - 1]) && /^[-*+]\s/.test(l) && LABEL.test(l) && !BLOCK_HEAD.test(l));
+    const ends = (l, i) => fenced[i] || endsBlock(l) && !((i > at + 1 ? !isBlank(lines[i - 1]) && /^[-*+]\s/.test(l) && LABEL.test(l) : firstItem(l)) && !BLOCK_HEAD.test(l));
     for (let i = at + 1; i < lines.length && !ends(lines[i], i); i++) if (!isBlank(lines[i])) end = i;
     const sub = lines.slice(at + 1, end + 1).join('\n');
     out.push({ value: sub.trim(), start: at, end, sub });

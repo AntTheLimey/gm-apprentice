@@ -42,6 +42,9 @@ const WHERE_HEAD = /^\*\*(?:Where they can go|Open to the party):?\*\*[ \t]*(?:\
 // link whose note is no scene, or is unknown, leads a place. A bold lead with a colon (`**Great hall:** …,
 // Scene 1`) is a place whatever its tail says. plan_check.py holds the same rule.
 const POINTER_BULLET = /^.*(?:[—–-]\s*|,\s*)Scenes?\s+\d+(?:\s*\([^)]*\)|,?\s+\S+(?:\s+\S+){0,2})?[\s.]*$|^.*\(\s*Scenes?\s+\d+\s*\)[\s.]*$/;
+// An NPCs-block bullet led by a bold plain name (`- **The shikarri:** wants a clean drive`): a person
+// with no note. plan_check.py's _NPC_LINE_RE reads the same two forms.
+const PLAIN_NPC_LINE = /^\*\*([^*\[\]\n(]+?)(?:\s*\(([^)]*)\))?:?\*\*:?[ \t]*(?:\(([^)]*)\)[ \t]*:)?\s*([\s\S]*)$/;
 const BARE_LINK_LEAD = /^(!?\[\[[^\]]+\]\])/;
 const BOLD_LEAD = /^\*\*([^*\n]+?)\*\*/;
 const COLON_LEAD = /^\*\*[^*\n]+?(?::\*\*|\*\*:)/;
@@ -107,6 +110,9 @@ function readBeats(planBody, index) {
     if (p === null && String(target || '').trim()) warnMissing(String(target).trim());
     return p;
   };
+  // A note whose `status` is dead (the build's own word for a fallen NPC). A place bullet never brings
+  // one in; an NPCs or Who line naming one stays as written, with a `dead-in-scene` warning.
+  const isDead = (p) => Boolean(p) && index.has(p) && String(index.read(p).fm.status || '').trim().toLowerCase() === 'dead';
   const typeOf = (p) => (p ? nameKey(index.read(p).fm.type) : '');
 
   const claimed = {};
@@ -250,9 +256,16 @@ function readBeats(planBody, index) {
     // Who: the NPCs blocks, then the Who lines, then (in a hub) each spot's NPC lines.
     const who = [];
     const inWho = (note, name) => who.some((w) => (note ? w.note === note : !w.note && w.name === name));
-    const npcFrom = (itemText) => {
+    const npcFrom = (itemText, plain = false) => {
       const m = itemText.match(NPC_LINE);
-      if (!m) return null;
+      if (!m) {
+        const q = plain ? itemText.match(PLAIN_NPC_LINE) : null;
+        if (!q) return null;
+        const name = q[1].trim();
+        const p = q[2] === undefined ? '' : q[2].trim();
+        const counted = /^\d+$/.test(p);
+        return { target: '', name, knownAs: p && !counted ? p : name, count: counted ? Number(p) : 1, counted, wants: q[4].replace(/\s+/g, ' ').trim() };
+      }
       const l = linkParts(m[1]);
       const paren = (m[2] !== undefined ? m[2] : m[3]);
       const p = paren === undefined ? '' : paren.trim();
@@ -269,9 +282,9 @@ function readBeats(planBody, index) {
     for (const b of npcBlocks) {
       blockHeads.push(b);
       for (const item of offset(pt.bullets(b.sub), b.start)) {
-        const n = npcFrom(item.text);
+        const n = npcFrom(item.text, true);
         if (!n) continue;
-        const note = resolve(n.target);
+        const note = n.target ? resolve(n.target) : null;
         const at = who.findIndex((w) => (note ? w.note === note : !w.note && w.name === n.name));
         if (at !== -1) {
           // One person listed twice: two written counts add up, and the second line's words join the
@@ -348,7 +361,7 @@ function readBeats(planBody, index) {
             const lp = linkParts(m.slice(2, -2));
             const p = resolve(lp.target);
             const type = typeOf(p);
-            if (!p || type === 'location') continue;
+            if (!p || type === 'location' || isDead(p)) continue;
             if (!people.includes(p)) people.push(p);
             if ((type !== 'npc' && type !== 'creature') || taken(p, lp.name)) continue;
             who.push(person(p, { name: lp.name, knownAs: lp.display, count: 1, wants: '' }));
@@ -443,6 +456,9 @@ function readBeats(planBody, index) {
 
     const type = nameKey(pt.label(text, 'Type'));
     const hubLike = isHub || /\((?:hub|routing)\)/i.test(heading) || /^\s*scene\s+0\b/i.test(heading) || type === 'transition';
+    for (const w of who) {
+      if (isDead(w.note)) warnings.push({ kind: 'dead-in-scene', note: sceneNote, text: `${title} lists ${w.name}, whose note says dead, as here; the page shows them as written.` });
+    }
     if (!contingency && who.length === 0 && !hubLike) {
       const why = npcBlocks.length ? 'has no NPC lines the sheet can read' : 'has no **NPCs** block';
       warnings.push({ kind: 'no-npcs-block', note: sceneNote, text: `${title} ${why}, so the page shows nobody here.` });

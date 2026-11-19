@@ -486,6 +486,23 @@ describe('run sheet beats: the Plan shape', () => {
     }
   });
 
+  it('a dead NPC in a place bullet is not people or who; on an NPCs line it stays with dead-in-scene', () => {
+    const dir = skeletonVault();
+    fs.mkdirSync(path.join(dir, 'Characters'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'Characters', 'Brother Teodor.md'), '---\ntype: npc\nstatus: "dead"\n---\n');
+    fs.writeFileSync(path.join(dir, 'Characters', 'Sister Fen2.md'), '---\ntype: npc\nstatus: alive\n---\n');
+    fs.mkdirSync(path.join(dir, 'Locations'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'Locations', 'The Ice Crypt.md'), '---\ntype: location\n---\n');
+    const index = buildIndex(dir);
+    const hub = readBeats('## Planned Scenes\n\n### Scene 0: Out (hub)\n**Where they can go**\n- **[[The Ice Crypt]]:** [[Brother Teodor]] is dead; [[Sister Fen2]] waits.\n', index);
+    assert.deepStrictEqual(hub.beats[0].spots[0].people.map((p) => path.basename(p)), ['Sister Fen2.md']);
+    assert.deepStrictEqual(hub.beats[0].who.map((w) => w.name), ['Sister Fen2']);
+    assert.ok(!hub.warnings.some((w) => w.kind === 'dead-in-scene'));
+    const named = readBeats('## Planned Scenes\n\n### Scene 4: Crypt\n**Situation:** s\n**Place:** [[The Ice Crypt]]\n**Starts it:** t\n**NPCs**\n- **[[Brother Teodor]]:** his body\n', index);
+    assert.deepStrictEqual(named.beats[0].who.map((w) => w.name), ['Brother Teodor']);
+    assert.ok(named.warnings.some((w) => w.kind === 'dead-in-scene' && /Brother Teodor/.test(w.text)));
+  });
+
   it('pointer bullets are not spots', () => {
     const { beats } = read2(() => `## Planned Scenes\n\n### Scene 4: The yard\n**Where they can go**\n- the cellar door — Scene 3\n- **Cellar door** — Scene 3\n- **[[Name]]** — Scene 3 (locked)\n- **[[Scene note]]:** what follows\n- **The orchard:** hens\n`);
     assert.deepStrictEqual(beats[0].spots.map((x) => x.name), ['The orchard']);
@@ -674,6 +691,26 @@ describe('run sheet beats: the Plan shape', () => {
         assert.deepStrictEqual(r.ids.filter((id) => id.startsWith('hub-')), [], bullet);
         assert.strictEqual(r.beats[0].spots.length, 1, bullet);
       }
+    });
+
+    it('a bold plain-name NPCs bullet: a who entry with no note, no no-npcs-block, in both', () => {
+      const r = bothSides(SCENE('**Entities:** [[Name]]\n**NPCs**\n- **The shikarri:** wants a clean drive.\n'));
+      assert.ok(!r.ids.includes('no-npcs-block'));
+      assert.ok(!r.warnings.some((w) => w.kind === 'no-npcs-block' && /Supper/.test(w.text)));
+      assert.deepStrictEqual(r.beats[0].who.map((w) => [w.note, w.name, w.wants]), [[null, 'The shikarri', 'wants a clean drive.']]);
+    });
+
+    it('the Canticle fire bullet with a colon lead is a spot in both', () => {
+      const bullet = "- **The British fire:** Ashworth, Renwick, …; the obligation fire. Ashworth's warning lands here (Scene 4).";
+      const r = bothSides(`### Scene 0: Out (hub)\n**Where they can go**\n${bullet}\n`);
+      assert.deepStrictEqual(r.ids.filter((id) => id.startsWith('hub-')), []);
+      assert.deepStrictEqual(r.beats[0].spots.map((x) => x.name), ['The British fire']);
+    });
+
+    it('a plain bullet among place bullets: plan-check hub-plain-bullet, the reader still shows the spot', () => {
+      const r = bothSides('### Scene 0: Out (hub)\n**Where they can go**\n- **The yard:** hens\n- The ambush clues are marked in [[Location]]; use it for each fire.\n');
+      assert.ok(r.ids.includes('hub-plain-bullet'));
+      assert.strictEqual(r.beats[0].spots.length, 2);
     });
 
     it('a bold lead with a colon is a place whatever its tail says; without one, a pointer, in both', () => {

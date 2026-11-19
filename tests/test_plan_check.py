@@ -1385,6 +1385,28 @@ class RunSheetChecksTests(unittest.TestCase):
         bullets = "- **[[Orchard]]:** apples\n- **The yard:** hens\n"
         self.assertEqual(self.ids(self.HUB.format(bullets=bullets)), [])
 
+    def test_a_plain_bullet_among_place_bullets_warns_hub_plain_bullet(self):
+        bullets = ("- **The yard:** hens\n"
+                   "- The ambush clues are marked in [[Chapter_4]]; use it.\n")
+        found = self.found(self.HUB.format(bullets=bullets))
+        rows = rows_for(found, "hub-plain-bullet")
+        self.assertEqual(len(rows), 1, found)
+        self.assertIn("move a note for the GM below the block",
+                      rows[0].message)
+        # alone, or with only pointers, a plain bullet is hub-no-places' call
+        self.assertEqual(self.ids(self.HUB.format(
+            bullets="- **The yard:** hens\n- the cellar door — Scene 3\n")), [])
+        self.assertIn("hub-plain-bullet", pc.RUN_SHEET_CHECKS)
+
+    def test_a_bold_plain_name_npc_line_is_readable(self):
+        self.note("Orme", "npc")
+        self.assertEqual(self.ids(self.scene(
+            rest="**Entities:** [[Orme]]\n**NPCs**\n"
+                 "- **The shikarri:** wants a clean drive.\n")), [])
+        self.assertEqual(self.ids(self.scene(
+            rest="**Entities:** [[Orme]]\n**NPCs**\n"
+                 "- **Place:** the yard\n")), ["no-npcs-block"])
+
     def test_a_hub_title_with_no_block_warns_hub_no_places(self):
         self.assertEqual(self.ids("### Scene 5: Streets (hub)\n**Situation:** s\n"),
                          ["hub-no-places"])
