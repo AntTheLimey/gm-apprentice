@@ -10,12 +10,51 @@
 const { splitTableRow, wikilinkSpans, parseWikilink } = require('../wikilink');
 
 function normalise(text) {
-  const s = String(text == null ? '' : text).replace(/\r\n?/g, '\n');
-  // An unclosed comment runs to the end of the text.
-  return s.replace(/<!--[\s\S]*?(?:-->|$)/g, (m) => m.replace(/[^\n]/g, ''));
+  const src = String(text == null ? '' : text).replace(/\r\n?/g, '\n').split('\n');
+  const out = [];
+  let inComment = false;
+  let fence = null;
+  for (const line of src) {
+    if (!inComment) {
+      const f = line.match(FENCE);
+      if (fence !== null || f) {
+        if (f && (fence === null || fence === f[1])) fence = fence === null ? f[1] : null;
+        out.push(line);
+        continue;
+      }
+    }
+    let res = '';
+    let pos = 0;
+    for (;;) {
+      if (inComment) {
+        const c = line.indexOf('-->', pos);
+        if (c === -1) break; // the rest of the line is comment
+        inComment = false;
+        pos = c + 3;
+      } else {
+        const o = line.indexOf('<!--', pos);
+        if (o === -1) { res += line.slice(pos); break; }
+        res += line.slice(pos, o);
+        inComment = true;
+        pos = o + 4;
+      }
+    }
+    out.push(res);
+  }
+  return out.join('\n');
 }
 
 const linesOf = (text) => normalise(text).split('\n');
+// true for each line inside a fenced code block, fence lines included
+function fenceMask(lines) {
+  let fence = null;
+  return lines.map((l) => {
+    const f = l.match(FENCE);
+    if (fence !== null) { if (f && f[1] === fence) fence = null; return true; }
+    if (f) { fence = f[1]; return true; }
+    return false;
+  });
+}
 const isBlank = (l) => l.trim() === '';
 const HEADING = /^#{1,6}\s/;
 const FENCE = /^\s*(```|~~~)/;
@@ -62,7 +101,8 @@ function labels(text) {
     if (!m) continue;
     const parts = m[2].trim() === '' ? [] : [m[2].trim()];
     let end = i;
-    while (end + 1 < lines.length) {
+    // an empty value makes this line a block head: the lines after it belong to block()
+    while (parts.length > 0 && end + 1 < lines.length) {
       const nx = lines[end + 1];
       if (isBlank(nx) || LABEL.test(nx) || BULLET.test(nx) || isTableRow(nx) || isQuote(nx) || HEADING.test(nx)) break;
       parts.push(nx.trim());
@@ -102,7 +142,9 @@ function block(text, name) {
 // The body rows of the first-found table lines: header and separator dropped, cells trimmed.
 // An escaped pipe stays as written (`\|`).
 function tableRows(text) {
-  const rows = linesOf(text).filter(isTableRow).map((l) => {
+  const all = linesOf(text);
+  const fenced = fenceMask(all);
+  const rows = all.filter((l, i) => !fenced[i] && isTableRow(l)).map((l) => {
     const cells = splitTableRow(l.trim());
     if (cells[0].trim() === '') cells.shift();
     if (cells.length && cells[cells.length - 1].trim() === '') cells.pop();
@@ -119,28 +161,47 @@ function tableRows(text) {
   return out;
 }
 
+// Each table's line range (header, separator and rows), fenced code skipped.
+function tableRanges(text) {
+  const lines = linesOf(text);
+  const fenced = fenceMask(lines);
+  const out = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (fenced[i] || !isTableRow(lines[i])) continue;
+    let end = i;
+    while (end + 1 < lines.length && !fenced[end + 1] && isTableRow(lines[end + 1])) end++;
+    out.push({ start: i, end });
+    i = end;
+  }
+  return out;
+}
+
 // Top-level list items. Indented (nested) lines and wrapped lines fold into the item with '\n'.
 // `box` is true for `- [ ]` / `- [x]`; the box is removed from `text`.
 function bullets(text) {
   const lines = linesOf(text);
+  const fenced = fenceMask(lines);
   const out = [];
   let cur = null;
   const flush = () => { if (cur) out.push(cur); cur = null; };
   for (let i = 0; i < lines.length; i++) {
     const l = lines[i];
-    if (BULLET.test(l)) {
+    if (fenced[i]) {
+      flush();
+    } else if (BULLET.test(l)) {
       flush();
       let t = l.replace(BULLET, '').trimEnd();
       const b = t.match(/^\[([ xX])\][ \t]*(.*)$/);
       if (b) t = b[2];
-      cur = { text: t, box: Boolean(b) };
+      cur = { text: t, box: Boolean(b), start: i, end: i };
     } else if (cur && isBlank(l)) {
       // a blank line continues the item only when an indented line follows
       let j = i + 1;
       while (j < lines.length && isBlank(lines[j])) j++;
-      if (j < lines.length && /^\s+\S/.test(lines[j]) && !isQuote(lines[j])) { i = j - 1; } else flush();
+      if (j < lines.length && !fenced[j] && /^\s+\S/.test(lines[j]) && !isQuote(lines[j])) { i = j - 1; } else flush();
     } else if (cur && !HEADING.test(l) && !isTableRow(l) && !isQuote(l)) {
       cur.text += `\n${l.trimEnd()}`;
+      cur.end = i;
     } else {
       flush();
     }
@@ -151,7 +212,9 @@ function bullets(text) {
 
 // Wikilink targets in order, duplicates kept; `#heading` and `|alias` dropped; embeds skipped.
 function links(text) {
-  const s = normalise(text);
+  const ls = linesOf(text);
+  const fenced = fenceMask(ls);
+  const s = ls.map((l, i) => (fenced[i] ? '' : l)).join('\n');
   const out = [];
   for (const span of wikilinkSpans(s, true)) {
     if (s[span.index] === '!') continue;
@@ -176,6 +239,17 @@ function readAloud(text) {
   return groups.map((g) => g.join('\n').trim()).filter(Boolean).join('\n\n');
 }
 
+// The line ranges of the quote groups readAloud reads.
+function readAloudRanges(text) {
+  const out = [];
+  let cur = null;
+  linesOf(text).forEach((l, i) => {
+    if (!isQuote(l)) { cur = null; return; }
+    if (!cur) { cur = { start: i, end: i }; out.push(cur); } else cur.end = i;
+  });
+  return out;
+}
+
 // The lines no range covers (ranges are inclusive line indexes, see the top), joined with '\n'
 // and trimmed of blank lines at both ends.
 function unclaimed(text, claimed) {
@@ -187,4 +261,4 @@ function unclaimed(text, claimed) {
   return linesOf(text).filter((_, i) => !taken.has(i)).join('\n').replace(/^(?:[ \t]*\n)+/, '').replace(/(?:\n[ \t]*)+$/, '').trim();
 }
 
-module.exports = { normalise, sections, labels, label, block, tableRows, bullets, links, readAloud, unclaimed };
+module.exports = { normalise, sections, labels, label, block, tableRows, tableRanges, bullets, links, readAloud, readAloudRanges, unclaimed };

@@ -44,10 +44,10 @@ test('block stops at the next label or quote', () => {
 test('bullets marks checkboxes and folds nested lines', () => {
   const x = '- plain\n  - nested\n- [ ] open\n- [x] done\n\n- last\n  wrapped';
   assert.deepEqual(t.bullets(x), [
-    { text: 'plain\n  - nested', box: false },
-    { text: 'open', box: true },
-    { text: 'done', box: true },
-    { text: 'last\n  wrapped', box: false },
+    { text: 'plain\n  - nested', box: false, start: 0, end: 1 },
+    { text: 'open', box: true, start: 2, end: 2 },
+    { text: 'done', box: true, start: 3, end: 3 },
+    { text: 'last\n  wrapped', box: false, start: 5, end: 6 },
   ]);
   assert.deepEqual(t.bullets(''), []);
 });
@@ -90,4 +90,38 @@ test('comments are removed without shifting line indexes', () => {
   assert.equal(t.unclaimed(x, t.labels(x)), 'a  b\n\n\n\nstray');
   assert.equal(t.sections('## S\nx <!-- y -->', 2)[0].text, 'x');
   assert.equal(t.label('**A:** v <!-- c', 'A'), 'v');
+});
+
+test('ranges: tableRanges and readAloudRanges cover what was read', () => {
+  const x = 'a\n| H |\n|---|\n| r |\nb\n> q1\n> q2\nc\n> q3';
+  assert.deepEqual(t.tableRanges(x), [{ start: 1, end: 3 }]);
+  assert.deepEqual(t.readAloudRanges(x), [{ start: 5, end: 6 }, { start: 8, end: 8 }]);
+  assert.equal(t.unclaimed(x, [...t.tableRanges(x), ...t.readAloudRanges(x)]), 'a\n| H |\n|---|\n| r |\nb\n> q1\n> q2\nc\n> q3'.split('\n').filter((l) => ['a', 'b', 'c'].includes(l)).join('\n'));
+  assert.deepEqual(t.tableRanges(''), []);
+  assert.deepEqual(t.readAloudRanges(''), []);
+});
+
+test('a comment opener inside a fenced block stays literal', () => {
+  const x = '```\n<!-- not a comment\n```\n**A:** v <!-- c -->\nafter';
+  assert.equal(t.normalise(x), '```\n<!-- not a comment\n```\n**A:** v \nafter');
+  assert.equal(t.labels(x)[0].start, 3);
+});
+
+test('an empty-valued label is a block head and does not run on', () => {
+  const x = '**NPCs:**\n- a\nplain';
+  assert.deepEqual(t.labels(x), [{ name: 'NPCs', value: '', start: 0, end: 0 }]);
+  const b = t.block(x, 'NPCs');
+  assert.equal(b.value, '- a\nplain');
+  assert.equal(b.start, 0);
+  assert.equal(b.end, 2);
+  assert.equal(t.label(x, 'NPCs'), '');
+  assert.equal(t.unclaimed(x, [...t.labels(x), b]), '');
+});
+
+test('bullets, tables and links skip fenced code', () => {
+  const x = '- real\n```\n- fake [[Nope]]\n| a |\n| b |\n```\n[[Yes]]\n| h |\n|---|\n| r |';
+  assert.deepEqual(t.bullets(x).map((b) => b.text), ['real']);
+  assert.deepEqual(t.links(x), ['Yes']);
+  assert.deepEqual(t.tableRows(x), [['r']]);
+  assert.deepEqual(t.tableRanges(x), [{ start: 7, end: 9 }]);
 });
