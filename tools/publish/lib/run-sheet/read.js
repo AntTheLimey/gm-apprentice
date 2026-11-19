@@ -248,16 +248,19 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
     mapPairs.push({ gm, player });
   };
   const allMaps = index.notes().filter(isMap);
+  // A GM map's player map: its `player_version` when that resolves to a map, else the name pair.
   const playerOf = (gm) => {
     const t = fmTarget(fmOf(gm).player_version);
-    if (t) return index.resolve(t);
+    const named = t ? index.resolve(t) : null;
+    if (isMap(named)) return named;
     const stem = stemOf(gm);
     return GM_SUFFIX.test(stem) ? index.resolve(stem.replace(GM_SUFFIX, '')) : null;
   };
+  const playerFor = new Map(allMaps.map((g) => [g, playerOf(g)]));
   for (const p of maps) {
-    pair(p, playerOf(p));
+    pair(p, playerFor.get(p));
     // p as the player map: any GM map that points at it, by field or by name
-    for (const g of allMaps) if (g !== p && playerOf(g) === p) pair(g, p);
+    for (const g of allMaps) if (g !== p && playerFor.get(g) === p) pair(g, p);
   }
 
   // A link to nowhere anywhere in the Plan warns once (beats warn for theirs; the same text merges).

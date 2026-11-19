@@ -245,6 +245,15 @@ describe('run sheet reader', () => {
       assert.deepStrictEqual(m2.mapPairs.map((p) => p.gm), ['Documents/Map of the Gate (GM).md', 'Documents/Cellar Plan (GM).md']);
     });
 
+    it('a player_version that is not a map falls back to the name pair', () => {
+      const dir = copy();
+      write(dir, 'Documents/Foo (GM).md', mapNote('Foo (GM)', 'player_version: "[[Nowhere]]"\n'));
+      write(dir, 'Documents/Foo.md', mapNote('Foo'));
+      withPlanLine(dir, 'See [[Foo (GM)]].');
+      const m = readRunSheet(dir, PLAN, { party: PARTY });
+      assert.deepStrictEqual(m.mapPairs, [{ gm: 'Documents/Foo (GM).md', player: 'Documents/Foo.md' }]);
+    });
+
     it('maps keeps its strings, a lone map is not paired, a broken link does not throw', () => {
       const dir = copy();
       let m = readRunSheet(dir, PLAN, { party: PARTY });
