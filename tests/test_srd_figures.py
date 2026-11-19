@@ -83,5 +83,22 @@ class OfficialFiguresTests(unittest.TestCase):
                          "30 ft., 40 ft. (wolf form only)")
 
 
+class SpellDcTests(unittest.TestCase):
+    def test_no_shipped_block_has_an_unknown_spell_dc(self):
+        bad = [f"{path.name}: {line}"
+               for path in [*sorted(DIR.glob("monsters-cr*.md")),
+                            DIR / "animals.md"]
+               for line in path.read_text(encoding="utf-8").splitlines()
+               if re.search(r"DC \?", line)]
+        self.assertEqual(bad, [])
+
+    def test_the_priest_family_has_the_srd_521_dcs(self):
+        text = (DIR / "monsters-cr2-3.md").read_text(encoding="utf-8")
+        self.assertIn("Spellcasting (WIS, DC 13):", text)
+        self.assertEqual(FIGURES["Priest"]["spell_dc"], "13")
+        self.assertEqual(FIGURES["Priest Acolyte"]["spell_dc"], "")
+        self.assertEqual(FIGURES["Giant Owl"]["spell_dc"], "")
+
+
 if __name__ == "__main__":
     unittest.main()

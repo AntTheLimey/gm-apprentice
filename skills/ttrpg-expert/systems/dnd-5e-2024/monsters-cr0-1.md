@@ -154,7 +154,7 @@ STR 14 DEX 10 CON 12 INT 10 WIS 14 CHA 11
 Senses: Passive Perception 12
 - Mace: +4, 1d6+2 bludgeoning + 1d4 radiant
 - Radiant Flame: +4, 2d6 radiant
-Spellcasting (WIS, DC ?): At Will — Light, Thaumaturgy
+Spellcasting (WIS): At Will — Light, Thaumaturgy
 
 **Pseudodragon** | Dragon | T | CR 1/4 (50 XP)
 AC 14 | HP 10 (3d4+3) | Init +2 (12) | Speed 15 ft., Fly 60 ft.

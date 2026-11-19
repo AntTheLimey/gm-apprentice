@@ -3,2010 +3,2683 @@
   "size": "Large",
   "init": "+7",
   "init_score": 17,
-  "speed": "10 ft., Swim 40 ft."
+  "speed": "10 ft., Swim 40 ft.",
+  "ac": 17,
+  "hp": "150 (20d10 + 40)"
  },
  "Adult Black Dragon": {
   "size": "Huge",
   "init": "+12",
   "init_score": 22,
-  "speed": "40 ft., Fly 80 ft., Swim 40 ft."
+  "speed": "40 ft., Fly 80 ft., Swim 40 ft.",
+  "ac": 19,
+  "hp": "195 (17d12 + 85)"
  },
  "Adult Blue Dragon": {
   "size": "Huge",
   "init": "+10",
   "init_score": 20,
-  "speed": "40 ft., Burrow 30 ft., Fly 80 ft."
+  "speed": "40 ft., Burrow 30 ft., Fly 80 ft.",
+  "ac": 19,
+  "hp": "212 (17d12 + 102)"
  },
  "Adult Brass Dragon": {
   "size": "Huge",
   "init": "+10",
   "init_score": 20,
-  "speed": "40 ft., Burrow 30 ft., Fly 80 ft."
+  "speed": "40 ft., Burrow 30 ft., Fly 80 ft.",
+  "ac": 18,
+  "hp": "172 (15d12 + 75)"
  },
  "Adult Bronze Dragon": {
   "size": "Huge",
   "init": "+10",
   "init_score": 20,
-  "speed": "40 ft., Fly 80 ft., Swim 40 ft."
+  "speed": "40 ft., Fly 80 ft., Swim 40 ft.",
+  "ac": 18,
+  "hp": "212 (17d12 + 102)"
  },
  "Adult Copper Dragon": {
   "size": "Huge",
   "init": "+11",
   "init_score": 21,
-  "speed": "40 ft., Climb 40 ft., Fly 80 ft."
+  "speed": "40 ft., Climb 40 ft., Fly 80 ft.",
+  "ac": 18,
+  "hp": "184 (16d12 + 80)"
  },
  "Adult Gold Dragon": {
   "size": "Huge",
   "init": "+14",
   "init_score": 24,
-  "speed": "40 ft., Fly 80 ft., Swim 40 ft."
+  "speed": "40 ft., Fly 80 ft., Swim 40 ft.",
+  "ac": 19,
+  "hp": "243 (18d12 + 126)"
  },
  "Adult Green Dragon": {
   "size": "Huge",
   "init": "+11",
   "init_score": 21,
-  "speed": "40 ft., Fly 80 ft., Swim 40 ft."
+  "speed": "40 ft., Fly 80 ft., Swim 40 ft.",
+  "ac": 19,
+  "hp": "207 (18d12 + 90)"
  },
  "Adult Red Dragon": {
   "size": "Huge",
   "init": "+12",
   "init_score": 22,
-  "speed": "40 ft., Climb 40 ft., Fly 80 ft."
+  "speed": "40 ft., Climb 40 ft., Fly 80 ft.",
+  "ac": 19,
+  "hp": "256 (19d12 + 133)"
  },
  "Adult Silver Dragon": {
   "size": "Huge",
   "init": "+10",
   "init_score": 20,
-  "speed": "40 ft., Fly 80 ft."
+  "speed": "40 ft., Fly 80 ft.",
+  "ac": 19,
+  "hp": "216 (16d12 + 112)"
  },
  "Adult White Dragon": {
   "size": "Huge",
   "init": "+10",
   "init_score": 20,
-  "speed": "40 ft., Burrow 30 ft., Fly 80 ft., Swim 40 ft."
+  "speed": "40 ft., Burrow 30 ft., Fly 80 ft., Swim 40 ft.",
+  "ac": 18,
+  "hp": "200 (16d12 + 96)"
  },
  "Air Elemental": {
   "size": "Large",
   "init": "+5",
   "init_score": 15,
-  "speed": "10 ft., Fly 90 ft. (hover)"
+  "speed": "10 ft., Fly 90 ft. (hover)",
+  "ac": 15,
+  "hp": "90 (12d10 + 24)"
  },
  "Allosaurus": {
   "size": "Large",
   "init": "+1",
   "init_score": 11,
-  "speed": "60 ft."
+  "speed": "60 ft.",
+  "ac": 13,
+  "hp": "51 (6d10 + 18)"
  },
  "Ancient Black Dragon": {
   "size": "Gargantuan",
   "init": "+16",
   "init_score": 26,
-  "speed": "40 ft., Fly 80 ft., Swim 40 ft."
+  "speed": "40 ft., Fly 80 ft., Swim 40 ft.",
+  "ac": 22,
+  "hp": "367 (21d20 + 147)"
  },
  "Ancient Blue Dragon": {
   "size": "Gargantuan",
   "init": "+14",
   "init_score": 24,
-  "speed": "40 ft., Burrow 40 ft., Fly 80 ft."
+  "speed": "40 ft., Burrow 40 ft., Fly 80 ft.",
+  "ac": 22,
+  "hp": "481 (26d20 + 208)"
  },
  "Ancient Brass Dragon": {
   "size": "Gargantuan",
   "init": "+12",
   "init_score": 22,
-  "speed": "40 ft., Burrow 40 ft., Fly 80 ft."
+  "speed": "40 ft., Burrow 40 ft., Fly 80 ft.",
+  "ac": 20,
+  "hp": "332 (19d20 + 133)"
  },
  "Ancient Bronze Dragon": {
   "size": "Gargantuan",
   "init": "+14",
   "init_score": 24,
-  "speed": "40 ft., Fly 80 ft., Swim 40 ft."
+  "speed": "40 ft., Fly 80 ft., Swim 40 ft.",
+  "ac": 22,
+  "hp": "444 (24d20 + 192)"
  },
  "Ancient Copper Dragon": {
   "size": "Gargantuan",
   "init": "+15",
   "init_score": 25,
-  "speed": "40 ft., Climb 40 ft., Fly 80 ft."
+  "speed": "40 ft., Climb 40 ft., Fly 80 ft.",
+  "ac": 21,
+  "hp": "367 (21d20 + 147)"
  },
  "Ancient Gold Dragon": {
   "size": "Gargantuan",
   "init": "+16",
   "init_score": 26,
-  "speed": "40 ft., Fly 80 ft., Swim 40 ft."
+  "speed": "40 ft., Fly 80 ft., Swim 40 ft.",
+  "ac": 22,
+  "hp": "546 (28d20 + 252)"
  },
  "Ancient Green Dragon": {
   "size": "Gargantuan",
   "init": "+15",
   "init_score": 25,
-  "speed": "40 ft., Fly 80 ft., Swim 40 ft."
+  "speed": "40 ft., Fly 80 ft., Swim 40 ft.",
+  "ac": 21,
+  "hp": "402 (23d20 + 161)"
  },
  "Ancient Red Dragon": {
   "size": "Gargantuan",
   "init": "+14",
   "init_score": 24,
-  "speed": "40 ft., Climb 40 ft., Fly 80 ft."
+  "speed": "40 ft., Climb 40 ft., Fly 80 ft.",
+  "ac": 22,
+  "hp": "507 (26d20 + 234)"
  },
  "Ancient Silver Dragon": {
   "size": "Gargantuan",
   "init": "+14",
   "init_score": 24,
-  "speed": "40 ft., Fly 80 ft."
+  "speed": "40 ft., Fly 80 ft.",
+  "ac": 22,
+  "hp": "468 (24d20 + 216)"
  },
  "Ancient White Dragon": {
   "size": "Gargantuan",
   "init": "+12",
   "init_score": 22,
-  "speed": "40 ft., Burrow 40 ft., Fly 80 ft., Swim 40 ft."
+  "speed": "40 ft., Burrow 40 ft., Fly 80 ft., Swim 40 ft.",
+  "ac": 20,
+  "hp": "333 (18d20 + 144)"
  },
  "Animated Armor": {
   "size": "Medium",
   "init": "+2",
   "init_score": 12,
-  "speed": "25 ft."
+  "speed": "25 ft.",
+  "ac": 18,
+  "hp": "33 (6d8 + 6)"
  },
  "Animated Flying Sword": {
   "size": "Small",
   "init": "+4",
   "init_score": 14,
-  "speed": "5 ft., Fly 50 ft. (hover)"
+  "speed": "5 ft., Fly 50 ft. (hover)",
+  "ac": 17,
+  "hp": "14 (4d6)"
  },
  "Animated Rug of Smothering": {
   "size": "Large",
   "init": "+4",
   "init_score": 14,
-  "speed": "10 ft."
+  "speed": "10 ft.",
+  "ac": 12,
+  "hp": "27 (5d10)"
  },
  "Ankheg": {
   "size": "Large",
   "init": "+0",
   "init_score": 10,
-  "speed": "30 ft., Burrow 10 ft."
+  "speed": "30 ft., Burrow 10 ft.",
+  "ac": 14,
+  "hp": "45 (6d10 + 12)"
  },
  "Ankylosaurus": {
   "size": "Huge",
   "init": "+0",
   "init_score": 10,
-  "speed": "30 ft."
+  "speed": "30 ft.",
+  "ac": 15,
+  "hp": "68 (8d12 + 16)"
  },
  "Ape": {
   "size": "Medium",
   "init": "+2",
   "init_score": 12,
-  "speed": "30 ft., Climb 30 ft."
+  "speed": "30 ft., Climb 30 ft.",
+  "ac": 12,
+  "hp": "19 (3d8 + 6)"
  },
  "Archelon": {
   "size": "Huge",
   "init": "+3",
   "init_score": 13,
-  "speed": "20 ft., Swim 80 ft."
+  "speed": "20 ft., Swim 80 ft.",
+  "ac": 17,
+  "hp": "90 (12d12 + 12)"
  },
  "Archmage": {
   "size": "Medium or Small",
   "init": "+7",
   "init_score": 17,
-  "speed": "30 ft."
+  "speed": "30 ft.",
+  "ac": 17,
+  "hp": "170 (31d8 + 31)"
  },
  "Assassin": {
   "size": "Medium or Small",
   "init": "+10",
   "init_score": 20,
-  "speed": "30 ft."
+  "speed": "30 ft.",
+  "ac": 16,
+  "hp": "97 (15d8 + 30)"
  },
  "Avatar of Death": {
   "size": "Medium",
   "init": "+3",
   "init_score": 13,
-  "speed": "60 ft., Fly 60 ft. (hover)"
+  "speed": "60 ft., Fly 60 ft. (hover)",
+  "ac": 20,
+  "hp": null
  },
  "Awakened Shrub": {
   "size": "Small",
   "init": "-1",
   "init_score": 9,
-  "speed": "20 ft."
+  "speed": "20 ft.",
+  "ac": 9,
+  "hp": "10 (3d6)"
  },
  "Awakened Tree": {
   "size": "Huge",
   "init": "-2",
   "init_score": 8,
-  "speed": "20 ft."
+  "speed": "20 ft.",
+  "ac": 13,
+  "hp": "59 (7d12 + 14)"
  },
  "Axe Beak": {
   "size": "Large",
   "init": "+1",
   "init_score": 11,
-  "speed": "50 ft."
+  "speed": "50 ft.",
+  "ac": 11,
+  "hp": "19 (3d10 + 3)"
  },
  "Azer Sentinel": {
   "size": "Medium",
   "init": "+1",
   "init_score": 11,
-  "speed": "30 ft."
+  "speed": "30 ft.",
+  "ac": 17,
+  "hp": "39 (6d8 + 12)"
  },
  "Baboon": {
   "size": "Small",
   "init": "+2",
   "init_score": 12,
-  "speed": "30 ft., Climb 30 ft."
+  "speed": "30 ft., Climb 30 ft.",
+  "ac": 12,
+  "hp": "3 (1d6)"
  },
  "Badger": {
   "size": "Tiny",
   "init": "+0",
   "init_score": 10,
-  "speed": "20 ft., Burrow 5 ft."
+  "speed": "20 ft., Burrow 5 ft.",
+  "ac": 11,
+  "hp": "5 (1d4 + 3)"
  },
  "Balor": {
   "size": "Huge",
   "init": "+14",
   "init_score": 24,
-  "speed": "40 ft., Fly 80 ft."
+  "speed": "40 ft., Fly 80 ft.",
+  "ac": 19,
+  "hp": "287 (23d12 + 138)"
  },
  "Bandit": {
   "size": "Medium or Small",
   "init": "+1",
   "init_score": 11,
-  "speed": "30 ft."
+  "speed": "30 ft.",
+  "ac": 12,
+  "hp": "11 (2d8 + 2)"
  },
  "Bandit Captain": {
   "size": "Medium or Small",
   "init": "+3",
   "init_score": 13,
-  "speed": "30 ft."
+  "speed": "30 ft.",
+  "ac": 15,
+  "hp": "52 (8d8 + 16)"
  },
  "Barbed Devil": {
   "size": "Medium",
   "init": "+3",
   "init_score": 13,
-  "speed": "30 ft., Climb 30 ft."
+  "speed": "30 ft., Climb 30 ft.",
+  "ac": 15,
+  "hp": "110 (13d8 + 52)"
  },
  "Basilisk": {
   "size": "Medium",
   "init": "-1",
   "init_score": 9,
-  "speed": "20 ft."
+  "speed": "20 ft.",
+  "ac": 15,
+  "hp": "52 (8d8 + 16)"
  },
  "Bat": {
   "size": "Tiny",
   "init": "+2",
   "init_score": 12,
-  "speed": "5 ft., Fly 30 ft."
+  "speed": "5 ft., Fly 30 ft.",
+  "ac": 12,
+  "hp": "1 (1d4 - 1)"
  },
  "Bearded Devil": {
   "size": "Medium",
   "init": "+2",
   "init_score": 12,
-  "speed": "30 ft."
+  "speed": "30 ft.",
+  "ac": 13,
+  "hp": "58 (9d8 + 18)"
  },
  "Behir": {
   "size": "Huge",
   "init": "+3",
   "init_score": 13,
-  "speed": "50 ft., Climb 50 ft."
+  "speed": "50 ft., Climb 50 ft.",
+  "ac": 17,
+  "hp": "168 (16d12 + 64)"
  },
  "Berserker": {
   "size": "Medium or Small",
   "init": "+1",
   "init_score": 11,
-  "speed": "30 ft."
+  "speed": "30 ft.",
+  "ac": 13,
+  "hp": "67 (9d8 + 27)"
  },
  "Black Bear": {
   "size": "Medium",
   "init": "+1",
   "init_score": 11,
-  "speed": "30 ft., Climb 30 ft., Swim 30 ft."
+  "speed": "30 ft., Climb 30 ft., Swim 30 ft.",
+  "ac": 11,
+  "hp": "19 (3d8 + 6)"
  },
  "Black Dragon Wyrmling": {
   "size": "Medium",
   "init": "+4",
   "init_score": 14,
-  "speed": "30 ft., Fly 60 ft., Swim 30 ft."
+  "speed": "30 ft., Fly 60 ft., Swim 30 ft.",
+  "ac": 17,
+  "hp": "33 (6d8 + 6)"
  },
  "Black Pudding": {
   "size": "Large",
   "init": "-3",
   "init_score": 7,
-  "speed": "20 ft., Climb 20 ft."
+  "speed": "20 ft., Climb 20 ft.",
+  "ac": 7,
+  "hp": "68 (8d10 + 24)"
  },
  "Blink Dog": {
   "size": "Medium",
   "init": "+3",
   "init_score": 13,
-  "speed": "40 ft."
+  "speed": "40 ft.",
+  "ac": 13,
+  "hp": "22 (4d8 + 4)"
  },
  "Blood Hawk": {
   "size": "Small",
   "init": "+2",
   "init_score": 12,
-  "speed": "10 ft., Fly 60 ft."
+  "speed": "10 ft., Fly 60 ft.",
+  "ac": 12,
+  "hp": "7 (2d6)"
  },
  "Blue Dragon Wyrmling": {
   "size": "Medium",
   "init": "+2",
   "init_score": 12,
-  "speed": "30 ft., Burrow 15 ft., Fly 60 ft."
+  "speed": "30 ft., Burrow 15 ft., Fly 60 ft.",
+  "ac": 17,
+  "hp": "65 (10d8 + 20)"
  },
  "Boar": {
   "size": "Medium",
   "init": "+0",
   "init_score": 10,
-  "speed": "40 ft."
+  "speed": "40 ft.",
+  "ac": 11,
+  "hp": "13 (2d8 + 4)"
  },
  "Bone Devil": {
   "size": "Large",
   "init": "+7",
   "init_score": 17,
-  "speed": "40 ft., Fly 40 ft."
+  "speed": "40 ft., Fly 40 ft.",
+  "ac": 16,
+  "hp": "161 (17d10 + 68)"
  },
  "Brass Dragon Wyrmling": {
   "size": "Medium",
   "init": "+2",
   "init_score": 12,
-  "speed": "30 ft., Burrow 15 ft., Fly 60 ft."
+  "speed": "30 ft., Burrow 15 ft., Fly 60 ft.",
+  "ac": 15,
+  "hp": "22 (4d8 + 4)"
  },
  "Bronze Dragon Wyrmling": {
   "size": "Medium",
   "init": "+2",
   "init_score": 12,
-  "speed": "30 ft., Fly 60 ft., Swim 30 ft."
+  "speed": "30 ft., Fly 60 ft., Swim 30 ft.",
+  "ac": 15,
+  "hp": "39 (6d8 + 12)"
  },
  "Brown Bear": {
   "size": "Large",
   "init": "+1",
   "init_score": 11,
-  "speed": "40 ft., Climb 30 ft."
+  "speed": "40 ft., Climb 30 ft.",
+  "ac": 11,
+  "hp": "22 (3d10 + 6)"
  },
  "Bugbear Stalker": {
   "size": "Medium",
   "init": "+2",
   "init_score": 12,
-  "speed": "30 ft."
+  "speed": "30 ft.",
+  "ac": 15,
+  "hp": "65 (10d8 + 20)"
  },
  "Bugbear Warrior": {
   "size": "Medium",
   "init": "+2",
   "init_score": 12,
-  "speed": "30 ft."
+  "speed": "30 ft.",
+  "ac": 14,
+  "hp": "33 (6d8 + 6)"
  },
  "Bulette": {
   "size": "Large",
   "init": "+0",
   "init_score": 10,
-  "speed": "40 ft., Burrow 40 ft."
+  "speed": "40 ft., Burrow 40 ft.",
+  "ac": 17,
+  "hp": "94 (9d10 + 45)"
  },
  "Camel": {
   "size": "Large",
   "init": "-1",
   "init_score": 9,
-  "speed": "50 ft."
+  "speed": "50 ft.",
+  "ac": 10,
+  "hp": "17 (2d10 + 6)"
  },
  "Cat": {
   "size": "Tiny",
   "init": "+2",
   "init_score": 12,
-  "speed": "40 ft., Climb 40 ft."
+  "speed": "40 ft., Climb 40 ft.",
+  "ac": 12,
+  "hp": "2 (1d4)"
  },
  "Centaur Trooper": {
   "size": "Large",
   "init": "+2",
   "init_score": 12,
-  "speed": "50 ft."
+  "speed": "50 ft.",
+  "ac": 16,
+  "hp": "45 (6d10 + 12)"
  },
  "Chain Devil": {
   "size": "Medium",
   "init": "+5",
   "init_score": 15,
-  "speed": "30 ft."
+  "speed": "30 ft.",
+  "ac": 15,
+  "hp": "85 (10d8 + 40)"
  },
  "Chimera": {
   "size": "Large",
   "init": "+0",
   "init_score": 10,
-  "speed": "30 ft., Fly 60 ft."
+  "speed": "30 ft., Fly 60 ft.",
+  "ac": 14,
+  "hp": "114 (12d10 + 48)"
  },
  "Chuul": {
   "size": "Large",
   "init": "+0",
   "init_score": 10,
-  "speed": "30 ft., Swim 30 ft."
+  "speed": "30 ft., Swim 30 ft.",
+  "ac": 16,
+  "hp": "76 (9d10 + 27)"
  },
  "Clay Golem": {
   "size": "Large",
   "init": "+3",
   "init_score": 13,
-  "speed": "30 ft."
+  "speed": "30 ft.",
+  "ac": 14,
+  "hp": "123 (13d10 + 52)"
  },
  "Cloaker": {
   "size": "Large",
   "init": "+5",
   "init_score": 15,
-  "speed": "10 ft., Fly 40 ft."
+  "speed": "10 ft., Fly 40 ft.",
+  "ac": 14,
+  "hp": "91 (14d10 + 14)"
  },
  "Cloud Giant": {
   "size": "Huge",
   "init": "+4",
   "init_score": 14,
-  "speed": "40 ft., Fly 20 ft. (hover)"
+  "speed": "40 ft., Fly 20 ft. (hover)",
+  "ac": 14,
+  "hp": "200 (16d12 + 96)"
  },
  "Cockatrice": {
   "size": "Small",
   "init": "+1",
   "init_score": 11,
-  "speed": "20 ft., Fly 40 ft."
+  "speed": "20 ft., Fly 40 ft.",
+  "ac": 11,
+  "hp": "22 (5d6 + 5)"
  },
  "Commoner": {
   "size": "Medium or Small",
   "init": "+0",
   "init_score": 10,
-  "speed": "30 ft."
+  "speed": "30 ft.",
+  "ac": 10,
+  "hp": "4 (1d8)"
  },
  "Constrictor Snake": {
   "size": "Large",
   "init": "+2",
   "init_score": 12,
-  "speed": "30 ft., Swim 30 ft."
+  "speed": "30 ft., Swim 30 ft.",
+  "ac": 13,
+  "hp": "13 (2d10 + 2)"
  },
  "Copper Dragon Wyrmling": {
   "size": "Medium",
   "init": "+3",
   "init_score": 13,
-  "speed": "30 ft., Climb 30 ft., Fly 60 ft."
+  "speed": "30 ft., Climb 30 ft., Fly 60 ft.",
+  "ac": 16,
+  "hp": "22 (4d8 + 4)"
  },
  "Couatl": {
   "size": "Medium",
   "init": "+5",
   "init_score": 15,
-  "speed": "30 ft., Fly 90 ft."
+  "speed": "30 ft., Fly 90 ft.",
+  "ac": 19,
+  "hp": "60 (8d8 + 24)"
  },
  "Crab": {
   "size": "Tiny",
   "init": "+0",
   "init_score": 10,
-  "speed": "20 ft., Swim 20 ft."
+  "speed": "20 ft., Swim 20 ft.",
+  "ac": 11,
+  "hp": "3 (1d4 + 1)"
  },
  "Crocodile": {
   "size": "Large",
   "init": "+0",
   "init_score": 10,
-  "speed": "20 ft., Swim 30 ft."
+  "speed": "20 ft., Swim 30 ft.",
+  "ac": 12,
+  "hp": "13 (2d10 + 2)"
  },
  "Cultist": {
   "size": "Medium or Small",
   "init": "+1",
   "init_score": 11,
-  "speed": "30 ft."
+  "speed": "30 ft.",
+  "ac": 12,
+  "hp": "9 (2d8)"
  },
  "Cultist Fanatic": {
   "size": "Medium or Small",
   "init": "+2",
   "init_score": 12,
-  "speed": "30 ft."
+  "speed": "30 ft.",
+  "ac": 13,
+  "hp": "44 (8d8 + 8)"
  },
  "Darkmantle": {
   "size": "Small",
   "init": "+3",
   "init_score": 13,
-  "speed": "10 ft., Fly 30 ft."
+  "speed": "10 ft., Fly 30 ft.",
+  "ac": 11,
+  "hp": "22 (5d6 + 5)"
  },
  "Death Dog": {
   "size": "Medium",
   "init": "+2",
   "init_score": 12,
-  "speed": "40 ft."
+  "speed": "40 ft.",
+  "ac": 12,
+  "hp": "39 (6d8 + 12)"
  },
  "Deer": {
   "size": "Medium",
   "init": "+3",
   "init_score": 13,
-  "speed": "50 ft."
+  "speed": "50 ft.",
+  "ac": 13,
+  "hp": "4 (1d8)"
  },
  "Deva": {
   "size": "Medium",
   "init": "+4",
   "init_score": 14,
-  "speed": "30 ft., Fly 90 ft. (hover)"
+  "speed": "30 ft., Fly 90 ft. (hover)",
+  "ac": 17,
+  "hp": "229 (27d8 + 108)"
  },
  "Dire Wolf": {
   "size": "Large",
   "init": "+2",
   "init_score": 12,
-  "speed": "50 ft."
+  "speed": "50 ft.",
+  "ac": 14,
+  "hp": "22 (3d10 + 6)"
  },
  "Djinni": {
   "size": "Large",
   "init": "+2",
   "init_score": 12,
-  "speed": "30 ft., Fly 90 ft. (hover)"
+  "speed": "30 ft., Fly 90 ft. (hover)",
+  "ac": 17,
+  "hp": "218 (19d10 + 114)"
  },
  "Doppelganger": {
   "size": "Medium",
   "init": "+4",
   "init_score": 14,
-  "speed": "30 ft."
+  "speed": "30 ft.",
+  "ac": 14,
+  "hp": "52 (8d8 + 16)"
  },
  "Draconic Spirit": {
   "size": "Large",
   "init": null,
   "init_score": null,
-  "speed": "30 ft., Fly 60 ft., Swim 30 ft."
+  "speed": "30 ft., Fly 60 ft., Swim 30 ft.",
+  "ac": 14,
+  "hp": null
  },
  "Draft Horse": {
   "size": "Large",
   "init": "+0",
   "init_score": 10,
-  "speed": "40 ft."
+  "speed": "40 ft.",
+  "ac": 10,
+  "hp": "15 (2d10 + 4)"
  },
  "Dragon Turtle": {
   "size": "Gargantuan",
   "init": "+6",
   "init_score": 16,
-  "speed": "20 ft., Swim 50 ft."
+  "speed": "20 ft., Swim 50 ft.",
+  "ac": 20,
+  "hp": "356 (23d20 + 115)"
  },
  "Dretch": {
   "size": "Small",
   "init": "+0",
   "init_score": 10,
-  "speed": "20 ft."
+  "speed": "20 ft.",
+  "ac": 11,
+  "hp": "18 (4d6 + 4)"
  },
  "Drider": {
   "size": "Large",
   "init": "+4",
   "init_score": 14,
-  "speed": "30 ft., Climb 30 ft."
+  "speed": "30 ft., Climb 30 ft.",
+  "ac": 19,
+  "hp": "123 (13d10 + 52)"
  },
  "Druid": {
   "size": "Medium or Small",
   "init": "+1",
   "init_score": 11,
-  "speed": "30 ft."
+  "speed": "30 ft.",
+  "ac": 13,
+  "hp": "44 (8d8 + 8)"
  },
  "Dryad": {
   "size": "Medium",
   "init": "+1",
   "init_score": 11,
-  "speed": "30 ft."
+  "speed": "30 ft.",
+  "ac": 16,
+  "hp": "22 (5d8)"
  },
  "Dust Mephit": {
   "size": "Small",
   "init": "+2",
   "init_score": 12,
-  "speed": "30 ft., Fly 30 ft."
+  "speed": "30 ft., Fly 30 ft.",
+  "ac": 12,
+  "hp": "17 (5d6)"
  },
  "Eagle": {
   "size": "Small",
   "init": "+2",
   "init_score": 12,
-  "speed": "10 ft., Fly 60 ft."
+  "speed": "10 ft., Fly 60 ft.",
+  "ac": 12,
+  "hp": "4 (1d6 + 1)"
  },
  "Earth Elemental": {
   "size": "Large",
   "init": "-1",
   "init_score": 9,
-  "speed": "30 ft., Burrow 30 ft."
+  "speed": "30 ft., Burrow 30 ft.",
+  "ac": 17,
+  "hp": "147 (14d10 + 70)"
  },
  "Efreeti": {
   "size": "Large",
   "init": "+1",
   "init_score": 11,
-  "speed": "40 ft., Fly 60 ft. (hover)"
+  "speed": "40 ft., Fly 60 ft. (hover)",
+  "ac": 17,
+  "hp": "212 (17d10 + 119)"
  },
  "Elephant": {
   "size": "Huge",
   "init": "-1",
   "init_score": 9,
-  "speed": "40 ft."
+  "speed": "40 ft.",
+  "ac": 12,
+  "hp": "76 (8d12 + 24)"
  },
  "Elk": {
   "size": "Large",
   "init": "+0",
   "init_score": 10,
-  "speed": "50 ft."
+  "speed": "50 ft.",
+  "ac": 10,
+  "hp": "11 (2d10)"
  },
  "Erinyes": {
   "size": "Medium",
   "init": "+7",
   "init_score": 17,
-  "speed": "30 ft., Fly 60 ft."
+  "speed": "30 ft., Fly 60 ft.",
+  "ac": 18,
+  "hp": "178 (21d8 + 84)"
  },
  "Ettercap": {
   "size": "Medium",
   "init": "+2",
   "init_score": 12,
-  "speed": "30 ft., Climb 30 ft."
+  "speed": "30 ft., Climb 30 ft.",
+  "ac": 13,
+  "hp": "44 (8d8 + 8)"
  },
  "Ettin": {
   "size": "Large",
   "init": "-1",
   "init_score": 9,
-  "speed": "40 ft."
+  "speed": "40 ft.",
+  "ac": 12,
+  "hp": "85 (10d10 + 30)"
  },
  "Fire Elemental": {
   "size": "Large",
   "init": "+3",
   "init_score": 13,
-  "speed": "50 ft."
+  "speed": "50 ft.",
+  "ac": 13,
+  "hp": "93 (11d10 + 33)"
  },
  "Fire Giant": {
   "size": "Huge",
   "init": "+3",
   "init_score": 13,
-  "speed": "30 ft."
+  "speed": "30 ft.",
+  "ac": 18,
+  "hp": "162 (13d12 + 78)"
  },
  "Flesh Golem": {
   "size": "Medium",
   "init": "-1",
   "init_score": 9,
-  "speed": "30 ft."
+  "speed": "30 ft.",
+  "ac": 9,
+  "hp": "127 (15d8 + 60)"
  },
  "Flying Snake": {
   "size": "Tiny",
   "init": "+2",
   "init_score": 12,
-  "speed": "30 ft., Fly 60 ft., Swim 30 ft."
+  "speed": "30 ft., Fly 60 ft., Swim 30 ft.",
+  "ac": 14,
+  "hp": "5 (2d4)"
  },
  "Frog": {
   "size": "Tiny",
   "init": "+1",
   "init_score": 11,
-  "speed": "20 ft., Swim 20 ft."
+  "speed": "20 ft., Swim 20 ft.",
+  "ac": 11,
+  "hp": "1 (1d4 - 1)"
  },
  "Frost Giant": {
   "size": "Huge",
   "init": "+2",
   "init_score": 12,
-  "speed": "40 ft."
+  "speed": "40 ft.",
+  "ac": 15,
+  "hp": "149 (13d12 + 65)"
  },
  "Gargoyle": {
   "size": "Medium",
   "init": "+2",
   "init_score": 12,
-  "speed": "30 ft., Fly 60 ft."
+  "speed": "30 ft., Fly 60 ft.",
+  "ac": 15,
+  "hp": "67 (9d8 + 27)"
  },
  "Gelatinous Cube": {
   "size": "Large",
   "init": "-4",
   "init_score": 6,
-  "speed": "15 ft."
+  "speed": "15 ft.",
+  "ac": 6,
+  "hp": "63 (6d10 + 30)"
  },
  "Ghast": {
   "size": "Medium",
   "init": "+3",
   "init_score": 13,
-  "speed": "30 ft."
+  "speed": "30 ft.",
+  "ac": 13,
+  "hp": "36 (8d8)"
  },
  "Ghost": {
   "size": "Medium",
   "init": "+1",
   "init_score": 11,
-  "speed": "5 ft., Fly 40 ft. (hover)"
+  "speed": "5 ft., Fly 40 ft. (hover)",
+  "ac": 11,
+  "hp": "45 (10d8)"
  },
  "Ghoul": {
   "size": "Medium",
   "init": "+2",
   "init_score": 12,
-  "speed": "30 ft."
+  "speed": "30 ft.",
+  "ac": 12,
+  "hp": "22 (5d8)"
  },
  "Giant Ape": {
   "size": "Huge",
   "init": "+5",
   "init_score": 15,
-  "speed": "40 ft., Climb 40 ft."
+  "speed": "40 ft., Climb 40 ft.",
+  "ac": 12,
+  "hp": "168 (16d12 + 64)"
  },
  "Giant Badger": {
   "size": "Medium",
   "init": "+0",
   "init_score": 10,
-  "speed": "30 ft., Burrow 10 ft."
+  "speed": "30 ft., Burrow 10 ft.",
+  "ac": 13,
+  "hp": "15 (2d8 + 6)"
  },
  "Giant Bat": {
   "size": "Large",
   "init": "+3",
   "init_score": 13,
-  "speed": "10 ft., Fly 60 ft."
+  "speed": "10 ft., Fly 60 ft.",
+  "ac": 13,
+  "hp": "22 (4d10)"
  },
  "Giant Boar": {
   "size": "Large",
   "init": "+0",
   "init_score": 10,
-  "speed": "40 ft."
+  "speed": "40 ft.",
+  "ac": 13,
+  "hp": "42 (5d10 + 15)"
  },
  "Giant Centipede": {
   "size": "Small",
   "init": "+2",
   "init_score": 12,
-  "speed": "30 ft., Climb 30 ft."
+  "speed": "30 ft., Climb 30 ft.",
+  "ac": 14,
+  "hp": "9 (2d6 + 2)"
  },
  "Giant Constrictor Snake": {
   "size": "Huge",
   "init": "+2",
   "init_score": 12,
-  "speed": "30 ft., Swim 30 ft."
+  "speed": "30 ft., Swim 30 ft.",
+  "ac": 12,
+  "hp": "60 (8d12 + 8)"
  },
  "Giant Crab": {
   "size": "Medium",
   "init": "+1",
   "init_score": 11,
-  "speed": "30 ft., Swim 30 ft."
+  "speed": "30 ft., Swim 30 ft.",
+  "ac": 15,
+  "hp": "13 (3d8)"
  },
  "Giant Crocodile": {
   "size": "Huge",
   "init": "-1",
   "init_score": 9,
-  "speed": "30 ft., Swim 50 ft."
+  "speed": "30 ft., Swim 50 ft.",
+  "ac": 14,
+  "hp": "85 (9d12 + 27)"
  },
  "Giant Eagle": {
   "size": "Large",
   "init": "+3",
   "init_score": 13,
-  "speed": "10 ft., Fly 80 ft."
+  "speed": "10 ft., Fly 80 ft.",
+  "ac": 13,
+  "hp": "26 (4d10 + 4)"
  },
  "Giant Elk": {
   "size": "Huge",
   "init": "+6",
   "init_score": 16,
-  "speed": "60 ft."
+  "speed": "60 ft.",
+  "ac": 14,
+  "hp": "42 (5d12 + 10)"
  },
  "Giant Fire Beetle": {
   "size": "Small",
   "init": "+0",
   "init_score": 10,
-  "speed": "30 ft., Climb 30 ft."
+  "speed": "30 ft., Climb 30 ft.",
+  "ac": 13,
+  "hp": "4 (1d6 + 1)"
  },
  "Giant Fly": {
   "size": "Large",
   "init": "+1",
   "init_score": 11,
-  "speed": "30 ft., Fly 60 ft."
+  "speed": "30 ft., Fly 60 ft.",
+  "ac": 11,
+  "hp": "19 (3d10 + 3)"
  },
  "Giant Frog": {
   "size": "Medium",
   "init": "+1",
   "init_score": 11,
-  "speed": "30 ft., Swim 30 ft."
+  "speed": "30 ft., Swim 30 ft.",
+  "ac": 11,
+  "hp": "18 (4d8)"
  },
  "Giant Goat": {
   "size": "Large",
   "init": "+1",
   "init_score": 11,
-  "speed": "40 ft., Climb 30 ft."
+  "speed": "40 ft., Climb 30 ft.",
+  "ac": 11,
+  "hp": "19 (3d10 + 3)"
  },
  "Giant Hyena": {
   "size": "Large",
   "init": "+2",
   "init_score": 12,
-  "speed": "50 ft."
+  "speed": "50 ft.",
+  "ac": 12,
+  "hp": "45 (6d10 + 12)"
  },
  "Giant Insect": {
   "size": "Large",
   "init": null,
   "init_score": null,
-  "speed": "40 ft., Climb 40 ft., Fly 40 ft. (Wasp only)"
+  "speed": "40 ft., Climb 40 ft., Fly 40 ft. (Wasp only)",
+  "ac": 11,
+  "hp": null
  },
  "Giant Lizard": {
   "size": "Large",
   "init": "+1",
   "init_score": 11,
-  "speed": "40 ft., Climb 40 ft."
+  "speed": "40 ft., Climb 40 ft.",
+  "ac": 12,
+  "hp": "19 (3d10 + 3)"
  },
  "Giant Octopus": {
   "size": "Large",
   "init": "+1",
   "init_score": 11,
-  "speed": "10 ft., Swim 60 ft."
+  "speed": "10 ft., Swim 60 ft.",
+  "ac": 11,
+  "hp": "45 (7d10 + 7)"
  },
  "Giant Owl": {
   "size": "Large",
   "init": "+2",
   "init_score": 12,
-  "speed": "5 ft., Fly 60 ft."
+  "speed": "5 ft., Fly 60 ft.",
+  "ac": 12,
+  "hp": "19 (3d10 + 3)",
+  "spell_dc": ""
  },
  "Giant Rat": {
   "size": "Small",
   "init": "+3",
   "init_score": 13,
-  "speed": "30 ft., Climb 30 ft."
+  "speed": "30 ft., Climb 30 ft.",
+  "ac": 13,
+  "hp": "7 (2d6)"
  },
  "Giant Scorpion": {
   "size": "Large",
   "init": "+1",
   "init_score": 11,
-  "speed": "40 ft."
+  "speed": "40 ft.",
+  "ac": 15,
+  "hp": "52 (7d10 + 14)"
  },
  "Giant Seahorse": {
   "size": "Large",
   "init": "+1",
   "init_score": 11,
-  "speed": "5 ft., Swim 40 ft."
+  "speed": "5 ft., Swim 40 ft.",
+  "ac": 14,
+  "hp": "16 (3d10)"
  },
  "Giant Shark": {
   "size": "Huge",
   "init": "+3",
   "init_score": 13,
-  "speed": "5 ft., Swim 60 ft."
+  "speed": "5 ft., Swim 60 ft.",
+  "ac": 13,
+  "hp": "92 (8d12 + 40)"
  },
  "Giant Spider": {
   "size": "Large",
   "init": "+3",
   "init_score": 13,
-  "speed": "30 ft., Climb 30 ft."
+  "speed": "30 ft., Climb 30 ft.",
+  "ac": 14,
+  "hp": "26 (4d10 + 4)"
  },
  "Giant Toad": {
   "size": "Large",
   "init": "+1",
   "init_score": 11,
-  "speed": "30 ft., Swim 30 ft."
+  "speed": "30 ft., Swim 30 ft.",
+  "ac": 11,
+  "hp": "39 (6d10 + 6)"
  },
  "Giant Venomous Snake": {
   "size": "Medium",
   "init": "+4",
   "init_score": 14,
-  "speed": "40 ft., Swim 40 ft."
+  "speed": "40 ft., Swim 40 ft.",
+  "ac": 14,
+  "hp": "11 (2d8 + 2)"
  },
  "Giant Vulture": {
   "size": "Large",
   "init": "+0",
   "init_score": 10,
-  "speed": "10 ft., Fly 60 ft."
+  "speed": "10 ft., Fly 60 ft.",
+  "ac": 10,
+  "hp": "25 (3d10 + 9)"
  },
  "Giant Wasp": {
   "size": "Medium",
   "init": "+2",
   "init_score": 12,
-  "speed": "10 ft., Fly 50 ft."
+  "speed": "10 ft., Fly 50 ft.",
+  "ac": 13,
+  "hp": "22 (5d8)"
  },
  "Giant Weasel": {
   "size": "Medium",
   "init": "+3",
   "init_score": 13,
-  "speed": "40 ft., Climb 30 ft."
+  "speed": "40 ft., Climb 30 ft.",
+  "ac": 13,
+  "hp": "9 (2d8)"
  },
  "Giant Wolf Spider": {
   "size": "Medium",
   "init": "+3",
   "init_score": 13,
-  "speed": "40 ft., Climb 40 ft."
+  "speed": "40 ft., Climb 40 ft.",
+  "ac": 13,
+  "hp": "11 (2d8 + 2)"
  },
  "Gibbering Mouther": {
   "size": "Medium",
   "init": "-1",
   "init_score": 9,
-  "speed": "20 ft., Swim 20 ft."
+  "speed": "20 ft., Swim 20 ft.",
+  "ac": 9,
+  "hp": "52 (7d8 + 21)"
  },
  "Glabrezu": {
   "size": "Large",
   "init": "+6",
   "init_score": 16,
-  "speed": "40 ft."
+  "speed": "40 ft.",
+  "ac": 17,
+  "hp": "189 (18d10 + 90)"
  },
  "Gladiator": {
   "size": "Medium or Small",
   "init": "+5",
   "init_score": 15,
-  "speed": "30 ft."
+  "speed": "30 ft.",
+  "ac": 16,
+  "hp": "112 (15d8 + 45)"
  },
  "Gnoll Warrior": {
   "size": "Medium",
   "init": "+1",
   "init_score": 11,
-  "speed": "30 ft."
+  "speed": "30 ft.",
+  "ac": 15,
+  "hp": "27 (6d8)"
  },
  "Goat": {
   "size": "Medium",
   "init": "+0",
   "init_score": 10,
-  "speed": "40 ft., Climb 30 ft."
+  "speed": "40 ft., Climb 30 ft.",
+  "ac": 10,
+  "hp": "4 (1d8)"
  },
  "Goblin Boss": {
   "size": "Small",
   "init": "+2",
   "init_score": 12,
-  "speed": "30 ft."
+  "speed": "30 ft.",
+  "ac": 17,
+  "hp": "21 (6d6)"
  },
  "Goblin Minion": {
   "size": "Small",
   "init": "+2",
   "init_score": 12,
-  "speed": "30 ft."
+  "speed": "30 ft.",
+  "ac": 12,
+  "hp": "7 (2d6)"
  },
  "Goblin Warrior": {
   "size": "Small",
   "init": "+2",
   "init_score": 12,
-  "speed": "30 ft."
+  "speed": "30 ft.",
+  "ac": 15,
+  "hp": "10 (3d6)"
  },
  "Gold Dragon Wyrmling": {
   "size": "Medium",
   "init": "+4",
   "init_score": 14,
-  "speed": "30 ft., Fly 60 ft., Swim 30 ft."
+  "speed": "30 ft., Fly 60 ft., Swim 30 ft.",
+  "ac": 17,
+  "hp": "60 (8d8 + 24)"
  },
  "Gorgon": {
   "size": "Large",
   "init": "+0",
   "init_score": 10,
-  "speed": "40 ft."
+  "speed": "40 ft.",
+  "ac": 19,
+  "hp": "114 (12d10 + 48)"
  },
  "Gray Ooze": {
   "size": "Medium",
   "init": "-2",
   "init_score": 13,
-  "speed": "10 ft., Climb 10 ft."
+  "speed": "10 ft., Climb 10 ft.",
+  "ac": 9,
+  "hp": "22 (3d8 + 9)"
  },
  "Green Dragon Wyrmling": {
   "size": "Medium",
   "init": "+3",
   "init_score": 13,
-  "speed": "30 ft., Fly 60 ft., Swim 30 ft."
+  "speed": "30 ft., Fly 60 ft., Swim 30 ft.",
+  "ac": 17,
+  "hp": "38 (7d8 + 7)"
  },
  "Green Hag": {
   "size": "Medium",
   "init": "+1",
   "init_score": 11,
-  "speed": "30 ft., Swim 30 ft."
+  "speed": "30 ft., Swim 30 ft.",
+  "ac": 17,
+  "hp": "82 (11d8 + 33)"
  },
  "Grick": {
   "size": "Medium",
   "init": "+2",
   "init_score": 12,
-  "speed": "30 ft., Climb 30 ft."
+  "speed": "30 ft., Climb 30 ft.",
+  "ac": 14,
+  "hp": "54 (12d8)"
  },
  "Griffon": {
   "size": "Large",
   "init": "+2",
   "init_score": 12,
-  "speed": "30 ft., Fly 80 ft."
+  "speed": "30 ft., Fly 80 ft.",
+  "ac": 12,
+  "hp": "59 (7d10 + 21)"
  },
  "Grimlock": {
   "size": "Medium",
   "init": "+1",
   "init_score": 11,
-  "speed": "30 ft., Climb 30 ft."
+  "speed": "30 ft., Climb 30 ft.",
+  "ac": 11,
+  "hp": "11 (2d8 + 2)"
  },
  "Guard": {
   "size": "Medium or Small",
   "init": "+1",
   "init_score": 11,
-  "speed": "30 ft."
+  "speed": "30 ft.",
+  "ac": 16,
+  "hp": "11 (2d8 + 2)"
  },
  "Guard Captain": {
   "size": "Medium or Small",
   "init": "+4",
   "init_score": 14,
-  "speed": "30 ft."
+  "speed": "30 ft.",
+  "ac": 18,
+  "hp": "75 (10d8 + 30)"
  },
  "Guardian Naga": {
   "size": "Large",
   "init": "+4",
   "init_score": 14,
-  "speed": "40 ft., Climb 40 ft., Swim 40 ft."
+  "speed": "40 ft., Climb 40 ft., Swim 40 ft.",
+  "ac": 18,
+  "hp": "136 (16d10 + 48)"
  },
  "Half-Dragon": {
   "size": "Medium",
   "init": "+5",
   "init_score": 15,
-  "speed": "40 ft."
+  "speed": "40 ft.",
+  "ac": 18,
+  "hp": "105 (14d8 + 42)"
  },
  "Harpy": {
   "size": "Medium",
   "init": "+1",
   "init_score": 11,
-  "speed": "20 ft., Fly 40 ft."
+  "speed": "20 ft., Fly 40 ft.",
+  "ac": 11,
+  "hp": "38 (7d8 + 7)"
  },
  "Hawk": {
   "size": "Tiny",
   "init": "+3",
   "init_score": 13,
-  "speed": "10 ft., Fly 60 ft."
+  "speed": "10 ft., Fly 60 ft.",
+  "ac": 13,
+  "hp": "1 (1d4 - 1)"
  },
  "Hell Hound": {
   "size": "Medium",
   "init": "+1",
   "init_score": 11,
-  "speed": "50 ft."
+  "speed": "50 ft.",
+  "ac": 15,
+  "hp": "58 (9d8 + 18)"
  },
  "Hezrou": {
   "size": "Large",
   "init": "+6",
   "init_score": 16,
-  "speed": "30 ft."
+  "speed": "30 ft.",
+  "ac": 18,
+  "hp": "157 (15d10 + 75)"
  },
  "Hill Giant": {
   "size": "Huge",
   "init": "+2",
   "init_score": 12,
-  "speed": "40 ft."
+  "speed": "40 ft.",
+  "ac": 13,
+  "hp": "105 (10d12 + 40)"
  },
  "Hippogriff": {
   "size": "Large",
   "init": "+1",
   "init_score": 11,
-  "speed": "40 ft., Fly 60 ft."
+  "speed": "40 ft., Fly 60 ft.",
+  "ac": 11,
+  "hp": "26 (4d10 + 4)"
  },
  "Hippopotamus": {
   "size": "Large",
   "init": "-2",
   "init_score": 8,
-  "speed": "30 ft., Swim 30 ft."
+  "speed": "30 ft., Swim 30 ft.",
+  "ac": 14,
+  "hp": "82 (11d10 + 22)"
  },
  "Hobgoblin Captain": {
   "size": "Medium",
   "init": "+4",
   "init_score": 14,
-  "speed": "30 ft."
+  "speed": "30 ft.",
+  "ac": 17,
+  "hp": "58 (9d8 + 18)"
  },
  "Hobgoblin Warrior": {
   "size": "Medium",
   "init": "+3",
   "init_score": 13,
-  "speed": "30 ft."
+  "speed": "30 ft.",
+  "ac": 18,
+  "hp": "11 (2d8 + 2)"
  },
  "Homunculus": {
   "size": "Tiny",
   "init": "+2",
   "init_score": 12,
-  "speed": "20 ft., Fly 40 ft."
+  "speed": "20 ft., Fly 40 ft.",
+  "ac": 13,
+  "hp": "4 (1d4 + 2)"
  },
  "Horned Devil": {
   "size": "Large",
   "init": "+7",
   "init_score": 17,
-  "speed": "30 ft., Fly 60 ft."
+  "speed": "30 ft., Fly 60 ft.",
+  "ac": 18,
+  "hp": "199 (19d10 + 95)"
  },
  "Hunter Shark": {
   "size": "Large",
   "init": "+2",
   "init_score": 12,
-  "speed": "5 ft., Swim 40 ft."
+  "speed": "5 ft., Swim 40 ft.",
+  "ac": 12,
+  "hp": "45 (6d10 + 12)"
  },
  "Hydra": {
   "size": "Huge",
   "init": "+4",
   "init_score": 14,
-  "speed": "40 ft., Swim 40 ft."
+  "speed": "40 ft., Swim 40 ft.",
+  "ac": 15,
+  "hp": "184 (16d12 + 80)"
  },
  "Hyena": {
   "size": "Medium",
   "init": "+1",
   "init_score": 11,
-  "speed": "50 ft."
+  "speed": "50 ft.",
+  "ac": 11,
+  "hp": "5 (1d8 + 1)"
  },
  "Ice Devil": {
   "size": "Large",
   "init": "+7",
   "init_score": 17,
-  "speed": "40 ft."
+  "speed": "40 ft.",
+  "ac": 18,
+  "hp": "228 (24d10 + 96)"
  },
  "Ice Mephit": {
   "size": "Small",
   "init": "+1",
   "init_score": 11,
-  "speed": "30 ft., Fly 30 ft."
+  "speed": "30 ft., Fly 30 ft.",
+  "ac": 11,
+  "hp": "21 (6d6)"
  },
  "Imp": {
   "size": "Tiny",
   "init": "+3",
   "init_score": 13,
-  "speed": "20 ft., Fly 40 ft."
+  "speed": "20 ft., Fly 40 ft.",
+  "ac": 13,
+  "hp": "21 (6d4 + 6)"
  },
  "Incubus": {
   "size": "Medium",
   "init": "+3",
   "init_score": 13,
-  "speed": "30 ft., Fly 60 ft."
+  "speed": "30 ft., Fly 60 ft.",
+  "ac": 15,
+  "hp": "66 (12d8 + 12)"
  },
  "Invisible Stalker": {
   "size": "Large",
   "init": "+7",
   "init_score": 22,
-  "speed": "50 ft., Fly 50 ft. (hover)"
+  "speed": "50 ft., Fly 50 ft. (hover)",
+  "ac": 14,
+  "hp": "97 (13d10 + 26)"
  },
  "Iron Golem": {
   "size": "Large",
   "init": "+9",
   "init_score": 19,
-  "speed": "30 ft."
+  "speed": "30 ft.",
+  "ac": 20,
+  "hp": "252 (24d10 + 120)"
  },
  "Jackal": {
   "size": "Small",
   "init": "+2",
   "init_score": 12,
-  "speed": "40 ft."
+  "speed": "40 ft.",
+  "ac": 12,
+  "hp": "3 (1d6)"
  },
  "Killer Whale": {
   "size": "Huge",
   "init": "+2",
   "init_score": 12,
-  "speed": "5 ft., Swim 60 ft."
+  "speed": "5 ft., Swim 60 ft.",
+  "ac": 12,
+  "hp": "90 (12d12 + 12)"
  },
  "Knight": {
   "size": "Medium or Small",
   "init": "+0",
   "init_score": 10,
-  "speed": "30 ft."
+  "speed": "30 ft.",
+  "ac": 18,
+  "hp": "52 (8d8 + 16)"
  },
  "Kobold Warrior": {
   "size": "Small",
   "init": "+2",
   "init_score": 12,
-  "speed": "30 ft."
+  "speed": "30 ft.",
+  "ac": 14,
+  "hp": "7 (3d6 - 3)"
  },
  "Kraken": {
   "size": "Gargantuan",
   "init": "+14",
   "init_score": 24,
-  "speed": "30 ft., Swim 120 ft."
+  "speed": "30 ft., Swim 120 ft.",
+  "ac": 18,
+  "hp": "481 (26d20 + 208)"
  },
  "Lamia": {
   "size": "Large",
   "init": "+1",
   "init_score": 11,
-  "speed": "40 ft."
+  "speed": "40 ft.",
+  "ac": 13,
+  "hp": "97 (13d10 + 26)"
  },
  "Lemure": {
   "size": "Medium",
   "init": "-3",
   "init_score": 7,
-  "speed": "20 ft."
+  "speed": "20 ft.",
+  "ac": 9,
+  "hp": "9 (2d8)"
  },
  "Lich": {
   "size": "Medium",
   "init": "+17",
   "init_score": 27,
-  "speed": "30 ft."
+  "speed": "30 ft.",
+  "ac": 20,
+  "hp": "315 (42d8 + 126)"
  },
  "Lion": {
   "size": "Large",
   "init": "+2",
   "init_score": 12,
-  "speed": "50 ft."
+  "speed": "50 ft.",
+  "ac": 12,
+  "hp": "22 (4d10)"
  },
  "Lizard": {
   "size": "Tiny",
   "init": "+0",
   "init_score": 10,
-  "speed": "20 ft., Climb 20 ft."
+  "speed": "20 ft., Climb 20 ft.",
+  "ac": 10,
+  "hp": "2 (1d4)"
  },
  "Mage": {
   "size": "Medium or Small",
   "init": "+2",
   "init_score": 12,
-  "speed": "30 ft."
+  "speed": "30 ft.",
+  "ac": 15,
+  "hp": "81 (18d8)"
  },
  "Magma Mephit": {
   "size": "Small",
   "init": "+1",
   "init_score": 11,
-  "speed": "30 ft., Fly 30 ft."
+  "speed": "30 ft., Fly 30 ft.",
+  "ac": 11,
+  "hp": "18 (4d6 + 4)"
  },
  "Magmin": {
   "size": "Small",
   "init": "+2",
   "init_score": 12,
-  "speed": "30 ft."
+  "speed": "30 ft.",
+  "ac": 14,
+  "hp": "13 (3d6 + 3)"
  },
  "Mammoth": {
   "size": "Huge",
   "init": "+2",
   "init_score": 12,
-  "speed": "50 ft."
+  "speed": "50 ft.",
+  "ac": 13,
+  "hp": "126 (11d12 + 55)"
  },
  "Manticore": {
   "size": "Large",
   "init": "+3",
   "init_score": 13,
-  "speed": "30 ft., Fly 50 ft."
+  "speed": "30 ft., Fly 50 ft.",
+  "ac": 14,
+  "hp": "68 (8d10 + 24)"
  },
  "Marilith": {
   "size": "Large",
   "init": "+10",
   "init_score": 20,
-  "speed": "40 ft., Climb 40 ft."
+  "speed": "40 ft., Climb 40 ft.",
+  "ac": 16,
+  "hp": "220 (21d10 + 105)"
  },
  "Mastiff": {
   "size": "Medium",
   "init": "+2",
   "init_score": 12,
-  "speed": "40 ft."
+  "speed": "40 ft.",
+  "ac": 12,
+  "hp": "5 (1d8 + 1)"
  },
  "Medusa": {
   "size": "Medium",
   "init": "+6",
   "init_score": 16,
-  "speed": "30 ft."
+  "speed": "30 ft.",
+  "ac": 15,
+  "hp": "127 (17d8 + 51)"
  },
  "Merfolk Skirmisher": {
   "size": "Medium",
   "init": "+1",
   "init_score": 11,
-  "speed": "10 ft., Swim 40 ft."
+  "speed": "10 ft., Swim 40 ft.",
+  "ac": 11,
+  "hp": "11 (2d8 + 2)"
  },
  "Merrow": {
   "size": "Large",
   "init": "+2",
   "init_score": 12,
-  "speed": "10 ft., Swim 40 ft."
+  "speed": "10 ft., Swim 40 ft.",
+  "ac": 13,
+  "hp": "45 (6d10 + 12)"
  },
  "Mimic": {
   "size": "Medium",
   "init": "+3",
   "init_score": 13,
-  "speed": "20 ft."
+  "speed": "20 ft.",
+  "ac": 12,
+  "hp": "58 (9d8 + 18)"
  },
  "Minotaur Skeleton": {
   "size": "Large",
   "init": "+0",
   "init_score": 10,
-  "speed": "40 ft."
+  "speed": "40 ft.",
+  "ac": 12,
+  "hp": "45 (6d10 + 12)"
  },
  "Minotaur of Baphomet": {
   "size": "Large",
   "init": "+0",
   "init_score": 10,
-  "speed": "40 ft."
+  "speed": "40 ft.",
+  "ac": 14,
+  "hp": "85 (10d10 + 30)"
  },
  "Mule": {
   "size": "Medium",
   "init": "+0",
   "init_score": 10,
-  "speed": "40 ft."
+  "speed": "40 ft.",
+  "ac": 10,
+  "hp": "11 (2d8 + 2)"
  },
  "Mummy": {
   "size": "Medium or Small",
   "init": "-1",
   "init_score": 9,
-  "speed": "20 ft."
+  "speed": "20 ft.",
+  "ac": 11,
+  "hp": "58 (9d8 + 18)"
  },
  "Mummy Lord": {
   "size": "Medium or Small",
   "init": "+10",
   "init_score": 20,
-  "speed": "30 ft."
+  "speed": "30 ft.",
+  "ac": 17,
+  "hp": "187 (25d8 + 75)"
  },
  "Nalfeshnee": {
   "size": "Large",
   "init": "+5",
   "init_score": 15,
-  "speed": "20 ft., Fly 30 ft."
+  "speed": "20 ft., Fly 30 ft.",
+  "ac": 18,
+  "hp": "184 (16d10 + 96)"
  },
  "Night Hag": {
   "size": "Medium",
   "init": "+5",
   "init_score": 15,
-  "speed": "30 ft."
+  "speed": "30 ft.",
+  "ac": 17,
+  "hp": "112 (15d8 + 45)"
  },
  "Nightmare": {
   "size": "Large",
   "init": "+2",
   "init_score": 12,
-  "speed": "60 ft., Fly 90 ft. (hover)"
+  "speed": "60 ft., Fly 90 ft. (hover)",
+  "ac": 13,
+  "hp": "68 (8d10 + 24)"
  },
  "Noble": {
   "size": "Medium or Small",
   "init": "+1",
   "init_score": 11,
-  "speed": "30 ft."
+  "speed": "30 ft.",
+  "ac": 15,
+  "hp": "9 (2d8)"
  },
  "Ochre Jelly": {
   "size": "Large",
   "init": "-2",
   "init_score": 8,
-  "speed": "20 ft., Climb 20 ft."
+  "speed": "20 ft., Climb 20 ft.",
+  "ac": 8,
+  "hp": "52 (7d10 + 14)"
  },
  "Octopus": {
   "size": "Small",
   "init": "+2",
   "init_score": 12,
-  "speed": "5 ft., Swim 30 ft."
+  "speed": "5 ft., Swim 30 ft.",
+  "ac": 12,
+  "hp": "3 (1d6)"
  },
  "Ogre": {
   "size": "Large",
   "init": "-1",
   "init_score": 9,
-  "speed": "40 ft."
+  "speed": "40 ft.",
+  "ac": 11,
+  "hp": "68 (8d10 + 24)"
  },
  "Ogre Zombie": {
   "size": "Large",
   "init": "-2",
   "init_score": 8,
-  "speed": "30 ft."
+  "speed": "30 ft.",
+  "ac": 8,
+  "hp": "85 (9d10 + 36)"
  },
  "Oni": {
   "size": "Large",
   "init": "+0",
   "init_score": 10,
-  "speed": "30 ft., Fly 30 ft. (hover)"
+  "speed": "30 ft., Fly 30 ft. (hover)",
+  "ac": 17,
+  "hp": "119 (14d10 + 42)"
  },
  "Otherworldly Steed": {
   "size": "Large",
   "init": null,
   "init_score": null,
-  "speed": "60 ft., Fly 60 ft. (requires level 4+ spell)"
+  "speed": "60 ft., Fly 60 ft. (requires level 4+ spell)",
+  "ac": 10,
+  "hp": null
  },
  "Otyugh": {
   "size": "Large",
   "init": "+0",
   "init_score": 10,
-  "speed": "30 ft."
+  "speed": "30 ft.",
+  "ac": 14,
+  "hp": "104 (11d10 + 44)"
  },
  "Owl": {
   "size": "Tiny",
   "init": "+1",
   "init_score": 11,
-  "speed": "5 ft., Fly 60 ft."
+  "speed": "5 ft., Fly 60 ft.",
+  "ac": 11,
+  "hp": "1 (1d4 - 1)"
  },
  "Owlbear": {
   "size": "Large",
   "init": "+1",
   "init_score": 11,
-  "speed": "40 ft., Climb 40 ft."
+  "speed": "40 ft., Climb 40 ft.",
+  "ac": 13,
+  "hp": "59 (7d10 + 21)"
  },
  "Panther": {
   "size": "Medium",
   "init": "+3",
   "init_score": 13,
-  "speed": "50 ft., Climb 40 ft."
+  "speed": "50 ft., Climb 40 ft.",
+  "ac": 13,
+  "hp": "13 (3d8)"
  },
  "Pegasus": {
   "size": "Large",
   "init": "+2",
   "init_score": 12,
-  "speed": "60 ft., Fly 90 ft."
+  "speed": "60 ft., Fly 90 ft.",
+  "ac": 12,
+  "hp": "59 (7d10 + 21)"
  },
  "Phase Spider": {
   "size": "Large",
   "init": "+3",
   "init_score": 13,
-  "speed": "30 ft., Climb 30 ft."
+  "speed": "30 ft., Climb 30 ft.",
+  "ac": 14,
+  "hp": "45 (7d10 + 7)"
  },
  "Piranha": {
   "size": "Tiny",
   "init": "+3",
   "init_score": 13,
-  "speed": "5 ft., Swim 40 ft."
+  "speed": "5 ft., Swim 40 ft.",
+  "ac": 13,
+  "hp": "1 (1d4 - 1)"
  },
  "Pirate": {
   "size": "Medium or Small",
   "init": "+5",
   "init_score": 15,
-  "speed": "30 ft."
+  "speed": "30 ft.",
+  "ac": 14,
+  "hp": "33 (6d8 + 6)"
  },
  "Pirate Captain": {
   "size": "Medium or Small",
   "init": "+7",
   "init_score": 17,
-  "speed": "30 ft."
+  "speed": "30 ft.",
+  "ac": 17,
+  "hp": "84 (13d8 + 26)"
  },
  "Pit Fiend": {
   "size": "Large",
   "init": "+14",
   "init_score": 24,
-  "speed": "30 ft., Fly 60 ft."
+  "speed": "30 ft., Fly 60 ft.",
+  "ac": 21,
+  "hp": "337 (27d10 + 189)"
  },
  "Planetar": {
   "size": "Large",
   "init": "+10",
   "init_score": 20,
-  "speed": "40 ft., Fly 120 ft. (hover)"
+  "speed": "40 ft., Fly 120 ft. (hover)",
+  "ac": 19,
+  "hp": "262 (21d10 + 147)"
  },
  "Plesiosaurus": {
   "size": "Large",
   "init": "+2",
   "init_score": 12,
-  "speed": "20 ft., Swim 40 ft."
+  "speed": "20 ft., Swim 40 ft.",
+  "ac": 13,
+  "hp": "68 (8d10 + 24)"
  },
  "Polar Bear": {
   "size": "Large",
   "init": "+2",
   "init_score": 12,
-  "speed": "40 ft., Swim 40 ft."
+  "speed": "40 ft., Swim 40 ft.",
+  "ac": 12,
+  "hp": "42 (5d10 + 15)"
  },
  "Pony": {
   "size": "Medium",
   "init": "+0",
   "init_score": 10,
-  "speed": "40 ft."
+  "speed": "40 ft.",
+  "ac": 10,
+  "hp": "11 (2d8 + 2)"
  },
  "Priest": {
   "size": "Medium or Small",
   "init": "+0",
   "init_score": 10,
-  "speed": "30 ft."
+  "speed": "30 ft.",
+  "ac": 13,
+  "hp": "38 (7d8 + 7)",
+  "spell_dc": "13"
  },
  "Priest Acolyte": {
   "size": "Medium or Small",
   "init": "+0",
   "init_score": 10,
-  "speed": "30 ft."
+  "speed": "30 ft.",
+  "ac": 13,
+  "hp": "11 (2d8 + 2)",
+  "spell_dc": ""
  },
  "Pseudodragon": {
   "size": "Tiny",
   "init": "+2",
   "init_score": 12,
-  "speed": "15 ft., Fly 60 ft."
+  "speed": "15 ft., Fly 60 ft.",
+  "ac": 14,
+  "hp": "10 (3d4 + 3)"
  },
  "Pteranodon": {
   "size": "Medium",
   "init": "+2",
   "init_score": 12,
-  "speed": "10 ft., Fly 60 ft."
+  "speed": "10 ft., Fly 60 ft.",
+  "ac": 13,
+  "hp": "13 (3d8)"
  },
  "Purple Worm": {
   "size": "Gargantuan",
   "init": "+3",
   "init_score": 13,
-  "speed": "50 ft., Burrow 50 ft."
+  "speed": "50 ft., Burrow 50 ft.",
+  "ac": 18,
+  "hp": "247 (15d20 + 90)"
  },
  "Quasit": {
   "size": "Tiny",
   "init": "+3",
   "init_score": 13,
-  "speed": "40 ft."
+  "speed": "40 ft.",
+  "ac": 13,
+  "hp": "25 (10d4)"
  },
  "Rakshasa": {
   "size": "Medium",
   "init": "+8",
   "init_score": 18,
-  "speed": "40 ft."
+  "speed": "40 ft.",
+  "ac": 17,
+  "hp": "221 (26d8 + 104)"
  },
  "Rat": {
   "size": "Tiny",
   "init": "+0",
   "init_score": 10,
-  "speed": "20 ft., Climb 20 ft."
+  "speed": "20 ft., Climb 20 ft.",
+  "ac": 10,
+  "hp": "1 (1d4 - 1)"
  },
  "Raven": {
   "size": "Tiny",
   "init": "+2",
   "init_score": 12,
-  "speed": "10 ft., Fly 50 ft."
+  "speed": "10 ft., Fly 50 ft.",
+  "ac": 12,
+  "hp": "2 (1d4)"
  },
  "Red Dragon Wyrmling": {
   "size": "Medium",
   "init": "+2",
   "init_score": 12,
-  "speed": "30 ft., Climb 30 ft., Fly 60 ft."
+  "speed": "30 ft., Climb 30 ft., Fly 60 ft.",
+  "ac": 17,
+  "hp": "75 (10d8 + 30)"
  },
  "Reef Shark": {
   "size": "Medium",
   "init": "+2",
   "init_score": 12,
-  "speed": "5 ft., Swim 30 ft."
+  "speed": "5 ft., Swim 30 ft.",
+  "ac": 12,
+  "hp": "22 (4d8 + 4)"
  },
  "Remorhaz": {
   "size": "Huge",
   "init": "+5",
   "init_score": 15,
-  "speed": "40 ft., Burrow 30 ft."
+  "speed": "40 ft., Burrow 30 ft.",
+  "ac": 17,
+  "hp": "195 (17d12 + 85)"
  },
  "Rhinoceros": {
   "size": "Large",
   "init": "-1",
   "init_score": 9,
-  "speed": "40 ft."
+  "speed": "40 ft.",
+  "ac": 13,
+  "hp": "45 (6d10 + 12)"
  },
  "Riding Horse": {
   "size": "Large",
   "init": "+1",
   "init_score": 11,
-  "speed": "60 ft."
+  "speed": "60 ft.",
+  "ac": 11,
+  "hp": "13 (2d10 + 2)"
  },
  "Roc": {
   "size": "Gargantuan",
   "init": "+8",
   "init_score": 18,
-  "speed": "20 ft., Fly 120 ft."
+  "speed": "20 ft., Fly 120 ft.",
+  "ac": 15,
+  "hp": "248 (16d20 + 80)"
  },
  "Roper": {
   "size": "Large",
   "init": "+5",
   "init_score": 15,
-  "speed": "10 ft., Climb 20 ft."
+  "speed": "10 ft., Climb 20 ft.",
+  "ac": 20,
+  "hp": "93 (11d10 + 33)"
  },
  "Rust Monster": {
   "size": "Medium",
   "init": "+1",
   "init_score": 11,
-  "speed": "40 ft."
+  "speed": "40 ft.",
+  "ac": 14,
+  "hp": "33 (6d8 + 6)"
  },
  "Saber-Toothed Tiger": {
   "size": "Large",
   "init": "+3",
   "init_score": 13,
-  "speed": "40 ft."
+  "speed": "40 ft.",
+  "ac": 13,
+  "hp": "52 (7d10 + 14)"
  },
  "Sahuagin Warrior": {
   "size": "Medium",
   "init": "+0",
   "init_score": 10,
-  "speed": "30 ft., Swim 40 ft."
+  "speed": "30 ft., Swim 40 ft.",
+  "ac": 12,
+  "hp": "22 (4d8 + 4)"
  },
  "Salamander": {
   "size": "Large",
   "init": "+2",
   "init_score": 12,
-  "speed": "30 ft., Climb 30 ft."
+  "speed": "30 ft., Climb 30 ft.",
+  "ac": 15,
+  "hp": "90 (12d10 + 24)"
  },
  "Satyr": {
   "size": "Medium",
   "init": "+3",
   "init_score": 13,
-  "speed": "40 ft."
+  "speed": "40 ft.",
+  "ac": 13,
+  "hp": "31 (7d8)"
  },
  "Scorpion": {
   "size": "Tiny",
   "init": "+0",
   "init_score": 10,
-  "speed": "10 ft."
+  "speed": "10 ft.",
+  "ac": 11,
+  "hp": "1 (1d4 - 1)"
  },
  "Scout": {
   "size": "Medium or Small",
   "init": "+2",
   "init_score": 12,
-  "speed": "30 ft."
+  "speed": "30 ft.",
+  "ac": 13,
+  "hp": "16 (3d8 + 3)"
  },
  "Sea Hag": {
   "size": "Medium",
   "init": "+1",
   "init_score": 11,
-  "speed": "30 ft., Swim 40 ft."
+  "speed": "30 ft., Swim 40 ft.",
+  "ac": 14,
+  "hp": "52 (7d8 + 21)"
  },
  "Seahorse": {
   "size": "Tiny",
   "init": "+1",
   "init_score": 11,
-  "speed": "5 ft., Swim 20 ft."
+  "speed": "5 ft., Swim 20 ft.",
+  "ac": 12,
+  "hp": "1 (1d4 - 1)"
  },
  "Shadow": {
   "size": "Medium",
   "init": "+2",
   "init_score": 12,
-  "speed": "40 ft."
+  "speed": "40 ft.",
+  "ac": 12,
+  "hp": "27 (5d8 + 5)"
  },
  "Shambling Mound": {
   "size": "Large",
   "init": "-1",
   "init_score": 9,
-  "speed": "30 ft., Swim 20 ft."
+  "speed": "30 ft., Swim 20 ft.",
+  "ac": 15,
+  "hp": "110 (13d10 + 39)"
  },
  "Shield Guardian": {
   "size": "Large",
   "init": "-1",
   "init_score": 9,
-  "speed": "30 ft."
+  "speed": "30 ft.",
+  "ac": 17,
+  "hp": "142 (15d10 + 60)"
  },
  "Shrieker Fungus": {
   "size": "Medium",
   "init": "-5",
   "init_score": 5,
-  "speed": "5 ft."
+  "speed": "5 ft.",
+  "ac": 5,
+  "hp": "13 (3d8)"
  },
  "Silver Dragon Wyrmling": {
   "size": "Medium",
   "init": "+2",
   "init_score": 12,
-  "speed": "30 ft., Fly 60 ft."
+  "speed": "30 ft., Fly 60 ft.",
+  "ac": 17,
+  "hp": "45 (6d8 + 18)"
  },
  "Skeleton": {
   "size": "Medium",
   "init": "+3",
   "init_score": 13,
-  "speed": "30 ft."
+  "speed": "30 ft.",
+  "ac": 14,
+  "hp": "13 (2d8 + 4)"
  },
  "Solar": {
   "size": "Large",
   "init": "+20",
   "init_score": 30,
-  "speed": "50 ft., Fly 150 ft. (hover)"
+  "speed": "50 ft., Fly 150 ft. (hover)",
+  "ac": 21,
+  "hp": "297 (22d10 + 176)"
  },
  "Specter": {
   "size": "Medium",
   "init": "+2",
   "init_score": 12,
-  "speed": "30 ft., Fly 50 ft. (hover)"
+  "speed": "30 ft., Fly 50 ft. (hover)",
+  "ac": 12,
+  "hp": "22 (5d8)"
  },
  "Sphinx of Lore": {
   "size": "Large",
   "init": "+10",
   "init_score": 20,
-  "speed": "40 ft., Fly 60 ft."
+  "speed": "40 ft., Fly 60 ft.",
+  "ac": 17,
+  "hp": "170 (20d10 + 60)"
  },
  "Sphinx of Valor": {
   "size": "Large",
   "init": "+12",
   "init_score": 22,
-  "speed": "40 ft., Fly 60 ft."
+  "speed": "40 ft., Fly 60 ft.",
+  "ac": 17,
+  "hp": "199 (19d10 + 95)"
  },
  "Sphinx of Wonder": {
   "size": "Tiny",
   "init": "+3",
   "init_score": 13,
-  "speed": "20 ft., Fly 40 ft."
+  "speed": "20 ft., Fly 40 ft.",
+  "ac": 13,
+  "hp": "24 (7d4 + 7)"
  },
  "Spider": {
   "size": "Tiny",
   "init": "+2",
   "init_score": 12,
-  "speed": "20 ft., Climb 20 ft."
+  "speed": "20 ft., Climb 20 ft.",
+  "ac": 12,
+  "hp": "1 (1d4 - 1)"
  },
  "Spirit Naga": {
   "size": "Large",
   "init": "+3",
   "init_score": 13,
-  "speed": "40 ft."
+  "speed": "40 ft.",
+  "ac": 17,
+  "hp": "135 (18d10 + 36)"
  },
  "Sprite": {
   "size": "Tiny",
   "init": "+4",
   "init_score": 14,
-  "speed": "10 ft., Fly 40 ft."
+  "speed": "10 ft., Fly 40 ft.",
+  "ac": 15,
+  "hp": "10 (4d4)"
  },
  "Spy": {
   "size": "Medium or Small",
   "init": "+4",
   "init_score": 14,
-  "speed": "30 ft., Climb 30 ft."
+  "speed": "30 ft., Climb 30 ft.",
+  "ac": 12,
+  "hp": "27 (6d8)"
  },
  "Steam Mephit": {
   "size": "Small",
   "init": "+0",
   "init_score": 10,
-  "speed": "30 ft., Fly 30 ft."
+  "speed": "30 ft., Fly 30 ft.",
+  "ac": 10,
+  "hp": "17 (5d6)"
  },
  "Stirge": {
   "size": "Tiny",
   "init": "+3",
   "init_score": 13,
-  "speed": "10 ft., Fly 40 ft."
+  "speed": "10 ft., Fly 40 ft.",
+  "ac": 13,
+  "hp": "5 (2d4)"
  },
  "Stone Giant": {
   "size": "Huge",
   "init": "+5",
   "init_score": 15,
-  "speed": "40 ft."
+  "speed": "40 ft.",
+  "ac": 17,
+  "hp": "126 (11d12 + 55)"
  },
  "Stone Golem": {
   "size": "Large",
   "init": "+3",
   "init_score": 13,
-  "speed": "30 ft."
+  "speed": "30 ft.",
+  "ac": 18,
+  "hp": "220 (21d10 + 105)"
  },
  "Storm Giant": {
   "size": "Huge",
   "init": "+7",
   "init_score": 17,
-  "speed": "50 ft., Fly 25 ft. (hover), Swim 50 ft."
+  "speed": "50 ft., Fly 25 ft. (hover), Swim 50 ft.",
+  "ac": 16,
+  "hp": "230 (20d12 + 100)"
  },
  "Succubus": {
   "size": "Medium",
   "init": "+3",
   "init_score": 13,
-  "speed": "30 ft., Fly 60 ft."
+  "speed": "30 ft., Fly 60 ft.",
+  "ac": 15,
+  "hp": "71 (13d8 + 13)"
  },
  "Swarm of Bats": {
   "size": "Large",
   "init": "+2",
   "init_score": 12,
-  "speed": "5 ft., Fly 30 ft."
+  "speed": "5 ft., Fly 30 ft.",
+  "ac": 12,
+  "hp": "11 (2d10)"
  },
  "Swarm of Crawling Claws": {
   "size": "Medium",
   "init": "+2",
   "init_score": 12,
-  "speed": "30 ft., Climb 30 ft."
+  "speed": "30 ft., Climb 30 ft.",
+  "ac": 12,
+  "hp": "49 (11d8)"
  },
  "Swarm of Insects": {
   "size": "Medium",
   "init": "+1",
   "init_score": 11,
-  "speed": "20 ft., Climb or Fly 20 ft. (GM's choice)"
+  "speed": "20 ft., Climb or Fly 20 ft. (GM's choice)",
+  "ac": 11,
+  "hp": "19 (3d8 + 6)"
  },
  "Swarm of Piranhas": {
   "size": "Medium",
   "init": "+3",
   "init_score": 13,
-  "speed": "5 ft., Swim 40 ft."
+  "speed": "5 ft., Swim 40 ft.",
+  "ac": 13,
+  "hp": "28 (8d8 - 8)"
  },
  "Swarm of Rats": {
   "size": "Medium",
   "init": "+0",
   "init_score": 10,
-  "speed": "30 ft., Climb 30 ft."
+  "speed": "30 ft., Climb 30 ft.",
+  "ac": 10,
+  "hp": "14 (4d8 - 4)"
  },
  "Swarm of Ravens": {
   "size": "Medium",
   "init": "+2",
   "init_score": 12,
-  "speed": "10 ft., Fly 50 ft."
+  "speed": "10 ft., Fly 50 ft.",
+  "ac": 12,
+  "hp": "11 (2d8 + 2)"
  },
  "Swarm of Venomous Snakes": {
   "size": "Medium",
   "init": "+4",
   "init_score": 14,
-  "speed": "30 ft., Swim 30 ft."
+  "speed": "30 ft., Swim 30 ft.",
+  "ac": 14,
+  "hp": "36 (8d8)"
  },
  "Tarrasque": {
   "size": "Gargantuan",
   "init": "+18",
   "init_score": 28,
-  "speed": "60 ft., Burrow 40 ft., Climb 60 ft."
+  "speed": "60 ft., Burrow 40 ft., Climb 60 ft.",
+  "ac": 25,
+  "hp": "697 (34d20 + 340)"
  },
  "Tiger": {
   "size": "Large",
   "init": "+3",
   "init_score": 13,
-  "speed": "40 ft."
+  "speed": "40 ft.",
+  "ac": 13,
+  "hp": "30 (4d10 + 8)"
  },
  "Tough": {
   "size": "Medium or Small",
   "init": "+1",
   "init_score": 11,
-  "speed": "30 ft."
+  "speed": "30 ft.",
+  "ac": 12,
+  "hp": "32 (5d8 + 10)"
  },
  "Tough Boss": {
   "size": "Medium or Small",
   "init": "+2",
   "init_score": 12,
-  "speed": "30 ft."
+  "speed": "30 ft.",
+  "ac": 16,
+  "hp": "82 (11d8 + 33)"
  },
  "Treant": {
   "size": "Huge",
   "init": "+3",
   "init_score": 13,
-  "speed": "30 ft."
+  "speed": "30 ft.",
+  "ac": 16,
+  "hp": "138 (12d12 + 60)"
  },
  "Triceratops": {
   "size": "Huge",
   "init": "-1",
   "init_score": 9,
-  "speed": "50 ft."
+  "speed": "50 ft.",
+  "ac": 14,
+  "hp": "114 (12d12 + 36)"
  },
  "Troll": {
   "size": "Large",
   "init": "+1",
   "init_score": 11,
-  "speed": "30 ft."
+  "speed": "30 ft.",
+  "ac": 15,
+  "hp": "94 (9d10 + 45)"
  },
  "Troll Limb": {
   "size": "Small",
   "init": "+1",
   "init_score": 11,
-  "speed": "20 ft."
+  "speed": "20 ft.",
+  "ac": 13,
+  "hp": "14 (4d6)"
  },
  "Tyrannosaurus Rex": {
   "size": "Huge",
   "init": "+3",
   "init_score": 13,
-  "speed": "50 ft."
+  "speed": "50 ft.",
+  "ac": 13,
+  "hp": "136 (13d12 + 52)"
  },
  "Unicorn": {
   "size": "Large",
   "init": "+8",
   "init_score": 18,
-  "speed": "50 ft."
+  "speed": "50 ft.",
+  "ac": 12,
+  "hp": "97 (13d10 + 26)"
  },
  "Vampire": {
   "size": "Medium or Small",
   "init": "+14",
   "init_score": 24,
-  "speed": "40 ft., Climb 40 ft."
+  "speed": "40 ft., Climb 40 ft.",
+  "ac": 16,
+  "hp": "195 (23d8 + 92)"
  },
  "Vampire Familiar": {
   "size": "Medium or Small",
   "init": "+5",
   "init_score": 15,
-  "speed": "30 ft., Climb 30 ft."
+  "speed": "30 ft., Climb 30 ft.",
+  "ac": 15,
+  "hp": "65 (10d8 + 20)"
  },
  "Vampire Spawn": {
   "size": "Medium or Small",
   "init": "+3",
   "init_score": 13,
-  "speed": "30 ft."
+  "speed": "30 ft.",
+  "ac": 16,
+  "hp": "90 (12d8 + 36)"
  },
  "Venomous Snake": {
   "size": "Tiny",
   "init": "+2",
   "init_score": 12,
-  "speed": "30 ft., Swim 30 ft."
+  "speed": "30 ft., Swim 30 ft.",
+  "ac": 12,
+  "hp": "5 (2d4)"
  },
  "Violet Fungus": {
   "size": "Medium",
   "init": "-5",
   "init_score": 5,
-  "speed": "5 ft."
+  "speed": "5 ft.",
+  "ac": 5,
+  "hp": "18 (4d8)"
  },
  "Vrock": {
   "size": "Large",
   "init": "+2",
   "init_score": 12,
-  "speed": "40 ft., Fly 60 ft."
+  "speed": "40 ft., Fly 60 ft.",
+  "ac": 15,
+  "hp": "152 (16d10 + 64)"
  },
  "Vulture": {
   "size": "Medium",
   "init": "+0",
   "init_score": 10,
-  "speed": "10 ft., Fly 50 ft."
+  "speed": "10 ft., Fly 50 ft.",
+  "ac": 10,
+  "hp": "5 (1d8 + 1)"
  },
  "Warhorse": {
   "size": "Large",
   "init": "+1",
   "init_score": 11,
-  "speed": "60 ft."
+  "speed": "60 ft.",
+  "ac": 11,
+  "hp": "19 (3d10 + 3)"
  },
  "Warhorse Skeleton": {
   "size": "Large",
   "init": "+1",
   "init_score": 11,
-  "speed": "60 ft."
+  "speed": "60 ft.",
+  "ac": 13,
+  "hp": "22 (3d10 + 6)"
  },
  "Warrior Infantry": {
   "size": "Medium or Small",
   "init": "+0",
   "init_score": 10,
-  "speed": "30 ft."
+  "speed": "30 ft.",
+  "ac": 13,
+  "hp": "9 (2d8)"
  },
  "Warrior Veteran": {
   "size": "Medium or Small",
   "init": "+3",
   "init_score": 13,
-  "speed": "30 ft."
+  "speed": "30 ft.",
+  "ac": 17,
+  "hp": "65 (10d8 + 20)"
  },
  "Water Elemental": {
   "size": "Large",
   "init": "+2",
   "init_score": 12,
-  "speed": "30 ft., Swim 90 ft."
+  "speed": "30 ft., Swim 90 ft.",
+  "ac": 14,
+  "hp": "114 (12d10 + 48)"
  },
  "Weasel": {
   "size": "Tiny",
   "init": "+3",
   "init_score": 13,
-  "speed": "30 ft., Climb 30 ft."
+  "speed": "30 ft., Climb 30 ft.",
+  "ac": 13,
+  "hp": "1 (1d4 - 1)"
  },
  "Werebear": {
   "size": "Medium or Small",
   "init": "+3",
   "init_score": 13,
-  "speed": "30 ft., 40 ft. (bear form only), Climb 30 ft. (bear form only)"
+  "speed": "30 ft., 40 ft. (bear form only), Climb 30 ft. (bear form only)",
+  "ac": 15,
+  "hp": "135 (18d8 + 54)"
  },
  "Wereboar": {
   "size": "Medium or Small",
   "init": "+2",
   "init_score": 12,
-  "speed": "30 ft., 40 ft. (boar form only)"
+  "speed": "30 ft., 40 ft. (boar form only)",
+  "ac": 15,
+  "hp": "97 (15d8 + 30)"
  },
  "Wererat": {
   "size": "Medium or Small",
   "init": "+3",
   "init_score": 13,
-  "speed": "30 ft., Climb 30 ft."
+  "speed": "30 ft., Climb 30 ft.",
+  "ac": 13,
+  "hp": "60 (11d8 + 11)"
  },
  "Weretiger": {
   "size": "Medium or Small",
   "init": "+2",
   "init_score": 12,
-  "speed": "30 ft., 40 ft. (tiger form only)"
+  "speed": "30 ft., 40 ft. (tiger form only)",
+  "ac": 12,
+  "hp": "120 (16d8 + 48)"
  },
  "Werewolf": {
   "size": "Medium or Small",
   "init": "+4",
   "init_score": 14,
-  "speed": "30 ft., 40 ft. (wolf form only)"
+  "speed": "30 ft., 40 ft. (wolf form only)",
+  "ac": 15,
+  "hp": "71 (11d8 + 22)"
  },
  "White Dragon Wyrmling": {
   "size": "Medium",
   "init": "+2",
   "init_score": 12,
-  "speed": "30 ft., Burrow 15 ft., Fly 60 ft., Swim 30 ft."
+  "speed": "30 ft., Burrow 15 ft., Fly 60 ft., Swim 30 ft.",
+  "ac": 16,
+  "hp": "32 (5d8 + 10)"
  },
  "Wight": {
   "size": "Medium",
   "init": "+4",
   "init_score": 14,
-  "speed": "30 ft."
+  "speed": "30 ft.",
+  "ac": 14,
+  "hp": "82 (11d8 + 33)"
  },
  "Will-o'-Wisp": {
   "size": "Tiny",
   "init": "+9",
   "init_score": 19,
-  "speed": "5 ft., Fly 50 ft. (hover)"
+  "speed": "5 ft., Fly 50 ft. (hover)",
+  "ac": 19,
+  "hp": "27 (11d4)"
  },
  "Winter Wolf": {
   "size": "Large",
   "init": "+1",
   "init_score": 11,
-  "speed": "50 ft."
+  "speed": "50 ft.",
+  "ac": 13,
+  "hp": "75 (10d10 + 20)"
  },
  "Wolf": {
   "size": "Medium",
   "init": "+2",
   "init_score": 12,
-  "speed": "40 ft."
+  "speed": "40 ft.",
+  "ac": 12,
+  "hp": "11 (2d8 + 2)"
  },
  "Worg": {
   "size": "Large",
   "init": "+1",
   "init_score": 11,
-  "speed": "50 ft."
+  "speed": "50 ft.",
+  "ac": 13,
+  "hp": "26 (4d10 + 4)"
  },
  "Wraith": {
   "size": "Medium or Small",
   "init": "+3",
   "init_score": 13,
-  "speed": "5 ft., Fly 60 ft. (hover)"
+  "speed": "5 ft., Fly 60 ft. (hover)",
+  "ac": 13,
+  "hp": "67 (9d8 + 27)"
  },
  "Wyvern": {
   "size": "Large",
   "init": "+0",
   "init_score": 10,
-  "speed": "30 ft., Fly 80 ft."
+  "speed": "30 ft., Fly 80 ft.",
+  "ac": 14,
+  "hp": "127 (15d10 + 45)"
  },
  "Xorn": {
   "size": "Medium",
   "init": "+0",
   "init_score": 10,
-  "speed": "20 ft., Burrow 20 ft."
+  "speed": "20 ft., Burrow 20 ft.",
+  "ac": 19,
+  "hp": "84 (8d8 + 48)"
  },
  "Young Black Dragon": {
   "size": "Large",
   "init": "+5",
   "init_score": 15,
-  "speed": "40 ft., Fly 80 ft., Swim 40 ft."
+  "speed": "40 ft., Fly 80 ft., Swim 40 ft.",
+  "ac": 18,
+  "hp": "127 (15d10 + 45)"
  },
  "Young Blue Dragon": {
   "size": "Large",
   "init": "+4",
   "init_score": 14,
-  "speed": "40 ft., Burrow 20 ft., Fly 80 ft."
+  "speed": "40 ft., Burrow 20 ft., Fly 80 ft.",
+  "ac": 18,
+  "hp": "152 (16d10 + 64)"
  },
  "Young Brass Dragon": {
   "size": "Large",
   "init": "+3",
   "init_score": 13,
-  "speed": "40 ft., Burrow 20 ft., Fly 80 ft."
+  "speed": "40 ft., Burrow 20 ft., Fly 80 ft.",
+  "ac": 17,
+  "hp": "110 (13d10 + 39)"
  },
  "Young Bronze Dragon": {
   "size": "Large",
   "init": "+3",
   "init_score": 13,
-  "speed": "40 ft., Fly 80 ft., Swim 40 ft."
+  "speed": "40 ft., Fly 80 ft., Swim 40 ft.",
+  "ac": 17,
+  "hp": "142 (15d10 + 60)"
  },
  "Young Copper Dragon": {
   "size": "Large",
   "init": "+4",
   "init_score": 14,
-  "speed": "40 ft., Climb 40 ft., Fly 80 ft."
+  "speed": "40 ft., Climb 40 ft., Fly 80 ft.",
+  "ac": 17,
+  "hp": "119 (14d10 + 42)"
  },
  "Young Gold Dragon": {
   "size": "Large",
   "init": "+6",
   "init_score": 16,
-  "speed": "40 ft., Fly 80 ft., Swim 40 ft."
+  "speed": "40 ft., Fly 80 ft., Swim 40 ft.",
+  "ac": 18,
+  "hp": "178 (17d10 + 85)"
  },
  "Young Green Dragon": {
   "size": "Large",
   "init": "+4",
   "init_score": 14,
-  "speed": "40 ft., Fly 80 ft., Swim 40 ft."
+  "speed": "40 ft., Fly 80 ft., Swim 40 ft.",
+  "ac": 18,
+  "hp": "136 (16d10 + 48)"
  },
  "Young Red Dragon": {
   "size": "Large",
   "init": "+4",
   "init_score": 14,
-  "speed": "40 ft., Climb 40 ft., Fly 80 ft."
+  "speed": "40 ft., Climb 40 ft., Fly 80 ft.",
+  "ac": 18,
+  "hp": "178 (17d10 + 85)"
  },
  "Young Silver Dragon": {
   "size": "Large",
   "init": "+4",
   "init_score": 14,
-  "speed": "40 ft., Fly 80 ft."
+  "speed": "40 ft., Fly 80 ft.",
+  "ac": 18,
+  "hp": "168 (16d10 + 80)"
  },
  "Young White Dragon": {
   "size": "Large",
   "init": "+3",
   "init_score": 13,
-  "speed": "40 ft., Burrow 20 ft., Fly 80 ft., Swim 40 ft."
+  "speed": "40 ft., Burrow 20 ft., Fly 80 ft., Swim 40 ft.",
+  "ac": 17,
+  "hp": "123 (13d10 + 52)"
  },
  "Zombie": {
   "size": "Medium",
   "init": "-2",
   "init_score": 8,
-  "speed": "20 ft."
+  "speed": "20 ft.",
+  "ac": 8,
+  "hp": "15 (2d8 + 6)"
  }
 }

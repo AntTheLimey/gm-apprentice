@@ -3,7 +3,7 @@
 
 A dev script. It runs `pdftotext -bbox-layout` on the WotC SRD 5.2.1 PDF
 (CC-BY 4.0; the PDF is not part of this repo) and writes
-`scripts/srd521-figures.json`: name -> {size, init, init_score, speed}.
+`scripts/srd521-figures.json`: name -> {size, init, init_score, speed, ac, hp}.
 `srd-monster-enricher.py` reads that file. Run it when the SRD changes:
 
     python3 scripts/srd521_figures.py SRD_CC_v5.2.1.pdf
@@ -13,7 +13,12 @@ blocks are found by position: a size line ("Huge Dragon (Metallic), Chaotic
 Good") starts a block, the line above it is the name, and the AC, Initiative,
 HP and Speed lines sit under it in the same column.
 
-It prints every shipped creature it could not find, by name.
+It prints every shipped creature it could not find, by name, and every
+shipped block whose AC or HP differs from the PDF's. A name that appears twice
+in the PDF keeps its first block, with a warning.
+
+Spell save DCs are read from the PDF by hand, because a Spellcasting trait can
+run across a column or page break (see `SPELL_DC`).
 """
 
 import argparse
@@ -31,6 +36,8 @@ SIZES = "Tiny|Small|Medium|Large|Huge|Gargantuan"
 SIZE_LINE = re.compile(
     rf"^(?P<size>(?:{SIZES})(?: or (?:{SIZES}))?) (?P<rest>[A-Z].*,.*"
     r"(?:Lawful|Chaotic|Neutral|Unaligned|Evil|Good|Any).*)$")
+AC_RE = re.compile(r"^AC\s+(\d+)\b")
+HP_RE = re.compile(r"^HP\s+(\d+)\s*\(([^)]*)\)")
 INIT_RE = re.compile(r"\bInitiative\s+([+-]\d+)\s*\((\d+)\)")
 LABELS = ("AC ", "Initiative", "HP ", "Speed ")
 LINE_RE = re.compile(
@@ -38,6 +45,12 @@ LINE_RE = re.compile(
     r"(.*?)</line>", re.S)
 WORD_RE = re.compile(r">([^<]*)</word>")
 PAGE_RE = re.compile(r"<page ")
+# The spell save DC of a shipped creature's Spellcasting trait, as the SRD
+# 5.2.1 prints it ("" = the trait names no DC). Priest: p. 316, the trait at
+# the head of the right-hand column. Priest Acolyte (p. 316) and Giant Owl
+# (p. 352) print their Spellcasting with no DC at all. `srd-monster-enricher.py`
+# reads these from the figures file.
+SPELL_DC = {"Priest": "13", "Priest Acolyte": "", "Giant Owl": ""}
 COLUMN_SLACK = 4.0
 FRAME_DEPTH = 80.0
 FRAME_WIDTH = 180.0
@@ -91,9 +104,15 @@ def parse_blocks(lines):
             frame = sorted((ln for ln in wide if hy - 1 <= ln[2] < limit),
                            key=lambda ln: (round(ln[2]), ln[1]))
             fig = {"size": sm["size"], "init": None, "init_score": None,
-                   "speed": None}
+                   "speed": None, "ac": None, "hp": None}
             for i, ln in enumerate(frame):
                 text = ln[4]
+                am = AC_RE.match(text)
+                if am and fig["ac"] is None:
+                    fig["ac"] = int(am[1])
+                hm = HP_RE.match(text)
+                if hm and fig["hp"] is None:
+                    fig["hp"] = f"{hm[1]} ({hm[2]})"
                 im = INIT_RE.search(text)
                 if im and fig["init"] is None:
                     fig["init"], fig["init_score"] = im[1], int(im[2])
@@ -111,11 +130,18 @@ def parse_blocks(lines):
 
 
 def shipped_names():
-    names = []
+    return [n for n, _, _ in shipped_figures()]
+
+
+def shipped_figures():
+    """(name, AC, HP) of every shipped block."""
+    out = []
     for path in [*sorted(SHIPPED.glob("monsters-cr*.md")),
                  SHIPPED / "animals.md"]:
-        names += re.findall(r"^\*\*([^*]+)\*\* \| ", path.read_text("utf-8"), re.M)
-    return names
+        out += [(m[1], int(m[2]), m[3].replace(" ", "")) for m in re.finditer(
+            r"^\*\*([^*]+)\*\* \| [^\n]*\nAC (\d+) \| HP (\d+ \([^)]*\))",
+            path.read_text("utf-8"), re.M)]
+    return out
 
 
 def main():
@@ -128,8 +154,18 @@ def main():
     for name, hits in found.items():
         if name is None:
             continue
-        for _, _, fig in hits:
-            figures.setdefault(name, fig)
+        if len(hits) > 1:
+            pages = ", ".join(str(h[0]) for h in hits)
+            print(f"WARNING: {name} appears {len(hits)} times in the PDF "
+                  f"(pages {pages}); keeping the first block",
+                  file=sys.stderr)
+        figures[name] = hits[0][2]
+    for name, dc in SPELL_DC.items():
+        if name in figures:
+            figures[name]["spell_dc"] = dc
+        else:
+            print(f"WARNING: SPELL_DC names {name}, not in the PDF",
+                  file=sys.stderr)
     ship = shipped_names()
     folded = {n.casefold(): n for n in figures}
     missing, incomplete = [], []
@@ -147,6 +183,17 @@ def main():
         print(f"NOT FOUND: {n}", file=sys.stderr)
     for n in incomplete:
         print(f"NO INITIATIVE: {n}", file=sys.stderr)
+    for n, ac, hp in shipped_figures():
+        key = folded.get(n.casefold())
+        if key is None:
+            continue
+        fig = figures[key]
+        if fig["ac"] != ac:
+            print(f"AC MISMATCH: {n}: shipped {ac}, SRD 5.2.1 {fig['ac']}",
+                  file=sys.stderr)
+        if (fig["hp"] or "").replace(" ", "") != hp:
+            print(f"HP MISMATCH: {n}: shipped {hp}, SRD 5.2.1 {fig['hp']}",
+                  file=sys.stderr)
 
 
 if __name__ == "__main__":

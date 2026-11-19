@@ -5,6 +5,7 @@
 **Detail files:** `monsters-cr0-1.md`, `monsters-cr2-3.md`, `monsters-cr4.md`, `monsters-cr5-10.md`, `monsters-cr11-16.md`, `monsters-cr17-plus.md`
 **Sub-file format:** Name | Type | Size | AC | HP | Speed | Notable | XP
 **Size codes:** T, S, M, L, H, G (Tiny to Gargantuan); M/S = Medium or Small
+**Initiative:** the figures, and the score in brackets, are as printed in SRD 5.2.1; do not "correct" them (Gray Ooze −2 (13), Invisible Stalker +7 (22)).
 
 ## Response Templates
 

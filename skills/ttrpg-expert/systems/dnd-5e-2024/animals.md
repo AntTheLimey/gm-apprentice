@@ -294,7 +294,7 @@ Saves: WIS +4 | Senses: darkvision 120 ft.
 Resistances: Necrotic, Radiant
 Flyby
 - Talons: +4, 1d10+2 slashing
-Spellcasting (WIS, DC ?): At Will — Detect Evil and Good, Detect Magic; 1/day — Clairvoyance
+Spellcasting (WIS): At Will — Detect Evil and Good, Detect Magic; 1/day — Clairvoyance
 
 **Giant Venomous Snake** | Beast | M | CR 1/4 (50 XP)
 AC 14 | HP 11 (2d8+2) | Init +4 (14) | Speed 40 ft., Swim 40 ft.

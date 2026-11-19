@@ -71,6 +71,8 @@ def apply_figures(m, figures):
     m['size'] = size_code(fig['size'])
     m['init'] = f"{fig['init']}({fig['init_score']})" if fig['init'] else None
     m['speed'] = fig['speed']
+    if 'spell_dc' in fig:
+        m['spell_dc'] = fig['spell_dc']
 
 
 def load_figures(path):
@@ -542,12 +544,15 @@ def format_spellcasting_trait(name, desc):
     return f"Spellcasting (DC {dc})"
 
 
-def format_spellcasting_action(name, desc, budget_tight=False):
-    """Format spellcasting action."""
+def format_spellcasting_action(name, desc, budget_tight=False, spell_dc=None):
+    """Format spellcasting action. `spell_dc` is the SRD 5.2.1's own figure
+    when the figures file has one: "" means the trait prints no DC."""
     dc_match = re.search(r'DC\s*(\d+)', desc)
     ability_match = re.search(r'using (\w+)', desc)
 
     dc = dc_match.group(1) if dc_match else '?'
+    if spell_dc is not None:
+        dc = spell_dc
     ability = ability_match.group(1)[:3].upper() if ability_match else ''
 
     # Named spellcasting abilities (Hellfire Spellcasting, etc.)
@@ -570,8 +575,9 @@ def format_spellcasting_action(name, desc, budget_tight=False):
             return f"{base_name}{recharge_str} (DC {dc}): {' '.join(spell_parts)}"
         return f"{base_name}{recharge_str} (DC {dc})"
 
+    dc_part = f", DC {dc}" if dc else ""
     if budget_tight:
-        return f"Spellcasting ({ability}, DC {dc})"
+        return f"Spellcasting ({ability}{dc_part})"
 
     at_will = []
     daily = []
@@ -584,7 +590,7 @@ def format_spellcasting_action(name, desc, budget_tight=False):
         freq_str = f"{daily_match.group(1)}/day"
         daily = re.findall(r'\*([A-Z][^*]+)\*', daily_match.group(2))
 
-    parts = [f"Spellcasting ({ability}, DC {dc}):"]
+    parts = [f"Spellcasting ({ability}{dc_part}):"]
     if at_will:
         parts[0] += f" At Will — {', '.join(at_will[:4])}"
     if daily:
@@ -693,7 +699,8 @@ def format_monster(m, budget_tight=False):
         if aname == 'Multiattack':
             multiattack = format_multiattack(adesc)
         elif aname == 'Spellcasting':
-            spellcasting = format_spellcasting_action(aname, adesc, budget_tight)
+            spellcasting = format_spellcasting_action(
+                aname, adesc, budget_tight, m.get('spell_dc'))
         else:
             formatted = format_attack(aname, adesc, budget_tight)
             if formatted:

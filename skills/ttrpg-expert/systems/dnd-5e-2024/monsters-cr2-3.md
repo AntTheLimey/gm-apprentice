@@ -232,7 +232,7 @@ Senses: Passive Perception 15
 Multiattack: 2× (Mace/Radiant Flame)
 - Mace: +5, 1d6+3 bludgeoning + 2d4 radiant
 - Radiant Flame: +5, 2d10 radiant
-Spellcasting (WIS, DC ?): At Will — Light, Thaumaturgy; 1/day — Spirit Guardians
+Spellcasting (WIS, DC 13): At Will — Light, Thaumaturgy; 1/day — Spirit Guardians
 
 **Sea Hag** | Fey | M | CR 2 (450 XP)
 AC 14 | HP 52 (7d8+21) | Init +1 (11) | Speed 30 ft., Swim 40 ft.
