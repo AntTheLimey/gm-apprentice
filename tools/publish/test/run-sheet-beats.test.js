@@ -466,7 +466,7 @@ describe('run sheet beats: the Plan shape', () => {
     assert.deepStrictEqual(hub.spots.map((x) => x.people), [['Characters/NPCs/NPC.md'], []]);
     assert.deepStrictEqual(hub.who.map((w) => [w.name, w.wants]), [['NPC', '']]);
     assert.deepStrictEqual(s1.spots.map((x) => x.people), [[]]);
-    assert.match(hub.extra, /- A lead in words — Scene 3/);
+    assert.match(hub.extra, /- \[what draws them there\] — Scene 3/);
     assert.match(hub.extra, /- \[\[Scene note\]\] — a lead to a scene/);
     // a place in plain words, then a place that is one link
     assert.deepStrictEqual([harbour.place, harbour.placeFrom, harbour.placeText], [null, null, 'The harbour office, up the stairs from the quay.']);
@@ -495,11 +495,13 @@ describe('run sheet beats: the Plan shape', () => {
     assert.deepStrictEqual(beats[0].who, []);
   });
 
-  it('a place line with words keeps them and gives no place', () => {
-    const { beats } = read2(() => '## Planned Scenes\n\n### Scene 4: The yard\n**Situation:** s\n**Place:** [[Location]] after dark\n**Entities:** [[Location]]\n**NPCs**\n- **[[Name]]:** x\n');
+  it('a place line of words alone keeps them and gives no place; a leading link is the place', () => {
+    const { beats } = read2(() => '## Planned Scenes\n\n### Scene 4: The yard\n**Situation:** s\n**Place:** after dark in the yard\n**Entities:** [[Location]]\n**NPCs**\n- **[[Name]]:** x\n');
     assert.strictEqual(beats[0].place, null);
     assert.strictEqual(beats[0].placeFrom, null);
-    assert.strictEqual(beats[0].placeText, '[[Location]] after dark');
+    assert.strictEqual(beats[0].placeText, 'after dark in the yard');
+    const linked = read2(() => '## Planned Scenes\n\n### Scene 4: The yard\n**Situation:** s\n**Place:** [[Location]] after dark\n').beats[0];
+    assert.deepStrictEqual([linked.place, linked.placeFrom, linked.placeText], ['Locations/Location.md', 'place', 'after dark']);
     assert.deepStrictEqual(beats[0].spots, []);
     assert.doesNotMatch(beats[0].extra, /Place/);
   });
@@ -525,7 +527,8 @@ describe('run sheet beats: the Plan shape', () => {
 
   it('a plan without the new lines reads as before', () => {
     // test/fixtures/run-sheet-main-beats.json is what the reader at main (239f91d3, #781) gave for
-    // #781's fixture Plan and its hub Plan, recorded from that reader's own beats.js.
+    // #781's fixture Plan and its hub Plan, recorded from that reader's own beats.js. The snapshot is
+    // frozen from 239f91d3 and must never be regenerated: it is the proof the old plans read as before.
     const old = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'run-sheet-main-beats.json'), 'utf8'));
     const hubPlan = readText(path.join(__dirname, 'fixtures', 'run-sheet-hub-plan.md'));
     const { index: _ix, ...planRead } = read();
@@ -631,6 +634,53 @@ describe('run sheet beats: the Plan shape', () => {
         // plan-check: a lead is a pointer, a link is a place; either way the hub is not empty
         assert.ok(!r.ids.includes('hub-no-places'), link);
         assert.strictEqual(r.beats[0].spots.length, pointer ? 0 : 1, link);
+      }
+    });
+
+    it('a bulleted block label: plan-check label-form, reader reads no block', () => {
+      for (const head of ['- **Treasure:**', '- **Treasure**']) {
+        const r = bothSides(SCENE(`${head}\n  - a gem\n`));
+        assert.ok(r.ids.includes('label-form'), head);
+        assert.deepStrictEqual(r.beats[0].treasure, [], head);
+      }
+      const ok = bothSides(SCENE('**Treasure**\n- a gem\n'));
+      assert.ok(!ok.ids.includes('label-form'));
+      assert.deepStrictEqual(ok.beats[0].treasure.map((t) => t.text), ['a gem']);
+    });
+
+    it('a place line linking a non-location: plan-check place-not-location, reader gives no place', () => {
+      const r = bothSides(SCENE('', '**Place:** [[Name]], the yard\n'));
+      assert.ok(r.ids.includes('place-not-location'));
+      assert.strictEqual(r.beats[0].place, null);
+      assert.match(r.beats[0].placeText, /the yard/);
+      const ok = bothSides(SCENE('', '**Place:** [[Location]]\n'));
+      assert.ok(!ok.ids.includes('place-not-location'));
+      assert.strictEqual(ok.beats[0].place, 'Locations/Location.md');
+    });
+
+    it('a place line starting with a location link plus words: the place, and the words', () => {
+      for (const [line, text] of [['[[Location]], the yard', 'the yard'], ['[[Location]] — by the well', 'by the well'], ['[[Location]]', '']]) {
+        const r = bothSides(SCENE('', `**Place:** ${line}\n`));
+        assert.ok(!r.ids.includes('no-place') && !r.ids.includes('place-not-location'), line);
+        assert.deepStrictEqual([r.beats[0].place, r.beats[0].placeFrom, r.beats[0].placeText], ['Locations/Location.md', 'place', text], line);
+      }
+      const words = bothSides(SCENE('', '**Place:** the yard, by [[Location]]\n'));
+      assert.deepStrictEqual([words.beats[0].place, words.beats[0].placeText], [null, 'the yard, by [[Location]]']);
+    });
+
+    it('a location-led bullet stays a place whatever its words end in, in both', () => {
+      for (const bullet of ['- **[[Location]]** — Scene 3', '- [[Location]], Scene 3']) {
+        const r = bothSides(`### Scene 0: Out (hub)\n**Where they can go**\n${bullet}\n`);
+        assert.deepStrictEqual(r.ids.filter((id) => id.startsWith('hub-')), [], bullet);
+        assert.strictEqual(r.beats[0].spots.length, 1, bullet);
+      }
+    });
+
+    it('a scene reference after a comma or in parentheses is a pointer in both', () => {
+      for (const bullet of ['- the yard: shouting, Scene 1.', '- the yard shouting (Scene 1)', '- [what draws them there] — Scene 3']) {
+        const r = bothSides(`### Scene 0: Out (hub)\n**Where they can go**\n${bullet}\n`);
+        assert.deepStrictEqual(r.ids.filter((id) => id.startsWith('hub-')), [], bullet);
+        assert.deepStrictEqual(r.beats[0].spots, [], bullet);
       }
     });
 

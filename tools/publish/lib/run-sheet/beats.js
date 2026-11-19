@@ -23,6 +23,8 @@ const HUB_MARK = /\s*\((hub|routing)\)\s*/i;
 const SEPARATORS = /[\s,;&.·]+/g;
 const onlySeparators = (s) => s.replace(/\band\b/gi, '').replace(SEPARATORS, '') === '';
 const LINK_ONLY = /^\s*\[\[([^\]]+)\]\]\s*$/;
+// A Place line that starts with one link: group 1 the link, group 2 what follows it.
+const PLACE_LINK_FIRST = /^\s*\[\[([^\]]+)\]\]([\s\S]*)$/;
 const LINK = /!?\[\[[^\]]*\]\]/g;
 // `**[[Note]]:** wants`, `**[[Note]] (3):** wants`, `**[[Note]]** (known as): wants` (bullet marker removed)
 const NPC_LINE = /^\*\*\[\[([^\]]+)\]\](?:\s*\(([^)]*)\))?:?\*\*:?[ \t]*(?:\(([^)]*)\)[ \t]*:)?\s*([\s\S]*)$/;
@@ -34,10 +36,11 @@ const GROUP_HEAD = /^\*\*([^*\n]+?):?\*\*[ \t]*(\([^)]*\))?[ \t]*$/;
 const NAMED_BULLET = /^\*\*([^*\n]+?):?\*\*:?[ \t]*([\s\S]*)$/;
 // The hub block heads (`**Where they can go**`, legacy `**Open to the party**`): a scene holding one is a hub.
 const WHERE_HEAD = /^\*\*(?:Where they can go|Open to the party):?\*\*[ \t]*(?:\([^)]*\))?[ \t]*$/i;
-// A pointer bullet leads to another scene: it ends `— Scene N` (a parenthesis or a few words may
-// follow), or its lead (a bold lead, or a bare link first) links a note of type scene. A link whose
-// note is no scene, or is unknown, leads a place. plan_check.py holds the same rule.
-const POINTER_BULLET = /^.*[—–-]\s*Scenes?\s+\d+(?:\s*\([^)]*\)|,?\s+\S+(?:\s+\S+){0,2})?[\s.]*$/;
+// A pointer bullet leads to another scene: it ends `— Scene N` or `, Scene N` (a parenthesis or a few
+// words may follow) or `(Scene N)`, or its lead (a bold lead, or a bare link first) links a note of
+// type scene. A lead linking a location note keeps the bullet a place whatever its words end in. A
+// link whose note is no scene, or is unknown, leads a place. plan_check.py holds the same rule.
+const POINTER_BULLET = /^.*(?:[—–-]\s*|,\s*)Scenes?\s+\d+(?:\s*\([^)]*\)|,?\s+\S+(?:\s+\S+){0,2})?[\s.]*$|^.*\(\s*Scenes?\s+\d+\s*\)[\s.]*$/;
 const BARE_LINK_LEAD = /^(!?\[\[[^\]]+\]\])/;
 const BOLD_LEAD = /^\*\*([^*\n]+?)\*\*/;
 const BLOCK_NAMES = new Set(['npcs', 'points to land', 'if the players...', 'treasure', 'complications', 'then']);
@@ -220,15 +223,22 @@ function readBeats(planBody, index) {
     let place = entities.find((p) => typeOf(p) === 'location') || null;
     let placeFrom = null;
     if (place) placeFrom = noteFm && fmPaths(noteFm.locations).includes(place) ? 'scene-note' : 'entities';
-    // The Plan's `**Place:**` wins over the scene note's and Entities: one link alone is the place;
-    // anything else is words, kept as placeText, and gives no place.
+    // The Plan's `**Place:**` wins over the scene note's and Entities: a line that starts with one
+    // link to a location note gives that place, and the words after the link (their leading
+    // punctuation trimmed) are the placeText; anything else is words, kept as placeText, and gives
+    // no place. A link to a note of another type is words too.
     let placeText = '';
     const placeLines = labelsNamed('Place');
     if (placeLines.length) {
       placeLines.forEach((l) => claim(l.start, l.end));
-      const lm = placeLines.length === 1 ? placeLines[0].value.match(LINK_ONLY) : null;
-      const linked = lm ? resolve(linkParts(lm[1]).target) : null;
-      if (linked) { place = linked; placeFrom = 'place'; } else {
+      const lm = placeLines.length === 1 ? placeLines[0].value.match(PLACE_LINK_FIRST) : null;
+      let linked = lm ? resolve(linkParts(lm[1]).target) : null;
+      if (linked && typeOf(linked) !== 'location') linked = null;
+      if (linked) {
+        place = linked;
+        placeFrom = 'place';
+        placeText = lm[2].replace(/^[\s,;:.—–-]+/, '').trim();
+      } else {
         place = null;
         placeFrom = null;
         placeText = placeLines.map((l) => l.value).join('\n\n');
@@ -313,8 +323,8 @@ function readBeats(planBody, index) {
           // a pointer bullet leads to another scene: no spot, and its line stays in extra
           const lead = first.match(BOLD_LEAD);
           const leadLinks = lead ? (lead[1].match(LINK) || []) : (first.match(BARE_LINK_LEAD) || []).slice(1);
-          if (POINTER_BULLET.test(first)
-              || leadLinks.some((m) => typeOf(resolve(linkParts(m.replace(/^!?\[\[|\]\]$/g, '')).target)) === 'scene')) continue;
+          const leadTypes = leadLinks.map((m) => typeOf(resolve(linkParts(m.replace(/^!?\[\[|\]\]$/g, '')).target)));
+          if (leadTypes.includes('scene') || (POINTER_BULLET.test(first) && !leadTypes.includes('location'))) continue;
           const nb = item.text.match(NAMED_BULLET);
           let name;
           let rest;

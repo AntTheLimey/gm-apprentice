@@ -129,7 +129,7 @@ from *this* PC.
 **Where they can go**
 - **[[Location]]:** what is there, who is there ([[NPC]]), what changes when they arrive.
 - **Plain name:** the same, when no location note fits.
-- A lead in words — Scene 3
+- [what draws them there] — Scene 3
 - [[Scene note]] — a lead to a scene that has its own Place.
 <!-- /hub-skeleton -->
 

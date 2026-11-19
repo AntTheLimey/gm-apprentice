@@ -1413,7 +1413,79 @@ class RunSheetChecksTests(unittest.TestCase):
         bullets = "- **[[Orchard]]:** [[Orme]] is picking\n"
         self.assertEqual(self.ids(self.HUB.format(bullets=bullets)), [])
 
+    def test_a_bold_lead_linking_a_location_stays_a_place_whatever_ends_it(self):
+        self.note("Orchard", "location")
+        for bullets in ("- **[[Orchard]]** — Scene 3\n",
+                        "- [[Orchard]], Scene 3\n"):
+            with self.subTest(bullets=bullets):
+                found = self.found(self.HUB.format(bullets=bullets))
+                self.assertEqual(
+                    [f.id for f in found if f.id in pc.RUN_SHEET_CHECKS], [])
+        self.note("Orme", "npc")
+        self.assertEqual(self.ids(self.HUB.format(
+            bullets="- **[[Orme]]** — Scene 3\n")), [])
+
+    def test_a_scene_reference_after_a_comma_or_in_parentheses_is_a_pointer(self):
+        for bullets in ("- the yard: shouting, Scene 1.\n",
+                        "- the yard shouting (Scene 1)\n"):
+            with self.subTest(bullets=bullets):
+                self.assertEqual(
+                    self.ids(self.HUB.format(bullets=bullets)), [])
+        # a plain bullet with no scene reference is neither place nor lead
+        self.assertEqual(self.ids(self.HUB.format(
+            bullets="- the yard shouting\n")), ["hub-no-places"])
+
+    def test_a_hub_of_plain_bullets_says_the_sheet_cannot_name_them(self):
+        rows = rows_for(self.found(self.HUB.format(
+            bullets="- the yard\n")), "hub-no-places")
+        self.assertEqual(len(rows), 1)
+        self.assertIn("bold lead", rows[0].message)
+        self.assertNotIn("nowhere to go", rows[0].message)
+        bare = rows_for(self.found(self.HUB.format(bullets="")),
+                        "hub-no-places")
+        self.assertIn("nowhere to go", bare[0].message)
+
+    # place-not-location
+
+    def test_a_place_line_linking_a_non_location_warns(self):
+        self.note("Orme", "npc")
+        rows = rows_for(self.found(self.scene("**Place:** [[Orme]], the yard\n")),
+                        "place-not-location")
+        self.assertEqual(len(rows), 1)
+        self.assertIn("npc", rows[0].message)
+
+    def test_a_place_line_linking_a_location_with_words_is_clean(self):
+        self.note("Cloister", "location")
+        self.assertEqual(self.ids(
+            self.scene("**Place:** [[Cloister]], the yard\n")), [])
+
+    def test_a_place_line_link_with_no_vault_is_not_type_checked(self):
+        self.note("Orme", "npc")
+        self.assertEqual(self.ids(
+            self.scene("**Place:** [[Orme]]\n"), index=False), [])
+
+    def test_no_place_with_a_location_in_entities_says_so(self):
+        self.note("Orchard", "location")
+        rows = rows_for(self.found(self.scene(
+            place="", rest="**Entities:** [[Orchard]]\n")), "no-place")
+        self.assertEqual(len(rows), 1)
+        self.assertIn("makes it explicit", rows[0].message)
+        self.assertNotIn("will not say where", rows[0].message)
+
     # label-form
+
+    def test_a_bulleted_block_label_with_nothing_after_it_warns(self):
+        for head in ("- **Treasure:**", "- **Treasure**", "- **Points to land:**",
+                     "- **NPCs:**"):
+            with self.subTest(head=head):
+                rows = rows_for(self.found(self.scene(
+                    rest=f"{head}\n  - a gem\n")), "label-form")
+                self.assertEqual(len(rows), 1, head)
+                self.assertIn("will not read", rows[0].message)
+
+    def test_a_bulleted_one_line_label_is_fine(self):
+        self.assertEqual(self.ids(self.scene(
+            rest="- **Entities:** the orchard\n")), [])
 
     def test_npcs_in_parentheses_warns_label_form(self):
         found = self.found(self.scene(

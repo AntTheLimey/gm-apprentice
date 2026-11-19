@@ -462,12 +462,19 @@ A scene: `### Scene N: Title` (or a scene note's `### [[Title]]`, step
 14). **Situation:** and **Starts it:** are required. **Place:** is
 expected on every planned scene, and an **NPCs** block on any scene
 that names an NPC or creature in Entities, because `gma plan-check`
-warns without them and prep fixes every warning in its own draft; use
-the other labels where they earn a place. Write a label as `**X:**`,
-`**X**` or `- **X:**`, never with a parenthesis inside the bold:
-`**NPCs**`, not `**NPCs (who is here)**`. **Place:** is one link alone,
-or plain words when no location note fits (no stub note, no question to
-the GM). **NPCs** holds everyone in the room, never everyone referred
+warns without them and prep fixes every warning in its own draft, with one exception: a
+`no-npcs-block` on a scene where nobody named in Entities is in the room
+(searching an absent man's study) stands. Prep never adds an NPCs line
+for someone absent and never drops them from Entities to clear it. Use
+the other labels where they earn a place. Write a one-line label (Situation, Place,
+Starts it, Entities, Handouts) as `**X:**`, `**X**` or `- **X:**`. Write
+a block label (NPCs, Where they can go, Points to land, If the
+players..., Treasure, Complications) at the left margin as `**X**` or
+`**X:**`, never bulleted: the run sheet does not read a bulleted block.
+Never put a parenthesis inside the bold: `**NPCs**`, not
+`**NPCs (who is here)**`. **Place:** is one link, which may be followed
+by words (`[[The Cloister]], the yard`), or plain words when no location
+note fits (no stub note, no question to the GM). **NPCs** holds everyone in the room, never everyone referred
 to. **Treasure** (one item per bullet) goes on a fight or hoard beat.
 A hub is any scene holding a **Where they can go** block (legacy:
 **Open to the party**), with or without "(hub)" in its title; it needs
@@ -507,7 +514,7 @@ own Place. People named in a place bullet are there.
 **Where they can go**
 - **[[Location]]:** what is there, who is there ([[NPC]]), what changes when they arrive.
 - **Plain name:** the same, when no location note fits.
-- A lead in words — Scene 3
+- [what draws them there] — Scene 3
 - [[Scene note]] — a lead to a scene that has its own Place.
 ```
 
