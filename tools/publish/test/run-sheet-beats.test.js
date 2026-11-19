@@ -524,21 +524,54 @@ describe('run sheet beats: the Plan shape', () => {
   });
 
   it('a plan without the new lines reads as before', () => {
-    const { beats, warnings } = read();
-    // #781's fixture: every beat's new fields are empty, and a spot's md is ''; no no-place warning
-    for (const b of beats) {
-      assert.strictEqual(b.placeText, '');
-      assert.strictEqual(b.placeFrom, { null: null, 'The Bell Tower': 'scene-note' }[b.place === null ? 'null' : b.title] || (b.place ? 'entities' : null));
-      for (const x of b.spots) assert.strictEqual(x.md, '');
-    }
-    assert.deepStrictEqual(warnings.filter((w) => w.kind === 'no-place'), []);
-    // its hub Plan (`**Open to the party**`): the two `— Scene N` bullets are pointers, so their
-    // spots are gone and their lines stay in extra; the S1 group's people lose their wants to the
-    // spot's md. Nothing else differs.
+    // test/fixtures/run-sheet-main-beats.json is what the reader at main (239f91d3, #781) gave for
+    // #781's fixture Plan and its hub Plan, recorded from that reader's own beats.js.
+    const old = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'run-sheet-main-beats.json'), 'utf8'));
     const hubPlan = readText(path.join(__dirname, 'fixtures', 'run-sheet-hub-plan.md'));
-    const hub = readBeats(hubPlan, buildIndex(copy())).beats;
+    const { index: _ix, ...planRead } = read();
+    const now = { plan: planRead, hub: readBeats(hubPlan, buildIndex(copy())) };
+    // the fields this change adds are taken off: placeText, placeFrom, spots[].md, spots[].people
+    const strip = (r) => ({
+      ...r,
+      beats: r.beats.map(({ placeText, placeFrom, spots, ...b }) => ({ ...b, spots: spots.map(({ md, people, ...x }) => x) })),
+    });
+    for (const r of Object.values(now)) {
+      for (const b of r.beats) {
+        assert.strictEqual(b.placeText, '', b.title);
+        for (const x of b.spots) if (!x.md) assert.deepStrictEqual(x.people, [], b.title);
+      }
+    }
+    const was = JSON.parse(JSON.stringify(old));
+    const got = strip(JSON.parse(JSON.stringify(now.plan)));
+    assert.deepStrictEqual(got, strip(was.plan), '#781 fixture Plan');
+
+    // The hub Plan differs in exactly the named ways; each is asserted, then taken out of the comparison.
+    const hub = now.hub.beats;
+    const hubWas = was.hub.beats;
+    // (1) The Abbey: a bold-named bullet's words moved from its people's wants to its spot's md, and
+    // the bullets no longer left over, so extra is empty.
+    assert.deepStrictEqual(hubWas[0].who.map((w) => w.wants), ['at the stair', 'kept the fire.', 'caught with a knife.', 'prowling.']);
+    assert.deepStrictEqual(hub[0].who.map((w) => w.wants), ['', '', '', '']);
+    assert.strictEqual(hubWas[0].extra, '**Open to the party**\n- **The walls:** the lamp carvings.\n- **The yard:** [[Ada Moss]] keeps watch.');
+    assert.strictEqual(hub[0].extra, '');
+    assert.deepStrictEqual(hub[0].spots.map((x) => x.md), [
+      '[[Brother Ash]] at the stair; [[Lucan Grey]] kept the fire.', '[[Sister Fen]], caught with a knife.',
+      'the lamp carvings.', '[[Frost Wolf]] prowling.', '[[Ada Moss]] keeps watch.',
+    ]);
+    hubWas[0].who.forEach((w, i) => { w.wants = hub[0].who[i].wants; });
+    hubWas[0].extra = hub[0].extra;
+    // (2) The Inn: the two `— Scene N` bullets are pointers, so no longer spots; their lines stay in
+    // extra, with the bare-location-link bullet still a spot.
+    assert.deepStrictEqual(hubWas[1].spots.map((x) => x.name), ['The guest register (Hollis)', 'Crane by the fire', 'The Gate House at dusk']);
     assert.deepStrictEqual(hub[1].spots.map((x) => x.name), ['The Gate House at dusk']);
-    assert.strictEqual(hub[0].spots.length, 5);
+    assert.strictEqual(hub[1].extra, hubWas[1].extra);
+    hubWas[1].spots = hubWas[1].spots.filter((x) => x.name === 'The Gate House at dusk');
+    // Everything else, the surviving spots' keys included, equals the old reader's.
+    assert.deepStrictEqual(strip(JSON.parse(JSON.stringify(now.hub))), strip(was.hub), '#781 hub Plan');
+    for (const k of ['sections', 'claimed', 'preamble', 'warnings']) {
+      assert.deepStrictEqual(now.plan[k], old.plan[k], k);
+      assert.deepStrictEqual(now.hub[k], old.hub[k], k);
+    }
   });
 
   describe('both sides agree', () => {
