@@ -143,3 +143,13 @@ test('bullets, tables and links skip fenced code', () => {
   assert.deepEqual(t.tableRows(x), [['r']]);
   assert.deepEqual(t.tableRanges(x), [{ start: 7, end: 9 }]);
 });
+
+test('a bulleted bold-label line inside a block is block content; a bare label still ends it', () => {
+  const x = '**Then**\n- first\n- **Bold lead:** more of the same block\n- last\n**Trigger:** next field';
+  const b = t.block(x, 'Then');
+  assert.equal(b.value, '- first\n- **Bold lead:** more of the same block\n- last');
+  assert.equal(b.end, 3);
+  // after a blank line the same bullet opens the next field, as a scene note's block then a stub's fields do
+  const y = '**Treasure**\n- loot\n\n- **Purpose:** the stub field';
+  assert.equal(t.block(y, 'Treasure').value, '- loot');
+});
