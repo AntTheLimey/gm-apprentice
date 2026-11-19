@@ -274,6 +274,16 @@ describe('run sheet reader', () => {
       assert.ok(m.warnings.some((w) => w.kind === 'map-pair'));
     });
 
+    it('a player_version naming the GM map itself warns and falls back to the name pair (PR #799 review)', () => {
+      const dir = copy();
+      write(dir, 'Documents/Foo (GM).md', mapNote('Foo (GM)', 'player_version: "[[Foo (GM)]]"\n'));
+      write(dir, 'Documents/Foo.md', mapNote('Foo'));
+      withPlanLine(dir, 'See [[Foo (GM)]].');
+      const m = readRunSheet(dir, PLAN, { party: PARTY });
+      assert.deepStrictEqual(m.mapPairs, [{ gm: 'Documents/Foo (GM).md', player: 'Documents/Foo.md' }]);
+      assert.ok(m.warnings.some((w) => w.kind === 'map-pair' && w.note === 'Documents/Foo (GM).md' && /player_version \[\[Foo \(GM\)\]\] is this map itself/.test(w.text)), JSON.stringify(m.warnings));
+    });
+
     it('maps keeps its strings, a lone map is not paired, a broken link does not throw', () => {
       const dir = copy();
       let m = readRunSheet(dir, PLAN, { party: PARTY });
@@ -347,6 +357,16 @@ describe('run sheet reader', () => {
       const m = withFm(copy(), 'unmasked_name: "[[]]"\n');
       assert.strictEqual(m.notes[ASH].unmask, null);
       assert.ok(unmaskWarnings(m).some((w) => /unmasked_name holds \[\[\]\], which names no one: no Unmask on the sheet/.test(w.text)), JSON.stringify(m.warnings));
+    });
+
+    it('a true face written as a link or a list of one is found (PR #799 review)', () => {
+      for (const face of ['"[[ember.png]]"', '"![[_attachments/ember.png|200]]"', '[[ember.png]]', '\n  - "[[ember.png]]"']) {
+        const dir = copy();
+        write(dir, '_attachments/ember.png', 'x');
+        const m = withFm(dir, `unmasked_name: The Ember Abbot\nunmasked_portrait: ${face}\n`);
+        assert.strictEqual(m.notes[ASH].unmask && m.notes[ASH].unmask.portrait, '_attachments/ember.png', face);
+        assert.ok(!m.warnings.some((w) => w.kind === 'no-portrait' && w.note === ASH), face);
+      }
     });
 
     it('a face with no true name warns (M2)', () => {

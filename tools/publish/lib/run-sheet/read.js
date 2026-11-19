@@ -256,15 +256,15 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
   const playerVersionWarning = (gm) => {
     const t = fmTarget(fmOf(gm).player_version);
     const named = t ? index.resolve(t) : null;
-    if (!t || isMap(named)) return;
-    const why = named !== null ? 'is not a map (no doc_type: map)'
+    if (!t || (isMap(named) && named !== gm)) return;
+    const why = named === gm ? 'is this map itself' : named !== null ? 'is not a map (no doc_type: map)'
       : ((index.linkProblem(t) || {}).text || `[[${t}]] matches no note in the vault`).replace(`[[${t}]] `, '');
     warnings.push({ kind: 'map-pair', note: gm, text: `its player_version [[${t}]] ${why}; the sheet pairs it by name if it can` });
   };
   const playerOf = (gm) => {
     const t = fmTarget(fmOf(gm).player_version);
     const named = t ? index.resolve(t) : null;
-    if (isMap(named)) return named;
+    if (isMap(named) && named !== gm) return named;
     const stem = stemOf(gm);
     return GM_SUFFIX.test(stem) ? index.resolve(stem.replace(GM_SUFFIX, '')) : null;
   };

@@ -249,7 +249,12 @@ function buildIndex(vaultPath, { deps } = {}) {
     // picture the reader sees matches warns `no-portrait` on that note. `field` names another
     // picture field read the same way (a disguised NPC's `unmasked_portrait`).
     portrait(p, field = 'portrait') {
-      const name = portraitBasename({ portrait: need(p).fm[field] });
+      // A picture written as a link (`[[rook.png]]`, `![[a/rook.png|200]]`) or as a list of one is that picture,
+      // as reveal --unmask reads it.
+      const raw = [need(p).fm[field]].flat(Infinity).filter((v) => typeof v === 'string' && v.trim());
+      const one = raw.length === 1 ? raw[0].trim() : raw.length ? raw : null;
+      const link = typeof one === 'string' ? /^!?\[\[([\s\S]*?)\]\]$/.exec(one) : null;
+      const name = portraitBasename({ portrait: link ? link[1].split('|')[0].trim() : one });
       if (!name) return null;
       const hit = attached()[name];
       const rel = hit ? toPosix(path.relative(vaultPath, hit.sourcePath)) : null;
