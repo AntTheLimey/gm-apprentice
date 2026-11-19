@@ -1,0 +1,93 @@
+'use strict';
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const t = require('../lib/run-sheet/plan-text');
+
+test('sections keeps order, duplicates and the lead', () => {
+  const body = 'lead\n\n## B\none\n### sub\nx\n## A\ntwo\n## B\nthree\n';
+  assert.deepEqual(t.sections(body, 2), [
+    { title: '', text: 'lead' },
+    { title: 'B', text: 'one\n### sub\nx' },
+    { title: 'A', text: 'two' },
+    { title: 'B', text: 'three' },
+  ]);
+  assert.deepEqual(t.sections('## Only\nx', 2), [{ title: 'Only', text: 'x' }]);
+  assert.deepEqual(t.sections('', 2), []);
+});
+
+test('a label value runs to the next label or blank line', () => {
+  const l = t.labels('**Situation:** a\nb\n**Starts it:** c');
+  assert.deepEqual(l, [
+    { name: 'Situation', value: 'a b', start: 0, end: 1 },
+    { name: 'Starts it', value: 'c', start: 2, end: 2 },
+  ]);
+  assert.equal(t.labels('**Situation:** a\n\nb')[0].value, 'a');
+  assert.equal(t.labels('- **Wants:** x\n- other')[0].value, 'x');
+  assert.equal(t.labels('**A:** x\n> q\n| t |')[0].value, 'x');
+  assert.deepEqual(t.labels(''), []);
+});
+
+test('a repeated label keeps both', () => {
+  const x = '**Starts it:** x\n\n**Starts it:** y';
+  assert.equal(t.labels(x).length, 2);
+  assert.equal(t.label(x, 'Starts it'), 'x\n\ny');
+  assert.equal(t.label(x, 'Nope'), '');
+});
+
+test('block stops at the next label or quote', () => {
+  const x = '**Notes**\nline one\n\nline two\n**Then:** z\n';
+  assert.deepEqual(t.block(x, 'Notes'), { value: 'line one\n\nline two', start: 0, end: 3 });
+  assert.equal(t.block('**Notes:**\nq\n> quote\nafter', 'notes').value, 'q');
+  assert.deepEqual(t.block('nothing', 'Notes'), { value: '', start: -1, end: -1 });
+});
+
+test('bullets marks checkboxes and folds nested lines', () => {
+  const x = '- plain\n  - nested\n- [ ] open\n- [x] done\n\n- last\n  wrapped';
+  assert.deepEqual(t.bullets(x), [
+    { text: 'plain\n  - nested', box: false },
+    { text: 'open', box: true },
+    { text: 'done', box: true },
+    { text: 'last\n  wrapped', box: false },
+  ]);
+  assert.deepEqual(t.bullets(''), []);
+});
+
+test('tableRows drops header and separator, keeps an escaped pipe', () => {
+  const x = '| A | B |\n|---|:-:|\n| [[X|y]] | a \\| b |\n| c | d |';
+  assert.deepEqual(t.tableRows(x), [['[[X|y]]', 'a \\| b'], ['c', 'd']]);
+  assert.deepEqual(t.tableRows('no table'), []);
+});
+
+test('links drops labels and headings', () => {
+  assert.deepEqual(t.links('[[A#h|label]] and [[B]] and [[A]] ![[pic.png]] [[C\\|x]]'), ['A', 'B', 'A', 'C']);
+  assert.deepEqual(t.links(''), []);
+});
+
+test('readAloud joins quoted lines', () => {
+  assert.equal(t.readAloud('x\n> [!quote] Read\n> one\n>\n> two\ny\n> three'), 'one\n\ntwo\n\nthree');
+  assert.equal(t.readAloud('none'), '');
+});
+
+test('unclaimed returns the lines no field took', () => {
+  const x = '**A:** 1\n\nstray\n**B:** 2\n\nlast';
+  assert.equal(t.unclaimed(x, t.labels(x)), 'stray\n\nlast');
+  assert.equal(t.unclaimed(x, [{ start: 0, end: 5 }]), '');
+  assert.equal(t.unclaimed('', []), '');
+  assert.equal(t.unclaimed('a\nb', undefined), 'a\nb');
+});
+
+test('crlf reads the same as lf', () => {
+  const lf = '## S\n**A:** x\ny\n- [ ] b\n';
+  const crlf = lf.replace(/\n/g, '\r\n');
+  assert.deepEqual(t.sections(crlf, 2), t.sections(lf, 2));
+  assert.deepEqual(t.labels(crlf), t.labels(lf));
+  assert.deepEqual(t.bullets(crlf), t.bullets(lf));
+});
+
+test('comments are removed without shifting line indexes', () => {
+  const x = 'a <!-- gone --> b\n<!-- multi\nline -->\n**A:** v\n\nstray';
+  assert.deepEqual(t.labels(x), [{ name: 'A', value: 'v', start: 3, end: 3 }]);
+  assert.equal(t.unclaimed(x, t.labels(x)), 'a  b\n\n\n\nstray');
+  assert.equal(t.sections('## S\nx <!-- y -->', 2)[0].text, 'x');
+  assert.equal(t.label('**A:** v <!-- c', 'A'), 'v');
+});
