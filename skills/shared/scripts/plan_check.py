@@ -47,12 +47,40 @@ Checks, by id, level, and the rule they mechanise:
                          Starts it, every Contingency scene carries
                          Trigger — except a routing/hub scene (a menu,
                          not a scene: a title with (routing) or (hub),
-                         or `Scene 0`), which needs neither; the other labels are optional and an
-                         absent one is never reported, but any label
-                         that is attempted must be spelled exactly; a
-                         legacy Objective/Setup/Behaviours/Branching
+                         `Scene 0`, or a `**Where they can go**` block),
+                         which needs neither; the other labels are
+                         optional and an absent one is never reported
+                         here, but any label that is attempted must be
+                         spelled exactly; a legacy
+                         Objective/Setup/Behaviours/Behaviors/Branching
                          scene is one row
                          (session-prep SKILL.md, Plan shape)
+  no-place      WARNING  a planned scene (not a hub or contingency) has no
+                         `**Place:**` line (a link, or plain words) and no
+                         scene note with `locations:`: the run sheet will
+                         not say where it happens
+  no-npcs-block WARNING  a planned scene (not a hub) names an NPC or
+                         creature in Entities but has no `**NPCs**` block
+                         with a readable `- **[[Name]]:**` line: the run
+                         sheet will show nobody there. Needs a vault; the
+                         notes' `type` is read, never guessed
+  hub-no-places WARNING  a hub (a `**Where they can go**` block, legacy
+                         `**Open to the party**`, or "(hub)" in the title)
+                         with neither place bullets (`- **[[Location]]:**`,
+                         `- **Plain name:**`) nor pointer bullets
+                         (`- words — Scene N`, `- [[Scene note]] ...`)
+  hub-place-not-location
+                WARNING  a place bullet whose bold lead links a note that
+                         is not `type: location` (needs a vault)
+  label-form    WARNING  a scene label with a parenthesis inside the bold
+                         (`**NPCs (who is here)**`): the run sheet reads
+                         `**NPCs**`, `**NPCs:**` or `- **NPCs:**` only
+  if-table-unlabelled
+                WARNING  a table in a planned scene that is not under
+                         `**If the players...**`: the run sheet reads
+                         Do | Then rows only from there
+                         (the checks above: tools/publish/lib/run-sheet;
+                         shape only, never story)
   duration      ERROR/   never estimate scene durations
                 WARNING  (shared/session-principles.md, Absolute Rules)
   audit-trail   WARNING  the Plan is an instrument, not an audit trail
@@ -197,17 +225,24 @@ _TABLE_SEPARATOR_RE = re.compile(r"\|?[\s:|-]+\|?")
 # named. An old Plan's `**Type:** transition` still marks a routing scene.
 #
 # One minimum for all types (2026-09-14, docs/scene-design-research.md):
-# only SCENE_LABELS_REQUIRED is demanded. Six prep traditions across five
-# systems were surveyed and none prescribes a uniform mandatory scene
-# shape — a routing scene, a GUMSHOE Sub-Plot and an Angry GM "no-fail
-# scene" are all legitimately near-empty. The rest of the labels are
-# tools, offered and not demanded, and a scene that omits one is finished,
-# not incomplete. A label that is *attempted* and mistyped is still an
-# error: that is a typo, not an omission.
+# only SCENE_LABELS_REQUIRED is demanded of the scene itself. Six prep
+# traditions across five systems were surveyed and none prescribes a
+# uniform mandatory scene shape — a routing scene, a GUMSHOE Sub-Plot and
+# an Angry GM "no-fail scene" are all legitimately near-empty. The rest of
+# the labels are tools, offered and not demanded, and a scene that omits
+# one is finished, not incomplete. A label that is *attempted* and
+# mistyped is still an error: that is a typo, not an omission.
+#
+# Two lines are the exception, by the GM's word (2026-11-19): `**Place:**`
+# and an `**NPCs**` block are expected on a planned scene that has a place
+# or people, because the run sheet is built from them and prep fixes every
+# warning in its own draft. `no-place` and `no-npcs-block` say so; they
+# are warnings, never errors, and a hub or contingency owes neither.
 SCENE_LABELS_INLINE: tuple[str, ...] = (
-    "Situation", "Starts it", "Entities", "Handouts")
+    "Situation", "Place", "Starts it", "Entities", "Handouts")
 SCENE_LABELS_BLOCK: tuple[str, ...] = (
-    "NPCs", "Points to land", "If the players...", "Complications")
+    "NPCs", "Where they can go", "Points to land", "If the players...",
+    "Treasure", "Complications")
 SCENE_LABELS: tuple[str, ...] = SCENE_LABELS_INLINE + SCENE_LABELS_BLOCK
 SCENE_LABELS_REQUIRED: frozenset[str] = frozenset({"Situation", "Starts it"})
 CONTINGENCY_LABELS: tuple[str, ...] = ("Trigger", "Then")
@@ -545,7 +580,8 @@ def _label_present(body: str, label: str) -> bool:
             r"^\*\*If the players(?:\.{3}|…)\*\*", body, re.MULTILINE))
     if _is_inline_label(label):
         return bool(re.search(
-            rf"^\*\*{re.escape(label)}:\*\*", body, re.MULTILINE))
+            rf"^(?:[-*+]\s+)?\*\*{re.escape(label)}:\*\*", body,
+            re.MULTILINE))
     # Block label: the bare label, or the label plus an optional
     # parenthetical (`**Complications (drop when the scene sags)**`).
     # Anything else after the label — a colon, a period, free text with
@@ -704,6 +740,251 @@ def check_scenes(rel: str, by_norm: dict[str, tuple[int, str, str]]
         for scene_title, scene_body in vl.h3_blocks(contingency[2]):
             findings.extend(_scene_findings(
                 rel, scene_body, scene_title, CONTINGENCY_LABELS))
+    return findings
+
+
+# --------------------------------------------------------------------------
+# What the run sheet reads (tools/publish/lib/run-sheet/beats.js). Shape only:
+# each warning names what the sheet will lack, and none asks anything of the
+# story.
+# --------------------------------------------------------------------------
+
+RUN_SHEET_CHECKS: tuple[str, ...] = (
+    "no-place", "no-npcs-block", "hub-no-places", "hub-place-not-location",
+    "label-form", "if-table-unlabelled")
+
+_SCENE_N_RE = re.compile(r"^\s*scene\s+\d+\s*:\s*", re.I)
+_HUB_MARK_RE = re.compile(r"\s*\((?:hub|routing)\)\s*", re.I)
+_TITLE_NOTE_RE = re.compile(r"\[\[([^\[\]]+)\]\]")
+_FENCE_RE = re.compile(r"^\s*(```|~~~)")
+_PLACE_LINE_RE = re.compile(r"^(?:[-*+]\s+)?\*\*Place:\*\*[ \t]*\S")
+_ENTITIES_LINE_RE = re.compile(r"^(?:[-*+]\s+)?\*\*Entities:\*\*[ \t]*(.*)$")
+_WHO_LINE_RE = re.compile(r"^(?:[-*+]\s+)?\*\*Who:\*\*[ \t]*\S")
+_NPCS_HEAD_RE = re.compile(r"^\*\*NPCs:?\*\*[ \t]*$")
+_NPC_LINE_RE = re.compile(r"^[-*+]\s+\*\*\[\[[^\]]+\]\]")
+_WHERE_HEAD_RE = re.compile(
+    r"^\*\*(?:Where they can go|Open to the party):?\*\*[ \t]*"
+    r"(?:\([^)]*\))?[ \t]*$", re.I)
+_PLACE_BULLET_RE = re.compile(r"^[-*+]\s+\*\*([^*\n]+?)\*\*")
+_POINTER_BULLET_RE = re.compile(
+    r"^[-*+]\s+(?:\[\[|.*[—–-]\s*Scenes?\s+\d+)")
+_LINK_RE = re.compile(r"(?<!!)\[\[([^\[\]]+)\]\]")
+_IF_LABEL_RE = re.compile(r"^\*\*If the players", re.I)
+_BOLD_HEAD_RE = re.compile(r"^(?:[-*+]\s+)?\*\*[^*\n]+\*\*")
+# A scene label with a parenthesis inside its bold: the reader finds none.
+_PAREN_LABEL_RE = re.compile(
+    r"^(?:[-*+]\s+)?\*\*(?P<name>[^*\n(]+?)\s*\([^)*\n]*\)\s*:?\*\*")
+_KNOWN_LABEL_NORMS: frozenset[str] = frozenset(
+    {n.rstrip(".…").casefold() for n in (
+        *SCENE_LABELS, *CONTINGENCY_LABELS, "Open to the party")})
+_NPC_TYPES = frozenset({"npc", "creature"})
+
+
+class VaultIndex:
+    """A vault's notes by normalised name (file stem or alias), read once and
+    only when a check needs a note's type. Without a vault every lookup is
+    None: the type checks are skipped, never guessed."""
+
+    def __init__(self, vault: Path | None) -> None:
+        self.vault = vault
+        self._by_name: dict[str, list[dict[str, Any]]] | None = None
+
+    def notes(self, link: str) -> list[dict[str, Any]] | None:
+        """Frontmatter of each note the link names; None with no vault."""
+        if self.vault is None:
+            return None
+        if self._by_name is None:
+            self._by_name = {}
+            for rel, text in vl.vault_files(self.vault):
+                fm = vl.extract_frontmatter(text) or {}
+                for name in (Path(rel).stem, *vl.link_aliases(fm)):
+                    self._by_name.setdefault(
+                        vl.normalize(name), []).append(fm)
+        return self._by_name.get(vl.link_target(link), [])
+
+    def types(self, link: str) -> set[str] | None:
+        """The `type`s of the notes a link names; None when the vault is
+        unknown or holds no such note (a missing link is not this check's)."""
+        found = self.notes(link)
+        return {vl.entity_type(fm) for fm in found} if found else None
+
+
+def _unfenced(body: str) -> list[str]:
+    out: list[str] = []
+    fence: str | None = None
+    for line in body.splitlines():
+        f = _FENCE_RE.match(line)
+        if f:
+            fence = None if fence == f.group(1) else (fence or f.group(1))
+            continue
+        if fence is None:
+            out.append(line)
+    return out
+
+
+def _block_after(lines: list[str], head: int) -> list[str]:
+    """The lines under a bold head, up to the next bold line, quote or
+    heading at the left margin (a bullet that opens with bold stays in)."""
+    out: list[str] = []
+    for line in lines[head + 1:]:
+        if line.startswith(("**", ">", "#")):
+            break
+        out.append(line)
+    return out
+
+
+def _scene_note_link(title: str) -> str | None:
+    t = _HUB_MARK_RE.sub(" ", _SCENE_N_RE.sub("", title)).strip()
+    m = _TITLE_NOTE_RE.fullmatch(t)
+    return m.group(1) if m else None
+
+
+def _label_form_findings(locus: str, title: str, lines: list[str]
+                         ) -> list[Finding]:
+    out = []
+    for line in lines:
+        m = _PAREN_LABEL_RE.match(line)
+        if not m or m.group("name").strip().rstrip(".…").casefold() \
+                not in _KNOWN_LABEL_NORMS:
+            continue
+        name = m.group("name").strip()
+        out.append(Finding(
+            "label-form", "WARNING", locus,
+            f"label-form: '{title}' has {m.group(0)!r} — the run sheet "
+            f"reads no label with a parenthesis inside the bold, so it "
+            f"will lack that part; write '**{name}**' and move the "
+            f"words out"))
+    return out
+
+
+def _if_table_findings(locus: str, title: str, lines: list[str]
+                       ) -> list[Finding]:
+    label: str | None = None
+    in_table = False
+    out = []
+    for line in lines:
+        if line.lstrip().startswith("|"):
+            if not in_table and not (label and _IF_LABEL_RE.match(label)):
+                out.append(Finding(
+                    "if-table-unlabelled", "WARNING", locus,
+                    f"if-table-unlabelled: '{title}' has a table that is "
+                    f"not under '**If the players...**' — the run sheet "
+                    f"reads Do | Then rows only from there, so it will "
+                    f"lack these"))
+            in_table = True
+            continue
+        in_table = False
+        if _BOLD_HEAD_RE.match(line):
+            label = line.strip()
+    return out
+
+
+def _hub_findings(locus: str, title: str, lines: list[str],
+                  index: VaultIndex) -> list[Finding]:
+    heads = [i for i, ln in enumerate(lines) if _WHERE_HEAD_RE.match(ln)]
+    bullets = [ln for i in heads for ln in _block_after(lines, i)
+               if ln[:1] in "-*+" and ln[1:2] == " "]
+    places = [m for ln in bullets if (m := _PLACE_BULLET_RE.match(ln))]
+    pointers = [ln for ln in bullets
+                if not _PLACE_BULLET_RE.match(ln)
+                and _POINTER_BULLET_RE.match(ln)]
+    out = []
+    if not places and not pointers:
+        out.append(Finding(
+            "hub-no-places", "WARNING", locus,
+            f"hub-no-places: hub '{title}' lists no places and no leads — "
+            f"the run sheet will show the party nowhere to go; add "
+            f"'- **[[Location]]:** ...' or '- **Plain name:** ...' bullets "
+            f"under '**Where they can go**', and '- words — Scene N' for "
+            f"a lead to another scene"))
+    for m in places:
+        for link in _LINK_RE.findall(m.group(1)):
+            kinds = index.types(link)
+            if kinds is not None and "location" not in kinds:
+                shown = ", ".join(sorted(k or "none" for k in kinds))
+                out.append(Finding(
+                    "hub-place-not-location", "WARNING", locus,
+                    f"hub-place-not-location: hub '{title}' lists "
+                    f"[[{link}]] as a place but its note is type: {shown} "
+                    f"— the run sheet will show no place there; link a "
+                    f"location note, or write the place's name in plain "
+                    f"words"))
+    return out
+
+
+def _entity_people(lines: list[str], index: VaultIndex) -> list[str]:
+    names = []
+    for line in lines:
+        m = _ENTITIES_LINE_RE.match(line)
+        if not m:
+            continue
+        for link in _LINK_RE.findall(m.group(1)):
+            kinds = index.types(link)
+            if kinds and kinds & _NPC_TYPES:
+                names.append(vl.link_name(link))
+    return names
+
+
+def _run_sheet_scene(rel: str, title: str, body: str, planned: bool,
+                     index: VaultIndex) -> list[Finding]:
+    locus = f"{rel}:§{title}"
+    lines = _unfenced(body)
+    out = _label_form_findings(locus, title, lines)
+    if not planned:
+        return out
+    out.extend(_if_table_findings(locus, title, lines))
+    hub = (any(_WHERE_HEAD_RE.match(ln) for ln in lines)
+           or bool(re.search(r"\(hub\)", title, re.I)))
+    if hub:
+        out.extend(_hub_findings(locus, title, lines, index))
+    if hub or _is_routing_scene(body, title):
+        return out
+    if not any(_PLACE_LINE_RE.match(ln) for ln in lines):
+        link = _scene_note_link(title)
+        if link is None:
+            has_locations: bool | None = False
+        else:  # the scene note may hold the place; with no vault, unknown
+            notes = index.notes(link)
+            has_locations = (any(vl.link_targets(fm.get("locations"))
+                                 for fm in notes) if notes else None)
+        if has_locations is False:
+            out.append(Finding(
+                "no-place", "WARNING", locus,
+                f"no-place: '{title}' has no '**Place:**' line — the run "
+                f"sheet will not say where it happens; add "
+                f"'**Place:** [[Location]]', or plain words when no "
+                f"location note fits"))
+    people = _entity_people(lines, index)
+    if people:
+        head = next((i for i, ln in enumerate(lines)
+                     if _NPCS_HEAD_RE.match(ln)), None)
+        readable = head is not None and any(
+            _NPC_LINE_RE.match(ln) for ln in _block_after(lines, head))
+        if not readable and not any(_WHO_LINE_RE.match(ln) for ln in lines):
+            why = ("has an '**NPCs**' block with no '- **[[Name]]:**' line "
+                   "the sheet can read" if head is not None
+                   else "has no '**NPCs**' block")
+            out.append(Finding(
+                "no-npcs-block", "WARNING", locus,
+                f"no-npcs-block: '{title}' names {', '.join(people)} in "
+                f"Entities but {why} — the run sheet will show nobody "
+                f"here; add '**NPCs**' and a '- **[[Name]]:** wants ...' "
+                f"line for each person in the room"))
+    return out
+
+
+def check_run_sheet(rel: str, by_norm: dict[str, tuple[int, str, str]],
+                    vault: Path | None) -> list[Finding]:
+    index = VaultIndex(vault)
+    findings: list[Finding] = []
+    for section, planned in ((PLANNED_SCENES_TITLE, True),
+                             (CONTINGENCY_SCENES_TITLE, False)):
+        entry = by_norm.get(_norm_title(section))
+        if entry is None:
+            continue
+        for title, body in vl.h3_blocks(entry[2]):
+            findings.extend(
+                _run_sheet_scene(rel, title, body, planned, index))
     return findings
 
 
@@ -1034,6 +1315,7 @@ def run_checks(rel: str, text: str, fm: dict[str, Any], headless: bool,
     findings.extend(check_recap(rel, by_norm))
     findings.extend(check_npc_table(rel, by_norm))
     findings.extend(check_scenes(rel, by_norm))
+    findings.extend(check_run_sheet(rel, by_norm, vault))
     findings.extend(check_duration(rel, states))
     findings.extend(check_audit_trail(rel, states))
     findings.extend(check_pc_state(rel, states))

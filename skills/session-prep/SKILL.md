@@ -279,13 +279,15 @@ alongside new ideas. The propose-before-write gate is the
    wrap-up's, kept as written. One the GM drops:
    `gma vault-write <vault> scene-played --scene "<scene>" --dropped --write`.
    A small beat may stay inline in the scene skeleton (Plan shape): **Situation** and **Starts it**
-   are required; every other label is optional, and a two-line routing
-   scene is finished.
+   are required, **Place** is expected on every scene and an **NPCs** block on any scene with
+   people in it (the run sheet is built from them); every other label is optional.
 
 Scenes are situations the party may walk into, in their likely order,
 never a required one. Where the party has committed to a place, build
-it out; where they're at a crossroads, one (hub) scene lists each lead
-(what's there, who notices, what changes when they arrive). What turns
+it out; where they're at a crossroads, one hub scene (a **Where they can
+go** block) lists each place the party can stand (what's there, who is
+there, what changes when they arrive) and points at each lead that is a
+scene of its own, which carries its own Place. What turns
 on the players is `Do | Then` rows or a Contingency scene's
 **Trigger**; the only fixed times are what NPCs do on their own
 schedule.
@@ -322,7 +324,13 @@ implies `--headless`).
   missing `## GM Notes`.
 - WARNING rows — fix silently when mechanical (`preamble`, `recap`,
   `audit-trail`, `pc-state`, `scene-type`, `scene-pointer`, the other
-  `sections`); raise as a question when they touch content. A
+  `sections`); raise as a question when they touch content. The run-sheet
+  rows are all fixed in the draft, none left for the GM: `no-place` (write
+  the scene's **Place** line: a link, or plain words when no location
+  note fits; never a stub note, never a question), `no-npcs-block` (add
+  an **NPCs** block: everyone in the room, never everyone referred to),
+  `hub-no-places`, `hub-place-not-location`, `label-form`,
+  `if-table-unlabelled`. They check shape only, never story. A
   `checks failed` row: run the commands it names.
 - INFO rows are cues (`read-aloud`, `scene-length`, `placeholder`). A
   read-aloud line that names a PC, dictates a feeling ("you feel…") or
@@ -357,6 +365,9 @@ Apply fixes in place; there is no audit-notes report.
   block allowed for the rest. On the GM's yes it goes in
   the NPC note's `## GM Notes` as its `### Stats` section. With
   `# system: none recorded`, build nothing: it is an Open Question.
+- A `foe-no-numbers` warning (a CoC, GURPS or PF2e foe whose stats the
+  run sheet cannot read): one line under `## Gaps & Actions` naming the
+  foe. No question to the GM.
 - Unresolved calls — plot questions the GM deferred or you couldn't
   ground — each with 2–3 seeds, sorted per Stance. "Does Sophia know
   what her husband has become?" is a plot question; "Georgiana's
@@ -442,13 +453,24 @@ one with nothing for it keeps its heading with an empty body (never
   issues (step 16); handouts go in Handouts & Props.
 
 A scene: `### Scene N: Title` (or a scene note's `### [[Title]]`, step
-14). Only **Situation:** and **Starts it:** are required; use the rest
-where they earn a place. A routing or hub scene (a menu of where the
-party is and what is open) needs neither: "(routing)" or "(hub)" in
-its title, or `Scene 0`.
+14). **Situation:** and **Starts it:** are required. **Place:** is
+expected on every planned scene, and an **NPCs** block on any scene
+that names an NPC or creature in Entities, because `gma plan-check`
+warns without them and prep fixes every warning in its own draft; use
+the other labels where they earn a place. Write a label as `**X:**`,
+`**X**` or `- **X:**`, never with a parenthesis inside the bold:
+`**NPCs**`, not `**NPCs (who is here)**`. **Place:** is one link alone,
+or plain words when no location note fits (no stub note, no question to
+the GM). **NPCs** holds everyone in the room, never everyone referred
+to. **Treasure** (one item per bullet) goes on a fight or hoard beat.
+A hub is any scene holding a **Where they can go** block (legacy:
+**Open to the party**), with or without "(hub)" in its title; it needs
+no Situation, Starts it, Place or NPCs. A "(routing)" title or `Scene 0`
+also owes none of them.
 
 ```markdown
 **Situation:** One line: what is happening as it opens, a thing in motion.
+**Place:** [[Location]], or plain words when no location note fits.
 **Starts it:** One line: the named NPC or schedule that brings the PCs in within sixty seconds, and what they want from this PC.
 **Entities:** [[NPC]], [[Location]], [[Item]]
 **Handouts:** [[Document]] — what this scene hands over, and how
@@ -462,11 +484,25 @@ its title, or `Scene 0`.
 |---|---|
 | A choice the table may make | What the situation does in reply |
 | Nobody engages by [time] | What the NPCs do on their own |
+**Treasure**
+- An item the scene holds, one per bullet.
 **Complications**
 - A curveball to drop when the scene sags; two or three.
 
 > Read-aloud: 2–4 sentences of sensory description to the table; never
 > names one PC or dictates a feeling.
+```
+
+A hub, `### Scene 0: Title (hub)`. A place bullet is somewhere the party
+can stand; a pointer bullet is a lead to another scene, which has its
+own Place. People named in a place bullet are there.
+
+```markdown
+**Where they can go**
+- **[[Location]]:** what is there, who is there ([[NPC]]), what changes when they arrive.
+- **Plain name:** the same, when no location note fits.
+- A lead in words — Scene 3
+- [[Scene note]] — a lead to a scene that has its own Place.
 ```
 
 A contingency scene, `### Title` under Contingency Scenes:
