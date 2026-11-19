@@ -1277,7 +1277,9 @@ class RunSheetChecksTests(unittest.TestCase):
     def test_a_bold_lead_ending_in_scene_n_is_a_pointer(self):
         self.note("Orme", "npc")
         for bullets in ("- **Cellar door** — Scene 3\n",
-                        "- **[[Orme]]** — Scene 3\n"):
+                        "- **[[Orme]]** — Scene 3\n",
+                        "- **[[Orme]]** — Scene 3 (locked)\n",
+                        "- **[[Orme]]** — Scene 3, locked tight\n"):
             with self.subTest(bullets=bullets):
                 self.assertEqual(
                     self.ids(self.HUB.format(bullets=bullets)), [])

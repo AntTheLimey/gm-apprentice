@@ -135,6 +135,24 @@ describe('run sheet reader', () => {
     assert.deepStrictEqual(m.warnings.filter((w) => w.kind === 'not-on-page'), []);
   });
 
+  it('every line of the plan skeleton is kept somewhere, and its places and spots are on the model', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rs-skel-'));
+    fs.cpSync(path.join(__dirname, 'fixtures', 'run-sheet-skeleton'), dir, { recursive: true });
+    const skeleton = readText(path.join(__dirname, '..', '..', '..', 'tests', 'fixtures', 'plan-skeleton.md'));
+    const rel = 'Plan.md';
+    write(dir, rel, skeleton);
+    const m = readRunSheet(dir, rel, { party: [] });
+    const body = bodyOf(skeleton);
+    assert.deepStrictEqual(missingLines(body, m), []);
+    assert.deepStrictEqual(strayLines(dir, body, m), []);
+    assert.deepStrictEqual(m.beats.map((b) => b.placeFrom), [null, null, null, 'place', null]);
+    assert.deepStrictEqual(m.beats[1].spots.map((x) => x.md).filter(Boolean).length, 2);
+    // the place and the hub's location are on the page's places
+    assert.deepStrictEqual(m.places, ['Locations/Location.md', 'Locations/The Vicarage.md']);
+    assert.deepStrictEqual(m.warnings.filter((w) => w.kind === 'no-place'), []);
+    assert.deepStrictEqual(JSON.parse(JSON.stringify(m)), m);
+  });
+
   it('completeness reports a link a field dropped', () => {
     const dir = copy();
     const m = readRunSheet(dir, PLAN, { party: PARTY });

@@ -769,11 +769,14 @@ _WHERE_HEAD_RE = re.compile(
     r"^\*\*(?:Where they can go|Open to the party):?\*\*[ \t]*"
     r"(?:\([^)]*\))?[ \t]*$", re.I)
 _PLACE_BULLET_RE = re.compile(r"^[-*+]\s+\*\*([^*\n]+?)\*\*")
-# A pointer bullet leads to another scene: it ends `— Scene N`, or opens with
-# a bare link. A bold lead that ends so, or links a scene note, is a pointer
-# too (`- **Cellar door** — Scene 3`); a place bullet is a bold lead with none.
+# A pointer bullet leads to another scene: it ends `— Scene N` (a parenthesis
+# or up to three words may follow, `— Scene 3 (locked)`), or opens with a bare
+# link. A bold lead that ends so, or links a scene note, is a pointer too
+# (`- **Cellar door** — Scene 3`); a place bullet is a bold lead with none.
+# tools/publish/lib/run-sheet/beats.js holds the same rule.
 _POINTER_BULLET_RE = re.compile(
-    r"^[-*+]\s+(?:\[\[|.*[—–-]\s*Scenes?\s+\d+[\s.]*$)")
+    r"^[-*+]\s+(?:\[\[|.*[—–-]\s*Scenes?\s+\d+"
+    r"(?:\s*\([^)]*\)|,?\s+\S+(?:\s+\S+){0,2})?[\s.]*$)")
 _LINK_RE = re.compile(r"(?<!!)\[\[([^\[\]]+)\]\]")
 _IF_LABEL_RE = re.compile(r"^\*\*If the players", re.I)
 _BOLD_HEAD_RE = re.compile(r"^(?:[-*+]\s+)?\*\*[^*\n]+\*\*")

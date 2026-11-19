@@ -3,6 +3,7 @@ const { describe, it } = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
 const os = require('node:os');
+const { spawnSync } = require('node:child_process');
 const path = require('node:path');
 const { readText } = require('./helpers/run-sheet-lines');
 const { buildIndex } = require('../lib/run-sheet/notes');
@@ -159,38 +160,38 @@ describe('run sheet beats', () => {
       ['The guest wing', null], ['The chapel', null], ['The walls', null],
       ['The Chapel Yard', 'Locations/The Chapel Yard.md'], ['The yard', null],
     ]);
+    // the people a bullet links are in who, and the bullet's words stay on its spot, never in their wants
     assert.deepStrictEqual(b.who.map((w) => [w.name, w.wants]), [
-      ['Brother Ash', 'at the stair'], ['Lucan Grey', 'kept the fire.'],
-      ['Sister Fen', 'caught with a knife.'], ['Frost Wolf', 'prowling.'],
+      ['Brother Ash', ''], ['Lucan Grey', ''], ['Sister Fen', ''], ['Frost Wolf', ''],
     ]);
-    // words no field holds stay, with their head; a PC is not a person here
-    assert.strictEqual(b.extra, '**Open to the party**\n- **The walls:** the lamp carvings.\n- **The yard:** [[Ada Moss]] keeps watch.');
+    assert.deepStrictEqual(b.spots.map((x) => x.md), [
+      '[[Brother Ash]] at the stair; [[Lucan Grey]] kept the fire.', '[[Sister Fen]], caught with a knife.',
+      'the lamp carvings.', '[[Frost Wolf]] prowling.', '[[Ada Moss]] keeps watch.',
+    ]);
+    // every word is on a spot, so nothing is left over; a PC is not a person here
+    assert.strictEqual(b.extra, '');
     assert.ok(!warnings.some((w) => w.kind === 'no-npcs-block'));
   });
 
-  it('real hub: a spot group of plain bullets keeps its parenthesis', () => {
+  it('real hub: a group of pointer bullets keeps its parenthesis and holds no spot', () => {
     const index = buildIndex(copy());
     const plan = readText(path.join(__dirname, 'fixtures', 'run-sheet-hub-plan.md'));
     const b = readBeats(plan, index).beats[1];
-    assert.deepStrictEqual(b.spots.map((s) => [s.name, s.note]), [
-      ['The guest register (Hollis)', null], ['Crane by the fire', null],
-      ['The Gate House at dusk', 'Locations/The Gate House.md'],
-    ]);
-    assert.ok(!b.spots.some((s) => s.name === 'Open to the party'));
+    // all three bullets lead to other scenes (`— Scene N`, or a bare link first): none is a spot
+    assert.deepStrictEqual(b.spots, []);
     assert.deepStrictEqual(b.who, []);
     assert.strictEqual(b.extra,
-      '**Open to the party** (scenes 1–8, any order, any number)\n- The guest register (Hollis) — Scene 1\n- Crane by the fire — Scene 4');
+      '**Open to the party** (scenes 1–8, any order, any number)\n- The guest register (Hollis) — Scene 1\n- Crane by the fire — Scene 4\n- [[The Gate House]] at dusk');
   });
 
   it('a plain hub bullet is named by its first line', () => {
     const index = buildIndex(copy());
     const plan = readText(path.join(__dirname, 'fixtures', 'run-sheet-hub-plan.md'))
-      .replace('- Crane by the fire — Scene 4\n', '- Crane by the fire\n  - he has the key\n')
-      .replace('- [[The Gate House]] at dusk\n', '- [[The Gate House]] at dusk\n\n  The door sticks.\n');
+      .replace('- Crane by the fire — Scene 4\n', '- Crane by the fire\n  - he has the key\n');
     const b = readBeats(plan, index).beats[1];
-    assert.deepStrictEqual(b.spots.map((s) => s.name), ['The guest register (Hollis)', 'Crane by the fire', 'The Gate House at dusk']);
-    assert.match(b.extra, /- Crane by the fire\n  - he has the key/);
-    assert.match(b.extra, /The door sticks\./);
+    // the pointers stay out; the plain bullet is a spot named by its first line, its nested line its words
+    assert.deepStrictEqual(b.spots.map((s) => [s.name, s.md]), [['Crane by the fire', '- he has the key']]);
+    assert.doesNotMatch(b.extra, /he has the key/);
   });
 
   it('scene note text after the GM fence is kept', () => {
@@ -408,5 +409,197 @@ describe('run sheet beats', () => {
     assert.ok(warnings.some((w) => w.kind === 'ambiguous-link' && /\[\[index\]\] names several notes/.test(w.text)));
     assert.ok(warnings.some((w) => w.kind === 'excluded-note' && /\[\[Old Ruin\]\]/.test(w.text)));
     assert.ok(!warnings.some((w) => w.kind === 'missing-note' && /index|Old Ruin/.test(w.text)));
+  });
+});
+
+// The Plan shape (Place line, hub block, NPCs, If table, Treasure), read from the fixture that
+// plan-check's own tests hold to the template: tests/fixtures/plan-skeleton.md.
+const REPO = path.join(__dirname, '..', '..', '..');
+const SKELETON = path.join(REPO, 'tests', 'fixtures', 'plan-skeleton.md');
+const SKELETON_VAULT = path.join(__dirname, 'fixtures', 'run-sheet-skeleton');
+const PLAN_CHECK = path.join(REPO, 'skills', 'shared', 'scripts', 'plan_check.py');
+const bodyOnly = (t) => t.replace(/^---\n[\s\S]*?\n---\n/, '');
+
+// A scratch vault: the skeleton's linked notes, a `_meta` folder (plan-check finds its vault by it).
+function skeletonVault() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rs-skel-'));
+  fs.cpSync(SKELETON_VAULT, dir, { recursive: true });
+  fs.mkdirSync(path.join(dir, '_meta'));
+  return dir;
+}
+
+const planOf = (planned) => `---\ntype: session-plan\nsession: "[[S1]]"\nchapter: "[[C1]]"\n---\n\n## Planned Scenes\n\n${planned}\n`;
+
+// One Plan through both programs: plan-check's finding ids, and the reader's beats.
+function bothSides(planned) {
+  const dir = skeletonVault();
+  const file = path.join(dir, 'Plan.md');
+  fs.writeFileSync(file, planOf(planned));
+  const run = spawnSync('python3', [PLAN_CHECK, file, '--json'], { encoding: 'utf8' });
+  const ids = JSON.parse(run.stdout).findings.map((f) => f.id);
+  const index = buildIndex(dir);
+  return { ids, ...readBeats(bodyOnly(readText(file)), index), index };
+}
+
+describe('run sheet beats: the Plan shape', () => {
+  const read2 = (edit) => {
+    const dir = skeletonVault();
+    const text = edit ? edit(bodyOnly(readText(SKELETON))) : bodyOnly(readText(SKELETON));
+    const index = buildIndex(dir);
+    return readBeats(text, index);
+  };
+
+  it('the plan skeleton gives every feed', () => {
+    const { beats, warnings } = read2();
+    const [s1, hub, harbour, supper] = beats;
+    assert.deepStrictEqual(beats.map((b) => b.title), ['[Title]', '[Title] (hub)', 'The Harbour Office', 'The Quiet Supper', '[Contingency Title]']);
+    // Scene 1's Place line holds a link and words: the words are kept, no place is given
+    assert.strictEqual(s1.place, null);
+    assert.strictEqual(s1.placeFrom, null);
+    assert.strictEqual(s1.placeText, '[[Location]], or plain words when no location note fits.');
+    assert.deepStrictEqual(s1.who.map((w) => [w.name, w.wants]), [['Name', 'wants X. Does Y if left alone.']]);
+    assert.deepStrictEqual(s1.ifs.map((x) => x.do), ['A choice the table may make', 'Nobody engages by [time]']);
+    assert.deepStrictEqual(s1.treasure.map((x) => x.text), ['An item the scene holds, one per bullet.']);
+    assert.deepStrictEqual(s1.points.map((x) => x.text), ['A fact you must convey however the improv goes.']);
+    // the hub: a Where they can go block makes it one; two spots with their words, and no pointer is a spot
+    assert.deepStrictEqual(hub.spots.map((x) => [x.name, x.note, x.md]), [
+      ['Location', 'Locations/Location.md', 'what is there, who is there ([[NPC]]), what changes when they arrive.'],
+      ['Plain name', null, 'the same, when no location note fits.'],
+    ]);
+    assert.deepStrictEqual(hub.who.map((w) => [w.name, w.wants]), [['NPC', '']]);
+    assert.match(hub.extra, /- A lead in words — Scene 3/);
+    assert.match(hub.extra, /- \[\[Scene note\]\] — a lead to a scene/);
+    // a place in plain words, then a place that is one link
+    assert.deepStrictEqual([harbour.place, harbour.placeFrom, harbour.placeText], [null, null, 'The harbour office, up the stairs from the quay.']);
+    assert.deepStrictEqual([supper.place, supper.placeFrom, supper.placeText], ['Locations/The Vicarage.md', 'place', '']);
+    assert.deepStrictEqual(supper.spots.map((x) => x.note), ['Locations/The Vicarage.md']);
+    assert.deepStrictEqual(supper.who.map((w) => w.name), ['The Vicar']);
+    // a scene with a Place line owes no warning; a hub and a contingency owe none either
+    assert.deepStrictEqual(warnings.filter((w) => w.kind === 'no-place'), []);
+  });
+
+  it('the where they can go block makes a hub without a title mark', () => {
+    for (const head of ['**Where they can go**', '**Open to the party**']) {
+      const { beats, warnings } = read2(() => `## Planned Scenes\n\n### Scene 4: The yard\n${head}\n- **[[Location]]:** apples, with [[NPC]] about\n- **The orchard:** hens\n`);
+      assert.deepStrictEqual(beats[0].spots.map((x) => [x.name, x.md]), [['Location', 'apples, with [[NPC]] about'], ['The orchard', 'hens']], head);
+      assert.deepStrictEqual(beats[0].who.map((w) => w.name), ['NPC']);
+      assert.deepStrictEqual(warnings.filter((w) => w.kind === 'no-place' || w.kind === 'no-npcs-block'), [], head);
+    }
+  });
+
+  it('pointer bullets are not spots', () => {
+    const { beats } = read2(() => `## Planned Scenes\n\n### Scene 4: The yard\n**Where they can go**\n- the cellar door — Scene 3\n- **Cellar door** — Scene 3\n- **[[Name]]** — Scene 3 (locked)\n- **[[Scene note]]:** what follows\n- [[Location]] and the road on\n- **The orchard:** hens\n`);
+    assert.deepStrictEqual(beats[0].spots.map((x) => x.name), ['The orchard']);
+    // a pointer's words are not dropped: they stay in extra, and name no person
+    assert.match(beats[0].extra, /the cellar door — Scene 3/);
+    assert.match(beats[0].extra, /\*\*\[\[Name\]\]\*\* — Scene 3 \(locked\)/);
+    assert.deepStrictEqual(beats[0].who, []);
+  });
+
+  it('a place line with words keeps them and gives no place', () => {
+    const { beats } = read2(() => '## Planned Scenes\n\n### Scene 4: The yard\n**Situation:** s\n**Place:** [[Location]] after dark\n**Entities:** [[Location]]\n**NPCs**\n- **[[Name]]:** x\n');
+    assert.strictEqual(beats[0].place, null);
+    assert.strictEqual(beats[0].placeFrom, null);
+    assert.strictEqual(beats[0].placeText, '[[Location]] after dark');
+    assert.deepStrictEqual(beats[0].spots, []);
+    assert.doesNotMatch(beats[0].extra, /Place/);
+  });
+
+  it("the plan's place wins over the scene note's", () => {
+    const dir = skeletonVault();
+    fs.writeFileSync(path.join(dir, 'Scenes', 'Scene note.md'), '---\nname: Scene note\ntype: scene\nlocations: ["[[Location]]"]\n---\n\n**Situation:** s\n');
+    const plan = (place) => `## Planned Scenes\n\n### [[Scene note]]\n${place}**NPCs**\n- **[[Name]]:** x\n`;
+    const noLine = readBeats(plan(''), buildIndex(dir)).beats[0];
+    assert.deepStrictEqual([noLine.place, noLine.placeFrom], ['Locations/Location.md', 'scene-note']);
+    const withLine = readBeats(plan('**Place:** [[The Vicarage]]\n'), buildIndex(dir)).beats[0];
+    assert.deepStrictEqual([withLine.place, withLine.placeFrom], ['Locations/The Vicarage.md', 'place']);
+    const entities = readBeats('## Planned Scenes\n\n### Scene 4: Y\n**Entities:** [[Location]]\n**NPCs**\n- **[[Name]]:** x\n', buildIndex(dir)).beats[0];
+    assert.deepStrictEqual([entities.place, entities.placeFrom], ['Locations/Location.md', 'entities']);
+    const over = readBeats('## Planned Scenes\n\n### Scene 4: Y\n**Entities:** [[Location]]\n**Place:** [[The Vicarage]]\n**NPCs**\n- **[[Name]]:** x\n', buildIndex(dir)).beats[0];
+    assert.deepStrictEqual([over.place, over.placeFrom], ['Locations/The Vicarage.md', 'place']);
+  });
+
+  it('a bulleted place line reads like a plain one', () => {
+    const { beats } = read2(() => '## Planned Scenes\n\n### Scene 4: Y\n- **Place:** [[The Vicarage]]\n');
+    assert.deepStrictEqual([beats[0].place, beats[0].placeFrom], ['Locations/The Vicarage.md', 'place']);
+  });
+
+  it('a plan without the new lines reads as before', () => {
+    const { beats, warnings } = read();
+    // #781's fixture: every beat's new fields are empty, and a spot's md is ''; no no-place warning
+    for (const b of beats) {
+      assert.strictEqual(b.placeText, '');
+      assert.strictEqual(b.placeFrom, { null: null, 'The Bell Tower': 'scene-note' }[b.place === null ? 'null' : b.title] || (b.place ? 'entities' : null));
+      for (const x of b.spots) assert.strictEqual(x.md, '');
+    }
+    assert.deepStrictEqual(warnings.filter((w) => w.kind === 'no-place'), []);
+    // its hub Plan (`**Open to the party**`): the one S2-shape group is all pointer bullets,
+    // so its three spots are gone and their lines stay in extra; the S1 group's people lose
+    // their wants to the spot's md. Nothing else differs.
+    const hubPlan = readText(path.join(__dirname, 'fixtures', 'run-sheet-hub-plan.md'));
+    const hub = readBeats(hubPlan, buildIndex(copy())).beats;
+    assert.deepStrictEqual(hub[1].spots, []);
+    assert.strictEqual(hub[0].spots.length, 5);
+  });
+
+  describe('both sides agree', () => {
+    const SCENE = (rest, place = '**Place:** The orchard\n') => `### Scene 1: Supper\n**Situation:** s\n${place}**Starts it:** t\n${rest}`;
+
+    it('no place line: plan-check no-place, reader place null', () => {
+      const r = bothSides(SCENE('', ''));
+      assert.ok(r.ids.includes('no-place'));
+      assert.deepStrictEqual([r.beats[0].place, r.beats[0].placeText], [null, '']);
+      assert.ok(r.warnings.some((w) => w.kind === 'no-place'));
+      // and with one, neither complains
+      const ok = bothSides(SCENE(''));
+      assert.ok(!ok.ids.includes('no-place'));
+      assert.ok(!ok.warnings.some((w) => w.kind === 'no-place'));
+      assert.strictEqual(ok.beats[0].placeText, 'The orchard');
+    });
+
+    it('people in Entities with no block: plan-check no-npcs-block, reader who 0', () => {
+      const r = bothSides(SCENE('**Entities:** [[Name]]\n'));
+      assert.ok(r.ids.includes('no-npcs-block'));
+      assert.deepStrictEqual(r.beats[0].who, []);
+      assert.ok(r.warnings.some((w) => w.kind === 'no-npcs-block'));
+    });
+
+    it('a hub with no places and no leads: plan-check hub-no-places, reader spots 0', () => {
+      const r = bothSides('### Scene 0: Out (hub)\n**Where they can go**\nJust words, no bullets.\n');
+      assert.ok(r.ids.includes('hub-no-places'));
+      assert.deepStrictEqual(r.beats[0].spots, []);
+    });
+
+    it('a hub place that is no location: plan-check hub-place-not-location, reader gives no place there', () => {
+      const r = bothSides('### Scene 0: Out (hub)\n**Where they can go**\n- **[[Name]]:** the clerk\n');
+      assert.ok(r.ids.includes('hub-place-not-location'));
+      const note = r.beats[0].spots[0].note;
+      assert.strictEqual(r.index.read(note).fm.type, 'npc'); // the spot's note is no location
+    });
+
+    it('npcs in parentheses: plan-check label-form, reader who 0', () => {
+      const r = bothSides(SCENE('**NPCs (in the room)**\n- **[[Name]]:** x\n'));
+      assert.ok(r.ids.includes('label-form'));
+      assert.deepStrictEqual(r.beats[0].who, []);
+    });
+
+    it('an unlabelled table: plan-check if-table-unlabelled, reader ifs 0', () => {
+      const r = bothSides(SCENE('| Do | Then |\n|---|---|\n| a | b |\n'));
+      assert.ok(r.ids.includes('if-table-unlabelled'));
+      assert.deepStrictEqual(r.beats[0].ifs, []);
+      const ok = bothSides(SCENE('**If the players...**\n| Do | Then |\n|---|---|\n| a | b |\n'));
+      assert.ok(!ok.ids.includes('if-table-unlabelled'));
+      assert.strictEqual(ok.beats[0].ifs.length, 1);
+    });
+
+    it('a pointer with trailing words is a pointer in both', () => {
+      for (const bullet of ['- **[[Name]]** — Scene 3 (locked)', '- **[[Name]]** — Scene 3, locked tight', '- **[[Name]]** — Scene 3']) {
+        const r = bothSides(`### Scene 0: Out (hub)\n**Where they can go**\n${bullet}\n`);
+        // plan-check: a pointer, so not a place (no hub-place-not-location) and the hub holds a lead
+        assert.deepStrictEqual(r.ids.filter((id) => id.startsWith('hub-')), [], bullet);
+        // reader: the same bullet is no spot
+        assert.deepStrictEqual(r.beats[0].spots, [], bullet);
+      }
+    });
   });
 });

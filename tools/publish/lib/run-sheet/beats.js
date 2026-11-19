@@ -32,6 +32,12 @@ const SPOT = /^\*\*([^*\n]+?)\*\*(?!\*)(.*)$/;
 const GROUP_HEAD = /^\*\*([^*\n]+?):?\*\*[ \t]*(\([^)]*\))?[ \t]*$/;
 // A spot group bullet led by a bold name: `**The guest wing:** rest` (bullet marker removed).
 const NAMED_BULLET = /^\*\*([^*\n]+?):?\*\*:?[ \t]*([\s\S]*)$/;
+// The hub block heads (`**Where they can go**`, legacy `**Open to the party**`): a scene holding one is a hub.
+const WHERE_HEAD = /^\*\*(?:Where they can go|Open to the party):?\*\*[ \t]*(?:\([^)]*\))?[ \t]*$/i;
+// A pointer bullet leads to another scene: it opens with a bare link, or ends `— Scene N` (a
+// parenthesis or a few words may follow). plan_check.py holds the same rule, bullet marker and all.
+const POINTER_BULLET = /^(?:\[\[|.*[—–-]\s*Scenes?\s+\d+(?:\s*\([^)]*\)|,?\s+\S+(?:\s+\S+){0,2})?[\s.]*$)/;
+const BOLD_LEAD = /^\*\*([^*\n]+?)\*\*/;
 const BLOCK_NAMES = new Set(['npcs', 'points to land', 'if the players...', 'treasure', 'complications', 'then']);
 
 const linesOf = (text) => pt.cleanText(text).split('\n');
@@ -127,8 +133,8 @@ function readBeats(planBody, index) {
   });
   // Keys first in each object, in the model's field order.
   const ordered = beats.map((b) => ({
-    key: b.key, title: b.title, contingency: b.contingency, sceneNote: b.sceneNote, place: b.place,
-    spots: b.spots.map((s) => ({ key: s.key, name: s.name, note: s.note })),
+    key: b.key, title: b.title, contingency: b.contingency, sceneNote: b.sceneNote, place: b.place, placeText: b.placeText, placeFrom: b.placeFrom,
+    spots: b.spots.map((s) => ({ key: s.key, name: s.name, note: s.note, md: s.md })),
     situation: b.situation, startsIt: b.startsIt, readAloud: b.readAloud, gmNotes: b.gmNotes,
     complications: b.complications, trigger: b.trigger, then: b.then,
     who: b.who.map((w) => ({ key: w.key, note: w.note, name: w.name, knownAs: w.knownAs, count: w.count, wants: w.wants, playAs: w.playAs })),
@@ -209,7 +215,23 @@ function readBeats(planBody, index) {
     addEntity(sceneNote);
     linkLine('Entities').forEach(addEntity);
     if (noteFm) fmPaths(noteFm.entities).forEach(addEntity);
-    const place = entities.find((p) => typeOf(p) === 'location') || null;
+    let place = entities.find((p) => typeOf(p) === 'location') || null;
+    let placeFrom = null;
+    if (place) placeFrom = noteFm && fmPaths(noteFm.locations).includes(place) ? 'scene-note' : 'entities';
+    // The Plan's `**Place:**` wins over the scene note's and Entities: one link alone is the place;
+    // anything else is words, kept as placeText, and gives no place.
+    let placeText = '';
+    const placeLines = labelsNamed('Place');
+    if (placeLines.length) {
+      placeLines.forEach((l) => claim(l.start, l.end));
+      const lm = placeLines.length === 1 ? placeLines[0].value.match(LINK_ONLY) : null;
+      const linked = lm ? resolve(linkParts(lm[1]).target) : null;
+      if (linked) { place = linked; placeFrom = 'place'; } else {
+        place = null;
+        placeFrom = null;
+        placeText = placeLines.map((l) => l.value).join('\n\n');
+      }
+    }
 
     // Who: the NPCs blocks, then the Who lines, then (in a hub) each spot's NPC lines.
     const who = [];
@@ -272,7 +294,8 @@ function readBeats(planBody, index) {
     }
 
     let spots = [];
-    if (/\(hub\)/i.test(heading)) {
+    const isHub = /\(hub\)/i.test(heading) || lines.some((l, i) => !fenced[i] && WHERE_HEAD.test(l));
+    if (isHub) {
       const found = [];
       const taken = (note, name) => (note && typeOf(note) === 'pc') || inWho(note, name);
       // Spot groups: a bare bold head with no field slot, one spot per top-level bullet under it.
@@ -284,39 +307,35 @@ function readBeats(planBody, index) {
         const paren = Boolean(line.match(GROUP_HEAD)[2]);
         if (!paren) blockHeads.push({ head: i, start: i + 1, end }); // a parenthesis keeps the head in extra
         for (const item of offset(pt.bullets(lines.slice(i + 1, end + 1).join('\n')), i + 1)) {
+          const [first, ...more] = item.text.split('\n');
+          // a pointer bullet leads to another scene: no spot, and its line stays in extra
+          const lead = first.match(BOLD_LEAD);
+          if (POINTER_BULLET.test(first)
+              || (lead && (lead[1].match(LINK) || []).some((m) => typeOf(resolve(linkParts(m.replace(/^!?\[\[|\]\]$/g, '')).target)) === 'scene'))) continue;
           const nb = item.text.match(NAMED_BULLET);
           let name;
           let rest;
           if (nb) { name = nb[1].trim(); rest = nb[2]; } else {
-            // a plain bullet is named by its first line; nested or wrapped lines stay in extra
-            const [first, ...more] = item.text.split('\n');
+            // a plain bullet is named by its first line
             const dash = first.indexOf(' — ');
             name = dash === -1 ? first : first.slice(0, dash);
-            rest = (dash === -1 ? '' : first.slice(dash + 3)) + more.join('\n');
+            rest = (dash === -1 ? '' : first.slice(dash + 3)) + (more.length ? `\n${more.join('\n')}` : '');
           }
           const nameLinks = name.match(LINK) || [];
           const note = nameLinks.length ? resolve(linkParts(nameLinks[0].replace(/^!?\[\[|\]\]$/g, '')).target) : null;
           name = name.replace(LINK, (m) => { const l = linkParts(m.replace(/^!?\[\[|\]\]$/g, '')); return l.display || l.name; }).trim();
-          found.push({ i: item.start, name, note });
-          // A bold-named bullet's NPC and creature links join who; each `;` part's words are its wants.
-          let held = rest.trim() === '';
-          if (nb && !held) {
-            held = true;
-            for (const part of rest.split(';')) {
-              if (part.trim() === '') continue;
-              const ls = (part.match(LINK) || []).filter((m) => !m.startsWith('!'));
-              if (ls.length === 0) { held = false; continue; }
-              for (const m of ls) {
-                const lp = linkParts(m.slice(2, -2));
-                const p = resolve(lp.target);
-                const type = typeOf(p);
-                if (!p || (type !== 'npc' && type !== 'creature') || taken(p, lp.name)) { held = false; continue; }
-                const wants = part.replace(m, '').replace(/\s+/g, ' ').replace(/^[\s,;:—–-]+|[\s,;]+$/g, '');
-                who.push(person(p, { name: lp.name, knownAs: lp.display, count: 1, wants }));
-              }
-            }
+          // The bullet's words are the spot's (`md`); the NPCs and creatures it links join who, without
+          // those words as their wants. The bullet is held whole.
+          const md = rest.trim();
+          found.push({ i: item.start, name, note, md });
+          for (const m of (md.match(LINK) || []).filter((x) => !x.startsWith('!'))) {
+            const lp = linkParts(m.slice(2, -2));
+            const p = resolve(lp.target);
+            const type = typeOf(p);
+            if (!p || (type !== 'npc' && type !== 'creature') || taken(p, lp.name)) continue;
+            who.push(person(p, { name: lp.name, knownAs: lp.display, count: 1, wants: '' }));
           }
-          if (held) claim(item.start, item.end);
+          claim(item.start, item.end);
         }
       });
       // Bold-name spot lines, each followed by its `- **[[Note]]:**` NPC lines.
@@ -344,9 +363,9 @@ function readBeats(planBody, index) {
           claim(item.start, item.end);
         }
       });
-      spots = found.sort((a, b) => a.i - b.i).map((x) => ({ name: x.name, note: x.note }));
+      spots = found.sort((a, b) => a.i - b.i).map((x) => ({ name: x.name, note: x.note, md: x.md || '' }));
     } else if (place) {
-      spots = [{ name: stemOf(place), note: place }];
+      spots = [{ name: stemOf(place), note: place, md: '' }];
     }
 
     // Lists and tables.
@@ -405,14 +424,18 @@ function readBeats(planBody, index) {
     const extra = left;
 
     const type = nameKey(pt.label(text, 'Type'));
-    if (!contingency && who.length === 0 && !/\((?:hub|routing)\)/i.test(heading)
-        && !/^\s*scene\s+0\b/i.test(heading) && type !== 'transition') {
+    const hubLike = isHub || /\((?:hub|routing)\)/i.test(heading) || /^\s*scene\s+0\b/i.test(heading) || type === 'transition';
+    if (!contingency && who.length === 0 && !hubLike) {
       const why = npcBlocks.length ? 'has no NPC lines the sheet can read' : 'has no **NPCs** block';
       warnings.push({ kind: 'no-npcs-block', note: sceneNote, text: `${title} ${why}, so the page shows nobody here.` });
     }
 
+    if (!contingency && !hubLike && !place && !placeText) {
+      warnings.push({ kind: 'no-place', note: sceneNote, text: `${title} has no **Place:** line, so the page does not say where it happens.` });
+    }
+
     return {
-      title, contingency, sceneNote, place, spots, situation, startsIt, readAloud, gmNotes,
+      title, contingency, sceneNote, place, placeText, placeFrom, spots, situation, startsIt, readAloud, gmNotes,
       complications, trigger, then, who, points, ifs, treasure, handouts, entities, extra,
     };
   }
