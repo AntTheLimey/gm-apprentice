@@ -170,4 +170,16 @@ describe('run sheet handouts, party and people', () => {
     assert.strictEqual(r.pcs.find((p) => p.name === 'Ada Moss').moment, 'exact');
     assert.ok(r.warnings.some((w) => w.kind === 'ambiguous-pc' && w.text.includes('Ada')));
   });
+
+  it('a row with no name is kept, not skipped', () => {
+    const { index } = setup();
+    const h = readHandouts('## Handouts & Props\n\n| Doc | Scene | Status | Notes |\n|---|---|---|---|\n| | 2 | to build | a torn page |\n', index);
+    assert.deepStrictEqual(h.handouts, []);
+    assert.strictEqual(h.leftover, ' | 2 | to build | a torn page'.trim());
+    const r = readPeople('## NPC Quick Reference\n\n| NPC | Role | Detail | Location |\n|---|---|---|---|\n| | a | b | c |\n', index);
+    assert.deepStrictEqual(r.people, []);
+    assert.strictEqual(r.leftover, '| a | b | c');
+    const p = readPcs('## Spotlight Forecast\n\n| PC | Role | Moment |\n|---|---|---|\n| | Scout | sees it |\n', index, [ADA]);
+    assert.deepStrictEqual(p.unmatched, [{ section: 'Spotlight Forecast', text: '| Scout | sees it' }]);
+  });
 });

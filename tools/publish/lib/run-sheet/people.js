@@ -24,8 +24,9 @@ function readPeople(planBody, index) {
   };
   const sec = sections(planBody, 2).filter((s) => TITLE.test(s.title)).map((s) => s.text).join('\n');
   const people = [];
+  const nameless = [];
   for (const cells of tableRows(sec)) {
-    if (!cells.length || !cells[0]) continue;
+    if (!cells[0]) { if (cells.some(Boolean)) nameless.push(cells.join(' | ').trim()); continue; }
     const first = links(cells[0])[0];
     const note = first ? index.resolve(first) : null;
     const name = wordsOf(cells[0]);
@@ -48,7 +49,7 @@ function readPeople(planBody, index) {
       cells,
     });
   }
-  const leftover = unclaimed(sec, [...tableRanges(sec), ...bullets(sec)]);
+  const leftover = [unclaimed(sec, [...tableRanges(sec), ...bullets(sec)]), ...nameless].filter(Boolean).join('\n');
   return { people, warnings, leftover };
 }
 

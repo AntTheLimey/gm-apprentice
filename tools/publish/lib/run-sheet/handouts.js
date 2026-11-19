@@ -9,7 +9,9 @@ const TITLE = /^handouts\s*(?:&|and)\s*props$/i;
 
 function readHandouts(planBody, index) {
   const sec = sections(planBody, 2).filter((s) => TITLE.test(s.title)).map((s) => s.text).join('\n');
-  const rows = tableRows(sec).map((cells) => ({
+  const all0 = tableRows(sec);
+  const nameless = all0.filter((c) => !c[0] && c.some(Boolean)).map((c) => c.join(' | ').trim());
+  const rows = all0.filter((c) => c[0]).map((cells) => ({
     note: noteOf(cells[0] || '', index),
     scene: cells[1] || '',
     status: cells[2] || '',
@@ -19,7 +21,7 @@ function readHandouts(planBody, index) {
   const items = bullets(sec).map((b) => ({ note: noteOf(b.text, index), scene: '', status: '', text: b.text, id: b.text }));
   const all = rows.concat(items);
   const keys = itemKeys('handouts', 'ho', all.map((h) => h.id));
-  const leftover = unclaimed(sec, [...tableRanges(sec), ...bullets(sec)]);
+  const leftover = [unclaimed(sec, [...tableRanges(sec), ...bullets(sec)]), ...nameless].filter(Boolean).join('\n');
   const handouts = all.map((h, i) => ({ key: keys[i], note: h.note, scene: h.scene, status: h.status, text: h.text }));
   return { handouts, leftover };
 }

@@ -133,7 +133,7 @@ function readPcs(planBody, index, party) {
       }
     };
     for (const cells of tableRows(sec.text)) {
-      if (!cells.length || !cells[0]) continue;
+      if (!cells[0]) { if (cells.some(Boolean)) unmatched.push({ section: sec.title, text: cells.join(' | ').trim() }); continue; }
       apply(wordsOf(cells[0]), links(cells[0])[0] || null, cells, '', cells.join(' | '));
     }
     for (const b of bullets(sec.text)) {
