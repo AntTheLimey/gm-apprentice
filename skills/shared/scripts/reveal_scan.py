@@ -20,7 +20,8 @@ The hidden parts, joined by `; `: each section title the site withholds
 (as the publish tool names them, e.g. `GM Notes`), `gm-only xN` for N
 `<!-- gm-only -->` blocks, `spoiler: <first words>` per spoiler block, and
 `gm_aliases: a, b`, and for a disguised NPC `unmasked_name: <name>` and
-`unmasked_portrait: <picture>`. `prop` marks a note the publish tool says is a prop.
+`unmasked_portrait: <picture>` (a link read as what it names; a true name
+that names no one says so). `prop` marks a note the publish tool says is a prop.
 A published note with nothing hidden is left out. An unpublished note is
 always listed.
 
@@ -47,8 +48,8 @@ from reconcile_scan import (Note, _documents, _index, _linked, _resolve,  # noqa
                             open_spoilers)
 from vault_check import ask_publish_tool  # noqa: E402
 from vaultlib import (WRAP_UP_TYPES, PublishToolUnavailable, link_lines,  # noqa: E402
-                      live_wikilinks, markers_in, normalize_file_arg,
-                      note_withheld, vault_files)
+                      link_value, live_wikilinks, markers_in, normalize_file_arg,
+                      note_withheld, unmasked_names, value_blank, vault_files)
 
 NEVER_CANDIDATES = frozenset({
     "session", "plan", "session-plan", "scene", "play-notes",
@@ -142,13 +143,29 @@ def _hidden_parts(note: Note, stripped: list[str]) -> list[str]:
         if names:
             hidden.append("gm_aliases: " + ", ".join(names))
     # A disguised NPC: its true name and face, which `reveal --unmask` makes its own.
-    for key in ("unmasked_name", "unmasked_portrait"):
-        value = note.fm.get(key)
-        values = value if isinstance(value, list) else [value]
-        shown = [str(v).strip() for v in values if isinstance(v, str) and v.strip()]
-        if shown:
-            hidden.append(f"{key}: " + ", ".join(shown))
+    # A link is read as what it names, as reveal and the publish tool read it; a
+    # true name that is there but names no one is said, never dropped.
+    value = note.fm.get("unmasked_name")
+    if not value_blank(value):
+        names = unmasked_names(value)
+        hidden.append("unmasked_name: " + (", ".join(names) if names else
+                                           f"{_shown(value)} (names no one: write the true name)"))
+    value = note.fm.get("unmasked_portrait")
+    if not value_blank(value):
+        faces = [link_value(v) for v in _strings(value)]
+        hidden.append("unmasked_portrait: " + (", ".join(f for f in faces if f) or _shown(value)))
     return hidden
+
+
+def _strings(value: object) -> list[str]:
+    out: list[str] = []
+    for v in value if isinstance(value, list) else [value]:
+        out.extend(_strings(v) if isinstance(v, list) else [v] if isinstance(v, str) else [])
+    return out
+
+
+def _shown(value: object) -> str:
+    return value.strip() if isinstance(value, str) else str(value)
 
 
 def _stripped_by_path(vault: Path) -> tuple[dict[str, list[str]], set[str], str | None]:

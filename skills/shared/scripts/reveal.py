@@ -35,13 +35,21 @@ refused; `--released` still logs.
 the unmasking: `unmasked_name` goes into `aliases` (unless it is there
 already, in the list style the note uses) and `unmasked_portrait` into
 `portrait`, each then emptied; when Playing Them has an `**Unmasked:**`
-line, `**Speech:**` becomes `**Disguise:**` and `**Unmasked:**` becomes
-`**Speech:**` (without one it is left alone: the same voice). Every
+line, every `**Speech:**` becomes `**Disguise:**` and every `**Unmasked:**`
+becomes `**Speech:**` (without one it is left alone: the same voice).
+Playing Them is read by the run sheet's rule (see PLAYING THEM below). Every
 `gm_aliases` entry holding the true name as whole words goes (the secret
-is out). Each is logged as its own entry,
+is out). A true name written as a link (`[[Captain Rook]]`) is the name it
+links; a face written as a link or a list of one is that picture. Each is
+logged as its own entry,
 `{"kind": "unmask", "path", "name", "old_portrait", "session", "date"}`,
 so the disguise's face is kept; an entry without `kind` is a session's
-reveal. A note with no `unmasked_name` is refused with an ERROR row.
+reveal. A note with no `unmasked_name`, or one this cannot read (several
+names, several faces, a link to nothing), is refused with an ERROR row.
+Each edit is read back before it is written; one that did not come out
+right is an ERROR row and is not written. The unmaskings of one run are
+all or nothing: every note is checked first, and one refused, or a write
+that fails, leaves every note as it was.
 
 Rows are `verb <TAB> path <TAB> detail`, then
 `# publish: N clear: N stamp: N unmask: N log: N errors: N`.
@@ -66,17 +74,24 @@ from vault_check import _site_config, ask_publish_tool  # noqa: E402
 from vault_write import set_block  # noqa: E402
 from vaultlib import (  # noqa: E402
     WITHHELD_KEY_RE, PublishToolUnavailable, entity_type, extract_frontmatter,
-    FLOW_ITEM_RE, frontmatter_span, normalize_file_arg, note_withheld, publish_mode,
-    scalar_value, yaml_scalar)
+    FLOW_ITEM_RE, frontmatter_span, link_value, normalize_file_arg, note_withheld,
+    publish_mode, scalar_value, unmasked_names, value_blank, yaml_scalar)
 
 LOG = "_meta/reveals.json"
 EMPTY_VALUES = ("", "[]", "null", "~")     # YAML's empty values, as scalar_value reads them
 REVEALED_IN_KEY_RE = re.compile(r"""^["']?revealed_in["']?[ \t]*:""")
-PLAYING_THEM_RE = re.compile(r"^###[ \t]+Playing Them[ \t]*$")
-HEADING_RE = re.compile(r"^#{1,3}[ \t]")
-# A `**Label:**` line, bulleted or not, read as the run sheet reads one (any case).
-LABEL_RE = {name: re.compile(rf"^(\s*(?:[-*+][ \t]+)?)\*\*[ \t]*{name}[ \t]*:\*\*", re.I)
-            for name in ("Speech", "Unmasked")}
+# PLAYING THEM, read by one rule shared with the run sheet (tools/publish/lib/run-sheet:
+# notes.js `headings`/`sectionOf` and plan-text.js `labels`/`label`):
+# - the section is the first `### Playing Them` inside the first `## GM Notes` (titles
+#   in any case), to the next heading of level 3 or above;
+# - a heading or label inside a ``` or ~~~ fence is no heading or label;
+# - a label line is `**Name:**` at the start of the line, after a `-`, `*` or `+`
+#   bullet or none: an indented bullet is no label;
+# - every `**Speech:**` and every `**Unmasked:**` line counts (the sheet joins them all);
+# - an Unmasked line counts only with a value and no `{placeholder}` in it.
+HEADING_LINE_RE = re.compile(r"^(#{1,6})[ \t]+(.*?)(?:[ \t]+#+)?[ \t]*$")
+FENCE_RE = re.compile(r"^\s*(```|~~~)")
+LABEL_LINE_RE = re.compile(r"^((?:[-*+]\s+)?)\*\*([^*\n]+?):\*\*[ \t]*(.*)$")
 
 
 def _nfc(s: str) -> str:
@@ -350,8 +365,9 @@ def _drop_from_list(head: list[str], key: str, name: str) -> list[str]:
 
 def _unmask_span(lines: list[str]) -> tuple[int, str | None]:
     """frontmatter_span, except that a block list written flush (`- A` at
-    column zero under an empty key, valid YAML) is taken: the shared
-    reader refuses it, and --unmask edits such a list in place."""
+    column zero under a key with no value, valid YAML) is taken: the shared
+    reader refuses it, and --unmask edits such a list in place. A `- A`
+    under a key that has a value (`key: ""`) is no list, and stays refused."""
     end, error = frontmatter_span(lines)
     if not error or error == "no frontmatter":
         return end, error
@@ -366,16 +382,178 @@ def _unmask_span(lines: list[str]) -> tuple[int, str | None]:
                 indented[i] = "  " + line
             continue
         if text.strip() and not text[:1].isspace() and not text.startswith("#"):
-            under_empty_key = ":" in text and not scalar_value(text.partition(":")[2])
+            value = text.partition(":")[2].strip()
+            under_empty_key = ":" in text and (not value or value.startswith("#"))
     if indented == lines:
         return end, error
     end2, error2 = frontmatter_span(indented)
     return (end2, None) if not error2 else (end, error)
 
 
+def _comment_at(value: str) -> int | None:
+    """Where a YAML comment starts in a key's value text (`# ` after a
+    blank, outside quotes), or None."""
+    quote = None
+    i = 0
+    while i < len(value):
+        c = value[i]
+        if quote == '"' and c == "\\":
+            i += 2
+            continue
+        if quote:
+            if c == quote:
+                quote = None
+        elif c in "\"'" and not value[:i].strip():
+            quote = c
+        elif c == "#" and (i == 0 or value[i - 1] in " \t"):
+            return i
+        i += 1
+    return None
+
+
+def _set_value(head: list[str], key: str, value: str) -> None:
+    """Set the top-level `key` to the one value `value`, taking whatever it
+    held (a scalar, a flow list, a block list indented or flush), with the
+    span the list helpers use (`_list_lines`). The key keeps its spelling
+    (quoted or not) and a comment after the old value stays; a missing key
+    is added at the end."""
+    at = next((i for i, ln in enumerate(head) if _key_re(key).match(ln)), None)
+    if at is None:
+        head.append(f"{key}: {value}")
+        return
+    k, _, old = head[at].partition(":")
+    end, _ = _list_lines(head, at)
+    while end > at + 1 and head[end - 1].startswith("#"):
+        end -= 1        # a comment at column zero after a flush list is the next key's
+    c = _comment_at(old)
+    tail = ""
+    if c is not None:
+        before = old[:c]
+        tail = (before[len(before.rstrip()):] if before.strip() else "  ") + old[c:]
+    head[at:end] = [f"{k}: {value}{tail}"]
+
+
+def _one_picture(fm: dict[str, Any], key: str) -> tuple[str, str | None]:
+    """(the one picture `key` names, why it cannot be read). A link is read
+    as the file it names; a list of one picture is that picture; nothing
+    there is ""."""
+    value = fm.get(key)
+    if value_blank(value):
+        return "", None
+    items = value if isinstance(value, list) else [value]
+    flat: list[Any] = []
+    for v in items:
+        flat.extend(v if isinstance(v, list) else [v])
+    pictures = [v for v in flat if not value_blank(v)]
+    if any(not isinstance(v, str) for v in pictures):
+        return "", f"{key} is not a picture's name; write it as one picture"
+    if len(pictures) > 1:
+        return "", f"{key} is a list of {len(pictures)} pictures; give it one"
+    picture = link_value(pictures[0])
+    if not picture:
+        return "", f"{key} holds {pictures[0].strip()}, which names no picture"
+    return picture, None
+
+
+def _true_name(fm: dict[str, Any]) -> tuple[str, str | None]:
+    """(the note's one true name, why there is none)."""
+    value = fm.get("unmasked_name")
+    if value_blank(value):
+        return "", "nothing to unmask: the note has no unmasked_name"
+    names = unmasked_names(value)
+    if len(names) > 1:
+        return "", (f"nothing changed: unmasked_name is a list of {len(names)} "
+                    f"names; give it the one true name")
+    if not names:
+        shown = value.strip() if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
+        return "", f"nothing changed: unmasked_name holds {shown}, which names no one; write the true name"
+    return names[0], None
+
+
+def _playing_them(body: list[str]) -> list[int]:
+    """The label lines (`LABEL_LINE_RE`) of Playing Them, by the rule above:
+    their indexes in `body`."""
+    heads: list[tuple[int, int, str]] = []
+    fenced: list[bool] = []
+    fence = None
+    for i, line in enumerate(body):
+        text = line.rstrip("\r\n")
+        f = FENCE_RE.match(text)
+        if f:
+            fence = f[1] if fence is None else (None if fence == f[1] else fence)
+            fenced.append(True)
+            continue
+        fenced.append(fence is not None)
+        m = None if fence else HEADING_LINE_RE.match(text)
+        if m:
+            heads.append((i, len(m[1]), unicodedata.normalize("NFC", m[2]).strip().casefold()))
+
+    def section(title: str, level: int, start: int, stop: int) -> tuple[int, int] | None:
+        at = next((n for n, h in enumerate(heads)
+                   if start <= h[0] < stop and h[1] == level and h[2] == title), None)
+        if at is None:
+            return None
+        end = next((h[0] for h in heads[at + 1:] if h[1] <= level), len(body))
+        return heads[at][0], end
+    gm = section("gm notes", 2, 0, len(body))
+    pt = section("playing them", 3, gm[0], gm[1]) if gm else None
+    if pt is None:
+        return []
+    return [i for i in range(pt[0] + 1, pt[1])
+            if not fenced[i] and LABEL_LINE_RE.match(body[i].rstrip("\r\n"))]
+
+
+def _label_of(line: str) -> tuple[str, str, str]:
+    """(bullet, label name folded, value) of a label line."""
+    m = LABEL_LINE_RE.match(line.rstrip("\r\n"))
+    assert m is not None
+    return m[1], m[2].strip().casefold(), m[3].strip()
+
+
+def _top_keys(head: list[str]) -> list[str]:
+    keys = []
+    for ln in head:
+        if ln[:1].isspace() or ln.startswith(("#", "-")) or ":" not in ln:
+            continue
+        keys.append(ln.partition(":")[0].strip().strip("\"'"))
+    return keys
+
+
+def _check_edit(new: str, name: str, face: str) -> str | None:
+    """Why the edited note is not what --unmask set out to write, or None:
+    its frontmatter is read again (the strict span, one line per key) and
+    unmasked_name must be empty, aliases must hold the name, and with a
+    true face, portrait must be it and unmasked_portrait empty."""
+    lines = new.splitlines(keepends=True)
+    end, error = _unmask_span(lines)
+    if error:
+        return f"the frontmatter would not read ({error})"
+    keys = _top_keys([ln.rstrip("\r\n") for ln in lines[1:end]])
+    twice = sorted({k for k in keys if keys.count(k) > 1})
+    if twice:
+        return f"{', '.join(twice)} would be written twice"
+    fm = extract_frontmatter(new) or {}
+    left = unmasked_names(fm.get("unmasked_name"))
+    if left or not value_blank(fm.get("unmasked_name")):
+        return f"unmasked_name still holds {', '.join(left) or fm.get('unmasked_name')}"
+    raw = fm.get("aliases")
+    aliases = [raw] if isinstance(raw, str) else [a for a in raw if isinstance(a, str)] \
+        if isinstance(raw, list) else []
+    if not any(_same_name(a, name) for a in aliases):
+        return f"aliases do not hold {name}"
+    if face:
+        if _one_picture(fm, "portrait") != (face, None):
+            return f"portrait is not {face}"
+        if not value_blank(fm.get("unmasked_portrait")):
+            return "unmasked_portrait is not empty"
+    return None
+
+
 def _unmask_edit(vault: Path, rel: str) -> tuple[str | None, dict[str, Any] | None, str]:
     """(new text, the log entry less its session, what changes), or
-    (None, None, why not)."""
+    (None, None, why not). The new text is read back (`_check_edit`)
+    before it is handed out: an edit that did not come out right is a
+    why-not, never a text to write."""
     if rel.startswith("_meta/"):
         return None, None, "not a note to unmask: _meta notes are the vault's own"
     full = vault / rel
@@ -385,25 +563,28 @@ def _unmask_edit(vault: Path, rel: str) -> tuple[str | None, dict[str, Any] | No
         full.resolve().relative_to(vault.resolve())
     except ValueError:
         return None, None, "outside the vault"
-    with open(full, encoding="utf-8", newline="") as f:
-        text = f.read()     # no newline translation: a CRLF note stays CRLF
+    try:
+        with open(full, encoding="utf-8", newline="") as f:
+            text = f.read()     # no newline translation: a CRLF note stays CRLF
+    except (OSError, UnicodeDecodeError) as e:
+        return None, None, f"nothing changed: the note cannot be read ({e})"
     lines = text.splitlines(keepends=True)
     end, error = _unmask_span(lines)
     if error:
         return None, None, f"nothing changed: {error}"
     fm = extract_frontmatter(text) or {}
-    name = fm.get("unmasked_name")
-    if isinstance(name, list):
-        names = [n for n in name if isinstance(n, str) and n.strip()]
-        if len(names) > 1:
-            return None, None, (f"nothing changed: unmasked_name is a list of {len(names)} "
-                                f"names; give it the one true name")
-        name = names[0] if names else ""
-    if not isinstance(name, str) or not name.strip():
-        return None, None, "nothing to unmask: the note has no unmasked_name"
-    name = name.strip()
-    face = fm.get("unmasked_portrait")
-    face = face.strip() if isinstance(face, str) else ""
+    name, why = _true_name(fm)
+    if why:
+        return None, None, why
+    face, why = _one_picture(fm, "unmasked_portrait")
+    if why:
+        return None, None, f"nothing changed: {why}"
+    old_face = None
+    if face:
+        old_face, why = _one_picture(fm, "portrait")
+        if why:
+            return None, None, f"nothing changed: {why}"
+        old_face = old_face or None
     eol = "\r\n" if lines[0].endswith("\r\n") else "\n"
     head = [ln.rstrip("\r\n") for ln in lines[1:end]]
     changes: list[str] = []
@@ -424,44 +605,37 @@ def _unmask_edit(vault: Path, rel: str) -> tuple[str | None, dict[str, Any] | No
             changes.append(f"gm_aliases - {gone}")
     except ListShapeError as e:
         return None, None, f"nothing changed: {e}"
-    set_block(head, "unmasked_name", '""')
-    old_face = None
+    _set_value(head, "unmasked_name", '""')
     if face:
-        old = fm.get("portrait")
-        old_face = old.strip() if isinstance(old, str) and old.strip() else None
-        set_block(head, "portrait", yaml_scalar(face))
-        set_block(head, "unmasked_portrait", '""')
+        _set_value(head, "portrait", yaml_scalar(face))
+        _set_value(head, "unmasked_portrait", '""')
         changes.append(f"portrait {old_face or '(none)'} → {face}")
-    # Playing Them, only when it has an Unmasked line (without one the true self
-    # speaks as the disguise does): the first Speech becomes Disguise and the first
-    # Unmasked becomes Speech, each line keeping its own ending.
+    # Playing Them (the rule above), only when it has an Unmasked line with a
+    # voice in it (without one the true self speaks as the disguise does): every
+    # Speech becomes Disguise and every Unmasked becomes Speech, each line
+    # keeping its own ending.
     body = lines[end + 1:]
-    section: list[int] = []
-    inside = False
-    for i, line in enumerate(body):
-        if PLAYING_THEM_RE.match(line.rstrip("\r\n")):
-            inside = True
-            continue
-        if inside and HEADING_RE.match(line):
-            inside = False
-        if inside:
-            section.append(i)
-    if not any(LABEL_RE["Unmasked"].match(body[i]) for i in section):
-        section = []
-    renamed = {"Speech": False, "Unmasked": False}
-    for i in section:
-        line = body[i]
-        for old_label, new_label in (("Speech", "Disguise"), ("Unmasked", "Speech")):
-            m = LABEL_RE[old_label].match(line)
-            if m and not renamed[old_label]:
-                body[i] = f"{m.group(1)}**{new_label}:**{line[m.end():]}"
-                renamed[old_label] = True
-                break
-    if renamed["Speech"]:
-        changes.append("Speech is now Disguise")
-    if renamed["Unmasked"]:
-        changes.append("Unmasked is now Speech")
+    section = _playing_them(body)
+    labels = [(i, *_label_of(body[i])) for i in section]
+    if any(label == "unmasked" and value and "{" not in value for _, _, label, value in labels):
+        renamed = {"speech": 0, "unmasked": 0}
+        for i, bullet, label, _ in labels:
+            if label not in renamed:
+                continue
+            text = body[i].rstrip("\r\n")
+            ending = body[i][len(text):]
+            after = text.index(":**", len(bullet)) + 3
+            new_label = "Disguise" if label == "speech" else "Speech"
+            body[i] = f"{bullet}**{new_label}:**{text[after:]}{ending}"
+            renamed[label] += 1
+        if renamed["speech"]:
+            changes.append("Speech is now Disguise")
+        if renamed["unmasked"]:
+            changes.append("Unmasked is now Speech")
     new = "---" + eol + eol.join(head) + eol + "---" + eol + "".join(body)
+    wrong = _check_edit(new, name, face)
+    if wrong:
+        return None, None, f"nothing changed: the edit did not come out right ({wrong})"
     entry = {"kind": "unmask", "path": rel, "name": name, "old_portrait": old_face}
     return new, entry, "; ".join(changes)
 
@@ -515,6 +689,20 @@ def _write_log(vault: Path, log: dict[str, Any]) -> None:
     except OSError:
         tmp.unlink(missing_ok=True)
         raise
+
+
+def _log_writable(vault: Path) -> str | None:
+    """Why the log cannot be written, or None: a file is made beside it
+    and taken away again."""
+    target = vault / LOG
+    probe = target.with_name(f".{target.name}.{os.getpid()}.probe")
+    try:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        probe.write_text("", encoding="utf-8")
+        probe.unlink()
+    except OSError as e:
+        return e.strerror or str(e)
+    return None
 
 
 def run(vault: Path, session: str, publish: list[str], released: list[tuple[str, str]],
@@ -655,25 +843,57 @@ def run(vault: Path, session: str, publish: list[str], released: list[tuple[str,
     unmasked: list[dict[str, Any]] = []
     asked = list(dict.fromkeys(normalize_file_arg(r) for r in unmask or []))
     if asked:
-        # The log is read first: one that cannot be written to must not leave a
-        # note unmasked with its old face nowhere.
+        # The log is checked first, read and (on --write) written to: a note must
+        # never be unmasked with its old face logged nowhere.
+        problem = None
         try:
             _load_log(vault)
         except (OSError, ValueError) as e:
+            problem = f"{LOG} cannot be read ({e})"
+        if problem is None and write:
+            why = _log_writable(vault)
+            problem = f"{LOG} cannot be written ({why})" if why else None
+        if problem:
             for raw in asked:
-                error(raw, f"not unmasked, nothing changed: {LOG} cannot be read ({e})")
+                error(raw, f"not unmasked, nothing changed: {problem}")
             asked = []
+    # Every note is checked before any is written: a batch is all or nothing.
+    unmasks: dict[str, tuple[str, dict[str, Any], str]] = {}
+    refused_unmask: list[str] = []
     for raw in asked:
-        new, entry, said = _unmask_edit(vault, raw)
-        if new is None or entry is None:
+        new_text, entry, said = _unmask_edit(vault, raw)
+        if new_text is None or entry is None:
             error(raw, said)
-            continue
-        if write:
+            refused_unmask.append(raw)
+        else:
+            unmasks[raw] = (new_text, entry, said)
+    if refused_unmask:
+        for raw in unmasks:
+            error(raw, f"not unmasked, nothing changed: {', '.join(refused_unmask)} in the same run "
+                       f"was refused, and an unmasking is all or nothing; fix it or leave it out, then run again")
+        unmasks = {}
+    if write and unmasks:
+        written: list[tuple[str, bytes]] = []
+        for raw, (new_text, _, _) in unmasks.items():
             try:
-                (vault / raw).write_text(new, encoding="utf-8", newline="")
+                was = (vault / raw).read_bytes()
+                (vault / raw).write_text(new_text, encoding="utf-8", newline="")
             except OSError as e:
-                error(raw, f"not unmasked: {e}")
-                continue
+                error(raw, f"not unmasked, nothing changed: {e}")
+                # What this run already wrote is put back; a note that cannot be is
+                # unmasked, and is told and logged as such.
+                stuck: list[str] = []
+                for put, text_before in written:
+                    try:
+                        (vault / put).write_bytes(text_before)
+                        error(put, f"not unmasked, put back as it was: {raw} could not be written")
+                    except OSError as e2:
+                        error(put, f"could not be put back after {raw} failed ({e2}); it is unmasked")
+                        stuck.append(put)
+                unmasks = {d: unmasks[d] for d in stuck}
+                break
+            written.append((raw, was))
+    for raw, (_, entry, said) in unmasks.items():
         counts["unmask"] += 1
         row("UNMASKED" if write else "WOULD-UNMASK", raw, said)
         unmasked.append({**entry, "session": session, "date": date.today().isoformat()})

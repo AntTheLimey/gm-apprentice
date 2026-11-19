@@ -9,6 +9,7 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -912,6 +913,222 @@ class UnmaskTests(unittest.TestCase):
         raw = (self.root / MASK).read_bytes().decode("utf-8")
         self.assertNotIn("\n", raw.replace("\r\n", ""))
         self.assertIn("- **Speech:** clipped, a soldier's orders\r\n", raw)
+
+    # --- final fix wave (silent-failure review C1, C2, I1, I2, M1, M5; final review Minor 1) ---
+
+    def _write_mask(self, old: str, new: str, rel: str = MASK, base: str = MASKED) -> None:
+        self.assertIn(old, base)
+        (self.root / rel).write_text(base.replace(old, new), encoding="utf-8")
+
+    @unittest.skipUnless(shutil.which("node"), "node is not installed")
+    def test_unmask_reads_a_wikilink_true_name_as_the_name(self) -> None:
+        """C1: a true name written as a link is the name it links."""
+        for value in ('"[[Captain Rook]]"', '"[[Captain Rook|the captain]]"', "[[Captain Rook]]",
+                      "[[Captain Rook|the captain]]", '"[[NPCs/Captain Rook]]"'):
+            self._write_mask('unmasked_name: "Captain Rook"\n', f"unmasked_name: {value}\n")
+            code, out, _ = run(self.root, "--unmask", MASK, "--write")
+            self.assertEqual(code, 0, f"{value}: {out}")
+            self.assertIn("aliases + Captain Rook;", out, value)
+            strict = self._strict(MASK)
+            self.assertEqual(strict["aliases"], ["The Pedlar", "Captain Rook"], value)
+            self.assertEqual(strict["unmasked_name"], "", value)
+            entry = [e for e in log_of(self.root)["entries"] if e.get("kind") == "unmask"][-1]
+            self.assertEqual(entry["name"], "Captain Rook", value)
+
+    def test_unmask_refuses_a_true_name_it_cannot_read(self) -> None:
+        """C1: a value that is there but names no one is told, not dropped."""
+        self._write_mask('unmasked_name: "Captain Rook"\n', 'unmasked_name: "[[]]"\n')
+        before = (self.root / MASK).read_text(encoding="utf-8")
+        code, out, _ = run(self.root, "--unmask", MASK, "--write")
+        self.assertEqual(code, 1, out)
+        self.assertIn(f"ERROR\t{MASK}\tnothing changed: unmasked_name holds [[]], which names no one", out)
+        self.assertEqual((self.root / MASK).read_text(encoding="utf-8"), before)
+
+    @unittest.skipUnless(shutil.which("node"), "node is not installed")
+    def test_unmask_clears_a_flush_unmasked_name_list(self) -> None:
+        """C2: a flush list under unmasked_name is cleared whole, not left as a stray item."""
+        self._write_mask('unmasked_name: "Captain Rook"\nunmasked_portrait: "_attachments/rook.png"\n'
+                         'portrait: "_attachments/pedlar.png"\n',
+                         "unmasked_name:\n- Captain Rook\nunmasked_portrait:\n- _attachments/rook.png\n"
+                         "portrait:\n- _attachments/pedlar.png\n")
+        code, out, _ = run(self.root, "--unmask", MASK, "--write")
+        self.assertEqual(code, 0, out)
+        text = (self.root / MASK).read_text(encoding="utf-8")
+        self.assertNotIn("- Captain Rook", text)
+        strict = self._strict(MASK)
+        self.assertEqual(strict["unmasked_name"], "")
+        self.assertEqual(strict["unmasked_portrait"], "")
+        self.assertEqual(strict["portrait"], "_attachments/rook.png")
+        self.assertEqual(strict["aliases"], ["The Pedlar", "Captain Rook"])
+        self.assertIn("portrait _attachments/pedlar.png → _attachments/rook.png", out)
+
+    def test_unmask_checks_its_own_edit_and_writes_nothing_on_a_mismatch(self) -> None:
+        """C2: the edit is read back before it is written; a broken one is an ERROR, nothing written."""
+        before = (self.root / MASK).read_text(encoding="utf-8")
+        real = reveal._set_value
+
+        def broken(head: list[str], key: str, value: str) -> None:
+            if key != "unmasked_name":
+                real(head, key, value)
+        with mock.patch.object(reveal, "_set_value", side_effect=broken):
+            code, out, _ = run(self.root, "--unmask", MASK, "--write")
+        self.assertEqual(code, 1, out)
+        self.assertIn(f"ERROR\t{MASK}\tnothing changed: the edit did not come out right "
+                      "(unmasked_name still holds Captain Rook)", out)
+        self.assertNotIn("UNMASKED", out)
+        self.assertEqual((self.root / MASK).read_text(encoding="utf-8"), before)
+        self.assertFalse((self.root / "_meta" / "reveals.json").exists())
+
+    @unittest.skipUnless(shutil.which("node"), "node is not installed")
+    def test_unmask_moves_a_face_written_as_a_link_or_a_one_item_list(self) -> None:
+        """I1: the face moves whatever one-picture shape it is written in."""
+        for value, face in (("[[rook.png]]", "rook.png"), ('"[[_attachments/rook.png]]"', "_attachments/rook.png"),
+                            ('\n  - "_attachments/rook.png"', "_attachments/rook.png")):
+            self._write_mask('unmasked_portrait: "_attachments/rook.png"\n', f"unmasked_portrait: {value}\n")
+            code, out, _ = run(self.root, "--unmask", MASK, "--write")
+            self.assertEqual(code, 0, f"{value}: {out}")
+            self.assertIn(f"portrait _attachments/pedlar.png → {face}", out, value)
+            strict = self._strict(MASK)
+            self.assertEqual(strict["portrait"], face, value)
+            self.assertEqual(strict["unmasked_portrait"], "", value)
+
+    def test_unmask_refuses_a_face_it_cannot_move(self) -> None:
+        """I1: several pictures, or a link to nothing, is refused before anything is written."""
+        for value, why in (("[a.png, b.png]", "unmasked_portrait is a list of 2 pictures"),
+                           ('"[[]]"', "unmasked_portrait holds [[]], which names no picture")):
+            self._write_mask('unmasked_portrait: "_attachments/rook.png"\n', f"unmasked_portrait: {value}\n")
+            before = (self.root / MASK).read_text(encoding="utf-8")
+            code, out, _ = run(self.root, "--unmask", MASK, "--write")
+            self.assertEqual(code, 1, out)
+            self.assertIn(f"ERROR\t{MASK}\tnothing changed: {why}", out)
+            self.assertEqual((self.root / MASK).read_text(encoding="utf-8"), before)
+
+    def test_unmask_batch_checks_every_note_before_writing_any(self) -> None:
+        """I2: one unreadable note in a batch: nothing written, nothing logged, every note told."""
+        (self.root / "NPCs/Latin.md").write_bytes("---\ntype: npc\nunmasked_name: \"René\"\n---\n".encode("latin-1"))
+        before = (self.root / MASK).read_text(encoding="utf-8")
+        code, out, _ = run(self.root, "--unmask", MASK, "--unmask", "NPCs/Latin.md", "--write")
+        self.assertEqual(code, 1, out)
+        self.assertIn("ERROR\tNPCs/Latin.md\tnothing changed: the note cannot be read", out)
+        self.assertIn(f"ERROR\t{MASK}\tnot unmasked, nothing changed: NPCs/Latin.md in the same run was refused", out)
+        self.assertNotIn("UNMASKED", out)
+        self.assertEqual((self.root / MASK).read_text(encoding="utf-8"), before)
+        self.assertFalse((self.root / "_meta" / "reveals.json").exists())
+        self.assertIn("unmask: 0", out.splitlines()[-1])
+
+    def test_unmask_batch_puts_back_what_it_wrote_when_a_write_fails(self) -> None:
+        """I2: a write that fails mid-batch puts the earlier notes back; nothing is logged."""
+        before = (self.root / MASK).read_text(encoding="utf-8")
+        wick = (self.root / "NPCs/Wick.md").read_text(encoding="utf-8")
+        real = Path.write_text
+
+        def failing(path: Path, *a: object, **k: object) -> int:
+            if path.name == "Wick.md":
+                raise PermissionError("Permission denied")
+            return real(path, *a, **k)  # type: ignore[arg-type]
+        with mock.patch.object(Path, "write_text", failing):
+            code, out, _ = run(self.root, "--unmask", MASK, "--unmask", "NPCs/Wick.md", "--write")
+        self.assertEqual(code, 1, out)
+        self.assertIn("ERROR\tNPCs/Wick.md\tnot unmasked, nothing changed: Permission denied", out)
+        self.assertIn(f"ERROR\t{MASK}\tnot unmasked, put back as it was: NPCs/Wick.md could not be written", out)
+        self.assertNotIn("UNMASKED", out)
+        self.assertEqual((self.root / MASK).read_text(encoding="utf-8"), before)
+        self.assertEqual((self.root / "NPCs/Wick.md").read_text(encoding="utf-8"), wick)
+        self.assertFalse((self.root / "_meta" / "reveals.json").exists())
+
+    def test_unmask_refuses_before_writing_when_the_log_cannot_be_written(self) -> None:
+        """M1: a log folder that cannot be written to stops the unmask before any note changes."""
+        (self.root / "_meta").mkdir()
+        before = (self.root / MASK).read_text(encoding="utf-8")
+        with mock.patch.object(reveal, "_log_writable", return_value="Permission denied"):
+            code, out, _ = run(self.root, "--unmask", MASK, "--write")
+        self.assertEqual(code, 1, out)
+        self.assertIn(f"ERROR\t{MASK}\tnot unmasked, nothing changed: {reveal.LOG} cannot be written (Permission denied)", out)
+        self.assertEqual((self.root / MASK).read_text(encoding="utf-8"), before)
+
+    def test_log_writable_reports_a_read_only_folder(self) -> None:
+        meta = self.root / "_meta"
+        meta.mkdir()
+        self.assertIsNone(reveal._log_writable(self.root))
+        self.assertEqual(list(meta.iterdir()), [], "the probe leaves nothing behind")
+        meta.chmod(0o500)
+        self.addCleanup(meta.chmod, 0o700)
+        if os.access(meta, os.W_OK):
+            self.skipTest("running as a user who can write anywhere")
+        self.assertIsNotNone(reveal._log_writable(self.root))
+
+    def test_unmask_keeps_the_comments_on_the_lines_it_sets(self) -> None:
+        """Final review Minor 1: a trailing comment stays; a quoted key is set, not doubled."""
+        self._write_mask('unmasked_name: "Captain Rook"\nunmasked_portrait: "_attachments/rook.png"\n'
+                         'portrait: "_attachments/pedlar.png"\n',
+                         'unmasked_name: "Captain Rook"     # a disguise\'s true name\n'
+                         'unmasked_portrait: "_attachments/rook.png" # the true face\n'
+                         'portrait: "_attachments/pedlar.png"  # the face players see\n')
+        code, out, _ = run(self.root, "--unmask", MASK, "--write")
+        self.assertEqual(code, 0, out)
+        text = (self.root / MASK).read_text(encoding="utf-8")
+        self.assertIn('unmasked_name: ""     # a disguise\'s true name\n', text)
+        self.assertIn('unmasked_portrait: "" # the true face\n', text)
+        self.assertIn('portrait: "_attachments/rook.png"  # the face players see\n', text)
+        head = ['type: npc', '"unmasked_name": "Captain Rook"  # x', "aliases: []"]
+        reveal._set_value(head, "unmasked_name", '""')
+        self.assertEqual(head, ['type: npc', '"unmasked_name": ""  # x', "aliases: []"])
+
+    def _playing_them(self, gm_notes: str, before: str = "") -> str:
+        note = ('---\ntype: npc\nunmasked_name: "Captain Rook"\n---\n\n' + before
+                + "## GM Notes\n\n" + gm_notes)
+        (self.root / MASK).write_text(note, encoding="utf-8")
+        code, out, _ = run(self.root, "--unmask", MASK, "--write")
+        self.assertEqual(code, 0, out)
+        return (self.root / MASK).read_text(encoding="utf-8")
+
+    def test_unmask_renames_every_speech_and_unmasked_line(self) -> None:
+        """M5: every Speech line, as the run sheet joins every one."""
+        text = self._playing_them("### Playing Them\n\n- **Speech:** sing-song\n- **Speech:** haggles\n"
+                                  "- **Unmasked:** clipped\n- **Unmasked:** orders\n")
+        self.assertIn("- **Disguise:** sing-song\n- **Disguise:** haggles\n"
+                      "- **Speech:** clipped\n- **Speech:** orders\n", text)
+
+    def test_unmask_reads_playing_them_as_the_run_sheet_does(self) -> None:
+        """M5: only the Playing Them under GM Notes, never in a fence, never an indented bullet."""
+        text = self._playing_them(
+            "### Playing Them\n\n- **Speech:** sing-song\n  - **Speech:** nested, not a label\n"
+            "```\n- **Speech:** in a fence\n```\n- **Unmasked:** clipped\n",
+            before="## Overview\n\n### Playing Them\n\n- **Speech:** outside GM Notes\n- **Unmasked:** no\n\n")
+        self.assertIn("- **Speech:** outside GM Notes\n- **Unmasked:** no\n", text)
+        self.assertIn("- **Disguise:** sing-song\n  - **Speech:** nested, not a label\n"
+                      "```\n- **Speech:** in a fence\n```\n- **Speech:** clipped\n", text)
+
+    def test_unmask_leaves_speech_alone_when_unmasked_is_a_placeholder(self) -> None:
+        """M5: an Unmasked line the run sheet skips (a {placeholder}) is no voice to swap in."""
+        text = self._playing_them("### Playing Them\n\n- **Speech:** sing-song\n- **Unmasked:** {the true voice}\n")
+        self.assertIn("- **Speech:** sing-song\n- **Unmasked:** {the true voice}\n", text)
+
+    @unittest.skipUnless(shutil.which("node"), "node is not installed")
+    def test_unmasked_voice_matches_the_run_sheet_before_and_after(self) -> None:
+        """M5: what the sheet shows behind Unmask before is what it plays as after."""
+        gm = ("### Playing Them\n\n- **Speech:** sing-song\n- **Tell:** counts\n"
+              "* **Speech:** haggles\n  - **Unmasked:** nested\n```\n**Unmasked:** fenced\n```\n"
+              "- **Unmasked:** clipped\n**unmasked:** orders\n\n### Wants\n\n- **Speech:** not this one\n")
+        note = '---\ntype: npc\nunmasked_name: "Captain Rook"\n---\n\n## GM Notes\n\n' + gm
+        (self.root / MASK).write_text(note, encoding="utf-8")
+        js = ("const {buildIndex}=require(process.argv[1]+'/notes');"
+              "const {playAsOf,unmaskedPlayAsOf}=require(process.argv[1]+'/people-from-notes');"
+              "const i=buildIndex(process.argv[2]);"
+              "process.stdout.write(JSON.stringify([playAsOf(process.argv[3],i),unmaskedPlayAsOf(process.argv[3],i)]))")
+        lib = str(ROOT / "tools" / "publish" / "lib" / "run-sheet")
+
+        def sheet() -> list[str]:
+            got = subprocess.run(["node", "-e", js, lib, str(self.root), MASK],
+                                 capture_output=True, text=True, check=False)
+            self.assertEqual(got.returncode, 0, got.stderr)
+            return json.loads(got.stdout)
+        _, behind_unmask = sheet()
+        code, out, _ = run(self.root, "--unmask", MASK, "--write")
+        self.assertEqual(code, 0, out)
+        after, _ = sheet()
+        self.assertEqual(after, behind_unmask)
+        self.assertIn("clipped", after)
 
 
 @unittest.skipUnless(shutil.which("node"), "node is not installed")

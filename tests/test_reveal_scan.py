@@ -217,6 +217,21 @@ class RevealScan(unittest.TestCase):
                        publishing=["NPCs/Pedlar.md"])
         self.assertEqual([r.hidden for r in res.rows if r.path == "NPCs/Pedlar.md"], [])
 
+    def test_a_true_name_written_as_a_link_shows_as_the_name(self) -> None:
+        """C1: the scan shows the name a link names, and says when it reads none."""
+        for value, shown in (('"[[Captain Rook]]"', "unmasked_name: Captain Rook"),
+                             ("[[Captain Rook|the captain]]", "unmasked_name: Captain Rook"),
+                             ('"[[]]"', "unmasked_name: [[]] (names no one: write the true name)"),
+                             ("[[rook.png]]", "unmasked_name: rook.png")):
+            pedlar = f"---\ntype: npc\nunmasked_name: {value}\n---\n\n# Pedlar\n"
+            res = run_scan({**base(play="Met [[Pedlar]].\n"), "NPCs/Pedlar.md": pedlar},
+                           publishing=["NPCs/Pedlar.md"])
+            self.assertEqual(res.rows[0].hidden, [shown], value)
+        pedlar = "---\ntype: npc\nunmasked_name: Rook\nunmasked_portrait: [[rook.png]]\n---\n\n# Pedlar\n"
+        res = run_scan({**base(play="Met [[Pedlar]].\n"), "NPCs/Pedlar.md": pedlar},
+                       publishing=["NPCs/Pedlar.md"])
+        self.assertEqual(res.rows[0].hidden, ["unmasked_name: Rook", "unmasked_portrait: rook.png"])
+
     def test_cli_no_such_index_exits_2(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, \
                 mock.patch.object(rv, "ask_publish_tool", tool()):
