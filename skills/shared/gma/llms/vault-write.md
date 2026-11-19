@@ -698,7 +698,9 @@ against one plan: each
 command's stdin. Commands: every writer here, plus
 'stamp FILE... <stamp-entities options>', 'note-new PATH'
 (body: the whole note), 'section NOTE HEADING
-[--append|--replace]' (body: the text; 'section NOTE --lead'
+[--append|--replace]' (body: the text; --replace prints DROPPED
+for a labelled block the old section had and the new lacks;
+'section NOTE --lead'
 writes the text above the note's first heading or hidden
 block, a scene's Situation, Starts it and If-table),
 'names [--wrapup
