@@ -806,6 +806,7 @@ class VaultIndex:
         self.vault = vault
         self._by_name: dict[str, list[dict[str, Any]]] | None = None
         self._texts: dict[str, list[tuple[str, str]]] | None = None
+        self._major: set[str] | None = None
         self._system: str | None = None
         self._system_read = False
 
@@ -843,6 +844,18 @@ class VaultIndex:
                     self._texts.setdefault(
                         vl.normalize(name), []).append((rel, text))
         return self._texts.get(vl.link_target(link), [])
+
+    def major(self, note: str) -> bool:
+        """Whether the note is a companion or a key NPC (npc_stats' rule)."""
+        if self.vault is None:
+            return False
+        if self._major is None:
+            import npc_stats
+            notes = npc_stats.Notes(self.vault)
+            self._major = ({rel for rel, _t, fm in notes.npcs
+                            if npc_stats._is_true(fm.get("companion"))}
+                           | npc_stats.key_npcs(notes))
+        return note in self._major
 
     def system(self) -> str | None:
         """The vault's game system, read once."""
@@ -1017,7 +1030,10 @@ def _foe_findings(locus: str, title: str, lines: list[str],
             verdict = npc_stats.classify(text, index.system())
             if verdict is None or verdict[0] != "stock":
                 continue
-            fix = (f"run: gma stat-fill \"<vault>\" \"{note}\" --write"
+            major = index.major(note)
+            fix = (f"it needs a full stat workup (session-prep step 16), "
+                   f"not a stock block" if major else
+                   f"run: gma stat-fill \"<vault>\" \"{note}\" --write"
                    if index.system() == "dnd-5e-2024" else
                    "write the numbers into its note's ### Stats")
             out.append(Finding(

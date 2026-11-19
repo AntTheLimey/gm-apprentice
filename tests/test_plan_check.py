@@ -1223,9 +1223,10 @@ class RunSheetChecksTests(unittest.TestCase):
     # foe-no-numbers
 
     def stock_note(self, name: str, body: str, type_: str = "npc",
-                   system: str | None = "dnd-5e-2024") -> None:
+                   system: str | None = "dnd-5e-2024",
+                   extra: str = "") -> None:
         (self.vault / f"{name}.md").write_text(
-            f"---\ntype: {type_}\n---\n\n## Overview\n\nx\n\n"
+            f"---\ntype: {type_}\n{extra}---\n\n## Overview\n\nx\n\n"
             f"<!-- gm-only -->\n\n## GM Notes\n\n### Stats\n\n{body}\n\n"
             f"<!-- /gm-only -->\n", encoding="utf-8")
         if system:
@@ -1251,6 +1252,21 @@ class RunSheetChecksTests(unittest.TestCase):
         self.assertEqual(len(rows), 1, found)
         self.assertNotIn("stat-fill", rows[0].message)
         self.assertIn("write the numbers", rows[0].message)
+
+    def test_a_companion_or_key_npc_is_sent_to_the_full_workup(self):
+        self.stock_note("Tomas", "Commoner (SRD)", extra="companion: true\n")
+        (self.vault / "Brief.md").write_text(
+            "---\ntype: adventure-brief\n---\n\n## Key NPCs\n\n"
+            "- **[[Garrick]]** the smith\n", encoding="utf-8")
+        self.stock_note("Garrick", "As Bandit.")
+        for who in ("Tomas", "Garrick"):
+            with self.subTest(who):
+                found = self.found(self.scene(
+                    rest=f"**Entities:** [[{who}]]\n"))
+                rows = rows_for(found, "foe-no-numbers")
+                self.assertEqual(len(rows), 1, found)
+                self.assertIn("full stat workup", rows[0].message)
+                self.assertNotIn("stat-fill", rows[0].message)
 
     def test_a_social_npc_with_no_stats_does_not(self):
         self.note("Orme", "npc")
