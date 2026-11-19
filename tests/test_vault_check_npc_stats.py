@@ -382,12 +382,37 @@ class RowTests(unittest.TestCase):
         })
         self.assertEqual(rows(v), [])
 
-    def test_the_dead_are_left_out_unless_a_plan_names_them(self):
+    def test_the_dead_are_left_out_even_when_a_plan_names_them(self):
+        # #776: prep runs --plan, and a Plan names the dead too (a body
+        # found, a grave visited).
         dead = npc().replace("status: alive", "status: dead")
         plan = ("---\ntype: session-plan\n---\n\n## Planned Scenes\n\n"
-                "### The Crypt\n\n[[Old Vessel]] rises.\n")
-        v = make(self, {"NPCs/Old Vessel.md": dead, "Plans/S3 Plan.md": plan})
+                "### The Crevasse\n\nThey find [[Tam Rowe]]'s body.\n")
+        v = make(self, {"NPCs/Tam Rowe.md": dead, "Plans/S3 Plan.md": plan})
         self.assertEqual(rows(v), [])
+        self.assertEqual(rows(v, plan="Plans/S3 Plan.md"), [])
+        fated = npc("### Behind the Scenes\n\n- **Dead.** Fell in the "
+                    "crevasse.")
+        v = make(self, {"NPCs/Tam Rowe.md": fated, "Plans/S3 Plan.md": plan})
+        self.assertEqual(rows(v, plan="Plans/S3 Plan.md"), [])
+
+    def test_a_plan_may_be_given_by_its_full_path(self):
+        plan = ("---\ntype: session-plan\n---\n\n## Planned Scenes\n\n"
+                "### The Crypt\n\n[[Old Vessel]] waits.\n")
+        v = make(self, {"NPCs/Old Vessel.md": npc(), "Plans/S3 Plan.md": plan})
+        self.assertEqual(rows(v, plan=str(v / "Plans" / "S3 Plan.md")),
+                         rows(v, plan="Plans/S3 Plan.md"))
+        self.assertEqual(len(rows(v, plan="Plans/S3 Plan.md")), 1)
+
+    def test_a_dead_npc_who_rises_takes_a_later_fate_and_is_kept(self):
+        # A fate beats status: the players buried him; he walks the crypt.
+        risen = npc("### Behind the Scenes\n\n- **Dead.** Buried at the "
+                    "pass.\n- **Risen; walks the crypt.** The Lodge raised "
+                    "him.").replace("status: alive", "status: dead")
+        plan = ("---\ntype: session-plan\n---\n\n## Planned Scenes\n\n"
+                "### The Crypt\n\n[[Old Vessel]] rises.\n")
+        v = make(self, {"NPCs/Old Vessel.md": risen, "Plans/S3 Plan.md": plan})
+        self.assertEqual(len(rows(v)), 1)
         self.assertEqual(len(rows(v, plan="Plans/S3 Plan.md")), 1)
 
     def fate(self, *bullets: str) -> list[str]:

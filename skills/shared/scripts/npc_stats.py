@@ -25,11 +25,12 @@ list item or paragraph led by its link or bold name). Majors sort first.
 `--plan PLAN` keeps the NPCs that Plan's scenes name: links in its Planned
 and Contingency Scenes, and in the scene notes they point at (`### [[Scene]]`).
 `--played` keeps the NPCs play has shown: linked from a Wrap-Up, or from a
-scene note marked played (`status: played` or a `played_in` session). Without
-`--plan`, a dead NPC is left out: its `status` is dead, or its current hidden
-fate is (the last bullet of GM Notes `### Behind the Scenes` not struck
-through that opens with a bold fate, `**Dead.**`). Archived, QA and Midwife
-copies are never read as NPCs. Writes nothing.
+scene note marked played (`status: played` or a `played_in` session). A dead
+NPC is always left out: its current hidden fate is death (the last bullet of
+GM Notes `### Behind the Scenes` not struck through that opens with a bold
+fate, `**Dead.**`), or it has no fate and its `status` is dead. A fate beats
+`status`: one who rises again takes a later fate (`**Risen.**`). Archived, QA
+and Midwife copies are never read as NPCs. Writes nothing.
 """
 
 from __future__ import annotations
@@ -330,9 +331,17 @@ def key_npcs(notes: Notes) -> set[str]:
 
 
 def find_plan(notes: Notes, given: str) -> tuple[str, str] | str:
-    """(path, text) of the Plan `given` names, by vault path or by note
-    name (`[[Name]]` too); otherwise the error to print."""
-    want = normalize_file_arg(given.strip().strip("[]"))
+    """(path, text) of the Plan `given` names, by path (in the vault, or
+    a full path to a note inside it) or by note name (`[[Name]]` too);
+    otherwise the error to print."""
+    raw = given.strip().strip("[]")
+    full = Path(raw).expanduser()
+    if full.is_absolute():
+        try:
+            raw = full.resolve().relative_to(notes.vault.resolve()).as_posix()
+        except ValueError:
+            pass        # outside the vault: matched, and refused, as given
+    want = normalize_file_arg(raw)
     exact = [n for n in notes.all if n[0] == want]
     key = normalize(want.removesuffix(".md"))
     hits = exact or [n for n in notes.all if normalize(Path(n[0]).stem) == key]
@@ -385,17 +394,16 @@ _FATE_RE = re.compile(
 _DEAD_RE = re.compile(r"dead\b", re.I)
 
 
-def hidden_dead(text: str) -> bool:
-    """Whether an NPC's current hidden fate is death: the last bullet of
-    its GM Notes `### Behind the Scenes` that is not struck through and
-    opens with a bold fate, a bold sentence ending in a full stop (a
-    `**Label:**` or a bold name is no fate), says **Dead…**.
-    A later fate that is not death (**Alive, freed.**) beats an earlier
-    one; death named anywhere else in a bullet is not a fate."""
+def hidden_fate(text: str) -> str | None:
+    """An NPC's current hidden fate, or None when it has none: the last
+    bullet of its GM Notes `### Behind the Scenes` that is not struck
+    through and opens with a bold fate, a bold sentence ending in a full
+    stop (a `**Label:**` or a bold name is no fate). A later fate beats an
+    earlier one."""
     body = body_of(text)
     found = find_section(body, ["GM Notes", "Behind the Scenes"], first=True)
     if not isinstance(found, tuple):
-        return False
+        return None
     fate = None
     for line in body.split("\n")[found[0] + 1:found[1]]:
         m = _FATE_RE.match(line)
@@ -406,7 +414,18 @@ def hidden_dead(text: str) -> bool:
                 and m["fate"].rstrip().endswith(".") \
                 and not m["fate"].lstrip().startswith("~~"):
             fate = m["fate"].strip()
-    return fate is not None and bool(_DEAD_RE.match(fate))
+    return fate
+
+
+def is_dead(text: str, fm: dict[str, Any]) -> bool:
+    """Is the NPC dead? Its hidden fate says so when it has one (the truth,
+    which beats `status`, what the players know); else its `status` does.
+    A later fate that is not death (**Alive, freed.**, **Risen.**) beats an
+    earlier one; death named anywhere else in a bullet is not a fate."""
+    fate = hidden_fate(text)
+    if fate is not None:
+        return bool(_DEAD_RE.match(fate))
+    return str(fm.get("status", "")).strip().lower() == "dead"
 
 
 def system_line(vault: Path) -> str:
@@ -441,9 +460,9 @@ def check_npc_stats(vault: Path, plan: str | None = None,
     for rel, text, fm in notes.npcs:
         if keep is not None and rel not in keep:
             continue
-        if plan is None and (
-                str(fm.get("status", "")).strip().lower() == "dead"
-                or hidden_dead(text)):
+        # Dead in every mode: a Plan names the dead too (a body found, a
+        # grave visited). One who acts again has a later fate (**Risen.**).
+        if is_dead(text, fm):
             continue
         verdict = classify(text, system, notes.exists)
         if verdict is None:
