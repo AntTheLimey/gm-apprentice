@@ -63,7 +63,19 @@ function buildIndex(vaultPath, { deps } = {}) {
   const pages = [];
   // The scan reads every note once; a file it cannot read is answered empty there, so the walk goes on,
   // and is read (and fails) again below, where it is marked unreadable. A folder that cannot be listed still throws.
-  const scanDeps = { ...(deps || {}), readFile: (p) => { try { return rd.readFile(p); } catch { return ''; } } };
+  const scanDeps = {
+    ...(deps || {}),
+    readFile: (p) => { try { return rd.readFile(p); } catch { return ''; } },
+    // A sub-folder that cannot be listed is warned about and left out; the vault root still throws.
+    readdir: (dir) => {
+      try { return rd.readdir(dir); } catch (err) {
+        const rel = toPosix(path.relative(vaultPath, dir));
+        if (!rel) throw err;
+        warn('unreadable-folder', rel, `could not be listed: ${String(err.message).split('\n')[0]}`);
+        return [];
+      }
+    },
+  };
   for (const page of scanAllNotes(vaultPath, scanDeps)) {
     const rel = toPosix(path.relative(vaultPath, page.sourcePath));
     if (isLeftOut(rel)) continue;

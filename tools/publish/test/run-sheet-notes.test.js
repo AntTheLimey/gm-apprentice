@@ -141,4 +141,18 @@ describe('run sheet note index', () => {
     assert.strictEqual(idx.resolve('index'), null);
     assert.strictEqual(idx.resolve('Lucan'), 'Characters/NPCs/Lucan Grey.md');
   });
+
+  it('an unlistable folder warns and its notes are left out', () => {
+    const dir = copy();
+    const bad = path.join(dir, 'Creatures');
+    const deps = { readdir: (p) => { if (p === bad) throw Object.assign(new Error('EACCES: denied'), { code: 'EACCES' }); return fs.readdirSync(p, { withFileTypes: true }); } };
+    const idx = buildIndex(dir, { deps });
+    assert.strictEqual(idx.resolve('Frost Wolf'), null);
+    assert.strictEqual(idx.resolve('Brother Ash'), 'Characters/NPCs/Brother Ash.md');
+    const w = idx.warnings.filter((x) => x.kind === 'unreadable-folder');
+    assert.strictEqual(w.length, 1);
+    assert.strictEqual(w[0].note, 'Creatures');
+    const root = { readdir: (p) => { if (p === dir) throw new Error('EIO'); return fs.readdirSync(p, { withFileTypes: true }); } };
+    assert.throws(() => buildIndex(dir, { deps: root }), /EIO/);
+  });
 });
