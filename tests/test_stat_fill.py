@@ -161,6 +161,19 @@ class FillTests(FillCase):
         self.assertNotIn("Stats to come", text)
         self.assertIn("**AC** 12", text)
 
+    def test_a_deferral_word_in_the_gms_sentence_is_not_the_deferral_line(self):
+        old = ["Ambushes travellers later at dusk.", "", "Stats to come.", "",
+               "Flees at half HP."]
+        self.assertEqual(stat_fill.kept_beside_placeholder(old),
+                         ["Ambushes travellers later at dusk.", "",
+                          "Flees at half HP."])
+
+    def test_a_gm_table_beside_a_placeholder_is_kept(self):
+        old = ["Stats to come.", "", "| Roll | Loot |", "|---|---|",
+               "| 1 | a knife {rusty} |"]
+        out = stat_fill.kept_beside_placeholder(old)
+        self.assertEqual(out, old[2:])
+
     def test_keeps_a_tuned_hp_line(self):
         v = self.vault({"Tomas.md": npc("Bandit (SRD)\n\nHP 5 after the fall.")})
         self.run_cli(v, "Tomas.md", "--write")

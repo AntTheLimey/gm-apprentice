@@ -307,16 +307,23 @@ def kept_lines(old: list[str]) -> list[str]:
 
 def kept_beside_placeholder(old: list[str]) -> list[str]:
     """What the GM wrote under a placeholder or blank block: every line but
-    the deferral line itself (`Stats to come.`) and the empty block's own
-    fields, table rows and embeds."""
+    the one deferral line itself (`Stats to come.`) and embeds. The deferral is the line that is itself a marker, or
+    one that names stats and defers; only with neither is it the first line
+    holding a deferral word (`later`, `pending` are ordinary words). The note
+    has no numbers here, so a table is the GM's own and stays."""
+    lines = [ln for ln in old if npc_stats.DEFER_RE.search(ln)]
+    drop = next((ln for ln in lines if npc_stats._standalone(ln)), None)
+    if drop is None:
+        drop = next((ln for ln in lines
+                     if npc_stats.STAT_WORD_RE.search(ln)), None)
+    if drop is None and lines:
+        drop = lines[0]
     out: list[str] = []
-    deferral = False
+    gone = False
     for line in old:
-        if not deferral and npc_stats.DEFER_RE.search(line):
-            deferral = True
-        elif not (line.lstrip().startswith("|")
-                  or npc_stats.BRACE_RE.search(line)
-                  or npc_stats.EMBED_RE.search(line)):
+        if not gone and line is drop:
+            gone = True
+        elif not npc_stats.EMBED_RE.search(line):
             out.append(line)
     return _tidy(out)
 
