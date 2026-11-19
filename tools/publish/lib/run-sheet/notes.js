@@ -145,8 +145,11 @@ function buildIndex(vaultPath, { deps } = {}) {
   const attached = () => {
     if (attachments) return attachments;
     const settings = readSettings({ vaultPath, deps });
-    const dir = settings.values && settings.values['vault.attachments'];
-    attachments = scanAttachments({ vaultPath, attachmentsDir: dir, excludeDirs: settings.values && settings.values['player_site.hide.folders'] }, deps);
+    // Settings values are nested by group: `vault.attachments` is values.vault.attachments.
+    const values = settings.values || {};
+    const dir = values.vault && values.vault.attachments;
+    const hide = values.player_site && values.player_site.hide && values.player_site.hide.folders;
+    attachments = scanAttachments({ vaultPath, attachmentsDir: dir, excludeDirs: hide }, deps);
     return attachments;
   };
 

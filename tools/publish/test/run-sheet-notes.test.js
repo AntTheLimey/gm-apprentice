@@ -83,6 +83,14 @@ describe('run sheet note index', () => {
     assert.strictEqual(idx.portrait('Characters/PCs/Ben Hart.md'), null);
   });
 
+  it('portrait looks in the attachments folder the settings name', () => {
+    const dir = copy();
+    writeSettings(dir, { 'vault.system': 'dnd5e', 'vault.attachments': 'Pics' });
+    fs.mkdirSync(path.join(dir, 'Pics'), { recursive: true });
+    fs.renameSync(path.join(dir, '_attachments', 'ada.png'), path.join(dir, 'Pics', 'ada.png'));
+    assert.strictEqual(buildIndex(dir).portrait('Characters/PCs/Ada Moss.md'), 'Pics/ada.png');
+  });
+
   it('section and gmSection read headings', () => {
     const idx = buildIndex(copy());
     assert.match(idx.section('Chapters/Chapter 1/Sessions/Session 02/Session 02 - The Test - Plan.md', 'Session Intent'), /wolves are listening/);
