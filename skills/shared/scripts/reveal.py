@@ -307,7 +307,7 @@ def _add_to_list(head: list[str], key: str, name: str) -> None:
     k, _, value = head[at].partition(":")
     flow = _flow(key, value)
     if flow:
-        items = flow["items"].strip()
+        items = flow["items"].strip().rstrip(",").rstrip()     # `[a,]`: no empty item
         head[at] = f"{k}:{flow['open']}{items + ', ' if items else ''}{item}]{flow['rest'] or ''}"
         return
     end, _ = _list_lines(head, at)
@@ -513,6 +513,25 @@ def _label_of(line: str) -> tuple[str, str, str]:
     return m[1], m[2].strip().casefold(), m[3].strip()
 
 
+BLOCK_HEAD_RE = re.compile(r"^\*\*([^*\n]+?):?\*\*[ \t]*$")
+BULLET_RE = re.compile(r"^(?:[-*+]|\d+[.)])\s+")
+
+
+def _label_value(body: list[str], i: int) -> str:
+    """A label line's value with the lines that continue it, as the run
+    sheet's `labels` reads them: up to a blank line, a fence, another label
+    or bold head, a bullet, a table row, a quote or a heading."""
+    parts = [_label_of(body[i])[2]]
+    for line in body[i + 1:]:
+        text = line.rstrip("\r\n")
+        if (not text.strip() or FENCE_RE.match(text) or LABEL_LINE_RE.match(text)
+                or BLOCK_HEAD_RE.match(text) or BULLET_RE.match(text)
+                or re.match(r"^\s*[|>]", text) or re.match(r"^#{1,6}\s", text)):
+            break
+        parts.append(text.strip())
+    return " ".join(p for p in parts if p)
+
+
 def _top_keys(head: list[str]) -> list[str]:
     keys = []
     for ln in head:
@@ -690,7 +709,12 @@ def _unmask_edit(vault: Path, rel: str) -> tuple[str | None, dict[str, Any] | No
     body = lines[end + 1:]
     section = _playing_them(body)
     labels = [(i, *_label_of(body[i])) for i in section]
-    if any(label == "unmasked" and value and "{" not in value for _, _, label, value in labels):
+    # The run sheet's test (`unmaskedPlayAsOf`): every Unmasked value, its
+    # continuation lines included, joined; usable when there is one and no
+    # `{placeholder}` is in it.
+    unmasked_voice = "\n\n".join(_label_value(body, i) for i, _, label, value in labels
+                                  if label == "unmasked" and value)
+    if unmasked_voice and "{" not in unmasked_voice:
         renamed = {"speech": 0, "unmasked": 0}
         for i, bullet, label, _ in labels:
             if label not in renamed:
@@ -987,11 +1011,11 @@ def run(vault: Path, session: str, publish: list[str], released: list[tuple[str,
             error(raw, f"not unmasked, nothing changed: {', '.join(refused_unmask)} in the same run "
                        f"was refused, and an unmasking is all or nothing; fix it or leave it out, then run again")
         unmasks = {}
+    written: list[tuple[str, bytes]] = []
     if write and unmasks:
         # Each note is written whole or not at all (`_replace_file`). When one
         # fails, the notes this run already wrote are put back, the ones after it
         # are not touched, and every note gets a row saying which.
-        written: list[tuple[str, bytes]] = []
         order = list(unmasks)
         for n, raw in enumerate(order):
             try:
@@ -1012,8 +1036,10 @@ def run(vault: Path, session: str, publish: list[str], released: list[tuple[str,
                 unmasks = {d: unmasks[d] for d in stuck}
                 break
             written.append((raw, was))
+    unmask_row: dict[str, int] = {}
     for raw, (_, entry, said) in unmasks.items():
         counts["unmask"] += 1
+        unmask_row[raw] = len(rows)
         row("UNMASKED" if write else "WOULD-UNMASK", raw, said)
         unmasked.append({**entry, "session": session, "date": date.today().isoformat()})
 
@@ -1037,6 +1063,20 @@ def run(vault: Path, session: str, publish: list[str], released: list[tuple[str,
             except (OSError, ValueError) as e:
                 counts["log"] = 0
                 error(LOG, f"not logged: {e}")
+                # The log is part of an unmasking (it keeps the old face): the notes
+                # this run unmasked are put back, so a later run can do them again.
+                for put, text_before in written:
+                    if put not in unmask_row:
+                        continue
+                    counts["unmask"] -= 1
+                    counts["errors"] += 1
+                    try:
+                        _replace_file(vault / put, text_before)
+                        rows[unmask_row[put]] = (f"ERROR\t{put}\tnot unmasked, put back as it was: "
+                                                 f"{LOG} could not be written ({e})")
+                    except OSError as e2:
+                        rows[unmask_row[put]] = (f"ERROR\t{put}\tunmasked but not logged, and it could not be "
+                                                 f"put back ({e2}): {unmasks[put][2]}")
     rows.append(f"# publish: {counts['publish']} clear: {counts['clear']} "
                 f"stamp: {counts['stamp']} unmask: {counts['unmask']} "
                 f"log: {counts['log']} errors: {counts['errors']}")

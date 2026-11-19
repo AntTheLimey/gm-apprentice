@@ -1141,6 +1141,35 @@ class UnmaskTests(unittest.TestCase):
             self.assertIn(f"nothing changed: the edit did not come out right ({why})", out)
             self.assertEqual((self.root / MASK).read_bytes(), before)
 
+    @unittest.skipUnless(shutil.which("node"), "node is not installed")
+    def test_unmask_adds_to_a_flow_list_with_a_trailing_comma(self) -> None:
+        """PR #799 review: `["The Pedlar",]` must not become `["The Pedlar",, ...]`."""
+        for before in ('aliases: ["The Pedlar",]\n', 'aliases: ["The Pedlar", ]  # c\n'):
+            text = self._aliases_written_as(before)
+            self.assertNotIn(",,", text.replace(" ", ""), before)
+            self.assertEqual(self._strict(MASK)["aliases"], ["The Pedlar", "Captain Rook"], before)
+
+    def test_unmask_swaps_voices_only_when_every_unmasked_line_is_usable(self) -> None:
+        """PR #799 review: one Unmasked with a {placeholder} makes the sheet keep Speech, so reveal does too."""
+        text = self._playing_them("### Playing Them\n\n- **Speech:** sing-song\n- **Unmasked:** clipped\n"
+                                  "- **Unmasked:** {the rest}\n")
+        self.assertIn("- **Speech:** sing-song\n- **Unmasked:** clipped\n- **Unmasked:** {the rest}\n", text)
+        text = self._playing_them("### Playing Them\n\n- **Speech:** sing-song\n- **Unmasked:** clipped\n"
+                                  "  and {later}\n")
+        self.assertIn("- **Speech:** sing-song\n- **Unmasked:** clipped\n", text, "a continuation line counts")
+
+    def test_unmask_puts_the_notes_back_when_the_log_cannot_be_saved(self) -> None:
+        """PR #799 review: the log is part of the unmasking; if it fails, the notes are put back."""
+        before = {r: (self.root / r).read_bytes() for r in (MASK, "NPCs/Wick.md")}
+        with mock.patch.object(reveal, "_write_log", side_effect=OSError(28, "No space left on device")):
+            code, out, _ = run(self.root, "--unmask", MASK, "--unmask", "NPCs/Wick.md", "--write")
+        self.assertEqual(code, 1, out)
+        for r, b in before.items():
+            self.assertEqual((self.root / r).read_bytes(), b, r)
+            self.assertIn(f"ERROR\t{r}\tnot unmasked, put back as it was: {reveal.LOG} could not be written", out)
+        self.assertNotIn("UNMASKED", out)
+        self.assertIn("unmask: 0", out.splitlines()[-1])
+
     def test_unmask_refuses_before_writing_when_the_log_cannot_be_written(self) -> None:
         """M1: a log folder that cannot be written to stops the unmask before any note changes."""
         (self.root / "_meta").mkdir()
