@@ -10,6 +10,12 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 ---
 
 
+## [1.12.99] — 2026-11-19
+
+### Fixed
+
+- The site follows a link written in another letter case, as Obsidian does (#790): `[[the cloister]]` links to The Cloister. If two notes differ only by case, the link stays plain words. The run sheet uses the same rule.
+
 ## [1.12.98] — 2026-11-19
 
 ### Fixed

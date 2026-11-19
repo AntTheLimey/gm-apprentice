@@ -147,7 +147,8 @@ function buildIndex(vaultPath, { deps } = {}) {
       if (!(k in table) && !ambiguous.has(k)) table[k] = p.path;
     }
   }
-  const lookup = nfcLookupTable(table);
+  // Letter case aside, as a link is followed everywhere on the site (scanner.js buildLinkMap; #790).
+  const lookup = nfcLookupTable(table, { foldCase: true });
 
   // Notes in dot folders (`.trash`): the scan never walks them, so they are listed only when a link
   // fails to resolve, once. `.git` and node_modules hold no notes of the GM's.
@@ -192,7 +193,6 @@ function buildIndex(vaultPath, { deps } = {}) {
     }
     return attachments;
   };
-  let folded = null;
   const keyOf = (target) => canonicalNfc(wikiTarget(target)).replace(/\.md$/i, '');
 
   const self = {
@@ -201,17 +201,7 @@ function buildIndex(vaultPath, { deps } = {}) {
       const key = keyOf(target);
       if (!key) return null;
       const hit = lookup[key];
-      if (typeof hit === 'string') return hit;
-      // Obsidian ignores case in a link: `[[the cloister]]` finds `The Cloister`, unless two notes
-      // differ only by case (then it names neither).
-      if (!folded) {
-        folded = new Map();
-        for (const k of Object.keys(table)) {
-          const f = k.toLowerCase();
-          folded.set(f, folded.has(f) && folded.get(f) !== table[k] ? null : table[k]);
-        }
-      }
-      return folded.get(key.toLowerCase()) || null;
+      return typeof hit === 'string' ? hit : null;
     },
     // True when the target names several notes and so resolves to none.
     isAmbiguous(target) {

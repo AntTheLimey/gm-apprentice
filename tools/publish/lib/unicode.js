@@ -30,8 +30,8 @@ function canonicalNfc(value) {
 // #145's percent-encoding: only comparison keys are canonicalized, never emitted paths.
 //
 // What this does NOT cover — read before relying on it:
-//   * `set` and `delete` are untrapped. Writing through the wrapper with a non-canonical key
-//     stores that key verbatim, creating a duplicate entry that reads can never reach.
+//   * `set` and `delete` store and remove keys verbatim (`set` only forgets the case index). Writing through the
+//     wrapper with a non-canonical key stores that key verbatim, creating a duplicate entry that reads can never reach.
 //     Build tables fully as a plain object, canonicalizing keys yourself, then wrap once.
 //   * `Object.prototype.hasOwnProperty.call(map, k)` and `Object.keys(map).includes(k)`
 //     bypass the traps and see only the stored keys; `k in map` and `map[k]` go through them.
@@ -42,24 +42,48 @@ function canonicalNfc(value) {
 //     access. Every `Map`/`Set` keyed on author-typed text is therefore call-site-dependent
 //     and must canonicalize at both the write and the read. `recency.js`, `story-spine.js`,
 //     and the chapter matcher in `build.js` are the ones that exist today.
-function nfcLookupTable(map) {
+// With `foldCase` (a table of note names, #790), a name with no entry is looked up again ignoring letter case, as
+// Obsidian follows a link: `[[the cloister]]` finds `The Cloister`. It answers only when every name that differs by
+// case alone gives the same answer; two that name different things answer neither. A write through the table (a
+// link moved to its Story page) is seen by the next such lookup.
+function nfcLookupTable(map, { foldCase = false } = {}) {
   // A table of author-typed names has no prototype to answer for them: `table['constructor']`
   // is a name with no entry, not Object's constructor. A plain object given here is copied
   // into one that has none (an own `__proto__` key survives the copy as a name).
   const table = Object.getPrototypeOf(map) === null ? map : Object.assign(Object.create(null), map);
+  let folded = null;
+  const byCase = (key) => {
+    if (!foldCase) return undefined;
+    if (!folded) {
+      folded = new Map();
+      for (const k of Object.keys(table)) {
+        const f = k.toLowerCase();
+        folded.set(f, folded.has(f) && folded.get(f) !== table[k] ? null : table[k]);
+      }
+    }
+    const hit = folded.get(key.toLowerCase());
+    return hit === null ? undefined : hit;
+  };
   return new Proxy(table, {
     get(target, prop, receiver) {
       if (typeof prop === 'string') {
         const key = canonicalNfc(prop);
         if (Object.prototype.hasOwnProperty.call(target, key)) return target[key];
+        const hit = byCase(key);
+        if (hit !== undefined) return hit;
       }
       return Reflect.get(target, prop, receiver);
     },
     has(target, prop) {
-      if (typeof prop === 'string' && Object.prototype.hasOwnProperty.call(target, canonicalNfc(prop))) {
-        return true;
+      if (typeof prop === 'string') {
+        const key = canonicalNfc(prop);
+        if (Object.prototype.hasOwnProperty.call(target, key) || byCase(key) !== undefined) return true;
       }
       return Reflect.has(target, prop);
+    },
+    set(target, prop, value, receiver) {
+      folded = null;
+      return Reflect.set(target, prop, value, receiver);
     },
   });
 }
