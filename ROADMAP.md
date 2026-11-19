@@ -117,6 +117,7 @@ decision rather than pure score.
 
 ## Completed
 
+- ~~`resolve --export` refuses an Export note's path in the vault~~ — it tries the path as given, then in the vault (#766, v1.12.84)
 - ~~The leak check flags a paused scene's `After [[Session]].` line~~ — the tool's own line under `## Paused` is not hidden when its session is published (#765, v1.12.83, tool 1.70.30)
 - ~~`stamp-entities --set` writes a list as one string~~ — it writes real lists, `--add` appends, and link fields take names (#761, v1.12.82)
 - ~~`section --lead` on a paused scene writes above the snapshot and leaves the real lead~~ — the lead is the text below the `## Paused` section's end line, and below an older scene's `# Title` line; a misread empty lead is refused (#758, v1.12.81)

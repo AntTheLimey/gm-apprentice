@@ -9,6 +9,13 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+
+## [1.12.84] — 2026-11-19
+
+### Fixed
+
+- `vault-write resolve --export` reads the Export note by its path in the vault, as every other `vault-write` command names a note; before, only an absolute path or one relative to the shell's folder worked, and the vault path said "unreadable" (#766).
+
 ## [1.12.83] — 2026-11-18
 
 ### Fixed
