@@ -2,7 +2,7 @@
 // The Plan's NPC Quick Reference, one Person per row. Works with what it has: a row naming no note
 // reads with empty playAs and wants, and a warning.
 
-const { sections, tableRows, links } = require('./plan-text');
+const { sections, tableRows, tableRanges, bullets, links, unclaimed } = require('./plan-text');
 const { personKey } = require('./keys');
 const { playAsOf, wantsOf } = require('./people-from-notes');
 const { replaceWikilinks, parseWikilink } = require('../wikilink');
@@ -48,7 +48,8 @@ function readPeople(planBody, index) {
       cells,
     });
   }
-  return { people, warnings };
+  const leftover = unclaimed(sec, [...tableRanges(sec), ...bullets(sec)]);
+  return { people, warnings, leftover };
 }
 
 module.exports = { readPeople };

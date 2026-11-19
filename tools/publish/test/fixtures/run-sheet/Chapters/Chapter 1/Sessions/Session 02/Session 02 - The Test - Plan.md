@@ -133,6 +133,8 @@ Scenes that fire on a player choice or a clock, not by default.
 - **[[Ada Moss]]** (Pat): Testing. Next beat: the tracks.
 - **[[Ben Hart]]** (Sam): Secretive. Next beat: the letter.
 
+Current state: each PC's `## Current Status`.
+
 ## Touchpoint Plan
 
 - **Ben:** (secret) the letter

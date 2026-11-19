@@ -1,8 +1,8 @@
 'use strict';
-// The Plan's Handouts & Props section, one Handout per table row or bullet. Never throws: a
-// missing section reads as [].
+// The Plan's Handouts & Props section, one Handout per table row or bullet; `leftover` is the
+// section's other lines ("No handouts or props."). Never throws: a missing section reads empty.
 
-const { sections, tableRows, bullets, links } = require('./plan-text');
+const { sections, tableRows, tableRanges, bullets, links, unclaimed } = require('./plan-text');
 const { itemKeys } = require('./keys');
 
 const TITLE = /^handouts\s*(?:&|and)\s*props$/i;
@@ -19,7 +19,9 @@ function readHandouts(planBody, index) {
   const items = bullets(sec).map((b) => ({ note: noteOf(b.text, index), scene: '', status: '', text: b.text, id: b.text }));
   const all = rows.concat(items);
   const keys = itemKeys('handouts', 'ho', all.map((h) => h.id));
-  return all.map((h, i) => ({ key: keys[i], note: h.note, scene: h.scene, status: h.status, text: h.text }));
+  const leftover = unclaimed(sec, [...tableRanges(sec), ...bullets(sec)]);
+  const handouts = all.map((h, i) => ({ key: keys[i], note: h.note, scene: h.scene, status: h.status, text: h.text }));
+  return { handouts, leftover };
 }
 
 function noteOf(text, index) {

@@ -6,7 +6,7 @@
 const path = require('node:path');
 const { canonicalNfc } = require('../unicode');
 const { replaceWikilinks, parseWikilink } = require('../wikilink');
-const { sections, tableRows, bullets, labels, cleanText, links } = require('./plan-text');
+const { sections, tableRows, tableRanges, bullets, unclaimed, labels, cleanText, links } = require('./plan-text');
 
 const stemOf = (p) => path.posix.basename(p, path.posix.extname(p));
 const low = (s) => canonicalNfc(String(s || '')).trim().toLowerCase();
@@ -81,7 +81,8 @@ function readPcs(planBody, index, party) {
     const note = index.read && p ? p : null;
     const fm = note ? index.read(note).fm : null;
     if (!note || String(fm.type || '').toLowerCase() !== 'pc') {
-      warn('not-a-pc', note, `${given} is not a PC note in the vault: left out of the party`);
+      if (!note) warn('missing-pc', null, `${given} is in the party but not in the vault`);
+      else warn('not-a-pc', note, `${given} is not a PC note in the vault: left out of the party`);
       continue;
     }
     if (pcs.some((x) => x.note === note)) continue;
@@ -105,7 +106,14 @@ function readPcs(planBody, index, party) {
     if (target) { const hit = pcs.find((p) => p.note === target); if (hit) return hit; }
     const k = low(name);
     if (!k) return null;
-    return pcs.find((p) => low(p.name) === k) || pcs.find((p) => low(p.name).split(/\s+/)[0] === k) || null;
+    const full = pcs.find((p) => low(p.name) === k);
+    if (full) return full;
+    const firsts = pcs.filter((p) => low(p.name).split(/\s+/)[0] === k);
+    if (firsts.length > 1) {
+      warn('ambiguous-pc', null, `"${name}" is the first name of ${firsts.length} party PCs (${firsts.map((p) => p.name).join(', ')}): the line is left unmatched`);
+      return null;
+    }
+    return firsts[0] || null;
   };
   const add = (pc, field, text) => { if (text) pc[field] = pc[field] ? `${pc[field]}\n${text}` : text; };
 
@@ -117,7 +125,7 @@ function readPcs(planBody, index, party) {
       const pc = matchPc(name, link);
       if (!pc) { unmatched.push({ section: sec.title, text: raw }); return; }
       if (kind.field === 'spotlight') {
-        if (cells) { add(pc, 'role', cells[1] || ''); add(pc, 'moment', cells.slice(2).join(' · ')); } else add(pc, 'role', rest);
+        if (cells) { add(pc, 'role', cells[1] || ''); add(pc, 'moment', cells.slice(2).join(' · ')); } else add(pc, 'moment', rest);
       } else if (kind.field === 'touchpoint') {
         add(pc, 'touch', cells ? cells.slice(1, 4).join(' · ') : rest);
       } else {
@@ -132,6 +140,10 @@ function readPcs(planBody, index, party) {
       const s = bulletSubject(b.text);
       if (!s) { unmatched.push({ section: sec.title, text: b.text }); continue; }
       apply(s.name, s.link, null, s.rest, b.text);
+    }
+    // prose lines no row or bullet took are kept, one per line
+    for (const line of unclaimed(sec.text, [...tableRanges(sec.text), ...bullets(sec.text)]).split('\n')) {
+      if (line.trim()) unmatched.push({ section: sec.title, text: line.trim() });
     }
   }
   return { pcs, unmatched, warnings };

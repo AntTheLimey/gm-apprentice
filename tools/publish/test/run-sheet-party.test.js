@@ -29,7 +29,8 @@ function setup() {
 describe('run sheet handouts, party and people', () => {
   it('handouts read as rows', () => {
     const { index, body } = setup();
-    const h = readHandouts(body, index);
+    const { handouts: h, leftover } = readHandouts(body, index);
+    assert.strictEqual(leftover, '');
     assert.strictEqual(h.length, 1);
     assert.strictEqual(h[0].note, "Chapters/Chapter 1/Props/Ash's Note.md");
     assert.strictEqual(h[0].scene, 'Scene 1');
@@ -40,7 +41,7 @@ describe('run sheet handouts, party and people', () => {
 
   it('handouts read as bullets', () => {
     const { index } = setup();
-    const h = readHandouts('## Handouts & Props\n\n- A torn map of [[The Gate]]\n- A coin\n', index);
+    const h = readHandouts('## Handouts & Props\n\n- A torn map of [[The Gate]]\n- A coin\n', index).handouts;
     assert.strictEqual(h.length, 2);
     assert.strictEqual(h[0].note, 'Locations/The Gate.md');
     assert.strictEqual(h[1].note, null);
@@ -86,9 +87,10 @@ describe('run sheet handouts, party and people', () => {
   it('a line for no party pc is kept as unmatched', () => {
     const { index, body } = setup();
     const r = readPcs(body, index, [ADA, BEN]);
-    assert.strictEqual(r.unmatched.length, 1);
-    assert.strictEqual(r.unmatched[0].section, 'Spotlight Forecast');
-    assert.match(r.unmatched[0].text, /Nobody PC/);
+    assert.strictEqual(r.unmatched.length, 2);
+    assert.deepStrictEqual(r.unmatched[0], { section: 'PC Roster & Arcs', text: "Current state: each PC's `## Current Status`." });
+    assert.strictEqual(r.unmatched[1].section, 'Spotlight Forecast');
+    assert.match(r.unmatched[1].text, /Nobody PC/);
   });
 
   it('no party warns', () => {
@@ -106,7 +108,8 @@ describe('run sheet handouts, party and people', () => {
     const { index, body } = setup();
     const r = readPcs(body, index, [ADA, 'Characters/NPCs/Brother Ash.md', 'Nowhere/Nobody.md']);
     assert.deepStrictEqual(r.pcs.map((p) => p.name), ['Ada Moss']);
-    assert.deepStrictEqual(r.warnings.map((w) => w.kind), ['not-a-pc', 'not-a-pc']);
+    assert.deepStrictEqual(r.warnings.map((w) => w.kind), ['not-a-pc', 'missing-pc']);
+    assert.match(r.warnings[1].text, /in the party but not in the vault/);
   });
 
   it('people read four columns', () => {
@@ -129,5 +132,42 @@ describe('run sheet handouts, party and people', () => {
     assert.strictEqual(r.people[1].note, null);
     assert.strictEqual(r.people[1].playAs, '');
     assert.ok(r.warnings.some((w) => w.kind === 'no-note'));
+  });
+
+  it('prose lines in handouts and people are kept as leftover', () => {
+    const { index } = setup();
+    assert.deepStrictEqual(readHandouts('## Handouts & Props\n\nNo handouts or props.\n', index), { handouts: [], leftover: 'No handouts or props.' });
+    const r = readPeople('## NPC Quick Reference\n\nAsh is in the gate house.\n\n| NPC | Role | Detail | Location |\n|---|---|---|---|\n| [[Brother Ash]] | a | b | c |\n', index);
+    assert.strictEqual(r.leftover, 'Ash is in the gate house.');
+    assert.strictEqual(r.people.length, 1);
+  });
+
+  it('prose lines in roster, touchpoint and spotlight go to unmatched', () => {
+    const { index } = setup();
+    const plan = '## PC Roster & Arcs\n\n- **[[Ada Moss]]:** stage: call.\n\nCurrent state: each PC\'s `## Current Status`.\n\n## Touchpoint Plan\n\nNone this week.\n';
+    const r = readPcs(plan, index, [ADA]);
+    assert.deepStrictEqual(r.unmatched, [
+      { section: 'PC Roster & Arcs', text: "Current state: each PC's `## Current Status`." },
+      { section: 'Touchpoint Plan', text: 'None this week.' },
+    ]);
+    assert.strictEqual(r.pcs[0].arc, 'stage: call.');
+  });
+
+  it('a bullet spotlight line is the moment', () => {
+    const { index } = setup();
+    const r = readPcs('## Spotlight Forecast\n\n- **Ada:** three shards in her coat\n', index, [ADA]);
+    assert.strictEqual(r.pcs[0].moment, 'three shards in her coat');
+    assert.strictEqual(r.pcs[0].role, '');
+  });
+
+  it('a shared first name is not guessed', () => {
+    const { dir } = setup();
+    fs.writeFileSync(path.join(dir, 'Characters/PCs/Ada Quill.md'), '---\ntype: pc\nplayer_name: Lee\n---\n\nHi.\n');
+    const index = buildIndex(dir);
+    const plan = '## Spotlight Forecast\n\n- **Ada:** shared\n- **Ada Moss:** exact\n';
+    const r = readPcs(plan, index, [ADA, 'Characters/PCs/Ada Quill.md']);
+    assert.deepStrictEqual(r.unmatched, [{ section: 'Spotlight Forecast', text: '**Ada:** shared' }]);
+    assert.strictEqual(r.pcs.find((p) => p.name === 'Ada Moss').moment, 'exact');
+    assert.ok(r.warnings.some((w) => w.kind === 'ambiguous-pc' && w.text.includes('Ada')));
   });
 });
