@@ -468,8 +468,8 @@ Handouts) is `**X:**` or `- **X:**`. A block label (NPCs, Where they can
 go, Points to land, If the players..., Treasure, Complications) is
 `**X**` or `**X:**` at the left margin, never bulleted, never with a
 parenthesis in the bold. **Place:** is one link, which may be followed
-by words (`[[The Cloister]], the yard`), or plain words when no location
-note fits. **NPCs** holds everyone in the room, never everyone referred
+by words (`[[The Cloister]], the yard`), or just the words when no
+location note fits (`the drive ground beyond the camp`). **NPCs** holds everyone in the room, never everyone referred
 to; a lead of two links (`- **[[Sister Wren]] and [[Durgan Flintmere]]:**
 want ...`) is one person each. **Treasure** (one item per bullet) goes on
 a fight or hoard beat. A hub is any scene holding a **Where they can
@@ -479,7 +479,7 @@ Place or NPCs.
 
 ```markdown
 **Situation:** One line: what is happening as it opens, a thing in motion.
-**Place:** [[Location]], or plain words when no location note fits.
+**Place:** [[Location]]
 **Starts it:** One line: the named NPC or schedule that brings the PCs in within sixty seconds, and what they want from this PC.
 **Entities:** [[NPC]], [[Location]], [[Item]]
 **Handouts:** [[Document]] — what this scene hands over, and how
