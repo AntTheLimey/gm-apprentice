@@ -49,8 +49,6 @@ CREDIT = ("*Stats condensed from the SRD 5.2 by Wizards of the Coast LLC "
 NO_SRD_LINE = ("the SRD creature files are not installed in this copy of the "
                "plugin; reinstall it")
 
-SIZES = {"T": "Tiny", "S": "Small", "M": "Medium", "L": "Large",
-         "H": "Huge", "G": "Gargantuan"}
 ABILITIES = ("STR", "DEX", "CON", "INT", "WIS", "CHA")
 
 HEAD_RE = re.compile(
@@ -243,8 +241,7 @@ def actions_block(c: Creature) -> list[str]:
 
 def stats_block(c: Creature) -> list[str]:
     """The creature in the vault's Stats form, as lines."""
-    kind = c.kind
-    out = [f"**{c.name}**", f"*{SIZES[c.size]} {kind}*", ""]
+    out = [f"**{c.name}**", ""]
     init = f" · **Initiative** {c.init}" if c.init else ""
     out += [f"**AC** {c.ac}{init} · **HP** {c.hp} ({c.dice}) · "
             f"**Speed** {c.speed}", "",
@@ -305,21 +302,35 @@ def kept_lines(old: list[str]) -> list[str]:
     return _tidy(out)
 
 
+_FILLER_RE = re.compile(r"\b(?:is|are|the|for|a|an|this|his|her|their|its|"
+                        r"of|to|be|yet|here|stats?|stat ?blocks?)\b", re.I)
+
+
+def _bare_deferral(line: str) -> bool:
+    """Nothing in the line but deferral words (`Stats to come.`, `TBD`)."""
+    rest = _FILLER_RE.sub("", npc_stats.DEFER_RE.sub("", line))
+    return not re.search(r"\w", rest)
+
+
 def kept_beside_placeholder(old: list[str]) -> list[str]:
     """What the GM wrote under a placeholder or blank block: every line but
-    the one deferral line itself (`Stats to come.`), embeds and an unfilled
-    system template (`{...}` fields, an empty score table, its bare heads).
-    The deferral is the line that is itself a marker, or one that names
-    stats and defers; only with neither is it the first line holding a
-    deferral word (`later`, `pending` are ordinary words). Any other table
-    is the GM's own and stays."""
+    the bare deferral line (`Stats to come.`), embeds and an unfilled system
+    template (`{...}` fields, an empty score table, its bare heads). A line
+    that defers and says more (`Stats to come; he fights with a boat hook.`)
+    stays whole under **As written:**; one whose only deferral word is an
+    ordinary one (`Later, if it comes to blows, ...`) stays as it was. Any
+    other table is the GM's own and stays."""
     lines = [ln for ln in old if npc_stats.DEFER_RE.search(ln)]
-    drop = next((ln for ln in lines if npc_stats._standalone(ln)), None)
+    drop = next((ln for ln in lines if _bare_deferral(ln)), None)
+    said: str | None = None
     if drop is None:
-        drop = next((ln for ln in lines
-                     if npc_stats.STAT_WORD_RE.search(ln)), None)
-    if drop is None and lines:
-        drop = lines[0]
+        drop = next((ln for ln in lines if npc_stats._standalone(ln)), None)
+        if drop is None:
+            drop = next((ln for ln in lines
+                         if npc_stats.STAT_WORD_RE.search(ln)), None)
+        if drop is not None:
+            said = " ".join(drop.split())
+        drop = drop if said else None
     out: list[str] = []
     gone = False
     run: list[str] = []
@@ -342,6 +353,8 @@ def kept_beside_placeholder(old: list[str]) -> list[str]:
                   or npc_stats.BRACE_RE.search(line)):
             out.append(line)
     flush()
+    if said:
+        out.insert(0, f"**As written:** {npc_stats._unlabelled(said)}")
     return _tidy(_without_bare_heads(out))
 
 

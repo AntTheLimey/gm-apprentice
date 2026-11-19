@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """Transform SRD 5.2 monster stat blocks into compact enriched reference format.
 
-This builds the five `skills/ttrpg-expert/systems/dnd-5e-2024/monsters-cr*.md`
+This builds the `skills/ttrpg-expert/systems/dnd-5e-2024/monsters-cr*.md`
 files the rules advisor reads. Run it after the SRD source changes:
 
     python3 scripts/srd-monster-enricher.py <srd>/src/12_MonstersA-Z.md \
         [--animals <srd>/src/13_Animals.md]
 
-It rewrites the five files in place, and an unchanged SRD gives byte-identical
+It rewrites those files in place, and an unchanged SRD gives byte-identical
 files. The SRD 5.2 is CC-BY 4.0 (see ATTRIBUTION.md).
 """
 
@@ -17,13 +17,14 @@ import sys
 from pathlib import Path
 
 OUT_DIR = Path("skills/ttrpg-expert/systems/dnd-5e-2024")
-MAX_REF_BYTES = 26 * 1024
+MAX_REF_BYTES = 25 * 1024
 
 SIZE_MAP = {"Tiny": "T", "Small": "S", "Medium": "M", "Large": "L", "Huge": "H", "Gargantuan": "G"}
 
 TIERS = {
     "cr0-1":     {"label": "CR 0–1", "min": 0, "max": 1},
-    "cr2-4":     {"label": "CR 2–4", "min": 2, "max": 4},
+    "cr2-3":     {"label": "CR 2–3", "min": 2, "max": 3},
+    "cr4":       {"label": "CR 4", "min": 4, "max": 4},
     "cr5-10":    {"label": "CR 5–10", "min": 5, "max": 10},
     "cr11-16":   {"label": "CR 11–16", "min": 11, "max": 16},
     "cr17-plus": {"label": "CR 17+", "min": 17, "max": 999},
