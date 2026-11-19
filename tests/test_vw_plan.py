@@ -492,6 +492,31 @@ class DroppedBlockTests(unittest.TestCase):
                         stdin=FIGHT_NO_TREASURE)
         self.assertNotIn("DROPPED", out)
 
+    def test_a_label_in_a_comment_is_not_a_block(self):
+        hidden = FIGHT.replace("**Treasure**\n- A purse of silver",
+                               "<!-- **Treasure**\n- A purse -->")
+        run(self.vault, "--number", "2", "--section", "--write", stdin=hidden)
+        code, out = run(self.vault, "--number", "2", "--section",
+                        stdin=FIGHT_NO_TREASURE)
+        self.assertNotIn("DROPPED", out)
+
+    def test_a_contingency_that_loses_its_then_says_dropped(self):
+        cont = ("### If they torch the quay\n\n**Trigger:** Fire.\n\n"
+                "**Then**\n- The crane falls\n")
+        sect = "## Planned Scenes\n\n" + FIGHT + "\n"
+        run(self.vault, "--number", "2", "--section", "--write",
+            stdin=sect + cont)
+        code, out = run(self.vault, "--number", "2", "--section",
+                        stdin=sect + cont.replace(
+                            "**Then**\n- The crane falls\n", ""))
+        self.assertIn("DROPPED\tIf they torch the quay\t**Then**", out)
+
+    def test_repeated_scene_titles_are_compared_one_by_one(self):
+        old = FIGHT + "\n" + FIGHT.replace("silver", "gold")
+        new = FIGHT + "\n" + FIGHT_NO_TREASURE
+        rows = vw.dropped_blocks(old, new)
+        self.assertEqual(rows, ["DROPPED\tThe Yard\t**Treasure**"])
+
 
 if __name__ == "__main__":
     unittest.main()

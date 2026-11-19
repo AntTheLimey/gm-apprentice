@@ -533,7 +533,6 @@ class BatchTests(unittest.TestCase):
                              "**Starts it:** The well bell.\n\n" + SCENE_GM)
             self.assertEqual(got.count("**Situation:**"), 1)
 
-
     def test_scene_lead_replace_names_the_blocks_it_drops(self):
         vault = self.paused_vault()
         code, out = batch(vault, PAUSED_REPLACE)

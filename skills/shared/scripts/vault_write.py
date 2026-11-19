@@ -4542,16 +4542,18 @@ _COMMENT_RE = re.compile(r"<!--.*?-->", re.S)
 _BLOCK_LABELS: dict[str, str] = {
     name.rstrip(".\u2026").casefold(): name
     for name in (*plan_check.SCENE_LABELS_INLINE,
-                 *plan_check.SCENE_LABELS_BLOCK, "Open to the party")}
+                 *plan_check.SCENE_LABELS_BLOCK,
+                 *plan_check.CONTINGENCY_LABELS, "Open to the party")}
 
 
-def labelled_blocks(text: str) -> dict[str, list[str]]:
+def labelled_blocks(text: str) -> dict[tuple[str, int], list[str]]:
     """Each `###` scene of `text` -> the labelled block heads it holds, as
     plan_check names them (`**X:**`, `**X**`, `- **X:**`), fences and
     comments left out. A note with no `###` is one scene under ''."""
     text = _COMMENT_RE.sub(lambda m: "\n" * m.group(0).count("\n"), text)
-    scenes: dict[str, list[str]] = {"": []}
-    here = ""
+    scenes: dict[tuple[str, int], list[str]] = {("", 1): []}
+    seen: Counter[str] = Counter()
+    here = ("", 1)
     fence: str | None = None
     for line in text.splitlines():
         mark = re.match(r"^\s*(```|~~~)", line)
@@ -4562,8 +4564,9 @@ def labelled_blocks(text: str) -> dict[str, list[str]]:
             continue
         head = re.match(r"^###\s+(.*?)\s*#*\s*$", line)
         if head and not line.startswith("####"):
-            here = head.group(1)
-            scenes.setdefault(here, [])
+            seen[head.group(1)] += 1
+            here = (head.group(1), seen[head.group(1)])
+            scenes[here] = []
             continue
         m = _BLOCK_HEAD_RE.match(line)
         if not m:
@@ -4583,9 +4586,9 @@ def dropped_blocks(old: str, new: str, stem: str = "") -> list[str]:
     either side is compared whole, as the scene `stem`."""
     a, b = labelled_blocks(old), labelled_blocks(new)
     if stem and len(a) == 1 and len(b) == 1:
-        a, b = {stem: a[""]}, {stem: b[""]}
-    return [f"DROPPED\t{scene}\t**{label}**"
-            for scene, labels in a.items() if scene and scene in b
+        a, b = {(stem, 1): a[("", 1)]}, {(stem, 1): b[("", 1)]}
+    return [f"DROPPED\t{scene[0]}\t**{label}**"
+            for scene, labels in a.items() if scene[0] and scene in b
             for label in labels if label not in b[scene]]
 
 
