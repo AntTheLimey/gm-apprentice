@@ -280,6 +280,15 @@ class FillTests(FillCase):
                "| Roll | Loot |", "|---|---|", "| 1 | a knife |"]
         self.assertEqual(stat_fill.kept_beside_placeholder(old), old[4:])
 
+    def test_a_gm_table_with_an_empty_row_is_kept_whole(self):
+        old = ["| Roll | Loot |", "|---|---|", "| 1 | a knife |", "| | |",
+               "| 3 | a rope |"]
+        self.assertEqual(stat_fill.kept_beside_placeholder(old), old)
+
+    def test_the_coc_empty_score_table_is_dropped(self):
+        old = ["| STR | CON |", "|-----|-----|", "|     |     |", "", "Kept."]
+        self.assertEqual(stat_fill.kept_beside_placeholder(old), ["Kept."])
+
     def test_a_gm_weapon_table_with_a_group_row_is_kept(self):
         old = ["Stats to come.", "", "| Weapon | Dmg |", "|---|---|",
                "| **Melee** | |", "| Knife | 1d4 |"]

@@ -52,7 +52,7 @@ Agile
 AC 12 | HP 4 (1d6+1) | Init +2 (12) | Speed 10 ft., Fly 60 ft.
 STR 6 DEX 15 CON 12 INT 2 WIS 14 CHA 7
 Senses: Passive Perception 16
-- Talons: +4
+- Talons: +4, 1d4+2 slashing
 
 **Frog** | Beast | T | CR 0 (0 XP)
 AC 11 | HP 1 (1d4-1) | Init +1 (11) | Speed 20 ft., Swim 20 ft.
@@ -192,7 +192,7 @@ AC 13 | HP 7 (2d6) | Init +3 (13) | Speed 30 ft., Climb 30 ft.
 STR 7 DEX 16 CON 11 INT 2 WIS 10 CHA 4
 Saves: DEX +5 | Senses: darkvision 60 ft.
 Pack Tactics
-- Bite: +5
+- Bite: +5, 1d4+3 piercing
 
 **Giant Weasel** | Beast | M | CR 1/8 (25 XP)
 AC 13 | HP 9 (2d8) | Init +3 (13) | Speed 40 ft., Climb 30 ft.

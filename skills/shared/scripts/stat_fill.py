@@ -348,8 +348,7 @@ def kept_beside_placeholder(old: list[str]) -> list[str]:
     def flush() -> None:
         # A table run: an empty score table is the template's, any other is
         # the GM's own.
-        if run and not npc_stats._blank_table("\n".join(run),
-                                              scores_only=True):
+        if run and not _empty_score_table(run):
             out.extend(run)
         run.clear()
 
@@ -367,6 +366,30 @@ def kept_beside_placeholder(old: list[str]) -> list[str]:
     if said:
         out.insert(0, f"**As written:** {npc_stats._unlabelled(said)}")
     return _tidy(_without_bare_heads(out))
+
+
+_SCORE_COLUMNS = frozenset(("SCORE", "MOD", "SAVE"))
+
+
+def _empty_score_table(rows: list[str]) -> bool:
+    """True only for the template's empty ability-score table: every cell is
+    blank, a score name (STR..CHA) or a column word (Score, Mod, Save), at
+    least one score is named, and a score has no number. Any other table,
+    empty rows included, is the GM's."""
+    named = False
+    for line in rows:
+        m = npc_stats.TABLE_ROW_RE.match(line)
+        if not m:
+            return False
+        if npc_stats.TABLE_RULE_RE.match(line):
+            continue
+        for cell in m.group(1).split("|"):
+            word = cell.strip("*_ \t").upper()
+            if word in npc_stats.SCORE_NAMES:
+                named = True
+            elif word and word not in _SCORE_COLUMNS:
+                return False
+    return named and npc_stats._blank_table("\n".join(rows), scores_only=True)
 
 
 # The bold heads the shipped npc-stats templates use (templates/npc-stats/).

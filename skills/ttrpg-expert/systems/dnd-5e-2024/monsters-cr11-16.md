@@ -27,8 +27,8 @@ Immunities: Lightning, Thunder
 Magic Resistance (advantage on saves vs spells)
 Wishes
 Multiattack: 3× (Storm Blade/Storm Bolt)
-- Storm Blade: +9
-- Storm Bolt: +9
+- Storm Blade: +9, 2d6+5 slashing + 2d6 lightning
+- Storm Bolt: +9, 3d8 thunder
 - Create Whirlwind: (a creature makes this save only once per turn, and the djinni is unaffected), DC 17 STR, While in the whirlwind, the target has the Restrained and moves with the whirlwind.
 Spellcasting (CHA, DC 17): At Will — Detect Evil and Good, Detect Magic
 

@@ -256,8 +256,8 @@ def format_attack(name, desc, budget_tight=False):
     atk_match = re.search(
         r'\*(Melee|Ranged)(?: or (?:Melee|Ranged))? Attack Roll:\*\s*\+(\d+)'
         r'(?:\s+to hit)?(?:\s*\([^)]*\))?'
-        r',?\s*(?:reach\s*(\d+)\s*ft\.?)?'
-        r'(?:,?\s*(?:or\s+)?range\s*[\d/]+\s*ft\.?)?'
+        r',?\s*(?:reach\s*(\d+)\s*(?:ft|feet)\.?)?'
+        r'(?:,?\s*(?:or\s+)?range\s*[\d/]+\s*(?:ft|feet)\.?)?'
         r'\s*(\d+)(?:\s*\(([^)]+)\))?\s*(\w+)\s*damage',
         desc
     )
@@ -304,7 +304,7 @@ def format_attack(name, desc, budget_tight=False):
     atk_nodmg = re.search(
         r'\*(Melee|Ranged)(?: or (?:Melee|Ranged))? Attack Roll:\*\s*\+(\d+)'
         r'(?:\s*\([^)]*\))?'
-        r',?\s*(?:reach\s*(\d+)\s*ft\.?)?',
+        r',?\s*(?:reach\s*(\d+)\s*(?:ft|feet)\.?)?',
         desc
     )
     if atk_nodmg and 'damage' not in desc.split('Attack Roll')[0]:

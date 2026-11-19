@@ -48,3 +48,17 @@ class InitiativeTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AttackLineTests(unittest.TestCase):
+    # Attacks the official SRD 5.2.1 gives no damage: none today.
+    NO_DAMAGE_IN_SRD: set[tuple[str, str]] = set()
+
+    def test_no_attack_line_ends_at_its_bonus(self):
+        bare = re.compile(r"^- ([A-Za-z ]+): [+-]\d+$", re.M)
+        found = []
+        for path in [*sorted(DIR.glob("monsters-cr*.md")), DIR / "animals.md"]:
+            for m in bare.finditer(path.read_text(encoding="utf-8")):
+                if (path.name, m[1]) not in self.NO_DAMAGE_IN_SRD:
+                    found.append((path.name, m[0]))
+        self.assertEqual(found, [])
