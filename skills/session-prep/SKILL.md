@@ -445,10 +445,9 @@ A scene: `### Scene N: Title` (or a scene note's `### [[Title]]`, step
 14). Only **Situation:** and **Starts it:** are required; use the rest
 where they earn a place. A routing or hub scene (a menu of where the
 party is and what is open) needs neither: "(routing)" or "(hub)" in
-its title, `Scene 0`, or `**Type:** transition`.
+its title, or `Scene 0`.
 
 ```markdown
-**Type:** investigation | social | combat | chase | transition | horror | downtime | other
 **Situation:** One line: what is happening as it opens, a thing in motion.
 **Starts it:** One line: the named NPC or schedule that brings the PCs in within sixty seconds, and what they want from this PC.
 **Entities:** [[NPC]], [[Location]], [[Item]]

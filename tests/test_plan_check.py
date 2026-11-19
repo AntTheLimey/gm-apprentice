@@ -143,10 +143,11 @@ class BadPlanRowsTests(unittest.TestCase):
         self.assertIn("Objective", legacy[0].message)
         self.assertIn("Scene 2", legacy[0].locus)
 
-    def test_scene_type(self):
-        f = self.one("scene-type")
-        self.assertEqual(f.level, "WARNING")
-        self.assertIn("'dance'", f.message)
+    def test_an_old_type_line_raises_nothing(self):
+        # The Plan has no **Type:** line (#759); an old Plan's, even a word
+        # off the old list ("dance"), is no finding.
+        self.assertEqual(rows_for(self.findings, "scene-type"), [])
+        self.assertFalse(any("dance" in f.message for f in self.findings))
 
     def test_duration_locus_is_scene_1s_line(self):
         rows = rows_for(self.findings, "duration")
@@ -431,7 +432,7 @@ class ShippedTemplateTests(unittest.TestCase):
                                       pc.re.S))
         tpl = pc.re.sub(r"<!--.*?-->", "", self.TEMPLATE.read_text(
             encoding="utf-8"), flags=pc.re.S)
-        keep = set(pc.SCENE_LABELS) | set(pc.CONTINGENCY_LABELS) | {"Type"}
+        keep = set(pc.SCENE_LABELS) | set(pc.CONTINGENCY_LABELS)
         norm = lambda text: {  # noqa: E731
             m.split(" (")[0].replace("\u2026", "...")
             for m in label.findall(text)} & keep

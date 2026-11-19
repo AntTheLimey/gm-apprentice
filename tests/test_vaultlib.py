@@ -282,6 +282,14 @@ class FrontmatterEditorTests(unittest.TestCase):
         self.assertTrue(vl.opens_a_block(fm, "tags"))
         self.assertFalse(vl.opens_a_block(fm, "status"))
 
+    def test_opens_a_block_looks_past_a_comment(self):
+        # A comment line between a key and its items is not its value.
+        fm = ["scene_type:\n", "# kept for now\n", "  - combat\n",
+              "status: DRAFT\n"]
+        self.assertTrue(vl.opens_a_block(fm, "scene_type"))
+        fm = ["scene_type:\n", "# a note\n", "status: DRAFT\n"]
+        self.assertFalse(vl.opens_a_block(fm, "scene_type"))
+
     def test_delete_key_first_top_level_only(self):
         fm = self.fm("---\ntype: npc\ndocuments:\n  type: nested\n"
                      "type: duplicate\n---\n")

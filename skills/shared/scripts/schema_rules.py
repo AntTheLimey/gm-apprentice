@@ -94,10 +94,6 @@ CANON_STATUS_VALUES = {"DRAFT", "AUTHORITATIVE", "SUPERSEDED", "STUB"}
 SESSION_STATUS = set(SESSION_NOT_YET_RUN | SESSION_PLAYED)
 SCENE_STATUS = ("planned", "paused", "played", "dropped")
 CHAPTER_STATUS: tuple[str, ...] = tuple(_ontology()["chapter_status"]["values"])
-SCENE_TYPES = {
-    "investigation", "social", "combat", "chase",
-    "transition", "horror", "downtime", "other"
-}
 NPC_STATUS = {"alive", "dead", "missing", "unknown"}
 PC_STATUS = frozenset(NPC_STATUS | {"retired"})
 ADVENTURE_BRIEF_SCOPE = {"campaign", "one-shot", "few-shot"}
@@ -127,7 +123,7 @@ PROP_SHOW_SEALED = frozenset({"titles", "none"})
 CHECKED_VALUES: dict[str, dict[str, frozenset[str]]] = {
     "*": {"canon_status": frozenset(CANON_STATUS_VALUES)},
     "session": {"status": frozenset(SESSION_NOT_YET_RUN | SESSION_PLAYED)},
-    "scene": {"status": frozenset(SCENE_STATUS), "scene_type": frozenset(SCENE_TYPES)},
+    "scene": {"status": frozenset(SCENE_STATUS)},
     "chapter": {"status": frozenset(CHAPTER_STATUS)},
     "npc": {"status": frozenset(NPC_STATUS)},
     "pc": {"status": PC_STATUS},

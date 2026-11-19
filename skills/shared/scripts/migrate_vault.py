@@ -1132,6 +1132,49 @@ def find_adventure_shape(vault: Path) -> list[Item]:
     return items
 
 
+# --- a scene note's scene_type field ------------------------------------------
+
+# 1.12.85 (#759). A scene note's `scene_type` named one of eight words
+# (investigation, social, combat, chase, transition, horror, downtime, other)
+# that nothing read: the frontmatter check only rejected a word off the list.
+# It mixed a tone (horror) with what the players do, and any scene can turn
+# into any of them. The line goes, value and all, as bookkeeping; the scene's
+# prose says what it is. A value written as a block is left alone (one line
+# cannot be cut from it safely).
+SCENE_TYPE_KEY = "scene_type"
+
+
+def _scene_type_field(fm: list[str], _rel: str) -> bool:
+    return (_fm_type(fm) == "scene"
+            and any(line.startswith(f"{SCENE_TYPE_KEY}:") for line in fm)
+            and not opens_a_block(fm, SCENE_TYPE_KEY))
+
+
+def _drop_scene_type(vault: Path) -> list[str]:
+    done = []
+    for rel in _notes_with(vault, _scene_type_field):
+        said: list[str] = []
+
+        def change(fm: list[str], _eol: str) -> None:
+            if _scene_type_field(fm, rel):
+                gone = delete_key(fm, SCENE_TYPE_KEY)
+                if gone:
+                    said.append(gone)
+        edit_frontmatter(vault / rel, change)
+        done += [f"removed {line.strip()} from {rel}" for line in said]
+    return done
+
+
+def find_scene_type(vault: Path) -> list[Item]:
+    """1.12.85: a scene note's `scene_type` line is removed."""
+    found = _notes_with(vault, _scene_type_field)
+    if not found:
+        return []
+    return [Item("scene-type", WILL,
+                 [f"remove {SCENE_TYPE_KEY} from {rel}" for rel in found],
+                 lambda _v: _drop_scene_type(vault))]
+
+
 # --- the `publish` row of the schema table -----------------------------------
 
 # 1.11.3: the stock schema table in `_meta/entity-types.md` once wrote the
@@ -2161,4 +2204,7 @@ VAULT_CHECKS: list[Check] = [
           plain=("Deleted the PC roster note (Player Characters) and turned any links to it into plain words: each PC's player and status are on the PC's own note, which the skills read, and the site makes its party page itself."),
           ask=("Deletes the PC roster note and the text you wrote in it, and turns the links to it into plain words: each PC's player and status are on the PC's own note, which the skills read, and the site makes its party page itself."),
           left=("Kept your PC roster note; the skills no longer read it, and the site no longer hangs the party board on it.")),
+    Check("scene-type", "1.12.85", 3, "a scene note's scene_type field",
+          find_scene_type, kind="bookkeeping",
+          plain=("Removed the scene_type line from your scene notes: nothing read it, and a scene's own words say what it is. Nothing else in the notes changed.")),
 ]

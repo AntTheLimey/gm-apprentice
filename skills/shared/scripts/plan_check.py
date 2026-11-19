@@ -46,15 +46,12 @@ Checks, by id, level, and the rule they mechanise:
   scene-labels  ERROR    every Planned scene carries Situation and
                          Starts it, every Contingency scene carries
                          Trigger — except a routing/hub scene (a menu,
-                         not a scene: `**Type:** transition`, a title
-                         with (routing) or (hub), or `Scene 0`), which
-                         needs neither; the other labels are optional and an
+                         not a scene: a title with (routing) or (hub),
+                         or `Scene 0`), which needs neither; the other labels are optional and an
                          absent one is never reported, but any label
                          that is attempted must be spelled exactly; a
                          legacy Objective/Setup/Behaviours/Branching
                          scene is one row
-                         (session-prep SKILL.md, Plan shape)
-  scene-type    WARNING  **Type:** is one of schema_rules.SCENE_TYPES
                          (session-prep SKILL.md, Plan shape)
   duration      ERROR/   never estimate scene durations
                 WARNING  (shared/session-principles.md, Absolute Rules)
@@ -106,7 +103,6 @@ from typing import Any, Iterator
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import vaultlib as vl                                  # noqa: E402
 import vault_check as vc                                # noqa: E402
-from schema_rules import SCENE_TYPES                    # noqa: E402
 
 
 @dataclass
@@ -197,8 +193,8 @@ _TABLE_SEPARATOR_RE = re.compile(r"\|?[\s:|-]+\|?")
 # The Plan scene skeleton: inline labels are `**Label:**` on their own
 # line; block labels are `**Label**` (optional trailing text before the
 # closing `**`) followed by bullets, a checklist, or a table.
-# `Type` is optional and lives outside SCENE_LABELS — checked only when
-# present, by the existing scene-type/placeholder logic.
+# The Plan has no `**Type:**` line (#759): nothing read the scene types it
+# named. An old Plan's `**Type:** transition` still marks a routing scene.
 #
 # One minimum for all types (2026-09-14, docs/scene-design-research.md):
 # only SCENE_LABELS_REQUIRED is demanded. Six prep traditions across five
@@ -624,7 +620,8 @@ def _legacy_scene(body: str, labels: tuple[str, ...]) -> list[str]:
 # world does regardless of the PCs — a menu, not a scene, so it has no
 # Situation to state and nobody to start it (#205; the Alexandrian's
 # "Tools, Not Contingencies"). Recognised by its own words, never by
-# being short: `**Type:** transition`, a title naming it, or Scene 0.
+# being short: a title naming it, or Scene 0 (or, in a Plan written before
+# 1.12.83, the `**Type:** transition` line the Plan then had).
 # The marker is the parenthesised word — "(routing)" or "(hub)" — because a
 # bare "hub" or "routing" is as likely a place or a topic ("The Hub",
 # "Routing the refugees") as a menu.
@@ -685,21 +682,6 @@ def _scene_findings(rel: str, body: str, scene_title: str,
                 findings.append(Finding(
                     "scene-labels", "ERROR", locus,
                     f"scene-labels: '{scene_title}' is missing {shown}"))
-    type_match = re.search(r"\*\*Type:\*\*\s*([^\n]+)", body)
-    if type_match:
-        raw = type_match.group(1).strip()
-        if "|" in raw:
-            findings.append(Finding(
-                "placeholder", "INFO", locus,
-                f"placeholder: '{scene_title}' Type is still the "
-                f"template's placeholder list"))
-        else:
-            value = re.split(r"[.\n]", raw)[0].strip().casefold()
-            if value not in SCENE_TYPES:
-                findings.append(Finding(
-                    "scene-type", "WARNING", locus,
-                    f"scene-type: '{scene_title}' Type '{raw}' not in "
-                    f"{{{', '.join(sorted(SCENE_TYPES))}}}"))
     wc = vl.word_count(body)
     if wc > 1200:
         findings.append(Finding(

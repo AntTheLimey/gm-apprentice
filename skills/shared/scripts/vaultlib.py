@@ -636,7 +636,9 @@ def opens_a_block(fm: list[str], key: str) -> bool:
         if not pattern.match(line):
             continue
         for nxt in fm[i + 1:]:
-            if not nxt.strip():
+            # A blank or comment-only line between a key and its items is
+            # not the value; look past it.
+            if not nxt.strip() or nxt.lstrip().startswith("#"):
                 continue
             return nxt[:1].isspace() or nxt.startswith("- ") or nxt.rstrip() == "-"
         return False

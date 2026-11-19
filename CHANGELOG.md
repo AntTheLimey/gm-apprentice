@@ -10,6 +10,12 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 ---
 
 
+## [1.12.85] — 2026-11-19
+
+### Removed
+
+- A scene note's `scene_type` field and the Plan's `**Type:**` line: nothing read them, and they mixed a tone (horror) with what the players do. A routing or hub scene is marked by "(routing)" or "(hub)" in its title, or Scene 0; an old Plan's `**Type:** transition` still counts. The update removes the `scene_type` line from every scene note and changes nothing else in them (check `scene-type`); played Plans are left as they are (#759).
+
 ## [1.12.84] — 2026-11-19
 
 ### Fixed
