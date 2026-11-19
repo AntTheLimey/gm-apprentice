@@ -9,6 +9,12 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.83] — 2026-11-18
+
+### Fixed
+
+- The leak check no longer flags a paused scene's `After [[Session]].` line, which the update tool writes and which says only the published session's title; the snapshot under it, and the line when its session is not on the site, are still hidden text (#765, tool 1.70.30).
+
 ## [1.12.82] — 2026-11-18
 
 ### Fixed

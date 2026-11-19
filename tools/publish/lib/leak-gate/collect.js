@@ -20,7 +20,7 @@ const { foldLabelsOf, labelFoldedLinks } = require('../story-fold');
 const { chapterShownMarkdown } = require('../story-spine');
 const { chapterStatusOf } = require('../shared-lists');
 const { ruleValue, WORKSPACE_DIRS } = require('../excluding-values');
-const { labelsForLinks } = require('../wikilink');
+const { labelsForLinks, linkText } = require('../wikilink');
 const { isWrapUp } = require('../session-hub');
 const { parseNote } = require('../frontmatter');
 const { canonicalNfc } = require('../unicode');
@@ -82,6 +82,23 @@ function sheetTexts(shownMd, fields, { system, playerConfig, linkMap, outputPath
   const parts = typeof rendered === 'string' ? [rendered]
     : Object.entries(rendered || {}).filter(([key, html]) => /Html$/.test(key) && typeof html === 'string').map(([, html]) => html);
   return parts.map((html) => pageText(html, { attributes: true })).filter((text) => text.trim());
+}
+
+// A paused scene's snapshot opens with the line the update tool writes under `## Paused`, `After [[Session]].`
+// (vault_write.py scene-paused). When that session is published the line says nothing but its title, which the site
+// prints, so it is not hidden text (#765). Only that one line, only when its link names a published note: the snapshot
+// under it is still hidden, and so is the line when the session is not on the site.
+const PAUSED_HEADING = /^##[ \t]+Paused[ \t]*$/;
+const PAUSED_AFTER = /^After (\[\[[^\]|]+\]\])\.$/;   // a bare link only: a label is the GM's own words
+function withoutPausedAfter(md, linkMap) {
+  const lines = md.split('\n');
+  const at = lines.findIndex((l) => PAUSED_HEADING.test(l.replace(/\r$/, '')));
+  if (at < 0) return md;
+  let i = at + 1;
+  while (i < lines.length && !lines[i].trim()) i++;
+  const m = i < lines.length ? PAUSED_AFTER.exec(lines[i].trim()) : null;
+  if (!m || !(canonicalNfc(linkText(m[1]).key.trim()) in linkMap)) return md;
+  return [...lines.slice(0, i), ...lines.slice(i + 1)].join('\n');
 }
 
 const HELD_TITLE = 'the title of an unpublished prop';
@@ -307,7 +324,7 @@ function collectHidden({ configPath, outputDir = null }) {
       }
     }
     const why = verdict && verdict.player ? verdict.player.reason : 'not on the site';
-    add(hiddenOf(body), rel, `unpublished note: ${why}`);
+    add(hiddenOf(withoutPausedAfter(body, linkMap)), rel, `unpublished note: ${why}`);
   }
 
   // What a page's Connections section prints (lib/connections.js), made as the build makes it from the published
