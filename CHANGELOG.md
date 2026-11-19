@@ -10,6 +10,12 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 ---
 
 
+## [1.12.95] — 2026-11-19
+
+### Fixed
+
+- A GURPS character's page now shows its Current Status (#782): the lede, location, condition, its own open threads and the shared threads that name it. The live HP and FP panel is unchanged.
+
 ## [1.12.94] — 2026-11-19
 
 ### Added

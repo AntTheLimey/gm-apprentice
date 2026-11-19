@@ -4047,49 +4047,6 @@ body:has(.coc-sheet-root #p-story:not([hidden])) .pull-quote-backstory{ display:
   margin: 0 auto;
 }
 
-/* === Status banner === */
-.status {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  align-items: center;
-  padding: 9px 14px;
-  border-radius: 10px;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  margin-bottom: 16px;
-  font-size: 13px;
-  color: var(--text);
-}
-.status .tag {
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  font-size: 11px;
-  color: var(--gc-def);
-  padding-right: 6px;
-}
-.status .pip {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 3px 9px;
-  border-radius: 999px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  font-variant-numeric: tabular-nums;
-}
-.status .pip b { font-weight: 700; }
-.status .condition { color: var(--text-muted); font-style: italic; }
-.status .location { color: var(--text-muted); }
-.status .status-label {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--text-muted);
-  margin-right: 3px;
-}
-
 /* === Masonry flow === */
 .flow { column-count: 2; column-gap: 16px; }
 @media (max-width: 760px) { .flow { column-count: 1; } }
@@ -5325,7 +5282,6 @@ svg.cx-web .cx-node.cx-sel text, svg.cx-web .cx-node:focus-visible text { fill: 
     break-inside: avoid;
   }
   .blk h2, .wide h2 { border-bottom: 1px solid #ccc; }
-  .status { border: 1px solid #ccc !important; background: #fff !important; box-shadow: none !important; }
   /* The to-hit calculator is for the table, not the printed sheet */
   .tohit { display: none !important; }
   /* Force rules-ref open in print regardless of open attribute */

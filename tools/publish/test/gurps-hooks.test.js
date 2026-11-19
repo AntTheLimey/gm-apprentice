@@ -4,7 +4,6 @@ const { renderEncumbrance } = require('../lib/templates/gurps/blocks/encumbrance
 const { renderSkills } = require('../lib/templates/gurps/blocks/skills');
 const { renderMelee } = require('../lib/templates/gurps/blocks/melee');
 const { renderAttributes } = require('../lib/templates/gurps/blocks/attributes');
-const { renderStatus } = require('../lib/templates/gurps/blocks/status');
 const { renderDefenses } = require('../lib/templates/gurps/blocks/defenses');
 const { renderStatusPanel } = require('../lib/templates/gurps/blocks/status-panel');
 const { liveStat } = require('../lib/templates/gurps/render');
@@ -68,11 +67,6 @@ test('attributes leaves non-Move/Dodge secondary cards untouched', () => {
   const html = renderAttributes({ attributes: { secondary: { HP: { value: '13' }, Move: { value: '4 / 6' } } } });
   // HP must not become a live field
   assert.doesNotMatch(html, /data-gl-field="[^"]*">13</);
-});
-
-test('status Move pip is a live field', () => {
-  const html = renderStatus({ status: { move: '4 / 6' } });
-  assert.match(html, /Move: <span class="gl-live" data-gl-field="move">4<\/span> \/ 6/);
 });
 
 test('defenses Dodge chip is a live field', () => {
