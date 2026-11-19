@@ -197,7 +197,7 @@ class FillTests(FillCase):
         v = self.vault({"A.md": npc("As Commoner.")})
         self.run_cli(v, "A.md", "--write")
         text = self.read(v, "A.md")
-        self.assertIn("**AC** 10", text)
+        self.assertIn("**Commoner**", text)
         self.assertNotRegex(text, r"\*(?:Tiny|Small|Medium|Large) ")
 
     def test_keeps_the_gms_words_beside_a_placeholder(self):
@@ -245,6 +245,42 @@ class FillTests(FillCase):
         old = ["|     | Score |", "|-----|-------|", "| STR |       |", "",
                "| Roll | Loot |", "|---|---|", "| 1 | a knife |"]
         self.assertEqual(stat_fill.kept_beside_placeholder(old), old[4:])
+
+    def test_a_gm_weapon_table_with_a_group_row_is_kept(self):
+        old = ["Stats to come.", "", "| Weapon | Dmg |", "|---|---|",
+               "| **Melee** | |", "| Knife | 1d4 |"]
+        self.assertEqual(stat_fill.kept_beside_placeholder(old), old[2:])
+
+    def test_the_stock_lines_own_qualifier_is_kept(self):
+        v = self.vault({"A.md": npc("A canal Commoner (SRD).")})
+        self.run_cli(v, "A.md", "--write")
+        text = self.read(v, "A.md")
+        self.assertIn("**As written:** A canal Commoner (SRD).", text)
+        self.assertIn("**Commoner**", text)
+
+    def test_a_slot_with_no_closing_brace_is_refused_not_eaten(self):
+        text = npc("").replace(
+            "## GM Notes\n\n", "## GM Notes\n\n{STAT BLOCK: forgot to close\n\n")
+        v = self.vault({"A.md": text})
+        code, rows = self.run_cli(v, "A.md", "--as", "Commoner", "--write")
+        self.assertEqual(code, 1, rows)
+        self.assertEqual(self.read(v, "A.md"), text)
+
+    def test_a_stock_heading_beside_a_missing_embed_fills_as_discovery_says(self):
+        text = npc("As Bandit.").replace(
+            "### Playing Them", "### Statistics\n\n![[Missing Stats]]\n\n"
+            "### Playing Them")
+        v = self.vault({"A.md": text})
+        found = stat_fill.npc_stats.stock_rows(v)
+        self.assertEqual(len(found), 1, found)
+        code, rows = self.run_cli(v, "A.md", "--write")
+        self.assertTrue(rows[0].startswith("FILLED\tA.md"), rows)
+
+    def test_a_note_that_only_embeds_a_missing_note_says_so(self):
+        v = self.vault({"A.md": npc("![[Missing Stats]]")})
+        code, rows = self.run_cli(v, "A.md", "--write")
+        self.assertIn("embeds a note that is not in the vault", rows[0])
+        self.assertNotIn("already has numbers", rows[0])
 
     def test_keeps_a_tuned_hp_line(self):
         v = self.vault({"Tomas.md": npc("Bandit (SRD)\n\nHP 5 after the fall.")})
@@ -350,6 +386,12 @@ class SourceTests(FillCase):
                 self.assertIn(f"**HP** {c.hp}", block)
                 self.assertRegex(block, r"Initiative\*\* [+-]\d+ \(\d+\)")
                 self.assertEqual(len(c.scores), 6)
+                self.assertNotIn("?", c.speed)
+
+    def test_a_fixed_damage_attack_keeps_its_damage(self):
+        srd = stat_fill.load_srd(stat_fill.SYSTEMS_DIR)
+        bat = "\n".join(stat_fill.stats_block(srd["bat"]))
+        self.assertIn("Bite.*** +4, 1 piercing", bat)
 
 
 if __name__ == "__main__":

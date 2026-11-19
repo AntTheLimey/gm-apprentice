@@ -30,6 +30,7 @@ from __future__ import annotations
 import argparse
 import re
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -286,7 +287,17 @@ def _tidy(out: list[str]) -> list[str]:
     return tidy
 
 
-def kept_lines(old: list[str]) -> list[str]:
+def words_beside(stock: npc_stats.Stock, c: Creature) -> str:
+    """What the stock line says besides the creature it resolved to: its
+    own words, or the ones in its name the lookup skipped (`A tough` in
+    `A tough Commoner (SRD).`); "" for an exact reference."""
+    if stock.words:
+        return stock.words
+    extra = re.sub(re.escape(c.name), "", stock.name, flags=re.I)
+    return stock.line if re.search(r"\w", extra) else ""
+
+
+def kept_lines(old: list[str], c: Creature) -> list[str]:
     """What the GM wrote under a stock block, to sit below the new one: the
     words of the stock line, then every other line as it was."""
     out: list[str] = []
@@ -295,8 +306,9 @@ def kept_lines(old: list[str]) -> list[str]:
         stock = None if done else npc_stats._stock(line)
         if stock is not None:
             done = True
-            if stock.words:
-                out.insert(0, f"**As written:** {stock.words}")
+            words = words_beside(stock, c)
+            if words:
+                out.insert(0, f"**As written:** {words}")
         else:
             out.append(line)
     return _tidy(out)
@@ -338,7 +350,8 @@ def kept_beside_placeholder(old: list[str]) -> list[str]:
     def flush() -> None:
         # A table run: an empty score table is the template's, any other is
         # the GM's own.
-        if run and not npc_stats._blank_table("\n".join(run)):
+        if run and not npc_stats._blank_table("\n".join(run),
+                                              scores_only=True):
             out.extend(run)
         run.clear()
 
@@ -377,8 +390,8 @@ def _without_bare_heads(lines: list[str]) -> list[str]:
     return keep
 
 
-def written(text: str, rel: str, c: Creature, stock_words: str | None
-            ) -> str:
+def written(text: str, rel: str, c: Creature, stock_words: str | None,
+            exists: Callable[[str], bool] | None = None) -> str:
     """The note's text with the creature's block as its `### Stats`."""
     doc = vw.parse(text)
     gm_head, _opener, closer = vw.gm_region(doc, rel)
@@ -386,9 +399,9 @@ def written(text: str, rel: str, c: Creature, stock_words: str | None
     keep: list[str] = []
     if head is not None:
         old = [ln.rstrip("\r\n") for ln in doc.lines[head.idx + 1:end]]
-        verdict = npc_stats.classify(text, SYSTEM)
+        verdict = npc_stats.classify(text, SYSTEM, exists)
         if verdict is not None:
-            keep = (kept_lines(old) if verdict[0] == "stock"
+            keep = (kept_lines(old, c) if verdict[0] == "stock"
                     else kept_beside_placeholder(old))
     elif stock_words:
         keep = [f"**As written:** {stock_words}"]
@@ -408,6 +421,9 @@ def written(text: str, rel: str, c: Creature, stock_words: str | None
         stop = slot
         while stop < at and "}" not in lines[stop]:
             stop += 1
+        if stop >= at:
+            raise vw.WriteError(f"{rel}: its {{STAT BLOCK: slot has no "
+                                f"closing brace; close it first")
         doc = vw.parse("".join(doc.lines[:slot] + doc.lines[stop + 1:]))
         at -= stop + 1 - slot
     return vw.place(doc, at, unit)
@@ -454,7 +470,8 @@ def main(argv: list[str] | None = None) -> int:
         for raw in args.notes:
             try:
                 rel = section.resolve_note(batch, raw, names)
-                row = fill_one(batch, rel, args, system, srd, major)
+                row = fill_one(batch, rel, args, system, srd, major,
+                               notes.exists)
             except vw.WriteError as e:
                 row = f"ERROR\t{raw}\t{e}"
             errors += row.startswith("ERROR")
@@ -477,15 +494,19 @@ def main(argv: list[str] | None = None) -> int:
 
 def fill_one(batch: vw.Batch, rel: str, args: argparse.Namespace,
              system: str | None, srd: dict[str, Creature],
-             major: dict[str, str]) -> str:
+             major: dict[str, str],
+             exists: Callable[[str], bool] | None = None) -> str:
     if system != SYSTEM:
         return f"NOT-DND\t{rel}\tthe vault's system is {system or 'not set'}"
     if not srd:
         return f"NO-SRD\t{rel}\t{NO_SRD_LINE}"
     text = batch.read(rel)
-    verdict = npc_stats.classify(text, system)
+    verdict = npc_stats.classify(text, system, exists)
     if verdict is None:
         return f"UNCHANGED\t{rel}\talready has numbers"
+    if verdict[0] == "missing" and npc_stats.classify(text, system) is None:
+        # only an embed of a note that is not there: filling would drop it
+        return f"UNCHANGED\t{rel}\t{verdict[1]}"
     if rel in major:
         return (f"REFUSED-MAJOR\t{rel}\t{major[rel]}: needs a full workup, "
                 f"not a stock block")
@@ -501,7 +522,8 @@ def fill_one(batch: vw.Batch, rel: str, args: argparse.Namespace,
     if creature is None:
         return f"NOT-FOUND\t{rel}\tno SRD creature named \"{wanted}\""
     batch.put(rel, written(text, rel, creature,
-                           stock.words if stock else None))
+                           words_beside(stock, creature) if stock else None,
+                           exists))
     return f"FILLED\t{rel}\t{creature.name}"
 
 
