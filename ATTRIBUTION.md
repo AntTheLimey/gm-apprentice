@@ -66,6 +66,12 @@ carried weights and carrying capacities were filled in by
 `dnd_sheet.py`, whose carrying factors are the SRD 5.2 Carrying
 Capacity table's.
 
+The run sheet reader's test fixtures
+(`tools/publish/test/fixtures/run-sheet/`) are original notes whose
+stat blocks use SRD 5.2 creature names and stat numbers only (the
+Young White Dragon, Ice Mephit and Priest), CC-BY 4.0; no rules text
+is copied.
+
 `skills/shared/scripts/dnd_tables.py` holds numbers from the D&D 5.2
 SRD (CC-BY 4.0) for the rules checks: each class's hit die, saving
 throws, cantrips and prepared spells by level, the spell slot table, the
