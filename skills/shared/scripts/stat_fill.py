@@ -44,9 +44,6 @@ from migrate_vault import vault_system  # noqa: E402
 
 SYSTEM = "dnd-5e-2024"
 SYSTEMS_DIR = LAYOUT.shared.parent / "ttrpg-expert" / "systems"
-CREDIT = ("*Stats condensed from the SRD 5.2 by Wizards of the Coast LLC "
-          "(dndbeyond.com/srd), CC-BY 4.0 "
-          "(creativecommons.org/licenses/by/4.0/legalcode).*")
 NO_SRD_LINE = ("the SRD creature files are not installed in this copy of the "
                "plugin; reinstall it")
 
@@ -409,7 +406,6 @@ def written(text: str, rel: str, c: Creature, stock_words: str | None,
     unit = ["### Stats", "", *stats_block(c)]
     if keep:
         unit += ["", *keep]
-    unit += ["", CREDIT]
     if head is not None:
         return vw._replace(doc, head, unit)[0]
     # A new section opens GM Notes, where the template's block slot is.

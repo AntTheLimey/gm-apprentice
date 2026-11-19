@@ -17,9 +17,9 @@ sys.path.insert(0, str(ROOT / "skills" / "shared" / "scripts"))
 
 import stat_fill  # noqa: E402
 
-CREDIT = ("*Stats condensed from the SRD 5.2 by Wizards of the Coast LLC "
-          "(dndbeyond.com/srd), CC-BY 4.0 "
-          "(creativecommons.org/licenses/by/4.0/legalcode).*")
+OLD_CREDIT = ("*Stats condensed from the SRD 5.2 by Wizards of the Coast LLC "
+              "(dndbeyond.com/srd), CC-BY 4.0 "
+              "(creativecommons.org/licenses/by/4.0/legalcode).*")
 
 
 def npc(stats: str, extra: str = "", type_: str = "npc") -> str:
@@ -97,10 +97,12 @@ class FillTests(FillCase):
         for want in ("### Stats\n\n**Ice Mephit**\n\n**AC** 11",
                      "**AC** 11 · **Initiative** +1 (11) · **HP** 21 (6d6)",
                      "| DEX | 13 | +1 | +1 |",
-                     "***Frost Breath (Recharge 6).***", CREDIT,
+                     "***Frost Breath (Recharge 6).***",
                      "### Playing Them"):
             self.assertIn(want, text)
         self.assertNotIn("Ice Mephit (SRD)", text)
+        self.assertNotIn("Stats condensed", text)
+        self.assertNotIn("creativecommons", text)
 
     def test_fills_young_white_dragon_with_the_srd_initiative_not_dex(self):
         v = self.vault({"Wyrmling.md": npc("As Young White Dragon.")})
@@ -320,7 +322,17 @@ class FillTests(FillCase):
         text = self.read(v, "Tomas.md")
         self.assertIn("**HP** 11 (2d8+2)", text)
         self.assertLess(text.index("**HP** 11"), text.index("HP 5 after"))
-        self.assertLess(text.index("HP 5 after"), text.index(CREDIT))
+
+    def test_an_old_credit_line_is_left_alone(self):
+        own = ("**AC** 13 · **Initiative** +2 (12) · **HP** 27 (6d8)\n\n"
+               "| STR | 10 | +0 | +0 |\n| DEX | 14 | +2 | +2 |\n"
+               "| CON | 12 | +1 | +1 |\n| INT | 11 | +0 | +0 |\n"
+               "| WIS | 16 | +3 | +5 |\n| CHA | 13 | +1 | +1 |\n\n"
+               + OLD_CREDIT)
+        v = self.vault({"Wenna.md": npc(own)})
+        before = self.read(v, "Wenna.md")
+        self.run_cli(v, "Wenna.md", "--write")
+        self.assertEqual(self.read(v, "Wenna.md"), before)
 
     def test_a_note_with_no_stats_section_gets_one_first_in_gm_notes(self):
         v = self.vault({"Tomas.md": npc("")})
