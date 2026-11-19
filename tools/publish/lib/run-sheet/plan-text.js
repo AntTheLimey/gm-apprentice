@@ -91,7 +91,7 @@ function sections(body, level) {
 }
 
 // Every `**Name:** value` or `- **Name:** value` line. The value runs from after the label to the
-// next label line, blank line, bullet, table row, quote or heading; lines that wrap are joined
+// next label line, bare bold block head (`**Then**`), blank line, bullet, table row, quote or heading; lines that wrap are joined
 // with a space.
 function labels(text) {
   const lines = linesOf(text);
@@ -104,7 +104,7 @@ function labels(text) {
     // an empty value makes this line a block head: the lines after it belong to block()
     while (parts.length > 0 && end + 1 < lines.length) {
       const nx = lines[end + 1];
-      if (isBlank(nx) || LABEL.test(nx) || BULLET.test(nx) || isTableRow(nx) || isQuote(nx) || HEADING.test(nx)) break;
+      if (isBlank(nx) || LABEL.test(nx) || BLOCK_HEAD.test(nx) || BULLET.test(nx) || isTableRow(nx) || isQuote(nx) || HEADING.test(nx)) break;
       parts.push(nx.trim());
       end++;
     }

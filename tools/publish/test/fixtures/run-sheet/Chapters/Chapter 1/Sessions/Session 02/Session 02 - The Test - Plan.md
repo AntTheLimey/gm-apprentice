@@ -91,14 +91,15 @@ The wolves are close enough to hear.
 
 ### Scene 3: Dawn (hub)
 **[[The Gate House]]**: the party can warm up here.
-- [[Lucan Grey]] is waiting with the map.
+- **[[Lucan Grey]]:** waiting with the map.
 **[[The Chapel Yard]]**: graves under the snow.
-- [[Sister Fen]] tends the lamps.
+- **[[Sister Fen]]:** tends the lamps.
 **The orchard**: bare trees and a ladder.
 - Nobody is there.
 
 ### Scene 4: The Gate
 **Situation:** The same gate, the next evening.
+**Entities:** [[The Gate]], [[Missing Person]]
 **Starts it:** The bell has rung and the wolves are quiet.
 
 ### Scene 5: On the Road (routing)
@@ -114,6 +115,7 @@ Scenes that fire on a player choice or a clock, not by default.
 - The pack comes down from the ridge.
 **NPCs**
 - **[[Frost Wolf]] (2):** hunting the bell-ringer
+- **[[Missing Person]]:** watching from the trees
 
 ## Handouts & Props
 

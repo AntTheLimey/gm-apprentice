@@ -24,6 +24,7 @@ test('a label value runs to the next label or blank line', () => {
   assert.equal(t.labels('**Situation:** a\n\nb')[0].value, 'a');
   assert.equal(t.labels('- **Wants:** x\n- other')[0].value, 'x');
   assert.equal(t.labels('**A:** x\n> q\n| t |')[0].value, 'x');
+  assert.equal(t.labels('**Trigger:** x\n**Then**\n- y')[0].value, 'x');
   assert.deepEqual(t.labels(''), []);
 });
 
