@@ -1197,6 +1197,9 @@ class RunSheetChecksTests(unittest.TestCase):
             with self.subTest(head=head):
                 hub = f"### Scene 4: The yard\n{head}\n- **The orchard:** x\n"
                 self.assertEqual(self.ids(hub), [])
+                self.assertEqual(
+                    [f.row for f in self.found(hub)
+                     if f.id == "scene-labels"], [])
 
     def test_a_scene_note_heading_with_locations_needs_no_place_line(self):
         self.note("Orchard", "location")
@@ -1270,6 +1273,19 @@ class RunSheetChecksTests(unittest.TestCase):
     def test_a_hub_of_pointer_bullets_is_not_hub_no_places(self):
         bullets = "- the cellar door — Scene 3\n- [[Supper]] and what follows\n"
         self.assertEqual(self.ids(self.HUB.format(bullets=bullets)), [])
+
+    def test_a_bold_lead_ending_in_scene_n_is_a_pointer(self):
+        self.note("Orme", "npc")
+        for bullets in ("- **Cellar door** — Scene 3\n",
+                        "- **[[Orme]]** — Scene 3\n"):
+            with self.subTest(bullets=bullets):
+                self.assertEqual(
+                    self.ids(self.HUB.format(bullets=bullets)), [])
+
+    def test_a_bold_lead_linking_a_scene_note_is_a_pointer(self):
+        self.note("Supper", "scene")
+        self.assertEqual(self.ids(self.HUB.format(
+            bullets="- **[[Supper]]:** what follows\n")), [])
 
     def test_a_hub_of_place_bullets_is_not_hub_no_places(self):
         bullets = "- **[[Orchard]]:** apples\n- **The yard:** hens\n"

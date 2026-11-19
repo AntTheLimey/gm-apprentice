@@ -667,6 +667,9 @@ _ROUTING_TITLE_RE = re.compile(r"\((?:routing|hub)\)|^Scene\s+0\b", re.I)
 def _is_routing_scene(body: str, scene_title: str) -> bool:
     if _ROUTING_TITLE_RE.search(scene_title):
         return True
+    # A `**Where they can go**` block makes a hub, whatever its title says.
+    if any(_WHERE_HEAD_RE.match(ln) for ln in _unfenced(body)):
+        return True
     m = re.search(r"\*\*Type:\*\*\s*([^\n]+)", body)
     if m is None:
         return False
@@ -766,8 +769,11 @@ _WHERE_HEAD_RE = re.compile(
     r"^\*\*(?:Where they can go|Open to the party):?\*\*[ \t]*"
     r"(?:\([^)]*\))?[ \t]*$", re.I)
 _PLACE_BULLET_RE = re.compile(r"^[-*+]\s+\*\*([^*\n]+?)\*\*")
+# A pointer bullet leads to another scene: it ends `— Scene N`, or opens with
+# a bare link. A bold lead that ends so, or links a scene note, is a pointer
+# too (`- **Cellar door** — Scene 3`); a place bullet is a bold lead with none.
 _POINTER_BULLET_RE = re.compile(
-    r"^[-*+]\s+(?:\[\[|.*[—–-]\s*Scenes?\s+\d+)")
+    r"^[-*+]\s+(?:\[\[|.*[—–-]\s*Scenes?\s+\d+[\s.]*$)")
 _LINK_RE = re.compile(r"(?<!!)\[\[([^\[\]]+)\]\]")
 _IF_LABEL_RE = re.compile(r"^\*\*If the players", re.I)
 _BOLD_HEAD_RE = re.compile(r"^(?:[-*+]\s+)?\*\*[^*\n]+\*\*")
@@ -884,10 +890,18 @@ def _hub_findings(locus: str, title: str, lines: list[str],
     heads = [i for i, ln in enumerate(lines) if _WHERE_HEAD_RE.match(ln)]
     bullets = [ln for i in heads for ln in _block_after(lines, i)
                if ln[:1] in "-*+" and ln[1:2] == " "]
-    places = [m for ln in bullets if (m := _PLACE_BULLET_RE.match(ln))]
-    pointers = [ln for ln in bullets
-                if not _PLACE_BULLET_RE.match(ln)
-                and _POINTER_BULLET_RE.match(ln)]
+    def is_pointer(ln: str) -> bool:
+        if _POINTER_BULLET_RE.match(ln):
+            return True
+        m = _PLACE_BULLET_RE.match(ln)
+        if m is None:
+            return False
+        return any("scene" in (index.types(k) or ())
+                   for k in _LINK_RE.findall(m.group(1)))
+
+    places = [m for ln in bullets
+              if not is_pointer(ln) and (m := _PLACE_BULLET_RE.match(ln))]
+    pointers = [ln for ln in bullets if is_pointer(ln)]
     out = []
     if not places and not pointers:
         out.append(Finding(

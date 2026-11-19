@@ -13,6 +13,8 @@ It also warns about what the run sheet reads, each row saying what the sheet wil
 | `label-form` | a label with a parenthesis inside the bold, such as `**NPCs (who is here)**` | the part the label holds | `**NPCs**` |
 | `if-table-unlabelled` | a table in a planned scene not under `**If the players...**` | its Do and Then rows | put it under that label |
 
+`label-form` also flags an older Plan's `**Complications (…)**`-style label as a warning, though `scene-labels` still accepts it.
+
 The note-type checks (`no-npcs-block`, `hub-place-not-location`, and `no-place` for a scene note heading) read each note's `type` from the vault above the plan; with no vault they are skipped.
 
 <!-- BEGIN GENERATED: gma plan-check -->
