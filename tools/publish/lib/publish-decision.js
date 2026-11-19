@@ -177,12 +177,14 @@ function decidePage(page, options) {
   const excludedDir = alwaysExcludedSegment(rel);
   if (excludedDir) return verdict('exclude', 'DIR_ALWAYS_EXCLUDED', `in ${excludedDir}/ — never published`);
   if (isImageGuidance(rel, publishConfig)) return verdict('exclude', 'IMAGE_GUIDANCE', 'the Image Guidance note is never published');
-  if (!folderMapped) {
-    return verdict('decide', 'DIR_UNMAPPED', `its folder is not in player_site.folder_map`);
-  }
-  if (!frontmatter || !frontmatter.type) {
-    return verdict('decide', 'NO_TYPE', 'no `type:` in frontmatter');
-  }
+  // A file the site cannot make a page of needs the GM's decision, unless the publish list already records it as
+  // excluded: then the GM has decided, and it is counted with the excluded (#793). The code still says why.
+  const listedExcluded = !!(manifest && indexOf(manifest).excluded.has(rel));
+  const unpaged = (code, why) => (listedExcluded
+    ? verdict('exclude', code, `${why}; publish list: excluded`)
+    : verdict('decide', code, why));
+  if (!folderMapped) return unpaged('DIR_UNMAPPED', 'its folder is not in player_site.folder_map');
+  if (!frontmatter || !frontmatter.type) return unpaged('NO_TYPE', 'no `type:` in frontmatter');
   // Scenes and session Plans are prep by type: no status, publish list entry or setting puts them on the player site.
   if (PREP_TYPES.has(lower(ruleValue('type', frontmatter.type)))) {
     return verdict('exclude', 'PREP_TYPE', 'prep: scenes and Plans stay off the player site');

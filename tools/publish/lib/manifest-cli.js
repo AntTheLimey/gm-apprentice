@@ -199,7 +199,9 @@ async function runDiff(options, deps, survey) {
   }
 
   const header = manifest ? 'publish list' : 'no manifest';
-  out(`manifest: ${header} — ${counts.publishing} publishing, ${counts.excluded} excluded, ${counts.needsDecision} needs decision`);
+  // Two counts that answer different questions (#793): this one is what the build does with each file in the walk;
+  // `Unchanged` below is the publish list's own entries. Each says which it is.
+  out(`manifest: ${header} — the build: ${counts.publishing} publishing, ${counts.excluded} excluded, ${counts.needsDecision} needs decision`);
   out('');
   out(`New (${added.length}):`);
   for (const row of added) out(`  ${row.path}\t${row.bucket}\t${row.code}\t${row.reason}`);
@@ -212,7 +214,7 @@ async function runDiff(options, deps, survey) {
     for (const row of outside) out(`  ${row.path}\t${row.section}`);
   }
   out('');
-  out(`Unchanged: Publishing ${unchanged.publishing}, Excluded ${unchanged.excluded}, Needs Decision ${unchanged.needsDecision}`);
+  out(`Unchanged list entries: Publishing ${unchanged.publishing}, Excluded ${unchanged.excluded}, Needs Decision ${unchanged.needsDecision}`);
   return 0;
 }
 

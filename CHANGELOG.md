@@ -10,6 +10,12 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 ---
 
 
+## [1.12.98] — 2026-11-19
+
+### Fixed
+
+- `manifest diff` no longer says a file needs a decision when the publish list already excludes it (#793). Its two count lines now say which is the build's verdict and which is the list's entries.
+
 ## [1.12.97] — 2026-11-19
 
 ### Fixed

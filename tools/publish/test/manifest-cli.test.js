@@ -63,7 +63,7 @@ describe('manifest diff', () => {
 
     assert.strictEqual(rc, 0);
     const text = c.text();
-    assert.match(text, /^manifest: no manifest — 2 publishing, 3 excluded, 0 needs decision$/m);
+    assert.match(text, /^manifest: no manifest — the build: 2 publishing, 3 excluded, 0 needs decision$/m);
     // Every file is New, with its bucket, code and reason on one tab-separated row.
     assert.match(text, /^ {2}Sessions\/Planned Session\.md\texclude\tAUTO_EXCLUDED_STATUS\tstatus: planned$/m);
     assert.match(text, /^ {2}Characters\/NPCs\/Prep Source\.md\texclude\tAUTO_EXCLUDED_SOURCE\tsource: prep$/m);
@@ -178,6 +178,28 @@ describe('manifest diff', () => {
         return true;
       },
     );
+  });
+});
+
+describe('manifest diff: the header agrees with the list (#793)', () => {
+  it('a file with no type the list records as excluded counts as excluded, not as needing a decision', async () => {
+    const vault = copyVault('auto-exclude');
+    fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
+    fs.writeFileSync(path.join(vault, 'Sessions', 'scratch.md'), '# Working notes\n');
+    fs.writeFileSync(path.join(vault, 'Sessions', 'loose.md'), '# Not listed\n');
+    const walked = ['Sessions/Played Session.md', 'Sessions/Planned Session.md', 'Characters/NPCs/Draft NPC.md',
+      'Characters/NPCs/Prep Source.md', 'Characters/NPCs/Published NPC.md'];
+    writePublishList(vault, { publishing: ['Sessions/Played Session.md', 'Characters/NPCs/Published NPC.md'],
+      excluded: [...walked.slice(1, 4), { path: 'Sessions/scratch.md', reason: 'working notes' }] });
+    const { configPath } = siteFor(vault);
+    const c = capture();
+    assert.strictEqual(await runManifest({ verb: 'diff', configPath }, c.deps), 0);
+    const text = c.text();
+    assert.match(text, /^manifest: publish list — the build: 2 publishing, 4 excluded, 1 needs decision$/m, text);
+    assert.match(text, /^Unchanged list entries: Publishing 2, Excluded 4, Needs Decision 0$/m);
+    // The one file the GM has not decided is the unlisted one, and it is the one the header counts.
+    assert.match(text, /^ {2}Sessions\/loose\.md\tdecide\tNO_TYPE\t/m);
+    fs.rmSync(vault, { recursive: true, force: true });
   });
 });
 
