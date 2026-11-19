@@ -51,7 +51,14 @@ Checks, by id, level, and the rule they mechanise:
                          which needs neither; the other labels are
                          optional and an absent one is never reported
                          here, but any label that is attempted must be
-                         spelled exactly; a legacy
+                         spelled exactly. Label forms, stated once: a
+                         block label (NPCs, Treasure, Where they can go,
+                         Points to land, If the players..., Complications)
+                         is `**X**` or `**X:**` at the left margin; a
+                         one-line label (Situation, Place, Starts it,
+                         Entities, Handouts) is `**X:**` or `- **X:**`,
+                         and `**Place**` with no colon is an error. A
+                         legacy
                          Objective/Setup/Behaviours/Behaviors/Branching
                          scene is one row
                          (session-prep SKILL.md, Plan shape)
@@ -61,7 +68,9 @@ Checks, by id, level, and the rule they mechanise:
                          not say where it happens
   no-npcs-block WARNING  a planned scene (not a hub) names an NPC or
                          creature in Entities but has no `**NPCs**` block
-                         with a readable `- **[[Name]]:**` line: the run
+                         with a readable `- **[[Name]]:**` line (a lead
+                         of two or more links is one person each) and no
+                         `**Who:**` line holding a link: the run
                          sheet will show nobody there. Needs a vault; the
                          notes' `type` is read, never guessed
   hub-no-places WARNING  a hub (a `**Where they can go**` block, legacy
@@ -73,7 +82,8 @@ Checks, by id, level, and the rule they mechanise:
   hub-plain-bullet
                 WARNING  a hub with at least one place bullet and also a
                          bullet that is neither a place nor a pointer: the
-                         sheet shows that line as a place
+                         sheet shows that line as a place (a plain line,
+                         not a bullet, below the block is read as a note)
   hub-place-not-location
                 WARNING  a place bullet whose bold lead links a note that
                          is not `type: location` (needs a vault)
@@ -86,15 +96,16 @@ Checks, by id, level, and the rule they mechanise:
                          `**NPCs**` or `**NPCs:**` at the left margin
                          (`- **Treasure:**` and the other block labels,
                          bulleted, with or without words after the colon,
-                         are read as none); the one-line labels (Situation, Place,
-                         Starts it, Entities, Handouts) may be bulleted
+                         are read as none)
   if-table-unlabelled
-                WARNING  a table in a planned scene that is not under
-                         `**If the players...**`: the run sheet reads
-                         Do | Then rows only from there
+                WARNING  a table whose header starts `Do` or `If`, in a
+                         planned scene, not under `**If the players...**`:
+                         the run sheet reads Do | Then rows only from
+                         there. Other tables are the GM's own, never read
+                         or flagged
   foe-no-numbers
-                WARNING  a person a scene names (Who, Entities or NPCs
-                         block) whose note only names a stock creature:
+                WARNING  a person in the room (the Who line or the NPCs
+                         block; Entities is not read) whose note only names a stock creature:
                          the sheet has no AC or HP for them (needs a
                          vault; in a D&D vault, `gma stat-fill` fixes it)
                          (the checks above: tools/publish/lib/run-sheet;
@@ -592,35 +603,33 @@ def _is_inline_label(label: str) -> bool:
     return label in _INLINE_LABELS
 
 
-def _label_present(body: str, label: str) -> bool:
+def _label_present(body: str, label: str, colon: bool = True) -> bool:
     if label == "If the players...":
         return bool(re.search(
-            r"^\*\*If the players(?:\.{3}|…)\*\*", body, re.MULTILINE))
+            r"^\*\*If the players(?:\.{3}|…)?:?\*\*", body, re.MULTILINE))
     if _is_inline_label(label):
         return bool(re.search(
             rf"^(?:[-*+]\s+)?\*\*{re.escape(label)}:\*\*", body,
             re.MULTILINE))
-    # Block label: the bare label, or the label plus an optional
+    # Block label: `**X**` or `**X:**`, or the label plus an optional
     # parenthetical (`**Complications (drop when the scene sags)**`).
-    # Anything else after the label — a colon, a period, free text with
-    # no parens — is a near miss, not a match, so `_label_near_miss`
+    # Anything else after the label — a period, free text with no
+    # parens — is a near miss, not a match, so `_label_near_miss`
     # stays reachable instead of this pattern swallowing it first.
     return bool(re.search(
-        rf"^\*\*{re.escape(label)}(?:\s*\([^*\n]*\))?\*\*", body,
+        rf"^\*\*{re.escape(label)}(?:\s*\([^*\n]*\))?{':?' if colon else ''}\*\*", body,
         re.MULTILINE))
 
 
 def _label_near_miss(body: str, label: str) -> str | None:
     if label == "If the players...":
         # The ellipsis is part of the label, so `re.escape(label)` below
-        # would only ever find `**If the players...:**`. The form the GM
-        # actually writes is `**If the players:**` — a near miss with a
-        # fix, not a missing label (#M16).
+        # would only ever find `**If the players...:**`. The label is read
+        # with three dots, `…` or none, with or without a colon.
         # A short ellipsis (`**If the players.**`) is a typo, not the
         # label: `_label_present` requires all three dots, so without a
         # near miss here an optional label would go unreported.
-        for pattern in (r"^\*\*If the players(?:\.{1,3}|…)?\s*:\*\*",
-                        r"^\*\*If the players(?:\.{1,3}|…)?\s*;\*\*",
+        for pattern in (r"^\*\*If the players(?:\.{1,3}|…)?\s*;\*\*",
                         r"^\*\*If the players\.{1,2}\*\*",
                         r"^If the players(?:\.{1,3}|…)?\s*:"):
             m = re.search(pattern, body, re.MULTILINE)
@@ -631,8 +640,6 @@ def _label_near_miss(body: str, label: str) -> str | None:
     patterns = [rf"^\*\*{esc}\.\*\*", rf"^\*\*{esc};\*\*"]
     if _is_inline_label(label):
         patterns.append(rf"^\*\*{esc}\*\*")
-    else:
-        patterns.append(rf"^\*\*{esc}:\*\*")
     patterns.append(rf"^{esc}:")
     for pattern in patterns:
         m = re.search(pattern, body, re.MULTILINE)
@@ -660,7 +667,9 @@ def _legacy_scene(body: str, labels: tuple[str, ...]) -> list[str]:
     roll call to say so.
     """
     gate = [lb for lb in labels if lb not in _COMMON_FURNITURE_LABELS]
-    if any(_label_present(body, label) for label in gate):
+    # `**Complications:**` is also a legacy prose label, so the colon form
+    # of a block label is no evidence of the modern skeleton here.
+    if any(_label_present(body, label, colon=False) for label in gate):
         return []
     found: list[str] = []
     for line in body.splitlines():
@@ -977,11 +986,13 @@ def _if_table_findings(locus: str, title: str, lines: list[str]
     out = []
     for line in lines:
         if line.lstrip().startswith("|"):
-            if not in_table and not (label and _IF_LABEL_RE.match(label)):
+            first = line.strip().strip("|").split("|")[0].strip().casefold()
+            if (not in_table and not (label and _IF_LABEL_RE.match(label))
+                    and (first == "do" or first.startswith("if"))):
                 out.append(Finding(
                     "if-table-unlabelled", "WARNING", locus,
-                    f"if-table-unlabelled: '{title}' has a table that is "
-                    f"not under '**If the players...**' — the run sheet "
+                    f"if-table-unlabelled: '{title}' has a Do or If table "
+                    f"that is not under '**If the players...**' — the run sheet "
                     f"reads Do | Then rows only from there, so it will "
                     f"lack these"))
             in_table = True
@@ -1043,8 +1054,8 @@ def _hub_findings(locus: str, title: str, lines: list[str],
                 "hub-plain-bullet", "WARNING", locus,
                 f"hub-plain-bullet: hub '{title}' has the plain bullet "
                 f"{shown!r} among its places — the sheet shows this line "
-                f"as a place; move a note for the GM below the block, or "
-                f"write it as a bold place"))
+                f"as a place; move a note for the GM to a plain line, not "
+                f"a bullet, below the block, or write it as a bold place"))
     for ln in places:
         for link in lead_links(ln):
             kinds = index.types(link)
@@ -1054,9 +1065,9 @@ def _hub_findings(locus: str, title: str, lines: list[str],
                     "hub-place-not-location", "WARNING", locus,
                     f"hub-place-not-location: hub '{title}' lists "
                     f"[[{link}]] as a place but its note is type: {shown} "
-                    f"— the run sheet will show no place there; link a "
-                    f"location note, or write the place's name in plain "
-                    f"words"))
+                    f"— the run sheet names the place by that line's words "
+                    f"and shows no map or note for it; link a location "
+                    f"note, or write the place's name in plain words"))
     return out
 
 
@@ -1087,20 +1098,20 @@ def _entity_places(lines: list[str], index: VaultIndex) -> list[str]:
 
 
 def _foe_links(lines: list[str]) -> list[str]:
-    """Every note a beat names as someone in the room: its Who and Entities
-    lines' links, and the lead link of each `**NPCs**` bullet."""
+    """Every note a beat names as someone in the room: its Who line's
+    links, and the lead links of each `**NPCs**` bullet. Entities is
+    everyone referred to, not who is in the room, so it is not read."""
     links: list[str] = []
     for ln in lines:
-        m = _ENTITIES_LINE_RE.match(ln)
-        if m:
-            links.extend(_LINK_RE.findall(m.group(1)))
-        elif _WHO_LINE_RE.match(ln):
+        if _WHO_LINE_RE.match(ln):
             links.extend(_LINK_RE.findall(ln))
     for i, ln in enumerate(lines):
         if _NPCS_HEAD_RE.match(ln):
             for b in _block_after(lines, i):
                 if _NPC_LINE_RE.match(b):
-                    links.extend(_LINK_RE.findall(b)[:1])
+                    lead = _PLACE_BULLET_RE.match(b)
+                    links.extend(_LINK_RE.findall(lead.group(1))
+                                 if lead else [])
     return links
 
 
@@ -1125,7 +1136,8 @@ def _foe_findings(locus: str, title: str, lines: list[str],
             elif index.system() == "dnd-5e-2024":
                 fix = f'run: gma stat-fill "<vault>" "{note}" --write'
             else:
-                fix = "write the numbers into its note's ### Stats"
+                fix = ("add one Gaps & Actions line saying the numbers "
+                       "are missing")
             out.append(Finding(
                 "foe-no-numbers", "WARNING", locus,
                 f"foe-no-numbers: '{title}' names {vl.link_name(link)}, "
@@ -1192,7 +1204,9 @@ def _run_sheet_scene(rel: str, title: str, body: str, planned: bool,
         readable = head is not None and any(
             _NPC_LINE_RE.match(ln) and not _field_bullet(ln)
             for ln in _block_after(lines, head))
-        if not readable and not any(_WHO_LINE_RE.match(ln) for ln in lines):
+        if not readable and not any(
+                _WHO_LINE_RE.match(ln) and _LINK_RE.search(ln)
+                for ln in lines):
             why = ("has an '**NPCs**' block with no '- **[[Name]]:**' line "
                    "the sheet can read" if head is not None
                    else "has no '**NPCs**' block")

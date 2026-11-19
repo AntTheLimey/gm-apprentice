@@ -18,9 +18,9 @@ tags: []
      when no location note fits) and an **NPCs** block on any scene with
      people in it. The rest are tools, used where they earn their place.
      One-line labels (Situation, Place, Starts it, Entities, Handouts)
-     may be bulleted, - **X:**. Block labels (NPCs, Where they can go,
-     Points to land, If the players..., Treasure, Complications) go at
-     the left margin as **X** or **X:**, never bulleted: the sheet does
+     are **X:** or - **X:**. Block labels (NPCs, Where they can go,
+     Points to land, If the players..., Treasure, Complications) are
+     **X** or **X:** at the left margin, never bulleted: the sheet does
      not read a bulleted block. Never put a parenthesis inside the bold
      (**NPCs**, not **NPCs (who is here)**). **Place:** is one link,
      which may be followed by words ([[Location]], the yard), or plain

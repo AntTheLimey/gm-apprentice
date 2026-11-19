@@ -278,14 +278,26 @@ class LabelHelperUnitTests(unittest.TestCase):
         body = "**Complications (drop when the scene sags)**\n- x"
         self.assertTrue(pc._label_present(body, "Complications"))
 
-    def test_block_label_rejects_colon_suffixed_form(self):
-        # Ruling 2: the block regex must not swallow `**NPCs:**` — that
-        # near-miss form has to fall through to `_label_near_miss`.
-        self.assertFalse(pc._label_present("**NPCs:**\n- x", "NPCs"))
+    def test_block_label_accepts_colon_suffixed_form(self):
+        # The run sheet reads `**NPCs:**` as it reads `**NPCs**`.
+        self.assertTrue(pc._label_present("**NPCs:**\n- x", "NPCs"))
+        self.assertIsNone(pc._label_near_miss("**NPCs:**\n- x", "NPCs"))
 
-    def test_block_label_near_miss_reports_colon_suffixed_form(self):
-        near = pc._label_near_miss("**NPCs:**\n- x", "NPCs")
-        self.assertEqual(near, "**NPCs:**")
+    def test_block_label_near_miss_still_reports_a_period(self):
+        self.assertFalse(pc._label_present("**NPCs.**\n- x", "NPCs"))
+        self.assertEqual(pc._label_near_miss("**NPCs.**\n- x", "NPCs"),
+                         "**NPCs.**")
+
+    def test_inline_label_without_a_colon_is_still_a_near_miss(self):
+        self.assertFalse(pc._label_present("**Place** the yard", "Place"))
+        self.assertEqual(
+            pc._label_near_miss("**Place** the yard", "Place"), "**Place**")
+
+    def test_if_label_with_dots_ellipsis_or_none(self):
+        for head in ("**If the players...**", "**If the players…**",
+                     "**If the players**", "**If the players:**"):
+            with self.subTest(head=head):
+                self.assertTrue(pc._label_present(head + "\n| Do |", "If the players..."))
 
     def test_inline_label_near_miss_semicolon(self):
         near = pc._label_near_miss("**Setup;** foo", "Setup")
@@ -362,17 +374,18 @@ class LabelHelperUnitTests(unittest.TestCase):
         self.assertIn("rewrite as Trigger", legacy[0].message)
         self.assertNotIn("Situation", legacy[0].message)
 
-    def test_if_the_players_colon_form_is_a_near_miss(self):
+    def test_if_the_players_colon_form_is_read(self):
         body = "**If the players:**\n| Do | Then |\n|---|---|"
-        self.assertFalse(pc._label_present(body, "If the players..."))
-        self.assertEqual(pc._label_near_miss(body, "If the players..."),
-                         "**If the players:**")
+        self.assertTrue(pc._label_present(body, "If the players..."))
         findings = pc._scene_findings("P.md", body, "Scene 1",
                                       ("If the players...",))
-        rows = [f for f in findings if f.id == "scene-labels"]
-        self.assertEqual(len(rows), 1, rows)
-        self.assertIn("has '**If the players:**' — write "
-                      "'**If the players...**'", rows[0].message)
+        self.assertEqual([f for f in findings if f.id == "scene-labels"], [])
+
+    def test_if_the_players_short_ellipsis_is_a_near_miss(self):
+        body = "**If the players..**\n| Do | Then |\n|---|---|"
+        self.assertFalse(pc._label_present(body, "If the players..."))
+        self.assertEqual(pc._label_near_miss(body, "If the players..."),
+                         "**If the players..**")
 
 
 class SectionsOrderTests(unittest.TestCase):
@@ -1253,11 +1266,29 @@ class RunSheetChecksTests(unittest.TestCase):
 
     def test_a_stock_foe_in_another_system_says_write_the_numbers(self):
         self.stock_note("Tomas", "Commoner (SRD)", system="gurps-4e")
-        found = self.found(self.scene(rest="**Entities:** [[Tomas]]\n"))
+        found = self.found(self.scene(rest="**Who:** [[Tomas]]\n"))
         rows = rows_for(found, "foe-no-numbers")
         self.assertEqual(len(rows), 1, found)
         self.assertNotIn("stat-fill", rows[0].message)
-        self.assertIn("write the numbers", rows[0].message)
+        self.assertIn("one Gaps & Actions line", rows[0].message)
+        self.assertNotIn("write the numbers", rows[0].message)
+
+    def test_a_foe_only_in_entities_is_not_in_the_room(self):
+        self.stock_note("Tomas", "Commoner (SRD)")
+        rest = "**Entities:** [[Tomas]]\n"
+        self.assertEqual(
+            rows_for(self.found(self.scene(rest=rest)), "foe-no-numbers"), [])
+
+    def test_a_two_link_npc_lead_checks_each_person(self):
+        self.note("Orme", "npc")
+        self.stock_note("Tomas", "Commoner (SRD)")
+        rest = ("**NPCs**\n- **[[Orme]] and [[Tomas]]:** want the cart "
+                "back\n")
+        found = self.found(self.scene(rest=rest))
+        rows = rows_for(found, "foe-no-numbers")
+        self.assertEqual(len(rows), 1, found)
+        self.assertIn("Tomas", rows[0].message)
+        self.assertEqual(self.ids(self.scene(rest=rest)), ["foe-no-numbers"])
 
     def test_a_companion_or_key_npc_is_sent_to_the_full_workup(self):
         self.stock_note("Tomas", "Commoner (SRD)", extra="companion: true\n")
@@ -1268,7 +1299,7 @@ class RunSheetChecksTests(unittest.TestCase):
         for who in ("Tomas", "Garrick"):
             with self.subTest(who):
                 found = self.found(self.scene(
-                    rest=f"**Entities:** [[{who}]]\n"))
+                    rest=f"**Who:** [[{who}]]\n"))
                 rows = rows_for(found, "foe-no-numbers")
                 self.assertEqual(len(rows), 1, found)
                 self.assertIn("full stat workup", rows[0].message)
@@ -1323,6 +1354,24 @@ class RunSheetChecksTests(unittest.TestCase):
         self.note("Orme", "npc")
         rest = "**Entities:** [[Orme]]\n**NPCs**\n- Mrs Orme, wary\n"
         self.assertEqual(self.ids(self.scene(rest=rest)), ["no-npcs-block"])
+
+    def test_a_who_line_counts_only_with_a_link(self):
+        self.note("Orme", "npc")
+        base = "**Entities:** [[Orme]]\n"
+        self.assertEqual(self.ids(self.scene(
+            rest=base + "**Who:** Orme and the cook.\n")), ["no-npcs-block"])
+        self.assertEqual(self.ids(self.scene(
+            rest=base + "- **Who:** Orme and the cook.\n")),
+            ["no-npcs-block"])
+        self.assertEqual(self.ids(self.scene(
+            rest=base + "**Who:** [[Orme]] and the cook.\n")), [])
+
+    def test_a_two_link_npc_lead_is_readable(self):
+        self.note("Orme", "npc")
+        self.note("Tomas", "npc")
+        rest = ("**Entities:** [[Orme]], [[Tomas]]\n**NPCs**\n"
+                "- **[[Orme]] and [[Tomas]]:** want the cart back\n")
+        self.assertEqual(self.ids(self.scene(rest=rest)), [])
 
     def test_a_location_in_entities_needs_no_block(self):
         self.note("Orchard", "location")
@@ -1397,7 +1446,7 @@ class RunSheetChecksTests(unittest.TestCase):
         found = self.found(self.HUB.format(bullets=bullets))
         rows = rows_for(found, "hub-plain-bullet")
         self.assertEqual(len(rows), 1, found)
-        self.assertIn("move a note for the GM below the block",
+        self.assertIn("a plain line, not a bullet, below the block",
                       rows[0].message)
         # alone, or with only pointers, a plain bullet is hub-no-places' call
         self.assertEqual(self.ids(self.HUB.format(
@@ -1423,6 +1472,8 @@ class RunSheetChecksTests(unittest.TestCase):
         rows = rows_for(found, "hub-place-not-location")
         self.assertEqual(len(rows), 1, found)
         self.assertIn("npc", rows[0].message)
+        self.assertNotIn("no place there", rows[0].message)
+        self.assertIn("by that line's words", rows[0].message)
 
     def test_a_place_bullet_linking_a_location_is_fine(self):
         self.note("Orchard", "location")
@@ -1597,6 +1648,18 @@ class RunSheetChecksTests(unittest.TestCase):
     def test_a_table_under_another_label_warns(self):
         self.assertEqual(self.ids(self.scene(
             rest="**Points to land**\n" + self.TABLE)), ["if-table-unlabelled"])
+
+    def test_only_a_do_or_if_table_warns(self):
+        for head in ("Rumour | True?", "d10 | Encounter", "Outcome | Effect"):
+            with self.subTest(head=head):
+                table = f"| {head} |\n|---|---|\n| a | b |\n"
+                self.assertEqual(self.ids(self.scene(rest=table)), [])
+        for head in ("If | Then", "If they go to | They find", "Do | Then",
+                     "If a PC… | Result"):
+            with self.subTest(head=head):
+                table = f"| {head} |\n|---|---|\n| a | b |\n"
+                self.assertEqual(self.ids(self.scene(rest=table)),
+                                 ["if-table-unlabelled"])
 
     def test_a_table_in_a_code_fence_is_ignored(self):
         self.assertEqual(self.ids(self.scene(
