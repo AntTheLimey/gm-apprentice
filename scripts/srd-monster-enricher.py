@@ -16,7 +16,7 @@ import sys
 from pathlib import Path
 
 OUT_DIR = Path("skills/ttrpg-expert/systems/dnd-5e-2024")
-MAX_REF_BYTES = 25 * 1024
+MAX_REF_BYTES = 26 * 1024
 
 SIZE_MAP = {"Tiny": "T", "Small": "S", "Medium": "M", "Large": "L", "Huge": "H", "Gargantuan": "G"}
 
@@ -104,6 +104,11 @@ def parse_one(name, body):
     else:
         m['hp'] = '1'
         m['hp_dice'] = '1d4'
+
+    # Initiative, as the SRD gives it: "+3 (13)". It is never worked out from
+    # DEX, because the SRD adds proficiency to some creatures' Initiative.
+    init_match = re.search(r'\*\*Initiative\*\*:\s*([+-−]?\s*\d+\s*\(\d+\))', body)
+    m['init'] = re.sub(r'\s+', '', init_match.group(1)).replace('−', '-') if init_match else None
 
     # Speed
     spd_match = re.search(r'\*\*Speed:\*\*\s*(.+)', body)
@@ -600,7 +605,8 @@ def format_monster(m, budget_tight=False):
 
     out = []
     out.append(f"**{m['name']}** | {m['type']} | {m['size']} | CR {cr_str} ({xp_str} XP)")
-    out.append(f"AC {m['ac']} | HP {m['hp']} ({m['hp_dice']}) | Speed {m['speed']}")
+    init = f" | Init {m['init'].replace('(', ' (')}" if m.get('init') else ""
+    out.append(f"AC {m['ac']} | HP {m['hp']} ({m['hp_dice']}){init} | Speed {m['speed']}")
 
     if budget_tight:
         stat_line = '/'.join(str(stats.get(s, 10)) for s in ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'])
