@@ -87,14 +87,16 @@ Armour is subtracted from damage as normal.
 - 86-98: Hit ally or hard surface
 - 99-00: Roll again 2-3 more times
 
-## Multiple Defensive Reactions
+## Multiple Defensive Reactions (Outnumbered)
 
-- Each investigator gets **one free** defensive reaction per
-  round (Dodge or Fight Back).
-- Each additional reaction beyond the first incurs a
-  **cumulative penalty die**.
-- Fighting defensively (forfeiting your action) grants one
-  additional free reaction without the penalty die.
+- A character may Dodge or Fight Back against every melee
+  attack, once against each.
+- Once they have dodged or fought back this round, every
+  later melee attack on them gains **one bonus die**. Not
+  firearms.
+- One with several attacks a round (a ghoul with three) may
+  defend that many times before the bonus die applies
+  (Keeper Rulebook p.108).
 
 ## Spot Rules -- Quick Reference
 
@@ -146,10 +148,12 @@ half protection for falls up to 3m. A successful Jump roll
 reduces falling damage by 1D6 per success level.
 
 ### Firing into Combat
--20% to skill when firing into melee. If the roll is between
-the modified and normal chance, a random other combatant is
-hit (Luck rolls to determine who). Firing while engaged in
-melee is Difficult (but point-blank Easy cancels this).
+One penalty die when shooting at a target engaged in melee. A
+fumble hits an ally instead; with several allies in the line of
+fire, the one with the lowest Luck. A shooter within point-blank
+range (a fifth of their DEX in feet) gains a bonus die, which
+cancels the penalty die, but a foe in reach may attack or disarm
+them (Keeper Rulebook pp.113-114).
 
 ### Knockout Attacks
 Declare intent before rolling. Make a Fighting roll (targeting

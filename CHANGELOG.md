@@ -10,6 +10,13 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 ---
 
 
+## [1.12.114] — 2026-11-20
+
+### Fixed
+
+- CoC 7e reference (#825): age now lowers MOV from the 40s (-1 per decade, up to -5 in the 80s), and firing into melee is one penalty die, with a fumble hitting the ally with the lowest Luck.
+- CoC 7e reference: range is Regular, Hard (up to 2x base) or Extreme (up to 4x), and point-blank (a fifth of DEX in feet) gives a bonus die, in every file that gives range. Bullets can't be dodged (diving for cover gives the shooter a penalty die), and after a character's first defence in a round, later melee attackers gain a bonus die.
+
 ## [1.12.112] — 2026-11-20
 
 ### Fixed

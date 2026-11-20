@@ -130,11 +130,11 @@ characteristics:
 |-----|-----------|
 | 15-19 | Deduct 5 from STR or SIZ. Deduct 5 from EDU. Luck: roll twice, take higher. |
 | 20-39 | No modifiers (prime). Make 1 EDU improvement check. |
-| 40-49 | Deduct 5 from STR, CON, or DEX (distribute as desired). Deduct 5 from APP. Make 2 EDU improvement checks. |
-| 50-59 | Deduct 10 from STR, CON, or DEX (distribute). Deduct 10 from APP. Make 3 EDU improvement checks. |
-| 60-69 | Deduct 20 from STR, CON, or DEX (distribute). Deduct 15 from APP. Make 4 EDU improvement checks. MOV -1. |
-| 70-79 | Deduct 40 from STR, CON, or DEX (distribute). Deduct 20 from APP. Make 4 EDU improvement checks. MOV -2. |
-| 80-89 | Deduct 80 from STR, CON, or DEX (distribute). Deduct 25 from APP. Make 4 EDU improvement checks. MOV -3. |
+| 40-49 | Deduct 5 from STR, CON, or DEX (distribute as desired). Deduct 5 from APP. Make 2 EDU improvement checks. MOV -1. |
+| 50-59 | Deduct 10 from STR, CON, or DEX (distribute). Deduct 10 from APP. Make 3 EDU improvement checks. MOV -2. |
+| 60-69 | Deduct 20 from STR, CON, or DEX (distribute). Deduct 15 from APP. Make 4 EDU improvement checks. MOV -3. |
+| 70-79 | Deduct 40 from STR, CON, or DEX (distribute). Deduct 20 from APP. Make 4 EDU improvement checks. MOV -4. |
+| 80-89 | Deduct 80 from STR, CON, or DEX (distribute). Deduct 25 from APP. Make 4 EDU improvement checks. MOV -5. |
 
 **EDU improvement check**: Roll 1D100. If the result exceeds
 the current EDU score, add 1D10 to EDU (maximum 99).
