@@ -35,11 +35,11 @@ function chromeEnv(dir) {
 }
 
 // Chrome on a Mac writes `.com.google.Chrome.*` and `com.google.Chrome.*` files (components and extension packages
-// it fetches) straight into the system temp folder, whatever TMPDIR says, and leaves some there (#565). A launch notes what is there before it
+// it fetches), and `scoped_dir*` folders (and a `contentlinkingd` one on the CI runner), straight into the system temp folder, whatever TMPDIR says, and leaves some there (#565). A launch notes what is there before it
 // starts (chromeTempNow) and removes what is new once it is over (removeNewChromeTemp). Launches take turns, so what
 // appears in between is the launch's own; a file a Chrome of the user's wrote in that moment is only a temp file it
 // fetches again.
-const CHROME_TEMP = /^\.?com\.google\.Chrome\./;
+const CHROME_TEMP = /^(\.?com\.google\.Chrome\.|scoped_dir|contentlinkingd$)/;
 function chromeTempNow(dir = os.tmpdir()) {
   try { return new Set(fs.readdirSync(dir).filter((name) => CHROME_TEMP.test(name))); } catch (_) { return new Set(); }
 }
