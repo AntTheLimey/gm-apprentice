@@ -24,7 +24,7 @@ const { readSettings } = require('../settings/read');
 const { readerFrom } = require('../vault-reader');
 const { isWithheld, nameList, unmaskedNames, unmaskedNameUnread } = require('../processor');
 const { canonicalNfc } = require('../unicode');
-const { SESSION_PLAYED } = require('../shared-lists');
+const { tableLogOf, isPlayed } = require('./sessions');
 
 const toPosix = (p) => p.split(path.sep).join('/');
 const low = (s) => canonicalNfc(String(s == null ? '' : s)).trim().toLowerCase();
@@ -407,30 +407,10 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
     const at = order.findIndex((pg) => pg.rel === sessionIndex);
     if (at < 1) return null;
     const earlier = order.slice(0, at).map((pg) => pg.rel).reverse();
-    const RECORDS = ['play_notes', 'export', 'table_log', 'wrap_up'];
-    const played = (s) => {
-      const sfm = fmOf(s);
-      const docs = sfm.documents && typeof sfm.documents === 'object' ? sfm.documents : {};
-      return SESSION_PLAYED.has(low(sfm.status)) || RECORDS.some((k) => fmTarget(docs[k]));
-    };
     const logOf = (s) => {
-      const docs = fmOf(s).documents;
-      const t = fmTarget(docs && typeof docs === 'object' ? docs.table_log : null);
-      if (!t) {
-        const named = index.notes().filter((n) => low(fmOf(n).type) === 'session-table-log' && index.resolve(fmTarget(fmOf(n).session) || null) === s);
-        return named.length === 1 ? named[0] : null;
-      }
-      const log = index.resolve(t);
-      if (log === null) {
-        const why = (index.linkProblem(t) || {}).text || `[[${t}]] matches no note in the vault`;
-        warnings.push({ kind: 'table-log', note: s, text: `its documents.table_log ${why}: allies start from their notes` });
-        return null;
-      }
-      if (low(fmOf(log).type) !== 'session-table-log') {
-        warnings.push({ kind: 'table-log', note: s, text: `its documents.table_log links ${log}, which is not type: session-table-log: it is not read for the allies` });
-        return null;
-      }
-      return log;
+      const r = tableLogOf(index, s);
+      if (r.warning) warnings.push(r.warning);
+      return r.log;
     };
     // Per earlier played session, newest first, read when first asked: Map<note path, hit points>.
     const read = [];
@@ -439,7 +419,7 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
     const readNext = () => {
       while (next < earlier.length) {
         const s = earlier[next++];
-        if (!played(s)) continue;
+        if (!isPlayed(index, s)) continue;
         const log = logOf(s);
         if (!log) continue;
         const hp = new Map();
