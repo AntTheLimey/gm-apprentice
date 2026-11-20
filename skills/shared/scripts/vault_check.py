@@ -1687,6 +1687,13 @@ def _resolve_chain_key(key: str, rel: str, stem: str, number: int | None,
     elif target and linked is None:
         broken.append(f"WARNING\t{rel}\tdocuments.{key} links "
                       f"'[[{target}]]' but no such note exists")
+    elif linked and entity_type(by_rel[linked]) not in types:
+        # A link to a note of another kind (the Plan under `table_log`) is
+        # not that record: warn, and let the type-based lookup decide.
+        broken.append(
+            f"WARNING\t{rel}\tdocuments.{key} links '[[{target}]]', a "
+            f"{entity_type(by_rel[linked]) or 'untyped'} note, not a {kind}")
+        linked = None
     found = _chain_document(files, stems, types, stem, number, chapter)
     if found and not linked:
         unlinked.append(

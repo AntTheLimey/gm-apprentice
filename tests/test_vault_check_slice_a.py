@@ -931,6 +931,34 @@ class SessionsCommandTests(unittest.TestCase):
         self.assertFalse(rows_for(rows, "no such note exists"), rows)
         self.assertTrue(rows_for(rows, "derived=planned"), rows)
 
+    def test_link_to_a_note_of_the_wrong_type_is_warned_and_not_counted(self):
+        vault = make_vault(self)
+        (vault / "Session 01 - Lone.md").write_text(
+            "---\ntype: session\nsession_number: 1\nstatus: planned\n"
+            "documents:\n  table_log: \"[[Session 01 - Plan]]\"\n---\n",
+            encoding="utf-8")
+        (vault / "Session 01 - Plan.md").write_text(
+            "---\ntype: session-plan\nsession_number: 1\n---\n",
+            encoding="utf-8")
+        rows = vc.check_sessions(vault)
+        self.assertTrue(rows_for(
+            rows, "documents.table_log links '[[Session 01 - Plan]]', "
+                  "a session-plan note, not a table log"), rows)
+        self.assertFalse(rows_for(rows, "derived=played"), rows)
+
+    def test_link_to_a_note_of_the_right_type_still_counts(self):
+        vault = make_vault(self)
+        (vault / "Session 01 - Lone.md").write_text(
+            "---\ntype: session\nsession_number: 1\nstatus: planned\n"
+            "documents:\n  table_log: \"[[Session 01 - Table Log]]\"\n---\n",
+            encoding="utf-8")
+        (vault / "Session 01 - Table Log.md").write_text(
+            "---\ntype: session-table-log\nsession_number: 1\n---\n",
+            encoding="utf-8")
+        rows = vc.check_sessions(vault)
+        self.assertFalse(rows_for(rows, "not a table log"), rows)
+        self.assertTrue(rows_for(rows, "derived=played"), rows)
+
     def test_empty_vault_says_so(self):
         vault = make_vault(self)
         self.assertEqual(vc.check_sessions(vault),
