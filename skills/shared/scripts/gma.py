@@ -50,6 +50,7 @@ COMMANDS: dict[str, Command] = {
     "links": Command("links", "List a vault's broken links by kind, and fix them."),
     "migrate": Command("migrate", "Bring a vault and its site up to the plugin's version."),
     "moments": Command("moments", "A wrap-up's Memorable Moments, as the Story page reads them."),
+    "personal": Command("personal_home", "Where the GM's personal reference files live, and what is there."),
     "plan-check": Command("plan_check", "Session Plan conformance checks."),
     "plans-index": Command("plans_index", "Narrative-plan and midwife-adventure discovery."),
     "prop-move": Command("prop_move", "Move a vault's own props into prop notes."),
@@ -455,9 +456,10 @@ def main(argv: list[str] | None = None) -> int:
         return _llms(rest)
     if name == "tool":
         return _tool(rest)
-    if name == "publish" or (name != "doctor" and not any(a in ("-h", "--help") for a in rest)):
+    if name == "publish" or (name not in ("doctor", "personal") and not any(a in ("-h", "--help") for a in rest)):
         # A Python command's help needs no tool, so no wait on a download;
-        # nor does doctor, which reports what is installed and changes nothing.
+        # nor does doctor, which reports what is installed and changes nothing,
+        # nor personal, which only copies and lists the GM's own files.
         _ensure_tool()
     if name == "publish":
         return _publish(rest)

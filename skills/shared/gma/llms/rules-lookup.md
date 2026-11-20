@@ -17,7 +17,7 @@ gma rules-lookup <system> <term> [options]
 | `--variant` | `VARIANT` | include this variant's records |
 | `--limit` | `LIMIT` | the most records to print |
 | `--json` |  | emit the records as JSON instead of rows |
-| `--personal` |  | also read the gitignored personal/ files |
+| `--personal` |  | also read the GM's personal reference files (gma personal) |
 | `--systems-dir` | `SYSTEMS_DIR` | the systems folder to read |
 
 Example: `gma rules-lookup gurps-4e "Broadsword" --kind skill`

@@ -123,8 +123,8 @@ campaign voice: draft one per `shared/voice.md` and offer it. A GM
 correction of voiced prose: offer to fold it into the voice (same file).
 
 When prep needs setting detail the SRD/ORC files lack (faction rosters,
-NPC references, location atmosphere), check the user's gitignored
-`systems/{system}/personal/`.
+NPC references, location atmosphere), check the GM's personal reference
+files (`gma personal --system {system}`).
 
 ## Phase 1: Reconcile (conditional)
 

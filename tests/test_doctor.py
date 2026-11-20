@@ -38,9 +38,11 @@ def _install(root: Path, *, version="1.2.3", publish="1.70.1", tool=None, home="
     return Layout(shared, plugin, path, path is not None)
 
 
-def _run(layout, *, python=(3, 12, 1), node="/usr/bin/node", old=None, said="22.21.0"):
+def _run(layout, *, python=(3, 12, 1), node="/usr/bin/node", old=None, said="22.21.0", user_home=None):
+    # A home with no personal files unless the test gives one, so the GM's own never count here.
     return doctor.checks(layout, python=python, which=lambda name: node,
-                         node_too_old=lambda n: old, node_version=lambda n: said)
+                         node_too_old=lambda n: old, node_version=lambda n: said,
+                         user_home=user_home or layout.shared / "no-such-home")
 
 
 class DoctorTests(unittest.TestCase):

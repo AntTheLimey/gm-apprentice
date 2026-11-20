@@ -270,9 +270,9 @@ no receipt into the Wrap-Up — the PC sheet is the record.
 
 ### 4. Update the World
 
-Personal setting reference may sit in `systems/{system}/personal/`
-— check it for faction ties, locations and NPC relationships when
-creating entities.
+Personal setting reference may sit in the GM's personal reference
+files (`gma personal --system {system}`) — check them for faction ties,
+locations and NPC relationships when creating entities.
 
 - **New entities:** read `_Templates/_Template_{Type}.md` for its
   fields and section names, then a

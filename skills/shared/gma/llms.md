@@ -30,7 +30,7 @@ gma <command> ... [options]
 | Argument | Value | Help |
 |---|---|---|
 | `--version` |  | print the plugin version |
-| `<command>` | `dnd-ddb`, `dnd-sheet`, `doctor`, `graph-check`, `gurps-check`, `gurps-skill-default`, `image`, `index-build`, `ingest-images`, `ingest-survey`, `links`, `migrate`, `moments`, `plan-check`, `plans-index`, `prop-move`, `reconcile-promote`, `reconcile-scan`, `relink`, `reveal`, `reveal-scan`, `rules-lookup`, `scene-queue`, `schema-rules`, `section`, `session-context`, `stamp-entities`, `stat-fill`, `tones`, `update`, `vault-check`, `vault-scaffold`, `vault-search`, `vault-write`, `workaround`, `publish`, `tool`, `llms` | the command to run; each has its own --help |
+| `<command>` | `dnd-ddb`, `dnd-sheet`, `doctor`, `graph-check`, `gurps-check`, `gurps-skill-default`, `image`, `index-build`, `ingest-images`, `ingest-survey`, `links`, `migrate`, `moments`, `personal`, `plan-check`, `plans-index`, `prop-move`, `reconcile-promote`, `reconcile-scan`, `relink`, `reveal`, `reveal-scan`, `rules-lookup`, `scene-queue`, `schema-rules`, `section`, `session-context`, `stamp-entities`, `stat-fill`, `tones`, `update`, `vault-check`, `vault-scaffold`, `vault-search`, `vault-write`, `workaround`, `publish`, `tool`, `llms` | the command to run; each has its own --help |
 <!-- END GENERATED -->
 
 <!-- BEGIN GENERATED: gma llms -->
@@ -65,6 +65,7 @@ Example: `gma llms relink`
 | `links` | `gma llms links` | List a vault's broken links by kind, and fix them. |
 | `migrate` | `gma llms migrate` | Bring a vault and its site up to the plugin's version. |
 | `moments` | `gma llms moments` | A wrap-up's Memorable Moments, as the Story page reads them. |
+| `personal` | `gma llms personal` | Where the GM's personal reference files live, and what is there. |
 | `plan-check` | `gma llms plan-check` | Session Plan conformance checks. |
 | `plans-index` | `gma llms plans-index` | Narrative-plan and midwife-adventure discovery. |
 | `prop-move` | `gma llms prop-move` | Move a vault's own props into prop notes. |

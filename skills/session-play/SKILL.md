@@ -106,5 +106,5 @@ For GM-craft questions, read only the routed section and deliver
 the answer, not a summary.
 
 When improvising and the public SRD/ORC files lack setting detail,
-check `systems/{system}/personal/` (the user's own factions, NPCs,
-locations, tables).
+check the GM's personal reference files (`gma personal --system {system}`:
+their own factions, NPCs, locations, tables).

@@ -1,17 +1,16 @@
 # Adding Your Own Reference Material
 
-gm-apprentice ships with SRD and ORC-licensed mechanics for
-each supported game system. These public files cover rules,
-procedures, and character options -- but not setting-specific
-content like named factions, locations, NPCs, or world lore.
-That content is copyrighted by its publisher.
+gm-apprentice ships with the open rules texts (SRD and ORC) for
+each supported system, and its own summaries for GURPS. These
+files cover rules, procedures, and character options -- but not
+setting-specific content like named factions, locations, NPCs,
+or world lore. That content is copyrighted by its publisher.
 
 If you own a rulebook, supplement, or sourcebook, you can
 create personal reference files that give Claude access to
 that material during your sessions. These files live in a
-`personal/` directory inside each system folder and are
-automatically gitignored -- they stay on your machine and are
-never distributed with the plugin.
+folder of their own in your home directory, outside the plugin
+-- they stay on your machine and are never distributed with it.
 
 ## Important: This Is for Content You Own
 
@@ -22,33 +21,47 @@ transcribing from, or content you've written yourself.
 
 This feature exists so Claude can reference *your books* the
 way you'd flip through them at the table. It is not a way to
-redistribute copyrighted material. The `personal/` directory
-is gitignored specifically to prevent accidental distribution.
+redistribute copyrighted material. The folder sits outside the
+plugin, so nothing in it is ever packaged or published with it.
 
 **Do not** use this to share copyrighted content with others,
 host it publicly, or circumvent publisher licensing terms.
 
 ## Where Personal Files Live
 
+One folder in your home directory, with a folder per system:
+
 ```text
-skills/ttrpg-expert/systems/
-  fitd/
-    personal/           <-- your FitD setting content
-      districts/        <-- optional subdirectories
-  gurps-4e/
-    personal/           <-- your GURPS supplements
-  coc-7e/
-    personal/           <-- your CoC setting material
-  dnd-5e-2024/
-    personal/           <-- your D&D supplements
-  pf2e/
-    personal/           <-- your PF2e supplements
+~/gm-apprentice/personal/
+  fitd/                 <-- your FitD setting content
+    districts/          <-- optional subdirectories
+  gurps-4e/             <-- your GURPS supplements
+  coc-7e/               <-- your CoC setting material
+  dnd-5e-2024/          <-- your D&D supplements
+  pf2e/                 <-- your PF2e supplements
 ```
+
+On Windows, `~` is your user folder (`C:\Users\<you>`). It is
+the same folder whichever way you installed gm-apprentice, and
+updates and reinstalls leave it alone.
 
 Four skills discover and use these files automatically:
 ttrpg-expert, session-play, session-prep, and session-wrapup.
 You don't need to configure anything -- if the files exist,
-Claude finds them.
+Claude finds them. `gma personal` prints the folder and what is
+in it.
+
+You can make the files yourself, or ask Claude to: "keep these
+notes from my Doskvol chapter as personal reference files" saves
+them in the right system's folder.
+
+Older versions kept these files inside the plugin, in
+`skills/ttrpg-expert/systems/<system>/personal/`. A plugin
+update replaces that folder, so files kept there were left
+behind in the old version. The first `gma update` (or
+`gma personal`) after you install this version copies any it
+finds into `~/gm-apprentice/personal/`. It never moves, deletes
+or overwrites a file, and says what it copied.
 
 ## What to Put in Personal Files
 
@@ -118,8 +131,8 @@ source, note the page number. This helps you verify details
 later and helps Claude cite where to look:
 `*Source: Core Rulebook, pp. 280-282*`
 
-**Keep a README.** A short `README.md` in your `personal/`
-directory listing what files exist and what they cover helps
+**Keep a README.** A short `README.md` in each system's folder
+listing what files exist and what they cover helps
 Claude (and you) find things quickly.
 
 ## What Not to Do
@@ -127,9 +140,10 @@ Claude (and you) find things quickly.
 - **Don't copy pages verbatim.** Summarize and restructure.
   Your personal files should be a reference tool, not a
   reproduction of the book.
-- **Don't commit personal files to git.** They're gitignored
-  by default. If you override this, you risk distributing
-  copyrighted material.
+- **Don't commit personal files to git** or put them anywhere
+  that publishes them (a campaign vault's site, a shared
+  folder). Keeping them in `~/gm-apprentice/personal/` keeps
+  them private.
 - **Don't create files for content already in the public
   system files.** The SRD mechanics are already there. Focus
   on the setting and supplementary content the public files

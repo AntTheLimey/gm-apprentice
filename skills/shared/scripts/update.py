@@ -39,7 +39,9 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 import github_issues
+import install_layout
 import migrate
+import personal_home
 import update_backup
 import update_record
 from migrate_core import CHOICE, PERSON, Check, Item, StepFailed
@@ -832,6 +834,17 @@ def _emit(res: UpdateResult, as_json: bool) -> None:
         buffer.flush()
 
 
+def _adopt_personal() -> list[str]:
+    """A plugin update leaves the GM's personal reference files in the old version's folder, which
+    is deleted later: the first update after one copies them home (per user, not per vault)."""
+    try:
+        return personal_home.adoption_lines(personal_home.adopt(install_layout.LAYOUT.shared, user_home=HOME),
+                                            user_home=HOME)
+    except OSError as e:
+        return [f"personal files: could not copy them into "
+                f"{personal_home.shown(personal_home.home(HOME), HOME)} ({e}); run `gma personal` to try again"]
+
+
 def main(argv: list[str] | None = None) -> int:
     utf8_output()
     ap = build_parser()
@@ -859,6 +872,8 @@ def main(argv: list[str] | None = None) -> int:
         res = UpdateResult(exit=1, vault=vault.resolve().name, headless=args.headless,
                            error=(str(e) if isinstance(e, SettingsUnavailable)
                                   else f"unexpected {e.__class__.__name__}: {e}"))
+    if res.exit != 2:
+        res.notes.extend(_adopt_personal())
     _emit(res, args.json)
     return res.exit
 
