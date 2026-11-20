@@ -317,7 +317,8 @@ function buildLinkMap(pages) {
     }
   }
 
-  return nfcLookupTable(map);
+  // Links are followed as Obsidian follows them, letter case aside (#790).
+  return nfcLookupTable(map, { foldCase: true });
 }
 
 function scanAttachments(config, deps) {
