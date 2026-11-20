@@ -113,9 +113,10 @@ flush` in the site directory and report its per-PC summary
 skip.
 
 Read the session's play records: its Play Notes (`type:
-session-play-notes`) and its Export (`type: session-export`), each
-its own note, linked as `documents.play_notes` and `documents.export`;
-either may be missing. A session with no index: `vw session-new
+session-play-notes`), its Export (`type: session-export`) and its Table
+Log (`type: session-table-log`), each its own note, linked as
+`documents.play_notes`, `documents.export` and `documents.table_log`;
+any may be missing. A session with no index: `vw session-new
 --number N --title "T" --play-date D [--export PATH]` files the index
 and Play Notes (and the Export); an index but no Play Notes: `vw
 play-notes-new --session "<index>" --play-date D`; a gmassistant.app
@@ -124,6 +125,11 @@ export-new --session "<index>" --export PATH`. These run on their own
 with `--write`, not in the batch: the rest works from the records.
 With neither notes nor an export, ask the GM for notes (paste, path,
 or dictation) for the Play Notes.
+If there is a Table Log, it wins for numbers (HP, vitals), loot, Plan
+point states and where everyone ended; the Play Notes and Export win
+for what was said and decided. An empty or missing section is nothing
+recorded, not "none happened". Step 5b's review names each
+disagreement with both versions and which won.
 Read the PC roster and the session's Plan for planned-vs-actual.
 `gma plan-check <plan> --inventory` gives per-section status and
 word counts but not scene titles — open the plan body for those.
@@ -238,14 +244,18 @@ the narrative. Apply the house rules as you would the book.
 3. Write an advancement change (XP, points) to a sheet only when
    the Play Notes or the GM give the amount; a missing award goes
    in the Keeper Checklist.
-4. End-of-session vitals the Play Notes or the GM give (HP, Hit
+4. End-of-session vitals the Table Log's `Vitals at the end` has for
+   the PC, else the Play Notes or the GM give (HP, Hit
    Dice spent, Sanity, conditions) go in the Current Status prose and
    in a `=== sheet <PC> hp=41 hit-dice=1/5` block after them, which
    writes the Stat Sheet the party board reads (D&D, CoC, GURPS; a
    wrong key's refusal lists the keys). A value not given is left alone, never guessed. A field
    step 1's flush changed is the player's: leave it as flush wrote
    it, and where the notes disagree, 5b's review names both for the
-   GM.
+   GM. Where the Table Log's HP differs from what flush wrote, the
+   review shows both and the GM picks; write nothing to that sheet
+   until then. An ally's vitals go in its note's Current Status prose.
+   Loot goes to whoever the Table Log's `Loot` names.
 
 Each PC's refreshed fields show in full in step 5b's review; write
 no receipt into the Wrap-Up — the PC sheet is the record.
