@@ -366,19 +366,24 @@ describe('the GM page runs a fight', { skip: browserSkip() }, () => {
     await withPage({ width: 1449, height: 762 }, async (page) => {
       const { p } = await started(page, run);
       const wyrm = rowOf(p, WYRM);
-      // another window leaves the wyrm alone in the fight, its breath spent
+      // another window leaves the wyrm alone in the fight
       const { stateId, state } = await (await fetch(`${run.base}/api/state`)).json();
-      const actions = state.fight.rows.filter((r) => r.id !== wyrm.id).map((r, i) => ({ id: `o-${i}`, type: 'fightTick', fight: state.fight.id, row: r.id, in: false }));
-      actions.push({ id: 'o-breath', type: 'recharge', fight: state.fight.id, row: wyrm.id, name: wyrm.recharge[0].name, ready: false });
-      const res = await fetch(`${run.base}/api/actions`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ stateId, base: 0, clientId: 'other-tab', actions }) });
-      assert.strictEqual(res.status, 200);
+      const other = async (actions) => {
+        const res = await fetch(`${run.base}/api/actions`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ stateId, base: 0, clientId: 'other-tab', actions }) });
+        assert.strictEqual(res.status, 200);
+      };
+      await other(state.fight.rows.filter((r) => r.id !== wyrm.id).map((r, i) => ({ id: `o-${i}`, type: 'fightTick', fight: state.fight.id, row: r.id, in: false })));
       await until(page, `p.fight.rows.filter((r) => r.in).length === 1 && p.pending === 0`);
+      // the turn comes round to the wyrm with its breath still ready, so no recharge roll can come of it
       let now = await probe(page);
       if (now.fight.turn !== wyrm.id) {
         await click(page, '#fNext');
         now = await until(page, `p.fight.turn === ${q(wyrm.id)} && p.pending === 0`);
       }
       const round = now.fight.round;
+      // then the wyrm breathes, from the other window: spent on its own turn
+      await other([{ id: 'o-breath', type: 'recharge', fight: state.fight.id, row: wyrm.id, name: wyrm.recharge[0].name, ready: false }]);
+      await until(page, `p.fight.rows.find((x) => x.id === ${q(wyrm.id)}).recharge[0].ready === false && p.pending === 0`);
       await settled(page);
       const rolls = (await probe(page)).requests['POST /api/roll'] || 0;
       await click(page, '#fNext');
