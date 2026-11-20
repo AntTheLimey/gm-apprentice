@@ -309,8 +309,8 @@ describe('the players\' view', () => {
   });
 
   it('a name never falls back to the file\'s stem', () => {
-    const m = reread(QUIET, (t) => t.replace('name: Quiet Dead\n', ''));
-    const m2 = reread(GATE, (t) => t.replace('name: The Gate\n', ''));
+    const m = reread(QUIET, (t) => t.replace(/name: Quiet Dead\r?\n/, ''));
+    const m2 = reread(GATE, (t) => t.replace(/name: The Gate\r?\n/, ''));
     let s = move(fresh(), BEN, FIGHT);
     s = act(s, { type: 'show', group: FIGHT.key, note: QUIET, on: true });
     assert.equal(view(s, m).panels[0].people[0].name, 'a stranger');

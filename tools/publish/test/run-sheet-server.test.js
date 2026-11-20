@@ -1154,8 +1154,8 @@ describe('run sheet server: rolls and actions', () => {
       stateId: run.stateId, base: 0,
       actions: [{ type: 'mark', id: 'r-1', point: p.key, mark: 'landed', beat: b.key, beatTitle: b.title, text: p.text }],
     });
-    await waitFor(() => /## Points landed\n\n- /.test(logText(vault)));
-    assert.ok(logText(vault).includes(p.text.slice(0, 12)));
+    await waitFor(() => /## Points landed\n\n- /.test(logLf(vault)));
+    assert.ok(logLf(vault).includes(p.text.slice(0, 12)));
   });
 
   it('the PUT still works beside the actions', async () => {

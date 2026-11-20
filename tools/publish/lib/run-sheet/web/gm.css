@@ -226,7 +226,8 @@ ol.to { list-style: none; margin: 0; padding: 0; }
 /* one line a row, however busy: chips and counters give way (ellipsis, the full word in the title) before the row wraps */
 ol.to > li { display: flex; flex-wrap: nowrap; align-items: center; gap: 2px; min-height: 32px; padding: 2px 4px; border-top: 1px solid var(--line); border-radius: 4px; }
 ol.to > li > * { flex-shrink: 0; }
-ol.to > li > .nm { flex-shrink: 1; min-width: 6rem; }
+/* the name gives way last: chips shrink first, so a wider font (Linux, Windows) cuts a chip before a name */
+ol.to > li > .nm { flex: 1 0.01 auto; min-width: 6rem; }
 ol.to > li > .chip, ol.to > li > .cnt[data-frch] { flex-shrink: 1; min-width: 2.4rem; overflow: hidden; text-overflow: ellipsis; }
 ol.to > li.cur { background: var(--lamp-soft); box-shadow: inset 4px 0 0 var(--lamp); }
 ol.to > li.out { opacity: .55; }
