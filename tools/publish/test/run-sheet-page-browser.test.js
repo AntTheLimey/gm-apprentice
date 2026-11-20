@@ -116,8 +116,7 @@ describe('the GM page in a browser', { skip: browserSkip() }, () => {
       await typeEnter(page, '#sheet input[data-jot]', 'Ash lowers the rope');
       await settled(page);
       await page.reload();
-      await page.waitFor(`(() => { const p = ${PROBE}; return p && p.jots.length; })()`);
-      const p = await probe(page);
+      const p = await page.waitFor(`(() => { const p = ${PROBE}; return p && p.jots.length && p.marked === 1 && p; })()`);
       assert.strictEqual(p.marked, 1);
       assert.deepStrictEqual(p.jots, ['Ash lowers the rope']);
       assert.deepStrictEqual(p.errors, []);
