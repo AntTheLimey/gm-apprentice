@@ -301,7 +301,7 @@ Several writes at once: put this as a '=== session-new ...' block in `gma vault-
 | `--chapter` | `CHAPTER` | the chapter, when the number alone does not say which |
 | `--upcoming` |  | a session not yet played (prep): the index alone, status planned, no Play Notes |
 | `--export` | `EXPORT` | the export file (any path) |
-| `--created-by` | `session-play`, `vault-ingest`, `run-sheet`, `manual` | the skill filing it, stamped as created_by on the play records (default manual) |
+| `--created-by` | `session-play`, `vault-ingest`, `manual` | the skill filing it, stamped as created_by on the play records (default manual) |
 | `--write` |  | write it (default: preview) |
 <!-- END GENERATED -->
 
@@ -327,7 +327,7 @@ Several writes at once: put this as a '=== play-notes-new ...' block in `gma vau
 | `--session` | `SESSION` | the session index: path or name |
 | `--play-date` | `PLAY_DATE` | YYYY-MM-DD |
 | `--export` | `EXPORT` | the export file (any path) |
-| `--created-by` | `session-play`, `vault-ingest`, `run-sheet`, `manual` | the skill filing it, stamped as created_by on the play records (default manual) |
+| `--created-by` | `session-play`, `vault-ingest`, `manual` | the skill filing it, stamped as created_by on the play records (default manual) |
 | `--write` |  | write it (default: preview) |
 <!-- END GENERATED -->
 
@@ -354,7 +354,7 @@ Several writes at once: put this as a '=== export-new ...' block in `gma vault-w
 |---|---|---|
 | `--session` | `SESSION` | the session index: path or name |
 | `--export` | `EXPORT` | the export file (any path) |
-| `--created-by` | `session-play`, `vault-ingest`, `run-sheet`, `manual` | the skill filing it, stamped as created_by on the play records (default manual) |
+| `--created-by` | `session-play`, `vault-ingest`, `manual` | the skill filing it, stamped as created_by on the play records (default manual) |
 | `--play-date` | `PLAY_DATE` | YYYY-MM-DD |
 | `--write` |  | write it (default: preview) |
 <!-- END GENERATED -->
@@ -379,7 +379,7 @@ Several writes at once: put this as a '=== table-log-new ...' block in `gma vaul
 | Argument | Value | Help |
 |---|---|---|
 | `--session` | `SESSION` | the session index: path or name |
-| `--created-by` | `session-play`, `vault-ingest`, `run-sheet`, `manual` | who files it, stamped as created_by (default manual) |
+| `--created-by` | `session-play`, `vault-ingest`, `manual`, `run-sheet` | who files it, stamped as created_by (default manual) |
 | `--play-date` | `PLAY_DATE` | YYYY-MM-DD |
 | `--write` |  | write it (default: preview) |
 <!-- END GENERATED -->

@@ -80,6 +80,14 @@ class TableLogNewTests(unittest.TestCase):
         self.assertEqual(vl.extract_frontmatter(self.read(LOG_NOTE))
                          ["created_by"], "run-sheet")
 
+    def test_only_table_log_new_takes_run_sheet(self):
+        with self.assertRaises(SystemExit):
+            run(self.vault, "export-new", "--session", SESSION, "--export",
+                "x.md", "--created-by", "run-sheet")
+        with self.assertRaises(SystemExit):
+            run(self.vault, "play-notes-new", "--session", SESSION,
+                "--created-by", "run-sheet")
+
     def test_links_index_and_raises_status(self):
         self.write(INDEX, PREPPED.replace("status: prepped",
                                           "status: prepped  # as planned"))
@@ -153,9 +161,8 @@ class SourceDocumentIgnoresTableLogTests(unittest.TestCase):
 
     def test_table_log_alone_is_no_source(self):
         fm, out = self.wrap({})
-        self.assertNotIn("Table Log", str(fm.get("source_document") or ""))
-        self.assertTrue(vl.wikilink_target(fm.get("source_document") or "") == ""
-                        or "Table Log" not in fm["source_document"], fm)
+        self.assertFalse(vl.wikilink_target(fm.get("source_document") or ""),
+                         fm)
 
 
 if __name__ == "__main__":

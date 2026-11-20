@@ -3963,7 +3963,9 @@ def cmd_resolve(batch: Batch, args: argparse.Namespace, _text: str) -> None:
 
 
 # Who files a play record, as its `created_by` says (--created-by).
-CREATED_BY = ("session-play", "vault-ingest", "run-sheet", "manual")
+CREATED_BY = ("session-play", "vault-ingest", "manual")
+# The run sheet writes the Table Log and nothing else.
+TABLE_LOG_CREATED_BY = (*CREATED_BY, "run-sheet")
 
 # Each play record: (its label, the file name's suffix, its `type:`).
 PLAY_RECORDS = {
@@ -5722,7 +5724,8 @@ def build_parser() -> argparse.ArgumentParser:
             "already names the session."))
     tn.add_argument("--session", required=True,
                     help="the session index: path or name")
-    tn.add_argument("--created-by", dest="created_by", choices=CREATED_BY,
+    tn.add_argument("--created-by", dest="created_by",
+                    choices=TABLE_LOG_CREATED_BY,
                     default="manual", help="who files it, stamped as created_by (default manual)")
     tn.add_argument("--play-date", dest="play_date", help="YYYY-MM-DD")
     tn.add_argument("--write", action="store_true", help="write it (default: preview)")
