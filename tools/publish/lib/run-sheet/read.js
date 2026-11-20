@@ -15,6 +15,8 @@ const { readPcs, SECTIONS: PC_SECTIONS } = require('./party');
 const { readPeople, TITLE: PEOPLE_TITLE } = require('./people');
 const { readHandouts, TITLE: HANDOUTS_TITLE } = require('./handouts');
 const { foesFor } = require('./foes');
+const { readTableLog, VITALS } = require('./table-log');
+const { orderedSessions } = require('../story-spine');
 const { unmaskedPlayAsOf } = require('./people-from-notes');
 const { parseNote } = require('../frontmatter');
 const { readSettings } = require('../settings/read');
@@ -189,8 +191,9 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
   add(beatsRead.warnings);
   const beats = beatsRead.beats;
   const seen = new Set();
+  const carried = readCarried();
   for (const beat of beats) {
-    const r = foesFor(beat, index, seen);
+    const r = foesFor(beat, index, seen, carried);
     beat.foes = r.foes;
     beat.treasure.push(...r.treasure);
     add(r.warnings);
@@ -377,6 +380,45 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
       unmasks.set(p, name ? { name, portrait: index.portrait(p, 'unmasked_portrait'), playAs: unmaskedPlayAsOf(p, index) } : null);
     }
     return unmasks.get(p);
+  }
+
+  // The previous session's Table Log, for the allies (an ally starts from its vitals there, else from
+  // its note): `{ log, hp: Map<note path, hit points> }`, or null when there is none. "Previous" is the
+  // session before this one in the site's story order (story-spine orderedSessions: chapter, then
+  // number), never number alone. Only that one session's `documents.table_log` is read. A link there,
+  // or a Who cell, that names no note warns once, naming the note it is in.
+  function readCarried() {
+    if (!sessionIndex) return null;
+    const pages = index.notes().map((p) => ({
+      title: stemOf(p), displayTitle: stemOf(p).replace(/_/g, ' '), frontmatter: fmOf(p), sourcePath: path.join(vaultPath, p), rel: p,
+    }));
+    const order = orderedSessions(pages);
+    const at = order.findIndex((pg) => pg.rel === sessionIndex);
+    if (at < 1) return null;
+    const prev = order[at - 1].rel;
+    const docs = fmOf(prev).documents;
+    const t = fmTarget(docs && typeof docs === 'object' ? docs.table_log : null);
+    if (!t) return null;
+    const log = index.resolve(t);
+    if (log === null) {
+      const why = (index.linkProblem(t) || {}).text || `[[${t}]] matches no note in the vault`;
+      warnings.push({ kind: 'table-log', note: prev, text: `its documents.table_log ${why}: allies start from their notes` });
+      return null;
+    }
+    const hp = new Map();
+    const bad = new Set();
+    for (const v of readTableLog(index.read(log).body).vitals) {
+      const who = index.resolve(v.who);
+      if (who === null) {
+        if (bad.has(low(v.who))) continue;
+        bad.add(low(v.who));
+        const why = (index.linkProblem(v.who) || {}).text || `[[${v.who}]] matches no note in the vault`;
+        warnings.push({ kind: 'table-log', note: log, text: `${VITALS}: ${why}; nobody starts from that row` });
+        continue;
+      }
+      if (v.hpNow !== null && !hp.has(who)) hp.set(who, v.hpNow);
+    }
+    return { log, hp };
   }
 
   // If you run long: never above the chapter. The chapter folder is the chapter note's folder,

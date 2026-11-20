@@ -33,6 +33,20 @@ const one = (index, name, count = 1) => foesOf(`Creatures/${name}.md`, index, co
 const npc = (index, name, count = 1) => foesOf(`Characters/NPCs/${name}.md`, index, count, 'b-test');
 
 describe('run sheet foes', () => {
+  it('an ally starts from the carried hit points; a foe never does', () => {
+    const { index } = setup();
+    const lucan = 'Characters/NPCs/Lucan Grey.md';
+    const wolf = 'Creatures/Frost Wolf.md';
+    const carried = { log: 'Log.md', hp: new Map([[lucan, 3], [wolf, 1]]) };
+    const [a] = foesOf(lucan, index, 1, 'b-test', new Set(), carried).foes;
+    assert.deepStrictEqual([a.ally, a.hp, a.hpNow, a.carriedFrom], [true, 16, 3, 'Log.md']);
+    const [w] = foesOf(wolf, index, 1, 'b-test', new Set(), carried).foes;
+    assert.deepStrictEqual([w.ally, w.hpNow, w.carriedFrom], [false, null, null]);
+    // nothing carried: both null
+    const [b] = foesOf(lucan, index, 1, 'b-test').foes;
+    assert.deepStrictEqual([b.hpNow, b.carriedFrom], [null, null]);
+  });
+
   it('tuned hit points beat the stock figure', () => {
     const { index } = setup();
     const [f] = one(index, 'Frost Wolf').foes;
