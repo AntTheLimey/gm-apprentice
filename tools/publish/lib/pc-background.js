@@ -222,8 +222,12 @@ function freeFormBackstory(html) {
 }
 
 // To the first `.`, `!` or `?` followed by whitespace or the end; past `max`, cut at a word.
+// A picture embed is no words of it: a backstory opening on `![[Six.png]]` starts at its prose (#804).
 function firstSentence(text, max = 200) {
-  const flat = String(text || '').replace(/\s+/g, ' ').trim();
+  const flat = String(text || '')
+    .replace(/!\[\[[^\]]*\]\]/g, ' ')
+    .replace(/!\[[^\]]*\]\((?:<[^>]*>[^)]*|(?:[^()]|\([^()]*\))*)\)/g, ' ')
+    .replace(/\s+/g, ' ').trim();
   let end = -1;
   for (const m of flat.matchAll(/[.!?](?=\s|$)/g)) {
     if (m[0] === '.') {

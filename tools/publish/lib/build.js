@@ -2233,8 +2233,9 @@ function buildSite(options) {
   function partyBoard(outputPath) {
     if (!party.board || !party.partyManifest) return {};
     const boardHtml = party.board.renderBoard(party.partyManifest, outputPath, { live: party.live });
-    if (!party.live) return { boardHtml };
-    return { boardHtml, dataScript: partyDataScript(party.partyManifest, party.board.scriptId), clientScripts: party.board.clientScripts };
+    const onBoard = party.partyManifest.pcs.map((pc) => pc.outputPath);
+    if (!party.live) return { boardHtml, onBoard };
+    return { boardHtml, onBoard, dataScript: partyDataScript(party.partyManifest, party.board.scriptId), clientScripts: party.board.clientScripts };
   }
 
   const liveFx = {

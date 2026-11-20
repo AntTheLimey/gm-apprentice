@@ -2,7 +2,8 @@
 // #483: the D&D backstory showcase (#492) on GURPS and Call of Cthulhu PC pages: the hook under the
 // name, the Story tab opening on the prologue, how they look beside the portrait, the system's
 // personality fields as cards, the sheet's teaser in place of a closed Background box, and the hook
-// on the party list cards. A PC with no backstory keeps the page it had.
+// in the link preview (the party board's names show it; the board's PCs get no list card, #804).
+// A PC with no backstory keeps the page it had.
 const { describe, it, before, after } = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs'); const path = require('path'); const os = require('os');
@@ -31,7 +32,16 @@ function site(fixture, system, edits) {
   console.log = () => {}; console.warn = () => {};
   try { build({ configPath }); } finally { Object.assign(console, real); }
   const dir = path.join(root, 'docs', 'characters', 'pcs');
-  return { page: (slug) => fs.readFileSync(path.join(dir, `${slug}.html`), 'utf8'), index: fs.readFileSync(path.join(dir, 'index.html'), 'utf8') };
+  const previews = JSON.parse(fs.readFileSync(path.join(root, 'docs', 'previews.json'), 'utf8'));
+  return {
+    page: (slug) => fs.readFileSync(path.join(dir, `${slug}.html`), 'utf8'), index: fs.readFileSync(path.join(dir, 'index.html'), 'utf8'),
+    // The link preview's opening line for a page: what a reader sees hovering its name on the party board.
+    preview: (slug) => {
+      const entry = Object.entries(previews).find(([k]) => k.endsWith(`characters/pcs/${slug}.html`));
+      assert.ok(entry, `${slug} has a link preview`);
+      return entry[1].x || '';
+    },
+  };
 }
 after(() => { for (const r of roots) fs.rmSync(r, { recursive: true, force: true }); });
 
@@ -77,8 +87,9 @@ describe('GURPS PC with a backstory (the template\'s sub-sections)', () => {
       quote: 'Karl walked out of the Black Forest at sixteen with a borrowed rifle.',
     });
   });
-  it('the hook is on its party list card', () => {
-    assert.match(card(s.index, 'Karl Brenner'), /<p class="card-hook">Karl walked out of the Black Forest/);
+  it('the hook is in the preview of his name on the party board, which gives him no card as well (#804)', () => {
+    assert.strictEqual(card(s.index, 'Karl Brenner'), '');
+    assert.match(s.preview('karl-brenner'), /^Karl walked out of the Black Forest/);
   });
 });
 
@@ -114,8 +125,9 @@ describe('CoC investigator with a backstory (the folio)', () => {
     assert.match(panel(html, 'p-sheet'), /<a href="#story">Read on/);
     assert.ok(html.includes('js/coc-sheet.js'));
   });
-  it('the hook is on its party list card', () => {
-    assert.match(card(s.index, 'Jane Ashford'), /<p class="card-hook">Jane was raised in a vicarage library\.<\/p>/);
+  it('the hook is in the preview of her name on the party board, which gives her no card as well (#804)', () => {
+    assert.strictEqual(card(s.index, 'Jane Ashford'), '');
+    assert.strictEqual(s.preview('jane-ashford'), 'Jane was raised in a vicarage library.');
   });
 });
 
@@ -137,18 +149,18 @@ describe('CoC investigator whose fields are lists, with GM text in them', () => 
 
 describe('CoC investigator with only the sheet\'s fields', () => {
   it('shows how they look and the cards, with no prologue, teaser or hook to invent', () => {
-    const { page, index } = site('with-coc-pc', 'regency-cthulhu', {});
+    const { page, preview } = site('with-coc-pc', 'regency-cthulhu', {});
     const html = page('jane-ashford');
     const story = panel(html, 'p-story');
     assert.match(story, /^\s*<section class="pc-story-box pc-look">/);
     assert.strictEqual((story.match(/class="pc-drive"/g) || []).length, 5);
     assert.ok(!html.includes('pc-prologue') && !html.includes('pc-backstory-teaser') && !html.includes('pull-quote'));
-    assert.doesNotMatch(card(index, 'Jane Ashford'), /card-hook/);
+    assert.strictEqual(preview('jane-ashford'), '');
   });
-  it('a `hook` is shown under the masthead and on the card', () => {
-    const { page, index } = site('with-coc-pc', 'regency-cthulhu', { 'Jane_Ashford.md': (t) => t.replace('type: pc', 'type: pc\nhook: She reads what she should not.') });
+  it('a `hook` is shown under the masthead and in the preview', () => {
+    const { page, preview } = site('with-coc-pc', 'regency-cthulhu', { 'Jane_Ashford.md': (t) => t.replace('type: pc', 'type: pc\nhook: She reads what she should not.') });
     assert.ok(page('jane-ashford').includes('<div class="pull-quote">She reads what she should not.</div>'));
-    assert.match(card(index, 'Jane Ashford'), /<p class="card-hook">She reads what she should not\.<\/p>/);
+    assert.strictEqual(preview('jane-ashford'), 'She reads what she should not.');
   });
 });
 
@@ -159,15 +171,15 @@ describe('PCs with no backstory keep their pages', () => {
     for (const cls of ['pc-prologue', 'pc-look', 'pc-drive', 'pc-backstory-teaser', 'pull-quote-backstory']) assert.ok(!html.includes(cls), cls);
     assert.match(panel(html, 'tab-sheet'), /^\s*<div class="gurps-sheet">/);
   });
-  it('CoC: no hook under the masthead, no hook on the card, the Story tab and Record as they were', () => {
-    const { page, index } = site('with-coc-pc', 'regency-cthulhu', {
+  it('CoC: no hook under the masthead or in the preview, the Story tab and Record as they were', () => {
+    const { page, preview } = site('with-coc-pc', 'regency-cthulhu', {
       'Jane_Ashford.md': (t) => t.replace(/## Background[\s\S]*?(?=## Injuries)/, ''),
     });
     const html = page('jane-ashford');
     for (const cls of ['pc-prologue', 'pc-look', 'pc-drive', 'pc-backstory-teaser', 'pull-quote']) assert.ok(!html.includes(cls), cls);
     assert.match(panel(html, 'p-story'), /^\s*<div class="story-prose">\s*<p class="text-muted">No story content available\.<\/p>\s*<\/div>\s*<\/div>/);
     assert.match(panel(html, 'p-sheet'), /^\s*<div class="coc-charsheet">/);
-    assert.doesNotMatch(card(index, 'Jane Ashford'), /card-hook/);
+    assert.strictEqual(preview('jane-ashford'), '');
   });
 });
 

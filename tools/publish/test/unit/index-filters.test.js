@@ -27,6 +27,27 @@ describe('buildPillFilters', () => {
     assert.ok(pills.includes('city'));
     assert.ok(pills.includes('building'));
   });
+
+  it('gives no type pills when every card has the same type (#804)', () => {
+    assert.deepStrictEqual(buildPillFilters([{ frontmatter: { type: 'pc' } }, { frontmatter: { type: 'pc' } }], 'characters/pcs'), ['All']);
+    assert.deepStrictEqual(buildPillFilters([{ frontmatter: { type: 'location', location_type: 'city' } }], 'locations'), ['All']);
+  });
+});
+
+describe('the type pills on an index', () => {
+  const page = (name, type) => ({ title: name, displayTitle: name, outputPath: `characters/${name.toLowerCase()}.html`, outputDir: 'characters', frontmatter: { type } });
+  const render = (pages) => indexTemplate('characters', 'Characters', pages, () => '<nav></nav>', { siteTitle: 'X' },
+    { statuses: { out_of_play: new Set() }, _linkMap: {} }, {}, {});
+
+  it('reads each type as a reader sees it', () => {
+    const html = render([page('Six', 'pc'), page('Rook', 'npc')]);
+    assert.match(html, /data-filter="pc">Player character</);
+    assert.match(html, /data-filter="npc">NPC</);
+  });
+
+  it('shows no pills for a folder of one type (#804)', () => {
+    assert.doesNotMatch(render([page('Six', 'pc'), page('Rook', 'pc')]), /pill-filter/);
+  });
 });
 
 describe('buildLocationTree', () => {
