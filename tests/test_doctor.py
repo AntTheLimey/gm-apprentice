@@ -142,8 +142,9 @@ class DoctorTests(unittest.TestCase):
         self.assertEqual(doctor.report(found)[1], 0)
 
     def test_it_runs_through_gma_and_changes_nothing(self):
-        done = subprocess.run([sys.executable, str(REPO / "skills" / "shared" / "scripts" / "gma.py"), "doctor"],
-                              capture_output=True, text=True)
+        with tempfile.TemporaryDirectory() as user:  # never the GM's own home (personal files)
+            done = subprocess.run([sys.executable, str(REPO / "skills" / "shared" / "scripts" / "gma.py"), "doctor"],
+                                  capture_output=True, text=True, env={**os.environ, "HOME": user, "USERPROFILE": user})
         self.assertIn(done.returncode, (0, 1), done.stderr)
         self.assertRegex(done.stdout, r"(?m)^ok\s+Python ")
         self.assertRegex(done.stdout, r"(?m)^(Ready|Not ready)")

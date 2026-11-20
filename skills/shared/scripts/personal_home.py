@@ -13,7 +13,9 @@ deleted with the old version's folder.
 plugin, in the older version folders beside it, into the home. It copies:
 it never moves, deletes or overwrites. A file already in the home is kept;
 a different file of the same name left behind is reported only when it is
-the newer of the two (it may hold edits the home's copy lacks). `gma personal` and `gma update`
+the newer of the two (it may hold edits the home's copy lacks). Each file is
+dealt with once (the home's hidden `.adopted.json` names it), so a file the
+GM renames or deletes in the home is never brought back. `gma personal` and `gma update`
 run it; `gma doctor` counts what it would copy, changing nothing.
 
 This command lists the home; its files are the GM's licensed material and
@@ -39,6 +41,8 @@ FOLDER = Path("gm-apprentice") / "personal"
 # Where an install keeps the systems corpus, relative to the folder holding shared/.
 SYSTEMS = Path("ttrpg-expert") / "systems"
 README = "readme.md"
+# In the home: every file adoption has dealt with (`fitd/factions.md`), so it is never copied twice.
+RECORD = ".adopted.json"
 
 
 def home(user_home: Path | None = None) -> Path:
@@ -114,10 +118,30 @@ def _copy(src: Path, dest: Path) -> None:
         raise
 
 
+def _read_record(target: Path) -> set[str]:
+    try:
+        data = json.loads((target / RECORD).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return set()
+    return {k for k in data if isinstance(k, str)} if isinstance(data, list) else set()
+
+
+def _write_record(target: Path, keys: set[str]) -> None:
+    target.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=target, prefix=".copying-")
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        json.dump(sorted(keys), f, indent=0)
+    os.replace(tmp, target / RECORD)
+
+
 def adopt(shared: Path, *, user_home: Path | None = None, dry_run: bool = False) -> Adoption:
-    """Copy every personal file the install folders hold into the home (see the module text)."""
+    """Copy every personal file the install folders hold into the home (see the module text).
+    Each file is dealt with once: the home's record names it from then on, so one the GM
+    renamed or deleted is not brought back, and a clash is reported once."""
     target = home(user_home)
     result = Adoption()
+    record = _read_record(target)
+    seen = set(record)
     for label, systems in sources(shared):
         if not systems.is_dir():
             continue
@@ -126,7 +150,12 @@ def adopt(shared: Path, *, user_home: Path | None = None, dry_run: bool = False)
                 continue
             system = personal.parent.name
             for src in _files(personal):
-                dest = target / system / src.relative_to(personal)
+                rel = src.relative_to(personal)
+                key = "/".join((system, *rel.parts))
+                if key in seen:
+                    continue
+                seen.add(key)
+                dest = target / system / rel
                 if dest.exists():
                     # Same bytes, or the home's copy is the newer (the GM edited it after it came
                     # across): nothing to say. Only a newer file left behind may hold edits to lose.
@@ -137,6 +166,8 @@ def adopt(shared: Path, *, user_home: Path | None = None, dry_run: bool = False)
                 if not dry_run:
                     _copy(src, dest)
                 result.copied[label] = result.copied.get(label, 0) + 1
+    if not dry_run and seen != record:
+        _write_record(target, seen)
     return result
 
 

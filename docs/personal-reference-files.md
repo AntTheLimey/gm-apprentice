@@ -61,7 +61,8 @@ update replaces that folder, so files kept there were left
 behind in the old version. The first `gma update` (or
 `gma personal`) after you install this version copies any it
 finds into `~/gm-apprentice/personal/`. It never moves, deletes
-or overwrites a file, and says what it copied.
+or overwrites a file, says what it copied, and copies each file
+once: one you later rename or delete there stays that way.
 
 ## What to Put in Personal Files
 

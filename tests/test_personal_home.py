@@ -75,6 +75,37 @@ class PersonalHomeTests(unittest.TestCase):
         self.assertEqual((again.copied, again.clashes), ({}, []), "a second run has nothing to do")
         self.assertEqual(ph.adoption_lines(again, user_home=self.user), [])
 
+    def test_a_file_the_gm_renamed_or_deleted_is_not_brought_back(self):
+        old = self.cache / "1.12.95"
+        _install(old)
+        _write(_personal(old, "fitd", "factions.md"), "factions")
+        _write(_personal(old, "fitd", "npcs.md"), "npcs")
+        new = _install(self.cache / "1.12.105")
+        self.adopt(new)
+        (self.home / "fitd" / "factions.md").rename(self.home / "fitd" / "crews.md")
+        (self.home / "fitd" / "npcs.md").unlink()
+        again = self.adopt(new)
+        self.assertEqual(again.copied, {})
+        self.assertEqual(ph.listing(user_home=self.user), {"fitd": ["crews.md"]})
+
+    def test_a_clash_is_reported_once(self):
+        old = self.cache / "1.12.95"
+        _install(old)
+        _write(_personal(old, "fitd", "notes.md"), "newer", mtime=3_000)
+        _write(self.home / "fitd" / "notes.md", "the GM's own", mtime=2_000)
+        new = _install(self.cache / "1.12.105")
+        self.assertEqual(len(self.adopt(new).clashes), 1)
+        self.assertEqual(self.adopt(new).clashes, [])
+        self.assertEqual((self.home / "fitd" / "notes.md").read_text(), "the GM's own")
+
+    def test_a_dry_run_writes_no_record(self):
+        old = self.cache / "1.12.95"
+        _install(old)
+        _write(_personal(old, "fitd", "a.md"), "a")
+        new = _install(self.cache / "1.12.105")
+        self.adopt(new, dry_run=True)
+        self.assertEqual(self.adopt(new).copied, {"1.12.95": 1}, "the dry run left it to be copied")
+
     def test_files_in_the_running_install_are_copied_too(self):
         shared = _install(self.cache / "1.12.105")
         _write(_personal(self.cache / "1.12.105", "coc-7e", "arkham.md"), "arkham")
