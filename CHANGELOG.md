@@ -10,6 +10,12 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 ---
 
 
+## [1.12.107] — 2026-11-20
+
+### Added
+
+- The README links the GM-Apprentice website, gmapprentice.com: the start-here guides, a tutorial for each skill, and the gallery.
+
 ## [1.12.105] — 2026-11-20
 
 ### Added

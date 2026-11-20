@@ -5,6 +5,8 @@ An apprentice that helps GMs run tabletop role-playing games -- from a
 first spark of an idea through content generation, live play, and
 campaign management.
 
+Guides, tutorials and a gallery of campaign sites: <https://gmapprentice.com>
+
 ## Installation
 
 ### Handing the install to your AI agent
