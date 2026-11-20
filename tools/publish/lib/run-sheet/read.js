@@ -24,6 +24,7 @@ const { readSettings } = require('../settings/read');
 const { readerFrom } = require('../vault-reader');
 const { isWithheld, nameList, unmaskedNames, unmaskedNameUnread } = require('../processor');
 const { canonicalNfc } = require('../unicode');
+const { SESSION_PLAYED } = require('../shared-lists');
 
 const toPosix = (p) => p.split(path.sep).join('/');
 const low = (s) => canonicalNfc(String(s == null ? '' : s)).trim().toLowerCase();
@@ -383,47 +384,102 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
     return unmasks.get(p);
   }
 
-  // The previous session's Table Log, for the allies (an ally starts from its vitals there, else from
-  // its note): `{ log, hp: Map<note path, hit points> }`, or null when there is none. "Previous" is the
-  // session before this one in the site's story order (story-spine orderedSessions: chapter, then
-  // number), never number alone. Only that one session's `documents.table_log` is read. A link there,
-  // or a Who cell, that names no note warns once, naming the note it is in.
+  // The allies' carried vitals: `{ of(note) }` gives `{ hp, log }`, from the latest Table Log before this
+  // session whose vitals name the ally (a row with no figure still stops the walk: `hp` null), or null.
+  // The walk goes back through the sessions before this one in the site's story order (story-spine
+  // orderedSessions: chapter, then number), never number alone, and counts only played ones: `status`
+  // played (or wrap-up, reviewed), or a Play Notes, Export, Table Log or Wrap-Up linked from
+  // `documents`. A session's Table Log is its `documents.table_log`, else the one `session-table-log`
+  // note whose `session:` names the index; one of another type is not read. Each log is read once, and
+  // only as far back as an ally asks. A link that names no note or the wrong type, a Who cell that names
+  // no note, and an HP cell that holds no number each warn once, naming the note they are in.
   function readCarried() {
     if (!sessionIndex) return null;
     // Page-shaped as the scanner makes them (its displayTitleOf: `title:`, else the stem), so a chapter
     // a session names by title owns it here as on the site. Sessions with equal sort keys (two with no
     // session_number in one chapter) keep their input order: the index's path order here, the scanner's
-    // walk order on the site; only such unnumbered sessions can differ.
+    // walk order on the site, so those can be read in a different order than the site shows them.
     const pages = index.notes().map((p) => ({
       title: stemOf(p), displayTitle: displayTitleOf(fmOf(p), stemOf(p)), frontmatter: fmOf(p), sourcePath: path.join(vaultPath, p), rel: p,
     }));
     const order = orderedSessions(pages);
     const at = order.findIndex((pg) => pg.rel === sessionIndex);
     if (at < 1) return null;
-    const prev = order[at - 1].rel;
-    const docs = fmOf(prev).documents;
-    const t = fmTarget(docs && typeof docs === 'object' ? docs.table_log : null);
-    if (!t) return null;
-    const log = index.resolve(t);
-    if (log === null) {
-      const why = (index.linkProblem(t) || {}).text || `[[${t}]] matches no note in the vault`;
-      warnings.push({ kind: 'table-log', note: prev, text: `its documents.table_log ${why}: allies start from their notes` });
-      return null;
-    }
-    const hp = new Map();
-    const bad = new Set();
-    for (const v of readTableLog(index.read(log).body).vitals) {
-      const who = index.resolve(v.who);
-      if (who === null) {
-        if (bad.has(low(v.who))) continue;
-        bad.add(low(v.who));
-        const why = (index.linkProblem(v.who) || {}).text || `[[${v.who}]] matches no note in the vault`;
-        warnings.push({ kind: 'table-log', note: log, text: `${VITALS}: ${why}; nobody starts from that row` });
-        continue;
+    const earlier = order.slice(0, at).map((pg) => pg.rel).reverse();
+    const RECORDS = ['play_notes', 'export', 'table_log', 'wrap_up'];
+    const played = (s) => {
+      const sfm = fmOf(s);
+      const docs = sfm.documents && typeof sfm.documents === 'object' ? sfm.documents : {};
+      return SESSION_PLAYED.has(low(sfm.status)) || RECORDS.some((k) => fmTarget(docs[k]));
+    };
+    const logOf = (s) => {
+      const docs = fmOf(s).documents;
+      const t = fmTarget(docs && typeof docs === 'object' ? docs.table_log : null);
+      if (!t) {
+        const named = index.notes().filter((n) => low(fmOf(n).type) === 'session-table-log' && index.resolve(fmTarget(fmOf(n).session) || null) === s);
+        return named.length === 1 ? named[0] : null;
       }
-      if (v.hpNow !== null && !hp.has(who)) hp.set(who, v.hpNow);
-    }
-    return { log, hp };
+      const log = index.resolve(t);
+      if (log === null) {
+        const why = (index.linkProblem(t) || {}).text || `[[${t}]] matches no note in the vault`;
+        warnings.push({ kind: 'table-log', note: s, text: `its documents.table_log ${why}: allies start from their notes` });
+        return null;
+      }
+      if (low(fmOf(log).type) !== 'session-table-log') {
+        warnings.push({ kind: 'table-log', note: s, text: `its documents.table_log links ${log}, which is not type: session-table-log: it is not read for the allies` });
+        return null;
+      }
+      return log;
+    };
+    // Per earlier played session, newest first, read when first asked: Map<note path, hit points>.
+    const read = [];
+    let next = 0;
+    const bad = new Set();
+    const readNext = () => {
+      while (next < earlier.length) {
+        const s = earlier[next++];
+        if (!played(s)) continue;
+        const log = logOf(s);
+        if (!log) continue;
+        const hp = new Map();
+        const t = readTableLog(index.read(log).body);
+        for (const v of t.vitals) {
+          const who = index.resolve(v.who);
+          if (who === null) {
+            if (bad.has(low(v.who))) continue;
+            bad.add(low(v.who));
+            const why = (index.linkProblem(v.who) || {}).text || `[[${v.who}]] matches no note in the vault`;
+            warnings.push({ kind: 'table-log', note: log, text: `${VITALS}: ${why}; nobody starts from that row` });
+            continue;
+          }
+          if (!hp.has(who)) hp.set(who, v.hpNow);
+        }
+        const unread = new Set();
+        for (const u of t.unread) {
+          const who = index.resolve(u.who);
+          const k = `${who}\u0000${low(u.cell)}`;
+          if (who === null || unread.has(k)) continue;
+          unread.add(k);
+          warnings.push({ kind: 'table-log', note: log, text: `${VITALS}: the HP cell "${u.cell}" for [[${u.who}]] holds no number it can read (current/max or current): it starts from its note` });
+        }
+        read.push({ log, hp });
+        return true;
+      }
+      return false;
+    };
+    const found = new Map();
+    return {
+      of(note) {
+        if (!found.has(note)) {
+          let hit = null;
+          for (let i = 0; hit === null && (i < read.length || readNext()); i++) {
+            if (read[i].hp.has(note)) hit = { hp: read[i].hp.get(note), log: read[i].log };
+          }
+          found.set(note, hit);
+        }
+        return found.get(note);
+      },
+    };
   }
 
   // If you run long: never above the chapter. The chapter folder is the chapter note's folder,

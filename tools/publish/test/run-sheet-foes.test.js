@@ -37,7 +37,8 @@ describe('run sheet foes', () => {
     const { index } = setup();
     const lucan = 'Characters/NPCs/Lucan Grey.md';
     const wolf = 'Creatures/Frost Wolf.md';
-    const carried = { log: 'Log.md', hp: new Map([[lucan, 3], [wolf, 1]]) };
+    const hp = new Map([[lucan, 3], [wolf, 1]]);
+    const carried = { of: (n) => (hp.has(n) ? { hp: hp.get(n), log: 'Log.md' } : null) };
     const [a] = foesOf(lucan, index, 1, 'b-test', new Set(), carried).foes;
     assert.deepStrictEqual([a.ally, a.hp, a.hpNow, a.carriedFrom], [true, 16, 3, 'Log.md']);
     const [w] = foesOf(wolf, index, 1, 'b-test', new Set(), carried).foes;

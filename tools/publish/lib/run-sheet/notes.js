@@ -13,11 +13,15 @@ const { canonicalNfc, nfcLookupTable } = require('../unicode');
 const { readSettings } = require('../settings/read');
 const { readerFrom } = require('../vault-reader');
 const { HEADING_LINE } = require('./plan-text');
+const { WORKSPACE_FOLDERS } = require('../shared-lists');
 
-const LEFT_OUT = new Set(['_Templates', '_midwife', '_meta', '_archive', '_QA', 'node_modules']);
+// The folders the reader never indexes, matched in any case: housekeeping, and the plugin's workspace
+// folders as every tool lists them (the ontology's workspace_folders, `_inbox` among them).
+const LEFT_OUT_DIRS = ['_Templates', '_meta', '_archive', 'node_modules', ...WORKSPACE_FOLDERS];
+const LEFT_OUT = new Set(LEFT_OUT_DIRS.map((d) => d.toLowerCase()));
 
 const toPosix = (p) => p.split(path.sep).join('/');
-const isLeftOut = (rel) => rel.split('/').slice(0, -1).some((seg) => seg.startsWith('.') || LEFT_OUT.has(seg));
+const isLeftOut = (rel) => rel.split('/').slice(0, -1).some((seg) => seg.startsWith('.') || LEFT_OUT.has(seg.toLowerCase()));
 const stemOf = (rel) => path.posix.basename(rel, path.posix.extname(rel));
 
 function wikiTarget(value) {
@@ -186,7 +190,7 @@ function buildIndex(vaultPath, { deps } = {}) {
       const dir = values.vault && values.vault.attachments;
       // The GM sees every portrait: the players' hide list does not apply, only the workspace
       // folders the index itself leaves out.
-      attachments = scanAttachments({ vaultPath, attachmentsDir: dir, excludeDirs: [...LEFT_OUT] }, deps);
+      attachments = scanAttachments({ vaultPath, attachmentsDir: dir, excludeDirs: LEFT_OUT_DIRS }, deps);
     } catch (err) {
       attachments = {};
       warn('unreadable-attachments', null, `the vault's pictures could not be listed (${String(err.message).split('\n')[0]}): the sheet shows no portraits`);

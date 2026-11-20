@@ -222,8 +222,8 @@ vitals), loot, point states and where everyone ended; the Play Notes and
 Export win for what was said and decided. Wrap-up names each
 disagreement in its review. Where the Table Log's end-of-session vitals
 differ from what flush wrote, the review names both and the GM picks.
-The run sheet starts an ally from the previous session's Table Log when
-there is one, else the note.
+The run sheet starts an ally from the latest played session's Table Log
+whose vitals name it, else the note.
 
 ### 4. Session Wrap-Up (`Chapter_CC_Session_NN_Wrap_Up.md`)
 

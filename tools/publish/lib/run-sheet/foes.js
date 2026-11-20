@@ -82,9 +82,9 @@ function entry(notePath, index, count, add) {
 
 // The fight rows for a list of entries, keyed together so no two share a key, and numbered per
 // note across the list (two lines of one creature give `Wolf 1` to `Wolf 5`). An ally starts from
-// `carried` (the previous session's Table Log: `{ log, hp: Map<note path, hit points> }`) when it
-// names the ally: `hpNow` is that figure and `carriedFrom` the log; `hp` stays the note's. A foe
-// never carries, and an ally the log does not name has both null.
+// `carried` (the reader's `{ of(note) }`: `{ hp, log }` from the latest Table Log naming the ally,
+// or null) when it has a figure: `hpNow` is that figure and `carriedFrom` the log; `hp` stays the
+// note's. A foe never carries, and an ally with no figure has both null.
 function rows(entries, beatKey, carried = null) {
   const paths = entries.flatMap((e) => Array(e.n).fill(e.notePath));
   const keys = itemKeys(beatKey, 'foe', paths);
@@ -96,13 +96,14 @@ function rows(entries, beatKey, carried = null) {
     const i = (at.get(e.notePath) || 0) + 1;
     at.set(e.notePath, i);
     const { info, nums } = e;
-    const hpNow = nums.ally && carried && carried.hp.has(e.notePath) ? carried.hp.get(e.notePath) : null;
+    const got = nums.ally && carried ? carried.of(e.notePath) : null;
+    const hpNow = got && got.hp !== null ? got.hp : null;
     return {
       key: keys[k++], note: e.notePath, name: total.get(e.notePath) > 1 ? `${info.name} ${i}` : info.name,
       ally: nums.ally, ac: nums.ac, hp: nums.hp, init: nums.init,
       legendaryResistance: nums.legendaryResistance, legendaryActions: nums.legendaryActions,
       recharge: nums.recharge, lair: nums.lair, stats: info.stats,
-      hpNow, carriedFrom: hpNow === null ? null : carried.log,
+      hpNow, carriedFrom: hpNow === null ? null : got.log,
     };
   }));
 }
@@ -115,7 +116,7 @@ function foesOf(notePath, index, count = 1, beatKey, seen = new Set(), carried =
 }
 
 // Every `who` entry of a beat, planned or contingency. `seen` carries one Plan's warnings across beats;
-// `carried` is the previous session's Table Log, as `rows` reads it.
+// `carried` is the allies' carried vitals, as `rows` reads them.
 function foesFor(beat, index, seen = new Set(), carried = null) {
   const warnings = [];
   const add = warner(seen, warnings);

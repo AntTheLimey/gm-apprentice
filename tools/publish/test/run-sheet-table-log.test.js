@@ -101,4 +101,30 @@ describe('readTableLog', () => {
     assert.deepStrictEqual([...a.sections], [...b.sections]);
     assert.doesNotMatch(JSON.stringify([...a.sections]), /\\r/);
   });
+
+  it('finds the Who, HP and Conditions columns by the header row, in any case', () => {
+    const t = (head, sep, row) => `## Vitals at the end\n\n${head}\n${sep}\n${row}\n`;
+    const r1 = readTableLog(t('| Who | Max | HP |', '|---|---|---|', '| [[Lucan Grey]] | 27 | 9 |'));
+    assert.deepStrictEqual(r1.vitals, [{ who: 'Lucan Grey', hpNow: 9, hpMax: null, conditions: '' }]);
+    const r2 = readTableLog(t('| who | CONDITIONS | hp |', '|---|---|---|', '| [[Lucan Grey]] | winded | 9/27 |'));
+    assert.deepStrictEqual(r2.vitals, [{ who: 'Lucan Grey', hpNow: 9, hpMax: 27, conditions: 'winded' }]);
+    // no header row (no separator): by position
+    const r3 = readTableLog('## Vitals at the end\n\n| [[Lucan Grey]] | 9/27 | winded |\n');
+    assert.deepStrictEqual(r3.vitals, [{ who: 'Lucan Grey', hpNow: 9, hpMax: 27, conditions: 'winded' }]);
+  });
+
+  it('reads the HP cell shapes a hand-writer types', () => {
+    const cells = ['9/27 hp', '9 of 27', '9/27 (bloodied)', '\u22123/27', '9 HP'];
+    const text = '## Vitals at the end\n\n| Who | HP | Conditions |\n|---|---|---|\n'
+      + cells.map((c) => `| [[Lucan Grey]] | ${c} | |`).join('\n') + '\n';
+    const r = readTableLog(text);
+    assert.deepStrictEqual(r.vitals.map((v) => [v.hpNow, v.hpMax]), [[9, 27], [9, 27], [9, 27], [-3, 27], [9, null]]);
+    assert.deepStrictEqual(r.unread, []);
+  });
+
+  it('lists the rows whose HP cell is not empty and cannot be read', () => {
+    const text = '## Vitals at the end\n\n| Who | HP | Conditions |\n|---|---|---|\n'
+      + '| [[Lucan Grey]] | fine | |\n| [[Ada Moss]] | | prone |\n| [[Ben Hart]] | 4/9 | |\n';
+    assert.deepStrictEqual(readTableLog(text).unread, [{ who: 'Lucan Grey', cell: 'fine' }]);
+  });
 });

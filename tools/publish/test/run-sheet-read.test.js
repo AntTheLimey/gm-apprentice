@@ -530,8 +530,8 @@ const CH1 = 'Chapters/Chapter 1';
 const CH2 = 'Chapters/Chapter 2';
 const LUCAN = 'Characters/NPCs/Lucan Grey.md';
 const ASH = 'Characters/NPCs/Brother Ash.md';
-const sessionIndex = (dir, rel, { number, chapter, log }) => write(dir, rel, [
-  '---', 'type: session', `session_number: ${number}`, `chapter: "[[${chapter}]]"`, 'status: played',
+const sessionIndex = (dir, rel, { number, chapter, log, status = 'played' }) => write(dir, rel, [
+  '---', 'type: session', `session_number: ${number}`, `chapter: "[[${chapter}]]"`, `status: ${status}`,
   'documents:', `  table_log: ${log ? `"[[${log}]]"` : 'null'}`, '---', '', `# ${path.posix.basename(rel, '.md')}`, '',
 ].join('\n'));
 const tableLog = (dir, rel, session, rows) => write(dir, rel, [
@@ -577,9 +577,32 @@ describe('run sheet reader: allies start from the last Table Log', () => {
     assert.deepStrictEqual(tableLogWarnings(m), []);
   });
 
-  it('an ally whose HP cell holds no number starts from note', () => {
-    const m = readRunSheet(withS1(['| [[Lucan Grey]] | fine | |']), PLAN, { party: PARTY });
+  it('an ally whose HP cell holds no number starts from note, and the row warns once', () => {
+    const m = readRunSheet(withS1(['| [[Lucan Grey]] | fine | |', '| [[Lucan Grey]] | fine | |']), PLAN, { party: PARTY });
     for (const f of allyRows(m)) assert.deepStrictEqual([f.hpNow, f.carriedFrom], [null, null]);
+    const w = tableLogWarnings(m);
+    assert.strictEqual(w.length, 1, JSON.stringify(w));
+    assert.strictEqual(w[0].kind, 'table-log');
+    assert.strictEqual(w[0].note, S1_LOG);
+    assert.match(w[0].text, /Lucan Grey/);
+    assert.match(w[0].text, /"fine"/);
+  });
+
+  it('an empty HP cell is silent', () => {
+    const m = readRunSheet(withS1(['| [[Lucan Grey]] | | winded |']), PLAN, { party: PARTY });
+    for (const f of allyRows(m)) assert.deepStrictEqual([f.hpNow, f.carriedFrom], [null, null]);
+    assert.deepStrictEqual(tableLogWarnings(m), []);
+  });
+
+  it('a header row puts the HP column where it says', () => {
+    const dir = withS1();
+    tableLog(dir, S1_LOG, 'Session 01 - The Road', []);
+    const abs = path.join(dir, S1_LOG);
+    fs.writeFileSync(abs, fs.readFileSync(abs, 'utf8').replace('| Who | HP | Conditions |\n|-----|----|------------|',
+      '| Who | Max | HP |\n|---|---|---|\n| [[Lucan Grey]] | 27 | 9 hp |'));
+    const m = readRunSheet(dir, PLAN, { party: PARTY });
+    for (const f of allyRows(m)) assert.deepStrictEqual([f.hpNow, f.carriedFrom], [9, S1_LOG]);
+    assert.deepStrictEqual(tableLogWarnings(m), []);
   });
 
   it('a pipe alias in the Who cell still finds the ally', () => {
@@ -608,7 +631,8 @@ describe('run sheet reader: allies start from the last Table Log', () => {
       write(dir, S1_LOG, text);
       const m = readRunSheet(dir, PLAN, { party: PARTY });
       for (const f of allyRows(m)) assert.deepStrictEqual([f.hpNow, f.carriedFrom], [null, null]);
-      assert.deepStrictEqual(tableLogWarnings(m), []);
+      // an empty file has no `type: session-table-log`, so it is not read, and says so
+      assert.deepStrictEqual(tableLogWarnings(m).map((w) => /not type: session-table-log/.test(w.text)), text ? [] : [true]);
     }
   });
 
@@ -670,22 +694,66 @@ describe('run sheet reader: allies start from the last Table Log', () => {
     assert.deepStrictEqual(hpOf(P2), [`2 ${C2S1_LOG}`]);
   });
 
-  it('a previous session with no Table Log is never skipped back past', () => {
-    // S1 has a log; S2, the session before the Plan's S3, has none: allies start from their notes.
-    const dir = withS1();
-    const S2 = `${CH1}/Sessions/Session 02/Session 02 - The Test.md`;
-    sessionIndex(dir, S2, { number: 2, chapter: 'Chapter 1', log: null });
-    const S3 = `${CH1}/Sessions/Session 03/Session 03 - Next.md`;
-    sessionIndex(dir, S3, { number: 3, chapter: 'Chapter 1', log: null });
-    const P3 = `${CH1}/Sessions/Session 03/Session 03 - Next - Plan.md`;
+  // S1 has a log naming Lucan; S2 (the fixture's) and S3 are made as each test needs; the Plan is S3's.
+  const S2 = `${CH1}/Sessions/Session 02/Session 02 - The Test.md`;
+  const S2_LOG = `${CH1}/Sessions/Session 02/Session 02 - The Test - Table Log.md`;
+  const S3 = `${CH1}/Sessions/Session 03/Session 03 - Next.md`;
+  const P3 = `${CH1}/Sessions/Session 03/Session 03 - Next - Plan.md`;
+  const withS3 = (dir) => {
+    sessionIndex(dir, S3, { number: 3, chapter: 'Chapter 1', log: null, status: 'planned' });
     write(dir, P3, ['---', 'type: session-plan', 'session: "[[Session 03 - Next]]"', 'chapter: "[[Chapter 1]]"', '---', '',
       '## Planned Scenes', '', '### Scene 1: Again', '**Situation:** Lucan again.', '**NPCs**', '- **[[Lucan Grey]]:** helps', ''].join('\n'));
     const m = readRunSheet(dir, P3, { party: PARTY });
     const rows = allyRows(m);
     assert.ok(rows.length >= 1);
-    for (const f of rows) assert.deepStrictEqual([f.hpNow, f.carriedFrom], [null, null]);
-    // the same vault's S2 Plan does carry from S1, so the log is readable
-    for (const f of allyRows(readRunSheet(dir, PLAN, { party: PARTY }))) assert.strictEqual(f.hpNow, 9);
+    return { m, got: [...new Set(rows.map((f) => `${f.hpNow} ${f.carriedFrom}`))] };
+  };
+
+  it('walks back past a played session with no Table Log', () => {
+    const dir = withS1();
+    sessionIndex(dir, S2, { number: 2, chapter: 'Chapter 1', log: null });
+    const { m, got } = withS3(dir);
+    assert.deepStrictEqual(got, [`9 ${S1_LOG}`]);
+    assert.deepStrictEqual(tableLogWarnings(m), []);
+  });
+
+  it('skips an unplayed session index between', () => {
+    // the fixture's S2 is planned, with no records
+    const { got } = withS3(withS1());
+    assert.deepStrictEqual(got, [`9 ${S1_LOG}`]);
+  });
+
+  it('an unplayed index does not count even with a log beside it unlinked', () => {
+    const dir = withS1();
+    tableLog(dir, S2_LOG, 'Session 02 - The Test', ['| [[Lucan Grey]] | 2/27 | |']);
+    const { got } = withS3(dir);
+    assert.deepStrictEqual(got, [`9 ${S1_LOG}`]);
+  });
+
+  it('a later Table Log that does not name the ally does not stop the walk', () => {
+    const dir = withS1();
+    sessionIndex(dir, S2, { number: 2, chapter: 'Chapter 1', log: 'Session 02 - The Test - Table Log' });
+    tableLog(dir, S2_LOG, 'Session 02 - The Test', ['| [[Ada Moss]] | 3/11 | |']);
+    const { got } = withS3(dir);
+    assert.deepStrictEqual(got, [`9 ${S1_LOG}`]);
+  });
+
+  it('the latest Table Log naming the ally wins', () => {
+    const dir = withS1();
+    sessionIndex(dir, S2, { number: 2, chapter: 'Chapter 1', log: 'Session 02 - The Test - Table Log' });
+    tableLog(dir, S2_LOG, 'Session 02 - The Test', ['| [[Lucan Grey]] | 14/27 | |']);
+    const { got } = withS3(dir);
+    assert.deepStrictEqual(got, [`14 ${S2_LOG}`]);
+  });
+
+  it('a session played by its Play Notes alone counts, its unlinked Table Log found by session:', () => {
+    const dir = withS1();
+    write(dir, S2, ['---', 'type: session', 'session_number: 2', 'chapter: "[[Chapter 1]]"', 'status: planned',
+      'documents:', '  play_notes: "[[Session 02 - The Test - Play Notes]]"', '---', ''].join('\n'));
+    write(dir, `${CH1}/Sessions/Session 02/Session 02 - The Test - Play Notes.md`, '---\ntype: session-play-notes\n---\n\nPlayed.\n');
+    tableLog(dir, S2_LOG, 'Session 02 - The Test', ['| [[Lucan Grey]] | 14/27 | |']);
+    const { got } = withS3(dir);
+    assert.deepStrictEqual(got, [`14 ${S2_LOG}`]);
   });
 
   it('a chapter matched by its title: field orders as the site orders it', () => {
@@ -720,6 +788,39 @@ describe('run sheet reader: allies start from the last Table Log', () => {
     assert.ok(foes.some((f) => f.note === ASH));
     for (const f of foes) assert.deepStrictEqual([f.hpNow, f.carriedFrom], [null, null], f.name);
     for (const f of allyRows(m)) assert.strictEqual(f.hpNow, 9);
+  });
+
+  it('an unlinked Table Log whose session: names the index is read', () => {
+    const dir = withS1();
+    sessionIndex(dir, S1, { number: 1, chapter: 'Chapter 1', log: null });
+    const m = readRunSheet(dir, PLAN, { party: PARTY });
+    for (const f of allyRows(m)) assert.deepStrictEqual([f.hpNow, f.carriedFrom], [9, S1_LOG]);
+    assert.deepStrictEqual(tableLogWarnings(m), []);
+  });
+
+  it('a documents.table_log that links a note of another type warns once and is not read', () => {
+    const dir = withS1();
+    const NOTES = `${CH1}/Sessions/Session 01/Session 01 - The Road - Play Notes.md`;
+    write(dir, NOTES, ['---', 'type: session-play-notes', '---', '', '| Who | HP |', '|---|---|', '| [[Lucan Grey]] | 3 |', ''].join('\n'));
+    sessionIndex(dir, S1, { number: 1, chapter: 'Chapter 1', log: 'Session 01 - The Road - Play Notes' });
+    fs.rmSync(path.join(dir, S1_LOG));
+    const m = readRunSheet(dir, PLAN, { party: PARTY });
+    for (const f of allyRows(m)) assert.deepStrictEqual([f.hpNow, f.carriedFrom], [null, null]);
+    const w = tableLogWarnings(m);
+    assert.strictEqual(w.length, 1, JSON.stringify(w));
+    assert.strictEqual(w[0].note, S1);
+    assert.match(w[0].text, /session-table-log/);
+  });
+
+  it('a session note in a workspace or templates folder, in any case, is never the previous session', () => {
+    for (const folder of ['_inbox', '_Inbox', '_templates', '_QA']) {
+      const dir = withS1();
+      const rel = `${folder}/Session 01 - Draft.md`;
+      sessionIndex(dir, rel, { number: 1, chapter: 'Chapter 1', log: 'Session 01 - Draft - Table Log' });
+      tableLog(dir, `${folder}/Session 01 - Draft - Table Log.md`, 'Session 01 - Draft', ['| [[Lucan Grey]] | 2/27 | |']);
+      const m = readRunSheet(dir, PLAN, { party: PARTY });
+      for (const f of allyRows(m)) assert.deepStrictEqual([f.hpNow, f.carriedFrom], [9, S1_LOG], folder);
+    }
   });
 
   it('a Windows checkout (CRLF) Table Log carries the same', () => {
