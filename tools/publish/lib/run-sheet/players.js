@@ -152,7 +152,18 @@ function forPlayers(model, state, { withheldWords, campaign, picId } = {}) {
       return (c && c.unseenAs) || (n && n.unseenAs) || personWord;
     };
     const rowsIn = f.rows.filter((r) => r && typeof r === 'object').map((r) => ({ ...r, kind: kindOf(r) }));
-    const unseen = FM.unseenLabels(rowsIn, wordOf);
+    // a number is fixed under the row's own word; one that disagrees with the model's word (or repeats) is
+    // dropped, and every foe is numbered again by the model's word in the stored order
+    const wordKey = (w) => String(w || '').trim().toLowerCase();
+    const taken = new Set();
+    const clash = rowsIn.some((r) => {
+      if (r.kind !== 'foe' || r.unseenN === null || r.unseenN === undefined) return false;
+      const key = `${wordKey(wordOf(r))}#${r.unseenN}`;
+      const bad = wordKey(r.word) !== wordKey(wordOf(r)) || taken.has(key);
+      taken.add(key);
+      return bad;
+    });
+    const unseen = FM.unseenLabels(clash ? rowsIn.map((r) => (r.kind === 'foe' ? { ...r, unseenN: null } : r)) : rowsIn, wordOf);
     const ticked = rowsIn.filter((r) => r.in);
     const copiesIn = (note) => ticked.filter((x) => x.note === note && x.kind !== 'pc').length;
     const withCopy = (name, r) => (r.copy && copiesIn(r.note) > 1 ? `${name} ${r.copy}` : name);

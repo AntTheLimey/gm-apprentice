@@ -173,6 +173,28 @@ describe('the fight in the state', () => {
     assert.deepEqual(ada.conds, ['Prone'], 'Prone kept, Stable gone');
   });
 
+  it('a status cleared after a long rest keeps the rest\'s Exhaustion step', () => {
+    const base = () => {
+      let s = gateFight();
+      s = F(s, { type: 'status', row: row(s, ADA).id, add: 'Prone' });
+      s = F(s, { type: 'exhaustion', row: row(s, ADA).id, level: 2 });
+      return end(s);
+    };
+    const conds = (s) => vital(s, ADA).conditions;
+    const clear = (s, t) => RS.reduce(s, { id: nextId(), type: 'afterClear', fight: s.fights[0].id, row: s.fights[0].rows.find((r) => r.note === ADA).id, status: 'Prone' }, t);
+    const rest = (s, t) => RS.reduce(s, { id: nextId(), type: 'longRest' }, t);
+    const plus = (s, m) => new Date(Date.parse(s.fights[0].endedAt) + m * 60000).toISOString();
+    // F: nothing after the rest
+    let s = base();
+    assert.equal(conds(rest(s, plus(s, 5))), 'Prone, Exhaustion 1');
+    // G: Prone cleared on the ended fight after the rest
+    s = base();
+    assert.equal(conds(clear(rest(s, plus(s, 5)), plus(s, 10))), 'Exhaustion 1');
+    // H: Prone cleared before the rest, then the rest
+    s = base();
+    assert.equal(conds(rest(clear(s, plus(s, 4)), plus(s, 5))), 'Exhaustion 1');
+  });
+
   it('an end-panel edit between fights wins', () => {
     let s = gateFight();
     s = hit(s, ADA, '-10');

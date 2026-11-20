@@ -1183,10 +1183,10 @@
     if (t.id === 'advance') act({ type: 'endSet', advancement: t.value });
   });
 
-  // A tab closed while clicks are still unsent (the server not answering) would lose them: the browser asks first.
   // A header that wraps on a narrower window is taller: the jump offset follows it.
   window.addEventListener('resize', measureTop);
 
+  // A tab closed while clicks are still unsent (the server not answering) would lose them: the browser asks first.
   window.addEventListener('beforeunload', (ev) => {
     if (!G.pending.length) return;
     ev.preventDefault();

@@ -409,7 +409,7 @@
         }
         // HP and max at their own time, conditions at the row's (Review H1); a row from before `hpAt` reads `at` for both
         const at = r.at || f.endedAt || f.startedAt || null;
-        if (rowId && changed(r)) out.set(rowId, { hp: r.hp, max: r.max, conditions: condText(r), at, hpAt: r.hpAt || at });
+        if (rowId && changed(r)) out.set(rowId, { hp: r.hp, max: r.max, conditions: condText(r), at, hpAt: r.hpAt || at, endedAt: f.endedAt || null });
       }
     }
     return { figures: out, allies };
@@ -466,7 +466,13 @@
       const ff = figures.get(r.rowId);
       if (ff) {
         steps.push({ t: ord(ff.hpAt), k: 0, run: () => Object.assign(fig, { hp: ff.hp, max: ff.max ?? fig.max, source: 'fight', at: ff.hpAt }) });
-        steps.push({ t: ord(ff.at), k: 0, run: () => { fig.conditions = ff.conditions; } });
+        // a status cleared on the ended fight after a long rest must not undo the rest's Exhaustion step: the
+        // text is the fight's, so the rest is applied to it again (after the fight, actions only remove statuses)
+        steps.push({ t: ord(ff.at), k: 0, run: () => {
+          fig.conditions = ff.conditions;
+          const rest = ord(state.end.longRestAt);
+          if (covered && rest && ff.endedAt && ord(ff.endedAt) <= rest && rest < ord(ff.at) && !restSkipped) fig.conditions = restedConditions(fig.conditions);
+        } });
       }
       // each field has its own time; a 5a row holds one time for all of them, a row with none loses to a fight
       const when = (k) => (o.at && typeof o.at === 'object' ? o.at[k] : o.at);

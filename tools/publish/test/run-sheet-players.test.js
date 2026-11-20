@@ -153,6 +153,20 @@ describe('the players\' view', () => {
     assert.ok(names.includes('Stranger 5'), 'a number is given at the first tick');
   });
 
+  it('a row whose stored word differs from the model\'s never shares a label', () => {
+    let s = benFight();
+    const strangers = s.fight.rows.filter((r) => r.kind === 'foe' && r.in && /^Stranger/.test(orderNames(view(s))[s.fight.rows.filter((x) => x.in).indexOf(r)]));
+    assert.ok(strangers.length >= 2);
+    const word = strangers[0].word;
+    s = { ...s, fight: { ...s.fight, rows: s.fight.rows.map((r) => {
+      if (r.id === strangers[0].id) return { ...r, word: 'a hooded one', unseenN: 1 };
+      if (r.id === strangers[1].id) return { ...r, word, unseenN: 1 };
+      return r;
+    }) } };
+    const names = orderNames(view(s)).filter((x) => /^Stranger/.test(x));
+    assert.equal(new Set(names).size, names.length, names.join(', '));
+  });
+
   it('two unseen copies are told apart', () => {
     let s = benFight();
     assert.deepEqual(orderNames(view(s)).filter((x) => /ephit/.test(x)), ['Mephit 1', 'Mephit 2']);
