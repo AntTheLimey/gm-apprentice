@@ -84,6 +84,11 @@ function tableLogBody(model, state, { linkFor: link, timeOf = localTime } = {}) 
     if (o.kind === 'loot') return `Loot "${text}"${beat ? ` (${beat})` : ''}: to ${who(o.value)}; no longer in the Plan`;
     if (o.kind === 'handout') return `Handout "${text}": handed over; no longer in the Plan`;
     if (o.kind === 'spot') return `Spot${beat ? ` in "${beat}"` : ''}: ${link(o.value)} stood there; no longer in the Plan`;
+    if (o.kind === 'vitals') {
+      const v = o.value;
+      const hp = v.hp !== null ? `HP ${one(v.hp)}${v.max !== null ? `/${one(v.max)}` : ''}` : v.max !== null ? `HP max ${one(v.max)}` : '';
+      return `Vitals for ${link(o.note)}${o.copy > 1 ? ` ${o.copy}` : ''}: ${[hp, one(v.conditions)].filter(Boolean).join(', ')}; no longer in the Plan`;
+    }
     const uses = o.value.map((v) => (v.startsWith('stood: ') ? `${link(v.slice(7))} stood there` : v));
     return `Beat "${text || o.key}": ${uses.join(', ')}; no longer in the Plan`;
   }));
@@ -94,7 +99,7 @@ function tableLogBody(model, state, { linkFor: link, timeOf = localTime } = {}) 
     d.unmaskedNow.filter((u) => !u.carried).map((u) => `${link(u.note)} as ${one(u.name)}`)
       .concat(d.maskedAgain.map((u) => `${link(u.note)} masked again`)),
   );
-  sec['Handouts handed over'] = bullets(d.handedOver.map((h) => (h.note ? link(h.note) : one(h.text))));
+  sec['Handouts handed over'] = bullets(d.handedOver.map((h) => (h.note ? link(h.note) : one(h.name || h.text))));
 
   sec.Log = bullets(d.log.map((l) => `${timeOf(l.at)} ${l.beatTitle ? `${one(l.beatTitle)}: ` : ''}${one(l.text)}`));
 

@@ -125,7 +125,11 @@ describe('run sheet sessions', () => {
 
   it('a wrapped-up session is refused verbatim', () => {
     assert.deepStrictEqual(pickSession(list, 'Session 01 - The Start'),
-      { error: 'Session 1 is wrapped up; its record is the Table Log note.' });
+      { error: 'Session 1 is wrapped up; its record is the Wrap-Up.' });
+    // the Table Log is named only when the session has one (2026-11-21, step 5a proof)
+    const withLog = list.map((s) => (s.wrapUp ? { ...s, tableLog: `${s.index.replace(/\.md$/, '')} - Table Log.md` } : s));
+    assert.deepStrictEqual(pickSession(withLog, 'Session 01 - The Start'),
+      { error: 'Session 1 is wrapped up; its record is the Wrap-Up, with its Table Log.' });
   });
 
   it('a name two sessions answer to is refused with both paths', () => {

@@ -113,8 +113,9 @@ function createTableServer({ vaultPath, session, party = [], stateFile, deps = {
       if (needsBackup(text, store.get().state.recordHash) && keptBody !== bodyHash(fileBody)) {
         fs.mkdirSync(tableDir, { recursive: true });
         const stamp = stampOf(now());
-        let name = `${stateId}.table-log-${stamp}.md`;
-        for (let i = 2; fs.existsSync(path.join(tableDir, name)); i++) name = `${stateId}.table-log-${stamp}-${i}.md`;
+        // not .md: a kept copy is never read as a second Table Log note by a vault scan
+        let name = `${stateId}.table-log-${stamp}.txt`;
+        for (let i = 2; fs.existsSync(path.join(tableDir, name)); i++) name = `${stateId}.table-log-${stamp}-${i}.txt`;
         fs.copyFileSync(logFile, path.join(tableDir, name));
         keptBody = bodyHash(fileBody);
         const keptRel = path.relative(vaultRoot, path.join(tableDir, name)).split(path.sep).join('/');
@@ -178,7 +179,8 @@ function createTableServer({ vaultPath, session, party = [], stateFile, deps = {
     delayMs: deps.delayMs,
     retryMs: deps.retryMs,
     pid: deps.pid,
-    alive: deps.alive,
+    held: deps.lockHeld,
+    inCloud: deps.inCloud,
     fresh: () => RS.emptyState({ stateId, session: session.index, plan: session.plan }),
     upgrade: (state) => RS.upgrade(state, RS.emptyState({ stateId, session: session.index, plan: session.plan })),
     onSaved: (rev) => {
@@ -199,7 +201,7 @@ function createTableServer({ vaultPath, session, party = [], stateFile, deps = {
     },
     onWrite: (state) => writeRecord(state),
   });
-  store.load(); // a session another live server holds throws, code LOCKED
+  store.load(); // throws code LOCKED for a session another server holds, IN_CLOUD for a state iCloud took off the disk
   if (store.broken) {
     const rel = path.relative(vaultRoot, store.broken).split(path.sep).join('/');
     notices.push({ kind: 'state-broken', path: rel, text: `The saved state did not read; it is kept at ${rel} and the sheet starts fresh.` });
@@ -304,7 +306,7 @@ function createTableServer({ vaultPath, session, party = [], stateFile, deps = {
         vaultFiles({ method: 'GET', url: rest }, res);
       },
     },
-    { method: 'GET', path: '/api/state', handle: (req, res) => { const { state, rev } = store.get(); json(res, 200, { state, rev, stateId, serverId }); } },
+    { method: 'GET', path: '/api/state', handle: (req, res) => { const { state, rev } = store.get(); json(res, 200, { state, rev, stateId, serverId, label }); } },
     {
       method: 'PUT',
       path: '/api/state',

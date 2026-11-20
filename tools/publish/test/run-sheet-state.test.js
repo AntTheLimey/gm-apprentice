@@ -246,6 +246,21 @@ describe('run sheet state', () => {
     assert.strictEqual(RS.derive(model, un).loot.length, 1);
   });
 
+  it('the handed-over Log line names the handout, never its Notes cell (proof defect 3)', () => {
+    const h = model.handouts[0];
+    assert.ok(h.text, 'the fixture row has a Notes cell');
+    assert.strictEqual(RS.handoutName(h), "Ash's Note");
+    assert.strictEqual(RS.handoutName({ note: null, name: '[[Gone Letter|the letter]] (water-stained)' }), 'the letter (water-stained)');
+    assert.strictEqual(RS.handoutName({ note: null, name: 'A torn map' }), 'A torn map');
+    const s = run([{ type: 'handOver', handout: h.key, on: true, text: h.text, name: RS.handoutName(h), note: h.note }]);
+    const d = RS.derive(model, s);
+    assert.deepStrictEqual(d.log.map((l) => l.text), ["Handed over: Ash's Note."]);
+    assert.deepStrictEqual(d.handedOver.map((x) => x.name), ["Ash's Note"]);
+    // a name that ends in a full stop or a quote gets no second one
+    const q = run([{ type: 'handOver', handout: 'x', on: true, name: 'A note that says "Run."', note: null }]);
+    assert.deepStrictEqual(RS.derive(model, q).log.map((l) => l.text), ['Handed over: A note that says "Run."']);
+  });
+
   it('fired contingencies and handed-over handouts', () => {
     const c = model.beats.find((x) => x.contingency);
     const h = model.handouts[0];
@@ -408,6 +423,55 @@ describe('run sheet state', () => {
     assert.deepStrictEqual(d.orphans.map((o) => [o.kind, o.key, o.text]), [['point', re(p1.key), p1.text]]);
     assert.strictEqual(s2.positions[ADA].beat, NEW);
     assert.ok(s2.visited[NEW] && !s2.visited[GATE.key]);
+  });
+
+  it('a renamed beat known only by a brought-in person, a jot and a point shows its title (proof defect 2)', () => {
+    const p0 = GATE.points[0];
+    const N = 'Characters/NPCs/Abbot Rime.md';
+    const renamed = () => { const m = clone(model); m.beats[0].key = 'b-renamed002'; m.beats[0].title = 'The Gate (renamed)'; m.beats[0].points = []; return m; };
+    // the bring action carries the beat's title
+    const one = RS.derive(renamed(), run([{ type: 'bring', beat: GATE.key, note: N, name: 'Abbot Rime', title: GATE.title }]));
+    const b = one.orphans.find((x) => x.kind === 'beat' && x.key === GATE.key);
+    assert.deepStrictEqual([b.text, b.beatTitle, b.value], [GATE.title, GATE.title, ['brought']]);
+    // brought with no title of its own (an old state): the title comes from a jot or a point there
+    const s = run([
+      { type: 'jot', beat: GATE.key, text: 'snow', title: GATE.title },
+      { type: 'mark', point: p0.key, mark: 'landed', beat: GATE.key, beatTitle: GATE.title, text: p0.text },
+    ]);
+    s.brought[GATE.key] = [{ note: N, name: 'Abbot Rime', at: at(0) }];
+    const o = RS.derive(renamed(), s).orphans.find((x) => x.kind === 'beat');
+    assert.strictEqual(o.text, GATE.title);
+    // a PC standing in a beat the Plan lost (no visited record) gets the title from a jot there
+    const st = run([{ type: 'jot', beat: GATE.key, text: 'snow', title: GATE.title }]);
+    st.positions[ADA] = { beat: GATE.key, spot: null };
+    assert.strictEqual(RS.derive(renamed(), st).orphans.find((x) => x.kind === 'beat').text, GATE.title);
+  });
+
+  it('taking a brought-in person off writes a Log line; bringing back does not double (proof defect 4)', () => {
+    const N = 'Characters/NPCs/Abbot Rime.md';
+    const s = run([
+      { type: 'bring', beat: TOWER.key, note: N, name: 'Abbot Rime', title: TOWER.title },
+      { type: 'unbring', beat: TOWER.key, note: N, title: TOWER.title },
+      { type: 'unbring', beat: TOWER.key, note: N, title: TOWER.title },
+      { type: 'bring', beat: TOWER.key, note: N, name: 'Abbot Rime', title: TOWER.title },
+    ]);
+    assert.deepStrictEqual(RS.derive(model, s).log.map((l) => [l.beatTitle, l.text]), [
+      [TOWER.title, 'Abbot Rime brought in.'],
+      [TOWER.title, 'Abbot Rime taken off.'],
+      [TOWER.title, 'Abbot Rime brought in.'],
+    ], 'a second Remove of someone not there writes nothing');
+    assert.strictEqual(s.brought[TOWER.key].length, 1);
+  });
+
+  it('vitals set for someone no longer in the model are an orphan, not lost (PR review L2)', () => {
+    const GONE = 'Characters/NPCs/Garrick Fell.md';
+    const s = run([{ type: 'endSet', vitals: { [GONE]: { hp: 4, conditions: 'Exhaustion 1' }, [`${GONE}#2`]: { conditions: '' }, [ADA]: { hp: 9 } } }]);
+    const d = RS.derive(model, s);
+    assert.deepStrictEqual(d.vitalsRecorded.map((v) => v.rowId), [ADA]);
+    const o = d.orphans.filter((x) => x.kind === 'vitals');
+    assert.deepStrictEqual(o.map((x) => [x.key, x.note, x.copy, x.value]), [[GONE, GONE, 1, { hp: 4, max: null, conditions: 'Exhaustion 1' }]], 'an empty row is no orphan');
+    const two = RS.derive(model, run([{ type: 'endSet', vitals: { [`${GONE}#2`]: { hp: 3 } } }]));
+    assert.deepStrictEqual(two.orphans.map((x) => [x.kind, x.note, x.copy]), [['vitals', GONE, 2]]);
   });
 
   it('unknown keys and actions are left alone', () => {

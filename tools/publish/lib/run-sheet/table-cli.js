@@ -6,10 +6,10 @@ const fs = require('node:fs');
 const http = require('node:http');
 const net = require('node:net');
 const path = require('node:path');
-const { spawn: nodeSpawn, execFile } = require('node:child_process');
+const { spawn: nodeSpawn, spawnSync: nodeSpawnSync, execFile } = require('node:child_process');
 const { listSessions, pickSession, stateIdOf } = require('./sessions');
 const { createTableServer, listenLocal } = require('./server');
-const { lockHolder } = require('./store');
+const { lockHolder, inCloudOnly } = require('./store');
 const { siteFileNamedBy } = require('../settings/site-tool');
 const { detectStatusBar, detectInbox } = require('../backend-flags');
 
@@ -17,6 +17,9 @@ const DEFAULT_PORT = 4322;
 const FLUSH_CAP_MS = 20000;
 const BIN = path.join(__dirname, '..', '..', 'bin', 'gm-publish.js');
 const TAIL = 'the sheet starts from the PC notes as they are.';
+// The signals that end the sheet: Ctrl+C, kill, a closed terminal window (SIGHUP; Windows sends a closed
+// console as SIGHUP too) and Ctrl+Break on Windows. Each one saves first (PR review M1).
+const STOP_SIGNALS = ['SIGINT', 'SIGTERM', 'SIGHUP', 'SIGBREAK'];
 
 // ---- the --party flag: PC note paths, a JSON array of them, or a .json file holding one ----
 
@@ -106,26 +109,48 @@ async function whoHolds(port, { platform = process.platform, run = defaultRun, h
 
 // ---- flush, capped ----
 
-// Runs `gm-publish flush --config <file>` as a child, with its output passed through, stopped after the cap.
-function runFlushCapped({ configFile, timeoutMs = FLUSH_CAP_MS, spawn = nodeSpawn }) {
+// Ends the child and everything it started (wrangler under the flush): on Windows `taskkill /T`, else
+// the child's own process group, which `runFlushCapped` gives it.
+function killTree(child, { platform = process.platform, spawnSync = nodeSpawnSync, kill = process.kill } = {}) {
+  if (!child || !child.pid) return;
+  if (platform === 'win32') {
+    try { spawnSync('taskkill', ['/T', '/F', '/PID', String(child.pid)], { stdio: 'ignore', windowsHide: true, timeout: 5000 }); } catch { /* below */ }
+    try { child.kill(); } catch { /* already gone */ }
+    return;
+  }
+  try { kill(-child.pid, 'SIGTERM'); } catch { try { child.kill(); } catch { /* already gone */ } }
+}
+
+// Runs `gm-publish flush --config <file>` as a child, with its output passed through, stopped (with
+// all it started) after the cap. Off Windows the child leads its own process group, so a stop signal
+// meant for the sheet no longer reaches it: one that comes during the flush ends the flush's group,
+// then this process.
+function runFlushCapped({ configFile, timeoutMs = FLUSH_CAP_MS, spawn = nodeSpawn, platform = process.platform, kill = process.kill, spawnSync = nodeSpawnSync, proc = process, exit = (c) => process.exit(c) }) {
   return new Promise((resolve) => {
     let child;
     let timer = null;
     let done = false;
+    const onStop = () => {
+      killTree(child, { platform, spawnSync, kill });
+      finish({ ok: false, why: 'stopped' });
+      exit(130);
+    };
     const finish = (r) => {
       if (done) return;
       done = true;
       if (timer) clearTimeout(timer);
+      for (const sig of STOP_SIGNALS) proc.removeListener(sig, onStop);
       resolve(r);
     };
     try {
-      child = spawn(process.execPath, [BIN, 'flush', '--config', configFile], { stdio: ['ignore', 'inherit', 'inherit'], windowsHide: true });
+      child = spawn(process.execPath, [BIN, 'flush', '--config', configFile], { stdio: ['ignore', 'inherit', 'inherit'], windowsHide: true, detached: platform !== 'win32' });
     } catch (err) {
       finish({ ok: false, why: err.message });
       return;
     }
+    for (const sig of STOP_SIGNALS) proc.on(sig, onStop);
     timer = setTimeout(() => {
-      try { child.kill(); } catch { /* already gone */ }
+      killTree(child, { platform, spawnSync, kill });
       finish({ ok: false, why: 'timeout' });
     }, timeoutMs);
     child.on('error', (err) => finish({ ok: false, why: err.message }));
@@ -162,6 +187,11 @@ async function busyMessage(port, err, deps) {
   let who = null;
   try { who = await (deps.whoHolds || whoHolds)(port); } catch { who = null; }
   return `Port ${port} is busy: ${who || 'something else'} holds it. Stop it, or start this with --port <another>.`;
+}
+
+function inCloudMessage(label, vaultPath, file) {
+  const rel = path.relative(vaultPath, file).split(path.sep).join('/');
+  return `The saved run sheet for ${label} is in iCloud, not on this computer (${rel}). Download it first (in Finder: Download Now), then start again.`;
 }
 
 function lockedMessage(label, { pid, port }) {
@@ -204,8 +234,12 @@ async function runTable({ vault, session, port = DEFAULT_PORT, open = true, part
   const busy = await checkPort(port);
   if (busy) return refuse(await busyMessage(port, busy, deps));
   // One server per session: another one (on another port) would write the same state and Table Log.
-  const holder = lockHolder(path.join(vaultPath, '_meta', 'table', `${stateIdOf(chosen)}.json`), { alive: deps.alive });
+  const stateFile = path.join(vaultPath, '_meta', 'table', `${stateIdOf(chosen)}.json`);
+  const hello = deps.hello || defaultHello;
+  const holder = await lockHolder(stateFile, { hello });
   if (holder) return refuse(lockedMessage(chosen.label, holder));
+  // A saved state iCloud has taken off this computer would read as none: the sheet would start empty.
+  if ((deps.inCloud || inCloudOnly)(stateFile)) return refuse(inCloudMessage(chosen.label, vaultPath, stateFile));
 
   if (pick) {
     const stateId = stateIdOf(chosen);
@@ -222,15 +256,23 @@ async function runTable({ vault, session, port = DEFAULT_PORT, open = true, part
     out(`No site folder: nothing to flush; ${TAIL}`);
   } else if (detectStatusBar(site.dir) || detectInbox(site.dir)) {
     let res;
-    try { res = await (deps.runFlushCapped || runFlushCapped)({ configFile: site.file, timeoutMs: FLUSH_CAP_MS }); } catch (e) { res = { ok: false, why: String(e.message).split('\n')[0] }; }
+    try {
+      res = await (deps.runFlushCapped || runFlushCapped)({ configFile: site.file, timeoutMs: FLUSH_CAP_MS, proc: deps.proc || process, exit: deps.exit || ((c) => process.exit(c)) });
+    } catch (e) { res = { ok: false, why: String(e.message).split('\n')[0] }; }
+    if (res.why === 'stopped') return 130; // stopped during the flush: nothing was served
     if (!res.ok) out(res.why === 'timeout' ? `Flush took over 20 s and was stopped: ${TAIL}` : `Flush failed (${res.why}): ${TAIL}`);
   }
 
   if (!chosen.tableLog) out('No Table Log note yet: start it with `gma table` to have the record written.');
 
+  // Asked again: another start may have taken the session while this one flushed.
+  const late = await lockHolder(stateFile, { hello });
+  if (late) return refuse(lockedMessage(chosen.label, late));
+
   let app;
   try { app = (deps.createTableServer || createTableServer)({ vaultPath, session: chosen, party, deps: deps.server }); } catch (e) {
     if (e.code === 'LOCKED') return refuse(lockedMessage(chosen.label, e));
+    if (e.code === 'IN_CLOUD') return refuse(inCloudMessage(chosen.label, vaultPath, e.file));
     throw e;
   }
   let bound;
@@ -257,23 +299,20 @@ async function runTable({ vault, session, port = DEFAULT_PORT, open = true, part
   let stopping = null;
   const onSignal = () => {
     if (stopping) return;
-    proc.removeListener('SIGINT', onSignal);
-    proc.removeListener('SIGTERM', onSignal);
+    for (const sig of STOP_SIGNALS) proc.removeListener(sig, onSignal);
     stopping = app.close().then(() => exit(0), (e) => { err(`Could not save the sheet's state on the way out: ${e.message}`); exit(1); });
   };
-  proc.on('SIGINT', onSignal);
-  proc.on('SIGTERM', onSignal);
+  for (const sig of STOP_SIGNALS) proc.on(sig, onSignal);
 
   return {
     port: bound,
     url,
     app,
     async close() {
-      proc.removeListener('SIGINT', onSignal);
-      proc.removeListener('SIGTERM', onSignal);
+      for (const sig of STOP_SIGNALS) proc.removeListener(sig, onSignal);
       await app.close();
     },
   };
 }
 
-module.exports = { runTable, runFlushCapped, whoHolds, openBrowser, parseParty, checkPort, FLUSH_CAP_MS, DEFAULT_PORT };
+module.exports = { runTable, runFlushCapped, killTree, whoHolds, openBrowser, parseParty, checkPort, FLUSH_CAP_MS, DEFAULT_PORT, STOP_SIGNALS };

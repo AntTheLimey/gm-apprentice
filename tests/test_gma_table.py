@@ -43,6 +43,7 @@ class TableTests(unittest.TestCase):
         self.addCleanup(setattr, vaultlib, "PUBLISH_TOOL", old)
         self.pick = _done(PICK_OK)
         self.file_code = 0
+        self.file_says = ""
 
         def fake_run(cmd, **kw):
             self.calls.append(("pick", cmd))
@@ -50,6 +51,8 @@ class TableTests(unittest.TestCase):
 
         def fake_file(argv, *a, **kw):
             self.calls.append(("file", argv))
+            if self.file_says:
+                print(self.file_says, file=sys.stderr)
             return self.file_code
 
         def fake_serve(tool, args):
@@ -114,7 +117,7 @@ class TableTests(unittest.TestCase):
         self.assertEqual(out.count("Filed"), 1)
 
     def test_a_refused_pick_prints_the_tools_words_and_exits_1(self):
-        words = "Session 3 is wrapped up; its record is the Table Log note."
+        words = "Session 3 is wrapped up; its record is the Wrap-Up."
         self.pick = _done({"ok": False, "error": words}, 1)
         code, _, err = self.run_gma(["table", "V", "--session", "Session 03"])
         self.assertEqual(code, 1)
@@ -135,6 +138,16 @@ class TableTests(unittest.TestCase):
         self.assertEqual(self.kinds(), ["pick", "file", "serve"])
         self.assertIn("gma table: could not file the Table Log; the sheet runs without one", err)
         self.assertNotIn("Filed", out)
+
+    def test_a_failed_filing_prints_its_reason(self):
+        # PR review L4: the reason was swallowed
+        self.file_code = 1
+        self.file_says = "\nvault-write: the session index has no documents block\nmore detail\n"
+        code, out, err = self.run_gma(["table", "V"])
+        self.assertEqual(code, 0)
+        self.assertIn("gma table: could not file the Table Log (vault-write: the session "
+                      "index has no documents block); the sheet runs without one", err)
+        self.assertNotIn("more detail", err + out)
 
     def test_publish_table_routes_to_table(self):
         self.run_gma(["publish", "table", "V", "--no-open"])

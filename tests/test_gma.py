@@ -319,27 +319,65 @@ class WindowsJobTests(unittest.TestCase):
                 self.assertEqual(gma._call_tied_to_gma(["node"]), 0)
             close.assert_not_called()
 
-    def test_an_interrupt_of_gma_ends_node_and_closes_the_job(self):
+    def test_an_interrupt_of_gma_waits_for_node_and_closes_the_job(self):
+        # Ctrl+C reaches node too: it saves and exits; gma waits for it and
+        # returns its code, with no traceback (PR review M3)
         proc = mock.MagicMock(_handle=1234)
         proc.wait.side_effect = [KeyboardInterrupt, 0]
         with mock.patch.object(gma.subprocess, "Popen", return_value=proc), \
                 mock.patch.object(gma, "_kill_on_close_job", return_value=77), \
                 mock.patch.object(gma, "_close_job") as close:
-            with self.assertRaises(KeyboardInterrupt):
-                gma._call_tied_to_gma(["node"])
-        proc.kill.assert_called_once_with()
+            self.assertEqual(gma._call_tied_to_gma(["node"]), 0)
+        proc.wait.assert_called_with(timeout=gma._INTERRUPT_GRACE_S)
+        proc.kill.assert_not_called()
         close.assert_called_once_with(77)
 
-    def test_an_interrupt_during_the_job_setup_ends_node_and_leaks_no_job(self):
+    def test_an_interrupt_during_the_job_setup_waits_for_node_and_leaks_no_job(self):
         proc = mock.MagicMock(_handle=1234)
         proc.wait.return_value = 0
         with mock.patch.object(gma.subprocess, "Popen", return_value=proc), \
                 mock.patch.object(gma, "_kill_on_close_job", side_effect=KeyboardInterrupt), \
                 mock.patch.object(gma, "_close_job") as close:
-            with self.assertRaises(KeyboardInterrupt):
-                gma._call_tied_to_gma(["node"])
-        proc.kill.assert_called_once_with()
+            self.assertEqual(gma._call_tied_to_gma(["node"]), 0)
+        proc.kill.assert_not_called()
         close.assert_not_called()   # no handle was returned to close
+
+    def _real_child(self, code):
+        """A real child (this Python) and a Popen whose first plain wait is
+        interrupted, as Ctrl+C interrupts gma's wait."""
+        real_popen = subprocess.Popen
+        made = []
+
+        def popen(cmd):
+            child = real_popen([sys.executable, "-c", code])
+            made.append(child)
+            plain = child.wait
+            first = [True]
+
+            def wait(timeout=None):
+                if timeout is None and first[0]:
+                    first[0] = False
+                    raise KeyboardInterrupt
+                return plain(timeout=timeout)
+            child.wait = wait   # type: ignore[method-assign]
+            return child
+        return popen, made
+
+    def test_an_interrupt_with_a_real_child_returns_the_childs_own_code(self):
+        popen, made = self._real_child("import time; time.sleep(0.3); raise SystemExit(4)")
+        with mock.patch.object(gma.subprocess, "Popen", popen), \
+                mock.patch.object(gma, "_kill_on_close_job", return_value=None):
+            self.assertEqual(gma._call_tied_to_gma(["node"]), 4)
+        self.assertEqual(made[0].returncode, 4, "the child finished on its own")
+
+    def test_a_real_child_that_will_not_stop_is_ended_after_the_wait(self):
+        popen, made = self._real_child("import time; time.sleep(60)")
+        with mock.patch.object(gma.subprocess, "Popen", popen), \
+                mock.patch.object(gma, "_kill_on_close_job", return_value=None), \
+                mock.patch.object(gma, "_INTERRUPT_GRACE_S", 0.3):
+            code = gma._call_tied_to_gma(["node"])
+        self.assertNotEqual(code, 0)
+        self.assertIsNotNone(made[0].poll(), "no child is left running")
 
     def test_an_interrupt_after_the_job_is_made_closes_it(self):
         import ctypes

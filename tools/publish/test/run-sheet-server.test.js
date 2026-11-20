@@ -116,7 +116,7 @@ async function markFirst(run, mark = 'landed', n = 0) {
 }
 
 const tableDir = (vault) => path.join(vault, '_meta', 'table');
-const kept = (vault, id) => (fs.existsSync(tableDir(vault)) ? fs.readdirSync(tableDir(vault)).filter((n) => n.startsWith(`${id}.table-log-`) && n.endsWith('.md')) : []);
+const kept = (vault, id) => (fs.existsSync(tableDir(vault)) ? fs.readdirSync(tableDir(vault)).filter((n) => n.startsWith(`${id}.table-log-`) && n.endsWith('.txt')) : []);
 const logText = (vault) => fs.readFileSync(path.join(vault, LOG), 'utf8');
 const withHandLog = (vault, line = '- 19:30 The party argued about the bell, by hand.') => {
   fs.writeFileSync(path.join(vault, LOG), `${logText(vault)}\n${line}\n`);
@@ -161,6 +161,7 @@ describe('run sheet server', () => {
     });
     assert.strictEqual(r.status, 403);
     assert.strictEqual((await req(run.port, 'GET', '/api/state')).json.rev, 0);
+    assert.strictEqual((await req(run.port, 'GET', '/api/state')).json.label, 'Session 2', 'a page that finds another session says which (proof defect 1)');
     const ok = await req(run.port, 'PUT', '/api/state', {
       headers: { Origin: `http://localhost:${run.port}` }, body: { stateId: run.stateId, base: 0, state: { points: {} } },
     });
@@ -437,6 +438,7 @@ describe('run sheet server', () => {
       await markFirst(run, mark, n);
       const names = await waitFor(() => { const k = kept(vault, run.stateId); return k.length ? k : null; });
       assert.strictEqual(names.length, 1);
+      assert.ok(!fs.readdirSync(tableDir(vault)).some((n) => n.endsWith('.md')), 'the kept copy is not a note a vault scan reads (PR review L3)');
       assert.strictEqual(fs.readFileSync(path.join(tableDir(vault), names[0]), 'utf8'), oldText);
       await waitFor(() => (mark === 'landed' ? /## Points landed\n\n- The Gate: the tracks/ : /## Tried and missed\n\n- The Gate: the bell/).test(logText(vault)));
       const ev = await waitFor(() => sse.events.find((e) => e.event === 'record-kept'));
@@ -593,7 +595,7 @@ describe('run sheet server: the third review', () => {
   const logHash = (vault) => bodyHash(recordBodyOf(logText(vault)));
   // What a kill -9 leaves besides the files: a lock whose process is gone.
   const staleLock = (vault, run) => fs.writeFileSync(path.join(tableDir(vault), `${run.stateId}.lock`), JSON.stringify({ pid: 999999, port: 1 }));
-  const gone = { alive: () => false };
+  const gone = {}; // the store takes over a lock with a port: the CLI asks the port first
 
   it('Ctrl+C a moment after the last click: the restart copies nothing aside (H1)', async () => {
     const vault = copyOf();

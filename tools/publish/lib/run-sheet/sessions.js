@@ -134,7 +134,7 @@ function pickSession(sessions, asked, vaultPath) {
     if (hits.length === 0) return { error: `No session matches "${asked}".` };
     if (hits.length > 1) return { error: `"${asked}" names more than one session: ${hits.map((s) => s.index).join(' and ')}. Name one by its path.` };
     const s = hits[0];
-    if (s.wrapUp) return { error: `${s.label} is wrapped up; its record is the Table Log note.` };
+    if (s.wrapUp) return { error: `${s.label} is wrapped up; its record is the Wrap-Up${s.tableLog ? ', with its Table Log' : ''}.` };
     if (!s.plan) return { error: `${s.label} has no Plan yet: prep it first.` };
     return { session: s, others: [] };
   }

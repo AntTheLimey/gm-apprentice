@@ -7,7 +7,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { EventEmitter } = require('node:events');
 const { spawnSync } = require('node:child_process');
-const { runTable, runFlushCapped, whoHolds, openBrowser, parseParty } = require('../lib/run-sheet/table-cli');
+const { runTable, runFlushCapped, killTree, whoHolds, openBrowser, parseParty, STOP_SIGNALS } = require('../lib/run-sheet/table-cli');
 const RS = require('../lib/run-sheet/web/state');
 
 const FIXTURE = path.join(__dirname, 'fixtures', 'run-sheet-app');
@@ -98,7 +98,7 @@ describe('gm-publish table: pick', () => {
     assert.strictEqual(rc, 1);
     const got = JSON.parse(lines[0]);
     assert.strictEqual(got.ok, false);
-    assert.match(got.error, /^Session 1 is wrapped up; its record is the Table Log note\.$/);
+    assert.match(got.error, /^Session 1 is wrapped up; its record is the Wrap-Up\.$/);
   });
 
   it('pick refuses a busy port and files nothing', async () => {
@@ -237,6 +237,27 @@ describe('gm-publish table: serving', () => {
     assert.strictEqual(JSON.parse(fs.readFileSync(file, 'utf8')).rev, got.rev + 1);
     assert.strictEqual(a.deps.proc.listenerCount('SIGINT'), 0);
   });
+
+  for (const sig of ['SIGHUP', 'SIGBREAK', 'SIGTERM']) {
+    it(`${sig} saves and removes the lock (PR review M1)`, async () => {
+      const vault = vaultCopy();
+      const codes = [];
+      const a = await start({ vault, party: [] }, { exit: (c) => codes.push(c) });
+      const got = await (await fetch(`http://127.0.0.1:${a.port}/api/state`)).json();
+      const put = await fetch(`http://127.0.0.1:${a.port}/api/state`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stateId: got.stateId, base: got.rev, state: RS.reduce(got.state, { type: 'jot', id: 'c1-1', text: 'kept', beat: null }, '2026-11-20T20:00:00.000Z') }),
+      });
+      assert.strictEqual(put.status, 200);
+      const file = path.join(vault, '_meta', 'table', `${got.stateId}.json`);
+      a.deps.proc.emit(sig);
+      for (let i = 0; i < 100 && codes.length === 0; i++) await new Promise((r) => { setTimeout(r, 30); });
+      assert.deepStrictEqual(codes, [0]);
+      assert.strictEqual(JSON.parse(fs.readFileSync(file, 'utf8')).rev, got.rev + 1);
+      assert.ok(!fs.existsSync(path.join(vault, '_meta', 'table', `${got.stateId}.lock`)), 'the lock is gone');
+      for (const s2 of STOP_SIGNALS) assert.strictEqual(a.deps.proc.listenerCount(s2), 0);
+    });
+  }
 });
 
 describe('gm-publish table: one server per session (third review L4)', () => {
@@ -256,16 +277,60 @@ describe('gm-publish table: one server per session (third review L4)', () => {
     assert.match(JSON.parse(pick.lines[0]).error, /already running/);
   });
 
-  it('a lock whose process is gone is taken over', async () => {
+  it('a lock whose port does not answer is taken over', async () => {
     const vault = vaultCopy();
     const dir = path.join(vault, '_meta', 'table');
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(path.join(dir, 'chapter-1--session-02-the-test.lock'), JSON.stringify({ pid: 999999, port: 4322 }));
-    const gone = () => false;
-    const a = await start({ vault }, { alive: gone, server: { alive: gone } });
+    const a = await start({ vault }, { hello: async () => null });
     assert.strictEqual(typeof a.h, 'object', a.errs.join('\n'));
     assert.deepStrictEqual(JSON.parse(fs.readFileSync(path.join(dir, 'chapter-1--session-02-the-test.lock'), 'utf8')), { pid: process.pid, port: a.port });
     assert.ok(a.h.app.store.unclean);
+  });
+
+  it('a lock whose pid is alive as another program is taken over (PR review M2)', async () => {
+    const vault = vaultCopy();
+    const dir = path.join(vault, '_meta', 'table');
+    fs.mkdirSync(dir, { recursive: true });
+    // this test's own pid is alive; the port it names answers as something that is not the run sheet
+    const other = require('node:http').createServer((req, res) => { res.end('{"app":"something else"}'); });
+    await new Promise((r) => { other.listen(0, '127.0.0.1', r); });
+    try {
+      fs.writeFileSync(path.join(dir, 'chapter-1--session-02-the-test.lock'), JSON.stringify({ pid: process.pid, port: other.address().port }));
+      const a = await start({ vault });
+      assert.strictEqual(typeof a.h, 'object', a.errs.join('\n'));
+      assert.ok(a.h.app.store.unclean);
+    } finally { other.close(); }
+  });
+
+  it('a lock with no port under a minute old is refused; an older one is taken over', async () => {
+    const vault = vaultCopy();
+    const dir = path.join(vault, '_meta', 'table');
+    const lock = path.join(dir, 'chapter-1--session-02-the-test.lock');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(lock, JSON.stringify({ pid: 4242, port: null }));
+    const b = await start({ vault });
+    assert.strictEqual(b.h, 1);
+    assert.strictEqual(b.errs.join('\n'), 'The run sheet for Session 2 is already running (pid 4242). Use that one, or stop it first.');
+    const t = (Date.now() - 2 * 60 * 1000) / 1000;
+    fs.utimesSync(lock, t, t);
+    const c = await start({ vault });
+    assert.strictEqual(typeof c.h, 'object', c.errs.join('\n'));
+  });
+
+  it('a saved state iCloud has taken off this computer refuses to start, and nothing is written (PR review L1)', async () => {
+    const vault = vaultCopy();
+    const dir = path.join(vault, '_meta', 'table');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, '.chapter-1--session-02-the-test.json.icloud'), 'bplist');
+    const before = fs.readdirSync(dir).sort();
+    const a = await start({ vault });
+    assert.strictEqual(a.h, 1);
+    assert.strictEqual(a.errs.join('\n'), 'The saved run sheet for Session 2 is in iCloud, not on this computer (_meta/table/chapter-1--session-02-the-test.json). Download it first (in Finder: Download Now), then start again.');
+    assert.deepStrictEqual(fs.readdirSync(dir).sort(), before, 'no lock, no fresh state');
+    const pick = quiet();
+    assert.strictEqual(await runTable({ vault, port: await freePort(), open: false, pick: true, json: true }, pick.deps), 1, 'refused at the pick, before anything is filed');
+    assert.match(JSON.parse(pick.lines[0]).error, /in iCloud/);
   });
 
   it('Ctrl+C that cannot save says so and exits 1', async () => {
@@ -345,6 +410,56 @@ describe('runFlushCapped and openBrowser', () => {
     assert.deepStrictEqual(await runFlushCapped({ configFile: 'x', timeoutMs: 5000, spawn: mk(0) }), { ok: true, why: null });
     assert.deepStrictEqual(await runFlushCapped({ configFile: 'x', timeoutMs: 5000, spawn: mk(3) }), { ok: false, why: 'exit 3' });
   });
+  it('a flush past the cap is stopped with all it started (PR review L6)', async () => {
+    const fake = () => { const c = new EventEmitter(); c.pid = 4321; c.kill = () => { c.killed = true; }; return c; };
+    let child;
+    const kills = [];
+    const r = await runFlushCapped({ configFile: 'x', timeoutMs: 20, platform: 'darwin', spawn: (cmd, args, opts) => { child = fake(); child.opts = opts; return child; }, kill: (pid, sig) => kills.push([pid, sig]) });
+    assert.deepStrictEqual(r, { ok: false, why: 'timeout' });
+    assert.strictEqual(child.opts.detached, true, 'its own process group');
+    assert.deepStrictEqual(kills, [[-4321, 'SIGTERM']], 'the whole group');
+    const runs = [];
+    const w = await runFlushCapped({ configFile: 'x', timeoutMs: 20, platform: 'win32', spawn: (cmd, args, opts) => { child = fake(); child.opts = opts; return child; }, spawnSync: (cmd, args) => runs.push([cmd, ...args]) });
+    assert.deepStrictEqual(w, { ok: false, why: 'timeout' });
+    assert.strictEqual(child.opts.detached, false);
+    assert.deepStrictEqual(runs, [['taskkill', '/T', '/F', '/PID', '4321']]);
+  });
+
+  it('a real flush and the child it started are both stopped at the cap', async () => {
+    if (process.platform === 'win32') return;
+    const d = tmp();
+    const pidFile = path.join(d, 'grandchild.pid');
+    // the flush stand-in starts a grandchild (as flush starts wrangler) and both sleep
+    const code = `const c = require('child_process').spawn(process.execPath, ['-e', 'setTimeout(()=>{},60000)'], { stdio: 'ignore' }); require('fs').writeFileSync(${JSON.stringify(pidFile)}, String(c.pid)); setTimeout(()=>{},60000);`;
+    const spawn = (cmd, args, opts) => require('node:child_process').spawn(process.execPath, ['-e', code], { ...opts, stdio: 'ignore' });
+    const p = runFlushCapped({ configFile: 'x', timeoutMs: 600, spawn });
+    const r = await p;
+    assert.deepStrictEqual(r, { ok: false, why: 'timeout' });
+    const gpid = Number(fs.readFileSync(pidFile, 'utf8'));
+    let alive = true;
+    for (let i = 0; i < 50 && alive; i++) {
+      try { process.kill(gpid, 0); await new Promise((res) => { setTimeout(res, 40); }); } catch { alive = false; }
+    }
+    assert.strictEqual(alive, false, 'the grandchild is gone too');
+  });
+
+  it('a stop signal during the flush ends the flush and this process', async () => {
+    const proc = new EventEmitter();
+    const codes = [];
+    const kills = [];
+    const c = new EventEmitter(); c.pid = 777; c.kill = () => {};
+    const p = runFlushCapped({ configFile: 'x', timeoutMs: 5000, platform: 'linux', spawn: () => c, kill: (pid, sig) => kills.push([pid, sig]), proc, exit: (n) => codes.push(n) });
+    proc.emit('SIGHUP');
+    assert.deepStrictEqual(await p, { ok: false, why: 'stopped' });
+    assert.deepStrictEqual(kills, [[-777, 'SIGTERM']]);
+    assert.deepStrictEqual(codes, [130]);
+    for (const sig of STOP_SIGNALS) assert.strictEqual(proc.listenerCount(sig), 0);
+  });
+
+  it('killTree on a child with no pid does nothing', () => {
+    assert.doesNotThrow(() => killTree({}, { kill: () => { throw new Error('asked'); } }));
+  });
+
   it('a spawn that fails is a why, not a throw', async () => {
     const r = await runFlushCapped({ configFile: 'x', timeoutMs: 5000, spawn: () => { throw new Error('no node'); } });
     assert.strictEqual(r.ok, false);

@@ -383,8 +383,16 @@ def _close_job(job: int) -> None:
     ctypes.WinDLL("kernel32").CloseHandle(ctypes.c_void_p(job))  # type: ignore[attr-defined]
 
 
+# How long gma waits, after Ctrl+C, for node to save and exit by itself.
+_INTERRUPT_GRACE_S = 5.0
+
+
 def _call_tied_to_gma(cmd: list[str]) -> int:
-    """`subprocess.call(cmd)` on Windows, with the child dying when gma does."""
+    """`subprocess.call(cmd)` on Windows, with the child dying when gma does.
+
+    Ctrl+C reaches node as well as gma: node saves and exits, so gma waits
+    for it (up to `_INTERRUPT_GRACE_S`) and returns its code, with no
+    traceback. A child still running then is ended."""
     proc = subprocess.Popen(cmd)
     job = None
     try:
@@ -393,8 +401,14 @@ def _call_tied_to_gma(cmd: list[str]) -> int:
         except (OSError, AttributeError, ValueError):
             job = None   # the child runs untied, as before
         return proc.wait()
+    except KeyboardInterrupt:
+        try:
+            return proc.wait(timeout=_INTERRUPT_GRACE_S)
+        except (subprocess.TimeoutExpired, KeyboardInterrupt):
+            proc.kill()
+            return proc.wait()
     except BaseException:
-        proc.kill()   # an interrupt of gma, even during the job setup, ends its child too
+        proc.kill()   # anything else that stops gma ends its child too
         proc.wait()
         raise
     finally:
@@ -415,6 +429,11 @@ def _run_tool(tool: Path, args: list[str]) -> int:
     except OSError:
         print("gma: publish needs node on the PATH", file=sys.stderr)
         return 1
+
+
+def _first_line(text: str) -> str:
+    """The first line with words on it, or ''."""
+    return next((line.strip() for line in text.splitlines() if line.strip()), "")
 
 
 def _table_pick(tool: Path, vault: str, flags: list[str]) -> dict[str, object] | None:
@@ -462,16 +481,19 @@ def _table(args: list[str]) -> int:
     index, label = str(picked["index"]), str(picked["label"])
     if not picked.get("tableLog"):
         import vault_write
-        with contextlib.redirect_stdout(io.StringIO()), \
-                contextlib.redirect_stderr(io.StringIO()):
+        said_out, said_err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(said_out), \
+                contextlib.redirect_stderr(said_err):
             filed = vault_write.main([opts.vault, "table-log-new", "--session",
                                       index, "--created-by", "run-sheet",
                                       "--write"])
         if filed == 0:
             print(f"Filed the Table Log: {label} now counts as played.")
         else:
-            print("gma table: could not file the Table Log; the sheet runs "
-                  "without one", file=sys.stderr)
+            why = _first_line(said_err.getvalue()) or _first_line(said_out.getvalue())
+            print("gma table: could not file the Table Log"
+                  + (f" ({why})" if why else "")
+                  + "; the sheet runs without one", file=sys.stderr)
     import vault_check
     party = [row.split("\t")[1] for row in
              vault_check.list_active_pcs(Path(opts.vault))]

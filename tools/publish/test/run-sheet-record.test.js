@@ -52,6 +52,21 @@ describe('the Table Log writer', () => {
     assert.match(PY, /TABLE_LOG_VITALS_HEAD = "\\n\| Who \| HP \| Conditions \|\\n\| --- \| --- \| --- \|\\n"/);
   });
 
+  it('a renamed beat shows its title, and vitals for someone gone are kept, in Changed since play started (proof defect 2, PR review L2)', () => {
+    const s = run([
+      { type: 'bring', beat: 'b-gone', note: 'Characters/NPCs/Guard.md', name: 'Guard', title: 'The Old Hoard' },
+      { type: 'endSet', vitals: { 'Characters/NPCs/Garrick Fell.md': { hp: 4, conditions: 'Exhaustion 1' }, 'Characters/NPCs/Guard.md#2': { hp: 3 } } },
+    ]);
+    s.end.vitals['Characters/NPCs/Guard.md#2'].max = 11;
+    const lines = sectionsOf(body(s)).get('Changed since play started').trim().split('\n');
+    assert.deepStrictEqual(lines, [
+      '- Beat "The Old Hoard": brought; no longer in the Plan',
+      '- Vitals for [[Characters/NPCs/Garrick Fell]]: HP 4, Exhaustion 1; no longer in the Plan',
+      '- Vitals for [[Guard]] 2: HP 3/11; no longer in the Plan',
+    ]);
+    assert.ok(!lines.some((l) => l.includes('b-gone')), 'never the key');
+  });
+
   it('an untouched session writes 16 bare headings', () => {
     const b = body(fresh());
     assert.deepStrictEqual([...b.matchAll(/^## (.+)$/gm)].map((m) => m[1]), R.TABLE_LOG_SECTIONS);

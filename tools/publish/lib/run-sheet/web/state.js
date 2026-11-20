@@ -139,10 +139,12 @@
       list.push({ note: a.note, name: a.name || stem(a.note), at });
       log(s, at, a.beat, `${a.name || stem(a.note)} brought in.`, a.title);
     },
-    unbring(s, a) {
-      if (!s.brought[a.beat]) return;
+    unbring(s, a, at) {
+      const gone = (s.brought[a.beat] || []).find((b) => b.note === a.note);
+      if (!gone) return;
       s.brought[a.beat] = s.brought[a.beat].filter((b) => b.note !== a.note);
       if (!s.brought[a.beat].length) delete s.brought[a.beat];
+      log(s, at, a.beat, `${gone.name || stem(a.note)} taken off.`, a.title);
     },
     unmask(s, a, at) {
       if (!a.note || (a.on && !a.name)) return;
@@ -153,8 +155,10 @@
     handOver(s, a, at) {
       if (!a.handout) return;
       if (!a.on) { delete s.handouts[a.handout]; return; }
-      s.handouts[a.handout] = { text: a.text || '', note: a.note || null, at };
-      log(s, at, null, `Handed over: ${String(a.text || stem(a.note) || 'a handout').replace(/\.$/, '')}.`);
+      s.handouts[a.handout] = { text: a.text || '', ...(a.name ? { name: a.name } : {}), note: a.note || null, at };
+      // the handout's name (the page sends it), never its Notes cell; a name that ends a sentence gets no second stop
+      const name = String(a.name || stem(a.note) || a.text || 'a handout').trim();
+      log(s, at, null, `Handed over: ${/[.!?]["'”’)]?$/.test(name) ? name : `${name}.`}`);
     },
     loot(s, a, at) {
       if (!a.item) return;
@@ -238,6 +242,13 @@
     s.stateId = state.stateId;
     s.recordHash = state.recordHash;
     return s;
+  }
+
+  // A handout's name for the Log: its note's name, else the row's first cell with its links read as words.
+  function handoutName(h) {
+    if (!h) return '';
+    if (h.note) return stem(h.note);
+    return String(h.name || '').replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (m, target, alias) => alias || target.split('/').pop()).trim();
   }
 
   function cyclePoint(mark) {
@@ -428,8 +439,17 @@
     // anything keyed that the Plan no longer holds
     const orphans = [];
     const seenBeat = new Map();
-    const beatOrphan = (key, title, use) => {
+    // A beat's title as the actions made in it carried it: a beat known only by a brought-in person or
+    // a PC standing there still shows its title, never its key.
+    const savedTitle = new Map();
+    const keep = (key, title) => { if (key && title && !savedTitle.has(key)) savedTitle.set(key, title); };
+    for (const e of state.events) keep(e.beat, e.title);
+    for (const j of state.jots) keep(j.beat, j.title);
+    for (const p of Object.values(state.points)) keep(p.beat, p.beatTitle);
+    for (const l of Object.values(state.loot)) keep(l.beat, l.beatTitle);
+    const beatOrphan = (key, title0, use) => {
       if (byKey.has(key)) return;
+      const title = title0 || savedTitle.get(key) || '';
       if (!seenBeat.has(key)) { const o = { kind: 'beat', key, text: title || '', beatTitle: title || '', value: [] }; seenBeat.set(key, o); orphans.push(o); }
       const o = seenBeat.get(key);
       if (title && !o.text) { o.text = title; o.beatTitle = title; }
@@ -446,7 +466,19 @@
     }
     for (const [k, v] of Object.entries(state.points)) if (!pointKeys.has(k)) orphans.push({ kind: 'point', key: k, text: v.text, beatTitle: v.beatTitle, value: v.mark });
     for (const [k, v] of Object.entries(state.loot)) if (!lootKeys.has(k)) orphans.push({ kind: 'loot', key: k, text: v.text, beatTitle: v.beatTitle, value: v.to });
-    for (const [k, v] of Object.entries(state.handouts)) if (!handoutKeys.has(k)) orphans.push({ kind: 'handout', key: k, text: v.text, beatTitle: '', value: 'handed over' });
+    for (const [k, v] of Object.entries(state.handouts)) if (!handoutKeys.has(k)) orphans.push({ kind: 'handout', key: k, text: v.name || v.text, beatTitle: '', value: 'handed over' });
+    // vitals the GM set for a row the model no longer has (a note renamed or dropped mid-session)
+    const rowIds = new Set(vitals.map((v) => v.rowId));
+    const given = (x) => x !== undefined && x !== null && x !== '';
+    for (const [id, v] of Object.entries(state.end.vitals)) {
+      if (rowIds.has(id) || !v || typeof v !== 'object') continue;
+      const hp = given(v.hp) ? v.hp : (v.rested && given(v.rested.hp) ? v.rested.hp : null);
+      const max = given(v.max) ? v.max : (v.rested && given(v.rested.max) ? v.rested.max : null);
+      const conditions = String(v.conditions || '').trim();
+      if (hp === null && max === null && !conditions) continue;
+      const m = /^(.*)#(\d+)$/.exec(id);
+      orphans.push({ kind: 'vitals', key: id, note: m ? m[1] : id, copy: m ? Number(m[2]) : 1, text: '', beatTitle: '', value: { hp, max, conditions } });
+    }
 
     return {
       beats, reached, whereEnded, pointsBy, notReached, orphans, vitals, vitalsRecorded, loot,
@@ -454,12 +486,12 @@
       stopped: state.stopped ? { beat: state.stopped.beat, title: titleOf(state.stopped.beat, state.stopped.title) } : null,
       fired: Object.entries(state.fired).map(([beat, v]) => ({ beat, title: titleOf(beat, v.title) })),
       improvised: state.improvised.slice(),
-      handedOver: Object.entries(state.handouts).map(([key, v]) => ({ key, text: v.text, note: v.note })),
+      handedOver: Object.entries(state.handouts).map(([key, v]) => ({ key, text: v.text, name: v.name || '', note: v.note })),
       unmaskedNow, maskedAgain,
       advancement: state.end.advancement || '',
       fightLog: [],
     };
   }
 
-  return { emptyState, upgrade, reduce, derive, cyclePoint, armClick, castSearch };
+  return { emptyState, upgrade, reduce, derive, cyclePoint, armClick, castSearch, handoutName };
 }));

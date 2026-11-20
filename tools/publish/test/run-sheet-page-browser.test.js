@@ -160,6 +160,45 @@ describe('the GM page in a browser', { skip: browserSkip() }, () => {
     assert.strictEqual(Object.keys(state.handouts).length, 1, 'the page\'s own action was re-applied');
   });
 
+  it('a page left open while the server is switched to another session names the new one (proof defect 1)', async () => {
+    const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'rs-page-'));
+    made.push(vault);
+    fs.cpSync(FIXTURE, vault, { recursive: true });
+    const serve = async (asked, port) => {
+      const picked = pickSession(listSessions(vault), asked, vault);
+      const t = createTableServer({ vaultPath: vault, session: picked.session, party: PARTY, deps: { delayMs: 50, log: () => {} } });
+      const bound = await listenLocal(t.server, port);
+      servers.push(t);
+      return { ...t, port: bound, base: `http://127.0.0.1:${bound}/` };
+    };
+    const s2 = await serve('Session 02 - The Test', 0);
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await page.goto(`${s2.base}?probe=1`);
+      await settled(page);
+      await s2.close();
+      await page.waitFor(`(() => { const p = ${PROBE}; return p && p.saved === 'Not connected' && p; })()`);
+      const s3 = await serve('Session 03 - Next', s2.port);
+      const p = await page.waitFor(`(() => { const p = ${PROBE}; return p && p.notes.length && p; })()`);
+      assert.deepStrictEqual(p.notes, ['This page was showing Session 2; it now shows Session 3.']);
+      assert.strictEqual(p.stateId, s3.stateId);
+    });
+  });
+
+  it('closing the tab while clicks are unsent asks first (PR review L5)', async () => {
+    const gone = await start(FIXTURE, 'Session 02 - The Test');
+    const asks = 'window.dispatchEvent(Object.assign(new Event("beforeunload", { cancelable: true }))) === false';
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await page.goto(`${gone.base}?probe=1`);
+      await settled(page);
+      assert.strictEqual(await page.evaluate(asks), false, 'nothing unsent: no question');
+      await gone.close();
+      await page.waitFor(`(() => { const p = ${PROBE}; return p && p.saved === 'Not connected' && p; })()`);
+      await click(page, '#sheet .ptb[data-pt]');
+      await page.waitFor(`(() => { const p = ${PROBE}; return p && p.pending > 0 && p; })()`);
+      assert.strictEqual(await page.evaluate(asks), true, 'a click not yet sent: the browser asks');
+    });
+  });
+
   it('a Table Log changed by hand is kept aside, and the page says where', async () => {
     const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'rs-page-'));
     made.push(vault);
@@ -172,7 +211,7 @@ describe('the GM page in a browser', { skip: browserSkip() }, () => {
       await settled(page);
       await click(page, '#sheet .ptb[data-pt]');
       const p = await page.waitFor(`(() => { const p = ${PROBE}; return p && p.notes.length && p; })()`);
-      assert.match(p.notes[0], /^The Table Log was changed outside the sheet; the earlier text is kept at _meta\/table\/chapter-1--session-02-the-test\.table-log-.*\.md\.$/);
+      assert.match(p.notes[0], /^The Table Log was changed outside the sheet; the earlier text is kept at _meta\/table\/chapter-1--session-02-the-test\.table-log-.*\.txt\.$/);
       const rel = p.notes[0].replace(/^.* kept at (.*)\.$/, '$1');
       assert.match(fs.readFileSync(path.join(kept.vault, ...rel.split('/')), 'utf8'), /A line the GM wrote by hand/);
     });

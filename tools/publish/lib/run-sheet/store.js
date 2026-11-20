@@ -5,30 +5,75 @@
 // page's PUT never sets them (plan decision 16, re-check R2). Only an accepted PUT bumps `rev`;
 // `setServer` (the server's `recordHash`) does not, but it still schedules a write.
 //
-// A lock file beside the state (`<id>.lock`, `{ pid, port }`) keeps one server per session: a live
-// holder refuses the load (code LOCKED); a holder whose process is gone is taken over. A clean close
-// removes the lock, so a lock found at load means the last run did not end cleanly: rev then starts
-// 1000 higher, so a rev a lost write had handed out is never handed out again (third review L3).
+// A lock file beside the state (`<id>.lock`, `{ pid, port }`) keeps one server per session. A lock is
+// held only while its server answers: its port answers `/api/hello` as the run sheet with the lock's
+// pid (`lockHolder`, which the CLI asks before it starts), or, before the port is known, while the
+// lock is under a minute old. Any other lock is taken over: a pid can be alive again as another
+// program after a reboot, a wrap or on Windows (PR review M2). A clean close removes the lock, so a
+// lock found at load means the last run did not end cleanly: rev then starts 1000 higher, so a rev a
+// lost write had handed out is never handed out again (third review L3).
+//
+// A state file iCloud has taken off this computer (its `.<name>.icloud` placeholder, or a dataless
+// file on macOS) refuses the load, code IN_CLOUD: the sheet never starts empty over a saved state.
 const nodeFs = require('node:fs');
 const path = require('node:path');
+const { runCommand } = require('../run-command');
 
 const SERVER_KEYS = ['recordHash'];
 const REV_GAP = 1000;
-
-// True while a process with that pid runs. EPERM means it runs as someone else.
-function pidAlive(pid) {
-  if (!Number.isInteger(pid) || pid <= 0) return false;
-  try { process.kill(pid, 0); return true; } catch (err) { return err.code === 'EPERM'; }
-}
+const LOCK_FRESH_MS = 60 * 1000;
+const SF_DATALESS = 0x40000000;
 
 const lockFileOf = (file) => `${file.replace(/\.json$/i, '')}.lock`;
 
-// The lock's `{ pid, port }` when a live process holds it, else null.
-function lockHolder(file, { fs = nodeFs, alive = pidAlive } = {}) {
-  let held;
-  try { held = JSON.parse(fs.readFileSync(lockFileOf(file), 'utf8')); } catch { return null; }
-  if (!held || !alive(held.pid)) return null;
-  return { pid: held.pid, port: Number.isInteger(held.port) ? held.port : null };
+// The lock beside `file`: null for none, `{ broken: true }` for one that does not read, else
+// `{ pid, port, ageMs }` (port null before the server listens).
+function readLock(file, { fs = nodeFs, nowMs = Date.now } = {}) {
+  const lf = lockFileOf(file);
+  let text;
+  try { text = fs.readFileSync(lf, 'utf8'); } catch (err) { return err.code === 'ENOENT' ? null : { broken: true }; }
+  let held = null;
+  try { held = JSON.parse(text); } catch { held = null; }
+  if (!held || typeof held !== 'object' || Array.isArray(held)) return { broken: true };
+  let ageMs = Infinity;
+  try { ageMs = nowMs() - fs.statSync(lf).mtimeMs; } catch { /* no age: an old lock */ }
+  return { pid: Number.isInteger(held.pid) ? held.pid : null, port: Number.isInteger(held.port) ? held.port : null, ageMs };
+}
+
+// The rule without the network: a lock with no port is held while under a minute old (its server is
+// between load and listen). A lock with a port is held only when the port answers, which `lockHolder`
+// asks; the store alone takes it over.
+const portlessAndFresh = (lock) => lock.port === null && lock.ageMs < LOCK_FRESH_MS;
+
+// The lock's `{ pid, port }` when its server still holds it, else null. `hello(port)` answers the
+// run sheet's `/api/hello` body, or null.
+async function lockHolder(file, { fs = nodeFs, nowMs = Date.now, hello } = {}) {
+  const lock = readLock(file, { fs, nowMs });
+  if (!lock || lock.broken) return null;
+  if (lock.port === null) return portlessAndFresh(lock) ? { pid: lock.pid, port: null } : null;
+  let h = null;
+  try { h = hello ? await hello(lock.port) : null; } catch { h = null; }
+  return h && h.app === 'run-sheet' && h.pid === lock.pid ? { pid: lock.pid, port: lock.port } : null;
+}
+
+// macOS file flags (`stat -f %f`), or null when they cannot be read.
+function statFlags(file) {
+  const r = runCommand('/usr/bin/stat', ['-f', '%f', file], { timeoutMs: 3000 });
+  const n = r.code === 0 ? Number(String(r.stdout).trim()) : NaN;
+  return Number.isInteger(n) ? n : null;
+}
+
+// True when the file is in iCloud and not on this computer: its `.<name>.icloud` placeholder stands in
+// for it, or (macOS) it is dataless. A dataless file has no blocks, so only then are its flags read.
+function inCloudOnly(file, { fs = nodeFs, platform = process.platform, flagsOf = statFlags } = {}) {
+  let st;
+  try { st = fs.statSync(file); } catch (err) {
+    if (err.code !== 'ENOENT') return false;
+    return fs.existsSync(path.join(path.dirname(file), `.${path.basename(file)}.icloud`));
+  }
+  if (platform !== 'darwin' || !st.isFile() || st.blocks !== 0 || st.size === 0) return false;
+  const flags = flagsOf(file);
+  return flags === null ? true : (flags & SF_DATALESS) !== 0;
 }
 
 // A file-name-safe UTC stamp: 2026-11-20T21-05-03Z.
@@ -37,7 +82,7 @@ const stampOf = (d) => d.toISOString().replace(/\.\d+Z$/, 'Z').replace(/:/g, '-'
 function createStore({
   file, stateId, delayMs = 1000, retryMs = [1000, 2000, 5000], fs = nodeFs,
   onSaved = () => {}, onFailed = () => {}, onWrite = () => {}, fresh = () => ({}), now = () => new Date(),
-  upgrade = (state) => state, pid = process.pid, alive = pidAlive,
+  upgrade = (state) => state, pid = process.pid, held = portlessAndFresh, nowMs = Date.now, inCloud = inCloudOnly,
 } = {}) {
   if (!file || !stateId) throw new Error('createStore needs a file and a stateId');
   const dir = path.dirname(file);
@@ -101,21 +146,18 @@ function createStore({
     } catch { /* no lock: the state writes say what is wrong */ }
   }
 
-  // Takes the lock; true when a lock was found that its process had left behind (an unclean end).
+  // Takes the lock; true when a lock was found that its server had left behind (an unclean end).
   function takeLock() {
-    let held = null;
-    let found = false;
-    try { held = JSON.parse(fs.readFileSync(lockFile, 'utf8')); found = true; } catch (err) { found = err.code !== 'ENOENT'; }
-    if (held && alive(held.pid)) {
-      const port = Number.isInteger(held.port) ? held.port : null;
-      const e = new Error(`the run sheet for this session is already running (pid ${held.pid}${port ? `, port ${port}` : ''})`);
+    const lock = readLock(file, { fs, nowMs });
+    if (lock && !lock.broken && held(lock)) {
+      const e = new Error(`the run sheet for this session is already running (pid ${lock.pid}${lock.port ? `, port ${lock.port}` : ''})`);
       e.code = 'LOCKED';
-      e.pid = held.pid;
-      e.port = port;
+      e.pid = lock.pid;
+      e.port = lock.port;
       throw e;
     }
     writeLock(null);
-    return found;
+    return lock !== null;
   }
 
   function changed() {
@@ -129,6 +171,12 @@ function createStore({
     // The saved state, or null for none (or one that did not parse, moved aside as
     // `<id>.broken-<stamp>.json`, its path in `store.broken`). Leftover temp files are removed.
     load() {
+      if (inCloud(file, { fs })) {
+        const e = new Error(`the saved state is in iCloud, not on this computer: ${file}`);
+        e.code = 'IN_CLOUD';
+        e.file = file;
+        throw e;
+      }
       const unclean = takeLock();
       self.unclean = unclean;
       const startFresh = () => { rev = unclean ? REV_GAP : 0; cur = own(fresh() || {}, rev, null); };
@@ -214,4 +262,4 @@ function createStore({
   return self;
 }
 
-module.exports = { createStore, stampOf, lockHolder, lockFileOf, pidAlive, REV_GAP };
+module.exports = { createStore, stampOf, lockHolder, readLock, lockFileOf, inCloudOnly, portlessAndFresh, REV_GAP, LOCK_FRESH_MS, SF_DATALESS };

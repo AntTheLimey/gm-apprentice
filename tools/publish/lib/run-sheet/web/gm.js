@@ -161,7 +161,7 @@
         G.state = st.state;
         G.rev = st.rev;
       } catch (e) { lost(); return; }
-      note(`This page was showing ${was}; it now shows ${body.label}.`);
+      note(`This page was showing ${was}; it now shows ${body.label || (G.session && G.session.label) || 'another session'}.`);
       update();
       return;
     }
@@ -185,7 +185,8 @@
     G.resyncTimer = null;
     let st;
     try { st = await getJson('/api/state'); } catch (e) { lost(); return; }
-    if (st.stateId !== G.stateId) { await conflict({ reason: 'session', label: (G.session && G.session.label) || '' }); G.down = false; indicator(); return; }
+    // the server now runs another session: its label is the one to name, never this page's own
+    if (st.stateId !== G.stateId) { await conflict({ reason: 'session', label: st.label || '' }); G.down = false; indicator(); return; }
     G.serverId = st.serverId;
     rebase(st.state, st.rev);
     G.down = false;
@@ -391,6 +392,11 @@
       if (o.kind === 'loot') return `Loot "${esc(o.text)}"${where}: to ${esc(o.value === 'party' ? 'the party' : nameOf(o.value))}`;
       if (o.kind === 'handout') return `Handout "${esc(o.text)}": handed over`;
       if (o.kind === 'spot') return `A spot at ${esc(o.beatTitle)}: ${esc(nameOf(o.value))} stood there`;
+      if (o.kind === 'vitals') {
+        const v = o.value;
+        const hp = v.hp !== null ? `HP ${v.hp}${v.max !== null ? `/${v.max}` : ''}` : v.max !== null ? `HP max ${v.max}` : '';
+        return `Vitals for ${esc(nameOf(o.note))}${o.copy > 1 ? ` ${o.copy}` : ''}: ${esc([hp, v.conditions].filter(Boolean).join(', '))} (no longer on the end panel)`;
+      }
       return `Beat "${esc(o.text || o.key)}": ${esc([].concat(o.value).map((v) => String(v).replace(/^stood: (.*)$/, (x, p) => `${nameOf(p)} stood there`)).join(', '))}`;
     };
     return `<div class="changed" id="changed"><b>Changed since play started:</b> marks kept against things the Plan no longer has. They go into the record as they are; attach one to what it became.<ul>${d.orphans.map((o) => {
@@ -644,7 +650,7 @@
     if (d.arm) {
       const id = d.arm;
       if (d.unjot) armed(id, () => act({ type: 'unjot', jot: d.unjot }));
-      else if (d.unbring) armed(id, () => act({ type: 'unbring', beat: d.beat, note: d.unbring }));
+      else if (d.unbring) armed(id, () => act({ type: 'unbring', beat: d.beat, note: d.unbring, title: titleOfKey(d.beat) }));
       else if (d.unimpro) armed(id, () => act({ type: 'unimprovise', key: d.unimpro }));
       return;
     }
@@ -661,7 +667,7 @@
     }
     if (d.hand) {
       const x = (G.model.handouts || []).find((h) => h.key === d.hand);
-      act({ type: 'handOver', handout: d.hand, on: !G.state.handouts[d.hand], text: x ? (x.text || stem(x.note) || x.name) : '', note: x ? x.note : null });
+      act({ type: 'handOver', handout: d.hand, on: !G.state.handouts[d.hand], text: x ? (x.text || stem(x.note) || x.name) : '', name: x ? RS.handoutName(x) : '', note: x ? x.note : null });
       return;
     }
     if (d.fire) { G.ui.focus = d.fire; act({ type: 'fire', beat: d.fire, on: !G.state.fired[d.fire], title: titleOfKey(d.fire) }); return; }
@@ -781,6 +787,13 @@
     }
     if (d.vcond) { act({ type: 'endSet', vitals: { [d.vcond]: { conditions: t.value.trim() } } }); return; }
     if (t.id === 'advance') act({ type: 'endSet', advancement: t.value });
+  });
+
+  // A tab closed while clicks are still unsent (the server not answering) would lose them: the browser asks first.
+  window.addEventListener('beforeunload', (ev) => {
+    if (!G.pending.length) return;
+    ev.preventDefault();
+    ev.returnValue = '';
   });
 
   // ------------------------------------------------------------------ the probe (tests only)
