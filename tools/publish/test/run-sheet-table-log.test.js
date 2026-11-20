@@ -85,6 +85,13 @@ describe('readTableLog', () => {
     ]);
   });
 
+  it('negative hit points read as numbers', () => {
+    const text = '## Vitals at the end\n\n| Who | HP | Conditions |\n|---|---|---|\n| [[Lucan Grey]] | -3/12 | dying |\n| [[Ada Moss]] | -10 | |\n| [[Ben Hart]] | - 3 | |\n';
+    assert.deepStrictEqual(readTableLog(text).vitals.map((v) => [v.who, v.hpNow, v.hpMax]), [
+      ['Lucan Grey', -3, 12], ['Ada Moss', -10, null], ['Ben Hart', null, null],
+    ]);
+  });
+
   it('a Windows checkout (CRLF) reads the same', () => {
     const crlf = LOG.replace(/\n/g, '\r\n');
     assert.match(crlf, /\r\n/);

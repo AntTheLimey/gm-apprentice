@@ -248,6 +248,9 @@ describe('decideGmPage: a session\'s Play Notes', () => {
     for (const type of ['session-play-notes', 'session_play_notes', 'session-export', 'session_export']) {
       assert.strictEqual(isPlayRecord({ type }), true, type);
     }
+    // any case, and a list of one, as the player site's rules read a type
+    assert.strictEqual(isPlayRecord({ type: 'Session-Play-Notes' }), true);
+    assert.strictEqual(isPlayRecord({ type: ['session-export'] }), true);
     assert.strictEqual(isPlayRecord({ type: 'session' }), false);
     assert.strictEqual(isPlayRecord({ type: 'session_wrap' }), false);
     assert.strictEqual(isPlayRecord(null), false);
@@ -302,9 +305,7 @@ describe('decideGmPage: a session\'s Play Notes', () => {
           manifest: manifestOf({ publishing: ['Sessions/S1 Table Log.md'] }),
         });
         assert.strictEqual(listed.code, 'TABLE_LOG', label);
-        // the GM site still pages it, notes switch on or off (a type in odd case is read off the player site
-        // all the same; the GM site's play-record rule reads the type as written, so that case is not asked here)
-        if (type !== type.toLowerCase()) continue;
+        // the GM site still pages it, notes switch on or off, in any case of the type
         for (const show of [OFF, NOTES_ON]) {
           const v = gm(fm, { show, rel: 'Sessions/S1 Table Log.md' });
           assert.strictEqual(v.player.code, 'TABLE_LOG', label);

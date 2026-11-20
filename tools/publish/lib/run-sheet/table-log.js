@@ -16,7 +16,8 @@ class Sections extends Map {
 }
 
 const VITALS = 'Vitals at the end';
-const HP_CELL = /^(\d+)\s*(?:\/\s*(\d+))?$/;
+// `current/max` or `current`; current may be below zero (a dying ally, GURPS).
+const HP_CELL = /^(-?\d+)\s*(?:\/\s*(\d+))?$/;
 
 // A Who cell's note: its first link's target (a pipe alias dropped), else the cell's own text.
 function whoOf(cell) {

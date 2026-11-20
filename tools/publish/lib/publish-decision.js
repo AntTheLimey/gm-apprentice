@@ -294,7 +294,8 @@ const TABLE_LOG_TYPES = new Set(['session-table-log', 'session_table_log']);
 const PLAY_RECORD_TYPES = new Set(['session-play-notes', 'session_play_notes', 'session-export', 'session_export',
   'session-table-log', 'session_table_log']);
 function isPlayRecord(frontmatter) {
-  return !!frontmatter && PLAY_RECORD_TYPES.has(frontmatter.type);
+  // Any case, as decidePage reads a type (TABLE_LOG among them), so the two rules agree.
+  return !!frontmatter && PLAY_RECORD_TYPES.has(lower(ruleValue('type', frontmatter.type)));
 }
 
 // The GM site's verdict for one page. `options` is decidePage's plus `show` (a Set of the kinds the GM

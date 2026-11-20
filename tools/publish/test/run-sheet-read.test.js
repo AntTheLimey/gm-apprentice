@@ -670,6 +670,50 @@ describe('run sheet reader: allies start from the last Table Log', () => {
     assert.deepStrictEqual(hpOf(P2), [`2 ${C2S1_LOG}`]);
   });
 
+  it('a previous session with no Table Log is never skipped back past', () => {
+    // S1 has a log; S2, the session before the Plan's S3, has none: allies start from their notes.
+    const dir = withS1();
+    const S2 = `${CH1}/Sessions/Session 02/Session 02 - The Test.md`;
+    sessionIndex(dir, S2, { number: 2, chapter: 'Chapter 1', log: null });
+    const S3 = `${CH1}/Sessions/Session 03/Session 03 - Next.md`;
+    sessionIndex(dir, S3, { number: 3, chapter: 'Chapter 1', log: null });
+    const P3 = `${CH1}/Sessions/Session 03/Session 03 - Next - Plan.md`;
+    write(dir, P3, ['---', 'type: session-plan', 'session: "[[Session 03 - Next]]"', 'chapter: "[[Chapter 1]]"', '---', '',
+      '## Planned Scenes', '', '### Scene 1: Again', '**Situation:** Lucan again.', '**NPCs**', '- **[[Lucan Grey]]:** helps', ''].join('\n'));
+    const m = readRunSheet(dir, P3, { party: PARTY });
+    const rows = allyRows(m);
+    assert.ok(rows.length >= 1);
+    for (const f of rows) assert.deepStrictEqual([f.hpNow, f.carriedFrom], [null, null]);
+    // the same vault's S2 Plan does carry from S1, so the log is readable
+    for (const f of allyRows(readRunSheet(dir, PLAN, { party: PARTY }))) assert.strictEqual(f.hpNow, 9);
+  });
+
+  it('a chapter matched by its title: field orders as the site orders it', () => {
+    // Sessions in one flat folder name their chapter by the chapter's title, not its file name: only the
+    // title (the scanner's displayTitle) ties them to a chapter. Number alone would put B's S1 before C's S2.
+    const dir = copy();
+    write(dir, 'Book/Ch1.md', '---\ntype: chapter\nstatus: active\nsort_order: 1\ntitle: The Frost\n---\n\n# The Frost\n');
+    write(dir, 'Book/Ch2.md', '---\ntype: chapter\nstatus: active\nsort_order: 2\ntitle: The Thaw\n---\n\n# The Thaw\n');
+    const idx = (rel, number, chapter, log) => write(dir, rel, ['---', 'type: session', `session_number: ${number}`,
+      `chapter: "${chapter}"`, 'documents:', `  table_log: ${log ? `"[[${log}]]"` : 'null'}`, '---', ''].join('\n'));
+    idx('Book/Sessions/A - First.md', 1, 'Book - The Frost', 'A - First - Table Log');
+    tableLog(dir, 'Book/Sessions/A - First - Table Log.md', 'A - First', ['| [[Lucan Grey]] | 6/16 | |']);
+    idx('Book/Sessions/B - Thaw One.md', 1, 'Book - The Thaw', 'B - Thaw One - Table Log');
+    tableLog(dir, 'Book/Sessions/B - Thaw One - Table Log.md', 'B - Thaw One', ['| [[Lucan Grey]] | 1/16 | |']);
+    idx('Book/Sessions/C - Second.md', 2, 'Book - The Frost', null);
+    const P = 'Book/Sessions/C - Second - Plan.md';
+    write(dir, P, ['---', 'type: session-plan', 'session: "[[C - Second]]"', '---', '',
+      '## Planned Scenes', '', '### Scene 1: Again', '**Situation:** Lucan again.', '**NPCs**', '- **[[Lucan Grey]]:** helps', ''].join('\n'));
+    const rows = allyRows(readRunSheet(dir, P, { party: PARTY }));
+    assert.ok(rows.length >= 1);
+    for (const f of rows) assert.deepStrictEqual([f.hpNow, f.carriedFrom], [6, 'Book/Sessions/A - First - Table Log.md']);
+  });
+
+  it('a dying ally carries negative hit points', () => {
+    const m = readRunSheet(withS1(['| [[Lucan Grey]] | -3/12 | dying |']), PLAN, { party: PARTY });
+    for (const f of allyRows(m)) assert.deepStrictEqual([f.hpNow, f.carriedFrom], [-3, S1_LOG]);
+  });
+
   it('foes are never carried', () => {
     const m = readRunSheet(withS1(['| [[Brother Ash]] | 3/20 | bloodied |', '| [[Frost Wolf]] | 1/15 | |', '| [[Lucan Grey]] | 9/27 | |']), PLAN, { party: PARTY });
     const foes = m.beats.flatMap((b) => b.foes).filter((f) => !f.ally);
