@@ -94,6 +94,21 @@ class DoctorTests(unittest.TestCase):
         self.assertIn("v20.11.0", found[2].what)
         self.assertIn("22.21", found[2].fix)
 
+    def test_a_node_that_does_not_say_its_version_warns(self):
+        found = _run(_install(self.root, tool="1.70.1"), said=None)
+        self.assertEqual(found[2].level, "warn")
+        self.assertIn("did not answer", found[2].what)
+
+    def test_a_tool_with_no_stamp_or_no_readable_version_fails(self):
+        found = _run(_install(self.root, publish=None, tool="1.70.1"))
+        self.assertEqual(found[3].level, "fail")
+        self.assertIn("PUBLISH_VERSION", found[3].what)
+        layout = _install(self.root / "b", tool="1.70.1")
+        (layout.root / "tools" / "publish" / "package.json").write_text("not json")
+        found = _run(layout)
+        self.assertEqual(found[3].level, "fail")
+        self.assertIn("no readable version", found[3].what)
+
     def test_an_old_python_fails(self):
         found = _run(_install(self.root, tool="1.70.1"), python=(3, 9, 6))
         self.assertEqual(found[0].level, "fail")

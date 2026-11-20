@@ -103,26 +103,34 @@ def checks(layout: Layout, *, python: tuple[int, ...] = tuple(sys.version_info[:
                            f"needed only for a campaign site: install Node {tool_cache.NODE_FLOOR} "
                            f"or newer from {NODE_URL}"))
     else:
-        old = node_too_old(node)
-        if old is not None:
+        said = node_version(node)
+        old = node_too_old(node) if said is not None else None
+        if said is None:
+            found.append(Check("warn", "Node is installed, but `node --version` did not answer",
+                               f"the campaign site needs Node {tool_cache.NODE_FLOOR} or newer: reinstall it "
+                               f"from {NODE_URL}"))
+        elif old is not None:
             found.append(Check("warn", f"Node {old} is too old for the campaign site",
                                f"upgrade to Node {tool_cache.NODE_FLOOR} or newer from {NODE_URL}"))
         else:
-            found.append(Check("ok", f"Node {node_version(node) or ''}".rstrip()))
+            found.append(Check("ok", f"Node {said}"))
 
     wanted = install_layout.publish_version(layout.shared)
     tool = layout.publish_tool
-    if tool is not None and tool.is_file():
-        have = _tool_version(tool) if layout.door_owns_tool else wanted
-        if wanted is not None and have is not None and have != wanted:
-            found.append(Check("fail", f"the publish tool is {have}, but these skills go with {wanted}",
-                               "this install is mixed: install gm-apprentice again"))
-        else:
-            found.append(Check("ok", f"the publish tool{f' {have}' if have else ''}, at {tool.as_posix()}"))
-    elif wanted is None:
+    if wanted is None:
         found.append(Check("fail", f"the publish tool's version is unknown: shared/{install_layout.PUBLISH_STAMP} "
                                    "is missing or empty",
                            "this install is incomplete: install gm-apprentice again"))
+    elif tool is not None and tool.is_file():
+        have = _tool_version(tool) if layout.door_owns_tool else wanted
+        if have is None:
+            found.append(Check("fail", f"the publish tool at {tool.as_posix()} has no readable version",
+                               "this install is incomplete: install gm-apprentice again"))
+        elif have != wanted:
+            found.append(Check("fail", f"the publish tool is {have}, but these skills go with {wanted}",
+                               "this install is mixed: install gm-apprentice again"))
+        else:
+            found.append(Check("ok", f"the publish tool {have}, at {tool.as_posix()}"))
     elif node is None:
         found.append(Check("warn", "the publish tool is not installed",
                            "it downloads once Node is installed, on the first command that needs it"))

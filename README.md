@@ -38,11 +38,15 @@ any of them. If step 3 fails, stop and show me the error.
    - Codex: `codex plugin marketplace add AntTheLimey/gm-apprentice`,
      then `codex plugin add gm-apprentice@gm-apprentice`.
    - Any other agent: `npx -y skills add AntTheLimey/gm-apprentice --all -g`.
+     `npx` comes with Node: if it is missing, stop and tell me this
+     install needs Node (https://nodejs.org) even without a campaign
+     website.
 4. Check the install. Find the `gma.py` you just installed, in the
    newest version folder: on Claude Code, `claude plugin list --json`
    gives gm-apprentice's `installPath`, and it is at
    `skills/shared/scripts/gma.py` under it; on Codex, under
-   `~/.codex/plugins/cache/gm-apprentice/`; otherwise
+   `$CODEX_HOME/plugins/cache/gm-apprentice/` (`~/.codex` when
+   `CODEX_HOME` is not set); otherwise
    `~/.agents/skills/shared/scripts/gma.py`. Run
    `python3 "<that path>" doctor` and show me its output. If a line
    says `fail`, tell me what it says and stop. If one says `warn`,
