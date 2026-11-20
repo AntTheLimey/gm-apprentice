@@ -92,8 +92,8 @@ NARRATIVE_TYPES = {"chapter", "session", "scene"}
 # Session-chain documents: nest under their session in the Chapters
 # section, or fall to Stubs when no session claims them.
 CHAIN_TYPES: set[str] = {"session-plan", "session-play-notes", "session-export",
-                         *WRAP_UP_TYPES}
-CHAIN_ORDER = ["plan", "play notes", "export", "wrap-up"]
+                         "session-table-log", *WRAP_UP_TYPES}
+CHAIN_ORDER = ["plan", "play notes", "export", "table log", "wrap-up"]
 
 # Types that are narrative apparatus, not domain entities: never counted
 # in entity_count and never bucketed into "Entities by Type". Plans get
@@ -139,8 +139,8 @@ class Entry:
 class SessionEntry(TypedDict):
     stem: str
     status: str
-    # (label, stem) pairs — "plan"/"play notes"/"export"/"wrap-up" — for whichever
-    # session-chain documents matched this session.
+    # (label, stem) pairs — "plan"/"play notes"/"export"/"table log"/
+    # "wrap-up" — for whichever session-chain documents matched this session.
     chain: list[tuple[str, str]]
 
 
@@ -226,6 +226,8 @@ def _chain_label(ftype: str) -> str:
         return "play notes"
     if ftype == "session-export":
         return "export"
+    if ftype == "session-table-log":
+        return "table log"
     return "wrap-up"  # one of WRAP_UP_TYPES
 
 

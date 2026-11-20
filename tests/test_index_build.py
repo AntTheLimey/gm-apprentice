@@ -564,6 +564,13 @@ class UnfiledChainDocTests(unittest.TestCase):
         self.assertIn(("play notes", "Session_09_Notes"),
                       session_08["chain"])
 
+    def test_chain_label_table_log(self):
+        self.assertEqual(ib._chain_label("session-table-log"), "table log")
+        self.assertEqual(ib._chain_label("session_wrap"), "wrap-up")
+        self.assertEqual(ib.CHAIN_ORDER,
+                         ["plan", "play notes", "export", "table log",
+                          "wrap-up"])
+
     def test_documents_target_places_a_chapterless_chain_doc(self):
         entries, chapters = ib.collect(self.vault)
         session_08 = next(s for c in chapters for s in c["all_sessions"]

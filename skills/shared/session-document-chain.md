@@ -23,6 +23,7 @@ documents:
   plan: "[[Session NN - Title - Plan]]"
   play_notes: "[[Session NN - Title - Play Notes]]"
   export: null
+  table_log: null
   wrap_up: "[[Chapter_CC_Session_NN_Wrap_Up]]"
 world_evolved: null
 tags: []
@@ -50,7 +51,7 @@ the world's own format and never fabricate a Gregorian date.
 |--------|---------|
 | planned | Index created, no other documents |
 | prepped | Plan file exists |
-| played | Play Notes or an Export exists |
+| played | Play Notes, an Export or a Table Log exists |
 | wrap-up | Wrap-Up file exists |
 | reviewed | GM has reviewed and confirmed the Wrap-Up |
 
@@ -85,7 +86,7 @@ document that owns it, where the skill that needs it reads it:
 
 | Bookkeeping | Where it goes |
 |---|---|
-| Plan, Play Notes, Export, Wrap-Up links | frontmatter `documents:` |
+| Plan, Play Notes, Export, Table Log, Wrap-Up links | frontmatter `documents:` |
 | Scene Index with prep states, key prep, image prompts, pre-play premise | the Plan |
 | Handoff briefs after play | the Wrap-Up's fenced `## GM Notes` |
 
@@ -161,6 +162,67 @@ tags: []
 Older vaults may hold an export inside the Play Notes, under
 `## Narrative Record`; wrap-up reads it there too.
 
+### 3c. Table Log (`Session {NN} - {Title} - Table Log.md`)
+
+The run sheet's record of the table: where everyone ended, which Plan
+points landed, what was handed over, loot and vitals. It is the third
+play record, beside the Play Notes and the Export, and its own file with
+one writer: the run sheet (written by hand until the run sheet's
+table command exists). session-play never writes a Table Log. It is linked as
+`documents.table_log`, the site treats it as it treats the Play Notes
+(`publish: false` keeps it off the player site; the GM site still gives
+it a page), and session-wrapup reads it. A Table Log is numbers, not
+narrative, so it is never a Wrap-Up's `source_document`.
+
+```yaml
+---
+type: session-table-log
+session: "[[Session NN - Title]]"
+session_number: N
+chapter: "[[Chapter N - Title]]"
+campaign: ""
+canon_status: AUTHORITATIVE
+created_by: run-sheet       # or: manual
+publish: false
+tags: []
+---
+```
+
+**Body:** these `##` sections, in this order, with this exact text.
+Every section is a bulleted list (links where a note exists) except
+`Vitals at the end` and `Log`.
+
+1. `Where everyone ended`
+2. `Stopped in`
+3. `Points landed`
+4. `Tried and missed`
+5. `Overtaken`
+6. `Reached but not landed`
+7. `Not reached`
+8. `Changed since play started`
+9. `Contingencies that fired`
+10. `Improvised beats`
+11. `Unmasked this session`
+12. `Handouts handed over`
+13. `Log`: bullets, `- HH:MM text`
+14. `Loot`: bullets, `- [[Item]] to [[Who]]`
+15. `Vitals at the end`: a table `| Who | HP | Conditions |`; the Who cell
+    is a bare wikilink (`[[Name]]`, no pipe: Obsidian's table rule) and
+    the HP cell is `current/max` or `current`
+16. `Advancement`
+
+A section with nothing in it, or missing altogether, means nothing was
+recorded for it. It is never an error, and never read as "none
+happened"; wrap-up works as it does without a Table Log.
+
+**Where the records disagree:** the Table Log wins for numbers (HP,
+vitals), loot, point states and where everyone ended; the Play Notes and
+Export win for what was said and decided. Wrap-up names each
+disagreement in its review. Where the Table Log's end-of-session vitals
+differ from what flush wrote, the review names both and the GM picks.
+The run sheet starts an ally from the previous session's Table Log when
+there is one, else the note.
+
 ### 4. Session Wrap-Up (`Chapter_CC_Session_NN_Wrap_Up.md`)
 
 Canonical record of the session. Starts DRAFT, promoted to
@@ -212,7 +274,8 @@ fenced `<!-- gm-only -->`.
 | session-prep | Previous wrap-ups, vault | Plan file; index `status`, `documents.plan` | planned → prepped |
 | session-play | Plan file | Play Notes file, session index | prepped → played |
 | `vw export-new` | The export file | Export file, session index | prepped → played |
-| session-wrapup | Play Notes and Export | Wrap-Up file, entities, session index | played → wrap-up |
+| run sheet | The Plan, the run sheet's table state | Table Log file, `_meta/table/`, session index | prepped → played |
+| session-wrapup | Play Notes, Export and Table Log | Wrap-Up file, entities, session index | played → wrap-up |
 | reconcile | Wrap-Up file | Promotes canon status, session index | wrap-up → reviewed |
 | vault-ingest | Old source material | Play Notes (reconstructed), session index | Then chains to wrapup → reconcile |
 
@@ -235,5 +298,6 @@ Chapters/Chapter 1 - Title/Sessions/
     ├── Session 01 - The Arrival - Plan.md
     ├── Session 01 - The Arrival - Play Notes.md
     ├── Session 01 - The Arrival - Export.md   (when there is one)
+    ├── Session 01 - The Arrival - Table Log.md   (when there is one)
     └── Chapter_01_Session_01_Wrap_Up.md
 ```

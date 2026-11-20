@@ -70,7 +70,7 @@ INFO (context the auditing skill should triage, not a defect).
 `player_site.hide.folders`, no `type:`, a draft), and otherwise by
 frontmatter: a `type:` of
 `session-plan`, a play record (`session-play-notes`, `session-export`,
-which the commands file with `publish: false`), `plan`, or `meta` is
+`session-table-log`, which the commands file with `publish: false`), `plan`, or `meta` is
 skipped as never meant for players, even under `_meta/`; `publish: none`
 pages are skipped and `publish: stub` pages are scanned only over
 the sections they ship. ERROR is an orphan `<!-- /gm-only -->`
@@ -409,7 +409,7 @@ DIGITS_RE = re.compile(r"\d+(?:\.\d+)?")
 # only flood the report.
 STRUCTURAL_TYPES = {
     "session", "session-plan", "session-play-notes", "session-export",
-    *WRAP_UP_TYPES, "scene", "chapter",
+    "session-table-log", *WRAP_UP_TYPES, "scene", "chapter",
     "meta", "timeline", "world_flags", "plan",
 }
 STRUCTURAL_NAME_RE = re.compile(
@@ -1369,12 +1369,13 @@ SESSION_DOC_TYPES: dict[str, tuple[str, set[str]]] = {
     "plan": ("plan", {"session-plan"}),
     "play_notes": ("play notes", {"session-play-notes"}),
     "export": ("export", {"session-export"}),
+    "table_log": ("table log", {"session-table-log"}),
     "wrap_up": ("wrap-up", set(WRAP_UP_TYPES)),
 }
 # The play records: what happened at the table, each its own note with one
 # writer (session-play or the GM; a table-assistant export dropped in
 # whole). Any one of them makes a session played; wrap-up reads them all.
-PLAY_RECORD_KEYS = ("play_notes", "export")
+PLAY_RECORD_KEYS = ("play_notes", "export", "table_log")
 PLAY_RECORD_TYPES = frozenset().union(
     *(SESSION_DOC_TYPES[k][1] for k in PLAY_RECORD_KEYS))
 
@@ -2919,12 +2920,13 @@ def check_sessions(vault: Path) -> list[str]:
         else:
             derived = "planned"
 
-        # The export shows only when there is one: most sessions have none.
+        # The export and the table log show only when there is one: most sessions have none.
         flags = " ".join(
             f"{label}={'✓' if chain[key] else '–'}"
             for key, label in (("plan", "plan"), ("play_notes", "play-notes"),
-                               ("export", "export"), ("wrap_up", "wrap-up"))
-            if key != "export" or chain[key])
+                               ("export", "export"), ("table_log", "table-log"),
+                               ("wrap_up", "wrap-up"))
+            if key not in ("export", "table_log") or chain[key])
         status = fm.get("status")
         declared = (str(status) if status and not isinstance(status, list)
                     else "?")
