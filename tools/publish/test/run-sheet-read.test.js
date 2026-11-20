@@ -307,11 +307,28 @@ describe('run sheet reader', () => {
       assert.strictEqual(m.notes[ASH].unmask, null);
     });
 
+    // The fixture as the test edits it: frontmatter lines added after `type: npc`, and Playing Them lines before
+    // `- **Tell:**`. A Windows checkout gives the fixture CRLF line ends (no .gitattributes), so a match on
+    // `type: npc\n` alone found nothing there and the note kept no unmasked_name.
+    // So the added lines take the note's own line ends.
+    const withAsh = (text, fmLines, beforeTell = '') => {
+      const eol = text.includes('\r\n') ? '\r\n' : '\n';
+      const own = (t) => t.replace(/\r?\n/g, eol);
+      return text.replace(/type: npc\r?\n/, `type: npc${eol}${own(fmLines)}`).replace('- **Tell:**', `${own(beforeTell)}- **Tell:**`);
+    };
+
+    it('a CRLF note (a Windows checkout) gives the same unmask', () => {
+      const dir = copy();
+      const crlf = fs.readFileSync(path.join(FIXTURE, ASH), 'utf8').replace(/\r?\n/g, '\r\n');
+      write(dir, ASH, withAsh(crlf, 'unmasked_name: The Ember Abbot\n', '- **Unmasked:** cold\n'));
+      const m = readRunSheet(dir, PLAN, { party: PARTY });
+      assert.deepStrictEqual(m.notes[ASH].unmask, { name: 'The Ember Abbot', portrait: null, playAs: 'cold rubs his thumb along the rope scar' });
+    });
+
     it('unmasked_name gives an unmask', () => {
       const dir = copy();
-      const ash = fs.readFileSync(path.join(dir, ASH), 'utf8')
-        .replace('type: npc\n', 'type: npc\nunmasked_name: " The Ember Abbot "\nunmasked_portrait: "_attachments/ember.png"\n')
-        .replace('- **Tell:**', '- **Unmasked:** cold, never says "indeed"\n- **Tell:**');
+      const ash = withAsh(fs.readFileSync(path.join(dir, ASH), 'utf8'),
+        'unmasked_name: " The Ember Abbot "\nunmasked_portrait: "_attachments/ember.png"\n', '- **Unmasked:** cold, never says "indeed"\n');
       write(dir, ASH, ash);
       write(dir, '_attachments/ember.png', 'x');
       const m = readRunSheet(dir, PLAN, { party: PARTY });
@@ -328,11 +345,11 @@ describe('run sheet reader', () => {
     it('an unmask with no face or Unmasked line has what the note gives, and a missing face warns', () => {
       const dir = copy();
       const ash = fs.readFileSync(path.join(dir, ASH), 'utf8');
-      write(dir, ASH, ash.replace('type: npc\n', 'type: npc\nunmasked_name: The Ember Abbot\nunmasked_portrait: ""\n'));
+      write(dir, ASH, withAsh(ash, 'unmasked_name: The Ember Abbot\nunmasked_portrait: ""\n'));
       let m = readRunSheet(dir, PLAN, { party: PARTY });
       // no Unmasked line: the true self speaks as the disguise does (Speech is kept by --unmask)
       assert.deepStrictEqual(m.notes[ASH].unmask, { name: 'The Ember Abbot', portrait: null, playAs: 'slow, fond of the word "indeed" rubs his thumb along the rope scar' });
-      write(dir, ASH, ash.replace('type: npc\n', 'type: npc\nunmasked_name: The Ember Abbot\nunmasked_portrait: nowhere.png\n'));
+      write(dir, ASH, withAsh(ash, 'unmasked_name: The Ember Abbot\nunmasked_portrait: nowhere.png\n'));
       m = readRunSheet(dir, PLAN, { party: PARTY });
       assert.strictEqual(m.notes[ASH].unmask.portrait, null);
       assert.ok(m.warnings.some((w) => w.kind === 'no-portrait' && w.note === ASH && /unmasked_portrait nowhere\.png .*the Unmask has no face/.test(w.text)), JSON.stringify(m.warnings));
@@ -340,7 +357,7 @@ describe('run sheet reader', () => {
 
     const withFm = (dir, lines) => {
       const ash = fs.readFileSync(path.join(FIXTURE, ASH), 'utf8');
-      write(dir, ASH, ash.replace('type: npc\n', `type: npc\n${lines}`));
+      write(dir, ASH, withAsh(ash, lines));
       return readRunSheet(dir, PLAN, { party: PARTY });
     };
     const unmaskWarnings = (m) => m.warnings.filter((w) => w.kind === 'unmask' && w.note === ASH);
