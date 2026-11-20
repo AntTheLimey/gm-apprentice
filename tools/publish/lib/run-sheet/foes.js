@@ -96,7 +96,9 @@ function entry(notePath, index, count, add, canFight = true) {
   if (canFight) missing.forEach((w) => add(w.kind, notePath, w.text));
   else if (missing.length) prepNote = missing.map((w) => w.text).join('; ');
   if (STOCK_NAMED.test(info.stats) && !HAS_ACTION.test(info.stats)) {
-    add('stock-no-actions', notePath, `${info.name} names a stock stat block but no actions are in the vault: fill them in prep (gma stat-fill)`);
+    const text = `${info.name} names a stock stat block but no actions are in the vault: fill them in prep (gma stat-fill)`;
+    if (canFight) add('stock-no-actions', notePath, text);
+    else prepNote = prepNote ? `${prepNote}; ${text}` : text;
   }
   return { notePath, n, info, nums, prepNote };
 }
@@ -125,7 +127,7 @@ function rows(entries, beatKey, carried = null) {
     const i = (at.get(e.notePath) || 0) + 1;
     at.set(e.notePath, i);
     const { info, nums } = e;
-    const got = nums.ally && carried ? carried.of(e.notePath) : null;
+    const got = nums.ally && carried ? carried.of(e.notePath, i) : null;
     const hpNow = got && got.hp !== null ? got.hp : null;
     return {
       key: keys[k++], note: e.notePath, name: total.get(e.notePath) > 1 ? `${info.name} ${i}` : info.name,

@@ -28,7 +28,7 @@ function readCast(index, { carried = null } = {}) {
       gmAliases: gmAliasList(fm),
       withheld: isWithheld(fm),
       status: fm.status === undefined || fm.status === null ? '' : String(fm.status),
-      dead: fate.isDead(body, fm),
+      dead: fate.isDeadBody(body, fm),
       portrait: index.portrait(p),
       playAs: pc ? '' : playAsOf(p, index),
       wants: pc ? '' : wantsOf(p, index),

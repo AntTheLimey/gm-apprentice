@@ -466,7 +466,8 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
             continue;
           }
           if (v.hpNow === null && !unreadWho.has(low(v.who))) continue;
-          if (!hp.has(who)) hp.set(who, v.hpNow);
+          const id = v.copy > 1 ? `${who}#${v.copy}` : who;
+          if (!hp.has(id)) hp.set(id, v.hpNow);
         }
         const unread = new Set();
         for (const u of t.unread) {
@@ -507,15 +508,19 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
         }
         return since.get(note) || null;
       },
-      of(note) {
-        if (!found.has(note)) {
+      // Copy 2 and up read their own row (`Guard 2`), falling back to the note's copy-less row.
+      of(note, copy = 1) {
+        const id = copy > 1 ? `${note}#${copy}` : note;
+        if (!found.has(id)) {
           let hit = null;
           for (let i = 0; hit === null && (i < read.length || readNext()); i++) {
-            if (read[i].hp.has(note)) hit = { hp: read[i].hp.get(note), log: read[i].log };
+            const h = read[i].hp;
+            const k = h.has(id) ? id : note;
+            if (h.has(k)) hit = { hp: h.get(k), log: read[i].log };
           }
-          found.set(note, hit);
+          found.set(id, hit);
         }
-        return found.get(note);
+        return found.get(id);
       },
     };
   }

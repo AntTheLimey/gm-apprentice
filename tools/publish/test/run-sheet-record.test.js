@@ -329,7 +329,7 @@ describe('the reader carries what the writer wrote', () => {
     for (const f of rows) assert.deepStrictEqual([f.hpNow, f.carriedFrom], [9, S1_LOG]);
   });
 
-  it("copy 2 carries copy 2's figure next session, and falls back to the copy-less row", { todo: 'needs the read.js change (reader files are another builder\'s right now)' }, () => {
+  it("copy 2 carries copy 2's figure next session, and falls back to the copy-less row", () => {
     const two = (dir) => {
       const p = path.join(dir, P);
       fs.writeFileSync(p, fs.readFileSync(p, 'utf8').replace('- **[[Lucan Grey]] (Lucan):** helps', '- **[[Lucan Grey]] (2):** helps'));

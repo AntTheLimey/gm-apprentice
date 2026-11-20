@@ -261,6 +261,12 @@ describe('run sheet foes', () => {
       assert.strictEqual(w[0].text, 'X names a stock stat block but no actions are in the vault: fill them in prep (gma stat-fill)');
     });
 
+    it('stock-no-actions is quiet at a beat that cannot fight: the row carries it', () => {
+      const r = foesFor(beat({ type: 'social', who: [who('Dragon Keeper')] }), vault(NOTES));
+      assert.deepStrictEqual(r.warnings.filter((x) => x.kind === 'stock-no-actions'), []);
+      assert.match(r.foes[0].prepNote, /names a stock stat block but no actions/);
+    });
+
     it('a pasted block does not', () => {
       const r = foesOf('Characters/NPCs/Guard Captain.md', vault(NOTES), 1, 'b-x');
       assert.deepStrictEqual(r.warnings.filter((x) => x.kind === 'stock-no-actions'), []);

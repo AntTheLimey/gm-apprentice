@@ -172,16 +172,32 @@ describe('run sheet state', () => {
     assert.strictEqual(RS.derive(model, s).whereEnded.find((x) => x.pc === ADA).text, 'in the cellar');
   });
 
-  it('improvised beats get i- keys and log a line', () => {
-    const s = run([{ type: 'improvise', title: 'A stranger at the well' }, { type: 'improvise', title: 'The well again' }]);
-    assert.deepStrictEqual(s.improvised.map((i) => i.key), ['i-1', 'i-2']);
+  it('improvised beats are keyed from the action id and log a line', () => {
+    const s = run([{ id: 'x1', type: 'improvise', title: 'A stranger at the well' }, { id: 'x2', type: 'improvise', title: 'The well again' }]);
+    assert.deepStrictEqual(s.improvised.map((i) => i.key), ['i-x1', 'i-x2']);
     const d = RS.derive(model, s);
-    assert.ok(d.beats.some((b) => b.key === 'i-1' && b.impro && b.title === 'A stranger at the well'));
+    assert.ok(d.beats.some((b) => b.key === 'i-x1' && b.impro && b.title === 'A stranger at the well'));
     assert.ok(d.log.some((l) => /Improvised beat/.test(l.text) && /stranger/.test(l.beatTitle)));
-    const s2 = run([{ type: 'unimprovise', key: 'i-1' }], s);
-    assert.deepStrictEqual(s2.improvised.map((i) => i.key), ['i-2']);
-    // the next one never reuses a live key
-    assert.strictEqual(run([{ type: 'improvise', title: 'x' }], s2).improvised[1].key, 'i-3');
+    const s2 = run([{ type: 'unimprovise', key: 'i-x1' }], s);
+    assert.deepStrictEqual(s2.improvised.map((i) => i.key), ['i-x2']);
+  });
+
+  it('a stale re-apply keeps a move and a jot on the improvised beat they were made in', () => {
+    const base = run([{ id: 'b1', type: 'improvise', title: 'Tavern brawl' }]);
+    const queued = [{ id: 'a1', type: 'improvise', title: 'Ambush on road' },
+      { id: 'a2', type: 'move', pc: ADA, to: { beat: 'i-a1', title: 'Ambush on road' } },
+      { id: 'a3', type: 'jot', beat: 'i-a1', text: 'Ash got stabbed' }];
+    const s = queued.reduce((st, a, i) => RS.reduce(st, a, at(i)), base);
+    assert.strictEqual(s.positions[ADA].beat, 'i-a1');
+    assert.deepStrictEqual(s.jots.map((j) => j.beat), ['i-a1']);
+    assert.deepStrictEqual(s.improvised.map((i) => i.key), ['i-b1', 'i-a1']);
+  });
+
+  it('removing an improvised beat clears its stop, fire, points and loot, so a later one starts clean', () => {
+    let s = run([{ id: 'q1', type: 'improvise', title: 'Q' }, { type: 'stop', beat: 'i-q1', title: 'Q' }, { type: 'fire', beat: 'i-q1', on: true },
+      { type: 'mark', point: 'i-q1.pt.h', mark: 'landed', beat: 'i-q1' }, { type: 'loot', item: 'i-q1.loot.h', to: 'Ada', beat: 'i-q1' }]);
+    s = run([{ type: 'unimprovise', key: 'i-q1' }], s);
+    assert.deepStrictEqual([s.stopped, s.fired, s.points, s.loot], [null, {}, {}, {}]);
   });
 
   it("bring adds a cast entry to Who's here; unbring takes it off", () => {
@@ -261,12 +277,48 @@ describe('run sheet state', () => {
   it('long rest sets every vitals row to max', () => {
     const s = run([{ type: 'endSet', vitals: { [ADA]: { hp: 3, conditions: 'prone' } } }, { type: 'longRest' }]);
     const d = RS.derive(model, s);
-    assert.strictEqual(d.vitalsRecorded.length, d.vitals.length);
+    // the party, and no ally from a beat nobody reached
+    assert.deepStrictEqual(d.vitalsRecorded.map((v) => v.rowId), [ADA, BEN]);
     assert.deepStrictEqual(d.vitalsRecorded.map((v) => v.hp), d.vitalsRecorded.map((v) => v.max));
     assert.strictEqual(d.vitals.find((v) => v.rowId === ADA).hp, 30);
     // an edit after a long rest wins
     const d2 = RS.derive(model, run([{ type: 'endSet', vitals: { [ADA]: { hp: 12 } } }], s));
     assert.strictEqual(d2.vitalsRecorded.find((v) => v.rowId === ADA).hp, 12);
+  });
+
+  it('a long rest covers an ally in a reached beat, and can be undone with the figures kept', () => {
+    const allyBeat = model.beats.find((b) => (b.foes || []).some((f) => f.ally));
+    assert.ok(allyBeat, 'the fixture has an ally in a beat');
+    const s = run([{ type: 'move', pc: ADA, to: to(allyBeat) }, { type: 'endSet', vitals: { [ADA]: { hp: 3 } } }, { type: 'longRest' }]);
+    assert.ok(RS.derive(model, s).vitalsRecorded.some((v) => v.ally));
+    const u = run([{ type: 'longRest', on: false }], s);
+    assert.strictEqual(u.end.longRest, undefined);
+    assert.strictEqual(RS.derive(model, u).vitals.find((v) => v.rowId === ADA).hp, 3);
+    assert.deepStrictEqual(RS.derive(model, u).vitalsRecorded.map((v) => v.rowId), [ADA]);
+  });
+
+  it('an ally brought in gets a vitals row', () => {
+    const c = model.cast.find((x) => x.foe && x.foe.ally);
+    assert.ok(c);
+    const fresh1 = RS.derive(model, run([{ type: 'bring', beat: GATE.key, note: c.note, name: c.name }]));
+    assert.ok(fresh1.vitals.some((v) => v.note === c.note));
+  });
+
+  it('attach: the moved state wins a key collision, and later actions follow the attach', () => {
+    let s = run([{ type: 'mark', point: 'b-old.pt.aaa', mark: 'landed', beat: 'b-old', text: 'old' },
+      { type: 'mark', point: 'b-new.pt.aaa', mark: 'missed', beat: 'b-new', text: 'new' }]);
+    s = run([{ type: 'attach', from: 'b-old', to: 'b-new' }], s);
+    assert.strictEqual(s.points['b-new.pt.aaa'].mark, 'landed');
+    s = run([{ type: 'mark', point: 'b-old.pt.bbb', mark: 'landed', beat: 'b-old' }], s);
+    assert.ok(s.points['b-new.pt.bbb'] && !s.points['b-old.pt.bbb']);
+  });
+
+  it('a carried unmasking turned off and on again shows once; no name logs nothing', () => {
+    const m = { ...model, notes: { ...model.notes, 'N.md': { unmask: { since: 'log', name: 'Hob' } } } };
+    const s = run([{ type: 'unmask', note: 'N.md', on: false }, { type: 'unmask', note: 'N.md', on: true, name: 'Hob' }]);
+    assert.deepStrictEqual(RS.derive(m, s).unmaskedNow, [{ note: 'N.md', name: 'Hob', carried: false }]);
+    const none = run([{ type: 'unmask', note: 'N.md', on: true }]);
+    assert.deepStrictEqual([none.events.length, Object.keys(none.unmask)], [0, []]);
   });
 
   it('advancement is stored as typed', () => {

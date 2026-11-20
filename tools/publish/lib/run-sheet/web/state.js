@@ -42,8 +42,11 @@
     };
   }
   function rekey(obj, re) {
+    // keys the rewrite leaves alone go in first, so a moved value wins a collision
     const out = {};
-    for (const [k, v] of Object.entries(obj || {})) out[re(k)] = v;
+    const moved = [];
+    for (const [k, v] of Object.entries(obj || {})) { if (re(k) === k) out[k] = v; else moved.push([re(k), v]); }
+    for (const [k, v] of moved) out[k] = v;
     return out;
   }
 
@@ -88,8 +91,9 @@
     improvise(s, a, at) {
       const title = String(a.title || '').trim();
       if (!title) return;
-      const n = s.improvised.reduce((m, i) => Math.max(m, Number(String(i.key).slice(2)) || 0), 0) + 1;
-      const key = `i-${n}`;
+      // the key comes from the action, never from what the state holds, so a re-applied action keeps its beat
+      const key = a.key || (a.id != null ? `i-${a.id}` : `i-${s.improvised.length + 1}`);
+      if (s.improvised.some((i) => i.key === key)) return;
       s.improvised.push({ key, title, at });
       log(s, at, key, 'Improvised beat.', title);
     },
@@ -97,6 +101,10 @@
       s.improvised = s.improvised.filter((i) => i.key !== a.key);
       delete s.visited[a.key];
       delete s.brought[a.key];
+      delete s.fired[a.key];
+      if (s.stopped && s.stopped.beat === a.key) s.stopped = null;
+      const under = (k) => k === a.key || k.startsWith(`${a.key}.`);
+      for (const m of ['points', 'loot']) for (const k of Object.keys(s[m])) if (under(k)) delete s[m][k];
       for (const [pc, p] of Object.entries(s.positions)) if (p.beat === a.key) delete s.positions[pc];
       s.jots = s.jots.filter((j) => j.beat !== a.key);
       s.events = s.events.filter((e) => e.beat !== a.key);
@@ -114,7 +122,7 @@
       if (!s.brought[a.beat].length) delete s.brought[a.beat];
     },
     unmask(s, a, at) {
-      if (!a.note) return;
+      if (!a.note || (a.on && !a.name)) return;
       s.unmask[a.note] = { on: !!a.on, name: a.name || '', at };
       const was = a.was || stem(a.note);
       log(s, at, a.beat, a.on ? `${was} unmasked as ${a.name}.` : `${was} masked again.`, a.title);
@@ -147,11 +155,49 @@
       for (const [pc, text] of Object.entries(a.where || {})) { if (String(text || '').trim()) s.end.where[pc] = String(text); else delete s.end.where[pc]; }
       if (typeof a.advancement === 'string') s.end.advancement = a.advancement;
     },
-    longRest(s) {
-      for (const v of Object.values(s.end.vitals)) { delete v.hp; delete v.max; }
+    // A long rest sets every row to full; `longRest {on: false}` takes it back, with the figures the GM had set.
+    longRest(s, a) {
+      if (a.on === false) {
+        for (const v of Object.values(s.end.vitals)) {
+          if (v.rested) { if (v.hp === undefined) v.hp = v.rested.hp; if (v.max === undefined) v.max = v.rested.max; delete v.rested; }
+          if (v.hp === undefined) delete v.hp;
+          if (v.max === undefined) delete v.max;
+        }
+        delete s.end.longRest;
+        return;
+      }
+      for (const v of Object.values(s.end.vitals)) {
+        if (v.hp !== undefined || v.max !== undefined) v.rested = { hp: v.hp, max: v.max };
+        delete v.hp; delete v.max;
+      }
       s.end.longRest = true;
     },
   };
+
+  // An action made before an `attach` (queued in another window, or re-applied on a newer state) still
+  // names the old keys: map them through what was attached.
+  const KEY_FIELDS = ['beat', 'point', 'item', 'handout', 'spot'];
+  function remapKey(attached, k) {
+    if (typeof k !== 'string' || !attached) return k;
+    let cur = k;
+    for (let n = 0; n < 10; n++) {
+      let next = has(attached, cur) ? attached[cur] : null;
+      if (next === null) {
+        const dot = cur.indexOf('.');
+        if (dot > 0 && has(attached, cur.slice(0, dot))) next = attached[cur.slice(0, dot)] + cur.slice(dot);
+      }
+      if (next === null || next === cur) break;
+      cur = next;
+    }
+    return cur;
+  }
+  function remapAction(attached, a) {
+    if (a.type === 'attach' || !attached || !Object.keys(attached).length) return a;
+    const out = { ...a };
+    for (const f of KEY_FIELDS) if (out[f] != null) out[f] = remapKey(attached, out[f]);
+    if (out.to && typeof out.to === 'object') out.to = { ...out.to, beat: remapKey(attached, out.to.beat), spot: remapKey(attached, out.to.spot) };
+    return out;
+  }
 
   // reduce(state, action, at) -> a new state. An action id already in `applied` changes nothing; an
   // unknown action returns the same object.
@@ -160,7 +206,7 @@
     if (action.id != null && state.applied && state.applied.includes(action.id)) return state;
     const s = clone(state);
     if (!s.startedAt) s.startedAt = at || null;
-    HANDLERS[action.type](s, action, at || null);
+    HANDLERS[action.type](s, remapAction(s.attached, action), at || null);
     if (action.id != null) {
       s.applied = (s.applied || []).concat(action.id).slice(-APPLIED_KEEP);
     }
@@ -215,33 +261,42 @@
   // whoever the GM brought in.
   function beatsOf(model, state) {
     const cast = new Map((model.cast || []).map((c) => [c.note, c]));
+    // a brought-in ally gets a fight row too (unless the beat already has one), so it has a vitals row
+    const broughtFoes = (key, foes) => (state.brought[key] || []).flatMap((x) => {
+      const f = (cast.get(x.note) || {}).foe;
+      return f && f.ally && !foes.some((o) => o.note === x.note) ? [{ ...f, key: `${key}.brought.${x.note}`, broughtIn: true }] : [];
+    });
     const real = (model.beats || []).map((b) => {
       const extra = (state.brought[b.key] || []).map((x) => {
         const c = cast.get(x.note) || {};
         return { key: `${b.key}.brought.${x.note}`, note: x.note, name: c.name || x.name, knownAs: '', count: 1,
           wants: c.wants || '', playAs: c.playAs || '', dead: !!c.dead, brought: true };
       });
-      return extra.length ? { ...b, who: (b.who || []).concat(extra) } : b;
+      if (!extra.length) return b;
+      const foes = b.foes || [];
+      return { ...b, who: (b.who || []).concat(extra), foes: foes.concat(broughtFoes(b.key, foes)) };
     });
     const impro = state.improvised.map((i) => ({
       key: i.key, title: i.title, impro: true, contingency: false, sceneNote: null, place: null, spots: [],
       who: (state.brought[i.key] || []).map((x) => ({ key: `${i.key}.brought.${x.note}`, note: x.note, name: x.name, brought: true, count: 1 })),
-      points: [], ifs: [], treasure: [], foes: [], handouts: [], entities: [],
+      points: [], ifs: [], treasure: [], foes: broughtFoes(i.key, []), handouts: [], entities: [],
     }));
     return real.concat(impro);
   }
 
   // Ally rows: one per ally note, a copy row for each extra number a beat holds (`Guard 2`).
-  function vitalRows(model, state, beats) {
+  function vitalRows(model, state, beats, reached) {
     const rows = [];
     for (const p of model.pcs || []) {
       rows.push({ rowId: p.note, ally: false, copy: 1, note: p.note, name: p.name, base: { hp: p.hpNow ?? p.hpMax ?? null, max: p.hpMax ?? null } });
     }
     const allies = new Map();
+    const inPlay = new Set();
     for (const b of beats) {
       const seen = new Map();
       for (const f of b.foes || []) {
         if (!f.ally) continue;
+        if (reached.has(b.key) || f.broughtIn) inPlay.add(f.note);
         const copy = (seen.get(f.note) || 0) + 1;
         seen.set(f.note, copy);
         if (!allies.has(f.note)) allies.set(f.note, []);
@@ -251,13 +306,17 @@
     }
     for (const list of allies.values()) for (const r of list) if (r) rows.push(r);
     return rows.map((r) => {
-      const o = state.end.vitals[r.rowId] || {};
-      const hp = o.hp !== undefined && o.hp !== '' ? o.hp : r.base.hp;
+      let o = state.end.vitals[r.rowId] || {};
+      const covered = state.end.longRest && (!r.ally || inPlay.has(r.note));
+      // an ally who was not in play keeps the figures the GM set before the rest
+      if (state.end.longRest && !covered && o.rested) o = { ...o, hp: o.rested.hp, max: o.rested.max };
+      const setHp = o.hp !== undefined && o.hp !== '';
+      const hp = setHp ? o.hp : r.base.hp;
       const max = o.max !== undefined && o.max !== '' ? o.max : r.base.max;
-      const rest = state.end.longRest && !(o.hp !== undefined && o.hp !== '');
+      const rest = covered && !setHp;
       return { rowId: r.rowId, ally: r.ally, copy: r.copy, note: r.note, name: r.name,
         hp: rest ? max : hp, max, conditions: o.conditions || '',
-        set: has(state.end.vitals, r.rowId), setHp: o.hp !== undefined && o.hp !== '' };
+        set: has(state.end.vitals, r.rowId), rest, setHp };
     });
   }
 
@@ -311,11 +370,11 @@
         title: spot ? `${beat.title} · ${spot.name}` : beat.title };
     });
 
-    const vitals = vitalRows(model, state, beats);
+    const vitals = vitalRows(model, state, beats, reached);
     const vitalsRecorded = vitals
-      .filter((v) => v.set || state.end.longRest)
+      .filter((v) => v.set || v.rest)
       .map((v) => ({ rowId: v.rowId, ally: v.ally, copy: v.copy, note: v.note, name: v.name,
-        hp: v.setHp || state.end.longRest ? v.hp : null, max: v.max, conditions: v.conditions }));
+        hp: v.setHp || v.rest ? v.hp : null, max: v.max, conditions: v.conditions }));
 
     const loot = [];
     for (const b of beats) {
@@ -330,15 +389,17 @@
       .concat(state.events.map((e, i) => ({ at: e.at, o: 1e6 + i, beatKey: e.beat, beatTitle: e.beat ? titleOf(e.beat, e.title) : '', text: e.text })));
     const logLines = entries.sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : a.o - b.o)).map(({ o, ...rest }) => rest);
 
+    // one entry per note: the state's entry decides on or off; a carried unmasking shows only when the state is silent
     const unmaskedNow = [];
     const maskedAgain = [];
-    for (const [note, n] of Object.entries(model.notes || {})) {
-      if (n && n.unmask && n.unmask.since && !(state.unmask[note] && state.unmask[note].on === false)) unmaskedNow.push({ note, name: n.unmask.name, carried: true });
-    }
-    for (const [note, u] of Object.entries(state.unmask)) {
-      const carried = model.notes && model.notes[note] && model.notes[note].unmask && model.notes[note].unmask.since;
-      if (u.on) unmaskedNow.push({ note, name: u.name, carried: false });
-      else if (carried) maskedAgain.push({ note });
+    const noteIds = new Set([...Object.keys(model.notes || {}), ...Object.keys(state.unmask)]);
+    for (const note of noteIds) {
+      const since = model.notes && model.notes[note] && model.notes[note].unmask && model.notes[note].unmask.since;
+      const u = state.unmask[note];
+      if (u) {
+        if (u.on) unmaskedNow.push({ note, name: u.name, carried: false });
+        else if (since) maskedAgain.push({ note });
+      } else if (since) unmaskedNow.push({ note, name: model.notes[note].unmask.name, carried: true });
     }
 
     // anything keyed that the Plan no longer holds
