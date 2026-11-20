@@ -13,6 +13,24 @@ const FOE_TYPES = new Set(['npc', 'creature']);
 
 const number = (m) => (m ? toNumber(m[1]) : null);
 
+// The bullet list under the line that holds `Lair Actions`, as written (dedented, so it renders as a list): the
+// consecutive bullet lines after that line, indented or not. '' when the line has no list.
+const BULLET = /^([ \t]*)[-*+][ \t]+\S/;
+function lairActionsOf(stats) {
+  const lines = String(stats).split('\n');
+  for (let at = 0; at < lines.length; at++) {
+    if (!/Lair Actions/i.test(lines[at])) continue;
+    const list = [];
+    for (let i = at + 1; i < lines.length && BULLET.test(lines[i]); i++) list.push(lines[i]);
+    if (!list.length) continue;
+    const indent = Math.min(...list.map((l) => BULLET.exec(l)[1].length));
+    return list.map((l) => l.slice(indent)).join('\n');
+  }
+  return '';
+}
+
+const BOLD_CHARGE = /\*\*\*([^*]+?)\s*\(Recharge (\d+(?:\s*[–-]\s*\d+)?)\)/g;
+
 // Only a number AFTER the HP / Hit Points word counts ("regains 10 HP" and "DC 14" are not figures).
 function readNumbers(stats, behaviour) {
   const ac = number(/\b(?:AC|Armor Class)[ \t*:]*(\d+)/.exec(stats));
@@ -22,20 +40,28 @@ function readNumbers(stats, behaviour) {
   const init = number(new RegExp(`Initiative[^\\d\\n]{0,3}(${SIGNED_SOURCE})`).exec(stats));
   const full = `${stats}\n${behaviour}`;
   // A declaration with no number (`(Recharge -)`, a draft) is no recharge.
-  const charges = [...full.matchAll(/\*\*\*([^*]+?)\s*\(Recharge (\d+(?:\s*[–-]\s*\d+)?)\)/g)];
-  const recharge = [...new Set(charges.map((m) => m[1].trim()))].sort();
+  const charges = [...full.matchAll(BOLD_CHARGE)];
+  // The plain form of a one-line block, `Frost Breath (Recharge 6)`: the name is the run of capitalised words
+  // before the bracket, small joining words kept (`Breath of Frost`). The bold form wins a name it already gave.
+  const plain = [...full.replace(BOLD_CHARGE, ' ').matchAll(/((?:[A-Z][\w'’-]*)(?:[ \t]+(?:(?:of|the|and|in|on|from|to|at|with|a|an)[ \t]+)*[A-Z][\w'’-]*)*)[ \t]*\(Recharge (\d+(?:\s*[–-]\s*\d+)?)\)/g)]
+    .map((m) => [null, m[1], m[2]]);
+  const all = [...charges, ...plain];
+  const recharge = [...new Set(all.map((m) => m[1].trim()))].sort();
   // The lowest roll that recharges each: `(Recharge 5–6)` is 5, `(Recharge 6)` is 6. The first of a name counts.
   const rechargeAt = {};
-  for (const m of charges) {
+  for (const m of all) {
     const name = m[1].trim();
     if (!(name in rechargeAt)) rechargeAt[name] = Math.min(...m[2].match(/\d+/g).map(Number));
   }
   return {
     ac, hp, init,
-    legendaryResistance: number(/Legendary Resistance \((\d+)\/Day\)/i.exec(stats)) || 0,
-    legendaryActions: number(/Legendary Actions \((\d+)\)/i.exec(stats)) || 0,
+    // `(2/Day)`, or SRD 5.2.1's `(3/Day, or 4/Day in Lair)`: the first count (the in-lair use is the GM's)
+    legendaryResistance: number(/Legendary Resistance \((\d+)\/Day[^)\n]*\)/i.exec(stats)) || 0,
+    // `Legendary Actions (3)`, or SRD 5.2.1's `Legendary Action Uses: 3 (4 in Lair)`
+    legendaryActions: number(/Legendary Actions \((\d+)\)/i.exec(stats)) || number(/Legendary Action Uses\W{0,6}(\d+)/i.exec(stats)) || 0,
     recharge, rechargeAt,
     lair: /Lair Actions/i.test(stats),
+    lairActions: lairActionsOf(stats),
     ally: /\bas an ally\b/.test(stats),
   };
 }
@@ -134,7 +160,7 @@ function rows(entries, beatKey, carried = null) {
       key: keys[k++], note: e.notePath, name: total.get(e.notePath) > 1 ? `${info.name} ${i}` : info.name,
       ally: nums.ally, ac: nums.ac, hp: nums.hp, init: nums.init,
       legendaryResistance: nums.legendaryResistance, legendaryActions: nums.legendaryActions,
-      recharge: nums.recharge, rechargeAt: nums.rechargeAt, lair: nums.lair, stats: info.stats,
+      recharge: nums.recharge, rechargeAt: nums.rechargeAt, lair: nums.lair, lairActions: nums.lairActions, stats: info.stats,
       hpNow, carriedFrom: hpNow === null ? null : got.log, prepNote: e.prepNote,
     };
   }));

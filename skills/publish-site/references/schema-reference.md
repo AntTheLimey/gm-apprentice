@@ -71,7 +71,7 @@ beneath them. No accordion — the content flows as continuous prose.
 <!-- generated:fields-npc (scripts/gen_field_lists.py) -->
 Template fields: `companion`, `occupation`, `age`, `gender`,
 `nationality`, `status` (alive/dead/missing/unknown), `location`,
-`portrait`, `voice`, `unmasked_name`, `unmasked_portrait`.
+`portrait`, `voice`, `unmasked_name`, `unmasked_portrait`, `unseen_as`.
 <!-- /generated:fields-npc -->
 
 | Field | Status | Description |
@@ -110,8 +110,8 @@ if the linked note can be resolved.
 `type: creature`
 
 <!-- generated:fields-creature (scripts/gen_field_lists.py) -->
-Template fields: `creature_type`, `threat_level`, `location`,
-`portrait`.
+Template fields: `unseen_as`, `creature_type`, `threat_level`,
+`location`, `portrait`.
 <!-- /generated:fields-creature -->
 
 | Field | Status | Description |

@@ -3,7 +3,7 @@
 // ships no markdown parser (plan decision 9). The words stay: a field `f` gains a sibling `fHtml`, so the
 // page's state and the Table Log keep the Plan's own text. `[[link]]` becomes an anchor the drawer opens
 // (`data-note`, the vault-relative path), or a `missing` span; `![[picture]]` becomes `/vault/<path>`.
-// Raw HTML in a note is never run (`createRenderer` is `html: false`). 5b adds `forPlayers` beside this.
+// Raw HTML in a note is never run (`createRenderer` is `html: false`). The players' view is players.js.
 
 const crypto = require('node:crypto');
 const path = require('node:path');
@@ -70,6 +70,11 @@ function addHtml(obj, fields, index, inline) {
   }
 }
 
+// A foe row's stat block and lair actions, rendered beside the text (the text fields stay as they are).
+function addFoeHtml(foe, index) {
+  addHtml(foe, ['stats', 'lairActions'], index, false);
+}
+
 const BEAT_BLOCKS = ['situation', 'startsIt', 'readAloud', 'complications', 'gmNotes', 'extra', 'then', 'trigger'];
 
 function present(model, { index }) {
@@ -83,10 +88,12 @@ function present(model, { index }) {
     for (const t of b.treasure || []) addHtml(t, ['text'], index, true);
     for (const w of b.who || []) addHtml(w, ['wants', 'playAs'], index, true);
     for (const a of b.arrivals || []) addHtml(a, ['text'], index, true);
+    for (const f of b.foes || []) addFoeHtml(f, index);
   }
   for (const p of m.prep || []) addHtml(p, ['md'], index, false);
   if (typeof m.threads === 'string') m.threadsHtml = toHtml(m.threads, index);
   for (const h of m.handouts || []) addHtml(h, ['name', 'text'], index, true);
+  for (const c of m.cast || []) if (c.foe) addFoeHtml(c.foe, index);
   for (const p of m.people || []) addHtml(p, ['playAs', 'wants', 'now', 'where'], index, true);
   return m;
 }

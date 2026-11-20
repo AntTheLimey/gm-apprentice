@@ -8,6 +8,7 @@ const path = require('node:path');
 const { createTableServer, listenLocal } = require('../lib/run-sheet/server');
 const { listSessions, pickSession, stateIdOf } = require('../lib/run-sheet/sessions');
 const RS = require('../lib/run-sheet/web/state');
+const { readRunSheet } = require('../lib/run-sheet/read');
 const { bodyHash, recordBodyOf } = require('../lib/run-sheet/record');
 
 const FIXTURE = path.join(__dirname, 'fixtures', 'run-sheet-app');
@@ -304,6 +305,35 @@ describe('run sheet server', () => {
     assert.ok(alt.includes(`<a class="lk" data-note="${ASH}">Brother Ash</a>`), alt);
     // markdown decodes these entities to the private-use characters a placeholder once used
     assert.strictEqual(toHtml('&#xE000;0&#xE001; and &#xE000;7&#xE001;', index, { inline: true }), '\uE0000\uE001 and \uE0007\uE001');
+  });
+
+  it('foes carry statsHtml and lairActionsHtml; their text is unchanged', async () => {
+    const vault = copyOf();
+    const wyrm = path.join(vault, 'Creatures', 'Glacier Wyrm.md');
+    fs.writeFileSync(wyrm, fs.readFileSync(wyrm, 'utf8').replace('  - The ice shifts.', '  - The ice shifts around [[Brother Ash]].\n  - Fog <b>rises</b>.'));
+    const plan = path.join(vault, PLAN);
+    fs.writeFileSync(plan, fs.readFileSync(plan, 'utf8').replace('- **[[Frost Wolf]] (3):** hunting', '- **[[Frost Wolf]] (3):** hunting\n- **[[Glacier Wyrm]]:** wants it dark'));
+    const run = await start(vault);
+    const { model } = (await req(run.port, 'GET', '/api/model')).json;
+    const fresh = readRunSheet(vault, PLAN, { party: [] });
+    const foes = model.beats.flatMap((b) => b.foes);
+    const w = foes.find((f) => f.note === 'Creatures/Glacier Wyrm.md');
+    assert.ok(w, 'the wyrm is a foe of its beat');
+    assert.match(w.statsHtml, /<strong>Lair Actions<\/strong>|Lair Actions/);
+    assert.match(w.lairActionsHtml, /<ul>[\s\S]*<li>The ice shifts around <a class="lk" data-note="Characters\/NPCs\/Brother Ash.md">Brother Ash<\/a>\.<\/li>/);
+    assert.ok(!w.lairActionsHtml.includes('<b>'), 'raw HTML in a note is never run');
+    assert.ok(w.lairActionsHtml.includes('&lt;b&gt;'));
+    const wolf = foes.find((f) => f.note === 'Creatures/Frost Wolf.md');
+    assert.strictEqual(wolf.lairActionsHtml, '');
+    assert.ok(typeof wolf.statsHtml === 'string' && wolf.statsHtml.length > 0);
+    // the words stay as the reader gave them
+    const strip = (f) => { const { statsHtml, lairActionsHtml, ...rest } = f; return rest; };
+    assert.deepStrictEqual(foes.map(strip), fresh.beats.flatMap((b) => b.foes));
+    // the same in the cast
+    const cw = model.cast.find((c) => c.note === 'Creatures/Glacier Wyrm.md');
+    assert.deepStrictEqual(strip(cw.foe), fresh.cast.find((c) => c.note === cw.note).foe);
+    assert.match(cw.foe.lairActionsHtml, /<li>/);
+    assert.ok(model.cast.filter((c) => c.foe).every((c) => typeof c.foe.statsHtml === 'string' && typeof c.foe.lairActionsHtml === 'string'));
   });
 
   it('a tab from another session gets 409 and does not overwrite', async () => {
@@ -800,7 +830,7 @@ describe('run sheet server: the third review', () => {
       const sse = listen(run.port);
       try {
         await waitFor(() => sse.events.find((e) => e.event === 'hello'));
-        assert.deepStrictEqual(sse.events[0].data.status, { saving: 'ok', saveError: null, record: 'ok', recordError: null });
+        assert.deepStrictEqual(sse.events[0].data.status, { saving: 'ok', saveError: null, record: 'ok', recordError: null, players: 'ok', playersError: null });
         await markFirst(run, 'landed', 0);
         await waitFor(() => sse.events.find((e) => e.event === 'record-failed'));
         await wait(200);
@@ -959,5 +989,405 @@ describe('run sheet server: the third review', () => {
     assert.strictEqual(pic.headers['cross-origin-resource-policy'], 'same-origin');
     const put = await req(run.port, 'PUT', '/api/state', { headers: sf('same-site', 'cors', 'empty'), body: { stateId: run.stateId, base: 0, state: {} } });
     assert.strictEqual(put.status, 403);
+  });
+});
+
+describe('run sheet server: rolls and actions', () => {
+  const post = (run, url, body, extra = {}) => req(run.port, 'POST', url, { body, ...extra });
+  const jot = (id, text = 'A jot.', extra = {}) => ({ type: 'jot', id, text, ...extra });
+  const stateOf = async (run) => (await req(run.port, 'GET', '/api/state')).json;
+
+  it('roll answers numbers and changes no state', async () => {
+    const run = await start(copyOf());
+    const before = await stateOf(run);
+    const r = await post(run, '/api/roll', { rolls: [{ sides: 20, mod: 5 }, { sides: 6 }] });
+    assert.strictEqual(r.status, 200);
+    assert.strictEqual(r.json.results.length, 2);
+    assert.ok(r.json.results[0].die >= 1 && r.json.results[0].die <= 20);
+    assert.strictEqual(r.json.results[0].total, r.json.results[0].die + 5);
+    assert.strictEqual(r.json.results[1].mod, 0);
+    assert.strictEqual((await stateOf(run)).rev, before.rev);
+  });
+
+  it('roll refuses 65 rolls, a d7, a foreign Origin', async () => {
+    const run = await start(copyOf());
+    assert.strictEqual((await post(run, '/api/roll', { rolls: Array.from({ length: 65 }, () => ({ sides: 4 })) })).status, 400);
+    assert.strictEqual((await post(run, '/api/roll', { rolls: Array.from({ length: 64 }, () => ({ sides: 4 })) })).status, 200);
+    assert.strictEqual((await post(run, '/api/roll', { rolls: [{ sides: 7 }] })).status, 400);
+    assert.strictEqual((await post(run, '/api/roll', { rolls: [{ sides: 20, mod: 100 }] })).status, 400);
+    assert.strictEqual((await post(run, '/api/roll', { rolls: 'x' })).status, 400);
+    assert.strictEqual((await post(run, '/api/roll', {})).status, 400);
+    assert.strictEqual((await req(run.port, 'POST', '/api/roll', { headers: { 'Content-Type': 'text/plain' }, body: '{}' })).status, 415);
+    assert.strictEqual((await req(run.port, 'POST', '/api/roll', { body: '{"rolls": ' })).status, 400);
+    assert.strictEqual((await post(run, '/api/roll', { rolls: [{ sides: 20 }] }, { headers: { Origin: 'http://evil.example' } })).status, 403);
+    assert.strictEqual((await post(run, '/api/roll', { rolls: [{ sides: 20 }] }, { headers: { 'Sec-Fetch-Site': 'cross-site' } })).status, 403);
+    assert.strictEqual((await req(run.port, 'GET', '/api/roll')).status, 405);
+  });
+
+  it('roll is too big at 2 MB', async () => {
+    const run = await start(copyOf());
+    const r = await post(run, '/api/roll', { rolls: [], pad: 'x'.repeat(2 * 1024 * 1024 + 10) });
+    assert.strictEqual(r.status, 413);
+  });
+
+  it('no dice code in web/', () => {
+    const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]));
+    const files = walk(WEB).filter((f) => /\.(js|html|mjs)$/.test(f));
+    assert.ok(files.length);
+    for (const f of files) {
+      const text = fs.readFileSync(f, 'utf8');
+      for (const bad of ['Math.random', 'getRandomValues', 'randomInt']) assert.ok(!text.includes(bad), `${f} has ${bad}`);
+    }
+  });
+
+  it('actions are reduced on the server', async () => {
+    const run = await start(copyOf());
+    const l = listen(run.port);
+    const { model } = (await req(run.port, 'GET', '/api/model')).json;
+    const b = model.beats[0];
+    const p = b.points[0];
+    const r = await post(run, '/api/actions', {
+      stateId: run.stateId, base: 0, clientId: 'c9',
+      actions: [{ type: 'mark', id: 'c9-1', point: p.key, mark: 'landed', beat: b.key, beatTitle: b.title, text: p.text }],
+    });
+    assert.strictEqual(r.status, 200);
+    assert.strictEqual(r.json.rev, 1);
+    assert.deepStrictEqual(r.json.rejected, []);
+    assert.strictEqual(r.json.state.points[p.key].mark, 'landed');
+    assert.ok(!Number.isNaN(Date.parse(r.json.state.points[p.key].at)), 'a server time');
+    assert.ok(Date.now() - Date.parse(r.json.state.points[p.key].at) < 5000);
+    assert.strictEqual((await stateOf(run)).rev, 1);
+    await waitFor(() => l.events.some((e) => e.event === 'state' && e.data.clientId === 'c9' && e.data.rev === 1));
+    l.close();
+  });
+
+  it('actions: a repeat lands once', async () => {
+    const run = await start(copyOf());
+    const body = { stateId: run.stateId, base: 0, actions: [jot('c1-j1', 'Once.')] };
+    const a = await post(run, '/api/actions', body);
+    const b = await post(run, '/api/actions', body);
+    assert.strictEqual(a.status, 200);
+    assert.strictEqual(b.status, 200);
+    const s = (await stateOf(run)).state;
+    assert.strictEqual(s.jots.filter((j) => j.text === 'Once.').length, 1);
+    assert.strictEqual(b.json.rev, a.json.rev, 'nothing changed, no new rev');
+  });
+
+  it('actions from another session get 409', async () => {
+    const run = await start(copyOf());
+    const r = await post(run, '/api/actions', { stateId: 'chapter-2--session-01-snowmelt', base: 0, actions: [jot('x-1')] });
+    assert.strictEqual(r.status, 409);
+    assert.strictEqual(r.json.reason, 'session');
+    assert.strictEqual(r.json.stateId, run.stateId);
+    assert.strictEqual(r.json.label, 'Session 2');
+    assert.strictEqual(r.json.rev, 0);
+    const s = await stateOf(run);
+    assert.strictEqual(s.rev, 0);
+    assert.strictEqual(s.state.jots.length, 0);
+  });
+
+  it('actions on an old base still apply', async () => {
+    const run = await start(copyOf());
+    for (let i = 1; i <= 3; i++) assert.strictEqual((await post(run, '/api/actions', { stateId: run.stateId, base: i - 1, actions: [jot(`a-${i}`, `J${i}`)] })).status, 200);
+    const r = await post(run, '/api/actions', { stateId: run.stateId, base: 0, actions: [jot('old-1', 'Old base')] });
+    assert.strictEqual(r.status, 200);
+    assert.strictEqual(r.json.rev, 4);
+    assert.ok((await stateOf(run)).state.jots.some((j) => j.text === 'Old base'));
+  });
+
+  it('bad bodies get 400, 413, 415', async () => {
+    const run = await start(copyOf());
+    assert.strictEqual((await post(run, '/api/actions', { stateId: run.stateId, base: 0 })).status, 400);
+    assert.strictEqual((await post(run, '/api/actions', { stateId: run.stateId, base: 0, actions: {} })).status, 400);
+    assert.strictEqual((await post(run, '/api/actions', { stateId: run.stateId, base: 0, actions: Array.from({ length: 201 }, (_, i) => jot(`n-${i}`)) })).status, 400);
+    assert.strictEqual((await post(run, '/api/actions', { stateId: run.stateId, base: 0, actions: Array.from({ length: 200 }, (_, i) => jot(`m-${i}`)) })).status, 200);
+    assert.strictEqual((await req(run.port, 'POST', '/api/actions', { body: '{"actions": ' })).status, 400);
+    assert.strictEqual((await req(run.port, 'POST', '/api/actions', { headers: { 'Content-Type': 'text/plain' }, body: '{}' })).status, 415);
+    assert.strictEqual((await post(run, '/api/actions', { stateId: run.stateId, base: 0, actions: [], pad: 'x'.repeat(2 * 1024 * 1024 + 10) })).status, 413);
+    assert.strictEqual((await post(run, '/api/actions', { stateId: run.stateId, base: 0, actions: [jot('o-1')] }, { headers: { Origin: 'http://evil.example' } })).status, 403);
+    assert.strictEqual((await post(run, '/api/actions', { stateId: run.stateId, base: 0, actions: [jot('o-2')] }, { headers: { 'Sec-Fetch-Site': 'same-site' } })).status, 403);
+  });
+
+  it('an unknown action type is ignored and changes nothing', async () => {
+    const run = await start(copyOf());
+    const r = await post(run, '/api/actions', { stateId: run.stateId, base: 0, actions: [{ type: 'nope', id: 'z-1' }, null, 5] });
+    assert.strictEqual(r.status, 200);
+    assert.strictEqual(r.json.rev, 0, 'nothing changed');
+    assert.deepStrictEqual(r.json.rejected, []);
+  });
+
+  it('an action that throws is skipped and named; the ones after it land', async () => {
+    const real = RS.reduce;
+    const run = await start(copyOf(), 'Session 02 - The Test', {
+      deps: { reduce: (s, a, at) => { if (a.type === 'boom') throw new Error('it broke'); return real(s, a, at); }, log: () => {} },
+    });
+    const r = await post(run, '/api/actions', { stateId: run.stateId, base: 0, actions: [jot('k-1', 'Before'), { type: 'boom', id: 'k-2' }, jot('k-3', 'After')] });
+    assert.strictEqual(r.status, 200);
+    assert.deepStrictEqual(r.json.rejected, [{ id: 'k-2', type: 'boom', error: 'it broke' }]);
+    assert.deepStrictEqual(r.json.state.jots.map((j) => j.text), ['Before', 'After']);
+    assert.strictEqual(r.json.rev, 1, 'one bump for the whole post');
+  });
+
+  it("an action's own time is kept; a future one gets the server's", async () => {
+    const run = await start(copyOf());
+    const past = new Date(Date.now() - 600 * 1000).toISOString();
+    const future = new Date(Date.now() + 3600 * 1000).toISOString();
+    const r = await post(run, '/api/actions', {
+      stateId: run.stateId, base: 0,
+      actions: [jot('t-1', 'Own', { at: past }), jot('t-2', 'Future', { at: future }), jot('t-3', 'Junk', { at: 'yesterday' }), jot('t-4', 'None')],
+    });
+    const at = (t) => r.json.state.jots.find((j) => j.text === t).at;
+    assert.strictEqual(at('Own'), past);
+    for (const t of ['Future', 'Junk', 'None']) {
+      assert.notStrictEqual(at(t), future);
+      assert.ok(Math.abs(Date.now() - Date.parse(at(t))) < 5000, t);
+    }
+  });
+
+  it("an action-only write rewrites the Table Log", async () => {
+    const vault = copyOf();
+    const run = await start(vault);
+    const { model } = (await req(run.port, 'GET', '/api/model')).json;
+    const b = model.beats[0];
+    const p = b.points[0];
+    await post(run, '/api/actions', {
+      stateId: run.stateId, base: 0,
+      actions: [{ type: 'mark', id: 'r-1', point: p.key, mark: 'landed', beat: b.key, beatTitle: b.title, text: p.text }],
+    });
+    await waitFor(() => /## Points landed\n\n- /.test(logLf(vault)));
+    assert.ok(logLf(vault).includes(p.text.slice(0, 12)));
+  });
+
+  it('the PUT still works beside the actions', async () => {
+    const run = await start(copyOf());
+    const a = await post(run, '/api/actions', { stateId: run.stateId, base: 0, actions: [jot('p-1', 'By action')] });
+    assert.strictEqual(a.json.rev, 1);
+    const got = await stateOf(run);
+    const put = await req(run.port, 'PUT', '/api/state', { body: { stateId: got.stateId, base: got.rev, state: got.state } });
+    assert.strictEqual(put.status, 200);
+    assert.strictEqual(put.json.rev, 2);
+  });
+});
+
+describe('run sheet server: the players\' half', () => {
+  const PLAYERS = path.join(__dirname, 'fixtures', 'run-sheet-players');
+  const P_PLAN = 'Chapters/Chapter 1/Sessions/Session 03/Session 03 - Next - Plan.md';
+  const P_PARTY = ['Characters/PCs/Ada Moss.md', 'Characters/PCs/Ben Hart.md'];
+  const [P_ADA, P_BEN] = P_PARTY;
+  const QUIET = 'Characters/NPCs/Quiet Dead.md';
+  const GILT = 'Characters/NPCs/Masked Gilt.md';
+  const playersRun = (deps = {}) => {
+    const vault = copyOf(PLAYERS);
+    return start(vault, 'Session 03 - Next', { party: P_PARTY, deps }).then((run) => ({ ...run, vault, model: readRunSheet(vault, P_PLAN, { party: P_PARTY }) }));
+  };
+  let seq = 0;
+  const send = (run, actions) => req(run.port, 'POST', '/api/actions', { body: { stateId: run.stateId, base: 0, actions: actions.map((a) => ({ id: `pl-${++seq}`, ...a })) } });
+  const moveTo = (pc, beat) => ({ type: 'move', pc, to: { beat: beat.key, spot: null, title: beat.title } });
+  const beatOf = (run) => run.model.beats.find((b) => b.title === 'Ashfall Reckoning');
+  const view = async (run) => (await req(run.port, 'GET', '/api/players/view')).json;
+
+  // An SSE client on any route, keeping the raw text too.
+  function stream(port, url) {
+    const events = [];
+    let raw = '';
+    let resp = null;
+    const r = http.get({ host: '127.0.0.1', port, path: url, headers: { Host: `127.0.0.1:${port}` } }, (res) => {
+      resp = res;
+      let buf = '';
+      res.setEncoding('utf8');
+      res.on('data', (c) => {
+        raw += c;
+        buf += c;
+        let i;
+        while ((i = buf.indexOf('\n\n')) >= 0) {
+          const block = buf.slice(0, i);
+          buf = buf.slice(i + 2);
+          const ev = /^event: (.+)$/m.exec(block);
+          const data = /^data: (.+)$/m.exec(block);
+          if (ev) events.push({ event: ev[1], text: data ? data[1] : null, data: data ? JSON.parse(data[1]) : null });
+        }
+      });
+    });
+    r.on('error', () => {});
+    return { events, raw: () => raw, close: () => { r.destroy(); if (resp) resp.destroy(); } };
+  }
+
+  it('the view before any model load', async () => {
+    const run = await playersRun();
+    const r = await req(run.port, 'GET', '/api/players/view');
+    assert.strictEqual(r.status, 200);
+    assert.strictEqual(r.json.campaign, 'The Test Campaign');
+    assert.strictEqual(r.json.layout, 'none');
+  });
+
+  it('players\' view answers with no GM keys', async () => {
+    const run = await playersRun();
+    await send(run, [moveTo(P_BEN, beatOf(run)), { type: 'show', group: beatOf(run).key, note: GILT, on: true }]);
+    const r = await req(run.port, 'GET', '/api/players/view');
+    assert.strictEqual(r.status, 200);
+    assert.deepStrictEqual(Object.keys(r.json).sort(), ['campaign', 'layout', 'panels']);
+    for (const bad of ['serverId', 'stateId', 'rev', 'label', 'notices', run.serverId, run.stateId, 'Ashfall', '_attachments', '.md']) assert.ok(!r.text.includes(bad), bad);
+    assert.strictEqual(r.json.panels[0].people[0].name, 'Masked Gilt');
+  });
+
+  it('players\' stream: hello then view; reconnect gets the view', async () => {
+    const run = await playersRun();
+    await send(run, [moveTo(P_BEN, beatOf(run))]);
+    const a = stream(run.port, '/api/players/events');
+    await waitFor(() => a.events.length >= 2);
+    assert.deepStrictEqual(a.events.map((e) => e.event), ['hello', 'view']);
+    assert.strictEqual(a.events[0].text, '{}');
+    assert.deepStrictEqual(a.events[1].data, await view(run));
+    a.close();
+    const b = stream(run.port, '/api/players/events');
+    await waitFor(() => b.events.length >= 2);
+    assert.deepStrictEqual(b.events.map((e) => e.event), ['hello', 'view']);
+    assert.strictEqual(b.events[1].data.panels.length, 1);
+    b.close();
+  });
+
+  it('the view is broadcast only when it changes', async () => {
+    const run = await playersRun();
+    const a = stream(run.port, '/api/players/events');
+    await waitFor(() => a.events.length >= 2);
+    await send(run, [{ type: 'jot', text: 'A jot.' }]);
+    await wait(100);
+    assert.strictEqual(a.events.filter((e) => e.event === 'view').length, 1, 'a jot changes nothing the players see');
+    await send(run, [moveTo(P_BEN, beatOf(run))]);
+    await waitFor(() => a.events.filter((e) => e.event === 'view').length === 2);
+    assert.strictEqual(a.events[a.events.length - 1].data.panels.length, 1);
+    a.close();
+  });
+
+  it('the players\' stream carries only hello and view', async () => {
+    const run = await playersRun();
+    const gm = listen(run.port);
+    const a = stream(run.port, '/api/players/events');
+    await waitFor(() => a.events.length >= 2);
+    await send(run, [moveTo(P_BEN, beatOf(run))]);
+    const got = (await req(run.port, 'GET', '/api/state')).json;
+    const s = RS.reduce(got.state, { type: 'jot', id: 'pl-put', text: 'By PUT.' }, '2026-11-20T20:00:00.000Z');
+    assert.strictEqual((await req(run.port, 'PUT', '/api/state', { body: { stateId: got.stateId, base: got.rev, state: s } })).status, 200);
+    await req(run.port, 'GET', '/api/model');
+    await waitFor(() => gm.events.some((e) => e.event === 'saved'));
+    await wait(100);
+    const names = [...a.raw().matchAll(/^event: (.+)$/gm)].map((m) => m[1]);
+    assert.deepStrictEqual([...new Set(names)].sort(), ['hello', 'view']);
+    assert.ok(!/^data: .*"(?:rev|serverId|stateId)"/m.test(a.raw()));
+    assert.ok(/^data: \{\}$/m.test(a.raw()), 'hello is {}');
+    gm.close();
+    a.close();
+  });
+
+  it('pic ids serve current pictures only', async () => {
+    const run = await playersRun();
+    const beat = beatOf(run);
+    await send(run, [moveTo(P_BEN, beat), { type: 'show', group: beat.key, note: QUIET, on: true }]);
+    const quiet = (await view(run)).panels[0].people[0].pic;
+    assert.match(quiet, /^\/players\/pic\/[0-9a-f]{20}$/);
+    const r = await req(run.port, 'GET', quiet);
+    assert.strictEqual(r.status, 200);
+    assert.strictEqual(r.headers['content-type'], 'image/png');
+    assert.strictEqual(r.text.length > 0, true);
+    await send(run, [{ type: 'show', group: beat.key, note: QUIET, on: false }]);
+    assert.strictEqual((await req(run.port, 'GET', quiet)).status, 200, 'the previous view\'s picture still serves');
+    await send(run, [{ type: 'show', group: beat.key, note: GILT, on: true }]);
+    const gone = await req(run.port, 'GET', quiet);
+    assert.strictEqual(gone.status, 404, 'two views ago');
+    assert.strictEqual(gone.text, 'Not found');
+    assert.strictEqual((await req(run.port, 'GET', '/players/pic/0123456789abcdef0123')).status, 404);
+    assert.strictEqual((await req(run.port, 'GET', '/players/pic/../x')).status, 404);
+    assert.strictEqual((await req(run.port, 'GET', '/players/pic/%2e%2e%2f_attachments%2fquiet-face.png')).status, 404);
+  });
+
+  it('a missing picture answers the fixed body', async () => {
+    const lines = [];
+    const run = await playersRun({ log: (l) => lines.push(l) });
+    const beat = beatOf(run);
+    await send(run, [moveTo(P_BEN, beat), { type: 'show', group: beat.key, note: QUIET, on: true }]);
+    const quiet = (await view(run)).panels[0].people[0].pic;
+    fs.rmSync(path.join(run.vault, '_attachments', 'quiet-face.png'));
+    const r = await req(run.port, 'GET', quiet);
+    assert.strictEqual(r.status, 404);
+    assert.strictEqual(r.text, 'Not found');
+    assert.ok(lines.some((l) => l.includes('quiet-face.png')), 'the terminal is told which file');
+  });
+
+  it('a forPlayers that throws keeps the last view and tells the GM', async () => {
+    const { forPlayers } = require('../lib/run-sheet/players');
+    let broken = false;
+    const lines = [];
+    const run = await playersRun({ forPlayers: (...a) => { if (broken) throw new Error('boom\nmore'); return forPlayers(...a); }, log: (l) => lines.push(l) });
+    const gm = listen(run.port);
+    await send(run, [moveTo(P_BEN, beatOf(run))]);
+    const before = await view(run);
+    assert.strictEqual(before.panels.length, 1);
+    broken = true;
+    await send(run, [moveTo(P_ADA, beatOf(run))]);
+    const after = await req(run.port, 'GET', '/api/players/view');
+    assert.strictEqual(after.status, 200);
+    assert.deepStrictEqual(after.json, before, 'the last good view stays');
+    await waitFor(() => gm.events.some((e) => e.event === 'players-failed'));
+    assert.strictEqual(gm.events.find((e) => e.event === 'players-failed').data.text, "The players' screen could not be updated: boom");
+    const m = (await req(run.port, 'GET', '/api/model')).json;
+    assert.ok(m.notices.some((x) => x.kind === 'players-failing' && x.text === "The players' screen could not be updated: boom"));
+    assert.ok(lines.some((l) => l.includes('boom')));
+    broken = false;
+    await send(run, [{ type: 'jot', text: 'Again.' }]);
+    await waitFor(() => gm.events.some((e) => e.event === 'players-ok'));
+    assert.strictEqual((await view(run)).panels[0].pcs.length, 2);
+    assert.ok(!(await req(run.port, 'GET', '/api/model')).json.notices.some((x) => x.kind === 'players-failing'));
+    gm.close();
+  });
+
+  it('a players\' route never answers with an error\'s own words', async () => {
+    const run = await playersRun({ forPlayers: () => { throw new Error('secret words'); }, log: () => {} });
+    const r = await req(run.port, 'GET', '/api/players/view');
+    assert.strictEqual(r.status, 503);
+    assert.deepStrictEqual(r.json, { error: 'unavailable' });
+    const a = stream(run.port, '/api/players/events');
+    await waitFor(() => a.events.length >= 1);
+    await wait(50);
+    assert.deepStrictEqual(a.events.map((e) => e.event), ['hello']);
+    assert.ok(!a.raw().includes('secret'));
+    a.close();
+    const run2 = await playersRun({ readRunSheet: () => { throw new Error('the plan says secret things'); }, log: () => {} });
+    const r2 = await req(run2.port, 'GET', '/api/players/view');
+    assert.deepStrictEqual(r2.json, { error: 'unavailable' });
+    assert.ok(!r2.text.includes('secret'));
+  });
+
+  it('a 5a-shaped PUT keeps the fight keys', async () => {
+    const run = await playersRun();
+    // a fight ended, one running, a person shown: every fight key holds something
+    const b = beatOf(run);
+    await send(run, [
+      moveTo(P_PARTY[0], b),
+      { type: 'show', group: b.key, note: 'Characters/NPCs/Brother Venn.md', on: true },
+      { type: 'fightStart', beat: b.key, title: b.title, groups: [b.key], rows: [] },
+    ]);
+    const first = (await req(run.port, 'GET', '/api/state')).json.state.fight.id;
+    await send(run, [{ type: 'fightEnd', fight: first }, { type: 'fightStart', beat: b.key, title: b.title, groups: [b.key], rows: [] }]);
+    const got = (await req(run.port, 'GET', '/api/state')).json;
+    const before = ['fight', 'fights', 'panels', 'shownEver'].map((k) => got.state[k]);
+    assert.ok(before[0] && before[1].length === 1 && Object.keys(before[2]).length && Object.keys(before[3]).length, 'seeded');
+    const old = { ...got.state };
+    for (const k of ['fight', 'fights', 'panels', 'shownEver']) delete old[k];
+    old.jots = [{ id: 'x', text: 'From an old tab.', at: '2026-11-20T20:00:00.000Z', beat: null, spot: null }];
+    assert.strictEqual((await req(run.port, 'PUT', '/api/state', { body: { stateId: got.stateId, base: got.rev, state: old } })).status, 200);
+    const s = (await req(run.port, 'GET', '/api/state')).json.state;
+    assert.deepStrictEqual([s.fight, s.fights, s.panels, s.shownEver], before);
+    assert.strictEqual(s.jots[0].text, 'From an old tab.', 'the PUT\'s own keys win');
+    assert.strictEqual((await req(run.port, 'GET', '/api/players/view')).status, 200);
+  });
+
+  it('players\' routes refuse a foreign Host', async () => {
+    const run = await playersRun();
+    for (const url of ['/players', '/players/players.js', '/api/players/view', '/api/players/events', '/players/pic/0123456789abcdef0123']) {
+      const r = await req(run.port, 'GET', url, { headers: { Host: `evil.example:${run.port}` } });
+      assert.strictEqual(r.status, 403, url);
+    }
+    assert.strictEqual((await req(run.port, 'POST', '/api/players/view', { body: {} })).status, 405);
+    assert.strictEqual((await req(run.port, 'GET', '/players/nothing-here.js')).text, 'Not found');
   });
 });

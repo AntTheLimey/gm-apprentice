@@ -15,9 +15,11 @@
 // connects (SSE `hello`, `/api/model` notices), so a page loaded after a failure still says so. A
 // record that fails is retried quietly with backoff, said once per distinct error.
 //
-// 5b adds rows to ROUTES (`/players`, `/api/players/*`, `/api/roll`) and a `forPlayers` view beside
-// `present`; a players' route never sends GM data. The PUT and 409 contract below is the one its
-// windows use too.
+// 5b adds `/api/roll`, `/api/actions` and the players' half: `/players` (their page), `/api/players/view`,
+// `/api/players/events` and `/players/pic/<id>`. The players' view is players.js's `forPlayers`, a whitelist
+// built here after each accepted write and each model load and sent only when it changed. The players'
+// stream is its own client set: it carries `hello` ({}) and `view`, never a GM event. Every players' error
+// answer is a fixed body; the detail goes to the terminal only (plan 5b decisions 10 and 23, Review M4).
 
 const crypto = require('node:crypto');
 const nodeFs = require('node:fs');
@@ -29,14 +31,22 @@ const { buildIndex, stemOf } = require('./notes');
 const { tableLogOf, stateIdOf } = require('./sessions');
 const { createStore, stampOf } = require('./store');
 const { present, toHtml } = require('./present');
+const { forPlayers } = require('./players');
 const { tableLogBody, rewriteTableLog, recordBodyOf, bodyHash, needsBackup, isEmptySkeleton, linkFor } = require('./record');
 const { isWithheld } = require('../processor');
 const RS = require('./web/state');
+const dice = require('../dice');
 
 const WEB_DIR = path.join(__dirname, 'web');
+const PLAYERS_DIR = path.join(WEB_DIR, 'players');
+const PICTURE_TYPES = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.avif': 'image/avif' };
+// What every players' route answers on any error: never the error's own words.
+const UNAVAILABLE = { error: 'unavailable' };
 const CSP = "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
 const RECORD_RETRY_MS = [2000, 5000, 10000, 30000];
 const MAX_BODY = 2 * 1024 * 1024;
+const MAX_ROLLS = 64;
+const MAX_ACTIONS = 200;
 const PICTURE = /\.(jpe?g|png|webp|gif|svg|avif)$/i; // the same list as present.js
 // A miss in a served folder is a plain 404, never a 404.html page the folder happens to hold.
 const NO_PAGE = '.run-sheet-no-404-page';
@@ -56,8 +66,14 @@ function createTableServer({ vaultPath, session, party = [], stateFile, deps = {
   const file = stateFile || path.join(vaultPath, '_meta', 'table', `${stateId}.json`);
   const tableDir = path.dirname(file);
   const vaultRoot = path.resolve(vaultPath);
+  const reduce = deps.reduce || RS.reduce;
+  const buildPlayers = deps.forPlayers || forPlayers;
 
   const clients = new Set();
+  // The players' half: its own stream clients, the last good view, and the picture ids of the current
+  // view and the one before it (a picture asked for just as the view changed still serves).
+  const playersClients = new Set();
+  const players = { view: null, json: null, pics: new Map(), before: new Map() };
   const notices = [];
   let lastModel = null;
   let lastIndex = null;
@@ -71,15 +87,56 @@ function createTableServer({ vaultPath, session, party = [], stateFile, deps = {
   let savedRev = null;
   const recordRetryMs = deps.recordRetryMs || RECORD_RETRY_MS;
   // What a page that connects now needs to know: is the state being saved, is the record being written.
-  const status = { saving: 'ok', saveError: null, record: 'ok', recordError: null };
+  const status = { saving: 'ok', saveError: null, record: 'ok', recordError: null, players: 'ok', playersError: null };
+  const playersText = (error) => `The players' screen could not be updated: ${error}`;
   const statusNotices = () => [
     ...(status.saving === 'failing' ? [{ kind: 'save-failing', error: status.saveError }] : []),
     ...(status.record === 'failing' ? [{ kind: 'record-failing', error: status.recordError }] : []),
+    ...(status.players === 'failing' ? [{ kind: 'players-failing', error: status.playersError, text: playersText(status.playersError) }] : []),
   ];
 
   function broadcast(event, data) {
     const chunk = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
     for (const res of clients) res.write(chunk);
+  }
+
+  // The players' view, rebuilt from the cached model and the newest state; sent to the players' stream only
+  // when it changed. A build that throws keeps the last good view up and tells the GM (Review M4.2).
+  function refreshPlayers() {
+    if (closed) return;
+    const pics = new Map();
+    const picId = (p) => {
+      const id = crypto.createHash('sha256').update(`${serverId}\n${p}`).digest('hex').slice(0, 20);
+      pics.set(id, p);
+      return id;
+    };
+    let view;
+    try {
+      const model = lastModel || loadModel().model;
+      view = buildPlayers(model, store.get().state, { withheldWords: model.withheldWords, campaign: model.campaign, picId });
+    } catch (err) {
+      const error = String((err && err.message) || err).split('\n')[0];
+      if (status.players !== 'failing' || status.playersError !== error) {
+        status.players = 'failing';
+        status.playersError = error;
+        log(`run sheet: the players' screen could not be updated (${error}); it keeps what it showed.`);
+        broadcast('players-failed', { error, text: playersText(error) });
+      }
+      return;
+    }
+    if (status.players === 'failing') {
+      status.players = 'ok';
+      status.playersError = null;
+      log("run sheet: the players' screen is updated again.");
+      broadcast('players-ok', {});
+    }
+    const text = JSON.stringify(view);
+    if (text === players.json) return;
+    players.before = players.pics;
+    players.pics = pics;
+    players.view = view;
+    players.json = text;
+    for (const res of playersClients) res.write(`event: view\ndata: ${text}\n\n`);
   }
 
   const indexNow = () => {
@@ -247,6 +304,28 @@ function createTableServer({ vaultPath, session, party = [], stateFile, deps = {
     res.end(text);
   };
   const webFiles = serve.handler(WEB_DIR, { notFound: NO_PAGE });
+  const playersFiles = serve.handler(PLAYERS_DIR, { notFound: NO_PAGE });
+
+  // A picture by its id, for an id in the current or the previous view only. Inside the vault once links
+  // are followed, a picture's extension, a file: else 404 with the fixed body, the reason on the terminal.
+  function playersPicture(res, id) {
+    const notFound = (why) => {
+      if (why) log(`run sheet: a players' picture was not served (${why}).`);
+      plain(res, 404, 'Not found');
+    };
+    const rel = players.pics.get(id) || players.before.get(id);
+    if (!rel) { notFound(null); return; }
+    if (!PICTURE.test(rel) || rel.includes('\0') || rel.includes('\\')) { notFound(`${rel} is not a picture`); return; }
+    let data;
+    try {
+      const real = fs.realpathSync(path.resolve(vaultRoot, ...rel.split('/')));
+      if (!within(real, fs.realpathSync(vaultRoot))) { notFound(`${rel} leads outside the vault`); return; }
+      if (!fs.statSync(real).isFile()) { notFound(`${rel} is not a file`); return; }
+      data = fs.readFileSync(real);
+    } catch (err) { notFound(`${rel}: ${(err && err.code) || String((err && err.message) || err).split('\n')[0]}`); return; }
+    res.writeHead(200, { 'Content-Type': PICTURE_TYPES[path.extname(rel).toLowerCase()] || 'application/octet-stream', 'Content-Length': data.length, 'Cache-Control': 'no-store' });
+    res.end(data);
+  }
   const vaultFiles = serve.handler(vaultRoot, { notFound: NO_PAGE });
   const sessionInfo = () => ({ label, index: session.index, plan: session.plan, title: session.title, number: session.number });
 
@@ -260,6 +339,21 @@ function createTableServer({ vaultPath, session, party = [], stateFile, deps = {
       else chunks.push(c);
     });
     req.on('end', () => done(tooBig, Buffer.concat(chunks).toString('utf8')));
+  }
+
+  // A JSON body for a POST: 415 for another type, 413 over 2 MB, 400 for text that is not JSON.
+  function withJson(req, res, then) {
+    if (!/^application\/json\s*(;|$)/i.test(String(req.headers['content-type'] || ''))) {
+      req.resume();
+      json(res, 415, { error: 'the body must be JSON' });
+      return;
+    }
+    readBody(req, (tooBig, text) => {
+      if (tooBig) { json(res, 413, { error: 'the body is over 2 MB' }); return; }
+      let msg;
+      try { msg = JSON.parse(text); } catch { json(res, 400, { error: 'the body is not JSON' }); return; }
+      then(msg);
+    });
   }
 
   const ROUTES = [
@@ -276,6 +370,7 @@ function createTableServer({ vaultPath, session, party = [], stateFile, deps = {
           json(res, 500, { error: String(err.message).split('\n')[0] });
           return;
         }
+        refreshPlayers();
         json(res, 200, { model: present(model, { index: idx }), session: sessionInfo(), stateId, tableLog: logOf(idx), serverId, notices: [...notices, ...statusNotices()] });
       },
     },
@@ -351,6 +446,44 @@ function createTableServer({ vaultPath, session, party = [], stateFile, deps = {
           if (r.conflict) { json(res, 409, { reason: r.conflict, stateId, rev: r.rev, label }); return; }
           json(res, 200, { rev: r.rev });
           broadcast('state', { rev: r.rev, clientId: typeof msg.clientId === 'string' ? msg.clientId : null });
+          refreshPlayers();
+        });
+      },
+    },
+    {
+      method: 'POST',
+      path: '/api/roll',
+      handle: (req, res) => {
+        withJson(req, res, (msg) => {
+          if (!msg || !Array.isArray(msg.rolls) || msg.rolls.length > MAX_ROLLS) { json(res, 400, { error: `the body needs { rolls: [{ sides, mod }] }, at most ${MAX_ROLLS}` }); return; }
+          let results;
+          try { results = dice.rollMany(msg.rolls); } catch (err) { json(res, 400, { error: String(err.message).split('\n')[0] }); return; }
+          json(res, 200, { results });
+        });
+      },
+    },
+    {
+      method: 'POST',
+      path: '/api/actions',
+      handle: (req, res) => {
+        withJson(req, res, (msg) => {
+          if (!msg || !Array.isArray(msg.actions) || msg.actions.length > MAX_ACTIONS) { json(res, 400, { error: `the body needs { stateId, base, actions }, at most ${MAX_ACTIONS} actions` }); return; }
+          const before = store.get().rev;
+          let r;
+          // a throw outside any one action (Review L6): a 400, which the page drops and names, never re-sends
+          try { r = store.apply({ stateId: msg.stateId, actions: msg.actions, reduce }); } catch (err) {
+            const error = String((err && err.message) || err).split('\n')[0];
+            log(`run sheet: ${msg.actions.length} action(s) could not be applied (${error}).`);
+            json(res, 400, { error });
+            return;
+          }
+          if (r.conflict) { json(res, 409, { reason: r.conflict, stateId, rev: r.rev, label }); return; }
+          for (const x of r.rejected) log(`run sheet: an action could not be applied (${x.type}: ${x.error}).`);
+          json(res, 200, { rev: r.rev, state: r.state, rejected: r.rejected });
+          if (r.rev !== before) {
+            broadcast('state', { rev: r.rev, clientId: typeof msg.clientId === 'string' ? msg.clientId : null });
+            refreshPlayers();
+          }
         });
       },
     },
@@ -379,9 +512,38 @@ function createTableServer({ vaultPath, session, party = [], stateFile, deps = {
         res.on('close', drop);
       },
     },
+    // --- the players' half: their page, their view, their stream, their pictures. Nothing else. ---
+    { method: 'GET', path: '/players', handle: (req, res) => playersFiles({ method: 'GET', url: '/players.html' }, res) },
+    // listed before `/players/`, which would take it otherwise
+    { method: 'GET', prefix: '/players/pic/', handle: (req, res, u) => playersPicture(res, u.raw.slice('/players/pic/'.length)) },
+    { method: 'GET', prefix: '/players/', handle: (req, res, u) => playersFiles({ method: 'GET', url: u.raw.slice('/players'.length) }, res) },
+    {
+      method: 'GET',
+      path: '/api/players/view',
+      handle: (req, res) => {
+        if (!players.view) refreshPlayers();
+        if (!players.view) { json(res, 503, UNAVAILABLE); return; }
+        json(res, 200, players.view);
+      },
+    },
+    {
+      method: 'GET',
+      path: '/api/players/events',
+      handle: (req, res) => {
+        res.writeHead(200, { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-store' });
+        res.write('event: hello\ndata: {}\n\n');
+        playersClients.add(res);
+        const drop = () => playersClients.delete(res);
+        req.on('close', drop);
+        res.on('close', drop);
+        // the first build reaches this client through the set; an existing view is sent to it alone
+        if (!players.view) refreshPlayers();
+        else res.write(`event: view\ndata: ${players.json}\n\n`);
+      },
+    },
   ];
 
-  const ping = setInterval(() => { for (const res of clients) res.write(': ping\n\n'); }, deps.pingMs || 15000);
+  const ping = setInterval(() => { for (const res of [...clients, ...playersClients]) res.write(': ping\n\n'); }, deps.pingMs || 15000);
   if (ping.unref) ping.unref();
 
   const server = http.createServer((req, res) => {
@@ -426,8 +588,11 @@ function createTableServer({ vaultPath, session, party = [], stateFile, deps = {
       route.handle(req, res, u);
     } catch (err) {
       log(`run sheet: ${String((err && err.message) || err).split('\n')[0]}`);
-      if (!res.headersSent) json(res, 500, { error: String((err && err.message) || err).split('\n')[0] });
-      else res.end();
+      const raw = String(req.url || '').split('#')[0].split('?')[0];
+      const forPlayersRoute = raw === '/players' || raw.startsWith('/players/') || raw.startsWith('/api/players/');
+      if (res.headersSent) res.end();
+      else if (forPlayersRoute) json(res, 500, UNAVAILABLE);
+      else json(res, 500, { error: String((err && err.message) || err).split('\n')[0] });
     }
   });
 
@@ -443,8 +608,9 @@ function createTableServer({ vaultPath, session, party = [], stateFile, deps = {
       if (recordRetry) { clearTimeout(recordRetry); recordRetry = null; if (lastWritten) writeRecord(lastWritten); }
       closed = true;
       if (recordRetry) { clearTimeout(recordRetry); recordRetry = null; }
-      for (const res of clients) res.end();
+      for (const res of [...clients, ...playersClients]) res.end();
       clients.clear();
+      playersClients.clear();
       await new Promise((resolve) => {
         if (!server.listening) { resolve(); return; }
         server.close(() => resolve());

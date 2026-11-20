@@ -17,13 +17,15 @@ const { readHandouts, TITLE: HANDOUTS_TITLE } = require('./handouts');
 const { foesFor } = require('./foes');
 const { readTableLog, VITALS } = require('./table-log');
 const { orderedSessions } = require('../story-spine');
-const { displayTitleOf } = require('../scanner');
+const { displayTitleOf, mapFolder } = require('../scanner');
 const { unmaskedPlayAsOf } = require('./people-from-notes');
 const { parseNote } = require('../frontmatter');
 const { readSettings } = require('../settings/read');
 const { readerFrom } = require('../vault-reader');
 const { isWithheld, nameList, unmaskedNames, unmaskedNameUnread } = require('../processor');
 const { canonicalNfc } = require('../unicode');
+const { decidePage, publishesPage } = require('../publish-decision');
+const { loadManifest } = require('../manifest');
 const { tableLogOf, isPlayed } = require('./sessions');
 const { readCast } = require('./cast');
 
@@ -149,11 +151,13 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
   let system = null;
   let campaign = path.basename(path.resolve(vaultPath));
   const withheldWords = { person: 'someone', place: 'somewhere' };
+  let publishConfig = {};
   try {
     // Settings values are nested by group: `vault.system` is values.vault.system.
     const values = readSettings({ vaultPath, deps }).values || {};
     system = (values.vault && values.vault.system) || null;
     const site = values.player_site || {};
+    publishConfig = site;
     if (typeof site.title === 'string' && site.title.trim()) campaign = site.title.trim();
     for (const k of ['person', 'place']) {
       const w = site.withheld_words && site.withheld_words[k];
@@ -298,6 +302,24 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
     return GM_SUFFIX.test(stem) ? index.resolve(stem.replace(GM_SUFFIX, '')) : null;
   };
   const playerFor = new Map(allMaps.map((g) => [g, playerOf(g)]));
+
+  // The maps the GM may Show the players: every map the player site would publish, bar the GM half of a pair.
+  // A manifest that does not read leaves the list empty (nothing is known to publish) and says so.
+  let manifest = null;
+  let manifestRead = true;
+  try {
+    manifest = loadManifest(vaultPath, { warn: () => {} });
+  } catch (err) {
+    manifestRead = false;
+    warnings.push({ kind: 'map-list', note: null, text: 'the publish list could not be read: no map can be Shown' });
+  }
+  const gmHalves = new Set([...allMaps.filter((g) => GM_SUFFIX.test(stemOf(g))), ...[...playerFor].filter(([, v]) => v).map(([g]) => g)]);
+  // A folder player_site.folder_map leaves out is not published, as the scanner says (a vault with no map set,
+  // no site set up, leaves each map to its own publish rule).
+  const folderMap = publishConfig.folder_map && typeof publishConfig.folder_map === 'object' ? publishConfig.folder_map : {};
+  const folderMapped = (rel) => !Object.keys(folderMap).length || !rel.includes('/') || mapFolder(rel.slice(0, rel.lastIndexOf('/')), folderMap) !== null;
+  const showableMaps = !manifestRead ? [] : allMaps.filter((m) => !gmHalves.has(m)
+    && publishesPage(decidePage({ rel: m, frontmatter: fmOf(m) }, { rel: m, publishConfig, manifest, folderMapped: folderMapped(m) }))).sort();
   for (const p of maps) {
     playerVersionWarning(p);
     pair(p, playerFor.get(p));
@@ -365,6 +387,14 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
   if (!model.notes[plan]) model.notes[plan] = noteOf(plan, fm);
   // The cast is read last: its notes are never "touched", and its warnings stay on each entry.
   model.cast = readCast(index, { carried });
+  // Added last, so these paths make no `notes` entries or links of their own: a Plan that names no map reads as before.
+  model.showableMaps = showableMaps;
+  // What the players' screen needs of each: its own name (never the stem) and its picture.
+  model.mapNotes = Object.fromEntries(showableMaps.map((m) => {
+    const mfm = fmOf(m);
+    const named = typeof mfm.name === 'string' && Boolean(mfm.name.trim());
+    return [m, { path: m, name: named ? mfm.name.trim() : stemOf(m), named, type: low(mfm.type), docType: 'map', withheld: isWithheld(mfm), portrait: portraitOf(m) }];
+  }));
   return model;
 
   // The index's answer, asked once per note (a picture that cannot be found is its warning).
@@ -380,8 +410,11 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
     return {
       path: p,
       name: typeof nfm.name === 'string' && nfm.name.trim() ? nfm.name.trim() : stemOf(p),
+      // whether `name` is the note's own: the players' screen never shows a file's stem (5b decision 12)
+      named: typeof nfm.name === 'string' && Boolean(nfm.name.trim()),
       type: low(nfm.type),
       withheld: isWithheld(nfm),
+      unseenAs: typeof nfm.unseen_as === 'string' ? nfm.unseen_as.trim() : '',
       unreadable: Boolean(read.unreadable),
       portrait,
       location: typeof nfm.location === 'string' ? nfm.location : '',

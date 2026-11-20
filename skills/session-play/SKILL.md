@@ -58,8 +58,9 @@ file (`type: session-play-notes`). If none exists, file it with
 never note anything in the index body (it publishes). An Export note (`type:
 session-export`) or a Table Log (`type: session-table-log`, the run
 sheet's) beside it is not Play Notes: leave it alone. Before play,
-`gma table <vault>` opens the run sheet; it writes the Table Log, and
-you still write the Play Notes beside it. Acknowledge and hold — no editing or reorganizing;
+`gma table <vault>` opens the run sheet, which runs fights and a
+players' screen and writes the Table Log; you still write the Play
+Notes beside it. Acknowledge and hold — no editing or reorganizing;
 wrap-up processes it. Mark entities with:
 
 | Marker | Use when |

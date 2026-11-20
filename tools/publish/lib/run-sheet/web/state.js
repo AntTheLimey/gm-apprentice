@@ -7,11 +7,15 @@
 // State is stored against the reader's keys (beat, spot, point, loot, handout), each with the words
 // it had, so an item whose key the Plan later loses can still be shown (an orphan) and re-attached.
 // `rev`, `stateId` and `recordHash` belong to the server: `reduce` never touches them. Keys the page
-// does not know (5b's `fight`, `shown`, `panels`, `rolls`) pass through `reduce` and `derive` untouched.
+// does not know pass through `reduce` and `derive` untouched.
+//
+// The fight (plan 5b) lives here too: fight-math.js holds its pure helpers and fight.js its handlers, which
+// `reduce` takes as its own. In a page both load before this file; under node it requires them. show.js
+// (what the GM shows the players) joins the same way.
 (function (root, factory) {
-  if (typeof module === 'object' && module.exports) module.exports = factory();
-  else root.RunSheetState = factory();
-}(typeof self !== 'undefined' ? self : this, function () {
+  if (typeof module === 'object' && module.exports) module.exports = factory(require('./fight-math'), require('./fight'), require('./show'));
+  else root.RunSheetState = factory(root.RunSheetFightMath, root.RunSheetFight, root.RunSheetShow);
+}(typeof self !== 'undefined' ? self : this, function (FM, Fight, Show) {
   const APPLIED_KEEP = 500;
   const POINT_MARKS = ['landed', 'missed', 'overtaken'];
 
@@ -23,6 +27,7 @@
       brought: {}, unmask: {}, handouts: {}, loot: {}, jots: [], events: [],
       end: { vitals: {}, where: {}, advancement: '' },
       attached: {},
+      fight: null, fights: [], panels: {}, shownEver: {},
     };
   }
 
@@ -57,6 +62,16 @@
       entries(v, `brought.${id}`);
     }
     if (out.stopped !== null && kind(out.stopped) !== 'object') throw bad(`stopped is ${kind(out.stopped)}, not object`);
+    // The fight and the players' panels: a running fight is an object or null, each fight's rows a list
+    // of objects, and each group's panel an object. `shownEver` holds a time (or true) per note: any value.
+    if (out.fight !== null && kind(out.fight) !== 'object') throw bad(`fight is ${kind(out.fight)}, not object`);
+    entries(out.fights, 'fights');
+    for (const [where, f] of [...(out.fight ? [['fight', out.fight]] : []), ...out.fights.map((f, i) => [`fights[${i}]`, f])]) {
+      if (f.rows === undefined) continue;
+      if (kind(f.rows) !== 'array') throw bad(`${where}.rows is ${kind(f.rows)}, not array`);
+      entries(f.rows, `${where}.rows`);
+    }
+    for (const [id, v] of Object.entries(out.panels)) if (kind(v) !== 'object') throw bad(`panels.${id} is ${kind(v)}, not object`);
     return out;
   }
 
@@ -141,7 +156,8 @@
       for (const m of ['points', 'loot']) for (const k of Object.keys(s[m])) if (under(k)) delete s[m][k];
       for (const [pc, p] of Object.entries(s.positions)) if (p.beat === a.key) delete s.positions[pc];
       s.jots = s.jots.filter((j) => j.beat !== a.key);
-      s.events = s.events.filter((e) => e.beat !== a.key);
+      // a fight's lines stay: the fight happened, wherever it was started
+      s.events = s.events.filter((e) => e.beat !== a.key || e.fight);
     },
     bring(s, a, at) {
       if (!a.beat || !a.note) return;
@@ -186,15 +202,40 @@
       if (s.stopped) s.stopped.beat = re(s.stopped.beat);
       for (const j of s.jots) { j.beat = re(j.beat); j.spot = re(j.spot); }
       for (const e of s.events) e.beat = re(e.beat);
+      // the fight, its thresholds and lit marks, and the ended fights follow the beat (Review M10)
+      const rows = (list) => { for (const r of list || []) { r.group = re(r.group); r.foeKey = re(r.foeKey); } };
+      if (s.fight) {
+        const f = s.fight;
+        f.beat = re(f.beat);
+        f.groups = (f.groups || []).map(re);
+        for (const t of f.thresholds || []) { t.beat = re(t.beat); t.key = re(t.key); }
+        // a lit key is `<threshold key>|<row id>`: only the part before the bar names a place
+        f.lit = Object.fromEntries(Object.entries(f.lit || {}).map(([k, v]) => {
+          const i = k.lastIndexOf('|');
+          return [i < 0 ? re(k) : `${re(k.slice(0, i))}${k.slice(i)}`, v];
+        }));
+        rows(f.rows);
+      }
+      for (const f of s.fights || []) { f.beat = re(f.beat); rows(f.rows); }
+      // the players' panels are kept by position, so they move with it (Review M10)
+      if (s.panels && typeof s.panels === 'object') s.panels = rekey(s.panels, re);
       s.attached[a.from] = a.to;
     },
-    endSet(s, a) {
-      for (const [id, v] of Object.entries(a.vitals || {})) s.end.vitals[id] = { ...(s.end.vitals[id] || {}), ...v };
+    // Each field set here is stamped with when, so a later fight or long rest can be told from it (decision 17).
+    endSet(s, a, at) {
+      for (const [id, v] of Object.entries(a.vitals || {})) {
+        const old = s.end.vitals[id] || {};
+        // each field keeps its own time: a conditions edit must not make an older HP look newer than a fight
+        const was = old.at && typeof old.at === 'object' ? old.at : (old.at ? { hp: old.at, max: old.at, conditions: old.at } : {});
+        const stamp = { ...was };
+        for (const k of Object.keys(v)) stamp[k] = at;
+        s.end.vitals[id] = { ...old, ...v, at: stamp };
+      }
       for (const [pc, text] of Object.entries(a.where || {})) { if (String(text || '').trim()) s.end.where[pc] = String(text); else delete s.end.where[pc]; }
       if (typeof a.advancement === 'string') s.end.advancement = a.advancement;
     },
     // A long rest sets every row to full; `longRest {on: false}` takes it back, with the figures the GM had set.
-    longRest(s, a) {
+    longRest(s, a, at) {
       if (a.on === false) {
         for (const v of Object.values(s.end.vitals)) {
           if (v.rested) { if (v.hp === undefined) v.hp = v.rested.hp; if (v.max === undefined) v.max = v.rested.max; delete v.rested; }
@@ -202,6 +243,7 @@
           if (v.max === undefined) delete v.max;
         }
         delete s.end.longRest;
+        delete s.end.longRestAt;
         return;
       }
       for (const v of Object.values(s.end.vitals)) {
@@ -209,12 +251,14 @@
         delete v.hp; delete v.max;
       }
       s.end.longRest = true;
+      s.end.longRestAt = at;
     },
   };
+  Object.assign(HANDLERS, Fight.FIGHT_HANDLERS, Show.SHOW_HANDLERS);
 
   // An action made before an `attach` (queued in another window, or re-applied on a newer state) still
   // names the old keys: map them through what was attached.
-  const KEY_FIELDS = ['beat', 'point', 'item', 'handout', 'spot'];
+  const KEY_FIELDS = ['beat', 'point', 'item', 'handout', 'spot', 'group'];
   function remapKey(attached, k) {
     if (typeof k !== 'string' || !attached) return k;
     let cur = k;
@@ -234,6 +278,11 @@
     const out = { ...a };
     for (const f of KEY_FIELDS) if (out[f] != null) out[f] = remapKey(attached, out[f]);
     if (out.to && typeof out.to === 'object') out.to = { ...out.to, beat: remapKey(attached, out.to.beat), spot: remapKey(attached, out.to.spot) };
+    // a fight action built before the attach: its groups, rows and thresholds
+    const re = (k) => remapKey(attached, k);
+    if (Array.isArray(out.groups)) out.groups = out.groups.map(re);
+    if (Array.isArray(out.rows)) out.rows = out.rows.map((r) => (r && typeof r === 'object' ? { ...r, group: re(r.group), foeKey: re(r.foeKey) } : r));
+    if (Array.isArray(out.thresholds)) out.thresholds = out.thresholds.map((t) => (t && typeof t === 'object' ? { ...t, beat: re(t.beat), key: re(t.key) } : t));
     return out;
   }
 
@@ -329,7 +378,69 @@
     return real.concat(impro);
   }
 
-  // Ally rows: one per ally note, a copy row for each extra number a beat holds (`Guard 2`).
+  const lower = (x) => String(x == null ? '' : x).trim().toLowerCase();
+  // The party note a PC fight row stands for: by path, then by name (decision 18); null when neither holds.
+  function partyNoteOf(model, row) {
+    const pcs = model.pcs || [];
+    const p = pcs.find((x) => x.note === row.note) || pcs.find((x) => lower(x.name) && lower(x.name) === lower(row.name));
+    return p ? p.note : null;
+  }
+  const condText = (r) => Fight.statusesOf(r).join(', ');
+  // "Changed" means the row differs from where it started; touched and put back is not changed (Review L7).
+  // A max corrected in the fight counts (a row from before the start kept its max has none to compare).
+  function changed(r) {
+    const st = r.start || {};
+    const same = (x, y) => JSON.stringify((x || []).slice().sort()) === JSON.stringify((y || []).slice().sort());
+    return r.hp !== st.hp || (has(st, 'max') && r.max !== st.max) || !same(r.conds, st.conds)
+      || (r.exhaustion || 0) !== (st.exhaustion || 0) || !!r.conc !== !!st.conc;
+  }
+  // Each PC's and ally's figures from every fight, ended or running, that changed it or had a status cleared
+  // after it: vitals rowId -> [figure], oldest fight first. All are replayed, so a rest between two fights
+  // still sees the HP the first one left (a later fight's figure stays the current one).
+  function fightFigures(model, state) {
+    const out = new Map();
+    const allies = new Map();
+    const fights = (Array.isArray(state.fights) ? state.fights : []).concat(state.fight && Array.isArray(state.fight.rows) ? [state.fight] : []);
+    for (const f of fights) {
+      for (const r of f.rows || []) {
+        let rowId = null;
+        if (r.kind === 'pc') rowId = partyNoteOf(model, r);
+        else if (r.kind === 'ally' && r.note) {
+          rowId = r.copy > 1 ? `${r.note}#${r.copy}` : r.note;
+          if (!allies.has(rowId)) allies.set(rowId, { rowId, ally: true, copy: r.copy || 1, note: r.note, name: r.name, base: { hp: (r.start || {}).hp ?? r.max ?? null, max: r.max ?? null } });
+        }
+        // HP and max at their own time, conditions at theirs (Review H1); a row from before them reads `at`
+        const at = r.at || f.endedAt || f.startedAt || null;
+        const clears = Array.isArray(r.clears) ? r.clears.filter((c) => c && Array.isArray(c.removed)) : [];
+        const moved = changed(r);
+        if (!rowId || (!moved && !clears.length)) continue;
+        if (!out.has(rowId)) out.set(rowId, []);
+        out.get(rowId).push({ changed: moved, hp: r.hp, max: r.max, conditions: condText(r), condAt: r.condAt || at, hpAt: r.hpAt || at, clears });
+      }
+    }
+    return { figures: out, allies };
+  }
+  // A long rest: HP to max, Down and Stable gone, Exhaustion one lower; every other status kept.
+  function restedConditions(text) {
+    return String(text || '').split(/[,;]/).map((x) => x.trim()).filter(Boolean).flatMap((c) => {
+      if (/^(?:Down|Stable)$/i.test(c)) return [];
+      const m = /^Exhaustion\s+(\d+)$/i.exec(c);
+      if (m) return Number(m[1]) > 1 ? [`Exhaustion ${Number(m[1]) - 1}`] : [];
+      return [c];
+    }).join(', ');
+  }
+
+  // A conditions text with the statuses a clear took off; an Exhaustion clear takes any Exhaustion level.
+  function withoutStatuses(text, removed) {
+    const gone = new Set(removed);
+    const tired = removed.some((x) => /^Exhaustion\b/.test(x));
+    return String(text || '').split(/[,;]/).map((x) => x.trim()).filter(Boolean)
+      .filter((c) => !gone.has(c) && !(tired && /^Exhaustion\b/i.test(c))).join(', ');
+  }
+
+  // Ally rows: one per ally note, a copy row for each extra number a beat holds (`Guard 2`), and any ally a
+  // fight held. Each row's figure is the latest of: the note, each fight that changed it, the end panel,
+  // a long rest (decision 17). `source` says where the HP came from.
   function vitalRows(model, state, beats, reached) {
     const rows = [];
     for (const p of model.pcs || []) {
@@ -350,18 +461,62 @@
       }
     }
     for (const list of allies.values()) for (const r of list) if (r) rows.push(r);
+    const { figures, allies: fought } = fightFigures(model, state);
+    for (const [rowId, r] of fought) {
+      if (rows.some((x) => x.rowId === rowId)) continue;
+      rows.push(r);
+      inPlay.add(r.note);
+    }
+    const ord = (t) => (typeof t === 'string' ? t : '');
     return rows.map((r) => {
       let o = state.end.vitals[r.rowId] || {};
       const covered = state.end.longRest && (!r.ally || inPlay.has(r.note));
       // an ally who was not in play keeps the figures the GM set before the rest, unless set again since
       if (state.end.longRest && !covered && o.rested) o = { ...o, hp: o.hp !== undefined ? o.hp : o.rested.hp, max: o.max !== undefined ? o.max : o.rested.max };
       const setHp = o.hp !== undefined && o.hp !== '';
-      const hp = setHp ? o.hp : r.base.hp;
-      const max = o.max !== undefined && o.max !== '' ? o.max : r.base.max;
-      const rest = covered && !setHp;
-      return { rowId: r.rowId, ally: r.ally, copy: r.copy, note: r.note, name: r.name,
-        hp: rest ? max : hp, max, conditions: o.conditions || '',
-        set: has(state.end.vitals, r.rowId), rest, setHp };
+      const setMax = o.max !== undefined && o.max !== '';
+      const fig = { hp: r.base.hp, max: r.base.max, conditions: '', source: 'note', at: null };
+      const steps = [];
+      const ffs = figures.get(r.rowId) || [];
+      for (const ff of ffs) {
+        if (ff.changed) {
+          steps.push({ t: ord(ff.hpAt), k: 0, run: () => Object.assign(fig, { hp: ff.hp, max: ff.max ?? fig.max, source: 'fight', at: ff.hpAt }) });
+          // the text is the row's now: a status cleared since is gone already, and its clear below takes it off
+          // whatever stands then too (an end-panel edit, a rest's Exhaustion step), never puts the fight's back
+          steps.push({ t: ord(ff.condAt), k: 0, run: () => { fig.conditions = ff.conditions; } });
+        }
+        for (const c of ff.clears) steps.push({ t: ord(c.at), k: 0, run: () => { fig.conditions = withoutStatuses(fig.conditions, c.removed); } });
+      }
+      // each field has its own time; a 5a row holds one time for all of them, a row with none loses to a fight
+      const when = (k) => (o.at && typeof o.at === 'object' ? o.at[k] : o.at);
+      if (setMax) steps.push({ t: ord(when('max')), k: 1, run: () => { fig.max = o.max; } });
+      if (o.conditions !== undefined) steps.push({ t: ord(when('conditions')), k: 1, run: () => { fig.conditions = o.conditions || ''; } });
+      let restSkipped = false;
+      // the HP and max the GM set before the rest (the rest set them aside) stand at their own times, before it,
+      // so a 0 typed then still means the rest does nothing
+      const typed = (x) => x !== undefined && x !== null && x !== '';
+      if (covered && o.rested) {
+        const rest = ord(state.end.longRestAt);
+        const before = (k) => [ord(when(k)), rest].sort()[0];
+        if (typed(o.rested.max)) steps.push({ t: before('max'), k: 1, run: () => { fig.max = o.rested.max; } });
+        if (typed(o.rested.hp)) steps.push({ t: before('hp'), k: 1, run: () => Object.assign(fig, { hp: o.rested.hp, source: 'end', at: when('hp') || null }) });
+      }
+      if (covered) {
+        // SRD: a creature at 0 HP gets no long rest benefit; its row is left as it is
+        steps.push({ t: ord(state.end.longRestAt), k: 2, run: () => {
+          if (fig.hp === 0) { restSkipped = true; return; }
+          // SRD 5.2.1: a long rest restores a reduced HP maximum too
+          if (typeof r.base.max === 'number' && (typeof fig.max !== 'number' || fig.max < r.base.max)) fig.max = r.base.max;
+          Object.assign(fig, { hp: fig.max, conditions: restedConditions(fig.conditions), source: 'rest', at: state.end.longRestAt || null });
+        } });
+      }
+      // a long rest moves the HP the GM had set aside, so an HP still set was typed after it
+      if (setHp) steps.push({ t: covered ? [ord(when('hp')), ord(state.end.longRestAt)].sort().pop() : ord(when('hp')), k: 3, run: () => Object.assign(fig, { hp: o.hp, source: 'end', at: when('hp') || null }) });
+      steps.sort((x, y) => (x.t < y.t ? -1 : x.t > y.t ? 1 : x.k - y.k)).forEach((x) => x.run());
+      return { restSkipped, rowId: r.rowId, ally: r.ally, copy: r.copy, note: r.note, name: r.name,
+        hp: fig.hp, max: fig.max, conditions: fig.conditions,
+        set: has(state.end.vitals, r.rowId), rest: fig.source === 'rest', setHp: fig.source === 'end',
+        fight: ffs.some((x) => x.changed), source: fig.source, at: fig.at };
     });
   }
 
@@ -417,9 +572,9 @@
 
     const vitals = vitalRows(model, state, beats, reached);
     const vitalsRecorded = vitals
-      .filter((v) => v.set || v.rest)
+      .filter((v) => v.set || v.rest || v.fight)
       .map((v) => ({ rowId: v.rowId, ally: v.ally, copy: v.copy, note: v.note, name: v.name,
-        hp: v.setHp || v.rest ? v.hp : null, max: v.max, conditions: v.conditions }));
+        hp: v.source === 'note' ? null : v.hp, max: v.max, conditions: v.conditions, source: v.source, at: v.at }));
 
     const loot = [];
     for (const b of beats) {
@@ -431,7 +586,11 @@
 
     const titleOf = (key, saved) => (byKey.get(key) ? byKey.get(key).title : saved || '');
     const entries = state.jots.map((j, i) => ({ at: j.at, o: i, beatKey: j.beat, beatTitle: j.beat ? titleOf(j.beat, j.title) : '', text: j.text, id: j.id }))
-      .concat(state.events.map((e, i) => ({ at: e.at, o: 1e6 + i, beatKey: e.beat, beatTitle: e.beat ? titleOf(e.beat, e.title) : '', text: e.text })));
+      .concat(state.events.map((e, i) => ({ at: e.at, o: 1e6 + i, beatKey: e.beat, beatTitle: e.beat ? titleOf(e.beat, e.title) : '', text: e.text, ...(e.fight ? { fight: true } : {}) })));
+    // a long rest passes over anyone at 0 HP, and says so at the time of the rest
+    for (const v of vitals) {
+      if (v.restSkipped) entries.push({ at: state.end.longRestAt, o: 2e6, beatKey: null, beatTitle: '', text: `${v.name} is at 0 HP, so the long rest does nothing for them.` });
+    }
     const logLines = entries.sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : a.o - b.o)).map(({ o, ...rest }) => rest);
 
     // one entry per note: the state's entry decides on or off; a carried unmasking shows only when the state is silent
@@ -502,8 +661,45 @@
       handedOver: Object.entries(state.handouts).map(([key, v]) => ({ key, text: v.text, name: v.name || '', note: v.note })),
       unmaskedNow, maskedAgain,
       advancement: state.end.advancement || '',
-      fightLog: [],
+      fight: fightView(model, state, byKey, unmaskedNow),
+      fightLog: logLines.filter((l) => l.fight),
+      afterFight: afterFightOf(model, state, unmaskedNow),
     };
+  }
+
+  // The GM's name for a fight row: unmasked when Unmask is on (this session or carried), then the copy number.
+  function namer(rows, unmaskedNow) {
+    const unmasked = new Map(unmaskedNow.map((u) => [u.note, u.name]));
+    return (r) => FM.gmName(r, (note) => unmasked.get(note) || null, r.note ? rows.filter((x) => x.note === r.note && x.kind !== 'pc').length : 1);
+  }
+
+  // The running fight with what the page draws from it: rows (a PC row whose note left the party marked
+  // `gone`), whose panel shows, which rows are Bloodied and which thresholds are lit now.
+  function fightView(model, state, byKey, unmaskedNow) {
+    const f = state.fight;
+    if (!f || typeof f !== 'object') return null;
+    const raw = Array.isArray(f.rows) ? f.rows : [];
+    const name = namer(raw, unmaskedNow);
+    const rows = raw.map((r) => ({ ...r, gmName: name(r), ...(r.kind === 'pc' && !partyNoteOf(model, r) ? { gone: true } : {}) }));
+    const acting = FM.actingRow({ ...f, rows }, null);
+    const bloodied = new Set(rows.filter((r) => FM.isBloodied(r)).map((r) => r.id));
+    const lit = new Set();
+    for (const t of f.thresholds || []) if (rows.some((r) => FM.isLit(t, r))) lit.add(t.key);
+    return { ...f, view: { rows, acting, bloodied, lit, beatGone: !byKey.has(f.beat) } };
+  }
+
+  // The last ended fight's rows that still hold a status, for the After the fight box; null while a fight
+  // runs or when none is left.
+  function afterFightOf(model, state, unmaskedNow) {
+    if (state.fight) return null;
+    const fights = Array.isArray(state.fights) ? state.fights : [];
+    const f = fights[fights.length - 1];
+    if (!f) return null;
+    const rows = Array.isArray(f.rows) ? f.rows : [];
+    const name = namer(rows, unmaskedNow);
+    const left = rows.filter((r) => r.kind !== 'lair' && Fight.statusesOf(r).length)
+      .map((r) => ({ id: r.id, kind: r.kind, note: r.note, name: name(r), statuses: Fight.statusesOf(r) }));
+    return left.length ? { fight: f.id, title: f.title || '', rows: left } : null;
   }
 
   return { emptyState, upgrade, reduce, derive, cyclePoint, armClick, castSearch, handoutName };

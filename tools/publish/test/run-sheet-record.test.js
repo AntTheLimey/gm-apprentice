@@ -394,3 +394,107 @@ describe('the reader carries what the writer wrote', () => {
     assert.deepStrictEqual(rows, [['Lucan Grey 1', null, null], ['Lucan Grey 2', 5, S1_LOG]]);
   });
 });
+
+describe('the Table Log writer: fights (plan 5b decision 17)', () => {
+  const M = require('../lib/run-sheet/web/fight-math');
+  const LUCAN = 'Characters/NPCs/Lucan Grey.md';
+  const WOLF = 'Creatures/Frost Wolf.md';
+  // each action a minute after the last, from 21:00 (timeOf)
+  const play = (steps) => {
+    let s = RS.emptyState({ stateId: 'f', session: model.session.index, plan: PLAN });
+    let i = 0;
+    for (const step of steps) {
+      i += 1;
+      const a = typeof step === 'function' ? step(s) : step;
+      s = RS.reduce(s, { id: `f-${i}`, ...(s.fight && a.type !== 'fightStart' && !a.fight ? { fight: s.fight.id } : {}), ...a }, at(i));
+    }
+    return s;
+  };
+  const start = (s) => {
+    const b = M.rowsForFight({ model, derived: RS.derive(model, s), state: s, beatKey: GATE.key, idBase: `f-${s.applied.length + 1}` });
+    return { type: 'fightStart', beat: GATE.key, title: GATE.title, groups: b.groups, rows: b.rows, thresholds: b.thresholds };
+  };
+  const rowId = (s, note) => s.fight.rows.find((r) => r.note === note).id;
+  const hp = (note, entry) => (s) => ({ type: 'hp', row: rowId(s, note), entry });
+  const vitalsLines = (s) => sectionsOf(body(s)).get('Vitals at the end').split('\n').filter((l) => l.startsWith('| [['));
+
+  it('fight lines are in the Log in time order', () => {
+    const s = play([
+      { type: 'move', pc: ADA, to: to(GATE) },
+      { type: 'jot', beat: GATE.key, spot: null, text: 'they knock', title: GATE.title },
+      start,
+      hp(WOLF, '-20'),
+      { type: 'jot', beat: null, spot: null, text: 'after the wolf' },
+      (s) => ({ type: 'fightEnd' }),
+    ]);
+    const log = sectionsOf(body(s)).get('Log').split('\n');
+    assert.deepStrictEqual(log.slice(0, 4), [
+      '- 21:02 The Gate: they knock',
+      '- 21:03 The Gate: Fight starts at The Gate.',
+      '- 21:04 The Gate: Frost Wolf 1 drops.',
+      '- 21:05 after the wolf',
+    ]);
+    assert.strictEqual(log.length, 5);
+    assert.strictEqual(log[4], '- 21:06 The Gate: Fight ends before the first turn: Ada Moss 22/30, Brother Ash 9/9, Frost Wolf 1 0/15 (Out), Frost Wolf 2 15/15, Frost Wolf 3 15/15, Lucan Grey 16/16.');
+  });
+
+  it('vitals from a fight are written as hp/max (after the fight, HH:MM); kept statuses in Conditions, cleared ones not', () => {
+    let fid;
+    const s = play([
+      { type: 'move', pc: ADA, to: to(GATE) },
+      start,
+      (x) => { fid = x.fight.id; return hp(ADA, '-10')(x); },
+      (x) => ({ type: 'status', row: rowId(x, ADA), add: 'Prone' }),
+      (x) => ({ type: 'status', row: rowId(x, ADA), add: 'Poisoned' }),
+      (x) => ({ type: 'concentrating', row: rowId(x, ADA), on: true }),
+      (x) => ({ type: 'exhaustion', row: rowId(x, ADA), level: 1 }),
+      hp(LUCAN, '-4'),
+      { type: 'fightEnd' },
+      (x) => ({ type: 'afterClear', fight: fid, row: x.fights[0].rows.find((r) => r.note === ADA).id, status: 'Poisoned' }),
+      (x) => ({ type: 'afterClear', fight: fid, row: x.fights[0].rows.find((r) => r.note === ADA).id, status: 'Concentrating' }),
+    ]);
+    const lines = vitalsLines(s);
+    // the HP's own time, when the hit landed: clearing a status after the fight does not move it (Review H1)
+    assert.ok(lines.includes('| [[Ada Moss]] | 12/30 (after the fight, 21:03) | Prone, Exhaustion 1 |'), lines.join('\n'));
+    assert.ok(lines.some((l) => /^\| \[\[Characters\/NPCs\/Lucan Grey\]\] \| 12\/16 \(after the fight, 21:08\) \|  \|$/.test(l)), lines.join('\n'));
+    assert.ok(!lines.some((l) => l.includes('Ben Hart')), 'an unchanged PC is not written');
+    assert.ok(!lines.some((l) => l.includes('Wolf')), 'no foe');
+  });
+
+  it('an end-panel figure is written bare, and the bracketed figure reads back', () => {
+    const s = play([
+      { type: 'move', pc: ADA, to: to(GATE) },
+      start,
+      hp(ADA, '-10'),
+      { type: 'fightEnd' },
+      { type: 'endSet', vitals: { [BEN]: { hp: 7 } } },
+    ]);
+    const lines = vitalsLines(s);
+    assert.ok(lines.includes('| [[Ada Moss]] | 12/30 (after the fight, 21:03) |  |'), lines.join('\n'));
+    assert.ok(lines.includes('| [[Ben Hart]] | 7/20 |  |'));
+    const r = readTableLog(body(s));
+    assert.deepStrictEqual(r.unread, []);
+    assert.deepStrictEqual(r.vitals.map((v) => [v.who, v.hpNow, v.hpMax]), [['Ada Moss', 12, 30], ['Ben Hart', 7, 20]]);
+    // a later end-panel edit takes it back to bare
+    const s2 = RS.reduce(s, { id: 'late', type: 'endSet', vitals: { [ADA]: { hp: 14 } } }, at(9));
+    assert.ok(vitalsLines(s2).includes('| [[Ada Moss]] | 14/30 |  |'));
+  });
+
+  it('round trip through readTableLog', () => {
+    const s = play([
+      { type: 'move', pc: ADA, to: to(GATE) },
+      start,
+      hp(ADA, '-10'),
+      (x) => ({ type: 'status', row: rowId(x, ADA), add: 'Prone' }),
+      hp(LUCAN, '-3'),
+    ]);
+    const text = R.rewriteTableLog(skeleton(), body(s));
+    const r = readTableLog(text);
+    assert.deepStrictEqual(r.vitals.map((v) => [v.who, v.copy, v.hpNow, v.hpMax, v.conditions]), [
+      ['Ada Moss', null, 12, 30, 'Prone'],
+      ['Characters/NPCs/Lucan Grey', null, 13, 16, ''],
+    ]);
+    assert.ok(r.sections.get('Log').includes('Fight starts at The Gate.'));
+    assert.strictEqual(R.recordBodyOf(text), R.recordBodyOf(R.rewriteTableLog(text, body(s))), 'stable');
+  });
+});

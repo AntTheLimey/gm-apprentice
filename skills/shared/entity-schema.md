@@ -279,7 +279,9 @@ familiar, cohort); never pictured on Story pages), `occupation`,
 `voice` (set only when the GM gives this NPC their own story; how they
 are told and speak; never published), `unmasked_name` (a disguise's
 true name: behind the run sheet's Unmask; never published),
-`unmasked_portrait` (a disguise's true face; never published)
+`unmasked_portrait` (a disguise's true face; never published),
+`unseen_as` (what players call this one before they learn the name ("a
+brother"); the run sheet's players' screen only)
 
 **PC:** `player_name`, `occupation`, `age`, `gender`, `nationality`,
 `status` (alive/dead/missing/retired/unknown), `key_traits`,
@@ -379,12 +381,13 @@ undecided), `scope` (campaign/one-shot/few-shot), `sessions_estimated`
 `voice` (the campaign's storytelling voice, a few sentences; the GM
 approves it; never published)
 
-**Creature:** `creature_type` (beast, undead, construct, spirit,
-deity, aberration), `threat_level` (how dangerous the PCs believe it
-is, shown on the site), `location` (wiki-link: where it lairs or is
-found), `portrait`, `abilities` (optional, publishes), `weaknesses`
-(optional, publishes). Keep `abilities` and `weaknesses` in the body's
-GM Notes to hide them.
+**Creature:** `unseen_as` (what players call this one before they
+learn the name ("a brother"); the run sheet's players' screen only),
+`creature_type` (beast, undead, construct, spirit, deity, aberration),
+`threat_level` (how dangerous the PCs believe it is, shown on the
+site), `location` (wiki-link: where it lairs or is found), `portrait`,
+`abilities` (optional, publishes), `weaknesses` (optional, publishes).
+Keep `abilities` and `weaknesses` in the body's GM Notes to hide them.
 
 **Heritage:** `lifespan_range` (min/max age array), `maturity_age`,
 `average_height`, `notable_traits`, `portrait`

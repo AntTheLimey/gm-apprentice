@@ -224,11 +224,41 @@ function createStore({
       if (theirs !== stateId) return { conflict: 'session', rev };
       if (theirBase !== rev) return { conflict: 'stale', rev };
       if (!state || typeof state !== 'object' || Array.isArray(state)) throw new TypeError('state must be an object');
-      const whole = upgrade(state); // throws, code BAD_STATE, for a key of the wrong kind
+      // a page from before a key existed (a 5a tab open across the upgrade) sends none: the stored one stands
+      const sent = { ...state };
+      for (const k of Object.keys(cur || {})) if (!Object.prototype.hasOwnProperty.call(sent, k)) sent[k] = cur[k];
+      const whole = upgrade(sent); // throws, code BAD_STATE, for a key of the wrong kind
       rev++;
       cur = own(whole, rev, cur.recordHash);
       changed();
       return { rev };
+    },
+    // Reduces each action on its own, on the newest state, stamping `at` (the action's own valid time not
+    // in the future, else `now`). One that throws is skipped and named in `rejected`. `rev` bumps once
+    // when anything changed. `base` is not asked for: actions land on whatever the store holds, and an
+    // action id already applied changes nothing (5b decision 25).
+    apply({ stateId: theirs, actions, reduce, upgrade: up = upgrade, fresh: fr = fresh, now: clock = now } = {}) {
+      ensure();
+      if (theirs !== stateId) return { conflict: 'session', rev };
+      if (!Array.isArray(actions)) throw new TypeError('actions must be an array');
+      if (typeof reduce !== 'function') throw new TypeError('apply needs a reduce');
+      const start = up(cur, fr());
+      let s = start;
+      const rejected = [];
+      for (const action of actions) {
+        const own = action && typeof action === 'object' ? action.at : null;
+        const ms = typeof own === 'string' && /^\d{4}-\d\d-\d\dT/.test(own) ? Date.parse(own) : NaN;
+        const t = clock();
+        const at = Number.isFinite(ms) && ms <= t.getTime() ? new Date(ms).toISOString() : t.toISOString();
+        try { s = reduce(s, action, at); } catch (err) {
+          rejected.push({ id: action && action.id != null ? action.id : null, type: action && action.type != null ? action.type : null, error: String((err && err.message) || err).split('\n')[0] });
+        }
+      }
+      if (s === start) return { rev, state: cur, rejected };
+      rev++;
+      cur = own(s, rev, cur.recordHash);
+      changed();
+      return { rev, state: cur, rejected };
     },
     // Server-owned keys only (`recordHash`); no rev bump, but a write is scheduled so a kill before the
     // next click cannot leave a stale recordHash on disk.

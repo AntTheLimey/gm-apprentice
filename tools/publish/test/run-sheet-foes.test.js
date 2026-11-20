@@ -76,6 +76,19 @@ describe('run sheet foes', () => {
       [17, 183, 3, 2, 3, true, []]);
   });
 
+  it('reads the SRD 5.2.1 legendary counts: (3/Day, or 4/Day in Lair) and Legendary Action Uses (Review L3)', () => {
+    const dir = mkTmp('rs-');
+    fs.cpSync(FIXTURE, dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'Creatures', 'Old Dragon.md'), [
+      '---', 'name: Old Dragon', 'type: creature', '---', '', '## GM Notes', '', '### Stats', '',
+      '**AC** 18; **HP** 200; **Initiative** +4 (14)', '',
+      '***Legendary Resistance (3/Day, or 4/Day in Lair).*** If the dragon fails a saving throw, it can choose to succeed instead.', '',
+      '**Legendary Action Uses:** 3 (4 in Lair). Immediately after another creature\'s turn, the dragon can expend a use.', '',
+    ].join('\r\n'));
+    const [d] = foesOf('Creatures/Old Dragon.md', buildIndex(dir), 1, 'b-test').foes;
+    assert.deepStrictEqual([d.ac, d.hp, d.legendaryResistance, d.legendaryActions], [18, 200, 3, 3]);
+  });
+
   it('reads every real stat-block shape', () => {
     const { index } = setup();
     const abbot = npc(index, 'Abbot Rime').foes[0];
@@ -315,5 +328,56 @@ describe('run sheet foes', () => {
       assert.match(r.foes[0].prepNote, /no hit points/);
       assert.match(r.foes[0].prepNote, /no initiative/);
     });
+  });
+});
+
+describe('run sheet foes: recharge forms and lair actions (5b)', () => {
+  const noteWith = (stats) => {
+    const dir = mkTmp('rs-');
+    fs.cpSync(FIXTURE, dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'Creatures', 'Shape.md'),
+      `---\nname: Shape\ntype: creature\n---\n\n<!-- gm-only -->\n\n## GM Notes\n\n### Stats\n\n${stats}\n\n<!-- /gm-only -->\n`);
+    return foesOf('Creatures/Shape.md', buildIndex(dir), 1, 'b-test').foes[0];
+  };
+
+  it('a plain recharge in a one-line block', () => {
+    const f = noteWith('SRD **Ice Mephit** (CR 1/2). **AC** 11 · **Initiative** +1 · **HP** 21 (6d6). Claw +3, 1d4+1 Slashing plus 1d4 Cold. Frost Breath (Recharge 6): 15-ft cone, Con save DC 10. Fog Cloud 1/day.');
+    assert.deepStrictEqual(f.recharge, ['Frost Breath']);
+    assert.deepStrictEqual(f.rechargeAt, { 'Frost Breath': 6 });
+    const range = noteWith('AC 11 HP 9 Initiative +1. Breath Weapon (Recharge 5–6): a cone.');
+    assert.deepStrictEqual(range.rechargeAt, { 'Breath Weapon': 5 });
+  });
+
+  it('the bold form still wins its name', () => {
+    const f = noteWith('AC 11 HP 9 Initiative +1. Cold Breath (Recharge 6) in the summary.\n\n***Cold Breath (Recharge 5–6).*** A cone.');
+    assert.deepStrictEqual(f.recharge, ['Cold Breath']);
+    assert.deepStrictEqual(f.rechargeAt, { 'Cold Breath': 5 });
+  });
+
+  it('a bold name with lower-case words gives no stray plain name', () => {
+    const f = noteWith('AC 11 HP 9 Initiative +1\n\n- ***Breath Under the Ice (Recharge 5–6).*** He breathes.');
+    assert.deepStrictEqual(f.recharge, ['Breath Under the Ice']);
+    assert.deepStrictEqual(f.rechargeAt, { 'Breath Under the Ice': 5 });
+  });
+
+  it('plain names with small words read as the bold ones do', () => {
+    const plain = noteWith('AC 11 HP 9 Initiative +1. Breath of Frost (Recharge 5–6): a cone. Touch of Frost (Recharge 6): a touch.');
+    const bold = noteWith('AC 11 HP 9 Initiative +1\n\n***Breath of Frost (Recharge 5–6).*** A cone.\n\n***Touch of Frost (Recharge 6).*** A touch.');
+    assert.deepStrictEqual(plain.recharge, ['Breath of Frost', 'Touch of Frost']);
+    assert.deepStrictEqual(plain.rechargeAt, { 'Breath of Frost': 5, 'Touch of Frost': 6 });
+    assert.deepStrictEqual([plain.recharge, plain.rechargeAt], [bold.recharge, bold.rechargeAt]);
+  });
+
+  it("lair actions are the block's list", () => {
+    const { index } = setup();
+    const wyrm = one(index, 'Glacier Wyrm').foes[0];
+    assert.strictEqual(wyrm.lairActions, '- The ice shifts.', 'the fixture\'s indented list');
+    const top = noteWith('AC 11 HP 9 Initiative +1\n\n**Lair Actions** (anywhere in the house). On initiative count 20, he takes one of these.\n- ***The Hymn.*** The brothers sing.\n- ***Rime.*** Frost climbs.\n\n**Villain Actions.** At the end of a round.\n- ***1. Peace.*** Fear.');
+    assert.strictEqual(top.lairActions, '- ***The Hymn.*** The brothers sing.\n- ***Rime.*** Frost climbs.', 'the Severin shape: a top-level list under the line');
+    assert.strictEqual(one(index, 'Frost Wolf').foes[0].lairActions, '', 'a Lair Actions line with no list');
+    assert.strictEqual(one(index, 'Ice Mephit').foes[0].lairActions, '', 'no Lair Actions at all');
+    const nested = noteWith('AC 11 HP 9 Initiative +1\n\n- ***Lair Actions*** (on initiative 20):\n    - Icefall.\n      - A sub-point.\n    - Fog.');
+    assert.strictEqual(nested.lairActions, '- Icefall.\n  - A sub-point.\n- Fog.');
+    assert.strictEqual(noteWith('AC 11 HP 9 Initiative +1\n\nLair actions work here, recast.\n\n- ***Lair Actions*** (on 20):\n  - Fog.').lairActions, '- Fog.', 'a prose mention before the real line');
   });
 });

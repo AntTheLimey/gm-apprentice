@@ -10,7 +10,19 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 ---
 
 
-## [1.12.110] — 2026-11-21
+## [1.12.111] — 2026-11-20
+
+### Added
+
+- The run sheet runs a D&D fight (#556): a turn order with HP, statuses, recharges, Legendary Resistance and lair actions, dice rolled on the page, and the fight written to the Table Log (a figure from a fight reads `12/40 (after the fight, 20:14)`).
+- The players' screen: a second window for the table monitor that shows only what you choose to show, with names, places and maps filtered on the server so nothing you keep back reaches it.
+- An npc or creature note can set `unseen_as`, what players call it before they learn its name ("a brother"). Optional; no vault change is needed.
+
+### Fixed
+
+- The run sheet reads plain recharges and lair actions in a stat block, and a bare Bloodied If-row lights for the foe it names.
+
+## [1.12.110] — 2026-11-20
 
 ### Added
 

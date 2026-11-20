@@ -643,6 +643,11 @@ describe('isWithheld (the gm_only vectors; vaultlib.note_withheld asks it)', () 
   it('publishedFrontmatter never carries the flag', () => {
     assert.ok(!('withheld' in published({ type: 'npc', withheld: true, occupation: 'x' })));
   });
+  it('unseen_as never publishes', () => {
+    const out = published({ type: 'creature', unseen_as: 'a mephit', creature_type: 'spirit' });
+    assert.ok(!('unseen_as' in out));
+    assert.strictEqual(out.creature_type, 'spirit');
+  });
   it('the rewriter labels an unlabelled link to a withheld note, and keeps a label, an anchor, a folder path and a table cell', () => {
     const pages = [{ title: 'Lord_Zorn', displayTitle: 'Lord Zorn', frontmatter: { type: 'npc', withheld: true, aliases: ['Duke Zorn'] } },
       { title: 'Mara', displayTitle: 'Mara', frontmatter: { type: 'npc' } }];

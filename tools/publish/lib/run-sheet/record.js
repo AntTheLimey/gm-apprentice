@@ -113,6 +113,8 @@ function tableLogBody(model, state, { linkFor: link, timeOf = localTime } = {}) 
     const set = (x) => x !== null && x !== undefined && x !== '';
     let hp = '';
     if (set(v.hp)) hp = set(v.max) ? `${cell(String(v.hp))}/${cell(String(v.max))}` : cell(String(v.hp));
+    // a figure from a fight says when it was taken; one set on the end panel or by a long rest is bare (decision 17)
+    if (hp && v.source === 'fight' && v.at) hp += ` (after the fight, ${timeOf(v.at)})`;
     return `| ${name} | ${hp} | ${cell(v.conditions)} |`;
   });
   sec[VITALS] = rows.length ? `${VITALS_HEAD}\n${rows.join('\n')}` : '';

@@ -52,7 +52,7 @@ img { max-width: 100%; }
 .hnote button { font-size: .75rem; padding: 0 6px; }
 
 /* the rail and the main column */
-.app { display: grid; grid-template-columns: 220px minmax(0, 1fr); align-items: start; }
+.app { display: grid; grid-template-columns: 220px minmax(0, 1fr) var(--sidew, 400px); align-items: start; }
 .rail { position: sticky; top: var(--toph); height: calc(100vh - var(--toph)); overflow: auto; border-right: 1px solid var(--line); padding: 10px 8px 30px; font-size: .86rem; }
 .rail a { display: block; color: var(--ink); text-decoration: none; padding: 3px 6px; border-radius: 5px; cursor: pointer; }
 .rail a:hover { background: var(--ice-soft); }
@@ -64,6 +64,21 @@ img { max-width: 100%; }
 .rail .hd { font: 500 .68rem var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin: 12px 6px 4px; }
 .rail .offs { padding: 2px 6px 0 14px; display: flex; flex-wrap: wrap; gap: 2px; }
 .sheet { padding: 14px 20px 120px; min-width: 0; }
+/* the right column: the players' screen preview, or a part's own (the fight view) */
+.side { position: sticky; top: var(--toph); height: calc(100vh - var(--toph)); overflow: auto; border-left: 1px solid var(--line); padding: 12px 12px 30px; min-width: 0; font-size: .86rem; }
+.side .pvh { display: flex; justify-content: space-between; align-items: center; margin: 0 0 6px; }
+.side .pvh b { font: 500 .68rem var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.side .pv { width: 100%; }
+.side .pvlist { list-style: none; padding: 0; margin: 8px 0 0; }
+.side .pvlist li { padding: 2px 4px; border-radius: 5px; }
+.side .pvlist li.focus { background: var(--lamp-soft); }
+.top .round { font: 650 .9rem var(--mono); color: var(--lamp); }
+/* a wide window gives the preview more room: nearer the players' own 1920-wide layout */
+@media (min-width: 1800px) { .app { --sidew: 560px; } }
+.here-strip .pv-btns { display: inline-flex; gap: 6px; margin-left: 6px; }
+ul.maps { list-style: none; padding: 0; }
+ul.maps li { display: flex; gap: 8px; align-items: center; padding: 2px 0; }
+.drawer .dbtns { display: flex; gap: 6px; align-items: center; }
 .sheet > * { max-width: 1180px; }
 section.s { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; margin: 0 0 14px; padding: 12px 16px; scroll-margin-top: calc(var(--toph) + 8px); }
 section.s > h2 { font: 650 1.05rem/1.3 var(--display); margin: 0 0 8px; }
@@ -173,8 +188,106 @@ pre.notes { white-space: pre-wrap; background: var(--bg); border: 1px solid var(
 .drawer .body h3, .drawer .body h4 { font-size: .92rem; margin: 10px 0 2px; }
 .drawer .ty { font: 500 .7rem var(--mono); text-transform: uppercase; color: var(--muted); }
 @media (prefers-reduced-motion: reduce) { .drawer { transition: none; } }
+/* the fight view (gm-fight.js, spec §6.4, §6.5): the right column moves left of the beats and holds the
+   turn order, one line a row, with the acting creature's panel under it (its own column at 1600 px and up).
+   The rail goes while a fight runs; the beats column keeps the fight's beat cut at its top. */
+.app.part-side { --ordw: 860px; --actw: 0px; grid-template-columns: calc(var(--ordw) + var(--actw)) minmax(0, 1fr); }
+.app.part-side .rail { display: none; }
+.app.part-side .side { order: -1; border-left: none; border-right: 1px solid var(--line); padding: 0; overflow: hidden; font-size: .86rem; }
+.fview { display: flex; flex-direction: column; height: 100%; }
+.fview .fo { flex: 0 1 auto; min-height: 0; overflow: auto; padding: 8px 10px 6px; }
+.fview .act { flex: 1 0 160px; min-height: 160px; overflow: auto; margin: 0; border-width: 2px 0 0; border-radius: 0; }
+@media (min-width: 1600px) {
+  .app.part-side { --actw: 340px; }
+  .fview { display: grid; grid-template-columns: var(--ordw) var(--actw); }
+  .fview .fo { height: 100%; }
+  .fview .act { height: 100%; border-width: 0 0 0 2px; }
+}
+@media (min-width: 1800px) { .app.part-side { --actw: 460px; } }
+.fh { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; margin: 0 0 6px; }
+.fh b { font: 650 .8rem var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--bad); margin-right: 4px; }
+.fh .sp { flex: 1; }
+.fh button { font-size: .82rem; padding: 2px 8px; }
+.fask { background: var(--lamp-soft); border: 1px solid var(--lamp); border-radius: 8px; padding: 5px 8px; margin: 0 0 6px; }
+.fin, .fadd { display: flex; gap: 5px; flex-wrap: wrap; align-items: center; margin: 0 0 5px; font-size: .8rem; }
+.fin .gchip { border: 1px solid var(--line); border-radius: 999px; padding: 0 8px; background: var(--bg); }
+.fadd button { font-size: .78rem; padding: 1px 7px; }
+.fadd .addname { position: relative; }
+.fadd #fAddName { width: 11rem; font-size: .8rem; }
+.fadd #fAddCount { width: 3.2rem; font-size: .8rem; }
+.fadd .fhits { position: absolute; left: 0; top: 100%; z-index: 3; display: flex; flex-direction: column; min-width: 14rem; background: var(--panel); box-shadow: 0 4px 12px rgba(0, 0, 0, .15); }
+.fadd .fhits:empty { display: none; }
+.fadd .fhits button { text-align: left; border-radius: 0; }
+.fadd .fhits .t { color: var(--muted); font-size: .72rem; margin-left: 6px; }
+.areabar { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; background: var(--bad-soft); border: 1px solid var(--bad); border-radius: 8px; padding: 4px 8px; margin: 0 0 6px; font-size: .82rem; }
+.areabar input#fAreaDmg { width: 4.5rem; }
+.areabar .spend { display: inline-flex; gap: 3px; align-items: center; }
+ol.to { list-style: none; margin: 0; padding: 0; }
+/* one line a row, however busy: chips and counters give way (ellipsis, the full word in the title) before the row wraps */
+ol.to > li { display: flex; flex-wrap: nowrap; align-items: center; gap: 2px; min-height: 32px; padding: 2px 4px; border-top: 1px solid var(--line); border-radius: 4px; }
+ol.to > li > * { flex-shrink: 0; }
+/* the name gives way last: chips shrink first, so a wider font (Linux, Windows) cuts a chip before a name */
+ol.to > li > .nm { flex: 1 0.01 auto; min-width: 6rem; }
+ol.to > li > .chip, ol.to > li > .cnt[data-frch] { flex-shrink: 1; min-width: 2.4rem; overflow: hidden; text-overflow: ellipsis; }
+ol.to > li.cur { background: var(--lamp-soft); box-shadow: inset 4px 0 0 var(--lamp); }
+ol.to > li.out { opacity: .55; }
+ol.to > li.out .nm { text-decoration: line-through; }
+ol.to > li.bench { opacity: .6; }
+ol.to > li.sel { outline: 2px solid var(--bad); outline-offset: -2px; }
+ol.to .tk { width: 16px; display: inline-flex; }
+ol.to input { font: 500 .8rem var(--mono); padding: 1px 3px; text-align: center; }
+ol.to input.ini { width: 2.6rem; font-weight: 650; }
+ol.to .ini.fixed { width: 2.6rem; text-align: center; font: 650 .8rem var(--mono); }
+ol.to .nm { flex: 1 1 4.5rem; min-width: 3.5rem; font-weight: 600; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+ol.to .tag { font: 500 .68rem var(--mono); color: var(--muted); white-space: nowrap; }
+ol.to input.hpin { width: 4.2rem; text-align: left; }
+ol.to .hpv, ol.to .acv { font: 650 .8rem var(--mono); white-space: nowrap; }
+ol.to .hpv input { width: 2.6rem; }
+ol.to .acv input { width: 2.3rem; margin-left: 2px; }
+ol.to input.other { width: 9rem; text-align: left; }
+ol.to select { font-size: .72rem; padding: 0 1px; max-width: 4.2rem; }
+ol.to .cnt { max-width: 6rem; overflow: hidden; text-overflow: ellipsis; }
+ol.to button { font-size: .72rem; padding: 0 4px; line-height: 1.5; }
+.tg { font: 600 .7rem var(--mono); }
+.tg.on { background: var(--ice); color: var(--panel); border-color: var(--ice); }
+.chip { font: 500 .68rem var(--mono); padding: 0 4px; border: 1px solid var(--bad); color: var(--bad); border-radius: 4px; background: transparent; white-space: nowrap; }
+.chip.auto { border-color: var(--lamp); color: var(--lamp); }
+.cnt { font: 500 .7rem var(--mono); white-space: nowrap; }
+.cnt.spent { opacity: .55; text-decoration: line-through; }
+ol.to .ds { font: 500 .7rem var(--mono); white-space: nowrap; }
+.act { border-top: 2px solid var(--lamp); background: var(--panel); padding: 8px 12px; }
+.act .ah { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.act .ah h3 { margin: 0; font: 650 1.05rem var(--display); }
+.act .ah .why { font: 500 .68rem var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.act .nums { display: flex; gap: 5px; flex-wrap: wrap; margin: 6px 0; font: 600 .82rem var(--mono); align-items: center; }
+.act .nums > span { border: 1px solid var(--line); border-radius: 5px; padding: 0 6px; background: var(--bg); }
+.act .nums .bl { color: var(--lamp); border-color: var(--lamp); }
+.act .nums .st { color: var(--bad); }
+.act .nums.ctr button { font-size: .75rem; padding: 1px 6px; }
+.act .stats { font-size: .9rem; border-top: 1px solid var(--line); margin-top: 6px; padding-top: 4px; }
+.act .stats table { font-size: .8rem; }
+/* the beats column in a fight: the beat cut, the paused strip, the after-the-fight box */
+.cut { border: 1px solid var(--bad); border-radius: 10px; background: var(--panel); padding: 10px 16px; margin: 0 0 14px; scroll-margin-top: calc(var(--toph) + 8px); }
+.cut > h2 { font: 650 1rem var(--display); margin: 0 0 4px; color: var(--bad); }
+.cut > h2 .lk { font: 500 .8rem var(--body); margin-left: 6px; }
+.cut .cwho > div { padding: 2px 0; }
+.cut .now, .pts .now { font: 700 .72rem var(--mono); color: var(--panel); background: var(--bad); border-radius: 4px; padding: 0 5px; }
+.cut tr.lit td { background: var(--bad-soft); }
+.pstrip { position: sticky; top: var(--toph); z-index: 4; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; background: var(--lamp-soft); border: 1px solid var(--lamp); border-radius: 8px; padding: 5px 10px; margin: 0 0 12px; font-size: .82rem; }
+.pstrip ol { list-style: none; display: flex; flex-wrap: wrap; gap: 3px 10px; margin: 0; padding: 0; flex: 1; }
+.pstrip li.cur { font-weight: 700; color: var(--lamp); }
+.pstrip li.out { text-decoration: line-through; opacity: .6; }
+.pstrip .h { font: 600 .75rem var(--mono); color: var(--muted); }
+.after { border: 1px solid var(--lamp); background: var(--lamp-soft); border-radius: 10px; padding: 8px 14px; margin: 10px 0; }
+.after .ah { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.after .ah button { margin-left: auto; }
+.after ul { list-style: none; padding: 0; margin: 6px 0 0; }
+.after li { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; padding: 2px 0; }
 @media (max-width: 1000px) {
   .app { grid-template-columns: 1fr; }
   .rail { display: none; }
+  .side { position: static; height: auto; border-left: none; border-top: 1px solid var(--line); }
+  .app.part-side { grid-template-columns: 1fr; }
+  .app.part-side .side { overflow: visible; }
   .top .bar { flex-wrap: wrap; white-space: normal; }
 }

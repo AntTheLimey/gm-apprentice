@@ -538,7 +538,7 @@ describe('RS.upgrade (third review M3)', () => {
 
   it('keeps what is there, and keys it does not know', () => {
     const s = run([{ type: 'mark', point: GATE.points[0].key, mark: 'landed', beat: GATE.key, beatTitle: GATE.title, text: GATE.points[0].text }]);
-    s.fights = { later: true };
+    s.later = { fights: true };
     const up = RS.upgrade(s, fresh());
     assert.deepStrictEqual(up, s);
     assert.notStrictEqual(up, s, 'a copy');

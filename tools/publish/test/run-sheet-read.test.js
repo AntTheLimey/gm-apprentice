@@ -31,6 +31,7 @@ const write = (dir, rel, text) => {
   fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
   fs.writeFileSync(path.join(dir, rel), text);
 };
+const LUCAN_NOTE = 'Characters/NPCs/Lucan Grey.md';
 const bodyOf = (text) => text.replace(/^---\n[\s\S]*?\n---\n/, '');
 
 // The reverse: each line a beat keeps in `extra` is a line its sources hold (the Plan, the scene
@@ -90,6 +91,7 @@ describe('run sheet reader', () => {
     assert.strictEqual(m.notes['Locations/The Gate House.md'].withheld, true);
     assert.strictEqual(m.notes['Documents/Map of the Gate.md'].docType, 'map');
     assert.deepStrictEqual(m.notes['Characters/NPCs/Lucan Grey.md'].aliases, ['Lucan']);
+    assert.strictEqual(m.notes['Characters/NPCs/Lucan Grey.md'].unseenAs, '');
     for (const p of m.places) assert.ok(m.notes[p], p);
     // every Plan link is on the page; a link to nowhere warns once
     assert.deepStrictEqual(m.warnings.filter((w) => w.kind === 'not-on-page'), []);
@@ -983,6 +985,73 @@ describe('run sheet reader: loot items, Plan-line HP, carried unmaskings', () =>
       // masked in S1, unmasked in S2 only: since is S2's log; unmasked in both with no cancel: the earlier one
       logWith(dir, S2L, 'Session 02 - The Test', ['- [[Brother Ash]] as The Ember Abbot']);
       assert.strictEqual(readRunSheet(dir, p3, { party: PARTY }).notes[ASHP].unmask.since, S1_LOG);
+    });
+  });
+
+  it('a note carries unseen_as, trimmed', () => {
+    const dir = copy();
+    const lp = path.join(dir, LUCAN_NOTE);
+    fs.writeFileSync(lp, fs.readFileSync(lp, 'utf8').replace(/\r?\ntype: npc/, '\ntype: npc\nunseen_as: " a courier "'));
+    const m = readRunSheet(dir, PLAN, { party: PARTY });
+    assert.strictEqual(m.notes[LUCAN_NOTE].unseenAs, 'a courier');
+  });
+
+  describe('showable maps (5b)', () => {
+    const mapNote = (name, extra = '') => `---\nname: ${name}\ntype: document\ndoc_type: map\n${extra}---\n\nA map.\n`;
+    const GM = 'Documents/Map of the Gate (GM).md';
+    const GATE = 'Documents/Map of the Gate.md';
+
+    it('a GM map is never showable; its player twin is', () => {
+      const dir = copy();
+      write(dir, GM, mapNote('Map of the Gate (GM)'));
+      const m = readRunSheet(dir, PLAN, { party: PARTY });
+      assert.deepStrictEqual(m.showableMaps, [GATE]);
+      // a GM map named by player_version, with no (GM) in its name, is no more showable
+      write(dir, 'Documents/Cellar.md', mapNote('Cellar', 'player_version: "[[Cellar Sketch]]"\n'));
+      write(dir, 'Documents/Cellar Sketch.md', mapNote('Cellar Sketch'));
+      assert.deepStrictEqual(readRunSheet(dir, PLAN, { party: PARTY }).showableMaps, ['Documents/Cellar Sketch.md', GATE]);
+    });
+
+    it('a withheld map is not showable', () => {
+      const dir = copy();
+      write(dir, 'Documents/Hidden Vault.md', mapNote('Hidden Vault', 'withheld: true\n'));
+      assert.deepStrictEqual(readRunSheet(dir, PLAN, { party: PARTY }).showableMaps, [GATE]);
+    });
+
+    it('a map the publish list excludes is not showable', () => {
+      const dir = copy();
+      write(dir, 'Documents/Other.md', mapNote('Other'));
+      write(dir, '_meta/publish-list.yaml', `publishing:\n  - ${GATE}\n  - Documents/Other.md\nexcluded:\n  - Documents/Other.md\n`);
+      assert.deepStrictEqual(readRunSheet(dir, PLAN, { party: PARTY }).showableMaps, [GATE, 'Documents/Other.md'], 'publishing wins a double listing');
+      write(dir, '_meta/publish-list.yaml', `publishing:\n  - ${GATE}\nexcluded:\n  - Documents/Other.md\n`);
+      assert.deepStrictEqual(readRunSheet(dir, PLAN, { party: PARTY }).showableMaps, [GATE]);
+      write(dir, '_meta/publish-list.yaml', `publishing:\n  - Documents/Other.md\nexcluded:\n  - ${GATE}\n`);
+      assert.deepStrictEqual(readRunSheet(dir, PLAN, { party: PARTY }).showableMaps, ['Documents/Other.md']);
+    });
+
+    it('a map in a folder player_site.folder_map leaves out is not showable', () => {
+      const dir = copy();
+      write(dir, 'GM Maps/Back Stair.md', mapNote('Back Stair'));
+      // no map set (no site set up): each map's own rule
+      assert.deepStrictEqual(readRunSheet(dir, PLAN, { party: PARTY }).showableMaps, [GATE, 'GM Maps/Back Stair.md']);
+      write(dir, '_meta/vault-config.yaml', 'vault:\n  system: dnd-5e-2024\nplayer_site:\n  title: The Test Campaign\n  folder_map:\n    Documents: documents\n');
+      assert.deepStrictEqual(readRunSheet(dir, PLAN, { party: PARTY }).showableMaps, [GATE]);
+    });
+
+    it('no publish list: an ordinary map is showable', () => {
+      const dir = copy();
+      const m = readRunSheet(dir, PLAN, { party: PARTY });
+      assert.deepStrictEqual(m.showableMaps, [GATE]);
+      assert.ok(!m.warnings.some((w) => w.kind === 'map-list'));
+    });
+
+    it('a publish list that does not read leaves the list empty and warns', () => {
+      const dir = copy();
+      write(dir, '_meta/publish-list.yaml', 'publishing: [unclosed\n  - x: : :\n');
+      const m = readRunSheet(dir, PLAN, { party: PARTY });
+      assert.deepStrictEqual(m.showableMaps, []);
+      const w = m.warnings.filter((x) => x.kind === 'map-list');
+      assert.deepStrictEqual(w.map((x) => x.text), ['the publish list could not be read: no map can be Shown']);
     });
   });
 });

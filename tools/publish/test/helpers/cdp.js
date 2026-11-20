@@ -62,7 +62,8 @@ function connect(child) {
 const sleep = (ms) => new Promise((r) => { setTimeout(r, ms); });
 
 // Runs `fn(page)` in a fresh headless Chrome of the given size and returns what it returns.
-// `page`: goto(url), reload(), evaluate(expr), waitFor(expr, ms), screenshot(file), sleep(ms).
+// `page`: goto(url), reload(), evaluate(expr), waitFor(expr, ms), screenshot(file), sleep(ms), key(name, { shift }),
+// newTab(url) -> page.
 async function withPage({ width = 1449, height = 762, chrome = findChrome() } = {}, fn) {
   if (!chrome) throw new Error('no browser');
   return withChromeLock(async () => {
@@ -83,40 +84,66 @@ async function withPage({ width = 1449, height = 762, chrome = findChrome() } = 
       let target = targetInfos.find((t) => t.type === 'page');
       if (!target) target = { targetId: (await send('Target.createTarget', { url: 'about:blank' })).targetId };
       const { sessionId } = await send('Target.attachToTarget', { targetId: target.targetId, flatten: true });
-      const s = (method, params) => send(method, params, sessionId);
-      await s('Page.enable');
-      await s('Runtime.enable');
-      await s('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
-      const evaluate = async (expression) => {
-        const r = await s('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true });
-        if (r.exceptionDetails) throw new Error(`in the page: ${(r.exceptionDetails.exception && r.exceptionDetails.exception.description) || r.exceptionDetails.text}`);
-        return r.result.value;
+      // One page object per attached target; `newTab` makes another on the same pipe.
+      const makePage = async (sessionId) => {
+        const s = (method, params) => send(method, params, sessionId);
+        await s('Page.enable');
+        await s('Runtime.enable');
+        await s('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+        const evaluate = async (expression) => {
+          const r = await s('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true });
+          if (r.exceptionDetails) throw new Error(`in the page: ${(r.exceptionDetails.exception && r.exceptionDetails.exception.description) || r.exceptionDetails.text}`);
+          return r.result.value;
+        };
+        const waitFor = async (expression, ms = 15000) => {
+          const t0 = Date.now();
+          for (;;) {
+            let v = null;
+            try { v = await evaluate(expression); } catch { /* the page is loading */ }
+            if (v) return v;
+            if (Date.now() - t0 > ms) throw new Error(`timed out after ${ms} ms waiting for: ${expression}`);
+            await sleep(50);
+          }
+        };
+        return {
+          async goto(url) {
+            const r = await s('Page.navigate', { url });
+            if (r && r.errorText) throw new Error(`could not open ${url}: ${r.errorText}`);
+            return r;
+          },
+          reload: () => s('Page.reload', { ignoreCache: true }),
+          // A headless page has no window focus, so focus and blur fire no events; this makes them fire,
+          // for a test of what leaving a box does.
+          focusEvents: () => s('Emulation.setFocusEmulationEnabled', { enabled: true }),
+          evaluate,
+          waitFor,
+          sleep,
+          async screenshot(file, { full = false } = {}) {
+            const r = await s('Page.captureScreenshot', { format: 'png', captureBeyondViewport: full });
+            fs.writeFileSync(file, Buffer.from(r.data, 'base64'));
+          },
+          // A real key press (keyDown, then keyUp) on whatever has focus: Enter, Tab, Escape, or one character.
+          // `shift` holds Shift down, so `key('Tab', { shift: true })` goes backwards.
+          async key(name, { shift = false } = {}) {
+            const named = { Enter: [13, '\r'], Tab: [9, ''], Escape: [27, ''], Backspace: [8, ''] };
+            const one = String(name).length === 1;
+            if (!named[name] && !one) throw new Error(`key: no such key ${name}`);
+            const [vk, text] = named[name] || [String(name).toUpperCase().charCodeAt(0), name];
+            const ev = { key: name, code: one ? `Key${String(name).toUpperCase()}` : name, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk, modifiers: shift ? 8 : 0 };
+            await s('Input.dispatchKeyEvent', { type: text ? 'keyDown' : 'rawKeyDown', ...ev, ...(text ? { text, unmodifiedText: text } : {}) });
+            await s('Input.dispatchKeyEvent', { type: 'keyUp', ...ev });
+          },
+          // Another tab in the same browser, opened on `url` (its own event streams, its own page).
+          async newTab(url) {
+            const { targetId } = await send('Target.createTarget', { url: 'about:blank' });
+            const att = await send('Target.attachToTarget', { targetId, flatten: true });
+            const tab = await makePage(att.sessionId);
+            await tab.goto(url);
+            return tab;
+          },
+        };
       };
-      const waitFor = async (expression, ms = 15000) => {
-        const t0 = Date.now();
-        for (;;) {
-          let v = null;
-          try { v = await evaluate(expression); } catch { /* the page is loading */ }
-          if (v) return v;
-          if (Date.now() - t0 > ms) throw new Error(`timed out after ${ms} ms waiting for: ${expression}`);
-          await sleep(50);
-        }
-      };
-      const page = {
-        async goto(url) {
-          const r = await s('Page.navigate', { url });
-          if (r && r.errorText) throw new Error(`could not open ${url}: ${r.errorText}`);
-          return r;
-        },
-        reload: () => s('Page.reload', { ignoreCache: true }),
-        evaluate,
-        waitFor,
-        sleep,
-        async screenshot(file, { full = false } = {}) {
-          const r = await s('Page.captureScreenshot', { format: 'png', captureBeyondViewport: full });
-          fs.writeFileSync(file, Buffer.from(r.data, 'base64'));
-        },
-      };
+      const page = await makePage(sessionId);
       const result = await fn(page);
       try { await send('Browser.close'); } catch { /* gone already */ }
       return result;

@@ -65,6 +65,17 @@ describe('run sheet cast', () => {
     assert.deepStrictEqual([g.withheld, g.dead, g.status], [true, true, 'dead']);
   });
 
+  it('cast and notes carry unseen_as', () => {
+    const dir = copy();
+    const mephit = 'Creatures/Ice Mephit.md';
+    const mp = path.join(dir, mephit);
+    fs.writeFileSync(mp, fs.readFileSync(mp, 'utf8').replace(/\r?\ntype: creature/, '\ntype: creature\nunseen_as: "  a mephit "'));
+    const cast = readCast(buildIndex(dir), { carried: null });
+    assert.strictEqual(cast.find((c) => c.note === mephit).unseenAs, 'a mephit');
+    assert.strictEqual(cast.find((c) => c.note === WOLF).unseenAs, '');
+    assert.ok(cast.every((c) => typeof c.unseenAs === 'string'));
+  });
+
   it('cast warnings stay off the model', () => {
     const dir = copy();
     const m = readRunSheet(dir, PLAN, { party: [ADA] });

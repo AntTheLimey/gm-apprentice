@@ -23,10 +23,12 @@ function readCast(index, { carried = null } = {}) {
     cast.push({
       note: p,
       name: typeof fm.name === 'string' && fm.name.trim() ? fm.name.trim() : stemOf(p),
+      named: typeof fm.name === 'string' && Boolean(fm.name.trim()),
       type,
       aliases: nameList(fm.aliases),
       gmAliases: gmAliasList(fm),
       withheld: isWithheld(fm),
+      unseenAs: typeof fm.unseen_as === 'string' ? fm.unseen_as.trim() : '',
       status: fm.status === undefined || fm.status === null ? '' : String(fm.status),
       dead: fate.isDeadBody(body, fm),
       portrait: index.portrait(p),
