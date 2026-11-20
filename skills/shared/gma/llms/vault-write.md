@@ -379,7 +379,7 @@ Several writes at once: put this as a '=== table-log-new ...' block in `gma vaul
 | Argument | Value | Help |
 |---|---|---|
 | `--session` | `SESSION` | the session index: path or name |
-| `--created-by` | `session-play`, `vault-ingest`, `manual`, `run-sheet` | who files it, stamped as created_by (default manual) |
+| `--created-by` | `run-sheet`, `manual` | who files it, stamped as created_by (default manual) |
 | `--play-date` | `PLAY_DATE` | YYYY-MM-DD |
 | `--write` |  | write it (default: preview) |
 <!-- END GENERATED -->

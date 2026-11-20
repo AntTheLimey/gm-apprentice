@@ -3964,8 +3964,9 @@ def cmd_resolve(batch: Batch, args: argparse.Namespace, _text: str) -> None:
 
 # Who files a play record, as its `created_by` says (--created-by).
 CREATED_BY = ("session-play", "vault-ingest", "manual")
-# The run sheet writes the Table Log and nothing else.
-TABLE_LOG_CREATED_BY = (*CREATED_BY, "run-sheet")
+# The run sheet writes the Table Log and nothing else; session-play never
+# writes one (spec: one writer per record), so it is not offered here.
+TABLE_LOG_CREATED_BY = ("run-sheet", "manual")
 
 # Each play record: (its label, the file name's suffix, its `type:`).
 PLAY_RECORDS = {
