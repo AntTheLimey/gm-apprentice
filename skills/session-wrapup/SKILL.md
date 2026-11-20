@@ -50,7 +50,7 @@ paused one finishing tonight too): a block
 `=== scene-played --scene "<scene>" --session "<session index>"`.
 One the notes show stopped part-way (planned, resumed or born at the
 table): confirm with the GM that it paused, then write from the Play
-Notes what the GM needs to pick it up cold. Examples, not a list to
+Notes (and the Table Log's `Stopped in`, if any) what the GM needs to pick it up cold. Examples, not a list to
 fill: a fight's initiative order with NPCs and monsters, the round,
 each combatant's condition and position, PC vitals from step 1's
 `flush` summary if any; a social set piece's progress, conversations
@@ -242,7 +242,7 @@ the narrative. Apply the house rules as you would the book.
    them in place (fields: `shared/pc-body-structure.md`). Don't
    read or hand-edit the sheet.
 3. Write an advancement change (XP, points) to a sheet only when
-   the Play Notes or the GM give the amount; a missing award goes
+   the Table Log's `Advancement`, the Play Notes or the GM give the amount; a missing award goes
    in the Keeper Checklist.
 4. End-of-session vitals the Table Log's `Vitals at the end` has for
    the PC, else the Play Notes or the GM give (HP, Hit
@@ -252,10 +252,14 @@ the narrative. Apply the house rules as you would the book.
    wrong key's refusal lists the keys). A value not given is left alone, never guessed. A field
    step 1's flush changed is the player's: leave it as flush wrote
    it, and where the notes disagree, 5b's review names both for the
-   GM. Where the Table Log's HP differs from what flush wrote, the
-   review shows both and the GM picks; write nothing to that sheet
-   until then. An ally's vitals go in its note's Current Status prose.
-   Loot goes to whoever the Table Log's `Loot` names.
+   GM. Where the Table Log's HP differs from what flush wrote, leave
+   `hp=` out of that PC's `=== sheet` block and show both in 5b's
+   review; on the GM's pick, add it before `--write`. With no answer (a
+   headless run), flush's value stands and the review says so. With a
+   Table Log: an ally's end vitals stay in it, where the next run sheet
+   reads them (write nothing to the ally's note for them), and loot goes
+   in the `Carrying` of whoever its `Loot` names (a PC's `=== status`
+   block).
 
 Each PC's refreshed fields show in full in step 5b's review; write
 no receipt into the Wrap-Up — the PC sheet is the record.
@@ -458,7 +462,8 @@ a batch's write names, outside the session's own folder, and per
 note edited by hand after it. On a `# warning: --also` line, fix that path and run the
 scan again. On "no publish list", skip this step silently;
 on "could not ask the publish tool", tell the GM the reason and skip.
-From the Play Notes, the Wrap-Up and the recap, propose one list of
+From the Play Notes, the Wrap-Up and the recap (and a Table Log's
+`Unmasked this session` and `Handouts handed over`), propose one list of
 what came out: people, places and things met or learned of; secrets
 now known, by page, from the scan's hidden parts; clues found; props
 handed over or shown; places visited. Never propose from the Plan or

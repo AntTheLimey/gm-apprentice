@@ -82,7 +82,7 @@ which Obsidian resolves via its attachment paths.
 
 ## Session Document Chain
 
-Each session has an index hub and up to three documents
+Each session has an index hub and its documents
 (standard: `shared/session-document-chain.md`):
 
 ```text
