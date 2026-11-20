@@ -39,7 +39,8 @@ function linkHtml({ bang, inner }, index) {
 function toHtml(text, index, { inline = false } = {}) {
   if (text === null || text === undefined || text === '') return '';
   const links = [];
-  const src = String(text).replace(/[]/g, '').replace(/(!?)\[\[([^\]\n]+?)\]\]/g, (m, bang, inner) => {
+  // An HTML comment (a `<!-- gm-only -->` fence) is never shown: `html: false` would print it as text.
+  const src = String(text).replace(/<!--[\s\S]*?-->/g, '').replace(/[]/g, '').replace(/(!?)\[\[([^\]\n]+?)\]\]/g, (m, bang, inner) => {
     links.push({ bang: bang === '!', inner });
     return `${OPEN}${links.length - 1}${SHUT}`;
   });
@@ -67,6 +68,7 @@ function present(model, { index }) {
     for (const x of b.ifs || []) addHtml(x, ['do', 'then'], index, true);
     for (const t of b.treasure || []) addHtml(t, ['text'], index, true);
     for (const w of b.who || []) addHtml(w, ['wants', 'playAs'], index, true);
+    for (const a of b.arrivals || []) addHtml(a, ['text'], index, true);
   }
   for (const p of m.prep || []) addHtml(p, ['md'], index, false);
   if (typeof m.threads === 'string') m.threadsHtml = toHtml(m.threads, index);
