@@ -172,6 +172,17 @@ class InstallPromptTests(unittest.TestCase):
         self.assertIn("/plugin install gm-apprentice", self.manual)
         self.assertIn("claude plugin install gm-apprentice@gm-apprentice", self.steps)
 
+    def test_an_older_install_is_brought_up_to_the_latest_release(self):
+        # #814: "already installed" left 1.12.96 in place, which has no doctor.
+        for line in ("claude plugin marketplace update gm-apprentice", "claude plugin update gm-apprentice@gm-apprentice",
+                     "codex plugin marketplace upgrade gm-apprentice"):
+            self.assertIn(line, self.steps)
+        self.assertIn("codex plugin marketplace upgrade gm-apprentice", self.manual)
+        self.assertIn("unknown command 'doctor'", self.steps)
+        # The update lines follow the install lines, so a new install runs them too.
+        self.assertLess(self.steps.index("claude plugin install"), self.steps.index("claude plugin update"))
+        self.assertLess(self.steps.index("marketplace upgrade"), self.steps.index("codex plugin add"))
+
     def test_it_checks_with_doctor_and_the_floors_match(self):
         self.assertIn("skills/shared/scripts/gma.py", self.steps)
         self.assertIn('python3 "<that path>" doctor', self.steps)
