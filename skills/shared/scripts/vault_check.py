@@ -2999,9 +2999,10 @@ GM_AFTER_POSSESSIVE = frozenset((
 # Types never meant for players: prep, meta, and the raw play records
 # (filed with `publish: false`; the player site does not page them). Flagging
 # their (correctly) Keeper-facing headings would bury the findings that
-# matter. A play record without `publish: false` in a vault with no publish
-# list would publish; the update's `play-records-publish` check marks those
-# older notes (#692).
+# matter. Play Notes or an Export without `publish: false` in a vault with no
+# publish list would publish; the update's `play-records-publish` check marks
+# those older notes (#692). A Table Log never publishes, whatever `publish:`
+# says (the tool's TABLE_LOG verdict), so the tool's answer always skips it.
 GM_LEAK_SKIP_TYPES = {"session-plan", *PLAY_RECORD_TYPES, "plan", "meta"}
 
 # A bold label opening a paragraph: `**Secret:** he lied.` The colon is

@@ -169,9 +169,10 @@ points landed, what was handed over, loot and vitals. It is the third
 play record, beside the Play Notes and the Export, and its own file with
 one writer: the run sheet (written by hand until the run sheet's
 table command exists). session-play never writes a Table Log. It is linked as
-`documents.table_log`, the site treats it as it treats the Play Notes
-(`publish: false` keeps it off the player site; the GM site still gives
-it a page), and session-wrapup reads it. A Table Log is numbers, not
+`documents.table_log`. It is never a player-site page, whatever its
+`publish:` says or a publish list holds: it carries foes' numbers,
+unmasked names and the GM's vitals. The GM site always gives it a page,
+and session-wrapup reads it. A Table Log is numbers, not
 narrative, so it is never a Wrap-Up's `source_document`.
 
 ```yaml
