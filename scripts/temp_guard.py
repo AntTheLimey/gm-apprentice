@@ -21,7 +21,11 @@ import os
 import sys
 import tempfile
 
-ALLOWED = ("node-compile-cache", "pytest-of-*", "com.apple.*", "systemd-private-*")
+# scoped_dir* and contentlinkingd: a Mac Chrome driven over --remote-debugging-pipe
+# writes these outside TMPDIR, and they can't be told from the GM's own running
+# Chrome's, so the tests must not delete them; on a CI runner they are harmless.
+ALLOWED = ("node-compile-cache", "pytest-of-*", "com.apple.*", "systemd-private-*",
+           "scoped_dir*", "contentlinkingd")
 
 
 def entries() -> set[str]:
