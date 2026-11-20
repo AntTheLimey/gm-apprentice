@@ -484,7 +484,8 @@ function findSecretNames(html, names, { publicWords, holders = null, linkHolders
   // there nothing is blanked: every word on it is taken from some note.
   const blank = (text) => (listing ? text : text.replace(/\u0002([^\u0003]*)\u0003/g, (m, inner) => {
     if (publicWords.has(fold(inner))) return LINK_OPEN.repeat(m.length);
-    return linkHolders ? m.replace(linkHolders, (h) => LINK_OPEN.repeat(h.length)) : m;
+    // One line at a time: a card's title and the excerpt under it are separate lines, and a public name in neither.
+    return linkHolders ? m.split('\n').map((line) => line.replace(linkHolders, (h) => LINK_OPEN.repeat(h.length))).join('\n') : m;
   }));
   const body = foldQuotes(pageText(bodyHtml, { links: 'fence' }));
   const bodyOwn = blank(body);

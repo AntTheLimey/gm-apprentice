@@ -407,6 +407,15 @@ describe('a name only an index or listing page prints', () => {
     const loud = site(moor('Rook nests here.'));
     assert.ok(fromBuild(loud.configPath).filter(alias).some((f) => f.path === 'Locations/The_Moor.md'));
     assert.ok(pages(loud).includes('locations/the-moor.html'), JSON.stringify(pages(loud)));
+    // A public name is matched within one line of a card: the title "Old" and an excerpt opening "Rook" are not the
+    // public name "Old Rook".
+    const split = site({
+      'Characters/NPCs/The_Stranger.md': npcs('gm_aliases: ["Rook"]\n'),
+      'Locations/The_Moor.md': '---\ntype: location\n---\n\nWide and wet.\n',
+      'Locations/Old.md': '---\ntype: location\nparent_location: "[[The_Moor]]"\n---\n\nRook nests here.\n',
+      'Locations/Old_Rook.md': '---\ntype: location\n---\n\nA crag.\n',
+    });
+    assert.ok(fromBuild(split.configPath).filter(alias).some((f) => f.path === 'Locations/The_Moor.md'));
   });
 
   it('ALIAS_IN_PROSE: found where an index card only carries it, in an attribute its filter reads', async () => {
