@@ -1,8 +1,9 @@
 # Quickstart: Your First Campaign
 
 From a spark of an idea to your first session. This assumes you've
-[installed gm-apprentice](../README.md#installation) and know your way
-around a tabletop RPG, but are new to using Claude as a GM tool.
+[installed gm-apprentice](../README.md#installation) (the README has a
+prompt that has your agent do it for you) and know your way around a
+tabletop RPG, but are new to using Claude as a GM tool.
 
 You talk to Claude normally — "skills" activate automatically from what
 you ask. You never pick one by hand. When you say "help me start a new

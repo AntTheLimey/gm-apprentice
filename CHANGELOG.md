@@ -10,6 +10,13 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 ---
 
 
+## [1.12.104] — 2026-11-20
+
+### Added
+
+- An install prompt in the README: paste it into your agent and it checks Python and Node, installs gm-apprentice the way that agent takes plugins or skills, and checks the install.
+- `gma doctor` checks a machine is ready (Python, the skills' version, Node, the publish tool) and says what to do about anything missing. It changes nothing.
+
 ## [1.12.102] — 2026-11-19
 
 ### Fixed
