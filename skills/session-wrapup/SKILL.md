@@ -132,7 +132,8 @@ decided. Of the point states only `Points landed` is something the
 players have: the other four feed Skipped Prep, never the recap, a
 PC's fields or 5c's list. An empty or missing section is nothing
 recorded, not "none happened". Step 5b's review names each
-disagreement with both versions and which won.
+disagreement (a number, an item, a point or a quote in its `Log`) with
+both versions and which won.
 Read the PC roster and the session's Plan for planned-vs-actual.
 `gma plan-check <plan> --inventory` gives per-section status and
 word counts but not scene titles — open the plan body for those.
