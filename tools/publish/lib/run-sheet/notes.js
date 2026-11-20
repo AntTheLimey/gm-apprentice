@@ -248,7 +248,31 @@ function buildIndex(vaultPath, { deps } = {}) {
       return sec ? sec.text : '';
     },
     notes() { return pages.map((p) => p.path); },
+    // The item (or prop) note a loot line is about: the note its leading link names, else the note whose
+    // name or alias opens the line, up to a `(`, a `,` or the end. Null when no item note does.
+    itemOf(text) {
+      const t = String(text == null ? '' : text).replace(/^[\s*_]+/, '');
+      const isItem = (p) => {
+        if (p === null || !byPath.has(p)) return false;
+        const type = String(byPath.get(p).fm.type || '').trim().toLowerCase();
+        return type === 'item' || type === 'prop';
+      };
+      const link = /^\[\[([^\]]+)\]\]/.exec(t);
+      const lead = link ? link[1] : t.split(/[(,]/)[0].replace(/[\s*_.:;]+$/, '');
+      const hit = lead ? self.resolve(lead) : null;
+      return isItem(hit) ? hit : null;
+    },
     has(p) { return typeof p === 'string' && byPath.has(p); },
+    // The picture an embed names (`rook.png`, `Pictures/rook.png`), vault-relative, or null: one in the
+    // pictures folder by its name, else a vault path that is there. Never a folder the reader skips.
+    picture(name) {
+      const n = String(name == null ? '' : name).trim().replace(/\\/g, '/').replace(/^\/+/, '');
+      if (!n || !/\.(jpe?g|png|webp|gif|svg|avif)$/i.test(n) || n.split('/').includes('..')) return null;
+      const hit = attached()[path.posix.basename(n)];
+      let rel = hit ? toPosix(path.relative(vaultPath, hit.sourcePath)) : null;
+      if (!rel && rd.exists(path.join(vaultPath, ...n.split('/')))) rel = n;
+      return rel && !isLeftOut(rel) ? rel : null;
+    },
     // The note's portrait picture, vault-relative, or null. A portrait the frontmatter names that no
     // picture the reader sees matches warns `no-portrait` on that note. `field` names another
     // picture field read the same way (a disguised NPC's `unmasked_portrait`).

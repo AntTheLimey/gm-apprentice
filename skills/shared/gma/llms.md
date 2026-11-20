@@ -30,7 +30,7 @@ gma <command> ... [options]
 | Argument | Value | Help |
 |---|---|---|
 | `--version` |  | print the plugin version |
-| `<command>` | `dnd-ddb`, `dnd-sheet`, `doctor`, `graph-check`, `gurps-check`, `gurps-skill-default`, `image`, `index-build`, `ingest-images`, `ingest-survey`, `links`, `migrate`, `moments`, `personal`, `plan-check`, `plans-index`, `prop-move`, `reconcile-promote`, `reconcile-scan`, `relink`, `reveal`, `reveal-scan`, `rules-lookup`, `scene-queue`, `schema-rules`, `section`, `session-context`, `stamp-entities`, `stat-fill`, `tones`, `update`, `vault-check`, `vault-scaffold`, `vault-search`, `vault-write`, `workaround`, `publish`, `tool`, `llms` | the command to run; each has its own --help |
+| `<command>` | `dnd-ddb`, `dnd-sheet`, `doctor`, `graph-check`, `gurps-check`, `gurps-skill-default`, `image`, `index-build`, `ingest-images`, `ingest-survey`, `links`, `migrate`, `moments`, `personal`, `plan-check`, `plans-index`, `prop-move`, `reconcile-promote`, `reconcile-scan`, `relink`, `reveal`, `reveal-scan`, `rules-lookup`, `scene-queue`, `schema-rules`, `section`, `session-context`, `stamp-entities`, `stat-fill`, `tones`, `update`, `vault-check`, `vault-scaffold`, `vault-search`, `vault-write`, `workaround`, `table`, `publish`, `tool`, `llms` | the command to run; each has its own --help |
 <!-- END GENERATED -->
 
 <!-- BEGIN GENERATED: gma llms -->
@@ -88,6 +88,7 @@ Example: `gma llms relink`
 | `vault-search` | `gma llms vault-search` | Ranked vault search. |
 | `vault-write` | `gma llms vault-write` | Place text the apprentice wrote into vault notes. |
 | `workaround` | `gma llms workaround` | Record the vault's workarounds by the issue each stands in for. |
+| `table` | `gma llms table` | Run tonight's session from the run sheet: a live page on this computer. |
 | `publish` | `gma llms publish` | Build and deploy the campaign site (runs the publish tool under node). |
 | `tool` | `gma llms tool` | Download the publish tool (installs without it), or print where it is. |
 | `llms` | this page | The command reference: when to use each command, its flags, an example. |

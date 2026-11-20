@@ -24,7 +24,8 @@ const { readSettings } = require('../settings/read');
 const { readerFrom } = require('../vault-reader');
 const { isWithheld, nameList, unmaskedNames, unmaskedNameUnread } = require('../processor');
 const { canonicalNfc } = require('../unicode');
-const { SESSION_PLAYED } = require('../shared-lists');
+const { tableLogOf, isPlayed } = require('./sessions');
+const { readCast } = require('./cast');
 
 const toPosix = (p) => p.split(path.sep).join('/');
 const low = (s) => canonicalNfc(String(s == null ? '' : s)).trim().toLowerCase();
@@ -146,10 +147,18 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
   }
 
   let system = null;
+  let campaign = path.basename(path.resolve(vaultPath));
+  const withheldWords = { person: 'someone', place: 'somewhere' };
   try {
     // Settings values are nested by group: `vault.system` is values.vault.system.
     const values = readSettings({ vaultPath, deps }).values || {};
     system = (values.vault && values.vault.system) || null;
+    const site = values.player_site || {};
+    if (typeof site.title === 'string' && site.title.trim()) campaign = site.title.trim();
+    for (const k of ['person', 'place']) {
+      const w = site.withheld_words && site.withheld_words[k];
+      if (typeof w === 'string' && w.trim()) withheldWords[k] = w;
+    }
   } catch (err) {
     warnings.push({ kind: 'unreadable-settings', note: null, text: `the vault's settings could not be read (${firstLine(err.message)}): the game system is unknown` });
   }
@@ -199,6 +208,21 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
     beat.foes = r.foes;
     beat.treasure.push(...r.treasure);
     add(r.warnings);
+  }
+  // An ally's own Plan line may state where they stand ("32 of 38 HP"): the first such figure in Plan
+  // order is the figure for every row of that ally, in every beat, and wins over the Table Log and the
+  // note. The second number is a reading aid; the note's HP stays the maximum.
+  const planHp = new Map();
+  for (const beat of beats) {
+    for (const w of beat.who) {
+      const m = w.note && /(\d+)\s*(?:of|\/)\s*(\d+)\s*HP\b/i.exec(w.wants || '');
+      if (m && !planHp.has(w.note)) planHp.set(w.note, Number(m[1]));
+    }
+  }
+  for (const beat of beats) {
+    for (const f of beat.foes) {
+      if (f.ally && planHp.has(f.note)) { f.hpNow = planHp.get(f.note); f.carriedFrom = plan; }
+    }
   }
   const pcsRead = readPcs(body, index, party);
   add(pcsRead.warnings);
@@ -289,6 +313,8 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
 
   const model = {
     system,
+    campaign,
+    withheldWords,
     plan,
     session: { index: sessionIndex, title, chapter, number },
     brief: { overview: joined('overview'), world: joined('world'), stops: joined('stops') },
@@ -303,6 +329,7 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
     threads: joined('threads'),
     runLong,
     prep,
+    cast: [],
     notes: {},
     links: {},
     warnings: [],
@@ -336,6 +363,8 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
     model.notes[s] = noteOf(s);
   }
   if (!model.notes[plan]) model.notes[plan] = noteOf(plan, fm);
+  // The cast is read last: its notes are never "touched", and its warnings stay on each entry.
+  model.cast = readCast(index, { carried });
   return model;
 
   // The index's answer, asked once per note (a picture that cannot be found is its warning).
@@ -379,7 +408,7 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
         warnings.push({ kind: 'unmask', note: p, text: `unmasked_portrait is set but unmasked_name is empty${noSheet}` });
       }
       const name = names.length === 1 ? names[0] : null;
-      unmasks.set(p, name ? { name, portrait: index.portrait(p, 'unmasked_portrait'), playAs: unmaskedPlayAsOf(p, index) } : null);
+      unmasks.set(p, name ? { name, portrait: index.portrait(p, 'unmasked_portrait'), playAs: unmaskedPlayAsOf(p, index), since: carried ? carried.unmaskedSince(p) : null } : null);
     }
     return unmasks.get(p);
   }
@@ -407,30 +436,10 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
     const at = order.findIndex((pg) => pg.rel === sessionIndex);
     if (at < 1) return null;
     const earlier = order.slice(0, at).map((pg) => pg.rel).reverse();
-    const RECORDS = ['play_notes', 'export', 'table_log', 'wrap_up'];
-    const played = (s) => {
-      const sfm = fmOf(s);
-      const docs = sfm.documents && typeof sfm.documents === 'object' ? sfm.documents : {};
-      return SESSION_PLAYED.has(low(sfm.status)) || RECORDS.some((k) => fmTarget(docs[k]));
-    };
     const logOf = (s) => {
-      const docs = fmOf(s).documents;
-      const t = fmTarget(docs && typeof docs === 'object' ? docs.table_log : null);
-      if (!t) {
-        const named = index.notes().filter((n) => low(fmOf(n).type) === 'session-table-log' && index.resolve(fmTarget(fmOf(n).session) || null) === s);
-        return named.length === 1 ? named[0] : null;
-      }
-      const log = index.resolve(t);
-      if (log === null) {
-        const why = (index.linkProblem(t) || {}).text || `[[${t}]] matches no note in the vault`;
-        warnings.push({ kind: 'table-log', note: s, text: `its documents.table_log ${why}: allies start from their notes` });
-        return null;
-      }
-      if (low(fmOf(log).type) !== 'session-table-log') {
-        warnings.push({ kind: 'table-log', note: s, text: `its documents.table_log links ${log}, which is not type: session-table-log: it is not read for the allies` });
-        return null;
-      }
-      return log;
+      const r = tableLogOf(index, s);
+      if (r.warning) warnings.push(r.warning);
+      return r.log;
     };
     // Per earlier played session, newest first, read when first asked: Map<note path, hit points>.
     const read = [];
@@ -439,14 +448,17 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
     const readNext = () => {
       while (next < earlier.length) {
         const s = earlier[next++];
-        if (!played(s)) continue;
+        if (!isPlayed(index, s)) continue;
         const log = logOf(s);
         if (!log) continue;
         const hp = new Map();
+        const blank = new Set(); // a row with an empty HP cell: this log recorded nothing for that copy
         const t = readTableLog(index.read(log).body);
         if (t.unnamed) warnings.push({ kind: 'table-log', note: log, text: `${VITALS}: a table's header row names none of Who, HP or Conditions, so it is not read: nobody starts from it` });
-        // An empty HP cell is nothing recorded: the walk goes on past it. An unreadable one stops it.
-        const unreadWho = new Set(t.unread.map((u) => low(u.who)));
+        // An empty HP cell is nothing recorded: the walk goes on past it. An unreadable one stops it,
+        // for its own ally and copy only.
+        const rowKey = (who, copy) => `${low(who)}#${copy > 1 ? copy : 1}`;
+        const unreadWho = new Set(t.unread.map((u) => rowKey(u.who, u.copy)));
         for (const v of t.vitals) {
           const who = index.resolve(v.who);
           if (who === null) {
@@ -456,8 +468,9 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
             warnings.push({ kind: 'table-log', note: log, text: `${VITALS}: ${why}; nobody starts from that row` });
             continue;
           }
-          if (v.hpNow === null && !unreadWho.has(low(v.who))) continue;
-          if (!hp.has(who)) hp.set(who, v.hpNow);
+          const id = v.copy > 1 ? `${who}#${v.copy}` : who;
+          if (v.hpNow === null && !unreadWho.has(rowKey(v.who, v.copy))) { blank.add(id); continue; }
+          if (!hp.has(id)) hp.set(id, v.hpNow);
         }
         const unread = new Set();
         for (const u of t.unread) {
@@ -467,22 +480,52 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
           unread.add(k);
           warnings.push({ kind: 'table-log', note: log, text: `${VITALS}: the HP cell "${u.cell}" for [[${u.who}]] holds no number it can read (current/max or current): it starts from its note` });
         }
-        read.push({ log, hp });
+        // `Unmasked this session`: `- [[Note]] as Name` unmasks, `- [[Note]] masked again` cancels.
+        const unmasked = [];
+        for (const b of pt.bullets(t.sections.get('Unmasked this session') || '')) {
+          const target = pt.links(b.text)[0];
+          const note = target ? index.resolve(target) : null;
+          if (note !== null) unmasked.push({ note, on: !/\bmasked again\s*[.!]?\s*$/i.test(b.text) });
+        }
+        read.push({ log, hp, blank, unmasked });
         return true;
       }
       return false;
     };
     const found = new Map();
+    let since = null;
     return {
-      of(note) {
-        if (!found.has(note)) {
+      // The log an unmasking began in, walking every earlier played log oldest first: a later
+      // `masked again` cancels it, a later unmasking after that begins it afresh. Null when the
+      // note is masked. Reads every earlier log, so it is asked only of a note that has an Unmask.
+      unmaskedSince(note) {
+        if (since === null) {
+          while (readNext());
+          since = new Map();
+          for (const r of [...read].reverse()) {
+            for (const u of r.unmasked) {
+              if (!u.on) since.delete(u.note);
+              else if (!since.has(u.note)) since.set(u.note, r.log);
+            }
+          }
+        }
+        return since.get(note) || null;
+      },
+      // Copy 2 and up read their own row (`Guard 2`), falling back to the note's copy-less row.
+      of(note, copy = 1) {
+        const id = copy > 1 ? `${note}#${copy}` : note;
+        if (!found.has(id)) {
           let hit = null;
           for (let i = 0; hit === null && (i < read.length || readNext()); i++) {
-            if (read[i].hp.has(note)) hit = { hp: read[i].hp.get(note), log: read[i].log };
+            const h = read[i].hp;
+            // a blank row of this copy's own: nothing recorded here, never the copy-less row instead
+            if (!h.has(id) && read[i].blank.has(id)) continue;
+            const k = h.has(id) ? id : note;
+            if (h.has(k)) hit = { hp: h.get(k), log: read[i].log };
           }
-          found.set(note, hit);
+          found.set(id, hit);
         }
-        return found.get(note);
+        return found.get(id);
       },
     };
   }

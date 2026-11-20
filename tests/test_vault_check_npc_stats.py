@@ -671,5 +671,69 @@ class StockRowsTests(unittest.TestCase):
         self.assertEqual(run([str(root), "names", "--stock"])[0], 2)
 
 
+
+class HiddenFateAsksTheTool(unittest.TestCase):
+    """#788: the hidden-fate rule is the publish tool's; is_dead asks it."""
+
+    def setUp(self):
+        self._ask = npc_stats.vl.PUBLISH_LINES.ask
+        self._warned = npc_stats._FATE_WARNED
+        npc_stats._FATE_WARNED = False
+
+    def tearDown(self):
+        npc_stats.vl.PUBLISH_LINES.ask = self._ask
+        npc_stats._FATE_WARNED = self._warned
+
+    def test_is_dead_asks_the_tool(self):
+        seen = []
+
+        def ask(request):
+            seen.append(request)
+            return {"fate": "Dead.", "dead": True}
+        npc_stats.vl.PUBLISH_LINES.ask = ask
+        text = npc("### Behind the Scenes\n\n- **Dead.** Fell.")
+        self.assertTrue(npc_stats.is_dead(text, {"status": "alive"}))
+        self.assertEqual(seen, [{"op": "fate", "text": text}])
+        self.assertEqual(npc_stats.hidden_fate(text), "Dead.")
+
+    def test_is_dead_falls_back_to_status_warning_once(self):
+        def ask(request):
+            raise npc_stats.vl.PublishToolUnavailable("no node")
+        npc_stats.vl.PUBLISH_LINES.ask = ask
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            self.assertTrue(npc_stats.is_dead("x", {"status": "dead"}))
+            self.assertFalse(npc_stats.is_dead("x", {"status": "alive"}))
+            self.assertIsNone(npc_stats.hidden_fate("x"))
+        lines = err.getvalue().splitlines()
+        self.assertEqual(lines, [
+            "npc_stats: hidden fates not read (could not ask the publish "
+            "tool: no node); status alone decides who is dead"])
+
+    def test_an_answer_without_dead_is_a_tool_that_cannot_say(self):
+        npc_stats.vl.PUBLISH_LINES.ask = lambda request: {"kinds": []}
+        with contextlib.redirect_stderr(io.StringIO()):
+            self.assertTrue(npc_stats.is_dead("x", {"status": "dead"}))
+
+    def test_a_tool_that_failed_is_not_asked_again(self):
+        calls = []
+
+        def ask(request):
+            calls.append(request)
+            raise npc_stats.vl.PublishToolUnavailable("no node")
+        npc_stats.vl.PUBLISH_LINES.ask = ask
+        with contextlib.redirect_stderr(io.StringIO()):
+            for _ in range(3):
+                npc_stats.is_dead("x", {"status": "alive"})
+            npc_stats.hidden_fate("x")
+        self.assertEqual(len(calls), 1)
+
+    def test_no_fate_in_the_answer_leaves_status_to_the_callers_note(self):
+        npc_stats.vl.PUBLISH_LINES.ask = lambda request: {
+            "fate": None, "dead": False}
+        self.assertTrue(npc_stats.is_dead("x", {"status": "dead"}))
+        self.assertFalse(npc_stats.is_dead("x", {"status": "alive"}))
+
+
 if __name__ == "__main__":
     unittest.main()

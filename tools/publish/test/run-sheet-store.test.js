@@ -1,0 +1,462 @@
+'use strict';
+const { describe, it, after } = require('node:test');
+const assert = require('node:assert');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const { createStore, lockHolder, readLock, inCloudOnly, REV_GAP, SF_DATALESS } = require('../lib/run-sheet/store');
+
+const made = [];
+const tmp = () => {
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'rs-store-'));
+  made.push(d);
+  return d;
+};
+after(() => { for (const d of made) fs.rmSync(d, { recursive: true, force: true }); });
+
+const wait = (ms) => new Promise((r) => { setTimeout(r, ms); });
+const ID = 'chapter-1--session-02-the-test';
+const fileIn = (dir) => path.join(dir, '_meta', 'table', `${ID}.json`);
+const readJson = (f) => JSON.parse(fs.readFileSync(f, 'utf8'));
+const S = (extra = {}) => ({ points: {}, jots: [], ...extra });
+
+// A store on a temp file with short waits; closed by the caller.
+function mk(dir, opts = {}) {
+  const store = createStore({ file: fileIn(dir), stateId: ID, delayMs: 40, retryMs: [20, 20], ...opts });
+  store.load();
+  return store;
+}
+
+describe('run sheet state store', () => {
+  it('writes once per second however many puts', async () => {
+    const dir = tmp();
+    let writes = 0;
+    const realFs = fs;
+    const spy = { ...realFs, renameSync: (a, b) => { writes++; return realFs.renameSync(a, b); } };
+    const store = mk(dir, { fs: spy, delayMs: 60 });
+    let rev = 0;
+    for (let i = 0; i < 5; i++) rev = store.put({ stateId: ID, base: rev, state: S({ n: i }) }).rev;
+    assert.strictEqual(rev, 5);
+    assert.strictEqual(writes, 0, 'nothing written inside the wait');
+    await wait(120);
+    assert.strictEqual(writes, 1);
+    assert.strictEqual(readJson(fileIn(dir)).n, 4);
+    await store.close();
+  });
+
+  it('rev and stateId survive a restart', async () => {
+    const dir = tmp();
+    const a = mk(dir);
+    a.put({ stateId: ID, base: 0, state: S() });
+    a.put({ stateId: ID, base: 1, state: S({ x: 1 }) });
+    await a.close();
+    const b = createStore({ file: fileIn(dir), stateId: ID, delayMs: 40 });
+    const loaded = b.load();
+    assert.strictEqual(loaded.rev, 2);
+    assert.strictEqual(loaded.stateId, ID);
+    assert.strictEqual(b.get().rev, 2);
+    assert.deepStrictEqual(b.put({ stateId: ID, base: 2, state: S() }), { rev: 3 });
+    await b.close();
+  });
+
+  it("a put with another stateId conflicts 'session'; a stale base conflicts 'stale'; neither writes", async () => {
+    const dir = tmp();
+    const store = mk(dir);
+    store.put({ stateId: ID, base: 0, state: S({ ok: 1 }) });
+    await store.close();
+    const before = fs.readFileSync(fileIn(dir), 'utf8');
+    const s2 = mk(dir);
+    assert.deepStrictEqual(s2.put({ stateId: 'other--session', base: 1, state: S({ bad: 1 }) }), { conflict: 'session', rev: 1 });
+    assert.deepStrictEqual(s2.put({ stateId: ID, base: 0, state: S({ bad: 2 }) }), { conflict: 'stale', rev: 1 });
+    assert.strictEqual(s2.get().state.bad, undefined);
+    await wait(80);
+    await s2.close();
+    assert.strictEqual(fs.readFileSync(fileIn(dir), 'utf8'), before);
+  });
+
+  it('a PUT cannot change recordHash', async () => {
+    const dir = tmp();
+    const store = mk(dir);
+    store.setServer({ recordHash: 'abc' });
+    const r = store.put({ stateId: ID, base: 0, state: S({ recordHash: 'evil', rev: 99, stateId: 'nope' }) });
+    assert.deepStrictEqual(r, { rev: 1 });
+    const { state, rev } = store.get();
+    assert.strictEqual(rev, 1);
+    assert.strictEqual(state.recordHash, 'abc');
+    assert.strictEqual(state.rev, 1);
+    assert.strictEqual(state.stateId, ID);
+    await store.close();
+    const disk = readJson(fileIn(dir));
+    assert.strictEqual(disk.recordHash, 'abc');
+    assert.strictEqual(disk.rev, 1);
+    assert.strictEqual(disk.stateId, ID);
+  });
+
+  it('setServer schedules a write without a rev bump', async () => {
+    const dir = tmp();
+    const store = mk(dir);
+    store.put({ stateId: ID, base: 0, state: S() });
+    await wait(80);
+    store.setServer({ recordHash: 'h1', rev: 50 });
+    assert.strictEqual(store.get().rev, 1, 'no rev bump, and rev is not the server patch\'s either');
+    await wait(80);
+    const disk = readJson(fileIn(dir));
+    assert.strictEqual(disk.recordHash, 'h1');
+    assert.strictEqual(disk.rev, 1);
+    // A store that is killed now (no close) has the new recordHash on disk for the next start.
+    const again = createStore({ file: fileIn(dir), stateId: ID, held: () => false });
+    assert.strictEqual(again.load().recordHash, 'h1');
+    await again.close();
+    await store.close();
+  });
+
+  it('leftover temp files are removed at load', async () => {
+    const dir = tmp();
+    const f = fileIn(dir);
+    fs.mkdirSync(path.dirname(f), { recursive: true });
+    fs.writeFileSync(f, JSON.stringify({ stateId: ID, rev: 3 }));
+    fs.writeFileSync(`${f}.tmp-123`, '{"half');
+    fs.writeFileSync(`${f}.tmp-9`, '');
+    const keep = path.join(path.dirname(f), 'other.json.tmp-5');
+    fs.writeFileSync(keep, 'not ours');
+    const store = createStore({ file: f, stateId: ID });
+    assert.strictEqual(store.load().rev, 3);
+    assert.ok(!fs.existsSync(`${f}.tmp-123`));
+    assert.ok(!fs.existsSync(`${f}.tmp-9`));
+    assert.ok(fs.existsSync(keep), 'another file\'s temp is left alone');
+    await store.close();
+  });
+
+  it('get returns the newest state inside the debounce', async () => {
+    const dir = tmp();
+    const store = mk(dir, { delayMs: 500 });
+    store.put({ stateId: ID, base: 0, state: S({ v: 'new' }) });
+    assert.ok(!fs.existsSync(fileIn(dir)));
+    assert.strictEqual(store.get().state.v, 'new');
+    assert.strictEqual(store.get().rev, 1);
+    await store.close();
+  });
+
+  it('a write is temp file then rename', async () => {
+    const dir = tmp();
+    const calls = [];
+    const spy = {
+      ...fs,
+      writeFileSync: (p, ...rest) => { calls.push(['write', p]); return fs.writeFileSync(p, ...rest); },
+      renameSync: (a, b) => { calls.push(['rename', a, b]); return fs.renameSync(a, b); },
+    };
+    const store = mk(dir, { fs: spy });
+    store.put({ stateId: ID, base: 0, state: S() });
+    store.flushNow();
+    const f = fileIn(dir);
+    assert.ok(calls.length >= 2);
+    assert.ok(calls.every((c) => c[0] !== 'write' || c[1] !== f), 'never written to the target directly');
+    const w = calls.find((c) => c[0] === 'write' && !c[1].endsWith('.lock'));
+    assert.strictEqual(w[1], `${f}.tmp-${process.pid}`);
+    assert.deepStrictEqual(calls.find((c) => c[0] === 'rename').slice(1), [`${f}.tmp-${process.pid}`, f]);
+    await store.close();
+  });
+
+  it('a crash before rename leaves the old file whole', async () => {
+    const dir = tmp();
+    const a = mk(dir);
+    a.put({ stateId: ID, base: 0, state: S({ v: 'old' }) });
+    await a.close();
+    const before = fs.readFileSync(fileIn(dir), 'utf8');
+    const crash = { ...fs, renameSync: () => { const e = new Error('killed'); e.code = 'EKILLED'; throw e; } };
+    const b = mk(dir, { fs: crash, retryMs: [10000] });
+    b.put({ stateId: ID, base: 1, state: S({ v: 'new' }) });
+    assert.strictEqual(b.flushNow(), 'failed');
+    assert.strictEqual(fs.readFileSync(fileIn(dir), 'utf8'), before);
+    await assert.rejects(b.close(), /killed/);
+  });
+
+  it('EPERM on rename retries and reports failed, then saved', { timeout: 10000 }, async () => {
+    const dir = tmp();
+    const seen = [];
+    let landed;
+    const saved = new Promise((r) => { landed = r; });
+    let fails = 2;
+    const flaky = {
+      ...fs,
+      renameSync: (a, b) => {
+        if (fails > 0) { fails--; const e = new Error('busy'); e.code = 'EPERM'; throw e; }
+        return fs.renameSync(a, b);
+      },
+    };
+    const store = mk(dir, {
+      fs: flaky,
+      onSaved: (rev) => { seen.push(['saved', rev]); landed(); },
+      onFailed: (rev, err) => seen.push(['failed', rev, err.code]),
+    });
+    store.put({ stateId: ID, base: 0, state: S() });
+    // The store's retry timer is unref'd (a running server's socket keeps the process up), so a ref'd
+    // timer holds the event loop open until the write lands: Node 22's runner otherwise ends the test.
+    const hold = setInterval(() => {}, 1000);
+    try { await saved; } finally { clearInterval(hold); } // however slow the runner, the assertions run once the write has landed
+    assert.deepStrictEqual(seen, [['failed', 1, 'EPERM'], ['failed', 1, 'EPERM'], ['saved', 1]]);
+    assert.strictEqual(readJson(fileIn(dir)).rev, 1);
+    await store.close();
+  });
+
+  it('an unparseable file is moved aside, not deleted', async () => {
+    const dir = tmp();
+    const f = fileIn(dir);
+    fs.mkdirSync(path.dirname(f), { recursive: true });
+    fs.writeFileSync(f, '{"rev": 4, "broken');
+    const store = createStore({ file: f, stateId: ID, now: () => new Date('2026-11-20T21:05:03Z') });
+    assert.strictEqual(store.load(), null);
+    assert.ok(!fs.existsSync(f));
+    const aside = path.join(path.dirname(f), `${ID}.broken-2026-11-20T21-05-03Z.json`);
+    assert.strictEqual(store.broken, aside);
+    assert.strictEqual(fs.readFileSync(aside, 'utf8'), '{"rev": 4, "broken');
+    assert.strictEqual(store.get().rev, 0);
+    await store.close();
+  });
+
+  it('close flushes', async () => {
+    const dir = tmp();
+    const store = mk(dir, { delayMs: 10000 });
+    store.put({ stateId: ID, base: 0, state: S({ v: 'last' }) });
+    await store.close();
+    assert.strictEqual(readJson(fileIn(dir)).v, 'last');
+  });
+
+  it('onWrite runs after each successful write with the state written', async () => {
+    const dir = tmp();
+    const wrote = [];
+    const store = mk(dir, { onWrite: (s) => wrote.push(s.v) });
+    store.put({ stateId: ID, base: 0, state: S({ v: 1 }) });
+    await wait(80);
+    store.put({ stateId: ID, base: 1, state: S({ v: 2 }) });
+    await store.close();
+    assert.deepStrictEqual(wrote, [1, 2]);
+  });
+
+  it('a fresh store starts from the given empty state', async () => {
+    const dir = tmp();
+    const store = createStore({ file: fileIn(dir), stateId: ID, fresh: () => ({ points: {}, rev: 7, stateId: 'x' }) });
+    assert.strictEqual(store.load(), null);
+    assert.deepStrictEqual(store.get(), { state: { points: {}, rev: 0, stateId: ID, recordHash: null }, rev: 0 });
+    await store.close();
+    assert.ok(!fs.existsSync(fileIn(dir)), 'nothing written until something changes');
+  });
+  it("close lands the recordHash an onWrite sets, straight after a put (third review H1)", async () => {
+    const dir = tmp();
+    // As the server's record does: the hash of what was written, set only when it changes.
+    const store = mk(dir, {
+      delayMs: 1000,
+      onWrite: (st) => { if (st.recordHash !== `H-${st.v}`) store.setServer({ recordHash: `H-${st.v}` }); },
+    });
+    store.put({ stateId: ID, base: 0, state: S({ v: 'last' }) });
+    await store.close();
+    const disk = readJson(fileIn(dir));
+    assert.strictEqual(disk.v, 'last');
+    assert.strictEqual(disk.recordHash, 'H-last', 'the hash the last record write set is on disk');
+  });
+
+  it('close rejects when an onWrite never stops changing the state', async () => {
+    const dir = tmp();
+    let n = 0;
+    const store = mk(dir, { delayMs: 1000, onWrite: () => store.setServer({ recordHash: `H-${++n}` }) });
+    store.put({ stateId: ID, base: 0, state: S() });
+    await assert.rejects(store.close(), /kept changing/);
+  });
+
+  it('close rejects, with the reason, when the state cannot be written', async () => {
+    const dir = tmp();
+    const stuck = { ...fs, renameSync: () => { const e = new Error('EPERM: operation not permitted, rename'); e.code = 'EPERM'; throw e; } };
+    const store = mk(dir, { fs: stuck, retryMs: [10000] });
+    store.put({ stateId: ID, base: 0, state: S() });
+    await assert.rejects(store.close(), (err) => err.code === 'EPERM' && /operation not permitted/.test(err.message));
+    assert.ok(fs.existsSync(path.join(dir, '_meta', 'table', `${ID}.lock`)), 'the lock is left, so the next start knows');
+  });
+
+  it('a state the upgrade refuses is moved aside as broken', async () => {
+    const dir = tmp();
+    const f = fileIn(dir);
+    fs.mkdirSync(path.dirname(f), { recursive: true });
+    fs.writeFileSync(f, JSON.stringify({ rev: 4, stateId: ID, points: [] }));
+    const refuse = (st) => { if (Array.isArray(st.points)) { const e = new TypeError('points'); e.code = 'BAD_STATE'; throw e; } return st; };
+    const store = createStore({ file: f, stateId: ID, upgrade: refuse });
+    assert.strictEqual(store.load(), null);
+    assert.ok(store.broken && fs.existsSync(store.broken));
+    assert.throws(() => store.put({ stateId: ID, base: 0, state: { points: [] } }), (e) => e.code === 'BAD_STATE');
+    assert.strictEqual(store.get().rev, 0, 'a refused put takes no rev');
+    await store.close();
+  });
+
+  describe('the lock (third review L3, L4)', () => {
+    const lockOf = (dir) => path.join(dir, '_meta', 'table', `${ID}.lock`);
+
+    const hi = (pid) => async () => ({ app: 'run-sheet', session: 'Session 2', pid });
+    const writeLockFile = (dir, obj, ageMs = 0) => {
+      fs.mkdirSync(path.dirname(lockOf(dir)), { recursive: true });
+      fs.writeFileSync(lockOf(dir), JSON.stringify(obj));
+      const t = (Date.now() - ageMs) / 1000;
+      fs.utimesSync(lockOf(dir), t, t);
+    };
+
+    it('a lock whose port answers as the run sheet with its pid is refused (PR review M2)', async () => {
+      const dir = tmp();
+      const a = mk(dir);
+      a.lockPort(4322);
+      assert.deepStrictEqual(JSON.parse(fs.readFileSync(lockOf(dir), 'utf8')), { pid: process.pid, port: 4322 });
+      assert.deepStrictEqual(await lockHolder(fileIn(dir), { hello: hi(process.pid) }), { pid: process.pid, port: 4322 });
+      // the store alone cannot ask the port: the caller's answer is what it goes by
+      const b = createStore({ file: fileIn(dir), stateId: ID, held: () => true });
+      assert.throws(() => b.load(), (e) => e.code === 'LOCKED' && e.pid === process.pid && e.port === 4322 && /pid \d+, port 4322/.test(e.message));
+      await a.close();
+      assert.ok(!fs.existsSync(lockOf(dir)), 'a clean close removes the lock');
+      assert.strictEqual(await lockHolder(fileIn(dir), { hello: hi(process.pid) }), null);
+    });
+
+    it('a lock whose pid is alive as something else is taken over (PR review M2)', async () => {
+      const dir = tmp();
+      // our own pid is certainly alive; the port answers nothing, or as another program or another run sheet
+      writeLockFile(dir, { pid: process.pid, port: 4322 });
+      for (const hello of [async () => null, async () => ({ app: 'other', pid: process.pid }), hi(process.pid + 1), async () => { throw new Error('ECONNREFUSED'); }]) {
+        assert.strictEqual(await lockHolder(fileIn(dir), { hello }), null);
+      }
+      const b = createStore({ file: fileIn(dir), stateId: ID });
+      assert.strictEqual(b.load(), null, 'the store takes a lock with a port over: the port was asked first');
+      assert.strictEqual(b.unclean, true);
+      assert.strictEqual(b.get().rev, REV_GAP);
+      await b.close();
+    });
+
+    it('a lock with no port is held while under a minute old, then taken over', async () => {
+      const dir = tmp();
+      writeLockFile(dir, { pid: 999999, port: null }, 5000);
+      assert.deepStrictEqual(await lockHolder(fileIn(dir), { hello: hi(999999) }), { pid: 999999, port: null });
+      assert.throws(() => createStore({ file: fileIn(dir), stateId: ID }).load(), (e) => e.code === 'LOCKED' && e.port === null && /pid 999999\)/.test(e.message));
+      writeLockFile(dir, { pid: 999999, port: null }, 61 * 1000);
+      assert.strictEqual(await lockHolder(fileIn(dir), { hello: hi(999999) }), null);
+      const b = createStore({ file: fileIn(dir), stateId: ID });
+      b.load();
+      assert.strictEqual(b.unclean, true);
+      await b.close();
+    });
+
+    it('a lock that does not read is taken over as an unclean end', async () => {
+      const dir = tmp();
+      writeLockFile(dir, {});
+      fs.writeFileSync(lockOf(dir), '{half');
+      assert.deepStrictEqual(readLock(fileIn(dir)), { broken: true });
+      assert.strictEqual(await lockHolder(fileIn(dir), { hello: hi(process.pid) }), null);
+      const b = createStore({ file: fileIn(dir), stateId: ID });
+      b.load();
+      assert.strictEqual(b.unclean, true);
+      await b.close();
+    });
+
+    it('a lock whose server is gone is taken over, and rev starts 1000 higher', async () => {
+      const dir = tmp();
+      const a = mk(dir);
+      a.lockPort(4322);
+      a.put({ stateId: ID, base: 0, state: S() });
+      a.put({ stateId: ID, base: 1, state: S() });
+      a.flushNow();
+      // killed: no close, so the lock stays
+      assert.strictEqual(await lockHolder(fileIn(dir), { hello: async () => null }), null);
+      const b = createStore({ file: fileIn(dir), stateId: ID });
+      assert.strictEqual(b.load().rev, 2 + REV_GAP);
+      assert.strictEqual(b.unclean, true);
+      assert.deepStrictEqual(b.put({ stateId: ID, base: 2, state: S() }), { conflict: 'stale', rev: 2 + REV_GAP }, 'a tab on the old rev is stale');
+      assert.deepStrictEqual(b.put({ stateId: ID, base: 2 + REV_GAP, state: S() }), { rev: 3 + REV_GAP });
+      await b.close();
+      await a.close();
+    });
+
+    it('a lock that cannot be written stops the load (CodeRabbit 818)', () => {
+      const dir = tmp();
+      const noLock = { ...fs, writeFileSync: (f, ...rest) => { if (String(f).endsWith('.lock')) { const e = new Error('denied'); e.code = 'EACCES'; throw e; } return fs.writeFileSync(f, ...rest); } };
+      const b = createStore({ file: fileIn(dir), stateId: ID, fs: noLock });
+      assert.throws(() => b.load(), (e) => e.code === 'EACCES');
+    });
+
+    it('of two starts that both saw no lock, only one gets it', async () => {
+      const dir = tmp();
+      const a = mk(dir);
+      // b read the lock before a wrote it: it saw none
+      const blind = { ...fs, readFileSync: (f, ...rest) => { if (String(f).endsWith('.lock')) { const e = new Error('none'); e.code = 'ENOENT'; throw e; } return fs.readFileSync(f, ...rest); } };
+      const b = createStore({ file: fileIn(dir), stateId: ID, fs: blind });
+      assert.throws(() => b.load(), (e) => e.code === 'LOCKED');
+      await a.close();
+    });
+
+    it('a close leaves a lock another start has taken over since', async () => {
+      const dir = tmp();
+      const a = mk(dir);
+      writeLockFile(dir, { pid: 999999, port: 4400 });
+      a.lockPort(4322);
+      assert.deepStrictEqual(JSON.parse(fs.readFileSync(lockOf(dir), 'utf8')), { pid: 999999, port: 4400 }, 'not ours: the port is not written over it');
+      await a.close();
+      assert.deepStrictEqual(JSON.parse(fs.readFileSync(lockOf(dir), 'utf8')), { pid: 999999, port: 4400 }, 'the successor keeps its lock');
+    });
+
+    it('the port is written into the lock whole, through a temp file and a rename', async () => {
+      const dir = tmp();
+      const direct = [];
+      const spy = { ...fs, writeFileSync: (f, ...rest) => { direct.push(String(f)); return fs.writeFileSync(f, ...rest); } };
+      const a = mk(dir, { fs: spy });
+      direct.length = 0;
+      a.lockPort(4322);
+      assert.deepStrictEqual(direct.filter((f) => f.endsWith('.lock')), [], 'never written in place');
+      assert.deepStrictEqual(JSON.parse(fs.readFileSync(lockOf(dir), 'utf8')), { pid: process.pid, port: 4322 });
+      await a.close();
+    });
+
+    it('a clean close then a restart keeps rev as it was', async () => {
+      const dir = tmp();
+      const a = mk(dir);
+      a.put({ stateId: ID, base: 0, state: S() });
+      await a.close();
+      const b = createStore({ file: fileIn(dir), stateId: ID });
+      assert.strictEqual(b.load().rev, 1);
+      assert.strictEqual(b.unclean, false);
+      await b.close();
+    });
+
+    it('a lost state file after an unclean end still starts 1000 higher', async () => {
+      const dir = tmp();
+      fs.mkdirSync(path.dirname(lockOf(dir)), { recursive: true });
+      fs.writeFileSync(lockOf(dir), JSON.stringify({ pid: 999999, port: 4322 }));
+      const b = createStore({ file: fileIn(dir), stateId: ID });
+      assert.strictEqual(b.load(), null);
+      assert.strictEqual(b.get().rev, REV_GAP);
+      assert.strictEqual(b.get().state.rev, REV_GAP);
+      await b.close();
+    });
+  });
+});
+
+describe('a state iCloud has taken off this computer (PR review L1)', () => {
+  it('a .icloud placeholder in place of the file refuses the load, and takes no lock', () => {
+    const dir = tmp();
+    const f = fileIn(dir);
+    fs.mkdirSync(path.dirname(f), { recursive: true });
+    fs.writeFileSync(path.join(path.dirname(f), `.${ID}.json.icloud`), 'bplist');
+    assert.strictEqual(inCloudOnly(f), true);
+    const store = createStore({ file: f, stateId: ID });
+    assert.throws(() => store.load(), (e) => e.code === 'IN_CLOUD' && e.file === f && /in iCloud, not on this computer/.test(e.message));
+    assert.ok(!fs.existsSync(path.join(path.dirname(f), `${ID}.lock`)), 'no lock taken');
+  });
+
+  it('a dataless file on macOS is in the cloud; a file on the disk, or no file at all, is not', () => {
+    const dir = tmp();
+    const f = fileIn(dir);
+    assert.strictEqual(inCloudOnly(f), false, 'no file and no placeholder: a fresh start');
+    fs.mkdirSync(path.dirname(f), { recursive: true });
+    fs.writeFileSync(f, '{"rev":3}');
+    const statFs = (blocks) => ({ ...fs, statSync: (p) => Object.assign(fs.statSync(p), { blocks }) });
+    assert.strictEqual(inCloudOnly(f, { platform: 'darwin', fs: statFs(8), flagsOf: () => { throw new Error('not asked'); } }), false, 'blocks on disk: never asked');
+    assert.strictEqual(inCloudOnly(f, { platform: 'darwin', fs: statFs(0), flagsOf: () => SF_DATALESS }), true);
+    assert.strictEqual(inCloudOnly(f, { platform: 'darwin', fs: statFs(0), flagsOf: () => 0x20 }), false, 'compressed, not dataless');
+    assert.strictEqual(inCloudOnly(f, { platform: 'darwin', fs: statFs(0), flagsOf: () => null }), true, 'no blocks and no flags: taken as in the cloud');
+    assert.strictEqual(inCloudOnly(f, { platform: 'linux', fs: statFs(0), flagsOf: () => SF_DATALESS }), false);
+    if (process.platform === 'darwin') assert.strictEqual(inCloudOnly(f), false, 'a real file on this disk');
+    const store = createStore({ file: f, stateId: ID, inCloud: () => true });
+    assert.throws(() => store.load(), (e) => e.code === 'IN_CLOUD');
+  });
+});

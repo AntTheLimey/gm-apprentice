@@ -78,6 +78,9 @@ describe('run sheet reader', () => {
     const gate = m.beats[0];
     assert.deepStrictEqual(gate.foes.map((f) => f.name), ['Brother Ash', 'Frost Wolf 1', 'Frost Wolf 2', 'Frost Wolf 3', 'Lucan Grey']);
     assert.strictEqual(gate.foes[4].ally, true);
+    // the beats carry their Type and any arrivals; every fight row has a prepNote (null where the beat can fight)
+    assert.ok(m.beats.every((b) => typeof b.type === 'string' && Array.isArray(b.arrivals)));
+    assert.ok(m.beats.flatMap((b) => b.foes).every((f) => 'prepNote' in f));
     // run long: the next Plan, the unplayed scenes, the Planning notes, the contingencies
     assert.strictEqual(m.runLong.nextPlan, 'Chapters/Chapter 1/Sessions/Session 03/Session 03 - Next - Plan.md');
     assert.deepStrictEqual(m.runLong.scenes, ['Chapters/Chapter 1/Scenes/The Bell Tower.md', 'Chapters/Chapter 1/Scenes/Unplayed.md']);
@@ -322,7 +325,7 @@ describe('run sheet reader', () => {
       const crlf = fs.readFileSync(path.join(FIXTURE, ASH), 'utf8').replace(/\r?\n/g, '\r\n');
       write(dir, ASH, withAsh(crlf, 'unmasked_name: The Ember Abbot\n', '- **Unmasked:** cold\n'));
       const m = readRunSheet(dir, PLAN, { party: PARTY });
-      assert.deepStrictEqual(m.notes[ASH].unmask, { name: 'The Ember Abbot', portrait: null, playAs: 'cold rubs his thumb along the rope scar' });
+      assert.deepStrictEqual(m.notes[ASH].unmask, { name: 'The Ember Abbot', portrait: null, playAs: 'cold rubs his thumb along the rope scar', since: null });
     });
 
     it('unmasked_name gives an unmask', () => {
@@ -335,7 +338,7 @@ describe('run sheet reader', () => {
       assert.deepStrictEqual(m.notes[ASH].unmask, {
         name: 'The Ember Abbot',
         portrait: '_attachments/ember.png',
-        playAs: 'cold, never says "indeed" rubs his thumb along the rope scar',
+        playAs: 'cold, never says "indeed" rubs his thumb along the rope scar', since: null,
       });
       // the disguise's own name and play-as are unchanged
       assert.strictEqual(m.notes[ASH].name, 'Brother Ash');
@@ -348,7 +351,7 @@ describe('run sheet reader', () => {
       write(dir, ASH, withAsh(ash, 'unmasked_name: The Ember Abbot\nunmasked_portrait: ""\n'));
       let m = readRunSheet(dir, PLAN, { party: PARTY });
       // no Unmasked line: the true self speaks as the disguise does (Speech is kept by --unmask)
-      assert.deepStrictEqual(m.notes[ASH].unmask, { name: 'The Ember Abbot', portrait: null, playAs: 'slow, fond of the word "indeed" rubs his thumb along the rope scar' });
+      assert.deepStrictEqual(m.notes[ASH].unmask, { name: 'The Ember Abbot', portrait: null, playAs: 'slow, fond of the word "indeed" rubs his thumb along the rope scar', since: null });
       write(dir, ASH, withAsh(ash, 'unmasked_name: The Ember Abbot\nunmasked_portrait: nowhere.png\n'));
       m = readRunSheet(dir, PLAN, { party: PARTY });
       assert.strictEqual(m.notes[ASH].unmask.portrait, null);
@@ -521,7 +524,9 @@ describe('run sheet reader', () => {
     walk(crlf);
     assert.match(fs.readFileSync(path.join(crlf, PLAN), 'utf8'), /\r\n/);
     assert.doesNotMatch(readText(path.join(crlf, PLAN)), /\r/);
-    assert.deepStrictEqual(readRunSheet(crlf, PLAN, { party: PARTY }), readRunSheet(lf, PLAN, { party: PARTY }));
+    // the campaign is the folder's name when no title is set, and the two folders are named apart
+    const sameName = (m) => ({ ...m, campaign: '' });
+    assert.deepStrictEqual(sameName(readRunSheet(crlf, PLAN, { party: PARTY })), sameName(readRunSheet(lf, PLAN, { party: PARTY })));
   });
 });
 
@@ -855,5 +860,129 @@ describe('run sheet reader: allies start from the last Table Log', () => {
     const abs = path.join(dir, S1_LOG);
     fs.writeFileSync(abs, fs.readFileSync(abs, 'utf8').replace(/\r?\n/g, '\r\n'));
     for (const f of allyRows(readRunSheet(dir, PLAN, { party: PARTY }))) assert.deepStrictEqual([f.hpNow, f.carriedFrom], [9, S1_LOG]);
+  });
+});
+
+// Task 3 of the live app: what the page needs from the reader.
+describe('run sheet reader: loot items, Plan-line HP, carried unmaskings', () => {
+  const FROST = 'Items/Frost Brand.md';
+  const item = (name, type = 'item', aliases = '') => `---\nname: ${name}\ntype: ${type}\n${aliases}---\n\n# ${name}\n`;
+  const withTreasure = (lines) => {
+    const dir = copy();
+    write(dir, FROST, item('Frost Brand', 'item', 'aliases: [The Cold Blade]\n'));
+    write(dir, 'Items/Ash Note.md', item('Ash Note', 'prop'));
+    const abs = path.join(dir, PLAN);
+    const text = fs.readFileSync(abs, 'utf8').replace(/\r\n?/g, '\n');
+    fs.writeFileSync(abs, text.replace('- A silver bell clapper\n', `${lines.join('\n')}\n- A silver bell clapper\n`));
+    return readRunSheet(dir, PLAN, { party: PARTY });
+  };
+  const lootOf = (m) => m.beats.flatMap((b) => b.treasure).map((t) => [t.text, t.item]);
+
+  it('a loot row names its item note by link and by plain name', () => {
+    const m = withTreasure(['- [[Frost Brand]] (longsword, +1)', '- Frost Brand (longsword, +2)', '- The Cold Blade, wrapped in oilcloth', '- [[Ash Note]]']);
+    const got = Object.fromEntries(lootOf(m));
+    assert.strictEqual(got['[[Frost Brand]] (longsword, +1)'], FROST);
+    assert.strictEqual(got['Frost Brand (longsword, +2)'], FROST);
+    assert.strictEqual(got['The Cold Blade, wrapped in oilcloth'], FROST);
+    assert.strictEqual(got['[[Ash Note]]'], 'Items/Ash Note.md');
+  });
+
+  it('a loot row with no item note', () => {
+    const m = withTreasure(['- Frost Brandy (a flask)', '- [[Lucan Grey]] owes the party a favour']);
+    const got = Object.fromEntries(lootOf(m));
+    assert.strictEqual(got['A silver bell clapper'], null);
+    assert.strictEqual(got['Frost Brandy (a flask)'], null);
+    assert.strictEqual(got['[[Lucan Grey]] owes the party a favour'], null, 'an npc is no item');
+  });
+
+  describe('an ally on the Plan line', () => {
+    const LUCAN = 'Characters/NPCs/Lucan Grey.md';
+    const P3 = `${CH1}/Sessions/Session 03/Session 03 - Next - Plan.md`;
+    const run = (dir, scenes, extra = (d) => d) => {
+      sessionIndex(dir, `${CH1}/Sessions/Session 03/Session 03 - Next.md`, { number: 3, chapter: 'Chapter 1', log: null, status: 'planned' });
+      write(dir, P3, ['---', 'type: session-plan', 'session: "[[Session 03 - Next]]"', 'chapter: "[[Chapter 1]]"', '---', '', '## Planned Scenes', '', scenes, ''].join('\n'));
+      return readRunSheet(extra(dir), P3, { party: PARTY });
+    };
+    it("an ally's Plan-line HP wins", () => {
+      const m = run(withS1(), '### Scene 1: Again\n**Situation:** x\n**NPCs**\n- **[[Lucan Grey]]:** 32 of 38 HP, helps');
+      const f = allyRows(m);
+      assert.ok(f.length >= 1);
+      for (const r of f) assert.deepStrictEqual([r.note, r.hpNow, r.carriedFrom, r.hp], [LUCAN, 32, P3, 16]);
+    });
+    it('an ally in two beats takes the first Plan-line figure for both', () => {
+      const m = run(withS1(), [
+        '### Scene 1: One\n**Situation:** x\n**NPCs**\n- **[[Lucan Grey]]:** helps',
+        '### Scene 2: Two\n**Situation:** x\n**NPCs**\n- **[[Lucan Grey]]:** 5/38 HP, hurt',
+        '### Scene 3: Three\n**Situation:** x\n**NPCs**\n- **[[Lucan Grey]]:** 30 of 38 HP',
+      ].join('\n\n'));
+      const f = allyRows(m);
+      assert.strictEqual(m.beats.filter((b) => b.foes.some((x) => x.ally)).length, 3);
+      for (const r of f) assert.deepStrictEqual([r.hpNow, r.carriedFrom, r.hp], [5, P3, 16]);
+    });
+    it('without a figure the Table Log still carries', () => {
+      const m = run(withS1(), '### Scene 1: Again\n**Situation:** x\n**NPCs**\n- **[[Lucan Grey]]:** helps');
+      const rows = allyRows(m);
+      assert.ok(rows.some((r) => r.note === LUCAN), "Lucan's row is there");
+      for (const r of rows) assert.deepStrictEqual([r.hpNow, r.carriedFrom], [9, S1_LOG]);
+    });
+  });
+
+  describe('unmaskings carried from earlier Table Logs', () => {
+    const ASHP = 'Characters/NPCs/Brother Ash.md';
+    const addUnmask = (dir) => {
+      const t = fs.readFileSync(path.join(dir, ASHP), 'utf8').replace(/\r?\n/g, '\n');
+      write(dir, ASHP, t.replace('type: npc\n', 'type: npc\nunmasked_name: The Ember Abbot\n'));
+    };
+    const logWith = (dir, rel, session, unmasked) => {
+      tableLog(dir, rel, session, ['| [[Ada Moss]] | 4/11 | |']);
+      const abs = path.join(dir, rel);
+      fs.writeFileSync(abs, `${fs.readFileSync(abs, 'utf8')}\n## Unmasked this session\n\n${unmasked.join('\n')}\n`);
+    };
+    const S2I = `${CH1}/Sessions/Session 02/Session 02 - The Test.md`;
+    const S2L = `${CH1}/Sessions/Session 02/Session 02 - The Test - Table Log.md`;
+    const earlier = (s1) => {
+      const dir = copy();
+      addUnmask(dir);
+      sessionIndex(dir, S1, { number: 1, chapter: 'Chapter 1', log: 'Session 01 - The Road - Table Log' });
+      logWith(dir, S1_LOG, 'Session 01 - The Road', s1);
+      return dir;
+    };
+    it("an earlier Table Log's unmasking starts the note unmasked", () => {
+      const m = readRunSheet(earlier(['- [[Brother Ash]] as The Ember Abbot']), PLAN, { party: PARTY });
+      assert.strictEqual(m.notes[ASHP].unmask.since, S1_LOG);
+      assert.strictEqual(m.notes[ASHP].unmask.name, 'The Ember Abbot');
+    });
+    it('a note nobody unmasked has since null', () => {
+      const m = readRunSheet(earlier(['- [[Lucan Grey]] as Someone']), PLAN, { party: PARTY });
+      assert.strictEqual(m.notes[ASHP].unmask.since, null);
+    });
+    it('an unmasking for a note with no Unmask is ignored', () => {
+      const dir = earlier(['- [[Brother Venn]] as Someone Else']);
+      // Brother Venn is in tonight's Plan, so the model has his note to check
+      const plan = path.join(dir, PLAN);
+      fs.writeFileSync(plan, fs.readFileSync(plan, 'utf8').replace(/\r\n?/g, '\n').replace('- **[[Brother Ash]]:** wants the bell rung', '- **[[Brother Ash]]:** wants the bell rung\n- **[[Brother Venn]]:** watches'));
+      const m = readRunSheet(dir, PLAN, { party: PARTY });
+      const venn = m.notes['Characters/NPCs/Brother Venn.md'];
+      assert.ok(venn, 'Brother Venn is in the model');
+      assert.strictEqual(venn.unmask, null);
+      assert.deepStrictEqual(tableLogWarnings(m), []);
+    });
+    it('masked again in a later log cancels it', () => {
+      const dir = earlier(['- [[Brother Ash]] as The Ember Abbot']);
+      // a played Session 02 earlier than a Session 03 Plan: Session 03 reads both logs
+      sessionIndex(dir, S2I, { number: 2, chapter: 'Chapter 1', log: 'Session 02 - The Test - Table Log' });
+      logWith(dir, S2L, 'Session 02 - The Test', ['- [[Brother Ash]] masked again']);
+      sessionIndex(dir, `${CH1}/Sessions/Session 03/Session 03 - Next.md`, { number: 3, chapter: 'Chapter 1', log: null, status: 'planned' });
+      const p3 = `${CH1}/Sessions/Session 03/Session 03 - Next - Plan.md`;
+      write(dir, p3, ['---', 'type: session-plan', 'session: "[[Session 03 - Next]]"', 'chapter: "[[Chapter 1]]"', '---', '',
+        '## Planned Scenes', '', '### Scene 1: Again', '**Situation:** x', '**NPCs**', '- **[[Brother Ash]]:** rings'].join('\n'));
+      assert.strictEqual(readRunSheet(dir, p3, { party: PARTY }).notes[ASHP].unmask.since, null);
+      // and unmasked once more after being masked: the later unmasking counts
+      logWith(dir, S2L, 'Session 02 - The Test', ['- [[Brother Ash]] masked again', '- [[Brother Ash]] as The Ember Abbot']);
+      assert.strictEqual(readRunSheet(dir, p3, { party: PARTY }).notes[ASHP].unmask.since, S2L);
+      // masked in S1, unmasked in S2 only: since is S2's log; unmasked in both with no cancel: the earlier one
+      logWith(dir, S2L, 'Session 02 - The Test', ['- [[Brother Ash]] as The Ember Abbot']);
+      assert.strictEqual(readRunSheet(dir, p3, { party: PARTY }).notes[ASHP].unmask.since, S1_LOG);
+    });
   });
 });

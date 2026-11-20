@@ -1,0 +1,192 @@
+'use strict';
+// The Table Log writer: the 16-section body a session's state renders to, and the rewrite of a Table
+// Log note around it (skills/shared/session-document-chain.md §3c; the reader is table-log.js).
+// Pure: it reads no file and no clock. The server (step 7) decides when to write and what to keep aside.
+
+const crypto = require('node:crypto');
+const path = require('node:path');
+const RS = require('./web/state');
+const { fenceMask } = require('./plan-text');
+
+// The same list as `TABLE_LOG_SECTIONS` in skills/shared/scripts/vault_write.py; a test compares the two.
+const TABLE_LOG_SECTIONS = [
+  'Where everyone ended', 'Stopped in', 'Points landed',
+  'Tried and missed', 'Overtaken', 'Reached but not landed',
+  'Not reached', 'Changed since play started',
+  'Contingencies that fired', 'Improvised beats',
+  'Unmasked this session', 'Handouts handed over', 'Log', 'Loot',
+  'Vitals at the end', 'Advancement',
+];
+const VITALS = 'Vitals at the end';
+const VITALS_HEAD = '| Who | HP | Conditions |\n| --- | --- | --- |';
+
+const lf = (s) => String(s == null ? '' : s).replace(/\r\n?/g, '\n');
+const one = (s) => String(s == null ? '' : s).replace(/\s+/g, ' ').trim();
+const low = (s) => String(s).trim().toLowerCase();
+const TITLES = new Set(TABLE_LOG_SECTIONS.map(low));
+
+// `[[stem]]` when the vault resolves that stem to this very note, else the path without `.md`.
+function linkFor(index) {
+  return (p) => {
+    const stem = path.posix.basename(p, '.md');
+    return index.resolve(stem) === p ? `[[${stem}]]` : `[[${String(p).replace(/\.md$/, '')}]]`;
+  };
+}
+
+function localTime(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '--:--';
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+// A section is its heading and its text; an empty one is a bare heading.
+function render(sections) {
+  return sections.map(({ title, text }) => (text ? `## ${title}\n\n${text}\n` : `## ${title}\n`)).join('\n');
+}
+
+function tableLogBody(model, state, { linkFor: link, timeOf = localTime } = {}) {
+  const d = RS.derive(model, state);
+  const bullets = (items) => items.map((t) => `- ${t}`).join('\n');
+  const sec = {};
+  const beatByKey = new Map(d.beats.map((b) => [b.key, b]));
+  const who = (to) => (to === 'party' ? 'the party' : link(to));
+
+  // Everyone left unplaced is "not placed", but only when someone was placed: a GM who touched
+  // nothing gets a bare section, never a made-up "everyone at beat 1".
+  const anyPlaced = d.whereEnded.some((w) => w.status !== 'unplaced' || w.text);
+  sec['Where everyone ended'] = bullets(d.whereEnded.filter((w) => anyPlaced).map((w) => {
+    let at;
+    if (w.text) at = one(w.text);
+    else if (w.status === 'unplaced') at = 'not placed';
+    else if (w.status === 'off') at = 'off-screen';
+    else if (w.status === 'gone') at = one(w.title);
+    else if (w.place) at = `${link(w.place)}${w.spotName ? ` (${one(w.spotName)})` : ''}`;
+    else at = one(w.title);
+    return `${link(w.pc)}: ${at}`;
+  }));
+
+  sec['Stopped in'] = d.stopped ? bullets([(() => {
+    const b = beatByKey.get(d.stopped.beat);
+    return `${one(d.stopped.title)}${b && b.place ? ` (${link(b.place)})` : ''}`;
+  })()]) : '';
+
+  const point = (p) => `${one(p.beatTitle)}: ${one(p.text)}`;
+  sec['Points landed'] = bullets(d.pointsBy.landed.map(point));
+  sec['Tried and missed'] = bullets(d.pointsBy.missed.map(point));
+  sec.Overtaken = bullets(d.pointsBy.overtaken.map(point));
+  sec['Reached but not landed'] = bullets(d.pointsBy.open.map(point));
+  // Nothing reached yet means play has not started: a bare section, not "every beat".
+  sec['Not reached'] = d.reached.size ? bullets(d.notReached.map((b) => one(b.title))) : '';
+
+  sec['Changed since play started'] = bullets(d.orphans.map((o) => {
+    const text = one(o.text);
+    const beat = one(o.beatTitle);
+    if (o.kind === 'point') return `Point "${text}"${beat ? ` (${beat})` : ''}: ${one(o.value)}; no longer in the Plan`;
+    if (o.kind === 'loot') return `Loot "${text}"${beat ? ` (${beat})` : ''}: to ${who(o.value)}; no longer in the Plan`;
+    if (o.kind === 'handout') return `Handout "${text}": handed over; no longer in the Plan`;
+    if (o.kind === 'spot') return `Spot${beat ? ` in "${beat}"` : ''}: ${link(o.value)} stood there; no longer in the Plan`;
+    if (o.kind === 'vitals') {
+      const v = o.value;
+      const hp = v.hp !== null ? `HP ${one(v.hp)}${v.max !== null ? `/${one(v.max)}` : ''}` : v.max !== null ? `HP max ${one(v.max)}` : '';
+      return `Vitals for ${link(o.note)}${o.copy > 1 ? ` ${o.copy}` : ''}: ${[hp, one(v.conditions)].filter(Boolean).join(', ')}; no longer in the Plan`;
+    }
+    const uses = o.value.map((v) => (v.startsWith('stood: ') ? `${link(v.slice(7))} stood there` : v));
+    return `Beat "${text || o.key}": ${uses.join(', ')}; no longer in the Plan`;
+  }));
+
+  sec['Contingencies that fired'] = bullets(d.fired.map((f) => one(f.title)));
+  sec['Improvised beats'] = bullets(d.improvised.map((i) => one(i.title)));
+  sec['Unmasked this session'] = bullets(
+    d.unmaskedNow.filter((u) => !u.carried).map((u) => `${link(u.note)} as ${one(u.name)}`)
+      .concat(d.maskedAgain.map((u) => `${link(u.note)} masked again`)),
+  );
+  sec['Handouts handed over'] = bullets(d.handedOver.map((h) => (h.note ? link(h.note) : one(h.name || h.text))));
+
+  sec.Log = bullets(d.log.map((l) => `${timeOf(l.at)} ${l.beatTitle ? `${one(l.beatTitle)}: ` : ''}${one(l.text)}`));
+
+  sec.Loot = bullets(d.loot.map((l) => `${l.item ? link(l.item) : one(l.text)} to ${who(l.to)}`));
+
+  const cell = (s) => one(s).replace(/\|/g, '/');
+  const rows = d.vitalsRecorded.map((v) => {
+    const name = `${link(v.note)}${v.copy > 1 ? ` ${v.copy}` : ''}`;
+    // The page sends what was typed: a `|` or a line break in a figure must not break the row.
+    const set = (x) => x !== null && x !== undefined && x !== '';
+    let hp = '';
+    if (set(v.hp)) hp = set(v.max) ? `${cell(String(v.hp))}/${cell(String(v.max))}` : cell(String(v.hp));
+    return `| ${name} | ${hp} | ${cell(v.conditions)} |`;
+  });
+  sec[VITALS] = rows.length ? `${VITALS_HEAD}\n${rows.join('\n')}` : '';
+
+  // Each non-empty line the GM typed is one bullet, so a typed `## ` never makes a section.
+  sec.Advancement = bullets(lf(d.advancement).split('\n').map((l) => l.trim()).filter(Boolean));
+
+  return render(TABLE_LOG_SECTIONS.map((title) => ({ title, text: sec[title] || '' })));
+}
+
+// A section's text without the blank lines round it; a first line's indent is kept (an indented
+// code block or a nested bullet means something).
+const unpad = (text) => text.replace(/^(?:[ \t]*\n)+/, '').replace(/\s+$/, '');
+
+// The file's `##` sections: `head` is everything above the first one. A `## ` inside a code fence is
+// the fence's text, never a section.
+function split(fileText) {
+  const lines = lf(fileText).split('\n');
+  const fenced = fenceMask(lines);
+  const head = [];
+  const sections = [];
+  let cur = null;
+  lines.forEach((line, i) => {
+    const m = fenced[i] ? null : /^##[ \t]+(.+?)[ \t]*$/.exec(line);
+    if (m) { cur = { title: m[1], lines: [] }; sections.push(cur); } else if (cur) cur.lines.push(line);
+    else head.push(line);
+  });
+  return { head: head.join('\n'), sections: sections.map((s) => ({ title: s.title, text: unpad(s.lines.join('\n')) })) };
+}
+
+const FM_TYPE = /^---\n([\s\S]*?)\n---(?:\n|$)/;
+function isTableLog(fileText) {
+  const m = FM_TYPE.exec(lf(fileText));
+  return !!m && /^type:\s*["']?session-table-log["']?\s*$/m.test(m[1]);
+}
+
+// The note with its 16 sections replaced by `body`: the frontmatter, everything above the first `##`
+// and any `##` section that is not one of the 16 (kept after Advancement, in order) stay as they are.
+function rewriteTableLog(fileText, body) {
+  if (!isTableLog(fileText)) {
+    const e = new Error('not a Table Log note (type: session-table-log): not written');
+    e.code = 'NOT_A_TABLE_LOG';
+    throw e;
+  }
+  const crlf = /\r\n/.test(fileText);
+  const { head, sections } = split(fileText);
+  const own = sections.filter((s) => !TITLES.has(low(s.title)));
+  let out = `${head.replace(/\s+$/, '')}\n\n${lf(body).trim()}\n`;
+  if (own.length) out += `\n${render(own)}`;
+  return crlf ? out.replace(/\n/g, '\r\n') : out;
+}
+
+// The file's 16-section body, normalised: LF, trimmed, in file order. What a hash is taken over.
+function recordBodyOf(fileText) {
+  return render(split(fileText).sections.filter((s) => TITLES.has(low(s.title)))).trim();
+}
+
+const bodyHash = (body) => crypto.createHash('sha1').update(lf(body).trim()).digest('hex');
+
+// No section holds a bullet, a table data row or any other text. A header-only table counts as empty.
+function isEmptySkeleton(body) {
+  const { sections } = split(`## x\n${lf(body)}`.replace(/^## x\n(?=## )/, ''));
+  const sepRow = (l) => /^\|?[\s:|-]*-[\s:|-]*\|?$/.test(l) && /\|/.test(l);
+  return sections.every((s) => {
+    const lines = s.text.split('\n').map((l) => l.trim()).filter(Boolean);
+    return lines.every((l, i) => sepRow(l) || (/^\|/.test(l) && lines[i + 1] !== undefined && sepRow(lines[i + 1])));
+  });
+}
+
+// True when the file's body is not what the server last wrote and holds something: copy it aside first.
+function needsBackup(fileText, recordHash) {
+  const b = recordBodyOf(fileText);
+  if (isEmptySkeleton(b)) return false;
+  return bodyHash(b) !== recordHash;
+}
+
+module.exports = { TABLE_LOG_SECTIONS, tableLogBody, rewriteTableLog, recordBodyOf, bodyHash, isEmptySkeleton, needsBackup, linkFor, timeOf: localTime };

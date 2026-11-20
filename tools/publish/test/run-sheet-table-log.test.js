@@ -55,11 +55,11 @@ describe('readTableLog', () => {
   it('vitals cur/max and cur alone', () => {
     const { vitals } = readTableLog(LOG);
     assert.deepStrictEqual(vitals, [
-      { who: 'Lucan Grey', hpNow: 9, hpMax: 27, conditions: 'poisoned' },
-      { who: 'Ada Moss', hpNow: 12, hpMax: null, conditions: '' },
-      { who: 'Ben Hart', hpNow: 7, hpMax: 20, conditions: '' },
+      { who: 'Lucan Grey', copy: null, hpNow: 9, hpMax: 27, conditions: 'poisoned' },
+      { who: 'Ada Moss', copy: null, hpNow: 12, hpMax: null, conditions: '' },
+      { who: 'Ben Hart', copy: null, hpNow: 7, hpMax: 20, conditions: '' },
       // an odd HP cell is no number, never an error
-      { who: 'Frost Wolf', hpNow: null, hpMax: null, conditions: 'dead' },
+      { who: 'Frost Wolf', copy: null, hpNow: null, hpMax: null, conditions: 'dead' },
     ]);
   });
 
@@ -78,10 +78,10 @@ describe('readTableLog', () => {
   it('pipe in Who cell takes the target', () => {
     const text = '## Vitals at the end\n\n| Who | HP | Conditions |\n|---|---|---|\n| [[Lucan Grey|Lucan]] | 4/16 | |\n| [[Characters/NPCs/Sister Fen\\|Fen]] | 3 | prone |\n| Garrick | 5/9 | |\n';
     assert.deepStrictEqual(readTableLog(text).vitals, [
-      { who: 'Lucan Grey', hpNow: 4, hpMax: 16, conditions: '' },
-      { who: 'Characters/NPCs/Sister Fen', hpNow: 3, hpMax: null, conditions: 'prone' },
+      { who: 'Lucan Grey', copy: null, hpNow: 4, hpMax: 16, conditions: '' },
+      { who: 'Characters/NPCs/Sister Fen', copy: null, hpNow: 3, hpMax: null, conditions: 'prone' },
       // no link: the cell's text is who it names
-      { who: 'Garrick', hpNow: 5, hpMax: 9, conditions: '' },
+      { who: 'Garrick', copy: null, hpNow: 5, hpMax: 9, conditions: '' },
     ]);
   });
 
@@ -105,17 +105,17 @@ describe('readTableLog', () => {
   it('finds the Who, HP and Conditions columns by the header row, in any case', () => {
     const t = (head, sep, row) => `## Vitals at the end\n\n${head}\n${sep}\n${row}\n`;
     const r1 = readTableLog(t('| Who | Max | HP |', '|---|---|---|', '| [[Lucan Grey]] | 27 | 9 |'));
-    assert.deepStrictEqual(r1.vitals, [{ who: 'Lucan Grey', hpNow: 9, hpMax: null, conditions: '' }]);
+    assert.deepStrictEqual(r1.vitals, [{ who: 'Lucan Grey', copy: null, hpNow: 9, hpMax: null, conditions: '' }]);
     const r2 = readTableLog(t('| who | CONDITIONS | hp |', '|---|---|---|', '| [[Lucan Grey]] | winded | 9/27 |'));
-    assert.deepStrictEqual(r2.vitals, [{ who: 'Lucan Grey', hpNow: 9, hpMax: 27, conditions: 'winded' }]);
+    assert.deepStrictEqual(r2.vitals, [{ who: 'Lucan Grey', copy: null, hpNow: 9, hpMax: 27, conditions: 'winded' }]);
     // no header row (no separator): by position
     const r3 = readTableLog('## Vitals at the end\n\n| [[Lucan Grey]] | 9/27 | winded |\n');
-    assert.deepStrictEqual(r3.vitals, [{ who: 'Lucan Grey', hpNow: 9, hpMax: 27, conditions: 'winded' }]);
+    assert.deepStrictEqual(r3.vitals, [{ who: 'Lucan Grey', copy: null, hpNow: 9, hpMax: 27, conditions: 'winded' }]);
   });
 
   it('emphasis in the header row still names the columns', () => {
     const r = readTableLog('## Vitals at the end\n\n| **Who** | **Max** | __HP__ | *Conditions* |\n|---|---|---|---|\n| [[Lucan Grey]] | 27 | 9 | winded |\n');
-    assert.deepStrictEqual(r.vitals, [{ who: 'Lucan Grey', hpNow: 9, hpMax: null, conditions: 'winded' }]);
+    assert.deepStrictEqual(r.vitals, [{ who: 'Lucan Grey', copy: null, hpNow: 9, hpMax: null, conditions: 'winded' }]);
     assert.deepStrictEqual(r.unnamed, 0);
   });
 
@@ -137,6 +137,6 @@ describe('readTableLog', () => {
   it('lists the rows whose HP cell is not empty and cannot be read', () => {
     const text = '## Vitals at the end\n\n| Who | HP | Conditions |\n|---|---|---|\n'
       + '| [[Lucan Grey]] | fine | |\n| [[Ada Moss]] | | prone |\n| [[Ben Hart]] | 4/9 | |\n';
-    assert.deepStrictEqual(readTableLog(text).unread, [{ who: 'Lucan Grey', cell: 'fine' }]);
+    assert.deepStrictEqual(readTableLog(text).unread, [{ who: 'Lucan Grey', copy: null, cell: 'fine' }]);
   });
 });

@@ -227,4 +227,4 @@ function measure(pagePaths, width, script, { height = 900, wait = 6000, chrome =
   return Array.isArray(pagePaths) ? results : results[0];
 }
 
-module.exports = { findChrome, browserSkip, measure, runChrome, whyNot, withChromeLock, browserBefore, CHROME_TIMEOUT_MS, HOLD_MS, PROFILE_PREFIX };
+module.exports = { findChrome, browserSkip, measure, runChrome, whyNot, withChromeLock, browserBefore, CHROME_TIMEOUT_MS, HOLD_MS, PROFILE_PREFIX, LOCK_DIR };

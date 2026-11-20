@@ -1466,6 +1466,28 @@ class RunSheetChecksTests(unittest.TestCase):
         self.assertEqual(self.ids(self.HUB.format(
             bullets="- **[[Supper]]:** what follows\n")), [])
 
+    def test_a_routing_line_of_scene_links_is_a_pointer(self):
+        self.note("Lucan's Call", "scene")
+        bullets = ("- **The yard:** hens\n"
+                   "- When the wandering winds down: [[Lucan's Call]]\n")
+        self.assertEqual(self.ids(self.HUB.format(bullets=bullets)), [])
+        # a link to a note that is no scene leaves it a plain bullet
+        self.note("Orme", "npc")
+        found = self.found(self.HUB.format(
+            bullets="- **The yard:** hens\n- Down by the water: [[Orme]]\n"))
+        self.assertEqual(len(rows_for(found, "hub-plain-bullet")), 1, found)
+
+    def test_a_cue_line_is_no_readable_person(self):
+        self.note("Sister Wren", "npc")
+        scene = ("### Scene 1: Supper\n**Situation:** s\n"
+                 "**Place:** The orchard\n**Starts it:** t\n"
+                 "**Entities:** [[Sister Wren]]\n**NPCs**\n{line}\n")
+        cue = scene.format(
+            line="- **Arriving, start of round 3:** [[Sister Wren]] hurries in")
+        person = scene.format(line="- **[[Sister Wren]]:** hurries in")
+        self.assertIn("no-npcs-block", self.ids(cue))
+        self.assertNotIn("no-npcs-block", self.ids(person))
+
     def test_a_hub_of_place_bullets_is_not_hub_no_places(self):
         bullets = "- **[[Orchard]]:** apples\n- **The yard:** hens\n"
         self.assertEqual(self.ids(self.HUB.format(bullets=bullets)), [])

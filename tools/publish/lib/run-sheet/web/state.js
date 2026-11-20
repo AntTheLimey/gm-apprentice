@@ -1,0 +1,510 @@
+'use strict';
+// The run sheet's play state, as one pure module. It runs in node (the Table Log writer, the tests)
+// and in the browser (the page) with no build step: `module.exports` under node, `window.RunSheetState`
+// in a page. No DOM, no fetch, no clock: time comes in as an argument. `reduce` is the one way state
+// changes and `derive` the one way the page and the record read it, so they cannot disagree.
+//
+// State is stored against the reader's keys (beat, spot, point, loot, handout), each with the words
+// it had, so an item whose key the Plan later loses can still be shown (an orphan) and re-attached.
+// `rev`, `stateId` and `recordHash` belong to the server: `reduce` never touches them. Keys the page
+// does not know (5b's `fight`, `shown`, `panels`, `rolls`) pass through `reduce` and `derive` untouched.
+(function (root, factory) {
+  if (typeof module === 'object' && module.exports) module.exports = factory();
+  else root.RunSheetState = factory();
+}(typeof self !== 'undefined' ? self : this, function () {
+  const APPLIED_KEEP = 500;
+  const POINT_MARKS = ['landed', 'missed', 'overtaken'];
+
+  function emptyState({ stateId, session, plan } = {}) {
+    return {
+      version: 1, stateId: stateId || null, rev: 0, session: session || null, plan: plan || null, startedAt: null,
+      applied: [], recordHash: null,
+      positions: {}, visited: {}, points: {}, fired: {}, stopped: null, improvised: [],
+      brought: {}, unmask: {}, handouts: {}, loot: {}, jots: [], events: [],
+      end: { vitals: {}, where: {}, advancement: '' },
+      attached: {},
+    };
+  }
+
+  // A saved state brought up to this version's shape: each top-level key (and each `end.*` key) that is
+  // missing is filled from `fresh` (emptyState), so a file an older version wrote still derives. A key
+  // of the wrong kind (an array where an object belongs) throws, code BAD_STATE: the file is broken.
+  function upgrade(state, fresh) {
+    const bad = (why) => { const e = new TypeError(`the saved state is not one this sheet can read: ${why}`); e.code = 'BAD_STATE'; return e; };
+    const kind = (v) => (Array.isArray(v) ? 'array' : v === null ? 'null' : typeof v);
+    const fill = (obj, base, where) => {
+      if (kind(obj) !== 'object') throw bad(`${where || 'the state'} is not an object`);
+      const out = { ...obj };
+      for (const [k, v] of Object.entries(base)) {
+        if (!has(out, k) || out[k] === undefined) { out[k] = clone(v); continue; }
+        // Only the containers are checked: they are what derive reads into. A scalar (stateId, plan,
+        // startedAt…) or a key the empty state leaves null (stopped) takes any value.
+        if ((kind(v) === 'object' || kind(v) === 'array') && kind(out[k]) !== kind(v)) throw bad(`${where ? `${where}.` : ''}${k} is ${kind(out[k])}, not ${kind(v)}`);
+      }
+      return out;
+    };
+    const base = fresh || emptyState({});
+    const out = fill(state, base, '');
+    out.end = fill(out.end, base.end, 'end');
+    // The entries derive and the handlers read into: each one an object (a `null` jot would stop the page).
+    const entries = (list, where) => list.forEach((v, i) => { if (kind(v) !== 'object') throw bad(`${where}[${i}] is ${kind(v)}, not object`); });
+    for (const k of ['jots', 'events', 'improvised']) entries(out[k], k);
+    for (const k of ['positions', 'visited', 'points', 'fired', 'loot', 'handouts']) {
+      for (const [id, v] of Object.entries(out[k])) if (kind(v) !== 'object') throw bad(`${k}.${id} is ${kind(v)}, not object`);
+    }
+    for (const [id, v] of Object.entries(out.brought)) {
+      if (kind(v) !== 'array') throw bad(`brought.${id} is ${kind(v)}, not array`);
+      entries(v, `brought.${id}`);
+    }
+    if (out.stopped !== null && kind(out.stopped) !== 'object') throw bad(`stopped is ${kind(out.stopped)}, not object`);
+    return out;
+  }
+
+  const clone = (v) => (typeof structuredClone === 'function' ? structuredClone(v) : JSON.parse(JSON.stringify(v)));
+  const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+  const stem = (p) => String(p || '').split('/').pop().replace(/\.md$/, '');
+
+  // `from` is a beat key (no dot) or a single item key. A beat key also carries every key under it
+  // (`<beat>.pt.<hash>`), so an item whose text is unchanged is re-homed by its hash alone.
+  function rewriter(from, to) {
+    const beat = !String(from).includes('.');
+    return (k) => {
+      if (typeof k !== 'string') return k;
+      if (k === from) return to;
+      if (beat && k.startsWith(`${from}.`)) return to + k.slice(from.length);
+      return k;
+    };
+  }
+  function rekey(obj, re) {
+    // keys the rewrite leaves alone go in first, so a moved value wins a collision
+    const out = {};
+    const moved = [];
+    for (const [k, v] of Object.entries(obj || {})) { if (re(k) === k) out[k] = v; else moved.push([re(k), v]); }
+    for (const [k, v] of moved) out[k] = v;
+    return out;
+  }
+
+  const log = (s, at, beat, text, title) => { s.events.push({ at, beat: beat || null, text, ...(title ? { title } : {}) }); };
+
+  // Each handler changes the (already cloned) state `s`. `a.id` is made by the page; fields beyond
+  // the action's own words (titles, text) are the words to keep for an orphan or the Log.
+  const HANDLERS = {
+    move(s, a, at) {
+      if (!a.pc) return;
+      const to = a.to;
+      if (to === 'off' || (to && to.off)) { s.positions[a.pc] = { off: true }; return; }
+      if (!to || !to.beat) return;
+      s.positions[a.pc] = { beat: to.beat, spot: to.spot || null };
+      if (!s.visited[to.beat]) s.visited[to.beat] = { title: to.title || '', at };
+    },
+    moveAll(s, a, at) { for (const pc of a.pcs || []) HANDLERS.move(s, { pc, to: a.to }, at); },
+    mark(s, a, at) {
+      if (!a.point) return;
+      if (!POINT_MARKS.includes(a.mark)) { delete s.points[a.point]; return; }
+      s.points[a.point] = { mark: a.mark, beat: a.beat || null, beatTitle: a.beatTitle || '', text: a.text || '', at };
+    },
+    jot(s, a, at) {
+      const text = String(a.text == null ? '' : a.text).trim();
+      if (!text) return;
+      s.jots.push({ id: a.id, beat: a.beat || null, spot: a.spot || null, text, at, ...(a.title ? { title: a.title } : {}) });
+    },
+    unjot(s, a) { s.jots = s.jots.filter((j) => j.id !== a.jot); },
+    fire(s, a, at) {
+      if (!a.beat) return;
+      if (a.on) {
+        if (s.fired[a.beat]) return;
+        s.fired[a.beat] = { title: a.title || '', at };
+        log(s, at, a.beat, 'Contingency fired.', a.title);
+      } else delete s.fired[a.beat];
+    },
+    stop(s, a, at) {
+      if (!a.beat) { s.stopped = null; return; }
+      s.stopped = { beat: a.beat, title: a.title || '', at };
+      log(s, at, a.beat, 'Stopped here.', a.title);
+    },
+    improvise(s, a, at) {
+      const title = String(a.title || '').trim();
+      if (!title) return;
+      // the key comes from the action, never from what the state holds, so a re-applied action keeps its beat
+      const key = a.key || (a.id != null ? `i-${a.id}` : `i-${s.improvised.length + 1}`);
+      if (s.improvised.some((i) => i.key === key)) return;
+      s.improvised.push({ key, title, at });
+      log(s, at, key, 'Improvised beat.', title);
+    },
+    unimprovise(s, a) {
+      s.improvised = s.improvised.filter((i) => i.key !== a.key);
+      delete s.visited[a.key];
+      delete s.brought[a.key];
+      delete s.fired[a.key];
+      if (s.stopped && s.stopped.beat === a.key) s.stopped = null;
+      const under = (k) => k === a.key || k.startsWith(`${a.key}.`);
+      for (const m of ['points', 'loot']) for (const k of Object.keys(s[m])) if (under(k)) delete s[m][k];
+      for (const [pc, p] of Object.entries(s.positions)) if (p.beat === a.key) delete s.positions[pc];
+      s.jots = s.jots.filter((j) => j.beat !== a.key);
+      s.events = s.events.filter((e) => e.beat !== a.key);
+    },
+    bring(s, a, at) {
+      if (!a.beat || !a.note) return;
+      const list = s.brought[a.beat] || (s.brought[a.beat] = []);
+      if (list.some((b) => b.note === a.note)) return;
+      list.push({ note: a.note, name: a.name || stem(a.note), at });
+      log(s, at, a.beat, `${a.name || stem(a.note)} brought in.`, a.title);
+    },
+    unbring(s, a, at) {
+      const gone = (s.brought[a.beat] || []).find((b) => b.note === a.note);
+      if (!gone) return;
+      s.brought[a.beat] = s.brought[a.beat].filter((b) => b.note !== a.note);
+      if (!s.brought[a.beat].length) delete s.brought[a.beat];
+      log(s, at, a.beat, `${gone.name || stem(a.note)} taken off.`, a.title);
+    },
+    unmask(s, a, at) {
+      if (!a.note || (a.on && !a.name)) return;
+      s.unmask[a.note] = { on: !!a.on, name: a.name || '', at };
+      const was = a.was || stem(a.note);
+      log(s, at, a.beat, a.on ? `${was} unmasked as ${a.name}.` : `${was} masked again.`, a.title);
+    },
+    handOver(s, a, at) {
+      if (!a.handout) return;
+      if (!a.on) { delete s.handouts[a.handout]; return; }
+      s.handouts[a.handout] = { text: a.text || '', ...(a.name ? { name: a.name } : {}), note: a.note || null, at };
+      // the handout's name (the page sends it), never its Notes cell; a name that ends a sentence gets no second stop
+      const name = String(a.name || stem(a.note) || a.text || 'a handout').trim();
+      log(s, at, null, `Handed over: ${/[.!?]["'”’)]?$/.test(name) ? name : `${name}.`}`);
+    },
+    loot(s, a, at) {
+      if (!a.item) return;
+      if (!a.to) { delete s.loot[a.item]; return; }
+      s.loot[a.item] = { to: a.to, text: a.text || '', item: a.note || null, beat: a.beat || null, beatTitle: a.beatTitle || '', at };
+    },
+    attach(s, a) {
+      if (!a.from || !a.to || a.from === a.to) return;
+      const re = rewriter(a.from, a.to);
+      for (const k of ['points', 'visited', 'fired', 'brought', 'loot', 'handouts']) s[k] = rekey(s[k], re);
+      for (const v of Object.values(s.points)) v.beat = re(v.beat);
+      for (const v of Object.values(s.loot)) v.beat = re(v.beat);
+      for (const p of Object.values(s.positions)) { if (p.beat) { p.beat = re(p.beat); p.spot = re(p.spot); } }
+      if (s.stopped) s.stopped.beat = re(s.stopped.beat);
+      for (const j of s.jots) { j.beat = re(j.beat); j.spot = re(j.spot); }
+      for (const e of s.events) e.beat = re(e.beat);
+      s.attached[a.from] = a.to;
+    },
+    endSet(s, a) {
+      for (const [id, v] of Object.entries(a.vitals || {})) s.end.vitals[id] = { ...(s.end.vitals[id] || {}), ...v };
+      for (const [pc, text] of Object.entries(a.where || {})) { if (String(text || '').trim()) s.end.where[pc] = String(text); else delete s.end.where[pc]; }
+      if (typeof a.advancement === 'string') s.end.advancement = a.advancement;
+    },
+    // A long rest sets every row to full; `longRest {on: false}` takes it back, with the figures the GM had set.
+    longRest(s, a) {
+      if (a.on === false) {
+        for (const v of Object.values(s.end.vitals)) {
+          if (v.rested) { if (v.hp === undefined) v.hp = v.rested.hp; if (v.max === undefined) v.max = v.rested.max; delete v.rested; }
+          if (v.hp === undefined) delete v.hp;
+          if (v.max === undefined) delete v.max;
+        }
+        delete s.end.longRest;
+        return;
+      }
+      for (const v of Object.values(s.end.vitals)) {
+        if (v.hp !== undefined || v.max !== undefined) v.rested = { hp: v.hp, max: v.max };
+        delete v.hp; delete v.max;
+      }
+      s.end.longRest = true;
+    },
+  };
+
+  // An action made before an `attach` (queued in another window, or re-applied on a newer state) still
+  // names the old keys: map them through what was attached.
+  const KEY_FIELDS = ['beat', 'point', 'item', 'handout', 'spot'];
+  function remapKey(attached, k) {
+    if (typeof k !== 'string' || !attached) return k;
+    let cur = k;
+    for (let n = 0; n < 10; n++) {
+      let next = has(attached, cur) ? attached[cur] : null;
+      if (next === null) {
+        const dot = cur.indexOf('.');
+        if (dot > 0 && has(attached, cur.slice(0, dot))) next = attached[cur.slice(0, dot)] + cur.slice(dot);
+      }
+      if (next === null || next === cur) break;
+      cur = next;
+    }
+    return cur;
+  }
+  function remapAction(attached, a) {
+    if (a.type === 'attach' || !attached || !Object.keys(attached).length) return a;
+    const out = { ...a };
+    for (const f of KEY_FIELDS) if (out[f] != null) out[f] = remapKey(attached, out[f]);
+    if (out.to && typeof out.to === 'object') out.to = { ...out.to, beat: remapKey(attached, out.to.beat), spot: remapKey(attached, out.to.spot) };
+    return out;
+  }
+
+  // reduce(state, action, at) -> a new state. An action id already in `applied` changes nothing; an
+  // unknown action returns the same object.
+  function reduce(state, action, at) {
+    if (!action || typeof action !== 'object' || !has(HANDLERS, action.type)) return state;
+    if (action.id != null && state.applied && state.applied.includes(action.id)) return state;
+    const s = clone(state);
+    if (!s.startedAt) s.startedAt = at || null;
+    HANDLERS[action.type](s, remapAction(s.attached, action), at || null);
+    if (action.id != null) {
+      s.applied = (s.applied || []).concat(action.id).slice(-APPLIED_KEEP);
+    }
+    // the server's keys are never the page's to change
+    s.rev = state.rev;
+    s.stateId = state.stateId;
+    s.recordHash = state.recordHash;
+    return s;
+  }
+
+  // A handout's name for the Log: its note's name, else the row's first cell with its links read as words.
+  function handoutName(h) {
+    if (!h) return '';
+    if (h.note) return stem(h.note);
+    return String(h.name || '').replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (m, target, alias) => alias || target.split('/').pop()).trim();
+  }
+
+  function cyclePoint(mark) {
+    const i = POINT_MARKS.indexOf(mark);
+    return i === -1 ? POINT_MARKS[0] : (POINT_MARKS[i + 1] || '');
+  }
+
+  // Taking something off takes two clicks within the window: the first arms, the second fires.
+  function armClick(armed, id, nowMs, windowMs = 3000) {
+    if (armed && armed.id === id && nowMs - armed.at <= windowMs) return { fire: true, armed: null };
+    return { fire: false, armed: { id, at: nowMs } };
+  }
+
+  const fold = (s) => String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').normalize('NFC').toLowerCase();
+
+  // Name, aliases and gm aliases, case and accent blind. A word-prefix match comes before a
+  // match inside a word; within a rank, the name's own match comes first, then by name.
+  function castSearch(cast, query, limit = 8) {
+    const q = fold(query).trim();
+    if (!q) return [];
+    const rank = (c) => {
+      const fields = [[c.name, 0], ...(c.aliases || []).map((x) => [x, 1]), ...(c.gmAliases || []).map((x) => [x, 1])];
+      let best = Infinity;
+      for (const [text, base] of fields) {
+        const t = fold(text);
+        if (!t) continue;
+        let r = Infinity;
+        if (t.startsWith(q)) r = base;
+        else if (t.split(/[^\p{L}\p{N}]+/u).some((w) => w.startsWith(q))) r = 2 + base;
+        else if (t.includes(q)) r = 4 + base;
+        best = Math.min(best, r);
+      }
+      return best;
+    };
+    return (cast || [])
+      .map((c, i) => ({ c, i, r: rank(c) }))
+      .filter((x) => x.r !== Infinity)
+      .sort((a, b) => a.r - b.r || fold(a.c.name).localeCompare(fold(b.c.name)) || a.i - b.i)
+      .slice(0, limit)
+      .map((x) => x.c);
+  }
+
+  // The beats the page shows: the Plan's, the improvised ones, and each beat's "Who's here" with
+  // whoever the GM brought in.
+  function beatsOf(model, state) {
+    const cast = new Map((model.cast || []).map((c) => [c.note, c]));
+    // a brought-in ally gets a fight row too (unless the beat already has one), so it has a vitals row
+    const broughtFoes = (key, foes) => (state.brought[key] || []).flatMap((x) => {
+      const f = (cast.get(x.note) || {}).foe;
+      return f && f.ally && !foes.some((o) => o.note === x.note) ? [{ ...f, key: `${key}.brought.${x.note}`, broughtIn: true }] : [];
+    });
+    const real = (model.beats || []).map((b) => {
+      const extra = (state.brought[b.key] || []).map((x) => {
+        const c = cast.get(x.note) || {};
+        return { key: `${b.key}.brought.${x.note}`, note: x.note, name: c.name || x.name, knownAs: '', count: 1,
+          wants: c.wants || '', playAs: c.playAs || '', dead: !!c.dead, brought: true };
+      });
+      if (!extra.length) return b;
+      const foes = b.foes || [];
+      return { ...b, who: (b.who || []).concat(extra), foes: foes.concat(broughtFoes(b.key, foes)) };
+    });
+    const impro = state.improvised.map((i) => ({
+      key: i.key, title: i.title, impro: true, contingency: false, sceneNote: null, place: null, spots: [],
+      who: (state.brought[i.key] || []).map((x) => ({ key: `${i.key}.brought.${x.note}`, note: x.note, name: x.name, brought: true, count: 1 })),
+      points: [], ifs: [], treasure: [], foes: broughtFoes(i.key, []), handouts: [], entities: [],
+    }));
+    return real.concat(impro);
+  }
+
+  // Ally rows: one per ally note, a copy row for each extra number a beat holds (`Guard 2`).
+  function vitalRows(model, state, beats, reached) {
+    const rows = [];
+    for (const p of model.pcs || []) {
+      rows.push({ rowId: p.note, ally: false, copy: 1, note: p.note, name: p.name, base: { hp: p.hpNow ?? p.hpMax ?? null, max: p.hpMax ?? null } });
+    }
+    const allies = new Map();
+    const inPlay = new Set();
+    for (const b of beats) {
+      const seen = new Map();
+      for (const f of b.foes || []) {
+        if (!f.ally) continue;
+        if (reached.has(b.key) || f.broughtIn) inPlay.add(f.note);
+        const copy = (seen.get(f.note) || 0) + 1;
+        seen.set(f.note, copy);
+        if (!allies.has(f.note)) allies.set(f.note, []);
+        const list = allies.get(f.note);
+        if (!list[copy - 1]) list[copy - 1] = { rowId: copy === 1 ? f.note : `${f.note}#${copy}`, ally: true, copy, note: f.note, name: f.name, base: { hp: f.hpNow ?? f.hp ?? null, max: f.hp ?? null } };
+      }
+    }
+    for (const list of allies.values()) for (const r of list) if (r) rows.push(r);
+    return rows.map((r) => {
+      let o = state.end.vitals[r.rowId] || {};
+      const covered = state.end.longRest && (!r.ally || inPlay.has(r.note));
+      // an ally who was not in play keeps the figures the GM set before the rest, unless set again since
+      if (state.end.longRest && !covered && o.rested) o = { ...o, hp: o.hp !== undefined ? o.hp : o.rested.hp, max: o.max !== undefined ? o.max : o.rested.max };
+      const setHp = o.hp !== undefined && o.hp !== '';
+      const hp = setHp ? o.hp : r.base.hp;
+      const max = o.max !== undefined && o.max !== '' ? o.max : r.base.max;
+      const rest = covered && !setHp;
+      return { rowId: r.rowId, ally: r.ally, copy: r.copy, note: r.note, name: r.name,
+        hp: rest ? max : hp, max, conditions: o.conditions || '',
+        set: has(state.end.vitals, r.rowId), rest, setHp };
+    });
+  }
+
+  function derive(model, state) {
+    const beats = beatsOf(model, state);
+    const byKey = new Map(beats.map((b) => [b.key, b]));
+    const spotKeys = new Set();
+    const pointKeys = new Set();
+    const lootKeys = new Set();
+    for (const b of beats) {
+      (b.spots || []).forEach((x) => spotKeys.add(x.key));
+      (b.points || []).forEach((x) => pointKeys.add(x.key));
+      (b.treasure || []).forEach((x) => lootKeys.add(x.key));
+    }
+    const handoutKeys = new Set((model.handouts || []).map((h) => h.key));
+
+    // a beat is reached if it is visited, marked, jotted in, fired or stopped in
+    const reached = new Set(Object.keys(state.visited));
+    for (const p of Object.values(state.points)) if (p.beat) reached.add(p.beat);
+    for (const j of state.jots) if (j.beat) reached.add(j.beat);
+    for (const k of Object.keys(state.fired)) reached.add(k);
+    if (state.stopped) reached.add(state.stopped.beat);
+
+    const pointsBy = { landed: [], missed: [], overtaken: [], open: [] };
+    for (const b of beats) {
+      if (b.contingency) continue;
+      for (const p of b.points || []) {
+        const mark = state.points[p.key] && state.points[p.key].mark;
+        const row = { key: p.key, beat: b.key, beatTitle: b.title, text: p.text };
+        if (POINT_MARKS.includes(mark)) pointsBy[mark].push(row);
+        else if (reached.has(b.key)) pointsBy.open.push(row);
+      }
+    }
+    const notReached = beats
+      .filter((b) => !b.contingency && !b.impro && !reached.has(b.key))
+      .map((b) => ({ key: b.key, title: b.title, note: b.sceneNote || null }));
+
+    const whereEnded = (model.pcs || []).map((pc) => {
+      const pos = state.positions[pc.note];
+      const text = state.end.where[pc.note] || '';
+      const r = { pc: pc.note, name: pc.name, status: 'unplaced', beat: null, spot: null, place: null, spotName: null, title: '', text };
+      if (!pos) return r;
+      if (pos.off) return { ...r, status: 'off', title: 'Off-screen' };
+      const beat = byKey.get(pos.beat);
+      if (!beat) return { ...r, status: 'gone', title: '(gone from the Plan)' };
+      const spot = pos.spot && (beat.spots || []).length > 1 ? (beat.spots.find((x) => x.key === pos.spot) || null) : null;
+      if (pos.spot && !spot && (beat.spots || []).length > 1) return { ...r, status: 'gone', beat, title: '(gone from the Plan)' };
+      return { ...r, status: spot ? 'spot' : 'beat', beat, spot,
+        place: (spot && spot.note) || beat.place || null,
+        spotName: spot && !spot.note ? spot.name : null,
+        title: spot ? `${beat.title} · ${spot.name}` : beat.title };
+    });
+
+    const vitals = vitalRows(model, state, beats, reached);
+    const vitalsRecorded = vitals
+      .filter((v) => v.set || v.rest)
+      .map((v) => ({ rowId: v.rowId, ally: v.ally, copy: v.copy, note: v.note, name: v.name,
+        hp: v.setHp || v.rest ? v.hp : null, max: v.max, conditions: v.conditions }));
+
+    const loot = [];
+    for (const b of beats) {
+      for (const t of b.treasure || []) {
+        const l = state.loot[t.key];
+        if (l && l.to) loot.push({ key: t.key, beat: b.key, beatTitle: b.title, text: t.text, item: t.item || l.item || null, to: l.to });
+      }
+    }
+
+    const titleOf = (key, saved) => (byKey.get(key) ? byKey.get(key).title : saved || '');
+    const entries = state.jots.map((j, i) => ({ at: j.at, o: i, beatKey: j.beat, beatTitle: j.beat ? titleOf(j.beat, j.title) : '', text: j.text, id: j.id }))
+      .concat(state.events.map((e, i) => ({ at: e.at, o: 1e6 + i, beatKey: e.beat, beatTitle: e.beat ? titleOf(e.beat, e.title) : '', text: e.text })));
+    const logLines = entries.sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : a.o - b.o)).map(({ o, ...rest }) => rest);
+
+    // one entry per note: the state's entry decides on or off; a carried unmasking shows only when the state is silent
+    const unmaskedNow = [];
+    const maskedAgain = [];
+    const noteIds = new Set([...Object.keys(model.notes || {}), ...Object.keys(state.unmask)]);
+    for (const note of noteIds) {
+      const since = model.notes && model.notes[note] && model.notes[note].unmask && model.notes[note].unmask.since;
+      const u = state.unmask[note];
+      if (u) {
+        if (u.on) unmaskedNow.push({ note, name: u.name, carried: false });
+        else if (since) maskedAgain.push({ note });
+      } else if (since) unmaskedNow.push({ note, name: model.notes[note].unmask.name, carried: true });
+    }
+
+    // anything keyed that the Plan no longer holds
+    const orphans = [];
+    const seenBeat = new Map();
+    // A beat's title as the actions made in it carried it: a beat known only by a brought-in person or
+    // a PC standing there still shows its title, never its key.
+    const savedTitle = new Map();
+    const keep = (key, title) => { if (key && title && !savedTitle.has(key)) savedTitle.set(key, title); };
+    for (const e of state.events) keep(e.beat, e.title);
+    for (const j of state.jots) keep(j.beat, j.title);
+    for (const p of Object.values(state.points)) keep(p.beat, p.beatTitle);
+    for (const l of Object.values(state.loot)) keep(l.beat, l.beatTitle);
+    const beatOrphan = (key, title0, use) => {
+      if (byKey.has(key)) return;
+      const title = title0 || savedTitle.get(key) || '';
+      if (!seenBeat.has(key)) { const o = { kind: 'beat', key, text: title || '', beatTitle: title || '', value: [] }; seenBeat.set(key, o); orphans.push(o); }
+      const o = seenBeat.get(key);
+      if (title && !o.text) { o.text = title; o.beatTitle = title; }
+      if (!o.value.includes(use)) o.value.push(use);
+    };
+    for (const [k, v] of Object.entries(state.visited)) beatOrphan(k, v.title, 'visited');
+    for (const [k, v] of Object.entries(state.fired)) beatOrphan(k, v.title, 'fired');
+    if (state.stopped) beatOrphan(state.stopped.beat, state.stopped.title, 'stopped');
+    for (const k of Object.keys(state.brought)) beatOrphan(k, '', 'brought');
+    // a jot in a beat the Plan lost: the beat shows, so its jots can be attached to what it became
+    for (const j of state.jots) if (j.beat) beatOrphan(j.beat, j.title, 'jotted in');
+    for (const [pc, p] of Object.entries(state.positions)) {
+      if (!p.beat) continue;
+      if (!byKey.has(p.beat)) beatOrphan(p.beat, '', `stood: ${pc}`);
+      else if (p.spot && (byKey.get(p.beat).spots || []).length > 1 && !spotKeys.has(p.spot)) orphans.push({ kind: 'spot', key: p.spot, text: '', beatTitle: byKey.get(p.beat).title, value: pc });
+    }
+    for (const [k, v] of Object.entries(state.points)) if (!pointKeys.has(k)) orphans.push({ kind: 'point', key: k, text: v.text, beatTitle: v.beatTitle, value: v.mark });
+    for (const [k, v] of Object.entries(state.loot)) if (!lootKeys.has(k)) orphans.push({ kind: 'loot', key: k, text: v.text, beatTitle: v.beatTitle, value: v.to });
+    for (const [k, v] of Object.entries(state.handouts)) if (!handoutKeys.has(k)) orphans.push({ kind: 'handout', key: k, text: v.name || v.text, beatTitle: '', value: 'handed over' });
+    // vitals the GM set for a row the model no longer has (a note renamed or dropped mid-session)
+    const rowIds = new Set(vitals.map((v) => v.rowId));
+    const given = (x) => x !== undefined && x !== null && x !== '';
+    for (const [id, v] of Object.entries(state.end.vitals)) {
+      if (rowIds.has(id) || !v || typeof v !== 'object') continue;
+      const hp = given(v.hp) ? v.hp : (v.rested && given(v.rested.hp) ? v.rested.hp : null);
+      const max = given(v.max) ? v.max : (v.rested && given(v.rested.max) ? v.rested.max : null);
+      const conditions = String(v.conditions || '').trim();
+      if (hp === null && max === null && !conditions) continue;
+      const m = /^(.*)#(\d+)$/.exec(id);
+      orphans.push({ kind: 'vitals', key: id, note: m ? m[1] : id, copy: m ? Number(m[2]) : 1, text: '', beatTitle: '', value: { hp, max, conditions } });
+    }
+
+    return {
+      beats, reached, whereEnded, pointsBy, notReached, orphans, vitals, vitalsRecorded, loot,
+      log: logLines,
+      stopped: state.stopped ? { beat: state.stopped.beat, title: titleOf(state.stopped.beat, state.stopped.title) } : null,
+      fired: Object.entries(state.fired).map(([beat, v]) => ({ beat, title: titleOf(beat, v.title) })),
+      improvised: state.improvised.slice(),
+      handedOver: Object.entries(state.handouts).map(([key, v]) => ({ key, text: v.text, name: v.name || '', note: v.note })),
+      unmaskedNow, maskedAgain,
+      advancement: state.end.advancement || '',
+      fightLog: [],
+    };
+  }
+
+  return { emptyState, upgrade, reduce, derive, cyclePoint, armClick, castSearch, handoutName };
+}));

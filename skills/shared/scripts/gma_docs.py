@@ -38,7 +38,7 @@ INDEX_BUDGET = 12_000
 PUBLISH_SUBCOMMANDS = (
     "build", "deploy", "doctor", "explain", "flush", "inbox", "init",
     "leaks", "lines", "manifest", "props", "relationships", "serve",
-    "settings", "setup-inbox", "setup-status-bar", "sheet", "update-pin",
+    "settings", "setup-inbox", "setup-status-bar", "sheet", "table", "update-pin",
 )
 
 END = "<!-- END GENERATED -->"

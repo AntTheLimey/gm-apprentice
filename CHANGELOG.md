@@ -10,6 +10,16 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 ---
 
 
+## [1.12.110] — 2026-11-21
+
+### Added
+
+- `gma table <vault>` runs tonight's session from the run sheet (#556): a page on your computer with the Plan, the cast and the notes, which keeps its place through a reload or restart and writes the session's Table Log as you play. It files the Table Log if there is none, and a busy port or a wrapped-up session stops it with a plain line.
+
+### Fixed
+
+- A dead NPC is treated alike everywhere the run sheet shows one (#788), and the run sheet's reader no longer mistakes a reinforcements cue or a routing line for a person, and warns about a stock stat block with no actions.
+
 ## [1.12.109] — 2026-11-20
 
 ### Changed

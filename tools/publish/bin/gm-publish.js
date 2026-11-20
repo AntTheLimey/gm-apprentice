@@ -33,6 +33,7 @@ Usage:
   gm-apprentice-publish init [target-dir]    Scaffold a new site
   gm-apprentice-publish build [options]      Build the site (--site player|gm)
   gm-apprentice-publish serve [options]      Serve a built site to the home network (--site gm|player)
+  gm-apprentice-publish table <vault> [options]  Run tonight's session from the run sheet (this computer only)
   gm-apprentice-publish inbox <cmd> [args]   Change-request queue (used by the loop)
   gm-apprentice-publish flush [options]      Write players' current KV live-state back into the vault sheets
   gm-apprentice-publish sheet show [options] Print one PC's sheet (--player-safe shows only what players see)
@@ -538,6 +539,33 @@ and prints the addresses to open.
   --config <path>    Path to vault.config.json (default: ./vault.config.json)
   --help, -h         Show this help
 `,
+  table: `
+gm-apprentice-publish table <vault> [--session <name>] [--port <n>] [--party <pc>]... [--no-open]
+gm-apprentice-publish table <vault> --pick [--json] [--session <name>] [--port <n>]
+
+Runs tonight's session from the run sheet: a live page on this computer only
+(127.0.0.1), with the session's Plan, a record of play kept in
+_meta/table/<session>.json, and the Table Log written as play happens. It runs
+until you stop it (Ctrl+C), which saves the state first. It never files a Table
+Log note: \`gma table\` does that before it starts the sheet.
+
+With the site's live stats or inbox deployed it flushes the PCs' live sheets
+first (stopped after 20 s); a flush that fails does not stop the sheet.
+
+  --session <name>   A session's index note, its Plan, or its name ("Session 04").
+                     Default: the open session already in progress, else the
+                     first one open for play, in story order
+  --port <n>         The port on 127.0.0.1 (default 4322). A busy port is an error
+                     that names what holds it
+  --party <pc>       A PC note's vault path; repeat it for each PC. A JSON array
+                     of paths, or a .json file holding one, also works
+  --no-open          Do not open the browser
+  --pick             Choose the session and check the port, then stop: nothing is
+                     served or written. With --json prints
+                     { "ok": true, "index", "plan", "tableLog", "label", "stateId", "others" }
+                     or { "ok": false, "error" } and exits 1
+  --help, -h         Show this help
+`,
   deploy: `
 gm-apprentice-publish deploy [--config <path>] [--verify] [--no-build] [--dry-run] [--ignore-leaks] [--json]
 
@@ -1008,6 +1036,47 @@ if (command === 'serve') {
     site,
     ...(parsed.flags.port === undefined ? {} : { port: parsed.flags.port }),
   }).catch(failAfterFlush);
+  return;
+}
+
+if (command === 'table') {
+  const vault = args[1] && !args[1].startsWith('-') ? args[1] : null;
+  if (!vault) {
+    console.error('Error: table needs a vault folder. See `gm-apprentice-publish table --help`.');
+    process.exit(1);
+  }
+  const parsed = parseSubcommandArgs(
+    args.slice(2),
+    { '--no-open': 'noOpen', '--pick': 'pick', '--json': 'json' },
+    { '--session': 'session', '--port': 'port' },
+    { '--party': 'party' },
+  );
+  if (parsed.error) {
+    const bad = /^Unknown argument: (.*)$/.exec(parsed.error);
+    if (bad) refuseUnknownArgument('table', bad[1]);
+    console.error(`Error: ${parsed.error}`);
+    process.exit(1);
+  }
+  // The site comes from the vault's own settings: a --config would be silently ignored, so it is refused.
+  if (parsed.configGiven) refuseUnknownArgument('table', '--config');
+  const { runTable, parseParty } = require('../lib/run-sheet/table-cli.js');
+  const given = parseParty(parsed.flags.party);
+  const portText = parsed.flags.port;
+  const port = portText === undefined ? undefined : (/^\d{1,5}$/.test(portText) ? Number(portText) : NaN);
+  if (given.error || Number.isNaN(port) || port > 65535) {
+    console.error(`Error: ${given.error || '--port needs a whole number from 0 to 65535'}`);
+    process.exit(1);
+  }
+  // The server keeps the process alive; Ctrl+C saves the state and exits. A refusal exits with the reason.
+  runTable({
+    vault,
+    session: parsed.flags.session,
+    ...(port === undefined ? {} : { port }),
+    open: !parsed.flags.noOpen,
+    party: given.party,
+    pick: !!parsed.flags.pick,
+    json: !!parsed.flags.json,
+  }, { exit: exitAfterFlush }).then((r) => { if (typeof r === 'number') exitAfterFlush(r); }).catch(failAfterFlush);
   return;
 }
 

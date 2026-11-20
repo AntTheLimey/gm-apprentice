@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Run sheet</title>
+<link rel="stylesheet" href="/web/gm.css">
+</head>
+<body>
+<header class="top" id="top">
+  <div class="bar">
+    <h1 id="ttl">Run sheet</h1><span class="sub" id="sub"></span><span class="sp"></span>
+    <input id="hjot" placeholder="Jot (J)" aria-label="Jot a line for the beat in play" autocomplete="off">
+    <span class="saved" id="saved" role="status" aria-live="polite">Saved</span>
+    <button class="warnb" id="warnBtn" type="button"></button>
+    <button id="endBtn" type="button">End of night</button>
+  </div>
+  <div class="hnotes" id="hnotes"></div>
+</header>
+<div class="app" id="app">
+  <nav class="rail" id="rail" aria-label="The run"></nav>
+  <main class="sheet" id="sheet"><p class="muted">The run sheet is starting.</p></main>
+</div>
+<div class="drawer" id="drawer" role="dialog" aria-label="Note" tabindex="-1"></div>
+<script src="/web/state.js"></script>
+<script src="/web/gm.js"></script>
+</body>
+</html>

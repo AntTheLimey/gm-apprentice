@@ -381,3 +381,17 @@ describe('lines: moments (moments.py asks it, so the wrap-up tagger reads cards 
     assert.strictEqual(answer({ op: 'moments', text: '```\n## Memorable Moments\n**A.**\n```' }).section, null);
   });
 });
+
+describe('lines: fate (npc_stats.is_dead asks it, so the two never read a hidden fate two ways, #788)', () => {
+  const body = (fm, bullet) => `---\ntype: npc\n${fm}\n---\n\n## GM Notes\n\n### Behind the Scenes\n\n${bullet}\n`;
+  it('answers the fate and whether it is dead', () => {
+    assert.deepStrictEqual(answer({ op: 'fate', text: body('status: alive', '- **Dead.** Fell.') }), { fate: 'Dead.', dead: true });
+  });
+  it('a fate that is not death beats a dead status', () => {
+    assert.deepStrictEqual(answer({ op: 'fate', text: body('status: dead', '- **Alive, freed.** Found.') }), { fate: 'Alive, freed.', dead: false });
+  });
+  it('with no fate the status decides', () => {
+    assert.deepStrictEqual(answer({ op: 'fate', text: body('status: dead', '- **Motive:** x') }), { fate: null, dead: true });
+    assert.deepStrictEqual(answer({ op: 'fate', text: '# T\n' }), { fate: null, dead: false });
+  });
+});

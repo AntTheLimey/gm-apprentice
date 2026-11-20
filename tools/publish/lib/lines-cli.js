@@ -70,6 +70,11 @@
 //                            that only the strip chain hides (gm-only, a comment) is `hidden: true`, with no cards.
 //                            moments.py tags wrap-ups from this, so the tagger never reads a card a second way.
 //
+//   {"op":"fate","text":…}
+//       -> {"fate":…|null,"dead":bool}  a note's hidden fate (the last unstruck bold sentence bullet of its GM Notes >
+//                            Behind the Scenes, lib/fate.js) and whether it is dead: the fate says so when there is
+//                            one, else the note's own frontmatter `status`. npc_stats.is_dead asks this (#788).
+//
 //   {"op":"command","args":["settings",…]|["explain","--all",…],"cwd":…,"env":{…}}
 //       -> {"rc":…,"stdout":…,"stderr":…}  the command run as `gm-publish <args>` runs it, from the
 //                            same option reader and the same function, in `cwd` with `env` (both
@@ -84,6 +89,7 @@ const path = require('path');
 const { readSettings, nameIn, fileLabel } = require('./settings');
 const { cutLines, findHeadings, playerSafeMarkdown, keepOnlySections, keptSectionFlags, sectionVerdicts, isWithheld, nameList, gmAliasList } = require('./processor');
 const { parseNote } = require('./frontmatter');
+const { hiddenFate, isDead } = require('./fate');
 const { labelsForLinks } = require('./wikilink');
 const { KINDS, parseMoments } = require('./story-moments');
 const { isMomentsHeading } = require('./heading-key');
@@ -199,6 +205,11 @@ function answer(request) {
       const callouts = request.excludeCallouts === undefined || request.excludeCallouts === null ? false : request.excludeCallouts;
       if (typeof callouts !== 'boolean') list(request, 'excludeCallouts');
       return moments(text, callouts);
+    }
+    case 'fate': {
+      let fm;
+      try { fm = parseNote(text).data || {}; } catch (e) { fm = {}; }
+      return { fate: hiddenFate(text), dead: isDead(text, fm) };
     }
     case 'sections':
       return { withheldBy: sectionVerdicts(text, list(request, 'excludeSections')) };

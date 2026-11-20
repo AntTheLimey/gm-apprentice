@@ -239,6 +239,8 @@ infra only; the at-table session is capability 7.
   enablement by hand.
 - `references/gm-site.md` — the GM's own copy of the site.
   Both hosts can run in parallel from the same `docs/`.
+- `gma table <vault>` — runs tonight's session from the run sheet, a
+  page on the GM's computer (not a published site); `gma llms table`.
 
 ## Companion Skills
 

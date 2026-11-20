@@ -496,21 +496,25 @@ describe('run sheet beats: the Plan shape', () => {
     }
   });
 
-  it('a dead NPC in a place bullet is not people or who; on an NPCs line it stays with dead-in-scene', () => {
+  it('a dead NPC is kept, marked dead and warned, in a place bullet and on an NPCs line alike (#788)', () => {
     const dir = skeletonVault();
     fs.mkdirSync(path.join(dir, 'Characters'), { recursive: true });
     fs.writeFileSync(path.join(dir, 'Characters', 'Brother Teodor.md'), '---\ntype: npc\nstatus: "dead"\n---\n');
     fs.writeFileSync(path.join(dir, 'Characters', 'Sister Fen2.md'), '---\ntype: npc\nstatus: alive\n---\n');
+    // status stays alive: the GM keeps it until the players learn, and writes the fate under GM Notes
+    fs.writeFileSync(path.join(dir, 'Characters', 'Warden Pell.md'), '---\ntype: npc\nstatus: alive\n---\n\n## GM Notes\n\n### Behind the Scenes\n\n- **[[Session 01 - The Pass]]** — **Dead.** Fell in the crevasse.\n');
     fs.mkdirSync(path.join(dir, 'Locations'), { recursive: true });
     fs.writeFileSync(path.join(dir, 'Locations', 'The Ice Crypt.md'), '---\ntype: location\n---\n');
     const index = buildIndex(dir);
-    const hub = readBeats('## Planned Scenes\n\n### Scene 0: Out (hub)\n**Where they can go**\n- **[[The Ice Crypt]]:** [[Brother Teodor]] is dead; [[Sister Fen2]] waits.\n', index);
+    const hub = readBeats('## Planned Scenes\n\n### Scene 0: Out (hub)\n**Where they can go**\n- **[[The Ice Crypt]]:** [[Brother Teodor]] is dead; [[Sister Fen2]] waits; [[Warden Pell]] stands guard.\n', index);
     assert.deepStrictEqual(hub.beats[0].spots[0].people.map((p) => path.basename(p)), ['Sister Fen2.md']);
-    assert.deepStrictEqual(hub.beats[0].who.map((w) => w.name), ['Sister Fen2']);
-    assert.ok(!hub.warnings.some((w) => w.kind === 'dead-in-scene'));
-    const named = readBeats('## Planned Scenes\n\n### Scene 4: Crypt\n**Situation:** s\n**Place:** [[The Ice Crypt]]\n**Starts it:** t\n**NPCs**\n- **[[Brother Teodor]]:** his body\n', index);
-    assert.deepStrictEqual(named.beats[0].who.map((w) => w.name), ['Brother Teodor']);
-    assert.ok(named.warnings.some((w) => w.kind === 'dead-in-scene' && /Brother Teodor/.test(w.text)));
+    assert.deepStrictEqual(hub.beats[0].who.map((w) => [w.name, w.dead]), [['Brother Teodor', true], ['Sister Fen2', false], ['Warden Pell', true]]);
+    const dead = hub.warnings.filter((w) => w.kind === 'dead-in-scene');
+    assert.strictEqual(dead.length, 2);
+    assert.ok(/Brother Teodor/.test(dead[0].text) && /Warden Pell/.test(dead[1].text));
+    const named = readBeats('## Planned Scenes\n\n### Scene 4: Crypt\n**Situation:** s\n**Place:** [[The Ice Crypt]]\n**Starts it:** t\n**NPCs**\n- **[[Brother Teodor]]:** his body\n- **[[Warden Pell]]:** his coat\n', index);
+    assert.deepStrictEqual(named.beats[0].who.map((w) => [w.name, w.dead]), [['Brother Teodor', true], ['Warden Pell', true]]);
+    assert.strictEqual(named.warnings.filter((w) => w.kind === 'dead-in-scene').length, 2);
   });
 
   it('pointer bullets are not spots', () => {
@@ -561,12 +565,19 @@ describe('run sheet beats: the Plan shape', () => {
     const { index: _ix, ...planRead } = read();
     const now = { plan: planRead, hub: readBeats(hubPlan, buildIndex(copy())) };
     // the fields this change adds are taken off: placeText, placeFrom, spots[].md, spots[].people
+    // (#788 adds who[].dead; the fixture names no dead NPC, so every `dead` is false before it is taken off.)
+    // (Run sheet 5a task 4 adds `type` and `arrivals`; neither old Plan holds a cue, so every `arrivals` is empty.)
+    // (Run sheet 5a adds treasure[].item; the fixture names no item note, so every `item` is null before it is taken off.)
     const strip = (r) => ({
       ...r,
-      beats: r.beats.map(({ placeText, placeFrom, spots, ...b }) => ({ ...b, spots: spots.map(({ md, people, ...x }) => x) })),
+      beats: r.beats.map(({ placeText, placeFrom, spots, who, treasure, type, arrivals, ...b }) => ({ ...b, treasure: treasure.map(({ item, ...t }) => t), who: who.map(({ dead, ...w }) => w), spots: spots.map(({ md, people, ...x }) => x) })),
     });
     for (const r of Object.values(now)) {
       for (const b of r.beats) {
+        assert.ok(b.who.every((w) => w.dead === false), b.title);
+        assert.ok(b.treasure.every((t) => t.item === null), b.title);
+        assert.deepStrictEqual(b.arrivals, [], b.title);
+        assert.strictEqual(typeof b.type, 'string', b.title);
         assert.strictEqual(b.placeText, '', b.title);
         for (const x of b.spots) if (!x.md) assert.deepStrictEqual(x.people, [], b.title);
       }
@@ -779,6 +790,36 @@ describe('run sheet beats: the Plan shape', () => {
       assert.ok(!ent.ids.includes('foe-no-numbers'));
       const who = bothSides(SCENE('**Who:** [[Tomas]]\n'), NOTES);
       assert.ok(who.ids.includes('foe-no-numbers'));
+    });
+
+    it('an arriving cue is no person, and a plain bold person still reads', () => {
+      const r = bothSides(SCENE('**NPCs**\n- **Arriving, start of round 3:** [[Sister Wren]] and four Brothers, hurrying\n- **The shikarri:** wants a clean drive\n'), NOTES);
+      assert.deepStrictEqual(r.beats[0].who.map((w) => w.name), ['The shikarri']);
+      assert.deepStrictEqual(r.beats[0].arrivals.map((a) => [a.when, a.people]), [['Arriving, start of round 3', ['Characters/NPCs/Sister Wren.md']]]);
+      assert.match(r.beats[0].arrivals[0].text, /^\[\[Sister Wren\]\] and four Brothers/);
+      assert.ok(r.beats[0].arrivals[0].key.includes('arrive'));
+      assert.doesNotMatch(r.beats[0].extra, /Arriving/); // its line is claimed
+      const round = bothSides(SCENE('**NPCs**\n- **Wolves howl at round 2:** [[Sister Wren]] looks up\n'), NOTES);
+      assert.deepStrictEqual(round.beats[0].arrivals.map((a) => a.when), ['Wolves howl at round 2']);
+      // a cue word with no npc or creature link is still the old reading
+      const none = bothSides(SCENE('**NPCs**\n- **Later, the bell:** rings loudly\n'), NOTES);
+      assert.deepStrictEqual(none.beats[0].arrivals, []);
+      assert.deepStrictEqual(none.beats[0].who.map((w) => w.name), ['Later, the bell']);
+      // plan-check counts a cue line as no readable person
+      assert.ok(r.ids.includes('no-npcs-block') === false);
+      const only = bothSides(SCENE('**Entities:** [[Sister Wren]]\n**NPCs**\n- **Arriving, round 3:** [[Sister Wren]] hurries in\n'), NOTES);
+      assert.ok(only.ids.includes('no-npcs-block'));
+    });
+
+    it('a routing line is no hub spot, in both', () => {
+      const NOTES2 = { ...NOTES, "Chapters/Chapter 1/Scenes/Lucan's Call.md": note('scene', "Lucan's Call"), 'Locations/The Chapel.md': note('location', 'The Chapel') };
+      const r = bothSides(HUB("- **[[The Chapel]]:** cold\n- When the wandering winds down: [[Lucan's Call]]\n"), NOTES2);
+      assert.deepStrictEqual(r.beats[0].spots.map((x) => x.name), ['The Chapel']);
+      assert.match(r.beats[0].extra, /When the wandering winds down: \[\[Lucan's Call\]\]/);
+      assert.ok(!r.ids.includes('hub-plain-bullet'), r.ids.join());
+      // a plain bullet with a link that is no scene stays a place
+      const place = bothSides(HUB("- **[[The Chapel]]:** cold\n- Down by the water: [[The Chapel]]\n"), NOTES2);
+      assert.strictEqual(place.beats[0].spots.length, 2);
     });
 
     it('a link in another case still finds its note, in both', () => {
