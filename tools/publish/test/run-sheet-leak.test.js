@@ -1,0 +1,553 @@
+'use strict';
+// The players' screen leak test (plan 5b Task 8, spec §6.8): nothing the GM keeps back reaches the players.
+//
+// A scripted session (helpers/run-sheet-leak-script.js) runs against the server in this process, on a copy
+// of the players' fixture. After every step the test collects everything the players' half can answer:
+// their page and its files, the view, every picture the view names, and every event on their stream. It
+// renders each view with the served render.js, as the players' page does. Then it checks:
+//
+// - no forbidden string is in any of it (the list is read from the fixture's notes, not typed here);
+// - every view's keys are exactly the players' whitelist, and a foe's row is name, ini, current, out, lair;
+// - no answer sets a cookie or a CORS header, and no header value holds a forbidden string;
+// - the players' stream names only `hello` (data `{}`) and `view`;
+// - every picture served is, byte for byte, a picture the step allows;
+// - positive control: every string the step forbids IS in the GM's own answers, so a sentinel the fixture
+//   lost fails here instead of passing for ever.
+//
+// Matching (Review M5): long sentinels (four digits and up, GMNOTE lines, names, paths) anywhere in the
+// bytes collected; short tokens (`+97`, `2/Day`, `(3)`) on word boundaries, in the views, the events and the
+// rendered markup only, never in the static scripts. A `dead` flag is checked by keys, a hidden fate by its text.
+const { describe, it, after } = require('node:test');
+const assert = require('node:assert/strict');
+const crypto = require('node:crypto');
+const fs = require('node:fs');
+const http = require('node:http');
+const os = require('node:os');
+const path = require('node:path');
+const vm = require('node:vm');
+const matter = require('gray-matter');
+const { createTableServer, listenLocal } = require('../lib/run-sheet/server');
+const { listSessions, pickSession, stateIdOf } = require('../lib/run-sheet/sessions');
+const { readRunSheet } = require('../lib/run-sheet/read');
+const { forPlayers } = require('../lib/run-sheet/players');
+const S = require('./helpers/run-sheet-leak-script');
+
+const FIXTURE = path.join(__dirname, 'fixtures', 'run-sheet-players');
+const made = [];
+after(() => { for (const d of made) fs.rmSync(d, { recursive: true, force: true }); });
+
+const wait = (ms) => new Promise((r) => { setTimeout(r, ms); });
+async function waitFor(fn, what, ms = 10000) {
+  const t0 = Date.now();
+  for (;;) {
+    const v = await fn();
+    if (v) return v;
+    if (Date.now() - t0 > ms) throw new Error(`timed out waiting for ${what}`);
+    await wait(10);
+  }
+}
+
+function req(port, method, url, body) {
+  return new Promise((resolve, reject) => {
+    const data = body === undefined ? undefined : JSON.stringify(body);
+    const headers = { Host: `127.0.0.1:${port}` };
+    if (data !== undefined) headers['Content-Type'] = 'application/json';
+    const r = http.request({ host: '127.0.0.1', port, method, path: url, headers }, (res) => {
+      const chunks = [];
+      res.on('data', (c) => chunks.push(c));
+      res.on('end', () => {
+        const bytes = Buffer.concat(chunks);
+        const text = bytes.toString('utf8');
+        let json = null;
+        try { json = JSON.parse(text); } catch { /* not json */ }
+        resolve({ url, status: res.statusCode, headers: res.headers, bytes, text, json });
+      });
+    });
+    r.on('error', reject);
+    if (data !== undefined) r.write(data);
+    r.end();
+  });
+}
+
+// An event stream, raw text kept. `events` are { event, data } as they arrive.
+function stream(port, url) {
+  const events = [];
+  let raw = '';
+  let resp = null;
+  const r = http.get({ host: '127.0.0.1', port, path: url, headers: { Host: `127.0.0.1:${port}` } }, (res) => {
+    resp = res;
+    let buf = '';
+    res.setEncoding('utf8');
+    res.on('data', (c) => {
+      raw += c;
+      buf += c;
+      let i;
+      while ((i = buf.indexOf('\n\n')) >= 0) {
+        const block = buf.slice(0, i);
+        buf = buf.slice(i + 2);
+        const ev = /^event: (.*)$/m.exec(block);
+        const data = /^data: (.*)$/m.exec(block);
+        if (ev) events.push({ event: ev[1], text: data ? data[1] : null });
+      }
+    });
+  });
+  r.on('error', () => {});
+  return { events, raw: () => raw, headers: () => (resp ? resp.headers : null), close: () => { r.destroy(); if (resp) resp.destroy(); } };
+}
+
+const ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+const escHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ESC[c]);
+const reEsc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const forms = (s) => [...new Set([s, escHtml(s), JSON.stringify(s).slice(1, -1), escHtml(s).replace(/&#39;/g, '&#x27;')])];
+const walk = (dir) => fs.readdirSync(dir, { withFileTypes: true })
+  .flatMap((e) => (e.isDirectory() ? walk(path.join(dir, e.name)) : [path.join(dir, e.name)]));
+const clean = (line) => String(line).replace(/^#+\s*/, '').replace(/^[-*]\s+/, '').replace(/\*\*/g, '').replace(/\[\[|\]\]/g, '').trim();
+
+// ---- the forbidden list, read from the fixture ----
+// Each entry: { text | re, short, why, control } — `short` matches on word boundaries in the views, events
+// and markup only; `control: false` for a string the GM's answers cannot hold (the temp folder).
+function forbiddenList(vault, model) {
+  const out = [];
+  const add = (text, why, opts = {}) => {
+    const t = String(text || '').trim();
+    if (t && !out.some((x) => x.text === t)) out.push({ text: t, why, short: false, control: true, ...opts });
+  };
+  const files = walk(vault).map((f) => path.relative(vault, f).split(path.sep).join('/'));
+  const notes = files.filter((f) => f.endsWith('.md'));
+  const pictures = files.filter((f) => /\.(png|jpe?g|gif|webp|svg)$/i.test(f));
+  const sessionFoes = new Set(model.beats.flatMap((b) => (b.foes || []).map((f) => f.note).concat((b.who || []).map((w) => w.note))));
+
+  for (const rel of notes) {
+    add(rel, 'a vault path');
+    const text = fs.readFileSync(path.join(vault, rel), 'utf8');
+    let fm = {};
+    let body = text;
+    try { ({ data: fm, content: body } = matter(text)); } catch { fm = {}; }
+    const lines = body.split(/\r?\n/);
+    const type = String(fm.type || '').toLowerCase();
+    for (const l of lines) {
+      const g = /GMNOTE-[^\r\n<]*/.exec(l);
+      if (g) add(g[0].trim(), 'a GM Notes sentinel');
+      if (/\*\*Dead\.\*\*/.test(l)) add(clean(l.replace(/^.*\*\*Dead\.\*\*/, '')), 'a hidden fate');
+    }
+    for (const a of [].concat(fm.gm_aliases || [])) add(a, 'a gm_alias');
+    if (fm.unmasked_name) add(fm.unmasked_name, 'an unmasked name before Unmask');
+    if (fm.withheld === true && fm.name) add(fm.name, 'a withheld note\'s name');
+    if ((type === 'npc' || type === 'creature') && fm.name) add(fm.name, 'an unshown name');
+    if (fm.doc_type === 'map' && /\(GM\)/.test(rel)) {
+      add(fm.name, 'the GM map\'s name');
+      add(path.posix.basename(rel, '.md'), 'the GM map\'s stem');
+    }
+    if (/\/Scenes\//.test(rel)) add(fm.name || path.posix.basename(rel, '.md'), 'a scene title');
+    // a foe's numbers
+    const st = /^###\s+Stats\s*$/m.exec(body);
+    if ((type === 'npc' || type === 'creature') && st) {
+      const rest = body.slice(st.index + st[0].length);
+      const stop = rest.search(/^(?:#{2,3}\s|<!--)/m);
+      const stats = stop >= 0 ? rest.slice(0, stop) : rest;
+      // an ally's HP is on the players' order (decision 7), once the ally is: allowed with its name
+      const ally = model.beats.some((b) => (b.foes || []).some((f) => f.note === rel && f.ally));
+      const hp = new Set([...stats.matchAll(/\b(?:HP|Hit Points)\**\s*(\d+)/g)].map((m) => m[1]));
+      for (const m of stats.matchAll(/\d{4,}/g)) add(m[0], 'a foe number (sentinel)', ally && hp.has(m[0]) ? { with: fm.name } : {});
+      if (sessionFoes.has(rel)) {
+        for (const m of stats.matchAll(/\b(?:AC|HP|Hit Points)\**\s*(\d+)/g)) if (m[1].length < 4) add(m[1], 'a foe number', { short: true });
+        for (const m of stats.matchAll(/Initiative\**\s*\+(\d+)/g)) add(`+${m[1]}`, 'a foe\'s initiative modifier', { short: true });
+        for (const m of stats.matchAll(/\((\d+)\/Day\)/gi)) add(`${m[1]}/Day`, 'a Legendary Resistance count', { short: true });
+        for (const m of stats.matchAll(/Legendary Actions\W*\((\d+)\)/g)) add(`(${m[1]})`, 'a legendary action count', { short: true });
+      }
+    }
+  }
+  for (const p of pictures) add(path.posix.basename(p), 'a picture file name');
+  add('_attachments', 'a vault folder');
+  add('GMNOTE', 'a GM Notes sentinel');
+  out.push({ re: /\.md(?![A-Za-z0-9])/, text: '.md', why: 'a vault path', short: false, control: true });
+  add('Recharge', 'a foe\'s recharge', { short: true });
+  add('Legendary', 'a foe\'s legendary counters', { short: true });
+  add('Bloodied', 'a foe\'s Bloodied (no PC or ally is Bloodied in the script)', { short: true });
+
+  // the session's Plan: titles, each section's first line, and the beats' own words
+  add(path.posix.basename(model.plan || S.PLAN, '.md'), 'the Plan note');
+  add(S.SESSION, 'the session\'s title');
+  const plan = fs.readFileSync(path.join(vault, S.PLAN), 'utf8').split(/\r?\n/);
+  plan.forEach((l, i) => {
+    if (!/^##\s/.test(l)) return;
+    const after = plan.slice(i + 1).filter((x) => x.trim() && !/^---/.test(x));
+    const first = after[0];
+    if (first && !/^##\s/.test(first)) add(clean(first), 'a Plan section\'s first line');
+    const prose = after.find((x) => !/GMNOTE/.test(x));
+    if (prose && !/^##\s/.test(prose)) add(clean(prose), 'a Plan section\'s first line');
+  });
+  for (const b of model.beats) {
+    add(b.title, 'a beat title');
+    add(b.title.replace(/\s*\((?:hub|routing)\)\s*$/, ''), 'a beat title');
+    for (const k of ['situation', 'startsIt', 'trigger', 'readAloud', 'complications']) if (String(b[k] || '').length >= 6) add(b[k], 'Plan text');
+    if (String(b.then || '').length >= 6) add(clean(b.then), 'Plan text');
+    for (const w of b.who || []) { add(w.wants, 'Plan text'); add(w.playAs, 'GM Notes text'); }
+    for (const p of b.points || []) add(p.text, 'Plan text');
+    for (const x of b.ifs || []) { add(x.do, 'Plan text'); add(x.then, 'Plan text'); }
+    for (const sp of b.spots || []) { if (!sp.note) add(sp.name, 'a Plan-only spot'); add(sp.md, 'Plan text'); }
+    for (const f of b.foes || []) add(f.name, 'an unseen foe\'s name');
+  }
+  // too short to be told apart from ordinary words
+  return out.filter((x) => x.re || x.text.length >= 4 || x.short);
+}
+
+function matcher(x) {
+  if (x.re) return (text) => x.re.test(text);
+  if (x.short) {
+    const res = forms(x.text).map((f) => new RegExp(`(?<![A-Za-z0-9_])${reEsc(f)}(?![A-Za-z0-9_])`));
+    return (text) => res.some((re) => re.test(text));
+  }
+  const fs2 = forms(x.text);
+  return (text) => fs2.some((f) => text.includes(f));
+}
+
+// ---- the players' whitelist ----
+const VIEW_KEYS = ['campaign', 'layout', 'panels'].sort();
+const PANEL_KEYS = ['backdrop', 'caption', 'id', 'order', 'pcs', 'people'].sort();
+const WHO_KEYS = ['name', 'pic'];
+const ORDER_KEYS = ['paused', 'round', 'rows'].sort();
+const FOE_ROW = ['current', 'ini', 'lair', 'name', 'out'].sort();
+const PC_ROW = ['current', 'hp', 'ini', 'lair', 'name', 'out', 'statuses'].sort();
+const PIC = /^\/players\/pic\/[0-9a-f]{20}$/;
+const keys = (o) => Object.keys(o).sort();
+
+function checkShape(view, where) {
+  assert.deepEqual(keys(view), VIEW_KEYS, `${where}: view keys`);
+  assert.ok(['none', 'n1', 'n2', 'n4', 'n6', 'n8', 'n9'].includes(view.layout), `${where}: layout`);
+  for (const p of view.panels) {
+    assert.deepEqual(keys(p), PANEL_KEYS, `${where}: panel keys`);
+    assert.ok(p.backdrop === null || PIC.test(p.backdrop), `${where}: backdrop ${p.backdrop}`);
+    for (const w of p.pcs.concat(p.people)) {
+      assert.deepEqual(keys(w), WHO_KEYS, `${where}: person keys`);
+      assert.ok(w.pic === null || PIC.test(w.pic), `${where}: pic ${w.pic}`);
+    }
+    if (p.order === null) continue;
+    assert.deepEqual(keys(p.order), ORDER_KEYS, `${where}: order keys`);
+    for (const r of p.order.rows) {
+      const k = keys(r);
+      assert.ok(JSON.stringify(k) === JSON.stringify(FOE_ROW) || JSON.stringify(k) === JSON.stringify(PC_ROW), `${where}: row keys ${k}`);
+      if (r.lair) assert.deepEqual(k, FOE_ROW, `${where}: the Lair row's keys`);
+      if (r.statuses) assert.ok(r.statuses.every((x) => typeof x === 'string'));
+    }
+  }
+}
+
+// The order a fighting panel shows, against the state's fight: one row per ticked row, in order; foe and
+// Lair rows carry only name, ini, current, out and lair (Review L1).
+// A row is a PC or an ally by the model's word, never the row's (the PR review's L1).
+function checkOrder(view, state, where, model) {
+  const f = state.fight;
+  const pcs = new Set((model.pcs || []).map((p) => p.note));
+  const allies = new Set(model.beats.flatMap((b) => (b.foes || []).filter((x) => x.ally).map((x) => x.note))
+    .concat((model.cast || []).filter((c) => c.foe && c.foe.ally).map((c) => c.note)));
+  for (const p of view.panels) {
+    if (!f) { assert.equal(p.order, null, `${where}: no fight, no order`); continue; }
+    if (!p.order) continue;
+    const ticked = f.rows.filter((r) => r.in);
+    assert.equal(p.order.rows.length, ticked.length, `${where}: one row per ticked row, no unticked one`);
+    ticked.forEach((r, i) => {
+      const named = r.kind !== 'lair' && (pcs.has(r.note) || allies.has(r.note));
+      assert.deepEqual(keys(p.order.rows[i]), named ? PC_ROW : FOE_ROW, `${where}: ${r.kind} row keys`);
+    });
+  }
+}
+
+describe('the players\' screen leak test', () => {
+  it('nothing the GM keeps back reaches the players, step by step', { timeout: 120000 }, async () => {
+    const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'rs-leak-'));
+    made.push(vault);
+    fs.cpSync(FIXTURE, vault, { recursive: true });
+    const model = readRunSheet(vault, S.PLAN, { party: S.PARTY });
+
+    // a forPlayers that can be made to throw once, with GM words in its message
+    const THROWN = `GMNOTE-thrown ${S.NOTES.GM_MAP} Hidden Abbot`;
+    let throwNext = false;
+    const lines = [];
+    const deps = {
+      delayMs: 20, retryMs: [20], pingMs: 40,
+      log: (l) => lines.push(l),
+      forPlayers: (...a) => { if (throwNext) { throwNext = false; throw new Error(`${THROWN}\nsecond line`); } return forPlayers(...a); },
+    };
+    const picked = pickSession(listSessions(vault), S.SESSION, vault);
+    assert.ok(picked.session, picked.error);
+    const run = createTableServer({ vaultPath: vault, session: picked.session, party: S.PARTY, deps });
+    const port = await listenLocal(run.server, 0);
+    const stateId = stateIdOf(picked.session);
+    try {
+      const forbidden = forbiddenList(vault, model);
+      forbidden.push({ text: vault, why: 'the vault\'s folder', short: false, control: false });
+      forbidden.push({ text: run.serverId, why: 'the serverId', short: false, control: true });
+      forbidden.push({ text: stateId, why: 'the stateId', short: false, control: true });
+      // a sanity check on the list itself: the fixture's sentinels are all in it
+      for (const must of ['7342', '6173', '+97', 'GMNOTE-Glacier Wyrm', 'The Pale Courier Two', 'Lucan Truename', 'Hidden Abbot',
+        'The Gate House', 'Ashfall Reckoning', 'Map of the Gate (GM)', 'gate-gm-secret.png', 'Died before the party came.', '2/Day', '(3)']) {
+        assert.ok(forbidden.some((x) => x.text === must), `the forbidden list holds ${must}`);
+      }
+      const checks = forbidden.map((x) => ({ ...x, hit: matcher(x) }));
+
+      // the GM's own answers about every note (static over the session) for the positive control
+      const noteAnswers = [];
+      for (const f of walk(vault).filter((x) => x.endsWith('.md'))) {
+        const rel = path.relative(vault, f).split(path.sep).join('/');
+        const r = await req(port, 'GET', `/api/note?path=${encodeURIComponent(rel)}`);
+        if (r.status === 200) noteAnswers.push(r.text);
+      }
+
+      const pictures = walk(path.join(vault, '_attachments')).map((f) => `_attachments/${path.basename(f)}`);
+      const picPath = (url) => {
+        const id = url.slice('/players/pic/'.length);
+        return pictures.find((p) => crypto.createHash('sha256').update(`${run.serverId}\n${p}`).digest('hex').slice(0, 20) === id) || null;
+      };
+
+      let seq = 0;
+      const gm = stream(port, '/api/events');
+      let players = stream(port, '/api/players/events');
+      const oldStreams = [];
+      const allowed = new Set();
+      const allowedPics = new Set();
+      let streamSeen = 0;
+      let lastPaused = null;
+      const collected = [];
+
+      const t = {
+        model,
+        vault,
+        id: () => `lk-${++seq}`,
+        state: async () => { const r = await req(port, 'GET', '/api/state'); return { state: r.json.state, rev: r.json.rev }; },
+        send: async (actions) => {
+          const r = await req(port, 'POST', '/api/actions', { stateId, base: 0, actions: actions.map((a) => ({ id: `lk-${++seq}`, ...a })) });
+          assert.equal(r.status, 200, r.text);
+          assert.deepEqual(r.json.rejected, [], `no action rejected: ${JSON.stringify(r.json.rejected)}`);
+          return r.json;
+        },
+        roll: async (rolls) => {
+          if (!rolls.length) return [];
+          const r = await req(port, 'POST', '/api/roll', { rolls });
+          assert.equal(r.status, 200, r.text);
+          return r.json.results;
+        },
+        checkpoint: async (name) => { lastPaused = await collect(`${t.step} (${name})`); },
+        reconnect: async () => {
+          oldStreams.push(players);
+          players.close();
+          players = stream(port, '/api/players/events');
+          streamSeen = 0;
+          await waitFor(() => players.events.length >= 2, 'hello and view after the reconnect');
+          assert.deepEqual(players.events.slice(0, 2).map((e) => e.event), ['hello', 'view'], 'a reconnect gets hello, then the view');
+          assert.equal(players.events[0].text, '{}');
+          assert.deepEqual(JSON.parse(players.events[1].text), (await req(port, 'GET', '/api/players/view')).json, 'and the view is the current one');
+        },
+        missingPicture: async (rel) => {
+          const v = (await req(port, 'GET', '/api/players/view')).json;
+          const urls = v.panels.flatMap((p) => [p.backdrop, ...p.pcs.map((x) => x.pic), ...p.people.map((x) => x.pic)]).filter(Boolean);
+          const url = urls.find((u) => picPath(u) === rel);
+          assert.ok(url, `${rel} is on the view`);
+          const keep = fs.readFileSync(path.join(vault, ...rel.split('/')));
+          fs.rmSync(path.join(vault, ...rel.split('/')));
+          const r = await req(port, 'GET', url);
+          assert.equal(r.status, 404);
+          assert.equal(r.text, 'Not found', 'a missing picture answers the fixed body');
+          assert.ok(lines.some((l) => l.includes(path.posix.basename(rel))), 'the terminal is told which file');
+          collected.push({ where: 'a missing picture', text: r.text, headers: r.headers, kind: 'static' });
+          fs.writeFileSync(path.join(vault, ...rel.split('/')), keep);
+        },
+        throwOnce: async (actions) => {
+          const before = (await req(port, 'GET', '/api/players/view')).text;
+          const count = players.events.length;
+          throwNext = true;
+          await t.send(actions);
+          const now = await req(port, 'GET', '/api/players/view');
+          assert.equal(now.status, 200);
+          assert.equal(now.text, before, 'a forPlayers that throws keeps the last view');
+          await waitFor(() => gm.events.some((e) => e.event === 'players-failed'), 'the GM told');
+          const told = JSON.parse(gm.events.find((e) => e.event === 'players-failed').text);
+          assert.equal(told.text, `The players' screen could not be updated: ${THROWN}`);
+          await wait(120);
+          assert.equal(players.events.length, count, 'nothing new on the players\' stream');
+          assert.ok(!players.raw().includes('thrown') && !now.text.includes('thrown'), 'the error\'s words stay off the players\' half');
+        },
+      };
+
+      async function collect(where) {
+        const got = [];
+        for (const url of ['/players', '/players/players.js', '/players/render.js', '/players/players.css']) {
+          const r = await req(port, 'GET', url);
+          assert.equal(r.status, 200, `${where}: ${url}`);
+          got.push({ where: `${where} ${url}`, text: r.text, headers: r.headers, kind: 'static' });
+        }
+        const v = await req(port, 'GET', '/api/players/view');
+        assert.equal(v.status, 200, `${where}: the view`);
+        got.push({ where: `${where} view`, text: v.text, headers: v.headers, kind: 'view' });
+        const view = v.json;
+        checkShape(view, where);
+        const { state } = await t.state();
+        checkOrder(view, state, where, model);
+
+        // the stream has caught up with the view; what it sent since the last step is checked
+        await waitFor(() => {
+          const last = [...players.events].reverse().find((e) => e.event === 'view');
+          return last && last.text === v.text;
+        }, `${where}: the stream's view`);
+        const fresh = players.events.slice(streamSeen);
+        streamSeen = players.events.length;
+        for (const e of fresh) {
+          assert.ok(['hello', 'view'].includes(e.event), `${where}: the players' stream sent "${e.event}"`);
+          if (e.event === 'hello') assert.equal(e.text, '{}', `${where}: hello is {}`);
+          else checkShape(JSON.parse(e.text), `${where} (stream)`);
+          got.push({ where: `${where} event ${e.event}`, text: e.text || '', kind: 'view' });
+        }
+        // the raw stream: only event/data pairs and pings, nothing else on the wire
+        for (const s of [players, ...oldStreams]) {
+          const blocks = s.raw().split('\n\n').filter((b) => b.length);
+          for (const b of blocks) assert.ok(/^: ping$/.test(b) || /^event: (hello|view)\ndata: .*$/.test(b), `${where}: a stream block ${JSON.stringify(b.slice(0, 80))}`);
+          const h = s.headers();
+          if (h) got.push({ where: `${where} stream headers`, text: '', headers: h, kind: 'static' });
+        }
+
+        // rendered as the players' page renders it, with the render.js the server serves
+        const sandbox = { self: {} };
+        vm.runInNewContext(got.find((x) => x.where.endsWith('/players/render.js')).text, sandbox);
+        const render = sandbox.self.RunSheetPlayersRender.renderPlayers;
+        for (const e of [view, ...fresh.filter((x) => x.event === 'view').map((x) => JSON.parse(x.text))]) {
+          got.push({ where: `${where} markup`, text: render(e), kind: 'view' });
+        }
+
+        // every picture: one the step allows, byte for byte
+        const urls = view.panels.flatMap((p) => [p.backdrop, ...p.pcs.map((x) => x.pic), ...p.people.map((x) => x.pic)]).filter(Boolean);
+        for (const url of new Set(urls)) {
+          const rel = picPath(url);
+          assert.ok(rel, `${where}: ${url} is a picture in the vault`);
+          assert.ok(allowedPics.has(path.posix.basename(rel)), `${where}: ${rel} may not be shown yet`);
+          const r = await req(port, 'GET', url);
+          assert.equal(r.status, 200, `${where}: ${url}`);
+          assert.ok(r.bytes.equals(fs.readFileSync(path.join(vault, ...rel.split('/')))), `${where}: ${url} serves ${rel}`);
+          got.push({ where: `${where} picture headers`, text: '', headers: r.headers, kind: 'static' });
+        }
+
+        // headers: no cookie, no CORS
+        for (const g of got.filter((x) => x.headers)) {
+          assert.ok(!('set-cookie' in g.headers), `${g.where}: Set-Cookie`);
+          assert.ok(!Object.keys(g.headers).some((k) => k.startsWith('access-control-')), `${g.where}: a CORS header`);
+        }
+
+        // the GM's own answers at this step
+        const gmText = [(await req(port, 'GET', '/api/model')).text, (await req(port, 'GET', '/api/state')).text, ...noteAnswers].join('\n');
+        assert.match(gmText, /"dead"\s*:/, 'the GM\'s answers hold a dead flag (positive control for the key check)');
+
+        const active = checks.filter((x) => !allowed.has(x.text) && !(x.with && allowed.has(x.with)));
+        for (const x of active) {
+          if (x.control) assert.ok(x.hit(gmText), `${where}: positive control: "${x.text}" (${x.why}) is not in the GM's answers`);
+          for (const g of got) {
+            // a short number is matched in the body only: a header's Date or Content-Length holds numbers of its own
+            // (`14:21:05` failed the step whenever the clock said 21)
+            const texts = [g.text, ...(x.short ? [] : Object.values(g.headers || {}).flat().map(String))];
+            if (x.short && g.kind !== 'view') continue;
+            for (const text of texts) assert.ok(!x.hit(text.replace(/\/players\/pic\/[0-9a-f]{20}/g, '/players/pic/ID')), `${g.where}: "${x.text}" (${x.why}) reached the players`);
+          }
+        }
+        for (const g of got.filter((x) => x.kind === 'view')) assert.ok(!/"dead"\s*:/.test(g.text), `${g.where}: a dead key`);
+        collected.push(...got);
+        return { view, state };
+      }
+
+      const expect = {
+        '1': ({ view }) => {
+          assert.equal(view.layout, 'n2');
+          assert.deepEqual(view.panels.map((p) => p.pcs.map((x) => x.name)), [['Ada'], ['Ben']]);
+          assert.equal(view.panels[0].caption, 'The Gate');
+          assert.equal(view.panels[1].caption, null, 'a withheld place has no caption');
+          assert.ok(view.panels[1].backdrop, 'and keeps its picture');
+        },
+        '2a': ({ view }) => assert.deepEqual(view.panels[0].people.map((x) => x.name), ['Masked Gilt']),
+        '2b': ({ view }) => assert.deepEqual(view.panels[0].people.map((x) => x.name), ['Lucan Truename']),
+        '3': ({ view }) => {
+          assert.deepEqual(view.panels[0].people.map((x) => x.name), ['Lucan Truename', 'a stranger']);
+          assert.equal(view.panels[0].people[1].pic, null, 'a withheld person has no face');
+        },
+        '4a': ({ view }) => { assert.equal(view.panels[0].caption, 'Map of the Gate'); assert.ok(view.panels[0].backdrop); },
+        '4b': ({ view }) => { assert.equal(view.panels[0].backdrop, null, 'a GM map shows nothing'); assert.equal(view.panels[0].caption, null); },
+        '5': ({ view }) => {
+          const names = view.panels[0].order.rows.map((r) => r.name);
+          assert.ok(names.includes('Brother Venn') && names.includes('Mephit 1') && names.includes('Mephit 2'), names.join(', '));
+          assert.equal(view.panels[1].order, null, 'the panel not in the fight has no order');
+        },
+        '6': ({ view, state }) => {
+          assert.ok(state.fight.round >= 2, 'a whole round went by');
+          const wyrm = S.rowOf(state, S.NOTES.WYRM);
+          assert.ok(wyrm.hp <= wyrm.max / 2 && wyrm.hp > 0, 'the wyrm is Bloodied');
+          assert.ok(Object.keys(state.fight.lit).some((k) => k.endsWith(`|${wyrm.id}`)), 'its threshold lit');
+          assert.equal(view.panels[0].order.round, state.fight.round);
+          const ada = view.panels[0].order.rows.find((r) => r.name === 'Ada');
+          assert.deepEqual([ada.hp, ada.statuses], ['17/30', ['Prone']]);
+        },
+        '7 (paused)': ({ view }) => assert.equal(view.panels[0].order.paused, true),
+        '7': ({ view }) => assert.equal(view.panels[0].order.paused, false),
+        '8': ({ view }) => {
+          const names = view.panels[0].order.rows.map((r) => r.name);
+          assert.ok(names.includes('Ice Mephit 1') && names.includes('Mephit 2'), names.join(', '));
+        },
+        '8b': ({ view }) => {
+          const names = view.panels[0].order.rows.map((r) => r.name);
+          assert.ok(names.includes('Mephit 1') && names.includes('Mephit 2'), names.join(', '));
+        },
+        '12 (hostile fight)': ({ view }) => {
+          const names = view.panels[0].order.rows.map((r) => r.name);
+          assert.ok(names.includes('Mephit 1'), `the model's word, not the row's: ${names.join(', ')}`);
+          const wyrm = view.panels[0].order.rows.filter((r) => !('hp' in r));
+          assert.ok(wyrm.length >= 3, 'the wyrm sent as an ally is still a foe: no HP');
+        },
+        '9': ({ view }) => {
+          assert.ok(view.panels[1].order, 'the second group\'s panel shows the order');
+          assert.deepEqual(view.panels[1].order, view.panels[0].order);
+        },
+        '10': ({ view }) => assert.ok(view.panels.every((p) => p.order === null)),
+        '12': ({ view }) => {
+          assert.deepEqual(view.panels[0].people.map((x) => x.name), ['Lucan Truename', 'a stranger'], 'nothing that is not a person goes up');
+          assert.equal(view.panels[0].backdrop, null);
+          assert.deepEqual([view.panels[1].backdrop, view.panels[1].caption], [null, null], 'a person is no backdrop');
+          assert.ok(!JSON.stringify(view).includes('Nobody Here Either'));
+        },
+        '13': ({ view, state }) => {
+          const ticked = state.fight.rows.filter((r) => r.in);
+          const i = ticked.findIndex((r) => r.note === S.NOTES.ABBOT);
+          assert.equal(ticked[i].seen, true);
+          assert.match(view.panels[0].order.rows[i].name, /^(?:Stranger \d+|A stranger)$/, 'a seen withheld foe keeps the word');
+        },
+        '14': ({ view, state }) => {
+          const wolf = S.rowOf(state, S.NOTES.WOLF);
+          assert.equal(wolf.in, false);
+          assert.ok(wolf.unseenN === null || wolf.unseenN === undefined, 'an unticked row takes no number');
+          const nums = view.panels[0].order.rows.map((r) => /^Stranger (\d+)$/.exec(r.name)).filter(Boolean).map((m) => Number(m[1])).sort((a, b) => a - b);
+          // numbers are fixed at first tick, so a shown row keeps its place in the count (decision 5); the
+          // unticked wolf has none, so the ticked strangers hold exactly 1..k and no label goes past k
+          // a foe seen when it joined (the abbot, shown in step 3) takes no number
+          const strangers = state.fight.rows.filter((r) => r.in && r.kind === 'foe' && r.word === wolf.word && !(r.seen && r.unseenN == null));
+          assert.deepEqual(strangers.map((r) => r.unseenN).sort((a, b) => a - b), strangers.map((_, k) => k + 1));
+          assert.ok(nums.length >= 2 && Math.max(...nums) <= strangers.length, `no stranger numbered past ${strangers.length}: ${nums}`);
+        },
+        '15': ({ view }) => assert.deepEqual(view.panels[0].people.map((x) => x.name), ['a stranger'], 'the view moves on once forPlayers works again'),
+      };
+
+      await waitFor(() => players.events.length >= 1, 'hello');
+      for (const step of S.STEPS) {
+        t.step = step.name;
+        const key = step.name.split(' ')[0];
+        await step.run(t);
+        for (const a of step.allow || []) allowed.add(a);
+        for (const a of step.revoke || []) allowed.delete(a);
+        for (const p of step.pics || []) allowedPics.add(p);
+        const got = await collect(step.name);
+        if (expect[key]) expect[key](got);
+        // the checkpoints inside steps 7 and 12 have their own expectations
+        if (key === '7') expect['7 (paused)'](lastPaused);
+        if (key === '12') expect['12 (hostile fight)'](lastPaused);
+      }
+      assert.ok(collected.length > 100, 'the test looked at what the players were sent');
+      gm.close();
+      players.close();
+    } finally {
+      await run.close();
+    }
+  });
+});

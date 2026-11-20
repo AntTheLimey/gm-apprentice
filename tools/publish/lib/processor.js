@@ -2383,6 +2383,8 @@ function publishedFrontmatter(frontmatter, excludeFields = [], overrides = {}) {
   // (`gma reveal --unmask` moves them into `aliases` and `portrait`).
   delete filtered.unmasked_name;
   delete filtered.unmasked_portrait;
+  // `unseen_as` is the run sheet's players' screen word for a foe not yet shown; never a sheet row.
+  delete filtered.unseen_as;
   // `withheld` is the note's own flag for the build; nothing on the site says a note has it.
   delete filtered.withheld;
   if (Array.isArray(filtered.aliases) && secret.size > 0) {

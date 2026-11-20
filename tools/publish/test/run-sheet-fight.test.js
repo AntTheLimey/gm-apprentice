@@ -1,0 +1,1087 @@
+'use strict';
+// The fight in the run sheet's state (plan 5b Task 5): fight.js's handlers through state.js's one `reduce`,
+// and what `derive` gives the page and the record. Rows come from fight-math's builders, as the page makes them.
+const { describe, it } = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const { readRunSheet } = require('../lib/run-sheet/read');
+const RS = require('../lib/run-sheet/web/state');
+const M = require('../lib/run-sheet/web/fight-math');
+
+const FIXTURE = path.join(__dirname, 'fixtures', 'run-sheet-app');
+const PLAN = 'Chapters/Chapter 1/Sessions/Session 02/Session 02 - The Test - Plan.md';
+const ADA = 'Characters/PCs/Ada Moss.md';
+const BEN = 'Characters/PCs/Ben Hart.md';
+const LUCAN = 'Characters/NPCs/Lucan Grey.md';
+const WOLF = 'Creatures/Frost Wolf.md';
+const ASH = 'Characters/NPCs/Brother Ash.md';
+const MEPHIT = 'Creatures/Ice Mephit.md';
+const DRAKE = 'Creatures/Ice Drake.md';
+const GUARD = 'Characters/NPCs/Guard.md';
+const base = readRunSheet(FIXTURE, PLAN, { party: [ADA, BEN] });
+const clone = (o) => JSON.parse(JSON.stringify(o));
+// the Gate gets an HP line a wolf can cross and one a bare Bloodied names
+const model = (() => {
+  const m = clone(base);
+  m.beats[0].points.push({ key: `${m.beats[0].key}.pt.hp10`, text: 'Bloodied (10 HP or less): the pack breaks' });
+  return m;
+})();
+const GATE = model.beats[0];
+const HUB = model.beats[2];
+const SPOT = HUB.spots[0].key;
+const TOWER = model.beats[1];
+
+const T0 = Date.parse('2026-11-20T19:00:00.000Z');
+let tick = 0;
+const now = () => new Date(T0 + (++tick) * 60000).toISOString();
+let n = 0;
+const nextId = () => `a${++n}`;
+const fresh = () => RS.emptyState({ stateId: 's', session: 'x', plan: PLAN });
+const deepFreeze = (o) => { Object.values(o).forEach((v) => { if (v && typeof v === 'object') deepFreeze(v); }); return Object.freeze(o); };
+
+const red = (s, a, m) => RS.reduce(s, a, now(), m);
+const act = (s, a) => red(s, { id: nextId(), ...a });
+const move = (s, pc, beat, spot) => act(s, { type: 'move', pc, to: { beat: beat.key, spot: spot || null, title: beat.title } });
+// Fight on a beat, as the page builds it
+const fightAt = (s, beat, { m = model, groups } = {}) => {
+  const id = nextId();
+  const b = M.rowsForFight({ model: m, derived: RS.derive(m, s), state: s, beatKey: beat.key, groups, idBase: id });
+  return RS.reduce(s, { id, type: 'fightStart', beat: beat.key, title: beat.title, groups: b.groups, rows: b.rows, thresholds: b.thresholds }, now());
+};
+const join = (s, add, m = model) => {
+  const id = nextId();
+  const j = M.joinRows({ model: m, derived: RS.derive(m, s), state: s, fight: s.fight, add, idBase: id });
+  assert.equal(j.refused, null, j.refused);
+  return RS.reduce(s, { id, type: 'fightJoin', fight: s.fight.id, rows: j.rows, tick: j.tick, groups: j.groups, thresholds: j.thresholds, label: '' }, now());
+};
+const F = (s, a) => act(s, { fight: s.fight.id, ...a });
+const rows = (s, note) => s.fight.rows.filter((r) => r.note === note);
+const row = (s, note, copy = 1) => s.fight.rows.find((r) => r.note === note && (r.kind === 'pc' || r.copy === copy));
+const next = (s) => F(s, { type: 'fightNext', from: s.fight.turn, round: s.fight.round });
+const hit = (s, note, entry, copy) => F(s, { type: 'hp', row: row(s, note, copy).id, entry });
+const end = (s) => F(s, { type: 'fightEnd' });
+const texts = (s) => s.events.filter((e) => e.fight).map((e) => e.text);
+const vital = (s, id, m = model) => RS.derive(m, s).vitals.find((v) => v.rowId === id);
+const recorded = (s, id, m = model) => RS.derive(m, s).vitalsRecorded.find((v) => v.rowId === id);
+// Ada at the Gate and a fight on it
+const gateFight = () => fightAt(move(fresh(), ADA, GATE), GATE);
+
+describe('the fight in the state', () => {
+  it('fight start ticks the beat\'s people', () => {
+    const s = gateFight();
+    assert.equal(row(s, ADA).in, true);
+    assert.equal(row(s, BEN).in, false, 'a PC elsewhere is listed unticked');
+    assert.equal(rows(s, WOLF).length, 3);
+    assert.ok(rows(s, WOLF).every((r) => r.in));
+    assert.equal(row(s, LUCAN).kind, 'ally');
+    assert.equal(row(s, LUCAN).in, true);
+    const lair = s.fight.rows.find((r) => r.kind === 'lair');
+    assert.deepEqual(lair.of, rows(s, WOLF).map((r) => r.id));
+    // Brother Ash and the wolves share the withheld person word, so all four are numbered
+    assert.equal(row(s, ASH).unseenN, 1);
+    assert.deepEqual(rows(s, WOLF).map((r) => r.unseenN), [2, 3, 4], 'numbered when first ticked in');
+    assert.equal(row(s, LUCAN).unseenN, null, 'an ally is never unseen');
+    assert.equal(rows(s, WOLF)[0].word, 'a stranger', 'the withheld person word');
+    assert.deepEqual(s.fight.groups, [GATE.key]);
+    assert.equal(s.fight.round, 0);
+    assert.equal(s.fight.turn, null);
+    assert.deepEqual(texts(s), ['Fight starts at The Gate.']);
+    assert.ok(s.events.every((e) => e.beat === GATE.key));
+  });
+
+  it('a second fightStart is dropped', () => {
+    const s = gateFight();
+    const s2 = fightAt(s, TOWER);
+    assert.equal(s2.fight.id, s.fight.id);
+    assert.deepEqual(s2.fight.rows, s.fight.rows);
+    assert.equal(texts(s2).length, 1);
+  });
+
+  it('two Nexts built on the same turn advance once', () => {
+    let s = gateFight();
+    const a = { type: 'fightNext', fight: s.fight.id, from: null, round: 0 };
+    s = red(s, { id: 'n1', ...a });
+    const first = s.fight.turn;
+    s = red(s, { id: 'n2', ...a });
+    assert.equal(s.fight.turn, first, 'the second Next built before the start is dropped');
+    const b = { type: 'fightNext', fight: s.fight.id, from: s.fight.turn, round: 1 };
+    s = red(s, { id: 'n3', ...b });
+    const second = s.fight.turn;
+    assert.notEqual(second, first);
+    s = red(s, { id: 'n4', ...b });
+    assert.equal(s.fight.turn, second, 'a Next built on a turn that moved on is dropped');
+    s = red(s, { id: 'n5', ...b, from: second, round: 2 });
+    assert.equal(s.fight.turn, second, 'the wrong round is dropped');
+  });
+
+  it('an action for an ended fight changes nothing', () => {
+    let s = gateFight();
+    const old = s.fight.id;
+    const wolf = row(s, WOLF).id;
+    s = end(s);
+    s = fightAt(s, GATE);
+    const before = s.fight.rows;
+    for (const a of [{ type: 'hp', row: wolf, entry: '-5' }, { type: 'fightNext', from: null, round: 0 }, { type: 'fightPause', on: true }, { type: 'fightEnd' }]) {
+      s = act(s, { ...a, fight: old });
+    }
+    assert.deepEqual(s.fight.rows, before);
+    assert.equal(s.fight.paused, false);
+    assert.equal(s.fight.turn, null);
+    // and a row this fight does not hold
+    const s2 = F(s, { type: 'hp', row: 'nope', entry: '-5' });
+    assert.deepEqual(s2.fight, s.fight);
+    // with no fight running, every fight action is a no-op
+    const e = end(s);
+    assert.equal(e.fight, null);
+    assert.deepEqual(act(e, { type: 'hp', fight: s.fight.id, row: wolf, entry: '-5' }).fights, e.fights);
+  });
+
+  it('a second fight starts from the first\'s figures', () => {
+    let s = gateFight();
+    s = hit(s, ADA, '-10');
+    s = F(s, { type: 'status', row: row(s, ADA).id, add: 'Prone' });
+    s = F(s, { type: 'exhaustion', row: row(s, ADA).id, level: 1 });
+    s = F(s, { type: 'concentrating', row: row(s, ADA).id, on: true });
+    s = F(s, { type: 'hp', row: row(s, ADA).id, entry: 't5' });
+    s = end(s);
+    s = fightAt(s, GATE);
+    const ada = row(s, ADA);
+    assert.equal(ada.hp, 12);
+    assert.equal(ada.max, 30);
+    assert.deepEqual(ada.conds, ['Prone']);
+    assert.equal(ada.exhaustion, 1);
+    assert.equal(ada.conc, false, 'concentration starts empty');
+    assert.equal(ada.temp, 0, 'temp starts empty');
+    assert.deepEqual(ada.start, { hp: 12, max: 30, conds: ['Prone'], exhaustion: 1, conc: false });
+  });
+
+  it('a long rest between fights', () => {
+    let s = gateFight();
+    s = hit(s, ADA, '-10');
+    s = F(s, { type: 'status', row: row(s, ADA).id, add: 'Prone' });
+    s = F(s, { type: 'status', row: row(s, ADA).id, add: 'Stable' });
+    s = F(s, { type: 'exhaustion', row: row(s, ADA).id, level: 2 });
+    s = end(s);
+    s = act(s, { type: 'longRest' });
+    assert.equal(vital(s, ADA).conditions, 'Prone, Exhaustion 1');
+    s = fightAt(s, GATE);
+    const ada = row(s, ADA);
+    assert.equal(ada.hp, 30, 'at max');
+    assert.equal(ada.exhaustion, 1, 'one lower');
+    assert.deepEqual(ada.conds, ['Prone'], 'Prone kept, Stable gone');
+  });
+
+  it('an end-panel edit between fights wins', () => {
+    let s = gateFight();
+    s = hit(s, ADA, '-10');
+    s = F(s, { type: 'status', row: row(s, ADA).id, add: 'Prone' });
+    s = end(s);
+    s = act(s, { type: 'endSet', vitals: { [ADA]: { hp: 18 } } });
+    assert.equal(vital(s, ADA).hp, 18);
+    assert.equal(vital(s, ADA).source, 'end');
+    s = fightAt(s, GATE);
+    assert.equal(row(s, ADA).hp, 18);
+    assert.deepEqual(row(s, ADA).conds, ['Prone'], 'the conditions the end panel left alone are the fight\'s');
+  });
+
+  it('a long rest after a fight wins over the fight\'s figure; one before it loses', () => {
+    let s = gateFight();
+    s = hit(s, ADA, '-10');
+    s = end(s);
+    const after = act(s, { type: 'longRest' });
+    assert.equal(vital(after, ADA).hp, 30);
+    assert.equal(vital(after, ADA).source, 'rest');
+    let t = act(move(fresh(), ADA, GATE), { type: 'longRest' });
+    t = fightAt(t, GATE);
+    t = hit(t, ADA, '-10');
+    assert.equal(vital(t, ADA).hp, 20, 'the fight after the rest wins');
+    assert.equal(vital(t, ADA).source, 'fight');
+    // undoing the rest gives the fight's figure back
+    assert.equal(vital(act(after, { type: 'longRest', on: false }), ADA).hp, 12);
+  });
+
+  it('a 5a end-panel row with no at loses to a fight row', () => {
+    let s = move(fresh(), ADA, GATE);
+    s = { ...s, end: { ...s.end, vitals: { [ADA]: { hp: 5, conditions: 'Winded' } } } };
+    s = fightAt(s, GATE);
+    assert.equal(row(s, ADA).hp, 5, 'the fight starts from it');
+    s = hit(s, ADA, '-2');
+    const v = vital(s, ADA);
+    assert.equal(v.hp, 3);
+    assert.equal(v.source, 'fight');
+    assert.equal(v.conditions, 'Winded');
+  });
+
+  it('attach carries a fight', () => {
+    const m = clone(model);
+    m.beats[0].ifs.push({ key: `${GATE.key}.if.bl`, do: 'Bloodied', then: 'it flees' });
+    let s = act(move(fresh(), ADA, GATE), { type: 'move', pc: BEN, to: { beat: HUB.key, spot: SPOT, title: HUB.title } });
+    s = fightAt(s, GATE, { m });
+    // a queued join built before the attach names the old group
+    const id = nextId();
+    const j = M.joinRows({ model: m, derived: RS.derive(m, s), state: s, fight: s.fight, add: { group: GATE.key }, idBase: id });
+    s = hit(s, WOLF, '-6');
+    assert.ok(Object.keys(s.fight.lit).length, 'the 10 HP line lit');
+    const NEW = 'b-new';
+    s = act(s, { type: 'attach', from: GATE.key, to: NEW });
+    assert.equal(s.fight.beat, NEW);
+    assert.deepEqual(s.fight.groups, [NEW]);
+    assert.ok(s.fight.thresholds.every((t) => t.beat === NEW && t.key.startsWith(`${NEW}.`)));
+    assert.ok(Object.keys(s.fight.lit).every((k) => k.startsWith(`${NEW}.`)));
+    assert.ok(rows(s, WOLF).every((r) => r.foeKey.startsWith(`${NEW}.`)));
+    assert.equal(row(s, ADA).group, NEW);
+    s = RS.reduce(s, { id, type: 'fightJoin', fight: s.fight.id, rows: j.rows, tick: j.tick, groups: [GATE.key], thresholds: j.thresholds, label: 'x' }, now());
+    assert.deepEqual(s.fight.groups, [NEW], 'the old group is remapped, not added');
+    // an ended fight follows too
+    s = end(s);
+    s = act(s, { type: 'attach', from: NEW, to: 'b-newer' });
+    assert.equal(s.fights[0].beat, 'b-newer');
+    assert.equal(s.fights[0].rows.find((r) => r.note === ADA).group, 'b-newer');
+  });
+
+  it('a fight whose beat left the Plan still runs', () => {
+    let s = gateFight();
+    s = act(s, { type: 'attach', from: GATE.key, to: 'b-gone' });
+    const d = RS.derive(model, s);
+    assert.equal(d.fight.view.beatGone, true);
+    s = next(s);
+    assert.equal(s.fight.round, 1);
+    assert.equal(RS.derive(model, gateFight()).fight.view.beatGone, false);
+  });
+
+  it('changed means differs from the start', () => {
+    let s = gateFight();
+    s = hit(s, ADA, '-5');
+    s = hit(s, ADA, '+5');
+    s = F(s, { type: 'status', row: row(s, ADA).id, add: 'Prone' });
+    s = F(s, { type: 'status', row: row(s, ADA).id, remove: 'Prone' });
+    assert.equal(recorded(s, ADA), undefined, 'touched and put back is not recorded');
+    s = hit(s, ADA, '-1');
+    assert.equal(recorded(s, ADA).hp, 21);
+  });
+
+  it('a fight spans two groups', () => {
+    let s = move(fresh(), ADA, GATE);
+    s = move(s, BEN, HUB, SPOT);
+    s = fightAt(s, GATE);
+    s = next(s);
+    const turn = s.fight.turn;
+    assert.equal(row(s, BEN).in, false);
+    s = join(s, { group: SPOT });
+    assert.deepEqual(s.fight.groups, [GATE.key, SPOT]);
+    assert.equal(s.fight.turn, turn, 'the turn unchanged');
+    assert.equal(row(s, BEN).in, true, 'the joined PC ticked');
+    assert.equal(s.fight.rows.filter((r) => r.kind === 'pc').length, 2, 'no second row for him');
+    assert.match(texts(s).at(-1), /Ben Hart join the fight\./);
+    assert.equal(RS.derive(model, s).fight.id, s.fight.id, 'one fight');
+  });
+
+  it('copies', () => {
+    let s = gateFight();
+    s = join(s, { cast: MEPHIT, count: 2 });
+    s = join(s, { cast: MEPHIT, count: 1 });
+    assert.deepEqual(rows(s, MEPHIT).map((r) => r.copy), [1, 2, 3]);
+    assert.deepEqual(rows(s, MEPHIT).map((r) => r.unseenN), [5, 6, 7], 'they share the stranger word with Ash and the wolves');
+    const d = RS.derive(model, s);
+    assert.deepEqual(d.fight.view.rows.filter((r) => r.note === MEPHIT).map((r) => r.gmName), ['Ice Mephit 1', 'Ice Mephit 2', 'Ice Mephit 3']);
+    // ally copies get rowIds note, note#2
+    const am = clone(model);
+    const guard = (k) => ({ key: k, note: GUARD, name: 'Guard', ally: true, ac: 12, hp: 11, init: 0 });
+    am.beats[0].foes = [guard('g1'), guard('g2')];
+    let t = fightAt(move(fresh(), ADA, GATE), GATE, { m: am });
+    t = F(t, { type: 'hp', row: row(t, GUARD, 2).id, entry: '-4' });
+    t = F(t, { type: 'hp', row: row(t, GUARD, 1).id, entry: '-1' });
+    const rec = RS.derive(am, t).vitalsRecorded;
+    assert.equal(rec.find((v) => v.rowId === `${GUARD}#2`).hp, 7);
+    assert.equal(rec.find((v) => v.rowId === GUARD).hp, 10);
+  });
+
+  it('rollInit fills only empty boxes', () => {
+    let s = gateFight();
+    const [w1, w2] = rows(s, WOLF);
+    s = F(s, { type: 'setInit', row: w1.id, ini: 3 });
+    s = F(s, { type: 'rollInit', values: { [w1.id]: 19, [w2.id]: 7, [row(s, ADA).id]: 15, nope: 4 } });
+    assert.equal(row(s, WOLF, 1).ini, 3, 'the typed number wins');
+    assert.equal(row(s, WOLF, 2).ini, 7);
+    assert.equal(row(s, ADA).ini, null, 'a PC is never rolled');
+    s = F(s, { type: 'setInit', row: w1.id, ini: null });
+    assert.equal(row(s, WOLF, 1).ini, null);
+  });
+
+  it('first Next sorts once; typing after does not re-sort; Sort keeps the turn', () => {
+    let s = gateFight();
+    const set = (note, ini, copy) => { s = F(s, { type: 'setInit', row: row(s, note, copy).id, ini }); };
+    set(ADA, 5); set(WOLF, 18, 1); set(WOLF, 10, 2); set(WOLF, 2, 3); set(LUCAN, 12); set(ASH, 1);
+    assert.equal(s.fight.sorted, false);
+    s = next(s);
+    assert.equal(s.fight.sorted, true);
+    const order = s.fight.rows.filter((r) => r.in).map((r) => r.id);
+    assert.equal(s.fight.rows.find((r) => r.id === s.fight.turn).kind, 'lair', 'the Lair row on 20 goes first');
+    assert.match(texts(s).at(-1), /^Round 1: Lair action 20, Frost Wolf 1 18, Lucan Grey 12, Frost Wolf 2 10, Ada Moss 5, Frost Wolf 3 2, Brother Ash 1\.$/);
+    s = next(s);
+    const turn = s.fight.turn;
+    set(ASH, 30);
+    assert.deepEqual(s.fight.rows.filter((r) => r.in).map((r) => r.id), order, 'typing does not re-sort');
+    s = F(s, { type: 'fightSort' });
+    assert.equal(s.fight.rows.filter((r) => r.in)[0].note, ASH);
+    assert.equal(s.fight.turn, turn, 'the turn stays with its row');
+  });
+
+  it('rounds wrap with a round-end line naming every combatant\'s HP', () => {
+    let s = gateFight();
+    s = F(s, { type: 'fightTick', row: row(s, WOLF, 2).id, in: false });
+    s = F(s, { type: 'fightTick', row: row(s, WOLF, 3).id, in: false });
+    s = hit(s, ADA, '-2');
+    const live = s.fight.rows.filter((r) => r.in && !r.out).length;
+    for (let i = 0; i < live; i++) s = next(s);
+    assert.equal(s.fight.round, 1);
+    s = next(s);
+    assert.equal(s.fight.round, 2);
+    const line = texts(s).find((t) => t.startsWith('Round 1 ends:'));
+    assert.ok(line, texts(s).join('\n'));
+    for (const name of ['Ada Moss 20/30', 'Brother Ash 9/9', 'Frost Wolf 1 15/15', 'Lucan Grey 16/16']) assert.ok(line.includes(name), `${name} in ${line}`);
+    assert.ok(!line.includes('Frost Wolf 2'), 'an unticked row is no combatant');
+    assert.ok(!line.includes('Lair'), 'the Lair row has no HP');
+  });
+
+  it('legendary actions refill on its turn; recharge rolls once per round; a roll under rechargeAt keeps it spent', () => {
+    let s = gateFight();
+    const w = row(s, WOLF).id;
+    for (const r of s.fight.rows) if (r.id !== w) s = F(s, { type: 'fightTick', row: r.id, in: false });
+    s = F(s, { type: 'fightTick', row: row(s, ADA).id, in: true });
+    s = F(s, { type: 'counter', row: w, kind: 'la', value: 0 });
+    s = F(s, { type: 'counter', row: w, kind: 'lr', value: 9 });
+    assert.equal(row(s, WOLF).lr, 1, 'clamped to its max');
+    s = F(s, { type: 'recharge', row: w, name: 'Howl', ready: false });
+    s = F(s, { type: 'setInit', row: w, ini: 15 });
+    s = F(s, { type: 'setInit', row: row(s, ADA).id, ini: 3 });
+    s = next(s);
+    assert.equal(s.fight.turn, w);
+    assert.equal(row(s, WOLF).la, 2, 'refilled on its turn');
+    assert.equal(s.fight.lastFoe, w);
+    s = F(s, { type: 'rechargeRoll', row: w, name: 'Howl', roll: 4, round: 1 });
+    assert.equal(row(s, WOLF).recharge[0].ready, false, 'under 5 stays spent');
+    s = F(s, { type: 'rechargeRoll', row: w, name: 'Howl', roll: 6, round: 1 });
+    assert.deepEqual(row(s, WOLF).recharge[0].rolled, { round: 1, roll: 4 }, 'one roll a round');
+    assert.equal(row(s, WOLF).recharge[0].ready, false);
+    s = F(s, { type: 'rechargeRoll', row: w, name: 'Howl', roll: 5, round: 2 });
+    assert.equal(row(s, WOLF).recharge[0].ready, false, 'a roll for a round that is not the current one is dropped');
+    s = next(s);
+    s = next(s);
+    assert.equal(s.fight.round, 2);
+    s = F(s, { type: 'rechargeRoll', row: w, name: 'Howl', roll: 5, round: 2 });
+    assert.equal(row(s, WOLF).recharge[0].ready, true);
+    s = F(s, { type: 'rechargeRoll', row: w, name: 'Howl', roll: 1, round: 2 });
+    assert.equal(row(s, WOLF).recharge[0].ready, true, 'a ready recharge takes no roll');
+  });
+
+  it('the Lair row takes its turn at 20 after the 20s', () => {
+    let s = gateFight();
+    for (const r of s.fight.rows) if (r.kind !== 'lair') s = F(s, { type: 'setInit', row: r.id, ini: 20 });
+    s = F(s, { type: 'fightSort' });
+    const live = s.fight.rows.filter((r) => r.in);
+    assert.equal(live.at(-1).kind, 'lair');
+  });
+
+  it('hp entries: -37, +8, t5; half is one-shot; resisted stays', () => {
+    let s = gateFight();
+    const id = row(s, LUCAN).id;
+    s = F(s, { type: 'hp', row: id, entry: '-7' });
+    assert.equal(row(s, LUCAN).hp, 9);
+    s = F(s, { type: 'hp', row: id, entry: '+8' });
+    assert.equal(row(s, LUCAN).hp, 16, 'healing stops at max');
+    s = F(s, { type: 'hp', row: id, entry: 't5' });
+    assert.equal(row(s, LUCAN).temp, 5);
+    s = F(s, { type: 'hp', row: id, entry: '3' });
+    assert.deepEqual([row(s, LUCAN).hp, row(s, LUCAN).temp], [16, 2]);
+    const before = s;
+    s = F(s, { type: 'hp', row: id, entry: 'nonsense' });
+    assert.deepEqual(s.fight, before.fight);
+    s = F(s, { type: 'half', row: id, on: true });
+    s = F(s, { type: 'hp', row: id, entry: '-10' });
+    assert.equal(row(s, LUCAN).hp, 13, '10 halved to 5, 2 to temp');
+    assert.equal(row(s, LUCAN).half, false, 'half is one-shot');
+    s = F(s, { type: 'resisted', row: id, on: true });
+    s = F(s, { type: 'hp', row: id, entry: '-4' });
+    s = F(s, { type: 'hp', row: id, entry: '-4' });
+    assert.equal(row(s, LUCAN).hp, 9);
+    assert.equal(row(s, LUCAN).resisted, true, 'resisted stays');
+  });
+
+  it('a foe at 0 is out and logged; a PC at 0 is Down, concentration ends, logged', () => {
+    let s = gateFight();
+    s = hit(s, ASH, '-30');
+    assert.equal(row(s, ASH).hp, 0);
+    assert.equal(row(s, ASH).out, true);
+    assert.ok(texts(s).includes('Brother Ash drops.'));
+    s = F(s, { type: 'concentrating', row: row(s, ADA).id, on: true });
+    s = hit(s, ADA, '-40');
+    assert.deepEqual(row(s, ADA).conds, ['Down']);
+    assert.equal(row(s, ADA).conc, false);
+    assert.equal(row(s, ADA).out, false, 'a PC is Down, not Out');
+    assert.deepEqual(texts(s).slice(-2), ['Ada Moss is Down.', 'Ada Moss\'s concentration ends.']);
+  });
+
+  // SRD 5.2.1: Concentration ends when the concentrator has the Incapacitated condition, which Paralyzed,
+  // Petrified, Stunned and Unconscious each include.
+  it('Incapacitated, or a status that includes it, ends concentration with a Log line', () => {
+    for (const status of ['Incapacitated', 'Paralyzed', 'Petrified', 'Stunned', 'Unconscious']) {
+      let s = gateFight();
+      const id = row(s, ADA).id;
+      s = F(s, { type: 'concentrating', row: id, on: true });
+      s = F(s, { type: 'status', row: id, add: status });
+      assert.equal(row(s, ADA).conc, false, status);
+      assert.deepEqual(row(s, ADA).conds, [status]);
+      assert.equal(texts(s).at(-1), 'Ada Moss\'s concentration ends.', status);
+    }
+    // other statuses leave it on, and no line is written when there is none to end
+    let s = gateFight();
+    const id = row(s, ADA).id;
+    s = F(s, { type: 'concentrating', row: id, on: true });
+    s = F(s, { type: 'status', row: id, add: 'Prone' });
+    s = F(s, { type: 'status', row: id, add: 'Poisoned' });
+    assert.equal(row(s, ADA).conc, true);
+    const before = texts(s).length;
+    s = F(s, { type: 'concentrating', row: id, on: false });
+    s = F(s, { type: 'status', row: id, add: 'Stunned' });
+    assert.equal(texts(s).length, before, 'no concentration, no line');
+  });
+
+  it('healing from 0 clears Down, Stable and death saves', () => {
+    let s = gateFight();
+    s = hit(s, ADA, '-40');
+    s = F(s, { type: 'deathSave', row: row(s, ADA).id, s: 3, f: 1 });
+    s = F(s, { type: 'status', row: row(s, ADA).id, add: 'Prone' });
+    assert.deepEqual(row(s, ADA).conds, ['Down', 'Stable', 'Prone']);
+    s = F(s, { type: 'deathSave', row: row(s, ADA).id, f: 2 });
+    s = hit(s, ADA, '+4');
+    assert.equal(row(s, ADA).hp, 4);
+    assert.deepEqual(row(s, ADA).conds, ['Prone']);
+    assert.deepEqual(row(s, ADA).ds, { s: 0, f: 0 });
+  });
+
+  it('three death-save successes add Stable', () => {
+    let s = gateFight();
+    s = hit(s, ADA, '-40');
+    const id = row(s, ADA).id;
+    s = F(s, { type: 'deathSave', row: id, s: 2 });
+    assert.ok(!row(s, ADA).conds.includes('Stable'));
+    s = F(s, { type: 'deathSave', row: id, s: 9, f: -2 });
+    assert.deepEqual(row(s, ADA).ds, { s: 0, f: 0 }, 'both counts reset at Stable (SRD)');
+    assert.ok(row(s, ADA).conds.includes('Stable'));
+    assert.ok(texts(s).includes('Ada Moss is Stable.'));
+    s = F(s, { type: 'deathSave', row: id, f: 3 });
+    assert.ok(texts(s).includes('Ada Moss has failed three death saves.'));
+  });
+
+  it('Bloodied is logged for a foe, never stored, and lights the HP line once', () => {
+    let s = gateFight();
+    s = hit(s, WOLF, '-6');
+    let d = RS.derive(model, s);
+    const w = row(s, WOLF).id;
+    const key = `${GATE.key}.pt.hp10`;
+    assert.ok(d.fight.view.lit.has(key), '9 of 15 is under the 10 line');
+    assert.ok(!d.fight.view.bloodied.has(w), 'but not Bloodied');
+    assert.deepEqual(texts(s).filter((t) => t.includes('pack breaks')), ['Frost Wolf 1: Bloodied (10 HP or less): the pack breaks']);
+    s = hit(s, WOLF, '-2');
+    d = RS.derive(model, s);
+    assert.ok(d.fight.view.bloodied.has(w));
+    assert.ok(texts(s).includes('Frost Wolf 1 is Bloodied.'));
+    s = hit(s, WOLF, '-1');
+    assert.equal(texts(s).filter((t) => t.includes('pack breaks')).length, 1, 'logged once');
+    assert.equal(texts(s).filter((t) => t.endsWith('is Bloodied.')).length, 1);
+    assert.ok(!('bloodied' in row(s, WOLF)), 'never stored');
+    assert.ok(!row(s, WOLF).conds.includes('Bloodied'));
+    // a PC's Bloodied shows, but is not logged
+    s = hit(s, ADA, '-10');
+    assert.ok(RS.derive(model, s).fight.view.bloodied.has(row(s, ADA).id));
+    assert.ok(!texts(s).includes('Ada Moss is Bloodied.'));
+    // at 0 it is no longer lit
+    s = hit(s, WOLF, '-30');
+    assert.ok(!RS.derive(model, s).fight.view.lit.has(key));
+  });
+
+  it('area: each ticked row once, half per row, recharge spent in the same action', () => {
+    let s = gateFight();
+    const w = row(s, WOLF).id;
+    s = F(s, { type: 'area', amount: 9, hits: [{ row: row(s, ADA).id, half: false }, { row: row(s, LUCAN).id, half: true }, { row: row(s, ADA).id, half: false }, { row: 'nope' }], spend: { row: w, name: 'Howl' } });
+    assert.equal(row(s, ADA).hp, 13, 'hit once');
+    assert.equal(row(s, LUCAN).hp, 12, 'half: 4');
+    assert.equal(row(s, WOLF).recharge[0].ready, false);
+    const line = texts(s).at(-1);
+    assert.equal(line, 'Howl: 9 damage to Ada Moss 9, Lucan Grey 4 (half).');
+    s = F(s, { type: 'area', amount: 20, hits: [{ row: row(s, ASH).id, half: false }], spend: null });
+    assert.deepEqual(texts(s).slice(-2), ['Area: 20 damage to Brother Ash 20.', 'Brother Ash drops.']);
+  });
+
+  it('exhaustion 1-6 as one value', () => {
+    let s = gateFight();
+    const id = row(s, ADA).id;
+    s = F(s, { type: 'exhaustion', row: id, level: 3 });
+    assert.equal(row(s, ADA).exhaustion, 3);
+    s = F(s, { type: 'exhaustion', row: id, level: 9 });
+    assert.equal(row(s, ADA).exhaustion, 6);
+    s = F(s, { type: 'exhaustion', row: id, level: -1 });
+    assert.equal(row(s, ADA).exhaustion, 0);
+  });
+
+  it('max typed on a no-numbers row sets its HP', () => {
+    let s = gateFight();
+    s = join(s, { cast: DRAKE, count: 1 });
+    assert.equal(row(s, DRAKE).hp, null);
+    s = F(s, { type: 'setMax', row: row(s, DRAKE).id, max: 30 });
+    assert.deepEqual([row(s, DRAKE).hp, row(s, DRAKE).max], [30, 30]);
+    s = F(s, { type: 'setMax', row: row(s, DRAKE).id, max: 40 });
+    assert.deepEqual([row(s, DRAKE).hp, row(s, DRAKE).max], [30, 40], 'a row with HP keeps it');
+    s = F(s, { type: 'setAc', row: row(s, DRAKE).id, ac: 14 });
+    assert.equal(row(s, DRAKE).ac, 14);
+  });
+
+  it('pause and resume keep the turn and round, and are logged', () => {
+    let s = gateFight();
+    s = next(s);
+    s = next(s);
+    const { turn, round } = s.fight;
+    s = F(s, { type: 'fightPause', on: true });
+    assert.equal(s.fight.paused, true);
+    s = F(s, { type: 'fightPause', on: true });
+    s = F(s, { type: 'fightPause', on: false });
+    assert.deepEqual([s.fight.turn, s.fight.round, s.fight.paused], [turn, round, false]);
+    assert.deepEqual(texts(s).slice(-2), ['Fight paused.', 'Fight resumed.']);
+  });
+
+  it('end fight keeps every status; after-fight clear each and clear all', () => {
+    let s = gateFight();
+    const ada = row(s, ADA).id;
+    s = F(s, { type: 'status', row: ada, add: 'Prone' });
+    s = F(s, { type: 'status', row: ada, add: 'Poisoned' });
+    s = F(s, { type: 'exhaustion', row: ada, level: 2 });
+    s = F(s, { type: 'concentrating', row: ada, on: true });
+    s = F(s, { type: 'status', row: row(s, LUCAN).id, add: 'Frightened' });
+    s = F(s, { type: 'status', row: row(s, WOLF).id, add: 'Grappled' });
+    assert.equal(RS.derive(model, s).afterFight, null, 'none while a fight runs');
+    const id = s.fight.id;
+    s = end(s);
+    assert.equal(s.fight, null);
+    assert.equal(s.fights.length, 1);
+    assert.match(texts(s).at(-1), /^Fight ends before the first turn: .*Ada Moss 22\/30 \(Prone, Poisoned, Exhaustion 2, Concentrating\)/);
+    let a = RS.derive(model, s).afterFight;
+    assert.equal(a.fight, id);
+    const byName = (x, y) => (x[0] < y[0] ? -1 : 1);
+    assert.deepEqual(a.rows.map((r) => [r.name, r.statuses]).sort(byName), [
+      ['Ada Moss', ['Prone', 'Poisoned', 'Exhaustion 2', 'Concentrating']],
+      ['Frost Wolf 1', ['Grappled']],
+      ['Lucan Grey', ['Frightened']],
+    ]);
+    s = act(s, { type: 'afterClear', fight: id, row: ada, status: 'Prone' });
+    s = act(s, { type: 'afterClear', fight: id, row: ada, status: 'Concentrating' });
+    s = act(s, { type: 'afterClear', fight: id, row: ada, status: 'Exhaustion' });
+    assert.deepEqual(RS.derive(model, s).afterFight.rows.find((r) => r.id === ada).statuses, ['Poisoned']);
+    assert.equal(vital(s, ADA).conditions, 'Poisoned');
+    s = act(s, { type: 'afterClear', fight: id, row: row({ fight: s.fights[0] }, LUCAN).id, all: true });
+    assert.ok(!RS.derive(model, s).afterFight.rows.some((r) => r.note === LUCAN));
+    s = act(s, { type: 'afterClearAll', fight: 'other' });
+    assert.ok(RS.derive(model, s).afterFight, 'another id changes nothing');
+    s = act(s, { type: 'afterClearAll', fight: id });
+    assert.equal(RS.derive(model, s).afterFight, null);
+  });
+
+  it('vitals come from the last fight; a later end-panel edit wins; an earlier one loses', () => {
+    let s = move(fresh(), ADA, GATE);
+    s = act(s, { type: 'endSet', vitals: { [ADA]: { hp: 25, conditions: 'Winded' } } });
+    s = fightAt(s, GATE);
+    assert.equal(row(s, ADA).hp, 25);
+    s = hit(s, ADA, '-5');
+    s = end(s);
+    let v = recorded(s, ADA);
+    assert.deepEqual([v.hp, v.max, v.conditions, v.source], [20, 30, 'Winded', 'fight'], 'the earlier edit loses');
+    assert.ok(v.at);
+    s = fightAt(s, GATE);
+    s = hit(s, ADA, '-5');
+    s = end(s);
+    assert.equal(recorded(s, ADA).hp, 15, 'the last fight');
+    s = act(s, { type: 'endSet', vitals: { [ADA]: { hp: 29 } } });
+    v = recorded(s, ADA);
+    assert.deepEqual([v.hp, v.source], [29, 'end'], 'the later edit wins');
+  });
+
+  it('an unended fight still gives vitals', () => {
+    let s = gateFight();
+    s = hit(s, LUCAN, '-6');
+    const v = recorded(s, LUCAN);
+    assert.deepEqual([v.hp, v.max, v.source, v.ally], [10, 16, 'fight', true]);
+  });
+
+  it('foes are never in the vitals', () => {
+    let s = gateFight();
+    s = hit(s, WOLF, '-5');
+    s = hit(s, ASH, '-5');
+    s = end(s);
+    const d = RS.derive(model, s);
+    assert.ok(!d.vitals.some((v) => v.note === WOLF || v.note === ASH));
+  });
+
+  it('a PC renamed mid-fight', () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'rs-fight-'));
+    try {
+      fs.cpSync(FIXTURE, tmp, { recursive: true });
+      const m1 = readRunSheet(tmp, PLAN, { party: [ADA, BEN] });
+      let s = fightAt(move(fresh(), ADA, m1.beats[0]), m1.beats[0], { m: m1 });
+      s = F(s, { type: 'hp', row: row(s, ADA).id, entry: '-5' });
+      const NEW = 'Characters/PCs/Ada Rowe.md';
+      fs.renameSync(path.join(tmp, ADA), path.join(tmp, NEW));
+      const m2 = readRunSheet(tmp, PLAN, { party: [NEW, BEN] });
+      const d = RS.derive(m2, s);
+      const r = d.fight.view.rows.find((x) => x.note === ADA);
+      assert.equal(r.gone, true);
+      assert.equal(r.name, 'Ada Moss', 'its stored name');
+      assert.ok(!d.fight.view.rows.find((x) => x.note === BEN).gone);
+      assert.ok(!d.vitals.some((v) => v.rowId === ADA));
+      const nv = d.vitals.find((v) => v.rowId === NEW);
+      assert.deepEqual([nv.hp, nv.source], [22, 'note'], 'the new path comes from the note');
+      assert.ok(!d.vitalsRecorded.some((v) => v.rowId === NEW || v.rowId === ADA));
+    } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+  });
+
+  it('re-applied actions land once', () => {
+    // the page builds on state N; another window's hit moves the server to N+1; the page's queue is re-applied there
+    const N = gateFight();
+    const w = row(N, WOLF).id;
+    const mine = [{ id: 'p1', type: 'hp', fight: N.fight.id, row: w, entry: '-3' }, { id: 'p2', type: 'status', fight: N.fight.id, row: w, add: 'Prone' }];
+    const local = mine.reduce((s, a) => RS.reduce(s, a, now()), N);
+    assert.equal(row(local, WOLF).hp, 12);
+    const N1 = RS.reduce(N, { id: 'o1', type: 'hp', fight: N.fight.id, row: w, entry: '-4' }, now());
+    let s = mine.reduce((x, a) => RS.reduce(x, a, now()), N1);
+    assert.equal(row(s, WOLF).hp, 8, 'both hits, each once');
+    const again = mine.reduce((x, a) => RS.reduce(x, a, now()), s);
+    assert.deepEqual(again, s, 'the same ids again change nothing');
+    // a fight started twice with the same action makes the same rows
+    const st = move(fresh(), ADA, GATE);
+    const b = M.rowsForFight({ model, derived: RS.derive(model, st), state: st, beatKey: GATE.key, idBase: 'f1' });
+    const fa = { id: 'f1', type: 'fightStart', beat: GATE.key, title: GATE.title, groups: b.groups, rows: b.rows, thresholds: b.thresholds };
+    s = RS.reduce(st, fa, now());
+    assert.equal(RS.reduce(s, fa, now()), s);
+  });
+
+  it('two windows\' damage both land', () => {
+    const N = gateFight();
+    const a = { id: 'w1', type: 'hp', fight: N.fight.id, row: row(N, ADA).id, entry: '-2' };
+    const b = { id: 'w2', type: 'hp', fight: N.fight.id, row: row(N, ADA).id, entry: '-3' };
+    const s = [a, b, a, b].reduce((x, y) => RS.reduce(x, y, now()), N);
+    assert.equal(row(s, ADA).hp, 17);
+  });
+
+  it('a fight survives a JSON round trip', () => {
+    let s = gateFight();
+    s = next(s);
+    s = hit(s, WOLF, '-8');
+    s = F(s, { type: 'status', row: row(s, ADA).id, add: 'Prone' });
+    s = F(s, { type: 'fightPause', on: true });
+    const plain = (d) => JSON.stringify(d, (k, v) => (v instanceof Set ? [...v].sort() : v));
+    const back = JSON.parse(JSON.stringify(s));
+    assert.equal(plain(RS.derive(model, back)), plain(RS.derive(model, s)));
+    assert.deepEqual(back, s);
+    const ended = end(s);
+    assert.equal(plain(RS.derive(model, JSON.parse(JSON.stringify(ended)))), plain(RS.derive(model, ended)));
+  });
+
+  it('reduce never mutates its input', () => {
+    let s = deepFreeze(move(fresh(), ADA, GATE));
+    const id = 'fz';
+    const b = M.rowsForFight({ model, derived: RS.derive(model, s), state: s, beatKey: GATE.key, idBase: id });
+    const start = deepFreeze({ id, type: 'fightStart', beat: GATE.key, title: GATE.title, groups: b.groups, rows: b.rows, thresholds: b.thresholds });
+    s = deepFreeze(RS.reduce(s, start, now()));
+    const w = row(s, WOLF).id;
+    const ada = row(s, ADA).id;
+    const j = M.joinRows({ model, derived: RS.derive(model, s), state: s, fight: s.fight, add: { cast: MEPHIT, count: 1 }, idBase: 'fj' });
+    const all = [
+      { type: 'fightJoin', rows: j.rows, tick: j.tick, groups: j.groups, thresholds: j.thresholds, label: 'M' },
+      { type: 'fightTick', row: w, in: false }, { type: 'fightTick', row: w, in: true },
+      { type: 'setInit', row: w, ini: 12 }, { type: 'rollInit', values: { [w]: 3 } }, { type: 'fightSort' },
+      { type: 'fightNext', from: null, round: 0 },
+      { type: 'hp', row: w, entry: '-9' }, { type: 'half', row: w, on: true }, { type: 'resisted', row: w, on: true },
+      { type: 'setMax', row: w, max: 20 }, { type: 'setAc', row: w, ac: 11 },
+      { type: 'status', row: ada, add: 'Prone' }, { type: 'status', row: ada, remove: 'Prone' },
+      { type: 'exhaustion', row: ada, level: 1 }, { type: 'concentrating', row: ada, on: true },
+      { type: 'hp', row: ada, entry: '-99' }, { type: 'deathSave', row: ada, s: 3, f: 0 },
+      { type: 'out', row: w, on: true }, { type: 'counter', row: w, kind: 'la', value: 1 },
+      { type: 'recharge', row: w, name: 'Howl', ready: false }, { type: 'rechargeRoll', row: w, name: 'Howl', roll: 6, round: 1 },
+      { type: 'area', hits: [{ row: ada, half: true }], amount: 4, spend: null }, { type: 'seen', row: w, on: true },
+      { type: 'fightPause', on: true }, { type: 'fightEnd' },
+    ];
+    const fid = s.fight.id;
+    for (const a of all) s = deepFreeze(RS.reduce(s, deepFreeze({ id: nextId(), fight: fid, ...a }), now()));
+    for (const a of [{ type: 'afterClear', row: ada, status: 'Down' }, { type: 'afterClear', row: ada, all: true }, { type: 'afterClearAll' }]) {
+      s = deepFreeze(RS.reduce(s, deepFreeze({ id: nextId(), fight: fid, ...a }), now()));
+    }
+    assert.equal(s.fight, null);
+    assert.equal(s.fights.length, 1);
+  });
+
+  it('an old state with no fight keys loads and derives', () => {
+    const old = move(fresh(), ADA, GATE);
+    for (const k of ['fight', 'fights', 'panels', 'shownEver']) delete old[k];
+    const d = RS.derive(model, old);
+    assert.equal(d.fight, null);
+    assert.deepEqual(d.fightLog, []);
+    assert.equal(d.afterFight, null);
+    const up = RS.upgrade(old, fresh());
+    assert.deepEqual([up.fight, up.fights, up.panels, up.shownEver], [null, [], {}, {}]);
+    let s = fightAt(old, GATE);
+    assert.ok(s.fight);
+    s = end(s);
+    assert.equal(s.fights.length, 1);
+  });
+
+  it('unimprovise keeps a fight\'s Log lines', () => {
+    let s = act(move(fresh(), ADA, GATE), { type: 'improvise', title: 'A brawl', key: 'i-x' });
+    const m = model;
+    const d = RS.derive(m, s);
+    const beat = d.beats.find((b) => b.key === 'i-x');
+    s = fightAt(s, beat);
+    s = end(s);
+    const fightLines = texts(s);
+    s = act(s, { type: 'unimprovise', key: 'i-x' });
+    assert.deepEqual(texts(s), fightLines);
+    assert.ok(!s.events.some((e) => !e.fight && e.beat === 'i-x'));
+    assert.deepEqual(RS.derive(m, s).fightLog.map((l) => l.text), fightLines);
+  });
+
+  it('a join with lair actions is listed on the Lair row; unseen numbers carry on', () => {
+    let s = gateFight();
+    s = join(s, { cast: WOLF, count: 1 });
+    const lair = s.fight.rows.find((r) => r.kind === 'lair');
+    assert.equal(s.fight.rows.filter((r) => r.kind === 'lair').length, 1);
+    assert.deepEqual(lair.of, rows(s, WOLF).map((r) => r.id));
+    assert.equal(rows(s, WOLF)[3].copy, 4);
+    assert.equal(rows(s, WOLF)[3].unseenN, 5);
+    s = F(s, { type: 'fightTick', row: rows(s, WOLF)[3].id, in: false });
+    assert.equal(rows(s, WOLF)[3].unseenN, 5, 'kept once given');
+    // an unticked foe gets its number when first ticked in
+    let t = move(fresh(), ADA, GATE);
+    t = fightAt(t, GATE);
+    t = F(t, { type: 'fightTick', row: row(t, WOLF, 3).id, in: false });
+    const id = nextId();
+    const j = M.joinRows({ model, derived: RS.derive(model, t), state: t, fight: t.fight, add: { cast: MEPHIT, count: 1 }, idBase: id });
+    j.rows[0].in = false;
+    t = RS.reduce(t, { id, type: 'fightJoin', fight: t.fight.id, rows: j.rows, tick: [], groups: [], thresholds: [], label: 'M' }, now());
+    assert.equal(row(t, MEPHIT).unseenN, null, 'unticked: no number');
+    t = F(t, { type: 'fightTick', row: row(t, MEPHIT).id, in: true });
+    assert.equal(row(t, MEPHIT).unseenN, 5, 'the next number when first ticked in');
+  });
+
+  it('derive names rows for the GM and picks the acting panel', () => {
+    let s = act(move(fresh(), ADA, GATE), { type: 'unmask', note: ASH, on: true, name: 'Ash the Knife', beat: GATE.key });
+    s = fightAt(s, GATE);
+    s = hit(s, ASH, '-20');
+    assert.ok(texts(s).includes('Ash the Knife drops.'), 'the log uses the unmasked name');
+    const d = RS.derive(model, s);
+    assert.equal(d.fight.view.rows.find((r) => r.note === ASH).gmName, 'Ash the Knife');
+    assert.equal(d.fight.view.acting.why, 'first-foe');
+    assert.deepEqual(d.fightLog.map((l) => l.text), texts(s));
+    assert.ok(d.fightLog.every((l) => l.beatTitle === GATE.title));
+  });
+
+  it('gm.html loads fight-math.js and fight.js before state.js', () => {
+    const html = fs.readFileSync(path.join(__dirname, '..', 'lib', 'run-sheet', 'web', 'gm.html'), 'utf8');
+    const i = (f) => html.indexOf(`src="/web/${f}"`);
+    assert.ok(i('fight-math.js') > 0 && i('fight-math.js') < i('fight.js') && i('fight.js') < i('state.js'));
+  });
+});
+
+describe('the first review\'s fixes', () => {
+  it('an end-panel edit on one field leaves the other fields\' times alone', () => {
+    let s = move(fresh(), ADA, GATE);
+    s = act(s, { type: 'endSet', vitals: { [ADA]: { hp: 18 } } });
+    s = fightAt(s, GATE);
+    s = hit(s, ADA, '-10');
+    s = F(s, { type: 'status', row: row(s, ADA).id, add: 'Prone' });
+    s = end(s);
+    assert.equal(vital(s, ADA).hp, 8);
+    s = act(s, { type: 'endSet', vitals: { [ADA]: { conditions: '' } } });
+    const v = vital(s, ADA);
+    assert.equal(v.hp, 8, 'the fight\'s HP stays');
+    assert.equal(v.source, 'fight');
+    assert.equal(v.conditions, '', 'the later conditions edit wins');
+    assert.equal(recorded(s, ADA).hp, 8);
+    // and an HP typed after the fight still wins
+    s = act(s, { type: 'endSet', vitals: { [ADA]: { hp: 20 } } });
+    assert.deepEqual([vital(s, ADA).hp, vital(s, ADA).source], [20, 'end']);
+  });
+
+  it('three death-save successes reset both counts', () => {
+    let s = gateFight();
+    s = hit(s, ADA, '-40');
+    const id = row(s, ADA).id;
+    s = F(s, { type: 'deathSave', row: id, f: 2 });
+    s = F(s, { type: 'deathSave', row: id, s: 3 });
+    assert.ok(row(s, ADA).conds.includes('Stable'));
+    assert.deepEqual(row(s, ADA).ds, { s: 0, f: 0 });
+  });
+
+  it('damage at 0 HP removes Stable and is a death save failure; a crit\'s second failure goes on the pips', () => {
+    let s = gateFight();
+    s = hit(s, ADA, '-40');
+    const id = row(s, ADA).id;
+    s = F(s, { type: 'deathSave', row: id, s: 3 });
+    s = hit(s, ADA, '-3');
+    assert.ok(!row(s, ADA).conds.includes('Stable'));
+    assert.ok(row(s, ADA).conds.includes('Down'));
+    assert.deepEqual(row(s, ADA).ds, { s: 0, f: 1 });
+    assert.equal(row(s, ADA).hp, 0);
+    assert.equal(texts(s).at(-1), 'Ada Moss takes damage at 0 HP: a death save failure.');
+    // no control sends a crit (Review L5): the field is ignored, the GM adds the second failure on the pips
+    s = F(s, { type: 'hp', row: id, entry: '-3', crit: true });
+    assert.deepEqual(row(s, ADA).ds, { s: 0, f: 2 });
+    s = F(s, { type: 'deathSave', row: id, f: 3 });
+    s = hit(s, ADA, '-1');
+    assert.ok(texts(s).includes('Ada Moss has failed three death saves.'));
+    s = hit(s, ADA, '-1');
+    assert.deepEqual(row(s, ADA).ds, { s: 0, f: 3 }, 'stops at three');
+  });
+
+  it('temp HP soaks damage at 0 with no failure; an area hit at 0 is a failure; a foe at 0 takes none', () => {
+    let s = gateFight();
+    s = hit(s, ADA, '-40');
+    s = hit(s, ADA, 't5');
+    s = hit(s, ADA, '-3');
+    assert.deepEqual(row(s, ADA).ds, { s: 0, f: 0 });
+    s = F(s, { type: 'area', amount: 4, hits: [{ row: row(s, ADA).id }, { row: row(s, WOLF).id }] });
+    assert.deepEqual(row(s, ADA).ds, { s: 0, f: 1 });
+    s = hit(s, WOLF, '-30');
+    s = hit(s, WOLF, '-3');
+    assert.ok(!('ds' in row(s, WOLF)) || (row(s, WOLF).ds.f || 0) === 0);
+  });
+
+  it('damage left over that reaches the HP max is logged', () => {
+    let s = gateFight();
+    s = hit(s, ADA, '-60');
+    assert.ok(texts(s).includes('Ada Moss: the damage left over is at least the HP max.'));
+    let t = gateFight();
+    t = hit(t, ADA, '-40');
+    assert.ok(!texts(t).some((x) => x.includes('left over')), '28 left over of 30');
+  });
+
+  it('a single-point attach keeps a lit threshold lit', () => {
+    let s = gateFight();
+    s = hit(s, WOLF, '-6');
+    const key = `${GATE.key}.pt.hp10`;
+    const line = texts(s).filter((x) => x.includes('pack breaks'));
+    assert.equal(line.length, 1);
+    s = act(s, { type: 'attach', from: key, to: `${GATE.key}.pt.moved` });
+    assert.ok(Object.keys(s.fight.lit).every((k) => k.startsWith(`${GATE.key}.pt.moved|`)), Object.keys(s.fight.lit).join());
+    s = hit(s, WOLF, '-1');
+    assert.equal(texts(s).filter((x) => x.includes('pack breaks')).length, 1, 'lit once per threshold and row');
+  });
+
+  it('an If-row threshold logs its consequence', () => {
+    const m = clone(model);
+    m.beats[0].ifs.push({ key: `${GATE.key}.if.bl`, do: 'Bloodied', then: 'it flees' });
+    let s = fightAt(move(fresh(), ADA, GATE), GATE, { m });
+    s = hit(s, WOLF, '-8');
+    assert.ok(texts(s).includes('Frost Wolf 1: Bloodied: it flees'), texts(s).join(' | '));
+  });
+
+  it('the Lair row loses its turn once every owner is Out', () => {
+    let s = gateFight();
+    const lair = s.fight.rows.find((r) => r.kind === 'lair');
+    for (const r of s.fight.rows) if (r.kind !== 'lair') s = F(s, { type: 'setInit', row: r.id, ini: 10 });
+    s = F(s, { type: 'fightSort' });
+    for (const r of rows(s, WOLF)) s = F(s, { type: 'out', row: r.id, on: true });
+    const seen = [];
+    for (let i = 0; i < 12; i++) { s = next(s); seen.push(s.fight.turn); }
+    assert.ok(!seen.includes(lair.id), 'skipped');
+    s = F(s, { type: 'out', row: rows(s, WOLF)[0].id, on: false });
+    const back = [];
+    for (let i = 0; i < 12; i++) { s = next(s); back.push(s.fight.turn); }
+    assert.ok(back.includes(lair.id), 'back once an owner is in again');
+  });
+
+  it('an owner ticked in later gets a Lair row when the fight has none', () => {
+    let s = gateFight();
+    s = clone(s);
+    s.fight.rows = s.fight.rows.filter((r) => r.kind !== 'lair');
+    const w = rows(s, WOLF)[0];
+    s = F(s, { type: 'fightTick', row: w.id, in: false });
+    s = F(s, { type: 'fightTick', row: w.id, in: true });
+    const lair = s.fight.rows.filter((r) => r.kind === 'lair');
+    assert.equal(lair.length, 1);
+    assert.ok(lair[0].of.includes(w.id));
+    s = F(s, { type: 'fightTick', row: rows(s, WOLF)[1].id, in: false });
+    s = F(s, { type: 'fightTick', row: rows(s, WOLF)[1].id, in: true });
+    assert.equal(s.fight.rows.filter((r) => r.kind === 'lair').length, 1, 'never a second');
+  });
+
+  it('a foe healed from 0 is back in the fight', () => {
+    let s = gateFight();
+    s = hit(s, WOLF, '-40');
+    assert.equal(row(s, WOLF).out, true);
+    s = hit(s, WOLF, '+4');
+    assert.equal(row(s, WOLF).out, false);
+    assert.ok(texts(s).includes('Frost Wolf 1 is back in the fight.'));
+  });
+
+  it('ending a fight before its first turn says so', () => {
+    const s = end(gateFight());
+    assert.match(texts(s).at(-1), /^Fight ends before the first turn: /);
+  });
+
+  it('a long rest does nothing for a creature at 0 HP, and the Log says so', () => {
+    let s = gateFight();
+    s = hit(s, ADA, '-40');
+    s = end(s);
+    s = act(s, { type: 'longRest' });
+    const v = vital(s, ADA);
+    assert.equal(v.hp, 0);
+    assert.equal(v.conditions, 'Down');
+    assert.equal(v.source, 'fight');
+    const log = RS.derive(model, s).log.map((l) => l.text);
+    assert.ok(log.includes('Ada Moss is at 0 HP, so the long rest does nothing for them.'), log.join(' | '));
+    // someone above 0 is rested as before
+    let t = gateFight();
+    t = hit(t, ADA, '-10');
+    t = end(t);
+    t = act(t, { type: 'longRest' });
+    assert.equal(vital(t, ADA).hp, 30);
+    assert.ok(!RS.derive(model, t).log.some((l) => l.text.includes('long rest does nothing')));
+  });
+});
+
+describe('the PR review and the proof', () => {
+  // Ada 22/30 takes 10 and goes Prone; the fight ends (Review H1's probe)
+  const afterFight = () => {
+    let s = gateFight();
+    s = hit(s, ADA, '-10');
+    s = F(s, { type: 'status', row: row(s, ADA).id, add: 'Prone' });
+    return end(s);
+  };
+  const adaRow = (s) => s.fights.at(-1).rows.find((r) => r.note === ADA);
+
+  it('H1 B: an end-panel HP, then a status cleared after the fight: the end panel\'s HP stands', () => {
+    let s = afterFight();
+    s = act(s, { type: 'endSet', vitals: { [ADA]: { hp: 25 } } });
+    s = act(s, { type: 'afterClear', fight: s.fights.at(-1).id, row: adaRow(s).id, status: 'Prone' });
+    const v = vital(s, ADA);
+    assert.deepEqual([v.hp, v.max, v.conditions, v.source], [25, 30, '', 'end']);
+  });
+
+  it('H1 C: a long rest, then a status cleared after the fight: the rest stands', () => {
+    let s = afterFight();
+    s = act(s, { type: 'longRest' });
+    s = act(s, { type: 'afterClear', fight: s.fights.at(-1).id, row: adaRow(s).id, status: 'Prone' });
+    const v = vital(s, ADA);
+    assert.deepEqual([v.hp, v.max, v.conditions, v.source], [30, 30, '', 'rest']);
+  });
+
+  it('H1 D: a long rest, then Clear all: the rest stands', () => {
+    let s = afterFight();
+    s = act(s, { type: 'longRest' });
+    s = act(s, { type: 'afterClearAll', fight: s.fights.at(-1).id });
+    const v = vital(s, ADA);
+    assert.deepEqual([v.hp, v.conditions, v.source], [30, '', 'rest']);
+    assert.equal(recorded(s, ADA).hp, 30);
+  });
+
+  it('H1: seen, init, AC and counters never move the HP\'s time; hp, area and max do', () => {
+    let s = gateFight();
+    const id = row(s, ADA).id;
+    const t0 = row(s, ADA).hpAt;
+    assert.ok(t0, 'a row takes the fight start as its HP time');
+    s = F(s, { type: 'setInit', row: id, ini: 12 });
+    s = F(s, { type: 'setAc', row: id, ac: 15 });
+    s = F(s, { type: 'status', row: id, add: 'Prone' });
+    assert.equal(row(s, ADA).hpAt, t0);
+    s = hit(s, ADA, '-1');
+    const t1 = row(s, ADA).hpAt;
+    assert.ok(t1 > t0);
+    s = F(s, { type: 'area', amount: 2, hits: [{ row: id }] });
+    const t2 = row(s, ADA).hpAt;
+    assert.ok(t2 > t1);
+    s = F(s, { type: 'setMax', row: id, max: 31 });
+    assert.ok(row(s, ADA).hpAt > t2);
+    // a row from before hpAt reads `at` for both
+    const old = clone(s);
+    delete old.fight.rows.find((r) => r.id === id).hpAt;
+    assert.equal(vital(old, ADA).at, old.fight.rows.find((r) => r.id === id).at);
+  });
+
+  it('L5: max set below HP brings HP down; a max-only fix is recorded; a long rest restores a reduced max', () => {
+    let s = gateFight();
+    const id = row(s, ADA).id;
+    s = F(s, { type: 'setMax', row: id, max: 20 });
+    assert.equal(row(s, ADA).hp, 20, 'HP never above the max');
+    let t = gateFight();
+    t = F(t, { type: 'setMax', row: row(t, ADA).id, max: 31 });
+    assert.equal(row(t, ADA).hp, 22);
+    assert.deepEqual([recorded(t, ADA).hp, recorded(t, ADA).max], [22, 31], 'a max-only fix is recorded');
+    s = end(s);
+    assert.equal(vital(s, ADA).max, 20);
+    s = act(s, { type: 'longRest' });
+    assert.deepEqual([vital(s, ADA).hp, vital(s, ADA).max], [30, 30], 'the rest restores the reduced max');
+  });
+
+  it('proof M1: people an arrivals cue names join benched', () => {
+    const m = clone(model);
+    m.beats[0].arrivals = [{ key: `${GATE.key}.arrive.x`, when: 'Arriving, start of round 3', text: '[[Brother Ash]]', people: [ASH] }];
+    let s = fightAt(move(fresh(), ADA, GATE), GATE, { m });
+    assert.equal(row(s, ASH).in, false, 'benched');
+    assert.equal(row(s, ASH).unseenN, null, 'no unseen number while benched');
+    assert.ok(rows(s, WOLF).every((r) => r.in), 'the rest of the beat is ticked');
+    s = join(s, { cast: ASH, count: 1 }, m);
+    assert.equal(row(s, ASH).in, true, 'Add by name ticks the benched row in');
+    assert.equal(rows(s, ASH).length, 1, 'not a copy');
+  });
+
+  it('proof M2: a Fight on a beat where no PC stands takes every group holding a ticked PC', () => {
+    let s = move(fresh(), ADA, HUB, SPOT);
+    s = move(s, BEN, HUB, SPOT);
+    s = fightAt(s, TOWER);
+    assert.ok(row(s, ADA).in && row(s, BEN).in);
+    assert.deepEqual(s.fight.groups, [SPOT]);
+  });
+
+  it('proof Low: a foe shown before the fight takes no unseen number; it takes one if it goes back to unseen', () => {
+    let s = move(fresh(), ADA, GATE);
+    s = act(s, { type: 'show', group: GATE.key, note: ASH, on: true });
+    s = fightAt(s, GATE);
+    assert.equal(row(s, ASH).seen, true);
+    assert.equal(row(s, ASH).unseenN, null);
+    assert.deepEqual(rows(s, WOLF).map((r) => r.unseenN), [1, 2, 3], 'the wolves start at 1');
+    s = F(s, { type: 'seen', row: row(s, ASH).id, on: false });
+    assert.equal(row(s, ASH).unseenN, 4);
+  });
+
+  it('proof Low: a join line agrees in number', () => {
+    let s = gateFight();
+    s = join(s, { cast: MEPHIT, count: 2 });
+    assert.equal(texts(s).at(-1), 'Ice Mephit 1, Ice Mephit 2 join the fight.');
+    s = join(s, { cast: DRAKE, count: 1 });
+    assert.match(texts(s).at(-1), / joins the fight\.$/);
+    const id = nextId();
+    const t = RS.reduce(gateFight(), { id, type: 'fightJoin', fight: null, rows: [], tick: [], groups: [], thresholds: [], label: '' }, now());
+    assert.ok(t);
+  });
+});
+
+describe('RS.upgrade and the fight\'s keys', () => {
+  it('a saved state with a running fight, an ended one and the players\' panels comes back as it was', () => {
+    let s = move(fresh(), ADA, GATE);
+    s = act(s, { type: 'show', group: GATE.key, note: ASH, on: true });
+    s = end(gateFight());
+    s = fightAt(move(s, ADA, GATE), GATE);
+    s = act(s, { type: 'show', group: GATE.key, note: ASH, on: true });
+    assert.ok(s.fight && s.fights.length === 1 && Object.keys(s.panels).length && Object.keys(s.shownEver).length);
+    const saved = clone(s);
+    assert.deepEqual(RS.upgrade(saved, fresh()), saved);
+  });
+
+  it('a fight, a fight\'s rows or a panel of the wrong kind is refused, code BAD_STATE', () => {
+    for (const bad of [{ fight: 'x' }, { fight: [] }, { fight: { rows: {} } }, { fight: { rows: [null] } },
+      { fights: {} }, { fights: [null] }, { fights: [{ rows: 'x' }] }, { panels: [] }, { panels: { g: null } }, { shownEver: [] }]) {
+      assert.throws(() => RS.upgrade(bad, fresh()), (e) => e.code === 'BAD_STATE', JSON.stringify(bad));
+    }
+    assert.doesNotThrow(() => RS.upgrade({ fight: null, fights: [], panels: {}, shownEver: { [ASH]: true } }, fresh()));
+  });
+});

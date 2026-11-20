@@ -9,6 +9,7 @@ lastUpdated: ""
 aliases: []
 gm_aliases: []        # its true nature, if the name hides one: links resolve, never published
 withheld: false       # true: this note's own name is a secret; the site build looks for it in published text
+unseen_as: ""         # what players call this one before they learn the name ("a brother"); the run sheet's players' screen only
 tags: []
 creature_type: ""     # beast, undead, construct, spirit, deity, aberration
 threat_level: ""      # how dangerous the PCs believe it is, shown on the site

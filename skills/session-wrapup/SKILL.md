@@ -262,7 +262,9 @@ the narrative. Apply the house rules as you would the book.
    flush's value stands (in the prose too), the review says so, and the
    Keeper Checklist gets the pick with both numbers. An ally the Table
    Log's vitals name: its end vitals stay there, where the next run
-   sheet reads them. Loot goes in the `Carrying` of whoever the Table
+   sheet reads them. A figure written `(after the fight, HH:MM)` is the
+   last one the sheet saw: when the Play Notes mention a rest after it,
+   ask the GM. Loot goes in the `Carrying` of whoever the Table
    Log's `Loot` names (a PC's `=== status` block).
 
 Each PC's refreshed fields show in full in step 5b's review; write

@@ -220,9 +220,12 @@ note, `- [[PC]]: Beat title` for a beat with no place, or `off-screen`,
 `not placed`); `Not reached` is one `- Beat title` per beat; each line
 the GM typed under `Advancement` is one bullet; an ally's copies are
 `| [[Guard]] 2 | 9/11 | |`, the number outside the link; a carried
-unmasking turned off tonight is `- [[Note]] masked again`. Vitals rows
-are only values the GM set, so a GM who touched nothing leaves bare
-headings.
+unmasking turned off tonight is `- [[Note]] masked again`. A fight's
+start, rounds and end are `Log` lines, and a vitals row comes from the
+last fight when it changed the figure. A figure written `12/40 (after
+the fight, 20:14)` is the last one the sheet saw, not one set at the
+end. Vitals rows are only values the GM set or a fight changed, so a GM
+who touched nothing leaves bare headings.
 
 A section with nothing in it, or missing altogether, means nothing was
 recorded for it. It is never an error, and never read as "none

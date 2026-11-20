@@ -1,17 +1,25 @@
 'use strict';
 // The run sheet's GM page (spec §6.3): a thin DOM layer over `RunSheetState` (web/state.js, loaded
 // first). The page keeps one { model, state, rev, stateId } and every click is an action: `reduce`,
-// a redraw, then a PUT. The server owns `rev`; the page never re-sends its whole state on its own.
+// a redraw, then the action goes to the server. The server owns `rev`; the page never sends a state.
 //
-// Saving (plan decision 16): one PUT in flight; actions taken meanwhile go together in the next PUT,
-// built on the rev the last one returned. Each action carries an id `<clientId>-<n>`, so `reduce`
-// never applies one twice. A 409 'stale' reloads the server's state and re-applies every pending
-// action in order; a 409 'session' reloads and drops them. A network failure shows "Not connected"
-// until the server answers again; then the page rebases its pending actions on the server's state.
-// An answered action is kept (`G.sent`) until a `saved` event says its rev is on disk: a server that
-// stops inside its one-second write wait loses nothing, because the page sends those actions again.
+// Saving (5a decision 16, 5b decision 25): each action is applied here at once and queued. One
+// `POST /api/actions` is in flight with everything queued; the server runs the same `reduce` on its
+// own state and answers with it, and the page takes that state and re-applies what was queued since.
+// Each action carries an id `<clientId>-<n>`, so `reduce` never applies one twice. An action the
+// server could not apply comes back in `rejected`: it leaves the queue and the header names it.
+// Answered is not saved: answered actions are kept until a `saved` event covers their rev, and go
+// back to the head of the queue when the server turns out to be a new one (a crash before its
+// write). `savedRev` is the disk's rev, from `saved` and from a `hello`'s `savedRev`, so either can
+// prune. A 409 'session' reloads and drops the queue, and no action is taken until the new session is
+// in. A network failure shows "Not connected" until the server answers again; then the page rebases
+// its queue on the server's state.
 //
-// Fights, dice, the players' screen and Show are step 5b: absent here, not disabled.
+// The seam (`window.RunSheetPage`): `dispatch`, `model()`, `state()`, `derived()`, `ui`, `render()`
+// and `parts`, an array of { beatButtons(beat) -> html, side() -> html|null, click(event) -> bool,
+// probe() -> object, sheetTop(derived) -> html, beforeBeat(beat) -> html, focusAttrs: [attribute] }.
+// Scripts loaded after this one push parts in (the fight view, gm-fight.js); the page calls them on
+// every draw. A part that takes the right column puts `part-side` on `#app`. The page holds no dice code: rolls come from the server.
 (function () {
   const RS = window.RunSheetState;
   const $ = (s) => document.querySelector(s);
@@ -29,22 +37,40 @@
   const encodePath = (p) => String(p).split('/').map(encodeURIComponent).join('/');
   const picUrl = (p) => (p ? `/vault/${encodePath(p)}` : null);
   const hhmm = (iso) => { const d = new Date(iso); return Number.isNaN(d.getTime()) ? '' : d.toTimeString().slice(0, 5); };
+  // A tab's name for itself (not a die: the dice live on the server). Short, and different per tab.
   const randomId = () => {
-    const a = new Uint8Array(4);
-    (window.crypto || {}).getRandomValues ? window.crypto.getRandomValues(a) : a.forEach((_, i) => { a[i] = Math.floor(Math.random() * 256); });
-    return Array.from(a, (x) => x.toString(16).padStart(2, '0')).join('');
+    const c = window.crypto || {};
+    if (c.randomUUID) return c.randomUUID().slice(0, 8);
+    return `${Date.now().toString(16)}${Math.floor(performance.now()).toString(16)}`.slice(-8);
   };
 
   // ------------------------------------------------------------------ the one page state
   const G = {
     model: null, session: null, stateId: null, tableLog: null, serverId: null,
     state: null, rev: 0,
-    pending: [], sent: [], inflight: false, clientId: randomId(), seq: 0, switching: false,
-    down: false, putFailing: false, saveFailed: false, putRev: 0, savedRev: 0,
+    pending: [], answered: [], inflight: false, clientId: randomId(), seq: 0, switching: false,
+    down: false, putFailing: false, saveFailed: false, putRev: 0, savedRev: 0, heardRev: 0,
     retry: null, resyncTimer: null, notes: [], drafts: {},
-    ui: { focus: null, armed: null, record: '', copyMsg: '', hits: {} },
+    ui: { focus: null, focusGroup: null, armed: null, record: '', copyMsg: '', hits: {} },
     modelAt: 0,
+    view: null, viewTicket: 0, drawerNote: null,
   };
+  const parts = []; // RunSheetPage.parts: see the seam at the end
+  const MAX_SEND = 200; // the server takes at most 200 actions in one POST
+  // A status typed on a PC or ally row reaches the players word for word (Review L7): the fight view's
+  // `other…` box uses this placeholder.
+  const OTHER_STATUS_PLACEHOLDER = 'other… (players see it as typed)';
+
+  // Tests only: count requests by route, so a test can say no whole state was ever sent.
+  const requests = {};
+  if (PROBE && window.fetch) {
+    const send = window.fetch.bind(window);
+    window.fetch = (url, opts = {}) => {
+      const k = `${String(opts.method || 'GET').toUpperCase()} ${String(url).split('?')[0]}`;
+      requests[k] = (requests[k] || 0) + 1;
+      return send(url, opts);
+    };
+  }
 
   // UI-only memory: folds and Read-aloud. Never the play state; a browser that keeps nothing still works.
   const mem = {
@@ -72,7 +98,7 @@
     G.model = m.model;
     G.session = m.session;
     G.tableLog = m.tableLog;
-    G.serverId = m.serverId;
+    serverIs(m.serverId);
     G.modelAt = Date.now();
     for (const n of m.notices || []) {
       if (n.kind === 'record-kept') note(keptText(n.path), { id: `kept:${n.path}` });
@@ -100,9 +126,31 @@
   }
   const keptText = (p) => `The Table Log was changed outside the sheet; the earlier text is kept at ${p}.`;
 
+  // A new server (a restart, maybe after a crash before its write): what it answered but never saved
+  // goes back to the head of the queue. `applied` drops any that did reach the disk (Review M2). Its revs
+  // are the new server's from here on, so the save counters start again.
+  function serverIs(id) {
+    if (G.serverId && id && id !== G.serverId) {
+      const queued = new Set(G.pending.map((p) => p.a.id));
+      G.pending = G.answered.filter((x) => !queued.has(x.a.id)).map(({ a, at }) => ({ a, at })).concat(G.pending);
+      G.answered = [];
+      G.putRev = 0;
+      G.savedRev = 0;
+      G.heardRev = 0;
+    }
+    if (id) G.serverId = id;
+  }
+  // The server has `rev` on disk (a `saved` event, or a `hello`'s savedRev): what it answered up to there
+  // is safe, and is forgotten.
+  function saved(rev) {
+    G.savedRev = Math.max(G.savedRev, rev);
+    prune();
+  }
+  function prune() { G.answered = G.answered.filter((x) => x.rev > G.savedRev); }
+
   function rebase(serverState, rev) {
     let s = serverState;
-    for (const p of G.sent.concat(G.pending)) s = RS.reduce(s, p.a, p.at);
+    for (const p of G.pending) s = RS.reduce(s, p.a, p.at);
     G.state = s;
     G.rev = rev;
   }
@@ -112,6 +160,7 @@
     if (G.switching) return; // the sheet is changing session: nothing is done to the old one
     a.id = `${G.clientId}-${++G.seq}`;
     const at = new Date().toISOString();
+    a.at = at; // the server keeps the action's own time (Review L2), so a queued action logs when it was done
     G.state = RS.reduce(G.state, a, at);
     G.pending.push({ a, at });
     update();
@@ -121,14 +170,14 @@
   async function pump() {
     if (G.inflight || !G.pending.length || G.down || G.retry || G.switching) return;
     G.inflight = true;
-    const sent = G.pending.length;
+    const batch = G.pending.slice(0, MAX_SEND);
     indicator();
     let res;
     try {
-      res = await fetch('/api/state', {
-        method: 'PUT',
+      res = await fetch('/api/actions', {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ stateId: G.stateId, serverId: G.serverId, base: G.rev, state: G.state, clientId: G.clientId }),
+        body: JSON.stringify({ stateId: G.stateId, base: G.rev, actions: batch.map((p) => p.a), clientId: G.clientId }),
       });
     } catch (e) {
       G.inflight = false;
@@ -138,18 +187,41 @@
     let body = null;
     try { body = await res.json(); } catch (e) { /* not JSON */ }
     G.inflight = false;
-    if (res.ok && body && typeof body.rev === 'number') {
-      G.rev = body.rev;
-      G.putRev = body.rev;
-      // answered, not yet on disk: kept until a `saved` event reaches this rev
-      for (const p of G.pending.splice(0, sent)) G.sent.push({ ...p, rev: body.rev });
-      if (G.savedRev >= body.rev) G.sent = [];
+    if (res.ok && body && typeof body.rev === 'number' && body.state && typeof body.state === 'object') {
+      const sent = new Set(batch.map((p) => p.a.id));
+      G.pending = G.pending.filter((p) => !sent.has(p.a.id));
+      const rejected = Array.isArray(body.rejected) ? body.rejected : [];
+      const bad = new Set(rejected.map((x) => x.id));
+      for (const p of batch) if (!bad.has(p.a.id)) G.answered.push({ a: p.a, at: p.at, rev: body.rev });
+      for (const x of rejected) note(`One change could not be applied: ${x.type}.`, { kind: 'bad', id: `rejected:${x.id}` });
+      G.putRev = Math.max(G.putRev, body.rev);
       G.putFailing = false;
-      indicator();
+      const before = JSON.stringify(G.state);
+      rebase(body.state, body.rev);
+      prune();
+      if (JSON.stringify(G.state) !== before) update();
+      else indicator();
+      // another window wrote while this answer was on its way: its state is newer than ours (proof M3)
+      if (!G.pending.length && G.heardRev > G.rev) refresh();
       pump();
       return;
     }
     if (res.status === 409 && body) { await conflict(body); return; }
+    // The server could not take the batch at all (Review L6): sending it again would fail again. Drop it,
+    // say so, and take the server's state, so its local effect goes too.
+    if (res.status === 400) {
+      const sent = new Set(batch.map((p) => p.a.id));
+      G.pending = G.pending.filter((p) => !sent.has(p.a.id));
+      const what = batch.length === 1 ? 'One change' : `${batch.length} changes`;
+      note(`${what} could not be applied: ${(body && body.error) || 'the server refused them'}.`, { kind: 'bad', id: `refused:${batch[0].a.id}` });
+      try {
+        const st = await getJson('/api/state');
+        if (st.stateId === G.stateId) rebase(st.state, st.rev);
+      } catch (e) { lost(); return; }
+      update();
+      pump();
+      return;
+    }
     G.putFailing = true;
     indicator();
     G.retry = setTimeout(() => { G.retry = null; pump(); }, 2000);
@@ -159,7 +231,7 @@
     if (body.reason === 'session') {
       const was = G.session ? G.session.label : 'another session';
       G.pending = [];
-      G.sent = [];
+      G.answered = [];
       // No action until the new session's model and state are both in: one taken meanwhile would be
       // made against the old sheet and lost.
       G.switching = true;
@@ -183,22 +255,12 @@
     // 'stale': another window changed the sheet. Take its state and re-apply every pending action.
     try {
       const st = await getJson('/api/state');
-      if (st.serverId && st.serverId !== G.serverId) serverRestarted(st.serverId);
+      serverIs(st.serverId);
       rebase(st.state, st.rev);
     } catch (e) { lost(); return; }
     note('Another window changed the sheet; reloaded.', { id: `stale:${G.rev}` });
     update();
     pump();
-  }
-
-  // A new server (a restart): what the old one answered but had not yet written goes again, ahead of
-  // anything still waiting. Its revs are the new server's from here on.
-  function serverRestarted(serverId) {
-    G.pending = G.sent.map(({ a, at }) => ({ a, at })).concat(G.pending);
-    G.sent = [];
-    G.serverId = serverId;
-    G.putRev = 0;
-    G.savedRev = 0;
   }
 
   // The server stopped answering: keep the pending actions and ask again every 2 s.
@@ -213,31 +275,29 @@
     try { st = await getJson('/api/state'); } catch (e) { lost(); return; }
     // the server now runs another session: its label is the one to name, never this page's own
     if (st.stateId !== G.stateId) { await conflict({ reason: 'session', label: st.label || '' }); G.down = false; indicator(); return; }
-    if (st.serverId && st.serverId !== G.serverId) serverRestarted(st.serverId);
+    serverIs(st.serverId);
     rebase(st.state, st.rev);
     G.down = false;
     update();
     pump();
   }
 
-  // Another window saved: take its state when nothing of ours is waiting (else the next PUT's 409 does it).
+  // Another window wrote: take the server's state when nothing of ours is waiting. While ours is on its
+  // way, the answer's end asks again if the other write is newer than the answer (proof M3). A redraw
+  // keeps the box being typed in (update).
   async function refresh() {
     if (G.inflight || G.pending.length) return;
     try {
       const st = await getJson('/api/state');
       if (G.inflight || G.pending.length || st.stateId !== G.stateId) return;
-      // an answer older than the state shown (two refreshes crossed) never rolls the view back
-      if (st.serverId === G.serverId && st.rev < G.rev) return;
+      // a new server (a restart): what it answered but never saved goes again, on its state
+      if (st.serverId && st.serverId !== G.serverId) { serverIs(st.serverId); rebase(st.state, st.rev); update(); pump(); return; }
+      // an answer no newer than the state shown (two refreshes crossed, or our own answer) never rolls the view back
+      if (st.rev <= G.rev) return;
       G.state = st.state;
       G.rev = st.rev;
       update();
     } catch (e) { lost(); }
-  }
-
-  // The server has `rev` on disk: what it answered up to there is safe.
-  function saved(rev) {
-    G.savedRev = Math.max(G.savedRev, rev);
-    G.sent = G.sent.filter((p) => p.rev > G.savedRev);
   }
 
   function listen() {
@@ -247,14 +307,27 @@
     es.addEventListener('hello', (ev) => {
       const d = data(ev);
       const restarted = G.serverId && d.serverId && d.serverId !== G.serverId;
-      if (!restarted && typeof d.savedRev === 'number') saved(d.savedRev);
+      serverIs(d.serverId); // first: a new server's revs say nothing of what the old one answered
+      if (typeof d.savedRev === 'number') saved(d.savedRev);
       if (d.status) takeStatus(d.status);
       if (G.down || restarted) { if (G.resyncTimer) { clearTimeout(G.resyncTimer); G.resyncTimer = null; } resync(); }
       indicator();
+      loadView();
     });
-    es.addEventListener('saved', (ev) => { saved(data(ev).rev || 0); G.saveFailed = false; indicator(); });
+    es.addEventListener('saved', (ev) => {
+      saved(data(ev).rev || 0);
+      G.saveFailed = false;
+      indicator();
+      loadView();
+    });
+    es.addEventListener('players-ok', () => loadView());
     es.addEventListener('save-failed', () => { G.saveFailed = true; indicator(); });
-    es.addEventListener('state', (ev) => { const d = data(ev); if (d.clientId !== G.clientId) refresh(); });
+    es.addEventListener('state', (ev) => {
+      const d = data(ev);
+      if (d.clientId === G.clientId) return;
+      if (typeof d.rev === 'number') G.heardRev = Math.max(G.heardRev, d.rev);
+      refresh();
+    });
     es.addEventListener('record-kept', (ev) => { const d = data(ev); if (d.path) note(keptText(d.path), { id: `kept:${d.path}` }); });
     es.addEventListener('record-failed', (ev) => { const d = data(ev); recordOk(); note(recordFailedText(d.error), { kind: 'bad', id: `rf:${d.error}` }); });
     es.addEventListener('record-ok', () => recordOk());
@@ -296,9 +369,46 @@
   const pcsAtBeat = (key) => pcs().filter((p) => { const x = posOf(p.note); return x && x.beat === key; });
   const pcsAtSpot = (key, spot, hub) => pcs().filter((p) => { const x = posOf(p.note); return x && x.beat === key && (hub ? x.spot === spot : true); });
 
+  // ------------------------------------------------------------------ the players' screen: groups and targets
+  const SHOW = window.RunSheetShow;
+  const PERSON_TYPES = new Set(['npc', 'creature']);
+  const typeOf = (p) => { const n = noteInfo(p) || castOf(p); return n ? String(n.type || '').toLowerCase() : ''; };
+  const showablePerson = (p) => Boolean(p) && PERSON_TYPES.has(typeOf(p));
+  const showableMaps = () => G.model.showableMaps || [];
+  const mapName = (p) => { const m = (G.model.mapNotes || {})[p]; return (m && m.name) || stem(p); };
+  const groups = () => (SHOW && G.model && G.state ? SHOW.groupsOf(G.model, G.state) : []);
+  const panelOf = (g) => (G.state.panels && G.state.panels[g]) || { people: [], backdrop: null, placeOff: false };
+  // The focused group (plan decision 12): the last group whose beat the GM touched, else the first group.
+  function focusedGroup(gs = groups()) {
+    if (!gs.length) return null;
+    if (G.ui.focusGroup && gs.some((g) => g.key === G.ui.focusGroup)) return G.ui.focusGroup;
+    const atBeat = G.ui.focus && gs.find((g) => g.beat === G.ui.focus);
+    return (atBeat || gs[0]).key;
+  }
+  // Where a beat's Show goes: the beat's own group (the focused one when a hub has several), else the focused group.
+  function groupForBeat(b, gs = groups()) {
+    const own = b.contingency ? [] : gs.filter((g) => g.beat === b.key);
+    if (!own.length) return focusedGroup(gs);
+    const f = focusedGroup(gs);
+    return own.some((g) => g.key === f) ? f : own[0].key;
+  }
+  // A group's name for the GM: the beat's title, and the spot at a hub.
+  function groupLabel(key, d = D()) {
+    for (const b of d.beats) {
+      if (b.key === key) return b.title;
+      const sp = (b.spots || []).find((x) => x.key === key);
+      if (sp) return `${b.title} · ${sp.name}`;
+    }
+    return key;
+  }
+  const touch = (group) => { if (group) G.ui.focusGroup = group; };
+
   // The beat the header jot writes to: the one last worked on, else where the first placed PC stands.
   function focusBeat(d) {
     const keys = new Set(d.beats.map((b) => b.key));
+    // during a fight, the fight's beat (the prototype's jotTarget); paused, the beat the GM is playing
+    const f = G.state.fight;
+    if (f && !f.paused && keys.has(f.beat)) return d.beats.find((b) => b.key === f.beat);
     if (G.ui.focus && keys.has(G.ui.focus)) return d.beats.find((b) => b.key === G.ui.focus);
     for (const p of pcs()) { const x = posOf(p.note); if (x && x.beat && keys.has(x.beat)) return d.beats.find((b) => b.key === x.beat); }
     return null;
@@ -306,7 +416,8 @@
 
   // ------------------------------------------------------------------ drawing
   function focusKey(el) {
-    for (const a of ['data-jot', 'data-bring', 'data-vhp', 'data-vcond', 'data-where', 'data-orphan', 'data-pt', 'data-hand', 'data-stop', 'data-fire']) {
+    const own = ['data-jot', 'data-bring', 'data-vhp', 'data-vcond', 'data-where', 'data-orphan', 'data-pt', 'data-hand', 'data-stop', 'data-fire'];
+    for (const a of own.concat(...parts.map((p) => p.focusAttrs || []))) {
       const v = el.getAttribute(a);
       if (v) return `[${a}="${CSS.escape(v)}"]`;
     }
@@ -332,7 +443,7 @@
     G.drafts = {};
     document.querySelectorAll('#sheet input[data-jot], #sheet input[data-bring], #newBeat').forEach((el) => { if (el.value) G.drafts[focusKey(el)] = el.value; });
     // the box being typed in keeps its words too (an end-panel box changes the state only on blur)
-    const typing = sel && a.closest && a.closest('#sheet') && /^(INPUT|TEXTAREA)$/.test(a.tagName) ? a.value : null;
+    const typing = sel && a.closest && a.closest('#sheet, #side') && /^(INPUT|TEXTAREA)$/.test(a.tagName) ? a.value : null;
     render();
     if (typing !== null) { const el = document.querySelector(sel); if (el) el.value = typing; }
     for (const [k, v] of Object.entries(G.drafts)) { const el = k && document.querySelector(k); if (el && !el.value) el.value = v; }
@@ -350,12 +461,17 @@
     $('#ttl').textContent = [m.campaign, G.session && G.session.label].filter(Boolean).join(' · ') || 'Run sheet';
     document.title = `${(G.session && G.session.label) || 'Run sheet'} · ${m.campaign || 'run sheet'}`;
     $('#sub').textContent = m.system || '';
+    const f = G.state.fight;
+    const rd = $('#round');
+    if (rd) { rd.textContent = f ? `${f.round ? `Round ${f.round}` : 'Setting up'}${f.paused ? ' · paused' : ''}` : ''; rd.hidden = !f; }
     jotLabel(d);
     const w = (m.warnings || []).length;
     $('#warnBtn').textContent = w ? `${w} prep note${w === 1 ? '' : 's'}` : 'No prep notes';
     renderNotes();
     $('#rail').innerHTML = railHTML(d);
     $('#sheet').innerHTML = sheetHTML(d);
+    renderSide(d);
+    drawerShow();
     decorate(document);
     indicator();
   }
@@ -406,19 +522,22 @@
     return h;
   }
 
+  // What a part puts above a beat (the After the fight box).
+  const beforeBeat = (b) => parts.map((p) => (p.beforeBeat && p.beforeBeat(b)) || '').join('');
   const sec = (id, title, body) => `<section class="s" id="${id}"><h2>${title}</h2>${body}</section>`;
   const BRIEF_LABELS = { overview: 'Overview', world: 'World', stops: 'Good places to stop' };
 
   function sheetHTML(d) {
     const m = G.model;
     let h = '';
+    for (const part of parts) if (part.sheetTop) h += part.sheetTop(d) || '';
     if (d.orphans.length) h += changedHTML(d);
     if (!G.tableLog) h += '<div class="nolog"><b>No Table Log note yet:</b> start it with <code>gma table</code> to have the record written. The sheet keeps what you do meanwhile.</div>';
     const brief = Object.keys(m.brief || {}).filter((k) => !k.endsWith('Html') && m.brief[`${k}Html`]);
     if (brief.length) h += sec('brief', 'Brief', brief.map((k) => `<h4 class="lab">${esc(BRIEF_LABELS[k] || k)}</h4>${m.brief[`${k}Html`]}`).join(''));
     h += sec('handover', 'Hand over', handoverHTML(d));
     h += sec('pcs', 'The PCs', pcsHTML());
-    h += sec('run', 'The run', (d.beats.length ? d.beats.filter((b) => !b.contingency).concat(d.beats.filter((b) => b.contingency)).map((b) => beatHTML(b, d)).join('') : '<p class="muted">This Plan has no beats the sheet can read: its prep is below, under Prep\'s working.</p>')
+    h += sec('run', 'The run', (d.beats.length ? d.beats.filter((b) => !b.contingency).concat(d.beats.filter((b) => b.contingency)).map((b) => beforeBeat(b) + beatHTML(b, d)).join('') : '<p class="muted">This Plan has no beats the sheet can read: its prep is below, under Prep\'s working.</p>')
       + '<div class="addbeat"><input id="newBeat" placeholder="Name an improvised beat (Enter)" aria-label="Name an improvised beat" autocomplete="off"><button id="addBeat" type="button">+ Beat</button></div>');
     h += sec('people', 'People', peopleHTML(d));
     h += sec('places', 'Places and maps', placesHTML());
@@ -464,7 +583,16 @@
 
   function handoverHTML() {
     const list = G.model.handouts || [];
-    if (!list.length) return '<p class="muted">Nothing to hand over.</p>';
+    return `${list.length ? handoutsHTML(list) : '<p class="muted">Nothing to hand over.</p>'}${mapsHTML()}`;
+  }
+  // The maps the player site would publish (decision 9), each with Show to the focused group's panel.
+  function mapsHTML() {
+    const maps = showableMaps();
+    if (!maps.length) return '';
+    const group = focusedGroup();
+    return `<h4 class="lab">Maps to show</h4><ul class="maps">${maps.map((p) => `<li>${link(p, mapName(p))} ${backdropBtn(p, group, 'data-mapshow')}</li>`).join('')}</ul>${group ? '' : '<p class="note">Place a PC at a beat to have a panel to show them on.</p>'}`;
+  }
+  function handoutsHTML(list) {
     return `<ul class="pts">${list.map((x) => {
       const on = !!G.state.handouts[x.key];
       return `<li class="${on ? 'landed' : ''}"><button class="ptb ${on ? 'landed' : ''}" data-hand="${esc(x.key)}" type="button" aria-pressed="${on}" title="${on ? 'Handed over. Click: not handed over' : 'Click: handed over'}">${on ? '✓' : ''}</button><span>${x.nameHtml || esc(x.name)}${x.scene ? ` <span class="muted">(${esc(x.scene)})</span>` : ''} ${x.textHtml || ''}${on ? ' <span class="note">handed over</span>' : ''}</span></li>`;
@@ -485,22 +613,28 @@
     const here = pcsAtBeat(b.key);
     let h = `<div class="beat ${here.length ? 'here' : ''}" id="beat:${esc(b.key)}" data-beat="${esc(b.key)}"><div class="bh"><span class="lbl">${lbl}</span><h3>${esc(b.title)}</h3>${b.sceneNote ? link(b.sceneNote, 'scene note') : ''}</div>`;
     // 1 Here: faces per standing place; a hub gets one row per spot
+    const gs = groups();
+    const hub = (b.spots || []).length > 1;
     if (!b.contingency && pcs().length) {
-      const hub = (b.spots || []).length > 1;
       const strip = (spot, label) => {
         const to = JSON.stringify({ beat: b.key, spot: spot ? spot.key : null, title: b.title });
         const at = pcsAtSpot(b.key, spot && spot.key, hub);
-        return `<div class="here-strip">${label ? `<span class="sl">${label}</span>` : 'Here:'} ${pcs().map((p) => `<button class="pcb ${at.includes(p) ? 'on' : ''}" data-move="${esc(p.note)}" data-to="${esc(to)}" type="button" title="Put ${esc(p.name)} here" aria-pressed="${at.includes(p)}">${face(p.note)}${esc(first(p.name))}</button>`).join('')} <button data-all="${esc(to)}" type="button">Everyone</button></div>`;
+        // a hub's spots each carry their own Show and Place on panel; a plain beat's are with its buttons
+        const own = spot ? `${showBeatBtn(b, spot, gs)}${placeBtn(spot.key)}` : '';
+        return `<div class="here-strip">${label ? `<span class="sl">${label}</span>` : 'Here:'} ${pcs().map((p) => `<button class="pcb ${at.includes(p) ? 'on' : ''}" data-move="${esc(p.note)}" data-to="${esc(to)}" type="button" title="Put ${esc(p.name)} here" aria-pressed="${at.includes(p)}">${face(p.note)}${esc(first(p.name))}</button>`).join('')} <button data-all="${esc(to)}" type="button">Everyone</button>${own ? `<span class="pv-btns">${own}</span>` : ''}</div>`;
       };
       h += hub ? b.spots.map((s) => strip(s, s.note ? link(s.note, s.name) : esc(s.name))).join('') : strip(null, '');
     }
     // The beat's buttons
     const btns = [];
+    if (!hub || b.contingency) btns.push(showBeatBtn(b, null, gs));
+    if (!hub && !b.contingency) btns.push(placeBtn(b.key));
     if (b.contingency) btns.push(`<button data-fire="${esc(b.key)}" class="${G.state.fired[b.key] ? 'fired' : ''}" type="button" aria-pressed="${!!G.state.fired[b.key]}">${G.state.fired[b.key] ? 'Fired ✓' : 'It fired'}</button>`);
     const stopped = G.state.stopped && G.state.stopped.beat === b.key;
     btns.push(`<button data-stop="${esc(b.key)}" class="${stopped ? 'on' : ''}" type="button" aria-pressed="${stopped}">${stopped ? 'Stopped here ✓' : 'Stopped here'}</button>`);
     if (b.impro) btns.push(armBtn(`unimpro:${b.key}`, 'Remove this beat', `data-unimpro="${esc(b.key)}"`));
-    h += `<div class="bbtns">${btns.join('')}</div>`;
+    for (const part of parts) if (part.beatButtons) btns.push(part.beatButtons(b) || '');
+    h += `<div class="bbtns">${btns.filter(Boolean).join('')}</div>`;
     if (b.contingency) h += `<div class="kv"><b>Trigger</b><span>${b.triggerHtml || esc(b.trigger || '')}</span></div>${b.thenHtml || ''}`;
     // 2 Points to land
     if ((b.points || []).length) {
@@ -535,6 +669,31 @@
     return h;
   }
 
+  // Show on a beat (or a hub's spot): the beat's people who have notes, and its place, to the group's panel.
+  function showBeatBtn(b, spot, gs) {
+    const own = spot ? gs.find((g) => g.key === spot.key) : null;
+    const group = own ? own.key : groupForBeat(b, gs);
+    if (!group) return '';
+    return `<button type="button" data-showbeat="${esc(b.key)}" data-spot="${esc(spot ? spot.key : '')}" data-group="${esc(group)}" title="Show this beat's people and place on the players' screen (${esc(groupLabel(group))})">Show</button>`;
+  }
+  // Place on panel: always there, kept by position, so it holds for PCs who arrive later (Review L3).
+  function placeBtn(position) {
+    const on = !panelOf(position).placeOff;
+    return `<button type="button" data-placeoff="${esc(position)}" class="${on ? 'on' : ''}" aria-pressed="${on}" title="${on ? 'The place is behind this panel. Click: take it off' : 'No place behind this panel. Click: put it back'}">${on ? 'Place on panel ✓' : 'Place on panel'}</button>`;
+  }
+  // Show or Remove for one person on the group's panel. Remove takes two clicks.
+  function personBtn(p, group, name) {
+    if (!group || !showablePerson(p)) return '';
+    if (panelOf(group).people.includes(p)) return armBtn(`unshow:${group}|${p}`, 'Remove from panel', `data-unshow="${esc(p)}" data-group="${esc(group)}"`, `Take ${name} off the players' screen`);
+    return `<button type="button" data-show="${esc(p)}" data-group="${esc(group)}" title="Show ${esc(name)} on the players' screen (${esc(groupLabel(group))})">Show</button>`;
+  }
+  // Show for a place or a map: it goes behind the group's panel. Shown already: the click puts the group's own place back.
+  function backdropBtn(p, group, attr) {
+    if (!group) return '';
+    const on = panelOf(group).backdrop === p;
+    return `<button type="button" ${attr}="${esc(p)}" data-group="${esc(group)}" class="${on ? 'on' : ''}" aria-pressed="${on}" title="${on ? 'Behind the panel now. Click: back to the group\'s own place' : `Show behind the players' panel (${esc(groupLabel(group))})`}">${on ? 'Shown ✓' : 'Show'}</button>`;
+  }
+
   // A two-click button: the first click arms it (3 s), the second does it.
   function armBtn(id, label, attrs, title = '') {
     const armed = G.ui.armed && G.ui.armed.id === id && Date.now() - G.ui.armed.at <= 3000;
@@ -545,6 +704,7 @@
 
   function whoHTML(b, d) {
     const inWho = new Set((b.who || []).map((w) => w.note).filter(Boolean));
+    const target = groupForBeat(b);
     let h = (b.who || []).map((w) => {
       const p = w.note;
       const um = p ? unmaskOf(p) : null;
@@ -561,17 +721,26 @@
       if (!p) tags.push('<span class="warn">no note: a Plan line, not a person</span>');
       const btns = [];
       if (um) btns.push(`<button type="button" data-unmask="${esc(p)}" data-beat="${esc(b.key)}" class="${on ? 'on' : ''}" aria-pressed="${!!on}">${on ? `Unmasked as ${esc(um.name)}` : `Unmask (${esc(um.name)})`}</button>`);
+      if (p && target) btns.push(personBtn(p, target, shown));
       if (w.brought) btns.push(armBtn(`unbring:${b.key}|${p}`, 'Remove', `data-unbring="${esc(p)}" data-beat="${esc(b.key)}"`, `Take ${shown} off this beat`));
       return `<div class="who">${p ? face(p, 'av', d) : '<span class="av"></span>'}<div><div class="wn"><b>${p ? link(p, shown) : esc(shown)}</b>${tags.join(' ')} ${btns.join(' ')}</div>${pa ? `<div class="pa">${pa}</div>` : ''}${wants ? `<div class="wa">${wants}</div>` : ''}${foe ? `<div class="note">${esc(foe.prepNote)}</div>` : ''}</div></div>`;
     }).join('');
     if (!(b.who || []).length) h += '<p class="muted">Nobody listed.</p>';
-    for (const a of b.arrivals || []) {
-      const people = (a.people || []).filter((p) => !inWho.has(p));
-      h += `<div class="cue"><b>${esc(a.when)}:</b> <span>${a.textHtml || esc(a.text)}</span>${people.map((p) => `<button type="button" data-bringin="${esc(p)}" data-beat="${esc(b.key)}">Bring in ${esc(nameOf(p))}</button>`).join('')}</div>`;
-    }
+    for (const a of b.arrivals || []) h += cueHTML(b, a, inWho);
     const hits = G.ui.hits[b.key] || [];
     h += `<div class="bring"><input data-bring="${esc(b.key)}" placeholder="Bring anyone in: type a name" aria-label="Bring someone into ${esc(b.title)}" autocomplete="off"><div class="hits" data-hits="${esc(b.key)}">${hitsHTML(b.key, hits)}</div></div>`;
     return h;
+  }
+  // An arrivals cue. While a fight runs, each person it names has Add to fight (a benched row is ticked in),
+  // whether or not the Who line names them too (proof M1); else Bring in for anyone not here yet.
+  function cueHTML(b, a, inWho) {
+    const f = G.state.fight;
+    const fighting = (p) => Boolean(f) && f.rows.some((r) => r.note === p && r.in);
+    const btn = (p) => {
+      if (f) return fighting(p) ? '' : `<button type="button" data-faddcast="${esc(p)}" title="Tick ${esc(nameOf(p))} into the fight">Add ${esc(nameOf(p))} to the fight</button>`;
+      return inWho.has(p) ? '' : `<button type="button" data-bringin="${esc(p)}" data-beat="${esc(b.key)}">Bring in ${esc(nameOf(p))}</button>`;
+    };
+    return `<div class="cue"><b>${esc(a.when)}:</b> <span>${a.textHtml || esc(a.text)}</span>${(a.people || []).map(btn).join('')}</div>`;
   }
   function hitsHTML(beat, hits) {
     return hits.map((c) => `<button type="button" data-pick="${esc(c.note)}" data-beat="${esc(beat)}">${esc(c.name)}<span class="t">${esc(c.type)}${c.dead ? ', dead' : ''}${(c.aliases || []).length ? ` · ${esc(c.aliases.join(', '))}` : ''}</span></button>`).join('');
@@ -636,6 +805,114 @@
     return h;
   }
 
+  // ------------------------------------------------------------------ the right column: the players' screen preview
+  // A part (the fight view) may take the column; otherwise it shows the players' own view, drawn by their own
+  // render.js inside a shadow root (their stylesheet stays out of this page's), at 0.35 scale. The view is the
+  // server's filtered one, read again on this page's own `saved`. Each person on a panel gets a ✕ (two clicks).
+  const PV_SCALE = 0.35;
+  const PV_CSS = `:host { display: block; overflow: hidden; border-radius: 8px; background: #0d1117;
+    --lamp: #e7a65a; --bad: #ff9d93; --soft: #c9d3df; }
+  .pvbox { transform: scale(${PV_SCALE}); transform-origin: 0 0; padding: 12px; background: #0d1117; color: #e6edf3;
+    font: 20px/1.25 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; box-sizing: border-box; }
+  .tile { position: relative; }
+  .x { position: absolute; top: -8px; right: -4px; width: 56px; height: 56px; padding: 0; border-radius: 50%; cursor: pointer;
+    font: 700 34px/1 system-ui, sans-serif; color: #fff; background: rgba(0, 0, 0, .78); border: 3px solid rgba(255, 255, 255, .8); }
+  .x.arm { background: #a3302a; border-color: #fff; }`;
+  let pvKey = '';
+  function renderSide(d) {
+    const side = $('#side');
+    if (!side) return;
+    let own = null;
+    for (const part of parts) {
+      if (!part.side) continue;
+      const h = part.side();
+      if (h != null) { own = h; break; }
+    }
+    $('#app').classList.toggle('part-side', own != null);
+    if (own != null) {
+      pvKey = '';
+      side.classList.add('part');
+      side.innerHTML = own;
+      return;
+    }
+    if (side.classList.contains('part') || !$('#pv')) {
+      side.classList.remove('part');
+      side.innerHTML = '<div class="pvh"><b>Players\' screen</b><button type="button" id="playersBtn2" class="mini" title="Open the players\' window">Open</button></div><div id="pv" class="pv"></div><div id="pvctl" class="pvctl"></div>';
+      pvKey = '';
+    }
+    drawPreview();
+    $('#pvctl').innerHTML = previewControls(d);
+  }
+  // Under the preview: each panel's Shown backdrop, with a way back to the group's own place.
+  function previewControls(d) {
+    const gs = groups();
+    if (!gs.length) return '<p class="note">No PC is at a beat yet: the players see the campaign\'s name.</p>';
+    const f = focusedGroup(gs);
+    return `<ul class="pvlist">${gs.map((g) => {
+      const pn = panelOf(g.key);
+      const back = pn.backdrop ? ` · <span class="muted">behind:</span> ${esc(showableMaps().includes(pn.backdrop) ? mapName(pn.backdrop) : nameOf(pn.backdrop))} <button type="button" class="mini" data-unback="${esc(g.key)}" title="Back to the group's own place">✕</button>` : '';
+      return `<li class="${g.key === f ? 'focus' : ''}"><a class="lk" data-pgroup="${esc(g.key)}" title="Show goes to this panel">${esc(groupLabel(g.key, d))}</a>${g.key === f ? ' <span class="note">· Show goes here</span>' : ''}${back}</li>`;
+    }).join('')}</ul>`;
+  }
+  // The notes behind a view panel's people, as forPlayers keeps them: the panel's own list, people only, once each.
+  function panelPeople(key) {
+    const out = [];
+    for (const p of panelOf(key).people || []) if (!out.includes(p) && (showablePerson(p) || typeOf(p) === 'pc')) out.push(p);
+    return out;
+  }
+  function drawPreview() {
+    const host = $('#pv');
+    const R = window.RunSheetPlayersRender;
+    if (!host || !R) return;
+    const root = host.shadowRoot || host.attachShadow({ mode: 'open' });
+    const view = G.view || { campaign: G.model.campaign, layout: 'none', panels: [] };
+    const w = Math.max(200, Math.floor(host.clientWidth / PV_SCALE));
+    const hgt = Math.round((w * 9) / 16);
+    const armedId = G.ui.armed && Date.now() - G.ui.armed.at <= 3000 ? G.ui.armed.id : '';
+    const key = JSON.stringify([view, w, armedId]);
+    if (key === pvKey) return;
+    pvKey = key;
+    host.style.height = `${Math.round(hgt * PV_SCALE)}px`;
+    root.innerHTML = `<link rel="stylesheet" href="/players/players.css"><style>${PV_CSS}</style><div class="pvbox" style="width:${w}px;height:${hgt}px">${R.renderPlayers(view)}</div>`;
+    // a ✕ on each person, when the panel's people line up with the state's (else the view is a step behind)
+    const gs = groups();
+    const panels = root.querySelectorAll('.panel');
+    if (panels.length !== gs.length) return;
+    gs.forEach((g, i) => {
+      const notes = panelPeople(g.key);
+      const tiles = panels[i].querySelectorAll('.ppl .tile');
+      if (tiles.length !== notes.length) return;
+      tiles.forEach((t, j) => {
+        const id = `unshow:${g.key}|${notes[j]}`;
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = `x${armedId === id ? ' arm' : ''}`;
+        b.textContent = '✕';
+        b.title = armedId === id ? 'Sure? click again' : 'Take off the players\' screen';
+        b.dataset.unshow = notes[j];
+        b.dataset.group = g.key;
+        b.dataset.arm = id;
+        t.appendChild(b);
+      });
+    });
+    if (!root.__wired) {
+      root.__wired = true;
+      root.addEventListener('click', (ev) => {
+        const b = ev.target.closest && ev.target.closest('button.x');
+        if (b) unshow(b.dataset.arm, b.dataset.group, b.dataset.unshow);
+      });
+    }
+  }
+  async function loadView() {
+    const ticket = ++G.viewTicket;
+    let v;
+    try { v = await getJson('/api/players/view'); } catch (e) { return; } // the last view stays; the GM stream says why
+    if (ticket !== G.viewTicket) return;
+    G.view = v;
+    if (G.model && G.state) drawPreview();
+    probe();
+  }
+
   // ------------------------------------------------------------------ the drawer
   async function openNote(p) {
     let n;
@@ -643,7 +920,26 @@
       showDrawer(`<div class="dh"><h2>${esc(stem(p))}</h2><button id="closeDrawer" type="button">Close ✕</button></div><p class="warn">That note could not be opened (${esc(e.message)}).</p>`);
       return;
     }
-    showDrawer(`<div class="dh"><div><div class="ty">${esc(n.type)}${n.withheld ? ' · withheld from players' : ''}</div><h2>${esc(n.name)}</h2></div><button id="closeDrawer" type="button">Close ✕</button></div>${n.portrait ? `<img class="big" src="${esc(picUrl(n.portrait))}" alt="">` : ''}<div class="body">${n.html || ''}</div>`);
+    G.drawerNote = n;
+    showDrawer(`<div class="dh"><div><div class="ty">${esc(n.type)}${n.withheld ? ' · withheld from players' : ''}</div><h2>${esc(n.name)}</h2></div><span class="dbtns"><span id="dshow"></span><button id="closeDrawer" type="button">Close ✕</button></span></div>${n.portrait ? `<img class="big" src="${esc(picUrl(n.portrait))}" alt="">` : ''}<div class="body">${n.html || ''}</div>`);
+    drawerShow();
+  }
+  // The drawer's Show: a person to the focused group's panel; a place, or a map the player site would
+  // publish, behind it. A GM map, a scene or anything else has none.
+  function drawerShow() {
+    const slot = $('#dshow');
+    const n = G.drawerNote;
+    if (!slot || !n || !$('#drawer').classList.contains('open')) return;
+    const group = focusedGroup();
+    const p = n.path;
+    let h = '';
+    if (showableMaps().includes(p) || String(n.type || '').toLowerCase() === 'location') h = backdropBtn(p, group, 'data-dshow');
+    else if (showablePerson(p)) {
+      const on = group && panelOf(group).people.includes(p);
+      h = on ? armBtn(`unshow:${group}|${p}`, 'Remove from panel', `data-unshow="${esc(p)}" data-group="${esc(group)}"`, `Take ${n.name} off the players' screen`)
+        : (group ? `<button type="button" data-dshow="${esc(p)}" data-group="${esc(group)}" title="Show on the players' screen (${esc(groupLabel(group))})">Show</button>` : '');
+    }
+    slot.innerHTML = h;
   }
   function openWarnings() {
     const list = G.model.warnings || [];
@@ -657,7 +953,7 @@
     dr.scrollTop = 0;
     dr.focus({ preventScroll: true });
   }
-  const closeDrawer = () => $('#drawer').classList.remove('open');
+  const closeDrawer = () => { $('#drawer').classList.remove('open'); G.drawerNote = null; };
 
   // ------------------------------------------------------------------ actions from the page
   const beatOfKey = (key) => D().beats.find((b) => b.key === key) || null;
@@ -689,15 +985,23 @@
     setTimeout(() => { if (G.ui.armed && G.ui.armed.id === id && Date.now() - G.ui.armed.at > 3000) { G.ui.armed = null; update(); } }, 3100);
   }
 
+  function unshow(id, group, note) {
+    armed(id, () => act({ type: 'show', group, note, on: false }));
+  }
+  function openPlayers() { window.open('/players', 'run-sheet-players'); }
+
   function goTo(id) {
     const el = document.getElementById(id);
     if (el) el.scrollIntoView({ block: 'start' });
   }
 
   document.addEventListener('click', (ev) => {
-    const t = ev.target.closest('button,a[data-note],a[data-go],[data-go]');
+    for (const part of parts) if (part.click && part.click(ev)) return;
+    const t = ev.target.closest('button,a[data-note],a[data-go],[data-go],a[data-pgroup]');
     if (!t || t.disabled) return;
     const d = t.dataset;
+    if (t.id === 'playersBtn' || t.id === 'playersBtn2') { openPlayers(); return; }
+    if (d.pgroup) { touch(d.pgroup); update(); return; }
     if (t.id === 'closeDrawer') { closeDrawer(); return; }
     if (t.id === 'warnBtn') { openWarnings(); return; }
     if (t.id === 'endBtn') { goTo('end'); return; }
@@ -709,10 +1013,31 @@
       if (d.unjot) armed(id, () => act({ type: 'unjot', jot: d.unjot }));
       else if (d.unbring) armed(id, () => act({ type: 'unbring', beat: d.beat, note: d.unbring, title: titleOfKey(d.beat) }));
       else if (d.unimpro) armed(id, () => act({ type: 'unimprovise', key: d.unimpro }));
+      else if (d.unshow) unshow(id, d.group, d.unshow);
       return;
     }
-    if (d.move) { const to = JSON.parse(d.to); G.ui.focus = to.beat; act({ type: 'move', pc: d.move, to }); return; }
-    if (d.all) { const to = JSON.parse(d.all); G.ui.focus = to.beat; act({ type: 'moveAll', pcs: pcs().map((p) => p.note), to }); return; }
+    if (d.showbeat !== undefined) {
+      const b = beatOfKey(d.showbeat);
+      if (!b || !d.group) return;
+      const spot = d.spot ? (b.spots || []).find((x) => x.key === d.spot) : null;
+      const people = (b.who || []).map((w) => w.note).filter((p) => showablePerson(p));
+      const place = (spot ? spot.note : b.place) || undefined;
+      touch(d.group);
+      act({ type: 'showBeat', group: d.group, people, place });
+      return;
+    }
+    if (d.placeoff) { act({ type: 'placeOff', group: d.placeoff, on: !panelOf(d.placeoff).placeOff }); return; }
+    if (d.show) { touch(d.group); act({ type: 'show', group: d.group, note: d.show, on: true }); return; }
+    if (d.dshow || d.mapshow) {
+      const p = d.dshow || d.mapshow;
+      touch(d.group);
+      if (showablePerson(p)) act({ type: 'show', group: d.group, note: p, on: true });
+      else act({ type: 'backdrop', group: d.group, note: panelOf(d.group).backdrop === p ? null : p });
+      return;
+    }
+    if (d.unback) { act({ type: 'backdrop', group: d.unback, note: null }); return; }
+    if (d.move) { const to = JSON.parse(d.to); G.ui.focus = to.beat; touch(to.spot || to.beat); act({ type: 'move', pc: d.move, to }); return; }
+    if (d.all) { const to = JSON.parse(d.all); G.ui.focus = to.beat; touch(to.spot || to.beat); act({ type: 'moveAll', pcs: pcs().map((p) => p.note), to }); return; }
     if (d.off) { act({ type: 'move', pc: d.off, to: 'off' }); return; }
     if (d.pt) {
       const b = beatOfKey(d.beat);
@@ -870,17 +1195,38 @@
 
   // ------------------------------------------------------------------ the probe (tests only)
   function probe() {
-    if (!PROBE || !G.model || !document.body) return;
+    // not before the first draw: a probe written between the model and the state said "Saved" with no beats
+    if (!PROBE || !G.model || !G.state || !document.body) return;
     const beats = document.querySelectorAll('#sheet .beat').length;
     const rail = document.querySelectorAll('#rail [data-railbeat]').length;
-    document.body.dataset.probe = JSON.stringify({
+    const out = {
       beats, rail, saved: ($('#saved') || {}).textContent || '', errors: probeErrors.slice(),
-      notes: G.notes.map((n) => n.text), rev: G.rev, pending: G.pending.length, stateId: G.stateId, clientId: G.clientId,
+      notes: G.notes.map((n) => n.text), rev: G.rev, pending: G.pending.length, answered: G.answered.length,
+      stateId: G.stateId, clientId: G.clientId,
       marked: document.querySelectorAll('#sheet .ptb.landed[data-pt]').length,
       jots: Array.from(document.querySelectorAll('#sheet ul.jots li > span:not(.tm)'), (el) => el.textContent),
-    });
+      requests: { ...requests }, view: G.view, focusGroup: G.state ? focusedGroup() : null,
+    };
+    for (const part of parts) if (part.probe) Object.assign(out, part.probe());
+    document.body.dataset.probe = JSON.stringify(out);
   }
-  window.RunSheetPage = { act, get state() { return G.state; }, get model() { return G.model; }, probe };
+
+  // ------------------------------------------------------------------ the seam
+  // One dispatch path (`reduce`, a redraw, the queued write) and one render. Parts plug in here.
+  window.RunSheetPage = {
+    dispatch: act,
+    // the id the next dispatch will carry, for actions whose rows are named after it (fightStart, fightJoin)
+    nextId: () => `${G.clientId}-${G.seq + 1}`,
+    model: () => G.model,
+    state: () => G.state,
+    derived: () => D(),
+    ui: G.ui,
+    render: update,
+    parts,
+    // helpers the parts share with the page
+    esc, armBtn, armed, link, face, nameOf, getJson, focusedGroup, groups, groupLabel, note, probe, cueHTML, unmaskOf, isUnmasked,
+    OTHER_STATUS_PLACEHOLDER,
+  };
 
   // ------------------------------------------------------------------ start
   async function start() {
@@ -899,11 +1245,8 @@
     if (PROBE && params.get('stateId')) G.stateId = params.get('stateId');
     render();
     listen();
-    if (PROBE && params.get('walk')) {
-      const s = document.createElement('script');
-      s.src = '/web/probe.js';
-      document.body.appendChild(s);
-    }
+    loadView();
   }
+  window.addEventListener('resize', () => { if (G.model && G.state) drawPreview(); });
   start();
 }());

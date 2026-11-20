@@ -1,6 +1,6 @@
 'use strict';
 // The run sheet's GM page (plan Task 9) in a real browser, against the real server on a fixture
-// copy: every beat renders with no script errors, no 5b button is on the page, a point marked and a
+// copy: every beat renders with no script errors and a Fight button (5b), a point marked and a
 // jot written survive a reload, a page for another session and a stale page each reload on 409 and
 // say so, and an old-shape Plan renders prep only. The browser is driven over the DevTools pipe
 // (helpers/cdp.js): the page holds an event stream open, which stops `--dump-dom`'s virtual clock.
@@ -85,7 +85,7 @@ describe('the GM page in a browser', { skip: browserSkip() }, () => {
   let run;
   before(async () => { run = await start(FIXTURE, 'Session 02 - The Test'); });
 
-  it('renders every beat with no script errors, and no 5b buttons', async () => {
+  it('renders every beat with no script errors, Fight on each (D&D) and no Roll before a fight', async () => {
     const model = (await api(run, 'GET', '/api/model')).model;
     await withPage({ width: 1449, height: 762 }, async (page) => {
       await page.goto(`${run.base}?probe=1`);
@@ -95,9 +95,8 @@ describe('the GM page in a browser', { skip: browserSkip() }, () => {
       assert.deepStrictEqual(p.errors, []);
       assert.strictEqual(p.saved, 'Saved');
       const buttons = await page.evaluate('Array.from(document.querySelectorAll("button"), (b) => b.textContent.trim())');
-      for (const word of ['Show', 'Fight', 'Place on panel', 'Roll']) {
-        assert.ok(!buttons.some((t) => t === word || t.startsWith(`${word} `)), `no ${word} button`);
-      }
+      assert.ok(!buttons.some((t) => t === 'Roll' || t.startsWith('Roll ')), 'no Roll button before a fight');
+      assert.strictEqual(buttons.filter((t) => t === 'Fight').length, model.beats.length, 'Fight on every beat (5b, decision 19)');
       assert.strictEqual(await page.evaluate('document.documentElement.scrollWidth <= window.innerWidth'), true, 'nothing wider than the window');
       // J outside a text box goes to the header jot; Esc closes the drawer.
       await page.evaluate('document.body.focus(); document.dispatchEvent(new KeyboardEvent("keydown", { key: "j", bubbles: true }))');
@@ -196,24 +195,25 @@ describe('the GM page in a browser', { skip: browserSkip() }, () => {
     });
   });
 
-  it('a stale page reloads on 409 and re-applies what it was sending', async () => {
+  it('another window\'s write is kept, and the page takes it from the answer', async () => {
     await withPage({ width: 1449, height: 762 }, async (page) => {
       await page.goto(`${run.base}?probe=1`);
       const p0 = await settled(page);
       // Another window writes first. It carries this page's clientId, so the page takes no notice of
-      // the broadcast and its next PUT is built on the old rev.
+      // the broadcast; its next write is an action, which lands on the newer state, and the answer
+      // brings the other window's jot back with it.
       const { state, rev } = await api(run, 'GET', '/api/state');
       const other = RS.reduce(state, { type: 'jot', id: 'other-1', text: 'From the other window', beat: null }, new Date().toISOString());
       const put = await api(run, 'PUT', '/api/state', { stateId: run.stateId, base: rev, state: other, clientId: p0.clientId });
       assert.strictEqual(put.rev, rev + 1);
       await click(page, '#handover .ptb[data-hand]');
-      const p = await page.waitFor(`(() => { const p = ${PROBE}; return p && p.notes.length && p.saved === 'Saved' && p.pending === 0 && p; })()`);
-      assert.deepStrictEqual(p.notes, ['Another window changed the sheet; reloaded.']);
-      assert.deepStrictEqual(p.errors, []);
+      await settled(page);
+      assert.ok(await page.evaluate('window.RunSheetPage.state().jots.some((j) => j.text === "From the other window")'), 'the page holds the other window\'s jot');
+      assert.deepStrictEqual((await probe(page)).errors, []);
     });
     const { state } = await api(run, 'GET', '/api/state');
     assert.ok(state.jots.some((j) => j.text === 'From the other window'), 'the other window\'s jot is kept');
-    assert.strictEqual(Object.keys(state.handouts).length, 1, 'the page\'s own action was re-applied');
+    assert.strictEqual(Object.keys(state.handouts).length, 1, 'the page\'s own action landed');
   });
 
   it('a page left open while the server is switched to another session names the new one (proof defect 1)', async () => {
@@ -321,6 +321,322 @@ describe('the GM page in a browser', { skip: browserSkip() }, () => {
       assert.strictEqual(p.beats, 0);
       assert.deepStrictEqual(p.errors, []);
       assert.ok(await page.evaluate('document.querySelectorAll("#prep h3").length > 0'), 'the prep is on the page');
+    });
+  });
+});
+
+// ------------------------------------------------------------------ 5b Task 9: Show and the players' screen
+// On the players' fixture (Task 3), Session 03: beat 1 is "Ashfall Reckoning" at The Gate, beat 2 a hub.
+const PL_FIXTURE = path.join(__dirname, 'fixtures', 'run-sheet-players');
+const PL_SESSION = 'Session 03 - Next';
+const SHOTS = process.env.RS_SHOTS || '';
+const { renderPlayers } = require('../lib/run-sheet/web/players/render');
+
+async function startPlayers(deps = {}, { vault: given, port = 0 } = {}) {
+  let vault = given;
+  if (!vault) {
+    vault = fs.mkdtempSync(path.join(os.tmpdir(), 'rs-page-pl-'));
+    made.push(vault);
+    fs.cpSync(PL_FIXTURE, vault, { recursive: true });
+  }
+  const picked = pickSession(listSessions(vault), PL_SESSION, vault);
+  assert.ok(picked.session, picked.error);
+  const t = createTableServer({ vaultPath: vault, session: picked.session, party: PARTY, deps: { delayMs: 50, log: () => {}, ...deps } });
+  const got = await listenLocal(t.server, port);
+  servers.push(t);
+  return { ...t, vault, port: got, base: `http://127.0.0.1:${got}/` };
+}
+const beatSel = (key) => `[id="beat:${key}"]`;
+const buttonsIn = (page, sel) => page.evaluate(`Array.from(document.querySelectorAll(${JSON.stringify(`${sel} button`)}), (b) => b.textContent.trim())`);
+const viewOf = (page, test) => page.waitFor(`(() => { const p = ${PROBE}; const v = p && p.view; return v && (${test}) && p; })()`);
+async function shot(page, name) {
+  if (SHOTS) await page.screenshot(path.join(SHOTS, `${name}.png`));
+}
+// Every PC to the first beat, and the page settled.
+async function everyoneAt(page, model) {
+  const b = model.beats[0];
+  await click(page, `${beatSel(b.key)} [data-all]`);
+  await settled(page);
+  return b;
+}
+
+describe('the GM page shows things on the players\' screen', { skip: browserSkip() }, () => {
+  it('Show, Place on panel and Players\' screen are on a beat with PCs', async () => {
+    const run = await startPlayers();
+    const { model } = await api(run, 'GET', '/api/model');
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await page.goto(`${run.base}?probe=1`);
+      await settled(page);
+      const b = await everyoneAt(page, model);
+      const here = await buttonsIn(page, `${beatSel(b.key)} .bbtns`);
+      assert.ok(here.includes('Show'), `Show on the beat: ${here}`);
+      assert.ok(here.some((t) => t.startsWith('Place on panel')), 'Place on panel on the beat');
+      // Place on panel is there on a beat with no PCs too, keyed by position (Review L3)
+      const hub = model.beats[1];
+      assert.ok((await buttonsIn(page, beatSel(hub.key))).filter((t) => t.startsWith('Place on panel')).length >= 2, 'one per hub spot');
+      const header = await buttonsIn(page, '#top');
+      assert.ok(header.includes('Players\' screen'), 'the header opens the players\' window');
+      await page.evaluate('window.open = (u, n) => { window.__opened = [u, n]; return null; }');
+      await click(page, '#playersBtn');
+      assert.deepStrictEqual(await page.evaluate('window.__opened'), ['/players', 'run-sheet-players']);
+      // Show puts the beat's people and place on its group's panel; a withheld note goes up under its word
+      await click(page, `${beatSel(b.key)} .bbtns [data-showbeat]`);
+      let p = await viewOf(page, 'v.panels.length === 1 && v.panels[0].people.length > 0');
+      const names = p.view.panels[0].people.map((x) => x.name);
+      assert.ok(names.includes('Glacier Wyrm') && names.includes('Brother Venn'), names.join(', '));
+      assert.ok(!names.includes('Hidden Abbot'), 'a withheld name never goes up');
+      assert.strictEqual(p.view.panels[0].caption, 'The Gate');
+      await shot(page, 'show-beat-1449');
+      // Place on panel off: the caption goes, and the state keeps it by position
+      await click(page, `${beatSel(b.key)} .bbtns [data-placeoff]`);
+      await settled(page);
+      // the beat Show set the place as the backdrop; Place on panel turns off only the group's own place
+      const st = (await api(run, 'GET', '/api/state')).state;
+      assert.strictEqual(st.panels[b.key].placeOff, true);
+      // Who's here: Remove takes two clicks
+      const venn = 'Characters/NPCs/Brother Venn.md';
+      await click(page, `${beatSel(b.key)} [data-unshow="${venn}"]`);
+      p = await probe(page);
+      assert.ok(p.view.panels[0].people.some((x) => x.name === 'Brother Venn'), 'one click only arms it');
+      await click(page, `${beatSel(b.key)} [data-unshow="${venn}"]`);
+      p = await viewOf(page, '!v.panels[0].people.some((x) => x.name === "Brother Venn")');
+      // and Show puts one person back
+      await click(page, `${beatSel(b.key)} [data-show="${venn}"]`);
+      await viewOf(page, 'v.panels[0].people.some((x) => x.name === "Brother Venn")');
+      assert.deepStrictEqual((await probe(page)).errors, []);
+    });
+  });
+
+  it('Show from the drawer puts a person on the focused group\'s panel', async () => {
+    const run = await startPlayers();
+    const { model } = await api(run, 'GET', '/api/model');
+    await withPage({ width: 1920, height: 1080 }, async (page) => {
+      await page.goto(`${run.base}?probe=1`);
+      await settled(page);
+      const b = await everyoneAt(page, model);
+      // A person from outside this beat: the cast search's note, opened in the drawer by a link
+      await page.evaluate('document.getElementById("sheet").insertAdjacentHTML("beforeend", \'<a id="t-sister" data-note="Characters/NPCs/Sister Fen.md">x</a>\')');
+      await click(page, '#t-sister');
+      await page.waitFor('document.querySelector("#drawer.open [data-dshow]")');
+      await shot(page, 'drawer-show-1920');
+      await click(page, '#drawer [data-dshow]');
+      const p = await viewOf(page, 'v.panels.length === 1 && v.panels[0].people.some((x) => x.name === "Sister Fen")');
+      assert.deepStrictEqual(p.errors, []);
+      const st = (await api(run, 'GET', '/api/state')).state;
+      assert.deepStrictEqual(st.panels[b.key].people, ['Characters/NPCs/Sister Fen.md']);
+    });
+  });
+
+  it('a GM map has no Show', async () => {
+    const run = await startPlayers();
+    const { model } = await api(run, 'GET', '/api/model');
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await page.goto(`${run.base}?probe=1`);
+      await settled(page);
+      await everyoneAt(page, model);
+      const maps = await page.evaluate('Array.from(document.querySelectorAll("#handover [data-mapshow]"), (b) => b.dataset.mapshow)');
+      assert.deepStrictEqual(maps, ['Documents/Map of the Gate.md'], 'only the map the player site publishes');
+      await page.evaluate('document.getElementById("sheet").insertAdjacentHTML("beforeend", \'<a id="t-gm" data-note="Documents/Map of the Gate (GM).md">x</a><a id="t-pl" data-note="Documents/Map of the Gate.md">y</a>\')');
+      await click(page, '#t-gm');
+      await page.waitFor('document.querySelector("#drawer.open h2")');
+      assert.strictEqual(await page.evaluate('document.querySelectorAll("#drawer [data-dshow]").length'), 0, 'the GM map has no Show in the drawer');
+      await click(page, '#t-pl');
+      await page.waitFor('document.querySelector("#drawer.open [data-dshow]")');
+      await click(page, '#handover [data-mapshow]');
+      const p = await viewOf(page, 'v.panels.length === 1 && v.panels[0].caption === "Map of the Gate"');
+      assert.ok(p.view.panels[0].backdrop, 'the map is behind the panel');
+      assert.deepStrictEqual(p.errors, []);
+    });
+  });
+
+  it('the preview matches the players\' view', async () => {
+    const run = await startPlayers();
+    const { model } = await api(run, 'GET', '/api/model');
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await page.goto(`${run.base}?probe=1`);
+      await settled(page);
+      const b = await everyoneAt(page, model);
+      await click(page, `${beatSel(b.key)} .bbtns [data-showbeat]`);
+      await viewOf(page, 'v.panels.length === 1 && v.panels[0].people.length > 2');
+      await page.waitFor('document.querySelector("#pv") && document.querySelector("#pv").shadowRoot && document.querySelector("#pv").shadowRoot.querySelector(".mon .panel .ppl .tile")');
+      const view = await api(run, 'GET', '/api/players/view');
+      const drawn = await page.evaluate(`(() => { const m = document.querySelector("#pv").shadowRoot.querySelector(".mon").cloneNode(true);
+        m.querySelectorAll(".x").forEach((x) => x.remove()); return m.outerHTML; })()`);
+      assert.strictEqual(drawn, renderPlayers(view), 'the preview draws the same view with the same code');
+      const box = await page.evaluate('(() => { const r = document.querySelector("#pv").getBoundingClientRect(); return { w: r.width, right: r.right }; })()');
+      assert.ok(box.right <= 1449, `the preview fits the window (${JSON.stringify(box)})`);
+      await shot(page, 'preview-1449');
+      // each person on a panel has a ✕ in the preview: two clicks take them off
+      const n = view.panels[0].people.length;
+      assert.strictEqual(await page.evaluate('document.querySelector("#pv").shadowRoot.querySelectorAll(".panel .x").length'), n);
+      const x = 'document.querySelector("#pv").shadowRoot.querySelector(".panel .x").click()';
+      await page.evaluate(x);
+      assert.strictEqual((await probe(page)).view.panels[0].people.length, n, 'one click only arms it');
+      await page.evaluate(x);
+      await viewOf(page, `v.panels[0].people.length === ${n - 1}`);
+      assert.deepStrictEqual((await probe(page)).errors, []);
+    });
+  });
+
+  it('the page writes actions, never a whole state', async () => {
+    const run = await startPlayers();
+    const { model } = await api(run, 'GET', '/api/model');
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await page.goto(`${run.base}?probe=1`);
+      await settled(page);
+      const b = await everyoneAt(page, model);
+      await click(page, `${beatSel(b.key)} .ptb[data-pt]`);
+      await typeEnter(page, `${beatSel(b.key)} input[data-jot]`, 'The horn sounds');
+      await click(page, `${beatSel(b.key)} .bbtns [data-showbeat]`);
+      const p = await settled(page);
+      assert.strictEqual(p.requests['PUT /api/state'] || 0, 0, 'no whole-state PUT');
+      assert.ok(p.requests['POST /api/actions'] >= 1, JSON.stringify(p.requests));
+      assert.strictEqual(p.answered, 0, 'every answered action is covered by a saved');
+      const st = (await api(run, 'GET', '/api/state')).state;
+      assert.deepStrictEqual(st.jots.map((j) => j.text), ['The horn sounds']);
+    });
+  });
+
+  it('a rejected action drains the queue', async () => {
+    const reduce = (s, a, at) => { if (a && a.type === 'showBeat') throw new Error('a bad show'); return RS.reduce(s, a, at); };
+    const run = await startPlayers({ reduce });
+    const { model } = await api(run, 'GET', '/api/model');
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await page.goto(`${run.base}?probe=1`);
+      await settled(page);
+      const b = await everyoneAt(page, model);
+      await click(page, `${beatSel(b.key)} .bbtns [data-showbeat]`);
+      let p = await page.waitFor(`(() => { const p = ${PROBE}; return p && p.notes.length && p; })()`);
+      assert.deepStrictEqual(p.notes, ['One change could not be applied: showBeat.']);
+      await click(page, `${beatSel(b.key)} .ptb[data-pt]`);
+      p = await settled(page);
+      assert.strictEqual(p.marked, 1);
+      const st = (await api(run, 'GET', '/api/state')).state;
+      assert.strictEqual(Object.values(st.points).filter((x) => x.mark === 'landed').length, 1, 'a later mark saves');
+      assert.deepStrictEqual(st.panels, {}, 'the rejected action is not in the page\'s state either');
+      assert.deepStrictEqual(await page.evaluate('window.RunSheetPage.state().panels'), {});
+      assert.deepStrictEqual(p.errors, []);
+    });
+  });
+
+  // The page's POST reaches the server, but its answer is held until `release()`: another window's write
+  // lands while it is on its way (proof M3), or the answer is a 400 (Review L6).
+  const HOLD = `(() => { if (window.__held) return true; window.__held = true; const real = window.fetch;
+    window.fetch = async (url, opts) => {
+      if (String(url) === '/api/actions' && window.__refuse) { window.__refuse -= 1; window.__refused = (window.__refused || 0) + 1;
+        return new Response(JSON.stringify({ error: 'the state could not be read' }), { status: 400, headers: { 'Content-Type': 'application/json' } }); }
+      const res = await real(url, opts);
+      if (String(url) === '/api/actions' && window.__hold) { window.__hold = false; await new Promise((r) => { window.__release = r; }); }
+      return res; };
+    return true; })()`;
+
+  it('another window\'s write while this page\'s is on its way: the page takes the newer state (proof M3)', async () => {
+    const run = await startPlayers();
+    const { model } = await api(run, 'GET', '/api/model');
+    const b = model.beats[0];
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await page.goto(`${run.base}?probe=1`);
+      await settled(page);
+      await page.evaluate(HOLD);
+      await page.evaluate('window.__hold = true');
+      await typeEnter(page, `${beatSel(b.key)} input[data-jot]`, 'From this page');
+      await page.waitFor('typeof window.__release === "function"');
+      // the server has this page's jot; another window writes after it
+      const { stateId } = await api(run, 'GET', '/api/state');
+      const other = await api(run, 'POST', '/api/actions', { stateId, base: 0, clientId: 'other-tab', actions: [{ type: 'jot', id: 'other-1', text: 'From the other window', beat: b.key }] });
+      assert.deepStrictEqual(other.rejected, []);
+      await page.sleep(300);
+      await page.evaluate('window.__release()');
+      const p = await page.waitFor(`(() => { const p = ${PROBE}; return p && p.pending === 0 && p.jots.length === 2 && p.saved === 'Saved' && p; })()`, 8000);
+      assert.deepStrictEqual(p.jots.slice().sort(), ['From the other window', 'From this page']);
+      assert.strictEqual(p.rev, other.rev, 'the page holds the newest rev');
+      assert.deepStrictEqual(p.errors, []);
+    });
+  });
+
+  it('a batch the server cannot take at all is dropped and named, never sent again (Review L6)', async () => {
+    const run = await startPlayers();
+    const { model } = await api(run, 'GET', '/api/model');
+    const b = model.beats[0];
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await page.goto(`${run.base}?probe=1`);
+      await settled(page);
+      await page.evaluate(HOLD);
+      await page.evaluate('window.__refuse = 1');
+      await typeEnter(page, `${beatSel(b.key)} input[data-jot]`, 'Never lands');
+      // its effect on the page goes too, once the server's state is back
+      let p = await page.waitFor(`(() => { const p = ${PROBE}; return p && p.notes.length && p.pending === 0 && p.jots.length === 0 && p; })()`);
+      assert.deepStrictEqual(p.notes, ['One change could not be applied: the state could not be read.']);
+      await page.sleep(2500);
+      assert.strictEqual(await page.evaluate('window.__refused'), 1, 'not sent again');
+      await typeEnter(page, `${beatSel(b.key)} input[data-jot]`, 'Lands');
+      p = await settled(page);
+      assert.deepStrictEqual(p.jots, ['Lands']);
+      assert.deepStrictEqual((await api(run, 'GET', '/api/state')).state.jots.map((j) => j.text), ['Lands']);
+      assert.deepStrictEqual(p.errors, []);
+    });
+  });
+
+  it('a restart re-sends what was answered but not saved; each lands once', async () => {
+    // The first server writes nothing once it is "killed": its fs drops every write.
+    const box = { dead: false };
+    const deadFs = new Proxy(fs, { get: (o, k) => (['writeFileSync', 'renameSync', 'rmSync', 'mkdirSync', 'appendFileSync', 'fsyncSync', 'openSync', 'closeSync', 'writeSync'].includes(k)
+      ? (...a) => (box.dead ? undefined : o[k](...a)) : o[k]) });
+    const first = await startPlayers({ delayMs: 600000, fs: deadFs });
+    const { model } = await api(first, 'GET', '/api/model');
+    const b = model.beats[0];
+    let second = null;
+    try {
+      await withPage({ width: 1449, height: 762 }, async (page) => {
+        await page.goto(`${first.base}?probe=1`);
+        await page.waitFor(`(() => { const p = ${PROBE}; return p && p.saved === 'Saved' && p; })()`);
+        await typeEnter(page, `${beatSel(b.key)} input[data-jot]`, 'Saved before the crash');
+        await page.waitFor(`(() => { const p = ${PROBE}; return p && p.pending === 0 && p.answered === 1 && p; })()`);
+        await first.store.flushNow(); // on disk; its `saved` covers it
+        await page.waitFor(`(() => { const p = ${PROBE}; return p && p.answered === 0 && p.saved === 'Saved' && p; })()`);
+        await typeEnter(page, `${beatSel(b.key)} input[data-jot]`, 'Answered, never saved');
+        await page.waitFor(`(() => { const p = ${PROBE}; return p && p.pending === 0 && p.answered === 1 && p; })()`);
+        // the kill: nothing more reaches the disk, every connection drops
+        box.dead = true;
+        first.server.closeAllConnections();
+        await new Promise((r) => { first.server.close(() => r()); });
+        await page.waitFor(`(() => { const p = ${PROBE}; return p && p.saved === 'Not connected' && p; })()`);
+        second = await startPlayers({}, { vault: first.vault, port: first.port });
+        assert.notStrictEqual(second.serverId, first.serverId);
+        await page.waitFor(`(() => { const p = ${PROBE}; return p && p.saved === 'Saved' && p.pending === 0 && p.jots.length === 2 && p; })()`, 20000);
+        // a `saved` covering it may have gone out before the event stream was back: the next one clears it
+        await click(page, `${beatSel(b.key)} .ptb[data-pt]`);
+        const p = await page.waitFor(`(() => { const p = ${PROBE}; return p && p.saved === 'Saved' && p.pending === 0 && p.answered === 0 && p.marked === 1 && p; })()`);
+        assert.deepStrictEqual(p.jots, ['Saved before the crash', 'Answered, never saved']);
+        assert.deepStrictEqual(p.errors, []);
+      });
+      const st = second.store.get().state;
+      assert.deepStrictEqual(st.jots.map((j) => j.text), ['Saved before the crash', 'Answered, never saved'], 'each lands once');
+    } finally {
+      try { await first.close(); } catch { /* killed */ }
+    }
+  });
+
+  it('no script errors', async () => {
+    const run = await startPlayers();
+    const { model } = await api(run, 'GET', '/api/model');
+    await withPage({ width: 1920, height: 1080 }, async (page) => {
+      await page.goto(`${run.base}?probe=1`);
+      await settled(page);
+      const b = await everyoneAt(page, model);
+      // every Show control once
+      await click(page, `${beatSel(b.key)} [data-show]`);
+      await click(page, `${beatSel(b.key)} .bbtns [data-showbeat]`);
+      await click(page, `${beatSel(b.key)} .bbtns [data-placeoff]`);
+      await click(page, `${beatSel(model.beats[1].key)} [data-placeoff]`);
+      await click(page, '#handover [data-mapshow]');
+      await click(page, 'a[data-note="Locations/The Gate.md"]');
+      await page.waitFor('document.querySelector("#drawer.open [data-dshow]")');
+      await click(page, '#drawer [data-dshow]');
+      const p = await settled(page);
+      await shot(page, 'walk-1920');
+      assert.deepStrictEqual(p.errors, []);
+      assert.strictEqual(await page.evaluate('document.documentElement.scrollWidth <= window.innerWidth'), true, 'nothing wider than the window');
     });
   });
 });

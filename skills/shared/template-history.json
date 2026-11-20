@@ -18,7 +18,8 @@
    "ea5221c5c4f6e3d89aaa6027c3802ea8d242b9f3862d4aaf1c495d2f4ea987df": null
   },
   "_Template_Creature.md": {
-   "2343ae3b78a03e5221f186c144df06bbb81d1d855466103a9afd03acc26b25e7": null
+   "2343ae3b78a03e5221f186c144df06bbb81d1d855466103a9afd03acc26b25e7": "1.12.108",
+   "dcbdd42e8bde9187386bcd20ab682fdc846540167fb84349cf70b351a196ec15": null
   },
   "_Template_Document.md": {
    "a5f4cffbada9bea72a597fe2aa1ccdf2beece400b0bf1f4412b9a3330a246ae2": null,
@@ -45,8 +46,9 @@
    "edd1d0e2b88fe22fc41eb12a6bc26762fc1775127e236551b86c591622295db6": null
   },
   "_Template_NPC.md": {
-   "8182e942f417117636d51748f1e32ede343a67753fab952c395e419dec4d31b9": null,
+   "8182e942f417117636d51748f1e32ede343a67753fab952c395e419dec4d31b9": "1.12.108",
    "a9976ae52a10a18e8e9f9cbcea5e88695a63ab0c2a67ba48a1ecd0b288dd0b1e": "1.12.100",
+   "c09af02e30939c54f2dd303662b9963b6ab9a0df72ec6fe97a0b2d9e92fac70c": null,
    "cba7b7df7dd8963b9134615dc7aacb496fa24c9121752e369abaee7ee2633104": "1.11.1"
   },
   "_Template_Organization.md": {
@@ -117,7 +119,8 @@
    "ea5221c5c4f6e3d89aaa6027c3802ea8d242b9f3862d4aaf1c495d2f4ea987df": null
   },
   "_Template_Creature.md": {
-   "2343ae3b78a03e5221f186c144df06bbb81d1d855466103a9afd03acc26b25e7": null
+   "2343ae3b78a03e5221f186c144df06bbb81d1d855466103a9afd03acc26b25e7": "1.12.108",
+   "dcbdd42e8bde9187386bcd20ab682fdc846540167fb84349cf70b351a196ec15": null
   },
   "_Template_Document.md": {
    "a5f4cffbada9bea72a597fe2aa1ccdf2beece400b0bf1f4412b9a3330a246ae2": null,
@@ -144,8 +147,9 @@
    "edd1d0e2b88fe22fc41eb12a6bc26762fc1775127e236551b86c591622295db6": null
   },
   "_Template_NPC.md": {
+   "44e1dfc1f0090da3706e0810ea5927503b36131345eb8e29f215926225041461": null,
    "6d123b1f8ecbe8e60c513fd7d791f6803d2e4e9b3dd2db33054fea2439b67f9c": "1.12.100",
-   "8a0b1d35c3f114c063d4a9212dd9dc873efb418898ab59a632495dc661367a4c": null,
+   "8a0b1d35c3f114c063d4a9212dd9dc873efb418898ab59a632495dc661367a4c": "1.12.108",
    "990a9cd37c1d076646f685be02dfd5318db449446f7d189f4203296f351fbf60": "1.11.1"
   },
   "_Template_Organization.md": {
@@ -216,7 +220,8 @@
    "ea5221c5c4f6e3d89aaa6027c3802ea8d242b9f3862d4aaf1c495d2f4ea987df": null
   },
   "_Template_Creature.md": {
-   "82c40cfba8819987e8a4941e823ebaa6fec9f593da7e98f3205fad3a5109ebab": null
+   "3f22ab85bfda5eacd7fd86d71c589ccd42ba229a32bea991c2f4a5ca4d193d4d": null,
+   "82c40cfba8819987e8a4941e823ebaa6fec9f593da7e98f3205fad3a5109ebab": "1.12.108"
   },
   "_Template_Document.md": {
    "a5f4cffbada9bea72a597fe2aa1ccdf2beece400b0bf1f4412b9a3330a246ae2": null,
@@ -245,7 +250,8 @@
   "_Template_NPC.md": {
    "62c9361d13575025f18a976398c8522afc179f035a09a7a094263fdb837c66ea": "1.11.1",
    "83fc97703fb329bb9b712606a5956f22362f7c67b37aa189d0dfc3bb18a4de18": "1.12.100",
-   "a189a69be56e77e163c2ff6749b9d58435c79e5e8a295bd08006435a9812b6bf": null
+   "a189a69be56e77e163c2ff6749b9d58435c79e5e8a295bd08006435a9812b6bf": "1.12.108",
+   "e84ca1918949b64678ce58fbfce9c9d11f32cdd0cccd5f8573be4e06f606f42a": null
   },
   "_Template_Organization.md": {
    "91d409ba7bd15cf111f20337c62f37f08b6d18e944e7a84f9700c8926fd0232b": null
@@ -314,7 +320,8 @@
    "ea5221c5c4f6e3d89aaa6027c3802ea8d242b9f3862d4aaf1c495d2f4ea987df": null
   },
   "_Template_Creature.md": {
-   "3a2919a3fb07812af8852396e1622da1f8973259b646126d1ebe38a1baf2ae5a": null
+   "3a2919a3fb07812af8852396e1622da1f8973259b646126d1ebe38a1baf2ae5a": "1.12.108",
+   "5dd6f92528b0dcaf1487487983407b67b26e879b39d49e8aaa10f01df4354eb0": null
   },
   "_Template_Document.md": {
    "a5f4cffbada9bea72a597fe2aa1ccdf2beece400b0bf1f4412b9a3330a246ae2": null,
@@ -341,8 +348,9 @@
    "edd1d0e2b88fe22fc41eb12a6bc26762fc1775127e236551b86c591622295db6": null
   },
   "_Template_NPC.md": {
+   "50e8ed197d305ead7b362eca0789b2d85ce53f5886f7f46f7a500b98adc1ddd5": null,
    "677c2321e34aff9b5cd56e704d4de56c02997a076c8927d790943f06d5fc739a": "1.11.1",
-   "833f4dc169e49b161a340573a292eac685564a16b978ed898b51099ad2bd487c": null,
+   "833f4dc169e49b161a340573a292eac685564a16b978ed898b51099ad2bd487c": "1.12.108",
    "9bac78aca0c3599fb04c00f8eaa49826975c7ded8540854e5b5b94c6d1b0c37c": "1.12.100"
   },
   "_Template_Organization.md": {
@@ -415,7 +423,8 @@
    "ea5221c5c4f6e3d89aaa6027c3802ea8d242b9f3862d4aaf1c495d2f4ea987df": null
   },
   "_Template_Creature.md": {
-   "a4c73f0f20021ea7acbd8503d44f1bc3981a85f65d8415a2ef73be888f237780": null
+   "2805ad7dd1e1f5c279f62ba0aa7726ff11382c14bc29a48aff1030099183c826": null,
+   "a4c73f0f20021ea7acbd8503d44f1bc3981a85f65d8415a2ef73be888f237780": "1.12.108"
   },
   "_Template_Document.md": {
    "a5f4cffbada9bea72a597fe2aa1ccdf2beece400b0bf1f4412b9a3330a246ae2": null,
@@ -442,7 +451,8 @@
    "edd1d0e2b88fe22fc41eb12a6bc26762fc1775127e236551b86c591622295db6": null
   },
   "_Template_NPC.md": {
-   "ad6c6e5eb94b8111fef3c23c329c9cd3e50066dbbb49a32dcabb5eb9cdf255f7": null,
+   "ad6c6e5eb94b8111fef3c23c329c9cd3e50066dbbb49a32dcabb5eb9cdf255f7": "1.12.108",
+   "bdad90f5844d26ba8b5e7bf2014a5bb35b105478fea568b1be5831256b84b83a": null,
    "e7a53c88aa4a7c27b845d891f08488ddd4cd786b9498a0d4a8544878172f3d49": "1.11.1",
    "ea4e06848270c229a4f03853785d58345306849bd906f41324977485842185e5": "1.12.100"
   },
@@ -513,7 +523,8 @@
    "ea5221c5c4f6e3d89aaa6027c3802ea8d242b9f3862d4aaf1c495d2f4ea987df": null
   },
   "_Template_Creature.md": {
-   "cf59e457e7a1f9f95cbf2111cb1be54ddd9af08ed18569358498cc21bff6555a": null
+   "cf59e457e7a1f9f95cbf2111cb1be54ddd9af08ed18569358498cc21bff6555a": "1.12.108",
+   "e50f3baa66694d675c4ba100904d2c15638c39b9dd5c6a84001b66695055dd19": null
   },
   "_Template_Document.md": {
    "a5f4cffbada9bea72a597fe2aa1ccdf2beece400b0bf1f4412b9a3330a246ae2": null,
@@ -541,7 +552,8 @@
   },
   "_Template_NPC.md": {
    "0c2a0a0ea6f580b99e884af6df111bf21db1bb05ec6b0e65252503317ec2d601": "1.11.1",
-   "1ee7abf649c633ef8c2bc2bf8590201a613f48f4143d6bbbfcce4d4f0d922318": null,
+   "1ee7abf649c633ef8c2bc2bf8590201a613f48f4143d6bbbfcce4d4f0d922318": "1.12.108",
+   "73cf29feee8f38bba6e2d68d97c2596c28a1eda9ebadf4a11fd178a06c145aa1": null,
    "b3f8e6c64e52e1975d1fd572aa27ad2fcbd6bc06830df429ffb6c32c42a43019": "1.12.100"
   },
   "_Template_Organization.md": {
@@ -613,7 +625,8 @@
    "ea5221c5c4f6e3d89aaa6027c3802ea8d242b9f3862d4aaf1c495d2f4ea987df": null
   },
   "_Template_Creature.md": {
-   "857c98a56cc9b15e27a723fe12fe0d445381a68e0f0d620d1198aad684b4dba6": null
+   "857c98a56cc9b15e27a723fe12fe0d445381a68e0f0d620d1198aad684b4dba6": "1.12.108",
+   "f917b28695719a621d31359e0cb5c308ec12e2f67750e3aa18e4a8d3aa83c6a0": null
   },
   "_Template_Document.md": {
    "a5f4cffbada9bea72a597fe2aa1ccdf2beece400b0bf1f4412b9a3330a246ae2": null,
@@ -640,7 +653,8 @@
    "edd1d0e2b88fe22fc41eb12a6bc26762fc1775127e236551b86c591622295db6": null
   },
   "_Template_NPC.md": {
-   "3b9551898090508c36cf4a2501790443c259324c5d62f889f758bbf9111737f4": null,
+   "2f1e9cf18af0c7e75bc2c09f1f9c19f07e4f056ea9080c59343ef4b60f22d992": null,
+   "3b9551898090508c36cf4a2501790443c259324c5d62f889f758bbf9111737f4": "1.12.108",
    "8dbc533409713b76522bf5ebcf445352b2669762e90969d31e26ca509edf45c8": "1.11.1",
    "cb1f2be11aad9e76cfd55268fab0e4285de9b4b50d85a57ebc4a75466787fcda": "1.12.100"
   },

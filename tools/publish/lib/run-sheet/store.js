@@ -230,6 +230,33 @@ function createStore({
       changed();
       return { rev };
     },
+    // Reduces each action on its own, on the newest state, stamping `at` (the action's own valid time not
+    // in the future, else `now`). One that throws is skipped and named in `rejected`. `rev` bumps once
+    // when anything changed. `base` is not asked for: actions land on whatever the store holds, and an
+    // action id already applied changes nothing (5b decision 25).
+    apply({ stateId: theirs, actions, reduce, upgrade: up = upgrade, fresh: fr = fresh, now: clock = now } = {}) {
+      ensure();
+      if (theirs !== stateId) return { conflict: 'session', rev };
+      if (!Array.isArray(actions)) throw new TypeError('actions must be an array');
+      if (typeof reduce !== 'function') throw new TypeError('apply needs a reduce');
+      const start = up(cur, fr());
+      let s = start;
+      const rejected = [];
+      for (const action of actions) {
+        const own = action && typeof action === 'object' ? action.at : null;
+        const ms = typeof own === 'string' && /^\d{4}-\d\d-\d\dT/.test(own) ? Date.parse(own) : NaN;
+        const t = clock();
+        const at = Number.isFinite(ms) && ms <= t.getTime() ? new Date(ms).toISOString() : t.toISOString();
+        try { s = reduce(s, action, at); } catch (err) {
+          rejected.push({ id: action && action.id != null ? action.id : null, type: action && action.type != null ? action.type : null, error: String((err && err.message) || err).split('\n')[0] });
+        }
+      }
+      if (s === start) return { rev, state: cur, rejected };
+      rev++;
+      cur = own(s, rev, cur.recordHash);
+      changed();
+      return { rev, state: cur, rejected };
+    },
     // Server-owned keys only (`recordHash`); no rev bump, but a write is scheduled so a kill before the
     // next click cannot leave a stale recordHash on disk.
     setServer(patch = {}) {

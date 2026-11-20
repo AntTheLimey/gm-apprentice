@@ -21,6 +21,7 @@ portrait: ""
 voice: ""            # set only when the GM gives this NPC their own story; how they are told and speak; never published
 unmasked_name: ""     # a disguise's true name: behind the run sheet's Unmask; never published
 unmasked_portrait: "" # a disguise's true face; never published
+unseen_as: ""         # what players call this one before they learn the name ("a brother"); the run sheet's players' screen only
 relationships:
   - target: "[[]]"
     type: knows
