@@ -12,7 +12,7 @@ if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
 CLI_SCRIPTS = [
-    "dnd_ddb", "dnd_sheet", "graph_check", "gurps_check",
+    "dnd_ddb", "dnd_sheet", "doctor", "graph_check", "gurps_check",
     "gurps_skill_default", "image", "index_build", "ingest_images", "ingest_survey",
     "links", "migrate", "moments", "plan_check", "plans_index", "prop_move",
     "reconcile_promote", "reconcile_scan", "relink", "reveal", "reveal_scan", "rules_lookup",
