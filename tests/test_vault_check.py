@@ -154,6 +154,17 @@ class CheckNamesPhoneticTests(unittest.TestCase):
                         {"Herzfeld": "npc", "Herzveld": "location"}), 0.95)
         self.assertFalse(rows_for(rows, "PHONETIC"))
 
+    def test_the_midwifes_drafts_and_other_record_copies_are_not_compared(self):
+        # #826: a promoted entity beside its own draft gave one WARNING each, plus index.md x2.
+        d = self._vault(["Amos Tibbet"])
+        for rel in ("_midwife/hollow-quay/npcs/amos-tibbet.md", "_midwife/hollow-quay/index.md",
+                    "_midwife/index.md", "_archive/Amos Tibbet.md", "_QA/Amos Tibbett.md"):
+            (d / rel).parent.mkdir(parents=True, exist_ok=True)
+            (d / rel).write_text("---\ntype: npc\n---\n")
+        self.assertEqual(vc.check_names(d, 0.85), [])
+        (d / "Amos Tibbett.md").write_text("---\ntype: npc\nname: Amos Tibbett\n---\n")
+        self.assertEqual(len(vc.check_names(d, 0.85)), 1, "two live notes still compare")
+
     def test_different_sounding_names_pass(self):
         rows = vc.check_names(self._vault(["Adler", "Adley", "Vienna"]), 0.95)
         self.assertFalse(rows_for(rows, "PHONETIC"))

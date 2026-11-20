@@ -383,3 +383,13 @@ def test_campaign_wide_notes_are_read_for_markers(tmp_path):
     out = rs.scan(v, wrap)
     assert "unverified in linked notes: 1" in out
     assert any(line.startswith("quick path: no") and "UNVERIFIED" in line for line in out)
+
+
+def test_frontmatter_check_skips_the_midwifes_drafts(tmp_path):
+    # #826: drafts have no frontmatter, or half of one, on purpose.
+    v = vault_with(tmp_path, {"NPCs/Tom.md": NPC,
+                              "_midwife/hq/brief.md": "# Brief\n",
+                              "_midwife/hq/npcs/amos.md": "---\ntype: npcc\nvoice: \\\"\\\"\n---\n"})
+    rows = vc.check_frontmatter(v, None)
+    assert not [r for r in rows if "_midwife" in r], rows
+    assert [r for r in rows if "NPCs/Tom.md" in r], "the live note is still checked"

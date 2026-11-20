@@ -37,6 +37,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from vaultlib import (  # noqa: E402
     frontmatter_aliases,
     is_skipped_path,
+    is_midwife_draft,
     is_unchecked_source,
     link_lines,
     link_name,
@@ -68,8 +69,8 @@ def collect(vault: Path, excludes: list[str]):
     for path in sorted(vault.rglob("*.md")):
         rel = path.relative_to(vault).as_posix()
         parts = rel.split("/")
-        if is_skipped_path(rel):
-            continue
+        if is_skipped_path(rel) or is_midwife_draft(rel):
+            continue  # the Midwife's drafts are not notes: no link to or from them counts (#826)
         if any(fnmatch.fnmatch(rel, g) or fnmatch.fnmatch(parts[0], g)
                for g in excludes):
             continue

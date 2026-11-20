@@ -49,6 +49,20 @@ class UnresolvedTests(unittest.TestCase):
         self.assertEqual(run(vault)[0], "# count: 0")
         self.assertEqual(run(vault, "orphans"), ["# count: 1", "A.md"])
 
+    def test_the_midwifes_drafts_are_not_notes(self):
+        # #826: drafts are neither orphans nor dead ends, their names don't make a link
+        # ambiguous, and a draft's link doesn't save a live note from being an orphan.
+        vault = vault_of(self, {
+            "Handouts.md": "[[Lonely]]\n", "Lonely.md": "x\n", "Drafted.md": "x\n",
+            "Plan.md": "[[Handouts]]\n",
+            "_midwife/index.md": "[[index]]\n",
+            "_midwife/hq/index.md": "[[Drafted]] [[Nowhere]]\n",
+            "_midwife/hq/handouts.md": "draft\n"})
+        self.assertEqual(run(vault, "ambiguous"), ["# count: 0"])
+        self.assertEqual(run(vault, "unresolved"), ["# count: 0"])
+        self.assertEqual(run(vault, "orphans"), ["# count: 2", "Drafted.md", "Plan.md"])
+        self.assertEqual(run(vault, "deadends"), ["# count: 2", "Drafted.md", "Lonely.md"])
+
     def test_links_quoted_in_code_are_not_links(self):
         vault = vault_of(self, {
             "A.md": ("see `[[InlineMissing]]` and ``[[Double]]``\n"

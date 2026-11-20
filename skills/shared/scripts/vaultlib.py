@@ -128,9 +128,15 @@ def is_unchecked_source(rel: str) -> bool:
     return len(parts) > 1 and parts[0] in UNCHECKED_DIRS
 
 
+def is_midwife_draft(rel: str) -> bool:
+    """A file in the Midwife's workspace (`_midwife/`): its drafts, briefs and seeds. It
+    keeps them on purpose, so no check that compares or grades notes reads them (#826)."""
+    return rel.split("/", 1)[0] == "_midwife"
+
+
 def is_record_copy(rel: str) -> bool:
     """A note no name means: archived, a QA report, or a Midwife draft."""
-    return is_unchecked_source(rel) or rel.split("/", 1)[0] == "_midwife"
+    return is_unchecked_source(rel) or is_midwife_draft(rel)
 
 
 def campaign_overview(notes: Iterable[tuple[str, dict[str, Any]]]
