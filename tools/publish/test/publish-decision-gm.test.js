@@ -274,6 +274,18 @@ describe('decideGmPage: a session\'s Play Notes', () => {
     assert.strictEqual(gm({ type: 'session-play-notes' }, { show: OFF, rel: 'Sessions/x.md' }).code, 'OK');
   });
 
+  it('a Table Log always gets a GM page, and never a player page', () => {
+    for (const type of ['session-table-log', 'session_table_log']) {
+      assert.strictEqual(isPlayRecord({ type }), true, type);
+      const kept = gm({ type, publish: false }, { show: OFF, rel: 'Sessions/S1 Table Log.md' });
+      assert.strictEqual(kept.player.code, 'PUBLISH_FALSE', type);
+      assert.strictEqual(kept.code, 'GM_SHOWN', type);
+      assert.ok(publishesPage(kept));
+      const folder = gm({ type }, { show: OFF, rel: '_play/S1 Table Log.md', hiddenFolders: ['_play'] });
+      assert.strictEqual(folder.code, 'GM_SHOWN', type);
+    }
+  });
+
   it('any other note is not: show.notes off keeps the player verdict', () => {
     for (const type of ['session', 'session_wrap', 'npc', 'scene']) {
       const v = gm({ type, publish: false }, { show: OFF, rel: 'Sessions/x.md' });

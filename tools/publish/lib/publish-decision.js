@@ -280,8 +280,9 @@ const NOTE_CODES = new Set([
 ]);
 
 // A session's play records, either spelling of each type: its Play Notes, and a table assistant's export filed as
-// its own Export note (#691).
-const PLAY_RECORD_TYPES = new Set(['session-play-notes', 'session_play_notes', 'session-export', 'session_export']);
+// its own Export note (#691), and the Table Log the run sheet or the GM files; none of them is ever a player page.
+const PLAY_RECORD_TYPES = new Set(['session-play-notes', 'session_play_notes', 'session-export', 'session_export',
+  'session-table-log', 'session_table_log']);
 function isPlayRecord(frontmatter) {
   return !!frontmatter && PLAY_RECORD_TYPES.has(frontmatter.type);
 }
