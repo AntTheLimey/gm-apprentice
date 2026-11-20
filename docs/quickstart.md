@@ -15,6 +15,11 @@ gm-apprentice supports **Call of Cthulhu 7e** (with the Regency Cthulhu
 variant), **GURPS 4e**, **Forged in the Dark**, **D&D 5e (2024)**, and
 **Pathfinder 2e (Remaster)**.
 
+Want to see a finished campaign first? Clone the sample campaign
+[Snowbound](https://github.com/AntTheLimey/gm-apprentice-snowbound) (tag
+`sample-v2`), open its folder and ask for anything a GM would: prep
+Session 5, check the vault for contradictions, or publish its site.
+
 ## 1. Conceive it — the-midwife
 
 Start with the idea, however rough — or with nothing at all:
