@@ -1266,7 +1266,9 @@ def _contingency_foe_findings(locus: str, title: str, lines: list[str],
     for ln in lines:
         # Two stats (`HP 10, SAN 50`), or one and a skill (`HP 11, Fighting (Brawl) 50%`);
         # skills alone are a check (`Spot Hidden 40% or Listen 50%`), not a block.
-        pairs = {m.group(1).upper() for m in STAT_PAIR_RE.finditer(ln)}
+        # A roll is not a stat: `SAN 0/1`, `SAN 1D6/1D20` (sanity loss) are left out.
+        pairs = {m.group(1).upper() for m in STAT_PAIR_RE.finditer(ln)
+                 if ln[m.end():m.end() + 1] not in ("/", "D", "d")}
         numbers = len(pairs) >= 2 or (pairs and _SKILL_PERCENT_RE.search(ln))
         if numbers or _STAT_POINTER_RE.search(ln):
             words = ln.strip().lstrip("-*+ ").strip()

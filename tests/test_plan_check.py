@@ -1400,7 +1400,9 @@ class RunSheetChecksTests(unittest.TestCase):
 
     def test_a_contingency_without_numbers_or_a_planned_scene_with_them_is_not_flagged(self):
         quiet = ("- The bell rings; SAN 0/1 for anyone who hears it.\n"
-                 "- Spot Hidden 40% or Listen 50% hears the boat first.\n")
+                 "- Spot Hidden 40% or Listen 50% hears the boat first.\n"
+                 "- Spot Hidden 40% finds the corpse; SAN 0/1 on seeing it.\n"
+                 "- The thing rises: SAN 1D6/1D20, POW 70 to look away.\n")
         self.assertEqual(rows_for(self.found(contingency=self.CONTINGENCY.format(then=quiet)),
                                   "contingency-foes"), [])
         crib = self.scene(rest="- Wachter: STR 75, DEX 85, HP 13, Armor 1.\n")

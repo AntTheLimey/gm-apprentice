@@ -374,8 +374,10 @@ Apply fixes in place; there is no audit-notes report.
   (the GM's "two more cultists with gaff hooks"; a `contingency-foes`
   row): one note per kind, `npc` for people, `creature` otherwise, built
   through ttrpg-expert with a full `### Stats` block under `## GM Notes`
-  in the system's shape (`shared/templates/npc-stats/{system}.md`; a CoC
-  creature `creature-stats/coc-7e.md`). Never their numbers in the
+  in the system's shape (`shared/templates/npc-stats/{system}.md`, which
+  for `coc-7e-regency` is `coc-7e.md`; a CoC creature
+  `creature-stats/coc-7e.md`). With `# system: none recorded`, build
+  nothing: it is an Open Question. Never their numbers in the
   Plan's own lines, never "stat them as [[X]]": a variant of an NPC gets
   a note and block of its own. Show it in the review; on the GM's yes
   write it (`gma vault-write <vault> entity-new --type creature --name
