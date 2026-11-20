@@ -71,13 +71,16 @@ jobs:
           errors=0
           while IFS= read -r file; do
             dir=$(dirname "$file")
-            grep -oP '`(\.\./[^`]+\.md)`' "$file" | tr -d '`' | while read -r ref; do
+            # Fed by process substitution, not a pipe: a piped loop runs in a subshell and its
+            # count never reaches the test below (#798). Fenced blocks are examples, not links.
+            while IFS= read -r ref; do
               target="$dir/$ref"
               if [ ! -f "$target" ]; then
                 echo "::error file=$file::Broken relative path: $ref (resolved to $target)"
                 errors=$((errors + 1))
               fi
-            done
+            done < <(awk '/^[ \t]*(```|~~~)/ { fence = !fence; next } !fence' "$file" \
+                       | grep -oP '`(\.\./[^`]+\.md)`' | tr -d '`')
           done < <(find skills/ docs/ tests/ -name '*.md' -not -path '*/personal/*')
           if [ "$errors" -gt 0 ]; then
             exit 1
