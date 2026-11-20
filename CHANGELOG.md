@@ -10,6 +10,12 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 ---
 
 
+## [1.12.115] — 2026-11-20
+
+### Fixed
+
+- Vault checks leave the Midwife's drafts in `_midwife/` alone (#826). Names no longer pairs a note with its own draft, frontmatter no longer lists drafts without frontmatter, and graph-check no longer counts drafts as orphans, dead ends or ambiguous link targets. Names also skips archived notes and QA reports.
+
 ## [1.12.114] — 2026-11-20
 
 ### Fixed

@@ -374,9 +374,10 @@ def check_frontmatter(vault: Path, folder: str | None,
                             f"only the schema's words were taken")
             return []
     for rel, text in notes:
-        if rel in unparsed:
+        if rel in unparsed or vaultlib.is_midwife_draft(rel):
             # Schema rows would come from the line reader's guess at YAML
-            # the build rejects; they mean nothing until it parses.
+            # the build rejects; they mean nothing until it parses. The
+            # Midwife's drafts are not notes (#826).
             continue
         fm = extract_frontmatter(text)
         if fm is None:
@@ -486,6 +487,8 @@ def check_names(vault: Path, threshold: float) -> list[str]:
     # name -> list of (rel, kind) where kind is 'name' or 'alias'
     entries = []
     for rel, text in vault_files(vault):
+        if vaultlib.is_record_copy(rel):
+            continue  # archived, a QA report or a Midwife draft: no name means it (#826)
         fm = extract_frontmatter(text) or {}
         stem = Path(rel).stem
         if entity_type(fm) in STRUCTURAL_TYPES:
