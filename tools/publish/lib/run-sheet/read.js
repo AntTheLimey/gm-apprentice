@@ -396,9 +396,9 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
   function readCarried() {
     if (!sessionIndex) return null;
     // Page-shaped as the scanner makes them (its displayTitleOf: `title:`, else the stem), so a chapter
-    // a session names by title owns it here as on the site. Sessions with equal sort keys (two with no
-    // session_number in one chapter) keep their input order: the index's path order here, the scanner's
-    // walk order on the site, so those can be read in a different order than the site shows them.
+    // a session names by title owns it here as on the site. The notes ordered are every note the reader
+    // indexes (not only those the site pages), and sessions with equal sort keys (two with no
+    // session_number in one chapter) keep the index's path order, where the site keeps its walk order.
     const pages = index.notes().map((p) => ({
       title: stemOf(p), displayTitle: displayTitleOf(fmOf(p), stemOf(p)), frontmatter: fmOf(p), sourcePath: path.join(vaultPath, p), rel: p,
     }));
