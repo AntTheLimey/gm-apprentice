@@ -174,6 +174,11 @@ accumulated content), **campaign-qa** (periodic health checks), and
 **vault-ingest** (import old material). The midwife scaffolds the
 starting vault, so none of these are needed on day one.
 
+To see what the skills produce before you start your own, clone
+[Snowbound](https://github.com/AntTheLimey/gm-apprentice-snowbound)
+(tag `sample-v2`): a finished D&D 5e (2024) chapter, four sessions with
+every Plan, play notes and wrap-up, that you can prep, check or publish.
+
 ## Supported Game Systems
 
 - **Call of Cthulhu 7th Edition** (CoC 7e) — includes the Regency Cthulhu variant

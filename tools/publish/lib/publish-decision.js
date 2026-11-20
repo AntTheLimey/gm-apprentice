@@ -21,7 +21,7 @@
 // first. A page carrying both `publish: false` and `status: planned` was counted as
 // auto-excluded, and still is. The order is:
 //
-//   directory checks → IMAGE_GUIDANCE → NO_TYPE → PREP_TYPE → STORY_COMPANION → DRAFT_EXCLUDED →
+//   directory checks → IMAGE_GUIDANCE → NO_TYPE → TABLE_LOG → PREP_TYPE → STORY_COMPANION → DRAFT_EXCLUDED →
 //   AUTO_EXCLUDED_* → MANIFEST_EXCLUDED/NEEDS_DECISION → WITHHELD → MANIFEST_UNLISTED →
 //   PUBLISH_FALSE/NONE →
 //   SUPERSEDED_NO_TARGET → OK
@@ -39,7 +39,7 @@ const { chapterStatusOf } = require('./shared-lists');
 const { canonicalNfc } = require('./unicode');
 
 // The values that keep a note off a player site are listed once, in excluding-values.js.
-const { AUTO_EXCLUDE_STATUS, AUTO_EXCLUDE_STAGE, AUTO_EXCLUDE_SOURCE, PREP_TYPES, DRAFT, ruleValue, hiddenFolderReason } = require('./excluding-values');
+const { AUTO_EXCLUDE_STATUS, AUTO_EXCLUDE_STAGE, AUTO_EXCLUDE_SOURCE, PREP_TYPES, TABLE_LOG_TYPES, DRAFT, ruleValue, hiddenFolderReason } = require('./excluding-values');
 
 // Directories that never publish, whatever the config says. `_templates` is the
 // lowercase spelling some vaults use; `personal` holds the GM's own licensed
@@ -185,6 +185,11 @@ function decidePage(page, options) {
     : verdict('decide', code, why));
   if (!folderMapped) return unpaged('DIR_UNMAPPED', 'its folder is not in player_site.folder_map');
   if (!frontmatter || !frontmatter.type) return unpaged('NO_TYPE', 'no `type:` in frontmatter');
+  // A Table Log holds foes' numbers, unmasked names and the GM's vitals: it is never a player page, whatever its
+  // `publish:` says or a publish list holds (a hand-written one may have no `publish:` at all). The GM site pages it.
+  if (TABLE_LOG_TYPES.has(lower(ruleValue('type', frontmatter.type)))) {
+    return verdict('exclude', 'TABLE_LOG', 'a Table Log never publishes to the player site');
+  }
   // Scenes and session Plans are prep by type: no status, publish list entry or setting puts them on the player site.
   if (PREP_TYPES.has(lower(ruleValue('type', frontmatter.type)))) {
     return verdict('exclude', 'PREP_TYPE', 'prep: scenes and Plans stay off the player site');
@@ -276,14 +281,18 @@ function publishesPage(verdict) {
 const NOTE_CODES = new Set([
   'DRAFT_EXCLUDED', 'AUTO_EXCLUDED_STATUS', 'AUTO_EXCLUDED_STAGE', 'AUTO_EXCLUDED_SOURCE',
   'PREP_TYPE', 'MANIFEST_EXCLUDED', 'MANIFEST_NEEDS_DECISION', 'MANIFEST_UNLISTED',
-  'WITHHELD', 'PUBLISH_FALSE', 'PUBLISH_NONE',
+  'WITHHELD', 'PUBLISH_FALSE', 'PUBLISH_NONE', 'TABLE_LOG',
 ]);
 
 // A session's play records, either spelling of each type: its Play Notes, and a table assistant's export filed as
-// its own Export note (#691).
-const PLAY_RECORD_TYPES = new Set(['session-play-notes', 'session_play_notes', 'session-export', 'session_export']);
+// its own Export note (#691), and the Table Log the run sheet or the GM files. The GM site always pages them. On the
+// player site a Table Log never publishes (TABLE_LOG); Play Notes and an Export stay off only by `publish: false`
+// (as their writers file them) or a publish list that leaves them out.
+const PLAY_RECORD_TYPES = new Set(['session-play-notes', 'session_play_notes', 'session-export', 'session_export',
+  'session-table-log', 'session_table_log']);
 function isPlayRecord(frontmatter) {
-  return !!frontmatter && PLAY_RECORD_TYPES.has(frontmatter.type);
+  // Any case, as decidePage reads a type (TABLE_LOG among them), so the two rules agree.
+  return !!frontmatter && PLAY_RECORD_TYPES.has(lower(ruleValue('type', frontmatter.type)));
 }
 
 // The GM site's verdict for one page. `options` is decidePage's plus `show` (a Set of the kinds the GM

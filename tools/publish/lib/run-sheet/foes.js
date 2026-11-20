@@ -81,8 +81,11 @@ function entry(notePath, index, count, add) {
 }
 
 // The fight rows for a list of entries, keyed together so no two share a key, and numbered per
-// note across the list (two lines of one creature give `Wolf 1` to `Wolf 5`).
-function rows(entries, beatKey) {
+// note across the list (two lines of one creature give `Wolf 1` to `Wolf 5`). An ally starts from
+// `carried` (the reader's `{ of(note) }`: `{ hp, log }` from the latest Table Log naming the ally,
+// or null) when it has a figure: `hpNow` is that figure and `carriedFrom` the log; `hp` stays the
+// note's. A foe never carries, and an ally with no figure has both null.
+function rows(entries, beatKey, carried = null) {
   const paths = entries.flatMap((e) => Array(e.n).fill(e.notePath));
   const keys = itemKeys(beatKey, 'foe', paths);
   const total = new Map();
@@ -93,24 +96,28 @@ function rows(entries, beatKey) {
     const i = (at.get(e.notePath) || 0) + 1;
     at.set(e.notePath, i);
     const { info, nums } = e;
+    const got = nums.ally && carried ? carried.of(e.notePath) : null;
+    const hpNow = got && got.hp !== null ? got.hp : null;
     return {
       key: keys[k++], note: e.notePath, name: total.get(e.notePath) > 1 ? `${info.name} ${i}` : info.name,
       ally: nums.ally, ac: nums.ac, hp: nums.hp, init: nums.init,
       legendaryResistance: nums.legendaryResistance, legendaryActions: nums.legendaryActions,
       recharge: nums.recharge, lair: nums.lair, stats: info.stats,
+      hpNow, carriedFrom: hpNow === null ? null : got.log,
     };
   }));
 }
 
 // One note's foes, `count` of them. Exported for the Fight's Add (step 5).
-function foesOf(notePath, index, count = 1, beatKey, seen = new Set()) {
+function foesOf(notePath, index, count = 1, beatKey, seen = new Set(), carried = null) {
   const warnings = [];
   const e = entry(notePath, index, count, warner(seen, warnings));
-  return { foes: e ? rows([e], beatKey) : [], warnings };
+  return { foes: e ? rows([e], beatKey, carried) : [], warnings };
 }
 
-// Every `who` entry of a beat, planned or contingency. `seen` carries one Plan's warnings across beats.
-function foesFor(beat, index, seen = new Set()) {
+// Every `who` entry of a beat, planned or contingency. `seen` carries one Plan's warnings across beats;
+// `carried` is the allies' carried vitals, as `rows` reads them.
+function foesFor(beat, index, seen = new Set(), carried = null) {
   const warnings = [];
   const add = warner(seen, warnings);
   const entries = [];
@@ -124,7 +131,7 @@ function foesFor(beat, index, seen = new Set()) {
     doneNotes.add(w.note);
     for (const b of bullets(e.info.treasure)) texts.push({ text: b.text, box: b.box });
   }
-  const foes = rows(entries, beat.key);
+  const foes = rows(entries, beat.key, carried);
   // A scene that lists its own treasure stands alone: a note's hoard is the same loot in other words.
   const own = (beat.treasure || []).map((t) => t.text);
   const fresh = own.length ? [] : texts;

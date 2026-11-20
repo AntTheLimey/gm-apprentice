@@ -20,6 +20,8 @@
                                [--export PATH] [--created-by WHO] [--write]
     vault_write.py VAULT export-new --session INDEX --export PATH
                                [--play-date D] [--created-by WHO] [--write]
+    vault_write.py VAULT table-log-new --session INDEX
+                               [--play-date D] [--created-by WHO] [--write]
     vault_write.py VAULT resolve --export PATH                (read-only)
     vault_write.py VAULT chapter-new --title T [--sort-order N]
                                [--status S] [--write]
@@ -975,6 +977,7 @@ def cmd_wrapup_new(batch: Batch, args: argparse.Namespace, _text: str) -> None:
     # names the session. Several notes of one record leave it blank. When
     # nothing is found, a link as written stands (its note may come later).
     notes, notes_warning, as_written = "", "", ""
+    # The Table Log is numbers, not narrative: never a source.
     for key in ("export", "play_notes"):
         link = documents.get(key) or ""
         if is_blank(link):
@@ -3961,12 +3964,27 @@ def cmd_resolve(batch: Batch, args: argparse.Namespace, _text: str) -> None:
 
 # Who files a play record, as its `created_by` says (--created-by).
 CREATED_BY = ("session-play", "vault-ingest", "manual")
+# The run sheet writes the Table Log and nothing else; session-play never
+# writes one (spec: one writer per record), so it is not offered here.
+TABLE_LOG_CREATED_BY = ("run-sheet", "manual")
 
 # Each play record: (its label, the file name's suffix, its `type:`).
 PLAY_RECORDS = {
     "play_notes": ("Play Notes", "Play Notes", "session-play-notes"),
     "export": ("an Export", "Export", "session-export"),
+    "table_log": ("a Table Log", "Table Log", "session-table-log"),
 }
+
+# The Table Log's body sections, in order (session-document-chain.md §3c).
+TABLE_LOG_SECTIONS: tuple[str, ...] = (
+    "Where everyone ended", "Stopped in", "Points landed",
+    "Tried and missed", "Overtaken", "Reached but not landed",
+    "Not reached", "Changed since play started",
+    "Contingencies that fired", "Improvised beats",
+    "Unmasked this session", "Handouts handed over", "Log", "Loot",
+    "Vitals at the end", "Advancement",
+)
+TABLE_LOG_VITALS_HEAD = "\n| Who | HP | Conditions |\n| --- | --- | --- |\n"
 
 
 def record_text(key: str, stem: str, n: int, chapter_raw: str | None,
@@ -3992,6 +4010,10 @@ def record_text(key: str, stem: str, n: int, chapter_raw: str | None,
     note_fm.append("tags: []")
     text = ("---\n" + "\n".join(note_fm) + "\n---\n\n"
             f"# {stem} - {suffix}\n")
+    if key == "table_log":
+        # The vitals table's header row gives a hand-writer its columns.
+        text += "".join(f"\n## {name}\n" + (TABLE_LOG_VITALS_HEAD if name == "Vitals at the end" else "")
+                        for name in TABLE_LOG_SECTIONS)
     if export_path:
         text += "\n" + export
     return text
@@ -4094,6 +4116,9 @@ def file_record(batch: Batch, index: str, key: str, play_date: str | None,
                   "unedited")
         if not export.strip():
             batch.row("WARNING", rec_rel, "", "the export is empty")
+    elif key == "table_log":
+        batch.row("WOULD-CREATE", rec_rel, "", "the Table Log's "
+                  f"{len(TABLE_LOG_SECTIONS)} sections, empty")
     else:
         batch.row("WOULD-CREATE", rec_rel, "", "the notes are empty")
     if batch.originals.get(index, "") is not None:
@@ -4127,6 +4152,16 @@ def cmd_export_new(batch: Batch, args: argparse.Namespace,
     file_record(batch, index, "export", args.play_date, args.export, export,
                 args.created_by)
     resolve_export(batch, export_entries(export), export)
+
+
+def cmd_table_log_new(batch: Batch, args: argparse.Namespace,
+                      _text: str) -> None:
+    """An empty Table Log beside a session index already filed, for the
+    run sheet to fill: the other records are left alone."""
+    check_play_date(args.play_date)
+    index = batch.note_named(args.session, {"session"}, "--session")
+    file_record(batch, index, "table_log", args.play_date,
+                created_by=args.created_by)
 
 
 def cmd_session_new(batch: Batch, args: argparse.Namespace,
@@ -5683,6 +5718,22 @@ def build_parser() -> argparse.ArgumentParser:
                     default="manual", help="the skill filing it, stamped as created_by on the play records (default manual)")
     en.add_argument("--play-date", dest="play_date", help="YYYY-MM-DD")
     en.add_argument("--write", action="store_true", help="write it (default: preview)")
+    tn = sub.add_parser(
+        "table-log-new", help="an empty Table Log beside a session index",
+        formatter_class=raw, description=(
+            "Files <index> - Table Log beside the index with its sections\n"
+            "empty (the vitals table's header row only), and sets its\n"
+            "documents.table_log, play_date (with\n"
+            "--play-date) and a planned or prepped status to played. The\n"
+            "other play records are left alone. Refused when a Table Log\n"
+            "already names the session."))
+    tn.add_argument("--session", required=True,
+                    help="the session index: path or name")
+    tn.add_argument("--created-by", dest="created_by",
+                    choices=TABLE_LOG_CREATED_BY,
+                    default="manual", help="who files it, stamped as created_by (default manual)")
+    tn.add_argument("--play-date", dest="play_date", help="YYYY-MM-DD")
+    tn.add_argument("--write", action="store_true", help="write it (default: preview)")
     rs = sub.add_parser(
         "resolve", help="an export's names against the vault (read-only)",
         description="The name rows session-new prints, for an export "
@@ -5914,6 +5965,7 @@ COMMANDS: dict[str, Command] = {"wrapup-new": cmd_wrapup_new,
                                 "session-new": cmd_session_new,
                                 "play-notes-new": cmd_play_notes_new,
                                 "export-new": cmd_export_new,
+                                "table-log-new": cmd_table_log_new,
                                 "resolve": cmd_resolve,
                                 "promote-plan": cmd_promote_plan,
                                 "plan": cmd_plan,
@@ -5925,7 +5977,7 @@ COMMANDS: dict[str, Command] = {"wrapup-new": cmd_wrapup_new,
                                 "entity-new": cmd_entity_new,
                                 "prop-hand": cmd_prop_hand}
 NO_STDIN = frozenset({"wrapup-new", "session-new", "play-notes-new",
-                      "export-new", "resolve",
+                      "export-new", "table-log-new", "resolve",
                       "promote-plan", "chapter-new", "scene-new",
                       "scene-played", "prop-new", "prop-hand"})
 

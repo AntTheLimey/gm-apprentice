@@ -70,8 +70,9 @@ INFO (context the auditing skill should triage, not a defect).
 `player_site.hide.folders`, no `type:`, a draft), and otherwise by
 frontmatter: a `type:` of
 `session-plan`, a play record (`session-play-notes`, `session-export`,
-which the commands file with `publish: false`), `plan`, or `meta` is
-skipped as never meant for players, even under `_meta/`; `publish: none`
+`session-table-log`, which the commands file with `publish: false`),
+`plan`, or `meta` is skipped as never meant for players, even under
+`_meta/`; `publish: none`
 pages are skipped and `publish: stub` pages are scanned only over
 the sections they ship. ERROR is an orphan `<!-- /gm-only -->`
 closer (everything above it publishes); WARNING is an unclosed opener or a
@@ -409,7 +410,7 @@ DIGITS_RE = re.compile(r"\d+(?:\.\d+)?")
 # only flood the report.
 STRUCTURAL_TYPES = {
     "session", "session-plan", "session-play-notes", "session-export",
-    *WRAP_UP_TYPES, "scene", "chapter",
+    "session-table-log", *WRAP_UP_TYPES, "scene", "chapter",
     "meta", "timeline", "world_flags", "plan",
 }
 STRUCTURAL_NAME_RE = re.compile(
@@ -1369,12 +1370,13 @@ SESSION_DOC_TYPES: dict[str, tuple[str, set[str]]] = {
     "plan": ("plan", {"session-plan"}),
     "play_notes": ("play notes", {"session-play-notes"}),
     "export": ("export", {"session-export"}),
+    "table_log": ("table log", {"session-table-log"}),
     "wrap_up": ("wrap-up", set(WRAP_UP_TYPES)),
 }
 # The play records: what happened at the table, each its own note with one
 # writer (session-play or the GM; a table-assistant export dropped in
 # whole). Any one of them makes a session played; wrap-up reads them all.
-PLAY_RECORD_KEYS = ("play_notes", "export")
+PLAY_RECORD_KEYS = ("play_notes", "export", "table_log")
 PLAY_RECORD_TYPES = frozenset().union(
     *(SESSION_DOC_TYPES[k][1] for k in PLAY_RECORD_KEYS))
 
@@ -1685,6 +1687,13 @@ def _resolve_chain_key(key: str, rel: str, stem: str, number: int | None,
     elif target and linked is None:
         broken.append(f"WARNING\t{rel}\tdocuments.{key} links "
                       f"'[[{target}]]' but no such note exists")
+    elif linked and entity_type(by_rel[linked]) not in types:
+        # A link to a note of another kind (the Plan under `table_log`) is
+        # not that record: warn, and let the type-based lookup decide.
+        broken.append(
+            f"WARNING\t{rel}\tdocuments.{key} links '[[{target}]]', a "
+            f"{entity_type(by_rel[linked]) or 'untyped'} note, not a {kind}")
+        linked = None
     found = _chain_document(files, stems, types, stem, number, chapter)
     if found and not linked:
         unlinked.append(
@@ -2919,12 +2928,13 @@ def check_sessions(vault: Path) -> list[str]:
         else:
             derived = "planned"
 
-        # The export shows only when there is one: most sessions have none.
+        # The export and the table log show only when there is one: most sessions have none.
         flags = " ".join(
             f"{label}={'✓' if chain[key] else '–'}"
             for key, label in (("plan", "plan"), ("play_notes", "play-notes"),
-                               ("export", "export"), ("wrap_up", "wrap-up"))
-            if key != "export" or chain[key])
+                               ("export", "export"), ("table_log", "table-log"),
+                               ("wrap_up", "wrap-up"))
+            if key not in ("export", "table_log") or chain[key])
         status = fm.get("status")
         declared = (str(status) if status and not isinstance(status, list)
                     else "?")
@@ -2996,9 +3006,10 @@ GM_AFTER_POSSESSIVE = frozenset((
 # Types never meant for players: prep, meta, and the raw play records
 # (filed with `publish: false`; the player site does not page them). Flagging
 # their (correctly) Keeper-facing headings would bury the findings that
-# matter. A play record without `publish: false` in a vault with no publish
-# list would publish; the update's `play-records-publish` check marks those
-# older notes (#692).
+# matter. Play Notes or an Export without `publish: false` in a vault with no
+# publish list would publish; the update's `play-records-publish` check marks
+# those older notes (#692). A Table Log never publishes, whatever `publish:`
+# says (the tool's TABLE_LOG verdict), so the tool's answer always skips it.
 GM_LEAK_SKIP_TYPES = {"session-plan", *PLAY_RECORD_TYPES, "plan", "meta"}
 
 # A bold label opening a paragraph: `**Secret:** he lied.` The colon is
@@ -4044,6 +4055,7 @@ class WrapContext:
     ambiguous_index: bool = False
     notes_rel: str | None = None
     ambiguous_notes: bool = False
+    table_log_only: bool = False  # no Play Notes or Export, but a Table Log
 
 
 def is_recap_title(title: str) -> bool:
@@ -4176,21 +4188,27 @@ def _wrap_context(rel: str, fm: dict,
         target = wikilink_target(f.get("session"))
         return bool(own and target and link_target(target) != own)
 
+    def records(key: str) -> list[str]:
+        return [r for r, _t, f in entries
+                if isinstance(f.get("type"), str)
+                and f["type"] in SESSION_DOC_TYPES[key][1]
+                and ctx.number is not None
+                and _session_number_of(r, f) == ctx.number
+                and _chapters_agree(chapter, chapter_key(r, f))
+                and not names_another(f)]
+
     notes: list[str] = []
+    # The Table Log is numbers, not narrative: never a source.
     for key in ("export", "play_notes"):
-        notes = [r for r, _t, f in entries
-                 if isinstance(f.get("type"), str)
-                 and f["type"] in SESSION_DOC_TYPES[key][1]
-                 and ctx.number is not None
-                 and _session_number_of(r, f) == ctx.number
-                 and _chapters_agree(chapter, chapter_key(r, f))
-                 and not names_another(f)]
+        notes = records(key)
         if notes:
             break
     if len(notes) == 1:
         ctx.notes_rel = notes[0]
     elif notes:
         ctx.ambiguous_notes = True
+    else:
+        ctx.table_log_only = bool(records("table_log"))
     return ctx
 
 
@@ -4391,6 +4409,11 @@ def wrapup_frontmatter_findings(rel: str, text: str,
                 "INFO", rel,
                 f"source_document: absent — backfill {value}",
                 "fm", ("set", "source_document", value)))
+        elif ctx.table_log_only:
+            out.append(Finding(
+                "INFO", rel,
+                "source_document: absent — this session's only play record "
+                "is a Table Log, which is never a source: none is needed"))
         else:
             reason = ("more than one" if ctx.ambiguous_notes else "no")
             out.append(Finding(

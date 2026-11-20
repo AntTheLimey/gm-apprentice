@@ -161,6 +161,28 @@ describe('the GM Story page', () => {
     } finally { s.cleanup(); }
   });
 
+  it('GM Story links the Table Log after the Export, and nothing when there is none', () => {
+    const log = '---\ntype: session-table-log\nsession: "[[Session 1]]"\npublish: false\n---\n\n# Session 1 - Table Log\n\nTABLELOG-1.\n';
+    const exportNote = '---\ntype: session-export\nsession: "[[Session 1]]"\npublish: false\n---\n\n# Session 1 - Export\n\nEXPORT-1.\n';
+    const s = buildBoth(storyVault({
+      'Sessions/Session 1.md': SESSION(1).replace('  play_notes:', '  export: "[[Session 1 Export]]"\n  table_log: "[[Session 1 Table Log]]"\n  play_notes:'),
+      'Sessions/Session 1 Export.md': exportNote,
+      'Sessions/Session 1 Table Log.md': log,
+    }), { gm: { show: { notes: false } } });
+    try {
+      const links = [...read(s.gm, STORY_1).matchAll(/<p class="story-playnotes"><a href="([^"]+)">([^<]+)<\/a><\/p>/g)];
+      assert.deepEqual(links.map((m) => m[2]), ['Play Notes for this session →', 'Export for this session →', 'Table Log for this session →']);
+      assert.equal(path.posix.join('story', decodeURI(links[2][1])), 'sessions/session-1-table-log.html');
+      assert.ok(s.gm.exists('sessions', 'session-1-table-log.html'));
+      assert.ok(!s.player.exists('sessions', 'session-1-table-log.html'));
+      for (const [file, text] of texts(s.player)) assert.ok(!text.includes('TABLELOG-1'), file);
+    } finally { s.cleanup(); }
+    const none = buildBoth(storyVault(), { gm: { show: { notes: false } } });
+    try {
+      assert.ok(!read(none.gm, STORY_1).includes('Table Log for this session'));
+    } finally { none.cleanup(); }
+  });
+
   it('an export-only session whose wrap-up names the Export as its source links it once, as the Export', () => {
     const exportNote = '---\ntype: session-export\nsession: "[[Session 1]]"\npublish: false\n---\n\n# Session 1 - Export\n\nEXPORT-ONLY-1.\n';
     const vault = storyVault({

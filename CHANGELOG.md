@@ -10,6 +10,15 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 ---
 
 
+## [1.12.105] — 2026-11-20
+
+### Added
+
+- The Table Log, a session's third play record beside the Play Notes and the Export (#556): the run sheet's record of where everyone ended, which Plan points landed, loot, unmaskings, handouts and end-of-session vitals. `vault-write table-log-new` files one; the GM site pages it and links it from the session's GM Story page; it is never a player page.
+- Wrap-up reads a Table Log when there is one: it wins for numbers, loot, point states and where everyone ended, the Play Notes and Export win for what was said, and the review names each disagreement. Where its hit points differ from what the players entered, the review shows both and you pick.
+- The run sheet starts an ally with the hit points the last Table Log naming it ended it on, and warns on an HP cell it cannot read.
+- The README and quickstart link the sample campaign, Snowbound.
+
 ## [1.12.104] — 2026-11-20
 
 ### Added

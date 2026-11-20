@@ -17,6 +17,8 @@ const AUTO_EXCLUDE_STAGE = STAGE_HIDES;
 const AUTO_EXCLUDE_SOURCE = new Set(['prep']);
 // type: prep by kind. A scene and a session Plan never publish to the player site, whatever the publish list says.
 const PREP_TYPES = new Set(['scene', 'session-plan']);
+// type: a session's Table Log, either spelling: never a player page, whatever `publish:` or a publish list says.
+const TABLE_LOG_TYPES = new Set(['session-table-log', 'session_table_log']);
 // canon_status (and its older names), as written: withheld while exclude_drafts is on.
 const DRAFT = 'DRAFT';
 // type: a note the build never writes a page for.
@@ -50,7 +52,7 @@ const EXCLUDES = {
   canon_status: (v) => String(v) === DRAFT,
   source_confidence: (v) => String(v) === DRAFT,
   confidence: (v) => String(v) === DRAFT,
-  type: (v) => NO_PAGE_TYPES.has(String(v)) || PREP_TYPES.has(lower(v)),
+  type: (v) => NO_PAGE_TYPES.has(String(v)) || PREP_TYPES.has(lower(v)) || TABLE_LOG_TYPES.has(lower(v)),
 };
 
 // The first of `values` that keeps a note off the site when it stands in `field`, as
@@ -71,7 +73,7 @@ function ruleValue(field, value) {
 }
 
 module.exports = {
-  AUTO_EXCLUDE_STATUS, AUTO_EXCLUDE_STAGE, AUTO_EXCLUDE_SOURCE, PREP_TYPES, DRAFT, NO_PAGE_TYPES,
+  AUTO_EXCLUDE_STATUS, AUTO_EXCLUDE_STAGE, AUTO_EXCLUDE_SOURCE, PREP_TYPES, TABLE_LOG_TYPES, DRAFT, NO_PAGE_TYPES,
   WORKSPACE_DIRS, isWorkspaceDir, withWorkspaceDirs, hiddenFolderReason,
   excludingValue, ruleValue,
 };

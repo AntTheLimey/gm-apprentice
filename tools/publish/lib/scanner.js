@@ -171,9 +171,7 @@ function scanVaultReport(config, { quiet = false, deps } = {}) {
         }
 
         const baseName = path.basename(entry.name, '.md');
-        // A YAML number (`title: 1984`) is the title as a string.
-        // A labelled link in a title prints its label wherever the title goes (wikilink.js).
-        const displayTitle = (frontmatter.title ? labelsForLinks(String(frontmatter.title)) : '') || baseName.replace(/_/g, ' ');
+        const displayTitle = displayTitleOf(frontmatter, baseName);
         const slug = slugify(baseName);
         const outputPath = outputDir
           ? outputDir + '/' + slug + '.html'
@@ -263,6 +261,13 @@ function warnScanReport(report) {
 // The three kinds of name a `[[link]]` reaches a page by, NFC. buildLinkMap keys on
 // these and nothing else, and session-hub.js pairs a session index with its Wrap-Up
 // through linkKeys, so a pairing link resolves exactly as the same link in a page body.
+// A page's display title: its `title:` (a YAML number, `title: 1984`, is the title as a string; a labelled link
+// prints its label wherever the title goes, wikilink.js), else the file name with `_` as spaces.
+function displayTitleOf(frontmatter, baseName) {
+  const t = frontmatter && frontmatter.title;
+  return (t ? labelsForLinks(String(t)) : '') || String(baseName).replace(/_/g, ' ');
+}
+
 function titleKey(page) { return canonicalNfc(page.title); }
 function pathKey(page) { return page.vaultPath ? canonicalNfc(page.vaultPath) : null; }
 function aliasKeys(page) {
@@ -501,4 +506,4 @@ function scanAllNotes(vaultPath, deps) {
   return out;
 }
 
-module.exports = { scanAllNotes, slugify, pcLiveKey, storyPathOf, storyOwnerPath, isStoryCompanion, STORY_SUFFIX, scanVault, scanVaultReport, warnScanReport, buildLinkMap, linkKeys, mapFolder, folderMapEntry, scanAttachments, pairStoryFiles, dirIsExcluded, matchExcludedDir };
+module.exports = { displayTitleOf, scanAllNotes, slugify, pcLiveKey, storyPathOf, storyOwnerPath, isStoryCompanion, STORY_SUFFIX, scanVault, scanVaultReport, warnScanReport, buildLinkMap, linkKeys, mapFolder, folderMapEntry, scanAttachments, pairStoryFiles, dirIsExcluded, matchExcludedDir };

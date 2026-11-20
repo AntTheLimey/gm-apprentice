@@ -1162,10 +1162,13 @@ function buildSite(options) {
   if (!gm && autoExcluded.length > 0) console.log(`Auto-excluded ${autoExcluded.length} prep/draft file(s)`);
 
   if (!gm && manifest) {
-    // A scene or Plan on the publish list is never published; say so for each, once.
+    // A scene, Plan or Table Log on the publish list is never published; say so for each, once.
     const listed = new Set(manifest.publishing);
     for (const p of withCode('PREP_TYPE')) {
       if (listed.has(vaultRelPathOf(p))) printWarning(`prep note on the publish list: ${vaultRelPathOf(p)} never publishes`);
+    }
+    for (const p of withCode('TABLE_LOG')) {
+      if (listed.has(vaultRelPathOf(p))) printWarning(`Table Log on the publish list: ${vaultRelPathOf(p)} never publishes`);
     }
   }
 
@@ -1191,7 +1194,7 @@ function buildSite(options) {
     // codes count as having reached this stage.
     const beforeManifest = new Set([
       'DRAFT_EXCLUDED', 'AUTO_EXCLUDED_STATUS', 'AUTO_EXCLUDED_STAGE', 'AUTO_EXCLUDED_SOURCE',
-      'PREP_TYPE', 'DIR_ALWAYS_EXCLUDED', 'IMAGE_GUIDANCE', 'DIR_UNMAPPED', 'NO_TYPE',
+      'PREP_TYPE', 'TABLE_LOG', 'DIR_ALWAYS_EXCLUDED', 'IMAGE_GUIDANCE', 'DIR_UNMAPPED', 'NO_TYPE',
     ]);
     const reachedManifest = pages.filter(p => !beforeManifest.has(verdicts.get(p).code));
     // Allowlist membership alone, exactly as the old pass counted it: `publish: false`
@@ -2760,10 +2763,11 @@ function buildSite(options) {
     if (isFolded(page)) foldedOnto.set(page.outputPath, (foldedOnto.get(page.outputPath) || []).concat(page));
   }
   // What the GM Story page shows after the cards: the wrap-up's parts that go there (its GM Notes), then links to the
-  // session's Play Notes and its Export when they have a page.
+  // session's Play Notes, its Export and its Table Log when they have a page.
   function gmAfter(unit) {
     const parts = (unit.after || []).map((a) => a.html).join('\n');
     const exportHref = unit.kind === 'session' ? exportHrefOf(unit) : null;
+    const tableLogHref = unit.kind === 'session' ? docHrefOf(unit, 'table_log') : null;
     // A wrap-up whose source_document names the Export is not naming Play Notes: that page is linked as the Export.
     const notesHref = unit.kind === 'session' ? playNotesHrefOf(unit) : null;
     const href = notesHref && notesHref !== exportHref ? notesHref : null;
@@ -2771,7 +2775,8 @@ function buildSite(options) {
     unit.afterHtml = parts ? `<section class="story-gm-after">\n${parts}\n</section>` : '';
     const link = (to, label) => `<p class="story-playnotes"><a href="${encodeHref(relativeHref(unit.outputPath, to))}">${label}</a></p>`;
     unit.playNotesHtml = [href && link(href, 'Play Notes for this session →'),
-      exportHref && link(exportHref, 'Export for this session →')].filter(Boolean).join('\n');
+      exportHref && link(exportHref, 'Export for this session →'),
+      tableLogHref && link(tableLogHref, 'Table Log for this session →')].filter(Boolean).join('\n');
     // A chapter page links its chapter note's own page, the GM's workbench, where the GM site writes one.
     const note = unit.kind === 'chapter' ? unit.sourcePage : null;
     unit.gmNoteHtml = note && pages.includes(note) && !getsNoPage(note) && !isFolded(note)
@@ -2787,14 +2792,16 @@ function buildSite(options) {
     const found = resolveSiteLink(ref.trim(), { linkMap });
     return found.kind === 'page' ? found.href : null;
   }
-  // A session's Export (#691): the note its `documents.export` names; the address of its page, or null.
-  function exportHrefOf(unit) {
+  // The address of the page a session's `documents.<key>` names, or null when it names none or has no page.
+  function docHrefOf(unit, key) {
     const fm = (unit.sourcePage && (unit.sourcePage.sourceFrontmatter || unit.sourcePage.frontmatter)) || {};
-    const ref = fm.documents && fm.documents.export;
+    const ref = fm.documents && fm.documents[key];
     if (typeof ref !== 'string' || !ref.trim()) return null;
     const found = resolveSiteLink(ref.trim(), { linkMap });
     return found.kind === 'page' ? found.href : null;
   }
+  // A session's Export (#691): the note its `documents.export` names.
+  function exportHrefOf(unit) { return docHrefOf(unit, 'export'); }
   // A page that sends the reader on to `toPath` at once (a meta refresh, its canonical address, and a plain link for a
   // reader that does not follow it): an old address kept working.
   function redirectPage(fromPath, toPath, label) {

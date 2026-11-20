@@ -12,7 +12,7 @@ gma vault-write <vault> <command> ...
 | Argument | Value | Help |
 |---|---|---|
 | `<vault>` |  | the vault folder |
-| `<command>` | `wrapup-new`, `wrapup-add`, `wrapup-settle`, `story`, `npc-story`, `status`, `threads`, `log`, `timeline`, `session-new`, `play-notes-new`, `export-new`, `resolve`, `promote-plan`, `chapter-new`, `scene-new`, `scene-paused`, `scene-played`, `prop-new`, `prop-hand`, `plan`, `npc-merge`, `entity-new`, `batch` |  |
+| `<command>` | `wrapup-new`, `wrapup-add`, `wrapup-settle`, `story`, `npc-story`, `status`, `threads`, `log`, `timeline`, `session-new`, `play-notes-new`, `export-new`, `table-log-new`, `resolve`, `promote-plan`, `chapter-new`, `scene-new`, `scene-paused`, `scene-played`, `prop-new`, `prop-hand`, `plan`, `npc-merge`, `entity-new`, `batch` |  |
 
 Example: `gma vault-write "<vault>" wrapup-add "<wrap-up>" --write`
 <!-- END GENERATED -->
@@ -355,6 +355,32 @@ Several writes at once: put this as a '=== export-new ...' block in `gma vault-w
 | `--session` | `SESSION` | the session index: path or name |
 | `--export` | `EXPORT` | the export file (any path) |
 | `--created-by` | `session-play`, `vault-ingest`, `manual` | the skill filing it, stamped as created_by on the play records (default manual) |
+| `--play-date` | `PLAY_DATE` | YYYY-MM-DD |
+| `--write` |  | write it (default: preview) |
+<!-- END GENERATED -->
+
+<!-- BEGIN GENERATED: gma vault-write table-log-new -->
+an empty Table Log beside a session index
+
+```text
+gma vault-write <vault> table-log-new --session SESSION [options]
+```
+
+```text
+Files <index> - Table Log beside the index with its sections
+empty (the vitals table's header row only), and sets its
+documents.table_log, play_date (with
+--play-date) and a planned or prepped status to played. The
+other play records are left alone. Refused when a Table Log
+already names the session.
+
+Several writes at once: put this as a '=== table-log-new ...' block in `gma vault-write <vault> batch FILE`.
+```
+
+| Argument | Value | Help |
+|---|---|---|
+| `--session` | `SESSION` | the session index: path or name |
+| `--created-by` | `run-sheet`, `manual` | who files it, stamped as created_by (default manual) |
 | `--play-date` | `PLAY_DATE` | YYYY-MM-DD |
 | `--write` |  | write it (default: preview) |
 <!-- END GENERATED -->

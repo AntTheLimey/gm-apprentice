@@ -55,8 +55,9 @@ wrap-up). Note a saved entity in the Play Notes too.
 file (`type: session-play-notes`). If none exists, file it with
 `gma vault-write <vault> play-notes-new --session "<index>"
 --created-by session-play --write`, which links it from the index and sets `status: played`;
-never note anything in the index body (it publishes). An Export note beside it (`type:
-session-export`) is not Play Notes: leave it alone. Acknowledge and hold — no editing or reorganizing;
+never note anything in the index body (it publishes). An Export note (`type:
+session-export`) or a Table Log (`type: session-table-log`, the run
+sheet's) beside it is not Play Notes: leave it alone. Acknowledge and hold — no editing or reorganizing;
 wrap-up processes it. Mark entities with:
 
 | Marker | Use when |

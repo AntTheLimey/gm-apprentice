@@ -30,7 +30,7 @@ describe('NOTE_CODES', () => {
     assert.deepStrictEqual([...NOTE_CODES].sort(), [
       'AUTO_EXCLUDED_SOURCE', 'AUTO_EXCLUDED_STAGE', 'AUTO_EXCLUDED_STATUS', 'DRAFT_EXCLUDED',
       'MANIFEST_EXCLUDED', 'MANIFEST_NEEDS_DECISION', 'MANIFEST_UNLISTED',
-      'PREP_TYPE', 'PUBLISH_FALSE', 'PUBLISH_NONE', 'WITHHELD',
+      'PREP_TYPE', 'PUBLISH_FALSE', 'PUBLISH_NONE', 'TABLE_LOG', 'WITHHELD',
     ]);
   });
 });
@@ -248,6 +248,9 @@ describe('decideGmPage: a session\'s Play Notes', () => {
     for (const type of ['session-play-notes', 'session_play_notes', 'session-export', 'session_export']) {
       assert.strictEqual(isPlayRecord({ type }), true, type);
     }
+    // any case, and a list of one, as the player site's rules read a type
+    assert.strictEqual(isPlayRecord({ type: 'Session-Play-Notes' }), true);
+    assert.strictEqual(isPlayRecord({ type: ['session-export'] }), true);
     assert.strictEqual(isPlayRecord({ type: 'session' }), false);
     assert.strictEqual(isPlayRecord({ type: 'session_wrap' }), false);
     assert.strictEqual(isPlayRecord(null), false);
@@ -272,6 +275,67 @@ describe('decideGmPage: a session\'s Play Notes', () => {
   it('a Play Notes note in an always-excluded folder, or one the player site publishes, keeps its verdict', () => {
     assert.strictEqual(gm({ type: 'session-play-notes', publish: false }, { show: OFF, rel: '_meta/x.md' }).code, 'DIR_ALWAYS_EXCLUDED');
     assert.strictEqual(gm({ type: 'session-play-notes' }, { show: OFF, rel: 'Sessions/x.md' }).code, 'OK');
+  });
+
+  it('a Table Log always gets a GM page, and never a player page', () => {
+    for (const type of ['session-table-log', 'session_table_log']) {
+      assert.strictEqual(isPlayRecord({ type }), true, type);
+      const kept = gm({ type, publish: false }, { show: OFF, rel: 'Sessions/S1 Table Log.md' });
+      assert.strictEqual(kept.player.code, 'TABLE_LOG', type);
+      assert.strictEqual(kept.code, 'GM_SHOWN', type);
+      assert.ok(publishesPage(kept));
+      const folder = gm({ type }, { show: OFF, rel: '_play/S1 Table Log.md', hiddenFolders: ['_play'] });
+      assert.strictEqual(folder.code, 'GM_SHOWN', type);
+    }
+  });
+
+  it('a Table Log typed as a list is still never a player page', () => {
+    for (const type of [['session-table-log', 'note'], ['note', 'Session_Table_Log']]) {
+      const v = decidePage(page({ type }), { rel: 'Sessions/S1 Table Log.md', publishConfig: PLAYER, manifest: null });
+      assert.deepStrictEqual([v.bucket, v.code], ['exclude', 'TABLE_LOG'], JSON.stringify(type));
+    }
+    const { TABLE_LOG_TYPES, excludingValue } = require('../lib/excluding-values');
+    assert.ok(TABLE_LOG_TYPES.has('session-table-log'));
+    assert.strictEqual(excludingValue('type', ['note', 'session-table-log']), 'session-table-log');
+  });
+
+  it('a padded type list holding a Table Log is still never a player page', () => {
+    const { shapeFrontmatter } = require('../lib/frontmatter-shape');
+    const { frontmatter } = shapeFrontmatter({ type: ['note', ' session-table-log '] });
+    const v = decidePage(page(frontmatter), { rel: 'Sessions/S1 Table Log.md', publishConfig: PLAYER, manifest: null });
+    assert.deepStrictEqual([v.bucket, v.code], ['exclude', 'TABLE_LOG']);
+  });
+
+  it('a Table Log is never a player page, whatever publish says; the GM page stays', () => {
+    for (const type of ['session-table-log', 'session_table_log', 'Session-Table-Log']) {
+      for (const publish of [undefined, true, false, 'none']) {
+        const fm = publish === undefined ? { type } : { type, publish };
+        const label = `${type} publish: ${publish}`;
+        // no publish list, no hide.folders: still no player page
+        const player = decidePage(page(fm), { rel: 'Sessions/S1 Table Log.md', publishConfig: PLAYER, manifest: null });
+        assert.strictEqual(player.code, 'TABLE_LOG', label);
+        assert.strictEqual(player.bucket, 'exclude', label);
+        assert.strictEqual(publishesPage(player), false, label);
+        // listed for publishing on a publish list: still none
+        const listed = decidePage(page(fm), {
+          rel: 'Sessions/S1 Table Log.md', publishConfig: PLAYER,
+          manifest: manifestOf({ publishing: ['Sessions/S1 Table Log.md'] }),
+        });
+        assert.strictEqual(listed.code, 'TABLE_LOG', label);
+        // the GM site still pages it, notes switch on or off, in any case of the type
+        for (const show of [OFF, NOTES_ON]) {
+          const v = gm(fm, { show, rel: 'Sessions/S1 Table Log.md' });
+          assert.strictEqual(v.player.code, 'TABLE_LOG', label);
+          assert.strictEqual(v.code, 'GM_SHOWN', label);
+          assert.ok(publishesPage(v), label);
+        }
+      }
+    }
+    // Play Notes and Export keep their rule: publish omitted publishes, publish: false does not
+    for (const type of ['session-play-notes', 'session-export']) {
+      assert.strictEqual(decidePage(page({ type }), { rel: 'Sessions/x.md', publishConfig: PLAYER, manifest: null }).code, 'OK', type);
+      assert.strictEqual(decidePage(page({ type, publish: false }), { rel: 'Sessions/x.md', publishConfig: PLAYER, manifest: null }).code, 'PUBLISH_FALSE', type);
+    }
   });
 
   it('any other note is not: show.notes off keeps the player verdict', () => {
