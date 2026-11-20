@@ -58,7 +58,7 @@ function tableLogBody(model, state, { linkFor: link, timeOf = localTime } = {}) 
     if (w.text) at = one(w.text);
     else if (w.status === 'unplaced') at = 'not placed';
     else if (w.status === 'off') at = 'off-screen';
-    else if (w.status === 'gone') at = w.title;
+    else if (w.status === 'gone') at = one(w.title);
     else if (w.place) at = `${link(w.place)}${w.spotName ? ` (${one(w.spotName)})` : ''}`;
     else at = one(w.title);
     return `${link(w.pc)}: ${at}`;
@@ -103,8 +103,10 @@ function tableLogBody(model, state, { linkFor: link, timeOf = localTime } = {}) 
   const cell = (s) => one(s).replace(/\|/g, '/');
   const rows = d.vitalsRecorded.map((v) => {
     const name = `${link(v.note)}${v.copy > 1 ? ` ${v.copy}` : ''}`;
+    // The page sends what was typed: a `|` or a line break in a figure must not break the row.
+    const set = (x) => x !== null && x !== undefined && x !== '';
     let hp = '';
-    if (v.hp !== null && v.hp !== undefined && v.hp !== '') hp = v.max !== null && v.max !== undefined && v.max !== '' ? `${v.hp}/${v.max}` : String(v.hp);
+    if (set(v.hp)) hp = set(v.max) ? `${cell(String(v.hp))}/${cell(String(v.max))}` : cell(String(v.hp));
     return `| ${name} | ${hp} | ${cell(v.conditions)} |`;
   });
   sec[VITALS] = rows.length ? `${VITALS_HEAD}\n${rows.join('\n')}` : '';

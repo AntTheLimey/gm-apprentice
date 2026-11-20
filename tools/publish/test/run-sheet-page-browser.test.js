@@ -52,13 +52,13 @@ after(async () => {
   for (const d of made) fs.rmSync(d, { recursive: true, force: true });
 });
 
-async function start(src, asked, party = PARTY) {
+async function start(src, asked, party = PARTY, deps = {}) {
   const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'rs-page-'));
   made.push(vault);
   fs.cpSync(src, vault, { recursive: true });
   const picked = pickSession(listSessions(vault), asked, vault);
   assert.ok(picked.session, picked.error);
-  const t = createTableServer({ vaultPath: vault, session: picked.session, party, deps: { delayMs: 50, log: () => {} } });
+  const t = createTableServer({ vaultPath: vault, session: picked.session, party, deps: { delayMs: 50, log: () => {}, ...deps } });
   const port = await listenLocal(t.server, 0);
   servers.push(t);
   return { ...t, vault, port, base: `http://127.0.0.1:${port}/` };
@@ -175,6 +175,44 @@ describe('the GM page in a browser', { skip: browserSkip() }, () => {
       assert.match(p.notes[0], /^The Table Log was changed outside the sheet; the earlier text is kept at _meta\/table\/chapter-1--session-02-the-test\.table-log-.*\.md\.$/);
       const rel = p.notes[0].replace(/^.* kept at (.*)\.$/, '$1');
       assert.match(fs.readFileSync(path.join(kept.vault, ...rel.split('/')), 'utf8'), /A line the GM wrote by hand/);
+    });
+  });
+
+  it('a page loaded while the record or the state is failing says so, and clears when it recovers', async () => {
+    let logStuck = true;
+    let stateStuck = false;
+    const busy = (msg) => { const e = new Error(msg); e.code = 'EBUSY'; return e; };
+    const flaky = {
+      ...fs,
+      renameSync: (x, y) => {
+        if (logStuck && y.endsWith('Table Log.md')) throw busy('EBUSY: resource busy or locked');
+        if (stateStuck && y.endsWith('.json')) throw busy('EBUSY: the state is held');
+        return fs.renameSync(x, y);
+      },
+    };
+    const sick = await start(FIXTURE, 'Session 02 - The Test', PARTY, { fs: flaky, recordRetryMs: [100], retryMs: [100] });
+    const { model } = await api(sick, 'GET', '/api/model');
+    const { state, rev } = await api(sick, 'GET', '/api/state');
+    const b = model.beats[0];
+    const marked = RS.reduce(state, { type: 'mark', id: 'x-1', point: b.points[0].key, mark: 'landed', beat: b.key, beatTitle: b.title, text: b.points[0].text }, new Date().toISOString());
+    await api(sick, 'PUT', '/api/state', { stateId: sick.stateId, base: rev, state: marked });
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      // Loaded after the one broadcast: the status comes with the model and the event stream's hello.
+      for (let i = 0; i < 100 && !(await api(sick, 'GET', '/api/model')).notices.some((n) => n.kind === 'record-failing'); i++) await new Promise((r) => { setTimeout(r, 20); });
+      await page.goto(`${sick.base}?probe=1`);
+      const p = await page.waitFor(`(() => { const p = ${PROBE}; return p && p.notes.length && p; })()`);
+      assert.deepStrictEqual(p.notes, ['The Table Log could not be written: EBUSY: resource busy or locked. The sheet keeps the state and tries again.']);
+      logStuck = false;
+      await page.waitFor(`(() => { const p = ${PROBE}; return p && p.notes.length === 0 && p; })()`);
+      stateStuck = true;
+      const now = await api(sick, 'GET', '/api/state');
+      await api(sick, 'PUT', '/api/state', { stateId: sick.stateId, base: now.rev, state: RS.reduce(now.state, { type: 'jot', id: 'x-2', text: 'held', beat: null }, new Date().toISOString()) });
+      for (let i = 0; i < 100 && !(await api(sick, 'GET', '/api/model')).notices.some((n) => n.kind === 'save-failing'); i++) await new Promise((r) => { setTimeout(r, 20); });
+      await page.reload();
+      const q = await page.waitFor(`(() => { const p = ${PROBE}; return p && p.saved === 'Not saving' && p; })()`);
+      assert.deepStrictEqual(q.errors, []);
+      stateStuck = false;
+      await settled(page);
     });
   });
 

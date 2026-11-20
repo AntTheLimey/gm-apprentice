@@ -7,7 +7,13 @@
 //
 // After each state write the Table Log note is brought up to date from the state (plan decision 7):
 // a file body that is neither what the server last wrote (`recordHash`) nor the empty skeleton is
-// copied aside first, so text is never lost.
+// copied aside first, so text is never lost. The record is built from the model cached at the last
+// `/api/model` (what the page shows), not a fresh read of the Plan per write. At start one reconcile
+// adopts a Table Log the state already renders, or rewrites one a crash left a change behind.
+//
+// Whether the state and the record are being written is kept here and given to every page that
+// connects (SSE `hello`, `/api/model` notices), so a page loaded after a failure still says so. A
+// record that fails is retried quietly with backoff, said once per distinct error.
 //
 // 5b adds rows to ROUTES (`/players`, `/api/players/*`, `/api/roll`) and a `forPlayers` view beside
 // `present`; a players' route never sends GM data. The PUT and 409 contract below is the one its
@@ -28,7 +34,8 @@ const { isWithheld } = require('../processor');
 const RS = require('./web/state');
 
 const WEB_DIR = path.join(__dirname, 'web');
-const CSP = "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'";
+const CSP = "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
+const RECORD_RETRY_MS = [2000, 5000, 10000, 30000];
 const MAX_BODY = 2 * 1024 * 1024;
 const PICTURE = /\.(jpe?g|png|webp|gif|svg)$/i;
 // A miss in a served folder is a plain 404, never a 404.html page the folder happens to hold.
@@ -56,7 +63,15 @@ function createTableServer({ vaultPath, session, party = [], stateFile, deps = {
   let lastIndex = null;
   let closed = false;
   let recordRetry = null;
+  let recordAttempt = 0;
   let keptBody = null;
+  const recordRetryMs = deps.recordRetryMs || RECORD_RETRY_MS;
+  // What a page that connects now needs to know: is the state being saved, is the record being written.
+  const status = { saving: 'ok', saveError: null, record: 'ok', recordError: null };
+  const statusNotices = () => [
+    ...(status.saving === 'failing' ? [{ kind: 'save-failing', error: status.saveError }] : []),
+    ...(status.record === 'failing' ? [{ kind: 'record-failing', error: status.recordError }] : []),
+  ];
 
   function broadcast(event, data) {
     const chunk = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
@@ -91,6 +106,7 @@ function createTableServer({ vaultPath, session, party = [], stateFile, deps = {
       const fileBody = recordBodyOf(text);
       if (bodyHash(fileBody) === hash) {
         if (store.get().state.recordHash !== hash) store.setServer({ recordHash: hash });
+        recordOk();
         return;
       }
       const out = rewriteTableLog(text, body); // refuses a note that is not type: session-table-log
@@ -109,15 +125,49 @@ function createTableServer({ vaultPath, session, party = [], stateFile, deps = {
       fs.writeFileSync(tmp, out, 'utf8');
       fs.renameSync(tmp, logFile);
       store.setServer({ recordHash: hash });
+      recordOk();
     } catch (err) {
       const error = String((err && err.message) || err).split('\n')[0];
-      broadcast('record-failed', { error });
-      if (err && err.code === 'NOT_A_TABLE_LOG') return;
+      if (status.record !== 'failing' || status.recordError !== error) {
+        status.record = 'failing';
+        status.recordError = error;
+        log(`run sheet: the Table Log could not be written (${error}); the state is kept${err && err.code === 'NOT_A_TABLE_LOG' ? '' : ' and the write is tried again'}.`);
+        broadcast('record-failed', { error });
+      }
+      if (err && err.code === 'NOT_A_TABLE_LOG') return; // a note that is not a Table Log is never written
       if (!recordRetry && !closed) {
-        recordRetry = setTimeout(() => { recordRetry = null; writeRecord(store.get().state); }, 2000);
+        const wait = recordRetryMs[Math.min(recordAttempt, recordRetryMs.length - 1)];
+        recordAttempt++;
+        recordRetry = setTimeout(() => { recordRetry = null; writeRecord(store.get().state); }, wait);
         if (recordRetry.unref) recordRetry.unref();
       }
     }
+  }
+
+  function recordOk() {
+    recordAttempt = 0;
+    if (recordRetry) { clearTimeout(recordRetry); recordRetry = null; }
+    if (status.record === 'ok') return;
+    status.record = 'ok';
+    status.recordError = null;
+    log('run sheet: the Table Log is written again.');
+    broadcast('record-ok', {});
+  }
+
+  // Once, at start: a Table Log the loaded state already renders is adopted (a kill after the log
+  // write, before its recordHash reached disk); a log that is the server's own last write but behind
+  // the state is rewritten (a kill after the state write, before the log's). Anything else waits for
+  // the next change, as before.
+  function reconcile() {
+    const idx = indexNow();
+    const rel = logOf(idx);
+    if (!rel) return;
+    const { model } = loadModel();
+    const state = store.get().state;
+    const text = fs.readFileSync(path.join(vaultRoot, ...rel.split('/')), 'utf8');
+    const fileHash = bodyHash(recordBodyOf(text));
+    const ours = bodyHash(tableLogBody(model, state, { linkFor: linkFor(lastIndex || idx) }));
+    if (fileHash === ours || (state.recordHash && fileHash === state.recordHash)) writeRecord(state);
   }
 
   const store = createStore({
@@ -127,12 +177,29 @@ function createTableServer({ vaultPath, session, party = [], stateFile, deps = {
     now,
     delayMs: deps.delayMs,
     retryMs: deps.retryMs,
+    pid: deps.pid,
+    alive: deps.alive,
     fresh: () => RS.emptyState({ stateId, session: session.index, plan: session.plan }),
-    onSaved: (rev) => broadcast('saved', { rev }),
-    onFailed: (rev, err) => broadcast('save-failed', { rev, error: String((err && err.message) || err).split('\n')[0] }),
+    upgrade: (state) => RS.upgrade(state, RS.emptyState({ stateId, session: session.index, plan: session.plan })),
+    onSaved: (rev) => {
+      if (status.saving === 'failing') {
+        status.saving = 'ok';
+        status.saveError = null;
+        log('run sheet: the state is saved again.');
+      }
+      broadcast('saved', { rev });
+    },
+    onFailed: (rev, err) => {
+      const error = String((err && err.message) || err).split('\n')[0];
+      if (status.saving === 'failing' && status.saveError === error) return;
+      status.saving = 'failing';
+      status.saveError = error;
+      log(`run sheet: the state could not be saved (${error}); it is tried again.`);
+      broadcast('save-failed', { rev, error });
+    },
     onWrite: (state) => writeRecord(state),
   });
-  store.load();
+  store.load(); // a session another live server holds throws, code LOCKED
   if (store.broken) {
     const rel = path.relative(vaultRoot, store.broken).split(path.sep).join('/');
     notices.push({ kind: 'state-broken', path: rel, text: `The saved state did not read; it is kept at ${rel} and the sheet starts fresh.` });
@@ -152,6 +219,7 @@ function createTableServer({ vaultPath, session, party = [], stateFile, deps = {
   } catch (err) {
     log(`run sheet: could not tidy the Table Log's folder (${String(err.message).split('\n')[0]}).`);
   }
+  try { reconcile(); } catch { /* the Plan or the log does not read: the first change tries again */ }
 
   // --- answers ---------------------------------------------------------------------------------
   const json = (res, status, obj) => {
@@ -193,7 +261,7 @@ function createTableServer({ vaultPath, session, party = [], stateFile, deps = {
           json(res, 500, { error: String(err.message).split('\n')[0] });
           return;
         }
-        json(res, 200, { model: present(model, { index: idx }), session: sessionInfo(), stateId, tableLog: logOf(idx), serverId, notices });
+        json(res, 200, { model: present(model, { index: idx }), session: sessionInfo(), stateId, tableLog: logOf(idx), serverId, notices: [...notices, ...statusNotices()] });
       },
     },
     {
@@ -254,7 +322,11 @@ function createTableServer({ vaultPath, session, party = [], stateFile, deps = {
             json(res, 400, { error: 'the body needs { stateId, base, state }' });
             return;
           }
-          const r = store.put({ stateId: msg.stateId, base: msg.base, state: msg.state });
+          let r;
+          try { r = store.put({ stateId: msg.stateId, base: msg.base, state: msg.state }); } catch (err) {
+            json(res, 400, { error: String((err && err.message) || err).split('\n')[0] });
+            return;
+          }
           if (r.conflict) { json(res, 409, { reason: r.conflict, stateId, rev: r.rev, label }); return; }
           json(res, 200, { rev: r.rev });
           broadcast('state', { rev: r.rev, clientId: typeof msg.clientId === 'string' ? msg.clientId : null });
@@ -279,7 +351,7 @@ function createTableServer({ vaultPath, session, party = [], stateFile, deps = {
       path: '/api/events',
       handle: (req, res) => {
         res.writeHead(200, { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-store' });
-        res.write(`event: hello\ndata: ${JSON.stringify({ serverId, rev: store.get().rev })}\n\n`);
+        res.write(`event: hello\ndata: ${JSON.stringify({ serverId, rev: store.get().rev, status })}\n\n`);
         clients.add(res);
         const drop = () => clients.delete(res);
         req.on('close', drop);
@@ -295,6 +367,7 @@ function createTableServer({ vaultPath, session, party = [], stateFile, deps = {
     res.setHeader('Content-Security-Policy', CSP);
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'no-referrer');
+    res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
     try {
       const addr = server.address();
       const port = addr && typeof addr === 'object' ? addr.port : null;
@@ -311,6 +384,16 @@ function createTableServer({ vaultPath, session, party = [], stateFile, deps = {
       const route = matches.find((r) => r.method === req.method);
       if (!route) { req.resume(); plain(res, 405, 'Method not allowed', { Allow: [...new Set(matches.map((r) => r.method))].join(', ') }); return; }
 
+      // Another site (or another port: same-site) may not frame, embed or fire requests at the sheet.
+      // Only a top-level navigation to the page itself is let through, so a link to it still opens.
+      const site = String(req.headers['sec-fetch-site'] || '').toLowerCase();
+      if (site === 'cross-site' || site === 'same-site') {
+        const navigation = req.method === 'GET' && raw === '/'
+          && String(req.headers['sec-fetch-mode'] || '').toLowerCase() === 'navigate'
+          && String(req.headers['sec-fetch-dest'] || '').toLowerCase() === 'document';
+        if (!navigation) { req.resume(); plain(res, 403, 'Forbidden'); return; }
+      }
+
       if (req.method !== 'GET') {
         const origin = req.headers.origin;
         if (origin !== undefined && !new Set([`http://127.0.0.1:${port}`, `http://localhost:${port}`]).has(String(origin).toLowerCase())) {
@@ -318,7 +401,6 @@ function createTableServer({ vaultPath, session, party = [], stateFile, deps = {
           plain(res, 403, 'Forbidden');
           return;
         }
-        if (String(req.headers['sec-fetch-site'] || '').toLowerCase() === 'cross-site') { req.resume(); plain(res, 403, 'Forbidden'); return; }
       }
       route.handle(req, res, u);
     } catch (err) {
@@ -333,7 +415,8 @@ function createTableServer({ vaultPath, session, party = [], stateFile, deps = {
     if (closing) return closing;
     closing = (async () => {
       clearInterval(ping);
-      await store.close(); // the last write, and its record, land before the end
+      let saveError = null;
+      try { await store.close(); } catch (err) { saveError = err; } // the last write, and its record, land before the end
       closed = true;
       if (recordRetry) { clearTimeout(recordRetry); recordRetry = null; }
       for (const res of clients) res.end();
@@ -343,9 +426,12 @@ function createTableServer({ vaultPath, session, party = [], stateFile, deps = {
         server.close(() => resolve());
         if (server.closeAllConnections) server.closeAllConnections();
       });
+      if (saveError) throw saveError;
     })();
     return closing;
   }
+
+  server.on('listening', () => { const a = server.address(); if (a && typeof a === 'object') store.lockPort(a.port); });
 
   return { server, store, close, stateId, serverId, routes: ROUTES };
 }

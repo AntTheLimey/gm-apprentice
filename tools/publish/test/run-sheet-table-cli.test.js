@@ -8,6 +8,7 @@ const path = require('node:path');
 const { EventEmitter } = require('node:events');
 const { spawnSync } = require('node:child_process');
 const { runTable, runFlushCapped, whoHolds, openBrowser, parseParty } = require('../lib/run-sheet/table-cli');
+const RS = require('../lib/run-sheet/web/state');
 
 const FIXTURE = path.join(__dirname, 'fixtures', 'run-sheet-app');
 const BIN = path.join(__dirname, '..', 'bin', 'gm-publish.js');
@@ -225,7 +226,7 @@ describe('gm-publish table: serving', () => {
     const got = await (await fetch(`http://127.0.0.1:${a.port}/api/state`)).json();
     const put = await fetch(`http://127.0.0.1:${a.port}/api/state`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ stateId: got.stateId, base: got.rev, state: { ...got.state, jots: { x: 'kept' } } }),
+      body: JSON.stringify({ stateId: got.stateId, base: got.rev, state: RS.reduce(got.state, { type: 'jot', id: 'c1-1', text: 'kept', beat: null }, '2026-11-20T20:00:00.000Z') }),
     });
     assert.strictEqual(put.status, 200);
     const file = path.join(vault, '_meta', 'table', `${got.stateId}.json`);
@@ -235,6 +236,56 @@ describe('gm-publish table: serving', () => {
     assert.ok(fs.existsSync(file));
     assert.strictEqual(JSON.parse(fs.readFileSync(file, 'utf8')).rev, got.rev + 1);
     assert.strictEqual(a.deps.proc.listenerCount('SIGINT'), 0);
+  });
+});
+
+describe('gm-publish table: one server per session (third review L4)', () => {
+  it('a second run sheet for the same session, on another port, is refused naming the first', async () => {
+    const vault = vaultCopy();
+    const a = await start({ vault });
+    const lock = JSON.parse(fs.readFileSync(path.join(vault, '_meta', 'table', `${a.h.app.stateId}.lock`), 'utf8'));
+    assert.deepStrictEqual(lock, { pid: process.pid, port: a.port });
+    const before = fs.readdirSync(path.join(vault, '_meta', 'table')).sort();
+    const b = await start({ vault });
+    assert.strictEqual(b.h, 1);
+    assert.strictEqual(b.errs.join('\n'), `The run sheet for Session 2 is already running (pid ${process.pid}, port ${a.port}: http://127.0.0.1:${a.port}/). Use that one, or stop it first.`);
+    assert.strictEqual(b.deps.flushed, undefined, 'refused before the flush');
+    assert.deepStrictEqual(fs.readdirSync(path.join(vault, '_meta', 'table')).sort(), before);
+    const pick = quiet();
+    assert.strictEqual(await runTable({ vault, port: await freePort(), open: false, pick: true, json: true }, pick.deps), 1);
+    assert.match(JSON.parse(pick.lines[0]).error, /already running/);
+  });
+
+  it('a lock whose process is gone is taken over', async () => {
+    const vault = vaultCopy();
+    const dir = path.join(vault, '_meta', 'table');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'chapter-1--session-02-the-test.lock'), JSON.stringify({ pid: 999999, port: 4322 }));
+    const gone = () => false;
+    const a = await start({ vault }, { alive: gone, server: { alive: gone } });
+    assert.strictEqual(typeof a.h, 'object', a.errs.join('\n'));
+    assert.deepStrictEqual(JSON.parse(fs.readFileSync(path.join(dir, 'chapter-1--session-02-the-test.lock'), 'utf8')), { pid: process.pid, port: a.port });
+    assert.ok(a.h.app.store.unclean);
+  });
+
+  it('Ctrl+C that cannot save says so and exits 1', async () => {
+    const vault = vaultCopy();
+    const codes = [];
+    let stuck = false;
+    const flaky = { ...fs, renameSync: (x, y) => { if (stuck && y.endsWith('.json')) { const e = new Error('EPERM: operation not permitted'); e.code = 'EPERM'; throw e; } return fs.renameSync(x, y); } };
+    const a = await start({ vault, party: [] }, { exit: (c) => codes.push(c), server: { fs: flaky, delayMs: 10000, retryMs: [10000], log: () => {} } });
+    handles.splice(handles.indexOf(a.h), 1); // its close rejects: this test ends it
+    const got = await (await fetch(`http://127.0.0.1:${a.port}/api/state`)).json();
+    const put = await fetch(`http://127.0.0.1:${a.port}/api/state`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ stateId: got.stateId, base: got.rev, state: RS.reduce(got.state, { type: 'jot', id: 'c1-1', text: 'lost', beat: null }, '2026-11-20T20:00:00.000Z') }),
+    });
+    assert.strictEqual(put.status, 200);
+    stuck = true;
+    a.deps.proc.emit('SIGINT');
+    for (let i = 0; i < 100 && codes.length === 0; i++) await new Promise((r) => { setTimeout(r, 30); });
+    assert.deepStrictEqual(codes, [1]);
+    assert.match(a.errs.join('\n'), /^Could not save the sheet's state on the way out: EPERM: operation not permitted$/m);
   });
 });
 

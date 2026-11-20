@@ -8,6 +8,7 @@ const path = require('node:path');
 const { createTableServer, listenLocal } = require('../lib/run-sheet/server');
 const { listSessions, pickSession, stateIdOf } = require('../lib/run-sheet/sessions');
 const RS = require('../lib/run-sheet/web/state');
+const { bodyHash, recordBodyOf } = require('../lib/run-sheet/record');
 
 const FIXTURE = path.join(__dirname, 'fixtures', 'run-sheet-app');
 const BENCHMARK = path.join(__dirname, '..', '..', '..', 'tests', 'benchmark-campaign');
@@ -236,7 +237,8 @@ describe('run sheet server', () => {
       await req(run.port, 'GET', '/web/state.js'),
     ];
     for (const r of answers) {
-      assert.strictEqual(r.headers['content-security-policy'], "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'");
+      assert.strictEqual(r.headers['content-security-policy'], "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
+      assert.strictEqual(r.headers['cross-origin-resource-policy'], 'same-origin');
       assert.ok(!Object.keys(r.headers).some((h) => h.startsWith('access-control-')), JSON.stringify(r.headers));
     }
     assert.strictEqual(answers[3].status, 404);
@@ -414,7 +416,7 @@ describe('run sheet server', () => {
     await waitFor(() => fs.existsSync(path.join(tableDir(vault), `${run.stateId}.json`)));
     await wait(100);
     assert.deepStrictEqual(list(vault), before);
-    assert.deepStrictEqual(fs.readdirSync(tableDir(vault)), [`${run.stateId}.json`]);
+    assert.deepStrictEqual(fs.readdirSync(tableDir(vault)).sort(), [`${run.stateId}.json`, `${run.stateId}.lock`], 'the state and the lock while it runs');
   });
 
   it('a hand-made Table Log of another type is never overwritten', async () => {
@@ -581,5 +583,261 @@ describe('run sheet server', () => {
     for (const n of files) {
       assert.doesNotMatch(fs.readFileSync(path.join(WEB, n), 'utf8'), /https?:\/\//i, n);
     }
+  });
+});
+
+describe('run sheet server: the third review', () => {
+  const T = 'Session 02 - The Test';
+  const stateFileOf = (vault, run) => path.join(tableDir(vault), `${run.stateId}.json`);
+  const readState = (vault, run) => JSON.parse(fs.readFileSync(stateFileOf(vault, run), 'utf8'));
+  const logHash = (vault) => bodyHash(recordBodyOf(logText(vault)));
+  // What a kill -9 leaves besides the files: a lock whose process is gone.
+  const staleLock = (vault, run) => fs.writeFileSync(path.join(tableDir(vault), `${run.stateId}.lock`), JSON.stringify({ pid: 999999, port: 1 }));
+  const gone = { alive: () => false };
+
+  it('Ctrl+C a moment after the last click: the restart copies nothing aside (H1)', async () => {
+    const vault = copyOf();
+    const a = await start(vault, T, { deps: { delayMs: 1000 } });
+    await markFirst(a, 'landed', 0);
+    await wait(200);
+    await a.close();
+    assert.match(logText(vault), /## Points landed\n\n- The Gate: the tracks/);
+    assert.strictEqual(readState(vault, a).recordHash, logHash(vault), 'the record hash reached disk');
+    assert.ok(!fs.existsSync(path.join(tableDir(vault), `${a.stateId}.lock`)), 'a clean close removes the lock');
+    const b = await start(vault, T, { deps: { delayMs: 1000 } });
+    const sse = listen(b.port);
+    try {
+      await markFirst(b, 'missed', 1);
+      await b.close();
+      assert.deepStrictEqual(kept(vault, a.stateId), []);
+      assert.ok(!sse.events.some((e) => e.event === 'record-kept'));
+      assert.match(logText(vault), /## Tried and missed\n\n- The Gate: the bell/);
+    } finally { sse.close(); }
+  });
+
+  it('a close that cannot save rejects, and keeps the lock', async () => {
+    const vault = copyOf();
+    let stuck = false;
+    const flaky = { ...fs, renameSync: (x, y) => { if (stuck && y.endsWith('.json')) { const e = new Error('EPERM: operation not permitted'); e.code = 'EPERM'; throw e; } return fs.renameSync(x, y); } };
+    const a = await start(vault, T, { deps: { fs: flaky, delayMs: 1000, retryMs: [10000], log: () => {} } });
+    await markFirst(a);
+    stuck = true;
+    await assert.rejects(a.close(), /operation not permitted/);
+    assert.ok(fs.existsSync(path.join(tableDir(vault), `${a.stateId}.lock`)));
+    assert.strictEqual(a.server.listening, false, 'the server still stops');
+    servers.splice(servers.indexOf(a), 1);
+  });
+
+  describe('the kill -9 windows, reconciled at start (M1)', () => {
+    it('the log was written, its recordHash was not: the log is adopted, nothing copied', async () => {
+      const vault = copyOf();
+      const a = await start(vault, T);
+      await markFirst(a, 'landed', 0);
+      await waitFor(() => /Points landed\n\n- /.test(logText(vault)));
+      await wait(100);
+      await a.close();
+      const st = readState(vault, a);
+      st.recordHash = 'the hash before the last write';
+      fs.writeFileSync(stateFileOf(vault, a), JSON.stringify(st));
+      staleLock(vault, a);
+      const before = [logText(vault), fs.statSync(path.join(vault, LOG)).mtimeMs];
+      const b = await start(vault, T, { deps: gone });
+      await waitFor(() => readState(vault, b).recordHash === logHash(vault));
+      assert.deepStrictEqual([logText(vault), fs.statSync(path.join(vault, LOG)).mtimeMs], before, 'the log is not rewritten');
+      await markFirst(b, 'missed', 1);
+      await waitFor(() => /Tried and missed\n\n- /.test(logText(vault)));
+      await wait(50);
+      assert.deepStrictEqual(kept(vault, a.stateId), []);
+    });
+
+    it('the state was written, the log was not: the log is brought up to date at start', async () => {
+      const vault = copyOf();
+      const a = await start(vault, T);
+      await markFirst(a, 'landed', 0);
+      await waitFor(() => /Points landed\n\n- /.test(logText(vault)));
+      await wait(100);
+      const log0 = logText(vault);
+      const hash0 = readState(vault, a).recordHash;
+      assert.strictEqual(hash0, logHash(vault));
+      await markFirst(a, 'missed', 1);
+      await waitFor(() => /Tried and missed\n\n- /.test(logText(vault)));
+      await wait(100);
+      await a.close();
+      // The state at S1 with S0's recordHash, the log at S0.
+      fs.writeFileSync(path.join(vault, LOG), log0);
+      const st = readState(vault, a);
+      st.recordHash = hash0;
+      fs.writeFileSync(stateFileOf(vault, a), JSON.stringify(st));
+      staleLock(vault, a);
+      const b = await start(vault, T, { deps: gone });
+      assert.match(logText(vault), /## Tried and missed\n\n- The Gate: the bell/, 'rewritten before the first click');
+      await waitFor(() => readState(vault, b).recordHash === logHash(vault));
+      assert.deepStrictEqual(kept(vault, a.stateId), []);
+    });
+
+    it('a log edited by hand while the sheet was off is left alone until the next change', async () => {
+      const vault = copyOf();
+      const a = await start(vault, T);
+      await markFirst(a, 'landed', 0);
+      await waitFor(() => /Points landed\n\n- /.test(logText(vault)));
+      await wait(100);
+      await a.close();
+      withHandLog(vault);
+      const before = logText(vault);
+      const b = await start(vault, T);
+      await wait(100);
+      assert.strictEqual(logText(vault), before);
+      assert.deepStrictEqual(kept(vault, a.stateId), []);
+      await b.close();
+    });
+  });
+
+  describe('save and record status (M2)', () => {
+    const helloOf = async (port) => {
+      const sse = listen(port);
+      try { return (await waitFor(() => sse.events.find((e) => e.event === 'hello'))).data; } finally { sse.close(); }
+    };
+
+    it('a record that fails is said once, retried quietly, and given to a page that connects later', async () => {
+      const vault = copyOf();
+      let failing = true;
+      const lines = [];
+      const flaky = {
+        ...fs,
+        renameSync: (x, y) => {
+          if (failing && y.endsWith('Table Log.md')) { const e = new Error('EBUSY: resource busy or locked, rename'); e.code = 'EBUSY'; throw e; }
+          return fs.renameSync(x, y);
+        },
+      };
+      const run = await start(vault, T, { deps: { fs: flaky, recordRetryMs: [30], log: (l) => lines.push(l) } });
+      const sse = listen(run.port);
+      try {
+        await waitFor(() => sse.events.find((e) => e.event === 'hello'));
+        assert.deepStrictEqual(sse.events[0].data.status, { saving: 'ok', saveError: null, record: 'ok', recordError: null });
+        await markFirst(run, 'landed', 0);
+        await waitFor(() => sse.events.find((e) => e.event === 'record-failed'));
+        await wait(200);
+        await markFirst(run, 'missed', 1);
+        await wait(100);
+        assert.strictEqual(sse.events.filter((e) => e.event === 'record-failed').length, 1, 'said once');
+        assert.strictEqual(lines.filter((l) => /could not be written/.test(l)).length, 1, 'one terminal line');
+        const late = await helloOf(run.port);
+        assert.strictEqual(late.status.record, 'failing');
+        assert.match(late.status.recordError, /EBUSY/);
+        const m = (await req(run.port, 'GET', '/api/model')).json;
+        assert.ok(m.notices.some((n) => n.kind === 'record-failing' && /EBUSY/.test(n.error)), JSON.stringify(m.notices));
+        failing = false;
+        await waitFor(() => sse.events.find((e) => e.event === 'record-ok'));
+        assert.match(logText(vault), /## Tried and missed\n\n- The Gate: the bell/);
+        assert.strictEqual((await helloOf(run.port)).status.record, 'ok');
+        assert.ok(!(await req(run.port, 'GET', '/api/model')).json.notices.some((n) => n.kind === 'record-failing'));
+        assert.ok(lines.some((l) => /written again/.test(l)));
+        assert.deepStrictEqual(kept(vault, run.stateId), []);
+      } finally { sse.close(); }
+    });
+
+    it('a Table Log turned into another type mid-session is said once, not on every write', async () => {
+      const vault = copyOf();
+      const run = await start(vault, T, { deps: { log: () => {} } });
+      const sse = listen(run.port);
+      try {
+        await markFirst(run, 'landed', 0);
+        await waitFor(() => /Points landed\n\n- /.test(logText(vault)));
+        // The index the server holds still names the note; no /api/model call refreshes it below.
+        fs.writeFileSync(path.join(vault, LOG), logText(vault).replace('type: session-table-log', 'type: session-notes'));
+        const before = logText(vault);
+        await act(run, [{ type: 'jot', id: 'c1-j1', text: 'one', beat: null }]);
+        await waitFor(() => sse.events.find((e) => e.event === 'record-failed'));
+        await act(run, [{ type: 'jot', id: 'c1-j2', text: 'two', beat: null }]);
+        await wait(150);
+        assert.strictEqual(sse.events.filter((e) => e.event === 'record-failed').length, 1);
+        assert.strictEqual((await helloOf(run.port)).status.record, 'failing');
+        assert.strictEqual(logText(vault), before, 'never written');
+      } finally { sse.close(); }
+    });
+
+    it('a state that cannot be saved shows on a page that connects later, until it saves', async () => {
+      const vault = copyOf();
+      let stuck = true;
+      const flaky = { ...fs, renameSync: (x, y) => { if (stuck && y.endsWith('.json')) { const e = new Error('EPERM: operation not permitted'); e.code = 'EPERM'; throw e; } return fs.renameSync(x, y); } };
+      const lines = [];
+      const run = await start(vault, T, { deps: { fs: flaky, retryMs: [30], log: (l) => lines.push(l) } });
+      await markFirst(run);
+      await waitFor(() => lines.some((l) => /could not be saved/.test(l)));
+      const late = await helloOf(run.port);
+      assert.strictEqual(late.status.saving, 'failing');
+      assert.match(late.status.saveError, /EPERM/);
+      assert.ok((await req(run.port, 'GET', '/api/model')).json.notices.some((n) => n.kind === 'save-failing'));
+      await wait(150);
+      assert.strictEqual(lines.filter((l) => /could not be saved/.test(l)).length, 1, 'one terminal line');
+      stuck = false;
+      await waitFor(() => lines.some((l) => /saved again/.test(l)));
+      assert.strictEqual((await helloOf(run.port)).status.saving, 'ok');
+    });
+  });
+
+  describe('a state file that is not a whole state (M3)', () => {
+    for (const [name, make] of [
+      ['{ rev, stateId } alone', (id) => ({ rev: 3, stateId: id })],
+      ['one missing visited', (id) => { const s = RS.emptyState({ stateId: id }); delete s.visited; delete s.end.where; return { ...s, rev: 2 }; }],
+      ['an empty object', () => ({})],
+    ]) {
+      it(`${name} serves, and writes a record`, async () => {
+        const vault = copyOf();
+        const id = stateIdOf(pickSession(listSessions(vault), T, vault).session);
+        fs.mkdirSync(tableDir(vault), { recursive: true });
+        fs.writeFileSync(path.join(tableDir(vault), `${id}.json`), JSON.stringify(make(id)));
+        const run = await start(vault, T);
+        assert.strictEqual((await req(run.port, 'GET', '/api/model')).status, 200);
+        const st = (await req(run.port, 'GET', '/api/state')).json.state;
+        for (const k of Object.keys(RS.emptyState({}))) assert.ok(k in st, k);
+        assert.strictEqual((await req(run.port, 'GET', '/api/record')).status, 200);
+        assert.strictEqual((await markFirst(run)).status, 200);
+        await waitFor(() => /## Points landed\n\n- The Gate: the tracks/.test(logText(vault)));
+        assert.strictEqual(run.store.broken, null);
+      });
+    }
+
+    it('a key of the wrong type moves the file aside as broken; a PUT of one is refused', async () => {
+      const vault = copyOf();
+      const id = stateIdOf(pickSession(listSessions(vault), T, vault).session);
+      fs.mkdirSync(tableDir(vault), { recursive: true });
+      fs.writeFileSync(path.join(tableDir(vault), `${id}.json`), JSON.stringify({ ...RS.emptyState({ stateId: id }), positions: [] }));
+      const run = await start(vault, T, { deps: { log: () => {} } });
+      const m = (await req(run.port, 'GET', '/api/model')).json;
+      assert.ok(m.notices.some((n) => n.kind === 'state-broken'), JSON.stringify(m.notices));
+      assert.ok(fs.readdirSync(tableDir(vault)).some((n) => n.startsWith(`${id}.broken-`)));
+      const got = (await req(run.port, 'GET', '/api/state')).json;
+      const r = await req(run.port, 'PUT', '/api/state', { body: { stateId: got.stateId, base: got.rev, state: { ...got.state, jots: {} } } });
+      assert.strictEqual(r.status, 400);
+      assert.match(r.json.error, /jots/);
+      assert.strictEqual((await req(run.port, 'GET', '/api/state')).json.rev, got.rev);
+    });
+  });
+
+  it('another site cannot frame the page or fire requests at it; a link to the page still opens (L1)', async () => {
+    const vault = copyOf();
+    fs.mkdirSync(path.join(vault, 'Pictures'), { recursive: true });
+    fs.writeFileSync(path.join(vault, 'Pictures', 'rook.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+    const run = await start(vault, T);
+    const sf = (site, mode, dest) => ({ 'Sec-Fetch-Site': site, 'Sec-Fetch-Mode': mode, 'Sec-Fetch-Dest': dest });
+    const refused = [
+      ['/', sf('cross-site', 'navigate', 'iframe')],
+      ['/', sf('same-site', 'navigate', 'iframe')],
+      ['/api/model', sf('cross-site', 'no-cors', 'image')],
+      ['/api/model', sf('same-site', 'cors', 'empty')],
+      ['/api/state', sf('cross-site', 'navigate', 'document')],
+      ['/vault/Pictures/rook.png', sf('cross-site', 'no-cors', 'image')],
+      ['/web/gm.js', sf('same-site', 'no-cors', 'script')],
+    ];
+    for (const [u, h] of refused) assert.strictEqual((await req(run.port, 'GET', u, { headers: h })).status, 403, `${u} ${JSON.stringify(h)}`);
+    assert.strictEqual((await req(run.port, 'GET', '/', { headers: sf('cross-site', 'navigate', 'document') })).status, 200, 'a link to the page');
+    assert.strictEqual((await req(run.port, 'GET', '/', { headers: sf('none', 'navigate', 'document') })).status, 200, 'typed in');
+    assert.strictEqual((await req(run.port, 'GET', '/api/model', { headers: sf('same-origin', 'cors', 'empty') })).status, 200);
+    const pic = await req(run.port, 'GET', '/vault/Pictures/rook.png', { headers: sf('same-origin', 'no-cors', 'image') });
+    assert.strictEqual(pic.status, 200);
+    assert.strictEqual(pic.headers['cross-origin-resource-policy'], 'same-origin');
+    const put = await req(run.port, 'PUT', '/api/state', { headers: sf('same-site', 'cors', 'empty'), body: { stateId: run.stateId, base: 0, state: {} } });
+    assert.strictEqual(put.status, 403);
   });
 });

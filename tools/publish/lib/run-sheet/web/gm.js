@@ -76,6 +76,25 @@
       if (n.kind === 'record-kept') note(keptText(n.path), { id: `kept:${n.path}` });
       else if (n.kind === 'state-broken') note(n.text, { kind: 'bad', id: `broken:${n.path}` });
     }
+    takeStatus({
+      saving: (m.notices || []).some((n) => n.kind === 'save-failing') ? 'failing' : 'ok',
+      record: (m.notices || []).some((n) => n.kind === 'record-failing') ? 'failing' : 'ok',
+      recordError: ((m.notices || []).find((n) => n.kind === 'record-failing') || {}).error,
+    });
+  }
+  const recordFailedText = (error) => `The Table Log could not be written: ${error || 'no reason given'}. The sheet keeps the state and tries again.`;
+  // What the server says about saving and the record, whenever the page connects or loads.
+  function takeStatus(st) {
+    if (!st) return;
+    G.saveFailed = st.saving === 'failing';
+    if (st.record === 'failing') note(recordFailedText(st.recordError), { kind: 'bad', id: `rf:${st.recordError}` });
+    else recordOk();
+    indicator();
+  }
+  function recordOk() {
+    const before = G.notes.length;
+    G.notes = G.notes.filter((n) => !String(n.id).startsWith('rf:'));
+    if (G.notes.length !== before) renderNotes();
   }
   const keptText = (p) => `The Table Log was changed outside the sheet; the earlier text is kept at ${p}.`;
 
@@ -194,6 +213,7 @@
       const d = data(ev);
       const restarted = G.serverId && d.serverId && d.serverId !== G.serverId;
       if (typeof d.rev === 'number') G.savedRev = Math.max(G.savedRev, d.rev);
+      if (d.status) takeStatus(d.status);
       if (G.down || restarted) { if (G.resyncTimer) { clearTimeout(G.resyncTimer); G.resyncTimer = null; } resync(); }
       indicator();
     });
@@ -201,13 +221,14 @@
     es.addEventListener('save-failed', () => { G.saveFailed = true; indicator(); });
     es.addEventListener('state', (ev) => { const d = data(ev); if (d.clientId !== G.clientId) refresh(); });
     es.addEventListener('record-kept', (ev) => { const d = data(ev); if (d.path) note(keptText(d.path), { id: `kept:${d.path}` }); });
-    es.addEventListener('record-failed', (ev) => { const d = data(ev); note(`The Table Log could not be written: ${d.error || 'no reason given'}. The sheet keeps the state and tries again.`, { kind: 'bad', id: `rf:${d.error}` }); });
+    es.addEventListener('record-failed', (ev) => { const d = data(ev); recordOk(); note(recordFailedText(d.error), { kind: 'bad', id: `rf:${d.error}` }); });
+    es.addEventListener('record-ok', () => recordOk());
     es.onerror = () => { if (!G.down) lost(); };
   }
 
   function saveWord() {
     if (G.down) return ['Not connected', 'bad', 'The server is not answering; the page keeps what you do and sends it when it is back.'];
-    if (G.putFailing || G.saveFailed) return ['Not saving', 'bad', 'The server could not keep the last change; it is tried again every 2 s.'];
+    if (G.putFailing || G.saveFailed) return ['Not saving', 'bad', 'The server could not keep the last change; it keeps trying.'];
     if (G.inflight || G.pending.length || G.savedRev < G.putRev) return ['Saving…', 'wait', 'On its way to the vault.'];
     return ['Saved', '', 'Kept in the vault.'];
   }

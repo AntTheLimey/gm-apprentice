@@ -438,3 +438,30 @@ describe('run sheet state', () => {
     assert.ok(s.applied.length === as.length);
   });
 });
+
+describe('RS.upgrade (third review M3)', () => {
+  it('fills every missing key, end.* too, so a partial state derives', () => {
+    for (const partial of [{}, { rev: 3, stateId: 'x' }, (() => { const s = fresh(); delete s.visited; delete s.end.where; return s; })()]) {
+      const up = RS.upgrade(partial, fresh());
+      assert.deepStrictEqual(Object.keys(up).sort(), Object.keys(fresh()).sort());
+      assert.deepStrictEqual(Object.keys(up.end).sort(), Object.keys(fresh().end).sort());
+      assert.doesNotThrow(() => RS.derive(model, up));
+    }
+  });
+
+  it('keeps what is there, and keys it does not know', () => {
+    const s = run([{ type: 'mark', point: GATE.points[0].key, mark: 'landed', beat: GATE.key, beatTitle: GATE.title, text: GATE.points[0].text }]);
+    s.fights = { later: true };
+    const up = RS.upgrade(s, fresh());
+    assert.deepStrictEqual(up, s);
+    assert.notStrictEqual(up, s, 'a copy');
+  });
+
+  it('a key of the wrong kind is refused, code BAD_STATE', () => {
+    for (const bad of [{ positions: [] }, { jots: {} }, { end: [] }, { end: { vitals: 'x' } }, { points: null }]) {
+      assert.throws(() => RS.upgrade(bad, fresh()), (e) => e.code === 'BAD_STATE', JSON.stringify(bad));
+    }
+    assert.throws(() => RS.upgrade([], fresh()), (e) => e.code === 'BAD_STATE');
+    assert.doesNotThrow(() => RS.upgrade({ stopped: { beat: 'b' }, startedAt: '2026-11-20T19:00:00.000Z' }, fresh()), 'a key left null takes a value');
+  });
+});

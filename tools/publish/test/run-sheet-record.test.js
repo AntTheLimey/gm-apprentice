@@ -225,6 +225,16 @@ describe('the Table Log writer', () => {
     assert.ok(body(s).includes('| [[Ada Moss]] | 5/30 | blind / deaf prone |'));
   });
 
+  it('a pipe or a line break typed in an HP or max box keeps the row whole (third review L2)', () => {
+    const s = run([{ type: 'endSet', vitals: { [ADA]: { hp: '5|3', max: '30\n', conditions: 'Winded' }, [BEN]: { hp: '7\n|x' } } }]);
+    const b = body(s);
+    const rows = b.split('\n').filter((l) => l.startsWith('| [['));
+    assert.deepStrictEqual(rows, ['| [[Ada Moss]] | 5/3/30 | Winded |', '| [[Ben Hart]] | 7 /x/20 |  |']);
+    const r = readTableLog(b);
+    assert.deepStrictEqual(r.vitals.map((v) => [v.who, v.conditions]), [['Ada Moss', 'Winded'], ['Ben Hart', '']]);
+    assert.strictEqual([...r.sections.keys()].length, 16);
+  });
+
   it('an ambiguous stem is linked by path', () => {
     const amb = R.linkFor({ resolve: () => null });
     assert.strictEqual(amb('Characters/PCs/Ada Moss.md'), '[[Characters/PCs/Ada Moss]]');

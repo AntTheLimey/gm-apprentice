@@ -9,6 +9,7 @@ const path = require('node:path');
 const { spawn: nodeSpawn, execFile } = require('node:child_process');
 const { listSessions, pickSession, stateIdOf } = require('./sessions');
 const { createTableServer, listenLocal } = require('./server');
+const { lockHolder } = require('./store');
 const { siteFileNamedBy } = require('../settings/site-tool');
 const { detectStatusBar, detectInbox } = require('../backend-flags');
 
@@ -163,6 +164,10 @@ async function busyMessage(port, err, deps) {
   return `Port ${port} is busy: ${who || 'something else'} holds it. Stop it, or start this with --port <another>.`;
 }
 
+function lockedMessage(label, { pid, port }) {
+  return `The run sheet for ${label} is already running (pid ${pid}${port ? `, port ${port}: http://127.0.0.1:${port}/` : ''}). Use that one, or stop it first.`;
+}
+
 // The model's warnings, from the server just started; null when the Plan cannot be read.
 function fetchModel(port) {
   return new Promise((resolve) => {
@@ -198,6 +203,9 @@ async function runTable({ vault, session, port = DEFAULT_PORT, open = true, part
   // The port is checked before anything else is done, so a busy one is refused before `gma table` files a thing.
   const busy = await checkPort(port);
   if (busy) return refuse(await busyMessage(port, busy, deps));
+  // One server per session: another one (on another port) would write the same state and Table Log.
+  const holder = lockHolder(path.join(vaultPath, '_meta', 'table', `${stateIdOf(chosen)}.json`), { alive: deps.alive });
+  if (holder) return refuse(lockedMessage(chosen.label, holder));
 
   if (pick) {
     const stateId = stateIdOf(chosen);
@@ -220,7 +228,11 @@ async function runTable({ vault, session, port = DEFAULT_PORT, open = true, part
 
   if (!chosen.tableLog) out('No Table Log note yet: start it with `gma table` to have the record written.');
 
-  const app = (deps.createTableServer || createTableServer)({ vaultPath, session: chosen, party, deps: deps.server });
+  let app;
+  try { app = (deps.createTableServer || createTableServer)({ vaultPath, session: chosen, party, deps: deps.server }); } catch (e) {
+    if (e.code === 'LOCKED') return refuse(lockedMessage(chosen.label, e));
+    throw e;
+  }
   let bound;
   try { bound = await listenLocal(app.server, port); } catch (e) {
     await app.close();

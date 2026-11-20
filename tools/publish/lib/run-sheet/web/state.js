@@ -26,6 +26,29 @@
     };
   }
 
+  // A saved state brought up to this version's shape: each top-level key (and each `end.*` key) that is
+  // missing is filled from `fresh` (emptyState), so a file an older version wrote still derives. A key
+  // of the wrong kind (an array where an object belongs) throws, code BAD_STATE: the file is broken.
+  function upgrade(state, fresh) {
+    const bad = (why) => { const e = new TypeError(`the saved state is not one this sheet can read: ${why}`); e.code = 'BAD_STATE'; return e; };
+    const kind = (v) => (Array.isArray(v) ? 'array' : v === null ? 'null' : typeof v);
+    const fill = (obj, base, where) => {
+      if (kind(obj) !== 'object') throw bad(`${where || 'the state'} is not an object`);
+      const out = { ...obj };
+      for (const [k, v] of Object.entries(base)) {
+        if (!has(out, k) || out[k] === undefined) { out[k] = clone(v); continue; }
+        // Only the containers are checked: they are what derive reads into. A scalar (stateId, plan,
+        // startedAt…) or a key the empty state leaves null (stopped) takes any value.
+        if ((kind(v) === 'object' || kind(v) === 'array') && kind(out[k]) !== kind(v)) throw bad(`${where ? `${where}.` : ''}${k} is ${kind(out[k])}, not ${kind(v)}`);
+      }
+      return out;
+    };
+    const base = fresh || emptyState({});
+    const out = fill(state, base, '');
+    out.end = fill(out.end, base.end, 'end');
+    return out;
+  }
+
   const clone = (v) => (typeof structuredClone === 'function' ? structuredClone(v) : JSON.parse(JSON.stringify(v)));
   const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
   const stem = (p) => String(p || '').split('/').pop().replace(/\.md$/, '');
@@ -438,5 +461,5 @@
     };
   }
 
-  return { emptyState, reduce, derive, cyclePoint, armClick, castSearch };
+  return { emptyState, upgrade, reduce, derive, cyclePoint, armClick, castSearch };
 }));
