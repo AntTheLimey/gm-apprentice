@@ -70,8 +70,9 @@ INFO (context the auditing skill should triage, not a defect).
 `player_site.hide.folders`, no `type:`, a draft), and otherwise by
 frontmatter: a `type:` of
 `session-plan`, a play record (`session-play-notes`, `session-export`,
-`session-table-log`, which the commands file with `publish: false`), `plan`, or `meta` is
-skipped as never meant for players, even under `_meta/`; `publish: none`
+`session-table-log`, which the commands file with `publish: false`),
+`plan`, or `meta` is skipped as never meant for players, even under
+`_meta/`; `publish: none`
 pages are skipped and `publish: stub` pages are scanned only over
 the sections they ship. ERROR is an orphan `<!-- /gm-only -->`
 closer (everything above it publishes); WARNING is an unclosed opener or a
@@ -4179,6 +4180,7 @@ def _wrap_context(rel: str, fm: dict,
         return bool(own and target and link_target(target) != own)
 
     notes: list[str] = []
+    # The Table Log is numbers, not narrative: never a source.
     for key in ("export", "play_notes"):
         notes = [r for r, _t, f in entries
                  if isinstance(f.get("type"), str)

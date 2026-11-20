@@ -8,6 +8,7 @@ Run: python3 -m pytest tests/test_table_log_type.py
 
 from __future__ import annotations
 
+import shutil
 import sys
 import tempfile
 import unittest
@@ -17,6 +18,7 @@ ROOT = Path(__file__).resolve().parent.parent
 SCRIPTS = ROOT / "skills" / "shared" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
+import index_build as ib  # noqa: E402
 import reveal_scan as rs  # noqa: E402
 import schema_rules as sr  # noqa: E402
 import vault_check as vc  # noqa: E402
@@ -61,6 +63,30 @@ class RegistryTests(unittest.TestCase):
         self.assertIn("session-table-log", vc.PLAY_RECORD_TYPES)
         self.assertEqual(sr.REQUIRED_FIELDS["session-table-log"],
                          ["type", "canon_status", "session"])
+
+
+    def test_table_log_is_structural(self):
+        self.assertIn("session-table-log", vc.STRUCTURAL_TYPES)
+
+
+class IndexNestingTests(unittest.TestCase):
+    def test_table_log_nests_under_its_session_as_an_export_does(self):
+        fix = (ROOT / "tests" / "fixtures" / "slice-b" / "index")
+        with tempfile.TemporaryDirectory() as d:
+            shutil.copytree(fix, d, dirs_exist_ok=True)
+            base = "Chapters/Chapter 1 - Arrival/Sessions/"
+            write(d, base + "Session_01_Table_Log.md",
+                  "---\ntype: session-table-log\nsession: 1\n"
+                  'chapter: "[[Chapter 1 - Arrival]]"\n---\n\n# Table Log\n')
+            write(d, base + "Session_01_Export.md",
+                  "---\ntype: session-export\nsession: 1\n"
+                  'chapter: "[[Chapter 1 - Arrival]]"\n---\n\n# Export\n')
+            _entries, chapters = ib.collect(Path(d))
+        session_01 = next(s for s in chapters[0]["all_sessions"]
+                          if s["stem"] == "Session 01")
+        labels = dict(session_01["chain"])
+        self.assertEqual(labels.get("table log"), "Session_01_Table_Log")
+        self.assertEqual(labels.get("export"), "Session_01_Export")
 
 
 class ChainTests(unittest.TestCase):
