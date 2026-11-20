@@ -60,7 +60,7 @@ function shapeFrontmatter(frontmatter) {
     if (field === 'type' && typeof value === 'boolean') { set(field, undefined); continue; }
     if (isPlain(value) || isDate(value)) { set(field, plainText(value)); continue; }
     if (Array.isArray(value) && value.length > 0 && value.every((v) => isPlain(v) || isDate(v))) {
-      const items = value.map(plainText);
+      const items = value.map((v) => plainText(v).trim());
       // A list that holds a value that keeps a note off a player site (`planned`, `DRAFT`)
       // is read as that value alone: joined with the others it would be a text no rule
       // knows, and the note would publish. The one list of those values is excluding-values.js.

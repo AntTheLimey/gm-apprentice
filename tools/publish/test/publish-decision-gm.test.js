@@ -299,6 +299,13 @@ describe('decideGmPage: a session\'s Play Notes', () => {
     assert.strictEqual(excludingValue('type', ['note', 'session-table-log']), 'session-table-log');
   });
 
+  it('a padded type list holding a Table Log is still never a player page', () => {
+    const { shapeFrontmatter } = require('../lib/frontmatter-shape');
+    const { frontmatter } = shapeFrontmatter({ type: ['note', ' session-table-log '] });
+    const v = decidePage(page(frontmatter), { rel: 'Sessions/S1 Table Log.md', publishConfig: PLAYER, manifest: null });
+    assert.deepStrictEqual([v.bucket, v.code], ['exclude', 'TABLE_LOG']);
+  });
+
   it('a Table Log is never a player page, whatever publish says; the GM page stays', () => {
     for (const type of ['session-table-log', 'session_table_log', 'Session-Table-Log']) {
       for (const publish of [undefined, true, false, 'none']) {
