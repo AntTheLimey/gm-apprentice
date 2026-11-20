@@ -10,7 +10,7 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 ---
 
 
-## [1.12.111] — 2026-11-21
+## [1.12.111] — 2026-11-20
 
 ### Added
 
@@ -22,7 +22,7 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 - The run sheet reads plain recharges and lair actions in a stat block, and a bare Bloodied If-row lights for the foe it names.
 
-## [1.12.110] — 2026-11-21
+## [1.12.110] — 2026-11-20
 
 ### Added
 
