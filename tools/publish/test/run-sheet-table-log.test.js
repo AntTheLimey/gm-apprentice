@@ -113,6 +113,18 @@ describe('readTableLog', () => {
     assert.deepStrictEqual(r3.vitals, [{ who: 'Lucan Grey', hpNow: 9, hpMax: 27, conditions: 'winded' }]);
   });
 
+  it('emphasis in the header row still names the columns', () => {
+    const r = readTableLog('## Vitals at the end\n\n| **Who** | **Max** | __HP__ | *Conditions* |\n|---|---|---|---|\n| [[Lucan Grey]] | 27 | 9 | winded |\n');
+    assert.deepStrictEqual(r.vitals, [{ who: 'Lucan Grey', hpNow: 9, hpMax: null, conditions: 'winded' }]);
+    assert.deepStrictEqual(r.unnamed, 0);
+  });
+
+  it('a header row naming none of the columns is counted and its table not read by position', () => {
+    const r = readTableLog('## Vitals at the end\n\n| Name | Max | Now |\n|---|---|---|\n| [[Lucan Grey]] | 27 | 9 |\n');
+    assert.deepStrictEqual(r.vitals, []);
+    assert.strictEqual(r.unnamed, 1);
+  });
+
   it('reads the HP cell shapes a hand-writer types', () => {
     const cells = ['9/27 hp', '9 of 27', '9/27 (bloodied)', '\u22123/27', '9 HP'];
     const text = '## Vitals at the end\n\n| Who | HP | Conditions |\n|---|---|---|\n'

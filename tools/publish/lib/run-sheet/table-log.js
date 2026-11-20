@@ -29,8 +29,9 @@ function whoOf(cell) {
   return target.replace(/\\+$/, '').trim();
 }
 
-// Each table under the vitals section as { columns, rows }: the columns from its header row when it
-// has one that names any of them, else by position.
+// Each table under the vitals section as { columns, rows }: the columns from its header row (a row
+// directly above a `---` separator; `*` and `_` emphasis ignored), else by position. A header row that
+// names none of them gives `columns: null`: the table is not read, never guessed by position.
 function vitalsTables(text) {
   const lines = text.split('\n');
   return pt.tableRanges(text).map((r) => {
@@ -38,20 +39,23 @@ function vitalsTables(text) {
     const all = pt.tableRows(lines.slice(r.start, r.end + 1).join('\n'));
     let columns = BY_POSITION;
     if (headed) {
-      const head = pt.tableRows(lines[r.start])[0].map(low);
+      const head = pt.tableRows(lines[r.start])[0].map((h) => low(String(h).replace(/[*_]/g, '')));
       const named = {};
       for (const [k, re] of Object.entries(COLUMNS)) {
         const i = head.findIndex((h) => re.test(h));
         if (i >= 0) named[k] = i;
       }
-      if (Object.keys(named).length) columns = { who: named.who === undefined ? 0 : named.who, hp: named.hp, conditions: named.conditions };
+      columns = Object.keys(named).length
+        ? { who: named.who === undefined ? 0 : named.who, hp: named.hp, conditions: named.conditions }
+        : null;
     }
     return { columns, rows: all };
   });
 }
 
 // `unread`: the rows whose HP cell holds something that is not a number, `{ who, cell }` (an empty
-// cell is no figure and not listed), for the reader to warn about.
+// cell is no figure and not listed); `unnamed`: how many tables have a header row naming no column.
+// Both are for the reader to warn about.
 function readTableLog(text) {
   const src = String(text == null ? '' : text).replace(/\r\n?/g, '\n');
   const body = src.replace(/^---\n[\s\S]*?\n---(?:\n|$)/, '');
@@ -63,8 +67,10 @@ function readTableLog(text) {
   }
   const vitals = [];
   const unread = [];
+  let unnamed = 0;
   const cell = (cells, i) => (i === undefined ? '' : String(cells[i] || '').trim());
   for (const { columns, rows } of vitalsTables(sections.get(VITALS) || '')) {
+    if (!columns) { unnamed++; continue; }
     for (const cells of rows) {
       const who = whoOf(cell(cells, columns.who));
       if (!who) continue;
@@ -79,7 +85,7 @@ function readTableLog(text) {
       });
     }
   }
-  return { sections, vitals, unread };
+  return { sections, vitals, unread, unnamed };
 }
 
 module.exports = { readTableLog, VITALS };

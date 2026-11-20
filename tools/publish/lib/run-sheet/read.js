@@ -385,7 +385,8 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
   }
 
   // The allies' carried vitals: `{ of(note) }` gives `{ hp, log }`, from the latest Table Log before this
-  // session whose vitals name the ally (a row with no figure still stops the walk: `hp` null), or null.
+  // session whose vitals name the ally (an empty HP cell is passed over; an unreadable one stops the
+  // walk with `hp` null), or null.
   // The walk goes back through the sessions before this one in the site's story order (story-spine
   // orderedSessions: chapter, then number), never number alone, and counts only played ones: `status`
   // played (or wrap-up, reviewed), or a Play Notes, Export, Table Log or Wrap-Up linked from
@@ -443,6 +444,9 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
         if (!log) continue;
         const hp = new Map();
         const t = readTableLog(index.read(log).body);
+        if (t.unnamed) warnings.push({ kind: 'table-log', note: log, text: `${VITALS}: a table's header row names none of Who, HP or Conditions, so it is not read: nobody starts from it` });
+        // An empty HP cell is nothing recorded: the walk goes on past it. An unreadable one stops it.
+        const unreadWho = new Set(t.unread.map((u) => low(u.who)));
         for (const v of t.vitals) {
           const who = index.resolve(v.who);
           if (who === null) {
@@ -452,6 +456,7 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
             warnings.push({ kind: 'table-log', note: log, text: `${VITALS}: ${why}; nobody starts from that row` });
             continue;
           }
+          if (v.hpNow === null && !unreadWho.has(low(v.who))) continue;
           if (!hp.has(who)) hp.set(who, v.hpNow);
         }
         const unread = new Set();

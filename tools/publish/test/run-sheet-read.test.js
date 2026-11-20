@@ -588,10 +588,37 @@ describe('run sheet reader: allies start from the last Table Log', () => {
     assert.match(w[0].text, /"fine"/);
   });
 
-  it('an empty HP cell is silent', () => {
-    const m = readRunSheet(withS1(['| [[Lucan Grey]] | | winded |']), PLAN, { party: PARTY });
-    for (const f of allyRows(m)) assert.deepStrictEqual([f.hpNow, f.carriedFrom], [null, null]);
+  it('an empty HP cell in a newer Table Log is silent and the walk goes on past it', () => {
+    const dir = withS1();
+    const s2 = `${CH1}/Sessions/Session 02/Session 02 - The Test.md`;
+    const s2Log = `${CH1}/Sessions/Session 02/Session 02 - The Test - Table Log.md`;
+    const s3 = `${CH1}/Sessions/Session 03/Session 03 - Next.md`;
+    const p3 = `${CH1}/Sessions/Session 03/Session 03 - Next - Plan.md`;
+    sessionIndex(dir, s2, { number: 2, chapter: 'Chapter 1', log: 'Session 02 - The Test - Table Log' });
+    tableLog(dir, s2Log, 'Session 02 - The Test', ['| [[Lucan Grey]] | | winded |']);
+    sessionIndex(dir, s3, { number: 3, chapter: 'Chapter 1', log: null, status: 'planned' });
+    write(dir, p3, ['---', 'type: session-plan', 'session: "[[Session 03 - Next]]"', 'chapter: "[[Chapter 1]]"', '---', '',
+      '## Planned Scenes', '', '### Scene 1: Again', '**Situation:** Lucan again.', '**NPCs**', '- **[[Lucan Grey]]:** helps', ''].join('\n'));
+    const m = readRunSheet(dir, p3, { party: PARTY });
+    const rows = allyRows(m);
+    assert.ok(rows.length >= 1);
+    for (const f of rows) assert.deepStrictEqual([f.hpNow, f.carriedFrom], [9, S1_LOG]);
     assert.deepStrictEqual(tableLogWarnings(m), []);
+  });
+
+  it('a header row naming no column warns once naming the Table Log, and the table is not read', () => {
+    const dir = withS1();
+    tableLog(dir, S1_LOG, 'Session 01 - The Road', []);
+    const abs = path.join(dir, S1_LOG);
+    fs.writeFileSync(abs, fs.readFileSync(abs, 'utf8').replace('| Who | HP | Conditions |\n|-----|----|------------|',
+      '| Name | Max | Now |\n|---|---|---|\n| [[Lucan Grey]] | 27 | 9 |'));
+    const m = readRunSheet(dir, PLAN, { party: PARTY });
+    for (const f of allyRows(m)) assert.deepStrictEqual([f.hpNow, f.carriedFrom], [null, null]);
+    const w = tableLogWarnings(m);
+    assert.strictEqual(w.length, 1, JSON.stringify(w));
+    assert.strictEqual(w[0].kind, 'table-log');
+    assert.strictEqual(w[0].note, S1_LOG);
+    assert.match(w[0].text, /Who|HP/);
   });
 
   it('a header row puts the HP column where it says', () => {
