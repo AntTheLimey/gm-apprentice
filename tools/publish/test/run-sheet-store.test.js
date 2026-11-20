@@ -190,7 +190,10 @@ describe('run sheet state store', () => {
       onFailed: (rev, err) => seen.push(['failed', rev, err.code]),
     });
     store.put({ stateId: ID, base: 0, state: S() });
-    await saved; // however slow the runner, the assertions run once the write has landed
+    // The store's retry timer is unref'd (a running server's socket keeps the process up), so a ref'd
+    // timer holds the event loop open until the write lands: Node 22's runner otherwise ends the test.
+    const hold = setInterval(() => {}, 1000);
+    try { await saved; } finally { clearInterval(hold); } // however slow the runner, the assertions run once the write has landed
     assert.deepStrictEqual(seen, [['failed', 1, 'EPERM'], ['failed', 1, 'EPERM'], ['saved', 1]]);
     assert.strictEqual(readJson(fileIn(dir)).rev, 1);
     await store.close();
