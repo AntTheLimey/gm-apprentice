@@ -30,7 +30,7 @@ gma <command> ... [options]
 | Argument | Value | Help |
 |---|---|---|
 | `--version` |  | print the plugin version |
-| `<command>` | `dnd-ddb`, `dnd-sheet`, `graph-check`, `gurps-check`, `gurps-skill-default`, `image`, `index-build`, `ingest-images`, `ingest-survey`, `links`, `migrate`, `moments`, `plan-check`, `plans-index`, `prop-move`, `reconcile-promote`, `reconcile-scan`, `relink`, `reveal`, `reveal-scan`, `rules-lookup`, `scene-queue`, `schema-rules`, `section`, `session-context`, `stamp-entities`, `stat-fill`, `tones`, `update`, `vault-check`, `vault-scaffold`, `vault-search`, `vault-write`, `workaround`, `publish`, `tool`, `llms` | the command to run; each has its own --help |
+| `<command>` | `dnd-ddb`, `dnd-sheet`, `doctor`, `graph-check`, `gurps-check`, `gurps-skill-default`, `image`, `index-build`, `ingest-images`, `ingest-survey`, `links`, `migrate`, `moments`, `plan-check`, `plans-index`, `prop-move`, `reconcile-promote`, `reconcile-scan`, `relink`, `reveal`, `reveal-scan`, `rules-lookup`, `scene-queue`, `schema-rules`, `section`, `session-context`, `stamp-entities`, `stat-fill`, `tones`, `update`, `vault-check`, `vault-scaffold`, `vault-search`, `vault-write`, `workaround`, `publish`, `tool`, `llms` | the command to run; each has its own --help |
 <!-- END GENERATED -->
 
 <!-- BEGIN GENERATED: gma llms -->
@@ -54,6 +54,7 @@ Example: `gma llms relink`
 |---|---|---|
 | `dnd-ddb` | `gma llms dnd-ddb` | Bring a D&D 5e PC note up to date from D&D Beyond. |
 | `dnd-sheet` | `gma llms dnd-sheet` | Report and fill the derived numbers on a D&D 5e PC note. |
+| `doctor` | `gma llms doctor` | Check this machine is ready: Python, the skills' version, Node, the publish tool. |
 | `graph-check` | `gma llms graph-check` | Vault graph queries: orphans, unresolved links, dead ends, backlinks. |
 | `gurps-check` | `gma llms gurps-check` | GURPS 4e sheet arithmetic checks. |
 | `gurps-skill-default` | `gma llms gurps-skill-default` | Add a GURPS skill to a PC's sheet at its default level. |

@@ -7,6 +7,60 @@ campaign management.
 
 ## Installation
 
+### Handing the install to your AI agent
+
+Your agent can do the install for you. It checks Python and Node,
+installs gm-apprentice the way your agent takes plugins or skills, then
+checks the install. Paste this prompt into Claude Code, Codex, Cursor or
+any other coding agent:
+
+<!-- install-prompt: begin -->
+
+```text
+Install gm-apprentice, the Game Master skills, on this machine.
+Follow these steps in order, and do not improvise an alternative to
+any of them. If step 3 fails, stop and show me the error.
+
+1. Preflight. Run `python3 --version`. If it fails, or is older
+   than 3.10, stop and tell me to install Python 3.10 or newer: on
+   Windows from the Microsoft Store (its `python3` is the one the
+   skills call; the python.org installer gives only `python` and
+   `py`), on a Mac from https://www.python.org or Homebrew (the
+   `python3` a Mac comes with is 3.9), elsewhere from
+   https://www.python.org or the system's package manager. Run `node --version`. If Node is missing or
+   older than 22.21, tell me it is needed only for a campaign
+   website (https://nodejs.org), and carry on.
+2. Work out which agent you are: Claude Code, Codex, or another.
+3. Install for my user, so every campaign folder has it. "Already
+   added" or "already installed" is fine: carry on.
+   - Claude Code: `claude plugin marketplace add AntTheLimey/gm-apprentice`,
+     then `claude plugin install gm-apprentice@gm-apprentice`.
+   - Codex: `codex plugin marketplace add AntTheLimey/gm-apprentice`,
+     then `codex plugin add gm-apprentice@gm-apprentice`.
+   - Any other agent: `npx -y skills add AntTheLimey/gm-apprentice --all -g`.
+     `npx` comes with Node: if it is missing, stop and tell me this
+     install needs Node (https://nodejs.org) even without a campaign
+     website.
+4. Check the install. Find the `gma.py` you just installed, in the
+   newest version folder: on Claude Code, `claude plugin list --json`
+   gives gm-apprentice's `installPath`, and it is at
+   `skills/shared/scripts/gma.py` under it; on Codex, under
+   `$CODEX_HOME/plugins/cache/gm-apprentice/` (`~/.codex` when
+   `CODEX_HOME` is not set); otherwise
+   `~/.agents/skills/shared/scripts/gma.py`. Run
+   `python3 "<that path>" doctor` and show me its output. If a line
+   says `fail`, tell me what it says and stop. If one says `warn`,
+   tell me and carry on.
+5. Tell me the skills load in a new session (in Claude Code, also
+   after `/reload-plugins`), list any step you skipped with the
+   command that finishes it later, and tell me the next step: say
+   "help me start a new campaign".
+```
+
+<!-- install-prompt: end -->
+
+To do it by hand instead, use the section for your agent below.
+
 ### Claude Code (CLI)
 
 ```bash
@@ -202,8 +256,9 @@ The bundled utilities under `skills/shared/scripts/` give the skills
 ranked search, link-graph audits, schema validation, and more — Python
 3.10 or later, standard library only, no packages to install. Python 3 is
 a required dependency of this plugin. The skills invoke it as `python3`
-from Claude Code's Bash tool, which on Windows is Git Bash: macOS and
-most Linux ship `python3` already; on Windows, install Python from the
+from Claude Code's Bash tool, which on Windows is Git Bash. Most Linux
+ships a new enough `python3`; macOS ships 3.9, too old, so install a
+newer one from python.org or Homebrew; on Windows, install Python from the
 Microsoft Store, whose `python3` alias Git Bash finds on PATH (the
 python.org installer provides only `python` and `py`).
 

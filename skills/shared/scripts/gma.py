@@ -39,6 +39,7 @@ class Command(NamedTuple):
 COMMANDS: dict[str, Command] = {
     "dnd-ddb": Command("dnd_ddb", "Bring a D&D 5e PC note up to date from D&D Beyond."),
     "dnd-sheet": Command("dnd_sheet", "Report and fill the derived numbers on a D&D 5e PC note."),
+    "doctor": Command("doctor", "Check this machine is ready: Python, the skills' version, Node, the publish tool."),
     "graph-check": Command("graph_check", "Vault graph queries: orphans, unresolved links, dead ends, backlinks."),
     "gurps-check": Command("gurps_check", "GURPS 4e sheet arithmetic checks."),
     "gurps-skill-default": Command("gurps_skill_default", "Add a GURPS skill to a PC's sheet at its default level."),
@@ -454,8 +455,9 @@ def main(argv: list[str] | None = None) -> int:
         return _llms(rest)
     if name == "tool":
         return _tool(rest)
-    if name == "publish" or not any(a in ("-h", "--help") for a in rest):
-        # A Python command's help needs no tool, so no wait on a download.
+    if name == "publish" or (name != "doctor" and not any(a in ("-h", "--help") for a in rest)):
+        # A Python command's help needs no tool, so no wait on a download;
+        # nor does doctor, which reports what is installed and changes nothing.
         _ensure_tool()
     if name == "publish":
         return _publish(rest)
