@@ -363,5 +363,54 @@ class RevealScanAlso(unittest.TestCase):
             "NPCs/Ida.md\tunpublished\tspoiler: Ida is the heir"])
 
 
+TLOG = f"{SESS}/Session 12 - Mill - Table Log.md"
+
+
+def with_log(body: str) -> dict[str, str]:
+    files = base(play="Nothing.\n")
+    files[INDEX] = files[INDEX].replace(
+        "documents:\n", "documents:\n  table_log: \"[[Session 12 - Mill - Table Log]]\"\n")
+    files[TLOG] = ("---\ntype: session-table-log\n---\n\n# Table Log\n\n"
+                   + body.replace("\r\n", "\n"))
+    return files
+
+
+class TableLogSections(unittest.TestCase):
+    """Only the Table Log sections that record what the players got count."""
+
+    def test_not_reached_link_gives_no_row(self) -> None:
+        res = run_scan({**with_log("## Not reached\n\n- [[Vex]] in the vault\n"),
+                        "NPCs/Vex.md": VEX})
+        self.assertEqual(res.sources, ["Play Notes", "Wrap-Up", "Table Log"])
+        self.assertEqual(res.rows, [])
+
+    def test_vitals_only_link_gives_no_row(self) -> None:
+        body = ("## Vitals at the end\n\n| Who | HP | Conditions |\n"
+                "| --- | --- | --- |\n| [[Vex]] | 3/12 | |\n")
+        res = run_scan({**with_log(body), "NPCs/Vex.md": VEX})
+        self.assertEqual(res.rows, [])
+
+    def test_unread_sections_give_no_rows(self) -> None:
+        body = "".join(f"## {name}\n\n- [[Vex]]\n\n" for name in (
+            "Stopped in", "Tried and missed", "Overtaken", "Reached but not landed",
+            "Not reached", "Changed since play started", "Contingencies that fired",
+            "Log", "Advancement"))
+        res = run_scan({**with_log(body), "NPCs/Vex.md": VEX})
+        self.assertEqual(res.rows, [])
+
+    def test_handout_handed_over_gives_a_row(self) -> None:
+        res = run_scan({**with_log("## Not reached\n\n- x\n\n"
+                                   "## handouts handed over\n\n- [[Vex]]\n"),
+                        "NPCs/Vex.md": VEX})
+        self.assertEqual([r.path for r in res.rows], ["NPCs/Vex.md"])
+
+    def test_every_read_section_gives_a_row(self) -> None:
+        for name in rv.TABLE_LOG_READ:
+            with self.subTest(name=name):
+                res = run_scan({**with_log(f"## {name}\n\n- [[Vex]]\n"),
+                                "NPCs/Vex.md": VEX})
+                self.assertEqual([r.path for r in res.rows], ["NPCs/Vex.md"])
+
+
 if __name__ == "__main__":
     unittest.main()

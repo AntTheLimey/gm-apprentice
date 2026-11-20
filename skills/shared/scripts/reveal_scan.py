@@ -9,7 +9,10 @@ count as "touched" are those the session's Play Notes, Wrap-Up and recap
 (when it has a separate one) link to, plus each `--also` path (vault-
 relative: the notes a wrap-up wrote that none of those link); the Plan
 never counts, since it holds what was meant to happen, not what was
-played. Scenes, Plans, session notes, chapters and other structural notes
+played. From the Table Log only the sections that record what the players
+got are read (`TABLE_LOG_READ`); its missed and unreached points, what
+changed, the log and the vitals table echo the Plan or name foes, so they
+never count. Scenes, Plans, session notes, chapters and other structural notes
 are never listed. An `--also` path that names no note gets a `# warning:`.
 
 Each listed note is one tab-separated row:
@@ -38,6 +41,7 @@ Exit: 0 scanned; 2 no such session index.
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 import unicodedata
 from dataclasses import dataclass, field
@@ -66,6 +70,12 @@ FALLBACK_TYPES = {
 # (documents key, label) in print order. `recap` is read when the index has it.
 SOURCE_KEYS = (("play_notes", "Play Notes"), ("export", "Export"), ("wrap_up", "Wrap-Up"),
                ("recap", "Recap"), ("table_log", "Table Log"))
+# The Table Log's `##` sections whose links count as touched (any case):
+# what the players have. The rest of §3c's sections never count.
+TABLE_LOG_READ = ("Where everyone ended", "Points landed", "Improvised beats",
+                  "Unmasked this session", "Handouts handed over", "Loot")
+_READ_KEYS = frozenset(unicodedata.normalize("NFC", t).casefold() for t in TABLE_LOG_READ)
+_HEADING_RE = re.compile(r"^(#{1,6})\s+(.*?)\s*#*\s*$")
 
 
 @dataclass
@@ -224,9 +234,16 @@ def scan(vault: Path, session: str, also: tuple[str, ...] | list[str] = ()) -> S
             seen.add(note.rel)
             candidates.append(note)
 
-    for _, doc in sources:
+    for label, doc in sources:
+        # The Table Log: links only under a TABLE_LOG_READ section.
+        reading = label != "Table Log"
         for ll in link_lines(doc.text):
             if ll.in_code:
+                continue
+            heading = None if ll.in_frontmatter else _HEADING_RE.match(ll.line.rstrip("\r\n"))
+            if label == "Table Log" and heading and len(heading.group(1)) <= 2:
+                reading = unicodedata.normalize("NFC", heading.group(2)).casefold() in _READ_KEYS
+            if not reading:
                 continue
             for m in live_wikilinks(ll.line, ll.spans):
                 add(_resolve(m.group(1), by_name, doc.rel))
