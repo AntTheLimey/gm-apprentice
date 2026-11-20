@@ -10,6 +10,12 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 ---
 
 
+## [1.12.100] — 2026-11-19
+
+### Fixed
+
+- The build no longer warns that a GM alias is printed on a page that only links a public place or person whose name holds it (#797): `[[Rook Hollow]]` is not the secret "Rook". The page whose own name holds it still gets the warning, so you can decide whether to rename it.
+
 ## [1.12.99] — 2026-11-19
 
 ### Fixed

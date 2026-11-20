@@ -363,6 +363,28 @@ describe('a name only an index or listing page prints', () => {
     assert.deepStrictEqual(found.map((f) => [f.path, f.listings]), [['Events/Ball.md', ['events/index.html']]]);
   });
 
+  it('ALIAS_IN_PROSE: a link to a public name that holds a GM alias is not counted, in the pull-quote either (#797)', async () => {
+    const { runLeakGate } = require('../lib/leak-gate');
+    const alias = (f) => f.code === 'ALIAS_IN_PROSE';
+    const bran = (text) => ({
+      'Characters/NPCs/The_Stranger.md': npcs('gm_aliases: ["Rook"]\n'),
+      'Locations/Rook_Hollow.md': '---\ntype: location\n---\n\nA dip in the moor.\n',
+      'Characters/NPCs/Bran.md': `---\ntype: npc\n---\n\n${text}\n`,
+      'Locations/The_Inn.md': '---\ntype: location\n---\n\nTravellers from [[Rook_Hollow]] stop here.\n',
+    });
+    // The link opens each page, so its pull-quote prints it again as plain words. Only the page whose own name holds the
+    // alias is told (the GM may rename it); the leak gate lets the public name through.
+    const quiet = site(bran('Lives in [[Rook_Hollow]].'));
+    assert.deepStrictEqual(fromBuild(quiet.configPath).filter(alias).map((f) => f.path), ['Locations/Rook_Hollow.md']);
+    const built = fs.readFileSync(path.join(quiet.root, 'docs', 'characters', 'npcs', 'bran.html'), 'utf8');
+    assert.match(built, /<div class="pull-quote">Lives in Rook Hollow\.<\/div>/);
+    assert.deepStrictEqual(runLeakGate({ configPath: quiet.configPath, outputDir: path.join(quiet.root, 'docs') }).findings.filter(alias), []);
+    // The name on its own is still found, by both.
+    const loud = site(bran('Lives in [[Rook_Hollow]]. Rook was seen there.'));
+    assert.deepStrictEqual(fromBuild(loud.configPath).filter(alias).map((f) => [f.path, f.count]), [['Characters/NPCs/Bran.md', 1], ['Locations/Rook_Hollow.md', 2]]);
+    assert.deepStrictEqual(runLeakGate({ configPath: loud.configPath, outputDir: path.join(loud.root, 'docs') }).findings.filter(alias).map((f) => f.page), ['characters/npcs/bran.html', 'previews.json']);
+  });
+
   it('ALIAS_IN_PROSE: found where an index card only carries it, in an attribute its filter reads', async () => {
     const found = await faults({
       'Characters/NPCs/Mr_Grey.md': npcs('gm_aliases: ["The Watcher"]\n'),

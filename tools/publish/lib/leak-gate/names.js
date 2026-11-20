@@ -1,7 +1,7 @@
 'use strict';
 // The secret-name checks of the build's note audit (note-faults.js), run over the finished folder: a gm_aliases name or
 // a withheld note's name in any text file, or in a copied file's name; and a withheld note that publishes.
-const { secretNamesOf, findSecretNames, publicWordsOf, foldQuotes, nameMatcher, nameHits, hasName } = require('../note-faults');
+const { secretNamesOf, findSecretNames, publicWordsOf, holdersOf, foldQuotes, nameMatcher, nameHits, hasName } = require('../note-faults');
 const { fileText, pageExtras, isToolFile } = require('./match');
 const { wordsOf } = require('./text');
 const { canonicalNfc } = require('../unicode');
@@ -11,26 +11,6 @@ const REASON = { alias: 'a name kept secret in gm_aliases', withheld: 'the name 
 const CODE = { alias: 'ALIAS_IN_PROSE', withheld: 'WITHHELD_IN_PROSE' };
 const NEVER_SHOW = { code: 'NEVER_SHOW', note: 'player_site.never_show', reason: 'a word the GM listed under player_site.never_show' };
 const CONTEXT = 60;
-
-const esc = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-// The public names of the site that hold a secret name as a part ("Zorn Manor" holds the withheld "Zorn"), as one
-// pattern that finds them in a text. A page that prints such a name prints the public name, not the secret one; the
-// pull-quote of a paragraph with a link in it is the usual place (the link is flattened to its label there).
-function holdersOf(names, publicWords) {
-  const holders = [];
-  for (const w of publicWords) {
-    if (!w) continue;
-    const text = foldQuotes(w);
-    for (const n of names) {
-      if (hasName(n.re, text)) { holders.push(text); break; }
-    }
-  }
-  if (holders.length === 0) return null;
-  const parts = [...new Set(holders)].sort((a, b) => b.length - a.length)
-    .map((h) => h.split(/[\s_\-\u2010\u2011]+/).filter(Boolean).map(esc).join('[\\s_\\-\\u2010\\u2011]+'));
-  return new RegExp('(?<![\\p{L}\\p{N}])(?:' + parts.join('|') + ')(?![\\p{L}\\p{N}])', 'giu');
-}
 
 // What a file says for the name search. The search index holds the body as single terms (lunr), and a term is a word of
 // some public page: a secret name that is one word of a public name ("Zorn" in "Zorn Manor") would match it for good.

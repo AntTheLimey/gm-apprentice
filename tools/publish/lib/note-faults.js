@@ -378,6 +378,24 @@ function publicWordsOf(linkMap, published) {
   return set;
 }
 
+// The public names of the site that hold a secret name as a part ("Zorn Manor" holds the withheld "Zorn", "Rook Hollow"
+// the GM alias "Rook"), as one pattern that finds them in a text, or null. The leak gate takes them out of every file (a
+// public name is on the site already); the audit only out of a pull-quote (findSecretNames), so it still tells the GM
+// about a page whose own name or words hold one. A never-show word is not excused by one (the GM said never).
+function holdersOf(names, publicWords) {
+  const holders = [];
+  const secret = names.filter((n) => n.kind !== 'never_show');
+  for (const w of publicWords) {
+    if (!w) continue;
+    const text = foldQuotes(w);
+    if (secret.some((n) => hasName(n.re, text))) holders.push(text);
+  }
+  if (holders.length === 0) return null;
+  const parts = [...new Set(holders)].sort((a, b) => b.length - a.length)
+    .map((h) => h.split(/[\s_\-‐‑]+/).filter(Boolean).map(esc).join('[\\s_\\-\\u2010\\u2011]+'));
+  return new RegExp('(?<![\\p{L}\\p{N}])(?:' + parts.join('|') + ')(?![\\p{L}\\p{N}])', 'giu');
+}
+
 // A page with each link to another site that prints its own address taken out.
 function withoutAutolinks(html) {
   return html.replace(/<a\b[^>]*\shref="((?:[a-z][a-z0-9+.-]*:|\/\/)[^"]*)"[^>]*>([\s\S]*?)<\/a\s*>/gi, (whole, href, inner) => {
@@ -392,7 +410,27 @@ function withoutAutolinks(html) {
 // { kind, alias, owner, re, count, context }. On a listing page (a page made of many notes) nothing is blanked.
 // `only: 'withheld'` looks for withheld names alone: for texts that have never been read for gm_aliases names (the
 // records the search index is made of).
-function findSecretNames(html, names, { publicWords, listing = false, only = null } = {}) {
+// `holders` (holdersOf) is taken out of the page's pull-quote before a gm_aliases or withheld name is looked for: the
+// pull-quote is the page's own text again with each link printed as plain words, so a link to "Rook Hollow" there is
+// the public name, not the GM alias "Rook" (#797). Elsewhere a link is fenced and blanked as below. A never-show word
+// is looked for in the page as printed.
+const PULL_QUOTE = /(<div class="pull-quote(?:\s[^"]*)?">)([\s\S]*?)(<\/div>)/g;
+function findSecretNames(html, names, { publicWords, holders = null, listing = false, only = null } = {}) {
+  if (holders) {
+    const options = { publicWords, listing, only };
+    const never = names.filter((a) => a.kind === 'never_show');
+    const secret = names.filter((a) => a.kind !== 'never_show');
+    const unheld = String(html).replace(PULL_QUOTE, (m, open, inner, close) => {
+      // Tags and comments out first, as the page is read: a name split by them ("Ro<em>ok</em>") stays whole.
+      const text = foldQuotes(decodeAll(inner.replace(/<!--[\s\S]*?-->/g, '').replace(/<[^>]*>/g, '')));
+      const left = text.replace(holders, ' ');
+      return left === text ? m : open + left.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + close;
+    });
+    return [
+      ...(secret.length ? findSecretNames(unheld, secret, options) : []),
+      ...(never.length ? findSecretNames(html, never, options) : []),
+    ];
+  }
   const hits = [];
   // The page's own text first; a name found only in its <head> or in a tag's words (the
   // tab title, a description, an image's alt) is on the site too.
@@ -674,15 +712,21 @@ function startNoteAudit(input) {
   // Every name a page of the site answers to, folded: the words a link with no label of its
   // own prints, and the titles pages print. Made when first asked.
   let publicSet = null;
+  let holders;
   const publicWords = () => {
-    if (publicSet === null) publicSet = publicWordsOf(input.linkMap, input.published);
+    if (publicSet === null) {
+      publicSet = publicWordsOf(input.linkMap, input.published);
+      // A link to a public name that holds a secret name ("Rook Hollow", the GM alias "Rook"), flattened in a
+      // pull-quote, is the public name (#797).
+      holders = holdersOf(secretNames, publicSet);
+    }
     return publicSet;
   };
   // `only: 'withheld'` looks for withheld names alone: for texts that have never been read for
   // gm_aliases names (the records the search index is made of).
   function read(rel, html, out = null, where = 'the page', only = null) {
     if (!probe || (only && !secretNames.some((a) => a.kind === only)) || !mayHold(html)) return;
-    const options = { publicWords: publicWords(), listing: out !== null, only };
+    const options = { publicWords: publicWords(), holders, listing: out !== null, only };
     // A note's own page has its addresses read on their own (readAddresses): a link that prints its own address (a
     // bare https://… in the text) is told as an address for a withheld name, not as words of the page.
     const plain = out === null && where === 'the page' ? withoutAutolinks(String(html)) : String(html);
@@ -796,9 +840,12 @@ function startNoteAudit(input) {
       return into;
     };
     const textOf = new Map();
+    // A link's label is the note's own words; a link with none prints the page it goes to by that page's public name, so
+    // `[[Rook_Hollow]]` is not this note holding the GM alias "Rook" (#797), as a link is blanked on a page.
+    const ownWords = (text) => text.replace(/!?\[\[([^\]|]*)(?:\|([^\]]*))?\]\]/g, (m, target, label) => (label === undefined ? ' ' : label));
     const holds = (page, re) => {
       if (!textOf.has(page)) {
-        textOf.set(page, foldQuotes(strings(page.frontmatter || {}, [String(page.displayTitle || ''), String(page.publishedMarkdown || '')]).join('\n')));
+        textOf.set(page, foldQuotes(ownWords(strings(page.frontmatter || {}, [String(page.displayTitle || ''), String(page.publishedMarkdown || '')]).join('\n'))));
       }
       return hasName(re, textOf.get(page));
     };
@@ -1150,4 +1197,4 @@ function summaryLines(findings) {
   return lines;
 }
 
-module.exports = { startNoteAudit, summaryLines, PAGES_SHOWN, kindOfType, pageText, mainOf, CODES, MARK_RE, foldQuotes, secretNamesOf, publicWordsOf, findSecretNames, nameMatcher, nameHits, hasName };
+module.exports = { startNoteAudit, summaryLines, PAGES_SHOWN, kindOfType, pageText, mainOf, CODES, MARK_RE, foldQuotes, secretNamesOf, publicWordsOf, holdersOf, findSecretNames, nameMatcher, nameHits, hasName };
