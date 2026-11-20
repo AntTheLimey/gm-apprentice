@@ -40,7 +40,26 @@ test('the party page carries the board, island, and live scripts when it is give
   assert.match(html, /id="gurps-party-data"/);
   assert.match(html, /js\/gurps-live\.js/);
   assert.match(html, /js\/gurps-party\.js/);
-  assert.match(html, /class="entity-card" href="six\.html"/);   // the PC's card below the board
+});
+
+test('a PC on the board gets no card under it; one the board leaves out keeps its card (#804)', () => {
+  const manifest = buildPartyManifest('space-game', [pcEntry('Six', 'six', 6.5, 14)]);
+  const board = { boardHtml: renderPartyBoard(manifest, PARTY), dataScript: partyDataScript(manifest), onBoard: ['characters/pcs/six.html'] };
+  const onlySix = partyPage([pcPage('Six', 'six', 'alive')], board);
+  assert.match(onlySix, /class="gl-party"/);
+  assert.match(onlySix, /id="gurps-party-data"/, 'the live data island stays');
+  for (const gone of [/entity-card/, /card-grid/, /index-count/, /sort-control/, /pill-filter/, /name-filter/]) {
+    assert.doesNotMatch(onlySix, gone);
+  }
+  const withRook = partyPage([pcPage('Six', 'six', 'alive'), pcPage('Rook', 'rook', 'alive')], board);
+  assert.doesNotMatch(withRook, /class="entity-card" href="six\.html"/);
+  assert.match(withRook, /class="entity-card" href="rook\.html"/);
+  assert.match(withRook, /Showing 1 of 1/);
+});
+
+test('with no board drawn, the board\'s list hides no card', () => {
+  const html = partyPage([pcPage('Six', 'six', 'alive')], { onBoard: ['characters/pcs/six.html'] });
+  assert.match(html, /class="entity-card" href="six\.html"/);
 });
 
 test('the party page without a board renders no board or live scripts', () => {
@@ -141,6 +160,7 @@ test('build() leaves out-of-play PCs off the party board and lists them as out o
       assert.doesNotMatch(data, /otto-weiss/, 'retired PC is not in the data island');
     }
     assert.match(html, /<a href="otto-weiss\.html">Otto Weiss<\/a> \(Retired\)/);
+    assert.doesNotMatch(html, /class="entity-card"/, 'the board lists Karl: no card repeats it (#804)');
   }
 });
 

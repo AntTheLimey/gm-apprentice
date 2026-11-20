@@ -7,6 +7,7 @@ const { canonicalNfc, nfcLookupTable } = require('../unicode');
 const { isPlayedStatus } = require('../session-hub');
 const { pcEpithetText } = require('../pc-header-meta');
 const { isOutOfPlay, statusLabel } = require('../pc-status');
+const { kindLabel } = require('../kind-label');
 
 const GENRE_SECTION_TITLES = {
   military: {
@@ -45,25 +46,15 @@ function relHref(page, indexDir) {
   return encodeHref(rel);
 }
 
+// 'All' plus one pill per type, or just 'All' when there is one type: a pill that keeps every card filters nothing (#804).
 function buildPillFilters(pages, dir) {
   const pills = ['All'];
-  if (dir === 'characters' || dir.startsWith('characters')) {
-    const types = new Set();
-    for (const p of pages) types.add(p.frontmatter.type);
-    pills.push(...Array.from(types).sort());
-  } else if (dir === 'locations') {
-    const types = new Set();
-    for (const p of pages) {
-      if (p.frontmatter.location_type) types.add(p.frontmatter.location_type);
-    }
-    pills.push(...Array.from(types).sort());
-  } else {
-    const types = new Set();
-    for (const p of pages) {
-      if (p.frontmatter.type) types.add(p.frontmatter.type);
-    }
-    if (types.size > 1) pills.push(...Array.from(types).sort());
+  const types = new Set();
+  for (const p of pages) {
+    const t = dir === 'locations' ? p.frontmatter.location_type : p.frontmatter.type;
+    if (t) types.add(t);
   }
+  if (types.size > 1) pills.push(...Array.from(types).sort());
   return pills;
 }
 
@@ -1039,7 +1030,8 @@ ${parts.join('\n')}
 }
 
 // opts.cocFolio: PC pages are the CoC folio, which shows a hook only when the note gives one; its cards follow.
-// opts.party: the party page's board, { boardHtml, dataScript, clientScripts } (build.js partyBoard).
+// opts.party: the party page's board, { boardHtml, dataScript, clientScripts, onBoard } (build.js partyBoard);
+// onBoard is the output paths of the PCs the board lists.
 function indexTemplate(dir, label, allPages, navFor, config, publishConfig, imageMap = {}, opts = {}) {
   const outputPath = dir + '/index.html';
   const crumbs = generateBreadcrumbs(outputPath, {});
@@ -1048,8 +1040,10 @@ function indexTemplate(dir, label, allPages, navFor, config, publishConfig, imag
   const outOfPlay = isParty
     ? allPages.filter((p) => p.frontmatter.type === 'pc' && isOutOfPlay(p.frontmatter, publishConfig.statuses.out_of_play))
     : [];
-  const pages = outOfPlay.length ? allPages.filter((p) => !outOfPlay.includes(p)) : allPages;
   const party = (isParty && opts.party) || {};
+  // A PC the board lists, linking to its sheet, gets no card as well (#804): the cards are for what the board leaves out.
+  const onBoard = new Set(party.boardHtml ? party.onBoard || [] : []);
+  const pages = allPages.filter((p) => !outOfPlay.includes(p) && !onBoard.has(p.outputPath));
   const total = pages.length;
   const isChapters = dir === 'chapters';
   const isLocations = dir === 'locations';
@@ -1061,7 +1055,7 @@ function indexTemplate(dir, label, allPages, navFor, config, publishConfig, imag
     ? `<div class="pill-filters">${pills.map((p, i) => {
         const filterVal = p === 'All' ? 'all' : p;
         const active = i === 0 ? ' active' : '';
-        return `<button class="pill-filter${active}" data-filter="${escapeHtml(filterVal)}">${escapeHtml(p === 'All' ? 'All' : p.charAt(0).toUpperCase() + p.slice(1))}</button>`;
+        return `<button class="pill-filter${active}" data-filter="${escapeHtml(filterVal)}">${escapeHtml(p === 'All' ? 'All' : kindLabel(p))}</button>`;
       }).join('\n')}</div>`
     : '';
 
@@ -1181,8 +1175,8 @@ ${bodyContent}`;
 </div>
 ${bodyContent}`;
   } else if (isParty && total === 0) {
-    // No PC card here (every PC in this folder is out of play): the page is their list, with no count, sort or
-    // filters of cards it has none of. A board with PCs on it (in play, their pages elsewhere) still shows.
+    // No card here (every PC is on the board or out of play): the page is the board, the threads and the
+    // out-of-play list, with no count, sort or filters of cards it has none of.
     content = `
 <div class="index-header">
   <h1 class="page-title">${escapeHtml(label)}</h1>

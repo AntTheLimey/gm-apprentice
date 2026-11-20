@@ -94,6 +94,14 @@ test('returns null with no story', () => {
   assert.equal(backgroundParts(sectionsOf('## Background\n**Species:** Elf\n')), null);
 });
 
+test('a backstory opening on a picture starts at its prose (#804)', () => {
+  // Dead End's shape: a free-form Background whose first line is the portrait embed.
+  const md = ['## Background', '', '![[Six.png]]', '', 'A vat-grown, **human-based replicant** engineered as a hull-breacher. Kill or subdue.', '', '## Notes', 'x'].join('\n');
+  assert.equal(backgroundParts(sectionsOf(md)).firstSentence, 'A vat-grown, human-based replicant engineered as a hull-breacher.');
+  const subs = ['## Background', '### Backstory', '![](images/mira.png) Mira grew up in the salt flats. More.', '', '## Notes', 'x'].join('\n');
+  assert.equal(backgroundParts(sectionsOf(subs)).firstSentence, 'Mira grew up in the salt flats.');
+});
+
 test('firstSentence skips abbreviations, initials and ellipses', () => {
   assert.equal(firstSentence('Dr. Smith raised her. Then more.'), 'Dr. Smith raised her.');
   assert.equal(firstSentence('St. Albans is home. Next.'), 'St. Albans is home.');
