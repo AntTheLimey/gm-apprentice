@@ -75,7 +75,10 @@ describe('run sheet sessions', () => {
   it('two Wrap-Ups naming a session still wrap it up', () => {
     const dir = copy();
     const f = path.join(dir, IDX.c1s1);
-    fs.writeFileSync(f, fs.readFileSync(f, 'utf8').replace(/documents:\n {2}wrap_up: .*\n/, ''));
+    const text = fs.readFileSync(f, 'utf8').replace(/\r\n/g, '\n'); // a Windows checkout has CRLF
+    const next = text.replace(/documents:\n {2}wrap_up: .*\n/, '');
+    assert.notStrictEqual(next, text, 'the wrap_up link was removed');
+    fs.writeFileSync(f, next);
     fs.writeFileSync(path.join(dir, `${S}Session 01/Session 01 - The Start - Wrap-Up draft.md`),
       '---\ntype: session_wrap\nsession: "[[Session 01 - The Start]]"\nchapter: "[[Chapter 1]]"\n---\n\n## Recap\n\nA draft.\n');
     const l = listSessions(dir);
@@ -118,7 +121,10 @@ describe('run sheet sessions', () => {
   it('the chapter comes from the build rule, the chapter folder, when chapter: is missing', () => {
     const dir = copy();
     const f = path.join(dir, IDX.c2s1);
-    fs.writeFileSync(f, fs.readFileSync(f, 'utf8').replace('chapter: "[[Chapter 2]]"\n', ''));
+    const text = fs.readFileSync(f, 'utf8').replace(/\r\n/g, '\n');
+    const next = text.replace('chapter: "[[Chapter 2]]"\n', '');
+    assert.notStrictEqual(next, text, 'the chapter link was removed');
+    fs.writeFileSync(f, next);
     const l = listSessions(dir);
     assert.strictEqual(l.find((s) => s.index === IDX.c2s1).chapter, 'Chapters/Chapter 2/Chapter 2.md');
   });
@@ -180,5 +186,19 @@ describe('run sheet sessions', () => {
     const r = tableLogOf(buildIndex(dir), IDX.c1s3);
     assert.strictEqual(r.log, null);
     assert.strictEqual(r.warning.kind, 'table-log');
+  });
+
+  it("a table_log link to another session's log (an index copied from the last) is refused, and says which", () => {
+    const dir = copy();
+    const f = path.join(dir, IDX.c1s3);
+    fs.writeFileSync(f, fs.readFileSync(f, 'utf8').replace('status: planned', 'status: planned\ndocuments:\n  table_log: "[[Session 02 - The Test - Table Log]]"'));
+    const r = tableLogOf(buildIndex(dir), IDX.c1s3);
+    assert.strictEqual(r.log, null);
+    assert.strictEqual(r.warning.kind, 'table-log');
+    assert.match(r.warning.text, /Session 02 - The Test\.md/);
+    // a log whose session: is left empty is taken as linked
+    const l = path.join(dir, LOG);
+    fs.writeFileSync(l, fs.readFileSync(l, 'utf8').replace(/^session: .*$/m, 'session:'));
+    assert.deepStrictEqual(tableLogOf(buildIndex(dir), IDX.c1s3), { log: LOG, warning: null });
   });
 });

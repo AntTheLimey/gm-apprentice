@@ -28,7 +28,7 @@ button { font: inherit; color: inherit; cursor: pointer; border: 1px solid var(-
 button:disabled { opacity: .45; cursor: default; }
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 2px solid var(--ice); outline-offset: 2px; }
 button.on { background: var(--lamp-soft); border-color: var(--lamp); color: var(--lamp); }
-button.arm { background: var(--bad); color: #fff; border-color: var(--bad); }
+button.arm { background: var(--bad); color: var(--panel); border-color: var(--bad); }
 button.primary { background: var(--ice); border-color: var(--ice); color: var(--panel); }
 input, select, textarea { font: inherit; color: inherit; background: var(--bg); border: 1px solid var(--line); border-radius: 5px; padding: 2px 6px; }
 img { max-width: 100%; }

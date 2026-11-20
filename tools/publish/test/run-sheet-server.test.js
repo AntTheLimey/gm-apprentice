@@ -160,7 +160,7 @@ describe('run sheet server', () => {
   it('a PUT with a foreign Origin is refused', async () => {
     const run = await start(copyOf());
     const r = await req(run.port, 'PUT', '/api/state', {
-      headers: { Origin: 'http://evil.example' }, body: { stateId: run.stateId, base: 0, state: { points: { x: 1 } } },
+      headers: { Origin: 'http://evil.example' }, body: { stateId: run.stateId, base: 0, state: { points: { x: { mark: 'landed', n: 1 } } } },
     });
     assert.strictEqual(r.status, 403);
     assert.strictEqual((await req(run.port, 'GET', '/api/state')).json.rev, 0);
@@ -216,6 +216,11 @@ describe('run sheet server', () => {
     const pic = await req(run.port, 'GET', '/vault/Pictures/rook.png');
     assert.strictEqual(pic.status, 200);
     assert.strictEqual(pic.headers['content-type'], 'image/png');
+    // an AVIF embed the page shows is served too, as an image
+    fs.writeFileSync(path.join(vault, 'Pictures', 'map.avif'), Buffer.from([0, 0, 0, 0x1c]));
+    const avif = await req(run.port, 'GET', '/vault/Pictures/map.avif');
+    assert.strictEqual(avif.status, 200);
+    assert.strictEqual(avif.headers['content-type'], 'image/avif');
     const refused = [
       '/vault/Characters/NPCs/Brother%20Ash.md', '/vault/_meta/vault-config.yaml',
       '/vault/Characters/NPCs/Brother%20Ash.md?.png', '/vault/Characters/NPCs/Brother%20Ash.md#.png',
@@ -291,9 +296,19 @@ describe('run sheet server', () => {
     assert.strictEqual(r.json.tableLog, LOG);
   });
 
+  it('a link inside a picture\'s alt text gives its words; a note\'s text never passes for a link', () => {
+    const { toHtml } = require('../lib/run-sheet/present');
+    const index = { resolve: (t) => (t === 'Brother Ash' ? ASH : null), picture: () => null };
+    const alt = toHtml('![See [[Brother Ash|the warden]] here](x.png) then [[Brother Ash]]', index);
+    assert.ok(alt.includes('alt="See the warden here"'), alt);
+    assert.ok(alt.includes(`<a class="lk" data-note="${ASH}">Brother Ash</a>`), alt);
+    // markdown decodes these entities to the private-use characters a placeholder once used
+    assert.strictEqual(toHtml('&#xE000;0&#xE001; and &#xE000;7&#xE001;', index, { inline: true }), '\uE0000\uE001 and \uE0007\uE001');
+  });
+
   it('a tab from another session gets 409 and does not overwrite', async () => {
     const run = await start(copyOf());
-    const r = await req(run.port, 'PUT', '/api/state', { body: { stateId: 'chapter-2--session-01-snowmelt', base: 0, state: { points: { a: 1 } } } });
+    const r = await req(run.port, 'PUT', '/api/state', { body: { stateId: 'chapter-2--session-01-snowmelt', base: 0, state: { points: { a: { mark: 'landed', n: 1 } } } } });
     assert.strictEqual(r.status, 409);
     assert.deepStrictEqual(r.json, { reason: 'session', stateId: run.stateId, rev: 0, label: 'Session 2' });
     assert.deepStrictEqual((await req(run.port, 'GET', '/api/state')).json.state.points, {});
@@ -310,26 +325,53 @@ describe('run sheet server', () => {
 
   it('two tabs: the second PUT on an old base gets 409', async () => {
     const run = await start(copyOf());
-    const a = await req(run.port, 'PUT', '/api/state', { body: { stateId: run.stateId, base: 0, state: { points: { one: 1 } } } });
-    const b = await req(run.port, 'PUT', '/api/state', { body: { stateId: run.stateId, base: 0, state: { points: { two: 2 } } } });
+    const a = await req(run.port, 'PUT', '/api/state', { body: { stateId: run.stateId, base: 0, state: { points: { one: { mark: 'landed', n: 1 } } } } });
+    const b = await req(run.port, 'PUT', '/api/state', { body: { stateId: run.stateId, base: 0, state: { points: { two: { mark: 'landed', n: 2 } } } } });
     assert.strictEqual(a.status, 200);
     assert.strictEqual(b.status, 409);
     assert.strictEqual(b.json.reason, 'stale');
-    assert.deepStrictEqual((await req(run.port, 'GET', '/api/state')).json.state.points, { one: 1 });
+    assert.deepStrictEqual((await req(run.port, 'GET', '/api/state')).json.state.points, { one: { mark: 'landed', n: 1 } });
+  });
+
+  it("a page built on another server's revisions is stale, whatever its base (two unclean restarts can reuse a rev)", async () => {
+    const run = await start(copyOf());
+    const r = await req(run.port, 'PUT', '/api/state', { body: { stateId: run.stateId, serverId: 'an-earlier-server', base: 0, state: { points: {} } } });
+    assert.strictEqual(r.status, 409);
+    assert.strictEqual(r.json.reason, 'stale');
+    const ok = await req(run.port, 'PUT', '/api/state', { body: { stateId: run.stateId, serverId: run.serverId, base: 0, state: { points: {} } } });
+    assert.strictEqual(ok.status, 200);
+  });
+
+  it("a Table Log link to another session's log is never written, and the page has a prep note naming it", async () => {
+    const vault = copyOf();
+    const other = `${S2}Session 02 - The Test - Table Log.md`;
+    const f = path.join(vault, other);
+    const before = fs.readFileSync(f, 'utf8').replace(/^session: .*$/m, 'session: "[[Session 01 - The Start]]"');
+    fs.writeFileSync(f, before);
+    // Session 02's index links it (copied from the session before, say)
+    const idx = path.join(vault, `${S2}Session 02 - The Test.md`);
+    fs.writeFileSync(idx, fs.readFileSync(idx, 'utf8').replace('status: planned', 'status: planned\ndocuments:\n  table_log: "[[Session 02 - The Test - Table Log]]"'));
+    const run = await start(vault);
+    const m = await req(run.port, 'GET', '/api/model');
+    assert.strictEqual(m.json.tableLog, null);
+    assert.ok(m.json.model.warnings.some((w) => w.kind === 'table-log' && /Session 01 - The Start/.test(w.text)), JSON.stringify(m.json.model.warnings));
+    await req(run.port, 'PUT', '/api/state', { body: { stateId: run.stateId, base: 0, state: RS.reduce(RS.emptyState({ stateId: run.stateId }), { id: 'x-1', type: 'jot', text: 'hello' }, '2026-11-20T19:00:00.000Z') } });
+    run.store.flushNow();
+    assert.strictEqual(fs.readFileSync(f, 'utf8'), before);
   });
 
   it('a page reconnecting after a restart with an older base gets 409, not a silent overwrite', async () => {
     const vault = copyOf();
     const a = await start(vault);
-    await req(a.port, 'PUT', '/api/state', { body: { stateId: a.stateId, base: 0, state: { points: { one: 1 } } } });
-    await req(a.port, 'PUT', '/api/state', { body: { stateId: a.stateId, base: 1, state: { points: { two: 2 } } } });
+    await req(a.port, 'PUT', '/api/state', { body: { stateId: a.stateId, base: 0, state: { points: { one: { mark: 'landed', n: 1 } } } } });
+    await req(a.port, 'PUT', '/api/state', { body: { stateId: a.stateId, base: 1, state: { points: { two: { mark: 'landed', n: 2 } } } } });
     await a.close();
     const b = await start(vault);
     assert.strictEqual((await req(b.port, 'GET', '/api/state')).json.rev, 2);
-    const r = await req(b.port, 'PUT', '/api/state', { body: { stateId: b.stateId, base: 1, state: { points: { old: 1 } } } });
+    const r = await req(b.port, 'PUT', '/api/state', { body: { stateId: b.stateId, base: 1, state: { points: { old: { mark: 'landed', n: 1 } } } } });
     assert.strictEqual(r.status, 409);
     assert.strictEqual(r.json.reason, 'stale');
-    assert.deepStrictEqual((await req(b.port, 'GET', '/api/state')).json.state.points, { two: 2 });
+    assert.deepStrictEqual((await req(b.port, 'GET', '/api/state')).json.state.points, { two: { mark: 'landed', n: 2 } });
   });
 
   it('model is re-read per load', async () => {
@@ -702,6 +744,24 @@ describe('run sheet server: the third review', () => {
       assert.deepStrictEqual(kept(vault, a.stateId), []);
     });
 
+    it("a first log write that failed before a stop leaves the skeleton: it is brought up to date at start", async () => {
+      const vault = copyOf();
+      const skeleton = logText(vault);
+      const a = await start(vault, T);
+      await markFirst(a, 'landed', 0);
+      await waitFor(() => /Points landed\n\n- /.test(logLf(vault)));
+      await wait(100);
+      await a.close();
+      fs.writeFileSync(path.join(vault, LOG), skeleton);
+      const st = readState(vault, a);
+      st.recordHash = null;
+      fs.writeFileSync(stateFileOf(vault, a), JSON.stringify(st));
+      const b = await start(vault, T);
+      assert.match(logLf(vault), /## Points landed\n\n- The Gate: the tracks/, 'rewritten before the first click');
+      assert.deepStrictEqual(kept(vault, a.stateId), [], 'the skeleton held nothing to keep');
+      await b.close();
+    });
+
     it('a log edited by hand while the sheet was off is left alone until the next change', async () => {
       const vault = copyOf();
       const a = await start(vault, T);
@@ -761,6 +821,39 @@ describe('run sheet server: the third review', () => {
         assert.ok(lines.some((l) => /written again/.test(l)));
         assert.deepStrictEqual(kept(vault, run.stateId), []);
       } finally { sse.close(); }
+    });
+
+    it('a record retry renders the state on disk, never a newer one still waiting to be written', async () => {
+      const vault = copyOf();
+      let failing = true;
+      const flaky = { ...fs, renameSync: (x, y) => { if (failing && y.endsWith('Table Log.md')) { const e = new Error('EBUSY: busy'); e.code = 'EBUSY'; throw e; } return fs.renameSync(x, y); } };
+      const run = await start(vault, T, { deps: { fs: flaky, delayMs: 400, recordRetryMs: [30], log: () => {} } });
+      const sse = listen(run.port);
+      try {
+        await markFirst(run, 'landed', 0);
+        await waitFor(() => sse.events.find((e) => e.event === 'record-failed'));
+        await markFirst(run, 'missed', 1); // rev 2: in memory, written 400 ms from now
+        failing = false;
+        await waitFor(() => sse.events.find((e) => e.event === 'record-ok'));
+        const now = logLf(vault);
+        assert.match(now, /## Points landed\n\n- The Gate: the tracks/);
+        assert.doesNotMatch(now, /## Tried and missed\n\n- /, 'the log is not ahead of the saved state');
+      } finally { sse.close(); }
+    });
+
+    it('a stop with a record write waiting on its retry gives it a last try', async () => {
+      const vault = copyOf();
+      let failing = true;
+      const flaky = { ...fs, renameSync: (x, y) => { if (failing && y.endsWith('Table Log.md')) { const e = new Error('EBUSY: busy'); e.code = 'EBUSY'; throw e; } return fs.renameSync(x, y); } };
+      const run = await start(vault, T, { deps: { fs: flaky, recordRetryMs: [60000], log: () => {} } });
+      const sse = listen(run.port);
+      try {
+        await markFirst(run, 'landed', 0);
+        await waitFor(() => sse.events.find((e) => e.event === 'record-failed'));
+      } finally { sse.close(); }
+      failing = false;
+      await run.close();
+      assert.match(logLf(vault), /## Points landed\n\n- The Gate: the tracks/);
     });
 
     it('a Table Log turned into another type mid-session is said once, not on every write', async () => {

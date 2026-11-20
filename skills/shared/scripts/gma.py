@@ -498,9 +498,10 @@ def _table(args: list[str]) -> int:
     party = [row.split("\t")[1] for row in
              vault_check.list_active_pcs(Path(opts.vault))]
     sys.stdout.flush()   # posix replaces this process next: nothing may be left buffered
+    # one JSON array: a PC note named like "[Guest] Mira.md" is then a path, never read as JSON
     return _run_tool(tool, [
         "table", opts.vault, "--session", index,
-        *[x for p in party for x in ("--party", p)], *port,
+        *(["--party", json.dumps(party)] if party else []), *port,
         *(["--no-open"] if opts.no_open else [])])
 
 

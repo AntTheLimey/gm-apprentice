@@ -921,7 +921,9 @@ describe('run sheet reader: loot items, Plan-line HP, carried unmaskings', () =>
     });
     it('without a figure the Table Log still carries', () => {
       const m = run(withS1(), '### Scene 1: Again\n**Situation:** x\n**NPCs**\n- **[[Lucan Grey]]:** helps');
-      for (const r of allyRows(m)) assert.deepStrictEqual([r.hpNow, r.carriedFrom], [9, S1_LOG]);
+      const rows = allyRows(m);
+      assert.ok(rows.some((r) => r.note === LUCAN), "Lucan's row is there");
+      for (const r of rows) assert.deepStrictEqual([r.hpNow, r.carriedFrom], [9, S1_LOG]);
     });
   });
 
@@ -956,8 +958,13 @@ describe('run sheet reader: loot items, Plan-line HP, carried unmaskings', () =>
     });
     it('an unmasking for a note with no Unmask is ignored', () => {
       const dir = earlier(['- [[Brother Venn]] as Someone Else']);
+      // Brother Venn is in tonight's Plan, so the model has his note to check
+      const plan = path.join(dir, PLAN);
+      fs.writeFileSync(plan, fs.readFileSync(plan, 'utf8').replace(/\r\n?/g, '\n').replace('- **[[Brother Ash]]:** wants the bell rung', '- **[[Brother Ash]]:** wants the bell rung\n- **[[Brother Venn]]:** watches'));
       const m = readRunSheet(dir, PLAN, { party: PARTY });
-      assert.strictEqual(m.notes['Characters/NPCs/Brother Venn.md'] ? m.notes['Characters/NPCs/Brother Venn.md'].unmask : null, null);
+      const venn = m.notes['Characters/NPCs/Brother Venn.md'];
+      assert.ok(venn, 'Brother Venn is in the model');
+      assert.strictEqual(venn.unmask, null);
       assert.deepStrictEqual(tableLogWarnings(m), []);
     });
     it('masked again in a later log cancels it', () => {

@@ -105,7 +105,61 @@ describe('the GM page in a browser', { skip: browserSkip() }, () => {
       await page.waitFor('document.querySelector("#drawer.open h2")');
       await page.evaluate('document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))');
       assert.strictEqual(await page.evaluate('document.getElementById("drawer").classList.contains("open")'), false);
+      // the rail's beat links take the keyboard, and the header jot names the beat jumped to
+      assert.strictEqual(await page.evaluate('Array.from(document.querySelectorAll("#rail a[data-go]")).every((a) => a.tabIndex === 0)'), true);
+      const last = model.beats.filter((b) => !b.contingency).pop();
+      await page.evaluate(`(() => { const a = document.querySelector('#rail a[data-go="beat:${last.key}"]'); a.focus(); a.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); })()`);
+      assert.strictEqual(await page.evaluate('document.getElementById("hjot").placeholder'), `Jot (J) → ${last.title}`);
     });
+  });
+
+  it('an HP typed on the end panel survives a redraw before the GM leaves the box', async () => {
+    const own = await start(FIXTURE, 'Session 02 - The Test');
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await page.goto(`${own.base}?probe=1`);
+      await settled(page);
+      // typed, not yet left: no change event yet
+      await page.evaluate('(() => { const e = document.querySelector("#sheet input[data-vhp]"); e.focus(); e.value = "3"; })()');
+      // another window saves: the page redraws under the box
+      const { state, rev } = await api(own, 'GET', '/api/state');
+      await api(own, 'PUT', '/api/state', { stateId: own.stateId, base: rev, state: RS.reduce(state, { type: 'jot', id: 'other-1', text: 'elsewhere', beat: null }, new Date().toISOString()), clientId: 'other' });
+      await page.waitFor(`(() => { const p = ${PROBE}; return p && p.rev > ${rev} && p; })()`);
+      await page.evaluate('document.activeElement.blur()');
+      await settled(page);
+    });
+    const { state } = await api(own, 'GET', '/api/state');
+    const hp = Object.values(state.end.vitals).map((v) => v.hp);
+    assert.ok(hp.includes(3), JSON.stringify(state.end.vitals));
+  });
+
+  it('a jot the server answered but had not yet written is sent again after the server dies', async () => {
+    const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'rs-page-'));
+    made.push(vault);
+    fs.cpSync(FIXTURE, vault, { recursive: true });
+    const picked = pickSession(listSessions(vault), 'Session 02 - The Test', vault);
+    // The first server never gets its write to disk: once "killed", every write it tries fails.
+    let dead = false;
+    const deadFs = new Proxy(fs, { get: (t, k) => (dead && /^(write|rename|mkdir|copyFile|rm)/.test(String(k)) ? () => { throw Object.assign(new Error('killed'), { code: 'EIO' }); } : t[k]) });
+    const a = createTableServer({ vaultPath: vault, session: picked.session, party: PARTY, deps: { delayMs: 60000, fs: deadFs, log: () => {} } });
+    const port = await listenLocal(a.server, 0);
+    const base = `http://127.0.0.1:${port}/`;
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await page.goto(`${base}?probe=1`);
+      await page.waitFor(`(() => { const p = ${PROBE}; return p && p.beats && p; })()`);
+      await typeEnter(page, '#sheet input[data-jot]', 'Said before the crash');
+      await page.waitFor(`(() => { const p = ${PROBE}; return p && p.pending === 0 && p.rev > 0 && p; })()`);
+      // the kill: no flush, the connections cut
+      dead = true;
+      a.server.closeAllConnections();
+      await new Promise((r) => { a.server.close(r); });
+      await page.waitFor(`(() => { const p = ${PROBE}; return p && p.saved === 'Not connected' && p; })()`);
+      const b = createTableServer({ vaultPath: vault, session: picked.session, party: PARTY, deps: { delayMs: 50, log: () => {} } });
+      servers.push(b);
+      await listenLocal(b.server, port);
+      await page.waitFor(`(() => { const p = ${PROBE}; return p && p.saved === 'Saved' && p.pending === 0 && p; })()`);
+    });
+    const st = JSON.parse(fs.readFileSync(path.join(vault, '_meta', 'table', `${a.stateId}.json`), 'utf8'));
+    assert.deepStrictEqual(st.jots.map((j) => j.text), ['Said before the crash']);
   });
 
   it('a point marked and a jot written are kept after a reload', async () => {
@@ -115,8 +169,10 @@ describe('the GM page in a browser', { skip: browserSkip() }, () => {
       await click(page, '#sheet .ptb[data-pt]');
       await typeEnter(page, '#sheet input[data-jot]', 'Ash lowers the rope');
       await settled(page);
+      // a mark on the old document, so the wait below can only pass in the reloaded one
+      await page.evaluate('window.__beforeReload = true');
       await page.reload();
-      const p = await page.waitFor(`(() => { const p = ${PROBE}; return p && p.jots.length && p.marked === 1 && p; })()`);
+      const p = await page.waitFor(`(() => { const p = ${PROBE}; return !window.__beforeReload && p && p.jots.length && p.marked === 1 && p; })()`);
       assert.strictEqual(p.marked, 1);
       assert.deepStrictEqual(p.jots, ['Ash lowers the rope']);
       assert.deepStrictEqual(p.errors, []);

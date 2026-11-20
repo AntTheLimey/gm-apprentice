@@ -29,7 +29,7 @@ const { buildIndex, stemOf } = require('./notes');
 const { tableLogOf, stateIdOf } = require('./sessions');
 const { createStore, stampOf } = require('./store');
 const { present, toHtml } = require('./present');
-const { tableLogBody, rewriteTableLog, recordBodyOf, bodyHash, needsBackup, linkFor } = require('./record');
+const { tableLogBody, rewriteTableLog, recordBodyOf, bodyHash, needsBackup, isEmptySkeleton, linkFor } = require('./record');
 const { isWithheld } = require('../processor');
 const RS = require('./web/state');
 
@@ -37,7 +37,7 @@ const WEB_DIR = path.join(__dirname, 'web');
 const CSP = "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
 const RECORD_RETRY_MS = [2000, 5000, 10000, 30000];
 const MAX_BODY = 2 * 1024 * 1024;
-const PICTURE = /\.(jpe?g|png|webp|gif|svg)$/i;
+const PICTURE = /\.(jpe?g|png|webp|gif|svg|avif)$/i; // the same list as present.js
 // A miss in a served folder is a plain 404, never a 404.html page the folder happens to hold.
 const NO_PAGE = '.run-sheet-no-404-page';
 
@@ -65,6 +65,10 @@ function createTableServer({ vaultPath, session, party = [], stateFile, deps = {
   let recordRetry = null;
   let recordAttempt = 0;
   let keptBody = null;
+  // The state last written to disk: a record retry renders this, never a newer state still in memory,
+  // so the log is never ahead of the saved state.
+  let lastWritten = null;
+  let savedRev = null;
   const recordRetryMs = deps.recordRetryMs || RECORD_RETRY_MS;
   // What a page that connects now needs to know: is the state being saved, is the record being written.
   const status = { saving: 'ok', saveError: null, record: 'ok', recordError: null };
@@ -86,6 +90,9 @@ function createTableServer({ vaultPath, session, party = [], stateFile, deps = {
   const loadModel = () => {
     const idx = index(vaultPath, { deps: vaultDeps });
     const model = read(vaultPath, session.plan, { party, deps: vaultDeps });
+    // tonight's Table Log link, when it is refused (another session's log), is a prep note
+    const tl = tableLogOf(idx, session.index);
+    if (tl.warning && Array.isArray(model.warnings) && !model.warnings.some((w) => w.text === tl.warning.text)) model.warnings.push(tl.warning);
     lastIndex = idx;
     lastModel = model;
     return { model, idx };
@@ -139,7 +146,7 @@ function createTableServer({ vaultPath, session, party = [], stateFile, deps = {
       if (!recordRetry && !closed) {
         const wait = recordRetryMs[Math.min(recordAttempt, recordRetryMs.length - 1)];
         recordAttempt++;
-        recordRetry = setTimeout(() => { recordRetry = null; writeRecord(store.get().state); }, wait);
+        recordRetry = setTimeout(() => { recordRetry = null; writeRecord(lastWritten || store.get().state); }, wait);
         if (recordRetry.unref) recordRetry.unref();
       }
     }
@@ -166,9 +173,13 @@ function createTableServer({ vaultPath, session, party = [], stateFile, deps = {
     const { model } = loadModel();
     const state = store.get().state;
     const text = fs.readFileSync(path.join(vaultRoot, ...rel.split('/')), 'utf8');
-    const fileHash = bodyHash(recordBodyOf(text));
-    const ours = bodyHash(tableLogBody(model, state, { linkFor: linkFor(lastIndex || idx) }));
-    if (fileHash === ours || (state.recordHash && fileHash === state.recordHash)) writeRecord(state);
+    const fileBody = recordBodyOf(text);
+    const fileHash = bodyHash(fileBody);
+    const ourBody = tableLogBody(model, state, { linkFor: linkFor(lastIndex || idx) });
+    const ours = bodyHash(ourBody);
+    // An empty skeleton behind a state with content too: a first log write that failed before a stop.
+    const behind = isEmptySkeleton(fileBody) && !isEmptySkeleton(ourBody);
+    if (fileHash === ours || (state.recordHash && fileHash === state.recordHash) || behind) writeRecord(state);
   }
 
   const store = createStore({
@@ -184,6 +195,7 @@ function createTableServer({ vaultPath, session, party = [], stateFile, deps = {
     fresh: () => RS.emptyState({ stateId, session: session.index, plan: session.plan }),
     upgrade: (state) => RS.upgrade(state, RS.emptyState({ stateId, session: session.index, plan: session.plan })),
     onSaved: (rev) => {
+      savedRev = rev;
       if (status.saving === 'failing') {
         status.saving = 'ok';
         status.saveError = null;
@@ -199,9 +211,10 @@ function createTableServer({ vaultPath, session, party = [], stateFile, deps = {
       log(`run sheet: the state could not be saved (${error}); it is tried again.`);
       broadcast('save-failed', { rev, error });
     },
-    onWrite: (state) => writeRecord(state),
+    onWrite: (state) => { lastWritten = state; writeRecord(state); },
   });
   store.load(); // throws code LOCKED for a session another server holds, IN_CLOUD for a state iCloud took off the disk
+  savedRev = store.get().rev; // every rev this server hands out is above it
   if (store.broken) {
     const rel = path.relative(vaultRoot, store.broken).split(path.sep).join('/');
     notices.push({ kind: 'state-broken', path: rel, text: `The saved state did not read; it is kept at ${rel} and the sheet starts fresh.` });
@@ -324,6 +337,12 @@ function createTableServer({ vaultPath, session, party = [], stateFile, deps = {
             json(res, 400, { error: 'the body needs { stateId, base, state }' });
             return;
           }
+          // A page built on another server's revisions (this one restarted) is stale whatever its base
+          // says: two unclean restarts can hand out the same rev numbers.
+          if (msg.serverId !== undefined && msg.serverId !== serverId && msg.stateId === stateId) {
+            json(res, 409, { reason: 'stale', stateId, rev: store.get().rev, label });
+            return;
+          }
           let r;
           try { r = store.put({ stateId: msg.stateId, base: msg.base, state: msg.state }); } catch (err) {
             json(res, 400, { error: String((err && err.message) || err).split('\n')[0] });
@@ -353,7 +372,7 @@ function createTableServer({ vaultPath, session, party = [], stateFile, deps = {
       path: '/api/events',
       handle: (req, res) => {
         res.writeHead(200, { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-store' });
-        res.write(`event: hello\ndata: ${JSON.stringify({ serverId, rev: store.get().rev, status })}\n\n`);
+        res.write(`event: hello\ndata: ${JSON.stringify({ serverId, rev: store.get().rev, savedRev, status })}\n\n`);
         clients.add(res);
         const drop = () => clients.delete(res);
         req.on('close', drop);
@@ -419,6 +438,9 @@ function createTableServer({ vaultPath, session, party = [], stateFile, deps = {
       clearInterval(ping);
       let saveError = null;
       try { await store.close(); } catch (err) { saveError = err; } // the last write, and its record, land before the end
+      // A record write still waiting on its retry gets one last try; if it fails, the next start's
+      // reconcile brings the log up to date (it was the server's own last write, or the skeleton).
+      if (recordRetry) { clearTimeout(recordRetry); recordRetry = null; if (lastWritten) writeRecord(lastWritten); }
       closed = true;
       if (recordRetry) { clearTimeout(recordRetry); recordRetry = null; }
       for (const res of clients) res.end();

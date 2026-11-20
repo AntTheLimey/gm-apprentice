@@ -53,7 +53,10 @@ function hiddenFateOfBody(body) {
   const section = behindTheScenes(lines);
   if (!section) return null;
   let fate = null;
-  for (const line of section) {
+  // a bullet inside a code fence is an example, never the fate
+  const fenced = fenceMask(section);
+  for (const [i, line] of section.entries()) {
+    if (fenced[i]) continue;
     const m = FATE.exec(line);
     if (!m) continue;
     const { s1, s2, fate: f } = m.groups;

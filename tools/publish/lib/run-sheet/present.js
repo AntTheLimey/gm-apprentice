@@ -5,6 +5,7 @@
 // (`data-note`, the vault-relative path), or a `missing` span; `![[picture]]` becomes `/vault/<path>`.
 // Raw HTML in a note is never run (`createRenderer` is `html: false`). 5b adds `forPlayers` beside this.
 
+const crypto = require('node:crypto');
 const path = require('node:path');
 const { createRenderer } = require('../markdown');
 
@@ -36,16 +37,29 @@ function linkHtml({ bang, inner }, index) {
 }
 
 // Markdown to HTML with the vault's links. `inline` for a one-line field (no wrapping <p>).
+// Each link waits in the markdown as a placeholder holding a fresh random token, so no text in a
+// note (an entity markdown decodes, say) can pass for one. Inside an attribute (a picture's alt
+// text) a link gives only its words.
 function toHtml(text, index, { inline = false } = {}) {
   if (text === null || text === undefined || text === '') return '';
   const links = [];
+  const token = crypto.randomBytes(6).toString('hex');
   // An HTML comment (a `<!-- gm-only -->` fence) is never shown: `html: false` would print it as text.
-  const src = String(text).replace(/<!--[\s\S]*?-->/g, '').replace(/[]/g, '').replace(/(!?)\[\[([^\]\n]+?)\]\]/g, (m, bang, inner) => {
+  const src = String(text).replace(/<!--[\s\S]*?-->/g, '').replace(/[\uE000\uE001]/g, '').replace(/(!?)\[\[([^\]\n]+?)\]\]/g, (m, bang, inner) => {
     links.push({ bang: bang === '!', inner });
-    return `${OPEN}${links.length - 1}${SHUT}`;
+    return `${OPEN}${token}:${links.length - 1}${SHUT}`;
   });
   const html = inline ? md.renderInline(src) : md.render(src);
-  return html.replace(/(\d+)/g, (m, i) => linkHtml(links[Number(i)], index));
+  const mark = new RegExp(`${OPEN}${token}:(\\d+)${SHUT}`, 'g');
+  const words = (i) => {
+    const l = links[Number(i)];
+    const bar = l.inner.indexOf('|');
+    const target = (bar >= 0 ? l.inner.slice(0, bar) : l.inner).split('#')[0];
+    return esc((bar >= 0 && !l.bang ? l.inner.slice(bar + 1) : target.split('/').pop().replace(/\.md$/i, '')).trim());
+  };
+  return html
+    .replace(/="([^"]*)"/g, (attr, value) => `="${value.replace(mark, (m, i) => words(i))}"`)
+    .replace(mark, (m, i) => linkHtml(links[Number(i)], index));
 }
 
 // `obj[f + 'Html']` for each field of `fields` that holds a string.

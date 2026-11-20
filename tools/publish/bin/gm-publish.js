@@ -1057,6 +1057,8 @@ if (command === 'table') {
     console.error(`Error: ${parsed.error}`);
     process.exit(1);
   }
+  // The site comes from the vault's own settings: a --config would be silently ignored, so it is refused.
+  if (parsed.configGiven) refuseUnknownArgument('table', '--config');
   const { runTable, parseParty } = require('../lib/run-sheet/table-cli.js');
   const given = parseParty(parsed.flags.party);
   const portText = parsed.flags.port;

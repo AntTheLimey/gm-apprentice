@@ -313,10 +313,22 @@ describe('run sheet state', () => {
   });
 
   it('an ally brought in gets a vitals row', () => {
-    const c = model.cast.find((x) => x.foe && x.foe.ally);
-    assert.ok(c);
-    const fresh1 = RS.derive(model, run([{ type: 'bring', beat: GATE.key, note: c.note, name: c.name }]));
-    assert.ok(fresh1.vitals.some((v) => v.note === c.note));
+    // an ally no beat lists as a foe, brought into a beat with none
+    const c = model.cast.find((x) => x.foe && x.foe.ally && !model.beats.some((b) => (b.foes || []).some((f) => f.note === x.note)));
+    assert.ok(c, 'the fixture has an ally in no beat');
+    assert.ok(!(TOWER.foes || []).some((f) => f.note === c.note));
+    assert.ok(!RS.derive(model, fresh()).vitals.some((v) => v.note === c.note), 'no row before');
+    const brought = RS.derive(model, run([{ type: 'bring', beat: TOWER.key, note: c.note, name: c.name }]));
+    assert.ok(brought.vitals.some((v) => v.note === c.note), 'a row after');
+  });
+
+  it('an ally not in play keeps its pre-rest figures, unless the GM sets them again after the rest', () => {
+    const m = clone(model);
+    const s = run([{ type: 'endSet', vitals: { [LUCAN]: { hp: 4, max: 20 } } }, { type: 'longRest' }], RS.emptyState({ stateId: 'x' }));
+    const row = (st) => RS.derive(m, st).vitals.find((v) => v.rowId === LUCAN);
+    assert.deepStrictEqual([row(s).hp, row(s).max], [4, 20], 'not in play: the rest does not cover it');
+    const later = run([{ type: 'endSet', vitals: { [LUCAN]: { hp: 7 } } }], s);
+    assert.deepStrictEqual([row(later).hp, row(later).max], [7, 20], 'the edit after the rest stands');
   });
 
   it('attach: the moved state wins a key collision, and later actions follow the attach', () => {
@@ -425,6 +437,18 @@ describe('run sheet state', () => {
     assert.ok(s2.visited[NEW] && !s2.visited[GATE.key]);
   });
 
+  it('a beat the Plan lost that only holds jots is listed, and attaching it moves the jots', () => {
+    const renamed = clone(model);
+    renamed.beats[1].key = 'b-tower-renamed';
+    const s = run([{ type: 'jot', beat: TOWER.key, text: 'the bell cracked', title: TOWER.title }]);
+    const o = RS.derive(renamed, s).orphans.find((x) => x.kind === 'beat' && x.key === TOWER.key);
+    assert.ok(o, 'the lost beat is listed');
+    assert.deepStrictEqual([o.text, o.value], [TOWER.title, ['jotted in']]);
+    const moved = run([{ type: 'attach', from: TOWER.key, to: 'b-tower-renamed' }], s);
+    assert.strictEqual(moved.jots[0].beat, 'b-tower-renamed');
+    assert.deepStrictEqual(RS.derive(renamed, moved).orphans, []);
+  });
+
   it('a renamed beat known only by a brought-in person, a jot and a point shows its title (proof defect 2)', () => {
     const p0 = GATE.points[0];
     const N = 'Characters/NPCs/Abbot Rime.md';
@@ -433,14 +457,13 @@ describe('run sheet state', () => {
     const one = RS.derive(renamed(), run([{ type: 'bring', beat: GATE.key, note: N, name: 'Abbot Rime', title: GATE.title }]));
     const b = one.orphans.find((x) => x.kind === 'beat' && x.key === GATE.key);
     assert.deepStrictEqual([b.text, b.beatTitle, b.value], [GATE.title, GATE.title, ['brought']]);
-    // brought with no title of its own (an old state): the title comes from a jot or a point there
-    const s = run([
-      { type: 'jot', beat: GATE.key, text: 'snow', title: GATE.title },
-      { type: 'mark', point: p0.key, mark: 'landed', beat: GATE.key, beatTitle: GATE.title, text: p0.text },
-    ]);
-    s.brought[GATE.key] = [{ note: N, name: 'Abbot Rime', at: at(0) }];
-    const o = RS.derive(renamed(), s).orphans.find((x) => x.kind === 'beat');
-    assert.strictEqual(o.text, GATE.title);
+    // brought with no title of its own (an old state): the title comes from a jot there, or from a point there
+    const fromJot = run([{ type: 'jot', beat: GATE.key, text: 'snow', title: GATE.title }]);
+    fromJot.brought[GATE.key] = [{ note: N, name: 'Abbot Rime', at: at(0) }];
+    assert.strictEqual(RS.derive(renamed(), fromJot).orphans.find((x) => x.kind === 'beat').text, GATE.title);
+    const fromPoint = run([{ type: 'mark', point: p0.key, mark: 'landed', beat: GATE.key, beatTitle: GATE.title, text: p0.text }]);
+    fromPoint.brought[GATE.key] = [{ note: N, name: 'Abbot Rime', at: at(0) }];
+    assert.strictEqual(RS.derive(renamed(), fromPoint).orphans.find((x) => x.kind === 'beat').text, GATE.title);
     // a PC standing in a beat the Plan lost (no visited record) gets the title from a jot there
     const st = run([{ type: 'jot', beat: GATE.key, text: 'snow', title: GATE.title }]);
     st.positions[ADA] = { beat: GATE.key, spot: null };
@@ -527,5 +550,14 @@ describe('RS.upgrade (third review M3)', () => {
     }
     assert.throws(() => RS.upgrade([], fresh()), (e) => e.code === 'BAD_STATE');
     assert.doesNotThrow(() => RS.upgrade({ stopped: { beat: 'b' }, startedAt: '2026-11-20T19:00:00.000Z' }, fresh()), 'a key left null takes a value');
+  });
+
+  it('an entry derive reads into that is not an object is refused, code BAD_STATE', () => {
+    for (const bad of [{ jots: [null] }, { events: ['x'] }, { improvised: [1] }, { positions: { a: null } }, { points: { k: 1 } },
+      { brought: { b: {} } }, { brought: { b: [null] } }, { stopped: 'b' }]) {
+      assert.throws(() => RS.upgrade(bad, fresh()), (e) => e.code === 'BAD_STATE', JSON.stringify(bad));
+    }
+    // a valid older save still fills what is missing
+    assert.doesNotThrow(() => RS.derive(model, RS.upgrade({ jots: [{ id: 'j1', beat: null, text: 'x', at: T0 }] }, fresh())));
   });
 });

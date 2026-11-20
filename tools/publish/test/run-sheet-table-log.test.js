@@ -137,6 +137,6 @@ describe('readTableLog', () => {
   it('lists the rows whose HP cell is not empty and cannot be read', () => {
     const text = '## Vitals at the end\n\n| Who | HP | Conditions |\n|---|---|---|\n'
       + '| [[Lucan Grey]] | fine | |\n| [[Ada Moss]] | | prone |\n| [[Ben Hart]] | 4/9 | |\n';
-    assert.deepStrictEqual(readTableLog(text).unread, [{ who: 'Lucan Grey', cell: 'fine' }]);
+    assert.deepStrictEqual(readTableLog(text).unread, [{ who: 'Lucan Grey', copy: null, cell: 'fine' }]);
   });
 });

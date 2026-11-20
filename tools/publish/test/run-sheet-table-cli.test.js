@@ -414,15 +414,26 @@ describe('runFlushCapped and openBrowser', () => {
     const fake = () => { const c = new EventEmitter(); c.pid = 4321; c.kill = () => { c.killed = true; }; return c; };
     let child;
     const kills = [];
-    const r = await runFlushCapped({ configFile: 'x', timeoutMs: 20, platform: 'darwin', spawn: (cmd, args, opts) => { child = fake(); child.opts = opts; return child; }, kill: (pid, sig) => kills.push([pid, sig]) });
+    // the group goes at the signal: the flush is waited for until it has closed
+    const r = await runFlushCapped({ configFile: 'x', timeoutMs: 20, platform: 'darwin', spawn: (cmd, args, opts) => { child = fake(); child.opts = opts; return child; }, kill: (pid, sig) => { kills.push([pid, sig]); child.emit('close', null, sig); } });
     assert.deepStrictEqual(r, { ok: false, why: 'timeout' });
     assert.strictEqual(child.opts.detached, true, 'its own process group');
     assert.deepStrictEqual(kills, [[-4321, 'SIGTERM']], 'the whole group');
     const runs = [];
-    const w = await runFlushCapped({ configFile: 'x', timeoutMs: 20, platform: 'win32', spawn: (cmd, args, opts) => { child = fake(); child.opts = opts; return child; }, spawnSync: (cmd, args) => runs.push([cmd, ...args]) });
+    const w = await runFlushCapped({ configFile: 'x', timeoutMs: 20, platform: 'win32', spawn: (cmd, args, opts) => { child = fake(); child.opts = opts; return child; }, spawnSync: (cmd, args) => { runs.push([cmd, ...args]); child.emit('close', 1, null); } });
     assert.deepStrictEqual(w, { ok: false, why: 'timeout' });
     assert.strictEqual(child.opts.detached, false);
     assert.deepStrictEqual(runs, [['taskkill', '/T', '/F', '/PID', '4321']]);
+  });
+
+  it('a flush that does not end at the signal is killed outright after the grace, and only then does the sheet start', async () => {
+    const c = new EventEmitter(); c.pid = 4321; c.kill = () => {};
+    const kills = [];
+    const t0 = Date.now();
+    const r = await runFlushCapped({ configFile: 'x', timeoutMs: 20, graceMs: 120, platform: 'darwin', spawn: () => c, kill: (pid, sig) => kills.push([pid, sig]) });
+    assert.deepStrictEqual(r, { ok: false, why: 'timeout' });
+    assert.deepStrictEqual(kills, [[-4321, 'SIGTERM'], [-4321, 'SIGKILL']]);
+    assert.ok(Date.now() - t0 >= 130, 'the grace was waited out');
   });
 
   it('a real flush and the child it started are both stopped at the cap', async () => {
@@ -432,13 +443,16 @@ describe('runFlushCapped and openBrowser', () => {
     // the flush stand-in starts a grandchild (as flush starts wrangler) and both sleep
     const code = `const c = require('child_process').spawn(process.execPath, ['-e', 'setTimeout(()=>{},60000)'], { stdio: 'ignore' }); require('fs').writeFileSync(${JSON.stringify(pidFile)}, String(c.pid)); setTimeout(()=>{},60000);`;
     const spawn = (cmd, args, opts) => require('node:child_process').spawn(process.execPath, ['-e', code], { ...opts, stdio: 'ignore' });
-    const p = runFlushCapped({ configFile: 'x', timeoutMs: 600, spawn });
-    const r = await p;
+    // the cap leaves a loaded runner time to start node twice and write the pid file
+    const r = await runFlushCapped({ configFile: 'x', timeoutMs: 3000, spawn });
     assert.deepStrictEqual(r, { ok: false, why: 'timeout' });
+    assert.ok(fs.existsSync(pidFile), 'the stand-in started its grandchild before the cap');
     const gpid = Number(fs.readFileSync(pidFile, 'utf8'));
+    // Linux: a grandchild that has exited but is not yet reaped (a zombie) answers kill 0; it is gone
+    const zombie = (pid) => { try { return /^\d+ \(.*\) Z/.test(fs.readFileSync(`/proc/${pid}/stat`, 'utf8')); } catch { return false; } };
     let alive = true;
     for (let i = 0; i < 50 && alive; i++) {
-      try { process.kill(gpid, 0); await new Promise((res) => { setTimeout(res, 40); }); } catch { alive = false; }
+      try { process.kill(gpid, 0); if (zombie(gpid)) alive = false; else await new Promise((res) => { setTimeout(res, 40); }); } catch { alive = false; }
     }
     assert.strictEqual(alive, false, 'the grandchild is gone too');
   });

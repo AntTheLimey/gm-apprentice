@@ -138,25 +138,32 @@ function createStore({
     return dirty ? 'dirty' : 'clean';
   }
 
-  function writeLock(port) {
-    try {
-      fs.mkdirSync(dir, { recursive: true });
-      fs.writeFileSync(lockFile, `${JSON.stringify({ pid, port: port == null ? null : port })}\n`, 'utf8');
-      locked = true;
-    } catch { /* no lock: the state writes say what is wrong */ }
-  }
+  const lockText = (port) => `${JSON.stringify({ pid, port: port == null ? null : port })}\n`;
+  const lockedError = (lock) => {
+    const e = new Error(`the run sheet for this session is already running (pid ${lock.pid}${lock.port ? `, port ${lock.port}` : ''})`);
+    e.code = 'LOCKED';
+    e.pid = lock.pid;
+    e.port = lock.port;
+    return e;
+  };
+  // The lock is still this store's: a later start that took it over owns it now.
+  const ownLock = () => { const l = readLock(file, { fs, nowMs }); return !!l && !l.broken && l.pid === pid; };
 
-  // Takes the lock; true when a lock was found that its server had left behind (an unclean end).
+  // Takes the lock; true when a lock was found that its server had left behind (an unclean end). The
+  // lock is created exclusively, so of two starts at once only one gets it. A lock that cannot be
+  // written stops the start: another start would have no owner to check.
   function takeLock() {
     const lock = readLock(file, { fs, nowMs });
-    if (lock && !lock.broken && held(lock)) {
-      const e = new Error(`the run sheet for this session is already running (pid ${lock.pid}${lock.port ? `, port ${lock.port}` : ''})`);
-      e.code = 'LOCKED';
-      e.pid = lock.pid;
-      e.port = lock.port;
-      throw e;
+    if (lock && !lock.broken && held(lock)) throw lockedError(lock);
+    fs.mkdirSync(dir, { recursive: true });
+    if (lock) fs.rmSync(lockFile, { force: true });
+    try {
+      fs.writeFileSync(lockFile, lockText(null), { encoding: 'utf8', flag: 'wx' });
+    } catch (err) {
+      if (err.code !== 'EEXIST') throw err;
+      throw lockedError(readLock(file, { fs, nowMs }) || { pid: null, port: null });
     }
-    writeLock(null);
+    locked = true;
     return lock !== null;
   }
 
@@ -236,7 +243,15 @@ function createStore({
     get() { ensure(); return { state: cur, rev }; },
     flushNow() { clearTimer(); return writeNow(); },
     // The port the server listens on, for the lock's refusal message.
-    lockPort(port) { if (locked && !closed) writeLock(port); },
+    // Written whole through a temp file and a rename, so a start that reads it never sees half a lock.
+    lockPort(port) {
+      if (!locked || closed || !ownLock()) return;
+      const tmp = `${lockFile}.tmp-${process.pid}`;
+      try {
+        fs.writeFileSync(tmp, lockText(port), 'utf8');
+        fs.renameSync(tmp, lockFile);
+      } catch { try { fs.rmSync(tmp, { force: true }); } catch { /* nothing to tidy */ } }
+    },
     // A write's onWrite may change the state again (the server's recordHash): that lands too. Rejects
     // when the newest state could not be written; the lock is then left, so the next start knows.
     close() {
@@ -255,7 +270,8 @@ function createStore({
         e.code = lastError && lastError.code;
         return Promise.reject(e);
       }
-      if (locked) { try { fs.rmSync(lockFile, { force: true }); } catch { /* the next start takes over a lock whose process is gone */ } }
+      // Only this store's own lock: one a later start took over is that start's.
+      if (locked && ownLock()) { try { fs.rmSync(lockFile, { force: true }); } catch { /* the next start takes over a lock whose process is gone */ } }
       return Promise.resolve();
     },
   };

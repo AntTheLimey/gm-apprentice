@@ -46,6 +46,17 @@
     const base = fresh || emptyState({});
     const out = fill(state, base, '');
     out.end = fill(out.end, base.end, 'end');
+    // The entries derive and the handlers read into: each one an object (a `null` jot would stop the page).
+    const entries = (list, where) => list.forEach((v, i) => { if (kind(v) !== 'object') throw bad(`${where}[${i}] is ${kind(v)}, not object`); });
+    for (const k of ['jots', 'events', 'improvised']) entries(out[k], k);
+    for (const k of ['positions', 'visited', 'points', 'fired', 'loot', 'handouts']) {
+      for (const [id, v] of Object.entries(out[k])) if (kind(v) !== 'object') throw bad(`${k}.${id} is ${kind(v)}, not object`);
+    }
+    for (const [id, v] of Object.entries(out.brought)) {
+      if (kind(v) !== 'array') throw bad(`brought.${id} is ${kind(v)}, not array`);
+      entries(v, `brought.${id}`);
+    }
+    if (out.stopped !== null && kind(out.stopped) !== 'object') throw bad(`stopped is ${kind(out.stopped)}, not object`);
     return out;
   }
 
@@ -342,8 +353,8 @@
     return rows.map((r) => {
       let o = state.end.vitals[r.rowId] || {};
       const covered = state.end.longRest && (!r.ally || inPlay.has(r.note));
-      // an ally who was not in play keeps the figures the GM set before the rest
-      if (state.end.longRest && !covered && o.rested) o = { ...o, hp: o.rested.hp, max: o.rested.max };
+      // an ally who was not in play keeps the figures the GM set before the rest, unless set again since
+      if (state.end.longRest && !covered && o.rested) o = { ...o, hp: o.hp !== undefined ? o.hp : o.rested.hp, max: o.max !== undefined ? o.max : o.rested.max };
       const setHp = o.hp !== undefined && o.hp !== '';
       const hp = setHp ? o.hp : r.base.hp;
       const max = o.max !== undefined && o.max !== '' ? o.max : r.base.max;
@@ -459,6 +470,8 @@
     for (const [k, v] of Object.entries(state.fired)) beatOrphan(k, v.title, 'fired');
     if (state.stopped) beatOrphan(state.stopped.beat, state.stopped.title, 'stopped');
     for (const k of Object.keys(state.brought)) beatOrphan(k, '', 'brought');
+    // a jot in a beat the Plan lost: the beat shows, so its jots can be attached to what it became
+    for (const j of state.jots) if (j.beat) beatOrphan(j.beat, j.title, 'jotted in');
     for (const [pc, p] of Object.entries(state.positions)) {
       if (!p.beat) continue;
       if (!byKey.has(p.beat)) beatOrphan(p.beat, '', `stood: ${pc}`);

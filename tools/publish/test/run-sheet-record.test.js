@@ -271,6 +271,19 @@ describe('the Table Log writer', () => {
     assert.strictEqual(R.recordBodyOf(out), body(s).replace(/\r\n?/g, '\n').trim());
   });
 
+  it("rewrite keeps a GM section's fenced headings and its first line's indent", () => {
+    const own = '\n## My notes\n\n    an indented code line\n\n```\n## Log\nan example, not a section\n```\n\nAfter the fence.\n';
+    const s = run([{ type: 'jot', beat: null, text: 'hello' }]);
+    const out = R.rewriteTableLog(skeleton() + own, body(s));
+    assert.ok(out.includes('## My notes\n\n    an indented code line\n'), out);
+    assert.ok(out.includes('```\n## Log\nan example, not a section\n```\n\nAfter the fence.'), out);
+    assert.strictEqual((out.match(/^## Log$/gm) || []).length, 2, 'the real Log section and the fenced example');
+    assert.strictEqual(R.rewriteTableLog(out, body(s)), out);
+    // an indent changed by hand on a section's first line is a change: it is kept aside first
+    const file = R.rewriteTableLog(skeleton(), body(s));
+    assert.strictEqual(R.needsBackup(file.replace('- 21:00 hello', '  - 21:00 hello'), R.bodyHash(body(s))), true);
+  });
+
   it('rewrite keeps CRLF', () => {
     const file = skeleton().replace(/\n/g, '\r\n');
     const out = R.rewriteTableLog(file, body(run([{ type: 'jot', beat: null, text: 'hello' }])));
@@ -365,5 +378,19 @@ describe('the reader carries what the writer wrote', () => {
     assert.deepStrictEqual(numbered(m), [['Lucan Grey 1', 9], ['Lucan Grey 2', 5]]);
     const m2 = readRunSheet(two(vault(logFile(['| [[Lucan Grey]] | 9/27 | |']))), P, { party });
     assert.deepStrictEqual(numbered(m2), [['Lucan Grey 1', 9], ['Lucan Grey 2', 9]]);
+  });
+
+  it("an unreadable copy-1 cell stops only copy 1; a blank copy-2 row walks on to copy 2's older figure", () => {
+    const dir = vault(logFile(['| [[Lucan Grey]] | 9/27 | |', '| [[Lucan Grey]] 2 | 5/27 | |']));
+    write(dir, `${CH1}/Sessions/Session 02/Session 02 - The Test.md`, ['---', 'type: session', 'session_number: 2', 'chapter: "[[Chapter 1]]"', 'status: played',
+      'documents:', '  table_log: "[[Session 02 - The Test - Table Log]]"', '---', '', '# s2', ''].join('\n'));
+    write(dir, `${CH1}/Sessions/Session 02/Session 02 - The Test - Table Log.md`, logFile(['| [[Lucan Grey]] | fine | |', '| [[Lucan Grey]] 2 |  | |'])
+      .replace('Session 01 - The Road]]', 'Session 02 - The Test]]'));
+    sessionIndex(dir, `${CH1}/Sessions/Session 03/Session 03 - Next.md`, 3, null, 'planned');
+    const p3 = `${CH1}/Sessions/Session 03/Session 03 - Next - Plan.md`;
+    write(dir, p3, ['---', 'type: session-plan', 'session: "[[Session 03 - Next]]"', 'chapter: "[[Chapter 1]]"', '---', '',
+      '## Planned Scenes', '', '### Scene 1: Again', '**Situation:** Lucan again.', '**NPCs**', '- **[[Lucan Grey]] (2):** helps', ''].join('\n'));
+    const rows = lucans(readRunSheet(dir, p3, { party })).filter((f) => /^Lucan Grey \d$/.test(f.name)).map((f) => [f.name, f.hpNow, f.carriedFrom]);
+    assert.deepStrictEqual(rows, [['Lucan Grey 1', null, null], ['Lucan Grey 2', 5, S1_LOG]]);
   });
 });

@@ -21,8 +21,11 @@ function connect(child) {
   let buf = '';
   const waiting = new Map();
   const events = [];
+  let closed = null;
+  // one decoder for the pipe: a character split across two chunks arrives whole
+  inp.setEncoding('utf8');
   inp.on('data', (chunk) => {
-    buf += chunk.toString('utf8');
+    buf += chunk;
     let at;
     while ((at = buf.indexOf('\0')) >= 0) {
       const msg = JSON.parse(buf.slice(0, at));
@@ -36,9 +39,18 @@ function connect(child) {
       } else if (msg.method) events.push(msg);
     }
   });
-  const fail = (err) => { for (const w of waiting.values()) { clearTimeout(w.timer); w.reject(err); } waiting.clear(); };
+  // The first cause is kept: once the browser is gone every command fails at once with it.
+  const fail = (err) => {
+    if (!closed) closed = err;
+    for (const w of waiting.values()) { clearTimeout(w.timer); w.reject(closed); }
+    waiting.clear();
+  };
+  child.on('error', (err) => fail(new Error(`the browser did not start: ${err.message}`)));
   child.on('exit', () => fail(new Error('the browser exited')));
+  out.on('error', (err) => fail(new Error(`the pipe to the browser broke: ${err.message}`)));
+  inp.on('error', (err) => fail(new Error(`the pipe from the browser broke: ${err.message}`)));
   const send = (method, params = {}, sessionId) => new Promise((resolve, reject) => {
+    if (closed) { reject(closed); return; }
     const n = ++id;
     const timer = setTimeout(() => { waiting.delete(n); reject(new Error(`${method}: no answer in ${STEP_MS / 1000} s`)); }, STEP_MS);
     waiting.set(n, { resolve, reject, timer, method });
@@ -55,7 +67,12 @@ async function withPage({ width = 1449, height = 762, chrome = findChrome() } = 
   if (!chrome) throw new Error('no browser');
   return withChromeLock(async () => {
     const profile = fs.mkdtempSync(path.join(os.tmpdir(), PROFILE_PREFIX));
-    try { fs.writeFileSync(path.join(LOCK_DIR, 'profile'), profile); } catch { /* the lock is a test's own */ }
+    // Recorded beside the lock (as launchChrome does), so a stale lock's reaper can end this Chrome;
+    // a launch that could not be recorded does not start.
+    try { fs.writeFileSync(path.join(LOCK_DIR, 'profile'), profile); } catch (e) {
+      fs.rmSync(profile, { recursive: true, force: true, maxRetries: 3 });
+      throw e;
+    }
     const before = chromeTempNow();
     const child = spawn(chrome, ['--headless=new', '--disable-gpu', '--no-sandbox', '--no-first-run', '--hide-scrollbars',
       `--user-data-dir=${profile}`, '--remote-debugging-pipe', `--window-size=${width},${height}`, 'about:blank'],
@@ -86,7 +103,11 @@ async function withPage({ width = 1449, height = 762, chrome = findChrome() } = 
         }
       };
       const page = {
-        goto: (url) => s('Page.navigate', { url }),
+        async goto(url) {
+          const r = await s('Page.navigate', { url });
+          if (r && r.errorText) throw new Error(`could not open ${url}: ${r.errorText}`);
+          return r;
+        },
         reload: () => s('Page.reload', { ignoreCache: true }),
         evaluate,
         waitFor,

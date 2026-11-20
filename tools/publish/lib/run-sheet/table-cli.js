@@ -55,6 +55,7 @@ function defaultHello(port) {
     const req = http.get({ host: '127.0.0.1', port, path: '/api/hello', headers: { Host: `127.0.0.1:${port}` }, timeout: 1500 }, (res) => {
       let text = '';
       res.setEncoding('utf8');
+      res.on('error', () => resolve(null)); // a holder that hangs up mid-answer: ask the OS instead
       res.on('data', (c) => { text += c; });
       res.on('end', () => {
         try {
@@ -125,10 +126,13 @@ function killTree(child, { platform = process.platform, spawnSync = nodeSpawnSyn
 // all it started) after the cap. Off Windows the child leads its own process group, so a stop signal
 // meant for the sheet no longer reaches it: one that comes during the flush ends the flush's group,
 // then this process.
-function runFlushCapped({ configFile, timeoutMs = FLUSH_CAP_MS, spawn = nodeSpawn, platform = process.platform, kill = process.kill, spawnSync = nodeSpawnSync, proc = process, exit = (c) => process.exit(c) }) {
+// At the cap the flush is asked to stop, and the sheet waits for it to be gone (killed outright after
+// `graceMs`), so nothing it does lands after the sheet has read the PC notes.
+function runFlushCapped({ configFile, timeoutMs = FLUSH_CAP_MS, graceMs = 3000, spawn = nodeSpawn, platform = process.platform, kill = process.kill, spawnSync = nodeSpawnSync, proc = process, exit = (c) => process.exit(c) }) {
   return new Promise((resolve) => {
     let child;
     let timer = null;
+    let timedOut = false;
     let done = false;
     const onStop = () => {
       killTree(child, { platform, spawnSync, kill });
@@ -150,11 +154,16 @@ function runFlushCapped({ configFile, timeoutMs = FLUSH_CAP_MS, spawn = nodeSpaw
     }
     for (const sig of STOP_SIGNALS) proc.on(sig, onStop);
     timer = setTimeout(() => {
+      timedOut = true;
       killTree(child, { platform, spawnSync, kill });
-      finish({ ok: false, why: 'timeout' });
+      timer = setTimeout(() => {
+        if (platform !== 'win32') { try { kill(-child.pid, 'SIGKILL'); } catch { /* gone */ } }
+        finish({ ok: false, why: 'timeout' });
+      }, graceMs);
     }, timeoutMs);
-    child.on('error', (err) => finish({ ok: false, why: err.message }));
-    child.on('close', (code, signal) => finish(code === 0 ? { ok: true, why: null } : { ok: false, why: code === null ? `stopped by ${signal}` : `exit ${code}` }));
+    child.on('error', (err) => finish({ ok: false, why: timedOut ? 'timeout' : err.message }));
+    child.on('close', (code, signal) => finish(timedOut ? { ok: false, why: 'timeout' }
+      : code === 0 ? { ok: true, why: null } : { ok: false, why: code === null ? `stopped by ${signal}` : `exit ${code}` }));
   });
 }
 

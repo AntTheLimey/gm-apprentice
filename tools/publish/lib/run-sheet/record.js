@@ -6,6 +6,7 @@
 const crypto = require('node:crypto');
 const path = require('node:path');
 const RS = require('./web/state');
+const { fenceMask } = require('./plan-text');
 
 // The same list as `TABLE_LOG_SECTIONS` in skills/shared/scripts/vault_write.py; a test compares the two.
 const TABLE_LOG_SECTIONS = [
@@ -122,18 +123,24 @@ function tableLogBody(model, state, { linkFor: link, timeOf = localTime } = {}) 
   return render(TABLE_LOG_SECTIONS.map((title) => ({ title, text: sec[title] || '' })));
 }
 
-// The file's `##` sections: `head` is everything above the first one.
+// A section's text without the blank lines round it; a first line's indent is kept (an indented
+// code block or a nested bullet means something).
+const unpad = (text) => text.replace(/^(?:[ \t]*\n)+/, '').replace(/\s+$/, '');
+
+// The file's `##` sections: `head` is everything above the first one. A `## ` inside a code fence is
+// the fence's text, never a section.
 function split(fileText) {
   const lines = lf(fileText).split('\n');
+  const fenced = fenceMask(lines);
   const head = [];
   const sections = [];
   let cur = null;
-  for (const line of lines) {
-    const m = /^##[ \t]+(.+?)[ \t]*$/.exec(line);
+  lines.forEach((line, i) => {
+    const m = fenced[i] ? null : /^##[ \t]+(.+?)[ \t]*$/.exec(line);
     if (m) { cur = { title: m[1], lines: [] }; sections.push(cur); } else if (cur) cur.lines.push(line);
     else head.push(line);
-  }
-  return { head: head.join('\n'), sections: sections.map((s) => ({ title: s.title, text: s.lines.join('\n').trim() })) };
+  });
+  return { head: head.join('\n'), sections: sections.map((s) => ({ title: s.title, text: unpad(s.lines.join('\n')) })) };
 }
 
 const FM_TYPE = /^---\n([\s\S]*?)\n---(?:\n|$)/;

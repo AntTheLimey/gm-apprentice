@@ -21,7 +21,8 @@ function readNumbers(stats, behaviour) {
   const hp = hps.length ? Number(hps[hps.length - 1][1]) : null;
   const init = number(new RegExp(`Initiative[^\\d\\n]{0,3}(${SIGNED_SOURCE})`).exec(stats));
   const full = `${stats}\n${behaviour}`;
-  const charges = [...full.matchAll(/\*\*\*([^*]+?)\s*\(Recharge ([0-9–-]+)\)/g)];
+  // A declaration with no number (`(Recharge -)`, a draft) is no recharge.
+  const charges = [...full.matchAll(/\*\*\*([^*]+?)\s*\(Recharge (\d+(?:\s*[–-]\s*\d+)?)\)/g)];
   const recharge = [...new Set(charges.map((m) => m[1].trim()))].sort();
   // The lowest roll that recharges each: `(Recharge 5–6)` is 5, `(Recharge 6)` is 6. The first of a name counts.
   const rechargeAt = {};

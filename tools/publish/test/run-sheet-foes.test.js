@@ -269,7 +269,16 @@ describe('run sheet foes', () => {
 
     it('a pasted block does not', () => {
       const r = foesOf('Characters/NPCs/Guard Captain.md', vault(NOTES), 1, 'b-x');
+      assert.strictEqual(r.foes.length, 1, 'the Guard Captain has his fight row');
+      assert.strictEqual(r.foes[0].note, 'Characters/NPCs/Guard Captain.md');
       assert.deepStrictEqual(r.warnings.filter((x) => x.kind === 'stock-no-actions'), []);
+    });
+
+    it('a recharge with no number is no recharge, and does not stop the read', () => {
+      const index = vault({ 'Characters/NPCs/Half.md': stats('Half, AC 12, HP 9\n\n***Breath (Recharge -).*** draft\n\n***Bite (Recharge 5–6).*** x\n\n***Roar (Recharge 6).*** y') });
+      const [f] = foesOf('Characters/NPCs/Half.md', index, 1, 'b-x').foes;
+      assert.deepStrictEqual(f.recharge, ['Bite', 'Roar']);
+      assert.deepStrictEqual(f.rechargeAt, { Bite: 5, Roar: 6 });
     });
 
     it('no-numbers is quiet at a social beat: no warning, the text on the row', () => {

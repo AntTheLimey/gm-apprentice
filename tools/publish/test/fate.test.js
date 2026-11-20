@@ -24,6 +24,11 @@ describe('fate: hidden fate and death', () => {
     assert.strictEqual(hiddenFate(note('- **Motive:** he owed the Lodge.')), null);
     assert.ok(isDead(note('- **Dead.** Fell.\n- **The Lodge** recovered his coat.'), {}));
   });
+  it('a fate bullet inside a code fence is an example, never the fate', () => {
+    const t = note('- **Dead.** Fell.\n\n```\n- **Alive.** an example\n```');
+    assert.strictEqual(hiddenFate(t), 'Dead.');
+    assert.ok(isDead(t, { status: 'alive' }));
+  });
   it('death in passing is no fate', () => {
     assert.strictEqual(hiddenFate(note(`- ${S1}he said his brother was dead. **Dead** men tell no tales.`)), null);
     assert.strictEqual(hiddenFate(note('- He fears the **Dead.**')), null);

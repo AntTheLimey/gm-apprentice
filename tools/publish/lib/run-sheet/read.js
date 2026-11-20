@@ -452,10 +452,13 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
         const log = logOf(s);
         if (!log) continue;
         const hp = new Map();
+        const blank = new Set(); // a row with an empty HP cell: this log recorded nothing for that copy
         const t = readTableLog(index.read(log).body);
         if (t.unnamed) warnings.push({ kind: 'table-log', note: log, text: `${VITALS}: a table's header row names none of Who, HP or Conditions, so it is not read: nobody starts from it` });
-        // An empty HP cell is nothing recorded: the walk goes on past it. An unreadable one stops it.
-        const unreadWho = new Set(t.unread.map((u) => low(u.who)));
+        // An empty HP cell is nothing recorded: the walk goes on past it. An unreadable one stops it,
+        // for its own ally and copy only.
+        const rowKey = (who, copy) => `${low(who)}#${copy > 1 ? copy : 1}`;
+        const unreadWho = new Set(t.unread.map((u) => rowKey(u.who, u.copy)));
         for (const v of t.vitals) {
           const who = index.resolve(v.who);
           if (who === null) {
@@ -465,8 +468,8 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
             warnings.push({ kind: 'table-log', note: log, text: `${VITALS}: ${why}; nobody starts from that row` });
             continue;
           }
-          if (v.hpNow === null && !unreadWho.has(low(v.who))) continue;
           const id = v.copy > 1 ? `${who}#${v.copy}` : who;
+          if (v.hpNow === null && !unreadWho.has(rowKey(v.who, v.copy))) { blank.add(id); continue; }
           if (!hp.has(id)) hp.set(id, v.hpNow);
         }
         const unread = new Set();
@@ -484,7 +487,7 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
           const note = target ? index.resolve(target) : null;
           if (note !== null) unmasked.push({ note, on: !/\bmasked again\s*[.!]?\s*$/i.test(b.text) });
         }
-        read.push({ log, hp, unmasked });
+        read.push({ log, hp, blank, unmasked });
         return true;
       }
       return false;
@@ -515,6 +518,8 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
           let hit = null;
           for (let i = 0; hit === null && (i < read.length || readNext()); i++) {
             const h = read[i].hp;
+            // a blank row of this copy's own: nothing recorded here, never the copy-less row instead
+            if (!h.has(id) && read[i].blank.has(id)) continue;
             const k = h.has(id) ? id : note;
             if (h.has(k)) hit = { hp: h.get(k), log: read[i].log };
           }

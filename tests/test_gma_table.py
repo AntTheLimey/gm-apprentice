@@ -88,7 +88,7 @@ class TableTests(unittest.TestCase):
             "V", "table-log-new", "--session", INDEX, "--created-by", "run-sheet", "--write"])
         self.assertEqual(self.calls[2][1], [
             "table", "V", "--session", INDEX,
-            "--party", "PCs/Ana.md", "--party", "PCs/Bo Lee.md",
+            "--party", json.dumps(["PCs/Ana.md", "PCs/Bo Lee.md"]),
             "--port", "4400", "--no-open"])
 
     def test_a_session_asked_for_goes_to_the_pick_only(self):
@@ -168,7 +168,15 @@ class TableTests(unittest.TestCase):
         self.assertEqual(self.calls[1][1][0], vault)
         serve = self.calls[2][1]
         self.assertEqual(serve[1], vault)
-        self.assertIn("PCs/Bo Lee.md", serve)
+        self.assertIn("PCs/Bo Lee.md", json.loads(serve[serve.index("--party") + 1]))
+
+    def test_a_pc_note_named_like_json_passes_as_a_path(self):
+        rows = ["PC\t[Guest] Mira.md\tMira; aliases: none; asOfSession: 3; player: C; status: active"]
+        with mock.patch.object(vault_check, "list_active_pcs", lambda v, everyone=False: rows):
+            self.run_gma(["table", "V"])
+        serve = self.calls[2][1]
+        self.assertEqual(serve.count("--party"), 1)
+        self.assertEqual(json.loads(serve[serve.index("--party") + 1]), ["[Guest] Mira.md"])
 
     def test_no_party_serves_with_none(self):
         with mock.patch.object(vault_check, "list_active_pcs", lambda v, everyone=False: []):

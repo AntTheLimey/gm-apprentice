@@ -59,7 +59,7 @@ function vitalsTables(text) {
   });
 }
 
-// `unread`: the rows whose HP cell holds something that is not a number, `{ who, cell }` (an empty
+// `unread`: the rows whose HP cell holds something that is not a number, `{ who, copy, cell }` (an empty
 // cell is no figure and not listed); `unnamed`: how many tables have a header row naming no column.
 // Both are for the reader to warn about.
 function readTableLog(text) {
@@ -82,10 +82,11 @@ function readTableLog(text) {
       if (!who) continue;
       const hpText = cell(cells, columns.hp);
       const hp = HP_CELL.exec(hpText.replace(/\u2212/g, '-'));
-      if (!hp && hpText) unread.push({ who, cell: hpText });
+      const copy = copyOf(cell(cells, columns.who));
+      if (!hp && hpText) unread.push({ who, copy, cell: hpText });
       vitals.push({
         who,
-        copy: copyOf(cell(cells, columns.who)),
+        copy,
         hpNow: hp ? Number(hp[1]) : null,
         hpMax: hp && hp[2] !== undefined ? Number(hp[2]) : null,
         conditions: cell(cells, columns.conditions),

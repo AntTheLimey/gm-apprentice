@@ -48,6 +48,13 @@ function tableLogOf(index, sessionPath) {
   if (low(fmOf(index, log).type) !== 'session-table-log') {
     return { log: null, warning: { kind: 'table-log', note: sessionPath, text: `its documents.table_log links ${log}, which is not type: session-table-log: it is not read for the allies` } };
   }
+  // A log whose `session:` names another session (an index copied from the last one) is that
+  // session's record: never read or written as this one's.
+  const backlink = fmTarget(fmOf(index, log).session);
+  const owner = backlink ? index.resolve(backlink) : null;
+  if (owner !== null && owner !== sessionPath) {
+    return { log: null, warning: { kind: 'table-log', note: sessionPath, text: `its documents.table_log links ${log}, whose session: is ${owner}: fix the link to this session's own Table Log; it is not read or written` } };
+  }
   return { log, warning: null };
 }
 

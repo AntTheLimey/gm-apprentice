@@ -8,6 +8,8 @@
 // never applies one twice. A 409 'stale' reloads the server's state and re-applies every pending
 // action in order; a 409 'session' reloads and drops them. A network failure shows "Not connected"
 // until the server answers again; then the page rebases its pending actions on the server's state.
+// An answered action is kept (`G.sent`) until a `saved` event says its rev is on disk: a server that
+// stops inside its one-second write wait loses nothing, because the page sends those actions again.
 //
 // Fights, dice, the players' screen and Show are step 5b: absent here, not disabled.
 (function () {
@@ -37,7 +39,7 @@
   const G = {
     model: null, session: null, stateId: null, tableLog: null, serverId: null,
     state: null, rev: 0,
-    pending: [], inflight: false, clientId: randomId(), seq: 0,
+    pending: [], sent: [], inflight: false, clientId: randomId(), seq: 0, switching: false,
     down: false, putFailing: false, saveFailed: false, putRev: 0, savedRev: 0,
     retry: null, resyncTimer: null, notes: [], drafts: {},
     ui: { focus: null, armed: null, record: '', copyMsg: '', hits: {} },
@@ -100,13 +102,14 @@
 
   function rebase(serverState, rev) {
     let s = serverState;
-    for (const p of G.pending) s = RS.reduce(s, p.a, p.at);
+    for (const p of G.sent.concat(G.pending)) s = RS.reduce(s, p.a, p.at);
     G.state = s;
     G.rev = rev;
   }
 
   // Every change: reduce, redraw, send.
   function act(a) {
+    if (G.switching) return; // the sheet is changing session: nothing is done to the old one
     a.id = `${G.clientId}-${++G.seq}`;
     const at = new Date().toISOString();
     G.state = RS.reduce(G.state, a, at);
@@ -116,7 +119,7 @@
   }
 
   async function pump() {
-    if (G.inflight || !G.pending.length || G.down || G.retry) return;
+    if (G.inflight || !G.pending.length || G.down || G.retry || G.switching) return;
     G.inflight = true;
     const sent = G.pending.length;
     indicator();
@@ -125,7 +128,7 @@
       res = await fetch('/api/state', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ stateId: G.stateId, base: G.rev, state: G.state, clientId: G.clientId }),
+        body: JSON.stringify({ stateId: G.stateId, serverId: G.serverId, base: G.rev, state: G.state, clientId: G.clientId }),
       });
     } catch (e) {
       G.inflight = false;
@@ -138,7 +141,9 @@
     if (res.ok && body && typeof body.rev === 'number') {
       G.rev = body.rev;
       G.putRev = body.rev;
-      G.pending.splice(0, sent);
+      // answered, not yet on disk: kept until a `saved` event reaches this rev
+      for (const p of G.pending.splice(0, sent)) G.sent.push({ ...p, rev: body.rev });
+      if (G.savedRev >= body.rev) G.sent = [];
       G.putFailing = false;
       indicator();
       pump();
@@ -154,13 +159,23 @@
     if (body.reason === 'session') {
       const was = G.session ? G.session.label : 'another session';
       G.pending = [];
+      G.sent = [];
+      // No action until the new session's model and state are both in: one taken meanwhile would be
+      // made against the old sheet and lost.
+      G.switching = true;
       try {
-        takeModel(await getJson('/api/model'));
+        const m = await getJson('/api/model');
         const st = await getJson('/api/state');
+        takeModel(m);
         G.stateId = st.stateId;
+        G.serverId = st.serverId || G.serverId;
         G.state = st.state;
         G.rev = st.rev;
-      } catch (e) { lost(); return; }
+        // the save counters are the new session's: the old one's revs mean nothing here
+        G.putRev = st.rev;
+        G.savedRev = st.rev;
+      } catch (e) { G.switching = false; lost(); return; }
+      G.switching = false;
       note(`This page was showing ${was}; it now shows ${body.label || (G.session && G.session.label) || 'another session'}.`);
       update();
       return;
@@ -168,11 +183,22 @@
     // 'stale': another window changed the sheet. Take its state and re-apply every pending action.
     try {
       const st = await getJson('/api/state');
+      if (st.serverId && st.serverId !== G.serverId) serverRestarted(st.serverId);
       rebase(st.state, st.rev);
     } catch (e) { lost(); return; }
     note('Another window changed the sheet; reloaded.', { id: `stale:${G.rev}` });
     update();
     pump();
+  }
+
+  // A new server (a restart): what the old one answered but had not yet written goes again, ahead of
+  // anything still waiting. Its revs are the new server's from here on.
+  function serverRestarted(serverId) {
+    G.pending = G.sent.map(({ a, at }) => ({ a, at })).concat(G.pending);
+    G.sent = [];
+    G.serverId = serverId;
+    G.putRev = 0;
+    G.savedRev = 0;
   }
 
   // The server stopped answering: keep the pending actions and ask again every 2 s.
@@ -187,7 +213,7 @@
     try { st = await getJson('/api/state'); } catch (e) { lost(); return; }
     // the server now runs another session: its label is the one to name, never this page's own
     if (st.stateId !== G.stateId) { await conflict({ reason: 'session', label: st.label || '' }); G.down = false; indicator(); return; }
-    G.serverId = st.serverId;
+    if (st.serverId && st.serverId !== G.serverId) serverRestarted(st.serverId);
     rebase(st.state, st.rev);
     G.down = false;
     update();
@@ -200,10 +226,18 @@
     try {
       const st = await getJson('/api/state');
       if (G.inflight || G.pending.length || st.stateId !== G.stateId) return;
+      // an answer older than the state shown (two refreshes crossed) never rolls the view back
+      if (st.serverId === G.serverId && st.rev < G.rev) return;
       G.state = st.state;
       G.rev = st.rev;
       update();
     } catch (e) { lost(); }
+  }
+
+  // The server has `rev` on disk: what it answered up to there is safe.
+  function saved(rev) {
+    G.savedRev = Math.max(G.savedRev, rev);
+    G.sent = G.sent.filter((p) => p.rev > G.savedRev);
   }
 
   function listen() {
@@ -213,12 +247,12 @@
     es.addEventListener('hello', (ev) => {
       const d = data(ev);
       const restarted = G.serverId && d.serverId && d.serverId !== G.serverId;
-      if (typeof d.rev === 'number') G.savedRev = Math.max(G.savedRev, d.rev);
+      if (!restarted && typeof d.savedRev === 'number') saved(d.savedRev);
       if (d.status) takeStatus(d.status);
       if (G.down || restarted) { if (G.resyncTimer) { clearTimeout(G.resyncTimer); G.resyncTimer = null; } resync(); }
       indicator();
     });
-    es.addEventListener('saved', (ev) => { const d = data(ev); G.savedRev = Math.max(G.savedRev, d.rev || 0); G.saveFailed = false; indicator(); });
+    es.addEventListener('saved', (ev) => { saved(data(ev).rev || 0); G.saveFailed = false; indicator(); });
     es.addEventListener('save-failed', () => { G.saveFailed = true; indicator(); });
     es.addEventListener('state', (ev) => { const d = data(ev); if (d.clientId !== G.clientId) refresh(); });
     es.addEventListener('record-kept', (ev) => { const d = data(ev); if (d.path) note(keptText(d.path), { id: `kept:${d.path}` }); });
@@ -278,9 +312,21 @@
     }
     return el.id ? `#${CSS.escape(el.id)}` : null;
   }
+  // An end-panel box saves on `change`, which a redraw would swallow: the box is replaced, its words put
+  // back, and leaving it then fires nothing. So a box whose words differ from the saved ones commits first.
+  const COMMIT_ON_CHANGE = '#sheet [data-where], #sheet [data-vhp], #sheet [data-vcond], #sheet #advance';
+  let committing = false;
+  let renders = 0;
+
   // Every change: redraw, then put focus, caret and half-typed words back.
   function update() {
     const a = document.activeElement;
+    if (!committing && a && a.matches && a.matches(COMMIT_ON_CHANGE) && a.value.trim() !== a.defaultValue.trim()) {
+      const before = renders;
+      committing = true;
+      try { a.dispatchEvent(new Event('change', { bubbles: true })); } finally { committing = false; }
+      if (renders !== before) return; // the change's action redrew
+    }
     const sel = a && a !== document.body && a.getAttribute ? focusKey(a) : null;
     const caret = a && typeof a.selectionStart === 'number' ? [a.selectionStart, a.selectionEnd] : null;
     G.drafts = {};
@@ -298,13 +344,13 @@
 
   function render() {
     if (!G.model || !G.state) return;
+    renders++;
     const d = D();
     const m = G.model;
     $('#ttl').textContent = [m.campaign, G.session && G.session.label].filter(Boolean).join(' · ') || 'Run sheet';
     document.title = `${(G.session && G.session.label) || 'Run sheet'} · ${m.campaign || 'run sheet'}`;
     $('#sub').textContent = m.system || '';
-    const fb = focusBeat(d);
-    $('#hjot').placeholder = `Jot (J) → ${fb ? fb.title : 'the night'}`;
+    jotLabel(d);
     const w = (m.warnings || []).length;
     $('#warnBtn').textContent = w ? `${w} prep note${w === 1 ? '' : 's'}` : 'No prep notes';
     renderNotes();
@@ -314,18 +360,29 @@
     indicator();
   }
 
+  // The header jot box names the beat it writes to.
+  function jotLabel(d = D()) {
+    const fb = focusBeat(d);
+    $('#hjot').placeholder = `Jot (J) → ${fb ? fb.title : 'the night'}`;
+  }
+
+  // The sticky header's height, for the scroll offset of a beat or a section jumped to.
+  function measureTop() {
+    const top = $('#top');
+    if (top) document.documentElement.style.setProperty('--toph', `${top.offsetHeight}px`);
+  }
+
   function renderNotes() {
     const el = $('#hnotes');
     if (!el) return;
     el.innerHTML = G.notes.map((n) => `<div class="hnote ${n.kind}"><span>${esc(n.text)}</span><button type="button" data-dismiss="${esc(n.id)}" aria-label="Dismiss">✕</button></div>`).join('');
-    const top = $('#top');
-    if (top) document.documentElement.style.setProperty('--toph', `${top.offsetHeight}px`);
+    measureTop();
     probe();
   }
 
-  // Links the server rendered have no href: make them reachable from the keyboard.
+  // Links with no href (a note the drawer opens, a beat or section to jump to): reachable from the keyboard.
   function decorate(root) {
-    root.querySelectorAll('a[data-note]:not([href])').forEach((a) => { a.tabIndex = 0; a.setAttribute('role', 'link'); });
+    root.querySelectorAll('a[data-note]:not([href]), a[data-go]:not([href])').forEach((a) => { a.tabIndex = 0; a.setAttribute('role', 'link'); });
   }
 
   const RAIL_TOP = [['handover', 'Hand over'], ['pcs', 'The PCs'], ['run', 'The run']];
@@ -646,7 +703,7 @@
     if (t.id === 'endBtn') { goTo('end'); return; }
     if (d.dismiss) { G.notes = G.notes.filter((n) => n.id !== d.dismiss); renderNotes(); return; }
     if (d.note && t.tagName === 'A') { openNote(d.note); return; }
-    if (d.go) { goTo(d.go); if (d.go.startsWith('beat:')) G.ui.focus = d.go.slice(5); return; }
+    if (d.go) { goTo(d.go); if (d.go.startsWith('beat:')) { G.ui.focus = d.go.slice(5); jotLabel(); } return; }
     if (d.arm) {
       const id = d.arm;
       if (d.unjot) armed(id, () => act({ type: 'unjot', jot: d.unjot }));
@@ -733,6 +790,7 @@
     if (ev.key === 'Escape') { if ($('#drawer').classList.contains('open')) { closeDrawer(); ev.preventDefault(); } return; }
     if (!typing && (ev.key === 'j' || ev.key === 'J') && !ev.metaKey && !ev.ctrlKey && !ev.altKey) { ev.preventDefault(); $('#hjot').focus(); return; }
     if (ev.key === 'Enter' && t.tagName === 'A' && d.note) { openNote(d.note); return; }
+    if (ev.key === 'Enter' && t.tagName === 'A' && d.go) { ev.preventDefault(); t.click(); return; }
     if (ev.key !== 'Enter' || ev.isComposing) return;
     if (d.jot !== undefined) { const v = t.value; t.value = ''; jot(d.jot, v); return; }
     if (t.id === 'hjot') { const fb = focusBeat(D()); const v = t.value; t.value = ''; jot(fb ? fb.key : null, v); return; }
@@ -762,7 +820,18 @@
     const t = ev.target;
     if (!t.dataset || t.dataset.bring === undefined || Date.now() - G.modelAt < 3000) return;
     G.modelAt = Date.now();
-    getJson('/api/model').then((m) => { G.model = m.model; G.tableLog = m.tableLog; }).catch(() => { /* the model in hand serves */ });
+    getJson('/api/model').then((m) => {
+      G.model = m.model;
+      G.tableLog = m.tableLog;
+      // a name typed while the model was on its way is searched again in the new cast
+      const box = document.activeElement;
+      if (box && box.dataset && box.dataset.bring !== undefined && box.value) {
+        const beat = box.dataset.bring;
+        G.ui.hits[beat] = RS.castSearch(G.model.cast || [], box.value);
+        const hits = document.querySelector(`[data-hits="${CSS.escape(beat)}"]`);
+        if (hits) hits.innerHTML = hitsHTML(beat, G.ui.hits[beat]);
+      }
+    }).catch(() => { /* the model in hand serves */ });
   });
 
   document.addEventListener('change', (ev) => {
@@ -790,6 +859,9 @@
   });
 
   // A tab closed while clicks are still unsent (the server not answering) would lose them: the browser asks first.
+  // A header that wraps on a narrower window is taller: the jump offset follows it.
+  window.addEventListener('resize', measureTop);
+
   window.addEventListener('beforeunload', (ev) => {
     if (!G.pending.length) return;
     ev.preventDefault();
