@@ -1360,6 +1360,54 @@ class RunSheetChecksTests(unittest.TestCase):
             self.ids(self.scene(rest="**Entities:** [[Tomas]]\n"),
                      index=False), [])
 
+    def test_a_creature_in_the_room_with_no_stat_block_warns(self):
+        # #827: a creature is there to be fought; with no block the sheet has no numbers.
+        self.note("Gaffer", "creature")
+        self.note("Innkeeper", "npc")
+        rest = "**NPCs**\n- **[[Gaffer]] ×2:** hook\n- **[[Innkeeper]]:** pours\n"
+        rows = rows_for(self.found(self.scene(rest=rest)), "foe-no-numbers")
+        self.assertEqual(len(rows), 1, rows)
+        self.assertIn("Gaffer", rows[0].message)
+        self.assertIn("### Stats", rows[0].message)
+
+    # contingency-foes (#827)
+
+    CONTINGENCY = "### The boat comes in early\n**Trigger:** t\n**Then**\n{then}"
+
+    def test_a_contingencys_own_numbers_for_its_fighters_warn(self):
+        for then in ("- Two cultists: Brawl 35%, Dodge 25%, HP 10, SAN 50; gaff 1D6\n",
+                     "- Stat the two as [[Mickey Dunne]] without the shotgun.\n",
+                     "- Use [[Mickey Dunne]] stats for both.\n",
+                     "- They have [[Mickey Dunne]]'s stats.\n",
+                     "- Each fisherman: HP 11, Fighting (Brawl) 50%, gaff hook 1D6.\n",
+                     "- Stats: use the [[Mickey Dunne]] block without the shotgun.\n"):
+            with self.subTest(then=then):
+                rows = rows_for(self.found(contingency=self.CONTINGENCY.format(then=then)),
+                                "contingency-foes")
+                self.assertEqual(len(rows), 1)
+                self.assertEqual(rows[0].level, "WARNING")
+                self.assertIn("**NPCs**", rows[0].message)
+
+    def test_a_contingency_that_names_its_fighters_is_fine(self):
+        self.note("Hallett Crewman", "npc")
+        then = ("- Stat the two as [[Mickey Dunne]].\n**NPCs**\n"
+                "- **[[Hallett Crewman]] ×2:** take the roof\n")
+        self.assertEqual(rows_for(self.found(contingency=self.CONTINGENCY.format(then=then)),
+                                  "contingency-foes"), [])
+        who = "- HP 10, SAN 50 each.\n**Who:** [[Hallett Crewman]]\n"
+        self.assertEqual(rows_for(self.found(contingency=self.CONTINGENCY.format(then=who)),
+                                  "contingency-foes"), [])
+
+    def test_a_contingency_without_numbers_or_a_planned_scene_with_them_is_not_flagged(self):
+        quiet = ("- The bell rings; SAN 0/1 for anyone who hears it.\n"
+                 "- Spot Hidden 40% or Listen 50% hears the boat first.\n"
+                 "- Spot Hidden 40% finds the corpse; SAN 0/1 on seeing it.\n"
+                 "- The thing rises: SAN 1D6/1D20, POW 70 to look away.\n")
+        self.assertEqual(rows_for(self.found(contingency=self.CONTINGENCY.format(then=quiet)),
+                                  "contingency-foes"), [])
+        crib = self.scene(rest="- Wachter: STR 75, DEX 85, HP 13, Armor 1.\n")
+        self.assertEqual(rows_for(self.found(crib), "contingency-foes"), [])
+
     # no-npcs-block
 
     def test_npc_in_entities_without_a_block_warns(self):

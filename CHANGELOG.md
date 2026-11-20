@@ -10,6 +10,12 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 ---
 
 
+## [1.12.116] — 2026-11-20
+
+### Fixed
+
+- Foes a contingency brings in get a note and a stat block (#827). Session prep gives each kind of foe its own note with a full stat block and lists it under the contingency's **NPCs** with a count, so the run sheet has their fight rows. plan-check warns when a contingency writes its fighters' numbers into the Plan, or points at someone else's ("stat the two as [[Mickey Dunne]]"), and when a creature in a scene has no stat block.
+
 ## [1.12.115] — 2026-11-20
 
 ### Fixed

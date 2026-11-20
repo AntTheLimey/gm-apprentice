@@ -14,11 +14,12 @@ It also warns about what the run sheet reads, each row saying what the sheet wil
 | `place-not-location` | a `**Place:**` line starting with a link to a note that is not a location | the place | link a location note, or write the place in words |
 | `label-form` | a label with a parenthesis inside the bold, such as `**NPCs (who is here)**`, or a block label written as a bullet, such as `- **Treasure:**` (with or without words after it) | the part the label holds, or the whole block | `**NPCs**`, `**Treasure**` at the left margin |
 | `if-table-unlabelled` | a table in a planned scene not under `**If the players...**` | its Do and Then rows | put it under that label |
-| `foe-no-numbers` | a person a scene names whose note only names a stock creature, such as `Commoner (SRD)` | their AC and HP | in a D&D vault, `gma stat-fill "<vault>" "<note>" --write`; elsewhere write the numbers into the note's `### Stats` |
+| `foe-no-numbers` | a person a scene names whose note only names a stock creature, such as `Commoner (SRD)`, or a creature whose note has no stat block | their AC and HP | in a D&D vault, `gma stat-fill "<vault>" "<note>" --write`; elsewhere write the numbers into the note's `### Stats` |
+| `contingency-foes` | a contingency that writes its fighters' numbers in its own lines (`HP 10, SAN 50`, `HP 11, Dodge 25%`) or points at someone else's (`stat the two as [[Mickey Dunne]]`, `use the [[Mickey Dunne]] block`), and names no NPC or creature under `**NPCs**` or `**Who:**` | every fight row when it fires | a note per kind of foe with a `### Stats` block, listed under `**NPCs**` with a count (`- **[[Name]] (2):** ...`) |
 
 `label-form` also flags an older Plan's `**Complications (…)**`-style label as a warning, though `scene-labels` still accepts it.
 
-The note checks (`no-npcs-block`, `hub-place-not-location`, `place-not-location`, `foe-no-numbers`, and `no-place` for a scene note heading) read each note from the vault above the plan; with no vault they are skipped.
+The note checks (`no-npcs-block`, `hub-place-not-location`, `place-not-location`, `foe-no-numbers`, `contingency-foes`, and `no-place` for a scene note heading) read each note from the vault above the plan; with no vault they are skipped.
 
 <!-- BEGIN GENERATED: gma plan-check -->
 Session Plan conformance checks.
