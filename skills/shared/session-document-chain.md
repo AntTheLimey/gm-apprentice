@@ -195,11 +195,12 @@ Every section is a bulleted list (links where a note exists) except
 
 1. `Where everyone ended`
 2. `Stopped in`
-3. `Points landed`
-4. `Tried and missed`
-5. `Overtaken`
-6. `Reached but not landed`
-7. `Not reached`
+3. `Points landed`: Plan points the players took
+4. `Tried and missed`: points the GM tried to land and the players did
+   not take
+5. `Overtaken`: points events made moot
+6. `Reached but not landed`: the beat was reached, its point not taken
+7. `Not reached`: the beat never came up
 8. `Changed since play started`
 9. `Contingencies that fired`
 10. `Improvised beats`
