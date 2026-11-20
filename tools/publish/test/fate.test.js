@@ -1,6 +1,6 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
-const { hiddenFate, isDead } = require('../lib/fate');
+const { hiddenFate, isDead, isDeadBody } = require('../lib/fate');
 
 const note = (bullets, fm = 'status: alive') => `---\ntype: npc\n${fm}\n---\n\n# Tam\n\n## GM Notes\n\n### Behind the Scenes\n\n${bullets}\n\n### Secrets\n\n- **Dead.** not here\n`;
 const S1 = '**[[Session 01 - The Pass]]** — ';
@@ -39,5 +39,13 @@ describe('fate: hidden fate and death', () => {
   });
   it('only death leaves an NPC dead', () => {
     for (const f of ['**Captive, in the ice crypt.**', '**Missing.**']) assert.ok(!isDead(note(`- ${S1}${f}`), { status: 'dead' }));
+  });
+  it('a stub GM Notes above the real one is skipped', () => {
+    const t = '---\ntype: npc\n---\n\n# Tam\n\n## GM Notes\n\n(fill in)\n\n## Elsewhere\n\n## GM Notes\n\n### Behind the Scenes\n\n- **Dead.** Fell.\n';
+    assert.strictEqual(hiddenFate(t), 'Dead.');
+  });
+  it('a body that opens with a thematic break is not stripped a second time', () => {
+    const body = '---\n\nIntro line.\n\n---\n\n## GM Notes\n\n### Behind the Scenes\n\n- **Dead.** Fell.\n';
+    assert.ok(isDeadBody(body, {}));
   });
 });

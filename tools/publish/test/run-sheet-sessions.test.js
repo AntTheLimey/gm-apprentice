@@ -62,6 +62,67 @@ describe('run sheet sessions', () => {
     assert.deepStrictEqual(r.others.map((s) => s.index), [IDX.c2s1]);
   });
 
+  it('a session in progress beats an earlier open one', () => {
+    const dir = copy();
+    fs.rmSync(path.join(dir, LOG));
+    fs.writeFileSync(path.join(dir, 'Chapters/Chapter 2/Sessions/Session 01/Snowmelt Log.md'),
+      '---\ntype: session-table-log\nsession: "[[Session 01 - Snowmelt]]"\n---\n\n## Log\n');
+    const r = pickSession(listSessions(dir));
+    assert.strictEqual(r.session.index, IDX.c2s1);
+    assert.deepStrictEqual(r.others, []);
+  });
+
+  it('two Wrap-Ups naming a session still wrap it up', () => {
+    const dir = copy();
+    const f = path.join(dir, IDX.c1s1);
+    fs.writeFileSync(f, fs.readFileSync(f, 'utf8').replace(/documents:\n {2}wrap_up: .*\n/, ''));
+    fs.writeFileSync(path.join(dir, `${S}Session 01/Session 01 - The Start - Wrap-Up draft.md`),
+      '---\ntype: session_wrap\nsession: "[[Session 01 - The Start]]"\nchapter: "[[Chapter 1]]"\n---\n\n## Recap\n\nA draft.\n');
+    const l = listSessions(dir);
+    assert.strictEqual(l[0].open, false);
+    assert.ok(l[0].wrapUp);
+    assert.strictEqual(pickSession(l).session.index, IDX.c1s2);
+  });
+
+  it('a played session with a Plan and no Wrap-Up stays open', () => {
+    const dir = copy();
+    const f = path.join(dir, IDX.c1s1);
+    fs.rmSync(path.join(dir, `${S}Session 01/Session 01 - The Start - Wrap-Up.md`));
+    fs.writeFileSync(f, fs.readFileSync(f, 'utf8').replace(/documents:\n {2}wrap_up: .*\n/, ''));
+    fs.writeFileSync(path.join(dir, `${S}Session 01/Session 01 - The Start - Plan.md`), '---\ntype: session-plan\nsession: "[[Session 01 - The Start]]"\n---\n\n## Planned Scenes\n');
+    const l = listSessions(dir);
+    assert.strictEqual(l[0].played, true);
+    assert.strictEqual(l[0].open, true);
+  });
+
+  it('--session takes a Windows path and an absolute path inside the vault', () => {
+    assert.strictEqual(pickSession(list, IDX.c1s3.replace(/\//g, '\\'), FIXTURE).session.index, IDX.c1s3);
+    assert.strictEqual(pickSession(list, path.join(FIXTURE, IDX.c1s3), FIXTURE).session.index, IDX.c1s3);
+    assert.strictEqual(pickSession(list, path.join(FIXTURE, list[2].plan), FIXTURE).session.index, IDX.c1s3);
+    assert.ok(pickSession(list, '/elsewhere/Session 03 - Next.md', FIXTURE).error);
+  });
+
+  it('two same-named sessions with no chapter note never share a state id', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rs-sessions-'));
+    made.push(dir);
+    for (const c of ['Alpha', 'Beta']) {
+      const d = path.join(dir, 'Campaign', c, 'Session 01');
+      fs.mkdirSync(d, { recursive: true });
+      fs.writeFileSync(path.join(d, 'Session 01.md'), '---\ntype: session\nsession_number: 1\nstatus: planned\n---\n\n# Session 01\n');
+    }
+    const l = listSessions(dir);
+    assert.strictEqual(l.length, 2);
+    assert.notStrictEqual(stateIdOf(l[0]), stateIdOf(l[1]));
+  });
+
+  it('the chapter comes from the build rule, the chapter folder, when chapter: is missing', () => {
+    const dir = copy();
+    const f = path.join(dir, IDX.c2s1);
+    fs.writeFileSync(f, fs.readFileSync(f, 'utf8').replace('chapter: "[[Chapter 2]]"\n', ''));
+    const l = listSessions(dir);
+    assert.strictEqual(l.find((s) => s.index === IDX.c2s1).chapter, 'Chapters/Chapter 2/Chapter 2.md');
+  });
+
   it('a wrapped-up session is refused verbatim', () => {
     assert.deepStrictEqual(pickSession(list, 'Session 01 - The Start'),
       { error: 'Session 1 is wrapped up; its record is the Table Log note.' });

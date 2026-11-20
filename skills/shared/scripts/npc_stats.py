@@ -423,14 +423,18 @@ def played_npcs(notes: Notes) -> set[str]:
 # dead is the publish tool's rule (`lib/fate.js`, #788): the run sheet reads
 # the same one, so the two never differ. Asked through `lines`, the way
 # moments.py asks for moments. When the tool cannot be asked, `status` alone
-# decides, and this says so once.
+# decides, and this says so once. The first failure is remembered: the tool
+# is not asked again for the rest of the run (a broken install would
+# otherwise cost one process start per NPC).
 _FATE_WARNED = False
 
 
 def _ask_fate(text: str) -> dict[str, Any] | None:
     """The tool's answer {fate, dead} for a note, or None when it cannot be
-    asked (said once on stderr)."""
+    asked (said once on stderr, and not asked again after that)."""
     global _FATE_WARNED
+    if _FATE_WARNED:
+        return None
     try:
         answer = vl.PUBLISH_LINES.ask({"op": "fate", "text": text})
         if isinstance(answer.get("dead"), bool) and "fate" in answer:
@@ -438,11 +442,10 @@ def _ask_fate(text: str) -> dict[str, Any] | None:
         why = "the tool's answer was not understood"
     except vl.PublishToolUnavailable as e:
         why = str(e)
-    if not _FATE_WARNED:
-        _FATE_WARNED = True
-        print("npc_stats: hidden fates not read (could not ask the publish "
-              f"tool: {why}); status alone decides who is dead",
-              file=sys.stderr)
+    _FATE_WARNED = True
+    print("npc_stats: hidden fates not read (could not ask the publish "
+          f"tool: {why}); status alone decides who is dead",
+          file=sys.stderr)
     return None
 
 
@@ -460,7 +463,7 @@ def is_dead(text: str, fm: dict[str, Any]) -> bool:
     which beats `status`, what the players know); else its `status` does.
     The publish tool decides; without it, `status` alone does."""
     answer = _ask_fate(text)
-    if answer is not None:
+    if answer is not None and answer["fate"] is not None:
         return answer["dead"]
     return str(fm.get("status", "")).strip().lower() == "dead"
 

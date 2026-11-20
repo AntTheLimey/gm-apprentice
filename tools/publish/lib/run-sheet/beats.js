@@ -138,7 +138,11 @@ function readBeats(planBody, index) {
   };
   // A note whose person is dead: its hidden fate says so, else its `status` (lib/fate.js, the one rule, #788).
   // An NPCs line, a Who line or a place bullet naming one keeps them, marked `dead`, with a `dead-in-scene` warning.
-  const isDeadNote = (p) => Boolean(p) && index.has(p) && fate.isDead(index.read(p).body, index.read(p).fm);
+  const isDeadNote = (p) => {
+    if (!p || !index.has(p)) return false;
+    const note = index.read(p);
+    return fate.isDeadBody(note.body, note.fm);
+  };
   const typeOf = (p) => (p ? nameKey(index.read(p).fm.type) : '');
 
   const claimed = {};

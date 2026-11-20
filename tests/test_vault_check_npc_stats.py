@@ -671,9 +671,6 @@ class StockRowsTests(unittest.TestCase):
         self.assertEqual(run([str(root), "names", "--stock"])[0], 2)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
 
 class HiddenFateAsksTheTool(unittest.TestCase):
     """#788: the hidden-fate rule is the publish tool's; is_dead asks it."""
@@ -717,3 +714,26 @@ class HiddenFateAsksTheTool(unittest.TestCase):
         npc_stats.vl.PUBLISH_LINES.ask = lambda request: {"kinds": []}
         with contextlib.redirect_stderr(io.StringIO()):
             self.assertTrue(npc_stats.is_dead("x", {"status": "dead"}))
+
+    def test_a_tool_that_failed_is_not_asked_again(self):
+        calls = []
+
+        def ask(request):
+            calls.append(request)
+            raise npc_stats.vl.PublishToolUnavailable("no node")
+        npc_stats.vl.PUBLISH_LINES.ask = ask
+        with contextlib.redirect_stderr(io.StringIO()):
+            for _ in range(3):
+                npc_stats.is_dead("x", {"status": "alive"})
+            npc_stats.hidden_fate("x")
+        self.assertEqual(len(calls), 1)
+
+    def test_no_fate_in_the_answer_leaves_status_to_the_callers_note(self):
+        npc_stats.vl.PUBLISH_LINES.ask = lambda request: {
+            "fate": None, "dead": False}
+        self.assertTrue(npc_stats.is_dead("x", {"status": "dead"}))
+        self.assertFalse(npc_stats.is_dead("x", {"status": "alive"}))
+
+
+if __name__ == "__main__":
+    unittest.main()

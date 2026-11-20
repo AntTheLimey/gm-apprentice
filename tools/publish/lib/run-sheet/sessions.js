@@ -6,7 +6,8 @@
 const path = require('node:path');
 const pt = require('./plan-text');
 const { buildIndex, stemOf } = require('./notes');
-const { orderedSessions } = require('../story-spine');
+const { orderedSessions, chapterOfSession } = require('../story-spine');
+const { publishedWrapUpFor } = require('../session-hub');
 const { displayTitleOf } = require('../scanner');
 const { canonicalNfc } = require('../unicode');
 const { SESSION_PLAYED, WRAP_UP_TYPES } = require('../shared-lists');
@@ -50,14 +51,30 @@ function tableLogOf(index, sessionPath) {
   return { log, warning: null };
 }
 
-// A record of one kind: the `documents.<key>` link when it resolves, else the one note of `types`
-// whose `session:` names the session.
-function recordOf(index, sessionPath, key, types) {
-  const t = fmTarget(docsOf(index, sessionPath)[key]);
+// The notes of `types` whose `session:` names the session.
+const claimants = (index, sessionPath, types) => index.notes()
+  .filter((n) => types.has(low(fmOf(index, n).type)) && index.resolve(fmTarget(fmOf(index, n).session) || null) === sessionPath);
+
+// The session's Plan: the `documents.plan` link when it resolves, else the one session-plan note naming the session.
+function planOf(index, sessionPath) {
+  const t = fmTarget(docsOf(index, sessionPath).plan);
   const hit = t ? index.resolve(t) : null;
   if (hit) return hit;
-  const named = index.notes().filter((n) => types.has(low(fmOf(index, n).type)) && index.resolve(fmTarget(fmOf(index, n).session) || null) === sessionPath);
+  const named = claimants(index, sessionPath, new Set(['session-plan']));
   return named.length === 1 ? named[0] : null;
+}
+
+// The session's Wrap-Up, by the build's own pairing rule (lib/session-hub.js, the one rule), run over every
+// Wrap-Up in the vault whether it publishes or not. Two Wrap-Ups naming one session leave the pairing
+// unsure which is the record, not whether the session is wrapped up: it still counts, by the first.
+function wrapUpOf(index, sessionPath, pages) {
+  const page = pages.find((pg) => pg.rel === sessionPath);
+  const paired = page ? publishedWrapUpFor(page, pages) : null;
+  if (paired) return paired.rel;
+  const t = fmTarget(docsOf(index, sessionPath).wrap_up);
+  const hit = t ? index.resolve(t) : null;
+  if (hit) return hit;
+  return claimants(index, sessionPath, WRAP_UP_TYPES)[0] || null;
 }
 
 const numberOf = (fm, stem) => {
@@ -71,22 +88,21 @@ const numberOf = (fm, stem) => {
 function listSessions(vaultPath, { deps, index } = {}) {
   const idx = index || buildIndex(vaultPath, { deps });
   const pages = idx.notes().map((p) => ({
-    title: stemOf(p), displayTitle: displayTitleOf(fmOf(idx, p), stemOf(p)), frontmatter: fmOf(idx, p), sourcePath: path.join(vaultPath, p), rel: p,
+    title: stemOf(p), vaultPath: p.replace(/\.md$/i, ''), displayTitle: displayTitleOf(fmOf(idx, p), stemOf(p)), frontmatter: fmOf(idx, p), sourcePath: path.join(vaultPath, p), rel: p,
   }));
-  const planTypes = new Set(['session-plan']);
   return orderedSessions(pages).map((pg) => {
     const p = pg.rel;
     const fm = fmOf(idx, p);
-    const chapterTarget = fmTarget(fm.chapter);
+    const chapterPage = chapterOfSession(pg, pages);
     const number = numberOf(fm, stemOf(p));
     const title = pg.displayTitle || stemOf(p);
-    const plan = recordOf(idx, p, 'plan', planTypes);
-    const wrapUp = recordOf(idx, p, 'wrap_up', WRAP_UP_TYPES);
+    const plan = planOf(idx, p);
+    const wrapUp = wrapUpOf(idx, p, pages);
     return {
       index: p,
       title,
       number,
-      chapter: chapterTarget ? idx.resolve(chapterTarget) : null,
+      chapter: chapterPage ? chapterPage.rel : null,
       plan,
       wrapUp,
       tableLog: tableLogOf(idx, p).log,
@@ -98,10 +114,16 @@ function listSessions(vaultPath, { deps, index } = {}) {
 }
 
 // Which session to run. `asked` is an index stem, an index path, a Plan path, or a name two sessions may share.
-function pickSession(sessions, asked) {
+// `vaultPath`, when given, lets an absolute path name a session inside the vault.
+function pickSession(sessions, asked, vaultPath) {
   if (asked) {
-    const q = low(asked).replace(/\.md$/, '');
-    const norm = (s) => low(s).replace(/\.md$/, '').replace(/\bsession\s+0*(\d+)\b/, 'session $1');
+    let wanted = String(asked).trim().replace(/\\/g, '/');
+    if (vaultPath && (path.posix.isAbsolute(wanted) || path.win32.isAbsolute(wanted))) {
+      const rel = path.relative(vaultPath, wanted.replace(/\//g, path.sep)).split(path.sep).join('/');
+      if (rel && !rel.startsWith('..') && !path.isAbsolute(rel)) wanted = rel;
+    }
+    const q = low(wanted).replace(/\.md$/, '');
+    const norm = (s) => low(s).replace(/\\/g, '/').replace(/\.md$/, '').replace(/\bsession\s+0*(\d+)\b/, 'session $1');
     const exact = sessions.filter((s) => [s.index, s.plan, stemOf(s.index)].some((v) => v && norm(v) === norm(q)));
     const near = sessions.filter((s) => {
       const stem = norm(stemOf(s.index));
@@ -125,9 +147,10 @@ function pickSession(sessions, asked) {
 
 const slug = (s) => canonicalNfc(String(s || '')).normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'x';
 
-// The state file's name: chapter stem and session index stem, so two Session 01s in two chapters differ.
+// The state file's name: chapter stem (the session's folder when it has no chapter) and session index stem, so two Session 01s in two chapters differ.
 function stateIdOf(session) {
-  return `${session.chapter ? slug(stemOf(session.chapter)) : 'no-chapter'}--${slug(stemOf(session.index))}`;
+  const where = session.chapter ? slug(stemOf(session.chapter)) : slug(path.posix.dirname(session.index));
+  return `${where}--${slug(stemOf(session.index))}`;
 }
 
 module.exports = { listSessions, pickSession, tableLogOf, isPlayed, stateIdOf };

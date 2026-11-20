@@ -38,17 +38,18 @@ function behindTheScenes(lines) {
     const next = heads.find((x) => x.at > h.at && x.level <= h.level);
     return next ? next.at : lines.length;
   };
-  const gm = heads.find((h) => h.title === 'gm notes');
-  if (!gm) return null;
-  const gmEnd = endOf(gm);
-  const bts = heads.find((h) => h.at > gm.at && h.at < gmEnd && h.level > gm.level && h.title === 'behind the scenes');
-  if (!bts) return null;
-  return lines.slice(bts.at + 1, endOf(bts));
+  // Any `GM Notes` heading: the first one that holds a `Behind the Scenes` section (a stub above the real one is skipped).
+  for (const gm of heads.filter((h) => h.title === 'gm notes')) {
+    const gmEnd = endOf(gm);
+    const bts = heads.find((h) => h.at > gm.at && h.at < gmEnd && h.level > gm.level && h.title === 'behind the scenes');
+    if (bts) return lines.slice(bts.at + 1, endOf(bts));
+  }
+  return null;
 }
 
-// The note's current hidden fate (the words inside the bold), or null when it has none.
-function hiddenFate(text) {
-  const lines = bodyOf(String(text).replace(/\r\n?/g, '\n')).split('\n');
+// The current hidden fate (the words inside the bold) of a note's BODY, frontmatter already gone; null when none.
+function hiddenFateOfBody(body) {
+  const lines = String(body).replace(/\r\n?/g, '\n').trim().split('\n');
   const section = behindTheScenes(lines);
   if (!section) return null;
   let fate = null;
@@ -62,11 +63,15 @@ function hiddenFate(text) {
   return fate;
 }
 
+// The same for a whole note's text, frontmatter and all.
+const hiddenFate = (text) => hiddenFateOfBody(bodyOf(String(text).replace(/\r\n?/g, '\n')));
+
 // Is the NPC dead? Its hidden fate says so when it has one; else its frontmatter `status` does.
-function isDead(text, fm) {
-  const fate = hiddenFate(text);
+function isDeadBody(body, fm) {
+  const fate = hiddenFateOfBody(body);
   if (fate !== null) return DEAD.test(fate);
   return String((fm && fm.status) || '').trim().toLowerCase() === 'dead';
 }
+const isDead = (text, fm) => isDeadBody(bodyOf(String(text).replace(/\r\n?/g, '\n')), fm);
 
-module.exports = { hiddenFate, isDead };
+module.exports = { hiddenFate, hiddenFateOfBody, isDead, isDeadBody };
