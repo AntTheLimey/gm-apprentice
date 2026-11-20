@@ -43,3 +43,25 @@ test('an HTML comment or a hidden block in a frontmatter value is in no built fi
     assert.ok(index.includes('Clerk of works'));
   } finally { v.cleanup(); }
 });
+
+test('unmasked_name and unmasked_portrait never reach a page and the picture is not copied', () => {
+  const v = buildVault({
+    'People/Pedlar.md': '---\ntype: npc\noccupation: Pedlar\nportrait: "_attachments/pedlar.png"\n'
+      + 'unmasked_name: "Captain Rook"\nunmasked_portrait: "_attachments/true-face.png"\n---\nSells ribbons.\n',
+    '_attachments/pedlar.png': 'png',
+    '_attachments/true-face.png': 'png',
+  });
+  try {
+    const all = everything(v);
+    for (const word of ['Captain Rook', 'unmasked', 'true-face']) assert.ok(!all.includes(word), `${word} is published`);
+    assert.ok(v.read('people', 'pedlar.html').includes('Pedlar'));
+    const files = [];
+    (function walk(dir) {
+      for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+        if (e.isDirectory()) walk(path.join(dir, e.name)); else files.push(e.name);
+      }
+    })(path.join(v.root, 'docs'));
+    assert.ok(files.includes('pedlar.png'), `the portrait itself is copied: ${files.join(', ')}`);
+    assert.ok(!files.some((f) => f.startsWith('true-face')), 'the unmasked face is not');
+  } finally { v.cleanup(); }
+});

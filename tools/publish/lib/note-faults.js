@@ -7,12 +7,15 @@
 //   COMMENT_STRAY   a `%%` that is not a comment (unclosed, or straight after a number);
 //                   in a frontmatter value, also a comment or hidden block never closed
 //   FENCE_UNCLOSED  a code fence never closed, so a hidden marker below it is not obeyed
-//   ALIAS_IN_PROSE  a `gm_aliases` name printed on a published page
+//   ALIAS_IN_PROSE  a `gm_aliases` name (or a disguised NPC's `unmasked_name`) printed on a published page
 //   WITHHELD_IN_PROSE    the file name, title or alias of a note marked `withheld: true`,
 //                        printed on a published page, in the search index or in the file
 //                        name of a copied attachment (#291)
 //   WITHHELD_NAME_PUBLIC a withheld name that a published page also answers to, which so
 //                        cannot be searched for
+//   ALIAS_NAME_PUBLIC    a `gm_aliases` or `unmasked_name` name that a published page also answers to, which so
+//                        cannot be searched for (a name the note only lists in its own `aliases` is still searched)
+//   UNMASKED_NAME_UNREAD an `unmasked_name` that is there but names no one (`"[[]]"`), so no true name is searched
 //   WITHHELD_PUBLISHED   a note marked `withheld: true` that the site publishes (an error)
 //   WITHHELD_FLAG_UNREADABLE  a `withheld:` value that is not true or false (read as false)
 //   COMPANION_FLAG_UNREADABLE a `companion:` value that is not true or false (read as false: the note may be
@@ -72,13 +75,13 @@ const { canonicalNfc } = require('./unicode');
 const { isAgentFile } = require('./agent-files');
 const { SWITCH_WORDS } = require('./settings/types');
 const { decidePage, publishesPage } = require('./publish-decision');
-const { gmAliasList, nameList, gmAliasKey, wikiTargetLabel, humanizeName, isWithheld } = require('./processor');
+const { gmAliasList, unmaskedNames, unmaskedNameUnread, noteSecretNames, nameList, gmAliasKey, wikiTargetLabel, humanizeName, isWithheld } = require('./processor');
 const { kindOfType } = require('./kind-label');
 const { STORY_SUFFIX } = require('./scanner');
 const { NO_PAGE_TYPES } = require('./excluding-values');
 const { decodeEntities } = require('./templates/gurps/tables');
 
-const CODES = ['ALIAS_IN_PROSE', 'NEVER_SHOW_IN_PROSE', 'WITHHELD_PUBLISHED', 'WITHHELD_IN_PROSE', 'WITHHELD_NAME_PUBLIC', 'WITHHELD_FLAG_UNREADABLE', 'COMPANION_FLAG_UNREADABLE', 'FENCE_UNCLOSED', 'COMMENT_STRAY', 'NAMED_NO_PAGE', 'TOHIT_UNREAD', 'SKILL_BELOW_BASE', 'HEADING_IN_HIDDEN_BLOCK', 'TABLE_OVERWIDE', 'PROP_NOT_COPIED', 'MOMENT_KIND_UNKNOWN', 'UNFILLED_PLACEHOLDER', 'CHAPTER_STATUS_UNKNOWN', 'CHAPTER_NO_TEASER', 'CHAPTER_ACTIVE_MANY', 'CHAPTER_PLANNED_PLAYED', 'CHAPTER_TITLE_SHARED', 'SESSION_NO_CHAPTER', 'CHAPTER_REF_UNSHOWN', 'PCS_ADDRESS'];
+const CODES = ['ALIAS_IN_PROSE', 'NEVER_SHOW_IN_PROSE', 'WITHHELD_PUBLISHED', 'WITHHELD_IN_PROSE', 'WITHHELD_NAME_PUBLIC', 'ALIAS_NAME_PUBLIC', 'UNMASKED_NAME_UNREAD', 'WITHHELD_FLAG_UNREADABLE', 'COMPANION_FLAG_UNREADABLE', 'FENCE_UNCLOSED', 'COMMENT_STRAY', 'NAMED_NO_PAGE', 'TOHIT_UNREAD', 'SKILL_BELOW_BASE', 'HEADING_IN_HIDDEN_BLOCK', 'TABLE_OVERWIDE', 'PROP_NOT_COPIED', 'MOMENT_KIND_UNKNOWN', 'UNFILLED_PLACEHOLDER', 'CHAPTER_STATUS_UNKNOWN', 'CHAPTER_NO_TEASER', 'CHAPTER_ACTIVE_MANY', 'CHAPTER_PLANNED_PLAYED', 'CHAPTER_TITLE_SHARED', 'SESSION_NO_CHAPTER', 'CHAPTER_REF_UNSHOWN', 'PCS_ADDRESS'];
 // The Story's chapter bookkeeping: one closing line for all of them.
 const CHAPTER_CODES = new Set(CODES.slice(CODES.indexOf('CHAPTER_STATUS_UNKNOWN'), CODES.indexOf('CHAPTER_REF_UNSHOWN') + 1));
 const WORST = 3;
@@ -290,9 +293,9 @@ function fileLine(readFile, abs, source, bodyLine) {
 }
 
 /**
- * The secret names of a vault and how to look for them: every gm_aliases name and the names of the notes marked
- * withheld, with the matcher for each. Shared by the build's note audit and by the leak gate, which runs it over the
- * finished folder.
+ * The secret names of a vault and how to look for them: every gm_aliases name, every disguised NPC's unmasked_name,
+ * and the names of the notes marked withheld, with the matcher for each. Shared by the build's note audit and by the
+ * leak gate, which runs it over the finished folder.
  *
  * @param {object} input
  * @param {object[]} input.notes          scanAllNotes(vaultPath)
@@ -301,7 +304,8 @@ function fileLine(readFile, abs, source, bodyLine) {
  *   it puts there (the leak gate: its page, then its prop's files)
  * @param {object} input.linkMap          the link map of the published pages
  * @returns {{names: object[], probe: RegExp|null, mayHold: function, secretKeys: Set<string>, collisions: object[],
- *   publishedWithheld: object[], unreadableFlags: object[], publicNames: Set<string>}}
+ *   aliasCollisions: object[], publishedWithheld: object[], unreadableFlags: object[], unreadUnmasked: object[],
+ *   publicNames: Set<string>, privateNames: Set<string>}}
  */
 function secretNamesOf(input) {
   const secretKeys = new Set();
@@ -310,6 +314,7 @@ function secretNamesOf(input) {
   const publishedWithheld = [];       // withheld notes the site publishes: { rel, out } (out as outOf gives it)
   const unreadableFlags = [];         // notes whose `withheld:` is neither true nor false: { rel, value }
   const unreadableCompanions = [];    // notes whose `companion:` is neither true nor false: { rel, value }
+  const unreadUnmasked = [];          // notes whose `unmasked_name` is there but names no one: { rel, value }
   for (const note of input.notes) {
     const rel = noteRel(note);
     // Names are read from the note as it is on disk: a published page's own frontmatter has
@@ -317,8 +322,14 @@ function secretNamesOf(input) {
     const fm = note.frontmatter || {};
     for (const alias of gmAliasList(fm)) {
       secretKeys.add(gmAliasKey(alias));
-      if (!aliasOwners.has(fold(alias))) aliasOwners.set(fold(alias), { alias, rel });
+      if (!aliasOwners.has(fold(alias))) aliasOwners.set(fold(alias), { alias, rel, field: 'gm_aliases' });
     }
+    // A disguised NPC's true name is searched as a gm_aliases name is; it resolves no link, so it is no secret key.
+    for (const alias of unmaskedNames(fm)) {
+      if (!aliasOwners.has(fold(alias))) aliasOwners.set(fold(alias), { alias, rel, field: 'unmasked_name' });
+    }
+    const unread = unmaskedNameUnread(fm);
+    if (unread !== null) unreadUnmasked.push({ rel, value: unread });
     // A withheld note's own names: its file name, its title and its aliases (its gm_aliases
     // are searched as every gm_aliases name is).
     if (Object.prototype.hasOwnProperty.call(fm, 'withheld') && !flagReadable(fm.withheld)) unreadableFlags.push({ rel, value: fm.withheld });
@@ -336,7 +347,32 @@ function secretNamesOf(input) {
   }
 
   const publicNames = new Set(Object.keys(input.linkMap).map(fold));
-  for (const key of [...aliasOwners.keys()]) if (publicNames.has(key)) aliasOwners.delete(key);
+  // A secret name a note also lists under its own `aliases` (so a link to it resolves in Obsidian) is in the link
+  // map, but it is no public name: the site takes it out of `aliases` (publishedFrontmatter), and a link to it prints
+  // the owner's public name (gm_aliases) or the name as plain text (unmasked_name, then a finding), so it is searched
+  // like any secret (#796). Only a name a published page really
+  // answers to (its file name, its path, an alias that is not its own secret) is public.
+  const ownSecretAliases = new Set();
+  const answered = new Set();
+  for (const note of input.notes) {
+    const fm = note.frontmatter || {};
+    const rel = noteRel(note);
+    const secret = new Set(noteSecretNames(fm).map(fold));
+    for (const a of nameList(fm.aliases)) if (secret.has(fold(a))) ownSecretAliases.add(fold(a));
+    if (!input.publishedRels.has(rel)) continue;
+    answered.add(fold(baseName(rel))).add(fold(rel.replace(/\.md$/i, '')));
+    for (const a of nameList(fm.aliases)) if (!secret.has(fold(a))) answered.add(fold(a));
+  }
+  const privateNames = new Set([...ownSecretAliases].filter((k) => !answered.has(k)));
+  for (const key of privateNames) publicNames.delete(key);
+  // A secret name a published page answers to is on the site already, so it cannot be searched for: it is told once
+  // (ALIAS_NAME_PUBLIC) and left out of the search.
+  const aliasCollisions = [];
+  for (const [key, owner] of [...aliasOwners]) {
+    if (!publicNames.has(key)) continue;
+    aliasCollisions.push({ ...owner, key });
+    aliasOwners.delete(key);
+  }
   // A withheld name a published page also answers to is on the site already, so it cannot
   // be searched for: it is told once (WITHHELD_NAME_PUBLIC) and left out of the search. A
   // name gm_aliases already searches is that search's.
@@ -368,12 +404,15 @@ function secretNamesOf(input) {
   const HIDDEN_CHAR = /[\u200b-\u200d\u2060\ufeff\u00ad]|&(?:shy|ZeroWidthSpace|NoBreak|#\d+|#x[0-9a-f]+);/i;
   const COMBINING = /[\u0300-\u036f]/;
   const mayHold = (html) => probe.test(html) || ((HIDDEN_CHAR.test(html) || COMBINING.test(html)) && probe.test(foldQuotes(decodeAll(String(html)))));
-  return { names, probe, mayHold, secretKeys, collisions, publishedWithheld, unreadableFlags, unreadableCompanions, publicNames };
+  return { names, probe, mayHold, secretKeys, collisions, aliasCollisions, publishedWithheld, unreadableFlags, unreadableCompanions, unreadUnmasked, publicNames, privateNames };
 }
 
 // The words that are a public name of the site (a page's name or title): a link to one prints it, so it is no leak.
-function publicWordsOf(linkMap, published) {
-  const set = new Set(Object.keys(linkMap).map((k) => fold(foldQuotes(k))));
+// `privateNames` (secretNamesOf): link-map keys that are a note's own secret name, which no link prints.
+function publicWordsOf(linkMap, published, privateNames = new Set()) {
+  // Both sides with their quotes straightened: a private `Captain O’Rook` must drop the key it is.
+  const priv = new Set([...privateNames].map((k) => fold(foldQuotes(k))));
+  const set = new Set(Object.keys(linkMap).map((k) => fold(foldQuotes(k))).filter((k) => !priv.has(k)));
   for (const page of published) set.add(fold(foldQuotes(page.displayTitle || '')));
   return set;
 }
@@ -481,7 +520,7 @@ function findSecretNames(html, names, { publicWords, holders = null, listing = f
     const start = Math.max(text.lastIndexOf('\n', at) + 1, at - CONTEXT);
     const stop = Math.min(...[text.indexOf('\n', at), at + matches[0][0].length + CONTEXT, text.length].filter((x) => x >= 0));
     hits.push({
-      kind: a.kind, alias: a.alias, owner: a.rel, re: a.re, count,
+      kind: a.kind, alias: a.alias, owner: a.rel, re: a.re, count, field: a.field,
       // A one-word name the page also writes in lower case reads as an everyday word there (#454).
       lowerCase: a.re.oneWord && matches.some((m) => /^\p{Ll}/u.test(m.groups.last)),
       context: clip(text.slice(start, stop).replace(/[\u0002\u0003]/g, '').trim(), 2 * CONTEXT + a.alias.length),
@@ -531,7 +570,7 @@ function startNoteAudit(input) {
     unmapped: new Set(input.report.unmapped.map((u) => canonicalNfc(u.dir))),
   };
   const secrets = secretNamesOf({ notes: input.notes, publishedRels, outOf: (rel) => (scanned.get(rel) || {}).outputPath, linkMap: input.linkMap, neverShow: input.publishConfig.never_show });
-  const { secretKeys, collisions, publishedWithheld, unreadableFlags, unreadableCompanions = [], probe, mayHold, publicNames } = secrets;
+  const { secretKeys, collisions, aliasCollisions, publishedWithheld, unreadableFlags, unreadableCompanions = [], unreadUnmasked, probe, mayHold, publicNames, privateNames } = secrets;
   const secretNames = secrets.names;
   for (const note of input.notes) {
     const rel = noteRel(note);
@@ -715,7 +754,7 @@ function startNoteAudit(input) {
   let holders;
   const publicWords = () => {
     if (publicSet === null) {
-      publicSet = publicWordsOf(input.linkMap, input.published);
+      publicSet = publicWordsOf(input.linkMap, input.published, privateNames);
       // A link to a public name that holds a secret name ("Rook Hollow", the GM alias "Rook"), flattened in a
       // pull-quote, is the public name (#797).
       holders = holdersOf(secretNames, publicSet);
@@ -798,7 +837,7 @@ function startNoteAudit(input) {
     // ordinary use of it is a row, and rewording each would be endless. The name has to go: a file name by renaming
     // the note, a title or alias by taking it off (a title adds a name to look for; it never replaces the file name).
     const everyday = new Set(secretHits.filter((h) => h.kind === 'withheld' && h.lowerCase).map((h) => h.alias));
-    const fixLine = (alias, owner, file) => {
+    const fixLine = (alias, owner, file, field) => {
       if (file) return `rename the file, and the embeds that name it, so that its name does not hold "${alias}"`;
       if (never) return `reword it, or move it into a part of the note players do not see (a GM Notes section, a gm-only block); deploy stops while the player site shows it. If the word no longer needs guarding, take it off player_site.never_show`;
       if (withheld && everyday.has(alias)) {
@@ -810,11 +849,14 @@ function startNoteAudit(input) {
       if (withheld) {
         return `reword it to a name the players know, in the text or in the frontmatter field or title that holds it; or, in the text, link the note ([[${alias}]]): a link with no label of its own prints a neutral word (${[...new Set(Object.values(input.publishConfig.withheld_words))].join(', ')}) in place of a withheld note's name; where it is an ordinary word and not the name, the finding stays until the note is no longer marked withheld`;
       }
+      if (field === 'unmasked_name') return `reword it to the public name, in the text or in the frontmatter field or title that holds it, until wrap-up unmasks ${owner} (gma reveal --unmask)`;
       return `reword it to the public name, in the text or in the frontmatter field or title that holds it; or, in the text, link the name ([[${alias}]]): the build prints the page's public title for a linked GM alias`;
     };
     const told = (hit, rel) => (never ? `"${hit.alias}", a word you listed under player_site.never_show` : withheld
       ? `"${hit.alias}", the name of ${hit.owner === rel ? 'this note, which you marked withheld' : `a note you marked withheld (${hit.owner})`}`
-      : `"${hit.alias}", a name you keep secret in gm_aliases${hit.owner === rel ? '' : ` (of ${hit.owner})`}`);
+      : `"${hit.alias}", a name you keep secret in ${hit.field || 'gm_aliases'}${hit.owner === rel ? '' : ` (of ${hit.owner})`}`);
+    // A finding for a disguised NPC's true name says so, for the build's summary line.
+    const unmaskedField = (hit) => (hit.field === 'unmasked_name' ? { field: 'unmasked_name' } : {});
     const base = (hit) => (never ? { word: hit.alias } : withheld ? { name: hit.alias, ...(everyday.has(hit.alias) ? { everyday: true } : {}) } : { alias: hit.alias });
     const hits = secretHits.filter((h) => h.kind === kind);
     for (const hit of hits.filter((h) => h.out === null)) {
@@ -827,8 +869,8 @@ function startNoteAudit(input) {
           ? `${told(hit, hit.rel)}, is in the file name of an attachment the site copies`
           : hit.where === 'address' ? `${told(hit, hit.rel)}, is in the address of a link on the page`
             : `${told(hit, hit.rel)}, is printed on ${hit.where}${hit.count > 1 ? ` ${hit.count} times` : ''}`,
-        fix: fixLine(hit.alias, hit.owner, hit.where === 'file'),
-        ...base(hit), owner: hit.owner, count: hit.count, context: hit.context, listings: [],
+        fix: fixLine(hit.alias, hit.owner, hit.where === 'file', hit.field),
+        ...base(hit), ...unmaskedField(hit), owner: hit.owner, count: hit.count, context: hit.context, listings: [],
       });
     }
     const listed = hits.filter((h) => h.out !== null);
@@ -866,10 +908,10 @@ function startNoteAudit(input) {
             code, severity: 'warning', path: rel,
             detail: named ? (sources.length > 0 ? `${named} is in this note's title, frontmatter or text, and an index or listing page prints it` : `${named} is printed on this page of the site, which is not built from one note`)
               : sources.length > 0
-              ? `"${hit.alias}", ${withheld ? `the name of ${hit.owner === rel ? 'this note, which you marked withheld' : `${secret} (${hit.owner})`}` : `a name you keep secret in gm_aliases${hit.owner === rel ? '' : ` (of ${hit.owner})`}`}, is in this note's title, frontmatter or text, and an index or listing page prints it`
-              : `"${hit.alias}", ${withheld ? `the name of ${secret} (${hit.owner})` : `a name you keep secret in gm_aliases (of ${hit.owner})`}, is printed on this page of the site, which is not built from one note`,
-            fix: fixLine(hit.alias, hit.owner, false),
-            ...base(hit), owner: hit.owner, count: hit.count, context: hit.context, listings: [],
+              ? `"${hit.alias}", ${withheld ? `the name of ${hit.owner === rel ? 'this note, which you marked withheld' : `${secret} (${hit.owner})`}` : `a name you keep secret in ${hit.field || 'gm_aliases'}${hit.owner === rel ? '' : ` (of ${hit.owner})`}`}, is in this note's title, frontmatter or text, and an index or listing page prints it`
+              : `"${hit.alias}", ${withheld ? `the name of ${secret} (${hit.owner})` : `a name you keep secret in ${hit.field || 'gm_aliases'} (of ${hit.owner})`}, is printed on this page of the site, which is not built from one note`,
+            fix: fixLine(hit.alias, hit.owner, false, hit.field),
+            ...base(hit), ...unmaskedField(hit), owner: hit.owner, count: hit.count, context: hit.context, listings: [],
           });
         }
         const finding = out.get(key);
@@ -961,6 +1003,29 @@ function startNoteAudit(input) {
         detail: `"${c.alias}" is withheld, but ${pageRel ? `the published page ${pageRel}` : 'a published page'} answers to the same name, so it is not looked for on the site`,
         fix: `take withheld: true off this note, or give ${pageRel || 'the published page'} another title or alias`,
         name: c.alias, owner: c.rel, page: pageRel,
+      });
+    }
+    for (const c of aliasCollisions) {
+      const answers = Object.entries(input.linkMap).find(([key]) => fold(key) === c.key);
+      const answering = answers ? input.published.find((p) => p.outputPath === answers[1]) : null;
+      const pageRel = answering ? input.relOf(answering) : null;
+      const kept = c.field === 'unmasked_name' ? 'the true name in unmasked_name' : 'a name kept secret in gm_aliases';
+      found.push({
+        code: 'ALIAS_NAME_PUBLIC', severity: 'warning', path: c.rel,
+        detail: `"${c.alias}", ${kept}, is also the name of ${pageRel ? `the published page ${pageRel}` : 'a published page'}, so it is not looked for on the site`,
+        // A name that is the page's own file name or path stays its name whatever its title or aliases say.
+        fix: `if the name is a secret, ${pageRel && [fold(baseName(pageRel)), fold(pageRel.replace(/\.md$/i, ''))].includes(c.key)
+          ? `rename ${pageRel} (campaign-qa offers to rename it, links included)`
+          : `give ${pageRel || 'the published page'} another title or alias`}; if it is not, take it out of ${c.field}`,
+        name: c.alias, field: c.field, owner: c.rel, page: pageRel,
+      });
+    }
+    for (const u of unreadUnmasked) {
+      found.push({
+        code: 'UNMASKED_NAME_UNREAD', severity: 'warning', path: u.rel,
+        detail: `unmasked_name holds ${u.value}, which names no one, so no true name is looked for on the site`,
+        fix: 'write the true name as plain text, or as one [[link]] to its note',
+        value: u.value,
       });
     }
     // A withheld note the site publishes: one error for the contradiction. The build does not
@@ -1183,15 +1248,26 @@ function summaryLines(findings) {
       lines.push(`${k} ${plural(k, 'prop', 'props')} could not be put on the site as asked (${worst.join(', ')}) — ${where} ${plural(k, 'it', 'these')}.`);
     } else if (code === 'PCS_ADDRESS') {
       continue;   // the build said it per folder as it went, with the fix
+    } else if (code === 'ALIAS_NAME_PUBLIC') {
+      const names = [...new Set(rows.map((f) => f.name))].sort();
+      lines.push(`${names.length} secret ${plural(names.length, 'name is also the name of a published page', 'names are also the names of published pages')}, so ${plural(names.length, 'it is', 'they are')} not looked for (${names.slice(0, WORST).join(', ')}) — ${where} ${plural(names.length, 'it', 'these')}.`);
+    } else if (code === 'UNMASKED_NAME_UNREAD') {
+      for (const f of rows.slice(0, 10)) lines.push(`${f.path}: unmasked_name holds ${f.value}, which names no one, so no true name is looked for on the site.`);
+      if (rows.length > 10) lines.push(`${rows.length - 10} more notes have an unmasked_name that names no one.`);
     } else if (code === 'WITHHELD_NAME_PUBLIC') {
       const names = [...new Set(rows.map((f) => f.name))];
       lines.push(`${names.length} withheld ${plural(names.length, 'name is also the name of a published page', 'names are also the names of published pages')}, so ${plural(names.length, 'it is', 'they are')} not looked for (${names.slice(0, WORST).join(', ')}) — ${where} ${plural(names.length, 'it', 'these')}.`);
     } else {
-      const byAlias = new Map();
-      for (const f of rows) byAlias.set(f.alias, (byAlias.get(f.alias) || 0) + 1);
-      const worst = [...byAlias].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1)).slice(0, WORST)
-        .map(([alias, pages]) => `${alias} ${pages} ${plural(pages, 'page', 'pages')}`);
-      lines.push(`${byAlias.size} GM ${plural(byAlias.size, 'alias is', 'aliases are')} printed on published pages (${worst.join(', ')}) — ${where} ${plural(byAlias.size, 'it', 'these')}.`);
+      // A gm_aliases name and a disguised NPC's unmasked name each get their own line.
+      for (const [what, group] of [[['GM alias is', 'GM aliases are'], rows.filter((f) => f.field !== 'unmasked_name')],
+        [['unmasked name is', 'unmasked names are'], rows.filter((f) => f.field === 'unmasked_name')]]) {
+        if (group.length === 0) continue;
+        const byAlias = new Map();
+        for (const f of group) byAlias.set(f.alias, (byAlias.get(f.alias) || 0) + 1);
+        const worst = [...byAlias].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1)).slice(0, WORST)
+          .map(([alias, pages]) => `${alias} ${pages} ${plural(pages, 'page', 'pages')}`);
+        lines.push(`${byAlias.size} ${plural(byAlias.size, ...what)} printed on published pages (${worst.join(', ')}) — ${where} ${plural(byAlias.size, 'it', 'these')}.`);
+      }
     }
   }
   return lines;

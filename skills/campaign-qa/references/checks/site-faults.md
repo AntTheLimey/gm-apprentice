@@ -67,6 +67,8 @@ every page that names it. Use it to confirm each fix.
 | `NAMED_NO_PAGE`, withheld (`ERROR`) | Critical | A published page links a withheld note |
 | `WITHHELD_PUBLISHED` (`ERROR`) | Critical | A withheld note is on the site under its name |
 | `WITHHELD_NAME_PUBLIC` | Warning | A withheld name is not looked for |
+| `ALIAS_NAME_PUBLIC` | Warning | A secret name is not looked for |
+| `UNMASKED_NAME_UNREAD` | Warning | A disguised NPC's true name is not looked for |
 | `WITHHELD_FLAG_UNREADABLE` | Warning | The flag does nothing until it is fixed |
 | `COMPANION_FLAG_UNREADABLE` | Warning | The companion may be pictured on Story pages |
 | `FENCE_UNCLOSED` | Critical | Hidden text is on the site now |
@@ -114,8 +116,8 @@ next time it is published.
 
 ## ALIAS_IN_PROSE
 
-A name the GM keeps in a note's `gm_aliases` is printed on a published
-page. The row gives the note the page is built from (a PC's
+A name the GM keeps in a note's `gm_aliases`, or a disguised NPC's
+`unmasked_name`, is printed on a published page. The row gives the note the page is built from (a PC's
 `…_Story.md` for its story page), the name, the note that owns it, how
 often it is printed and the sentence as the page prints it.
 
@@ -132,7 +134,10 @@ rewording is the only fix.
   creature's `subtype`, a chapter's `overview`). Reword that field.
 
 If the GM says the name is no longer a secret, move it from
-`gm_aliases` to `aliases` on the owning note instead.
+`gm_aliases` to `aliases` on the owning note instead. An
+`unmasked_name` has no link fix; when the players have seen the
+unmasking, run `gma reveal <vault> --session "<title>" --unmask <path>`
+(session-wrapup 5c).
 
 ## NEVER_SHOW_IN_PROSE
 
@@ -177,6 +182,19 @@ on a yes; the publish-list one is `SITE manifest apply --exclude
 ## WITHHELD_NAME_PUBLIC
 
 Offer the row's two fixes, and make the one the GM picks.
+
+## ALIAS_NAME_PUBLIC
+
+A `gm_aliases` or `unmasked_name` name is also the name of a published
+page, so the site cannot search for it. A name the note lists only in
+its own `aliases` is not this row: the site keeps that one off and
+searches it. Offer the row's two fixes, and make the one the GM picks.
+
+## UNMASKED_NAME_UNREAD
+
+The note's `unmasked_name` names no one (`"[[]]"`, a value that is not
+a name), so the site looks for no true name. Ask the GM for the true
+name and write it as plain text, or as one `[[link]]` to its note.
 
 ## WITHHELD_FLAG_UNREADABLE
 

@@ -2293,6 +2293,7 @@ def no_publish_tool(vault: Path, check: str) -> tuple[str | None, list[str]]:
 NOTE_FAULT_CODES = ("ALIAS_IN_PROSE", "NEVER_SHOW_IN_PROSE",
                     "WITHHELD_PUBLISHED",
                     "WITHHELD_IN_PROSE", "WITHHELD_NAME_PUBLIC",
+                    "ALIAS_NAME_PUBLIC", "UNMASKED_NAME_UNREAD",
                     "WITHHELD_FLAG_UNREADABLE",
                     "COMPANION_FLAG_UNREADABLE", "FENCE_UNCLOSED",
                     "COMMENT_STRAY", "NAMED_NO_PAGE", "TOHIT_UNREAD",
@@ -2356,7 +2357,8 @@ def _site_fault_row(f: dict[str, Any], whole: bool) -> str:
                   "CHAPTER_ACTIVE_MANY", "CHAPTER_PLANNED_PLAYED",
                   "CHAPTER_TITLE_SHARED", "SESSION_NO_CHAPTER",
                   "CHAPTER_REF_UNSHOWN", "PCS_ADDRESS",
-                  "WITHHELD_NAME_PUBLIC", "WITHHELD_PUBLISHED",
+                  "WITHHELD_NAME_PUBLIC", "ALIAS_NAME_PUBLIC",
+                  "UNMASKED_NAME_UNREAD", "WITHHELD_PUBLISHED",
                   "WITHHELD_FLAG_UNREADABLE", "COMPANION_FLAG_UNREADABLE"):
         msg = f"{code}: {_one_line(f.get('detail'))}"
     elif code == "NEVER_SHOW_IN_PROSE":

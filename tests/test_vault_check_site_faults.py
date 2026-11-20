@@ -426,6 +426,29 @@ class SiteFaultRowsTests(unittest.TestCase):
             f"WARNING\t{ZORN}\tWITHHELD_NAME_PUBLIC: "), rows)
         self.assertIn("take withheld: true off", rows[0])
 
+    def test_a_secret_name_a_published_page_answers_to_is_a_row(self):
+        vault, _site = make(self, {
+            MARA: npc("Plain."),
+            ZORN: npc("The duke.", "unmasked_name: Mara Quill\n")})
+        rows = findings(vc.check_site_faults(vault))
+        self.assertEqual(len(rows), 1, rows)
+        self.assertTrue(rows[0].startswith(
+            f"WARNING\t{ZORN}\tALIAS_NAME_PUBLIC: \"Mara Quill\", the true name in "
+            f"unmasked_name, is also the name of the published page {MARA}"), rows)
+        # the page's own file name: retitling it would not help, renaming the note does
+        self.assertIn(f"rename {MARA} (campaign-qa offers to rename it, links included)", rows[0])
+        self.assertNotIn("another title or alias", rows[0])
+
+    def test_an_unmasked_name_that_names_no_one_is_a_row(self):
+        vault, _site = make(self, {
+            MARA: npc("Plain."),
+            ZORN: npc("The duke.", 'unmasked_name: "[[]]"\n')})
+        rows = findings(vc.check_site_faults(vault))
+        self.assertEqual(rows, [
+            f"WARNING\t{ZORN}\tUNMASKED_NAME_UNREAD: unmasked_name holds [[]], "
+            f"which names no one, so no true name is looked for on the site — "
+            f"write the true name as plain text, or as one [[link]] to its note"], rows)
+
     def test_a_withheld_flag_that_cannot_be_read_is_a_row(self):
         vault, _site = make(self, {
             MARA: npc("Plain."),

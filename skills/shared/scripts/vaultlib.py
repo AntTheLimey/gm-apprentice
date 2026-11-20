@@ -655,6 +655,72 @@ def unquote(text: str) -> str:
     return text
 
 
+# A value written as a wiki-link: `[[X]]`, `[[X|Label]]`, `![[X]]`, or the
+# `[X]` this module's frontmatter reader makes of an unquoted `[[X]]`.
+_LINK_VALUE_RE = re.compile(r"^!?\[\[?(.*?)\]\]?$", re.S)
+
+
+def link_value(text: str) -> str:
+    """`text` with any wiki-link brackets taken off: what the link names
+    (no `|label`, no `#heading`), path kept; plain text as written,
+    trimmed."""
+    s = text.strip()
+    m = _LINK_VALUE_RE.match(s)
+    if not m:
+        return s
+    return m.group(1).split("|", 1)[0].split("#", 1)[0].strip()
+
+
+def _flat_strings(value: Any) -> list[str]:
+    out: list[str] = []
+    for v in value if isinstance(value, list) else [value]:
+        if isinstance(v, list):
+            out.extend(_flat_strings(v))
+        elif isinstance(v, str):
+            out.append(v)
+    return out
+
+
+def _link_name(body: str) -> str:
+    """The note a link's body names: no `|label`, no `#heading`, no folder,
+    no `.md`; quotes the frontmatter reader left round it taken off."""
+    name = body.strip().strip("\"'").split("|", 1)[0].split("#", 1)[0].strip()
+    name = name.replace("\\", "/").rsplit("/", 1)[-1].strip()
+    return name[:-3].strip() if name.lower().endswith(".md") else name
+
+
+def unmasked_names(value: Any) -> list[str]:
+    """A disguised NPC's true names, from its `unmasked_name` value: one
+    name or a list, each plain or a wiki-link (`[[Captain Rook]]`,
+    `[[NPCs/Captain Rook.md|the captain]]`), read as the note's name. A
+    text inside a list inside the list (an unquoted `[[...]]` to YAML) is a
+    link's body. The publish tool's `unmaskedNames` (processor.js) reads it
+    by the same rule."""
+    names: list[str] = []
+
+    def take(v: Any, in_link: bool) -> None:
+        if isinstance(v, list):
+            for x in v:
+                take(x, True)
+            return
+        if not isinstance(v, str) or not v.strip():
+            return
+        m = _LINK_VALUE_RE.match(v.strip())
+        name = _link_name(m.group(1)) if m else _link_name(v) if in_link else v.strip()
+        if name:
+            names.append(name)
+    for v in value if isinstance(value, list) else [value]:
+        take(v, False)
+    return names
+
+
+def value_blank(value: Any) -> bool:
+    """A frontmatter value with nothing in it: absent, empty, or a list of
+    such."""
+    return value is None or (isinstance(value, str) and not value.strip()) \
+        or (isinstance(value, list) and all(value_blank(v) for v in value))
+
+
 def yaml_scalar(value: str, *, quoted_int: bool = False) -> str:
     """An integer stays bare unless the file already quotes its integer
     (`asOfSession: "9"` stays `"10"`); anything else is double-quoted."""

@@ -1,6 +1,7 @@
 'use strict';
-// The secret-name checks of the build's note audit (note-faults.js), run over the finished folder: a gm_aliases name or
-// a withheld note's name in any text file, or in a copied file's name; and a withheld note that publishes.
+// The secret-name checks of the build's note audit (note-faults.js), run over the finished folder: a gm_aliases name, a
+// disguised NPC's unmasked_name or a withheld note's name in any text file, or in a copied file's name; and a withheld
+// note that publishes.
 const { secretNamesOf, findSecretNames, publicWordsOf, holdersOf, foldQuotes, nameMatcher, nameHits, hasName } = require('../note-faults');
 const { fileText, pageExtras, isToolFile } = require('./match');
 const { wordsOf } = require('./text');
@@ -38,12 +39,13 @@ function nameTextOf(file) {
 function nameFindings({ files, allFiles, hidden, findingId }) {
   const secrets = secretNamesOf({ notes: hidden.notes, publishedRels: hidden.publishedRels, outOf: hidden.outOf, linkMap: hidden.linkMap });
   const found = [];
-  const add = (page, kind, alias, owner, context) => {
+  const add = (page, kind, alias, owner, context, field) => {
     const text = wordsOf(alias).join(' ');
-    found.push({ id: findingId(page, text), kind: 'name', code: CODE[kind], page, text, shown: context, note: owner, reason: REASON[kind] });
+    const reason = field === 'unmasked_name' ? 'a disguised NPC\'s true name, kept secret in unmasked_name' : REASON[kind];
+    found.push({ id: findingId(page, text), kind: 'name', code: CODE[kind], page, text, shown: context, note: owner, reason });
   };
   if (secrets.probe) {
-    const publicWords = publicWordsOf(hidden.linkMap, hidden.published);
+    const publicWords = publicWordsOf(hidden.linkMap, hidden.published, secrets.privateNames);
     const holders = holdersOf(secrets.names, publicWords);
     for (const file of files) {
       const html = nameTextOf(file);
@@ -51,7 +53,7 @@ function nameFindings({ files, allFiles, hidden, findingId }) {
       if (!secrets.mayHold(html) && !(file.text && secrets.mayHold(file.text))) continue;
       // A public name that holds a secret name is the public name (see holdersOf): taken out before the search.
       const looked = holders ? foldQuotes(html).replace(holders, ' ') : html;
-      for (const hit of findSecretNames(looked, secrets.names, { publicWords })) add(file.rel, hit.kind, hit.alias, hit.owner, hit.context);
+      for (const hit of findSecretNames(looked, secrets.names, { publicWords })) add(file.rel, hit.kind, hit.alias, hit.owner, hit.context, hit.field);
     }
   }
   // A copied file (a picture, a font) whose name holds a withheld name: the name is in its address. A page is not one

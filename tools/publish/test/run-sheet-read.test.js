@@ -208,13 +208,206 @@ describe('run sheet reader', () => {
     assert.strictEqual(f.session.title, 'Session 05 - Flat');
   });
 
+  describe('map pairs', () => {
+    const mapNote = (name, extra = '') => `---\nname: ${name}\ntype: document\ndoc_type: map\n${extra}---\n\nA map.\n`;
+    const withPlanLine = (dir, line) => {
+      const text = fs.readFileSync(path.join(dir, PLAN), 'utf8');
+      fs.writeFileSync(path.join(dir, PLAN), `${text}\n${line}\n`);
+    };
+
+    it('maps pair by player_version', () => {
+      const dir = copy();
+      write(dir, 'Documents/Cellar Plan (GM).md', mapNote('Cellar Plan (GM)', 'player_version: "[[Cellar Sketch]]"\n'));
+      write(dir, 'Documents/Cellar Sketch.md', mapNote('Cellar Sketch'));
+      withPlanLine(dir, 'See [[Cellar Plan (GM)]].');
+      const m = readRunSheet(dir, PLAN, { party: PARTY });
+      assert.deepStrictEqual(m.mapPairs, [{ gm: 'Documents/Cellar Plan (GM).md', player: 'Documents/Cellar Sketch.md' }]);
+    });
+
+    it('maps pair by name when the field is absent', () => {
+      const dir = copy();
+      write(dir, 'Documents/Map of the Gate (GM).md', mapNote('Map of the Gate (GM)'));
+      const m = readRunSheet(dir, PLAN, { party: PARTY });
+      assert.deepStrictEqual(m.mapPairs, [{ gm: 'Documents/Map of the Gate (GM).md', player: 'Documents/Map of the Gate.md' }]);
+    });
+
+    it('an unlinked twin is paired', () => {
+      const dir = copy();
+      write(dir, 'Documents/Map of the Gate (GM).md', mapNote('Map of the Gate (GM)'));
+      const m = readRunSheet(dir, PLAN, { party: PARTY });
+      assert.ok(!m.maps.includes('Documents/Map of the Gate (GM).md'));
+      assert.strictEqual(m.mapPairs.length, 1);
+      // and the GM map links its player map while the Plan names only the GM map
+      write(dir, 'Documents/Cellar Plan (GM).md', mapNote('Cellar Plan (GM)', 'player_version: "[[Cellar Sketch]]"\n'));
+      write(dir, 'Documents/Cellar Sketch.md', mapNote('Cellar Sketch'));
+      withPlanLine(dir, 'See [[Cellar Sketch]].');
+      const m2 = readRunSheet(dir, PLAN, { party: PARTY });
+      assert.deepStrictEqual(m2.mapPairs.map((p) => p.gm), ['Documents/Map of the Gate (GM).md', 'Documents/Cellar Plan (GM).md']);
+    });
+
+    it('a player_version that is not a map falls back to the name pair', () => {
+      const dir = copy();
+      write(dir, 'Documents/Foo (GM).md', mapNote('Foo (GM)', 'player_version: "[[Nowhere]]"\n'));
+      write(dir, 'Documents/Foo.md', mapNote('Foo'));
+      withPlanLine(dir, 'See [[Foo (GM)]].');
+      const m = readRunSheet(dir, PLAN, { party: PARTY });
+      assert.deepStrictEqual(m.mapPairs, [{ gm: 'Documents/Foo (GM).md', player: 'Documents/Foo.md' }]);
+    });
+
+    it('a player_version that names no note, or no map, warns on the GM map and falls back (I4)', () => {
+      const dir = copy();
+      write(dir, 'Documents/Lone (GM).md', mapNote('Lone (GM)', 'player_version: "[[Cellar Sketchh]]"\n'));
+      withPlanLine(dir, 'See [[Lone (GM)]].');
+      let m = readRunSheet(dir, PLAN, { party: PARTY });
+      assert.deepStrictEqual(m.mapPairs, []);
+      assert.ok(m.warnings.some((w) => w.kind === 'map-pair' && w.note === 'Documents/Lone (GM).md'
+        && /player_version \[\[Cellar Sketchh\]\] matches no note in the vault/.test(w.text)), JSON.stringify(m.warnings));
+      write(dir, 'Documents/Cellar Sketch.md', '---\ntype: document\n---\n\nNot a map.\n');
+      write(dir, 'Documents/Lone (GM).md', mapNote('Lone (GM)', 'player_version: "[[Cellar Sketch]]"\n'));
+      m = readRunSheet(dir, PLAN, { party: PARTY });
+      assert.ok(m.warnings.some((w) => w.kind === 'map-pair' && w.note === 'Documents/Lone (GM).md'
+        && /player_version \[\[Cellar Sketch\]\] is not a map \(no doc_type: map\)/.test(w.text)), JSON.stringify(m.warnings));
+      // the name pair still stands in
+      write(dir, 'Documents/Lone.md', mapNote('Lone'));
+      m = readRunSheet(dir, PLAN, { party: PARTY });
+      assert.deepStrictEqual(m.mapPairs, [{ gm: 'Documents/Lone (GM).md', player: 'Documents/Lone.md' }]);
+      assert.ok(m.warnings.some((w) => w.kind === 'map-pair'));
+    });
+
+    it('a player_version naming the GM map itself warns and falls back to the name pair (PR #799 review)', () => {
+      const dir = copy();
+      write(dir, 'Documents/Foo (GM).md', mapNote('Foo (GM)', 'player_version: "[[Foo (GM)]]"\n'));
+      write(dir, 'Documents/Foo.md', mapNote('Foo'));
+      withPlanLine(dir, 'See [[Foo (GM)]].');
+      const m = readRunSheet(dir, PLAN, { party: PARTY });
+      assert.deepStrictEqual(m.mapPairs, [{ gm: 'Documents/Foo (GM).md', player: 'Documents/Foo.md' }]);
+      assert.ok(m.warnings.some((w) => w.kind === 'map-pair' && w.note === 'Documents/Foo (GM).md' && /player_version \[\[Foo \(GM\)\]\] is this map itself/.test(w.text)), JSON.stringify(m.warnings));
+    });
+
+    it('maps keeps its strings, a lone map is not paired, a broken link does not throw', () => {
+      const dir = copy();
+      let m = readRunSheet(dir, PLAN, { party: PARTY });
+      assert.deepStrictEqual(m.maps, ['Documents/Map of the Gate.md']);
+      assert.deepStrictEqual(m.mapPairs, []);
+      write(dir, 'Documents/Lone (GM).md', mapNote('Lone (GM)', 'player_version: "[[Nowhere At All]]"\n'));
+      withPlanLine(dir, 'See [[Lone (GM)]].');
+      m = readRunSheet(dir, PLAN, { party: PARTY });
+      assert.deepStrictEqual(m.maps, ['Documents/Map of the Gate.md', 'Documents/Lone (GM).md']);
+      assert.deepStrictEqual(m.mapPairs, []);
+    });
+  });
+
+  describe('unmask', () => {
+    const ASH = 'Characters/NPCs/Brother Ash.md';
+    const LUCAN = 'Characters/NPCs/Lucan Grey.md';
+
+    it('gm_aliases alone is not a disguise', () => {
+      const m = readRunSheet(copy(), PLAN, { party: PARTY });
+      assert.strictEqual(m.notes[LUCAN].unmask, null);
+      assert.strictEqual(m.notes[ASH].unmask, null);
+    });
+
+    // The fixture as the test edits it: frontmatter lines added after `type: npc`, and Playing Them lines before
+    // `- **Tell:**`. A Windows checkout gives the fixture CRLF line ends (no .gitattributes), so a match on
+    // `type: npc\n` alone found nothing there and the note kept no unmasked_name.
+    // So the added lines take the note's own line ends.
+    const withAsh = (text, fmLines, beforeTell = '') => {
+      const eol = text.includes('\r\n') ? '\r\n' : '\n';
+      const own = (t) => t.replace(/\r?\n/g, eol);
+      return text.replace(/type: npc\r?\n/, `type: npc${eol}${own(fmLines)}`).replace('- **Tell:**', `${own(beforeTell)}- **Tell:**`);
+    };
+
+    it('a CRLF note (a Windows checkout) gives the same unmask', () => {
+      const dir = copy();
+      const crlf = fs.readFileSync(path.join(FIXTURE, ASH), 'utf8').replace(/\r?\n/g, '\r\n');
+      write(dir, ASH, withAsh(crlf, 'unmasked_name: The Ember Abbot\n', '- **Unmasked:** cold\n'));
+      const m = readRunSheet(dir, PLAN, { party: PARTY });
+      assert.deepStrictEqual(m.notes[ASH].unmask, { name: 'The Ember Abbot', portrait: null, playAs: 'cold rubs his thumb along the rope scar' });
+    });
+
+    it('unmasked_name gives an unmask', () => {
+      const dir = copy();
+      const ash = withAsh(fs.readFileSync(path.join(dir, ASH), 'utf8'),
+        'unmasked_name: " The Ember Abbot "\nunmasked_portrait: "_attachments/ember.png"\n', '- **Unmasked:** cold, never says "indeed"\n');
+      write(dir, ASH, ash);
+      write(dir, '_attachments/ember.png', 'x');
+      const m = readRunSheet(dir, PLAN, { party: PARTY });
+      assert.deepStrictEqual(m.notes[ASH].unmask, {
+        name: 'The Ember Abbot',
+        portrait: '_attachments/ember.png',
+        playAs: 'cold, never says "indeed" rubs his thumb along the rope scar',
+      });
+      // the disguise's own name and play-as are unchanged
+      assert.strictEqual(m.notes[ASH].name, 'Brother Ash');
+      assert.match(m.people.find((p) => p.note === ASH).playAs, /^slow, fond of the word/);
+    });
+
+    it('an unmask with no face or Unmasked line has what the note gives, and a missing face warns', () => {
+      const dir = copy();
+      const ash = fs.readFileSync(path.join(dir, ASH), 'utf8');
+      write(dir, ASH, withAsh(ash, 'unmasked_name: The Ember Abbot\nunmasked_portrait: ""\n'));
+      let m = readRunSheet(dir, PLAN, { party: PARTY });
+      // no Unmasked line: the true self speaks as the disguise does (Speech is kept by --unmask)
+      assert.deepStrictEqual(m.notes[ASH].unmask, { name: 'The Ember Abbot', portrait: null, playAs: 'slow, fond of the word "indeed" rubs his thumb along the rope scar' });
+      write(dir, ASH, withAsh(ash, 'unmasked_name: The Ember Abbot\nunmasked_portrait: nowhere.png\n'));
+      m = readRunSheet(dir, PLAN, { party: PARTY });
+      assert.strictEqual(m.notes[ASH].unmask.portrait, null);
+      assert.ok(m.warnings.some((w) => w.kind === 'no-portrait' && w.note === ASH && /unmasked_portrait nowhere\.png .*the Unmask has no face/.test(w.text)), JSON.stringify(m.warnings));
+    });
+
+    const withFm = (dir, lines) => {
+      const ash = fs.readFileSync(path.join(FIXTURE, ASH), 'utf8');
+      write(dir, ASH, withAsh(ash, lines));
+      return readRunSheet(dir, PLAN, { party: PARTY });
+    };
+    const unmaskWarnings = (m) => m.warnings.filter((w) => w.kind === 'unmask' && w.note === ASH);
+
+    it('a true name written as a link is the name it links (C1)', () => {
+      for (const value of ['"[[The Ember Abbot]]"', '"[[The Ember Abbot|the abbot]]"', '[[The Ember Abbot]]', '"[[NPCs/The Ember Abbot]]"']) {
+        const m = withFm(copy(), `unmasked_name: ${value}\n`);
+        assert.strictEqual(m.notes[ASH].unmask && m.notes[ASH].unmask.name, 'The Ember Abbot', value);
+        assert.deepStrictEqual(unmaskWarnings(m), [], value);
+      }
+    });
+
+    it('an unmasked_name that names no one warns and gives no Unmask (C1)', () => {
+      const m = withFm(copy(), 'unmasked_name: "[[]]"\n');
+      assert.strictEqual(m.notes[ASH].unmask, null);
+      assert.ok(unmaskWarnings(m).some((w) => /unmasked_name holds \[\[\]\], which names no one: no Unmask on the sheet/.test(w.text)), JSON.stringify(m.warnings));
+    });
+
+    it('a true face written as a link or a list of one is found (PR #799 review)', () => {
+      for (const face of ['"[[ember.png]]"', '"![[_attachments/ember.png|200]]"', '[[ember.png]]', '\n  - "[[ember.png]]"']) {
+        const dir = copy();
+        write(dir, '_attachments/ember.png', 'x');
+        const m = withFm(dir, `unmasked_name: The Ember Abbot\nunmasked_portrait: ${face}\n`);
+        assert.strictEqual(m.notes[ASH].unmask && m.notes[ASH].unmask.portrait, '_attachments/ember.png', face);
+        assert.ok(!m.warnings.some((w) => w.kind === 'no-portrait' && w.note === ASH), face);
+      }
+    });
+
+    it('a face with no true name warns (M2)', () => {
+      const dir = copy();
+      write(dir, '_attachments/ember.png', 'x');
+      const m = withFm(dir, 'unmasked_portrait: "_attachments/ember.png"\n');
+      assert.strictEqual(m.notes[ASH].unmask, null);
+      assert.ok(unmaskWarnings(m).some((w) => w.text === 'unmasked_portrait is set but unmasked_name is empty: no Unmask on the sheet'), JSON.stringify(m.warnings));
+    });
+
+    it('several true names warn and show none, as reveal refuses them (M3)', () => {
+      const m = withFm(copy(), 'unmasked_name: [The Ember Abbot, Old Cinders]\n');
+      assert.strictEqual(m.notes[ASH].unmask, null);
+      assert.ok(unmaskWarnings(m).some((w) => w.text === 'unmasked_name is a list of 2 names; give it the one true name: no Unmask on the sheet'), JSON.stringify(m.warnings));
+    });
+  });
+
   it('plan with only a title reads to an empty model', () => {
     const dir = copy();
     write(dir, 'Lonely - Plan.md', '# Lonely\n');
     const m = readRunSheet(dir, 'Lonely - Plan.md');
     assert.deepStrictEqual(m.session, { index: null, title: 'Lonely', chapter: null, number: null });
     assert.deepStrictEqual(m.brief, { overview: '', world: '', stops: '' });
-    for (const f of ['handouts', 'pcs', 'unmatchedPcLines', 'beats', 'people', 'places', 'maps']) assert.deepStrictEqual(m[f], [], f);
+    for (const f of ['handouts', 'pcs', 'unmatchedPcLines', 'beats', 'people', 'places', 'maps', 'mapPairs']) assert.deepStrictEqual(m[f], [], f);
     assert.strictEqual(m.threads, '');
     assert.deepStrictEqual(m.runLong, { nextPlan: null, scenes: [], planning: [], contingencies: [] });
     // the title line is the lead text: kept, not dropped

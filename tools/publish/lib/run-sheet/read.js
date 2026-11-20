@@ -15,10 +15,11 @@ const { readPcs, SECTIONS: PC_SECTIONS } = require('./party');
 const { readPeople, TITLE: PEOPLE_TITLE } = require('./people');
 const { readHandouts, TITLE: HANDOUTS_TITLE } = require('./handouts');
 const { foesFor } = require('./foes');
+const { unmaskedPlayAsOf } = require('./people-from-notes');
 const { parseNote } = require('../frontmatter');
 const { readSettings } = require('../settings/read');
 const { readerFrom } = require('../vault-reader');
-const { isWithheld, nameList } = require('../processor');
+const { isWithheld, nameList, unmaskedNames, unmaskedNameUnread } = require('../processor');
 const { canonicalNfc } = require('../unicode');
 
 const toPosix = (p) => p.split(path.sep).join('/');
@@ -128,6 +129,7 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
 
   const warnings = [];
   const portraits = new Map();
+  const unmasks = new Map();
   const add = (list) => { for (const w of list || []) warnings.push(w); };
   let fm = {};
   let body = text;
@@ -235,6 +237,45 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
   const places = uniq(linked).filter((p) => low(fmOf(p).type) === 'location');
   const maps = uniq(linked).filter((p) => low(fmOf(p).doc_type) === 'map');
 
+  // Map pairs: a GM map and the map players see. The GM map's `player_version` names it, else the
+  // `X (GM)` / `X` name pair; a twin the Plan does not link is found in the index. A map with no
+  // partner is not listed, and a broken `player_version` link is no pair (and no throw).
+  const isMap = (p) => p !== null && index.has(p) && low(fmOf(p).doc_type) === 'map';
+  const GM_SUFFIX = /\s*\(GM\)\s*$/i;
+  const mapPairs = [];
+  const pairSeen = new Set();
+  const pair = (gm, player) => {
+    if (!isMap(gm) || !isMap(player) || gm === player || pairSeen.has(`${gm}\n${player}`)) return;
+    pairSeen.add(`${gm}\n${player}`);
+    mapPairs.push({ gm, player });
+  };
+  const allMaps = index.notes().filter(isMap);
+  // A GM map's player map: its `player_version` when that resolves to a map, else the name pair. A
+  // `player_version` that names no note, or a note that is no map, warns on a GM map the Plan links: the
+  // GM asked for a pair the sheet cannot make from it.
+  const playerVersionWarning = (gm) => {
+    const t = fmTarget(fmOf(gm).player_version);
+    const named = t ? index.resolve(t) : null;
+    if (!t || (isMap(named) && named !== gm)) return;
+    const why = named === gm ? 'is this map itself' : named !== null ? 'is not a map (no doc_type: map)'
+      : ((index.linkProblem(t) || {}).text || `[[${t}]] matches no note in the vault`).replace(`[[${t}]] `, '');
+    warnings.push({ kind: 'map-pair', note: gm, text: `its player_version [[${t}]] ${why}; the sheet pairs it by name if it can` });
+  };
+  const playerOf = (gm) => {
+    const t = fmTarget(fmOf(gm).player_version);
+    const named = t ? index.resolve(t) : null;
+    if (isMap(named) && named !== gm) return named;
+    const stem = stemOf(gm);
+    return GM_SUFFIX.test(stem) ? index.resolve(stem.replace(GM_SUFFIX, '')) : null;
+  };
+  const playerFor = new Map(allMaps.map((g) => [g, playerOf(g)]));
+  for (const p of maps) {
+    playerVersionWarning(p);
+    pair(p, playerFor.get(p));
+    // p as the player map: any GM map that points at it, by field or by name
+    for (const g of allMaps) if (g !== p && playerFor.get(g) === p) pair(g, p);
+  }
+
   // A link to nowhere anywhere in the Plan warns once (beats warn for theirs; the same text merges).
   for (const w of warnings) if (w.note === null) warnedLinks.add(low(w.text));
   for (const t of pt.links(body)) if (index.resolve(t) === null) warnLink(t);
@@ -253,6 +294,7 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
     people: peopleRead.people,
     places,
     maps,
+    mapPairs,
     threads: joined('threads'),
     runLong,
     prep,
@@ -271,9 +313,9 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
   add(completeness(body, model, { resolve: (t) => index.resolve(t) }));
   // The index's warnings about notes this sheet touches (a note a warning names among them, such
   // as a PC whose frontmatter does not parse), and those about the vault as a whole. Each touched
-  // note's portrait is looked for first, so a portrait that matches no picture warns here.
+  // note's portraits (its unmasked one too) are looked for first, so one that matches no picture warns here.
   const touched = new Set([...stringsOf(model), ...warnings.map((w) => w.note)].filter((x) => index.has(x)));
-  for (const p of touched) portraitOf(p);
+  for (const p of touched) { portraitOf(p); unmaskOf(p); }
   add(index.warnings.filter((w) => w.note === null || w.kind === 'unreadable-folder' || touched.has(w.note)));
   const kept = new Set();
   for (const w of warnings) {
@@ -311,7 +353,30 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
       location: typeof nfm.location === 'string' ? nfm.location : '',
       docType: low(nfm.doc_type),
       aliases: nameList(nfm.aliases),
+      unmask: unmaskOf(p),
     };
+  }
+
+  // A disguised NPC's true self, behind the sheet's Unmask: only a note with one `unmasked_name` has
+  // one (a `gm_aliases` name alone is no disguise). The name is read as reveal reads it (a link is the
+  // name it links); a value that names no one, or several names (which reveal refuses), gives no Unmask
+  // and a warning, as does a true face with no true name. Its face is null and its play-as '' when the
+  // note gives none. Asked once per note, as the portrait is.
+  function unmaskOf(p) {
+    if (!unmasks.has(p)) {
+      const nfm = index.has(p) ? index.read(p).fm || {} : {};
+      const names = unmaskedNames(nfm);
+      const unread = unmaskedNameUnread(nfm);
+      const noSheet = ': no Unmask on the sheet';
+      if (names.length > 1) warnings.push({ kind: 'unmask', note: p, text: `unmasked_name is a list of ${names.length} names; give it the one true name${noSheet}` });
+      else if (unread !== null) warnings.push({ kind: 'unmask', note: p, text: `unmasked_name holds ${unread}, which names no one${noSheet}` });
+      else if (names.length === 0 && nameList(nfm.unmasked_portrait).length > 0) {
+        warnings.push({ kind: 'unmask', note: p, text: `unmasked_portrait is set but unmasked_name is empty${noSheet}` });
+      }
+      const name = names.length === 1 ? names[0] : null;
+      unmasks.set(p, name ? { name, portrait: index.portrait(p, 'unmasked_portrait'), playAs: unmaskedPlayAsOf(p, index) } : null);
+    }
+    return unmasks.get(p);
   }
 
   // If you run long: never above the chapter. The chapter folder is the chapter note's folder,

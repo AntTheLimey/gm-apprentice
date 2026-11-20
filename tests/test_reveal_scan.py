@@ -205,6 +205,41 @@ class RevealScan(unittest.TestCase):
                        publishing=["Places/Mill.md"])
         self.assertEqual(res.rows[0].hidden, ["gm_aliases: The Widow"])
 
+    def test_a_disguised_npc_shows_its_true_name_and_face(self) -> None:
+        pedlar = ("---\ntype: npc\nunmasked_name: \"Captain Rook\"\n"
+                  "unmasked_portrait: rook.png\n---\n\n# Pedlar\n")
+        res = run_scan({**base(play="Met [[Pedlar]].\n"), "NPCs/Pedlar.md": pedlar},
+                       publishing=["NPCs/Pedlar.md"])
+        self.assertEqual(res.rows[0].hidden,
+                         ["unmasked_name: Captain Rook", "unmasked_portrait: rook.png"])
+        plain = "---\ntype: npc\nunmasked_name: \"\"\nunmasked_portrait: \"\"\n---\n\n# Pedlar\n"
+        res = run_scan({**base(play="Met [[Pedlar]].\n"), "NPCs/Pedlar.md": plain},
+                       publishing=["NPCs/Pedlar.md"])
+        self.assertEqual([r.hidden for r in res.rows if r.path == "NPCs/Pedlar.md"], [])
+
+    def test_a_true_name_written_as_a_link_shows_as_the_name(self) -> None:
+        """C1: the scan shows the name a link names, and says when it reads none."""
+        for value, shown in (('"[[Captain Rook]]"', "unmasked_name: Captain Rook"),
+                             ("[[Captain Rook|the captain]]", "unmasked_name: Captain Rook"),
+                             ('"[[]]"', "unmasked_name: [[]] (names no one: write the true name)"),
+                             ('["[[]]", ""]', "unmasked_name: [[]] (names no one: write the true name)"),
+                             ("[[rook.png]]", "unmasked_name: rook.png")):
+            pedlar = f"---\ntype: npc\nunmasked_name: {value}\n---\n\n# Pedlar\n"
+            res = run_scan({**base(play="Met [[Pedlar]].\n"), "NPCs/Pedlar.md": pedlar},
+                           publishing=["NPCs/Pedlar.md"])
+            self.assertEqual(res.rows[0].hidden, [shown], value)
+        pedlar = "---\ntype: npc\nunmasked_name: Rook\nunmasked_portrait: [[rook.png]]\n---\n\n# Pedlar\n"
+        res = run_scan({**base(play="Met [[Pedlar]].\n"), "NPCs/Pedlar.md": pedlar},
+                       publishing=["NPCs/Pedlar.md"])
+        self.assertEqual(res.rows[0].hidden, ["unmasked_name: Rook", "unmasked_portrait: rook.png"])
+
+    def test_true_name_readers_agree_on_nested_and_suffixed_links(self) -> None:
+        """PR #799 review: a quoted link body in a nested list, and a `.md` link, read as the note's name."""
+        from vaultlib import unmasked_names
+        for value in ([["Captain Rook|the captain"]], [["NPCs/Captain Rook|the captain"]], ["[NPCs/Captain Rook.md]"],
+                      "[[NPCs/Captain Rook.md|x]]", "[[Captain Rook#Past]]", '["Captain Rook"]'):
+            self.assertEqual(unmasked_names(value), ["Captain Rook"], value)
+
     def test_cli_no_such_index_exits_2(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, \
                 mock.patch.object(rv, "ask_publish_tool", tool()):

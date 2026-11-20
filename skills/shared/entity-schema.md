@@ -277,7 +277,9 @@ familiar, cohort); never pictured on Story pages), `occupation`,
 `age`, `gender`, `nationality`, `status` (alive/dead/missing/unknown),
 `location` (wiki-link: where they can usually be found), `portrait`,
 `voice` (set only when the GM gives this NPC their own story; how they
-are told and speak; never published)
+are told and speak; never published), `unmasked_name` (a disguise's
+true name: behind the run sheet's Unmask; never published),
+`unmasked_portrait` (a disguise's true face; never published)
 
 **PC:** `player_name`, `occupation`, `age`, `gender`, `nationality`,
 `status` (alive/dead/missing/retired/unknown), `key_traits`,
@@ -336,8 +338,9 @@ PC)
 spell, tome), `author` (wiki-link: who wrote it, or as the PCs
 believe), `date` (when written), `condition` (pristine, water-stained,
 torn, partly burned), `current_holder` (wiki-link: who has it now),
-`portrait` (a scan or prop image, if you have one). The text goes in
-the body under `## The Text`; an older `content` field moves there.
+`portrait` (a scan or prop image, if you have one), `player_version`
+(on a GM map, wiki-link: the map players see). The text goes in the
+body under `## The Text`; an older `content` field moves there.
 
 **Prop:** `prop_kind` (document, object, diagram, supplied,
 container), `prop_file` (a hand-made page, PDF or picture beside the

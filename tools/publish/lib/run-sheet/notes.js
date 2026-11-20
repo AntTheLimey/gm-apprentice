@@ -246,16 +246,23 @@ function buildIndex(vaultPath, { deps } = {}) {
     notes() { return pages.map((p) => p.path); },
     has(p) { return typeof p === 'string' && byPath.has(p); },
     // The note's portrait picture, vault-relative, or null. A portrait the frontmatter names that no
-    // picture the reader sees matches warns `no-portrait` on that note.
-    portrait(p) {
-      const name = portraitBasename(need(p).fm);
+    // picture the reader sees matches warns `no-portrait` on that note. `field` names another
+    // picture field read the same way (a disguised NPC's `unmasked_portrait`).
+    portrait(p, field = 'portrait') {
+      // A picture written as a link (`[[rook.png]]`, `![[a/rook.png|200]]`) or as a list of one is that picture,
+      // as reveal --unmask reads it.
+      const raw = [need(p).fm[field]].flat(Infinity).filter((v) => typeof v === 'string' && v.trim());
+      const one = raw.length === 1 ? raw[0].trim() : raw.length ? raw : null;
+      const link = typeof one === 'string' ? /^!?\[\[([\s\S]*?)\]\]$/.exec(one) : null;
+      const name = portraitBasename({ portrait: link ? link[1].split('|')[0].trim() : one });
       if (!name) return null;
       const hit = attached()[name];
       const rel = hit ? toPosix(path.relative(vaultPath, hit.sourcePath)) : null;
       if (rel && !isLeftOut(rel)) return rel;
+      const lacks = field === 'portrait' ? 'no portrait on the sheet' : 'the Unmask has no face';
       warn('no-portrait', p, rel
-        ? `its portrait ${name} is in a folder the reader skips: no portrait on the sheet`
-        : `its portrait ${name} matches no picture in the vault: no portrait on the sheet`);
+        ? `its ${field} ${name} is in a folder the reader skips: ${lacks}`
+        : `its ${field} ${name} matches no picture in the vault: ${lacks}`);
       return null;
     },
     warnings,

@@ -2,7 +2,7 @@
 // tools/publish/test/unit/mark-fields-names.test.js
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { hiddenFieldsOf, gmAliasRewriter } = require('../../lib/processor');
+const { hiddenFieldsOf, publishedFrontmatter, gmAliasRewriter } = require('../../lib/processor');
 const { createMarks, markKinds } = require('../../lib/gm-marks');
 
 const ALL = new Set(markKinds());
@@ -27,6 +27,15 @@ test('1: hidden fields, GM-only edges and secret aliases are listed in the input
     { kind: 'relationships', label: 'GM-only relationship', name: 'relationships', value: edgeB },
     { kind: 'fields', label: 'field: gm_aliases', name: 'aliases', value: 'Elias Crowe' },
     { kind: 'fields', label: 'field: gm_aliases', name: 'gm_aliases', value: ['Elias Crowe'] },
+  ]);
+});
+
+test('1b: a disguised NPC\'s unmasked_name and unmasked_portrait are hidden fields, never published', () => {
+  const fm = { occupation: 'Pedlar', unmasked_name: 'Captain Rook', unmasked_portrait: 'rook.png', aliases: ['The Pedlar'] };
+  assert.deepEqual(publishedFrontmatter(fm, []), { occupation: 'Pedlar', aliases: ['The Pedlar'] });
+  assert.deepEqual(hiddenFieldsOf(fm, []), [
+    { kind: 'fields', label: 'field: unmasked_name', name: 'unmasked_name', value: 'Captain Rook' },
+    { kind: 'fields', label: 'field: unmasked_portrait', name: 'unmasked_portrait', value: 'rook.png' },
   ]);
 });
 
