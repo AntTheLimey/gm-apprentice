@@ -56,6 +56,13 @@ class PersonalHomeTests(unittest.TestCase):
         self.assertEqual(ph.home(self.user), self.user / "gm-apprentice" / "personal")
         self.assertEqual(ph.shown(self.home / "fitd", self.user), "~/gm-apprentice/personal/fitd")
 
+    def test_a_clean_room_run_can_stand_in_for_the_users_home(self):
+        with mock.patch.dict(os.environ, {ph.TEST_HOME_ENV: str(self.user)}):
+            self.assertEqual(ph.home(), self.home)
+            self.assertEqual(ph.shown(self.home / "fitd"), str(self.home / "fitd"), "spelled out, never ~/")
+        with mock.patch.dict(os.environ, {ph.TEST_HOME_ENV: ""}):
+            self.assertEqual(ph.home(), Path.home() / "gm-apprentice" / "personal")
+
     def test_an_update_strands_files_in_the_old_version_and_they_are_copied_home(self):
         old = self.cache / "1.12.95"
         _install(old)
