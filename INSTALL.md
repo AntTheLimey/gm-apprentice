@@ -27,7 +27,9 @@ programmer.
    - Claude Code: `claude plugin marketplace add AntTheLimey/gm-apprentice`,
      then `claude plugin install gm-apprentice@gm-apprentice`, then
      `claude plugin marketplace update gm-apprentice`, then
-     `claude plugin update gm-apprentice@gm-apprentice`.
+     `claude plugin update gm-apprentice@gm-apprentice --scope user` (the
+     scope matters: without it the update may go to a copy installed for
+     one project instead).
    - Codex: `codex plugin marketplace add AntTheLimey/gm-apprentice`,
      then `codex plugin marketplace upgrade gm-apprentice`, then
      `codex plugin add gm-apprentice@gm-apprentice`.
@@ -38,8 +40,9 @@ programmer.
      website.
 4. **Check the install.** Find the `gma.py` you just installed, in the
    newest version folder:
-   - Claude Code: `claude plugin list --json` gives
-     `gm-apprentice@gm-apprentice`'s `installPath`; it is at
+   - Claude Code: `claude plugin list --json` lists one entry per
+     install; take the `installPath` of the `gm-apprentice@gm-apprentice`
+     entry whose `scope` is `user`. It is at
      `skills/shared/scripts/gma.py` under it.
    - Codex: under `$CODEX_HOME/plugins/cache/gm-apprentice/` (`~/.codex`
      when `CODEX_HOME` is not set).

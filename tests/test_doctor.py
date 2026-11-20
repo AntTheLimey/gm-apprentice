@@ -174,7 +174,8 @@ class InstallPromptTests(unittest.TestCase):
 
     def test_an_older_install_is_brought_up_to_the_latest_release(self):
         # #814: "already installed" left 1.12.96 in place, which has no doctor.
-        for line in ("claude plugin marketplace update gm-apprentice", "claude plugin update gm-apprentice@gm-apprentice",
+        for line in ("claude plugin marketplace update gm-apprentice",
+                     "claude plugin update gm-apprentice@gm-apprentice --scope user", "whose `scope` is `user`",
                      "codex plugin marketplace upgrade gm-apprentice"):
             self.assertIn(line, self.steps)
         self.assertIn("codex plugin marketplace upgrade gm-apprentice", self.manual)
