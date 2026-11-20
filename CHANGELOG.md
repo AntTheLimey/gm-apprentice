@@ -10,6 +10,12 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 ---
 
 
+## [1.12.117] — 2026-11-20
+
+### Fixed
+
+- CoC reference files now give 7e rules, not Basic Roleplaying ones (#832). Creatures are on the 7e scale (characteristics x5, one Fighting skill, damage bonus and Build), weapons use the 7e skills and impale rule, armour penalties are penalty dice, poison, falls, fire and explosions follow the Keeper Rulebook's damage table, fumble tables and the Resistance Table are gone, and the magic file describes 7e spellcasting. Each rule cites its Keeper Rulebook page.
+
 ## [1.12.116] — 2026-11-20
 
 ### Fixed

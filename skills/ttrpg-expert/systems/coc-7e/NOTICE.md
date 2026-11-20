@@ -46,7 +46,10 @@ Each file below records what it derives from. Paths are relative to this directo
 
 > **Attribution:** ORC creature stats from *Basic Roleplaying:
 > Universal Game Engine* by Chaosium Inc., used under the ORC
-> License. Lovecraft entity descriptions drawn from the fiction
+> License, converted to the CoC 7e scale (characteristics x5,
+> one Fighting skill, damage bonus and Build from the 7e table)
+> by following the conversion method the CoC 7e Keeper Rulebook
+> describes, in our own words. Lovecraft entity descriptions drawn from the fiction
 > of H.P. Lovecraft, cited by composition date. No Chaosium
 > game-mechanical content is used for the Lovecraft entries.
 > See ATTRIBUTION.md for full license details.
@@ -54,7 +57,9 @@ Each file below records what it derives from. Paths are relative to this directo
 ### `equipment-armor.md`
 
 > BRP equipment data: BRP ORC License. See ATTRIBUTION.md.
-> CoC 7e uses the same basic armour tables as BRP.
+> CoC 7e adaptation (penalty dice, shields under 7e rules,
+> STR/DEX minimums on the 7e scale): our own descriptions of
+> uncopyrightable game mechanics. Not Chaosium text.
 
 > **Attribution:** Armour and shield data from *Basic
 > Roleplaying: Universal Game Engine* by Chaosium Inc., used
@@ -64,8 +69,9 @@ Each file below records what it derives from. Paths are relative to this directo
 ### `equipment-weapons.md`
 
 > BRP equipment data: BRP ORC License. See ATTRIBUTION.md.
-> CoC 7e uses the same basic weapon tables as BRP. Skill names
-> below use CoC 7e conventions (Fighting, Firearms).
+> Damage values are BRP's. Skills, base chances, impales, burst
+> fire, and blast distances use CoC 7e conventions, described in
+> our own words. Not Chaosium text.
 
 > **Attribution:** Weapon data from *Basic Roleplaying: Universal
 > Game Engine* by Chaosium Inc., used under the ORC License.
@@ -92,12 +98,9 @@ Each file below records what it derives from. Paths are relative to this directo
 
 ### `powers-magic.md`
 
-> BRP powers data: BRP ORC License. See ATTRIBUTION.md.
-
-> **Attribution:** Powers and magic system data from *Basic
-> Roleplaying: Universal Game Engine* by Chaosium Inc., used
-> under the ORC License. See ATTRIBUTION.md for full license
-> details.
+> CoC 7e magic: our own descriptions of uncopyrightable game
+> mechanics (Baker v. Selden, 1879). Not Chaosium text. No BRP
+> powers data remains.
 
 ### `rules-reference.md`
 

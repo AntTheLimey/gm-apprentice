@@ -4,87 +4,105 @@ ORC creatures with stat blocks + Lovecraft entities with
 literary descriptions (no Chaosium game stats). For encounter
 building and stat lookups.
 
-**[ORC]** = BRP UGE ORC Content Document (full stats).
+**[ORC]** = BRP UGE ORC Content Document, converted to the 7e
+scale with the Keeper Rulebook's own conversion guide (pp.390-394).
 **[Lovecraft]** = public domain fiction (descriptions only,
 no game stats). Use Ghoul [ORC] as mechanical baseline for
 humanoid Mythos creatures; scale for larger entities.
 
-**Stat block format:** Characteristics (rolled range, avg).
-HP = (CON+SIZ)/2. MOV = Walk/Swim/Fly/Slither. DM = damage
-modifier. SAN Loss = success/failure.
+**Stat block format:** Characteristics as dice x5 (average).
+Hit points, armour, and MOV are the source's own (the Keeper
+Rulebook keeps them as they were, p.392; 7e figures new HP as
+(CON+SIZ)/10, which can come out a point lower). Damage bonus
+(DB) and Build come from the 7e STR+SIZ table (p.33) at the
+averages. Each creature has one Fighting skill, the best of its
+old attacks, with the ways it hurts listed after it; special
+attacks are fighting maneuvers (p.105). APP stands in for
+Basic Roleplaying's CHA. "+½DB" = half the damage bonus.
+SAN Loss = success/failure.
 
 ---
 
 ## Natural Animals [ORC]
 
 ### Alligator/Crocodile [ORC]
-STR 4D6+12 (25), CON 3D6+6 (19), SIZ 4D6+12 (25), POW 3D6
-(11), DEX 2D6 (7). HP 22, MOV Walk 7/Swim 6, DM +2D6.
-Armour: 5-pt hide. Attack: Bite 50%, 1D10+dm.
-Skills: Dodge 30%, Hide 50%, Stealth 75%.
-Alligators are smaller (-1D6 STR/SIZ, Bite 1D8+dm).
+STR (4D6+12)x5 (125), CON (3D6+6)x5 (95), SIZ (4D6+12)x5
+(125), POW 3D6x5 (55), DEX 2D6x5 (35). HP 22, MOV Walk
+7/Swim 6, DB +2D6, Build 3. Armour: 5-pt hide.
+Fighting 50%: bite 1D10+DB. Skills: Dodge 30%, Stealth 75%.
+Alligators are smaller (-1D6x5 STR/SIZ, bite 1D8+DB).
 
 ### Bear [ORC]
-STR 3D6+10 (21), CON 2D6+6 (13), SIZ 3D6+10 (21), POW 3D6
-(11), DEX 3D6 (11). HP 17, MOV Walk 12/Swim 2, DM +2D6.
-Armour: 3-pt fur. Attacks: Bite 25%, 1D10; Claw 25%, 1D6+dm.
-Two attacks per round (two claws, or one claw + one bite).
-Grizzlies: +1D6 STR/SIZ, +1 armour, +10% combat. Polar
-bears: +2D6 STR/SIZ, +3 armour, +20% attacks, Swim 80%.
+STR (3D6+10)x5 (105), CON (2D6+6)x5 (65), SIZ (3D6+10)x5
+(105), POW 3D6x5 (55), DEX 3D6x5 (55). HP 17, MOV Walk
+12/Swim 2, DB +2D6, Build 3. Armour: 3-pt fur.
+Fighting 25%: bite 1D10, claw 1D6+DB. Attacks per round: 2
+(two claws, or one claw and one bite).
+Grizzlies: +1D6x5 STR/SIZ, +1 armour, +10% Fighting. Polar
+bears: +2D6x5 STR/SIZ, +3 armour, +20% Fighting, Swim 80%.
 
 ### Dog [ORC]
-STR 2D6 (7), CON 3D6 (11), SIZ 1D6+1 (5), POW 2D6 (7),
-DEX 2D6+6 (13). HP 8, MOV Walk 10/Swim 6, DM -1D4.
-Attack: Bite 30%, 1D6+1/2dm. Wild dogs form packs of 1D8+3.
+STR 2D6x5 (35), CON 3D6x5 (55), SIZ (1D6+1)x5 (25), POW
+2D6x5 (35), DEX (2D6+6)x5 (65). HP 8, MOV Walk 10/Swim 6,
+DB -2, Build -2.
+Fighting 30%: bite 1D6+½DB. Wild dogs form packs of 1D8+3.
 For larger dogs, use Wolf stats.
 
 ### Horse [ORC]
-STR 3D6+18 (29), CON 2D6+6 (13), SIZ 4D6+12 (26), POW 3D6
-(11), DEX 3D6 (11). HP 20, MOV Walk 12/Swim 2, DM +2D6.
-Armour: 1-pt hide. Attacks: Kick 20%, 2D8+dm; Bite 10%, 1D6.
+STR (3D6+18)x5 (145), CON (2D6+6)x5 (65), SIZ (4D6+12)x5
+(130), POW 3D6x5 (55), DEX 3D6x5 (55). HP 20, MOV Walk
+12/Swim 2, DB +2D6, Build 3. Armour: 1-pt hide.
+Fighting 20%: kick 2D8+DB, bite 1D6.
 Untrained horses flee from blood, fire, gunshots. Warhorses:
-+2 STR/CON/SIZ, hold ground on Ride check.
++10 STR/CON/SIZ, hold ground on a Ride roll.
 
 ### Lion [ORC]
-STR 2D6+12 (19), CON 3D6 (11), SIZ 3D6+6 (17), POW 2D6+6
-(13), DEX 2D6+12 (19). HP 14, MOV Walk 10/Swim 2, DM +1D6.
-Armour: 2-pt skin. Attacks: Bite 40%, 1D10; Claw 60%,
-1D6+dm; Rip 80%, 2D6+dm. One claw + one bite per round;
-if both hit, rakes with hind claws next round.
+STR (2D6+12)x5 (95), CON 3D6x5 (55), SIZ (3D6+6)x5 (85), POW
+(2D6+6)x5 (65), DEX (2D6+12)x5 (95). HP 14, MOV Walk 10/Swim
+2, DB +1D6, Build 2. Armour: 2-pt skin.
+Fighting 60%: claw 1D6+DB, bite 1D10. Attacks per round: 2
+(one claw and one bite). If both hit, it rakes with its hind
+claws next round (Fighting 80%, 2D6+DB).
 
 ### Shark [ORC]
-STR 3D6+12 (23), CON 2D6+9 (16), SIZ 3D6+12 (23), POW 3D6
-(11), DEX 2D6+3 (10). HP 23, MOV Swim 10, DM +2D6.
-Armour: 5-pt skin. Attacks: Bite 75%, 2D6+dm; Fin Slash 50%,
-2D3+1/2dm. If bite hits, shark continues biting (Easy) each
-round. Giant shark: STR/SIZ 6D6+24, +5D6 DM.
+STR (3D6+12)x5 (115), CON (2D6+9)x5 (80), SIZ (3D6+12)x5
+(115), POW 3D6x5 (55), DEX (2D6+3)x5 (50). HP 23, MOV Swim 10,
+DB +2D6, Build 3. Armour: 5-pt skin.
+Fighting 75%: bite 2D6+DB, fin slash 2D3+½DB. Once a bite
+lands, the shark keeps biting each round with a bonus die (the
+source's Easy roll, converted as p.394 advises). Giant shark:
+STR and SIZ (6D6+24)x5 (225), DB +5D6, Build 6.
 
 ### Snake, Constrictor [ORC]
-STR 3D6+12 (23), CON 2D6+6 (13), SIZ 5D6 (18), POW 3D6
-(11), DEX 2D6+6 (13). HP 16, MOV Slither 6/Swim 4, DM +1D6.
-Armour: 1-pt skin. Attacks: Bite 65%, 1D4+1/2dm; Constrict
-40%, 1D6+dm per round. Constriction requires STR vs STR to
-escape. Giant constrictor: +2D6 STR/SIZ, 4-pt hide.
+STR (3D6+12)x5 (115), CON (2D6+6)x5 (65), SIZ 5D6x5 (90), POW
+3D6x5 (55), DEX (2D6+6)x5 (65). HP 16, MOV Slither 6/Swim 4,
+DB +2D6, Build 3. Armour: 1-pt skin.
+Fighting 65%: bite 1D4+½DB. Constrict (fighting maneuver): a
+held victim takes 1D6+DB a round until it breaks free with a
+maneuver of its own. Giant constrictor: +2D6x5 STR/SIZ, 4-pt
+hide.
 
 ### Snake, Venomous [ORC]
-STR 2D4 (5), CON 2D6 (7), SIZ 2D4 (5), POW 1D8 (5),
-DEX 3D6 (11). HP 6, MOV Slither 6/Swim 4, DM -1D6.
-Attack: Bite 70%, 1D2+1/2dm (impaling) + poison.
-Skills: Hide 80%, Stealth 90%.
+STR 2D4x5 (25), CON 2D6x5 (35), SIZ 2D4x5 (25), POW 1D8x5
+(25), DEX 3D6x5 (55). HP 6, MOV Slither 6/Swim 4, DB -2,
+Build -2.
+Fighting 70%: bite 1D2+½DB (impales) + poison.
+Skills: Stealth 90%.
 
 ### Tiger [ORC]
-STR 3D6+12 (23), CON 3D6 (11), SIZ 3D6+6 (17), POW 3D6
-(11), DEX 2D6+12 (19). HP 14, MOV Walk 12, DM +1D6.
-Armour: 2-pt skin. Attacks: Claw 70%, 1D8+dm; Bite 45%,
-1D10+1/2dm; Rip 80%, 2D8+dm. Two claws + one bite per round
-(bite 5 DEX ranks after claws). If both claws hit, rips with
-hind claws next round.
+STR (3D6+12)x5 (115), CON 3D6x5 (55), SIZ (3D6+6)x5 (85), POW
+3D6x5 (55), DEX (2D6+12)x5 (95). HP 14, MOV Walk 12, DB +1D6,
+Build 2. Armour: 2-pt skin.
+Fighting 70%: claw 1D8+DB, bite 1D10+½DB. Attacks per round: 3
+(two claws, then a bite). If both claws hit, it rips with its
+hind claws next round (Fighting 80%, 2D8+DB).
 
 ### Wolf [ORC]
-STR 2D6+6 (13), CON 3D6 (11), SIZ 2D6+1 (8), POW 3D6 (11),
-DEX 2D6+6 (13). HP 10, MOV Walk 10, DM none.
-Armour: 2-pt fur. Attack: Bite 30%, 1D8+1/2dm.
-Skills: Listen 75%, Sense 90%, Track 80%.
+STR (2D6+6)x5 (65), CON 3D6x5 (55), SIZ (2D6+1)x5 (40), POW
+3D6x5 (55), DEX (2D6+6)x5 (65). HP 10, MOV Walk 10, DB none,
+Build 0. Armour: 2-pt fur.
+Fighting 30%: bite 1D8+½DB.
+Skills: Listen 75%, Spot Hidden 90% (by scent), Track 80%.
 Wolves hunt in packs (12-40+), fighting cooperatively to
 knock targets down then swarm.
 
@@ -93,89 +111,99 @@ knock targets down then swarm.
 ## Fantasy Creatures [ORC]
 
 ### Centaur [ORC]
-STR 3D6+6 (17), CON 3D6 (11), SIZ 4D6+12 (26), INT 2D6+6
-(13), POW 3D6 (11), DEX 3D6+3 (14), CHA 3D6 (11).
-HP 19, MOV 12, DM +1D4 (melee) / +2D6 (kick/charge).
+STR (3D6+6)x5 (85), CON 3D6x5 (55), SIZ (4D6+12)x5 (130), INT
+(2D6+6)x5 (65), POW 3D6x5 (55), DEX (3D6+3)x5 (70), APP 3D6x5
+(55). HP 19, MOV 12, Build 3. DB +1D4 with hand weapons, +2D6
+for kicks and charges (the source splits it this way).
 Armour: 1-pt hide (can wear additional armour).
-Attacks: Composite Bow 45%, 1D8+1+1/2dm; Lance 35%,
-1D10+1+dm; Bastard Sword 40%, 1D10+1+dm; Kick 50%, 1D6+dm.
-Skills: Appraise 50%, First Aid 40%, Knowledge (History) 50%.
+Attacks: Fighting (Sword) 40%, bastard sword 1D10+1+DB;
+Fighting (Spear) 35%, lance 1D10+1+DB; Fighting (Brawl) 50%,
+kick 1D6+DB; Firearms (Bow) 45%, composite bow 1D8+1+½DB.
+Skills: Appraise 50%, First Aid 40%, History 50%.
 Wise, pastoral, fine craftsmen and fierce warriors.
 
 ### Dragon [ORC]
-STR 20D6 (70), CON 10D6 (35), SIZ 20D6 (70), INT 10 (fixed),
-POW 4D6+6 (20), DEX 3D6 (11). HP 53, MOV Walk 4/Fly 10,
-DM +8D6. Armour: 12-pt scales.
-Attacks: Breath Flame 75%, 4D6+fire (3m radius, POW in metres
-range, costs 1D6 PP); Bite 65%, 3D6+dm; Claw 50%, 1D6+dm;
-Tail 50%, 1D6+1/2dm (sweep).
-Two attacks per round (breath or bite, plus claw or tail).
-SAN Loss: 0/1D8+. Intelligent dragons (INT 4D6) know magic.
+STR 20D6x5 (350), CON 10D6x5 (175), SIZ 20D6x5 (350), INT 50
+(fixed), POW (4D6+6)x5 (100), DEX 3D6x5 (55). HP 53, MOV Walk
+4/Fly 10, DB +8D6, Build 9. Armour: 12-pt scales.
+Fighting 65%: bite 3D6+DB, claw 1D6+DB, tail sweep 1D6+½DB.
+Breath flame 75%: 4D6 fire in a 3m radius, range in metres a
+fifth of POW, costs 1D6 MP. Attacks per round: 2 (breath or
+bite, plus claw or tail).
+SAN Loss: 0/1D8+. Intelligent dragons (INT 4D6x5) know magic.
 
 ### Dwarf [ORC]
-STR 4D6 (14), CON 1D6+12 (16), SIZ 1D4+4 (7), INT 2D6+6
-(13), POW 3D6 (11), DEX 3D6 (11), CHA 3D6 (11).
-HP 12, MOV 6, DM none. Armour: 8-pt (chain + light helm).
-Attacks: Hammer 35%, 1D6+dm; Battleaxe 50%, 1D8+2+dm;
-Heavy Crossbow 40%, 2D4+2; Buckler 50%, 1D2+dm.
-Skills: Appraise 50%, Bargain 45%, Brawl 50%, Craft
-(Blacksmithing) 45%. Darkvision equivalent to 1/2 POW levels.
+STR 4D6x5 (70), CON (1D6+12)x5 (80), SIZ (1D4+4)x5 (35), INT
+(2D6+6)x5 (65), POW 3D6x5 (55), DEX 3D6x5 (55), APP 3D6x5
+(55). HP 12, MOV 6, DB none, Build 0. Armour: 8-pt (chain +
+light helm).
+Attacks: Fighting (Axe) 50%, battleaxe 1D8+2+DB; Fighting
+(Brawl) 50%, hammer 1D6+DB or buckler bash 1D2+DB; Firearms
+(Bow) 40%, heavy crossbow 2D4+2.
+Skills: Appraise 50%, Art/Craft (Blacksmithing) 45%, Persuade
+45%. Sees in the dark.
 
 ### Elf [ORC]
-STR 2D6+2 (9), CON 3D6 (11), SIZ 2D4+4 (9), INT 3D6+6 (17),
-POW 2D6+6 (13), DEX 3D6+3 (14), CHA 3D6 (11).
-HP 10, MOV 11, DM none. Armour: 1-pt (soft leather).
+STR (2D6+2)x5 (45), CON 3D6x5 (55), SIZ (2D4+4)x5 (45), INT
+(3D6+6)x5 (85), POW (2D6+6)x5 (65), DEX (3D6+3)x5 (70), APP
+3D6x5 (55). HP 10, MOV 11, DB none, Build 0. Armour: 1-pt
+(soft leather).
 Long-lived or immortal forest dwellers with strong connections
 to nature. Keen senses and magical aptitude.
 
 ### Ghost [ORC]
-STR --, CON --, SIZ --, INT 3D6 (11), POW 3D6+6 (17),
-DEX 3D6 (11), CHA 2D6 (7). HP = POW (17), MOV 12.
+STR --, CON --, SIZ --, INT 3D6x5 (55), POW (3D6+6)x5 (85),
+DEX 3D6x5 (55), APP 2D6x5 (35). HP a fifth of POW (17), MOV 12.
 Armour: None (immune to physical weapons). Attacks: Terrify
-(automatic, causes SAN loss); Chill Touch 50%, 1D6 PP drain.
+(automatic, causes SAN loss); chill touch, Fighting 50%,
+drains 1D6 MP.
 SAN Loss: 0/1D4. Incorporeal; can be affected by magic,
-enchanted weapons, or powers targeting POW.
+enchanted weapons, or opposed POW rolls.
 
 ### Ghoul [ORC]
-STR 4D6 (14), CON 3D6+3 (14), SIZ 2D6+6 (13), INT 2D6+6
-(13), POW 3D6 (11), DEX 3D6+3 (14). HP 14, MOV 9.
-Armour: 2-pt thick skin. Attacks: Claw 40%, 1D6+dm; Bite
-35%, 1D6+1/2dm + disease risk.
+STR 4D6x5 (70), CON (3D6+3)x5 (70), SIZ (2D6+6)x5 (65), INT
+(2D6+6)x5 (65), POW 3D6x5 (55), DEX (3D6+3)x5 (70). HP 14,
+MOV 9, DB +1D4, Build 1. Armour: 2-pt thick skin.
+Fighting 40%: claw 1D6+DB, bite 1D6+½DB + disease risk.
 SAN Loss: 0/1D6. Grave-dwelling scavengers that feast on
 the dead. Often found near cemeteries and crypts.
 
 ### Skeleton [ORC]
-STR 3D6 (11), CON -- (immune), SIZ 2D6+6 (13), INT -- (fixed
-3), POW 1 (fixed), DEX 2D6+3 (10). HP = SIZ (13), MOV 8.
-Armour: None. Attacks: Claw 40%, 1D6; Weapon (as weapon type).
-SAN Loss: 0/1D6. Animated bones. Immune to poison, disease,
-bleeding, and impaling specials. Takes minimum damage from
-non-crushing weapons.
+STR 3D6x5 (55), CON -- (immune), SIZ (2D6+6)x5 (65), INT 15
+(fixed), POW 5 (fixed), DEX (2D6+3)x5 (50). HP 13, MOV 8, DB
+none, Build 0. Armour: None.
+Fighting 40%: claw 1D6, or as weapon type.
+SAN Loss: 0/1D6. Animated bones. Immune to poison and disease;
+an impale deals only normal damage. Takes minimum damage from
+blades and bullets.
 
 ### Vampire [ORC]
-STR 4D6+12 (26), CON 3D6+6 (17), SIZ 2D6+6 (13), INT 3D6+6
-(17), POW 3D6+6 (17), DEX 3D6+6 (17), CHA 3D6+6 (17).
-HP 15, MOV 12, DM +1D6. Armour: None (but see regeneration).
-Attacks: Bite 50%, 1D6+dm + drain; Claw 50%, 1D6+dm.
-Skills: Dodge 50%, Hide 80%, Insight 65%, Stealth 80%.
+STR (4D6+12)x5 (130), CON (3D6+6)x5 (85), SIZ (2D6+6)x5 (65),
+INT (3D6+6)x5 (85), POW (3D6+6)x5 (85), DEX (3D6+6)x5 (85),
+APP (3D6+6)x5 (85). HP 15, MOV 12, DB +1D6, Build 2. Armour:
+None (but see regeneration).
+Fighting 50%: bite 1D6+DB + drain, claw 1D6+DB.
+Skills: Dodge 50%, Psychology 65%, Stealth 80%.
 SAN Loss: 1/1D4+. Regenerates 1 HP/round. Weakened by
 sunlight, garlic, holy symbols (at Keeper's discretion).
 
 ### Werewolf [ORC]
-STR 3D6+12 (23), CON 3D6+6 (17), SIZ 3D6+6 (17), INT 2D6+6
-(13), POW 3D6 (11), DEX 3D6+3 (14). HP 17, MOV 12.
+STR (3D6+12)x5 (115), CON (3D6+6)x5 (85), SIZ (3D6+6)x5 (85),
+INT (2D6+6)x5 (65), POW 3D6x5 (55), DEX (3D6+3)x5 (70). HP 17,
+MOV 12, DB +1D6, Build 2.
 Armour: 3-pt fur (immune to non-silver/non-magic weapons).
-Attacks: Bite 50%, 1D10+dm; Claw 60%, 1D8+dm.
+Fighting 60%: bite 1D10+DB, claw 1D8+DB.
 SAN Loss: 0/1D8. In human form, uses normal human stats.
 Transforms under full moon or at will (Keeper's choice).
 
 ### Zombie [ORC]
-STR 3D6+6 (17), CON 3D6+6 (17), SIZ 2D6+6 (13), INT --
-(fixed 1), POW 1 (fixed), DEX 1D6 (4). HP 15, MOV 4.
-Armour: None. Attacks: Fist 35%, 1D6+dm; Bite 30%, 1D4+1/2dm.
-SAN Loss: 1/1D8. Mindless animated corpse. Immune to
-poison, disease, impaling. Takes minimum damage from bullets
-(treat firearms as 1 HP per hit). No Dodge.
+STR (3D6+6)x5 (85), CON (3D6+6)x5 (85), SIZ (2D6+6)x5 (65),
+INT 5 (fixed), POW 5 (fixed), DEX 1D6x5 (20). HP 15, MOV 4,
+DB +1D4, Build 1. Armour: None.
+Fighting 35%: fist 1D6+DB, bite 1D4+½DB.
+SAN Loss: 1/1D8. Mindless animated corpse. Immune to poison
+and disease; an impale deals only normal damage. Bullets deal
+only 1 HP per hit. No Dodge.
 
 ---
 

@@ -1,111 +1,76 @@
-# Call of Cthulhu 7e — Powers and Magic Overview
+# Call of Cthulhu 7e — Magic Overview
 
-BRP ORC magic, sorcery, and psychic systems overview. Used
-during character creation for powered characters and during
-play for magic resolution. In a typical CoC game, magic is
-rare and dangerous; investigators encounter it more often
-than they wield it.
+How Mythos magic works in 7e: learning spells, casting them,
+paying for them, and what happens when it goes wrong. Used
+during play for magic resolution and during prep for cultists
+and sorcerers. In a typical CoC game, magic is rare and
+dangerous; investigators encounter it more often than they
+wield it. Page numbers are the Keeper Rulebook's.
 
-## Power Sets in BRP
+7e has one kind of magic: spells drawn from the Cthulhu Mythos.
+Basic Roleplaying's other power sets (sorcery, psychic powers,
+mutations, superpowers) and its power levels have no place in
+it. Pulp Cthulhu adds its own Talents, not covered here.
 
-The BRP system offers five power sets. A game can use one,
-several, or all. In Call of Cthulhu, magic (spells) is the
-primary supernatural system, though Keepers may draw on
-others for specific campaigns.
+## Magic Points (MP)
 
-### Magic
-Spells cast like skills using percentile rolls. Each spell
-known is a separate skill. Spells cost power points (based
-on POW) and can be made stronger by adding levels. Quick to
-cast but limited by power point reserves.
+- Spells, artefacts, and gates are powered by Magic points
+  (p.176). A character's MP is a fifth of POW; cultists and
+  sorcerers may have bigger pools.
+- MP spent beyond zero comes off hit points, one for one, shown
+  as physical harm: sores, blistering, bleeding from the eyes.
+- MP returns at 1 per hour (2 per hour with POW over 100, 3 over
+  200), never above a fifth of POW. Extra MP gained some other
+  way can be spent but not regained.
+- Some spells cost POW as well, for long-lasting or major
+  effects (p.243).
 
-### Sorcery
-Short incantations that automatically work unless resisted.
-Sorcerers memorise spells daily from a larger repertoire.
-Different levels of effectiveness. Seeking new spells is part
-of the sorcerer's journey.
+## Learning a Spell
 
-### Psychic Abilities
-Powers of the mind resolved through resistance rolls (INT or
-POW vs opposing characteristic). A psychic may have many
-abilities at moderate strength.
+Learning a spell costs no Sanity; casting one does (p.176).
 
-### Mutations
-Physical modifications beyond human norms (extra limbs,
-toxins, heightened senses). Some are harmful. Resolved through
-various mechanics depending on the specific mutation.
+- **From a book**: needs at least an initial reading of the
+  tome. Study takes about 2D6 weeks, then a Hard INT roll (the
+  Keeper may make it automatic). The roll may be pushed by
+  justifying it (shutting oneself away until it is mastered);
+  a failed push brings Sanity loss and strange effects.
+- **From a teacher**: the same rules, faster: about 1D8 days.
+- **From a Mythos entity**: through dreams, visions, or
+  telepathy, at a Sanity cost (1D6 or more suggested); the
+  Keeper may ask for an INT roll to keep the knowledge (p.177).
 
-### Superpowers
-Expansions of skills or characteristics beyond natural limits.
-Often resolved with resistance rolls. Include advantages and
-disadvantages.
+## Casting a Spell
 
-## Magic — The Core System
+- Casting costs MP and Sanity as the spell says; some need
+  components, a chant, and freedom to gesture (p.177).
+- **The first time** a character casts a newly learned spell,
+  they make a Hard POW roll. Success: the spell works. Failure:
+  nothing happens, and they may try again later (paying again)
+  by pushing the roll. After one successful casting, no roll is
+  needed. NPCs and monsters never make casting rolls.
+- **A pushed casting roll that fails still casts the spell**,
+  but the caster pays its cost (MP, Sanity, and/or POW) times
+  1D6, and the Keeper adds a side effect: blurred vision,
+  disembodied voices, wind, bleeding walls, a monster
+  accidentally summoned; worse for great spells (p.178).
+- **Disruption**: a caster struck or shot mid-casting loses the
+  spell but still pays its cost (p.179).
+- **Casting time in combat** (p.243): an instantaneous spell
+  goes off at DEX + 50, like a readied gun; a one-round spell
+  at the caster's DEX that round; a two-round spell at their
+  DEX the next round, and so on.
 
-Magic is the power set most relevant to Call of Cthulhu.
-The following covers how it works mechanically.
+## Resisting a Spell
 
-### How Magic Works
-- Each spell is a separate skill with a percentile rating.
-- Cast by spending power points and rolling D100 against the
-  spell's skill rating.
-- **Success**: Spell takes effect. Power points spent.
-- **Failure**: 1 power point is spent. Nothing happens.
-- **Fumble**: Full power point cost spent. Nothing happens
-  (or worse, at Keeper's discretion).
-- **Special/Critical**: Enhanced effects (see individual
-  spells or Keeper's ruling).
-- Spells can be improved through experience like any skill.
+Where a spell can be resisted, caster and target make opposed
+POW rolls; the higher level of success wins, then the higher
+POW (p.243). If the two POWs differ by 100 or more, the greater
+wins automatically. Older material's "POW vs POW on the
+resistance table" is this opposed roll (p.394).
 
-### Power Point Cost
-- Base cost is 1 power point per level of the spell.
-- Some spells cost more per level.
-- At 0 power points, the caster falls unconscious.
-- Recovery: 1 PP per hour while sleeping, 1 PP per 2 hours
-  while awake.
+## Range
 
-### Casting Time
-- One spell per combat round.
-- Cost: 1 DEX rank per level of the spell.
-- A level 1 spell cast by someone with DEX 15 activates at
-  DEX rank 14 (15 - 1 = 14).
-- Higher-level spells activate later in the round.
-
-### Spell Levels
-Each spell starts at level 1. Additional levels increase
-power and cost. The effect of each additional level is
-defined in the spell's description. Casters choose how many
-levels to invest when casting.
-
-### Resistance
-Some spells require a resistance roll (usually caster's POW
-vs target's POW on the resistance table). If the target
-resists, the spell has no effect but power points are still
-spent.
-
-### Range and Duration
-Vary by spell. Many spells require line of sight. Some are
-touch only. Durations range from instantaneous to permanent,
-with many lasting a number of rounds equal to the spell's
-level.
-
-## Sorcery — Key Differences from Magic
-
-- Sorcery spells automatically succeed (no skill roll)
-  unless the target resists.
-- Sorcerers memorise a limited number of spells per day from
-  a larger known repertoire.
-- Levels in sorcery spells affect intensity, not skill chance.
-- Sorcery spells are harder to learn; finding new ones is a
-  significant part of play.
-
-## Psychic Abilities — Key Differences
-
-- Resolved through resistance rolls (usually INT or POW vs
-  target characteristic) rather than percentile skill rolls.
-- Do not require gestures or incantations.
-- Often more subtle and harder to detect.
-- Draw from the same power point pool as magic.
+Usually touch, 100 yards, or sight (p.243).
 
 ## Magic in Call of Cthulhu
 
@@ -120,39 +85,13 @@ cult rituals, alien artefacts, and the effects of spells cast
 against them. Understanding magic often requires Occult or the forbidden
 Cthulhu Mythos skill.
 
-**What is the cost?** Beyond magic points, learning and using
-Mythos magic typically costs Sanity. The Cthulhu Mythos skill
-permanently reduces maximum Sanity (Max SAN = 99 minus Cthulhu
-Mythos). Each spell learned may cost additional SAN. The more
+**What is the cost?** Beyond Magic points, casting Mythos magic
+costs Sanity. The Cthulhu Mythos skill permanently reduces
+maximum Sanity (Max SAN = 99 minus Cthulhu Mythos). The more
 an investigator knows about the true nature of the universe,
 the less grip they have on their own sanity.
 
 **Mythos tomes** are the primary source of spells. Reading a
-tome takes weeks or months. Successful study grants spells
-but costs Sanity and raises the Cthulhu Mythos skill.
-
-## Power Level Guidelines
-
-The game's power level determines starting power access:
-
-| Level | Powers Available |
-|-------|-----------------|
-| Normal | None, or 1-2 minor, unreliable powers. Horror/modern adventure. |
-| Heroic | A few strong powers or many minor ones. Pulp adventure. |
-| Epic | Formidable powers. Veteran supernatural characters. |
-| Superhuman | Immense capabilities. Demigods and cosmic heroes. |
-
-Standard Call of Cthulhu uses the **Normal** power level.
-Pulp Cthulhu campaigns may use **Heroic**.
-
-## Opposing Different Power Types
-
-When powers from different sets conflict:
-1. Use the resistance table if both sides have a relevant
-   characteristic (usually POW).
-2. Find an equivalent rule from spot rules or equipment.
-3. Choose whatever is most fun and dramatically appropriate.
-
-All power sets draw from the same power point pool. A
-character using magic and psychic abilities does not maintain
-separate reserves.
+tome takes weeks or months. Study raises the Cthulhu Mythos
+skill and costs Sanity; the spells in it are learned
+separately, as above.

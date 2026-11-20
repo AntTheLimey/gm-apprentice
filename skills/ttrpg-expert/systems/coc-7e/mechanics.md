@@ -56,8 +56,8 @@ age modifiers. EDU, SIZ, and INT must be at least 40.
 
 ### Move Rate (MOV)
 
-Compare STR, DEX, and SIZ (use the raw pre-multiplication
-values, i.e., the 3-18 scale):
+Compare STR, DEX, and SIZ (Keeper Rulebook p.33; humans only,
+not monsters):
 
 | Condition | MOV |
 |-----------|-----|
@@ -186,14 +186,17 @@ Each character gets one action per round:
 Defensive reactions respond to attacks and do not use the
 character's action:
 
-- **Dodge**: Roll Dodge skill. Success avoids the attack.
-- **Fight Back**: Roll Fighting skill against a melee attack.
-  If successful and higher than the attacker's roll, the
-  defender avoids the attack and deals damage.
-- **Use Cover**: Drop behind cover against ranged attacks.
+- **Dodge**: Opposed Dodge roll. A higher level of success, or
+  the same level, avoids the attack.
+- **Fight Back**: Opposed Fighting roll against a melee attack.
+  A higher level of success avoids the attack and deals damage;
+  the same level goes to the attacker.
+- **Dive for Cover**: Against shots, a Dodge roll gives the
+  shooter a penalty die; the diver forfeits their next attack.
 
-One free defensive reaction per round. Each additional reaction
-incurs a cumulative penalty die.
+A character may dodge or fight back against every attack. Once
+they have, later melee attacks on them that round gain a bonus
+die (Keeper Rulebook p.108; see combat-reference.md).
 
 ### Damage and Injury
 

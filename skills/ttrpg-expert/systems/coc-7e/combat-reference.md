@@ -2,90 +2,84 @@
 
 Quick-reference for combat flow, defensive reactions, fighting
 manoeuvres, firearms rules, and common spot rules. Used during
-play for fast resolution of combat and hazards.
+play for fast resolution of combat and hazards. Page numbers
+are the Keeper Rulebook's.
 
 ## Combat Round Structure (approx. 12 seconds)
 
 1. **Determine Initiative** -- Characters act in DEX order
-   (highest DEX first). Ties are simultaneous.
+   (highest DEX first). A readied firearm shoots at DEX + 50
+   (p.112). Ties go to the higher combat skill.
 
 2. **Actions** -- Each combatant gets one action per round,
    resolved in DEX order:
    - **Attack (melee)**: Roll Fighting (Brawl) or weapon skill.
-   - **Attack (ranged)**: Roll Firearms skill.
-   - **Move**: Up to MOV x 5 yards if taking no other action.
-   - **Flee**: Initiate a chase (see Chase Rules).
+   - **Attack (ranged)**: Roll Firearms or Throw.
+   - **Fighting maneuver**: Disarm, grab, trip, shove (p.105).
+   - **Move**: Up to MOV x 5 yards (p.127).
+   - **Flee**: Leave melee if not held; may start a chase.
    - **Skill use**: One non-combat skill (First Aid, etc.).
-   - **Other**: Draw weapon, stand up, etc.
+   - **Other**: Draw weapon, stand up, cast a spell, etc.
 
 3. **Defensive Reactions** -- Taken in response to attacks;
    do not consume the character's action:
-   - **Dodge**: Roll Dodge to avoid the attack entirely.
-   - **Fight Back**: Roll Fighting against a melee attacker;
-     if your success level is higher, you avoid the attack
-     AND deal damage.
-   - **Use Cover**: Drop behind available cover (ranged only).
-   One free reaction per round. Each additional reaction
-   incurs a cumulative penalty die.
+   - **Dodge**: Opposed Dodge roll against a melee or thrown
+     attack.
+   - **Fight Back**: Opposed Fighting roll against a melee
+     attacker; win and you deal damage instead.
+   - **Dive for Cover**: Against shots, a Dodge roll; success
+     gives the shooter a penalty die, and the diver forfeits
+     their next attack (p.113).
+   A character may dodge or fight back against every attack.
+   Once they have, later melee attacks on them that round gain
+   a bonus die (see Outnumbered).
 
 4. **End of Round** -- Apply ongoing effects, check for
    unconsciousness, dying, or death.
 
 ## Attack vs Defence Resolution
 
-When an attacker rolls and the defender uses a reaction (Dodge
-or Fight Back), compare success levels:
+The attacker's Fighting roll is opposed by the defender's Dodge
+or Fighting roll; the higher level of success wins (pp.103-104):
 
-| Attacker | Defender | Result |
-|----------|----------|--------|
-| Higher level | -- | Attacker hits; roll damage |
-| -- | Higher level (Dodge) | Attack avoided entirely |
-| -- | Higher level (Fight Back) | Attack avoided; defender deals damage |
-| Same level | -- | Compare actual die rolls; higher successful roll wins |
-| Failure | -- | Miss, no damage |
-| Fumble | -- | Miss; attacker suffers a mishap |
+| Outcome | Defender dodging | Defender fighting back |
+|---------|------------------|------------------------|
+| Attacker higher | Hit; roll damage | Hit; roll damage |
+| Defender higher | Attack avoided | Attack avoided; defender deals damage |
+| Same level | Defender wins (dodged) | Attacker wins (hit) |
+| Both fail | Nothing happens | Nothing happens |
 
-**Success level hierarchy**: Extreme > Hard > Regular > Failure.
-Critical (01) counts as the highest possible success level.
+**Success level hierarchy**: Critical (01) > Extreme > Hard >
+Regular > Failure.
 
-When an attack hits with an Extreme success, it deals
-enhanced damage (impale for piercing weapons, knockback for
-blunt weapons, or other effects at Keeper's discretion).
-Armour is subtracted from damage as normal.
+**Extreme damage** (p.103), only on the attacker's own turn,
+never when fighting back: a non-impaling weapon deals maximum
+damage plus maximum damage bonus; an impaling weapon (blade,
+bullet) does the same and adds one more weapon damage roll.
+Armour is subtracted as normal.
 
-## Fumble Tables (Condensed)
+Combat rolls (Fighting, Firearms) cannot be pushed (p.104).
+Monsters and NPCs fight back by default and dodge only when
+trying to escape.
 
-### Melee Attack Fumbles (D100)
-- 01-25: Lose 1-1D3 rounds, helpless
-- 26-40: Fall prone
-- 41-60: Drop or throw weapon 1D10m
-- 61-65: Weapon loses 1D10 HP
-- 66-75: Vision obscured, -30% for 1D3 rounds
-- 76-98: Hit nearest ally (normal/special/critical)
-- 99-00: Roll again 2-3 more times
+## Fumbles
 
-### Melee Parry Fumbles (D100)
-- 01-20: Lose next round, helpless
-- 21-50: Fall prone or drop weapon
-- 51-75: Vision obscured, -30% for 1D3 rounds
-- 76-93: Wide open; foe auto-hits (normal/special/critical)
-- 94-00: Roll again 2-3 more times
+7e has no fumble tables (p.89). A fumble (100 when the
+target number is 50 or more, 96-100 below 50) means something
+worse than a miss, at the Keeper's discretion: a dropped or
+broken weapon, a fall, a blow to an ally. It takes effect at
+once and cannot be pushed away. A fumble with a firearm may be
+a malfunction or something worse (p.118). A chainsaw's chance
+of a fumble is doubled (p.64).
 
-### Missile/Firearm Fumbles (D100)
-- 01-25: Lose 1-1D3 rounds
-- 26-40: Fall prone
-- 41-55: Vision obscured, -30% for 1D3 rounds
-- 56-85: Drop, damage, or break weapon
-- 86-98: Hit nearest ally (normal/special/critical)
-- 99-00: Roll again 2-3 more times
+## Fighting Maneuvers
 
-### Natural Weapon Fumbles (D100)
-- 01-30: Lose 1-1D3 rounds
-- 31-60: Fall prone, possibly twist ankle (-1 MOV)
-- 61-75: Vision obscured
-- 76-85: Strain, lose 1 HP in attacking limb
-- 86-98: Hit ally or hard surface
-- 99-00: Roll again 2-3 more times
+Compare Builds first (p.105): one point smaller is a penalty
+die, two points smaller two penalty dice, three or more smaller
+and the maneuver is impossible. Then roll as an attack; the
+target dodges or fights back. A success disarms, knocks down,
+holds (one penalty die on the target, or a bonus die to allies
+against it), pushes over an edge, or breaks free of a hold.
 
 ## Multiple Defensive Reactions (Outnumbered)
 
@@ -100,52 +94,81 @@ Armour is subtracted from damage as normal.
 
 ## Spot Rules -- Quick Reference
 
-### Ambush
-Attackers must succeed at Stealth opposed by target's Listen
-or Spot Hidden. Surprise grants the attackers a free round
-of attacks with a bonus die; targets cannot use defensive
-reactions. After the surprise round, combat proceeds normally.
-
-### Backstab and Helpless Opponents
-Attacking from behind in melee: roll with a bonus die. Target
-may attempt a Hard Listen roll to notice, then a Hard Dodge.
-Helpless targets (unconscious, restrained): attack succeeds
-automatically, no defence possible.
+### Surprise, Ambush, and Helpless Targets
+A sudden attack (p.106): the target may get a Listen, Spot
+Hidden, or Psychology roll to see it coming, with the
+attacker's Stealth setting the difficulty. If they see it,
+they dodge or fight back as usual. If not, the Keeper makes the
+attack an automatic success (unless fumbled) or gives it a
+bonus die; a ranged attack always rolls to hit. A target that
+cannot or will not dodge or fight back is only missed on a
+fumble (p.107). Then switch to combat rounds.
 
 ### Cover
-Partial cover imposes a penalty die on attacks. If the attack
-roll would have hit without the penalty but misses with it,
-the shot hits the cover instead. Thick cover may stop the
-attack entirely; thin cover may let damage through (compare
-damage vs material's armour value).
+Hiding at least half the target imposes a penalty die on shots
+(p.113). Shooting through the cover adds the cover's armour
+rating to the target's: a thin wooden fence 1, a low brick wall
+10 (p.127). A target hidden completely behind cover can still
+be shot through it, at two steps higher difficulty plus the
+cover's armour; in a large hiding space, only a critical may
+hit (p.127).
 
 ### Darkness
-- Semi-darkness: one penalty die
-- Light fog/smoke: one penalty die
-- Full darkness: two penalty dice (or impossible for visual
-  tasks)
-- Complete darkness: visual Spot Hidden is impossible
-Detect opponents in total dark with a Hard Listen roll.
+7e has no fixed darkness rule; treat it as concealment:
+- Semi-darkness, light fog, or smoke: one penalty die
+- Full darkness: two penalty dice
+- Complete darkness: visual Spot Hidden is impossible; a Hard
+  Listen roll can locate a foe
 
 ### Disease
-Roll CON to resist infection. If caught, roll CON daily to
-fight off the disease. Failure means the disease progresses
-(losing HP or characteristic points depending on severity).
-Medicine rolls can assist recovery. Specific diseases have
-their own progression and treatment rules.
+7e has no disease rules. Medicine treats disease; First Aid
+cannot (p.65). A CON roll to resist, with Hard difficulty for a
+virulent strain, is a reasonable Keeper's call. Damage, if
+any, uses Table III (p.124).
 
 ### Poison
-Poison has a Potency (POT). Resist with CON vs POT on the
-resistance table. Failure: take POT in damage (to HP or
-characteristic, depending on poison type). Success: take
-half POT damage. Speed of onset varies (instant, 1D6 rounds,
-hours). Antidotes reduce effective POT.
+Poison comes in bands (p.128): very mild (symptoms only,
+perhaps unconsciousness), mild 1D10 damage, strong 2D10, lethal
+4D10. The victim makes a CON roll; an Extreme success halves
+the damage and eases the symptoms, and on a critical the
+Keeper may let them shake it off. Several doses add a penalty
+die. A player may push the CON roll by purging the poison.
+Older material's POT converts as POT 1-9 mild, 10-19 strong,
+20+ lethal (p.394). Armour does not stop poison (p.108).
 
 ### Falling
-1D6 damage per 3 metres fallen. SIZ 5 or less: reduce by
-1D6. SIZ 20+: add 1D6 per 20 SIZ above 20. Armour provides
-half protection for falls up to 3m. A successful Jump roll
-reduces falling damage by 1D6 per success level.
+Table III (p.124) rates a fall per 10 feet by what is below:
+1D3 onto soft swamp, 1D6 onto grass, 1D10 onto concrete. A
+successful Jump roll prepares for the fall and halves the
+damage (p.66).
+
+### Knock-Out Blows
+The standard rules knock a target out with a Major Wound (a
+failed CON roll) or at zero hit points (p.125). The optional
+movie-style rule: a knock-out is a fighting maneuver with a
+blunt attack; success leaves the target unconscious with only
+1 hit point of damage. It needs a skull or similar weak spot
+(humans, deep ones, ghouls; not a shoggoth). Against an
+unaware target it is an automatic success (p.106).
+
+### Choking, Drowning, Asphyxiation
+A CON roll each round; Hard difficulty when exerting oneself.
+Once a roll fails, damage every round until the victim can
+breathe (p.124): 1D3 for a smoky atmosphere, 1D6 for breathing
+water or vacuum. Armour does not help.
+
+### Fire and Heat
+Table III (p.124), per round of exposure:
+- Burning torch: 1D6
+- Flamethrower, running through a burning room: 1D10
+Larger fires move up the table (2D10 and beyond) at the
+Keeper's discretion (p.123).
+
+### Explosions
+For a hand grenade or a stick of dynamite (Table III, p.124):
+4D10 within 3 yards, 2D10 at 3 to 6 yards, 1D10 at 6 to 9
+yards. A target who sees it coming may dive for cover with a
+Dodge roll (p.113). Bigger charges move up the table.
 
 ### Firing into Combat
 One penalty die when shooting at a target engaged in melee. A
@@ -155,41 +178,12 @@ range (a fifth of their DEX in feet) gains a bonus die, which
 cancels the penalty die, but a foe in reach may attack or disarm
 them (Keeper Rulebook pp.113-114).
 
-### Knockout Attacks
-Declare intent before rolling. Make a Fighting roll (targeting
-the head). If the attack succeeds, compare damage to half the
-target's max HP:
-- Damage < half max HP: target takes minimum damage, stays
-  conscious.
-- Damage >= half max HP: target takes 1 HP damage and is
-  knocked unconscious.
-
-### Choking, Drowning, Asphyxiation
-An investigator can hold their breath for a number of rounds
-equal to their CON/10 (round down). After that, roll CON
-each round with increasing difficulty. Failure means the
-investigator begins drowning/suffocating, taking 1D8 damage
-per round (water), 1D4 (smoke), or 1D6 (dense smoke). If
-surprised (no chance to prepare), the situation is immediately
-dangerous.
-
-### Fire and Heat
-- Candle/lantern: 1 HP/round of direct contact
-- Torch/small fire: 1D6/round; may set target alight
-- Bonfire: 1D6+2/round; clothing catches fire on POW x1 fail
-- Intense fire (lava, furnace): 3D6/round; auto-ignites
-Conventional armour protects for 1D3 rounds only. Fire-
-retardant gear protects normally.
-
-### Explosions
-Damage = XD6 at epicentre. Reduce by 1D6 per 2m from centre.
-A successful Dodge roll allows diving for cover (reduces
-damage and leaves the investigator prone). Damage is applied
-to the investigator as a whole (not by hit location).
-
-### Autofire
-Burst: +20% to hit. Full auto: +40%. Roll one attack. On
-success, roll appropriate die for number of rounds hitting.
-Only the first round can achieve special or critical. Against
-spread targets: no skill bonus; roll separately per target.
-Narrow field of fire (corridor): +20% additional.
+### Burst and Full Auto
+Declare the bullets fired first (p.114, summary p.410). Full
+auto splits into volleys of skill/10 bullets (minimum 3), one
+attack roll each; a burst is a single volley. The first roll
+uses the range difficulty and modifiers; each later roll adds a
+penalty die (at a third, stay at two and raise the difficulty a
+step). A success hits with half the volley (round down, minimum
+one); an Extreme success hits with all of it, the first half
+impaling. Moving between targets spends a bullet per yard.
