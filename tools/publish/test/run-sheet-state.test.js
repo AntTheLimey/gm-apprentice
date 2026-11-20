@@ -177,7 +177,7 @@ describe('run sheet state', () => {
     assert.deepStrictEqual(s.improvised.map((i) => i.key), ['i-1', 'i-2']);
     const d = RS.derive(model, s);
     assert.ok(d.beats.some((b) => b.key === 'i-1' && b.impro && b.title === 'A stranger at the well'));
-    assert.ok(d.log.some((l) => /Improvised/.test(l.text) && /stranger/.test(l.text)));
+    assert.ok(d.log.some((l) => /Improvised beat/.test(l.text) && /stranger/.test(l.beatTitle)));
     const s2 = run([{ type: 'unimprovise', key: 'i-1' }], s);
     assert.deepStrictEqual(s2.improvised.map((i) => i.key), ['i-2']);
     // the next one never reuses a live key
@@ -238,7 +238,7 @@ describe('run sheet state', () => {
     assert.ok(d.fired.some((f) => f.beat === c.key));
     assert.ok(d.reached.has(c.key));
     assert.deepStrictEqual(d.handedOver.map((x) => x.key), [h.key]);
-    assert.ok(d.log.some((l) => /Fired/.test(l.text)) && d.log.some((l) => /handed over/i.test(l.text)));
+    assert.ok(d.log.some((l) => /Contingency fired/.test(l.text)) && d.log.some((l) => /handed over/i.test(l.text)));
     const off = run([{ type: 'fire', beat: c.key, on: false }, { type: 'handOver', handout: h.key, on: false }], s);
     assert.deepStrictEqual([RS.derive(model, off).fired, RS.derive(model, off).handedOver], [[], []]);
   });

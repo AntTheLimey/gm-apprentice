@@ -29,6 +29,12 @@ function whoOf(cell) {
   return target.replace(/\\+$/, '').trim();
 }
 
+// A copy number: the trailing number after the Who cell's link (`[[Guard]] 2` is the second Guard).
+function copyOf(cell) {
+  const m = /\]\]\s*(\d+)\s*$/.exec(String(cell || ''));
+  return m ? Number(m[1]) : null;
+}
+
 // Each table under the vitals section as { columns, rows }: the columns from its header row (a row
 // directly above a `---` separator; `*` and `_` emphasis ignored), else by position. A header row that
 // names none of them gives `columns: null`: the table is not read, never guessed by position.
@@ -79,6 +85,7 @@ function readTableLog(text) {
       if (!hp && hpText) unread.push({ who, cell: hpText });
       vitals.push({
         who,
+        copy: copyOf(cell(cells, columns.who)),
         hpNow: hp ? Number(hp[1]) : null,
         hpMax: hp && hp[2] !== undefined ? Number(hp[2]) : null,
         conditions: cell(cells, columns.conditions),

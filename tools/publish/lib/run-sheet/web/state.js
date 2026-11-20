@@ -77,7 +77,7 @@
       if (a.on) {
         if (s.fired[a.beat]) return;
         s.fired[a.beat] = { title: a.title || '', at };
-        log(s, at, a.beat, `Fired: ${a.title || 'a contingency'}.`, a.title);
+        log(s, at, a.beat, 'Contingency fired.', a.title);
       } else delete s.fired[a.beat];
     },
     stop(s, a, at) {
@@ -91,7 +91,7 @@
       const n = s.improvised.reduce((m, i) => Math.max(m, Number(String(i.key).slice(2)) || 0), 0) + 1;
       const key = `i-${n}`;
       s.improvised.push({ key, title, at });
-      log(s, at, key, `Improvised: ${title}.`, title);
+      log(s, at, key, 'Improvised beat.', title);
     },
     unimprovise(s, a) {
       s.improvised = s.improvised.filter((i) => i.key !== a.key);
@@ -123,7 +123,7 @@
       if (!a.handout) return;
       if (!a.on) { delete s.handouts[a.handout]; return; }
       s.handouts[a.handout] = { text: a.text || '', note: a.note || null, at };
-      log(s, at, null, `Handed over: ${a.text || stem(a.note) || 'a handout'}.`);
+      log(s, at, null, `Handed over: ${String(a.text || stem(a.note) || 'a handout').replace(/\.$/, '')}.`);
     },
     loot(s, a, at) {
       if (!a.item) return;
