@@ -60,6 +60,8 @@ class PersonalHomeTests(unittest.TestCase):
         with mock.patch.dict(os.environ, {ph.TEST_HOME_ENV: str(self.user)}):
             self.assertEqual(ph.home(), self.home)
             self.assertEqual(ph.shown(self.home / "fitd"), str(self.home / "fitd"), "spelled out, never ~/")
+        with mock.patch.dict(os.environ, {ph.TEST_HOME_ENV: "~/stand-in"}):
+            self.assertEqual(ph.home(), Path.home() / "stand-in" / "gm-apprentice" / "personal")
         with mock.patch.dict(os.environ, {ph.TEST_HOME_ENV: ""}):
             self.assertEqual(ph.home(), Path.home() / "gm-apprentice" / "personal")
 

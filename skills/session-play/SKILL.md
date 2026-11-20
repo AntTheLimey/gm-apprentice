@@ -33,8 +33,8 @@ that prose takes: as before). Never draft one.
 
 **Quick reference** — NPC, location, rules and scene facts from the
 vault. Essentials only. A name the vault doesn't have may be in the
-GM's personal reference files (below): check them before saying it
-isn't there.
+GM's personal reference files: run `gma personal --system {system}`
+and look there (below) before saying it isn't there.
 
 **Rules assist** — answer the mechanical question, nothing more
 (routes below).
@@ -114,5 +114,5 @@ The GM's personal reference files (`gma personal --system {system}`
 lists them) hold their own books, adventures, factions, NPCs,
 locations and tables. Check them when a name the GM asks about isn't
 in the vault, and when improvising and the public SRD/ORC files lack
-setting detail. Read the file that fits, or search the folder for the
-name.
+setting detail. Read the file that fits; if the name isn't there,
+search the whole folder for it.
