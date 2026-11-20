@@ -141,6 +141,13 @@ class DoctorTests(unittest.TestCase):
         self.assertIn("tool install", found[3].fix)
         self.assertEqual(doctor.report(found)[1], 0)
 
+    def test_an_unreadable_personal_home_is_a_warning_not_a_crash(self):
+        with unittest.mock.patch.object(doctor.personal_home, "listing", side_effect=PermissionError(13, "Permission denied")):
+            found = _run(_install(self.root, tool="1.70.1"))
+        self.assertEqual(found[-1].level, "warn")
+        self.assertIn("could not be read (Permission denied)", found[-1].what)
+        self.assertEqual([c.level for c in found[:4]], ["ok"] * 4, "the other checks still report")
+
     def test_it_runs_through_gma_and_changes_nothing(self):
         with tempfile.TemporaryDirectory() as user:  # never the GM's own home (personal files)
             done = subprocess.run([sys.executable, str(REPO / "skills" / "shared" / "scripts" / "gma.py"), "doctor"],

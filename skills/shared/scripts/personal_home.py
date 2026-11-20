@@ -142,6 +142,17 @@ def adopt(shared: Path, *, user_home: Path | None = None, dry_run: bool = False)
     result = Adoption()
     record = _read_record(target)
     seen = set(record)
+    try:
+        _adopt_into(shared, target, seen, result, dry_run)
+    finally:
+        # Written when a copy fails too, so the files already copied stay dealt with. The one
+        # that failed never reached `seen`, so the next run tries it again.
+        if not dry_run and seen != record:
+            _write_record(target, seen)
+    return result
+
+
+def _adopt_into(shared: Path, target: Path, seen: set[str], result: Adoption, dry_run: bool) -> None:
     for label, systems in sources(shared):
         if not systems.is_dir():
             continue
@@ -154,7 +165,6 @@ def adopt(shared: Path, *, user_home: Path | None = None, dry_run: bool = False)
                 key = "/".join((system, *rel.parts))
                 if key in seen:
                     continue
-                seen.add(key)
                 dest = target / system / rel
                 if dest.exists():
                     # Same bytes, or the home's copy is the newer (the GM edited it after it came
@@ -162,13 +172,11 @@ def adopt(shared: Path, *, user_home: Path | None = None, dry_run: bool = False)
                     same = dest.is_file() and dest.read_bytes() == src.read_bytes()
                     if not same and src.stat().st_mtime > dest.stat().st_mtime:
                         result.clashes.append((src, dest))
-                    continue
-                if not dry_run:
-                    _copy(src, dest)
-                result.copied[label] = result.copied.get(label, 0) + 1
-    if not dry_run and seen != record:
-        _write_record(target, seen)
-    return result
+                else:
+                    if not dry_run:
+                        _copy(src, dest)
+                    result.copied[label] = result.copied.get(label, 0) + 1
+                seen.add(key)
 
 
 def adoption_lines(result: Adoption, *, user_home: Path | None = None) -> list[str]:

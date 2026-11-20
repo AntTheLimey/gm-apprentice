@@ -423,7 +423,7 @@ def _personal_records(folder: Path, wanted: set[str] | None) -> Iterator[Record]
             continue
         if wanted is not None and rel_parts[0] not in wanted:
             continue
-        yield from parse_file(path, rel_parts[0], personal_home.shown(path))
+        yield from parse_file(path, system_slug(rel_parts), personal_home.shown(path))
 
 
 def _corpus_records(systems_dir: Path, wanted: set[str] | None) -> Iterator[Record]:

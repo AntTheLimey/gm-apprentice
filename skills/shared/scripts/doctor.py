@@ -149,9 +149,12 @@ def _personal(layout: Layout, user_home: Path | None) -> list[Check]:
     """The GM's personal reference files: how many, and any still in the plugin's own folders
     (counted, never copied: doctor changes nothing). No line when there are none."""
     out: list[Check] = []
-    files = personal_home.listing(user_home=user_home)
-    count = sum(len(f) for f in files.values())
     where = personal_home.shown(personal_home.home(user_home), user_home)
+    try:
+        files = personal_home.listing(user_home=user_home)
+    except OSError as e:
+        return [Check("warn", f"personal reference files: {where} could not be read ({e.strerror or e})")]
+    count = sum(len(f) for f in files.values())
     if count:
         out.append(Check("ok", f"personal reference files: {count} in {where} ({', '.join(files)})"))
     try:

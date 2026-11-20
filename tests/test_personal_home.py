@@ -106,6 +106,26 @@ class PersonalHomeTests(unittest.TestCase):
         self.adopt(new, dry_run=True)
         self.assertEqual(self.adopt(new).copied, {"1.12.95": 1}, "the dry run left it to be copied")
 
+    def test_a_failed_copy_keeps_the_files_already_copied_dealt_with(self):
+        old = self.cache / "1.12.95"
+        _install(old)
+        _write(_personal(old, "fitd", "a.md"), "a")
+        _write(_personal(old, "fitd", "b.md"), "b")
+        new = _install(self.cache / "1.12.105")
+        real_copy = ph._copy
+
+        def copy_a_only(src, dest):
+            if src.name == "b.md":
+                raise OSError(28, "No space left on device")
+            real_copy(src, dest)
+
+        with mock.patch.object(ph, "_copy", copy_a_only), self.assertRaises(OSError):
+            self.adopt(new)
+        (self.home / "fitd" / "a.md").unlink()  # the GM deletes the one that came across
+        self.assertEqual(self.adopt(new).copied, {"1.12.95": 1}, "only b.md, the one that failed")
+        self.assertFalse((self.home / "fitd" / "a.md").exists())
+        self.assertTrue((self.home / "fitd" / "b.md").exists())
+
     def test_files_in_the_running_install_are_copied_too(self):
         shared = _install(self.cache / "1.12.105")
         _write(_personal(self.cache / "1.12.105", "coc-7e", "arkham.md"), "arkham")

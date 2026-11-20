@@ -17,6 +17,7 @@ Run: python3 tests/test_rules_lookup.py
 import json
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -245,6 +246,16 @@ class Gating(unittest.TestCase):
         self.assertEqual([], [r for r in rl.iter_records(FIX, personal=True, personal_dir=HOME_FIX, systems=["coc-7e"])
                               if r.name == "Home Trait"])
 
+
+    def test_a_personal_variant_file_belongs_to_its_variant(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            (home / "coc-7e" / "variants" / "regency").mkdir(parents=True)
+            (home / "coc-7e" / "variants" / "regency" / "skills.md").write_text(
+                "| Skill | Base |\n|---|---|\n| Regency Only Skill | 10% |\n")
+            found = {r.system for r in rl.iter_records(FIX, personal=True, personal_dir=home)
+                     if r.name == "Regency Only Skill"}
+        self.assertEqual(found, {"coc-7e/regency"})
 
 class ParenAndDashLeads(unittest.TestCase):
     """I1: a parenthetical, or an ASCII '--' dash, after a bold lead still
