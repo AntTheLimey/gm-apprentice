@@ -113,6 +113,38 @@ class ChainTests(unittest.TestCase):
         self.assertNotIn("table-log", got)
 
 
+class WrapUpSourceTests(unittest.TestCase):
+    WRAP = "Chapters/Chapter 1/Sessions/Session 01/Chapter_01_Session_01_Wrap_Up.md"
+
+    def rows(self, with_notes):
+        with tempfile.TemporaryDirectory() as d:
+            session_vault(d, [("table_log", "Session 01 - Arrival - Table Log")])
+            if with_notes:
+                write(d, "Chapters/Chapter 1/Sessions/Session 01/"
+                         "Session 01 - Arrival - Play Notes.md",
+                      "---\ntype: session-play-notes\nsession: \"[[Session 01 - Arrival]]\"\n"
+                      "session_number: 1\nchapter: \"[[Chapter 1]]\"\n---\n\nPlayed.\n")
+            write(d, self.WRAP,
+                  "---\ntype: session_wrap\nsession: \"[[Session 01 - Arrival]]\"\n"
+                  "session_number: 1\nchapter: \"[[Chapter 1]]\"\n---\n\n"
+                  "## Narrative Recap\n\nIt happened.\n")
+            return [r for r in vc.check_wrapup(Path(d), None, False)
+                    if r.startswith("INFO\t") and "source_document" in r]
+
+    def test_table_log_only_needs_no_source(self):
+        rows = self.rows(with_notes=False)
+        self.assertEqual(len(rows), 1, rows)
+        self.assertNotIn("add it by hand", rows[0])
+        self.assertIn("only play record is a Table Log", rows[0])
+        self.assertIn("none is needed", rows[0])
+
+    def test_play_notes_still_backfill(self):
+        rows = self.rows(with_notes=True)
+        self.assertEqual(len(rows), 1, rows)
+        self.assertIn("backfill", rows[0])
+        self.assertIn("Play Notes", rows[0])
+
+
 class RevealScanTests(unittest.TestCase):
     def test_table_log_never_a_name_candidate(self):
         self.assertIn("session-table-log", rs.NEVER_CANDIDATES)

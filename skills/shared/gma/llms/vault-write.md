@@ -368,7 +368,8 @@ gma vault-write <vault> table-log-new --session SESSION [options]
 
 ```text
 Files <index> - Table Log beside the index with its sections
-empty, and sets its documents.table_log, play_date (with
+empty (the vitals table's header row only), and sets its
+documents.table_log, play_date (with
 --play-date) and a planned or prepped status to played. The
 other play records are left alone. Refused when a Table Log
 already names the session.

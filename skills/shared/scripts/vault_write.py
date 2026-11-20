@@ -3984,6 +3984,7 @@ TABLE_LOG_SECTIONS: tuple[str, ...] = (
     "Unmasked this session", "Handouts handed over", "Log", "Loot",
     "Vitals at the end", "Advancement",
 )
+TABLE_LOG_VITALS_HEAD = "\n| Who | HP | Conditions |\n| --- | --- | --- |\n"
 
 
 def record_text(key: str, stem: str, n: int, chapter_raw: str | None,
@@ -4010,7 +4011,9 @@ def record_text(key: str, stem: str, n: int, chapter_raw: str | None,
     text = ("---\n" + "\n".join(note_fm) + "\n---\n\n"
             f"# {stem} - {suffix}\n")
     if key == "table_log":
-        text += "".join(f"\n## {name}\n" for name in TABLE_LOG_SECTIONS)
+        # The vitals table's header row gives a hand-writer its columns.
+        text += "".join(f"\n## {name}\n" + (TABLE_LOG_VITALS_HEAD if name == "Vitals at the end" else "")
+                        for name in TABLE_LOG_SECTIONS)
     if export_path:
         text += "\n" + export
     return text
@@ -5719,7 +5722,8 @@ def build_parser() -> argparse.ArgumentParser:
         "table-log-new", help="an empty Table Log beside a session index",
         formatter_class=raw, description=(
             "Files <index> - Table Log beside the index with its sections\n"
-            "empty, and sets its documents.table_log, play_date (with\n"
+            "empty (the vitals table's header row only), and sets its\n"
+            "documents.table_log, play_date (with\n"
             "--play-date) and a planned or prepped status to played. The\n"
             "other play records are left alone. Refused when a Table Log\n"
             "already names the session."))

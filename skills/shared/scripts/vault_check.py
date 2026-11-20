@@ -4048,6 +4048,7 @@ class WrapContext:
     ambiguous_index: bool = False
     notes_rel: str | None = None
     ambiguous_notes: bool = False
+    table_log_only: bool = False  # no Play Notes or Export, but a Table Log
 
 
 def is_recap_title(title: str) -> bool:
@@ -4180,22 +4181,27 @@ def _wrap_context(rel: str, fm: dict,
         target = wikilink_target(f.get("session"))
         return bool(own and target and link_target(target) != own)
 
+    def records(key: str) -> list[str]:
+        return [r for r, _t, f in entries
+                if isinstance(f.get("type"), str)
+                and f["type"] in SESSION_DOC_TYPES[key][1]
+                and ctx.number is not None
+                and _session_number_of(r, f) == ctx.number
+                and _chapters_agree(chapter, chapter_key(r, f))
+                and not names_another(f)]
+
     notes: list[str] = []
     # The Table Log is numbers, not narrative: never a source.
     for key in ("export", "play_notes"):
-        notes = [r for r, _t, f in entries
-                 if isinstance(f.get("type"), str)
-                 and f["type"] in SESSION_DOC_TYPES[key][1]
-                 and ctx.number is not None
-                 and _session_number_of(r, f) == ctx.number
-                 and _chapters_agree(chapter, chapter_key(r, f))
-                 and not names_another(f)]
+        notes = records(key)
         if notes:
             break
     if len(notes) == 1:
         ctx.notes_rel = notes[0]
     elif notes:
         ctx.ambiguous_notes = True
+    else:
+        ctx.table_log_only = bool(records("table_log"))
     return ctx
 
 
@@ -4396,6 +4402,11 @@ def wrapup_frontmatter_findings(rel: str, text: str,
                 "INFO", rel,
                 f"source_document: absent — backfill {value}",
                 "fm", ("set", "source_document", value)))
+        elif ctx.table_log_only:
+            out.append(Finding(
+                "INFO", rel,
+                "source_document: absent — this session's only play record "
+                "is a Table Log, which is never a source: none is needed"))
         else:
             reason = ("more than one" if ctx.ambiguous_notes else "no")
             out.append(Finding(

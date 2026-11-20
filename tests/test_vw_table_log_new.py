@@ -67,9 +67,10 @@ class TableLogNewTests(unittest.TestCase):
         self.assertEqual(vl.wikilink_target(fm["session"]), SESSION)
         self.assertEqual(re.findall(r"^## (.*)$", text, re.M), SECTIONS)
         body = text.split("---\n", 2)[2]
+        # every section empty but the vitals table's header and separator rows
         self.assertEqual(
             [s.strip() for s in re.split(r"^## .*$", body, flags=re.M)[1:]],
-            [""] * 16)
+            [""] * 14 + ["| Who | HP | Conditions |\n| --- | --- | --- |", ""])
         errors = [m for level, m in schema_rules.frontmatter_findings(
             fm, None, vl.raw_frontmatter(text)) if level == "ERROR"]
         self.assertEqual(errors, [])
