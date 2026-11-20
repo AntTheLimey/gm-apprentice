@@ -78,7 +78,8 @@ const click = (page, sel) => page.evaluate(`(() => { const e = document.querySel
 const typeEnter = (page, sel, text) => page.evaluate(`(() => { const e = document.querySelector(${JSON.stringify(sel)}); e.focus(); e.value = ${JSON.stringify(text)};
   e.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); return true; })()`);
 const probe = (page) => page.evaluate(PROBE);
-const settled = (page) => page.waitFor(`(() => { const p = ${PROBE}; return p && p.saved === 'Saved' && p.pending === 0 && p; })()`);
+// Settled means drawn as well as saved: the probe can say Saved before the first draw has put any beat on the page.
+const settled = (page) => page.waitFor(`(() => { const p = ${PROBE}; return p && p.beats > 0 && p.saved === 'Saved' && p.pending === 0 && p; })()`);
 
 describe('the GM page in a browser', { skip: browserSkip() }, () => {
   let run;
@@ -314,7 +315,9 @@ describe('the GM page in a browser', { skip: browserSkip() }, () => {
     const old = await start(BENCHMARK, 'Session 03 - The Inner Sanctum', []);
     await withPage({ width: 1449, height: 762 }, async (page) => {
       await page.goto(`${old.base}?probe=1`);
-      const p = await settled(page);
+      // No beats here, so wait for the prep to be drawn instead of settled()'s first beat.
+      await page.waitFor('document.querySelectorAll("#prep h3").length > 0');
+      const p = await page.waitFor(`(() => { const p = ${PROBE}; return p && p.saved === 'Saved' && p.pending === 0 && p; })()`);
       assert.strictEqual(p.beats, 0);
       assert.deepStrictEqual(p.errors, []);
       assert.ok(await page.evaluate('document.querySelectorAll("#prep h3").length > 0'), 'the prep is on the page');
