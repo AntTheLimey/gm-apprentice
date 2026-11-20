@@ -47,6 +47,11 @@ const POINTER_BULLET = /^.*(?:[—–-]\s*|,\s*)Scenes?\s+\d+(?:\s*\([^)]*\)|,?\
 // An NPCs-block bullet led by a bold plain name (`- **The shikarri:** wants a clean drive`): a person
 // with no note. plan_check.py's _NPC_LINE_RE reads the same two forms.
 const PLAIN_NPC_LINE = /^\*\*([^*\[\]\n(]+?)(?:\s*\(([^)]*)\))?:?\*\*:?[ \t]*(?:\(([^)]*)\)[ \t]*:)?\s*([\s\S]*)$/;
+// A reinforcements cue (`- **Arriving, start of round 3:** [[Sister Wren]] and four Brothers`): a plain bold lead that
+// opens with a cue word or holds `round N`. With npc or creature links after it, it is an arrival, never a person.
+// plan_check.py holds the same rule.
+const CUE_LEAD = /^(?:arriv(?:es?|ing)\b|enter|reinforcements?\b|later\b|when\b|after\b|at round\b|on round\b)|\bround\s+\d+/i;
+const CUE_LINE = /^\*\*([^*\[\]\n]+?)\*\*:?[ \t]*([\s\S]*)$/;
 const BARE_LINK_LEAD = /^(!?\[\[[^\]]+\]\])/;
 const BOLD_LEAD = /^\*\*([^*\n]+?)\*\*/;
 const COLON_LEAD = /^\*\*[^*\n]+?(?::\*\*|\*\*:)/;
@@ -169,6 +174,8 @@ function readBeats(planBody, index) {
     b.who.forEach((w, j) => { w.key = whoKeys[j]; });
     const spotKeys = itemKeys(b.key, 'spot', b.spots.map((s) => s.note || s.name));
     b.spots.forEach((s, j) => { s.key = spotKeys[j]; });
+    const arrKeys = itemKeys(b.key, 'arrive', b.arrivals.map((a) => a.text));
+    b.arrivals.forEach((a, j) => { a.key = arrKeys[j]; });
     for (const [field, kind, textOf] of [['points', 'pt', (x) => x.text], ['treasure', 'loot', (x) => x.text], ['ifs', 'if', (x) => x.do]]) {
       const ks = itemKeys(b.key, kind, b[field].map(textOf));
       b[field].forEach((x, j) => { x.key = ks[j]; });
@@ -185,6 +192,8 @@ function readBeats(planBody, index) {
     ifs: b.ifs.map((x) => ({ key: x.key, do: x.do, then: x.then })),
     treasure: b.treasure.map((x) => ({ key: x.key, text: x.text, box: x.box, item: index.itemOf(x.text) })),
     handouts: b.handouts, entities: b.entities, foes: [], extra: b.extra,
+    type: b.type,
+    arrivals: b.arrivals.map((a) => ({ key: a.key, when: a.when, text: a.text, people: a.people })),
   }));
   // `sections[i]` is the `##` title beat i was read under.
   return { beats: ordered, sections: heads.map((h) => h.section), claimed, preamble, warnings };
@@ -365,12 +374,34 @@ function readBeats(planBody, index) {
     };
     const person = (note, n) => ({ note, name: n.name, knownAs: n.knownAs, count: n.count, wants: n.wants, playAs: playAsOf(note, index), dead: isDeadNote(note) });
 
+    // An arrival: a plain bold cue lead and the npc or creature notes its words link.
+    const arrivals = [];
+    const cueOf = (itemText) => {
+      const m = itemText.match(CUE_LINE);
+      if (!m) return null;
+      const when = m[1].trim().replace(/[\s:]+$/, '');
+      const words = m[2].replace(/\s+/g, ' ').trim();
+      if (!CUE_LEAD.test(when)) return null;
+      const people = [];
+      for (const lk of (words.match(LINK) || []).filter((x) => !x.startsWith('!'))) {
+        const p = resolve(linkParts(lk.slice(2, -2)).target);
+        if (p && isFolk(p) && !people.includes(p)) people.push(p);
+      }
+      return people.length ? { when, text: words, people } : null;
+    };
+
     // Whether each entry's count was written as a number (`(3)`), by who index.
     const countedAt = [];
     const npcBlocks = blocksOf('NPCs');
     for (const b of npcBlocks) {
       blockHeads.push(b);
       for (const item of offset(pt.bullets(b.sub), b.start)) {
+        const cue = cueOf(item.text);
+        if (cue) {
+          arrivals.push(cue);
+          claim(item.start, item.end);
+          continue;
+        }
         const ns = npcsFrom(item.text, true);
         if (!ns.length) continue;
         let held = false;
@@ -436,6 +467,11 @@ function readBeats(planBody, index) {
           const leadLinks = lead ? (lead[1].match(LINK) || []) : (first.match(BARE_LINK_LEAD) || []).slice(1);
           const leadTypes = leadLinks.map((m) => typeOf(resolve(linkParts(m.replace(/^!?\[\[|\]\]$/g, '')).target)));
           if (leadTypes.includes('scene') || (!COLON_LEAD.test(first) && POINTER_BULLET.test(first) && !leadTypes.includes('location'))) continue;
+          // a routing line: its only links are scene notes (`- When the wandering winds down: [[Lucan's Call]]`)
+          if (!COLON_LEAD.test(first)) {
+            const all = (item.text.match(LINK) || []).filter((m) => !m.startsWith('!'));
+            if (all.length && all.every((m) => typeOf(resolve(linkParts(m.slice(2, -2)).target)) === 'scene')) continue;
+          }
           const nb = item.text.match(NAMED_BULLET);
           let name;
           let rest;
@@ -575,7 +611,7 @@ function readBeats(planBody, index) {
     }
 
     return {
-      title, contingency, sceneNote, place, placeText, placeFrom, spots, situation, startsIt, readAloud, gmNotes,
+      type, arrivals, title, contingency, sceneNote, place, placeText, placeFrom, spots, situation, startsIt, readAloud, gmNotes,
       complications, trigger, then, who, points, ifs, treasure, handouts, entities, extra,
     };
   }

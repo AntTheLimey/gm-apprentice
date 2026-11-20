@@ -235,4 +235,70 @@ describe('run sheet foes', () => {
     assert.deepStrictEqual(d.warnings, []);
     assert.deepStrictEqual([d.foes[0].ac, d.foes[0].hp, d.foes[0].init], [17, 123, 3]);
   });
+
+  describe('reader fixes from the prototype pass', () => {
+    const stats = (body) => `---\nname: X\ntype: npc\n---\n\n## GM Notes\n\n### Stats\n\n${body}\n`;
+    const vault = (notes) => {
+      const dir = mkTmp('rs-');
+      fs.cpSync(FIXTURE, dir, { recursive: true });
+      for (const [rel, text] of Object.entries(notes)) fs.writeFileSync(path.join(dir, rel), text);
+      return buildIndex(dir);
+    };
+    const NOTES = {
+      'Characters/NPCs/Dragon Keeper.md': stats('SRD **Young White Dragon**\n\n- AC 17; HP 123\n- tuning: breath at round 2'),
+      'Characters/NPCs/Guard Captain.md': stats('SRD Guard\n\n**Actions**\n\n*Melee Attack Roll:* +4 to hit. *Hit:* 5 damage'),
+      'Characters/NPCs/Clerk.md': stats('Clerk, a plain note with no numbers'),
+      'Characters/NPCs/Clerk Two.md': stats('Clerk, a plain note with no numbers'),
+    };
+    const beat = (extra) => ({ key: 'b-x', type: '', contingency: false, who: [], ...extra });
+    const who = (name, count = 1) => ({ note: `Characters/NPCs/${name}.md`, count });
+
+    it('a stock block with only tuning warns stock-no-actions', () => {
+      const index = vault(NOTES);
+      const r = foesOf('Characters/NPCs/Dragon Keeper.md', index, 1, 'b-x');
+      const w = r.warnings.filter((x) => x.kind === 'stock-no-actions');
+      assert.strictEqual(w.length, 1);
+      assert.strictEqual(w[0].text, 'X names a stock stat block but no actions are in the vault: fill them in prep (gma stat-fill)');
+    });
+
+    it('a pasted block does not', () => {
+      const r = foesOf('Characters/NPCs/Guard Captain.md', vault(NOTES), 1, 'b-x');
+      assert.deepStrictEqual(r.warnings.filter((x) => x.kind === 'stock-no-actions'), []);
+    });
+
+    it('no-numbers is quiet at a social beat: no warning, the text on the row', () => {
+      const index = vault(NOTES);
+      const r = foesFor(beat({ type: 'social', who: [who('Clerk'), who('Clerk Two')] }), index);
+      assert.deepStrictEqual(r.warnings, []);
+      assert.strictEqual(r.foes.length, 2);
+      for (const f of r.foes) assert.match(f.prepNote, /names a stat block with no numbers in the vault: fill them in prep/);
+    });
+
+    it('no-numbers still warns at a combat beat', () => {
+      const r = foesFor(beat({ type: 'combat', who: [who('Clerk')] }), vault(NOTES));
+      assert.deepStrictEqual(r.warnings.map((w) => w.kind), ['no-numbers']);
+      assert.strictEqual(r.foes[0].prepNote, null);
+      for (const type of ['fight', 'battle', 'ambush']) {
+        assert.strictEqual(foesFor(beat({ type, who: [who('Clerk')] }), vault(NOTES)).warnings.length, 1, type);
+      }
+    });
+
+    it('and with a creature present, a count above 1, or at a contingency', () => {
+      const index = vault(NOTES);
+      const withCreature = foesFor(beat({ type: 'social', who: [who('Clerk'), { note: 'Creatures/Frost Wolf.md', count: 1 }] }), index);
+      assert.ok(withCreature.warnings.some((w) => w.kind === 'no-numbers'));
+      const many = foesFor(beat({ type: 'social', who: [who('Clerk', 2)] }), index);
+      assert.ok(many.warnings.some((w) => w.kind === 'no-numbers'));
+      const contingency = foesFor(beat({ type: 'social', contingency: true, who: [who('Clerk')] }), index);
+      assert.ok(contingency.warnings.some((w) => w.kind === 'no-numbers'));
+    });
+
+    it('a row of numbers missing only at a social beat keeps its text as prepNote too', () => {
+      const index = vault({ 'Characters/NPCs/Half.md': stats('Half, AC 12') });
+      const r = foesFor(beat({ type: 'social', who: [who('Half')] }), index);
+      assert.deepStrictEqual(r.warnings, []);
+      assert.match(r.foes[0].prepNote, /no hit points/);
+      assert.match(r.foes[0].prepNote, /no initiative/);
+    });
+  });
 });

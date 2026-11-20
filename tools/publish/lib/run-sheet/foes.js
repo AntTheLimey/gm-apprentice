@@ -58,21 +58,29 @@ function warner(seen, warnings) {
   };
 }
 
-function warnFor(notePath, name, nums, add) {
-  // A block with no numbers at all says so once; its missing initiative is part of that.
+// What a block's numbers lack, as [{ kind, text }]. A block with no numbers at all says so once; its
+// missing initiative is part of that.
+function lacks(name, nums) {
   if (nums.ac === null && nums.hp === null) {
-    add('no-numbers', notePath, `${name} names a stat block with no numbers in the vault: fill them in prep`);
-    return;
+    return [{ kind: 'no-numbers', text: `${name} names a stat block with no numbers in the vault: fill them in prep` }];
   }
-  if (nums.ac === null) add('no-ac', notePath, `${name} has no AC in its Stats: fill it in prep`);
-  if (nums.hp === null) add('no-hp', notePath, `${name} has no hit points in its Stats: fill them in prep`);
-  if (nums.init === null) add('no-initiative', notePath, `${name} has no initiative modifier in its Stats (rolled at +0)`);
+  const out = [];
+  if (nums.ac === null) out.push({ kind: 'no-ac', text: `${name} has no AC in its Stats: fill it in prep` });
+  if (nums.hp === null) out.push({ kind: 'no-hp', text: `${name} has no hit points in its Stats: fill them in prep` });
+  if (nums.init === null) out.push({ kind: 'no-initiative', text: `${name} has no initiative modifier in its Stats (rolled at +0)` });
+  return out;
 }
+
+// A `### Stats` that names a stock block (SRD or stock) and holds no action of its own.
+const STOCK_NAMED = /\b(?:SRD|stock)\b/i;
+const HAS_ACTION = /^[ \t]*(?:[-*+][ \t]+)?[*_]*Actions\b|Hit:|Attack Roll|to hit/im;
 
 // One who entry read for a fight: its note's numbers and how many, or null when it makes no foe. A
 // creature with no Stats, or any entry counted more than once with none, is a fight the sheet
 // cannot run: it warns `no-stats`. An NPC listed once with no Stats is a social NPC: no warning.
-function entry(notePath, index, count, add) {
+// `canFight` is false for a beat that cannot fight (see beatCanFight): the numbers it lacks then go
+// into the row's `prepNote` instead of a warning, for the Fight to say when it is wanted (5b).
+function entry(notePath, index, count, add, canFight = true) {
   const info = inspect(notePath, index);
   if (!info) return null;
   const n = Number.isInteger(count) && count > 0 ? count : 1;
@@ -83,8 +91,22 @@ function entry(notePath, index, count, add) {
     return null;
   }
   const nums = readNumbers(info.stats, info.behaviour);
-  warnFor(notePath, info.name, nums, add);
-  return { notePath, n, info, nums };
+  const missing = lacks(info.name, nums);
+  let prepNote = null;
+  if (canFight) missing.forEach((w) => add(w.kind, notePath, w.text));
+  else if (missing.length) prepNote = missing.map((w) => w.text).join('; ');
+  if (STOCK_NAMED.test(info.stats) && !HAS_ACTION.test(info.stats)) {
+    add('stock-no-actions', notePath, `${info.name} names a stock stat block but no actions are in the vault: fill them in prep (gma stat-fill)`);
+  }
+  return { notePath, n, info, nums, prepNote };
+}
+
+// Can this beat fight: its Type is combat, fight, battle or ambush, or it is a contingency, or its who holds a
+// creature or a count above 1. A beat with no `type` field (one built by hand) can.
+function beatCanFight(beat, index) {
+  if (beat.type === undefined || beat.contingency) return true;
+  if (/\b(?:combat|fight|battle|ambush)\b/.test(beat.type)) return true;
+  return (beat.who || []).some((w) => (w.count || 1) > 1 || (w.note && index.has(w.note) && String((index.read(w.note).fm || {}).type || '').toLowerCase() === 'creature'));
 }
 
 // The fight rows for a list of entries, keyed together so no two share a key, and numbered per
@@ -110,7 +132,7 @@ function rows(entries, beatKey, carried = null) {
       ally: nums.ally, ac: nums.ac, hp: nums.hp, init: nums.init,
       legendaryResistance: nums.legendaryResistance, legendaryActions: nums.legendaryActions,
       recharge: nums.recharge, rechargeAt: nums.rechargeAt, lair: nums.lair, stats: info.stats,
-      hpNow, carriedFrom: hpNow === null ? null : got.log,
+      hpNow, carriedFrom: hpNow === null ? null : got.log, prepNote: e.prepNote,
     };
   }));
 }
@@ -130,8 +152,9 @@ function foesFor(beat, index, seen = new Set(), carried = null) {
   const entries = [];
   const texts = [];
   const doneNotes = new Set();
+  const canFight = beatCanFight(beat, index);
   for (const w of beat.who || []) {
-    const e = entry(w.note, index, w.count, add);
+    const e = entry(w.note, index, w.count, add, canFight);
     if (!e) continue;
     entries.push(e);
     if (doneNotes.has(w.note)) continue;

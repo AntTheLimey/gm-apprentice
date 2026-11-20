@@ -78,6 +78,9 @@ describe('run sheet reader', () => {
     const gate = m.beats[0];
     assert.deepStrictEqual(gate.foes.map((f) => f.name), ['Brother Ash', 'Frost Wolf 1', 'Frost Wolf 2', 'Frost Wolf 3', 'Lucan Grey']);
     assert.strictEqual(gate.foes[4].ally, true);
+    // the beats carry their Type and any arrivals; every fight row has a prepNote (null where the beat can fight)
+    assert.ok(m.beats.every((b) => typeof b.type === 'string' && Array.isArray(b.arrivals)));
+    assert.ok(m.beats.flatMap((b) => b.foes).every((f) => 'prepNote' in f));
     // run long: the next Plan, the unplayed scenes, the Planning notes, the contingencies
     assert.strictEqual(m.runLong.nextPlan, 'Chapters/Chapter 1/Sessions/Session 03/Session 03 - Next - Plan.md');
     assert.deepStrictEqual(m.runLong.scenes, ['Chapters/Chapter 1/Scenes/The Bell Tower.md', 'Chapters/Chapter 1/Scenes/Unplayed.md']);

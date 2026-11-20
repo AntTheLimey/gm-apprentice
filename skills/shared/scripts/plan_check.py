@@ -799,6 +799,22 @@ _NPCS_HEAD_RE = re.compile(r"^\*\*NPCs:?\*\*[ \t]*$")
 _NPC_LINE_RE = re.compile(
     r"^[-*+]\s+\*\*(?:\[\[[^\]]+\]\]|[^*\[\]\n(]+?[\s:]*(?:\([^)\n]*\))?[\s:]*\*\*)")
 _FIELD_BULLET_RE = re.compile(r"^[-*+]\s+\*\*([^*\n]+?):?\*\*")
+# A reinforcements cue in an NPCs block (`- **Arriving, start of round 3:**
+# [[Sister Wren]] and four Brothers`): a plain bold lead opening with a cue
+# word or holding `round N`, with npc or creature links after it. The sheet
+# reads it as an arrival, never a person. beats.js holds the same rule.
+_CUE_LINE_RE = re.compile(r"^[-*+]\s+\*\*([^*\[\]\n]+?)\*\*:?[ \t]*(.*)$")
+_CUE_LEAD_RE = re.compile(
+    r"^(?:arriv(?:es?|ing)\b|enter|reinforcements?\b|later\b|when\b|after\b"
+    r"|at round\b|on round\b)|\bround\s+\d+", re.I)
+
+
+def _is_cue_line(line: str, index: VaultIndex) -> bool:
+    m = _CUE_LINE_RE.match(line)
+    if m is None or not _CUE_LEAD_RE.search(m.group(1).strip().rstrip(": ")):
+        return False
+    return any((kinds := index.types(k)) is not None and kinds & _NPC_TYPES
+               for k in _LINK_RE.findall(m.group(2)))
 
 
 def _field_bullet(line: str) -> bool:
@@ -823,7 +839,9 @@ _PLACE_BULLET_RE = re.compile(r"^[-*+]\s+\*\*([^*\n]+?)\*\*")
 # says; only a scene-typed lead link makes it a pointer. Any other bullet
 # led by a bold name or a link is a place; a link to a note of unknown type
 # (no vault, or no such note) is a place. tools/publish/lib/run-sheet/beats.js
-# holds the same rule.
+# holds the same rule. A routing line (`- When the wandering winds down:
+# [[Lucan's Call]]`: no bold colon lead, and every link it holds is a scene
+# note) is a pointer too.
 _POINTER_BULLET_RE = re.compile(
     r"^[-*+]\s+.*(?:[—–-]\s*|,\s*)Scenes?\s+\d+"
     r"(?:\s*\([^)]*\)|,?\s+\S+(?:\s+\S+){0,2})?[\s.]*$"
@@ -1050,6 +1068,9 @@ def _hub_menu(lines: list[str], index: VaultIndex
             return True
         if _COLON_LEAD_RE.match(ln):
             return False
+        every = [index.types(k) or () for k in _LINK_RE.findall(ln)]
+        if every and all("scene" in k for k in every):
+            return True
         return bool(_POINTER_BULLET_RE.match(ln)) and not any(
             "location" in k for k in kinds)
 
@@ -1258,6 +1279,7 @@ def _run_sheet_scene(rel: str, title: str, body: str, planned: bool,
         heads = [i for i, ln in enumerate(seen) if _NPCS_HEAD_RE.match(ln)]
         readable = any(
             _NPC_LINE_RE.match(ln) and not _field_bullet(ln)
+            and not _is_cue_line(ln, index)
             for i in heads for ln in _block_after(seen, i))
         if not readable and not any(
                 _WHO_LINE_RE.match(ln) and any(
