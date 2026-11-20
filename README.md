@@ -25,8 +25,9 @@ any of them. If step 3 fails, stop and show me the error.
    than 3.10, stop and tell me to install Python 3.10 or newer: on
    Windows from the Microsoft Store (its `python3` is the one the
    skills call; the python.org installer gives only `python` and
-   `py`), elsewhere from https://www.python.org or the system's
-   package manager. Run `node --version`. If Node is missing or
+   `py`), on a Mac from https://www.python.org or Homebrew (the
+   `python3` a Mac comes with is 3.9), elsewhere from
+   https://www.python.org or the system's package manager. Run `node --version`. If Node is missing or
    older than 22.21, tell me it is needed only for a campaign
    website (https://nodejs.org), and carry on.
 2. Work out which agent you are: Claude Code, Codex, or another.
@@ -251,8 +252,9 @@ The bundled utilities under `skills/shared/scripts/` give the skills
 ranked search, link-graph audits, schema validation, and more — Python
 3.10 or later, standard library only, no packages to install. Python 3 is
 a required dependency of this plugin. The skills invoke it as `python3`
-from Claude Code's Bash tool, which on Windows is Git Bash: macOS and
-most Linux ship `python3` already; on Windows, install Python from the
+from Claude Code's Bash tool, which on Windows is Git Bash. Most Linux
+ships a new enough `python3`; macOS ships 3.9, too old, so install a
+newer one from python.org or Homebrew; on Windows, install Python from the
 Microsoft Store, whose `python3` alias Git Bash finds on PATH (the
 python.org installer provides only `python` and `py`).
 

@@ -46,15 +46,17 @@ def _install_kind(layout: Layout) -> str:
     root = layout.root
     if root is None:
         return "installed with npx skills"
+    # An installed plugin sits in its agent's plugins/cache: under ~/.codex or ~/.claude, or where CODEX_HOME and
+    # CLAUDE_CONFIG_DIR point. It is asked first: Codex copies a plugin's .git along with it.
+    where = root.resolve().as_posix().lower() + "/"
+    if "/plugins/cache/" in where:
+        for name, env, folder in (("Codex", "CODEX_HOME", "/.codex/"), ("Claude Code", "CLAUDE_CONFIG_DIR", "/.claude/")):
+            home = os.environ.get(env)
+            if folder in where or (home and where.startswith(Path(home).resolve().as_posix().lower() + "/")):
+                return f"the {name} plugin"
+        return "a plugin"
     if (root / ".git").exists():
         return f"a checkout of the repository at {root.as_posix()}"
-    # Each agent keeps its plugins in its own folder: ~/.codex and ~/.claude, or where CODEX_HOME and
-    # CLAUDE_CONFIG_DIR point.
-    where = root.resolve().as_posix().lower() + "/"
-    for name, env, folder in (("Codex", "CODEX_HOME", "/.codex/"), ("Claude Code", "CLAUDE_CONFIG_DIR", "/.claude/")):
-        home = os.environ.get(env)
-        if folder in where or (home and where.startswith(Path(home).resolve().as_posix().lower() + "/")):
-            return f"the {name} plugin"
     return "a plugin"
 
 

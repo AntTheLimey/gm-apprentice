@@ -60,8 +60,17 @@ class DoctorTests(unittest.TestCase):
         self.assertEqual(doctor.report(found), ("".join(f"ok  {c.what}\n" for c in found) + "Ready.\n", 0))
 
     def test_the_codex_plugin_is_named(self):
-        found = _run(_install(self.root, tool="1.70.1", home=".codex"))
-        self.assertIn("the Codex plugin", found[1].what)
+        layout = _install(self.root, tool="1.70.1", home=".codex")
+        (layout.root / ".git").write_text("gitdir: elsewhere\n")  # Codex copies it with the plugin
+        self.assertIn("the Codex plugin", _run(layout)[1].what)
+
+    def test_a_checkout_is_named(self):
+        shared = self.root / "work" / "skills" / "shared"
+        shared.mkdir(parents=True)
+        (shared / "VERSION").write_text("1.2.3\n")
+        (self.root / "work" / ".git").mkdir()
+        found = _run(Layout(shared, self.root / "work", None))
+        self.assertIn("a checkout of the repository", found[1].what)
 
     def test_an_agent_folder_moved_by_its_variable_is_named(self):
         layout = _install(self.root, tool="1.70.1", home="elsewhere")
