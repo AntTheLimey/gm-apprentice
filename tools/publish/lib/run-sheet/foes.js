@@ -21,12 +21,19 @@ function readNumbers(stats, behaviour) {
   const hp = hps.length ? Number(hps[hps.length - 1][1]) : null;
   const init = number(new RegExp(`Initiative[^\\d\\n]{0,3}(${SIGNED_SOURCE})`).exec(stats));
   const full = `${stats}\n${behaviour}`;
-  const recharge = [...new Set([...full.matchAll(/\*\*\*([^*]+?)\s*\(Recharge [0-9–-]+\)/g)].map((m) => m[1].trim()))].sort();
+  const charges = [...full.matchAll(/\*\*\*([^*]+?)\s*\(Recharge ([0-9–-]+)\)/g)];
+  const recharge = [...new Set(charges.map((m) => m[1].trim()))].sort();
+  // The lowest roll that recharges each: `(Recharge 5–6)` is 5, `(Recharge 6)` is 6. The first of a name counts.
+  const rechargeAt = {};
+  for (const m of charges) {
+    const name = m[1].trim();
+    if (!(name in rechargeAt)) rechargeAt[name] = Math.min(...m[2].match(/\d+/g).map(Number));
+  }
   return {
     ac, hp, init,
     legendaryResistance: number(/Legendary Resistance \((\d+)\/Day\)/i.exec(stats)) || 0,
     legendaryActions: number(/Legendary Actions \((\d+)\)/i.exec(stats)) || 0,
-    recharge,
+    recharge, rechargeAt,
     lair: /Lair Actions/i.test(stats),
     ally: /\bas an ally\b/.test(stats),
   };
@@ -102,7 +109,7 @@ function rows(entries, beatKey, carried = null) {
       key: keys[k++], note: e.notePath, name: total.get(e.notePath) > 1 ? `${info.name} ${i}` : info.name,
       ally: nums.ally, ac: nums.ac, hp: nums.hp, init: nums.init,
       legendaryResistance: nums.legendaryResistance, legendaryActions: nums.legendaryActions,
-      recharge: nums.recharge, lair: nums.lair, stats: info.stats,
+      recharge: nums.recharge, rechargeAt: nums.rechargeAt, lair: nums.lair, stats: info.stats,
       hpNow, carriedFrom: hpNow === null ? null : got.log,
     };
   }));
@@ -136,7 +143,7 @@ function foesFor(beat, index, seen = new Set(), carried = null) {
   const own = (beat.treasure || []).map((t) => t.text);
   const fresh = own.length ? [] : texts;
   const keys = itemKeys(beat.key, 'loot', fresh.map((t) => t.text));
-  const treasure = fresh.map((t, i) => ({ key: keys[i], text: t.text, box: t.box }));
+  const treasure = fresh.map((t, i) => ({ key: keys[i], text: t.text, box: t.box, item: index.itemOf(t.text) }));
   return { foes, treasure, warnings };
 }
 

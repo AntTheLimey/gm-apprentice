@@ -179,7 +179,7 @@ function readBeats(planBody, index) {
     who: b.who.map((w) => ({ key: w.key, note: w.note, name: w.name, knownAs: w.knownAs, count: w.count, wants: w.wants, playAs: w.playAs, dead: w.dead })),
     points: b.points.map((x) => ({ key: x.key, text: x.text, box: x.box })),
     ifs: b.ifs.map((x) => ({ key: x.key, do: x.do, then: x.then })),
-    treasure: b.treasure.map((x) => ({ key: x.key, text: x.text, box: x.box })),
+    treasure: b.treasure.map((x) => ({ key: x.key, text: x.text, box: x.box, item: index.itemOf(x.text) })),
     handouts: b.handouts, entities: b.entities, foes: [], extra: b.extra,
   }));
   // `sections[i]` is the `##` title beat i was read under.

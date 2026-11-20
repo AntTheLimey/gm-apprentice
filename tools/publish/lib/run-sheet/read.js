@@ -25,6 +25,7 @@ const { readerFrom } = require('../vault-reader');
 const { isWithheld, nameList, unmaskedNames, unmaskedNameUnread } = require('../processor');
 const { canonicalNfc } = require('../unicode');
 const { tableLogOf, isPlayed } = require('./sessions');
+const { readCast } = require('./cast');
 
 const toPosix = (p) => p.split(path.sep).join('/');
 const low = (s) => canonicalNfc(String(s == null ? '' : s)).trim().toLowerCase();
@@ -146,10 +147,18 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
   }
 
   let system = null;
+  let campaign = path.basename(path.resolve(vaultPath));
+  const withheldWords = { person: 'someone', place: 'somewhere' };
   try {
     // Settings values are nested by group: `vault.system` is values.vault.system.
     const values = readSettings({ vaultPath, deps }).values || {};
     system = (values.vault && values.vault.system) || null;
+    const site = values.player_site || {};
+    if (typeof site.title === 'string' && site.title.trim()) campaign = site.title.trim();
+    for (const k of ['person', 'place']) {
+      const w = site.withheld_words && site.withheld_words[k];
+      if (typeof w === 'string' && w.trim()) withheldWords[k] = w;
+    }
   } catch (err) {
     warnings.push({ kind: 'unreadable-settings', note: null, text: `the vault's settings could not be read (${firstLine(err.message)}): the game system is unknown` });
   }
@@ -199,6 +208,21 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
     beat.foes = r.foes;
     beat.treasure.push(...r.treasure);
     add(r.warnings);
+  }
+  // An ally's own Plan line may state where they stand ("32 of 38 HP"): the first such figure in Plan
+  // order is the figure for every row of that ally, in every beat, and wins over the Table Log and the
+  // note. The second number is a reading aid; the note's HP stays the maximum.
+  const planHp = new Map();
+  for (const beat of beats) {
+    for (const w of beat.who) {
+      const m = w.note && /(\d+)\s*(?:of|\/)\s*(\d+)\s*HP\b/i.exec(w.wants || '');
+      if (m && !planHp.has(w.note)) planHp.set(w.note, Number(m[1]));
+    }
+  }
+  for (const beat of beats) {
+    for (const f of beat.foes) {
+      if (f.ally && planHp.has(f.note)) { f.hpNow = planHp.get(f.note); f.carriedFrom = plan; }
+    }
   }
   const pcsRead = readPcs(body, index, party);
   add(pcsRead.warnings);
@@ -289,6 +313,8 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
 
   const model = {
     system,
+    campaign,
+    withheldWords,
     plan,
     session: { index: sessionIndex, title, chapter, number },
     brief: { overview: joined('overview'), world: joined('world'), stops: joined('stops') },
@@ -303,6 +329,7 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
     threads: joined('threads'),
     runLong,
     prep,
+    cast: [],
     notes: {},
     links: {},
     warnings: [],
@@ -336,6 +363,8 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
     model.notes[s] = noteOf(s);
   }
   if (!model.notes[plan]) model.notes[plan] = noteOf(plan, fm);
+  // The cast is read last: its notes are never "touched", and its warnings stay on each entry.
+  model.cast = readCast(index, { carried });
   return model;
 
   // The index's answer, asked once per note (a picture that cannot be found is its warning).
@@ -379,7 +408,7 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
         warnings.push({ kind: 'unmask', note: p, text: `unmasked_portrait is set but unmasked_name is empty${noSheet}` });
       }
       const name = names.length === 1 ? names[0] : null;
-      unmasks.set(p, name ? { name, portrait: index.portrait(p, 'unmasked_portrait'), playAs: unmaskedPlayAsOf(p, index) } : null);
+      unmasks.set(p, name ? { name, portrait: index.portrait(p, 'unmasked_portrait'), playAs: unmaskedPlayAsOf(p, index), since: carried ? carried.unmaskedSince(p) : null } : null);
     }
     return unmasks.get(p);
   }
@@ -447,13 +476,37 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
           unread.add(k);
           warnings.push({ kind: 'table-log', note: log, text: `${VITALS}: the HP cell "${u.cell}" for [[${u.who}]] holds no number it can read (current/max or current): it starts from its note` });
         }
-        read.push({ log, hp });
+        // `Unmasked this session`: `- [[Note]] as Name` unmasks, `- [[Note]] masked again` cancels.
+        const unmasked = [];
+        for (const b of pt.bullets(t.sections.get('Unmasked this session') || '')) {
+          const target = pt.links(b.text)[0];
+          const note = target ? index.resolve(target) : null;
+          if (note !== null) unmasked.push({ note, on: !/\bmasked again\s*[.!]?\s*$/i.test(b.text) });
+        }
+        read.push({ log, hp, unmasked });
         return true;
       }
       return false;
     };
     const found = new Map();
+    let since = null;
     return {
+      // The log an unmasking began in, walking every earlier played log oldest first: a later
+      // `masked again` cancels it, a later unmasking after that begins it afresh. Null when the
+      // note is masked. Reads every earlier log, so it is asked only of a note that has an Unmask.
+      unmaskedSince(note) {
+        if (since === null) {
+          while (readNext());
+          since = new Map();
+          for (const r of [...read].reverse()) {
+            for (const u of r.unmasked) {
+              if (!u.on) since.delete(u.note);
+              else if (!since.has(u.note)) since.set(u.note, r.log);
+            }
+          }
+        }
+        return since.get(note) || null;
+      },
       of(note) {
         if (!found.has(note)) {
           let hit = null;

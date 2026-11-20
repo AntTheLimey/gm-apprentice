@@ -566,13 +566,15 @@ describe('run sheet beats: the Plan shape', () => {
     const now = { plan: planRead, hub: readBeats(hubPlan, buildIndex(copy())) };
     // the fields this change adds are taken off: placeText, placeFrom, spots[].md, spots[].people
     // (#788 adds who[].dead; the fixture names no dead NPC, so every `dead` is false before it is taken off.)
+    // (Run sheet 5a adds treasure[].item; the fixture names no item note, so every `item` is null before it is taken off.)
     const strip = (r) => ({
       ...r,
-      beats: r.beats.map(({ placeText, placeFrom, spots, who, ...b }) => ({ ...b, who: who.map(({ dead, ...w }) => w), spots: spots.map(({ md, people, ...x }) => x) })),
+      beats: r.beats.map(({ placeText, placeFrom, spots, who, treasure, ...b }) => ({ ...b, treasure: treasure.map(({ item, ...t }) => t), who: who.map(({ dead, ...w }) => w), spots: spots.map(({ md, people, ...x }) => x) })),
     });
     for (const r of Object.values(now)) {
       for (const b of r.beats) {
         assert.ok(b.who.every((w) => w.dead === false), b.title);
+        assert.ok(b.treasure.every((t) => t.item === null), b.title);
         assert.strictEqual(b.placeText, '', b.title);
         for (const x of b.spots) if (!x.md) assert.deepStrictEqual(x.people, [], b.title);
       }
