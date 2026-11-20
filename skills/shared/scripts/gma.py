@@ -16,7 +16,9 @@ all, for the docs generator and the tests.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import importlib
+import io
 import json
 import os
 import shutil
@@ -73,6 +75,7 @@ COMMANDS: dict[str, Command] = {
     "vault-search": Command("vault_search", "Ranked vault search."),
     "vault-write": Command("vault_write", "Place text the apprentice wrote into vault notes."),
     "workaround": Command("workaround", "Record the vault's workarounds by the issue each stands in for."),
+    "table": Command("", "Run tonight's session from the run sheet: a live page on this computer."),
     "publish": Command("", "Build and deploy the campaign site (runs the publish tool under node)."),
     "tool": Command("", "Download the publish tool (installs without it), or print where it is."),
     "llms": Command("", "The command reference: when to use each command, its flags, an example."),
@@ -107,6 +110,21 @@ def _publish_parser() -> argparse.ArgumentParser:
     stub.add_argument("args", nargs=argparse.REMAINDER,
                       help="passed to the publish tool unchanged")
     return stub
+
+
+def _table_parser() -> argparse.ArgumentParser:
+    ap = argparse.ArgumentParser(
+        prog="gma table", description=COMMANDS["table"].summary,
+        epilog="Example: gma table <vault>")
+    ap.add_argument("vault", help="the campaign vault")
+    ap.add_argument("--session", help="the session to run: an index stem or "
+                    "path, a Plan path, or a name; none picks the one in "
+                    "progress, else the next open one")
+    ap.add_argument("--port", type=int, help="the port on this computer "
+                    "(default 4322)")
+    ap.add_argument("--no-open", action="store_true", dest="no_open",
+                    help="do not open the page in the browser")
+    return ap
 
 
 def _llms_parser() -> argparse.ArgumentParser:
@@ -213,7 +231,7 @@ def _tool(args: list[str]) -> int:
 
 
 BUILTINS = {"publish": _publish_parser, "llms": _llms_parser,
-            "tool": _tool_parser}
+            "tool": _tool_parser, "table": _table_parser}
 
 
 def _load(name: str) -> argparse.ArgumentParser:
@@ -399,7 +417,74 @@ def _run_tool(tool: Path, args: list[str]) -> int:
         return 1
 
 
+def _table_pick(tool: Path, vault: str, flags: list[str]) -> dict[str, object] | None:
+    """Ask the tool which session to run (it also checks the port). The
+    answer, or None after printing why there is none. Nothing is served or
+    filed here."""
+    try:
+        done = subprocess.run(
+            ["node", str(tool), "table", vault, "--pick", "--json", *flags],
+            capture_output=True, text=True, encoding="utf-8")
+    except OSError:
+        print("gma table: needs node on the PATH", file=sys.stderr)
+        return None
+    answer: object = None
+    for line in reversed(done.stdout.strip().splitlines()):
+        try:
+            answer = json.loads(line)
+        except ValueError:
+            continue
+        break
+    if isinstance(answer, dict) and answer.get("ok") is True and done.returncode == 0:
+        return answer
+    if isinstance(answer, dict) and isinstance(answer.get("error"), str):
+        why = answer["error"]
+    else:
+        why = (done.stderr.strip() or done.stdout.strip()
+               or f"the publish tool stopped with exit {done.returncode}")
+    print(f"gma table: {why}", file=sys.stderr)
+    return None
+
+
+def _table(args: list[str]) -> int:
+    """The run sheet: the tool picks the session and checks the port, then a
+    missing Table Log is filed, then the tool serves with the party."""
+    opts = _table_parser().parse_args(args)
+    tool = vaultlib.PUBLISH_TOOL
+    if tool is None:
+        print("gma table: " + MISSING_TOOL, file=sys.stderr)
+        return 1
+    port = ["--port", str(opts.port)] if opts.port is not None else []
+    asked = ["--session", opts.session] if opts.session else []
+    picked = _table_pick(tool, opts.vault, [*asked, *port])
+    if picked is None:
+        return 1
+    index, label = str(picked["index"]), str(picked["label"])
+    if not picked.get("tableLog"):
+        import vault_write
+        with contextlib.redirect_stdout(io.StringIO()), \
+                contextlib.redirect_stderr(io.StringIO()):
+            filed = vault_write.main([opts.vault, "table-log-new", "--session",
+                                      index, "--created-by", "run-sheet",
+                                      "--write"])
+        if filed == 0:
+            print(f"Filed the Table Log: {label} now counts as played.")
+        else:
+            print("gma table: could not file the Table Log; the sheet runs "
+                  "without one", file=sys.stderr)
+    import vault_check
+    party = [row.split("\t")[1] for row in
+             vault_check.list_active_pcs(Path(opts.vault))]
+    sys.stdout.flush()   # posix replaces this process next: nothing may be left buffered
+    return _run_tool(tool, [
+        "table", opts.vault, "--session", index,
+        *[x for p in party for x in ("--party", p)], *port,
+        *(["--no-open"] if opts.no_open else [])])
+
+
 def _publish(args: list[str]) -> int:
+    if args and args[0] == "table":
+        return _table(args[1:])
     tool = vaultlib.PUBLISH_TOOL
     if tool is None:
         print("gma: " + MISSING_TOOL, file=sys.stderr)
@@ -463,6 +548,8 @@ def main(argv: list[str] | None = None) -> int:
         _ensure_tool()
     if name == "publish":
         return _publish(rest)
+    if name == "table":
+        return _table(rest)
     module = importlib.import_module(COMMANDS[name].module)
     # argparse derives its default prog from sys.argv[0], so usage and error
     # lines read `gma <name> ...` at every depth.

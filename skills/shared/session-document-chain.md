@@ -167,8 +167,8 @@ Older vaults may hold an export inside the Play Notes, under
 The run sheet's record of the table: where everyone ended, which Plan
 points landed, what was handed over, loot and vitals. It is the third
 play record, beside the Play Notes and the Export, and its own file with
-one writer: the run sheet (written by hand until the run sheet's
-table command exists). session-play never writes a Table Log. It is linked as
+one writer: the run sheet (`gma table` files and writes it).
+session-play never writes a Table Log. It is linked as
 `documents.table_log`. It is never a player-site page, whatever its
 `publish:` says or a publish list holds: it carries foes' numbers,
 unmasked names and the GM's vitals. The GM site always gives it a page,
@@ -212,6 +212,17 @@ Every section is a bulleted list (links where a note exists) except
     is a bare wikilink (`[[Name]]`, no pipe: Obsidian's table rule) and
     the HP cell is `current/max` or `current`
 16. `Advancement`
+
+How the run sheet writes them: `Log` is `- HH:MM Beat title: text`, or
+`- HH:MM text` with no beat; `Where everyone ended` is `- [[PC]]:
+[[Place]]` (`- [[PC]]: [[Hub place]] (spot words)` for a spot with no
+note, `- [[PC]]: Beat title` for a beat with no place, or `off-screen`,
+`not placed`); `Not reached` is one `- Beat title` per beat; each line
+the GM typed under `Advancement` is one bullet; an ally's copies are
+`| [[Guard]] 2 | 9/11 | |`, the number outside the link; a carried
+unmasking turned off tonight is `- [[Note]] masked again`. Vitals rows
+are only values the GM set, so a GM who touched nothing leaves bare
+headings.
 
 A section with nothing in it, or missing altogether, means nothing was
 recorded for it. It is never an error, and never read as "none
