@@ -280,8 +280,10 @@ describe('the GM page runs a fight', { skip: browserSkip() }, () => {
       const st = await getState(run);
       assert.ok(st.jots.some((j) => j.beat === b.key && j.text === 'The bell rings.'), 'the jot is the fight beat\'s');
       await shot(page, 'paused-1449');
+      // a mark on the old document, so the wait below can only pass in the reloaded one
+      await page.evaluate('window.__beforeReload = true');
       await page.reload();
-      const p = await until(page, 'p.fight && p.saved === "Saved"');
+      const p = await until(page, '!window.__beforeReload && p.fight && p.saved === "Saved"');
       assert.strictEqual(p.fight.turn, before.fight.turn);
       assert.strictEqual(p.fight.round, before.fight.round);
       assert.strictEqual(p.fight.paused, true);
@@ -382,8 +384,9 @@ describe('the GM page runs a fight', { skip: browserSkip() }, () => {
       const plan = path.join(run.vault, PLAN);
       fs.writeFileSync(plan, lf(fs.readFileSync(plan, 'utf8')).replace('### Scene 1: Ashfall Reckoning', '### Scene 1: Copperwick Quarrel'));
       await fetch(`${run.base}/api/model`);
+      await page.evaluate('window.__beforeReload = true');
       await page.reload();
-      const now = await until(page, 'p.fight && p.saved === "Saved" && p.layout');
+      const now = await until(page, '!window.__beforeReload && p.fight && p.saved === "Saved" && p.layout');
       assert.deepStrictEqual(now.fight.rows.map((r) => r.id), p.fight.rows.map((r) => r.id), 'the order stays');
       assert.strictEqual(now.fight.turn, p.fight.turn);
       assert.ok(now.fight.actingName, 'the acting panel stays');
