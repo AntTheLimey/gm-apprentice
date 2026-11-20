@@ -39,7 +39,7 @@ const { chapterStatusOf } = require('./shared-lists');
 const { canonicalNfc } = require('./unicode');
 
 // The values that keep a note off a player site are listed once, in excluding-values.js.
-const { AUTO_EXCLUDE_STATUS, AUTO_EXCLUDE_STAGE, AUTO_EXCLUDE_SOURCE, PREP_TYPES, DRAFT, ruleValue, hiddenFolderReason } = require('./excluding-values');
+const { AUTO_EXCLUDE_STATUS, AUTO_EXCLUDE_STAGE, AUTO_EXCLUDE_SOURCE, PREP_TYPES, TABLE_LOG_TYPES, DRAFT, ruleValue, hiddenFolderReason } = require('./excluding-values');
 
 // Directories that never publish, whatever the config says. `_templates` is the
 // lowercase spelling some vaults use; `personal` holds the GM's own licensed
@@ -283,9 +283,6 @@ const NOTE_CODES = new Set([
   'PREP_TYPE', 'MANIFEST_EXCLUDED', 'MANIFEST_NEEDS_DECISION', 'MANIFEST_UNLISTED',
   'WITHHELD', 'PUBLISH_FALSE', 'PUBLISH_NONE', 'TABLE_LOG',
 ]);
-
-// The Table Log's type, either spelling: decidePage keeps it off the player site whatever `publish:` says.
-const TABLE_LOG_TYPES = new Set(['session-table-log', 'session_table_log']);
 
 // A session's play records, either spelling of each type: its Play Notes, and a table assistant's export filed as
 // its own Export note (#691), and the Table Log the run sheet or the GM files. The GM site always pages them. On the

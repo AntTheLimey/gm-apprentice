@@ -289,6 +289,16 @@ describe('decideGmPage: a session\'s Play Notes', () => {
     }
   });
 
+  it('a Table Log typed as a list is still never a player page', () => {
+    for (const type of [['session-table-log', 'note'], ['note', 'Session_Table_Log']]) {
+      const v = decidePage(page({ type }), { rel: 'Sessions/S1 Table Log.md', publishConfig: PLAYER, manifest: null });
+      assert.deepStrictEqual([v.bucket, v.code], ['exclude', 'TABLE_LOG'], JSON.stringify(type));
+    }
+    const { TABLE_LOG_TYPES, excludingValue } = require('../lib/excluding-values');
+    assert.ok(TABLE_LOG_TYPES.has('session-table-log'));
+    assert.strictEqual(excludingValue('type', ['note', 'session-table-log']), 'session-table-log');
+  });
+
   it('a Table Log is never a player page, whatever publish says; the GM page stays', () => {
     for (const type of ['session-table-log', 'session_table_log', 'Session-Table-Log']) {
       for (const publish of [undefined, true, false, 'none']) {
