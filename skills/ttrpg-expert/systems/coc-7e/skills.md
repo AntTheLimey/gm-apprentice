@@ -25,9 +25,12 @@ opposite types cancel one-for-one.
 
 ## Combat Skills
 
-**Dodge** (DEX/2) — evade attacks. One free/round; additional
-dodges get penalty die. Can dodge melee and first visible
-ranged attack (with penalty die). No action cost.
+**Dodge** (DEX/2) — evade melee attacks, once against each
+attack (after the first defence of a round, later attackers gain
+a bonus die). Bullets can't be dodged: a
+successful Dodge to dive for cover gives the shooter a penalty
+die and costs the diver their next attack (Keeper Rulebook
+pp.63, 113).
 
 **Fighting (Brawl)** (25%) — unarmed + improvised weapons.
 Can "fight back" as defensive reaction.

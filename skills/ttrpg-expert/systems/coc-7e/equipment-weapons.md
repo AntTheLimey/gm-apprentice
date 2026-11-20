@@ -15,8 +15,8 @@ during combat).
   attack every 2 or 3 rounds.
 - **Special**: Type of enhanced damage on an Extreme success
   (bleeding, crushing, entangling, impaling, knockback).
-- **Rng**: Base range. Long range (2x base) warrants a
-  penalty die. Extreme range (4x base) requires an Extreme
+- **Rng**: Base range. Long range (up to 2x base) needs a
+  Hard success; very long range (up to 4x base) an Extreme
   success.
 - **Hands**: 1H = one-handed, 2H = two-handed.
 - **HP**: Weapon hit points.
@@ -189,10 +189,12 @@ jams or misfires. Revolvers/bolt-actions: dud round, cycle
 past in 1 round. Automatics: jam, 1D6 rounds and a Firearm
 or Repair roll to clear.
 
-**Point-blank range**: Attacks within DEX/3 metres are Easy.
+**Point-blank range**: Within a fifth of the shooter's DEX in
+feet, the attack gains a bonus die (Keeper Rulebook p.113).
 
-**Extended range**: Base range = unmodified. 2x base = Difficult.
-4x base = 1/5 skill chance.
+**Extended range**: Base range = Regular. Up to 2x base = Hard
+(half skill). Up to 4x base = Extreme (a fifth of skill); there
+only a critical impales (p.112).
 
 **No damage modifier**: Firearms never apply the attacker's
 damage modifier.

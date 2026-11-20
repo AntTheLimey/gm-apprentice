@@ -127,10 +127,10 @@ penalty die.
 | Shotgun (12-gauge) | 25% | 4D6/2D6/1D6 | 1 or 2 |
 | Hunting Rifle | 25% | 2D6+4 | 1 (1 per 2 rounds) |
 
-Range modifiers use bonus/penalty dice: point-blank (bonus
-die), base range (no modifier), long range (penalty die),
-extreme range (not possible for most weapons). No damage
-bonus applies to firearms.
+Range sets the difficulty: point-blank (within a fifth of DEX
+in feet) gains a bonus die, base range is Regular, long range
+(up to 2x base) is Hard, very long range (up to 4x base) is
+Extreme. No damage bonus applies to firearms.
 
 ## Pushing Rolls
 

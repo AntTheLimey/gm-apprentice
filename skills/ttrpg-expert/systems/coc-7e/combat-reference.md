@@ -87,14 +87,16 @@ Armour is subtracted from damage as normal.
 - 86-98: Hit ally or hard surface
 - 99-00: Roll again 2-3 more times
 
-## Multiple Defensive Reactions
+## Multiple Defensive Reactions (Outnumbered)
 
-- Each investigator gets **one free** defensive reaction per
-  round (Dodge or Fight Back).
-- Each additional reaction beyond the first incurs a
-  **cumulative penalty die**.
-- Fighting defensively (forfeiting your action) grants one
-  additional free reaction without the penalty die.
+- A character may Dodge or Fight Back against every melee
+  attack, once against each.
+- Once they have dodged or fought back this round, every
+  later melee attack on them gains **one bonus die**. Not
+  firearms.
+- One with several attacks a round (a ghoul with three) may
+  defend that many times before the bonus die applies
+  (Keeper Rulebook p.108).
 
 ## Spot Rules -- Quick Reference
 
