@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -47,12 +48,13 @@ def _install_kind(layout: Layout) -> str:
         return "installed with npx skills"
     if (root / ".git").exists():
         return f"a checkout of the repository at {root.as_posix()}"
-    # Each agent keeps its plugins under its own home folder.
-    where = root.as_posix().lower()
-    if "/.codex/" in where:
-        return "the Codex plugin"
-    if "/.claude/" in where:
-        return "the Claude Code plugin"
+    # Each agent keeps its plugins in its own folder: ~/.codex and ~/.claude, or where CODEX_HOME and
+    # CLAUDE_CONFIG_DIR point.
+    where = root.resolve().as_posix().lower() + "/"
+    for name, env, folder in (("Codex", "CODEX_HOME", "/.codex/"), ("Claude Code", "CLAUDE_CONFIG_DIR", "/.claude/")):
+        home = os.environ.get(env)
+        if folder in where or (home and where.startswith(Path(home).resolve().as_posix().lower() + "/")):
+            return f"the {name} plugin"
     return "a plugin"
 
 

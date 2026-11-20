@@ -2,10 +2,12 @@
 that holds only for what the skills cannot run without."""
 
 import json
+import os
 import subprocess
 import sys
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
@@ -60,6 +62,14 @@ class DoctorTests(unittest.TestCase):
     def test_the_codex_plugin_is_named(self):
         found = _run(_install(self.root, tool="1.70.1", home=".codex"))
         self.assertIn("the Codex plugin", found[1].what)
+
+    def test_an_agent_folder_moved_by_its_variable_is_named(self):
+        layout = _install(self.root, tool="1.70.1", home="elsewhere")
+        with unittest.mock.patch.dict(os.environ, {"CLAUDE_CONFIG_DIR": str(self.root / "elsewhere")}):
+            self.assertIn("the Claude Code plugin", _run(layout)[1].what)
+        with unittest.mock.patch.dict(os.environ, {"CODEX_HOME": str(self.root / "elsewhere")}, clear=False):
+            os.environ.pop("CLAUDE_CONFIG_DIR", None)
+            self.assertIn("the Codex plugin", _run(layout)[1].what)
 
     def test_no_node_only_warns(self):
         found = _run(_install(self.root, tool="1.70.1"), node=None)
