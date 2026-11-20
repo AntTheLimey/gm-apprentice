@@ -226,7 +226,7 @@ function freeFormBackstory(html) {
 function firstSentence(text, max = 200) {
   const flat = String(text || '')
     .replace(/!\[\[[^\]]*\]\]/g, ' ')
-    .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
+    .replace(/!\[[^\]]*\]\((?:<[^>]*>[^)]*|[^)]*)\)/g, ' ')
     .replace(/\s+/g, ' ').trim();
   let end = -1;
   for (const m of flat.matchAll(/[.!?](?=\s|$)/g)) {

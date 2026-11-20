@@ -100,6 +100,7 @@ test('a backstory opening on a picture starts at its prose (#804)', () => {
   assert.equal(backgroundParts(sectionsOf(md)).firstSentence, 'A vat-grown, human-based replicant engineered as a hull-breacher.');
   const subs = ['## Background', '### Backstory', '![](images/mira.png) Mira grew up in the salt flats. More.', '', '## Notes', 'x'].join('\n');
   assert.equal(backgroundParts(sectionsOf(subs)).firstSentence, 'Mira grew up in the salt flats.');
+  assert.equal(firstSentence('![a](<Six (1).png>) Six cuts hulls. More.'), 'Six cuts hulls.');
 });
 
 test('firstSentence skips abbreviations, initials and ellipses', () => {

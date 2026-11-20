@@ -14,7 +14,7 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ### Fixed
 
-- The party page no longer repeats the board as a grid of PC cards; a card shows only for a PC the board leaves out. An index with one type of note shows no filter chips, and the chips read "NPC" and "Player character" (#804)
+- The party page no longer repeats the board as a grid of PC cards; a card shows only for a PC the board leaves out. A board PC's hook shows on its page and when you hover its name on the board. An index with one type of note shows no filter chips, and the chips read "NPC" and "Player character" (#804)
 - A PC whose backstory opens on a picture no longer prints `![[...]]` in its card, its page's pull-quote or its link preview (#804)
 
 ## [1.12.107] — 2026-11-20
