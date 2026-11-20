@@ -66,7 +66,7 @@ function addSite(vault) {
   fs.writeFileSync(path.join(site, 'wrangler.toml'), 'name = "x"\n[[kv_namespaces]]\nbinding = "INBOX"\nid = "0123456789abcdef0123456789abcdef"\n');
   fs.writeFileSync(path.join(site, 'vault.config.json'), '{"vaultPath":".."}');
   const cfg = path.join(vault, '_meta', 'vault-config.yaml');
-  fs.writeFileSync(cfg, fs.readFileSync(cfg, 'utf8').replace('player_site:\n', 'player_site:\n  folder: Site\n'));
+  fs.writeFileSync(cfg, fs.readFileSync(cfg, 'utf8').replace(/player_site:\r?\n/, 'player_site:\n  folder: Site\n'));
 }
 
 describe('gm-publish table: pick', () => {

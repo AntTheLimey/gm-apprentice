@@ -118,6 +118,9 @@ async function markFirst(run, mark = 'landed', n = 0) {
 const tableDir = (vault) => path.join(vault, '_meta', 'table');
 const kept = (vault, id) => (fs.existsSync(tableDir(vault)) ? fs.readdirSync(tableDir(vault)).filter((n) => n.startsWith(`${id}.table-log-`) && n.endsWith('.txt')) : []);
 const logText = (vault) => fs.readFileSync(path.join(vault, LOG), 'utf8');
+// The log with LF line ends, for the checks: a checkout with CRLF fixtures (git on Windows) keeps CRLF in the log.
+const lf = (s) => s.replace(/\r\n/g, '\n');
+const logLf = (vault) => lf(logText(vault));
 const withHandLog = (vault, line = '- 19:30 The party argued about the bell, by hand.') => {
   fs.writeFileSync(path.join(vault, LOG), `${logText(vault)}\n${line}\n`);
 };
@@ -207,7 +210,8 @@ describe('run sheet server', () => {
     const vault = copyOf();
     fs.mkdirSync(path.join(vault, 'Pictures', 'dir.png'), { recursive: true });
     fs.writeFileSync(path.join(vault, 'Pictures', 'rook.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47]));
-    fs.writeFileSync(path.join(vault, 'Characters', 'NPCs', 'Secret.md?.png'), 'nope');
+    // `?` cannot be in a Windows file name: there the request below is still refused, with no file behind it.
+    if (process.platform !== 'win32') fs.writeFileSync(path.join(vault, 'Characters', 'NPCs', 'Secret.md?.png'), 'nope');
     const run = await start(vault);
     const pic = await req(run.port, 'GET', '/vault/Pictures/rook.png');
     assert.strictEqual(pic.status, 200);
@@ -267,7 +271,7 @@ describe('run sheet server', () => {
     fs.mkdirSync(path.join(vault, '_attachments', 'maps'), { recursive: true });
     fs.writeFileSync(path.join(vault, '_attachments', 'maps', 'gate.png'), Buffer.from([0x89, 0x50]));
     const plan = path.join(vault, PLAN);
-    fs.writeFileSync(plan, fs.readFileSync(plan, 'utf8').replace('## Session Intent\n', '## Session Intent\n\n![[gate.png]] and ![[lost.png]]\n'));
+    fs.writeFileSync(plan, fs.readFileSync(plan, 'utf8').replace(/## Session Intent\r?\n/, '## Session Intent\n\n![[gate.png]] and ![[lost.png]]\n'));
     const run = await start(vault);
     const r = await req(run.port, 'GET', '/api/model');
     assert.strictEqual(r.status, 200);
@@ -389,9 +393,9 @@ describe('run sheet server', () => {
     const vault = copyOf();
     const run = await start(vault);
     await markFirst(run);
-    await waitFor(() => /## Points landed\n\n- The Gate: the tracks/.test(logText(vault)));
+    await waitFor(() => /## Points landed\n\n- The Gate: the tracks/.test(logLf(vault)));
     const text = logText(vault);
-    assert.match(text, /^---\ntype: session-table-log/);
+    assert.match(lf(text), /^---\ntype: session-table-log/);
     assert.match(text, /# Session 02 - The Test - Table Log/);
     assert.deepStrictEqual(kept(vault, run.stateId), [], 'an empty skeleton is not copied aside');
     await wait(150);
@@ -404,6 +408,27 @@ describe('run sheet server', () => {
     assert.strictEqual(logText(vault), text);
     const disk = JSON.parse(fs.readFileSync(path.join(tableDir(vault), `${run.stateId}.json`), 'utf8'));
     assert.ok(disk.recordHash, 'the record hash is on disk');
+  });
+
+  it('a vault with CRLF line ends (a Windows checkout or editor) is read, and its Table Log is rewritten in CRLF', async () => {
+    const vault = copyOf();
+    for (const n of fs.readdirSync(vault, { recursive: true }).map(String)) {
+      const f = path.join(vault, n);
+      if (/\.(md|ya?ml)$/.test(n) && fs.statSync(f).isFile()) fs.writeFileSync(f, lf(fs.readFileSync(f, 'utf8')).replace(/\n/g, '\r\n'));
+    }
+    const a = await start(vault);
+    const { model } = (await req(a.port, 'GET', '/api/model')).json;
+    assert.deepStrictEqual(model.beats[0].points.map((p) => p.text), ['the tracks', 'the bell', 'the bell']);
+    await markFirst(a);
+    await waitFor(() => /## Points landed\n\n- The Gate: the tracks/.test(logLf(vault)));
+    assert.ok(!/[^\r]\n/.test(logText(vault)), 'every line still ends in CRLF');
+    assert.deepStrictEqual(kept(vault, a.stateId), [], 'an empty skeleton is not copied aside');
+    await a.close();
+    const b = await start(vault);
+    await markFirst(b, 'missed', 1);
+    await waitFor(() => /## Tried and missed\n\n- The Gate: the bell/.test(logLf(vault)));
+    assert.ok(!/[^\r]\n/.test(logText(vault)));
+    assert.deepStrictEqual(kept(vault, b.stateId), [], 'the sheet knows its own CRLF log after a restart');
   });
 
   it('no Table Log: state saves, nothing else is written', async () => {
@@ -440,7 +465,7 @@ describe('run sheet server', () => {
       assert.strictEqual(names.length, 1);
       assert.ok(!fs.readdirSync(tableDir(vault)).some((n) => n.endsWith('.md')), 'the kept copy is not a note a vault scan reads (PR review L3)');
       assert.strictEqual(fs.readFileSync(path.join(tableDir(vault), names[0]), 'utf8'), oldText);
-      await waitFor(() => (mark === 'landed' ? /## Points landed\n\n- The Gate: the tracks/ : /## Tried and missed\n\n- The Gate: the bell/).test(logText(vault)));
+      await waitFor(() => (mark === 'landed' ? /## Points landed\n\n- The Gate: the tracks/ : /## Tried and missed\n\n- The Gate: the bell/).test(logLf(vault)));
       const ev = await waitFor(() => sse.events.find((e) => e.event === 'record-kept'));
       assert.strictEqual(ev.data.path, `_meta/table/${names[0]}`);
     }
@@ -458,7 +483,7 @@ describe('run sheet server', () => {
       const vault = copyOf();
       const a = await start(vault);
       await markFirst(a, 'landed', 0);
-      await waitFor(() => /Points landed/.test(logText(vault)));
+      await waitFor(() => /Points landed/.test(logLf(vault)));
       await a.close();
       fs.writeFileSync(path.join(tableDir(vault), `${a.stateId}.json`), '{ not json');
       const old = logText(vault);
@@ -476,7 +501,7 @@ describe('run sheet server', () => {
       const vault = copyOf();
       const a = await start(vault);
       await markFirst(a, 'landed', 0);
-      await waitFor(() => /Points landed/.test(logText(vault)));
+      await waitFor(() => /Points landed/.test(logLf(vault)));
       await a.close();
       const dir = path.join(vault, S2);
       fs.renameSync(path.join(dir, 'Session 02 - The Test.md'), path.join(dir, 'Session 02 - The Trial.md'));
@@ -497,7 +522,7 @@ describe('run sheet server', () => {
       const sse = listen(run.port);
       try {
         await markFirst(run, 'landed', 0);
-        await waitFor(() => /Points landed/.test(logText(vault)));
+        await waitFor(() => /Points landed/.test(logLf(vault)));
         await wait(100);
         assert.deepStrictEqual(kept(vault, run.stateId), []);
         withHandLog(vault, '- 21:00 Typed in by hand mid-session.');
@@ -505,7 +530,7 @@ describe('run sheet server', () => {
         await markFirst(run, 'missed', 1);
         const names = await waitFor(() => { const k = kept(vault, run.stateId); return k.length ? k : null; });
         assert.strictEqual(fs.readFileSync(path.join(tableDir(vault), names[0]), 'utf8'), old);
-        await waitFor(() => /## Tried and missed/.test(logText(vault)) && /Tried and missed\n\n- /.test(logText(vault)));
+        await waitFor(() => /## Tried and missed/.test(logLf(vault)) && /Tried and missed\n\n- /.test(logLf(vault)));
         await waitFor(() => sse.events.find((e) => e.event === 'record-kept'));
       } finally { sse.close(); }
     });
@@ -515,7 +540,7 @@ describe('run sheet server', () => {
     const vault = copyOf();
     const a = await start(vault);
     await markFirst(a);
-    await waitFor(() => /Points landed/.test(logText(vault)));
+    await waitFor(() => /Points landed/.test(logLf(vault)));
     await wait(150);
     await a.close();
     const stateFile = path.join(tableDir(vault), `${a.stateId}.json`);
@@ -603,7 +628,7 @@ describe('run sheet server: the third review', () => {
     await markFirst(a, 'landed', 0);
     await wait(200);
     await a.close();
-    assert.match(logText(vault), /## Points landed\n\n- The Gate: the tracks/);
+    assert.match(logLf(vault), /## Points landed\n\n- The Gate: the tracks/);
     assert.strictEqual(readState(vault, a).recordHash, logHash(vault), 'the record hash reached disk');
     assert.ok(!fs.existsSync(path.join(tableDir(vault), `${a.stateId}.lock`)), 'a clean close removes the lock');
     const b = await start(vault, T, { deps: { delayMs: 1000 } });
@@ -613,7 +638,7 @@ describe('run sheet server: the third review', () => {
       await b.close();
       assert.deepStrictEqual(kept(vault, a.stateId), []);
       assert.ok(!sse.events.some((e) => e.event === 'record-kept'));
-      assert.match(logText(vault), /## Tried and missed\n\n- The Gate: the bell/);
+      assert.match(logLf(vault), /## Tried and missed\n\n- The Gate: the bell/);
     } finally { sse.close(); }
   });
 
@@ -635,7 +660,7 @@ describe('run sheet server: the third review', () => {
       const vault = copyOf();
       const a = await start(vault, T);
       await markFirst(a, 'landed', 0);
-      await waitFor(() => /Points landed\n\n- /.test(logText(vault)));
+      await waitFor(() => /Points landed\n\n- /.test(logLf(vault)));
       await wait(100);
       await a.close();
       const st = readState(vault, a);
@@ -647,7 +672,7 @@ describe('run sheet server: the third review', () => {
       await waitFor(() => readState(vault, b).recordHash === logHash(vault));
       assert.deepStrictEqual([logText(vault), fs.statSync(path.join(vault, LOG)).mtimeMs], before, 'the log is not rewritten');
       await markFirst(b, 'missed', 1);
-      await waitFor(() => /Tried and missed\n\n- /.test(logText(vault)));
+      await waitFor(() => /Tried and missed\n\n- /.test(logLf(vault)));
       await wait(50);
       assert.deepStrictEqual(kept(vault, a.stateId), []);
     });
@@ -656,13 +681,13 @@ describe('run sheet server: the third review', () => {
       const vault = copyOf();
       const a = await start(vault, T);
       await markFirst(a, 'landed', 0);
-      await waitFor(() => /Points landed\n\n- /.test(logText(vault)));
+      await waitFor(() => /Points landed\n\n- /.test(logLf(vault)));
       await wait(100);
       const log0 = logText(vault);
       const hash0 = readState(vault, a).recordHash;
       assert.strictEqual(hash0, logHash(vault));
       await markFirst(a, 'missed', 1);
-      await waitFor(() => /Tried and missed\n\n- /.test(logText(vault)));
+      await waitFor(() => /Tried and missed\n\n- /.test(logLf(vault)));
       await wait(100);
       await a.close();
       // The state at S1 with S0's recordHash, the log at S0.
@@ -672,7 +697,7 @@ describe('run sheet server: the third review', () => {
       fs.writeFileSync(stateFileOf(vault, a), JSON.stringify(st));
       staleLock(vault, a);
       const b = await start(vault, T, { deps: gone });
-      assert.match(logText(vault), /## Tried and missed\n\n- The Gate: the bell/, 'rewritten before the first click');
+      assert.match(logLf(vault), /## Tried and missed\n\n- The Gate: the bell/, 'rewritten before the first click');
       await waitFor(() => readState(vault, b).recordHash === logHash(vault));
       assert.deepStrictEqual(kept(vault, a.stateId), []);
     });
@@ -681,7 +706,7 @@ describe('run sheet server: the third review', () => {
       const vault = copyOf();
       const a = await start(vault, T);
       await markFirst(a, 'landed', 0);
-      await waitFor(() => /Points landed\n\n- /.test(logText(vault)));
+      await waitFor(() => /Points landed\n\n- /.test(logLf(vault)));
       await wait(100);
       await a.close();
       withHandLog(vault);
@@ -730,7 +755,7 @@ describe('run sheet server: the third review', () => {
         assert.ok(m.notices.some((n) => n.kind === 'record-failing' && /EBUSY/.test(n.error)), JSON.stringify(m.notices));
         failing = false;
         await waitFor(() => sse.events.find((e) => e.event === 'record-ok'));
-        assert.match(logText(vault), /## Tried and missed\n\n- The Gate: the bell/);
+        assert.match(logLf(vault), /## Tried and missed\n\n- The Gate: the bell/);
         assert.strictEqual((await helloOf(run.port)).status.record, 'ok');
         assert.ok(!(await req(run.port, 'GET', '/api/model')).json.notices.some((n) => n.kind === 'record-failing'));
         assert.ok(lines.some((l) => /written again/.test(l)));
@@ -744,7 +769,7 @@ describe('run sheet server: the third review', () => {
       const sse = listen(run.port);
       try {
         await markFirst(run, 'landed', 0);
-        await waitFor(() => /Points landed\n\n- /.test(logText(vault)));
+        await waitFor(() => /Points landed\n\n- /.test(logLf(vault)));
         // The index the server holds still names the note; no /api/model call refreshes it below.
         fs.writeFileSync(path.join(vault, LOG), logText(vault).replace('type: session-table-log', 'type: session-notes'));
         const before = logText(vault);
@@ -795,7 +820,7 @@ describe('run sheet server: the third review', () => {
         for (const k of Object.keys(RS.emptyState({}))) assert.ok(k in st, k);
         assert.strictEqual((await req(run.port, 'GET', '/api/record')).status, 200);
         assert.strictEqual((await markFirst(run)).status, 200);
-        await waitFor(() => /## Points landed\n\n- The Gate: the tracks/.test(logText(vault)));
+        await waitFor(() => /## Points landed\n\n- The Gate: the tracks/.test(logLf(vault)));
         assert.strictEqual(run.store.broken, null);
       });
     }
