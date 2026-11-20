@@ -496,21 +496,25 @@ describe('run sheet beats: the Plan shape', () => {
     }
   });
 
-  it('a dead NPC in a place bullet is not people or who; on an NPCs line it stays with dead-in-scene', () => {
+  it('a dead NPC is kept, marked dead and warned, in a place bullet and on an NPCs line alike (#788)', () => {
     const dir = skeletonVault();
     fs.mkdirSync(path.join(dir, 'Characters'), { recursive: true });
     fs.writeFileSync(path.join(dir, 'Characters', 'Brother Teodor.md'), '---\ntype: npc\nstatus: "dead"\n---\n');
     fs.writeFileSync(path.join(dir, 'Characters', 'Sister Fen2.md'), '---\ntype: npc\nstatus: alive\n---\n');
+    // status stays alive: the GM keeps it until the players learn, and writes the fate under GM Notes
+    fs.writeFileSync(path.join(dir, 'Characters', 'Warden Pell.md'), '---\ntype: npc\nstatus: alive\n---\n\n## GM Notes\n\n### Behind the Scenes\n\n- **[[Session 01 - The Pass]]** — **Dead.** Fell in the crevasse.\n');
     fs.mkdirSync(path.join(dir, 'Locations'), { recursive: true });
     fs.writeFileSync(path.join(dir, 'Locations', 'The Ice Crypt.md'), '---\ntype: location\n---\n');
     const index = buildIndex(dir);
-    const hub = readBeats('## Planned Scenes\n\n### Scene 0: Out (hub)\n**Where they can go**\n- **[[The Ice Crypt]]:** [[Brother Teodor]] is dead; [[Sister Fen2]] waits.\n', index);
+    const hub = readBeats('## Planned Scenes\n\n### Scene 0: Out (hub)\n**Where they can go**\n- **[[The Ice Crypt]]:** [[Brother Teodor]] is dead; [[Sister Fen2]] waits; [[Warden Pell]] stands guard.\n', index);
     assert.deepStrictEqual(hub.beats[0].spots[0].people.map((p) => path.basename(p)), ['Sister Fen2.md']);
-    assert.deepStrictEqual(hub.beats[0].who.map((w) => w.name), ['Sister Fen2']);
-    assert.ok(!hub.warnings.some((w) => w.kind === 'dead-in-scene'));
-    const named = readBeats('## Planned Scenes\n\n### Scene 4: Crypt\n**Situation:** s\n**Place:** [[The Ice Crypt]]\n**Starts it:** t\n**NPCs**\n- **[[Brother Teodor]]:** his body\n', index);
-    assert.deepStrictEqual(named.beats[0].who.map((w) => w.name), ['Brother Teodor']);
-    assert.ok(named.warnings.some((w) => w.kind === 'dead-in-scene' && /Brother Teodor/.test(w.text)));
+    assert.deepStrictEqual(hub.beats[0].who.map((w) => [w.name, w.dead]), [['Brother Teodor', true], ['Sister Fen2', false], ['Warden Pell', true]]);
+    const dead = hub.warnings.filter((w) => w.kind === 'dead-in-scene');
+    assert.strictEqual(dead.length, 2);
+    assert.ok(/Brother Teodor/.test(dead[0].text) && /Warden Pell/.test(dead[1].text));
+    const named = readBeats('## Planned Scenes\n\n### Scene 4: Crypt\n**Situation:** s\n**Place:** [[The Ice Crypt]]\n**Starts it:** t\n**NPCs**\n- **[[Brother Teodor]]:** his body\n- **[[Warden Pell]]:** his coat\n', index);
+    assert.deepStrictEqual(named.beats[0].who.map((w) => [w.name, w.dead]), [['Brother Teodor', true], ['Warden Pell', true]]);
+    assert.strictEqual(named.warnings.filter((w) => w.kind === 'dead-in-scene').length, 2);
   });
 
   it('pointer bullets are not spots', () => {
@@ -561,12 +565,14 @@ describe('run sheet beats: the Plan shape', () => {
     const { index: _ix, ...planRead } = read();
     const now = { plan: planRead, hub: readBeats(hubPlan, buildIndex(copy())) };
     // the fields this change adds are taken off: placeText, placeFrom, spots[].md, spots[].people
+    // (#788 adds who[].dead; the fixture names no dead NPC, so every `dead` is false before it is taken off.)
     const strip = (r) => ({
       ...r,
-      beats: r.beats.map(({ placeText, placeFrom, spots, ...b }) => ({ ...b, spots: spots.map(({ md, people, ...x }) => x) })),
+      beats: r.beats.map(({ placeText, placeFrom, spots, who, ...b }) => ({ ...b, who: who.map(({ dead, ...w }) => w), spots: spots.map(({ md, people, ...x }) => x) })),
     });
     for (const r of Object.values(now)) {
       for (const b of r.beats) {
+        assert.ok(b.who.every((w) => w.dead === false), b.title);
         assert.strictEqual(b.placeText, '', b.title);
         for (const x of b.spots) if (!x.md) assert.deepStrictEqual(x.people, [], b.title);
       }

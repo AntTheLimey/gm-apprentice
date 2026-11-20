@@ -9,6 +9,7 @@
 // vault lacks) stays whole in `extra` as well.
 
 const pt = require('./plan-text');
+const fate = require('../fate');
 const { stemOf } = require('./notes');
 const { beatKeys, itemKeys } = require('./keys');
 const { playAsOf } = require('./people-from-notes');
@@ -135,9 +136,9 @@ function readBeats(planBody, index) {
     if (p === null && String(target || '').trim()) warnMissing(String(target).trim());
     return p;
   };
-  // A note whose `status` is dead (the build's own word for a fallen NPC). A place bullet never brings
-  // one in; an NPCs or Who line naming one stays as written, with a `dead-in-scene` warning.
-  const isDead = (p) => Boolean(p) && index.has(p) && String(index.read(p).fm.status || '').trim().toLowerCase() === 'dead';
+  // A note whose person is dead: its hidden fate says so, else its `status` (lib/fate.js, the one rule, #788).
+  // An NPCs line, a Who line or a place bullet naming one keeps them, marked `dead`, with a `dead-in-scene` warning.
+  const isDeadNote = (p) => Boolean(p) && index.has(p) && fate.isDead(index.read(p).body, index.read(p).fm);
   const typeOf = (p) => (p ? nameKey(index.read(p).fm.type) : '');
 
   const claimed = {};
@@ -175,7 +176,7 @@ function readBeats(planBody, index) {
     spots: b.spots.map((s) => ({ key: s.key, name: s.name, note: s.note, md: s.md, people: s.people })),
     situation: b.situation, startsIt: b.startsIt, readAloud: b.readAloud, gmNotes: b.gmNotes,
     complications: b.complications, trigger: b.trigger, then: b.then,
-    who: b.who.map((w) => ({ key: w.key, note: w.note, name: w.name, knownAs: w.knownAs, count: w.count, wants: w.wants, playAs: w.playAs })),
+    who: b.who.map((w) => ({ key: w.key, note: w.note, name: w.name, knownAs: w.knownAs, count: w.count, wants: w.wants, playAs: w.playAs, dead: w.dead })),
     points: b.points.map((x) => ({ key: x.key, text: x.text, box: x.box })),
     ifs: b.ifs.map((x) => ({ key: x.key, do: x.do, then: x.then })),
     treasure: b.treasure.map((x) => ({ key: x.key, text: x.text, box: x.box })),
@@ -358,7 +359,7 @@ function readBeats(planBody, index) {
       const w = counted ? { count: Number(p), counted: true, rest: known } : withCount(known, resolve(l.target), 1);
       return { target: l.target, name: l.name, knownAs: w.rest, count: w.count, counted: w.counted, wants: m[4].replace(/\s+/g, ' ').trim() };
     };
-    const person = (note, n) => ({ note, name: n.name, knownAs: n.knownAs, count: n.count, wants: n.wants, playAs: playAsOf(note, index) });
+    const person = (note, n) => ({ note, name: n.name, knownAs: n.knownAs, count: n.count, wants: n.wants, playAs: playAsOf(note, index), dead: isDeadNote(note) });
 
     // Whether each entry's count was written as a number (`(3)`), by who index.
     const countedAt = [];
@@ -458,8 +459,8 @@ function readBeats(planBody, index) {
             const lp = linkParts(m.slice(2, -2));
             const p = resolve(lp.target);
             const type = typeOf(p);
-            if (!p || isDead(p) || (type !== 'npc' && type !== 'creature')) continue;
-            if (!people.includes(p)) people.push(p);
+            if (!p || (type !== 'npc' && type !== 'creature')) continue;
+            if (!isDeadNote(p) && !people.includes(p)) people.push(p); // a place's people are the living; the dead stay in who
             if (taken(p, lp.name)) continue;
             who.push(person(p, { name: lp.name, knownAs: lp.display, count: 1, wants: '' }));
           }
@@ -558,7 +559,7 @@ function readBeats(planBody, index) {
     const type = nameKey(pt.label(text, 'Type').split(/[.\n]/)[0]); // plan-check reads the value up to its first period
     const hubLike = isHub || /\((?:hub|routing)\)/i.test(heading) || /^\s*scene\s+0\b/i.test(heading) || type === 'transition';
     for (const w of who) {
-      if (isDead(w.note)) warnings.push({ kind: 'dead-in-scene', note: sceneNote, text: `${title} lists ${w.name}, whose note says dead, as here; the page shows them as written.` });
+      if (w.dead) warnings.push({ kind: 'dead-in-scene', note: sceneNote, text: `${title} lists ${w.name}, whose note says dead (by its status or a hidden fate), as here; the page shows them as written.` });
     }
     if (!contingency && who.length === 0 && !hubLike) {
       const why = npcBlocks.length ? 'has no NPC lines the sheet can read' : 'has no **NPCs** block';

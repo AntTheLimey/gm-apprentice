@@ -36,13 +36,15 @@ and Midwife copies are never read as NPCs. Writes nothing.
 from __future__ import annotations
 
 import re
+import sys
 from pathlib import Path
 from typing import Any, Callable, Iterable, NamedTuple
 
 import session_context as sc
+import vaultlib as vl
 from migrate_vault import vault_system
 from vaultlib import (LINK_RE, WRAP_UP_TYPES, body_of, entity_type,
-                      extract_frontmatter, fenced_headings, find_section,
+                      extract_frontmatter, fenced_headings,
                       h3_blocks,
                       is_record_copy, link_aliases, link_lines, link_name,
                       link_target,
@@ -417,46 +419,49 @@ def played_npcs(notes: Notes) -> set[str]:
     return notes.npcs_named(names)
 
 
-# A Behind the Scenes bullet that opens with a fate: an optional bold
-# session link and dash, then the fate in bold (`- **[[Session 01 - …]]**
-# — **Dead.** …`). A `~~` before either part strikes it through.
-_FATE_RE = re.compile(
-    r"^[-*+]\s+(?P<s1>~~)?\s*(?:(?:\*\*)?\[\[[^\]\n]+\]\](?:\*\*)?"
-    r"\s*[—–-]+\s*)?(?P<s2>~~)?\*\*(?P<fate>(?!\[\[)[^*\n]+?)\*\*")
-_DEAD_RE = re.compile(r"dead\b", re.I)
+# Whether an NPC's hidden fate (its GM Notes > Behind the Scenes) says it is
+# dead is the publish tool's rule (`lib/fate.js`, #788): the run sheet reads
+# the same one, so the two never differ. Asked through `lines`, the way
+# moments.py asks for moments. When the tool cannot be asked, `status` alone
+# decides, and this says so once.
+_FATE_WARNED = False
+
+
+def _ask_fate(text: str) -> dict[str, Any] | None:
+    """The tool's answer {fate, dead} for a note, or None when it cannot be
+    asked (said once on stderr)."""
+    global _FATE_WARNED
+    try:
+        answer = vl.PUBLISH_LINES.ask({"op": "fate", "text": text})
+        if isinstance(answer.get("dead"), bool) and "fate" in answer:
+            return answer
+        why = "the tool's answer was not understood"
+    except vl.PublishToolUnavailable as e:
+        why = str(e)
+    if not _FATE_WARNED:
+        _FATE_WARNED = True
+        print("npc_stats: hidden fates not read (could not ask the publish "
+              f"tool: {why}); status alone decides who is dead",
+              file=sys.stderr)
+    return None
 
 
 def hidden_fate(text: str) -> str | None:
-    """An NPC's current hidden fate, or None when it has none: the last
-    bullet of its GM Notes `### Behind the Scenes` that is not struck
-    through and opens with a bold fate, a bold sentence ending in a full
-    stop (a `**Label:**` or a bold name is no fate). A later fate beats an
-    earlier one."""
-    body = body_of(text)
-    found = find_section(body, ["GM Notes", "Behind the Scenes"], first=True)
-    if not isinstance(found, tuple):
-        return None
-    fate = None
-    for line in body.split("\n")[found[0] + 1:found[1]]:
-        m = _FATE_RE.match(line)
-        # A fate is a bold sentence (`**Dead.**`, `**Alive, freed.**`): a
-        # bold lead with no full stop (`**The Lodge**`, `**Motive:**`) is
-        # not one, and neither is a struck one, tildes inside the bold too.
-        if m and not (m["s1"] or m["s2"]) \
-                and m["fate"].rstrip().endswith(".") \
-                and not m["fate"].lstrip().startswith("~~"):
-            fate = m["fate"].strip()
-    return fate
+    """An NPC's current hidden fate, or None when it has none (or the tool
+    cannot be asked): the publish tool's reading of its GM Notes > Behind
+    the Scenes."""
+    answer = _ask_fate(text)
+    fate = answer.get("fate") if answer else None
+    return fate if isinstance(fate, str) else None
 
 
 def is_dead(text: str, fm: dict[str, Any]) -> bool:
     """Is the NPC dead? Its hidden fate says so when it has one (the truth,
     which beats `status`, what the players know); else its `status` does.
-    A later fate that is not death (**Alive, freed.**, **Risen.**) beats an
-    earlier one; death named anywhere else in a bullet is not a fate."""
-    fate = hidden_fate(text)
-    if fate is not None:
-        return bool(_DEAD_RE.match(fate))
+    The publish tool decides; without it, `status` alone does."""
+    answer = _ask_fate(text)
+    if answer is not None:
+        return answer["dead"]
     return str(fm.get("status", "")).strip().lower() == "dead"
 
 
