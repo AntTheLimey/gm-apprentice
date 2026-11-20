@@ -45,13 +45,27 @@ README = "readme.md"
 RECORD = ".adopted.json"
 
 
+# For clean-room test runs only: a stand-in for the user's home directory, so a run that
+# must keep the real HOME (where the agent's login lives) still never reads the GM's own files.
+TEST_HOME_ENV = "GM_APPRENTICE_TEST_HOME"
+
+
+def _user_home(user_home: Path | None) -> Path:
+    if user_home is not None:
+        return user_home
+    stand_in = os.environ.get(TEST_HOME_ENV)
+    return Path(os.path.abspath(Path(stand_in).expanduser())) if stand_in else Path.home()
+
+
 def home(user_home: Path | None = None) -> Path:
     """The personal files' folder: `~/gm-apprentice/personal`."""
-    return (Path.home() if user_home is None else user_home) / FOLDER
+    return _user_home(user_home) / FOLDER
 
 
 def shown(path: Path, user_home: Path | None = None) -> str:
-    """`path` as a GM reads it: under their home it starts with `~/`."""
+    """`path` as a GM reads it: under their home it starts with `~/`. Only the real home
+    is shortened to `~` (never a stand-in, TEST_HOME_ENV), so a `~` the agent expands
+    always reaches the folder printed."""
     base = Path.home() if user_home is None else user_home
     try:
         return "~/" + path.relative_to(base).as_posix()

@@ -10,6 +10,12 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 ---
 
 
+## [1.12.112] — 2026-11-20
+
+### Fixed
+
+- At the table, a name the vault doesn't have (an adventure's NPC, a monster) is looked for in your personal reference files before the skill says it isn't there (#807).
+
 ## [1.12.111] — 2026-11-20
 
 ### Added
