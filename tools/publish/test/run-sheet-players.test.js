@@ -265,6 +265,16 @@ describe('the players\' view', () => {
     assert.ok(!text.includes('GM') && !text.includes(picId('_attachments/gate-gm-secret.png')));
   });
 
+  it('a GM map typed as a place is still no backdrop', () => {
+    const m = clone(model);
+    m.notes[GM_MAP] = { ...m.notes[GATE], path: GM_MAP, name: 'Map of the Gate (GM)', docType: 'map', portrait: m.notes[GATE].portrait.replace('gate-place', 'gate-gm-secret') };
+    let s = move(fresh(), BEN, FIGHT);
+    s = act(s, { type: 'backdrop', group: FIGHT.key, note: GM_MAP });
+    const v = view(s, m);
+    assert.deepEqual([v.panels[0].backdrop, v.panels[0].caption], [null, null]);
+    assert.ok(!JSON.stringify(v).includes(picId('_attachments/gate-gm-secret.png')));
+  });
+
   it('a group\'s place is its backdrop; a withheld place has no caption', () => {
     let s = move(fresh(), BEN, FIGHT);
     s = move(s, ADA, HUB, SPOT1);

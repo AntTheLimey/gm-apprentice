@@ -171,6 +171,15 @@ describe('the GM page runs a fight', { skip: browserSkip() }, () => {
       assert.strictEqual(await focused(page), ada, 'Shift+Tab goes back');
       now = await until(page, `p.fight.rows.find((r) => r.id === ${q(nextBox)}).ini === 25`);
       assert.deepStrictEqual(now.fight.rows.map((r) => r.id), order, 'nothing re-sorts until Sort or Start');
+      // past the last box, and before the first, Tab leaves the boxes for the page's other controls
+      const last = boxes.at(-1);
+      await fill(page, `[data-fini="${last}"]`, '4');
+      await page.key('Tab');
+      assert.ok(!boxes.includes(await focused(page)), 'Tab past the last box leaves the boxes');
+      await until(page, `p.fight.rows.find((r) => r.id === ${q(last)}).ini === 4`);
+      await page.evaluate(`document.querySelector('[data-fini="${boxes[0]}"]').focus()`);
+      await page.key('Tab', { shift: true });
+      assert.ok(!boxes.includes(await focused(page)), 'Shift+Tab before the first leaves them too');
       await click(page, '#fSort');
       now = await until(page, `p.fight.rows[0].id === ${q(nextBox)}`);
       assert.deepStrictEqual(now.errors, []);
@@ -348,6 +357,33 @@ describe('the GM page runs a fight', { skip: browserSkip() }, () => {
       }
       now = await until(page, `(() => { const r = p.fight.rows.find((x) => x.id === ${q(wyrm.id)}); return p.fight.round === 2 && r.recharge[0].rolled && r.recharge[0].rolled.round === 2; })()`);
       assert.ok(now.requests['POST /api/roll'] >= 2);
+      assert.deepStrictEqual(now.errors, []);
+    });
+  });
+
+  it('a lone foe keeping the turn into a new round still rolls its spent recharge', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      const { p } = await started(page, run);
+      const wyrm = rowOf(p, WYRM);
+      // another window leaves the wyrm alone in the fight, its breath spent
+      const { stateId, state } = await (await fetch(`${run.base}/api/state`)).json();
+      const actions = state.fight.rows.filter((r) => r.id !== wyrm.id).map((r, i) => ({ id: `o-${i}`, type: 'fightTick', fight: state.fight.id, row: r.id, in: false }));
+      actions.push({ id: 'o-breath', type: 'recharge', fight: state.fight.id, row: wyrm.id, name: wyrm.recharge[0].name, ready: false });
+      const res = await fetch(`${run.base}/api/actions`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ stateId, base: 0, clientId: 'other-tab', actions }) });
+      assert.strictEqual(res.status, 200);
+      await until(page, `p.fight.rows.filter((r) => r.in).length === 1 && p.pending === 0`);
+      let now = await probe(page);
+      if (now.fight.turn !== wyrm.id) {
+        await click(page, '#fNext');
+        now = await until(page, `p.fight.turn === ${q(wyrm.id)} && p.pending === 0`);
+      }
+      const round = now.fight.round;
+      await settled(page);
+      const rolls = (await probe(page)).requests['POST /api/roll'] || 0;
+      await click(page, '#fNext');
+      now = await until(page, `p.fight.round === ${round + 1} && p.fight.turn === ${q(wyrm.id)} && p.fight.rows.find((x) => x.id === ${q(wyrm.id)}).recharge[0].rolled && p.fight.rows.find((x) => x.id === ${q(wyrm.id)}).recharge[0].rolled.round === ${round + 1}`);
+      assert.ok(now.requests['POST /api/roll'] > rolls, 'a recharge roll was asked for');
       assert.deepStrictEqual(now.errors, []);
     });
   });
@@ -546,6 +582,36 @@ describe('the fight takes the PR review\'s and the proof\'s fixes', { skip: brow
       assert.strictEqual(await page.evaluate(`document.querySelector('[data-fini="${ada}"]').value`), '17', 'the typed number kept');
       await page.key('Enter');
       await until(page, `p.fight.rows.find((r) => r.id === ${q(ada)}).ini === 17 && p.pending === 0`);
+    });
+  });
+
+  it('a half-typed number kept through a redraw is saved when the box is left', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await page.focusEvents();
+      const { p } = await fightOn(page, run);
+      const ada = rowOf(p, ADA).id;
+      const other = async (ini, n) => {
+        const { stateId, state } = await (await fetch(`${run.base}/api/state`)).json();
+        const res = await fetch(`${run.base}/api/actions`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ stateId, base: 0, clientId: 'other-tab', actions: [{ id: `o-${n}`, type: 'setInit', fight: state.fight.id, row: rowOf(p, BEN).id, ini }] }) });
+        assert.strictEqual(res.status, 200);
+        await until(page, `p.fight.rows.find((r) => r.id === ${q(rowOf(p, BEN).id)}).ini === ${ini}`);
+      };
+      await fill(page, `[data-fini="${ada}"]`, '17');
+      await other(9, 1);
+      assert.strictEqual(await page.evaluate(`document.querySelector('[data-fini="${ada}"]').value`), '17');
+      await page.evaluate('document.activeElement.blur()');
+      await until(page, `p.fight.rows.find((r) => r.id === ${q(ada)}).ini === 17 && p.pending === 0`);
+      // the same for a max: nothing is sent while it is half typed
+      const wolf = rowOf(p, WYRM).id;
+      await fill(page, `[data-fmax="${wolf}"]`, '4');
+      await other(8, 2);
+      assert.notStrictEqual((await probe(page)).fight.rows.find((r) => r.id === wolf).max, 4, 'a redraw sends no half-typed max');
+      await fill(page, `[data-fmax="${wolf}"]`, '45');
+      await page.evaluate('document.activeElement.blur()');
+      const now = await until(page, `p.fight.rows.find((r) => r.id === ${q(wolf)}).max === 45 && p.pending === 0`);
+      assert.deepStrictEqual(now.errors, []);
     });
   });
 

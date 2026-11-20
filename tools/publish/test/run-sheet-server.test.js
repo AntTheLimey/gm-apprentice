@@ -1359,13 +1359,24 @@ describe('run sheet server: the players\' half', () => {
 
   it('a 5a-shaped PUT keeps the fight keys', async () => {
     const run = await playersRun();
+    // a fight ended, one running, a person shown: every fight key holds something
+    const b = beatOf(run);
+    await send(run, [
+      moveTo(P_PARTY[0], b),
+      { type: 'show', group: b.key, note: 'Characters/NPCs/Brother Venn.md', on: true },
+      { type: 'fightStart', beat: b.key, title: b.title, groups: [b.key], rows: [] },
+    ]);
+    const first = (await req(run.port, 'GET', '/api/state')).json.state.fight.id;
+    await send(run, [{ type: 'fightEnd', fight: first }, { type: 'fightStart', beat: b.key, title: b.title, groups: [b.key], rows: [] }]);
     const got = (await req(run.port, 'GET', '/api/state')).json;
+    const before = ['fight', 'fights', 'panels', 'shownEver'].map((k) => got.state[k]);
+    assert.ok(before[0] && before[1].length === 1 && Object.keys(before[2]).length && Object.keys(before[3]).length, 'seeded');
     const old = { ...got.state };
     for (const k of ['fight', 'fights', 'panels', 'shownEver']) delete old[k];
     old.jots = [{ id: 'x', text: 'From an old tab.', at: '2026-11-20T20:00:00.000Z', beat: null, spot: null }];
     assert.strictEqual((await req(run.port, 'PUT', '/api/state', { body: { stateId: got.stateId, base: got.rev, state: old } })).status, 200);
     const s = (await req(run.port, 'GET', '/api/state')).json.state;
-    assert.deepStrictEqual([s.fight, s.fights, s.panels, s.shownEver], [null, [], {}, {}]);
+    assert.deepStrictEqual([s.fight, s.fights, s.panels, s.shownEver], before);
     assert.strictEqual(s.jots[0].text, 'From an old tab.', 'the PUT\'s own keys win');
     assert.strictEqual((await req(run.port, 'GET', '/api/players/view')).status, 200);
   });

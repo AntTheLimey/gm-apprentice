@@ -394,7 +394,9 @@
     return r.hp !== st.hp || (has(st, 'max') && r.max !== st.max) || !same(r.conds, st.conds)
       || (r.exhaustion || 0) !== (st.exhaustion || 0) || !!r.conc !== !!st.conc;
   }
-  // Each PC's and ally's figure from the last fight, ended or running, that changed it: vitals rowId -> figure.
+  // Each PC's and ally's figures from every fight, ended or running, that changed it or had a status cleared
+  // after it: vitals rowId -> [figure], oldest fight first. All are replayed, so a rest between two fights
+  // still sees the HP the first one left (a later fight's figure stays the current one).
   function fightFigures(model, state) {
     const out = new Map();
     const allies = new Map();
@@ -407,9 +409,13 @@
           rowId = r.copy > 1 ? `${r.note}#${r.copy}` : r.note;
           if (!allies.has(rowId)) allies.set(rowId, { rowId, ally: true, copy: r.copy || 1, note: r.note, name: r.name, base: { hp: (r.start || {}).hp ?? r.max ?? null, max: r.max ?? null } });
         }
-        // HP and max at their own time, conditions at the row's (Review H1); a row from before `hpAt` reads `at` for both
+        // HP and max at their own time, conditions at theirs (Review H1); a row from before them reads `at`
         const at = r.at || f.endedAt || f.startedAt || null;
-        if (rowId && changed(r)) out.set(rowId, { hp: r.hp, max: r.max, conditions: condText(r), at, hpAt: r.hpAt || at, endedAt: f.endedAt || null });
+        const clears = Array.isArray(r.clears) ? r.clears.filter((c) => c && Array.isArray(c.removed)) : [];
+        const moved = changed(r);
+        if (!rowId || (!moved && !clears.length)) continue;
+        if (!out.has(rowId)) out.set(rowId, []);
+        out.get(rowId).push({ changed: moved, hp: r.hp, max: r.max, conditions: condText(r), condAt: r.condAt || at, hpAt: r.hpAt || at, clears });
       }
     }
     return { figures: out, allies };
@@ -424,8 +430,16 @@
     }).join(', ');
   }
 
+  // A conditions text with the statuses a clear took off; an Exhaustion clear takes any Exhaustion level.
+  function withoutStatuses(text, removed) {
+    const gone = new Set(removed);
+    const tired = removed.some((x) => /^Exhaustion\b/.test(x));
+    return String(text || '').split(/[,;]/).map((x) => x.trim()).filter(Boolean)
+      .filter((c) => !gone.has(c) && !(tired && /^Exhaustion\b/i.test(c))).join(', ');
+  }
+
   // Ally rows: one per ally note, a copy row for each extra number a beat holds (`Guard 2`), and any ally a
-  // fight held. Each row's figure is the latest of: the note, the last fight that changed it, the end panel,
+  // fight held. Each row's figure is the latest of: the note, each fight that changed it, the end panel,
   // a long rest (decision 17). `source` says where the HP came from.
   function vitalRows(model, state, beats, reached) {
     const rows = [];
@@ -463,22 +477,30 @@
       const setMax = o.max !== undefined && o.max !== '';
       const fig = { hp: r.base.hp, max: r.base.max, conditions: '', source: 'note', at: null };
       const steps = [];
-      const ff = figures.get(r.rowId);
-      if (ff) {
-        steps.push({ t: ord(ff.hpAt), k: 0, run: () => Object.assign(fig, { hp: ff.hp, max: ff.max ?? fig.max, source: 'fight', at: ff.hpAt }) });
-        // a status cleared on the ended fight after a long rest must not undo the rest's Exhaustion step: the
-        // text is the fight's, so the rest is applied to it again (after the fight, actions only remove statuses)
-        steps.push({ t: ord(ff.at), k: 0, run: () => {
-          fig.conditions = ff.conditions;
-          const rest = ord(state.end.longRestAt);
-          if (covered && rest && ff.endedAt && ord(ff.endedAt) <= rest && rest < ord(ff.at) && !restSkipped) fig.conditions = restedConditions(fig.conditions);
-        } });
+      const ffs = figures.get(r.rowId) || [];
+      for (const ff of ffs) {
+        if (ff.changed) {
+          steps.push({ t: ord(ff.hpAt), k: 0, run: () => Object.assign(fig, { hp: ff.hp, max: ff.max ?? fig.max, source: 'fight', at: ff.hpAt }) });
+          // the text is the row's now: a status cleared since is gone already, and its clear below takes it off
+          // whatever stands then too (an end-panel edit, a rest's Exhaustion step), never puts the fight's back
+          steps.push({ t: ord(ff.condAt), k: 0, run: () => { fig.conditions = ff.conditions; } });
+        }
+        for (const c of ff.clears) steps.push({ t: ord(c.at), k: 0, run: () => { fig.conditions = withoutStatuses(fig.conditions, c.removed); } });
       }
       // each field has its own time; a 5a row holds one time for all of them, a row with none loses to a fight
       const when = (k) => (o.at && typeof o.at === 'object' ? o.at[k] : o.at);
       if (setMax) steps.push({ t: ord(when('max')), k: 1, run: () => { fig.max = o.max; } });
       if (o.conditions !== undefined) steps.push({ t: ord(when('conditions')), k: 1, run: () => { fig.conditions = o.conditions || ''; } });
       let restSkipped = false;
+      // the HP and max the GM set before the rest (the rest set them aside) stand at their own times, before it,
+      // so a 0 typed then still means the rest does nothing
+      const typed = (x) => x !== undefined && x !== null && x !== '';
+      if (covered && o.rested) {
+        const rest = ord(state.end.longRestAt);
+        const before = (k) => [ord(when(k)), rest].sort()[0];
+        if (typed(o.rested.max)) steps.push({ t: before('max'), k: 1, run: () => { fig.max = o.rested.max; } });
+        if (typed(o.rested.hp)) steps.push({ t: before('hp'), k: 1, run: () => Object.assign(fig, { hp: o.rested.hp, source: 'end', at: when('hp') || null }) });
+      }
       if (covered) {
         // SRD: a creature at 0 HP gets no long rest benefit; its row is left as it is
         steps.push({ t: ord(state.end.longRestAt), k: 2, run: () => {
@@ -494,7 +516,7 @@
       return { restSkipped, rowId: r.rowId, ally: r.ally, copy: r.copy, note: r.note, name: r.name,
         hp: fig.hp, max: fig.max, conditions: fig.conditions,
         set: has(state.end.vitals, r.rowId), rest: fig.source === 'rest', setHp: fig.source === 'end',
-        fight: !!ff, source: fig.source, at: fig.at };
+        fight: ffs.some((x) => x.changed), source: fig.source, at: fig.at };
     });
   }
 

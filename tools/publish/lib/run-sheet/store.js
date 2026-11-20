@@ -224,7 +224,10 @@ function createStore({
       if (theirs !== stateId) return { conflict: 'session', rev };
       if (theirBase !== rev) return { conflict: 'stale', rev };
       if (!state || typeof state !== 'object' || Array.isArray(state)) throw new TypeError('state must be an object');
-      const whole = upgrade(state); // throws, code BAD_STATE, for a key of the wrong kind
+      // a page from before a key existed (a 5a tab open across the upgrade) sends none: the stored one stands
+      const sent = { ...state };
+      for (const k of Object.keys(cur || {})) if (!Object.prototype.hasOwnProperty.call(sent, k)) sent[k] = cur[k];
+      const whole = upgrade(sent); // throws, code BAD_STATE, for a key of the wrong kind
       rev++;
       cur = own(whole, rev, cur.recordHash);
       changed();

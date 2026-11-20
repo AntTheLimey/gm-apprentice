@@ -69,7 +69,8 @@ function forPlayers(model, state, { withheldWords, campaign, picId } = {}) {
     if (showableMap(note)) info = (model.mapNotes || {})[note] || null;
     else {
       const n = has(notes, note) ? notes[note] : null;
-      if (n && String(n.type || '').toLowerCase() === 'location') info = n;
+      // a map reaches the screen only as a showable map: a GM half typed `location` is no place
+      if (n && n.docType !== 'map' && String(n.type || '').toLowerCase() === 'location') info = n;
     }
     if (!info) return null;
     return { backdrop: picOf(info.portrait), caption: info.withheld || !info.named ? null : info.name };
@@ -154,7 +155,7 @@ function forPlayers(model, state, { withheldWords, campaign, picId } = {}) {
     const rowsIn = f.rows.filter((r) => r && typeof r === 'object').map((r) => ({ ...r, kind: kindOf(r) }));
     // a number is fixed under the row's own word; one that disagrees with the model's word (or repeats) is
     // dropped, and every foe is numbered again by the model's word in the stored order
-    const wordKey = (w) => String(w || '').trim().toLowerCase();
+    const wordKey = FM.unseenKey;
     const taken = new Set();
     const clash = rowsIn.some((r) => {
       if (r.kind !== 'foe' || r.unseenN === null || r.unseenN === undefined) return false;

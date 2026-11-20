@@ -31,6 +31,13 @@
   function draw(next) {
     view = next;
     screen.innerHTML = R.renderPlayers(view);
+    // a long order runs past its panel (nobody scrolls a screen on the wall): it is moved so the turn
+    // being taken stays in sight, a third of the way down
+    for (const li of screen.querySelectorAll('.ord li.cur')) {
+      const box = li.closest('.ord');
+      if (!box || box.scrollHeight <= box.clientHeight) continue;
+      box.scrollTop += li.getBoundingClientRect().top - box.getBoundingClientRect().top - box.clientHeight / 3;
+    }
     if (view && view.campaign) document.title = `${view.campaign} - players' screen`;
     if (probing) measure();
   }

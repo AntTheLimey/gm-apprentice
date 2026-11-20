@@ -1029,6 +1029,15 @@ describe('run sheet reader: loot items, Plan-line HP, carried unmaskings', () =>
       assert.deepStrictEqual(readRunSheet(dir, PLAN, { party: PARTY }).showableMaps, ['Documents/Other.md']);
     });
 
+    it('a map in a folder player_site.folder_map leaves out is not showable', () => {
+      const dir = copy();
+      write(dir, 'GM Maps/Back Stair.md', mapNote('Back Stair'));
+      // no map set (no site set up): each map's own rule
+      assert.deepStrictEqual(readRunSheet(dir, PLAN, { party: PARTY }).showableMaps, [GATE, 'GM Maps/Back Stair.md']);
+      write(dir, '_meta/vault-config.yaml', 'vault:\n  system: dnd-5e-2024\nplayer_site:\n  title: The Test Campaign\n  folder_map:\n    Documents: documents\n');
+      assert.deepStrictEqual(readRunSheet(dir, PLAN, { party: PARTY }).showableMaps, [GATE]);
+    });
+
     it('no publish list: an ordinary map is showable', () => {
       const dir = copy();
       const m = readRunSheet(dir, PLAN, { party: PARTY });

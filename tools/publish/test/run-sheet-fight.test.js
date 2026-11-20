@@ -195,6 +195,84 @@ describe('the fight in the state', () => {
     assert.equal(conds(rest(clear(s, plus(s, 4)), plus(s, 5))), 'Exhaustion 1');
   });
 
+  it('an initiative typed after an end-panel clear leaves the clear standing', () => {
+    let s = gateFight();
+    s = F(s, { type: 'status', row: row(s, ADA).id, add: 'Prone' });
+    s = act(s, { type: 'endSet', vitals: { [ADA]: { conditions: '' } } });
+    s = F(s, { type: 'setInit', row: row(s, ADA).id, ini: 14 });
+    s = F(s, { type: 'half', row: row(s, ADA).id, on: true });
+    assert.equal(vital(s, ADA).conditions, '');
+    // a status the fight adds after the clear still wins
+    s = F(s, { type: 'status', row: row(s, ADA).id, add: 'Grappled' });
+    assert.equal(vital(s, ADA).conditions, 'Prone, Grappled');
+  });
+
+  it('a clear after the fight takes its status off what the end panel holds', () => {
+    let s = gateFight();
+    s = F(s, { type: 'status', row: row(s, ADA).id, add: 'Prone' });
+    s = F(s, { type: 'status', row: row(s, ADA).id, add: 'Frightened' });
+    s = end(s);
+    s = act(s, { type: 'endSet', vitals: { [ADA]: { conditions: 'Prone, Poisoned' } } });
+    s = act(s, { type: 'afterClear', fight: s.fights[0].id, row: s.fights[0].rows.find((r) => r.note === ADA).id, status: 'Prone' });
+    assert.equal(vital(s, ADA).conditions, 'Poisoned');
+    // Clear all takes off only what the fight still held
+    s = act(s, { type: 'afterClear', fight: s.fights[0].id, row: s.fights[0].rows.find((r) => r.note === ADA).id, all: true });
+    assert.equal(vital(s, ADA).conditions, 'Poisoned');
+  });
+
+  it('an end-panel 0 HP set before a long rest means the rest does nothing', () => {
+    let s = move(fresh(), ADA, GATE);
+    s = act(s, { type: 'endSet', vitals: { [ADA]: { hp: 0 } } });
+    s = act(s, { type: 'longRest' });
+    const v = vital(s, ADA);
+    assert.equal(v.hp, 0);
+    assert.equal(v.restSkipped, true);
+    // a non-zero HP set before it is restored to full
+    let t = move(fresh(), ADA, GATE);
+    t = act(t, { type: 'endSet', vitals: { [ADA]: { hp: 5 } } });
+    t = act(t, { type: 'longRest' });
+    assert.equal(vital(t, ADA).hp, vital(t, ADA).max);
+  });
+
+  it('a second fight after a skipped rest keeps the skip and its own HP', () => {
+    let s = gateFight();
+    s = hit(s, ADA, `-${row(s, ADA).hp}`);
+    s = end(s);
+    s = act(s, { type: 'longRest' });
+    assert.equal(vital(s, ADA).restSkipped, true);
+    s = fightAt(s, GATE);
+    assert.equal(row(s, ADA).hp, 0);
+    s = hit(s, ADA, '+4');
+    s = end(s);
+    const v = vital(s, ADA);
+    assert.equal(v.hp, 4, 'the later fight is the current figure');
+    assert.equal(v.restSkipped, true, 'the rest still saw the 0 the first fight left');
+  });
+
+  it('temp HP alone never makes the fight\'s older HP the newer figure', () => {
+    let s = gateFight();
+    s = hit(s, ADA, '-10');
+    const hpNow = row(s, ADA).hp;
+    s = act(s, { type: 'endSet', vitals: { [ADA]: { hp: hpNow + 6 } } });
+    s = hit(s, ADA, 't5');
+    assert.equal(vital(s, ADA).hp, hpNow + 6, 'temp HP given');
+    s = hit(s, ADA, '-3');
+    assert.equal(vital(s, ADA).hp, hpNow + 6, 'a hit the temp HP soaked whole');
+    s = F(s, { type: 'area', amount: 4, hits: [{ row: row(s, ADA).id }] });
+    assert.equal(row(s, ADA).hp, hpNow - 2, 'the area hit went past the temp HP');
+    assert.equal(vital(s, ADA).hp, hpNow - 2, 'and a hit that reaches HP wins');
+  });
+
+  it('a row with no HP still loses its temp HP to a hit', () => {
+    let s = gateFight();
+    const id = row(s, WOLF).id;
+    s = { ...s, fight: { ...s.fight, rows: s.fight.rows.map((r) => (r.id === id ? { ...r, hp: null, max: null } : r)) } };
+    s = F(s, { type: 'hp', row: id, entry: 't5' });
+    s = F(s, { type: 'hp', row: id, entry: '3' });
+    const r = s.fight.rows.find((x) => x.id === id);
+    assert.deepEqual([r.hp, r.temp], [null, 2]);
+  });
+
   it('an end-panel edit between fights wins', () => {
     let s = gateFight();
     s = hit(s, ADA, '-10');
@@ -296,8 +374,31 @@ describe('the fight in the state', () => {
     assert.equal(s.fight.turn, turn, 'the turn unchanged');
     assert.equal(row(s, BEN).in, true, 'the joined PC ticked');
     assert.equal(s.fight.rows.filter((r) => r.kind === 'pc').length, 2, 'no second row for him');
-    assert.match(texts(s).at(-1), /Ben Hart join the fight\./);
+    assert.equal(rows(s, LUCAN).length, 1, 'Lucan, planned on both beats, is one row');
+    assert.equal(texts(s).at(-1), 'Ben Hart joins the fight.');
     assert.equal(RS.derive(model, s).fight.id, s.fight.id, 'one fight');
+  });
+
+  it('a group joined from two windows at once brings its planned foes once', () => {
+    const m = clone(model);
+    m.beats[2].foes.push({ key: `${HUB.key}.foe.imp`, note: MEPHIT, name: 'Ice Mephit', ally: false, ac: 11, hp: 21, init: 1 });
+    let s = move(fresh(), ADA, GATE);
+    s = move(s, BEN, HUB, SPOT);
+    s = fightAt(s, GATE, { m });
+    // both windows build the join on the same state, before either lands
+    const build = (id) => {
+      const j = M.joinRows({ model: m, derived: RS.derive(m, s), state: s, fight: s.fight, add: { group: SPOT }, idBase: id });
+      return { id, type: 'fightJoin', fight: s.fight.id, rows: j.rows, tick: j.tick, groups: j.groups, thresholds: j.thresholds, label: '', planned: true };
+    };
+    const one = build('w1');
+    const two = build('w2');
+    s = RS.reduce(RS.reduce(s, one, now()), two, now());
+    assert.equal(rows(s, MEPHIT).length, 1, 'one Mephit, not two');
+    assert.equal(rows(s, BEN).length, 1);
+    assert.equal(texts(s).filter((x) => /joins? the fight/.test(x)).length, 1, 'one line in the log');
+    // Add by name keeps its copies
+    s = join(s, { cast: MEPHIT, count: 2 });
+    assert.equal(rows(s, MEPHIT).length, 3);
   });
 
   it('copies', () => {
@@ -330,6 +431,14 @@ describe('the fight in the state', () => {
     assert.equal(row(s, ADA).ini, null, 'a PC is never rolled');
     s = F(s, { type: 'setInit', row: w1.id, ini: null });
     assert.equal(row(s, WOLF, 1).ini, null);
+  });
+
+  it('a Lair row whose owners are all Out is not in round one\'s line', () => {
+    let s = gateFight();
+    for (const w of rows(s, WOLF)) s = F(s, { type: 'out', row: w.id, on: true });
+    s = next(s);
+    assert.notEqual(s.fight.rows.find((r) => r.id === s.fight.turn).kind, 'lair');
+    assert.doesNotMatch(texts(s).find((x) => x.startsWith('Round 1:')), /Lair/);
   });
 
   it('first Next sorts once; typing after does not re-sort; Sort keeps the turn', () => {

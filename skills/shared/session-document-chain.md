@@ -224,8 +224,8 @@ unmasking turned off tonight is `- [[Note]] masked again`. A fight's
 start, rounds and end are `Log` lines, and a vitals row comes from the
 last fight when it changed the figure. A figure written `12/40 (after
 the fight, 20:14)` is the last one the sheet saw, not one set at the
-end. Vitals rows are only values the GM set or a fight changed, so a GM
-who touched nothing leaves bare headings.
+end. Vitals rows are only values the GM set, a fight changed or a long
+rest gave, so a GM who touched nothing leaves bare headings.
 
 A section with nothing in it, or missing altogether, means nothing was
 recorded for it. It is never an error, and never read as "none

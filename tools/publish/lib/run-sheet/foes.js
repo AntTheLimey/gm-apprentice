@@ -42,8 +42,8 @@ function readNumbers(stats, behaviour) {
   // A declaration with no number (`(Recharge -)`, a draft) is no recharge.
   const charges = [...full.matchAll(BOLD_CHARGE)];
   // The plain form of a one-line block, `Frost Breath (Recharge 6)`: the name is the run of capitalised words
-  // before the bracket. The bold form wins a name it already gave.
-  const plain = [...full.replace(BOLD_CHARGE, ' ').matchAll(/((?:[A-Z][\w'’-]*)(?:[ \t]+[A-Z][\w'’-]*)*)[ \t]*\(Recharge (\d+(?:\s*[–-]\s*\d+)?)\)/g)]
+  // before the bracket, small joining words kept (`Breath of Frost`). The bold form wins a name it already gave.
+  const plain = [...full.replace(BOLD_CHARGE, ' ').matchAll(/((?:[A-Z][\w'’-]*)(?:[ \t]+(?:(?:of|the|and|in|on|from|to|at|with|a|an)[ \t]+)*[A-Z][\w'’-]*)*)[ \t]*\(Recharge (\d+(?:\s*[–-]\s*\d+)?)\)/g)]
     .map((m) => [null, m[1], m[2]]);
   const all = [...charges, ...plain];
   const recharge = [...new Set(all.map((m) => m[1].trim()))].sort();

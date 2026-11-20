@@ -42,8 +42,9 @@
   // Temp HP takes damage first; HP stops at 0.
   function afterDamage({ hp, temp }, d) {
     const t = temp || 0;
-    if (hp === null || hp === undefined) return { hp: null, temp: t };
     const soak = Math.min(t, d);
+    // a row with no HP still loses the temp HP it was given
+    if (hp === null || hp === undefined) return { hp: null, temp: t - soak };
     return { hp: Math.max(0, hp - (d - soak)), temp: t - soak };
   }
 
@@ -153,17 +154,25 @@
   // The number a foe row gets, by word, fixed when first ticked in: a row that has one keeps it; a ticked
   // row without one takes the next after the highest. An unticked row with no number gets none, nor does a
   // row already seen (shown before the fight): it takes a number only if it goes back to unseen.
+  // Foes are numbered by the word they show, article dropped: `a guard` and `the guard` both show `Guard N`,
+  // so they share one run of numbers. A kept number already taken in its run (two runs that met) takes the
+  // next free one instead.
+  const unseenKey = (word) => String(word || '').trim().replace(ARTICLE, '').toLowerCase();
   function unseenNumbers(rows, wordOf) {
     const out = new Map();
     const top = new Map();
+    const used = new Map();
     const fresh = [];
     for (const r of rows) {
       if (r.kind !== 'foe') continue;
-      const w = String(wordOf(r) || '').trim().toLowerCase();
-      if (r.unseenN !== null && r.unseenN !== undefined) {
+      const w = unseenKey(wordOf(r));
+      if (!used.has(w)) used.set(w, new Set());
+      const kept = r.unseenN !== null && r.unseenN !== undefined;
+      if (kept && !used.get(w).has(r.unseenN)) {
         out.set(r.id, r.unseenN);
+        used.get(w).add(r.unseenN);
         top.set(w, Math.max(top.get(w) || 0, r.unseenN));
-      } else if (r.in && !r.seen) fresh.push([r, w]);
+      } else if (kept || (r.in && !r.seen)) fresh.push([r, w]);
     }
     for (const [r, w] of fresh) {
       const n = (top.get(w) || 0) + 1;
@@ -180,15 +189,14 @@
     const members = new Map();
     for (const r of rows) {
       if (r.kind !== 'foe' || !numbers.has(r.id)) continue;
-      const w = String(wordOf(r) || '').trim().toLowerCase();
+      const w = unseenKey(wordOf(r));
       members.set(w, (members.get(w) || 0) + 1);
     }
     const labels = new Map();
     for (const r of rows) {
       if (r.kind !== 'foe') continue;
       const word = String(wordOf(r) || '').trim();
-      const w = word.toLowerCase();
-      labels.set(r.id, numbers.has(r.id) && members.get(w) >= 2 ? `${cap(word.replace(ARTICLE, ''))} ${numbers.get(r.id)}` : cap(word));
+      labels.set(r.id, numbers.has(r.id) && members.get(unseenKey(word)) >= 2 ? `${cap(word.replace(ARTICLE, ''))} ${numbers.get(r.id)}` : cap(word));
     }
     return labels;
   }
@@ -344,10 +352,12 @@
       // an HP line can only be crossed by a foe whose max is over it
       const can = t.hp !== undefined ? bosses.filter((r) => isNum(r.max) && r.max > t.hp) : bosses;
       // the foe Do names, else the foe Then names, else the biggest (Review L4: an HP line too)
+      // whole names only: a Rat is not named by "Pirate"
+      const names = (text, name) => Boolean(name) && new RegExp(`(?:^|[^\\p{L}\\p{N}])${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}\\p{N}])`, 'iu').test(text);
       const naming = (s) => can.filter((r) => {
-        const text = String(s || '').toLowerCase();
-        const stem = String(r.note || '').split('/').pop().replace(/\.md$/, '').toLowerCase();
-        return text.includes(r.name.toLowerCase()) || (stem && text.includes(stem));
+        const text = String(s || '');
+        const stem = String(r.note || '').split('/').pop().replace(/\.md$/, '');
+        return names(text, String(r.name || '')) || names(text, stem);
       });
       let pick = naming(l.cond);
       if (!pick.length) pick = naming(l.then);
@@ -452,7 +462,8 @@
       const n = Math.max(1, Math.min(20, Math.floor(add.count) || 1));
       const mine = have.filter((x) => x.note === c.note);
       const benched = mine.filter((x) => !x.in);
-      if (benched.length) { benched.slice(0, n).forEach(tickIn); return out; }
+      // a benched arrival ticked in may be the first lair owner able to act: its Lair row comes with it
+      if (benched.length) { benched.slice(0, n).forEach(tickIn); lairIfNew(); return out; }
       if (c.type === 'npc' && mine.length) { out.refused = `${c.name} is already in this fight.`; return out; }
       const foe = c.foe || { key: `cast.${c.note}`, note: c.note, name: c.name, ally: false, ac: null, hp: null, init: null };
       const top = mine.reduce((m, x) => Math.max(m, x.copy || 0), 0);
@@ -482,7 +493,14 @@
     if (beat) {
       const taken = new Map();
       for (const r of have) if (r.note) taken.set(r.note, Math.max(taken.get(r.note) || 0, r.copy || 0));
-      const foes = beatFoes(ctx, beat).filter((x) => !have.some((r) => r.foeKey === x.foe.key));
+      // A named NPC already in the fight from another beat is the same person: ticked in if benched, never a
+      // second row (the rule Add by name keeps). A beat listing a note twice still makes both.
+      const foes = beatFoes(ctx, beat).filter((x) => !have.some((r) => r.foeKey === x.foe.key)).filter((x) => {
+        const mine = typeOf(ctx.model, x.foe) === 'npc' ? have.filter((r) => r.note === x.foe.note) : [];
+        if (!mine.length) return true;
+        if (x.on) mine.filter((r) => !r.in).slice(0, 1).forEach(tickIn);
+        return false;
+      });
       const copies = numberCopies(foes, taken);
       const built = foes.map((x, i) => ({ ...foeRowFrom(ctx, x.foe, { copy: copies[i], in: x.on }), id: id() }));
       out.rows.push(...built);
@@ -506,7 +524,7 @@
   return {
     DND_STATUSES, EXHAUSTION_MAX, fightGroupKeys,
     parseEntry, damageTaken, afterDamage, afterHeal, isBloodied,
-    thresholdOf, isLit, sortRows, nextLive, actingRow,
-    gmName, lairRow, unseenNumbers, unseenLabels, rowsForFight, joinRows,
+    thresholdOf, isLit, sortRows, takesTurn, nextLive, actingRow,
+    gmName, lairRow, unseenKey, unseenNumbers, unseenLabels, rowsForFight, joinRows,
   };
 }));

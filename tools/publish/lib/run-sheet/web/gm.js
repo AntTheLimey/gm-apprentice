@@ -275,6 +275,9 @@
     try { st = await getJson('/api/state'); } catch (e) { lost(); return; }
     // the server now runs another session: its label is the one to name, never this page's own
     if (st.stateId !== G.stateId) { await conflict({ reason: 'session', label: st.label || '' }); G.down = false; indicator(); return; }
+    // two recoveries can cross (the retry timer's and a hello's): the same server's older state never rolls
+    // back a newer one an answer brought meanwhile, whose actions have left the queue
+    if (st.serverId && st.serverId === G.serverId && st.rev < G.rev) { G.down = false; indicator(); pump(); return; }
     serverIs(st.serverId);
     rebase(st.state, st.rev);
     G.down = false;
@@ -326,6 +329,7 @@
       const d = data(ev);
       if (d.clientId === G.clientId) return;
       if (typeof d.rev === 'number') G.heardRev = Math.max(G.heardRev, d.rev);
+      probe();
       refresh();
     });
     es.addEventListener('record-kept', (ev) => { const d = data(ev); if (d.path) note(keptText(d.path), { id: `kept:${d.path}` }); });
@@ -1201,7 +1205,7 @@
     const rail = document.querySelectorAll('#rail [data-railbeat]').length;
     const out = {
       beats, rail, saved: ($('#saved') || {}).textContent || '', errors: probeErrors.slice(),
-      notes: G.notes.map((n) => n.text), rev: G.rev, pending: G.pending.length, answered: G.answered.length,
+      notes: G.notes.map((n) => n.text), rev: G.rev, heardRev: G.heardRev, pending: G.pending.length, answered: G.answered.length,
       stateId: G.stateId, clientId: G.clientId,
       marked: document.querySelectorAll('#sheet .ptb.landed[data-pt]').length,
       jots: Array.from(document.querySelectorAll('#sheet ul.jots li > span:not(.tm)'), (el) => el.textContent),

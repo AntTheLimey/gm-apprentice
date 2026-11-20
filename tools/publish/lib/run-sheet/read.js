@@ -17,7 +17,7 @@ const { readHandouts, TITLE: HANDOUTS_TITLE } = require('./handouts');
 const { foesFor } = require('./foes');
 const { readTableLog, VITALS } = require('./table-log');
 const { orderedSessions } = require('../story-spine');
-const { displayTitleOf } = require('../scanner');
+const { displayTitleOf, mapFolder } = require('../scanner');
 const { unmaskedPlayAsOf } = require('./people-from-notes');
 const { parseNote } = require('../frontmatter');
 const { readSettings } = require('../settings/read');
@@ -314,8 +314,12 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
     warnings.push({ kind: 'map-list', note: null, text: 'the publish list could not be read: no map can be Shown' });
   }
   const gmHalves = new Set([...allMaps.filter((g) => GM_SUFFIX.test(stemOf(g))), ...[...playerFor].filter(([, v]) => v).map(([g]) => g)]);
+  // A folder player_site.folder_map leaves out is not published, as the scanner says (a vault with no map set,
+  // no site set up, leaves each map to its own publish rule).
+  const folderMap = publishConfig.folder_map && typeof publishConfig.folder_map === 'object' ? publishConfig.folder_map : {};
+  const folderMapped = (rel) => !Object.keys(folderMap).length || !rel.includes('/') || mapFolder(rel.slice(0, rel.lastIndexOf('/')), folderMap) !== null;
   const showableMaps = !manifestRead ? [] : allMaps.filter((m) => !gmHalves.has(m)
-    && publishesPage(decidePage({ rel: m, frontmatter: fmOf(m) }, { rel: m, publishConfig, manifest }))).sort();
+    && publishesPage(decidePage({ rel: m, frontmatter: fmOf(m) }, { rel: m, publishConfig, manifest, folderMapped: folderMapped(m) }))).sort();
   for (const p of maps) {
     playerVersionWarning(p);
     pair(p, playerFor.get(p));

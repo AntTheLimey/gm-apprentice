@@ -36,6 +36,7 @@ test('heal stops at max; damage at 0', () => {
   assert.equal(M.afterHeal({ hp: 35, max: 40 }, 8), 40);
   assert.equal(M.afterHeal({ hp: 5, max: 40 }, 8), 13);
   assert.deepEqual(M.afterDamage({ hp: 4, temp: 0 }, 30), { hp: 0, temp: 0 });
+  assert.deepEqual(M.afterDamage({ hp: null, temp: 5 }, 3), { hp: null, temp: 2 }, 'no HP: the temp HP still soaks');
 });
 
 test('Bloodied at exactly half, not at 0, not without a max', () => {
@@ -112,6 +113,14 @@ test('a bare Bloodied If-row lights for the foe its Then names, Do first', () =>
   assert.deepEqual(run({ key: 'b1.if.t', do: 'Bloodied', then: 'Masked Gilt stops fighting' }), ['NPCs/Gilt.md']);
   // a name in Do wins over a name in Then
   assert.deepEqual(run({ key: 'b1.if.d', do: 'Gilt Bloodied', then: 'the Glacier Wyrm laughs' }), ['NPCs/Gilt.md']);
+});
+
+test('a cue names whole foes: a Rat is not named by "Pirate"', () => {
+  const rat = { key: 'b1.foe.rat', note: 'Creatures/Rat.md', name: 'Rat', ally: false, ac: 10, hp: 30, init: 1 };
+  const pirate = { key: 'b1.foe.pirate', note: 'Creatures/Pirate.md', name: 'Pirate', ally: false, ac: 12, hp: 30, init: 2 };
+  const beat = { ...gate, foes: [rat, pirate], ifs: [], points: [{ key: 'b1.pt.p', text: 'Pirate at 10 HP or less: it flees' }] };
+  const r = M.rowsForFight({ model, derived: derivedOf({ beats: [beat, hub] }), state: here, beatKey: 'b1', idBase: 'a1' });
+  assert.deepEqual(r.thresholds[0].foes, ['Creatures/Pirate.md']);
 });
 
 test('not lit at 0 or Out', () => {
@@ -211,6 +220,16 @@ test('unseen labels', () => {
   assert.equal(M.unseenNumbers(rows, word).get('b'), 4);
   // other kinds are left out
   assert.equal(M.unseenLabels([row({ id: 'p', kind: 'pc' })], word).size, 0);
+  // `a guard` and `the guard` both show `Guard N`: one run of numbers, even for numbers kept apart before
+  const guard = (r) => r.word;
+  rows = [row({ id: 'g1', word: 'a guard' }), row({ id: 'g2', word: 'a guard' }), row({ id: 'g3', word: 'the guard' }), row({ id: 'g4', word: 'the guard' })];
+  l = M.unseenLabels(rows, guard);
+  assert.deepEqual(['g1', 'g2', 'g3', 'g4'].map((id) => l.get(id)), ['Guard 1', 'Guard 2', 'Guard 3', 'Guard 4']);
+  rows = rows.map((r, i) => ({ ...r, unseenN: (i % 2) + 1 }));
+  l = M.unseenLabels(rows, guard);
+  assert.equal(new Set(['g1', 'g2', 'g3', 'g4'].map((id) => l.get(id))).size, 4, [...l.values()].join(', '));
+  // a lone one keeps its own words
+  assert.equal(M.unseenLabels([row({ id: 'x', word: 'the guard' })], guard).get('x'), 'The guard');
 });
 
 test('gm names: unmasked, with the copy number once there are two', () => {
@@ -348,6 +367,17 @@ test('join ticks a benched one in', () => {
   assert.deepEqual(r.tick, [rows.find((x) => x.note === 'NPCs/Gilt.md').id]);
   const pc = M.joinRows({ model, derived: derivedOf(), state: here, fight: { groups: f.groups, rows, thresholds: [] }, add: { cast: nim }, idBase: 'j' });
   assert.deepEqual(pc.tick, [rows.find((x) => x.note === nim).id]);
+});
+
+test('a benched lair owner added by name brings the Lair row', () => {
+  const f = M.rowsForFight({ model, derived: derivedOf(), state: here, beatKey: 'b1', idBase: 'a' });
+  const rows = f.rows.filter((r) => r.kind !== 'lair').map((r) => (r.note === 'Creatures/Wyrm.md' ? { ...r, in: false } : r));
+  const r = M.joinRows({ model, derived: derivedOf(), state: here, fight: { groups: f.groups, rows, thresholds: [] }, add: { cast: 'Creatures/Wyrm.md' }, idBase: 'j' });
+  assert.deepEqual(r.tick, [rows.find((x) => x.note === 'Creatures/Wyrm.md').id]);
+  assert.equal(r.rows.filter((x) => x.kind === 'lair').length, 1);
+  // and never a second
+  const again = M.joinRows({ model, derived: derivedOf(), state: here, fight: { groups: f.groups, rows: f.rows.map((x) => (x.note === 'Creatures/Wyrm.md' ? { ...x, in: false } : x)), thresholds: [] }, add: { cast: 'Creatures/Wyrm.md' }, idBase: 'k' });
+  assert.equal(again.rows.length, 0);
 });
 
 test('join a group brings its PCs and its beat foes', () => {

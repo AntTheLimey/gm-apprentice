@@ -112,6 +112,9 @@ async function withPage({ width = 1449, height = 762, chrome = findChrome() } = 
             return r;
           },
           reload: () => s('Page.reload', { ignoreCache: true }),
+          // A headless page has no window focus, so focus and blur fire no events; this makes them fire,
+          // for a test of what leaving a box does.
+          focusEvents: () => s('Emulation.setFocusEmulationEnabled', { enabled: true }),
           evaluate,
           waitFor,
           sleep,

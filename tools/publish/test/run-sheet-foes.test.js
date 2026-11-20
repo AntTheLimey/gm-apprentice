@@ -360,6 +360,14 @@ describe('run sheet foes: recharge forms and lair actions (5b)', () => {
     assert.deepStrictEqual(f.rechargeAt, { 'Breath Under the Ice': 5 });
   });
 
+  it('plain names with small words read as the bold ones do', () => {
+    const plain = noteWith('AC 11 HP 9 Initiative +1. Breath of Frost (Recharge 5–6): a cone. Touch of Frost (Recharge 6): a touch.');
+    const bold = noteWith('AC 11 HP 9 Initiative +1\n\n***Breath of Frost (Recharge 5–6).*** A cone.\n\n***Touch of Frost (Recharge 6).*** A touch.');
+    assert.deepStrictEqual(plain.recharge, ['Breath of Frost', 'Touch of Frost']);
+    assert.deepStrictEqual(plain.rechargeAt, { 'Breath of Frost': 5, 'Touch of Frost': 6 });
+    assert.deepStrictEqual([plain.recharge, plain.rechargeAt], [bold.recharge, bold.rechargeAt]);
+  });
+
   it("lair actions are the block's list", () => {
     const { index } = setup();
     const wyrm = one(index, 'Glacier Wyrm').foes[0];

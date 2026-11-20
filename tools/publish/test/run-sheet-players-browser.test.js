@@ -245,16 +245,40 @@ describe('the players\' page in a browser', { skip: browserSkip() }, () => {
       assert.match(text, /Round 1/i);
       assert.ok(await page.evaluate('document.querySelectorAll(".ord li.cur").length === 1'), 'one current row');
       assert.match(await page.evaluate('document.querySelector(".ord li.cur").innerText'), /▸/);
-      // every number a foe row holds, less any that the view itself gives, is nowhere on the page
-      const seen = new Set((text.match(/\d+/g) || []));
+      // every number a foe row holds is nowhere on the page, less any the players may see for another reason
+      // (an initiative, the round, a PC's or an ally's HP), never less what the page happens to show
+      const allowed = new Set([String(st.state.fight.round)]);
+      for (const r of st.state.fight.rows) {
+        if (Number.isFinite(r.ini)) allowed.add(String(Math.abs(r.ini)));
+        if (r.kind === 'pc' || r.kind === 'ally') for (const n of [r.hp, r.max, r.temp]) if (Number.isFinite(n)) allowed.add(String(Math.abs(n)));
+      }
       const secret = new Set();
-      for (const f of foes) for (const n of [f.hp, f.max, f.ac, f.mod]) if (Number.isFinite(n) && Math.abs(n) >= 10 && !seen.has(String(Math.abs(n)))) secret.add(String(Math.abs(n)));
+      for (const f of foes) for (const n of [f.hp, f.max, f.ac, f.mod]) if (Number.isFinite(n) && Math.abs(n) >= 10 && !allowed.has(String(Math.abs(n)))) secret.add(String(Math.abs(n)));
+      assert.ok(secret.size > 0, 'there are foe numbers to look for');
       assert.ok(foes.some((f) => f.hp >= 10), 'the fixture foes have numbers to hide');
       for (const n of secret) assert.ok(!new RegExp(`\\b${n}\\b`).test(text), `${n} is not on the page`);
       assert.ok(!/\bAC\b/.test(text), 'no armour class');
       await shot(page, 'real-fight');
       assert.ok(pcRow, 'a PC row is on the order');
       assert.deepStrictEqual((await probe(page)).errors, []);
+    });
+  });
+
+  it('a long order keeps the current turn in sight', async () => {
+    const view = makeView(1, { campaign: 'Long', orderOn: [0] });
+    const rows = [];
+    for (let i = 0; i < 30; i++) rows.push({ name: `Frost Wolf ${i + 1}`, ini: 40 - i, current: i === 26, out: false, lair: false, hp: i % 3 ? null : '9/11' });
+    view.panels[0].order.rows = rows;
+    const box = { view };
+    const { run } = await viewServer(box);
+    await withPage({ width: 1920, height: 1080 }, async (page) => {
+      await page.goto(`${run.base}/players?probe=1`);
+      await drawn(page, 'Long');
+      const seen = await page.evaluate(`(() => { const li = document.querySelector('.ord li.cur'); const b = li.closest('.ord').getBoundingClientRect(); const r = li.getBoundingClientRect();
+        return { inside: r.top >= b.top && r.bottom <= b.bottom, over: li.closest('.ord').scrollHeight > li.closest('.ord').clientHeight }; })()`);
+      assert.strictEqual(seen.over, true, 'the order is longer than its panel');
+      assert.strictEqual(seen.inside, true, 'the current row is in sight');
+      await shot(page, 'long-order');
     });
   });
 

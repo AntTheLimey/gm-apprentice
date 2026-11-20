@@ -545,7 +545,8 @@ describe('the GM page shows things on the players\' screen', { skip: browserSkip
       const { stateId } = await api(run, 'GET', '/api/state');
       const other = await api(run, 'POST', '/api/actions', { stateId, base: 0, clientId: 'other-tab', actions: [{ type: 'jot', id: 'other-1', text: 'From the other window', beat: b.key }] });
       assert.deepStrictEqual(other.rejected, []);
-      await page.sleep(300);
+      // the page has heard the other write before its own answer comes
+      await page.waitFor(`(() => { const p = ${PROBE}; return p && p.heardRev >= ${other.rev}; })()`);
       await page.evaluate('window.__release()');
       const p = await page.waitFor(`(() => { const p = ${PROBE}; return p && p.pending === 0 && p.jots.length === 2 && p.saved === 'Saved' && p; })()`, 8000);
       assert.deepStrictEqual(p.jots.slice().sort(), ['From the other window', 'From this page']);

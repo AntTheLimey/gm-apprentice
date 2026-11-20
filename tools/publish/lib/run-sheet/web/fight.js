@@ -44,8 +44,13 @@
   // HP and max keep their own time (Review H1): a status cleared after the fight must not make the fight's
   // HP newer than a rest or an end-panel edit made since. `at` stays the time of anything else.
   const touchHp = (r, at) => { r.at = at; r.hpAt = at; };
+  // HP's own time moves only when HP or max did: temp HP alone never makes an older HP the newer figure
+  const touchIfHp = (r, at, hp, max) => { if (r.hp !== hp || r.max !== max) touchHp(r, at); else touch(r, at); };
   // A row as it enters a fight: its HP is the figure of that moment.
-  const entered = (r, at) => { if (r && typeof r === 'object' && !r.hpAt) r.hpAt = at; return r; };
+  const entered = (r, at) => {
+    if (r && typeof r === 'object') { if (!r.hpAt) r.hpAt = at; if (!r.condAt) r.condAt = at; }
+    return r;
+  };
 
   // The number an unseen foe keeps, fixed when it is first ticked in (decision 5).
   function numberUnseen(f) {
@@ -114,8 +119,7 @@
   // Damage after half and resisted, into temp HP first. Answers what the row took.
   function hurt(r, n, half) {
     const d = FM.damageTaken(n, { half, resisted: r.resisted });
-    if (!isNum(r.hp)) return d;
-    const next = FM.afterDamage({ hp: r.hp, temp: r.temp }, d);
+    const next = FM.afterDamage({ hp: isNum(r.hp) ? r.hp : null, temp: r.temp }, d);
     r.hp = next.hp;
     r.temp = next.temp;
     return d;
@@ -174,7 +178,12 @@
       const f = running(s, a);
       if (!f) return;
       const ids = new Set(f.rows.map((r) => r.id));
-      const added = clone(a.rows || []).filter((r) => r && r.id != null && !ids.has(r.id)).map((r) => entered(r, at));
+      // A group or beat joined from two windows at once brings its planned foes once; a PC never joins twice.
+      // Add by name (no `planned`) keeps its copies.
+      const keys = new Set(a.planned ? f.rows.map((r) => r.foeKey).filter(Boolean) : []);
+      const pcs = new Set(f.rows.filter((r) => r.kind === 'pc').map((r) => r.note));
+      const dupe = (r) => (r.kind === 'pc' ? pcs.has(r.note) : Boolean(r.foeKey) && keys.has(r.foeKey));
+      const added = clone(a.rows || []).filter((r) => r && r.id != null && !ids.has(r.id) && !dupe(r)).map((r) => entered(r, at));
       // a second Lair row never joins: the fight's own lists the newcomers
       const fresh = f.rows.some((r) => r.kind === 'lair') ? added.filter((r) => r.kind !== 'lair') : added;
       f.rows.push(...fresh);
@@ -183,14 +192,15 @@
         const r = rowOf(f, id);
         if (r && !r.in) { r.in = true; touch(r, at); ticked.push(r); }
       }
-      for (const g of a.groups || []) if (!f.groups.includes(g)) f.groups.push(g);
+      const groups = (a.groups || []).filter((g) => !f.groups.includes(g));
+      f.groups.push(...groups);
       const have = new Set((f.thresholds || []).map((t) => t.key));
       for (const t of clone(a.thresholds || [])) if (!have.has(t.key)) { f.thresholds.push(t); have.add(t.key); }
       for (const [note, name] of Object.entries(a.carried || {})) if (!f.carried[note]) f.carried[note] = name;
       // newcomers go to the bottom until the next Sort; the turn stays with its row
       numberUnseen(f);
       lairOf(f);
-      if (!fresh.length && !ticked.length && !(a.groups || []).length) return;
+      if (!fresh.length && !ticked.length && !groups.length) return;
       const who = fresh.concat(ticked).filter((r) => r.kind !== 'lair');
       const label = String(a.label || '').trim() || who.map((r) => nameOf(s, f, r)).join(', ');
       if (label) say(s, f, at, `${label} ${who.length > 1 ? 'join' : 'joins'} the fight.`);
@@ -238,7 +248,7 @@
         f.started = true;
         f.round = 1;
         f.turn = first.id;
-        const order = f.rows.filter((r) => r.in && !r.out).map((r) => `${nameOf(s, f, r)}${isNum(r.ini) ? ` ${r.ini}` : ''}`);
+        const order = f.rows.filter((r) => FM.takesTurn(r, f.rows)).map((r) => `${nameOf(s, f, r)}${isNum(r.ini) ? ` ${r.ini}` : ''}`);
         say(s, f, at, `Round 1: ${order.join(', ')}.`);
         turnStart(f, first, at);
         return;
@@ -261,7 +271,7 @@
       let over = null;
       if (e.kind === 'temp') r.temp = e.n;
       else if (e.kind === 'heal') { if (!isNum(r.hp)) return; r.hp = FM.afterHeal({ hp: r.hp, max: r.max }, e.n); } else { over = overOf(hurt(r, e.n, r.half), temp, before); r.half = false; }
-      touchHp(r, at);
+      touchIfHp(r, at, before, r.max);
       afterHp(s, f, r, before, at, { over });
     }),
     half: onRow((s, f, r, a, at) => { r.half = !!a.on; touch(r, at); }),
@@ -273,11 +283,12 @@
       const n = clear ? null : int(a.max);
       if (!clear && (n === null || n < 0)) return;
       const before = r.hp;
+      const maxBefore = r.max;
       r.max = n;
       if (n !== null && !isNum(r.hp)) r.hp = n;
       // SRD: HP never goes above the maximum
       if (n !== null && isNum(r.hp) && r.hp > n) r.hp = n;
-      touchHp(r, at);
+      touchIfHp(r, at, before, maxBefore);
       afterHp(s, f, r, before, at);
     }),
     setAc: onRow((s, f, r, a, at) => {
@@ -365,7 +376,7 @@
         const before = r.hp;
         const temp = r.temp;
         const took = hurt(r, n, !!h.half);
-        touchHp(r, at);
+        touchIfHp(r, at, before, r.max);
         hits.push({ r, before, took, half: !!h.half, over: overOf(took, temp, before) });
       }
       let spent = null;
@@ -405,16 +416,39 @@
       const f = endedFight(s, a.fight);
       const r = f && (f.rows || []).find((x) => x.id === a.row);
       if (!r) return;
+      const was = statusesOf(r);
       if (a.all) { if (!holdsStatus(r)) return; clearAll(r); } else if (a.status !== undefined) clearStatus(r, a.status);
       else return;
-      touch(r, at);
+      cleared(r, was, at);
     },
     afterClearAll(s, a, at) {
       const f = endedFight(s, a.fight);
       if (!f) return;
-      for (const r of f.rows || []) if (r.kind !== 'lair' && holdsStatus(r)) { clearAll(r); touch(r, at); }
+      for (const r of f.rows || []) if (r.kind !== 'lair' && holdsStatus(r)) { const was = statusesOf(r); clearAll(r); cleared(r, was, at); }
     },
   };
+
+  // A clear after the fight is kept as what it took off, at its time: derive takes those statuses off the
+  // figure of that moment (an end-panel edit or a rest since the fight), never puts the fight's back.
+  function cleared(r, was, at) {
+    const now = new Set(statusesOf(r));
+    const removed = was.filter((x) => !now.has(x));
+    if (!removed.length) return;
+    r.clears = (Array.isArray(r.clears) ? r.clears : []).concat({ at, removed });
+    touch(r, at);
+  }
+
+  // Conditions keep their own time too: an initiative or a toggle after an end-panel clear must not make the
+  // fight's older statuses the newer figure. Every handler on the running fight stamps the rows it changed.
+  for (const [type, fn] of Object.entries(FIGHT_HANDLERS)) {
+    if (type === 'afterClear' || type === 'afterClearAll') continue;
+    FIGHT_HANDLERS[type] = (s, a, at) => {
+      const rows = s.fight && Array.isArray(s.fight.rows) ? s.fight.rows : [];
+      const before = new Map(rows.map((r) => [r, statusesOf(r).join('\n')]));
+      fn(s, a, at);
+      for (const [r, was] of before) if (statusesOf(r).join('\n') !== was) r.condAt = at;
+    };
+  }
 
   return { FIGHT_HANDLERS, statusesOf };
 }));

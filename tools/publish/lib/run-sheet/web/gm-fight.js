@@ -87,7 +87,7 @@
     const j = FM.joinRows({ model: model(), derived: d, state: s, fight: f, add, idBase: id });
     if (j.refused) { RP.note(j.refused, { id: `refused:${id}` }); return; }
     if (!j.rows.length && !j.tick.length && !j.groups.length) return;
-    RP.dispatch({ type: 'fightJoin', fight: f.id, rows: j.rows, tick: j.tick, groups: j.groups, thresholds: j.thresholds, label: label || '', carried: carried(d) });
+    RP.dispatch({ type: 'fightJoin', fight: f.id, rows: j.rows, tick: j.tick, groups: j.groups, thresholds: j.thresholds, label: label || '', carried: carried(d), planned: !add.cast });
   }
   function addByName(note) {
     const n = Math.max(1, Math.min(20, Math.floor(Number(ui.addCount)) || 1));
@@ -117,10 +117,12 @@
     }
     ui.ask = null;
     const wasTurn = f.turn;
+    const wasRound = f.round;
     const wasStarted = f.started;
     RP.dispatch({ type: 'fightNext', fight: f.id, from: f.turn, round: f.round });
     const g = state().fight;
-    if (!g || g.turn === wasTurn) return;
+    // a lone foe keeps the turn into the next round: that is a new turn too, and rolls its recharges
+    if (!g || (g.turn === wasTurn && g.round === wasRound)) return;
     if (!wasStarted) scrollToCut();
     rechargeRolls(g);
   }
@@ -568,14 +570,15 @@
     const d = (t && t.dataset) || {};
     if (ev.isComposing) return;
     if (d.fini !== undefined && (ev.key === 'Enter' || ev.key === 'Tab')) {
-      ev.preventDefault();
       const id = d.fini;
-      if (!commitIni(t)) return;
-      if (ev.key === 'Tab') {
-        // Tab walks the initiative boxes in row order (nothing has re-sorted)
-        const boxes = Array.from(document.querySelectorAll('[data-fini]'));
-        const i = boxes.findIndex((b) => b.dataset.fini === id);
-        const nx = boxes[(i + (ev.shiftKey ? -1 : 1) + boxes.length) % boxes.length];
+      // Tab walks the initiative boxes in row order (nothing has re-sorted); past the last one (Shift+Tab
+      // before the first) it leaves them for the page's other controls, as Tab does anywhere
+      const ids = Array.from(document.querySelectorAll('[data-fini]'), (b) => b.dataset.fini);
+      const to = ev.key === 'Tab' ? ids[ids.indexOf(id) + (ev.shiftKey ? -1 : 1)] : undefined;
+      if (ev.key === 'Enter' || to !== undefined) ev.preventDefault();
+      if (!commitIni(t)) { ev.preventDefault(); return; }
+      if (to !== undefined) {
+        const nx = document.querySelector(attr('data-fini', to));
         if (nx) { nx.focus(); nx.select(); }
       }
       return;
@@ -632,6 +635,21 @@
     }
     if (t.id === 'fAddCount') ui.addCount = t.value;
     if (t.id === 'fAreaDmg') ui.areaDmg = t.value;
+  });
+
+  // A redraw from another window puts a half-typed number back into a new box, which then fires no `change`
+  // when it is left: leaving it commits what it holds (the same number again sends nothing). Never on the
+  // redraw itself, so a max half typed (4 of 45) never cuts the HP to it.
+  document.addEventListener('focusout', (ev) => {
+    const t = ev.target;
+    const d = (t && t.dataset) || {};
+    if (d.fini === undefined && d.fmax === undefined && d.fac === undefined) return;
+    // after the redraw that may be under way: a box it replaced is gone, and its words are in the new one
+    setTimeout(() => {
+      if (!t.isConnected || document.activeElement === t) return;
+      if (d.fini !== undefined) commitIni(t);
+      else commitNumber(t);
+    }, 0);
   });
 
   document.addEventListener('change', (ev) => {
