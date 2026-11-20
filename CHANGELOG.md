@@ -10,6 +10,17 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 ---
 
 
+## [1.12.109] — 2026-11-20
+
+### Changed
+
+- Personal reference files (your own notes from books you own) live in `~/gm-apprentice/personal/<system>/`, outside the plugin, so an update no longer leaves them behind and the apprentice can save them. `gma personal` names the folder and lists what is there (#806)
+- The first `gma update` or `gma personal` copies any personal files still in the plugin's own folders, older versions' included, into that folder; it never moves, deletes or overwrites one. `gma doctor` counts them (#806)
+
+### Fixed
+
+- The personal reference files page no longer says GURPS ships as SRD or ORC text (#808)
+
 ## [1.12.108] — 2026-11-20
 
 ### Fixed

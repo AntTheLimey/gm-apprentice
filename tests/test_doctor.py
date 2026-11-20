@@ -38,9 +38,11 @@ def _install(root: Path, *, version="1.2.3", publish="1.70.1", tool=None, home="
     return Layout(shared, plugin, path, path is not None)
 
 
-def _run(layout, *, python=(3, 12, 1), node="/usr/bin/node", old=None, said="22.21.0"):
+def _run(layout, *, python=(3, 12, 1), node="/usr/bin/node", old=None, said="22.21.0", user_home=None):
+    # A home with no personal files unless the test gives one, so the GM's own never count here.
     return doctor.checks(layout, python=python, which=lambda name: node,
-                         node_too_old=lambda n: old, node_version=lambda n: said)
+                         node_too_old=lambda n: old, node_version=lambda n: said,
+                         user_home=user_home or layout.shared / "no-such-home")
 
 
 class DoctorTests(unittest.TestCase):
@@ -139,9 +141,17 @@ class DoctorTests(unittest.TestCase):
         self.assertIn("tool install", found[3].fix)
         self.assertEqual(doctor.report(found)[1], 0)
 
+    def test_an_unreadable_personal_home_is_a_warning_not_a_crash(self):
+        with unittest.mock.patch.object(doctor.personal_home, "listing", side_effect=PermissionError(13, "Permission denied")):
+            found = _run(_install(self.root, tool="1.70.1"))
+        self.assertEqual(found[-1].level, "warn")
+        self.assertIn("could not be read (Permission denied)", found[-1].what)
+        self.assertEqual([c.level for c in found[:4]], ["ok"] * 4, "the other checks still report")
+
     def test_it_runs_through_gma_and_changes_nothing(self):
-        done = subprocess.run([sys.executable, str(REPO / "skills" / "shared" / "scripts" / "gma.py"), "doctor"],
-                              capture_output=True, text=True)
+        with tempfile.TemporaryDirectory() as user:  # never the GM's own home (personal files)
+            done = subprocess.run([sys.executable, str(REPO / "skills" / "shared" / "scripts" / "gma.py"), "doctor"],
+                                  capture_output=True, text=True, env={**os.environ, "HOME": user, "USERPROFILE": user})
         self.assertIn(done.returncode, (0, 1), done.stderr)
         self.assertRegex(done.stdout, r"(?m)^ok\s+Python ")
         self.assertRegex(done.stdout, r"(?m)^(Ready|Not ready)")

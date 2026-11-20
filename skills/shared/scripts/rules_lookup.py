@@ -60,8 +60,9 @@ Copyright: this prints back only what the corpus files already contain,
 one record at a time — never a whole table or file, and it writes
 nothing to disk (no index, no cache). A blank term is rejected outright
 rather than matching (and printing) the whole corpus. Files under
-`personal/` are the user's private licensed copies and are skipped
-unless `--personal` is passed explicitly.
+the GM's personal reference files (`~/gm-apprentice/personal/<system>/`,
+their private licensed copies) are read only when `--personal` is passed,
+and a `personal/` folder inside the systems corpus is never read.
 """
 
 from __future__ import annotations
@@ -76,6 +77,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import personal_home  # noqa: E402
 import schema_rules  # noqa: E402
 from install_layout import LAYOUT  # noqa: E402
 
@@ -400,11 +402,31 @@ def _h3_body(lines: list[str], start: int) -> list[str]:
 
 
 def iter_records(systems_dir: Path = SYSTEMS_DIR, *, personal: bool = False,
-                 systems: Iterable[str] | None = None) -> Iterator[Record]:
-    """Every record under `systems_dir`, in file order then line order."""
-    if not systems_dir.is_dir():
-        return
+                 systems: Iterable[str] | None = None,
+                 personal_dir: Path | None = None) -> Iterator[Record]:
+    """Every record under `systems_dir`, in file order then line order; with
+    `personal`, then the GM's personal files (`personal_dir`, by default
+    `~/gm-apprentice/personal`), whose `file` is where it is (`~/gm-apprentice/personal/fitd/...`)."""
     wanted = set(systems) if systems is not None else None
+    if systems_dir.is_dir():
+        yield from _corpus_records(systems_dir, wanted)
+    if personal:
+        yield from _personal_records(personal_home.home() if personal_dir is None else personal_dir, wanted)
+
+
+def _personal_records(folder: Path, wanted: set[str] | None) -> Iterator[Record]:
+    if not folder.is_dir():
+        return
+    for path in sorted(folder.rglob("*.md")):
+        rel_parts = path.relative_to(folder).parts
+        if len(rel_parts) < 2 or any(part.startswith(".") for part in rel_parts):
+            continue
+        if wanted is not None and rel_parts[0] not in wanted:
+            continue
+        yield from parse_file(path, system_slug(rel_parts), personal_home.shown(path))
+
+
+def _corpus_records(systems_dir: Path, wanted: set[str] | None) -> Iterator[Record]:
     for path in sorted(systems_dir.rglob("*.md")):
         rel_parts = path.relative_to(systems_dir).parts
         if len(rel_parts) < 2:
@@ -413,8 +435,8 @@ def iter_records(systems_dir: Path = SYSTEMS_DIR, *, personal: bool = False,
             continue
         if wanted is not None and rel_parts[0] not in wanted:
             continue
-        if not personal and "personal" in rel_parts[:-1]:
-            continue
+        if "personal" in rel_parts[:-1]:
+            continue  # an old copy inside the install: personal files live in the GM's home
         rel = "/".join(rel_parts)
         yield from parse_file(path, system_slug(rel_parts), rel)
 
@@ -447,7 +469,8 @@ def _matches_filters(rec: Record, system: str | None, kind: str | None,
 def lookup(term: str, *, system: str | None = None, kind: str | None = None,
            variant: str | None = None, limit: int = 10,
            personal: bool = False,
-           systems_dir: Path = SYSTEMS_DIR
+           systems_dir: Path = SYSTEMS_DIR,
+           personal_dir: Path | None = None
            ) -> tuple[str, list[Record], int]:
     """Find `term`, best tier first. Returns (match_mode, records, total)
     where `total` is the number of records at the reported tier before
@@ -463,7 +486,7 @@ def lookup(term: str, *, system: str | None = None, kind: str | None = None,
         return "none", [], 0
     systems = [system.split("/")[0]] if system else None
     candidates = [rec for rec in iter_records(systems_dir, personal=personal,
-                                              systems=systems)
+                                              systems=systems, personal_dir=personal_dir)
                   if _matches_filters(rec, system, kind, variant)]
 
     query_key = _normalize_key(term)
@@ -580,7 +603,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--json", action="store_true",
                         help="emit the records as JSON instead of rows")
     parser.add_argument("--personal", action="store_true",
-                        help="also read the gitignored personal/ files")
+                        help="also read the GM's personal reference files (gma personal)")
     parser.add_argument("--systems-dir", type=Path, default=SYSTEMS_DIR, help="the systems folder to read")
     parser.epilog = 'Example: gma rules-lookup gurps-4e "Broadsword" --kind skill'
     return parser

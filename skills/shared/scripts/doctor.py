@@ -4,7 +4,8 @@
     gma doctor
 
 Checks Python, these skills' version, Node and the publish tool, one line
-each, with what to do about anything missing. Nothing is installed or
+each, with what to do about anything missing, then counts the GM's
+personal reference files and any still left in the plugin's own folders. Nothing is installed or
 changed. Exit 0 when the skills can run (a missing Node only warns: a vault
 with no site needs none), 1 when something must be fixed first.
 """
@@ -21,6 +22,7 @@ from pathlib import Path
 from typing import Callable, NamedTuple
 
 import install_layout
+import personal_home
 import tool_cache
 from install_layout import Layout, terminal_command
 
@@ -81,7 +83,8 @@ def _node_version(node: str) -> str | None:
 def checks(layout: Layout, *, python: tuple[int, ...] = tuple(sys.version_info[:3]),
            which: Callable[[str], str | None] = shutil.which,
            node_too_old: Callable[[str], str | None] = tool_cache.node_too_old,
-           node_version: Callable[[str], str | None] = _node_version) -> list[Check]:
+           node_version: Callable[[str], str | None] = _node_version,
+           user_home: Path | None = None) -> list[Check]:
     found: list[Check] = []
     shown = ".".join(str(n) for n in python)
     if tuple(python[:2]) >= PYTHON_FLOOR:
@@ -138,7 +141,31 @@ def checks(layout: Layout, *, python: tuple[int, ...] = tuple(sys.version_info[:
         found.append(Check("warn", f"the publish tool {wanted} is not downloaded yet",
                            f"it downloads on the first command that needs it; to fetch it now, run "
                            f"`{terminal_command('tool', 'install')}`"))
+    found.extend(_personal(layout, user_home))
     return found
+
+
+def _personal(layout: Layout, user_home: Path | None) -> list[Check]:
+    """The GM's personal reference files: how many, and any still in the plugin's own folders
+    (counted, never copied: doctor changes nothing). No line when there are none."""
+    out: list[Check] = []
+    where = personal_home.shown(personal_home.home(user_home), user_home)
+    try:
+        files = personal_home.listing(user_home=user_home)
+    except OSError as e:
+        return [Check("warn", f"personal reference files: {where} could not be read ({e.strerror or e})")]
+    count = sum(len(f) for f in files.values())
+    if count:
+        out.append(Check("ok", f"personal reference files: {count} in {where} ({', '.join(files)})"))
+    try:
+        left = personal_home.adopt(layout.shared, user_home=user_home, dry_run=True).total
+    except OSError:
+        left = 0
+    if left:
+        out.append(Check("warn", f"{left} personal reference file{'s are' if left != 1 else ' is'} still "
+                                 "in the plugin's own folders, which an update replaces",
+                         f"`{terminal_command('personal')}` copies them to {where}"))
+    return out
 
 
 def report(found: list[Check]) -> tuple[str, int]:

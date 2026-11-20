@@ -172,7 +172,7 @@ investigation. No keyword or tag → base files only.
 
 | Request | File |
 |---------|------|
-| Doskvol setting / districts | `personal/` (requires personal files) |
+| Doskvol setting / districts | personal reference files (`gma personal --system fitd`) |
 | Factions | `factions.md` |
 | Playbooks (kind: class) | `playbooks.md` |
 | Crew types | `crew-types.md` |
@@ -217,11 +217,12 @@ investigation. No keyword or tag → base files only.
 
 ### Personal reference files
 
-`systems/{system}/personal/` (and subfolders like
-`personal/districts/`) may hold the user's own setting material —
-factions, NPCs, districts, lore, random tables. Gitignored, never
-distributed. Check it when a question needs setting content the
-SRD/ORC files don't cover.
+`gma personal --system {system}` names the GM's own setting material
+(`~/gm-apprentice/personal/{system}/`, subfolders like `districts/`) —
+factions, NPCs, districts, lore, random tables, never distributed.
+Check it when a question needs setting content the SRD/ORC files don't
+cover. Asked to keep notes from a book, write them there, never into
+the plugin's folders.
 
 ## Canon and Validation
 

@@ -17,6 +17,7 @@ Run: python3 tests/test_rules_lookup.py
 import json
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -27,6 +28,7 @@ sys.path.insert(0, str(SCRIPTS))
 import rules_lookup as rl  # noqa: E402
 
 FIX = Path(__file__).resolve().parent / "fixtures" / "slice-b" / "systems"
+HOME_FIX = Path(__file__).resolve().parent / "fixtures" / "personal-home"
 SCRIPT = SCRIPTS / "rules_lookup.py"
 
 
@@ -221,17 +223,39 @@ class Gating(unittest.TestCase):
         self.assertEqual(recs[0].file, "coc-7e/variants/regency/skills.md")
 
     def test_personal_excluded_by_default(self):
-        self.assertNotIn("Secret Trait",
-                         {r.name for r in rl.iter_records(FIX)})
-        self.assertIn("Secret Trait",
-                      {r.name for r in rl.iter_records(FIX, personal=True)})
+        self.assertNotIn("Home Trait",
+                         {r.name for r in rl.iter_records(FIX, personal_dir=HOME_FIX)})
+        self.assertIn("Home Trait",
+                      {r.name for r in rl.iter_records(FIX, personal=True, personal_dir=HOME_FIX)})
 
-        mode, _, _total = rl.lookup("Secret Trait", systems_dir=FIX)
+        mode, _, _total = rl.lookup("Home Trait", systems_dir=FIX, personal_dir=HOME_FIX)
         self.assertNotEqual(mode, "exact")
-        mode, recs, _total = rl.lookup("Secret Trait", systems_dir=FIX, personal=True)
+        mode, recs, _total = rl.lookup("Home Trait", systems_dir=FIX, personal=True, personal_dir=HOME_FIX)
         self.assertEqual(mode, "exact")
-        self.assertEqual(recs[0].cells[1], "99")
+        self.assertEqual(recs[0].cells[1], "42")
+        self.assertEqual(recs[0].system, "gurps-4e")
+        self.assertTrue(recs[0].file.endswith("personal-home/gurps-4e/traits.md"), recs[0].file)
 
+    def test_a_personal_folder_inside_the_corpus_is_never_read(self):
+        # The old place (#806): an update strands it, so even --personal reads only the GM's home.
+        for personal in (False, True):
+            self.assertNotIn("Secret Trait",
+                             {r.name for r in rl.iter_records(FIX, personal=personal, personal_dir=HOME_FIX)})
+
+    def test_personal_files_keep_to_the_system_asked_for(self):
+        self.assertEqual([], [r for r in rl.iter_records(FIX, personal=True, personal_dir=HOME_FIX, systems=["coc-7e"])
+                              if r.name == "Home Trait"])
+
+
+    def test_a_personal_variant_file_belongs_to_its_variant(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            (home / "coc-7e" / "variants" / "regency").mkdir(parents=True)
+            (home / "coc-7e" / "variants" / "regency" / "skills.md").write_text(
+                "| Skill | Base |\n|---|---|\n| Regency Only Skill | 10% |\n")
+            found = {r.system for r in rl.iter_records(FIX, personal=True, personal_dir=home)
+                     if r.name == "Regency Only Skill"}
+        self.assertEqual(found, {"coc-7e/regency"})
 
 class ParenAndDashLeads(unittest.TestCase):
     """I1: a parenthetical, or an ASCII '--' dash, after a bold lead still
