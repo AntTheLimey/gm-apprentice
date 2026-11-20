@@ -384,6 +384,12 @@ class TableLogSections(unittest.TestCase):
         self.assertEqual(res.sources, ["Play Notes", "Wrap-Up", "Table Log"])
         self.assertEqual(res.rows, [])
 
+    def test_indented_heading_ends_the_section(self) -> None:
+        body = ("## Points landed\n\n- [[Ida]]\n\n"
+                " ## Not reached\n\n- [[Vex]] in the vault\n")
+        res = run_scan({**with_log(body), "NPCs/Vex.md": VEX, "NPCs/Ida.md": VEX.replace("# Vex", "# Ida")})
+        self.assertEqual([r.path for r in res.rows], ["NPCs/Ida.md"])
+
     def test_vitals_only_link_gives_no_row(self) -> None:
         body = ("## Vitals at the end\n\n| Who | HP | Conditions |\n"
                 "| --- | --- | --- |\n| [[Vex]] | 3/12 | |\n")

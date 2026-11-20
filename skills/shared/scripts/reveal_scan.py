@@ -75,7 +75,7 @@ SOURCE_KEYS = (("play_notes", "Play Notes"), ("export", "Export"), ("wrap_up", "
 TABLE_LOG_READ = ("Where everyone ended", "Points landed", "Improvised beats",
                   "Unmasked this session", "Handouts handed over", "Loot")
 _READ_KEYS = frozenset(unicodedata.normalize("NFC", t).casefold() for t in TABLE_LOG_READ)
-_HEADING_RE = re.compile(r"^(#{1,6})\s+(.*?)\s*#*\s*$")
+_HEADING_RE = re.compile(r"^ {0,3}(#{1,6})\s+(.*?)\s*#*\s*$")
 
 
 @dataclass
