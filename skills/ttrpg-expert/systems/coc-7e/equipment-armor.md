@@ -10,9 +10,8 @@ examples are on p.112.
 
 Armour subtracts its armour value (AV) from incoming damage
 (Keeper Rulebook p.108). It does not stop magic, poison,
-drowning, and the like. Armour does not normally degrade from
-combat hits; only environmental effects (acid, fire) or
-exceptional events reduce armour value.
+drowning, and the like. Against a shotgun, armour counts
+against every damage die (p.126).
 
 **Penalties**: 7e has no armour skill penalties. Basic
 Roleplaying's percentages are converted the way the Keeper
@@ -22,9 +21,14 @@ is the Keeper's call (a penalty die or a harder difficulty).
 "Physical" means climbing, swimming, stealth, and the like;
 "Perception" means Listen and Spot Hidden.
 
-**Locations**: 7e only uses hit locations as an optional rule
-(p.127). Without it, armour that covers the chest protects
-against any hit the Keeper judges it would stop.
+**Partial armour** (p.126): 7e uses hit locations only as an
+optional rule (p.127). In a brawl or a fall, armour on part of
+the body simply reduces the damage. Against one specific
+attack, such as a shot, a Luck roll decides whether it struck
+the armour: success, the armour counts; failure, it hit
+somewhere bare. Armour on both head and torso gives a bonus die
+on that roll. The Locations column says what each piece
+covers.
 
 **Layering**: Soft armour (heavy cloth, padded, soft leather)
 can be worn under hard armour, adding its AV.
@@ -88,9 +92,9 @@ first is vs melee, the second vs firearms.
 ordinary ones:
 
 - **Blocking**: the bearer fights back or dodges as usual
-  (Keeper Rulebook p.103); a shield is a good reason for the
-  Keeper to allow fighting back against a thrown weapon or
-  arrow. Against shots, a big shield is cover: a penalty die
+  (Keeper Rulebook p.103). Fighting back against a thrown
+  weapon or arrow still needs the thrower within a fifth of the
+  bearer's DEX in feet (p.108). Against shots, a big shield is cover: a penalty die
   when it hides half the bearer, and its AV against shots
   through it (p.113 and p.127).
 - **Bashing**: Fighting (Brawl) for the listed damage, or a

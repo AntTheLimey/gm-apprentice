@@ -108,10 +108,11 @@ fumble (p.107). Then switch to combat rounds.
 Hiding at least half the target imposes a penalty die on shots
 (p.113). Shooting through the cover adds the cover's armour
 rating to the target's: a thin wooden fence 1, a low brick wall
-10 (p.127). A target hidden completely behind cover can still
-be shot through it, at two steps higher difficulty plus the
-cover's armour; in a large hiding space, only a critical may
-hit (p.127).
+10 (p.127). A target hidden completely for the whole round can
+still be shot at through the cover (p.127): one step harder for
+a small hiding space; more space, another step or a critical
+only. The book's example, someone behind a high brick wall, is
+two steps harder with the wall's armour of 10.
 
 ### Darkness
 7e has no fixed darkness rule; treat it as concealment:
@@ -167,8 +168,9 @@ Keeper's discretion (p.123).
 ### Explosions
 For a hand grenade or a stick of dynamite (Table III, p.124):
 4D10 within 3 yards, 2D10 at 3 to 6 yards, 1D10 at 6 to 9
-yards. A target who sees it coming may dive for cover with a
-Dodge roll (p.113). Bigger charges move up the table.
+yards. Bigger charges move up the table. Letting a target who
+sees it coming dive for cover with a Dodge roll is a Keeper's
+call, borrowed from the firearms rule (p.113).
 
 ### Firing into Combat
 One penalty die when shooting at a target engaged in melee. A
@@ -186,4 +188,6 @@ uses the range difficulty and modifiers; each later roll adds a
 penalty die (at a third, stay at two and raise the difficulty a
 step). A success hits with half the volley (round down, minimum
 one); an Extreme success hits with all of it, the first half
-impaling. Moving between targets spends a bullet per yard.
+impaling, unless the shot needed an Extreme success to hit at
+all (then nothing impales). Moving between targets spends a
+bullet per yard.

@@ -11,11 +11,12 @@ no game stats). Use Ghoul [ORC] as mechanical baseline for
 humanoid Mythos creatures; scale for larger entities.
 
 **Stat block format:** Characteristics as dice x5 (average).
-Hit points, armour, and MOV are the source's own (the Keeper
-Rulebook keeps them as they were, p.392; 7e figures new HP as
-(CON+SIZ)/10, which can come out a point lower). Damage bonus
-(DB) and Build come from the 7e STR+SIZ table (p.33) at the
-averages. Each creature has one Fighting skill, the best of its
+Hit points, armour, MOV, and damage bonus (DB) are the source's
+own: the Keeper Rulebook keeps them as they were (p.392). 7e
+figures new HP as (CON+SIZ)/10, which can come out a point
+lower (p.391), and a negative DB becomes -1 or -2 (p.391).
+Build is added from the 7e STR+SIZ table (p.33, as p.391 asks),
+and so is DB where the source gave none. Each creature has one Fighting skill, the best of its
 old attacks, with the ways it hurts listed after it; special
 attacks are fighting maneuvers (p.105). APP stands in for
 Basic Roleplaying's CHA. "+½DB" = half the damage bonus.
@@ -26,8 +27,8 @@ SAN Loss = success/failure.
 ## Natural Animals [ORC]
 
 ### Alligator/Crocodile [ORC]
-STR (4D6+12)x5 (125), CON (3D6+6)x5 (95), SIZ (4D6+12)x5
-(125), POW 3D6x5 (55), DEX 2D6x5 (35). HP 22, MOV Walk
+STR (4D6+12)x5 (130), CON (3D6+6)x5 (85), SIZ (4D6+12)x5
+(130), POW 3D6x5 (55), DEX 2D6x5 (35). HP 22, MOV Walk
 7/Swim 6, DB +2D6, Build 3. Armour: 5-pt hide.
 Fighting 50%: bite 1D10+DB. Skills: Dodge 30%, Stealth 75%.
 Alligators are smaller (-1D6x5 STR/SIZ, bite 1D8+DB).
@@ -44,7 +45,7 @@ bears: +2D6x5 STR/SIZ, +3 armour, +20% Fighting, Swim 80%.
 ### Dog [ORC]
 STR 2D6x5 (35), CON 3D6x5 (55), SIZ (1D6+1)x5 (25), POW
 2D6x5 (35), DEX (2D6+6)x5 (65). HP 8, MOV Walk 10/Swim 6,
-DB -2, Build -2.
+DB -1, Build -2.
 Fighting 30%: bite 1D6+½DB. Wild dogs form packs of 1D8+3.
 For larger dogs, use Wolf stats.
 
@@ -60,9 +61,9 @@ Untrained horses flee from blood, fire, gunshots. Warhorses:
 STR (2D6+12)x5 (95), CON 3D6x5 (55), SIZ (3D6+6)x5 (85), POW
 (2D6+6)x5 (65), DEX (2D6+12)x5 (95). HP 14, MOV Walk 10/Swim
 2, DB +1D6, Build 2. Armour: 2-pt skin.
-Fighting 60%: claw 1D6+DB, bite 1D10. Attacks per round: 2
-(one claw and one bite). If both hit, it rakes with its hind
-claws next round (Fighting 80%, 2D6+DB).
+Fighting 80%: claw 1D6+DB, bite 1D10, rake 2D6+DB. Attacks
+per round: 2 (one claw and one bite); if both hit, it rakes
+with its hind claws next round.
 
 ### Shark [ORC]
 STR (3D6+12)x5 (115), CON (2D6+9)x5 (80), SIZ (3D6+12)x5
@@ -76,7 +77,7 @@ STR and SIZ (6D6+24)x5 (225), DB +5D6, Build 6.
 ### Snake, Constrictor [ORC]
 STR (3D6+12)x5 (115), CON (2D6+6)x5 (65), SIZ 5D6x5 (90), POW
 3D6x5 (55), DEX (2D6+6)x5 (65). HP 16, MOV Slither 6/Swim 4,
-DB +2D6, Build 3. Armour: 1-pt skin.
+DB +1D6, Build 2. Armour: 1-pt skin.
 Fighting 65%: bite 1D4+½DB. Constrict (fighting maneuver): a
 held victim takes 1D6+DB a round until it breaks free with a
 maneuver of its own. Giant constrictor: +2D6x5 STR/SIZ, 4-pt
@@ -93,9 +94,9 @@ Skills: Stealth 90%.
 STR (3D6+12)x5 (115), CON 3D6x5 (55), SIZ (3D6+6)x5 (85), POW
 3D6x5 (55), DEX (2D6+12)x5 (95). HP 14, MOV Walk 12, DB +1D6,
 Build 2. Armour: 2-pt skin.
-Fighting 70%: claw 1D8+DB, bite 1D10+½DB. Attacks per round: 3
-(two claws, then a bite). If both claws hit, it rips with its
-hind claws next round (Fighting 80%, 2D8+DB).
+Fighting 80%: claw 1D8+DB, bite 1D10+½DB, rip 2D8+DB. Attacks
+per round: 3 (two claws, then a bite); if both claws hit, it
+rips with its hind claws next round.
 
 ### Wolf [ORC]
 STR (2D6+6)x5 (65), CON 3D6x5 (55), SIZ (2D6+1)x5 (40), POW

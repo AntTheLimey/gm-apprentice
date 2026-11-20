@@ -175,7 +175,9 @@ difficulty and modifiers; each later roll adds a penalty die (at
 a third, stay at two penalty dice and raise the difficulty one
 step). A success hits with half the volley (round down, at least
 one); an Extreme success hits with all of it, the first half
-impaling. Moving between targets spends a bullet per yard.
+impaling, unless the shot needed an Extreme success to hit at
+all (then nothing impales). Moving between targets spends a
+bullet per yard.
 
 ## Explosives and Grenades
 
@@ -189,9 +191,9 @@ dynamite:
 | 3 to 6 yards | 2D10 |
 | 6 to 9 yards | 1D10 |
 
-A target who sees it coming may dive for cover with a Dodge
-roll (p.113). Larger charges move up the table; smaller ones
-down.
+Larger charges move up the table; smaller ones down. Letting a
+target who sees it coming dive for cover with a Dodge roll is a
+Keeper's call, borrowed from the firearms rule (p.113).
 
 | Other devices | Effect |
 |---------------|--------|

@@ -47,7 +47,7 @@ Each file below records what it derives from. Paths are relative to this directo
 > **Attribution:** ORC creature stats from *Basic Roleplaying:
 > Universal Game Engine* by Chaosium Inc., used under the ORC
 > License, converted to the CoC 7e scale (characteristics x5,
-> one Fighting skill, damage bonus and Build from the 7e table)
+> one Fighting skill, Build from the 7e table)
 > by following the conversion method the CoC 7e Keeper Rulebook
 > describes, in our own words. Lovecraft entity descriptions drawn from the fiction
 > of H.P. Lovecraft, cited by composition date. No Chaosium
