@@ -10,6 +10,12 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 ---
 
 
+## [1.12.114] — 2026-11-20
+
+### Fixed
+
+- CoC 7e reference (#825): age now lowers MOV from the 40s (-1 per decade, up to -5 in the 80s), and firing into melee is one penalty die, with a fumble hitting the ally with the lowest Luck.
+
 ## [1.12.112] — 2026-11-20
 
 ### Fixed

@@ -146,10 +146,12 @@ half protection for falls up to 3m. A successful Jump roll
 reduces falling damage by 1D6 per success level.
 
 ### Firing into Combat
--20% to skill when firing into melee. If the roll is between
-the modified and normal chance, a random other combatant is
-hit (Luck rolls to determine who). Firing while engaged in
-melee is Difficult (but point-blank Easy cancels this).
+One penalty die when shooting at a target engaged in melee. A
+fumble hits an ally instead; with several allies in the line of
+fire, the one with the lowest Luck. A shooter within point-blank
+range (a fifth of their DEX in feet) gains a bonus die, which
+cancels the penalty die, but a foe in reach may attack or disarm
+them (Keeper Rulebook pp.113-114).
 
 ### Knockout Attacks
 Declare intent before rolling. Make a Fighting roll (targeting
