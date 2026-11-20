@@ -149,30 +149,35 @@ class DoctorTests(unittest.TestCase):
 
 
 class InstallPromptTests(unittest.TestCase):
-    """The README's install prompt installs what its hand-install sections do."""
+    """The README's one-line prompt fetches INSTALL.md, whose steps install what the hand-install sections do."""
 
     def setUp(self):
         text = (REPO / "README.md").read_text(encoding="utf-8")
         start, end = text.index("<!-- install-prompt: begin -->"), text.index("<!-- install-prompt: end -->")
-        self.prompt = " ".join(text[start:end].split())
+        self.line = " ".join(text[start:end].split())
         self.manual = text[end:]
+        self.steps = " ".join((REPO / "INSTALL.md").read_text(encoding="utf-8").split())
+
+    def test_the_line_fetches_install_md_from_main_with_curl(self):
+        # curl, not a fetch tool that hands the page to a model to summarise: the commands must arrive exact.
+        self.assertIn("https://raw.githubusercontent.com/AntTheLimey/gm-apprentice/main/INSTALL.md", self.line)
+        self.assertIn("with curl", self.line)
 
     def test_its_commands_are_the_hand_install_commands(self):
         for line in ("marketplace add AntTheLimey/gm-apprentice", "codex plugin add gm-apprentice@gm-apprentice",
                      "skills add AntTheLimey/gm-apprentice --all -g"):
-            self.assertIn(line, self.prompt)
+            self.assertIn(line, self.steps)
             self.assertIn(line, self.manual)
         # Claude Code's hand install is slash commands at its prompt; the agent runs the same from a shell.
         self.assertIn("/plugin install gm-apprentice", self.manual)
-        self.assertIn("claude plugin install gm-apprentice@gm-apprentice", self.prompt)
+        self.assertIn("claude plugin install gm-apprentice@gm-apprentice", self.steps)
 
     def test_it_checks_with_doctor_and_the_floors_match(self):
-        self.assertIn("skills/shared/scripts/gma.py", self.prompt)
-        self.assertIn('python3 "<that path>" doctor', self.prompt)
-        self.assertIn("older than 3.10", self.prompt)
+        self.assertIn("skills/shared/scripts/gma.py", self.steps)
+        self.assertIn('python3 "<that path>" doctor', self.steps)
+        self.assertIn("older than 3.10", self.steps)
         self.assertEqual(doctor.PYTHON_FLOOR, (3, 10))
-        self.assertIn(f"older than {doctor.tool_cache.NODE_FLOOR}", self.prompt)
-
+        self.assertIn(f"older than {doctor.tool_cache.NODE_FLOOR}", self.steps)
 
 if __name__ == "__main__":
     unittest.main()
