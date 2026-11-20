@@ -105,9 +105,18 @@ Checks, by id, level, and the rule they mechanise:
                          or flagged
   foe-no-numbers
                 WARNING  a person in the room (the Who line or the NPCs
-                         block; Entities is not read) whose note only names a stock creature:
+                         block; Entities is not read) whose note only names a stock creature,
+                         or a creature whose note has no stat block:
                          the sheet has no AC or HP for them (needs a
                          vault; in a D&D vault, `gma stat-fill` fixes it)
+  contingency-foes
+                WARNING  a contingency scene that writes fighters' numbers
+                         in its own lines (two stats on one line, or a stat
+                         and a skill: `HP 10, SAN 50`, `HP 11, Dodge 25%`)
+                         or points at someone else's
+                         (`stat the two as [[Mickey Dunne]]`), and names no
+                         NPC or creature under `**NPCs**` or `**Who:**`: the
+                         sheet makes fight rows only from notes (#827)
                          (the checks above: tools/publish/lib/run-sheet;
                          shape only, never story)
   duration      ERROR/   never estimate scene durations
@@ -782,7 +791,8 @@ def check_scenes(rel: str, by_norm: dict[str, tuple[int, str, str]]
 RUN_SHEET_CHECKS: tuple[str, ...] = (
     "no-place", "no-npcs-block", "hub-no-places", "hub-plain-bullet",
     "hub-place-not-location",
-    "place-not-location", "label-form", "if-table-unlabelled", "foe-no-numbers")
+    "place-not-location", "label-form", "if-table-unlabelled", "foe-no-numbers",
+    "contingency-foes")
 
 _SCENE_N_RE = re.compile(r"^\s*scene\s+\d+\s*:\s*", re.I)
 _HUB_MARK_RE = re.compile(r"\s*\((?:hub|routing)\)\s*", re.I)
@@ -1199,7 +1209,21 @@ def _foe_findings(locus: str, title: str, lines: list[str],
                 continue
             seen.add(note)
             verdict = npc_stats.classify(text, index.system())
-            if verdict is None or verdict[0] != "stock":
+            if verdict is None:
+                continue
+            if verdict[0] != "stock":
+                # A creature in the room is there to be fought; an NPC with no block may be
+                # anyone (an innkeeper), and npc-stats --plan finds the ones that matter.
+                fm = vl.extract_frontmatter(text) or {}
+                if vl.entity_type(fm).strip().casefold() != "creature":
+                    continue
+                out.append(Finding(
+                    "foe-no-numbers", "WARNING", locus,
+                    f"foe-no-numbers: '{title}' names {vl.link_name(link)}, a "
+                    f"creature whose note has {verdict[1]} — the run sheet will "
+                    f"lack its numbers; add a '### Stats' block under its "
+                    f"'## GM Notes' in the system's template shape "
+                    f"(session-prep step 16)"))
                 continue
             if index.major(note):
                 fix = ("it needs a full stat workup (session-prep step 16), "
@@ -1217,6 +1241,47 @@ def _foe_findings(locus: str, title: str, lines: list[str],
     return out
 
 
+# A pointer at another note's numbers in place of a block: `Stat the two as [[Mickey Dunne]]`,
+# `use [[Cultist]] stats`, `[[Mickey Dunne]]'s stats`.
+_STAT_POINTER_RE = re.compile(
+    r"\bstat(?:s|ted)?\b[^\n.]{0,40}?\bas\s+(?:an?\s+|the\s+)?\[\["
+    r"|\[\[[^\]]+\]\]['’]s\s+(?:stats|stat\s*block|block|numbers)\b"
+    r"|\buse\s+(?:the\s+)?\[\[[^\]]+\]\]\s+(?:stats|stat\s*block|block|numbers)\b", re.I)
+# A skill at a percentage, as a CoC block writes one: `Dodge 25%`, `Fighting (Brawl) 50%`.
+_SKILL_PERCENT_RE = re.compile(r"\b[A-Z][A-Za-z]+(?:\s*\([A-Za-z ]+\))?\s+\d{1,3}%")
+
+
+def _contingency_foe_findings(locus: str, title: str, lines: list[str],
+                              index: VaultIndex) -> list[Finding]:
+    """A contingency that brings in fighters with their numbers written into its own lines,
+    or pointed at someone else's, and nobody in the room the run sheet can read: it has no
+    fight rows when the contingency fires (#827). Only contingencies: a planned scene's
+    people come through the prep's NPC pass, and a GM's own numbers beside a statted foe
+    are a crib, not a gap."""
+    from npc_stats import STAT_PAIR_RE
+    for link in _foe_links(lines):
+        kinds = index.types(link)
+        if kinds is None or kinds & _NPC_TYPES:
+            return []
+    for ln in lines:
+        # Two stats (`HP 10, SAN 50`), or one and a skill (`HP 11, Fighting (Brawl) 50%`);
+        # skills alone are a check (`Spot Hidden 40% or Listen 50%`), not a block.
+        pairs = {m.group(1).upper() for m in STAT_PAIR_RE.finditer(ln)}
+        numbers = len(pairs) >= 2 or (pairs and _SKILL_PERCENT_RE.search(ln))
+        if numbers or _STAT_POINTER_RE.search(ln):
+            words = ln.strip().lstrip("-*+ ").strip()
+            shown = words if len(words) <= 60 else words[:57] + "..."
+            return [Finding(
+                "contingency-foes", "WARNING", locus,
+                f"contingency-foes: '{title}' gives fighters' numbers in its own words "
+                f"('{shown}') and names no one under '**NPCs**' — the run sheet makes "
+                f"fight rows only from notes, so it will have none when this fires; give "
+                f"each kind of foe an npc or creature note with a '### Stats' block (a "
+                f"variant of an NPC gets its own note), then add '**NPCs**' and "
+                f"'- **[[Name]] (2):** what they want' (session-prep step 16)")]
+    return []
+
+
 def _run_sheet_scene(rel: str, title: str, body: str, planned: bool,
                      index: VaultIndex) -> list[Finding]:
     locus = f"{rel}:§{title}"
@@ -1224,6 +1289,7 @@ def _run_sheet_scene(rel: str, title: str, body: str, planned: bool,
     out = _label_form_findings(locus, title, lines)
     out.extend(_foe_findings(locus, title, lines, index))
     if not planned:
+        out.extend(_contingency_foe_findings(locus, title, lines, index))
         return out
     out.extend(_if_table_findings(locus, title, lines))
     hub = (any(_WHERE_HEAD_RE.match(ln) for ln in lines)

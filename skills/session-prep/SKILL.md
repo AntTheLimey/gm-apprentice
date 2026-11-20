@@ -326,7 +326,7 @@ implies `--headless`).
   `audit-trail`, `pc-state`, `scene-type`, `scene-pointer`, the other
   `sections`); raise as a question when they touch content. Every
   run-sheet row (`no-place`, `no-npcs-block`, `hub-*`, `foe-no-numbers`
-  by step 16, and the rest) is fixed in the draft, none left for the GM;
+  and `contingency-foes` by step 16, and the rest) is fixed in the draft, none left for the GM;
   each names its fix. Never a stub note for `no-place`, never a question
   to the GM. A `checks failed` row: run the commands it names. A
   `DROPPED` row names a labelled block (`**Treasure**`) a rewrite lost:
@@ -370,6 +370,19 @@ Apply fixes in place; there is no audit-notes report.
   block allowed for the rest. On the GM's yes it goes in
   the NPC note's `## GM Notes` as its `### Stats` section. With
   `# system: none recorded`, build nothing: it is an Open Question.
+- Fighters a scene or contingency brings in with no note of their own
+  (the GM's "two more cultists with gaff hooks"; a `contingency-foes`
+  row): one note per kind, `npc` for people, `creature` otherwise, built
+  through ttrpg-expert with a full `### Stats` block under `## GM Notes`
+  in the system's shape (`shared/templates/npc-stats/{system}.md`; a CoC
+  creature `creature-stats/coc-7e.md`). Never their numbers in the
+  Plan's own lines, never "stat them as [[X]]": a variant of an NPC gets
+  a note and block of its own. Show it in the review; on the GM's yes
+  write it (`gma vault-write <vault> entity-new --type creature --name
+  "<Name>" --write`, or `--type npc`, the note on stdin) and name it
+  under the beat's **NPCs** with a count
+  (`- **[[Hallett Crewman]] (2):** ...`): the run sheet's fight rows
+  come only from notes.
 - A `foe-no-numbers` warning: in a D&D vault run
   `gma stat-fill "<vault>" "<note>" --write` for each, with no yes from
   the GM (their own words stay below the block); `REFUSED-MAJOR` goes to
@@ -443,8 +456,8 @@ one with nothing for it keeps its heading with an empty body (never
   line a bullet, table row or one-line label; the read-aloud blockquote
   is the only prose. Not word-capped: cut bloat, not substance.
 - `## Contingency Scenes` — trigger and consequences only (skeleton
-  below); promote one to a full scene only if it needs its own NPCs and
-  Points to land.
+  below), plus an **NPCs** block when it brings people in; promote one
+  to a full scene only if it needs its own Points to land.
 - `## Handouts & Props` — `| Document | Scene | Status | Notes |`, one
   row each in scene order, status built, print or to build; else "No
   handouts or props."
@@ -528,6 +541,8 @@ A contingency scene, `### Title` under Contingency Scenes:
 
 ```markdown
 **Trigger:** One line: what sets it off.
+**NPCs**
+- **[[Name]] (2):** only when it brings people in (step 16).
 **Then**
 - What happens, as bullets.
 ```
