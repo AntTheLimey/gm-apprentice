@@ -451,10 +451,11 @@ function withoutAutolinks(html) {
 // records the search index is made of).
 // `holders` (holdersOf) is taken out of the page's pull-quote before a gm_aliases or withheld name is looked for: the
 // pull-quote is the page's own text again with each link printed as plain words, so a link to "Rook Hollow" there is
-// the public name, not the GM alias "Rook" (#797). Elsewhere a link is fenced and blanked as below. A never-show word
-// is looked for in the page as printed.
+// the public name, not the GM alias "Rook" (#797). Elsewhere a link is fenced and blanked as below, and inside a
+// link that is more than a name (a card: a place within, a figure known there, with its excerpt) each holder is
+// blanked too: the card prints the other page's public name. A never-show word is looked for in the page as printed.
 const PULL_QUOTE = /(<div class="pull-quote(?:\s[^"]*)?">)([\s\S]*?)(<\/div>)/g;
-function findSecretNames(html, names, { publicWords, holders = null, listing = false, only = null } = {}) {
+function findSecretNames(html, names, { publicWords, holders = null, linkHolders = null, listing = false, only = null } = {}) {
   if (holders) {
     const options = { publicWords, listing, only };
     const never = names.filter((a) => a.kind === 'never_show');
@@ -466,7 +467,7 @@ function findSecretNames(html, names, { publicWords, holders = null, listing = f
       return left === text ? m : open + left.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + close;
     });
     return [
-      ...(secret.length ? findSecretNames(unheld, secret, options) : []),
+      ...(secret.length ? findSecretNames(unheld, secret, { ...options, linkHolders: holders }) : []),
       ...(never.length ? findSecretNames(html, never, options) : []),
     ];
   }
@@ -481,8 +482,11 @@ function findSecretNames(html, names, { publicWords, holders = null, listing = f
   const bodyHtml = headEnd === -1 ? whole : whole.slice(headEnd);
   // On an index page a link is a whole card (a name, and fields of the note under it), so
   // there nothing is blanked: every word on it is taken from some note.
-  const blank = (text) => (listing ? text : text.replace(/\u0002([^\u0003]*)\u0003/g,
-    (m, inner) => (publicWords.has(fold(inner)) ? LINK_OPEN.repeat(m.length) : m)));
+  const blank = (text) => (listing ? text : text.replace(/\u0002([^\u0003]*)\u0003/g, (m, inner) => {
+    if (publicWords.has(fold(inner))) return LINK_OPEN.repeat(m.length);
+    // One line at a time: a card's title and the excerpt under it are separate lines, and a public name in neither.
+    return linkHolders ? m.split('\n').map((line) => line.replace(linkHolders, (h) => LINK_OPEN.repeat(h.length))).join('\n') : m;
+  }));
   const body = foldQuotes(pageText(bodyHtml, { links: 'fence' }));
   const bodyOwn = blank(body);
   let boxes = null;

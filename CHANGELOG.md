@@ -10,6 +10,12 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 ---
 
 
+## [1.12.102] — 2026-11-19
+
+### Fixed
+
+- A card on another page (a place within, a figure known there) that prints a public name holding a GM alias no longer warns that the alias is in that page's prose. The note whose own name holds the alias still warns (#797).
+
 ## [1.12.101] — 2026-11-19
 
 ### Added
