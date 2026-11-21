@@ -130,15 +130,20 @@ describe('the GM page runs a fight', { skip: browserSkip() }, () => {
     });
   });
 
-  it('1920x1080: the acting panel has its own column', async () => {
+  // plan 6a Task 10 (review F10): the acting panel goes beside the order by the middle's width (1,200 px), not
+  // the window's 1600: at 1920 with the rail and the pane open the middle is 1,088 px, so the pane is folded here.
+  it('1920x1080: the acting panel has its own column once the middle is wide', async () => {
     const run = await start();
     await withPage({ width: 1920, height: 1080 }, async (page) => {
       await started(page, run);
-      const p = await probe(page);
+      await click(page, '#paneFold');
+      const p = await until(page, 'p.layout.folded && p.layout.beside');
       assert.ok(p.layout.actingLeft >= p.layout.orderRight, `acting at ${p.layout.actingLeft}, order ends at ${p.layout.orderRight}`);
-      assert.ok(inView(p.layout.cutTop, 1080), 'the beat cut is in view beside them');
       assert.strictEqual(p.layout.wide, false);
       await shot(page, 'fight-1920');
+      await click(page, '#paneOpen');
+      const open = await until(page, '!p.layout.folded');
+      assert.ok(inView(open.layout.cutTop, 1080), 'the beat cut is in view beside them');
     });
   });
 

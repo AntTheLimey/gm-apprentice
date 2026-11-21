@@ -647,7 +647,8 @@
     const beats = d.beats.filter((b) => !b.contingency).concat(d.beats.filter((b) => b.contingency));
     const off = pcs().filter((p) => { const x = posOf(p.note); return x && x.off; });
     const unplaced = pcs().filter((p) => !posOf(p.note));
-    let h = '<div class="hd">Run sheet</div>';
+    let h = '<button type="button" class="railstrip" id="railOpen" title="Open the run list" aria-label="Open the run list">⟩</button>';
+    h += '<div class="hd rhd">Run sheet<button type="button" id="railFold" title="Fold the run list to a thin strip" aria-label="Fold the run list">⟨</button></div>';
     h += RAIL_TOP.map(([id, t]) => `<a data-go="${id}">${t}</a>`).join('');
     h += beats.map((b) => {
       const here = pcsAtBeat(b.key);
@@ -673,9 +674,9 @@
     if (!pane) return wholeHTML(d);
     const v = G.ui.pane || 'cut';
     const fb = d.beats.find((b) => b.key === pane.beat);
-    const strip = '';
+    const strip = `<button type="button" class="panestrip" id="paneOpen" title="Open the fight's beat" aria-label="Open the fight's beat"><span aria-hidden="true">⟨</span><span class="vtitle">⚔ ${esc(pane.title)}</span></button>`;
     const back = v === 'whole' ? "Back to the fight's beat" : v === 'beat' && fb ? 'Cut it down' : '';
-    const bar = `<div class="rbar"><span class="t">⚔ ${esc(pane.title)}</span>${back ? `<button type="button" id="paneCut" data-pane="cut">${back}</button>` : ''}</div>`;
+    const bar = `<div class="rbar"><span class="t">⚔ ${esc(pane.title)}</span>${back ? `<button type="button" id="paneCut" data-pane="cut">${back}</button>` : ''}<button type="button" id="paneFold" title="Fold this pane to a thin strip: the fight takes the room">Fold ⟩</button></div>`;
     if (v === 'whole') return strip + bar + wholeHTML(d);
     const body = v === 'beat' && fb ? beforeBeat(fb) + beatHTML(fb, d) : pane.cut;
     return `${strip}${bar}${body}<p class="wholelink"><a class="lk" id="paneWhole" data-pane="whole">Whole run sheet</a> <span class="note">the brief, every beat, people, places and the end of the night</span></p>`;
@@ -1160,18 +1161,20 @@
   function openPlayers() { window.open('/players', 'run-sheet-players'); }
 
   // A jump (the rail, End of night). In a fight it goes in the right pane: to the fight's beat, the whole beat;
-  // to anything the cut does not hold, the whole sheet; a folded pane opens.
+  // to anything the cut does not hold, the whole sheet; a folded pane opens. One column (a narrow window): the
+  // page scrolls to it instead.
   function goTo(id) {
-    if (G.pane && window.innerWidth > NARROW) {
+    if (G.pane) {
       const sheet = $('#sheet');
       const here = document.getElementById(id);
       if (!here || !sheet.contains(here)) G.ui.pane = id === `beat:${G.pane.beat}` ? 'beat' : 'whole';
+      openPane();
       update();
       const el = document.getElementById(id);
-      if (el && sheet.contains(el)) {
+      if (el && sheet.contains(el) && fightLayout()) {
         const bar = sheet.querySelector('.rbar');
         sheet.scrollTop += el.getBoundingClientRect().top - sheet.getBoundingClientRect().top - (bar ? bar.offsetHeight : 0) - 8;
-      }
+      } else if (el) el.scrollIntoView({ block: 'start' });
       probe();
       return;
     }
@@ -1211,6 +1214,7 @@
     out.auto = { rail: false, pane: false };
     return out;
   })();
+  const opened = { rail: false, pane: false };
   function saveLayout() {
     try { window.localStorage.setItem(LKEY, JSON.stringify({ railFolded: L.railFolded, railFoldedFight: L.railFoldedFight, folded: L.folded, rw: L.rw, pv: L.pv })); } catch (e) { /* not kept */ }
   }
@@ -1245,16 +1249,50 @@
     const w = want != null ? want : L.rw != null ? L.rw : def;
     return Math.round(Math.max(room.min, Math.min(room.max, w)));
   }
-  // The four columns in a fight: the right pane at its default width (the grip and the folds come with 10b, 10c).
+  // The folds, the widths and where the preview sits, from the GM's choices and the room there is.
   function applyLayout() {
     const app = $('#app');
     if (!app || !G.state) return;
-    if (fightLayout()) {
-      app.classList.add('nogrip');
-      app.style.setProperty('--rw', `${rightWidth()}px`);
-      app.style.setProperty('--gripw', '0px');
-      app.style.setProperty('--ordmin', `${G.om - ($('#side').offsetWidth - $('#side').clientWidth)}px`);
-    } else app.classList.remove('nogrip');
+    const fight = fightLayout();
+    const narrow = window.innerWidth <= NARROW;
+    let rail = !narrow && (G.pane ? L.railFoldedFight : L.railFolded);
+    let pane = fight && L.folded;
+    L.auto = { rail: false, pane: false };
+    if (fight) {
+      const w = appW();
+      const need = () => (rail ? RAIL_FOLDED : RAIL_W) + G.om + (pane ? PANE_FOLDED : GRIP_W + (opened.pane ? PANE_LEAST : RIGHT_MIN));
+      if (need() > w && !rail && !opened.rail) { rail = true; L.auto.rail = true; }
+      if (need() > w && !pane && !opened.pane) { pane = true; L.auto.pane = true; }
+      // a column the GM opened yields too when the order would still be short: no row is ever clipped
+      if (need() > w && !pane) { pane = true; L.auto.pane = true; }
+      if (need() > w && !rail) { rail = true; L.auto.rail = true; }
+    }
+    G.lay = { rail, pane };
+    const strip = $('#railOpen');
+    if (strip) strip.title = fight && L.auto.rail && opened.rail ? 'No room to open the run list beside the fight at this width: widen the window' : 'Open the run list';
+    app.classList.toggle('railf', rail);
+    app.classList.toggle('panef', pane);
+    const grip = $('#grip');
+    if (fight) {
+      const room = rightRoom();
+      const showGrip = !pane && room.max - room.min >= GRIP_TRAVEL;
+      const rw = pane ? PANE_FOLDED : rightWidth();
+      const gw = showGrip ? GRIP_W : 0;
+      const mid = appW() - railW() - gw - rw;
+      const side = $('#side');
+      const border = side.offsetWidth - side.clientWidth;
+      const fv = mid - border;
+      const ordMin = G.om - border;
+      const beside = fv >= BESIDE_AT;
+      app.classList.toggle('nogrip', !showGrip);
+      app.classList.toggle('beside', beside);
+      app.style.setProperty('--rw', `${rw}px`);
+      app.style.setProperty('--gripw', `${gw}px`);
+      app.style.setProperty('--ordw', `${beside ? Math.max(ordMin, Math.min(ORDER_CAP, fv - 340)) : fv}px`);
+      if (grip) grip.title = `Drag to resize: the pane ${room.min}-${room.max} px at this width · double-click to reset`;
+    } else {
+      for (const c of ['nogrip', 'beside']) app.classList.remove(c);
+    }
     probe();
   }
   // The pane brought to its top (Fight, Resume, Back to the fight's beat, Players' screen ▸: review F3).
@@ -1264,6 +1302,24 @@
     $('#sheet').scrollTop = 0;
     if (window.scrollY) window.scrollTo(0, 0);
     return true;
+  }
+  function openPane() {
+    if (!G.lay.pane) return;
+    if (L.folded) { L.folded = false; saveLayout(); }
+    if (L.auto.pane) { opened.pane = true; opened.rail = false; }
+  }
+  function foldClick(id) {
+    const fightNow = Boolean(G.pane);
+    if (id === 'railFold') {
+      if (fightNow) L.railFoldedFight = true; else L.railFolded = true;
+      opened.rail = false;
+    } else if (id === 'railOpen') {
+      if (fightNow) L.railFoldedFight = false; else L.railFolded = false;
+      // the last column opened wins: the other one folds again if the room is short
+      if (L.auto.rail) { opened.rail = true; opened.pane = false; }
+    } else if (id === 'paneFold') { L.folded = true; opened.pane = false; } else if (id === 'paneOpen') openPane();
+    saveLayout();
+    update();
   }
   function layoutProbe() {
     const box = (el) => (el ? el.getBoundingClientRect() : null);
@@ -1281,7 +1337,38 @@
       orderMin: G.om, room, beside: $('#app').classList.contains('beside'), scrollY: r(window.scrollY),
     };
   }
-  window.addEventListener('resize', () => { if (G.model && G.state) applyLayout(); });
+  // The grip: drag to resize, double-click to reset; it listens on the document (pointer and mouse both), so a
+  // drag never depends on pointer capture or on the pointer staying over a 12 px strip.
+  (() => {
+    const grip = $('#grip');
+    if (!grip) return;
+    let on = false;
+    let startX = 0;
+    let startW = 0;
+    const begin = (x) => { on = true; startX = x; startW = rightWidth(); grip.classList.add('drag'); document.body.classList.add('dragging'); };
+    const move = (x) => {
+      if (!on) return;
+      L.rw = rightWidth(startW + (startX - x));
+      applyLayout();
+      const room = rightRoom();
+      grip.classList.toggle('limit', L.rw <= room.min || L.rw >= room.max);
+    };
+    const stop = () => { if (!on) return; on = false; grip.classList.remove('drag', 'limit'); document.body.classList.remove('dragging'); saveLayout(); probe(); };
+    grip.addEventListener('pointerdown', (ev) => { if (ev.button !== 0) return; ev.preventDefault(); begin(ev.clientX); });
+    grip.addEventListener('mousedown', (ev) => { if (ev.button !== 0 || on) return; ev.preventDefault(); begin(ev.clientX); });
+    document.addEventListener('pointermove', (ev) => move(ev.clientX));
+    document.addEventListener('mousemove', (ev) => move(ev.clientX));
+    document.addEventListener('pointerup', stop);
+    document.addEventListener('mouseup', stop);
+    document.addEventListener('pointercancel', stop);
+    window.addEventListener('blur', stop);
+    grip.addEventListener('dblclick', () => { L.rw = null; saveLayout(); applyLayout(); });
+  })();
+  window.addEventListener('resize', () => {
+    opened.rail = false;
+    opened.pane = false;
+    if (G.model && G.state) applyLayout();
+  });
   if (PROBE) {
     let queued = false;
     document.addEventListener('scroll', () => { if (queued) return; queued = true; requestAnimationFrame(() => { queued = false; probe(); }); }, true);
@@ -1416,6 +1503,7 @@
     if (!t || t.disabled) return;
     const d = t.dataset;
     if (t.id === 'playersBtn' || t.id === 'playersBtn2') { openPlayers(); return; }
+    if (t.id === 'railFold' || t.id === 'railOpen' || t.id === 'paneFold' || t.id === 'paneOpen') { foldClick(t.id); return; }
     if (d.pane) { G.ui.pane = d.pane; update(); paneTop(); probe(); return; }
     if (d.pgroup) { touch(d.pgroup); update(); return; }
     if (t.id === 'coloursBtn') { menuOpen(!menuIsOpen()); return; }

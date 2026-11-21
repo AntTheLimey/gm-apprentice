@@ -53,6 +53,15 @@ img { max-width: 100%; }
 
 /* the rail and the main column */
 .app { display: grid; grid-template-columns: var(--railw, 220px) minmax(0, 1fr) var(--sidew, 400px); align-items: start; }
+/* the rail folds to a 28 px strip (plan 6a Task 10): the whole strip is the button that opens it */
+.app.railf { --railw: 28px; }
+.rail .rhd { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.rail .rhd button { font: 600 .8rem/1.2 var(--body); letter-spacing: 0; text-transform: none; padding: 0 6px; }
+.rail .railstrip { display: none; }
+.app.railf .rail { padding: 0; overflow: hidden; }
+.app.railf .rail > :not(.railstrip) { display: none; }
+.app.railf .rail > .railstrip { display: flex; justify-content: center; align-items: flex-start; width: 100%; height: 100%; padding: 10px 0; border: 0; border-radius: 0; background: var(--panel); color: var(--ice); font-weight: 700; }
+.app.railf .rail > .railstrip:hover { background: var(--ice-soft); }
 .rail { position: sticky; top: var(--toph); height: calc(100vh - var(--toph)); overflow: auto; border-right: 1px solid var(--line); padding: 10px 8px 30px; font-size: .86rem; }
 .rail a { display: block; color: var(--ink); text-decoration: none; padding: 3px 6px; border-radius: 5px; cursor: pointer; }
 .rail a:hover { background: var(--ice-soft); }
@@ -196,21 +205,28 @@ pre.notes { white-space: pre-wrap; background: var(--bg); border: 1px solid var(
 .app.part-side .side { order: 1; border-left: none; border-right: 1px solid var(--line); padding: 0; overflow: hidden; font-size: .86rem; display: flex; flex-direction: column; }
 .grip { display: none; }
 .app.part-side .grip { display: block; order: 2; align-self: stretch; position: sticky; top: var(--toph); height: calc(100vh - var(--toph)); cursor: col-resize; background: var(--line); touch-action: none; }
+.app.part-side .grip:hover, .app.part-side .grip.drag { background: var(--ice); }
+.app.part-side .grip.limit { background: var(--lamp); }
+.app.part-side .grip::after { content: ""; position: absolute; top: 50%; left: 4px; width: 4px; height: 36px; margin-top: -18px; border-left: 1px dotted var(--panel); border-right: 1px dotted var(--panel); }
 .app.part-side.nogrip .grip { visibility: hidden; pointer-events: none; }
+body.dragging, body.dragging * { cursor: col-resize !important; user-select: none !important; }
 .app.part-side .sheet { order: 3; position: sticky; top: var(--toph); height: calc(100vh - var(--toph)); overflow: auto; padding: 0 16px 60px; }
 .rbar { position: sticky; top: 0; z-index: 3; display: flex; gap: 8px; align-items: center; background: var(--bg); padding: 8px 0 6px; border-bottom: 1px solid var(--line); margin: 0 0 10px; }
 .rbar .t { font: 650 .95rem var(--display); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--bad); }
 .rbar button { font-size: .8rem; padding: 1px 8px; white-space: nowrap; }
 .wholelink { margin: 16px 0 4px; font-size: .95rem; }
+.sheet > .panestrip { display: none; }
+.app.part-side.panef .sheet { padding: 0; overflow: hidden; }
+.app.part-side.panef .sheet > :not(.panestrip) { display: none; }
+.app.part-side.panef .sheet > .panestrip { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 100%; height: 100%; padding: 10px 0; border: 0; border-radius: 0; background: var(--panel); color: var(--ice); font-weight: 700; }
+.app.part-side.panef .sheet > .panestrip:hover { background: var(--ice-soft); }
+.vtitle { writing-mode: vertical-rl; transform: rotate(180deg); font: 650 .9rem var(--display); color: var(--bad); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-height: calc(100% - 40px); }
 .fview { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; min-width: 0; }
 .fview .fo { flex: 0 1 auto; min-height: 0; overflow: auto; padding: 8px 10px 6px; }
 .fview .act { flex: 1 0 160px; min-height: 160px; overflow: auto; margin: 0; border-width: 2px 0 0; border-radius: 0; }
-/* 5b's rule, until Task 10b puts the acting panel beside the order by the middle's width: the order keeps its least */
-@media (min-width: 1600px) {
-  .fview { display: grid; grid-template-columns: minmax(var(--ordmin, 0px), 1fr) minmax(0, 340px); grid-template-rows: minmax(0, 1fr); }
-  .fview .fo { height: 100%; }
-  .fview .act { height: 100%; border-width: 0 0 0 2px; }
-}
+.app.part-side.beside .fview { display: grid; grid-template-columns: var(--ordw) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+.app.part-side.beside .fview .fo { height: 100%; }
+.app.part-side.beside .fview .act { height: 100%; border-width: 0 0 0 2px; }
 /* the order measured at its narrowest (gm.js orderMin): each row as tight as its items allow */
 ol.to.measure > li { width: 1px; }
 .fh { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; margin: 0 0 6px; }

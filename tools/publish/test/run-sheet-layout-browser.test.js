@@ -415,3 +415,328 @@ describe('10a: the right pane holds the fight\'s beat', { skip: browserSkip() },
     });
   });
 });
+
+describe('10b: the grip and the widths', { skip: browserSkip() }, () => {
+  for (const [w, h] of SIZES.slice(0, 2)) {
+    it(`the grip drags 60 px each way at ${w}`, async () => {
+      const run = await start();
+      await withPage({ width: w, height: h }, async (page) => {
+        let p = await fightAt(page, run);
+        sane(p, 'opened');
+        // 1449: the rail open; 1280: the boss row needs 748 px, so the page folds the rail to fit (review F2)
+        assert.strictEqual(p.layout.railFolded, w < 1449, `rail folded at ${w}: ${p.layout.railFolded}`);
+        assert.strictEqual(p.layout.auto.rail, w < 1449);
+        assert.ok(p.layout.grip.shown, 'the grip is there');
+        const d0 = p.layout.sheetW;
+        assert.strictEqual(d0, Math.min(600, p.layout.room.max - 80), 'the default width');
+        await dragGrip(page, -60);
+        p = await until(page, `p.layout.sheetW !== ${d0}`);
+        assert.strictEqual(p.layout.sheetW, d0 + 60, 'dragged left: the pane 60 px wider');
+        sane(p, 'wider');
+        await dragGrip(page, 120);
+        p = await until(page, `p.layout.sheetW === ${d0 - 60}`);
+        sane(p, 'narrower');
+        assert.strictEqual(p.layout.saved.rw, d0 - 60, 'the width is kept');
+      });
+    });
+  }
+
+  it('stops at each limit, tinted while there, and the title gives the range', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await fightAt(page, run);
+      const { min, max } = p.layout.room;
+      assert.deepStrictEqual([min, max], [320, 1449 - 220 - 12 - p.layout.orderMin]);
+      assert.match(await page.evaluate('document.querySelector("#grip").title'), new RegExp(`${min}-${max} px`));
+      const g = await page.box('#grip');
+      const x = g.left + 6;
+      const y = g.top + 200;
+      await page.mouse('mouseMoved', x, y);
+      await page.mouse('mousePressed', x, y, { buttons: 1 });
+      for (const to of [x - 200, x - 500, x - 800]) await page.mouse('mouseMoved', to, y, { buttons: 1 });
+      assert.ok(await page.evaluate('document.querySelector("#grip").classList.contains("limit")'), 'tinted at the limit');
+      await page.mouse('mouseReleased', x - 800, y);
+      p = await until(page, `p.layout.sheetW === ${max}`);
+      sane(p, 'at max');
+      await dragGrip(page, 900);
+      p = await until(page, `p.layout.sheetW === ${min}`);
+      sane(p, 'at min');
+      assert.ok(!await page.evaluate('document.querySelector("#grip").classList.contains("limit")'), 'the tint goes on release');
+    });
+  });
+
+  it('double-click resets', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await fightAt(page, run);
+      const d0 = p.layout.sheetW;
+      await dragGrip(page, -50);
+      p = await until(page, `p.layout.sheetW === ${d0 + 50}`);
+      const g = await page.box('#grip');
+      const x = g.left + 6;
+      const y = g.top + 300;
+      await page.mouse('mouseMoved', x, y);
+      for (const n of [1, 2]) {
+        await page.mouse('mousePressed', x, y, { buttons: 1, clickCount: n });
+        await page.mouse('mouseReleased', x, y, { clickCount: n });
+      }
+      p = await until(page, `p.layout.sheetW === ${d0} && p.layout.saved.rw === null`);
+      sane(p, 'reset');
+    });
+  });
+
+  it('a window resize clamps the width again', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await fightAt(page, run);
+      await dragGrip(page, -400);
+      p = await until(page, `p.layout.sheetW === ${p.layout.room.max}`);
+      await page.resize(1340, 762);
+      p = await until(page, 'p.layout.room && p.layout.room.max === 1340 - 220 - 12 - p.layout.orderMin');
+      assert.strictEqual(p.layout.sheetW, p.layout.room.max);
+      sane(p, 'after the resize');
+    });
+  });
+
+  it('a boss row is never clipped: the Glacier Wyrm with three statuses, at every width and state', async () => {
+    for (const [w, h] of SIZES) {
+      const run = await start();
+      await withPage({ width: w, height: h }, async (page) => {
+        let p = await startedFight(page, run);
+        const wyrm = p.fight.rows.find((r) => r.note === WYRM);
+        const f = p.fight.id;
+        await fromOther(run, ['Frightened', 'Prone', 'Poisoned'].map((add) => ({ type: 'status', fight: f, row: wyrm.id, add })));
+        p = await until(page, `p.fight.rows.find((r) => r.id === ${JSON.stringify(wyrm.id)}).conds.length === 3`);
+        const check = async (state) => {
+          const now = await P(page);
+          sane(now, `${w} ${state}`);
+          const row = now.layout.rows.find((r) => r.id === wyrm.id);
+          assert.ok(!row.over && !row.nameCut && row.h <= 40, `${w} ${state}: ${JSON.stringify(row)}`);
+          return now;
+        };
+        p = await check('default');
+        if (p.layout.grip.shown) {
+          await dragGrip(page, -900);
+          await check('pane at its max');
+          await dragGrip(page, 900);
+          await check('pane at its min');
+        }
+        if (!p.layout.folded) {
+          await tap(page, '#paneFold');
+          await until(page, 'p.layout.folded');
+          await check('pane folded');
+          await tap(page, '#paneOpen');
+          await until(page, '!p.layout.folded');
+        } else {
+          await tap(page, '#paneOpen');
+          await until(page, '!p.layout.folded');
+          await check('pane opened by hand');
+        }
+        p = await P(page);
+        if (p.layout.railFolded) {
+          // opened by hand: it opens where the order keeps its room, and stays a strip where it cannot
+          const room = p.layout.orderMin + 220 + 40 <= w;
+          await tap(page, '#railOpen');
+          if (room) await until(page, '!p.layout.railFolded');
+          else { await page.sleep(200); assert.ok((await P(page)).layout.railFolded, `${w}: no room to open the rail`); }
+          await check('rail opened by hand');
+        } else {
+          await tap(page, '#railFold');
+          await until(page, 'p.layout.railFolded');
+          await check('rail folded');
+        }
+      });
+    }
+  });
+
+  it('a saved width too wide is clamped on load', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await page.goto(`${run.base}/?probe=1`);
+      await settled(page);
+      await page.evaluate('localStorage.setItem("rs:layout", JSON.stringify({ rw: 5000 }))');
+      const p = await fightAt(page, run);
+      assert.strictEqual(p.layout.sheetW, p.layout.room.max, `${p.layout.sheetW} against ${p.layout.room.max}`);
+      sane(p, 'clamped');
+    });
+  });
+
+  it('with rail and pane folded at 1449 the acting panel sits beside the order and ends inside the window', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await startedFight(page, run);
+      assert.strictEqual(p.layout.beside, false, 'stacked while the middle is narrow');
+      await tap(page, '#railFold');
+      await until(page, 'p.layout.railFolded');
+      await tap(page, '#paneFold');
+      p = await until(page, 'p.layout.folded && p.layout.beside');
+      assert.ok(p.layout.actingLeft > p.layout.orderRight - 1, `acting at ${p.layout.actingLeft}, order ends ${p.layout.orderRight}`);
+      const act = await page.box('#acting');
+      assert.ok(act.bottom <= 762, `the acting panel ends at ${act.bottom}`);
+      assert.ok(p.layout.orderRight - (await page.box('#fOrder')).left <= 870, 'the order is capped near 860');
+      sane(p, 'both folded');
+    });
+  });
+});
+
+describe('10c: the folds', { skip: browserSkip() }, () => {
+  it('the rail strip opens from a click anywhere along its height', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await fightAt(page, run);
+      assert.strictEqual(p.layout.railW, 220);
+      for (const y of [4, 'bottom']) {
+        await tap(page, '#railFold');
+        p = await until(page, 'p.layout.railW === 28');
+        const r = await page.box('#railOpen');
+        assert.ok(r.top <= 60 && r.bottom >= 755, `the strip runs the full height: ${r.top}-${r.bottom}`);
+        await tap(page, '#railOpen', { offsetX: 14, offsetY: y === 'bottom' ? r.height - 6 : y });
+        p = await until(page, 'p.layout.railW === 220');
+        sane(p, `opened at ${y}`);
+      }
+    });
+  });
+
+  it('folding the rail gives its room', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await fightAt(page, run);
+      const max = p.layout.room.max;
+      await tap(page, '#railFold');
+      p = await until(page, 'p.layout.railFolded');
+      assert.strictEqual(p.layout.room.max, max + 192);
+      assert.strictEqual(await page.evaluate('window.RunSheetPage.rightRoom().max'), max + 192);
+      sane(p, 'rail folded');
+    });
+  });
+
+  it('opening the rail clamps a saved width with no sideways scroll', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await fightAt(page, run);
+      await tap(page, '#railFold');
+      p = await until(page, 'p.layout.railFolded');
+      await dragGrip(page, -600);
+      p = await until(page, `p.layout.sheetW === ${p.layout.room.max}`);
+      await tap(page, '#railOpen');
+      p = await until(page, '!p.layout.railFolded');
+      assert.strictEqual(p.layout.sheetW, p.layout.room.max, 'clamped to the room the open rail leaves');
+      sane(p, 'rail opened');
+    });
+  });
+
+  it('folding the rail with the pane at its maximum keeps the pane\'s width', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await startedFight(page, run);
+      await dragGrip(page, -600);
+      p = await until(page, `p.layout.sheetW === ${p.layout.room.max}`);
+      const w = p.layout.sheetW;
+      await tap(page, '#railFold');
+      p = await until(page, 'p.layout.railFolded');
+      assert.strictEqual(p.layout.sheetW, w);
+      // no row went out of view: the current one is in the order's box
+      const inBox = await page.evaluate(`(() => { const o = document.querySelector('#side ol.to').getBoundingClientRect(); const c = document.querySelector('#side ol.to li.cur').getBoundingClientRect(); return c.top >= o.top && c.bottom <= o.bottom; })()`);
+      assert.ok(inBox);
+      sane(p, 'rail folded at max');
+    });
+  });
+
+  it('at 1100 the page opens with the rail folded and the grip moves 60 px each way', async () => {
+    // A small fight (the Tallow Alarm's Rime Imp and the party): its widest row is a plain foe's (review F2: the
+    // boss fight's 748 px row does not fit beside a 320 px pane at 1100 even with the rail folded; see below).
+    const run = await start();
+    await withPage({ width: 1100, height: 762 }, async (page) => {
+      let p = await fightAt(page, run, { on: run.model.beats.findIndex((b) => b.contingency) });
+      assert.ok(p.layout.orderMin < 640, `order minimum ${p.layout.orderMin}`);
+      assert.deepStrictEqual([p.layout.railFolded, p.layout.auto.rail, p.layout.saved.railFoldedFight, p.layout.folded], [true, true, false, false]);
+      assert.ok(p.layout.grip.shown);
+      const d0 = p.layout.sheetW;
+      await dragGrip(page, -60);
+      p = await until(page, `p.layout.sheetW === ${d0 + 60}`);
+      sane(p, '1100 wider');
+      await dragGrip(page, 120);
+      p = await until(page, `p.layout.sheetW === ${d0 - 60}`);
+      sane(p, '1100 narrower');
+    });
+    // the boss fight at 1100: the rail and then the pane fold; the pane opened by hand holds until a resize
+    const boss = await start();
+    await withPage({ width: 1100, height: 762 }, async (page) => {
+      let p = await fightAt(page, boss);
+      assert.deepStrictEqual([p.layout.railFolded, p.layout.folded, p.layout.auto.pane, p.layout.grip.shown], [true, true, true, false]);
+      sane(p, '1100 boss');
+      await tap(page, '#paneOpen');
+      p = await until(page, '!p.layout.folded');
+      assert.strictEqual(p.layout.saved.folded, false, 'an auto-fold is never kept');
+      sane(p, '1100 boss, pane opened');
+      await page.resize(1101, 762);
+      p = await until(page, 'p.layout.folded');
+      sane(p, 'after a resize the page folds again');
+    });
+  });
+
+  it('an auto-fold is undone when room returns', async () => {
+    const run = await start();
+    await withPage({ width: 1280, height: 762 }, async (page) => {
+      let p = await fightAt(page, run);
+      assert.ok(p.layout.railFolded && p.layout.auto.rail);
+      await page.resize(1449, 762);
+      p = await until(page, '!p.layout.railFolded');
+      sane(p, 'room again');
+      await page.resize(1280, 762);
+      p = await until(page, 'p.layout.railFolded');
+      // a GM click opens it: the pane narrows or folds, nothing scrolls sideways
+      await tap(page, '#railOpen');
+      p = await until(page, '!p.layout.railFolded');
+      assert.ok(p.layout.folded, 'the pane folds to give the room');
+      sane(p, 'rail opened at 1280');
+    });
+  });
+
+  it('at 1000 the page is one column, as today', async () => {
+    const run = await start();
+    await withPage({ width: 1000, height: 762 }, async (page) => {
+      const p = await fightAt(page, run);
+      const side = await page.box('#side');
+      const sheet = await page.box('#sheet');
+      assert.strictEqual(Math.round(side.left), Math.round(sheet.left), 'one column');
+      assert.ok(sheet.top >= side.bottom - 1, 'the beat under the order');
+      assert.strictEqual(p.layout.railW, 0);
+      assert.strictEqual(p.layout.grip.shown, false);
+      assert.strictEqual(p.layout.folded, false);
+      assert.strictEqual(p.layout.wide, false);
+      // a jump to what the cut does not hold opens the whole sheet, and the page scrolls to it
+      await tap(page, '#endBtn');
+      await page.waitFor('document.querySelector("#sheet section#end")');
+      const end = await page.box('#end');
+      assert.ok(end.top >= 0 && end.top < 762, `End of the night at ${end.top}`);
+      assert.deepStrictEqual((await P(page)).errors, []);
+    });
+  });
+
+  it('the rail\'s two flags: folded in a fight, open again after End fight', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await fightAt(page, run);
+      await tap(page, '#railFold');
+      p = await until(page, 'p.layout.railFolded');
+      assert.deepStrictEqual([p.layout.saved.railFoldedFight, p.layout.saved.railFolded], [true, false]);
+      await tap(page, '#fEnd');
+      await tap(page, '#fEnd');
+      p = await until(page, '!p.fight && p.layout.railW === 220');
+      const rail = await page.evaluate('({ faces: document.querySelectorAll("#rail .fc .face").length, off: document.querySelectorAll("#rail [data-off]").length })');
+      assert.ok(rail.faces >= 2 && rail.off >= 2, `faces and Off-screen buttons back: ${JSON.stringify(rail)}`);
+      // folded out of a fight, it stays folded there only
+      await tap(page, '#railFold');
+      p = await until(page, 'p.layout.railW === 28');
+      await page.evaluate('window.__before = true');
+      await page.reload();
+      p = await until(page, '!window.__before && p.layout && p.layout.railW === 28 && p.saved === "Saved"');
+      await tap(page, '#railOpen');
+      p = await until(page, 'p.layout.railW === 220');
+      await tap(page, `[id="beat:${run.model.beats[0].key}"] [data-fight]`);
+      p = await until(page, 'p.fight && p.layout.railW === 28');
+      assert.deepStrictEqual(p.errors, []);
+    });
+  });
+});

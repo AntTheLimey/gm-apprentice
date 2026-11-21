@@ -63,7 +63,7 @@ const sleep = (ms) => new Promise((r) => { setTimeout(r, ms); });
 
 // Runs `fn(page)` in a fresh headless Chrome of the given size and returns what it returns.
 // `page`: goto(url), reload(), evaluate(expr), waitFor(expr, ms), screenshot(file), sleep(ms), key(name, { shift }),
-// newTab(url) -> page; real pointer and text: mouse(type, x, y, { buttons }), click(sel, { holdMs }), drag(x1, y1, x2, y2, steps),
+// newTab(url) -> page, resize(width, height); real pointer and text: mouse(type, x, y, { buttons }), click(sel, { holdMs }), drag(x1, y1, x2, y2, steps),
 // wheel(x, y, dy), type(text), box(sel), clickAt(x, y, { holdMs }), colorScheme('light'|'dark').
 async function withPage({ width = 1449, height = 762, chrome = findChrome() } = {}, fn) {
   if (!chrome) throw new Error('no browser');
@@ -113,6 +113,8 @@ async function withPage({ width = 1449, height = 762, chrome = findChrome() } = 
             return r;
           },
           reload: () => s('Page.reload', { ignoreCache: true }),
+          // The window's size, changed as a user drags its corner: the page gets a resize event.
+          resize: (w, h) => s('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 1, mobile: false }),
           // The page's prefers-color-scheme, as the machine's setting would give it ('light' or 'dark'); it holds across loads.
           colorScheme: (value) => s('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value }] }),
           // A headless page has no window focus, so focus and blur fire no events; this makes them fire,
