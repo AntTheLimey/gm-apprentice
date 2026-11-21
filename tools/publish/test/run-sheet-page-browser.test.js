@@ -641,3 +641,81 @@ describe('the GM page shows things on the players\' screen', { skip: browserSkip
     });
   });
 });
+
+// plan 6a Task 7: Move them and Fight here, by real input only (page.click, page.type, page.key)
+describe('Move them and Fight here in a browser', { skip: browserSkip() }, () => {
+  const YARD = 'Locations/The Chapel Yard.md';
+  const ADA = PARTY[0];
+  const beat = (key) => `[id="beat:${key}"]`;
+  const stateOf = async (run) => (await api(run, 'GET', '/api/state')).state;
+
+  it('the party moves to a known place by a near name, to a typed one by its explicit choice, back, and fights at a place', async () => {
+    const run = await start(FIXTURE, 'Session 02 - The Test');
+    const { model } = await api(run, 'GET', '/api/model');
+    const gate = model.beats[0];
+    await withPage({ width: 1449, height: 900 }, async (page) => {
+      await page.goto(`${run.base}?probe=1`);
+      await settled(page);
+      // nobody placed: Hand over has no group line yet
+      assert.strictEqual(await page.evaluate('document.querySelector("#handover .where-party")'), null);
+      await page.click(`${beat(gate.key)} [data-all]`);
+      await settled(page);
+      // Hand over: one line for the group, with its place and the box
+      await page.waitFor('document.querySelector("#handover .where-party input[data-moveg]")');
+      assert.match(await page.evaluate('document.querySelector("#handover .where-party li").textContent'), /Ada, Ben at The Gate/);
+      // "chapel yard" (no "the", lower case) is The Chapel Yard: Enter takes the known place
+      await page.click('#handover input[data-moveg]');
+      await page.type('chapel yard');
+      await page.waitFor('document.querySelector("#handover [data-movepick]")');
+      assert.strictEqual(await page.evaluate('document.querySelector("#handover [data-mhits] button").textContent'), 'The Chapel Yard');
+      assert.match(await page.evaluate('document.querySelector("#handover [data-mhits] button:last-child").textContent'), /^\+ New place: chapel yard$/);
+      await page.key('Enter');
+      await settled(page);
+      let s = await stateOf(run);
+      const yardKey = model.placeKeys[YARD];
+      assert.deepStrictEqual([s.positions[ADA].beat, s.positions[PARTY[1]].beat], [yardKey, yardKey]);
+      assert.ok(s.events.some((e) => e.text === 'Ada, Ben move to The Chapel Yard.'));
+      await page.waitFor(`document.querySelector('${beat(yardKey)}')`);
+      // a name no place has: Enter makes nothing and says so; the explicit choice makes the new place
+      await page.click(`${beat(yardKey)} input[data-moveg]`);
+      await page.type('Rusty Anchor');
+      await page.key('Enter');
+      await page.sleep(200);
+      s = await stateOf(run);
+      assert.ok(!s.improvised.some((i) => i.newPlace), 'Enter never makes a new place');
+      await page.waitFor(`document.querySelector('${beat(yardKey)} [data-movenew]')`);
+      await page.click(`${beat(yardKey)} [data-movenew]`);
+      await settled(page);
+      s = await stateOf(run);
+      const typed = s.improvised.find((i) => i.newPlace);
+      assert.strictEqual(typed && typed.title, 'Rusty Anchor');
+      assert.strictEqual(s.positions[ADA].beat, typed.key);
+      // the players' screen shows the typed place's name
+      const view = await api(run, 'GET', '/api/players/view');
+      assert.strictEqual(view.panels[0].caption, 'Rusty Anchor');
+      // back to The Gate, then Take off the typed place (two clicks)
+      await page.click(`${beat(typed.key)} input[data-moveg]`);
+      await page.type('gate');
+      await page.waitFor(`document.querySelector('${beat(typed.key)} [data-movepick]')`);
+      await page.key('Enter');
+      await settled(page);
+      s = await stateOf(run);
+      assert.strictEqual(s.positions[ADA].beat, model.placeKeys['Locations/The Gate.md']);
+      await page.click(`${beat(typed.key)} [data-unplace]`);
+      await page.click(`${beat(typed.key)} [data-unplace]`);
+      await settled(page);
+      s = await stateOf(run);
+      assert.ok(!s.improvised.some((i) => i.newPlace), 'taken back');
+      // Fight here at The Chapel Yard from its tile: nobody moves, nobody of the party there is ticked
+      await page.click(`#places [data-fplace="${YARD}"]`);
+      const p = await page.waitFor(`(() => { const p = ${PROBE}; return p && p.fight && p; })()`);
+      assert.ok(p.fight.rows.filter((r) => r.kind === 'pc').every((r) => !r.in), 'no PC stands at the Yard: nobody ticked');
+      s = await stateOf(run);
+      assert.strictEqual(s.positions[ADA].beat, model.placeKeys['Locations/The Gate.md'], 'Fight here moves nobody');
+      assert.strictEqual(s.fight.beat, yardKey, 'the Yard\'s place beat, found again');
+      const focus = s.fight.groups[0];
+      assert.strictEqual(s.panels[focus].backdrop, YARD);
+      assert.deepStrictEqual((await probe(page)).errors, []);
+    });
+  });
+});

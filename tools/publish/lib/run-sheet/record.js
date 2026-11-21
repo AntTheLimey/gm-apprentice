@@ -99,12 +99,10 @@ function tableLogBody(model, state, { linkFor: link, timeOf = localTime } = {}) 
   }));
 
   sec['Contingencies that fired'] = bullets(d.fired.map((f) => one(f.title)));
-  // a place beat (plan 6a Task 7): a known place as its link, a place typed tonight as `New place: <name>`
-  // (wrap-up can offer to make its note)
-  sec['Improvised beats'] = bullets(d.improvised.map((i) => {
-    if (typeof i.place === 'string' && i.place) return link(i.place);
-    return i.newPlace ? `${NEW_PLACE} ${one(i.title)}` : one(i.title);
-  }));
+  // a place typed tonight (plan 6a Task 7) is `New place: <name>`, for wrap-up to offer its note. A known place's
+  // beat is its name, unlinked: reveal_scan counts a link here as seen by the players, and Fight here moves
+  // nobody there. A PC who stood there links it under Where everyone ended.
+  sec['Improvised beats'] = bullets(d.improvised.map((i) => (i.newPlace ? `${NEW_PLACE} ${one(i.title)}` : one(i.title))));
   sec['Unmasked this session'] = bullets(
     d.unmaskedNow.filter((u) => !u.carried).map((u) => `${link(u.note)} as ${one(u.name)}`)
       .concat(d.maskedAgain.map((u) => `${link(u.note)} masked again`)),

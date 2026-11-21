@@ -616,7 +616,8 @@ describe('places in the record', () => {
       { type: 'moveGroup', pcs: [BEN], place: YARD, key, title: 'The Chapel Yard', names: ['Ben'] }]);
     const sec = sectionsOf(R.tableLogBody(model, s, opts));
     assert.strictEqual(sec.get('Where everyone ended'), '- [[Ada Moss]]: The Docks\n- [[Ben Hart]]: [[The Chapel Yard]]');
-    assert.strictEqual(sec.get('Improvised beats'), '- New place: The Docks\n- [[The Chapel Yard]]');
+    // the known place is linked where a PC stood, never under Improvised beats (reveal_scan reads links there as seen)
+    assert.strictEqual(sec.get('Improvised beats'), '- New place: The Docks\n- The Chapel Yard');
     assert.match(sec.get('Log'), /Ada moves to The Docks \(a new place\)\./);
     assert.match(sec.get('Log'), /Ben moves to The Chapel Yard\./);
   });
@@ -627,6 +628,6 @@ describe('places in the record', () => {
     s = run([{ id: 'fx', type: 'fightStart', beat: key, title: 'The Chapel Yard', groups: [GATE.key], rows: [], thresholds: [], backdrop: { group: GATE.key, place: YARD } }, { type: 'fightEnd', fight: 'fx' }], s);
     const sec = sectionsOf(R.tableLogBody(model, s, opts));
     assert.match(sec.get('Where everyone ended'), /^- \[\[Ada Moss\]\]: \[\[The Gate\]\]$/m);
-    assert.strictEqual(sec.get('Improvised beats'), '- [[The Chapel Yard]]');
+    assert.strictEqual(sec.get('Improvised beats'), '- The Chapel Yard', 'nobody stood there: no link');
   });
 });

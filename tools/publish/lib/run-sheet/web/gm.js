@@ -353,7 +353,7 @@
 
   // ------------------------------------------------------------------ lookups
   const D = () => RS.derive(G.model, G.state);
-  const noteInfo = (p) => (G.model.notes && G.model.notes[p]) || null;
+  const noteInfo = (p) => (G.model.notes && G.model.notes[p]) || (G.model.placeNotes && G.model.placeNotes[p]) || null;
   const castOf = (p) => (G.model.cast || []).find((c) => c.note === p) || null;
   const pcOf = (p) => (G.model.pcs || []).find((x) => x.note === p) || null;
   const nameOf = (p) => { const pc = pcOf(p); if (pc) return pc.name; const c = castOf(p); if (c) return c.name; const n = noteInfo(p); return n ? n.name : stem(p); };
@@ -407,6 +407,70 @@
   }
   const touch = (group) => { if (group) G.ui.focusGroup = group; };
 
+  // ------------------------------------------------------------------ Move them (plan 6a Task 7, review F13)
+  // Every place in the vault the party can go: the reader's placeKeys, each with its own note's name.
+  const FM = window.RunSheetFightMath;
+  function knownPlaces() {
+    const keys = G.model.placeKeys || {};
+    // a folder's own note (`North/index.md`) with no name of its own goes by its folder's
+    const named = (note, n) => (n.named || stem(note).toLowerCase() !== 'index' ? n.name || stem(note) : note.split('/').slice(-2, -1)[0] || stem(note));
+    return Object.keys(keys).map((note) => { const n = noteInfo(note) || {}; return { note, name: named(note, n), type: 'location', aliases: n.aliases || [] }; })
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }
+  const NEW_PLACE = (t) => `+ New place: ${t}`;
+  const NO_PLACE = 'No known place by that name: choose "+ New place" to make one';
+  const placeChoices = (text) => (FM ? FM.addChoices(knownPlaces(), text, RS.castSearch, 8, NEW_PLACE) : []);
+  // A group's place, for the GM: its beat's place (or spot's), else the place beat's, else its beat's title.
+  function groupPlace(g, d = D()) {
+    const b = d.beats.find((x) => x.key === g.beat);
+    const spot = b && g.spot ? (b.spots || []).find((x) => x.key === g.spot) : null;
+    const place = (spot && spot.note) || (b && b.place) || null;
+    return place ? link(place) : esc(groupLabel(g.key, d));
+  }
+  // The box: type a place (the datalist offers every known one), Enter takes the top known hit, and a new one
+  // is only ever the explicit "+ New place: <typed>" choice under it (P-S10).
+  // `where` tells a group's boxes apart (Hand over, a Here strip): each keeps its own focus and choices.
+  function moveBoxHTML(group, where) {
+    const id = `${where}|${group}`;
+    const hits = (G.ui.moveHits && G.ui.moveHits[id]) || [];
+    return `<span class="movebox"><input data-moveg="${esc(group)}" data-movebox="${esc(id)}" list="rsPlaces" placeholder="Move them to…" aria-label="Move ${esc(groupWho(group))} to a place" autocomplete="off"><span class="hits" data-mhits="${esc(id)}">${moveHitsHTML(group, hits)}</span></span>`;
+  }
+  function moveHitsHTML(group, hits) {
+    return hits.map((c) => (c.isNew
+      ? `<button type="button" class="new" data-movenew="${esc(c.name)}" data-moveg="${esc(group)}">${esc(c.label)}</button>`
+      : `<button type="button" data-movepick="${esc(c.note)}" data-moveg="${esc(group)}">${esc(c.name)}</button>`)).join('');
+  }
+  const groupWho = (key) => ((groups().find((g) => g.key === key) || {}).pcs || []).map((p) => first(nameOf(p))).join(', ');
+  // Move a group's PCs to a known place (`note`) or a typed one (`name`). The place's beat becomes the focus.
+  function moveGroup(group, { note, name }) {
+    const g = groups().find((x) => x.key === group);
+    if (!g) return;
+    if (G.ui.moveHits) for (const k of Object.keys(G.ui.moveHits)) if (k.endsWith(`|${group}`)) delete G.ui.moveHits[k];
+    document.querySelectorAll(`input[data-moveg="${CSS.escape(group)}"]`).forEach((box) => { box.value = ''; });
+    const names = g.pcs.map((p) => first(nameOf(p)));
+    let key;
+    if (note) {
+      key = (G.model.placeKeys || {})[note];
+      if (!key) return;
+      act({ type: 'moveGroup', pcs: g.pcs, place: note, key, title: nameOf(note), names });
+    } else {
+      const typed = String(name || '').replace(/\s+/g, ' ').trim();
+      if (!typed) return;
+      const had = G.state.improvised.find((i) => i.newPlace && FM.sameName(i.title, typed));
+      key = had ? had.key : `pn-${G.clientId}-${G.seq + 1}`;
+      act({ type: 'moveGroup', pcs: g.pcs, name: typed, names });
+    }
+    G.ui.focus = key;
+    touch(key);
+    update();
+  }
+  // "Where the party is" (F13): one row per group at the top of Hand over, with its place and Move them.
+  function partyWhereHTML(d) {
+    const gs = groups();
+    if (!gs.length) return '';
+    return `<h4 class="lab">Where the party is</h4><ul class="where-party">${gs.map((g) => `<li><span class="fc">${g.pcs.map((p) => face(p)).join('')}</span> <b>${esc(groupWho(g.key))}</b> at ${groupPlace(g, d)} ${moveBoxHTML(g.key, 'handover')}</li>`).join('')}</ul>`;
+  }
+
   // The beat the header jot writes to: the one last worked on, else where the first placed PC stands.
   function focusBeat(d) {
     const keys = new Set(d.beats.map((b) => b.key));
@@ -420,7 +484,7 @@
 
   // ------------------------------------------------------------------ drawing
   function focusKey(el) {
-    const own = ['data-jot', 'data-bring', 'data-vhp', 'data-vcond', 'data-where', 'data-orphan', 'data-pt', 'data-hand', 'data-stop', 'data-fire'];
+    const own = ['data-jot', 'data-bring', 'data-movebox', 'data-vhp', 'data-vcond', 'data-where', 'data-orphan', 'data-pt', 'data-hand', 'data-stop', 'data-fire'];
     for (const a of own.concat(...parts.map((p) => p.focusAttrs || []))) {
       const v = el.getAttribute(a);
       if (v) return `[${a}="${CSS.escape(v)}"]`;
@@ -445,7 +509,7 @@
     const sel = a && a !== document.body && a.getAttribute ? focusKey(a) : null;
     const caret = a && typeof a.selectionStart === 'number' ? [a.selectionStart, a.selectionEnd] : null;
     G.drafts = {};
-    document.querySelectorAll('#sheet input[data-jot], #sheet input[data-bring], #newBeat').forEach((el) => { if (el.value) G.drafts[focusKey(el)] = el.value; });
+    document.querySelectorAll('#sheet input[data-jot], #sheet input[data-bring], #sheet input[data-movebox], #newBeat').forEach((el) => { if (el.value) G.drafts[focusKey(el)] = el.value; });
     // the box being typed in keeps its words too (an end-panel box changes the state only on blur)
     const typing = sel && a.closest && a.closest('#sheet, #side') && /^(INPUT|TEXTAREA)$/.test(a.tagName) ? a.value : null;
     render();
@@ -540,6 +604,7 @@
     const brief = Object.keys(m.brief || {}).filter((k) => !k.endsWith('Html') && m.brief[`${k}Html`]);
     if (brief.length) h += sec('brief', 'Brief', brief.map((k) => `<h4 class="lab">${esc(BRIEF_LABELS[k] || k)}</h4>${m.brief[`${k}Html`]}`).join(''));
     h += sec('handover', 'Hand over', handoverHTML(d));
+    h += `<datalist id="rsPlaces">${knownPlaces().map((p) => `<option value="${esc(p.name)}"></option>`).join('')}</datalist>`;
     h += sec('pcs', 'The PCs', pcsHTML());
     h += sec('run', 'The run', (d.beats.length ? d.beats.filter((b) => !b.contingency).concat(d.beats.filter((b) => b.contingency)).map((b) => beforeBeat(b) + beatHTML(b, d)).join('') : '<p class="muted">This Plan has no beats the sheet can read: its prep is below, under Prep\'s working.</p>')
       + '<div class="addbeat"><input id="newBeat" placeholder="Name an improvised beat (Enter)" aria-label="Name an improvised beat" autocomplete="off"><button id="addBeat" type="button">+ Beat</button></div>');
@@ -585,9 +650,9 @@
     }).join('')}</ul></div>`;
   }
 
-  function handoverHTML() {
+  function handoverHTML(d) {
     const list = G.model.handouts || [];
-    return `${list.length ? handoutsHTML(list) : '<p class="muted">Nothing to hand over.</p>'}${mapsHTML()}`;
+    return `${partyWhereHTML(d)}${list.length ? handoutsHTML(list) : '<p class="muted">Nothing to hand over.</p>'}${mapsHTML()}`;
   }
   // The maps the player site would publish (decision 9), each with Show to the focused group's panel.
   function mapsHTML() {
@@ -614,7 +679,7 @@
   const PT_TITLE = { '': 'Not marked. Click: landed ✓', landed: 'Landed ✓. Click: tried and missed ✗', missed: 'Tried and missed ✗. Click: overtaken ⊘', overtaken: 'Overtaken ⊘. Click: clear' };
 
   function beatHTML(b, d) {
-    const lbl = b.contingency ? 'If triggered' : b.impro ? 'Improvised' : (b.place ? esc(nameOf(b.place)) : esc(b.placeText || ''));
+    const lbl = b.contingency ? 'If triggered' : b.newPlace ? 'New place (typed tonight)' : b.placeBeat ? 'Place' : b.impro ? 'Improvised' : (b.place ? esc(nameOf(b.place)) : esc(b.placeText || ''));
     const here = pcsAtBeat(b.key);
     let h = `<div class="beat ${here.length ? 'here' : ''}" id="beat:${esc(b.key)}" data-beat="${esc(b.key)}"><div class="bh"><span class="lbl">${lbl}</span><h3>${esc(b.title)}</h3>${b.sceneNote ? link(b.sceneNote, 'scene note') : ''}</div>`;
     // 1 Here: faces per standing place; a hub gets one row per spot
@@ -626,7 +691,10 @@
         const at = pcsAtSpot(b.key, spot && spot.key, hub);
         // a hub's spots each carry their own Show and Place on panel; a plain beat's are with its buttons
         const own = spot ? `${showBeatBtn(b, spot, gs)}${placeBtn(spot.key)}` : '';
-        return `<div class="here-strip">${label ? `<span class="sl">${label}</span>` : 'Here:'} ${pcs().map((p) => `<button class="pcb ${at.includes(p) ? 'on' : ''}" data-move="${esc(p.note)}" data-to="${esc(to)}" type="button" title="Put ${esc(p.name)} here" aria-pressed="${at.includes(p)}">${face(p.note)}${esc(first(p.name))}</button>`).join('')} <button data-all="${esc(to)}" type="button">Everyone</button>${own ? `<span class="pv-btns">${own}</span>` : ''}</div>`;
+        // the group standing here can be moved on, to any place (F13)
+        const position = spot ? spot.key : b.key;
+        const move = gs.some((g) => g.key === position) ? moveBoxHTML(position, 'here') : '';
+        return `<div class="here-strip">${label ? `<span class="sl">${label}</span>` : 'Here:'} ${pcs().map((p) => `<button class="pcb ${at.includes(p) ? 'on' : ''}" data-move="${esc(p.note)}" data-to="${esc(to)}" type="button" title="Put ${esc(p.name)} here" aria-pressed="${at.includes(p)}">${face(p.note)}${esc(first(p.name))}</button>`).join('')} <button data-all="${esc(to)}" type="button">Everyone</button>${own ? `<span class="pv-btns">${own}</span>` : ''}${move}</div>`;
       };
       h += hub ? b.spots.map((s) => strip(s, s.note ? link(s.note, s.name) : esc(s.name))).join('') : strip(null, '');
     }
@@ -637,7 +705,9 @@
     if (b.contingency) btns.push(`<button data-fire="${esc(b.key)}" class="${G.state.fired[b.key] ? 'fired' : ''}" type="button" aria-pressed="${!!G.state.fired[b.key]}">${G.state.fired[b.key] ? 'Fired ✓' : 'It fired'}</button>`);
     const stopped = G.state.stopped && G.state.stopped.beat === b.key;
     btns.push(`<button data-stop="${esc(b.key)}" class="${stopped ? 'on' : ''}" type="button" aria-pressed="${stopped}">${stopped ? 'Stopped here ✓' : 'Stopped here'}</button>`);
-    if (b.impro) btns.push(armBtn(`unimpro:${b.key}`, 'Remove this beat', `data-unimpro="${esc(b.key)}"`));
+    // a place typed tonight is taken back (Take off) once nobody stands there; any other improvised beat is removed
+    if (b.newPlace) { if (!here.length) btns.push(armBtn(`unplace:${b.key}`, 'Take off this place', `data-unplace="${esc(b.key)}"`, 'Take back this place typed tonight, and its lines')); }
+    else if (b.impro) btns.push(armBtn(`unimpro:${b.key}`, 'Remove this beat', `data-unimpro="${esc(b.key)}"`));
     for (const part of parts) if (part.beatButtons) btns.push(part.beatButtons(b) || '');
     h += `<div class="bbtns">${btns.filter(Boolean).join('')}</div>`;
     if (b.contingency) h += `<div class="kv"><b>Trigger</b><span>${b.triggerHtml || esc(b.trigger || '')}</span></div>${b.thenHtml || ''}`;
@@ -770,7 +840,11 @@
   }
 
   function placesHTML() {
-    const tile = (p) => { const pic = portraitOf(p); return `<div class="place"><div class="im">${pic ? `<img src="${esc(picUrl(pic))}" alt="">` : 'no picture yet'}</div><div class="cap">${link(p)}</div></div>`; };
+    const tile = (p) => {
+      const pic = portraitOf(p);
+      const btns = parts.map((x) => (x.placeButtons && x.placeButtons(p)) || '').join('');
+      return `<div class="place"><div class="im">${pic ? `<img src="${esc(picUrl(pic))}" alt="">` : 'no picture yet'}</div><div class="cap">${link(p)}${btns ? ` ${btns}` : ''}</div></div>`;
+    };
     const places = G.model.places || [];
     const maps = G.model.maps || [];
     if (!places.length && !maps.length) return '<p class="muted">None listed.</p>';
@@ -855,7 +929,8 @@
     const f = focusedGroup(gs);
     return `<ul class="pvlist">${gs.map((g) => {
       const pn = panelOf(g.key);
-      const back = pn.backdrop ? ` · <span class="muted">behind:</span> ${esc(showableMaps().includes(pn.backdrop) ? mapName(pn.backdrop) : nameOf(pn.backdrop))} <button type="button" class="mini" data-unback="${esc(g.key)}" title="Back to the group's own place">✕</button>` : '';
+      const typed = pn.backdrop ? G.state.improvised.find((i) => i.key === pn.backdrop && i.newPlace) : null;
+      const back = pn.backdrop ? ` · <span class="muted">behind:</span> ${esc(typed ? typed.title : showableMaps().includes(pn.backdrop) ? mapName(pn.backdrop) : nameOf(pn.backdrop))} <button type="button" class="mini" data-unback="${esc(g.key)}" title="Back to the group's own place">✕</button>` : '';
       return `<li class="${g.key === f ? 'focus' : ''}"><a class="lk" data-pgroup="${esc(g.key)}" title="Show goes to this panel">${esc(groupLabel(g.key, d))}</a>${g.key === f ? ' <span class="note">· Show goes here</span>' : ''}${back}</li>`;
     }).join('')}</ul>`;
   }
@@ -938,8 +1013,12 @@
     const group = focusedGroup();
     const p = n.path;
     let h = '';
-    if (showableMaps().includes(p) || String(n.type || '').toLowerCase() === 'location') h = backdropBtn(p, group, 'data-dshow');
-    else if (showablePerson(p)) {
+    const isPlace = String(n.type || '').toLowerCase() === 'location';
+    if (showableMaps().includes(p) || isPlace) {
+      h = backdropBtn(p, group, 'data-dshow');
+      // any place in the vault, not only the Plan's: a part's buttons for it (Fight here)
+      if (isPlace && (G.model.placeKeys || {})[p]) h += parts.map((x) => (x.placeButtons && x.placeButtons(p)) || '').join('');
+    } else if (showablePerson(p)) {
       const on = group && panelOf(group).people.includes(p);
       h = on ? armBtn(`unshow:${group}|${p}`, 'Remove from panel', `data-unshow="${esc(p)}" data-group="${esc(group)}"`, `Take ${n.name} off the players' screen`)
         : (group ? `<button type="button" data-dshow="${esc(p)}" data-group="${esc(group)}" title="Show on the players' screen (${esc(groupLabel(group))})">Show</button>` : '');
@@ -1018,6 +1097,7 @@
       if (d.unjot) armed(id, () => act({ type: 'unjot', jot: d.unjot }));
       else if (d.unbring) armed(id, () => act({ type: 'unbring', beat: d.beat, note: d.unbring, title: titleOfKey(d.beat) }));
       else if (d.unimpro) armed(id, () => act({ type: 'unimprovise', key: d.unimpro }));
+      else if (d.unplace) armed(id, () => act({ type: 'unplace', key: d.unplace }));
       else if (d.unshow) unshow(id, d.group, d.unshow);
       return;
     }
@@ -1041,6 +1121,8 @@
       return;
     }
     if (d.unback) { act({ type: 'backdrop', group: d.unback, note: null }); return; }
+    if (d.movepick) { moveGroup(d.moveg, { note: d.movepick }); return; }
+    if (d.movenew !== undefined) { moveGroup(d.moveg, { name: d.movenew }); return; }
     if (d.move) { const to = JSON.parse(d.to); G.ui.focus = to.beat; touch(to.spot || to.beat); act({ type: 'move', pc: d.move, to }); return; }
     if (d.all) { const to = JSON.parse(d.all); G.ui.focus = to.beat; touch(to.spot || to.beat); act({ type: 'moveAll', pcs: pcs().map((p) => p.note), to }); return; }
     if (d.off) { act({ type: 'move', pc: d.off, to: 'off' }); return; }
@@ -1132,11 +1214,24 @@
       return;
     }
     if (t.id === 'newBeat') { ev.preventDefault(); addBeat(); }
+    if (d.moveg !== undefined && t.tagName === 'INPUT') {
+      ev.preventDefault();
+      const top = placeChoices(t.value)[0];
+      if (top && !top.isNew) { moveGroup(d.moveg, { note: top.note }); return; }
+      if (t.value.trim()) { t.setCustomValidity(NO_PLACE); t.reportValidity(); }
+    }
   });
 
   document.addEventListener('input', (ev) => {
     const t = ev.target;
     if (t.setCustomValidity) t.setCustomValidity('');
+    if (t.dataset && t.dataset.moveg !== undefined && t.tagName === 'INPUT') {
+      const id = t.dataset.movebox;
+      G.ui.moveHits = G.ui.moveHits || {};
+      G.ui.moveHits[id] = placeChoices(t.value);
+      const box = document.querySelector(`[data-mhits="${CSS.escape(id)}"]`);
+      if (box) box.innerHTML = moveHitsHTML(t.dataset.moveg, G.ui.moveHits[id]);
+    }
     if (t.dataset && t.dataset.bring !== undefined) {
       const beat = t.dataset.bring;
       G.ui.hits[beat] = RS.castSearch(G.model.cast || [], t.value);

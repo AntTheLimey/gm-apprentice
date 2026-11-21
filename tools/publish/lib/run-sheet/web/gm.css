@@ -294,3 +294,12 @@ ol.to .ds { font: 500 .7rem var(--mono); white-space: nowrap; }
   .app.part-side .side { overflow: visible; }
   .top .bar { flex-wrap: wrap; white-space: normal; }
 }
+
+/* Move them (plan 6a Task 7): a box over every known place, with its choices under it */
+.movebox { position: relative; display: inline-flex; flex-direction: column; gap: 2px; min-width: 12rem; max-width: 18rem; margin-left: 6px; }
+.movebox input { width: 100%; font-size: .82rem; }
+.movebox .hits { display: flex; flex-direction: column; gap: 2px; }
+.movebox .hits:empty { display: none; }
+.movebox .hits button { text-align: left; font-size: .82rem; }
+.where-party { list-style: none; padding: 0; margin: 4px 0 10px; }
+.where-party li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 4px 0; }

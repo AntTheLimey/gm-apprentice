@@ -70,12 +70,25 @@
     const b = d.beats.find((x) => x.key === key);
     if (!b || state().fight) return;
     const id = RP.nextId();
-    // a contingency has no PCs of its own: the focused group fights it (decision 13)
-    const groups = b.contingency ? [RP.focusedGroup()].filter(Boolean) : undefined;
+    // a contingency has no PCs of its own: the focused group fights it (decision 13); so does a place, when no
+    // PC stands there (plan 6a Task 7, review P4)
+    const focus = RP.focusedGroup();
+    const groups = b.contingency || b.placeBeat ? [focus].filter(Boolean) : undefined;
     const built = FM.rowsForFight({ model: model(), derived: d, state: state(), beatKey: key, groups, idBase: id });
+    // Fight here puts the place behind the focused group's panel until End fight (P3); a typed place by its key.
+    // PCs who stand there already have it behind theirs, and their group is the fight's.
+    const backdrop = b.placeBeat && focus && !built.groups.includes(b.key) ? { group: focus, place: b.place || b.key } : undefined;
     RP.ui.focus = key;
     ui.mine = id;
-    RP.dispatch({ type: 'fightStart', beat: key, title: b.title, groups: built.groups, rows: built.rows, thresholds: built.thresholds, carried: carried(d) });
+    RP.dispatch({ type: 'fightStart', beat: key, title: b.title, groups: built.groups, rows: built.rows, thresholds: built.thresholds, carried: carried(d), ...(backdrop ? { backdrop } : {}) });
+  }
+  // Fight here at a place (plan 6a Task 7): its place beat first (the reader's key, so a second Fight here
+  // finds it again), then the fight. Nobody moves.
+  function fightHere(note) {
+    const key = (model().placeKeys || {})[note];
+    if (!key || state().fight) return;
+    if (!RP.derived().beats.some((b) => b.key === key)) RP.dispatch({ type: 'improvise', key, title: RP.nameOf(note), place: note });
+    startFight(key);
   }
 
   function addTo(add, label) {
@@ -406,6 +419,11 @@
         return `<div>${w.note ? RP.face(w.note, 'face', d) : ''} <b>${w.note ? RP.link(w.note, name) : esc(name)}</b>${pa ? ` <span class="muted">${pa}</span>` : ''}</div>`;
       }).join('')}${(b.arrivals || []).map((a) => RP.cueHTML(b, a, new Set())).join('')}</div>`;
     }
+    // a fight at a place moved nobody there (Part 6 call 4): say so, and who stands there
+    if (b.placeBeat) {
+      const there = (model().pcs || []).filter((p) => { const x = state().positions[p.note]; return x && x.beat === b.key; });
+      h += `<p class="note">${b.newPlace ? 'A place typed tonight. ' : ''}Fight here moves nobody: ${there.length ? `${esc(there.map((p) => first(p.name)).join(', '))} ${there.length > 1 ? 'stand' : 'stands'} here` : 'no PC stands here'}.</p>`;
+    }
     if ((b.ifs || []).length) {
       h += `<h4 class="lab">If they…</h4><div class="tw"><table class="ifs"><tbody>${b.ifs.map((r) => `<tr class="${lit.has(r.key) ? 'lit' : ''}"><td>${lit.has(r.key) ? '<b class="now">NOW</b> ' : ''}${r.doHtml || esc(r.do)}</td><td>${r.thenHtml || esc(r.then)}</td></tr>`).join('')}</tbody></table></div>`;
     }
@@ -429,6 +447,11 @@
   // ------------------------------------------------------------------ the part
   const part = {
     focusAttrs: ['data-fini', 'data-fhp', 'data-fmax', 'data-fac', 'data-fother'],
+    // Fight here on a place tile or a place's drawer (plan 6a Task 7); nothing while a fight runs
+    placeButtons(note) {
+      if (!allowed() || state().fight || !(model().placeKeys || {})[note]) return '';
+      return `<button type="button" data-fplace="${esc(note)}" title="Fight here: the place's creatures are ticked in, its people benched; only PCs standing here are ticked, and nobody moves">Fight here</button>`;
+    },
     beatButtons(b) {
       if (!allowed()) return '';
       const f = state().fight;
@@ -511,6 +534,7 @@
     const d = t.dataset;
     const f = state().fight;
     if (d.fight) { startFight(d.fight); return true; }
+    if (d.fplace) { fightHere(d.fplace); return true; }
     if (d.faddbeat) { addTo({ beat: d.faddbeat }); return true; }
     if (d.fafter) { const [row, st] = split(d.fafter); const lf = lastFight(); if (lf) RP.dispatch({ type: 'afterClear', fight: lf.id, row, status: st }); return true; }
     if (t.id === 'fAfterAll') { const lf = lastFight(); if (lf) RP.dispatch({ type: 'afterClearAll', fight: lf.id }); return true; }
