@@ -511,11 +511,23 @@
     }
     return closed;
   }
+  // A box that still holds typed words opens its list again when it is pressed or tabbed back into (re-review).
+  function reopenMoveList(input) {
+    if (!input || !input.value.trim()) return;
+    const id = input.dataset.movebox;
+    G.ui.moveHits = G.ui.moveHits || {};
+    if ((G.ui.moveHits[id] || []).length) return;
+    G.ui.moveHits[id] = placeChoices(input.value);
+    const box = document.querySelector(`[data-mhits="${CSS.escape(id)}"]`);
+    if (box) box.innerHTML = moveHitsHTML(input.dataset.moveg, G.ui.moveHits[id]);
+  }
   document.addEventListener('pointerdown', (ev) => {
     const mb = ev.target.closest && ev.target.closest('.movebox');
     const input = mb && mb.querySelector('input[data-movebox]');
     closeMoveLists(input ? input.dataset.movebox : null);
+    if (input && ev.target === input) reopenMoveList(input);
   }, true);
+  document.addEventListener('focusin', (ev) => { if (ev.target.matches && ev.target.matches('input[data-movebox]')) reopenMoveList(ev.target); });
   // Move a group's PCs to a known place (`note`) or a typed one (`name`). The place's beat becomes the focus.
   function moveGroup(group, { note, name }) {
     const g = groups().find((x) => x.key === group);

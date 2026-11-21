@@ -28,6 +28,9 @@
       end: { vitals: {}, where: {}, advancement: '' },
       attached: {},
       fight: null, fights: [], panels: {}, shownEver: {},
+      // the notes whose rows the players saw by name in a fight that has ended (final review, ledger 86): a foe
+      // starts seen from it, never an inferred ally (re-review)
+      seenEver: {},
       // the last side the GM set per note (plan 6a): 'foe' | 'ally' | 'neutral'
       sides: {},
     };
@@ -65,7 +68,7 @@
     }
     if (out.stopped !== null && kind(out.stopped) !== 'object') throw bad(`stopped is ${kind(out.stopped)}, not object`);
     // The fight and the players' panels: a running fight is an object or null, each fight's rows a list
-    // of objects, and each group's panel an object. `shownEver` holds a time (or true) per note: any value.
+    // of objects, and each group's panel an object. `shownEver` and `seenEver` hold a time (or true) per note: any value.
     if (out.fight !== null && kind(out.fight) !== 'object') throw bad(`fight is ${kind(out.fight)}, not object`);
     entries(out.fights, 'fights');
     for (const [where, f] of [...(out.fight ? [['fight', out.fight]] : []), ...out.fights.map((f, i) => [`fights[${i}]`, f])]) {

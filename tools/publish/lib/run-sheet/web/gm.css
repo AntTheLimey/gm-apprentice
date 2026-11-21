@@ -249,12 +249,14 @@ ol.to.measure > li { width: 1px; }
 .fin, .fadd { display: flex; gap: 5px; flex-wrap: wrap; align-items: center; margin: 0 0 5px; font-size: .8rem; }
 .fin .gchip { border: 1px solid var(--line); border-radius: 999px; padding: 0 8px; background: var(--bg); }
 .fadd button { font-size: .78rem; padding: 1px 7px; }
-.fadd .addname { position: relative; }
+/* the Add list is a row of the Add line itself, never over the order: while the GM types the order moves down by
+   its height, and back when it closes (final review P-A1) */
+.fadd .addname { display: contents; }
 .fadd #fAddName { width: 11rem; font-size: .8rem; }
 .fadd #fAddCount { width: 3.2rem; font-size: .8rem; }
-.fadd .fhits { position: absolute; left: 0; top: 100%; z-index: 3; display: flex; flex-direction: column; min-width: 14rem; background: var(--panel); box-shadow: 0 4px 12px rgba(0, 0, 0, .15); }
+.fadd .fhits { order: 99; flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 3px; }
 .fadd .fhits:empty { display: none; }
-.fadd .fhits button { text-align: left; border-radius: 0; }
+.fadd .fhits button { text-align: left; }
 .fadd .fhits .t { color: var(--muted); font-size: .72rem; margin-left: 6px; }
 .fadd .fhits .new { font-style: italic; }
 .fjoins { display: flex; gap: 5px 12px; flex-wrap: wrap; margin: 0 0 5px; font-size: .78rem; color: var(--muted); }

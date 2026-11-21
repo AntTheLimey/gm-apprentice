@@ -324,11 +324,13 @@
     const at = foe.rechargeAt || {};
     const seenFrom = typeof ctx.seenFrom[foe.note] === 'string' && ctx.seenFrom[foe.note] ? ctx.seenFrom[foe.note] : null;
     const shown = Boolean(ctx.state.shownEver && ctx.state.shownEver[foe.note]);
+    // seen in an ended fight: a foe starts seen (name only); an inferred ally does not (re-review)
+    const seenBefore = Boolean(ctx.state.seenEver && ctx.state.seenEver[foe.note]) && !(ally && !start.byGm);
     return withStart(blankRow({
       kind: ally ? 'ally' : 'foe', neutral: start.side === 'neutral', sideFrom: start.why, seenFrom,
       note: foe.note, foeKey: foe.key, type, name: baseName(ctx.model, foe),
       group: ctx.foeGroup, mod: num(foe.init) || 0, ac: num(foe.ac), hp, max, conds, exhaustion, out,
-      seen: (ally && start.byGm) || shown || Boolean(seenFrom),
+      seen: (ally && start.byGm) || shown || seenBefore || Boolean(seenFrom),
       lrMax: foe.legendaryResistance || 0, lr: foe.legendaryResistance || 0,
       laMax: foe.legendaryActions || 0, la: foe.legendaryActions || 0,
       recharge: (foe.recharge || []).map((name) => ({ name, at: isNum(at[name]) ? at[name] : 6, ready: true, rolled: null })),

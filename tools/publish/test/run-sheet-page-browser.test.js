@@ -763,6 +763,10 @@ describe('Move them and Fight here in a browser', { skip: browserSkip() }, () =>
       assert.strictEqual(await page.evaluate('document.querySelectorAll("#handover [data-mhits] button").length'), 0, 'a press outside: no list');
       assert.strictEqual(await page.evaluate('document.activeElement.id'), 'hjot', 'the press did what it says');
       assert.strictEqual(await page.evaluate('document.querySelector("#handover input[data-moveg]").value'), 'orthx', 'the words stay');
+      // re-review (minor 1): pressing back into the box, words still in it, opens its list again
+      await page.click('#handover input[data-moveg]');
+      await page.waitFor('document.querySelectorAll("#handover [data-mhits] button").length > 0');
+      assert.ok((await page.evaluate('Array.from(document.querySelectorAll("#handover [data-mhits] button"), (b) => b.textContent)')).length > 0, 'the list is back');
       const s = (await api(run, 'GET', '/api/state')).state;
       assert.strictEqual(s.positions[ADA].beat, gate.key, 'nobody moved');
       assert.deepStrictEqual((await probe(page)).errors, []);

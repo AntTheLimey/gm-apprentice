@@ -51,12 +51,12 @@ const signOf = (tone) => SIGN[familyOf.get(String(tone || '').trim().toLowerCase
 
 const found = (re, text) => { const m = re.exec(String(text || '')); return m ? m[0] : null; };
 
-// A Plan phrase that counts: one with no negation or hedge before it in its own clause (a clause ends at
-// . ; , : ( ) or a dash), and no `?` or `/` straight after it there. "will never fight as an ally" and "not
-// with the party" are no ally; "Enemy of the Order, fights with the party" is. A who line is read whole; a
-// Quick Reference row cell by cell (its cells are `|`-joined). This fails safe: a hedged phrase makes no ally,
-// so no name reaches the players' screen by it.
-const CLAUSE_END = /[.;,:()\u2013\u2014]|\s-\s/g;
+// A Plan phrase that counts: one whose whole sentence (it ends at `.`, `;`, `!` or a line end) holds no negation
+// or hedge, before or after it (final review O1, widened by the re-review: a clause was too narrow, "is not, for now,
+// with the party" read as an ally). "will never fight as an ally", "not with the party" and "Enemy of the Order,
+// fights with the party" are no ally. A who line is read whole; a Quick Reference row cell by cell (its cells are
+// `|`-joined). This fails safe: a hedged phrase makes no ally, so no name reaches the players' screen by it.
+const SENTENCE_END = /[.;!\n]/g;
 // Returns { said } for a phrase that counts, { hedged: true } when every phrase found is hedged (the GM's own
 // words say no: the row is a foe, and nothing later infers an ally), or {} when there is none.
 function phraseIn(text, perCell) {
@@ -65,11 +65,11 @@ function phraseIn(text, perCell) {
     for (const m of part.matchAll(PHRASES)) {
       const before = part.slice(0, m.index);
       let start = 0;
-      for (const e of before.matchAll(CLAUSE_END)) start = e.index + e[0].length;
+      for (const e of before.matchAll(SENTENCE_END)) start = e.index + e[0].length;
       const tail = part.slice(m.index + m[0].length);
-      const end = tail.search(CLAUSE_END);
+      const end = tail.search(SENTENCE_END);
       const after = end < 0 ? tail : tail.slice(0, end);
-      if (!HEDGE.test(before.slice(start)) && !/[?/]/.test(after)) return { said: m[0] };
+      if (!HEDGE.test(before.slice(start)) && !HEDGE.test(after)) return { said: m[0] };
       hedged = true;
     }
   }

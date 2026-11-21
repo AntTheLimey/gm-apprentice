@@ -505,7 +505,7 @@
       r.sideFrom = 'you set it';
       if (side === 'ally') r.seen = true;
       else if (was === 'ally') {
-        const shown = Boolean(r.note && s.shownEver && s.shownEver[r.note]);
+        const shown = Boolean(r.note && ((s.shownEver && s.shownEver[r.note]) || (s.seenEver && s.seenEver[r.note])));
         const foeStart = r.seenTick === true || r.seenTick === false ? r.seenTick : (shown || Boolean(r.seenFrom));
         r.seen = (r.seen === true && Boolean(r.in)) || foeStart;
       }
@@ -531,12 +531,14 @@
       sayRoster(s, f, at, `Fight ends ${f.round ? `after round ${f.round}` : 'before the first turn'}: `, rosterItems(s, f), '.');
       if (!Array.isArray(s.fights)) s.fights = [];
       s.fights.push({ id: f.id, beat: f.beat, title: f.title, round: f.round, startedAt: f.startedAt, endedAt: at, rows: f.rows, carried: f.carried || {} });
-      // a row the players saw by name (seen and ticked in) is remembered as seen for its note (`shownEver`, which only ever makes a row
-      // start seen), so a turned ally never comes back next fight as a "Stranger" (final review, ledger 86)
+      // a row the players saw by name (seen and ticked in) is remembered for its note (`seenEver`), so a turned ally
+      // never comes back next fight as a "Stranger" (final review, ledger 86). It starts a foe seen (its name, never
+      // its HP); an ally the reader only infers does not start seen from it (re-review): that is `seenFrom`'s, or the
+      // GM's own act tonight
       for (const r of f.rows || []) {
         if (!r.note || r.seen !== true || !r.in || (r.kind !== 'foe' && r.kind !== 'ally')) continue;
-        if (!s.shownEver || typeof s.shownEver !== 'object' || Array.isArray(s.shownEver)) s.shownEver = {};
-        if (!s.shownEver[r.note]) s.shownEver[r.note] = at || true;
+        if (!s.seenEver || typeof s.seenEver !== 'object' || Array.isArray(s.seenEver)) s.seenEver = {};
+        if (!s.seenEver[r.note]) s.seenEver[r.note] = at || true;
       }
       // the place Fight here put behind a panel goes, and the group's own place is back; one the GM chose since stays
       const bd = f.backdrop;

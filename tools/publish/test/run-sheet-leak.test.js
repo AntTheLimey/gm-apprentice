@@ -728,6 +728,33 @@ describe('the players\' screen follows the row\'s side (plan 6a Task 5 / review 
     }
   });
 
+  // re-review (minor 3): a name the players saw in an ended fight never starts an INFERRED ally seen, with its HP
+  it('a foe seen by name, its side dropped for a mixed group, then inferred an ally: the next fight sends no name and no HP', () => {
+    const m = JSON.parse(JSON.stringify(model));
+    for (const f of m.beats.flatMap((x) => x.foes || []).concat((m.cast || []).map((c) => c.foe).filter(Boolean))) {
+      if (f.note === MEPHIT) Object.assign(f, { ally: true, allyBy: 'relationships', allyFrom: 'relationships: +2 with this party' });
+    }
+    for (const c of m.cast || []) if (c.note === MEPHIT) Object.assign(c, { ally: true, allyBy: 'relationships' });
+    let s = fight(m);
+    assert.deepEqual([1, 2].map((c) => [rowOf(s, MEPHIT, c).kind, rowOf(s, MEPHIT, c).seen]), [['ally', false], ['ally', false]]);
+    // the GM sets one to foe (a mixed group: the note's side is dropped) and shows its name
+    s = setSide(s, MEPHIT, 'foe', 1);
+    assert.equal((s.sides || {})[MEPHIT], undefined);
+    s = act(s, { type: 'seen', fight: s.fight.id, row: rowOf(s, MEPHIT, 1).id, on: true });
+    assert.equal(shown(view(s, m), s, MEPHIT, 1).name, 'Ice Mephit 1', 'the players saw its name');
+    s = act(s, { type: 'fightEnd', fight: s.fight.id });
+    // the next fight: the reader infers both allies again; neither starts seen from what the players saw
+    const id = `p1-${++n}`;
+    const g = gateOf(m);
+    const b = M.rowsForFight({ model: m, derived: RS.derive(m, s), state: s, beatKey: g.key, idBase: id });
+    s = RS.reduce(s, { id, type: 'fightStart', beat: g.key, title: g.title, groups: b.groups, rows: b.rows, thresholds: b.thresholds }, new Date(T0).toISOString());
+    assert.deepEqual([1, 2].map((c) => [rowOf(s, MEPHIT, c).kind, rowOf(s, MEPHIT, c).seen]), [['ally', false], ['ally', false]]);
+    const v = view(s, m);
+    for (const copy of [1, 2]) assert.deepEqual(keys(shown(v, s, MEPHIT, copy)), FOE_ROW, `mephit ${copy}: a foe's keys`);
+    assert.ok(!JSON.stringify(v).includes('7341') && !render(v).includes('7341'), 'no HP');
+    clean(v, new Set(['Brother Venn']), 'an inferred ally the players once saw as a foe');
+  });
+
   it('after End fight the panel shows no order, whatever the sides', () => {
     let s = fight();
     s = setSide(s, MEPHIT, 'ally', 1);
@@ -848,20 +875,20 @@ describe('a negated Plan ally phrase makes no seen ally (final review O1)', () =
   let n = 0;
   const act = (s, a) => RS.reduce(s, { id: `o1-${++n}`, ...a }, new Date(Date.parse('2026-11-20T19:00:00Z') + n * 60000).toISOString());
 
-  it('"will never fight as an ally" and "not with the party" send no name and no HP', () => {
+  it('"will never fight as an ally", "not with the party" and "is not, for now, with the party" send no name and no HP', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rs-o1-'));
     made.push(dir);
     fs.cpSync(FIXTURE, dir, { recursive: true });
     const planPath = path.join(dir, S.PLAN);
     const text = fs.readFileSync(planPath, 'utf8').replace(/\r\n/g, '\n')
       .replace('**[[Rime Imp]]:** rides its shoulder', '**[[Rime Imp]]:** rides its shoulder and will never fight as an ally')
-      .replace('**[[Frost Wolf]]:** arrives in round three', '**[[Frost Wolf]]:** arrives in round three')
+      .replace('**[[Ice Mephit]] (2):** circling the torches', '**[[Ice Mephit]] (2):** circling the torches, and is not, for now, with the party')
       .replace('## Contingency Scenes', '## NPC Quick Reference\n\n| NPC | Role This Session | Key Detail | Location |\n|-----|---|---|---|\n| [[Frost Wolf]] | Hunter | not with the party | [[The Gate]] |\n\n## Contingency Scenes');
-    assert.ok(text.includes('will never fight as an ally') && text.includes('not with the party'));
+    assert.ok(text.includes('will never fight as an ally') && text.includes('not with the party') && text.includes('is not, for now,'));
     fs.writeFileSync(planPath, text);
     const m = readRunSheet(dir, S.PLAN, { party: S.PARTY });
     const gate = m.beats.find((b) => b.title === 'Ashfall Reckoning');
-    for (const note of [IMP, WOLF]) {
+    for (const note of [IMP, WOLF, S.NOTES.MEPHIT]) {
       const f = gate.foes.find((x) => x.note === note);
       assert.ok(f, note);
       assert.deepEqual([f.ally, f.allyBy], [false, null], `${note} is a foe`);
@@ -879,7 +906,7 @@ describe('a negated Plan ally phrase makes no seen ally (final review O1)', () =
     vm.runInNewContext(fs.readFileSync(path.join(__dirname, '..', 'lib', 'run-sheet', 'web', 'players', 'render.js'), 'utf8'), sandbox);
     const texts = [JSON.stringify(v), sandbox.self.RunSheetPlayersRender.renderPlayers(v)];
     for (const t of texts) {
-      for (const bad of ['Rime Imp', 'Frost Wolf', '6175', '7346', '7347']) assert.ok(!t.includes(bad), `"${bad}" reached the players`);
+      for (const bad of ['Rime Imp', 'Frost Wolf', 'Ice Mephit', '6175', '7341', '7346', '7347']) assert.ok(!t.includes(bad), `"${bad}" reached the players`);
       assert.ok(!/(?<![0-9])21\/21(?![0-9])/.test(t), 'the Imp\'s HP reached the players');
     }
   });

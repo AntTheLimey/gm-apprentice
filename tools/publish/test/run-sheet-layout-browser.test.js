@@ -238,59 +238,46 @@ describe('the fight: adding anyone, by real input', { skip: browserSkip() }, () 
     });
   });
 
-  // final review P-A1: the Add list closes on Esc and on any press outside it; the press lands where it was aimed
-  it('the Add list closes on Esc and on a press outside, and a name it covered picks its row, not a list item', async () => {
-    const run = await start();
-    await withPage({ width: 1280, height: 762 }, async (page) => {
-      const was = await startedFight(page, run);
-      const count = was.fight.rows.length;
-      const listOpen = () => page.evaluate('document.querySelectorAll("#fHits button").length');
-      await tap(page, '#fAddName');
-      await page.type('a');
-      await page.waitFor('document.querySelector("#fHits button")');
-      await page.key('Escape');
-      assert.strictEqual(await listOpen(), 0, 'Esc: no list');
-      assert.deepStrictEqual(await page.evaluate('[document.activeElement.id, document.activeElement.value]'), ['fAddName', 'a'], 'focus and words stay');
-      // open again; a row's name the list lies over
-      await page.key('Backspace');
-      await page.type('a');
-      await page.waitFor('document.querySelector("#fHits button")');
-      const list = await page.box('#fHits');
-      const under = await page.evaluate(`(() => { const L = ${JSON.stringify(list)};
-        const n = Array.from(document.querySelectorAll('#fOrder [data-fpeek]')).find((e) => { const r = e.getBoundingClientRect();
-          return r.left + r.width / 2 > L.left && r.left + r.width / 2 < L.right && r.top + r.height / 2 > L.top && r.top + r.height / 2 < L.bottom; });
-        return n ? n.dataset.fpeek : null; })()`);
-      assert.ok(under, 'the open list covers a row\'s name');
-      // a press outside (a damage box) closes it, and lands in the box
-      const dmg = was.fight.rows.find((r) => r.kind === 'pc');
-      await tap(page, `[data-fhp="${dmg.id}"]`);
-      assert.strictEqual(await listOpen(), 0, 'a press outside: no list');
-      assert.strictEqual(await page.evaluate('document.activeElement.dataset.fhp'), dmg.id, 'the press landed in the damage box');
-      // the name that was under the list now takes the click: its row is picked, nobody is added
-      await tap(page, `[data-fpeek="${under}"]`);
-      let p = await until(page, `p.saved === "Saved" && p.pending === 0`);
-      assert.strictEqual(p.fight.rows.length, count, 'nobody added');
-      const name = p.fight.rows.find((r) => r.id === under).name;
-      assert.deepStrictEqual(await page.evaluate('[document.querySelector("#acting .why").textContent, document.querySelector("#acting h3").textContent]'), ['picked', name]);
-      // with the list open, a click on a name outside it closes the list and picks that row
-      await tap(page, '#fAddName');
-      await page.type('a');
-      await page.waitFor('document.querySelector("#fHits button")');
-      const L2 = await page.box('#fHits');
-      const other = await page.evaluate(`(() => { const L = ${JSON.stringify(L2)};
-        const n = Array.from(document.querySelectorAll('#fOrder [data-fpeek]')).find((e) => { const r = e.getBoundingClientRect();
-          return r.top > L.bottom + 2 && e.dataset.fpeek !== ${JSON.stringify(under)}; });
-        return n ? n.dataset.fpeek : null; })()`);
-      assert.ok(other, 'a name below the list');
-      await tap(page, `[data-fpeek="${other}"]`);
-      assert.strictEqual(await listOpen(), 0);
-      p = await until(page, `p.saved === "Saved" && p.pending === 0`);
-      assert.strictEqual(p.fight.rows.length, count, 'still nobody added');
-      assert.strictEqual(await page.evaluate('document.querySelector("#acting h3").textContent'), p.fight.rows.find((r) => r.id === other).name);
-      assert.strictEqual(await page.evaluate('document.querySelector("#fAddName").value'), 'aa', 'the typed words stay');
-      assert.deepStrictEqual(p.errors, []);
+  // final review P-A1 (re-review ruling): the Add list is in flow, never over the order, so a click meant for a row's
+  // name with the list OPEN lands on that name. Esc closes it; a press outside closes it once its click has landed.
+  for (const w of [1280, 1449]) {
+    it(`${w}: with the Add list open no item lies over a row, and a held click on Ben Hart's name picks him, adding nobody`, async () => {
+      const run = await start();
+      await withPage({ width: w, height: 762 }, async (page) => {
+        const was = await startedFight(page, run);
+        const count = was.fight.rows.length;
+        const ben = was.fight.rows.find((r) => r.note === BEN);
+        const listOpen = () => page.evaluate('document.querySelectorAll("#fHits button").length');
+        await tap(page, '#fAddName');
+        await page.type('a');
+        await page.waitFor('document.querySelector("#fHits button")');
+        await page.key('Escape');
+        assert.strictEqual(await listOpen(), 0, 'Esc: no list');
+        assert.deepStrictEqual(await page.evaluate('[document.activeElement.id, document.activeElement.value]'), ['fAddName', 'a'], 'focus and words stay');
+        await page.key('Backspace');
+        await page.type('a');
+        await page.waitFor('document.querySelector("#fHits button")');
+        // the list is open: no item's box meets any row's box
+        const overlap = await page.evaluate(`(() => {
+          const rows = Array.from(document.querySelectorAll('#side ol.to > li'), (e) => e.getBoundingClientRect());
+          const items = Array.from(document.querySelectorAll('#fHits button'), (e) => e.getBoundingClientRect());
+          const meet = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+          return { items: items.length, hits: items.filter((i) => rows.some((r) => meet(i, r))).length }; })()`);
+        assert.ok(overlap.items > 0, 'the list is open');
+        assert.strictEqual(overlap.hits, 0, `no list item over a row: ${JSON.stringify(overlap)}`);
+        assert.ok((await listOpen()) > 0, 'still open before the click');
+        // a held click on Ben Hart's name, the list still open: it is his name the pointer meets
+        const r = await page.click(`[data-fpeek="${ben.id}"]`, { holdMs: 90 });
+        assert.strictEqual(r.hit, true, 'the name itself is under the pointer');
+        const p = await until(page, 'p.saved === "Saved" && p.pending === 0');
+        assert.strictEqual(p.fight.rows.length, count, 'nobody added');
+        assert.deepStrictEqual(await page.evaluate('[document.querySelector("#acting .why").textContent, document.querySelector("#acting h3").textContent]'), ['picked', 'Ben Hart']);
+        await page.waitFor('document.querySelectorAll("#fHits button").length === 0');
+        assert.strictEqual(await page.evaluate('document.querySelector("#fAddName").value'), 'a', 'the typed words stay');
+        assert.deepStrictEqual(p.errors, []);
+      });
     });
-  });
+  }
 
   it('Undo takes back an untouched add with a real click; a touched add has no Undo', async () => {
     const run = await start();

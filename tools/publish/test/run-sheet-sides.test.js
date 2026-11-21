@@ -105,11 +105,15 @@ describe('a row\'s starting side', () => {
     }
     // the GM's "never" stops the vault's inference too: Wyndham's affiliation says loyal to party
     assert.deepStrictEqual(pick(side(index, 'Wyndham', { whoText: 'will never fight as an ally' })), [false, null]);
-    // a hedge in another clause or another cell does not cancel the phrase
-    assert.deepStrictEqual(pick(side(index, 'Ferrante', { whoText: 'Enemy of the Order, fights with the party' })), [true, 'plan']);
+    // re-review: the whole sentence counts, so a negation set off by commas, or a hedge anywhere in it, is no ally
+    for (const t of ['is not, for now, with the party', 'Enemy of the Order, fights with the party', 'with the party, maybe']) {
+      assert.deepStrictEqual(pick(side(index, 'Ferrante', { whoText: t })), [false, null], t);
+    }
+    // a hedge in another sentence or another cell does not cancel the phrase
+    assert.deepStrictEqual(pick(side(index, 'Ferrante', { whoText: 'Not a soldier. Fights with the party' })), [true, 'plan']);
     assert.deepStrictEqual(pick(side(index, 'Ferrante', { quickRefText: 'Not seen since spring | with the party' })), [true, 'plan']);
     // a second, plain phrase still counts after a hedged one
-    assert.deepStrictEqual(pick(side(index, 'Ferrante', { whoText: 'not with the party at first; later as an ally' })), [true, 'plan']);
+    assert.deepStrictEqual(pick(side(index, 'Ferrante', { whoText: 'not with the party at first; later as an ally' })), [true, 'plan'], 'a second sentence');
     // the who line's plain phrase wins over a hedged Quick Reference cell
     assert.deepStrictEqual(pick(side(index, 'Ferrante', { whoText: 'with the party', quickRefText: 'not with the party' })), [true, 'plan']);
   });

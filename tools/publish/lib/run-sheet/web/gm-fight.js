@@ -512,9 +512,9 @@
       return `<button type="button" data-faddbeat="${esc(b.key)}" title="Bring this contingency's people into the fight: ${esc(b.title)}">+ If: ${esc(t)}</button>`;
     }).join(' ');
   }
-  // The Add list closes on Esc and on any press outside the Add control (final review P-A1), as the
-  // Colours menu does: the press goes on to do what it says (a row's name under the list's place picks that row,
-  // never a list item), and the typed words stay in the box.
+  // The Add list is a row of the Add line, in flow: it never lies over the order (final review P-A1, re-review). It
+  // closes on Esc at once, and after any press outside the Add control once that press's click has landed: closing
+  // moves the order back up, so it must not happen under the pointer mid-press. The typed words stay in the box.
   function closeAddList() {
     if (!ui.addHits.length) return false;
     ui.addHits = [];
@@ -525,9 +525,14 @@
   // The count box and the Add button are the Add control's own: a press on them keeps the list (type a name, set
   // the count, then pick "+ New").
   const ADD_PARTS = '.addname, #fAddCount, #fAddGo';
+  let closeOwed = false;
+  const closeIfOwed = () => { if (!closeOwed) return; closeOwed = false; closeAddList(); };
   document.addEventListener('pointerdown', (ev) => {
-    if (ui.addHits.length && !(ev.target.closest && ev.target.closest(ADD_PARTS))) closeAddList();
+    if (ui.addHits.length && !(ev.target.closest && ev.target.closest(ADD_PARTS))) closeOwed = true;
   }, true);
+  window.addEventListener('click', () => setTimeout(closeIfOwed, 0));
+  document.addEventListener('pointerup', () => { if (closeOwed) setTimeout(closeIfOwed, 0); }, true);
+  document.addEventListener('pointercancel', closeIfOwed, true);
   function hitsHTML() {
     return ui.addHits.map((c) => (c.isNew
       ? `<button type="button" class="new" data-faddnew="${esc(c.name)}">${esc(c.label)}</button>`

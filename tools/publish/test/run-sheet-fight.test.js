@@ -1625,7 +1625,7 @@ describe('sides in the fight', () => {
     s = side(s, ASH, 'foe');
     assert.equal(row(s, ASH).seen, true, 'set back to foe, the name stays (ruling I2)');
     s = end(s);
-    assert.ok(s.shownEver[ASH], 'remembered as seen');
+    assert.ok(s.seenEver[ASH], 'remembered as seen');
     s = fightAt(s, GATE);
     assert.deepEqual([row(s, ASH).kind, row(s, ASH).seen], ['foe', true]);
     const { forPlayers } = require('../lib/run-sheet/players');
@@ -1635,7 +1635,7 @@ describe('sides in the fight', () => {
     // a foe never seen leaves nothing behind
     let t = gateFight();
     t = end(t);
-    assert.ok(!t.shownEver[ASH]);
+    assert.ok(!t.seenEver[ASH]);
     t = fightAt(t, GATE);
     assert.equal(row(t, ASH).seen, false);
   });
