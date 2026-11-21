@@ -1,0 +1,97 @@
+'use strict';
+// The session's own party: who sat at this session's table, as PC note paths for `readPcs`.
+// The order, first source that names at least one PC wins (one that names none falls through):
+//   1. a list field on the session index (`pcs`, `party`, `players_present`, `present`, `attendance`, `characters`);
+//   2. the session's wrap-up, the subjects of its `### PC Carry-Forward` entries;
+//   3. the Plan's `## PC Roster & Arcs`;
+//   4. `given`, the caller's list (the active PCs).
+// In the live app source 2 never fires: a wrapped-up session cannot be opened (`pickSession`), so
+// tonight's party comes from the index field, the Plan roster or the active PCs [P-S1]. It is here
+// for the reader on its own and for the no-Plan page.
+// Names and links resolve through `index.resolve`. Never throws.
+
+const path = require('node:path');
+const pt = require('./plan-text');
+const { stemOf } = require('./notes');
+const { wrapUpOf } = require('./sessions');
+const { displayTitleOf } = require('../scanner');
+const { canonicalNfc } = require('../unicode');
+
+const FIELDS = ['pcs', 'party', 'players_present', 'present', 'attendance', 'characters'];
+const low = (s) => canonicalNfc(String(s == null ? '' : s)).replace(/[_*`]/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+
+function sessionParty({ index, sessionPath, planBody, given }) {
+  const fmOf = (p) => (p && index.has(p) ? index.read(p).fm || {} : {});
+  // A note whose frontmatter does not parse is let through a link: `readPcs` warns about it by name.
+  const isPc = (p) => !!p && index.has(p) && (String(fmOf(p).type || '').trim().toLowerCase() === 'pc' || !!index.read(p).unreadable);
+  const pcNotes = index.notes().filter((n) => String(fmOf(n).type || '').trim().toLowerCase() === 'pc');
+  const byName = new Map();
+  const firsts = new Map();
+  for (const n of pcNotes) {
+    const full = low(stemOf(n));
+    byName.set(full, n);
+    const f = full.split(' ')[0];
+    firsts.set(f, firsts.has(f) ? null : n);
+  }
+  // A link or a plain name to a PC note path, or null. A first name counts only when one PC has it.
+  const pcOf = (link, name) => {
+    if (link) { const hit = index.resolve(link); if (isPc(hit)) return hit; }
+    const k = low(name || link);
+    return (k && (byName.get(k) || firsts.get(k))) || null;
+  };
+  const collect = (items) => {
+    const out = [];
+    for (const [link, name] of items) { const p = pcOf(link, name); if (p && !out.includes(p)) out.push(p); }
+    return out;
+  };
+  const items = (text) => {
+    const l = pt.links(text)[0] || null;
+    return [l, l ? null : String(text).replace(/\|.*$/, '').trim()];
+  };
+
+  // 1. the session index's list field
+  const fm = fmOf(sessionPath);
+  const field = FIELDS.find((k) => fm[k] !== undefined && fm[k] !== null && fm[k] !== '');
+  if (field) {
+    const v = fm[field];
+    const party = collect((Array.isArray(v) ? v : String(v).split(/[,;\n]/)).map((x) => items(String(x))));
+    if (party.length) return { party, from: 'index' };
+  }
+
+  // 2. the wrap-up's PC Carry-Forward entries
+  if (sessionPath) {
+    const pages = index.notes().map((p) => ({
+      title: stemOf(p), vaultPath: p.replace(/\.md$/i, ''), displayTitle: displayTitleOf(fmOf(p), stemOf(p)),
+      frontmatter: fmOf(p), sourcePath: path.posix.join('/', p), rel: p,
+    }));
+    const wrap = wrapUpOf(index, sessionPath, pages);
+    const sec = wrap ? [3, 2].map((n) => pt.sections(index.read(wrap).body, n).find((s) => /^pc\s+carry[- ]?forward/i.test(s.title))).find(Boolean) : null;
+    if (sec) {
+      const lines = sec.text.split('\n');
+      const heads = lines.filter((l) => /^#{4}\s/.test(l)).map((l) => items(l.replace(/^#+\s+/, '').split(/\s[—–-]\s|\s\(/)[0]));
+      // an entry is a heading when the section has any; else a top-level bullet led by a bold subject
+      const subjects = heads.length ? heads : lines.map((l) => /^[-*]\s+\*\*(.+?)\*\*/.exec(l)).filter(Boolean).map((m) => items(m[1].replace(/:\s*$/, '')));
+      const party = collect(subjects);
+      if (party.length) return { party, from: 'wrapup' };
+    }
+  }
+
+  // 3. the Plan's PC Roster & Arcs
+  const roster = pt.sections(planBody || '', 2).find((s) => /^pc\s+roster/i.test(s.title));
+  if (roster) {
+    const subjects = [];
+    for (const h of roster.text.split('\n').filter((l) => /^#{3,}\s/.test(l))) subjects.push(items(h.replace(/^#+\s+/, '').split(/\s[—–-]\s|\s\(/)[0]));
+    for (const cells of pt.tableRows(roster.text)) if (cells[0]) subjects.push(items(cells[0].replace(/[*]/g, '')));
+    for (const b of pt.bullets(roster.text)) {
+      const m = /^\*\*(.+?)\*\*/.exec(b.text);
+      if (m) subjects.push(items(m[1].replace(/:\s*$/, '')));
+    }
+    const party = collect(subjects);
+    if (party.length) return { party, from: 'plan' };
+  }
+
+  // 4. the caller's list
+  return { party: Array.isArray(given) ? given : [], from: 'given' };
+}
+
+module.exports = { sessionParty };

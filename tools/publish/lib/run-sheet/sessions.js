@@ -160,4 +160,4 @@ function stateIdOf(session) {
   return `${where}--${slug(stemOf(session.index))}`;
 }
 
-module.exports = { listSessions, pickSession, tableLogOf, isPlayed, stateIdOf };
+module.exports = { listSessions, pickSession, tableLogOf, isPlayed, stateIdOf, wrapUpOf };

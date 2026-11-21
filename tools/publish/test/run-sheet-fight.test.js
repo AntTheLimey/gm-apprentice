@@ -763,6 +763,9 @@ describe('the fight in the state', () => {
       s = F(s, { type: 'hp', row: row(s, ADA).id, entry: '-5' });
       const NEW = 'Characters/PCs/Ada Rowe.md';
       fs.renameSync(path.join(tmp, ADA), path.join(tmp, NEW));
+      // the Plan's roster is the party now, so a rename carries its link along, as Obsidian does
+      const planFile = path.join(tmp, PLAN);
+      fs.writeFileSync(planFile, fs.readFileSync(planFile, 'utf8').replace('- **[[Ada Moss]]** (Pat)', '- **[[Ada Rowe]]** (Pat)'));
       const m2 = readRunSheet(tmp, PLAN, { party: [NEW, BEN] });
       const d = RS.derive(m2, s);
       const r = d.fight.view.rows.find((x) => x.note === ADA);

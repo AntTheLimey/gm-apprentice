@@ -12,6 +12,7 @@ const pt = require('./plan-text');
 const { buildIndex, stemOf } = require('./notes');
 const { readBeats, sceneSection } = require('./beats');
 const { readPcs, SECTIONS: PC_SECTIONS } = require('./party');
+const { sessionParty } = require('./session-party');
 const { readPeople, TITLE: PEOPLE_TITLE } = require('./people');
 const { readHandouts, TITLE: HANDOUTS_TITLE } = require('./handouts');
 const { foesFor } = require('./foes');
@@ -228,7 +229,9 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
       if (f.ally && planHp.has(f.note)) { f.hpNow = planHp.get(f.note); f.carriedFrom = plan; }
     }
   }
-  const pcsRead = readPcs(body, index, party);
+  // The session's own party (the index field, the wrap-up, the Plan's roster), else the one given.
+  const own = sessionParty({ index, sessionPath: sessionIndex, planBody: body, given: party });
+  const pcsRead = readPcs(body, index, own.party);
   add(pcsRead.warnings);
   const peopleRead = readPeople(body, index);
   add(peopleRead.warnings);
@@ -342,6 +345,7 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
     brief: { overview: joined('overview'), world: joined('world'), stops: joined('stops') },
     handouts: handoutsRead.handouts,
     pcs: pcsRead.pcs,
+    partyFrom: own.from,
     unmatchedPcLines: pcsRead.unmatched,
     beats,
     people: peopleRead.people,
