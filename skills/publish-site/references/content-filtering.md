@@ -222,7 +222,9 @@ build. It holds every file the GM has decided on: `publishing`,
 
 A file publishes if and only if it is under `publishing`. Being under `excluded` or `needs_decision` never
 publishes it; those lists only quiet the "not on the publish list"
-warning.
+warning. A session or chapter the build holds back as prep (status
+prepped or planned, source prep) never gets that warning: it goes on
+the list once it is played (`manifest publish-played`).
 
 The file may also hold `accepted:`, the leak check's findings the GM
 accepted, each `{ page, text, note }`. `leaks accept` writes it; nobody edits

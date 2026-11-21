@@ -1083,6 +1083,7 @@ function buildSite(options) {
   // Played sessions the manifest would withhold (#277): reported once, at the end of the
   // build, because the per-file warning drowns in a real build's log.
   const unpublishedPlayedSessions = [];
+  const unlistedRecords = [];
   if (manifest && !gm) {
     const scanned = new Set(corpus.map(vaultRelPathOf));
     for (const entry of manifest.publishing) {
@@ -1098,6 +1099,7 @@ function buildSite(options) {
     // broken link. Warn on registrable types that are in neither the Publishing nor the
     // Excluded list (a deliberate exclusion is a decision, not an oversight).
     // The publish list is enforced as an allowlist (the filter below), so the warning is true.
+    // The warning itself waits for the verdicts below (#828).
     const registered = new Set([...manifest.publishing, ...(manifest.excluded || [])]);
     for (const page of corpus) {
       const type = page.frontmatter && page.frontmatter.type;
@@ -1108,8 +1110,7 @@ function buildSite(options) {
           unpublishedPlayedSessions.push({ rel, title: page.title || path.basename(rel, '.md') });
           continue;
         }
-        const kind = type === 'chapter' ? 'chapter' : 'session';
-        console.warn(`  WARNING: "${rel}" (type: ${type}) is present in the vault but not on the publish list — this ${kind} will NOT publish. Put it on the list with manifest apply --publish "${rel}" (manifest publish-played does it for finished sessions).`);
+        unlistedRecords.push({ page, rel, type });
       }
     }
   }
@@ -1152,6 +1153,16 @@ function buildSite(options) {
     published.push(shownPage);
   }
   const withCode = (...codes) => pages.filter(p => codes.includes(verdicts.get(p).code));
+
+  // A session or chapter the build holds back as prep (status prepped or planned, a prep stage or
+  // source) is not an oversight: it publishes once it is played (#828). Listing it now would
+  // publish it before play, so only the others are named.
+  for (const { page, rel, type } of unlistedRecords) {
+    const verdict = verdicts.get(page);
+    if (verdict && verdict.code.startsWith('AUTO_EXCLUDED_')) continue;
+    const kind = type === 'chapter' ? 'chapter' : 'session';
+    console.warn(`  WARNING: "${rel}" (type: ${type}) is present in the vault but not on the publish list — this ${kind} will NOT publish. Put it on the list with manifest apply --publish "${rel}" (manifest publish-played does it for finished sessions).`);
+  }
 
   const draftExcluded = withCode('DRAFT_EXCLUDED');
   // The counts of what the player site holds back are the player build's to print.

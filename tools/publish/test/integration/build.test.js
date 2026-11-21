@@ -732,6 +732,47 @@ describe('build integration', () => {
         'a deliberately excluded session must not warn');
     });
 
+    it('does not warn about a session or chapter the build holds back as prep (#828)', () => {
+      const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-test-prep-unreg-'));
+      const vault = path.join(tmp, 'vault');
+      fs.cpSync(path.join(fixturesDir, 'with-manifest'), vault, { recursive: true });
+      const write = (name, fm) => fs.writeFileSync(path.join(vault, 'Sessions', name),
+        `---\n${fm}\naliases: []\ntags: []\n---\n\n## Recap\n\nSoon.\n`);
+      write('Session 12 - Prepped.md', 'type: session\nsession_number: 12\nstatus: prepped');
+      write('Session 13 - Prep Source.md', 'type: session\nsession_number: 13\nsource: prep');
+      write('Chapter 3.md', 'type: chapter\nstatus: planned');
+      write('Session 14 - Unprepped.md', 'type: session\nsession_number: 14');
+
+      const configPath = path.join(tmp, 'config.json');
+      writeSiteConfig(configPath, {
+        vaultPath: vault,
+        outputDir: path.join(tmp, 'docs'),
+        attachmentsDir: '_attachments',
+        siteTitle: 'Prep',
+        siteUrl: 'https://example.github.io/t',
+        excludeDirs: ['_meta', '_Templates'],
+        excludeSections: ['GM Notes'],
+        folderMap: { 'Characters/NPCs': 'characters/npcs', Locations: 'locations', Sessions: 'sessions' },
+      }, 2);
+
+      const warnings = [];
+      const realWarn = console.warn;
+      console.warn = (...args) => warnings.push(args.join(' '));
+      try {
+        build({ configPath });
+      } finally {
+        console.warn = realWarn;
+        fs.rmSync(tmp, { recursive: true, force: true });
+      }
+
+      const unlisted = warnings.filter(w => w.includes('not on the publish list'));
+      for (const name of ['Session 12 - Prepped', 'Session 13 - Prep Source', 'Chapter 3']) {
+        assert.ok(!unlisted.some(w => w.includes(name)), `${name} must not warn: ${JSON.stringify(unlisted)}`);
+      }
+      assert.ok(unlisted.some(w => w.includes('Session 14 - Unprepped')),
+        `an unlisted session that is not prep still warns: ${JSON.stringify(warnings)}`);
+    });
+
     it('ends the build with one summary line naming unpublished played sessions (#277)', () => {
       const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-test-played-'));
       const vault = path.join(tmp, 'vault');
