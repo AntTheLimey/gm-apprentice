@@ -226,7 +226,10 @@ body.dragging, body.dragging * { cursor: col-resize !important; user-select: non
 .app.part-side.panef .sheet > .panestrip:hover { background: var(--ice-soft); }
 .vtitle { writing-mode: vertical-rl; transform: rotate(180deg); font: 650 .9rem var(--display); color: var(--bad); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-height: calc(100% - 40px); }
 .fview { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; min-width: 0; }
-.fview .fo { flex: 0 1 auto; min-height: 0; overflow: auto; padding: 8px 10px 6px; }
+/* the order: its toolbar stays put, its rows scroll in their own box (F8) */
+.fview .fo { flex: 0 1 auto; min-height: 0; display: flex; flex-direction: column; padding: 8px 10px 6px; }
+.fview .fotop { flex: none; }
+.fview ol.to { flex: 0 1 auto; min-height: 68px; overflow-y: auto; overflow-x: hidden; scrollbar-gutter: stable; }
 .fview .act { flex: 1 0 160px; min-height: 160px; overflow: auto; margin: 0; border-width: 2px 0 0; border-radius: 0; }
 .app.part-side.beside .fview { display: grid; grid-template-columns: var(--ordw) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
 .app.part-side.beside .fview .fo { height: 100%; }
@@ -336,6 +339,7 @@ ol.to .ds { font: 500 .7rem var(--mono); white-space: nowrap; }
   .app.part-side .side { overflow: visible; }
   .app.part-side .grip { display: none; }
   .app.part-side .sheet { position: static; height: auto; overflow: visible; padding: 14px 20px 120px; }
+  .fview ol.to { overflow: visible; }
   .top .bar { flex-wrap: wrap; white-space: normal; }
 }
 

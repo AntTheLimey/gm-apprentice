@@ -599,8 +599,10 @@
     const w = (m.warnings || []).length;
     $('#warnBtn').textContent = w ? `${w} prep note${w === 1 ? '' : 's'}` : 'No prep notes';
     renderNotes();
-    // the right pane keeps its place through the redraw
+    // the boxes that scroll on their own keep their place through the redraw
     const wasPane = Boolean(G.pane);
+    const kept = {};
+    document.querySelectorAll('[data-keepscroll]').forEach((el) => { kept[el.dataset.keepscroll] = el.scrollTop; });
     const sheetTop = $('#sheet').scrollTop;
     G.pane = null;
     for (const part of parts) if (!G.pane && part.pane) G.pane = part.pane(d) || null;
@@ -608,6 +610,7 @@
     $('#sheet').innerHTML = sheetHTML(d);
     renderSide(d);
     if (G.pane && wasPane) $('#sheet').scrollTop = sheetTop;
+    document.querySelectorAll('[data-keepscroll]').forEach((el) => { if (kept[el.dataset.keepscroll]) el.scrollTop = kept[el.dataset.keepscroll]; });
     G.om = G.pane ? orderMin() : ORDER_FLOOR;
     applyLayout();
     drawerShow();

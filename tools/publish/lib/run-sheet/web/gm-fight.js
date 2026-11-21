@@ -5,7 +5,7 @@
 // never sees the model. Rolls come from the server's `/api/roll`: no dice here.
 //
 // While a fight runs (and is not paused) it takes the middle column, `#side`: the turn order, one line per
-// row, with the acting creature's panel under it (beside
+// row, in its own scroll box under a toolbar that stays put, with the acting creature's panel under it (beside
 // it once the middle is wide enough: gm.js's layout). The right pane, `#sheet`, holds only the fight's beat cut
 // (`pane`). Paused, the beats come back with a strip of the order kept at the top. After End fight, a box above
 // the beat lists every status still on.
@@ -155,6 +155,7 @@
     const g = state().fight;
     // a lone foe keeps the turn into the next round: that is a new turn too, and rolls its recharges
     if (!g || (g.turn === wasTurn && g.round === wasRound)) return;
+    keepTurnInView();
     if (!wasStarted) scrollToCut();
     rechargeRolls(g);
   }
@@ -223,6 +224,22 @@
     const top = el.getBoundingClientRect().top;
     if (top >= topH() && top < window.innerHeight / 2) { RP.probe(); return; }
     scrollTo(el);
+  }
+  // Next keeps the turn in view: the order's own box scrolls (never the page) so the current row and the one
+  // after it are inside it (review F8). A new round starts at the top.
+  function keepTurnInView() {
+    const ol = $('#side ol.to');
+    const cur = ol && ol.querySelector('li.cur');
+    if (!cur || ol.scrollHeight <= ol.clientHeight) return;
+    let nx = cur.nextElementSibling;
+    while (nx && nx.classList.contains('bench')) nx = nx.nextElementSibling;
+    const at = (el) => el.getBoundingClientRect().top - ol.getBoundingClientRect().top + ol.scrollTop;
+    const top = at(cur);
+    const end = nx || cur;
+    const bottom = at(end) + end.offsetHeight;
+    if (top < ol.scrollTop) ol.scrollTop = top;
+    else if (bottom > ol.scrollTop + ol.clientHeight) ol.scrollTop = Math.min(top, bottom - ol.clientHeight);
+    RP.probe();
   }
   function scrollToBeat(key) {
     const strip = $('#fightStrip');
@@ -366,7 +383,7 @@
   function sideHTML(d) {
     const f = d.fight;
     const view = f.view;
-    let h = '<div class="fview"><div class="fo" id="fOrder">';
+    let h = '<div class="fview"><div class="fo" id="fOrder"><div class="fotop">';
     h += `<div class="fh"><b>${f.started ? `Round ${esc(f.round)}` : 'Setting up'}</b>`
       + '<button type="button" id="fRoll" title="Roll d20 + modifier for every ticked foe and ally with no number yet (never a PC)">Roll</button>'
       + '<button type="button" id="fSort" title="Sort once by initiative; whose turn it is stays">Sort</button>'
@@ -393,7 +410,7 @@
         + offer.names.map((x) => `<label class="spend"><input type="checkbox" data-fspend="${esc(x)}" ${offer.chosen === x ? 'checked' : ''}> spend ${esc(x)}</label>`).join('')
         + `<button type="button" id="fAreaGo" class="primary" ${n ? '' : 'disabled'}>Apply</button><button type="button" id="fAreaDone">Done</button></div>`;
     }
-    h += `<ol class="to">${view.rows.map((r) => rowHTML(r, f, view)).join('')}</ol></div>`;
+    h += `</div><ol class="to" data-keepscroll="order">${view.rows.map((r) => rowHTML(r, f, view)).join('')}</ol></div>`;
     h += `${actingHTML(d)}</div>`;
     return h;
   }

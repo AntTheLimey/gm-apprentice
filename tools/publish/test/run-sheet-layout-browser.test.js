@@ -855,3 +855,41 @@ describe('10d: the players\' preview', { skip: browserSkip() }, () => {
     });
   });
 });
+
+describe('10e: the order\'s own scroll', { skip: browserSkip() }, () => {
+  it('big fight: Next keeps the turn in the order\'s box, never the page, and the toolbar stays put', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await startedFight(page, run);
+      await addNew(page, 'Bouncer', 8);
+      let p = await until(page, 'p.fight.rows.filter((r) => /^Bouncer/.test(r.name)).length === 8 && p.pending === 0');
+      assert.ok(p.fight.rows.length >= 14, `${p.fight.rows.length} rows`);
+      const look = () => page.evaluate(`(() => {
+        const ol = document.querySelector('#side ol.to'); const o = ol.getBoundingClientRect();
+        const cur = ol.querySelector('li.cur'); let nx = cur && cur.nextElementSibling; while (nx && nx.classList.contains('bench')) nx = nx.nextElementSibling;
+        const r = (e) => e && e.getBoundingClientRect(); const c = r(cur); const n = r(nx);
+        const b = document.querySelector('#fNext').getBoundingClientRect(); const at = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
+        return { box: [o.top, o.bottom], scrolls: ol.scrollHeight > ol.clientHeight, cur: c && [c.top, c.bottom], next: n && [n.top, n.bottom],
+          y: scrollY, nextTop: at === document.querySelector('#fNext') || document.querySelector('#fNext').contains(at), nextIn: b.top >= 0 && b.bottom <= innerHeight,
+          act: document.querySelector('#acting').getBoundingClientRect().height };
+      })()`);
+      let l = await look();
+      assert.ok(l.scrolls, 'the order scrolls in its own box');
+      for (let i = 1; i <= 10; i++) {
+        assert.ok(l.nextTop && l.nextIn, `before Next ${i}: #fNext in view and on top`);
+        const turn = p.fight.turn;
+        await tap(page, '#fNext');
+        p = await until(page, `p.fight.turn !== ${JSON.stringify(turn)} && p.pending === 0`);
+        await page.sleep(50);
+        l = await look();
+        const inBox = (x) => x[0] >= l.box[0] - 0.5 && x[1] <= l.box[1] + 0.5;
+        assert.ok(inBox(l.cur), `Next ${i}: the current row ${l.cur} in the box ${l.box}`);
+        if (l.next) assert.ok(inBox(l.next), `Next ${i}: the next row ${l.next} in the box ${l.box}`);
+        assert.strictEqual(l.y, 0, `Next ${i}: the page did not scroll`);
+        assert.ok(l.nextTop && l.nextIn, `Next ${i}: #fNext in view and on top`);
+        assert.ok(l.act >= 150, `Next ${i}: the acting panel ${l.act} px`);
+      }
+      sane(await P(page), 'big fight');
+    });
+  });
+});
