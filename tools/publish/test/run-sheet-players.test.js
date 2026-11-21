@@ -384,15 +384,18 @@ describe('the players\' view', () => {
 
 describe('the PR review and the proof', () => {
   const WYRM = 'Creatures/Glacier Wyrm.md';
-  it('L1: a fight row\'s kind and unseen word come from the model, never the state', () => {
+  // retitled by plan 6a fix round 1 / review M5: under P1 the row's side is the row's, and an ally goes up
+  // named only once seen; whether a row is a PC, and its unseen word, are still the model's (L1)
+  it('P1: a row\'s side is the row\'s but an unseen ally row is a foe; a PC and the unseen word come from the model', () => {
     const s = clone(benFight());
     const w = s.fight.rows.find((r) => r.note === WYRM);
     w.kind = 'ally';
+    assert.equal(w.seen, false, 'the hand-made ally row is unseen');
     const m1 = s.fight.rows.find((r) => r.note === MEPHIT);
     m1.word = 'The white dragon from the Plan';
     const v = view(s);
     const text = JSON.stringify(v);
-    assert.ok(!text.includes('Glacier Wyrm') && !text.includes('7342'), 'a foe sent as an ally is still a foe');
+    assert.ok(!text.includes('Glacier Wyrm') && !text.includes('7342'), 'a foe sent as an unseen ally is still a foe');
     assert.ok(!text.includes('white dragon'), 'the word is the model\'s');
     assert.ok(orderNames(v).includes('Mephit 1'));
     // a PC row named in the state only: no state words
@@ -401,6 +404,18 @@ describe('the PR review and the proof', () => {
     ben.note = 'Characters/PCs/Nobody.md';
     ben.name = 'Secret Name';
     assert.ok(!JSON.stringify(view(t)).includes('Secret'));
+  });
+
+  // plan 6a fix round 1 / review M5, M6: the deliberate path. The GM page is the trusted author of fight rows,
+  // so a row it sends as a seen ally goes up named, with its HP
+  it('P1: a row sent as a seen ally goes up with its name and HP', () => {
+    const s = clone(benFight());
+    const w = s.fight.rows.find((r) => r.note === WYRM);
+    Object.assign(w, { kind: 'ally', seen: true });
+    const r = orderRow(view(s), 'Glacier Wyrm');
+    assert.ok(r, 'named');
+    assert.match(r.hp, /^7342\/7342$/);
+    assert.ok(Array.isArray(r.statuses));
   });
 
   it('proof M2: a Fight where no PC stands shows the order on the panels of every ticked PC', () => {

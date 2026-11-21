@@ -595,17 +595,57 @@ describe('the players\' screen follows the row\'s side (plan 6a Task 5 / review 
     }
   };
 
-  it('a model-ally set to foe or neutral sends no HP and no name', () => {
-    let s = fight();
-    let v = view(s);
-    assert.deepEqual(keys(shown(v, s, VENN)), PC_ROW, 'Brother Venn starts as the Plan\'s ally');
-    assert.equal(shown(v, s, VENN).name, 'Brother Venn');
+  // changed on purpose by plan 6a Task 5 fix round 1 / review I2: a model-ally set to foe or neutral sends
+  // no HP, and its name only if the players were already shown it (seen and ticked in as an ally)
+  it('a model-ally set to foe or neutral sends no HP; the name only if it was already shown', () => {
     for (const side of ['foe', 'neutral']) {
+      let s = fight();
+      let v = view(s);
+      assert.deepEqual(keys(shown(v, s, VENN)), PC_ROW, 'Brother Venn starts as the Plan\'s ally');
+      assert.equal(shown(v, s, VENN).name, 'Brother Venn');
       s = setSide(s, VENN, side);
       v = view(s);
       assert.deepEqual(keys(shown(v, s, VENN)), FOE_ROW, `set to ${side}: a foe's keys`);
-      clean(v, new Set(), `Brother Venn set to ${side}`);
+      assert.equal(shown(v, s, VENN).name, 'Brother Venn', 'shown already: the name stays');
+      assert.ok(!JSON.stringify(v).includes('7343') && !render(v).includes('7343'), `set to ${side}: no HP`);
+      clean(v, new Set(['Brother Venn']), `Brother Venn set to ${side}`);
+      // benched, so never shown: no name either
+      let b = fight();
+      b = act(b, { type: 'fightTick', fight: b.fight.id, row: rowOf(b, VENN).id, in: false });
+      b = setSide(b, VENN, side);
+      b = act(b, { type: 'fightTick', fight: b.fight.id, row: rowOf(b, VENN).id, in: true });
+      v = view(b);
+      assert.deepEqual(keys(shown(v, b, VENN)), FOE_ROW);
+      clean(v, new Set(), `Brother Venn, benched, set to ${side}`);
     }
+  });
+
+  // plan 6a Task 5 fix round 1 / review C1: one copy's switch is that copy's, never the note's
+  it('one mephit of two set to ally: the next fight is foe-shaped and nothing is carried', () => {
+    let s = fight();
+    s = setSide(s, MEPHIT, 'ally', 1);
+    s = act(s, { type: 'fightEnd', fight: s.fight.id });
+    assert.deepEqual(RS.derive(model, s).sidesSet, []);
+    const id = `p1-${++n}`;
+    const g = gateOf(model);
+    const b = M.rowsForFight({ model, derived: RS.derive(model, s), state: s, beatKey: g.key, idBase: id });
+    s = RS.reduce(s, { id, type: 'fightStart', beat: g.key, title: g.title, groups: b.groups, rows: b.rows, thresholds: b.thresholds }, new Date(T0).toISOString());
+    const v = view(s);
+    for (const copy of [1, 2]) assert.deepEqual(keys(shown(v, s, MEPHIT, copy)), FOE_ROW, `mephit ${copy}`);
+    clean(v, new Set(['Brother Venn']), 'the next fight');
+  });
+
+  it('an unseen inferred ally set to foe sends no name', () => {
+    const m = JSON.parse(JSON.stringify(model));
+    for (const f of m.beats.flatMap((x) => x.foes || []).concat((m.cast || []).map((c) => c.foe).filter(Boolean))) {
+      if (f.note === VENN) Object.assign(f, { ally: true, allyBy: 'relationships', allyFrom: 'relationships: +2 with this party' });
+    }
+    let s = fight(m);
+    assert.equal(rowOf(s, VENN).seen, false);
+    s = setSide(s, VENN, 'foe');
+    const v = view(s, m);
+    assert.deepEqual(keys(shown(v, s, VENN)), FOE_ROW);
+    clean(v, new Set(), 'an unseen inferred ally set to foe');
   });
 
   it('a model-foe set to ally sends its name and HP', () => {
@@ -619,7 +659,8 @@ describe('the players\' screen follows the row\'s side (plan 6a Task 5 / review 
     clean(v, new Set(['Ice Mephit', 'Ice Mephit 1', '7341', 'Brother Venn']), 'a mephit set to ally');
     // the other mephit is still a foe, numbered by its word
     assert.deepEqual(keys(shown(v, s, MEPHIT, 2)), FOE_ROW);
-    assert.match(shown(v, s, MEPHIT, 2).name, /^(?:Mephit \d|A mephit)$/);
+    // plan 6a fix round 1 / review M3: the copy switched to ally still counts, so the other keeps its number
+    assert.equal(shown(v, s, MEPHIT, 2).name, 'Mephit 2');
   });
 
   it('a withheld foe set to ally shows only its withheld word', () => {

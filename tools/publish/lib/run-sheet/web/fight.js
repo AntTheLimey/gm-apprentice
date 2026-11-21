@@ -52,10 +52,11 @@
     return r;
   };
 
-  // The number an unseen foe keeps, fixed when it is first ticked in (decision 5).
+  // The number an unseen foe keeps, fixed when it is first ticked in (decision 5); an unseen ally keeps one
+  // too, so its label never drifts (plan 6a fix round 1 / review M4).
   function numberUnseen(f) {
     const nums = FM.unseenNumbers(f.rows, (r) => r.word || '');
-    for (const r of f.rows) if (r.kind === 'foe' && r.in && (r.unseenN === null || r.unseenN === undefined) && nums.has(r.id)) r.unseenN = nums.get(r.id);
+    for (const r of f.rows) if (FM.sideOfRow(r) && r.in && (r.unseenN === null || r.unseenN === undefined) && nums.has(r.id)) r.unseenN = nums.get(r.id);
   }
 
   // A Lair row lists the rows whose block has lair actions.
@@ -402,24 +403,31 @@
       // back to unseen: a row that never had a number takes the next one
       if (!r.seen) numberUnseen(f);
     }),
-    // The GM sets a row's side (plan 6a): ally makes it seen; foe or neutral makes it as seen as a foe starts
-    // (the GM's own tick, else shown before or the model's seenFrom the row carries), so a Plan ally turned
-    // never puts its name or HP on the players' screen by itself. The note's last side is kept in `s.sides`,
-    // which the next fight starts from and the Table Log carries to the next session.
+    // The GM sets a row's side (plan 6a): ally makes it seen. Leaving ally, a row the players have seen and
+    // that is ticked in stays seen (its name only, a foe's keys: plan 6a fix round 1 / review I2); else it is
+    // as seen as a foe starts (the GM's own tick, else shown before or the model's seenFrom the row carries),
+    // so a Plan ally turned never puts its name on the players' screen by itself. Foe to neutral and back
+    // leaves seen alone: the players see the two alike. The note's side is kept in `s.sides` (which the next
+    // fight starts from and the Table Log carries) only while every copy of it in the fight has that side:
+    // one Guard of three turned is that Guard's, never the note's (review C1).
     setSide: onRow((s, f, r, a, at) => {
       const side = a.side;
-      if (!FM.isSide(side) || !FM.sideOfRow(r) || FM.sideOfRow(r) === side) return;
+      const was = FM.sideOfRow(r);
+      if (!FM.isSide(side) || !was || was === side) return;
       r.kind = side === 'ally' ? 'ally' : 'foe';
       r.neutral = side === 'neutral';
       r.sideFrom = 'you set it';
       if (side === 'ally') r.seen = true;
-      else {
+      else if (was === 'ally') {
         const shown = Boolean(r.note && s.shownEver && s.shownEver[r.note]);
-        r.seen = r.seenTick === true || r.seenTick === false ? r.seenTick : (shown || Boolean(r.seenFrom));
+        const foeStart = r.seenTick === true || r.seenTick === false ? r.seenTick : (shown || Boolean(r.seenFrom));
+        r.seen = (r.seen === true && Boolean(r.in)) || foeStart;
       }
       if (r.note) {
         if (!s.sides || typeof s.sides !== 'object' || Array.isArray(s.sides)) s.sides = {};
-        s.sides[r.note] = side;
+        const copies = f.rows.filter((x) => x.note === r.note && FM.sideOfRow(x));
+        if (copies.every((x) => FM.sideOfRow(x) === side)) s.sides[r.note] = side;
+        else delete s.sides[r.note];
       }
       touch(r, at);
       numberUnseen(f);

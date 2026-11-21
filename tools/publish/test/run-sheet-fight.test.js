@@ -82,7 +82,10 @@ describe('the fight in the state', () => {
     // Brother Ash and the wolves share the withheld person word, so all four are numbered
     assert.equal(row(s, ASH).unseenN, 1);
     assert.deepEqual(rows(s, WOLF).map((r) => r.unseenN), [2, 3, 4], 'numbered when first ticked in');
-    assert.equal(row(s, LUCAN).unseenN, null, 'an ally is never unseen');
+    // changed on purpose by plan 6a fix round 1 / review M4: Lucan is an inferred ally (the Plan's quick
+    // reference), so he starts unseen and keeps a number in the stranger run like a foe
+    assert.equal(row(s, LUCAN).seen, false);
+    assert.equal(row(s, LUCAN).unseenN, 5, 'an unseen ally keeps a number');
     assert.equal(rows(s, WOLF)[0].word, 'a stranger', 'the withheld person word');
     assert.deepEqual(s.fight.groups, [GATE.key]);
     assert.equal(s.fight.round, 0);
@@ -406,7 +409,8 @@ describe('the fight in the state', () => {
     s = join(s, { cast: MEPHIT, count: 2 });
     s = join(s, { cast: MEPHIT, count: 1 });
     assert.deepEqual(rows(s, MEPHIT).map((r) => r.copy), [1, 2, 3]);
-    assert.deepEqual(rows(s, MEPHIT).map((r) => r.unseenN), [5, 6, 7], 'they share the stranger word with Ash and the wolves');
+    // plan 6a fix round 1 / review M4: the unseen Lucan holds 5 in the stranger run
+    assert.deepEqual(rows(s, MEPHIT).map((r) => r.unseenN), [6, 7, 8], 'they share the stranger word with Ash, the wolves and Lucan');
     const d = RS.derive(model, s);
     assert.deepEqual(d.fight.view.rows.filter((r) => r.note === MEPHIT).map((r) => r.gmName), ['Ice Mephit 1', 'Ice Mephit 2', 'Ice Mephit 3']);
     // ally copies get rowIds note, note#2
@@ -890,9 +894,10 @@ describe('the fight in the state', () => {
     assert.equal(s.fight.rows.filter((r) => r.kind === 'lair').length, 1);
     assert.deepEqual(lair.of, rows(s, WOLF).map((r) => r.id));
     assert.equal(rows(s, WOLF)[3].copy, 4);
-    assert.equal(rows(s, WOLF)[3].unseenN, 5);
+    // plan 6a fix round 1 / review M4: the unseen Lucan holds 5 in the stranger run
+    assert.equal(rows(s, WOLF)[3].unseenN, 6);
     s = F(s, { type: 'fightTick', row: rows(s, WOLF)[3].id, in: false });
-    assert.equal(rows(s, WOLF)[3].unseenN, 5, 'kept once given');
+    assert.equal(rows(s, WOLF)[3].unseenN, 6, 'kept once given');
     // an unticked foe gets its number when first ticked in
     let t = move(fresh(), ADA, GATE);
     t = fightAt(t, GATE);
@@ -903,7 +908,7 @@ describe('the fight in the state', () => {
     t = RS.reduce(t, { id, type: 'fightJoin', fight: t.fight.id, rows: j.rows, tick: [], groups: [], thresholds: [], label: 'M' }, now());
     assert.equal(row(t, MEPHIT).unseenN, null, 'unticked: no number');
     t = F(t, { type: 'fightTick', row: row(t, MEPHIT).id, in: true });
-    assert.equal(row(t, MEPHIT).unseenN, 5, 'the next number when first ticked in');
+    assert.equal(row(t, MEPHIT).unseenN, 6, 'the next number when first ticked in (Lucan holds 5: review M4)');
   });
 
   it('derive names rows for the GM and picks the acting panel', () => {
@@ -1184,7 +1189,8 @@ describe('the PR review and the proof', () => {
     assert.equal(row(s, ASH).unseenN, null);
     assert.deepEqual(rows(s, WOLF).map((r) => r.unseenN), [1, 2, 3], 'the wolves start at 1');
     s = F(s, { type: 'seen', row: row(s, ASH).id, on: false });
-    assert.equal(row(s, ASH).unseenN, 4);
+    // plan 6a fix round 1 / review M4: the unseen Lucan holds 4
+    assert.equal(row(s, ASH).unseenN, 5);
   });
 
   it('proof Low: a join line agrees in number', () => {
@@ -1266,9 +1272,18 @@ describe('sides in the fight', () => {
     assert.equal(row(s, ASH).seen, false);
     s = side(s, ASH, 'ally');
     assert.equal(row(s, ASH).seen, true);
+    // plan 6a fix round 1 / review I2: ticked in and seen as an ally, the players have its name: it stays
     s = side(s, ASH, 'neutral');
-    assert.equal(row(s, ASH).seen, false, 'no publish, no Show, no tick: unseen again');
+    assert.equal(row(s, ASH).seen, true, 'seen and ticked in: still seen');
+    s = side(s, ASH, 'foe');
+    assert.equal(row(s, ASH).seen, true, 'neutral to foe leaves seen alone');
+    // benched while an ally, nobody saw it: back to how a foe starts
+    s = side(s, ASH, 'ally');
+    s = F(s, { type: 'fightTick', row: row(s, ASH).id, in: false });
+    s = side(s, ASH, 'neutral');
+    assert.equal(row(s, ASH).seen, false, 'not ticked in, no publish, no Show, no tick: unseen');
     assert.ok(row(s, ASH).unseenN !== null && row(s, ASH).unseenN !== undefined, 'and it keeps a number for its unseen word');
+    s = F(s, { type: 'fightTick', row: row(s, ASH).id, in: true });
     // the GM's own tick wins
     s = F(s, { type: 'seen', row: row(s, ASH).id, on: true });
     s = side(s, ASH, 'ally');
@@ -1337,6 +1352,30 @@ describe('sides in the fight', () => {
     // and a foe the GM set to ally has one
     t = side(t, ASH, 'ally');
     assert.ok(RS.derive(model, t).vitals.some((v) => v.note === ASH));
+  });
+
+  // plan 6a fix round 1 / review C1: one copy's side is that copy's, never the note's
+  it('one copy of two set to ally: nothing remembered, the next fight is the reader\'s, no Sides set line', () => {
+    let s = gateFight();
+    s = side(s, WOLF, 'ally', 1);
+    assert.equal(row(s, WOLF, 1).kind, 'ally');
+    assert.equal(s.sides[WOLF], undefined);
+    assert.deepEqual(RS.derive(model, s).sidesSet, []);
+    s = fightAt(end(s), GATE);
+    assert.ok(rows(s, WOLF).every((r) => r.kind === 'foe' && !r.neutral && !r.seen), 'every wolf a foe again');
+  });
+
+  it('every copy set: remembered; one set back: forgotten', () => {
+    let s = gateFight();
+    for (const r of rows(s, WOLF)) s = side(s, WOLF, 'ally', r.copy);
+    assert.equal(s.sides[WOLF], 'ally');
+    assert.deepEqual(RS.derive(model, s).sidesSet, [{ note: WOLF, side: 'ally' }]);
+    const next = fightAt(end(s), GATE);
+    assert.ok(rows(next, WOLF).every((r) => r.kind === 'ally'), 'remembered into the next fight');
+    s = side(s, WOLF, 'foe', 2);
+    assert.equal(s.sides[WOLF], undefined, 'mixed again: forgotten');
+    s = fightAt(end(s), GATE);
+    assert.ok(rows(s, WOLF).every((r) => r.kind === 'foe'));
   });
 
   it('derive lists the sides set tonight for the record', () => {

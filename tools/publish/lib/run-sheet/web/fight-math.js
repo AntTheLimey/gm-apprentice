@@ -184,7 +184,8 @@
     const used = new Map();
     const fresh = [];
     for (const r of rows) {
-      if (r.kind !== 'foe') continue;
+      // a foe's, and an ally's: one the reader inferred starts unseen (plan 6a fix round 1 / review M4)
+      if (r.kind !== 'foe' && r.kind !== 'ally') continue;
       const w = unseenKey(wordOf(r));
       if (!used.has(w)) used.set(w, new Set());
       const kept = r.unseenN !== null && r.unseenN !== undefined;
@@ -206,9 +207,12 @@
   // word as written, capitalised. Rows that are unticked and unnumbered do not count towards the numbering.
   function unseenLabels(rows, wordOf) {
     const numbers = unseenNumbers(rows, wordOf);
+    // every numbered row with the word counts, whatever its side now: a copy switched to ally never
+    // renumbers the others (plan 6a fix round 1 / review M3)
     const members = new Map();
     for (const r of rows) {
-      if (r.kind !== 'foe' || !numbers.has(r.id)) continue;
+      if (r.kind === 'pc' || r.kind === 'lair') continue;
+      if (!numbers.has(r.id) && (r.unseenN === null || r.unseenN === undefined)) continue;
       const w = unseenKey(wordOf(r));
       members.set(w, (members.get(w) || 0) + 1);
     }

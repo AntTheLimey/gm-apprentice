@@ -13,6 +13,8 @@
 // up with its name and HP only once it is seen; an ally not seen, a foe and a neutral send exactly a foe's
 // keys, so the players' screen never tells a neutral from a foe and the reader never puts a name there by
 // itself (an ally it infers starts unseen). A withheld note still shows only its withheld word.
+// The GM page is the trusted author of fight rows (`kind` and `seen` included); the server's Origin check
+// on the actions route is the boundary (review M6).
 // Pictures go out as opaque ids (`picId(path)`); the server maps an id back to a file.
 
 const FM = require('./web/fight-math');

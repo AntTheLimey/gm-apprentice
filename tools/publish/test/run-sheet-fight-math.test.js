@@ -530,3 +530,13 @@ test('an inferred ally starts unseen; one from the GM\'s own words starts seen',
   for (const by of ['plan', 'stats']) assert.equal(run(by).seen, true, by);
   assert.equal(run('nonsense').seen, false, 'an allyBy the sheet does not know is not the GM\'s word');
 });
+
+// plan 6a fix round 1 / review M3, M4
+test('a copy switched to ally still counts towards its word; an unseen ally is numbered', () => {
+  const word = () => 'a mephit';
+  const rows = [row({ id: 'm1', kind: 'ally', seen: true, unseenN: 1 }), row({ id: 'm2', unseenN: 2 })];
+  assert.equal(M.unseenLabels(rows, word).get('m2'), 'Mephit 2');
+  const n = M.unseenNumbers([row({ id: 'a', kind: 'ally', seen: false }), row({ id: 'f' })], word);
+  assert.deepEqual([n.get('a'), n.get('f')], [1, 2]);
+  assert.equal(M.unseenNumbers([row({ id: 'a', kind: 'ally', seen: true })], word).has('a'), false, 'a seen ally takes none');
+});
