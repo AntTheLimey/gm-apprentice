@@ -740,3 +740,118 @@ describe('10c: the folds', { skip: browserSkip() }, () => {
     });
   });
 });
+
+describe('10d: the players\' preview', { skip: browserSkip() }, () => {
+  const inView = (p, top) => {
+    assert.ok(p.layout.pvOpen, 'open');
+    assert.ok(p.layout.pvTop >= top, `its top ${p.layout.pvTop} at or below ${top}`);
+    assert.ok(p.layout.pvBottom <= 762, `its bottom ${p.layout.pvBottom} inside the window`);
+  };
+
+  it('starts folded, out of a fight and in one', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await page.goto(`${run.base}/?probe=1`);
+      let p = await settled(page);
+      assert.strictEqual(p.layout.pvOpen, false);
+      assert.strictEqual(await page.evaluate('document.querySelector("#side").firstElementChild.id'), 'pvbox', 'it tops the side column');
+      assert.strictEqual(await page.evaluate('document.querySelector("#pvToggle").textContent'), 'Show ▸');
+      await tap(page, '#pvToggle');
+      p = await until(page, 'p.layout.pvOpen');
+      inView(p, (await page.box('#side')).top);
+      assert.strictEqual(await page.evaluate('document.querySelector("#pvToggle").textContent'), 'Hide ▾');
+      await tap(page, '#pvToggle');
+      p = await until(page, '!p.layout.pvOpen');
+      p = await fightAt(page, run);
+      assert.strictEqual(p.layout.pvOpen, false);
+      assert.strictEqual(await page.evaluate('Boolean(document.querySelector("#pvbox"))'), false, 'in a fight, folded is nowhere');
+      assert.ok(await page.evaluate('Boolean(document.querySelector("#fPvShow"))'), 'the toolbar offers it');
+      sane(p, 'fight, folded');
+    });
+  });
+
+  it('opens fully in view in both pane states, from the toolbar', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await fightAt(page, run);
+      await tap(page, '#fPvShow');
+      p = await until(page, 'p.layout.pvOpen');
+      inView(p, p.layout.paneBox.top);
+      assert.strictEqual(p.layout.pvIn, 'sheet');
+      assert.strictEqual(await page.evaluate('Boolean(document.querySelector("#fPvShow"))'), false, 'open: no toolbar button');
+      assert.ok(p.layout.pvBottom - p.layout.pvTop <= 0.4 * (p.layout.paneBox.bottom - p.layout.paneBox.top) + 1, 'at most 40% of the pane');
+      sane(p, 'preview in the pane');
+      await tap(page, '#paneFold');
+      p = await until(page, 'p.layout.folded && p.layout.pvOpen');
+      assert.strictEqual(p.layout.pvIn, 'pvcol');
+      inView(p, (await page.box('#side')).top);
+      const col = await page.box('#side .pvcol');
+      const order = await page.box('#fOrder');
+      assert.ok(col.left >= order.right - 1, 'a column beside the order');
+      sane(p, 'preview beside the order');
+    });
+  });
+
+  it('opens in view after the pane was wheel-scrolled 500 px', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await fightAt(page, run);
+      await tap(page, '#paneWhole');
+      await page.waitFor('document.querySelector("#sheet section#people")');
+      const pane = await page.box('#sheet');
+      await page.wheel(pane.left + 100, 400, 500);
+      p = await until(page, 'p.layout.paneTop >= 450');
+      await tap(page, '#fPvShow');
+      p = await until(page, 'p.layout.pvOpen && p.layout.paneTop === 0');
+      inView(p, p.layout.paneBox.top);
+      sane(p, 'after the wheel');
+    });
+  });
+
+  it('hidden takes no room', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await fightAt(page, run);
+      const c0 = p.layout.cutTop;
+      await tap(page, '#fPvShow');
+      p = await until(page, 'p.layout.pvOpen');
+      assert.ok(p.layout.cutTop > c0 + 100, `the cut moved down to ${p.layout.cutTop}`);
+      await tap(page, '#pvToggle');
+      p = await until(page, '!p.layout.pvOpen');
+      assert.strictEqual(p.layout.cutTop, c0, 'the cut is back where it was');
+      assert.strictEqual(await page.evaluate('Boolean(document.querySelector("#sheet #pvbox"))'), false);
+      sane(p, 'hidden');
+    });
+  });
+
+  for (const w of [1280, 1100]) {
+    it(`with the preview open the cut's first point is in view at ${w}`, async () => {
+      const run = await start();
+      await withPage({ width: w, height: 762 }, async (page) => {
+        let p = await fightAt(page, run);
+        // at 1100 the boss fight folds the pane (review F2): the GM opens it
+        if (p.layout.folded) { await tap(page, '#paneOpen'); p = await until(page, '!p.layout.folded'); }
+        await tap(page, '#fPvShow');
+        p = await until(page, 'p.layout.pvOpen');
+        inView(p, p.layout.paneBox.top);
+        const pt = await page.box('#fightCut ul.pts li');
+        assert.ok(pt.top >= p.layout.pvBottom && pt.bottom <= 762, `the first point at ${pt.top}-${pt.bottom}`);
+        sane(p, `${w} preview open`);
+      });
+    });
+  }
+
+  it('survives a reload', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await fightAt(page, run);
+      await tap(page, '#fPvShow');
+      await until(page, 'p.layout.pvOpen');
+      await page.evaluate('window.__before = true');
+      await page.reload();
+      p = await until(page, '!window.__before && p.fight && p.layout && p.layout.pvOpen');
+      inView(p, p.layout.paneBox.top);
+      sane(p, 'reloaded');
+    });
+  });
+});

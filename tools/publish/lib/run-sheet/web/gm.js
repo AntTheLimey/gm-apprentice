@@ -995,19 +995,23 @@
     }
     $('#app').classList.toggle('part-side', own != null);
     if (own != null) {
-      pvKey = '';
       side.classList.add('part');
       side.innerHTML = own;
       return;
     }
-    if (side.classList.contains('part') || !$('#pv')) {
+    if (side.classList.contains('part') || !$('#pvctl')) {
       side.classList.remove('part');
-      side.innerHTML = '<div class="pvh"><b>Players\' screen</b><button type="button" id="playersBtn2" class="mini" title="Open the players\' window">Open</button></div><div id="pv" class="pv"></div><div id="pvctl" class="pvctl"></div>';
-      pvKey = '';
+      side.innerHTML = '<div id="pvctl" class="pvctl"></div>';
     }
-    drawPreview();
     $('#pvctl').innerHTML = previewControls(d);
   }
+  // The players' preview: one box, made once, that `applyLayout` puts where it belongs. Its shadow root (the
+  // drawn view) goes with it. Folded it is its bar; in a fight, folded, it is nowhere (the toolbar brings it).
+  const pvbox = document.createElement('div');
+  pvbox.id = 'pvbox';
+  pvbox.className = 'pvw';
+  pvbox.innerHTML = '<div class="pvh"><b>Players\' screen</b><button type="button" id="playersBtn2" class="mini" title="Open the players\' window">Open</button><button type="button" id="pvToggle" class="mini" aria-controls="pv"></button></div><div id="pv" class="pv"></div>';
+  const pvHost = pvbox.querySelector('#pv');
   // Under the preview: each panel's Shown backdrop, with a way back to the group's own place.
   function previewControls(d) {
     const gs = groups();
@@ -1026,13 +1030,24 @@
     for (const p of panelOf(key).people || []) if (!out.includes(p) && (showablePerson(p) || typeOf(p) === 'pc')) out.push(p);
     return out;
   }
+  // The most the preview may take: 40% of the right pane's height there (review F9), or of the middle's when it
+  // sits above the order; elsewhere its width alone sets it.
+  function pvCap() {
+    const at = pvbox.parentElement;
+    const bar = pvbox.querySelector('.pvh').offsetHeight + 16;
+    if (at && at.id === 'sheet') return Math.max(80, at.clientHeight * 0.4 - bar);
+    if (at && at.classList.contains('pvcol') && !$('#app').classList.contains('pvrow')) return Math.max(80, $('#side').clientHeight * 0.4 - bar);
+    return Infinity;
+  }
   function drawPreview() {
-    const host = $('#pv');
+    const host = pvHost;
     const R = window.RunSheetPlayersRender;
-    if (!host || !R) return;
+    if (!host || !R || !pvbox.isConnected || !L.pv || !host.clientWidth) return;
     const root = host.shadowRoot || host.attachShadow({ mode: 'open' });
     const view = G.view || { campaign: G.model.campaign, layout: 'none', panels: [] };
-    const w = Math.max(200, Math.floor(host.clientWidth / PV_SCALE));
+    let w = Math.max(200, Math.floor(host.clientWidth / PV_SCALE));
+    const cap = pvCap();
+    if ((w * 9 * PV_SCALE) / 16 > cap) w = Math.max(200, Math.floor((cap / PV_SCALE) * 16 / 9));
     const hgt = Math.round((w * 9) / 16);
     const armedId = G.ui.armed && Date.now() - G.ui.armed.at <= 3000 ? G.ui.armed.id : '';
     const key = JSON.stringify([view, w, armedId]);
@@ -1200,6 +1215,8 @@
   const ORDER_FLOOR = 560;
   const ORDER_CAP = 860; // the order's width once the acting panel sits beside it
   const BESIDE_AT = 1200; // the middle's width from which the acting panel goes beside the order (review F10)
+  const PV_BESIDE = 0.36; // the preview's share of the middle when the pane is folded, at least 300 px
+  const PV_BESIDE_MIN = 300;
   const GRIP_TRAVEL = 120; // the grip hides with less travel than this
   const NARROW = 1000; // at this width and under, one column (gm.css)
   const L = (() => {
@@ -1273,6 +1290,8 @@
     app.classList.toggle('railf', rail);
     app.classList.toggle('panef', pane);
     const grip = $('#grip');
+    let pvAt = null;
+    let pvRow = false;
     if (fight) {
       const room = rightRoom();
       const showGrip = !pane && room.max - room.min >= GRIP_TRAVEL;
@@ -1281,18 +1300,47 @@
       const mid = appW() - railW() - gw - rw;
       const side = $('#side');
       const border = side.offsetWidth - side.clientWidth;
-      const fv = mid - border;
+      let pvw = 0;
+      if (pane && L.pv) {
+        pvw = Math.round(Math.max(PV_BESIDE_MIN, mid * PV_BESIDE));
+        pvRow = mid - pvw >= G.om; // else the preview goes above the order, which keeps its room
+      }
+      const fv = mid - border - (pvRow ? pvw : 0);
       const ordMin = G.om - border;
       const beside = fv >= BESIDE_AT;
       app.classList.toggle('nogrip', !showGrip);
       app.classList.toggle('beside', beside);
+      app.classList.toggle('pvrow', pvRow);
       app.style.setProperty('--rw', `${rw}px`);
       app.style.setProperty('--gripw', `${gw}px`);
       app.style.setProperty('--ordw', `${beside ? Math.max(ordMin, Math.min(ORDER_CAP, fv - 340)) : fv}px`);
+      app.style.setProperty('--pvw', `${pvw}px`);
       if (grip) grip.title = `Drag to resize: the pane ${room.min}-${room.max} px at this width · double-click to reset`;
+      if (L.pv) {
+        if (!pane) pvAt = $('#sheet');
+        else {
+          let col = side.querySelector('.pvcol');
+          if (!col) { col = document.createElement('div'); col.className = 'pvcol'; }
+          if (pvRow) side.appendChild(col); else side.insertBefore(col, side.firstChild);
+          pvAt = col;
+        }
+      }
     } else {
-      for (const c of ['nogrip', 'beside']) app.classList.remove(c);
+      for (const c of ['nogrip', 'beside', 'pvrow']) app.classList.remove(c);
+      // one column in a fight: the preview tops the pane, as on a wide window
+      pvAt = G.pane ? (L.pv ? $('#sheet') : null) : $('#side');
     }
+    if (pvAt) {
+      const bar = pvAt.id === 'sheet' ? pvAt.querySelector('.rbar') : null;
+      const before = bar ? bar.nextSibling : pvAt.firstChild;
+      if (pvbox.parentElement !== pvAt || (bar && bar.nextSibling !== pvbox) || (!bar && pvAt.firstChild !== pvbox)) pvAt.insertBefore(pvbox, before);
+    } else if (pvbox.parentElement) pvbox.remove();
+    pvbox.classList.toggle('open', L.pv);
+    const tg = pvbox.querySelector('#pvToggle');
+    tg.textContent = L.pv ? 'Hide ▾' : 'Show ▸';
+    tg.setAttribute('aria-expanded', String(L.pv));
+    tg.title = L.pv ? 'Fold the preview away' : 'Show the preview of the players\' screen';
+    drawPreview();
     probe();
   }
   // The pane brought to its top (Fight, Resume, Back to the fight's beat, Players' screen ▸: review F3).
@@ -1326,13 +1374,13 @@
     const r = (v) => (v == null ? null : Math.round(v));
     const g = box($('#grip'));
     const gripShown = Boolean(g) && g.width > 0 && getComputedStyle($('#grip')).visibility !== 'hidden';
-    const pv = null; // the preview folds into the fight's layout with Task 10d
+    const pv = L.pv && pvbox.isConnected ? box(pvbox) : null;
     const room = fightLayout() ? rightRoom() : null;
     return {
       grip: { left: r(g && g.left), width: r(g && g.width), shown: gripShown },
       railW: r(box($('#rail')).width), sheetW: r(box($('#sheet')).width), sideW: r(box($('#side')).width),
       folded: G.lay.pane, railFolded: G.lay.rail, auto: { ...L.auto }, saved: { railFolded: L.railFolded, railFoldedFight: L.railFoldedFight, folded: L.folded, rw: L.rw, pv: L.pv },
-      pvOpen: Boolean(pv), pvTop: r(pv && pv.top), pvBottom: r(pv && pv.bottom), pvIn: null,
+      pvOpen: Boolean(pv), pvTop: r(pv && pv.top), pvBottom: r(pv && pv.bottom), pvIn: pv ? (pvbox.parentElement.id || pvbox.parentElement.className) : null,
       paneTop: r($('#sheet').scrollTop), paneBox: (() => { const b = box($('#sheet')); return { top: r(b.top), bottom: r(b.bottom), left: r(b.left), right: r(b.right) }; })(),
       orderMin: G.om, room, beside: $('#app').classList.contains('beside'), scrollY: r(window.scrollY),
     };
@@ -1504,6 +1552,14 @@
     const d = t.dataset;
     if (t.id === 'playersBtn' || t.id === 'playersBtn2') { openPlayers(); return; }
     if (t.id === 'railFold' || t.id === 'railOpen' || t.id === 'paneFold' || t.id === 'paneOpen') { foldClick(t.id); return; }
+    if (t.id === 'pvToggle' || t.id === 'fPvShow') {
+      L.pv = t.id === 'fPvShow' ? true : !L.pv;
+      saveLayout();
+      update();
+      if (L.pv && G.pane) paneTop();
+      probe();
+      return;
+    }
     if (d.pane) { G.ui.pane = d.pane; update(); paneTop(); probe(); return; }
     if (d.pgroup) { touch(d.pgroup); update(); return; }
     if (t.id === 'coloursBtn') { menuOpen(!menuIsOpen()); return; }
@@ -1770,6 +1826,5 @@
     listen();
     loadView();
   }
-  window.addEventListener('resize', () => { if (G.model && G.state) drawPreview(); });
   start();
 }());

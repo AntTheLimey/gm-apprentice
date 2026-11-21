@@ -373,7 +373,8 @@
       + `<button type="button" id="fNext" class="primary">${f.started ? 'Next ▸' : 'Start ▸'}</button><span class="sp"></span>`
       + `<button type="button" id="fArea" class="${ui.area ? 'on' : ''}" aria-pressed="${ui.area}" title="Tick several rows, type the damage once">Area</button>`
       + '<button type="button" id="fPause" title="Play the beat on (a bargain, a parley); every number is kept">Pause</button>'
-      + `${RP.armBtn('fightEnd', 'End fight', 'id="fEnd"', 'End the fight: two clicks. Every status is kept')}</div>`;
+      + `${RP.armBtn('fightEnd', 'End fight', 'id="fEnd"', 'End the fight: two clicks. Every status is kept')}`
+      + `${RP.layout.pv ? '' : '<button type="button" id="fPvShow" title="Bring the players\' screen preview back">Players\' screen ▸</button>'}</div>`;
     const missing = ui.ask === f.id && !f.started ? missingInit(view) : [];
     if (missing.length) h += `<div class="fask">No initiative yet for ${esc(missing.map((r) => r.gmName).join(', '))}. Start anyway? <button type="button" id="fStartAnyway" class="primary">Start anyway</button> <button type="button" id="fAskNo">Not yet</button></div>`;
     // every group holding a ticked PC is in (proof M2); Add offers only the rest

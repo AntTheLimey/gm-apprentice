@@ -458,6 +458,8 @@ describe('the GM page shows things on the players\' screen', { skip: browserSkip
       const b = await everyoneAt(page, model);
       await click(page, `${beatSel(b.key)} .bbtns [data-showbeat]`);
       await viewOf(page, 'v.panels.length === 1 && v.panels[0].people.length > 2');
+      // plan 6a Task 10: the preview starts folded; Show ▸ opens it
+      await click(page, '#pvToggle');
       await page.waitFor('document.querySelector("#pv") && document.querySelector("#pv").shadowRoot && document.querySelector("#pv").shadowRoot.querySelector(".mon .panel .ppl .tile")');
       const view = await api(run, 'GET', '/api/players/view');
       const drawn = await page.evaluate(`(() => { const m = document.querySelector("#pv").shadowRoot.querySelector(".mon").cloneNode(true);

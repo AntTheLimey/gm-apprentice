@@ -75,9 +75,13 @@ img { max-width: 100%; }
 .sheet { padding: 14px 20px 120px; min-width: 0; }
 /* the right column: the players' screen preview, or a part's own (the fight view) */
 .side { position: sticky; top: var(--toph); height: calc(100vh - var(--toph)); overflow: auto; border-left: 1px solid var(--line); padding: 12px 12px 30px; min-width: 0; font-size: .86rem; }
-.side .pvh { display: flex; justify-content: space-between; align-items: center; margin: 0 0 6px; }
-.side .pvh b { font: 500 .68rem var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
-.side .pv { width: 100%; }
+/* the players' preview (#pvbox): one element the page moves to where it belongs, folded to its bar by default */
+.pvw .pvh { display: flex; gap: 6px; align-items: center; margin: 0 0 6px; }
+.pvw .pvh b { font: 500 .68rem var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); flex: 1; }
+.pvw .pv { width: 100%; }
+.pvw:not(.open) .pv { display: none; }
+.pvw:not(.open) .pvh { margin: 0; }
+.sheet > .pvw { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 6px 8px; margin: 0 0 10px; }
 .side .pvlist { list-style: none; padding: 0; margin: 8px 0 0; }
 .side .pvlist li { padding: 2px 4px; border-radius: 5px; }
 .side .pvlist li.focus { background: var(--lamp-soft); }
@@ -229,6 +233,10 @@ body.dragging, body.dragging * { cursor: col-resize !important; user-select: non
 .app.part-side.beside .fview .act { height: 100%; border-width: 0 0 0 2px; }
 /* the order measured at its narrowest (gm.js orderMin): each row as tight as its items allow */
 ol.to.measure > li { width: 1px; }
+/* the preview, pane folded: a column beside the order, or above it when the order needs the room */
+.side .pvcol { flex: none; padding: 8px 10px; overflow: auto; border-bottom: 1px solid var(--line); }
+.app.part-side.pvrow .side { flex-direction: row; }
+.app.part-side.pvrow .side .pvcol { width: var(--pvw); border-bottom: none; border-left: 1px solid var(--line); }
 .fh { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; margin: 0 0 6px; }
 .fh b { font: 650 .8rem var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--bad); margin-right: 4px; }
 .fh .sp { flex: 1; }
