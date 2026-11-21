@@ -38,7 +38,8 @@ const RS = require('./web/state');
 const dice = require('../dice');
 const { applyChanges } = require('../settings/write');
 const { siteFileNamedBy, siteToolOlderThan } = require('../settings/site-tool');
-const { SIDES, HEX, PRESETS, SITE_TOOL_FROM } = require('./side-colours');
+const { SIDES, HEX, PRESETS, SITE_TOOL_FROM, readSideColours } = require('./side-colours');
+const { readSettings } = require('../settings/read');
 
 const WEB_DIR = path.join(__dirname, 'web');
 const PLAYERS_DIR = path.join(WEB_DIR, 'players');
@@ -523,7 +524,10 @@ function createTableServer({ vaultPath, session, party = [], stateFile, deps = {
           }
           let model;
           try { ({ model } = loadModel()); } catch {
-            json(res, 200, { sideColours: { preset: msg.preset, own: own || null }, note: 'saved, but the sheet could not be re-read' });
+            // This path skips broadcast and refreshPlayers: other open pages update on their next model fetch.
+            let written;
+            try { written = readSideColours(readSettings({ vaultPath: vaultRoot, deps: vaultDeps }).values || {}).sideColours; } catch { written = { preset: msg.preset, own: null }; }
+            json(res, 200, { sideColours: written, note: 'saved, but the sheet could not be re-read' });
             return;
           }
           json(res, 200, { sideColours: model.sideColours });

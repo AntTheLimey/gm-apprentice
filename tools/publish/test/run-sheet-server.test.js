@@ -1473,6 +1473,16 @@ describe('the side-colours setting', () => {
     assert.strictEqual(c.own_colours.pc, '#010203');
     assert.strictEqual(c.own_colours.foe, '#aa0000');
   });
+  it('POST when the model cannot be re-read after the write answers 200 with what the file now holds', async () => {
+    const vault = copyOf();
+    let broken = false;
+    const run = await start(vault, 'Session 02 - The Test', { deps: { readRunSheet: (...a) => { if (broken) throw new Error('boom'); return readRunSheet(...a); } } });
+    broken = true;
+    const r = await post(run, { preset: 'own', own: { foe: ' #AA0000 ' } });
+    assert.strictEqual(r.status, 200, r.text);
+    assert.strictEqual(r.json.note, 'saved, but the sheet could not be re-read');
+    assert.deepStrictEqual(r.json.sideColours, { preset: 'own', own: { pc: '#2e7d3c', ally: '#7a3fb0', foe: '#aa0000', neutral: '#6b7078' } });
+  });
   it('POST on a site with a current tool, or on a vault with no site, writes', async () => {
     const vault = copyOf();
     withSite(vault);
