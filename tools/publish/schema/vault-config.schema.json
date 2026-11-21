@@ -110,6 +110,67 @@
             }
           }
         },
+        "run_sheet": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "side_colours": {
+              "description": "Which colours the run sheet gives the sides in a fight (party, ally, foe, neutral): `pens` for the green, purple, red and grey pens, `colour_blind` for a set that stays apart for colour-blind eyes, `own` for the four in `vault.run_sheet.own_colours`",
+              "default": "pens",
+              "type": [
+                "string",
+                "null"
+              ],
+              "pattern": "^\\s*(?:[pP][eE][nN][sS]|[cC][oO][lL][oO][uU][rR]_[bB][lL][iI][nN][dD]|[oO][wW][nN])\\s*$"
+            },
+            "own_colours": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "properties": {
+                "pc": {
+                  "description": "The party's colour on the run sheet when `vault.run_sheet.side_colours` is `own`. One colour, used in both light and dark mode",
+                  "default": "#2e7d3c",
+                  "type": [
+                    "string",
+                    "number",
+                    "null"
+                  ]
+                },
+                "ally": {
+                  "description": "The allies' colour on the run sheet when `vault.run_sheet.side_colours` is `own`. One colour, used in both light and dark mode",
+                  "default": "#7a3fb0",
+                  "type": [
+                    "string",
+                    "number",
+                    "null"
+                  ]
+                },
+                "foe": {
+                  "description": "The foes' colour on the run sheet when `vault.run_sheet.side_colours` is `own`. One colour, used in both light and dark mode",
+                  "default": "#b3261e",
+                  "type": [
+                    "string",
+                    "number",
+                    "null"
+                  ]
+                },
+                "neutral": {
+                  "description": "The neutral parties' colour on the run sheet when `vault.run_sheet.side_colours` is `own`. One colour, used in both light and dark mode",
+                  "default": "#6b7078",
+                  "type": [
+                    "string",
+                    "number",
+                    "null"
+                  ]
+                }
+              }
+            }
+          }
+        },
         "stale_after_sessions": {
           "description": "How many sessions a draft note, or a character's open thread, can go untouched before the checks call it stale",
           "default": 3,

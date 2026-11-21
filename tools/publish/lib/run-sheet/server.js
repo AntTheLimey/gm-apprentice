@@ -36,6 +36,9 @@ const { tableLogBody, rewriteTableLog, recordBodyOf, bodyHash, needsBackup, isEm
 const { isWithheld } = require('../processor');
 const RS = require('./web/state');
 const dice = require('../dice');
+const { applyChanges } = require('../settings/write');
+const { siteFileNamedBy, siteToolOlderThan } = require('../settings/site-tool');
+const { SIDES, HEX, PRESETS, SITE_TOOL_FROM } = require('./side-colours');
 
 const WEB_DIR = path.join(__dirname, 'web');
 const PLAYERS_DIR = path.join(WEB_DIR, 'players');
@@ -484,6 +487,44 @@ function createTableServer({ vaultPath, session, party = [], stateFile, deps = {
             broadcast('state', { rev: r.rev, clientId: typeof msg.clientId === 'string' ? msg.clientId : null });
             refreshPlayers();
           }
+        });
+      },
+    },
+    {
+      method: 'POST',
+      path: '/api/settings/side-colours',
+      handle: (req, res) => {
+        withJson(req, res, (msg) => {
+          const own = msg && msg.own;
+          const ownOk = own === undefined || (own && typeof own === 'object' && !Array.isArray(own) && Object.keys(own).every((k) => SIDES.includes(k) && typeof own[k] === 'string' && HEX.test(own[k].trim())));
+          if (!msg || !PRESETS.includes(msg.preset) || !ownOk) {
+            json(res, 400, { error: `the body needs { preset: ${PRESETS.join(' | ')}, own?: { pc, ally, foe, neutral } } with each colour like #2e7d3c` });
+            return;
+          }
+          // An older site tool stops a player build on a key it does not know under `vault`: only a vault with a site is held.
+          const site = siteFileNamedBy(vaultRoot);
+          if (site && fs.existsSync(site.dir)) {
+            let old = null;
+            try { old = siteToolOlderThan(site.dir, SITE_TOOL_FROM, deps.pinCheck ? { pinCheck: deps.pinCheck } : {}); } catch { old = null; }
+            if (old) {
+              json(res, 409, { error: `the site's publish tool (${old.shown}) is older than ${SITE_TOOL_FROM} and would stop on this setting: update the site first (gma update)` });
+              return;
+            }
+          }
+          const changes = [{ op: 'set', name: 'vault.run_sheet.side_colours', value: msg.preset }];
+          for (const k of SIDES) if (own && own[k] !== undefined) changes.push({ op: 'set', name: `vault.run_sheet.own_colours.${k}`, value: own[k].trim().toLowerCase() });
+          try { applyChanges(vaultRoot, changes); } catch (err) {
+            json(res, 400, { error: (err && err.refusals && err.refusals.join('\n')) || String((err && err.message) || err).split('\n')[0] });
+            return;
+          }
+          let model;
+          try { ({ model } = loadModel()); } catch (err) {
+            json(res, 500, { error: String(err.message).split('\n')[0] });
+            return;
+          }
+          json(res, 200, { sideColours: model.sideColours });
+          broadcast('side-colours', model.sideColours);
+          refreshPlayers();
         });
       },
     },

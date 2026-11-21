@@ -1085,3 +1085,27 @@ describe('places the party can go', () => {
     assert.ok(plain.placeKeys && typeof plain.placePeople === 'object');
   });
 });
+
+// plan 6a Task 8: the side colours are a vault setting
+describe('side colours', () => {
+  it('the model carries sideColours', () => {
+    const m = readRunSheet(copy(), PLAN, { party: PARTY });
+    assert.deepStrictEqual(m.sideColours, { preset: 'pens', own: { pc: '#2e7d3c', ally: '#7a3fb0', foe: '#b3261e', neutral: '#6b7078' } });
+    const dir = copy();
+    writeSettings(dir, { 'vault.system': 'dnd5e', 'vault.run_sheet.side_colours': 'own', 'vault.run_sheet.own_colours.foe': '#112233' });
+    const own = readRunSheet(dir, PLAN, { party: PARTY });
+    assert.strictEqual(own.sideColours.preset, 'own');
+    assert.strictEqual(own.sideColours.own.foe, '#112233');
+    assert.strictEqual(own.sideColours.own.pc, '#2e7d3c');
+  });
+  it('a bad own colour falls back, with a prep note', () => {
+    const dir = copy();
+    writeSettings(dir, { 'vault.system': 'dnd5e', 'vault.run_sheet.side_colours': 'own', 'vault.run_sheet.own_colours.foe': 'red', 'vault.run_sheet.own_colours.pc': '#abc' });
+    const m = readRunSheet(dir, PLAN, { party: PARTY });
+    assert.strictEqual(m.sideColours.own.foe, '#b3261e');
+    assert.strictEqual(m.sideColours.own.pc, '#2e7d3c');
+    const notes = m.warnings.filter((w) => w.kind === 'side-colours');
+    assert.strictEqual(notes.length, 2);
+    assert.match(notes[0].text, /#rrggbb/);
+  });
+});

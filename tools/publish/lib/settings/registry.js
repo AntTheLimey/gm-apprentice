@@ -107,6 +107,34 @@ const REGISTRY = [
     left_out: '`dead`, `deceased`, `destroyed`, `kia`, `dissolved`',
   },
 
+  // The run sheet's fight rows are coloured by side. The colours are a vault setting, so they follow the campaign.
+  {
+    name: 'vault.run_sheet.side_colours', type: 'choice', values: ['pens', 'colour_blind', 'own'], default: 'pens', group: 'vault',
+    does: "Which colours the run sheet gives the sides in a fight (party, ally, foe, neutral): `pens` for the green, purple, red and grey pens, `colour_blind` for a set that stays apart for colour-blind eyes, `own` for the four in `vault.run_sheet.own_colours`",
+    left_out: '`pens`',
+  },
+  { name: 'vault.run_sheet.own_colours', type: 'map', container: true },
+  {
+    name: 'vault.run_sheet.own_colours.pc', type: 'text', default: '#2e7d3c', shape: 'a colour like #2e7d3c', group: 'vault',
+    does: "The party's colour on the run sheet when `vault.run_sheet.side_colours` is `own`. One colour, used in both light and dark mode",
+    left_out: '`#2e7d3c`',
+  },
+  {
+    name: 'vault.run_sheet.own_colours.ally', type: 'text', default: '#7a3fb0', shape: 'a colour like #7a3fb0', group: 'vault',
+    does: "The allies' colour on the run sheet when `vault.run_sheet.side_colours` is `own`. One colour, used in both light and dark mode",
+    left_out: '`#7a3fb0`',
+  },
+  {
+    name: 'vault.run_sheet.own_colours.foe', type: 'text', default: '#b3261e', shape: 'a colour like #b3261e', group: 'vault',
+    does: "The foes' colour on the run sheet when `vault.run_sheet.side_colours` is `own`. One colour, used in both light and dark mode",
+    left_out: '`#b3261e`',
+  },
+  {
+    name: 'vault.run_sheet.own_colours.neutral', type: 'text', default: '#6b7078', shape: 'a colour like #6b7078', group: 'vault',
+    does: "The neutral parties' colour on the run sheet when `vault.run_sheet.side_colours` is `own`. One colour, used in both light and dark mode",
+    left_out: '`#6b7078`',
+  },
+
   // Numbers the vault scripts (not the site build) read
   {
     name: 'vault.stale_after_sessions', type: 'number', integer: true, min: 1, default: 3, group: 'vault',

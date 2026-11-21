@@ -23,6 +23,7 @@ const { loadPublishConfig } = require('../config');
 const { unmaskedPlayAsOf } = require('./people-from-notes');
 const { parseNote } = require('../frontmatter');
 const { readSettings } = require('../settings/read');
+const { readSideColours } = require('./side-colours');
 const { readerFrom } = require('../vault-reader');
 const { isWithheld, nameList, unmaskedNames, unmaskedNameUnread } = require('../processor');
 const { canonicalNfc } = require('../unicode');
@@ -158,10 +159,14 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
   let campaign = path.basename(path.resolve(vaultPath));
   const withheldWords = { person: 'someone', place: 'somewhere' };
   let publishConfig = {};
+  let sideColours = readSideColours({}).sideColours;
   try {
     // Settings values are nested by group: `vault.system` is values.vault.system.
     const values = readSettings({ vaultPath, deps }).values || {};
     system = (values.vault && values.vault.system) || null;
+    const colours = readSideColours(values);
+    sideColours = colours.sideColours;
+    add(colours.warnings);
     const site = values.player_site || {};
     publishConfig = site;
     if (typeof site.title === 'string' && site.title.trim()) campaign = site.title.trim();
@@ -359,6 +364,7 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
     system,
     campaign,
     withheldWords,
+    sideColours,
     plan,
     session: { index: sessionIndex, title, chapter, number },
     brief: { overview: joined('overview'), world: joined('world'), stops: joined('stops') },
