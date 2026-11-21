@@ -29,6 +29,7 @@ const { decidePage, publishesPage } = require('../publish-decision');
 const { loadManifest } = require('../manifest');
 const { tableLogOf, isPlayed } = require('./sessions');
 const { readCast } = require('./cast');
+const { readSeen } = require('./seen');
 
 const toPosix = (p) => p.split(path.sep).join('/');
 const low = (s) => canonicalNfc(String(s == null ? '' : s)).trim().toLowerCase();
@@ -331,8 +332,9 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
   // no site set up, leaves each map to its own publish rule).
   const folderMap = publishConfig.folder_map && typeof publishConfig.folder_map === 'object' ? publishConfig.folder_map : {};
   const folderMapped = (rel) => !Object.keys(folderMap).length || !rel.includes('/') || mapFolder(rel.slice(0, rel.lastIndexOf('/')), folderMap) !== null;
-  const showableMaps = !manifestRead ? [] : allMaps.filter((m) => !gmHalves.has(m)
-    && publishesPage(decidePage({ rel: m, frontmatter: fmOf(m) }, { rel: m, publishConfig, manifest, folderMapped: folderMapped(m) }))).sort();
+  // The one publish decision, for a map and for a person's note alike.
+  const publishes = (rel) => publishesPage(decidePage({ rel, frontmatter: fmOf(rel) }, { rel, publishConfig, manifest, folderMapped: folderMapped(rel) }));
+  const showableMaps = !manifestRead ? [] : allMaps.filter((m) => !gmHalves.has(m) && publishes(m)).sort();
   for (const p of maps) {
     playerVersionWarning(p);
     pair(p, playerFor.get(p));
@@ -403,6 +405,13 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
   model.cast = readCast(index, { carried, sides });
   // Added last, so these paths make no `notes` entries or links of their own: a Plan that names no map reads as before.
   model.showableMaps = showableMaps;
+  // A foe's starting seen: it publishes, or an earlier played session named it. A publish list that does
+  // not read leaves nothing known to publish, so nothing starts seen.
+  if (manifestRead) model.seenFrom = readSeen({ vaultPath, index, sessionIndex, publishes, deps });
+  else {
+    model.seenFrom = {};
+    model.warnings.push({ kind: 'seen-list', note: null, text: 'the publish list could not be read: no foe starts seen' });
+  }
   // What the players' screen needs of each: its own name (never the stem) and its picture.
   model.mapNotes = Object.fromEntries(showableMaps.map((m) => {
     const mfm = fmOf(m);
