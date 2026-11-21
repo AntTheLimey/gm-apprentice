@@ -616,8 +616,8 @@ describe('places in the record', () => {
       { type: 'moveGroup', pcs: [BEN], place: YARD, key, title: 'The Chapel Yard', names: ['Ben'] }]);
     const sec = sectionsOf(R.tableLogBody(model, s, opts));
     assert.strictEqual(sec.get('Where everyone ended'), '- [[Ada Moss]]: The Docks\n- [[Ben Hart]]: [[The Chapel Yard]]');
-    // the known place is linked where a PC stood, never under Improvised beats (reveal_scan reads links there as seen)
-    assert.strictEqual(sec.get('Improvised beats'), '- New place: The Docks\n- The Chapel Yard');
+    // review I2: a known place a PC was moved to is linked under Improvised beats too
+    assert.strictEqual(sec.get('Improvised beats'), '- New place: The Docks\n- [[The Chapel Yard]]');
     assert.match(sec.get('Log'), /Ada moves to The Docks \(a new place\)\./);
     assert.match(sec.get('Log'), /Ben moves to The Chapel Yard\./);
   });
@@ -629,5 +629,55 @@ describe('places in the record', () => {
     const sec = sectionsOf(R.tableLogBody(model, s, opts));
     assert.match(sec.get('Where everyone ended'), /^- \[\[Ada Moss\]\]: \[\[The Gate\]\]$/m);
     assert.strictEqual(sec.get('Improvised beats'), '- The Chapel Yard', 'nobody stood there: no link');
+  });
+});
+
+// Task 7 fix round 1
+describe('places in the record (fix round 1)', () => {
+  const YARD = 'Locations/The Chapel Yard.md';
+  const GATE_NOTE = 'Locations/The Gate.md';
+  const NOTES2 = new Map([...NOTES, ['The Chapel Yard', YARD]]);
+  const opts = { linkFor: R.linkFor({ resolve: (t) => NOTES2.get(t) || null }), timeOf };
+
+  it('review I2: a known place moved to and then left is still linked under Improvised beats', () => {
+    const key = model.placeKeys[YARD];
+    const s = run([{ type: 'move', pc: ADA, to: to(GATE) },
+      { type: 'moveGroup', pcs: [ADA], place: YARD, key, title: 'The Chapel Yard', names: ['Ada'] },
+      { type: 'move', pc: ADA, to: to(TOWER) }]);
+    const sec = sectionsOf(R.tableLogBody(model, s, opts));
+    assert.strictEqual(sec.get('Improvised beats'), '- [[The Chapel Yard]]');
+  });
+
+  it('review I1: Move them to The Gate goes to the Plan\'s Gate beats, never a place beat of its own', () => {
+    const target = (s) => RS.planTarget(model, s, GATE_NOTE);
+    let s = fresh();
+    const t1 = target(s);
+    assert.deepStrictEqual([t1.beat, t1.spot], [GATE.key, null], 'the first Gate beat');
+    s = run([{ type: 'moveGroup', pcs: [ADA, BEN], place: GATE_NOTE, title: 'The Gate', to: t1, names: ['Ada', 'Ben'] }], s);
+    assert.deepStrictEqual([s.positions[ADA], s.positions[BEN]], [{ beat: GATE.key, spot: null }, { beat: GATE.key, spot: null }]);
+    assert.ok(!s.improvised.some((i) => i.key.startsWith('pl-')), 'no pl- beat');
+    assert.ok(RS.derive(model, s).log.some((l) => l.text === 'Ada, Ben move to The Gate (the Plan\'s beat: The Gate).'));
+    // away, then The Gate again: the Gate beat not yet visited (Scene 4)
+    s = run([{ type: 'move', pc: ADA, to: to(TOWER) }, { type: 'move', pc: BEN, to: to(TOWER) }], s);
+    const t2 = target(s);
+    const scene4 = model.beats.filter((b) => b.place === GATE_NOTE)[1];
+    assert.strictEqual(t2.beat, scene4.key);
+    s = run([{ type: 'moveGroup', pcs: [ADA, BEN], place: GATE_NOTE, title: 'The Gate', to: t2, names: ['Ada', 'Ben'] }], s);
+    // both visited, so the first again
+    assert.strictEqual(target(s).beat, GATE.key);
+    const sec = sectionsOf(R.tableLogBody(model, s, opts));
+    assert.ok(!/The Gate/.test(sec.get('Not reached')), `no Gate beat is Not reached: ${sec.get('Not reached')}`);
+    assert.strictEqual(sec.get('Improvised beats'), '', 'none is Improvised');
+  });
+
+  it('review I1: a hub spot\'s place is that spot', () => {
+    const t = RS.planTarget(model, fresh(), YARD);
+    assert.deepStrictEqual([t.beat, t.spot], [HUB.key, HUB.spots.find((x) => x.note === YARD).key]);
+    assert.strictEqual(t.label, `${HUB.title} · The Chapel Yard`);
+    const s = run([{ type: 'moveGroup', pcs: [ADA], place: YARD, title: 'The Chapel Yard', to: t, names: ['Ada'] }]);
+    assert.deepStrictEqual(s.positions[ADA], { beat: HUB.key, spot: t.spot });
+    assert.strictEqual(RS.derive(model, s).whereEnded[0].status, 'spot');
+    // a place the Plan has no beat for has no target: it gets its pl- beat
+    assert.strictEqual(RS.planTarget(model, fresh(), 'Locations/North/index.md'), null);
   });
 });

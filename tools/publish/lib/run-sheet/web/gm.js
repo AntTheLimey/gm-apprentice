@@ -410,12 +410,24 @@
   // ------------------------------------------------------------------ Move them (plan 6a Task 7, review F13)
   // Every place in the vault the party can go: the reader's placeKeys, each with its own note's name.
   const FM = window.RunSheetFightMath;
+  // Each goes by its own name, else its first alias, else its file's stem with `_` as spaces (review M1); two
+  // that would show the same carry their folder in brackets: `index (North)`, `index (South)`.
   function knownPlaces() {
     const keys = G.model.placeKeys || {};
-    // a folder's own note (`North/index.md`) with no name of its own goes by its folder's
-    const named = (note, n) => (n.named || stem(note).toLowerCase() !== 'index' ? n.name || stem(note) : note.split('/').slice(-2, -1)[0] || stem(note));
-    return Object.keys(keys).map((note) => { const n = noteInfo(note) || {}; return { note, name: named(note, n), type: 'location', aliases: n.aliases || [] }; })
-      .sort((a, b) => a.name.localeCompare(b.name));
+    const list = Object.keys(keys).map((note) => {
+      const n = noteInfo(note) || {};
+      const aliases = Array.isArray(n.aliases) ? n.aliases : [];
+      const name = (n.named && n.name) || aliases[0] || stem(note).replace(/_/g, ' ');
+      return { note, name, type: 'location', aliases };
+    });
+    const count = new Map();
+    for (const p of list) count.set(p.name.toLowerCase(), (count.get(p.name.toLowerCase()) || 0) + 1);
+    for (const p of list) {
+      if (count.get(p.name.toLowerCase()) < 2) continue;
+      const folder = p.note.split('/').slice(-2, -1)[0];
+      if (folder) p.name = `${p.name} (${folder})`;
+    }
+    return list.sort((a, b) => a.name.localeCompare(b.name));
   }
   const NEW_PLACE = (t) => `+ New place: ${t}`;
   const NO_PLACE = 'No known place by that name: choose "+ New place" to make one';
@@ -449,6 +461,16 @@
     document.querySelectorAll(`input[data-moveg="${CSS.escape(group)}"]`).forEach((box) => { box.value = ''; });
     const names = g.pcs.map((p) => first(nameOf(p)));
     let key;
+    // a place the Plan has a beat or hub spot for is that beat (review I1); only any other gets a place beat
+    const plan = note ? RS.planTarget(G.model, G.state, note) : null;
+    if (plan) {
+      key = plan.beat;
+      act({ type: 'moveGroup', pcs: g.pcs, place: note, title: nameOf(note), to: plan, names });
+      G.ui.focus = key;
+      touch(plan.spot || plan.beat);
+      update();
+      return;
+    }
     if (note) {
       key = (G.model.placeKeys || {})[note];
       if (!key) return;
@@ -706,7 +728,7 @@
     const stopped = G.state.stopped && G.state.stopped.beat === b.key;
     btns.push(`<button data-stop="${esc(b.key)}" class="${stopped ? 'on' : ''}" type="button" aria-pressed="${stopped}">${stopped ? 'Stopped here ✓' : 'Stopped here'}</button>`);
     // a place typed tonight is taken back (Take off) once nobody stands there; any other improvised beat is removed
-    if (b.newPlace) { if (!here.length) btns.push(armBtn(`unplace:${b.key}`, 'Take off this place', `data-unplace="${esc(b.key)}"`, 'Take back this place typed tonight, and its lines')); }
+    if (b.newPlace) { if (!here.length && !RS.placeInFight(G.state, b.key)) btns.push(armBtn(`unplace:${b.key}`, 'Take off this place', `data-unplace="${esc(b.key)}"`, 'Take back this place typed tonight, and its lines')); }
     else if (b.impro) btns.push(armBtn(`unimpro:${b.key}`, 'Remove this beat', `data-unimpro="${esc(b.key)}"`));
     for (const part of parts) if (part.beatButtons) btns.push(part.beatButtons(b) || '');
     h += `<div class="bbtns">${btns.filter(Boolean).join('')}</div>`;

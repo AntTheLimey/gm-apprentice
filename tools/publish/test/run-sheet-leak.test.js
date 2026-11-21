@@ -772,3 +772,51 @@ describe('a place typed tonight (plan 6a Task 7 / Global Constraints (typed plac
     assert.equal(benPanel(view(s2)).caption, before.panels[0].caption);
   });
 });
+
+// Task 7 fix round 1 / review I3: a place reaches the players' screen only when its page would publish, by the maps
+// list's rule (a vault with no site set up publishes its places), Plan places and any vault place alike
+describe('a place that does not publish (plan 6a Task 7 fix round 1 / review I3)', () => {
+  const RS = require('../lib/run-sheet/web/state');
+  const tmp = () => { const d = fs.mkdtempSync(path.join(os.tmpdir(), 'rs-place-')); made.push(d); fs.cpSync(FIXTURE, d, { recursive: true }); return d; };
+  const CELLAR = 'Locations/Secret Cellar.md';
+  const GATE_NOTE = 'Locations/The Gate.md';
+  const view = (m, s) => forPlayers(m, s, { withheldWords: m.withheldWords, campaign: m.campaign, picId: () => '0'.repeat(20) });
+  let n = 0;
+  const act = (s, a) => RS.reduce(s, { id: `np-${++n}`, ...a }, new Date(Date.parse('2026-11-20T19:00:00Z') + n * 60000).toISOString());
+  const at = (m, note) => {
+    let s = RS.emptyState({ stateId: 's', session: 'x', plan: S.PLAN });
+    const to = RS.planTarget(m, s, note);
+    s = act(s, to ? { type: 'moveGroup', pcs: [S.NOTES.ADA], place: note, title: 'x', to, names: ['Ada'] }
+      : { type: 'moveGroup', pcs: [S.NOTES.ADA], place: note, key: m.placeKeys[note], title: 'x', names: ['Ada'] });
+    return view(m, s).panels[0];
+  };
+
+  it('an unpublished, unnamed location moved to: no caption, no picture', () => {
+    const dir = tmp();
+    fs.writeFileSync(path.join(dir, CELLAR), '---\ntype: location\npublish: false\nportrait: gate-place.png\n---\n\nUnder the chapel.\n');
+    const m = readRunSheet(dir, S.PLAN, { party: S.PARTY });
+    assert.strictEqual(m.placeNotes[CELLAR].publishes, false);
+    assert.ok(m.placeNotes[CELLAR].portrait, 'it has a picture to keep back');
+    const p = at(m, CELLAR);
+    assert.deepEqual([p.caption, p.backdrop], [null, null]);
+    // a Plan place that publishes still shows
+    assert.strictEqual(at(m, GATE_NOTE).caption, 'The Gate');
+    // and one set not to publish goes dark too: the same rule for Plan places
+    const gate = path.join(dir, GATE_NOTE);
+    fs.writeFileSync(gate, fs.readFileSync(gate, 'utf8').replace('type: location', 'type: location\npublish: false'));
+    const m2 = readRunSheet(dir, S.PLAN, { party: S.PARTY });
+    assert.deepEqual([at(m2, GATE_NOTE).caption, at(m2, GATE_NOTE).backdrop], [null, null]);
+  });
+
+  it('a vault with no site set up still shows its places; a publish list that does not read shows none', () => {
+    const dir = tmp();
+    fs.writeFileSync(path.join(dir, '_meta', 'vault-config.yaml'), 'vault:\n  system: dnd-5e-2024\n');
+    const m = readRunSheet(dir, S.PLAN, { party: S.PARTY });
+    const p = at(m, GATE_NOTE);
+    assert.ok(p.backdrop, 'the picture shows');
+    assert.strictEqual(p.caption, 'The Gate');
+    fs.writeFileSync(path.join(dir, '_meta', 'publish-manifest.md'), '# old list\n');
+    const broken = readRunSheet(dir, S.PLAN, { party: S.PARTY });
+    assert.deepEqual([at(broken, GATE_NOTE).caption, at(broken, GATE_NOTE).backdrop], [null, null]);
+  });
+});

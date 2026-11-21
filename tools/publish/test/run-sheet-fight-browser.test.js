@@ -641,3 +641,54 @@ describe('the fight takes the PR review\'s and the proof\'s fixes', { skip: brow
     });
   }
 });
+
+// Task 7 fix round 1 (a Task 6 leftover): a group joined into the fight brings its place's foes, but is no plain
+// add, so no Undo is offered for it; an add by name is. Real input only.
+describe('Undo is offered only for an add by name', { skip: browserSkip() }, () => {
+  it('a group join shows no Undo; an add by name does, and it takes the rows back', async () => {
+    const run = await start({ edit: (vault) => {
+      fs.writeFileSync(path.join(vault, 'Locations', 'Rat Cellar.md'), '---\nname: Rat Cellar\ntype: location\n---\n\nDamp.\n');
+      fs.writeFileSync(path.join(vault, 'Creatures', 'Cellar Rat.md'), '---\nname: Cellar Rat\ntype: creature\nlocation: "[[Rat Cellar]]"\n---\n\n## GM Notes\n\n### Stats\n\nAC 10\nHP 3\nInitiative +1\n');
+    } });
+    // the sticky header covers a button scrolled only to its edge: bring it to the middle first, as a hand scrolls
+    const press = async (page, sel) => {
+      await page.evaluate(`document.querySelector(${JSON.stringify(sel)}).scrollIntoView({ block: 'center' })`);
+      assert.ok((await page.click(sel)).hit, `the click lands on ${sel}`);
+    };
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await page.goto(`${run.base}/?probe=1`);
+      await settled(page);
+      const [b1, hub] = run.model.beats;
+      await press(page, `[id="beat:${b1.key}"] [data-move="${ADA}"]`);
+      await settled(page);
+      await press(page, `[id="beat:${hub.key}"] [data-move="${BEN}"]`);
+      await settled(page);
+      // Ben's group to the Rat Cellar, by Move them on the hub's Here line
+      await press(page, `[id="beat:${hub.key}"] input[data-moveg]`);
+      await page.type('rat cellar');
+      await page.waitFor(`document.querySelector('[id="beat:${hub.key}"] [data-movepick]')`);
+      await page.key('Enter');
+      await settled(page);
+      await press(page, `[id="beat:${b1.key}"] [data-fight]`);
+      let p = await until(page, 'p.fight');
+      assert.ok(!p.fight.rows.some((r) => r.note === 'Creatures/Cellar Rat.md'));
+      await press(page, '[data-faddgroup]');
+      p = await until(page, 'p.fight.groups.length === 2');
+      await settled(page);
+      assert.ok(p.fight.rows.some((r) => r.note === 'Creatures/Cellar Rat.md' && r.in), 'the group brings its place\'s rat');
+      assert.strictEqual(rowOf(p, BEN).in, true);
+      assert.strictEqual(await page.evaluate('document.querySelectorAll("[data-fundo]").length'), 0, 'no Undo for a group join');
+      await press(page, '#fAddName');
+      await page.type('Ice Drake');
+      await press(page, '#fAddGo');
+      p = await until(page, 'p.fight.rows.some((r) => r.note === "Creatures/Ice Drake.md")');
+      await page.waitFor('document.querySelectorAll("[data-fundo]").length === 1');
+      const n = p.fight.rows.length;
+      await press(page, '[data-fundo]');
+      p = await until(page, `p.fight.rows.length === ${n - 1}`);
+      assert.ok(!p.fight.rows.some((r) => r.note === 'Creatures/Ice Drake.md'), 'the add is taken back');
+      assert.ok(p.fight.rows.some((r) => r.note === 'Creatures/Cellar Rat.md'), 'the group\'s rows stay');
+      assert.deepStrictEqual(p.errors, []);
+    });
+  });
+});

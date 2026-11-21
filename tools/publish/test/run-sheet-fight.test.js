@@ -1631,3 +1631,34 @@ describe('sides in the fight', () => {
     assert.throws(() => RS.upgrade({ sides: [] }, fresh()), (e) => e.code === 'BAD_STATE');
   });
 });
+
+// Task 7 fix round 1 (a Task 6 leftover): a group or beat join's line carries no `join` id, so its rows carry none
+// and `undoable` says no: the Undo button is never offered for it
+describe('undo is only for a plain add', () => {
+  it('a beat or group join is not undoable; an add by name is', () => {
+    // the reviewer's case: a place beat holding a creature and a statless NPC, joined by its beat
+    const YARD = 'Locations/The Chapel Yard.md';
+    const m = clone(model);
+    m.placePeople = { [YARD]: [DRAKE, 'Characters/NPCs/Sister Fen.md'] };
+    const key = m.placeKeys[YARD];
+    let s = fightAt(move(fresh(), ADA, GATE), GATE, { m });
+    s = act(s, { type: 'improvise', key, title: 'The Chapel Yard', place: YARD, quiet: true });
+    const id = `j${++n}`;
+    const j = M.joinRows({ model: m, derived: RS.derive(m, s), state: s, fight: s.fight, add: { beat: key }, idBase: id });
+    assert.ok(j.rows.some((r) => r.kind !== 'pc'), `a join that brings new rows: ${j.rows.map((r) => r.name)}`);
+    assert.ok(j.groups.length, 'and a group');
+    s = RS.reduce(s, { id, type: 'fightJoin', fight: s.fight.id, rows: j.rows, tick: j.tick, groups: j.groups, thresholds: j.thresholds, label: '', planned: true }, now());
+    assert.ok(!s.events.some((e) => e.join === id), 'its line has no join id');
+    assert.ok(!s.fight.rows.some((r) => r.joinId === id), 'nor do its rows');
+    assert.equal(M.undoable(s.fight, id), false);
+    const before = JSON.stringify(s.fight.rows);
+    s = F(s, { type: 'undoAdd', join: id });
+    assert.equal(JSON.stringify(s.fight.rows), before, 'an undo of it does nothing');
+    // a plain add by name still is
+    const id2 = `j${++n}`;
+    const j2 = M.joinRows({ model, derived: RS.derive(model, s), state: s, fight: s.fight, add: { name: 'Bouncer', count: 2 }, idBase: id2 });
+    s = RS.reduce(s, { id: id2, type: 'fightJoin', fight: s.fight.id, rows: j2.rows, tick: j2.tick, groups: j2.groups, thresholds: j2.thresholds, label: 'Bouncer ×2' }, now());
+    assert.equal(M.undoable(s.fight, id2), true);
+    assert.equal(s.fight.rows.filter((r) => r.joinId === id2).length, 2);
+  });
+});

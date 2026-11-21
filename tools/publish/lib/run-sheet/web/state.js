@@ -147,14 +147,27 @@
       const key = a.key || (a.id != null ? `i-${a.id}` : `i-${s.improvised.length + 1}`);
       if (s.improvised.some((i) => i.key === key)) return;
       s.improvised.push({ key, title, at, ...(typeof a.place === 'string' && a.place ? { place: a.place } : {}) });
-      log(s, at, key, 'Improvised beat.', title);
+      // Fight here's own place beat is quiet: its "Fight starts at…" line says it (review M4)
+      if (!a.quiet) log(s, at, key, 'Improvised beat.', title);
     },
     // Move them (plan 6a Task 7): the PCs to a known place (`place`, with the reader's `key` and its `title`) or
     // to a typed name (`name`), making its place beat if it has none. A typed name the night already holds, in
     // any case and with or without "the", is that place again; a new one is keyed `pn-<action id>`. One Log line.
+    // A place the Plan has a beat or hub spot for (`to`, from `planTarget`) is that beat: the PCs move as `move`
+    // moves them, and the line names the beat (review I1), so no second beat shadows the Plan's.
     moveGroup(s, a, at) {
       const pcs = (Array.isArray(a.pcs) ? a.pcs : []).filter((p) => typeof p === 'string' && p);
       if (!pcs.length) return;
+      const said = () => pcs.map((pc, i) => String((Array.isArray(a.names) && a.names[i]) || '').trim() || stem(pc));
+      const verb = (names) => `${names.join(', ')} ${names.length > 1 ? 'move' : 'moves'} to`;
+      if (a.to && typeof a.to === 'object' && typeof a.to.beat === 'string' && a.to.beat) {
+        const to = { beat: a.to.beat, spot: a.to.spot || null, title: String(a.to.title || '') };
+        for (const pc of pcs) HANDLERS.move(s, { pc, to }, at);
+        const where = String(a.title || '').trim() || stem(a.place) || to.title;
+        const label = String(a.to.label || to.title || '').trim();
+        log(s, at, to.beat, `${verb(said())} ${where}${label ? ` (the Plan's beat: ${label})` : ''}.`, to.title);
+        return;
+      }
       let place;
       if (typeof a.place === 'string' && a.place) {
         const key = String(a.key || '');
@@ -173,14 +186,15 @@
         }
       }
       for (const pc of pcs) HANDLERS.move(s, { pc, to: { beat: place.key, spot: null, title: place.title } }, at);
-      const names = pcs.map((pc, i) => String((Array.isArray(a.names) && a.names[i]) || '').trim() || stem(pc));
-      log(s, at, place.key, `${names.join(', ')} ${names.length > 1 ? 'move' : 'moves'} to ${place.title}${place.newPlace ? ' (a new place)' : ''}.`, place.title);
+      log(s, at, place.key, `${verb(said())} ${place.title}${place.newPlace ? ' (a new place)' : ''}.`, place.title);
     },
-    // Take off (v8, review F13): a place typed tonight that nobody stands at goes, with its lines.
+    // Take off (v8, review F13): a place typed tonight that nobody stands at goes, with its lines; never while the
+    // running fight is at it or has it behind a panel (review M2).
     unplace(s, a) {
       const place = s.improvised.find((i) => i.key === a.key);
       if (!place || !place.newPlace) return;
       if (Object.values(s.positions).some((p) => p && p.beat === a.key)) return;
+      if (placeInFight(s, a.key)) return;
       HANDLERS.unimprovise(s, { key: a.key });
     },
     unimprovise(s, a) {
@@ -294,9 +308,31 @@
   };
   Object.assign(HANDLERS, Fight.FIGHT_HANDLERS, Show.SHOW_HANDLERS);
 
+  // Whether the running fight is at a place beat, or has it behind a panel.
+  const placeInFight = (s, key) => Boolean(s.fight && (s.fight.beat === key || (s.fight.backdrop && s.fight.backdrop.place === key)));
+
+  // Where Move them takes a group to a place the Plan already has (review I1): the beat whose place it is, or a
+  // hub's spot that names it; of several, the first not yet visited, else the first. Null when the Plan has
+  // none (the place gets a `pl-` beat of its own). `label` names the beat, and the spot at a hub.
+  function planTarget(model, state, note) {
+    const hits = [];
+    for (const b of (model && model.beats) || []) {
+      if (b.contingency) continue;
+      const spots = b.spots || [];
+      if (b.place === note) hits.push({ beat: b.key, spot: null, title: b.title, label: b.title });
+      else if (spots.length > 1) {
+        const sp = spots.find((x) => x.note === note);
+        if (sp) hits.push({ beat: b.key, spot: sp.key, title: b.title, label: `${b.title} · ${sp.name}` });
+      }
+    }
+    const visited = (state && state.visited) || {};
+    return hits.find((h) => !visited[h.beat]) || hits[0] || null;
+  }
+
   // An action made before an `attach` (queued in another window, or re-applied on a newer state) still
-  // names the old keys: map them through what was attached.
-  const KEY_FIELDS = ['beat', 'point', 'item', 'handout', 'spot', 'group'];
+  // names the old keys: map them through what was attached. `key` is an improvised or place beat's
+  // (improvise, moveGroup, unplace: review M3).
+  const KEY_FIELDS = ['beat', 'point', 'item', 'handout', 'spot', 'group', 'key'];
   function remapKey(attached, k) {
     if (typeof k !== 'string' || !attached) return k;
     let cur = k;
@@ -773,5 +809,5 @@
     return left.length ? { fight: f.id, title: f.title || '', rows: left } : null;
   }
 
-  return { emptyState, upgrade, reduce, derive, cyclePoint, armClick, castSearch, handoutName };
+  return { emptyState, upgrade, reduce, derive, cyclePoint, armClick, castSearch, handoutName, planTarget, placeInFight };
 }));

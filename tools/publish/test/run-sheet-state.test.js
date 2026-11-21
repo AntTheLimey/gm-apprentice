@@ -671,3 +671,37 @@ describe('place beats and Move them', () => {
     assert.strictEqual(s.panels[GATE.key].backdrop, 'Locations/The Bell Tower Room.md');
   });
 });
+
+// Task 7 fix round 1
+describe('place beats (fix round 1)', () => {
+  const YARD = 'Locations/The Chapel Yard.md';
+  it('review M2: unplace refuses while the running fight is at the place or has it behind a panel', () => {
+    let s = run([{ type: 'move', pc: ADA, to: to(GATE) }, { id: 'm2', type: 'moveGroup', pcs: [ADA], name: 'The Docks', names: ['Ada'] },
+      { type: 'move', pc: ADA, to: to(GATE) }]);
+    assert.strictEqual(RS.placeInFight(s, 'pn-m2'), false);
+    const at = run([{ id: 'f1', type: 'fightStart', beat: 'pn-m2', title: 'The Docks', groups: [GATE.key], rows: [], thresholds: [] }, { type: 'unplace', key: 'pn-m2' }], s);
+    assert.deepStrictEqual(at.improvised.map((i) => i.key), ['pn-m2'], 'the fight is at it');
+    const behind = run([{ id: 'f2', type: 'fightStart', beat: GATE.key, title: 'The Gate', groups: [GATE.key], rows: [], thresholds: [], backdrop: { group: GATE.key, place: 'pn-m2' } }, { type: 'unplace', key: 'pn-m2' }], s);
+    assert.deepStrictEqual(behind.improvised.map((i) => i.key), ['pn-m2'], 'it is behind a panel');
+    const ended = run([{ type: 'fightEnd', fight: 'f1' }, { type: 'unplace', key: 'pn-m2' }], at);
+    assert.deepStrictEqual(ended.improvised, [], 'after End fight it can go');
+  });
+
+  it('review M3: a queued improvise, moveGroup or unplace names its key through an attach', () => {
+    let s = run([{ id: 'q1', type: 'improvise', title: 'Old' }, { type: 'attach', from: 'i-q1', to: 'i-new' }]);
+    s = run([{ type: 'jot', beat: 'i-q1', text: 'x' }, { type: 'improvise', key: 'i-q1', title: 'Old again' }], s);
+    assert.strictEqual(s.jots[0].beat, 'i-new');
+    assert.ok(s.improvised.some((i) => i.key === 'i-new'), 'the queued improvise lands on the new key');
+    assert.ok(!s.improvised.some((i) => i.key === 'i-q1' && i.title === 'Old again'));
+    s = run([{ type: 'moveGroup', pcs: [ADA], place: YARD, key: 'i-q1', title: 'The Chapel Yard', names: ['Ada'] }], s);
+    assert.strictEqual(s.positions[ADA].beat, 'i-new');
+  });
+
+  it('review M4: Fight here\'s quiet improvise writes no Improvised beat line', () => {
+    const key = model.placeKeys[YARD];
+    const s = run([{ type: 'improvise', key, title: 'The Chapel Yard', place: YARD, quiet: true }]);
+    assert.deepStrictEqual(s.events, []);
+    assert.ok(RS.derive(model, s).beats.some((b) => b.key === key));
+    assert.strictEqual(run([{ type: 'improvise', title: 'Loud' }]).events.length, 1, 'a plain improvise still logs');
+  });
+});

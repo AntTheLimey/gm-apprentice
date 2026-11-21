@@ -84,10 +84,14 @@
   }
   // Fight here at a place (plan 6a Task 7): its place beat first (the reader's key, so a second Fight here
   // finds it again), then the fight. Nobody moves.
+  // A place the Plan has a beat (or hub spot) for fights on that beat, with its planned foes, as its own Fight
+  // does (review I1). The place beat's "Improvised beat." line is not written: "Fight starts at…" says it (M4).
   function fightHere(note) {
     const key = (model().placeKeys || {})[note];
     if (!key || state().fight) return;
-    if (!RP.derived().beats.some((b) => b.key === key)) RP.dispatch({ type: 'improvise', key, title: RP.nameOf(note), place: note });
+    const plan = RS.planTarget(model(), state(), note);
+    if (plan) { startFight(plan.beat); return; }
+    if (!RP.derived().beats.some((b) => b.key === key)) RP.dispatch({ type: 'improvise', key, title: RP.nameOf(note), place: note, quiet: true });
     startFight(key);
   }
 

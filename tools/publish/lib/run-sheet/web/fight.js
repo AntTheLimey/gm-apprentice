@@ -216,7 +216,6 @@
       const pcs = new Set(f.rows.filter((r) => r.kind === 'pc').map((r) => r.note));
       const dupe = (r) => (r.kind === 'pc' ? pcs.has(r.note) : Boolean(r.foeKey) && keys.has(r.foeKey));
       const added = clone(a.rows || []).filter((r) => r && r.id != null && !ids.has(r.id) && !dupe(r)).map((r) => entered(r, at));
-      for (const r of added) if (a.id != null) r.joinId = a.id;
       // a second Lair row never joins: the fight's own lists the newcomers
       const fresh = f.rows.some((r) => r.kind === 'lair') ? added.filter((r) => r.kind !== 'lair') : added;
       f.rows.push(...fresh);
@@ -238,8 +237,12 @@
       const who = fresh.concat(ticked).filter((r) => r.kind !== 'lair');
       const label = String(a.label || '').trim() || who.map((r) => nameOf(s, f, r, true)).join(', ');
       if (label) say(s, f, at, `${label} ${who.length > 1 ? 'join' : 'joins'} the fight.`);
-      // a join that only added rows can be taken back: its line carries the join's id, for Undo
-      if (label && fresh.length && a.id != null && !ticked.length && !groups.length && !newThresholds) s.events[s.events.length - 1].join = a.id;
+      // a join that only added rows can be taken back: its line and its rows carry the join's id, for Undo. A group
+      // or beat join (it ticks, adds groups or thresholds) carries none, so `undoable` says no to it.
+      if (label && fresh.length && a.id != null && !ticked.length && !groups.length && !newThresholds) {
+        s.events[s.events.length - 1].join = a.id;
+        for (const r of fresh) r.joinId = a.id;
+      }
     },
     fightTick: onRow((s, f, r, a, at) => {
       r.in = !!a.in;
