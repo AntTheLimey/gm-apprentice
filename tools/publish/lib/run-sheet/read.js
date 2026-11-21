@@ -208,8 +208,17 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
   const beats = beatsRead.beats;
   const seen = new Set();
   const carried = readCarried();
+  // The session's own party (the index field, the wrap-up, the Plan's roster), else the one given, and the
+  // Plan's NPC Quick Reference: what a row's starting side reads (sides.js). Their warnings are added below.
+  const own = sessionParty({ index, sessionPath: sessionIndex, planBody: body, given: party });
+  const peopleRead = readPeople(body, index);
+  const quickRef = new Map();
+  for (const x of peopleRead.people) {
+    if (x.note) quickRef.set(x.note, `${quickRef.get(x.note) || ''} ${x.cells.slice(1).join(' ')}`.trim());
+  }
+  const sides = { quickRef, partyNotes: own.party };
   for (const beat of beats) {
-    const r = foesFor(beat, index, seen, carried);
+    const r = foesFor(beat, index, seen, carried, sides);
     beat.foes = r.foes;
     beat.treasure.push(...r.treasure);
     add(r.warnings);
@@ -229,11 +238,8 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
       if (f.ally && planHp.has(f.note)) { f.hpNow = planHp.get(f.note); f.carriedFrom = plan; }
     }
   }
-  // The session's own party (the index field, the wrap-up, the Plan's roster), else the one given.
-  const own = sessionParty({ index, sessionPath: sessionIndex, planBody: body, given: party });
   const pcsRead = readPcs(body, index, own.party);
   add(pcsRead.warnings);
-  const peopleRead = readPeople(body, index);
   add(peopleRead.warnings);
   const handoutsRead = readHandouts(body, index);
 
@@ -390,7 +396,7 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
   }
   if (!model.notes[plan]) model.notes[plan] = noteOf(plan, fm);
   // The cast is read last: its notes are never "touched", and its warnings stay on each entry.
-  model.cast = readCast(index, { carried });
+  model.cast = readCast(index, { carried, sides });
   // Added last, so these paths make no `notes` entries or links of their own: a Plan that names no map reads as before.
   model.showableMaps = showableMaps;
   // What the players' screen needs of each: its own name (never the stem) and its picture.

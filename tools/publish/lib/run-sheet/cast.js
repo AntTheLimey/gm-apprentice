@@ -4,22 +4,24 @@
 // of five hundred people does not bury the Plan's own (read.js attaches the cast after its warnings pass).
 
 const { stemOf } = require('./notes');
-const { foesOf } = require('./foes');
+const { foesOf, sideOf } = require('./foes');
 const { playAsOf, wantsOf } = require('./people-from-notes');
 const { nameList, gmAliasList, isWithheld } = require('../processor');
 const fate = require('../fate');
 
 const TYPES = new Set(['npc', 'creature', 'pc']);
 
-// `carried` is the reader's allies' carried vitals (`{ of(note) }`) or null.
-function readCast(index, { carried = null } = {}) {
+// `carried` is the reader's allies' carried vitals (`{ of(note) }`) or null; `sides` is the Plan's side
+// context (foes.js sideOf), so a person with no stats still carries the side they start on.
+function readCast(index, { carried = null, sides = null } = {}) {
   const cast = [];
   for (const p of index.notes()) {
     const { fm, body } = index.read(p);
     const type = String((fm && fm.type) || '').trim().toLowerCase();
     if (!TYPES.has(type)) continue;
     const pc = type === 'pc';
-    const foe = pc ? { foes: [], warnings: [] } : foesOf(p, index, 1, `cast.${p}`, new Set(), carried);
+    const foe = pc ? { foes: [], warnings: [] } : foesOf(p, index, 1, `cast.${p}`, new Set(), carried, sides);
+    const side = pc ? { ally: false, allyFrom: null, allyBy: null } : sideOf(p, index, sides, '', foe.foes[0] ? foe.foes[0].stats : '');
     cast.push({
       note: p,
       name: typeof fm.name === 'string' && fm.name.trim() ? fm.name.trim() : stemOf(p),
@@ -34,6 +36,7 @@ function readCast(index, { carried = null } = {}) {
       portrait: index.portrait(p),
       playAs: pc ? '' : playAsOf(p, index),
       wants: pc ? '' : wantsOf(p, index),
+      ally: side.ally, allyFrom: side.allyFrom, allyBy: side.allyBy,
       foe: foe.foes[0] || null,
       warnings: foe.warnings,
     });

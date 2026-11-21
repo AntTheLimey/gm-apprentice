@@ -8,6 +8,7 @@ const path = require('node:path');
 const { itemKeys } = require('./keys');
 const { SIGNED_SOURCE, toNumber } = require('./signed');
 const { bullets } = require('./plan-text');
+const { startingSide } = require('./sides');
 
 const FOE_TYPES = new Set(['npc', 'creature']);
 
@@ -62,7 +63,6 @@ function readNumbers(stats, behaviour) {
     recharge, rechargeAt,
     lair: /Lair Actions/i.test(stats),
     lairActions: lairActionsOf(stats),
-    ally: /\bas an ally\b/.test(stats),
   };
 }
 
@@ -74,6 +74,20 @@ function inspect(notePath, index) {
   const name = String(fm.name || path.posix.basename(notePath, '.md'));
   const stats = FOE_TYPES.has(type) ? index.gmSection(notePath, 'Stats') : '';
   return { name, type, stats, behaviour: stats ? index.gmSection(notePath, 'Behaviour') : '', treasure: stats ? index.gmSection(notePath, 'Treasure') : '' };
+}
+
+// The starting side of a note (sides.js), from its own frontmatter and stats and the Plan's context:
+// `sides` is `{ quickRef: Map(note -> the Quick Reference row's words), partyNotes }`, or null for none.
+// `whoText` is what the who line says about it.
+function sideOf(notePath, index, sides, whoText = '', statsText = '') {
+  const ctx = sides || {};
+  return startingSide({
+    whoText, statsText,
+    quickRefText: (ctx.quickRef && ctx.quickRef.get(notePath)) || '',
+    fm: index.read(notePath).fm || {},
+    partyNotes: ctx.partyNotes || [],
+    resolve: (t) => index.resolve(t),
+  });
 }
 
 function warner(seen, warnings) {
@@ -107,7 +121,7 @@ const HAS_ACTION = /^[ \t]*(?:[-*+][ \t]+)?[*_]*Actions\b|Hit:|Attack Roll|to hi
 // cannot run: it warns `no-stats`. An NPC listed once with no Stats is a social NPC: no warning.
 // `canFight` is false for a beat that cannot fight (see beatCanFight): the numbers it lacks then go
 // into the row's `prepNote` instead of a warning, for the Fight to say when it is wanted (5b).
-function entry(notePath, index, count, add, canFight = true) {
+function entry(notePath, index, count, add, canFight = true, sides = null, whoText = '') {
   const info = inspect(notePath, index);
   if (!info) return null;
   const n = Number.isInteger(count) && count > 0 ? count : 1;
@@ -127,7 +141,7 @@ function entry(notePath, index, count, add, canFight = true) {
     if (canFight) add('stock-no-actions', notePath, text);
     else prepNote = prepNote ? `${prepNote}; ${text}` : text;
   }
-  return { notePath, n, info, nums, prepNote };
+  return { notePath, n, info, nums, prepNote, side: sideOf(notePath, index, sides, whoText, info.stats) };
 }
 
 // Can this beat fight: its Type is combat, fight, battle or ambush, or it is a contingency, or its who holds a
@@ -154,11 +168,11 @@ function rows(entries, beatKey, carried = null) {
     const i = (at.get(e.notePath) || 0) + 1;
     at.set(e.notePath, i);
     const { info, nums } = e;
-    const got = nums.ally && carried ? carried.of(e.notePath, i) : null;
+    const got = e.side.ally && carried ? carried.of(e.notePath, i) : null;
     const hpNow = got && got.hp !== null ? got.hp : null;
     return {
       key: keys[k++], note: e.notePath, name: total.get(e.notePath) > 1 ? `${info.name} ${i}` : info.name,
-      ally: nums.ally, ac: nums.ac, hp: nums.hp, init: nums.init,
+      ally: e.side.ally, allyFrom: e.side.allyFrom, allyBy: e.side.allyBy, ac: nums.ac, hp: nums.hp, init: nums.init,
       legendaryResistance: nums.legendaryResistance, legendaryActions: nums.legendaryActions,
       recharge: nums.recharge, rechargeAt: nums.rechargeAt, lair: nums.lair, lairActions: nums.lairActions, stats: info.stats,
       hpNow, carriedFrom: hpNow === null ? null : got.log, prepNote: e.prepNote,
@@ -167,15 +181,15 @@ function rows(entries, beatKey, carried = null) {
 }
 
 // One note's foes, `count` of them. Exported for the Fight's Add (step 5).
-function foesOf(notePath, index, count = 1, beatKey, seen = new Set(), carried = null) {
+function foesOf(notePath, index, count = 1, beatKey, seen = new Set(), carried = null, sides = null) {
   const warnings = [];
-  const e = entry(notePath, index, count, warner(seen, warnings));
+  const e = entry(notePath, index, count, warner(seen, warnings), true, sides);
   return { foes: e ? rows([e], beatKey, carried) : [], warnings };
 }
 
 // Every `who` entry of a beat, planned or contingency. `seen` carries one Plan's warnings across beats;
 // `carried` is the allies' carried vitals, as `rows` reads them.
-function foesFor(beat, index, seen = new Set(), carried = null) {
+function foesFor(beat, index, seen = new Set(), carried = null, sides = null) {
   const warnings = [];
   const add = warner(seen, warnings);
   const entries = [];
@@ -183,7 +197,7 @@ function foesFor(beat, index, seen = new Set(), carried = null) {
   const doneNotes = new Set();
   const canFight = beatCanFight(beat, index);
   for (const w of beat.who || []) {
-    const e = entry(w.note, index, w.count, add, canFight);
+    const e = entry(w.note, index, w.count, add, canFight, sides, `${w.wants || ''} ${w.knownAs || ''}`);
     if (!e) continue;
     entries.push(e);
     if (doneNotes.has(w.note)) continue;
@@ -199,4 +213,4 @@ function foesFor(beat, index, seen = new Set(), carried = null) {
   return { foes, treasure, warnings };
 }
 
-module.exports = { foesOf, foesFor };
+module.exports = { foesOf, foesFor, sideOf };
