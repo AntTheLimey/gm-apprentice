@@ -92,9 +92,10 @@ function forPlayers(model, state, { withheldWords, campaign, picId } = {}) {
     else {
       // a place the Plan names, else any place in the vault a group can be moved to (plan 6a Task 7)
       const n = has(notes, note) ? notes[note] : (has(model.placeNotes, note) ? model.placeNotes[note] : null);
-      // a map reaches the screen only as a showable map: a GM half typed `location` is no place; a place whose
-      // page the player site would not publish sends nothing (review I3)
-      if (n && n.docType !== 'map' && String(n.type || '').toLowerCase() === 'location' && n.publishes === true) info = n;
+      // a map reaches the screen only as a showable map: a GM half typed `location` is no place. A place need not
+      // publish: a backdrop is only ever set by the GM's own act (Move them, Fight here, Show), and that act is
+      // the reveal (Ant, Task 7 fix round 1); wrap-up then offers to publish it from the Table Log
+      if (n && n.docType !== 'map' && String(n.type || '').toLowerCase() === 'location') info = n;
     }
     if (!info) return null;
     return { backdrop: picOf(info.portrait), caption: info.withheld || !info.named ? null : info.name };

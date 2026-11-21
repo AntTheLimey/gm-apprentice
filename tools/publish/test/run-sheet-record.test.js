@@ -625,10 +625,16 @@ describe('places in the record', () => {
   it('Fight here moves nobody: Where everyone ended names the PCs\' beat', () => {
     const key = model.placeKeys[YARD];
     let s = run([{ type: 'move', pc: ADA, to: to(GATE) }, { type: 'improvise', key, title: 'The Chapel Yard', place: YARD }]);
-    s = run([{ id: 'fx', type: 'fightStart', beat: key, title: 'The Chapel Yard', groups: [GATE.key], rows: [], thresholds: [], backdrop: { group: GATE.key, place: YARD } }, { type: 'fightEnd', fight: 'fx' }], s);
+    // changed on purpose by Ant's ruling (Task 7 fix round 1, review I2 widened): the players fought there, so the
+    // place is linked under Improvised beats, for reveal_scan to offer it for publishing
+    const idle = sectionsOf(R.tableLogBody(model, s, opts));
+    assert.strictEqual(idle.get('Improvised beats'), '- The Chapel Yard', 'no fight yet, nobody went: plain words');
+    s = run([{ id: 'fx', type: 'fightStart', beat: key, title: 'The Chapel Yard', groups: [GATE.key], rows: [], thresholds: [], backdrop: { group: GATE.key, place: YARD } }], s);
+    assert.strictEqual(sectionsOf(R.tableLogBody(model, s, opts)).get('Improvised beats'), '- [[The Chapel Yard]]', 'linked while the fight runs');
+    s = run([{ type: 'fightEnd', fight: 'fx' }], s);
     const sec = sectionsOf(R.tableLogBody(model, s, opts));
     assert.match(sec.get('Where everyone ended'), /^- \[\[Ada Moss\]\]: \[\[The Gate\]\]$/m);
-    assert.strictEqual(sec.get('Improvised beats'), '- The Chapel Yard', 'nobody stood there: no link');
+    assert.strictEqual(sec.get('Improvised beats'), '- [[The Chapel Yard]]', 'Fight here at a place: linked');
   });
 });
 

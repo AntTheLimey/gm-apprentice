@@ -410,6 +410,17 @@ class TableLogSections(unittest.TestCase):
                         "NPCs/Vex.md": VEX})
         self.assertEqual([r.path for r in res.rows], ["NPCs/Vex.md"])
 
+    def test_unpublished_place_under_improvised_beats_is_offered(self) -> None:
+        # the run sheet links a known place the players were at tonight (moved there, or a fight there) under
+        # Improvised beats (plan 6a Task 7 fix round 1, Ant's ruling): wrap-up must offer it for publishing
+        cellar = "---\ntype: location\npublish: false\n---\n\n# Secret Cellar\n"
+        body = ("## Where everyone ended\n\n- [[Ada]]: The Docks\n\n"
+                "## Improvised beats\n\n- New place: The Docks\n- [[Secret Cellar]]\n")
+        res = run_scan({**with_log(body), "Locations/Secret Cellar.md": cellar})
+        self.assertEqual([(r.path, r.published) for r in res.rows], [("Locations/Secret Cellar.md", False)])
+        # a typed place is plain words: it names no note, so it gives no row
+        self.assertNotIn("The Docks", [r.path for r in res.rows])
+
     def test_every_read_section_gives_a_row(self) -> None:
         for name in rv.TABLE_LOG_READ:
             with self.subTest(name=name):

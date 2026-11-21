@@ -426,15 +426,6 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
   }
   for (const list of Object.values(model.placePeople)) list.sort();
   model.placeNotes = Object.fromEntries(locations.map((p) => [p, model.notes[p] || noteOf(p)]));
-  // Whether each place publishes, Plan places too (review I3): the players' screen shows a place's name and
-  // picture only when its page would be on the player site. The maps list's rule, so a vault with no site set
-  // up still shows its places; a publish list that does not read publishes nothing. `withheld` is left out of
-  // the question: a withheld place goes up as its picture with no name, as 5b decided (players.js), so it
-  // counts when it would publish but for being withheld.
-  const placePublishes = (rel) => publishesPage(decidePage({ rel, frontmatter: { ...fmOf(rel), withheld: false } }, { rel, publishConfig, manifest, folderMapped: folderMapped(rel) }));
-  for (const n of [...Object.values(model.notes), ...Object.values(model.placeNotes)]) {
-    if (n && n.type === 'location') n.publishes = manifestRead && placePublishes(n.path);
-  }
   // The cast is read last: its notes are never "touched", and its warnings stay on each entry.
   model.cast = readCast(index, { carried, sides });
   model.sidesCarried = sidesCarried;

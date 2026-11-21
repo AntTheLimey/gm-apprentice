@@ -99,13 +99,15 @@ function tableLogBody(model, state, { linkFor: link, timeOf = localTime } = {}) 
   }));
 
   sec['Contingencies that fired'] = bullets(d.fired.map((f) => one(f.title)));
-  // a place typed tonight (plan 6a Task 7) is `New place: <name>`, for wrap-up to offer its note. A known place's
-  // beat is its link once a PC was moved there (it is visited), even after they left (review I2); one only Fight
-  // here touched stays its name, unlinked, as reveal_scan counts a link here as seen by the players.
+  // a place typed tonight (plan 6a Task 7) is `New place: <name>`, plain words: it has no note yet, and wrap-up
+  // offers to make one. A known place the players were at tonight is its link: a PC was moved there (visited),
+  // even if they left, or a fight was fought there (Fight here). reveal_scan reads these links and offers to
+  // publish an unpublished place: the players have seen it (Ant, Task 7 fix round 1, review I2).
   const visited = (state && state.visited) || {};
+  const fought = new Set([...(Array.isArray(state && state.fights) ? state.fights : []), ...(state && state.fight ? [state.fight] : [])].map((f) => f && f.beat));
   sec['Improvised beats'] = bullets(d.improvised.map((i) => {
     if (i.newPlace) return `${NEW_PLACE} ${one(i.title)}`;
-    if (typeof i.place === 'string' && i.place && visited[i.key]) return link(i.place);
+    if (typeof i.place === 'string' && i.place && (visited[i.key] || fought.has(i.key))) return link(i.place);
     return one(i.title);
   }));
   sec['Unmasked this session'] = bullets(

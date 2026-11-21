@@ -773,50 +773,51 @@ describe('a place typed tonight (plan 6a Task 7 / Global Constraints (typed plac
   });
 });
 
-// Task 7 fix round 1 / review I3: a place reaches the players' screen only when its page would publish, by the maps
-// list's rule (a vault with no site set up publishes its places), Plan places and any vault place alike
-describe('a place that does not publish (plan 6a Task 7 fix round 1 / review I3)', () => {
+// Task 7 fix round 1, changed by Ant (the GM), who reversed review I3: "If the players go to a place that hasn't been
+// published, it should become visible and become published." A place need not publish to reach the players'
+// screen, but only the GM's own act puts it there: Move them, Fight here or Show. Never before; and the per-note
+// rules hold (a place with no name of its own shows no caption; the picture goes as an opaque id).
+describe('an unpublished place reaches the players only by the GM\'s act (plan 6a Task 7 fix round 1)', () => {
   const RS = require('../lib/run-sheet/web/state');
-  const tmp = () => { const d = fs.mkdtempSync(path.join(os.tmpdir(), 'rs-place-')); made.push(d); fs.cpSync(FIXTURE, d, { recursive: true }); return d; };
   const CELLAR = 'Locations/Secret Cellar.md';
-  const GATE_NOTE = 'Locations/The Gate.md';
-  const view = (m, s) => forPlayers(m, s, { withheldWords: m.withheldWords, campaign: m.campaign, picId: () => '0'.repeat(20) });
+  const PIC = '_attachments/secret-cellar.png';
   let n = 0;
   const act = (s, a) => RS.reduce(s, { id: `np-${++n}`, ...a }, new Date(Date.parse('2026-11-20T19:00:00Z') + n * 60000).toISOString());
-  const at = (m, note) => {
-    let s = RS.emptyState({ stateId: 's', session: 'x', plan: S.PLAN });
-    const to = RS.planTarget(m, s, note);
-    s = act(s, to ? { type: 'moveGroup', pcs: [S.NOTES.ADA], place: note, title: 'x', to, names: ['Ada'] }
-      : { type: 'moveGroup', pcs: [S.NOTES.ADA], place: note, key: m.placeKeys[note], title: 'x', names: ['Ada'] });
-    return view(m, s).panels[0];
-  };
 
-  it('an unpublished, unnamed location moved to: no caption, no picture', () => {
-    const dir = tmp();
-    fs.writeFileSync(path.join(dir, CELLAR), '---\ntype: location\npublish: false\nportrait: gate-place.png\n---\n\nUnder the chapel.\n');
+  it('an unpublished place shows its picture only after the GM moves the party there, fights there or Shows it', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rs-place-'));
+    made.push(dir);
+    fs.cpSync(FIXTURE, dir, { recursive: true });
+    fs.copyFileSync(path.join(dir, '_attachments', 'gate-place.png'), path.join(dir, PIC));
+    fs.writeFileSync(path.join(dir, CELLAR), '---\ntype: location\npublish: false\nportrait: secret-cellar.png\n---\n\nUnder the chapel.\n');
     const m = readRunSheet(dir, S.PLAN, { party: S.PARTY });
-    assert.strictEqual(m.placeNotes[CELLAR].publishes, false);
-    assert.ok(m.placeNotes[CELLAR].portrait, 'it has a picture to keep back');
-    const p = at(m, CELLAR);
-    assert.deepEqual([p.caption, p.backdrop], [null, null]);
-    // a Plan place that publishes still shows
-    assert.strictEqual(at(m, GATE_NOTE).caption, 'The Gate');
-    // and one set not to publish goes dark too: the same rule for Plan places
-    const gate = path.join(dir, GATE_NOTE);
-    fs.writeFileSync(gate, fs.readFileSync(gate, 'utf8').replace('type: location', 'type: location\npublish: false'));
-    const m2 = readRunSheet(dir, S.PLAN, { party: S.PARTY });
-    assert.deepEqual([at(m2, GATE_NOTE).caption, at(m2, GATE_NOTE).backdrop], [null, null]);
-  });
-
-  it('a vault with no site set up still shows its places; a publish list that does not read shows none', () => {
-    const dir = tmp();
-    fs.writeFileSync(path.join(dir, '_meta', 'vault-config.yaml'), 'vault:\n  system: dnd-5e-2024\n');
-    const m = readRunSheet(dir, S.PLAN, { party: S.PARTY });
-    const p = at(m, GATE_NOTE);
-    assert.ok(p.backdrop, 'the picture shows');
-    assert.strictEqual(p.caption, 'The Gate');
-    fs.writeFileSync(path.join(dir, '_meta', 'publish-manifest.md'), '# old list\n');
-    const broken = readRunSheet(dir, S.PLAN, { party: S.PARTY });
-    assert.deepEqual([at(broken, GATE_NOTE).caption, at(broken, GATE_NOTE).backdrop], [null, null]);
+    const ids = new Map();
+    const picId = (p) => { if (!ids.has(p)) ids.set(p, String(ids.size).padStart(20, '0')); return ids.get(p); };
+    const view = (s) => forPlayers(m, s, { withheldWords: m.withheldWords, campaign: m.campaign, picId });
+    const cellarPic = () => `/players/pic/${picId(PIC)}`;
+    const gate = m.beats.find((b) => b.title === 'Ashfall Reckoning');
+    const placed = () => act(RS.emptyState({ stateId: 's', session: 'x', plan: S.PLAN }), { type: 'move', pc: S.NOTES.ADA, to: { beat: gate.key, spot: null, title: gate.title } });
+    const shows = (v) => JSON.stringify(v).includes(cellarPic()) || JSON.stringify(v).includes('Secret Cellar');
+    // before: nothing names or shows the cellar
+    assert.strictEqual(m.placeNotes[CELLAR].portrait, PIC, 'it has a picture to keep back');
+    const s = placed();
+    const before = view(s);
+    assert.ok(!shows(before));
+    assert.deepEqual(before.panels.map((p) => p.caption), ['The Gate'], 'the group\'s own place, nothing else');
+    // Move them there: its picture, and no caption (it has no name of its own)
+    const moved = act(s, { type: 'moveGroup', pcs: [S.NOTES.ADA], place: CELLAR, key: m.placeKeys[CELLAR], title: 'Secret Cellar', names: ['Ada'] });
+    assert.deepEqual([view(moved).panels[0].backdrop, view(moved).panels[0].caption], [cellarPic(), null]);
+    // Fight here there, for the group at the Gate
+    const fought = act(act(s, { type: 'improvise', key: m.placeKeys[CELLAR], title: 'Secret Cellar', place: CELLAR, quiet: true }),
+      { type: 'fightStart', beat: m.placeKeys[CELLAR], title: 'Secret Cellar', groups: [gate.key], rows: [], thresholds: [], backdrop: { group: gate.key, place: CELLAR } });
+    assert.deepEqual([view(fought).panels[0].backdrop, view(fought).panels[0].caption], [cellarPic(), null]);
+    // Show it behind the panel
+    const shown = act(s, { type: 'backdrop', group: gate.key, note: CELLAR });
+    assert.deepEqual([view(shown).panels[0].backdrop, view(shown).panels[0].caption], [cellarPic(), null]);
+    // and none of it before: an improvised place beat nobody went to and no fight at puts nothing up
+    const idle = act(s, { type: 'improvise', key: m.placeKeys[CELLAR], title: 'Secret Cellar', place: CELLAR, quiet: true });
+    assert.deepEqual(view(idle), before);
+    assert.ok(!shows(view(idle)));
+    for (const v of [view(moved), view(fought), view(shown)]) checkShape(v, 'an unpublished place');
   });
 });
