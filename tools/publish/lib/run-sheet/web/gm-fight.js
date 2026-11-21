@@ -31,6 +31,8 @@
     fightId: null, peek: null, peekTurn: null,
     area: false, sel: {}, ahalf: {}, spend: {}, areaDmg: '',
     ask: null, asked: {}, other: {}, addHits: [], addText: '', addCount: '1', mine: null,
+    // a stat box holding words that are not a number (review F5): its words, kept through redraws
+    bad: {},
   };
 
   const model = () => RP.model();
@@ -298,6 +300,15 @@
     return c.join('');
   }
 
+  // A stat box: the state's number, or the words the GM typed that are not one, marked (review F5).
+  const BAD_NUMBER = 'Not a number: kept as typed';
+  const badKey = (k, id) => `${k}|${id}`;
+  function statBox(k, r, value, rest) {
+    const bad = ui.bad[badKey(k, r.id)];
+    if (bad === undefined) return `<input ${k}="${esc(r.id)}" value="${esc(value)}" ${rest}>`;
+    return `<input ${k}="${esc(r.id)}" value="${esc(bad)}" aria-invalid="true" ${rest}><span class="badnum" role="status">${BAD_NUMBER}</span>`;
+  }
+
   // pc, ally, foe or neutral; a lair action has none
   const sideWord = (r) => (r.kind === 'pc' ? 'pc' : FM.sideOfRow(r));
   function rowHTML(r, f, view) {
@@ -318,7 +329,7 @@
     if (r.temp) tags.push(`+${r.temp} temp`);
     if (r.gone) tags.push('not in the party now');
     let h = `<li class="${cls}" data-frow="${esc(r.id)}"><span class="tk">${tick}</span>`;
-    h += `<input class="ini" data-fini="${esc(r.id)}" value="${esc(isNum(r.ini) ? r.ini : '')}" placeholder="${r.kind === 'pc' ? 'roll' : esc(sign(r.mod))}" inputmode="numeric" autocomplete="off" aria-label="Initiative for ${esc(r.gmName)}">`;
+    h += statBox('data-fini', r, isNum(r.ini) ? r.ini : '', `class="ini" placeholder="${r.kind === 'pc' ? 'roll' : esc(sign(r.mod))}" inputmode="numeric" autocomplete="off" aria-label="Initiative for ${esc(r.gmName)}"`);
     h += `${name}${tags.length ? `<span class="tag">${esc(tags.join(' · '))}</span>` : ''}`;
     if (r.kind === 'foe') h += `<button type="button" class="tg ${r.seen ? 'on' : ''}" data-fseen="${esc(r.id)}" aria-pressed="${!!r.seen}" title="${r.seen ? 'The players see its name. Click: back to its unseen word' : 'The players see its unseen word. Click: they have seen it'}">${r.seen ? 'seen' : 'unseen'}</button>`;
     if (!r.in) return `${h}</li>`;
@@ -328,8 +339,8 @@
       h += `<button type="button" class="tg ${half ? 'on' : ''}" ${ui.area ? 'data-fahalf' : 'data-fhalf'}="${esc(r.id)}" aria-pressed="${!!half}" title="${ui.area ? 'Half for this area: a save' : 'Half: the next hit only (a save)'}">½</button>`;
       h += `<button type="button" class="tg ${r.resisted ? 'on' : ''}" data-fres="${esc(r.id)}" aria-pressed="${!!r.resisted}" title="Resisted: every hit halved until turned off">Res</button>`;
     }
-    h += `<span class="hpv">${esc(isNum(r.hp) ? r.hp : '?')}/<input data-fmax="${esc(r.id)}" value="${esc(isNum(r.max) ? r.max : '')}" inputmode="numeric" autocomplete="off" aria-label="Maximum HP for ${esc(r.gmName)}"></span>`;
-    h += `<span class="acv">AC<input data-fac="${esc(r.id)}" value="${esc(isNum(r.ac) ? r.ac : '')}" inputmode="numeric" autocomplete="off" aria-label="AC for ${esc(r.gmName)}"></span>`;
+    h += `<span class="hpv">${esc(isNum(r.hp) ? r.hp : '?')}/${statBox('data-fmax', r, isNum(r.max) ? r.max : '', `inputmode="numeric" autocomplete="off" aria-label="Maximum HP for ${esc(r.gmName)}"`)}</span>`;
+    h += `<span class="acv">AC${statBox('data-fac', r, isNum(r.ac) ? r.ac : '', `inputmode="numeric" autocomplete="off" aria-label="AC for ${esc(r.gmName)}"`)}</span>`;
     h += chips(r, view.bloodied.has(r.id));
     h += statusSelect(r);
     if (ui.other[r.id]) h += `<input class="other" data-fother="${esc(r.id)}" placeholder="${esc(RP.OTHER_STATUS_PLACEHOLDER)}" autocomplete="off" aria-label="A status for ${esc(r.gmName)}, typed">`;
@@ -585,7 +596,7 @@
           actingStatuses: Array.from(document.querySelectorAll('#acting .nums .st'), (b) => b.textContent.replace(/ ✕$/, '')),
           rows: f.view.rows.map((r) => ({
             id: r.id, note: r.note, copy: r.copy, kind: r.kind, side: sideWord(r), name: r.gmName, in: r.in, ini: isNum(r.ini) ? r.ini : null, mod: r.mod,
-            hp: r.hp, max: r.max, temp: r.temp, conds: r.conds, exhaustion: r.exhaustion, conc: r.conc, out: r.out, seen: r.seen,
+            hp: r.hp, max: r.max, ac: r.ac, temp: r.temp, conds: r.conds, exhaustion: r.exhaustion, conc: r.conc, out: r.out, seen: r.seen,
             recharge: (r.recharge || []).map((x) => ({ name: x.name, ready: x.ready, rolled: x.rolled })),
           })),
         };
@@ -702,33 +713,79 @@
     return false;
   }
 
-  // An initiative box: a whole number, or empty. Unchanged sends nothing.
-  function commitIni(t) {
-    const r = rowById(t.dataset.fini);
+  // The stat boxes: which key each is, and what it takes. An empty box clears the number.
+  const STAT = {
+    fini: { k: 'data-fini', ok: /^-?\d{1,3}$/ },
+    fmax: { k: 'data-fmax', ok: /^\d{1,4}$/ },
+    fac: { k: 'data-fac', ok: /^\d{1,4}$/ },
+  };
+  const statOf = (t) => { const d = (t && t.dataset) || {}; for (const f of Object.keys(STAT)) if (d[f] !== undefined) return f; return null; };
+
+  // Words that are not a number mark the box and stay in it; the state is unchanged, and focus is never
+  // taken back (review F5: reportValidity put it back, and whatever was typed next went into the bad box).
+  function markBad(t, f, on) {
+    const key = badKey(STAT[f].k, t.dataset[f]);
+    if (on) ui.bad[key] = t.value; else delete ui.bad[key];
+    const msg = t.nextElementSibling && t.nextElementSibling.classList.contains('badnum') ? t.nextElementSibling : null;
+    if (on) {
+      t.setAttribute('aria-invalid', 'true');
+      if (!msg) t.insertAdjacentHTML('afterend', `<span class="badnum" role="status">${BAD_NUMBER}</span>`);
+    } else {
+      t.removeAttribute('aria-invalid');
+      if (msg) msg.remove();
+    }
+  }
+
+  // A stat box sends its number, when it changed: initiative, max HP or AC. False for words that are not one.
+  function commitStat(t) {
+    const f = statOf(t);
+    const r = f && rowById(t.dataset[f]);
     if (!r) return true;
     const v = t.value.trim();
-    if (v !== '' && !/^-?\d{1,3}$/.test(v)) { t.setCustomValidity('A whole number'); t.reportValidity(); return false; }
+    if (v !== '' && !STAT[f].ok.test(v)) { markBad(t, f, true); return false; }
+    markBad(t, f, false);
     const n = v === '' ? null : Number(v);
-    if (n !== (isNum(r.ini) ? r.ini : null)) F({ type: 'setInit', row: r.id, ini: n });
+    if (f === 'fini' && n !== (isNum(r.ini) ? r.ini : null)) F({ type: 'setInit', row: r.id, ini: n });
+    if (f === 'fmax' && n !== r.max) F({ type: 'setMax', row: r.id, max: n });
+    if (f === 'fac' && n !== r.ac) F({ type: 'setAc', row: r.id, ac: n });
     return true;
+  }
+
+  // Where Tab goes from a stat box, by row id and field, found in the order as it stands before the commit,
+  // so a row the commit re-places (an initiative after Start) never moves the target:
+  // - an initiative box walks down the initiative column (spec §6.4 C2, as in 5b);
+  // - max HP goes to the same row's AC, and AC to the next row's max HP (review F4).
+  // Shift reverses both. Past either end: null, and Tab leaves the boxes as it does anywhere.
+  function tabTarget(t, f, back) {
+    const id = t.dataset[f];
+    const col = (k) => Array.from(document.querySelectorAll(`[${k}]`), (b) => b.getAttribute(k));
+    if (f === 'fini') {
+      const ids = col('data-fini');
+      const to = ids[ids.indexOf(id) + (back ? -1 : 1)];
+      return to === undefined ? null : attr('data-fini', to);
+    }
+    const rows = col('data-fmax');
+    const i = rows.indexOf(id);
+    if (f === 'fmax') {
+      if (!back) return document.querySelector(attr('data-fac', id)) ? attr('data-fac', id) : null;
+      return i > 0 ? attr('data-fac', rows[i - 1]) : null;
+    }
+    if (back) return attr('data-fmax', id);
+    return i >= 0 && i + 1 < rows.length ? attr('data-fmax', rows[i + 1]) : null;
   }
 
   document.addEventListener('keydown', (ev) => {
     const t = ev.target;
     const d = (t && t.dataset) || {};
     if (ev.isComposing) return;
-    if (d.fini !== undefined && (ev.key === 'Enter' || ev.key === 'Tab')) {
-      const id = d.fini;
-      // Tab walks the initiative boxes in row order (nothing has re-sorted); past the last one (Shift+Tab
-      // before the first) it leaves them for the page's other controls, as Tab does anywhere
-      const ids = Array.from(document.querySelectorAll('[data-fini]'), (b) => b.dataset.fini);
-      const to = ev.key === 'Tab' ? ids[ids.indexOf(id) + (ev.shiftKey ? -1 : 1)] : undefined;
-      if (ev.key === 'Enter' || to !== undefined) ev.preventDefault();
-      if (!commitIni(t)) { ev.preventDefault(); return; }
-      if (to !== undefined) {
-        const nx = document.querySelector(attr('data-fini', to));
-        if (nx) { nx.focus(); nx.select(); }
-      }
+    const f = statOf(t);
+    if (f && (ev.key === 'Enter' || ev.key === 'Tab')) {
+      const to = ev.key === 'Tab' ? tabTarget(t, f, ev.shiftKey) : null;
+      if (ev.key === 'Enter' || to) ev.preventDefault();
+      // committed here: the browser's `change` when focus leaves sends nothing and redraws nothing again
+      t.dataset.committed = t.value;
+      commitStat(t);
+      if (to) RP.focusTo(to);
       return;
     }
     if (ev.key !== 'Enter') return;
@@ -740,7 +797,6 @@
       F({ type: 'hp', row: d.fhp, entry });
       return;
     }
-    if (d.fmax !== undefined || d.fac !== undefined) { ev.preventDefault(); commitNumber(t); return; }
     if (d.fother !== undefined) {
       ev.preventDefault();
       const v = t.value.trim();
@@ -758,27 +814,35 @@
     }
     if (t.id === 'fAreaDmg') { ev.preventDefault(); applyArea(); }
   });
+  // A box already committed (by Tab or Enter) and not typed in since sends nothing more.
+  const committed = (t) => t.dataset.committed !== undefined && t.dataset.committed === t.value;
 
-  // Max HP and AC: whole numbers, or empty; sent on Enter or when the box is left.
-  function commitNumber(t) {
-    const d = t.dataset;
-    const r = rowById(d.fmax || d.fac);
-    if (!r) return;
-    const v = t.value.trim();
-    if (v !== '' && !/^\d{1,4}$/.test(v)) { t.setCustomValidity('A whole number'); t.reportValidity(); return; }
-    const n = v === '' ? null : Number(v);
-    if (d.fmax !== undefined && n !== r.max) F({ type: 'setMax', row: r.id, max: n });
-    if (d.fac !== undefined && n !== r.ac) F({ type: 'setAc', row: r.id, ac: n });
-  }
-
-  // The "how many" box selects its number when it is clicked or tabbed into, so a typed 3 replaces the 1
-  // instead of making 13 (ruling R2: this box only; Task 11 gives every number box the same).
-  document.addEventListener('click', (ev) => { if (ev.target && ev.target.id === 'fAddCount') ev.target.select(); });
-  document.addEventListener('focusin', (ev) => { if (ev.target && ev.target.id === 'fAddCount') ev.target.select(); });
+  // Every number box selects what it holds when it is clicked or tabbed into, so a typed 3 replaces the 1
+  // (or the 21) instead of making 13 (or 291). A focus handler alone is undone by the press's own caret
+  // (review F6), so a box this press focused selects again on the release.
+  const NUMBER_BOX = '[data-fini], [data-fmax], [data-fac], #fAddCount';
+  let pressFocused = null;
+  document.addEventListener('pointerdown', (ev) => {
+    const b = ev.target.closest && ev.target.closest(NUMBER_BOX);
+    pressFocused = b && document.activeElement !== b ? b : null;
+  }, true);
+  document.addEventListener('pointerup', (ev) => {
+    const b = ev.target.closest && ev.target.closest(NUMBER_BOX);
+    if (b && b === pressFocused && document.activeElement === b) b.select();
+    pressFocused = null;
+  }, true);
+  document.addEventListener('focusin', (ev) => { if (ev.target.matches && ev.target.matches(NUMBER_BOX)) ev.target.select(); });
 
   document.addEventListener('input', (ev) => {
     const t = ev.target;
     if (t.setCustomValidity) t.setCustomValidity('');
+    const f = statOf(t);
+    if (f) {
+      delete t.dataset.committed;
+      // a marked box keeps its words through a redraw while they are worked on
+      const key = badKey(STAT[f].k, t.dataset[f]);
+      if (ui.bad[key] !== undefined) ui.bad[key] = t.value;
+    }
     if (t.id === 'fAddName') {
       ui.addText = t.value;
       ui.addHits = FM.addChoices(model().cast || [], t.value, RS.castSearch);
@@ -795,20 +859,19 @@
   document.addEventListener('focusout', (ev) => {
     const t = ev.target;
     const d = (t && t.dataset) || {};
-    if (d.fini === undefined && d.fmax === undefined && d.fac === undefined) return;
+    if (!statOf(t)) return;
     // after the redraw that may be under way: a box it replaced is gone, and its words are in the new one
     setTimeout(() => {
-      if (!t.isConnected || document.activeElement === t) return;
-      if (d.fini !== undefined) commitIni(t);
-      else commitNumber(t);
+      if (!t.isConnected || document.activeElement === t || committed(t)) return;
+      commitStat(t);
     }, 0);
   });
 
   document.addEventListener('change', (ev) => {
     const t = ev.target;
     const d = t.dataset || {};
-    if (d.fini !== undefined) { commitIni(t); return; }
-    if (d.fmax !== undefined || d.fac !== undefined) { commitNumber(t); return; }
+    // a box the redraw removes fires change: its half-typed number is not sent (the redraw keeps it)
+    if (statOf(t)) { if (!committed(t) && !RP.drawing()) commitStat(t); return; }
     if (d.fstatus !== undefined) {
       const v = t.value;
       t.value = '';

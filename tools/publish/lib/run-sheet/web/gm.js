@@ -560,9 +560,51 @@
   let committing = false;
   let renders = 0;
 
+  // A press holds the redraws (review F1). Pressing the mouse leaves the box being edited, and its commit
+  // redraws; a redraw between press and release replaces what is under the pointer, so no click fires.
+  // The commit's action goes at once; the redraw waits until after the click (or a release with no click,
+  // or 300 ms), and then focus goes where the click put it.
+  const press = { on: false, owed: false, timer: null };
+  function endHold() {
+    clearTimeout(press.timer);
+    press.on = false;
+    if (press.owed) { press.owed = false; update(); }
+  }
+  document.addEventListener('pointerdown', (ev) => {
+    if (ev.button !== 0) return;
+    press.on = true;
+    clearTimeout(press.timer);
+    press.timer = setTimeout(endHold, 300);
+  }, true);
+  // the click's own handlers redraw as usual (capture, before them); a redraw still owed comes after them
+  window.addEventListener('click', () => { press.on = false; }, true);
+  window.addEventListener('click', endHold);
+  // a release with no click: the click, when there is one, comes in the same task as the release
+  document.addEventListener('pointerup', () => { if (press.on) setTimeout(endHold, 0); }, true);
+  document.addEventListener('pointercancel', endHold, true);
+
+  // Focus a part moved on purpose (Tab to the next box): a redraw that finds focus on nothing puts it back
+  // there, by the box's key, wherever its row now stands. Any press, or focus going elsewhere, forgets it.
+  let wantFocus = null;
+  function focusTo(key) {
+    wantFocus = key;
+    const el = key && document.querySelector(key);
+    if (!el) return null;
+    el.focus({ preventScroll: false });
+    if (el.select) el.select();
+    return el;
+  }
+  document.addEventListener('pointerdown', () => { wantFocus = null; }, true);
+  document.addEventListener('focusin', (ev) => { if (wantFocus && ev.target.getAttribute && focusKey(ev.target) !== wantFocus) wantFocus = null; });
+
   // Every change: redraw, then put focus, caret and half-typed words back.
   function update() {
-    const a = document.activeElement;
+    if (press.on) { press.owed = true; return; }
+    // called from inside a redraw (a box the redraw removes fires blur and change): once it is done
+    if (drawing) { drawAgain = true; return; }
+    press.owed = false;
+    let a = document.activeElement;
+    if ((!a || a === document.body) && wantFocus) a = document.querySelector(wantFocus) || a;
     if (!committing && a && a.matches && a.matches(COMMIT_ON_CHANGE) && a.value.trim() !== a.defaultValue.trim()) {
       const before = renders;
       committing = true;
@@ -584,7 +626,18 @@
     }
   }
 
+  // A focused box the redraw removes fires blur and change while `innerHTML` is being set; a redraw from
+  // in there would throw ("the node to be removed is no longer a child"), leave the page half drawn and
+  // focus on nothing. So the handlers can tell (`drawing()`), and a redraw asked for meanwhile comes after.
+  let drawing = false;
+  let drawAgain = false;
   function render() {
+    if (drawing) { drawAgain = true; return; }
+    drawing = true;
+    try { draw(); } finally { drawing = false; }
+    if (drawAgain) { drawAgain = false; setTimeout(update, 0); }
+  }
+  function draw() {
     if (!G.model || !G.state) return;
     renders++;
     const d = D();
@@ -1822,6 +1875,8 @@
     derived: () => D(),
     ui: G.ui,
     render: update,
+    drawing: () => drawing,
+    focusTo,
     parts,
     // helpers the parts share with the page
     esc, armBtn, armed, link, face, nameOf, getJson, focusedGroup, groups, groupLabel, note, probe, cueHTML, unmaskOf, isUnmasked,

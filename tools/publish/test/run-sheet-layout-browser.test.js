@@ -1021,3 +1021,238 @@ describe('10, fix round 1', { skip: browserSkip() }, () => {
     });
   });
 });
+
+// ---- stat boxes keep the mouse and the keyboard (plan 6a Task 11; review F1, F4, F5, F6). Real input only.
+// A headless page has no window focus, so leaving a box fires no blur or change: `focusEvents` makes it
+// behave as the GM's window does.
+const sel = (attr, id) => `[${attr}="${id}"]`;
+const active = (page) => page.evaluate('(() => { const a = document.activeElement; if (!a || a === document.body) return "body"; const d = a.dataset; return d.fini ? `fini:${d.fini}` : d.fmax ? `fmax:${d.fmax}` : d.fac ? `fac:${d.fac}` : d.fhp ? `fhp:${d.fhp}` : a.id || a.tagName; })()');
+const selected = (page) => page.evaluate('(() => { const a = document.activeElement; return a && typeof a.selectionStart === "number" ? [a.selectionStart, a.selectionEnd, a.value.length] : null; })()');
+// Counts every moment, between the page's tasks, that focus sits on nothing.
+const watchBody = (page) => page.evaluate('window.__body = 0; clearInterval(window.__bodyT); window.__bodyT = setInterval(() => { if (!document.activeElement || document.activeElement === document.body) window.__body++; }, 1); true');
+const bodyHits = (page) => page.evaluate('window.__body');
+// The fight set up, ready to Start: the PCs' numbers typed, the foes rolled.
+async function readyFight(page, run) {
+  await page.focusEvents();
+  await page.goto(`${run.base}/?probe=1`);
+  await settled(page);
+  const b = run.model.beats[0];
+  await tap(page, `[id="beat:${b.key}"] [data-all]`);
+  await settled(page);
+  await tap(page, `[id="beat:${b.key}"] [data-fight]`);
+  let p = await until(page, 'p.fight && p.fight.rows.length > 0');
+  for (const [note, v] of [[ADA, '15'], [BEN, '12']]) {
+    await tap(page, sel('data-fini', rowOf(p, note).id));
+    await page.type(v);
+    await page.key('Enter');
+  }
+  await settled(page);
+  await tap(page, '#fRoll');
+  return until(page, 'p.saved === "Saved" && p.pending === 0 && p.fight.rows.filter((r) => r.in && (r.kind === "foe" || r.kind === "ally")).every((r) => r.ini !== null)');
+}
+const foes = (p) => p.fight.rows.filter((r) => r.kind === 'foe' && r.in && Number.isFinite(r.hp));
+
+describe('stat boxes keep the mouse and the keyboard', { skip: browserSkip() }, () => {
+  it('an edited box then a click on Start: the max is saved and the fight starts', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      const p0 = await readyFight(page, run);
+      const foe = foes(p0)[0];
+      await tap(page, sel('data-fmax', foe.id));
+      await page.type('77');
+      await tap(page, '#fNext');
+      const p = await until(page, `p.saved === "Saved" && p.pending === 0 && p.fight.rows.find((r) => r.id === ${JSON.stringify(foe.id)}).max === 77`);
+      assert.strictEqual(p.fight.started, true, 'the click on Start was not eaten');
+      assert.deepStrictEqual(p.errors, []);
+    });
+  });
+
+  it('an edited box then a click into another box: both saved, focus never on the page', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await page.focusEvents();
+      await page.goto(`${run.base}/?probe=1`);
+      await settled(page);
+      const b = run.model.beats[0];
+      await tap(page, `[id="beat:${b.key}"] [data-all]`);
+      await settled(page);
+      await tap(page, `[id="beat:${b.key}"] [data-fight]`);
+      let p = await until(page, 'p.fight && p.fight.rows.length > 0 && p.saved === "Saved" && p.pending === 0');
+      const ada = rowOf(p, ADA).id;
+      const ben = rowOf(p, BEN).id;
+      await tap(page, sel('data-fini', ada));
+      await watchBody(page);
+      await page.type('15');
+      await tap(page, sel('data-fini', ben));
+      assert.strictEqual(await active(page), `fini:${ben}`, 'the click put focus in Ben\'s box');
+      await page.type('12');
+      await page.key('Tab');
+      p = await until(page, `p.saved === "Saved" && p.pending === 0 && p.fight.rows.find((r) => r.id === ${JSON.stringify(ada)}).ini === 15 && p.fight.rows.find((r) => r.id === ${JSON.stringify(ben)}).ini === 12`);
+      await page.sleep(100);
+      assert.notStrictEqual(await active(page), 'body');
+      assert.strictEqual(await bodyHits(page), 0, 'focus never sat on the page');
+      assert.deepStrictEqual(p.errors, []);
+    });
+  });
+
+  it('an edited box then a damage entry: the AC is saved and the HP goes down 4', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await page.focusEvents();
+      const p0 = await startedFight(page, run);
+      const [one, two] = foes(p0);
+      await tap(page, sel('data-fac', one.id));
+      await page.type('19');
+      await tap(page, sel('data-fhp', two.id));
+      assert.strictEqual(await active(page), `fhp:${two.id}`);
+      await page.type('-4');
+      await page.key('Enter');
+      const p = await until(page, `p.saved === "Saved" && p.pending === 0 && p.fight.rows.find((r) => r.id === ${JSON.stringify(one.id)}).ac === 19 && p.fight.rows.find((r) => r.id === ${JSON.stringify(two.id)}).hp === ${two.hp - 4}`);
+      assert.deepStrictEqual(p.errors, []);
+    });
+  });
+
+  it('a redraw during a press does not eat the click', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await readyFight(page, run);
+      const r = await page.box('#fNext');
+      const x = r.left + r.width / 2;
+      const y = r.top + r.height / 2;
+      await page.mouse('mouseMoved', x, y);
+      await page.mouse('mousePressed', x, y, { buttons: 1 });
+      await page.evaluate('RunSheetPage.render(); true');
+      await page.sleep(90);
+      await page.mouse('mouseReleased', x, y);
+      const p = await until(page, 'p.fight.started && p.saved === "Saved" && p.pending === 0');
+      assert.strictEqual(p.fight.round, 1);
+    });
+  });
+
+  it('max HP and AC pair on the row: three blank Bouncers take 11 Tab 13 six times over', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await page.focusEvents();
+      await startedFight(page, run);
+      await addNew(page, 'Bouncer', 3);
+      let p = await until(page, 'p.saved === "Saved" && p.pending === 0 && p.fight.rows.filter((r) => /^Bouncer/.test(r.name)).length === 3');
+      const ids = ['Bouncer 1', 'Bouncer 2', 'Bouncer 3'].map((n) => named(p, n).id);
+      await tap(page, sel('data-fmax', ids[0]));
+      await watchBody(page);
+      const want = [];
+      for (const id of ids) want.push(`fmax:${id}`, `fac:${id}`);
+      for (let i = 0; i < 6; i++) {
+        assert.strictEqual(await active(page), want[i], `step ${i}: focus in ${want[i]}`);
+        await page.type(i % 2 ? '13' : '11');
+        await page.key(i === 5 ? 'Enter' : 'Tab');
+      }
+      p = await until(page, `p.saved === "Saved" && p.pending === 0 && ${JSON.stringify(ids)}.every((id) => { const r = p.fight.rows.find((x) => x.id === id); return r.max === 11 && r.hp === 11 && r.ac === 13; })`);
+      await page.sleep(100);
+      assert.strictEqual(await bodyHits(page), 0, 'focus never sat on the page');
+      assert.deepStrictEqual(p.errors, []);
+    });
+  });
+
+  it('Shift-Tab goes back along the pairs with the number selected', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await page.focusEvents();
+      const p0 = await startedFight(page, run);
+      const [one, two] = foes(p0);
+      // two foes next to each other in the order
+      const order = Array.from(await page.evaluate('Array.from(document.querySelectorAll("[data-fmax]"), (b) => b.dataset.fmax)'));
+      const i = order.indexOf(two.id);
+      const prev = order[i - 1];
+      assert.ok(prev, 'a row before the second foe');
+      await tap(page, sel('data-fmax', two.id));
+      await page.key('Tab', { shift: true });
+      assert.strictEqual(await active(page), `fac:${prev}`, 'Shift-Tab from max goes to the row above\'s AC');
+      let s = await selected(page);
+      assert.ok(s[2] > 0 && s[0] === 0 && s[1] === s[2], `the AC is selected: ${s}`);
+      await page.key('Tab', { shift: true });
+      assert.strictEqual(await active(page), `fmax:${prev}`, 'Shift-Tab from AC goes to the same row\'s max');
+      s = await selected(page);
+      assert.ok(s[2] > 0 && s[0] === 0 && s[1] === s[2], `the max is selected: ${s}`);
+      await page.type('9');
+      await page.key('Enter');
+      const p = await until(page, `p.saved === "Saved" && p.pending === 0 && p.fight.rows.find((r) => r.id === ${JSON.stringify(prev)}).max === 9`);
+      assert.ok(one, 'two foes');
+      assert.deepStrictEqual(p.errors, []);
+    });
+  });
+
+  it('a bad number: marked and kept, the state unchanged, and the next click and entry land', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await page.focusEvents();
+      const p0 = await startedFight(page, run);
+      const [one, two] = foes(p0);
+      await tap(page, sel('data-fmax', one.id));
+      await page.type('40x');
+      await tap(page, sel('data-fhp', two.id));
+      assert.strictEqual(await active(page), `fhp:${two.id}`, 'the click put focus in the damage box');
+      await page.type('-3');
+      await page.key('Enter');
+      const p = await until(page, `p.saved === "Saved" && p.pending === 0 && p.fight.rows.find((r) => r.id === ${JSON.stringify(two.id)}).hp === ${two.hp - 3}`);
+      assert.strictEqual(await active(page), `fhp:${two.id}`, 'focus stays in the damage box');
+      assert.strictEqual(p.fight.rows.find((r) => r.id === one.id).max, one.max, 'the state\'s max is unchanged');
+      const bad = await page.evaluate(`(() => { const b = document.querySelector('${sel('data-fmax', one.id)}'); const m = b.parentElement.querySelector('.badnum'); return { v: b.value, inv: b.getAttribute('aria-invalid'), msg: m && m.textContent }; })()`);
+      assert.deepStrictEqual(bad, { v: '40x', inv: 'true', msg: 'Not a number: kept as typed' });
+      assert.deepStrictEqual(p.errors, []);
+    });
+  });
+
+  // The 9 Tab 8 Tab 7 flake: a redraw (here another window's) that removes a box holding a typed number
+  // fires its change in the middle of setting innerHTML; a commit from there redrew inside the redraw, threw,
+  // and left focus on nothing, so the next Tab went to Roll.
+  it('a redraw while a number is typed keeps it, sends nothing and throws nothing', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await page.focusEvents();
+      const p0 = await startedFight(page, run);
+      const [one, two] = foes(p0);
+      for (const [k, typed] of [['data-fmax', '45'], ['data-fini', '3']]) {
+        await tap(page, sel(k, one.id));
+        await page.evaluate('document.activeElement.select(); true'); // this test is not about the click's select
+        await page.type(typed);
+        const ini = 30 + typed.length;
+        await fromOther(run, [{ type: 'setInit', fight: p0.fight.id, row: two.id, ini }]);
+        const p = await until(page, `p.fight.rows.find((r) => r.id === ${JSON.stringify(two.id)}).ini === ${ini}`);
+        assert.deepStrictEqual(p.errors, [], `${k}: no script errors`);
+        assert.strictEqual(await active(page), `${k.slice(5)}:${one.id}`, `${k}: focus kept`);
+        assert.strictEqual(await page.evaluate(`document.querySelector('${sel(k, one.id)}').value`), typed, `${k}: the words kept`);
+        const r = p.fight.rows.find((x) => x.id === one.id);
+        assert.strictEqual(k === 'data-fmax' ? r.max : r.ini, k === 'data-fmax' ? one.max : one.ini, `${k}: nothing sent`);
+        await page.key('Enter');
+        await until(page, `p.saved === "Saved" && p.pending === 0 && p.fight.rows.find((r) => r.id === ${JSON.stringify(one.id)}).${k === 'data-fmax' ? 'max' : 'ini'} === ${Number(typed)}`);
+      }
+    });
+  });
+
+  it('every number box selects on a real click: one digit typed is that digit', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await page.focusEvents();
+      const p0 = await startedFight(page, run);
+      const foe = foes(p0)[0];
+      for (const [box, digit] of [[sel('data-fini', foe.id), '7'], [sel('data-fmax', foe.id), '8'], [sel('data-fac', foe.id), '6']]) {
+        await tap(page, '#fAddName');
+        const before = await page.evaluate(`document.querySelector('${box}').value`);
+        assert.ok(before.length > 0, `${box} holds a number`);
+        // the click lands inside the number, as a hand would, not at its start
+        const b = await page.box(box);
+        await tap(page, box, { offsetX: Math.min(b.width - 4, 14) });
+        await page.type(digit);
+        assert.strictEqual(await page.evaluate(`document.querySelector('${box}').value`), digit, `${box}: a click selects ${before}`);
+        await page.key('Enter');
+        await settled(page);
+      }
+      await tap(page, '#fAddName');
+      await page.type('Ice Drake');
+      await tap(page, '#fAddCount');
+      await page.type('3');
+      assert.strictEqual(await page.evaluate('document.querySelector("#fAddCount").value'), '3');
+      assert.deepStrictEqual((await P(page)).errors, []);
+    });
+  });
+});

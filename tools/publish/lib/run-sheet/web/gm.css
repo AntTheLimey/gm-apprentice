@@ -298,6 +298,8 @@ ol.to input.hpin { width: 4.2rem; text-align: left; }
 ol.to .hpv, ol.to .acv { font: 650 .8rem var(--mono); white-space: nowrap; }
 ol.to .hpv input { width: 2.6rem; }
 ol.to .acv input { width: 2.3rem; margin-left: 2px; }
+ol.to input[aria-invalid="true"] { outline: 2px solid var(--bad); outline-offset: 1px; }
+ol.to .badnum { color: var(--bad); font-size: .7rem; margin: 0 4px; white-space: nowrap; }
 ol.to input.other { width: 9rem; text-align: left; }
 ol.to select { font-size: .72rem; padding: 0 1px; max-width: 4.2rem; }
 ol.to .cnt { max-width: 6rem; overflow: hidden; text-overflow: ellipsis; }
