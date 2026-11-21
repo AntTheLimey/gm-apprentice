@@ -87,9 +87,10 @@
     const j = FM.joinRows({ model: model(), derived: d, state: s, fight: f, add, idBase: id });
     if (j.refused) { RP.note(j.refused, { id: `refused:${id}` }); return; }
     if (!j.rows.length && !j.tick.length && !j.groups.length) return;
-    RP.dispatch({ type: 'fightJoin', fight: f.id, rows: j.rows, tick: j.tick, groups: j.groups, thresholds: j.thresholds, label: label || '', carried: carried(d), planned: !add.cast });
+    RP.dispatch({ type: 'fightJoin', fight: f.id, rows: j.rows, tick: j.tick, groups: j.groups, thresholds: j.thresholds, label: label || '', carried: carried(d), planned: Boolean(add.group || add.beat) });
   }
-  function addByName(note) {
+  // The Add box's way in: a cast note (`note`), or a typed name nobody has (`name`: a blank row, no note).
+  function addByName(note, name) {
     const n = Math.max(1, Math.min(20, Math.floor(Number(ui.addCount)) || 1));
     ui.addText = '';
     ui.addHits = [];
@@ -97,8 +98,18 @@
     // the redraw keeps a focused box's words: empty it first, so the next name is typed afresh
     const box = $('#fAddName');
     if (box) box.value = '';
-    addTo({ cast: note, count: n });
+    const count = $('#fAddCount');
+    if (count) count.value = '1';
+    if (note) addTo({ cast: note, count: n });
+    else addTo({ name, count: n }, `${name}${n > 1 ? ` ×${n}` : ''}`);
   }
+  // What Add and Enter take: the top hit, when the cast has one. A blank row is only ever the explicit "+ New".
+  function addTop(text) {
+    const top = FM.addChoices(model().cast || [], text, RS.castSearch)[0];
+    if (top && !top.isNew) { addByName(top.note); return true; }
+    return false;
+  }
+  const NO_ONE = 'No one in the vault by that name: choose "+ New" to add them with no note';
   const groupPcs = (key) => ((RP.groups().find((g) => g.key === key) || {}).pcs || []);
   const groupWho = (key) => groupPcs(key).map((p) => first(pcName(p))).join(', ');
 
@@ -302,6 +313,11 @@
     if (f.view.bloodied.has(r.id)) nums.push('<span class="bl">Bloodied</span>');
     for (const x of Fight.statusesOf(r)) nums.push(`<span class="st">${esc(x)}</span>`);
     const ctr = counters(r, true);
+    const left = FM.groupMates(f.view.rows, r).filter((x) => x !== r && !x.typed).length;
+    if (left) {
+      const all = FM.groupMates(f.view.rows, r).length;
+      nums.push(`<button type="button" class="tg same" data-fsame="${esc(r.id)}" title="Copy these numbers (and the HP they give) to the others of ${esc(String(r.name).replace(/\s+\d+$/, ''))} nobody has typed into">Same for all ${all}</button>`);
+    }
     let body = '';
     if (r.kind === 'pc') body = '<p class="note">Players run their own sheets.</p>';
     else {
@@ -335,6 +351,7 @@
     h += `<div class="fadd"><span class="muted">Add:</span> ${others.map((g) => `<button type="button" data-faddgroup="${esc(g.key)}">+ ${esc(groupWho(g.key))} at ${esc(RP.groupLabel(g.key, d))}</button>`).join(' ')}`
       + `<span class="addname"><input id="fAddName" value="${esc(ui.addText)}" placeholder="anyone, by name" autocomplete="off" aria-label="Add anyone in the cast to the fight"><span class="fhits" id="fHits">${hitsHTML()}</span></span>`
       + `<input id="fAddCount" type="number" min="1" max="20" value="${esc(ui.addCount)}" aria-label="How many"><button type="button" id="fAddGo">Add</button></div>`;
+    h += joinsHTML(f);
     if (ui.area) {
       const n = f.rows.filter((r) => ui.sel[r.id] && r.in).length;
       const offer = areaOffer(f);
@@ -347,7 +364,18 @@
     return h;
   }
   function hitsHTML() {
-    return ui.addHits.map((c) => `<button type="button" data-faddpick="${esc(c.note)}">${esc(c.name)}<span class="t">${esc(c.type)}</span></button>`).join('');
+    return ui.addHits.map((c) => (c.isNew
+      ? `<button type="button" class="new" data-faddnew="${esc(c.name)}">${esc(c.label)}</button>`
+      : `<button type="button" data-faddpick="${esc(c.note)}">${esc(c.name)}<span class="t">${esc(c.type)}</span></button>`)).join('');
+  }
+  // The fight's join lines that can still be taken back: an add nobody has touched (fight-math's `undoable`).
+  function undoLines(f) {
+    return (state().events || []).filter((e) => e.fight && e.join && FM.undoable(f, e.join)).slice(-3).reverse();
+  }
+  function joinsHTML(f) {
+    const lines = undoLines(f);
+    if (!lines.length) return '';
+    return `<div class="fjoins">${lines.map((e) => `<span class="fj">${esc(e.text)} <button type="button" data-fundo="${esc(e.join)}" title="Take this add back: nobody has touched these rows">Undo</button></span>`).join('')}</div>`;
   }
 
   // ------------------------------------------------------------------ drawing: the beats column
@@ -504,11 +532,15 @@
       return true;
     }
     if (t.id === 'fAddGo') {
-      const hits = RS.castSearch(model().cast || [], ($('#fAddName') || {}).value || '');
-      if (hits.length) addByName(hits[0].note);
+      const box = $('#fAddName');
+      const text = (box || {}).value || '';
+      if (text.trim() && !addTop(text) && box) { box.setCustomValidity(NO_ONE); box.reportValidity(); }
       return true;
     }
     if (d.faddpick) { addByName(d.faddpick); return true; }
+    if (d.faddnew) { addByName(null, d.faddnew); return true; }
+    if (d.fundo) { F({ type: 'undoAdd', join: d.fundo }); return true; }
+    if (d.fsame) { F({ type: 'sameForAll', row: d.fsame }); return true; }
     if (d.faddcast) { addTo({ cast: d.faddcast, count: 1 }); return true; }
     if (d.faddgroup) { addTo({ group: d.faddgroup }, `${groupWho(d.faddgroup)} at ${RP.groupLabel(d.faddgroup)}`); return true; }
     if (d.fspend !== undefined) {
@@ -604,9 +636,8 @@
     }
     if (t.id === 'fAddName') {
       ev.preventDefault();
-      const hits = RS.castSearch(model().cast || [], t.value);
-      if (!hits.length) { t.setCustomValidity('No one in the vault by that name'); t.reportValidity(); return; }
-      addByName(hits[0].note);
+      if (!t.value.trim()) return;
+      if (!addTop(t.value)) { t.setCustomValidity(NO_ONE); t.reportValidity(); }
       return;
     }
     if (t.id === 'fAreaDmg') { ev.preventDefault(); applyArea(); }
@@ -624,12 +655,17 @@
     if (d.fac !== undefined && n !== r.ac) F({ type: 'setAc', row: r.id, ac: n });
   }
 
+  // The "how many" box selects its number when it is clicked or tabbed into, so a typed 3 replaces the 1
+  // instead of making 13 (ruling R2: this box only; Task 11 gives every number box the same).
+  document.addEventListener('click', (ev) => { if (ev.target && ev.target.id === 'fAddCount') ev.target.select(); });
+  document.addEventListener('focusin', (ev) => { if (ev.target && ev.target.id === 'fAddCount') ev.target.select(); });
+
   document.addEventListener('input', (ev) => {
     const t = ev.target;
     if (t.setCustomValidity) t.setCustomValidity('');
     if (t.id === 'fAddName') {
       ui.addText = t.value;
-      ui.addHits = RS.castSearch(model().cast || [], t.value);
+      ui.addHits = FM.addChoices(model().cast || [], t.value, RS.castSearch);
       const box = $('#fHits');
       if (box) box.innerHTML = hitsHTML();
     }

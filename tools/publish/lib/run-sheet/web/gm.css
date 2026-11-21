@@ -219,6 +219,9 @@ pre.notes { white-space: pre-wrap; background: var(--bg); border: 1px solid var(
 .fadd .fhits:empty { display: none; }
 .fadd .fhits button { text-align: left; border-radius: 0; }
 .fadd .fhits .t { color: var(--muted); font-size: .72rem; margin-left: 6px; }
+.fadd .fhits .new { font-style: italic; }
+.fjoins { display: flex; gap: 5px 12px; flex-wrap: wrap; margin: 0 0 5px; font-size: .78rem; color: var(--muted); }
+.fjoins button { font-size: .75rem; padding: 0 6px; }
 .areabar { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; background: var(--bad-soft); border: 1px solid var(--bad); border-radius: 8px; padding: 4px 8px; margin: 0 0 6px; font-size: .82rem; }
 .areabar input#fAreaDmg { width: 4.5rem; }
 .areabar .spend { display: inline-flex; gap: 3px; align-items: center; }

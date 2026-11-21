@@ -239,7 +239,7 @@
       ini: null, mod: 0, ac: null, hp: null, max: null, temp: 0, conds: [], exhaustion: 0, conc: false,
       ds: { s: 0, f: 0 }, out: false, seen: false, seenTick: null, seenFrom: null, neutral: false, sideFrom: null, half: false, resisted: false,
       lrMax: 0, lr: 0, laMax: 0, la: 0, recharge: [], lair: false, of: [], unseenN: null, word: null,
-      start: { hp: null, max: null, conds: [], exhaustion: 0, conc: false }, at: null, hpAt: null, ...over,
+      start: { hp: null, max: null, conds: [], exhaustion: 0, conc: false }, at: null, hpAt: null, typed: false, ...over,
     };
   }
 
@@ -495,6 +495,27 @@
     };
     const addGroup = (g) => { if (g && !(fight.groups || []).includes(g) && !out.groups.includes(g)) out.groups.push(g); };
 
+    // A name nobody in the cast has (the GM chose "+ New"): `count` blank rows, built as every page-built row
+    // is, so each starts an unseen foe with no note. `Name 1 … Name N`, or the bare name for one; a second
+    // add of the same name goes on from the highest number there.
+    if (add && typeof add.name === 'string') {
+      const name = add.name.replace(/\s+/g, ' ').trim();
+      if (!name) { out.refused = 'Type a name to add.'; return out; }
+      const n = Math.max(1, Math.min(20, Math.floor(add.count) || 1));
+      let top = 0;
+      for (const r of have) {
+        if (r.note || r.kind !== 'foe') continue;
+        if (r.name === name) top = Math.max(top, 1);
+        else if (r.name.startsWith(`${name} `) && /^\d+$/.test(r.name.slice(name.length + 1))) top = Math.max(top, Number(r.name.slice(name.length + 1)));
+      }
+      const foe = { key: null, note: null, name, ally: false, ac: null, hp: null, init: null };
+      for (let i = 1; i <= n; i++) {
+        const label = top === 0 && n === 1 ? name : `${name} ${top + i}`;
+        out.rows.push({ ...foeRowFrom(ctx, foe, { copy: null, in: true, name: label, foeKey: null }), id: id() });
+      }
+      return out;
+    }
+
     if (add && add.cast) {
       const c = castOf(model, add.cast);
       if (!c) { out.refused = 'That note is not in the cast.'; return out; }
@@ -560,6 +581,85 @@
     return out;
   }
 
+
+  // ---- adding anyone by name (plan 6a Task 6) ----
+
+  const fold = (s) => String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').normalize('NFC').toLowerCase();
+  // Edit distance (insert, delete, change one letter), two rows of memory.
+  function editDistance(a, b) {
+    let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+    for (let i = 1; i <= a.length; i++) {
+      const cur = [i];
+      for (let j = 1; j <= b.length; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      prev = cur;
+    }
+    return prev[b.length];
+  }
+  // The cast names a typed name nearly is: within two edits of a name or alias (fewer for a short one, so two
+  // letters are not near everything), then anyone sharing the surname (the last word of two or more). Nearest first.
+  function nearCast(cast, query) {
+    const q = fold(query).replace(/\s+/g, ' ').trim();
+    if (q.length < 3) return [];
+    const most = Math.min(2, Math.floor(q.length / 3));
+    const words = q.split(' ');
+    const out = [];
+    (cast || []).forEach((c, i) => {
+      let rank = null;
+      for (const t of [c.name, ...(c.aliases || []), ...(c.gmAliases || [])].map((x) => fold(x).replace(/\s+/g, ' ').trim()).filter(Boolean)) {
+        const d = editDistance(q, t);
+        if (d <= most && (rank === null || d < rank)) rank = d;
+      }
+      if (rank === null && words.length >= 2) {
+        const theirs = fold(c.name).replace(/\s+/g, ' ').trim().split(' ');
+        if (theirs.length >= 2 && theirs[theirs.length - 1] === words[words.length - 1]) rank = 10;
+      }
+      if (rank !== null) out.push({ c, i, rank });
+    });
+    return out.sort((a, b) => a.rank - b.rank || a.i - b.i).map((x) => x.c);
+  }
+  // What the Add box lists as the GM types: near names first, then the search's hits, then the one explicit
+  // way to make a blank row, "+ New: Name (no note)". `search` is state.js's castSearch (this file never
+  // loads it). Nothing typed lists nothing.
+  function addChoices(cast, query, search, limit = 8) {
+    const text = String(query == null ? '' : query).replace(/\s+/g, ' ').trim();
+    if (!text) return [];
+    const near = nearCast(cast, text);
+    const seen = new Set(near.map((c) => c.note));
+    const hits = near.concat(((typeof search === 'function' ? search(cast, text) : []) || []).filter((c) => !seen.has(c.note))).slice(0, limit);
+    return hits.map((c) => ({ note: c.note, name: c.name, type: c.type }))
+      .concat({ note: null, name: text, type: null, isNew: true, label: `+ New: ${text} (no note)` });
+  }
+
+  // A row's group: its note plus its name without a trailing number (v8's groupOf). A PC or the Lair row has none.
+  const groupKey = (r) => `${r.note || ''}|${String(r.name || '').replace(/\s+\d+$/, '')}`;
+  const groupMates = (rows, r) => (r && r.kind !== 'pc' && r.kind !== 'lair' ? rows.filter((x) => x.kind !== 'pc' && x.kind !== 'lair' && groupKey(x) === groupKey(r)) : []);
+
+  // One insert (plan 6a "latest entry wins"): the row goes above the first row it beats, at the place the
+  // sort would give it; the rest keep the order they have. A tie goes after the rows already there.
+  function placeRow(rows, id) {
+    const i = rows.findIndex((r) => r.id === id);
+    if (i < 0) return rows;
+    const row = rows[i];
+    const rest = rows.filter((_, k) => k !== i);
+    let at = rest.findIndex((x) => sortRows([x, row])[0] === row);
+    if (at < 0) at = rest.length;
+    return rest.slice(0, at).concat(row, rest.slice(at));
+  }
+
+  // A row an add made is untouched until the GM types into it, its HP or a status moves, it has a turn, or a
+  // line of the fight's log names it (`typed`, `turned`, `logged`).
+  function untouched(r) {
+    const st = r.start || {};
+    const same = (a, b) => (a === undefined || a === null ? null : a) === (b === undefined || b === null ? null : b);
+    return !r.typed && !r.turned && !r.logged && same(r.hp, st.hp) && same(r.max, st.max) && !r.temp && !r.out
+      && !(r.conds || []).length && !r.exhaustion && !r.conc && !(r.ds && (r.ds.s || r.ds.f));
+  }
+  // Whether the join's rows can still be taken back: there are some, and none has been touched.
+  function undoable(fight, join) {
+    const mine = ((fight && fight.rows) || []).filter((r) => join != null && r.joinId === join);
+    return mine.length > 0 && mine.every(untouched);
+  }
+
   // The groups a fight takes in (proof M2): the ones it was given or added, and every group (`{ key, pcs }`,
   // show.js's groupsOf) where a PC ticked into it now stands.
   function fightGroupKeys(fight, groups) {
@@ -573,7 +673,8 @@
     DND_STATUSES, EXHAUSTION_MAX, fightGroupKeys,
     parseEntry, damageTaken, afterDamage, afterHeal, isBloodied,
     thresholdOf, isLit, sortRows, takesTurn, nextLive, actingRow,
-    gmName, lairRow, unseenKey, unseenNumbers, unseenLabels, rowsForFight, joinRows,
+    gmName, lairRow, unseenKey, unseenNumbers, unseenLabels, rowsForFight, joinRows, blankRow,
+    addChoices, groupKey, groupMates, placeRow, undoable,
     SIDES, isSide, nextSide, sideOfRow, isFoe,
   };
 }));

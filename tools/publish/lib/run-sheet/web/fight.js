@@ -20,7 +20,10 @@
   const say = (s, f, at, text) => { s.events.push({ at, beat: f.beat || null, text, title: f.title || '', fight: true }); };
 
   // The GM's name for a row at this moment: unmasked when Unmask is on, then the copy number once there are two.
-  function nameOf(s, f, r) {
+  // A line of the fight's log that names a row marks it `logged`, so a row the log names is never taken back
+  // by Undo (a line naming it would stay in the Table Log). `quiet` is for the join's own line, which goes with it.
+  function nameOf(s, f, r, quiet) {
+    if (!quiet) r.logged = true;
     const u = s.unmask && r.note ? s.unmask[r.note] : null;
     const unmasked = u ? (u.on ? u.name : null) : ((f.carried && r.note && f.carried[r.note]) || null);
     const copies = r.note ? f.rows.filter((x) => x.note === r.note && x.kind !== 'pc').length : 1;
@@ -132,6 +135,7 @@
 
   // A neutral's turn is its own, but it is never the last foe the panel falls back to (plan 6a).
   const turnStart = (f, r, at) => {
+    r.turned = true;
     if (r.laMax) { r.la = r.laMax; touch(r, at); }
     if (FM.isFoe(r)) f.lastFoe = r.id;
   };
@@ -163,6 +167,9 @@
   // Incapacitated and the conditions that include it (SRD 5.2.1): each ends Concentration.
   const INCAPACITATING = new Set(['Incapacitated', 'Paralyzed', 'Petrified', 'Stunned', 'Unconscious']);
 
+  // The numbers a row carries that are its own in the fight, not stats to copy: Same for all leaves them.
+  const OWN_FIGURES = new Set(['hp', 'ini', 'temp', 'exhaustion', 'unseenN', 'copy', 'lr', 'la', 'lrMax', 'laMax', 'at', 'hpAt', 'condAt']);
+
   const FIGHT_HANDLERS = {
     fightStart(s, a, at) {
       if (s.fight || a.id == null || !Array.isArray(a.rows)) return;
@@ -187,6 +194,7 @@
       const pcs = new Set(f.rows.filter((r) => r.kind === 'pc').map((r) => r.note));
       const dupe = (r) => (r.kind === 'pc' ? pcs.has(r.note) : Boolean(r.foeKey) && keys.has(r.foeKey));
       const added = clone(a.rows || []).filter((r) => r && r.id != null && !ids.has(r.id) && !dupe(r)).map((r) => entered(r, at));
+      for (const r of added) if (a.id != null) r.joinId = a.id;
       // a second Lair row never joins: the fight's own lists the newcomers
       const fresh = f.rows.some((r) => r.kind === 'lair') ? added.filter((r) => r.kind !== 'lair') : added;
       f.rows.push(...fresh);
@@ -198,15 +206,18 @@
       const groups = (a.groups || []).filter((g) => !f.groups.includes(g));
       f.groups.push(...groups);
       const have = new Set((f.thresholds || []).map((t) => t.key));
-      for (const t of clone(a.thresholds || [])) if (!have.has(t.key)) { f.thresholds.push(t); have.add(t.key); }
+      let newThresholds = 0;
+      for (const t of clone(a.thresholds || [])) if (!have.has(t.key)) { f.thresholds.push(t); have.add(t.key); newThresholds += 1; }
       for (const [note, name] of Object.entries(a.carried || {})) if (!f.carried[note]) f.carried[note] = name;
       // newcomers go to the bottom until the next Sort; the turn stays with its row
       numberUnseen(f);
       lairOf(f);
       if (!fresh.length && !ticked.length && !groups.length) return;
       const who = fresh.concat(ticked).filter((r) => r.kind !== 'lair');
-      const label = String(a.label || '').trim() || who.map((r) => nameOf(s, f, r)).join(', ');
+      const label = String(a.label || '').trim() || who.map((r) => nameOf(s, f, r, true)).join(', ');
       if (label) say(s, f, at, `${label} ${who.length > 1 ? 'join' : 'joins'} the fight.`);
+      // a join that only added rows can be taken back: its line carries the join's id, for Undo
+      if (label && fresh.length && a.id != null && !ticked.length && !groups.length && !newThresholds) s.events[s.events.length - 1].join = a.id;
     },
     fightTick: onRow((s, f, r, a, at) => {
       r.in = !!a.in;
@@ -216,10 +227,19 @@
       if (r.in && r.lair && r.kind !== 'lair' && !f.rows.some((x) => x.kind === 'lair')) f.rows.push({ ...FM.lairRow([r], r.group), id: `${a.id || f.id}-lair` });
       lairOf(f);
     }),
+    // Before Start the number is all that changes (Sort stays the GM's button). After Start the latest entry
+    // wins (ruling "latest entry wins", step6.md): that one row is re-placed by one insert at its sorted
+    // place, the rest are not re-sorted, and `f.turn` stays on the same row.
     setInit: onRow((s, f, r, a, at) => {
+      if (r.kind === 'lair') return;
       if (a.ini === null || a.ini === '' || a.ini === undefined) r.ini = null;
       else { const n = int(a.ini); if (n === null) return; r.ini = n; }
+      r.typed = true;
       touch(r, at);
+      if (!f.started) return;
+      const was = f.rows.indexOf(r);
+      f.rows = FM.placeRow(f.rows, r.id);
+      if (f.rows.indexOf(r) !== was) say(s, f, at, `${nameOf(s, f, r)} moves in the order: initiative ${isNum(r.ini) ? r.ini : 'cleared'}.`);
     }),
     // Roll fills only boxes still empty, so a number typed meanwhile wins; a PC's box is never rolled.
     rollInit(s, a, at) {
@@ -288,6 +308,7 @@
       const before = r.hp;
       const maxBefore = r.max;
       r.max = n;
+      r.typed = true;
       if (n !== null && !isNum(r.hp)) r.hp = n;
       // SRD: HP never goes above the maximum
       if (n !== null && isNum(r.hp) && r.hp > n) r.hp = n;
@@ -298,8 +319,40 @@
       const n = a.ac === null || a.ac === '' ? null : int(a.ac);
       if (n === null && a.ac !== null && a.ac !== '') return;
       r.ac = n;
+      r.typed = true;
       touch(r, at);
     }),
+    // A counted row's typed numbers go to the rest of its group that nobody has typed into, and their HP
+    // is the max. Every number the row carries comes (max, ac and mod for D&D, whatever a system adds),
+    // but the figures that are the fight's own (HP, initiative, temp HP, counters, numbers, times) do not.
+    sameForAll: onRow((s, f, r, a, at) => {
+      const others = FM.groupMates(f.rows, r).filter((x) => x !== r && !x.typed);
+      if (!others.length) return;
+      const fields = Object.keys(r).filter((k) => isNum(r[k]) && !OWN_FIGURES.has(k));
+      for (const x of others) {
+        for (const k of fields) x[k] = r[k];
+        if (isNum(r.max)) x.hp = r.max;
+        touchHp(x, at);
+      }
+      say(s, f, at, `${others.map((x) => nameOf(s, f, x)).join(', ')}: the same numbers as ${nameOf(s, f, r)}.`);
+    }),
+    // Takes back the rows one join added, while none has been touched. One line says so; the join's own line
+    // goes with its rows, so no line of the fight names an undone row (the Table Log never will).
+    undoAdd(s, a, at) {
+      const f = running(s, a);
+      if (!f || a.join == null) return;
+      const line = s.events.findIndex((e) => e.fight && e.join === a.join);
+      if (line < 0 || !FM.undoable(f, a.join)) return;
+      const gone = f.rows.filter((r) => r.joinId === a.join);
+      const ids = new Set(gone.map((r) => r.id));
+      f.rows = f.rows.filter((r) => !ids.has(r.id));
+      for (const r of f.rows) if (r.kind === 'lair') r.of = (r.of || []).filter((id) => !ids.has(id));
+      s.events.splice(line, 1);
+      const counts = new Map();
+      for (const r of gone.filter((x) => x.kind !== 'lair')) { const k = String(r.name).replace(/\s+\d+$/, ''); counts.set(k, (counts.get(k) || 0) + 1); }
+      say(s, f, at, `Took back: ${[...counts].map(([k, n]) => (n > 1 ? `${k} ×${n}` : k)).join(', ')}.`);
+      s.events[s.events.length - 1].tookBack = true;
+    },
     status: onRow((s, f, r, a, at) => {
       if (a.add !== undefined) {
         const name = String(a.add || '').replace(/\s+/g, ' ').trim();

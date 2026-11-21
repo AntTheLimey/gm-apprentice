@@ -415,6 +415,73 @@ test('join: unknown cast and an empty add are refused, a pc not in the fight is 
   assert.equal(M.joinRows({ model, derived: derivedOf(), state: here, fight: f, add: { cast: nim }, idBase: 'j' }).rows[0].kind, 'pc');
 });
 
+test('add a typed name nobody has, by choosing New: blank unseen foes numbered Name 1..N', () => {
+  const fight = { groups: ['b1'], rows: [], thresholds: [] };
+  const a = M.joinRows({ model, derived: derivedOf(), state: here, fight, add: { name: 'Bouncer', count: 3 }, idBase: 'j1' });
+  assert.equal(a.refused, null);
+  assert.deepEqual(a.rows.map((r) => r.name), ['Bouncer 1', 'Bouncer 2', 'Bouncer 3']);
+  for (const r of a.rows) {
+    assert.equal(r.kind, 'foe');
+    assert.equal(r.neutral, false);
+    assert.equal(r.seen, false, 'a page-built row starts unseen');
+    assert.equal(r.in, true);
+    assert.equal(r.note, null, 'no note');
+    assert.equal(r.hp, null);
+    assert.equal(r.typed, false);
+  }
+  assert.equal(a.rows[0].group, 'b1');
+  const one = M.joinRows({ model, derived: derivedOf(), state: here, fight, add: { name: '  Bouncer  ', count: 1 }, idBase: 'j2' });
+  assert.deepEqual(one.rows.map((r) => r.name), ['Bouncer']);
+  // a second add of the same name goes on from the highest number
+  const more = M.joinRows({ model, derived: derivedOf(), state: here, fight: { ...fight, rows: a.rows }, add: { name: 'Bouncer', count: 2 }, idBase: 'j3' });
+  assert.deepEqual(more.rows.map((r) => r.name), ['Bouncer 4', 'Bouncer 5']);
+  assert.ok(M.joinRows({ model, derived: derivedOf(), state: here, fight, add: { name: '   ', count: 2 }, idBase: 'j4' }).refused);
+  assert.equal(typeof M.blankRow, 'function', 'blankRow is exported');
+});
+
+test('a cast name still adds the note', () => {
+  const fight = { groups: ['b1'], rows: [], thresholds: [] };
+  const a = M.joinRows({ model, derived: derivedOf(), state: here, fight, add: { cast: 'Creatures/Mephit.md', count: 2 }, idBase: 'j1' });
+  assert.deepEqual(a.rows.map((r) => r.note), ['Creatures/Mephit.md', 'Creatures/Mephit.md']);
+  assert.ok(a.rows.every((r) => r.hp === 7341), 'the note\'s numbers come with it');
+});
+
+test('near match comes first: Petr Goodwin finds Peter Goodwin, and New is last', () => {
+  const cast = [
+    { note: 'N/Anna Goodwin.md', name: 'Anna Goodwin', type: 'npc' },
+    { note: 'N/Petra.md', name: 'Petra Vane', type: 'npc' },
+    { note: 'N/Peter Goodwin.md', name: 'Peter Goodwin', type: 'npc' },
+    { note: 'N/Zed.md', name: 'Zed', type: 'npc' },
+  ];
+  const RS = require('../lib/run-sheet/web/state');
+  const c = M.addChoices(cast, 'Petr Goodwin', RS.castSearch);
+  assert.equal(c[0].note, 'N/Peter Goodwin.md', 'within two edits is the top hit');
+  assert.ok(c.some((x) => x.note === 'N/Anna Goodwin.md'), 'the same surname is offered too');
+  assert.ok(c.findIndex((x) => x.note === 'N/Anna Goodwin.md') > 0, 'but after the near spelling');
+  assert.equal(c.at(-1).isNew, true);
+  assert.equal(c.at(-1).name, 'Petr Goodwin');
+  assert.equal(c.at(-1).label, '+ New: Petr Goodwin (no note)');
+  assert.equal(c.filter((x) => x.isNew).length, 1);
+  // a plain prefix still finds, and a stranger gets New alone
+  assert.equal(M.addChoices(cast, 'Pet', RS.castSearch)[0].note, 'N/Peter Goodwin.md');
+  assert.deepEqual(M.addChoices(cast, 'Bouncer', RS.castSearch).map((x) => x.isNew), [true]);
+  assert.deepEqual(M.addChoices(cast, '   ', RS.castSearch), []);
+  // two letters are not "within two edits" of everything
+  assert.ok(!M.addChoices(cast, 'Ze', RS.castSearch).slice(0, -1).some((x) => x.note === 'N/Anna Goodwin.md'));
+});
+
+test('placeRow: one insert at the sorted place, the rest never re-sorted', () => {
+  const r = (id, ini, o) => row({ id, ini, ...o });
+  const rows = [r('a', 20), r('b', 5), r('c', 12), r('d', null), r('e', null)];
+  const at = (list, id, ini) => list.map((x) => (x.id === id ? { ...x, ini } : x));
+  const out = M.placeRow(at(rows, 'e', 15), 'e');
+  assert.deepEqual(out.map((x) => x.id), ['a', 'e', 'b', 'c', 'd'], 'e goes above the first row it beats; b and c keep their odd order');
+  assert.equal(out.find((x) => x.id === 'e').ini, 15);
+  const tie = M.placeRow([r('a', 10), r('b', 10), r('c', 10)], 'c');
+  assert.deepEqual(tie.map((x) => x.id), ['a', 'b', 'c'], 'a tie goes after the ones already there');
+  assert.deepEqual(M.placeRow(rows, 'nope'), rows);
+});
+
 test('pure: nothing here reads a clock, a die or the page', () => {
   const src = require('node:fs').readFileSync(require.resolve('../lib/run-sheet/web/fight-math'), 'utf8');
   for (const bad of ['Math.random', 'Date.now', 'new Date', 'randomInt', 'getRandomValues', 'document.', 'fetch(']) assert.ok(!src.includes(bad), bad);

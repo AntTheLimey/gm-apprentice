@@ -601,7 +601,7 @@
 
     const titleOf = (key, saved) => (byKey.get(key) ? byKey.get(key).title : saved || '');
     const entries = state.jots.map((j, i) => ({ at: j.at, o: i, beatKey: j.beat, beatTitle: j.beat ? titleOf(j.beat, j.title) : '', text: j.text, id: j.id }))
-      .concat(state.events.map((e, i) => ({ at: e.at, o: 1e6 + i, beatKey: e.beat, beatTitle: e.beat ? titleOf(e.beat, e.title) : '', text: e.text, ...(e.fight ? { fight: true } : {}) })));
+      .concat(state.events.map((e, i) => ({ at: e.at, o: 1e6 + i, beatKey: e.beat, beatTitle: e.beat ? titleOf(e.beat, e.title) : '', text: e.text, ...(e.fight ? { fight: true } : {}), ...(e.tookBack ? { tookBack: true } : {}) })));
     // a long rest passes over anyone at 0 HP, and says so at the time of the rest
     for (const v of vitals) {
       if (v.restSkipped) entries.push({ at: state.end.longRestAt, o: 2e6, beatKey: null, beatTitle: '', text: `${v.name} is at 0 HP, so the long rest does nothing for them.` });

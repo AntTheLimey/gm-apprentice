@@ -445,7 +445,7 @@ describe('the fight in the state', () => {
     assert.doesNotMatch(texts(s).find((x) => x.startsWith('Round 1:')), /Lair/);
   });
 
-  it('first Next sorts once; typing after does not re-sort; Sort keeps the turn', () => {
+  it('first Next sorts once; a number typed after Start moves that one row; Sort keeps the turn', () => {
     let s = gateFight();
     const set = (note, ini, copy) => { s = F(s, { type: 'setInit', row: row(s, note, copy).id, ini }); };
     set(ADA, 5); set(WOLF, 18, 1); set(WOLF, 10, 2); set(WOLF, 2, 3); set(LUCAN, 12); set(ASH, 1);
@@ -457,11 +457,172 @@ describe('the fight in the state', () => {
     assert.match(texts(s).at(-1), /^Round 1: Lair action 20, Frost Wolf 1 18, Lucan Grey 12, Frost Wolf 2 10, Ada Moss 5, Frost Wolf 3 2, Brother Ash 1\.$/);
     s = next(s);
     const turn = s.fight.turn;
+    // Ruling "latest entry wins" (step6.md): after Start a typed number places that one row, by one insert at
+    // its sorted place. The others keep the order they have, and the turn stays with its row. (5b pinned the
+    // opposite, "typing does not re-sort"; that is changed on purpose.)
     set(ASH, 30);
-    assert.deepEqual(s.fight.rows.filter((r) => r.in).map((r) => r.id), order, 'typing does not re-sort');
+    const moved = s.fight.rows.filter((r) => r.in).map((r) => r.id);
+    assert.equal(moved[0], row(s, ASH).id, 'Brother Ash at 30 goes to the top by one insert');
+    assert.deepEqual(moved.filter((id) => id !== row(s, ASH).id), order.filter((id) => id !== row(s, ASH).id), 'the rest are not re-sorted');
+    assert.equal(s.fight.turn, turn, 'the turn stays with its row');
     s = F(s, { type: 'fightSort' });
     assert.equal(s.fight.rows.filter((r) => r.in)[0].note, ASH);
     assert.equal(s.fight.turn, turn, 'the turn stays with its row');
+  });
+
+  it('setInit after Start inserts one row and keeps the turn; before Start it changes the number only', () => {
+    let s = gateFight();
+    const set = (note, ini, copy) => { s = F(s, { type: 'setInit', row: row(s, note, copy).id, ini }); };
+    const ids = () => s.fight.rows.map((r) => r.id);
+    const before = ids();
+    set(WOLF, 15, 3);
+    assert.deepEqual(ids(), before, 'before Start the order is not touched');
+    assert.equal(row(s, WOLF, 3).typed, true);
+    set(ADA, 5); set(WOLF, 18, 1); set(WOLF, 10, 2); set(LUCAN, 12); set(ASH, 1);
+    s = next(s);
+    s = next(s);
+    const turn = s.fight.turn;
+    const was = s.fight.rows.map((r) => r.id);
+    const lines = texts(s).length;
+    set(WOLF, 16, 2);
+    // Wolf 2 goes from 10 to 16, between Wolf 1 (18) and Wolf 3 (15): one row moved, the others stand where they were
+    const cut = (list, id) => list.filter((x) => x !== id);
+    assert.deepEqual(cut(ids(), row(s, WOLF, 2).id), cut(was, row(s, WOLF, 2).id), 'one row moved, nothing else');
+    assert.equal(s.fight.turn, turn, 'the turn stays with its row');
+    assert.equal(s.fight.rows.find((r) => r.id === s.fight.turn).id, turn);
+    assert.equal(texts(s).length, lines + 1, 'and the log says so');
+    assert.match(texts(s).at(-1), /Frost Wolf 2.*16/);
+    set(WOLF, 16, 2);
+    assert.equal(texts(s).length, lines + 1, 'the same number again says nothing');
+  });
+
+  // Add by a typed name (no note), as the page sends it after "+ New"; answers the new state and the join's id.
+  const addNamed = (s, name, count, m = model) => {
+    const id = nextId();
+    const j = M.joinRows({ model: m, derived: RS.derive(m, s), state: s, fight: s.fight, add: { name, count }, idBase: id });
+    assert.equal(j.refused, null, j.refused);
+    return [RS.reduce(s, { id, type: 'fightJoin', fight: s.fight.id, rows: j.rows, tick: j.tick, groups: j.groups, thresholds: j.thresholds, label: `${name}${count > 1 ? ` ×${count}` : ''}` }, now()), id];
+  };
+  const playersOrder = (s) => RS.derive(model, s) && require('../lib/run-sheet/players').forPlayers(model, s, { withheldWords: { person: 'someone' } }).panels.find((p) => p.order).order.rows.map((r) => r.name);
+
+  it('add a typed name nobody has, by choosing New: three blank Bouncers, unseen', () => {
+    let s = gateFight();
+    const [t, id] = addNamed(s, 'Bouncer', 3);
+    s = t;
+    const b = s.fight.rows.filter((r) => /^Bouncer/.test(r.name));
+    assert.deepEqual(b.map((r) => r.name), ['Bouncer 1', 'Bouncer 2', 'Bouncer 3']);
+    assert.ok(b.every((r) => r.kind === 'foe' && r.seen === false && r.in && r.note === null && r.hp === null && r.joinId === id));
+    assert.ok(playersOrder(s).every((n) => !/Bouncer/.test(n)), 'the players never see a typed name');
+    assert.match(texts(s).at(-1), /^Bouncer ×3 join the fight\.$/);
+    assert.equal(s.events.at(-1).join, id, 'the join line carries its id, for Undo');
+  });
+
+  it('a cast name still adds the note', () => {
+    let s = gateFight();
+    s = join(s, { cast: MEPHIT, count: 2 });
+    assert.equal(rows(s, MEPHIT).length, 2);
+    assert.ok(rows(s, MEPHIT).every((r) => r.note === MEPHIT && r.joinId));
+  });
+
+  it('sameForAll copies to the untouched only', () => {
+    let s = gateFight();
+    [s] = addNamed(s, 'Bouncer', 4);
+    const [b1, b2, b3, b4] = s.fight.rows.filter((r) => /^Bouncer/.test(r.name));
+    s = F(s, { type: 'setMax', row: b1.id, max: 30 });
+    s = F(s, { type: 'setAc', row: b1.id, ac: 14 });
+    s = F(s, { type: 'setAc', row: b2.id, ac: 9 });
+    s.fight.rows.find((r) => r.id === b1.id).mod = 3;
+    s.fight.rows.find((r) => r.id === b1.id).str = 17;
+    s.fight.rows.find((r) => r.id === b1.id).ini = 8;
+    s = F(s, { type: 'sameForAll', row: b1.id });
+    const get = (id) => s.fight.rows.find((r) => r.id === id);
+    for (const id of [b3.id, b4.id]) {
+      assert.deepEqual([get(id).max, get(id).hp, get(id).ac, get(id).mod, get(id).str], [30, 30, 14, 3, 17], 'an untouched copy');
+      assert.equal(get(id).ini, null, 'initiative is not copied');
+      assert.equal(get(id).typed, false, 'copying is not typing');
+    }
+    assert.equal(get(b2.id).ac, 9, 'a row someone typed into is left alone');
+    assert.equal(get(b2.id).max, null);
+    assert.match(texts(s).at(-1), /Bouncer 3, Bouncer 4.*Bouncer 1/);
+    // another group and a PC are never touched
+    assert.equal(row(s, WOLF, 1).max === 30, false);
+    // nothing untouched: nothing happens, nothing is said
+    s = F(s, { type: 'setMax', row: b3.id, max: 31 });
+    s = F(s, { type: 'setMax', row: b4.id, max: 32 });
+    const n = texts(s).length;
+    s = F(s, { type: 'sameForAll', row: b1.id });
+    assert.equal(get(b3.id).max, 31);
+    assert.equal(texts(s).length, n, 'a pass with nothing to copy is silent');
+  });
+
+  it('undoAdd takes back an untouched add, and the log says so', () => {
+    let s = gateFight();
+    s = join(s, { cast: MEPHIT, count: 2 });
+    const rowsBefore = s.fight.rows.map((r) => r.id);
+    const wordOf = (r) => r.word || '';
+    const labels = (x) => [...M.unseenLabels(x.fight.rows, wordOf)];
+    const was = { order: playersOrder(s), labels: labels(s), vitals: RS.derive(model, s).vitalsRecorded.length, events: s.events.filter((e) => !e.join).length };
+    const [t, id] = addNamed(s, 'Bouncer', 13);
+    s = t;
+    assert.equal(s.fight.rows.length, rowsBefore.length + 13);
+    s = F(s, { type: 'undoAdd', join: id });
+    assert.deepEqual(s.fight.rows.map((r) => r.id), rowsBefore, 'the order is as it was');
+    assert.deepEqual(playersOrder(s), was.order, 'the order and the players\' labels are as before');
+    assert.deepEqual(labels(s), was.labels);
+    assert.match(texts(s).at(-1), /^Took back: Bouncer ×13\.$/);
+    assert.ok(texts(s).every((x) => !/Bouncer \d/.test(x)), 'no line names an undone row');
+    assert.ok(s.events.every((e) => e.join !== id), 'the join line goes with its rows');
+    // a second undo of the same join does nothing
+    const before = JSON.stringify(s);
+    s = F(s, { type: 'undoAdd', join: id });
+    assert.equal(JSON.stringify(s.fight), JSON.stringify(JSON.parse(before).fight));
+    assert.equal(texts(s).filter((x) => /Took back/.test(x)).length, 1);
+    // and the next add numbers from 1 again
+    [s] = addNamed(s, 'Bouncer', 2);
+    assert.deepEqual(s.fight.rows.filter((r) => /^Bouncer/.test(r.name)).map((r) => r.name), ['Bouncer 1', 'Bouncer 2']);
+  });
+
+  it('an undone add leaves the unseen numbers of the others alone, even after the add took one', () => {
+    let s = gateFight();
+    const labelsOf = (x) => Object.fromEntries(x.fight.rows.map((r) => [r.id, r.unseenN]));
+    const before = labelsOf(s);
+    const [t, id] = addNamed(s, 'Bouncer', 3);
+    s = F(t, { type: 'undoAdd', join: id });
+    assert.deepEqual(labelsOf(s), before);
+  });
+
+  it('undoAdd refuses once a row is touched', () => {
+    const touch = {
+      typed: (s, r) => F(s, { type: 'setAc', row: r.id, ac: 12 }),
+      hp: (s, r) => F(s, { type: 'hp', row: r.id, entry: 't4' }),
+      status: (s, r) => F(s, { type: 'status', row: r.id, add: 'Prone' }),
+      init: (s, r) => F(s, { type: 'setInit', row: r.id, ini: 12 }),
+    };
+    for (const [how, fn] of Object.entries(touch)) {
+      let s = gateFight();
+      let id;
+      [s, id] = addNamed(s, 'Bouncer', 3);
+      const r = s.fight.rows.find((x) => x.name === 'Bouncer 2');
+      s = fn(s, r);
+      const n = s.fight.rows.length;
+      const lines = texts(s).length;
+      s = F(s, { type: 'undoAdd', join: id });
+      assert.equal(s.fight.rows.length, n, `${how}: refused`);
+      assert.equal(texts(s).length, lines, `${how}: and silent`);
+      assert.equal(M.undoable(s.fight, id), false, how);
+    }
+    // a Start that named the rows in Round 1 counts too
+    let s = gateFight();
+    let id;
+    [s, id] = addNamed(s, 'Bouncer', 2);
+    assert.equal(M.undoable(s.fight, id), true);
+    s = next(s);
+    assert.equal(M.undoable(s.fight, id), false, 'the Round 1 line names them');
+    // an unknown join, and a join that was not an add of rows only, never undo
+    s = gateFight();
+    const n = s.fight.rows.length;
+    s = F(s, { type: 'undoAdd', join: 'nope' });
+    assert.equal(s.fight.rows.length, n);
   });
 
   it('rounds wrap with a round-end line naming every combatant\'s HP', () => {

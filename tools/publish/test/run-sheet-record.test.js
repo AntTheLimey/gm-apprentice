@@ -441,6 +441,25 @@ describe('the Table Log writer: fights (plan 5b decision 17)', () => {
     assert.strictEqual(log[4], '- 21:06 The Gate: Fight ends before the first turn: Ada Moss 22/30, Brother Ash 9/9, Frost Wolf 1 0/15 (Out), Frost Wolf 2 15/15, Frost Wolf 3 15/15, Lucan Grey 16/16.');
   });
 
+  it('an add that was taken back leaves no trace in any section (plan 6a F7)', () => {
+    const addBouncers = (s) => {
+      const id = 'j-1';
+      const j = M.joinRows({ model, derived: RS.derive(model, s), state: s, fight: s.fight, add: { name: 'Bouncer', count: 13 }, idBase: id });
+      return { type: 'fightJoin', id, rows: j.rows, tick: j.tick, groups: j.groups, thresholds: j.thresholds, label: 'Bouncer ×13' };
+    };
+    const s = play([
+      { type: 'move', pc: ADA, to: to(GATE) },
+      start,
+      addBouncers,
+      { type: 'undoAdd', join: 'j-1' },
+      { type: 'fightEnd' },
+    ]);
+    assert.ok(s.events.some((e) => /Took back: Bouncer ×13\./.test(e.text)), 'the page keeps its line');
+    assert.ok(s.fight === null && s.fights.at(-1).rows.every((r) => !/Bouncer/.test(r.name)));
+    assert.doesNotMatch(body(s), /Bouncer|Took back/, 'the Table Log names no Bouncer');
+    assert.ok(RS.derive(model, s).log.some((l) => l.tookBack), 'derive marks the line, so the record can leave it out');
+  });
+
   it('vitals from a fight are written as hp/max (after the fight, HH:MM); kept statuses in Conditions, cleared ones not', () => {
     let fid;
     const s = play([

@@ -105,7 +105,8 @@ function tableLogBody(model, state, { linkFor: link, timeOf = localTime } = {}) 
   sec[SIDES_SET] = bullets(d.sidesSet.map((x) => `${link(x.note)}: ${x.side}`));
   sec['Handouts handed over'] = bullets(d.handedOver.map((h) => (h.note ? link(h.note) : one(h.name || h.text))));
 
-  sec.Log = bullets(d.log.map((l) => `${timeOf(l.at)} ${l.beatTitle ? `${one(l.beatTitle)}: ` : ''}${one(l.text)}`));
+  // the GM's "Took back" line stays on the page: the Table Log keeps no trace of an add that never was
+  sec.Log = bullets(d.log.filter((l) => !l.tookBack).map((l) => `${timeOf(l.at)} ${l.beatTitle ? `${one(l.beatTitle)}: ` : ''}${one(l.text)}`));
 
   sec.Loot = bullets(d.loot.map((l) => `${l.item ? link(l.item) : one(l.text)} to ${who(l.to)}`));
 
