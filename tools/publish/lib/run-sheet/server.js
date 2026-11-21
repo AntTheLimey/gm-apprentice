@@ -499,7 +499,7 @@ function createTableServer({ vaultPath, session, party = [], stateFile, deps = {
           const own = msg && msg.own;
           const ownOk = own === undefined || (own && typeof own === 'object' && !Array.isArray(own) && Object.keys(own).every((k) => SIDES.includes(k) && typeof own[k] === 'string' && HEX.test(own[k].trim())));
           if (!msg || !PRESETS.includes(msg.preset) || !ownOk) {
-            json(res, 400, { error: `the body needs { preset: ${PRESETS.join(' | ')}, own?: { pc, ally, foe, neutral } } with each colour like #2e7d3c` });
+            json(res, 400, { error: `the body needs { preset: ${PRESETS.join(' | ')}, own?: { pc, ally, foe, neutral } } with each colour like #2c7739` });
             return;
           }
           // An older site tool stops a player build on a key it does not know under `vault`: only a vault with a site is held.

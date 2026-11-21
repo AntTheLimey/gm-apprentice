@@ -12,6 +12,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const vm = require('node:vm');
+const YAML = require('yaml');
 const { createTableServer, listenLocal } = require('../lib/run-sheet/server');
 const { listSessions, pickSession } = require('../lib/run-sheet/sessions');
 const { browserSkip } = require('./helpers/browser');
@@ -47,14 +48,14 @@ after(async () => {
   for (const d of made) fs.rmSync(d, { recursive: true, force: true });
 });
 
-async function start({ edit } = {}) {
+async function start({ edit, deps } = {}) {
   const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'rs-fight-'));
   made.push(vault);
   fs.cpSync(FIXTURE, vault, { recursive: true });
   if (edit) edit(vault);
   const picked = pickSession(listSessions(vault), SESSION, vault);
   assert.ok(picked.session, picked.error);
-  const t = createTableServer({ vaultPath: vault, session: picked.session, party: PARTY, deps: { delayMs: 20, log: () => {} } });
+  const t = createTableServer({ vaultPath: vault, session: picked.session, party: PARTY, deps: { delayMs: 20, log: () => {}, ...(deps || {}) } });
   const port = await listenLocal(t.server, 0);
   servers.push(t);
   const base = `http://127.0.0.1:${port}`;
@@ -704,8 +705,20 @@ describe('sides by colour', { skip: browserSkip() }, () => {
     await page.evaluate(`document.querySelector(${JSON.stringify(sel)}).scrollIntoView({ block: 'center' })`);
     assert.ok((await page.click(sel)).hit, `the click lands on ${sel}`);
   };
-  // headless Chrome follows the machine's colour scheme: the page's own light theme switch pins these tests to light
-  const light = (page) => page.evaluate('document.documentElement.dataset.theme = "light"');
+  // headless Chrome here follows the machine's scheme (dark): the tests set the media feature, as the OS would
+  const light = (page) => page.colorScheme('light');
+  // A vault with a site whose pinned tool is older than the one that knows the setting, so the real route answers 409
+  const OLD_SITE = { ok: true, ours: false, spec: 'gm-apprentice-publish@1.70.40', installedBefore: '1.70.40' };
+  const oldSite = {
+    deps: { pinCheck: () => OLD_SITE },
+    edit: (vault) => {
+      const file = path.join(vault, '_meta', 'vault-config.yaml');
+      const cfg = YAML.parse(fs.readFileSync(file, 'utf8'));
+      cfg.player_site = { ...cfg.player_site, folder: 'site' };
+      fs.writeFileSync(file, YAML.stringify(cfg));
+      fs.mkdirSync(path.join(vault, 'site'));
+    },
+  };
   const VENN = 'Characters/NPCs/Brother Venn.md';
   const bar = (page, id) => page.evaluate(`getComputedStyle(document.querySelector('[data-frow="${id}"]')).borderLeftColor`);
   const nameColour = (page, id) => page.evaluate(`getComputedStyle(document.querySelector('[data-frow="${id}"] .nm')).color`);
@@ -728,7 +741,8 @@ describe('sides by colour', { skip: browserSkip() }, () => {
         assert.strictEqual(await nameColour(page, id), rgb(PENS[side]), `${side} name`);
         assert.ok(await page.evaluate(`document.querySelector('[data-frow="${id}"]').classList.contains('side-${side}')`));
       }
-      await page.evaluate('document.documentElement.dataset.theme = "dark"');
+      await page.colorScheme('dark');
+      await page.waitFor(`getComputedStyle(document.querySelector('[data-frow="${rowOf(p, ADA).id}"]')).borderLeftColor === ${q(rgb('#6fcf7f'))}`);
       assert.strictEqual(await bar(page, rowOf(p, ADA).id), rgb('#6fcf7f'), 'dark mode takes the dark set');
       await light(page);
       assert.strictEqual(await page.evaluate('document.querySelectorAll("ol.to .tag").length && [...document.querySelectorAll("ol.to .tag")].some((t) => /^(PC|ally)\\b/.test(t.textContent))'), false, 'no PC or ally tag');
@@ -746,9 +760,9 @@ describe('sides by colour', { skip: browserSkip() }, () => {
       await press(page, `[data-fside="neutral"][data-fsiderow="${foe.id}"]`);
       await until(page, `p.fight.rows.find((r) => r.id === ${q(foe.id)}).side === "neutral"`);
       const title = (id) => page.evaluate(`document.querySelector('[data-frow="${id}"] .nm').title`);
-      assert.strictEqual(await title(foe.id), `${foe.name} (neutral: you set it)`);
-      assert.strictEqual(await title(rowOf(p, ADA).id), `${rowOf(p, ADA).name} (PC)`);
-      assert.match(await title(rowOf(p, VENN).id), /\(ally(: .+)?\)$/);
+      assert.strictEqual(await title(foe.id), `${foe.name} (neutral: you set it). Show this one's panel`);
+      assert.strictEqual(await title(rowOf(p, ADA).id), `${rowOf(p, ADA).name} (PC). Show this one's panel`);
+      assert.match(await title(rowOf(p, VENN).id), /\(ally(: .+)?\)\. Show this one's panel$/);
     });
   });
 
@@ -829,7 +843,7 @@ describe('sides by colour', { skip: browserSkip() }, () => {
       const sent = await page.evaluate('window.__posts[0]');
       assert.strictEqual(sent.preset, 'own');
       assert.strictEqual(sent.own.foe, '#123456');
-      assert.strictEqual(sent.own.pc, '#2e7d3c', 'the others start from the vault\'s own colours');
+      assert.strictEqual(sent.own.pc, '#2c7739', 'the others start from the vault\'s own colours');
       const foe = foeRow(p);
       await page.waitFor(`getComputedStyle(document.querySelector('[data-frow="${foe.id}"]')).borderLeftColor === ${q(rgb('#123456'))}`);
       assert.strictEqual((await (await fetch(`${run.base}/api/model`)).json()).model.sideColours.own.foe, '#123456');
@@ -861,26 +875,97 @@ describe('sides by colour', { skip: browserSkip() }, () => {
     });
   });
 
-  it('a failed save still repaints and says why', async () => {
+  it('a failed save (a real 409) still repaints and says why; a network failure says so too', async () => {
+    const run = await start(oldSite);
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      const { p } = await fightOn(page, run);
+      await light(page);
+      const ada = `getComputedStyle(document.querySelector('[data-frow="${rowOf(p, ADA).id}"]')).borderLeftColor`;
+      await press(page, '#coloursBtn');
+      await press(page, '#coloursMenu input[name="scp"][value="colour_blind"]');
+      await page.waitFor(`${ada} === ${q(rgb(CB.pc))}`);
+      await page.waitFor('document.querySelector("#hnotes").textContent.includes("update the site first")');
+      assert.deepStrictEqual(JSON.parse(await page.evaluate('localStorage.getItem("rs:sideColours")')).choice.preset, 'colour_blind');
+      assert.strictEqual((await (await fetch(`${run.base}/api/model`)).json()).model.sideColours.preset, 'pens', 'the vault still says Pens');
+      assert.match(await page.evaluate('document.getElementById("coloursBtn").title'), /^Showing your choice, not the vault's \(not saved: .*update the site first/);
+      assert.strictEqual(await page.evaluate('document.querySelectorAll("#coloursBtn .keptmark").length'), 1, 'the marker shows');
+      // a network failure (the only stub here: a real one cannot be made on a live local server)
+      await page.evaluate(`window.fetch = (u, o) => { throw new TypeError('offline'); }`);
+      await press(page, '#coloursMenu input[name="scp"][value="pens"]');
+      await page.waitFor(`${ada} === ${q(rgb(PENS.pc))}`);
+      await page.waitFor('document.querySelector("#hnotes").textContent.includes("did not answer")');
+    });
+  });
+
+  it('a kept choice survives a reload while the vault is unchanged, and yields once the vault changes', async () => {
+    const run = await start(oldSite);
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      const { p } = await fightOn(page, run);
+      await light(page);
+      const ada = `getComputedStyle(document.querySelector('[data-frow="${rowOf(p, ADA).id}"]')).borderLeftColor`;
+      await press(page, '#coloursBtn');
+      await press(page, '#coloursMenu input[name="scp"][value="colour_blind"]');
+      await page.waitFor(`document.querySelectorAll('#coloursBtn .keptmark').length === 1`);
+      await page.goto(`${run.base}/?probe=1`);
+      await page.waitFor('document.querySelector("[data-frow]")');
+      await page.waitFor(`${ada} === ${q(rgb(CB.pc))}`);
+      assert.strictEqual(await page.evaluate('document.querySelectorAll("#coloursBtn .keptmark").length'), 1, 'kept over a reload');
+      // the vault changes under it (another tool wrote the setting): the vault's answer wins
+      const file = path.join(run.vault, '_meta', 'vault-config.yaml');
+      const cfg = YAML.parse(fs.readFileSync(file, 'utf8'));
+      cfg.vault = { ...cfg.vault, run_sheet: { ...(cfg.vault && cfg.vault.run_sheet), side_colours: 'own', own_colours: { pc: '#123456' } } };
+      fs.writeFileSync(file, YAML.stringify(cfg));
+      await page.goto(`${run.base}/?probe=1`);
+      await page.waitFor('document.querySelector("[data-frow]")');
+      await page.waitFor(`${ada} === ${q(rgb('#123456'))}`);
+      assert.strictEqual(await page.evaluate('document.querySelectorAll("#coloursBtn .keptmark").length'), 0, 'no marker');
+      assert.strictEqual(await page.evaluate('localStorage.getItem("rs:sideColours")'), null, 'the override is gone from the browser');
+    });
+  });
+
+  it('two quick changes: only the latest answer counts, even when the earlier one fails late', async () => {
     const run = await start();
     await withPage({ width: 1449, height: 762 }, async (page) => {
       const { p } = await fightOn(page, run);
       await light(page);
-      await page.evaluate(`(() => { const f = window.fetch; window.fetch = (u, o) => String(u).includes('side-colours')
-        ? Promise.resolve(new Response(JSON.stringify({ error: 'the site is older: update the site first (gma update)' }), { status: 409, headers: { 'content-type': 'application/json' } }))
-        : f(u, o); })()`);
+      const ada = `getComputedStyle(document.querySelector('[data-frow="${rowOf(p, ADA).id}"]')).borderLeftColor`;
+      // the first save is held back, then fails; the second goes through for real (answer order is the thing under test)
+      await page.evaluate(`(() => { const f = window.fetch; let first = true; window.fetch = (u, o) => {
+        if (String(u).includes('side-colours') && first) { first = false; return new Promise((r) => setTimeout(() => r(new Response(JSON.stringify({ error: 'late failure' }), { status: 409, headers: { 'content-type': 'application/json' } })), 700)); }
+        return f(u, o); }; })()`);
       await press(page, '#coloursBtn');
       await press(page, '#coloursMenu input[name="scp"][value="colour_blind"]');
-      await page.waitFor(`getComputedStyle(document.querySelector('[data-frow="${rowOf(p, ADA).id}"]')).borderLeftColor === ${q(rgb(CB.pc))}`);
-      const now = await probe(page);
-      assert.ok(now.notes.some((n) => /update the site first/.test(n)), `the note says why: ${JSON.stringify(now.notes)}`);
-      assert.deepStrictEqual(JSON.parse(await page.evaluate('localStorage.getItem("rs:sideColours")')).preset, 'colour_blind');
-      assert.strictEqual((await (await fetch(`${run.base}/api/model`)).json()).model.sideColours.preset, 'pens', 'the vault still says Pens');
-      // a network failure says so too
-      await page.evaluate(`window.fetch = (u, o) => { throw new TypeError('offline'); }`);
       await press(page, '#coloursMenu input[name="scp"][value="pens"]');
-      await page.waitFor(`getComputedStyle(document.querySelector('[data-frow="${rowOf(p, ADA).id}"]')).borderLeftColor === ${q(rgb(PENS.pc))}`);
-      assert.ok((await probe(page)).notes.some((n) => /did not answer/.test(n)));
+      await page.waitFor(`${ada} === ${q(rgb(PENS.pc))}`);
+      await page.sleep(1200);
+      assert.strictEqual(await page.evaluate('localStorage.getItem("rs:sideColours")'), null, 'the late failure kept nothing');
+      assert.strictEqual(await page.evaluate('document.querySelectorAll("#coloursBtn .keptmark").length'), 0);
+      assert.strictEqual(await page.evaluate(ada), rgb(PENS.pc), 'and repainted nothing');
+      assert.strictEqual((await (await fetch(`${run.base}/api/model`)).json()).model.sideColours.preset, 'pens');
+    });
+  });
+
+  it('the swatches follow the machine\'s light or dark scheme while the menu is open', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await fightOn(page, run);
+      await light(page);
+      await press(page, '#coloursBtn');
+      const first = () => page.evaluate('getComputedStyle(document.querySelector("#coloursMenu .copt .sws i")).backgroundColor');
+      assert.strictEqual(await first(), rgb(PENS.pc));
+      await page.colorScheme('dark');
+      await page.waitFor(`getComputedStyle(document.querySelector("#coloursMenu .copt .sws i")).backgroundColor === ${q(rgb('#6fcf7f'))}`);
+      await page.colorScheme('light');
+      await page.waitFor(`getComputedStyle(document.querySelector("#coloursMenu .copt .sws i")).backgroundColor === ${q(rgb(PENS.pc))}`);
+    });
+  });
+
+  it('a side row\'s name title also says what a click does', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      const { p } = await fightOn(page, run);
+      const foe = foeRow(p);
+      assert.strictEqual(await page.evaluate(`document.querySelector('[data-frow="${foe.id}"] .nm').title`), `${foe.name} (foe). Show this one's panel`);
     });
   });
 });

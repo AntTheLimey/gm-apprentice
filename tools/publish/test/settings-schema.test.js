@@ -194,6 +194,6 @@ test('registry has the two side-colour settings', () => {
   assert.equal(pick.default, 'pens');
   assert.equal(byName.get('vault.run_sheet.own_colours').container, true);
   const own = ['pc', 'ally', 'foe', 'neutral'].map((k) => byName.get(`vault.run_sheet.own_colours.${k}`));
-  assert.deepEqual(own.map((e) => e.default), ['#2e7d3c', '#7a3fb0', '#b3261e', '#6b7078']);
+  assert.deepEqual(own.map((e) => e.default), ['#2c7739', '#7a3fb0', '#b3261e', '#646870']);
   for (const e of own) assert.equal(e.type, 'text');
 });

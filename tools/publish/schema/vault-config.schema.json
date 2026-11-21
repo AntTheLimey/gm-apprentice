@@ -133,7 +133,7 @@
               "properties": {
                 "pc": {
                   "description": "The party's colour on the run sheet when `vault.run_sheet.side_colours` is `own`. One colour, used in both light and dark mode",
-                  "default": "#2e7d3c",
+                  "default": "#2c7739",
                   "type": [
                     "string",
                     "number",
@@ -160,7 +160,7 @@
                 },
                 "neutral": {
                   "description": "The neutral parties' colour on the run sheet when `vault.run_sheet.side_colours` is `own`. One colour, used in both light and dark mode",
-                  "default": "#6b7078",
+                  "default": "#646870",
                   "type": [
                     "string",
                     "number",

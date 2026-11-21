@@ -327,3 +327,4 @@ ol.to .ds { font: 500 .7rem var(--mono); white-space: nowrap; }
 .act .sideSw .lab { font: 500 .68rem var(--mono); color: var(--muted); margin-right: 4px; }
 .act .sideSw button[aria-pressed="true"] { background: var(--ice); color: var(--panel); border-color: var(--ice); }
 .act .nums > span.sideSw { border: 0; background: none; padding: 0; }
+#coloursBtn .keptmark { color: var(--lamp); font-size: .7rem; }

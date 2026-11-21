@@ -24,8 +24,9 @@
   // The sides' colours (plan 6a Task 9), one table for the page's variables and the Colours menu's swatches.
   // Order: PC, ally, foe, neutral. Every colour reaches 4.5:1 as text on the page, panel and current-row
   // backgrounds in its mode (test/run-sheet-side-colours.test.js is the judge). Colour-blind safe is the
-  // Okabe-Ito hues. Two light values are darkened from v8 to pass: the Pens PC and neutral (#2e7d3c and
-  // #6b7078 reach only 4.3:1 on the current-turn row), and so is Colour-blind safe's PC (#0072b2).
+  // Okabe-Ito hues. Three light values are darkened from v8 to pass on the current-turn row: Pens' PC
+  // and neutral (from #2e7d3c and #6b7078, 4.3 and 4.2:1) and Colour-blind safe's PC (from #0072b2, 4.37:1). The
+  // vault setting's own-colour defaults (lib/settings/registry.js) are the Pens light set, and a test holds them equal.
   const SIDE_NAMES = ['pc', 'ally', 'foe', 'neutral'];
   const SIDE_PRESETS = {
     pens: { light: ['#2c7739', '#7a3fb0', '#b3261e', '#646870'], dark: ['#6fcf7f', '#c39bf0', '#f0766b', '#a7abb2'] },
@@ -128,6 +129,7 @@
     G.tableLog = m.tableLog;
     serverIs(m.serverId);
     G.modelAt = Date.now();
+    if (sideKept && sideKept.base !== baseOf(G.model.sideColours)) dropKept();
     applySides();
     for (const n of m.notices || []) {
       if (n.kind === 'record-kept') note(keptText(n.path), { id: `kept:${n.path}` });
@@ -358,8 +360,7 @@
       const c = readChoice(data(ev));
       if (!c || !G.model) return;
       G.model.sideColours = c;
-      sideShown = null;
-      try { localStorage.removeItem(SIDEKEY); } catch (e) { /* no storage */ }
+      dropKept();
       applySides();
     });
     es.addEventListener('save-failed', () => { G.saveFailed = true; indicator(); });
@@ -1142,7 +1143,7 @@
   // ------------------------------------------------------------------ side colours (plan 6a Task 9)
   // The colours are a vault setting: the model carries them, `POST /api/settings/side-colours` writes them, and
   // the server tells every GM window (`side-colours`). When a save fails the page paints the choice anyway and
-  // keeps it in this browser (`localStorage['rs:sideColours']`) with a quiet note; `sideShown` holds that choice.
+  // keeps it in this browser (`localStorage['rs:sideColours']`) with a quiet note; `sideKept` holds that choice.
   const SIDEKEY = 'rs:sideColours';
   const HEX6 = /^#[0-9a-f]{6}$/i;
   const SIDE_WORDS = { pc: 'Party', ally: 'Ally', foe: 'Foe', neutral: 'Neutral' };
@@ -1152,9 +1153,24 @@
     for (const n of SIDE_NAMES) if (raw.own && HEX6.test(String(raw.own[n]))) own[n] = String(raw.own[n]).toLowerCase();
     return { preset: raw.preset, own };
   }
-  let sideShown = null;
-  try { sideShown = readChoice(JSON.parse(localStorage.getItem(SIDEKEY))); } catch (e) { /* no storage, or nothing kept */ }
-  const sideChoice = () => sideShown || readChoice(G.model && G.model.sideColours) || { preset: 'pens', own: {} };
+  // `sideTrying` is a choice being saved (painted at once); `sideKept` is one the vault could not take:
+  // { choice, base, why }, `base` being the model's colours when the save failed. It is kept in this browser, and
+  // it holds only while the vault still says what it said then: a vault that changed since wins.
+  let sideTrying = null;
+  let sideKept = null;
+  let saveSeq = 0;
+  try {
+    const k = JSON.parse(localStorage.getItem(SIDEKEY));
+    const choice = k && readChoice(k.choice);
+    if (choice && typeof k.base === 'string') sideKept = { choice, base: k.base, why: String(k.why || 'the vault could not be reached') };
+  } catch (e) { /* no storage, or nothing kept */ }
+  const baseOf = (colours) => JSON.stringify(colours || null);
+  function dropKept() {
+    sideKept = null;
+    try { localStorage.removeItem(SIDEKEY); } catch (e) { /* no storage */ }
+  }
+  // the kept choice counts only once a model has arrived to compare with
+  const sideChoice = () => sideTrying || (sideKept && G.model ? sideKept.choice : null) || readChoice(G.model && G.model.sideColours) || { preset: 'pens', own: {} };
   const darkNow = () => document.documentElement.dataset.theme === 'dark' || (document.documentElement.dataset.theme !== 'light' && Boolean(window.matchMedia) && matchMedia('(prefers-color-scheme: dark)').matches);
   const swatchHTML = (choice) => `<span class="sws" aria-hidden="true">${swatches(choice, darkNow() ? 'dark' : 'light').map((c) => `<i style="background:${c}"></i>`).join('')}</span>`;
   function menuHTML() {
@@ -1169,6 +1185,14 @@
     let el = document.getElementById('sideVars');
     if (!el) { el = document.createElement('style'); el.id = 'sideVars'; document.head.appendChild(el); }
     el.textContent = sideCss(choice);
+    const btn = document.getElementById('coloursBtn');
+    if (btn) {
+      const kept = Boolean(sideKept && G.model && !sideTrying);
+      const title = kept ? `Showing your choice, not the vault's (not saved: ${sideKept.why})` : 'The colours of the sides in a fight';
+      btn.innerHTML = `Colours${kept ? ' <span class="keptmark" aria-hidden="true">●</span>' : ''}`;
+      btn.title = title;
+      if (kept) btn.setAttribute('aria-label', `Colours. ${title}`); else btn.removeAttribute('aria-label');
+    }
     const menu = document.getElementById('coloursMenu');
     if (!menu) return;
     if (!menu.dataset.built) { menu.innerHTML = menuHTML(); menu.dataset.built = '1'; }
@@ -1180,8 +1204,11 @@
       l.querySelector('.sws').outerHTML = swatchHTML(v === 'own' ? { preset: 'own', own: choice.own } : { preset: v });
     });
   }
+  // Each save has a number: only the latest one's answer repaints or settles the kept choice (two quick changes
+  // can answer out of order).
   async function saveSides(choice) {
-    sideShown = choice; // painted at once, kept only if the vault cannot take it
+    const mine = ++saveSeq;
+    sideTrying = choice; // painted at once, kept only if the vault cannot take it
     applySides();
     let why = null;
     try {
@@ -1189,18 +1216,28 @@
       let body = null;
       try { body = await res.json(); } catch (e) { /* not JSON */ }
       if (res.ok) {
+        if (mine !== saveSeq) return;
         const got = readChoice(body && body.sideColours);
         if (got && G.model) G.model.sideColours = got;
-        sideShown = null;
-        try { localStorage.removeItem(SIDEKEY); } catch (e) { /* no storage */ }
+        sideTrying = null;
+        dropKept();
         applySides();
         if (body && body.note) note(String(body.note), { id: `sc:${body.note}` });
         return;
       }
       why = (body && body.error) || `the server answered ${res.status}`;
     } catch (e) { why = `the server did not answer (${e.message})`; }
-    try { localStorage.setItem(SIDEKEY, JSON.stringify(choice)); } catch (e) { /* no storage */ }
+    if (mine !== saveSeq) return;
+    sideTrying = null;
+    sideKept = { choice, base: baseOf(G.model && G.model.sideColours), why };
+    try { localStorage.setItem(SIDEKEY, JSON.stringify(sideKept)); } catch (e) { /* no storage */ }
+    applySides();
     note(`The colours could not be saved to the vault: ${why}. They stay as you chose on this browser.`, { kind: 'bad', id: `sc:${why}` });
+  }
+  // the machine's light or dark scheme can flip while the page is open: redraw the swatches
+  if (window.matchMedia) {
+    const mq = matchMedia('(prefers-color-scheme: dark)');
+    if (mq.addEventListener) mq.addEventListener('change', () => applySides());
   }
   const menuEl = () => document.getElementById('coloursMenu');
   function menuOpen(on) {

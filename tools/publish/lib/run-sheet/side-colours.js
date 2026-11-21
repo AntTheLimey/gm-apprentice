@@ -24,7 +24,7 @@ function readSideColours(values) {
     if (typeof v === 'string' && HEX.test(v.trim())) own[k] = v.trim().toLowerCase();
     else {
       own[k] = DEFAULT_OWN[k];
-      if (v !== undefined && v !== DEFAULT_OWN[k]) warnings.push({ kind: 'side-colours', note: null, text: `vault.run_sheet.own_colours.${k} is "${v}", not a colour like #2e7d3c (#rrggbb): the default ${DEFAULT_OWN[k]} is used` });
+      if (v !== undefined && v !== DEFAULT_OWN[k]) warnings.push({ kind: 'side-colours', note: null, text: `vault.run_sheet.own_colours.${k} is "${v}", not a colour like #2c7739 (#rrggbb): the default ${DEFAULT_OWN[k]} is used` });
     }
   }
   return { sideColours: { preset, own }, warnings };

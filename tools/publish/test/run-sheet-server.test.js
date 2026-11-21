@@ -1481,7 +1481,7 @@ describe('the side-colours setting', () => {
     const r = await post(run, { preset: 'own', own: { foe: ' #AA0000 ' } });
     assert.strictEqual(r.status, 200, r.text);
     assert.strictEqual(r.json.note, 'saved, but the sheet could not be re-read');
-    assert.deepStrictEqual(r.json.sideColours, { preset: 'own', own: { pc: '#2e7d3c', ally: '#7a3fb0', foe: '#aa0000', neutral: '#6b7078' } });
+    assert.deepStrictEqual(r.json.sideColours, { preset: 'own', own: { pc: '#2c7739', ally: '#7a3fb0', foe: '#aa0000', neutral: '#646870' } });
   });
   it('POST on a site with a current tool, or on a vault with no site, writes', async () => {
     const vault = copyOf();

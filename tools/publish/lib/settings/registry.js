@@ -115,9 +115,9 @@ const REGISTRY = [
   },
   { name: 'vault.run_sheet.own_colours', type: 'map', container: true },
   {
-    name: 'vault.run_sheet.own_colours.pc', type: 'text', default: '#2e7d3c', shape: 'a colour like #2e7d3c', group: 'vault',
+    name: 'vault.run_sheet.own_colours.pc', type: 'text', default: '#2c7739', shape: 'a colour like #2c7739', group: 'vault',
     does: "The party's colour on the run sheet when `vault.run_sheet.side_colours` is `own`. One colour, used in both light and dark mode",
-    left_out: '`#2e7d3c`',
+    left_out: '`#2c7739`',
   },
   {
     name: 'vault.run_sheet.own_colours.ally', type: 'text', default: '#7a3fb0', shape: 'a colour like #7a3fb0', group: 'vault',
@@ -130,9 +130,9 @@ const REGISTRY = [
     left_out: '`#b3261e`',
   },
   {
-    name: 'vault.run_sheet.own_colours.neutral', type: 'text', default: '#6b7078', shape: 'a colour like #6b7078', group: 'vault',
+    name: 'vault.run_sheet.own_colours.neutral', type: 'text', default: '#646870', shape: 'a colour like #646870', group: 'vault',
     does: "The neutral parties' colour on the run sheet when `vault.run_sheet.side_colours` is `own`. One colour, used in both light and dark mode",
-    left_out: '`#6b7078`',
+    left_out: '`#646870`',
   },
 
   // Numbers the vault scripts (not the site build) read

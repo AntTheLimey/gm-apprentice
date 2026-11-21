@@ -72,6 +72,11 @@ describe('the side colour table', () => {
     assert.doesNotMatch(sideCss({ preset: 'own', own }), /@media/, 'my own colours are one set for both modes');
   });
 
+  it('the vault setting\'s own-colour defaults are the Pens light set, so the two cannot drift', () => {
+    const { DEFAULT_OWN } = require('../lib/run-sheet/side-colours');
+    assert.deepStrictEqual(NAMES.map((n) => DEFAULT_OWN[n]), SIDE_PRESETS.pens.light);
+  });
+
   it('an unknown preset reads as Pens', () => {
     assert.deepStrictEqual(swatches({ preset: 'nonsense', own: {} }, 'light'), SIDE_PRESETS.pens.light);
   });
