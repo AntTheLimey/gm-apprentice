@@ -563,7 +563,8 @@
   // A press holds the redraws (review F1). Pressing the mouse leaves the box being edited, and its commit
   // redraws; a redraw between press and release replaces what is under the pointer, so no click fires.
   // The commit's action goes at once; the redraw waits until after the click (or a release with no click,
-  // or 300 ms), and then focus goes where the click put it.
+  // a cancelled press or the window losing focus), and then focus goes where the click put it. However long
+  // the press is held: only a release that never comes is cut off, after 2 s.
   const press = { on: false, owed: false, timer: null };
   function endHold() {
     clearTimeout(press.timer);
@@ -574,7 +575,7 @@
     if (ev.button !== 0) return;
     press.on = true;
     clearTimeout(press.timer);
-    press.timer = setTimeout(endHold, 300);
+    press.timer = setTimeout(endHold, 2000);
   }, true);
   // the click's own handlers redraw as usual (capture, before them); a redraw still owed comes after them
   window.addEventListener('click', () => { press.on = false; }, true);
@@ -582,6 +583,7 @@
   // a release with no click: the click, when there is one, comes in the same task as the release
   document.addEventListener('pointerup', () => { if (press.on) setTimeout(endHold, 0); }, true);
   document.addEventListener('pointercancel', endHold, true);
+  window.addEventListener('blur', () => { if (press.on) endHold(); });
 
   // Focus a part moved on purpose (Tab to the next box): a redraw that finds focus on nothing puts it back
   // there, by the box's key, wherever its row now stands. Any press, or focus going elsewhere, forgets it.
@@ -608,6 +610,8 @@
     if (!committing && a && a.matches && a.matches(COMMIT_ON_CHANGE) && a.value.trim() !== a.defaultValue.trim()) {
       const before = renders;
       committing = true;
+      // the redraw that follows removes the box, and the browser fires its own `change`: that one sends nothing
+      a.dataset.sent = a.value;
       try { a.dispatchEvent(new Event('change', { bubbles: true })); } finally { committing = false; }
       if (renders !== before) return; // the change's action redrew
     }
@@ -1815,6 +1819,8 @@
   document.addEventListener('change', (ev) => {
     const t = ev.target;
     const d = t.dataset || {};
+    // the browser's change for an end-panel box a redraw removes, just sent by `update`: not twice
+    if (drawing && t.matches && t.matches(COMMIT_ON_CHANGE) && d.sent !== undefined && d.sent === t.value) return;
     if (d.loot) {
       const b = beatOfKey(d.beat);
       const tr = b && b.treasure.find((x) => x.key === d.loot);

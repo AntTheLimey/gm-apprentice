@@ -1053,19 +1053,22 @@ async function readyFight(page, run) {
 const foes = (p) => p.fight.rows.filter((r) => r.kind === 'foe' && r.in && Number.isFinite(r.hp));
 
 describe('stat boxes keep the mouse and the keyboard', { skip: browserSkip() }, () => {
-  it('an edited box then a click on Start: the max is saved and the fight starts', async () => {
-    const run = await start();
-    await withPage({ width: 1449, height: 762 }, async (page) => {
-      const p0 = await readyFight(page, run);
-      const foe = foes(p0)[0];
-      await tap(page, sel('data-fmax', foe.id));
-      await page.type('77');
-      await tap(page, '#fNext');
-      const p = await until(page, `p.saved === "Saved" && p.pending === 0 && p.fight.rows.find((r) => r.id === ${JSON.stringify(foe.id)}).max === 77`);
-      assert.strictEqual(p.fight.started, true, 'the click on Start was not eaten');
-      assert.deepStrictEqual(p.errors, []);
+  // held as a quick hand does, and long (fix round 1, I1: the hold lasts until the release, however long)
+  for (const holdMs of [90, 500, 1500]) {
+    it(`an edited box then a click on Start held ${holdMs} ms: the max is saved and the fight starts`, async () => {
+      const run = await start();
+      await withPage({ width: 1449, height: 762 }, async (page) => {
+        const p0 = await readyFight(page, run);
+        const foe = foes(p0)[0];
+        await tap(page, sel('data-fmax', foe.id));
+        await page.type('77');
+        await tap(page, '#fNext', { holdMs });
+        const p = await until(page, `p.saved === "Saved" && p.pending === 0 && p.fight.rows.find((r) => r.id === ${JSON.stringify(foe.id)}).max === 77`);
+        assert.strictEqual(p.fight.started, true, 'the click on Start was not eaten');
+        assert.deepStrictEqual(p.errors, []);
+      });
     });
-  });
+  }
 
   it('an edited box then a click into another box: both saved, focus never on the page', async () => {
     const run = await start();
@@ -1226,6 +1229,90 @@ describe('stat boxes keep the mouse and the keyboard', { skip: browserSkip() }, 
         await page.key('Enter');
         await until(page, `p.saved === "Saved" && p.pending === 0 && p.fight.rows.find((r) => r.id === ${JSON.stringify(one.id)}).${k === 'data-fmax' ? 'max' : 'ini'} === ${Number(typed)}`);
       }
+    });
+  });
+
+  // fix round 1, M1: a box another window's redraw removes for good still sends its number
+  it('a max typed in a row another window unticks is saved, and focus is not on the page', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await page.focusEvents();
+      const p0 = await startedFight(page, run);
+      const foe = foes(p0)[0];
+      await tap(page, sel('data-fmax', foe.id));
+      await page.type('14');
+      await fromOther(run, [{ type: 'fightTick', fight: p0.fight.id, row: foe.id, in: false }]);
+      const p = await until(page, `p.saved === "Saved" && p.pending === 0 && p.fight.rows.find((r) => r.id === ${JSON.stringify(foe.id)}).in === false && p.fight.rows.find((r) => r.id === ${JSON.stringify(foe.id)}).max === 14`);
+      await page.sleep(100);
+      assert.notStrictEqual(await active(page), 'body', 'focus went somewhere sensible');
+      assert.deepStrictEqual(p.errors, []);
+    });
+  });
+
+  // fix round 1, M2: a marked box gives way to a newer number
+  it('a bad number\'s words give way to a newer number from another window', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await page.focusEvents();
+      const p0 = await startedFight(page, run);
+      const [one, two] = foes(p0);
+      await tap(page, sel('data-fmax', one.id));
+      await page.type('40x');
+      await tap(page, sel('data-fhp', two.id));
+      const look = () => page.evaluate(`(() => { const b = document.querySelector('${sel('data-fmax', one.id)}'); return { v: b.value, inv: b.getAttribute('aria-invalid'), msg: Boolean(b.parentElement.querySelector('.badnum')) }; })()`);
+      // an unrelated redraw keeps the mark
+      await fromOther(run, [{ type: 'setAc', fight: p0.fight.id, row: two.id, ac: 17 }]);
+      await until(page, `p.fight.rows.find((r) => r.id === ${JSON.stringify(two.id)}).ac === 17`);
+      assert.deepStrictEqual(await look(), { v: '40x', inv: 'true', msg: true });
+      await fromOther(run, [{ type: 'setMax', fight: p0.fight.id, row: one.id, max: 50 }]);
+      const p = await until(page, `p.fight.rows.find((r) => r.id === ${JSON.stringify(one.id)}).max === 50`);
+      assert.deepStrictEqual(await look(), { v: '50', inv: null, msg: false });
+      assert.deepStrictEqual(p.errors, []);
+    });
+  });
+
+  // fix round 1, M3: an end-panel box a redraw lands on sends its number once
+  it('a vitals box holding a typed HP sends one endSet when another window redraws and it is left', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await page.focusEvents();
+      await page.goto(`${run.base}/?probe=1`);
+      await settled(page);
+      // counts what the page sends (a wrapper round fetch: no event is made up)
+      await page.evaluate(`(() => { window.__sent = []; const f = window.fetch; window.fetch = function (u, o) { try { if (String(u).includes('/api/actions')) for (const a of JSON.parse(o.body).actions) window.__sent.push(a); } catch (e) {} return f.apply(this, arguments); }; return true; })()`);
+      const id = await page.evaluate('document.querySelector("#sheet [data-vhp]").dataset.vhp');
+      const box = `#sheet [data-vhp="${id}"]`;
+      await tap(page, box);
+      await page.evaluate('document.activeElement.select(); true');
+      await page.type('9');
+      await fromOther(run, [{ type: 'mark', beat: run.model.beats[0].key, done: true }]);
+      await page.sleep(600); // the other window's change reaches this page and redraws it
+      await page.key('Tab');
+      await settled(page);
+      await page.sleep(300);
+      const ends = await page.evaluate('window.__sent.filter((a) => a.type === "endSet").map((a) => JSON.stringify(a.vitals))');
+      assert.deepStrictEqual(ends, [JSON.stringify({ [id]: { hp: 9 } })], 'exactly one endSet');
+    });
+  });
+
+  // fix round 1, M4: a click into the box that already has focus selects it too
+  it('a click into the focused max box selects it: 20 Enter, click, 21 gives 21', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await page.focusEvents();
+      const p0 = await startedFight(page, run);
+      const foe = foes(p0)[0];
+      const box = sel('data-fmax', foe.id);
+      await tap(page, box);
+      await page.type('20');
+      await page.key('Enter');
+      await until(page, `p.saved === "Saved" && p.pending === 0 && p.fight.rows.find((r) => r.id === ${JSON.stringify(foe.id)}).max === 20`);
+      assert.strictEqual(await active(page), `fmax:${foe.id}`, 'still in the box');
+      await tap(page, box, { offsetX: 12 });
+      await page.type('21');
+      assert.strictEqual(await page.evaluate(`document.querySelector('${box}').value`), '21');
+      await page.key('Enter');
+      await until(page, `p.saved === "Saved" && p.pending === 0 && p.fight.rows.find((r) => r.id === ${JSON.stringify(foe.id)}).max === 21`);
     });
   });
 

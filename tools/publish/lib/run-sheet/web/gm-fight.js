@@ -31,7 +31,8 @@
     fightId: null, peek: null, peekTurn: null,
     area: false, sel: {}, ahalf: {}, spend: {}, areaDmg: '',
     ask: null, asked: {}, other: {}, addHits: [], addText: '', addCount: '1', mine: null,
-    // a stat box holding words that are not a number (review F5): its words, kept through redraws
+    // a stat box holding words that are not a number (review F5): { words, was }, kept through redraws
+    // while the state's number is still the one it was marked against
     bad: {},
   };
 
@@ -304,9 +305,12 @@
   const BAD_NUMBER = 'Not a number: kept as typed';
   const badKey = (k, id) => `${k}|${id}`;
   function statBox(k, r, value, rest) {
-    const bad = ui.bad[badKey(k, r.id)];
-    if (bad === undefined) return `<input ${k}="${esc(r.id)}" value="${esc(value)}" ${rest}>`;
-    return `<input ${k}="${esc(r.id)}" value="${esc(bad)}" aria-invalid="true" ${rest}><span class="badnum" role="status">${BAD_NUMBER}</span>`;
+    const key = badKey(k, r.id);
+    const bad = ui.bad[key];
+    // a newer number (another window, Same for all) replaces the marked words
+    if (bad && bad.was !== String(value)) delete ui.bad[key];
+    if (!ui.bad[key]) return `<input ${k}="${esc(r.id)}" value="${esc(value)}" ${rest}>`;
+    return `<input ${k}="${esc(r.id)}" value="${esc(bad.words)}" aria-invalid="true" ${rest}><span class="badnum" role="status">${BAD_NUMBER}</span>`;
   }
 
   // pc, ally, foe or neutral; a lair action has none
@@ -719,13 +723,16 @@
     fmax: { k: 'data-fmax', ok: /^\d{1,4}$/ },
     fac: { k: 'data-fac', ok: /^\d{1,4}$/ },
   };
+  const FIELD = { fini: 'ini', fmax: 'max', fac: 'ac' };
+  const shown = (r, f) => String(isNum(r[FIELD[f]]) ? r[FIELD[f]] : '');
   const statOf = (t) => { const d = (t && t.dataset) || {}; for (const f of Object.keys(STAT)) if (d[f] !== undefined) return f; return null; };
 
   // Words that are not a number mark the box and stay in it; the state is unchanged, and focus is never
   // taken back (review F5: reportValidity put it back, and whatever was typed next went into the bad box).
   function markBad(t, f, on) {
     const key = badKey(STAT[f].k, t.dataset[f]);
-    if (on) ui.bad[key] = t.value; else delete ui.bad[key];
+    const r = rowById(t.dataset[f]);
+    if (on && r) ui.bad[key] = { words: t.value, was: shown(r, f) }; else delete ui.bad[key];
     const msg = t.nextElementSibling && t.nextElementSibling.classList.contains('badnum') ? t.nextElementSibling : null;
     if (on) {
       t.setAttribute('aria-invalid', 'true');
@@ -820,16 +827,22 @@
   // Every number box selects what it holds when it is clicked or tabbed into, so a typed 3 replaces the 1
   // (or the 21) instead of making 13 (or 291). A focus handler alone is undone by the press's own caret
   // (review F6), so a box this press focused selects again on the release.
+  // A press on a box that already has focus selects too, unless the press dragged out a selection of its own.
   const NUMBER_BOX = '[data-fini], [data-fmax], [data-fac], #fAddCount';
-  let pressFocused = null;
+  let pressed = null;
   document.addEventListener('pointerdown', (ev) => {
     const b = ev.target.closest && ev.target.closest(NUMBER_BOX);
-    pressFocused = b && document.activeElement !== b ? b : null;
+    pressed = b ? { b, x: ev.clientX, y: ev.clientY } : null;
   }, true);
   document.addEventListener('pointerup', (ev) => {
     const b = ev.target.closest && ev.target.closest(NUMBER_BOX);
-    if (b && b === pressFocused && document.activeElement === b) b.select();
-    pressFocused = null;
+    const was = pressed;
+    pressed = null;
+    if (!b || !was || was.b !== b || document.activeElement !== b) return;
+    const dragged = Math.abs(ev.clientX - was.x) > 3 || Math.abs(ev.clientY - was.y) > 3;
+    const own = typeof b.selectionStart === 'number' && b.selectionStart !== b.selectionEnd;
+    if (dragged && own) return;
+    b.select();
   }, true);
   document.addEventListener('focusin', (ev) => { if (ev.target.matches && ev.target.matches(NUMBER_BOX)) ev.target.select(); });
 
@@ -841,7 +854,7 @@
       delete t.dataset.committed;
       // a marked box keeps its words through a redraw while they are worked on
       const key = badKey(STAT[f].k, t.dataset[f]);
-      if (ui.bad[key] !== undefined) ui.bad[key] = t.value;
+      if (ui.bad[key]) ui.bad[key].words = t.value;
     }
     if (t.id === 'fAddName') {
       ui.addText = t.value;
@@ -867,11 +880,38 @@
     }, 0);
   });
 
+  // A box the redraw removes fires change in the middle of the redraw. When the redraw drew it again, its
+  // half-typed words are in the new box (sent when it is left, never on the redraw). When it is gone for good
+  // (another window unticked the row), its number is sent from the old box, and focus that fell to nothing
+  // goes to the same box on the next row that has one, else to Next.
+  function afterDraw(t) {
+    const f = statOf(t);
+    const id = t.dataset[f];
+    const k = STAT[f].k;
+    setTimeout(() => {
+      if (document.querySelector(attr(k, id))) return;
+      commitStat(t);
+      const a = document.activeElement;
+      if (a && a !== document.body) return;
+      const fi = state().fight;
+      const ids = fi ? fi.rows.map((r) => r.id) : [];
+      const i = ids.indexOf(id);
+      const near = ids.slice(i + 1).concat(ids.slice(0, Math.max(0, i)).reverse());
+      const to = near.find((x) => document.querySelector(attr(k, x)));
+      if (to) RP.focusTo(attr(k, to));
+      else { const nx = $('#fNext'); if (nx) nx.focus(); }
+    }, 0);
+  }
+
   document.addEventListener('change', (ev) => {
     const t = ev.target;
     const d = t.dataset || {};
-    // a box the redraw removes fires change: its half-typed number is not sent (the redraw keeps it)
-    if (statOf(t)) { if (!committed(t) && !RP.drawing()) commitStat(t); return; }
+    if (statOf(t)) {
+      if (committed(t)) return;
+      if (RP.drawing()) { afterDraw(t); return; }
+      commitStat(t);
+      return;
+    }
     if (d.fstatus !== undefined) {
       const v = t.value;
       t.value = '';
