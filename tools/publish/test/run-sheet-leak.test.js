@@ -821,3 +821,51 @@ describe('an unpublished place reaches the players only by the GM\'s act (plan 6
     for (const v of [view(moved), view(fought), view(shown)]) checkShape(v, 'an unpublished place');
   });
 });
+
+// Final review O1: a Plan ally phrase with a negation or hedge before it is no ally, so a hostile NPC's name and
+// HP never reach the players' screen by it. "will never fight as an ally" in a who line, "not with the party" in a
+// Quick Reference cell.
+describe('a negated Plan ally phrase makes no seen ally (final review O1)', () => {
+  const RS = require('../lib/run-sheet/web/state');
+  const M = require('../lib/run-sheet/web/fight-math');
+  const IMP = 'Creatures/Rime Imp.md';
+  const WOLF = S.NOTES.WOLF;
+  let n = 0;
+  const act = (s, a) => RS.reduce(s, { id: `o1-${++n}`, ...a }, new Date(Date.parse('2026-11-20T19:00:00Z') + n * 60000).toISOString());
+
+  it('"will never fight as an ally" and "not with the party" send no name and no HP', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rs-o1-'));
+    made.push(dir);
+    fs.cpSync(FIXTURE, dir, { recursive: true });
+    const planPath = path.join(dir, S.PLAN);
+    const text = fs.readFileSync(planPath, 'utf8').replace(/\r\n/g, '\n')
+      .replace('**[[Rime Imp]]:** rides its shoulder', '**[[Rime Imp]]:** rides its shoulder and will never fight as an ally')
+      .replace('**[[Frost Wolf]]:** arrives in round three', '**[[Frost Wolf]]:** arrives in round three')
+      .replace('## Contingency Scenes', '## NPC Quick Reference\n\n| NPC | Role This Session | Key Detail | Location |\n|-----|---|---|---|\n| [[Frost Wolf]] | Hunter | not with the party | [[The Gate]] |\n\n## Contingency Scenes');
+    assert.ok(text.includes('will never fight as an ally') && text.includes('not with the party'));
+    fs.writeFileSync(planPath, text);
+    const m = readRunSheet(dir, S.PLAN, { party: S.PARTY });
+    const gate = m.beats.find((b) => b.title === 'Ashfall Reckoning');
+    for (const note of [IMP, WOLF]) {
+      const f = gate.foes.find((x) => x.note === note);
+      assert.ok(f, note);
+      assert.deepEqual([f.ally, f.allyBy], [false, null], `${note} is a foe`);
+    }
+    let s = RS.emptyState({ stateId: 's', session: 'x', plan: S.PLAN });
+    s = act(s, { type: 'move', pc: S.NOTES.ADA, to: { beat: gate.key, spot: null, title: gate.title } });
+    const id = `o1-${++n}`;
+    const b = M.rowsForFight({ model: m, derived: RS.derive(m, s), state: s, beatKey: gate.key, idBase: id });
+    s = RS.reduce(s, { id, type: 'fightStart', beat: gate.key, title: gate.title, groups: b.groups, rows: b.rows, thresholds: b.thresholds }, new Date().toISOString());
+    // tick every row in, so a name or HP has every chance to show
+    for (const r of s.fight.rows) if (!r.in) s = act(s, { type: 'fightTick', fight: s.fight.id, row: r.id, in: true });
+    const v = forPlayers(m, s, { withheldWords: m.withheldWords, campaign: m.campaign, picId: () => '0'.repeat(20) });
+    checkShape(v, 'negated phrases');
+    const sandbox = { self: {} };
+    vm.runInNewContext(fs.readFileSync(path.join(__dirname, '..', 'lib', 'run-sheet', 'web', 'players', 'render.js'), 'utf8'), sandbox);
+    const texts = [JSON.stringify(v), sandbox.self.RunSheetPlayersRender.renderPlayers(v)];
+    for (const t of texts) {
+      for (const bad of ['Rime Imp', 'Frost Wolf', '6175', '7346', '7347']) assert.ok(!t.includes(bad), `"${bad}" reached the players`);
+      assert.ok(!/(?<![0-9])21\/21(?![0-9])/.test(t), 'the Imp\'s HP reached the players');
+    }
+  });
+});

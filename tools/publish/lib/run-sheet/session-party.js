@@ -9,6 +9,10 @@
 // tonight's party comes from the index field, the Plan roster or the active PCs [P-S1]. It is here
 // for the reader on its own and for the no-Plan page.
 // Names and links resolve through `index.resolve`. Never throws.
+// `warnings` (final review O3): one `missing-pc` for each name or link the index field lists, and each link the
+// Plan's roster holds (a plain roster name, a heading or a bold label, may be a label, so only a link counts
+// there), that is no PC: the GM sees who was left out, as 5b's party said. A link to a note that is no PC (an NPC
+// Ben) is that note's, never a PC's first name.
 
 const path = require('node:path');
 const pt = require('./plan-text');
@@ -20,7 +24,8 @@ const { canonicalNfc } = require('../unicode');
 const FIELDS = ['pcs', 'party', 'players_present', 'present', 'attendance', 'characters'];
 const low = (s) => canonicalNfc(String(s == null ? '' : s)).replace(/[_*`]/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
 
-function sessionParty({ index, sessionPath, planBody, given }) {
+function sessionParty({ index, sessionPath, planBody, given, planPath = null }) {
+  const warnings = [];
   const fmOf = (p) => (p && index.has(p) ? index.read(p).fm || {} : {});
   // A note whose frontmatter does not parse is let through a link: `readPcs` warns about it by name.
   const isPc = (p) => !!p && index.has(p) && (String(fmOf(p).type || '').trim().toLowerCase() === 'pc' || !!index.read(p).unreadable);
@@ -35,13 +40,27 @@ function sessionParty({ index, sessionPath, planBody, given }) {
   }
   // A link or a plain name to a PC note path, or null. A first name counts only when one PC has it.
   const pcOf = (link, name) => {
-    if (link) { const hit = index.resolve(link); if (isPc(hit)) return hit; }
+    if (link) {
+      const hit = index.resolve(link);
+      if (isPc(hit)) return hit;
+      if (hit && index.has(hit)) return null;
+    }
     const k = low(name || link);
     return (k && (byName.get(k) || firsts.get(k))) || null;
   };
-  const collect = (items) => {
+  // `where` names the source for a warning (null: none, the wrap-up's); `strict` warns for plain names too (the
+  // index field), else links only
+  const collect = (items, where, note, strict) => {
     const out = [];
-    for (const [link, name] of items) { const p = pcOf(link, name); if (p && !out.includes(p)) out.push(p); }
+    for (const [link, name] of items) {
+      const p = pcOf(link, name);
+      if (p) { if (!out.includes(p)) out.push(p); continue; }
+      const shown = link ? `[[${link}]]` : String(name || '').trim();
+      if (!where || !shown || (!link && !strict)) continue;
+      const hit = link ? index.resolve(link) : null;
+      const why = hit && index.has(hit) ? 'links a note that is no PC' : 'names no PC in the vault';
+      warnings.push({ kind: 'missing-pc', note, text: `${where} lists ${shown}, which ${why}: left out of tonight's party` });
+    }
     return out;
   };
   const items = (text) => {
@@ -54,8 +73,9 @@ function sessionParty({ index, sessionPath, planBody, given }) {
   const field = FIELDS.find((k) => fm[k] !== undefined && fm[k] !== null && fm[k] !== '');
   if (field) {
     const v = fm[field];
-    const party = collect((Array.isArray(v) ? v : String(v).split(/[,;\n]/)).map((x) => items(String(x))));
-    if (party.length) return { party, from: 'index' };
+    const party = collect((Array.isArray(v) ? v : String(v).split(/[,;\n]/)).map((x) => items(String(x))).filter(([l, n]) => l || n),
+      `the session's \`${field}\``, sessionPath, true);
+    if (party.length) return { party, from: 'index', warnings };
   }
 
   // 2. the wrap-up's PC Carry-Forward entries
@@ -71,8 +91,8 @@ function sessionParty({ index, sessionPath, planBody, given }) {
       const heads = lines.filter((l) => /^#{4}\s/.test(l)).map((l) => items(l.replace(/^#+\s+/, '').split(/\s[—–-]\s|\s\(/)[0]));
       // an entry is a heading when the section has any; else a top-level bullet led by a bold subject
       const subjects = heads.length ? heads : lines.map((l) => /^[-*]\s+\*\*(.+?)\*\*/.exec(l)).filter(Boolean).map((m) => items(m[1].replace(/:\s*$/, '')));
-      const party = collect(subjects);
-      if (party.length) return { party, from: 'wrapup' };
+      const party = collect(subjects, null, wrap, false);
+      if (party.length) return { party, from: 'wrapup', warnings };
     }
   }
 
@@ -86,12 +106,12 @@ function sessionParty({ index, sessionPath, planBody, given }) {
       const m = /^\*\*(.+?)\*\*/.exec(b.text);
       if (m) subjects.push(items(m[1].replace(/:\s*$/, '')));
     }
-    const party = collect(subjects);
-    if (party.length) return { party, from: 'plan' };
+    const party = collect(subjects, 'the Plan\'s PC Roster', planPath, false);
+    if (party.length) return { party, from: 'plan', warnings };
   }
 
   // 4. the caller's list
-  return { party: Array.isArray(given) ? given : [], from: 'given' };
+  return { party: Array.isArray(given) ? given : [], from: 'given', warnings };
 }
 
 module.exports = { sessionParty };

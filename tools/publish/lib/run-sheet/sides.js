@@ -17,7 +17,7 @@ const { ontology } = require('../ontology');
 // A bare ally/allies in a Quick Reference cell is looser (it may be "not an ally"), so it is `allyBy:
 // 'quickRef'`, an inferred ally that Task 5 starts unseen, and it does not count when its cell also holds a
 // negation or hedge. allyBy values: 'plan' | 'quickRef' | 'stats' | 'affiliation' | 'relationships' | null.
-const PHRASES = /\bwith the party\b|\bwith (?:the )?coalition\b|\bas an ally\b|\bon their side\b/i;
+const PHRASES = /\bwith the party\b|\bwith (?:the )?coalition\b|\bas an ally\b|\bon their side\b/gi;
 const BARE_ALLY = /\b(?:ally|allies)\b/i;
 const HEDGE = /\b(?:not|no|never|former|once|potential|possible|maybe|could|threat|enemy|rival)\b|\bex-|\/|\?/i;
 const STATS_WORDS = /\bas an ally\b/i;
@@ -50,6 +50,31 @@ const signOf = (tone) => SIGN[familyOf.get(String(tone || '').trim().toLowerCase
 
 const found = (re, text) => { const m = re.exec(String(text || '')); return m ? m[0] : null; };
 
+// A Plan phrase that counts: one with no negation or hedge before it in its own clause (a clause ends at
+// . ; , : ( ) or a dash), and no `?` or `/` straight after it there. "will never fight as an ally" and "not
+// with the party" are no ally; "Enemy of the Order, fights with the party" is. A who line is read whole; a
+// Quick Reference row cell by cell (its cells are `|`-joined). This fails safe: a hedged phrase makes no ally,
+// so no name reaches the players' screen by it.
+const CLAUSE_END = /[.;,:()\u2013\u2014]|\s-\s/g;
+// Returns { said } for a phrase that counts, { hedged: true } when every phrase found is hedged (the GM's own
+// words say no: the row is a foe, and nothing later infers an ally), or {} when there is none.
+function phraseIn(text, perCell) {
+  let hedged = false;
+  for (const part of perCell ? String(text || '').split('|') : [String(text || '')]) {
+    for (const m of part.matchAll(PHRASES)) {
+      const before = part.slice(0, m.index);
+      let start = 0;
+      for (const e of before.matchAll(CLAUSE_END)) start = e.index + e[0].length;
+      const tail = part.slice(m.index + m[0].length);
+      const end = tail.search(CLAUSE_END);
+      const after = end < 0 ? tail : tail.slice(0, end);
+      if (!HEDGE.test(before.slice(start)) && !/[?/]/.test(after)) return { said: m[0] };
+      hedged = true;
+    }
+  }
+  return hedged ? { hedged } : {};
+}
+
 // The note's relationships to this session's party, summed: each one's `strength` (1 when it has
 // none or an unusable one), signed by its tone. `resolve` turns a target name into a note path.
 function relationshipsTotal(fm, partyNotes, resolve) {
@@ -66,8 +91,11 @@ function relationshipsTotal(fm, partyNotes, resolve) {
 }
 
 function startingSide({ whoText = '', quickRefText = '', statsText = '', fm = {}, partyNotes = [], resolve = null } = {}) {
-  const said = found(PHRASES, whoText) || found(PHRASES, quickRefText);
+  const who = phraseIn(whoText, false);
+  const quick = who.said ? {} : phraseIn(quickRefText, true);
+  const said = who.said || quick.said;
   if (said) return { ally: true, allyFrom: `the Plan: "${said.toLowerCase()}"`, allyBy: 'plan' };
+  if (who.hedged || quick.hedged) return { ally: false, allyFrom: null, allyBy: null };
   // Quick Reference cells are joined with `|`; a bare ally counts per cell, and a hedged cell is no yes.
   for (const cell of String(quickRefText || '').split('|')) {
     const bare = found(BARE_ALLY, cell);

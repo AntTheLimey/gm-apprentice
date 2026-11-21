@@ -96,6 +96,24 @@ describe('a row\'s starting side', () => {
     assert.deepStrictEqual(pick(side(index, 'Ferrante', { quickRefText: 'Ally | not seen since' })), [true, 'quickRef']);
   });
 
+  // final review O1: a negation or hedge before a phrase, in its own who line or Quick Reference cell, is no ally
+  it('a negated or hedged Plan phrase is no ally, and nothing after it infers one', () => {
+    for (const t of ['will never fight as an ally', 'not with the party', 'no longer on their side', 'Former friend, once with the coalition',
+      'could fight as an ally', 'a rival, maybe with the party', 'with the party?', 'with the party / the Order']) {
+      assert.deepStrictEqual(side(index, 'Ferrante', { whoText: t }), { ally: false, allyFrom: null, allyBy: null }, `who: ${t}`);
+      assert.deepStrictEqual(side(index, 'Ferrante', { quickRefText: `Hired | ${t}` }), { ally: false, allyFrom: null, allyBy: null }, `quick ref: ${t}`);
+    }
+    // the GM's "never" stops the vault's inference too: Wyndham's affiliation says loyal to party
+    assert.deepStrictEqual(pick(side(index, 'Wyndham', { whoText: 'will never fight as an ally' })), [false, null]);
+    // a hedge in another clause or another cell does not cancel the phrase
+    assert.deepStrictEqual(pick(side(index, 'Ferrante', { whoText: 'Enemy of the Order, fights with the party' })), [true, 'plan']);
+    assert.deepStrictEqual(pick(side(index, 'Ferrante', { quickRefText: 'Not seen since spring | with the party' })), [true, 'plan']);
+    // a second, plain phrase still counts after a hedged one
+    assert.deepStrictEqual(pick(side(index, 'Ferrante', { whoText: 'not with the party at first; later as an ally' })), [true, 'plan']);
+    // the who line's plain phrase wins over a hedged Quick Reference cell
+    assert.deepStrictEqual(pick(side(index, 'Ferrante', { whoText: 'with the party', quickRefText: 'not with the party' })), [true, 'plan']);
+  });
+
   it('only whole words count', () => {
     for (const t of ['really', 'allyship', 'Sally']) {
       assert.deepStrictEqual(pick(side(index, 'Ferrante', { quickRefText: t, whoText: t })), [false, null], t);
@@ -157,8 +175,12 @@ describe('a row\'s starting side in the reader', () => {
   });
 
   it('a statless NPC\'s cast entry reads the Plan\'s who line', () => {
+    // NoStats's own who line makes it the Plan's ally (not its affiliation's), and that line is NoStats's alone:
+    // Ferrante, with an empty line of its own, stays a foe
     const who = new Map([['NPCs/NoStats.md', 'with the party'], ['NPCs/Ferrante.md', '']]);
     const cast = readCast(index, { carried: null, sides: { quickRef: new Map(), partyNotes: [], who } });
+    const ns = cast.find((x) => x.note === 'NPCs/NoStats.md');
+    assert.deepStrictEqual([ns.ally, ns.allyBy], [true, 'plan']);
     const c = cast.find((x) => x.note === 'NPCs/Ferrante.md');
     assert.strictEqual(c.ally, false);
     const who2 = new Map([['NPCs/Ferrante.md', 'with the party']]);
@@ -180,6 +202,17 @@ describe('a row\'s starting side in the reader', () => {
     const by = (n) => cast.find((c) => c.note === `Characters/NPCs/${n}.md`);
     assert.deepStrictEqual([by('Brother Ash').ally, by('Brother Ash').allyBy], [false, null]);
     assert.deepStrictEqual([by('Sister Fen').ally, by('Sister Fen').allyBy], [true, 'quickRef']);
+  });
+
+  // ledger line 68: a fight row reads its own beat's who line; a row added mid-fight (foesOf), with none, reads the Plan's
+  it('a fight row reads its own who line; an added row falls back to the Plan\'s who lines', () => {
+    const who = new Map([['NPCs/Fighter.md', 'fights with the party']]);
+    const ctx = { quickRef: new Map(), partyNotes: PARTY, who };
+    const own = foesFor({ key: 'b-x', who: [{ note: 'NPCs/Fighter.md', count: 1, wants: '', knownAs: '' }] }, index, new Set(), null, ctx).foes[0];
+    assert.deepStrictEqual([own.ally, own.allyBy], [false, null], 'its own empty line is its word: no fallback to another beat\'s');
+    const { foesOf } = require('../lib/run-sheet/foes');
+    const added = foesOf('NPCs/Fighter.md', index, 1, 'b-y', new Set(), null, ctx).foes[0];
+    assert.deepStrictEqual([added.ally, added.allyBy], [true, 'plan']);
   });
 
   it('a foe whose stats say "as an ally" carries allyBy stats', () => {

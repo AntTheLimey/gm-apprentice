@@ -663,27 +663,55 @@ test('a copy switched to ally still counts towards its word; an unseen ally is n
     assert.ok(!plan.rows.some((r) => r.note === FEN));
   });
 
-  test('Fight here at an empty place with a split party ticks nobody and shows the order on the focused panel only', () => {
+  // Changed on purpose by final review P4.7: with nobody at the place, the fight is the place's (its groups are the
+  // place alone), so the GM reads it by the place and the focused group is offered on Add; no panel shows the order
+  // until a group is added.
+  test('Fight here at an empty place with a split party ticks nobody, and the fight is the place\'s', () => {
     const m = placeModel();
     const [GATE, TOWER] = m.beats;
     let s = go(RS.emptyState({}), { type: 'move', pc: ADA, to: to(GATE) });
     s = go(s, { type: 'move', pc: BEN, to: to(TOWER) });
     s = atYard(m, s);
     const key = m.placeKeys[YARD];
-    const built = M.rowsForFight({ model: m, derived: RS.derive(m, s), state: s, beatKey: key, groups: [GATE.key], idBase: 'f5' });
+    const built = M.rowsForFight({ model: m, derived: RS.derive(m, s), state: s, beatKey: key, idBase: 'f5' });
     assert.deepEqual(built.rows.filter((r) => r.kind === 'pc').map((r) => r.in), [false, false], 'no PC stands there: nobody is ticked');
-    assert.deepEqual(built.groups, [GATE.key]);
+    assert.deepEqual(built.groups, [key]);
     s = RS.reduce(s, { id: 'f5', type: 'fightStart', beat: key, title: 'The Chapel Yard', groups: built.groups, rows: built.rows, thresholds: built.thresholds }, '2026-11-20T21:00:00Z');
     const v = forPlayers(m, s, { withheldWords: m.withheldWords, picId: () => '0'.repeat(20) });
     assert.equal(v.panels.length, 2);
-    assert.ok(v.panels[0].order, 'the focused group\'s panel shows the order');
-    assert.equal(v.panels[1].order, null, 'the other group\'s does not');
-    assert.ok(!v.panels[0].order.rows.some((r) => r.name === 'Ada'), 'and Ada is not in it');
+    assert.deepEqual(v.panels.map((p) => p.order), [null, null], 'no group is in the fight yet');
+    assert.deepEqual(M.fightGroupKeys(s.fight, require('../lib/run-sheet/web/show').groupsOf(m, s)), [key], 'the fight is the place\'s');
     // a PC who stands at the place is ticked, and only they
     const s2 = go(s, { type: 'move', pc: BEN, to: { beat: key, spot: null, title: 'The Chapel Yard' } });
     const b2 = M.rowsForFight({ model: m, derived: RS.derive(m, s2), state: { ...s2, fight: null }, beatKey: key, groups: [GATE.key], idBase: 'f6' });
     assert.deepEqual(b2.rows.filter((r) => r.kind === 'pc').map((r) => [r.note, r.in]), [[ADA, false], [BEN, true]]);
     assert.deepEqual(b2.groups, [key]);
+  });
+
+  // final review O2: Fight here takes the beat where a PC of the focused group stands; P4.7: with nobody there, nobody
+  test('Fight here on a Plan place: the beat the group stands at, else the first unvisited with nobody ticked', () => {
+    const m = placeModel();
+    const GATE_NOTE = 'Locations/The Gate.md';
+    const [GATE, TOWER, , GATE2] = m.beats;
+    let s = go(RS.emptyState({}), { type: 'move', pc: ADA, to: to(GATE) });
+    s = go(s, { type: 'move', pc: BEN, to: to(GATE) });
+    assert.equal(RS.planTarget(m, s, GATE_NOTE).beat, GATE2.key, 'Move them still goes to the first unvisited');
+    const t = RS.planTarget(m, s, GATE_NOTE, [ADA, BEN]);
+    assert.equal(t.beat, GATE.key, 'Fight here: where Ada stands');
+    const b = M.rowsForFight({ model: m, derived: RS.derive(m, s), state: s, beatKey: t.beat, at: t.spot || t.beat, idBase: 'o2' });
+    assert.deepEqual(b.rows.filter((r) => r.kind === 'pc').map((r) => r.in), [true, true]);
+    assert.deepEqual(b.rows.filter((r) => r.kind !== 'pc' && r.kind !== 'lair').map((r) => r.name).sort(), ['Brother Ash', 'Frost Wolf', 'Frost Wolf', 'Frost Wolf', 'Lucan Grey']);
+    // the party at the Bell Tower: nobody stands at The Gate
+    s = go(s, { type: 'move', pc: ADA, to: to(TOWER) });
+    s = go(s, { type: 'move', pc: BEN, to: to(TOWER) });
+    const t2 = RS.planTarget(m, s, GATE_NOTE, [ADA, BEN]);
+    assert.equal(t2.beat, GATE2.key);
+    const b2 = M.rowsForFight({ model: m, derived: RS.derive(m, s), state: s, beatKey: t2.beat, at: t2.spot || t2.beat, idBase: 'o2b' });
+    assert.deepEqual(b2.rows.filter((r) => r.kind === 'pc').map((r) => r.in), [false, false], 'nobody is ticked');
+    assert.deepEqual(b2.groups, [GATE2.key], 'the fight is the place\'s');
+    // the same beat's own Fight (no `at`) still ticks everyone (proof M2)
+    const b3 = M.rowsForFight({ model: m, derived: RS.derive(m, s), state: s, beatKey: GATE2.key, idBase: 'o2c' });
+    assert.deepEqual(b3.rows.filter((r) => r.kind === 'pc').map((r) => r.in), [true, true]);
   });
 
   test('"club" finds The Club', () => {

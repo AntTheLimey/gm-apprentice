@@ -314,7 +314,9 @@
   // Where Move them takes a group to a place the Plan already has (review I1): the beat whose place it is, or a
   // hub's spot that names it; of several, the first not yet visited, else the first. Null when the Plan has
   // none (the place gets a `pl-` beat of its own). `label` names the beat, and the spot at a hub.
-  function planTarget(model, state, note) {
+  // `pcs` (Fight here, final review O2): when one of these PCs stands at one of the place's beats or spots now,
+  // that one, before the first unvisited.
+  function planTarget(model, state, note, pcs) {
     const hits = [];
     for (const b of (model && model.beats) || []) {
       if (b.contingency) continue;
@@ -325,6 +327,10 @@
         if (sp) hits.push({ beat: b.key, spot: sp.key, title: b.title, label: `${b.title} · ${sp.name}` });
       }
     }
+    const positions = (state && state.positions) || {};
+    const standing = (pcs || []).map((p) => positions[p]).filter((x) => x && !x.off);
+    const here = hits.find((h) => standing.some((x) => x.beat === h.beat && (h.spot === null || x.spot === h.spot)));
+    if (here) return here;
     const visited = (state && state.visited) || {};
     return hits.find((h) => !visited[h.beat]) || hits[0] || null;
   }

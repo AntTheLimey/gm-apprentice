@@ -21,7 +21,7 @@ function readCast(index, { carried = null, sides = null } = {}) {
     if (!TYPES.has(type)) continue;
     const pc = type === 'pc';
     const foe = pc ? { foes: [], warnings: [] } : foesOf(p, index, 1, `cast.${p}`, new Set(), carried, sides);
-    const side = pc ? { ally: false, allyFrom: null, allyBy: null } : sideOf(p, index, sides, '', foe.foes[0] ? foe.foes[0].stats : '');
+    const side = pc ? { ally: false, allyFrom: null, allyBy: null } : sideOf(p, index, sides, null, foe.foes[0] ? foe.foes[0].stats : '');
     cast.push({
       note: p,
       name: typeof fm.name === 'string' && fm.name.trim() ? fm.name.trim() : stemOf(p),

@@ -228,7 +228,8 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
   const sidesCarried = carried ? carried.sides() : {};
   // The session's own party (the index field, the wrap-up, the Plan's roster), else the one given, and the
   // Plan's NPC Quick Reference: what a row's starting side reads (sides.js). Their warnings are added below.
-  const own = sessionParty({ index, sessionPath: sessionIndex, planBody: body, given: party });
+  const own = sessionParty({ index, sessionPath: sessionIndex, planBody: body, given: party, planPath: plan });
+  add(own.warnings);
   const peopleRead = readPeople(body, index);
   const quickRef = new Map();
   for (const x of peopleRead.people) {
@@ -423,7 +424,10 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
   // (`pl-<hash>`, keys.js), with the npc and creature notes whose `location` links it, and its own entry in
   // `placeNotes` (as `notes` holds one), for its name and picture on both screens. `notes` stays the notes this
   // sheet touches. A `location` that names no place places nobody.
-  const locations = index.notes().filter((p) => low(fmOf(p).type) === 'location').sort();
+  // A map is never a place to go (final review O5), even typed `location`: its GM half would go behind a panel and
+  // into the Table Log, where wrap-up's reveal_scan would offer to publish it. Every `doc_type: map` note, the GM
+  // half of every pair among them, stays out of placeKeys, placeNotes and Move them's list.
+  const locations = index.notes().filter((p) => low(fmOf(p).type) === 'location' && !isMap(p) && !gmHalves.has(p)).sort();
   const isPlace = new Set(locations);
   model.placeKeys = Object.fromEntries(locations.map((p) => [p, placeKey(p)]));
   model.placePeople = {};

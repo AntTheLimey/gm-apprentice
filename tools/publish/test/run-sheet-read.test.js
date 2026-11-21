@@ -1058,6 +1058,20 @@ describe('run sheet reader: loot items, Plan-line HP, carried unmaskings', () =>
 
 // plan 6a Task 7: Fight here at any place, and Move them
 describe('places the party can go', () => {
+  // final review O5
+  it('a map typed location, GM half or not, is no place to go', () => {
+    const dir = copy();
+    write(dir, 'Documents/Gate Map (GM).md', '---\nname: Gate Map (GM)\ntype: location\ndoc_type: map\n---\n\nThe secret door.\n');
+    write(dir, 'Documents/Gate Map.md', '---\nname: Gate Map\ntype: location\ndoc_type: map\n---\n\nThe gate.\n');
+    write(dir, 'Locations/The Club.md', '---\nname: The Club\ntype: location\n---\n\nA club.\n');
+    const m = readRunSheet(dir, PLAN, { party: PARTY });
+    for (const p of ['Documents/Gate Map (GM).md', 'Documents/Gate Map.md']) {
+      assert.ok(!(p in m.placeKeys), `${p}: no place key`);
+      assert.ok(!(p in m.placeNotes), `${p}: no place note`);
+    }
+    assert.ok('Locations/The Club.md' in m.placeKeys, 'a plain location still is one');
+  });
+
   it('placePeople reads location links', () => {
     const dir = copy();
     write(dir, 'Locations/The Club.md', '---\nname: The Club\ntype: location\n---\n\nA club.\n');

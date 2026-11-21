@@ -465,16 +465,19 @@
 
   // The rows for a new fight on a beat (decision 13). `groups` is the page's focused group(s), used when no
   // PC stands in the beat (a contingency, an improvised beat); `positions` maps a PC note to its group id
-  // and defaults to the state's positions.
-  function rowsForFight({ model, derived, state, beatKey, groups, idBase, positions }) {
+  // and defaults to the state's positions. `at` is Fight here's place (a beat's or a hub spot's key): a
+  // place beat is always one.
+  function rowsForFight({ model, derived, state, beatKey, groups, idBase, positions, at }) {
     const ctx = contextOf({ model, derived, state, positions });
     const beat = ctx.byKey.get(beatKey) || null;
     const id = ider(idBase);
     const pcs = model.pcs || [];
-    // Fight here at a place (plan 6a Task 7, review P4): only the PCs who stand there are ticked. When none
-    // does, nobody is, and the order goes on the focused group's panel alone (the fight's `groups`).
-    const placeFight = Boolean(beat && beat.placeBeat);
-    let here = beat ? pcs.filter((p) => ctx.inBeat(p.note, beat)) : [];
+    // Fight here at a place (plan 6a Task 7, review P4; final review P4.7): only the PCs who stand there are
+    // ticked. When none does, nobody is, and the fight is the place's: its groups are the place alone, so the
+    // GM's eye reads it by the place and the focused group is offered on the Add line.
+    const placeAt = at || (beat && beat.placeBeat ? beatKey : null);
+    const placeFight = Boolean(placeAt);
+    let here = !beat ? [] : placeAt && placeAt !== beat.key ? pcs.filter((p) => ctx.groupOf(p.note) === placeAt) : pcs.filter((p) => ctx.inBeat(p.note, beat));
     if (!here.length && groups && groups.length && !placeFight) here = pcs.filter((p) => groups.includes(ctx.groupOf(p.note)));
     const rows = pcs.map((p) => {
       const on = here.length ? here.some((h) => h.note === p.note) : !placeFight;
@@ -483,7 +486,7 @@
     // the fight's groups: every group holding a ticked PC (proof M2: a beat where no PC stands ticks them all)
     const placed = (g) => g !== null && g !== undefined && g !== 'off';
     const held = [...new Set(rows.filter((r) => r.in && placed(r.group)).map((r) => r.group))];
-    const fightGroups = held.length ? held : (groups && groups.length ? groups.slice() : [beatKey]);
+    const fightGroups = held.length ? held : placeFight ? [placeAt] : (groups && groups.length ? groups.slice() : [beatKey]);
     ctx.foeGroup = fightGroups[0];
     const foes = beat ? beatFoes(ctx, beat) : [];
     const copies = numberCopies(foes, new Map());

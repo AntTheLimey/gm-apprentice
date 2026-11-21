@@ -78,11 +78,13 @@ function inspect(notePath, index) {
 
 // The starting side of a note (sides.js), from its own frontmatter and stats and the Plan's context:
 // `sides` is `{ quickRef: Map(note -> the Quick Reference row's words), partyNotes }`, or null for none.
-// `whoText` is what the who line says about it.
-function sideOf(notePath, index, sides, whoText = '', statsText = '') {
+// `whoText` is what the row's own who line says about it ('' when it says nothing: that is its word); null when
+// the row has no who line of its own (a row added in the fight, a cast entry), which then reads every beat's who
+// lines about the note (`sides.who`).
+function sideOf(notePath, index, sides, whoText = null, statsText = '') {
   const ctx = sides || {};
   return startingSide({
-    whoText: whoText || (ctx.who && ctx.who.get(notePath)) || '', statsText,
+    whoText: whoText !== null ? whoText : (ctx.who && ctx.who.get(notePath)) || '', statsText,
     quickRefText: (ctx.quickRef && ctx.quickRef.get(notePath)) || '',
     fm: index.read(notePath).fm || {},
     partyNotes: ctx.partyNotes || [],
@@ -121,7 +123,7 @@ const HAS_ACTION = /^[ \t]*(?:[-*+][ \t]+)?[*_]*Actions\b|Hit:|Attack Roll|to hi
 // cannot run: it warns `no-stats`. An NPC listed once with no Stats is a social NPC: no warning.
 // `canFight` is false for a beat that cannot fight (see beatCanFight): the numbers it lacks then go
 // into the row's `prepNote` instead of a warning, for the Fight to say when it is wanted (5b).
-function entry(notePath, index, count, add, canFight = true, sides = null, whoText = '') {
+function entry(notePath, index, count, add, canFight = true, sides = null, whoText = null) {
   const info = inspect(notePath, index);
   if (!info) return null;
   const n = Number.isInteger(count) && count > 0 ? count : 1;
@@ -197,7 +199,7 @@ function foesFor(beat, index, seen = new Set(), carried = null, sides = null) {
   const doneNotes = new Set();
   const canFight = beatCanFight(beat, index);
   for (const w of beat.who || []) {
-    const e = entry(w.note, index, w.count, add, canFight, sides, `${w.wants || ''} ${w.knownAs || ''}`);
+    const e = entry(w.note, index, w.count, add, canFight, sides, `${w.wants || ''} ${w.knownAs || ''}`.trim());
     if (!e) continue;
     entries.push(e);
     if (doneNotes.has(w.note)) continue;

@@ -69,19 +69,23 @@
   const rollFailed = (e) => RP.note(`The dice could not be rolled: ${e.message}.`, { kind: 'bad', id: `roll:${e.message}` });
 
   // ------------------------------------------------------------------ starting, adding
-  function startFight(key) {
+  // `here` is Fight here's: { at, place }, the beat's or hub spot's key and the place note (a place beat is one
+  // by itself).
+  function startFight(key, here = null) {
     const d = RP.derived();
     const b = d.beats.find((x) => x.key === key);
     if (!b || state().fight) return;
     const id = RP.nextId();
-    // a contingency has no PCs of its own: the focused group fights it (decision 13); so does a place, when no
-    // PC stands there (plan 6a Task 7, review P4)
+    // a contingency has no PCs of its own: the focused group fights it (decision 13). Fight here ticks only the
+    // PCs at the place, and nobody when none stands there (final review P4.7): the focused group is on Add.
     const focus = RP.focusedGroup();
-    const groups = b.contingency || b.placeBeat ? [focus].filter(Boolean) : undefined;
-    const built = FM.rowsForFight({ model: model(), derived: d, state: state(), beatKey: key, groups, idBase: id });
+    const groups = b.contingency ? [focus].filter(Boolean) : undefined;
+    const at = here ? here.at : b.placeBeat ? key : null;
+    const built = FM.rowsForFight({ model: model(), derived: d, state: state(), beatKey: key, groups, idBase: id, ...(at ? { at } : {}) });
     // Fight here puts the place behind the focused group's panel until End fight (P3); a typed place by its key.
-    // PCs who stand there already have it behind theirs, and their group is the fight's.
-    const backdrop = b.placeBeat && focus && !built.groups.includes(b.key) ? { group: focus, place: b.place || b.key } : undefined;
+    // PCs who stand there already have it behind theirs.
+    const nobody = !built.rows.some((r) => r.kind === 'pc' && r.in);
+    const backdrop = at && focus && nobody ? { group: focus, place: here ? here.place : b.place || b.key } : undefined;
     RP.ui.focus = key;
     ui.mine = id;
     RP.ui.pane = 'cut';
@@ -96,8 +100,9 @@
   function fightHere(note) {
     const key = (model().placeKeys || {})[note];
     if (!key || state().fight) return;
-    const plan = RS.planTarget(model(), state(), note);
-    if (plan) { startFight(plan.beat); return; }
+    // the beat or spot where a PC of the focused group stands now, else the first unvisited (final review O2)
+    const plan = RS.planTarget(model(), state(), note, groupPcs(RP.focusedGroup()));
+    if (plan) { startFight(plan.beat, { at: plan.spot || plan.beat, place: note }); return; }
     if (!RP.derived().beats.some((b) => b.key === key)) RP.dispatch({ type: 'improvise', key, title: RP.nameOf(note), place: note, quiet: true });
     startFight(key);
   }
