@@ -16,7 +16,9 @@ are the Keeper Rulebook's.
    - **Attack (melee)**: Roll Fighting (Brawl) or weapon skill.
    - **Attack (ranged)**: Roll Firearms or Throw.
    - **Fighting maneuver**: Disarm, grab, trip, shove (p.105).
-   - **Move**: Up to MOV x 5 yards (p.127).
+   - **Move**: Up to MOV yards and still act normally; up to
+     MOV x 5 yards and then one melee attack at the end of the
+     round, or shots with a penalty die (p.127).
    - **Flee**: Leave melee if not held; may start a chase.
    - **Skill use**: One non-combat skill (First Aid, etc.).
    - **Other**: Draw weapon, stand up, cast a spell, etc.
@@ -28,8 +30,8 @@ are the Keeper Rulebook's.
    - **Fight Back**: Opposed Fighting roll against a melee
      attacker; win and you deal damage instead.
    - **Dive for Cover**: Against shots, a Dodge roll; success
-     gives the shooter a penalty die, and the diver forfeits
-     their next attack (p.113).
+     gives the shooter a penalty die. Either way the diver
+     forfeits their next attack (p.113).
    A character may dodge or fight back against every attack.
    Once they have, later melee attacks on them that round gain
    a bonus die (see Outnumbered).
@@ -182,8 +184,10 @@ them (Keeper Rulebook pp.113-114).
 
 ### Burst and Full Auto
 Declare the bullets fired first (p.114, summary p.410). Full
-auto splits into volleys of skill/10 bullets (minimum 3), one
-attack roll each; a burst is a single volley. The first roll
+auto splits into volleys of up to skill/10 bullets (never fewer
+than 3), one attack roll each. A burst is one volley of 2 or 3
+bullets, set by the weapon, not the skill. Single shots from an
+automatic take a penalty die each. The first roll
 uses the range difficulty and modifiers; each later roll adds a
 penalty die (at a third, stay at two and raise the difficulty a
 step). A success hits with half the volley (round down, minimum

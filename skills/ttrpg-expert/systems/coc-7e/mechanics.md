@@ -166,7 +166,8 @@ or pushed rolls.
 ## Combat Basics
 
 Combat rounds are approximately 12 seconds. Characters act in
-DEX rank order (highest DEX first).
+DEX order (highest DEX first); a readied firearm shoots at
+DEX + 50 (p.112).
 
 ### Actions per Round
 
@@ -176,7 +177,7 @@ Each character gets one action per round:
 |--------|-------------|
 | Attack (melee) | Fighting (Brawl) or weapon skill roll |
 | Attack (ranged) | Firearms skill roll |
-| Move | Up to MOV x 5 yards if taking no other action |
+| Move | Up to MOV yards and still act normally; up to MOV x 5 yards and then one melee attack at the end of the round, or shots with a penalty die (p.127) |
 | Flee | Initiate a chase |
 | Skill use | One non-combat skill (First Aid, etc.) |
 | Other | Draw weapon, stand up, etc. |
@@ -191,12 +192,15 @@ character's action:
 - **Fight Back**: Opposed Fighting roll against a melee attack.
   A higher level of success avoids the attack and deals damage;
   the same level goes to the attacker.
-- **Dive for Cover**: Against shots, a Dodge roll gives the
-  shooter a penalty die; the diver forfeits their next attack.
+- **Dive for Cover**: Against shots, a Dodge roll; if it
+  succeeds, the shooter takes a penalty die. Either way the
+  diver forfeits their next attack (p.113).
 
 A character may dodge or fight back against every attack. Once
 they have, later melee attacks on them that round gain a bonus
-die (Keeper Rulebook p.108; see combat-reference.md).
+die. A creature with several attacks a round may defend that
+many times first (Keeper Rulebook p.108; see
+combat-reference.md).
 
 ### Damage and Injury
 

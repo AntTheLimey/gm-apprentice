@@ -152,13 +152,14 @@ escape or takes 1D6 a round (p.64).
 | Rifle, Assault | Firearms (Rifle/Shotgun) | 25 | 2D6+2 | 2/burst | Yes | 90m | 30 | 00 |
 | Rifle, Elephant | Firearms (Rifle/Shotgun) | 25 | 3D6+4 | 1 | Yes | 100m | 2 | 00 |
 | Rifle, Sniper | Firearms (Rifle/Shotgun) | 25 | 2D10+4 | 1 | Yes | 250m | 11 | 98+ |
-| Shotgun, Sporting | Firearms (Rifle/Shotgun) | 25 | 4D6/2D6/1D6 | 1 | Yes | 10/20/50m | 5 | 00 |
-| Shotgun, Double-barrel | Firearms (Rifle/Shotgun) | 25 | 4D6/2D6/1D6 | 1-2 | Yes | 10/20/50m | 2 | 00 |
-| Shotgun, Sawed-off | Firearms (Rifle/Shotgun) | 25 | 4D6/1D6 | 1-2 | Yes | 5/20m | 2 | 00 |
-| Shotgun, Automatic | Firearms (Rifle/Shotgun) | 25 | 4D6/2D6/1D6 | 1-2 | Yes | 10/20/50m | 8 | 00 |
+| Shotgun, Sporting | Firearms (Rifle/Shotgun) | 25 | 4D6/2D6/1D6 | 1 | No | 10/20/50m | 5 | 00 |
+| Shotgun, Double-barrel | Firearms (Rifle/Shotgun) | 25 | 4D6/2D6/1D6 | 1-2 | No | 10/20/50m | 2 | 00 |
+| Shotgun, Sawed-off | Firearms (Rifle/Shotgun) | 25 | 4D6/1D6 | 1-2 | No | 5/20m | 2 | 00 |
+| Shotgun, Automatic | Firearms (Rifle/Shotgun) | 25 | 4D6/2D6/1D6 | 1-2 | No | 10/20/50m | 8 | 00 |
 
 Shotguns deal damage by range bracket: first number at short
-range, second at medium, third at long.
+range, second at medium, third at long. Shot never impales; a
+shotgun loaded with a solid slug can (Keeper Rulebook p.405).
 
 ## Modern Firearms — Automatic Weapons
 
@@ -169,8 +170,9 @@ range, second at medium, third at long.
 
 **Burst and full auto** (Keeper Rulebook p.114, summary p.410):
 declare the bullets fired before rolling. Full auto splits into
-volleys of skill/10 bullets (never fewer than 3), one attack
-roll each; a burst is one volley. The first roll uses the range
+volleys of up to skill/10 bullets (never fewer than 3), one
+attack roll each. A burst is one volley of 2 or 3 bullets, set
+by the weapon, not the skill. The first roll uses the range
 difficulty and modifiers; each later roll adds a penalty die (at
 a third, stay at two penalty dice and raise the difficulty one
 step). A success hits with half the volley (round down, at least

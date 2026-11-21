@@ -77,7 +77,7 @@ STR and SIZ (6D6+24)x5 (225), DB +5D6, Build 6.
 ### Snake, Constrictor [ORC]
 STR (3D6+12)x5 (115), CON (2D6+6)x5 (65), SIZ 5D6x5 (90), POW
 3D6x5 (55), DEX (2D6+6)x5 (65). HP 16, MOV Slither 6/Swim 4,
-DB +1D6, Build 2. Armour: 1-pt skin.
+DB +1D6, Build 3. Armour: 1-pt skin.
 Fighting 65%: bite 1D4+½DB. Constrict (fighting maneuver): a
 held victim takes 1D6+DB a round until it breaks free with a
 maneuver of its own. Giant constrictor: +2D6x5 STR/SIZ, 4-pt
