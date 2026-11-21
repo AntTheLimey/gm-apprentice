@@ -705,6 +705,7 @@ describe('10c: the folds', { skip: browserSkip() }, () => {
       assert.strictEqual(p.layout.grip.shown, false);
       assert.strictEqual(p.layout.folded, false);
       assert.strictEqual(p.layout.wide, false);
+      assert.strictEqual(await page.evaluate('getComputedStyle(document.querySelector("#paneFold")).display'), 'none', 'no Fold where nothing folds');
       // a jump to what the cut does not hold opens the whole sheet, and the page scrolls to it
       await tap(page, '#endBtn');
       await page.waitFor('document.querySelector("#sheet section#end")');

@@ -340,6 +340,9 @@ ol.to .ds { font: 500 .7rem var(--mono); white-space: nowrap; }
   .app.part-side .grip { display: none; }
   .app.part-side .sheet { position: static; height: auto; overflow: visible; padding: 14px 20px 120px; }
   .fview ol.to { overflow: visible; }
+  /* one column: no folds, and the pane's bar sticks under the header */
+  .rbar { top: var(--toph); }
+  .rbar #paneFold { display: none; }
   .top .bar { flex-wrap: wrap; white-space: normal; }
 }
 
