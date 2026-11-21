@@ -558,6 +558,26 @@ describe('the fight in the state', () => {
     assert.equal(texts(s).length, n, 'a pass with nothing to copy is silent');
   });
 
+  it('sameForAll never overwrites a wounded copy or one with a status', () => {
+    let s = gateFight();
+    [s] = addNamed(s, 'Bouncer', 4);
+    const [b1, b2, b3, b4] = s.fight.rows.filter((r) => /^Bouncer/.test(r.name));
+    const get = (id) => s.fight.rows.find((r) => r.id === id);
+    s = F(s, { type: 'setMax', row: b2.id, max: 20 });
+    s.fight.rows.find((r) => r.id === b2.id).typed = false; // hp 20/20 from a stat block, not typed: only the wound should protect it
+    s = F(s, { type: 'hp', row: b2.id, entry: '-4' });
+    s = F(s, { type: 'status', row: b4.id, add: 'Prone' });
+    s = F(s, { type: 'setMax', row: b1.id, max: 11 });
+    s = F(s, { type: 'sameForAll', row: b1.id });
+    assert.deepEqual([get(b3.id).max, get(b3.id).hp], [11, 11], 'the untouched copy gets it');
+    assert.deepEqual([get(b2.id).max, get(b2.id).hp], [20, 16], 'a wounded copy keeps its numbers and HP');
+    assert.equal(get(b4.id).max, null, 'a copy with a status is left alone');
+    // a second copy may overwrite the first (a copy is not a touch), even though a line names it
+    s = F(s, { type: 'setMax', row: b1.id, max: 12 });
+    s = F(s, { type: 'sameForAll', row: b1.id });
+    assert.deepEqual([get(b3.id).max, get(b3.id).hp], [12, 12]);
+  });
+
   it('undoAdd takes back an untouched add, and the log says so', () => {
     let s = gateFight();
     s = join(s, { cast: MEPHIT, count: 2 });

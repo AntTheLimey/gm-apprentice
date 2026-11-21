@@ -338,12 +338,13 @@
     // is the max. The stat keys come (`STAT_KEYS`: max, ac and mod for D&D);
     // nothing else does (not HP, initiative, side, seen or typed).
     sameForAll: onRow((s, f, r, a, at) => {
-      const others = FM.groupMates(f.rows, r).filter((x) => x !== r && !x.typed);
+      const others = FM.groupMates(f.rows, r).filter((x) => x !== r && FM.untouched(x, true));
       if (!others.length) return;
       const fields = STAT_KEYS.filter((k) => isNum(r[k]));
       for (const x of others) {
         for (const k of fields) x[k] = r[k];
         if (isNum(r.max)) x.hp = r.max;
+        x.copied = { hp: x.hp, max: x.max };
         touchHp(x, at);
       }
       // naming the copies in this line marks them touched, rightly: copying numbers onto them is an act on them

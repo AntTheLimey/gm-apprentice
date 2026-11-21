@@ -314,7 +314,7 @@
     for (const x of Fight.statusesOf(r)) nums.push(`<span class="st">${esc(x)}</span>`);
     const ctr = counters(r, true);
     // offered while an untouched copy still differs from this row (a copy already made has nothing left to take)
-    const left = FM.groupMates(f.view.rows, r).filter((x) => x !== r && !x.typed && (Fight.STAT_KEYS.some((k) => isNum(r[k]) && x[k] !== r[k]) || (isNum(r.max) && x.hp !== r.max))).length;
+    const left = FM.groupMates(f.view.rows, r).filter((x) => x !== r && FM.untouched(x, true) && (Fight.STAT_KEYS.some((k) => isNum(r[k]) && x[k] !== r[k]) || (isNum(r.max) && x.hp !== r.max))).length;
     if (left) {
       const all = FM.groupMates(f.view.rows, r).length;
       nums.push(`<button type="button" class="tg same" data-fsame="${esc(r.id)}" title="Copy these numbers (and the HP they give) to the others of ${esc(String(r.name).replace(/\s+\d+$/, ''))} nobody has typed into">Same for all ${all}</button>`);

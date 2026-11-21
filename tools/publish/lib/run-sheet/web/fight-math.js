@@ -648,10 +648,16 @@
 
   // A row an add made is untouched until the GM types into it, its HP or a status moves, it has a turn, or a
   // line of the fight's log names it (`typed`, `turned`, `logged`).
-  function untouched(r) {
+  // `forCopy` is Same for all's question: a line naming the row (its own copy line, a roster) or a turn it has had
+  // changes none of its numbers, so neither blocks a copy; typed numbers, HP, temp HP, statuses, Out and death saves do.
+  // The figures a copy itself gave (`copied`) are not a touch, so a second copy may overwrite the first.
+  function untouched(r, forCopy) {
     const st = r.start || {};
-    const same = (a, b) => (a === undefined || a === null ? null : a) === (b === undefined || b === null ? null : b);
-    return !r.typed && !r.turned && !r.logged && same(r.hp, st.hp) && same(r.max, st.max) && !r.temp && !r.out
+    const nul = (a) => (a === undefined || a === null ? null : a);
+    const c = r.copied || {};
+    const hpOk = nul(r.hp) === nul(st.hp) || (c.hp !== undefined && nul(r.hp) === nul(c.hp));
+    const maxOk = nul(r.max) === nul(st.max) || (c.max !== undefined && nul(r.max) === nul(c.max));
+    return !r.typed && (forCopy || (!r.turned && !r.logged)) && hpOk && maxOk && !r.temp && !r.out
       && !(r.conds || []).length && !r.exhaustion && !r.conc && !(r.ds && (r.ds.s || r.ds.f));
   }
   // Whether the join's rows can still be taken back: there are some, and none has been touched.
@@ -674,7 +680,7 @@
     parseEntry, damageTaken, afterDamage, afterHeal, isBloodied,
     thresholdOf, isLit, sortRows, takesTurn, nextLive, actingRow,
     gmName, lairRow, unseenKey, unseenNumbers, unseenLabels, rowsForFight, joinRows, blankRow,
-    addChoices, groupKey, groupMates, placeRow, undoable,
+    addChoices, groupKey, groupMates, placeRow, undoable, untouched,
     SIDES, isSide, nextSide, sideOfRow, isFoe,
   };
 }));
