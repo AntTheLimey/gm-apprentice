@@ -747,13 +747,14 @@ describe('Move them and Fight here in a browser', { skip: browserSkip() }, () =>
       assert.strictEqual(await page.evaluate('document.querySelectorAll("input[data-moveg][list], datalist").length'), 0, 'no list attribute, no datalist');
       // review M1: two notes both called "index" carry their folders
       await page.click('#handover input[data-moveg]');
-      await page.type('index');
+      await page.type('orth');
       await page.waitFor('document.querySelector("#handover [data-movepick]")');
       const options = await page.evaluate('Array.from(document.querySelectorAll("#handover [data-movepick]"), (o) => o.textContent)');
-      assert.ok(options.includes('index (North)') && options.includes('index (South)'), options.join(', '));
+      // changed on purpose (final review follow-up): a folder note goes by its folder, so the two no longer clash
+      assert.ok(options.includes('North') && !options.some((o) => /index/.test(o)), options.join(', '));
       await page.key('Escape');
       assert.strictEqual(await page.evaluate('document.querySelectorAll("#handover [data-mhits] button").length'), 0, 'Esc: no list');
-      assert.deepStrictEqual(await page.evaluate('[document.activeElement.matches("#handover input[data-moveg]"), document.activeElement.value]'), [true, 'index'], 'focus and words stay');
+      assert.deepStrictEqual(await page.evaluate('[document.activeElement.matches("#handover input[data-moveg]"), document.activeElement.value]'), [true, 'orth'], 'focus and words stay');
       // the list opens again on typing; a press on the jot box below closes it, and lands there
       await page.type('x');
       await page.waitFor('document.querySelector("#handover [data-mhits] button")');
@@ -761,7 +762,7 @@ describe('Move them and Fight here in a browser', { skip: browserSkip() }, () =>
       assert.strictEqual(r.hit, true, 'nothing covers the jot box');
       assert.strictEqual(await page.evaluate('document.querySelectorAll("#handover [data-mhits] button").length'), 0, 'a press outside: no list');
       assert.strictEqual(await page.evaluate('document.activeElement.id'), 'hjot', 'the press did what it says');
-      assert.strictEqual(await page.evaluate('document.querySelector("#handover input[data-moveg]").value'), 'indexx', 'the words stay');
+      assert.strictEqual(await page.evaluate('document.querySelector("#handover input[data-moveg]").value'), 'orthx', 'the words stay');
       const s = (await api(run, 'GET', '/api/state')).state;
       assert.strictEqual(s.positions[ADA].beat, gate.key, 'nobody moved');
       assert.deepStrictEqual((await probe(page)).errors, []);
@@ -838,6 +839,10 @@ describe('Move them and Fight here in a browser', { skip: browserSkip() }, () =>
       const northKey = model.placeKeys['Locations/North/index.md'];
       s = await stateOf(run);
       assert.strictEqual(s.positions[ADA].beat, northKey);
+      await page.waitFor(`document.getElementById(${JSON.stringify(`beat:${northKey}`)})`);
+      const head = await page.evaluate(`(() => { const e = document.getElementById(${JSON.stringify(`beat:${northKey}`)}); const h = e.querySelector('h2, h3, h4'); return h ? h.textContent : ''; })()`);
+      assert.match(head, /North/, `the beat's title: ${head}`);
+      assert.doesNotMatch(head, /\bindex\b/);
       await page.click(`#places [data-fplace="${GATE_NOTE}"]`);
       await page.waitFor(`(() => { const p = ${PROBE}; return p && p.fight && p; })()`);
       s = await stateOf(run);
@@ -847,10 +852,11 @@ describe('Move them and Fight here in a browser', { skip: browserSkip() }, () =>
       await page.waitFor('document.querySelector("#side .fin")');
       const fin = await page.evaluate('document.querySelector("#side .fin").textContent');
       assert.match(fin, /The Gate/, 'the fight reads as the place');
-      assert.doesNotMatch(fin, /Ada|index/, 'not as the focused group\'s own place');
+      assert.doesNotMatch(fin, /Ada|North/, 'not as the focused group\'s own place');
+      // North's note is North/index.md with no name: its beat and the Add line say North, never "index"
+      assert.strictEqual(s.improvised.find((i) => i.key === northKey).title, 'North');
       const adds = await page.evaluate('Array.from(document.querySelectorAll("#side [data-faddgroup]"), (b) => b.textContent)');
-      // (North's note is North/index.md, so its beat is titled by the note's own name)
-      assert.deepStrictEqual(adds, [`+ Ada, Ben at ${s.improvised.find((i) => i.key === northKey).title}`], 'the focused group is on the Add line');
+      assert.deepStrictEqual(adds, ['+ Ada, Ben at North'], 'the focused group is on the Add line');
       assert.deepStrictEqual((await probe(page)).errors, []);
     });
   });

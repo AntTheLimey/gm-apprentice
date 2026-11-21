@@ -54,6 +54,14 @@ function tableLogBody(model, state, { linkFor: link, timeOf = localTime } = {}) 
   const sec = {};
   const beatByKey = new Map(d.beats.map((b) => [b.key, b]));
   const who = (to) => (to === 'party' ? 'the party' : link(to));
+  // a place's link carries its title when the link's own words would not say it (a folder note's `[[…/index]]`)
+  const placeLink = (p) => {
+    const n = (model.placeNotes && model.placeNotes[p]) || (model.notes && model.notes[p]) || null;
+    const t = n && n.title;
+    const l = link(p);
+    const shown = l.slice(2, -2).split('/').pop();
+    return t && shown !== t ? `${l.slice(0, -2)}|${t.replace(/[|\]]/g, ' ')}]]` : l;
+  };
 
   // Everyone left unplaced is "not placed", but only when someone was placed: a GM who touched
   // nothing gets a bare section, never a made-up "everyone at beat 1".
@@ -64,7 +72,7 @@ function tableLogBody(model, state, { linkFor: link, timeOf = localTime } = {}) 
     else if (w.status === 'unplaced') at = 'not placed';
     else if (w.status === 'off') at = 'off-screen';
     else if (w.status === 'gone') at = one(w.title);
-    else if (w.place) at = `${link(w.place)}${w.spotName ? ` (${one(w.spotName)})` : ''}`;
+    else if (w.place) at = `${placeLink(w.place)}${w.spotName ? ` (${one(w.spotName)})` : ''}`;
     else at = one(w.title);
     return `${link(w.pc)}: ${at}`;
   }));
@@ -107,7 +115,7 @@ function tableLogBody(model, state, { linkFor: link, timeOf = localTime } = {}) 
   const fought = new Set([...(Array.isArray(state && state.fights) ? state.fights : []), ...(state && state.fight ? [state.fight] : [])].map((f) => f && f.beat));
   sec['Improvised beats'] = bullets(d.improvised.map((i) => {
     if (i.newPlace) return `${NEW_PLACE} ${one(i.title)}`;
-    if (typeof i.place === 'string' && i.place && (visited[i.key] || fought.has(i.key))) return link(i.place);
+    if (typeof i.place === 'string' && i.place && (visited[i.key] || fought.has(i.key))) return placeLink(i.place);
     return one(i.title);
   }));
   sec['Unmasked this session'] = bullets(

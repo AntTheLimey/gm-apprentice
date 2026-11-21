@@ -399,7 +399,8 @@
   const noteInfo = (p) => (G.model.notes && G.model.notes[p]) || (G.model.placeNotes && G.model.placeNotes[p]) || null;
   const castOf = (p) => (G.model.cast || []).find((c) => c.note === p) || null;
   const pcOf = (p) => (G.model.pcs || []).find((x) => x.note === p) || null;
-  const nameOf = (p) => { const pc = pcOf(p); if (pc) return pc.name; const c = castOf(p); if (c) return c.name; const n = noteInfo(p); return n ? n.name : stem(p); };
+  // a place goes by its title, the reader's one rule (place-name.js): never a folder note's "index"
+  const nameOf = (p) => { const pc = pcOf(p); if (pc) return pc.name; const c = castOf(p); if (c) return c.name; const n = noteInfo(p); return n ? (n.title || n.name) : stem(p); };
   const portraitOf = (p) => { const pc = pcOf(p); if (pc && pc.portrait) return pc.portrait; const n = noteInfo(p); if (n && n.portrait) return n.portrait; const c = castOf(p); return c ? c.portrait : null; };
   const unmaskOf = (p) => { const n = noteInfo(p); return n && n.unmask ? n.unmask : null; };
   const isUnmasked = (d, p) => d.unmaskedNow.some((u) => u.note === p);
@@ -453,14 +454,14 @@
   // ------------------------------------------------------------------ Move them (plan 6a Task 7, review F13)
   // Every place in the vault the party can go: the reader's placeKeys, each with its own note's name.
   const FM = window.RunSheetFightMath;
-  // Each goes by its own name, else its first alias, else its file's stem with `_` as spaces (review M1); two
-  // that would show the same carry their folder in brackets: `index (North)`, `index (South)`.
+  // Each goes by its title (the reader's one rule, place-name.js: name, first alias, a folder note's folder, the
+  // stem with `_` as spaces); two that would show the same carry their folder in brackets (review M1).
   function knownPlaces() {
     const keys = G.model.placeKeys || {};
     const list = Object.keys(keys).map((note) => {
       const n = noteInfo(note) || {};
       const aliases = Array.isArray(n.aliases) ? n.aliases : [];
-      const name = (n.named && n.name) || aliases[0] || stem(note).replace(/_/g, ' ');
+      const name = n.title || (n.named && n.name) || aliases[0] || stem(note).replace(/_/g, ' ');
       return { note, name, type: 'location', aliases };
     });
     const count = new Map();

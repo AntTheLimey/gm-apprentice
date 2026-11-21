@@ -10,6 +10,7 @@
 const path = require('node:path');
 const pt = require('./plan-text');
 const { buildIndex, stemOf } = require('./notes');
+const { placeTitle } = require('./place-name');
 const { readBeats, sceneSection } = require('./beats');
 const { readPcs, SECTIONS: PC_SECTIONS } = require('./party');
 const { sessionParty } = require('./session-party');
@@ -499,6 +500,8 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
       location: typeof nfm.location === 'string' ? nfm.location : '',
       docType: low(nfm.doc_type),
       aliases: nameList(nfm.aliases),
+      // a place's title, by the one rule (place-name.js); null for any other note
+      title: low(nfm.type) === 'location' ? placeTitle(p, nfm) : null,
       unmask: unmaskOf(p),
     };
   }

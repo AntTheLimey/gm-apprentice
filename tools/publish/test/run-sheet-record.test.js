@@ -638,6 +638,25 @@ describe('places in the record', () => {
   });
 });
 
+// final review follow-up: a folder note's place is titled by its folder, in the Table Log too
+describe('a folder note\'s place in the record', () => {
+  const NORTH = 'Locations/North/index.md';
+  const opts = { linkFor: R.linkFor({ resolve: (t) => NOTES.get(t) || null }), timeOf };
+
+  it('Locations/North/index.md with no name is North: its title, its Log line and its link', () => {
+    assert.strictEqual(model.placeNotes[NORTH].title, 'North');
+    const key = model.placeKeys[NORTH];
+    // as the page sends it: the title is the place's (gm.js nameOf reads it)
+    const s = run([{ type: 'move', pc: ADA, to: to(GATE) },
+      { type: 'moveGroup', pcs: [ADA], place: NORTH, key, title: model.placeNotes[NORTH].title, names: ['Ada'] }]);
+    assert.strictEqual(RS.derive(model, s).beats.find((b) => b.key === key).title, 'North');
+    const sec = sectionsOf(R.tableLogBody(model, s, opts));
+    assert.match(sec.get('Log'), /Ada moves to North\./);
+    assert.strictEqual(sec.get('Improvised beats'), '- [[Locations/North/index|North]]');
+    assert.match(sec.get('Where everyone ended'), /^- \[\[Ada Moss\]\]: \[\[Locations\/North\/index\|North\]\]$/m);
+  });
+});
+
 // Task 7 fix round 1
 describe('places in the record (fix round 1)', () => {
   const YARD = 'Locations/The Chapel Yard.md';
