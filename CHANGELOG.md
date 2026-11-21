@@ -10,6 +10,12 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 ---
 
 
+## [1.12.119] — 2026-11-20
+
+### Fixed
+
+- The build no longer warns that a prepped or planned session or chapter "will NOT publish" (#828). Prep is held back on purpose until it is played; the warning still names any other session or chapter missing from the publish list.
+
 ## [1.12.118] — 2026-11-20
 
 ### Fixed
