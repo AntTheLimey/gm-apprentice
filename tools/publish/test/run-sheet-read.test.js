@@ -1055,3 +1055,78 @@ describe('run sheet reader: loot items, Plan-line HP, carried unmaskings', () =>
     });
   });
 });
+
+// plan 6a Task 7: Fight here at any place, and Move them
+describe('places the party can go', () => {
+  // final review O5
+  it('a map typed location, GM half or not, is no place to go', () => {
+    const dir = copy();
+    write(dir, 'Documents/Gate Map (GM).md', '---\nname: Gate Map (GM)\ntype: location\ndoc_type: map\n---\n\nThe secret door.\n');
+    write(dir, 'Documents/Gate Map.md', '---\nname: Gate Map\ntype: location\ndoc_type: map\n---\n\nThe gate.\n');
+    write(dir, 'Locations/The Club.md', '---\nname: The Club\ntype: location\n---\n\nA club.\n');
+    const m = readRunSheet(dir, PLAN, { party: PARTY });
+    for (const p of ['Documents/Gate Map (GM).md', 'Documents/Gate Map.md']) {
+      assert.ok(!(p in m.placeKeys), `${p}: no place key`);
+      assert.ok(!(p in m.placeNotes), `${p}: no place note`);
+    }
+    assert.ok('Locations/The Club.md' in m.placeKeys, 'a plain location still is one');
+  });
+
+  it('placePeople reads location links', () => {
+    const dir = copy();
+    write(dir, 'Locations/The Club.md', '---\nname: The Club\ntype: location\n---\n\nA club.\n');
+    write(dir, "Locations/St. Mary's.md", "---\nname: St. Mary's\ntype: location\n---\n\nA church.\n");
+    write(dir, 'Creatures/Club Rat.md', '---\nname: Club Rat\ntype: creature\nlocation: "[[The Club]]"\n---\n\n## GM Notes\n\n### Stats\n\nAC 10\nHP 3\n');
+    write(dir, 'Characters/NPCs/Doorman.md', '---\nname: Doorman\ntype: npc\nlocation: "[[The Club]]"\n---\n\nNo stats.\n');
+    write(dir, 'Characters/NPCs/Verger.md', "---\nname: Verger\ntype: npc\nlocation: \"[[St. Mary's]]\"\n---\n\nNo stats.\n");
+    write(dir, 'Characters/NPCs/Nowhere Man.md', '---\nname: Nowhere Man\ntype: npc\nlocation: "[[No Such Place]]"\n---\n');
+    write(dir, 'Characters/NPCs/Plain.md', '---\nname: Plain\ntype: npc\nlocation: The Club\n---\n');
+    const m = readRunSheet(dir, PLAN, { party: PARTY });
+    assert.deepStrictEqual(m.placePeople['Locations/The Club.md'], ['Characters/NPCs/Doorman.md', 'Characters/NPCs/Plain.md', 'Creatures/Club Rat.md']);
+    assert.deepStrictEqual(m.placePeople["Locations/St. Mary's.md"], ['Characters/NPCs/Verger.md']);
+    assert.ok(!Object.values(m.placePeople).flat().includes('Characters/NPCs/Nowhere Man.md'), 'a link to no place places nobody');
+    // every location in the vault is a place to go: keyed, with its own entry for its name and picture
+    for (const p of ['Locations/The Club.md', "Locations/St. Mary's.md"]) {
+      assert.match(m.placeKeys[p], /^pl-[0-9a-f]{8}$/, p);
+      assert.strictEqual(m.placeNotes[p].name, p === 'Locations/The Club.md' ? 'The Club' : "St. Mary's");
+      assert.strictEqual(m.placeNotes[p].type, 'location');
+      assert.ok(!(p in m.notes), 'notes stays the notes the sheet touches');
+    }
+    assert.ok(!Object.values(m.placeKeys).some((k) => k.includes('.')), 'no key holds a dot');
+    assert.ok(!('Creatures/Club Rat.md' in m.placeKeys), 'only locations');
+    // a vault with no such notes reads as before
+    const plain = readRunSheet(copy(), PLAN, { party: PARTY });
+    assert.ok(plain.placeKeys && typeof plain.placePeople === 'object');
+  });
+});
+
+// plan 6a Task 8: the side colours are a vault setting
+describe('side colours', () => {
+  it('the model carries sideColours', () => {
+    const m = readRunSheet(copy(), PLAN, { party: PARTY });
+    assert.deepStrictEqual(m.sideColours, { preset: 'pens', own: { pc: '#2c7739', ally: '#7a3fb0', foe: '#b3261e', neutral: '#646870' } });
+    const dir = copy();
+    writeSettings(dir, { 'vault.system': 'dnd5e', 'vault.run_sheet.side_colours': 'own', 'vault.run_sheet.own_colours.foe': '#112233' });
+    const own = readRunSheet(dir, PLAN, { party: PARTY });
+    assert.strictEqual(own.sideColours.preset, 'own');
+    assert.strictEqual(own.sideColours.own.foe, '#112233');
+    assert.strictEqual(own.sideColours.own.pc, '#2c7739');
+  });
+  it('an unknown preset reads as pens, with a prep note', () => {
+    const dir = copy();
+    writeSettings(dir, { 'vault.system': 'dnd5e', 'vault.run_sheet.side_colours': 'neon' });
+    const m = readRunSheet(dir, PLAN, { party: PARTY });
+    assert.strictEqual(m.sideColours.preset, 'pens');
+    assert.strictEqual(m.warnings.filter((w) => w.kind === 'side-colours').length, 1);
+  });
+  it('a bad own colour falls back, with a prep note', () => {
+    const dir = copy();
+    writeSettings(dir, { 'vault.system': 'dnd5e', 'vault.run_sheet.side_colours': 'own', 'vault.run_sheet.own_colours.foe': 'red', 'vault.run_sheet.own_colours.pc': '#abc' });
+    const m = readRunSheet(dir, PLAN, { party: PARTY });
+    assert.strictEqual(m.sideColours.own.foe, '#b3261e');
+    assert.strictEqual(m.sideColours.own.pc, '#2c7739');
+    const notes = m.warnings.filter((w) => w.kind === 'side-colours');
+    assert.strictEqual(notes.length, 2);
+    assert.match(notes[0].text, /#rrggbb/);
+  });
+});

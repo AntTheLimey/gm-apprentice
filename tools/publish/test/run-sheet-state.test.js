@@ -561,3 +561,147 @@ describe('RS.upgrade (third review M3)', () => {
     assert.doesNotThrow(() => RS.derive(model, RS.upgrade({ jots: [{ id: 'j1', beat: null, text: 'x', at: T0 }] }, fresh())));
   });
 });
+
+// plan 6a Task 5: the sides the GM sets live in the state
+describe('the sides memory', () => {
+  it('a new state holds no sides; an old saved state with no sides derives, and gets an empty memory', () => {
+    assert.deepStrictEqual(fresh().sides, {});
+    const old = fresh();
+    delete old.sides;
+    const d = RS.derive(model, old);
+    assert.deepStrictEqual(d.sidesSet, []);
+    assert.ok(d.vitals.some((v) => v.note === LUCAN), 'the reader-ally keeps its vitals row');
+    assert.deepStrictEqual(RS.upgrade(old, fresh()).sides, {});
+  });
+
+  it('a side nobody can read in the memory is passed over', () => {
+    const s = fresh();
+    s.sides = { [LUCAN]: 'friendly', 'Characters/NPCs/Brother Ash.md': null };
+    const d = RS.derive(model, s);
+    assert.deepStrictEqual(d.sidesSet, []);
+    assert.ok(d.vitals.some((v) => v.note === LUCAN));
+  });
+});
+
+// plan 6a Task 7: Fight here at any place, and Move them
+describe('place beats and Move them', () => {
+  const { forPlayers } = require('../lib/run-sheet/players');
+  const FM = require('../lib/run-sheet/web/fight-math');
+  const YARD = 'Locations/The Chapel Yard.md';
+  const view = (s, m = model) => forPlayers(m, s, { withheldWords: m.withheldWords, campaign: m.campaign, picId: () => '0'.repeat(20) });
+
+  it('moveGroup to a known place, and its panel shows it', () => {
+    const key = model.placeKeys[YARD];
+    assert.match(key, /^pl-[0-9a-f]{8}$/);
+    const s = run([{ type: 'move', pc: ADA, to: to(GATE) }, { type: 'move', pc: BEN, to: to(GATE) },
+      { type: 'moveGroup', pcs: [ADA, BEN], place: YARD, key, title: 'The Chapel Yard', names: ['Ada', 'Ben'] }]);
+    assert.deepStrictEqual([s.positions[ADA], s.positions[BEN]], [{ beat: key, spot: null }, { beat: key, spot: null }]);
+    const d = RS.derive(model, s);
+    const b = d.beats.find((x) => x.key === key);
+    assert.ok(b && b.placeBeat && b.place === YARD && !b.newPlace, 'the place beat is made');
+    assert.deepStrictEqual([b.points, b.ifs], [[], []], 'no Points, no If-they');
+    assert.deepStrictEqual(d.log.map((l) => l.text), ['Ada, Ben move to The Chapel Yard.'], 'one log line, no Improvised beat line');
+    const v = view(s);
+    assert.strictEqual(v.panels.length, 1);
+    assert.strictEqual(v.panels[0].caption, 'The Chapel Yard', 'the players see the place moved to');
+    // moving there again makes no second beat
+    const s2 = run([{ type: 'moveGroup', pcs: [ADA], place: YARD, key, title: 'The Chapel Yard', names: ['Ada'] }], s);
+    assert.strictEqual(s2.improvised.filter((i) => i.key === key).length, 1);
+  });
+
+  it('moveGroup to a typed name makes a new place', () => {
+    let s = run([{ type: 'move', pc: ADA, to: to(GATE) }, { id: 'mg1', type: 'moveGroup', pcs: [ADA], name: 'The Docks', names: ['Ada'] }]);
+    assert.deepStrictEqual(s.improvised.map((i) => [i.key, i.title, i.newPlace]), [['pn-mg1', 'The Docks', true]]);
+    assert.strictEqual(s.positions[ADA].beat, 'pn-mg1');
+    let d = RS.derive(model, s);
+    const b = d.beats.find((x) => x.key === 'pn-mg1');
+    assert.ok(b.placeBeat && b.newPlace && b.place === null);
+    assert.strictEqual(d.log.at(-1).text, 'Ada moves to The Docks (a new place).');
+    // the same name typed again, any case and with or without "the", is the same place
+    s = run([{ id: 'mg2', type: 'moveGroup', pcs: [BEN], name: 'docks', names: ['Ben'] }], s);
+    assert.deepStrictEqual(s.improvised.map((i) => i.key), ['pn-mg1']);
+    assert.strictEqual(s.positions[BEN].beat, 'pn-mg1');
+    d = RS.derive(model, s);
+    assert.ok(d.log.some((l) => l.text === 'Ben moves to The Docks (a new place).'));
+    // nothing typed, or nobody to move, does nothing
+    assert.deepStrictEqual(run([{ type: 'moveGroup', pcs: [ADA], name: '  ' }], s).improvised, s.improvised);
+    assert.deepStrictEqual(run([{ type: 'moveGroup', pcs: [], name: 'Elsewhere' }], s).improvised, s.improvised);
+  });
+
+  it('unplace takes back a typed place', () => {
+    let s = run([{ type: 'move', pc: ADA, to: to(GATE) }, { id: 'up1', type: 'moveGroup', pcs: [ADA], name: 'The Docks', names: ['Ada'] }]);
+    // someone stands there: it stays
+    let s2 = run([{ type: 'unplace', key: 'pn-up1' }], s);
+    assert.deepStrictEqual(s2.improvised.map((i) => i.key), ['pn-up1']);
+    s = run([{ type: 'move', pc: ADA, to: to(TOWER) }], s);
+    s2 = run([{ type: 'unplace', key: 'pn-up1' }], s);
+    assert.deepStrictEqual(s2.improvised, []);
+    assert.ok(!RS.derive(model, s2).log.some((l) => /Docks/.test(l.text)), 'its move line goes with it');
+    // only a typed place: a known place beat or an improvised beat is not taken back by unplace
+    const k = model.placeKeys[YARD];
+    const s3 = run([{ type: 'improvise', key: k, title: 'The Chapel Yard', place: YARD }, { id: 'ib', type: 'improvise', title: 'A beat' },
+      { type: 'unplace', key: k }, { type: 'unplace', key: 'i-ib' }]);
+    assert.deepStrictEqual(s3.improvised.map((i) => i.key), [k, 'i-ib']);
+  });
+
+  it('End fight returns the panel to the group\'s own place', () => {
+    const key = model.placeKeys[YARD];
+    let s = run([{ type: 'move', pc: ADA, to: to(GATE) }, { type: 'improvise', key, title: 'The Chapel Yard', place: YARD }]);
+    const before = view(s).panels[0].caption;
+    assert.strictEqual(before, 'The Gate');
+    const id = 'fh1';
+    const built = FM.rowsForFight({ model, derived: RS.derive(model, s), state: s, beatKey: key, groups: [GATE.key], idBase: id });
+    s = RS.reduce(s, { id, type: 'fightStart', beat: key, title: 'The Chapel Yard', groups: built.groups, rows: built.rows, thresholds: built.thresholds, backdrop: { group: GATE.key, place: YARD } }, at(5));
+    assert.strictEqual(s.panels[GATE.key].backdrop, YARD);
+    assert.strictEqual(view(s).panels[0].caption, 'The Chapel Yard', 'Fight here puts the place behind the focused panel');
+    // Fight here moves nobody
+    assert.strictEqual(s.positions[ADA].beat, GATE.key);
+    assert.strictEqual(RS.derive(model, s).whereEnded[0].title, GATE.title);
+    s = RS.reduce(s, { id: 'fh2', type: 'fightEnd', fight: id }, at(6));
+    assert.strictEqual(s.panels[GATE.key].backdrop, null);
+    assert.strictEqual(view(s).panels[0].caption, 'The Gate', 'back to the group\'s own place');
+  });
+
+  it('End fight leaves a backdrop the GM changed during the fight', () => {
+    const key = model.placeKeys[YARD];
+    let s = run([{ type: 'move', pc: ADA, to: to(GATE) }, { type: 'improvise', key, title: 'The Chapel Yard', place: YARD }]);
+    s = RS.reduce(s, { id: 'fh3', type: 'fightStart', beat: key, title: 'The Chapel Yard', groups: [GATE.key], rows: [], thresholds: [], backdrop: { group: GATE.key, place: YARD } }, at(5));
+    s = run([{ type: 'backdrop', group: GATE.key, note: 'Locations/The Bell Tower Room.md' }], s);
+    s = RS.reduce(s, { id: 'fh4', type: 'fightEnd', fight: 'fh3' }, at(6));
+    assert.strictEqual(s.panels[GATE.key].backdrop, 'Locations/The Bell Tower Room.md');
+  });
+});
+
+// Task 7 fix round 1
+describe('place beats (fix round 1)', () => {
+  const YARD = 'Locations/The Chapel Yard.md';
+  it('review M2: unplace refuses while the running fight is at the place or has it behind a panel', () => {
+    let s = run([{ type: 'move', pc: ADA, to: to(GATE) }, { id: 'm2', type: 'moveGroup', pcs: [ADA], name: 'The Docks', names: ['Ada'] },
+      { type: 'move', pc: ADA, to: to(GATE) }]);
+    assert.strictEqual(RS.placeInFight(s, 'pn-m2'), false);
+    const at = run([{ id: 'f1', type: 'fightStart', beat: 'pn-m2', title: 'The Docks', groups: [GATE.key], rows: [], thresholds: [] }, { type: 'unplace', key: 'pn-m2' }], s);
+    assert.deepStrictEqual(at.improvised.map((i) => i.key), ['pn-m2'], 'the fight is at it');
+    const behind = run([{ id: 'f2', type: 'fightStart', beat: GATE.key, title: 'The Gate', groups: [GATE.key], rows: [], thresholds: [], backdrop: { group: GATE.key, place: 'pn-m2' } }, { type: 'unplace', key: 'pn-m2' }], s);
+    assert.deepStrictEqual(behind.improvised.map((i) => i.key), ['pn-m2'], 'it is behind a panel');
+    const ended = run([{ type: 'fightEnd', fight: 'f1' }, { type: 'unplace', key: 'pn-m2' }], at);
+    assert.deepStrictEqual(ended.improvised, [], 'after End fight it can go');
+  });
+
+  it('review M3: a queued improvise, moveGroup or unplace names its key through an attach', () => {
+    let s = run([{ id: 'q1', type: 'improvise', title: 'Old' }, { type: 'attach', from: 'i-q1', to: 'i-new' }]);
+    s = run([{ type: 'jot', beat: 'i-q1', text: 'x' }, { type: 'improvise', key: 'i-q1', title: 'Old again' }], s);
+    assert.strictEqual(s.jots[0].beat, 'i-new');
+    assert.ok(s.improvised.some((i) => i.key === 'i-new'), 'the queued improvise lands on the new key');
+    assert.ok(!s.improvised.some((i) => i.key === 'i-q1' && i.title === 'Old again'));
+    s = run([{ type: 'moveGroup', pcs: [ADA], place: YARD, key: 'i-q1', title: 'The Chapel Yard', names: ['Ada'] }], s);
+    assert.strictEqual(s.positions[ADA].beat, 'i-new');
+  });
+
+  it('review M4: Fight here\'s quiet improvise writes no Improvised beat line', () => {
+    const key = model.placeKeys[YARD];
+    const s = run([{ type: 'improvise', key, title: 'The Chapel Yard', place: YARD, quiet: true }]);
+    assert.deepStrictEqual(s.events, []);
+    assert.ok(RS.derive(model, s).beats.some((b) => b.key === key));
+    assert.strictEqual(run([{ type: 'improvise', title: 'Loud' }]).events.length, 1, 'a plain improvise still logs');
+  });
+});

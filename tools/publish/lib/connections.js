@@ -156,17 +156,18 @@ const printedProse = (text) => {
 function edgesOf(frontmatter) {
   const raw = frontmatter && frontmatter.relationships;
   const out = [];
-  const take = (target, type, tone, description) => {
+  const take = (target, type, tone, description, strength) => {
     if (typeof target !== 'string' || !target.trim()) return;
     out.push({
       target,
       type: typeof type === 'string' ? printed(type) : '',
       tone,
+      strength,
       line: typeof description === 'string' ? printedProse(description) : '',
     });
   };
   if (Array.isArray(raw)) {
-    for (const r of raw) if (r && typeof r === 'object' && !Array.isArray(r)) take(r.target, r.type, r.tone, r.description);
+    for (const r of raw) if (r && typeof r === 'object' && !Array.isArray(r)) take(r.target, r.type, r.tone, r.description, r.strength);
   } else if (raw && typeof raw === 'object') {
     for (const [type, targets] of Object.entries(raw)) {
       for (const t of Array.isArray(targets) ? targets : [targets]) take(t, type);
@@ -405,4 +406,4 @@ function isEmpty(model) {
   return !model || (model.tabs.length === 0 && model.mentions.length === 0);
 }
 
-module.exports = { buildConnections, isEmpty, TABS, markdownLinkLabels, targetRef, eventTies, participantsOf };
+module.exports = { buildConnections, edgesOf, isEmpty, TABS, markdownLinkLabels, targetRef, eventTies, participantsOf };

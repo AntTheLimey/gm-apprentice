@@ -82,7 +82,10 @@ describe('the fight in the state', () => {
     // Brother Ash and the wolves share the withheld person word, so all four are numbered
     assert.equal(row(s, ASH).unseenN, 1);
     assert.deepEqual(rows(s, WOLF).map((r) => r.unseenN), [2, 3, 4], 'numbered when first ticked in');
-    assert.equal(row(s, LUCAN).unseenN, null, 'an ally is never unseen');
+    // changed on purpose by plan 6a fix round 1 / review M4: Lucan is an inferred ally (the Plan's quick
+    // reference), so he starts unseen and keeps a number in the stranger run like a foe
+    assert.equal(row(s, LUCAN).seen, false);
+    assert.equal(row(s, LUCAN).unseenN, 5, 'an unseen ally keeps a number');
     assert.equal(rows(s, WOLF)[0].word, 'a stranger', 'the withheld person word');
     assert.deepEqual(s.fight.groups, [GATE.key]);
     assert.equal(s.fight.round, 0);
@@ -406,7 +409,8 @@ describe('the fight in the state', () => {
     s = join(s, { cast: MEPHIT, count: 2 });
     s = join(s, { cast: MEPHIT, count: 1 });
     assert.deepEqual(rows(s, MEPHIT).map((r) => r.copy), [1, 2, 3]);
-    assert.deepEqual(rows(s, MEPHIT).map((r) => r.unseenN), [5, 6, 7], 'they share the stranger word with Ash and the wolves');
+    // plan 6a fix round 1 / review M4: the unseen Lucan holds 5 in the stranger run
+    assert.deepEqual(rows(s, MEPHIT).map((r) => r.unseenN), [6, 7, 8], 'they share the stranger word with Ash, the wolves and Lucan');
     const d = RS.derive(model, s);
     assert.deepEqual(d.fight.view.rows.filter((r) => r.note === MEPHIT).map((r) => r.gmName), ['Ice Mephit 1', 'Ice Mephit 2', 'Ice Mephit 3']);
     // ally copies get rowIds note, note#2
@@ -441,7 +445,7 @@ describe('the fight in the state', () => {
     assert.doesNotMatch(texts(s).find((x) => x.startsWith('Round 1:')), /Lair/);
   });
 
-  it('first Next sorts once; typing after does not re-sort; Sort keeps the turn', () => {
+  it('first Next sorts once; a number typed after Start moves that one row; Sort keeps the turn', () => {
     let s = gateFight();
     const set = (note, ini, copy) => { s = F(s, { type: 'setInit', row: row(s, note, copy).id, ini }); };
     set(ADA, 5); set(WOLF, 18, 1); set(WOLF, 10, 2); set(WOLF, 2, 3); set(LUCAN, 12); set(ASH, 1);
@@ -453,11 +457,239 @@ describe('the fight in the state', () => {
     assert.match(texts(s).at(-1), /^Round 1: Lair action 20, Frost Wolf 1 18, Lucan Grey 12, Frost Wolf 2 10, Ada Moss 5, Frost Wolf 3 2, Brother Ash 1\.$/);
     s = next(s);
     const turn = s.fight.turn;
+    // Ruling "latest entry wins" (step6.md): after Start a typed number places that one row, by one insert at
+    // its sorted place. The others keep the order they have, and the turn stays with its row. (5b pinned the
+    // opposite, "typing does not re-sort"; that is changed on purpose.)
     set(ASH, 30);
-    assert.deepEqual(s.fight.rows.filter((r) => r.in).map((r) => r.id), order, 'typing does not re-sort');
+    const moved = s.fight.rows.filter((r) => r.in).map((r) => r.id);
+    assert.equal(moved[0], row(s, ASH).id, 'Brother Ash at 30 goes to the top by one insert');
+    assert.deepEqual(moved.filter((id) => id !== row(s, ASH).id), order.filter((id) => id !== row(s, ASH).id), 'the rest are not re-sorted');
+    assert.equal(s.fight.turn, turn, 'the turn stays with its row');
     s = F(s, { type: 'fightSort' });
     assert.equal(s.fight.rows.filter((r) => r.in)[0].note, ASH);
     assert.equal(s.fight.turn, turn, 'the turn stays with its row');
+  });
+
+  it('setInit after Start inserts one row and keeps the turn; before Start it changes the number only', () => {
+    let s = gateFight();
+    const set = (note, ini, copy) => { s = F(s, { type: 'setInit', row: row(s, note, copy).id, ini }); };
+    const ids = () => s.fight.rows.map((r) => r.id);
+    const before = ids();
+    set(WOLF, 15, 3);
+    assert.deepEqual(ids(), before, 'before Start the order is not touched');
+    assert.equal(row(s, WOLF, 3).typed, true);
+    set(ADA, 5); set(WOLF, 18, 1); set(WOLF, 10, 2); set(LUCAN, 12); set(ASH, 1);
+    s = next(s);
+    s = next(s);
+    const turn = s.fight.turn;
+    const was = s.fight.rows.map((r) => r.id);
+    const lines = texts(s).length;
+    set(WOLF, 16, 2);
+    // Wolf 2 goes from 10 to 16, between Wolf 1 (18) and Wolf 3 (15): one row moved, the others stand where they were
+    const cut = (list, id) => list.filter((x) => x !== id);
+    assert.deepEqual(cut(ids(), row(s, WOLF, 2).id), cut(was, row(s, WOLF, 2).id), 'one row moved, nothing else');
+    assert.equal(s.fight.turn, turn, 'the turn stays with its row');
+    assert.equal(s.fight.rows.find((r) => r.id === s.fight.turn).id, turn);
+    assert.equal(texts(s).length, lines + 1, 'and the log says so');
+    assert.match(texts(s).at(-1), /Frost Wolf 2.*16/);
+    set(WOLF, 16, 2);
+    assert.equal(texts(s).length, lines + 1, 'the same number again says nothing');
+  });
+
+  // Add by a typed name (no note), as the page sends it after "+ New"; answers the new state and the join's id.
+  const addNamed = (s, name, count, m = model) => {
+    const id = nextId();
+    const j = M.joinRows({ model: m, derived: RS.derive(m, s), state: s, fight: s.fight, add: { name, count }, idBase: id });
+    assert.equal(j.refused, null, j.refused);
+    return [RS.reduce(s, { id, type: 'fightJoin', fight: s.fight.id, rows: j.rows, tick: j.tick, groups: j.groups, thresholds: j.thresholds, label: `${name}${count > 1 ? ` ×${count}` : ''}` }, now()), id];
+  };
+  const playersOrder = (s) => RS.derive(model, s) && require('../lib/run-sheet/players').forPlayers(model, s, { withheldWords: { person: 'someone' } }).panels.find((p) => p.order).order.rows.map((r) => r.name);
+
+  it('add a typed name nobody has, by choosing New: three blank Bouncers, unseen', () => {
+    let s = gateFight();
+    const [t, id] = addNamed(s, 'Bouncer', 3);
+    s = t;
+    const b = s.fight.rows.filter((r) => /^Bouncer/.test(r.name));
+    assert.deepEqual(b.map((r) => r.name), ['Bouncer 1', 'Bouncer 2', 'Bouncer 3']);
+    assert.ok(b.every((r) => r.kind === 'foe' && r.seen === false && r.in && r.note === null && r.hp === null && r.joinId === id));
+    assert.ok(playersOrder(s).every((n) => !/Bouncer/.test(n)), 'the players never see a typed name');
+    assert.match(texts(s).at(-1), /^Bouncer ×3 join the fight\.$/);
+    assert.equal(s.events.at(-1).join, id, 'the join line carries its id, for Undo');
+  });
+
+  it('a cast name still adds the note', () => {
+    let s = gateFight();
+    s = join(s, { cast: MEPHIT, count: 2 });
+    assert.equal(rows(s, MEPHIT).length, 2);
+    assert.ok(rows(s, MEPHIT).every((r) => r.note === MEPHIT && r.joinId));
+  });
+
+  it('sameForAll copies to the untouched only', () => {
+    let s = gateFight();
+    [s] = addNamed(s, 'Bouncer', 4);
+    const [b1, b2, b3, b4] = s.fight.rows.filter((r) => /^Bouncer/.test(r.name));
+    s = F(s, { type: 'setMax', row: b1.id, max: 30 });
+    s = F(s, { type: 'setAc', row: b1.id, ac: 14 });
+    s = F(s, { type: 'setAc', row: b2.id, ac: 9 });
+    s.fight.rows.find((r) => r.id === b1.id).mod = 3;
+    const src = s.fight.rows.find((r) => r.id === b1.id);
+    src.str = 17; src.seen = true; src.seenTick = true; src.sideFrom = 'you set it'; src.neutral = true; src.kind = 'ally';
+    s.fight.rows.find((r) => r.id === b1.id).ini = 8;
+    s = F(s, { type: 'sameForAll', row: b1.id });
+    const get = (id) => s.fight.rows.find((r) => r.id === id);
+    for (const id of [b3.id, b4.id]) {
+      assert.deepEqual([get(id).max, get(id).hp, get(id).ac, get(id).mod], [30, 30, 14, 3], 'an untouched copy');
+      // only the stat keys are copied: never a side, a seen mark, typed, or a number a system has not declared
+      assert.deepEqual([get(id).str, get(id).seen, get(id).seenTick, get(id).sideFrom, get(id).neutral, get(id).kind, get(id).typed], [undefined, false, null, null, false, 'foe', false]);
+      assert.equal(get(id).ini, null, 'initiative is not copied');
+      assert.equal(get(id).typed, false, 'copying is not typing');
+    }
+    assert.equal(get(b2.id).ac, 9, 'a row someone typed into is left alone');
+    assert.equal(get(b2.id).max, null);
+    assert.match(texts(s).at(-1), /Bouncer 3, Bouncer 4.*Bouncer 1/);
+    // another group and a PC are never touched
+    assert.equal(row(s, WOLF, 1).max === 30, false);
+    // nothing untouched: nothing happens, nothing is said
+    s = F(s, { type: 'setMax', row: b3.id, max: 31 });
+    s = F(s, { type: 'setMax', row: b4.id, max: 32 });
+    const n = texts(s).length;
+    s = F(s, { type: 'sameForAll', row: b1.id });
+    assert.equal(get(b3.id).max, 31);
+    assert.equal(texts(s).length, n, 'a pass with nothing to copy is silent');
+  });
+
+  it('sameForAll never overwrites a wounded copy or one with a status', () => {
+    let s = gateFight();
+    [s] = addNamed(s, 'Bouncer', 4);
+    const [b1, b2, b3, b4] = s.fight.rows.filter((r) => /^Bouncer/.test(r.name));
+    const get = (id) => s.fight.rows.find((r) => r.id === id);
+    s = F(s, { type: 'setMax', row: b2.id, max: 20 });
+    s.fight.rows.find((r) => r.id === b2.id).typed = false; // hp 20/20 from a stat block, not typed: only the wound should protect it
+    s = F(s, { type: 'hp', row: b2.id, entry: '-4' });
+    s = F(s, { type: 'status', row: b4.id, add: 'Prone' });
+    s = F(s, { type: 'setMax', row: b1.id, max: 11 });
+    s = F(s, { type: 'sameForAll', row: b1.id });
+    assert.deepEqual([get(b3.id).max, get(b3.id).hp], [11, 11], 'the untouched copy gets it');
+    assert.deepEqual([get(b2.id).max, get(b2.id).hp], [20, 16], 'a wounded copy keeps its numbers and HP');
+    assert.equal(get(b4.id).max, null, 'a copy with a status is left alone');
+    // a second copy may overwrite the first (a copy is not a touch), even though a line names it
+    s = F(s, { type: 'setMax', row: b1.id, max: 12 });
+    s = F(s, { type: 'sameForAll', row: b1.id });
+    assert.deepEqual([get(b3.id).max, get(b3.id).hp], [12, 12]);
+  });
+
+  it('undoAdd takes back an untouched add, and the log says so', () => {
+    let s = gateFight();
+    s = join(s, { cast: MEPHIT, count: 2 });
+    const rowsBefore = s.fight.rows.map((r) => r.id);
+    const wordOf = (r) => r.word || '';
+    const labels = (x) => [...M.unseenLabels(x.fight.rows, wordOf)];
+    const was = { order: playersOrder(s), labels: labels(s), vitals: RS.derive(model, s).vitalsRecorded.length, events: s.events.filter((e) => !e.join).length };
+    const [t, id] = addNamed(s, 'Bouncer', 13);
+    s = t;
+    assert.equal(s.fight.rows.length, rowsBefore.length + 13);
+    s = F(s, { type: 'undoAdd', join: id });
+    assert.deepEqual(s.fight.rows.map((r) => r.id), rowsBefore, 'the order is as it was');
+    assert.deepEqual(playersOrder(s), was.order, 'the order and the players\' labels are as before');
+    assert.deepEqual(labels(s), was.labels);
+    assert.match(texts(s).at(-1), /^Took back: Bouncer ×13\.$/);
+    assert.ok(texts(s).every((x) => !/Bouncer \d/.test(x)), 'no line names an undone row');
+    assert.ok(s.events.every((e) => e.join !== id), 'the join line goes with its rows');
+    // a second undo of the same join does nothing
+    const before = JSON.stringify(s);
+    s = F(s, { type: 'undoAdd', join: id });
+    assert.equal(JSON.stringify(s.fight), JSON.stringify(JSON.parse(before).fight));
+    assert.equal(texts(s).filter((x) => /Took back/.test(x)).length, 1);
+    // and the next add numbers from 1 again
+    [s] = addNamed(s, 'Bouncer', 2);
+    assert.deepEqual(s.fight.rows.filter((r) => /^Bouncer/.test(r.name)).map((r) => r.name), ['Bouncer 1', 'Bouncer 2']);
+  });
+
+  it('Start and a round end do not touch an add; undo takes its names out of every roster line', () => {
+    let s = gateFight();
+    let id;
+    [s, id] = addNamed(s, 'Bouncer', 3);
+    s = next(s);
+    assert.match(texts(s).find((x) => x.startsWith('Round 1:')), /Bouncer 1/);
+    s = next(s);
+    // wrap the round by hand, the way the last turn does: the roster names everyone, nobody has acted on the Bouncers
+    const lastId = s.fight.rows.filter((r) => M.takesTurn(r, s.fight.rows)).at(-1).id;
+    s.fight.turn = lastId;
+    s = next(s);
+    assert.ok(texts(s).some((x) => /^Round 1 ends:.*Bouncer 1/.test(x)), 'a round end names them');
+    assert.ok(s.fight.rows.filter((r) => /^Bouncer/.test(r.name)).every((r) => !r.logged), 'a roster line is not a touch');
+    s.fight.rows.filter((r) => /^Bouncer/.test(r.name)).forEach((r) => { r.turned = false; });
+    assert.equal(M.undoable(s.fight, id), true, 'Undo is still offered');
+    s = F(s, { type: 'undoAdd', join: id });
+    assert.ok(!s.fight.rows.some((r) => /^Bouncer/.test(r.name)));
+    assert.ok(texts(s).every((x) => !/Bouncer \d/.test(x) || /^Took back/.test(x)), 'no roster line names an undone row');
+    assert.match(texts(s).find((x) => x.startsWith('Round 1:')), /^Round 1: .*\.$/);
+    assert.doesNotMatch(require('../lib/run-sheet/record').tableLogBody(model, s, { linkFor: (p) => `[[${p}]]` }), /Bouncer/);
+  });
+
+  it('Roll after Start places each filled row, in the order rolled, and keeps the turn', () => {
+    let s = gateFight();
+    const set = (note, ini, copy) => { s = F(s, { type: 'setInit', row: row(s, note, copy).id, ini }); };
+    set(ADA, 5); set(WOLF, 18, 1); set(WOLF, 10, 2); set(WOLF, 2, 3); set(LUCAN, 12); set(ASH, 1);
+    s = next(s); s = next(s);
+    let id;
+    [s, id] = addNamed(s, 'Bouncer', 3);
+    const turn = s.fight.turn;
+    const [b1, b2, b3] = s.fight.rows.filter((r) => /^Bouncer/.test(r.name));
+    const lines = texts(s).length;
+    s = F(s, { type: 'rollInit', values: { [b1.id]: 15, [b2.id]: 11, [b3.id]: 3 } });
+    const inis = s.fight.rows.filter((r) => r.in && r.kind !== 'lair').map((r) => r.ini);
+    assert.deepEqual(inis, [18, 15, 12, 11, 10, 5, 3, 2, 1], 'each at its sorted place');
+    assert.equal(s.fight.turn, turn);
+    assert.equal(texts(s).length, lines + 3, 'the log says so for each');
+    assert.equal(s.fight.rows.find((r) => r.id === b1.id).typed, false, 'rolled is not typed');
+    assert.equal(M.undoable(s.fight, id), false, 'a row the log names is not taken back');
+  });
+
+  it('an undone add leaves the unseen numbers of the others alone, even after the add took one', () => {
+    let s = gateFight();
+    const labelsOf = (x) => Object.fromEntries(x.fight.rows.map((r) => [r.id, r.unseenN]));
+    const before = labelsOf(s);
+    const [t, id] = addNamed(s, 'Bouncer', 3);
+    s = F(t, { type: 'undoAdd', join: id });
+    assert.deepEqual(labelsOf(s), before);
+  });
+
+  it('undoAdd refuses once a row is touched', () => {
+    const touch = {
+      typed: (s, r) => F(s, { type: 'setAc', row: r.id, ac: 12 }),
+      hp: (s, r) => F(s, { type: 'hp', row: r.id, entry: 't4' }),
+      status: (s, r) => F(s, { type: 'status', row: r.id, add: 'Prone' }),
+      init: (s, r) => F(s, { type: 'setInit', row: r.id, ini: 12 }),
+    };
+    for (const [how, fn] of Object.entries(touch)) {
+      let s = gateFight();
+      let id;
+      [s, id] = addNamed(s, 'Bouncer', 3);
+      const r = s.fight.rows.find((x) => x.name === 'Bouncer 2');
+      s = fn(s, r);
+      const n = s.fight.rows.length;
+      const lines = texts(s).length;
+      s = F(s, { type: 'undoAdd', join: id });
+      assert.equal(s.fight.rows.length, n, `${how}: refused`);
+      assert.equal(texts(s).length, lines, `${how}: and silent`);
+      assert.equal(M.undoable(s.fight, id), false, how);
+    }
+    // a row that has had its turn counts too
+    let s = gateFight();
+    let id;
+    [s, id] = addNamed(s, 'Bouncer', 2);
+    assert.equal(M.undoable(s.fight, id), true);
+    s = F(s, { type: 'setInit', row: s.fight.rows.find((r) => r.name === 'Bouncer 1').id, ini: 30 });
+    assert.equal(M.undoable(s.fight, id), false, 'typed');
+    [s, id] = addNamed(gateFight(), 'Bouncer', 2);
+    for (let i = 0; i < 14 && M.undoable(s.fight, id); i++) s = next(s);
+    assert.equal(M.undoable(s.fight, id), false, 'once the turns reach them');
+    // an unknown join, and a join that was not an add of rows only, never undo
+    s = gateFight();
+    const n = s.fight.rows.length;
+    s = F(s, { type: 'undoAdd', join: 'nope' });
+    assert.equal(s.fight.rows.length, n);
   });
 
   it('rounds wrap with a round-end line naming every combatant\'s HP', () => {
@@ -664,10 +896,44 @@ describe('the fight in the state', () => {
     assert.equal(row(s, DRAKE).hp, null);
     s = F(s, { type: 'setMax', row: row(s, DRAKE).id, max: 30 });
     assert.deepEqual([row(s, DRAKE).hp, row(s, DRAKE).max], [30, 30]);
+    // changed on purpose by final review P4.3: a full row follows its max
     s = F(s, { type: 'setMax', row: row(s, DRAKE).id, max: 40 });
-    assert.deepEqual([row(s, DRAKE).hp, row(s, DRAKE).max], [30, 40], 'a row with HP keeps it');
+    assert.deepEqual([row(s, DRAKE).hp, row(s, DRAKE).max], [40, 40], 'a full row stays full');
     s = F(s, { type: 'setAc', row: row(s, DRAKE).id, ac: 14 });
     assert.equal(row(s, DRAKE).ac, 14);
+  });
+
+  // Task 13 proof: a fight with nobody in it, ended before the first turn, says so with no empty list
+  it('a fight ended before the first turn with no one ticked writes "Fight ends before the first turn."', () => {
+    let s = gateFight();
+    for (const r of s.fight.rows) if (r.in && r.kind !== 'lair') s = F(s, { type: 'fightTick', row: r.id, in: false });
+    s = end(s);
+    assert.equal(texts(s).at(-1), 'Fight ends before the first turn.');
+    // with someone in it, the list stays
+    const t = end(gateFight());
+    assert.match(texts(t).at(-1), /^Fight ends before the first turn: \S.*\.$/);
+  });
+
+  // final review P4.3
+  it('a corrected max brings a full row\'s HP with it; a wounded row keeps its HP', () => {
+    let s = gateFight();
+    s = join(s, { cast: DRAKE, count: 1 });
+    const id = row(s, DRAKE).id;
+    for (const [max, hp] of [[21, 21], [2, 2], [20, 20]]) {
+      s = F(s, { type: 'setMax', row: id, max });
+      assert.deepEqual([row(s, DRAKE).hp, row(s, DRAKE).max], [hp, max], `max ${max}`);
+    }
+    // a "0" slip puts it Out; the corrected max brings it back full
+    s = F(s, { type: 'setMax', row: id, max: 0 });
+    assert.deepEqual([row(s, DRAKE).hp, row(s, DRAKE).out], [0, true]);
+    s = F(s, { type: 'setMax', row: id, max: 33 });
+    assert.deepEqual([row(s, DRAKE).hp, row(s, DRAKE).max, row(s, DRAKE).out], [33, 33, false]);
+    // wounded: 15/21, max 25 keeps 15
+    s = F(s, { type: 'setMax', row: id, max: 21 });
+    s = F(s, { type: 'hp', row: id, entry: '-6' });
+    assert.deepEqual([row(s, DRAKE).hp, row(s, DRAKE).max], [15, 21]);
+    s = F(s, { type: 'setMax', row: id, max: 25 });
+    assert.deepEqual([row(s, DRAKE).hp, row(s, DRAKE).max], [15, 25], 'a wounded row keeps its HP');
   });
 
   it('pause and resume keep the turn and round, and are logged', () => {
@@ -763,6 +1029,9 @@ describe('the fight in the state', () => {
       s = F(s, { type: 'hp', row: row(s, ADA).id, entry: '-5' });
       const NEW = 'Characters/PCs/Ada Rowe.md';
       fs.renameSync(path.join(tmp, ADA), path.join(tmp, NEW));
+      // the Plan's roster is the party now, so a rename carries its link along, as Obsidian does
+      const planFile = path.join(tmp, PLAN);
+      fs.writeFileSync(planFile, fs.readFileSync(planFile, 'utf8').replace('- **[[Ada Moss]]** (Pat)', '- **[[Ada Rowe]]** (Pat)'));
       const m2 = readRunSheet(tmp, PLAN, { party: [NEW, BEN] });
       const d = RS.derive(m2, s);
       const r = d.fight.view.rows.find((x) => x.note === ADA);
@@ -887,9 +1156,10 @@ describe('the fight in the state', () => {
     assert.equal(s.fight.rows.filter((r) => r.kind === 'lair').length, 1);
     assert.deepEqual(lair.of, rows(s, WOLF).map((r) => r.id));
     assert.equal(rows(s, WOLF)[3].copy, 4);
-    assert.equal(rows(s, WOLF)[3].unseenN, 5);
+    // plan 6a fix round 1 / review M4: the unseen Lucan holds 5 in the stranger run
+    assert.equal(rows(s, WOLF)[3].unseenN, 6);
     s = F(s, { type: 'fightTick', row: rows(s, WOLF)[3].id, in: false });
-    assert.equal(rows(s, WOLF)[3].unseenN, 5, 'kept once given');
+    assert.equal(rows(s, WOLF)[3].unseenN, 6, 'kept once given');
     // an unticked foe gets its number when first ticked in
     let t = move(fresh(), ADA, GATE);
     t = fightAt(t, GATE);
@@ -900,7 +1170,7 @@ describe('the fight in the state', () => {
     t = RS.reduce(t, { id, type: 'fightJoin', fight: t.fight.id, rows: j.rows, tick: [], groups: [], thresholds: [], label: 'M' }, now());
     assert.equal(row(t, MEPHIT).unseenN, null, 'unticked: no number');
     t = F(t, { type: 'fightTick', row: row(t, MEPHIT).id, in: true });
-    assert.equal(row(t, MEPHIT).unseenN, 5, 'the next number when first ticked in');
+    assert.equal(row(t, MEPHIT).unseenN, 6, 'the next number when first ticked in (Lucan holds 5: review M4)');
   });
 
   it('derive names rows for the GM and picks the acting panel', () => {
@@ -1181,7 +1451,8 @@ describe('the PR review and the proof', () => {
     assert.equal(row(s, ASH).unseenN, null);
     assert.deepEqual(rows(s, WOLF).map((r) => r.unseenN), [1, 2, 3], 'the wolves start at 1');
     s = F(s, { type: 'seen', row: row(s, ASH).id, on: false });
-    assert.equal(row(s, ASH).unseenN, 4);
+    // plan 6a fix round 1 / review M4: the unseen Lucan holds 4
+    assert.equal(row(s, ASH).unseenN, 5);
   });
 
   it('proof Low: a join line agrees in number', () => {
@@ -1214,5 +1485,253 @@ describe('RS.upgrade and the fight\'s keys', () => {
       assert.throws(() => RS.upgrade(bad, fresh()), (e) => e.code === 'BAD_STATE', JSON.stringify(bad));
     }
     assert.doesNotThrow(() => RS.upgrade({ fight: null, fights: [], panels: {}, shownEver: { [ASH]: true } }, fresh()));
+  });
+});
+
+// plan 6a Task 5: a neutral side, the side the GM sets, and its memory
+describe('sides in the fight', () => {
+  const side = (s, note, to, copy) => F(s, { type: 'setSide', row: row(s, note, copy).id, side: to });
+  const sideOf = (r) => M.sideOfRow(r);
+
+  it('setSide sets each side directly, and the side is remembered into the next fight', () => {
+    let s = gateFight();
+    assert.equal(sideOf(row(s, ASH)), 'foe');
+    for (const to of ['neutral', 'ally', 'foe']) { s = side(s, ASH, to); assert.equal(sideOf(row(s, ASH)), to); }
+    s = side(s, ASH, 'neutral');
+    assert.deepEqual([row(s, ASH).kind, row(s, ASH).neutral], ['foe', true]);
+    assert.equal(s.sides[ASH], 'neutral');
+    s = side(s, LUCAN, 'foe');
+    assert.equal(s.sides[LUCAN], 'foe');
+    // a side that is none of the three, a Lair row and a PC row are left alone
+    const before = clone(s);
+    s = F(s, { type: 'setSide', row: row(s, WOLF).id, side: 'friend' });
+    s = F(s, { type: 'setSide', row: row(s, ADA).id, side: 'foe' });
+    s = F(s, { type: 'setSide', row: s.fight.rows.find((r) => r.kind === 'lair').id, side: 'ally' });
+    assert.deepEqual(s.fight.rows, before.fight.rows);
+    assert.deepEqual(s.sides, before.sides);
+    s = end(s);
+    assert.equal(s.fights[0].rows.find((r) => r.note === ASH).neutral, true, 'an ended fight keeps its rows\' sides');
+    s = fightAt(s, GATE);
+    assert.deepEqual([row(s, ASH).kind, row(s, ASH).neutral, row(s, ASH).sideFrom], ['foe', true, 'you set it']);
+    assert.deepEqual([row(s, LUCAN).kind, row(s, LUCAN).neutral], ['foe', false]);
+    assert.ok(rows(s, WOLF).every((r) => r.kind === 'foe' && !r.neutral), 'a note nobody set keeps the reader\'s side');
+  });
+
+  it('the side switch is logged', () => {
+    let s = gateFight();
+    s = side(s, ASH, 'ally');
+    s = side(s, ASH, 'neutral');
+    s = side(s, ASH, 'foe');
+    assert.deepEqual(texts(s).slice(-3), ['Brother Ash is now an ally.', 'Brother Ash is now neutral.', 'Brother Ash is now a foe.']);
+    const n = texts(s).length;
+    s = side(s, ASH, 'foe');
+    assert.equal(texts(s).length, n, 'the side it already has: nothing happens');
+  });
+
+  it('set to ally becomes seen; set back to foe or neutral, it is as seen as a foe starts', () => {
+    let s = gateFight();
+    assert.equal(row(s, ASH).seen, false);
+    s = side(s, ASH, 'ally');
+    assert.equal(row(s, ASH).seen, true);
+    // plan 6a fix round 1 / review I2: ticked in and seen as an ally, the players have its name: it stays
+    s = side(s, ASH, 'neutral');
+    assert.equal(row(s, ASH).seen, true, 'seen and ticked in: still seen');
+    s = side(s, ASH, 'foe');
+    assert.equal(row(s, ASH).seen, true, 'neutral to foe leaves seen alone');
+    // benched while an ally, nobody saw it: back to how a foe starts
+    s = side(s, ASH, 'ally');
+    s = F(s, { type: 'fightTick', row: row(s, ASH).id, in: false });
+    s = side(s, ASH, 'neutral');
+    assert.equal(row(s, ASH).seen, false, 'not ticked in, no publish, no Show, no tick: unseen');
+    assert.ok(row(s, ASH).unseenN !== null && row(s, ASH).unseenN !== undefined, 'and it keeps a number for its unseen word');
+    s = F(s, { type: 'fightTick', row: row(s, ASH).id, in: true });
+    // the GM's own tick wins
+    s = F(s, { type: 'seen', row: row(s, ASH).id, on: true });
+    s = side(s, ASH, 'ally');
+    s = side(s, ASH, 'foe');
+    assert.equal(row(s, ASH).seen, true, 'ticked seen by the GM: stays seen');
+    // a reader-ally (Lucan, an inferred ally) set to ally by the GM is seen
+    s = side(s, LUCAN, 'neutral');
+    s = side(s, LUCAN, 'ally');
+    assert.equal(row(s, LUCAN).seen, true);
+  });
+
+  it('a neutral is never the last foe', () => {
+    let s = gateFight();
+    for (const r of s.fight.rows.filter((x) => x.kind === 'foe')) s = side(s, r.note, 'neutral', r.copy);
+    // every foe is neutral: Next walks every turn and none of them becomes the last foe
+    s = F(s, { type: 'rollInit', values: Object.fromEntries(s.fight.rows.filter((r) => r.kind !== 'pc').map((r, i) => [r.id, 20 - i])) });
+    s = F(s, { type: 'setInit', row: row(s, ADA).id, ini: 1 });
+    const turns = s.fight.rows.filter((r) => r.in).length + 1;
+    for (let i = 0; i < turns; i++) {
+      s = next(s);
+      assert.equal(s.fight.lastFoe, null, `turn ${i + 1}`);
+    }
+    // a foe's turn still sets it
+    s = side(s, ASH, 'foe');
+    do s = next(s); while (s.fight.turn !== row(s, ASH).id);
+    assert.equal(s.fight.lastFoe, row(s, ASH).id);
+  });
+
+  it('0 HP: neutral Out, ally Down', () => {
+    let s = gateFight();
+    s = side(s, ASH, 'neutral');
+    s = hit(s, ASH, '-999');
+    assert.equal(row(s, ASH).out, true);
+    assert.ok(!row(s, ASH).conds.includes('Down'));
+    assert.ok(texts(s).includes('Brother Ash drops.'));
+    s = side(s, WOLF, 'ally', 1);
+    s = hit(s, WOLF, '-999', 1);
+    assert.equal(row(s, WOLF, 1).out, false);
+    assert.ok(row(s, WOLF, 1).conds.includes('Down'));
+  });
+
+  it('neutrals and reader-allies set neutral are not in vitals', () => {
+    let s = gateFight();
+    assert.ok(RS.derive(model, s).vitals.some((v) => v.note === LUCAN), 'Lucan, a reader-ally, has a vitals row');
+    s = side(s, LUCAN, 'neutral');
+    s = hit(s, LUCAN, '-3');
+    s = side(s, ASH, 'neutral');
+    s = hit(s, ASH, '-3');
+    let d = RS.derive(model, s);
+    assert.ok(!d.vitals.some((v) => v.note === LUCAN || v.note === ASH));
+    s = end(s);
+    d = RS.derive(model, s);
+    assert.ok(!d.vitals.some((v) => v.note === LUCAN || v.note === ASH));
+    assert.ok(!d.vitalsRecorded.some((v) => v.note === LUCAN));
+    // an ally in an earlier fight, set neutral since: still not in the vitals
+    let t = gateFight();
+    t = hit(t, LUCAN, '-3');
+    t = end(t);
+    assert.ok(RS.derive(model, t).vitals.some((v) => v.note === LUCAN));
+    t = fightAt(t, GATE);
+    t = side(t, LUCAN, 'neutral');
+    assert.ok(!RS.derive(model, t).vitals.some((v) => v.note === LUCAN));
+    // a carried neutral too
+    const carried = { ...model, sidesCarried: { [LUCAN]: 'neutral' } };
+    assert.ok(!RS.derive(carried, fresh()).vitals.some((v) => v.note === LUCAN));
+    // and a foe the GM set to ally has one
+    t = side(t, ASH, 'ally');
+    assert.ok(RS.derive(model, t).vitals.some((v) => v.note === ASH));
+  });
+
+  // plan 6a fix round 1 / review C1: one copy's side is that copy's, never the note's
+  // changed on purpose by the final review (ledger 86): the copy the players saw as an ally leaves its name seen
+  it('one copy of two set to ally: no side remembered, the next fight is the reader\'s, no Sides set line', () => {
+    let s = gateFight();
+    s = side(s, WOLF, 'ally', 1);
+    assert.equal(row(s, WOLF, 1).kind, 'ally');
+    assert.equal(s.sides[WOLF], undefined);
+    assert.deepEqual(RS.derive(model, s).sidesSet, []);
+    s = fightAt(end(s), GATE);
+    assert.ok(rows(s, WOLF).every((r) => r.kind === 'foe' && !r.neutral), 'every wolf a foe again');
+    assert.ok(rows(s, WOLF).every((r) => r.seen), 'named, as the players saw it');
+  });
+
+  // final review, ledger 86: a turned ally is no "Stranger" in the next fight
+  it('a seen ally set to foe, End fight, a new fight with him: named, not a stranger', () => {
+    let s = gateFight();
+    s = side(s, ASH, 'ally');
+    assert.equal(row(s, ASH).seen, true, 'an ally is seen');
+    s = side(s, ASH, 'foe');
+    assert.equal(row(s, ASH).seen, true, 'set back to foe, the name stays (ruling I2)');
+    s = end(s);
+    assert.ok(s.seenEver[ASH], 'remembered as seen');
+    s = fightAt(s, GATE);
+    assert.deepEqual([row(s, ASH).kind, row(s, ASH).seen], ['foe', true]);
+    const { forPlayers } = require('../lib/run-sheet/players');
+    const v = forPlayers(model, s, { withheldWords: model.withheldWords, picId: () => '0'.repeat(20) });
+    const names = v.panels.flatMap((p) => (p.order ? p.order.rows.map((r) => r.name) : []));
+    assert.ok(names.includes('Brother Ash'), `his name, not his unseen word: ${names.join(', ')}`);
+    // a foe never seen leaves nothing behind
+    let t = gateFight();
+    t = end(t);
+    assert.ok(!t.seenEver[ASH]);
+    t = fightAt(t, GATE);
+    assert.equal(row(t, ASH).seen, false);
+  });
+
+  // final review, ledger 88: a side carried from an earlier session still applies after a mixed group drops s.sides
+  it('a carried side still applies after setSide forgets the note for a mixed group', () => {
+    const carried = { ...model, sidesCarried: { [WOLF]: 'neutral' } };
+    let s = fightAt(move(fresh(), ADA, GATE), GATE, { m: carried });
+    assert.ok(rows(s, WOLF).every((r) => r.neutral && r.sideFrom === 'you set it'), 'every wolf starts neutral from the Table Log');
+    s = side(s, WOLF, 'foe', 1);
+    assert.equal(s.sides[WOLF], undefined, 'mixed: tonight\'s side for the note is dropped');
+    assert.deepEqual(rows(s, WOLF).map((r) => M.sideOfRow(r)), ['foe', 'neutral', 'neutral'], 'the other copies keep theirs');
+    s = end(s);
+    const id = nextId();
+    const b = M.rowsForFight({ model: carried, derived: RS.derive(carried, s), state: s, beatKey: GATE.key, idBase: id });
+    s = RS.reduce(s, { id, type: 'fightStart', beat: GATE.key, title: GATE.title, groups: b.groups, rows: b.rows, thresholds: b.thresholds }, now());
+    assert.ok(rows(s, WOLF).every((r) => r.neutral), 'the next fight starts from the carried side again');
+  });
+
+  it('every copy set: remembered; one set back: forgotten', () => {
+    let s = gateFight();
+    for (const r of rows(s, WOLF)) s = side(s, WOLF, 'ally', r.copy);
+    assert.equal(s.sides[WOLF], 'ally');
+    assert.deepEqual(RS.derive(model, s).sidesSet, [{ note: WOLF, side: 'ally' }]);
+    const next = fightAt(end(s), GATE);
+    assert.ok(rows(next, WOLF).every((r) => r.kind === 'ally'), 'remembered into the next fight');
+    s = side(s, WOLF, 'foe', 2);
+    assert.equal(s.sides[WOLF], undefined, 'mixed again: forgotten');
+    s = fightAt(end(s), GATE);
+    assert.ok(rows(s, WOLF).every((r) => r.kind === 'foe'));
+  });
+
+  it('derive lists the sides set tonight for the record', () => {
+    let s = gateFight();
+    s = side(s, ASH, 'ally');
+    s = side(s, LUCAN, 'neutral');
+    s = side(s, ASH, 'foe');
+    assert.deepEqual(RS.derive(model, s).sidesSet, [{ note: ASH, side: 'foe' }, { note: LUCAN, side: 'neutral' }]);
+    assert.deepEqual(RS.derive(model, fresh()).sidesSet, []);
+  });
+
+  it('an old saved state with no sides derives', () => {
+    let old = gateFight();
+    delete old.sides;
+    for (const r of old.fight.rows) delete r.neutral;
+    const d = RS.derive(model, old);
+    assert.deepEqual(d.sidesSet, []);
+    assert.equal(d.fight.view.rows.find((r) => r.note === ASH).kind, 'foe');
+    const up = RS.upgrade(old, fresh());
+    assert.deepEqual(up.sides, {});
+    old = side(up, ASH, 'neutral');
+    assert.equal(old.sides[ASH], 'neutral');
+    // a row with no neutral key is no neutral
+    assert.equal(M.sideOfRow(up.fight.rows.find((r) => r.note === ASH)), 'foe');
+    assert.throws(() => RS.upgrade({ sides: [] }, fresh()), (e) => e.code === 'BAD_STATE');
+  });
+});
+
+// Task 7 fix round 1 (a Task 6 leftover): a group or beat join's line carries no `join` id, so its rows carry none
+// and `undoable` says no: the Undo button is never offered for it
+describe('undo is only for a plain add', () => {
+  it('a beat or group join is not undoable; an add by name is', () => {
+    // the reviewer's case: a place beat holding a creature and a statless NPC, joined by its beat
+    const YARD = 'Locations/The Chapel Yard.md';
+    const m = clone(model);
+    m.placePeople = { [YARD]: [DRAKE, 'Characters/NPCs/Sister Fen.md'] };
+    const key = m.placeKeys[YARD];
+    let s = fightAt(move(fresh(), ADA, GATE), GATE, { m });
+    s = act(s, { type: 'improvise', key, title: 'The Chapel Yard', place: YARD, quiet: true });
+    const id = `j${++n}`;
+    const j = M.joinRows({ model: m, derived: RS.derive(m, s), state: s, fight: s.fight, add: { beat: key }, idBase: id });
+    assert.ok(j.rows.some((r) => r.kind !== 'pc'), `a join that brings new rows: ${j.rows.map((r) => r.name)}`);
+    assert.ok(j.groups.length, 'and a group');
+    s = RS.reduce(s, { id, type: 'fightJoin', fight: s.fight.id, rows: j.rows, tick: j.tick, groups: j.groups, thresholds: j.thresholds, label: '', planned: true }, now());
+    assert.ok(!s.events.some((e) => e.join === id), 'its line has no join id');
+    assert.ok(!s.fight.rows.some((r) => r.joinId === id), 'nor do its rows');
+    assert.equal(M.undoable(s.fight, id), false);
+    const before = JSON.stringify(s.fight.rows);
+    s = F(s, { type: 'undoAdd', join: id });
+    assert.equal(JSON.stringify(s.fight.rows), before, 'an undo of it does nothing');
+    // a plain add by name still is
+    const id2 = `j${++n}`;
+    const j2 = M.joinRows({ model, derived: RS.derive(model, s), state: s, fight: s.fight, add: { name: 'Bouncer', count: 2 }, idBase: id2 });
+    s = RS.reduce(s, { id: id2, type: 'fightJoin', fight: s.fight.id, rows: j2.rows, tick: j2.tick, groups: j2.groups, thresholds: j2.thresholds, label: 'Bouncer ×2' }, now());
+    assert.equal(M.undoable(s.fight, id2), true);
+    assert.equal(s.fight.rows.filter((r) => r.joinId === id2).length, 2);
   });
 });

@@ -458,6 +458,8 @@ describe('the GM page shows things on the players\' screen', { skip: browserSkip
       const b = await everyoneAt(page, model);
       await click(page, `${beatSel(b.key)} .bbtns [data-showbeat]`);
       await viewOf(page, 'v.panels.length === 1 && v.panels[0].people.length > 2');
+      // plan 6a Task 10: the preview starts folded; Show ▸ opens it
+      await click(page, '#pvToggle');
       await page.waitFor('document.querySelector("#pv") && document.querySelector("#pv").shadowRoot && document.querySelector("#pv").shadowRoot.querySelector(".mon .panel .ppl .tile")');
       const view = await api(run, 'GET', '/api/players/view');
       const drawn = await page.evaluate(`(() => { const m = document.querySelector("#pv").shadowRoot.querySelector(".mon").cloneNode(true);
@@ -638,6 +640,228 @@ describe('the GM page shows things on the players\' screen', { skip: browserSkip
       await shot(page, 'walk-1920');
       assert.deepStrictEqual(p.errors, []);
       assert.strictEqual(await page.evaluate('document.documentElement.scrollWidth <= window.innerWidth'), true, 'nothing wider than the window');
+    });
+  });
+});
+
+// plan 6a Task 7: Move them and Fight here, by real input only (page.click, page.type, page.key). Changed on
+// purpose by Task 7 fix round 1 / review I1: a place the Plan has a beat or hub spot for is that beat (The Chapel
+// Yard is Dawn's spot, The Gate its beats); only a place with no Plan beat gets a place beat of its own.
+describe('Move them and Fight here in a browser', { skip: browserSkip() }, () => {
+  const YARD = 'Locations/The Chapel Yard.md';
+  const NORTH = 'Locations/North/index.md';
+  const ADA = PARTY[0];
+  const beat = (key) => `[id="beat:${key}"]`;
+  const stateOf = async (run) => (await api(run, 'GET', '/api/state')).state;
+
+  it('the party moves to a Plan place, a place of its own, a typed one by its explicit choice, back, and fights at a place', async () => {
+    const run = await start(FIXTURE, 'Session 02 - The Test');
+    const { model } = await api(run, 'GET', '/api/model');
+    const [gate, , hub, gate2] = model.beats;
+    const yardSpot = hub.spots.find((x) => x.note === YARD).key;
+    await withPage({ width: 1449, height: 900 }, async (page) => {
+      await page.goto(`${run.base}?probe=1`);
+      await settled(page);
+      assert.strictEqual(await page.evaluate('document.querySelector("#handover .where-party")'), null);
+      await page.click(`${beat(gate.key)} [data-all]`);
+      await settled(page);
+      await page.waitFor('document.querySelector("#handover .where-party input[data-moveg]")');
+      // review M1 (two notes both called "index" carry their folders) is checked in the Move list's own test below
+      assert.match(await page.evaluate('document.querySelector("#handover .where-party li").textContent'), /Ada, Ben at The Gate/);
+      // "chapel yard" is The Chapel Yard: the Plan's hub spot, not a place beat
+      await page.click('#handover input[data-moveg]');
+      await page.type('chapel yard');
+      await page.waitFor('document.querySelector("#handover [data-movepick]")');
+      assert.strictEqual(await page.evaluate('document.querySelector("#handover [data-mhits] button").textContent'), 'The Chapel Yard');
+      assert.match(await page.evaluate('document.querySelector("#handover [data-mhits] button:last-child").textContent'), /^\+ New place: chapel yard$/);
+      await page.key('Enter');
+      await settled(page);
+      let s = await stateOf(run);
+      assert.deepStrictEqual(s.positions[ADA], { beat: hub.key, spot: yardSpot });
+      assert.ok(!s.improvised.length, 'no place beat');
+      assert.ok(s.events.some((e) => e.text === `Ada, Ben move to The Chapel Yard (the Plan's beat: ${hub.title} · The Chapel Yard).`));
+      // "north": a place no Plan beat has, so it gets its own place beat
+      await page.waitFor(`document.querySelector('${beat(hub.key)} input[data-moveg]')`);
+      await page.click(`${beat(hub.key)} input[data-moveg]`);
+      await page.type('north');
+      await page.waitFor(`document.querySelector('${beat(hub.key)} [data-movepick]')`);
+      await page.key('Enter');
+      await settled(page);
+      s = await stateOf(run);
+      const northKey = model.placeKeys[NORTH];
+      assert.strictEqual(s.positions[ADA].beat, northKey);
+      await page.waitFor(`document.querySelector('${beat(northKey)}')`);
+      // a name no place has: Enter makes nothing; the explicit choice makes the new place
+      await page.click(`${beat(northKey)} input[data-moveg]`);
+      await page.type('Rusty Anchor');
+      await page.key('Enter');
+      await page.sleep(200);
+      s = await stateOf(run);
+      assert.ok(!s.improvised.some((i) => i.newPlace), 'Enter never makes a new place');
+      await page.waitFor(`document.querySelector('${beat(northKey)} [data-movenew]')`);
+      await page.click(`${beat(northKey)} [data-movenew]`);
+      await settled(page);
+      s = await stateOf(run);
+      const typed = s.improvised.find((i) => i.newPlace);
+      assert.strictEqual(typed && typed.title, 'Rusty Anchor');
+      assert.strictEqual(s.positions[ADA].beat, typed.key);
+      const view = await api(run, 'GET', '/api/players/view');
+      assert.strictEqual(view.panels[0].caption, 'Rusty Anchor');
+      // "gate": the Plan's Gate beat not yet visited (Scene 4)
+      await page.click(`${beat(typed.key)} input[data-moveg]`);
+      await page.type('gate');
+      await page.waitFor(`document.querySelector('${beat(typed.key)} [data-movepick]')`);
+      await page.key('Enter');
+      await settled(page);
+      s = await stateOf(run);
+      assert.strictEqual(s.positions[ADA].beat, gate2.key);
+      await page.click(`${beat(typed.key)} [data-unplace]`);
+      await page.click(`${beat(typed.key)} [data-unplace]`);
+      await settled(page);
+      s = await stateOf(run);
+      assert.ok(!s.improvised.some((i) => i.newPlace), 'taken back');
+      // Fight here on The Chapel Yard's tile: the fight is on the Plan's hub beat, with its planned foes
+      await page.click(`#places [data-fplace="${YARD}"]`);
+      await page.waitFor(`(() => { const p = ${PROBE}; return p && p.fight && p; })()`);
+      s = await stateOf(run);
+      assert.strictEqual(s.fight.beat, hub.key);
+      assert.ok(!s.improvised.some((i) => i.place === YARD), 'no place beat');
+      assert.ok(!s.events.some((e) => e.text === 'Improvised beat.'), 'no Improvised beat line');
+      assert.strictEqual(s.positions[ADA].beat, gate2.key, 'Fight here moves nobody');
+      assert.deepStrictEqual((await probe(page)).errors, []);
+    });
+  });
+
+  // final review P-A1 and P-A2, by real input: one list (the page's own, no datalist), closed by Esc and by a press
+  // outside, the typed words kept
+  it('the Move list is the page\'s own, and Esc or a press outside closes it', async () => {
+    const run = await start(FIXTURE, 'Session 02 - The Test');
+    const { model } = await api(run, 'GET', '/api/model');
+    const [gate] = model.beats;
+    await withPage({ width: 1449, height: 900 }, async (page) => {
+      await page.goto(`${run.base}?probe=1`);
+      await settled(page);
+      await page.click(`${beat(gate.key)} [data-all]`);
+      await settled(page);
+      await page.waitFor('document.querySelector("#handover .where-party input[data-moveg]")');
+      assert.strictEqual(await page.evaluate('document.querySelectorAll("input[data-moveg][list], datalist").length'), 0, 'no list attribute, no datalist');
+      // review M1: two notes both called "index" carry their folders
+      await page.click('#handover input[data-moveg]');
+      await page.type('orth');
+      await page.waitFor('document.querySelector("#handover [data-movepick]")');
+      const options = await page.evaluate('Array.from(document.querySelectorAll("#handover [data-movepick]"), (o) => o.textContent)');
+      // changed on purpose (final review follow-up): a folder note goes by its folder, so the two no longer clash
+      assert.ok(options.includes('North') && !options.some((o) => /index/.test(o)), options.join(', '));
+      await page.key('Escape');
+      assert.strictEqual(await page.evaluate('document.querySelectorAll("#handover [data-mhits] button").length'), 0, 'Esc: no list');
+      assert.deepStrictEqual(await page.evaluate('[document.activeElement.matches("#handover input[data-moveg]"), document.activeElement.value]'), [true, 'orth'], 'focus and words stay');
+      // the list opens again on typing; a press on the jot box below closes it, and lands there
+      await page.type('x');
+      await page.waitFor('document.querySelector("#handover [data-mhits] button")');
+      const r = await page.click('#hjot');
+      assert.strictEqual(r.hit, true, 'nothing covers the jot box');
+      assert.strictEqual(await page.evaluate('document.querySelectorAll("#handover [data-mhits] button").length'), 0, 'a press outside: no list');
+      assert.strictEqual(await page.evaluate('document.activeElement.id'), 'hjot', 'the press did what it says');
+      assert.strictEqual(await page.evaluate('document.querySelector("#handover input[data-moveg]").value'), 'orthx', 'the words stay');
+      // re-review (minor 1): pressing back into the box, words still in it, opens its list again
+      await page.click('#handover input[data-moveg]');
+      await page.waitFor('document.querySelectorAll("#handover [data-mhits] button").length > 0');
+      assert.ok((await page.evaluate('Array.from(document.querySelectorAll("#handover [data-mhits] button"), (b) => b.textContent)')).length > 0, 'the list is back');
+      const s = (await api(run, 'GET', '/api/state')).state;
+      assert.strictEqual(s.positions[ADA].beat, gate.key, 'nobody moved');
+      assert.deepStrictEqual((await probe(page)).errors, []);
+    });
+  });
+
+  // final review P4.5: after Move them the sheet shows where they went
+  it('Move them brings the beat they went to into view', async () => {
+    const run = await start(FIXTURE, 'Session 02 - The Test');
+    const { model } = await api(run, 'GET', '/api/model');
+    const [gate, , , gate2] = model.beats;
+    await withPage({ width: 1449, height: 700 }, async (page) => {
+      await page.goto(`${run.base}?probe=1`);
+      await settled(page);
+      await page.click(`${beat(gate.key)} [data-all]`);
+      await settled(page);
+      const inView = (key) => page.evaluate(`(() => { const e = document.getElementById(${JSON.stringify(`beat:${key}`)}); if (!e) return null;
+        const h = e.querySelector('h2, h3') || e; const r = h.getBoundingClientRect(); const top = document.querySelector('.top').getBoundingClientRect().bottom;
+        return r.top >= top - 1 && r.bottom <= innerHeight; })()`);
+      const moveTo = async (from, text, pick) => {
+        await page.click(`${beat(from)} input[data-moveg]`);
+        await page.type(text);
+        await page.waitFor(`document.querySelector('${beat(from)} ${pick}')`);
+        if (pick === '[data-movenew]') await page.click(`${beat(from)} [data-movenew]`); else await page.key('Enter');
+        await settled(page);
+      };
+      await moveTo(gate.key, 'gate', '[data-movepick]');
+      assert.strictEqual((await stateOf(run)).positions[ADA].beat, gate2.key);
+      await page.waitFor(`document.getElementById(${JSON.stringify(`beat:${gate2.key}`)})`);
+      assert.strictEqual(await inView(gate2.key), true, 'the Plan beat they went to is in view');
+      await moveTo(gate2.key, 'Rusty Anchor', '[data-movenew]');
+      const typed = (await stateOf(run)).improvised.find((i) => i.newPlace);
+      await page.waitFor(`document.getElementById(${JSON.stringify(`beat:${typed.key}`)})`);
+      assert.strictEqual(await inView(typed.key), true, 'the new place is in view');
+      // and back up to The Gate's first beat, far above
+      await moveTo(typed.key, 'gate', '[data-movepick]');
+      const at = (await stateOf(run)).positions[ADA].beat;
+      assert.strictEqual(await inView(at), true, `the beat ${at} is in view`);
+      assert.deepStrictEqual((await probe(page)).errors, []);
+    });
+  });
+
+  // final review O2 and P4.7, by real input: Fight here on a Plan place takes the beat where the focused group
+  // stands; with nobody there it ticks nobody, the fight reads as the place, and the group is offered on Add
+  it('Fight here takes the beat the party stands at; with nobody there it ticks nobody and offers them on Add', async () => {
+    const GATE_NOTE = 'Locations/The Gate.md';
+    const run = await start(FIXTURE, 'Session 02 - The Test');
+    const { model } = await api(run, 'GET', '/api/model');
+    const [gate, , , gate2] = model.beats;
+    assert.strictEqual(gate.key, 'b-d5e382792a');
+    await withPage({ width: 1449, height: 900 }, async (page) => {
+      await page.goto(`${run.base}?probe=1`);
+      await settled(page);
+      await page.click(`${beat(gate.key)} [data-all]`);
+      await settled(page);
+      // Ada and Ben at The Gate: Fight here on it is that beat (not the unvisited Scene 4), with its own foes
+      await page.click(`#places [data-fplace="${GATE_NOTE}"]`);
+      await page.waitFor(`(() => { const p = ${PROBE}; return p && p.fight && p; })()`);
+      let s = await stateOf(run);
+      assert.strictEqual(s.fight.beat, gate.key);
+      const names = s.fight.rows.filter((r) => r.kind !== 'pc' && r.kind !== 'lair').map((r) => r.name);
+      assert.deepStrictEqual(names.sort(), ['Brother Ash', 'Frost Wolf', 'Frost Wolf', 'Frost Wolf', 'Lucan Grey']);
+      assert.deepStrictEqual(s.fight.rows.filter((r) => r.kind === 'pc').map((r) => r.in), [true, true], 'both stand there');
+      await page.click('#fEnd');
+      await page.click('#fEnd');
+      await page.waitFor(`(() => { const p = ${PROBE}; return p && !p.fight && p; })()`);
+      await settled(page);
+      // the party moves to North, a place of its own; Fight here on The Gate: nobody stands there
+      await page.click(`${beat(gate.key)} input[data-moveg]`);
+      await page.type('north');
+      await page.waitFor(`document.querySelector('${beat(gate.key)} [data-movepick]')`);
+      await page.key('Enter');
+      await settled(page);
+      const northKey = model.placeKeys['Locations/North/index.md'];
+      s = await stateOf(run);
+      assert.strictEqual(s.positions[ADA].beat, northKey);
+      await page.waitFor(`document.getElementById(${JSON.stringify(`beat:${northKey}`)})`);
+      const head = await page.evaluate(`(() => { const e = document.getElementById(${JSON.stringify(`beat:${northKey}`)}); const h = e.querySelector('h2, h3, h4'); return h ? h.textContent : ''; })()`);
+      assert.match(head, /North/, `the beat's title: ${head}`);
+      assert.doesNotMatch(head, /\bindex\b/);
+      await page.click(`#places [data-fplace="${GATE_NOTE}"]`);
+      await page.waitFor(`(() => { const p = ${PROBE}; return p && p.fight && p; })()`);
+      s = await stateOf(run);
+      assert.strictEqual(s.fight.beat, gate2.key, 'nobody stands at The Gate: the first unvisited beat there');
+      assert.deepStrictEqual(s.fight.rows.filter((r) => r.kind === 'pc').map((r) => r.in), [false, false], 'nobody is ticked');
+      assert.deepStrictEqual(s.fight.groups, [gate2.key]);
+      await page.waitFor('document.querySelector("#side .fin")');
+      const fin = await page.evaluate('document.querySelector("#side .fin").textContent');
+      assert.match(fin, /The Gate/, 'the fight reads as the place');
+      assert.doesNotMatch(fin, /Ada|North/, 'not as the focused group\'s own place');
+      // North's note is North/index.md with no name: its beat and the Add line say North, never "index"
+      assert.strictEqual(s.improvised.find((i) => i.key === northKey).title, 'North');
+      const adds = await page.evaluate('Array.from(document.querySelectorAll("#side [data-faddgroup]"), (b) => b.textContent)');
+      assert.deepStrictEqual(adds, ['+ Ada, Ben at North'], 'the focused group is on the Add line');
+      assert.deepStrictEqual((await probe(page)).errors, []);
     });
   });
 });

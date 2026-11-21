@@ -6,6 +6,7 @@ const http = require('node:http');
 const os = require('node:os');
 const path = require('node:path');
 const { createTableServer, listenLocal } = require('../lib/run-sheet/server');
+const { SITE_TOOL_FROM } = require('../lib/run-sheet/side-colours');
 const { listSessions, pickSession, stateIdOf } = require('../lib/run-sheet/sessions');
 const RS = require('../lib/run-sheet/web/state');
 const { readRunSheet } = require('../lib/run-sheet/read');
@@ -457,7 +458,8 @@ describe('run sheet server', () => {
     await markFirst(run);
     const r = await req(run.port, 'GET', '/api/record');
     assert.strictEqual(r.status, 200);
-    assert.strictEqual((r.json.text.match(/^## /gm) || []).length, 16);
+    // 18 since the Task 13 proof added Places the party went (Ant's ruling: a place the players go to is published); 17 since Task 5 added Sides set
+    assert.strictEqual((r.json.text.match(/^## /gm) || []).length, 18);
     assert.match(r.json.text, /## Points landed\n\n- The Gate: the tracks/);
   });
 
@@ -1389,5 +1391,106 @@ describe('run sheet server: the players\' half', () => {
     }
     assert.strictEqual((await req(run.port, 'POST', '/api/players/view', { body: {} })).status, 405);
     assert.strictEqual((await req(run.port, 'GET', '/players/nothing-here.js')).text, 'Not found');
+  });
+});
+
+// plan 6a Task 8: POST /api/settings/side-colours
+describe('the side-colours setting', () => {
+  const YAML = require('yaml');
+  const OLD_POLL = { ok: true, ours: false, spec: 'gm-apprentice-publish@1.70.40', installedBefore: '1.70.40' };
+  const settingsOf = (vault) => YAML.parse(fs.readFileSync(path.join(vault, '_meta', 'vault-config.yaml'), 'utf8'));
+  const withSite = (vault) => {
+    const cfg = settingsOf(vault);
+    cfg.player_site = { ...cfg.player_site, folder: 'site' };
+    fs.writeFileSync(path.join(vault, '_meta', 'vault-config.yaml'), YAML.stringify(cfg));
+    fs.mkdirSync(path.join(vault, 'site'));
+  };
+  const post = (run, body) => req(run.port, 'POST', '/api/settings/side-colours', { body });
+
+  it('POST writes the vault setting', async () => {
+    const vault = copyOf();
+    const run = await start(vault);
+    const own = { pc: '#112233', ally: '#223344', foe: '#334455', neutral: '#445566' };
+    const r = await post(run, { preset: 'own', own });
+    assert.strictEqual(r.status, 200, r.text);
+    const cfg = settingsOf(vault);
+    assert.strictEqual(cfg.vault.run_sheet.side_colours, 'own');
+    assert.strictEqual(cfg.vault.run_sheet.own_colours.foe, '#334455');
+    const m = await req(run.port, 'GET', '/api/model');
+    assert.deepStrictEqual(m.json.model.sideColours, { preset: 'own', own });
+    const back = await post(run, { preset: 'colour_blind' });
+    assert.strictEqual(back.status, 200, back.text);
+    assert.strictEqual(settingsOf(vault).vault.run_sheet.side_colours, 'colour_blind');
+    assert.strictEqual(settingsOf(vault).vault.run_sheet.own_colours.pc, '#112233', 'own colours are kept');
+  });
+  it('a write is announced to an open page, which re-reads the model', async () => {
+    const run = await start(copyOf());
+    const events = listen(run.port);
+    await wait(50);
+    const r = await post(run, { preset: 'colour_blind' });
+    assert.strictEqual(r.status, 200, r.text);
+    await waitFor(() => events.events.some((e) => e.event === 'side-colours'));
+    events.close();
+  });
+  it('POST with an unknown preset is 400', async () => {
+    const vault = copyOf();
+    const run = await start(vault);
+    const before = fs.readFileSync(path.join(vault, '_meta', 'vault-config.yaml'), 'utf8');
+    assert.strictEqual((await post(run, { preset: 'neon' })).status, 400);
+    assert.strictEqual((await post(run, { preset: 'own', own: { pc: 'red' } })).status, 400);
+    assert.strictEqual((await post(run, {})).status, 400);
+    assert.strictEqual(fs.readFileSync(path.join(vault, '_meta', 'vault-config.yaml'), 'utf8'), before);
+  });
+  it('POST on a site pinned to an older tool is 409 and writes nothing', async () => {
+    const vault = copyOf();
+    withSite(vault);
+    const before = fs.readFileSync(path.join(vault, '_meta', 'vault-config.yaml'), 'utf8');
+    const run = await start(vault, 'Session 02 - The Test', { deps: { pinCheck: () => OLD_POLL } });
+    const r = await post(run, { preset: 'colour_blind' });
+    assert.strictEqual(r.status, 409);
+    assert.match(r.json.error, /gma update/);
+    assert.strictEqual(fs.readFileSync(path.join(vault, '_meta', 'vault-config.yaml'), 'utf8'), before);
+  });
+  it('POST when the site tool cannot be checked is 409 and writes nothing', async () => {
+    const vault = copyOf();
+    withSite(vault);
+    const before = fs.readFileSync(path.join(vault, '_meta', 'vault-config.yaml'), 'utf8');
+    const run = await start(vault, 'Session 02 - The Test', { deps: { pinCheck: () => { throw new Error('no network\nmore'); } } });
+    const r = await post(run, { preset: 'colour_blind' });
+    assert.strictEqual(r.status, 409);
+    assert.match(r.json.error, /could not be checked \(no network\).*nothing was written/);
+    assert.strictEqual(fs.readFileSync(path.join(vault, '_meta', 'vault-config.yaml'), 'utf8'), before);
+  });
+  it('a partial own, and own colours under another preset, write what was given', async () => {
+    const vault = copyOf();
+    const run = await start(vault);
+    assert.strictEqual((await post(run, { preset: 'own', own: { foe: '#AA0000' } })).status, 200);
+    let c = settingsOf(vault).vault.run_sheet;
+    assert.strictEqual(c.own_colours.foe, '#aa0000');
+    assert.strictEqual(c.own_colours.pc, undefined, 'only the given colour is written');
+    assert.strictEqual((await post(run, { preset: 'pens', own: { pc: '#010203' } })).status, 200);
+    c = settingsOf(vault).vault.run_sheet;
+    assert.strictEqual(c.side_colours, 'pens');
+    assert.strictEqual(c.own_colours.pc, '#010203');
+    assert.strictEqual(c.own_colours.foe, '#aa0000');
+  });
+  it('POST when the model cannot be re-read after the write answers 200 with what the file now holds', async () => {
+    const vault = copyOf();
+    let broken = false;
+    const run = await start(vault, 'Session 02 - The Test', { deps: { readRunSheet: (...a) => { if (broken) throw new Error('boom'); return readRunSheet(...a); } } });
+    broken = true;
+    const r = await post(run, { preset: 'own', own: { foe: ' #AA0000 ' } });
+    assert.strictEqual(r.status, 200, r.text);
+    assert.strictEqual(r.json.note, 'saved, but the sheet could not be re-read');
+    assert.deepStrictEqual(r.json.sideColours, { preset: 'own', own: { pc: '#2c7739', ally: '#7a3fb0', foe: '#aa0000', neutral: '#646870' } });
+  });
+  it('POST on a site with a current tool, or on a vault with no site, writes', async () => {
+    const vault = copyOf();
+    withSite(vault);
+    const run = await start(vault, 'Session 02 - The Test', { deps: { pinCheck: () => ({ ok: true, ours: false, spec: `gm-apprentice-publish@${SITE_TOOL_FROM}`, installedBefore: SITE_TOOL_FROM }) } });
+    assert.strictEqual((await post(run, { preset: 'colour_blind' })).status, 200);
+    // no site: the gate is not asked, so an old answer changes nothing
+    const bare = await start(copyOf(), 'Session 02 - The Test', { deps: { pinCheck: () => OLD_POLL } });
+    assert.strictEqual((await post(bare, { preset: 'colour_blind' })).status, 200);
   });
 });

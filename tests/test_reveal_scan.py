@@ -410,6 +410,36 @@ class TableLogSections(unittest.TestCase):
                         "NPCs/Vex.md": VEX})
         self.assertEqual([r.path for r in res.rows], ["NPCs/Vex.md"])
 
+    def test_unpublished_place_under_improvised_beats_is_offered(self) -> None:
+        # the run sheet links a known place the players were at tonight (moved there, or a fight there) under
+        # Improvised beats (plan 6a Task 7 fix round 1, Ant's ruling): wrap-up must offer it for publishing
+        cellar = "---\ntype: location\npublish: false\n---\n\n# Secret Cellar\n"
+        body = ("## Where everyone ended\n\n- [[Ada]]: The Docks\n\n"
+                "## Improvised beats\n\n- New place: The Docks\n- [[Secret Cellar]]\n")
+        res = run_scan({**with_log(body), "Locations/Secret Cellar.md": cellar})
+        self.assertEqual([(r.path, r.published) for r in res.rows], [("Locations/Secret Cellar.md", False)])
+        # a typed place is plain words: it names no note, so it gives no row
+        self.assertNotIn("The Docks", [r.path for r in res.rows])
+
+    def test_unpublished_place_the_party_went_through_is_offered(self) -> None:
+        # Task 13 proof (Ant's ruling: a place the players go to becomes visible and published): a Plan place the
+        # party stood at and moved on from is linked under Places the party went, and wrap-up offers it
+        light = "---\ntype: location\npublish: false\n---\n\n# Gannet Head Light\n"
+        body = ("## Where everyone ended\n\n- [[Ada]]: [[The Quay]]\n\n"
+                "## Places the party went\n\n- [[Gannet Head Light]]\n- [[Places/North/index|North]]\n")
+        north = "---\ntype: location\npublish: false\n---\n\n# North\n"
+        res = run_scan({**with_log(body), "Locations/Gannet Head Light.md": light, "Places/North/index.md": north})
+        self.assertEqual(sorted((r.path, r.published) for r in res.rows),
+                         [("Locations/Gannet Head Light.md", False), ("Places/North/index.md", False)])
+
+    def test_a_map_spot_written_as_words_is_not_offered(self) -> None:
+        # scoped check: a hub spot whose note is a GM map is written as plain words, never a link: nothing to offer
+        gm_map = "---\ntype: location\ndoc_type: map\npublish: false\n---\n\n# The Chapel Yard\n"
+        body = ("## Where everyone ended\n\n- [[Ben]]: Dawn (hub) (The Chapel Yard)\n\n"
+                "## Places the party went\n\n- [[The Gate]]\n")
+        res = run_scan({**with_log(body), "Locations/The Chapel Yard.md": gm_map})
+        self.assertNotIn("Locations/The Chapel Yard.md", [r.path for r in res.rows])
+
     def test_every_read_section_gives_a_row(self) -> None:
         for name in rv.TABLE_LOG_READ:
             with self.subTest(name=name):

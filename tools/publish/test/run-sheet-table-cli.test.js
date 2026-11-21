@@ -149,7 +149,11 @@ describe('gm-publish table: serving', () => {
   });
 
   it('no --party serves with the no-party warning counted', async () => {
-    const a = await start({ vault: vaultCopy() });
+    // a Plan with no roster, and no --party: the sheet has no one to put on it
+    const vault = vaultCopy();
+    const planFile = path.join(vault, 'Chapters/Chapter 1/Sessions/Session 02/Session 02 - The Test - Plan.md');
+    fs.writeFileSync(planFile, fs.readFileSync(planFile, 'utf8').replace(/^- \*\*\[\[(Ada Moss|Ben Hart)\]\]\*\*.*\n/gm, ''));
+    const a = await start({ vault });
     assert.match(a.lines.join('\n'), /\d+ prep notes? on the page/);
     const res = await fetch(`http://127.0.0.1:${a.port}/api/model`);
     const body = await res.json();

@@ -90,12 +90,56 @@ describe('run sheet handouts, party and people', () => {
   it('inline open threads read, a dash reads empty', () => {
     const { index, body } = setup();
     const [ada, ben] = readPcs(body, index, [ADA, BEN]).pcs;
-    assert.strictEqual(ada.thread, 'The tracks at the gate');
+    // Ada's label is bare with two bullets: the first reads, with the "(+N more)" suffix (step 6a, task 2 brief)
+    assert.strictEqual(ada.thread, 'The tracks at the gate (+1 more)');
     assert.strictEqual(ben.thread, '');
     const { dir } = setup();
     fs.writeFileSync(path.join(dir, BEN), readText(path.join(dir, BEN)).replace('**Open threads:** —', '**Open threads:** the sealed letter'));
     const i2 = buildIndex(dir);
     assert.strictEqual(readPcs(body, i2, [BEN]).pcs[0].thread, 'the sealed letter');
+  });
+
+  describe('threadOf shapes, copied from the Dead End copy', () => {
+    const { threadOf } = require('../lib/run-sheet/party');
+    it('bare label line: first sibling bullet and a count of the rest', () => {
+      const body = [
+        '**Gizmos:** one spent in Session 8.',
+        '**Open threads:**',
+        '- The [[Corvid Financial]] debt and [[Marek Solano]] working his file.',
+        '- **The ship\'s identity** rests on registered paperwork.',
+        '- **Roberts\'s favour**.',
+        '- His swarm sits dormant inside the [[Apex Bio Cleaning Van]].',
+        '',
+        '**Knows (exclusive):** Holds the clearest picture.',
+      ].join('\n');
+      assert.strictEqual(threadOf(body), 'The [[Corvid Financial]] debt and [[Marek Solano]] working his file. (+3 more)');
+    });
+    it('list-item label with nested bullets: first, then the count; the next sibling ends it', () => {
+      const body = [
+        '- **Carrying:** kit.',
+        '- **Open threads:**',
+        '    - Hunted by the bounty.',
+        '    - A quiet debt.',
+        '    - 120 credits taken.',
+        '- **Knows (exclusive):**',
+        '    - the station enforces selectively.',
+      ].join('\n');
+      assert.strictEqual(threadOf(body), 'Hunted by the bounty. (+2 more)');
+    });
+    it('list-item label with one nested bullet has no suffix', () => {
+      const body = '- **Open threads:**\n    - The portable bounty.\n- **Knows:** things.';
+      assert.strictEqual(threadOf(body), 'The portable bounty.');
+    });
+    it('list-item label with a value reads the value', () => {
+      assert.strictEqual(threadOf('- **Open threads:** the sealed letter\n- **Knows:** x'), 'the sealed letter');
+    });
+    it('a dash value is empty', () => {
+      assert.strictEqual(threadOf('**Open threads:** —\n- a later bullet'), '');
+      assert.strictEqual(threadOf('- **Open threads:** —\n    - nested'), '');
+    });
+    it('a list-item label with no nested bullets is empty', () => {
+      assert.strictEqual(threadOf('- **Open threads:**\n- **Knows:** x'), '');
+    });
   });
 
   it('a line for no party pc is kept as unmatched', () => {

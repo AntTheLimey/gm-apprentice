@@ -48,7 +48,8 @@ const skeleton = () => FM + R.TABLE_LOG_SECTIONS.map((s) => `\n## ${s}\n${s === 
 describe('the Table Log writer', () => {
   it("the sections are vault_write's", () => {
     assert.deepStrictEqual(R.TABLE_LOG_SECTIONS, pySections());
-    assert.strictEqual(R.TABLE_LOG_SECTIONS.length, 16);
+    // 18 since the Task 13 proof added Places the party went (Ant's ruling: a place the players go to is published); 17 since Task 5 added Sides set
+    assert.strictEqual(R.TABLE_LOG_SECTIONS.length, 18);
     assert.match(PY, /TABLE_LOG_VITALS_HEAD = "\\n\| Who \| HP \| Conditions \|\\n\| --- \| --- \| --- \|\\n"/);
   });
 
@@ -220,7 +221,8 @@ describe('the Table Log writer', () => {
     const s = run([{ type: 'endSet', vitals: { [ADA]: { hp: 9, conditions: 'Winded' }, 'Characters/NPCs/Guard.md': { hp: 4 }, 'Characters/NPCs/Guard.md#2': { hp: 7 } } }]);
     const b = R.tableLogBody(m, s, OPTS);
     const r = readTableLog(b);
-    assert.deepStrictEqual([...r.sections.keys()].length, 16);
+    // 18 since the Task 13 proof added Places the party went (Ant's ruling: a place the players go to is published); 17 since Task 5 added Sides set
+    assert.deepStrictEqual([...r.sections.keys()].length, 18);
     assert.deepStrictEqual(r.vitals.map((v) => [v.who, v.hpNow, v.hpMax, v.conditions]), [
       ['Ada Moss', 9, 30, 'Winded'], ['Guard', 4, 11, ''], ['Guard', 7, 11, '']]);
     assert.deepStrictEqual(r.vitals.map((v) => v.copy), [null, null, 2]);
@@ -247,7 +249,8 @@ describe('the Table Log writer', () => {
     assert.deepStrictEqual(rows, ['| [[Ada Moss]] | 5/3/30 | Winded |', '| [[Ben Hart]] | 7 /x/20 |  |']);
     const r = readTableLog(b);
     assert.deepStrictEqual(r.vitals.map((v) => [v.who, v.conditions]), [['Ada Moss', 'Winded'], ['Ben Hart', '']]);
-    assert.strictEqual([...r.sections.keys()].length, 16);
+    // 18 since the Task 13 proof added Places the party went (Ant's ruling: a place the players go to is published); 17 since Task 5 added Sides set
+    assert.strictEqual([...r.sections.keys()].length, 18);
   });
 
   it('an ambiguous stem is linked by path', () => {
@@ -438,6 +441,25 @@ describe('the Table Log writer: fights (plan 5b decision 17)', () => {
     assert.strictEqual(log[4], '- 21:06 The Gate: Fight ends before the first turn: Ada Moss 22/30, Brother Ash 9/9, Frost Wolf 1 0/15 (Out), Frost Wolf 2 15/15, Frost Wolf 3 15/15, Lucan Grey 16/16.');
   });
 
+  it('an add that was taken back leaves no trace in any section (plan 6a F7)', () => {
+    const addBouncers = (s) => {
+      const id = 'j-1';
+      const j = M.joinRows({ model, derived: RS.derive(model, s), state: s, fight: s.fight, add: { name: 'Bouncer', count: 13 }, idBase: id });
+      return { type: 'fightJoin', id, rows: j.rows, tick: j.tick, groups: j.groups, thresholds: j.thresholds, label: 'Bouncer ×13' };
+    };
+    const s = play([
+      { type: 'move', pc: ADA, to: to(GATE) },
+      start,
+      addBouncers,
+      { type: 'undoAdd', join: 'j-1' },
+      { type: 'fightEnd' },
+    ]);
+    assert.ok(s.events.some((e) => /Took back: Bouncer ×13\./.test(e.text)), 'the page keeps its line');
+    assert.ok(s.fight === null && s.fights.at(-1).rows.every((r) => !/Bouncer/.test(r.name)));
+    assert.doesNotMatch(body(s), /Bouncer|Took back/, 'the Table Log names no Bouncer');
+    assert.ok(RS.derive(model, s).log.some((l) => l.tookBack), 'derive marks the line, so the record can leave it out');
+  });
+
   it('vitals from a fight are written as hp/max (after the fight, HH:MM); kept statuses in Conditions, cleared ones not', () => {
     let fid;
     const s = play([
@@ -496,5 +518,274 @@ describe('the Table Log writer: fights (plan 5b decision 17)', () => {
     ]);
     assert.ok(r.sections.get('Log').includes('Fight starts at The Gate.'));
     assert.strictEqual(R.recordBodyOf(text), R.recordBodyOf(R.rewriteTableLog(text, body(s))), 'stable');
+  });
+});
+
+// plan 6a Task 5 (review P-S2): a side the GM set lasts past the session, through the Table Log
+describe('the sides the GM set', () => {
+  const M = require('../lib/run-sheet/web/fight-math');
+  const os = require('node:os');
+  const { writeSettings } = require('./helpers/vault-files');
+  const { after } = require('node:test');
+  const made = [];
+  after(() => { for (const d of made) fs.rmSync(d, { recursive: true, force: true }); });
+  const ASH = 'Characters/NPCs/Brother Ash.md';
+  const LUCAN = 'Characters/NPCs/Lucan Grey.md';
+  const CH1 = 'Chapters/Chapter 1';
+  const fought = (sides) => {
+    let s = RS.reduce(fresh(), { id: 'sd-1', type: 'move', pc: ADA, to: to(GATE) }, at(1));
+    const b = M.rowsForFight({ model, derived: RS.derive(model, s), state: s, beatKey: GATE.key, idBase: 'sd-2' });
+    s = RS.reduce(s, { id: 'sd-2', type: 'fightStart', beat: GATE.key, title: GATE.title, groups: b.groups, rows: b.rows, thresholds: b.thresholds }, at(2));
+    sides.forEach(([note, side], i) => {
+      const r = s.fight.rows.find((x) => x.note === note);
+      s = RS.reduce(s, { id: `sd-${3 + i}`, type: 'setSide', fight: s.fight.id, row: r.id, side }, at(3 + i));
+    });
+    return s;
+  };
+
+  it('the Table Log writes one line per note the GM set, under Sides set', () => {
+    assert.ok(R.TABLE_LOG_SECTIONS.includes(R.SIDES_SET));
+    const s = fought([[ASH, 'ally'], [LUCAN, 'neutral'], [ASH, 'foe']]);
+    const lines = sectionsOf(body(s)).get(R.SIDES_SET).trim().split('\n');
+    assert.deepStrictEqual(lines, ['- [[Characters/NPCs/Brother Ash]]: foe', '- [[Characters/NPCs/Lucan Grey]]: neutral']);
+    assert.strictEqual(sectionsOf(body(fresh())).get(R.SIDES_SET), '', 'nothing set: a bare heading');
+  });
+
+  it('a side set is carried to the next session through the Table Log', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rs-sides-'));
+    made.push(dir);
+    fs.cpSync(FIXTURE, dir, { recursive: true });
+    writeSettings(dir, { 'vault.system': 'dnd5e' });
+    const write = (rel, text) => fs.writeFileSync(path.join(dir, rel), text);
+    const S2 = `${CH1}/Sessions/Session 02/Session 02 - The Test.md`;
+    const S2_LOG = `${CH1}/Sessions/Session 02/Session 02 - The Test - Table Log.md`;
+    const P3 = `${CH1}/Sessions/Session 03/Session 03 - Next - Plan.md`;
+    write(S2, fs.readFileSync(path.join(dir, S2), 'utf8').replace('status: planned', 'status: played'));
+    const realLink = (p) => `[[${path.posix.basename(p, '.md')}]]`;
+    const s = fought([[ASH, 'ally'], [LUCAN, 'neutral']]);
+    write(S2_LOG, R.rewriteTableLog(fs.readFileSync(path.join(dir, S2_LOG), 'utf8'), R.tableLogBody(model, s, { linkFor: realLink, timeOf })));
+    let m = readRunSheet(dir, P3, { party: [ADA, BEN] });
+    assert.deepStrictEqual(m.sidesCarried, { [ASH]: 'ally', [LUCAN]: 'neutral' });
+    // a later session's line wins; a line naming no side or no note warns and is passed over
+    const log = path.join(dir, S2_LOG);
+    const text = fs.readFileSync(log, 'utf8');
+    fs.writeFileSync(log, text.replace(/## Sides set\n\n[\s\S]*?\n\n/, '## Sides set\n\n- [[Brother Ash]]: ally\n- [[Brother Ash]]: foe\n- [[Lucan Grey]]: friendly\n- [[Nobody At All]]: ally\n\n'));
+    m = readRunSheet(dir, P3, { party: [ADA, BEN] });
+    assert.deepStrictEqual(m.sidesCarried, { [ASH]: 'foe' }, 'the last line for a note wins');
+    const warned = m.warnings.filter((w) => w.kind === 'table-log' && /Sides set/.test(w.text)).map((w) => w.text);
+    assert.strictEqual(warned.length, 2, warned.join('\n'));
+    assert.ok(warned.some((w) => w.includes('friendly')));
+    assert.ok(warned.some((w) => w.includes('Nobody At All')));
+  });
+
+  it('a later Table Log wins over an earlier one; a session not played is not read', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rs-sides-'));
+    made.push(dir);
+    fs.cpSync(FIXTURE, dir, { recursive: true });
+    writeSettings(dir, { 'vault.system': 'dnd5e' });
+    const S1 = `${CH1}/Sessions/Session 01/Session 01 - The Start.md`;
+    const S1_LOG = `${CH1}/Sessions/Session 01/Session 01 - The Start - Table Log.md`;
+    const S2 = `${CH1}/Sessions/Session 02/Session 02 - The Test.md`;
+    const S2_LOG = `${CH1}/Sessions/Session 02/Session 02 - The Test - Table Log.md`;
+    const P3 = `${CH1}/Sessions/Session 03/Session 03 - Next - Plan.md`;
+    const logOf = (session, lines) => ['---', 'type: session-table-log', `session: "[[${session}]]"`, 'publish: false', '---', '', '# t', '',
+      `## ${R.SIDES_SET}`, '', ...lines, ''].join('\n');
+    const s1 = fs.readFileSync(path.join(dir, S1), 'utf8');
+    if (!/status: played/.test(s1)) fs.writeFileSync(path.join(dir, S1), s1.replace(/^type: session$/m, 'type: session\nstatus: played'));
+    fs.writeFileSync(path.join(dir, S1_LOG), logOf('Session 01 - The Start', ['- [[Brother Ash]]: ally', '- [[Lucan Grey]]: foe']));
+    fs.writeFileSync(path.join(dir, S2_LOG), logOf('Session 02 - The Test', ['- [[Brother Ash]]: neutral']));
+    // Session 02 is planned, not played: its log is not read
+    let m = readRunSheet(dir, P3, { party: [ADA, BEN] });
+    assert.deepStrictEqual(m.sidesCarried, { [ASH]: 'ally', [LUCAN]: 'foe' });
+    fs.writeFileSync(path.join(dir, S2), fs.readFileSync(path.join(dir, S2), 'utf8').replace('status: planned', 'status: played'));
+    m = readRunSheet(dir, P3, { party: [ADA, BEN] });
+    assert.deepStrictEqual(m.sidesCarried, { [ASH]: 'neutral', [LUCAN]: 'foe' });
+  });
+});
+
+// plan 6a Task 7: Move them to a known or a new place
+describe('places in the record', () => {
+  const YARD = 'Locations/The Chapel Yard.md';
+  const NOTES2 = new Map([...NOTES, ['The Chapel Yard', YARD]]);
+  const opts = { linkFor: R.linkFor({ resolve: (t) => NOTES2.get(t) || null }), timeOf };
+
+  it('the record writes a new place', () => {
+    const key = model.placeKeys[YARD];
+    const s = run([{ type: 'move', pc: ADA, to: to(GATE) }, { type: 'move', pc: BEN, to: to(GATE) },
+      { id: 'np1', type: 'moveGroup', pcs: [ADA], name: 'The Docks', names: ['Ada'] },
+      { type: 'moveGroup', pcs: [BEN], place: YARD, key, title: 'The Chapel Yard', names: ['Ben'] }]);
+    const sec = sectionsOf(R.tableLogBody(model, s, opts));
+    assert.strictEqual(sec.get('Where everyone ended'), '- [[Ada Moss]]: The Docks\n- [[Ben Hart]]: [[The Chapel Yard]]');
+    // review I2: a known place a PC was moved to is linked under Improvised beats too
+    assert.strictEqual(sec.get('Improvised beats'), '- New place: The Docks\n- [[The Chapel Yard]]');
+    assert.match(sec.get('Log'), /Ada moves to The Docks \(a new place\)\./);
+    assert.match(sec.get('Log'), /Ben moves to The Chapel Yard\./);
+  });
+
+  it('Fight here moves nobody: Where everyone ended names the PCs\' beat', () => {
+    const key = model.placeKeys[YARD];
+    let s = run([{ type: 'move', pc: ADA, to: to(GATE) }, { type: 'improvise', key, title: 'The Chapel Yard', place: YARD }]);
+    // changed on purpose by Ant's ruling (Task 7 fix round 1, review I2 widened): the players fought there, so the
+    // place is linked under Improvised beats, for reveal_scan to offer it for publishing
+    const idle = sectionsOf(R.tableLogBody(model, s, opts));
+    assert.strictEqual(idle.get('Improvised beats'), '- The Chapel Yard', 'no fight yet, nobody went: plain words');
+    s = run([{ id: 'fx', type: 'fightStart', beat: key, title: 'The Chapel Yard', groups: [GATE.key], rows: [], thresholds: [], backdrop: { group: GATE.key, place: YARD } }], s);
+    assert.strictEqual(sectionsOf(R.tableLogBody(model, s, opts)).get('Improvised beats'), '- [[The Chapel Yard]]', 'linked while the fight runs');
+    s = run([{ type: 'fightEnd', fight: 'fx' }], s);
+    const sec = sectionsOf(R.tableLogBody(model, s, opts));
+    assert.match(sec.get('Where everyone ended'), /^- \[\[Ada Moss\]\]: \[\[The Gate\]\]$/m);
+    assert.strictEqual(sec.get('Improvised beats'), '- [[The Chapel Yard]]', 'Fight here at a place: linked');
+  });
+});
+
+// final review follow-up: a folder note's place is titled by its folder, in the Table Log too
+describe('a folder note\'s place in the record', () => {
+  const NORTH = 'Locations/North/index.md';
+  const opts = { linkFor: R.linkFor({ resolve: (t) => NOTES.get(t) || null }), timeOf };
+
+  it('Locations/North/index.md with no name is North: its title, its Log line and its link', () => {
+    assert.strictEqual(model.placeNotes[NORTH].title, 'North');
+    const key = model.placeKeys[NORTH];
+    // as the page sends it: the title is the place's (gm.js nameOf reads it)
+    const s = run([{ type: 'move', pc: ADA, to: to(GATE) },
+      { type: 'moveGroup', pcs: [ADA], place: NORTH, key, title: model.placeNotes[NORTH].title, names: ['Ada'] }]);
+    assert.strictEqual(RS.derive(model, s).beats.find((b) => b.key === key).title, 'North');
+    const sec = sectionsOf(R.tableLogBody(model, s, opts));
+    assert.match(sec.get('Log'), /Ada moves to North\./);
+    assert.strictEqual(sec.get('Improvised beats'), '- [[Locations/North/index|North]]');
+    assert.match(sec.get('Where everyone ended'), /^- \[\[Ada Moss\]\]: \[\[Locations\/North\/index\|North\]\]$/m);
+  });
+});
+
+// Task 13 proof (Ant's ruling: a place the players go to becomes visible and published)
+describe('Places the party went', () => {
+  const os = require('node:os');
+  const LIGHT = 'Locations/Gannet Head Light.md';
+  const YARD = 'Locations/The Chapel Yard.md';
+  const NORTH = 'Locations/North/index.md';
+
+  it('Hollow Quay-shaped: the party at Gannet Head Light, then moved on: every place a PC stood at is linked, by first arrival', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rs-went-'));
+    try {
+      fs.cpSync(FIXTURE, dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, LIGHT), '---\nname: Gannet Head Light\ntype: location\npublish: false\n---\n\nThe lighthouse on the head.\n');
+      const m = readRunSheet(dir, PLAN, { party: [ADA, BEN] });
+      const notes = new Map([...NOTES, ['Gannet Head Light', LIGHT], ['The Chapel Yard', YARD], ['The Bell Tower Room', 'Locations/The Bell Tower Room.md']]);
+      const opts = { linkFor: R.linkFor({ resolve: (t) => notes.get(t) || null }), timeOf };
+      const hub = m.beats[2];
+      const yard = hub.spots.find((x) => x.note === YARD);
+      const st = RS.emptyState({ stateId: 'x', session: m.session.index, plan: PLAN });
+      const s = [
+        { type: 'moveGroup', pcs: [ADA, BEN], place: LIGHT, key: m.placeKeys[LIGHT], title: 'Gannet Head Light', names: ['Ada', 'Ben'] },
+        { type: 'move', pc: ADA, to: to(m.beats[0]) },
+        { type: 'move', pc: BEN, to: to(hub, yard.key) },
+        { type: 'moveGroup', pcs: [ADA], place: NORTH, key: m.placeKeys[NORTH], title: 'North', names: ['Ada'] },
+        { type: 'moveGroup', pcs: [ADA, BEN], name: 'The Docks', names: ['Ada', 'Ben'] },
+        { type: 'move', pc: BEN, to: to(m.beats[0]) },
+      ].reduce((acc, a, i) => RS.reduce(acc, { id: `w-${i}`, ...a }, at(i)), st);
+      const sec = sectionsOf(R.tableLogBody(m, s, opts));
+      assert.strictEqual(sec.get(R.PLACES_WENT), '- [[Gannet Head Light]]\n- [[The Gate]]\n- [[The Chapel Yard]]\n- [[Locations/North/index|North]]',
+        'the light (moved on from), the Plan\'s Gate, a hub spot, a folder note by its title; once each; never a typed place');
+      assert.match(sec.get('Improvised beats'), /New place: The Docks/);
+      assert.ok(!/Gannet Head Light/.test(sec.get('Where everyone ended')), 'nobody ended there');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  // scoped check: a hub spot whose note is a map (or a GM map half) is no place, so nothing links it for reveal_scan
+  it('The Chapel Yard as a map, Ben moved to its spot: neither section links it', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rs-went-map-'));
+    try {
+      fs.cpSync(FIXTURE, dir, { recursive: true });
+      const f = path.join(dir, YARD);
+      fs.writeFileSync(f, fs.readFileSync(f, 'utf8').replace(/\r\n/g, '\n').replace('type: location\n', 'type: location\ndoc_type: map\n'));
+      const m = readRunSheet(dir, PLAN, { party: [ADA, BEN] });
+      const hub = m.beats[2];
+      const yard = hub.spots.find((x) => x.name === 'The Chapel Yard');
+      assert.ok(yard, 'the spot keeps its words');
+      assert.strictEqual(yard.note, null, 'and carries no note');
+      const notes = new Map([...NOTES, ['The Chapel Yard', YARD]]);
+      const opts = { linkFor: R.linkFor({ resolve: (t) => notes.get(t) || null }), timeOf };
+      const st = RS.emptyState({ stateId: 'x', session: m.session.index, plan: PLAN });
+      const s = [{ type: 'move', pc: ADA, to: to(m.beats[0]) }, { type: 'move', pc: BEN, to: to(hub, yard.key) }]
+        .reduce((acc, a, i) => RS.reduce(acc, { id: `wm-${i}`, ...a }, at(i)), st);
+      const sec = sectionsOf(R.tableLogBody(m, s, opts));
+      for (const name of [R.PLACES_WENT, 'Where everyone ended']) {
+        assert.ok(!/Chapel Yard\]\]|Chapel Yard\|/.test(sec.get(name) || ''), `${name}: ${sec.get(name)}`);
+      }
+      assert.match(sec.get('Where everyone ended'), /Ben Hart\]\]: .*The Chapel Yard/, 'its words stay');
+      assert.strictEqual(sec.get(R.PLACES_WENT), '- [[The Gate]]');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  // the Undo rewrite of a roster line takes the empty form too. Undo needs a running fight and rows nobody touched,
+  // so a real night cannot undo every row a roster line names; the line is set here to pin the shared rewrite.
+  it('Undo of the only rows a roster line names leaves "Fight ends before the first turn."', () => {
+    const FM2 = require('../lib/run-sheet/web/fight-math');
+    let s = RS.reduce(fresh(), { id: 'u-1', type: 'move', pc: ADA, to: to(GATE) }, at(1));
+    const b = FM2.rowsForFight({ model, derived: RS.derive(model, s), state: s, beatKey: GATE.key, idBase: 'uf' });
+    s = RS.reduce(s, { id: 'uf', type: 'fightStart', beat: GATE.key, title: GATE.title, groups: b.groups, rows: b.rows, thresholds: b.thresholds }, at(2));
+    for (const r of s.fight.rows) if (r.in && r.kind !== 'lair') s = RS.reduce(s, { id: `ut-${r.id}`, type: 'fightTick', fight: 'uf', row: r.id, in: false }, at(3));
+    const j = FM2.joinRows({ model, derived: RS.derive(model, s), state: s, fight: s.fight, add: { name: 'Bouncer', count: 2 }, idBase: 'uj' });
+    s = RS.reduce(s, { id: 'uj', type: 'fightJoin', fight: 'uf', rows: j.rows, tick: j.tick, groups: j.groups, thresholds: j.thresholds, label: 'Bouncer ×2' }, at(4));
+    const added = s.fight.rows.filter((r) => /^Bouncer/.test(r.name)).map((r) => ({ id: r.id, text: r.name }));
+    s = JSON.parse(JSON.stringify(s));
+    s.events.push({ at: at(5), beat: GATE.key, fight: 'uf', text: 'Fight ends before the first turn: Bouncer 1, Bouncer 2.',
+      roster: { head: 'Fight ends before the first turn: ', tail: '.', items: added } });
+    s = RS.reduce(s, { id: 'uu', type: 'undoAdd', fight: 'uf', join: 'uj' }, at(6));
+    assert.strictEqual(s.events.filter((e) => /^Fight ends/.test(e.text || '')).at(-1).text, 'Fight ends before the first turn.');
+  });
+
+  it('a session where nobody moved has an empty section', () => {
+    assert.strictEqual(sectionsOf(R.tableLogBody(model, fresh(), OPTS)).get(R.PLACES_WENT) || '', '');
+  });
+});
+
+// Task 7 fix round 1
+describe('places in the record (fix round 1)', () => {
+  const YARD = 'Locations/The Chapel Yard.md';
+  const GATE_NOTE = 'Locations/The Gate.md';
+  const NOTES2 = new Map([...NOTES, ['The Chapel Yard', YARD]]);
+  const opts = { linkFor: R.linkFor({ resolve: (t) => NOTES2.get(t) || null }), timeOf };
+
+  it('review I2: a known place moved to and then left is still linked under Improvised beats', () => {
+    const key = model.placeKeys[YARD];
+    const s = run([{ type: 'move', pc: ADA, to: to(GATE) },
+      { type: 'moveGroup', pcs: [ADA], place: YARD, key, title: 'The Chapel Yard', names: ['Ada'] },
+      { type: 'move', pc: ADA, to: to(TOWER) }]);
+    const sec = sectionsOf(R.tableLogBody(model, s, opts));
+    assert.strictEqual(sec.get('Improvised beats'), '- [[The Chapel Yard]]');
+  });
+
+  it('review I1: Move them to The Gate goes to the Plan\'s Gate beats, never a place beat of its own', () => {
+    const target = (s) => RS.planTarget(model, s, GATE_NOTE);
+    let s = fresh();
+    const t1 = target(s);
+    assert.deepStrictEqual([t1.beat, t1.spot], [GATE.key, null], 'the first Gate beat');
+    s = run([{ type: 'moveGroup', pcs: [ADA, BEN], place: GATE_NOTE, title: 'The Gate', to: t1, names: ['Ada', 'Ben'] }], s);
+    assert.deepStrictEqual([s.positions[ADA], s.positions[BEN]], [{ beat: GATE.key, spot: null }, { beat: GATE.key, spot: null }]);
+    assert.ok(!s.improvised.some((i) => i.key.startsWith('pl-')), 'no pl- beat');
+    assert.ok(RS.derive(model, s).log.some((l) => l.text === 'Ada, Ben move to The Gate (the Plan\'s beat: The Gate).'));
+    // away, then The Gate again: the Gate beat not yet visited (Scene 4)
+    s = run([{ type: 'move', pc: ADA, to: to(TOWER) }, { type: 'move', pc: BEN, to: to(TOWER) }], s);
+    const t2 = target(s);
+    const scene4 = model.beats.filter((b) => b.place === GATE_NOTE)[1];
+    assert.strictEqual(t2.beat, scene4.key);
+    s = run([{ type: 'moveGroup', pcs: [ADA, BEN], place: GATE_NOTE, title: 'The Gate', to: t2, names: ['Ada', 'Ben'] }], s);
+    // both visited, so the first again
+    assert.strictEqual(target(s).beat, GATE.key);
+    const sec = sectionsOf(R.tableLogBody(model, s, opts));
+    assert.ok(!/The Gate/.test(sec.get('Not reached')), `no Gate beat is Not reached: ${sec.get('Not reached')}`);
+    assert.strictEqual(sec.get('Improvised beats'), '', 'none is Improvised');
+  });
+
+  it('review I1: a hub spot\'s place is that spot', () => {
+    const t = RS.planTarget(model, fresh(), YARD);
+    assert.deepStrictEqual([t.beat, t.spot], [HUB.key, HUB.spots.find((x) => x.note === YARD).key]);
+    assert.strictEqual(t.label, `${HUB.title} · The Chapel Yard`);
+    const s = run([{ type: 'moveGroup', pcs: [ADA], place: YARD, title: 'The Chapel Yard', to: t, names: ['Ada'] }]);
+    assert.deepStrictEqual(s.positions[ADA], { beat: HUB.key, spot: t.spot });
+    assert.strictEqual(RS.derive(model, s).whereEnded[0].status, 'spot');
+    // a place the Plan has no beat for has no target: it gets its pl- beat
+    assert.strictEqual(RS.planTarget(model, fresh(), 'Locations/North/index.md'), null);
   });
 });

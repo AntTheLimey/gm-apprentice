@@ -13,14 +13,17 @@
     <input id="hjot" placeholder="Jot (J)" aria-label="Jot a line for the beat in play" autocomplete="off">
     <span class="saved" id="saved" role="status" aria-live="polite">Saved</span>
     <button class="warnb" id="warnBtn" type="button"></button>
+    <button id="coloursBtn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="coloursMenu" title="The colours of the sides in a fight">Colours</button>
     <button id="playersBtn" type="button" title="Open the players' window: put it on the screen they can see">Players' screen</button>
     <button id="endBtn" type="button">End of night</button>
   </div>
+  <div class="cmenu" id="coloursMenu" role="group" aria-label="Side colours" hidden></div>
   <div class="hnotes" id="hnotes"></div>
 </header>
 <div class="app" id="app">
   <nav class="rail" id="rail" aria-label="The run"></nav>
   <main class="sheet" id="sheet"><p class="muted">The run sheet is starting.</p></main>
+  <div class="grip" id="grip" role="separator" aria-orientation="vertical" aria-label="Drag to resize the fight and its beat; double-click to reset" title="Drag to resize · double-click to reset"></div>
   <aside class="side" id="side" aria-label="The players' screen"></aside>
 </div>
 <div class="drawer" id="drawer" role="dialog" aria-label="Note" tabindex="-1"></div>

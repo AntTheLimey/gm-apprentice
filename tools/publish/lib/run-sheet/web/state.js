@@ -28,6 +28,11 @@
       end: { vitals: {}, where: {}, advancement: '' },
       attached: {},
       fight: null, fights: [], panels: {}, shownEver: {},
+      // the notes whose rows the players saw by name in a fight that has ended (final review, ledger 86): a foe
+      // starts seen from it, never an inferred ally (re-review)
+      seenEver: {},
+      // the last side the GM set per note (plan 6a): 'foe' | 'ally' | 'neutral'
+      sides: {},
     };
   }
 
@@ -63,7 +68,7 @@
     }
     if (out.stopped !== null && kind(out.stopped) !== 'object') throw bad(`stopped is ${kind(out.stopped)}, not object`);
     // The fight and the players' panels: a running fight is an object or null, each fight's rows a list
-    // of objects, and each group's panel an object. `shownEver` holds a time (or true) per note: any value.
+    // of objects, and each group's panel an object. `shownEver` and `seenEver` hold a time (or true) per note: any value.
     if (out.fight !== null && kind(out.fight) !== 'object') throw bad(`fight is ${kind(out.fight)}, not object`);
     entries(out.fights, 'fights');
     for (const [where, f] of [...(out.fight ? [['fight', out.fight]] : []), ...out.fights.map((f, i) => [`fights[${i}]`, f])]) {
@@ -111,6 +116,12 @@
       if (!to || !to.beat) return;
       s.positions[a.pc] = { beat: to.beat, spot: to.spot || null };
       if (!s.visited[to.beat]) s.visited[to.beat] = { title: to.title || '', at };
+      // a hub's spot keeps its own first arrival, for the Table Log's Places the party went (Task 13 proof)
+      const v = s.visited[to.beat];
+      if (to.spot && v && typeof v === 'object') {
+        if (!v.spots || typeof v.spots !== 'object' || Array.isArray(v.spots)) v.spots = {};
+        if (!v.spots[to.spot]) v.spots[to.spot] = at;
+      }
     },
     moveAll(s, a, at) { for (const pc of a.pcs || []) HANDLERS.move(s, { pc, to: a.to }, at); },
     mark(s, a, at) {
@@ -137,14 +148,63 @@
       s.stopped = { beat: a.beat, title: a.title || '', at };
       log(s, at, a.beat, 'Stopped here.', a.title);
     },
+    // `place` (plan 6a Task 7): a known place's note, for Fight here. Its key is the reader's `pl-<hash>`.
     improvise(s, a, at) {
       const title = String(a.title || '').trim();
       if (!title) return;
       // the key comes from the action, never from what the state holds, so a re-applied action keeps its beat
       const key = a.key || (a.id != null ? `i-${a.id}` : `i-${s.improvised.length + 1}`);
       if (s.improvised.some((i) => i.key === key)) return;
-      s.improvised.push({ key, title, at });
-      log(s, at, key, 'Improvised beat.', title);
+      s.improvised.push({ key, title, at, ...(typeof a.place === 'string' && a.place ? { place: a.place } : {}) });
+      // Fight here's own place beat is quiet: its "Fight starts at…" line says it (review M4)
+      if (!a.quiet) log(s, at, key, 'Improvised beat.', title);
+    },
+    // Move them (plan 6a Task 7): the PCs to a known place (`place`, with the reader's `key` and its `title`) or
+    // to a typed name (`name`), making its place beat if it has none. A typed name the night already holds, in
+    // any case and with or without "the", is that place again; a new one is keyed `pn-<action id>`. One Log line.
+    // A place the Plan has a beat or hub spot for (`to`, from `planTarget`) is that beat: the PCs move as `move`
+    // moves them, and the line names the beat (review I1), so no second beat shadows the Plan's.
+    moveGroup(s, a, at) {
+      const pcs = (Array.isArray(a.pcs) ? a.pcs : []).filter((p) => typeof p === 'string' && p);
+      if (!pcs.length) return;
+      const said = () => pcs.map((pc, i) => String((Array.isArray(a.names) && a.names[i]) || '').trim() || stem(pc));
+      const verb = (names) => `${names.join(', ')} ${names.length > 1 ? 'move' : 'moves'} to`;
+      if (a.to && typeof a.to === 'object' && typeof a.to.beat === 'string' && a.to.beat) {
+        const to = { beat: a.to.beat, spot: a.to.spot || null, title: String(a.to.title || '') };
+        for (const pc of pcs) HANDLERS.move(s, { pc, to }, at);
+        const where = String(a.title || '').trim() || stem(a.place) || to.title;
+        const label = String(a.to.label || to.title || '').trim();
+        log(s, at, to.beat, `${verb(said())} ${where}${label ? ` (the Plan's beat: ${label})` : ''}.`, to.title);
+        return;
+      }
+      let place;
+      if (typeof a.place === 'string' && a.place) {
+        const key = String(a.key || '');
+        if (!key || key.includes('.')) return;
+        place = s.improvised.find((i) => i.key === key);
+        if (!place) { place = { key, title: String(a.title || '').trim() || stem(a.place), at, place: a.place }; s.improvised.push(place); }
+      } else {
+        const name = String(a.name == null ? '' : a.name).replace(/\s+/g, ' ').trim();
+        if (!name) return;
+        place = s.improvised.find((i) => i.newPlace && FM.sameName(i.title, name));
+        if (!place) {
+          const key = `pn-${String(a.id != null ? a.id : s.improvised.length + 1).replace(/\./g, '-')}`;
+          if (s.improvised.some((i) => i.key === key)) return;
+          place = { key, title: name, at, place: null, newPlace: true };
+          s.improvised.push(place);
+        }
+      }
+      for (const pc of pcs) HANDLERS.move(s, { pc, to: { beat: place.key, spot: null, title: place.title } }, at);
+      log(s, at, place.key, `${verb(said())} ${place.title}${place.newPlace ? ' (a new place)' : ''}.`, place.title);
+    },
+    // Take off (v8, review F13): a place typed tonight that nobody stands at goes, with its lines; never while the
+    // running fight is at it or has it behind a panel (review M2).
+    unplace(s, a) {
+      const place = s.improvised.find((i) => i.key === a.key);
+      if (!place || !place.newPlace) return;
+      if (Object.values(s.positions).some((p) => p && p.beat === a.key)) return;
+      if (placeInFight(s, a.key)) return;
+      HANDLERS.unimprovise(s, { key: a.key });
     },
     unimprovise(s, a) {
       s.improvised = s.improvised.filter((i) => i.key !== a.key);
@@ -215,6 +275,7 @@
           return [i < 0 ? re(k) : `${re(k.slice(0, i))}${k.slice(i)}`, v];
         }));
         rows(f.rows);
+        if (f.backdrop && typeof f.backdrop === 'object') f.backdrop = { group: re(f.backdrop.group), place: re(f.backdrop.place) };
       }
       for (const f of s.fights || []) { f.beat = re(f.beat); rows(f.rows); }
       // the players' panels are kept by position, so they move with it (Review M10)
@@ -256,9 +317,37 @@
   };
   Object.assign(HANDLERS, Fight.FIGHT_HANDLERS, Show.SHOW_HANDLERS);
 
+  // Whether the running fight is at a place beat, or has it behind a panel.
+  const placeInFight = (s, key) => Boolean(s.fight && (s.fight.beat === key || (s.fight.backdrop && s.fight.backdrop.place === key)));
+
+  // Where Move them takes a group to a place the Plan already has (review I1): the beat whose place it is, or a
+  // hub's spot that names it; of several, the first not yet visited, else the first. Null when the Plan has
+  // none (the place gets a `pl-` beat of its own). `label` names the beat, and the spot at a hub.
+  // `pcs` (Fight here, final review O2): when one of these PCs stands at one of the place's beats or spots now,
+  // that one, before the first unvisited.
+  function planTarget(model, state, note, pcs) {
+    const hits = [];
+    for (const b of (model && model.beats) || []) {
+      if (b.contingency) continue;
+      const spots = b.spots || [];
+      if (b.place === note) hits.push({ beat: b.key, spot: null, title: b.title, label: b.title });
+      else if (spots.length > 1) {
+        const sp = spots.find((x) => x.note === note);
+        if (sp) hits.push({ beat: b.key, spot: sp.key, title: b.title, label: `${b.title} · ${sp.name}` });
+      }
+    }
+    const positions = (state && state.positions) || {};
+    const standing = (pcs || []).map((p) => positions[p]).filter((x) => x && !x.off);
+    const here = hits.find((h) => standing.some((x) => x.beat === h.beat && (h.spot === null || x.spot === h.spot)));
+    if (here) return here;
+    const visited = (state && state.visited) || {};
+    return hits.find((h) => !visited[h.beat]) || hits[0] || null;
+  }
+
   // An action made before an `attach` (queued in another window, or re-applied on a newer state) still
-  // names the old keys: map them through what was attached.
-  const KEY_FIELDS = ['beat', 'point', 'item', 'handout', 'spot', 'group'];
+  // names the old keys: map them through what was attached. `key` is an improvised or place beat's
+  // (improvise, moveGroup, unplace: review M3).
+  const KEY_FIELDS = ['beat', 'point', 'item', 'handout', 'spot', 'group', 'key'];
   function remapKey(attached, k) {
     if (typeof k !== 'string' || !attached) return k;
     let cur = k;
@@ -283,6 +372,7 @@
     if (Array.isArray(out.groups)) out.groups = out.groups.map(re);
     if (Array.isArray(out.rows)) out.rows = out.rows.map((r) => (r && typeof r === 'object' ? { ...r, group: re(r.group), foeKey: re(r.foeKey) } : r));
     if (Array.isArray(out.thresholds)) out.thresholds = out.thresholds.map((t) => (t && typeof t === 'object' ? { ...t, beat: re(t.beat), key: re(t.key) } : t));
+    if (out.backdrop && typeof out.backdrop === 'object') out.backdrop = { ...out.backdrop, group: re(out.backdrop.group), place: re(out.backdrop.place) };
     return out;
   }
 
@@ -351,6 +441,12 @@
       .map((x) => x.c);
   }
 
+  // A note's side as the GM has it now (plan 6a): the side set tonight, then one carried from an earlier
+  // Table Log, then the reader's (`readerAlly`). 'foe' | 'ally' | 'neutral'.
+  function sideNow(model, state, note, readerAlly) {
+    return FM.noteSide(state.sides, model.sidesCarried, note, readerAlly).side;
+  }
+
   // The beats the page shows: the Plan's, the improvised ones, and each beat's "Who's here" with
   // whoever the GM brought in.
   function beatsOf(model, state) {
@@ -358,7 +454,7 @@
     // a brought-in ally gets a fight row too (unless the beat already has one), so it has a vitals row
     const broughtFoes = (key, foes) => (state.brought[key] || []).flatMap((x) => {
       const f = (cast.get(x.note) || {}).foe;
-      return f && f.ally && !foes.some((o) => o.note === x.note) ? [{ ...f, key: `${key}.brought.${x.note}`, broughtIn: true }] : [];
+      return f && sideNow(model, state, x.note, f.ally) === 'ally' && !foes.some((o) => o.note === x.note) ? [{ ...f, key: `${key}.brought.${x.note}`, broughtIn: true }] : [];
     });
     const real = (model.beats || []).map((b) => {
       const extra = (state.brought[b.key] || []).map((x) => {
@@ -370,11 +466,27 @@
       const foes = b.foes || [];
       return { ...b, who: (b.who || []).concat(extra), foes: foes.concat(broughtFoes(b.key, foes)) };
     });
-    const impro = state.improvised.map((i) => ({
-      key: i.key, title: i.title, impro: true, contingency: false, sceneNote: null, place: null, spots: [],
-      who: (state.brought[i.key] || []).map((x) => ({ key: `${i.key}.brought.${x.note}`, note: x.note, name: x.name, brought: true, count: 1 })),
-      points: [], ifs: [], treasure: [], foes: broughtFoes(i.key, []), handouts: [], entities: [],
-    }));
+    // A place beat (plan 6a Task 7) is an improvised beat at a place: a known one (`place`, its people from the
+    // model's placePeople, v8's placeBeat) or one typed tonight (`newPlace`, nobody yet). No Points, no If-they.
+    // Its people's foes are keyed under it; anyone but a creature joins a fight benched.
+    const impro = state.improvised.map((i) => {
+      const place = typeof i.place === 'string' && i.place ? i.place : null;
+      const people = place ? ((model.placePeople && model.placePeople[place]) || []).filter((n) => typeof n === 'string') : [];
+      const who = people.map((note) => {
+        const c = cast.get(note) || {};
+        return { key: `${i.key}.who.${note}`, note, name: c.name || stem(note), knownAs: '', count: 1, wants: c.wants || '', playAs: c.playAs || '', dead: !!c.dead };
+      }).concat((state.brought[i.key] || []).filter((x) => !people.includes(x.note))
+        .map((x) => ({ key: `${i.key}.brought.${x.note}`, note: x.note, name: x.name, brought: true, count: 1 })));
+      const own = people.flatMap((note) => {
+        const c = cast.get(note);
+        return c && c.foe ? [{ ...c.foe, key: `${i.key}.foe.${note}`, benched: c.type !== 'creature' }] : [];
+      });
+      return {
+        key: i.key, title: i.title, impro: true, contingency: false, sceneNote: null, place, spots: [],
+        placeBeat: Boolean(place || i.newPlace), newPlace: Boolean(i.newPlace),
+        who, points: [], ifs: [], treasure: [], foes: own.concat(broughtFoes(i.key, own)), handouts: [], entities: place ? [place] : [],
+      };
+    });
     return real.concat(impro);
   }
 
@@ -451,7 +563,8 @@
     for (const b of beats) {
       const seen = new Map();
       for (const f of b.foes || []) {
-        if (!f.ally) continue;
+        // the side as the GM has it now: a reader-ally set neutral or foe has no vitals row (review P-S4)
+        if (sideNow(model, state, f.note, f.ally) !== 'ally') continue;
         if (reached.has(b.key) || f.broughtIn) inPlay.add(f.note);
         const copy = (seen.get(f.note) || 0) + 1;
         seen.set(f.note, copy);
@@ -464,6 +577,8 @@
     const { figures, allies: fought } = fightFigures(model, state);
     for (const [rowId, r] of fought) {
       if (rows.some((x) => x.rowId === rowId)) continue;
+      // an ally in a fight the GM has set to another side since
+      if (sideNow(model, state, r.note, true) !== 'ally') continue;
       rows.push(r);
       inPlay.add(r.note);
     }
@@ -586,7 +701,7 @@
 
     const titleOf = (key, saved) => (byKey.get(key) ? byKey.get(key).title : saved || '');
     const entries = state.jots.map((j, i) => ({ at: j.at, o: i, beatKey: j.beat, beatTitle: j.beat ? titleOf(j.beat, j.title) : '', text: j.text, id: j.id }))
-      .concat(state.events.map((e, i) => ({ at: e.at, o: 1e6 + i, beatKey: e.beat, beatTitle: e.beat ? titleOf(e.beat, e.title) : '', text: e.text, ...(e.fight ? { fight: true } : {}) })));
+      .concat(state.events.map((e, i) => ({ at: e.at, o: 1e6 + i, beatKey: e.beat, beatTitle: e.beat ? titleOf(e.beat, e.title) : '', text: e.text, ...(e.fight ? { fight: true } : {}), ...(e.tookBack ? { tookBack: true } : {}) })));
     // a long rest passes over anyone at 0 HP, and says so at the time of the rest
     for (const v of vitals) {
       if (v.restSkipped) entries.push({ at: state.end.longRestAt, o: 2e6, beatKey: null, beatTitle: '', text: `${v.name} is at 0 HP, so the long rest does nothing for them.` });
@@ -660,6 +775,9 @@
       improvised: state.improvised.slice(),
       handedOver: Object.entries(state.handouts).map(([key, v]) => ({ key, text: v.text, name: v.name || '', note: v.note })),
       unmaskedNow, maskedAgain,
+      // the sides the GM set this session, one per note, for the Table Log's Sides set
+      sidesSet: Object.entries(state.sides && typeof state.sides === 'object' ? state.sides : {})
+        .filter(([, side]) => FM.isSide(side)).map(([note, side]) => ({ note, side })),
       advancement: state.end.advancement || '',
       fight: fightView(model, state, byKey, unmaskedNow),
       fightLog: logLines.filter((l) => l.fight),
@@ -702,5 +820,5 @@
     return left.length ? { fight: f.id, title: f.title || '', rows: left } : null;
   }
 
-  return { emptyState, upgrade, reduce, derive, cyclePoint, armClick, castSearch, handoutName };
+  return { emptyState, upgrade, reduce, derive, cyclePoint, armClick, castSearch, handoutName, planTarget, placeInFight };
 }));

@@ -55,4 +55,11 @@ function personKey(pathOrName) {
   return `p-${textHash(pathOrName)}`;
 }
 
-module.exports = { normalise, textHash, dedupe, beatKeys, itemKeys, personKey };
+// A known place's beat key (plan 6a Task 7, review P2): `pl-` and 8 hex of SHA-1 of the note's path, as it is,
+// so a stem with a dot in it (`St. Mary's.md`) still makes a key with none. A place typed tonight is keyed
+// `pn-<action id>` by state.js instead. Neither holds a dot, so a beat key stays everything before the first one.
+function placeKey(notePath) {
+  return `pl-${crypto.createHash('sha1').update(String(notePath == null ? '' : notePath)).digest('hex').slice(0, 8)}`;
+}
+
+module.exports = { normalise, textHash, dedupe, beatKeys, itemKeys, personKey, placeKey };

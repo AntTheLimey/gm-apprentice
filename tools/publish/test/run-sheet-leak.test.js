@@ -235,19 +235,19 @@ function checkShape(view, where) {
 
 // The order a fighting panel shows, against the state's fight: one row per ticked row, in order; foe and
 // Lair rows carry only name, ini, current, out and lair (Review L1).
-// A row is a PC or an ally by the model's word, never the row's (the PR review's L1).
+// A row is a PC by the model's word, never the row's (the PR review's L1). Changed on purpose by plan 6a
+// Task 5 / review P1: a row is an ally by the row's own side as the GM has it now, and only once it is seen
+// (an ally the reader infers starts unseen); an ally row not seen, a foe and a neutral carry a foe's keys.
 function checkOrder(view, state, where, model) {
   const f = state.fight;
   const pcs = new Set((model.pcs || []).map((p) => p.note));
-  const allies = new Set(model.beats.flatMap((b) => (b.foes || []).filter((x) => x.ally).map((x) => x.note))
-    .concat((model.cast || []).filter((c) => c.foe && c.foe.ally).map((c) => c.note)));
   for (const p of view.panels) {
     if (!f) { assert.equal(p.order, null, `${where}: no fight, no order`); continue; }
     if (!p.order) continue;
     const ticked = f.rows.filter((r) => r.in);
     assert.equal(p.order.rows.length, ticked.length, `${where}: one row per ticked row, no unticked one`);
     ticked.forEach((r, i) => {
-      const named = r.kind !== 'lair' && (pcs.has(r.note) || allies.has(r.note));
+      const named = r.kind !== 'lair' && (pcs.has(r.note) || (r.kind === 'ally' && Boolean(r.seen)));
       assert.deepEqual(keys(p.order.rows[i]), named ? PC_ROW : FOE_ROW, `${where}: ${r.kind} row keys`);
     });
   }
@@ -495,7 +495,9 @@ describe('the players\' screen leak test', () => {
           const names = view.panels[0].order.rows.map((r) => r.name);
           assert.ok(names.includes('Mephit 1'), `the model's word, not the row's: ${names.join(', ')}`);
           const wyrm = view.panels[0].order.rows.filter((r) => !('hp' in r));
-          assert.ok(wyrm.length >= 3, 'the wyrm sent as an ally is still a foe: no HP');
+          // plan 6a Task 5 / review P1: the row's side is the row's now, but an ally row the players have not
+          // seen still goes up as a foe: the wyrm sent as an unseen ally shows no HP and no name
+          assert.ok(wyrm.length >= 3, 'the wyrm sent as an unseen ally is still a foe: no HP');
         },
         '9': ({ view }) => {
           assert.ok(view.panels[1].order, 'the second group\'s panel shows the order');
@@ -548,6 +550,364 @@ describe('the players\' screen leak test', () => {
       players.close();
     } finally {
       await run.close();
+    }
+  });
+});
+
+// plan 6a Task 5 / review P1: the players' screen takes a row's side from the row, as the GM has it now.
+// Each case builds the fight as the page does, on the players' fixture read as it is, sends the GM's
+// actions through the one `reduce`, and checks forPlayers' answer (and its rendered markup) against the
+// same forbidden list the scripted session uses.
+describe('the players\' screen follows the row\'s side (plan 6a Task 5 / review P1)', () => {
+  const RS = require('../lib/run-sheet/web/state');
+  const M = require('../lib/run-sheet/web/fight-math');
+  const model = readRunSheet(FIXTURE, S.PLAN, { party: S.PARTY });
+  const forbidden = forbiddenList(FIXTURE, model).map((x) => ({ ...x, hit: matcher(x) }));
+  const sandbox = { self: {} };
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, '..', 'lib', 'run-sheet', 'web', 'players', 'render.js'), 'utf8'), sandbox);
+  const render = sandbox.self.RunSheetPlayersRender.renderPlayers;
+  const VENN = 'Characters/NPCs/Brother Venn.md';
+  const ABBOT = S.NOTES.ABBOT;
+  const MEPHIT = S.NOTES.MEPHIT;
+  let n = 0;
+  const T0 = Date.parse('2026-11-20T19:00:00.000Z');
+  const act = (s, a) => RS.reduce(s, { id: `p1-${++n}`, ...a }, new Date(T0 + n * 60000).toISOString());
+  const gateOf = (m) => m.beats.find((b) => b.title === 'Ashfall Reckoning');
+  const fight = (m = model) => {
+    let s = RS.emptyState({ stateId: 's', session: 'x', plan: S.PLAN });
+    s = act(s, { type: 'move', pc: S.NOTES.ADA, to: { beat: gateOf(m).key, spot: null, title: gateOf(m).title } });
+    const id = `p1-${++n}`;
+    const b = M.rowsForFight({ model: m, derived: RS.derive(m, s), state: s, beatKey: gateOf(m).key, idBase: id });
+    return RS.reduce(s, { id, type: 'fightStart', beat: gateOf(m).key, title: gateOf(m).title, groups: b.groups, rows: b.rows, thresholds: b.thresholds }, new Date(T0).toISOString());
+  };
+  const rowOf = (s, note, copy = 1) => s.fight.rows.find((r) => r.note === note && r.copy === copy);
+  const setSide = (s, note, side, copy) => act(s, { type: 'setSide', fight: s.fight.id, row: rowOf(s, note, copy).id, side });
+  const view = (s, m = model) => forPlayers(m, s, { withheldWords: m.withheldWords, campaign: m.campaign, picId: () => '0'.repeat(20) });
+  // the view's row for a fight row, by its place among the ticked rows
+  const shown = (v, s, note, copy = 1) => v.panels[0].order.rows[s.fight.rows.filter((r) => r.in).findIndex((r) => r.note === note && r.copy === copy)];
+  // nothing the step does not allow reaches the players: the view's JSON and its markup
+  const clean = (v, allowed, where) => {
+    checkShape(v, where);
+    const texts = [JSON.stringify(v), render(v)];
+    for (const x of forbidden) {
+      if (allowed.has(x.text) || (x.with && allowed.has(x.with))) continue;
+      for (const t of texts) assert.ok(!x.hit(t), `${where}: "${x.text}" (${x.why}) reached the players`);
+    }
+  };
+
+  // changed on purpose by plan 6a Task 5 fix round 1 / review I2: a model-ally set to foe or neutral sends
+  // no HP, and its name only if the players were already shown it (seen and ticked in as an ally)
+  it('a model-ally set to foe or neutral sends no HP; the name only if it was already shown', () => {
+    for (const side of ['foe', 'neutral']) {
+      let s = fight();
+      let v = view(s);
+      assert.deepEqual(keys(shown(v, s, VENN)), PC_ROW, 'Brother Venn starts as the Plan\'s ally');
+      assert.equal(shown(v, s, VENN).name, 'Brother Venn');
+      s = setSide(s, VENN, side);
+      v = view(s);
+      assert.deepEqual(keys(shown(v, s, VENN)), FOE_ROW, `set to ${side}: a foe's keys`);
+      assert.equal(shown(v, s, VENN).name, 'Brother Venn', 'shown already: the name stays');
+      assert.ok(!JSON.stringify(v).includes('7343') && !render(v).includes('7343'), `set to ${side}: no HP`);
+      clean(v, new Set(['Brother Venn']), `Brother Venn set to ${side}`);
+      // benched, so never shown: no name either
+      let b = fight();
+      b = act(b, { type: 'fightTick', fight: b.fight.id, row: rowOf(b, VENN).id, in: false });
+      b = setSide(b, VENN, side);
+      b = act(b, { type: 'fightTick', fight: b.fight.id, row: rowOf(b, VENN).id, in: true });
+      v = view(b);
+      assert.deepEqual(keys(shown(v, b, VENN)), FOE_ROW);
+      clean(v, new Set(), `Brother Venn, benched, set to ${side}`);
+    }
+  });
+
+  // plan 6a Task 5 fix round 1 / review C1: one copy's switch is that copy's, never the note's. Changed on purpose by
+  // the final review (ledger 86): the players saw "Ice Mephit 1" by name, so the next fight names the mephits (a
+  // foe's keys, never the HP); a benched copy they never saw leaves no name behind.
+  it('one mephit of two set to ally: the next fight is foe-shaped, named as the players saw it, and nothing is carried', () => {
+    const next = (s) => {
+      const id = `p1-${++n}`;
+      const g = gateOf(model);
+      const b = M.rowsForFight({ model, derived: RS.derive(model, s), state: s, beatKey: g.key, idBase: id });
+      return RS.reduce(s, { id, type: 'fightStart', beat: g.key, title: g.title, groups: b.groups, rows: b.rows, thresholds: b.thresholds }, new Date(T0).toISOString());
+    };
+    let s = fight();
+    s = setSide(s, MEPHIT, 'ally', 1);
+    s = act(s, { type: 'fightEnd', fight: s.fight.id });
+    assert.deepEqual(RS.derive(model, s).sidesSet, []);
+    s = next(s);
+    let v = view(s);
+    for (const copy of [1, 2]) assert.deepEqual(keys(shown(v, s, MEPHIT, copy)), FOE_ROW, `mephit ${copy}`);
+    assert.deepEqual([1, 2].map((c) => shown(v, s, MEPHIT, c).name), ['Ice Mephit 1', 'Ice Mephit 2']);
+    clean(v, new Set(['Brother Venn', 'Ice Mephit', 'Ice Mephit 1', 'Ice Mephit 2']), 'the next fight');
+    // benched while it was the ally: the players never saw it, so nothing is remembered
+    let b = fight();
+    b = act(b, { type: 'fightTick', fight: b.fight.id, row: rowOf(b, MEPHIT, 1).id, in: false });
+    b = setSide(b, MEPHIT, 'ally', 1);
+    b = act(b, { type: 'fightEnd', fight: b.fight.id });
+    b = next(b);
+    v = view(b);
+    for (const copy of [1, 2]) assert.deepEqual(keys(shown(v, b, MEPHIT, copy)), FOE_ROW, `benched: mephit ${copy}`);
+    clean(v, new Set(['Brother Venn']), 'the next fight after a benched ally');
+  });
+
+  it('an unseen inferred ally set to foe sends no name', () => {
+    const m = JSON.parse(JSON.stringify(model));
+    for (const f of m.beats.flatMap((x) => x.foes || []).concat((m.cast || []).map((c) => c.foe).filter(Boolean))) {
+      if (f.note === VENN) Object.assign(f, { ally: true, allyBy: 'relationships', allyFrom: 'relationships: +2 with this party' });
+    }
+    let s = fight(m);
+    assert.equal(rowOf(s, VENN).seen, false);
+    s = setSide(s, VENN, 'foe');
+    const v = view(s, m);
+    assert.deepEqual(keys(shown(v, s, VENN)), FOE_ROW);
+    clean(v, new Set(), 'an unseen inferred ally set to foe');
+  });
+
+  it('a model-foe set to ally sends its name and HP', () => {
+    let s = fight();
+    s = setSide(s, MEPHIT, 'ally', 1);
+    const v = view(s);
+    const r = shown(v, s, MEPHIT, 1);
+    assert.deepEqual(keys(r), PC_ROW);
+    assert.equal(r.name, 'Ice Mephit 1');
+    assert.equal(r.hp, '7341/7341');
+    clean(v, new Set(['Ice Mephit', 'Ice Mephit 1', '7341', 'Brother Venn']), 'a mephit set to ally');
+    // the other mephit is still a foe, numbered by its word
+    assert.deepEqual(keys(shown(v, s, MEPHIT, 2)), FOE_ROW);
+    // plan 6a fix round 1 / review M3: the copy switched to ally still counts, so the other keeps its number
+    assert.equal(shown(v, s, MEPHIT, 2).name, 'Mephit 2');
+  });
+
+  it('a withheld foe set to ally shows only its withheld word', () => {
+    let s = fight();
+    s = setSide(s, ABBOT, 'ally');
+    const v = view(s);
+    const r = shown(v, s, ABBOT);
+    assert.equal(r.name, model.withheldWords.person);
+    // its HP goes up as an ally's does; its name never does
+    clean(v, new Set(['7344', 'Brother Venn']), 'the withheld abbot set to ally');
+  });
+
+  it('a neutral sends exactly a foe\'s keys', () => {
+    const foe = fight();
+    const neutral = setSide(fight(), 'Characters/NPCs/Masked Gilt.md', 'neutral');
+    assert.equal(rowOf(neutral, 'Characters/NPCs/Masked Gilt.md').neutral, true);
+    // the same fight with the row neutral: the players' view is the same, byte for byte
+    assert.deepEqual(view(neutral), view(foe));
+    // a Plan ally set neutral is the same as that ally set foe
+    assert.deepEqual(view(setSide(fight(), VENN, 'neutral')), view(setSide(fight(), VENN, 'foe')));
+  });
+
+  it('an inferred ally with no seenFrom sends nothing named', () => {
+    const inferred = (by, seenFrom) => {
+      const m = JSON.parse(JSON.stringify(model));
+      for (const f of m.beats.flatMap((b) => b.foes || []).concat((m.cast || []).map((c) => c.foe).filter(Boolean))) {
+        if (f.note === VENN) Object.assign(f, { ally: true, allyBy: by, allyFrom: `${by}: +2 with this party` });
+      }
+      for (const c of m.cast || []) if (c.note === VENN) Object.assign(c, { ally: true, allyBy: by });
+      if (seenFrom) m.seenFrom = { [VENN]: seenFrom };
+      return m;
+    };
+    for (const by of ['relationships', 'affiliation', 'quickRef']) {
+      const m = inferred(by);
+      const s = fight(m);
+      assert.equal(rowOf(s, VENN).kind, 'ally');
+      assert.equal(rowOf(s, VENN).seen, false);
+      const v = view(s, m);
+      assert.deepEqual(keys(shown(v, s, VENN)), FOE_ROW, `${by}: a foe's keys`);
+      clean(v, new Set(), `an ally by ${by}`);
+      // with seenFrom it starts seen, and goes up as an ally
+      const m2 = inferred(by, 'on the player site');
+      const s2 = fight(m2);
+      const v2 = view(s2, m2);
+      assert.deepEqual(keys(shown(v2, s2, VENN)), PC_ROW);
+      assert.equal(shown(v2, s2, VENN).name, 'Brother Venn');
+      // and the GM switching it to ally is the GM's word: it goes up too
+      const s3 = setSide(setSide(fight(m), VENN, 'neutral'), VENN, 'ally');
+      assert.equal(shown(view(s3, m), s3, VENN).name, 'Brother Venn');
+    }
+  });
+
+  // re-review (minor 3): a name the players saw in an ended fight never starts an INFERRED ally seen, with its HP
+  it('a foe seen by name, its side dropped for a mixed group, then inferred an ally: the next fight sends no name and no HP', () => {
+    const m = JSON.parse(JSON.stringify(model));
+    for (const f of m.beats.flatMap((x) => x.foes || []).concat((m.cast || []).map((c) => c.foe).filter(Boolean))) {
+      if (f.note === MEPHIT) Object.assign(f, { ally: true, allyBy: 'relationships', allyFrom: 'relationships: +2 with this party' });
+    }
+    for (const c of m.cast || []) if (c.note === MEPHIT) Object.assign(c, { ally: true, allyBy: 'relationships' });
+    let s = fight(m);
+    assert.deepEqual([1, 2].map((c) => [rowOf(s, MEPHIT, c).kind, rowOf(s, MEPHIT, c).seen]), [['ally', false], ['ally', false]]);
+    // the GM sets one to foe (a mixed group: the note's side is dropped) and shows its name
+    s = setSide(s, MEPHIT, 'foe', 1);
+    assert.equal((s.sides || {})[MEPHIT], undefined);
+    s = act(s, { type: 'seen', fight: s.fight.id, row: rowOf(s, MEPHIT, 1).id, on: true });
+    assert.equal(shown(view(s, m), s, MEPHIT, 1).name, 'Ice Mephit 1', 'the players saw its name');
+    s = act(s, { type: 'fightEnd', fight: s.fight.id });
+    // the next fight: the reader infers both allies again; neither starts seen from what the players saw
+    const id = `p1-${++n}`;
+    const g = gateOf(m);
+    const b = M.rowsForFight({ model: m, derived: RS.derive(m, s), state: s, beatKey: g.key, idBase: id });
+    s = RS.reduce(s, { id, type: 'fightStart', beat: g.key, title: g.title, groups: b.groups, rows: b.rows, thresholds: b.thresholds }, new Date(T0).toISOString());
+    assert.deepEqual([1, 2].map((c) => [rowOf(s, MEPHIT, c).kind, rowOf(s, MEPHIT, c).seen]), [['ally', false], ['ally', false]]);
+    const v = view(s, m);
+    for (const copy of [1, 2]) assert.deepEqual(keys(shown(v, s, MEPHIT, copy)), FOE_ROW, `mephit ${copy}: a foe's keys`);
+    assert.ok(!JSON.stringify(v).includes('7341') && !render(v).includes('7341'), 'no HP');
+    clean(v, new Set(['Brother Venn']), 'an inferred ally the players once saw as a foe');
+  });
+
+  it('after End fight the panel shows no order, whatever the sides', () => {
+    let s = fight();
+    s = setSide(s, MEPHIT, 'ally', 1);
+    s = act(s, { type: 'fightEnd', fight: s.fight.id });
+    const v = view(s);
+    assert.ok(v.panels.every((p) => p.order === null));
+    clean(v, new Set(), 'after End fight');
+  });
+});
+
+// Changed on purpose: plan 6a Task 7 / Global Constraints (typed place). A place the GM types tonight in Move
+// them goes to the players' screen as its plain name, as the panel's caption, and as nothing else: no picture,
+// no key, no other words of the state. This is the one widening of forPlayers Task 7 makes.
+describe('a place typed tonight (plan 6a Task 7 / Global Constraints (typed place))', () => {
+  const RS = require('../lib/run-sheet/web/state');
+  const model = readRunSheet(FIXTURE, S.PLAN, { party: S.PARTY });
+  const forbidden = forbiddenList(FIXTURE, model).map((x) => ({ ...x, hit: matcher(x) }));
+  const sandbox = { self: {} };
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, '..', 'lib', 'run-sheet', 'web', 'players', 'render.js'), 'utf8'), sandbox);
+  const render = sandbox.self.RunSheetPlayersRender.renderPlayers;
+  const view = (s) => forPlayers(model, s, { withheldWords: model.withheldWords, campaign: model.campaign, picId: () => '0'.repeat(20) });
+  let n = 0;
+  const act = (s, a) => RS.reduce(s, { id: `tp-${++n}`, ...a }, new Date(Date.parse('2026-11-20T19:00:00Z') + n * 60000).toISOString());
+
+  it('a typed place reaches players as its plain name and nothing else', () => {
+    const gate = model.beats.find((b) => b.title === 'Ashfall Reckoning');
+    let s = RS.emptyState({ stateId: 's', session: 'x', plan: S.PLAN });
+    s = act(s, { type: 'move', pc: S.NOTES.ADA, to: { beat: gate.key, spot: null, title: gate.title } });
+    s = act(s, { type: 'jot', beat: gate.key, text: 'JOTSENTINEL-4471 the GM wrote this' });
+    const before = view(s);
+    const typed = 'The <b>Rusty</b> Anchor';
+    s = act(s, { id: 'tp-move', type: 'moveGroup', pcs: [S.NOTES.ADA], name: typed, names: ['Ada'] });
+    const v = view(s);
+    checkShape(v, 'a typed place');
+    assert.equal(v.panels.length, before.panels.length);
+    const p = v.panels[0];
+    assert.deepEqual([p.caption, p.backdrop], [typed, null], 'the plain name as the caption, no picture');
+    // nothing else the state holds goes with it: its key, the move's log line, a jot
+    const texts = [JSON.stringify(v), render(v)];
+    for (const t of texts) {
+      assert.ok(!t.includes('pn-tp-move'), 'no key');
+      assert.ok(!/moves to/.test(t), 'no log line');
+      assert.ok(!t.includes('JOTSENTINEL'), 'no jot');
+      assert.ok(!t.includes('(a new place)'));
+    }
+    assert.ok(!render(v).includes('<b>Rusty</b>'), 'the name is text, never markup');
+    for (const x of forbidden) for (const t of texts) assert.ok(!x.hit(t), `"${x.text}" (${x.why}) reached the players`);
+    // the same view as before, but for the caption and the panel's place
+    const strip = (w) => JSON.stringify({ ...w, panels: w.panels.map((q) => ({ ...q, caption: null, backdrop: null })) });
+    assert.equal(strip(v), strip(before));
+    // Fight here at the typed place, for another group: the focused panel's caption is that name, and End fight puts it back
+    let s2 = act(s, { type: 'move', pc: S.NOTES.BEN, to: { beat: gate.key, spot: null, title: gate.title } });
+    s2 = act(s2, { id: 'tp-f', type: 'fightStart', beat: 'pn-tp-move', title: typed, groups: [gate.key], rows: [], thresholds: [], backdrop: { group: gate.key, place: 'pn-tp-move' } });
+    const benPanel = (w) => w.panels.find((q) => q.pcs.some((x) => x.name === 'Ben'));
+    assert.deepEqual([benPanel(view(s2)).caption, benPanel(view(s2)).backdrop], [typed, null]);
+    s2 = act(s2, { type: 'fightEnd', fight: 'tp-f' });
+    assert.equal(benPanel(view(s2)).caption, before.panels[0].caption);
+  });
+});
+
+// Task 7 fix round 1, changed by Ant (the GM), who reversed review I3: "If the players go to a place that hasn't been
+// published, it should become visible and become published." A place need not publish to reach the players'
+// screen, but only the GM's own act puts it there: Move them, Fight here or Show. Never before; and the per-note
+// rules hold (a place with no name of its own shows no caption; the picture goes as an opaque id).
+describe('an unpublished place reaches the players only by the GM\'s act (plan 6a Task 7 fix round 1)', () => {
+  const RS = require('../lib/run-sheet/web/state');
+  const CELLAR = 'Locations/Secret Cellar.md';
+  const PIC = '_attachments/secret-cellar.png';
+  let n = 0;
+  const act = (s, a) => RS.reduce(s, { id: `np-${++n}`, ...a }, new Date(Date.parse('2026-11-20T19:00:00Z') + n * 60000).toISOString());
+
+  it('an unpublished place shows its picture only after the GM moves the party there, fights there or Shows it', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rs-place-'));
+    made.push(dir);
+    fs.cpSync(FIXTURE, dir, { recursive: true });
+    fs.copyFileSync(path.join(dir, '_attachments', 'gate-place.png'), path.join(dir, PIC));
+    fs.writeFileSync(path.join(dir, CELLAR), '---\ntype: location\npublish: false\nportrait: secret-cellar.png\n---\n\nUnder the chapel.\n');
+    const m = readRunSheet(dir, S.PLAN, { party: S.PARTY });
+    const ids = new Map();
+    const picId = (p) => { if (!ids.has(p)) ids.set(p, String(ids.size).padStart(20, '0')); return ids.get(p); };
+    const view = (s) => forPlayers(m, s, { withheldWords: m.withheldWords, campaign: m.campaign, picId });
+    const cellarPic = () => `/players/pic/${picId(PIC)}`;
+    const gate = m.beats.find((b) => b.title === 'Ashfall Reckoning');
+    const placed = () => act(RS.emptyState({ stateId: 's', session: 'x', plan: S.PLAN }), { type: 'move', pc: S.NOTES.ADA, to: { beat: gate.key, spot: null, title: gate.title } });
+    const shows = (v) => JSON.stringify(v).includes(cellarPic()) || JSON.stringify(v).includes('Secret Cellar');
+    // before: nothing names or shows the cellar
+    assert.strictEqual(m.placeNotes[CELLAR].portrait, PIC, 'it has a picture to keep back');
+    const s = placed();
+    const before = view(s);
+    assert.ok(!shows(before));
+    assert.deepEqual(before.panels.map((p) => p.caption), ['The Gate'], 'the group\'s own place, nothing else');
+    // Move them there: its picture, and no caption (it has no name of its own)
+    const moved = act(s, { type: 'moveGroup', pcs: [S.NOTES.ADA], place: CELLAR, key: m.placeKeys[CELLAR], title: 'Secret Cellar', names: ['Ada'] });
+    assert.deepEqual([view(moved).panels[0].backdrop, view(moved).panels[0].caption], [cellarPic(), null]);
+    // Fight here there, for the group at the Gate
+    const fought = act(act(s, { type: 'improvise', key: m.placeKeys[CELLAR], title: 'Secret Cellar', place: CELLAR, quiet: true }),
+      { type: 'fightStart', beat: m.placeKeys[CELLAR], title: 'Secret Cellar', groups: [gate.key], rows: [], thresholds: [], backdrop: { group: gate.key, place: CELLAR } });
+    assert.deepEqual([view(fought).panels[0].backdrop, view(fought).panels[0].caption], [cellarPic(), null]);
+    // Show it behind the panel
+    const shown = act(s, { type: 'backdrop', group: gate.key, note: CELLAR });
+    assert.deepEqual([view(shown).panels[0].backdrop, view(shown).panels[0].caption], [cellarPic(), null]);
+    // and none of it before: an improvised place beat nobody went to and no fight at puts nothing up
+    const idle = act(s, { type: 'improvise', key: m.placeKeys[CELLAR], title: 'Secret Cellar', place: CELLAR, quiet: true });
+    assert.deepEqual(view(idle), before);
+    assert.ok(!shows(view(idle)));
+    for (const v of [view(moved), view(fought), view(shown)]) checkShape(v, 'an unpublished place');
+  });
+});
+
+// Final review O1: a Plan ally phrase with a negation or hedge before it is no ally, so a hostile NPC's name and
+// HP never reach the players' screen by it. "will never fight as an ally" in a who line, "not with the party" in a
+// Quick Reference cell.
+describe('a negated Plan ally phrase makes no seen ally (final review O1)', () => {
+  const RS = require('../lib/run-sheet/web/state');
+  const M = require('../lib/run-sheet/web/fight-math');
+  const IMP = 'Creatures/Rime Imp.md';
+  const WOLF = S.NOTES.WOLF;
+  let n = 0;
+  const act = (s, a) => RS.reduce(s, { id: `o1-${++n}`, ...a }, new Date(Date.parse('2026-11-20T19:00:00Z') + n * 60000).toISOString());
+
+  it('"will never fight as an ally", "not with the party" and "is not, for now, with the party" send no name and no HP', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rs-o1-'));
+    made.push(dir);
+    fs.cpSync(FIXTURE, dir, { recursive: true });
+    const planPath = path.join(dir, S.PLAN);
+    const text = fs.readFileSync(planPath, 'utf8').replace(/\r\n/g, '\n')
+      .replace('**[[Rime Imp]]:** rides its shoulder', '**[[Rime Imp]]:** rides its shoulder and will never fight as an ally')
+      .replace('**[[Ice Mephit]] (2):** circling the torches', '**[[Ice Mephit]] (2):** circling the torches, and is not, for now, with the party')
+      .replace('## Contingency Scenes', '## NPC Quick Reference\n\n| NPC | Role This Session | Key Detail | Location |\n|-----|---|---|---|\n| [[Frost Wolf]] | Hunter | not with the party | [[The Gate]] |\n\n## Contingency Scenes');
+    assert.ok(text.includes('will never fight as an ally') && text.includes('not with the party') && text.includes('is not, for now,'));
+    fs.writeFileSync(planPath, text);
+    const m = readRunSheet(dir, S.PLAN, { party: S.PARTY });
+    const gate = m.beats.find((b) => b.title === 'Ashfall Reckoning');
+    for (const note of [IMP, WOLF, S.NOTES.MEPHIT]) {
+      const f = gate.foes.find((x) => x.note === note);
+      assert.ok(f, note);
+      assert.deepEqual([f.ally, f.allyBy], [false, null], `${note} is a foe`);
+    }
+    let s = RS.emptyState({ stateId: 's', session: 'x', plan: S.PLAN });
+    s = act(s, { type: 'move', pc: S.NOTES.ADA, to: { beat: gate.key, spot: null, title: gate.title } });
+    const id = `o1-${++n}`;
+    const b = M.rowsForFight({ model: m, derived: RS.derive(m, s), state: s, beatKey: gate.key, idBase: id });
+    s = RS.reduce(s, { id, type: 'fightStart', beat: gate.key, title: gate.title, groups: b.groups, rows: b.rows, thresholds: b.thresholds }, new Date().toISOString());
+    // tick every row in, so a name or HP has every chance to show
+    for (const r of s.fight.rows) if (!r.in) s = act(s, { type: 'fightTick', fight: s.fight.id, row: r.id, in: true });
+    const v = forPlayers(m, s, { withheldWords: m.withheldWords, campaign: m.campaign, picId: () => '0'.repeat(20) });
+    checkShape(v, 'negated phrases');
+    const sandbox = { self: {} };
+    vm.runInNewContext(fs.readFileSync(path.join(__dirname, '..', 'lib', 'run-sheet', 'web', 'players', 'render.js'), 'utf8'), sandbox);
+    const texts = [JSON.stringify(v), sandbox.self.RunSheetPlayersRender.renderPlayers(v)];
+    for (const t of texts) {
+      for (const bad of ['Rime Imp', 'Frost Wolf', 'Ice Mephit', '6175', '7341', '7346', '7347']) assert.ok(!t.includes(bad), `"${bad}" reached the players`);
+      assert.ok(!/(?<![0-9])21\/21(?![0-9])/.test(t), 'the Imp\'s HP reached the players');
     }
   });
 });

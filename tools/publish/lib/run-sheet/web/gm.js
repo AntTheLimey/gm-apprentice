@@ -17,10 +17,41 @@
 //
 // The seam (`window.RunSheetPage`): `dispatch`, `model()`, `state()`, `derived()`, `ui`, `render()`
 // and `parts`, an array of { beatButtons(beat) -> html, side() -> html|null, click(event) -> bool,
-// probe() -> object, sheetTop(derived) -> html, beforeBeat(beat) -> html, focusAttrs: [attribute] }.
+// probe() -> object, sheetTop(derived) -> html, beforeBeat(beat) -> html, focusAttrs: [attribute],
+// pane(derived) -> { title, beat, cut } | null }. A part's `pane` makes `#sheet` the fight's right pane
+// (plan 6a Task 10): the cut, the whole beat or the whole sheet under a bar, in its own scroll.
 // Scripts loaded after this one push parts in (the fight view, gm-fight.js); the page calls them on
 // every draw. A part that takes the right column puts `part-side` on `#app`. The page holds no dice code: rolls come from the server.
 (function () {
+  // The sides' colours (plan 6a Task 9), one table for the page's variables and the Colours menu's swatches.
+  // Order: PC, ally, foe, neutral. Every colour reaches 4.5:1 as text on the page, panel and current-row
+  // backgrounds in its mode (test/run-sheet-side-colours.test.js is the judge). Colour-blind safe is the
+  // Okabe-Ito hues. Three light values are darkened from v8 to pass on the current-turn row: Pens' PC
+  // and neutral (from #2e7d3c and #6b7078, 4.3 and 4.2:1) and Colour-blind safe's PC (from #0072b2, 4.37:1). The
+  // vault setting's own-colour defaults (lib/settings/registry.js) are the Pens light set, and a test holds them equal.
+  const SIDE_NAMES = ['pc', 'ally', 'foe', 'neutral'];
+  const SIDE_PRESETS = {
+    pens: { light: ['#2c7739', '#7a3fb0', '#b3261e', '#646870'], dark: ['#6fcf7f', '#c39bf0', '#f0766b', '#a7abb2'] },
+    colour_blind: { light: ['#006ca9', '#8f3f73', '#7a5300', '#5f646b'], dark: ['#56b4e9', '#cc79a7', '#f0e442', '#a7abb2'] },
+  };
+  // A choice is { preset, own: { pc, ally, foe, neutral } }; my own colours are one set for both modes.
+  function swatches(choice, mode) {
+    const c = choice || {};
+    if (c.preset === 'own' && c.own) return SIDE_NAMES.map((n, i) => c.own[n] || SIDE_PRESETS.pens.light[i]);
+    return (SIDE_PRESETS[c.preset] || SIDE_PRESETS.pens)[mode === 'dark' ? 'dark' : 'light'].slice();
+  }
+  const sideVars = (colours) => colours.map((c, i) => `--${SIDE_NAMES[i]}:${c}`).join(';');
+  // The light set on :root, the dark set under the dark media query (and the forced-dark theme).
+  function sideCss(choice) {
+    const own = Boolean(choice) && choice.preset === 'own';
+    if (own) return `:root{${sideVars(swatches(choice, 'light'))}}`;
+    const dark = sideVars(swatches(choice, 'dark'));
+    return `:root{${sideVars(swatches(choice, 'light'))}}@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){${dark}}}:root[data-theme="dark"]{${dark}}`;
+  }
+  if (typeof window === 'undefined') {
+    if (typeof module !== 'undefined' && module.exports) module.exports = { SIDE_PRESETS, sideCss, swatches };
+    return;
+  }
   const RS = window.RunSheetState;
   const $ = (s) => document.querySelector(s);
   const params = new URLSearchParams(location.search);
@@ -100,6 +131,8 @@
     G.tableLog = m.tableLog;
     serverIs(m.serverId);
     G.modelAt = Date.now();
+    if (sideKept && sideKept.base !== baseOf(G.model.sideColours)) dropKept();
+    applySides();
     for (const n of m.notices || []) {
       if (n.kind === 'record-kept') note(keptText(n.path), { id: `kept:${n.path}` });
       else if (n.kind === 'state-broken') note(n.text, { kind: 'bad', id: `broken:${n.path}` });
@@ -240,6 +273,8 @@
         const st = await getJson('/api/state');
         takeModel(m);
         G.stateId = st.stateId;
+        loadKept();
+        applySides();
         G.serverId = st.serverId || G.serverId;
         G.state = st.state;
         G.rev = st.rev;
@@ -324,6 +359,14 @@
       loadView();
     });
     es.addEventListener('players-ok', () => loadView());
+    // Another window saved the colours: the vault's answer wins over whatever a failed save left here.
+    es.addEventListener('side-colours', (ev) => {
+      const c = readChoice(data(ev));
+      if (!c || !G.model) return;
+      G.model.sideColours = c;
+      dropKept();
+      applySides();
+    });
     es.addEventListener('save-failed', () => { G.saveFailed = true; indicator(); });
     es.addEventListener('state', (ev) => {
       const d = data(ev);
@@ -353,10 +396,11 @@
 
   // ------------------------------------------------------------------ lookups
   const D = () => RS.derive(G.model, G.state);
-  const noteInfo = (p) => (G.model.notes && G.model.notes[p]) || null;
+  const noteInfo = (p) => (G.model.notes && G.model.notes[p]) || (G.model.placeNotes && G.model.placeNotes[p]) || null;
   const castOf = (p) => (G.model.cast || []).find((c) => c.note === p) || null;
   const pcOf = (p) => (G.model.pcs || []).find((x) => x.note === p) || null;
-  const nameOf = (p) => { const pc = pcOf(p); if (pc) return pc.name; const c = castOf(p); if (c) return c.name; const n = noteInfo(p); return n ? n.name : stem(p); };
+  // a place goes by its title, the reader's one rule (place-name.js): never a folder note's "index"
+  const nameOf = (p) => { const pc = pcOf(p); if (pc) return pc.name; const c = castOf(p); if (c) return c.name; const n = noteInfo(p); return n ? (n.title || n.name) : stem(p); };
   const portraitOf = (p) => { const pc = pcOf(p); if (pc && pc.portrait) return pc.portrait; const n = noteInfo(p); if (n && n.portrait) return n.portrait; const c = castOf(p); return c ? c.portrait : null; };
   const unmaskOf = (p) => { const n = noteInfo(p); return n && n.unmask ? n.unmask : null; };
   const isUnmasked = (d, p) => d.unmaskedNow.some((u) => u.note === p);
@@ -407,6 +451,126 @@
   }
   const touch = (group) => { if (group) G.ui.focusGroup = group; };
 
+  // ------------------------------------------------------------------ Move them (plan 6a Task 7, review F13)
+  // Every place in the vault the party can go: the reader's placeKeys, each with its own note's name.
+  const FM = window.RunSheetFightMath;
+  // Each goes by its title (the reader's one rule, place-name.js: name, first alias, a folder note's folder, the
+  // stem with `_` as spaces); two that would show the same carry their folder in brackets (review M1).
+  function knownPlaces() {
+    const keys = G.model.placeKeys || {};
+    const list = Object.keys(keys).map((note) => {
+      const n = noteInfo(note) || {};
+      const aliases = Array.isArray(n.aliases) ? n.aliases : [];
+      const name = n.title || (n.named && n.name) || aliases[0] || stem(note).replace(/_/g, ' ');
+      return { note, name, type: 'location', aliases };
+    });
+    const count = new Map();
+    for (const p of list) count.set(p.name.toLowerCase(), (count.get(p.name.toLowerCase()) || 0) + 1);
+    for (const p of list) {
+      if (count.get(p.name.toLowerCase()) < 2) continue;
+      const folder = p.note.split('/').slice(-2, -1)[0];
+      if (folder) p.name = `${p.name} (${folder})`;
+    }
+    return list.sort((a, b) => a.name.localeCompare(b.name));
+  }
+  const NEW_PLACE = (t) => `+ New place: ${t}`;
+  const NO_PLACE = 'No known place by that name: choose "+ New place" to make one';
+  const placeChoices = (text) => (FM ? FM.addChoices(knownPlaces(), text, RS.castSearch, 8, NEW_PLACE) : []);
+  // A group's place, for the GM: its beat's place (or spot's), else the place beat's, else its beat's title.
+  function groupPlace(g, d = D()) {
+    const b = d.beats.find((x) => x.key === g.beat);
+    const spot = b && g.spot ? (b.spots || []).find((x) => x.key === g.spot) : null;
+    const place = (spot && spot.note) || (b && b.place) || null;
+    return place ? link(place) : esc(groupLabel(g.key, d));
+  }
+  // The box: type a place (the page's own list under it offers the near ones; no browser datalist as well, final
+  // review P-A2), Enter takes the top known hit, and a new one is only ever the explicit "+ New place: <typed>"
+  // choice under it (P-S10).
+  // `where` tells a group's boxes apart (Hand over, a Here strip): each keeps its own focus and choices.
+  function moveBoxHTML(group, where) {
+    const id = `${where}|${group}`;
+    const hits = (G.ui.moveHits && G.ui.moveHits[id]) || [];
+    return `<span class="movebox"><input data-moveg="${esc(group)}" data-movebox="${esc(id)}" placeholder="Move them to…" aria-label="Move ${esc(groupWho(group))} to a place" autocomplete="off"><span class="hits" data-mhits="${esc(id)}">${moveHitsHTML(group, hits)}</span></span>`;
+  }
+  function moveHitsHTML(group, hits) {
+    return hits.map((c) => (c.isNew
+      ? `<button type="button" class="new" data-movenew="${esc(c.name)}" data-moveg="${esc(group)}">${esc(c.label)}</button>`
+      : `<button type="button" data-movepick="${esc(c.note)}" data-moveg="${esc(group)}">${esc(c.name)}</button>`)).join('');
+  }
+  const groupWho = (key) => ((groups().find((g) => g.key === key) || {}).pcs || []).map((p) => first(nameOf(p))).join(', ');
+  // The Move list closes on Esc and on any press outside its box (final review P-A1), as the Colours menu does: the
+  // press goes on to do what it says, and the typed words stay in the box. `keep` is the box pressed in, if any.
+  function closeMoveLists(keep = null) {
+    let closed = false;
+    for (const [id, hits] of Object.entries(G.ui.moveHits || {})) {
+      if (id === keep || !hits.length) continue;
+      G.ui.moveHits[id] = [];
+      const box = document.querySelector(`[data-mhits="${CSS.escape(id)}"]`);
+      if (box) box.innerHTML = '';
+      closed = true;
+    }
+    return closed;
+  }
+  // A box that still holds typed words opens its list again when it is pressed or tabbed back into (re-review).
+  function reopenMoveList(input) {
+    if (!input || !input.value.trim()) return;
+    const id = input.dataset.movebox;
+    G.ui.moveHits = G.ui.moveHits || {};
+    if ((G.ui.moveHits[id] || []).length) return;
+    G.ui.moveHits[id] = placeChoices(input.value);
+    const box = document.querySelector(`[data-mhits="${CSS.escape(id)}"]`);
+    if (box) box.innerHTML = moveHitsHTML(input.dataset.moveg, G.ui.moveHits[id]);
+  }
+  document.addEventListener('pointerdown', (ev) => {
+    const mb = ev.target.closest && ev.target.closest('.movebox');
+    const input = mb && mb.querySelector('input[data-movebox]');
+    closeMoveLists(input ? input.dataset.movebox : null);
+    if (input && ev.target === input) reopenMoveList(input);
+  }, true);
+  document.addEventListener('focusin', (ev) => { if (ev.target.matches && ev.target.matches('input[data-movebox]')) reopenMoveList(ev.target); });
+  // Move a group's PCs to a known place (`note`) or a typed one (`name`). The place's beat becomes the focus.
+  function moveGroup(group, { note, name }) {
+    const g = groups().find((x) => x.key === group);
+    if (!g) return;
+    if (G.ui.moveHits) for (const k of Object.keys(G.ui.moveHits)) if (k.endsWith(`|${group}`)) delete G.ui.moveHits[k];
+    document.querySelectorAll(`input[data-moveg="${CSS.escape(group)}"]`).forEach((box) => { box.value = ''; });
+    const names = g.pcs.map((p) => first(nameOf(p)));
+    let key;
+    // a place the Plan has a beat or hub spot for is that beat (review I1); only any other gets a place beat
+    const plan = note ? RS.planTarget(G.model, G.state, note) : null;
+    if (plan) {
+      key = plan.beat;
+      act({ type: 'moveGroup', pcs: g.pcs, place: note, title: nameOf(note), to: plan, names });
+      G.ui.focus = key;
+      touch(plan.spot || plan.beat);
+      update();
+      goTo(`beat:${key}`);
+      return;
+    }
+    if (note) {
+      key = (G.model.placeKeys || {})[note];
+      if (!key) return;
+      act({ type: 'moveGroup', pcs: g.pcs, place: note, key, title: nameOf(note), names });
+    } else {
+      const typed = String(name || '').replace(/\s+/g, ' ').trim();
+      if (!typed) return;
+      const had = G.state.improvised.find((i) => i.newPlace && FM.sameName(i.title, typed));
+      key = had ? had.key : `pn-${G.clientId}-${G.seq + 1}`;
+      act({ type: 'moveGroup', pcs: g.pcs, name: typed, names });
+    }
+    G.ui.focus = key;
+    touch(key);
+    update();
+    // the sheet (the pane, in a fight) goes to where they went (final review P4.5)
+    goTo(`beat:${key}`);
+  }
+  // "Where the party is" (F13): one row per group at the top of Hand over, with its place and Move them.
+  function partyWhereHTML(d) {
+    const gs = groups();
+    if (!gs.length) return '';
+    return `<h4 class="lab">Where the party is</h4><ul class="where-party">${gs.map((g) => `<li><span class="fc">${g.pcs.map((p) => face(p)).join('')}</span> <b>${esc(groupWho(g.key))}</b> at ${groupPlace(g, d)} ${moveBoxHTML(g.key, 'handover')}</li>`).join('')}</ul>`;
+  }
+
   // The beat the header jot writes to: the one last worked on, else where the first placed PC stands.
   function focusBeat(d) {
     const keys = new Set(d.beats.map((b) => b.key));
@@ -420,7 +584,7 @@
 
   // ------------------------------------------------------------------ drawing
   function focusKey(el) {
-    const own = ['data-jot', 'data-bring', 'data-vhp', 'data-vcond', 'data-where', 'data-orphan', 'data-pt', 'data-hand', 'data-stop', 'data-fire'];
+    const own = ['data-jot', 'data-bring', 'data-movebox', 'data-vhp', 'data-vcond', 'data-where', 'data-orphan', 'data-pt', 'data-hand', 'data-stop', 'data-fire'];
     for (const a of own.concat(...parts.map((p) => p.focusAttrs || []))) {
       const v = el.getAttribute(a);
       if (v) return `[${a}="${CSS.escape(v)}"]`;
@@ -433,19 +597,65 @@
   let committing = false;
   let renders = 0;
 
+  // A press holds the redraws (review F1). Pressing the mouse leaves the box being edited, and its commit
+  // redraws; a redraw between press and release replaces what is under the pointer, so no click fires.
+  // The commit's action goes at once; the redraw waits until after the click (or a release with no click,
+  // a cancelled press or the window losing focus), and then focus goes where the click put it. However long
+  // the press is held: only a release that never comes is cut off, after 2 s.
+  const press = { on: false, owed: false, timer: null };
+  function endHold() {
+    clearTimeout(press.timer);
+    press.on = false;
+    if (press.owed) { press.owed = false; update(); }
+  }
+  document.addEventListener('pointerdown', (ev) => {
+    if (ev.button !== 0) return;
+    press.on = true;
+    clearTimeout(press.timer);
+    press.timer = setTimeout(endHold, 2000);
+  }, true);
+  // the click's own handlers redraw as usual (capture, before them); a redraw still owed comes after them
+  window.addEventListener('click', () => { press.on = false; }, true);
+  window.addEventListener('click', endHold);
+  // a release with no click: the click, when there is one, comes in the same task as the release
+  document.addEventListener('pointerup', () => { if (press.on) setTimeout(endHold, 0); }, true);
+  document.addEventListener('pointercancel', endHold, true);
+  window.addEventListener('blur', () => { if (press.on) endHold(); });
+
+  // Focus a part moved on purpose (Tab to the next box): a redraw that finds focus on nothing puts it back
+  // there, by the box's key, wherever its row now stands. Any press, or focus going elsewhere, forgets it.
+  let wantFocus = null;
+  function focusTo(key) {
+    wantFocus = key;
+    const el = key && document.querySelector(key);
+    if (!el) return null;
+    el.focus({ preventScroll: false });
+    if (el.select) el.select();
+    return el;
+  }
+  document.addEventListener('pointerdown', () => { wantFocus = null; }, true);
+  document.addEventListener('focusin', (ev) => { if (wantFocus && ev.target.getAttribute && focusKey(ev.target) !== wantFocus) wantFocus = null; });
+
   // Every change: redraw, then put focus, caret and half-typed words back.
   function update() {
-    const a = document.activeElement;
+    if (press.on) { press.owed = true; return; }
+    // called from inside a redraw (a box the redraw removes fires blur and change): once it is done
+    if (drawing) { drawAgain = true; return; }
+    press.owed = false;
+    let a = document.activeElement;
+    if ((!a || a === document.body) && wantFocus) a = document.querySelector(wantFocus) || a;
     if (!committing && a && a.matches && a.matches(COMMIT_ON_CHANGE) && a.value.trim() !== a.defaultValue.trim()) {
       const before = renders;
       committing = true;
+      // the redraw that follows removes the box, and the browser fires its own `change`: that one sends nothing
+      a.dataset.sent = a.value;
       try { a.dispatchEvent(new Event('change', { bubbles: true })); } finally { committing = false; }
       if (renders !== before) return; // the change's action redrew
     }
     const sel = a && a !== document.body && a.getAttribute ? focusKey(a) : null;
     const caret = a && typeof a.selectionStart === 'number' ? [a.selectionStart, a.selectionEnd] : null;
     G.drafts = {};
-    document.querySelectorAll('#sheet input[data-jot], #sheet input[data-bring], #newBeat').forEach((el) => { if (el.value) G.drafts[focusKey(el)] = el.value; });
+    document.querySelectorAll('#sheet input[data-jot], #sheet input[data-bring], #sheet input[data-movebox], #newBeat').forEach((el) => { if (el.value) G.drafts[focusKey(el)] = el.value; });
     // the box being typed in keeps its words too (an end-panel box changes the state only on blur)
     const typing = sel && a.closest && a.closest('#sheet, #side') && /^(INPUT|TEXTAREA)$/.test(a.tagName) ? a.value : null;
     render();
@@ -457,7 +667,18 @@
     }
   }
 
+  // A focused box the redraw removes fires blur and change while `innerHTML` is being set; a redraw from
+  // in there would throw ("the node to be removed is no longer a child"), leave the page half drawn and
+  // focus on nothing. So the handlers can tell (`drawing()`), and a redraw asked for meanwhile comes after.
+  let drawing = false;
+  let drawAgain = false;
   function render() {
+    if (drawing) { drawAgain = true; return; }
+    drawing = true;
+    try { draw(); } finally { drawing = false; }
+    if (drawAgain) { drawAgain = false; setTimeout(update, 0); }
+  }
+  function draw() {
     if (!G.model || !G.state) return;
     renders++;
     const d = D();
@@ -472,9 +693,20 @@
     const w = (m.warnings || []).length;
     $('#warnBtn').textContent = w ? `${w} prep note${w === 1 ? '' : 's'}` : 'No prep notes';
     renderNotes();
+    // the boxes that scroll on their own keep their place through the redraw
+    const wasPane = Boolean(G.pane);
+    const kept = {};
+    document.querySelectorAll('[data-keepscroll]').forEach((el) => { kept[el.dataset.keepscroll] = el.scrollTop; });
+    const sheetTop = $('#sheet').scrollTop;
+    G.pane = null;
+    for (const part of parts) if (!G.pane && part.pane) G.pane = part.pane(d) || null;
     $('#rail').innerHTML = railHTML(d);
     $('#sheet').innerHTML = sheetHTML(d);
     renderSide(d);
+    if (G.pane && wasPane) $('#sheet').scrollTop = sheetTop;
+    document.querySelectorAll('[data-keepscroll]').forEach((el) => { if (kept[el.dataset.keepscroll]) el.scrollTop = kept[el.dataset.keepscroll]; });
+    G.om = G.pane ? orderMin() : ORDER_FLOOR;
+    applyLayout();
     drawerShow();
     decorate(document);
     indicator();
@@ -502,7 +734,7 @@
 
   // Links with no href (a note the drawer opens, a beat or section to jump to): reachable from the keyboard.
   function decorate(root) {
-    root.querySelectorAll('a[data-note]:not([href]), a[data-go]:not([href])').forEach((a) => { a.tabIndex = 0; a.setAttribute('role', 'link'); });
+    root.querySelectorAll('a[data-note]:not([href]), a[data-go]:not([href]), a[data-pane]:not([href])').forEach((a) => { a.tabIndex = 0; a.setAttribute('role', 'link'); });
   }
 
   const RAIL_TOP = [['handover', 'Hand over'], ['pcs', 'The PCs'], ['run', 'The run']];
@@ -512,7 +744,8 @@
     const beats = d.beats.filter((b) => !b.contingency).concat(d.beats.filter((b) => b.contingency));
     const off = pcs().filter((p) => { const x = posOf(p.note); return x && x.off; });
     const unplaced = pcs().filter((p) => !posOf(p.note));
-    let h = '<div class="hd">Run sheet</div>';
+    let h = '<button type="button" class="railstrip" id="railOpen" title="Open the run list" aria-label="Open the run list">⟩</button>';
+    h += '<div class="hd rhd">Run sheet<button type="button" id="railFold" title="Fold the run list to a thin strip" aria-label="Fold the run list">⟨</button></div>';
     h += RAIL_TOP.map(([id, t]) => `<a data-go="${id}">${t}</a>`).join('');
     h += beats.map((b) => {
       const here = pcsAtBeat(b.key);
@@ -531,7 +764,21 @@
   const sec = (id, title, body) => `<section class="s" id="${id}"><h2>${title}</h2>${body}</section>`;
   const BRIEF_LABELS = { overview: 'Overview', world: 'World', stops: 'Good places to stop' };
 
+  // The right pane in a fight: a strip for when it is folded, a bar (the fight's title, the way back, Fold ⟩), then
+  // the cut, the whole beat, or the whole sheet (G.ui.pane: cut, beat, whole).
   function sheetHTML(d) {
+    const pane = G.pane;
+    if (!pane) return wholeHTML(d);
+    const v = G.ui.pane || 'cut';
+    const fb = d.beats.find((b) => b.key === pane.beat);
+    const strip = `<button type="button" class="panestrip" id="paneOpen" title="Open the fight's beat" aria-label="Open the fight's beat"><span aria-hidden="true">⟨</span><span class="vtitle">⚔ ${esc(pane.title)}</span></button>`;
+    const back = v === 'whole' ? "Back to the fight's beat" : v === 'beat' && fb ? 'Cut it down' : '';
+    const bar = `<div class="rbar"><span class="t">⚔ ${esc(pane.title)}</span>${back ? `<button type="button" id="paneCut" data-pane="cut">${back}</button>` : ''}<button type="button" id="paneFold" title="Fold this pane to a thin strip: the fight takes the room">Fold ⟩</button></div>`;
+    if (v === 'whole') return strip + bar + wholeHTML(d);
+    const body = v === 'beat' && fb ? beforeBeat(fb) + beatHTML(fb, d) : pane.cut;
+    return `${strip}${bar}${body}<p class="wholelink"><a class="lk" id="paneWhole" data-pane="whole">Whole run sheet</a> <span class="note">the brief, every beat, people, places and the end of the night</span></p>`;
+  }
+  function wholeHTML(d) {
     const m = G.model;
     let h = '';
     for (const part of parts) if (part.sheetTop) h += part.sheetTop(d) || '';
@@ -585,9 +832,9 @@
     }).join('')}</ul></div>`;
   }
 
-  function handoverHTML() {
+  function handoverHTML(d) {
     const list = G.model.handouts || [];
-    return `${list.length ? handoutsHTML(list) : '<p class="muted">Nothing to hand over.</p>'}${mapsHTML()}`;
+    return `${partyWhereHTML(d)}${list.length ? handoutsHTML(list) : '<p class="muted">Nothing to hand over.</p>'}${mapsHTML()}`;
   }
   // The maps the player site would publish (decision 9), each with Show to the focused group's panel.
   function mapsHTML() {
@@ -605,7 +852,8 @@
 
   function pcsHTML() {
     if (!pcs().length) return '<p class="muted">No party given: start the sheet with <code>gma table</code> to have the PCs on it.</p>';
-    return `<div class="tw"><table><thead><tr><th>PC</th><th>This session</th></tr></thead><tbody>${pcs().map((p) => `<tr><td style="white-space:nowrap">${face(p.note)} ${link(p.note, p.name)}<div class="note">${esc(p.player || '')}${p.role ? ` · ${esc(p.role)}` : ''} · AC ${esc(p.ac ?? '?')} · HP ${esc(p.hpNow ?? '?')}/${esc(p.hpMax ?? '?')} · Init ${p.init == null ? '?' : (p.init >= 0 ? '+' : '') + esc(p.init)}</div></td>
+    const src = { index: "the session's list", wrapup: "the session's wrap-up", plan: "the Plan's roster", given: 'the active PCs' }[G.model.partyFrom];
+    return `${src ? `<p class="muted">This session's party, from ${src}.</p>` : ''}<div class="tw"><table><thead><tr><th>PC</th><th>This session</th></tr></thead><tbody>${pcs().map((p) => `<tr><td style="white-space:nowrap">${face(p.note)} ${link(p.note, p.name)}<div class="note">${esc(p.player || '')}${p.role ? ` · ${esc(p.role)}` : ''} · AC ${esc(p.ac ?? '?')} · HP ${esc(p.hpNow ?? '?')}/${esc(p.hpMax ?? '?')} · Init ${p.init == null ? '?' : (p.init >= 0 ? '+' : '') + esc(p.init)}</div></td>
       <td>${p.moment ? `<b>Moment:</b> ${esc(p.moment)}<br>` : ''}${p.touch ? `<span class="muted">Touchpoint:</span> ${esc(p.touch)}<br>` : ''}${p.arc ? `<span class="muted">Arc:</span> ${esc(p.arc)}` : ''}${p.thread ? `<br><span class="muted">Thread:</span> ${esc(p.thread)}` : ''}</td></tr>`).join('')}</tbody></table></div>`;
   }
 
@@ -613,7 +861,7 @@
   const PT_TITLE = { '': 'Not marked. Click: landed ✓', landed: 'Landed ✓. Click: tried and missed ✗', missed: 'Tried and missed ✗. Click: overtaken ⊘', overtaken: 'Overtaken ⊘. Click: clear' };
 
   function beatHTML(b, d) {
-    const lbl = b.contingency ? 'If triggered' : b.impro ? 'Improvised' : (b.place ? esc(nameOf(b.place)) : esc(b.placeText || ''));
+    const lbl = b.contingency ? 'If triggered' : b.newPlace ? 'New place (typed tonight)' : b.placeBeat ? 'Place' : b.impro ? 'Improvised' : (b.place ? esc(nameOf(b.place)) : esc(b.placeText || ''));
     const here = pcsAtBeat(b.key);
     let h = `<div class="beat ${here.length ? 'here' : ''}" id="beat:${esc(b.key)}" data-beat="${esc(b.key)}"><div class="bh"><span class="lbl">${lbl}</span><h3>${esc(b.title)}</h3>${b.sceneNote ? link(b.sceneNote, 'scene note') : ''}</div>`;
     // 1 Here: faces per standing place; a hub gets one row per spot
@@ -625,7 +873,10 @@
         const at = pcsAtSpot(b.key, spot && spot.key, hub);
         // a hub's spots each carry their own Show and Place on panel; a plain beat's are with its buttons
         const own = spot ? `${showBeatBtn(b, spot, gs)}${placeBtn(spot.key)}` : '';
-        return `<div class="here-strip">${label ? `<span class="sl">${label}</span>` : 'Here:'} ${pcs().map((p) => `<button class="pcb ${at.includes(p) ? 'on' : ''}" data-move="${esc(p.note)}" data-to="${esc(to)}" type="button" title="Put ${esc(p.name)} here" aria-pressed="${at.includes(p)}">${face(p.note)}${esc(first(p.name))}</button>`).join('')} <button data-all="${esc(to)}" type="button">Everyone</button>${own ? `<span class="pv-btns">${own}</span>` : ''}</div>`;
+        // the group standing here can be moved on, to any place (F13)
+        const position = spot ? spot.key : b.key;
+        const move = gs.some((g) => g.key === position) ? moveBoxHTML(position, 'here') : '';
+        return `<div class="here-strip">${label ? `<span class="sl">${label}</span>` : 'Here:'} ${pcs().map((p) => `<button class="pcb ${at.includes(p) ? 'on' : ''}" data-move="${esc(p.note)}" data-to="${esc(to)}" type="button" title="Put ${esc(p.name)} here" aria-pressed="${at.includes(p)}">${face(p.note)}${esc(first(p.name))}</button>`).join('')} <button data-all="${esc(to)}" type="button">Everyone</button>${own ? `<span class="pv-btns">${own}</span>` : ''}${move}</div>`;
       };
       h += hub ? b.spots.map((s) => strip(s, s.note ? link(s.note, s.name) : esc(s.name))).join('') : strip(null, '');
     }
@@ -636,7 +887,9 @@
     if (b.contingency) btns.push(`<button data-fire="${esc(b.key)}" class="${G.state.fired[b.key] ? 'fired' : ''}" type="button" aria-pressed="${!!G.state.fired[b.key]}">${G.state.fired[b.key] ? 'Fired ✓' : 'It fired'}</button>`);
     const stopped = G.state.stopped && G.state.stopped.beat === b.key;
     btns.push(`<button data-stop="${esc(b.key)}" class="${stopped ? 'on' : ''}" type="button" aria-pressed="${stopped}">${stopped ? 'Stopped here ✓' : 'Stopped here'}</button>`);
-    if (b.impro) btns.push(armBtn(`unimpro:${b.key}`, 'Remove this beat', `data-unimpro="${esc(b.key)}"`));
+    // a place typed tonight is taken back (Take off) once nobody stands there; any other improvised beat is removed
+    if (b.newPlace) { if (!here.length && !RS.placeInFight(G.state, b.key)) btns.push(armBtn(`unplace:${b.key}`, 'Take off this place', `data-unplace="${esc(b.key)}"`, 'Take back this place typed tonight, and its lines')); }
+    else if (b.impro) btns.push(armBtn(`unimpro:${b.key}`, 'Remove this beat', `data-unimpro="${esc(b.key)}"`));
     for (const part of parts) if (part.beatButtons) btns.push(part.beatButtons(b) || '');
     h += `<div class="bbtns">${btns.filter(Boolean).join('')}</div>`;
     if (b.contingency) h += `<div class="kv"><b>Trigger</b><span>${b.triggerHtml || esc(b.trigger || '')}</span></div>${b.thenHtml || ''}`;
@@ -769,7 +1022,11 @@
   }
 
   function placesHTML() {
-    const tile = (p) => { const pic = portraitOf(p); return `<div class="place"><div class="im">${pic ? `<img src="${esc(picUrl(pic))}" alt="">` : 'no picture yet'}</div><div class="cap">${link(p)}</div></div>`; };
+    const tile = (p) => {
+      const pic = portraitOf(p);
+      const btns = parts.map((x) => (x.placeButtons && x.placeButtons(p)) || '').join('');
+      return `<div class="place"><div class="im">${pic ? `<img src="${esc(picUrl(pic))}" alt="">` : 'no picture yet'}</div><div class="cap">${link(p)}${btns ? ` ${btns}` : ''}</div></div>`;
+    };
     const places = G.model.places || [];
     const maps = G.model.maps || [];
     if (!places.length && !maps.length) return '<p class="muted">None listed.</p>';
@@ -834,19 +1091,23 @@
     }
     $('#app').classList.toggle('part-side', own != null);
     if (own != null) {
-      pvKey = '';
       side.classList.add('part');
       side.innerHTML = own;
       return;
     }
-    if (side.classList.contains('part') || !$('#pv')) {
+    if (side.classList.contains('part') || !$('#pvctl')) {
       side.classList.remove('part');
-      side.innerHTML = '<div class="pvh"><b>Players\' screen</b><button type="button" id="playersBtn2" class="mini" title="Open the players\' window">Open</button></div><div id="pv" class="pv"></div><div id="pvctl" class="pvctl"></div>';
-      pvKey = '';
+      side.innerHTML = '<div id="pvctl" class="pvctl"></div>';
     }
-    drawPreview();
     $('#pvctl').innerHTML = previewControls(d);
   }
+  // The players' preview: one box, made once, that `applyLayout` puts where it belongs. Its shadow root (the
+  // drawn view) goes with it. Folded it is its bar; in a fight, folded, it is nowhere (the toolbar brings it).
+  const pvbox = document.createElement('div');
+  pvbox.id = 'pvbox';
+  pvbox.className = 'pvw';
+  pvbox.innerHTML = '<div class="pvh"><b>Players\' screen</b><button type="button" id="playersBtn2" class="mini" title="Open the players\' window">Open</button><button type="button" id="pvToggle" class="mini" aria-controls="pv"></button></div><div id="pv" class="pv"></div>';
+  const pvHost = pvbox.querySelector('#pv');
   // Under the preview: each panel's Shown backdrop, with a way back to the group's own place.
   function previewControls(d) {
     const gs = groups();
@@ -854,7 +1115,8 @@
     const f = focusedGroup(gs);
     return `<ul class="pvlist">${gs.map((g) => {
       const pn = panelOf(g.key);
-      const back = pn.backdrop ? ` · <span class="muted">behind:</span> ${esc(showableMaps().includes(pn.backdrop) ? mapName(pn.backdrop) : nameOf(pn.backdrop))} <button type="button" class="mini" data-unback="${esc(g.key)}" title="Back to the group's own place">✕</button>` : '';
+      const typed = pn.backdrop ? G.state.improvised.find((i) => i.key === pn.backdrop && i.newPlace) : null;
+      const back = pn.backdrop ? ` · <span class="muted">behind:</span> ${esc(typed ? typed.title : showableMaps().includes(pn.backdrop) ? mapName(pn.backdrop) : nameOf(pn.backdrop))} <button type="button" class="mini" data-unback="${esc(g.key)}" title="Back to the group's own place">✕</button>` : '';
       return `<li class="${g.key === f ? 'focus' : ''}"><a class="lk" data-pgroup="${esc(g.key)}" title="Show goes to this panel">${esc(groupLabel(g.key, d))}</a>${g.key === f ? ' <span class="note">· Show goes here</span>' : ''}${back}</li>`;
     }).join('')}</ul>`;
   }
@@ -864,13 +1126,24 @@
     for (const p of panelOf(key).people || []) if (!out.includes(p) && (showablePerson(p) || typeOf(p) === 'pc')) out.push(p);
     return out;
   }
+  // The most the preview may take: 40% of the right pane's height there (review F9), or 25% of the middle's when
+  // it sits above the order, which keeps the rows in view (fix round 1, M5); elsewhere its width alone sets it.
+  function pvCap() {
+    const at = pvbox.parentElement;
+    const bar = pvbox.querySelector('.pvh').offsetHeight + 16;
+    if (at && at.id === 'sheet') return Math.max(80, at.clientHeight * 0.4 - bar);
+    if (at && at.classList.contains('pvcol') && !$('#app').classList.contains('pvrow')) return Math.max(80, $('#side').clientHeight * 0.25 - bar);
+    return Infinity;
+  }
   function drawPreview() {
-    const host = $('#pv');
+    const host = pvHost;
     const R = window.RunSheetPlayersRender;
-    if (!host || !R) return;
+    if (!host || !R || !pvbox.isConnected || !L.pv || !host.clientWidth) return;
     const root = host.shadowRoot || host.attachShadow({ mode: 'open' });
     const view = G.view || { campaign: G.model.campaign, layout: 'none', panels: [] };
-    const w = Math.max(200, Math.floor(host.clientWidth / PV_SCALE));
+    let w = Math.max(200, Math.floor(host.clientWidth / PV_SCALE));
+    const cap = pvCap();
+    if ((w * 9 * PV_SCALE) / 16 > cap) w = Math.max(200, Math.floor((cap / PV_SCALE) * 16 / 9));
     const hgt = Math.round((w * 9) / 16);
     const armedId = G.ui.armed && Date.now() - G.ui.armed.at <= 3000 ? G.ui.armed.id : '';
     const key = JSON.stringify([view, w, armedId]);
@@ -937,8 +1210,12 @@
     const group = focusedGroup();
     const p = n.path;
     let h = '';
-    if (showableMaps().includes(p) || String(n.type || '').toLowerCase() === 'location') h = backdropBtn(p, group, 'data-dshow');
-    else if (showablePerson(p)) {
+    const isPlace = String(n.type || '').toLowerCase() === 'location';
+    if (showableMaps().includes(p) || isPlace) {
+      h = backdropBtn(p, group, 'data-dshow');
+      // any place in the vault, not only the Plan's: a part's buttons for it (Fight here)
+      if (isPlace && (G.model.placeKeys || {})[p]) h += parts.map((x) => (x.placeButtons && x.placeButtons(p)) || '').join('');
+    } else if (showablePerson(p)) {
       const on = group && panelOf(group).people.includes(p);
       h = on ? armBtn(`unshow:${group}|${p}`, 'Remove from panel', `data-unshow="${esc(p)}" data-group="${esc(group)}"`, `Take ${n.name} off the players' screen`)
         : (group ? `<button type="button" data-dshow="${esc(p)}" data-group="${esc(group)}" title="Show on the players' screen (${esc(groupLabel(group))})">Show</button>` : '');
@@ -994,18 +1271,432 @@
   }
   function openPlayers() { window.open('/players', 'run-sheet-players'); }
 
+  // A jump (the rail, End of night). In a fight it goes in the right pane: to the fight's beat, the whole beat;
+  // to anything the cut does not hold, the whole sheet; a folded pane opens. One column (a narrow window): the
+  // page scrolls to it instead.
   function goTo(id) {
+    if (G.pane) {
+      const sheet = $('#sheet');
+      const here = document.getElementById(id);
+      if (!here || !sheet.contains(here)) G.ui.pane = id === `beat:${G.pane.beat}` ? 'beat' : 'whole';
+      openPane();
+      update();
+      const el = document.getElementById(id);
+      if (el && sheet.contains(el) && fightLayout()) {
+        const bar = sheet.querySelector('.rbar');
+        sheet.scrollTop += el.getBoundingClientRect().top - sheet.getBoundingClientRect().top - (bar ? bar.offsetHeight : 0) - 8;
+      } else if (el) el.scrollIntoView({ block: 'start' });
+      probe();
+      return;
+    }
     const el = document.getElementById(id);
     if (el) el.scrollIntoView({ block: 'start' });
   }
 
+  // ------------------------------------------------------------------ the fight's layout (plan 6a Task 10)
+  // In a fight the page is four columns: the rail | the order and the acting panel | the grip | the right pane.
+  // The GM's choices are kept in this browser (`localStorage['rs:layout']`): the rail folded out of a fight and in
+  // one (two flags: out of a fight the rail holds the PCs' faces and the Off-screen buttons), the pane folded, its
+  // width, the preview open. A page that can keep nothing still works. When the columns cannot fit at their
+  // least, the page folds for that window size by itself, the rail first, then the pane (`L.auto`, never kept);
+  // a GM click that opens an auto-folded column holds until the next resize (ruling R5).
+  const LKEY = 'rs:layout';
+  const RAIL_W = 220;
+  const RAIL_FOLDED = 28;
+  const GRIP_W = 12;
+  const RIGHT_MIN = 320;
+  const RIGHT_DEF = 600;
+  const PANE_LEAST = 260; // a pane the GM opened where 320 px will not fit gets what is left, down to this
+  const PANE_FOLDED = 40;
+  const ORDER_FLOOR = 560;
+  const ORDER_CAP = 860; // the order's width once the acting panel sits beside it
+  // The acting panel's working width: it goes beside the order once the middle holds the order's least width and
+  // this (review F10; final review P4.6, which replaced a fixed 1,200 px), and keeps at least this beside it.
+  const ACT_W = 420;
+  const PV_BESIDE = 0.36; // the preview's share of the middle when the pane is folded, at least 300 px
+  const PV_BESIDE_MIN = 300;
+  const GRIP_TRAVEL = 120; // the grip hides with less travel than this
+  const NARROW = 1000; // at this width and under, one column (gm.css)
+  const L = (() => {
+    const out = { railFolded: false, railFoldedFight: false, folded: false, rw: null, pv: false };
+    try {
+      const v = JSON.parse(window.localStorage.getItem(LKEY));
+      if (v && typeof v === 'object') {
+        for (const k of ['railFolded', 'railFoldedFight', 'folded', 'pv']) if (typeof v[k] === 'boolean') out[k] = v[k];
+        if (typeof v.rw === 'number' && Number.isFinite(v.rw)) out.rw = v.rw;
+      }
+    } catch (e) { /* nothing kept, or no storage */ }
+    out.auto = { rail: false, pane: false };
+    return out;
+  })();
+  // `opened`: a GM click opened an auto-folded column (and `paneW`, the width that pane got where 320 px did not
+  // fit); `held`: the folds the page made, which last until the next window resize, whatever the GM does with
+  // the other column (ruling R5, fix round 1). Opening a column by hand lets its own fold go.
+  const opened = { rail: false, pane: false, paneW: null };
+  const held = { rail: false, pane: false };
+  const forget = () => { opened.rail = false; opened.pane = false; opened.paneW = null; held.rail = false; held.pane = false; };
+  function saveLayout() {
+    try { window.localStorage.setItem(LKEY, JSON.stringify({ railFolded: L.railFolded, railFoldedFight: L.railFoldedFight, folded: L.folded, rw: L.rw, pv: L.pv })); } catch (e) { /* not kept */ }
+  }
+  G.lay = { rail: false, pane: false };
+  G.om = ORDER_FLOOR;
+  const fightLayout = () => Boolean(G.pane) && window.innerWidth > NARROW;
+  // The order's least width: its widest row with every item as tight as it goes (the name at its 6 rem, a chip at
+  // its 2.4 rem), plus the order box's padding, the scroll box's gutter and the column's border. Never under 560.
+  function orderMin() {
+    const ol = document.querySelector('#side ol.to');
+    const fo = ol && ol.closest('.fo');
+    if (!ol || !fo) return ORDER_FLOOR;
+    ol.classList.add('measure');
+    let row = 0;
+    // a row's second line (statuses that do not fit, a box's words) is never measured: it wraps
+    for (const li of ol.children) if (li.dataset.row2 === undefined) row = Math.max(row, li.scrollWidth + li.offsetWidth - li.clientWidth);
+    ol.classList.remove('measure');
+    const side = $('#side');
+    const round = fo.offsetWidth - ol.clientWidth + (side.offsetWidth - side.clientWidth);
+    return Math.max(ORDER_FLOOR, Math.ceil(row + round));
+  }
+  const railW = () => (G.lay.rail ? RAIL_FOLDED : RAIL_W);
+  const appW = () => ($('#app') || {}).clientWidth || window.innerWidth;
+  // The room the right pane has: from its 320 px least to what leaves the order its least.
+  function rightRoom() {
+    const max = Math.max(PANE_LEAST, appW() - railW() - GRIP_W - G.om);
+    return { min: Math.min(RIGHT_MIN, max), max };
+  }
+  // The right pane's width: the GM's (or the default, room to drag both ways), kept inside the room.
+  function rightWidth(want) {
+    const room = rightRoom();
+    const def = Math.max(room.min, Math.min(RIGHT_DEF, room.max - 80));
+    const w = want != null ? want : L.rw != null ? L.rw : def;
+    return Math.round(Math.max(room.min, Math.min(room.max, w)));
+  }
+  // The folds, the widths and where the preview sits, from the GM's choices and the room there is.
+  function applyLayout() {
+    const app = $('#app');
+    if (!app || !G.state) return;
+    const fight = fightLayout();
+    const narrow = window.innerWidth <= NARROW;
+    let rail = !narrow && (G.pane ? L.railFoldedFight : L.railFolded);
+    let pane = fight && L.folded;
+    L.auto = { rail: false, pane: false };
+    if (!fight) { held.rail = false; held.pane = false; }
+    if (fight) {
+      const w = appW();
+      if (held.rail && !rail && !opened.rail) { rail = true; L.auto.rail = true; }
+      if (held.pane && !pane && !opened.pane) { pane = true; L.auto.pane = true; }
+      const need = () => (rail ? RAIL_FOLDED : RAIL_W) + G.om + (pane ? PANE_FOLDED : GRIP_W + (opened.pane ? PANE_LEAST : RIGHT_MIN));
+      if (need() > w && !rail && !opened.rail) { rail = true; L.auto.rail = true; }
+      if (need() > w && !pane && !opened.pane) { pane = true; L.auto.pane = true; }
+      // a column the GM opened yields too when the order would still be short: no row is ever clipped
+      if (need() > w && !pane) { pane = true; L.auto.pane = true; }
+      if (need() > w && !rail) { rail = true; L.auto.rail = true; }
+      held.rail = held.rail || L.auto.rail;
+      held.pane = held.pane || L.auto.pane;
+    }
+    G.lay = { rail, pane };
+    const strip = $('#railOpen');
+    if (strip) strip.title = fight && L.auto.rail && opened.rail ? 'No room to open the run list beside the fight at this width: widen the window' : 'Open the run list';
+    app.classList.toggle('railf', rail);
+    app.classList.toggle('panef', pane);
+    const grip = $('#grip');
+    let pvAt = null;
+    let pvRow = false;
+    if (fight) {
+      const room = rightRoom();
+      const showGrip = !pane && room.max - room.min >= GRIP_TRAVEL;
+      let rw = pane ? PANE_FOLDED : rightWidth();
+      // a pane the GM opened where 320 px will not fit keeps the width it got until a resize (narrower only if the
+      // order needs it: no row is ever clipped)
+      if (!pane && opened.pane && room.max < RIGHT_MIN) {
+        if (opened.paneW == null) opened.paneW = rw;
+        rw = Math.min(opened.paneW, room.max);
+      }
+      const gw = showGrip ? GRIP_W : 0;
+      const mid = appW() - railW() - gw - rw;
+      const side = $('#side');
+      const border = side.offsetWidth - side.clientWidth;
+      let pvw = 0;
+      if (pane && L.pv) {
+        pvw = Math.round(Math.max(PV_BESIDE_MIN, mid * PV_BESIDE));
+        pvRow = mid - pvw >= G.om; // else the preview goes above the order, which keeps its room
+      }
+      const fv = mid - border - (pvRow ? pvw : 0);
+      const ordMin = G.om - border;
+      const beside = fv >= ordMin + ACT_W;
+      app.classList.toggle('nogrip', !showGrip);
+      app.classList.toggle('beside', beside);
+      app.classList.toggle('pvrow', pvRow);
+      app.style.setProperty('--rw', `${rw}px`);
+      app.style.setProperty('--gripw', `${gw}px`);
+      app.style.setProperty('--ordw', `${beside ? Math.max(ordMin, Math.min(ORDER_CAP, fv - ACT_W)) : fv}px`);
+      app.style.setProperty('--pvw', `${pvw}px`);
+      if (grip) grip.title = `Drag to resize: the pane ${room.min}-${room.max} px at this width · double-click to reset`;
+      if (L.pv) {
+        if (!pane) pvAt = $('#sheet');
+        else {
+          let col = side.querySelector('.pvcol');
+          if (!col) { col = document.createElement('div'); col.className = 'pvcol'; }
+          if (pvRow) side.appendChild(col); else side.insertBefore(col, side.firstChild);
+          pvAt = col;
+        }
+      }
+    } else {
+      for (const c of ['nogrip', 'beside', 'pvrow']) app.classList.remove(c);
+      // one column in a fight: the preview tops the pane, as on a wide window
+      pvAt = G.pane ? (L.pv ? $('#sheet') : null) : $('#side');
+    }
+    if (pvAt) {
+      const bar = pvAt.id === 'sheet' ? pvAt.querySelector('.rbar') : null;
+      // the open preview stays under the pane's bar while the pane scrolls, Hide with it (fix round 1, M4)
+      if (bar) pvAt.style.setProperty('--rbarh', `${bar.offsetHeight}px`);
+      const before = bar ? bar.nextSibling : pvAt.firstChild;
+      if (pvbox.parentElement !== pvAt || (bar && bar.nextSibling !== pvbox) || (!bar && pvAt.firstChild !== pvbox)) pvAt.insertBefore(pvbox, before);
+    } else if (pvbox.parentElement) pvbox.remove();
+    pvbox.classList.toggle('open', L.pv);
+    const tg = pvbox.querySelector('#pvToggle');
+    tg.textContent = L.pv ? 'Hide ▾' : 'Show ▸';
+    tg.setAttribute('aria-expanded', String(L.pv));
+    tg.title = L.pv ? 'Fold the preview away' : 'Show the preview of the players\' screen';
+    drawPreview();
+    for (const part of parts) if (part.afterLayout) part.afterLayout();
+    probe();
+  }
+  // The pane brought to its top (Fight, Resume, Back to the fight's beat, Players' screen ▸: review F3).
+  // True when the pane is its own column, so there was a pane to scroll.
+  function paneTop() {
+    if (!fightLayout()) return false;
+    $('#sheet').scrollTop = 0;
+    if (window.scrollY) window.scrollTo(0, 0);
+    return true;
+  }
+  function openPane() {
+    if (!G.lay.pane) return;
+    if (L.folded) { L.folded = false; saveLayout(); }
+    if (L.auto.pane) { opened.pane = true; opened.paneW = null; opened.rail = false; held.pane = false; }
+  }
+  function foldClick(id) {
+    const fightNow = Boolean(G.pane);
+    if (id === 'railFold') {
+      if (fightNow) L.railFoldedFight = true; else L.railFolded = true;
+      opened.rail = false;
+    } else if (id === 'railOpen') {
+      if (fightNow) L.railFoldedFight = false; else L.railFolded = false;
+      // the last column opened wins: the other one folds again if the room is short
+      if (L.auto.rail) { opened.rail = true; opened.pane = false; held.rail = false; }
+    } else if (id === 'paneFold') { L.folded = true; opened.pane = false; } else if (id === 'paneOpen') openPane();
+    saveLayout();
+    update();
+  }
+  function layoutProbe() {
+    const box = (el) => (el ? el.getBoundingClientRect() : null);
+    const r = (v) => (v == null ? null : Math.round(v));
+    const g = box($('#grip'));
+    const gripShown = Boolean(g) && g.width > 0 && getComputedStyle($('#grip')).visibility !== 'hidden';
+    const pv = L.pv && pvbox.isConnected ? box(pvbox) : null;
+    const room = fightLayout() ? rightRoom() : null;
+    return {
+      grip: { left: r(g && g.left), width: r(g && g.width), shown: gripShown },
+      railW: r(box($('#rail')).width), sheetW: r(box($('#sheet')).width), sideW: r(box($('#side')).width),
+      folded: G.lay.pane, railFolded: G.lay.rail, auto: { ...L.auto }, saved: { railFolded: L.railFolded, railFoldedFight: L.railFoldedFight, folded: L.folded, rw: L.rw, pv: L.pv },
+      pvOpen: Boolean(pv), pvTop: r(pv && pv.top), pvBottom: r(pv && pv.bottom), pvIn: pv ? (pvbox.parentElement.id || pvbox.parentElement.className) : null,
+      paneTop: r($('#sheet').scrollTop), paneBox: (() => { const b = box($('#sheet')); return { top: r(b.top), bottom: r(b.bottom), left: r(b.left), right: r(b.right) }; })(),
+      orderMin: G.om, gripMoves: G.gripMoves || 0, room, beside: $('#app').classList.contains('beside'), scrollY: r(window.scrollY),
+    };
+  }
+  // The grip: drag to resize, double-click to reset; it listens on the document (pointer and mouse both), so a
+  // drag never depends on pointer capture or on the pointer staying over a 12 px strip.
+  (() => {
+    const grip = $('#grip');
+    if (!grip) return;
+    let on = false;
+    let startX = 0;
+    let startW = 0;
+    let via = null; // 'pointer' or 'mouse': a pointer drag ignores the mouse events the browser also sends
+    const begin = (x) => { on = true; startX = x; startW = rightWidth(); grip.classList.add('drag'); document.body.classList.add('dragging'); };
+    const move = (x) => {
+      if (!on) return;
+      G.gripMoves = (G.gripMoves || 0) + 1;
+      L.rw = rightWidth(startW + (startX - x));
+      applyLayout();
+      const room = rightRoom();
+      grip.classList.toggle('limit', L.rw <= room.min || L.rw >= room.max);
+    };
+    const stop = () => { if (!on) return; on = false; via = null; grip.classList.remove('drag', 'limit'); document.body.classList.remove('dragging'); saveLayout(); probe(); };
+    grip.addEventListener('pointerdown', (ev) => { if (ev.button !== 0) return; ev.preventDefault(); via = 'pointer'; begin(ev.clientX); });
+    grip.addEventListener('mousedown', (ev) => { if (ev.button !== 0 || on) return; ev.preventDefault(); via = 'mouse'; begin(ev.clientX); });
+    document.addEventListener('pointermove', (ev) => { if (via === 'pointer') move(ev.clientX); });
+    document.addEventListener('mousemove', (ev) => { if (via === 'mouse') move(ev.clientX); });
+    document.addEventListener('pointerup', () => { if (via === 'pointer') stop(); });
+    document.addEventListener('mouseup', () => { if (via === 'mouse') stop(); });
+    document.addEventListener('pointercancel', stop);
+    window.addEventListener('blur', stop);
+    grip.addEventListener('dblclick', () => { L.rw = null; saveLayout(); applyLayout(); });
+  })();
+  window.addEventListener('resize', () => {
+    forget();
+    if (G.model && G.state) applyLayout();
+  });
+  if (PROBE) {
+    let queued = false;
+    document.addEventListener('scroll', () => { if (queued) return; queued = true; requestAnimationFrame(() => { queued = false; probe(); }); }, true);
+  }
+
+  // ------------------------------------------------------------------ side colours (plan 6a Task 9)
+  // The colours are a vault setting: the model carries them, `POST /api/settings/side-colours` writes them, and
+  // the server tells every GM window (`side-colours`). When a save fails the page paints the choice anyway and
+  // keeps it in this browser with a quiet note; `sideKept` holds that choice. Its key names the vault's campaign
+  // and the session's state (`rs:sideColours:<campaign>:<stateId>`, final review O10): the run sheet's one port
+  // serves every vault, and one vault's kept colours must never paint another's.
+  const SIDEKEY = 'rs:sideColours';
+  let keptKey = null;
+  const sideKeyNow = () => (G.model && G.stateId ? `${SIDEKEY}:${G.model.campaign || ''}:${G.stateId}` : null);
+  const HEX6 = /^#[0-9a-f]{6}$/i;
+  const SIDE_WORDS = { pc: 'Party', ally: 'Ally', foe: 'Foe', neutral: 'Neutral' };
+  function readChoice(raw) {
+    if (!raw || typeof raw !== 'object' || !(raw.preset === 'own' || SIDE_PRESETS[raw.preset])) return null;
+    const own = {};
+    for (const n of SIDE_NAMES) if (raw.own && HEX6.test(String(raw.own[n]))) own[n] = String(raw.own[n]).toLowerCase();
+    return { preset: raw.preset, own };
+  }
+  // `sideTrying` is a choice being saved (painted at once); `sideKept` is one the vault could not take:
+  // { choice, base, why }, `base` being the model's colours when the save failed. It is kept in this browser, and
+  // it holds only while the vault still says what it said then: a vault that changed since wins.
+  let sideTrying = null;
+  let sideKept = null;
+  let saveSeq = 0;
+  const baseOf = (colours) => JSON.stringify(colours || null);
+  // The choice kept for this vault and session, read once their key is known (and again when it changes): it holds
+  // only while the vault still says what it said when the save failed.
+  function loadKept() {
+    const key = sideKeyNow();
+    if (key === keptKey) return;
+    keptKey = key;
+    sideKept = null;
+    if (!key) return;
+    try {
+      const k = JSON.parse(localStorage.getItem(key));
+      const choice = k && readChoice(k.choice);
+      if (choice && typeof k.base === 'string') sideKept = { choice, base: k.base, why: String(k.why || 'the vault could not be reached') };
+    } catch (e) { /* no storage, or nothing kept */ }
+    if (sideKept && sideKept.base !== baseOf(G.model.sideColours)) dropKept();
+  }
+  function dropKept() {
+    sideKept = null;
+    try { if (keptKey) localStorage.removeItem(keptKey); } catch (e) { /* no storage */ }
+  }
+  // the kept choice counts only once a model has arrived to compare with
+  const sideChoice = () => sideTrying || (sideKept && G.model ? sideKept.choice : null) || readChoice(G.model && G.model.sideColours) || { preset: 'pens', own: {} };
+  const darkNow = () => document.documentElement.dataset.theme === 'dark' || (document.documentElement.dataset.theme !== 'light' && Boolean(window.matchMedia) && matchMedia('(prefers-color-scheme: dark)').matches);
+  const swatchHTML = (choice) => `<span class="sws" aria-hidden="true">${swatches(choice, darkNow() ? 'dark' : 'light').map((c) => `<i style="background:${c}"></i>`).join('')}</span>`;
+  function menuHTML() {
+    const opt = (value, label, choice) => `<label class="copt"><input type="radio" name="scp" value="${value}"> ${swatchHTML(choice)} <span>${label}</span></label>`;
+    const own = sideChoice();
+    return `${opt('pens', 'Pens', { preset: 'pens' })}${opt('colour_blind', 'Colour-blind safe', { preset: 'colour_blind' })}${opt('own', 'My own', { preset: 'own', own: own.own })}`
+      + `<div class="cown">${SIDE_NAMES.map((n) => `<label>${SIDE_WORDS[n]} <input type="color" data-scown="${n}" aria-label="${SIDE_WORDS[n]} colour"></label>`).join('')}</div>`
+      + '<p class="muted cnote">My own is one set of colours, used in light and dark.</p>';
+  }
+  function applySides() {
+    const choice = sideChoice();
+    let el = document.getElementById('sideVars');
+    if (!el) { el = document.createElement('style'); el.id = 'sideVars'; document.head.appendChild(el); }
+    el.textContent = sideCss(choice);
+    const btn = document.getElementById('coloursBtn');
+    if (btn) {
+      const kept = Boolean(sideKept && G.model && !sideTrying);
+      const title = kept ? `Showing your choice, not the vault's (not saved: ${sideKept.why})` : 'The colours of the sides in a fight';
+      btn.innerHTML = `Colours${kept ? ' <span class="keptmark" aria-hidden="true">●</span>' : ''}`;
+      btn.title = title;
+      if (kept) btn.setAttribute('aria-label', `Colours. ${title}`); else btn.removeAttribute('aria-label');
+    }
+    const menu = document.getElementById('coloursMenu');
+    if (!menu) return;
+    if (!menu.dataset.built) { menu.innerHTML = menuHTML(); menu.dataset.built = '1'; }
+    const own = swatches({ preset: 'own', own: choice.own }, 'light');
+    menu.querySelectorAll('input[name="scp"]').forEach((r) => { r.checked = r.value === choice.preset; });
+    menu.querySelectorAll('input[data-scown]').forEach((p) => { p.value = own[SIDE_NAMES.indexOf(p.dataset.scown)]; });
+    menu.querySelectorAll('.copt').forEach((l) => {
+      const v = l.querySelector('input').value;
+      l.querySelector('.sws').outerHTML = swatchHTML(v === 'own' ? { preset: 'own', own: choice.own } : { preset: v });
+    });
+  }
+  // Each save has a number: only the latest one's answer repaints or settles the kept choice (two quick changes
+  // can answer out of order).
+  async function saveSides(choice) {
+    const mine = ++saveSeq;
+    sideTrying = choice; // painted at once, kept only if the vault cannot take it
+    applySides();
+    let why = null;
+    try {
+      const res = await fetch('/api/settings/side-colours', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ preset: choice.preset, own: choice.own }) });
+      let body = null;
+      try { body = await res.json(); } catch (e) { /* not JSON */ }
+      if (res.ok) {
+        if (mine !== saveSeq) return;
+        const got = readChoice(body && body.sideColours);
+        if (got && G.model) G.model.sideColours = got;
+        sideTrying = null;
+        dropKept();
+        applySides();
+        if (body && body.note) note(String(body.note), { id: `sc:${body.note}` });
+        return;
+      }
+      why = (body && body.error) || `the server answered ${res.status}`;
+    } catch (e) { why = `the server did not answer (${e.message})`; }
+    if (mine !== saveSeq) return;
+    sideTrying = null;
+    loadKept();
+    sideKept = { choice, base: baseOf(G.model && G.model.sideColours), why };
+    try { if (keptKey) localStorage.setItem(keptKey, JSON.stringify(sideKept)); } catch (e) { /* no storage */ }
+    applySides();
+    note(`The colours could not be saved to the vault: ${why}. They stay as you chose on this browser.`, { kind: 'bad', id: `sc:${why}` });
+  }
+  // the machine's light or dark scheme can flip while the page is open: redraw the swatches
+  if (window.matchMedia) {
+    const mq = matchMedia('(prefers-color-scheme: dark)');
+    if (mq.addEventListener) mq.addEventListener('change', () => applySides());
+  }
+  const menuEl = () => document.getElementById('coloursMenu');
+  function menuOpen(on) {
+    const m = menuEl(); const b = document.getElementById('coloursBtn');
+    if (!m || !b) return;
+    m.hidden = !on;
+    b.setAttribute('aria-expanded', String(on));
+  }
+  const menuIsOpen = () => { const m = menuEl(); return Boolean(m) && !m.hidden; };
+  // Any press outside the menu closes it, and the press goes on to do what it says (no preventDefault here).
+  document.addEventListener('mousedown', (ev) => {
+    if (menuIsOpen() && !ev.target.closest('#coloursMenu, #coloursBtn')) menuOpen(false);
+  }, true);
+  document.addEventListener('change', (ev) => {
+    const t = ev.target;
+    if (!t || !t.closest || !t.closest('#coloursMenu')) return;
+    const cur = sideChoice();
+    if (t.name === 'scp') { saveSides({ preset: t.value, own: cur.own }); return; }
+    if (t.dataset.scown) {
+      const held = swatches({ preset: 'own', own: cur.own }, 'light');
+      const own = Object.fromEntries(SIDE_NAMES.map((n, i) => [n, n === t.dataset.scown ? t.value.toLowerCase() : held[i]]));
+      saveSides({ preset: 'own', own });
+    }
+  });
+
   document.addEventListener('click', (ev) => {
     for (const part of parts) if (part.click && part.click(ev)) return;
-    const t = ev.target.closest('button,a[data-note],a[data-go],[data-go],a[data-pgroup]');
+    const t = ev.target.closest('button,a[data-note],a[data-go],[data-go],a[data-pgroup],a[data-pane]');
     if (!t || t.disabled) return;
     const d = t.dataset;
     if (t.id === 'playersBtn' || t.id === 'playersBtn2') { openPlayers(); return; }
+    if (t.id === 'railFold' || t.id === 'railOpen' || t.id === 'paneFold' || t.id === 'paneOpen') { foldClick(t.id); return; }
+    if (t.id === 'pvToggle' || t.id === 'fPvShow') {
+      L.pv = t.id === 'fPvShow' ? true : !L.pv;
+      saveLayout();
+      update();
+      if (L.pv && G.pane) paneTop();
+      probe();
+      return;
+    }
+    if (d.pane) { G.ui.pane = d.pane; update(); paneTop(); probe(); return; }
     if (d.pgroup) { touch(d.pgroup); update(); return; }
+    if (t.id === 'coloursBtn') { menuOpen(!menuIsOpen()); return; }
     if (t.id === 'closeDrawer') { closeDrawer(); return; }
     if (t.id === 'warnBtn') { openWarnings(); return; }
     if (t.id === 'endBtn') { goTo('end'); return; }
@@ -1017,6 +1708,7 @@
       if (d.unjot) armed(id, () => act({ type: 'unjot', jot: d.unjot }));
       else if (d.unbring) armed(id, () => act({ type: 'unbring', beat: d.beat, note: d.unbring, title: titleOfKey(d.beat) }));
       else if (d.unimpro) armed(id, () => act({ type: 'unimprovise', key: d.unimpro }));
+      else if (d.unplace) armed(id, () => act({ type: 'unplace', key: d.unplace }));
       else if (d.unshow) unshow(id, d.group, d.unshow);
       return;
     }
@@ -1040,6 +1732,8 @@
       return;
     }
     if (d.unback) { act({ type: 'backdrop', group: d.unback, note: null }); return; }
+    if (d.movepick) { moveGroup(d.moveg, { note: d.movepick }); return; }
+    if (d.movenew !== undefined) { moveGroup(d.moveg, { name: d.movenew }); return; }
     if (d.move) { const to = JSON.parse(d.to); G.ui.focus = to.beat; touch(to.spot || to.beat); act({ type: 'move', pc: d.move, to }); return; }
     if (d.all) { const to = JSON.parse(d.all); G.ui.focus = to.beat; touch(to.spot || to.beat); act({ type: 'moveAll', pcs: pcs().map((p) => p.note), to }); return; }
     if (d.off) { act({ type: 'move', pc: d.off, to: 'off' }); return; }
@@ -1116,10 +1810,19 @@
     const t = ev.target;
     const d = t.dataset || {};
     const typing = /^(INPUT|SELECT|TEXTAREA)$/.test(t.tagName) || t.isContentEditable;
-    if (ev.key === 'Escape') { if ($('#drawer').classList.contains('open')) { closeDrawer(); ev.preventDefault(); } return; }
+    if (ev.key === 'Escape' && t.closest && t.closest('.movebox')) {
+      const input = t.closest('.movebox').querySelector('input[data-movebox]');
+      if (input && ((G.ui.moveHits || {})[input.dataset.movebox] || []).length) {
+        closeMoveLists();
+        input.focus();
+        ev.preventDefault();
+        return;
+      }
+    }
+    if (ev.key === 'Escape') { if (menuIsOpen()) { menuOpen(false); const b = document.getElementById('coloursBtn'); if (b) b.focus(); ev.preventDefault(); return; } if ($('#drawer').classList.contains('open')) { closeDrawer(); ev.preventDefault(); } return; }
     if (!typing && (ev.key === 'j' || ev.key === 'J') && !ev.metaKey && !ev.ctrlKey && !ev.altKey) { ev.preventDefault(); $('#hjot').focus(); return; }
     if (ev.key === 'Enter' && t.tagName === 'A' && d.note) { openNote(d.note); return; }
-    if (ev.key === 'Enter' && t.tagName === 'A' && d.go) { ev.preventDefault(); t.click(); return; }
+    if (ev.key === 'Enter' && t.tagName === 'A' && (d.go || d.pane)) { ev.preventDefault(); t.click(); return; }
     if (ev.key !== 'Enter' || ev.isComposing) return;
     if (d.jot !== undefined) { const v = t.value; t.value = ''; jot(d.jot, v); return; }
     if (t.id === 'hjot') { const fb = focusBeat(D()); const v = t.value; t.value = ''; jot(fb ? fb.key : null, v); return; }
@@ -1131,11 +1834,24 @@
       return;
     }
     if (t.id === 'newBeat') { ev.preventDefault(); addBeat(); }
+    if (d.moveg !== undefined && t.tagName === 'INPUT') {
+      ev.preventDefault();
+      const top = placeChoices(t.value)[0];
+      if (top && !top.isNew) { moveGroup(d.moveg, { note: top.note }); return; }
+      if (t.value.trim()) { t.setCustomValidity(NO_PLACE); t.reportValidity(); }
+    }
   });
 
   document.addEventListener('input', (ev) => {
     const t = ev.target;
     if (t.setCustomValidity) t.setCustomValidity('');
+    if (t.dataset && t.dataset.moveg !== undefined && t.tagName === 'INPUT') {
+      const id = t.dataset.movebox;
+      G.ui.moveHits = G.ui.moveHits || {};
+      G.ui.moveHits[id] = placeChoices(t.value);
+      const box = document.querySelector(`[data-mhits="${CSS.escape(id)}"]`);
+      if (box) box.innerHTML = moveHitsHTML(t.dataset.moveg, G.ui.moveHits[id]);
+    }
     if (t.dataset && t.dataset.bring !== undefined) {
       const beat = t.dataset.bring;
       G.ui.hits[beat] = RS.castSearch(G.model.cast || [], t.value);
@@ -1166,6 +1882,8 @@
   document.addEventListener('change', (ev) => {
     const t = ev.target;
     const d = t.dataset || {};
+    // the browser's change for an end-panel box a redraw removes, just sent by `update`: not twice
+    if (drawing && t.matches && t.matches(COMMIT_ON_CHANGE) && d.sent !== undefined && d.sent === t.value) return;
     if (d.loot) {
       const b = beatOfKey(d.beat);
       const tr = b && b.treasure.find((x) => x.key === d.loot);
@@ -1226,10 +1944,14 @@
     derived: () => D(),
     ui: G.ui,
     render: update,
+    drawing: () => drawing,
+    focusTo,
     parts,
     // helpers the parts share with the page
     esc, armBtn, armed, link, face, nameOf, getJson, focusedGroup, groups, groupLabel, note, probe, cueHTML, unmaskOf, isUnmasked,
-    OTHER_STATUS_PLACEHOLDER,
+    // the fight's layout (plan 6a Task 10)
+    layout: L, rightRoom, rightWidth, orderMin: () => G.om, paneTop, layoutProbe,
+    OTHER_STATUS_PLACEHOLDER, SIDE_PRESETS, sideCss, swatches,
   };
 
   // ------------------------------------------------------------------ start
@@ -1247,10 +1969,11 @@
       return;
     }
     if (PROBE && params.get('stateId')) G.stateId = params.get('stateId');
+    loadKept();
+    applySides();
     render();
     listen();
     loadView();
   }
-  window.addEventListener('resize', () => { if (G.model && G.state) drawPreview(); });
   start();
 }());

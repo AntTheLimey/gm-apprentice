@@ -52,7 +52,16 @@ img { max-width: 100%; }
 .hnote button { font-size: .75rem; padding: 0 6px; }
 
 /* the rail and the main column */
-.app { display: grid; grid-template-columns: 220px minmax(0, 1fr) var(--sidew, 400px); align-items: start; }
+.app { display: grid; grid-template-columns: var(--railw, 220px) minmax(0, 1fr) var(--sidew, 400px); align-items: start; }
+/* the rail folds to a 28 px strip (plan 6a Task 10): the whole strip is the button that opens it */
+.app.railf { --railw: 28px; }
+.rail .rhd { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.rail .rhd button { font: 600 .8rem/1.2 var(--body); letter-spacing: 0; text-transform: none; padding: 0 6px; }
+.rail .railstrip { display: none; }
+.app.railf .rail { padding: 0; overflow: hidden; }
+.app.railf .rail > :not(.railstrip) { display: none; }
+.app.railf .rail > .railstrip { display: flex; justify-content: center; align-items: flex-start; width: 100%; height: 100%; padding: 10px 0; border: 0; border-radius: 0; background: var(--panel); color: var(--ice); font-weight: 700; }
+.app.railf .rail > .railstrip:hover { background: var(--ice-soft); }
 .rail { position: sticky; top: var(--toph); height: calc(100vh - var(--toph)); overflow: auto; border-right: 1px solid var(--line); padding: 10px 8px 30px; font-size: .86rem; }
 .rail a { display: block; color: var(--ink); text-decoration: none; padding: 3px 6px; border-radius: 5px; cursor: pointer; }
 .rail a:hover { background: var(--ice-soft); }
@@ -66,9 +75,14 @@ img { max-width: 100%; }
 .sheet { padding: 14px 20px 120px; min-width: 0; }
 /* the right column: the players' screen preview, or a part's own (the fight view) */
 .side { position: sticky; top: var(--toph); height: calc(100vh - var(--toph)); overflow: auto; border-left: 1px solid var(--line); padding: 12px 12px 30px; min-width: 0; font-size: .86rem; }
-.side .pvh { display: flex; justify-content: space-between; align-items: center; margin: 0 0 6px; }
-.side .pvh b { font: 500 .68rem var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
-.side .pv { width: 100%; }
+/* the players' preview (#pvbox): one element the page moves to where it belongs, folded to its bar by default */
+.pvw .pvh { display: flex; gap: 6px; align-items: center; margin: 0 0 6px; }
+.pvw .pvh b { font: 500 .68rem var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); flex: 1; }
+.pvw .pv { width: 100%; }
+.pvw:not(.open) .pv { display: none; }
+.pvw:not(.open) .pvh { margin: 0; }
+.sheet > .pvw { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 6px 8px; margin: 0 0 10px; }
+.app.part-side .sheet > .pvw { position: sticky; top: var(--rbarh, 44px); z-index: 2; }
 .side .pvlist { list-style: none; padding: 0; margin: 8px 0 0; }
 .side .pvlist li { padding: 2px 4px; border-radius: 5px; }
 .side .pvlist li.focus { background: var(--lamp-soft); }
@@ -188,22 +202,45 @@ pre.notes { white-space: pre-wrap; background: var(--bg); border: 1px solid var(
 .drawer .body h3, .drawer .body h4 { font-size: .92rem; margin: 10px 0 2px; }
 .drawer .ty { font: 500 .7rem var(--mono); text-transform: uppercase; color: var(--muted); }
 @media (prefers-reduced-motion: reduce) { .drawer { transition: none; } }
-/* the fight view (gm-fight.js, spec §6.4, §6.5): the right column moves left of the beats and holds the
-   turn order, one line a row, with the acting creature's panel under it (its own column at 1600 px and up).
-   The rail goes while a fight runs; the beats column keeps the fight's beat cut at its top. */
-.app.part-side { --ordw: 860px; --actw: 0px; grid-template-columns: calc(var(--ordw) + var(--actw)) minmax(0, 1fr); }
-.app.part-side .rail { display: none; }
-.app.part-side .side { order: -1; border-left: none; border-right: 1px solid var(--line); padding: 0; overflow: hidden; font-size: .86rem; }
-.fview { display: flex; flex-direction: column; height: 100%; }
-.fview .fo { flex: 0 1 auto; min-height: 0; overflow: auto; padding: 8px 10px 6px; }
+/* the fight view (gm-fight.js, spec §6.4, §6.5; plan 6a Task 10). Four columns: the rail (220 px, or a 28 px
+   strip) | the middle, `#side`: the turn order with the acting creature's panel under it, or beside it once the
+   middle holds the order's least width and the panel's 420 px (gm.js sets `beside`, --ordw) | the grip (12 px) | the right pane, `#sheet`:
+   the fight's beat cut, its own scroll, --rw wide or a 40 px strip. gm.js sets the widths and the folds. */
+.app.part-side { grid-template-columns: var(--railw, 220px) minmax(0, 1fr) var(--gripw, 12px) var(--rw, 400px); }
+.app.part-side .side { order: 1; border-left: none; border-right: 1px solid var(--line); padding: 0; overflow: hidden; font-size: .86rem; display: flex; flex-direction: column; }
+.grip { display: none; }
+.app.part-side .grip { display: block; order: 2; align-self: stretch; position: sticky; top: var(--toph); height: calc(100vh - var(--toph)); cursor: col-resize; background: var(--line); touch-action: none; }
+.app.part-side .grip:hover, .app.part-side .grip.drag { background: var(--ice); }
+.app.part-side .grip.limit { background: var(--lamp); }
+.app.part-side .grip::after { content: ""; position: absolute; top: 50%; left: 4px; width: 4px; height: 36px; margin-top: -18px; border-left: 1px dotted var(--panel); border-right: 1px dotted var(--panel); }
+.app.part-side.nogrip .grip { visibility: hidden; pointer-events: none; }
+body.dragging, body.dragging * { cursor: col-resize !important; user-select: none !important; }
+.app.part-side .sheet { order: 3; position: sticky; top: var(--toph); height: calc(100vh - var(--toph)); overflow: auto; padding: 0 16px 60px; }
+.rbar { position: sticky; top: 0; z-index: 3; display: flex; gap: 8px; align-items: center; background: var(--bg); padding: 8px 0 6px; border-bottom: 1px solid var(--line); margin: 0 0 10px; }
+.rbar .t { font: 650 .95rem var(--display); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--bad); }
+.rbar button { font-size: .8rem; padding: 1px 8px; white-space: nowrap; }
+.wholelink { margin: 16px 0 4px; font-size: .95rem; }
+.sheet > .panestrip { display: none; }
+.app.part-side.panef .sheet { padding: 0; overflow: hidden; }
+.app.part-side.panef .sheet > :not(.panestrip) { display: none; }
+.app.part-side.panef .sheet > .panestrip { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 100%; height: 100%; padding: 10px 0; border: 0; border-radius: 0; background: var(--panel); color: var(--ice); font-weight: 700; }
+.app.part-side.panef .sheet > .panestrip:hover { background: var(--ice-soft); }
+.vtitle { writing-mode: vertical-rl; transform: rotate(180deg); font: 650 .9rem var(--display); color: var(--bad); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-height: calc(100% - 40px); }
+.fview { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; min-width: 0; }
+/* the order: its toolbar stays put, its rows scroll in their own box (F8) */
+.fview .fo { flex: 0 1 auto; min-height: 0; display: flex; flex-direction: column; padding: 8px 10px 6px; }
+.fview .fotop { flex: none; }
+.fview ol.to { flex: 0 1 auto; min-height: 68px; overflow-y: auto; overflow-x: hidden; scrollbar-gutter: stable; }
 .fview .act { flex: 1 0 160px; min-height: 160px; overflow: auto; margin: 0; border-width: 2px 0 0; border-radius: 0; }
-@media (min-width: 1600px) {
-  .app.part-side { --actw: 340px; }
-  .fview { display: grid; grid-template-columns: var(--ordw) var(--actw); }
-  .fview .fo { height: 100%; }
-  .fview .act { height: 100%; border-width: 0 0 0 2px; }
-}
-@media (min-width: 1800px) { .app.part-side { --actw: 460px; } }
+.app.part-side.beside .fview { display: grid; grid-template-columns: var(--ordw) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+.app.part-side.beside .fview .fo { height: 100%; }
+.app.part-side.beside .fview .act { height: 100%; border-width: 0 0 0 2px; }
+/* the order measured at its narrowest (gm.js orderMin): each row as tight as its items allow */
+ol.to.measure > li { width: 1px; }
+/* the preview, pane folded: a column beside the order, or above it when the order needs the room */
+.side .pvcol { flex: none; padding: 8px 10px; overflow: auto; border-bottom: 1px solid var(--line); }
+.app.part-side.pvrow .side { flex-direction: row; }
+.app.part-side.pvrow .side .pvcol { width: var(--pvw); border-bottom: none; border-left: 1px solid var(--line); }
 .fh { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; margin: 0 0 6px; }
 .fh b { font: 650 .8rem var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--bad); margin-right: 4px; }
 .fh .sp { flex: 1; }
@@ -212,23 +249,41 @@ pre.notes { white-space: pre-wrap; background: var(--bg); border: 1px solid var(
 .fin, .fadd { display: flex; gap: 5px; flex-wrap: wrap; align-items: center; margin: 0 0 5px; font-size: .8rem; }
 .fin .gchip { border: 1px solid var(--line); border-radius: 999px; padding: 0 8px; background: var(--bg); }
 .fadd button { font-size: .78rem; padding: 1px 7px; }
-.fadd .addname { position: relative; }
+/* the Add list is a row of the Add line itself, never over the order: while the GM types the order moves down by
+   its height, and back when it closes (final review P-A1) */
+.fadd .addname { display: contents; }
 .fadd #fAddName { width: 11rem; font-size: .8rem; }
 .fadd #fAddCount { width: 3.2rem; font-size: .8rem; }
-.fadd .fhits { position: absolute; left: 0; top: 100%; z-index: 3; display: flex; flex-direction: column; min-width: 14rem; background: var(--panel); box-shadow: 0 4px 12px rgba(0, 0, 0, .15); }
+.fadd .fhits { order: 99; flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 3px; }
 .fadd .fhits:empty { display: none; }
-.fadd .fhits button { text-align: left; border-radius: 0; }
+.fadd .fhits button { text-align: left; }
 .fadd .fhits .t { color: var(--muted); font-size: .72rem; margin-left: 6px; }
+.fadd .fhits .new { font-style: italic; }
+.fjoins { display: flex; gap: 5px 12px; flex-wrap: wrap; margin: 0 0 5px; font-size: .78rem; color: var(--muted); }
+.fjoins button { font-size: .75rem; padding: 0 6px; }
 .areabar { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; background: var(--bad-soft); border: 1px solid var(--bad); border-radius: 8px; padding: 4px 8px; margin: 0 0 6px; font-size: .82rem; }
 .areabar input#fAreaDmg { width: 4.5rem; }
 .areabar .spend { display: inline-flex; gap: 3px; align-items: center; }
 ol.to { list-style: none; margin: 0; padding: 0; }
 /* one line a row, however busy: chips and counters give way (ellipsis, the full word in the title) before the row wraps */
-ol.to > li { display: flex; flex-wrap: nowrap; align-items: center; gap: 2px; min-height: 32px; padding: 2px 4px; border-top: 1px solid var(--line); border-radius: 4px; }
+ol.to > li { display: flex; flex-wrap: nowrap; align-items: center; gap: 2px; min-height: 32px; padding: 2px 4px; border-top: 1px solid var(--line); border-left: 4px solid transparent; border-radius: 4px; }
+/* a row's side: the bar and the name take its colour (--pc, --ally, --foe, --neutral come from the Colours setting, gm.js) */
+ol.to > li.side-pc { border-left-color: var(--pc); }
+ol.to > li.side-ally { border-left-color: var(--ally); }
+ol.to > li.side-foe { border-left-color: var(--foe); }
+ol.to > li.side-neutral { border-left-color: var(--neutral); }
+ol.to > li.side-pc .nm { color: var(--pc); }
+ol.to > li.side-ally .nm { color: var(--ally); }
+ol.to > li.side-foe .nm { color: var(--foe); }
+ol.to > li.side-neutral .nm { color: var(--neutral); }
 ol.to > li > * { flex-shrink: 0; }
 /* the name gives way last: chips shrink first, so a wider font (Linux, Windows) cuts a chip before a name */
 ol.to > li > .nm { flex: 1 0.01 auto; min-width: 6rem; }
-ol.to > li > .chip, ol.to > li > .cnt[data-frch] { flex-shrink: 1; min-width: 2.4rem; overflow: hidden; text-overflow: ellipsis; }
+ol.to > li > .cnt[data-frch] { flex-shrink: 1; min-width: 2.4rem; overflow: hidden; text-overflow: ellipsis; }
+/* the statuses' strip: the row's leftover width, clipped, "+N" for the rest (gm-fight.js fitChips) */
+ol.to > li > .chips { display: flex; gap: 2px; flex: 0 1 auto; min-width: 0; overflow: hidden; }
+ol.to .chips > .chip { flex: none; }
+ol.to .chips > [hidden] { display: none; }
 ol.to > li.cur { background: var(--lamp-soft); box-shadow: inset 4px 0 0 var(--lamp); }
 ol.to > li.out { opacity: .55; }
 ol.to > li.out .nm { text-decoration: line-through; }
@@ -244,6 +299,12 @@ ol.to input.hpin { width: 4.2rem; text-align: left; }
 ol.to .hpv, ol.to .acv { font: 650 .8rem var(--mono); white-space: nowrap; }
 ol.to .hpv input { width: 2.6rem; }
 ol.to .acv input { width: 2.3rem; margin-left: 2px; }
+ol.to input[aria-invalid="true"], ol.to input.pending { outline: 2px solid var(--bad); outline-offset: 1px; }
+/* a row's second line (gm-fight.js syncLine2): a box's words and the statuses the row has no room for; it wraps, and
+   the order's least width never counts it */
+ol.to > li.row2 { flex-wrap: wrap; min-height: 0; gap: 2px 6px; padding: 0 4px 3px 22px; border-top: 0; }
+ol.to > li.row2 .l2st { display: flex; flex-wrap: wrap; gap: 2px; }
+ol.to .badnum, ol.to .pendnum { color: var(--bad); font: 600 .7rem var(--mono); white-space: nowrap; }
 ol.to input.other { width: 9rem; text-align: left; }
 ol.to select { font-size: .72rem; padding: 0 1px; max-width: 4.2rem; }
 ol.to .cnt { max-width: 6rem; overflow: hidden; text-overflow: ellipsis; }
@@ -262,7 +323,7 @@ ol.to .ds { font: 500 .7rem var(--mono); white-space: nowrap; }
 .act .nums { display: flex; gap: 5px; flex-wrap: wrap; margin: 6px 0; font: 600 .82rem var(--mono); align-items: center; }
 .act .nums > span { border: 1px solid var(--line); border-radius: 5px; padding: 0 6px; background: var(--bg); }
 .act .nums .bl { color: var(--lamp); border-color: var(--lamp); }
-.act .nums .st { color: var(--bad); }
+.act .nums .st { color: var(--bad); border: 1px solid var(--bad); border-radius: 5px; padding: 0 6px; background: var(--bg); font: inherit; }
 .act .nums.ctr button { font-size: .75rem; padding: 1px 6px; }
 .act .stats { font-size: .9rem; border-top: 1px solid var(--line); margin-top: 6px; padding-top: 4px; }
 .act .stats table { font-size: .8rem; }
@@ -289,5 +350,37 @@ ol.to .ds { font: 500 .7rem var(--mono); white-space: nowrap; }
   .side { position: static; height: auto; border-left: none; border-top: 1px solid var(--line); }
   .app.part-side { grid-template-columns: 1fr; }
   .app.part-side .side { overflow: visible; }
+  .app.part-side .grip { display: none; }
+  .app.part-side .sheet { position: static; height: auto; overflow: visible; padding: 14px 20px 120px; }
+  .fview ol.to { overflow: visible; }
+  /* one column: no folds, and the pane's bar sticks under the header */
+  .rbar { top: var(--toph); }
+  .rbar #paneFold { display: none; }
+  .app.part-side .sheet > .pvw { position: static; }
   .top .bar { flex-wrap: wrap; white-space: normal; }
 }
+
+/* Move them (plan 6a Task 7): a box over every known place, with its choices under it */
+.movebox { position: relative; display: inline-flex; flex-direction: column; gap: 2px; min-width: 12rem; max-width: 18rem; margin-left: 6px; }
+.movebox input { width: 100%; font-size: .82rem; }
+.movebox .hits { position: absolute; left: 0; top: 100%; z-index: 3; display: flex; flex-direction: column; gap: 2px; min-width: 100%; background: var(--panel); box-shadow: 0 4px 12px rgba(0, 0, 0, .15); }
+.movebox .hits:empty { display: none; }
+.movebox .hits button { text-align: left; font-size: .82rem; }
+.where-party { list-style: none; padding: 0; margin: 4px 0 10px; }
+.where-party li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 4px 0; }
+
+/* the Colours menu and the acting panel's side control */
+.cmenu { position: absolute; right: 16px; top: 100%; z-index: 6; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; box-shadow: 0 6px 18px rgba(0, 0, 0, .25); display: flex; flex-direction: column; gap: 6px; font-size: .86rem; }
+.cmenu[hidden] { display: none; }
+.cmenu .copt { display: flex; gap: 8px; align-items: center; cursor: pointer; }
+.sws { display: inline-flex; gap: 2px; }
+.sws i { width: 14px; height: 14px; border-radius: 3px; border: 1px solid var(--line); }
+.cmenu .cown { display: flex; gap: 8px; flex-wrap: wrap; padding-left: 22px; }
+.cmenu .cown label { display: inline-flex; gap: 4px; align-items: center; font-size: .78rem; }
+.cmenu input[type="color"] { width: 30px; height: 22px; padding: 0; }
+.cmenu .cnote { margin: 0; font-size: .75rem; max-width: 24rem; }
+.act .sideSw { display: inline-flex; gap: 2px; align-items: center; }
+.act .sideSw .lab { font: 500 .68rem var(--mono); color: var(--muted); margin-right: 4px; }
+.act .sideSw button[aria-pressed="true"] { background: var(--ice); color: var(--panel); border-color: var(--ice); }
+.act .nums > span.sideSw { border: 0; background: none; padding: 0; }
+#coloursBtn .keptmark { color: var(--lamp); font-size: .7rem; }
