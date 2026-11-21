@@ -249,10 +249,14 @@
     return c.join('');
   }
 
+  // pc, ally, foe or neutral; a lair action has none
+  const sideWord = (r) => (r.kind === 'pc' ? 'pc' : FM.sideOfRow(r));
   function rowHTML(r, f, view) {
     const cur = f.turn === r.id;
-    const cls = [cur ? 'cur' : '', r.out ? 'out' : '', r.in ? '' : 'bench', ui.area && ui.sel[r.id] ? 'sel' : ''].join(' ');
-    const name = `<span class="nm" data-fpeek="${esc(r.id)}" title="Show this one's panel">${esc(r.gmName)}</span>`;
+    const side = sideWord(r);
+    const cls = [cur ? 'cur' : '', r.out ? 'out' : '', r.in ? '' : 'bench', ui.area && ui.sel[r.id] ? 'sel' : '', side ? `side-${side}` : ''].join(' ');
+    // the name takes its side's colour; its title keeps the word and the reason, e.g. "Ferrante (neutral: you set it)"
+    const name = `<span class="nm" data-fpeek="${esc(r.id)}" title="${esc(side ? `${r.gmName} (${side === 'pc' ? 'PC' : side}${r.sideFrom ? `: ${r.sideFrom}` : ''})` : "Show this one's panel")}">${esc(r.gmName)}</span>`;
     if (r.kind === 'lair') {
       const owners = (r.of || []).map((id) => view.rows.find((x) => x.id === id)).filter(Boolean).map((x) => x.gmName);
       return `<li class="${cls} lair" data-frow="${esc(r.id)}"><span class="tk"></span><span class="ini fixed">20</span>${name}<span class="tag">loses ties${owners.length ? ` · ${esc(owners.join(', '))}` : ''}</span></li>`;
@@ -261,8 +265,6 @@
       ? `<input type="checkbox" data-fsel="${esc(r.id)}" ${ui.sel[r.id] ? 'checked' : ''} ${r.in ? '' : 'disabled'} aria-label="${esc(r.gmName)} is in the area">`
       : `<input type="checkbox" data-ftick="${esc(r.id)}" ${r.in ? 'checked' : ''} aria-label="${esc(r.gmName)} is in this fight" title="In this fight">`;
     const tags = [];
-    if (r.kind === 'pc') tags.push('PC');
-    if (r.kind === 'ally') tags.push('ally');
     if (!isNum(r.hp)) tags.push('no numbers');
     if (r.temp) tags.push(`+${r.temp} temp`);
     if (r.gone) tags.push('not in the party now');
@@ -335,6 +337,12 @@
     if (left) {
       const all = FM.groupMates(f.view.rows, r).length;
       nums.push(`<button type="button" class="tg same" data-fsame="${esc(r.id)}" title="Copy these numbers (and the HP they give) to the others of ${esc(String(r.name).replace(/\s+\d+$/, ''))} nobody has typed into">Same for all ${all}</button>`);
+    }
+    // Three direct buttons, never a cycle: foe to neutral by one click must not pass through ally (an ally that
+    // is seen shows its name and HP on the players' screen)
+    if (r.kind !== 'pc') {
+      const now = FM.sideOfRow(r);
+      nums.push(`<span class="sideSw" role="group" aria-label="Side"><span class="lab">Side:</span>${FM.SIDES.map((x) => `<button type="button" class="tg" data-fside="${x}" data-fsiderow="${esc(r.id)}" aria-pressed="${x === now}">${x}</button>`).join('')}</span>`);
     }
     let body = '';
     if (r.kind === 'pc') body = '<p class="note">Players run their own sheets.</p>';
@@ -500,7 +508,7 @@
           id: f.id, groups: f.groups, turn: f.turn, round: f.round, started: f.started, paused: f.paused, area: ui.area,
           ask: Boolean($('.fask')), actingName: acting ? acting.textContent : null,
           rows: f.view.rows.map((r) => ({
-            id: r.id, note: r.note, copy: r.copy, kind: r.kind, name: r.gmName, in: r.in, ini: isNum(r.ini) ? r.ini : null, mod: r.mod,
+            id: r.id, note: r.note, copy: r.copy, kind: r.kind, side: sideWord(r), name: r.gmName, in: r.in, ini: isNum(r.ini) ? r.ini : null, mod: r.mod,
             hp: r.hp, max: r.max, temp: r.temp, conds: r.conds, exhaustion: r.exhaustion, conc: r.conc, out: r.out, seen: r.seen,
             recharge: (r.recharge || []).map((x) => ({ name: x.name, ready: x.ready, rolled: x.rolled })),
           })),
@@ -587,6 +595,7 @@
     if (d.fahalf && r) { ui.ahalf[r.id] = !ui.ahalf[r.id]; RP.render(); return true; }
     if (d.fhalf && r) { F({ type: 'half', row: r.id, on: !r.half }); return true; }
     if (d.fres && r) { F({ type: 'resisted', row: r.id, on: !r.resisted }); return true; }
+    if (d.fside && d.fsiderow) { const x = rowById(d.fsiderow); if (x && FM.isSide(d.fside)) F({ type: 'setSide', row: x.id, side: d.fside }); return true; }
     if (d.fseen && r) { F({ type: 'seen', row: r.id, on: !r.seen }); return true; }
     if (d.fout && r) { F({ type: 'out', row: r.id, on: !r.out }); return true; }
     if (d.flr && r) { F({ type: 'counter', row: r.id, kind: 'lr', value: r.lr > 0 ? r.lr - 1 : r.lrMax }); return true; }

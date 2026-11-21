@@ -13,9 +13,11 @@
     <input id="hjot" placeholder="Jot (J)" aria-label="Jot a line for the beat in play" autocomplete="off">
     <span class="saved" id="saved" role="status" aria-live="polite">Saved</span>
     <button class="warnb" id="warnBtn" type="button"></button>
+    <button id="coloursBtn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="coloursMenu" title="The colours of the sides in a fight">Colours</button>
     <button id="playersBtn" type="button" title="Open the players' window: put it on the screen they can see">Players' screen</button>
     <button id="endBtn" type="button">End of night</button>
   </div>
+  <div class="cmenu" id="coloursMenu" role="group" aria-label="Side colours" hidden></div>
   <div class="hnotes" id="hnotes"></div>
 </header>
 <div class="app" id="app">

@@ -21,6 +21,34 @@
 // Scripts loaded after this one push parts in (the fight view, gm-fight.js); the page calls them on
 // every draw. A part that takes the right column puts `part-side` on `#app`. The page holds no dice code: rolls come from the server.
 (function () {
+  // The sides' colours (plan 6a Task 9), one table for the page's variables and the Colours menu's swatches.
+  // Order: PC, ally, foe, neutral. Every colour reaches 4.5:1 as text on the page, panel and current-row
+  // backgrounds in its mode (test/run-sheet-side-colours.test.js is the judge). Colour-blind safe is the
+  // Okabe-Ito hues. Two light values are darkened from v8 to pass: the Pens PC and neutral (#2e7d3c and
+  // #6b7078 reach only 4.3:1 on the current-turn row), and so is Colour-blind safe's PC (#0072b2).
+  const SIDE_NAMES = ['pc', 'ally', 'foe', 'neutral'];
+  const SIDE_PRESETS = {
+    pens: { light: ['#2c7739', '#7a3fb0', '#b3261e', '#646870'], dark: ['#6fcf7f', '#c39bf0', '#f0766b', '#a7abb2'] },
+    colour_blind: { light: ['#006ca9', '#8f3f73', '#7a5300', '#5f646b'], dark: ['#56b4e9', '#cc79a7', '#f0e442', '#a7abb2'] },
+  };
+  // A choice is { preset, own: { pc, ally, foe, neutral } }; my own colours are one set for both modes.
+  function swatches(choice, mode) {
+    const c = choice || {};
+    if (c.preset === 'own' && c.own) return SIDE_NAMES.map((n, i) => c.own[n] || SIDE_PRESETS.pens.light[i]);
+    return (SIDE_PRESETS[c.preset] || SIDE_PRESETS.pens)[mode === 'dark' ? 'dark' : 'light'].slice();
+  }
+  const sideVars = (colours) => colours.map((c, i) => `--${SIDE_NAMES[i]}:${c}`).join(';');
+  // The light set on :root, the dark set under the dark media query (and the forced-dark theme).
+  function sideCss(choice) {
+    const own = Boolean(choice) && choice.preset === 'own';
+    if (own) return `:root{${sideVars(swatches(choice, 'light'))}}`;
+    const dark = sideVars(swatches(choice, 'dark'));
+    return `:root{${sideVars(swatches(choice, 'light'))}}@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){${dark}}}:root[data-theme="dark"]{${dark}}`;
+  }
+  if (typeof window === 'undefined') {
+    if (typeof module !== 'undefined' && module.exports) module.exports = { SIDE_PRESETS, sideCss, swatches };
+    return;
+  }
   const RS = window.RunSheetState;
   const $ = (s) => document.querySelector(s);
   const params = new URLSearchParams(location.search);
@@ -100,6 +128,7 @@
     G.tableLog = m.tableLog;
     serverIs(m.serverId);
     G.modelAt = Date.now();
+    applySides();
     for (const n of m.notices || []) {
       if (n.kind === 'record-kept') note(keptText(n.path), { id: `kept:${n.path}` });
       else if (n.kind === 'state-broken') note(n.text, { kind: 'bad', id: `broken:${n.path}` });
@@ -324,6 +353,15 @@
       loadView();
     });
     es.addEventListener('players-ok', () => loadView());
+    // Another window saved the colours: the vault's answer wins over whatever a failed save left here.
+    es.addEventListener('side-colours', (ev) => {
+      const c = readChoice(data(ev));
+      if (!c || !G.model) return;
+      G.model.sideColours = c;
+      sideShown = null;
+      try { localStorage.removeItem(SIDEKEY); } catch (e) { /* no storage */ }
+      applySides();
+    });
     es.addEventListener('save-failed', () => { G.saveFailed = true; indicator(); });
     es.addEventListener('state', (ev) => {
       const d = data(ev);
@@ -1101,6 +1139,93 @@
     if (el) el.scrollIntoView({ block: 'start' });
   }
 
+  // ------------------------------------------------------------------ side colours (plan 6a Task 9)
+  // The colours are a vault setting: the model carries them, `POST /api/settings/side-colours` writes them, and
+  // the server tells every GM window (`side-colours`). When a save fails the page paints the choice anyway and
+  // keeps it in this browser (`localStorage['rs:sideColours']`) with a quiet note; `sideShown` holds that choice.
+  const SIDEKEY = 'rs:sideColours';
+  const HEX6 = /^#[0-9a-f]{6}$/i;
+  const SIDE_WORDS = { pc: 'Party', ally: 'Ally', foe: 'Foe', neutral: 'Neutral' };
+  function readChoice(raw) {
+    if (!raw || typeof raw !== 'object' || !(raw.preset === 'own' || SIDE_PRESETS[raw.preset])) return null;
+    const own = {};
+    for (const n of SIDE_NAMES) if (raw.own && HEX6.test(String(raw.own[n]))) own[n] = String(raw.own[n]).toLowerCase();
+    return { preset: raw.preset, own };
+  }
+  let sideShown = null;
+  try { sideShown = readChoice(JSON.parse(localStorage.getItem(SIDEKEY))); } catch (e) { /* no storage, or nothing kept */ }
+  const sideChoice = () => sideShown || readChoice(G.model && G.model.sideColours) || { preset: 'pens', own: {} };
+  const darkNow = () => document.documentElement.dataset.theme === 'dark' || (document.documentElement.dataset.theme !== 'light' && Boolean(window.matchMedia) && matchMedia('(prefers-color-scheme: dark)').matches);
+  const swatchHTML = (choice) => `<span class="sws" aria-hidden="true">${swatches(choice, darkNow() ? 'dark' : 'light').map((c) => `<i style="background:${c}"></i>`).join('')}</span>`;
+  function menuHTML() {
+    const opt = (value, label, choice) => `<label class="copt"><input type="radio" name="scp" value="${value}"> ${swatchHTML(choice)} <span>${label}</span></label>`;
+    const own = sideChoice();
+    return `${opt('pens', 'Pens', { preset: 'pens' })}${opt('colour_blind', 'Colour-blind safe', { preset: 'colour_blind' })}${opt('own', 'My own', { preset: 'own', own: own.own })}`
+      + `<div class="cown">${SIDE_NAMES.map((n) => `<label>${SIDE_WORDS[n]} <input type="color" data-scown="${n}" aria-label="${SIDE_WORDS[n]} colour"></label>`).join('')}</div>`
+      + '<p class="muted cnote">My own is one set of colours, used in light and dark.</p>';
+  }
+  function applySides() {
+    const choice = sideChoice();
+    let el = document.getElementById('sideVars');
+    if (!el) { el = document.createElement('style'); el.id = 'sideVars'; document.head.appendChild(el); }
+    el.textContent = sideCss(choice);
+    const menu = document.getElementById('coloursMenu');
+    if (!menu) return;
+    if (!menu.dataset.built) { menu.innerHTML = menuHTML(); menu.dataset.built = '1'; }
+    const own = swatches({ preset: 'own', own: choice.own }, 'light');
+    menu.querySelectorAll('input[name="scp"]').forEach((r) => { r.checked = r.value === choice.preset; });
+    menu.querySelectorAll('input[data-scown]').forEach((p) => { p.value = own[SIDE_NAMES.indexOf(p.dataset.scown)]; });
+    menu.querySelectorAll('.copt').forEach((l) => {
+      const v = l.querySelector('input').value;
+      l.querySelector('.sws').outerHTML = swatchHTML(v === 'own' ? { preset: 'own', own: choice.own } : { preset: v });
+    });
+  }
+  async function saveSides(choice) {
+    sideShown = choice; // painted at once, kept only if the vault cannot take it
+    applySides();
+    let why = null;
+    try {
+      const res = await fetch('/api/settings/side-colours', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ preset: choice.preset, own: choice.own }) });
+      let body = null;
+      try { body = await res.json(); } catch (e) { /* not JSON */ }
+      if (res.ok) {
+        const got = readChoice(body && body.sideColours);
+        if (got && G.model) G.model.sideColours = got;
+        sideShown = null;
+        try { localStorage.removeItem(SIDEKEY); } catch (e) { /* no storage */ }
+        applySides();
+        if (body && body.note) note(String(body.note), { id: `sc:${body.note}` });
+        return;
+      }
+      why = (body && body.error) || `the server answered ${res.status}`;
+    } catch (e) { why = `the server did not answer (${e.message})`; }
+    try { localStorage.setItem(SIDEKEY, JSON.stringify(choice)); } catch (e) { /* no storage */ }
+    note(`The colours could not be saved to the vault: ${why}. They stay as you chose on this browser.`, { kind: 'bad', id: `sc:${why}` });
+  }
+  const menuEl = () => document.getElementById('coloursMenu');
+  function menuOpen(on) {
+    const m = menuEl(); const b = document.getElementById('coloursBtn');
+    if (!m || !b) return;
+    m.hidden = !on;
+    b.setAttribute('aria-expanded', String(on));
+  }
+  const menuIsOpen = () => { const m = menuEl(); return Boolean(m) && !m.hidden; };
+  // Any press outside the menu closes it, and the press goes on to do what it says (no preventDefault here).
+  document.addEventListener('mousedown', (ev) => {
+    if (menuIsOpen() && !ev.target.closest('#coloursMenu, #coloursBtn')) menuOpen(false);
+  }, true);
+  document.addEventListener('change', (ev) => {
+    const t = ev.target;
+    if (!t || !t.closest || !t.closest('#coloursMenu')) return;
+    const cur = sideChoice();
+    if (t.name === 'scp') { saveSides({ preset: t.value, own: cur.own }); return; }
+    if (t.dataset.scown) {
+      const held = swatches({ preset: 'own', own: cur.own }, 'light');
+      const own = Object.fromEntries(SIDE_NAMES.map((n, i) => [n, n === t.dataset.scown ? t.value.toLowerCase() : held[i]]));
+      saveSides({ preset: 'own', own });
+    }
+  });
+
   document.addEventListener('click', (ev) => {
     for (const part of parts) if (part.click && part.click(ev)) return;
     const t = ev.target.closest('button,a[data-note],a[data-go],[data-go],a[data-pgroup]');
@@ -1108,6 +1233,7 @@
     const d = t.dataset;
     if (t.id === 'playersBtn' || t.id === 'playersBtn2') { openPlayers(); return; }
     if (d.pgroup) { touch(d.pgroup); update(); return; }
+    if (t.id === 'coloursBtn') { menuOpen(!menuIsOpen()); return; }
     if (t.id === 'closeDrawer') { closeDrawer(); return; }
     if (t.id === 'warnBtn') { openWarnings(); return; }
     if (t.id === 'endBtn') { goTo('end'); return; }
@@ -1221,7 +1347,7 @@
     const t = ev.target;
     const d = t.dataset || {};
     const typing = /^(INPUT|SELECT|TEXTAREA)$/.test(t.tagName) || t.isContentEditable;
-    if (ev.key === 'Escape') { if ($('#drawer').classList.contains('open')) { closeDrawer(); ev.preventDefault(); } return; }
+    if (ev.key === 'Escape') { if (menuIsOpen()) { menuOpen(false); const b = document.getElementById('coloursBtn'); if (b) b.focus(); ev.preventDefault(); return; } if ($('#drawer').classList.contains('open')) { closeDrawer(); ev.preventDefault(); } return; }
     if (!typing && (ev.key === 'j' || ev.key === 'J') && !ev.metaKey && !ev.ctrlKey && !ev.altKey) { ev.preventDefault(); $('#hjot').focus(); return; }
     if (ev.key === 'Enter' && t.tagName === 'A' && d.note) { openNote(d.note); return; }
     if (ev.key === 'Enter' && t.tagName === 'A' && d.go) { ev.preventDefault(); t.click(); return; }
@@ -1347,7 +1473,7 @@
     parts,
     // helpers the parts share with the page
     esc, armBtn, armed, link, face, nameOf, getJson, focusedGroup, groups, groupLabel, note, probe, cueHTML, unmaskOf, isUnmasked,
-    OTHER_STATUS_PLACEHOLDER,
+    OTHER_STATUS_PLACEHOLDER, SIDE_PRESETS, sideCss, swatches,
   };
 
   // ------------------------------------------------------------------ start

@@ -227,7 +227,16 @@ pre.notes { white-space: pre-wrap; background: var(--bg); border: 1px solid var(
 .areabar .spend { display: inline-flex; gap: 3px; align-items: center; }
 ol.to { list-style: none; margin: 0; padding: 0; }
 /* one line a row, however busy: chips and counters give way (ellipsis, the full word in the title) before the row wraps */
-ol.to > li { display: flex; flex-wrap: nowrap; align-items: center; gap: 2px; min-height: 32px; padding: 2px 4px; border-top: 1px solid var(--line); border-radius: 4px; }
+ol.to > li { display: flex; flex-wrap: nowrap; align-items: center; gap: 2px; min-height: 32px; padding: 2px 4px; border-top: 1px solid var(--line); border-left: 4px solid transparent; border-radius: 4px; }
+/* a row's side: the bar and the name take its colour (--pc, --ally, --foe, --neutral come from the Colours setting, gm.js) */
+ol.to > li.side-pc { border-left-color: var(--pc); }
+ol.to > li.side-ally { border-left-color: var(--ally); }
+ol.to > li.side-foe { border-left-color: var(--foe); }
+ol.to > li.side-neutral { border-left-color: var(--neutral); }
+ol.to > li.side-pc .nm { color: var(--pc); }
+ol.to > li.side-ally .nm { color: var(--ally); }
+ol.to > li.side-foe .nm { color: var(--foe); }
+ol.to > li.side-neutral .nm { color: var(--neutral); }
 ol.to > li > * { flex-shrink: 0; }
 /* the name gives way last: chips shrink first, so a wider font (Linux, Windows) cuts a chip before a name */
 ol.to > li > .nm { flex: 1 0.01 auto; min-width: 6rem; }
@@ -303,3 +312,18 @@ ol.to .ds { font: 500 .7rem var(--mono); white-space: nowrap; }
 .movebox .hits button { text-align: left; font-size: .82rem; }
 .where-party { list-style: none; padding: 0; margin: 4px 0 10px; }
 .where-party li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 4px 0; }
+
+/* the Colours menu and the acting panel's side control */
+.cmenu { position: absolute; right: 16px; top: 100%; z-index: 6; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; box-shadow: 0 6px 18px rgba(0, 0, 0, .25); display: flex; flex-direction: column; gap: 6px; font-size: .86rem; }
+.cmenu[hidden] { display: none; }
+.cmenu .copt { display: flex; gap: 8px; align-items: center; cursor: pointer; }
+.sws { display: inline-flex; gap: 2px; }
+.sws i { width: 14px; height: 14px; border-radius: 3px; border: 1px solid var(--line); }
+.cmenu .cown { display: flex; gap: 8px; flex-wrap: wrap; padding-left: 22px; }
+.cmenu .cown label { display: inline-flex; gap: 4px; align-items: center; font-size: .78rem; }
+.cmenu input[type="color"] { width: 30px; height: 22px; padding: 0; }
+.cmenu .cnote { margin: 0; font-size: .75rem; max-width: 24rem; }
+.act .sideSw { display: inline-flex; gap: 2px; align-items: center; }
+.act .sideSw .lab { font: 500 .68rem var(--mono); color: var(--muted); margin-right: 4px; }
+.act .sideSw button[aria-pressed="true"] { background: var(--ice); color: var(--panel); border-color: var(--ice); }
+.act .nums > span.sideSw { border: 0; background: none; padding: 0; }
