@@ -903,6 +903,17 @@ describe('the fight in the state', () => {
     assert.equal(row(s, DRAKE).ac, 14);
   });
 
+  // Task 13 proof: a fight with nobody in it, ended before the first turn, says so with no empty list
+  it('a fight ended before the first turn with no one ticked writes "Fight ends before the first turn."', () => {
+    let s = gateFight();
+    for (const r of s.fight.rows) if (r.in && r.kind !== 'lair') s = F(s, { type: 'fightTick', row: r.id, in: false });
+    s = end(s);
+    assert.equal(texts(s).at(-1), 'Fight ends before the first turn.');
+    // with someone in it, the list stays
+    const t = end(gateFight());
+    assert.match(texts(t).at(-1), /^Fight ends before the first turn: \S.*\.$/);
+  });
+
   // final review P4.3
   it('a corrected max brings a full row\'s HP with it; a wounded row keeps its HP', () => {
     let s = gateFight();

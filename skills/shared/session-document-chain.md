@@ -204,16 +204,19 @@ Every section is a bulleted list (links where a note exists) except
 8. `Changed since play started`
 9. `Contingencies that fired`
 10. `Improvised beats`
-11. `Unmasked this session`
-12. `Sides set`: bullets, `- [[Note]]: foe`, `ally` or `neutral`; a side
+11. `Places the party went`: one `- [[Place]]` per known place a PC
+    stood at tonight, in order of first arrival (a Plan beat's place, a
+    hub spot's note, or a known place moved to)
+12. `Unmasked this session`
+13. `Sides set`: bullets, `- [[Note]]: foe`, `ally` or `neutral`; a side
     the GM set that every copy of the note shared
-13. `Handouts handed over`
-14. `Log`: bullets, `- HH:MM text`
-15. `Loot`: bullets, `- [[Item]] to [[Who]]`
-16. `Vitals at the end`: a table `| Who | HP | Conditions |`; the Who cell
+14. `Handouts handed over`
+15. `Log`: bullets, `- HH:MM text`
+16. `Loot`: bullets, `- [[Item]] to [[Who]]`
+17. `Vitals at the end`: a table `| Who | HP | Conditions |`; the Who cell
     is a bare wikilink (`[[Name]]`, no pipe: Obsidian's table rule) and
     the HP cell is `current/max` or `current`
-17. `Advancement`
+18. `Advancement`
 
 How the run sheet writes them: `Log` is `- HH:MM Beat title: text`, or
 `- HH:MM text` with no beat; `Where everyone ended` is `- [[PC]]:
@@ -227,7 +230,11 @@ to the next session as that note's starting side; `Improvised beats` holds
 `- New place: <name>` for a place the GM typed tonight (no note yet: wrap-up
 may offer to make one) and a bare `[[Place]]` link for a known place the
 party was at (moved there, or fought there), which wrap-up's reveal pass
-reads to offer publishing it. A fight's
+reads to offer publishing it. `Places the party went` links every known
+place a PC stood at, even one they moved on from; a place typed tonight
+stays plain words under `Improvised beats`. A place's link carries its
+title when the link would not say it (`[[Places/North/index|North]]`), and
+the reveal pass reads this section too. A fight's
 start, rounds and end are `Log` lines, and a vitals row comes from the
 last fight when it changed the figure. A figure written `12/40 (after
 the fight, 20:14)` is the last one the sheet saw, not one set at the

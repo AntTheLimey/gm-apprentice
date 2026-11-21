@@ -421,6 +421,17 @@ class TableLogSections(unittest.TestCase):
         # a typed place is plain words: it names no note, so it gives no row
         self.assertNotIn("The Docks", [r.path for r in res.rows])
 
+    def test_unpublished_place_the_party_went_through_is_offered(self) -> None:
+        # Task 13 proof (Ant's ruling: a place the players go to becomes visible and published): a Plan place the
+        # party stood at and moved on from is linked under Places the party went, and wrap-up offers it
+        light = "---\ntype: location\npublish: false\n---\n\n# Gannet Head Light\n"
+        body = ("## Where everyone ended\n\n- [[Ada]]: [[The Quay]]\n\n"
+                "## Places the party went\n\n- [[Gannet Head Light]]\n- [[Places/North/index|North]]\n")
+        north = "---\ntype: location\npublish: false\n---\n\n# North\n"
+        res = run_scan({**with_log(body), "Locations/Gannet Head Light.md": light, "Places/North/index.md": north})
+        self.assertEqual(sorted((r.path, r.published) for r in res.rows),
+                         [("Locations/Gannet Head Light.md", False), ("Places/North/index.md", False)])
+
     def test_every_read_section_gives_a_row(self) -> None:
         for name in rv.TABLE_LOG_READ:
             with self.subTest(name=name):

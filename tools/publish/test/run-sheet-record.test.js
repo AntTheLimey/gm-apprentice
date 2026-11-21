@@ -48,8 +48,8 @@ const skeleton = () => FM + R.TABLE_LOG_SECTIONS.map((s) => `\n## ${s}\n${s === 
 describe('the Table Log writer', () => {
   it("the sections are vault_write's", () => {
     assert.deepStrictEqual(R.TABLE_LOG_SECTIONS, pySections());
-    // 17 since plan 6a Task 5 (review P-S2) added Sides set
-    assert.strictEqual(R.TABLE_LOG_SECTIONS.length, 17);
+    // 18 since the Task 13 proof added Places the party went (Ant's ruling: a place the players go to is published); 17 since Task 5 added Sides set
+    assert.strictEqual(R.TABLE_LOG_SECTIONS.length, 18);
     assert.match(PY, /TABLE_LOG_VITALS_HEAD = "\\n\| Who \| HP \| Conditions \|\\n\| --- \| --- \| --- \|\\n"/);
   });
 
@@ -221,8 +221,8 @@ describe('the Table Log writer', () => {
     const s = run([{ type: 'endSet', vitals: { [ADA]: { hp: 9, conditions: 'Winded' }, 'Characters/NPCs/Guard.md': { hp: 4 }, 'Characters/NPCs/Guard.md#2': { hp: 7 } } }]);
     const b = R.tableLogBody(m, s, OPTS);
     const r = readTableLog(b);
-    // 17 since plan 6a Task 5 (review P-S2) added Sides set
-    assert.deepStrictEqual([...r.sections.keys()].length, 17);
+    // 18 since the Task 13 proof added Places the party went (Ant's ruling: a place the players go to is published); 17 since Task 5 added Sides set
+    assert.deepStrictEqual([...r.sections.keys()].length, 18);
     assert.deepStrictEqual(r.vitals.map((v) => [v.who, v.hpNow, v.hpMax, v.conditions]), [
       ['Ada Moss', 9, 30, 'Winded'], ['Guard', 4, 11, ''], ['Guard', 7, 11, '']]);
     assert.deepStrictEqual(r.vitals.map((v) => v.copy), [null, null, 2]);
@@ -249,8 +249,8 @@ describe('the Table Log writer', () => {
     assert.deepStrictEqual(rows, ['| [[Ada Moss]] | 5/3/30 | Winded |', '| [[Ben Hart]] | 7 /x/20 |  |']);
     const r = readTableLog(b);
     assert.deepStrictEqual(r.vitals.map((v) => [v.who, v.conditions]), [['Ada Moss', 'Winded'], ['Ben Hart', '']]);
-    // 17 since plan 6a Task 5 (review P-S2) added Sides set
-    assert.strictEqual([...r.sections.keys()].length, 17);
+    // 18 since the Task 13 proof added Places the party went (Ant's ruling: a place the players go to is published); 17 since Task 5 added Sides set
+    assert.strictEqual([...r.sections.keys()].length, 18);
   });
 
   it('an ambiguous stem is linked by path', () => {
@@ -654,6 +654,45 @@ describe('a folder note\'s place in the record', () => {
     assert.match(sec.get('Log'), /Ada moves to North\./);
     assert.strictEqual(sec.get('Improvised beats'), '- [[Locations/North/index|North]]');
     assert.match(sec.get('Where everyone ended'), /^- \[\[Ada Moss\]\]: \[\[Locations\/North\/index\|North\]\]$/m);
+  });
+});
+
+// Task 13 proof (Ant's ruling: a place the players go to becomes visible and published)
+describe('Places the party went', () => {
+  const os = require('node:os');
+  const LIGHT = 'Locations/Gannet Head Light.md';
+  const YARD = 'Locations/The Chapel Yard.md';
+  const NORTH = 'Locations/North/index.md';
+
+  it('Hollow Quay-shaped: the party at Gannet Head Light, then moved on: every place a PC stood at is linked, by first arrival', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rs-went-'));
+    try {
+      fs.cpSync(FIXTURE, dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, LIGHT), '---\nname: Gannet Head Light\ntype: location\npublish: false\n---\n\nThe lighthouse on the head.\n');
+      const m = readRunSheet(dir, PLAN, { party: [ADA, BEN] });
+      const notes = new Map([...NOTES, ['Gannet Head Light', LIGHT], ['The Chapel Yard', YARD], ['The Bell Tower Room', 'Locations/The Bell Tower Room.md']]);
+      const opts = { linkFor: R.linkFor({ resolve: (t) => notes.get(t) || null }), timeOf };
+      const hub = m.beats[2];
+      const yard = hub.spots.find((x) => x.note === YARD);
+      const st = RS.emptyState({ stateId: 'x', session: m.session.index, plan: PLAN });
+      const s = [
+        { type: 'moveGroup', pcs: [ADA, BEN], place: LIGHT, key: m.placeKeys[LIGHT], title: 'Gannet Head Light', names: ['Ada', 'Ben'] },
+        { type: 'move', pc: ADA, to: to(m.beats[0]) },
+        { type: 'move', pc: BEN, to: to(hub, yard.key) },
+        { type: 'moveGroup', pcs: [ADA], place: NORTH, key: m.placeKeys[NORTH], title: 'North', names: ['Ada'] },
+        { type: 'moveGroup', pcs: [ADA, BEN], name: 'The Docks', names: ['Ada', 'Ben'] },
+        { type: 'move', pc: BEN, to: to(m.beats[0]) },
+      ].reduce((acc, a, i) => RS.reduce(acc, { id: `w-${i}`, ...a }, at(i)), st);
+      const sec = sectionsOf(R.tableLogBody(m, s, opts));
+      assert.strictEqual(sec.get(R.PLACES_WENT), '- [[Gannet Head Light]]\n- [[The Gate]]\n- [[The Chapel Yard]]\n- [[Locations/North/index|North]]',
+        'the light (moved on from), the Plan\'s Gate, a hub spot, a folder note by its title; once each; never a typed place');
+      assert.match(sec.get('Improvised beats'), /New place: The Docks/);
+      assert.ok(!/Gannet Head Light/.test(sec.get('Where everyone ended')), 'nobody ended there');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('a session where nobody moved has an empty section', () => {
+    assert.strictEqual(sectionsOf(R.tableLogBody(model, fresh(), OPTS)).get(R.PLACES_WENT) || '', '');
   });
 });
 

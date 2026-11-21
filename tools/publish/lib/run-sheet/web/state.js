@@ -116,6 +116,12 @@
       if (!to || !to.beat) return;
       s.positions[a.pc] = { beat: to.beat, spot: to.spot || null };
       if (!s.visited[to.beat]) s.visited[to.beat] = { title: to.title || '', at };
+      // a hub's spot keeps its own first arrival, for the Table Log's Places the party went (Task 13 proof)
+      const v = s.visited[to.beat];
+      if (to.spot && v && typeof v === 'object') {
+        if (!v.spots || typeof v.spots !== 'object' || Array.isArray(v.spots)) v.spots = {};
+        if (!v.spots[to.spot]) v.spots[to.spot] = at;
+      }
     },
     moveAll(s, a, at) { for (const pc of a.pcs || []) HANDLERS.move(s, { pc, to: a.to }, at); },
     mark(s, a, at) {

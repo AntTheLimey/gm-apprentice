@@ -458,8 +458,8 @@ describe('run sheet server', () => {
     await markFirst(run);
     const r = await req(run.port, 'GET', '/api/record');
     assert.strictEqual(r.status, 200);
-    // 17 since plan 6a Task 5 (review P-S2) added Sides set
-    assert.strictEqual((r.json.text.match(/^## /gm) || []).length, 17);
+    // 18 since the Task 13 proof added Places the party went (Ant's ruling: a place the players go to is published); 17 since Task 5 added Sides set
+    assert.strictEqual((r.json.text.match(/^## /gm) || []).length, 18);
     assert.match(r.json.text, /## Points landed\n\n- The Gate: the tracks/);
   });
 

@@ -602,7 +602,13 @@
 
   // ------------------------------------------------------------------ the part
   const part = {
-    focusAttrs: ['data-fini', 'data-fhp', 'data-fmax', 'data-fac', 'data-fother'],
+    // every focusable control the fight draws that has no id, so a redraw puts focus back on it (proof N1: a status
+    // select pressed while a typed number committed lost focus to the page). Controls with an id (the Add box, the
+    // count, Roll, Next, the area box…) are found by it.
+    focusAttrs: ['data-fini', 'data-fhp', 'data-fmax', 'data-fac', 'data-fother', 'data-fstatus', 'data-ftick', 'data-fsel',
+      'data-fseen', 'data-fhalf', 'data-fahalf', 'data-fres', 'data-fout', 'data-fds', 'data-flr', 'data-fla', 'data-frch',
+      'data-fun', 'data-fsame', 'data-fside', 'data-fundo', 'data-faddgroup', 'data-faddbeat', 'data-faddpick', 'data-faddnew',
+      'data-fspend', 'data-fafter', 'data-fjot', 'data-fight', 'data-fplace'],
     // Fight here on a place tile or a place's drawer (plan 6a Task 7); nothing while a fight runs
     placeButtons(note) {
       if (!allowed() || state().fight || !(model().placeKeys || {})[note]) return '';

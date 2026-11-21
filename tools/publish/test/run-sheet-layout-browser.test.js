@@ -1400,6 +1400,26 @@ describe('stat boxes keep the mouse and the keyboard', { skip: browserSkip() }, 
     });
   });
 
+  // Task 13 proof N1: a typed number, then a press on another row's "+ status": the redraw the commit makes keeps the
+  // select focused
+  for (const holdMs of [90, 600]) {
+    it(`a max typed, then a ${holdMs} ms press on another row's "+ status": the select keeps focus and the number is saved`, async () => {
+      const run = await start();
+      await withPage({ width: 1449, height: 762 }, async (page) => {
+        await page.focusEvents();
+        const p0 = await startedFight(page, run);
+        const [one, two] = foes(p0);
+        await tap(page, sel('data-fmax', one.id));
+        await page.type('9');
+        await tap(page, sel('data-fstatus', two.id), { holdMs });
+        const p = await until(page, `p.saved === "Saved" && p.pending === 0 && p.fight.rows.find((r) => r.id === ${JSON.stringify(one.id)}).max === 9`);
+        await page.sleep(100);
+        assert.strictEqual(await page.evaluate('document.activeElement.dataset.fstatus || document.activeElement.tagName'), two.id, 'the status select has focus');
+        assert.deepStrictEqual(p.errors, []);
+      });
+    });
+  }
+
   // final review P-A4: Esc takes back an edit
   it('a real Esc in a stat box puts its saved number back, sends nothing and keeps focus', async () => {
     const run = await start();

@@ -43,8 +43,11 @@
   }
   // A roster line (the Round 1 order, a round's end, the fight's end) lists everyone ticked in. It does not mark
   // them `logged`: it keeps its items (`roster`), so an Undo can take an undone row's name out of it.
+  // A roster line: "Round 1: Ada 22/30, …." With nobody to list (a Fight here where no one stands, ended before the
+  // first turn), the head's colon goes: "Fight ends before the first turn." (Task 13 proof)
+  const rosterText = (head, items, tail) => (items.length ? `${head}${items.map((x) => x.text).join(', ')}${tail}` : `${head.replace(/:\s*$/, '')}${tail}`);
   const sayRoster = (s, f, at, head, items, tail) => {
-    say(s, f, at, `${head}${items.map((x) => x.text).join(', ')}${tail}`);
+    say(s, f, at, rosterText(head, items, tail));
     s.events[s.events.length - 1].roster = { head, tail, items };
   };
   const rosterItems = (s, f) => f.rows.filter((r) => r.in && r.kind !== 'lair').map((r) => ({ id: r.id, text: figureOf(s, f, r, true) }));
@@ -379,7 +382,7 @@
       for (const e of s.events) {
         if (!e.roster || !e.roster.items.some((x) => ids.has(x.id))) continue;
         e.roster.items = e.roster.items.filter((x) => !ids.has(x.id));
-        e.text = `${e.roster.head}${e.roster.items.map((x) => x.text).join(', ')}${e.roster.tail}`;
+        e.text = rosterText(e.roster.head, e.roster.items, e.roster.tail);
       }
       const counts = new Map();
       for (const r of gone.filter((x) => x.kind !== 'lair')) { const k = String(r.name).replace(/\s+\d+$/, ''); counts.set(k, (counts.get(k) || 0) + 1); }
