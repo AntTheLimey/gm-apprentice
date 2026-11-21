@@ -28,6 +28,8 @@
       end: { vitals: {}, where: {}, advancement: '' },
       attached: {},
       fight: null, fights: [], panels: {}, shownEver: {},
+      // the last side the GM set per note (plan 6a): 'foe' | 'ally' | 'neutral'
+      sides: {},
     };
   }
 
@@ -351,6 +353,16 @@
       .map((x) => x.c);
   }
 
+  // A note's side as the GM has it now (plan 6a): the side set tonight, then one carried from an earlier
+  // Table Log, then the reader's (`readerAlly`). 'foe' | 'ally' | 'neutral'.
+  function sideNow(model, state, note, readerAlly) {
+    const set = state.sides && state.sides[note];
+    if (FM.isSide(set)) return set;
+    const carried = model.sidesCarried && model.sidesCarried[note];
+    if (FM.isSide(carried)) return carried;
+    return readerAlly ? 'ally' : 'foe';
+  }
+
   // The beats the page shows: the Plan's, the improvised ones, and each beat's "Who's here" with
   // whoever the GM brought in.
   function beatsOf(model, state) {
@@ -358,7 +370,7 @@
     // a brought-in ally gets a fight row too (unless the beat already has one), so it has a vitals row
     const broughtFoes = (key, foes) => (state.brought[key] || []).flatMap((x) => {
       const f = (cast.get(x.note) || {}).foe;
-      return f && f.ally && !foes.some((o) => o.note === x.note) ? [{ ...f, key: `${key}.brought.${x.note}`, broughtIn: true }] : [];
+      return f && sideNow(model, state, x.note, f.ally) === 'ally' && !foes.some((o) => o.note === x.note) ? [{ ...f, key: `${key}.brought.${x.note}`, broughtIn: true }] : [];
     });
     const real = (model.beats || []).map((b) => {
       const extra = (state.brought[b.key] || []).map((x) => {
@@ -451,7 +463,8 @@
     for (const b of beats) {
       const seen = new Map();
       for (const f of b.foes || []) {
-        if (!f.ally) continue;
+        // the side as the GM has it now: a reader-ally set neutral or foe has no vitals row (review P-S4)
+        if (sideNow(model, state, f.note, f.ally) !== 'ally') continue;
         if (reached.has(b.key) || f.broughtIn) inPlay.add(f.note);
         const copy = (seen.get(f.note) || 0) + 1;
         seen.set(f.note, copy);
@@ -464,6 +477,8 @@
     const { figures, allies: fought } = fightFigures(model, state);
     for (const [rowId, r] of fought) {
       if (rows.some((x) => x.rowId === rowId)) continue;
+      // an ally in a fight the GM has set to another side since
+      if (sideNow(model, state, r.note, true) !== 'ally') continue;
       rows.push(r);
       inPlay.add(r.note);
     }
@@ -660,6 +675,9 @@
       improvised: state.improvised.slice(),
       handedOver: Object.entries(state.handouts).map(([key, v]) => ({ key, text: v.text, name: v.name || '', note: v.note })),
       unmaskedNow, maskedAgain,
+      // the sides the GM set this session, one per note, for the Table Log's Sides set
+      sidesSet: Object.entries(state.sides && typeof state.sides === 'object' ? state.sides : {})
+        .filter(([, side]) => FM.isSide(side)).map(([note, side]) => ({ note, side })),
       advancement: state.end.advancement || '',
       fight: fightView(model, state, byKey, unmaskedNow),
       fightLog: logLines.filter((l) => l.fight),

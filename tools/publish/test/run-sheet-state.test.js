@@ -561,3 +561,24 @@ describe('RS.upgrade (third review M3)', () => {
     assert.doesNotThrow(() => RS.derive(model, RS.upgrade({ jots: [{ id: 'j1', beat: null, text: 'x', at: T0 }] }, fresh())));
   });
 });
+
+// plan 6a Task 5: the sides the GM sets live in the state
+describe('the sides memory', () => {
+  it('a new state holds no sides; an old saved state with no sides derives, and gets an empty memory', () => {
+    assert.deepStrictEqual(fresh().sides, {});
+    const old = fresh();
+    delete old.sides;
+    const d = RS.derive(model, old);
+    assert.deepStrictEqual(d.sidesSet, []);
+    assert.ok(d.vitals.some((v) => v.note === LUCAN), 'the reader-ally keeps its vitals row');
+    assert.deepStrictEqual(RS.upgrade(old, fresh()).sides, {});
+  });
+
+  it('a side nobody can read in the memory is passed over', () => {
+    const s = fresh();
+    s.sides = { [LUCAN]: 'friendly', 'Characters/NPCs/Brother Ash.md': null };
+    const d = RS.derive(model, s);
+    assert.deepStrictEqual(d.sidesSet, []);
+    assert.ok(d.vitals.some((v) => v.note === LUCAN));
+  });
+});

@@ -48,7 +48,8 @@ const skeleton = () => FM + R.TABLE_LOG_SECTIONS.map((s) => `\n## ${s}\n${s === 
 describe('the Table Log writer', () => {
   it("the sections are vault_write's", () => {
     assert.deepStrictEqual(R.TABLE_LOG_SECTIONS, pySections());
-    assert.strictEqual(R.TABLE_LOG_SECTIONS.length, 16);
+    // 17 since plan 6a Task 5 (review P-S2) added Sides set
+    assert.strictEqual(R.TABLE_LOG_SECTIONS.length, 17);
     assert.match(PY, /TABLE_LOG_VITALS_HEAD = "\\n\| Who \| HP \| Conditions \|\\n\| --- \| --- \| --- \|\\n"/);
   });
 
@@ -220,7 +221,8 @@ describe('the Table Log writer', () => {
     const s = run([{ type: 'endSet', vitals: { [ADA]: { hp: 9, conditions: 'Winded' }, 'Characters/NPCs/Guard.md': { hp: 4 }, 'Characters/NPCs/Guard.md#2': { hp: 7 } } }]);
     const b = R.tableLogBody(m, s, OPTS);
     const r = readTableLog(b);
-    assert.deepStrictEqual([...r.sections.keys()].length, 16);
+    // 17 since plan 6a Task 5 (review P-S2) added Sides set
+    assert.deepStrictEqual([...r.sections.keys()].length, 17);
     assert.deepStrictEqual(r.vitals.map((v) => [v.who, v.hpNow, v.hpMax, v.conditions]), [
       ['Ada Moss', 9, 30, 'Winded'], ['Guard', 4, 11, ''], ['Guard', 7, 11, '']]);
     assert.deepStrictEqual(r.vitals.map((v) => v.copy), [null, null, 2]);
@@ -247,7 +249,8 @@ describe('the Table Log writer', () => {
     assert.deepStrictEqual(rows, ['| [[Ada Moss]] | 5/3/30 | Winded |', '| [[Ben Hart]] | 7 /x/20 |  |']);
     const r = readTableLog(b);
     assert.deepStrictEqual(r.vitals.map((v) => [v.who, v.conditions]), [['Ada Moss', 'Winded'], ['Ben Hart', '']]);
-    assert.strictEqual([...r.sections.keys()].length, 16);
+    // 17 since plan 6a Task 5 (review P-S2) added Sides set
+    assert.strictEqual([...r.sections.keys()].length, 17);
   });
 
   it('an ambiguous stem is linked by path', () => {
@@ -496,5 +499,87 @@ describe('the Table Log writer: fights (plan 5b decision 17)', () => {
     ]);
     assert.ok(r.sections.get('Log').includes('Fight starts at The Gate.'));
     assert.strictEqual(R.recordBodyOf(text), R.recordBodyOf(R.rewriteTableLog(text, body(s))), 'stable');
+  });
+});
+
+// plan 6a Task 5 (review P-S2): a side the GM set lasts past the session, through the Table Log
+describe('the sides the GM set', () => {
+  const M = require('../lib/run-sheet/web/fight-math');
+  const os = require('node:os');
+  const { writeSettings } = require('./helpers/vault-files');
+  const { after } = require('node:test');
+  const made = [];
+  after(() => { for (const d of made) fs.rmSync(d, { recursive: true, force: true }); });
+  const ASH = 'Characters/NPCs/Brother Ash.md';
+  const LUCAN = 'Characters/NPCs/Lucan Grey.md';
+  const CH1 = 'Chapters/Chapter 1';
+  const fought = (sides) => {
+    let s = RS.reduce(fresh(), { id: 'sd-1', type: 'move', pc: ADA, to: to(GATE) }, at(1));
+    const b = M.rowsForFight({ model, derived: RS.derive(model, s), state: s, beatKey: GATE.key, idBase: 'sd-2' });
+    s = RS.reduce(s, { id: 'sd-2', type: 'fightStart', beat: GATE.key, title: GATE.title, groups: b.groups, rows: b.rows, thresholds: b.thresholds }, at(2));
+    sides.forEach(([note, side], i) => {
+      const r = s.fight.rows.find((x) => x.note === note);
+      s = RS.reduce(s, { id: `sd-${3 + i}`, type: 'setSide', fight: s.fight.id, row: r.id, side }, at(3 + i));
+    });
+    return s;
+  };
+
+  it('the Table Log writes one line per note the GM set, under Sides set', () => {
+    assert.ok(R.TABLE_LOG_SECTIONS.includes(R.SIDES_SET));
+    const s = fought([[ASH, 'ally'], [LUCAN, 'neutral'], [ASH, 'foe']]);
+    const lines = sectionsOf(body(s)).get(R.SIDES_SET).trim().split('\n');
+    assert.deepStrictEqual(lines, ['- [[Characters/NPCs/Brother Ash]]: foe', '- [[Characters/NPCs/Lucan Grey]]: neutral']);
+    assert.strictEqual(sectionsOf(body(fresh())).get(R.SIDES_SET), '', 'nothing set: a bare heading');
+  });
+
+  it('a side set is carried to the next session through the Table Log', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rs-sides-'));
+    made.push(dir);
+    fs.cpSync(FIXTURE, dir, { recursive: true });
+    writeSettings(dir, { 'vault.system': 'dnd5e' });
+    const write = (rel, text) => fs.writeFileSync(path.join(dir, rel), text);
+    const S2 = `${CH1}/Sessions/Session 02/Session 02 - The Test.md`;
+    const S2_LOG = `${CH1}/Sessions/Session 02/Session 02 - The Test - Table Log.md`;
+    const P3 = `${CH1}/Sessions/Session 03/Session 03 - Next - Plan.md`;
+    write(S2, fs.readFileSync(path.join(dir, S2), 'utf8').replace('status: planned', 'status: played'));
+    const realLink = (p) => `[[${path.posix.basename(p, '.md')}]]`;
+    const s = fought([[ASH, 'ally'], [LUCAN, 'neutral']]);
+    write(S2_LOG, R.rewriteTableLog(fs.readFileSync(path.join(dir, S2_LOG), 'utf8'), R.tableLogBody(model, s, { linkFor: realLink, timeOf })));
+    let m = readRunSheet(dir, P3, { party: [ADA, BEN] });
+    assert.deepStrictEqual(m.sidesCarried, { [ASH]: 'ally', [LUCAN]: 'neutral' });
+    // a later session's line wins; a line naming no side or no note warns and is passed over
+    const log = path.join(dir, S2_LOG);
+    const text = fs.readFileSync(log, 'utf8');
+    fs.writeFileSync(log, text.replace(/## Sides set\n\n[\s\S]*?\n\n/, '## Sides set\n\n- [[Brother Ash]]: ally\n- [[Brother Ash]]: foe\n- [[Lucan Grey]]: friendly\n- [[Nobody At All]]: ally\n\n'));
+    m = readRunSheet(dir, P3, { party: [ADA, BEN] });
+    assert.deepStrictEqual(m.sidesCarried, { [ASH]: 'foe' }, 'the last line for a note wins');
+    const warned = m.warnings.filter((w) => w.kind === 'table-log' && /Sides set/.test(w.text)).map((w) => w.text);
+    assert.strictEqual(warned.length, 2, warned.join('\n'));
+    assert.ok(warned.some((w) => w.includes('friendly')));
+    assert.ok(warned.some((w) => w.includes('Nobody At All')));
+  });
+
+  it('a later Table Log wins over an earlier one; a session not played is not read', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rs-sides-'));
+    made.push(dir);
+    fs.cpSync(FIXTURE, dir, { recursive: true });
+    writeSettings(dir, { 'vault.system': 'dnd5e' });
+    const S1 = `${CH1}/Sessions/Session 01/Session 01 - The Start.md`;
+    const S1_LOG = `${CH1}/Sessions/Session 01/Session 01 - The Start - Table Log.md`;
+    const S2 = `${CH1}/Sessions/Session 02/Session 02 - The Test.md`;
+    const S2_LOG = `${CH1}/Sessions/Session 02/Session 02 - The Test - Table Log.md`;
+    const P3 = `${CH1}/Sessions/Session 03/Session 03 - Next - Plan.md`;
+    const logOf = (session, lines) => ['---', 'type: session-table-log', `session: "[[${session}]]"`, 'publish: false', '---', '', '# t', '',
+      `## ${R.SIDES_SET}`, '', ...lines, ''].join('\n');
+    const s1 = fs.readFileSync(path.join(dir, S1), 'utf8');
+    if (!/status: played/.test(s1)) fs.writeFileSync(path.join(dir, S1), s1.replace(/^type: session$/m, 'type: session\nstatus: played'));
+    fs.writeFileSync(path.join(dir, S1_LOG), logOf('Session 01 - The Start', ['- [[Brother Ash]]: ally', '- [[Lucan Grey]]: foe']));
+    fs.writeFileSync(path.join(dir, S2_LOG), logOf('Session 02 - The Test', ['- [[Brother Ash]]: neutral']));
+    // Session 02 is planned, not played: its log is not read
+    let m = readRunSheet(dir, P3, { party: [ADA, BEN] });
+    assert.deepStrictEqual(m.sidesCarried, { [ASH]: 'ally', [LUCAN]: 'foe' });
+    fs.writeFileSync(path.join(dir, S2), fs.readFileSync(path.join(dir, S2), 'utf8').replace('status: planned', 'status: played'));
+    m = readRunSheet(dir, P3, { party: [ADA, BEN] });
+    assert.deepStrictEqual(m.sidesCarried, { [ASH]: 'neutral', [LUCAN]: 'foe' });
   });
 });

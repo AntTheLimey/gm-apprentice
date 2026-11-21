@@ -459,3 +459,74 @@ test('a foe already seen when it joins takes no unseen number', () => {
   assert.equal(n.get('m1'), 1);
   assert.equal(n.get('m2'), 2);
 });
+
+// ---- plan 6a Task 5: sides ----
+
+test('the switch cycles foe, ally, neutral, foe; a row\'s side is its kind and neutral flag', () => {
+  assert.equal(M.nextSide('foe'), 'ally');
+  assert.equal(M.nextSide('ally'), 'neutral');
+  assert.equal(M.nextSide('neutral'), 'foe');
+  assert.equal(M.sideOfRow(row({ kind: 'foe' })), 'foe');
+  assert.equal(M.sideOfRow(row({ kind: 'foe', neutral: true })), 'neutral');
+  assert.equal(M.sideOfRow(row({ kind: 'ally' })), 'ally');
+  assert.equal(M.sideOfRow(row({ kind: 'pc' })), null);
+  assert.equal(M.sideOfRow(row({ kind: 'lair' })), null);
+});
+
+test('actingRow skips a neutral', () => {
+  const rows = [row({ id: 'pc1', kind: 'pc' }), row({ id: 'n1', neutral: true }), row({ id: 'f1' })];
+  assert.deepEqual(M.actingRow({ rows, turn: null, lastFoe: null }, null), { row: rows[2], why: 'first-foe' });
+  assert.deepEqual(M.actingRow({ rows, turn: 'pc1', lastFoe: null }, null), { row: rows[2], why: 'next-foe' });
+  const onlyNeutral = [row({ id: 'pc1', kind: 'pc' }), row({ id: 'n1', neutral: true })];
+  assert.deepEqual(M.actingRow({ rows: onlyNeutral, turn: 'pc1', lastFoe: null }, null), { row: null, why: null });
+  assert.deepEqual(M.actingRow({ rows: onlyNeutral, turn: null, lastFoe: null }, null), { row: null, why: null });
+  // the neutral's own turn still shows its own panel
+  assert.deepEqual(M.actingRow({ rows, turn: 'n1', lastFoe: null }, null), { row: rows[1], why: 'acting' });
+});
+
+test('the starting side: the side set tonight, then the one carried, then the reader\'s', () => {
+  const by = (r, note) => r.rows.find((x) => x.note === note);
+  const r = M.rowsForFight({ model: { ...model, sidesCarried: { 'NPCs/Gilt.md': 'neutral', 'Creatures/Imp.md': 'ally' } },
+    derived: derivedOf(), state: { ...here, sides: { 'NPCs/Gilt.md': 'ally', 'NPCs/Venn.md': 'foe' } }, beatKey: 'b1', idBase: 'a' });
+  assert.deepEqual([by(r, 'NPCs/Gilt.md').kind, by(r, 'NPCs/Gilt.md').neutral, by(r, 'NPCs/Gilt.md').sideFrom], ['ally', false, 'you set it'], 'tonight wins over the carried side');
+  assert.deepEqual([by(r, 'Creatures/Imp.md').kind, by(r, 'Creatures/Imp.md').sideFrom], ['ally', 'you set it'], 'a carried side');
+  assert.deepEqual([by(r, 'NPCs/Venn.md').kind, by(r, 'NPCs/Venn.md').neutral], ['foe', false], 'a reader-ally set to foe');
+  assert.equal(by(r, 'Creatures/Wyrm.md').kind, 'foe', 'nothing set: the reader\'s side');
+  // a side set by the GM is the GM's word: an ally from it starts seen
+  assert.equal(by(r, 'NPCs/Gilt.md').seen, true);
+  assert.equal(by(r, 'Creatures/Imp.md').seen, true);
+  assert.equal(by(r, 'NPCs/Venn.md').seen, false, 'a reader-ally set to foe starts as a foe does');
+  const n = M.rowsForFight({ model, derived: derivedOf(), state: { ...here, sides: { 'NPCs/Gilt.md': 'neutral' } }, beatKey: 'b1', idBase: 'a' });
+  assert.deepEqual([by(n, 'NPCs/Gilt.md').kind, by(n, 'NPCs/Gilt.md').neutral, by(n, 'NPCs/Gilt.md').seen], ['foe', true, false]);
+  // a value that is no side is passed over
+  const odd = M.rowsForFight({ model: { ...model, sidesCarried: { 'NPCs/Gilt.md': 'friend' } }, derived: derivedOf(), state: { ...here, sides: { 'NPCs/Venn.md': 7 } }, beatKey: 'b1', idBase: 'a' });
+  assert.equal(by(odd, 'NPCs/Gilt.md').kind, 'foe');
+  assert.equal(by(odd, 'NPCs/Venn.md').kind, 'ally');
+});
+
+test('seenFrom starts a row seen, and the row carries it', () => {
+  const r = M.rowsForFight({ model: { ...model, seenFrom: { 'Creatures/Wyrm.md': 'on the player site' } }, derived: derivedOf(), state: here, beatKey: 'b1', idBase: 'a' });
+  const w = r.rows.find((x) => x.note === 'Creatures/Wyrm.md');
+  assert.equal(w.seen, true);
+  assert.equal(w.seenFrom, 'on the player site');
+  assert.equal(r.rows.find((x) => x.note === 'Creatures/Imp.md').seen, false);
+  assert.equal(r.rows.find((x) => x.note === 'Creatures/Imp.md').seenFrom, null);
+});
+
+test('an inferred ally starts unseen; one from the GM\'s own words starts seen', () => {
+  const ally = (allyBy) => ({ ...venn, allyBy, allyFrom: `why: ${allyBy}` });
+  const run = (allyBy, extra = {}) => {
+    const g = { ...gate, foes: [ally(allyBy)] };
+    const r = M.rowsForFight({ model: { ...model, ...extra }, derived: derivedOf({ beats: [g, hub] }), state: here, beatKey: 'b1', idBase: 'a' });
+    return r.rows.find((x) => x.note === 'NPCs/Venn.md');
+  };
+  for (const by of ['relationships', 'affiliation', 'quickRef']) {
+    const v = run(by);
+    assert.deepEqual([v.kind, v.seen], ['ally', false], by);
+    assert.equal(v.sideFrom, `why: ${by}`);
+    assert.equal(v.word, '', 'an unseen ally keeps a word for its label (the fixture has no withheld word)');
+    assert.equal(run(by, { seenFrom: { 'NPCs/Venn.md': 'named in Session 2' } }).seen, true, `${by} with seenFrom`);
+  }
+  for (const by of ['plan', 'stats']) assert.equal(run(by).seen, true, by);
+  assert.equal(run('nonsense').seen, false, 'an allyBy the sheet does not know is not the GM\'s word');
+});

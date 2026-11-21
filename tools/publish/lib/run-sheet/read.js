@@ -31,6 +31,8 @@ const { loadManifest } = require('../manifest');
 const { tableLogOf, isPlayed } = require('./sessions');
 const { readCast } = require('./cast');
 const { readSeen } = require('./seen');
+const { SIDES_SET } = require('./record');
+const { isSide } = require('./web/fight-math');
 
 const toPosix = (p) => p.split(path.sep).join('/');
 const low = (s) => canonicalNfc(String(s == null ? '' : s)).trim().toLowerCase();
@@ -210,6 +212,9 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
   const beats = beatsRead.beats;
   const seen = new Set();
   const carried = readCarried();
+  // The sides the GM set in earlier sessions' fights, the latest per note (plan 6a): a fight starts from
+  // them. Read here, so a Sides set line that does not read warns with the rest.
+  const sidesCarried = carried ? carried.sides() : {};
   // The session's own party (the index field, the wrap-up, the Plan's roster), else the one given, and the
   // Plan's NPC Quick Reference: what a row's starting side reads (sides.js). Their warnings are added below.
   const own = sessionParty({ index, sessionPath: sessionIndex, planBody: body, given: party });
@@ -404,6 +409,7 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
   if (!model.notes[plan]) model.notes[plan] = noteOf(plan, fm);
   // The cast is read last: its notes are never "touched", and its warnings stay on each entry.
   model.cast = readCast(index, { carried, sides });
+  model.sidesCarried = sidesCarried;
   // Added last, so these paths make no `notes` entries or links of their own: a Plan that names no map reads as before.
   model.showableMaps = showableMaps;
   // A foe's starting seen: it publishes, or an earlier played session named it. A publish list that does
@@ -559,14 +565,39 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
           const note = target ? index.resolve(target) : null;
           if (note !== null) unmasked.push({ note, on: !/\bmasked again\s*[.!]?\s*$/i.test(b.text) });
         }
-        read.push({ log, hp, blank, unmasked });
+        // `Sides set`: `- [[Note]]: ally` (foe, ally or neutral), as the writer makes it.
+        const sidesSet = [];
+        for (const b of pt.bullets(t.sections.get(SIDES_SET) || '')) {
+          const target = pt.links(b.text)[0];
+          const note = target ? index.resolve(target) : null;
+          const m = /\]\]\s*:\s*([A-Za-z]+)\s*[.!]?\s*$/.exec(b.text);
+          const side = m ? m[1].toLowerCase() : '';
+          if (note === null) {
+            const why = target ? ((index.linkProblem(target) || {}).text || `[[${target}]] matches no note in the vault`) : `"${b.text.trim()}" links no note`;
+            warnings.push({ kind: 'table-log', note: log, text: `${SIDES_SET}: ${why}; that side is not carried` });
+          } else if (!isSide(side)) {
+            warnings.push({ kind: 'table-log', note: log, text: `${SIDES_SET}: "${b.text.trim()}" names no side the sheet reads (foe, ally or neutral); that side is not carried` });
+          } else sidesSet.push({ note, side });
+        }
+        read.push({ log, hp, blank, unmasked, sidesSet });
         return true;
       }
       return false;
     };
     const found = new Map();
     let since = null;
+    let sides = null;
     return {
+      // The side each note was last set to, walking every earlier played log oldest first: a later log's
+      // line wins, and within one log the last line does. Reads every earlier log.
+      sides() {
+        if (sides === null) {
+          while (readNext());
+          sides = {};
+          for (const r of [...read].reverse()) for (const x of r.sidesSet) sides[x.note] = x.side;
+        }
+        return { ...sides };
+      },
       // The log an unmasking began in, walking every earlier played log oldest first: a later
       // `masked again` cancels it, a later unmasking after that begins it afresh. Null when the
       // note is masked. Reads every earlier log, so it is asked only of a note that has an Unmask.

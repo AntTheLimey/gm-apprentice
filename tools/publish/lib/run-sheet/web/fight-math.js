@@ -119,6 +119,26 @@
     return { row: null, wrapped };
   }
 
+  // ---- sides (plan 6a) ----
+
+  // A row's side is its kind plus a neutral flag: a neutral is `kind: 'foe', neutral: true`, so it is
+  // everything a foe is (Out at 0 HP, unseen, numbered, a foe's keys on the players' screen) except a foe
+  // the panel picks or the vitals hold. The panel's switch cycles foe, ally, neutral, foe.
+  const SIDES = ['foe', 'ally', 'neutral'];
+  const isSide = (v) => SIDES.includes(v);
+  const nextSide = (side) => SIDES[(SIDES.indexOf(side) + 1) % SIDES.length];
+  function sideOfRow(r) {
+    if (!r || (r.kind !== 'foe' && r.kind !== 'ally')) return null;
+    return r.kind === 'ally' ? 'ally' : (r.neutral ? 'neutral' : 'foe');
+  }
+  // A foe the panel may pick: never a neutral.
+  const isFoe = (r) => Boolean(r) && r.kind === 'foe' && !r.neutral;
+  // An ally from the GM's own words starts seen; one the reader infers (affiliation, relationships, a bare
+  // Quick Reference "ally") starts unseen. A foe made before allyBy existed (no key at all) is 5b's shape,
+  // where every ally was the Plan's.
+  const GM_WORDS = new Set(['plan', 'stats']);
+  const byGm = (foe) => foe.allyBy === undefined || GM_WORDS.has(foe.allyBy);
+
   // Whose panel the fight view shows (decision 22): the pinned one; else the current row; on a PC's turn
   // the last foe to act, or the next foe due; before the start, the first foe.
   function actingRow(fight, peekId) {
@@ -128,14 +148,14 @@
     if (picked) return { row: picked, why: 'picked' };
     const cur = byId(fight && fight.turn);
     if (!cur) {
-      const first = rows.find((r) => r.kind === 'foe' && r.in);
+      const first = rows.find((r) => isFoe(r) && r.in);
       return first ? { row: first, why: 'first-foe' } : { row: null, why: null };
     }
     if (cur.kind !== 'pc') return { row: cur, why: 'acting' };
     const last = byId(fight.lastFoe);
     if (last) return { row: last, why: 'last-foe' };
     const at = rows.indexOf(cur);
-    const next = rows.slice(at).concat(rows.slice(0, at)).find((r) => r.kind === 'foe' && live(r));
+    const next = rows.slice(at).concat(rows.slice(0, at)).find((r) => isFoe(r) && live(r));
     return next ? { row: next, why: 'next-foe' } : { row: null, why: null };
   }
 
@@ -213,7 +233,7 @@
     return {
       id: null, kind: 'foe', note: null, foeKey: null, type: null, name: '', copy: null, in: true, group: null,
       ini: null, mod: 0, ac: null, hp: null, max: null, temp: 0, conds: [], exhaustion: 0, conc: false,
-      ds: { s: 0, f: 0 }, out: false, seen: false, half: false, resisted: false,
+      ds: { s: 0, f: 0 }, out: false, seen: false, seenTick: null, seenFrom: null, neutral: false, sideFrom: null, half: false, resisted: false,
       lrMax: 0, lr: 0, laMax: 0, la: 0, recharge: [], lair: false, of: [], unseenN: null, word: null,
       start: { hp: null, max: null, conds: [], exhaustion: 0, conc: false }, at: null, hpAt: null, ...over,
     };
@@ -255,9 +275,15 @@
 
   // One foe or ally fight row. A PC or ally starts from the vitals figure (Review H1), a named NPC from its
   // last fight, a creature from its note. Temp HP, concentration and death saves always start empty.
+  //
+  // Its side (plan 6a): the side the GM set tonight, then one carried from an earlier session's Table Log
+  // (both "you set it"), then the reader's, then foe. It starts seen when it is an ally from the GM's own
+  // words or a side the GM set, when it was shown before, or when the model's `seenFrom` holds it; the row
+  // carries `seenFrom` for the seen button's title, and `sideFrom` for its side's.
   function foeRowFrom(ctx, foe, over) {
     const type = typeOf(ctx.model, foe);
-    const ally = Boolean(foe.ally);
+    const start = startingSide(ctx, foe);
+    const ally = start.side === 'ally';
     let hp = num(foe.hp);
     let max = num(foe.hp);
     let conds = [];
@@ -283,15 +309,30 @@
       }
     }
     const at = foe.rechargeAt || {};
+    const seenFrom = typeof ctx.seenFrom[foe.note] === 'string' && ctx.seenFrom[foe.note] ? ctx.seenFrom[foe.note] : null;
+    const shown = Boolean(ctx.state.shownEver && ctx.state.shownEver[foe.note]);
     return withStart(blankRow({
-      kind: ally ? 'ally' : 'foe', note: foe.note, foeKey: foe.key, type, name: baseName(ctx.model, foe),
+      kind: ally ? 'ally' : 'foe', neutral: start.side === 'neutral', sideFrom: start.why, seenFrom,
+      note: foe.note, foeKey: foe.key, type, name: baseName(ctx.model, foe),
       group: ctx.foeGroup, mod: num(foe.init) || 0, ac: num(foe.ac), hp, max, conds, exhaustion, out,
-      seen: ally || Boolean(ctx.state.shownEver && ctx.state.shownEver[foe.note]),
+      seen: (ally && start.byGm) || shown || Boolean(seenFrom),
       lrMax: foe.legendaryResistance || 0, lr: foe.legendaryResistance || 0,
       laMax: foe.legendaryActions || 0, la: foe.legendaryActions || 0,
       recharge: (foe.recharge || []).map((name) => ({ name, at: isNum(at[name]) ? at[name] : 6, ready: true, rolled: null })),
-      lair: Boolean(foe.lair), word: ally ? null : wordOf(ctx.model, foe.note), ...over,
+      // every row the GM can switch keeps its unseen word: an ally may be unseen, or become a foe
+      lair: Boolean(foe.lair), word: wordOf(ctx.model, foe.note), ...over,
     }));
+  }
+
+  // { side, why, byGm } for a foe object: why is "you set it" for a side the GM set, else the reader's
+  // allyFrom (null for a plain foe). A stored value that is no side is passed over.
+  function startingSide(ctx, foe) {
+    const set = ctx.sides[foe.note];
+    if (isSide(set)) return { side: set, why: 'you set it', byGm: true };
+    const carried = ctx.sidesCarried[foe.note];
+    if (isSide(carried)) return { side: carried, why: 'you set it', byGm: true };
+    if (foe.ally) return { side: 'ally', why: foe.allyFrom || null, byGm: byGm(foe) };
+    return { side: 'foe', why: null, byGm: false };
   }
 
   function pcRowFrom(ctx, pc, group, on) {
@@ -335,7 +376,10 @@
       }
       return null;
     };
-    return { model, state: st, beats, byKey, vitals, groupOf, inBeat, lastFightRow, foeGroup: null };
+    // the sides and seen the rows start from: the state's and the model's, as `reduce` never sees the model
+    const obj = (o) => (o && typeof o === 'object' && !Array.isArray(o) ? o : {});
+    return { model, state: st, beats, byKey, vitals, groupOf, inBeat, lastFightRow, foeGroup: null,
+      sides: obj(st.sides), sidesCarried: obj(model.sidesCarried), seenFrom: obj(model.seenFrom) };
   }
 
   // The threshold lines a beat holds, each with the notes that can light it (decision 20). `foeRows` are the
@@ -387,7 +431,7 @@
       const c = castOf(ctx.model, b.note);
       if (!c || !c.foe) continue;
       have.add(b.note);
-      rows.push({ foe: c.foe, on: Boolean(c.foe.ally) || Boolean(beat.impro) });
+      rows.push({ foe: c.foe, on: startingSide(ctx, c.foe).side === 'ally' || Boolean(beat.impro) });
     }
     return rows;
   }
@@ -526,5 +570,6 @@
     parseEntry, damageTaken, afterDamage, afterHeal, isBloodied,
     thresholdOf, isLit, sortRows, takesTurn, nextLive, actingRow,
     gmName, lairRow, unseenKey, unseenNumbers, unseenLabels, rowsForFight, joinRows,
+    SIDES, isSide, nextSide, sideOfRow, isFoe,
   };
 }));

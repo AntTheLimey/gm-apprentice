@@ -5,8 +5,14 @@
 //
 // Names come from the notes alone: a note's own `name`, the withheld word, or the note's unmasked name after
 // Unmask. Never Plan text, never a file's stem (a disguised NPC's file may be named for who he really is),
-// never words the state carries: a fight row's unseen word and its kind (PC, ally or foe) are the model's too
+// never words the state carries: a fight row's unseen word and whether it is a PC are the model's too
 // (Review L1). A note the model does not hold, or of the wrong kind, is dropped.
+//
+// A row's side is the row's, as the GM has it now (plan 6a, review P1): the running fight's row, then the
+// side the GM set (`state.sides`), then one carried from an earlier session, then the reader's. An ally goes
+// up with its name and HP only once it is seen; an ally not seen, a foe and a neutral send exactly a foe's
+// keys, so the players' screen never tells a neutral from a foe and the reader never puts a name there by
+// itself (an ally it infers starts unseen). A withheld note still shows only its withheld word.
 // Pictures go out as opaque ids (`picId(path)`); the server maps an id back to a file.
 
 const FM = require('./web/fight-math');
@@ -90,9 +96,12 @@ function forPlayers(model, state, { withheldWords, campaign, picId } = {}) {
   }
 
   const beats = new Map((model.beats || []).map((b) => [b.key, b]));
-  // the notes the model makes allies: a beat's ally, or a cast entry's (one brought in)
+  // the notes the model makes allies: a beat's ally, or a cast entry's (one brought in); the last word on a
+  // row whose own side cannot be read
   const allies = new Set((model.beats || []).flatMap((b) => (b.foes || []).filter((x) => x && x.ally).map((x) => x.note))
     .concat((model.cast || []).filter((c) => c.foe && c.foe.ally).map((c) => c.note)));
+  const sideSet = (o, note) => (o && typeof o === 'object' && has(o, note) && FM.isSide(o[note]) ? o[note] : null);
+  const sideOf = (r) => FM.sideOfRow(r) || sideSet(st.sides, r.note) || sideSet(model.sidesCarried, r.note) || (allies.has(r.note) ? 'ally' : 'foe');
   function placeOf(g) {
     const b = beats.get(g.beat);
     if (!b) return null;
@@ -140,12 +149,13 @@ function forPlayers(model, state, { withheldWords, campaign, picId } = {}) {
   function orderOf() {
     const f = st.fight;
     if (!f || typeof f !== 'object' || !Array.isArray(f.rows)) return null;
-    // the row's kind and unseen word as the model has them, never as the row says
+    // a PC and the unseen word as the model has them, never as the row says; an ally by the row's side, once
+    // seen (an unseen ally is numbered and named as a foe is)
     const kindOf = (r) => {
       if (r.kind === 'lair') return 'lair';
       const info = infoOf(r.note);
       if (pcs.has(r.note) || (info && String(info.type || '').toLowerCase() === 'pc')) return 'pc';
-      return allies.has(r.note) ? 'ally' : 'foe';
+      return sideOf(r) === 'ally' && r.seen === true ? 'ally' : 'foe';
     };
     const wordOf = (r) => {
       const c = cast.get(r.note);

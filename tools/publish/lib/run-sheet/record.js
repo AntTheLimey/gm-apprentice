@@ -1,5 +1,5 @@
 'use strict';
-// The Table Log writer: the 16-section body a session's state renders to, and the rewrite of a Table
+// The Table Log writer: the 17-section body a session's state renders to, and the rewrite of a Table
 // Log note around it (skills/shared/session-document-chain.md §3c; the reader is table-log.js).
 // Pure: it reads no file and no clock. The server (step 7) decides when to write and what to keep aside.
 
@@ -8,13 +8,15 @@ const path = require('node:path');
 const RS = require('./web/state');
 const { fenceMask } = require('./plan-text');
 
+// The sides the GM set in a fight (plan 6a), one `- [[Note]]: side` per note; the reader carries the latest.
+const SIDES_SET = 'Sides set';
 // The same list as `TABLE_LOG_SECTIONS` in skills/shared/scripts/vault_write.py; a test compares the two.
 const TABLE_LOG_SECTIONS = [
   'Where everyone ended', 'Stopped in', 'Points landed',
   'Tried and missed', 'Overtaken', 'Reached but not landed',
   'Not reached', 'Changed since play started',
   'Contingencies that fired', 'Improvised beats',
-  'Unmasked this session', 'Handouts handed over', 'Log', 'Loot',
+  'Unmasked this session', SIDES_SET, 'Handouts handed over', 'Log', 'Loot',
   'Vitals at the end', 'Advancement',
 ];
 const VITALS = 'Vitals at the end';
@@ -100,6 +102,7 @@ function tableLogBody(model, state, { linkFor: link, timeOf = localTime } = {}) 
     d.unmaskedNow.filter((u) => !u.carried).map((u) => `${link(u.note)} as ${one(u.name)}`)
       .concat(d.maskedAgain.map((u) => `${link(u.note)} masked again`)),
   );
+  sec[SIDES_SET] = bullets(d.sidesSet.map((x) => `${link(x.note)}: ${x.side}`));
   sec['Handouts handed over'] = bullets(d.handedOver.map((h) => (h.note ? link(h.note) : one(h.name || h.text))));
 
   sec.Log = bullets(d.log.map((l) => `${timeOf(l.at)} ${l.beatTitle ? `${one(l.beatTitle)}: ` : ''}${one(l.text)}`));
@@ -151,8 +154,8 @@ function isTableLog(fileText) {
   return !!m && /^type:\s*["']?session-table-log["']?\s*$/m.test(m[1]);
 }
 
-// The note with its 16 sections replaced by `body`: the frontmatter, everything above the first `##`
-// and any `##` section that is not one of the 16 (kept after Advancement, in order) stay as they are.
+// The note with its 17 sections replaced by `body`: the frontmatter, everything above the first `##`
+// and any `##` section that is not one of the 17 (kept after Advancement, in order) stay as they are.
 function rewriteTableLog(fileText, body) {
   if (!isTableLog(fileText)) {
     const e = new Error('not a Table Log note (type: session-table-log): not written');
@@ -167,7 +170,7 @@ function rewriteTableLog(fileText, body) {
   return crlf ? out.replace(/\n/g, '\r\n') : out;
 }
 
-// The file's 16-section body, normalised: LF, trimmed, in file order. What a hash is taken over.
+// The file's 17-section body, normalised: LF, trimmed, in file order. What a hash is taken over.
 function recordBodyOf(fileText) {
   return render(split(fileText).sections.filter((s) => TITLES.has(low(s.title)))).trim();
 }
@@ -191,4 +194,4 @@ function needsBackup(fileText, recordHash) {
   return bodyHash(b) !== recordHash;
 }
 
-module.exports = { TABLE_LOG_SECTIONS, tableLogBody, rewriteTableLog, recordBodyOf, bodyHash, isEmptySkeleton, needsBackup, linkFor, timeOf: localTime };
+module.exports = { TABLE_LOG_SECTIONS, SIDES_SET, tableLogBody, rewriteTableLog, recordBodyOf, bodyHash, isEmptySkeleton, needsBackup, linkFor, timeOf: localTime };

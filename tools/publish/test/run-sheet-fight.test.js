@@ -1219,3 +1219,148 @@ describe('RS.upgrade and the fight\'s keys', () => {
     assert.doesNotThrow(() => RS.upgrade({ fight: null, fights: [], panels: {}, shownEver: { [ASH]: true } }, fresh()));
   });
 });
+
+// plan 6a Task 5: a neutral side, the side the GM sets, and its memory
+describe('sides in the fight', () => {
+  const side = (s, note, to, copy) => F(s, { type: 'setSide', row: row(s, note, copy).id, side: to });
+  const sideOf = (r) => M.sideOfRow(r);
+
+  it('setSide cycles, and the side is remembered into the next fight', () => {
+    let s = gateFight();
+    assert.equal(sideOf(row(s, ASH)), 'foe');
+    for (const to of [M.nextSide('foe'), M.nextSide('ally'), M.nextSide('neutral')]) s = side(s, ASH, to);
+    assert.equal(sideOf(row(s, ASH)), 'foe', 'foe, ally, neutral, foe');
+    s = side(s, ASH, 'neutral');
+    assert.deepEqual([row(s, ASH).kind, row(s, ASH).neutral], ['foe', true]);
+    assert.equal(s.sides[ASH], 'neutral');
+    s = side(s, LUCAN, 'foe');
+    assert.equal(s.sides[LUCAN], 'foe');
+    // a side that is none of the three, a Lair row and a PC row are left alone
+    const before = clone(s);
+    s = F(s, { type: 'setSide', row: row(s, WOLF).id, side: 'friend' });
+    s = F(s, { type: 'setSide', row: row(s, ADA).id, side: 'foe' });
+    s = F(s, { type: 'setSide', row: s.fight.rows.find((r) => r.kind === 'lair').id, side: 'ally' });
+    assert.deepEqual(s.fight.rows, before.fight.rows);
+    assert.deepEqual(s.sides, before.sides);
+    s = end(s);
+    assert.equal(s.fights[0].rows.find((r) => r.note === ASH).neutral, true, 'an ended fight keeps its rows\' sides');
+    s = fightAt(s, GATE);
+    assert.deepEqual([row(s, ASH).kind, row(s, ASH).neutral, row(s, ASH).sideFrom], ['foe', true, 'you set it']);
+    assert.deepEqual([row(s, LUCAN).kind, row(s, LUCAN).neutral], ['foe', false]);
+    assert.ok(rows(s, WOLF).every((r) => r.kind === 'foe' && !r.neutral), 'a note nobody set keeps the reader\'s side');
+  });
+
+  it('the side switch is logged', () => {
+    let s = gateFight();
+    s = side(s, ASH, 'ally');
+    s = side(s, ASH, 'neutral');
+    s = side(s, ASH, 'foe');
+    assert.deepEqual(texts(s).slice(-3), ['Brother Ash is now an ally.', 'Brother Ash is now neutral.', 'Brother Ash is now a foe.']);
+    const n = texts(s).length;
+    s = side(s, ASH, 'foe');
+    assert.equal(texts(s).length, n, 'the side it already has: nothing happens');
+  });
+
+  it('set to ally becomes seen; set back to foe or neutral, it is as seen as a foe starts', () => {
+    let s = gateFight();
+    assert.equal(row(s, ASH).seen, false);
+    s = side(s, ASH, 'ally');
+    assert.equal(row(s, ASH).seen, true);
+    s = side(s, ASH, 'neutral');
+    assert.equal(row(s, ASH).seen, false, 'no publish, no Show, no tick: unseen again');
+    assert.ok(row(s, ASH).unseenN !== null && row(s, ASH).unseenN !== undefined, 'and it keeps a number for its unseen word');
+    // the GM's own tick wins
+    s = F(s, { type: 'seen', row: row(s, ASH).id, on: true });
+    s = side(s, ASH, 'ally');
+    s = side(s, ASH, 'foe');
+    assert.equal(row(s, ASH).seen, true, 'ticked seen by the GM: stays seen');
+    // a reader-ally (Lucan, an inferred ally) set to ally by the GM is seen
+    s = side(s, LUCAN, 'neutral');
+    s = side(s, LUCAN, 'ally');
+    assert.equal(row(s, LUCAN).seen, true);
+  });
+
+  it('a neutral is never the last foe', () => {
+    let s = gateFight();
+    for (const r of s.fight.rows.filter((x) => x.kind === 'foe')) s = side(s, r.note, 'neutral', r.copy);
+    // every foe is neutral: Next walks every turn and none of them becomes the last foe
+    s = F(s, { type: 'rollInit', values: Object.fromEntries(s.fight.rows.filter((r) => r.kind !== 'pc').map((r, i) => [r.id, 20 - i])) });
+    s = F(s, { type: 'setInit', row: row(s, ADA).id, ini: 1 });
+    const turns = s.fight.rows.filter((r) => r.in).length + 1;
+    for (let i = 0; i < turns; i++) {
+      s = next(s);
+      assert.equal(s.fight.lastFoe, null, `turn ${i + 1}`);
+    }
+    // a foe's turn still sets it
+    s = side(s, ASH, 'foe');
+    do s = next(s); while (s.fight.turn !== row(s, ASH).id);
+    assert.equal(s.fight.lastFoe, row(s, ASH).id);
+  });
+
+  it('0 HP: neutral Out, ally Down', () => {
+    let s = gateFight();
+    s = side(s, ASH, 'neutral');
+    s = hit(s, ASH, '-999');
+    assert.equal(row(s, ASH).out, true);
+    assert.ok(!row(s, ASH).conds.includes('Down'));
+    assert.ok(texts(s).includes('Brother Ash drops.'));
+    s = side(s, WOLF, 'ally', 1);
+    s = hit(s, WOLF, '-999', 1);
+    assert.equal(row(s, WOLF, 1).out, false);
+    assert.ok(row(s, WOLF, 1).conds.includes('Down'));
+  });
+
+  it('neutrals and reader-allies set neutral are not in vitals', () => {
+    let s = gateFight();
+    assert.ok(RS.derive(model, s).vitals.some((v) => v.note === LUCAN), 'Lucan, a reader-ally, has a vitals row');
+    s = side(s, LUCAN, 'neutral');
+    s = hit(s, LUCAN, '-3');
+    s = side(s, ASH, 'neutral');
+    s = hit(s, ASH, '-3');
+    let d = RS.derive(model, s);
+    assert.ok(!d.vitals.some((v) => v.note === LUCAN || v.note === ASH));
+    s = end(s);
+    d = RS.derive(model, s);
+    assert.ok(!d.vitals.some((v) => v.note === LUCAN || v.note === ASH));
+    assert.ok(!d.vitalsRecorded.some((v) => v.note === LUCAN));
+    // an ally in an earlier fight, set neutral since: still not in the vitals
+    let t = gateFight();
+    t = hit(t, LUCAN, '-3');
+    t = end(t);
+    assert.ok(RS.derive(model, t).vitals.some((v) => v.note === LUCAN));
+    t = fightAt(t, GATE);
+    t = side(t, LUCAN, 'neutral');
+    assert.ok(!RS.derive(model, t).vitals.some((v) => v.note === LUCAN));
+    // a carried neutral too
+    const carried = { ...model, sidesCarried: { [LUCAN]: 'neutral' } };
+    assert.ok(!RS.derive(carried, fresh()).vitals.some((v) => v.note === LUCAN));
+    // and a foe the GM set to ally has one
+    t = side(t, ASH, 'ally');
+    assert.ok(RS.derive(model, t).vitals.some((v) => v.note === ASH));
+  });
+
+  it('derive lists the sides set tonight for the record', () => {
+    let s = gateFight();
+    s = side(s, ASH, 'ally');
+    s = side(s, LUCAN, 'neutral');
+    s = side(s, ASH, 'foe');
+    assert.deepEqual(RS.derive(model, s).sidesSet, [{ note: ASH, side: 'foe' }, { note: LUCAN, side: 'neutral' }]);
+    assert.deepEqual(RS.derive(model, fresh()).sidesSet, []);
+  });
+
+  it('an old saved state with no sides derives', () => {
+    let old = gateFight();
+    delete old.sides;
+    for (const r of old.fight.rows) delete r.neutral;
+    const d = RS.derive(model, old);
+    assert.deepEqual(d.sidesSet, []);
+    assert.equal(d.fight.view.rows.find((r) => r.note === ASH).kind, 'foe');
+    const up = RS.upgrade(old, fresh());
+    assert.deepEqual(up.sides, {});
+    old = side(up, ASH, 'neutral');
+    assert.equal(old.sides[ASH], 'neutral');
+    // a row with no neutral key is no neutral
+    assert.equal(M.sideOfRow(up.fight.rows.find((r) => r.note === ASH)), 'foe');
+    assert.throws(() => RS.upgrade({ sides: [] }, fresh()), (e) => e.code === 'BAD_STATE');
+  });
+});

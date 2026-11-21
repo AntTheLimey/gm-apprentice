@@ -77,8 +77,9 @@
     }
   }
 
-  // What follows an HP change: a foe going Bloodied is logged; at 0 a foe is Out, a PC or ally is Down, and
-  // concentration ends; healing from 0 clears Down, Stable and the death saves; thresholds light.
+  // What follows an HP change: a foe going Bloodied is logged; at 0 a foe (a neutral too: its kind is foe)
+  // is Out, a PC or ally is Down, and concentration ends; healing from 0 clears Down, Stable and the death
+  // saves; thresholds light.
   // `opts.over` is the damage left after temp HP and HP.
   function afterHp(s, f, r, before, at, opts) {
     const o = opts || {};
@@ -128,9 +129,10 @@
   // What was left of `d` after temp HP and HP: the damage past 0.
   const overOf = (d, temp, hp) => (isNum(hp) ? d - (temp || 0) - hp : null);
 
+  // A neutral's turn is its own, but it is never the last foe the panel falls back to (plan 6a).
   const turnStart = (f, r, at) => {
     if (r.laMax) { r.la = r.laMax; touch(r, at); }
-    if (r.kind === 'foe') f.lastFoe = r.id;
+    if (FM.isFoe(r)) f.lastFoe = r.id;
   };
 
   // The running fight this action names, and the row it names when it names one.
@@ -390,12 +392,38 @@
       say(s, f, at, `${spent ? `${spent}: ` : 'Area: '}${n} damage${list ? ` to ${list}` : ''}.`);
       for (const x of hits) afterHp(s, f, x.r, x.before, at, { over: x.over });
     },
+    // A foe's, or an ally's (one the reader inferred starts unseen): the GM's tick is kept apart as `seenTick`,
+    // so a side switched later leaves it standing.
     seen: onRow((s, f, r, a, at) => {
-      if (r.kind !== 'foe') return;
+      if (r.kind !== 'foe' && r.kind !== 'ally') return;
       r.seen = !!a.on;
+      r.seenTick = r.seen;
       touch(r, at);
       // back to unseen: a row that never had a number takes the next one
       if (!r.seen) numberUnseen(f);
+    }),
+    // The GM sets a row's side (plan 6a): ally makes it seen; foe or neutral makes it as seen as a foe starts
+    // (the GM's own tick, else shown before or the model's seenFrom the row carries), so a Plan ally turned
+    // never puts its name or HP on the players' screen by itself. The note's last side is kept in `s.sides`,
+    // which the next fight starts from and the Table Log carries to the next session.
+    setSide: onRow((s, f, r, a, at) => {
+      const side = a.side;
+      if (!FM.isSide(side) || !FM.sideOfRow(r) || FM.sideOfRow(r) === side) return;
+      r.kind = side === 'ally' ? 'ally' : 'foe';
+      r.neutral = side === 'neutral';
+      r.sideFrom = 'you set it';
+      if (side === 'ally') r.seen = true;
+      else {
+        const shown = Boolean(r.note && s.shownEver && s.shownEver[r.note]);
+        r.seen = r.seenTick === true || r.seenTick === false ? r.seenTick : (shown || Boolean(r.seenFrom));
+      }
+      if (r.note) {
+        if (!s.sides || typeof s.sides !== 'object' || Array.isArray(s.sides)) s.sides = {};
+        s.sides[r.note] = side;
+      }
+      touch(r, at);
+      numberUnseen(f);
+      say(s, f, at, `${nameOf(s, f, r)} is now ${side === 'neutral' ? 'neutral' : side === 'ally' ? 'an ally' : 'a foe'}.`);
     }),
     fightPause(s, a, at) {
       const f = running(s, a);

@@ -457,7 +457,8 @@ describe('run sheet server', () => {
     await markFirst(run);
     const r = await req(run.port, 'GET', '/api/record');
     assert.strictEqual(r.status, 200);
-    assert.strictEqual((r.json.text.match(/^## /gm) || []).length, 16);
+    // 17 since plan 6a Task 5 (review P-S2) added Sides set
+    assert.strictEqual((r.json.text.match(/^## /gm) || []).length, 17);
     assert.match(r.json.text, /## Points landed\n\n- The Gate: the tracks/);
   });
 

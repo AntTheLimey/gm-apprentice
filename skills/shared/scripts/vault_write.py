@@ -3981,7 +3981,8 @@ TABLE_LOG_SECTIONS: tuple[str, ...] = (
     "Tried and missed", "Overtaken", "Reached but not landed",
     "Not reached", "Changed since play started",
     "Contingencies that fired", "Improvised beats",
-    "Unmasked this session", "Handouts handed over", "Log", "Loot",
+    "Unmasked this session", "Sides set", "Handouts handed over",
+    "Log", "Loot",
     "Vitals at the end", "Advancement",
 )
 TABLE_LOG_VITALS_HEAD = "\n| Who | HP | Conditions |\n| --- | --- | --- |\n"
