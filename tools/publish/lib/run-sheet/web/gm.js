@@ -273,6 +273,8 @@
         const st = await getJson('/api/state');
         takeModel(m);
         G.stateId = st.stateId;
+        loadKept();
+        applySides();
         G.serverId = st.serverId || G.serverId;
         G.state = st.state;
         G.rev = st.rev;
@@ -1529,8 +1531,12 @@
   // ------------------------------------------------------------------ side colours (plan 6a Task 9)
   // The colours are a vault setting: the model carries them, `POST /api/settings/side-colours` writes them, and
   // the server tells every GM window (`side-colours`). When a save fails the page paints the choice anyway and
-  // keeps it in this browser (`localStorage['rs:sideColours']`) with a quiet note; `sideKept` holds that choice.
+  // keeps it in this browser with a quiet note; `sideKept` holds that choice. Its key names the vault's campaign
+  // and the session's state (`rs:sideColours:<campaign>:<stateId>`, final review O10): the run sheet's one port
+  // serves every vault, and one vault's kept colours must never paint another's.
   const SIDEKEY = 'rs:sideColours';
+  let keptKey = null;
+  const sideKeyNow = () => (G.model && G.stateId ? `${SIDEKEY}:${G.model.campaign || ''}:${G.stateId}` : null);
   const HEX6 = /^#[0-9a-f]{6}$/i;
   const SIDE_WORDS = { pc: 'Party', ally: 'Ally', foe: 'Foe', neutral: 'Neutral' };
   function readChoice(raw) {
@@ -1545,15 +1551,25 @@
   let sideTrying = null;
   let sideKept = null;
   let saveSeq = 0;
-  try {
-    const k = JSON.parse(localStorage.getItem(SIDEKEY));
-    const choice = k && readChoice(k.choice);
-    if (choice && typeof k.base === 'string') sideKept = { choice, base: k.base, why: String(k.why || 'the vault could not be reached') };
-  } catch (e) { /* no storage, or nothing kept */ }
   const baseOf = (colours) => JSON.stringify(colours || null);
+  // The choice kept for this vault and session, read once their key is known (and again when it changes): it holds
+  // only while the vault still says what it said when the save failed.
+  function loadKept() {
+    const key = sideKeyNow();
+    if (key === keptKey) return;
+    keptKey = key;
+    sideKept = null;
+    if (!key) return;
+    try {
+      const k = JSON.parse(localStorage.getItem(key));
+      const choice = k && readChoice(k.choice);
+      if (choice && typeof k.base === 'string') sideKept = { choice, base: k.base, why: String(k.why || 'the vault could not be reached') };
+    } catch (e) { /* no storage, or nothing kept */ }
+    if (sideKept && sideKept.base !== baseOf(G.model.sideColours)) dropKept();
+  }
   function dropKept() {
     sideKept = null;
-    try { localStorage.removeItem(SIDEKEY); } catch (e) { /* no storage */ }
+    try { if (keptKey) localStorage.removeItem(keptKey); } catch (e) { /* no storage */ }
   }
   // the kept choice counts only once a model has arrived to compare with
   const sideChoice = () => sideTrying || (sideKept && G.model ? sideKept.choice : null) || readChoice(G.model && G.model.sideColours) || { preset: 'pens', own: {} };
@@ -1615,8 +1631,9 @@
     } catch (e) { why = `the server did not answer (${e.message})`; }
     if (mine !== saveSeq) return;
     sideTrying = null;
+    loadKept();
     sideKept = { choice, base: baseOf(G.model && G.model.sideColours), why };
-    try { localStorage.setItem(SIDEKEY, JSON.stringify(sideKept)); } catch (e) { /* no storage */ }
+    try { if (keptKey) localStorage.setItem(keptKey, JSON.stringify(sideKept)); } catch (e) { /* no storage */ }
     applySides();
     note(`The colours could not be saved to the vault: ${why}. They stay as you chose on this browser.`, { kind: 'bad', id: `sc:${why}` });
   }
@@ -1939,6 +1956,8 @@
       return;
     }
     if (PROBE && params.get('stateId')) G.stateId = params.get('stateId');
+    loadKept();
+    applySides();
     render();
     listen();
     loadView();

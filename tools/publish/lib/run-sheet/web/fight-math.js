@@ -127,6 +127,15 @@
   // shows a seen row's name and HP to the players, is last, so it is never the stray middle click (final review P-A3).
   const SIDES = ['foe', 'neutral', 'ally'];
   const isSide = (v) => SIDES.includes(v);
+  // A note's side as the GM has it now, before any row's own (final review O9: the one chain, for the rows a
+  // fight starts, the beats' Who's here and the players' screen): the side set tonight (`sides`), then one carried
+  // from an earlier session's Table Log (`carried`), then the reader's (`readerAlly`). `set` is true for the first
+  // two: the GM's own word. A stored value that is no side is passed over.
+  function noteSide(sides, carried, note, readerAlly) {
+    const own = (o) => (o && typeof o === 'object' && !Array.isArray(o) && Object.prototype.hasOwnProperty.call(o, note) && isSide(o[note]) ? o[note] : null);
+    const set = own(sides) || own(carried);
+    return set ? { side: set, set: true } : { side: readerAlly ? 'ally' : 'foe', set: false };
+  }
   function sideOfRow(r) {
     if (!r || (r.kind !== 'foe' && r.kind !== 'ally')) return null;
     return r.kind === 'ally' ? 'ally' : (r.neutral ? 'neutral' : 'foe');
@@ -331,11 +340,9 @@
   // { side, why, byGm } for a foe object: why is "you set it" for a side the GM set, else the reader's
   // allyFrom (null for a plain foe). A stored value that is no side is passed over.
   function startingSide(ctx, foe) {
-    const set = ctx.sides[foe.note];
-    if (isSide(set)) return { side: set, why: 'you set it', byGm: true };
-    const carried = ctx.sidesCarried[foe.note];
-    if (isSide(carried)) return { side: carried, why: 'you set it', byGm: true };
-    if (foe.ally) return { side: 'ally', why: foe.allyFrom || null, byGm: byGm(foe) };
+    const n = noteSide(ctx.sides, ctx.sidesCarried, foe.note, foe.ally);
+    if (n.set) return { side: n.side, why: 'you set it', byGm: true };
+    if (n.side === 'ally') return { side: 'ally', why: foe.allyFrom || null, byGm: byGm(foe) };
     return { side: 'foe', why: null, byGm: false };
   }
 
@@ -705,6 +712,6 @@
     thresholdOf, isLit, sortRows, takesTurn, nextLive, actingRow,
     gmName, lairRow, unseenKey, unseenNumbers, unseenLabels, rowsForFight, joinRows, blankRow,
     addChoices, sameName, groupKey, groupMates, placeRow, undoable, untouched,
-    SIDES, isSide, sideOfRow, isFoe,
+    SIDES, isSide, noteSide, sideOfRow, isFoe,
   };
 }));

@@ -835,7 +835,7 @@ describe('sides by colour', { skip: browserSkip() }, () => {
       const kept = ['_meta/vault-config.yaml', '_meta/vault-config.md'].map((f) => path.join(run.vault, f)).filter((f) => fs.existsSync(f));
       assert.ok(kept.some((f) => /side_colours:\s*colour_blind/.test(lf(fs.readFileSync(f, 'utf8')))), 'the vault settings file holds colour_blind');
       await tab.waitFor(`getComputedStyle(document.querySelector('[data-frow="${rowOf(p, ADA).id}"]')).borderLeftColor === ${q(rgb(CB.pc))}`);
-      assert.strictEqual(await page.evaluate('localStorage.getItem("rs:sideColours")'), null, 'a saved choice keeps nothing on the browser');
+      assert.strictEqual(await page.evaluate('Object.keys(localStorage).filter((k) => k.startsWith("rs:sideColours")).map((k) => localStorage.getItem(k))[0] || null'), null, 'a saved choice keeps nothing on the browser');
       await press(page, '#coloursBtn');
       await shot(page, 'sides-colour-blind');
     });
@@ -898,7 +898,7 @@ describe('sides by colour', { skip: browserSkip() }, () => {
       await press(page, '#coloursMenu input[name="scp"][value="colour_blind"]');
       await page.waitFor(`${ada} === ${q(rgb(CB.pc))}`);
       await page.waitFor('document.querySelector("#hnotes").textContent.includes("update the site first")');
-      assert.deepStrictEqual(JSON.parse(await page.evaluate('localStorage.getItem("rs:sideColours")')).choice.preset, 'colour_blind');
+      assert.deepStrictEqual(JSON.parse(await page.evaluate('Object.keys(localStorage).filter((k) => k.startsWith("rs:sideColours")).map((k) => localStorage.getItem(k))[0] || null')).choice.preset, 'colour_blind');
       assert.strictEqual((await (await fetch(`${run.base}/api/model`)).json()).model.sideColours.preset, 'pens', 'the vault still says Pens');
       assert.match(await page.evaluate('document.getElementById("coloursBtn").title'), /^Showing your choice, not the vault's \(not saved: .*update the site first/);
       assert.strictEqual(await page.evaluate('document.querySelectorAll("#coloursBtn .keptmark").length'), 1, 'the marker shows');
@@ -932,7 +932,30 @@ describe('sides by colour', { skip: browserSkip() }, () => {
       await page.waitFor('document.querySelector("[data-frow]")');
       await page.waitFor(`${ada} === ${q(rgb('#123456'))}`);
       assert.strictEqual(await page.evaluate('document.querySelectorAll("#coloursBtn .keptmark").length'), 0, 'no marker');
-      assert.strictEqual(await page.evaluate('localStorage.getItem("rs:sideColours")'), null, 'the override is gone from the browser');
+      assert.strictEqual(await page.evaluate('Object.keys(localStorage).filter((k) => k.startsWith("rs:sideColours")).map((k) => localStorage.getItem(k))[0] || null'), null, 'the override is gone from the browser');
+    });
+  });
+
+  // final review O10: a kept choice is this vault's and this session's, never another's on the same port
+  it('a kept choice is keyed by the vault\'s campaign and the session; another vault\'s, or an unkeyed one, is not read', async () => {
+    const run = await start(oldSite);
+    const { stateId } = await getState(run).then(() => fetch(`${run.base}/api/state`)).then((r) => r.json());
+    const base = JSON.stringify(run.model.sideColours || null);
+    const kept = JSON.stringify({ choice: { preset: 'colour_blind', own: {} }, base, why: 'test' });
+    const mine = `rs:sideColours:${run.model.campaign || ''}:${stateId}`;
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await page.goto(`${run.base}/?probe=1`);
+      await page.waitFor('document.querySelector("#coloursBtn")');
+      // another vault's choice, and one kept under the old key with no vault in it
+      await page.evaluate(`localStorage.setItem("rs:sideColours:Another Campaign:${stateId}", ${JSON.stringify(kept)}); localStorage.setItem("rs:sideColours", ${JSON.stringify(kept)}); true`);
+      await page.goto(`${run.base}/?probe=1`);
+      await settled(page);
+      assert.strictEqual(await page.evaluate('document.querySelectorAll("#coloursBtn .keptmark").length'), 0, 'neither is this vault\'s');
+      // this vault's own: read
+      await page.evaluate(`localStorage.setItem(${JSON.stringify(mine)}, ${JSON.stringify(kept)}); true`);
+      await page.goto(`${run.base}/?probe=1`);
+      await settled(page);
+      assert.strictEqual(await page.evaluate('document.querySelectorAll("#coloursBtn .keptmark").length'), 1, 'this vault\'s kept choice');
     });
   });
 
@@ -951,7 +974,7 @@ describe('sides by colour', { skip: browserSkip() }, () => {
       await press(page, '#coloursMenu input[name="scp"][value="pens"]');
       await page.waitFor(`${ada} === ${q(rgb(PENS.pc))}`);
       await page.sleep(1200);
-      assert.strictEqual(await page.evaluate('localStorage.getItem("rs:sideColours")'), null, 'the late failure kept nothing');
+      assert.strictEqual(await page.evaluate('Object.keys(localStorage).filter((k) => k.startsWith("rs:sideColours")).map((k) => localStorage.getItem(k))[0] || null'), null, 'the late failure kept nothing');
       assert.strictEqual(await page.evaluate('document.querySelectorAll("#coloursBtn .keptmark").length'), 0);
       assert.strictEqual(await page.evaluate(ada), rgb(PENS.pc), 'and repainted nothing');
       assert.strictEqual((await (await fetch(`${run.base}/api/model`)).json()).model.sideColours.preset, 'pens');

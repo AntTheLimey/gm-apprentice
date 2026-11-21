@@ -119,8 +119,7 @@ function forPlayers(model, state, { withheldWords, campaign, picId } = {}) {
   // row whose own side cannot be read
   const allies = new Set((model.beats || []).flatMap((b) => (b.foes || []).filter((x) => x && x.ally).map((x) => x.note))
     .concat((model.cast || []).filter((c) => c.foe && c.foe.ally).map((c) => c.note)));
-  const sideSet = (o, note) => (o && typeof o === 'object' && has(o, note) && FM.isSide(o[note]) ? o[note] : null);
-  const sideOf = (r) => FM.sideOfRow(r) || sideSet(st.sides, r.note) || sideSet(model.sidesCarried, r.note) || (allies.has(r.note) ? 'ally' : 'foe');
+  const sideOf = (r) => FM.sideOfRow(r) || FM.noteSide(st.sides, model.sidesCarried, r.note, allies.has(r.note)).side;
   // A group's own place: its Plan beat's (or hub spot's) place, else its place beat's (plan 6a Task 7, review
   // P3): a known place's note, or the key of a place typed tonight.
   function placeOf(g) {

@@ -539,6 +539,22 @@ test('the switch\'s sides are foe, neutral, ally, ally last; a row\'s side is it
   assert.equal(M.sideOfRow(row({ kind: 'lair' })), null);
 });
 
+// final review O9: one side chain, for the rows a fight starts, Who's here and the players' screen
+test('noteSide: tonight\'s side, then a carried one, then the reader\'s; a stored word that is no side is passed over', () => {
+  const N = 'NPCs/A.md';
+  assert.deepEqual(M.noteSide({ [N]: 'neutral' }, { [N]: 'ally' }, N, true), { side: 'neutral', set: true });
+  assert.deepEqual(M.noteSide({}, { [N]: 'ally' }, N, false), { side: 'ally', set: true });
+  assert.deepEqual(M.noteSide({ [N]: 'friend' }, { [N]: 'foe' }, N, true), { side: 'foe', set: true });
+  assert.deepEqual(M.noteSide(null, undefined, N, true), { side: 'ally', set: false });
+  assert.deepEqual(M.noteSide({}, {}, N, false), { side: 'foe', set: false });
+  assert.deepEqual(M.noteSide({}, {}, 'toString', false), { side: 'foe', set: false }, 'an inherited key is no side');
+  // the three users agree: a fight row, Who's here, and the players' view
+  const src = (f) => require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'lib', 'run-sheet', ...f), 'utf8');
+  assert.match(src(['web', 'state.js']), /FM\.noteSide\(/);
+  assert.match(src(['players.js']), /FM\.noteSide\(/);
+  assert.match(src(['web', 'fight-math.js']), /const n = noteSide\(ctx\.sides, ctx\.sidesCarried/);
+});
+
 test('actingRow skips a neutral', () => {
   const rows = [row({ id: 'pc1', kind: 'pc' }), row({ id: 'n1', neutral: true }), row({ id: 'f1' })];
   assert.deepEqual(M.actingRow({ rows, turn: null, lastFoe: null }, null), { row: rows[2], why: 'first-foe' });

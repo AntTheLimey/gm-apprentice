@@ -896,10 +896,33 @@ describe('the fight in the state', () => {
     assert.equal(row(s, DRAKE).hp, null);
     s = F(s, { type: 'setMax', row: row(s, DRAKE).id, max: 30 });
     assert.deepEqual([row(s, DRAKE).hp, row(s, DRAKE).max], [30, 30]);
+    // changed on purpose by final review P4.3: a full row follows its max
     s = F(s, { type: 'setMax', row: row(s, DRAKE).id, max: 40 });
-    assert.deepEqual([row(s, DRAKE).hp, row(s, DRAKE).max], [30, 40], 'a row with HP keeps it');
+    assert.deepEqual([row(s, DRAKE).hp, row(s, DRAKE).max], [40, 40], 'a full row stays full');
     s = F(s, { type: 'setAc', row: row(s, DRAKE).id, ac: 14 });
     assert.equal(row(s, DRAKE).ac, 14);
+  });
+
+  // final review P4.3
+  it('a corrected max brings a full row\'s HP with it; a wounded row keeps its HP', () => {
+    let s = gateFight();
+    s = join(s, { cast: DRAKE, count: 1 });
+    const id = row(s, DRAKE).id;
+    for (const [max, hp] of [[21, 21], [2, 2], [20, 20]]) {
+      s = F(s, { type: 'setMax', row: id, max });
+      assert.deepEqual([row(s, DRAKE).hp, row(s, DRAKE).max], [hp, max], `max ${max}`);
+    }
+    // a "0" slip puts it Out; the corrected max brings it back full
+    s = F(s, { type: 'setMax', row: id, max: 0 });
+    assert.deepEqual([row(s, DRAKE).hp, row(s, DRAKE).out], [0, true]);
+    s = F(s, { type: 'setMax', row: id, max: 33 });
+    assert.deepEqual([row(s, DRAKE).hp, row(s, DRAKE).max, row(s, DRAKE).out], [33, 33, false]);
+    // wounded: 15/21, max 25 keeps 15
+    s = F(s, { type: 'setMax', row: id, max: 21 });
+    s = F(s, { type: 'hp', row: id, entry: '-6' });
+    assert.deepEqual([row(s, DRAKE).hp, row(s, DRAKE).max], [15, 21]);
+    s = F(s, { type: 'setMax', row: id, max: 25 });
+    assert.deepEqual([row(s, DRAKE).hp, row(s, DRAKE).max], [15, 25], 'a wounded row keeps its HP');
   });
 
   it('pause and resume keep the turn and round, and are logged', () => {
@@ -1582,14 +1605,54 @@ describe('sides in the fight', () => {
   });
 
   // plan 6a fix round 1 / review C1: one copy's side is that copy's, never the note's
-  it('one copy of two set to ally: nothing remembered, the next fight is the reader\'s, no Sides set line', () => {
+  // changed on purpose by the final review (ledger 86): the copy the players saw as an ally leaves its name seen
+  it('one copy of two set to ally: no side remembered, the next fight is the reader\'s, no Sides set line', () => {
     let s = gateFight();
     s = side(s, WOLF, 'ally', 1);
     assert.equal(row(s, WOLF, 1).kind, 'ally');
     assert.equal(s.sides[WOLF], undefined);
     assert.deepEqual(RS.derive(model, s).sidesSet, []);
     s = fightAt(end(s), GATE);
-    assert.ok(rows(s, WOLF).every((r) => r.kind === 'foe' && !r.neutral && !r.seen), 'every wolf a foe again');
+    assert.ok(rows(s, WOLF).every((r) => r.kind === 'foe' && !r.neutral), 'every wolf a foe again');
+    assert.ok(rows(s, WOLF).every((r) => r.seen), 'named, as the players saw it');
+  });
+
+  // final review, ledger 86: a turned ally is no "Stranger" in the next fight
+  it('a seen ally set to foe, End fight, a new fight with him: named, not a stranger', () => {
+    let s = gateFight();
+    s = side(s, ASH, 'ally');
+    assert.equal(row(s, ASH).seen, true, 'an ally is seen');
+    s = side(s, ASH, 'foe');
+    assert.equal(row(s, ASH).seen, true, 'set back to foe, the name stays (ruling I2)');
+    s = end(s);
+    assert.ok(s.shownEver[ASH], 'remembered as seen');
+    s = fightAt(s, GATE);
+    assert.deepEqual([row(s, ASH).kind, row(s, ASH).seen], ['foe', true]);
+    const { forPlayers } = require('../lib/run-sheet/players');
+    const v = forPlayers(model, s, { withheldWords: model.withheldWords, picId: () => '0'.repeat(20) });
+    const names = v.panels.flatMap((p) => (p.order ? p.order.rows.map((r) => r.name) : []));
+    assert.ok(names.includes('Brother Ash'), `his name, not his unseen word: ${names.join(', ')}`);
+    // a foe never seen leaves nothing behind
+    let t = gateFight();
+    t = end(t);
+    assert.ok(!t.shownEver[ASH]);
+    t = fightAt(t, GATE);
+    assert.equal(row(t, ASH).seen, false);
+  });
+
+  // final review, ledger 88: a side carried from an earlier session still applies after a mixed group drops s.sides
+  it('a carried side still applies after setSide forgets the note for a mixed group', () => {
+    const carried = { ...model, sidesCarried: { [WOLF]: 'neutral' } };
+    let s = fightAt(move(fresh(), ADA, GATE), GATE, { m: carried });
+    assert.ok(rows(s, WOLF).every((r) => r.neutral && r.sideFrom === 'you set it'), 'every wolf starts neutral from the Table Log');
+    s = side(s, WOLF, 'foe', 1);
+    assert.equal(s.sides[WOLF], undefined, 'mixed: tonight\'s side for the note is dropped');
+    assert.deepEqual(rows(s, WOLF).map((r) => M.sideOfRow(r)), ['foe', 'neutral', 'neutral'], 'the other copies keep theirs');
+    s = end(s);
+    const id = nextId();
+    const b = M.rowsForFight({ model: carried, derived: RS.derive(carried, s), state: s, beatKey: GATE.key, idBase: id });
+    s = RS.reduce(s, { id, type: 'fightStart', beat: GATE.key, title: GATE.title, groups: b.groups, rows: b.rows, thresholds: b.thresholds }, now());
+    assert.ok(rows(s, WOLF).every((r) => r.neutral), 'the next fight starts from the carried side again');
   });
 
   it('every copy set: remembered; one set back: forgotten', () => {

@@ -333,6 +333,8 @@
       r.max = n;
       r.typed = true;
       if (n !== null && !isNum(r.hp)) r.hp = n;
+      // a row that was full stays full: a corrected max (21, a slip to 2, then 20) gives 20/20 (final review P4.3)
+      else if (n !== null && isNum(maxBefore) && r.hp === maxBefore) r.hp = n;
       // SRD: HP never goes above the maximum
       if (n !== null && isNum(r.hp) && r.hp > n) r.hp = n;
       touchIfHp(r, at, before, maxBefore);
@@ -345,8 +347,8 @@
       r.typed = true;
       touch(r, at);
     }),
-    // A counted row's typed numbers go to the rest of its group that nobody has typed into, and their HP
-    // is the max. The stat keys come (`STAT_KEYS`: max, ac and mod for D&D);
+    // A counted row's typed numbers go to the others of this group nobody has typed into, hurt or given a status
+    // (FM.untouched), and their HP is the max. The stat keys come (`STAT_KEYS`: max, ac and mod for D&D);
     // nothing else does (not HP, initiative, side, seen or typed).
     sameForAll: onRow((s, f, r, a, at) => {
       const others = FM.groupMates(f.rows, r).filter((x) => x !== r && FM.untouched(x, true));
@@ -529,6 +531,13 @@
       sayRoster(s, f, at, `Fight ends ${f.round ? `after round ${f.round}` : 'before the first turn'}: `, rosterItems(s, f), '.');
       if (!Array.isArray(s.fights)) s.fights = [];
       s.fights.push({ id: f.id, beat: f.beat, title: f.title, round: f.round, startedAt: f.startedAt, endedAt: at, rows: f.rows, carried: f.carried || {} });
+      // a row the players saw by name (seen and ticked in) is remembered as seen for its note (`shownEver`, which only ever makes a row
+      // start seen), so a turned ally never comes back next fight as a "Stranger" (final review, ledger 86)
+      for (const r of f.rows || []) {
+        if (!r.note || r.seen !== true || !r.in || (r.kind !== 'foe' && r.kind !== 'ally')) continue;
+        if (!s.shownEver || typeof s.shownEver !== 'object' || Array.isArray(s.shownEver)) s.shownEver = {};
+        if (!s.shownEver[r.note]) s.shownEver[r.note] = at || true;
+      }
       // the place Fight here put behind a panel goes, and the group's own place is back; one the GM chose since stays
       const bd = f.backdrop;
       const p = bd && s.panels && s.panels[bd.group];

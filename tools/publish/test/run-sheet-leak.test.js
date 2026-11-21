@@ -620,19 +620,34 @@ describe('the players\' screen follows the row\'s side (plan 6a Task 5 / review 
     }
   });
 
-  // plan 6a Task 5 fix round 1 / review C1: one copy's switch is that copy's, never the note's
-  it('one mephit of two set to ally: the next fight is foe-shaped and nothing is carried', () => {
+  // plan 6a Task 5 fix round 1 / review C1: one copy's switch is that copy's, never the note's. Changed on purpose by
+  // the final review (ledger 86): the players saw "Ice Mephit 1" by name, so the next fight names the mephits (a
+  // foe's keys, never the HP); a benched copy they never saw leaves no name behind.
+  it('one mephit of two set to ally: the next fight is foe-shaped, named as the players saw it, and nothing is carried', () => {
+    const next = (s) => {
+      const id = `p1-${++n}`;
+      const g = gateOf(model);
+      const b = M.rowsForFight({ model, derived: RS.derive(model, s), state: s, beatKey: g.key, idBase: id });
+      return RS.reduce(s, { id, type: 'fightStart', beat: g.key, title: g.title, groups: b.groups, rows: b.rows, thresholds: b.thresholds }, new Date(T0).toISOString());
+    };
     let s = fight();
     s = setSide(s, MEPHIT, 'ally', 1);
     s = act(s, { type: 'fightEnd', fight: s.fight.id });
     assert.deepEqual(RS.derive(model, s).sidesSet, []);
-    const id = `p1-${++n}`;
-    const g = gateOf(model);
-    const b = M.rowsForFight({ model, derived: RS.derive(model, s), state: s, beatKey: g.key, idBase: id });
-    s = RS.reduce(s, { id, type: 'fightStart', beat: g.key, title: g.title, groups: b.groups, rows: b.rows, thresholds: b.thresholds }, new Date(T0).toISOString());
-    const v = view(s);
+    s = next(s);
+    let v = view(s);
     for (const copy of [1, 2]) assert.deepEqual(keys(shown(v, s, MEPHIT, copy)), FOE_ROW, `mephit ${copy}`);
-    clean(v, new Set(['Brother Venn']), 'the next fight');
+    assert.deepEqual([1, 2].map((c) => shown(v, s, MEPHIT, c).name), ['Ice Mephit 1', 'Ice Mephit 2']);
+    clean(v, new Set(['Brother Venn', 'Ice Mephit', 'Ice Mephit 1', 'Ice Mephit 2']), 'the next fight');
+    // benched while it was the ally: the players never saw it, so nothing is remembered
+    let b = fight();
+    b = act(b, { type: 'fightTick', fight: b.fight.id, row: rowOf(b, MEPHIT, 1).id, in: false });
+    b = setSide(b, MEPHIT, 'ally', 1);
+    b = act(b, { type: 'fightEnd', fight: b.fight.id });
+    b = next(b);
+    v = view(b);
+    for (const copy of [1, 2]) assert.deepEqual(keys(shown(v, b, MEPHIT, copy)), FOE_ROW, `benched: mephit ${copy}`);
+    clean(v, new Set(['Brother Venn']), 'the next fight after a benched ally');
   });
 
   it('an unseen inferred ally set to foe sends no name', () => {

@@ -14,16 +14,18 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ### Added
 
-- The run sheet's fights show sides by colour: PCs green, allies purple, foes red, neutrals grey. Three buttons in the acting panel set a row's side. A Colours menu offers Pens, Colour-blind safe or your own, saved as a vault setting (a site tool older than 1.70.47 asks for an update first) (#556).
+- The run sheet's fights show each row's side by colour, and three buttons in the acting panel set it (#556).
+- A Colours menu offers Pens (green, purple, red and grey), Colour-blind safe or your own, saved as a vault setting. A site tool older than 1.70.47 asks for an update first.
 - Add anyone mid-fight by typed name or from the whole cast, with Same for all for a group of copies and an Undo until the new rows first act.
 - Fight here starts a beat's own fight, and Move them sends the party to a Plan place or one typed tonight. Places the party goes to show on the players' screen and are linked in the Table Log, so wrap-up offers to publish them.
 - The Table Log gains Sides set (the side you set is the next fight's start) and New place lines.
-- Allies are read from the Plan, Quick Reference, affiliation and relationships, starting unseen by the players until you show them. The party is the session's own PCs, and a Dead End PC's sheet reads in full.
+- Allies the Plan or a stat block names start as written; ones inferred from the quick reference, affiliation or relationships start unseen until you show them.
+- The party is the session's own PCs, and a Dead End PC's sheet reads in full.
 
 ### Changed
 
-- The fight page keeps its pane bar, folds either rail (remembered), drags the pane line, and scrolls a big order in its own box with the turn in view. Statuses no longer widen the order. The page folds a column itself only when the window is too narrow, until you resize.
-- Stat boxes keep every click and Tab: initiative walks down its column, max HP pairs with AC, and a server update never steals focus mid-typing.
+- The fight page keeps its pane bar, folds either rail (remembered), drags the pane line, and scrolls a big order in its own box with the turn in view. Statuses no longer widen the order: those that do not fit go on a second line for that row. The page folds a column itself only when the window is too narrow, until you resize.
+- Stat boxes keep every click and Tab: initiative walks down its column, max HP pairs with AC, and a server update never steals focus mid-typing. Esc takes back an edit.
 
 ## [1.12.119] — 2026-11-20
 

@@ -1,6 +1,7 @@
 'use strict';
 // A row's starting side on the run sheet: ally or foe. The first rule that applies wins:
-//   (b) the GM's words: the Plan's ally words, then `as an ally` in the stat block;
+//   (b) the GM's words: the Plan's ally words, then `as an ally` in the stat block; a Plan phrase the GM negated or
+//       hedged ("will never fight as an ally") is the GM saying no: a foe, and nothing later infers an ally;
 //   (c) the vault's facts: the affiliation, then the note's relationships to this session's party;
 //   (d) otherwise a foe.
 // (The side the GM last set for a note is the page's own and is read before any of this.)

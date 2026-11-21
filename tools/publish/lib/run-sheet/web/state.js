@@ -435,11 +435,7 @@
   // A note's side as the GM has it now (plan 6a): the side set tonight, then one carried from an earlier
   // Table Log, then the reader's (`readerAlly`). 'foe' | 'ally' | 'neutral'.
   function sideNow(model, state, note, readerAlly) {
-    const set = state.sides && state.sides[note];
-    if (FM.isSide(set)) return set;
-    const carried = model.sidesCarried && model.sidesCarried[note];
-    if (FM.isSide(carried)) return carried;
-    return readerAlly ? 'ally' : 'foe';
+    return FM.noteSide(state.sides, model.sidesCarried, note, readerAlly).side;
   }
 
   // The beats the page shows: the Plan's, the improvised ones, and each beat's "Who's here" with
