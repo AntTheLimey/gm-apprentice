@@ -52,7 +52,7 @@ img { max-width: 100%; }
 .hnote button { font-size: .75rem; padding: 0 6px; }
 
 /* the rail and the main column */
-.app { display: grid; grid-template-columns: 220px minmax(0, 1fr) var(--sidew, 400px); align-items: start; }
+.app { display: grid; grid-template-columns: var(--railw, 220px) minmax(0, 1fr) var(--sidew, 400px); align-items: start; }
 .rail { position: sticky; top: var(--toph); height: calc(100vh - var(--toph)); overflow: auto; border-right: 1px solid var(--line); padding: 10px 8px 30px; font-size: .86rem; }
 .rail a { display: block; color: var(--ink); text-decoration: none; padding: 3px 6px; border-radius: 5px; cursor: pointer; }
 .rail a:hover { background: var(--ice-soft); }
@@ -188,22 +188,31 @@ pre.notes { white-space: pre-wrap; background: var(--bg); border: 1px solid var(
 .drawer .body h3, .drawer .body h4 { font-size: .92rem; margin: 10px 0 2px; }
 .drawer .ty { font: 500 .7rem var(--mono); text-transform: uppercase; color: var(--muted); }
 @media (prefers-reduced-motion: reduce) { .drawer { transition: none; } }
-/* the fight view (gm-fight.js, spec §6.4, §6.5): the right column moves left of the beats and holds the
-   turn order, one line a row, with the acting creature's panel under it (its own column at 1600 px and up).
-   The rail goes while a fight runs; the beats column keeps the fight's beat cut at its top. */
-.app.part-side { --ordw: 860px; --actw: 0px; grid-template-columns: calc(var(--ordw) + var(--actw)) minmax(0, 1fr); }
-.app.part-side .rail { display: none; }
-.app.part-side .side { order: -1; border-left: none; border-right: 1px solid var(--line); padding: 0; overflow: hidden; font-size: .86rem; }
-.fview { display: flex; flex-direction: column; height: 100%; }
+/* the fight view (gm-fight.js, spec §6.4, §6.5; plan 6a Task 10). Four columns: the rail (220 px, or a 28 px
+   strip) | the middle, `#side`: the turn order with the acting creature's panel under it, or beside it once the
+   middle is 1,200 px or wider (gm.js sets `beside`, --ordw) | the grip (12 px) | the right pane, `#sheet`:
+   the fight's beat cut, its own scroll, --rw wide or a 40 px strip. gm.js sets the widths and the folds. */
+.app.part-side { grid-template-columns: var(--railw, 220px) minmax(0, 1fr) var(--gripw, 12px) var(--rw, 400px); }
+.app.part-side .side { order: 1; border-left: none; border-right: 1px solid var(--line); padding: 0; overflow: hidden; font-size: .86rem; display: flex; flex-direction: column; }
+.grip { display: none; }
+.app.part-side .grip { display: block; order: 2; align-self: stretch; position: sticky; top: var(--toph); height: calc(100vh - var(--toph)); cursor: col-resize; background: var(--line); touch-action: none; }
+.app.part-side.nogrip .grip { visibility: hidden; pointer-events: none; }
+.app.part-side .sheet { order: 3; position: sticky; top: var(--toph); height: calc(100vh - var(--toph)); overflow: auto; padding: 0 16px 60px; }
+.rbar { position: sticky; top: 0; z-index: 3; display: flex; gap: 8px; align-items: center; background: var(--bg); padding: 8px 0 6px; border-bottom: 1px solid var(--line); margin: 0 0 10px; }
+.rbar .t { font: 650 .95rem var(--display); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--bad); }
+.rbar button { font-size: .8rem; padding: 1px 8px; white-space: nowrap; }
+.wholelink { margin: 16px 0 4px; font-size: .95rem; }
+.fview { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; min-width: 0; }
 .fview .fo { flex: 0 1 auto; min-height: 0; overflow: auto; padding: 8px 10px 6px; }
 .fview .act { flex: 1 0 160px; min-height: 160px; overflow: auto; margin: 0; border-width: 2px 0 0; border-radius: 0; }
+/* 5b's rule, until Task 10b puts the acting panel beside the order by the middle's width: the order keeps its least */
 @media (min-width: 1600px) {
-  .app.part-side { --actw: 340px; }
-  .fview { display: grid; grid-template-columns: var(--ordw) var(--actw); }
+  .fview { display: grid; grid-template-columns: minmax(var(--ordmin, 0px), 1fr) minmax(0, 340px); grid-template-rows: minmax(0, 1fr); }
   .fview .fo { height: 100%; }
   .fview .act { height: 100%; border-width: 0 0 0 2px; }
 }
-@media (min-width: 1800px) { .app.part-side { --actw: 460px; } }
+/* the order measured at its narrowest (gm.js orderMin): each row as tight as its items allow */
+ol.to.measure > li { width: 1px; }
 .fh { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; margin: 0 0 6px; }
 .fh b { font: 650 .8rem var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--bad); margin-right: 4px; }
 .fh .sp { flex: 1; }
@@ -301,6 +310,8 @@ ol.to .ds { font: 500 .7rem var(--mono); white-space: nowrap; }
   .side { position: static; height: auto; border-left: none; border-top: 1px solid var(--line); }
   .app.part-side { grid-template-columns: 1fr; }
   .app.part-side .side { overflow: visible; }
+  .app.part-side .grip { display: none; }
+  .app.part-side .sheet { position: static; height: auto; overflow: visible; padding: 14px 20px 120px; }
   .top .bar { flex-wrap: wrap; white-space: normal; }
 }
 

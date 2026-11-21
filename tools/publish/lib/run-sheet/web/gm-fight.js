@@ -4,10 +4,11 @@
 // server); rows are built with fight-math's `rowsForFight`/`joinRows` and travel in the action, so `reduce`
 // never sees the model. Rolls come from the server's `/api/roll`: no dice here.
 //
-// While a fight runs (and is not paused) it takes the right column, which moves to the left of the beats:
-// the turn order, one line per row, with the acting creature's panel under it (its own column at 1600 px
-// and wider), and the fight's beat cut at the top of the beats. Paused, the beats come back with a strip of
-// the order kept at the top. After End fight, a box above the beat lists every status still on.
+// While a fight runs (and is not paused) it takes the middle column, `#side`: the turn order, one line per
+// row, with the acting creature's panel under it (beside
+// it once the middle is wide enough: gm.js's layout). The right pane, `#sheet`, holds only the fight's beat cut
+// (`pane`). Paused, the beats come back with a strip of the order kept at the top. After End fight, a box above
+// the beat lists every status still on.
 //
 // UI-only choices (a pinned panel, the area ticks, the Start question) live here and are lost on reload.
 (function () {
@@ -80,7 +81,10 @@
     const backdrop = b.placeBeat && focus && !built.groups.includes(b.key) ? { group: focus, place: b.place || b.key } : undefined;
     RP.ui.focus = key;
     ui.mine = id;
+    RP.ui.pane = 'cut';
     RP.dispatch({ type: 'fightStart', beat: key, title: b.title, groups: built.groups, rows: built.rows, thresholds: built.thresholds, carried: carried(d), ...(backdrop ? { backdrop } : {}) });
+    // the pane opens at its top, whatever the run sheet's scroll was (review F3)
+    RP.paneTop();
   }
   // Fight here at a place (plan 6a Task 7): its place beat first (the reader's key, so a second Fight here
   // finds it again), then the fight. Nobody moves.
@@ -210,8 +214,10 @@
     window.scrollTo({ top: Math.max(0, el.getBoundingClientRect().top + window.scrollY - topH() - above - 8), behavior: 'instant' });
     RP.probe();
   }
-  // Start and Resume bring the cut into view; one already in view stays put.
+  // Start and Resume bring the cut into view: the right pane to its top (review F3); on one column (a narrow
+  // window) the page scrolls to it, and a cut already in view stays put.
   function scrollToCut() {
+    if (RP.paneTop()) { RP.probe(); return; }
     const el = $('#fightCut');
     if (!el) return;
     const top = el.getBoundingClientRect().top;
@@ -375,6 +381,7 @@
     h += `<div class="fin"><span class="muted">In this fight:</span> ${inFight.map((g) => `<span class="gchip">${esc(groupWho(g) || '—')} · ${esc(RP.groupLabel(g, d))}</span>`).join(' ')}</div>`;
     const others = RP.groups().filter((g) => !inFight.includes(g.key));
     h += `<div class="fadd"><span class="muted">Add:</span> ${others.map((g) => `<button type="button" data-faddgroup="${esc(g.key)}">+ ${esc(groupWho(g.key))} at ${esc(RP.groupLabel(g.key, d))}</button>`).join(' ')}`
+      + contingencyAdds(f, d)
       + `<span class="addname"><input id="fAddName" value="${esc(ui.addText)}" placeholder="anyone, by name" autocomplete="off" aria-label="Add anyone in the cast to the fight"><span class="fhits" id="fHits">${hitsHTML()}</span></span>`
       + `<input id="fAddCount" type="number" min="1" max="20" value="${esc(ui.addCount)}" aria-label="How many"><button type="button" id="fAddGo">Add</button></div>`;
     h += joinsHTML(f);
@@ -388,6 +395,20 @@
     h += `<ol class="to">${view.rows.map((r) => rowHTML(r, f, view)).join('')}</ol></div>`;
     h += `${actingHTML(d)}</div>`;
     return h;
+  }
+  // A contingency with people the fight does not hold yet: "+ If: …" brings them in (its foes, its allies).
+  function contingencyAdds(f, d) {
+    return d.beats.filter((b) => b.contingency && b.key !== f.beat).filter((b) => {
+      const foes = b.foes || [];
+      const people = (b.who || []).filter((w) => w.note);
+      if (!foes.length && !people.length) return false;
+      const haveFoe = (fo) => f.rows.some((r) => r.foeKey === fo.key);
+      const havePerson = (w) => f.rows.some((r) => r.note === w.note);
+      return !(foes.every(haveFoe) && people.every(havePerson));
+    }).map((b) => {
+      const t = b.title.length > 34 ? `${b.title.slice(0, 33)}…` : b.title;
+      return `<button type="button" data-faddbeat="${esc(b.key)}" title="Bring this contingency's people into the fight: ${esc(b.title)}">+ If: ${esc(t)}</button>`;
+    }).join(' ');
   }
   function hitsHTML() {
     return ui.addHits.map((c) => (c.isNew
@@ -419,7 +440,7 @@
       .map(([k, t]) => `<button type="button" data-fjot="${esc(t)}" title="Jot it to the fight's beat">Jot: ${esc(t)}</button>`).join('')}</div>`;
     if (!b) return `<div class="cut gone" id="fightCut"><h2>⚔ ${esc(f.title)}</h2><p class="warn">This fight's beat is no longer in the Plan</p>${jots}</div>`;
     const lit = f.view.lit;
-    let h = `<div class="cut" id="fightCut"><h2>⚔ ${esc(b.title)} <a class="lk" data-go="beat:${esc(b.key)}">full beat ↓</a></h2>`;
+    let h = `<div class="cut" id="fightCut"><h2>⚔ ${esc(b.title)} <a class="lk" data-pane="beat" title="The whole beat in this pane">full beat ↓</a></h2>`;
     if ((b.points || []).length) h += `<h4 class="lab">Points to land</h4>${pointsHTML(b, lit)}`;
     if ((b.who || []).length || (b.arrivals || []).length) {
       // an unmasked person goes by the unmasked name and play-as, as on the full beat
@@ -483,6 +504,13 @@
       if (!f || f.paused) return null;
       return sideHTML(RP.derived());
     },
+    // The right pane in a fight (plan 6a Task 10): the cut, under the fight's title; nothing paused or after.
+    pane(d) {
+      const f = state().fight;
+      if (!f || f.paused) return null;
+      const b = d.beats.find((x) => x.key === f.beat);
+      return { title: b ? b.title : f.title, beat: f.beat, cut: cutHTML(d) };
+    },
     sheetTop(d) {
       const f = state().fight;
       if (f) return f.paused ? stripHTML(d) : cutHTML(d);
@@ -525,6 +553,7 @@
     const after = box('#afterFight');
     const r = (v) => (v == null ? null : Math.round(v));
     return {
+      ...RP.layoutProbe(),
       orderBottom: r(ol && ol.bottom), orderRight: r(ol && ol.right), actingTop: r(act && act.top), actingLeft: r(act && act.left),
       cutTop: r(cut && cut.top), afterTop: r(after && after.top),
       wide: document.documentElement.scrollWidth > window.innerWidth,
@@ -560,9 +589,10 @@
     if (t.id === 'fAreaDone') { endArea(); RP.render(); return true; }
     if (t.id === 'fAreaGo') { applyArea(); return true; }
     if (t.id === 'fPause') { RP.ui.focus = f.beat; F({ type: 'fightPause', on: true }); scrollToBeat(f.beat); return true; }
-    if (t.id === 'fResume') { F({ type: 'fightPause', on: false }); scrollToCut(); return true; }
+    if (t.id === 'fResume') { RP.ui.pane = 'cut'; F({ type: 'fightPause', on: false }); scrollToCut(); return true; }
     if (t.id === 'fEnd') {
       RP.armed('fightEnd', () => {
+        RP.ui.pane = 'cut';
         F({ type: 'fightEnd' });
         scrollTo($('#afterFight'));
       });

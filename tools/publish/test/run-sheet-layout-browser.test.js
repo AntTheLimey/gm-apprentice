@@ -282,3 +282,136 @@ describe('the fight: adding anyone, by real input', { skip: browserSkip() }, () 
     });
   });
 });
+
+// ---- the fight's layout (plan 6a Task 10): the four columns, the grip, the folds, the preview, the order's own
+// scroll. Real input only; the state a test needs that is not what it tests (statuses on a row, a saved width)
+// comes from another window's actions or from the page's own storage, never from a synthetic event.
+const WYRM = 'Creatures/Glacier Wyrm.md';
+const SIZES = [[1449, 762], [1280, 762], [1100, 762]];
+// What every layout test holds: no row clipped, no sideways scroll, the probe's layout fields there.
+function sane(p, where = '') {
+  const l = p.layout;
+  assert.ok(l, `${where}: a layout in the probe`);
+  for (const k of ['railW', 'sheetW', 'paneTop']) assert.strictEqual(typeof l[k], 'number', `${where}: layout.${k}`);
+  for (const k of ['folded', 'pvOpen']) assert.strictEqual(typeof l[k], 'boolean', `${where}: layout.${k}`);
+  assert.ok(l.grip && typeof l.grip.shown === 'boolean', `${where}: layout.grip`);
+  assert.ok('pvTop' in l && 'pvBottom' in l && 'cutTop' in l, `${where}: layout.pvTop, pvBottom, cutTop`);
+  const over = (l.rows || []).filter((r) => r.over);
+  assert.deepStrictEqual(over.map((r) => r.name), [], `${where}: rows clipped`);
+  assert.strictEqual(l.wide, false, `${where}: the page scrolls sideways`);
+  assert.deepStrictEqual(p.errors, [], `${where}: script errors`);
+}
+// Both PCs to beat 1 (or `at`), then Fight on beat `on` (default the first), by real clicks.
+async function fightAt(page, run, { at = 0, on = 0 } = {}) {
+  await page.goto(`${run.base}/?probe=1`);
+  await settled(page);
+  await tap(page, `[id="beat:${run.model.beats[at].key}"] [data-all]`);
+  await settled(page);
+  await tap(page, `[id="beat:${run.model.beats[on].key}"] [data-fight]`);
+  return until(page, 'p.fight && p.fight.rows.length > 0 && p.layout && p.layout.railW !== undefined');
+}
+// Another window's actions, as the server takes them: the page hears them on its stream.
+let otherN = 0;
+async function fromOther(run, actions) {
+  const { stateId } = await (await fetch(`${run.base}/api/state`)).json();
+  const res = await fetch(`${run.base}/api/actions`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ stateId, base: 0, clientId: 'other-tab', actions: actions.map((a) => ({ id: `o-${++otherN}`, ...a })) }) });
+  assert.strictEqual(res.status, 200);
+}
+// The grip dragged by `dx` with a real pointer (negative: to the left, the pane wider).
+async function dragGrip(page, dx) {
+  const g = await page.box('#grip');
+  const x = g.left + g.width / 2;
+  const y = g.top + g.height / 2;
+  await page.drag(x, y, x + dx, y, 10);
+}
+const P = (page) => page.evaluate(PROBE);
+const inside = (b, top, bottom) => b.top >= top - 0.5 && b.bottom <= bottom + 0.5;
+
+describe('10a: the right pane holds the fight\'s beat', { skip: browserSkip() }, () => {
+  it('the pane holds only the cut, and the links work', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await startedFight(page, run);
+      const beat = run.model.beats[0];
+      const only = () => page.evaluate(`({ cut: Boolean(document.querySelector('#sheet #fightCut')), beats: document.querySelectorAll('#sheet .beat').length,
+        sections: document.querySelectorAll('#sheet section.s').length, whole: Boolean(document.querySelector('#sheet #paneWhole')),
+        pts: document.querySelectorAll('#fightCut ul.pts li').length, who: Boolean(document.querySelector('#fightCut .cwho')),
+        ifs: Boolean(document.querySelector('#fightCut table.ifs')), jots: document.querySelectorAll('#fightCut [data-fjot]').length })`);
+      let o = await only();
+      assert.deepStrictEqual([o.cut, o.beats, o.sections, o.whole], [true, 0, 0, true], `the cut alone: ${JSON.stringify(o)}`);
+      assert.ok(o.pts > 0 && o.who && o.ifs && o.jots === 3, `points, who, if-they and the jots: ${JSON.stringify(o)}`);
+      sane(await P(page), 'cut');
+      // full beat ↓, then Cut it down
+      await tap(page, '#fightCut [data-pane="beat"]');
+      await page.waitFor(`document.querySelector('#sheet [id="beat:${beat.key}"]')`);
+      o = await only();
+      assert.deepStrictEqual([o.cut, o.beats, o.sections], [false, 1, 0], 'the whole beat');
+      assert.match(await page.evaluate('document.querySelector("#paneCut").textContent'), /^Cut it down$/);
+      await tap(page, '#paneCut');
+      await page.waitFor('document.querySelector("#sheet #fightCut")');
+      // Whole run sheet, then Back to the fight's beat
+      await tap(page, '#paneWhole');
+      await page.waitFor('document.querySelector("#sheet section#people")');
+      assert.match(await page.evaluate('document.querySelector("#paneCut").textContent'), /^Back to the fight's beat$/);
+      assert.ok((await only()).beats >= 3, 'every beat');
+      await page.wheel(1200, 500, 900);
+      await until(page, 'p.layout.paneTop > 300');
+      await tap(page, '#paneCut');
+      let p = await until(page, 'p.layout.paneTop === 0');
+      assert.ok((await only()).cut, 'back to the cut, at the pane\'s top');
+      // a rail link to anything else opens the whole sheet at it
+      await tap(page, '#rail a[data-go="people"]');
+      await page.waitFor('document.querySelector("#sheet section#people")');
+      const pane = await page.box('#sheet');
+      const people = await page.box('#people');
+      assert.ok(people.top >= pane.top && people.top < 762 - 40, `People in the pane at ${people.top}`);
+      assert.strictEqual(await page.evaluate('scrollY'), 0, 'the page itself does not scroll');
+      sane(await P(page), 'whole');
+      await tap(page, '#paneCut');
+      // a contingency with people: "+ If: …" on the Add line brings them in
+      const ifBeat = run.model.beats.find((b) => b.contingency);
+      await page.waitFor(`document.querySelector('.fadd [data-faddbeat="${ifBeat.key}"]')`);
+      assert.match(await page.evaluate(`document.querySelector('.fadd [data-faddbeat="${ifBeat.key}"]').textContent`), /^\+ If: Tallow Alarm$/);
+      const imps = p.fight.rows.filter((r) => r.note === 'Creatures/Rime Imp.md').length;
+      await tap(page, `.fadd [data-faddbeat="${ifBeat.key}"]`);
+      p = await until(page, `p.fight.rows.filter((r) => r.note === 'Creatures/Rime Imp.md').length === ${imps + 1} && p.pending === 0`);
+      assert.strictEqual(await page.evaluate(`document.querySelectorAll('.fadd [data-faddbeat="${ifBeat.key}"]').length`), 0, 'its people are in: no button');
+      // paused: the whole sheet comes back with the strip; Resume brings the cut, at the pane's top
+      await tap(page, '#fPause');
+      await page.waitFor('document.querySelector("#fightStrip") && document.querySelector("#sheet section#handover")');
+      await tap(page, '#fResume');
+      p = await until(page, '!p.fight.paused && p.layout.paneTop === 0');
+      assert.ok((await only()).cut);
+      sane(p, 'resumed');
+    });
+  });
+
+  it('Fight from a beat far down the sheet opens the pane at its top', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await page.goto(`${run.base}/?probe=1`);
+      await settled(page);
+      await tap(page, `[id="beat:${run.model.beats[0].key}"] [data-all]`);
+      await settled(page);
+      const last = run.model.beats[run.model.beats.length - 1];
+      const sel = `[id="beat:${last.key}"] [data-fight]`;
+      // a real wheel down the run sheet until the last beat's Fight is in view
+      for (let i = 0; i < 30; i++) {
+        const b = await page.box(sel);
+        if (b.top > 80 && b.bottom < 700) break;
+        await page.wheel(700, 400, 300);
+        await page.sleep(60);
+      }
+      assert.ok(await page.evaluate('scrollY') > 300, 'the sheet was scrolled down');
+      const r = await page.clickAt(...await page.box(sel).then((b) => [b.left + b.width / 2, b.top + b.height / 2]));
+      void r;
+      const p = await until(page, 'p.fight && p.layout.paneTop === 0');
+      const h2 = await page.box('#fightCut h2');
+      const pane = await page.box('#sheet');
+      assert.ok(h2.top >= pane.top && h2.bottom <= 762, `the cut's heading at ${h2.top}-${h2.bottom}, the pane from ${pane.top}`);
+      assert.strictEqual(await page.evaluate('scrollY'), 0);
+      sane(p, 'fight from below');
+    });
+  });
+});

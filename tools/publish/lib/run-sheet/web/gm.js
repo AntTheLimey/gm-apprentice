@@ -17,7 +17,9 @@
 //
 // The seam (`window.RunSheetPage`): `dispatch`, `model()`, `state()`, `derived()`, `ui`, `render()`
 // and `parts`, an array of { beatButtons(beat) -> html, side() -> html|null, click(event) -> bool,
-// probe() -> object, sheetTop(derived) -> html, beforeBeat(beat) -> html, focusAttrs: [attribute] }.
+// probe() -> object, sheetTop(derived) -> html, beforeBeat(beat) -> html, focusAttrs: [attribute],
+// pane(derived) -> { title, beat, cut } | null }. A part's `pane` makes `#sheet` the fight's right pane
+// (plan 6a Task 10): the cut, the whole beat or the whole sheet under a bar, in its own scroll.
 // Scripts loaded after this one push parts in (the fight view, gm-fight.js); the page calls them on
 // every draw. A part that takes the right column puts `part-side` on `#app`. The page holds no dice code: rolls come from the server.
 (function () {
@@ -597,9 +599,17 @@
     const w = (m.warnings || []).length;
     $('#warnBtn').textContent = w ? `${w} prep note${w === 1 ? '' : 's'}` : 'No prep notes';
     renderNotes();
+    // the right pane keeps its place through the redraw
+    const wasPane = Boolean(G.pane);
+    const sheetTop = $('#sheet').scrollTop;
+    G.pane = null;
+    for (const part of parts) if (!G.pane && part.pane) G.pane = part.pane(d) || null;
     $('#rail').innerHTML = railHTML(d);
     $('#sheet').innerHTML = sheetHTML(d);
     renderSide(d);
+    if (G.pane && wasPane) $('#sheet').scrollTop = sheetTop;
+    G.om = G.pane ? orderMin() : ORDER_FLOOR;
+    applyLayout();
     drawerShow();
     decorate(document);
     indicator();
@@ -627,7 +637,7 @@
 
   // Links with no href (a note the drawer opens, a beat or section to jump to): reachable from the keyboard.
   function decorate(root) {
-    root.querySelectorAll('a[data-note]:not([href]), a[data-go]:not([href])').forEach((a) => { a.tabIndex = 0; a.setAttribute('role', 'link'); });
+    root.querySelectorAll('a[data-note]:not([href]), a[data-go]:not([href]), a[data-pane]:not([href])').forEach((a) => { a.tabIndex = 0; a.setAttribute('role', 'link'); });
   }
 
   const RAIL_TOP = [['handover', 'Hand over'], ['pcs', 'The PCs'], ['run', 'The run']];
@@ -656,7 +666,21 @@
   const sec = (id, title, body) => `<section class="s" id="${id}"><h2>${title}</h2>${body}</section>`;
   const BRIEF_LABELS = { overview: 'Overview', world: 'World', stops: 'Good places to stop' };
 
+  // The right pane in a fight: a strip for when it is folded, a bar (the fight's title, the way back, Fold ⟩), then
+  // the cut, the whole beat, or the whole sheet (G.ui.pane: cut, beat, whole).
   function sheetHTML(d) {
+    const pane = G.pane;
+    if (!pane) return wholeHTML(d);
+    const v = G.ui.pane || 'cut';
+    const fb = d.beats.find((b) => b.key === pane.beat);
+    const strip = '';
+    const back = v === 'whole' ? "Back to the fight's beat" : v === 'beat' && fb ? 'Cut it down' : '';
+    const bar = `<div class="rbar"><span class="t">⚔ ${esc(pane.title)}</span>${back ? `<button type="button" id="paneCut" data-pane="cut">${back}</button>` : ''}</div>`;
+    if (v === 'whole') return strip + bar + wholeHTML(d);
+    const body = v === 'beat' && fb ? beforeBeat(fb) + beatHTML(fb, d) : pane.cut;
+    return `${strip}${bar}${body}<p class="wholelink"><a class="lk" id="paneWhole" data-pane="whole">Whole run sheet</a> <span class="note">the brief, every beat, people, places and the end of the night</span></p>`;
+  }
+  function wholeHTML(d) {
     const m = G.model;
     let h = '';
     for (const part of parts) if (part.sheetTop) h += part.sheetTop(d) || '';
@@ -1135,9 +1159,132 @@
   }
   function openPlayers() { window.open('/players', 'run-sheet-players'); }
 
+  // A jump (the rail, End of night). In a fight it goes in the right pane: to the fight's beat, the whole beat;
+  // to anything the cut does not hold, the whole sheet; a folded pane opens.
   function goTo(id) {
+    if (G.pane && window.innerWidth > NARROW) {
+      const sheet = $('#sheet');
+      const here = document.getElementById(id);
+      if (!here || !sheet.contains(here)) G.ui.pane = id === `beat:${G.pane.beat}` ? 'beat' : 'whole';
+      update();
+      const el = document.getElementById(id);
+      if (el && sheet.contains(el)) {
+        const bar = sheet.querySelector('.rbar');
+        sheet.scrollTop += el.getBoundingClientRect().top - sheet.getBoundingClientRect().top - (bar ? bar.offsetHeight : 0) - 8;
+      }
+      probe();
+      return;
+    }
     const el = document.getElementById(id);
     if (el) el.scrollIntoView({ block: 'start' });
+  }
+
+  // ------------------------------------------------------------------ the fight's layout (plan 6a Task 10)
+  // In a fight the page is four columns: the rail | the order and the acting panel | the grip | the right pane.
+  // The GM's choices are kept in this browser (`localStorage['rs:layout']`): the rail folded out of a fight and in
+  // one (two flags: out of a fight the rail holds the PCs' faces and the Off-screen buttons), the pane folded, its
+  // width, the preview open. A page that can keep nothing still works. When the columns cannot fit at their
+  // least, the page folds for that window size by itself, the rail first, then the pane (`L.auto`, never kept);
+  // a GM click that opens an auto-folded column holds until the next resize (ruling R5).
+  const LKEY = 'rs:layout';
+  const RAIL_W = 220;
+  const RAIL_FOLDED = 28;
+  const GRIP_W = 12;
+  const RIGHT_MIN = 320;
+  const RIGHT_DEF = 600;
+  const PANE_LEAST = 160; // a pane the GM opened where 320 px will not fit gets what is left, down to this
+  const PANE_FOLDED = 40;
+  const ORDER_FLOOR = 560;
+  const ORDER_CAP = 860; // the order's width once the acting panel sits beside it
+  const BESIDE_AT = 1200; // the middle's width from which the acting panel goes beside the order (review F10)
+  const GRIP_TRAVEL = 120; // the grip hides with less travel than this
+  const NARROW = 1000; // at this width and under, one column (gm.css)
+  const L = (() => {
+    const out = { railFolded: false, railFoldedFight: false, folded: false, rw: null, pv: false };
+    try {
+      const v = JSON.parse(window.localStorage.getItem(LKEY));
+      if (v && typeof v === 'object') {
+        for (const k of ['railFolded', 'railFoldedFight', 'folded', 'pv']) if (typeof v[k] === 'boolean') out[k] = v[k];
+        if (typeof v.rw === 'number' && Number.isFinite(v.rw)) out.rw = v.rw;
+      }
+    } catch (e) { /* nothing kept, or no storage */ }
+    out.auto = { rail: false, pane: false };
+    return out;
+  })();
+  function saveLayout() {
+    try { window.localStorage.setItem(LKEY, JSON.stringify({ railFolded: L.railFolded, railFoldedFight: L.railFoldedFight, folded: L.folded, rw: L.rw, pv: L.pv })); } catch (e) { /* not kept */ }
+  }
+  G.lay = { rail: false, pane: false };
+  G.om = ORDER_FLOOR;
+  const fightLayout = () => Boolean(G.pane) && window.innerWidth > NARROW;
+  // The order's least width: its widest row with every item as tight as it goes (the name at its 6 rem, a chip at
+  // its 2.4 rem), plus the order box's padding, the scroll box's gutter and the column's border. Never under 560.
+  function orderMin() {
+    const ol = document.querySelector('#side ol.to');
+    const fo = ol && ol.closest('.fo');
+    if (!ol || !fo) return ORDER_FLOOR;
+    ol.classList.add('measure');
+    let row = 0;
+    for (const li of ol.children) row = Math.max(row, li.scrollWidth + li.offsetWidth - li.clientWidth);
+    ol.classList.remove('measure');
+    const side = $('#side');
+    const round = fo.offsetWidth - ol.clientWidth + (side.offsetWidth - side.clientWidth);
+    return Math.max(ORDER_FLOOR, Math.ceil(row + round));
+  }
+  const railW = () => (G.lay.rail ? RAIL_FOLDED : RAIL_W);
+  const appW = () => ($('#app') || {}).clientWidth || window.innerWidth;
+  // The room the right pane has: from its 320 px least to what leaves the order its least.
+  function rightRoom() {
+    const max = Math.max(PANE_LEAST, appW() - railW() - GRIP_W - G.om);
+    return { min: Math.min(RIGHT_MIN, max), max };
+  }
+  // The right pane's width: the GM's (or the default, room to drag both ways), kept inside the room.
+  function rightWidth(want) {
+    const room = rightRoom();
+    const def = Math.max(room.min, Math.min(RIGHT_DEF, room.max - 80));
+    const w = want != null ? want : L.rw != null ? L.rw : def;
+    return Math.round(Math.max(room.min, Math.min(room.max, w)));
+  }
+  // The four columns in a fight: the right pane at its default width (the grip and the folds come with 10b, 10c).
+  function applyLayout() {
+    const app = $('#app');
+    if (!app || !G.state) return;
+    if (fightLayout()) {
+      app.classList.add('nogrip');
+      app.style.setProperty('--rw', `${rightWidth()}px`);
+      app.style.setProperty('--gripw', '0px');
+      app.style.setProperty('--ordmin', `${G.om - ($('#side').offsetWidth - $('#side').clientWidth)}px`);
+    } else app.classList.remove('nogrip');
+    probe();
+  }
+  // The pane brought to its top (Fight, Resume, Back to the fight's beat, Players' screen ▸: review F3).
+  // True when the pane is its own column, so there was a pane to scroll.
+  function paneTop() {
+    if (!fightLayout()) return false;
+    $('#sheet').scrollTop = 0;
+    if (window.scrollY) window.scrollTo(0, 0);
+    return true;
+  }
+  function layoutProbe() {
+    const box = (el) => (el ? el.getBoundingClientRect() : null);
+    const r = (v) => (v == null ? null : Math.round(v));
+    const g = box($('#grip'));
+    const gripShown = Boolean(g) && g.width > 0 && getComputedStyle($('#grip')).visibility !== 'hidden';
+    const pv = null; // the preview folds into the fight's layout with Task 10d
+    const room = fightLayout() ? rightRoom() : null;
+    return {
+      grip: { left: r(g && g.left), width: r(g && g.width), shown: gripShown },
+      railW: r(box($('#rail')).width), sheetW: r(box($('#sheet')).width), sideW: r(box($('#side')).width),
+      folded: G.lay.pane, railFolded: G.lay.rail, auto: { ...L.auto }, saved: { railFolded: L.railFolded, railFoldedFight: L.railFoldedFight, folded: L.folded, rw: L.rw, pv: L.pv },
+      pvOpen: Boolean(pv), pvTop: r(pv && pv.top), pvBottom: r(pv && pv.bottom), pvIn: null,
+      paneTop: r($('#sheet').scrollTop), paneBox: (() => { const b = box($('#sheet')); return { top: r(b.top), bottom: r(b.bottom), left: r(b.left), right: r(b.right) }; })(),
+      orderMin: G.om, room, beside: $('#app').classList.contains('beside'), scrollY: r(window.scrollY),
+    };
+  }
+  window.addEventListener('resize', () => { if (G.model && G.state) applyLayout(); });
+  if (PROBE) {
+    let queued = false;
+    document.addEventListener('scroll', () => { if (queued) return; queued = true; requestAnimationFrame(() => { queued = false; probe(); }); }, true);
   }
 
   // ------------------------------------------------------------------ side colours (plan 6a Task 9)
@@ -1265,10 +1412,11 @@
 
   document.addEventListener('click', (ev) => {
     for (const part of parts) if (part.click && part.click(ev)) return;
-    const t = ev.target.closest('button,a[data-note],a[data-go],[data-go],a[data-pgroup]');
+    const t = ev.target.closest('button,a[data-note],a[data-go],[data-go],a[data-pgroup],a[data-pane]');
     if (!t || t.disabled) return;
     const d = t.dataset;
     if (t.id === 'playersBtn' || t.id === 'playersBtn2') { openPlayers(); return; }
+    if (d.pane) { G.ui.pane = d.pane; update(); paneTop(); probe(); return; }
     if (d.pgroup) { touch(d.pgroup); update(); return; }
     if (t.id === 'coloursBtn') { menuOpen(!menuIsOpen()); return; }
     if (t.id === 'closeDrawer') { closeDrawer(); return; }
@@ -1387,7 +1535,7 @@
     if (ev.key === 'Escape') { if (menuIsOpen()) { menuOpen(false); const b = document.getElementById('coloursBtn'); if (b) b.focus(); ev.preventDefault(); return; } if ($('#drawer').classList.contains('open')) { closeDrawer(); ev.preventDefault(); } return; }
     if (!typing && (ev.key === 'j' || ev.key === 'J') && !ev.metaKey && !ev.ctrlKey && !ev.altKey) { ev.preventDefault(); $('#hjot').focus(); return; }
     if (ev.key === 'Enter' && t.tagName === 'A' && d.note) { openNote(d.note); return; }
-    if (ev.key === 'Enter' && t.tagName === 'A' && d.go) { ev.preventDefault(); t.click(); return; }
+    if (ev.key === 'Enter' && t.tagName === 'A' && (d.go || d.pane)) { ev.preventDefault(); t.click(); return; }
     if (ev.key !== 'Enter' || ev.isComposing) return;
     if (d.jot !== undefined) { const v = t.value; t.value = ''; jot(d.jot, v); return; }
     if (t.id === 'hjot') { const fb = focusBeat(D()); const v = t.value; t.value = ''; jot(fb ? fb.key : null, v); return; }
@@ -1510,6 +1658,8 @@
     parts,
     // helpers the parts share with the page
     esc, armBtn, armed, link, face, nameOf, getJson, focusedGroup, groups, groupLabel, note, probe, cueHTML, unmaskOf, isUnmasked,
+    // the fight's layout (plan 6a Task 10)
+    layout: L, rightRoom, rightWidth, orderMin: () => G.om, paneTop, layoutProbe,
     OTHER_STATUS_PLACEHOLDER, SIDE_PRESETS, sideCss, swatches,
   };
 

@@ -565,8 +565,11 @@ describe('the fight takes the PR review\'s and the proof\'s fixes', { skip: brow
       await fightOn(page, run);
       const cut = () => page.evaluate('document.querySelector("#fightCut .cwho").textContent');
       assert.match(await cut(), /Masked Gilt loud, self-important/);
+      // plan 6a Task 10: the pane holds only the cut; Unmask is on the whole beat ("full beat ↓")
+      await click(page, '#fightCut [data-pane="beat"]');
       await click(page, `[data-unmask="${GILT}"]`);
       await settled(page);
+      await click(page, '#paneCut');
       const text = await cut();
       assert.match(text, /Lucan Truename quiet and exact/);
       assert.doesNotMatch(text, /Masked Gilt|self-important/);
