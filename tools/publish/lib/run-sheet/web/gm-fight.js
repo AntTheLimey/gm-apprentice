@@ -253,12 +253,38 @@
     const ex = Array.from({ length: FM.EXHAUSTION_MAX }, (_, i) => i + 1).filter((n) => n !== r.exhaustion).map((n) => `<option>Exhaustion ${n}</option>`).join('');
     return `<select data-fstatus="${esc(r.id)}" aria-label="Add a status to ${esc(r.gmName)}"><option value="">+ status</option>${opts}${r.conc ? '' : '<option>Concentrating</option>'}<optgroup label="Exhaustion">${ex}</optgroup><option value="other">other…</option></select>`;
   }
+  // A row's statuses share one strip that takes the row's leftover width and clips when the row is full, with a
+  // "+N" for what does not fit (fitChips); the acting panel lists them all. So statuses never widen the order
+  // (review I1, v8's strip).
+  const statusKey = (label) => (/^Exhaustion /.test(label) ? 'Exhaustion' : label);
   function chips(r, bloodied) {
-    const one = (label, key) => `<button type="button" class="chip" data-fun="${esc(`${r.id}|${key}`)}" title="Remove ${esc(label)}">${esc(label)} ✕</button>`;
-    return (r.conds || []).map((c) => one(c, c)).join('')
-      + (r.exhaustion ? one(`Exhaustion ${r.exhaustion}`, 'Exhaustion') : '')
-      + (r.conc ? one('Concentrating', 'Concentrating') : '')
-      + (bloodied ? '<span class="chip auto">Bloodied</span>' : '');
+    const one = (label) => `<button type="button" class="chip" data-fun="${esc(`${r.id}|${statusKey(label)}`)}" title="Remove ${esc(label)}">${esc(label)} ✕</button>`;
+    const all = Fight.statusesOf(r);
+    const h = (bloodied ? '<span class="chip auto">Bloodied</span>' : '') + all.map(one).join('');
+    const names = (bloodied ? ['Bloodied'] : []).concat(all);
+    // always there, empty or not, so a first status never moves the row's other items (or the order's width)
+    return `<span class="chips"${names.length ? ` title="${esc(names.join(', '))}"` : ''}>${h}</span>`;
+  }
+  // Each strip shows the chips that fit and a "+N" for the rest (a click shows the row's panel, which lists them).
+  function fitChips() {
+    document.querySelectorAll('#side ol.to .chips').forEach((strip) => {
+      strip.querySelectorAll('.more').forEach((m) => m.remove());
+      const kids = Array.from(strip.children);
+      kids.forEach((k) => { k.hidden = false; });
+      if (strip.scrollWidth <= strip.clientWidth + 1) return;
+      const row = strip.closest('li');
+      const more = document.createElement('span');
+      more.className = 'chip more';
+      more.dataset.fpeek = row ? row.dataset.frow : '';
+      strip.appendChild(more);
+      for (let i = kids.length - 1; i >= 0; i--) {
+        kids[i].hidden = true;
+        const hidden = kids.length - i;
+        more.textContent = `+${hidden}`;
+        more.title = `${hidden} more: ${strip.title}. Click: this one's panel lists them all`;
+        if (strip.scrollWidth <= strip.clientWidth + 1) break;
+      }
+    });
   }
   function counters(r, long) {
     const c = [];
@@ -353,7 +379,8 @@
       `Init ${isNum(r.ini) ? r.ini : '—'} (${sign(r.mod)})`,
     ].map((x) => `<span>${esc(x)}</span>`);
     if (f.view.bloodied.has(r.id)) nums.push('<span class="bl">Bloodied</span>');
-    for (const x of Fight.statusesOf(r)) nums.push(`<span class="st">${esc(x)}</span>`);
+    // every status, the ones the row's strip had no room for too; a click removes it, as on the row
+    for (const x of Fight.statusesOf(r)) nums.push(`<button type="button" class="st" data-fun="${esc(`${r.id}|${statusKey(x)}`)}" title="Remove ${esc(x)}">${esc(x)} ✕</button>`);
     const ctr = counters(r, true);
     // offered while an untouched copy still differs from this row (a copy already made has nothing left to take)
     const left = FM.groupMates(f.view.rows, r).filter((x) => x !== r && FM.untouched(x, true) && (Fight.STAT_KEYS.some((k) => isNum(r[k]) && x[k] !== r[k]) || (isNum(r.max) && x.hp !== r.max))).length;
@@ -544,6 +571,8 @@
       return d.afterFight ? afterHTML(d) : '';
     },
     click(ev) { return onClick(ev); },
+    // after every layout pass (gm.js applyLayout): the rows' status strips fit their room
+    afterLayout() { fitChips(); },
     probe() {
       const d = RP.derived();
       const out = { fight: null, after: d.afterFight, layout: layout() };
@@ -553,6 +582,7 @@
         out.fight = {
           id: f.id, groups: f.groups, turn: f.turn, round: f.round, started: f.started, paused: f.paused, area: ui.area,
           ask: Boolean($('.fask')), actingName: acting ? acting.textContent : null,
+          actingStatuses: Array.from(document.querySelectorAll('#acting .nums .st'), (b) => b.textContent.replace(/ ✕$/, '')),
           rows: f.view.rows.map((r) => ({
             id: r.id, note: r.note, copy: r.copy, kind: r.kind, side: sideWord(r), name: r.gmName, in: r.in, ini: isNum(r.ini) ? r.ini : null, mod: r.mod,
             hp: r.hp, max: r.max, temp: r.temp, conds: r.conds, exhaustion: r.exhaustion, conc: r.conc, out: r.out, seen: r.seen,

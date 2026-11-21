@@ -82,6 +82,7 @@ img { max-width: 100%; }
 .pvw:not(.open) .pv { display: none; }
 .pvw:not(.open) .pvh { margin: 0; }
 .sheet > .pvw { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 6px 8px; margin: 0 0 10px; }
+.app.part-side .sheet > .pvw { position: sticky; top: var(--rbarh, 44px); z-index: 2; }
 .side .pvlist { list-style: none; padding: 0; margin: 8px 0 0; }
 .side .pvlist li { padding: 2px 4px; border-radius: 5px; }
 .side .pvlist li.focus { background: var(--lamp-soft); }
@@ -276,7 +277,12 @@ ol.to > li.side-neutral .nm { color: var(--neutral); }
 ol.to > li > * { flex-shrink: 0; }
 /* the name gives way last: chips shrink first, so a wider font (Linux, Windows) cuts a chip before a name */
 ol.to > li > .nm { flex: 1 0.01 auto; min-width: 6rem; }
-ol.to > li > .chip, ol.to > li > .cnt[data-frch] { flex-shrink: 1; min-width: 2.4rem; overflow: hidden; text-overflow: ellipsis; }
+ol.to > li > .cnt[data-frch] { flex-shrink: 1; min-width: 2.4rem; overflow: hidden; text-overflow: ellipsis; }
+/* the statuses' strip: the row's leftover width, clipped, "+N" for the rest (gm-fight.js fitChips) */
+ol.to > li > .chips { display: flex; gap: 2px; flex: 0 1 auto; min-width: 0; overflow: hidden; }
+ol.to .chips > .chip { flex: none; }
+ol.to .chips > [hidden] { display: none; }
+ol.to .chips > .more { cursor: pointer; border-color: var(--muted); color: var(--ink); }
 ol.to > li.cur { background: var(--lamp-soft); box-shadow: inset 4px 0 0 var(--lamp); }
 ol.to > li.out { opacity: .55; }
 ol.to > li.out .nm { text-decoration: line-through; }
@@ -310,7 +316,7 @@ ol.to .ds { font: 500 .7rem var(--mono); white-space: nowrap; }
 .act .nums { display: flex; gap: 5px; flex-wrap: wrap; margin: 6px 0; font: 600 .82rem var(--mono); align-items: center; }
 .act .nums > span { border: 1px solid var(--line); border-radius: 5px; padding: 0 6px; background: var(--bg); }
 .act .nums .bl { color: var(--lamp); border-color: var(--lamp); }
-.act .nums .st { color: var(--bad); }
+.act .nums .st { color: var(--bad); border: 1px solid var(--bad); border-radius: 5px; padding: 0 6px; background: var(--bg); font: inherit; }
 .act .nums.ctr button { font-size: .75rem; padding: 1px 6px; }
 .act .stats { font-size: .9rem; border-top: 1px solid var(--line); margin-top: 6px; padding-top: 4px; }
 .act .stats table { font-size: .8rem; }
@@ -343,6 +349,7 @@ ol.to .ds { font: 500 .7rem var(--mono); white-space: nowrap; }
   /* one column: no folds, and the pane's bar sticks under the header */
   .rbar { top: var(--toph); }
   .rbar #paneFold { display: none; }
+  .app.part-side .sheet > .pvw { position: static; }
   .top .bar { flex-wrap: wrap; white-space: normal; }
 }
 

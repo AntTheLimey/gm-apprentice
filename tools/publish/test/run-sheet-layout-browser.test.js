@@ -894,3 +894,130 @@ describe('10e: the order\'s own scroll', { skip: browserSkip() }, () => {
     });
   });
 });
+
+// ---- Task 10, fix round 1 (the reviewer's real-input walk): statuses never widen the order (I1), an auto-fold
+// holds until a window resize (I2), a pane opened by hand keeps its width (M3), the open preview stays under the
+// pane's bar (M4), the preview above the order leaves the rows in view (M5), one move per drag step (M6).
+const rowsInBox = (page) => page.evaluate(`(() => { const o = document.querySelector('#side ol.to').getBoundingClientRect();
+  const li = Array.from(document.querySelectorAll('#side ol.to > li'), (l) => l.getBoundingClientRect());
+  return { all: li.length, seen: li.filter((r) => r.top >= o.top - 0.5 && r.bottom <= o.bottom + 0.5).length }; })()`);
+
+describe('10, fix round 1', { skip: browserSkip() }, () => {
+  it('I1: statuses never widen the order: at 1449 the grip stays and moves 60 px each way, "+N" shows the rest', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await startedFight(page, run);
+      const before = { om: p.layout.orderMin, sheetW: p.layout.sheetW };
+      const wyrm = p.fight.rows.find((r) => r.note === WYRM);
+      await fromOther(run, ['Frightened', 'Prone', 'Poisoned'].map((add) => ({ type: 'status', fight: p.fight.id, row: wyrm.id, add })));
+      p = await until(page, `p.fight.rows.find((r) => r.id === ${JSON.stringify(wyrm.id)}).conds.length === 3`);
+      assert.deepStrictEqual({ om: p.layout.orderMin, sheetW: p.layout.sheetW }, before, 'the order minimum and the pane did not move');
+      assert.ok(p.layout.grip.shown && !p.layout.railFolded, 'the grip stays, the rail stays open');
+      sane(p, 'three statuses');
+      const more = `[data-frow="${wyrm.id}"] .chips .more`;
+      await page.waitFor(`document.querySelector(${JSON.stringify(more)})`);
+      assert.match(await page.evaluate(`document.querySelector(${JSON.stringify(more)}).textContent`), /^\+[1-3]$/);
+      await tap(page, more);
+      p = await until(page, 'p.fight.actingName === "Glacier Wyrm"');
+      assert.deepStrictEqual(p.fight.actingStatuses, ['Frightened', 'Prone', 'Poisoned'], 'the acting panel lists them all');
+      const d0 = p.layout.sheetW;
+      await dragGrip(page, -60);
+      p = await until(page, `p.layout.sheetW === ${d0 + 60}`);
+      sane(p, 'wider');
+      await dragGrip(page, 120);
+      p = await until(page, `p.layout.sheetW === ${d0 - 60}`);
+      sane(p, 'narrower');
+      // a status taken off in the acting panel goes from the row too
+      await tap(page, '#acting .nums .st');
+      p = await until(page, `p.fight.rows.find((r) => r.id === ${JSON.stringify(wyrm.id)}).conds.length === 2`);
+      sane(p, 'one removed');
+    });
+  });
+
+  it('I2: at 1280, Fold on the pane keeps the auto-folded rail folded; the preview sits beside the order, every row in view', async () => {
+    const run = await start();
+    await withPage({ width: 1280, height: 762 }, async (page) => {
+      let p = await startedFight(page, run);
+      assert.ok(p.layout.railFolded && p.layout.auto.rail);
+      await tap(page, '#fPvShow');
+      await until(page, 'p.layout.pvOpen');
+      await tap(page, '#paneFold');
+      p = await until(page, 'p.layout.folded && p.layout.pvOpen');
+      assert.strictEqual(p.layout.railFolded, true, 'the rail stays folded');
+      assert.strictEqual(p.layout.pvIn, 'pvcol');
+      const col = await page.box('#side .pvcol');
+      const order = await page.box('#fOrder');
+      assert.ok(col.left >= order.right - 1, 'beside the order');
+      const rows = await rowsInBox(page);
+      assert.strictEqual(rows.seen, rows.all, `every row in view: ${JSON.stringify(rows)}`);
+      sane(p, '1280 pane folded with the preview');
+    });
+  });
+
+  it('M3: at 1100 a pane opened by hand keeps its width as statuses come on', async () => {
+    const run = await start();
+    await withPage({ width: 1100, height: 762 }, async (page) => {
+      let p = await startedFight(page, run);
+      assert.ok(p.layout.folded && p.layout.auto.pane);
+      await tap(page, '#paneOpen');
+      p = await until(page, '!p.layout.folded');
+      const w = p.layout.sheetW;
+      assert.ok(w >= 260, `the pane ${w} px`);
+      const wyrm = p.fight.rows.find((r) => r.note === WYRM);
+      await fromOther(run, ['Frightened', 'Prone', 'Poisoned', 'Restrained'].map((add) => ({ type: 'status', fight: p.fight.id, row: wyrm.id, add })));
+      p = await until(page, `p.fight.rows.find((r) => r.id === ${JSON.stringify(wyrm.id)}).conds.length === 4`);
+      assert.strictEqual(p.layout.sheetW, w, 'the same width');
+      assert.strictEqual(p.layout.folded, false);
+      sane(p, '1100 statuses');
+    });
+  });
+
+  it('M4: the open preview stays under the pane\'s bar while the pane scrolls, and Hide works', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await fightAt(page, run);
+      await tap(page, '#fPvShow');
+      await until(page, 'p.layout.pvOpen');
+      await tap(page, '#paneWhole');
+      await page.waitFor('document.querySelector("#sheet section#people")');
+      const pane = await page.box('#sheet');
+      await page.wheel(pane.left + 150, 600, 400);
+      p = await until(page, 'p.layout.paneTop >= 350');
+      const hide = await page.box('#pvToggle');
+      assert.ok(hide.top >= pane.top && hide.bottom <= 762, `Hide at ${hide.top}`);
+      await tap(page, '#pvToggle');
+      p = await until(page, '!p.layout.pvOpen');
+      sane(p, 'hidden after the scroll');
+    });
+  });
+
+  it('M5: at 1280 the preview above the order leaves at least 8 rows in view', async () => {
+    const run = await start();
+    await withPage({ width: 1280, height: 762 }, async (page) => {
+      let p = await startedFight(page, run);
+      await tap(page, '#paneFold');
+      await until(page, 'p.layout.folded');
+      await tap(page, '#railOpen');
+      p = await until(page, '!p.layout.railFolded');
+      await tap(page, '#fPvShow');
+      p = await until(page, 'p.layout.pvOpen && p.layout.pvIn === "pvcol"');
+      const col = await page.box('#side .pvcol');
+      const order = await page.box('#fOrder');
+      assert.ok(col.bottom <= order.top + 1, 'the preview is above the order here');
+      const rows = await rowsInBox(page);
+      assert.ok(rows.seen >= 8, `rows in view: ${JSON.stringify(rows)}`);
+      sane(p, '1280 preview above the order');
+    });
+  });
+
+  it('M6: one layout pass per drag step, not two', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await fightAt(page, run);
+      const n0 = p.layout.gripMoves;
+      await dragGrip(page, -40);
+      p = await until(page, `p.layout.gripMoves > ${n0}`);
+      assert.ok(p.layout.gripMoves - n0 <= 10, `${p.layout.gripMoves - n0} passes for 10 steps`);
+    });
+  });
+});

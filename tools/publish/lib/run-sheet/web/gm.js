@@ -1033,13 +1033,13 @@
     for (const p of panelOf(key).people || []) if (!out.includes(p) && (showablePerson(p) || typeOf(p) === 'pc')) out.push(p);
     return out;
   }
-  // The most the preview may take: 40% of the right pane's height there (review F9), or of the middle's when it
-  // sits above the order; elsewhere its width alone sets it.
+  // The most the preview may take: 40% of the right pane's height there (review F9), or 25% of the middle's when
+  // it sits above the order, which keeps the rows in view (fix round 1, M5); elsewhere its width alone sets it.
   function pvCap() {
     const at = pvbox.parentElement;
     const bar = pvbox.querySelector('.pvh').offsetHeight + 16;
     if (at && at.id === 'sheet') return Math.max(80, at.clientHeight * 0.4 - bar);
-    if (at && at.classList.contains('pvcol') && !$('#app').classList.contains('pvrow')) return Math.max(80, $('#side').clientHeight * 0.4 - bar);
+    if (at && at.classList.contains('pvcol') && !$('#app').classList.contains('pvrow')) return Math.max(80, $('#side').clientHeight * 0.25 - bar);
     return Infinity;
   }
   function drawPreview() {
@@ -1213,7 +1213,7 @@
   const GRIP_W = 12;
   const RIGHT_MIN = 320;
   const RIGHT_DEF = 600;
-  const PANE_LEAST = 160; // a pane the GM opened where 320 px will not fit gets what is left, down to this
+  const PANE_LEAST = 260; // a pane the GM opened where 320 px will not fit gets what is left, down to this
   const PANE_FOLDED = 40;
   const ORDER_FLOOR = 560;
   const ORDER_CAP = 860; // the order's width once the acting panel sits beside it
@@ -1234,7 +1234,12 @@
     out.auto = { rail: false, pane: false };
     return out;
   })();
-  const opened = { rail: false, pane: false };
+  // `opened`: a GM click opened an auto-folded column (and `paneW`, the width that pane got where 320 px did not
+  // fit); `held`: the folds the page made, which last until the next window resize, whatever the GM does with
+  // the other column (ruling R5, fix round 1). Opening a column by hand lets its own fold go.
+  const opened = { rail: false, pane: false, paneW: null };
+  const held = { rail: false, pane: false };
+  const forget = () => { opened.rail = false; opened.pane = false; opened.paneW = null; held.rail = false; held.pane = false; };
   function saveLayout() {
     try { window.localStorage.setItem(LKEY, JSON.stringify({ railFolded: L.railFolded, railFoldedFight: L.railFoldedFight, folded: L.folded, rw: L.rw, pv: L.pv })); } catch (e) { /* not kept */ }
   }
@@ -1278,14 +1283,19 @@
     let rail = !narrow && (G.pane ? L.railFoldedFight : L.railFolded);
     let pane = fight && L.folded;
     L.auto = { rail: false, pane: false };
+    if (!fight) { held.rail = false; held.pane = false; }
     if (fight) {
       const w = appW();
+      if (held.rail && !rail && !opened.rail) { rail = true; L.auto.rail = true; }
+      if (held.pane && !pane && !opened.pane) { pane = true; L.auto.pane = true; }
       const need = () => (rail ? RAIL_FOLDED : RAIL_W) + G.om + (pane ? PANE_FOLDED : GRIP_W + (opened.pane ? PANE_LEAST : RIGHT_MIN));
       if (need() > w && !rail && !opened.rail) { rail = true; L.auto.rail = true; }
       if (need() > w && !pane && !opened.pane) { pane = true; L.auto.pane = true; }
       // a column the GM opened yields too when the order would still be short: no row is ever clipped
       if (need() > w && !pane) { pane = true; L.auto.pane = true; }
       if (need() > w && !rail) { rail = true; L.auto.rail = true; }
+      held.rail = held.rail || L.auto.rail;
+      held.pane = held.pane || L.auto.pane;
     }
     G.lay = { rail, pane };
     const strip = $('#railOpen');
@@ -1298,7 +1308,13 @@
     if (fight) {
       const room = rightRoom();
       const showGrip = !pane && room.max - room.min >= GRIP_TRAVEL;
-      const rw = pane ? PANE_FOLDED : rightWidth();
+      let rw = pane ? PANE_FOLDED : rightWidth();
+      // a pane the GM opened where 320 px will not fit keeps the width it got until a resize (narrower only if the
+      // order needs it: no row is ever clipped)
+      if (!pane && opened.pane && room.max < RIGHT_MIN) {
+        if (opened.paneW == null) opened.paneW = rw;
+        rw = Math.min(opened.paneW, room.max);
+      }
       const gw = showGrip ? GRIP_W : 0;
       const mid = appW() - railW() - gw - rw;
       const side = $('#side');
@@ -1335,6 +1351,8 @@
     }
     if (pvAt) {
       const bar = pvAt.id === 'sheet' ? pvAt.querySelector('.rbar') : null;
+      // the open preview stays under the pane's bar while the pane scrolls, Hide with it (fix round 1, M4)
+      if (bar) pvAt.style.setProperty('--rbarh', `${bar.offsetHeight}px`);
       const before = bar ? bar.nextSibling : pvAt.firstChild;
       if (pvbox.parentElement !== pvAt || (bar && bar.nextSibling !== pvbox) || (!bar && pvAt.firstChild !== pvbox)) pvAt.insertBefore(pvbox, before);
     } else if (pvbox.parentElement) pvbox.remove();
@@ -1344,6 +1362,7 @@
     tg.setAttribute('aria-expanded', String(L.pv));
     tg.title = L.pv ? 'Fold the preview away' : 'Show the preview of the players\' screen';
     drawPreview();
+    for (const part of parts) if (part.afterLayout) part.afterLayout();
     probe();
   }
   // The pane brought to its top (Fight, Resume, Back to the fight's beat, Players' screen ▸: review F3).
@@ -1357,7 +1376,7 @@
   function openPane() {
     if (!G.lay.pane) return;
     if (L.folded) { L.folded = false; saveLayout(); }
-    if (L.auto.pane) { opened.pane = true; opened.rail = false; }
+    if (L.auto.pane) { opened.pane = true; opened.paneW = null; opened.rail = false; held.pane = false; }
   }
   function foldClick(id) {
     const fightNow = Boolean(G.pane);
@@ -1367,7 +1386,7 @@
     } else if (id === 'railOpen') {
       if (fightNow) L.railFoldedFight = false; else L.railFolded = false;
       // the last column opened wins: the other one folds again if the room is short
-      if (L.auto.rail) { opened.rail = true; opened.pane = false; }
+      if (L.auto.rail) { opened.rail = true; opened.pane = false; held.rail = false; }
     } else if (id === 'paneFold') { L.folded = true; opened.pane = false; } else if (id === 'paneOpen') openPane();
     saveLayout();
     update();
@@ -1385,7 +1404,7 @@
       folded: G.lay.pane, railFolded: G.lay.rail, auto: { ...L.auto }, saved: { railFolded: L.railFolded, railFoldedFight: L.railFoldedFight, folded: L.folded, rw: L.rw, pv: L.pv },
       pvOpen: Boolean(pv), pvTop: r(pv && pv.top), pvBottom: r(pv && pv.bottom), pvIn: pv ? (pvbox.parentElement.id || pvbox.parentElement.className) : null,
       paneTop: r($('#sheet').scrollTop), paneBox: (() => { const b = box($('#sheet')); return { top: r(b.top), bottom: r(b.bottom), left: r(b.left), right: r(b.right) }; })(),
-      orderMin: G.om, room, beside: $('#app').classList.contains('beside'), scrollY: r(window.scrollY),
+      orderMin: G.om, gripMoves: G.gripMoves || 0, room, beside: $('#app').classList.contains('beside'), scrollY: r(window.scrollY),
     };
   }
   // The grip: drag to resize, double-click to reset; it listens on the document (pointer and mouse both), so a
@@ -1396,28 +1415,29 @@
     let on = false;
     let startX = 0;
     let startW = 0;
+    let via = null; // 'pointer' or 'mouse': a pointer drag ignores the mouse events the browser also sends
     const begin = (x) => { on = true; startX = x; startW = rightWidth(); grip.classList.add('drag'); document.body.classList.add('dragging'); };
     const move = (x) => {
       if (!on) return;
+      G.gripMoves = (G.gripMoves || 0) + 1;
       L.rw = rightWidth(startW + (startX - x));
       applyLayout();
       const room = rightRoom();
       grip.classList.toggle('limit', L.rw <= room.min || L.rw >= room.max);
     };
-    const stop = () => { if (!on) return; on = false; grip.classList.remove('drag', 'limit'); document.body.classList.remove('dragging'); saveLayout(); probe(); };
-    grip.addEventListener('pointerdown', (ev) => { if (ev.button !== 0) return; ev.preventDefault(); begin(ev.clientX); });
-    grip.addEventListener('mousedown', (ev) => { if (ev.button !== 0 || on) return; ev.preventDefault(); begin(ev.clientX); });
-    document.addEventListener('pointermove', (ev) => move(ev.clientX));
-    document.addEventListener('mousemove', (ev) => move(ev.clientX));
-    document.addEventListener('pointerup', stop);
-    document.addEventListener('mouseup', stop);
+    const stop = () => { if (!on) return; on = false; via = null; grip.classList.remove('drag', 'limit'); document.body.classList.remove('dragging'); saveLayout(); probe(); };
+    grip.addEventListener('pointerdown', (ev) => { if (ev.button !== 0) return; ev.preventDefault(); via = 'pointer'; begin(ev.clientX); });
+    grip.addEventListener('mousedown', (ev) => { if (ev.button !== 0 || on) return; ev.preventDefault(); via = 'mouse'; begin(ev.clientX); });
+    document.addEventListener('pointermove', (ev) => { if (via === 'pointer') move(ev.clientX); });
+    document.addEventListener('mousemove', (ev) => { if (via === 'mouse') move(ev.clientX); });
+    document.addEventListener('pointerup', () => { if (via === 'pointer') stop(); });
+    document.addEventListener('mouseup', () => { if (via === 'mouse') stop(); });
     document.addEventListener('pointercancel', stop);
     window.addEventListener('blur', stop);
     grip.addEventListener('dblclick', () => { L.rw = null; saveLayout(); applyLayout(); });
   })();
   window.addEventListener('resize', () => {
-    opened.rail = false;
-    opened.pane = false;
+    forget();
     if (G.model && G.state) applyLayout();
   });
   if (PROBE) {
