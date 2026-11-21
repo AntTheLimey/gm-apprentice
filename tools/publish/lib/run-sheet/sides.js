@@ -13,12 +13,27 @@ const { ontology } = require('../ontology');
 // The Plan's words, whole words, case-insensitive. A who line takes these; the NPC Quick Reference
 // row also takes a bare `ally` or `allies` (it is the Plan's own note on that person, where a who
 // line's "ally" is as likely to be a rival's or a stranger's).
-const WHO_WORDS = /\bwith the party\b|\bwith (?:the )?coalition\b|\bas an ally\b|\bon their side\b/i;
-const QUICK_REF_WORDS = /\bwith the party\b|\bwith (?:the )?coalition\b|\bas an ally\b|\bon their side\b|\ballies\b|\bally\b/i;
+// The phrases are the GM's own words wherever they stand, the Quick Reference included: `allyBy: 'plan'`.
+// A bare ally/allies in a Quick Reference cell is looser (it may be "not an ally"), so it is `allyBy:
+// 'quickRef'`, an inferred ally that Task 5 starts unseen, and it does not count when its cell also holds a
+// negation or hedge. allyBy values: 'plan' | 'quickRef' | 'stats' | 'affiliation' | 'relationships' | null.
+const PHRASES = /\bwith the party\b|\bwith (?:the )?coalition\b|\bas an ally\b|\bon their side\b/i;
+const BARE_ALLY = /\b(?:ally|allies)\b/i;
+const HEDGE = /\b(?:not|no|never|former|once|potential|possible|maybe|could|threat|enemy|rival)\b|\bex-|\/|\?/i;
 const STATS_WORDS = /\bas an ally\b/i;
 // An affiliation counts only when it names the party or holds one of these. "Allied with the Order"
 // names neither.
-const AFFILIATION = /\bloyal to (?:the )?party\b|\bthe party\b|\bcommitted ally\b/i;
+const AFFILIATION = /\bloyal to (?:the )?party\b|\bcommitted ally\b/i;
+// "the party" itself counts as the whole affiliation or as membership or loyalty, unless a hostile word
+// comes before it ("Enemy of the party").
+const PARTY_AFFILIATION = /^\s*(?:the )?party\s*$|\b(?:with|of|loyal to|member of) the party\b/i;
+const HOSTILE = /\b(?:enemy|against|hunting|hostile|rival)\b/i;
+function affiliationHeld(text) {
+  const plain = found(AFFILIATION, text);
+  if (plain) return plain;
+  const m = PARTY_AFFILIATION.exec(text);
+  return m && !HOSTILE.test(text.slice(0, m.index)) ? m[0] : null;
+}
 
 // Tones come from the ontology's `tones` (and `tone_near`, which folds a near word into one of
 // them), so the sheet keeps no list of its own. The approved lists differed from the ontology in
@@ -44,18 +59,24 @@ function relationshipsTotal(fm, partyNotes, resolve) {
     const ref = targetRef(e.target);
     const note = ref.links > 1 || !ref.name || !resolve ? null : resolve(ref.name);
     if (!note || !party.has(note)) continue;
-    const n = Number(e.strength);
-    total += signOf(e.tone) * (Number.isFinite(n) && n > 0 ? n : 1);
+    const n = e.strength === undefined || e.strength === null || e.strength === '' ? NaN : Number(e.strength);
+    total += signOf(e.tone) * (Number.isFinite(n) && n >= 0 ? n : 1);
   }
   return total;
 }
 
 function startingSide({ whoText = '', quickRefText = '', statsText = '', fm = {}, partyNotes = [], resolve = null } = {}) {
-  const said = found(WHO_WORDS, whoText) || found(QUICK_REF_WORDS, quickRefText);
+  const said = found(PHRASES, whoText) || found(PHRASES, quickRefText);
   if (said) return { ally: true, allyFrom: `the Plan: "${said.toLowerCase()}"`, allyBy: 'plan' };
+  // Quick Reference cells are joined with `|`; a bare ally counts per cell, and a hedged cell is no yes.
+  for (const cell of String(quickRefText || '').split('|')) {
+    const bare = found(BARE_ALLY, cell);
+    if (bare && !HEDGE.test(cell)) return { ally: true, allyFrom: `the Plan's quick reference: "${bare.toLowerCase()}"`, allyBy: 'quickRef' };
+  }
   if (found(STATS_WORDS, statsText)) return { ally: true, allyFrom: 'the stat block: "as an ally"', allyBy: 'stats' };
   const aff = [].concat((fm && fm.affiliation) || []).filter((x) => typeof x === 'string');
-  const held = found(AFFILIATION, aff.join('; '));
+  let held = null;
+  for (const a of aff) { held = affiliationHeld(a); if (held) break; }
   if (held) return { ally: true, allyFrom: `affiliation: ${held.toLowerCase()}`, allyBy: 'affiliation' };
   const total = relationshipsTotal(fm, partyNotes, resolve);
   if (total > 0) return { ally: true, allyFrom: `relationships: +${total} with this party`, allyBy: 'relationships' };

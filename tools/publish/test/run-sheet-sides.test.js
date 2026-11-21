@@ -81,8 +81,38 @@ describe('a row\'s starting side', () => {
   it('bare "ally" counts in the Quick Reference row, not in the who line', () => {
     assert.deepStrictEqual(pick(side(index, 'Ferrante', { whoText: 'a possible ally of the Order' })), [false, null]);
     assert.deepStrictEqual(pick(side(index, 'Ferrante', { whoText: 'Allies all round' })), [false, null]);
-    assert.deepStrictEqual(pick(side(index, 'Ferrante', { quickRefText: 'Potential ally / threat' })), [true, 'plan']);
+    assert.deepStrictEqual(pick(side(index, 'Ferrante', { quickRefText: 'Trusted ally' })), [true, 'quickRef']);
     assert.deepStrictEqual(pick(side(index, 'Ferrante', { quickRefText: 'With coalition' })), [true, 'plan']);
+  });
+
+  it('a bare ally in the Quick Reference is an inferred ally; a hedged one is none', () => {
+    assert.deepStrictEqual(side(index, 'Ferrante', { quickRefText: 'Ally' }),
+      { ally: true, allyFrom: 'the Plan\'s quick reference: "ally"', allyBy: 'quickRef' });
+    assert.deepStrictEqual(pick(side(index, 'Ferrante', { quickRefText: 'With coalition' })), [true, 'plan']);
+    for (const t of ['not an ally', 'Former ally, now hostile', 'Potential ally / threat', 'No ally', 'ex-ally', 'an ally?']) {
+      assert.deepStrictEqual(pick(side(index, 'Ferrante', { quickRefText: t })), [false, null], t);
+    }
+    // another cell's hedge does not cancel this cell's ally
+    assert.deepStrictEqual(pick(side(index, 'Ferrante', { quickRefText: 'Ally | not seen since' })), [true, 'quickRef']);
+  });
+
+  it('only whole words count', () => {
+    for (const t of ['really', 'allyship', 'Sally']) {
+      assert.deepStrictEqual(pick(side(index, 'Ferrante', { quickRefText: t, whoText: t })), [false, null], t);
+    }
+  });
+
+  it('"the party" counts as membership or loyalty, not as an enemy of it', () => {
+    const aff = (a) => pick(startingSide({ fm: { affiliation: a }, partyNotes: PARTY }));
+    assert.deepStrictEqual(aff('Enemy of the party'), [false, null]);
+    assert.deepStrictEqual(aff('Hunting the party'), [false, null]);
+    assert.deepStrictEqual(aff('Loyal to the party'), [true, 'affiliation']);
+    assert.deepStrictEqual(aff('The party'), [true, 'affiliation']);
+  });
+
+  it('strength 0 weighs nothing', () => {
+    const fm = { relationships: [{ target: '[[Emma]]', tone: 'positive', strength: 0 }] };
+    assert.deepStrictEqual(pick(startingSide({ fm, partyNotes: PARTY, resolve: (t) => index.resolve(t) })), [false, null]);
   });
 
   it('"Allied with the Order" is not an ally', () => {
@@ -120,10 +150,36 @@ describe('a row\'s starting side in the reader', () => {
     assert.deepStrictEqual(['ally', 'allyFrom', 'allyBy'].map((k) => foe(beat(''), sides)[k]), [false, null, null]);
     const planned = foe(beat('with the party'), sides);
     assert.deepStrictEqual([planned.ally, planned.allyFrom, planned.allyBy], [true, 'the Plan: "with the party"', 'plan']);
-    const quick = foe(beat(''), { quickRef: new Map([['NPCs/Fighter.md', 'Potential ally']]), partyNotes: PARTY });
-    assert.deepStrictEqual([quick.ally, quick.allyBy], [true, 'plan']);
+    const quick = foe(beat(''), { quickRef: new Map([['NPCs/Fighter.md', 'Trusted ally']]), partyNotes: PARTY });
+    assert.deepStrictEqual([quick.ally, quick.allyBy], [true, 'quickRef']);
     const withStats = foe(beat(''), { quickRef: new Map(), partyNotes: PARTY });
     assert.strictEqual(withStats.ally, false);
+  });
+
+  it('a statless NPC\'s cast entry reads the Plan\'s who line', () => {
+    const who = new Map([['NPCs/NoStats.md', 'with the party'], ['NPCs/Ferrante.md', '']]);
+    const cast = readCast(index, { carried: null, sides: { quickRef: new Map(), partyNotes: [], who } });
+    const c = cast.find((x) => x.note === 'NPCs/Ferrante.md');
+    assert.strictEqual(c.ally, false);
+    const who2 = new Map([['NPCs/Ferrante.md', 'with the party']]);
+    const f = readCast(index, { carried: null, sides: { quickRef: new Map(), partyNotes: [], who: who2 } }).find((x) => x.note === 'NPCs/Ferrante.md');
+    assert.deepStrictEqual([f.ally, f.allyBy], [true, 'plan']);
+  });
+
+  it('a link in the Quick Reference is not the Plan\'s word; a plain "Ally" cell is, as quickRef', () => {
+    const { readRunSheet } = require('../lib/run-sheet/read');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rs-sides-q-'));
+    made.push(dir);
+    fs.cpSync(path.join(__dirname, 'fixtures', 'run-sheet'), dir, { recursive: true });
+    const plan = 'Chapters/Chapter 1/Sessions/Session 02/Session 02 - The Test - Plan.md';
+    const text = fs.readFileSync(path.join(dir, plan), 'utf8').replace(/\r\n/g, '\n')
+      .replace('| Gate warden | Wants the bell rung | [[The Gate]]', '| [[Allies of Ostia]] | Wants the bell rung | [[The Gate]]')
+      .replace('| Chapel keeper |', '| Ally |');
+    fs.writeFileSync(path.join(dir, plan), text);
+    const cast = readRunSheet(dir, plan, { party: [] }).cast;
+    const by = (n) => cast.find((c) => c.note === `Characters/NPCs/${n}.md`);
+    assert.deepStrictEqual([by('Brother Ash').ally, by('Brother Ash').allyBy], [false, null]);
+    assert.deepStrictEqual([by('Sister Fen').ally, by('Sister Fen').allyBy], [true, 'quickRef']);
   });
 
   it('a foe whose stats say "as an ally" carries allyBy stats', () => {

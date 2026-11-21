@@ -82,7 +82,7 @@ function inspect(notePath, index) {
 function sideOf(notePath, index, sides, whoText = '', statsText = '') {
   const ctx = sides || {};
   return startingSide({
-    whoText, statsText,
+    whoText: whoText || (ctx.who && ctx.who.get(notePath)) || '', statsText,
     quickRefText: (ctx.quickRef && ctx.quickRef.get(notePath)) || '',
     fm: index.read(notePath).fm || {},
     partyNotes: ctx.partyNotes || [],

@@ -214,9 +214,13 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
   const peopleRead = readPeople(body, index);
   const quickRef = new Map();
   for (const x of peopleRead.people) {
-    if (x.note) quickRef.set(x.note, `${quickRef.get(x.note) || ''} ${x.cells.slice(1).join(' ')}`.trim());
+    // Links come out whole: a note named "Allies of Ostia" is a name, not the Plan's word. Cells stay `|`-joined.
+    if (x.note) quickRef.set(x.note, [quickRef.get(x.note), x.cells.slice(1).map((c) => c.replace(/\[\[[^\]]*\]\]/g, '')).join(' | ')].filter(Boolean).join(' | '));
   }
-  const sides = { quickRef, partyNotes: own.party };
+  // What each beat's who line says about a note, for the cast entry of a person no beat's fight row covers.
+  const who = new Map();
+  for (const b of beats) for (const w of b.who || []) if (w.note) who.set(w.note, `${who.get(w.note) || ''} ${w.wants || ''} ${w.knownAs || ''}`.trim());
+  const sides = { quickRef, partyNotes: own.party, who };
   for (const beat of beats) {
     const r = foesFor(beat, index, seen, carried, sides);
     beat.foes = r.foes;
