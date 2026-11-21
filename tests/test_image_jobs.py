@@ -303,6 +303,20 @@ def test_references_come_from_shows_in_order(tmp_path):
     assert all(Path(r).is_absolute() for r in e.refs)
 
 
+def test_an_ambiguous_reference_says_so_and_its_path_works(tmp_path):
+    v = build(tmp_path)
+    (v / "PCs" / "_resources").mkdir()
+    (v / "PCs" / "_resources" / "Marta.md").write_text(note("pc"), encoding="utf-8")
+    _, e = one(v, {"for": "Anselm", "subject": "x", "shows": ["Marta", "Nobody"]})
+    assert e.refs == []
+    assert e.said == [
+        "left out the reference picture for Marta: 2 notes match: "
+        "NPCs/Marta.md, PCs/_resources/Marta.md; pass its path",
+        "left out the reference picture for Nobody: no such note"]
+    _, e = one(v, {"for": "Anselm", "subject": "x", "shows": ["NPCs/Marta.md"]})
+    assert [Path(r).name for r in e.refs] == ["marta.png"]
+
+
 def test_a_missing_or_oversized_reference_is_dropped_and_said(tmp_path, monkeypatch):
     v = build(tmp_path)
     _, e = one(v, {"for": "Anselm", "subject": "x", "shows": ["Ghost", "Big"]})
