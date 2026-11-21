@@ -205,13 +205,15 @@ Every section is a bulleted list (links where a note exists) except
 9. `Contingencies that fired`
 10. `Improvised beats`
 11. `Unmasked this session`
-12. `Handouts handed over`
-13. `Log`: bullets, `- HH:MM text`
-14. `Loot`: bullets, `- [[Item]] to [[Who]]`
-15. `Vitals at the end`: a table `| Who | HP | Conditions |`; the Who cell
+12. `Sides set`: bullets, `- [[Note]]: foe`, `ally` or `neutral`; a side
+    the GM set that every copy of the note shared
+13. `Handouts handed over`
+14. `Log`: bullets, `- HH:MM text`
+15. `Loot`: bullets, `- [[Item]] to [[Who]]`
+16. `Vitals at the end`: a table `| Who | HP | Conditions |`; the Who cell
     is a bare wikilink (`[[Name]]`, no pipe: Obsidian's table rule) and
     the HP cell is `current/max` or `current`
-16. `Advancement`
+17. `Advancement`
 
 How the run sheet writes them: `Log` is `- HH:MM Beat title: text`, or
 `- HH:MM text` with no beat; `Where everyone ended` is `- [[PC]]:
@@ -220,7 +222,12 @@ note, `- [[PC]]: Beat title` for a beat with no place, or `off-screen`,
 `not placed`); `Not reached` is one `- Beat title` per beat; each line
 the GM typed under `Advancement` is one bullet; an ally's copies are
 `| [[Guard]] 2 | 9/11 | |`, the number outside the link; a carried
-unmasking turned off tonight is `- [[Note]] masked again`. A fight's
+unmasking turned off tonight is `- [[Note]] masked again`. `Sides set` is carried
+to the next session as that note's starting side; `Improvised beats` holds
+`- New place: <name>` for a place the GM typed tonight (no note yet: wrap-up
+may offer to make one) and a bare `[[Place]]` link for a known place the
+party was at (moved there, or fought there), which wrap-up's reveal pass
+reads to offer publishing it. A fight's
 start, rounds and end are `Log` lines, and a vitals row comes from the
 last fight when it changed the figure. A figure written `12/40 (after
 the fight, 20:14)` is the last one the sheet saw, not one set at the

@@ -6,6 +6,7 @@ const http = require('node:http');
 const os = require('node:os');
 const path = require('node:path');
 const { createTableServer, listenLocal } = require('../lib/run-sheet/server');
+const { SITE_TOOL_FROM } = require('../lib/run-sheet/side-colours');
 const { listSessions, pickSession, stateIdOf } = require('../lib/run-sheet/sessions');
 const RS = require('../lib/run-sheet/web/state');
 const { readRunSheet } = require('../lib/run-sheet/read');
@@ -1486,7 +1487,7 @@ describe('the side-colours setting', () => {
   it('POST on a site with a current tool, or on a vault with no site, writes', async () => {
     const vault = copyOf();
     withSite(vault);
-    const run = await start(vault, 'Session 02 - The Test', { deps: { pinCheck: () => ({ ok: true, ours: false, spec: 'gm-apprentice-publish@1.70.46', installedBefore: '1.70.46' }) } });
+    const run = await start(vault, 'Session 02 - The Test', { deps: { pinCheck: () => ({ ok: true, ours: false, spec: `gm-apprentice-publish@${SITE_TOOL_FROM}`, installedBefore: SITE_TOOL_FROM }) } });
     assert.strictEqual((await post(run, { preset: 'colour_blind' })).status, 200);
     // no site: the gate is not asked, so an old answer changes nothing
     const bare = await start(copyOf(), 'Session 02 - The Test', { deps: { pinCheck: () => OLD_POLL } });

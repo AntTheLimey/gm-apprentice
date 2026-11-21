@@ -8,7 +8,7 @@ const SIDES = ['pc', 'ally', 'foe', 'neutral'];
 const HEX = /^#[0-9a-f]{6}$/i;
 // The first site tool that reads a `vault.run_sheet` key: an older one stops a player build on an unknown key under
 // `vault` (settings/layout.js), so the route does not write for a site pinned to one. Named once; it follows the release.
-const SITE_TOOL_FROM = '1.70.46';
+const SITE_TOOL_FROM = '1.70.47';
 const PRESETS = REGISTRY.find((e) => e.name === 'vault.run_sheet.side_colours').values;
 const DEFAULT_OWN = Object.fromEntries(SIDES.map((k) => [k, REGISTRY.find((e) => e.name === `vault.run_sheet.own_colours.${k}`).default]));
 
