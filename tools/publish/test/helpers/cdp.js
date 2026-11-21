@@ -64,7 +64,7 @@ const sleep = (ms) => new Promise((r) => { setTimeout(r, ms); });
 // Runs `fn(page)` in a fresh headless Chrome of the given size and returns what it returns.
 // `page`: goto(url), reload(), evaluate(expr), waitFor(expr, ms), screenshot(file), sleep(ms), key(name, { shift }),
 // newTab(url) -> page; real pointer and text: mouse(type, x, y, { buttons }), click(sel, { holdMs }), drag(x1, y1, x2, y2, steps),
-// wheel(x, y, dy), type(text), box(sel).
+// wheel(x, y, dy), type(text), box(sel), clickAt(x, y, { holdMs }).
 async function withPage({ width = 1449, height = 762, chrome = findChrome() } = {}, fn) {
   if (!chrome) throw new Error('no browser');
   return withChromeLock(async () => {
@@ -152,17 +152,28 @@ async function withPage({ width = 1449, height = 762, chrome = findChrome() } = 
             if (!r) throw new Error(`nothing matches ${selector}`);
             return r;
           },
-          // A real click at the element's centre: move, press, hold `holdMs` (a quick press can slip past
-          // code that a real hand's press does not), release.
-          async click(selector, { holdMs = 90 } = {}) {
-            const r = await page.box(selector);
-            const x = r.x + r.width / 2;
-            const y = r.y + r.height / 2;
+          // A real click at (x, y): move, press, hold `holdMs` (a quick press can slip past code that a real
+          // hand's press does not), release.
+          async clickAt(x, y, { holdMs = 90 } = {}) {
             await page.mouse('mouseMoved', x, y);
             await page.mouse('mousePressed', x, y, { buttons: 1 });
             await sleep(holdMs);
             await page.mouse('mouseReleased', x, y);
-            return { x, y };
+          },
+          // A real click on an element: scrolls it into view first (scrollIntoView, as a hand would scroll),
+          // then clicks its centre, or `offsetX`/`offsetY` from its top-left corner. Throws if the point is
+          // still outside the viewport. Returns { x, y, inView, hit }: `hit` is false when something else
+          // covers the point (the cover gets the click, as it would under a hand; no error).
+          async click(selector, { holdMs = 90, offsetX, offsetY } = {}) {
+            await evaluate(`(() => { const e = document.querySelector(${JSON.stringify(selector)}); if (e) e.scrollIntoView({ block: 'nearest', inline: 'nearest' }); })()`);
+            const r = await page.box(selector);
+            const x = r.left + (offsetX === undefined ? r.width / 2 : offsetX);
+            const y = r.top + (offsetY === undefined ? r.height / 2 : offsetY);
+            const at = await evaluate(`(() => { const e = document.querySelector(${JSON.stringify(selector)}); const top = document.elementFromPoint(${x}, ${y});
+              return { inView: ${x} >= 0 && ${y} >= 0 && ${x} < innerWidth && ${y} < innerHeight, hit: Boolean(top) && (top === e || e.contains(top)) }; })()`);
+            if (!at.inView) throw new Error(`click ${selector}: the point (${x}, ${y}) is outside the viewport`);
+            await page.clickAt(x, y, { holdMs });
+            return { x, y, ...at };
           },
           // A real drag: press at the start, `steps` moves with the button held, release at the end.
           async drag(fromX, fromY, toX, toY, steps = 8) {
