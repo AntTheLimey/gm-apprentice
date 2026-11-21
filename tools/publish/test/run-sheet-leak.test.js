@@ -722,3 +722,53 @@ describe('the players\' screen follows the row\'s side (plan 6a Task 5 / review 
     clean(v, new Set(), 'after End fight');
   });
 });
+
+// Changed on purpose: plan 6a Task 7 / Global Constraints (typed place). A place the GM types tonight in Move
+// them goes to the players' screen as its plain name, as the panel's caption, and as nothing else: no picture,
+// no key, no other words of the state. This is the one widening of forPlayers Task 7 makes.
+describe('a place typed tonight (plan 6a Task 7 / Global Constraints (typed place))', () => {
+  const RS = require('../lib/run-sheet/web/state');
+  const model = readRunSheet(FIXTURE, S.PLAN, { party: S.PARTY });
+  const forbidden = forbiddenList(FIXTURE, model).map((x) => ({ ...x, hit: matcher(x) }));
+  const sandbox = { self: {} };
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, '..', 'lib', 'run-sheet', 'web', 'players', 'render.js'), 'utf8'), sandbox);
+  const render = sandbox.self.RunSheetPlayersRender.renderPlayers;
+  const view = (s) => forPlayers(model, s, { withheldWords: model.withheldWords, campaign: model.campaign, picId: () => '0'.repeat(20) });
+  let n = 0;
+  const act = (s, a) => RS.reduce(s, { id: `tp-${++n}`, ...a }, new Date(Date.parse('2026-11-20T19:00:00Z') + n * 60000).toISOString());
+
+  it('a typed place reaches players as its plain name and nothing else', () => {
+    const gate = model.beats.find((b) => b.title === 'Ashfall Reckoning');
+    let s = RS.emptyState({ stateId: 's', session: 'x', plan: S.PLAN });
+    s = act(s, { type: 'move', pc: S.NOTES.ADA, to: { beat: gate.key, spot: null, title: gate.title } });
+    s = act(s, { type: 'jot', beat: gate.key, text: 'JOTSENTINEL-4471 the GM wrote this' });
+    const before = view(s);
+    const typed = 'The <b>Rusty</b> Anchor';
+    s = act(s, { id: 'tp-move', type: 'moveGroup', pcs: [S.NOTES.ADA], name: typed, names: ['Ada'] });
+    const v = view(s);
+    checkShape(v, 'a typed place');
+    assert.equal(v.panels.length, before.panels.length);
+    const p = v.panels[0];
+    assert.deepEqual([p.caption, p.backdrop], [typed, null], 'the plain name as the caption, no picture');
+    // nothing else the state holds goes with it: its key, the move's log line, a jot
+    const texts = [JSON.stringify(v), render(v)];
+    for (const t of texts) {
+      assert.ok(!t.includes('pn-tp-move'), 'no key');
+      assert.ok(!/moves to/.test(t), 'no log line');
+      assert.ok(!t.includes('JOTSENTINEL'), 'no jot');
+      assert.ok(!t.includes('(a new place)'));
+    }
+    assert.ok(!render(v).includes('<b>Rusty</b>'), 'the name is text, never markup');
+    for (const x of forbidden) for (const t of texts) assert.ok(!x.hit(t), `"${x.text}" (${x.why}) reached the players`);
+    // the same view as before, but for the caption and the panel's place
+    const strip = (w) => JSON.stringify({ ...w, panels: w.panels.map((q) => ({ ...q, caption: null, backdrop: null })) });
+    assert.equal(strip(v), strip(before));
+    // Fight here at the typed place, for another group: the focused panel's caption is that name, and End fight puts it back
+    let s2 = act(s, { type: 'move', pc: S.NOTES.BEN, to: { beat: gate.key, spot: null, title: gate.title } });
+    s2 = act(s2, { id: 'tp-f', type: 'fightStart', beat: 'pn-tp-move', title: typed, groups: [gate.key], rows: [], thresholds: [], backdrop: { group: gate.key, place: 'pn-tp-move' } });
+    const benPanel = (w) => w.panels.find((q) => q.pcs.some((x) => x.name === 'Ben'));
+    assert.deepEqual([benPanel(view(s2)).caption, benPanel(view(s2)).backdrop], [typed, null]);
+    s2 = act(s2, { type: 'fightEnd', fight: 'tp-f' });
+    assert.equal(benPanel(view(s2)).caption, before.panels[0].caption);
+  });
+});

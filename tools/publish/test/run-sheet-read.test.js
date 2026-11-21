@@ -1055,3 +1055,33 @@ describe('run sheet reader: loot items, Plan-line HP, carried unmaskings', () =>
     });
   });
 });
+
+// plan 6a Task 7: Fight here at any place, and Move them
+describe('places the party can go', () => {
+  it('placePeople reads location links', () => {
+    const dir = copy();
+    write(dir, 'Locations/The Club.md', '---\nname: The Club\ntype: location\n---\n\nA club.\n');
+    write(dir, "Locations/St. Mary's.md", "---\nname: St. Mary's\ntype: location\n---\n\nA church.\n");
+    write(dir, 'Creatures/Club Rat.md', '---\nname: Club Rat\ntype: creature\nlocation: "[[The Club]]"\n---\n\n## GM Notes\n\n### Stats\n\nAC 10\nHP 3\n');
+    write(dir, 'Characters/NPCs/Doorman.md', '---\nname: Doorman\ntype: npc\nlocation: "[[The Club]]"\n---\n\nNo stats.\n');
+    write(dir, 'Characters/NPCs/Verger.md', "---\nname: Verger\ntype: npc\nlocation: \"[[St. Mary's]]\"\n---\n\nNo stats.\n");
+    write(dir, 'Characters/NPCs/Nowhere Man.md', '---\nname: Nowhere Man\ntype: npc\nlocation: "[[No Such Place]]"\n---\n');
+    write(dir, 'Characters/NPCs/Plain.md', '---\nname: Plain\ntype: npc\nlocation: The Club\n---\n');
+    const m = readRunSheet(dir, PLAN, { party: PARTY });
+    assert.deepStrictEqual(m.placePeople['Locations/The Club.md'], ['Characters/NPCs/Doorman.md', 'Characters/NPCs/Plain.md', 'Creatures/Club Rat.md']);
+    assert.deepStrictEqual(m.placePeople["Locations/St. Mary's.md"], ['Characters/NPCs/Verger.md']);
+    assert.ok(!Object.values(m.placePeople).flat().includes('Characters/NPCs/Nowhere Man.md'), 'a link to no place places nobody');
+    // every location in the vault is a place to go: keyed, with its own entry for its name and picture
+    for (const p of ['Locations/The Club.md', "Locations/St. Mary's.md"]) {
+      assert.match(m.placeKeys[p], /^pl-[0-9a-f]{8}$/, p);
+      assert.strictEqual(m.placeNotes[p].name, p === 'Locations/The Club.md' ? 'The Club' : "St. Mary's");
+      assert.strictEqual(m.placeNotes[p].type, 'location');
+      assert.ok(!(p in m.notes), 'notes stays the notes the sheet touches');
+    }
+    assert.ok(!Object.values(m.placeKeys).some((k) => k.includes('.')), 'no key holds a dot');
+    assert.ok(!('Creatures/Club Rat.md' in m.placeKeys), 'only locations');
+    // a vault with no such notes reads as before
+    const plain = readRunSheet(copy(), PLAN, { party: PARTY });
+    assert.ok(plain.placeKeys && typeof plain.placePeople === 'object');
+  });
+});

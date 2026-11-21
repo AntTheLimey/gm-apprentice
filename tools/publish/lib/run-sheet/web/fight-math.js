@@ -425,11 +425,24 @@
   // The foes a beat gives a fight: its own, the allies brought in (derive already holds those), and anyone
   // else brought in who has a fight row (Review M7). `on` says whether each is ticked: someone an arrivals
   // cue names (`Arriving, start of round 3`) joins benched, for the GM to tick in when they arrive.
+  //
+  // A place beat (plan 6a Task 7) fights as v8's did: its people's creatures ticked in, everyone else benched
+  // (derive marks those `benched`), and a person with no stats gets a blank row through foeRowFrom, carrying
+  // its note, name and side (decision 7, review P5). A Plan beat's statless people get none, as in 5b.
   function beatFoes(ctx, beat) {
     const own = beat.foes || [];
     const arriving = new Set((beat.arrivals || []).flatMap((a) => a.people || []));
-    const rows = own.map((f) => ({ foe: f, on: !arriving.has(f.note) }));
+    const rows = own.map((f) => ({ foe: f, on: !arriving.has(f.note) && !f.benched }));
     const have = new Set(own.map((f) => f.note));
+    if (beat.placeBeat) {
+      for (const w of beat.who || []) {
+        if (!w.note || w.brought || have.has(w.note)) continue;
+        const c = castOf(ctx.model, w.note);
+        if (!c || c.foe) continue;
+        have.add(w.note);
+        rows.push({ foe: { key: `${beat.key}.foe.${w.note}`, note: c.note, name: c.name, ally: Boolean(c.ally), allyFrom: c.allyFrom || null, allyBy: c.allyBy }, on: c.type === 'creature' });
+      }
+    }
     for (const b of (ctx.state.brought && ctx.state.brought[beat.key]) || []) {
       if (have.has(b.note)) continue;
       const c = castOf(ctx.model, b.note);
@@ -458,10 +471,13 @@
     const beat = ctx.byKey.get(beatKey) || null;
     const id = ider(idBase);
     const pcs = model.pcs || [];
+    // Fight here at a place (plan 6a Task 7, review P4): only the PCs who stand there are ticked. When none
+    // does, nobody is, and the order goes on the focused group's panel alone (the fight's `groups`).
+    const placeFight = Boolean(beat && beat.placeBeat);
     let here = beat ? pcs.filter((p) => ctx.inBeat(p.note, beat)) : [];
-    if (!here.length && groups && groups.length) here = pcs.filter((p) => groups.includes(ctx.groupOf(p.note)));
+    if (!here.length && groups && groups.length && !placeFight) here = pcs.filter((p) => groups.includes(ctx.groupOf(p.note)));
     const rows = pcs.map((p) => {
-      const on = here.length === 0 || here.some((h) => h.note === p.note);
+      const on = here.length ? here.some((h) => h.note === p.note) : !placeFight;
       return { ...pcRowFrom(ctx, p, ctx.groupOf(p.note), on), id: id() };
     });
     // the fight's groups: every group holding a ticked PC (proof M2: a beat where no PC stands ticks them all)
@@ -597,15 +613,19 @@
   }
   // The cast names a typed name nearly is: within two edits of a name or alias (fewer for a short one, so two
   // letters are not near everything), then anyone sharing the surname (the last word of two or more). Nearest first.
+  // A name as matching reads it: case, accents and spacing blind, and a leading "the" dropped (plan 6a Task 7:
+  // "club" finds The Club). `sameName` is the one test for "the same name", for people and places alike.
+  const nameKey = (s) => fold(s).replace(/\s+/g, ' ').trim().replace(/^the /, '');
+  const sameName = (a, b) => Boolean(nameKey(a)) && nameKey(a) === nameKey(b);
   function nearCast(cast, query) {
-    const q = fold(query).replace(/\s+/g, ' ').trim();
+    const q = nameKey(query);
     if (q.length < 3) return [];
     const most = Math.min(2, Math.floor(q.length / 3));
     const words = q.split(' ');
     const out = [];
     (cast || []).forEach((c, i) => {
       let rank = null;
-      for (const t of [c.name, ...(c.aliases || []), ...(c.gmAliases || [])].map((x) => fold(x).replace(/\s+/g, ' ').trim()).filter(Boolean)) {
+      for (const t of [c.name, ...(c.aliases || []), ...(c.gmAliases || [])].map(nameKey).filter(Boolean)) {
         const d = editDistance(q, t);
         if (d <= most && (rank === null || d < rank)) rank = d;
       }
@@ -619,15 +639,16 @@
   }
   // What the Add box lists as the GM types: near names first, then the search's hits, then the one explicit
   // way to make a blank row, "+ New: Name (no note)". `search` is state.js's castSearch (this file never
-  // loads it). Nothing typed lists nothing.
-  function addChoices(cast, query, search, limit = 8) {
+  // loads it). Nothing typed lists nothing. Move them lists places the same way (plan 6a Task 7): `cast` is
+  // then the known places and `newLabel` words the last choice ("+ New place: Name").
+  function addChoices(cast, query, search, limit = 8, newLabel = (t) => `+ New: ${t} (no note)`) {
     const text = String(query == null ? '' : query).replace(/\s+/g, ' ').trim();
     if (!text) return [];
     const near = nearCast(cast, text);
     const seen = new Set(near.map((c) => c.note));
     const hits = near.concat(((typeof search === 'function' ? search(cast, text) : []) || []).filter((c) => !seen.has(c.note))).slice(0, limit);
     return hits.map((c) => ({ note: c.note, name: c.name, type: c.type }))
-      .concat({ note: null, name: text, type: null, isNew: true, label: `+ New: ${text} (no note)` });
+      .concat({ note: null, name: text, type: null, isNew: true, label: newLabel(text) });
   }
 
   // A row's group: its note plus its name without a trailing number (v8's groupOf). A PC or the Lair row has none.
@@ -680,7 +701,7 @@
     parseEntry, damageTaken, afterDamage, afterHeal, isBloodied,
     thresholdOf, isLit, sortRows, takesTurn, nextLive, actingRow,
     gmName, lairRow, unseenKey, unseenNumbers, unseenLabels, rowsForFight, joinRows, blankRow,
-    addChoices, groupKey, groupMates, placeRow, undoable, untouched,
+    addChoices, sameName, groupKey, groupMates, placeRow, undoable, untouched,
     SIDES, isSide, nextSide, sideOfRow, isFoe,
   };
 }));

@@ -139,14 +139,49 @@
       s.stopped = { beat: a.beat, title: a.title || '', at };
       log(s, at, a.beat, 'Stopped here.', a.title);
     },
+    // `place` (plan 6a Task 7): a known place's note, for Fight here. Its key is the reader's `pl-<hash>`.
     improvise(s, a, at) {
       const title = String(a.title || '').trim();
       if (!title) return;
       // the key comes from the action, never from what the state holds, so a re-applied action keeps its beat
       const key = a.key || (a.id != null ? `i-${a.id}` : `i-${s.improvised.length + 1}`);
       if (s.improvised.some((i) => i.key === key)) return;
-      s.improvised.push({ key, title, at });
+      s.improvised.push({ key, title, at, ...(typeof a.place === 'string' && a.place ? { place: a.place } : {}) });
       log(s, at, key, 'Improvised beat.', title);
+    },
+    // Move them (plan 6a Task 7): the PCs to a known place (`place`, with the reader's `key` and its `title`) or
+    // to a typed name (`name`), making its place beat if it has none. A typed name the night already holds, in
+    // any case and with or without "the", is that place again; a new one is keyed `pn-<action id>`. One Log line.
+    moveGroup(s, a, at) {
+      const pcs = (Array.isArray(a.pcs) ? a.pcs : []).filter((p) => typeof p === 'string' && p);
+      if (!pcs.length) return;
+      let place;
+      if (typeof a.place === 'string' && a.place) {
+        const key = String(a.key || '');
+        if (!key || key.includes('.')) return;
+        place = s.improvised.find((i) => i.key === key);
+        if (!place) { place = { key, title: String(a.title || '').trim() || stem(a.place), at, place: a.place }; s.improvised.push(place); }
+      } else {
+        const name = String(a.name == null ? '' : a.name).replace(/\s+/g, ' ').trim();
+        if (!name) return;
+        place = s.improvised.find((i) => i.newPlace && FM.sameName(i.title, name));
+        if (!place) {
+          const key = `pn-${String(a.id != null ? a.id : s.improvised.length + 1).replace(/\./g, '-')}`;
+          if (s.improvised.some((i) => i.key === key)) return;
+          place = { key, title: name, at, place: null, newPlace: true };
+          s.improvised.push(place);
+        }
+      }
+      for (const pc of pcs) HANDLERS.move(s, { pc, to: { beat: place.key, spot: null, title: place.title } }, at);
+      const names = pcs.map((pc, i) => String((Array.isArray(a.names) && a.names[i]) || '').trim() || stem(pc));
+      log(s, at, place.key, `${names.join(', ')} ${names.length > 1 ? 'move' : 'moves'} to ${place.title}${place.newPlace ? ' (a new place)' : ''}.`, place.title);
+    },
+    // Take off (v8, review F13): a place typed tonight that nobody stands at goes, with its lines.
+    unplace(s, a) {
+      const place = s.improvised.find((i) => i.key === a.key);
+      if (!place || !place.newPlace) return;
+      if (Object.values(s.positions).some((p) => p && p.beat === a.key)) return;
+      HANDLERS.unimprovise(s, { key: a.key });
     },
     unimprovise(s, a) {
       s.improvised = s.improvised.filter((i) => i.key !== a.key);
@@ -217,6 +252,7 @@
           return [i < 0 ? re(k) : `${re(k.slice(0, i))}${k.slice(i)}`, v];
         }));
         rows(f.rows);
+        if (f.backdrop && typeof f.backdrop === 'object') f.backdrop = { group: re(f.backdrop.group), place: re(f.backdrop.place) };
       }
       for (const f of s.fights || []) { f.beat = re(f.beat); rows(f.rows); }
       // the players' panels are kept by position, so they move with it (Review M10)
@@ -285,6 +321,7 @@
     if (Array.isArray(out.groups)) out.groups = out.groups.map(re);
     if (Array.isArray(out.rows)) out.rows = out.rows.map((r) => (r && typeof r === 'object' ? { ...r, group: re(r.group), foeKey: re(r.foeKey) } : r));
     if (Array.isArray(out.thresholds)) out.thresholds = out.thresholds.map((t) => (t && typeof t === 'object' ? { ...t, beat: re(t.beat), key: re(t.key) } : t));
+    if (out.backdrop && typeof out.backdrop === 'object') out.backdrop = { ...out.backdrop, group: re(out.backdrop.group), place: re(out.backdrop.place) };
     return out;
   }
 
@@ -382,11 +419,27 @@
       const foes = b.foes || [];
       return { ...b, who: (b.who || []).concat(extra), foes: foes.concat(broughtFoes(b.key, foes)) };
     });
-    const impro = state.improvised.map((i) => ({
-      key: i.key, title: i.title, impro: true, contingency: false, sceneNote: null, place: null, spots: [],
-      who: (state.brought[i.key] || []).map((x) => ({ key: `${i.key}.brought.${x.note}`, note: x.note, name: x.name, brought: true, count: 1 })),
-      points: [], ifs: [], treasure: [], foes: broughtFoes(i.key, []), handouts: [], entities: [],
-    }));
+    // A place beat (plan 6a Task 7) is an improvised beat at a place: a known one (`place`, its people from the
+    // model's placePeople, v8's placeBeat) or one typed tonight (`newPlace`, nobody yet). No Points, no If-they.
+    // Its people's foes are keyed under it; anyone but a creature joins a fight benched.
+    const impro = state.improvised.map((i) => {
+      const place = typeof i.place === 'string' && i.place ? i.place : null;
+      const people = place ? ((model.placePeople && model.placePeople[place]) || []).filter((n) => typeof n === 'string') : [];
+      const who = people.map((note) => {
+        const c = cast.get(note) || {};
+        return { key: `${i.key}.who.${note}`, note, name: c.name || stem(note), knownAs: '', count: 1, wants: c.wants || '', playAs: c.playAs || '', dead: !!c.dead };
+      }).concat((state.brought[i.key] || []).filter((x) => !people.includes(x.note))
+        .map((x) => ({ key: `${i.key}.brought.${x.note}`, note: x.note, name: x.name, brought: true, count: 1 })));
+      const own = people.flatMap((note) => {
+        const c = cast.get(note);
+        return c && c.foe ? [{ ...c.foe, key: `${i.key}.foe.${note}`, benched: c.type !== 'creature' }] : [];
+      });
+      return {
+        key: i.key, title: i.title, impro: true, contingency: false, sceneNote: null, place, spots: [],
+        placeBeat: Boolean(place || i.newPlace), newPlace: Boolean(i.newPlace),
+        who, points: [], ifs: [], treasure: [], foes: own.concat(broughtFoes(i.key, own)), handouts: [], entities: place ? [place] : [],
+      };
+    });
     return real.concat(impro);
   }
 

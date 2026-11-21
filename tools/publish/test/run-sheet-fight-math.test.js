@@ -607,3 +607,103 @@ test('a copy switched to ally still counts towards its word; an unseen ally is n
   assert.deepEqual([n.get('a'), n.get('f')], [1, 2]);
   assert.equal(M.unseenNumbers([row({ id: 'a', kind: 'ally', seen: true })], word).has('a'), false, 'a seen ally takes none');
 });
+
+// ---- plan 6a Task 7: Fight here at any place ----
+{
+  const path = require('node:path');
+  const { readRunSheet } = require('../lib/run-sheet/read');
+  const RS = require('../lib/run-sheet/web/state');
+  const { forPlayers } = require('../lib/run-sheet/players');
+  const FIX = path.join(__dirname, 'fixtures', 'run-sheet-app');
+  const ADA = 'Characters/PCs/Ada Moss.md';
+  const BEN = 'Characters/PCs/Ben Hart.md';
+  const ASH = 'Characters/NPCs/Brother Ash.md';
+  const FEN = 'Characters/NPCs/Sister Fen.md';
+  const WOLF = 'Creatures/Frost Wolf.md';
+  const STALKER = 'Creatures/Hollow Stalker.md';
+  const YARD = 'Locations/The Chapel Yard.md';
+  const base = readRunSheet(FIX, 'Chapters/Chapter 1/Sessions/Session 02/Session 02 - The Test - Plan.md', { party: [ADA, BEN] });
+  const placeModel = () => { const m = JSON.parse(JSON.stringify(base)); m.placePeople = { ...m.placePeople, [YARD]: [ASH, FEN, WOLF, STALKER] }; return m; };
+  let n = 0;
+  const go = (s, a) => RS.reduce(s, { id: `pf-${++n}`, ...a }, new Date(Date.parse('2026-11-20T19:00:00Z') + n * 60000).toISOString());
+  const to = (b) => ({ beat: b.key, spot: null, title: b.title });
+  const atYard = (m, s) => go(s, { type: 'improvise', key: m.placeKeys[YARD], title: 'The Chapel Yard', place: YARD });
+
+  test('a place beat\'s who comes from its people: NPCs benched, creatures ticked; no Points, no If-they', () => {
+    const m = placeModel();
+    const s = atYard(m, RS.emptyState({}));
+    const b = RS.derive(m, s).beats.find((x) => x.key === m.placeKeys[YARD]);
+    assert.deepEqual(b.who.map((w) => w.note), [ASH, FEN, WOLF, STALKER]);
+    assert.deepEqual([b.points, b.ifs], [[], []]);
+    const built = M.rowsForFight({ model: m, derived: RS.derive(m, s), state: s, beatKey: b.key, idBase: 'f1' });
+    const rowOf = (note) => built.rows.find((r) => r.note === note);
+    assert.deepEqual([ASH, FEN, WOLF, STALKER].map((x) => rowOf(x).in), [false, false, true, true]);
+  });
+
+  test('a place beat\'s statless person gets a blank row', () => {
+    const m = placeModel();
+    const s = atYard(m, RS.emptyState({}));
+    const built = M.rowsForFight({ model: m, derived: RS.derive(m, s), state: s, beatKey: m.placeKeys[YARD], idBase: 'f2' });
+    for (const [note, name] of [[FEN, 'Sister Fen'], [STALKER, 'Hollow Stalker']]) {
+      const r = built.rows.find((x) => x.note === note);
+      assert.ok(r, `${name} has a row`);
+      assert.equal(r.name, name);
+      assert.deepEqual([r.hp, r.max, r.ac], [null, null, null], 'blank: no numbers to fill in');
+      assert.equal(M.sideOfRow(r), 'foe', 'its side as the reader starts it');
+      assert.equal(r.seen, false, 'never seen by hand');
+      assert.equal(r.word, base.withheldWords.person, 'it keeps an unseen word like any row');
+      assert.ok(r.foeKey && !r.foeKey.startsWith('cast.'), 'keyed under the place beat');
+    }
+    // a statless person the GM set to ally starts as one, seen: the same starting rules as every row
+    const s2 = { ...s, sides: { [FEN]: 'ally' } };
+    const fen = M.rowsForFight({ model: m, derived: RS.derive(m, s2), state: s2, beatKey: m.placeKeys[YARD], idBase: 'f3' }).rows.find((x) => x.note === FEN);
+    assert.deepEqual([fen.kind, fen.seen, fen.sideFrom], ['ally', true, 'you set it']);
+    // a Plan beat's statless people stay as 5b has them: no row
+    const plan = M.rowsForFight({ model: m, derived: RS.derive(m, s), state: s, beatKey: base.beats[0].key, idBase: 'f4' });
+    assert.ok(!plan.rows.some((r) => r.note === FEN));
+  });
+
+  test('Fight here at an empty place with a split party ticks nobody and shows the order on the focused panel only', () => {
+    const m = placeModel();
+    const [GATE, TOWER] = m.beats;
+    let s = go(RS.emptyState({}), { type: 'move', pc: ADA, to: to(GATE) });
+    s = go(s, { type: 'move', pc: BEN, to: to(TOWER) });
+    s = atYard(m, s);
+    const key = m.placeKeys[YARD];
+    const built = M.rowsForFight({ model: m, derived: RS.derive(m, s), state: s, beatKey: key, groups: [GATE.key], idBase: 'f5' });
+    assert.deepEqual(built.rows.filter((r) => r.kind === 'pc').map((r) => r.in), [false, false], 'no PC stands there: nobody is ticked');
+    assert.deepEqual(built.groups, [GATE.key]);
+    s = RS.reduce(s, { id: 'f5', type: 'fightStart', beat: key, title: 'The Chapel Yard', groups: built.groups, rows: built.rows, thresholds: built.thresholds }, '2026-11-20T21:00:00Z');
+    const v = forPlayers(m, s, { withheldWords: m.withheldWords, picId: () => '0'.repeat(20) });
+    assert.equal(v.panels.length, 2);
+    assert.ok(v.panels[0].order, 'the focused group\'s panel shows the order');
+    assert.equal(v.panels[1].order, null, 'the other group\'s does not');
+    assert.ok(!v.panels[0].order.rows.some((r) => r.name === 'Ada'), 'and Ada is not in it');
+    // a PC who stands at the place is ticked, and only they
+    const s2 = go(s, { type: 'move', pc: BEN, to: { beat: key, spot: null, title: 'The Chapel Yard' } });
+    const b2 = M.rowsForFight({ model: m, derived: RS.derive(m, s2), state: { ...s2, fight: null }, beatKey: key, groups: [GATE.key], idBase: 'f6' });
+    assert.deepEqual(b2.rows.filter((r) => r.kind === 'pc').map((r) => [r.note, r.in]), [[ADA, false], [BEN, true]]);
+    assert.deepEqual(b2.groups, [key]);
+  });
+
+  test('"club" finds The Club', () => {
+    const places = [
+      { note: 'L/The Club.md', name: 'The Club', type: 'location' },
+      { note: 'L/Clubhouse Row.md', name: 'Clubhouse Row', type: 'location' },
+      { note: 'L/The Docks.md', name: 'The Docks', type: 'location' },
+    ];
+    const newPlace = (t) => `+ New place: ${t}`;
+    for (const typed of ['club', 'Club', 'the club', 'THE CLUB']) {
+      const c = M.addChoices(places, typed, RS.castSearch, 8, newPlace);
+      assert.equal(c[0].note, 'L/The Club.md', `${typed}: The Club first`);
+      assert.equal(c.at(-1).isNew, true);
+      assert.equal(c.at(-1).label, `+ New place: ${typed}`, 'a new place is always the explicit last choice');
+    }
+    assert.equal(M.sameName('club', 'The Club'), true);
+    assert.equal(M.sameName('The  club ', 'the Club'), true);
+    assert.equal(M.sameName('Clubs', 'The Club'), false);
+    assert.equal(M.sameName('Theatre', 'atre'), false, 'only a whole leading "the"');
+    // a near spelling is offered before the new place, never made silently
+    assert.equal(M.addChoices(places, 'the dcks', RS.castSearch, 8, newPlace)[0].note, 'L/The Docks.md');
+  });
+}

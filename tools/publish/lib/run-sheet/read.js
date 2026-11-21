@@ -31,6 +31,7 @@ const { loadManifest } = require('../manifest');
 const { tableLogOf, isPlayed } = require('./sessions');
 const { readCast } = require('./cast');
 const { readSeen } = require('./seen');
+const { placeKey } = require('./keys');
 const { SIDES_SET } = require('./record');
 const { isSide } = require('./web/fight-math');
 
@@ -407,6 +408,24 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
     model.notes[s] = noteOf(s);
   }
   if (!model.notes[plan]) model.notes[plan] = noteOf(plan, fm);
+  // Places the party can go (plan 6a Task 7): every location note in the vault, keyed for its place beat
+  // (`pl-<hash>`, keys.js), with the npc and creature notes whose `location` links it, and its own entry in
+  // `placeNotes` (as `notes` holds one), for its name and picture on both screens. `notes` stays the notes this
+  // sheet touches. A `location` that names no place places nobody.
+  const locations = index.notes().filter((p) => low(fmOf(p).type) === 'location').sort();
+  const isPlace = new Set(locations);
+  model.placeKeys = Object.fromEntries(locations.map((p) => [p, placeKey(p)]));
+  model.placePeople = {};
+  for (const p of index.notes()) {
+    const pfm = fmOf(p);
+    if (!['npc', 'creature'].includes(low(pfm.type))) continue;
+    const t = fmTarget(pfm.location);
+    const at = t ? index.resolve(t) : null;
+    if (!at || !isPlace.has(at)) continue;
+    (model.placePeople[at] = model.placePeople[at] || []).push(p);
+  }
+  for (const list of Object.values(model.placePeople)) list.sort();
+  model.placeNotes = Object.fromEntries(locations.map((p) => [p, model.notes[p] || noteOf(p)]));
   // The cast is read last: its notes are never "touched", and its warnings stay on each entry.
   model.cast = readCast(index, { carried, sides });
   model.sidesCarried = sidesCarried;

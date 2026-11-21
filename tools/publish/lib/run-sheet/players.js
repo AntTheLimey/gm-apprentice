@@ -16,6 +16,10 @@
 // The GM page is the trusted author of fight rows (`kind` and `seen` included); the server's Origin check
 // on the actions route is the boundary (review M6).
 // Pictures go out as opaque ids (`picId(path)`); the server maps an id back to a file.
+//
+// The one place the state's own words reach the players (plan 6a Task 7 / Global Constraints (typed place)):
+// a place the GM typed tonight in Move them goes up as its plain name, the panel's caption, and as nothing
+// else. A known place a group moves to, or that Fight here puts behind a panel, is a note like any other.
 
 const FM = require('./web/fight-math');
 const { statusesOf } = require('./web/fight');
@@ -70,13 +74,24 @@ function forPlayers(model, state, { withheldWords, campaign, picId } = {}) {
   // A showable map: one the player site publishes, never the GM half of a pair.
   const gmMaps = new Set((model.mapPairs || []).map((x) => x.gm));
   const showableMap = (note) => (model.showableMaps || []).includes(note) && !gmMaps.has(note) && !GM_SUFFIX.test(stemOf(note));
-  // A backdrop: a place, or a map that may be shown; null for anything else.
+  // The night's place beats (plan 6a Task 7): a known place's note, or a place typed tonight, by beat key.
+  const improvised = new Map((Array.isArray(st.improvised) ? st.improvised : []).filter((i) => i && typeof i === 'object' && typeof i.key === 'string').map((i) => [i.key, i]));
+  // A place typed tonight: its plain name as the caption, no picture.
+  function typedPlace(key) {
+    const i = typeof key === 'string' ? improvised.get(key) : null;
+    const name = i && i.newPlace === true && typeof i.title === 'string' ? i.title.replace(/\s+/g, ' ').trim() : '';
+    return name ? { backdrop: null, caption: name } : null;
+  }
+  // A backdrop: a place, a place typed tonight, or a map that may be shown; null for anything else.
   function backdrop(note) {
     if (typeof note !== 'string' || !note) return null;
+    const typed = typedPlace(note);
+    if (typed) return typed;
     let info = null;
     if (showableMap(note)) info = (model.mapNotes || {})[note] || null;
     else {
-      const n = has(notes, note) ? notes[note] : null;
+      // a place the Plan names, else any place in the vault a group can be moved to (plan 6a Task 7)
+      const n = has(notes, note) ? notes[note] : (has(model.placeNotes, note) ? model.placeNotes[note] : null);
       // a map reaches the screen only as a showable map: a GM half typed `location` is no place
       if (n && n.docType !== 'map' && String(n.type || '').toLowerCase() === 'location') info = n;
     }
@@ -104,9 +119,16 @@ function forPlayers(model, state, { withheldWords, campaign, picId } = {}) {
     .concat((model.cast || []).filter((c) => c.foe && c.foe.ally).map((c) => c.note)));
   const sideSet = (o, note) => (o && typeof o === 'object' && has(o, note) && FM.isSide(o[note]) ? o[note] : null);
   const sideOf = (r) => FM.sideOfRow(r) || sideSet(st.sides, r.note) || sideSet(model.sidesCarried, r.note) || (allies.has(r.note) ? 'ally' : 'foe');
+  // A group's own place: its Plan beat's (or hub spot's) place, else its place beat's (plan 6a Task 7, review
+  // P3): a known place's note, or the key of a place typed tonight.
   function placeOf(g) {
     const b = beats.get(g.beat);
-    if (!b) return null;
+    if (!b) {
+      const i = improvised.get(g.beat);
+      if (!i) return null;
+      if (typeof i.place === 'string' && i.place) return i.place;
+      return i.newPlace === true ? i.key : null;
+    }
     const spot = g.spot ? (b.spots || []).find((x) => x.key === g.spot) : null;
     return (spot && spot.note) || b.place || null;
   }
@@ -122,8 +144,10 @@ function forPlayers(model, state, { withheldWords, campaign, picId } = {}) {
     const own = () => (asked.placeOff ? null : backdrop(placeOf(g)));
     if (typeof asked.backdrop === 'string' && asked.backdrop) {
       const shown = backdrop(asked.backdrop);
-      // a Shown place with no picture keeps the group's own place behind the panel, captioned as its own
-      if (shown && shown.backdrop === null) back = own() || back;
+      // a Shown place with no picture keeps the group's own place behind the panel, captioned as its own; the
+      // place a fight is at (Fight here) and a place typed tonight have no picture to defer to: their name shows
+      const fightAt = st.fight && st.fight.backdrop && st.fight.backdrop.group === g.key ? st.fight.backdrop.place : null;
+      if (shown && shown.backdrop === null && !typedPlace(asked.backdrop) && asked.backdrop !== fightAt) back = own() || back;
       else back = shown || back;
     } else back = own() || back;
     const seenPeople = new Set();

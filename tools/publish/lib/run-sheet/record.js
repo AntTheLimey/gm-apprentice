@@ -20,6 +20,8 @@ const TABLE_LOG_SECTIONS = [
   'Vitals at the end', 'Advancement',
 ];
 const VITALS = 'Vitals at the end';
+// An Improvised beats line for a place typed tonight (plan 6a Task 7): `- New place: The Docks`.
+const NEW_PLACE = 'New place:';
 const VITALS_HEAD = '| Who | HP | Conditions |\n| --- | --- | --- |';
 
 const lf = (s) => String(s == null ? '' : s).replace(/\r\n?/g, '\n');
@@ -97,7 +99,12 @@ function tableLogBody(model, state, { linkFor: link, timeOf = localTime } = {}) 
   }));
 
   sec['Contingencies that fired'] = bullets(d.fired.map((f) => one(f.title)));
-  sec['Improvised beats'] = bullets(d.improvised.map((i) => one(i.title)));
+  // a place beat (plan 6a Task 7): a known place as its link, a place typed tonight as `New place: <name>`
+  // (wrap-up can offer to make its note)
+  sec['Improvised beats'] = bullets(d.improvised.map((i) => {
+    if (typeof i.place === 'string' && i.place) return link(i.place);
+    return i.newPlace ? `${NEW_PLACE} ${one(i.title)}` : one(i.title);
+  }));
   sec['Unmasked this session'] = bullets(
     d.unmaskedNow.filter((u) => !u.carried).map((u) => `${link(u.note)} as ${one(u.name)}`)
       .concat(d.maskedAgain.map((u) => `${link(u.note)} masked again`)),
@@ -195,4 +202,4 @@ function needsBackup(fileText, recordHash) {
   return bodyHash(b) !== recordHash;
 }
 
-module.exports = { TABLE_LOG_SECTIONS, SIDES_SET, tableLogBody, rewriteTableLog, recordBodyOf, bodyHash, isEmptySkeleton, needsBackup, linkFor, timeOf: localTime };
+module.exports = { TABLE_LOG_SECTIONS, SIDES_SET, NEW_PLACE, tableLogBody, rewriteTableLog, recordBodyOf, bodyHash, isEmptySkeleton, needsBackup, linkFor, timeOf: localTime };

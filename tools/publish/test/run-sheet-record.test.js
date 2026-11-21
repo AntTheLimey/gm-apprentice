@@ -602,3 +602,31 @@ describe('the sides the GM set', () => {
     assert.deepStrictEqual(m.sidesCarried, { [ASH]: 'neutral', [LUCAN]: 'foe' });
   });
 });
+
+// plan 6a Task 7: Move them to a known or a new place
+describe('places in the record', () => {
+  const YARD = 'Locations/The Chapel Yard.md';
+  const NOTES2 = new Map([...NOTES, ['The Chapel Yard', YARD]]);
+  const opts = { linkFor: R.linkFor({ resolve: (t) => NOTES2.get(t) || null }), timeOf };
+
+  it('the record writes a new place', () => {
+    const key = model.placeKeys[YARD];
+    const s = run([{ type: 'move', pc: ADA, to: to(GATE) }, { type: 'move', pc: BEN, to: to(GATE) },
+      { id: 'np1', type: 'moveGroup', pcs: [ADA], name: 'The Docks', names: ['Ada'] },
+      { type: 'moveGroup', pcs: [BEN], place: YARD, key, title: 'The Chapel Yard', names: ['Ben'] }]);
+    const sec = sectionsOf(R.tableLogBody(model, s, opts));
+    assert.strictEqual(sec.get('Where everyone ended'), '- [[Ada Moss]]: The Docks\n- [[Ben Hart]]: [[The Chapel Yard]]');
+    assert.strictEqual(sec.get('Improvised beats'), '- New place: The Docks\n- [[The Chapel Yard]]');
+    assert.match(sec.get('Log'), /Ada moves to The Docks \(a new place\)\./);
+    assert.match(sec.get('Log'), /Ben moves to The Chapel Yard\./);
+  });
+
+  it('Fight here moves nobody: Where everyone ended names the PCs\' beat', () => {
+    const key = model.placeKeys[YARD];
+    let s = run([{ type: 'move', pc: ADA, to: to(GATE) }, { type: 'improvise', key, title: 'The Chapel Yard', place: YARD }]);
+    s = run([{ id: 'fx', type: 'fightStart', beat: key, title: 'The Chapel Yard', groups: [GATE.key], rows: [], thresholds: [], backdrop: { group: GATE.key, place: YARD } }, { type: 'fightEnd', fight: 'fx' }], s);
+    const sec = sectionsOf(R.tableLogBody(model, s, opts));
+    assert.match(sec.get('Where everyone ended'), /^- \[\[Ada Moss\]\]: \[\[The Gate\]\]$/m);
+    assert.strictEqual(sec.get('Improvised beats'), '- [[The Chapel Yard]]');
+  });
+});

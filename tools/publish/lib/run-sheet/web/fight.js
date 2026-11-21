@@ -195,6 +195,14 @@
       };
       numberUnseen(f);
       lairOf(f);
+      // Fight here (plan 6a Task 7, review P3): the place goes behind the focused group's panel until End fight
+      const bd = a.backdrop;
+      if (bd && typeof bd === 'object' && typeof bd.group === 'string' && bd.group && typeof bd.place === 'string' && bd.place) {
+        if (!s.panels || typeof s.panels !== 'object' || Array.isArray(s.panels)) s.panels = {};
+        const p = s.panels[bd.group] && typeof s.panels[bd.group] === 'object' ? s.panels[bd.group] : (s.panels[bd.group] = { people: [], backdrop: null, placeOff: false });
+        p.backdrop = bd.place;
+        f.backdrop = { group: bd.group, place: bd.place };
+      }
       s.fight = f;
       say(s, f, at, `Fight starts at ${f.title || 'the fight'}.`);
     },
@@ -518,6 +526,10 @@
       sayRoster(s, f, at, `Fight ends ${f.round ? `after round ${f.round}` : 'before the first turn'}: `, rosterItems(s, f), '.');
       if (!Array.isArray(s.fights)) s.fights = [];
       s.fights.push({ id: f.id, beat: f.beat, title: f.title, round: f.round, startedAt: f.startedAt, endedAt: at, rows: f.rows, carried: f.carried || {} });
+      // the place Fight here put behind a panel goes, and the group's own place is back; one the GM chose since stays
+      const bd = f.backdrop;
+      const p = bd && s.panels && s.panels[bd.group];
+      if (p && typeof p === 'object' && p.backdrop === bd.place) p.backdrop = null;
       s.fight = null;
     },
     // After the fight (decision 24): clear one status, all of a row's, or every row's, on an ended fight.
