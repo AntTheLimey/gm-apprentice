@@ -259,4 +259,26 @@ describe('the fight: adding anyone, by real input', { skip: browserSkip() }, () 
       assert.deepStrictEqual((await until(page, 'true')).errors, []);
     });
   });
+
+  it('Same for all: a real click copies a typed max to the untouched copies and the button goes', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await startedFight(page, run);
+      await addNew(page, 'Bouncer', 3);
+      let p = await until(page, 'p.fight.rows.filter((r) => /^Bouncer/.test(r.name)).length === 3');
+      const one = named(p, 'Bouncer 1');
+      await tap(page, `[data-fmax="${one.id}"]`);
+      await page.type('30');
+      await page.key('Enter');
+      p = await until(page, 'p.saved === "Saved" && p.pending === 0 && p.fight.rows.some((r) => r.name === "Bouncer 1" && r.max === 30)');
+      await tap(page, `[data-fpeek="${one.id}"]`);
+      await page.waitFor('document.querySelector("[data-fsame]")');
+      assert.match(await page.evaluate('document.querySelector("[data-fsame]").textContent'), /^Same for all 3$/);
+      await tap(page, '[data-fsame]');
+      p = await until(page, 'p.saved === "Saved" && p.pending === 0 && p.fight.rows.filter((r) => /^Bouncer/.test(r.name) && r.max === 30).length === 3');
+      assert.deepStrictEqual(['Bouncer 2', 'Bouncer 3'].map((n) => named(p, n).hp), [30, 30]);
+      assert.strictEqual(await page.evaluate('document.querySelectorAll("[data-fsame]").length'), 0, 'nothing left to copy to');
+      assert.deepStrictEqual(p.errors, []);
+    });
+  });
 });

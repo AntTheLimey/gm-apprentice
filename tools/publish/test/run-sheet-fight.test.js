@@ -532,12 +532,15 @@ describe('the fight in the state', () => {
     s = F(s, { type: 'setAc', row: b1.id, ac: 14 });
     s = F(s, { type: 'setAc', row: b2.id, ac: 9 });
     s.fight.rows.find((r) => r.id === b1.id).mod = 3;
-    s.fight.rows.find((r) => r.id === b1.id).str = 17;
+    const src = s.fight.rows.find((r) => r.id === b1.id);
+    src.str = 17; src.seen = true; src.seenTick = true; src.sideFrom = 'you set it'; src.neutral = true; src.kind = 'ally';
     s.fight.rows.find((r) => r.id === b1.id).ini = 8;
     s = F(s, { type: 'sameForAll', row: b1.id });
     const get = (id) => s.fight.rows.find((r) => r.id === id);
     for (const id of [b3.id, b4.id]) {
-      assert.deepEqual([get(id).max, get(id).hp, get(id).ac, get(id).mod, get(id).str], [30, 30, 14, 3, 17], 'an untouched copy');
+      assert.deepEqual([get(id).max, get(id).hp, get(id).ac, get(id).mod], [30, 30, 14, 3], 'an untouched copy');
+      // only the stat keys are copied: never a side, a seen mark, typed, or a number a system has not declared
+      assert.deepEqual([get(id).str, get(id).seen, get(id).seenTick, get(id).sideFrom, get(id).neutral, get(id).kind, get(id).typed], [undefined, false, null, null, false, 'foe', false]);
       assert.equal(get(id).ini, null, 'initiative is not copied');
       assert.equal(get(id).typed, false, 'copying is not typing');
     }
@@ -582,6 +585,47 @@ describe('the fight in the state', () => {
     assert.deepEqual(s.fight.rows.filter((r) => /^Bouncer/.test(r.name)).map((r) => r.name), ['Bouncer 1', 'Bouncer 2']);
   });
 
+  it('Start and a round end do not touch an add; undo takes its names out of every roster line', () => {
+    let s = gateFight();
+    let id;
+    [s, id] = addNamed(s, 'Bouncer', 3);
+    s = next(s);
+    assert.match(texts(s).find((x) => x.startsWith('Round 1:')), /Bouncer 1/);
+    s = next(s);
+    // wrap the round by hand, the way the last turn does: the roster names everyone, nobody has acted on the Bouncers
+    const lastId = s.fight.rows.filter((r) => M.takesTurn(r, s.fight.rows)).at(-1).id;
+    s.fight.turn = lastId;
+    s = next(s);
+    assert.ok(texts(s).some((x) => /^Round 1 ends:.*Bouncer 1/.test(x)), 'a round end names them');
+    assert.ok(s.fight.rows.filter((r) => /^Bouncer/.test(r.name)).every((r) => !r.logged), 'a roster line is not a touch');
+    s.fight.rows.filter((r) => /^Bouncer/.test(r.name)).forEach((r) => { r.turned = false; });
+    assert.equal(M.undoable(s.fight, id), true, 'Undo is still offered');
+    s = F(s, { type: 'undoAdd', join: id });
+    assert.ok(!s.fight.rows.some((r) => /^Bouncer/.test(r.name)));
+    assert.ok(texts(s).every((x) => !/Bouncer \d/.test(x) || /^Took back/.test(x)), 'no roster line names an undone row');
+    assert.match(texts(s).find((x) => x.startsWith('Round 1:')), /^Round 1: .*\.$/);
+    assert.doesNotMatch(require('../lib/run-sheet/record').tableLogBody(model, s, { linkFor: (p) => `[[${p}]]` }), /Bouncer/);
+  });
+
+  it('Roll after Start places each filled row, in the order rolled, and keeps the turn', () => {
+    let s = gateFight();
+    const set = (note, ini, copy) => { s = F(s, { type: 'setInit', row: row(s, note, copy).id, ini }); };
+    set(ADA, 5); set(WOLF, 18, 1); set(WOLF, 10, 2); set(WOLF, 2, 3); set(LUCAN, 12); set(ASH, 1);
+    s = next(s); s = next(s);
+    let id;
+    [s, id] = addNamed(s, 'Bouncer', 3);
+    const turn = s.fight.turn;
+    const [b1, b2, b3] = s.fight.rows.filter((r) => /^Bouncer/.test(r.name));
+    const lines = texts(s).length;
+    s = F(s, { type: 'rollInit', values: { [b1.id]: 15, [b2.id]: 11, [b3.id]: 3 } });
+    const inis = s.fight.rows.filter((r) => r.in && r.kind !== 'lair').map((r) => r.ini);
+    assert.deepEqual(inis, [18, 15, 12, 11, 10, 5, 3, 2, 1], 'each at its sorted place');
+    assert.equal(s.fight.turn, turn);
+    assert.equal(texts(s).length, lines + 3, 'the log says so for each');
+    assert.equal(s.fight.rows.find((r) => r.id === b1.id).typed, false, 'rolled is not typed');
+    assert.equal(M.undoable(s.fight, id), false, 'a row the log names is not taken back');
+  });
+
   it('an undone add leaves the unseen numbers of the others alone, even after the add took one', () => {
     let s = gateFight();
     const labelsOf = (x) => Object.fromEntries(x.fight.rows.map((r) => [r.id, r.unseenN]));
@@ -611,13 +655,16 @@ describe('the fight in the state', () => {
       assert.equal(texts(s).length, lines, `${how}: and silent`);
       assert.equal(M.undoable(s.fight, id), false, how);
     }
-    // a Start that named the rows in Round 1 counts too
+    // a row that has had its turn counts too
     let s = gateFight();
     let id;
     [s, id] = addNamed(s, 'Bouncer', 2);
     assert.equal(M.undoable(s.fight, id), true);
-    s = next(s);
-    assert.equal(M.undoable(s.fight, id), false, 'the Round 1 line names them');
+    s = F(s, { type: 'setInit', row: s.fight.rows.find((r) => r.name === 'Bouncer 1').id, ini: 30 });
+    assert.equal(M.undoable(s.fight, id), false, 'typed');
+    [s, id] = addNamed(gateFight(), 'Bouncer', 2);
+    for (let i = 0; i < 14 && M.undoable(s.fight, id); i++) s = next(s);
+    assert.equal(M.undoable(s.fight, id), false, 'once the turns reach them');
     // an unknown join, and a join that was not an add of rows only, never undo
     s = gateFight();
     const n = s.fight.rows.length;

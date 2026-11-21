@@ -36,12 +36,18 @@
   }
 
   // `Kael 12/40 (Prone, Exhaustion 1)`; a row with no numbers is its name; an Out row says so.
-  function figureOf(s, f, r) {
+  function figureOf(s, f, r, quiet) {
     const st = statusesOf(r).concat(r.out ? ['Out'] : []);
     const hp = isNum(r.hp) ? ` ${r.hp}${isNum(r.max) ? `/${r.max}` : ''}` : '';
-    return `${nameOf(s, f, r)}${hp}${st.length ? ` (${st.join(', ')})` : ''}`;
+    return `${nameOf(s, f, r, quiet)}${hp}${st.length ? ` (${st.join(', ')})` : ''}`;
   }
-  const roster = (s, f) => f.rows.filter((r) => r.in && r.kind !== 'lair').map((r) => figureOf(s, f, r)).join(', ');
+  // A roster line (the Round 1 order, a round's end, the fight's end) lists everyone ticked in. It does not mark
+  // them `logged`: it keeps its items (`roster`), so an Undo can take an undone row's name out of it.
+  const sayRoster = (s, f, at, head, items, tail) => {
+    say(s, f, at, `${head}${items.map((x) => x.text).join(', ')}${tail}`);
+    s.events[s.events.length - 1].roster = { head, tail, items };
+  };
+  const rosterItems = (s, f) => f.rows.filter((r) => r.in && r.kind !== 'lair').map((r) => ({ id: r.id, text: figureOf(s, f, r, true) }));
 
   const touch = (r, at) => { r.at = at; };
   // HP and max keep their own time (Review H1): a status cleared after the fight must not make the fight's
@@ -167,8 +173,16 @@
   // Incapacitated and the conditions that include it (SRD 5.2.1): each ends Concentration.
   const INCAPACITATING = new Set(['Incapacitated', 'Paralyzed', 'Petrified', 'Stunned', 'Unconscious']);
 
-  // The numbers a row carries that are its own in the fight, not stats to copy: Same for all leaves them.
-  const OWN_FIGURES = new Set(['hp', 'ini', 'temp', 'exhaustion', 'unseenN', 'copy', 'lr', 'la', 'lrMax', 'laMax', 'at', 'hpAt', 'condAt']);
+  // The stat keys Same for all copies (D&D's); 6b adds the keys a system declares here. Nothing else is copied.
+  const STAT_KEYS = ['max', 'ac', 'mod'];
+
+  // After Start, a row given a number is re-placed by one insert; the log says so when it moved.
+  function replace(s, f, r, at) {
+    if (!f.started) return;
+    const was = f.rows.indexOf(r);
+    f.rows = FM.placeRow(f.rows, r.id);
+    if (f.rows.indexOf(r) !== was) say(s, f, at, `${nameOf(s, f, r)} moves in the order: initiative ${isNum(r.ini) ? r.ini : 'cleared'}.`);
+  }
 
   const FIGHT_HANDLERS = {
     fightStart(s, a, at) {
@@ -236,10 +250,7 @@
       else { const n = int(a.ini); if (n === null) return; r.ini = n; }
       r.typed = true;
       touch(r, at);
-      if (!f.started) return;
-      const was = f.rows.indexOf(r);
-      f.rows = FM.placeRow(f.rows, r.id);
-      if (f.rows.indexOf(r) !== was) say(s, f, at, `${nameOf(s, f, r)} moves in the order: initiative ${isNum(r.ini) ? r.ini : 'cleared'}.`);
+      replace(s, f, r, at);
     }),
     // Roll fills only boxes still empty, so a number typed meanwhile wins; a PC's box is never rolled.
     rollInit(s, a, at) {
@@ -251,6 +262,7 @@
         if (!r || r.kind === 'pc' || n === null || isNum(r.ini)) continue;
         r.ini = n;
         touch(r, at);
+        replace(s, f, r, at);
       }
     },
     fightSort(s, a) {
@@ -271,15 +283,15 @@
         f.started = true;
         f.round = 1;
         f.turn = first.id;
-        const order = f.rows.filter((r) => FM.takesTurn(r, f.rows)).map((r) => `${nameOf(s, f, r)}${isNum(r.ini) ? ` ${r.ini}` : ''}`);
-        say(s, f, at, `Round 1: ${order.join(', ')}.`);
+        const order = f.rows.filter((r) => FM.takesTurn(r, f.rows)).map((r) => ({ id: r.id, text: `${nameOf(s, f, r, true)}${isNum(r.ini) ? ` ${r.ini}` : ''}` }));
+        sayRoster(s, f, at, 'Round 1: ', order, '.');
         turnStart(f, first, at);
         return;
       }
       const { row, wrapped } = FM.nextLive(f.rows, f.turn);
       if (!row) return;
       if (wrapped) {
-        say(s, f, at, `Round ${f.round} ends: ${roster(s, f)}.`);
+        sayRoster(s, f, at, `Round ${f.round} ends: `, rosterItems(s, f), '.');
         f.round += 1;
       }
       f.turn = row.id;
@@ -323,17 +335,18 @@
       touch(r, at);
     }),
     // A counted row's typed numbers go to the rest of its group that nobody has typed into, and their HP
-    // is the max. Every number the row carries comes (max, ac and mod for D&D, whatever a system adds),
-    // but the figures that are the fight's own (HP, initiative, temp HP, counters, numbers, times) do not.
+    // is the max. The stat keys come (`STAT_KEYS`: max, ac and mod for D&D);
+    // nothing else does (not HP, initiative, side, seen or typed).
     sameForAll: onRow((s, f, r, a, at) => {
       const others = FM.groupMates(f.rows, r).filter((x) => x !== r && !x.typed);
       if (!others.length) return;
-      const fields = Object.keys(r).filter((k) => isNum(r[k]) && !OWN_FIGURES.has(k));
+      const fields = STAT_KEYS.filter((k) => isNum(r[k]));
       for (const x of others) {
         for (const k of fields) x[k] = r[k];
         if (isNum(r.max)) x.hp = r.max;
         touchHp(x, at);
       }
+      // naming the copies in this line marks them touched, rightly: copying numbers onto them is an act on them
       say(s, f, at, `${others.map((x) => nameOf(s, f, x)).join(', ')}: the same numbers as ${nameOf(s, f, r)}.`);
     }),
     // Takes back the rows one join added, while none has been touched. One line says so; the join's own line
@@ -348,6 +361,12 @@
       f.rows = f.rows.filter((r) => !ids.has(r.id));
       for (const r of f.rows) if (r.kind === 'lair') r.of = (r.of || []).filter((id) => !ids.has(id));
       s.events.splice(line, 1);
+      // a roster line written since the join is rewritten without the undone rows
+      for (const e of s.events) {
+        if (!e.roster || !e.roster.items.some((x) => ids.has(x.id))) continue;
+        e.roster.items = e.roster.items.filter((x) => !ids.has(x.id));
+        e.text = `${e.roster.head}${e.roster.items.map((x) => x.text).join(', ')}${e.roster.tail}`;
+      }
       const counts = new Map();
       for (const r of gone.filter((x) => x.kind !== 'lair')) { const k = String(r.name).replace(/\s+\d+$/, ''); counts.set(k, (counts.get(k) || 0) + 1); }
       say(s, f, at, `Took back: ${[...counts].map(([k, n]) => (n > 1 ? `${k} ×${n}` : k)).join(', ')}.`);
@@ -495,7 +514,7 @@
     fightEnd(s, a, at) {
       const f = running(s, a);
       if (!f) return;
-      say(s, f, at, `Fight ends ${f.round ? `after round ${f.round}` : 'before the first turn'}: ${roster(s, f)}.`);
+      sayRoster(s, f, at, `Fight ends ${f.round ? `after round ${f.round}` : 'before the first turn'}: `, rosterItems(s, f), '.');
       if (!Array.isArray(s.fights)) s.fights = [];
       s.fights.push({ id: f.id, beat: f.beat, title: f.title, round: f.round, startedAt: f.startedAt, endedAt: at, rows: f.rows, carried: f.carried || {} });
       s.fight = null;
@@ -539,5 +558,5 @@
     };
   }
 
-  return { FIGHT_HANDLERS, statusesOf };
+  return { FIGHT_HANDLERS, statusesOf, STAT_KEYS };
 }));
