@@ -23,11 +23,11 @@ const NOTE = (n) => `Characters/NPCs/${n}.md`;
 
 // A vault where only Lucan Grey publishes; Session 1 is played with Play Notes `s1`; Session 3 is
 // played after the run's Session 2 with Play Notes `s3`.
-function vault({ s1 = 'Nothing of note.', s3 = 'Nothing of note.', notes = {}, publish = ['Characters/NPCs/Lucan Grey.md'] } = {}) {
+function vault({ s1 = 'Nothing of note.', s3 = 'Nothing of note.', notes = {}, publish = ['Characters/NPCs/Lucan Grey.md'], settings = {} } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rs-seen-'));
   made.push(dir);
   fs.cpSync(FIXTURE, dir, { recursive: true });
-  writeSettings(dir, { 'vault.system': 'dnd5e' });
+  writeSettings(dir, { 'vault.system': 'dnd5e', 'player_site.publish': true, ...settings });
   if (publish) write(dir, '_meta/publish-list.yaml', `publishing:\n${publish.map((p) => `  - ${p}\n`).join('')}`);
   const idx = (n, title, status) => `---\ntype: session\nsession_number: ${n}\nchapter: "[[Chapter 1]]"\nstatus: ${status}\ndocuments:\n  play_notes: "[[${title} - Play Notes]]"\n---\n\n# ${title}\n`;
   write(dir, `${S}Session 01/Session 01 - Start.md`, idx(1, 'Session 01 - Start', 'played'));
@@ -90,10 +90,13 @@ describe('a foe starts seen (6a Task 4)', () => {
 
   it("an earlier session's Table Log counts", () => {
     const dir = vault();
-    write(dir, `${S}Session 01/Session 01 - Start - Table Log.md`, `---\ntype: session-table-log\nsession: "[[Session 01 - Start]]"\n---\n\nThe Frost Wolf was beaten.\n`);
+    write(dir, `${S}Session 01/Session 01 - Start - Table Log.md`, `---\ntype: session-table-log\nsession: "[[Session 01 - Start]]"\n---\n\n## Not reached\n\n- Garrick Fell\n\n## Points landed\n\n- The Frost Wolf was beaten.\n\n## Vitals at the end\n\n| Who | HP | Conditions |\n| --- | --- | --- |\n| [[Brother Ash]] | 5/9 | |\n`);
     const idx = fs.readFileSync(path.join(dir, `${S}Session 01/Session 01 - Start.md`), 'utf8').replace('documents:\n', 'documents:\n  table_log: "[[Session 01 - Start - Table Log]]"\n');
     write(dir, `${S}Session 01/Session 01 - Start.md`, idx);
-    assert.strictEqual(seenOf(dir)['Creatures/Frost Wolf.md'], 'named in Session 1');
+    const seen = seenOf(dir);
+    assert.strictEqual(seen['Creatures/Frost Wolf.md'], 'named in Session 1');
+    assert.ok(!(NOTE('Garrick Fell') in seen), 'named only under Not reached: prep, not play');
+    assert.ok(!(NOTE('Brother Ash') in seen), 'named only in the vitals: fought unseen');
   });
 
   it('an unplayed earlier session does not count', () => {
@@ -108,6 +111,48 @@ describe('a foe starts seen (6a Task 4)', () => {
     write(dir, '_meta/publish-list.yaml', 'publishing: [unclosed\n  - x: : :\n');
     const m = readRunSheet(dir, PLAN, { party: [] });
     assert.deepStrictEqual(m.seenFrom, {});
-    assert.ok(m.warnings.some((w) => w.kind === 'seen-list'));
+    assert.ok(m.warnings.some((w) => w.kind === 'seen-list' && /earlier sessions are not read/.test(w.text)));
+  });
+
+  describe('the strict publish answer', () => {
+    const lucan = NOTE('Lucan Grey');
+    it('no player site set up: nothing publishes', () => {
+      const dir = vault({ publish: null });
+      fs.rmSync(path.join(dir, '_meta/vault-config.yaml'), { force: true });
+      writeSettings(dir, { 'vault.system': 'dnd5e' });
+      assert.deepStrictEqual(seenOf(dir), {});
+    });
+    it('publish: false: nothing publishes', () => {
+      assert.deepStrictEqual(seenOf(vault({ publish: null, settings: { 'player_site.publish': false } })), {});
+    });
+    it('a draft with hide.drafts is not seen; without it, it is', () => {
+      const notes = { 'Mordo Vane': npc('Mordo Vane', 'canon_status: DRAFT\n') };
+      assert.ok(!(NOTE('Mordo Vane') in seenOf(vault({ notes, publish: null, settings: { 'player_site.hide.drafts': true } }))));
+      assert.strictEqual(seenOf(vault({ notes, publish: null, settings: { 'player_site.hide.drafts': false } }))[NOTE('Mordo Vane')], 'on the player site');
+    });
+    it('a note under a hidden folder is not seen', () => {
+      const dir = vault({ publish: null, settings: { 'player_site.hide.folders': ['Characters/NPCs'] } });
+      assert.ok(!(lucan in seenOf(dir)));
+    });
+  });
+
+  describe('text the players never read does not name a foe', () => {
+    const named = (s1, settings) => NOTE('Garrick Fell') in seenOf(vault({ s1, notes: { 'Garrick Fell': npc('Garrick Fell') }, publish: [], settings }));
+    it('%% comments', () => assert.equal(named('They rested. %% Garrick Fell watched. %%'), false));
+    it('gm-only blocks', () => assert.equal(named('They rested.\n\n<!-- gm-only -->\nGarrick Fell watched.\n<!-- /gm-only -->\n'), false));
+    it('spoiler blocks', () => assert.equal(named('They rested.\n\n<!-- spoiler -->\nGarrick Fell watched.\n<!-- /spoiler -->\n'), false));
+    it('a hidden section', () => assert.equal(named('## What happened\n\nThey rested.\n\n## GM Notes\n\nGarrick Fell watched.\n', { 'player_site.hide.sections': ['GM Notes'] }), false));
+    it('the same name in plain play text is seen', () => assert.equal(named('Garrick Fell watched.'), true));
+  });
+
+  describe('play_notes link', () => {
+    it('an earlier session whose play_notes links its Plan adds nothing', () => {
+      const dir = vault({ publish: [], notes: { 'Silent Prior': npc('Silent Prior') } });
+      write(dir, `${S}Session 01/Session 01 - Start - Plan.md`, `---\ntype: session-plan\nsession: "[[Session 01 - Start]]"\n---\n\n- [[Silent Prior]] is behind it all.\n`);
+      const p = path.join(dir, `${S}Session 01/Session 01 - Start.md`);
+      fs.writeFileSync(p, fs.readFileSync(p, 'utf8').replace('Start - Play Notes', 'Start - Plan'));
+      fs.rmSync(path.join(dir, `${S}Session 01/Session 01 - Start - Play Notes.md`));
+      assert.ok(!(NOTE('Silent Prior') in seenOf(dir)));
+    });
   });
 });

@@ -18,7 +18,8 @@ const { readHandouts, TITLE: HANDOUTS_TITLE } = require('./handouts');
 const { foesFor } = require('./foes');
 const { readTableLog, VITALS } = require('./table-log');
 const { orderedSessions } = require('../story-spine');
-const { displayTitleOf, mapFolder } = require('../scanner');
+const { displayTitleOf, mapFolder, matchExcludedDir } = require('../scanner');
+const { loadPublishConfig } = require('../config');
 const { unmaskedPlayAsOf } = require('./people-from-notes');
 const { parseNote } = require('../frontmatter');
 const { readSettings } = require('../settings/read');
@@ -407,10 +408,25 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
   model.showableMaps = showableMaps;
   // A foe's starting seen: it publishes, or an earlier played session named it. A publish list that does
   // not read leaves nothing known to publish, so nothing starts seen.
-  if (manifestRead) model.seenFrom = readSeen({ vaultPath, index, sessionIndex, publishes, deps });
-  else {
-    model.seenFrom = {};
-    model.warnings.push({ kind: 'seen-list', note: null, text: 'the publish list could not be read: no foe starts seen' });
+  model.seenFrom = {};
+  if (!manifestRead) {
+    model.warnings.push({ kind: 'seen-list', note: null, text: 'the publish list could not be read: no foe starts seen, and names from earlier sessions are not read either' });
+  } else {
+    // The strict answer, for a name the players will read: the player site is on, the note is not under a
+    // hidden folder, and the page decision is made with the config-shaped settings (exclude_drafts and the
+    // rest), as the build makes it. The maps list above keeps its own, looser, reading.
+    let strict = null;
+    try { strict = loadPublishConfig(vaultPath, {}, () => {}, { quietStops: true, deps }); } catch { strict = null; }
+    if (!strict) {
+      model.warnings.push({ kind: 'seen-list', note: null, text: 'the publish settings could not be read: no foe starts seen, and names from earlier sessions are not read either' });
+    } else {
+      const strictMap = strict.folder_map && typeof strict.folder_map === 'object' ? strict.folder_map : {};
+      const strictMapped = (rel) => !Object.keys(strictMap).length || !rel.includes('/') || mapFolder(rel.slice(0, rel.lastIndexOf('/')), strictMap) !== null;
+      const publishesToPlayers = (rel) => strict.switches.site === true
+        && !matchExcludedDir(rel.includes('/') ? rel.slice(0, rel.lastIndexOf('/')) : '', strict.exclude_dirs)
+        && publishesPage(decidePage({ rel, frontmatter: fmOf(rel) }, { rel, publishConfig: strict, manifest, folderMapped: strictMapped(rel) }));
+      model.seenFrom = readSeen({ vaultPath, index, sessionIndex, publishes: publishesToPlayers, config: strict, deps });
+    }
   }
   // What the players' screen needs of each: its own name (never the stem) and its picture.
   model.mapNotes = Object.fromEntries(showableMaps.map((m) => {

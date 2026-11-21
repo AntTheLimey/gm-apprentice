@@ -11,11 +11,16 @@
 const pt = require('./plan-text');
 const { stemOf } = require('./notes');
 const { listSessions, isPlayed, tableLogOf, playNotesOf } = require('./sessions');
-const { nameList } = require('../processor');
+const { nameList, playerSafeMarkdown } = require('../processor');
+const { readTableLog } = require('./table-log');
+const { TABLE_LOG_SECTIONS } = require('./record');
 const { canonicalNfc } = require('../unicode');
 
 const TYPES = new Set(['npc', 'creature']);
 const MIN_NAME = 3;
+// What a Table Log holds of play the players saw: who was unmasked, what points landed, what was handed
+// over. The rest is prep, misses and the vitals of foes fought unseen. The titles come from record.js.
+const PLAYED_SECTIONS = TABLE_LOG_SECTIONS.filter((n) => ['Unmasked', 'Points landed', 'Handouts'].some((k) => n.startsWith(k)));
 const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 // The whole name as words: no letter, digit or underscore either side; a space in the name matches a
@@ -25,7 +30,9 @@ function wholeName(name) {
   return new RegExp(`(?<![\\p{L}\\p{N}_])${body}(?![\\p{L}\\p{N}_])`, 'u');
 }
 
-function readSeen({ vaultPath, index, sessionIndex, publishes, deps }) {
+// `config` is loadPublishConfig's shape (exclude_sections, exclude_callouts); `publishes(note)` is the
+// players' publish answer, strict (see read.js).
+function readSeen({ vaultPath, index, sessionIndex, publishes, config = {}, deps }) {
   const fmOf = (p) => (index.has(p) ? index.read(p).fm || {} : {});
   const people = index.notes().filter((p) => TYPES.has(String(fmOf(p).type || '').trim().toLowerCase()));
   const seen = {};
@@ -37,11 +44,22 @@ function readSeen({ vaultPath, index, sessionIndex, publishes, deps }) {
   const records = [];
   for (const s of at < 1 ? [] : sessions.slice(0, at)) {
     if (!isPlayed(index, s.index)) continue;
-    const texts = [playNotesOf(index, s.index), tableLogOf(index, s.index).log]
-      .filter((n, i, all) => n && all.indexOf(n) === i)
-      .map((n) => canonicalNfc(index.read(n).body || ''));
+    // Each record is cut as the player site cuts a page (the one strip chain), so a name a note hides from
+    // players (%% %%, gm-only, spoiler, a hidden section) is not read as met.
+    const safe = (note, body) => playerSafeMarkdown(body, {
+      excludeSections: config.exclude_sections, excludeCallouts: config.exclude_callouts, frontmatter: index.read(note).fm || {},
+    }).text;
+    const texts = [];
+    const notes = playNotesOf(index, s.index);
+    if (notes) texts.push(safe(notes, index.read(notes).body || ''));
+    const log = tableLogOf(index, s.index).log;
+    if (log) {
+      const sections = readTableLog(index.read(log).body || '').sections;
+      for (const name of PLAYED_SECTIONS) if (sections.get(name)) texts.push(safe(log, sections.get(name)));
+    }
     if (!texts.length) continue;
-    records.push({ label: s.label, text: texts.join('\n'), targets: new Set(texts.flatMap((t) => pt.links(t)).map((t) => index.resolve(t)).filter(Boolean)) });
+    const text = canonicalNfc(texts.join('\n'));
+    records.push({ label: s.label, text, targets: new Set(pt.links(text).map((t) => index.resolve(t)).filter(Boolean)) });
   }
   if (!records.length) return seen;
 
