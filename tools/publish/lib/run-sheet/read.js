@@ -365,6 +365,16 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
   for (const w of warnings) if (w.note === null) warnedLinks.add(low(w.text));
   for (const t of pt.links(body)) if (index.resolve(t) === null) warnLink(t);
 
+  // A map is never a place the party stands at (final review O5, carried to the beats by the scoped check): a beat's
+  // place or a hub spot whose note is a map, or a GM map half, keeps its words and its key but no note, so it is
+  // never linked as a place, in the Table Log's Where everyone ended or Places the party went, where reveal_scan
+  // would offer to publish a GM map. Done here, after the maps above are read, so the Plan's own map links still count.
+  const notAPlace = (p) => Boolean(p) && (isMap(p) || gmHalves.has(p));
+  for (const b of beats) {
+    if (notAPlace(b.place)) { if (!b.placeText) b.placeText = stemOf(b.place); b.place = null; }
+    for (const sp of b.spots || []) if (notAPlace(sp.note)) sp.note = null;
+  }
+
   const runLong = readRunLong();
 
   const model = {

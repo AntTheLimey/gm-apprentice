@@ -432,6 +432,14 @@ class TableLogSections(unittest.TestCase):
         self.assertEqual(sorted((r.path, r.published) for r in res.rows),
                          [("Locations/Gannet Head Light.md", False), ("Places/North/index.md", False)])
 
+    def test_a_map_spot_written_as_words_is_not_offered(self) -> None:
+        # scoped check: a hub spot whose note is a GM map is written as plain words, never a link: nothing to offer
+        gm_map = "---\ntype: location\ndoc_type: map\npublish: false\n---\n\n# The Chapel Yard\n"
+        body = ("## Where everyone ended\n\n- [[Ben]]: Dawn (hub) (The Chapel Yard)\n\n"
+                "## Places the party went\n\n- [[The Gate]]\n")
+        res = run_scan({**with_log(body), "Locations/The Chapel Yard.md": gm_map})
+        self.assertNotIn("Locations/The Chapel Yard.md", [r.path for r in res.rows])
+
     def test_every_read_section_gives_a_row(self) -> None:
         for name in rv.TABLE_LOG_READ:
             with self.subTest(name=name):

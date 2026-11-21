@@ -691,6 +691,50 @@ describe('Places the party went', () => {
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
 
+  // scoped check: a hub spot whose note is a map (or a GM map half) is no place, so nothing links it for reveal_scan
+  it('The Chapel Yard as a map, Ben moved to its spot: neither section links it', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rs-went-map-'));
+    try {
+      fs.cpSync(FIXTURE, dir, { recursive: true });
+      const f = path.join(dir, YARD);
+      fs.writeFileSync(f, fs.readFileSync(f, 'utf8').replace(/\r\n/g, '\n').replace('type: location\n', 'type: location\ndoc_type: map\n'));
+      const m = readRunSheet(dir, PLAN, { party: [ADA, BEN] });
+      const hub = m.beats[2];
+      const yard = hub.spots.find((x) => x.name === 'The Chapel Yard');
+      assert.ok(yard, 'the spot keeps its words');
+      assert.strictEqual(yard.note, null, 'and carries no note');
+      const notes = new Map([...NOTES, ['The Chapel Yard', YARD]]);
+      const opts = { linkFor: R.linkFor({ resolve: (t) => notes.get(t) || null }), timeOf };
+      const st = RS.emptyState({ stateId: 'x', session: m.session.index, plan: PLAN });
+      const s = [{ type: 'move', pc: ADA, to: to(m.beats[0]) }, { type: 'move', pc: BEN, to: to(hub, yard.key) }]
+        .reduce((acc, a, i) => RS.reduce(acc, { id: `wm-${i}`, ...a }, at(i)), st);
+      const sec = sectionsOf(R.tableLogBody(m, s, opts));
+      for (const name of [R.PLACES_WENT, 'Where everyone ended']) {
+        assert.ok(!/Chapel Yard\]\]|Chapel Yard\|/.test(sec.get(name) || ''), `${name}: ${sec.get(name)}`);
+      }
+      assert.match(sec.get('Where everyone ended'), /Ben Hart\]\]: .*The Chapel Yard/, 'its words stay');
+      assert.strictEqual(sec.get(R.PLACES_WENT), '- [[The Gate]]');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  // the Undo rewrite of a roster line takes the empty form too. Undo needs a running fight and rows nobody touched,
+  // so a real night cannot undo every row a roster line names; the line is set here to pin the shared rewrite.
+  it('Undo of the only rows a roster line names leaves "Fight ends before the first turn."', () => {
+    const FM2 = require('../lib/run-sheet/web/fight-math');
+    let s = RS.reduce(fresh(), { id: 'u-1', type: 'move', pc: ADA, to: to(GATE) }, at(1));
+    const b = FM2.rowsForFight({ model, derived: RS.derive(model, s), state: s, beatKey: GATE.key, idBase: 'uf' });
+    s = RS.reduce(s, { id: 'uf', type: 'fightStart', beat: GATE.key, title: GATE.title, groups: b.groups, rows: b.rows, thresholds: b.thresholds }, at(2));
+    for (const r of s.fight.rows) if (r.in && r.kind !== 'lair') s = RS.reduce(s, { id: `ut-${r.id}`, type: 'fightTick', fight: 'uf', row: r.id, in: false }, at(3));
+    const j = FM2.joinRows({ model, derived: RS.derive(model, s), state: s, fight: s.fight, add: { name: 'Bouncer', count: 2 }, idBase: 'uj' });
+    s = RS.reduce(s, { id: 'uj', type: 'fightJoin', fight: 'uf', rows: j.rows, tick: j.tick, groups: j.groups, thresholds: j.thresholds, label: 'Bouncer ×2' }, at(4));
+    const added = s.fight.rows.filter((r) => /^Bouncer/.test(r.name)).map((r) => ({ id: r.id, text: r.name }));
+    s = JSON.parse(JSON.stringify(s));
+    s.events.push({ at: at(5), beat: GATE.key, fight: 'uf', text: 'Fight ends before the first turn: Bouncer 1, Bouncer 2.',
+      roster: { head: 'Fight ends before the first turn: ', tail: '.', items: added } });
+    s = RS.reduce(s, { id: 'uu', type: 'undoAdd', fight: 'uf', join: 'uj' }, at(6));
+    assert.strictEqual(s.events.filter((e) => /^Fight ends/.test(e.text || '')).at(-1).text, 'Fight ends before the first turn.');
+  });
+
   it('a session where nobody moved has an empty section', () => {
     assert.strictEqual(sectionsOf(R.tableLogBody(model, fresh(), OPTS)).get(R.PLACES_WENT) || '', '');
   });
