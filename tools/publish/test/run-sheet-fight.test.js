@@ -1459,11 +1459,10 @@ describe('sides in the fight', () => {
   const side = (s, note, to, copy) => F(s, { type: 'setSide', row: row(s, note, copy).id, side: to });
   const sideOf = (r) => M.sideOfRow(r);
 
-  it('setSide cycles, and the side is remembered into the next fight', () => {
+  it('setSide sets each side directly, and the side is remembered into the next fight', () => {
     let s = gateFight();
     assert.equal(sideOf(row(s, ASH)), 'foe');
-    for (const to of [M.nextSide('foe'), M.nextSide('ally'), M.nextSide('neutral')]) s = side(s, ASH, to);
-    assert.equal(sideOf(row(s, ASH)), 'foe', 'foe, ally, neutral, foe');
+    for (const to of ['neutral', 'ally', 'foe']) { s = side(s, ASH, to); assert.equal(sideOf(row(s, ASH)), to); }
     s = side(s, ASH, 'neutral');
     assert.deepEqual([row(s, ASH).kind, row(s, ASH).neutral], ['foe', true]);
     assert.equal(s.sides[ASH], 'neutral');

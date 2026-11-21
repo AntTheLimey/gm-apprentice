@@ -782,7 +782,12 @@ describe('sides by colour', { skip: browserSkip() }, () => {
       const foe = foeRow(p);
       await press(page, `[data-fpeek="${foe.id}"]`);
       const pressed = () => page.evaluate('[...document.querySelectorAll("#acting [data-fside]")].filter((b) => b.getAttribute("aria-pressed") === "true").map((b) => b.dataset.fside)');
-      assert.deepStrictEqual(await page.evaluate('[...document.querySelectorAll("#acting [data-fside]")].map((b) => b.dataset.fside)'), ['foe', 'ally', 'neutral']);
+      // final review P-A3: ally last, so it is never the stray middle click; each button says what it does
+      assert.deepStrictEqual(await page.evaluate('[...document.querySelectorAll("#acting [data-fside]")].map((b) => [b.dataset.fside, b.title])'), [
+        ['foe', 'An enemy: the players see only what you show'],
+        ['neutral', 'Neither side: shown to players like a foe'],
+        ['ally', "On the party's side: the players see its name and HP"],
+      ]);
       assert.ok((await page.evaluate('document.querySelector("#acting").textContent')).includes('Side:'));
       assert.deepStrictEqual(await pressed(), ['foe']);
       await press(page, '#acting [data-fside="neutral"]');

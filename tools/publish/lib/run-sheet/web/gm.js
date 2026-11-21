@@ -480,13 +480,14 @@
     const place = (spot && spot.note) || (b && b.place) || null;
     return place ? link(place) : esc(groupLabel(g.key, d));
   }
-  // The box: type a place (the datalist offers every known one), Enter takes the top known hit, and a new one
-  // is only ever the explicit "+ New place: <typed>" choice under it (P-S10).
+  // The box: type a place (the page's own list under it offers the near ones; no browser datalist as well, final
+  // review P-A2), Enter takes the top known hit, and a new one is only ever the explicit "+ New place: <typed>"
+  // choice under it (P-S10).
   // `where` tells a group's boxes apart (Hand over, a Here strip): each keeps its own focus and choices.
   function moveBoxHTML(group, where) {
     const id = `${where}|${group}`;
     const hits = (G.ui.moveHits && G.ui.moveHits[id]) || [];
-    return `<span class="movebox"><input data-moveg="${esc(group)}" data-movebox="${esc(id)}" list="rsPlaces" placeholder="Move them to…" aria-label="Move ${esc(groupWho(group))} to a place" autocomplete="off"><span class="hits" data-mhits="${esc(id)}">${moveHitsHTML(group, hits)}</span></span>`;
+    return `<span class="movebox"><input data-moveg="${esc(group)}" data-movebox="${esc(id)}" placeholder="Move them to…" aria-label="Move ${esc(groupWho(group))} to a place" autocomplete="off"><span class="hits" data-mhits="${esc(id)}">${moveHitsHTML(group, hits)}</span></span>`;
   }
   function moveHitsHTML(group, hits) {
     return hits.map((c) => (c.isNew
@@ -494,6 +495,24 @@
       : `<button type="button" data-movepick="${esc(c.note)}" data-moveg="${esc(group)}">${esc(c.name)}</button>`)).join('');
   }
   const groupWho = (key) => ((groups().find((g) => g.key === key) || {}).pcs || []).map((p) => first(nameOf(p))).join(', ');
+  // The Move list closes on Esc and on any press outside its box (final review P-A1), as the Colours menu does: the
+  // press goes on to do what it says, and the typed words stay in the box. `keep` is the box pressed in, if any.
+  function closeMoveLists(keep = null) {
+    let closed = false;
+    for (const [id, hits] of Object.entries(G.ui.moveHits || {})) {
+      if (id === keep || !hits.length) continue;
+      G.ui.moveHits[id] = [];
+      const box = document.querySelector(`[data-mhits="${CSS.escape(id)}"]`);
+      if (box) box.innerHTML = '';
+      closed = true;
+    }
+    return closed;
+  }
+  document.addEventListener('pointerdown', (ev) => {
+    const mb = ev.target.closest && ev.target.closest('.movebox');
+    const input = mb && mb.querySelector('input[data-movebox]');
+    closeMoveLists(input ? input.dataset.movebox : null);
+  }, true);
   // Move a group's PCs to a known place (`note`) or a typed one (`name`). The place's beat becomes the focus.
   function moveGroup(group, { note, name }) {
     const g = groups().find((x) => x.key === group);
@@ -510,6 +529,7 @@
       G.ui.focus = key;
       touch(plan.spot || plan.beat);
       update();
+      goTo(`beat:${key}`);
       return;
     }
     if (note) {
@@ -526,6 +546,8 @@
     G.ui.focus = key;
     touch(key);
     update();
+    // the sheet (the pane, in a fight) goes to where they went (final review P4.5)
+    goTo(`beat:${key}`);
   }
   // "Where the party is" (F13): one row per group at the top of Hand over, with its place and Move them.
   function partyWhereHTML(d) {
@@ -750,7 +772,6 @@
     const brief = Object.keys(m.brief || {}).filter((k) => !k.endsWith('Html') && m.brief[`${k}Html`]);
     if (brief.length) h += sec('brief', 'Brief', brief.map((k) => `<h4 class="lab">${esc(BRIEF_LABELS[k] || k)}</h4>${m.brief[`${k}Html`]}`).join(''));
     h += sec('handover', 'Hand over', handoverHTML(d));
-    h += `<datalist id="rsPlaces">${knownPlaces().map((p) => `<option value="${esc(p.name)}"></option>`).join('')}</datalist>`;
     h += sec('pcs', 'The PCs', pcsHTML());
     h += sec('run', 'The run', (d.beats.length ? d.beats.filter((b) => !b.contingency).concat(d.beats.filter((b) => b.contingency)).map((b) => beforeBeat(b) + beatHTML(b, d)).join('') : '<p class="muted">This Plan has no beats the sheet can read: its prep is below, under Prep\'s working.</p>')
       + '<div class="addbeat"><input id="newBeat" placeholder="Name an improvised beat (Enter)" aria-label="Name an improvised beat" autocomplete="off"><button id="addBeat" type="button">+ Beat</button></div>');
@@ -1274,7 +1295,9 @@
   const PANE_FOLDED = 40;
   const ORDER_FLOOR = 560;
   const ORDER_CAP = 860; // the order's width once the acting panel sits beside it
-  const BESIDE_AT = 1200; // the middle's width from which the acting panel goes beside the order (review F10)
+  // The acting panel's working width: it goes beside the order once the middle holds the order's least width and
+  // this (review F10; final review P4.6, which replaced a fixed 1,200 px), and keeps at least this beside it.
+  const ACT_W = 420;
   const PV_BESIDE = 0.36; // the preview's share of the middle when the pane is folded, at least 300 px
   const PV_BESIDE_MIN = 300;
   const GRIP_TRAVEL = 120; // the grip hides with less travel than this
@@ -1311,7 +1334,8 @@
     if (!ol || !fo) return ORDER_FLOOR;
     ol.classList.add('measure');
     let row = 0;
-    for (const li of ol.children) row = Math.max(row, li.scrollWidth + li.offsetWidth - li.clientWidth);
+    // a row's second line (statuses that do not fit, a box's words) is never measured: it wraps
+    for (const li of ol.children) if (li.dataset.row2 === undefined) row = Math.max(row, li.scrollWidth + li.offsetWidth - li.clientWidth);
     ol.classList.remove('measure');
     const side = $('#side');
     const round = fo.offsetWidth - ol.clientWidth + (side.offsetWidth - side.clientWidth);
@@ -1383,13 +1407,13 @@
       }
       const fv = mid - border - (pvRow ? pvw : 0);
       const ordMin = G.om - border;
-      const beside = fv >= BESIDE_AT;
+      const beside = fv >= ordMin + ACT_W;
       app.classList.toggle('nogrip', !showGrip);
       app.classList.toggle('beside', beside);
       app.classList.toggle('pvrow', pvRow);
       app.style.setProperty('--rw', `${rw}px`);
       app.style.setProperty('--gripw', `${gw}px`);
-      app.style.setProperty('--ordw', `${beside ? Math.max(ordMin, Math.min(ORDER_CAP, fv - 340)) : fv}px`);
+      app.style.setProperty('--ordw', `${beside ? Math.max(ordMin, Math.min(ORDER_CAP, fv - ACT_W)) : fv}px`);
       app.style.setProperty('--pvw', `${pvw}px`);
       if (grip) grip.title = `Drag to resize: the pane ${room.min}-${room.max} px at this width · double-click to reset`;
       if (L.pv) {
@@ -1756,6 +1780,15 @@
     const t = ev.target;
     const d = t.dataset || {};
     const typing = /^(INPUT|SELECT|TEXTAREA)$/.test(t.tagName) || t.isContentEditable;
+    if (ev.key === 'Escape' && t.closest && t.closest('.movebox')) {
+      const input = t.closest('.movebox').querySelector('input[data-movebox]');
+      if (input && ((G.ui.moveHits || {})[input.dataset.movebox] || []).length) {
+        closeMoveLists();
+        input.focus();
+        ev.preventDefault();
+        return;
+      }
+    }
     if (ev.key === 'Escape') { if (menuIsOpen()) { menuOpen(false); const b = document.getElementById('coloursBtn'); if (b) b.focus(); ev.preventDefault(); return; } if ($('#drawer').classList.contains('open')) { closeDrawer(); ev.preventDefault(); } return; }
     if (!typing && (ev.key === 'j' || ev.key === 'J') && !ev.metaKey && !ev.ctrlKey && !ev.altKey) { ev.preventDefault(); $('#hjot').focus(); return; }
     if (ev.key === 'Enter' && t.tagName === 'A' && d.note) { openNote(d.note); return; }

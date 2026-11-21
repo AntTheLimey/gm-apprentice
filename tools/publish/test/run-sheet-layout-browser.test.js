@@ -238,6 +238,60 @@ describe('the fight: adding anyone, by real input', { skip: browserSkip() }, () 
     });
   });
 
+  // final review P-A1: the Add list closes on Esc and on any press outside it; the press lands where it was aimed
+  it('the Add list closes on Esc and on a press outside, and a name it covered picks its row, not a list item', async () => {
+    const run = await start();
+    await withPage({ width: 1280, height: 762 }, async (page) => {
+      const was = await startedFight(page, run);
+      const count = was.fight.rows.length;
+      const listOpen = () => page.evaluate('document.querySelectorAll("#fHits button").length');
+      await tap(page, '#fAddName');
+      await page.type('a');
+      await page.waitFor('document.querySelector("#fHits button")');
+      await page.key('Escape');
+      assert.strictEqual(await listOpen(), 0, 'Esc: no list');
+      assert.deepStrictEqual(await page.evaluate('[document.activeElement.id, document.activeElement.value]'), ['fAddName', 'a'], 'focus and words stay');
+      // open again; a row's name the list lies over
+      await page.key('Backspace');
+      await page.type('a');
+      await page.waitFor('document.querySelector("#fHits button")');
+      const list = await page.box('#fHits');
+      const under = await page.evaluate(`(() => { const L = ${JSON.stringify(list)};
+        const n = Array.from(document.querySelectorAll('#fOrder [data-fpeek]')).find((e) => { const r = e.getBoundingClientRect();
+          return r.left + r.width / 2 > L.left && r.left + r.width / 2 < L.right && r.top + r.height / 2 > L.top && r.top + r.height / 2 < L.bottom; });
+        return n ? n.dataset.fpeek : null; })()`);
+      assert.ok(under, 'the open list covers a row\'s name');
+      // a press outside (a damage box) closes it, and lands in the box
+      const dmg = was.fight.rows.find((r) => r.kind === 'pc');
+      await tap(page, `[data-fhp="${dmg.id}"]`);
+      assert.strictEqual(await listOpen(), 0, 'a press outside: no list');
+      assert.strictEqual(await page.evaluate('document.activeElement.dataset.fhp'), dmg.id, 'the press landed in the damage box');
+      // the name that was under the list now takes the click: its row is picked, nobody is added
+      await tap(page, `[data-fpeek="${under}"]`);
+      let p = await until(page, `p.saved === "Saved" && p.pending === 0`);
+      assert.strictEqual(p.fight.rows.length, count, 'nobody added');
+      const name = p.fight.rows.find((r) => r.id === under).name;
+      assert.deepStrictEqual(await page.evaluate('[document.querySelector("#acting .why").textContent, document.querySelector("#acting h3").textContent]'), ['picked', name]);
+      // with the list open, a click on a name outside it closes the list and picks that row
+      await tap(page, '#fAddName');
+      await page.type('a');
+      await page.waitFor('document.querySelector("#fHits button")');
+      const L2 = await page.box('#fHits');
+      const other = await page.evaluate(`(() => { const L = ${JSON.stringify(L2)};
+        const n = Array.from(document.querySelectorAll('#fOrder [data-fpeek]')).find((e) => { const r = e.getBoundingClientRect();
+          return r.top > L.bottom + 2 && e.dataset.fpeek !== ${JSON.stringify(under)}; });
+        return n ? n.dataset.fpeek : null; })()`);
+      assert.ok(other, 'a name below the list');
+      await tap(page, `[data-fpeek="${other}"]`);
+      assert.strictEqual(await listOpen(), 0);
+      p = await until(page, `p.saved === "Saved" && p.pending === 0`);
+      assert.strictEqual(p.fight.rows.length, count, 'still nobody added');
+      assert.strictEqual(await page.evaluate('document.querySelector("#acting h3").textContent'), p.fight.rows.find((r) => r.id === other).name);
+      assert.strictEqual(await page.evaluate('document.querySelector("#fAddName").value'), 'aa', 'the typed words stay');
+      assert.deepStrictEqual(p.errors, []);
+    });
+  });
+
   it('Undo takes back an untouched add with a real click; a touched add has no Undo', async () => {
     const run = await start();
     await withPage({ width: 1449, height: 762 }, async (page) => {
@@ -579,6 +633,27 @@ describe('10b: the grip and the widths', { skip: browserSkip() }, () => {
   });
 });
 
+// final review P4.6: the switch to the panel beside the order is the order's least width plus the panel's 420 px
+describe('the acting panel beside the order', { skip: browserSkip() }, () => {
+  it('at 1449 with only the pane folded (preview hidden), the panel is beside the order', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await startedFight(page, run);
+      assert.strictEqual(p.layout.railW, 220, 'the rail stays open');
+      await tap(page, '#paneFold');
+      p = await until(page, 'p.layout.folded');
+      if (p.layout.pvOpen) { await tap(page, '#pvToggle'); p = await until(page, '!p.layout.pvOpen'); }
+      p = await until(page, 'p.layout.folded && !p.layout.pvOpen');
+      assert.strictEqual(p.layout.railW, 220);
+      assert.strictEqual(p.layout.beside, true, `the middle ${p.layout.sideW} holds the order's ${p.layout.orderMin} and the panel's 420`);
+      const act = await page.box('#acting');
+      assert.ok(p.layout.actingLeft >= p.layout.orderRight - 1, 'beside, not under');
+      assert.ok(act.width >= 420 - 1, `the panel is ${act.width} px wide`);
+      sane(p, 'pane folded at 1449');
+    });
+  });
+});
+
 describe('10c: the folds', { skip: browserSkip() }, () => {
   it('the rail strip opens from a click anywhere along its height', async () => {
     const run = await start();
@@ -899,11 +974,13 @@ describe('10e: the order\'s own scroll', { skip: browserSkip() }, () => {
 // holds until a window resize (I2), a pane opened by hand keeps its width (M3), the open preview stays under the
 // pane's bar (M4), the preview above the order leaves the rows in view (M5), one move per drag step (M6).
 const rowsInBox = (page) => page.evaluate(`(() => { const o = document.querySelector('#side ol.to').getBoundingClientRect();
-  const li = Array.from(document.querySelectorAll('#side ol.to > li'), (l) => l.getBoundingClientRect());
+  const li = Array.from(document.querySelectorAll('#side ol.to > li[data-frow]'), (l) => l.getBoundingClientRect());
   return { all: li.length, seen: li.filter((r) => r.top >= o.top - 0.5 && r.bottom <= o.bottom + 0.5).length }; })()`);
 
 describe('10, fix round 1', { skip: browserSkip() }, () => {
-  it('I1: statuses never widen the order: at 1449 the grip stays and moves 60 px each way, "+N" shows the rest', async () => {
+  // changed on purpose by the final review (for the GM's eye): statuses that do not fit go on the row's second line
+  // by name, where "+N" stood
+  it('I1: statuses never widen the order: at 1449 the grip stays and moves 60 px each way, the second line names the rest', async () => {
     const run = await start();
     await withPage({ width: 1449, height: 762 }, async (page) => {
       let p = await startedFight(page, run);
@@ -914,10 +991,9 @@ describe('10, fix round 1', { skip: browserSkip() }, () => {
       assert.deepStrictEqual({ om: p.layout.orderMin, sheetW: p.layout.sheetW }, before, 'the order minimum and the pane did not move');
       assert.ok(p.layout.grip.shown && !p.layout.railFolded, 'the grip stays, the rail stays open');
       sane(p, 'three statuses');
-      const more = `[data-frow="${wyrm.id}"] .chips .more`;
-      await page.waitFor(`document.querySelector(${JSON.stringify(more)})`);
-      assert.match(await page.evaluate(`document.querySelector(${JSON.stringify(more)}).textContent`), /^\+[1-3]$/);
-      await tap(page, more);
+      const line = await page.evaluate(`(() => { const l = document.querySelector('[data-row2="${wyrm.id}"]'); return l ? l.textContent : ''; })()`);
+      for (const x of ['Frightened', 'Prone', 'Poisoned']) assert.ok(line.includes(x), `${x} on the second line: ${line}`);
+      await tap(page, `[data-fpeek="${wyrm.id}"]`);
       p = await until(page, 'p.fight.actingName === "Glacier Wyrm"');
       assert.deepStrictEqual(p.fight.actingStatuses, ['Frightened', 'Prone', 'Poisoned'], 'the acting panel lists them all');
       const d0 = p.layout.sheetW;
@@ -933,6 +1009,41 @@ describe('10, fix round 1', { skip: browserSkip() }, () => {
       sane(p, 'one removed');
     });
   });
+
+  // final review, for the GM's eye (Part 5 C1): a boss with four statuses reads them all, on its own second line
+  for (const [w, h] of [[1449, 762], [1280, 762]]) {
+    it(`${w}: four statuses on the Wyrm are all named on its second line; the grip holds, no row clipped`, async () => {
+      const run = await start();
+      await withPage({ width: w, height: h }, async (page) => {
+        let p = await startedFight(page, run);
+        const om = p.layout.orderMin;
+        const grip = p.layout.grip.shown;
+        const wyrm = p.fight.rows.find((r) => r.note === WYRM);
+        const four = ['Frightened', 'Prone', 'Poisoned', 'Restrained'];
+        await fromOther(run, four.map((add) => ({ type: 'status', fight: p.fight.id, row: wyrm.id, add })));
+        p = await until(page, `p.fight.rows.find((r) => r.id === ${JSON.stringify(wyrm.id)}).conds.length === 4`);
+        p = await until(page, `(p.layout.rows.find((r) => r.id === ${JSON.stringify(wyrm.id)}) || {}).line2`);
+        const row = p.layout.rows.find((r) => r.id === wyrm.id);
+        for (const x of four) assert.ok(row.line2.includes(x), `${x} on the second line: ${row.line2}`);
+        // every name is on screen, not clipped: each chip inside the order's box
+        const shown = await page.evaluate(`(() => { const o = document.querySelector('#side ol.to').getBoundingClientRect();
+          return Array.from(document.querySelectorAll('[data-row2="${wyrm.id}"] .chip'), (c) => { const r = c.getBoundingClientRect();
+            return r.width > 0 && r.left >= o.left - 0.5 && r.right <= o.right + 0.5; }); })()`);
+        assert.strictEqual(shown.filter(Boolean).length, 4, `four chips seen: ${shown}`);
+        assert.strictEqual(p.layout.orderMin, om, 'the order\'s least width did not move');
+        assert.strictEqual(p.layout.grip.shown, grip, 'the grip as it was');
+        if (w === 1449) assert.strictEqual(p.layout.grip.shown, true, 'the grip shown at 1449');
+        // other rows stay one line
+        const tall = p.layout.rows.filter((r) => r.id !== wyrm.id && r.line2);
+        assert.deepStrictEqual(tall.map((r) => r.name), [], 'no other row has a second line');
+        sane(p, `${w}, four statuses`);
+        // a click on a chip there takes the status off
+        await tap(page, `[data-row2="${wyrm.id}"] .chip[data-fun]`);
+        p = await until(page, `p.fight.rows.find((r) => r.id === ${JSON.stringify(wyrm.id)}).conds.length === 3`);
+        sane(p, `${w}, one taken off`);
+      });
+    });
+  }
 
   it('I2: at 1280, Fold on the pane keeps the auto-folded rail folded; the preview sits beside the order, every row in view', async () => {
     const run = await start();
@@ -1199,8 +1310,134 @@ describe('stat boxes keep the mouse and the keyboard', { skip: browserSkip() }, 
       const p = await until(page, `p.saved === "Saved" && p.pending === 0 && p.fight.rows.find((r) => r.id === ${JSON.stringify(two.id)}).hp === ${two.hp - 3}`);
       assert.strictEqual(await active(page), `fhp:${two.id}`, 'focus stays in the damage box');
       assert.strictEqual(p.fight.rows.find((r) => r.id === one.id).max, one.max, 'the state\'s max is unchanged');
-      const bad = await page.evaluate(`(() => { const b = document.querySelector('${sel('data-fmax', one.id)}'); const m = b.parentElement.querySelector('.badnum'); return { v: b.value, inv: b.getAttribute('aria-invalid'), msg: m && m.textContent }; })()`);
+      // the words are on the row's second line (final review P4.2)
+      const bad = await page.evaluate(`(() => { const b = document.querySelector('${sel('data-fmax', one.id)}'); const m = document.querySelector('[data-row2="${one.id}"] .badnum'); return { v: b.value, inv: b.getAttribute('aria-invalid'), msg: m && m.textContent }; })()`);
       assert.deepStrictEqual(bad, { v: '40x', inv: 'true', msg: 'Not a number: kept as typed' });
+      assert.deepStrictEqual(p.errors, []);
+    });
+  });
+
+  // final review P4.2: the words are seen at every width, a narrow row's too, on the row's second line
+  it('1100: a bad number\'s words are on screen beside its row, in every layout state', async () => {
+    const run = await start();
+    await withPage({ width: 1100, height: 762 }, async (page) => {
+      await page.focusEvents();
+      const p0 = await startedFight(page, run);
+      const wyrm = p0.fight.rows.find((r) => r.note === WYRM);
+      const seen = () => page.evaluate(`(() => { const m = document.querySelector('[data-row2="${wyrm.id}"] .badnum'); if (!m) return null;
+        const r = m.getBoundingClientRect(); const o = document.querySelector('#side ol.to').getBoundingClientRect();
+        const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+        return { text: m.textContent, inside: r.width > 0 && r.left >= o.left - 0.5 && r.right <= o.right + 0.5, top: Boolean(top) && m.contains(top) }; })()`);
+      await tap(page, sel('data-fmax', wyrm.id));
+      await page.type('40x');
+      await page.key('Enter');
+      const want = { text: 'Not a number: kept as typed', inside: true, top: true };
+      assert.deepStrictEqual(await seen(), want, 'both folded (the page\'s own folds at 1100)');
+      // the pane opened by hand: the narrowest order
+      await tap(page, '#paneOpen');
+      let p = await until(page, '!p.layout.folded');
+      assert.deepStrictEqual(await seen(), want, 'pane open');
+      // three statuses too: the second line holds both
+      await fromOther(run, ['Frightened', 'Prone', 'Poisoned'].map((add) => ({ type: 'status', fight: p.fight.id, row: wyrm.id, add })));
+      p = await until(page, `p.fight.rows.find((r) => r.id === ${JSON.stringify(wyrm.id)}).conds.length === 3`);
+      assert.deepStrictEqual(await seen(), want, 'with statuses');
+      sane(p, '1100, a bad number');
+      // a number puts it right: the words go
+      await tap(page, sel('data-fmax', wyrm.id));
+      await page.type('40');
+      await page.key('Enter');
+      await until(page, `p.saved === "Saved" && p.pending === 0 && p.fight.rows.find((r) => r.id === ${JSON.stringify(wyrm.id)}).max === 40`);
+      assert.strictEqual(await seen(), null);
+    });
+  });
+
+  // final review P4.1: damage typed and left is not applied, and is marked "Enter applies" until it is
+  it('damage typed then Tab or a click away is marked, kept through a redraw, and cleared by Enter or emptying', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await page.focusEvents();
+      const p0 = await startedFight(page, run);
+      const [one, two] = foes(p0);
+      const mark = (id) => page.evaluate(`(() => { const b = document.querySelector('[data-fhp="${id}"]');
+        const m = document.querySelector('[data-row2="${id}"] .pendnum'); return { v: b.value, pending: b.classList.contains('pending'), msg: m && m.textContent }; })()`);
+      await tap(page, sel('data-fhp', one.id));
+      await page.type('-6');
+      await page.key('Tab');
+      await tap(page, sel('data-fhp', two.id));
+      await page.type('-7');
+      await tap(page, sel('data-fmax', one.id));
+      let p = await until(page, 'p.saved === "Saved" && p.pending === 0');
+      assert.deepStrictEqual([p.fight.rows.find((r) => r.id === one.id).hp, p.fight.rows.find((r) => r.id === two.id).hp], [one.hp, two.hp], 'nothing applied');
+      assert.deepStrictEqual(await mark(one.id), { v: '-6', pending: true, msg: 'Enter applies' });
+      assert.deepStrictEqual(await mark(two.id), { v: '-7', pending: true, msg: 'Enter applies' });
+      // a redraw (another window) keeps both
+      await fromOther(run, [{ type: 'setAc', fight: p0.fight.id, row: two.id, ac: 17 }]);
+      await until(page, `p.fight.rows.find((r) => r.id === ${JSON.stringify(two.id)}).ac === 17`);
+      assert.deepStrictEqual(await mark(one.id), { v: '-6', pending: true, msg: 'Enter applies' });
+      // Enter applies it, and the mark goes
+      await tap(page, sel('data-fhp', one.id));
+      await page.key('Enter');
+      p = await until(page, `p.saved === "Saved" && p.pending === 0 && p.fight.rows.find((r) => r.id === ${JSON.stringify(one.id)}).hp === ${one.hp - 6}`);
+      assert.deepStrictEqual(await mark(one.id), { v: '', pending: false, msg: null });
+      // emptying the other clears its mark, and applies nothing
+      await tap(page, sel('data-fhp', two.id));
+      await page.key('Backspace');
+      await page.key('Backspace');
+      await page.key('Backspace');
+      assert.deepStrictEqual(await mark(two.id), { v: '', pending: false, msg: null });
+      p = await until(page, 'p.saved === "Saved" && p.pending === 0');
+      assert.strictEqual(p.fight.rows.find((r) => r.id === two.id).hp, two.hp);
+      assert.deepStrictEqual(p.errors, []);
+    });
+  });
+
+  // final review O4 and O7: the acting panel's words for a blank row, and Same for all's title
+  it('a row typed in the fight says to type its numbers here; Same for all says whom it copies to', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await startedFight(page, run);
+      await addNew(page, 'Bouncer', 2);
+      let p = await until(page, 'p.fight.rows.filter((r) => /^Bouncer/.test(r.name)).length === 2');
+      const one = named(p, 'Bouncer 1');
+      await tap(page, `[data-fpeek="${one.id}"]`);
+      await page.waitFor('document.querySelector("#acting h3") && document.querySelector("#acting h3").textContent === "Bouncer 1"');
+      assert.strictEqual(await page.evaluate('document.querySelector("#acting .warn").textContent'), 'Bouncer 1: no numbers yet: type them here');
+      await tap(page, sel('data-fmax', one.id));
+      await page.type('12');
+      await page.key('Enter');
+      p = await until(page, 'p.saved === "Saved" && p.pending === 0 && p.fight.rows.some((r) => r.name === "Bouncer 1" && r.max === 12)');
+      // still picked: its panel now offers Same for all
+      await page.waitFor('document.querySelector("[data-fsame]")');
+      assert.strictEqual(await page.evaluate('document.querySelector("[data-fsame]").title'), 'Copy these numbers (and the HP they give) to the others of this group nobody has typed into, hurt or given a status');
+      assert.deepStrictEqual(p.errors, []);
+    });
+  });
+
+  // final review P-A4: Esc takes back an edit
+  it('a real Esc in a stat box puts its saved number back, sends nothing and keeps focus', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await page.focusEvents();
+      const p0 = await startedFight(page, run);
+      const [one, two] = foes(p0);
+      await tap(page, sel('data-fmax', one.id));
+      await page.type('9');
+      await page.key('Escape');
+      assert.deepStrictEqual(await page.evaluate(`[document.activeElement.dataset.fmax, document.activeElement.value, document.activeElement.selectionStart, document.activeElement.selectionEnd]`),
+        [one.id, String(one.max), 0, String(one.max).length], 'the saved number, selected, focus kept');
+      await tap(page, sel('data-fhp', two.id));
+      let p = await until(page, 'p.saved === "Saved" && p.pending === 0');
+      await page.sleep(150);
+      p = await until(page, 'p.saved === "Saved" && p.pending === 0');
+      assert.strictEqual(p.fight.rows.find((r) => r.id === one.id).max, one.max, 'nothing sent');
+      // a bad number too: Esc takes back the words and the mark
+      await tap(page, sel('data-fac', one.id));
+      await page.type('1x');
+      await page.key('Tab');
+      await tap(page, sel('data-fac', one.id));
+      await page.key('Escape');
+      assert.deepStrictEqual(await page.evaluate(`(() => { const b = document.querySelector('${sel('data-fac', one.id)}'); return [b.value, b.getAttribute('aria-invalid'), Boolean(document.querySelector('[data-row2="${one.id}"] .badnum'))]; })()`),
+        [String(one.ac), null, false]);
       assert.deepStrictEqual(p.errors, []);
     });
   });
@@ -1259,7 +1496,7 @@ describe('stat boxes keep the mouse and the keyboard', { skip: browserSkip() }, 
       await tap(page, sel('data-fmax', one.id));
       await page.type('40x');
       await tap(page, sel('data-fhp', two.id));
-      const look = () => page.evaluate(`(() => { const b = document.querySelector('${sel('data-fmax', one.id)}'); return { v: b.value, inv: b.getAttribute('aria-invalid'), msg: Boolean(b.parentElement.querySelector('.badnum')) }; })()`);
+      const look = () => page.evaluate(`(() => { const b = document.querySelector('${sel('data-fmax', one.id)}'); return { v: b.value, inv: b.getAttribute('aria-invalid'), msg: Boolean(document.querySelector('[data-row2="${one.id}"] .badnum')) }; })()`);
       // an unrelated redraw keeps the mark
       await fromOther(run, [{ type: 'setAc', fight: p0.fight.id, row: two.id, ac: 17 }]);
       await until(page, `p.fight.rows.find((r) => r.id === ${JSON.stringify(two.id)}).ac === 17`);

@@ -123,10 +123,10 @@
 
   // A row's side is its kind plus a neutral flag: a neutral is `kind: 'foe', neutral: true`, so it is
   // everything a foe is (Out at 0 HP, unseen, numbered, a foe's keys on the players' screen) except a foe
-  // the panel picks or the vitals hold. The panel's switch cycles foe, ally, neutral, foe.
-  const SIDES = ['foe', 'ally', 'neutral'];
+  // the panel picks or the vitals hold. The panel's switch is three direct buttons in this order: ally, which
+  // shows a seen row's name and HP to the players, is last, so it is never the stray middle click (final review P-A3).
+  const SIDES = ['foe', 'neutral', 'ally'];
   const isSide = (v) => SIDES.includes(v);
-  const nextSide = (side) => SIDES[(SIDES.indexOf(side) + 1) % SIDES.length];
   function sideOfRow(r) {
     if (!r || (r.kind !== 'foe' && r.kind !== 'ally')) return null;
     return r.kind === 'ally' ? 'ally' : (r.neutral ? 'neutral' : 'foe');
@@ -705,6 +705,6 @@
     thresholdOf, isLit, sortRows, takesTurn, nextLive, actingRow,
     gmName, lairRow, unseenKey, unseenNumbers, unseenLabels, rowsForFight, joinRows, blankRow,
     addChoices, sameName, groupKey, groupMates, placeRow, undoable, untouched,
-    SIDES, isSide, nextSide, sideOfRow, isFoe,
+    SIDES, isSide, sideOfRow, isFoe,
   };
 }));

@@ -529,10 +529,9 @@ test('a foe already seen when it joins takes no unseen number', () => {
 
 // ---- plan 6a Task 5: sides ----
 
-test('the switch cycles foe, ally, neutral, foe; a row\'s side is its kind and neutral flag', () => {
-  assert.equal(M.nextSide('foe'), 'ally');
-  assert.equal(M.nextSide('ally'), 'neutral');
-  assert.equal(M.nextSide('neutral'), 'foe');
+test('the switch\'s sides are foe, neutral, ally, ally last; a row\'s side is its kind and neutral flag', () => {
+  assert.deepEqual(M.SIDES, ['foe', 'neutral', 'ally']);
+  assert.equal(M.nextSide, undefined, 'no cycle');
   assert.equal(M.sideOfRow(row({ kind: 'foe' })), 'foe');
   assert.equal(M.sideOfRow(row({ kind: 'foe', neutral: true })), 'neutral');
   assert.equal(M.sideOfRow(row({ kind: 'ally' })), 'ally');

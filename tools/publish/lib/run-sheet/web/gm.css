@@ -204,7 +204,7 @@ pre.notes { white-space: pre-wrap; background: var(--bg); border: 1px solid var(
 @media (prefers-reduced-motion: reduce) { .drawer { transition: none; } }
 /* the fight view (gm-fight.js, spec §6.4, §6.5; plan 6a Task 10). Four columns: the rail (220 px, or a 28 px
    strip) | the middle, `#side`: the turn order with the acting creature's panel under it, or beside it once the
-   middle is 1,200 px or wider (gm.js sets `beside`, --ordw) | the grip (12 px) | the right pane, `#sheet`:
+   middle holds the order's least width and the panel's 420 px (gm.js sets `beside`, --ordw) | the grip (12 px) | the right pane, `#sheet`:
    the fight's beat cut, its own scroll, --rw wide or a 40 px strip. gm.js sets the widths and the folds. */
 .app.part-side { grid-template-columns: var(--railw, 220px) minmax(0, 1fr) var(--gripw, 12px) var(--rw, 400px); }
 .app.part-side .side { order: 1; border-left: none; border-right: 1px solid var(--line); padding: 0; overflow: hidden; font-size: .86rem; display: flex; flex-direction: column; }
@@ -282,7 +282,6 @@ ol.to > li > .cnt[data-frch] { flex-shrink: 1; min-width: 2.4rem; overflow: hidd
 ol.to > li > .chips { display: flex; gap: 2px; flex: 0 1 auto; min-width: 0; overflow: hidden; }
 ol.to .chips > .chip { flex: none; }
 ol.to .chips > [hidden] { display: none; }
-ol.to .chips > .more { cursor: pointer; border-color: var(--muted); color: var(--ink); }
 ol.to > li.cur { background: var(--lamp-soft); box-shadow: inset 4px 0 0 var(--lamp); }
 ol.to > li.out { opacity: .55; }
 ol.to > li.out .nm { text-decoration: line-through; }
@@ -298,8 +297,12 @@ ol.to input.hpin { width: 4.2rem; text-align: left; }
 ol.to .hpv, ol.to .acv { font: 650 .8rem var(--mono); white-space: nowrap; }
 ol.to .hpv input { width: 2.6rem; }
 ol.to .acv input { width: 2.3rem; margin-left: 2px; }
-ol.to input[aria-invalid="true"] { outline: 2px solid var(--bad); outline-offset: 1px; }
-ol.to .badnum { color: var(--bad); font-size: .7rem; margin: 0 4px; white-space: nowrap; }
+ol.to input[aria-invalid="true"], ol.to input.pending { outline: 2px solid var(--bad); outline-offset: 1px; }
+/* a row's second line (gm-fight.js syncLine2): a box's words and the statuses the row has no room for; it wraps, and
+   the order's least width never counts it */
+ol.to > li.row2 { flex-wrap: wrap; min-height: 0; gap: 2px 6px; padding: 0 4px 3px 22px; border-top: 0; }
+ol.to > li.row2 .l2st { display: flex; flex-wrap: wrap; gap: 2px; }
+ol.to .badnum, ol.to .pendnum { color: var(--bad); font: 600 .7rem var(--mono); white-space: nowrap; }
 ol.to input.other { width: 9rem; text-align: left; }
 ol.to select { font-size: .72rem; padding: 0 1px; max-width: 4.2rem; }
 ol.to .cnt { max-width: 6rem; overflow: hidden; text-overflow: ellipsis; }
@@ -358,7 +361,7 @@ ol.to .ds { font: 500 .7rem var(--mono); white-space: nowrap; }
 /* Move them (plan 6a Task 7): a box over every known place, with its choices under it */
 .movebox { position: relative; display: inline-flex; flex-direction: column; gap: 2px; min-width: 12rem; max-width: 18rem; margin-left: 6px; }
 .movebox input { width: 100%; font-size: .82rem; }
-.movebox .hits { display: flex; flex-direction: column; gap: 2px; }
+.movebox .hits { position: absolute; left: 0; top: 100%; z-index: 3; display: flex; flex-direction: column; gap: 2px; min-width: 100%; background: var(--panel); box-shadow: 0 4px 12px rgba(0, 0, 0, .15); }
 .movebox .hits:empty { display: none; }
 .movebox .hits button { text-align: left; font-size: .82rem; }
 .where-party { list-style: none; padding: 0; margin: 4px 0 10px; }
