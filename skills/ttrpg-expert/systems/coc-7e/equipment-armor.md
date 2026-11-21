@@ -1,68 +1,86 @@
 # Call of Cthulhu 7e -- Armour and Shields
 
-Armour types with protection values, skill penalties, and
-encumbrance. Shield stats for parrying. Used during play for
-quick protection lookups.
+Armour types with protection values and the penalty dice heavy
+armour brings. Shield stats for blocking and bashing. Used
+during play for quick protection lookups. Armour values come
+from Basic Roleplaying (ORC); the Keeper Rulebook's own
+examples are on p.112.
 
 ## How Armour Works
 
-Armour subtracts its armour value (AV) from incoming damage.
-Armour does not normally degrade from combat hits; only
-environmental effects (acid, fire) or exceptional events
-reduce armour value. A character wearing armour suffers skill
-penalties to Physical and/or Perception skills as noted.
+Armour subtracts its armour value (AV) from incoming damage
+(Keeper Rulebook p.108). It does not stop magic, poison,
+drowning, and the like. Against a shotgun, armour counts
+against every damage die (p.126).
+
+**Penalties**: 7e has no armour skill penalties. Basic
+Roleplaying's percentages are converted the way the Keeper
+Rulebook converts any skill modifier (p.394): 5% or less is
+ignored, about 20% is one penalty die, and anything between
+is the Keeper's call (a penalty die or a harder difficulty).
+"Physical" means climbing, swimming, stealth, and the like;
+"Perception" means Listen and Spot Hidden.
+
+**Partial armour** (p.126): 7e uses hit locations only as an
+optional rule (p.127). In a brawl or a fall, armour on part of
+the body simply reduces the damage. Against one specific
+attack, such as a shot, a Luck roll decides whether it struck
+the armour: success, the armour counts; failure, it hit
+somewhere bare. Armour on both head and torso gives a bonus die
+on that roll. The Locations column says what each piece
+covers.
 
 **Layering**: Soft armour (heavy cloth, padded, soft leather)
-can be worn under hard armour, adding AV and ENC. Overlapping
-hard armour triples the ENC of the lesser piece.
+can be worn under hard armour, adding its AV.
 
 **Putting on armour**: 1 combat round per point of AV.
-**Taking off armour**: 3 AV removed per round (4 with Agility
-roll success).
+**Taking off armour**: 3 AV removed per round (4 with a
+successful DEX roll).
 
 ## Primitive Armour
 
-| Armour | AV | Burden | Skill Penalty | Locations | Value |
-|--------|-----|--------|--------------|-----------|-------|
-| Helmet (primitive) | +1 | Light | -5% Perception | Head | Cheap |
+| Armour | AV | Burden | Penalty | Locations | Value |
+|--------|-----|--------|---------|-----------|-------|
+| Helmet (primitive) | +1 | Light | None | Head | Cheap |
 | Hide | 1 | Light | None | All | Cheap |
 
 ## Ancient and Medieval Armour
 
-| Armour | AV | Burden | Skill Penalty | Locations | Value |
-|--------|-----|--------|--------------|-----------|-------|
+| Armour | AV | Burden | Penalty | Locations | Value |
+|--------|-----|--------|---------|-----------|-------|
 | Heavy Clothing | 1 | None | None | All | Cheap |
 | Padded/Quilted | 1 | None | None | All | Inexpensive |
-| Padded/Quilted, Heavy | 2 | Light | -5% Physical | All | Inexpensive |
+| Padded/Quilted, Heavy | 2 | Light | None | All | Inexpensive |
 | Soft Leather | 1 | Light | None | All | Inexpensive |
-| Hard Leather | 2 | Moderate | -10% Physical | All | Average |
-| Cuirbouilli (boiled leather) | 3 | Light | -10% Physical | All | Expensive |
-| Ring | 5 | Light | -10% Physical | All but head | Average |
-| Lamellar/Studded/Splinted | 6 | Moderate | -15% Physical | All but head | Expensive |
-| Scale | 6 | Moderate | -15% Physical | All but head | Average |
-| Chain | 7 | Moderate | -20% Physical | All | Expensive |
-| Half Plate | 7 | Moderate | -20% Physical | All but head | Expensive |
-| Full Plate | 8 | Cumbersome | -25% Physical | All but head | Expensive |
-| Helmet, Light | +1 | None | -15% Perception | Head | Inexpensive |
-| Helmet, Heavy | +2 | Light | -50% Perception | Head | Average |
+| Hard Leather | 2 | Moderate | Keeper's call (Physical) | All | Average |
+| Cuirbouilli (boiled leather) | 3 | Light | Keeper's call (Physical) | All | Expensive |
+| Ring | 5 | Light | Keeper's call (Physical) | All but head | Average |
+| Lamellar/Studded/Splinted | 6 | Moderate | Keeper's call (Physical) | All but head | Expensive |
+| Scale | 6 | Moderate | Keeper's call (Physical) | All but head | Average |
+| Chain | 7 | Moderate | 1 penalty die (Physical) | All | Expensive |
+| Half Plate | 7 | Moderate | 1 penalty die (Physical) | All but head | Expensive |
+| Full Plate | 8 | Cumbersome | 1 penalty die (Physical) | All but head | Expensive |
+| Helmet, Light | +1 | None | Keeper's call (Perception) | Head | Inexpensive |
+| Helmet, Heavy | +2 | Light | 2 penalty dice (Perception) | Head | Average |
 
 ## Modern Armour
 
-| Armour | AV | Burden | Skill Penalty | Locations | Value |
-|--------|-----|--------|--------------|-----------|-------|
+| Armour | AV | Burden | Penalty | Locations | Value |
+|--------|-----|--------|---------|-----------|-------|
 | Heavy Clothing | 1 | None | None | All | Cheap |
-| Ballistic Cloth | 3 vs melee / 5 vs firearms | Light | -10% Physical | Arms, Chest | Expensive |
-| Flak Jacket | 4 | Moderate | -10% Physical | Arms, Chest | Expensive |
-| Bulletproof Vest, Early | 4 | Moderate | -25% Physical | Chest | Expensive |
-| Bulletproof Vest, Modern | 4 vs melee / 8 vs firearms | Light | -5% Physical | Chest | Expensive |
-| Riot Gear (with helmet) | 12 vs melee / 6 vs firearms | Moderate | -10% Physical | All | Expensive |
-| Helmet, Light (modern) | +3 | None | -10% Perception | Head | Inexpensive |
-| Helmet, Heavy (modern) | +6 | Light | -25% Perception | Head | Average |
+| Ballistic Cloth | 3 vs melee / 5 vs firearms | Light | Keeper's call (Physical) | Arms, Chest | Expensive |
+| Flak Jacket | 4 | Moderate | Keeper's call (Physical) | Arms, Chest | Expensive |
+| Bulletproof Vest, Early | 4 | Moderate | 1 penalty die (Physical) | Chest | Expensive |
+| Bulletproof Vest, Modern | 4 vs melee / 8 vs firearms | Light | None | Chest | Expensive |
+| Riot Gear (with helmet) | 12 vs melee / 6 vs firearms | Moderate | Keeper's call (Physical) | All | Expensive |
+| Helmet, Light (modern) | +3 | None | Keeper's call (Perception) | Head | Inexpensive |
+| Helmet, Heavy (modern) | +6 | Light | 1 penalty die (Perception) | Head | Average |
 
 ## Armour and Firearms
 
-Primitive, ancient, and medieval armour only provides **half
-its AV** (round up) against firearms and high-velocity
+7e has no rule for this; the Basic Roleplaying one is a sound
+Keeper's call. Primitive, ancient, and medieval armour only
+provides **half its AV** (round up) against firearms and high-velocity
 projectiles. Modern armour provides full value against bullets
 (many modern armour entries list separate values for melee
 vs firearms). Where two values are shown (e.g. 4/8), the
@@ -70,41 +88,48 @@ first is vs melee, the second vs firearms.
 
 ## Shields
 
-Shields are large parrying weapons. A shield parry follows
-all normal parry rules. Shields can also attack (knockback
-or crushing damage). Successive shield parries after the
-first suffer the standard cumulative -30% penalty.
+7e has no parry and no shield rules. Run a shield with the
+ordinary ones:
 
-**Slung shields**: When slung on back/shoulder (not actively
-used), add 1/2 the shield's AV to any hit location struck
-from behind.
+- **Blocking**: the bearer fights back or dodges as usual
+  (Keeper Rulebook p.103). Fighting back against a thrown
+  weapon or arrow still needs the thrower within a fifth of the
+  bearer's DEX in feet (p.108). Against shots, a big shield is cover: a penalty die
+  when it hides half the bearer, and its AV against shots
+  through it (p.113 and p.127).
+- **Bashing**: Fighting (Brawl) for the listed damage, or a
+  fighting maneuver to shove or knock a foe down (p.105).
+- **Slung shields**: on the back, a shield adds its AV against
+  blows from behind.
+- **STR/DEX**: the minimum to use it without a penalty die,
+  on the 7e scale.
 
 ### Primitive Shields
 
-| Shield | Base | AV/HP | Dmg | Special | STR/DEX | Burden |
-|--------|------|-------|-----|---------|---------|--------|
-| Primitive | 10% | 10 | 1D2+dm | Knockback | 5/7 | Light |
+| Shield | AV/HP | Dmg | STR/DEX | Burden |
+|--------|-------|-----|---------|--------|
+| Primitive | 10 | 1D2+DB | 25/35 | Light |
 
 ### Ancient and Medieval Shields
 
-| Shield | Base | AV/HP | Dmg | Special | STR/DEX | Burden |
-|--------|------|-------|-----|---------|---------|--------|
-| Buckler | 05% | 15 | 1D2+dm | Knockback | 5/7 | Light |
-| Target | 15% | 15 | 1D2+dm | Knockback | 5/7 | Light |
-| Half Shield | 15% | 15 | 1D2+dm | Knockback | 5/7 | Moderate |
-| Heater | 15% | 20 | 1D3+dm | Knockback | 9/9 | Moderate |
-| Round | 15% | 20 | 1D3+dm | Knockback | 9/9 | Moderate |
-| Spiked | 15% | 20 | 1D3+dm | Impale | 9/9 | Moderate |
-| Full Shield | 15% | 22 | 1D4+dm | Knockback | 11/9 | Moderate |
-| Kite | 15% | 22 | 1D4+dm | Knockback | 11/9 | Moderate |
-| Large Round | 15% | 22 | 1D4+dm | Knockback | 11/9 | Moderate |
-| Hoplite | 15% | 26 | 1D4+dm | Knockback | 12/8 | Cumbersome |
+| Shield | AV/HP | Dmg | STR/DEX | Burden |
+|--------|-------|-----|---------|--------|
+| Buckler | 15 | 1D2+DB | 25/35 | Light |
+| Target | 15 | 1D2+DB | 25/35 | Light |
+| Half Shield | 15 | 1D2+DB | 25/35 | Moderate |
+| Heater | 20 | 1D3+DB | 45/45 | Moderate |
+| Round | 20 | 1D3+DB | 45/45 | Moderate |
+| Spiked | 20 | 1D3+DB (impales) | 45/45 | Moderate |
+| Full Shield | 22 | 1D4+DB | 55/45 | Moderate |
+| Kite | 22 | 1D4+DB | 55/45 | Moderate |
+| Large Round | 22 | 1D4+DB | 55/45 | Moderate |
+| Hoplite | 26 | 1D4+DB | 60/40 | Cumbersome |
 
 ### Modern Shields
 
-| Shield | Base | AV/HP | Dmg | Special | STR/DEX | Burden |
-|--------|------|-------|-----|---------|---------|--------|
-| Riot Shield | 15% | 16 | 1D3+dm | Knockback | 9/9 | Moderate |
+| Shield | AV/HP | Dmg | STR/DEX | Burden |
+|--------|-------|-----|---------|--------|
+| Riot Shield | 16 | 1D3+DB | 45/45 | Moderate |
 
 ## Armour Value of Common Materials
 

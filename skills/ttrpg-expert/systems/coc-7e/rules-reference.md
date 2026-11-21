@@ -66,12 +66,13 @@ a skill, comparing success levels the same way.
 ### Round Structure
 
 Each combat round is approximately 12 seconds. Rounds proceed
-in DEX rank order (highest DEX acts first).
+in DEX order (highest DEX acts first).
 
 **Round phases:**
 
 1. **Determine Initiative**: Characters act in DEX order
-   (highest first). Ties are simultaneous.
+   (highest first); a readied firearm shoots at DEX + 50
+   (p.112). Ties go to the higher combat skill.
 2. **Actions**: Each combatant resolves their action in DEX
    order. Defensive reactions are declared when attacked.
 3. **End of Round**: Apply ongoing effects, check for
@@ -85,7 +86,7 @@ Each character gets one action per round:
 |--------|-------------|
 | Attack (melee) | Fighting (Brawl) or weapon skill roll |
 | Attack (ranged) | Firearms skill roll |
-| Move | Up to MOV x 5 yards if taking no other action |
+| Move | Up to MOV yards and still act normally; up to MOV x 5 yards and then one melee attack at the end of the round, or shots with a penalty die (p.127) |
 | Flee | Initiate a chase (see Chase Rules) |
 | Skill use | One non-combat skill (First Aid, etc.) |
 | Other | Draw weapon, stand up, etc. |
@@ -95,17 +96,21 @@ Each character gets one action per round:
 Defensive reactions are taken in response to attacks and do not
 use up the character's action:
 
-- **Dodge**: Roll Dodge skill. Success avoids the attack
-  entirely. Usable against melee and ranged attacks.
-- **Fighting Back**: Roll Fighting skill in response to a
-  melee attack. If successful and higher than attacker's roll,
-  the defender avoids the attack and deals damage.
-- **Use Cover**: Drop behind available cover against ranged
-  attacks (Keeper's discretion).
+- **Dodge**: Opposed Dodge roll against a melee or thrown
+  attack. A higher level of success, or the same level, avoids
+  the attack.
+- **Fighting Back**: Opposed Fighting roll against a melee
+  attack. A higher level of success avoids the attack and deals
+  damage; the same level goes to the attacker.
+- **Dive for Cover**: Against shots, a Dodge roll; if it
+  succeeds, the shooter takes a penalty die. Either way the
+  diver forfeits their next attack (p.113).
 
-Only one defensive reaction per round without penalty. Each
-additional reaction beyond the first suffers a cumulative
-penalty die.
+A character may dodge or fight back against every attack. Once
+they have, later melee attacks on them that round gain a bonus
+die. A creature with several attacks a round may defend that
+many times first (Keeper Rulebook p.108; see
+combat-reference.md).
 
 ### Damage and Injury
 
@@ -283,8 +288,9 @@ CoC 7e uses a structured chase system with an abstract track:
 
 ### Magic Point Recovery
 
-Magic points regenerate at a rate of 1 per 2 hours of rest,
-fully recovering after 24 hours.
+Magic points regenerate at 1 per hour (2 per hour with POW
+over 100, 3 over 200), never above a fifth of POW (Keeper
+Rulebook p.176; see powers-magic.md).
 
 ## Experience and Improvement
 
