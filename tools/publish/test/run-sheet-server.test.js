@@ -1450,6 +1450,29 @@ describe('the side-colours setting', () => {
     assert.match(r.json.error, /gma update/);
     assert.strictEqual(fs.readFileSync(path.join(vault, '_meta', 'vault-config.yaml'), 'utf8'), before);
   });
+  it('POST when the site tool cannot be checked is 409 and writes nothing', async () => {
+    const vault = copyOf();
+    withSite(vault);
+    const before = fs.readFileSync(path.join(vault, '_meta', 'vault-config.yaml'), 'utf8');
+    const run = await start(vault, 'Session 02 - The Test', { deps: { pinCheck: () => { throw new Error('no network\nmore'); } } });
+    const r = await post(run, { preset: 'colour_blind' });
+    assert.strictEqual(r.status, 409);
+    assert.match(r.json.error, /could not be checked \(no network\).*nothing was written/);
+    assert.strictEqual(fs.readFileSync(path.join(vault, '_meta', 'vault-config.yaml'), 'utf8'), before);
+  });
+  it('a partial own, and own colours under another preset, write what was given', async () => {
+    const vault = copyOf();
+    const run = await start(vault);
+    assert.strictEqual((await post(run, { preset: 'own', own: { foe: '#AA0000' } })).status, 200);
+    let c = settingsOf(vault).vault.run_sheet;
+    assert.strictEqual(c.own_colours.foe, '#aa0000');
+    assert.strictEqual(c.own_colours.pc, undefined, 'only the given colour is written');
+    assert.strictEqual((await post(run, { preset: 'pens', own: { pc: '#010203' } })).status, 200);
+    c = settingsOf(vault).vault.run_sheet;
+    assert.strictEqual(c.side_colours, 'pens');
+    assert.strictEqual(c.own_colours.pc, '#010203');
+    assert.strictEqual(c.own_colours.foe, '#aa0000');
+  });
   it('POST on a site with a current tool, or on a vault with no site, writes', async () => {
     const vault = copyOf();
     withSite(vault);

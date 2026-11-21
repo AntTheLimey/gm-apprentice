@@ -502,10 +502,14 @@ function createTableServer({ vaultPath, session, party = [], stateFile, deps = {
             return;
           }
           // An older site tool stops a player build on a key it does not know under `vault`: only a vault with a site is held.
+          // A vault on the old settings layout (siteFileNamedBy gives null) is not gated: applyChanges refuses it outright (OLD_FILE_STOP), so nothing is written there either.
           const site = siteFileNamedBy(vaultRoot);
           if (site && fs.existsSync(site.dir)) {
-            let old = null;
-            try { old = siteToolOlderThan(site.dir, SITE_TOOL_FROM, deps.pinCheck ? { pinCheck: deps.pinCheck } : {}); } catch { old = null; }
+            let old;
+            try { old = siteToolOlderThan(site.dir, SITE_TOOL_FROM, deps.pinCheck ? { pinCheck: deps.pinCheck } : {}); } catch (err) {
+              json(res, 409, { error: `the site's publish tool version could not be checked (${String((err && err.message) || err).split('\n')[0].trim()}): nothing was written; try again, or update the site first (gma update)` });
+              return;
+            }
             if (old) {
               json(res, 409, { error: `the site's publish tool (${old.shown}) is older than ${SITE_TOOL_FROM} and would stop on this setting: update the site first (gma update)` });
               return;
@@ -518,8 +522,8 @@ function createTableServer({ vaultPath, session, party = [], stateFile, deps = {
             return;
           }
           let model;
-          try { ({ model } = loadModel()); } catch (err) {
-            json(res, 500, { error: String(err.message).split('\n')[0] });
+          try { ({ model } = loadModel()); } catch {
+            json(res, 200, { sideColours: { preset: msg.preset, own: own || null }, note: 'saved, but the sheet could not be re-read' });
             return;
           }
           json(res, 200, { sideColours: model.sideColours });

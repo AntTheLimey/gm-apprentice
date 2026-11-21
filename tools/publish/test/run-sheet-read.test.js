@@ -1098,6 +1098,13 @@ describe('side colours', () => {
     assert.strictEqual(own.sideColours.own.foe, '#112233');
     assert.strictEqual(own.sideColours.own.pc, '#2e7d3c');
   });
+  it('an unknown preset reads as pens, with a prep note', () => {
+    const dir = copy();
+    writeSettings(dir, { 'vault.system': 'dnd5e', 'vault.run_sheet.side_colours': 'neon' });
+    const m = readRunSheet(dir, PLAN, { party: PARTY });
+    assert.strictEqual(m.sideColours.preset, 'pens');
+    assert.strictEqual(m.warnings.filter((w) => w.kind === 'side-colours').length, 1);
+  });
   it('a bad own colour falls back, with a prep note', () => {
     const dir = copy();
     writeSettings(dir, { 'vault.system': 'dnd5e', 'vault.run_sheet.side_colours': 'own', 'vault.run_sheet.own_colours.foe': 'red', 'vault.run_sheet.own_colours.pc': '#abc' });

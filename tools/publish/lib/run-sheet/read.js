@@ -162,7 +162,12 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
   let sideColours = readSideColours({}).sideColours;
   try {
     // Settings values are nested by group: `vault.system` is values.vault.system.
-    const values = readSettings({ vaultPath, deps }).values || {};
+    const settingsRead = readSettings({ vaultPath, deps });
+    const values = settingsRead.values || {};
+    // The reader already swaps a word that is not allowed for the default; it says so only in its faults, which the sheet does not show.
+    for (const f of settingsRead.faults || []) {
+      if (f.name === 'vault.run_sheet.side_colours' && f.kind === 'not-allowed') add([{ kind: 'side-colours', note: null, text: `vault.run_sheet.side_colours is "${f.value}", not pens, colour_blind or own: pens is used` }]);
+    }
     system = (values.vault && values.vault.system) || null;
     const colours = readSideColours(values);
     sideColours = colours.sideColours;
