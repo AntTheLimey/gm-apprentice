@@ -696,6 +696,11 @@ def _reference(ctx: _Ctx, raw: str) -> tuple[_Ref | None, str | None]:
         return None, f"left out the reference picture for {raw}: {why}"
     try:
         rel = section.resolve_note(ctx.batch, raw, ctx.names)
+    except vw.WriteError as err:
+        # Several notes share the name: say so, so the path gets passed.
+        why = str(err).removeprefix(f"{raw}: ")
+        return skip(why if "notes match" in why else "no such note")
+    try:
         fm = vl.extract_frontmatter(ctx.batch.read(rel))
     except vw.WriteError:
         return skip("no such note")

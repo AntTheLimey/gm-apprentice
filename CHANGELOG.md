@@ -10,6 +10,12 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 ---
 
 
+## [1.12.118] — 2026-11-20
+
+### Fixed
+
+- A picture's likeness whose name several notes share now says so and names every path, instead of "no such note" (#833), so the right path can be passed.
+
 ## [1.12.117] — 2026-11-20
 
 ### Fixed
