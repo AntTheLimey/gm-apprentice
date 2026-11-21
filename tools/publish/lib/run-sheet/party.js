@@ -80,6 +80,7 @@ function threadOf(body) {
   const items = [];
   let level = null;
   for (let i = l.start + 1; i < lines.length; i++) {
+    if (level === null && lines[i].trim() === '') continue; // blank lines may precede the first bullet
     const m = lines[i].match(ITEM);
     if (!m) break; // a blank line or any other text ends the list
     const ind = indentOf(m[1]);
