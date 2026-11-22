@@ -756,7 +756,7 @@ test('a foe whose block says it starts hurt (hpStart) starts there; a carried or
   const ally = { ...venn, hpStart: 5, hpNow: 12 };
   const npc = { ...gilt, hpStart: 9 };
   const beat = { ...gate, foes: [hurt, ally, npc], points: [], ifs: [] };
-  const lastFight = (hp) => ({ ...here, fights: [{ id: 'old', ended: true, rows: [{ note: 'NPCs/Gilt.md', kind: 'foe', copy: 1, hp, max: 50, conds: [] }] }] });
+  const lastFight = (hp, max) => ({ ...here, fights: [{ id: 'old', ended: true, rows: [{ note: 'NPCs/Gilt.md', kind: 'foe', copy: 1, hp, max, conds: [] }] }] });
   const rows = (state) => M.rowsForFight({ model, derived: derivedOf({ beats: [beat, hub] }), state, beatKey: 'b1', idBase: 'a' }).rows;
   const by = (rs, note) => rs.find((x) => x.note === note);
   const r = rows(here);
@@ -765,4 +765,17 @@ test('a foe whose block says it starts hurt (hpStart) starts there; a carried or
   assert.equal(by(r, 'NPCs/Gilt.md').hp, 9, 'no last fight: the block\'s start');
   const noStart = M.rowsForFight({ model, derived: derivedOf(), state: here, beatKey: 'b1', idBase: 'a' }).rows;
   assert.equal(by(noStart, 'Creatures/Imp.md').hp, 21, 'no hpStart: full, as before');
+  const last = by(rows(lastFight(4, 40)), 'NPCs/Gilt.md');
+  assert.deepEqual([last.hp, last.max], [4, 40], 'an NPC with a last-fight row starts at its hp, max from the row, not hpStart');
+});
+
+test('hpStart is held to the block\'s HP when it has one, and taken as written when it has none', () => {
+  const start = (foe) => {
+    const beat = { ...gate, foes: [foe], points: [], ifs: [] };
+    return M.rowsForFight({ model, derived: derivedOf({ beats: [beat, hub] }), state: here, beatKey: 'b1', idBase: 'a' }).rows.find((x) => x.note === foe.note);
+  };
+  const over = start({ ...imp, hp: 10, hpStart: 12 });
+  assert.deepEqual([over.hp, over.max], [10, 10], 'HP 10 (currently 12) starts at 10');
+  const open = start({ ...imp, hp: null, hpStart: 12 });
+  assert.deepEqual([open.hp, open.max], [12, null], 'no HP figure: unclamped');
 });

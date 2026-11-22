@@ -48,6 +48,14 @@ describe('run sheet foes', () => {
     assert.deepStrictEqual([b.hpNow, b.carriedFrom], [null, null]);
   });
 
+  it('every copy of a counted foe carries the block\'s hpStart', () => {
+    const { index } = setup();
+    const note = 'Characters/NPCs/Hurt Sexton.md';
+    const withBlock = { has: (p) => p === note, read: () => ({ fm: { name: 'Hurt Sexton', type: 'npc' }, body: '## Stats\n\n**HP** 10 (currently 4) \u00b7 **AC** 11\n' }), gmSection: () => '', resolve: index.resolve, itemOf: index.itemOf };
+    const { foes } = foesOf(note, withBlock, 3, 'b-test');
+    assert.deepStrictEqual(foes.map((f) => [f.name, f.hp, f.hpStart]), [['Hurt Sexton 1', 10, 4], ['Hurt Sexton 2', 10, 4], ['Hurt Sexton 3', 10, 4]]);
+  });
+
   it('tuned hit points beat the stock figure', () => {
     const { index } = setup();
     const [f] = one(index, 'Frost Wolf').foes;

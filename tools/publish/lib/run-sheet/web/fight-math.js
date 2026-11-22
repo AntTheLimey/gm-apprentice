@@ -315,7 +315,8 @@
     const start = startingSide(ctx, foe);
     const ally = start.side === 'ally';
     // a block that says it starts hurt (`HP 10 (currently 4)`) starts there, unless a carried or last-fight figure speaks
-    let hp = num(foe.hpStart) !== null ? num(foe.hpStart) : num(foe.hp);
+    // (never above the block's own HP: `HP 10 (currently 12)` starts at 10; with no HP figure it is taken as written)
+    let hp = num(foe.hpStart) !== null ? (num(foe.hp) !== null ? Math.min(num(foe.hpStart), num(foe.hp)) : num(foe.hpStart)) : num(foe.hp);
     let max = num(foe.hp);
     let conds = [];
     let exhaustion = 0;
