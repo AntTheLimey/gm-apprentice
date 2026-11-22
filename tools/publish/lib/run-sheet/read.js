@@ -17,6 +17,7 @@ const { sessionParty } = require('./session-party');
 const { readPeople, TITLE: PEOPLE_TITLE } = require('./people');
 const { readHandouts, TITLE: HANDOUTS_TITLE } = require('./handouts');
 const { foesFor } = require('./foes');
+const { systemFor } = require('./systems');
 const { readTableLog, VITALS } = require('./table-log');
 const { orderedSessions } = require('../story-spine');
 const { displayTitleOf, mapFolder, matchExcludedDir } = require('../scanner');
@@ -184,6 +185,8 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
     warnings.push({ kind: 'unreadable-settings', note: null, text: `the vault's settings could not be read (${firstLine(err.message)}): the game system is unknown` });
   }
 
+  // the vault's system reads the foes and the PCs and describes the rest (model.rules); none runs as D&D
+  const sys = systemFor(system);
   const index = buildIndex(vaultPath, { deps });
   const fmOf = (p) => (index.has(p) ? index.read(p).fm || {} : {});
   // A link that resolves to no note warns once, saying why (missing, ambiguous, in a skipped folder).
@@ -242,7 +245,7 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
   for (const b of beats) for (const w of b.who || []) if (w.note) who.set(w.note, `${who.get(w.note) || ''} ${w.wants || ''} ${w.knownAs || ''}`.trim());
   const sides = { quickRef, partyNotes: own.party, who };
   for (const beat of beats) {
-    const r = foesFor(beat, index, seen, carried, sides);
+    const r = foesFor(beat, index, seen, carried, sides, sys);
     beat.foes = r.foes;
     beat.treasure.push(...r.treasure);
     add(r.warnings);
@@ -262,7 +265,7 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
       if (f.ally && planHp.has(f.note)) { f.hpNow = planHp.get(f.note); f.carriedFrom = plan; }
     }
   }
-  const pcsRead = readPcs(body, index, own.party);
+  const pcsRead = readPcs(body, index, own.party, sys);
   add(pcsRead.warnings);
   add(peopleRead.warnings);
   const handoutsRead = readHandouts(body, index);
@@ -379,6 +382,7 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
 
   const model = {
     system,
+    rules: sys.describe(),
     campaign,
     withheldWords,
     sideColours,
@@ -453,7 +457,7 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
   for (const list of Object.values(model.placePeople)) list.sort();
   model.placeNotes = Object.fromEntries(locations.map((p) => [p, model.notes[p] || noteOf(p)]));
   // The cast is read last: its notes are never "touched", and its warnings stay on each entry.
-  model.cast = readCast(index, { carried, sides });
+  model.cast = readCast(index, { carried, sides, system: sys });
   model.sidesCarried = sidesCarried;
   // Added last, so these paths make no `notes` entries or links of their own: a Plan that names no map reads as before.
   model.showableMaps = showableMaps;

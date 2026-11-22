@@ -7,7 +7,7 @@ const { canonicalNfc } = require('../unicode');
 const { replaceWikilinks, parseWikilink } = require('../wikilink');
 const { sections, tableRows, tableRanges, bullets, unclaimed, labels, cleanText, links, LABEL } = require('./plan-text');
 const { stemOf } = require('./notes');
-const { SIGNED_SOURCE, toNumber } = require('./signed');
+const { systemFor } = require('./systems');
 
 const low = (s) => canonicalNfc(String(s || '')).trim().toLowerCase();
 // The note names a cell links, as plain words: `[[Ada Moss|Ada]]` is `Ada Moss`. Matches a PC by name.
@@ -37,25 +37,6 @@ const SECTIONS = [
   { re: /^touchpoint/i, field: 'touchpoint' },
   { re: /^pc\s+roster/i, field: 'roster' },
 ];
-
-const numberFrom = (cell, signed) => {
-  const t = String(cell || '').trim();
-  if (signed && new RegExp(`^(?:${SIGNED_SOURCE}|\\d+)(?:\\.\\d+)?$`).test(t)) return toNumber(t);
-  return /^\d+(?:\.\d+)?$/.test(t) ? Number(t) : null;
-};
-
-function statsOf(body) {
-  const rows = tableRows(body);
-  const pick = (label, signed) => {
-    for (const r of rows) {
-      if (r[0] !== label) continue;
-      const n = numberFrom(r[1], signed);
-      if (n !== null) return n;
-    }
-    return null;
-  };
-  return { ac: pick('AC'), hpMax: pick('HP (Max)'), hpNow: pick('HP (Current)'), init: pick('Initiative', true) };
-}
 
 // A PC's open thread: the label's own text, or the first bullet under it with "(+N more)" for the rest.
 // The label is bare (`**Open threads:**`, bullets as siblings) or a list item (`- **Open threads:**`,
@@ -93,7 +74,8 @@ function threadOf(body) {
   return items[0] + (items.length > 1 ? ` (+${items.length - 1} more)` : '');
 }
 
-function readPcs(planBody, index, party) {
+// `system` reads each PC's numbers from its sheet (systems/index.js; D&D's when none is given).
+function readPcs(planBody, index, party, system = systemFor(null)) {
   const warnings = [];
   const seen = new Set();
   const warn = (kind, note, text) => {
@@ -118,6 +100,7 @@ function readPcs(planBody, index, party) {
     }
     if (pcs.some((x) => x.note === note)) continue;
     const body = index.read(note).body;
+    const read = system.readPc({ notePath: note, index, fm, body });
     // a portrait that cannot be found is the index's warning, never a throw
     const portrait = index.portrait(note);
     pcs.push({
@@ -127,7 +110,8 @@ function readPcs(planBody, index, party) {
       portrait,
       role: '', moment: '', touch: '', arc: '',
       thread: threadOf(body),
-      ...statsOf(body),
+      ...read.numbers,
+      ...(read.note ? { prepNote: read.note } : {}),
     });
   }
   pcs.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));

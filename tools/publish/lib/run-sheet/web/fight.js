@@ -130,10 +130,10 @@
     lightThresholds(s, f, r, at);
   }
 
-  // Damage after half and resisted, into temp HP first. Answers what the row took.
-  function hurt(r, n, half) {
+  // Damage after half and resisted, into temp HP first, down to the fight's floor. Answers what the row took.
+  function hurt(f, r, n, half) {
     const d = FM.damageTaken(n, { half, resisted: r.resisted });
-    const next = FM.afterDamage({ hp: isNum(r.hp) ? r.hp : null, temp: r.temp }, d);
+    const next = FM.afterDamage({ hp: isNum(r.hp) ? r.hp : null, temp: r.temp }, d, FM.rulesOf(f));
     r.hp = next.hp;
     r.temp = next.temp;
     return d;
@@ -183,7 +183,7 @@
   function replace(s, f, r, at) {
     if (!f.started) return;
     const was = f.rows.indexOf(r);
-    f.rows = FM.placeRow(f.rows, r.id);
+    f.rows = FM.placeRow(f.rows, r.id, FM.rulesOf(f));
     if (f.rows.indexOf(r) !== was) say(s, f, at, `${nameOf(s, f, r)} moves in the order: initiative ${isNum(r.ini) ? r.ini : 'cleared'}.`);
   }
 
@@ -196,6 +196,8 @@
         rows: clone(a.rows).map((r) => entered(r, at)), thresholds: clone(a.thresholds || []), lit: {}, startedAt: at,
         carried: clone(a.carried || {}),
       };
+      // the system's part for the reducer (model.rules.fight, step 6b): a fight with none runs as D&D (FM.rulesOf)
+      if (a.rules && typeof a.rules === 'object' && !Array.isArray(a.rules)) f.rules = clone(a.rules);
       numberUnseen(f);
       lairOf(f);
       // Fight here (plan 6a Task 7, review P3): the place goes behind the focused group's panel until End fight
@@ -282,7 +284,7 @@
     fightSort(s, a) {
       const f = running(s, a);
       if (!f) return;
-      f.rows = FM.sortRows(f.rows);
+      f.rows = FM.sortRows(f.rows, FM.rulesOf(f));
       f.sorted = true;
     },
     // Built on a turn and a round: a second Next built on the same turn is dropped (Review M3).
@@ -291,7 +293,7 @@
       if (!f) return;
       if ((a.from === undefined ? null : a.from) !== f.turn || a.round !== f.round) return;
       if (!f.started) {
-        if (!f.sorted) { f.rows = FM.sortRows(f.rows); f.sorted = true; }
+        if (!f.sorted) { f.rows = FM.sortRows(f.rows, FM.rulesOf(f)); f.sorted = true; }
         const first = FM.nextLive(f.rows, null).row;
         if (!first) return;
         f.started = true;
@@ -313,13 +315,13 @@
     },
     hp: onRow((s, f, r, a, at) => {
       if (r.kind === 'lair') return;
-      const e = FM.parseEntry(a.entry);
+      const e = FM.parseEntry(a.entry, FM.rulesOf(f));
       if (!e) return;
       const before = r.hp;
       const temp = r.temp;
       let over = null;
       if (e.kind === 'temp') r.temp = e.n;
-      else if (e.kind === 'heal') { if (!isNum(r.hp)) return; r.hp = FM.afterHeal({ hp: r.hp, max: r.max }, e.n); } else { over = overOf(hurt(r, e.n, r.half), temp, before); r.half = false; }
+      else if (e.kind === 'heal') { if (!isNum(r.hp)) return; r.hp = FM.afterHeal({ hp: r.hp, max: r.max }, e.n); } else { over = overOf(hurt(f, r, e.n, r.half), temp, before); r.half = false; }
       touchIfHp(r, at, before, r.max);
       afterHp(s, f, r, before, at, { over });
     }),
@@ -467,7 +469,7 @@
         done.add(r.id);
         const before = r.hp;
         const temp = r.temp;
-        const took = hurt(r, n, !!h.half);
+        const took = hurt(f, r, n, !!h.half);
         touchIfHp(r, at, before, r.max);
         hits.push({ r, before, took, half: !!h.half, over: overOf(took, temp, before) });
       }

@@ -12,6 +12,20 @@
     'Paralyzed', 'Petrified', 'Poisoned', 'Prone', 'Restrained', 'Stunned', 'Unconscious', 'Down', 'Stable'];
   const EXHAUSTION_MAX = 6;
 
+  // The reducer's part of D&D's rules (step 6b Task 1): what a fight started with no `rules` (one saved before 6b)
+  // runs by. systems/dnd.js describes D&D with a copy of it, so the page and the reducer share one source. The
+  // last four are GURPS's tables, null here.
+  const DND_FIGHT_RULES = {
+    initiative: 'roll', initDecimals: 0, orderFixed: false, hpFloor: 0, autoOut: true, marks: [], tiredAt: null,
+    prompts: { majorWoundAt: null, insanityAt: null }, firearmBonus: null, pools: [],
+    wounding: null, consequences: null, defences: null, manoeuvres: null,
+  };
+  // shared by every fight that has none of its own, so nothing may change it
+  Object.freeze(DND_FIGHT_RULES.marks); Object.freeze(DND_FIGHT_RULES.prompts); Object.freeze(DND_FIGHT_RULES.pools);
+  Object.freeze(DND_FIGHT_RULES);
+  // A fight's rules: its own (`f.rules`, from fightStart), else D&D's.
+  const rulesOf = (f) => (f && f.rules && typeof f.rules === 'object' ? f.rules : DND_FIGHT_RULES);
+
   const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
   const num = (v) => {
     if (v === null || v === undefined || v === '') return null;
@@ -21,8 +35,9 @@
 
   // ---- the HP box ----
 
-  // `-37` and a bare `37` are damage, `+8` heals, `t5` sets temp HP. Integers 0-9999 only.
-  function parseEntry(text) {
+  // `-37` and a bare `37` are damage, `+8` heals, `t5` sets temp HP. Integers 0-9999 only. `rules` is the fight's
+  // (rulesOf); D&D's grammar is every system's until a system adds its own.
+  function parseEntry(text, rules = DND_FIGHT_RULES) {
     const m = /^\s*([+-]|t)?\s*(\d+)\s*$/i.exec(String(text === null || text === undefined ? '' : text));
     if (!m) return null;
     const n = Number(m[2]);
@@ -39,13 +54,15 @@
     return d;
   }
 
-  // Temp HP takes damage first; HP stops at 0.
-  function afterDamage({ hp, temp }, d) {
+  // Temp HP takes damage first; HP stops at the rules' floor (D&D's 0), or goes on down when the floor is null.
+  function afterDamage({ hp, temp }, d, rules = DND_FIGHT_RULES) {
     const t = temp || 0;
     const soak = Math.min(t, d);
     // a row with no HP still loses the temp HP it was given
     if (hp === null || hp === undefined) return { hp: null, temp: t - soak };
-    return { hp: Math.max(0, hp - (d - soak)), temp: t - soak };
+    const floor = rulesOf({ rules }).hpFloor;
+    const left = hp - (d - soak);
+    return { hp: isNum(floor) ? Math.max(floor, left) : left, temp: t - soak };
   }
 
   // Healing stops at max (a row with no max just adds).
@@ -82,8 +99,8 @@
   // ---- order and turns ----
 
   // Ticked first; initiative high to low with an empty box last; at a tie the Lair row after the others,
-  // then the higher modifier, then PCs. Stable: equal rows keep their order.
-  function sortRows(rows) {
+  // then the higher modifier, then PCs. Stable: equal rows keep their order. `rules` is the fight's (rulesOf).
+  function sortRows(rows, rules = DND_FIGHT_RULES) {
     const ini = (r) => (isNum(r.ini) ? r.ini : -Infinity);
     return rows.map((r, i) => ({ r, i })).sort((a, b) => {
       const x = a.r;
@@ -669,12 +686,12 @@
 
   // One insert (plan 6a "latest entry wins"): the row goes above the first row it beats, at the place the
   // sort would give it; the rest keep the order they have. A tie goes after the rows already there.
-  function placeRow(rows, id) {
+  function placeRow(rows, id, rules = DND_FIGHT_RULES) {
     const i = rows.findIndex((r) => r.id === id);
     if (i < 0) return rows;
     const row = rows[i];
     const rest = rows.filter((_, k) => k !== i);
-    let at = rest.findIndex((x) => sortRows([x, row])[0] === row);
+    let at = rest.findIndex((x) => sortRows([x, row], rules)[0] === row);
     if (at < 0) at = rest.length;
     return rest.slice(0, at).concat(row, rest.slice(at));
   }
@@ -709,7 +726,7 @@
   }
 
   return {
-    DND_STATUSES, EXHAUSTION_MAX, fightGroupKeys,
+    DND_STATUSES, EXHAUSTION_MAX, DND_FIGHT_RULES, rulesOf, fightGroupKeys,
     parseEntry, damageTaken, afterDamage, afterHeal, isBloodied,
     thresholdOf, isLit, sortRows, takesTurn, nextLive, actingRow,
     gmName, lairRow, unseenKey, unseenNumbers, unseenLabels, rowsForFight, joinRows, blankRow,

@@ -1,79 +1,27 @@
 'use strict';
-// Foes: the fight rows. Name, AC, HP, initiative and boss counters are read from a note's
-// `### Stats` (the block itself is kept as written). Works with what it has: a foe whose stat
-// block lacks numbers is still a foe, with null numbers and a warning; nothing here throws.
-// No rules text ships, so the prototype's SRD recharge table is not ported.
+// Foes: the fight rows. A note's stat block and its numbers are read by the vault's system (systems/: D&D's name,
+// AC, HP, initiative and boss counters from `### Stats`; the block itself is kept as written). Works with what it
+// has: a foe whose stat block lacks numbers is still a foe, with null numbers and a warning; nothing here throws.
 
 const path = require('node:path');
 const { itemKeys } = require('./keys');
-const { SIGNED_SOURCE, toNumber } = require('./signed');
 const { bullets } = require('./plan-text');
 const { startingSide } = require('./sides');
+const { systemFor } = require('./systems');
 
-const FOE_TYPES = new Set(['npc', 'creature']);
+const DND = systemFor(null);
 
-const number = (m) => (m ? toNumber(m[1]) : null);
-
-// The bullet list under the line that holds `Lair Actions`, as written (dedented, so it renders as a list): the
-// consecutive bullet lines after that line, indented or not. '' when the line has no list.
-const BULLET = /^([ \t]*)[-*+][ \t]+\S/;
-function lairActionsOf(stats) {
-  const lines = String(stats).split('\n');
-  for (let at = 0; at < lines.length; at++) {
-    if (!/Lair Actions/i.test(lines[at])) continue;
-    const list = [];
-    for (let i = at + 1; i < lines.length && BULLET.test(lines[i]); i++) list.push(lines[i]);
-    if (!list.length) continue;
-    const indent = Math.min(...list.map((l) => BULLET.exec(l)[1].length));
-    return list.map((l) => l.slice(indent)).join('\n');
-  }
-  return '';
-}
-
-const BOLD_CHARGE = /\*\*\*([^*]+?)\s*\(Recharge (\d+(?:\s*[–-]\s*\d+)?)\)/g;
-
-// Only a number AFTER the HP / Hit Points word counts ("regains 10 HP" and "DC 14" are not figures).
-function readNumbers(stats, behaviour) {
-  const ac = number(/\b(?:AC|Armor Class)[ \t*:]*(\d+)/.exec(stats));
-  // The last HP figure stated wins: a session's tuning is written after the stock block.
-  const hps = [...stats.matchAll(/\b(?:HP|Hit Points)[ \t*:]*(\d+)/g)];
-  const hp = hps.length ? Number(hps[hps.length - 1][1]) : null;
-  const init = number(new RegExp(`Initiative[^\\d\\n]{0,3}(${SIGNED_SOURCE})`).exec(stats));
-  const full = `${stats}\n${behaviour}`;
-  // A declaration with no number (`(Recharge -)`, a draft) is no recharge.
-  const charges = [...full.matchAll(BOLD_CHARGE)];
-  // The plain form of a one-line block, `Frost Breath (Recharge 6)`: the name is the run of capitalised words
-  // before the bracket, small joining words kept (`Breath of Frost`). The bold form wins a name it already gave.
-  const plain = [...full.replace(BOLD_CHARGE, ' ').matchAll(/((?:[A-Z][\w'’-]*)(?:[ \t]+(?:(?:of|the|and|in|on|from|to|at|with|a|an)[ \t]+)*[A-Z][\w'’-]*)*)[ \t]*\(Recharge (\d+(?:\s*[–-]\s*\d+)?)\)/g)]
-    .map((m) => [null, m[1], m[2]]);
-  const all = [...charges, ...plain];
-  const recharge = [...new Set(all.map((m) => m[1].trim()))].sort();
-  // The lowest roll that recharges each: `(Recharge 5–6)` is 5, `(Recharge 6)` is 6. The first of a name counts.
-  const rechargeAt = {};
-  for (const m of all) {
-    const name = m[1].trim();
-    if (!(name in rechargeAt)) rechargeAt[name] = Math.min(...m[2].match(/\d+/g).map(Number));
-  }
-  return {
-    ac, hp, init,
-    // `(2/Day)`, or SRD 5.2.1's `(3/Day, or 4/Day in Lair)`: the first count (the in-lair use is the GM's)
-    legendaryResistance: number(/Legendary Resistance \((\d+)\/Day[^)\n]*\)/i.exec(stats)) || 0,
-    // `Legendary Actions (3)`, or SRD 5.2.1's `Legendary Action Uses: 3 (4 in Lair)`
-    legendaryActions: number(/Legendary Actions \((\d+)\)/i.exec(stats)) || number(/Legendary Action Uses\W{0,6}(\d+)/i.exec(stats)) || 0,
-    recharge, rechargeAt,
-    lair: /Lair Actions/i.test(stats),
-    lairActions: lairActionsOf(stats),
-  };
-}
-
-// What a note gives a fight row: null for a note the index lacks; `stats` '' when it has none.
-function inspect(notePath, index) {
+// What a note gives a fight row: null for a note the index lacks; `stats` '' when it has none. The system reads the
+// stat block and its numbers (`readFoe`), so the place a block is found is one place.
+function inspect(notePath, index, system = DND) {
   if (!index.has(notePath)) return null;
-  const fm = index.read(notePath).fm || {};
+  const note = index.read(notePath);
+  const fm = note.fm || {};
   const type = String(fm.type || '').toLowerCase();
   const name = String(fm.name || path.posix.basename(notePath, '.md'));
-  const stats = FOE_TYPES.has(type) ? index.gmSection(notePath, 'Stats') : '';
-  return { name, type, stats, behaviour: stats ? index.gmSection(notePath, 'Behaviour') : '', treasure: stats ? index.gmSection(notePath, 'Treasure') : '' };
+  const read = system.readFoe({ notePath, index, text: note.body });
+  const stats = read.stats;
+  return { name, type, stats, read, treasure: stats ? index.gmSection(notePath, 'Treasure') : '' };
 }
 
 // The starting side of a note (sides.js), from its own frontmatter and stats and the Plan's context:
@@ -101,30 +49,13 @@ function warner(seen, warnings) {
   };
 }
 
-// What a block's numbers lack, as [{ kind, text }]. A block with no numbers at all says so once; its
-// missing initiative is part of that.
-function lacks(name, nums) {
-  if (nums.ac === null && nums.hp === null) {
-    return [{ kind: 'no-numbers', text: `${name} names a stat block with no numbers in the vault: fill them in prep` }];
-  }
-  const out = [];
-  if (nums.ac === null) out.push({ kind: 'no-ac', text: `${name} has no AC in its Stats: fill it in prep` });
-  if (nums.hp === null) out.push({ kind: 'no-hp', text: `${name} has no hit points in its Stats: fill them in prep` });
-  if (nums.init === null) out.push({ kind: 'no-initiative', text: `${name} has no initiative modifier in its Stats (rolled at +0)` });
-  return out;
-}
-
-// A `### Stats` that names a stock block (SRD or stock) and holds no action of its own.
-const STOCK_NAMED = /\b(?:SRD|stock)\b/i;
-const HAS_ACTION = /^[ \t]*(?:[-*+][ \t]+)?[*_]*Actions\b|Hit:|Attack Roll|to hit/im;
-
 // One who entry read for a fight: its note's numbers and how many, or null when it makes no foe. A
 // creature with no Stats, or any entry counted more than once with none, is a fight the sheet
 // cannot run: it warns `no-stats`. An NPC listed once with no Stats is a social NPC: no warning.
 // `canFight` is false for a beat that cannot fight (see beatCanFight): the numbers it lacks then go
 // into the row's `prepNote` instead of a warning, for the Fight to say when it is wanted (5b).
-function entry(notePath, index, count, add, canFight = true, sides = null, whoText = null) {
-  const info = inspect(notePath, index);
+function entry(notePath, index, count, add, canFight = true, sides = null, whoText = null, system = DND) {
+  const info = inspect(notePath, index, system);
   if (!info) return null;
   const n = Number.isInteger(count) && count > 0 ? count : 1;
   if (!info.stats) {
@@ -133,12 +64,11 @@ function entry(notePath, index, count, add, canFight = true, sides = null, whoTe
     }
     return null;
   }
-  const nums = readNumbers(info.stats, info.behaviour);
-  const missing = lacks(info.name, nums);
+  const { nums, lacks: missing } = info.read;
   let prepNote = null;
   if (canFight) missing.forEach((w) => add(w.kind, notePath, w.text));
   else if (missing.length) prepNote = missing.map((w) => w.text).join('; ');
-  if (STOCK_NAMED.test(info.stats) && !HAS_ACTION.test(info.stats)) {
+  if (system.stockNoActions && system.stockNoActions(info.stats)) {
     const text = `${info.name} names a stock stat block but no actions are in the vault: fill them in prep (gma stat-fill)`;
     if (canFight) add('stock-no-actions', notePath, text);
     else prepNote = prepNote ? `${prepNote}; ${text}` : text;
@@ -183,15 +113,15 @@ function rows(entries, beatKey, carried = null) {
 }
 
 // One note's foes, `count` of them. Exported for the Fight's Add (step 5).
-function foesOf(notePath, index, count = 1, beatKey, seen = new Set(), carried = null, sides = null) {
+function foesOf(notePath, index, count = 1, beatKey, seen = new Set(), carried = null, sides = null, system = DND) {
   const warnings = [];
-  const e = entry(notePath, index, count, warner(seen, warnings), true, sides);
+  const e = entry(notePath, index, count, warner(seen, warnings), true, sides, null, system);
   return { foes: e ? rows([e], beatKey, carried) : [], warnings };
 }
 
 // Every `who` entry of a beat, planned or contingency. `seen` carries one Plan's warnings across beats;
 // `carried` is the allies' carried vitals, as `rows` reads them.
-function foesFor(beat, index, seen = new Set(), carried = null, sides = null) {
+function foesFor(beat, index, seen = new Set(), carried = null, sides = null, system = DND) {
   const warnings = [];
   const add = warner(seen, warnings);
   const entries = [];
@@ -199,7 +129,7 @@ function foesFor(beat, index, seen = new Set(), carried = null, sides = null) {
   const doneNotes = new Set();
   const canFight = beatCanFight(beat, index);
   for (const w of beat.who || []) {
-    const e = entry(w.note, index, w.count, add, canFight, sides, `${w.wants || ''} ${w.knownAs || ''}`.trim());
+    const e = entry(w.note, index, w.count, add, canFight, sides, `${w.wants || ''} ${w.knownAs || ''}`.trim(), system);
     if (!e) continue;
     entries.push(e);
     if (doneNotes.has(w.note)) continue;

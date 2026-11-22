@@ -24,7 +24,6 @@
   const sign = (n) => (isNum(n) ? (n >= 0 ? `+${n}` : String(n)) : '+0');
   const attr = (k, v) => `[${k}="${CSS.escape(v)}"]`;
   const PT = { '': '', landed: '✓', missed: '✗', overtaken: '⊘' };
-  const FIGHT_SYSTEMS = new Set(['dnd-5e-2024']); // decision 19: D&D only in 5b; null runs as D&D
   const INVALID = 'Type -37 or 37 (damage), +8 (healing) or t5 (temp HP)';
 
   const ui = {
@@ -40,7 +39,8 @@
 
   const model = () => RP.model();
   const state = () => RP.state();
-  const allowed = () => { const m = model(); return Boolean(m) && (m.system == null || FIGHT_SYSTEMS.has(m.system)); };
+  // the system's description says whether it fights (systems/index.js: null runs as D&D)
+  const allowed = () => { const m = model(); return Boolean(m && m.rules && m.rules.fights); };
   const pcName = (note) => { const p = (model().pcs || []).find((x) => x.note === note); return p ? p.name : RP.nameOf(note); };
 
   // Every fight action names the running fight (Review M3).
@@ -91,7 +91,7 @@
     RP.ui.focus = key;
     ui.mine = id;
     RP.ui.pane = 'cut';
-    RP.dispatch({ type: 'fightStart', beat: key, title: b.title, groups: built.groups, rows: built.rows, thresholds: built.thresholds, carried: carried(d), ...(backdrop ? { backdrop } : {}) });
+    RP.dispatch({ type: 'fightStart', beat: key, title: b.title, groups: built.groups, rows: built.rows, thresholds: built.thresholds, carried: carried(d), rules: model().rules.fight, ...(backdrop ? { backdrop } : {}) });
     // the pane opens at its top, whatever the run sheet's scroll was (review F3)
     RP.paneTop();
   }
@@ -909,7 +909,7 @@
     if (ev.key !== 'Enter') return;
     if (d.fhp !== undefined) {
       ev.preventDefault();
-      if (!FM.parseEntry(t.value)) { t.setCustomValidity(INVALID); t.reportValidity(); return; }
+      if (!FM.parseEntry(t.value, FM.rulesOf(state().fight))) { t.setCustomValidity(INVALID); t.reportValidity(); return; }
       const entry = t.value;
       t.value = '';
       markPending(t);

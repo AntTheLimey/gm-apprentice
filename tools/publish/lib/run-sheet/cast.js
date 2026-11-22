@@ -12,15 +12,16 @@ const fate = require('../fate');
 const TYPES = new Set(['npc', 'creature', 'pc']);
 
 // `carried` is the reader's allies' carried vitals (`{ of(note) }`) or null; `sides` is the Plan's side
-// context (foes.js sideOf), so a person with no stats still carries the side they start on.
-function readCast(index, { carried = null, sides = null } = {}) {
+// context (foes.js sideOf), so a person with no stats still carries the side they start on. `system` reads each
+// note's stat block (systems/index.js; D&D's when none is given).
+function readCast(index, { carried = null, sides = null, system } = {}) {
   const cast = [];
   for (const p of index.notes()) {
     const { fm, body } = index.read(p);
     const type = String((fm && fm.type) || '').trim().toLowerCase();
     if (!TYPES.has(type)) continue;
     const pc = type === 'pc';
-    const foe = pc ? { foes: [], warnings: [] } : foesOf(p, index, 1, `cast.${p}`, new Set(), carried, sides);
+    const foe = pc ? { foes: [], warnings: [] } : foesOf(p, index, 1, `cast.${p}`, new Set(), carried, sides, system);
     const side = pc ? { ally: false, allyFrom: null, allyBy: null } : sideOf(p, index, sides, null, foe.foes[0] ? foe.foes[0].stats : '');
     cast.push({
       note: p,
