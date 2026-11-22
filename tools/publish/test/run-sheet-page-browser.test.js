@@ -132,6 +132,40 @@ describe('the GM page in a browser', { skip: browserSkip() }, () => {
     assert.ok(hp.includes(3), JSON.stringify(state.end.vitals));
   });
 
+  it('a jot half typed survives the Table Log being filed (#855)', async () => {
+    const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'rs-page-'));
+    made.push(vault);
+    fs.cpSync(FIXTURE, vault, { recursive: true });
+    const picked = pickSession(listSessions(vault), 'Session 03 - Next', vault);
+    assert.ok(picked.session, picked.error);
+    // Stands in for `gma vault-write <vault> table-log-new`: the empty skeleton beside the index, and the link.
+    const stem = path.basename(picked.session.index, '.md');
+    const runFileLog = () => {
+      const idx = path.join(vault, picked.session.index);
+      fs.writeFileSync(path.join(vault, path.dirname(picked.session.index), `${stem} - Table Log.md`),
+        `---\ntype: session-table-log\nsession: "[[${stem}]]"\n---\n\n# ${stem} - Table Log\n\n## Log\n`);
+      fs.writeFileSync(idx, fs.readFileSync(idx, 'utf8').replace(/^type: session$/m, `type: session\ndocuments:\n  table_log: "[[${stem} - Table Log]]"`));
+      return { ok: true };
+    };
+    const t = createTableServer({ vaultPath: vault, session: picked.session, party: PARTY, fileLog: ['gma'], deps: { delayMs: 50, log: () => {}, runFileLog } });
+    const port = await listenLocal(t.server, 0);
+    servers.push(t);
+    const own = { ...t, port, base: `http://127.0.0.1:${port}/` };
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await page.goto(`${own.base}?probe=1`);
+      await settled(page);
+      assert.strictEqual(await page.evaluate('!!document.querySelector("#sheet .nolog")'), true, 'no Table Log yet');
+      await page.click('#sheet input[data-jot]');
+      await page.type('Half a thought');
+      // another window's jot is the first thing at the table: the server files the log and says so
+      const { state, rev } = await api(own, 'GET', '/api/state');
+      await api(own, 'PUT', '/api/state', { stateId: own.stateId, base: rev, state: RS.reduce(state, { type: 'jot', id: 'other-1', text: 'The party camps.', beat: null }, new Date().toISOString()), clientId: 'other' });
+      await page.waitFor('!document.querySelector("#sheet .nolog")');
+      const got = await page.evaluate('(() => { const a = document.activeElement; return { value: document.querySelector("#sheet input[data-jot]").value, typing: !!(a && a.matches && a.matches("#sheet input[data-jot]")) }; })()');
+      assert.deepStrictEqual(got, { value: 'Half a thought', typing: true });
+    });
+  });
+
   it('a jot the server answered but had not yet written is sent again after the server dies', async () => {
     const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'rs-page-'));
     made.push(vault);

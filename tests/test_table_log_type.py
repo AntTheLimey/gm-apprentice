@@ -106,18 +106,33 @@ class ChainTests(unittest.TestCase):
         self.assertFalse([r for r in rows if r.startswith("WARNING")
                           and "status" in r], rows)
 
-    def test_an_ended_session_with_no_wrap_up_is_never_told_to_go_back_to_prep(self):
+    def ended_rows(self, documents, with_log=True, status="wrap-up"):
         with tempfile.TemporaryDirectory() as d:
-            session_vault(d, [("plan", "Session 01 - Arrival - Plan"),
-                              ("table_log", "Session 01 - Arrival - Table Log")])
+            session_vault(d, documents, with_log)
             idx = Path(d) / INDEX
             idx.write_text(idx.read_text(encoding="utf-8").replace(
-                "status: played", "status: wrap-up"), encoding="utf-8")
-            rows = vc.check_sessions(Path(d))
+                "status: played", f"status: {status}"), encoding="utf-8")
+            return vc.check_sessions(Path(d))
+
+    def test_an_ended_session_with_no_wrap_up_is_never_told_to_go_back_to_prep(self):
+        rows = self.ended_rows([("plan", "Session 01 - Arrival - Plan"),
+                                ("table_log", "Session 01 - Arrival - Table Log")])
         warned = [r for r in rows if r.startswith("WARNING") and "status" in r]
         self.assertEqual(len(warned), 1, rows)
         self.assertIn("no Wrap-Up is linked or found", warned[0])
         self.assertNotIn("--set status=", warned[0])
+
+    def test_an_ended_session_with_no_play_records_still_misses_its_wrap_up(self):
+        # No Table Log, Play Notes or export: still ended, still no prep advice.
+        for status in ("wrap-up", "reviewed"):
+            rows = self.ended_rows([("plan", "Session 01 - Arrival - Plan")],
+                                   with_log=False, status=status)
+            warned = [r for r in rows
+                      if r.startswith("WARNING") and "status" in r]
+            self.assertEqual(len(warned), 1, rows)
+            self.assertIn(f"status '{status}' but no Wrap-Up is linked or found",
+                          warned[0])
+            self.assertNotIn("--set status=", warned[0])
 
     def test_chain_info_shows_table_log_only_when_present(self):
         with_log = self.rows([("plan", "Session 01 - Arrival - Plan"),

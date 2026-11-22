@@ -521,36 +521,36 @@ describe('run sheet server', () => {
 
   describe('the Table Log is filed on the first thing that happens at the table (#855)', () => {
     // Stands in for `gma vault-write <vault> table-log-new`: the empty skeleton beside the index, and the link.
-    const filer = (vault, run, { failFirst = false } = {}) => {
+    // Made before the server: a start with play already saved files the log while the server is built.
+    const filer = (vault, session, { failFirst = false } = {}) => {
       const calls = [];
       const runFileLog = (cmd) => {
         calls.push(cmd);
         if (failFirst && calls.length === 1) return { ok: false, why: 'the vault was busy' };
-        const idx = path.join(vault, run.session.index);
-        const stem = path.basename(run.session.index, '.md');
-        const rel = `${path.dirname(run.session.index)}/${stem} - Table Log.md`;
+        const idx = path.join(vault, session.index);
+        const stem = path.basename(session.index, '.md');
+        const rel = `${path.dirname(session.index)}/${stem} - Table Log.md`;
         fs.writeFileSync(path.join(vault, rel), `---\ntype: session-table-log\nsession: "[[${stem}]]"\n---\n\n# ${stem} - Table Log\n\n## Log\n`);
         fs.writeFileSync(idx, fs.readFileSync(idx, 'utf8').replace(/^type: session$/m, `type: session\ndocuments:\n  table_log: "[[${stem} - Table Log]]"`));
         return { ok: true };
       };
       return { calls, runFileLog };
     };
+    const next = (vault) => pickSession(listSessions(vault), 'Session 03 - Next', vault).session;
     const startFiling = async (vault, opts) => {
-      const holder = {};
-      const run = await start(vault, 'Session 03 - Next', { deps: { runFileLog: (c) => holder.f.runFileLog(c) } });
-      holder.f = filer(vault, run, opts);
-      return { run, calls: holder.f.calls };
+      const f = filer(vault, next(vault), opts);
+      const run = await start(vault, 'Session 03 - Next', { deps: { runFileLog: f.runFileLog } });
+      return { run, calls: f.calls };
     };
-    const startWith = async (vault, opts) => {
-      const picked = pickSession(listSessions(vault), 'Session 03 - Next', vault);
-      const holder = {};
-      const t = createTableServer({ vaultPath: vault, session: picked.session, fileLog: ['gma', 'vault-write', 'table-log-new'],
-        deps: { delayMs: 20, retryMs: [20], recordRetryMs: [20], runFileLog: (c) => holder.f.runFileLog(c) } });
+    const startWith = async (vault, { recordRetryMs = [20], ...opts } = {}) => {
+      const session = next(vault);
+      const f = filer(vault, session, opts);
+      const t = createTableServer({ vaultPath: vault, session, fileLog: ['gma', 'vault-write', 'table-log-new'],
+        deps: { delayMs: 20, retryMs: [20], recordRetryMs, runFileLog: f.runFileLog } });
       const port = await listenLocal(t.server, 0);
-      const run = { ...t, port, session: picked.session, stateId: stateIdOf(picked.session) };
+      const run = { ...t, port, session, stateId: stateIdOf(session) };
       servers.push(run);
-      holder.f = filer(vault, run, opts);
-      return { run, calls: holder.f.calls };
+      return { run, calls: f.calls };
     };
     const logOf = (vault, run) => path.join(vault, path.dirname(run.session.index), `${path.basename(run.session.index, '.md')} - Table Log.md`);
 
@@ -588,18 +588,17 @@ describe('run sheet server', () => {
 
     it('a command that wrote the note and then failed has still filed it: no refused retries', async () => {
       const vault = copyOf();
-      const picked = pickSession(listSessions(vault), 'Session 03 - Next', vault);
-      const holder = {};
-      const t = createTableServer({ vaultPath: vault, session: picked.session, fileLog: ['gma'],
-        deps: { delayMs: 20, retryMs: [20], recordRetryMs: [20], runFileLog: (c) => { holder.f.runFileLog(c); return { ok: false, why: 'timed out' }; } } });
+      const session = next(vault);
+      const f = filer(vault, session);
+      const t = createTableServer({ vaultPath: vault, session, fileLog: ['gma'],
+        deps: { delayMs: 20, retryMs: [20], recordRetryMs: [20], runFileLog: (c) => { f.runFileLog(c); return { ok: false, why: 'timed out' }; } } });
       const port = await listenLocal(t.server, 0);
-      const run = { ...t, port, session: picked.session, stateId: stateIdOf(picked.session) };
+      const run = { ...t, port, session, stateId: stateIdOf(session) };
       servers.push(run);
-      holder.f = filer(vault, run);
       await act(run, [{ type: 'jot', id: 'c1-1', text: 'The party camps.' }]);
       await waitFor(() => fs.existsSync(logOf(vault, run)) && /The party camps\./.test(fs.readFileSync(logOf(vault, run), 'utf8')));
       await wait(120);
-      assert.strictEqual(holder.f.calls.length, 1, 'run once, never again');
+      assert.strictEqual(f.calls.length, 1, 'run once, never again');
     });
 
     it('a start with play already in the state and no log files it at once', async () => {
@@ -608,7 +607,8 @@ describe('run sheet server', () => {
       await act(first, [{ type: 'jot', id: 'c1-1', text: 'The party camps.' }]);
       await waitFor(() => fs.existsSync(path.join(tableDir(vault), `${first.stateId}.json`)));
       await first.close();
-      const { run, calls } = await startWith(vault);
+      // a retry a minute off: only the filing while the server is built can pass this
+      const { run, calls } = await startWith(vault, { recordRetryMs: [60000] });
       await waitFor(() => fs.existsSync(logOf(vault, run)) && /The party camps\./.test(fs.readFileSync(logOf(vault, run), 'utf8')));
       assert.strictEqual(calls.length, 1);
     });

@@ -377,7 +377,7 @@
       refresh();
     });
     es.addEventListener('record-kept', (ev) => { const d = data(ev); if (d.path) note(keptText(d.path), { id: `kept:${d.path}` }); });
-    es.addEventListener('record-filed', (ev) => { const d = data(ev); if (d.path && !G.tableLog) { G.tableLog = d.path; render(); } });
+    es.addEventListener('record-filed', (ev) => { const d = data(ev); if (d.path && !G.tableLog) { G.tableLog = d.path; update(); } });
     es.addEventListener('record-failed', (ev) => { const d = data(ev); recordOk(); note(recordFailedText(d.error), { kind: 'bad', id: `rf:${d.error}` }); });
     es.addEventListener('record-ok', () => recordOk());
     es.onerror = () => { if (!G.down) lost(); };

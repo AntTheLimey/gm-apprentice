@@ -2951,9 +2951,10 @@ def check_sessions(vault: Path) -> list[str]:
                     f"declared={declared} derived={derived}"
                     + (" (in play)" if in_play else ""))
         # In play, any status from before play or a played the GM set is right.
-        if in_play and declared in ("wrap-up", "reviewed"):
-            # Ended by the GM, but its Wrap-Up is not found: never advise
-            # stamping an ended session back to prep.
+        if not wrap and declared in ("wrap-up", "reviewed"):
+            # Ended by the GM, but its Wrap-Up is not found (with or without
+            # play records): never advise stamping an ended session back to
+            # prep.
             rows.append(f"WARNING\t{rel}\tstatus '{declared}' but no "
                         "Wrap-Up is linked or found: link it as "
                         "documents.wrap_up, or file it with wrap-up")

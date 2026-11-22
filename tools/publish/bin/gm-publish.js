@@ -549,7 +549,8 @@ _meta/table/<session>.json, and the Table Log written as play happens. It runs
 until you stop it (Ctrl+C), which saves the state first. A session with no Table
 Log note gets one on the first thing that happens at the table, through the
 command --file-log names (\`gma table\` passes it); opening the sheet for a look
-files nothing. Without --file-log no Table Log note is filed or written.
+files nothing. Without --file-log a missing Table Log is never filed; a Table Log
+the session already links is still written as play happens.
 
 With the site's live stats or inbox deployed it flushes the PCs' live sheets
 first (stopped after 20 s); a flush that fails does not stop the sheet.
