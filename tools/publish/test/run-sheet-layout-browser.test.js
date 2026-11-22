@@ -11,6 +11,7 @@ const { createTableServer, listenLocal } = require('../lib/run-sheet/server');
 const { listSessions, pickSession } = require('../lib/run-sheet/sessions');
 const { browserSkip } = require('./helpers/browser');
 const { withPage } = require('./helpers/cdp');
+const { findChrome } = require('../lib/chrome');
 
 const PAGE = `<!doctype html><meta charset="utf-8"><body style="margin:0">
 <button id="b" style="position:absolute;left:40px;top:40px;width:120px;height:40px">go</button>
@@ -74,6 +75,23 @@ describe('real-input page helpers', { skip: browserSkip() }, () => {
       await page.wheel(300, 200, 0); // scrolls nothing: back after the wait for a scroll that never starts
       assert.ok(Date.now() - t0 < 2000, `${Date.now() - t0} ms`);
     });
+  });
+
+  it('a Chrome that never answers its setup is stopped and launched once more (#852)', { skip: process.platform === 'win32' && 'a shell stand-in' }, async () => {
+    // The macOS runner's "Runtime.enable: no answer in 30 s": a stand-in that says nothing on its first launch and
+    // starts the real Chrome on its second.
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rs-silent-'));
+    try {
+      const mark = path.join(dir, 'launched');
+      const stand = path.join(dir, 'chrome.sh');
+      fs.writeFileSync(stand, `#!/bin/sh\nif [ ! -f '${mark}' ]; then : > '${mark}'; exec sleep 60; fi\nexec '${findChrome()}' "$@"\n`, { mode: 0o755 });
+      const got = await withPage({ width: 600, height: 400, chrome: stand, stepMs: 3000 }, async (page) => {
+        await page.goto(URL_);
+        return page.waitFor('document.getElementById("b") && "opened"');
+      });
+      assert.strictEqual(got, 'opened');
+      assert.ok(fs.existsSync(mark), 'the silent first launch happened');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
 
   it('a drag moves a test element by the distance dragged', async () => {

@@ -14,7 +14,7 @@ const { withChromeLock, PROFILE_PREFIX, LOCK_DIR } = require('./browser');
 
 const STEP_MS = 30000;
 
-function connect(child) {
+function connect(child, stepMs = STEP_MS) {
   const out = child.stdio[3];
   const inp = child.stdio[4];
   let id = 0;
@@ -52,7 +52,7 @@ function connect(child) {
   const send = (method, params = {}, sessionId) => new Promise((resolve, reject) => {
     if (closed) { reject(closed); return; }
     const n = ++id;
-    const timer = setTimeout(() => { waiting.delete(n); reject(new Error(`${method}: no answer in ${STEP_MS / 1000} s`)); }, STEP_MS);
+    const timer = setTimeout(() => { waiting.delete(n); reject(new Error(`${method}: no answer in ${stepMs / 1000} s`)); }, stepMs);
     waiting.set(n, { resolve, reject, timer, method });
     out.write(`${JSON.stringify({ id: n, method, params, ...(sessionId ? { sessionId } : {}) })}\0`);
   });
@@ -100,26 +100,48 @@ const INPUT_LOG = `(() => {
 // `page`: goto(url), reload(), evaluate(expr), waitFor(expr, ms), screenshot(file), sleep(ms), key(name, { shift }),
 // newTab(url) -> page, resize(width, height); real pointer and text: mouse(type, x, y, { buttons }), click(sel, { holdMs }), drag(x1, y1, x2, y2, steps),
 // wheel(x, y, dy), type(text), box(sel), clickAt(x, y, { holdMs }), colorScheme('light'|'dark').
-async function withPage({ width = 1449, height = 762, chrome = findChrome() } = {}, fn) {
+async function withPage({ width = 1449, height = 762, chrome = findChrome(), stepMs = STEP_MS } = {}, fn) {
   if (!chrome) throw new Error('no browser');
   return withChromeLock(async () => {
-    const profile = fs.mkdtempSync(path.join(os.tmpdir(), PROFILE_PREFIX));
-    // Recorded beside the lock (as launchChrome does), so a stale lock's reaper can end this Chrome;
-    // a launch that could not be recorded does not start.
-    try { fs.writeFileSync(path.join(LOCK_DIR, 'profile'), profile); } catch (e) {
-      fs.rmSync(profile, { recursive: true, force: true, maxRetries: 3 });
-      throw e;
-    }
-    const before = chromeTempNow();
-    const child = spawn(chrome, ['--headless=new', '--disable-gpu', '--no-sandbox', '--no-first-run', '--hide-scrollbars',
-      `--user-data-dir=${profile}`, '--remote-debugging-pipe', `--window-size=${width},${height}`, 'about:blank'],
-    { stdio: ['ignore', 'ignore', 'ignore', 'pipe', 'pipe'], env: chromeEnv(profile) });
+    let child = null;
+    let profile = null;
+    let before = null;
+    let send = null;
+    const launch = () => {
+      profile = fs.mkdtempSync(path.join(os.tmpdir(), PROFILE_PREFIX));
+      // Recorded beside the lock (as launchChrome does), so a stale lock's reaper can end this Chrome;
+      // a launch that could not be recorded does not start.
+      try { fs.writeFileSync(path.join(LOCK_DIR, 'profile'), profile); } catch (e) {
+        fs.rmSync(profile, { recursive: true, force: true, maxRetries: 3 });
+        profile = null;
+        throw e;
+      }
+      before = chromeTempNow();
+      child = spawn(chrome, ['--headless=new', '--disable-gpu', '--no-sandbox', '--no-first-run', '--hide-scrollbars',
+        `--user-data-dir=${profile}`, '--remote-debugging-pipe', `--window-size=${width},${height}`, 'about:blank'],
+      { stdio: ['ignore', 'ignore', 'ignore', 'pipe', 'pipe'], env: chromeEnv(profile) });
+      ({ send } = connect(child, stepMs));
+    };
+    // The browser closed (killed if it will not go), its helpers stopped, its profile removed.
+    const stop = async () => {
+      if (child) {
+        const c = child;
+        await new Promise((resolve) => {
+          if (c.exitCode !== null || c.signalCode) { resolve(); return; }
+          const t = setTimeout(() => { try { c.kill('SIGKILL'); } catch { /* gone */ } resolve(); }, 5000);
+          c.once('exit', () => { clearTimeout(t); resolve(); });
+          try { c.kill(); } catch { /* gone */ }
+        });
+      }
+      if (profile) {
+        stopChrome(profile);
+        removeNewChromeTemp(before);
+        fs.rmSync(profile, { recursive: true, force: true, maxRetries: 3 });
+      }
+      child = null;
+      profile = null;
+    };
     try {
-      const { send } = connect(child);
-      const { targetInfos } = await send('Target.getTargets');
-      let target = targetInfos.find((t) => t.type === 'page');
-      if (!target) target = { targetId: (await send('Target.createTarget', { url: 'about:blank' })).targetId };
-      const { sessionId } = await send('Target.attachToTarget', { targetId: target.targetId, flatten: true });
       // One page object per attached target; `newTab` makes another on the same pipe.
       const makePage = async (sessionId) => {
         const s = (method, params) => send(method, params, sessionId);
@@ -259,30 +281,46 @@ async function withPage({ width = 1449, height = 762, chrome = findChrome() } = 
           // Text into whatever has focus (Input.insertText: one insert, as a paste or an input method gives).
           type: (text) => s('Input.insertText', { text }),
           // Another tab in the same browser, opened on `url` (its own event streams, its own page).
+          // A tab that never answers its setup (as a fresh launch can, #852) is closed and made once more.
           async newTab(url) {
-            const { targetId } = await send('Target.createTarget', { url: 'about:blank' });
-            const att = await send('Target.attachToTarget', { targetId, flatten: true });
-            const tab = await makePage(att.sessionId);
+            let tab = null;
+            for (let attempt = 1; !tab; attempt++) {
+              const { targetId } = await send('Target.createTarget', { url: 'about:blank' });
+              try {
+                const att = await send('Target.attachToTarget', { targetId, flatten: true });
+                tab = await makePage(att.sessionId);
+              } catch (e) {
+                try { await send('Target.closeTarget', { targetId }); } catch { /* gone already */ }
+                if (attempt >= 2) throw e;
+              }
+            }
             await tab.goto(url);
             return tab;
           },
         };
         return page;
       };
-      const page = await makePage(sessionId);
+      // A fresh Chrome on a busy macOS runner now and then never answers its first commands (Runtime.enable: no
+      // answer in 30 s, #852). Nothing of the test has run yet, so that launch is stopped and one more is made.
+      let page = null;
+      for (let attempt = 1; !page; attempt++) {
+        launch();
+        try {
+          const { targetInfos } = await send('Target.getTargets');
+          let target = targetInfos.find((t) => t.type === 'page');
+          if (!target) target = { targetId: (await send('Target.createTarget', { url: 'about:blank' })).targetId };
+          const { sessionId } = await send('Target.attachToTarget', { targetId: target.targetId, flatten: true });
+          page = await makePage(sessionId);
+        } catch (e) {
+          await stop();
+          if (attempt >= 2) throw new Error(`${e.message} (the browser's setup failed on two launches)`);
+        }
+      }
       const result = await fn(page);
       try { await send('Browser.close'); } catch { /* gone already */ }
       return result;
     } finally {
-      await new Promise((resolve) => {
-        if (child.exitCode !== null || child.signalCode) { resolve(); return; }
-        const t = setTimeout(() => { try { child.kill('SIGKILL'); } catch { /* gone */ } resolve(); }, 5000);
-        child.once('exit', () => { clearTimeout(t); resolve(); });
-        try { child.kill(); } catch { /* gone */ }
-      });
-      stopChrome(profile);
-      removeNewChromeTemp(before);
-      fs.rmSync(profile, { recursive: true, force: true, maxRetries: 3 });
+      await stop();
     }
   });
 }
