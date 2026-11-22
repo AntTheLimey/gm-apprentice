@@ -6,6 +6,15 @@ const path = require('node:path');
 const { leakSite } = require('../helpers/leak-site');
 const { runLeakGate } = require('../../lib/leak-gate');
 
+// The gate's own CPU time, not the clock's: a machine busy with other work (the rest of the suite, another
+// worktree's tests) stretches the clock, not the work, so a limit on the clock failed under load (#852).
+function timed(fn) {
+  const c0 = process.cpuUsage();
+  const r = fn();
+  const c = process.cpuUsage(c0);
+  return { r, cpu: (c.user + c.system) / 1e6 };
+}
+
 it('the gate reads a 1,000-page site in under 3 seconds', () => {
   const files = {};
   for (let i = 0; i < 1000; i++) {
@@ -15,10 +24,10 @@ it('the gate reads a 1,000-page site in under 3 seconds', () => {
   try {
     const page = fs.readFileSync(path.join(site.outputDir, 'npcs', 'n0.html'), 'utf8');
     assert.ok(page.length > 1000);
-    const r = runLeakGate({ configPath: site.configPath, outputDir: site.outputDir });
+    const { r, cpu } = timed(() => runLeakGate({ configPath: site.configPath, outputDir: site.outputDir }));
     assert.deepEqual(r.findings, []);
     const limit = process.env.CI ? 9 : 3;   // CI machines are slower; the proof measures the real copies
-    assert.ok(r.seconds < limit, `took ${r.seconds.toFixed(2)} s`);
+    assert.ok(cpu < limit, `took ${cpu.toFixed(2)} s of CPU (${r.seconds.toFixed(2)} s on the clock)`);
   } finally { site.cleanup(); }
 });
 
@@ -32,9 +41,9 @@ it('the gate reads a 1,000-page site full of comments in under 3 seconds', () =>
     const page = fs.readFileSync(path.join(site.outputDir, 'npcs', 'n0.html'), 'utf8');
     assert.ok(page.length > 1000);
     assert.ok(!page.includes('line comment') && !page.includes('multi-line'), 'comments are not on the page');
-    const r = runLeakGate({ configPath: site.configPath, outputDir: site.outputDir });
+    const { r, cpu } = timed(() => runLeakGate({ configPath: site.configPath, outputDir: site.outputDir }));
     assert.deepEqual(r.findings, []);
     const limit = process.env.CI ? 9 : 3;
-    assert.ok(r.seconds < limit, `took ${r.seconds.toFixed(2)} s`);
+    assert.ok(cpu < limit, `took ${cpu.toFixed(2)} s of CPU (${r.seconds.toFixed(2)} s on the clock)`);
   } finally { site.cleanup(); }
 });
