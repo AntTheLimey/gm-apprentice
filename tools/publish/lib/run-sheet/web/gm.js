@@ -77,7 +77,7 @@
 
   // ------------------------------------------------------------------ the one page state
   const G = {
-    model: null, session: null, stateId: null, tableLog: null, serverId: null,
+    model: null, session: null, stateId: null, tableLog: null, tableLogOnFirst: false, serverId: null,
     state: null, rev: 0,
     pending: [], answered: [], inflight: false, clientId: randomId(), seq: 0, switching: false,
     down: false, putFailing: false, saveFailed: false, putRev: 0, savedRev: 0, heardRev: 0,
@@ -129,6 +129,7 @@
     G.model = m.model;
     G.session = m.session;
     G.tableLog = m.tableLog;
+    G.tableLogOnFirst = !!m.tableLogOnFirst;
     serverIs(m.serverId);
     G.modelAt = Date.now();
     if (sideKept && sideKept.base !== baseOf(G.model.sideColours)) dropKept();
@@ -376,6 +377,7 @@
       refresh();
     });
     es.addEventListener('record-kept', (ev) => { const d = data(ev); if (d.path) note(keptText(d.path), { id: `kept:${d.path}` }); });
+    es.addEventListener('record-filed', (ev) => { const d = data(ev); if (d.path && !G.tableLog) { G.tableLog = d.path; update(); } });
     es.addEventListener('record-failed', (ev) => { const d = data(ev); recordOk(); note(recordFailedText(d.error), { kind: 'bad', id: `rf:${d.error}` }); });
     es.addEventListener('record-ok', () => recordOk());
     es.onerror = () => { if (!G.down) lost(); };
@@ -796,7 +798,10 @@
     let h = '';
     for (const part of parts) if (part.sheetTop) h += part.sheetTop(d) || '';
     if (d.orphans.length) h += changedHTML(d);
-    if (!G.tableLog) h += '<div class="nolog"><b>No Table Log note yet:</b> start it with <code>gma table</code> to have the record written. The sheet keeps what you do meanwhile.</div>';
+    // #855: started by gma table, the log is filed on the first thing that happens; a look leaves nothing.
+    if (!G.tableLog) h += G.tableLogOnFirst
+      ? '<div class="nolog"><b>No Table Log yet:</b> it is filed on the first thing that happens at the table, so a look leaves nothing in the vault.</div>'
+      : '<div class="nolog"><b>No Table Log note yet:</b> start it with <code>gma table</code> to have the record written. The sheet keeps what you do meanwhile.</div>';
     const brief = Object.keys(m.brief || {}).filter((k) => !k.endsWith('Html') && m.brief[`${k}Html`]);
     if (brief.length) h += sec('brief', 'Brief', brief.map((k) => `<h4 class="lab">${esc(BRIEF_LABELS[k] || k)}</h4>${m.brief[`${k}Html`]}`).join(''));
     h += sec('handover', 'Hand over', handoverHTML(d));
@@ -1894,6 +1899,7 @@
     getJson('/api/model').then((m) => {
       G.model = m.model;
       G.tableLog = m.tableLog;
+      G.tableLogOnFirst = !!m.tableLogOnFirst;
       // a name typed while the model was on its way is searched again in the new cast
       const box = document.activeElement;
       if (box && box.dataset && box.dataset.bring !== undefined && box.value) {

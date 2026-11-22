@@ -96,7 +96,7 @@ class ExportNewTests(unittest.TestCase):
     def test_play_notes_can_follow_the_export(self):
         code, out = self.new("--write", "--play-date", "2026-10-18")
         self.assertEqual(code, 0, out)
-        self.assertIn("status prepped -> played", out)
+        self.assertNotIn("-> played", out)    # #855: only wrap-up marks it played
         self.assertFalse((self.vault / NOTES).exists())
         code, out = run(self.vault, "play-notes-new", "--session", SESSION,
                         "--write")
@@ -167,12 +167,13 @@ class ExportInTheChainTests(unittest.TestCase):
     def session_rows(self):
         return [r for r in vc.check_sessions(self.vault) if INDEX in r]
 
-    def test_an_export_alone_derives_played(self):
+    def test_an_export_alone_puts_the_session_in_play(self):
+        # #855: in play, not played; the status stays prepped and is not warned about.
         self.file_export()
         rows = self.session_rows()
         info = next(r for r in rows if "derived=" in r)
         self.assertIn("export=✓", info)
-        self.assertIn("derived=played", info)
+        self.assertIn("declared=prepped derived=planned (in play)", info)
         self.assertFalse([r for r in rows if r.startswith("WARNING")
                           and ("status" in r or "export" in r)], rows)
 

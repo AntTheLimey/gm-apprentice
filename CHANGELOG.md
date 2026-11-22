@@ -9,6 +9,13 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.133] — 2026-11-22
+
+### Changed
+
+- Only wrap-up marks a session played (#855). Filing a Table Log, Play Notes or an export no longer raises the session's status, so a session in play stays off the player site until you wrap it up.
+- The run sheet files its Table Log on the first thing that happens at the table, not when it opens, so a look before game night leaves nothing behind. The session check no longer suggests stamping `played` on a session in play. Publish tool 1.70.53.
+
 ## [1.12.132] — 2026-11-22
 
 ### Added

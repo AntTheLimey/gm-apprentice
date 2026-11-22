@@ -747,13 +747,13 @@ class SessionsCommandTests(unittest.TestCase):
         self.assertTrue(rows_for(
             self.rows, f"WARNING\t{QUIET}\tstatus 'prepped' but"))
 
-    def test_chapter_two_session_one_derives_played_not_prepped(self):
+    def test_chapter_two_session_one_is_in_play_not_prepped(self):
         # Chapter 1's plan is also "session 1" — chapter scoping (mirroring
         # session_context.prefer_chapter) must keep it out of this chain.
         self.assertEqual(
             self.summary(RETURN),
             f"INFO\t{RETURN}\tsession 1: plan=– play-notes=✓ "
-            f"wrap-up=– declared=played derived=played")
+            f"wrap-up=– declared=played derived=planned (in play)")
 
     def test_matching_declared_status_produces_no_warning(self):
         self.assertFalse(
@@ -840,12 +840,12 @@ class SessionsCommandTests(unittest.TestCase):
         rows = vc.check_sessions(vault)
         ch4 = rows_for(rows, "Chapter 4 - Calcutta")
         self.assertTrue(rows_for(ch4, "derived=planned"), ch4)
-        self.assertFalse(rows_for(ch4, "derived=played"), ch4)
+        self.assertFalse(rows_for(ch4, "(in play)"), ch4)
         # The stray link is still worth telling the GM about.
         self.assertTrue(rows_for(ch4, "another chapter"), ch4)
         # And Chapter 3 keeps its own play notes.
         ch3 = rows_for(rows, "Chapter 3 - Vienna")
-        self.assertTrue(rows_for(ch3, "derived=played"), ch3)
+        self.assertTrue(rows_for(ch3, "(in play)"), ch3)
 
     def test_link_to_a_note_beside_the_index_survives_a_chapter_name_mismatch(
             self):
@@ -864,7 +864,7 @@ class SessionsCommandTests(unittest.TestCase):
         (d / "session_11_play_notes.md").write_text(
             "---\ntype: session-play-notes\n---\n", encoding="utf-8")
         rows = vc.check_sessions(vault)
-        self.assertTrue(rows_for(rows, "derived=played"), rows)
+        self.assertTrue(rows_for(rows, "(in play)"), rows)
         self.assertFalse(rows_for(rows, "another chapter"), rows)
 
     def test_unfiled_note_naming_this_index_by_session_link_is_claimed(self):
@@ -884,7 +884,7 @@ class SessionsCommandTests(unittest.TestCase):
             "---\ntype: session-play-notes\nsession: \"[[Session_11]]\"\n"
             "---\n", encoding="utf-8")
         rows = vc.check_sessions(vault)
-        self.assertTrue(rows_for(rows, "derived=played"), rows)
+        self.assertTrue(rows_for(rows, "(in play)"), rows)
         self.assertFalse(rows_for(rows, "another chapter"), rows)
         # The link is already in the frontmatter; do not tell the GM to add it.
         self.assertFalse(rows_for(rows, "does not link it"), rows)
@@ -917,7 +917,7 @@ class SessionsCommandTests(unittest.TestCase):
         self.assertTrue(rows_for(ch4, "derived=planned"), ch4)
         self.assertTrue(rows_for(ch4, "another chapter"), ch4)
         ch3 = rows_for(rows, "Chapter 3 - Vienna")
-        self.assertTrue(rows_for(ch3, "derived=played"), ch3)
+        self.assertTrue(rows_for(ch3, "(in play)"), ch3)
 
     def test_null_document_placeholder_is_not_a_broken_link(self):
         # `plan: null` is the schema's own "not yet" placeholder — the
@@ -944,7 +944,7 @@ class SessionsCommandTests(unittest.TestCase):
         self.assertTrue(rows_for(
             rows, "documents.table_log links '[[Session 01 - Plan]]', "
                   "a session-plan note, not a table log"), rows)
-        self.assertFalse(rows_for(rows, "derived=played"), rows)
+        self.assertFalse(rows_for(rows, "(in play)"), rows)
 
     def test_link_to_a_note_of_the_right_type_still_counts(self):
         vault = make_vault(self)
@@ -957,7 +957,7 @@ class SessionsCommandTests(unittest.TestCase):
             encoding="utf-8")
         rows = vc.check_sessions(vault)
         self.assertFalse(rows_for(rows, "not a table log"), rows)
-        self.assertTrue(rows_for(rows, "derived=played"), rows)
+        self.assertTrue(rows_for(rows, "(in play)"), rows)
 
     def test_empty_vault_says_so(self):
         vault = make_vault(self)

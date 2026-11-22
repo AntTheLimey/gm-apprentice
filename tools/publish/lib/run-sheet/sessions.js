@@ -11,6 +11,7 @@ const { publishedWrapUpFor } = require('../session-hub');
 const { displayTitleOf } = require('../scanner');
 const { canonicalNfc } = require('../unicode');
 const { SESSION_PLAYED, WRAP_UP_TYPES } = require('../shared-lists');
+const { recordBodyOf, isEmptySkeleton } = require('./record');
 
 const low = (s) => canonicalNfc(String(s == null ? '' : s)).trim().toLowerCase();
 const RECORDS = ['play_notes', 'export', 'table_log', 'wrap_up'];
@@ -27,9 +28,23 @@ const docsOf = (index, p) => {
   return d && typeof d === 'object' ? d : {};
 };
 
-// Has this session been played: a played status, or any record of it.
+// Has the table run this session: a played status, a Wrap-Up, or a play record with something in it (#855). A record
+// filed but empty (a Table Log a look filed before game night, under the old open-time filing) is no play.
+const written = (body) => String(body || '').split('\n').some((l) => {
+  const t = l.trim();
+  return t && !t.startsWith('#') && !/^<!--.*-->$/.test(t);
+});
+function recordHasContent(index, key, target) {
+  if (key === 'wrap_up' || key === 'export') return true;
+  const p = index.resolve(target);
+  if (!p || !index.has(p)) return false;
+  const { body } = index.read(p);
+  return key === 'table_log' ? !isEmptySkeleton(recordBodyOf(String(body || ''))) : written(body);
+}
 function isPlayed(index, sessionPath) {
-  return SESSION_PLAYED.has(low(fmOf(index, sessionPath).status)) || RECORDS.some((k) => fmTarget(docsOf(index, sessionPath)[k]));
+  if (SESSION_PLAYED.has(low(fmOf(index, sessionPath).status))) return true;
+  const docs = docsOf(index, sessionPath);
+  return RECORDS.some((k) => fmTarget(docs[k]) && recordHasContent(index, k, fmTarget(docs[k])));
 }
 
 // The session's Table Log: `documents.table_log`, else the one session-table-log note naming the session.

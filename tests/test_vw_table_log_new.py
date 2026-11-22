@@ -92,14 +92,15 @@ class TableLogNewTests(unittest.TestCase):
             run(self.vault, "play-notes-new", "--session", SESSION,
                 "--created-by", "run-sheet")
 
-    def test_links_index_and_raises_status(self):
+    def test_links_index_and_keeps_status(self):
+        # #855: filing the Table Log never changes the status.
         self.write(INDEX, PREPPED.replace("status: prepped",
                                           "status: prepped  # as planned"))
         code, out = self.new("--write", "--play-date", "2026-10-18")
         self.assertEqual(code, 0, out)
         self.assertEqual(vl.wikilink_target(self.documents()["table_log"]),
                          f"{SESSION} - Table Log")
-        self.assertIn("status: played  # as planned\n", self.read(INDEX))
+        self.assertIn("status: prepped  # as planned\n", self.read(INDEX))
         self.assertIn('play_date: "2026-10-18"', self.read(INDEX))
 
     def test_leaves_other_records_alone(self):

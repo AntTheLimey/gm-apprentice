@@ -2918,6 +2918,7 @@ def check_sessions(vault: Path) -> list[str]:
             unlinked.extend(u)
 
         wrap = chain["wrap_up"]
+        in_play = False
         if wrap:
             # A wrap-up the GM has confirmed is the 'reviewed' end state;
             # one still in DRAFT means the wrap-up exists, nothing more.
@@ -2925,7 +2926,11 @@ def check_sessions(vault: Path) -> list[str]:
                        if by_rel.get(wrap, {}).get("canon_status")
                        == "AUTHORITATIVE" else "wrap-up")
         elif any(chain[k] for k in PLAY_RECORD_KEYS):
-            derived = "played"
+            # In play (#855): the records show the table ran it, but only
+            # wrap-up marks it played. Its status stays as prep left it
+            # (planned or prepped); a played the GM set is accepted too.
+            in_play = True
+            derived = "prepped" if chain["plan"] else "planned"
         elif chain["plan"]:
             derived = "prepped"
         else:
@@ -2943,8 +2948,18 @@ def check_sessions(vault: Path) -> list[str]:
                     else "?")
         rows.append(f"INFO\t{rel}\tsession "
                     f"{number if number is not None else '?'}: {flags} "
-                    f"declared={declared} derived={derived}")
-        if declared != derived:
+                    f"declared={declared} derived={derived}"
+                    + (" (in play)" if in_play else ""))
+        # In play, any status from before play or a played the GM set is right.
+        if not wrap and declared in ("wrap-up", "reviewed"):
+            # Ended by the GM, but its Wrap-Up is not found (with or without
+            # play records): never advise stamping an ended session back to
+            # prep.
+            rows.append(f"WARNING\t{rel}\tstatus '{declared}' but no "
+                        "Wrap-Up is linked or found: link it as "
+                        "documents.wrap_up, or file it with wrap-up")
+        elif declared != derived and not (
+                in_play and declared in ("planned", "prepped", "played")):
             rows.append(f"WARNING\t{rel}\tstatus '{declared}' but the "
                         f"documents that exist derive '{derived}' — "
                         f'gma stamp-entities VAULT "{rel}" '

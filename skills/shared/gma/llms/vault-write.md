@@ -314,8 +314,8 @@ gma vault-write <vault> play-notes-new --session SESSION [options]
 
 ```text
 Files <index> - Play Notes beside the index and sets its
-documents.play_notes, play_date (with --play-date) and a
-planned or prepped status to played; the Plan link stays.
+documents.play_notes and play_date (with --play-date); the
+status and the Plan link stay (only wrap-up marks it played).
 Refused when Play Notes anywhere name the session. --export
 works as in session-new; export-new files an export alone.
 
@@ -340,8 +340,8 @@ gma vault-write <vault> export-new --session SESSION --export EXPORT [options]
 
 ```text
 Files <index> - Export beside the index, the export whole and
-unedited, and sets its documents.export, play_date (with
---play-date) and a planned or prepped status to played.
+unedited, and sets its documents.export and play_date (with
+--play-date); the status stays (only wrap-up marks it played).
 Play Notes there or not, it leaves them alone, so it runs
 after session-play as well as before. Refused when an Export
 already names the session. Resolves the export's names as
@@ -369,8 +369,8 @@ gma vault-write <vault> table-log-new --session SESSION [options]
 ```text
 Files <index> - Table Log beside the index with its sections
 empty (the vitals table's header row only), and sets its
-documents.table_log, play_date (with
---play-date) and a planned or prepped status to played. The
+documents.table_log and play_date (with --play-date); the
+status stays (only wrap-up marks it played). The
 other play records are left alone. Refused when a Table Log
 already names the session.
 

@@ -340,7 +340,8 @@ test('setup-backend.js and site-doctor.js read no site-folder key off the site f
 // runner there is caught. Files that require child_process: run-command.js (the shared runner for git, npm install,
 // wrangler and gh), image-optimize.js (image tools), chrome.js and props/pages-cli.js (find and run Chrome to print a
 // page; not build steps), run-sheet/table-cli.js (this tool's own `flush` as a capped child, the browser opener and
-// the lsof/netstat lookup of a busy port; not build steps), steps.js (the steps) and settings/site-tool.js, whose one use runs this tool's own
+// the lsof/netstat lookup of a busy port; not build steps), run-sheet/server.js (once, the Table Log filing command
+// `gma table` hands it, #855; not a build step), steps.js (the steps) and settings/site-tool.js, whose one use runs this tool's own
 // `update-pin --check`. No code runs `npm run <hook>` any more: a package.json prebuild or postbuild stops the build.
 // The two script names appear as code only in the registry (`stepsFrom`); a shell is opened with `shell: true` only by
 // steps.js.
@@ -348,7 +349,11 @@ test('a build step is run only by the steps module', () => {
   const everywhere = [...sources, ...files(SETTINGS)];
   const grepAll = (re) => everywhere.filter((f) => re.test(code(f))).map(rel).sort();
   assert.deepEqual(grepAll(/\brequire\(\s*['"](?:node:)?child_process['"]\s*\)/),
-    ['lib/chrome.js', 'lib/image-optimize.js', 'lib/props/pages-cli.js', 'lib/run-command.js', 'lib/run-sheet/table-cli.js', 'lib/settings/site-tool.js', 'lib/settings/steps.js']);
+    ['lib/chrome.js', 'lib/image-optimize.js', 'lib/props/pages-cli.js', 'lib/run-command.js', 'lib/run-sheet/server.js', 'lib/run-sheet/table-cli.js', 'lib/settings/site-tool.js', 'lib/settings/steps.js']);
+  // server.js starts exactly one process, the --file-log command, with no shell.
+  const serverSrc = code(path.join(ROOT, 'lib', 'run-sheet', 'server.js'));
+  assert.equal((serverSrc.match(/\bspawnSync\(/g) || []).length, 1, 'server.js: one call');
+  assert.match(serverSrc, /spawnSync\(cmd\[0\], cmd\.slice\(1\), \{ encoding: 'utf8', windowsHide: true/);
   // site-tool.js starts exactly one process: this tool, to ask update-pin about the site.
   const spawns = code(path.join(SETTINGS, 'site-tool.js')).match(/\bspawnSync\(/g) || [];
   assert.equal(spawns.length, 1, 'site-tool.js: one call');
