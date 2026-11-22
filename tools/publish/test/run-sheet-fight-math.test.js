@@ -750,3 +750,19 @@ test('a copy switched to ally still counts towards its word; an unseen ally is n
     assert.equal(M.addChoices(places, 'the dcks', RS.castSearch, 8, newPlace)[0].note, 'L/The Docks.md');
   });
 }
+
+test('a foe whose block says it starts hurt (hpStart) starts there; a carried or last-fight figure wins', () => {
+  const hurt = { ...imp, hpStart: 7 };
+  const ally = { ...venn, hpStart: 5, hpNow: 12 };
+  const npc = { ...gilt, hpStart: 9 };
+  const beat = { ...gate, foes: [hurt, ally, npc], points: [], ifs: [] };
+  const lastFight = (hp) => ({ ...here, fights: [{ id: 'old', ended: true, rows: [{ note: 'NPCs/Gilt.md', kind: 'foe', copy: 1, hp, max: 50, conds: [] }] }] });
+  const rows = (state) => M.rowsForFight({ model, derived: derivedOf({ beats: [beat, hub] }), state, beatKey: 'b1', idBase: 'a' }).rows;
+  const by = (rs, note) => rs.find((x) => x.note === note);
+  const r = rows(here);
+  assert.deepEqual([by(r, 'Creatures/Imp.md').hp, by(r, 'Creatures/Imp.md').max], [7, 21], 'starts at its block\'s figure, max the block\'s');
+  assert.equal(by(r, 'NPCs/Venn.md').hp, 12, 'the ally\'s carried figure wins');
+  assert.equal(by(r, 'NPCs/Gilt.md').hp, 9, 'no last fight: the block\'s start');
+  const noStart = M.rowsForFight({ model, derived: derivedOf(), state: here, beatKey: 'b1', idBase: 'a' }).rows;
+  assert.equal(by(noStart, 'Creatures/Imp.md').hp, 21, 'no hpStart: full, as before');
+});

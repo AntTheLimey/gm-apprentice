@@ -7,7 +7,9 @@ const crypto = require('node:crypto');
 const path = require('node:path');
 const { buildIndex } = require('../lib/run-sheet/notes');
 const { readRunSheet } = require('../lib/run-sheet/read');
+const { foesOf } = require('../lib/run-sheet/foes');
 const { systemFor } = require('../lib/run-sheet/systems');
+const { statSection, currentOf } = require('../lib/run-sheet/systems/stat-section');
 const RS = require('../lib/run-sheet/web/state');
 const FM = require('../lib/run-sheet/web/fight-math');
 const { copyFixture, withSystem, removeFixture, FIXTURES } = require('./helpers/systems-fixture');
@@ -148,11 +150,16 @@ describe('run sheet systems', () => {
         assert.ok(want, `${fx}/${notePath} is in the snapshot`);
         seen += 1;
         const got = dnd.readFoe({ notePath, index, text: index.read(notePath).body });
+        // A statless note that now finds a block (S6-D4 as widened) would fail here: none of the D&D fixtures has one.
+        const old = index.gmSection(notePath, 'Stats');
         if (!want.stats) {
           assert.equal(got.stats, '', notePath);
           continue;
         }
-        assert.equal(sha(got.stats), want.stats, notePath);
+        // main's block, byte for byte, is still what `gmSection` gives; the finder gives it with the HTML comments
+        // dropped (the closing `<!-- /gm-only -->` that used to trail it), the one change in the text
+        assert.equal(sha(old), want.stats, notePath);
+        assert.equal(sha(got.stats), sha(old.replace(/<!--[\s\S]*?-->/g, '').trim()), notePath);
         assert.equal(got.statsHeading, 'Stats', notePath);
         assert.deepEqual(got.nums, want.nums, notePath);
         assert.deepEqual(got.lacks, want.lacks, notePath);
@@ -212,5 +219,105 @@ describe('run sheet systems', () => {
     let t = RS.emptyState({ stateId: 's', session: 'x', plan: 'p.md' });
     t = RS.reduce(t, { id: 'f2', type: 'fightStart', title: 'T', rules: 'dnd', rows: [] }, now());
     assert.equal(t.fight.rules, undefined);
+  });
+
+  describe('the stat section finder (S6-D4 as widened)', () => {
+    const NPCS = 'Characters/NPCs';
+    const foundIn = (fx, note, crlf = false) => {
+      const dir = copyFixture(fx, { crlf });
+      try { return statSection(buildIndex(dir).read(`${NPCS}/${note}.md`).body); } finally { removeFixture(dir); }
+    };
+
+    it('finds each of the CoC fixture\'s five heading spellings', () => {
+      for (const [note, heading, first] of [
+        ['Wick Tamsin', 'Stats', '**Wick Tamsin**'],
+        ['Nurse Orla Penn', 'Statistics', '**Orla Penn**'],
+        ['Tobias Reed', 'Statistics \u2014 Call of Cthulhu 7th Edition', '**Tobias Reed**'],
+        ['Marcus Lowe', 'Combat Stats (CoC 7e) \u2014 Before', '| STR'],
+        ['Edda Voss', 'Attributes', '**Edda Voss**'],
+      ]) {
+        const got = foundIn('run-sheet-coc', note);
+        assert.ok(got, note);
+        assert.equal(got.heading, heading, note);
+        assert.ok(got.md.startsWith(first), `${note}: ${got.md.slice(0, 20)}`);
+        assert.ok(!got.md.includes('<!--'), `${note} drops the gm-only comment`);
+      }
+      assert.equal(foundIn('run-sheet-coc', 'Pell Ashby'), null);
+    });
+
+    it('a CRLF checkout gives the same sections', () => {
+      for (const note of ['Wick Tamsin', 'Nurse Orla Penn', 'Tobias Reed', 'Marcus Lowe', 'Edda Voss']) {
+        assert.deepEqual(foundIn('run-sheet-coc', note, true), foundIn('run-sheet-coc', note), note);
+      }
+    });
+
+    it('Physical Characteristics is found: the block shows, with no numbers (the accepted false hit)', () => {
+      const got = statSection('## Overview\n\nA cook.\n\n## Physical Characteristics\n\nTall, stooped, left-handed.\n\n## Notes\n\nx');
+      assert.deepEqual(got, { heading: 'Physical Characteristics', md: 'Tall, stooped, left-handed.' });
+    });
+
+    it('### Stats under GM Notes beats an earlier ## Statistics; the first match is taken otherwise', () => {
+      const body = '## Statistics\n\nHP 3\n\n## GM Notes\n\n### Stats\n\nHP 9\n\n### Behaviour\n\nx\n';
+      assert.deepEqual(statSection(body), { heading: 'Stats', md: 'HP 9' });
+      assert.equal(statSection('## Statistics\n\nHP 3\n\n## Combat Stats\n\nHP 4\n').md, 'HP 3');
+      // a `### Stats` outside GM Notes is no more than a heading that holds a stats word
+      assert.equal(statSection('## Overview\n\n### Stats\n\nHP 5\n\n## GM Notes\n\nx').md, 'HP 5');
+    });
+
+    it('a heading inside a code fence is not one; a section runs to the next heading of its level or higher', () => {
+      assert.equal(statSection('## Notes\n\n```\n## Stats\nHP 1\n```\n\ntext\n'), null);
+      assert.equal(statSection('## Notes\n\n~~~\n### Stats\n~~~\n'), null);
+      const got = statSection('## Stats\n\nHP 8\n\n### Attacks\n\nBite\n\n## Next\n\nz');
+      assert.equal(got.md, 'HP 8\n\n### Attacks\n\nBite');
+      assert.equal(statSection('## Overview\n\nnothing\n'), null);
+      assert.equal(statSection(''), null);
+      assert.equal(statSection(null), null);
+    });
+
+    it('markers are ignored in the title, and case', () => {
+      assert.equal(statSection('### **STAT BLOCK**\n\nHP 5').heading, 'STAT BLOCK');
+      assert.equal(statSection('## Combat `Stats`\n\nHP 5').heading, 'Combat Stats');
+      assert.ok(statSection('## _Stats_\n\nHP 5'));
+    });
+
+    it('currentOf reads (currently N) after the HP figure and HP n/m as current over max', () => {
+      assert.equal(currentOf('**HP** 10 (currently 4) \u00b7 **MP** 6'), 4);
+      assert.equal(currentOf('HP: 10 (Currently 0)'), 0);
+      assert.equal(currentOf('HP 6/9 \u00b7 FP 10'), 6);
+      assert.equal(currentOf('Hit Points 12 / 20'), 12);
+      assert.equal(currentOf('HP 10'), null);
+      assert.equal(currentOf('currently 4 elsewhere, HP 10'), null);
+      assert.equal(currentOf('AC 14 (currently 3)'), null);
+      assert.equal(currentOf(''), null);
+      assert.equal(currentOf(null), null);
+    });
+
+    it('readFoe gives hpStart: (currently 4) on the CoC note, HP 6/9 on the GURPS one, CRLF alike', () => {
+      const dnd = systemFor('dnd-5e-2024');
+      for (const crlf of [false, true]) {
+        const coc = copyFixture('run-sheet-coc', { crlf });
+        const gurps = copyFixture('run-sheet-gurps', { crlf });
+        try {
+          const a = buildIndex(coc);
+          const wick = `${NPCS}/Wick Tamsin.md`;
+          assert.equal(dnd.readFoe({ notePath: wick, index: a, text: a.read(wick).body }).hpStart, 4, `wick crlf=${crlf}`);
+          const orla = `${NPCS}/Nurse Orla Penn.md`;
+          assert.equal(dnd.readFoe({ notePath: orla, index: a, text: a.read(orla).body }).hpStart, null);
+          const b = buildIndex(gurps);
+          const tam = `${NPCS}/Tam Osier.md`;
+          assert.equal(dnd.readFoe({ notePath: tam, index: b, text: b.read(tam).body }).hpStart, 6, `tam crlf=${crlf}`);
+        } finally { removeFixture(coc); removeFixture(gurps); }
+      }
+    });
+
+    it('a foe row of the CoC fixture\'s Wick Tamsin carries hp 10 and hpStart 4 (the row start is in the fight-math tests)', () => {
+      const dir = copyFixture('run-sheet-coc');
+      try {
+        const index = buildIndex(dir);
+        const got = foesOf(`${NPCS}/Wick Tamsin.md`, index, 1, 'b-test').foes[0];
+        assert.equal(got.hp, 10);
+        assert.equal(got.hpStart, 4);
+      } finally { removeFixture(dir); }
+    });
   });
 });

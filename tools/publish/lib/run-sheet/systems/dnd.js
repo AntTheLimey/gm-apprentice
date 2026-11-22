@@ -8,6 +8,7 @@ const { SIGNED_SOURCE, toNumber } = require('../signed');
 const { tableRows } = require('../plan-text');
 const { SYSTEM_NAMES } = require('../../shared-lists');
 const FM = require('../web/fight-math');
+const { statSection, currentOf } = require('./stat-section');
 
 const FOE_TYPES = new Set(['npc', 'creature']);
 
@@ -86,14 +87,16 @@ const HAS_ACTION = /^[ \t]*(?:[-*+][ \t]+)?[*_]*Actions\b|Hit:|Attack Roll|to hi
 const nameOf = (notePath, fm) => String(fm.name || path.posix.basename(notePath, '.md'));
 
 // A note's stat block and its numbers: `stats` '' when it has none (only an NPC or a creature has one), and then
-// `nums` null. `text` is the note's body (frontmatter stripped), for a finder that reads the note itself (Task 2).
-function readFoe({ notePath, index }) {
+// `nums` null. `text` is the note's body (frontmatter stripped), which the stat section finder reads; `hpStart` is the HP the block says it
+// starts at (`HP 10 (currently 4)`), null when it says none.
+function readFoe({ notePath, index, text }) {
   const fm = index.read(notePath).fm || {};
   const type = String(fm.type || '').toLowerCase();
-  const stats = FOE_TYPES.has(type) ? index.gmSection(notePath, 'Stats') : '';
-  if (!stats) return { stats: '', statsHeading: null, nums: null, lacks: [] };
+  const found = FOE_TYPES.has(type) ? statSection(text == null ? index.read(notePath).body : text) : null;
+  if (!found || !found.md) return { stats: '', statsHeading: null, nums: null, lacks: [], hpStart: null };
+  const stats = found.md;
   const nums = readNumbers(stats, index.gmSection(notePath, 'Behaviour'));
-  return { stats, statsHeading: 'Stats', nums, lacks: lacks(nameOf(notePath, fm), nums) };
+  return { stats, statsHeading: found.heading, nums, lacks: lacks(nameOf(notePath, fm), nums), hpStart: currentOf(stats) };
 }
 
 // Whether a block names a stock stat block and holds no action of its own (the `stock-no-actions` warning).

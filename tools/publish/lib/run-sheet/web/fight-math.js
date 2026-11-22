@@ -314,7 +314,8 @@
     const type = typeOf(ctx.model, foe);
     const start = startingSide(ctx, foe);
     const ally = start.side === 'ally';
-    let hp = num(foe.hp);
+    // a block that says it starts hurt (`HP 10 (currently 4)`) starts there, unless a carried or last-fight figure speaks
+    let hp = num(foe.hpStart) !== null ? num(foe.hpStart) : num(foe.hp);
     let max = num(foe.hp);
     let conds = [];
     let exhaustion = 0;
