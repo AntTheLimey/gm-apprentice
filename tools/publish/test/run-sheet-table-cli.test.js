@@ -152,7 +152,7 @@ describe('gm-publish table: serving', () => {
     // a Plan with no roster, and no --party: the sheet has no one to put on it
     const vault = vaultCopy();
     const planFile = path.join(vault, 'Chapters/Chapter 1/Sessions/Session 02/Session 02 - The Test - Plan.md');
-    fs.writeFileSync(planFile, fs.readFileSync(planFile, 'utf8').replace(/^- \*\*\[\[(Ada Moss|Ben Hart)\]\]\*\*.*\n/gm, ''));
+    fs.writeFileSync(planFile, fs.readFileSync(planFile, 'utf8').replace(/^- \*\*\[\[(Ada Moss|Ben Hart)\]\]\*\*.*\r?\n/gm, ''));
     const a = await start({ vault });
     assert.match(a.lines.join('\n'), /\d+ prep notes? on the page/);
     const res = await fetch(`http://127.0.0.1:${a.port}/api/model`);

@@ -568,7 +568,7 @@ describe('the sides the GM set', () => {
     assert.deepStrictEqual(m.sidesCarried, { [ASH]: 'ally', [LUCAN]: 'neutral' });
     // a later session's line wins; a line naming no side or no note warns and is passed over
     const log = path.join(dir, S2_LOG);
-    const text = fs.readFileSync(log, 'utf8');
+    const text = fs.readFileSync(log, 'utf8').replace(/\r\n/g, '\n'); // Windows checks the fixture out CRLF
     fs.writeFileSync(log, text.replace(/## Sides set\n\n[\s\S]*?\n\n/, '## Sides set\n\n- [[Brother Ash]]: ally\n- [[Brother Ash]]: foe\n- [[Lucan Grey]]: friendly\n- [[Nobody At All]]: ally\n\n'));
     m = readRunSheet(dir, P3, { party: [ADA, BEN] });
     assert.deepStrictEqual(m.sidesCarried, { [ASH]: 'foe' }, 'the last line for a note wins');

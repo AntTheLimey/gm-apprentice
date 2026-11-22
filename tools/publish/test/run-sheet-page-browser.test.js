@@ -862,8 +862,13 @@ describe('Move them and Fight here in a browser', { skip: browserSkip() }, () =>
       const adds = await page.evaluate('Array.from(document.querySelectorAll("#side [data-faddgroup]"), (b) => b.textContent)');
       assert.deepStrictEqual(adds, ['+ Ada, Ben at North'], 'the focused group is on the Add line');
       // PRENTICE's PR review 2: once the group joins, the place's empty "—" chip goes
-      await page.click('#side [data-faddgroup]');
-      await page.waitFor(`(() => { const p = ${PROBE}; return p && p.fight && p.fight.rows.filter((r) => r.kind === 'pc' && r.in).length === 2 && p; })()`);
+      const hitAdd = await page.click('#side [data-faddgroup]');
+      assert.ok(hitAdd.inView && hitAdd.hit, `the group button takes the click: ${JSON.stringify(hitAdd)}`);
+      await page.waitFor(`(() => { const p = ${PROBE}; return p && p.fight && p.fight.rows.filter((r) => r.kind === 'pc' && r.in).length === 2 && p; })()`)
+        .catch(async (e) => {
+          const now = await probe(page);
+          throw new Error(`${e.message}\nPC rows: ${JSON.stringify(now.fight && now.fight.rows.filter((r) => r.kind === 'pc').map((r) => [r.name, r.in]))}; errors: ${JSON.stringify(now.errors)}; add line: ${await page.evaluate('(document.querySelector("#side .fadd") || {}).textContent || ""')}`);
+        });
       await page.waitFor('document.querySelector("#side .fin") && /Ada/.test(document.querySelector("#side .fin").textContent)');
       const joined = await page.evaluate('Array.from(document.querySelectorAll("#side .fin .gchip"), (c) => c.textContent)');
       assert.ok(joined.length > 0 && joined.every((c) => !c.startsWith('—')), `no empty chip: ${joined.join(' | ')}`);

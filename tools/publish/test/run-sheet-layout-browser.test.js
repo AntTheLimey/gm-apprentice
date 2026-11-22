@@ -634,10 +634,15 @@ describe('the acting panel beside the order', { skip: browserSkip() }, () => {
       if (p.layout.pvOpen) { await tap(page, '#pvToggle'); p = await until(page, '!p.layout.pvOpen'); }
       p = await until(page, 'p.layout.folded && !p.layout.pvOpen');
       assert.strictEqual(p.layout.railW, 220);
-      assert.strictEqual(p.layout.beside, true, `the middle ${p.layout.sideW} holds the order's ${p.layout.orderMin} and the panel's 420`);
+      // the rule, not a width: beside once the middle holds the order's least and the panel's 420. With a Mac's
+      // fonts that is so at 1449; where fonts run wider (CI's Linux) the order's least grows and the panel goes under
+      const room = p.layout.sideW >= p.layout.orderMin + 420;
+      assert.strictEqual(p.layout.beside, room, `the middle ${p.layout.sideW}, the order's ${p.layout.orderMin} and the panel's 420`);
       const act = await page.box('#acting');
-      assert.ok(p.layout.actingLeft >= p.layout.orderRight - 1, 'beside, not under');
-      assert.ok(act.width >= 420 - 1, `the panel is ${act.width} px wide`);
+      if (room) {
+        assert.ok(p.layout.actingLeft >= p.layout.orderRight - 1, 'beside, not under');
+        assert.ok(act.width >= 420 - 1, `the panel is ${act.width} px wide`);
+      } else assert.ok(act.top >= (await page.box('#fOrder')).bottom - 1, 'under the order');
       sane(p, 'pane folded at 1449');
     });
   });
