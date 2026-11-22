@@ -272,6 +272,23 @@ describe('scanVault unmapped-directory warning', () => {
     assert.strictEqual(locWarns.length, 1);
   });
 
+  it('does not warn about the Midwife\'s adventure brief, only about other notes beside it (issue 839)', () => {
+    const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'scan-brief-'));
+    try {
+      const write = (rel, text) => { fs.mkdirSync(path.dirname(path.join(vault, rel)), { recursive: true }); fs.writeFileSync(path.join(vault, rel), text); };
+      write('Adventures/The Long Tide/The Long Tide.md', '---\ntype: adventure-brief\n---\n# The Long Tide\n');
+      const config = { vaultPath: vault, excludeDirs: ['_meta'], folderMap: {} };
+      assert.deepStrictEqual(captureWarns(() => scanVault(config)).filter((w) => w.includes('folder_map')), []);
+      write('Adventures/The Long Tide/Keeper.md', '---\ntype: npc\n---\n# Keeper\n');
+      const warns = captureWarns(() => scanVault(config)).filter((w) => w.includes('folder_map'));
+      assert.strictEqual(warns.length, 1);
+      assert.match(warns[0], /Adventures\/The Long Tide/);
+      // Mapped, the brief publishes as before (#678): the GM's one step.
+      const mapped = scanVault({ ...config, folderMap: { Adventures: 'adventures' } });
+      assert.ok(mapped.some((p) => p.outputPath.endsWith('the-long-tide.html')));
+    } finally { fs.rmSync(vault, { recursive: true, force: true }); }
+  });
+
   it('does not warn when every typed dir is mapped', () => {
     const config = {
       vaultPath: fixturesDir,

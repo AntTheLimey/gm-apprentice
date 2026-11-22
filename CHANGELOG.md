@@ -9,6 +9,12 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.138] — 2026-11-23
+
+### Fixed
+
+- Player builds stop warning that the Midwife's `Adventures/` folder is "not in player_site.folder_map" (#839). The adventure brief stays off the site until you map the folder, as before; other notes put there are still warned about, and `explain` names the unmapped folder as the reason. Publish tool 1.70.56.
+
 ## [1.12.137] — 2026-11-22
 
 ### Fixed
