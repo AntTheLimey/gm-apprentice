@@ -59,6 +59,23 @@ describe('real-input page helpers', { skip: browserSkip() }, () => {
     });
   });
 
+  it('a wheel turn returns once its scroll has landed, however late (#852)', async () => {
+    // A page whose wheel scroll lands 150 ms late, as a slow machine's does: the box measured after the turn
+    // must already be where the click will find it.
+    const late = `<!doctype html><body style="margin:0"><div style="height:3000px"></div><script>
+      addEventListener('wheel', (e) => { e.preventDefault(); const dy = e.deltaY; setTimeout(() => scrollBy(0, dy), 150); }, { passive: false });
+      </script></body>`;
+    await withPage({ width: 600, height: 400 }, async (page) => {
+      await page.goto(`data:text/html;charset=utf-8,${encodeURIComponent(late)}`);
+      await page.waitFor('document.body');
+      await page.wheel(300, 200, 300);
+      assert.strictEqual(await page.evaluate('scrollY'), 300);
+      const t0 = Date.now();
+      await page.wheel(300, 200, 0); // scrolls nothing: back after the wait for a scroll that never starts
+      assert.ok(Date.now() - t0 < 2000, `${Date.now() - t0} ms`);
+    });
+  });
+
   it('a drag moves a test element by the distance dragged', async () => {
     await withPage({ width: 600, height: 400 }, async (page) => {
       await page.goto(URL_);

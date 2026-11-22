@@ -90,7 +90,10 @@ const INPUT_LOG = `(() => {
       if (log.length > 40) log.shift(); }
   } });
   let last = 0;
-  window.addEventListener('scroll', (ev) => { const now = performance.now(); if (now - last > 100) { last = now; keep(ev); } }, true);
+  window.__scrollN = 0;
+  window.__scrollAt = 0;
+  window.addEventListener('scroll', (ev) => { const now = performance.now(); window.__scrollN++; window.__scrollAt = now;
+    if (now - last > 100) { last = now; keep(ev); } }, true);
 })()`;
 
 // Runs `fn(page)` in a fresh headless Chrome of the given size and returns what it returns.
@@ -238,11 +241,23 @@ async function withPage({ width = 1449, height = 762, chrome = findChrome() } = 
             }
             await page.mouse('mouseReleased', toX, toY);
           },
-          // A real wheel turn over (x, y); positive `dy` scrolls down.
+          // A real wheel turn over (x, y); positive `dy` scrolls down. It returns once the scroll it started has
+          // stopped, as a hand waits to see where the page went (#852): on a slow machine the scroll lands after the
+          // turn, and a box measured before then puts the next click on whatever scrolled under it. A turn that
+          // scrolls nothing (the page at its end) returns after 300 ms.
           async wheel(x, y, dy) {
             moved({ act: 'wheel', x, y, dy });
+            const count = () => evaluate('[window.__scrollN || 0, performance.now() - (window.__scrollAt || 0)]').catch(() => [0, Infinity]);
+            const [n0] = await count();
             await page.mouse('mouseMoved', x, y);
             await page.mouse('mouseWheel', x, y, { deltaY: dy });
+            const t0 = Date.now();
+            for (;;) {
+              const [n, quiet] = await count();
+              if (n === n0 ? Date.now() - t0 > 300 : quiet > 100) return;
+              if (Date.now() - t0 > 3000) return;
+              await sleep(20);
+            }
           },
           // Text into whatever has focus (Input.insertText: one insert, as a paste or an input method gives).
           type: (text) => s('Input.insertText', { text }),
