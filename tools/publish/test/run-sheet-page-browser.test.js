@@ -861,6 +861,36 @@ describe('Move them and Fight here in a browser', { skip: browserSkip() }, () =>
       assert.strictEqual(s.improvised.find((i) => i.key === northKey).title, 'North');
       const adds = await page.evaluate('Array.from(document.querySelectorAll("#side [data-faddgroup]"), (b) => b.textContent)');
       assert.deepStrictEqual(adds, ['+ Ada, Ben at North'], 'the focused group is on the Add line');
+      // PRENTICE's PR review 2: once the group joins, the place's empty "—" chip goes
+      await page.click('#side [data-faddgroup]');
+      await page.waitFor(`(() => { const p = ${PROBE}; return p && p.fight && p.fight.rows.filter((r) => r.kind === 'pc' && r.in).length === 2 && p; })()`);
+      await page.waitFor('document.querySelector("#side .fin") && /Ada/.test(document.querySelector("#side .fin").textContent)');
+      const joined = await page.evaluate('Array.from(document.querySelectorAll("#side .fin .gchip"), (c) => c.textContent)');
+      assert.ok(joined.length > 0 && joined.every((c) => !c.startsWith('—')), `no empty chip: ${joined.join(' | ')}`);
+      assert.deepStrictEqual((await probe(page)).errors, []);
+    });
+  });
+
+  // PRENTICE's PR review 2: the Move list opens upward when it would run past the window's bottom
+  it('a Move box near the window\'s bottom opens its list upward, inside the window', async () => {
+    const run = await start(FIXTURE, 'Session 02 - The Test');
+    const { model } = await api(run, 'GET', '/api/model');
+    const [gate] = model.beats;
+    await withPage({ width: 1449, height: 900 }, async (page) => {
+      await page.goto(`${run.base}?probe=1`);
+      await settled(page);
+      await page.click(`${beat(gate.key)} [data-all]`);
+      await settled(page);
+      const input = '#handover input[data-moveg]';
+      await page.waitFor(`document.querySelector('${input}')`);
+      const b = await page.box(input);
+      await page.resize(1449, Math.ceil(b.bottom + 30));
+      await page.waitFor(`document.querySelector('${input}').getBoundingClientRect().bottom <= innerHeight`);
+      await page.click(input);
+      await page.type('orth');
+      await page.waitFor('document.querySelector("#handover [data-mhits] button")');
+      const out = await page.evaluate(`(() => { const h = document.querySelector('#handover [data-mhits]'); const r = h.getBoundingClientRect(); return { up: h.classList.contains('up'), top: r.top, bottom: r.bottom, height: innerHeight }; })()`);
+      assert.ok(out.up && out.top >= 0 && out.bottom <= out.height, JSON.stringify(out));
       assert.deepStrictEqual((await probe(page)).errors, []);
     });
   });

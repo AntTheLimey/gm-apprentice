@@ -480,7 +480,9 @@
     if (missing.length) h += `<div class="fask">No initiative yet for ${esc(missing.map((r) => r.gmName).join(', '))}. Start anyway? <button type="button" id="fStartAnyway" class="primary">Start anyway</button> <button type="button" id="fAskNo">Not yet</button></div>`;
     // every group holding a ticked PC is in (proof M2); Add offers only the rest
     const inFight = FM.fightGroupKeys(f, RP.groups());
-    h += `<div class="fin"><span class="muted">In this fight:</span> ${inFight.map((g) => `<span class="gchip">${esc(groupWho(g) || '—')} · ${esc(RP.groupLabel(g, d))}</span>`).join(' ')}</div>`;
+    // a group nobody stands in any more (its people joined another) goes once someone is in (PRENTICE's review 2)
+    const someone = inFight.filter((g) => groupWho(g));
+    h += `<div class="fin"><span class="muted">In this fight:</span> ${(someone.length ? someone : inFight).map((g) => `<span class="gchip">${esc(groupWho(g) || '—')} · ${esc(RP.groupLabel(g, d))}</span>`).join(' ')}</div>`;
     const others = RP.groups().filter((g) => !inFight.includes(g.key));
     h += `<div class="fadd"><span class="muted">Add:</span> ${others.map((g) => `<button type="button" data-faddgroup="${esc(g.key)}">+ ${esc(groupWho(g.key))} at ${esc(RP.groupLabel(g.key, d))}</button>`).join(' ')}`
       + contingencyAdds(f, d)
@@ -531,6 +533,16 @@
     if (ui.addHits.length && !(ev.target.closest && ev.target.closest(ADD_PARTS))) closeOwed = true;
   }, true);
   window.addEventListener('click', () => setTimeout(closeIfOwed, 0));
+  // A box that still holds typed words opens its list again when it is pressed or tabbed back into, as the Move box
+  // does (PRENTICE's PR review 2)
+  function reopenAddList(t) {
+    if (!t || t.id !== 'fAddName' || !t.value.trim() || ui.addHits.length) return;
+    ui.addHits = FM.addChoices(model().cast || [], t.value, RS.castSearch);
+    const box = $('#fHits');
+    if (box) box.innerHTML = hitsHTML();
+  }
+  document.addEventListener('pointerdown', (ev) => { if (ev.target && ev.target.id === 'fAddName') reopenAddList(ev.target); }, true);
+  document.addEventListener('focusin', (ev) => reopenAddList(ev.target));
   document.addEventListener('pointerup', () => { if (closeOwed) setTimeout(closeIfOwed, 0); }, true);
   document.addEventListener('pointercancel', closeIfOwed, true);
   function hitsHTML() {
@@ -864,6 +876,14 @@
       ev.preventDefault();
       return;
     }
+    // Esc empties a damage or healing box that was typed in and not applied (PRENTICE's PR review 2, D3)
+    if (ev.key === 'Escape' && d.fhp !== undefined) {
+      ev.preventDefault();
+      t.setCustomValidity('');
+      t.value = '';
+      markPending(t);
+      return;
+    }
     const f = statOf(t);
     // Esc takes back what was typed (final review P-A4): the box holds its saved number again, selected, nothing
     // is sent, and focus stays
@@ -935,6 +955,24 @@
     const own = typeof b.selectionStart === 'number' && b.selectionStart !== b.selectionEnd;
     if (dragged && own) return;
     b.select();
+    selectAfter = b;
+  }, true);
+  // A release inside a selection puts the caret where it landed once the click is done, after every handler here,
+  // so 41 typed into a 21 that Esc left selected made 2411 (PRENTICE's review 2, D1): select again after it.
+  // A key pressed before that comes round selects first, so the number is replaced whatever the timing.
+  let selectAfter = null;
+  let armed = null;
+  document.addEventListener('mouseup', () => {
+    const b = selectAfter;
+    selectAfter = null;
+    if (!b) return;
+    armed = b;
+    setTimeout(() => { if (armed === b) { armed = null; if (document.activeElement === b) b.select(); } }, 0);
+  }, true);
+  document.addEventListener('keydown', () => {
+    const b = armed;
+    armed = null;
+    if (b && document.activeElement === b) b.select();
   }, true);
   document.addEventListener('focusin', (ev) => { if (ev.target.matches && ev.target.matches(NUMBER_BOX)) ev.target.select(); });
 

@@ -520,6 +520,18 @@
     G.ui.moveHits[id] = placeChoices(input.value);
     const box = document.querySelector(`[data-mhits="${CSS.escape(id)}"]`);
     if (box) box.innerHTML = moveHitsHTML(input.dataset.moveg, G.ui.moveHits[id]);
+    placeMoveList(box);
+  }
+  // The Move list opens upward when it would run past the window's bottom and there is more room above
+  // (PRENTICE's PR review 2)
+  function placeMoveList(box) {
+    if (!box) return;
+    box.classList.remove('up');
+    if (!box.firstChild) return;
+    const r = box.getBoundingClientRect();
+    const input = box.parentElement.querySelector('input[data-movebox]');
+    const top = input ? input.getBoundingClientRect().top : r.top;
+    if (r.bottom > window.innerHeight && top > window.innerHeight - r.top) box.classList.add('up');
   }
   document.addEventListener('pointerdown', (ev) => {
     const mb = ev.target.closest && ev.target.closest('.movebox');
@@ -707,6 +719,7 @@
     document.querySelectorAll('[data-keepscroll]').forEach((el) => { if (kept[el.dataset.keepscroll]) el.scrollTop = kept[el.dataset.keepscroll]; });
     G.om = G.pane ? orderMin() : ORDER_FLOOR;
     applyLayout();
+    document.querySelectorAll('[data-mhits]').forEach(placeMoveList);
     drawerShow();
     decorate(document);
     indicator();
@@ -1817,7 +1830,9 @@
   document.addEventListener('keydown', (ev) => {
     const t = ev.target;
     const d = t.dataset || {};
-    const typing = /^(INPUT|SELECT|TEXTAREA)$/.test(t.tagName) || t.isContentEditable;
+    // a box that takes words; a list, a tick box or a button lets J through (PRENTICE's PR review 2, D2)
+    const typing = t.tagName === 'TEXTAREA' || t.isContentEditable
+      || (t.tagName === 'INPUT' && !/^(checkbox|radio|button|submit|reset|range|color|file)$/i.test(t.type || ''));
     if (ev.key === 'Escape' && t.closest && t.closest('.movebox')) {
       const input = t.closest('.movebox').querySelector('input[data-movebox]');
       if (input && ((G.ui.moveHits || {})[input.dataset.movebox] || []).length) {
@@ -1829,6 +1844,8 @@
     }
     if (ev.key === 'Escape') { if (menuIsOpen()) { menuOpen(false); const b = document.getElementById('coloursBtn'); if (b) b.focus(); ev.preventDefault(); return; } if ($('#drawer').classList.contains('open')) { closeDrawer(); ev.preventDefault(); } return; }
     if (!typing && (ev.key === 'j' || ev.key === 'J') && !ev.metaKey && !ev.ctrlKey && !ev.altKey) { ev.preventDefault(); $('#hjot').focus(); return; }
+    // a letter on a closed status list never picks a status by the browser's type-ahead: a status is chosen, not typed
+    if (t.matches && t.matches('select[data-fstatus]') && ev.key.length === 1 && ev.key !== ' ' && !ev.metaKey && !ev.ctrlKey && !ev.altKey) { ev.preventDefault(); return; }
     if (ev.key === 'Enter' && t.tagName === 'A' && d.note) { openNote(d.note); return; }
     if (ev.key === 'Enter' && t.tagName === 'A' && (d.go || d.pane)) { ev.preventDefault(); t.click(); return; }
     if (ev.key !== 'Enter' || ev.isComposing) return;
@@ -1859,6 +1876,7 @@
       G.ui.moveHits[id] = placeChoices(t.value);
       const box = document.querySelector(`[data-mhits="${CSS.escape(id)}"]`);
       if (box) box.innerHTML = moveHitsHTML(t.dataset.moveg, G.ui.moveHits[id]);
+      placeMoveList(box);
     }
     if (t.dataset && t.dataset.bring !== undefined) {
       const beat = t.dataset.bring;

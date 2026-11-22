@@ -1589,3 +1589,83 @@ describe('stat boxes keep the mouse and the keyboard', { skip: browserSkip() }, 
     });
   });
 });
+
+// PRENTICE's PR review 2 (D1-D3 and a note), by real input
+describe('Esc and J, from the review of the fixes', { skip: browserSkip() }, () => {
+  it('D1: after Esc, a click back into the box selects it, so 41 replaces the number', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await page.focusEvents();
+      const p0 = await startedFight(page, run);
+      const [one] = foes(p0);
+      const box = sel('data-fmax', one.id);
+      await tap(page, box);
+      await page.type('9');
+      await page.key('Escape');
+      await tap(page, box);
+      // real key presses, as a GM's hands type
+      await page.key('4');
+      await page.key('1');
+      await page.key('Enter');
+      const p = await until(page, `p.saved === "Saved" && p.pending === 0 && p.fight.rows.find((r) => r.id === ${JSON.stringify(one.id)}).max !== ${one.max}`);
+      assert.strictEqual(p.fight.rows.find((r) => r.id === one.id).max, 41);
+      assert.deepStrictEqual(p.errors, []);
+    });
+  });
+
+  it('D2: J on a status list goes to the jot box, and a letter there picks no status', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await page.focusEvents();
+      const p0 = await startedFight(page, run);
+      const [one] = foes(p0);
+      await tap(page, sel('data-fstatus', one.id));
+      await page.key('Escape');
+      assert.strictEqual(await page.evaluate('document.activeElement.dataset.fstatus || ""'), one.id, 'the list has focus');
+      await page.key('p');
+      await page.sleep(200);
+      let p = await P(page);
+      assert.deepStrictEqual(p.fight.rows.find((r) => r.id === one.id).conds, [], 'p picked nothing');
+      await page.key('j');
+      await page.waitFor('document.activeElement && document.activeElement.id === "hjot"');
+      p = await P(page);
+      assert.deepStrictEqual(p.fight.rows.find((r) => r.id === one.id).conds, [], 'no status added');
+      assert.strictEqual(await page.evaluate('document.querySelector("#hjot").value'), '', 'the J is not typed into it');
+      assert.deepStrictEqual(p.errors, []);
+    });
+  });
+
+  it('D3: Esc empties damage typed and left, and clears its mark', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await page.focusEvents();
+      const p0 = await startedFight(page, run);
+      const [one] = foes(p0);
+      const box = sel('data-fhp', one.id);
+      await tap(page, box);
+      await page.type('-4');
+      await page.waitFor(`document.querySelector('${box}').classList.contains('pending')`);
+      await page.key('Escape');
+      assert.deepStrictEqual(await page.evaluate(`(() => { const b = document.querySelector('${box}'); return [b.value, b.classList.contains('pending'), document.activeElement === b]; })()`), ['', false, true]);
+      const p = await settled(page);
+      assert.strictEqual(p.fight.rows.find((r) => r.id === one.id).hp, one.hp, 'no damage applied');
+      assert.deepStrictEqual(p.errors, []);
+    });
+  });
+
+  it('the Add box opens its list again on a click back in, as the Move box does', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await startedFight(page, run);
+      await tap(page, '#fAddName');
+      await page.type('Ben');
+      await page.waitFor('document.querySelector("#fHits button")');
+      await page.key('Escape');
+      await page.waitFor('!document.querySelector("#fHits button")');
+      await tap(page, '#fRoll');
+      await tap(page, '#fAddName');
+      await page.waitFor('document.querySelector("#fHits button")');
+      assert.strictEqual(await page.evaluate('document.querySelector("#fAddName").value'), 'Ben', 'the words stay');
+    });
+  });
+});
