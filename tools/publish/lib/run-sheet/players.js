@@ -5,9 +5,21 @@
 //
 // Names come from the notes alone: a note's own `name`, the withheld word, or the note's unmasked name after
 // Unmask. Never Plan text, never a file's stem (a disguised NPC's file may be named for who he really is),
-// never words the state carries: a fight row's unseen word and its kind (PC, ally or foe) are the model's too
+// never words the state carries: a fight row's unseen word and whether it is a PC are the model's too
 // (Review L1). A note the model does not hold, or of the wrong kind, is dropped.
+//
+// A row's side is the row's, as the GM has it now (plan 6a, review P1): the running fight's row, then the
+// side the GM set (`state.sides`), then one carried from an earlier session, then the reader's. An ally goes
+// up with its name and HP only once it is seen; an ally not seen, a foe and a neutral send exactly a foe's
+// keys, so the players' screen never tells a neutral from a foe and the reader never puts a name there by
+// itself (an ally it infers starts unseen). A withheld note still shows only its withheld word.
+// The GM page is the trusted author of fight rows (`kind` and `seen` included); the server's Origin check
+// on the actions route is the boundary (review M6).
 // Pictures go out as opaque ids (`picId(path)`); the server maps an id back to a file.
+//
+// The one place the state's own words reach the players (plan 6a Task 7 / Global Constraints (typed place)):
+// a place the GM typed tonight in Move them goes up as its plain name, the panel's caption, and as nothing
+// else. A known place a group moves to, or that Fight here puts behind a panel, is a note like any other.
 
 const FM = require('./web/fight-math');
 const { statusesOf } = require('./web/fight');
@@ -62,14 +74,27 @@ function forPlayers(model, state, { withheldWords, campaign, picId } = {}) {
   // A showable map: one the player site publishes, never the GM half of a pair.
   const gmMaps = new Set((model.mapPairs || []).map((x) => x.gm));
   const showableMap = (note) => (model.showableMaps || []).includes(note) && !gmMaps.has(note) && !GM_SUFFIX.test(stemOf(note));
-  // A backdrop: a place, or a map that may be shown; null for anything else.
+  // The night's place beats (plan 6a Task 7): a known place's note, or a place typed tonight, by beat key.
+  const improvised = new Map((Array.isArray(st.improvised) ? st.improvised : []).filter((i) => i && typeof i === 'object' && typeof i.key === 'string').map((i) => [i.key, i]));
+  // A place typed tonight: its plain name as the caption, no picture.
+  function typedPlace(key) {
+    const i = typeof key === 'string' ? improvised.get(key) : null;
+    const name = i && i.newPlace === true && typeof i.title === 'string' ? i.title.replace(/\s+/g, ' ').trim() : '';
+    return name ? { backdrop: null, caption: name } : null;
+  }
+  // A backdrop: a place, a place typed tonight, or a map that may be shown; null for anything else.
   function backdrop(note) {
     if (typeof note !== 'string' || !note) return null;
+    const typed = typedPlace(note);
+    if (typed) return typed;
     let info = null;
     if (showableMap(note)) info = (model.mapNotes || {})[note] || null;
     else {
-      const n = has(notes, note) ? notes[note] : null;
-      // a map reaches the screen only as a showable map: a GM half typed `location` is no place
+      // a place the Plan names, else any place in the vault a group can be moved to (plan 6a Task 7)
+      const n = has(notes, note) ? notes[note] : (has(model.placeNotes, note) ? model.placeNotes[note] : null);
+      // a map reaches the screen only as a showable map: a GM half typed `location` is no place. A place need not
+      // publish: a backdrop is only ever set by the GM's own act (Move them, Fight here, Show), and that act is
+      // the reveal (Ant, Task 7 fix round 1); wrap-up then offers to publish it from the Table Log
       if (n && n.docType !== 'map' && String(n.type || '').toLowerCase() === 'location') info = n;
     }
     if (!info) return null;
@@ -90,12 +115,21 @@ function forPlayers(model, state, { withheldWords, campaign, picId } = {}) {
   }
 
   const beats = new Map((model.beats || []).map((b) => [b.key, b]));
-  // the notes the model makes allies: a beat's ally, or a cast entry's (one brought in)
+  // the notes the model makes allies: a beat's ally, or a cast entry's (one brought in); the last word on a
+  // row whose own side cannot be read
   const allies = new Set((model.beats || []).flatMap((b) => (b.foes || []).filter((x) => x && x.ally).map((x) => x.note))
     .concat((model.cast || []).filter((c) => c.foe && c.foe.ally).map((c) => c.note)));
+  const sideOf = (r) => FM.sideOfRow(r) || FM.noteSide(st.sides, model.sidesCarried, r.note, allies.has(r.note)).side;
+  // A group's own place: its Plan beat's (or hub spot's) place, else its place beat's (plan 6a Task 7, review
+  // P3): a known place's note, or the key of a place typed tonight.
   function placeOf(g) {
     const b = beats.get(g.beat);
-    if (!b) return null;
+    if (!b) {
+      const i = improvised.get(g.beat);
+      if (!i) return null;
+      if (typeof i.place === 'string' && i.place) return i.place;
+      return i.newPlace === true ? i.key : null;
+    }
     const spot = g.spot ? (b.spots || []).find((x) => x.key === g.spot) : null;
     return (spot && spot.note) || b.place || null;
   }
@@ -111,8 +145,10 @@ function forPlayers(model, state, { withheldWords, campaign, picId } = {}) {
     const own = () => (asked.placeOff ? null : backdrop(placeOf(g)));
     if (typeof asked.backdrop === 'string' && asked.backdrop) {
       const shown = backdrop(asked.backdrop);
-      // a Shown place with no picture keeps the group's own place behind the panel, captioned as its own
-      if (shown && shown.backdrop === null) back = own() || back;
+      // a Shown place with no picture keeps the group's own place behind the panel, captioned as its own; the
+      // place a fight is at (Fight here) and a place typed tonight have no picture to defer to: their name shows
+      const fightAt = st.fight && st.fight.backdrop && st.fight.backdrop.group === g.key ? st.fight.backdrop.place : null;
+      if (shown && shown.backdrop === null && !typedPlace(asked.backdrop) && asked.backdrop !== fightAt) back = own() || back;
       else back = shown || back;
     } else back = own() || back;
     const seenPeople = new Set();
@@ -140,12 +176,13 @@ function forPlayers(model, state, { withheldWords, campaign, picId } = {}) {
   function orderOf() {
     const f = st.fight;
     if (!f || typeof f !== 'object' || !Array.isArray(f.rows)) return null;
-    // the row's kind and unseen word as the model has them, never as the row says
+    // a PC and the unseen word as the model has them, never as the row says; an ally by the row's side, once
+    // seen (an unseen ally is numbered and named as a foe is)
     const kindOf = (r) => {
       if (r.kind === 'lair') return 'lair';
       const info = infoOf(r.note);
       if (pcs.has(r.note) || (info && String(info.type || '').toLowerCase() === 'pc')) return 'pc';
-      return allies.has(r.note) ? 'ally' : 'foe';
+      return sideOf(r) === 'ally' && r.seen === true ? 'ally' : 'foe';
     };
     const wordOf = (r) => {
       const c = cast.get(r.note);

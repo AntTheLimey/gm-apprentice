@@ -4,10 +4,11 @@
 // server); rows are built with fight-math's `rowsForFight`/`joinRows` and travel in the action, so `reduce`
 // never sees the model. Rolls come from the server's `/api/roll`: no dice here.
 //
-// While a fight runs (and is not paused) it takes the right column, which moves to the left of the beats:
-// the turn order, one line per row, with the acting creature's panel under it (its own column at 1600 px
-// and wider), and the fight's beat cut at the top of the beats. Paused, the beats come back with a strip of
-// the order kept at the top. After End fight, a box above the beat lists every status still on.
+// While a fight runs (and is not paused) it takes the middle column, `#side`: the turn order, one line per
+// row, in its own scroll box under a toolbar that stays put, with the acting creature's panel under it (beside
+// it once the middle is wide enough: gm.js's layout). The right pane, `#sheet`, holds only the fight's beat cut
+// (`pane`). Paused, the beats come back with a strip of the order kept at the top. After End fight, a box above
+// the beat lists every status still on.
 //
 // UI-only choices (a pinned panel, the area ticks, the Start question) live here and are lost on reload.
 (function () {
@@ -30,6 +31,11 @@
     fightId: null, peek: null, peekTurn: null,
     area: false, sel: {}, ahalf: {}, spend: {}, areaDmg: '',
     ask: null, asked: {}, other: {}, addHits: [], addText: '', addCount: '1', mine: null,
+    // a stat box holding words that are not a number (review F5): { words, was }, kept through redraws
+    // while the state's number is still the one it was marked against
+    bad: {},
+    // a damage box holding words not yet applied (final review P4.1): row id -> the words, kept through redraws
+    pending: {},
   };
 
   const model = () => RP.model();
@@ -65,17 +71,42 @@
   const rollFailed = (e) => RP.note(`The dice could not be rolled: ${e.message}.`, { kind: 'bad', id: `roll:${e.message}` });
 
   // ------------------------------------------------------------------ starting, adding
-  function startFight(key) {
+  // `here` is Fight here's: { at, place }, the beat's or hub spot's key and the place note (a place beat is one
+  // by itself).
+  function startFight(key, here = null) {
     const d = RP.derived();
     const b = d.beats.find((x) => x.key === key);
     if (!b || state().fight) return;
     const id = RP.nextId();
-    // a contingency has no PCs of its own: the focused group fights it (decision 13)
-    const groups = b.contingency ? [RP.focusedGroup()].filter(Boolean) : undefined;
-    const built = FM.rowsForFight({ model: model(), derived: d, state: state(), beatKey: key, groups, idBase: id });
+    // a contingency has no PCs of its own: the focused group fights it (decision 13). Fight here ticks only the
+    // PCs at the place, and nobody when none stands there (final review P4.7): the focused group is on Add.
+    const focus = RP.focusedGroup();
+    const groups = b.contingency ? [focus].filter(Boolean) : undefined;
+    const at = here ? here.at : b.placeBeat ? key : null;
+    const built = FM.rowsForFight({ model: model(), derived: d, state: state(), beatKey: key, groups, idBase: id, ...(at ? { at } : {}) });
+    // Fight here puts the place behind the focused group's panel until End fight (P3); a typed place by its key.
+    // PCs who stand there already have it behind theirs.
+    const nobody = !built.rows.some((r) => r.kind === 'pc' && r.in);
+    const backdrop = at && focus && nobody ? { group: focus, place: here ? here.place : b.place || b.key } : undefined;
     RP.ui.focus = key;
     ui.mine = id;
-    RP.dispatch({ type: 'fightStart', beat: key, title: b.title, groups: built.groups, rows: built.rows, thresholds: built.thresholds, carried: carried(d) });
+    RP.ui.pane = 'cut';
+    RP.dispatch({ type: 'fightStart', beat: key, title: b.title, groups: built.groups, rows: built.rows, thresholds: built.thresholds, carried: carried(d), ...(backdrop ? { backdrop } : {}) });
+    // the pane opens at its top, whatever the run sheet's scroll was (review F3)
+    RP.paneTop();
+  }
+  // Fight here at a place (plan 6a Task 7): its place beat first (the reader's key, so a second Fight here
+  // finds it again), then the fight. Nobody moves.
+  // A place the Plan has a beat (or hub spot) for fights on that beat, with its planned foes, as its own Fight
+  // does (review I1). The place beat's "Improvised beat." line is not written: "Fight starts at…" says it (M4).
+  function fightHere(note) {
+    const key = (model().placeKeys || {})[note];
+    if (!key || state().fight) return;
+    // the beat or spot where a PC of the focused group stands now, else the first unvisited (final review O2)
+    const plan = RS.planTarget(model(), state(), note, groupPcs(RP.focusedGroup()));
+    if (plan) { startFight(plan.beat, { at: plan.spot || plan.beat, place: note }); return; }
+    if (!RP.derived().beats.some((b) => b.key === key)) RP.dispatch({ type: 'improvise', key, title: RP.nameOf(note), place: note, quiet: true });
+    startFight(key);
   }
 
   function addTo(add, label) {
@@ -87,9 +118,10 @@
     const j = FM.joinRows({ model: model(), derived: d, state: s, fight: f, add, idBase: id });
     if (j.refused) { RP.note(j.refused, { id: `refused:${id}` }); return; }
     if (!j.rows.length && !j.tick.length && !j.groups.length) return;
-    RP.dispatch({ type: 'fightJoin', fight: f.id, rows: j.rows, tick: j.tick, groups: j.groups, thresholds: j.thresholds, label: label || '', carried: carried(d), planned: !add.cast });
+    RP.dispatch({ type: 'fightJoin', fight: f.id, rows: j.rows, tick: j.tick, groups: j.groups, thresholds: j.thresholds, label: label || '', carried: carried(d), planned: Boolean(add.group || add.beat) });
   }
-  function addByName(note) {
+  // The Add box's way in: a cast note (`note`), or a typed name nobody has (`name`: a blank row, no note).
+  function addByName(note, name) {
     const n = Math.max(1, Math.min(20, Math.floor(Number(ui.addCount)) || 1));
     ui.addText = '';
     ui.addHits = [];
@@ -97,8 +129,18 @@
     // the redraw keeps a focused box's words: empty it first, so the next name is typed afresh
     const box = $('#fAddName');
     if (box) box.value = '';
-    addTo({ cast: note, count: n });
+    const count = $('#fAddCount');
+    if (count) count.value = '1';
+    if (note) addTo({ cast: note, count: n });
+    else addTo({ name, count: n }, `${name}${n > 1 ? ` ×${n}` : ''}`);
   }
+  // What Add and Enter take: the top hit, when the cast has one. A blank row is only ever the explicit "+ New".
+  function addTop(text) {
+    const top = FM.addChoices(model().cast || [], text, RS.castSearch)[0];
+    if (top && !top.isNew) { addByName(top.note); return true; }
+    return false;
+  }
+  const NO_ONE = 'No one in the vault by that name: choose "+ New" to add them with no note';
   const groupPcs = (key) => ((RP.groups().find((g) => g.key === key) || {}).pcs || []);
   const groupWho = (key) => groupPcs(key).map((p) => first(pcName(p))).join(', ');
 
@@ -123,6 +165,7 @@
     const g = state().fight;
     // a lone foe keeps the turn into the next round: that is a new turn too, and rolls its recharges
     if (!g || (g.turn === wasTurn && g.round === wasRound)) return;
+    keepTurnInView();
     if (!wasStarted) scrollToCut();
     rechargeRolls(g);
   }
@@ -182,13 +225,33 @@
     window.scrollTo({ top: Math.max(0, el.getBoundingClientRect().top + window.scrollY - topH() - above - 8), behavior: 'instant' });
     RP.probe();
   }
-  // Start and Resume bring the cut into view; one already in view stays put.
+  // Start and Resume bring the cut into view: the right pane to its top (review F3); on one column (a narrow
+  // window) the page scrolls to it, and a cut already in view stays put.
   function scrollToCut() {
+    if (RP.paneTop()) { RP.probe(); return; }
     const el = $('#fightCut');
     if (!el) return;
     const top = el.getBoundingClientRect().top;
     if (top >= topH() && top < window.innerHeight / 2) { RP.probe(); return; }
     scrollTo(el);
+  }
+  // Next keeps the turn in view: the order's own box scrolls (never the page) so the current row and the one
+  // after it are inside it (review F8). A new round starts at the top.
+  function keepTurnInView() {
+    const ol = $('#side ol.to');
+    const cur = ol && ol.querySelector('li.cur');
+    if (!cur || ol.scrollHeight <= ol.clientHeight) return;
+    let nx = cur.nextElementSibling;
+    while (nx && (nx.classList.contains('bench') || nx.dataset.row2 !== undefined)) nx = nx.nextElementSibling;
+    // a row's second line goes with it
+    if (nx && nx.nextElementSibling && nx.nextElementSibling.dataset.row2 === nx.dataset.frow) nx = nx.nextElementSibling;
+    const at = (el) => el.getBoundingClientRect().top - ol.getBoundingClientRect().top + ol.scrollTop;
+    const top = at(cur);
+    const end = nx || cur;
+    const bottom = at(end) + end.offsetHeight;
+    if (top < ol.scrollTop) ol.scrollTop = top;
+    else if (bottom > ol.scrollTop + ol.clientHeight) ol.scrollTop = Math.min(top, bottom - ol.clientHeight);
+    RP.probe();
   }
   function scrollToBeat(key) {
     const strip = $('#fightStrip');
@@ -202,12 +265,61 @@
     const ex = Array.from({ length: FM.EXHAUSTION_MAX }, (_, i) => i + 1).filter((n) => n !== r.exhaustion).map((n) => `<option>Exhaustion ${n}</option>`).join('');
     return `<select data-fstatus="${esc(r.id)}" aria-label="Add a status to ${esc(r.gmName)}"><option value="">+ status</option>${opts}${r.conc ? '' : '<option>Concentrating</option>'}<optgroup label="Exhaustion">${ex}</optgroup><option value="other">other…</option></select>`;
   }
+  // A row's statuses share one strip that takes the row's leftover width; when they do not all fit, the row gets
+  // a second line of its own that lists them by name (fitChips; final review, for the GM's eye: a boss read "+4").
+  // So statuses never widen the order (review I1, v8's strip), and the acting panel lists them all too.
+  const statusKey = (label) => (/^Exhaustion /.test(label) ? 'Exhaustion' : label);
   function chips(r, bloodied) {
-    const one = (label, key) => `<button type="button" class="chip" data-fun="${esc(`${r.id}|${key}`)}" title="Remove ${esc(label)}">${esc(label)} ✕</button>`;
-    return (r.conds || []).map((c) => one(c, c)).join('')
-      + (r.exhaustion ? one(`Exhaustion ${r.exhaustion}`, 'Exhaustion') : '')
-      + (r.conc ? one('Concentrating', 'Concentrating') : '')
-      + (bloodied ? '<span class="chip auto">Bloodied</span>' : '');
+    const one = (label) => `<button type="button" class="chip" data-fun="${esc(`${r.id}|${statusKey(label)}`)}" title="Remove ${esc(label)}">${esc(label)} ✕</button>`;
+    const all = Fight.statusesOf(r);
+    const h = (bloodied ? '<span class="chip auto">Bloodied</span>' : '') + all.map(one).join('');
+    const names = (bloodied ? ['Bloodied'] : []).concat(all);
+    // always there, empty or not, so a first status never moves the row's other items (or the order's width)
+    return `<span class="chips"${names.length ? ` title="${esc(names.join(', '))}"` : ''}>${h}</span>`;
+  }
+  // Each strip shows its chips when they all fit; else none, and the row's second line lists every one.
+  function fitChips() {
+    document.querySelectorAll('#side ol.to > li[data-frow]').forEach((li) => {
+      const strip = li.querySelector(':scope > .chips');
+      let moved = '';
+      if (strip) {
+        const kids = Array.from(strip.children);
+        kids.forEach((k) => { k.hidden = false; });
+        if (kids.length && strip.scrollWidth > strip.clientWidth + 1) {
+          moved = kids.map((k) => k.outerHTML).join('');
+          kids.forEach((k) => { k.hidden = true; });
+        }
+      }
+      li.dataset.l2st = moved;
+      syncLine2(li);
+    });
+  }
+  // A row's second line (final review): what a box needs said (a bad number, damage typed and not applied) and the
+  // statuses the row has no room for. Only a row that has any gets one; it is not a row (no data-frow), so the order's
+  // least width, the probe's rows and the keyboard pass it by.
+  const PENDING = 'Enter applies';
+  const STAT_NAMES = { fini: 'Initiative', fmax: 'Max HP', fac: 'AC' };
+  function line2Html(id, li) {
+    const out = [];
+    for (const f of Object.keys(STAT_NAMES)) {
+      if (ui.bad[badKey(STAT[f].k, id)]) out.push(`<span class="badnum" role="status" data-badfor="${f}" title="${esc(STAT_NAMES[f])}">${BAD_NUMBER}</span>`);
+    }
+    if (ui.pending[id]) out.push(`<span class="pendnum" role="status" title="Damage or healing typed, not applied yet">${PENDING}</span>`);
+    const st = (li && li.dataset.l2st) || '';
+    if (st) out.push(`<span class="l2st">${st}</span>`);
+    return out.join('');
+  }
+  const L2_CLASSES = /^(?:side-\w+|cur|bench|out)$/;
+  function syncLine2(rowOrId) {
+    const li = typeof rowOrId === 'string' ? document.querySelector(`#side ol.to > li[data-frow="${CSS.escape(rowOrId)}"]`) : rowOrId;
+    if (!li) return;
+    const id = li.dataset.frow;
+    const html = line2Html(id, li);
+    let l2 = li.nextElementSibling && li.nextElementSibling.dataset.row2 === id ? li.nextElementSibling : null;
+    if (!html) { if (l2) l2.remove(); return; }
+    if (!l2) { l2 = document.createElement('li'); l2.dataset.row2 = id; li.after(l2); }
+    l2.className = ['row2', ...Array.from(li.classList).filter((c) => L2_CLASSES.test(c))].join(' ');
+    if (l2.dataset.h !== html) { l2.innerHTML = html; l2.dataset.h = html; }
   }
   function counters(r, long) {
     const c = [];
@@ -221,10 +333,32 @@
     return c.join('');
   }
 
+  // A stat box: the state's number, or the words the GM typed that are not one, marked (review F5).
+  const BAD_NUMBER = 'Not a number: kept as typed';
+  const badKey = (k, id) => `${k}|${id}`;
+  function statBox(k, r, value, rest) {
+    const key = badKey(k, r.id);
+    const bad = ui.bad[key];
+    // a newer number (another window, Same for all) replaces the marked words
+    if (bad && bad.was !== String(value)) delete ui.bad[key];
+    if (!ui.bad[key]) return `<input ${k}="${esc(r.id)}" value="${esc(value)}" ${rest}>`;
+    // its words ("Not a number: kept as typed") are on the row's second line, seen at every width (P4.2)
+    return `<input ${k}="${esc(r.id)}" value="${esc(bad.words)}" aria-invalid="true" ${rest}>`;
+  }
+
+  const SIDE_TITLES = {
+    foe: 'An enemy: the players see only what you show',
+    neutral: 'Neither side: shown to players like a foe',
+    ally: "On the party's side: the players see its name and HP",
+  };
+  // pc, ally, foe or neutral; a lair action has none
+  const sideWord = (r) => (r.kind === 'pc' ? 'pc' : FM.sideOfRow(r));
   function rowHTML(r, f, view) {
     const cur = f.turn === r.id;
-    const cls = [cur ? 'cur' : '', r.out ? 'out' : '', r.in ? '' : 'bench', ui.area && ui.sel[r.id] ? 'sel' : ''].join(' ');
-    const name = `<span class="nm" data-fpeek="${esc(r.id)}" title="Show this one's panel">${esc(r.gmName)}</span>`;
+    const side = sideWord(r);
+    const cls = [cur ? 'cur' : '', r.out ? 'out' : '', r.in ? '' : 'bench', ui.area && ui.sel[r.id] ? 'sel' : '', side ? `side-${side}` : ''].join(' ');
+    // the name takes its side's colour; its title keeps the word and the reason, e.g. "Ferrante (neutral: you set it)"
+    const name = `<span class="nm" data-fpeek="${esc(r.id)}" title="${esc(side ? `${r.gmName} (${side === 'pc' ? 'PC' : side}${r.sideFrom ? `: ${r.sideFrom}` : ''}). Show this one's panel` : "Show this one's panel")}">${esc(r.gmName)}</span>`;
     if (r.kind === 'lair') {
       const owners = (r.of || []).map((id) => view.rows.find((x) => x.id === id)).filter(Boolean).map((x) => x.gmName);
       return `<li class="${cls} lair" data-frow="${esc(r.id)}"><span class="tk"></span><span class="ini fixed">20</span>${name}<span class="tag">loses ties${owners.length ? ` · ${esc(owners.join(', '))}` : ''}</span></li>`;
@@ -233,24 +367,24 @@
       ? `<input type="checkbox" data-fsel="${esc(r.id)}" ${ui.sel[r.id] ? 'checked' : ''} ${r.in ? '' : 'disabled'} aria-label="${esc(r.gmName)} is in the area">`
       : `<input type="checkbox" data-ftick="${esc(r.id)}" ${r.in ? 'checked' : ''} aria-label="${esc(r.gmName)} is in this fight" title="In this fight">`;
     const tags = [];
-    if (r.kind === 'pc') tags.push('PC');
-    if (r.kind === 'ally') tags.push('ally');
     if (!isNum(r.hp)) tags.push('no numbers');
     if (r.temp) tags.push(`+${r.temp} temp`);
     if (r.gone) tags.push('not in the party now');
     let h = `<li class="${cls}" data-frow="${esc(r.id)}"><span class="tk">${tick}</span>`;
-    h += `<input class="ini" data-fini="${esc(r.id)}" value="${esc(isNum(r.ini) ? r.ini : '')}" placeholder="${r.kind === 'pc' ? 'roll' : esc(sign(r.mod))}" inputmode="numeric" autocomplete="off" aria-label="Initiative for ${esc(r.gmName)}">`;
+    h += statBox('data-fini', r, isNum(r.ini) ? r.ini : '', `class="ini" placeholder="${r.kind === 'pc' ? 'roll' : esc(sign(r.mod))}" inputmode="numeric" autocomplete="off" aria-label="Initiative for ${esc(r.gmName)}"`);
     h += `${name}${tags.length ? `<span class="tag">${esc(tags.join(' · '))}</span>` : ''}`;
     if (r.kind === 'foe') h += `<button type="button" class="tg ${r.seen ? 'on' : ''}" data-fseen="${esc(r.id)}" aria-pressed="${!!r.seen}" title="${r.seen ? 'The players see its name. Click: back to its unseen word' : 'The players see its unseen word. Click: they have seen it'}">${r.seen ? 'seen' : 'unseen'}</button>`;
     if (!r.in) return `${h}</li>`;
     if (isNum(r.hp)) {
       const half = ui.area ? !!ui.ahalf[r.id] : r.half;
-      h += `<input class="hpin" data-fhp="${esc(r.id)}" placeholder="-37/+8/t5" autocomplete="off" aria-label="Damage or healing for ${esc(r.gmName)}">`;
+      // damage typed and left unapplied keeps its words and its mark, "Enter applies" (final review P4.1)
+      const pend = ui.pending[r.id];
+      h += `<input class="hpin${pend ? ' pending' : ''}" data-fhp="${esc(r.id)}" value="${esc(pend || '')}" placeholder="-37/+8/t5" autocomplete="off" aria-label="Damage or healing for ${esc(r.gmName)}">`;
       h += `<button type="button" class="tg ${half ? 'on' : ''}" ${ui.area ? 'data-fahalf' : 'data-fhalf'}="${esc(r.id)}" aria-pressed="${!!half}" title="${ui.area ? 'Half for this area: a save' : 'Half: the next hit only (a save)'}">½</button>`;
       h += `<button type="button" class="tg ${r.resisted ? 'on' : ''}" data-fres="${esc(r.id)}" aria-pressed="${!!r.resisted}" title="Resisted: every hit halved until turned off">Res</button>`;
     }
-    h += `<span class="hpv">${esc(isNum(r.hp) ? r.hp : '?')}/<input data-fmax="${esc(r.id)}" value="${esc(isNum(r.max) ? r.max : '')}" inputmode="numeric" autocomplete="off" aria-label="Maximum HP for ${esc(r.gmName)}"></span>`;
-    h += `<span class="acv">AC<input data-fac="${esc(r.id)}" value="${esc(isNum(r.ac) ? r.ac : '')}" inputmode="numeric" autocomplete="off" aria-label="AC for ${esc(r.gmName)}"></span>`;
+    h += `<span class="hpv">${esc(isNum(r.hp) ? r.hp : '?')}/${statBox('data-fmax', r, isNum(r.max) ? r.max : '', `inputmode="numeric" autocomplete="off" aria-label="Maximum HP for ${esc(r.gmName)}"`)}</span>`;
+    h += `<span class="acv">AC${statBox('data-fac', r, isNum(r.ac) ? r.ac : '', `inputmode="numeric" autocomplete="off" aria-label="AC for ${esc(r.gmName)}"`)}</span>`;
     h += chips(r, view.bloodied.has(r.id));
     h += statusSelect(r);
     if (ui.other[r.id]) h += `<input class="other" data-fother="${esc(r.id)}" placeholder="${esc(RP.OTHER_STATUS_PLACEHOLDER)}" autocomplete="off" aria-label="A status for ${esc(r.gmName)}, typed">`;
@@ -300,13 +434,28 @@
       `Init ${isNum(r.ini) ? r.ini : '—'} (${sign(r.mod)})`,
     ].map((x) => `<span>${esc(x)}</span>`);
     if (f.view.bloodied.has(r.id)) nums.push('<span class="bl">Bloodied</span>');
-    for (const x of Fight.statusesOf(r)) nums.push(`<span class="st">${esc(x)}</span>`);
+    // every status, the ones the row's strip had no room for too; a click removes it, as on the row
+    for (const x of Fight.statusesOf(r)) nums.push(`<button type="button" class="st" data-fun="${esc(`${r.id}|${statusKey(x)}`)}" title="Remove ${esc(x)}">${esc(x)} ✕</button>`);
     const ctr = counters(r, true);
+    // offered while an untouched copy still differs from this row (a copy already made has nothing left to take)
+    const left = FM.groupMates(f.view.rows, r).filter((x) => x !== r && FM.untouched(x, true) && (Fight.STAT_KEYS.some((k) => isNum(r[k]) && x[k] !== r[k]) || (isNum(r.max) && x.hp !== r.max))).length;
+    if (left) {
+      const all = FM.groupMates(f.view.rows, r).length;
+      nums.push(`<button type="button" class="tg same" data-fsame="${esc(r.id)}" title="Copy these numbers (and the HP they give) to the others of this group nobody has typed into, hurt or given a status">Same for all ${all}</button>`);
+    }
+    // Three direct buttons, never a cycle: foe to neutral by one click must not pass through ally (an ally that
+    // is seen shows its name and HP on the players' screen). Ally is last, each says what it does (P-A3).
+    if (r.kind !== 'pc') {
+      const now = FM.sideOfRow(r);
+      nums.push(`<span class="sideSw" role="group" aria-label="Side"><span class="lab">Side:</span>${FM.SIDES.map((x) => `<button type="button" class="tg" data-fside="${x}" data-fsiderow="${esc(r.id)}" aria-pressed="${x === now}" title="${esc(SIDE_TITLES[x])}">${x}</button>`).join('')}</span>`);
+    }
     let body = '';
     if (r.kind === 'pc') body = '<p class="note">Players run their own sheets.</p>';
     else {
       const info = foeInfo(r, d);
-      const nonum = !isNum(r.hp) ? ((info && info.prepNote) || `${r.name}: no numbers in the vault: fill them in prep`) : '';
+      // a row with no note (typed in the fight) has no vault to fill: its numbers are typed here (final review O4)
+      const nonum = isNum(r.hp) ? '' : !r.note ? `${r.name}: no numbers yet: type them here`
+        : ((info && info.prepNote) || `${r.name}: no numbers in the vault: type them here, or fill them in prep`);
       if (nonum) body += `<p class="warn">${esc(nonum)}</p>`;
       if (info && info.statsHtml) body += `<div class="stats">${info.statsHtml}</div>`;
       else if (!nonum) body += '<p class="warn">No stat block in the vault.</p>';
@@ -318,23 +467,28 @@
   function sideHTML(d) {
     const f = d.fight;
     const view = f.view;
-    let h = '<div class="fview"><div class="fo" id="fOrder">';
+    let h = '<div class="fview"><div class="fo" id="fOrder"><div class="fotop">';
     h += `<div class="fh"><b>${f.started ? `Round ${esc(f.round)}` : 'Setting up'}</b>`
       + '<button type="button" id="fRoll" title="Roll d20 + modifier for every ticked foe and ally with no number yet (never a PC)">Roll</button>'
       + '<button type="button" id="fSort" title="Sort once by initiative; whose turn it is stays">Sort</button>'
       + `<button type="button" id="fNext" class="primary">${f.started ? 'Next ▸' : 'Start ▸'}</button><span class="sp"></span>`
       + `<button type="button" id="fArea" class="${ui.area ? 'on' : ''}" aria-pressed="${ui.area}" title="Tick several rows, type the damage once">Area</button>`
       + '<button type="button" id="fPause" title="Play the beat on (a bargain, a parley); every number is kept">Pause</button>'
-      + `${RP.armBtn('fightEnd', 'End fight', 'id="fEnd"', 'End the fight: two clicks. Every status is kept')}</div>`;
+      + `${RP.armBtn('fightEnd', 'End fight', 'id="fEnd"', 'End the fight: two clicks. Every status is kept')}`
+      + `${RP.layout.pv ? '' : '<button type="button" id="fPvShow" title="Bring the players\' screen preview back">Players\' screen ▸</button>'}</div>`;
     const missing = ui.ask === f.id && !f.started ? missingInit(view) : [];
     if (missing.length) h += `<div class="fask">No initiative yet for ${esc(missing.map((r) => r.gmName).join(', '))}. Start anyway? <button type="button" id="fStartAnyway" class="primary">Start anyway</button> <button type="button" id="fAskNo">Not yet</button></div>`;
     // every group holding a ticked PC is in (proof M2); Add offers only the rest
     const inFight = FM.fightGroupKeys(f, RP.groups());
-    h += `<div class="fin"><span class="muted">In this fight:</span> ${inFight.map((g) => `<span class="gchip">${esc(groupWho(g) || '—')} · ${esc(RP.groupLabel(g, d))}</span>`).join(' ')}</div>`;
+    // a group nobody stands in any more (its people joined another) goes once someone is in (PRENTICE's review 2)
+    const someone = inFight.filter((g) => groupWho(g));
+    h += `<div class="fin"><span class="muted">In this fight:</span> ${(someone.length ? someone : inFight).map((g) => `<span class="gchip">${esc(groupWho(g) || '—')} · ${esc(RP.groupLabel(g, d))}</span>`).join(' ')}</div>`;
     const others = RP.groups().filter((g) => !inFight.includes(g.key));
     h += `<div class="fadd"><span class="muted">Add:</span> ${others.map((g) => `<button type="button" data-faddgroup="${esc(g.key)}">+ ${esc(groupWho(g.key))} at ${esc(RP.groupLabel(g.key, d))}</button>`).join(' ')}`
+      + contingencyAdds(f, d)
       + `<span class="addname"><input id="fAddName" value="${esc(ui.addText)}" placeholder="anyone, by name" autocomplete="off" aria-label="Add anyone in the cast to the fight"><span class="fhits" id="fHits">${hitsHTML()}</span></span>`
       + `<input id="fAddCount" type="number" min="1" max="20" value="${esc(ui.addCount)}" aria-label="How many"><button type="button" id="fAddGo">Add</button></div>`;
+    h += joinsHTML(f);
     if (ui.area) {
       const n = f.rows.filter((r) => ui.sel[r.id] && r.in).length;
       const offer = areaOffer(f);
@@ -342,12 +496,68 @@
         + offer.names.map((x) => `<label class="spend"><input type="checkbox" data-fspend="${esc(x)}" ${offer.chosen === x ? 'checked' : ''}> spend ${esc(x)}</label>`).join('')
         + `<button type="button" id="fAreaGo" class="primary" ${n ? '' : 'disabled'}>Apply</button><button type="button" id="fAreaDone">Done</button></div>`;
     }
-    h += `<ol class="to">${view.rows.map((r) => rowHTML(r, f, view)).join('')}</ol></div>`;
+    h += `</div><ol class="to" data-keepscroll="order">${view.rows.map((r) => rowHTML(r, f, view)).join('')}</ol></div>`;
     h += `${actingHTML(d)}</div>`;
     return h;
   }
+  // A contingency with people the fight does not hold yet: "+ If: …" brings them in (its foes, its allies).
+  function contingencyAdds(f, d) {
+    return d.beats.filter((b) => b.contingency && b.key !== f.beat).filter((b) => {
+      const foes = b.foes || [];
+      const people = (b.who || []).filter((w) => w.note);
+      if (!foes.length && !people.length) return false;
+      const haveFoe = (fo) => f.rows.some((r) => r.foeKey === fo.key);
+      const havePerson = (w) => f.rows.some((r) => r.note === w.note);
+      return !(foes.every(haveFoe) && people.every(havePerson));
+    }).map((b) => {
+      const t = b.title.length > 34 ? `${b.title.slice(0, 33)}…` : b.title;
+      return `<button type="button" data-faddbeat="${esc(b.key)}" title="Bring this contingency's people into the fight: ${esc(b.title)}">+ If: ${esc(t)}</button>`;
+    }).join(' ');
+  }
+  // The Add list is a row of the Add line, in flow: it never lies over the order (final review P-A1, re-review). It
+  // closes on Esc at once, and after any press outside the Add control once that press's click has landed: closing
+  // moves the order back up, so it must not happen under the pointer mid-press. The typed words stay in the box.
+  function closeAddList() {
+    if (!ui.addHits.length) return false;
+    ui.addHits = [];
+    const box = $('#fHits');
+    if (box) box.innerHTML = '';
+    return true;
+  }
+  // The count box and the Add button are the Add control's own: a press on them keeps the list (type a name, set
+  // the count, then pick "+ New").
+  const ADD_PARTS = '.addname, #fAddCount, #fAddGo';
+  let closeOwed = false;
+  const closeIfOwed = () => { if (!closeOwed) return; closeOwed = false; closeAddList(); };
+  document.addEventListener('pointerdown', (ev) => {
+    if (ui.addHits.length && !(ev.target.closest && ev.target.closest(ADD_PARTS))) closeOwed = true;
+  }, true);
+  window.addEventListener('click', () => setTimeout(closeIfOwed, 0));
+  // A box that still holds typed words opens its list again when it is pressed or tabbed back into, as the Move box
+  // does (PRENTICE's PR review 2)
+  function reopenAddList(t) {
+    if (!t || t.id !== 'fAddName' || !t.value.trim() || ui.addHits.length) return;
+    ui.addHits = FM.addChoices(model().cast || [], t.value, RS.castSearch);
+    const box = $('#fHits');
+    if (box) box.innerHTML = hitsHTML();
+  }
+  document.addEventListener('pointerdown', (ev) => { if (ev.target && ev.target.id === 'fAddName') reopenAddList(ev.target); }, true);
+  document.addEventListener('focusin', (ev) => reopenAddList(ev.target));
+  document.addEventListener('pointerup', () => { if (closeOwed) setTimeout(closeIfOwed, 0); }, true);
+  document.addEventListener('pointercancel', closeIfOwed, true);
   function hitsHTML() {
-    return ui.addHits.map((c) => `<button type="button" data-faddpick="${esc(c.note)}">${esc(c.name)}<span class="t">${esc(c.type)}</span></button>`).join('');
+    return ui.addHits.map((c) => (c.isNew
+      ? `<button type="button" class="new" data-faddnew="${esc(c.name)}">${esc(c.label)}</button>`
+      : `<button type="button" data-faddpick="${esc(c.note)}">${esc(c.name)}<span class="t">${esc(c.type)}</span></button>`)).join('');
+  }
+  // The fight's join lines that can still be taken back: an add nobody has touched (fight-math's `undoable`).
+  function undoLines(f) {
+    return (state().events || []).filter((e) => e.fight && e.join && FM.undoable(f, e.join)).slice(-3).reverse();
+  }
+  function joinsHTML(f) {
+    const lines = undoLines(f);
+    if (!lines.length) return '';
+    return `<div class="fjoins">${lines.map((e) => `<span class="fj">${esc(e.text)} <button type="button" data-fundo="${esc(e.join)}" title="Takes back the rows this add made">Undo</button></span>`).join('')}</div>`;
   }
 
   // ------------------------------------------------------------------ drawing: the beats column
@@ -365,7 +575,7 @@
       .map(([k, t]) => `<button type="button" data-fjot="${esc(t)}" title="Jot it to the fight's beat">Jot: ${esc(t)}</button>`).join('')}</div>`;
     if (!b) return `<div class="cut gone" id="fightCut"><h2>⚔ ${esc(f.title)}</h2><p class="warn">This fight's beat is no longer in the Plan</p>${jots}</div>`;
     const lit = f.view.lit;
-    let h = `<div class="cut" id="fightCut"><h2>⚔ ${esc(b.title)} <a class="lk" data-go="beat:${esc(b.key)}">full beat ↓</a></h2>`;
+    let h = `<div class="cut" id="fightCut"><h2>⚔ ${esc(b.title)} <a class="lk" data-pane="beat" title="The whole beat in this pane">full beat ↓</a></h2>`;
     if ((b.points || []).length) h += `<h4 class="lab">Points to land</h4>${pointsHTML(b, lit)}`;
     if ((b.who || []).length || (b.arrivals || []).length) {
       // an unmasked person goes by the unmasked name and play-as, as on the full beat
@@ -376,6 +586,11 @@
         const pa = on && um.playAs ? esc(um.playAs) : (w.playAsHtml || esc(w.playAs || ''));
         return `<div>${w.note ? RP.face(w.note, 'face', d) : ''} <b>${w.note ? RP.link(w.note, name) : esc(name)}</b>${pa ? ` <span class="muted">${pa}</span>` : ''}</div>`;
       }).join('')}${(b.arrivals || []).map((a) => RP.cueHTML(b, a, new Set())).join('')}</div>`;
+    }
+    // a fight at a place moved nobody there (Part 6 call 4): say so, and who stands there
+    if (b.placeBeat) {
+      const there = (model().pcs || []).filter((p) => { const x = state().positions[p.note]; return x && x.beat === b.key; });
+      h += `<p class="note">${b.newPlace ? 'A place typed tonight. ' : ''}Fight here moves nobody: ${there.length ? `${esc(there.map((p) => first(p.name)).join(', '))} ${there.length > 1 ? 'stand' : 'stands'} here` : 'no PC stands here'}.</p>`;
     }
     if ((b.ifs || []).length) {
       h += `<h4 class="lab">If they…</h4><div class="tw"><table class="ifs"><tbody>${b.ifs.map((r) => `<tr class="${lit.has(r.key) ? 'lit' : ''}"><td>${lit.has(r.key) ? '<b class="now">NOW</b> ' : ''}${r.doHtml || esc(r.do)}</td><td>${r.thenHtml || esc(r.then)}</td></tr>`).join('')}</tbody></table></div>`;
@@ -399,7 +614,18 @@
 
   // ------------------------------------------------------------------ the part
   const part = {
-    focusAttrs: ['data-fini', 'data-fhp', 'data-fmax', 'data-fac', 'data-fother'],
+    // every focusable control the fight draws that has no id, so a redraw puts focus back on it (proof N1: a status
+    // select pressed while a typed number committed lost focus to the page). Controls with an id (the Add box, the
+    // count, Roll, Next, the area box…) are found by it.
+    focusAttrs: ['data-fini', 'data-fhp', 'data-fmax', 'data-fac', 'data-fother', 'data-fstatus', 'data-ftick', 'data-fsel',
+      'data-fseen', 'data-fhalf', 'data-fahalf', 'data-fres', 'data-fout', 'data-fds', 'data-flr', 'data-fla', 'data-frch',
+      'data-fun', 'data-fsame', 'data-fside', 'data-fundo', 'data-faddgroup', 'data-faddbeat', 'data-faddpick', 'data-faddnew',
+      'data-fspend', 'data-fafter', 'data-fjot', 'data-fight', 'data-fplace'],
+    // Fight here on a place tile or a place's drawer (plan 6a Task 7); nothing while a fight runs
+    placeButtons(note) {
+      if (!allowed() || state().fight || !(model().placeKeys || {})[note]) return '';
+      return `<button type="button" data-fplace="${esc(note)}" title="Fight here: the place's creatures are ticked in, its people benched; only PCs standing here are ticked, and nobody moves">Fight here</button>`;
+    },
     beatButtons(b) {
       if (!allowed()) return '';
       const f = state().fight;
@@ -419,6 +645,13 @@
       if (!f || f.paused) return null;
       return sideHTML(RP.derived());
     },
+    // The right pane in a fight (plan 6a Task 10): the cut, under the fight's title; nothing paused or after.
+    pane(d) {
+      const f = state().fight;
+      if (!f || f.paused) return null;
+      const b = d.beats.find((x) => x.key === f.beat);
+      return { title: b ? b.title : f.title, beat: f.beat, cut: cutHTML(d) };
+    },
     sheetTop(d) {
       const f = state().fight;
       if (f) return f.paused ? stripHTML(d) : cutHTML(d);
@@ -434,6 +667,8 @@
       return d.afterFight ? afterHTML(d) : '';
     },
     click(ev) { return onClick(ev); },
+    // after every layout pass (gm.js applyLayout): the rows' status strips fit their room
+    afterLayout() { fitChips(); },
     probe() {
       const d = RP.derived();
       const out = { fight: null, after: d.afterFight, layout: layout() };
@@ -443,9 +678,10 @@
         out.fight = {
           id: f.id, groups: f.groups, turn: f.turn, round: f.round, started: f.started, paused: f.paused, area: ui.area,
           ask: Boolean($('.fask')), actingName: acting ? acting.textContent : null,
+          actingStatuses: Array.from(document.querySelectorAll('#acting .nums .st'), (b) => b.textContent.replace(/ ✕$/, '')),
           rows: f.view.rows.map((r) => ({
-            id: r.id, note: r.note, copy: r.copy, kind: r.kind, name: r.gmName, in: r.in, ini: isNum(r.ini) ? r.ini : null, mod: r.mod,
-            hp: r.hp, max: r.max, temp: r.temp, conds: r.conds, exhaustion: r.exhaustion, conc: r.conc, out: r.out, seen: r.seen,
+            id: r.id, note: r.note, copy: r.copy, kind: r.kind, side: sideWord(r), name: r.gmName, in: r.in, ini: isNum(r.ini) ? r.ini : null, mod: r.mod,
+            hp: r.hp, max: r.max, ac: r.ac, temp: r.temp, conds: r.conds, exhaustion: r.exhaustion, conc: r.conc, out: r.out, seen: r.seen,
             recharge: (r.recharge || []).map((x) => ({ name: x.name, ready: x.ready, rolled: x.rolled })),
           })),
         };
@@ -461,13 +697,15 @@
     const after = box('#afterFight');
     const r = (v) => (v == null ? null : Math.round(v));
     return {
+      ...RP.layoutProbe(),
       orderBottom: r(ol && ol.bottom), orderRight: r(ol && ol.right), actingTop: r(act && act.top), actingLeft: r(act && act.left),
       cutTop: r(cut && cut.top), afterTop: r(after && after.top),
       wide: document.documentElement.scrollWidth > window.innerWidth,
-      rows: Array.from(document.querySelectorAll('#side ol.to > li'), (li) => ({
+      rows: Array.from(document.querySelectorAll('#side ol.to > li[data-frow]'), (li) => ({
         id: li.dataset.frow, name: (li.querySelector('.nm') || {}).textContent, h: Math.round(li.getBoundingClientRect().height),
         over: li.scrollWidth > li.clientWidth + 1, nameCut: (() => { const n = li.querySelector('.nm'); return Boolean(n) && n.scrollWidth > n.clientWidth + 1; })(),
         statuses: Boolean(li.querySelector('.chip')),
+        line2: (() => { const l = li.nextElementSibling; return l && l.dataset.row2 === li.dataset.frow ? l.textContent : null; })(),
       })),
     };
   }
@@ -482,6 +720,7 @@
     const d = t.dataset;
     const f = state().fight;
     if (d.fight) { startFight(d.fight); return true; }
+    if (d.fplace) { fightHere(d.fplace); return true; }
     if (d.faddbeat) { addTo({ beat: d.faddbeat }); return true; }
     if (d.fafter) { const [row, st] = split(d.fafter); const lf = lastFight(); if (lf) RP.dispatch({ type: 'afterClear', fight: lf.id, row, status: st }); return true; }
     if (t.id === 'fAfterAll') { const lf = lastFight(); if (lf) RP.dispatch({ type: 'afterClearAll', fight: lf.id }); return true; }
@@ -495,20 +734,25 @@
     if (t.id === 'fAreaDone') { endArea(); RP.render(); return true; }
     if (t.id === 'fAreaGo') { applyArea(); return true; }
     if (t.id === 'fPause') { RP.ui.focus = f.beat; F({ type: 'fightPause', on: true }); scrollToBeat(f.beat); return true; }
-    if (t.id === 'fResume') { F({ type: 'fightPause', on: false }); scrollToCut(); return true; }
+    if (t.id === 'fResume') { RP.ui.pane = 'cut'; F({ type: 'fightPause', on: false }); scrollToCut(); return true; }
     if (t.id === 'fEnd') {
       RP.armed('fightEnd', () => {
+        RP.ui.pane = 'cut';
         F({ type: 'fightEnd' });
         scrollTo($('#afterFight'));
       });
       return true;
     }
     if (t.id === 'fAddGo') {
-      const hits = RS.castSearch(model().cast || [], ($('#fAddName') || {}).value || '');
-      if (hits.length) addByName(hits[0].note);
+      const box = $('#fAddName');
+      const text = (box || {}).value || '';
+      if (text.trim() && !addTop(text) && box) { box.setCustomValidity(NO_ONE); box.reportValidity(); }
       return true;
     }
     if (d.faddpick) { addByName(d.faddpick); return true; }
+    if (d.faddnew) { addByName(null, d.faddnew); return true; }
+    if (d.fundo) { F({ type: 'undoAdd', join: d.fundo }); return true; }
+    if (d.fsame) { F({ type: 'sameForAll', row: d.fsame }); return true; }
     if (d.faddcast) { addTo({ cast: d.faddcast, count: 1 }); return true; }
     if (d.faddgroup) { addTo({ group: d.faddgroup }, `${groupWho(d.faddgroup)} at ${RP.groupLabel(d.faddgroup)}`); return true; }
     if (d.fspend !== undefined) {
@@ -526,6 +770,7 @@
     if (d.fahalf && r) { ui.ahalf[r.id] = !ui.ahalf[r.id]; RP.render(); return true; }
     if (d.fhalf && r) { F({ type: 'half', row: r.id, on: !r.half }); return true; }
     if (d.fres && r) { F({ type: 'resisted', row: r.id, on: !r.resisted }); return true; }
+    if (d.fside && d.fsiderow) { const x = rowById(d.fsiderow); if (x && FM.isSide(d.fside)) F({ type: 'setSide', row: x.id, side: d.fside }); return true; }
     if (d.fseen && r) { F({ type: 'seen', row: r.id, on: !r.seen }); return true; }
     if (d.fout && r) { F({ type: 'out', row: r.id, on: !r.out }); return true; }
     if (d.flr && r) { F({ type: 'counter', row: r.id, kind: 'lr', value: r.lr > 0 ? r.lr - 1 : r.lrMax }); return true; }
@@ -554,33 +799,111 @@
     return false;
   }
 
-  // An initiative box: a whole number, or empty. Unchanged sends nothing.
-  function commitIni(t) {
-    const r = rowById(t.dataset.fini);
+  // The stat boxes: which key each is, and what it takes. An empty box clears the number.
+  const STAT = {
+    fini: { k: 'data-fini', ok: /^-?\d{1,3}$/ },
+    fmax: { k: 'data-fmax', ok: /^\d{1,4}$/ },
+    fac: { k: 'data-fac', ok: /^\d{1,4}$/ },
+  };
+  const FIELD = { fini: 'ini', fmax: 'max', fac: 'ac' };
+  const shown = (r, f) => String(isNum(r[FIELD[f]]) ? r[FIELD[f]] : '');
+  const statOf = (t) => { const d = (t && t.dataset) || {}; for (const f of Object.keys(STAT)) if (d[f] !== undefined) return f; return null; };
+
+  // Words that are not a number mark the box and stay in it; the state is unchanged, and focus is never
+  // taken back (review F5: reportValidity put it back, and whatever was typed next went into the bad box).
+  function markBad(t, f, on) {
+    const key = badKey(STAT[f].k, t.dataset[f]);
+    const r = rowById(t.dataset[f]);
+    if (on && r) ui.bad[key] = { words: t.value, was: shown(r, f) }; else delete ui.bad[key];
+    if (on) t.setAttribute('aria-invalid', 'true'); else t.removeAttribute('aria-invalid');
+    syncLine2(t.dataset[f]);
+  }
+  // Damage typed into a row's box and not applied (P4.1): marked until Enter applies it or the box is emptied.
+  // Never applied on leaving the box: a slip would hurt a row.
+  function markPending(t) {
+    const id = t.dataset.fhp;
+    const v = t.value;
+    if (v.trim()) ui.pending[id] = v; else delete ui.pending[id];
+    t.classList.toggle('pending', Boolean(v.trim()));
+    syncLine2(id);
+  }
+
+  // A stat box sends its number, when it changed: initiative, max HP or AC. False for words that are not one.
+  function commitStat(t) {
+    const f = statOf(t);
+    const r = f && rowById(t.dataset[f]);
     if (!r) return true;
     const v = t.value.trim();
-    if (v !== '' && !/^-?\d{1,3}$/.test(v)) { t.setCustomValidity('A whole number'); t.reportValidity(); return false; }
+    if (v !== '' && !STAT[f].ok.test(v)) { markBad(t, f, true); return false; }
+    markBad(t, f, false);
     const n = v === '' ? null : Number(v);
-    if (n !== (isNum(r.ini) ? r.ini : null)) F({ type: 'setInit', row: r.id, ini: n });
+    if (f === 'fini' && n !== (isNum(r.ini) ? r.ini : null)) F({ type: 'setInit', row: r.id, ini: n });
+    if (f === 'fmax' && n !== r.max) F({ type: 'setMax', row: r.id, max: n });
+    if (f === 'fac' && n !== r.ac) F({ type: 'setAc', row: r.id, ac: n });
     return true;
+  }
+
+  // Where Tab goes from a stat box, by row id and field, found in the order as it stands before the commit,
+  // so a row the commit re-places (an initiative after Start) never moves the target:
+  // - an initiative box walks down the initiative column (spec §6.4 C2, as in 5b);
+  // - max HP goes to the same row's AC, and AC to the next row's max HP (review F4).
+  // Shift reverses both. Past either end: null, and Tab leaves the boxes as it does anywhere.
+  function tabTarget(t, f, back) {
+    const id = t.dataset[f];
+    const col = (k) => Array.from(document.querySelectorAll(`[${k}]`), (b) => b.getAttribute(k));
+    if (f === 'fini') {
+      const ids = col('data-fini');
+      const to = ids[ids.indexOf(id) + (back ? -1 : 1)];
+      return to === undefined ? null : attr('data-fini', to);
+    }
+    const rows = col('data-fmax');
+    const i = rows.indexOf(id);
+    if (f === 'fmax') {
+      if (!back) return document.querySelector(attr('data-fac', id)) ? attr('data-fac', id) : null;
+      return i > 0 ? attr('data-fac', rows[i - 1]) : null;
+    }
+    if (back) return attr('data-fmax', id);
+    return i >= 0 && i + 1 < rows.length ? attr('data-fmax', rows[i + 1]) : null;
   }
 
   document.addEventListener('keydown', (ev) => {
     const t = ev.target;
     const d = (t && t.dataset) || {};
     if (ev.isComposing) return;
-    if (d.fini !== undefined && (ev.key === 'Enter' || ev.key === 'Tab')) {
-      const id = d.fini;
-      // Tab walks the initiative boxes in row order (nothing has re-sorted); past the last one (Shift+Tab
-      // before the first) it leaves them for the page's other controls, as Tab does anywhere
-      const ids = Array.from(document.querySelectorAll('[data-fini]'), (b) => b.dataset.fini);
-      const to = ev.key === 'Tab' ? ids[ids.indexOf(id) + (ev.shiftKey ? -1 : 1)] : undefined;
-      if (ev.key === 'Enter' || to !== undefined) ev.preventDefault();
-      if (!commitIni(t)) { ev.preventDefault(); return; }
-      if (to !== undefined) {
-        const nx = document.querySelector(attr('data-fini', to));
-        if (nx) { nx.focus(); nx.select(); }
-      }
+    if (ev.key === 'Escape' && t.closest && t.closest(ADD_PARTS) && closeAddList()) {
+      const box = $('#fAddName');
+      if (box) box.focus();
+      ev.preventDefault();
+      return;
+    }
+    // Esc empties a damage or healing box that was typed in and not applied (PRENTICE's PR review 2, D3)
+    if (ev.key === 'Escape' && d.fhp !== undefined) {
+      ev.preventDefault();
+      t.setCustomValidity('');
+      t.value = '';
+      markPending(t);
+      return;
+    }
+    const f = statOf(t);
+    // Esc takes back what was typed (final review P-A4): the box holds its saved number again, selected, nothing
+    // is sent, and focus stays
+    if (f && ev.key === 'Escape') {
+      const r = rowById(t.dataset[f]);
+      if (!r) return;
+      ev.preventDefault();
+      markBad(t, f, false);
+      t.value = shown(r, f);
+      t.dataset.committed = t.value;
+      t.select();
+      return;
+    }
+    if (f && (ev.key === 'Enter' || ev.key === 'Tab')) {
+      const to = ev.key === 'Tab' ? tabTarget(t, f, ev.shiftKey) : null;
+      if (ev.key === 'Enter' || to) ev.preventDefault();
+      // committed here: the browser's `change` when focus leaves sends nothing and redraws nothing again
+      t.dataset.committed = t.value;
+      commitStat(t);
+      if (to) RP.focusTo(to);
       return;
     }
     if (ev.key !== 'Enter') return;
@@ -589,10 +912,10 @@
       if (!FM.parseEntry(t.value)) { t.setCustomValidity(INVALID); t.reportValidity(); return; }
       const entry = t.value;
       t.value = '';
+      markPending(t);
       F({ type: 'hp', row: d.fhp, entry });
       return;
     }
-    if (d.fmax !== undefined || d.fac !== undefined) { ev.preventDefault(); commitNumber(t); return; }
     if (d.fother !== undefined) {
       ev.preventDefault();
       const v = t.value.trim();
@@ -604,32 +927,69 @@
     }
     if (t.id === 'fAddName') {
       ev.preventDefault();
-      const hits = RS.castSearch(model().cast || [], t.value);
-      if (!hits.length) { t.setCustomValidity('No one in the vault by that name'); t.reportValidity(); return; }
-      addByName(hits[0].note);
+      if (!t.value.trim()) return;
+      if (!addTop(t.value)) { t.setCustomValidity(NO_ONE); t.reportValidity(); }
       return;
     }
     if (t.id === 'fAreaDmg') { ev.preventDefault(); applyArea(); }
   });
+  // A box already committed (by Tab or Enter) and not typed in since sends nothing more.
+  const committed = (t) => t.dataset.committed !== undefined && t.dataset.committed === t.value;
 
-  // Max HP and AC: whole numbers, or empty; sent on Enter or when the box is left.
-  function commitNumber(t) {
-    const d = t.dataset;
-    const r = rowById(d.fmax || d.fac);
-    if (!r) return;
-    const v = t.value.trim();
-    if (v !== '' && !/^\d{1,4}$/.test(v)) { t.setCustomValidity('A whole number'); t.reportValidity(); return; }
-    const n = v === '' ? null : Number(v);
-    if (d.fmax !== undefined && n !== r.max) F({ type: 'setMax', row: r.id, max: n });
-    if (d.fac !== undefined && n !== r.ac) F({ type: 'setAc', row: r.id, ac: n });
-  }
+  // Every number box selects what it holds when it is clicked or tabbed into, so a typed 3 replaces the 1
+  // (or the 21) instead of making 13 (or 291). A focus handler alone is undone by the press's own caret
+  // (review F6), so a box this press focused selects again on the release.
+  // A press on a box that already has focus selects too, unless the press dragged out a selection of its own.
+  const NUMBER_BOX = '[data-fini], [data-fmax], [data-fac], #fAddCount';
+  let pressed = null;
+  document.addEventListener('pointerdown', (ev) => {
+    const b = ev.target.closest && ev.target.closest(NUMBER_BOX);
+    pressed = b ? { b, x: ev.clientX, y: ev.clientY } : null;
+  }, true);
+  document.addEventListener('pointerup', (ev) => {
+    const b = ev.target.closest && ev.target.closest(NUMBER_BOX);
+    const was = pressed;
+    pressed = null;
+    if (!b || !was || was.b !== b || document.activeElement !== b) return;
+    const dragged = Math.abs(ev.clientX - was.x) > 3 || Math.abs(ev.clientY - was.y) > 3;
+    const own = typeof b.selectionStart === 'number' && b.selectionStart !== b.selectionEnd;
+    if (dragged && own) return;
+    b.select();
+    selectAfter = b;
+  }, true);
+  // A release inside a selection puts the caret where it landed once the click is done, after every handler here,
+  // so 41 typed into a 21 that Esc left selected made 2411 (PRENTICE's review 2, D1): select again after it.
+  // A key pressed before that comes round selects first, so the number is replaced whatever the timing.
+  let selectAfter = null;
+  let armed = null;
+  document.addEventListener('mouseup', () => {
+    const b = selectAfter;
+    selectAfter = null;
+    if (!b) return;
+    armed = b;
+    setTimeout(() => { if (armed === b) { armed = null; if (document.activeElement === b) b.select(); } }, 0);
+  }, true);
+  document.addEventListener('keydown', () => {
+    const b = armed;
+    armed = null;
+    if (b && document.activeElement === b) b.select();
+  }, true);
+  document.addEventListener('focusin', (ev) => { if (ev.target.matches && ev.target.matches(NUMBER_BOX)) ev.target.select(); });
 
   document.addEventListener('input', (ev) => {
     const t = ev.target;
     if (t.setCustomValidity) t.setCustomValidity('');
+    const f = statOf(t);
+    if (f) {
+      delete t.dataset.committed;
+      // a marked box keeps its words through a redraw while they are worked on
+      const key = badKey(STAT[f].k, t.dataset[f]);
+      if (ui.bad[key]) ui.bad[key].words = t.value;
+    }
+    if (t.dataset && t.dataset.fhp !== undefined) markPending(t);
     if (t.id === 'fAddName') {
       ui.addText = t.value;
-      ui.addHits = RS.castSearch(model().cast || [], t.value);
+      ui.addHits = FM.addChoices(model().cast || [], t.value, RS.castSearch);
       const box = $('#fHits');
       if (box) box.innerHTML = hitsHTML();
     }
@@ -643,20 +1003,46 @@
   document.addEventListener('focusout', (ev) => {
     const t = ev.target;
     const d = (t && t.dataset) || {};
-    if (d.fini === undefined && d.fmax === undefined && d.fac === undefined) return;
+    if (!statOf(t)) return;
     // after the redraw that may be under way: a box it replaced is gone, and its words are in the new one
     setTimeout(() => {
-      if (!t.isConnected || document.activeElement === t) return;
-      if (d.fini !== undefined) commitIni(t);
-      else commitNumber(t);
+      if (!t.isConnected || document.activeElement === t || committed(t)) return;
+      commitStat(t);
     }, 0);
   });
+
+  // A box the redraw removes fires change in the middle of the redraw. When the redraw drew it again, its
+  // half-typed words are in the new box (sent when it is left, never on the redraw). When it is gone for good
+  // (another window unticked the row), its number is sent from the old box, and focus that fell to nothing
+  // goes to the same box on the next row that has one, else to Next.
+  function afterDraw(t) {
+    const f = statOf(t);
+    const id = t.dataset[f];
+    const k = STAT[f].k;
+    setTimeout(() => {
+      if (document.querySelector(attr(k, id))) return;
+      commitStat(t);
+      const a = document.activeElement;
+      if (a && a !== document.body) return;
+      const fi = state().fight;
+      const ids = fi ? fi.rows.map((r) => r.id) : [];
+      const i = ids.indexOf(id);
+      const near = ids.slice(i + 1).concat(ids.slice(0, Math.max(0, i)).reverse());
+      const to = near.find((x) => document.querySelector(attr(k, x)));
+      if (to) RP.focusTo(attr(k, to));
+      else { const nx = $('#fNext'); if (nx) nx.focus(); }
+    }, 0);
+  }
 
   document.addEventListener('change', (ev) => {
     const t = ev.target;
     const d = t.dataset || {};
-    if (d.fini !== undefined) { commitIni(t); return; }
-    if (d.fmax !== undefined || d.fac !== undefined) { commitNumber(t); return; }
+    if (statOf(t)) {
+      if (committed(t)) return;
+      if (RP.drawing()) { afterDraw(t); return; }
+      commitStat(t);
+      return;
+    }
     if (d.fstatus !== undefined) {
       const v = t.value;
       t.value = '';

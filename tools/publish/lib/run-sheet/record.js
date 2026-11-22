@@ -1,5 +1,5 @@
 'use strict';
-// The Table Log writer: the 16-section body a session's state renders to, and the rewrite of a Table
+// The Table Log writer: the 17-section body a session's state renders to, and the rewrite of a Table
 // Log note around it (skills/shared/session-document-chain.md §3c; the reader is table-log.js).
 // Pure: it reads no file and no clock. The server (step 7) decides when to write and what to keep aside.
 
@@ -8,16 +8,23 @@ const path = require('node:path');
 const RS = require('./web/state');
 const { fenceMask } = require('./plan-text');
 
+// The sides the GM set in a fight (plan 6a), one `- [[Note]]: side` per note; the reader carries the latest.
+const SIDES_SET = 'Sides set';
+// every known place a PC stood at tonight, linked, in order of first arrival (Task 13 proof: Ant's ruling, a place the
+// players go to becomes visible and published; reveal_scan reads this section)
+const PLACES_WENT = 'Places the party went';
 // The same list as `TABLE_LOG_SECTIONS` in skills/shared/scripts/vault_write.py; a test compares the two.
 const TABLE_LOG_SECTIONS = [
   'Where everyone ended', 'Stopped in', 'Points landed',
   'Tried and missed', 'Overtaken', 'Reached but not landed',
   'Not reached', 'Changed since play started',
-  'Contingencies that fired', 'Improvised beats',
-  'Unmasked this session', 'Handouts handed over', 'Log', 'Loot',
+  'Contingencies that fired', 'Improvised beats', PLACES_WENT,
+  'Unmasked this session', SIDES_SET, 'Handouts handed over', 'Log', 'Loot',
   'Vitals at the end', 'Advancement',
 ];
 const VITALS = 'Vitals at the end';
+// An Improvised beats line for a place typed tonight (plan 6a Task 7): `- New place: The Docks`.
+const NEW_PLACE = 'New place:';
 const VITALS_HEAD = '| Who | HP | Conditions |\n| --- | --- | --- |';
 
 const lf = (s) => String(s == null ? '' : s).replace(/\r\n?/g, '\n');
@@ -50,6 +57,14 @@ function tableLogBody(model, state, { linkFor: link, timeOf = localTime } = {}) 
   const sec = {};
   const beatByKey = new Map(d.beats.map((b) => [b.key, b]));
   const who = (to) => (to === 'party' ? 'the party' : link(to));
+  // a place's link carries its title when the link's own words would not say it (a folder note's `[[…/index]]`)
+  const placeLink = (p) => {
+    const n = (model.placeNotes && model.placeNotes[p]) || (model.notes && model.notes[p]) || null;
+    const t = n && n.title;
+    const l = link(p);
+    const shown = l.slice(2, -2).split('/').pop();
+    return t && shown !== t ? `${l.slice(0, -2)}|${t.replace(/[|\]]/g, ' ')}]]` : l;
+  };
 
   // Everyone left unplaced is "not placed", but only when someone was placed: a GM who touched
   // nothing gets a bare section, never a made-up "everyone at beat 1".
@@ -60,7 +75,7 @@ function tableLogBody(model, state, { linkFor: link, timeOf = localTime } = {}) 
     else if (w.status === 'unplaced') at = 'not placed';
     else if (w.status === 'off') at = 'off-screen';
     else if (w.status === 'gone') at = one(w.title);
-    else if (w.place) at = `${link(w.place)}${w.spotName ? ` (${one(w.spotName)})` : ''}`;
+    else if (w.place) at = `${placeLink(w.place)}${w.spotName ? ` (${one(w.spotName)})` : ''}`;
     else at = one(w.title);
     return `${link(w.pc)}: ${at}`;
   }));
@@ -95,14 +110,47 @@ function tableLogBody(model, state, { linkFor: link, timeOf = localTime } = {}) 
   }));
 
   sec['Contingencies that fired'] = bullets(d.fired.map((f) => one(f.title)));
-  sec['Improvised beats'] = bullets(d.improvised.map((i) => one(i.title)));
+  // a place typed tonight (plan 6a Task 7) is `New place: <name>`, plain words: it has no note yet, and wrap-up
+  // offers to make one. A known place the players were at tonight is its link: a PC was moved there (visited),
+  // even if they left, or a fight was fought there (Fight here). reveal_scan reads these links and offers to
+  // publish an unpublished place: the players have seen it (Ant, Task 7 fix round 1, review I2).
+  const visited = (state && state.visited) || {};
+  const fought = new Set([...(Array.isArray(state && state.fights) ? state.fights : []), ...(state && state.fight ? [state.fight] : [])].map((f) => f && f.beat));
+  sec['Improvised beats'] = bullets(d.improvised.map((i) => {
+    if (i.newPlace) return `${NEW_PLACE} ${one(i.title)}`;
+    if (typeof i.place === 'string' && i.place && (visited[i.key] || fought.has(i.key))) return placeLink(i.place);
+    return one(i.title);
+  }));
+  // Places the party went: a Plan beat's place, a hub spot's note, a known place's own beat. A place typed tonight
+  // stays plain words under Improvised beats (it has no note). One link a place, by the time a PC first stood there.
+  const went = [];
+  const spotSuffix = (k) => String(k).split('.spot.')[1] || null;
+  for (const [key, v] of Object.entries((state && state.visited) || {})) {
+    const b = beatByKey.get(key);
+    if (!b || !v || typeof v !== 'object' || b.newPlace) continue;
+    const spots = b.spots || [];
+    if (spots.length > 1) {
+      for (const [sk, sat] of Object.entries(v.spots && typeof v.spots === 'object' ? v.spots : {})) {
+        const sp = spots.find((x) => x.key === sk || (spotSuffix(x.key) && spotSuffix(x.key) === spotSuffix(sk)));
+        if (sp && sp.note) went.push({ note: sp.note, at: sat });
+      }
+    } else {
+      const note = b.place || (spots[0] && spots[0].note) || null;
+      if (note) went.push({ note, at: v.at });
+    }
+  }
+  went.sort((x, y) => String(x.at || '').localeCompare(String(y.at || '')));
+  const wentSeen = new Set();
+  sec[PLACES_WENT] = bullets(went.filter((x) => !wentSeen.has(x.note) && wentSeen.add(x.note)).map((x) => placeLink(x.note)));
   sec['Unmasked this session'] = bullets(
     d.unmaskedNow.filter((u) => !u.carried).map((u) => `${link(u.note)} as ${one(u.name)}`)
       .concat(d.maskedAgain.map((u) => `${link(u.note)} masked again`)),
   );
+  sec[SIDES_SET] = bullets(d.sidesSet.map((x) => `${link(x.note)}: ${x.side}`));
   sec['Handouts handed over'] = bullets(d.handedOver.map((h) => (h.note ? link(h.note) : one(h.name || h.text))));
 
-  sec.Log = bullets(d.log.map((l) => `${timeOf(l.at)} ${l.beatTitle ? `${one(l.beatTitle)}: ` : ''}${one(l.text)}`));
+  // the GM's "Took back" line stays on the page: the Table Log keeps no trace of an add that never was
+  sec.Log = bullets(d.log.filter((l) => !l.tookBack).map((l) => `${timeOf(l.at)} ${l.beatTitle ? `${one(l.beatTitle)}: ` : ''}${one(l.text)}`));
 
   sec.Loot = bullets(d.loot.map((l) => `${l.item ? link(l.item) : one(l.text)} to ${who(l.to)}`));
 
@@ -151,8 +199,8 @@ function isTableLog(fileText) {
   return !!m && /^type:\s*["']?session-table-log["']?\s*$/m.test(m[1]);
 }
 
-// The note with its 16 sections replaced by `body`: the frontmatter, everything above the first `##`
-// and any `##` section that is not one of the 16 (kept after Advancement, in order) stay as they are.
+// The note with its 17 sections replaced by `body`: the frontmatter, everything above the first `##`
+// and any `##` section that is not one of the 17 (kept after Advancement, in order) stay as they are.
 function rewriteTableLog(fileText, body) {
   if (!isTableLog(fileText)) {
     const e = new Error('not a Table Log note (type: session-table-log): not written');
@@ -167,7 +215,7 @@ function rewriteTableLog(fileText, body) {
   return crlf ? out.replace(/\n/g, '\r\n') : out;
 }
 
-// The file's 16-section body, normalised: LF, trimmed, in file order. What a hash is taken over.
+// The file's 17-section body, normalised: LF, trimmed, in file order. What a hash is taken over.
 function recordBodyOf(fileText) {
   return render(split(fileText).sections.filter((s) => TITLES.has(low(s.title)))).trim();
 }
@@ -191,4 +239,4 @@ function needsBackup(fileText, recordHash) {
   return bodyHash(b) !== recordHash;
 }
 
-module.exports = { TABLE_LOG_SECTIONS, tableLogBody, rewriteTableLog, recordBodyOf, bodyHash, isEmptySkeleton, needsBackup, linkFor, timeOf: localTime };
+module.exports = { TABLE_LOG_SECTIONS, SIDES_SET, PLACES_WENT, NEW_PLACE, tableLogBody, rewriteTableLog, recordBodyOf, bodyHash, isEmptySkeleton, needsBackup, linkFor, timeOf: localTime };

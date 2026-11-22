@@ -83,3 +83,28 @@ test('odd input never throws; an empty title still gets a key', () => {
   assert.deepEqual(k.beatKeys(null), []);
   assert.match(k.personKey(undefined), /^p-/);
 });
+
+// plan 6a Task 7 / review P2: a place beat's key holds no dot, so the key grammar (beat key, then `.item`) holds
+test('a place note with a dot in its stem keys and remaps', () => {
+  const RS = require('../lib/run-sheet/web/state');
+  const ST_MARY = "Locations/St. Mary's Yard.v2.md";
+  const key = k.placeKey(ST_MARY);
+  assert.match(key, /^pl-[0-9a-f]{8}$/);
+  assert.equal(key, k.placeKey(ST_MARY), 'the same note, the same key');
+  assert.notEqual(key, k.placeKey('Locations/St Marys Yard.md'));
+  let n = 0;
+  const go = (s, a) => RS.reduce(s, { id: `k-${++n}`, ...a }, '2026-11-20T19:00:00.000Z');
+  let s = RS.emptyState({});
+  s = go(s, { type: 'improvise', key, title: "St. Mary's Yard", place: ST_MARY });
+  s = go(s, { type: 'move', pc: 'Ada.md', to: { beat: key, spot: null, title: "St. Mary's Yard" } });
+  s = go(s, { type: 'jot', beat: key, text: 'a bell rings' });
+  s = go(s, { type: 'mark', point: `${key}.pt.abc`, mark: 'landed', beat: key });
+  // attach the place beat to another key: everything under it follows, and a later action on the old key too
+  s = go(s, { type: 'attach', from: key, to: 'b-0000000000' });
+  assert.equal(s.positions['Ada.md'].beat, 'b-0000000000');
+  assert.equal(s.jots[0].beat, 'b-0000000000');
+  assert.ok(s.points['b-0000000000.pt.abc']);
+  s = go(s, { type: 'mark', point: `${key}.pt.def`, mark: 'missed', beat: key });
+  assert.ok(s.points['b-0000000000.pt.def'], 'a queued action on the old key is remapped');
+  assert.equal(s.points['b-0000000000.pt.def'].beat, 'b-0000000000');
+});

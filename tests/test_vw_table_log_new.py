@@ -27,8 +27,9 @@ SECTIONS = [
     "Where everyone ended", "Stopped in", "Points landed",
     "Tried and missed", "Overtaken", "Reached but not landed",
     "Not reached", "Changed since play started",
-    "Contingencies that fired", "Improvised beats",
-    "Unmasked this session", "Handouts handed over", "Log", "Loot",
+    "Contingencies that fired", "Improvised beats", "Places the party went",
+    "Unmasked this session", "Sides set", "Handouts handed over",
+    "Log", "Loot",
     "Vitals at the end", "Advancement",
 ]
 
@@ -70,7 +71,9 @@ class TableLogNewTests(unittest.TestCase):
         # every section empty but the vitals table's header and separator rows
         self.assertEqual(
             [s.strip() for s in re.split(r"^## .*$", body, flags=re.M)[1:]],
-            [""] * 14 + ["| Who | HP | Conditions |\n| --- | --- | --- |", ""])
+            # 16 empty since the 6a Task 13 proof added "Places the party went" (Ant's ruling: a place the players
+            # go to is published); 15 since run sheet 6a added "Sides set"
+            [""] * 16 + ["| Who | HP | Conditions |\n| --- | --- | --- |", ""])
         errors = [m for level, m in schema_rules.frontmatter_findings(
             fm, None, vl.raw_frontmatter(text)) if level == "ERROR"]
         self.assertEqual(errors, [])

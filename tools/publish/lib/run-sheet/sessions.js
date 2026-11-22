@@ -62,6 +62,23 @@ function tableLogOf(index, sessionPath) {
 const claimants = (index, sessionPath, types) => index.notes()
   .filter((n) => types.has(low(fmOf(index, n).type)) && index.resolve(fmTarget(fmOf(index, n).session) || null) === sessionPath);
 
+// The session's Play Notes: the `documents.play_notes` link when it resolves to a play-notes note whose
+// `session:` names this session or nothing (as tableLogOf reads its link), else the one note of a
+// play-notes type whose `session:` names the session. A link to a Plan, or to another session's notes, is
+// not this session's record. No warning: the session's other records still read.
+const PLAY_NOTES_TYPES = new Set(['session-play-notes', 'session_play_notes']);
+function playNotesOf(index, sessionPath) {
+  const t = fmTarget(docsOf(index, sessionPath).play_notes);
+  const hit = t ? index.resolve(t) : null;
+  if (hit && PLAY_NOTES_TYPES.has(low(fmOf(index, hit).type))) {
+    const backlink = fmTarget(fmOf(index, hit).session);
+    const owner = backlink ? index.resolve(backlink) : null;
+    if (owner === null || owner === sessionPath) return hit;
+  }
+  const named = claimants(index, sessionPath, PLAY_NOTES_TYPES);
+  return named.length === 1 ? named[0] : null;
+}
+
 // The session's Plan: the `documents.plan` link when it resolves, else the one session-plan note naming the session.
 function planOf(index, sessionPath) {
   const t = fmTarget(docsOf(index, sessionPath).plan);
@@ -160,4 +177,4 @@ function stateIdOf(session) {
   return `${where}--${slug(stemOf(session.index))}`;
 }
 
-module.exports = { listSessions, pickSession, tableLogOf, isPlayed, stateIdOf };
+module.exports = { listSessions, pickSession, tableLogOf, isPlayed, stateIdOf, wrapUpOf, playNotesOf };

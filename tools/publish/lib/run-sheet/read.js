@@ -10,17 +10,21 @@
 const path = require('node:path');
 const pt = require('./plan-text');
 const { buildIndex, stemOf } = require('./notes');
+const { placeTitle } = require('./place-name');
 const { readBeats, sceneSection } = require('./beats');
 const { readPcs, SECTIONS: PC_SECTIONS } = require('./party');
+const { sessionParty } = require('./session-party');
 const { readPeople, TITLE: PEOPLE_TITLE } = require('./people');
 const { readHandouts, TITLE: HANDOUTS_TITLE } = require('./handouts');
 const { foesFor } = require('./foes');
 const { readTableLog, VITALS } = require('./table-log');
 const { orderedSessions } = require('../story-spine');
-const { displayTitleOf, mapFolder } = require('../scanner');
+const { displayTitleOf, mapFolder, matchExcludedDir } = require('../scanner');
+const { loadPublishConfig } = require('../config');
 const { unmaskedPlayAsOf } = require('./people-from-notes');
 const { parseNote } = require('../frontmatter');
 const { readSettings } = require('../settings/read');
+const { readSideColours } = require('./side-colours');
 const { readerFrom } = require('../vault-reader');
 const { isWithheld, nameList, unmaskedNames, unmaskedNameUnread } = require('../processor');
 const { canonicalNfc } = require('../unicode');
@@ -28,6 +32,10 @@ const { decidePage, publishesPage } = require('../publish-decision');
 const { loadManifest } = require('../manifest');
 const { tableLogOf, isPlayed } = require('./sessions');
 const { readCast } = require('./cast');
+const { readSeen } = require('./seen');
+const { placeKey } = require('./keys');
+const { SIDES_SET } = require('./record');
+const { isSide } = require('./web/fight-math');
 
 const toPosix = (p) => p.split(path.sep).join('/');
 const low = (s) => canonicalNfc(String(s == null ? '' : s)).trim().toLowerCase();
@@ -152,10 +160,19 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
   let campaign = path.basename(path.resolve(vaultPath));
   const withheldWords = { person: 'someone', place: 'somewhere' };
   let publishConfig = {};
+  let sideColours = readSideColours({}).sideColours;
   try {
     // Settings values are nested by group: `vault.system` is values.vault.system.
-    const values = readSettings({ vaultPath, deps }).values || {};
+    const settingsRead = readSettings({ vaultPath, deps });
+    const values = settingsRead.values || {};
+    // The reader already swaps a word that is not allowed for the default; it says so only in its faults, which the sheet does not show.
+    for (const f of settingsRead.faults || []) {
+      if (f.name === 'vault.run_sheet.side_colours' && f.kind === 'not-allowed') add([{ kind: 'side-colours', note: null, text: `vault.run_sheet.side_colours is ${JSON.stringify(String(f.value).slice(0, 40))}, not pens, colour_blind or own: pens is used` }]);
+    }
     system = (values.vault && values.vault.system) || null;
+    const colours = readSideColours(values);
+    sideColours = colours.sideColours;
+    add(colours.warnings);
     const site = values.player_site || {};
     publishConfig = site;
     if (typeof site.title === 'string' && site.title.trim()) campaign = site.title.trim();
@@ -207,8 +224,25 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
   const beats = beatsRead.beats;
   const seen = new Set();
   const carried = readCarried();
+  // The sides the GM set in earlier sessions' fights, the latest per note (plan 6a): a fight starts from
+  // them. Read here, so a Sides set line that does not read warns with the rest.
+  const sidesCarried = carried ? carried.sides() : {};
+  // The session's own party (the index field, the wrap-up, the Plan's roster), else the one given, and the
+  // Plan's NPC Quick Reference: what a row's starting side reads (sides.js). Their warnings are added below.
+  const own = sessionParty({ index, sessionPath: sessionIndex, planBody: body, given: party, planPath: plan });
+  add(own.warnings);
+  const peopleRead = readPeople(body, index);
+  const quickRef = new Map();
+  for (const x of peopleRead.people) {
+    // Links come out whole: a note named "Allies of Ostia" is a name, not the Plan's word. Cells stay `|`-joined.
+    if (x.note) quickRef.set(x.note, [quickRef.get(x.note), x.cells.slice(1).map((c) => c.replace(/\[\[[^\]]*\]\]/g, '')).join(' | ')].filter(Boolean).join(' | '));
+  }
+  // What each beat's who line says about a note, for the cast entry of a person no beat's fight row covers.
+  const who = new Map();
+  for (const b of beats) for (const w of b.who || []) if (w.note) who.set(w.note, `${who.get(w.note) || ''} ${w.wants || ''} ${w.knownAs || ''}`.trim());
+  const sides = { quickRef, partyNotes: own.party, who };
   for (const beat of beats) {
-    const r = foesFor(beat, index, seen, carried);
+    const r = foesFor(beat, index, seen, carried, sides);
     beat.foes = r.foes;
     beat.treasure.push(...r.treasure);
     add(r.warnings);
@@ -228,9 +262,8 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
       if (f.ally && planHp.has(f.note)) { f.hpNow = planHp.get(f.note); f.carriedFrom = plan; }
     }
   }
-  const pcsRead = readPcs(body, index, party);
+  const pcsRead = readPcs(body, index, own.party);
   add(pcsRead.warnings);
-  const peopleRead = readPeople(body, index);
   add(peopleRead.warnings);
   const handoutsRead = readHandouts(body, index);
 
@@ -318,8 +351,9 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
   // no site set up, leaves each map to its own publish rule).
   const folderMap = publishConfig.folder_map && typeof publishConfig.folder_map === 'object' ? publishConfig.folder_map : {};
   const folderMapped = (rel) => !Object.keys(folderMap).length || !rel.includes('/') || mapFolder(rel.slice(0, rel.lastIndexOf('/')), folderMap) !== null;
-  const showableMaps = !manifestRead ? [] : allMaps.filter((m) => !gmHalves.has(m)
-    && publishesPage(decidePage({ rel: m, frontmatter: fmOf(m) }, { rel: m, publishConfig, manifest, folderMapped: folderMapped(m) }))).sort();
+  // The one publish decision, for a map and for a person's note alike.
+  const publishes = (rel) => publishesPage(decidePage({ rel, frontmatter: fmOf(rel) }, { rel, publishConfig, manifest, folderMapped: folderMapped(rel) }));
+  const showableMaps = !manifestRead ? [] : allMaps.filter((m) => !gmHalves.has(m) && publishes(m)).sort();
   for (const p of maps) {
     playerVersionWarning(p);
     pair(p, playerFor.get(p));
@@ -331,17 +365,29 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
   for (const w of warnings) if (w.note === null) warnedLinks.add(low(w.text));
   for (const t of pt.links(body)) if (index.resolve(t) === null) warnLink(t);
 
+  // A map is never a place the party stands at (final review O5, carried to the beats by the scoped check): a beat's
+  // place or a hub spot whose note is a map, or a GM map half, keeps its words and its key but no note, so it is
+  // never linked as a place, in the Table Log's Where everyone ended or Places the party went, where reveal_scan
+  // would offer to publish a GM map. Done here, after the maps above are read, so the Plan's own map links still count.
+  const notAPlace = (p) => Boolean(p) && (isMap(p) || gmHalves.has(p));
+  for (const b of beats) {
+    if (notAPlace(b.place)) { if (!b.placeText) b.placeText = stemOf(b.place); b.place = null; }
+    for (const sp of b.spots || []) if (notAPlace(sp.note)) sp.note = null;
+  }
+
   const runLong = readRunLong();
 
   const model = {
     system,
     campaign,
     withheldWords,
+    sideColours,
     plan,
     session: { index: sessionIndex, title, chapter, number },
     brief: { overview: joined('overview'), world: joined('world'), stops: joined('stops') },
     handouts: handoutsRead.handouts,
     pcs: pcsRead.pcs,
+    partyFrom: own.from,
     unmatchedPcLines: pcsRead.unmatched,
     beats,
     people: peopleRead.people,
@@ -385,10 +431,54 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
     model.notes[s] = noteOf(s);
   }
   if (!model.notes[plan]) model.notes[plan] = noteOf(plan, fm);
+  // Places the party can go (plan 6a Task 7): every location note in the vault, keyed for its place beat
+  // (`pl-<hash>`, keys.js), with the npc and creature notes whose `location` links it, and its own entry in
+  // `placeNotes` (as `notes` holds one), for its name and picture on both screens. `notes` stays the notes this
+  // sheet touches. A `location` that names no place places nobody.
+  // A map is never a place to go (final review O5), even typed `location`: its GM half would go behind a panel and
+  // into the Table Log, where wrap-up's reveal_scan would offer to publish it. Every `doc_type: map` note, the GM
+  // half of every pair among them, stays out of placeKeys, placeNotes and Move them's list.
+  const locations = index.notes().filter((p) => low(fmOf(p).type) === 'location' && !isMap(p) && !gmHalves.has(p)).sort();
+  const isPlace = new Set(locations);
+  model.placeKeys = Object.fromEntries(locations.map((p) => [p, placeKey(p)]));
+  model.placePeople = {};
+  for (const p of index.notes()) {
+    const pfm = fmOf(p);
+    if (!['npc', 'creature'].includes(low(pfm.type))) continue;
+    const t = fmTarget(pfm.location);
+    const at = t ? index.resolve(t) : null;
+    if (!at || !isPlace.has(at)) continue;
+    (model.placePeople[at] = model.placePeople[at] || []).push(p);
+  }
+  for (const list of Object.values(model.placePeople)) list.sort();
+  model.placeNotes = Object.fromEntries(locations.map((p) => [p, model.notes[p] || noteOf(p)]));
   // The cast is read last: its notes are never "touched", and its warnings stay on each entry.
-  model.cast = readCast(index, { carried });
+  model.cast = readCast(index, { carried, sides });
+  model.sidesCarried = sidesCarried;
   // Added last, so these paths make no `notes` entries or links of their own: a Plan that names no map reads as before.
   model.showableMaps = showableMaps;
+  // A foe's starting seen: it publishes, or an earlier played session named it. A publish list that does
+  // not read leaves nothing known to publish, so nothing starts seen.
+  model.seenFrom = {};
+  if (!manifestRead) {
+    model.warnings.push({ kind: 'seen-list', note: null, text: 'the publish list could not be read: no foe starts seen, and names from earlier sessions are not read either' });
+  } else {
+    // The strict answer, for a name the players will read: the player site is on, the note is not under a
+    // hidden folder, and the page decision is made with the config-shaped settings (exclude_drafts and the
+    // rest), as the build makes it. The maps list above keeps its own, looser, reading.
+    let strict = null;
+    try { strict = loadPublishConfig(vaultPath, {}, () => {}, { quietStops: true, deps }); } catch { strict = null; }
+    if (!strict) {
+      model.warnings.push({ kind: 'seen-list', note: null, text: 'the publish settings could not be read: no foe starts seen, and names from earlier sessions are not read either' });
+    } else {
+      const strictMap = strict.folder_map && typeof strict.folder_map === 'object' ? strict.folder_map : {};
+      const strictMapped = (rel) => !Object.keys(strictMap).length || !rel.includes('/') || mapFolder(rel.slice(0, rel.lastIndexOf('/')), strictMap) !== null;
+      const publishesToPlayers = (rel) => strict.switches.site === true
+        && !matchExcludedDir(rel.includes('/') ? rel.slice(0, rel.lastIndexOf('/')) : '', strict.exclude_dirs)
+        && publishesPage(decidePage({ rel, frontmatter: fmOf(rel) }, { rel, publishConfig: strict, manifest, folderMapped: strictMapped(rel) }));
+      model.seenFrom = readSeen({ vaultPath, index, sessionIndex, publishes: publishesToPlayers, config: strict, deps });
+    }
+  }
   // What the players' screen needs of each: its own name (never the stem) and its picture.
   model.mapNotes = Object.fromEntries(showableMaps.map((m) => {
     const mfm = fmOf(m);
@@ -420,6 +510,8 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
       location: typeof nfm.location === 'string' ? nfm.location : '',
       docType: low(nfm.doc_type),
       aliases: nameList(nfm.aliases),
+      // a place's title, by the one rule (place-name.js); null for any other note
+      title: low(nfm.type) === 'location' ? placeTitle(p, nfm) : null,
       unmask: unmaskOf(p),
     };
   }
@@ -520,14 +612,39 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
           const note = target ? index.resolve(target) : null;
           if (note !== null) unmasked.push({ note, on: !/\bmasked again\s*[.!]?\s*$/i.test(b.text) });
         }
-        read.push({ log, hp, blank, unmasked });
+        // `Sides set`: `- [[Note]]: ally` (foe, ally or neutral), as the writer makes it.
+        const sidesSet = [];
+        for (const b of pt.bullets(t.sections.get(SIDES_SET) || '')) {
+          const target = pt.links(b.text)[0];
+          const note = target ? index.resolve(target) : null;
+          const m = /\]\]\s*:\s*([A-Za-z]+)\s*[.!]?\s*$/.exec(b.text);
+          const side = m ? m[1].toLowerCase() : '';
+          if (note === null) {
+            const why = target ? ((index.linkProblem(target) || {}).text || `[[${target}]] matches no note in the vault`) : `"${b.text.trim()}" links no note`;
+            warnings.push({ kind: 'table-log', note: log, text: `${SIDES_SET}: ${why}; that side is not carried` });
+          } else if (!isSide(side)) {
+            warnings.push({ kind: 'table-log', note: log, text: `${SIDES_SET}: "${b.text.trim()}" names no side the sheet reads (foe, ally or neutral); that side is not carried` });
+          } else sidesSet.push({ note, side });
+        }
+        read.push({ log, hp, blank, unmasked, sidesSet });
         return true;
       }
       return false;
     };
     const found = new Map();
     let since = null;
+    let sides = null;
     return {
+      // The side each note was last set to, walking every earlier played log oldest first: a later log's
+      // line wins, and within one log the last line does. Reads every earlier log.
+      sides() {
+        if (sides === null) {
+          while (readNext());
+          sides = {};
+          for (const r of [...read].reverse()) for (const x of r.sidesSet) sides[x.note] = x.side;
+        }
+        return { ...sides };
+      },
       // The log an unmasking began in, walking every earlier played log oldest first: a later
       // `masked again` cancels it, a later unmasking after that begins it afresh. Null when the
       // note is masked. Reads every earlier log, so it is asked only of a note that has an Unmask.

@@ -119,6 +119,35 @@
     return { row: null, wrapped };
   }
 
+  // ---- sides (plan 6a) ----
+
+  // A row's side is its kind plus a neutral flag: a neutral is `kind: 'foe', neutral: true`, so it is
+  // everything a foe is (Out at 0 HP, unseen, numbered, a foe's keys on the players' screen) except a foe
+  // the panel picks or the vitals hold. The panel's switch is three direct buttons in this order: ally, which
+  // shows a seen row's name and HP to the players, is last, so it is never the stray middle click (final review P-A3).
+  const SIDES = ['foe', 'neutral', 'ally'];
+  const isSide = (v) => SIDES.includes(v);
+  // A note's side as the GM has it now, before any row's own (final review O9: the one chain, for the rows a
+  // fight starts, the beats' Who's here and the players' screen): the side set tonight (`sides`), then one carried
+  // from an earlier session's Table Log (`carried`), then the reader's (`readerAlly`). `set` is true for the first
+  // two: the GM's own word. A stored value that is no side is passed over.
+  function noteSide(sides, carried, note, readerAlly) {
+    const own = (o) => (o && typeof o === 'object' && !Array.isArray(o) && Object.prototype.hasOwnProperty.call(o, note) && isSide(o[note]) ? o[note] : null);
+    const set = own(sides) || own(carried);
+    return set ? { side: set, set: true } : { side: readerAlly ? 'ally' : 'foe', set: false };
+  }
+  function sideOfRow(r) {
+    if (!r || (r.kind !== 'foe' && r.kind !== 'ally')) return null;
+    return r.kind === 'ally' ? 'ally' : (r.neutral ? 'neutral' : 'foe');
+  }
+  // A foe the panel may pick: never a neutral.
+  const isFoe = (r) => Boolean(r) && r.kind === 'foe' && !r.neutral;
+  // An ally from the GM's own words starts seen; one the reader infers (affiliation, relationships, a bare
+  // Quick Reference "ally") starts unseen. A foe made before allyBy existed (no key at all) is 5b's shape,
+  // where every ally was the Plan's.
+  const GM_WORDS = new Set(['plan', 'stats']);
+  const byGm = (foe) => foe.allyBy === undefined || GM_WORDS.has(foe.allyBy);
+
   // Whose panel the fight view shows (decision 22): the pinned one; else the current row; on a PC's turn
   // the last foe to act, or the next foe due; before the start, the first foe.
   function actingRow(fight, peekId) {
@@ -128,14 +157,14 @@
     if (picked) return { row: picked, why: 'picked' };
     const cur = byId(fight && fight.turn);
     if (!cur) {
-      const first = rows.find((r) => r.kind === 'foe' && r.in);
+      const first = rows.find((r) => isFoe(r) && r.in);
       return first ? { row: first, why: 'first-foe' } : { row: null, why: null };
     }
     if (cur.kind !== 'pc') return { row: cur, why: 'acting' };
     const last = byId(fight.lastFoe);
     if (last) return { row: last, why: 'last-foe' };
     const at = rows.indexOf(cur);
-    const next = rows.slice(at).concat(rows.slice(0, at)).find((r) => r.kind === 'foe' && live(r));
+    const next = rows.slice(at).concat(rows.slice(0, at)).find((r) => isFoe(r) && live(r));
     return next ? { row: next, why: 'next-foe' } : { row: null, why: null };
   }
 
@@ -164,7 +193,8 @@
     const used = new Map();
     const fresh = [];
     for (const r of rows) {
-      if (r.kind !== 'foe') continue;
+      // a foe's, and an ally's: one the reader inferred starts unseen (plan 6a fix round 1 / review M4)
+      if (r.kind !== 'foe' && r.kind !== 'ally') continue;
       const w = unseenKey(wordOf(r));
       if (!used.has(w)) used.set(w, new Set());
       const kept = r.unseenN !== null && r.unseenN !== undefined;
@@ -186,9 +216,12 @@
   // word as written, capitalised. Rows that are unticked and unnumbered do not count towards the numbering.
   function unseenLabels(rows, wordOf) {
     const numbers = unseenNumbers(rows, wordOf);
+    // every numbered row with the word counts, whatever its side now: a copy switched to ally never
+    // renumbers the others (plan 6a fix round 1 / review M3)
     const members = new Map();
     for (const r of rows) {
-      if (r.kind !== 'foe' || !numbers.has(r.id)) continue;
+      if (r.kind === 'pc' || r.kind === 'lair') continue;
+      if (!numbers.has(r.id) && (r.unseenN === null || r.unseenN === undefined)) continue;
       const w = unseenKey(wordOf(r));
       members.set(w, (members.get(w) || 0) + 1);
     }
@@ -213,9 +246,9 @@
     return {
       id: null, kind: 'foe', note: null, foeKey: null, type: null, name: '', copy: null, in: true, group: null,
       ini: null, mod: 0, ac: null, hp: null, max: null, temp: 0, conds: [], exhaustion: 0, conc: false,
-      ds: { s: 0, f: 0 }, out: false, seen: false, half: false, resisted: false,
+      ds: { s: 0, f: 0 }, out: false, seen: false, seenTick: null, seenFrom: null, neutral: false, sideFrom: null, half: false, resisted: false,
       lrMax: 0, lr: 0, laMax: 0, la: 0, recharge: [], lair: false, of: [], unseenN: null, word: null,
-      start: { hp: null, max: null, conds: [], exhaustion: 0, conc: false }, at: null, hpAt: null, ...over,
+      start: { hp: null, max: null, conds: [], exhaustion: 0, conc: false }, at: null, hpAt: null, typed: false, ...over,
     };
   }
 
@@ -255,9 +288,15 @@
 
   // One foe or ally fight row. A PC or ally starts from the vitals figure (Review H1), a named NPC from its
   // last fight, a creature from its note. Temp HP, concentration and death saves always start empty.
+  //
+  // Its side (plan 6a): the side the GM set tonight, then one carried from an earlier session's Table Log
+  // (both "you set it"), then the reader's, then foe. It starts seen when it is an ally from the GM's own
+  // words or a side the GM set, when it was shown before, or when the model's `seenFrom` holds it; the row
+  // carries `seenFrom` for the seen button's title, and `sideFrom` for its side's.
   function foeRowFrom(ctx, foe, over) {
     const type = typeOf(ctx.model, foe);
-    const ally = Boolean(foe.ally);
+    const start = startingSide(ctx, foe);
+    const ally = start.side === 'ally';
     let hp = num(foe.hp);
     let max = num(foe.hp);
     let conds = [];
@@ -283,15 +322,30 @@
       }
     }
     const at = foe.rechargeAt || {};
+    const seenFrom = typeof ctx.seenFrom[foe.note] === 'string' && ctx.seenFrom[foe.note] ? ctx.seenFrom[foe.note] : null;
+    const shown = Boolean(ctx.state.shownEver && ctx.state.shownEver[foe.note]);
+    // seen in an ended fight: a foe starts seen (name only); an inferred ally does not (re-review)
+    const seenBefore = Boolean(ctx.state.seenEver && ctx.state.seenEver[foe.note]) && !(ally && !start.byGm);
     return withStart(blankRow({
-      kind: ally ? 'ally' : 'foe', note: foe.note, foeKey: foe.key, type, name: baseName(ctx.model, foe),
+      kind: ally ? 'ally' : 'foe', neutral: start.side === 'neutral', sideFrom: start.why, seenFrom,
+      note: foe.note, foeKey: foe.key, type, name: baseName(ctx.model, foe),
       group: ctx.foeGroup, mod: num(foe.init) || 0, ac: num(foe.ac), hp, max, conds, exhaustion, out,
-      seen: ally || Boolean(ctx.state.shownEver && ctx.state.shownEver[foe.note]),
+      seen: (ally && start.byGm) || shown || seenBefore || Boolean(seenFrom),
       lrMax: foe.legendaryResistance || 0, lr: foe.legendaryResistance || 0,
       laMax: foe.legendaryActions || 0, la: foe.legendaryActions || 0,
       recharge: (foe.recharge || []).map((name) => ({ name, at: isNum(at[name]) ? at[name] : 6, ready: true, rolled: null })),
-      lair: Boolean(foe.lair), word: ally ? null : wordOf(ctx.model, foe.note), ...over,
+      // every row the GM can switch keeps its unseen word: an ally may be unseen, or become a foe
+      lair: Boolean(foe.lair), word: wordOf(ctx.model, foe.note), ...over,
     }));
+  }
+
+  // { side, why, byGm } for a foe object: why is "you set it" for a side the GM set, else the reader's
+  // allyFrom (null for a plain foe). A stored value that is no side is passed over.
+  function startingSide(ctx, foe) {
+    const n = noteSide(ctx.sides, ctx.sidesCarried, foe.note, foe.ally);
+    if (n.set) return { side: n.side, why: 'you set it', byGm: true };
+    if (n.side === 'ally') return { side: 'ally', why: foe.allyFrom || null, byGm: byGm(foe) };
+    return { side: 'foe', why: null, byGm: false };
   }
 
   function pcRowFrom(ctx, pc, group, on) {
@@ -335,7 +389,10 @@
       }
       return null;
     };
-    return { model, state: st, beats, byKey, vitals, groupOf, inBeat, lastFightRow, foeGroup: null };
+    // the sides and seen the rows start from: the state's and the model's, as `reduce` never sees the model
+    const obj = (o) => (o && typeof o === 'object' && !Array.isArray(o) ? o : {});
+    return { model, state: st, beats, byKey, vitals, groupOf, inBeat, lastFightRow, foeGroup: null,
+      sides: obj(st.sides), sidesCarried: obj(model.sidesCarried), seenFrom: obj(model.seenFrom) };
   }
 
   // The threshold lines a beat holds, each with the notes that can light it (decision 20). `foeRows` are the
@@ -377,17 +434,30 @@
   // The foes a beat gives a fight: its own, the allies brought in (derive already holds those), and anyone
   // else brought in who has a fight row (Review M7). `on` says whether each is ticked: someone an arrivals
   // cue names (`Arriving, start of round 3`) joins benched, for the GM to tick in when they arrive.
+  //
+  // A place beat (plan 6a Task 7) fights as v8's did: its people's creatures ticked in, everyone else benched
+  // (derive marks those `benched`), and a person with no stats gets a blank row through foeRowFrom, carrying
+  // its note, name and side (decision 7, review P5). A Plan beat's statless people get none, as in 5b.
   function beatFoes(ctx, beat) {
     const own = beat.foes || [];
     const arriving = new Set((beat.arrivals || []).flatMap((a) => a.people || []));
-    const rows = own.map((f) => ({ foe: f, on: !arriving.has(f.note) }));
+    const rows = own.map((f) => ({ foe: f, on: !arriving.has(f.note) && !f.benched }));
     const have = new Set(own.map((f) => f.note));
+    if (beat.placeBeat) {
+      for (const w of beat.who || []) {
+        if (!w.note || w.brought || have.has(w.note)) continue;
+        const c = castOf(ctx.model, w.note);
+        if (!c || c.foe) continue;
+        have.add(w.note);
+        rows.push({ foe: { key: `${beat.key}.foe.${w.note}`, note: c.note, name: c.name, ally: Boolean(c.ally), allyFrom: c.allyFrom || null, allyBy: c.allyBy }, on: c.type === 'creature' });
+      }
+    }
     for (const b of (ctx.state.brought && ctx.state.brought[beat.key]) || []) {
       if (have.has(b.note)) continue;
       const c = castOf(ctx.model, b.note);
       if (!c || !c.foe) continue;
       have.add(b.note);
-      rows.push({ foe: c.foe, on: Boolean(c.foe.ally) || Boolean(beat.impro) });
+      rows.push({ foe: c.foe, on: startingSide(ctx, c.foe).side === 'ally' || Boolean(beat.impro) });
     }
     return rows;
   }
@@ -404,22 +474,28 @@
 
   // The rows for a new fight on a beat (decision 13). `groups` is the page's focused group(s), used when no
   // PC stands in the beat (a contingency, an improvised beat); `positions` maps a PC note to its group id
-  // and defaults to the state's positions.
-  function rowsForFight({ model, derived, state, beatKey, groups, idBase, positions }) {
+  // and defaults to the state's positions. `at` is Fight here's place (a beat's or a hub spot's key): a
+  // place beat is always one.
+  function rowsForFight({ model, derived, state, beatKey, groups, idBase, positions, at }) {
     const ctx = contextOf({ model, derived, state, positions });
     const beat = ctx.byKey.get(beatKey) || null;
     const id = ider(idBase);
     const pcs = model.pcs || [];
-    let here = beat ? pcs.filter((p) => ctx.inBeat(p.note, beat)) : [];
-    if (!here.length && groups && groups.length) here = pcs.filter((p) => groups.includes(ctx.groupOf(p.note)));
+    // Fight here at a place (plan 6a Task 7, review P4; final review P4.7): only the PCs who stand there are
+    // ticked. When none does, nobody is, and the fight is the place's: its groups are the place alone, so the
+    // GM's eye reads it by the place and the focused group is offered on the Add line.
+    const placeAt = at || (beat && beat.placeBeat ? beatKey : null);
+    const placeFight = Boolean(placeAt);
+    let here = !beat ? [] : placeAt && placeAt !== beat.key ? pcs.filter((p) => ctx.groupOf(p.note) === placeAt) : pcs.filter((p) => ctx.inBeat(p.note, beat));
+    if (!here.length && groups && groups.length && !placeFight) here = pcs.filter((p) => groups.includes(ctx.groupOf(p.note)));
     const rows = pcs.map((p) => {
-      const on = here.length === 0 || here.some((h) => h.note === p.note);
+      const on = here.length ? here.some((h) => h.note === p.note) : !placeFight;
       return { ...pcRowFrom(ctx, p, ctx.groupOf(p.note), on), id: id() };
     });
     // the fight's groups: every group holding a ticked PC (proof M2: a beat where no PC stands ticks them all)
     const placed = (g) => g !== null && g !== undefined && g !== 'off';
     const held = [...new Set(rows.filter((r) => r.in && placed(r.group)).map((r) => r.group))];
-    const fightGroups = held.length ? held : (groups && groups.length ? groups.slice() : [beatKey]);
+    const fightGroups = held.length ? held : placeFight ? [placeAt] : (groups && groups.length ? groups.slice() : [beatKey]);
     ctx.foeGroup = fightGroups[0];
     const foes = beat ? beatFoes(ctx, beat) : [];
     const copies = numberCopies(foes, new Map());
@@ -446,6 +522,27 @@
       if (owners.length) out.rows.push({ ...lairRow(owners, ctx.foeGroup), id: id() });
     };
     const addGroup = (g) => { if (g && !(fight.groups || []).includes(g) && !out.groups.includes(g)) out.groups.push(g); };
+
+    // A name nobody in the cast has (the GM chose "+ New"): `count` blank rows, built as every page-built row
+    // is, so each starts an unseen foe with no note. `Name 1 … Name N`, or the bare name for one; a second
+    // add of the same name goes on from the highest number there.
+    if (add && typeof add.name === 'string') {
+      const name = add.name.replace(/\s+/g, ' ').trim();
+      if (!name) { out.refused = 'Type a name to add.'; return out; }
+      const n = Math.max(1, Math.min(20, Math.floor(add.count) || 1));
+      let top = 0;
+      for (const r of have) {
+        if (r.note || r.kind !== 'foe') continue;
+        if (r.name === name) top = Math.max(top, 1);
+        else if (r.name.startsWith(`${name} `) && /^\d+$/.test(r.name.slice(name.length + 1))) top = Math.max(top, Number(r.name.slice(name.length + 1)));
+      }
+      const foe = { key: null, note: null, name, ally: false, ac: null, hp: null, init: null };
+      for (let i = 1; i <= n; i++) {
+        const label = top === 0 && n === 1 ? name : `${name} ${top + i}`;
+        out.rows.push({ ...foeRowFrom(ctx, foe, { copy: null, in: true, name: label, foeKey: null }), id: id() });
+      }
+      return out;
+    }
 
     if (add && add.cast) {
       const c = castOf(model, add.cast);
@@ -512,6 +609,96 @@
     return out;
   }
 
+
+  // ---- adding anyone by name (plan 6a Task 6) ----
+
+  const fold = (s) => String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').normalize('NFC').toLowerCase();
+  // Edit distance (insert, delete, change one letter), two rows of memory.
+  function editDistance(a, b) {
+    let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+    for (let i = 1; i <= a.length; i++) {
+      const cur = [i];
+      for (let j = 1; j <= b.length; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      prev = cur;
+    }
+    return prev[b.length];
+  }
+  // The cast names a typed name nearly is: within two edits of a name or alias (fewer for a short one, so two
+  // letters are not near everything), then anyone sharing the surname (the last word of two or more). Nearest first.
+  // A name as matching reads it: case, accents and spacing blind, and a leading "the" dropped (plan 6a Task 7:
+  // "club" finds The Club). `sameName` is the one test for "the same name", for people and places alike.
+  const nameKey = (s) => fold(s).replace(/\s+/g, ' ').trim().replace(/^the /, '');
+  const sameName = (a, b) => Boolean(nameKey(a)) && nameKey(a) === nameKey(b);
+  function nearCast(cast, query) {
+    const q = nameKey(query);
+    if (q.length < 3) return [];
+    const most = Math.min(2, Math.floor(q.length / 3));
+    const words = q.split(' ');
+    const out = [];
+    (cast || []).forEach((c, i) => {
+      let rank = null;
+      for (const t of [c.name, ...(c.aliases || []), ...(c.gmAliases || [])].map(nameKey).filter(Boolean)) {
+        const d = editDistance(q, t);
+        if (d <= most && (rank === null || d < rank)) rank = d;
+      }
+      if (rank === null && words.length >= 2) {
+        const theirs = fold(c.name).replace(/\s+/g, ' ').trim().split(' ');
+        if (theirs.length >= 2 && theirs[theirs.length - 1] === words[words.length - 1]) rank = 10;
+      }
+      if (rank !== null) out.push({ c, i, rank });
+    });
+    return out.sort((a, b) => a.rank - b.rank || a.i - b.i).map((x) => x.c);
+  }
+  // What the Add box lists as the GM types: near names first, then the search's hits, then the one explicit
+  // way to make a blank row, "+ New: Name (no note)". `search` is state.js's castSearch (this file never
+  // loads it). Nothing typed lists nothing. Move them lists places the same way (plan 6a Task 7): `cast` is
+  // then the known places and `newLabel` words the last choice ("+ New place: Name").
+  function addChoices(cast, query, search, limit = 8, newLabel = (t) => `+ New: ${t} (no note)`) {
+    const text = String(query == null ? '' : query).replace(/\s+/g, ' ').trim();
+    if (!text) return [];
+    const near = nearCast(cast, text);
+    const seen = new Set(near.map((c) => c.note));
+    const hits = near.concat(((typeof search === 'function' ? search(cast, text) : []) || []).filter((c) => !seen.has(c.note))).slice(0, limit);
+    return hits.map((c) => ({ note: c.note, name: c.name, type: c.type }))
+      .concat({ note: null, name: text, type: null, isNew: true, label: newLabel(text) });
+  }
+
+  // A row's group: its note plus its name without a trailing number (v8's groupOf). A PC or the Lair row has none.
+  const groupKey = (r) => `${r.note || ''}|${String(r.name || '').replace(/\s+\d+$/, '')}`;
+  const groupMates = (rows, r) => (r && r.kind !== 'pc' && r.kind !== 'lair' ? rows.filter((x) => x.kind !== 'pc' && x.kind !== 'lair' && groupKey(x) === groupKey(r)) : []);
+
+  // One insert (plan 6a "latest entry wins"): the row goes above the first row it beats, at the place the
+  // sort would give it; the rest keep the order they have. A tie goes after the rows already there.
+  function placeRow(rows, id) {
+    const i = rows.findIndex((r) => r.id === id);
+    if (i < 0) return rows;
+    const row = rows[i];
+    const rest = rows.filter((_, k) => k !== i);
+    let at = rest.findIndex((x) => sortRows([x, row])[0] === row);
+    if (at < 0) at = rest.length;
+    return rest.slice(0, at).concat(row, rest.slice(at));
+  }
+
+  // A row an add made is untouched until the GM types into it, its HP or a status moves, it has a turn, or a
+  // line of the fight's log names it (`typed`, `turned`, `logged`).
+  // `forCopy` is Same for all's question: a line naming the row (its own copy line, a roster) or a turn it has had
+  // changes none of its numbers, so neither blocks a copy; typed numbers, HP, temp HP, statuses, Out and death saves do.
+  // The figures a copy itself gave (`copied`) are not a touch, so a second copy may overwrite the first.
+  function untouched(r, forCopy) {
+    const st = r.start || {};
+    const nul = (a) => (a === undefined || a === null ? null : a);
+    const c = r.copied || {};
+    const hpOk = nul(r.hp) === nul(st.hp) || (c.hp !== undefined && nul(r.hp) === nul(c.hp));
+    const maxOk = nul(r.max) === nul(st.max) || (c.max !== undefined && nul(r.max) === nul(c.max));
+    return !r.typed && (forCopy || (!r.turned && !r.logged)) && hpOk && maxOk && !r.temp && !r.out
+      && !(r.conds || []).length && !r.exhaustion && !r.conc && !(r.ds && (r.ds.s || r.ds.f));
+  }
+  // Whether the join's rows can still be taken back: there are some, and none has been touched.
+  function undoable(fight, join) {
+    const mine = ((fight && fight.rows) || []).filter((r) => join != null && r.joinId === join);
+    return mine.length > 0 && mine.every((r) => untouched(r, false));
+  }
+
   // The groups a fight takes in (proof M2): the ones it was given or added, and every group (`{ key, pcs }`,
   // show.js's groupsOf) where a PC ticked into it now stands.
   function fightGroupKeys(fight, groups) {
@@ -525,6 +712,8 @@
     DND_STATUSES, EXHAUSTION_MAX, fightGroupKeys,
     parseEntry, damageTaken, afterDamage, afterHeal, isBloodied,
     thresholdOf, isLit, sortRows, takesTurn, nextLive, actingRow,
-    gmName, lairRow, unseenKey, unseenNumbers, unseenLabels, rowsForFight, joinRows,
+    gmName, lairRow, unseenKey, unseenNumbers, unseenLabels, rowsForFight, joinRows, blankRow,
+    addChoices, sameName, groupKey, groupMates, placeRow, undoable, untouched,
+    SIDES, isSide, noteSide, sideOfRow, isFoe,
   };
 }));

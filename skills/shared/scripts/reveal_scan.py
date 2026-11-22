@@ -73,7 +73,8 @@ SOURCE_KEYS = (("play_notes", "Play Notes"), ("export", "Export"), ("wrap_up", "
 # The Table Log's `##` sections whose links count as touched (any case):
 # what the players have. The rest of §3c's sections never count.
 TABLE_LOG_READ = ("Where everyone ended", "Points landed", "Improvised beats",
-                  "Unmasked this session", "Handouts handed over", "Loot")
+                  "Places the party went", "Unmasked this session",
+                  "Handouts handed over", "Loot")
 _READ_KEYS = frozenset(unicodedata.normalize("NFC", t).casefold() for t in TABLE_LOG_READ)
 _HEADING_RE = re.compile(r"^ {0,3}(#{1,6})\s+(.*?)\s*#*\s*$")
 

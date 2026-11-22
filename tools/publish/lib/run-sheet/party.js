@@ -5,7 +5,7 @@
 
 const { canonicalNfc } = require('../unicode');
 const { replaceWikilinks, parseWikilink } = require('../wikilink');
-const { sections, tableRows, tableRanges, bullets, unclaimed, labels, cleanText, links } = require('./plan-text');
+const { sections, tableRows, tableRanges, bullets, unclaimed, labels, cleanText, links, LABEL } = require('./plan-text');
 const { stemOf } = require('./notes');
 const { SIGNED_SOURCE, toNumber } = require('./signed');
 
@@ -57,16 +57,40 @@ function statsOf(body) {
   return { ac: pick('AC'), hpMax: pick('HP (Max)'), hpNow: pick('HP (Current)'), init: pick('Initiative', true) };
 }
 
+// A PC's open thread: the label's own text, or the first bullet under it with "(+N more)" for the rest.
+// The label is bare (`**Open threads:**`, bullets as siblings) or a list item (`- **Open threads:**`,
+// bullets nested under it); a sibling of the list item ends its list. A dash value reads empty.
 function threadOf(body) {
   const lines = cleanText(body).split('\n');
   const l = labels(body).find((x) => low(x.name) === 'open threads');
   if (!l) return '';
-  if (l.value && !/^[—–-]+$/.test(l.value)) return l.value;
-  if (l.value) return '';
-  const after = lines.slice(l.end + 1).join('\n');
-  const first = bullets(after)[0];
-  // the bullet must start the text that follows, not some later list
-  return first && first.start <= after.split('\n').findIndex((x) => x.trim() !== '') ? first.text.trim() : '';
+  // the value is read off the label line itself: `labels` folds an indented bullet under a
+  // list-item label into its value, which would hide the nested list
+  const head = lines[l.start];
+  const ITEM = /^([ \t]*)(?:[-*+]|\d+[.)])\s+(.*)$/;
+  const parts = [((head.match(LABEL) || [])[2] || '').trim()].filter(Boolean);
+  for (let i = l.start + 1; parts.length > 0 && i <= l.end && !ITEM.test(lines[i]); i++) parts.push(lines[i].trim());
+  const value = parts.join(' ');
+  if (value && !/^[—–-]+$/.test(value)) return value;
+  if (value) return '';
+  const indentOf = (s) => s.match(/^[ \t]*/)[0].replace(/\t/g, '    ').length;
+  const asItem = /^[ \t]*[-*+]\s/.test(head);
+  // the label line's own indent: nested bullets must sit deeper; bare-label siblings set their own
+  const floor = asItem ? indentOf(head) : -1;
+  const items = [];
+  let level = null;
+  for (let i = l.start + 1; i < lines.length; i++) {
+    if (level === null && lines[i].trim() === '') continue; // blank lines may precede the first bullet
+    const m = lines[i].match(ITEM);
+    if (!m) break; // a blank line or any other text ends the list
+    const ind = indentOf(m[1]);
+    if (ind <= floor) break;
+    if (level === null) level = ind;
+    if (ind === level) items.push(m[2].trim());
+    else if (ind < level) break;
+  }
+  if (items.length === 0) return '';
+  return items[0] + (items.length > 1 ? ` (+${items.length - 1} more)` : '');
 }
 
 function readPcs(planBody, index, party) {
@@ -158,4 +182,4 @@ function readPcs(planBody, index, party) {
   return { pcs, unmatched, warnings };
 }
 
-module.exports = { readPcs, SECTIONS };
+module.exports = { readPcs, threadOf, SECTIONS };

@@ -12,6 +12,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const vm = require('node:vm');
+const YAML = require('yaml');
 const { createTableServer, listenLocal } = require('../lib/run-sheet/server');
 const { listSessions, pickSession } = require('../lib/run-sheet/sessions');
 const { browserSkip } = require('./helpers/browser');
@@ -47,14 +48,14 @@ after(async () => {
   for (const d of made) fs.rmSync(d, { recursive: true, force: true });
 });
 
-async function start({ edit } = {}) {
+async function start({ edit, deps } = {}) {
   const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'rs-fight-'));
   made.push(vault);
   fs.cpSync(FIXTURE, vault, { recursive: true });
   if (edit) edit(vault);
   const picked = pickSession(listSessions(vault), SESSION, vault);
   assert.ok(picked.session, picked.error);
-  const t = createTableServer({ vaultPath: vault, session: picked.session, party: PARTY, deps: { delayMs: 20, log: () => {} } });
+  const t = createTableServer({ vaultPath: vault, session: picked.session, party: PARTY, deps: { delayMs: 20, log: () => {}, ...(deps || {}) } });
   const port = await listenLocal(t.server, 0);
   servers.push(t);
   const base = `http://127.0.0.1:${port}`;
@@ -129,15 +130,20 @@ describe('the GM page runs a fight', { skip: browserSkip() }, () => {
     });
   });
 
-  it('1920x1080: the acting panel has its own column', async () => {
+  // plan 6a Task 10 (review F10): the acting panel goes beside the order by the middle's width (1,200 px), not
+  // the window's 1600: at 1920 with the rail and the pane open the middle is 1,088 px, so the pane is folded here.
+  it('1920x1080: the acting panel has its own column once the middle is wide', async () => {
     const run = await start();
     await withPage({ width: 1920, height: 1080 }, async (page) => {
       await started(page, run);
-      const p = await probe(page);
+      await click(page, '#paneFold');
+      const p = await until(page, 'p.layout.folded && p.layout.beside');
       assert.ok(p.layout.actingLeft >= p.layout.orderRight, `acting at ${p.layout.actingLeft}, order ends at ${p.layout.orderRight}`);
-      assert.ok(inView(p.layout.cutTop, 1080), 'the beat cut is in view beside them');
       assert.strictEqual(p.layout.wide, false);
       await shot(page, 'fight-1920');
+      await click(page, '#paneOpen');
+      const open = await until(page, '!p.layout.folded');
+      assert.ok(inView(open.layout.cutTop, 1080), 'the beat cut is in view beside them');
     });
   });
 
@@ -564,8 +570,11 @@ describe('the fight takes the PR review\'s and the proof\'s fixes', { skip: brow
       await fightOn(page, run);
       const cut = () => page.evaluate('document.querySelector("#fightCut .cwho").textContent');
       assert.match(await cut(), /Masked Gilt loud, self-important/);
+      // plan 6a Task 10: the pane holds only the cut; Unmask is on the whole beat ("full beat ↓")
+      await click(page, '#fightCut [data-pane="beat"]');
       await click(page, `[data-unmask="${GILT}"]`);
       await settled(page);
+      await click(page, '#paneCut');
       const text = await cut();
       assert.match(text, /Lucan Truename quiet and exact/);
       assert.doesNotMatch(text, /Masked Gilt|self-important/);
@@ -640,4 +649,359 @@ describe('the fight takes the PR review\'s and the proof\'s fixes', { skip: brow
       });
     });
   }
+});
+
+// Task 7 fix round 1 (a Task 6 leftover): a group joined into the fight brings its place's foes, but is no plain
+// add, so no Undo is offered for it; an add by name is. Real input only.
+describe('Undo is offered only for an add by name', { skip: browserSkip() }, () => {
+  it('a group join shows no Undo; an add by name does, and it takes the rows back', async () => {
+    const run = await start({ edit: (vault) => {
+      fs.writeFileSync(path.join(vault, 'Locations', 'Rat Cellar.md'), '---\nname: Rat Cellar\ntype: location\n---\n\nDamp.\n');
+      fs.writeFileSync(path.join(vault, 'Creatures', 'Cellar Rat.md'), '---\nname: Cellar Rat\ntype: creature\nlocation: "[[Rat Cellar]]"\n---\n\n## GM Notes\n\n### Stats\n\nAC 10\nHP 3\nInitiative +1\n');
+    } });
+    // the sticky header covers a button scrolled only to its edge: bring it to the middle first, as a hand scrolls
+    const press = async (page, sel) => {
+      await page.evaluate(`document.querySelector(${JSON.stringify(sel)}).scrollIntoView({ block: 'center' })`);
+      assert.ok((await page.click(sel)).hit, `the click lands on ${sel}`);
+    };
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await page.goto(`${run.base}/?probe=1`);
+      await settled(page);
+      const [b1, hub] = run.model.beats;
+      await press(page, `[id="beat:${b1.key}"] [data-move="${ADA}"]`);
+      await settled(page);
+      await press(page, `[id="beat:${hub.key}"] [data-move="${BEN}"]`);
+      await settled(page);
+      // Ben's group to the Rat Cellar, by Move them on the hub's Here line
+      await press(page, `[id="beat:${hub.key}"] input[data-moveg]`);
+      await page.type('rat cellar');
+      await page.waitFor(`document.querySelector('[id="beat:${hub.key}"] [data-movepick]')`);
+      await page.key('Enter');
+      await settled(page);
+      await press(page, `[id="beat:${b1.key}"] [data-fight]`);
+      let p = await until(page, 'p.fight');
+      assert.ok(!p.fight.rows.some((r) => r.note === 'Creatures/Cellar Rat.md'));
+      await press(page, '[data-faddgroup]');
+      p = await until(page, 'p.fight.groups.length === 2');
+      await settled(page);
+      assert.ok(p.fight.rows.some((r) => r.note === 'Creatures/Cellar Rat.md' && r.in), 'the group brings its place\'s rat');
+      assert.strictEqual(rowOf(p, BEN).in, true);
+      assert.strictEqual(await page.evaluate('document.querySelectorAll("[data-fundo]").length'), 0, 'no Undo for a group join');
+      await press(page, '#fAddName');
+      await page.type('Ice Drake');
+      await press(page, '#fAddGo');
+      p = await until(page, 'p.fight.rows.some((r) => r.note === "Creatures/Ice Drake.md")');
+      await page.waitFor('document.querySelectorAll("[data-fundo]").length === 1');
+      const n = p.fight.rows.length;
+      await press(page, '[data-fundo]');
+      p = await until(page, `p.fight.rows.length === ${n - 1}`);
+      assert.ok(!p.fight.rows.some((r) => r.note === 'Creatures/Ice Drake.md'), 'the add is taken back');
+      assert.ok(p.fight.rows.some((r) => r.note === 'Creatures/Cellar Rat.md'), 'the group\'s rows stay');
+      assert.deepStrictEqual(p.errors, []);
+    });
+  });
+});
+
+// Sides by colour (plan 6a Task 9): every control below is driven by real pointer and key input, except one
+// colour picker's value (a native picker cannot be opened headless), which is set by script and followed by a
+// `change`, and the network stubs of the failed-save test.
+describe('sides by colour', { skip: browserSkip() }, () => {
+  const PENS = { pc: '#2c7739', ally: '#7a3fb0', foe: '#b3261e', neutral: '#646870' };
+  const CB = { pc: '#006ca9', ally: '#8f3f73', foe: '#7a5300', neutral: '#5f646b' };
+  const rgb = (hex) => `rgb(${[1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)).join(', ')})`;
+  const press = async (page, sel) => {
+    await page.evaluate(`document.querySelector(${JSON.stringify(sel)}).scrollIntoView({ block: 'center' })`);
+    assert.ok((await page.click(sel)).hit, `the click lands on ${sel}`);
+  };
+  // headless Chrome here follows the machine's scheme (dark): the tests set the media feature, as the OS would
+  const light = (page) => page.colorScheme('light');
+  // A vault with a site whose pinned tool is older than the one that knows the setting, so the real route answers 409
+  const OLD_SITE = { ok: true, ours: false, spec: 'gm-apprentice-publish@1.70.40', installedBefore: '1.70.40' };
+  const oldSite = {
+    deps: { pinCheck: () => OLD_SITE },
+    edit: (vault) => {
+      const file = path.join(vault, '_meta', 'vault-config.yaml');
+      const cfg = YAML.parse(fs.readFileSync(file, 'utf8'));
+      cfg.player_site = { ...cfg.player_site, folder: 'site' };
+      fs.writeFileSync(file, YAML.stringify(cfg));
+      fs.mkdirSync(path.join(vault, 'site'));
+    },
+  };
+  const VENN = 'Characters/NPCs/Brother Venn.md';
+  const bar = (page, id) => page.evaluate(`getComputedStyle(document.querySelector('[data-frow="${id}"]')).borderLeftColor`);
+  const nameColour = (page, id) => page.evaluate(`getComputedStyle(document.querySelector('[data-frow="${id}"] .nm')).color`);
+  const sideOf = (p, id) => p.fight.rows.find((r) => r.id === id).side;
+  // a foe of the fixture that is not the Wyrm, so a side can be set without disturbing the other tests' favourites
+  const foeRow = (p) => p.fight.rows.find((r) => r.side === 'foe');
+
+  it('rows take the side colours: PC, ally, foe and neutral, by bar and by name', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let { p } = await fightOn(page, run);
+      await light(page);
+      const foe = foeRow(p);
+      await press(page, `[data-fpeek="${foe.id}"]`);
+      await press(page, `[data-fside="neutral"][data-fsiderow="${foe.id}"]`);
+      p = await until(page, `p.fight.rows.find((r) => r.id === ${q(foe.id)}).side === "neutral"`);
+      const want = { pc: rowOf(p, ADA).id, ally: rowOf(p, VENN).id, neutral: foe.id, foe: p.fight.rows.find((r) => r.side === 'foe').id };
+      for (const [side, id] of Object.entries(want)) {
+        assert.strictEqual(await bar(page, id), rgb(PENS[side]), `${side} bar`);
+        assert.strictEqual(await nameColour(page, id), rgb(PENS[side]), `${side} name`);
+        assert.ok(await page.evaluate(`document.querySelector('[data-frow="${id}"]').classList.contains('side-${side}')`));
+      }
+      await page.colorScheme('dark');
+      await page.waitFor(`getComputedStyle(document.querySelector('[data-frow="${rowOf(p, ADA).id}"]')).borderLeftColor === ${q(rgb('#6fcf7f'))}`);
+      assert.strictEqual(await bar(page, rowOf(p, ADA).id), rgb('#6fcf7f'), 'dark mode takes the dark set');
+      await light(page);
+      assert.strictEqual(await page.evaluate('document.querySelectorAll("ol.to .tag").length && [...document.querySelectorAll("ol.to .tag")].some((t) => /^(PC|ally)\\b/.test(t.textContent))'), false, 'no PC or ally tag');
+      await shot(page, 'sides-pens');
+    });
+  });
+
+  it('the name title keeps the word and the reason', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let { p } = await fightOn(page, run);
+      await light(page);
+      const foe = foeRow(p);
+      await press(page, `[data-fpeek="${foe.id}"]`);
+      await press(page, `[data-fside="neutral"][data-fsiderow="${foe.id}"]`);
+      await until(page, `p.fight.rows.find((r) => r.id === ${q(foe.id)}).side === "neutral"`);
+      const title = (id) => page.evaluate(`document.querySelector('[data-frow="${id}"] .nm').title`);
+      assert.strictEqual(await title(foe.id), `${foe.name} (neutral: you set it). Show this one's panel`);
+      assert.strictEqual(await title(rowOf(p, ADA).id), `${rowOf(p, ADA).name} (PC). Show this one's panel`);
+      assert.match(await title(rowOf(p, VENN).id), /\(ally(: .+)?\)\. Show this one's panel$/);
+    });
+  });
+
+  it('the side switch is three direct buttons: foe to neutral by one click never passes through ally', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let { p } = await fightOn(page, run);
+      await light(page);
+      const foe = foeRow(p);
+      await press(page, `[data-fpeek="${foe.id}"]`);
+      const pressed = () => page.evaluate('[...document.querySelectorAll("#acting [data-fside]")].filter((b) => b.getAttribute("aria-pressed") === "true").map((b) => b.dataset.fside)');
+      // final review P-A3: ally last, so it is never the stray middle click; each button says what it does
+      assert.deepStrictEqual(await page.evaluate('[...document.querySelectorAll("#acting [data-fside]")].map((b) => [b.dataset.fside, b.title])'), [
+        ['foe', 'An enemy: the players see only what you show'],
+        ['neutral', 'Neither side: shown to players like a foe'],
+        ['ally', "On the party's side: the players see its name and HP"],
+      ]);
+      assert.ok((await page.evaluate('document.querySelector("#acting").textContent')).includes('Side:'));
+      assert.deepStrictEqual(await pressed(), ['foe']);
+      await press(page, '#acting [data-fside="neutral"]');
+      await settled(page);
+      assert.deepStrictEqual(await pressed(), ['neutral']);
+      let st = await getState(run);
+      const row = st.fight.rows.find((r) => r.id === foe.id);
+      assert.strictEqual(row.kind, 'foe');
+      assert.strictEqual(row.neutral, true);
+      const said = st.events.map((e) => e.text || '').filter((t) => /is now (an ally|a foe|neutral)/.test(t));
+      assert.deepStrictEqual(said.map((t) => t.replace(/^.*is now /, '')), ['neutral.'], 'one change, straight to neutral, never an ally on the way');
+      assert.strictEqual(row.seen, foe.seen, 'seen is untouched');
+      await press(page, '#acting [data-fside="ally"]');
+      await settled(page);
+      assert.deepStrictEqual(await pressed(), ['ally']);
+      await press(page, '#acting [data-fside="foe"]');
+      await settled(page);
+      assert.deepStrictEqual(await pressed(), ['foe']);
+      p = await probe(page);
+      assert.strictEqual(sideOf(p, foe.id), 'foe');
+      assert.deepStrictEqual(p.errors, []);
+    });
+  });
+
+  it('choosing Colour-blind safe writes the vault setting and repaints, in both windows', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      const { p } = await fightOn(page, run);
+      await light(page);
+      const first = foeRow(p);
+      await press(page, `[data-fpeek="${first.id}"]`);
+      await press(page, `[data-fside="neutral"][data-fsiderow="${first.id}"]`);
+      await until(page, `p.fight.rows.find((r) => r.id === ${q(first.id)}).side === "neutral"`);
+      const tab = await page.newTab(`${run.base}/?probe=1`);
+      await tab.waitFor('document.querySelector("[data-frow]")');
+      await light(tab);
+      await press(page, '#coloursBtn');
+      assert.strictEqual(await page.evaluate('document.getElementById("coloursMenu").hidden'), false);
+      assert.strictEqual(await page.evaluate('document.querySelectorAll("#coloursMenu input[name=scp]").length'), 3);
+      assert.strictEqual(await page.evaluate('document.querySelectorAll("#coloursMenu input[type=color]").length'), 4);
+      await press(page, '#coloursMenu input[name="scp"][value="colour_blind"]');
+      await page.waitFor(`getComputedStyle(document.querySelector('[data-frow="${rowOf(p, ADA).id}"]')).borderLeftColor === ${q(rgb(CB.pc))}`);
+      const model = (await (await fetch(`${run.base}/api/model`)).json()).model;
+      assert.strictEqual(model.sideColours.preset, 'colour_blind');
+      const kept = ['_meta/vault-config.yaml', '_meta/vault-config.md'].map((f) => path.join(run.vault, f)).filter((f) => fs.existsSync(f));
+      assert.ok(kept.some((f) => /side_colours:\s*colour_blind/.test(lf(fs.readFileSync(f, 'utf8')))), 'the vault settings file holds colour_blind');
+      await tab.waitFor(`getComputedStyle(document.querySelector('[data-frow="${rowOf(p, ADA).id}"]')).borderLeftColor === ${q(rgb(CB.pc))}`);
+      assert.strictEqual(await page.evaluate('Object.keys(localStorage).filter((k) => k.startsWith("rs:sideColours")).map((k) => localStorage.getItem(k))[0] || null'), null, 'a saved choice keeps nothing on the browser');
+      await press(page, '#coloursBtn');
+      await shot(page, 'sides-colour-blind');
+    });
+  });
+
+  it('my own colours post once, on change, never on each picker input', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      const { p } = await fightOn(page, run);
+      await light(page);
+      await page.evaluate(`window.__posts = []; const f = window.fetch; window.fetch = (u, o) => { if (String(u).includes('side-colours')) window.__posts.push(JSON.parse(o.body)); return f(u, o); };`);
+      await press(page, '#coloursBtn');
+      // a native picker cannot be opened headless: this one control is set by script, with its input events and one change
+      await page.evaluate(`(() => { const e = document.querySelector('#coloursMenu input[data-scown="foe"]'); e.value = '#112233'; e.dispatchEvent(new Event('input', { bubbles: true })); e.value = '#123456'; e.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+      assert.strictEqual(await page.evaluate('window.__posts.length'), 0, 'input posts nothing');
+      await page.evaluate(`document.querySelector('#coloursMenu input[data-scown="foe"]').dispatchEvent(new Event('change', { bubbles: true }))`);
+      await page.waitFor('window.__posts.length === 1');
+      const sent = await page.evaluate('window.__posts[0]');
+      assert.strictEqual(sent.preset, 'own');
+      assert.strictEqual(sent.own.foe, '#123456');
+      assert.strictEqual(sent.own.pc, '#2c7739', 'the others start from the vault\'s own colours');
+      const foe = foeRow(p);
+      await page.waitFor(`getComputedStyle(document.querySelector('[data-frow="${foe.id}"]')).borderLeftColor === ${q(rgb('#123456'))}`);
+      assert.strictEqual((await (await fetch(`${run.base}/api/model`)).json()).model.sideColours.own.foe, '#123456');
+    });
+  });
+
+  it('the menu closes on Esc and on an outside click that still lands (a damage box, then -4 Enter applies)', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      const { p } = await started(page, run);
+      await light(page);
+      const open = () => page.evaluate('!document.getElementById("coloursMenu").hidden');
+      await press(page, '#coloursBtn');
+      assert.strictEqual(await open(), true);
+      await page.key('Escape');
+      assert.strictEqual(await open(), false, 'Esc closes it');
+      await press(page, '#coloursBtn');
+      assert.strictEqual(await open(), true);
+      const foe = p.fight.rows.find((r) => r.kind === 'foe' && r.in && Number.isFinite(r.hp));
+      const box = `[data-fhp="${foe.id}"]`;
+      const hpBefore = rowOf(await probe(page), foe.note, foe.copy).hp;
+      await press(page, box);
+      assert.strictEqual(await open(), false, 'a click outside closes it');
+      assert.strictEqual(await page.evaluate(`document.activeElement === document.querySelector(${q(box)})`), true, 'and the click still focused the damage box');
+      await page.type('-4');
+      await page.key('Enter');
+      const after = await until(page, `p.fight.rows.find((r) => r.id === ${q(foe.id)}).hp === ${hpBefore - 4}`);
+      assert.deepStrictEqual(after.errors, []);
+    });
+  });
+
+  it('a failed save (a real 409) still repaints and says why; a network failure says so too', async () => {
+    const run = await start(oldSite);
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      const { p } = await fightOn(page, run);
+      await light(page);
+      const ada = `getComputedStyle(document.querySelector('[data-frow="${rowOf(p, ADA).id}"]')).borderLeftColor`;
+      await press(page, '#coloursBtn');
+      await press(page, '#coloursMenu input[name="scp"][value="colour_blind"]');
+      await page.waitFor(`${ada} === ${q(rgb(CB.pc))}`);
+      await page.waitFor('document.querySelector("#hnotes").textContent.includes("update the site first")');
+      assert.deepStrictEqual(JSON.parse(await page.evaluate('Object.keys(localStorage).filter((k) => k.startsWith("rs:sideColours")).map((k) => localStorage.getItem(k))[0] || null')).choice.preset, 'colour_blind');
+      assert.strictEqual((await (await fetch(`${run.base}/api/model`)).json()).model.sideColours.preset, 'pens', 'the vault still says Pens');
+      assert.match(await page.evaluate('document.getElementById("coloursBtn").title'), /^Showing your choice, not the vault's \(not saved: .*update the site first/);
+      assert.strictEqual(await page.evaluate('document.querySelectorAll("#coloursBtn .keptmark").length'), 1, 'the marker shows');
+      // a network failure (the only stub here: a real one cannot be made on a live local server)
+      await page.evaluate(`window.fetch = (u, o) => { throw new TypeError('offline'); }`);
+      await press(page, '#coloursMenu input[name="scp"][value="pens"]');
+      await page.waitFor(`${ada} === ${q(rgb(PENS.pc))}`);
+      await page.waitFor('document.querySelector("#hnotes").textContent.includes("did not answer")');
+    });
+  });
+
+  it('a kept choice survives a reload while the vault is unchanged, and yields once the vault changes', async () => {
+    const run = await start(oldSite);
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      const { p } = await fightOn(page, run);
+      await light(page);
+      const ada = `getComputedStyle(document.querySelector('[data-frow="${rowOf(p, ADA).id}"]')).borderLeftColor`;
+      await press(page, '#coloursBtn');
+      await press(page, '#coloursMenu input[name="scp"][value="colour_blind"]');
+      await page.waitFor(`document.querySelectorAll('#coloursBtn .keptmark').length === 1`);
+      await page.goto(`${run.base}/?probe=1`);
+      await page.waitFor('document.querySelector("[data-frow]")');
+      await page.waitFor(`${ada} === ${q(rgb(CB.pc))}`);
+      assert.strictEqual(await page.evaluate('document.querySelectorAll("#coloursBtn .keptmark").length'), 1, 'kept over a reload');
+      // the vault changes under it (another tool wrote the setting): the vault's answer wins
+      const file = path.join(run.vault, '_meta', 'vault-config.yaml');
+      const cfg = YAML.parse(fs.readFileSync(file, 'utf8'));
+      cfg.vault = { ...cfg.vault, run_sheet: { ...(cfg.vault && cfg.vault.run_sheet), side_colours: 'own', own_colours: { pc: '#123456' } } };
+      fs.writeFileSync(file, YAML.stringify(cfg));
+      await page.goto(`${run.base}/?probe=1`);
+      await page.waitFor('document.querySelector("[data-frow]")');
+      await page.waitFor(`${ada} === ${q(rgb('#123456'))}`);
+      assert.strictEqual(await page.evaluate('document.querySelectorAll("#coloursBtn .keptmark").length'), 0, 'no marker');
+      assert.strictEqual(await page.evaluate('Object.keys(localStorage).filter((k) => k.startsWith("rs:sideColours")).map((k) => localStorage.getItem(k))[0] || null'), null, 'the override is gone from the browser');
+    });
+  });
+
+  // final review O10: a kept choice is this vault's and this session's, never another's on the same port
+  it('a kept choice is keyed by the vault\'s campaign and the session; another vault\'s, or an unkeyed one, is not read', async () => {
+    const run = await start(oldSite);
+    const { stateId } = await getState(run).then(() => fetch(`${run.base}/api/state`)).then((r) => r.json());
+    const base = JSON.stringify(run.model.sideColours || null);
+    const kept = JSON.stringify({ choice: { preset: 'colour_blind', own: {} }, base, why: 'test' });
+    const mine = `rs:sideColours:${run.model.campaign || ''}:${stateId}`;
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await page.goto(`${run.base}/?probe=1`);
+      await page.waitFor('document.querySelector("#coloursBtn")');
+      // another vault's choice, and one kept under the old key with no vault in it
+      await page.evaluate(`localStorage.setItem("rs:sideColours:Another Campaign:${stateId}", ${JSON.stringify(kept)}); localStorage.setItem("rs:sideColours", ${JSON.stringify(kept)}); true`);
+      await page.goto(`${run.base}/?probe=1`);
+      await settled(page);
+      assert.strictEqual(await page.evaluate('document.querySelectorAll("#coloursBtn .keptmark").length'), 0, 'neither is this vault\'s');
+      // this vault's own: read
+      await page.evaluate(`localStorage.setItem(${JSON.stringify(mine)}, ${JSON.stringify(kept)}); true`);
+      await page.goto(`${run.base}/?probe=1`);
+      await settled(page);
+      assert.strictEqual(await page.evaluate('document.querySelectorAll("#coloursBtn .keptmark").length'), 1, 'this vault\'s kept choice');
+    });
+  });
+
+  it('two quick changes: only the latest answer counts, even when the earlier one fails late', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      const { p } = await fightOn(page, run);
+      await light(page);
+      const ada = `getComputedStyle(document.querySelector('[data-frow="${rowOf(p, ADA).id}"]')).borderLeftColor`;
+      // the first save is held back, then fails; the second goes through for real (answer order is the thing under test)
+      await page.evaluate(`(() => { const f = window.fetch; let first = true; window.fetch = (u, o) => {
+        if (String(u).includes('side-colours') && first) { first = false; return new Promise((r) => setTimeout(() => r(new Response(JSON.stringify({ error: 'late failure' }), { status: 409, headers: { 'content-type': 'application/json' } })), 700)); }
+        return f(u, o); }; })()`);
+      await press(page, '#coloursBtn');
+      await press(page, '#coloursMenu input[name="scp"][value="colour_blind"]');
+      await press(page, '#coloursMenu input[name="scp"][value="pens"]');
+      await page.waitFor(`${ada} === ${q(rgb(PENS.pc))}`);
+      await page.sleep(1200);
+      assert.strictEqual(await page.evaluate('Object.keys(localStorage).filter((k) => k.startsWith("rs:sideColours")).map((k) => localStorage.getItem(k))[0] || null'), null, 'the late failure kept nothing');
+      assert.strictEqual(await page.evaluate('document.querySelectorAll("#coloursBtn .keptmark").length'), 0);
+      assert.strictEqual(await page.evaluate(ada), rgb(PENS.pc), 'and repainted nothing');
+      assert.strictEqual((await (await fetch(`${run.base}/api/model`)).json()).model.sideColours.preset, 'pens');
+    });
+  });
+
+  it('the swatches follow the machine\'s light or dark scheme while the menu is open', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await fightOn(page, run);
+      await light(page);
+      await press(page, '#coloursBtn');
+      const first = () => page.evaluate('getComputedStyle(document.querySelector("#coloursMenu .copt .sws i")).backgroundColor');
+      assert.strictEqual(await first(), rgb(PENS.pc));
+      await page.colorScheme('dark');
+      await page.waitFor(`getComputedStyle(document.querySelector("#coloursMenu .copt .sws i")).backgroundColor === ${q(rgb('#6fcf7f'))}`);
+      await page.colorScheme('light');
+      await page.waitFor(`getComputedStyle(document.querySelector("#coloursMenu .copt .sws i")).backgroundColor === ${q(rgb(PENS.pc))}`);
+    });
+  });
+
+  it('a side row\'s name title also says what a click does', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      const { p } = await fightOn(page, run);
+      const foe = foeRow(p);
+      assert.strictEqual(await page.evaluate(`document.querySelector('[data-frow="${foe.id}"] .nm').title`), `${foe.name} (foe). Show this one's panel`);
+    });
+  });
 });

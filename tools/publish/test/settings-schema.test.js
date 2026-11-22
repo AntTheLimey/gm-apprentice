@@ -185,3 +185,15 @@ test('a file that writes a choice as Tree and a switch as Yes validates and read
   assert.equal(read.values.player_site.features.search, true);
   fs.rmSync(root, { recursive: true, force: true });
 });
+
+// plan 6a Task 8: the run sheet's side colours
+test('registry has the two side-colour settings', () => {
+  const byName = new Map(REGISTRY.map((e) => [e.name, e]));
+  const pick = byName.get('vault.run_sheet.side_colours');
+  assert.deepEqual(pick.values, ['pens', 'colour_blind', 'own']);
+  assert.equal(pick.default, 'pens');
+  assert.equal(byName.get('vault.run_sheet.own_colours').container, true);
+  const own = ['pc', 'ally', 'foe', 'neutral'].map((k) => byName.get(`vault.run_sheet.own_colours.${k}`));
+  assert.deepEqual(own.map((e) => e.default), ['#2c7739', '#7a3fb0', '#b3261e', '#646870']);
+  for (const e of own) assert.equal(e.type, 'text');
+});
