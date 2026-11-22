@@ -685,6 +685,14 @@ describe('the fight in the state', () => {
     [s, id] = addNamed(gateFight(), 'Bouncer', 2);
     for (let i = 0; i < 14 && M.undoable(s.fight, id); i++) s = next(s);
     assert.equal(M.undoable(s.fight, id), false, 'once the turns reach them');
+    // a turn or a log line on the second or third row blocks it as the first row's does (CodeRabbit, PR #843)
+    for (const mark of ['turned', 'logged']) {
+      for (const at of [1, 2]) {
+        [s, id] = addNamed(gateFight(), 'Bouncer', 3);
+        s.fight.rows.find((r) => r.name === `Bouncer ${at + 1}`)[mark] = true;
+        assert.equal(M.undoable(s.fight, id), false, `Bouncer ${at + 1} ${mark}`);
+      }
+    }
     // an unknown join, and a join that was not an add of rows only, never undo
     s = gateFight();
     const n = s.fight.rows.length;

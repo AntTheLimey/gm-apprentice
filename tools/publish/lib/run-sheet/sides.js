@@ -93,6 +93,8 @@ function relationshipsTotal(fm, partyNotes, resolve) {
 
 function startingSide({ whoText = '', quickRefText = '', statsText = '', fm = {}, partyNotes = [], resolve = null } = {}) {
   const who = phraseIn(whoText, false);
+  // a who line that says no settles it: the Quick Reference is never read over it
+  if (who.hedged && !who.said) return { ally: false, allyFrom: null, allyBy: null };
   const quick = who.said ? {} : phraseIn(quickRefText, true);
   const said = who.said || quick.said;
   if (said) return { ally: true, allyFrom: `the Plan: "${said.toLowerCase()}"`, allyBy: 'plan' };

@@ -99,6 +99,24 @@ describe('a foe starts seen (6a Task 4)', () => {
     assert.ok(!(NOTE('Brother Ash') in seen), 'named only in the vitals: fought unseen');
   });
 
+  it('a Table Log section the vault hides by its heading is not read (CodeRabbit, PR #843)', () => {
+    const dir = vault({ settings: { 'player_site.hide.sections': ['Points landed'] } });
+    write(dir, `${S}Session 01/Session 01 - Start - Table Log.md`, `---\ntype: session-table-log\nsession: "[[Session 01 - Start]]"\n---\n\n## Points landed\n\n- The Frost Wolf was beaten.\n\n## Handouts handed over\n\n- Abbot Rime's letter.\n`);
+    const idx = fs.readFileSync(path.join(dir, `${S}Session 01/Session 01 - Start.md`), 'utf8').replace('documents:\n', 'documents:\n  table_log: "[[Session 01 - Start - Table Log]]"\n');
+    write(dir, `${S}Session 01/Session 01 - Start.md`, idx);
+    const seen = seenOf(dir);
+    assert.ok(!('Creatures/Frost Wolf.md' in seen), 'named only in a hidden section');
+    assert.strictEqual(seen[NOTE('Abbot Rime')], 'named in Session 1', 'the other sections still count');
+  });
+
+  it('a file name that is only part of the name is no match (CodeRabbit, PR #843)', () => {
+    const notes = { Marek: npc('Marek Solano'), Vell: npc('Vell') };
+    assert.ok(!(NOTE('Marek') in seenOf(vault({ s1: 'Marek waved.', notes }))), 'the first name alone');
+    assert.ok(!(NOTE('Marek') in seenOf(vault({ s1: 'Solano waved.', notes: { Solano: npc('Marek Solano') } }))), 'the surname alone');
+    assert.strictEqual(seenOf(vault({ s1: 'Marek Solano waved.', notes }))[NOTE('Marek')], 'named in Session 1', 'the whole name');
+    assert.strictEqual(seenOf(vault({ s1: 'Vell waved.', notes }))[NOTE('Vell')], 'named in Session 1', 'a one-word name');
+  });
+
   it('an unplayed earlier session does not count', () => {
     const dir = vault({ s1: 'Garrick Fell waved.', notes: { 'Garrick Fell': npc('Garrick Fell') } });
     const p = path.join(dir, `${S}Session 01/Session 01 - Start.md`);

@@ -696,7 +696,7 @@
   // Whether the join's rows can still be taken back: there are some, and none has been touched.
   function undoable(fight, join) {
     const mine = ((fight && fight.rows) || []).filter((r) => join != null && r.joinId === join);
-    return mine.length > 0 && mine.every(untouched);
+    return mine.length > 0 && mine.every((r) => untouched(r, false));
   }
 
   // The groups a fight takes in (proof M2): the ones it was given or added, and every group (`{ key, pcs }`,

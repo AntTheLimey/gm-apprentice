@@ -114,6 +114,10 @@ describe('a row\'s starting side', () => {
     assert.deepStrictEqual(pick(side(index, 'Ferrante', { quickRefText: 'Not seen since spring | with the party' })), [true, 'plan']);
     // a second, plain phrase still counts after a hedged one
     assert.deepStrictEqual(pick(side(index, 'Ferrante', { whoText: 'not with the party at first; later as an ally' })), [true, 'plan'], 'a second sentence');
+    // a who line that says no is not overruled by the Quick Reference (CodeRabbit, PR #843)
+    assert.deepStrictEqual(side(index, 'Ferrante', { whoText: 'will never fight as an ally', quickRefText: 'with the party' }),
+      { ally: false, allyFrom: null, allyBy: null });
+    assert.deepStrictEqual(pick(side(index, 'Ferrante', { whoText: 'not with the party', quickRefText: 'Ally' })), [false, null]);
     // the who line's plain phrase wins over a hedged Quick Reference cell
     assert.deepStrictEqual(pick(side(index, 'Ferrante', { whoText: 'with the party', quickRefText: 'not with the party' })), [true, 'plan']);
   });

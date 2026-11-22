@@ -54,8 +54,9 @@ function readSeen({ vaultPath, index, sessionIndex, publishes, config = {}, deps
     if (notes) texts.push(safe(notes, index.read(notes).body || ''));
     const log = tableLogOf(index, s.index).log;
     if (log) {
-      const sections = readTableLog(index.read(log).body || '').sections;
-      for (const name of PLAYED_SECTIONS) if (sections.get(name)) texts.push(safe(log, sections.get(name)));
+      // cut first, so a section the vault hides by its heading is gone before the sections are read
+      const sections = readTableLog(safe(log, index.read(log).body || '')).sections;
+      for (const name of PLAYED_SECTIONS) if (sections.get(name)) texts.push(sections.get(name));
     }
     if (!texts.length) continue;
     const text = canonicalNfc(texts.join('\n'));
@@ -66,7 +67,11 @@ function readSeen({ vaultPath, index, sessionIndex, publishes, config = {}, deps
   for (const p of people) {
     if (seen[p]) continue;
     const fm = fmOf(p);
-    const names = [...new Set([typeof fm.name === 'string' ? fm.name : '', stemOf(p), ...nameList(fm.aliases)]
+    const full = typeof fm.name === 'string' ? canonicalNfc(fm.name).trim() : '';
+    // the file name counts unless it is only part of the declared name (NPCs/Marek.md for Marek Solano)
+    const stem = canonicalNfc(stemOf(p)).trim();
+    const part = full && stem !== full && full.split(/[\s_]+/).includes(stem);
+    const names = [...new Set([full, part ? '' : stem, ...nameList(fm.aliases)]
       .map((n) => canonicalNfc(n).trim()).filter((n) => n.length >= MIN_NAME))];
     const res = names.map(wholeName);
     const hit = records.find((r) => r.targets.has(p) || res.some((re) => re.test(r.text)));
