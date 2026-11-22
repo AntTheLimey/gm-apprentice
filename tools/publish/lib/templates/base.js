@@ -55,14 +55,26 @@ function configureLinkPreviews(mode) { linkPreviews = entry('player_site.feature
 let connectionsMode = 'off';
 function configureConnections(mode) { connectionsMode = entry('player_site.features.connections').values.includes(mode) ? mode : 'off'; }
 
-// Whether this build's pages carry the credit line (player_site.credit), set once by configureCredit before any page
+// Whether this build's pages credit GM-Apprentice (player_site.credit, #862), set once by configureCredit before any page
 // renders, as the link-previews mode is.
 let creditOn = false;
 function configureCredit(on) { creditOn = on === true; }
+const CREDIT_HREF = 'https://gmapprentice.com';
+// The raven is drawn by the stylesheet (.credit-raven), in the colour of the text around it.
+const CREDIT_RAVEN = '<span class="credit-raven" aria-hidden="true"></span>';
+// The raven alone, at the end of the header on a computer. '' with the credit off.
+function creditMarkHtml() {
+  return creditOn ? `<a class="nav-credit" href="${CREDIT_HREF}" rel="noopener" aria-label="Powered by GM-Apprentice">${CREDIT_RAVEN}</a>` : '';
+}
+// The line at the foot of the phone menu. '' with the credit off.
+function creditMenuHtml() {
+  return creditOn ? `<a class="mobile-credit" href="${CREDIT_HREF}" rel="noopener">${CREDIT_RAVEN}Powered by GM-Apprentice</a>` : '';
+}
 // The page's footer: the GM's own line, then the credit under it. '' when the page has neither.
 function footerHtml(footer) {
-  const credit = creditOn ? '<p class="site-credit"><a href="https://gmapprentice.com" rel="noopener">Powered by GM-Apprentice</a></p>' : '';
-  return footer || credit ? `<footer class="site-footer">${footer ? escapeHtml(footer) : ''}${credit}</footer>` : '';
+  const credit = creditOn ? `<p class="site-credit">${CREDIT_RAVEN}<span>Powered by <a href="${CREDIT_HREF}" rel="noopener">GM-Apprentice</a></span></p>` : '';
+  if (!footer && !credit) return '';
+  return `<footer class="site-footer${footer ? '' : ' credit-only'}">${footer ? escapeHtml(footer) : ''}${credit}</footer>`;
 }
 
 // A page's Connections section, or '' when the site has none or the page has nothing to show.
@@ -273,6 +285,8 @@ module.exports = {
   configureLinkPreviews,
   configureConnections,
   configureCredit,
+  creditMarkHtml,
+  creditMenuHtml,
   footerHtml,
   connectionsSection,
   linkPreviewsOn,

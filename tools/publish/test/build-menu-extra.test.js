@@ -8,6 +8,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { build, resolveSiteLink, rememberHiddenNames } = require('../lib/build');
 const { generateNav } = require('../lib/templates/nav');
+const { configureCredit } = require('../lib/templates/base');
 const { writeNewConfig } = require('./helpers/settings-files');
 
 const npc = (extra = '') => `---\ntype: npc\n${extra}---\n\nA person.\n`;
@@ -476,6 +477,7 @@ test('a [[wikilink]] in a label prints as its name, as page text does (#388)', (
 });
 
 test('rule 6: the menu with no extra entries is the text a build made before there were extra entries (frozen from main, re-frozen for the aria-expanded and data-nav markup, #439)', () => {
+  configureCredit(false); // a build above left its own choice; the frozen menu is the one without the credit
   const out = generateNav([{ outputDir: 'world', outputPath: 'world/a.html', title: 'A', frontmatter: {} }], {})('index.html', { siteTitle: 'T' });
   assert.equal(require('node:crypto').createHash('sha256').update(out).digest('hex'), '0ef48ab93aae1b22c8ccd09aaa8dd07e7e224e900f145700a29b061940e87bdb');
 });

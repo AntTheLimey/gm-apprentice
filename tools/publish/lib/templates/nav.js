@@ -1,6 +1,6 @@
 const { TOGGLE_BUTTON, MOBILE_TOGGLE } = require('../color-mode');
 const { relativePath, escapeHtml, encodeHref } = require('../processor');
-const { DIR_LABELS, colorModeEnabled } = require('./base');
+const { DIR_LABELS, colorModeEnabled, creditMarkHtml, creditMenuHtml } = require('./base');
 const { isFolded } = require('../story-fold');
 
 // A link reads as base.js's DIR_LABELS names its folder; `labels` holds only a word the menu
@@ -166,14 +166,14 @@ ${linksHtml}
 ${groupsHtml}
   </nav>
   <button class="nav-search-btn" onclick="openSearch()" aria-label="Search" aria-haspopup="dialog" aria-expanded="false">Search <kbd class="search-kbd">⌘K</kbd></button>
-  ${colorModeEnabled() ? TOGGLE_BUTTON : ''}
+  ${[colorModeEnabled() ? TOGGLE_BUTTON : '', creditMarkHtml()].filter(Boolean).join('\n  ')}
   <button class="nav-search-icon-btn" onclick="openSearch()" aria-label="Search" aria-haspopup="dialog" aria-expanded="false"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/></svg></button>
   <button class="nav-mobile-toggle" aria-label="Menu" aria-expanded="false" aria-controls="mobile-nav">&#9776;</button>
 </header>
 <div id="mobile-nav" class="mobile-nav-overlay">
   <button class="mobile-nav-close" aria-label="Close">&times;</button>
 ${mobileLinksHtml}
-  ${colorModeEnabled() ? MOBILE_TOGGLE : ''}
+  ${[colorModeEnabled() ? MOBILE_TOGGLE : '', creditMenuHtml()].filter(Boolean).join('\n  ')}
 </div>`;
 }
 

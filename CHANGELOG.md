@@ -9,6 +9,12 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.139] — 2026-11-22
+
+### Changed
+
+- A campaign site credits GM-Apprentice more quietly, in three small parts in place of the footer line: a raven at the end of the header on a computer, the raven and a line at the end of every page, and a line at the foot of the phone menu. All take the site's own colours; `player_site.credit` off removes all three (#862)
+
 ## [1.12.133] — 2026-11-22
 
 ### Changed
