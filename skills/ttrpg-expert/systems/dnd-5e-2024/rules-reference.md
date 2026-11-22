@@ -28,7 +28,7 @@ Combat, spellcasting, death saves, resting, environment, and advanced mechanics.
 | **Disengage** | Movement doesn't provoke Opportunity Attacks for rest of turn. |
 | **Dodge** | Attacks against you have Disadv (if you see attacker); Adv on DEX saves. Lost if Incapacitated or Speed 0. |
 | **Help** | Give ally Adv on next ability check or next attack vs creature within 5 ft of you. Expires start of your next turn. |
-| **Hide** | DC 15 DEX (Stealth) while Heavily Obscured or behind 3/4 or Total Cover. Success = Invisible condition. |
+| **Hide** | DC 15 DEX (Stealth) while Heavily Obscured or behind 3/4 or Total Cover, and out of every enemy's line of sight. Success = Invisible condition; the check total is the WIS (Perception) DC to find you. Ends on a sound louder than a whisper, being found, an attack roll, or casting a Verbal spell. |
 | **Influence** | Urge monster to act. GM sets Willing/Unwilling/Hesitant. Hesitant requires ability check; DC 15 or monster's INT (higher). |
 | **Magic** | Cast a spell with casting time of one action, or activate a magic item. |
 | **Ready** | Set trigger + action (or movement) as Reaction. Readied spells require Concentration until released. |

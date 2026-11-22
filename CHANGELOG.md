@@ -10,6 +10,12 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 ---
 
 
+## [1.12.121] — 2026-11-22
+
+### Fixed
+
+- The D&D 2024 rules summary's Hide row now says you must be out of every enemy's line of sight, that your Stealth total is the Perception DC to find you, and what ends hiding (#812).
+
 ## [1.12.119] — 2026-11-20
 
 ### Fixed
