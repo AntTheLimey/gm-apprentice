@@ -187,7 +187,7 @@ async function stopShared() {
 // returns; the context (its storage and every tab it opened) is thrown away after.
 // `page`: goto(url), reload(), evaluate(expr), waitFor(expr, ms), screenshot(file), sleep(ms), key(name, { shift }),
 // newTab(url) -> page, resize(width, height); real pointer and text: mouse(type, x, y, { buttons }), click(sel, { holdMs }), drag(x1, y1, x2, y2, steps),
-// wheel(x, y, dy), type(text), box(sel), clickAt(x, y, { holdMs }), colorScheme('light'|'dark').
+// wheel(x, y, dy), type(text), box(sel), clickAt(x, y, { holdMs }), choose(sel, text) (a native select), colorScheme('light'|'dark').
 async function withPage({ width = 1449, height = 762, chrome = findChrome(), stepMs = STEP_MS } = {}, fn) {
   if (!chrome) throw new Error('no browser');
   return withChromeLock(async () => {
@@ -226,6 +226,7 @@ async function withPage({ width = 1449, height = 762, chrome = findChrome(), ste
             await sleep(50);
           }
         };
+        let lastChosen = 0; // when `choose` last typed
         const page = {
           async goto(url) {
             const r = await s('Page.navigate', { url });
@@ -247,17 +248,68 @@ async function withPage({ width = 1449, height = 762, chrome = findChrome(), ste
             const r = await s('Page.captureScreenshot', { format: 'png', captureBeyondViewport: full });
             fs.writeFileSync(file, Buffer.from(r.data, 'base64'));
           },
-          // A real key press (keyDown, then keyUp) on whatever has focus: Enter, Tab, Escape, or one character.
+          // A real key press (keyDown, then keyUp) on whatever has focus: Enter, Tab, Escape, Backspace, ArrowDown, ArrowUp, or one character.
           // `shift` holds Shift down, so `key('Tab', { shift: true })` goes backwards.
           async key(name, { shift = false } = {}) {
             moved({ act: 'key', name });
-            const named = { Enter: [13, '\r'], Tab: [9, ''], Escape: [27, ''], Backspace: [8, ''] };
+            const named = { Enter: [13, '\r'], Tab: [9, ''], Escape: [27, ''], Backspace: [8, ''], ArrowDown: [40, ''], ArrowUp: [38, ''] };
             const one = String(name).length === 1;
             if (!named[name] && !one) throw new Error(`key: no such key ${name}`);
             const [vk, text] = named[name] || [String(name).toUpperCase().charCodeAt(0), name];
             const ev = { key: name, code: one ? `Key${String(name).toUpperCase()}` : name, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk, modifiers: shift ? 8 : 0 };
             await s('Input.dispatchKeyEvent', { type: text ? 'keyDown' : 'rawKeyDown', ...ev, ...(text ? { text, unmodifiedText: text } : {}) });
             await s('Input.dispatchKeyEvent', { type: 'keyUp', ...ev });
+          },
+          // Chooses the option of a native <select> whose text starts with `text`, by real input only. A held click
+          // focuses the select; `text` is typed as real key events, quickly (the browser's type-to-select match resets
+          // after a pause), and the select's value is read. If it did not change to the wanted option, ArrowDown (which
+          // changes a closed select on Windows and Linux) steps on, reading again, until the option is chosen or the
+          // list ends. Letters pick the first option that starts with them, so type far enough to be unique ("All"
+          // for All-Out Attack (Determined), "(Do" for All-Out Attack (Double)). Fails naming the system when
+          // neither route moved it. Returns the chosen option's text.
+          async choose(selector, text) {
+            const sel = JSON.stringify(selector);
+            const want = JSON.stringify(String(text).toLowerCase());
+            const read = () => evaluate(`(() => { const e = document.querySelector(${sel}); if (!e) return null;
+              const o = e.options[e.selectedIndex]; return { value: e.value, text: o ? o.textContent.trim() : '', at: e.selectedIndex,
+              wanted: o ? o.textContent.trim().toLowerCase().startsWith(${want}) : false,
+              exists: Array.from(e.options).some((x) => x.textContent.trim().toLowerCase().startsWith(${want})) }; })()`);
+            const first = await read();
+            if (!first) throw new Error(`choose: nothing matches ${selector}`);
+            if (!first.exists) throw new Error(`choose: ${selector} has no option starting "${text}"`);
+            await page.click(selector);
+            moved({ act: 'choose', selector, text: String(text) });
+            // the browser keeps what was typed for a second: letters from an earlier choose would join these
+            await sleep(Math.max(0, lastChosen + 1100 - Date.now()));
+            for (const ch of String(text)) {
+              const code = ch === ' ' ? 'Space' : (/[a-z]/i.test(ch) ? `Key${ch.toUpperCase()}` : (/\d/.test(ch) ? `Digit${ch}` : ''));
+              const vk = ch === ' ' ? 32 : ch.toUpperCase().charCodeAt(0);
+              const ev = { key: ch, code, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk, modifiers: 0 };
+              await s('Input.dispatchKeyEvent', { type: 'keyDown', ...ev, text: ch, unmodifiedText: ch });
+              await s('Input.dispatchKeyEvent', { type: 'keyUp', ...ev });
+            }
+            lastChosen = Date.now();
+            await sleep(150);
+            let now = await read();
+            let route = 'letters';
+            if (!now.wanted) {
+              route = 'arrow';
+              const count = await evaluate(`document.querySelector(${sel}).options.length`);
+              for (let i = 0; i < count && !now.wanted; i++) {
+                await page.key('ArrowDown');
+                await sleep(100);
+                const next = await read();
+                if (next.at === now.at && next.at !== 0) break;
+                now = next;
+              }
+            }
+            if (!now.wanted) throw new Error(`could not choose "${text}" on ${selector} on ${process.platform}: the letters and ArrowDown both left it on "${now.text}"`);
+            // an open list takes the choice on Enter; a closed select has nothing to take, and Enter does no harm
+            await page.key('Enter');
+            await sleep(100);
+            const done = await read();
+            if (!done.wanted) throw new Error(`could not choose "${text}" on ${selector} on ${process.platform}: Enter left it on "${done.text}" (route ${route})`);
+            return done.text;
           },
           // Real pointer input (Input.dispatchMouseEvent), the way a hand moves it. `type` is mouseMoved,
           // mousePressed, mouseReleased or mouseWheel; `buttons` is the bit mask held down (1 = left).

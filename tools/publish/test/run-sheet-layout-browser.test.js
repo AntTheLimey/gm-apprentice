@@ -145,6 +145,25 @@ describe('real-input page helpers', { skip: browserSkip() }, () => {
     });
   });
 
+  it('choose picks options of a plain select by typing, then by arrow, and the page hears each change', async () => {
+    const page_ = `<!doctype html><meta charset="utf-8"><body style="margin:0"><select id="m" style="position:absolute;left:40px;top:40px">
+      <option value="strike">Strike</option><option value="sweep">Sweep</option><option value="sweep2">Sweep (Double)</option>
+      <option value="shove">Shove</option><option value="tuck">Tuck in</option></select>
+      <script>window.heard = []; document.getElementById('m').addEventListener('change', (e) => window.heard.push(e.target.value));</script>`;
+    await withPage({ width: 600, height: 400 }, async (page) => {
+      await page.goto(`data:text/html;charset=utf-8,${encodeURIComponent(page_)}`);
+      await page.waitFor('document.getElementById("m")');
+      assert.strictEqual(await page.choose('#m', 'Sweep (D'), 'Sweep (Double)');
+      assert.strictEqual(await page.choose('#m', 'Sho'), 'Shove');
+      assert.strictEqual(await page.choose('#m', 'Tuck i'), 'Tuck in');
+      assert.strictEqual(await page.choose('#m', 'Str'), 'Strike');
+      assert.strictEqual(await page.evaluate('document.getElementById("m").value'), 'strike');
+      // typing passes through the options on the way ("Sweep" is heard before "Sweep (Double)"): the last four are the choices
+      assert.deepStrictEqual((await page.evaluate('window.heard')).slice(-4), ['sweep2', 'shove', 'tuck', 'strike']);
+      await assert.rejects(() => page.choose('#m', 'Nothing like it'), /no option starting/);
+    });
+  });
+
   it('a click on a covered point reports hit false and the cover gets the click', async () => {
     await withPage({ width: 600, height: 400 }, async (page) => {
       await page.goto(URL_);
