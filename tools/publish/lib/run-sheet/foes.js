@@ -73,7 +73,7 @@ function entry(notePath, index, count, add, canFight = true, sides = null, whoTe
     if (canFight) add('stock-no-actions', notePath, text);
     else prepNote = prepNote ? `${prepNote}; ${text}` : text;
   }
-  return { notePath, n, info, nums, hpStart: info.read.hpStart ?? null, prepNote, side: sideOf(notePath, index, sides, whoText, info.stats) };
+  return { notePath, n, info, nums, hpStart: info.read.hpStart ?? null, fpStart: info.read.fpStart ?? null, prepNote, side: sideOf(notePath, index, sides, whoText, info.stats) };
 }
 
 // Can this beat fight: its Type is combat, fight, battle or ambush, or it is a contingency, or its who holds a
@@ -109,6 +109,7 @@ function rows(entries, beatKey, carried = null, system = DND) {
       recharge: nums.recharge, rechargeAt: nums.rechargeAt, lair: nums.lair, lairActions: nums.lairActions, stats: info.stats,
       ...system.foeRow(nums),
       hpNow, carriedFrom: hpNow === null ? null : got.log, prepNote: e.prepNote, hpStart: e.hpStart,
+      ...(e.fpStart == null ? {} : { fpStart: e.fpStart }),
     };
   }));
 }

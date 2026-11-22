@@ -106,7 +106,7 @@ describe('run sheet systems', () => {
     assert.equal(systemFor(null).fights, true);
     assert.equal(systemFor(undefined).describe().fights, true);
     assert.equal(systemFor(null).describe().family, 'dnd');
-    // CoC and GURPS have no system module yet (Tasks 3 and 4): no Fight button, as on main; nor PF2e, FitD or an
+    // CoC and GURPS have system modules but fights stay off until Task 7: no Fight button, as on main; nor PF2e, FitD or an
     // unknown system
     for (const [raw, id] of [['coc', 'coc-7e'], ['coc-7e', 'coc-7e'], ['coc-7e-regency', 'coc-7e-regency'],
       ['regency-cthulhu', 'coc-7e-regency'], ['gurps4e', 'gurps-4e'], ['gurps-4e', 'gurps-4e'], ['pf2e', 'pf2e'],
