@@ -9,6 +9,12 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.134] — 2026-11-22
+
+### Fixed
+
+- On the Connections panel, "From <Name>'s page" now sits on its own line in smaller italics under a tie written on the other note, so it no longer reads as part of the tie's sentence (#824). Publish tool 1.70.54.
+
 ## [1.12.133] — 2026-11-22
 
 ### Changed
