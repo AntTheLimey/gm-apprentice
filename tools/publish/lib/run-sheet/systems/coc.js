@@ -9,6 +9,9 @@ const { SYSTEM_NAMES } = require('../../shared-lists');
 const { dnd, describeAs } = require('./dnd');
 const { statSection, currentOf } = require('./stat-section');
 const { pairs, firstOf, leadingNumber, clean } = require('./pairs');
+const { extractSections } = require('../../processor');
+const { parseCoC } = require('../../templates/coc/parse');
+const { buildCoCLiveData } = require('../../templates/coc/live-data');
 
 const FOE_TYPES = new Set(['npc', 'creature']);
 
@@ -60,6 +63,40 @@ function readFoe({ notePath, index, text }) {
   return { stats: found.md, statsHeading: found.heading, nums, lacks: lacks(nameOf(notePath, fm), nums), hpStart: currentOf(found.md) };
 }
 
+// A PC's numbers come from the same reader the player site uses (parseCoC, then buildCoCLiveData), so the GM page
+// and the PC's own page never disagree. An empty Current column reads as the maximum. A sheet with no derived HP
+// falls back to the foe reader on its stat block, or on its Current Status line (current = max), with a quiet note.
+const NONE = { hpNow: null, hpMax: null, mpNow: null, mpMax: null, sanNow: null, sanMax: null, luck: null, dex: null };
+const NO_HP = 'no HP on the sheet: type it in the fight';
+const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+const firstLine = (e) => String((e && e.message) || e).split('\n')[0];
+
+function statusBlock(body) {
+  const m = /^#{1,6}[ \t]+Current Status[ \t]*$([\s\S]*?)(?=^#{1,6}[ \t]|(?![\s\S]))/im.exec(body);
+  return m ? m[1] : '';
+}
+
+function readPc({ body, fm }) {
+  try {
+    const text = String(body == null ? '' : body).replace(/\r\n?/g, '\n');
+    const model = parseCoC(fm || {}, extractSections(text), 'coc-7e');
+    const live = buildCoCLiveData(model, { campaignId: 'run-sheet', pcSlug: 'run-sheet' });
+    const d = (live && live.hp && num(live.hp.max) !== null) ? live : null;
+    if (d) {
+      const now = (o) => (num(o.cur) !== null ? o.cur : (num(o.max) !== null ? o.max : null));
+      return { numbers: { ...NONE, hpMax: d.hp.max, hpNow: now(d.hp), mpMax: num(d.mp.max), mpNow: now(d.mp),
+        sanMax: num(d.san.max), sanNow: now(d.san), luck: num(d.luck.cur), dex: num(d.dex) } };
+    }
+    const block = statSection(text);
+    const nums = readNumbers(`${block ? block.md : ''}\n${statusBlock(text)}`);
+    if (nums.hp === null) return { numbers: { ...NONE }, note: NO_HP };
+    return { numbers: { ...NONE, hpNow: nums.hp, hpMax: nums.hp, mpNow: nums.mp, mpMax: nums.mp, sanNow: nums.san, sanMax: nums.san,
+      luck: nums.luck, dex: nums.dex }, note: 'numbers from a one-line sheet (current = max)' };
+  } catch (e) {
+    return { numbers: { ...NONE }, note: `the sheet could not be read: ${firstLine(e)}` };
+  }
+}
+
 // Placeholders until later tasks fill them in: `panelBoxes`, `rowNumbers`, `vitals`, `words`, `statuses`,
 // `marks`, `prompts`, `pools`, `wounding`, `consequences`, `defences`, `manoeuvres`, `tiredAt`, `firearmBonus`
 // keep D&D's shape (CoC-safe empties where D&D words would show).
@@ -79,6 +116,6 @@ function describeCoc(id) {
 // The row's own fields: initiative is DEX.
 const foeRow = (n) => ({ init: n.dex, mp: n.mp, mpMax: n.mp, san: n.san, sanMax: n.san, dex: n.dex, armour: n.armour, from: n.from });
 
-const make = (id) => ({ ...dnd, id, fights: false, readFoe, foeRow, stockNoActions: undefined, describe: () => describeCoc(id) });
+const make = (id) => ({ ...dnd, id, fights: false, readFoe, readPc, foeRow, stockNoActions: undefined, describe: () => describeCoc(id) });
 
 module.exports = { coc: make('coc-7e'), cocRegency: make('coc-7e-regency'), readNumbers, keyOf, lacks };

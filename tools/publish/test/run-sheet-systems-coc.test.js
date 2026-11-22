@@ -154,3 +154,39 @@ describe('pairs is system-neutral', () => {
     assert.equal(keyOf('ST'), null);
   });
 });
+
+for (const crlf of [false, true]) {
+  describe(`CoC PC numbers from the site's readers${crlf ? ' (CRLF checkout)' : ''}`, () => {
+    const dir = copyFixture('run-sheet-coc', { crlf });
+    const readPc = (name, system = 'coc-7e') => {
+      const index = buildIndex(dir);
+      const note = `Characters/PCs/${name}.md`;
+      const r = index.read(note);
+      return systemFor(system).readPc({ notePath: note, index, fm: r.fm, body: r.body });
+    };
+    it('a Derived table gives current and maximum, Luck and DEX', () => {
+      assert.deepEqual(readPc('Iris Calder'), { numbers: { hpNow: 9, hpMax: 11, mpNow: 13, mpMax: 13, sanNow: 62, sanMax: 99, luck: 55, dex: 55 } });
+      assert.deepEqual(readPc('Iris Calder', 'coc-7e-regency').numbers.hpMax, 11);
+    });
+    it('a one-line sheet falls back to its line, current = max, with a quiet note', () => {
+      const r = readPc('Jonas Finch');
+      assert.deepEqual(r.numbers, { hpNow: 13, hpMax: 13, mpNow: 12, mpMax: 12, sanNow: 60, sanMax: 60, luck: null, dex: null });
+      assert.equal(r.note, 'numbers from a one-line sheet (current = max)');
+    });
+    it('a sheet with no numbers says to type HP in the fight', () => {
+      const r = readPc('Mabel Quill');
+      assert.equal(r.numbers.hpMax, null);
+      assert.equal(r.note, 'no HP on the sheet: type it in the fight');
+    });
+    it('an empty Current column reads as the maximum', () => {
+      const body = '## Stat Sheet\n\n### Derived\n\n| Attribute | Max | Current |\n|---|---|---|\n| HP | 12 | |\n| MP | 8 | |\n| Sanity | 70 | |\n';
+      const r = systemFor('coc-7e').readPc({ notePath: 'x.md', index: null, fm: { type: 'pc' }, body });
+      assert.deepEqual([r.numbers.hpNow, r.numbers.hpMax, r.numbers.mpNow, r.numbers.sanNow, r.numbers.sanMax], [12, 12, 8, 70, 70]);
+    });
+    it('a body that makes the reader throw gives a note, never a throw', () => {
+      const r = systemFor('coc-7e').readPc({ notePath: 'x.md', index: null, fm: null, body: { toString() { throw new Error('boom\nsecond'); } } });
+      assert.equal(r.numbers.hpMax, null);
+      assert.match(r.note, /could not be read: .*boom$/);
+    });
+  });
+}

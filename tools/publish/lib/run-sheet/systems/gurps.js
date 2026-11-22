@@ -10,6 +10,9 @@ const { dnd, describeAs } = require('./dnd');
 const { statSection } = require('./stat-section');
 const { pairs, firstOf, leadingNumber, clean } = require('./pairs');
 const { deriveGurps } = require('../web/gurps-math');
+const { extractSections } = require('../../processor');
+const { parseGurps } = require('../../templates/gurps/parse');
+const { buildVitals } = require('../../templates/gurps/live-data');
 
 const FOE_TYPES = new Set(['npc', 'creature']);
 
@@ -85,6 +88,27 @@ function readFoe({ notePath, index, text }) {
   };
 }
 
+// A PC's numbers come from the same reader the site uses (parseGurps, then buildVitals; the pattern of
+// flush/gurps-max.js), so the GM page and the PC's own page agree. Max is in Secondary Characteristics, current in
+// Current Status (`**FP:** 10/12`); a missing current reads as the maximum.
+const NONE = { hpNow: null, hpMax: null, fpNow: null, fpMax: null, speed: null, dx: null, ht: null };
+const NO_POOLS = 'no HP or FP on the sheet: type them in the fight';
+const firstLine = (e) => String((e && e.message) || e).split('\n')[0];
+const figure = (v) => { const n = parseFloat(String(v == null ? '' : v)); return Number.isFinite(n) ? n : null; };
+
+function readPc({ body, fm }) {
+  try {
+    const model = parseGurps(fm || {}, extractSections(String(body == null ? '' : body).replace(/\r\n?/g, '\n')));
+    const v = buildVitals(model);
+    if (!v) return { numbers: { ...NONE }, note: NO_POOLS };
+    const ht = ((model.attributes || {}).primary || {}).HT;
+    return { numbers: { hpNow: v.hp.cur, hpMax: v.hp.max, fpNow: v.fp.cur, fpMax: v.fp.max,
+      speed: figure(v.basicSpeed), dx: figure(v.dx), ht: figure(ht && ht.value) } };
+  } catch (e) {
+    return { numbers: { ...NONE }, note: `the sheet could not be read: ${firstLine(e)}` };
+  }
+}
+
 // Placeholders until later tasks fill them in: `panelBoxes`, `rowNumbers`, `vitals`, `words`, `statuses`, `marks`,
 // `prompts`, `pools`, `wounding`, `consequences`, `defences`, `manoeuvres`, `tiredAt`, `firearmBonus` keep D&D's
 // shape (GURPS-safe empties where D&D words would show).
@@ -104,6 +128,6 @@ function describeGurps(id) {
 // The row's own fields: initiative is Basic Speed.
 const foeRow = (n) => ({ init: n.speed, fp: n.fp, fpMax: n.fp, speed: n.speed, dx: n.dx, st: n.st, ht: n.ht, dodge: n.dodge, dr: n.dr, from: n.from });
 
-const gurps = { ...dnd, id: 'gurps-4e', fights: false, readFoe, foeRow, stockNoActions: undefined, describe: () => describeGurps('gurps-4e') };
+const gurps = { ...dnd, id: 'gurps-4e', fights: false, readFoe, readPc, foeRow, stockNoActions: undefined, describe: () => describeGurps('gurps-4e') };
 
 module.exports = { gurps, readNumbers, keyOf, lacks };

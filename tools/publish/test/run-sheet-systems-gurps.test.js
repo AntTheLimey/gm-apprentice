@@ -138,3 +138,36 @@ describe('the row\'s GURPS fields', () => {
     assert.deepEqual(systemFor('dnd-5e-2024').foeRow({ hp: 3 }), {});
   });
 });
+
+for (const crlf of [false, true]) {
+  describe(`GURPS PC numbers from the site's readers${crlf ? ' (CRLF checkout)' : ''}`, () => {
+    const dir = copyFixture('run-sheet-gurps', { crlf });
+    const readPc = (name) => {
+      const index = buildIndex(dir);
+      const note = `Characters/PCs/${name}.md`;
+      const r = index.read(note);
+      return systemFor('gurps-4e').readPc({ notePath: note, index, fm: r.fm, body: r.body });
+    };
+    it('each fixture PC reads HP, FP, Basic Speed, DX and HT', () => {
+      assert.deepEqual(readPc('Corin Ash'), { numbers: { hpNow: 10, hpMax: 10, fpNow: 11, fpMax: 11, speed: 5.25, dx: 10, ht: 11 } });
+      assert.deepEqual(readPc('Lysa Venn').numbers, { hpNow: 9, hpMax: 9, fpNow: 10, fpMax: 10, speed: 5, dx: 10, ht: 10 });
+      assert.deepEqual(readPc('Orrin Tate').numbers, { hpNow: 12, hpMax: 12, fpNow: 11, fpMax: 11, speed: 5.5, dx: 11, ht: 11 });
+      assert.deepEqual(readPc('Sela Drake').numbers, { hpNow: 12, hpMax: 12, fpNow: 10, fpMax: 10, speed: 5.25, dx: 11, ht: 10 });
+    });
+    it('max from Secondary Characteristics, current from Current Status (the Dead End shape)', () => {
+      const body = '## Current Status\n\n**HP:** 9/11\n**FP:** 10/12\n\n## Stat Sheet\n\n### Primary Attributes\n\n| Attribute | Score |\n|---|---|\n| ST | 11 |\n| DX | 12 |\n| IQ | 10 |\n| HT | 12 |\n\n### Secondary Characteristics\n\n| Characteristic | Value |\n|---|---|\n| HP | 11 |\n| FP | 12 |\n| Basic Speed | 6.00 |\n';
+      const r = systemFor('gurps-4e').readPc({ notePath: 'x.md', index: null, fm: { type: 'pc' }, body });
+      assert.deepEqual(r.numbers, { hpNow: 9, hpMax: 11, fpNow: 10, fpMax: 12, speed: 6, dx: 12, ht: 12 });
+    });
+    it('a sheet with no attributes says to type HP and FP in the fight', () => {
+      const r = systemFor('gurps-4e').readPc({ notePath: 'x.md', index: null, fm: { type: 'pc' }, body: 'Nothing here.\n' });
+      assert.equal(r.numbers.hpMax, null);
+      assert.equal(r.note, 'no HP or FP on the sheet: type them in the fight');
+    });
+    it('a body that makes the reader throw gives a note, never a throw', () => {
+      const r = systemFor('gurps-4e').readPc({ notePath: 'x.md', index: null, fm: null, body: { toString() { throw new Error('boom\nsecond'); } } });
+      assert.equal(r.numbers.hpMax, null);
+      assert.match(r.note, /could not be read: .*boom$/);
+    });
+  });
+}
