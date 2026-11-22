@@ -21,6 +21,7 @@
 // stream is its own client set: it carries `hello` ({}) and `view`, never a GM event. Every players' error
 // answer is a fixed body; the detail goes to the terminal only (plan 5b decisions 10 and 23, Review M4).
 
+const { spawnSync } = require('node:child_process');
 const crypto = require('node:crypto');
 const nodeFs = require('node:fs');
 const http = require('node:http');
@@ -57,7 +58,7 @@ const NO_PAGE = '.run-sheet-no-404-page';
 
 const within = (child, parent) => child === parent || child.startsWith(parent.endsWith(path.sep) ? parent : parent + path.sep);
 
-function createTableServer({ vaultPath, session, party = [], stateFile, deps = {} } = {}) {
+function createTableServer({ vaultPath, session, party = [], stateFile, fileLog = null, deps = {} } = {}) {
   const fs = deps.fs || nodeFs;
   const now = deps.now || (() => new Date());
   const log = deps.log || ((line) => console.error(line));
@@ -159,14 +160,42 @@ function createTableServer({ vaultPath, session, party = [], stateFile, deps = {
     return { model, idx };
   };
 
+  // The Table Log is filed on the first thing that happens at the table (#855): the first write with something in it.
+  // A look (reading the Plan, opening beats) leaves no note, so it never puts the session in play. `fileLog` is the
+  // `gma vault-write ... table-log-new` command `gma table` hands over, so the note's shape stays the vault scripts'.
+  // Without it (the sheet started some other way) there is no Table Log: the state is kept, nothing else written.
+  const runFileLog = deps.runFileLog || ((cmd) => {
+    const r = spawnSync(cmd[0], cmd.slice(1), { encoding: 'utf8', windowsHide: true, timeout: 60000 });
+    if (r.error) return { ok: false, why: r.error.message };
+    const said = `${r.stderr || ''}\n${r.stdout || ''}`.split('\n').map((l) => l.trim()).find(Boolean);
+    return r.status === 0 ? { ok: true } : { ok: false, why: said || `exit ${r.status}` };
+  });
+  function fileTableLog(model, state, idx) {
+    if (!fileLog || isEmptySkeleton(tableLogBody(model, state, { linkFor: linkFor(idx) }))) return null;
+    const done = runFileLog(fileLog);
+    lastIndex = index(vaultPath, { deps: vaultDeps });
+    const rel = logOf(lastIndex);
+    // A command that wrote the note and then failed (a timeout, an exit after the write) has still filed it: the log
+    // found is the log, or every retry would be refused with "already has a Table Log".
+    if (!done.ok && !rel) throw new Error(`filing it failed: ${done.why}`);
+    if (!rel) throw new Error('it was filed, but the session does not link it');
+    log(`run sheet: filed the Table Log, ${rel}: the session is in play.`);
+    broadcast('record-filed', { path: rel });
+    return rel;
+  }
+
   // The Table Log, brought up to date from the state just written.
   function writeRecord(state) {
     if (closed) return;
     try {
-      const idx = indexNow();
-      const rel = logOf(idx);
-      if (!rel) return; // no Table Log yet (plan decision 2): the state is kept, nothing else written
+      let idx = indexNow();
+      let rel = logOf(idx);
       const model = lastModel || loadModel().model;
+      if (!rel) {
+        rel = fileTableLog(model, state, idx);
+        if (!rel) return; // nothing to write yet, or no way to file one: the state is kept
+        idx = indexNow();
+      }
       const logFile = path.join(vaultRoot, ...rel.split('/'));
       const text = fs.readFileSync(logFile, 'utf8');
       const body = tableLogBody(model, state, { linkFor: linkFor(idx) });
@@ -230,7 +259,8 @@ function createTableServer({ vaultPath, session, party = [], stateFile, deps = {
   function reconcile() {
     const idx = indexNow();
     const rel = logOf(idx);
-    if (!rel) return;
+    // No log yet: a start after a filing that failed, with play already in the state, files it now (#855).
+    if (!rel) { if (fileLog) writeRecord(store.get().state); return; }
     const { model } = loadModel();
     const state = store.get().state;
     const text = fs.readFileSync(path.join(vaultRoot, ...rel.split('/')), 'utf8');
@@ -375,7 +405,7 @@ function createTableServer({ vaultPath, session, party = [], stateFile, deps = {
           return;
         }
         refreshPlayers();
-        json(res, 200, { model: present(model, { index: idx }), session: sessionInfo(), stateId, tableLog: logOf(idx), serverId, notices: [...notices, ...statusNotices()] });
+        json(res, 200, { model: present(model, { index: idx }), session: sessionInfo(), stateId, tableLog: logOf(idx), tableLogOnFirst: !!fileLog, serverId, notices: [...notices, ...statusNotices()] });
       },
     },
     {

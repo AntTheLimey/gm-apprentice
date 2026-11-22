@@ -104,8 +104,8 @@ class PlayNotesNewTests(unittest.TestCase):
         code, out = self.new("--write")
         self.assertEqual(code, 0, out)
         text = self.read(INDEX)
+        # The status stays prepped: a record shows play, only wrap-up marks it played (#855).
         want = (PREPPED.replace("play_date: null", 'play_date: "2026-10-18"')
-                .replace("status: prepped", "status: played")
                 .replace("  play_notes: null", '  play_notes: '
                          '"[[Session 13 - The Long Way Round - Play Notes]]"')
                 .replace("  wrap_up: null\n", "  wrap_up: null\n  export: "
@@ -166,10 +166,11 @@ class PlayNotesNewTests(unittest.TestCase):
         self.assertEqual(code, 1, out)
         self.assertIn("--play-date", out)
 
-    def test_status_rises_to_played_and_never_falls(self):
+    def test_status_is_never_changed(self):
+        # #855: filing Play Notes never raises or lowers the status.
         code, out = self.new()
-        self.assertIn("status prepped -> played", out)
-        for later in ("wrap-up", "reviewed"):
+        self.assertNotIn("-> played", out)
+        for later in ("prepped", "wrap-up", "reviewed"):
             (self.vault / INDEX).write_text(
                 PREPPED.replace("status: prepped", f"status: {later}"),
                 encoding="utf-8")

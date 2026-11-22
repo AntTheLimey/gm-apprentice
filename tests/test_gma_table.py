@@ -1,13 +1,18 @@
-"""gma table: pick, file the Table Log, pass the party, serve.
+"""gma table: pick, pass the party and the Table Log's filing command, serve.
 
-The tool, the filing and the roster are stubbed; the order and the
-arguments are what is pinned (Review M5: a refused pick files nothing).
+The tool and the roster are stubbed; the order and the arguments are what
+is pinned (Review M5: a refused pick files nothing). Nothing is filed on
+open (#855): the run sheet runs the command it is handed on the first thing
+that happens at the table. One test runs that command for real.
 """
 
 import contextlib
 import io
 import json
+import os
+import shutil
 import subprocess
+import tempfile
 import sys
 import unittest
 from pathlib import Path
@@ -78,30 +83,36 @@ class TableTests(unittest.TestCase):
     def kinds(self):
         return [k for k, _ in self.calls]
 
-    def test_table_picks_files_a_missing_table_log_passes_the_party(self):
+    def file_log(self, serve):
+        return json.loads(serve[serve.index("--file-log") + 1])
+
+    def test_table_picks_passes_the_party_and_the_filing_command_and_files_nothing(self):
         code, out, _ = self.run_gma(["table", "V", "--port", "4400", "--no-open"])
         self.assertEqual(code, 0)
-        self.assertEqual(self.kinds(), ["pick", "file", "serve"])
+        self.assertEqual(self.kinds(), ["pick", "serve"], "nothing is filed on open (#855)")
         self.assertEqual(self.calls[0][1], [
             "node", str(TOOL), "table", "V", "--pick", "--json", "--port", "4400"])
+        cmd = gma._table_log_command("V", INDEX)
         self.assertEqual(self.calls[1][1], [
-            "V", "table-log-new", "--session", INDEX, "--created-by", "run-sheet", "--write"])
-        self.assertEqual(self.calls[2][1], [
             "table", "V", "--session", INDEX,
             "--party", json.dumps(["PCs/Ana.md", "PCs/Bo Lee.md"]),
-            "--port", "4400", "--no-open"])
+            "--port", "4400", "--file-log", json.dumps(cmd), "--no-open"])
+        self.assertEqual(cmd[2:], ["vault-write", os.path.abspath("V"), "table-log-new",
+                                   "--session", INDEX, "--created-by", "run-sheet", "--write"])
+        self.assertNotIn("Filed", out)
+        self.assertNotIn("played", out)
 
     def test_a_session_asked_for_goes_to_the_pick_only(self):
         self.run_gma(["table", "V", "--session", "Session 04"])
         self.assertEqual(self.calls[0][1][-2:], ["--session", "Session 04"])
-        self.assertEqual(self.calls[2][1][2:4], ["--session", INDEX])
+        self.assertEqual(self.calls[1][1][2:4], ["--session", INDEX])
 
-    def test_table_with_a_table_log_files_nothing(self):
+    def test_table_with_a_table_log_passes_no_filing_command(self):
         self.pick = _done({**PICK_OK, "tableLog": "Chapter 1/Session 04 - Table Log.md"})
         code, out, _ = self.run_gma(["table", "V"])
         self.assertEqual(code, 0)
         self.assertEqual(self.kinds(), ["pick", "serve"])
-        self.assertNotIn("Filed", out)
+        self.assertNotIn("--file-log", self.calls[1][1])
 
     def test_a_busy_port_from_the_pick_files_nothing(self):
         busy = "Port 4322 is busy: something else holds it. Stop it, or start this with --port <another>."
@@ -110,11 +121,6 @@ class TableTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertEqual(self.kinds(), ["pick"])
         self.assertIn("gma table: " + busy, err)
-
-    def test_filing_prints_the_one_played_line(self):
-        _, out, _ = self.run_gma(["table", "V"])
-        self.assertEqual(out.count("Filed the Table Log: Session 4 now counts as played.\n"), 1)
-        self.assertEqual(out.count("Filed"), 1)
 
     def test_a_refused_pick_prints_the_tools_words_and_exits_1(self):
         words = "Session 3 is wrapped up; its record is the Wrap-Up."
@@ -131,28 +137,10 @@ class TableTests(unittest.TestCase):
         self.assertEqual(self.kinds(), ["pick"])
         self.assertIn("boom", err)
 
-    def test_a_failed_filing_still_serves(self):
-        self.file_code = 1
-        code, out, err = self.run_gma(["table", "V"])
-        self.assertEqual(code, 0)
-        self.assertEqual(self.kinds(), ["pick", "file", "serve"])
-        self.assertIn("gma table: could not file the Table Log; the sheet runs without one", err)
-        self.assertNotIn("Filed", out)
-
-    def test_a_failed_filing_prints_its_reason(self):
-        # PR review L4: the reason was swallowed
-        self.file_code = 1
-        self.file_says = "\nvault-write: the session index has no documents block\nmore detail\n"
-        code, out, err = self.run_gma(["table", "V"])
-        self.assertEqual(code, 0)
-        self.assertIn("gma table: could not file the Table Log (vault-write: the session "
-                      "index has no documents block); the sheet runs without one", err)
-        self.assertNotIn("more detail", err + out)
-
     def test_publish_table_routes_to_table(self):
         self.run_gma(["publish", "table", "V", "--no-open"])
-        self.assertEqual(self.kinds(), ["pick", "file", "serve"])
-        self.assertEqual(self.calls[2][1][-1], "--no-open")
+        self.assertEqual(self.kinds(), ["pick", "serve"])
+        self.assertEqual(self.calls[1][1][-1], "--no-open")
 
     def test_no_tool_exits_1(self):
         vaultlib.PUBLISH_TOOL = None
@@ -165,23 +153,23 @@ class TableTests(unittest.TestCase):
         vault = "C:\\Users\\Ann Lee\\My Vault"
         self.run_gma(["table", vault])
         self.assertEqual(self.calls[0][1][3], vault)
-        self.assertEqual(self.calls[1][1][0], vault)
-        serve = self.calls[2][1]
+        serve = self.calls[1][1]
         self.assertEqual(serve[1], vault)
+        self.assertIn(os.path.abspath(vault), self.file_log(serve))
         self.assertIn("PCs/Bo Lee.md", json.loads(serve[serve.index("--party") + 1]))
 
     def test_a_pc_note_named_like_json_passes_as_a_path(self):
         rows = ["PC\t[Guest] Mira.md\tMira; aliases: none; asOfSession: 3; player: C; status: active"]
         with mock.patch.object(vault_check, "list_active_pcs", lambda v, everyone=False: rows):
             self.run_gma(["table", "V"])
-        serve = self.calls[2][1]
+        serve = self.calls[1][1]
         self.assertEqual(serve.count("--party"), 1)
         self.assertEqual(json.loads(serve[serve.index("--party") + 1]), ["[Guest] Mira.md"])
 
     def test_no_party_serves_with_none(self):
         with mock.patch.object(vault_check, "list_active_pcs", lambda v, everyone=False: []):
             self.run_gma(["table", "V"])
-        self.assertNotIn("--party", self.calls[2][1])
+        self.assertNotIn("--party", self.calls[1][1])
 
     def test_stdout_is_flushed_before_serving(self):
         # posix replaces the process: buffered lines would be lost.
@@ -213,3 +201,26 @@ class TableTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TableLogCommandTests(unittest.TestCase):
+    """The command the run sheet is handed, run for real: it files the Table
+    Log beside the index and leaves the status alone (#855)."""
+
+    def test_the_command_files_the_log_and_keeps_the_status(self):
+        root = Path(tempfile.mkdtemp(prefix="gma-table-log-"))
+        self.addCleanup(shutil.rmtree, root, True)
+        index = "Chapters/Chapter 1/Sessions/Session 04 - Long Night.md"
+        (root / index).parent.mkdir(parents=True)
+        (root / index).write_text(
+            '---\ntype: session\nsession_number: 4\nstatus: prepped\n'
+            'chapter: "[[Chapter 1]]"\n---\n\n# Session 04 - Long Night\n',
+            encoding="utf-8")
+        done = subprocess.run(gma._table_log_command(str(root), index),
+                              capture_output=True, text=True, encoding="utf-8")
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        text = (root / index).read_text(encoding="utf-8")
+        self.assertIn("status: prepped\n", text)
+        self.assertIn('table_log: "[[Session 04 - Long Night - Table Log]]"', text)
+        log = root / "Chapters/Chapter 1/Sessions/Session 04 - Long Night - Table Log.md"
+        self.assertIn("type: session-table-log", log.read_text(encoding="utf-8"))

@@ -465,9 +465,19 @@ def _table_pick(tool: Path, vault: str, flags: list[str]) -> dict[str, object] |
     return None
 
 
+def _table_log_command(vault: str, index: str) -> list[str]:
+    """The command that files a session's Table Log. The run sheet runs it on
+    the first thing that happens at the table, not on open (#855): a look
+    before game night leaves nothing and never puts the session in play."""
+    return [sys.executable, str(Path(__file__).resolve()), "vault-write",
+            os.path.abspath(vault), "table-log-new", "--session", index,
+            "--created-by", "run-sheet", "--write"]
+
+
 def _table(args: list[str]) -> int:
-    """The run sheet: the tool picks the session and checks the port, then a
-    missing Table Log is filed, then the tool serves with the party."""
+    """The run sheet: the tool picks the session and checks the port, then
+    serves with the party, and with the command that files a missing Table
+    Log on the first thing that happens at the table."""
     opts = _table_parser().parse_args(args)
     tool = vaultlib.PUBLISH_TOOL
     if tool is None:
@@ -478,22 +488,8 @@ def _table(args: list[str]) -> int:
     picked = _table_pick(tool, opts.vault, [*asked, *port])
     if picked is None:
         return 1
-    index, label = str(picked["index"]), str(picked["label"])
-    if not picked.get("tableLog"):
-        import vault_write
-        said_out, said_err = io.StringIO(), io.StringIO()
-        with contextlib.redirect_stdout(said_out), \
-                contextlib.redirect_stderr(said_err):
-            filed = vault_write.main([opts.vault, "table-log-new", "--session",
-                                      index, "--created-by", "run-sheet",
-                                      "--write"])
-        if filed == 0:
-            print(f"Filed the Table Log: {label} now counts as played.")
-        else:
-            why = _first_line(said_err.getvalue()) or _first_line(said_out.getvalue())
-            print("gma table: could not file the Table Log"
-                  + (f" ({why})" if why else "")
-                  + "; the sheet runs without one", file=sys.stderr)
+    index = str(picked["index"])
+    file_log = _table_log_command(opts.vault, index)
     import vault_check
     party = [row.split("\t")[1] for row in
              vault_check.list_active_pcs(Path(opts.vault))]
@@ -502,6 +498,7 @@ def _table(args: list[str]) -> int:
     return _run_tool(tool, [
         "table", opts.vault, "--session", index,
         *(["--party", json.dumps(party)] if party else []), *port,
+        *(["--file-log", json.dumps(file_log)] if not picked.get("tableLog") else []),
         *(["--no-open"] if opts.no_open else [])])
 
 

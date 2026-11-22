@@ -540,14 +540,16 @@ and prints the addresses to open.
   --help, -h         Show this help
 `,
   table: `
-gm-apprentice-publish table <vault> [--session <name>] [--port <n>] [--party <pc>]... [--no-open]
+gm-apprentice-publish table <vault> [--session <name>] [--port <n>] [--party <pc>]... [--file-log <json>] [--no-open]
 gm-apprentice-publish table <vault> --pick [--json] [--session <name>] [--port <n>]
 
 Runs tonight's session from the run sheet: a live page on this computer only
 (127.0.0.1), with the session's Plan, a record of play kept in
 _meta/table/<session>.json, and the Table Log written as play happens. It runs
-until you stop it (Ctrl+C), which saves the state first. It never files a Table
-Log note: \`gma table\` does that before it starts the sheet.
+until you stop it (Ctrl+C), which saves the state first. A session with no Table
+Log note gets one on the first thing that happens at the table, through the
+command --file-log names (\`gma table\` passes it); opening the sheet for a look
+files nothing. Without --file-log no Table Log note is filed or written.
 
 With the site's live stats or inbox deployed it flushes the PCs' live sheets
 first (stopped after 20 s); a flush that fails does not stop the sheet.
@@ -559,6 +561,9 @@ first (stopped after 20 s); a flush that fails does not stop the sheet.
                      that names what holds it
   --party <pc>       A PC note's vault path; repeat it for each PC. A JSON array
                      of paths, or a .json file holding one, also works
+  --file-log <json>  The command that files the session's Table Log, as a JSON
+                     array of strings; run once, on the first write with
+                     something in it
   --no-open          Do not open the browser
   --pick             Choose the session and check the port, then stop: nothing is
                      served or written. With --json prints
@@ -1048,7 +1053,7 @@ if (command === 'table') {
   const parsed = parseSubcommandArgs(
     args.slice(2),
     { '--no-open': 'noOpen', '--pick': 'pick', '--json': 'json' },
-    { '--session': 'session', '--port': 'port' },
+    { '--session': 'session', '--port': 'port', '--file-log': 'fileLog' },
     { '--party': 'party' },
   );
   if (parsed.error) {
@@ -1063,6 +1068,15 @@ if (command === 'table') {
   const given = parseParty(parsed.flags.party);
   const portText = parsed.flags.port;
   const port = portText === undefined ? undefined : (/^\d{1,5}$/.test(portText) ? Number(portText) : NaN);
+  // --file-log: the command that files tonight's Table Log, as a JSON array (gma table hands it over, #855).
+  let fileLog = null;
+  if (parsed.flags.fileLog !== undefined) {
+    try { fileLog = JSON.parse(parsed.flags.fileLog); } catch { fileLog = undefined; }
+    if (!Array.isArray(fileLog) || !fileLog.length || fileLog.some((x) => typeof x !== 'string')) {
+      console.error('Error: --file-log needs a JSON array of strings: the command that files the Table Log');
+      process.exit(1);
+    }
+  }
   if (given.error || Number.isNaN(port) || port > 65535) {
     console.error(`Error: ${given.error || '--port needs a whole number from 0 to 65535'}`);
     process.exit(1);
@@ -1076,6 +1090,7 @@ if (command === 'table') {
     party: given.party,
     pick: !!parsed.flags.pick,
     json: !!parsed.flags.json,
+    fileLog,
   }, { exit: exitAfterFlush }).then((r) => { if (typeof r === 'number') exitAfterFlush(r); }).catch(failAfterFlush);
   return;
 }

@@ -223,7 +223,7 @@ function fetchModel(port) {
 
 // ---- the command ----
 
-async function runTable({ vault, session, port = DEFAULT_PORT, open = true, party = [], pick = false, json = false } = {}, deps = {}) {
+async function runTable({ vault, session, port = DEFAULT_PORT, open = true, party = [], pick = false, json = false, fileLog = null } = {}, deps = {}) {
   const out = deps.out || ((l) => console.log(l));
   const err = deps.err || ((l) => console.error(l));
   const refuse = (message) => {
@@ -272,14 +272,17 @@ async function runTable({ vault, session, port = DEFAULT_PORT, open = true, part
     if (!res.ok) out(res.why === 'timeout' ? `Flush took over 20 s and was stopped: ${TAIL}` : `Flush failed (${res.why}): ${TAIL}`);
   }
 
-  if (!chosen.tableLog) out('No Table Log note yet: start it with `gma table` to have the record written.');
+  if (!chosen.tableLog) {
+    out(fileLog ? 'No Table Log yet: it is filed on the first thing that happens at the table, so a look leaves nothing.'
+      : 'No Table Log note yet: start it with `gma table` to have the record written.');
+  }
 
   // Asked again: another start may have taken the session while this one flushed.
   const late = await lockHolder(stateFile, { hello });
   if (late) return refuse(lockedMessage(chosen.label, late));
 
   let app;
-  try { app = (deps.createTableServer || createTableServer)({ vaultPath, session: chosen, party, deps: deps.server }); } catch (e) {
+  try { app = (deps.createTableServer || createTableServer)({ vaultPath, session: chosen, party, fileLog, deps: deps.server }); } catch (e) {
     if (e.code === 'LOCKED') return refuse(lockedMessage(chosen.label, e));
     if (e.code === 'IN_CLOUD') return refuse(inCloudMessage(chosen.label, vaultPath, e.file));
     throw e;

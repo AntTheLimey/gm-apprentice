@@ -3953,10 +3953,6 @@ def play_notes_naming(batch: Batch, stem: str,
     return sorted(out)
 
 
-# A session index's status before play: play-notes-new raises it to played.
-BEFORE_PLAY = frozenset({"", "planned", "prepped"})
-
-
 def cmd_resolve(batch: Batch, args: argparse.Namespace, _text: str) -> None:
     export = read_export(args.export, batch.vault)
     resolve_export(batch, export_entries(export), export)
@@ -4024,10 +4020,11 @@ def file_record(batch: Batch, index: str, key: str, play_date: str | None,
                 export_path: str | None = None, export: str = "",
                 created_by: str = "manual") -> str:
     """File one play record beside an index (already filed, or created
-    earlier in this batch): the note, and on the index `documents.<key>`,
-    play_date (when given) and status played (from planned or prepped
-    only). The other records and the Plan link stay as they are. Returns
-    the new note's path."""
+    earlier in this batch): the note, and on the index `documents.<key>`
+    and play_date (when given). The status is left alone: a record shows
+    the session in play, and only wrap-up marks it played (#855). The other
+    records and the Plan link stay as they are. Returns the new note's
+    path."""
     label, suffix, _rtype = PLAY_RECORDS[key]
     text = batch.read(index)
     fm = vl.extract_frontmatter(text) or {}
@@ -4098,18 +4095,8 @@ def file_record(batch: Batch, index: str, key: str, play_date: str | None,
         vl.set_key(fm_lines, "play_date", f'"{play_date}"', eol)
         changes.append(f"play_date {old_date} -> {play_date}"
                        if old_date else f"play_date {play_date}")
-    status = (raw_value(text, "status") or "").strip("\"'").casefold()
-    if status in BEFORE_PLAY:
-        at = next((i for i, ln in enumerate(fm_lines)
-                   if ln.startswith("status:")), None)
-        if at is None:
-            fm_lines.append(f"status: played{eol}")
-        else:
-            # The value alone: a trailing comment stays.
-            fm_lines[at] = re.sub(
-                r"""^status:[ \t]*("[^"]*"|'[^']*'|[^\s#]*)""",
-                "status: played", fm_lines[at])
-        changes.append(f"status {status or '(none)'} -> played")
+    # The status is left alone (#855): a record shows the session in play;
+    # only wrap-up marks it played.
     batch.put(index, "".join([lines[0], *fm_lines, *lines[end:]]))
     if key == "export":
         batch.row("WOULD-CREATE", rec_rel, "",
@@ -5691,8 +5678,8 @@ def build_parser() -> argparse.ArgumentParser:
         "play-notes-new", help="Play Notes beside a session index prep "
         "already filed", formatter_class=raw, description=(
             "Files <index> - Play Notes beside the index and sets its\n"
-            "documents.play_notes, play_date (with --play-date) and a\n"
-            "planned or prepped status to played; the Plan link stays.\n"
+            "documents.play_notes and play_date (with --play-date); the\n"
+            "status and the Plan link stay (only wrap-up marks it played).\n"
             "Refused when Play Notes anywhere name the session. --export\n"
             "works as in session-new; export-new files an export alone."))
     pn.add_argument("--session", required=True,
@@ -5706,8 +5693,8 @@ def build_parser() -> argparse.ArgumentParser:
         "export-new", help="a table-assistant export beside a session "
         "index, as its own Export note", formatter_class=raw, description=(
             "Files <index> - Export beside the index, the export whole and\n"
-            "unedited, and sets its documents.export, play_date (with\n"
-            "--play-date) and a planned or prepped status to played.\n"
+            "unedited, and sets its documents.export and play_date (with\n"
+            "--play-date); the status stays (only wrap-up marks it played).\n"
             "Play Notes there or not, it leaves them alone, so it runs\n"
             "after session-play as well as before. Refused when an Export\n"
             "already names the session. Resolves the export's names as\n"
@@ -5724,8 +5711,8 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=raw, description=(
             "Files <index> - Table Log beside the index with its sections\n"
             "empty (the vitals table's header row only), and sets its\n"
-            "documents.table_log, play_date (with\n"
-            "--play-date) and a planned or prepped status to played. The\n"
+            "documents.table_log and play_date (with --play-date); the\n"
+            "status stays (only wrap-up marks it played). The\n"
             "other play records are left alone. Refused when a Table Log\n"
             "already names the session."))
     tn.add_argument("--session", required=True,

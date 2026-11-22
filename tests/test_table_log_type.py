@@ -95,12 +95,29 @@ class ChainTests(unittest.TestCase):
             session_vault(d, documents, with_log)
             return vc.check_sessions(Path(d))
 
-    def test_status_played_from_table_log_alone(self):
+    def test_a_table_log_alone_puts_the_session_in_play_not_played(self):
+        # #855: only wrap-up marks a session played. A played the GM set is
+        # still accepted, with no warning.
         rows = self.rows([("plan", "Session 01 - Arrival - Plan"),
                           ("table_log", "Session 01 - Arrival - Table Log")])
         summary = [r for r in rows if "\tsession 1:" in r]
         self.assertEqual(len(summary), 1, rows)
-        self.assertIn("derived=played", summary[0])
+        self.assertIn("derived=prepped (in play)", summary[0])
+        self.assertFalse([r for r in rows if r.startswith("WARNING")
+                          and "status" in r], rows)
+
+    def test_an_ended_session_with_no_wrap_up_is_never_told_to_go_back_to_prep(self):
+        with tempfile.TemporaryDirectory() as d:
+            session_vault(d, [("plan", "Session 01 - Arrival - Plan"),
+                              ("table_log", "Session 01 - Arrival - Table Log")])
+            idx = Path(d) / INDEX
+            idx.write_text(idx.read_text(encoding="utf-8").replace(
+                "status: played", "status: wrap-up"), encoding="utf-8")
+            rows = vc.check_sessions(Path(d))
+        warned = [r for r in rows if r.startswith("WARNING") and "status" in r]
+        self.assertEqual(len(warned), 1, rows)
+        self.assertIn("no Wrap-Up is linked or found", warned[0])
+        self.assertNotIn("--set status=", warned[0])
 
     def test_chain_info_shows_table_log_only_when_present(self):
         with_log = self.rows([("plan", "Session 01 - Arrival - Plan"),

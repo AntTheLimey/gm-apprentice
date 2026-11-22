@@ -519,6 +519,112 @@ describe('run sheet server', () => {
     assert.deepStrictEqual(fs.readdirSync(tableDir(vault)).sort(), [`${run.stateId}.json`, `${run.stateId}.lock`], 'the state and the lock while it runs');
   });
 
+  describe('the Table Log is filed on the first thing that happens at the table (#855)', () => {
+    // Stands in for `gma vault-write <vault> table-log-new`: the empty skeleton beside the index, and the link.
+    const filer = (vault, run, { failFirst = false } = {}) => {
+      const calls = [];
+      const runFileLog = (cmd) => {
+        calls.push(cmd);
+        if (failFirst && calls.length === 1) return { ok: false, why: 'the vault was busy' };
+        const idx = path.join(vault, run.session.index);
+        const stem = path.basename(run.session.index, '.md');
+        const rel = `${path.dirname(run.session.index)}/${stem} - Table Log.md`;
+        fs.writeFileSync(path.join(vault, rel), `---\ntype: session-table-log\nsession: "[[${stem}]]"\n---\n\n# ${stem} - Table Log\n\n## Log\n`);
+        fs.writeFileSync(idx, fs.readFileSync(idx, 'utf8').replace(/^type: session$/m, `type: session\ndocuments:\n  table_log: "[[${stem} - Table Log]]"`));
+        return { ok: true };
+      };
+      return { calls, runFileLog };
+    };
+    const startFiling = async (vault, opts) => {
+      const holder = {};
+      const run = await start(vault, 'Session 03 - Next', { deps: { runFileLog: (c) => holder.f.runFileLog(c) } });
+      holder.f = filer(vault, run, opts);
+      return { run, calls: holder.f.calls };
+    };
+    const startWith = async (vault, opts) => {
+      const picked = pickSession(listSessions(vault), 'Session 03 - Next', vault);
+      const holder = {};
+      const t = createTableServer({ vaultPath: vault, session: picked.session, fileLog: ['gma', 'vault-write', 'table-log-new'],
+        deps: { delayMs: 20, retryMs: [20], recordRetryMs: [20], runFileLog: (c) => holder.f.runFileLog(c) } });
+      const port = await listenLocal(t.server, 0);
+      const run = { ...t, port, session: picked.session, stateId: stateIdOf(picked.session) };
+      servers.push(run);
+      holder.f = filer(vault, run, opts);
+      return { run, calls: holder.f.calls };
+    };
+    const logOf = (vault, run) => path.join(vault, path.dirname(run.session.index), `${path.basename(run.session.index, '.md')} - Table Log.md`);
+
+    it('a look files nothing: no clicks, no Table Log', async () => {
+      const vault = copyOf();
+      const { run, calls } = await startWith(vault);
+      const m = (await req(run.port, 'GET', '/api/model')).json;
+      assert.strictEqual(m.tableLog, null);
+      assert.strictEqual(m.tableLogOnFirst, true, 'the page says the log comes on the first thing that happens');
+      const got = (await req(run.port, 'GET', '/api/state')).json;
+      await req(run.port, 'PUT', '/api/state', { body: { stateId: got.stateId, base: got.rev, state: got.state } });
+      await wait(150);
+      assert.deepStrictEqual(calls, []);
+      assert.ok(!fs.existsSync(logOf(vault, run)));
+    });
+
+    it('the first log line files it once, with the command gma table gave, and writes the line', async () => {
+      const vault = copyOf();
+      const { run, calls } = await startWith(vault);
+      await act(run, [{ type: 'jot', id: 'c1-1', text: 'The party camps.' }]);
+      await waitFor(() => fs.existsSync(logOf(vault, run)) && /The party camps\./.test(fs.readFileSync(logOf(vault, run), 'utf8')));
+      assert.deepStrictEqual(calls, [['gma', 'vault-write', 'table-log-new']]);
+      await act(run, [{ type: 'jot', id: 'c1-2', text: 'Dawn comes.' }]);
+      await waitFor(() => /Dawn comes\./.test(fs.readFileSync(logOf(vault, run), 'utf8')));
+      assert.strictEqual(calls.length, 1, 'filed once');
+    });
+
+    it('a filing that fails is said and tried again', async () => {
+      const vault = copyOf();
+      const { run, calls } = await startWith(vault, { failFirst: true });
+      await act(run, [{ type: 'jot', id: 'c1-1', text: 'The party camps.' }]);
+      await waitFor(() => fs.existsSync(logOf(vault, run)) && /The party camps\./.test(fs.readFileSync(logOf(vault, run), 'utf8')));
+      assert.strictEqual(calls.length, 2);
+    });
+
+    it('a command that wrote the note and then failed has still filed it: no refused retries', async () => {
+      const vault = copyOf();
+      const picked = pickSession(listSessions(vault), 'Session 03 - Next', vault);
+      const holder = {};
+      const t = createTableServer({ vaultPath: vault, session: picked.session, fileLog: ['gma'],
+        deps: { delayMs: 20, retryMs: [20], recordRetryMs: [20], runFileLog: (c) => { holder.f.runFileLog(c); return { ok: false, why: 'timed out' }; } } });
+      const port = await listenLocal(t.server, 0);
+      const run = { ...t, port, session: picked.session, stateId: stateIdOf(picked.session) };
+      servers.push(run);
+      holder.f = filer(vault, run);
+      await act(run, [{ type: 'jot', id: 'c1-1', text: 'The party camps.' }]);
+      await waitFor(() => fs.existsSync(logOf(vault, run)) && /The party camps\./.test(fs.readFileSync(logOf(vault, run), 'utf8')));
+      await wait(120);
+      assert.strictEqual(holder.f.calls.length, 1, 'run once, never again');
+    });
+
+    it('a start with play already in the state and no log files it at once', async () => {
+      const vault = copyOf();
+      const { run: first } = await startFiling(vault);
+      await act(first, [{ type: 'jot', id: 'c1-1', text: 'The party camps.' }]);
+      await waitFor(() => fs.existsSync(path.join(tableDir(vault), `${first.stateId}.json`)));
+      await first.close();
+      const { run, calls } = await startWith(vault);
+      await waitFor(() => fs.existsSync(logOf(vault, run)) && /The party camps\./.test(fs.readFileSync(logOf(vault, run), 'utf8')));
+      assert.strictEqual(calls.length, 1);
+    });
+
+    it('without --file-log nothing is filed, as before', async () => {
+      const vault = copyOf();
+      const { run, calls } = await startFiling(vault);
+      assert.strictEqual((await req(run.port, 'GET', '/api/model')).json.tableLogOnFirst, false);
+      await act(run, [{ type: 'jot', id: 'c1-1', text: 'The party camps.' }]);
+      await waitFor(() => fs.existsSync(path.join(tableDir(vault), `${run.stateId}.json`)));
+      await wait(100);
+      assert.deepStrictEqual(calls, []);
+      assert.ok(!fs.existsSync(logOf(vault, run)));
+    });
+  });
+
   it('a hand-made Table Log of another type is never overwritten', async () => {
     const vault = copyOf();
     const p = path.join(vault, LOG);

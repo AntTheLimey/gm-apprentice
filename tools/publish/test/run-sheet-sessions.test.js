@@ -179,6 +179,25 @@ describe('run sheet sessions', () => {
     assert.strictEqual(isPlayed(index, IDX.c1s3), false);
   });
 
+  it('played (#855): a record counts only with something in it; an empty Table Log a look filed does not', () => {
+    const dir = copy();
+    const f = path.join(dir, IDX.c1s3);
+    const stem = path.basename(IDX.c1s3, '.md');
+    const logRel = `${path.dirname(IDX.c1s3)}/${stem} - Table Log.md`;
+    const notesRel = `${path.dirname(IDX.c1s3)}/${stem} - Play Notes.md`;
+    const heads = ['Where everyone ended', 'Log', 'Vitals at the end'].map((h) => `## ${h}\n${h === 'Vitals at the end' ? '| Who | HP | Conditions |\n| --- | --- | --- |\n' : ''}`).join('\n');
+    const note = (type, body) => `---\ntype: ${type}\nsession: "[[${stem}]]"\n---\n\n# ${stem}\n\n${body}`;
+    fs.writeFileSync(f, fs.readFileSync(f, 'utf8').replace('status: planned', `status: planned\ndocuments:\n  table_log: "[[${stem} - Table Log]]"\n  play_notes: "[[${stem} - Play Notes]]"`));
+    fs.writeFileSync(path.join(dir, logRel), note('session-table-log', heads));
+    fs.writeFileSync(path.join(dir, notesRel), note('session-play-notes', ''));
+    assert.strictEqual(isPlayed(buildIndex(dir), IDX.c1s3), false, 'an empty log and empty notes are no play');
+    fs.writeFileSync(path.join(dir, notesRel), note('session-play-notes', 'Ada climbed the wall.\n'));
+    assert.strictEqual(isPlayed(buildIndex(dir), IDX.c1s3), true, 'written Play Notes are play');
+    fs.writeFileSync(path.join(dir, notesRel), note('session-play-notes', ''));
+    fs.writeFileSync(path.join(dir, logRel), note('session-table-log', heads.replace('## Log\n', '## Log\n- 20:14 the wall climbed\n')));
+    assert.strictEqual(isPlayed(buildIndex(dir), IDX.c1s3), true, 'a Table Log with a line is play');
+  });
+
   it('a table_log link that matches nothing warns', () => {
     const dir = copy();
     const f = path.join(dir, IDX.c1s3);
