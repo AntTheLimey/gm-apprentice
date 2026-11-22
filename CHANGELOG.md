@@ -9,6 +9,12 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.135] — 2026-11-22
+
+### Fixed
+
+- `gma image draw --redo` now redraws a picture you held with `place --hold`, instead of saying it "has not been drawn yet" (#835). The redrawn picture waits for a new keep-or-hold verdict; redoing a picture already kept says to plan it again.
+
 ## [1.12.134] — 2026-11-22
 
 ### Fixed

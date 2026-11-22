@@ -34,6 +34,10 @@ from image_jobs import (MAX_REF_BYTES, SIZE, Entry, Job, Stop,
 
 REDO_CHARS = 500
 FAILURES_IN_A_ROW = 3
+# A picture whose file sits in the job folder: drawn and waiting for a verdict,
+# or held by `place` (#835). Either can be redone; a redone one is drawn again
+# and waits for a new verdict.
+HAS_PICTURE = ("drawn", "held")
 SANDBOX = " If this AI runs in a sandbox, allow network access for gma image draw."
 NEEDS_THINKING = ("this model will not draw without thinking, and with it "
                   "this picture would pass the limit for one attempt")
@@ -300,7 +304,7 @@ class _Run:
             return
 
     def picture(self, e: Entry, pic: image_gemini.Picture, est: float | None) -> None:
-        redo = e.status == "drawn"
+        redo = e.status in HAS_PICTURE
         cents = self.count(e, pic.usage, est)
         if self.keep_picture(e, pic):
             e.status = "drawn"
@@ -328,7 +332,7 @@ class _Run:
         self.remember(e, f"the redraw failed ({reason}); the earlier picture is kept")
 
     def refused(self, e: Entry, refusal: image_gemini.Refused, est: float | None) -> None:
-        redo = e.status == "drawn"
+        redo = e.status in HAS_PICTURE
         cents = self.count(e, refusal.usage, est)
         why = f"the service declined: {self.clean(refusal.reason)}"
         self.streak = 0
@@ -347,7 +351,7 @@ class _Run:
 
     def service_error(self, e: Entry, err: image_gemini.ServiceError,
                       est: float | None) -> None:
-        redo = e.status == "drawn"
+        redo = e.status in HAS_PICTURE
         message = self.clean(err.message)
         self.result.ok = False
         if err.billed or err.maybe_billed:
@@ -411,7 +415,10 @@ def _check_redo(job: Job, redo: dict[int, str]) -> tuple[dict[int, str], list[in
         if e.status == "refused":
             raise Stop(f"Picture {n} was declined by the service and cannot "
                        "be redone: plan it again with a different description.")
-        if e.status != "drawn":
+        if e.status == "kept":
+            raise Stop(f"Picture {n} is already kept in the vault, so it cannot "
+                       "be redone: plan it again to replace it.")
+        if e.status not in HAS_PICTURE:
             raise Stop(f"Picture {n} has not been drawn yet, so it cannot be "
                        "redone. Draw it first.")
         what = what.strip().rstrip(".").strip()
@@ -536,7 +543,7 @@ class _FreeRun:
             self.say(e, f"not drawn, {why}")
 
     def got(self, e: Entry, pic: image_gemini.Picture, how: str) -> None:
-        redo = e.status == "drawn"
+        redo = e.status in HAS_PICTURE
         e.attempts += 1
         if _write_picture(e, pic):
             e.status = "drawn"
@@ -560,7 +567,7 @@ class _CodexRun(_FreeRun):
             self.result.lines.append(f"   {text}")
         prompt = e.prompt + (
             f"\n\nThe last attempt was wrong: {redo}. Correct it." if redo else "")
-        was_drawn = e.status == "drawn"
+        was_drawn = e.status in HAS_PICTURE
         try:
             pic = image_codex.draw(prompt, [str(r.path) for r in refs], e.shape,
                                    Path(e.pending).parent)
@@ -652,7 +659,7 @@ def hand_in(job: Job, pictures: dict[int, Path],
         e = by_n.get(n)
         if e is None:
             raise Stop(f"There is no picture {n} in job {job.id}.")
-        if e.status not in ("planned", "failed", "drawn"):
+        if e.status not in ("planned", "failed") + HAS_PICTURE:
             raise Stop(f"Picture {n} is {e.status}, so no picture is taken for it.")
         try:
             if path.stat().st_size > MAX_HANDED_IN:
