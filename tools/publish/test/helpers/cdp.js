@@ -61,6 +61,24 @@ function connect(child) {
 
 const sleep = (ms) => new Promise((r) => { setTimeout(r, ms); });
 
+// What the page received (#852): the last pointer, click, key and scroll events, each with its target and where
+// the page stood, kept on every page from its first script on. A wait that times out prints it beside the
+// helper's own last moves, so a lost input says whether it never arrived, landed elsewhere, or did nothing.
+const INPUT_LOG = `(() => {
+  const log = window.__inputLog = [];
+  const name = (e) => { if (!e || !e.tagName) return String(e && e.nodeName || e);
+    let s = e.tagName.toLowerCase() + (e.id ? '#' + e.id : '');
+    if (typeof e.className === 'string' && e.className.trim()) s += '.' + e.className.trim().split(/\\s+/).slice(0, 2).join('.');
+    for (const k of Object.keys(e.dataset || {}).slice(0, 2)) s += '[data-' + k + ']';
+    return s + (e.isConnected ? '' : '(gone)'); };
+  const sheet = () => { const e = document.getElementById('sheet'); return e ? Math.round(e.scrollTop) : null; };
+  const keep = (ev) => { log.push({ t: Math.round(performance.now()), type: ev.type, x: ev.clientX, y: ev.clientY, key: ev.key,
+    target: name(ev.target), scrollY: Math.round(scrollY), sheet: sheet() }); if (log.length > 40) log.shift(); };
+  for (const t of ['pointerdown', 'pointerup', 'click', 'keydown', 'wheel']) window.addEventListener(t, keep, true);
+  let last = 0;
+  window.addEventListener('scroll', (ev) => { const now = performance.now(); if (now - last > 100) { last = now; keep(ev); } }, true);
+})()`;
+
 // Runs `fn(page)` in a fresh headless Chrome of the given size and returns what it returns.
 // `page`: goto(url), reload(), evaluate(expr), waitFor(expr, ms), screenshot(file), sleep(ms), key(name, { shift }),
 // newTab(url) -> page, resize(width, height); real pointer and text: mouse(type, x, y, { buttons }), click(sel, { holdMs }), drag(x1, y1, x2, y2, steps),
@@ -91,6 +109,11 @@ async function withPage({ width = 1449, height = 762, chrome = findChrome() } = 
         await s('Page.enable');
         await s('Runtime.enable');
         await s('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+        await s('Page.addScriptToEvaluateOnNewDocument', { source: INPUT_LOG });
+        // The helper's own last moves, for a timed-out wait to print beside what the page received.
+        const t0Page = Date.now();
+        const moves = [];
+        const moved = (m) => { moves.push({ t: Date.now() - t0Page, ...m }); if (moves.length > 12) moves.shift(); };
         const evaluate = async (expression) => {
           const r = await s('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true });
           if (r.exceptionDetails) throw new Error(`in the page: ${(r.exceptionDetails.exception && r.exceptionDetails.exception.description) || r.exceptionDetails.text}`);
@@ -102,7 +125,11 @@ async function withPage({ width = 1449, height = 762, chrome = findChrome() } = 
             let v = null;
             try { v = await evaluate(expression); } catch { /* the page is loading */ }
             if (v) return v;
-            if (Date.now() - t0 > ms) throw new Error(`timed out after ${ms} ms waiting for: ${expression}`);
+            if (Date.now() - t0 > ms) {
+              let got = null;
+              try { got = await evaluate('window.__inputLog ? window.__inputLog.slice(-15) : null'); } catch { /* the page is gone */ }
+              throw new Error(`timed out after ${ms} ms waiting for: ${expression}\n  the helper's last moves (ms since the page opened): ${JSON.stringify(moves)}\n  what the page received (ms since it loaded): ${JSON.stringify(got)}`);
+            }
             await sleep(50);
           }
         };
@@ -130,6 +157,7 @@ async function withPage({ width = 1449, height = 762, chrome = findChrome() } = 
           // A real key press (keyDown, then keyUp) on whatever has focus: Enter, Tab, Escape, or one character.
           // `shift` holds Shift down, so `key('Tab', { shift: true })` goes backwards.
           async key(name, { shift = false } = {}) {
+            moved({ act: 'key', name });
             const named = { Enter: [13, '\r'], Tab: [9, ''], Escape: [27, ''], Backspace: [8, ''] };
             const one = String(name).length === 1;
             if (!named[name] && !one) throw new Error(`key: no such key ${name}`);
@@ -159,6 +187,12 @@ async function withPage({ width = 1449, height = 762, chrome = findChrome() } = 
           // A real click at (x, y): move, press, hold `holdMs` (a quick press can slip past code that a real
           // hand's press does not), release.
           async clickAt(x, y, { holdMs = 90 } = {}) {
+            let under = null;
+            try {
+              under = await evaluate(`(() => { const e = document.elementFromPoint(${x}, ${y}); if (!e) return null;
+                return e.tagName.toLowerCase() + (e.id ? '#' + e.id : '') + (typeof e.className === 'string' && e.className.trim() ? '.' + e.className.trim().split(/\\s+/)[0] : ''); })()`);
+            } catch { /* the page is loading */ }
+            moved({ act: 'click', x: Math.round(x), y: Math.round(y), under });
             await page.mouse('mouseMoved', x, y);
             await page.mouse('mousePressed', x, y, { buttons: 1 });
             await sleep(holdMs);
@@ -181,6 +215,7 @@ async function withPage({ width = 1449, height = 762, chrome = findChrome() } = 
           },
           // A real drag: press at the start, `steps` moves with the button held, release at the end.
           async drag(fromX, fromY, toX, toY, steps = 8) {
+            moved({ act: 'drag', from: [Math.round(fromX), Math.round(fromY)], to: [Math.round(toX), Math.round(toY)] });
             await page.mouse('mouseMoved', fromX, fromY);
             await page.mouse('mousePressed', fromX, fromY, { buttons: 1 });
             for (let i = 1; i <= steps; i++) {
@@ -191,6 +226,7 @@ async function withPage({ width = 1449, height = 762, chrome = findChrome() } = 
           },
           // A real wheel turn over (x, y); positive `dy` scrolls down.
           async wheel(x, y, dy) {
+            moved({ act: 'wheel', x, y, dy });
             await page.mouse('mouseMoved', x, y);
             await page.mouse('mouseWheel', x, y, { deltaY: dy });
           },

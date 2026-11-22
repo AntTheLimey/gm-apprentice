@@ -24,8 +24,11 @@ import tempfile
 # scoped_dir* and contentlinkingd: a Mac Chrome driven over --remote-debugging-pipe
 # writes these outside TMPDIR, and they can't be told from the GM's own running
 # Chrome's, so the tests must not delete them; on a CI runner they are harmless.
+# betaenrollmentagent and diagnosticextensionsd: macOS services on the runner make
+# these whenever they wake, tests or not (they failed macOS jobs whose tests all
+# passed, Nov 2026).
 ALLOWED = ("node-compile-cache", "pytest-of-*", "com.apple.*", "systemd-private-*",
-           "scoped_dir*", "contentlinkingd")
+           "scoped_dir*", "contentlinkingd", "betaenrollmentagent", "diagnosticextensionsd")
 
 
 def entries() -> set[str]:

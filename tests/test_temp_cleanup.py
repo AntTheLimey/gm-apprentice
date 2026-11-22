@@ -60,6 +60,8 @@ def test_the_guard_names_what_the_tests_left_and_fails(tmp_path):
     (temp / "node-compile-cache").mkdir()
     (temp / "pytest-of-runner").mkdir()
     (temp / "com.apple.mapssyncd").mkdir()
+    (temp / "betaenrollmentagent").mkdir()
+    (temp / "diagnosticextensionsd").mkdir()
     dirty = _guard("check", snapshot, temp)
     assert dirty.returncode == 1
     # The names it lists, one per indented line (the first line names the
