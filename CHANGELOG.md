@@ -13,7 +13,7 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ### Fixed
 
-- The run sheet no longer loses a click made just after a slow one (#852). When a click took a moment to handle, the next press could lose its hold, and a redraw under the pointer ate the click; on a slow machine a fold, Fight or Start could do nothing. A number typed into a stat box you have just clicked also always replaces it, whenever the machine puts the caret down. Publish tool 1.70.58.
+- The run sheet no longer loses a click made just after a slow one (#852). When a click took a moment to handle, the next press could lose its hold, and a redraw under the pointer ate the click; on a slow machine a fold, Fight or Start could do nothing. Publish tool 1.70.58.
 
 ## [1.12.135] — 2026-11-22
 

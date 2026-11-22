@@ -529,16 +529,10 @@
   const ADD_PARTS = '.addname, #fAddCount, #fAddGo';
   let closeOwed = false;
   const closeIfOwed = () => { if (!closeOwed) return; closeOwed = false; closeAddList(); };
-  // A close timer is for the press that set it (#852): when a click's handler runs long, the next press can come
-  // before the timer, and closing then would move the order under that press and eat its click. The next press's
-  // own release closes it instead.
-  let presses = 0;
-  const closeAfter = () => { const n = presses; setTimeout(() => { if (presses === n) closeIfOwed(); }, 0); };
   document.addEventListener('pointerdown', (ev) => {
-    presses++;
     if (ui.addHits.length && !(ev.target.closest && ev.target.closest(ADD_PARTS))) closeOwed = true;
   }, true);
-  window.addEventListener('click', closeAfter);
+  window.addEventListener('click', () => setTimeout(closeIfOwed, 0));
   // A box that still holds typed words opens its list again when it is pressed or tabbed back into, as the Move box
   // does (PRENTICE's PR review 2)
   function reopenAddList(t) {
@@ -549,7 +543,7 @@
   }
   document.addEventListener('pointerdown', (ev) => { if (ev.target && ev.target.id === 'fAddName') reopenAddList(ev.target); }, true);
   document.addEventListener('focusin', (ev) => reopenAddList(ev.target));
-  document.addEventListener('pointerup', () => { if (closeOwed) closeAfter(); }, true);
+  document.addEventListener('pointerup', () => { if (closeOwed) setTimeout(closeIfOwed, 0); }, true);
   document.addEventListener('pointercancel', closeIfOwed, true);
   function hitsHTML() {
     return ui.addHits.map((c) => (c.isNew
@@ -965,35 +959,21 @@
   }, true);
   // A release inside a selection puts the caret where it landed once the click is done, after every handler here,
   // so 41 typed into a 21 that Esc left selected made 2411 (PRENTICE's review 2, D1): select again after it.
-  // The box stays armed until its first key, however late a slow machine puts that caret down (#852): a typed
-  // character then replaces the whole number; any other key (an arrow, Tab, Esc) disarms it and does as usual.
-  // Text that comes with no key (a paste, an input method, dictation) replaces it too: `beforeinput` comes first.
+  // A key pressed before that comes round selects first, so the number is replaced whatever the timing.
   let selectAfter = null;
   let armed = null;
-  const WAIT_KEYS = new Set(['Shift', 'Control', 'Alt', 'AltGraph', 'Meta', 'CapsLock', 'Process', 'Dead', 'Unidentified']);
   document.addEventListener('mouseup', () => {
     const b = selectAfter;
     selectAfter = null;
     if (!b) return;
     armed = b;
-    setTimeout(() => { if (armed === b && document.activeElement === b) b.select(); }, 0);
+    setTimeout(() => { if (armed === b) { armed = null; if (document.activeElement === b) b.select(); } }, 0);
   }, true);
-  document.addEventListener('keydown', (ev) => {
-    const b = armed;
-    if (!b) return;
-    // a modifier on its own (Shift for a digit on AZERTY, Cmd before V) or an input method's key: what follows decides
-    if (WAIT_KEYS.has(ev.key)) return;
-    if ((ev.metaKey || ev.ctrlKey) && /^v$/i.test(ev.key || '')) return; // a paste: beforeinput selects for it
-    armed = null;
-    if (document.activeElement !== b) return;
-    if (ev.key && ev.key.length === 1 && !ev.metaKey && !ev.ctrlKey && !ev.altKey) b.select();
-  }, true);
-  document.addEventListener('beforeinput', (ev) => {
+  document.addEventListener('keydown', () => {
     const b = armed;
     armed = null;
-    if (b && ev.target === b && String(ev.inputType || '').startsWith('insert')) b.select();
+    if (b && document.activeElement === b) b.select();
   }, true);
-  document.addEventListener('pointerdown', () => { armed = null; }, true);
   document.addEventListener('focusin', (ev) => { if (ev.target.matches && ev.target.matches(NUMBER_BOX)) ev.target.select(); });
 
   document.addEventListener('input', (ev) => {

@@ -197,7 +197,7 @@ async function withPage({ width = 1449, height = 762, chrome = findChrome(), ste
           // `shift` holds Shift down, so `key('Tab', { shift: true })` goes backwards.
           async key(name, { shift = false } = {}) {
             moved({ act: 'key', name });
-            const named = { Enter: [13, '\r'], Tab: [9, ''], Escape: [27, ''], Backspace: [8, ''], Shift: [16, ''] };
+            const named = { Enter: [13, '\r'], Tab: [9, ''], Escape: [27, ''], Backspace: [8, ''] };
             const one = String(name).length === 1;
             if (!named[name] && !one) throw new Error(`key: no such key ${name}`);
             const [vk, text] = named[name] || [String(name).toUpperCase().charCodeAt(0), name];
