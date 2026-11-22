@@ -75,6 +75,20 @@ const INPUT_LOG = `(() => {
   const keep = (ev) => { log.push({ t: Math.round(performance.now()), type: ev.type, x: ev.clientX, y: ev.clientY, key: ev.key,
     target: name(ev.target), scrollY: Math.round(scrollY), sheet: sheet() }); if (log.length > 40) log.shift(); };
   for (const t of ['pointerdown', 'pointerup', 'click', 'keydown', 'wheel']) window.addEventListener(t, keep, true);
+  // A click needs its press and release on one element: a redraw that removes the pressed element between them
+  // eats the click. While a press is held, any innerHTML write that removes it is logged with who made it.
+  let down = null;
+  window.addEventListener('pointerdown', (ev) => { down = ev.target; }, true);
+  window.addEventListener('pointerup', () => { const d = down; const e = log[log.length - 1];
+    if (e && e.type === 'pointerup' && d) e.downGone = !d.isConnected; setTimeout(() => { if (down === d) down = null; }, 0); }, true);
+  const html = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML');
+  Object.defineProperty(Element.prototype, 'innerHTML', { configurable: true, get: html.get, set(v) {
+    const held = down && down.isConnected && this.contains(down);
+    html.set.call(this, v);
+    if (held) { log.push({ t: Math.round(performance.now()), type: 'pressed element replaced', target: name(this),
+      by: String(new Error().stack || '').split('\\n').slice(2, 7).map((s) => s.trim().replace(/https?:\\/\\/[^/]+/, '')).join(' < ') });
+      if (log.length > 40) log.shift(); }
+  } });
   let last = 0;
   window.addEventListener('scroll', (ev) => { const now = performance.now(); if (now - last > 100) { last = now; keep(ev); } }, true);
 })()`;
