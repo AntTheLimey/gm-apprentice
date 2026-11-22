@@ -107,6 +107,12 @@ describe('CoC block words', () => {
     const t = nums('| STR (Strength) | 70 |\n| Constitution | 60 |\n| Size | 50 |\n| Power | 45 |');
     assert.deepEqual([t.str, t.con, t.siz, t.pow, t.hp, t.mp], [70, 60, 50, 45, 11, 9]);
   });
+  it('a bold line with a parenthesised alias reads its value, LF and CRLF', () => {
+    for (const eol of ['\n', '\r\n']) {
+      const n = nums(`**STR (Strength)** 70 · **CON** 60${eol}**SIZ (Size):** 50 · **POW** 45`);
+      assert.deepEqual([n.str, n.con, n.siz, n.pow], [70, 60, 50, 45]);
+    }
+  });
   it('a value that is no number is null', () => {
     const n = nums('**HP** n/a · **MP** — · **SAN** not tracked · **DEX** 7 / 13 flying');
     assert.deepEqual([n.hp, n.mp, n.san, n.dex], [null, null, null, 7]);
@@ -125,6 +131,19 @@ describe('CoC block words', () => {
     assert.deepEqual(l.map((x) => x.kind), ['no-hp']);
     assert.match(l[0].text, /no HP in its stats: type it in the fight, or fill it in prep/);
     assert.doesNotMatch(JSON.stringify(l), /\bAC\b|initiative|stat-fill/i);
+  });
+});
+
+describe('the row\'s system fields', () => {
+  it('a D&D row gains no CoC keys, and a CoC row does', () => {
+    const dir = copyFixture('run-sheet-coc');
+    try {
+      const index = buildIndex(dir);
+      const d = foesOf(`${NPCS}Warden Hale.md`, index, 1, 'k', new Set(), null, null, systemFor('dnd-5e-2024')).foes[0];
+      for (const k of ['mp', 'mpMax', 'san', 'sanMax', 'dex', 'armour', 'from']) assert.equal(k in d, false, k);
+      assert.deepEqual(systemFor('dnd-5e-2024').foeRow({ hp: 3 }), {});
+      assert.equal('mp' in foesOf(`${NPCS}Warden Hale.md`, index, 1, 'k', new Set(), null, null, systemFor('coc-7e')).foes[0], true);
+    } finally { removeFixture(dir); }
   });
 });
 

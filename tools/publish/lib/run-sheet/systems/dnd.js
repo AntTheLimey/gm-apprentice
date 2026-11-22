@@ -159,6 +159,8 @@ const dnd = {
   fights: true,
   readFoe,
   readPc,
+  // the system's own fields on a foe's row, beyond the shared ones: D&D adds none
+  foeRow: () => ({}),
   stockNoActions,
   describe: () => describeAs(DND_ID, SYSTEM_NAMES[DND_ID], true),
 };

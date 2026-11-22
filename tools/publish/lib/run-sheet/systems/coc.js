@@ -76,6 +76,9 @@ function describeCoc(id) {
   return r;
 }
 
-const make = (id) => ({ ...dnd, id, fights: false, readFoe, stockNoActions: undefined, describe: () => describeCoc(id) });
+// The row's own fields: initiative is DEX.
+const foeRow = (n) => ({ init: n.dex, mp: n.mp, mpMax: n.mp, san: n.san, sanMax: n.san, dex: n.dex, armour: n.armour, from: n.from });
+
+const make = (id) => ({ ...dnd, id, fights: false, readFoe, foeRow, stockNoActions: undefined, describe: () => describeCoc(id) });
 
 module.exports = { coc: make('coc-7e'), cocRegency: make('coc-7e-regency'), readNumbers, keyOf, lacks };

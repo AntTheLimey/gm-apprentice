@@ -89,7 +89,7 @@ function beatCanFight(beat, index) {
 // `carried` (the reader's `{ of(note) }`: `{ hp, log }` from the latest Table Log naming the ally,
 // or null) when it has a figure: `hpNow` is that figure and `carriedFrom` the log; `hp` stays the
 // note's. A foe never carries, and an ally with no figure has both null.
-function rows(entries, beatKey, carried = null) {
+function rows(entries, beatKey, carried = null, system = DND) {
   const paths = entries.flatMap((e) => Array(e.n).fill(e.notePath));
   const keys = itemKeys(beatKey, 'foe', paths);
   const total = new Map();
@@ -107,7 +107,7 @@ function rows(entries, beatKey, carried = null) {
       ally: e.side.ally, allyFrom: e.side.allyFrom, allyBy: e.side.allyBy, ac: nums.ac, hp: nums.hp, init: nums.init,
       legendaryResistance: nums.legendaryResistance, legendaryActions: nums.legendaryActions,
       recharge: nums.recharge, rechargeAt: nums.rechargeAt, lair: nums.lair, lairActions: nums.lairActions, stats: info.stats,
-      ...(nums.from ? { init: nums.dex, mp: nums.mp, mpMax: nums.mp, san: nums.san, sanMax: nums.san, dex: nums.dex, armour: nums.armour, from: nums.from } : {}),
+      ...system.foeRow(nums),
       hpNow, carriedFrom: hpNow === null ? null : got.log, prepNote: e.prepNote, hpStart: e.hpStart,
     };
   }));
@@ -117,7 +117,7 @@ function rows(entries, beatKey, carried = null) {
 function foesOf(notePath, index, count = 1, beatKey, seen = new Set(), carried = null, sides = null, system = DND) {
   const warnings = [];
   const e = entry(notePath, index, count, warner(seen, warnings), true, sides, null, system);
-  return { foes: e ? rows([e], beatKey, carried) : [], warnings };
+  return { foes: e ? rows([e], beatKey, carried, system) : [], warnings };
 }
 
 // Every `who` entry of a beat, planned or contingency. `seen` carries one Plan's warnings across beats;
@@ -137,7 +137,7 @@ function foesFor(beat, index, seen = new Set(), carried = null, sides = null, sy
     doneNotes.add(w.note);
     for (const b of bullets(e.info.treasure)) texts.push({ text: b.text, box: b.box });
   }
-  const foes = rows(entries, beat.key, carried);
+  const foes = rows(entries, beat.key, carried, system);
   // A scene that lists its own treasure stands alone: a note's hoard is the same loot in other words.
   const own = (beat.treasure || []).map((t) => t.text);
   const fresh = own.length ? [] : texts;
