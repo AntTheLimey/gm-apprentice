@@ -9,6 +9,16 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.139] — 2026-11-23
+
+### Fixed
+
+- A session's Story page now shows its `banner:` (or its Wrap-Up's), where readers actually reach the session (#837).
+
+### Added
+
+- `gma image plan` draws scene pictures for a played session note that keeps its own Narrative Recap and has no Wrap-Up, placed after a recap paragraph as in a Wrap-Up (#837). Publish tool 1.70.57.
+
 ## [1.12.138] — 2026-11-23
 
 ### Fixed

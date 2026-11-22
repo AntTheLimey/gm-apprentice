@@ -2003,9 +2003,10 @@ function buildSite(options) {
     const [item] = raw;
     return Array.isArray(item) && item.length === 1 && typeof item[0] === 'string' ? `[[${item[0]}]]` : oneBanner(item);
   }
-  function pageBannerHtml(page, fx) {
+  // `at` is the page the banner is printed on: the note's own, or a Story page that shows the note (#837).
+  function pageBannerHtml(page, fx, at = page.outputPath) {
     const raw = page.frontmatter.banner;
-    const fromDir = page.outputPath.substring(0, page.outputPath.lastIndexOf('/'));
+    const fromDir = at.substring(0, at.lastIndexOf('/'));
     const site = () => { const placed = sitePageBanner(); return placed ? bannerAt(placed, fromDir, { page: true }) : ''; };
     if (raw === undefined || raw === null || raw === '') return site();
     if (raw === false) return '';
@@ -2031,6 +2032,16 @@ function buildSite(options) {
     }
     fx.usedImages.add(key);
     return renderBanner({ imageHref: relativePath(fromDir, 'images/' + found.entry.relPath), linkHref, alt: entry.alt || defaultAlt(name) }, { page: true });
+  }
+
+  // A Story page shows its session's (or chapter's) banner, or its Wrap-Up's when the note sets none (#837). With
+  // neither, the site's page banner, as on any page. A note with a page of its own says its banner's faults there; a
+  // note folded into the Story page has none, so `warn` (given on the live pass only, so once) says them here.
+  const hasBanner = (p) => !!p && p.frontmatter.banner !== undefined && p.frontmatter.banner !== null && p.frontmatter.banner !== '';
+  function storyBannerHtml(unit, fx, warn = null) {
+    const from = hasBanner(unit.sourcePage) || !hasBanner(unit.wrapUpPage) ? unit.sourcePage : unit.wrapUpPage;
+    const says = warn && isFolded(from) ? warn : () => {};
+    return from ? pageBannerHtml(from, { ...fx, warn: says }, unit.outputPath) : '';
   }
 
   function renderPage(page, fx) {
@@ -2550,7 +2561,11 @@ function buildSite(options) {
   // from that filtered set regardless of whether a manifest exists, so gating this on
   // `manifest` just meant a manifest-less player build shipped every GM-only image.
   // A recap's picture counts as used: the story pages are rendered once here, for the set only.
-  if (!onlySheets) buildStorySpine(pages, linkMap, storyPairs, { imageMap, usedImages, warn: true }, { marked: gm, marks: mark ? mark.marks : null, players: storyPlayers, figures: storyFigures });
+  if (!onlySheets) {
+    const spineForSet = buildStorySpine(pages, linkMap, storyPairs, { imageMap, usedImages, warn: true }, { marked: gm, marks: mark ? mark.marks : null, players: storyPlayers, figures: storyFigures });
+    // A Story page's banner picture is copied too, a folded Wrap-Up's among them (it has no page of its own).
+    for (const unit of spineForSet || []) storyBannerHtml(unit, { usedImages, bannerLinks });
+  }
   // The House Rules page is rendered here, before the pictures are chosen, so a picture used only in a rule is copied.
   const houseRulesHtml = houseRulesMd
     ? processContent({ markdown: houseRulesMd, frontmatter: {}, outputPath: 'house-rules.html' }, linkMap, excludeSections, imageMap, { usedImages, excludeCallouts }).html
@@ -3006,6 +3021,7 @@ function buildSite(options) {
         notes.held.open = mark.marks.open('notes', `This wrap-up is held back from players: ${why}`);
         notes.held.close = mark.marks.close();
       } else delete unit.heldBack;
+      unit.bannerHtml = storyBannerHtml(unit, { usedImages, bannerLinks }, live ? logWarnings : null);
       const html = renderStoryUnit(unit, config, publishConfig, navFor);
       // The GM site writes the page with its folded wrap-up's hidden-fields panel, and a banner when players have no
       // Story page here (with the reason): nothing the wrap-up's own page showed is lost.

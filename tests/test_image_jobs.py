@@ -212,6 +212,79 @@ def test_rule_6_recap_title_may_be_just_recap(tmp_path):
     assert e.status == "planned"
 
 
+SESSION_RECAP = ("---\ntype: session\nstatus: {status}\n{docs}---\n"
+                 "# Session 01\n## Narrative Recap\n"
+                 "The party reached the mill at dusk.\n\n"
+                 "Nobody slept.\n")
+
+
+def session_note(v, status="played", docs=""):
+    p = v / "Sessions" / "Session 01.md"
+    p.write_text(SESSION_RECAP.format(status=status, docs=docs), encoding="utf-8")
+    return {"for": "Session 01", "subject": "the mill at dusk", "name": "mill",
+            "after": "The party reached"}
+
+
+def test_a_played_session_with_its_own_recap_takes_a_scene_picture(tmp_path):
+    # #837: early sessions keep their recap in the session note, with no Wrap-Up.
+    v = build(tmp_path)
+    _, e = one(v, session_note(v))
+    assert e.status == "planned", said(e)
+    assert e.kind == "scene" and e.shape == "16:9"
+    assert e.note == "Sessions/Session 01.md"
+    assert e.dest.startswith("_attachments/scenes/")
+
+
+def test_a_session_not_yet_played_is_refused(tmp_path):
+    v = build(tmp_path)
+    _, e = one(v, session_note(v, status="planned"))
+    assert e.status == "refused" and "not played yet" in said(e)
+
+
+def test_a_session_with_a_wrap_up_points_at_the_wrap_up(tmp_path):
+    v = build(tmp_path)
+    req = session_note(v, docs='documents:\n  wrap_up: "[[Session 03 Wrap-Up]]"\n')
+    _, e = one(v, req)
+    assert e.status == "refused" and "has a Wrap-Up" in said(e)
+    assert "Session 03 Wrap-Up" in said(e)
+
+
+def test_a_wrap_up_that_names_the_session_counts_too(tmp_path):
+    # As the Story page pairs them: a Wrap-Up's own `session:` link back.
+    v = build(tmp_path)
+    req = session_note(v)
+    (v / "Sessions" / "Session 01 Wrap-Up.md").write_text(
+        RECAP.replace("session: 3", 'session: "[[Session 01]]"'), encoding="utf-8")
+    _, e = one(v, req)
+    assert e.status == "refused" and "Session 01 Wrap-Up" in said(e)
+
+
+def test_the_one_unlinked_wrap_up_in_the_session_folder_counts(tmp_path):
+    v = build(tmp_path)
+    (v / "Sessions" / "S1").mkdir()
+    (v / "Sessions" / "S1" / "Session 01.md").write_text(
+        SESSION_RECAP.format(status="played", docs=""), encoding="utf-8")
+    (v / "Sessions" / "S1" / "Wrap.md").write_text(
+        RECAP.replace("session: 3\n", ""), encoding="utf-8")
+    _, e = one(v, {"for": "Sessions/S1/Session 01.md", "subject": "s",
+                   "name": "m", "after": "The party reached"})
+    assert e.status == "refused" and "Sessions/S1/Wrap.md" in said(e)
+
+
+def test_a_session_whose_wrap_up_is_not_written_yet_uses_its_own_recap(tmp_path):
+    v = build(tmp_path)
+    _, e = one(v, session_note(v, docs='documents:\n  wrap_up: "[[Session 01 Wrap-Up]]"\n'))
+    assert e.status == "planned", said(e)
+
+
+def test_a_session_with_no_recap_is_refused_plainly(tmp_path):
+    v = build(tmp_path)
+    (v / "Sessions" / "Session 01.md").write_text(note("session", "status: played\n"), encoding="utf-8")
+    _, e = one(v, {"for": "Session 01", "subject": "s", "name": "m", "after": "x"})
+    assert e.status == "refused" and "no Narrative Recap section" in said(e)
+    assert "not supported yet" not in said(e)
+
+
 def test_rule_7_references_are_dropped_with_a_line(tmp_path):
     v = build(tmp_path)
     _, e = one(v, {"for": "Anselm", "subject": "x",
@@ -759,7 +832,7 @@ def test_a_wrap_up_with_no_recap_says_so(tmp_path):
         RECAP.replace("## Narrative Recap", "## Notes"), encoding="utf-8")
     _, e = one(v, {"for": "Session 03 Wrap-Up", "subject": "s", "name": "m",
                    "after": "The party"})
-    assert "this Wrap-Up has no Narrative Recap section" in said(e)
+    assert "this note has no Narrative Recap section" in said(e)
 
 
 def test_fences_and_headings_in_the_recap_are_not_paragraphs(tmp_path):

@@ -1,6 +1,6 @@
 # gma image
 
-Use it when the GM asks for a picture for a note: a portrait (PC, NPC, creature, heritage, document), a location, faction, organization or item, or a scene picture in a Wrap-Up's Narrative Recap. Event notes are not a kind it draws: a session's events get their picture as a scene picture in the recap, so never promise an Event its own. Use it unasked only as "When no one asked" below says, and for a fill as "A fill" says. `status` shows the source, whether Codex can draw, the service, model, key, this month's spending, the Image Guidance note's path and any job still `waiting`.
+Use it when the GM asks for a picture for a note: a portrait (PC, NPC, creature, heritage, document), a location, faction, organization or item, or a scene picture in a Wrap-Up's Narrative Recap (or, for a played session with no Wrap-Up, the session note's own). Event notes are not a kind it draws: a session's events get their picture as a scene picture in the recap, so never promise an Event its own. Use it unasked only as "When no one asked" below says, and for a fill as "A fill" says. `status` shows the source, whether Codex can draw, the service, model, key, this month's spending, the Image Guidance note's path and any job still `waiting`.
 
 Who draws is the GM's choice, never yours: `vault.images.source` is `codex` (an installed Codex on a ChatGPT plan, no money), `self` (your own image tool, no money; see "Drawing them yourself" below) or `service` (the set service and model, paid). If `plan` says to choose, put the three choices to the GM (`status` says whether Codex can draw) and set the one they name. Pass `--source` only when the GM names a source for this batch. `plan`'s first line after the job number says what draws.
 
@@ -41,7 +41,7 @@ A fill (the GM asks to fill in the missing pictures, or says yes to one offered)
    ]
    ```
 
-   - `for`: the note (path, name or alias). A Wrap-Up makes a scene picture and also needs `after` (the opening words of exactly one recap paragraph, which the picture goes after) and `name` (short, for the file name).
+   - `for`: the note (path, name or alias). A Wrap-Up, or a played session note that keeps its own Narrative Recap and has no Wrap-Up, makes a scene picture and also needs `after` (the opening words of exactly one recap paragraph, which the picture goes after) and `name` (short, for the file name).
    - `subject`: the whole picture in words: who and how many, place, period, any written words exactly as they must read. It is sent after the note's Always text and the `blocks` named.
    - `blocks`: `###` block names under the note's Blocks.
    - `shows`: notes whose `portrait` goes as a likeness (at most 4 characters and 14 pictures in all). A note with no portrait, or one that is not a PNG or JPEG under 5 MB inside the vault, is left out and `plan` says so. A name several notes share is left out too, with every path: pass the right one and plan again.
