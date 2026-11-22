@@ -46,7 +46,7 @@ function pairs(md, keyOf) {
       // the key is the first one to four words (`HP`, `Basic Speed`), a colon allowed after it
       for (let n = 1; n <= Math.min(4, words.length - 1); n++) {
         const k = keyOf(words.slice(0, n).join(' ').replace(/:$/, ''));
-        if (k) { out.push([k, words.slice(n).join(' ').replace(/^:\s*/, '').replace(/^\([^)]*\)\s*:?\s*/, '')]); break; }
+        if (k) { out.push([k, words.slice(n).join(' ').replace(/^:\s*/, '').replace(/^\([^)\d]*\)\s*:?\s*/, '')]); break; }
       }
     }
   }

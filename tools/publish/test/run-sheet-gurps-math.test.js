@@ -24,8 +24,11 @@ describe('deriveGurps', () => {
     assert.deepEqual(G.deriveGurps({}, {}), { from: {} });
     assert.deepEqual(G.deriveGurps(null, null), { from: {} });
   });
-  it('a typed zero or a non-number input is not an input', () => {
+  it('a zero ST is an input, a non-number is not', () => {
     assert.deepEqual(G.deriveGurps({ st: '10', dx: NaN, ht: null }, {}), { from: {} });
+  });
+  it('a zero ST gives HP 0', () => {
+    assert.equal(G.deriveGurps({ st: 0 }, {}).max, 0);
   });
   it('loads in a page with no module system, as window.RunSheetGurpsMath', () => {
     const win = {};

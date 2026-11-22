@@ -122,6 +122,17 @@ describe('GURPS block words', () => {
   });
 });
 
+describe('a bracket before a value', () => {
+  it('a bracketed number is the value; a bracketed word is an alias, LF and CRLF', () => {
+    for (const eol of ['\n', '\r\n']) {
+      const n = readNumbers(`DR (2)${eol}Basic Speed (5.25)${eol}ST 10`);
+      assert.deepEqual([n.dr, n.speed], ['(2)', 5.25]);
+      assert.equal(readNumbers('DR (2 vs piercing)').dr, '(2 vs piercing)');
+      assert.equal(readNumbers(`**ST (Strength)** 12${eol}`).st, 12);
+    }
+  });
+});
+
 describe('the row\'s GURPS fields', () => {
   it('a D&D row gains none', () => {
     assert.deepEqual(systemFor('dnd-5e-2024').foeRow({ hp: 3 }), {});

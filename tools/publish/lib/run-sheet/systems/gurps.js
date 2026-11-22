@@ -29,6 +29,7 @@ function keyOf(raw) {
 
 // A pool figure: the maximum, whether written `9`, `6/9` (current over maximum) or `10 (currently 4)`.
 function maxOf(v) {
+  v = String(v == null ? '' : v).replace(/^\(\s*/, '');
   const m = /^\s*(-?\d+)\s*\/\s*(\d+)/.exec(String(v == null ? '' : v));
   return m ? Number(m[2]) : leadingNumber(v);
 }
@@ -36,7 +37,7 @@ function maxOf(v) {
 // A block's numbers: hp and fp are maxima; a value that is no number (`n/a`, a dash) is null.
 function readNumbers(stats) {
   const ps = pairs(stats, keyOf);
-  const n = (k) => leadingNumber(firstOf(ps, k));
+  const n = (k) => maxOf(firstOf(ps, k));
   const nums = { hp: maxOf(firstOf(ps, 'hp')), fp: maxOf(firstOf(ps, 'fp')), speed: n('speed'), dx: n('dx'), st: n('st'), ht: n('ht'),
     dodge: n('dodge'), dr: null, from: {} };
   const dr = clean(firstOf(ps, 'dr') || '');
