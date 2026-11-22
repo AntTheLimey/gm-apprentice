@@ -650,7 +650,8 @@
     function lineOf(item, i, text) {
       var line = make('p', 'cx-line');
       line.appendChild(make('span', 'cx-line-text', text));
-      if (i >= item.f) line.appendChild(make('span', 'cx-from', ' from ' + item.t + '’s page'));
+      // Its own line (style.css), so it never reads as part of the tie's sentence (#824).
+      if (i >= item.f) line.appendChild(make('span', 'cx-from', 'From ' + item.t + '’s page'));
       return line;
     }
 
