@@ -296,6 +296,31 @@ describe('the fight: adding anyone, by real input', { skip: browserSkip() }, () 
     });
   }
 
+  it('a press on an Add list item, waiting behind a busy click outside, still picks it (#852)', async () => {
+    // A press outside owes the list a close once its click lands; a timer that ran after the NEXT press began
+    // closed the list under that press, and the item's click was eaten.
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      const was = await startedFight(page, run);
+      const count = was.fight.rows.length;
+      await tap(page, '#fAddName');
+      await page.type('a');
+      await page.waitFor('document.querySelector("#fHits button")');
+      await page.evaluate(`window.addEventListener('click', (e) => { if (e.target.id === 'ttl') { const end = performance.now() + 300; while (performance.now() < end); } })`);
+      const ttl = await page.box('#ttl');
+      const hit = await page.box('#fHits button');
+      const [x, y] = [hit.left + hit.width / 2, hit.top + hit.height / 2];
+      await page.mouse('mouseMoved', ttl.left + 5, ttl.top + 5);
+      await page.mouse('mousePressed', ttl.left + 5, ttl.top + 5, { buttons: 1 });
+      await Promise.all([page.mouse('mouseReleased', ttl.left + 5, ttl.top + 5), page.mouse('mouseMoved', x, y), page.mouse('mousePressed', x, y, { buttons: 1 })]);
+      await page.sleep(90);
+      await page.mouse('mouseReleased', x, y);
+      const p = await until(page, `p.fight.rows.length === ${count + 1} && p.saved === "Saved" && p.pending === 0`, 3000);
+      assert.deepStrictEqual(p.errors, []);
+      await page.waitFor('document.querySelectorAll("#fHits button").length === 0');
+    });
+  });
+
   it('Undo takes back an untouched add with a real click; a touched add has no Undo', async () => {
     const run = await start();
     await withPage({ width: 1449, height: 762 }, async (page) => {
@@ -1630,6 +1655,15 @@ describe('stat boxes keep the mouse and the keyboard', { skip: browserSkip() }, 
       await page.evaluate(`document.querySelector('${box}').setSelectionRange(1, 1)`);
       await page.type('21');
       assert.strictEqual(await page.evaluate(`document.querySelector('${box}').value`), '21');
+      await page.key('Enter');
+      await until(page, `p.saved === "Saved" && p.pending === 0 && p.fight.rows.find((r) => r.id === ${JSON.stringify(foe.id)}).max === 21`);
+      // a modifier on its own first (Shift, as an AZERTY digit needs): it leaves the box armed
+      await tap(page, box, { offsetX: 12 });
+      await page.sleep(50);
+      await page.evaluate(`document.querySelector('${box}').setSelectionRange(1, 1)`);
+      await page.key('Shift');
+      await page.type('22');
+      assert.strictEqual(await page.evaluate(`document.querySelector('${box}').value`), '22', 'Shift first: still replaced');
       await page.key('Escape');
     });
   });

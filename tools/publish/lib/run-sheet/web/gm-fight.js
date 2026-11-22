@@ -529,10 +529,16 @@
   const ADD_PARTS = '.addname, #fAddCount, #fAddGo';
   let closeOwed = false;
   const closeIfOwed = () => { if (!closeOwed) return; closeOwed = false; closeAddList(); };
+  // A close timer is for the press that set it (#852): when a click's handler runs long, the next press can come
+  // before the timer, and closing then would move the order under that press and eat its click. The next press's
+  // own release closes it instead.
+  let presses = 0;
+  const closeAfter = () => { const n = presses; setTimeout(() => { if (presses === n) closeIfOwed(); }, 0); };
   document.addEventListener('pointerdown', (ev) => {
+    presses++;
     if (ui.addHits.length && !(ev.target.closest && ev.target.closest(ADD_PARTS))) closeOwed = true;
   }, true);
-  window.addEventListener('click', () => setTimeout(closeIfOwed, 0));
+  window.addEventListener('click', closeAfter);
   // A box that still holds typed words opens its list again when it is pressed or tabbed back into, as the Move box
   // does (PRENTICE's PR review 2)
   function reopenAddList(t) {
@@ -543,7 +549,7 @@
   }
   document.addEventListener('pointerdown', (ev) => { if (ev.target && ev.target.id === 'fAddName') reopenAddList(ev.target); }, true);
   document.addEventListener('focusin', (ev) => reopenAddList(ev.target));
-  document.addEventListener('pointerup', () => { if (closeOwed) setTimeout(closeIfOwed, 0); }, true);
+  document.addEventListener('pointerup', () => { if (closeOwed) closeAfter(); }, true);
   document.addEventListener('pointercancel', closeIfOwed, true);
   function hitsHTML() {
     return ui.addHits.map((c) => (c.isNew
@@ -964,6 +970,7 @@
   // Text that comes with no key (a paste, an input method, dictation) replaces it too: `beforeinput` comes first.
   let selectAfter = null;
   let armed = null;
+  const WAIT_KEYS = new Set(['Shift', 'Control', 'Alt', 'AltGraph', 'Meta', 'CapsLock', 'Process', 'Dead', 'Unidentified']);
   document.addEventListener('mouseup', () => {
     const b = selectAfter;
     selectAfter = null;
@@ -973,8 +980,12 @@
   }, true);
   document.addEventListener('keydown', (ev) => {
     const b = armed;
+    if (!b) return;
+    // a modifier on its own (Shift for a digit on AZERTY, Cmd before V) or an input method's key: what follows decides
+    if (WAIT_KEYS.has(ev.key)) return;
+    if ((ev.metaKey || ev.ctrlKey) && /^v$/i.test(ev.key || '')) return; // a paste: beforeinput selects for it
     armed = null;
-    if (!b || document.activeElement !== b) return;
+    if (document.activeElement !== b) return;
     if (ev.key && ev.key.length === 1 && !ev.metaKey && !ev.ctrlKey && !ev.altKey) b.select();
   }, true);
   document.addEventListener('beforeinput', (ev) => {

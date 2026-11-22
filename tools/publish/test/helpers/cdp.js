@@ -175,7 +175,7 @@ async function withPage({ width = 1449, height = 762, chrome = findChrome() } = 
           // `shift` holds Shift down, so `key('Tab', { shift: true })` goes backwards.
           async key(name, { shift = false } = {}) {
             moved({ act: 'key', name });
-            const named = { Enter: [13, '\r'], Tab: [9, ''], Escape: [27, ''], Backspace: [8, ''] };
+            const named = { Enter: [13, '\r'], Tab: [9, ''], Escape: [27, ''], Backspace: [8, ''], Shift: [16, ''] };
             const one = String(name).length === 1;
             if (!named[name] && !one) throw new Error(`key: no such key ${name}`);
             const [vk, text] = named[name] || [String(name).toUpperCase().charCodeAt(0), name];
@@ -204,12 +204,9 @@ async function withPage({ width = 1449, height = 762, chrome = findChrome() } = 
           // A real click at (x, y): move, press, hold `holdMs` (a quick press can slip past code that a real
           // hand's press does not), release.
           async clickAt(x, y, { holdMs = 90 } = {}) {
-            let under = null;
-            try {
-              under = await evaluate(`(() => { const e = document.elementFromPoint(${x}, ${y}); if (!e) return null;
-                return e.tagName.toLowerCase() + (e.id ? '#' + e.id : '') + (typeof e.className === 'string' && e.className.trim() ? '.' + e.className.trim().split(/\\s+/)[0] : ''); })()`);
-            } catch { /* the page is loading */ }
-            moved({ act: 'click', x: Math.round(x), y: Math.round(y), under });
+            // No question to the page here: it would wait for the page to go idle before the press, and a press that
+            // comes while the page is busy is the case #852 was about. The page's own log says what the press met.
+            moved({ act: 'click', x: Math.round(x), y: Math.round(y) });
             await page.mouse('mouseMoved', x, y);
             await page.mouse('mousePressed', x, y, { buttons: 1 });
             await sleep(holdMs);
