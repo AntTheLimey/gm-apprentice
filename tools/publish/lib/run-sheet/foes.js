@@ -107,6 +107,7 @@ function rows(entries, beatKey, carried = null) {
       ally: e.side.ally, allyFrom: e.side.allyFrom, allyBy: e.side.allyBy, ac: nums.ac, hp: nums.hp, init: nums.init,
       legendaryResistance: nums.legendaryResistance, legendaryActions: nums.legendaryActions,
       recharge: nums.recharge, rechargeAt: nums.rechargeAt, lair: nums.lair, lairActions: nums.lairActions, stats: info.stats,
+      ...(nums.from ? { init: nums.dex, mp: nums.mp, mpMax: nums.mp, san: nums.san, sanMax: nums.san, dex: nums.dex, armour: nums.armour, from: nums.from } : {}),
       hpNow, carriedFrom: hpNow === null ? null : got.log, prepNote: e.prepNote, hpStart: e.hpStart,
     };
   }));
