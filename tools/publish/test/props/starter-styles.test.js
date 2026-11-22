@@ -14,6 +14,7 @@ const { layoutNames } = require('../../lib/props/layout');
 const { propTextOf, linesOfPropHtml } = require('../../lib/props/text');
 const { isValidFamily } = require('../../lib/fonts');
 const { noticeText } = require('../../lib/notice');
+const { withoutCredit } = require('../helpers/site-credit');
 
 const STARTERS = ['clipping', 'decree', 'form', 'hand', 'letter', 'passport', 'scroll', 'terminal', 'ticket'];
 const FIXTURE = path.join(__dirname, '..', 'fixtures', 'prop-styles');
@@ -149,7 +150,7 @@ describe('the prop-styles fixture, built', () => {
     const pages = walk(path.join(docs, 'props')).filter((f) => f.endsWith('-prop.html'));
     assert.deepEqual(pages.map((f) => path.basename(f)).sort(), [...notes.map((n) => `${n.slug}-prop.html`), 'sea-chest-prop.html'].sort());
     for (const f of pages) {
-      const page = fs.readFileSync(f, 'utf8');
+      const page = withoutCredit(fs.readFileSync(f, 'utf8'));
       for (const [, url] of page.matchAll(/(?:href|src)="([^"]*)"/g)) assert.doesNotMatch(url, /^(?:[a-z][a-z0-9+.-]*:|\/)/i, `${f}: ${url}`);
     }
     for (const f of walk(docs).filter((p) => /\.(html|css|js)$/.test(p))) assert.doesNotMatch(fs.readFileSync(f, 'utf8'), /fonts\.googleapis\.com/, f);

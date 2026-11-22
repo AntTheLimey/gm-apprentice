@@ -11,6 +11,7 @@ const { listFileText } = require('../helpers/publish-list');
 const { linesOfPropHtml } = require('../../lib/props/text');
 const { noticeText } = require('../../lib/notice');
 const { prefetchForConfig } = require('../../lib/fonts');
+const { withoutCredit } = require('../helpers/site-credit');
 
 const STYLE = {
   '_meta/prop-styles/t/layout.html': '<h1>{{title}}</h1>{{{body}}}<p class="stamp">{{prop_stamp}}</p>',
@@ -162,7 +163,7 @@ describe('what a styled prop ships', () => {
       const pages = rels(s.player).filter((f) => f.startsWith('props/') && f.endsWith('.html'));
       assert.ok(pages.length > 0);
       for (const f of pages) {
-        const page = s.player.read(...f.split('/'));
+        const page = withoutCredit(s.player.read(...f.split('/')));
         for (const [, url] of page.matchAll(/(?:href|src)="([^"]*)"/g)) assert.doesNotMatch(url, /^(?:[a-z][a-z0-9+.-]*:|\/)/i, `${f}: ${url}`);
       }
       assert.match(s.player.read('props', 'letter.html'), /<script src="styles\/t\/script\.js" defer><\/script>\n<\/body>/);

@@ -9,6 +9,16 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.132] — 2026-11-22
+
+### Added
+
+- A campaign site's pages end with a small "Powered by GM-Apprentice" line, linked to gmapprentice.com, under your own footer. Turn `player_site.credit` off to take it out; the GM site and a handout's own styled page never show it. The update tells a GM with a site once (`site-credit`) (#849)
+
+### Fixed
+
+- A menu entry that is a link lines up with the menu's buttons (#851)
+
 ## [1.12.125] — 2026-11-22
 
 ### Added

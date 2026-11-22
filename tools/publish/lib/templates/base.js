@@ -55,6 +55,16 @@ function configureLinkPreviews(mode) { linkPreviews = entry('player_site.feature
 let connectionsMode = 'off';
 function configureConnections(mode) { connectionsMode = entry('player_site.features.connections').values.includes(mode) ? mode : 'off'; }
 
+// Whether this build's pages carry the credit line (player_site.credit), set once by configureCredit before any page
+// renders, as the link-previews mode is.
+let creditOn = false;
+function configureCredit(on) { creditOn = on === true; }
+// The page's footer: the GM's own line, then the credit under it. '' when the page has neither.
+function footerHtml(footer) {
+  const credit = creditOn ? '<p class="site-credit"><a href="https://gmapprentice.com" rel="noopener">Powered by GM-Apprentice</a></p>' : '';
+  return footer || credit ? `<footer class="site-footer">${footer ? escapeHtml(footer) : ''}${credit}</footer>` : '';
+}
+
 // A page's Connections section, or '' when the site has none or the page has nothing to show.
 function connectionsSection(page, publishConfig, heading = 'h2') {
   const index = (publishConfig || {})._connections;
@@ -102,7 +112,6 @@ function bodyHook(html) { return themeHooks ? markFirstParagraph(html) : html; }
 function pageTypeAttr(pageType) { return themeHooks ? ` data-page-type="${escapeHtml(String(pageType || '').trim().toLowerCase() || 'page')}"` : ''; }
 
 function baseShell({ title, siteTitle, cssHref, navHtml, rootHref, content, banner = '', footer, genrePreset, overridesCss, breadcrumbsHtml, scripts, mainAttrs, extraCss, pageType, bodyAttrs = '' }) {
-  const footerHtml = footer ? `<footer class="site-footer">${escapeHtml(footer)}</footer>` : '';
   const themeCssHref = cssHref.replace('style.css', 'theme.css');
   const genreCssHref = genrePreset
     ? cssHref.replace('style.css', `themes/${genrePreset}.css`)
@@ -140,7 +149,7 @@ ${breadcrumbs}
 ${themeHooks ? markPage(banner + content) : banner + content}
 </main>
 
-${footerHtml}
+${footerHtml(footer)}
 
 <button class="back-to-top" onclick="window.scrollTo({top:0})" aria-label="Back to top">&#8593;</button>
 
@@ -263,6 +272,8 @@ module.exports = {
   clientScripts,
   configureLinkPreviews,
   configureConnections,
+  configureCredit,
+  footerHtml,
   connectionsSection,
   linkPreviewsOn,
   noPreviewAttr,
