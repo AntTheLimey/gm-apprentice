@@ -9,6 +9,12 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.137] — 2026-11-22
+
+### Fixed
+
+- The personal reference files guide and `gma personal --system` now name the `generic/` folder for games without their own, and the guide says each system's folder appears when the first file is saved there (#844).
+
 ## [1.12.136] — 2026-11-22
 
 ### Fixed

@@ -39,7 +39,12 @@ One folder in your home directory, with a folder per system:
   coc-7e/               <-- your CoC setting material
   dnd-5e-2024/          <-- your D&D supplements
   pf2e/                 <-- your PF2e supplements
+  generic/              <-- any other game
 ```
+
+A system's folder appears the first time a file is saved or copied
+into it, so a new install has none of them yet. If you make one
+yourself, use exactly the names above.
 
 On Windows, `~` is your user folder (`C:\Users\<you>`). It is
 the same folder whichever way you installed gm-apprentice, and
