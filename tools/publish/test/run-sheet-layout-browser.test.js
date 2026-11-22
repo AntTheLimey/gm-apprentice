@@ -470,14 +470,16 @@ describe('10b: the grip and the widths', { skip: browserSkip() }, () => {
         assert.ok(p.layout.grip.shown, 'the grip is there');
         const d0 = p.layout.sheetW;
         assert.strictEqual(d0, Math.min(600, p.layout.room.max - 80), 'the default width');
+        // narrower stops at the pane's 320 px least: where fonts run wider than a Mac's (CI's Linux), the order's
+        // least width grows and the default sits under 380
         await dragGrip(page, -60);
         p = await until(page, `p.layout.sheetW !== ${d0}`);
         assert.strictEqual(p.layout.sheetW, d0 + 60, 'dragged left: the pane 60 px wider');
         sane(p, 'wider');
         await dragGrip(page, 120);
-        p = await until(page, `p.layout.sheetW === ${d0 - 60}`);
+        p = await until(page, `p.layout.sheetW === ${Math.max(p.layout.room.min, d0 - 60)}`);
         sane(p, 'narrower');
-        assert.strictEqual(p.layout.saved.rw, d0 - 60, 'the width is kept');
+        assert.strictEqual(p.layout.saved.rw, Math.max(p.layout.room.min, d0 - 60), 'the width is kept');
       });
     });
   }
@@ -718,7 +720,7 @@ describe('10c: the folds', { skip: browserSkip() }, () => {
       p = await until(page, `p.layout.sheetW === ${d0 + 60}`);
       sane(p, '1100 wider');
       await dragGrip(page, 120);
-      p = await until(page, `p.layout.sheetW === ${d0 - 60}`);
+      p = await until(page, `p.layout.sheetW === ${Math.max(p.layout.room.min, d0 - 60)}`);
       sane(p, '1100 narrower');
     });
     // the boss fight at 1100: the rail and then the pane fold; the pane opened by hand holds until a resize
@@ -988,7 +990,7 @@ describe('10, fix round 1', { skip: browserSkip() }, () => {
       p = await until(page, `p.layout.sheetW === ${d0 + 60}`);
       sane(p, 'wider');
       await dragGrip(page, 120);
-      p = await until(page, `p.layout.sheetW === ${d0 - 60}`);
+      p = await until(page, `p.layout.sheetW === ${Math.max(p.layout.room.min, d0 - 60)}`);
       sane(p, 'narrower');
       // a status taken off in the acting panel goes from the row too
       await tap(page, '#acting .nums .st');

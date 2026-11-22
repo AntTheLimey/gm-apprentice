@@ -1313,7 +1313,7 @@
   // The acting panel's working width: it goes beside the order once the middle holds the order's least width and
   // this (review F10; final review P4.6, which replaced a fixed 1,200 px), and keeps at least this beside it.
   const ACT_W = 420;
-  const PV_BESIDE = 0.36; // the preview's share of the middle when the pane is folded, at least 300 px
+  const PV_BESIDE = 0.36; // the preview's share of the middle when the pane is folded, at least 300 px, less if the order needs it
   const PV_BESIDE_MIN = 300;
   const GRIP_TRAVEL = 120; // the grip hides with less travel than this
   const NARROW = 1000; // at this width and under, one column (gm.css)
@@ -1341,8 +1341,8 @@
   G.lay = { rail: false, pane: false };
   G.om = ORDER_FLOOR;
   const fightLayout = () => Boolean(G.pane) && window.innerWidth > NARROW;
-  // The order's least width: its widest row with every item as tight as it goes (the name at its 6 rem, a chip at
-  // its 2.4 rem), plus the order box's padding, the scroll box's gutter and the column's border. Never under 560.
+  // The order's least width: its widest row with every item as tight as it goes (a chip at its 2.4 rem, the name
+  // whole up to 14 rem), plus the order box's padding, the scroll box's gutter and the column's border. Never under 560.
   function orderMin() {
     const ol = document.querySelector('#side ol.to');
     const fo = ol && ol.closest('.fo');
@@ -1350,6 +1350,13 @@
     ol.classList.add('measure');
     let row = 0;
     // a row's second line (statuses that do not fit, a box's words) is never measured: it wraps
+    // a name longer than its 6 rem least keeps its whole width (up to 14 rem) as its least, so a font wider than a
+    // Mac's never cuts it: the row's other items shrink first
+    const cap = 14 * parseFloat(getComputedStyle(document.documentElement).fontSize || '16');
+    for (const nm of ol.querySelectorAll(':scope > li > .nm')) {
+      nm.style.minWidth = '';
+      if (nm.scrollWidth > nm.clientWidth + 1) nm.style.minWidth = `${Math.ceil(Math.min(nm.scrollWidth, cap))}px`;
+    }
     for (const li of ol.children) if (li.dataset.row2 === undefined) row = Math.max(row, li.scrollWidth + li.offsetWidth - li.clientWidth);
     ol.classList.remove('measure');
     const side = $('#side');
@@ -1417,7 +1424,8 @@
       const border = side.offsetWidth - side.clientWidth;
       let pvw = 0;
       if (pane && L.pv) {
-        pvw = Math.round(Math.max(PV_BESIDE_MIN, mid * PV_BESIDE));
+        // its share of the middle, narrowed (to 300 px at least) to leave the order its room beside it
+        pvw = Math.round(Math.max(PV_BESIDE_MIN, Math.min(mid * PV_BESIDE, mid - G.om)));
         pvRow = mid - pvw >= G.om; // else the preview goes above the order, which keeps its room
       }
       const fv = mid - border - (pvRow ? pvw : 0);
