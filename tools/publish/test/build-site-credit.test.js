@@ -12,6 +12,17 @@ const { writeNewConfig } = require('./helpers/settings-files');
 
 const { CREDIT_MARK, CREDIT_MENU, CREDIT_LINE } = require('./helpers/site-credit');
 
+// What a build printed as warnings, with nothing on the console.
+function quiet(run) {
+  const warnings = [];
+  const saved = { log: console.log, warn: console.warn, error: console.error };
+  console.log = () => {};
+  console.warn = (...a) => { warnings.push(a.join(' ')); };
+  console.error = () => {};
+  try { run(); } finally { Object.assign(console, saved); }
+  return warnings;
+}
+
 function site(settings = {}, { gm = false, files = {} } = {}) {
   const gmRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'site-credit-gm-'));
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'site-credit-'));
@@ -38,12 +49,7 @@ function site(settings = {}, { gm = false, files = {} } = {}) {
   });
   const configPath = path.join(root, 'vault.config.json');
   fs.writeFileSync(configPath, JSON.stringify({ vaultPath: './vault' }));
-  const warnings = [];
-  const saved = { log: console.log, warn: console.warn, error: console.error };
-  console.log = () => {};
-  console.warn = (...a) => { warnings.push(a.join(' ')); };
-  console.error = () => {};
-  try { build(gm ? { configPath, site: 'gm' } : { configPath }); } finally { Object.assign(console, saved); }
+  const warnings = quiet(() => build(gm ? { configPath, site: 'gm' } : { configPath }));
   const docs = gm ? path.join(gmRoot, 'site') : path.join(root, 'docs');
   const pages = fs.readdirSync(docs, { recursive: true }).filter((f) => String(f).endsWith('.html'))
     .map((f) => ({ name: String(f), html: fs.readFileSync(path.join(docs, String(f)), 'utf8') }));
@@ -81,7 +87,7 @@ test('the mark closes the header after the search and light/dark buttons, and th
 test('the raven is drawn by the site\'s own stylesheet, once, and nothing is fetched for it', () => {
   const { root, pages } = site();
   const css = fs.readFileSync(path.join(root, 'docs', 'css', 'style.css'), 'utf8');
-  assert.equal(css.split('--credit-raven: url("data:image/svg+xml,').length - 1, 1);
+  assert.equal(css.split('mask: url("data:image/svg+xml,').length - 1, 1);
   for (const p of pages) assert.ok(!p.html.includes('data:image/svg+xml'), p.name);
 });
 
@@ -91,6 +97,18 @@ test('at the page\'s end the credit is its own line under the GM\'s footer, whos
   assert.match(footer, /Tim &amp; &lt;b&gt;friends&lt;\/b&gt;/);
   assert.ok(footer.indexOf('friends') < footer.indexOf(CREDIT_LINE), footer);
   assert.ok(!footer.includes('credit-only'), footer);
+});
+
+test('a sheets-only build beside a stylesheet from before the marks writes none; beside a newer one it writes them', () => {
+  const { root } = site();
+  const css = path.join(root, 'docs', 'css', 'style.css');
+  const rebuilt = () => {
+    quiet(() => build({ configPath: path.join(root, 'vault.config.json'), only: 'sheets' }));
+    return fs.readFileSync(path.join(root, 'docs', 'characters', 'pcs', 'brill.html'), 'utf8');
+  };
+  assert.equal(count(rebuilt()), 3);
+  fs.writeFileSync(css, fs.readFileSync(css, 'utf8').replaceAll('.credit-raven', '.older'));
+  assert.equal(count(rebuilt()), 0);
 });
 
 test('switched off, no page has it, and a site with no footer has no footer element', () => {
