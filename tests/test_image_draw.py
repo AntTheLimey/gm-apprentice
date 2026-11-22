@@ -570,6 +570,49 @@ def test_a_redo_of_a_picture_not_drawn_stops_before_any_call(tmp_path, monkeypat
     assert "has not been drawn yet" in err and "There is no picture 9" in err
 
 
+def _set_status(job, n, status):
+    saved = reload(job)
+    saved.entries[n - 1].status = status
+    image_jobs.save(saved)
+
+
+def test_a_held_picture_can_be_redone_and_waits_for_a_new_verdict(tmp_path, monkeypatch):
+    # #835: place --hold leaves the file in the job folder, so --redo must take it.
+    vault, job = start(tmp_path, count=1)
+    redo_png = derived(data=base64.b64encode(ODD_PNG).decode())
+    send = script(monkeypatch, fixture(OK), redo_png)
+    assert run(vault, job) == 0
+    _set_status(job, 1, "held")
+    assert run(vault, job, "--redo", "1", "three arms and three legs") == 0
+    assert send.calls[1]["input"][0]["text"].endswith(
+        "The last attempt was wrong: three arms and three legs. Correct it.")
+    e = reload(job).entries[0]
+    assert e.status == "drawn" and e.attempts == 2
+    assert pending_files(job) == ["01.png"]
+
+
+def test_a_failed_redo_of_a_held_picture_leaves_it_held(tmp_path, monkeypatch):
+    vault, job = start(tmp_path, count=1)
+    script(monkeypatch, fixture(OK), image_gemini.ServiceError("network", "down", maybe_billed=False))
+    run(vault, job)
+    _set_status(job, 1, "held")
+    assert run(vault, job, "--redo", "1", "wrong") == 1
+    e = reload(job).entries[0]
+    assert e.status == "held" and e.attempts == 1
+    assert pending_files(job) == ["01.jpg"]
+
+
+def test_a_redo_of_a_kept_picture_says_it_is_kept_before_any_call(tmp_path, monkeypatch, capsys):
+    vault, job = start(tmp_path, count=1)
+    send = script(monkeypatch, fixture(OK))
+    run(vault, job)
+    _set_status(job, 1, "kept")
+    assert run(vault, job, "--redo", "1", "wrong") == 2
+    assert len(send.calls) == 1
+    err = capsys.readouterr().err
+    assert "already kept in the vault" in err and "plan it again" in err
+
+
 def test_a_paid_picture_is_counted_even_if_it_cannot_be_written(tmp_path, monkeypatch, capsys):
     vault, job = start(tmp_path)
     monkeypatch.setattr(image_draw._Run, "keep_picture", lambda self, e, pic: False)
