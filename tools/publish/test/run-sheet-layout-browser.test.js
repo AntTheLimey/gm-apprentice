@@ -811,6 +811,35 @@ describe('10c: the folds', { skip: browserSkip() }, () => {
   });
 });
 
+describe('a press held while the last click is still being handled (#852)', { skip: browserSkip() }, () => {
+  // The macOS runner's lost clicks: a click whose handler runs long (a big redraw on a slow machine) leaves the
+  // next press waiting; the browser takes that press before the timer the last release set, and the timer ended
+  // the new press's hold, so a redraw mid-press (the server's answer to an earlier action) replaced the button and
+  // no click fired. Here a click handler is made to run 300 ms, and the next press is sent while it runs.
+  it('the next press keeps its hold, and its click lands through a redraw', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await page.goto(`${run.base}/?probe=1`);
+      await settled(page);
+      await page.evaluate(`window.addEventListener('click', (e) => { if (e.target.id === 'ttl') { const end = performance.now() + 300; while (performance.now() < end); } })`);
+      const ttl = await page.box('#ttl');
+      const fold = await page.box('#railFold');
+      const [x, y] = [fold.left + fold.width / 2, fold.top + fold.height / 2];
+      assert.strictEqual((await until(page, 'true')).layout.railFolded, false);
+      await page.mouse('mouseMoved', ttl.left + 5, ttl.top + 5);
+      await page.mouse('mousePressed', ttl.left + 5, ttl.top + 5, { buttons: 1 });
+      // the release and the next press go together, so the press waits behind the busy click
+      await Promise.all([page.mouse('mouseReleased', ttl.left + 5, ttl.top + 5), page.mouse('mouseMoved', x, y), page.mouse('mousePressed', x, y, { buttons: 1 })]);
+      await page.sleep(30);
+      await page.evaluate('window.RunSheetPage.render()'); // a redraw mid-press, as the server's answer gives
+      await page.sleep(60);
+      await page.mouse('mouseReleased', x, y);
+      const p = await until(page, 'p.layout.railFolded', 3000);
+      assert.deepStrictEqual(p.errors, []);
+    });
+  });
+});
+
 describe('10d: the players\' preview', { skip: browserSkip() }, () => {
   const inView = (p, top) => {
     assert.ok(p.layout.pvOpen, 'open');
@@ -1564,6 +1593,27 @@ describe('stat boxes keep the mouse and the keyboard', { skip: browserSkip() }, 
       assert.strictEqual(await page.evaluate(`document.querySelector('${box}').value`), '21');
       await page.key('Enter');
       await until(page, `p.saved === "Saved" && p.pending === 0 && p.fight.rows.find((r) => r.id === ${JSON.stringify(foe.id)}).max === 21`);
+    });
+  });
+
+  it('a caret a slow machine puts down after the click still gives 21, not 2210 (#852)', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await page.focusEvents();
+      const p0 = await startedFight(page, run);
+      const foe = foes(p0)[0];
+      const box = sel('data-fmax', foe.id);
+      await tap(page, box);
+      await page.type('20');
+      await page.key('Enter');
+      await until(page, `p.saved === "Saved" && p.pending === 0 && p.fight.rows.find((r) => r.id === ${JSON.stringify(foe.id)}).max === 20`);
+      await tap(page, box, { offsetX: 12 });
+      await page.sleep(50);
+      // the macOS runner's late caret: Chrome sets it where the click landed after the page's own re-select ran
+      await page.evaluate(`document.querySelector('${box}').setSelectionRange(1, 1)`);
+      await page.type('21');
+      assert.strictEqual(await page.evaluate(`document.querySelector('${box}').value`), '21');
+      await page.key('Escape');
     });
   });
 

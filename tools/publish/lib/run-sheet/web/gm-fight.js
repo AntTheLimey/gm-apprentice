@@ -959,7 +959,9 @@
   }, true);
   // A release inside a selection puts the caret where it landed once the click is done, after every handler here,
   // so 41 typed into a 21 that Esc left selected made 2411 (PRENTICE's review 2, D1): select again after it.
-  // A key pressed before that comes round selects first, so the number is replaced whatever the timing.
+  // The box stays armed until its first key, however late a slow machine puts that caret down (#852): a typed
+  // character then replaces the whole number; any other key (an arrow, Tab, Esc) disarms it and does as usual.
+  // Text that comes with no key (a paste, an input method, dictation) replaces it too: `beforeinput` comes first.
   let selectAfter = null;
   let armed = null;
   document.addEventListener('mouseup', () => {
@@ -967,13 +969,20 @@
     selectAfter = null;
     if (!b) return;
     armed = b;
-    setTimeout(() => { if (armed === b) { armed = null; if (document.activeElement === b) b.select(); } }, 0);
+    setTimeout(() => { if (armed === b && document.activeElement === b) b.select(); }, 0);
   }, true);
-  document.addEventListener('keydown', () => {
+  document.addEventListener('keydown', (ev) => {
     const b = armed;
     armed = null;
-    if (b && document.activeElement === b) b.select();
+    if (!b || document.activeElement !== b) return;
+    if (ev.key && ev.key.length === 1 && !ev.metaKey && !ev.ctrlKey && !ev.altKey) b.select();
   }, true);
+  document.addEventListener('beforeinput', (ev) => {
+    const b = armed;
+    armed = null;
+    if (b && ev.target === b && String(ev.inputType || '').startsWith('insert')) b.select();
+  }, true);
+  document.addEventListener('pointerdown', () => { armed = null; }, true);
   document.addEventListener('focusin', (ev) => { if (ev.target.matches && ev.target.matches(NUMBER_BOX)) ev.target.select(); });
 
   document.addEventListener('input', (ev) => {
