@@ -25,7 +25,8 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 ### Changed
 
 - The fight page keeps its pane bar, folds either rail (remembered), drags the pane line, and scrolls a big order in its own box with the turn in view. Statuses no longer widen the order: those that do not fit go on a second line for that row. The page folds a column itself only when the window is too narrow, until you resize.
-- Stat boxes keep every click and Tab: initiative walks down its column, max HP pairs with AC, and a server update never steals focus mid-typing. Esc takes back an edit.
+- Stat boxes keep every click and Tab: initiative walks down its column, max HP pairs with AC, and a server update never steals focus mid-typing. Esc takes back an edit, and empties a damage box.
+- J reaches the jot box from a status list, and a typed letter never picks a status. On machines whose fonts run wider (Windows, Linux) a long name in the order is never cut, and the preview stays beside it.
 
 ## [1.12.119] — 2026-11-20
 
