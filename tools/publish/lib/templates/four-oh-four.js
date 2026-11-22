@@ -1,5 +1,5 @@
 const { escapeHtml, campaignImageSrc, isWebImageAddress } = require('../processor');
-const { colorModeHeadHtml, previewsAttr, extraStylesheetTags, pageTypeAttr } = require('./base');
+const { colorModeHeadHtml, previewsAttr, extraStylesheetTags, pageTypeAttr, footerHtml } = require('./base');
 
 // The 404 page loads the previews script like every page, from the site root; nothing when off.
 function previewsScriptTag(href) {
@@ -100,7 +100,7 @@ function fourOhFourTemplate(config) {
     <a href="${href('index.html')}" class="four-oh-four-home">Return to Safety</a>
   </div>
 </main>
-${previewsScriptTag(href)}
+${footerHtml('')}${previewsScriptTag(href)}
 </body>
 </html>`;
 }

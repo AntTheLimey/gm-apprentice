@@ -7,6 +7,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { buildBoth } = require('../helpers/gm-build');
 const { listFileText } = require('../helpers/publish-list');
+const { withoutCredit } = require('../helpers/site-credit');
 
 const STYLE = {
   '_meta/prop-styles/t/layout.html': '<h1>{{title}}</h1>{{{body}}}<div class="held">{{{items}}}</div>',
@@ -229,7 +230,7 @@ describe('a container listing groups by prop_group', () => {
   const sha = (t) => crypto.createHash('sha256').update(t).digest('hex');
 
   it('a flat container is unchanged', () => {
-    assert.equal(sha(flat.player.read('props', 'bookshelf.html')), '05b2d31951664ed5e97104124218d8a4c91bfb3664a2199c146d223478a70d00');
+    assert.equal(sha(withoutCredit(flat.player.read('props', 'bookshelf.html'))), '05b2d31951664ed5e97104124218d8a4c91bfb3664a2199c146d223478a70d00');
     assert.equal(sha(flat.gm.read('props', 'bookshelf.html')), '051ca089153f1d5fc79e772a1768863d9af44d097aa30eb7e4a193bf651ed291');
   });
 

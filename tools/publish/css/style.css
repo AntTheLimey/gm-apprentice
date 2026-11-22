@@ -198,6 +198,8 @@ img {
   font-weight: 600;
   padding: var(--space-1000) var(--space-1000);
   cursor: pointer;
+  /* A menu entry is a button or a link; a link would take the page's line height and sit higher (#851). */
+  line-height: normal;
   white-space: nowrap;
   height: 3.5rem;
   display: flex;
@@ -4990,6 +4992,8 @@ button.dnd5e-chip { font: inherit; color: var(--text); cursor: pointer; text-ali
   border-top: 1px solid var(--border);
   margin-top: 3rem;
 }
+.site-credit { margin: 0.5rem 0 0; }
+.site-credit a { color: var(--text); text-decoration: underline; }
 
 /* ===== BACK TO TOP ===== */
 .back-to-top {

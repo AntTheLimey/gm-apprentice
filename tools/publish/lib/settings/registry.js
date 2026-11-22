@@ -255,6 +255,11 @@ const REGISTRY = [
     left_out: 'No footer',
   },
   {
+    name: 'player_site.credit', type: 'switch', default: true, onFault: false, group: 'site',
+    does: 'The small "Powered by GM-Apprentice" line at the foot of every page, with a link to gmapprentice.com. It sits under your own footer. Never on the GM site, nor on a handout\'s own styled page',
+    left_out: 'On',
+  },
+  {
     name: 'player_site.features.search', was: [{ name: 'publish.search', in: 'vault' }, { name: 'searchEnabled', in: 'site' }], type: 'switch', default: true, legacyKind: 'scalar', group: 'site',
     does: 'The search box',
     left_out: 'On',
@@ -895,7 +900,7 @@ const NOT_PER_SITE = new Set(['player_site.publish', 'player_site.folder', 'play
   'player_site.hide.folders', 'player_site.hide.sections', 'player_site.hide.fields', 'player_site.hide.callouts',
   'player_site.hide.drafts', 'player_site.hide.field_exceptions', 'player_site.hide.declined', 'player_site.never_show',
   'player_site.features.live_stats', 'player_site.features.inbox', 'player_site.story.moments',
-  'player_site.story.pictures', 'player_site.story.scene_pictures']);
+  'player_site.story.pictures', 'player_site.story.scene_pictures', 'player_site.credit']);
 // A twin that does not inherit when unset: the player site's build steps never run for the GM site.
 const GM_OWN_DEFAULT = { 'player_site.before_build': [], 'player_site.after_build': [] };
 // What a twin does not copy: it has no old names, no default of its own (unset, it takes the player site's value), and

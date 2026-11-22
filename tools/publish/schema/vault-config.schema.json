@@ -541,6 +541,19 @@
             "null"
           ]
         },
+        "credit": {
+          "description": "The small \"Powered by GM-Apprentice\" line at the foot of every page, with a link to gmapprentice.com. It sits under your own footer. Never on the GM site, nor on a handout's own styled page",
+          "default": true,
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\s*(?:[tT][rR][uU][eE]|[yY][eE][sS]|[oO][nN]|[fF][aA][lL][sS][eE]|[nN][oO]|[oO][fF][fF])\\s*$"
+            }
+          ]
+        },
         "features": {
           "type": [
             "object",

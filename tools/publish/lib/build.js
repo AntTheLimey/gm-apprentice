@@ -1,5 +1,5 @@
 const { scopeColorScheme, headScript, storageKey } = require('./color-mode');
-const { configureColorMode, configureLinkPreviews, configureConnections, configureExtraStylesheets, configureThemeHooks, EXTRA_CSS_DIR } = require('./templates/base');
+const { configureColorMode, configureLinkPreviews, configureConnections, configureCredit, configureExtraStylesheets, configureThemeHooks, EXTRA_CSS_DIR } = require('./templates/base');
 const { hasSheetStructure } = require('./templates/sheet-parse');
 const fs = require('fs');
 const os = require('os');
@@ -1834,6 +1834,8 @@ function buildSite(options) {
   }
   configureLinkPreviews(publishConfig.link_previews);
   configureConnections(publishConfig.connections);
+  // The player site's alone: the GM site is the GM's own copy.
+  configureCredit(!gm && publishConfig.credit === true);
   copyCSS();
   writeGmFiles();
   copyJS();

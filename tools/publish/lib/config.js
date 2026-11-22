@@ -143,6 +143,7 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}, warn = console.wa
     connections: p.features.connections,
     site_title: p.title,
     footer: p.footer,
+    credit: p.credit,
     search: p.features.search,
     folder_map: p.folder_map,
     attachments_dir: v.attachments,

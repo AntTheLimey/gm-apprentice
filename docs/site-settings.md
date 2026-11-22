@@ -113,8 +113,9 @@ fixed, so nothing extra is ever shown by a guess. These are:
 <!-- /settings:hiding-list -->
 
 Every other setting only warns, by name, and the site uses that setting's
-usual value (off, for `player_site.publish`, `player_site.sheets.show`,
-`player_site.features.live_stats` and `player_site.features.inbox`).
+usual value (off, for `player_site.publish`, `player_site.credit`,
+`player_site.sheets.show`, `player_site.features.live_stats` and
+`player_site.features.inbox`).
 
 ### On and off
 
@@ -125,8 +126,9 @@ without. The choices that take `on` and `off` among their words
 `player_site.features.tohit_calculator`) read those words the same way.
 
 A setting written with nothing after the colon is treated as not set,
-except `player_site.publish`, `player_site.sheets.show`, `player_site.features.live_stats`
-and `player_site.features.inbox`, where an empty line counts as off. A switch that
+except `player_site.publish`, `player_site.credit`, `player_site.sheets.show`,
+`player_site.features.live_stats` and `player_site.features.inbox`, where
+an empty line counts as off. A switch that
 holds something that is not one of the words is reported by name, and
 what follows is as described under "Check the spelling" above.
 
@@ -174,6 +176,7 @@ Where a table says "A switch", see "On and off" above.
 | `player_site.folder`<br>was `publish.site_dir` | The folder on this computer that holds the site | A folder path | Setting up a site writes it |
 | `player_site.title`<br>was `publish.site_title`, `siteTitle` | The name in the menu bar and the browser tab | Text | No title; setting up a site writes one |
 | `player_site.footer`<br>was `publish.footer`, `footer` | A line at the foot of every page | Text | No footer |
+| `player_site.credit` | The small "Powered by GM-Apprentice" line at the foot of every page, with a link to gmapprentice.com. It sits under your own footer. Never on the GM site, nor on a handout's own styled page | A switch | On |
 | `player_site.features.search`<br>was `publish.search`, `searchEnabled` | The search box | A switch | On |
 | `player_site.features.link_previews`<br>was `publish.link_previews` | The small card that opens when a reader rests on a link to another page, or taps it once on a phone. `on` shows it everywhere; `desktop` keeps it to a mouse and keyboard, so on a phone a tap goes straight to the page | `on`, `desktop` or `off` | `on` |
 | `player_site.features.connections`<br>was `publish.connections` | How the Connections section on a page is drawn: what the page's subject is tied to, in tabs by kind (people, places, organisations and so on), with pages that only mention it in a last tab. `tree` is a branching list, readable on a phone; `web` puts the subject in the middle with names around it; `cards` gives a card for each; `off` leaves out the section and the list of mentions. `on`, `yes` and `true` read as `tree`; `no` and `false` as `off` | `tree`, `web`, `cards` or `off` | `tree` |
@@ -658,6 +661,7 @@ mark always means hidden from players. The GM site's folder is
 - `player_site.story.moments`
 - `player_site.story.pictures`
 - `player_site.story.scene_pictures`
+- `player_site.credit`
 
 <!-- /settings:gm-not-per-site -->
 
