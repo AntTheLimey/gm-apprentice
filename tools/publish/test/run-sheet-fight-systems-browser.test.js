@@ -488,8 +488,8 @@ describe('CoC and GURPS fights on the GM page, by real input', { skip: browserSk
     });
   });
   // Task 12: a hit typed as damage, type and place; Vex Harrow (Tower Stair) has DR 1 and 13 HP
-  for (const width of [1449, 1100]) {
-    it(`GURPS: 9 imp vitals Enter on a DR 1 foe takes 24 and shows the working at ${width}`, async () => {
+  for (const [width] of SIZES) {
+    it(`GURPS: 9 imp vitals Enter on a DR 1 foe takes 24 and shows the working at ${width}, a pending entry beside it`, async () => {
       const run = await start('gurps');
       await withPage({ width, height: 762 }, async (page) => {
         let p = await fightOn(page, run, 2);
@@ -504,6 +504,15 @@ describe('CoC and GURPS fights on the GM page, by real input', { skip: browserSk
         // one line, inside the row's width
         const box = await page.evaluate(`(() => { const e = document.querySelector(${q(line)}); const r = e.getBoundingClientRect(); const li = e.closest('li').getBoundingClientRect(); return { h: r.height, right: r.right, liRight: li.right }; })()`);
         assert.ok(box.h <= 20 && box.right <= box.liRight + 1, JSON.stringify(box));
+        // an entry typed after the hit, not applied: "Enter applies" shares the line with the working
+        const h2 = () => page.evaluate(`document.querySelector('li[data-row2="${vex}"]').getBoundingClientRect().height`);
+        const before = await h2();
+        await tap(page, `[data-fhp="${vex}"]`);
+        await page.type('-2');
+        await page.waitFor(`document.querySelector('li[data-row2="${vex}"] .pendnum')`);
+        assert.strictEqual(await h2(), before, `${width}: the second line stays one line`);
+        assert.strictEqual(await text(page, line), '9 imp \u2212 DR 1 = 8 \u00d7 3 = 24');
+        p = await settled(page);
         sane(p, `hit ${width}`);
         await shot(page, `gurps-hit-${width}`);
       });
@@ -527,7 +536,7 @@ describe('CoC and GURPS fights on the GM page, by real input', { skip: browserSk
       // the box has focus with the caret before the words: the damage is typed next
       await page.type('9');
       await page.key('Enter');
-      // 9 cut to a 13 HP arm through DR 1: 12, held at 7, crippled
+      // 9 cut arm on Vex (13 HP, DR 1): 7, crippled (arm)
       p = await until(page, `p.fight.rows.find((r) => r.id === ${q(vex)}).hp === 6 && p.saved === "Saved" && p.pending === 0`);
       assert.deepStrictEqual([named(p, 'Vex Harrow').hit.location, named(p, 'Vex Harrow').hit.type, named(p, 'Vex Harrow').crippled], ['arm', 'cut', ['arm']]);
       // the chips reset, the last used listed first

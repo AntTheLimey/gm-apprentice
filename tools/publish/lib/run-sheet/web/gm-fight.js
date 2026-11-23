@@ -1174,6 +1174,8 @@
       roll([{ damage: e.dice, ...(e.hit ? { type: e.hit.type } : {}) }]).then(([res]) => {
         const now = state().fight;
         if (now && f && now.id === f.id) RP.dispatch({ fight: f.id, type: 'hp', row: d.fhp, entry, rolled: res.total });
+        // the fight ended (or another began) while the dice were out: said, never applied to the wrong fight
+        else RP.note(`${entry} rolled ${res.total}, but that fight has ended: not applied.`, { kind: 'bad', id: `roll:late:${entry}` });
       }, (err) => {
         rollFailed(err);
         // the words go back in the box, as typed

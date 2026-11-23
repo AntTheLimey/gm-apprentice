@@ -31,26 +31,27 @@
   // A DR figure: a number, or the first whole number in the words typed for it (`2 (leather)`); null when none.
   const drFigure = (v) => { if (isNum(v)) return Math.max(0, Math.floor(v)); const m = /\d+/.exec(String(v == null ? '' : v)); return m ? Number(m[0]) : null; };
   const placeName = (location, side) => (side ? `${side} ${location}` : location);
-  // The row's DR where the hit lands: a PC's sheet DR for the place (its side's first; an eye's is the face's), else
-  // its torso's; a foe's one DR. A foe's open face (and its eyes) is DR 0.
+  // The row's DR where the hit lands: a DR the GM typed in the fight first (armour put on mid-fight), then a PC's
+  // sheet DR for the place (its side's first; an eye's is the face's), else its torso's; else the row's one DR.
+  // `faceOpen` makes the face and the eyes 0.
   function drAt(row, location, side, loc) {
+    const typed = row.typedKeys && row.typedKeys.dr ? drFigure(row.dr) : null;
+    if (row.faceOpen && loc.face) return { dr: 0, open: true };
+    if (typed !== null) return { dr: typed, open: false };
     const by = row.drByLocation && typeof row.drByLocation === 'object' ? row.drByLocation : null;
     if (by) {
       for (const k of [side ? placeName(location, side) : null, location, location === 'eye' ? 'face' : null, 'torso']) {
         if (k && isNum(by[k])) return { dr: by[k], open: false };
       }
     }
-    if (row.faceOpen && loc.face) return { dr: 0, open: true };
     const d = drFigure(row.dr);
     return { dr: d === null ? 0 : d, open: false };
   }
   const times = (x) => String(Math.round(x * 100) / 100);
 
-  // A hit's injury (Task 12): `hit` is { n, type, location, side, dice } (`n` the damage, rolled or typed), `row` the
-  // fight row (dr, drByLocation, faceOpen, max), `wounding` the system's table (systems/gurps.js WOUNDING, read from
-  // the fight's rules). DR off (with the place's own extra), nothing through is 0; then the type's or the place's
-  // multiplier, rounded down, at least 1; a limb held to its cap. Answers { injury, line, location, side, type, place,
-  // crippled }: `line` is the working (`9 imp − DR 1 = 8 × 3 = 24`).
+  // A hit's injury (Task 12). `hit` { n, type, location, side, dice }, `row` { dr, drByLocation, typedKeys, faceOpen,
+  // max }, `wounding` the table in systems/gurps.js (B377-381, B398, B420, B552). Answers { injury, line, location,
+  // side, type, place, crippled }; `line` is the working.
   function gurpsInjury(hit, row, wounding) {
     const w = wounding || {};
     const r = row || {};
@@ -62,7 +63,6 @@
     const place = placeName(location, side);
     const n = isNum(hit.n) ? Math.max(0, Math.floor(hit.n)) : 0;
     const left = (except) => (loc.except || []).includes(except);
-    // the multiplier: the place's for its types, else the type's own, said where the place is aimed at by others
     let mult = usual;
     let note = '';
     if (isNum(loc.all) && !left(type)) mult = loc.all;
@@ -72,16 +72,18 @@
     const at = drAt(r, location, side, loc);
     const dr = at.dr + extra;
     const drText = extra ? `${dr} (${location} +${extra})` : at.open ? `${dr} (face open)` : String(dr);
-    const head = `${hit.dice ? `${hit.dice} = ` : ''}${n} ${type} \u2212 DR ${drText}`;
+    const fat = type === 'fat';
+    const head = `${hit.dice ? `${hit.dice} = ` : ''}${n} ${type}${fat ? ` ${place}` : ''} \u2212 DR ${drText}`;
     const through = n - dr;
     const out = { injury: 0, location, side, type, place, crippled: false };
     if (through <= 0) return { ...out, line: `${head} = 0` };
+    // `fat` (B398)
+    if (fat) return { ...out, injury: through, line: `${head} = ${through} (fatigue: no location multiplier)` };
     const raw = Math.floor(through * mult);
     let injury = Math.max(1, raw);
     let line = `${head} = ${through}${mult !== 1 || note ? ` \u00d7 ${times(mult)}${note} = ${raw}` : ''}`;
     if (injury !== raw) line += `, at least ${injury}`;
-    // crippled past its share of max HP (not a hit taken as the torso's); a limb's or extremity's injury held to the
-    // least that cripples
+    // `cripple` and `cap` (B420, B552)
     const max = isNum(r.max) && r.max > 0 ? r.max : null;
     if (isNum(loc.cripple) && !note && max !== null && injury * loc.cripple > max) {
       out.crippled = true;

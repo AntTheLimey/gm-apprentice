@@ -9,7 +9,7 @@ const path = require('node:path');
 const { dnd, describeAs } = require('./dnd');
 const { statSection } = require('./stat-section');
 const { pairs, firstOf, leadingNumber, clean } = require('./pairs');
-const { deriveGurps } = require('../web/gurps-math');
+const { deriveGurps, drFigure } = require('../web/gurps-math');
 const { extractSections } = require('../../processor');
 const { parseGurps } = require('../../templates/gurps/parse');
 const { buildVitals } = require('../../templates/gurps/live-data');
@@ -17,14 +17,11 @@ const { sections } = require('../plan-text');
 
 const FOE_TYPES = new Set(['npc', 'creature']);
 
-// The wounding table (Task 12): names and numbers only, each beside its page. `types` are the damage types'
-// multipliers (B379). A location gives its multiplier only to the types listed in `by`, or to every type but those
-// in `except` (`all`); `only` marks a location the book lets only the `by` types aim at (the box takes any, and says
-// so). `dr` is the location's extra DR, `face` its use of a foe's "face open", `cripple` the share of max HP a blow
-// must pass to cripple it (over HP/N), and `cap` the injury held to the least that cripples (B420).
+// The wounding table (Task 12), names and numbers only. Fields: `types` (B379); per location `by`, `all`, `except`,
+// `only`, `dr`, `face`, `sided`, `cripple`, `cap` (B398, B420, B552).
 const PIERCING = ['pi-', 'pi', 'pi+', 'pi++'];
 const each = (keys, v) => Object.fromEntries(keys.map((k) => [k, v]));
-const LIMB_DOWN = { 'pi+': 1, 'pi++': 1, imp: 1 }; // B398, B552
+const LIMB_DOWN = { 'pi+': 1, 'pi++': 1, imp: 1 }; // B552
 const WOUNDING = {
   types: { 'pi-': 0.5, pi: 1, 'pi+': 1.5, 'pi++': 2, cut: 1.5, imp: 2, cr: 1, burn: 1, tbb: 1, cor: 1, tox: 1, fat: 1 }, // B379
   // the long names and one-letter forms a GM types (`tbb` is tight-beam burning)
@@ -76,8 +73,6 @@ function maxOf(v) {
   return m ? Number(m[2]) : leadingNumber(v);
 }
 
-// A DR figure: its first whole number (`3`, `2*`, `(2)`, `2 (leather)`), or null when it has none.
-const drFigure = (v) => { const m = /\d+/.exec(String(v == null ? '' : v)); return m ? Number(m[0]) : null; };
 // `face 0`, `face open`, `open face`, `bare face`, `face bare`, `face unarmoured`, on the DR's own line
 const FACE_BARE = /\bface\s*(?::\s*)?(?:0\b|open\b|bare\b|none\b|unarmou?red\b)|\b(?:open|bare)[ -]face/i;
 
@@ -218,12 +213,14 @@ function magicOf(model, text) {
 
 // A PC's DR by location, from the sheet's `DR by Hit Location` table (parseGurps's model.defenses.hitLocations):
 // each row's place (`Skull`, `Arms`, `Left Arm`, `Arms/Legs`, `Head`) to the table's own location names, its DR
-// (`3`, `2*`) to its leading figure. A side named keeps its own key (`left arm`) and fills the plain one if empty.
+// (`3`, `2*`) to its leading figure. A sided row gives its own key (`left arm`); the plain key (`arm`) comes from rows
+// with no side, and from a sided row only when no plain row names that place. The first row for a key wins.
 // null when no row reads.
 function drByLocationOf(model) {
   const rows = ((model && model.defenses) || {}).hitLocations || [];
   const out = {};
   const put = (k, v) => { if (!(k in out)) out[k] = v; };
+  const read = [];
   for (const row of rows) {
     const dr = drFigure(row && row.dr);
     if (dr === null) continue;
@@ -233,12 +230,15 @@ function drByLocationOf(model) {
       const name = words.filter((x) => x !== side).join(' ');
       const loc = WOUNDING.locations[name] ? name : WOUNDING.locationWords[name];
       if (!loc || name.length < 3) continue;
-      if (side) put(`${side} ${loc}`, dr);
-      put(loc, dr);
-      // a `Head` row covers the face too
-      if (name === 'head') put('face', dr);
+      read.push({ side, loc, dr, head: name === 'head' });
     }
   }
+  for (const x of read) {
+    if (x.side) put(`${x.side} ${x.loc}`, x.dr);
+    else { put(x.loc, x.dr); if (x.head) put('face', x.dr); }
+  }
+  // a place named only with a side: its plain key from the first such row
+  for (const x of read) if (x.side) put(x.loc, x.dr);
   return Object.keys(out).length ? out : null;
 }
 
@@ -298,7 +298,7 @@ function describeGurps(id) {
     // a caster's box: a spell is paid with f-3 (FP) or e-3 (Energy Reserve)
     casterPlaceholder: '\u2726 f-3',
     entryInvalid: 'Type -7 or 7 (injury), 9 imp vitals or 2d+1 cr (a hit), +3 (healing), f-2 (FP) or e-2 (Energy Reserve)',
-    faceOpen: 'face open', faceOpenTitle: 'The face is bare: a hit to the face or an eye ignores DR',
+    faceOpen: 'face open', faceOpenTitle: 'Face open: DR 0 for a hit to the face or an eye',
     noReserve: 'No Energy Reserve: f-N pays from FP',
     noFp: 'No FP on this row: type its max FP or HT',
     casterTitle: 'A caster: f-3 pays a spell from FP', reserveTitle: 'e-3 spends it',

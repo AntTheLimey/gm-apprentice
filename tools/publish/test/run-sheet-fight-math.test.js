@@ -1001,6 +1001,13 @@ test('hit grammar: damage, type and place in GURPS; a bare number stays raw', ()
   assert.deepEqual(hit('+3'), { pool: 'hp', kind: 'heal', n: 3 });
   // a place with no type, a word that is neither, healing with a type, a side with no limb: invalid
   for (const bad of ['9 vitals', '9 imp vitals x', '+9 imp', '9 left', 'imp vitals', '9 imp imp vitals', '10000 imp']) assert.equal(hit(bad), null, bad);
+  // a side after the place is not read
+  assert.equal(hit('9 cr arm left'), null);
+  // `t`: toxic while no type is given, the torso after one
+  assert.deepEqual(hit('9t').hit, { type: 'tox', location: 'torso', side: null });
+  assert.deepEqual(hit('9 cut t').hit, { type: 'cut', location: 'torso', side: null });
+  assert.deepEqual(hit('9 t t').hit, { type: 'tox', location: 'torso', side: null });
+  assert.equal(hit('9 t vitals').hit.type, 'tox');
   // only a system with a wounding table reads hits
   for (const t of ['9 imp vitals', '9i', '2d+1']) { assert.equal(M.parseEntry(t), null, `${t} in D&D`); assert.equal(M.parseEntry(t, COC), null, `${t} in CoC`); }
 });
@@ -1015,14 +1022,14 @@ test('a hit\'s words for the chips, and their order with the last used first', (
   assert.deepEqual(M.chipOrder(['cr', 'cut', 'imp'], 'nope'), ['cr', 'cut', 'imp']);
 });
 
-test('each damage type to the torso', () => {
+test('9 of each type to the torso on DR 1', () => {
   const want = { 'pi-': 4, pi: 8, 'pi+': 12, 'pi++': 16, cut: 12, imp: 16, cr: 8, burn: 8, tbb: 8, cor: 8, tox: 8, fat: 8 };
   for (const [type, injury] of Object.entries(want)) assert.equal(hitOn(`9 ${type} torso`, foe()).injury, injury, type);
   assert.equal(hitOn('9 cr', foe()).line, '9 cr − DR 1 = 8');
   assert.equal(hitOn('9 cut', foe()).line, '9 cut − DR 1 = 8 × 1.5 = 12');
 });
 
-test('vitals: ×3 for impaling and piercing, ×2 for tight-beam burning, others as the torso and said', () => {
+test('9 imp vitals on DR 1 takes 24, 9 tbb vitals 16, 9 cut vitals 12 with its line', () => {
   const v = hitOn('9 imp vitals', foe());
   assert.deepEqual([v.injury, v.line, v.location, v.type], [24, '9 imp − DR 1 = 8 × 3 = 24', 'vitals', 'imp']);
   for (const t of ['pi-', 'pi', 'pi+', 'pi++']) assert.equal(hitOn(`9 ${t} vitals`, foe()).injury, 24, t);
@@ -1032,7 +1039,7 @@ test('vitals: ×3 for impaling and piercing, ×2 for tight-beam burning, others 
   assert.equal(hitOn('9 cr vitals', foe()).line, '9 cr − DR 1 = 8 × 1 (vitals: as torso for cr) = 8');
 });
 
-test('the eye: ×4 for impaling, piercing and tight-beam burning, no extra DR; crushing as the torso, said', () => {
+test('9 imp eye on DR 1 takes 32, 9 cr eye 8 with its line; 9 imp left eye at 12 HP is marked', () => {
   for (const t of ['imp', 'pi-', 'pi', 'pi+', 'pi++', 'tbb']) {
     const e = hitOn(`9 ${t} eye`, foe({ max: 100 }));
     assert.equal(e.injury, 32, t);
@@ -1040,20 +1047,24 @@ test('the eye: ×4 for impaling, piercing and tight-beam burning, no extra DR; c
   }
   const cr = hitOn('9 cr eye', foe({ max: 100 }));
   assert.deepEqual([cr.injury, cr.line, cr.crippled], [8, '9 cr − DR 1 = 8 × 1 (eye: as torso for cr) = 8', false]);
-  // over a tenth of max HP: the eye's mark, and no cap
+  // 12 HP
   const blind = hitOn('9 imp left eye', foe({ max: 12 }));
   assert.deepEqual([blind.injury, blind.crippled, blind.place], [32, true, 'left eye']);
 });
 
-test('the skull: DR +2 and ×4 for every type but toxic', () => {
+test('12 cr skull on DR 1 takes 36, 12 tox skull 11 with its line', () => {
   const s = hitOn('12 cr skull', foe());
   assert.deepEqual([s.injury, s.line], [36, '12 cr − DR 3 (skull +2) = 9 × 4 = 36']);
-  for (const t of ['pi-', 'cut', 'imp', 'burn', 'fat']) assert.equal(hitOn(`12 ${t} skull`, foe()).injury, 36, t);
+  for (const t of ['pi-', 'cut', 'imp', 'burn']) assert.equal(hitOn(`12 ${t} skull`, foe()).injury, 36, t);
+  // fat: the place's DR, then FP (ruling, fix round 1)
+  const fat = hitOn('12 fat skull', foe());
+  assert.deepEqual([fat.injury, fat.line, fat.crippled], [9, '12 fat skull − DR 3 (skull +2) = 9 (fatigue: no location multiplier)', false]);
+  assert.deepEqual([hitOn('12 fat arm', foe()).injury, hitOn('12 fat arm', foe()).crippled], [11, false], '12 fat arm at 12 HP');
   const tox = hitOn('12 tox skull', foe());
   assert.deepEqual([tox.injury, tox.line], [11, '12 tox − DR 1 = 11 × 1 (skull: as torso for tox) = 11']);
 });
 
-test('the face: unchanged but corrosion ×1.5; face open makes its DR 0', () => {
+test('9 cr face on DR 3 takes 6, 9 with face open; 9 cor face takes 9', () => {
   assert.equal(hitOn('9 cr face', foe({ dr: 3 })).line, '9 cr − DR 3 = 6');
   assert.equal(hitOn('9 imp face', foe({ dr: 3 })).injury, 12);
   assert.equal(hitOn('9 cor face', foe({ dr: 3 })).injury, 9);
@@ -1063,32 +1074,31 @@ test('the face: unchanged but corrosion ×1.5; face open makes its DR 0', () => 
   assert.equal(hitOn('9 cr torso', foe({ dr: 3, faceOpen: true })).injury, 6, 'the rest keeps its DR');
 });
 
-test('the neck: cutting ×2, crushing and corrosion ×1.5, others as usual', () => {
+test('9 cut neck on DR 1 takes 16, 9 cr neck 12, 9 imp neck 16', () => {
   const want = { cut: 16, cr: 12, cor: 12, imp: 16, pi: 8, 'pi-': 4, burn: 8 };
   for (const [t, injury] of Object.entries(want)) assert.equal(hitOn(`9 ${t} neck`, foe()).injury, injury, t);
 });
 
-test('limbs and extremities: large and huge piercing and impaling ×1, capped and crippled past their share', () => {
-  assert.equal(hitOn('7 pi+ arm', foe()).injury, 6, 'pi+ ×1 to the arm');
+test('7 pi+ arm on DR 1 takes 6; 9 cut left arm at 12 HP takes 7, crippled; 9 cr hand takes 5', () => {
+  assert.equal(hitOn('7 pi+ arm', foe()).injury, 6);
   assert.equal(hitOn('7 pi++ leg', foe()).injury, 6);
   assert.equal(hitOn('7 imp foot', foe({ max: 100 })).injury, 6);
-  assert.equal(hitOn('7 cut arm', foe({ max: 100 })).injury, 9, 'cutting keeps ×1.5');
-  // 12 HP: an arm is crippled by 7 (over 6), and held there
+  assert.equal(hitOn('7 cut arm', foe({ max: 100 })).injury, 9);
+  // 12 HP, DR 1
   const arm = hitOn('9 cut left arm', foe());
   assert.deepEqual([arm.injury, arm.crippled, arm.place, arm.line], [7, true, 'left arm', '9 cut − DR 1 = 8 × 1.5 = 12, capped at 7 (left arm)']);
-  assert.deepEqual([hitOn('7 cr arm', foe()).injury, hitOn('7 cr arm', foe()).crippled], [6, false], 'exactly half: not crippled');
-  // a hand at 12 HP: over 4 cripples, held at 5
+  assert.deepEqual([hitOn('7 cr arm', foe()).injury, hitOn('7 cr arm', foe()).crippled], [6, false], '7 cr arm at 12 HP');
   const hand = hitOn('9 cr hand', foe());
   assert.deepEqual([hand.injury, hand.crippled, hand.place], [5, true, 'hand']);
   assert.deepEqual([hitOn('5 cr hand', foe()).injury, hitOn('5 cr hand', foe()).crippled], [4, false]);
-  // a row with no max: no cap, no mark
+  // a row with no max
   assert.deepEqual([hitOn('9 cut arm', foe({ max: null })).injury, hitOn('9 cut arm', foe({ max: null })).crippled], [12, false]);
 });
 
-test('DR that stops the whole hit is 0; a hit through is at least 1', () => {
+test('4 cr torso on DR 5 takes 0, 5 imp vitals on DR 5 takes 0, 9 pi- on DR 8 takes 1', () => {
   const stop = hitOn('4 cr torso', foe({ dr: 5 }));
   assert.deepEqual([stop.injury, stop.line], [0, '4 cr − DR 5 = 0']);
-  assert.equal(hitOn('5 imp vitals', foe({ dr: 5 })).injury, 0, 'equal to DR is stopped');
+  assert.equal(hitOn('5 imp vitals', foe({ dr: 5 })).injury, 0);
   const least = hitOn('9 pi- torso', foe({ dr: 8 }));
   assert.deepEqual([least.injury, least.line], [1, '9 pi- − DR 8 = 1 × 0.5 = 0, at least 1']);
   // DR as words a GM typed: its figure; no DR is 0
@@ -1099,13 +1109,20 @@ test('DR that stops the whole hit is 0; a hit through is at least 1', () => {
 test('a PC\'s DR by place, its side first, else its torso\'s', () => {
   const sela = { max: 12, drByLocation: { skull: 4, face: 0, neck: 2, torso: 3, arm: 2, 'left leg': 5, leg: 2 } };
   assert.equal(hitOn('9 cr torso', sela).line, '9 cr − DR 3 = 6');
-  assert.equal(hitOn('9 cr arm', sela).injury, 7, 'arm DR 2, crippled past 6 at 12 HP');
+  assert.equal(hitOn('9 cr arm', sela).injury, 7, 'arm DR 2, 12 HP');
   assert.equal(hitOn('9 cr left leg', sela).line, '9 cr − DR 5 = 4');
   const right = hitOn('9 cr right leg', sela);
-  assert.deepEqual([right.line, right.injury, right.crippled], ['9 cr − DR 2 = 7', 7, true], 'no right-leg row: the leg\'s; 7 reaches the cap');
+  assert.deepEqual([right.line, right.injury, right.crippled], ['9 cr − DR 2 = 7', 7, true], 'no right-leg row: the leg\'s');
   assert.equal(hitOn('9 imp vitals', sela).line, '9 imp − DR 3 = 6 × 3 = 18', 'no vitals row: the torso\'s');
   assert.equal(hitOn('9 cr skull', sela).line, '9 cr − DR 6 (skull +2) = 3 × 4 = 12');
   assert.equal(hitOn('9 imp eye', { ...sela, max: 100 }).line, '9 imp − DR 0 = 9 × 4 = 36', 'an eye takes the face\'s');
+});
+
+test('a DR typed in the fight wins over the sheet\'s by place', () => {
+  const pc = { max: 12, dr: 6, typedKeys: { dr: true }, drByLocation: { torso: 3, arm: 2 } };
+  assert.equal(hitOn('9 cr arm', pc).line, '9 cr − DR 6 = 3');
+  assert.equal(hitOn('9 cr arm', { ...pc, typedKeys: {} }).line, '9 cr − DR 2 = 7', 'not typed: the sheet\'s');
+  assert.equal(hitOn('9 cr face', { ...pc, faceOpen: true }).line, '9 cr − DR 0 (face open) = 9');
 });
 
 test('the dice\'s working starts with the roll', () => {

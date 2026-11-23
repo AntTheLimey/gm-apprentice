@@ -272,7 +272,14 @@ describe('GURPS hits: the readers', () => {
       { location: 'Left Arm', dr: '3' }, { location: 'Arms/Legs', dr: '2*' }, { location: 'Head', dr: '4' },
       { location: 'Torso', dr: '—' }, { location: 'Vitals', dr: '5' }, { location: 'Tail', dr: '9' },
     ] } };
-    assert.deepEqual(drByLocationOf(model), { 'left arm': 3, arm: 3, leg: 2, skull: 4, face: 4, vitals: 5 });
+    // the plain arm is the Arms/Legs row's, whatever the order: a right-arm or unsided hit is never the left's DR 3
+    assert.deepEqual(drByLocationOf(model), { 'left arm': 3, arm: 2, leg: 2, skull: 4, face: 4, vitals: 5 });
+    const sided = { defenses: { hitLocations: [{ location: 'Right Arm', dr: '1' }, { location: 'Left Arm', dr: '3' }, { location: 'Torso', dr: '2' }] } };
+    assert.deepEqual(drByLocationOf(sided), { 'right arm': 1, 'left arm': 3, torso: 2, arm: 1 }, 'no plain row: the first sided one');
+    const { gurpsInjury } = require('../lib/run-sheet/web/gurps-math');
+    const row = { max: 20, drByLocation: drByLocationOf(model) };
+    assert.equal(gurpsInjury({ n: 9, type: 'cr', location: 'arm', side: 'right' }, row, WOUNDING).line, '9 cr − DR 2 = 7');
+    assert.equal(gurpsInjury({ n: 9, type: 'cr', location: 'arm', side: 'left' }, row, WOUNDING).line, '9 cr − DR 3 = 6');
     assert.equal(drByLocationOf({ defenses: { hitLocations: [] } }), null);
     assert.equal(drByLocationOf({}), null);
   });

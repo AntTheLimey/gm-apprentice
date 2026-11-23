@@ -336,9 +336,8 @@
     settleTired(s, f, r, at);
   }
 
-  // A hit (GURPS, Task 12): the injury from the fight's wounding table (GM.gurpsInjury), its working on the row
-  // (`r.hit`: { line, injury, location, side, type }, what Task 13 reads) and in the log; fatigue's to FP, the rest
-  // to HP as any damage; a blow past a place's crippling share adds its mark, logged. DR that stops it all is 0.
+  // A hit (GURPS, Task 12): GM.gurpsInjury's injury to HP (a `fat` hit's to FP), `r.hit` { line, injury, location,
+  // side, type } for Task 13, the working logged, a `crippled` place added and logged once.
   function hitEntry(s, f, r, e, at) {
     const out = GM.gurpsInjury({ ...e.hit, n: e.n, dice: e.dice || null }, r, FM.rulesOf(f).wounding);
     r.hit = { line: out.line, injury: out.injury, location: out.location, side: out.side, type: out.type };
@@ -545,7 +544,7 @@
     }),
     half: onRow((s, f, r, a, at) => { r.half = !!a.on; touch(r, at); }),
     resisted: onRow((s, f, r, a, at) => { r.resisted = !!a.on; touch(r, at); }),
-    // a foe's bare face (GURPS): a hit to its face or eyes takes no DR
+    // the face-open toggle (GURPS, Task 12), read by GM.gurpsInjury
     faceOpen: onRow((s, f, r, a, at) => { if (r.kind === 'lair') return; r.faceOpen = !!a.on; touch(r, at); }),
     // A max typed on a row with no numbers sets its HP too, so a stock creature runs once its HP is typed; a row that
     // was full stays full, and HP never goes above the maximum (SRD) (fitMax).

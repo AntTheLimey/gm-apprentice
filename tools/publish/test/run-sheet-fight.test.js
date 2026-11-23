@@ -2266,7 +2266,7 @@ describe('GURPS hits on the row (step 6b Task 12)', () => {
     assert.deepEqual(lines(s).slice(before), ['Knight, torso: 4 cr − DR 5 = 0.']);
   });
 
-  it('an arm hit is capped and crippled, logged once; the mark stays through healing', () => {
+  it('9 cut left arm on DR 1 at 12 HP takes 7, crippled (left arm) logged once and kept through +20', () => {
     let s = begin([{ name: 'Vex', hp: 12, max: 12, dr: 1 }]);
     s = typeIn(s, 'Vex', '9 cut left arm');
     let v = named(s, 'Vex');
@@ -2279,7 +2279,7 @@ describe('GURPS hits on the row (step 6b Task 12)', () => {
     assert.deepEqual([v.hp, v.crippled], [12, ['left arm']]);
   });
 
-  it('large piercing to the arm at ×1', () => {
+  it('7 pi+ arm on DR 1 takes 6', () => {
     let s = begin([{ name: 'Vex', hp: 30, max: 30, dr: 1 }]);
     s = typeIn(s, 'Vex', '7 pi+ arm');
     assert.deepEqual([named(s, 'Vex').hp, named(s, 'Vex').hit.line], [24, '7 pi+ − DR 1 = 6']);
@@ -2312,15 +2312,25 @@ describe('GURPS hits on the row (step 6b Task 12)', () => {
     }
   });
 
-  it('fatigue goes to FP after DR; a PC uses its sheet\'s DR by place', () => {
+  it('5 fat on DR 1 takes 4 FP, 12 fat skull 9 FP; a PC uses its sheet\'s DR by place', () => {
     let s = begin([{ name: 'Mage', hp: 10, max: 10, fp: 10, fpMax: 10, dr: 1 },
       { name: 'Sela', kind: 'pc', hp: 12, max: 12, drByLocation: { torso: 3, arm: 2, skull: 4 } }]);
     s = typeIn(s, 'Mage', '5 fat');
     assert.deepEqual([named(s, 'Mage').fp, named(s, 'Mage').hp], [6, 10]);
+    s = typeIn(s, 'Mage', '12 fat skull');
+    assert.deepEqual([named(s, 'Mage').fp, named(s, 'Mage').hp, named(s, 'Mage').crippled], [-3, 10, []]);
+    assert.equal(named(s, 'Mage').hit.line, '12 fat skull − DR 3 (skull +2) = 9 (fatigue: no location multiplier)');
     s = typeIn(s, 'Sela', '9 cr');
     assert.equal(named(s, 'Sela').hp, 6, 'torso DR 3');
     s = typeIn(s, 'Sela', '4 cr arm');
     assert.equal(named(s, 'Sela').hp, 4, 'arm DR 2');
+  });
+
+  it('a DR typed in the panel wins over the sheet\'s by place for that row', () => {
+    let s = begin([{ name: 'Sela', kind: 'pc', hp: 30, max: 30, drByLocation: { torso: 3, arm: 2 } }]);
+    s = G(s, { type: 'setStat', row: named(s, 'Sela').id, key: 'dr', value: 6 });
+    s = typeIn(s, 'Sela', '9 cr arm');
+    assert.deepEqual([named(s, 'Sela').hp, named(s, 'Sela').hit.line], [27, '9 cr − DR 6 = 3']);
   });
 
   it('a PC row from the fixture sheet carries its DR by place', () => {
