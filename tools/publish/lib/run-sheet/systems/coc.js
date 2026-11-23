@@ -332,7 +332,8 @@ function describeCoc(id) {
     // `prompts` below; a line rolls the row's `stat`; each offer adds or removes statuses by name.
     cards: COC_CARDS,
     // a shot (Task 19): the range, the chips, Prone, the dive and the malfunction flag
-    firearm: FIREARM_RULES,
+    // Regency (RC p187): every gun is a flintlock, so one whose line does not say reads as never impaling
+    firearm: id === 'coc-7e-regency' ? { ...FIREARM_RULES, unknownImpales: false } : FIREARM_RULES,
   };
   // a Major Wound is a hit of at least max HP over `majorWoundAt` (KR p119, p120); a SAN loss of `insanityAt` or more
   // in one entry asks for the INT roll (KR p155)
@@ -371,6 +372,20 @@ function describeCoc(id) {
 const foeRow = (n) => ({ init: n.dex, mp: n.mp, mpMax: n.mp, san: n.san, sanMax: n.san, dex: n.dex, con: n.con, int: n.int, armour: n.armour, from: n.from,
   fighting: n.fighting, firearms: n.firearms, dodge: n.dodge, db: n.db, build: n.build, attacks: n.attacks, guns: n.guns || null });
 
-const make = (id) => ({ ...dnd, id, fights: true, readFoe, readPc, foeRow, stockNoActions: undefined, describe: () => describeCoc(id) });
+// A gun whose line says nothing about impaling takes the system's reading (`rules.coc.firearm.unknownImpales`:
+// Regency's false); a line that says it wins. Plain CoC leaves it null.
+function settleGuns(guns, firearm) {
+  if (!Array.isArray(guns) || !firearm || typeof firearm.unknownImpales !== 'boolean') return guns;
+  return guns.map((g) => (g.impales === null ? { ...g, impales: firearm.unknownImpales } : g));
+}
+// The readers with the system's own rules object, the one describe() gives (no second lookup).
+const make = (id) => {
+  const firearm = () => describeCoc(id).fight.coc.firearm;
+  return {
+    ...dnd, id, fights: true, foeRow, stockNoActions: undefined, describe: () => describeCoc(id),
+    readFoe: (a) => { const r = readFoe(a); if (r.nums && r.nums.guns) r.nums.guns = settleGuns(r.nums.guns, firearm()); return r; },
+    readPc: (a) => { const r = readPc(a); if (r.numbers && r.numbers.guns) r.numbers = { ...r.numbers, guns: settleGuns(r.numbers.guns, firearm()) }; return r; },
+  };
+};
 
 module.exports = { coc: make('coc-7e'), cocRegency: make('coc-7e-regency'), readNumbers, keyOf, lacks };

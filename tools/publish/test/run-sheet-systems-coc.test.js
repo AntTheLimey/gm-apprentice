@@ -177,6 +177,27 @@ for (const crlf of [false, true]) {
       }
       assert.equal(readNumbers('- Thompson 40% (20/8), damage 1D10+2').firearms, 40);
     });
+    it('Regency guns that do not say read impales false; the same blocks in plain CoC read null; a line that says impales wins (fix round 3)', () => {
+      const { buildIndex } = require('../lib/run-sheet/notes');
+      const tmp = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'coc-guns-'));
+      try {
+        fs.mkdirSync(path.join(tmp, 'Characters', 'NPCs'), { recursive: true });
+        // made-up officers, written as Ord's and Dunmore's blocks are
+        const block = (gun) => `---\nname: Officer\ntype: npc\n---\n\n## GM Notes\n\n### Stats\n\n**HP** 12 · **DEX** 60\n\n**Combat**\n- Brawl 50% (25/10), damage 1D3+1D4\n- ${gun}\n- Dodge 25% (12/5)\n`;
+        fs.writeFileSync(path.join(tmp, 'Characters/NPCs/Officer A.md'), block('Firearms (Pistol) 45% (22/9), damage 1D6+1'));
+        fs.writeFileSync(path.join(tmp, 'Characters/NPCs/Officer B.md'), block('Firearms (Handgun) 40% (20/8), damage 1D10'));
+        fs.writeFileSync(path.join(tmp, 'Characters/NPCs/Officer C.md'), block('Firearms (Pistol) 45% (22/9), damage 1D6+1, impales'));
+        const index = buildIndex(tmp);
+        const imp = (id, who) => systemFor(id).readFoe({ notePath: `Characters/NPCs/${who}.md`, index, text: undefined }).nums.guns.map((g) => g.impales);
+        assert.deepEqual(['Officer A', 'Officer B', 'Officer C'].map((w) => imp('coc-7e-regency', w)), [[false], [false], [true]]);
+        assert.deepEqual(['Officer A', 'Officer B', 'Officer C'].map((w) => imp('coc-7e', w)), [[null], [null], [true]]);
+        // a PC's sheet the same way
+        const sheet = fs.readFileSync(path.join(dir, 'Characters/PCs/Iris Calder.md'), 'utf8').replace(/\r\n/g, '\n').replace(/^---[\s\S]*?\n---\n/, '');
+        const body = `${sheet}\n## Combat\n\n| Weapon | Skill % | Damage | Attacks | Range | Ammo | Malf |\n|---|---|---|---|---|---|---|\n| Pistol | 50 | 1D6+1 | 1 | 10 yds | 1 | 95 |\n`;
+        assert.deepEqual([systemFor('coc-7e-regency').readPc({ body, fm: { name: 'Iris Calder' } }).numbers.guns[0].impales,
+          systemFor('coc-7e').readPc({ body, fm: { name: 'Iris Calder' } }).numbers.guns[0].impales], [false, null]);
+      } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+    });
     it('malfunction 00 is 100; a number outside 1-100 is none (Task 19)', () => {
       const g = (t) => readNumbers(`- Flintlock pistol 30%, damage 1D6, ${t}`).guns[0].malfunction;
       assert.deepEqual([g('malf 00'), g('malfunction 100'), g('malfunction 150'), g('malf. 95')], [100, 100, null, 95]);
