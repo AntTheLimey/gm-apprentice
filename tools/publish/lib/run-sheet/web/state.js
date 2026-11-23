@@ -531,7 +531,7 @@
         if (r.kind === 'pc') rowId = partyNoteOf(model, r);
         else if (r.kind === 'ally' && r.note) {
           rowId = r.copy > 1 ? `${r.note}#${r.copy}` : r.note;
-          if (!allies.has(rowId)) allies.set(rowId, { rowId, ally: true, copy: r.copy || 1, note: r.note, name: r.name, base: { hp: (r.start || {}).hp ?? r.max ?? null, max: r.max ?? null, ...poolBase(r.start || {}, r, poolColumns(model)) } });
+          if (!allies.has(rowId)) allies.set(rowId, { rowId, ally: true, copy: r.copy || 1, note: r.note, name: r.name, base: { hp: (r.start || {}).hp ?? r.max ?? null, max: r.max ?? null, ...poolBase(r.start || {}, r, nightPools(model)) } });
         }
         // HP and max at their own time, conditions at theirs (Review H1); a row from before them reads `at`
         const at = r.at || f.endedAt || f.startedAt || null;
@@ -573,6 +573,17 @@
     return Array.isArray(v) ? v.filter((c) => c && typeof c === 'object' && typeof c.field === 'string') : [];
   }
   const poolColumns = (model) => vitalColumns(model).filter((c) => c.field !== 'hp' && c.field !== 'conditions');
+  // The pools the night holds: the columns', and any other pool the system's fight keeps (model.rules.pools, each
+  // { key, max }: GURPS's Energy Reserve), which has no column. Such a pool is replayed like the others, so the next
+  // fight that night starts from it, but it is never written to the Table Log (vitalsRecorded reads the columns) and
+  // so never carried to the next session.
+  function nightPools(model) {
+    const cols = poolColumns(model);
+    const more = (model && model.rules && Array.isArray(model.rules.pools) ? model.rules.pools : [])
+      .filter((p) => p && typeof p.key === 'string' && !cols.some((c) => c.field === p.key))
+      .map((p) => ({ field: p.key, max: typeof p.max === 'string' ? p.max : null, column: null }));
+    return cols.concat(more);
+  }
   const numOr = (...xs) => { for (const x of xs) if (typeof x === 'number' && Number.isFinite(x)) return x; return null; };
   // A pool's current figure as the readers name it: `mpNow`, `sanNow`, `fpNow` (a PC's sheet, a carried figure);
   // Luck is `luck`.
@@ -614,7 +625,7 @@
   // a long rest (decision 17). `source` says where the HP came from.
   function vitalRows(model, state, beats, reached) {
     const rows = [];
-    const cols = poolColumns(model);
+    const cols = nightPools(model);
     for (const p of model.pcs || []) {
       rows.push({ rowId: p.note, ally: false, copy: 1, note: p.note, name: p.name, base: { hp: p.hpNow ?? p.hpMax ?? null, max: p.hpMax ?? null, ...pcPools(p, cols) } });
     }

@@ -950,6 +950,40 @@ describe("each system's vitals columns (Task 20)", () => {
       for (const f of rafe) assert.deepStrictEqual([f.hpNow, f.fpNow], [-2, -1]);
     });
 
+    it("Energy Reserve is held through the night with no column: fight 2 starts at max-4, the log has no ER, next session starts from the block", () => {
+      const BRAM = 'Characters/NPCs/Bram Holt.md';
+      const FM = require('../lib/run-sheet/web/fight-math');
+      const dir = copy(GURPS_FX, GURPS_PLAN, '**[[Bram Holt]]:** carries the lamp', 'with the party');
+      const m = readRunSheet(dir, GURPS_PLAN, {});
+      const beat = m.beats.find((b) => b.foes.some((f) => f.note === BRAM && f.ally));
+      assert.ok(beat, 'Bram is an ally');
+      const bramOf = (state, id) => FM.rowsForFight({ model: m, derived: RS.derive(m, state), state, beatKey: beat.key, idBase: id }).rows.find((r) => r.note === BRAM);
+      let s = s0(GURPS_PLAN);
+      const first = bramOf(s, 'f1');
+      assert.deepStrictEqual([first.er, first.erMax], [4, 4]);
+      const built = FM.rowsForFight({ model: m, derived: RS.derive(m, s), state: s, beatKey: beat.key, idBase: 'f1' });
+      s = RS.reduce(s, { id: 'f1', type: 'fightStart', beat: beat.key, title: 'T', rules: m.rules.fight, groups: built.groups, rows: built.rows, thresholds: [] }, at(1));
+      const row = s.fight.rows.find((r) => r.note === BRAM);
+      s = RS.reduce(s, { id: 'e1', type: 'hp', fight: 'f1', row: row.id, entry: 'e-4' }, at(2));
+      assert.strictEqual(s.fight.rows.find((r) => r.note === BRAM).er, 0);
+      s = RS.reduce(s, { id: 'e2', type: 'fightEnd', fight: 'f1' }, at(3));
+      // fight 2 the same night starts at max - 4
+      const second = bramOf(s, 'f2');
+      assert.deepStrictEqual([second.er, second.erMax], [0, 4]);
+      // the Table Log has no ER column, and no ER in any row
+      const v = vitalsOf(R.tableLogBody(m, s, { linkFor: stemLink, timeOf }));
+      assert.match(v, /^\| Who \| HP \| FP \| Conditions \|/);
+      assert.doesNotMatch(v, /\bER\b|Energy/);
+      assert.strictEqual(RS.derive(m, s).vitalsRecorded.find((x) => x.rowId === BRAM).er, undefined);
+      // the next session starts from the block
+      playedBefore(dir, 'Chapters/Chapter 1', R.tableLogBody(m, s, { linkFor: stemLink, timeOf }), 0);
+      const next = readRunSheet(dir, GURPS_PLAN, {});
+      const bram = next.beats.flatMap((b) => b.foes).find((f) => f.note === BRAM && f.ally);
+      assert.strictEqual(bram.erNow, undefined);
+      const fresh2 = FM.rowsForFight({ model: next, derived: RS.derive(next, s0(GURPS_PLAN)), state: s0(GURPS_PLAN), beatKey: beat.key, idBase: 'f9' }).rows.find((r) => r.note === BRAM);
+      assert.strictEqual(fresh2.er, 4);
+    });
+
     it('a pool cell that holds no number warns, naming its column, and stops that pool only', () => {
       const dir = copy(COC_FX, COC_PLAN, '**[[Edda Voss]]:** keeps the stove hot', 'with the party');
       playedBefore(dir, 'Chapters/Chapter 1', '## Vitals at the end\n\n| Who | HP | MP | SAN | Luck | Conditions |\n| --- | --- | --- | --- | --- | --- |\n| [[Edda Voss]] | 6/10 | lots | 41 |  | |\n', 0);
