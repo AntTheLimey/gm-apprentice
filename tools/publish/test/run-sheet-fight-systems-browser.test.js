@@ -166,6 +166,29 @@ describe('CoC and GURPS fights on the GM page, by real input', { skip: browserSk
     }
   });
 
+  // D3d (coordinator's ruling, fix round 1): a noted row with no block is complete once it has HP; D&D keeps its line
+  it('a noted row with no stat block, given HP, raises no panel warning (CoC Pell Ashby, GURPS Ned Pike)', async () => {
+    for (const [which, at, name] of [['coc', 0, 'Pell Ashby'], ['gurps', 1, 'Ned Pike']]) {
+      const run = await start(which);
+      await withPage({ width: 1449, height: 762 }, async (page) => {
+        let p = await fightOn(page, run, at);
+        await tap(page, '#fAddName');
+        await page.type(name);
+        await page.waitFor('document.querySelector("[data-faddpick]")');
+        await tap(page, '[data-faddpick]');
+        p = await until(page, `p.fight.rows.some((r) => r.name === ${q(name)} && r.note) && p.saved === "Saved" && p.pending === 0`);
+        const id = named(p, name).id;
+        p = await peek(page, p, name);
+        assert.ok(await text(page, '#acting .warn'), `${which}: a warning while it has no numbers`);
+        assert.strictEqual(await page.evaluate('Boolean(document.querySelector("#acting .stats"))'), false, `${which}: no block`);
+        p = await typeInto(page, `[data-fmax="${id}"]`, 10);
+        assert.deepStrictEqual([named(p, name).hp, named(p, name).max], [10, 10], which);
+        assert.strictEqual(await text(page, '#acting .warn'), null, `${which}: no panel warning once it has HP`);
+        assert.strictEqual(await text(page, `li[data-frow="${id}"] .tag`), null, `${which}: no tag`);
+      });
+    }
+  });
+
   it('CoC: gun toggle re-places the row', async () => {
     const run = await start('coc');
     await withPage({ width: 1449, height: 762 }, async (page) => {
@@ -241,7 +264,23 @@ describe('CoC and GURPS fights on the GM page, by real input', { skip: browserSk
       p = await addNew(page, 'Kev');
       p = await peek(page, p, 'Kev');
       p = await typeInto(page, box(p, 'Kev', 'st'), 12);
+      p = await typeInto(page, box(p, 'Kev', 'ht'), 11);
       const id = named(p, 'Kev').id;
+      // FP worked out from HT, said in the FP read-out's title
+      assert.deepStrictEqual([named(p, 'Kev').fp, named(p, 'Kev').fpMax], [11, 11]);
+      assert.strictEqual(await attrOf(page, `li[data-frow="${id}"] .fpv`, 'title'), 'Max FP 11 (from HT)');
+      // words in a panel box are refused: the box is marked, the row says so, DX stays blank
+      await tap(page, box(p, 'Kev', 'dx'));
+      await page.type('twelve');
+      await page.key('Enter');
+      const line2 = `li[data-row2="${id}"] .badnum[title="DX"]`;
+      await page.waitFor(`document.querySelector(${q(line2)})`);
+      assert.strictEqual(await text(page, line2), 'Not a number: kept as typed');
+      assert.strictEqual(await attrOf(page, box(p, 'Kev', 'dx'), 'aria-invalid'), 'true');
+      p = await settled(page);
+      assert.strictEqual(named(p, 'Kev').dx, null);
+      await page.key('Escape');
+      await page.waitFor(`!document.querySelector(${q(line2)})`);
       p = await typeInto(page, `[data-fhp="${id}"]`, '-77');
       assert.deepStrictEqual([named(p, 'Kev').hp, named(p, 'Kev').max, named(p, 'Kev').out], [-65, 12, false]);
       assert.deepStrictEqual(named(p, 'Kev').marks, ['Reeling', '0 or less']);
@@ -287,10 +326,22 @@ describe('CoC and GURPS fights on the GM page, by real input', { skip: browserSk
         const run = await start(which);
         await withPage({ width, height }, async (page) => {
           let p = await fightOn(page, run, at);
-          // a status on the first row, as in play; from another window, as the layout tests do (it is not what is tested)
           const first = p.fight.rows[0];
-          await fromOther(run, [{ type: 'status', fight: p.fight.id, row: first.id, add: 'Prone' }]);
-          p = await until(page, 'p.fight.rows[0].conds.includes("Prone") && p.saved === "Saved" && p.pending === 0');
+          const sel = `[data-fstatus="${first.id}"]`;
+          // the status list is the system's (rules.statuses), with no Exhaustion or Concentrating
+          const opts = await page.evaluate(`Array.from(document.querySelector(${q(sel)}).querySelectorAll('option'), (o) => o.textContent)`);
+          assert.deepStrictEqual(opts, ['+ status', ...run.model.rules.statuses, 'other…'], `${which} ${width}`);
+          assert.ok(!opts.some((o) => /Exhaustion|Concentrating/.test(o)), `${which}: no D&D statuses`);
+          // the system's first status on the first row, and (GURPS) a hit that lights Reeling and 0 or less; from
+          // another window, as the 6a layout tests do: a closed status list takes no real key input on macOS headless
+          // (letters are blocked on it by design, and ArrowDown opens the native menu), see the fix-round report
+          const status = run.model.rules.statuses[0];
+          await fromOther(run, [{ type: 'status', fight: p.fight.id, row: first.id, add: status },
+            ...(which === 'gurps' ? [{ type: 'hp', fight: p.fight.id, row: first.id, entry: '-30' }] : [])]);
+          p = await until(page, `p.fight.rows[0].conds.includes(${q(status)}) && p.saved === "Saved" && p.pending === 0`);
+          if (which === 'gurps') assert.deepStrictEqual(p.fight.rows[0].marks, ['Reeling', '0 or less']);
+          const chips = await texts(page, `li[data-frow="${first.id}"] .chips > .chip, li[data-row2="${first.id}"] .chip`);
+          assert.ok(chips.some((c) => c.startsWith(status)), `${which} ${width}: the ${status} chip (${chips})`);
           assert.ok(p.layout.rows.length >= 7, `${which} ${width}: ${p.layout.rows.length} rows drawn`);
           sane(p, `${which} ${width}`);
           await shot(page, `${which}-${width}`);

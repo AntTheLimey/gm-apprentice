@@ -122,7 +122,7 @@ function describeCoc(id) {
   // the row's own figures: initiative, HP now/[max], MP and SAN as read-outs
   r.rowNumbers = ['ini', 'hp', 'max', 'mp', 'san'];
   r.words = {
-    ...r.words, hp: 'HP', ac: '', temp: '', initiative: 'DEX', initBox: 'DEX', longRest: '', advancement: '', bloodied: '',
+    ...r.words, hp: 'HP', ac: '', temp: '', initiative: 'DEX', initBox: 'DEX', longRest: '', advancement: '', bloodied: '', noBlock: '',
     entryPlaceholder: '-7 / +3 / m-2 / s-5',
     entryInvalid: 'Type -7 or 7 (damage), +3 (healing), m-2 (MP) or s-5 (SAN)',
     gun: 'gun', gunTitle: `Firearm ready: +${fight.firearmBonus} to DEX for the order`,

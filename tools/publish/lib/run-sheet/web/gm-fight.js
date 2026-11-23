@@ -24,8 +24,9 @@
   const sign = (n) => (isNum(n) ? (n >= 0 ? `+${n}` : String(n)) : '+0');
   const attr = (k, v) => `[${k}="${CSS.escape(v)}"]`;
   const PT = { '': '', landed: '✓', missed: '✗', overtaken: '⊘' };
-  // the panel boxes' figures, one per key setStat takes (fight.js STAT_FIELDS); each box is `data-fs-<key>`
-  const PANEL_KEYS = ['dex', 'mp', 'san', 'fighting', 'firearms', 'dodge', 'db', 'armour', 'build', 'attacks', 'st', 'ht', 'dx', 'speed', 'parry', 'block', 'dr'];
+  // the panel boxes' figures: every key setStat takes (fight.js STAT_FIELDS) but max HP and max FP, which are the
+  // row's own boxes; each panel box is `data-fs-<key>`
+  const PANEL_KEYS = Object.keys(Fight.STAT_FIELDS).filter((k) => k !== 'hp' && k !== 'fp');
   // D&D's, for a model with no words of its own
   const INVALID = 'Type -37 or 37 (damage), +8 (healing) or t5 (temp HP)';
 
@@ -48,6 +49,7 @@
   // boxes. A model with none draws D&D's row, as before 6b.
   const rules = () => { const m = model(); return (m && m.rules) || {}; };
   const words = () => rules().words || {};
+  // the fallback is D&D's toggles as systems/dnd.js describeAs sets them (dnd.js:135-138), for a model with none
   const toggles = () => rules().toggles || { half: true, resisted: true, temp: true, deathSaves: true, concentration: true, exhaustion: true, counters: true };
   const rowNumbers = () => rules().rowNumbers || ['ini', 'hp', 'max', 'ac'];
   const rolled = () => !rules().initiative || rules().initiative === 'roll';
@@ -385,6 +387,8 @@
 
   // A row's pools: GURPS's FP now/[max] (an Energy Reserve inside it: `11/14 +4`), CoC's `MP 12 · SAN 55`. Only
   // the pools the row holds a figure in.
+  // One boxed pool is all a system has today (GURPS's FP, `data-ffpmax`); a second boxed pool needs its own attribute
+  // and STAT entry (Task 10's Energy Reserve, if it gets a box).
   function poolsHTML(r) {
     const { boxed, read } = poolsShown();
     let h = '';
@@ -533,8 +537,8 @@
         : ((info && info.prepNote) || `${r.name}: no numbers in the vault: type them here, or fill them in prep`);
       if (nonum) body += `<p class="warn">${esc(nonum)}</p>`;
       if (info && info.statsHtml) body += `<div class="stats">${info.statsHtml}</div>`;
-      // a row typed in the fight has no note to hold a block: once it has HP it is complete (D3d)
-      else if (!nonum && r.note) body += '<p class="warn">No stat block in the vault.</p>';
+      // D&D says when a row with numbers has no block; CoC and GURPS do not: a row with HP is complete (D3d)
+      else if (!nonum && w.noBlock) body += `<p class="warn">${esc(w.noBlock)}</p>`;
     }
     return `<div class="act" id="acting">${head(r.gmName)}<div class="nums">${nums.join('')}</div>${ctr ? `<div class="nums ctr">${ctr}</div>` : ''}${boxesHTML(r)}${trackHTML(r)}${body}</div>`;
   }
@@ -912,6 +916,7 @@
     fini: { k: 'data-fini', ok: /^-?\d{1,3}$/ },
     fmax: { k: 'data-fmax', ok: /^\d{1,4}$/ },
     fac: { k: 'data-fac', ok: /^\d{1,4}$/ },
+    // the one boxed pool's max (GURPS's FP); a second boxed pool needs its own entry (see poolsHTML)
     ffpmax: { k: 'data-ffpmax', ok: /^\d{1,4}$/, stat: 'fp' },
   };
   const PANEL_OK = { speed: /^\d{1,2}(?:\.\d{1,2})?$/, build: /^[+-]?\d{1,2}$/, db: /^\S.{0,39}$/, dr: /^\S.{0,39}$/ };

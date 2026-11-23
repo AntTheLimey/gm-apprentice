@@ -140,7 +140,7 @@ function describeGurps(id) {
   // the row's own figures: initiative (Basic Speed), HP now/[max], FP now/[max]
   r.rowNumbers = ['ini', 'hp', 'max', 'fp', 'fpMax'];
   r.words = {
-    ...r.words, hp: 'HP', ac: '', temp: '', initiative: 'Basic Speed', initBox: 'Spd', longRest: '', advancement: '', bloodied: '',
+    ...r.words, hp: 'HP', ac: '', temp: '', initiative: 'Basic Speed', initBox: 'Spd', longRest: '', advancement: '', bloodied: '', noBlock: '',
     entryPlaceholder: '-7 / +3 / f-2',
     entryInvalid: 'Type -7 or 7 (damage), +3 (healing) or f-2 (FP)',
   };
