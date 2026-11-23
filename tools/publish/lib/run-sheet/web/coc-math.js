@@ -432,7 +432,7 @@
     const x = fireOf(rules);
     if (!x) return [];
     const out = [];
-    if (shooter && shooter.aiming && isNum(shooter.aiming.round) && isNum(round) && shooter.aiming.round === round - 1) out.push('aim');
+    if (aimReady(shooter, round)) out.push('aim');
     if (proneOn(target, x.C)) out.push('proneTarget');
     if (proneOn(shooter, x.C)) out.push('proneShooter');
     return out;
@@ -453,6 +453,23 @@
     if (!asked || (asked.bonus || 0) !== dice.asked.bonus || (asked.penalty || 0) !== dice.asked.penalty) return null;
     return { level: x.level, kept: x.kept, tens: Array.isArray(x.tens) ? x.tens.filter(isNum) : [], needed: isNum(x.needed) ? x.needed : null };
   }
+  // A malfunction number as written (a weapon line, a sheet's Malf column, the strip's box): 1 to 100, `00` read as
+  // 100; anything else null.
+  function malNumber(v) {
+    const t = String(v == null ? '' : v).trim();
+    if (!/^\d{1,3}$/.test(t)) return null;
+    const n = t === '00' ? 100 : Number(t);
+    return n >= 1 && n <= 100 ? n : null;
+  }
+  // The number a shot is checked against (the one parser, the reducer's and the page's): a typed one, else the gun's;
+  // null with neither; undefined when the typed words are no number (the shot is refused).
+  function malfunctionOf(typed, gun) {
+    const t = typed == null ? '' : String(typed).trim();
+    if (t) { const n = malNumber(t); return n === null ? undefined : n; }
+    return gun && isNum(gun.malfunction) ? gun.malfunction : null;
+  }
+  // Whether the shooter's aim counts for a shot in `round`: declared the round before (KR p113). Spent by a shot.
+  const aimReady = (row, round) => Boolean(row && row.aiming && isNum(row.aiming.round) && isNum(round) && row.aiming.round === round - 1);
   // A kept roll against the malfunction number (KR p118): 'malfunction' at or over it; with no number, 'check' from the
   // table's hint; else ''.
   function malfunctionFlag(kept, number, rules) {
@@ -502,11 +519,18 @@
     if (m.on) return n > 1 ? `loses all ${n} attacks: dived for cover` : 'loses this attack: dived for cover';
     return n > 1 ? `dived for cover: loses its next ${n} attacks` : 'dived for cover: loses its next attack';
   }
-  const reloadText = (r) => (r && isNum(r.left) && r.left > 0 ? `${r.weapon ? `${r.weapon}: ` : ''}ready again in ${roundsText(r.left)}` : '');
+  // A slow gun's counter (one per gun, `gun` its index in the row's list): "Flintlock pistol: ready again in 4 rounds";
+  // a gun whose name another of the row's guns shares is numbered ("Flintlock pistol 2"). `row` the counter's row.
+  function reloadName(c, row) {
+    const guns = gunsOf(row);
+    const same = guns.filter((g) => g && g.name === c.weapon).length;
+    return same > 1 && isNum(c.gun) ? `${c.weapon} ${guns.slice(0, c.gun + 1).filter((g) => g && g.name === c.weapon).length}` : c.weapon || '';
+  }
+  const reloadText = (c, row) => (c && isNum(c.left) && c.left > 0 ? `${c.weapon ? `${reloadName(c, row)}: ` : ''}ready again in ${roundsText(c.left)}` : '');
 
   return {
     shotKeys, shotDice, shotChipsFrom, gunsOf, shotSkill, canShoot, shotHits, shotRoll, malfunctionFlag, damageChoices,
-    shotDiceText, shotLine, diveLine, lostText, reloadText,
+    shotDiceText, shotLine, diveLine, lostText, reloadText, reloadName, malNumber, malfunctionOf, aimReady,
     cocCardForHit, cocCardsAtRoundEnd, sanCard, lineTarget, lineStat, lineName, lineText, rollResult, resultText, offersFor,
     boutRoll, boutText, roundsText,
     DB_MODES, DB_WORDS, dbModeOf, dbTerm, halfTerm, damageRoll, cocDamage, extremeOffer,

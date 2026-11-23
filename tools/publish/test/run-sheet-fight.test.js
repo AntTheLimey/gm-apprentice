@@ -3648,7 +3648,7 @@ describe('CoC firearms: the aim, the shot, the dive, the reload (step 6b Task 19
     { name: 'Hound', ini: 40, dex: 40, hp: 14, max: 14, fighting: 45, dodge: 25, attacks: 2 },
   ];
 
-  it('an NPC\'s shot is the server\'s roll at the range\'s difficulty; a hit opens a shot\'s damage; no melee defence counts', () => {
+  it('an NPC\'s shot: rolled, a hit, a miss, no melee defence counted', () => {
     let s = toTurn(begin(rows()), 'Wharf Hand 1');
     s = shoot(s, 'Wharf Hand 1', 'Wharf Hand 2', ['long', 'pointBlank'], { gun: 0, f: [1, 2, 0] });
     assert.deepEqual(lines(s).slice(-1), ['Wharf Hand 1 shoots Wharf Hand 2 (long range, point blank), +1 bonus die: Firearms 50 at Hard (25): rolled 10 (tens 10, 20): Extreme: a hit.']);
@@ -3687,7 +3687,7 @@ describe('CoC firearms: the aim, the shot, the dive, the reload (step 6b Task 19
     assert.deepEqual([s.fight.melee.kind, s.fight.melee.level], ['shot', 'hard']);
   });
 
-  it('aim then shoot next round: +1 bonus die; moving clears it, logged', () => {
+  it('aim, then a shot next round; a move tap', () => {
     let s = toTurn(begin(rows()), 'Wharf Hand 1');
     s = G(s, { type: 'aim', row: named(s, 'Wharf Hand 1').id });
     assert.deepEqual(named(s, 'Wharf Hand 1').aiming, { round: 1 });
@@ -3711,7 +3711,7 @@ describe('CoC firearms: the aim, the shot, the dive, the reload (step 6b Task 19
     assert.deepEqual(lines(s).slice(-1), ['Wharf Hand 1: moves, the aim is lost.']);
   });
 
-  it('aim lost to a hit, logged; one never shot lapses at the next round\'s end', () => {
+  it('aim and a hit; an aim never shot, at the next round\'s end', () => {
     let s = toTurn(begin(rows()), 'Wharf Hand 1');
     s = G(s, { type: 'aim', row: named(s, 'Wharf Hand 1').id });
     s = G(s, { type: 'hp', row: named(s, 'Wharf Hand 1').id, entry: '-3' });
@@ -3727,7 +3727,7 @@ describe('CoC firearms: the aim, the shot, the dive, the reload (step 6b Task 19
     assert.equal(named(s, 'Wharf Hand 1').aiming, null, 'gone at round 3\'s end');
   });
 
-  it('three shots this round: each rolled with one penalty die', () => {
+  it('several shots: shots 1 to 3 rolled', () => {
     let s = toTurn(begin(rows()), 'Wharf Hand 1');
     for (let i = 0; i < 3; i++) {
       s = shoot(s, 'Wharf Hand 1', 'Wharf Hand 2', ['shots'], { f: [2, 6, 5] });
@@ -3735,7 +3735,7 @@ describe('CoC firearms: the aim, the shot, the dive, the reload (step 6b Task 19
     }
   });
 
-  it('a dive: an NPC diver\'s Dodge is rolled; only a pass adds the penalty die; either way the lost-attack mark shows on its next turn and clears when that turn ends; a two-attack creature loses both', () => {
+  it('a dive: an NPC diver rolled, passed and failed, its mark on its next turn and after it, a two-attack creature', () => {
     let s = toTurn(begin(rows()), 'Wharf Hand 1');
     s = G(s, { type: 'dive', row: named(s, 'Hound').id, result: dodge(15, 25, 'hard') });
     assert.deepEqual(lines(s).slice(-1), ['Hound dives for cover: Dodge rolled 15, Hard: a penalty die on the shot; loses its next 2 attacks.']);
@@ -3783,7 +3783,7 @@ describe('CoC firearms: the aim, the shot, the dive, the reload (step 6b Task 19
     assert.deepEqual(lines(s).slice(-1), ['Marksman shoots Iris (long range): Firearms 55 at Hard (27): rolled 96: Fumble: a miss; check malfunction (KR p118).']);
   });
 
-  it('a kept 96 with malfunction 95 is flagged and fires nothing; 94 is not; a typed number wins over the gun\'s', () => {
+  it('malfunction 95: kept 96, kept 94, a typed 90, a typed 00, typed words', () => {
     let s = toTurn(begin(rows()), 'Wharf Hand 1');
     s = shoot(s, 'Wharf Hand 1', 'Iris', [], { gun: 0, f: [9, 6] });
     assert.match(lines(s).slice(-1)[0], /rolled 96: Fail: malfunction \(95\)\.$/);
@@ -3792,6 +3792,8 @@ describe('CoC firearms: the aim, the shot, the dive, the reload (step 6b Task 19
     assert.match(lines(s).slice(-1)[0], /rolled 94: Fail: a miss\.$/);
     s = shoot(s, 'Wharf Hand 1', 'Iris', [], { gun: 0, f: [9, 1], malfunction: 90 });
     assert.match(lines(s).slice(-1)[0], /rolled 91: Fail: malfunction \(90\)\.$/);
+    s = shoot(s, 'Wharf Hand 1', 'Iris', [], { gun: 0, f: [9, 9], malfunction: '00' });
+    assert.match(lines(s).slice(-1)[0], /rolled 99: Fail: a miss\.$/, '00 is 100');
     const was = clone(s.fight);
     s = shoot(s, 'Wharf Hand 1', 'Iris', [], { gun: 0, malfunction: 'lots' });
     assert.deepEqual(s.fight.rows, was.rows, 'a typed number that is none is dropped');
@@ -3802,11 +3804,47 @@ describe('CoC firearms: the aim, the shot, the dive, the reload (step 6b Task 19
     s = toTurn(s, 'Wharf Hand 1');
     assert.equal(s.fight.round, 2);
     s = shoot(s, 'Wharf Hand 1', 'Iris', [], { gun: 0, f: [8, 8] });
-    assert.deepEqual(named(s, 'Wharf Hand 1').reload, { left: 4, of: 4, weapon: 'Flintlock pistol' });
-    assert.equal(CM.reloadText(named(s, 'Wharf Hand 1').reload), 'Flintlock pistol: ready again in 4 rounds');
+    assert.deepEqual(named(s, 'Wharf Hand 1').reload, [{ gun: 0, weapon: 'Flintlock pistol', left: 4, of: 4 }]);
+    assert.equal(CM.reloadText(named(s, 'Wharf Hand 1').reload[0], named(s, 'Wharf Hand 1')), 'Flintlock pistol: ready again in 4 rounds');
     const left = [];
-    for (let round = 3; round <= 6; round++) { s = toTurn(go(s), 'Iris'); assert.equal(s.fight.round, round); left.push(named(s, 'Wharf Hand 1').reload && named(s, 'Wharf Hand 1').reload.left); }
+    for (let round = 3; round <= 6; round++) { s = toTurn(go(s), 'Iris'); assert.equal(s.fight.round, round); left.push(named(s, 'Wharf Hand 1').reload && named(s, 'Wharf Hand 1').reload[0].left); }
     assert.deepEqual(left, [3, 2, 1, null], 'ready again in round 6');
+  });
+
+  it('a brace of pistols: each its own counter; one made ready by a tap, logged', () => {
+    const rs = rows();
+    rs[1].guns = [FLINTLOCK, { ...FLINTLOCK }];
+    let s = toTurn(begin(rs), 'Wharf Hand 1');
+    s = shoot(s, 'Wharf Hand 1', 'Iris', [], { gun: 0, f: [8, 8] });
+    s = toTurn(go(s), 'Wharf Hand 1');
+    s = shoot(s, 'Wharf Hand 1', 'Iris', [], { gun: 1, f: [8, 8] });
+    assert.deepEqual(named(s, 'Wharf Hand 1').reload.map((c) => [c.gun, c.left]), [[0, 3], [1, 4]]);
+    s = G(s, { type: 'reload', row: named(s, 'Wharf Hand 1').id, gun: 0, clear: true });
+    assert.deepEqual(named(s, 'Wharf Hand 1').reload.map((c) => [c.gun, c.left]), [[1, 4]]);
+    assert.deepEqual(lines(s).slice(-1), ['Wharf Hand 1: Flintlock pistol 1 ready.']);
+    s = G(s, { type: 'reload', row: named(s, 'Wharf Hand 1').id, gun: 1, clear: true });
+    assert.equal(named(s, 'Wharf Hand 1').reload, null);
+    assert.deepEqual(lines(s).slice(-1), ['Wharf Hand 1: ready.']);
+  });
+
+  it('a second shot after the aimed one has no aimed chip', () => {
+    let s = toTurn(begin(rows()), 'Wharf Hand 1');
+    s = G(s, { type: 'aim', row: named(s, 'Wharf Hand 1').id });
+    s = toTurn(go(s), 'Wharf Hand 1');
+    s = shoot(s, 'Wharf Hand 1', 'Wharf Hand 2', ['aim'], { f: [3, 4, 3] });
+    assert.match(lines(s).slice(-1)[0], /\(aimed\)/);
+    assert.deepEqual(CM.shotChipsFrom(named(s, 'Wharf Hand 1'), named(s, 'Wharf Hand 2'), s.fight.round, COC), []);
+    // the aim spent: a second shot still sending it is refused
+    const was = clone(s.fight);
+    s = shoot(s, 'Wharf Hand 1', 'Wharf Hand 2', ['aim'], { f: [3, 4, 3] });
+    assert.deepEqual(s.fight, was);
+    s = shoot(s, 'Wharf Hand 1', 'Wharf Hand 2', [], { f: [3, 3] });
+    assert.doesNotMatch(lines(s).slice(-1)[0], /aimed/);
+    // an aimed chip with no aim declared is refused too
+    s = toTurn(go(s), 'Iris');
+    const before = clone(s.fight);
+    s = shoot(s, 'Iris', 'Wharf Hand 2', ['aim'], { level: 'hard' });
+    assert.deepEqual(s.fight, before);
   });
 
   it('a flintlock\'s impaling toggle cannot be turned on: its exchange says it never impales; the blunderbuss\'s carries its two damages', () => {

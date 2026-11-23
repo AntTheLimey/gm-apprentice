@@ -12,6 +12,7 @@ const { pairs, firstOf, leadingNumber, clean } = require('./pairs');
 const { extractSections } = require('../../processor');
 const { parseCoC } = require('../../templates/coc/parse');
 const { buildCoCLiveData } = require('../../templates/coc/live-data');
+const { malNumber } = require('../web/coc-math');
 
 const FOE_TYPES = new Set(['npc', 'creature']);
 
@@ -35,7 +36,16 @@ function keyOf(raw) {
 // A firearm's name says so (`Pocket pistol`); any other is Fighting. Dodge and the named skills are pairs' (keyOf).
 // The name may hold digits (`.38 Revolver`, `12-gauge shotgun`): it runs to the ` NN%` figure.
 const ATTACK_LINE = /^\s*[-*+]\s+(?:\*\*)?([^%*\s][^%]*?)(?:\*\*)?\s+(\d{1,3})\s*%.*\bdamage\b/i;
-const FIREARM = /\b(?:firearms?|handgun|pistol|revolver|rifle|shotgun|carbine|smg|submachine|machine[- ]gun|musket|flintlock|blunderbuss|derringer|guns?)\b/i;
+// A firearm's name says so: a calibre (`.45`, `.30-06`, `9mm`), a kind of gun, or a common make (Task 19 widened it:
+// `Colt .45`, `Thompson`, `Lee-Enfield`, `Brown Bess`). `Gunsmith` and `2-handed axe` are not guns.
+const FIREARM = new RegExp([
+  '(?:^|[\\s(])\\.\\d{2,3}(?:-\\d{2,3})?\\b',
+  '\\b\\d{1,2}(?:\\.\\d{1,2})?\\s?mm\\b',
+  `\\b(?:${['firearms?', 'handguns?', 'pistols?', 'revolvers?', 'rifles?', 'shotguns?', 'carbines?', 'smgs?', 'submachine', 'machine[- ]?guns?',
+    'muskets?', 'flintlocks?', 'matchlocks?', 'blunderbuss(?:es)?', 'derringers?', 'guns?', 'automatics?', 'semi-automatics?', 'bolt-action',
+    'lever-action', 'colt', 'webley', 'luger', 'mauser', 'enfield', 'lee-enfield', 'winchester', 'remington', 'thompson', 'springfield',
+    'brown bess', 'baker'].join('|')})\\b`,
+].join('|'), 'i');
 // A firearm line may say more (Task 19): its damage (`damage 2D6/1D6`, by range), its malfunction number (`malfunction
 // 95`, `malf. 90`, `95 malf`), a slow reload (`1 per 4 rounds`, `1/4 rnds`) and whether it impales. Flintlocks and the
 // blunderbuss never impale (RC p187); a line that says `impales` does; any other is not known (null).
@@ -44,7 +54,7 @@ const MALF_OF = /\bmalf(?:unction)?\.?\s*:?\s*(\d{2,3})\b|\b(\d{2,3})\+?\s*malf/
 const RELOAD_OF = /\b1\s*(?:per|\/)\s*(\d{1,2})\s*(?:rounds?|rnds?)\b/i;
 const NO_IMPALE = /\b(?:flintlock|blunderbuss|musket)\b|\b(?:does not|doesn't|never|no|non-?)\s*impal/i;
 const IMPALES = /\bimpal(?:e|es|ing)\b/i;
-const malfOf = (text) => { const m = MALF_OF.exec(String(text || '')); return m ? Number(m[1] || m[2]) : null; };
+const malfOf = (text) => { const m = MALF_OF.exec(String(text || '')); return m ? malNumber(m[1] || m[2]) : null; };
 const reloadOf = (text) => {
   const t = String(text || '').trim();
   const m = RELOAD_OF.exec(t) || /^1\s*(?:per|\/)\s*(\d{1,2})$/.exec(t);
@@ -148,7 +158,7 @@ function sheetGuns(model) {
     const d = DAMAGE_OF.exec(`damage ${clean(w.damage)}`);
     const all = `${clean(w.weapon)} ${clean(w.damage)}`;
     return { name: clean(w.weapon), skill: sk ? Number(sk[1]) : null, damage: d ? d[1].replace(/\s+/g, '').toUpperCase() : null,
-      malfunction: leadingNumber(clean(w.malf)), reload: reloadOf(clean(w.attacks)), impales: impalesOf(all) };
+      malfunction: malNumber((/^\s*(\d{1,3})/.exec(clean(w.malf)) || [])[1]), reload: reloadOf(clean(w.attacks)), impales: impalesOf(all) };
   });
   return guns.length ? guns : null;
 }
@@ -219,22 +229,23 @@ const COC_CARDS = {
 // weapon line (RC p187).
 const FIREARM_RULES = {
   ranges: [
-    { key: 'regular', label: 'regular range', difficulty: 'regular' },
-    { key: 'long', label: 'long range', difficulty: 'hard' },
-    { key: 'veryLong', label: 'very long range', difficulty: 'extreme' },
+    { key: 'regular', label: 'regular range', short: 'regular', difficulty: 'regular' },
+    { key: 'long', label: 'long range', short: 'long', difficulty: 'hard' },
+    { key: 'veryLong', label: 'very long range', short: 'very long', difficulty: 'extreme' },
   ],
+  // `label` for the log line, `short` for the strip, under its `group`'s heading (none: the last, ungrouped)
   chips: [
-    { key: 'aim', label: 'aimed', bonus: 1 },
-    { key: 'pointBlank', label: 'point blank', bonus: 1 },
-    { key: 'large', label: 'large target', bonus: 1, size: true },
-    { key: 'small', label: 'small target', penalty: 1, size: true },
-    { key: 'cover', label: 'partly concealed', penalty: 1 },
-    { key: 'fast', label: 'fast mover', penalty: 1 },
-    { key: 'intoMelee', label: 'into melee', penalty: 1 },
-    { key: 'loading', label: 'loading', penalty: 1 },
-    { key: 'shots', label: '2-3 shots this round', penalty: 1 },
-    { key: 'proneTarget', label: 'target prone', penalty: 1, notWith: 'pointBlank' },
-    { key: 'proneShooter', label: 'shooter prone', bonus: 1 },
+    { key: 'large', label: 'large target', short: 'large', group: 'target', bonus: 1, size: true },
+    { key: 'small', label: 'small target', short: 'small', group: 'target', penalty: 1, size: true },
+    { key: 'proneTarget', label: 'target prone', short: 'prone', group: 'target', penalty: 1, notWith: 'pointBlank' },
+    { key: 'cover', label: 'partly concealed', short: 'cover', group: 'target', penalty: 1 },
+    { key: 'fast', label: 'fast mover', short: 'fast', group: 'target', penalty: 1 },
+    { key: 'aim', label: 'aimed', short: 'aimed', group: 'shooter', bonus: 1 },
+    { key: 'proneShooter', label: 'shooter prone', short: 'prone', group: 'shooter', bonus: 1 },
+    { key: 'loading', label: 'loading', short: 'loading', group: 'shooter', penalty: 1 },
+    { key: 'pointBlank', label: 'point blank', short: 'point blank', bonus: 1 },
+    { key: 'intoMelee', label: 'into melee', short: 'into melee', penalty: 1 },
+    { key: 'shots', label: '2-3 shots this round', short: '2-3 shots', penalty: 1 },
   ],
   // a target's Build that makes it large or small (KR p113, p410)
   size: { large: 4, small: -2 },

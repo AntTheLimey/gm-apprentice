@@ -571,21 +571,19 @@
     touch(r, at);
     say(s, f, at, `${nameOf(s, f, r)}: ${why === 'hit' ? 'hit' : 'moves'}, the aim is lost.`);
   }
-  // A round's end: a slow weapon's counter goes down a round (gone at 0); an aim declared before the round now ending
+  // A round's end: each slow gun's counter goes down a round (gone at 0); an aim declared before the round now ending
   // and never shot with lapses, quietly. Every row, Out or benched too: time passes for them.
   function shotRoundEnds(f, at) {
     if (!fireOf(f)) return;
     for (const r of f.rows) {
-      if (r.reload && isNum(r.reload.left)) { const left = r.reload.left - 1; r.reload = left > 0 ? { ...r.reload, left } : null; touch(r, at); }
+      if (Array.isArray(r.reload) && r.reload.length) {
+        const left = r.reload.map((c) => ({ ...c, left: c.left - 1 })).filter((c) => isNum(c.left) && c.left > 0);
+        r.reload = left.length ? left : null;
+        touch(r, at);
+      }
       if (r.aiming && isNum(r.aiming.round) && r.aiming.round < f.round) { r.aiming = null; touch(r, at); }
     }
   }
-  // A typed malfunction number: 1 to 100; null for none; undefined when it is not one.
-  const malIn = (v) => {
-    if (v === null || v === undefined || v === '') return null;
-    const n = Number(v);
-    return Number.isInteger(n) && n >= 1 && n <= 100 ? n : undefined;
-  };
   // A CoC damage entry (Task 17): dice the page rolled with the attacker's DB put in (`by`, `mode`, `roll`), an
   // Extreme hit's maximum (`extreme`, `roll` maxRoll's, `extra` the impaling weapon roll), or a bare number in the box
   // an exchange opened (`exchange`, its `n`), taken as rolled. The target's armour comes off; the working line goes
@@ -1024,8 +1022,10 @@
       const noGun = a.gun === null || a.gun === undefined;
       if (!noGun && !(Number.isInteger(a.gun) && guns[a.gun])) return;
       const gun = noGun ? null : guns[a.gun];
-      const typed = malIn(a.malfunction);
-      if (typed === undefined) return;
+      const mal = CM.malfunctionOf(a.malfunction, gun);
+      if (mal === undefined) return;
+      // the aimed chip only for an aim declared the round before and not yet spent (KR p113)
+      if (a.chips.includes('aim') && !CM.aimReady(A, f.round)) return;
       const dice = CM.shotDice(a.chips, A, D, C);
       const skill = CM.shotSkill(A, gun);
       let level;
@@ -1038,18 +1038,32 @@
         if (!roll) return;
         level = roll.level;
       }
-      const mal = typed !== null ? typed : (gun ? gun.malfunction : null);
       const flag = roll ? CM.malfunctionFlag(roll.kept, mal, C) : '';
       const hit = flag !== 'malfunction' && CM.shotHits(level, dice.difficulty);
       touch(A, at);
       touch(D, at);
       if (A.aiming) A.aiming = null;
-      if (gun && isNum(gun.reload) && gun.reload > 1) A.reload = { left: gun.reload, of: gun.reload, weapon: gun.name };
+      // each slow gun keeps its own counter (a brace of pistols: two)
+      if (gun && isNum(gun.reload) && gun.reload > 1) {
+        const others = (Array.isArray(A.reload) ? A.reload : []).filter((c) => c.gun !== a.gun);
+        A.reload = others.concat([{ gun: a.gun, weapon: gun.name, left: gun.reload, of: gun.reload }]).sort((x, y) => x.gun - y.gun);
+      }
       f.melee = hit ? exchangeOf(f, A, D, { kind: 'shot', side: 'attacker', level, veryLong: dice.range === 'veryLong',
         impales: gun ? gun.impales : null, damage: gun ? gun.damage : null }) : null;
       const cite = C.firearm.malfunction && C.firearm.malfunction.cite;
       say(s, f, at, CM.shotLine({ shooter: nameOf(s, f, A), target: nameOf(s, f, D) }, { dice, skill, roll, level, hit, flag, malfunction: mal, cite }));
     },
+    // A slow gun made ready by hand (CoC, Task 19): `gun` its index, or every counter on the row with none. Logged.
+    reload: onRow((s, f, r, a, at) => {
+      if (!fireOf(f) || !a.clear || !Array.isArray(r.reload) || !r.reload.length) return;
+      const all = a.gun === null || a.gun === undefined;
+      const gone = r.reload.filter((c) => all || c.gun === a.gun);
+      if (!gone.length) return;
+      const named = r.reload.length > 1 && !all ? `${CM.reloadName(gone[0], r)} ` : '';
+      r.reload = all ? null : (r.reload.filter((c) => c.gun !== a.gun).length ? r.reload.filter((c) => c.gun !== a.gun) : null);
+      touch(r, at);
+      say(s, f, at, `${nameOf(s, f, r)}: ${named}ready.`);
+    }),
     // A dive for cover (CoC, Task 19): the target's answer to a shot. An NPC's is the server's d100 against its Dodge
     // (`result`, Regular, no dice); a PC's the GM's Passed or Failed tap (`result: { tap }`). Pass or fail, the diver
     // loses its next attack (all of a creature's): a mark on its next turn, gone when that turn ends. The page adds the

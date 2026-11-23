@@ -392,14 +392,14 @@ describe('coc-math: a shot\'s dice (Task 19)', () => {
   it('the chip numbers are data with the system, the same for Regency', () => {
     assert.deepEqual(systemFor('coc-7e-regency').describe().fight.coc.firearm, COC.firearm);
     assert.deepEqual(COC.firearm.ranges.map((r) => r.difficulty), ['regular', 'hard', 'extreme']);
-    for (const c of COC.firearm.chips) assert.ok(c.label.length <= 22, `a chip names a condition: ${c.label}`);
+    for (const c of COC.firearm.chips) assert.ok(c.label.length <= 22 && c.short.length <= 12, `a chip names a condition: ${c.label}, ${c.short}`);
   });
   it('each chip\'s die', () => {
     const want = { aim: 1, pointBlank: 1, large: 1, small: -1, cover: -1, fast: -1, intoMelee: -1, loading: -1, shots: -1, proneTarget: -1, proneShooter: 1, dive: -1 };
     for (const [k, n] of Object.entries(want)) assert.equal(net([k]), n, k);
     assert.equal(net([]), 0);
   });
-  it('the range sets the difficulty: regular, long Hard, very long Extreme', () => {
+  it('the range chips: regular, long, very long', () => {
     assert.deepEqual([dice([]).difficulty, dice(['long']).difficulty, dice(['veryLong']).difficulty], ['regular', 'hard', 'extreme']);
     assert.deepEqual(dice(['long', 'pointBlank']).why, ['long range', 'point blank']);
   });
@@ -407,22 +407,22 @@ describe('coc-math: a shot\'s dice (Task 19)', () => {
     const d = dice(['pointBlank', 'small']);
     assert.deepEqual([d.net, d.asked, d.rolled], [0, { bonus: 0, penalty: 0 }, { bonus: 0, penalty: 0 }]);
   });
-  it('2-3 shots this round: one penalty die on each shot, the first included; it does not grow with the count', () => {
+  it('several shots: shot 1 to 3', () => {
     for (let shot = 1; shot <= 3; shot++) assert.equal(net(['shots']), -1, `shot ${shot}`);
   });
-  it('a Prone target: +1 penalty die, not at point blank; a Prone shooter: +1 bonus die', () => {
+  it('Prone: a target, a target at point blank, a shooter', () => {
     assert.equal(net(['proneTarget']), -1);
     assert.equal(net(['proneTarget', 'pointBlank']), 1, 'only the point blank die');
     assert.equal(net(['proneShooter']), 1);
     // the strip turns them on from the statuses
     assert.deepEqual(C.shotChipsFrom({ conds: ['Prone'] }, { conds: ['Prone'] }, 2, COC), ['proneTarget', 'proneShooter']);
   });
-  it('aim then shoot next round: the aimed chip is on; the round it was declared, or two rounds on, it is not', () => {
+  it('the aimed chip: the round after the aim, the round of it, two rounds on', () => {
     assert.deepEqual(C.shotChipsFrom({ conds: [], aiming: { round: 1 } }, target, 2, COC), ['aim']);
     assert.deepEqual(C.shotChipsFrom({ conds: [], aiming: { round: 2 } }, target, 2, COC), []);
     assert.deepEqual(C.shotChipsFrom({ conds: [], aiming: { round: 1 } }, target, 3, COC), []);
   });
-  it('a Build 4 target gives the bonus die without a chip; Build -2 the penalty die; a known Build overrides a size chip', () => {
+  it('size: Build 4, Build -2, a known Build and a size chip, no Build', () => {
     assert.equal(net([], shooter, { build: 4 }), 1);
     assert.equal(net([], shooter, { build: -2 }), -1);
     assert.equal(net(['large'], shooter, { build: 1 }), 0);
@@ -454,6 +454,11 @@ describe('coc-math: a shot\'s dice (Task 19)', () => {
     assert.equal(C.shotRoll(x, 55, dice(['long'])), null);
   });
   it('a kept 96 with malfunction 95 is flagged; 94 is not; with no number, 95 shows the hint', () => {
+    // the one parser of a malfunction number: typed, else the gun's; 00 is 100; words are none
+    const gun = { malfunction: 95 };
+    assert.deepEqual([C.malfunctionOf('90', gun), C.malfunctionOf('', gun), C.malfunctionOf(null, null), C.malfunctionOf('00', gun), C.malfunctionOf('lots', gun), C.malfunctionOf('0', gun), C.malfunctionOf('101', gun), C.malfunctionOf(88, gun)],
+      [90, 95, null, 100, undefined, undefined, undefined, 88]);
+    assert.deepEqual([C.malNumber('00'), C.malNumber('100'), C.malNumber('150'), C.malNumber('0'), C.malNumber('x')], [100, 100, null, null, null]);
     assert.deepEqual([C.malfunctionFlag(96, 95, COC), C.malfunctionFlag(95, 95, COC), C.malfunctionFlag(94, 95, COC)], ['malfunction', 'malfunction', '']);
     assert.deepEqual([C.malfunctionFlag(95, null, COC), C.malfunctionFlag(94, null, COC)], ['check', '']);
     assert.equal(C.malfunctionFlag(90, 90, COC), 'malfunction', 'the double-barreled pistol');
@@ -479,6 +484,11 @@ describe('coc-math: a shot\'s dice (Task 19)', () => {
     assert.equal(C.diveLine('Iris', { tapped: true, passed: false }, 1), 'Iris dives for cover: failed; loses its next attack.');
     assert.deepEqual([C.lostText({ attacks: 1, on: true }), C.lostText({ attacks: 2, on: true }), C.lostText({ attacks: 1, on: false })],
       ['loses this attack: dived for cover', 'loses all 2 attacks: dived for cover', 'dived for cover: loses its next attack']);
-    assert.equal(C.reloadText({ left: 4, weapon: 'Flintlock pistol' }), 'Flintlock pistol: ready again in 4 rounds');
+    const one = { guns: [{ name: 'Flintlock pistol' }] };
+    assert.equal(C.reloadText({ gun: 0, left: 4, weapon: 'Flintlock pistol' }, one), 'Flintlock pistol: ready again in 4 rounds');
+    // a brace of pistols: each its own counter, numbered
+    const brace = { guns: [{ name: 'Flintlock pistol' }, { name: 'Flintlock pistol' }] };
+    assert.deepEqual([C.reloadText({ gun: 0, left: 1, weapon: 'Flintlock pistol' }, brace), C.reloadText({ gun: 1, left: 3, weapon: 'Flintlock pistol' }, brace)],
+      ['Flintlock pistol 1: ready again in 1 round', 'Flintlock pistol 2: ready again in 3 rounds']);
   });
 });

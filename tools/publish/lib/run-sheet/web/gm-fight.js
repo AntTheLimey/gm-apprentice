@@ -752,6 +752,7 @@
     const live = (id) => { const x = rowById(id); return x && x.in && !x.out; };
     const sh = ui.shot;
     if (sh && (sh.fight !== f.id || !live(sh.target) || !live(sh.shooter))) ui.shot = null;
+    else if (sh) proneSync(sh);
     const m = ui.melee;
     if (!m) return;
     if (m.fight !== f.id || !live(m.target) || !live(m.attacker)) ui.melee = null;
@@ -793,7 +794,7 @@
     const f = state().fight;
     if (!C || !C.firearm || !cur || !f.started || r.kind === 'lair' || !r.in || r.out || !CMath.canShoot(r)) return '';
     if (r.aiming && r.aiming.round === f.round) return '';
-    return `<button type="button" class="tg mel" data-faim="${esc(r.id)}" title="${esc(`${r.gmName} aims: a shot next round`)}">aim</button>`;
+    return `<button type="button" class="tg mel" data-faim="${esc(r.id)}" title="Aimed">aim</button>`;
   }
   // The row's second line: its outnumbered and Prone notes, and the exchange while one is open on it.
   function meleeLine2(id) {
@@ -805,8 +806,9 @@
     if (ui.shot && ui.shot.target === id) out.push(shotHTML(ui.shot));
     // the firearm marks (Task 19): the attack a dive lost, a slow weapon's counter, a declared aim (tapped: it moved)
     if (r.lostAttack) out.push(`<span class="mnote lost${r.lostAttack.on ? ' now' : ''}">${esc(CMath.lostText(r.lostAttack))}</span>`);
-    if (r.reload) out.push(`<span class="mnote">${esc(CMath.reloadText(r.reload))}</span>`);
-    if (r.aiming) out.push(`<button type="button" class="tg mout on" data-faimoff="${esc(id)}" aria-pressed="true" title="Tap if it moves: the aim is lost">aiming</button>`);
+    // each slow gun's counter, a tap when the GM says it is ready now
+    for (const c of Array.isArray(r.reload) ? r.reload : []) out.push(`<button type="button" class="tg mout" data-freload="${esc(`${id}|${c.gun}`)}" title="Tap: ready now">${esc(CMath.reloadText(c, r))}</button>`);
+    if (r.aiming) out.push(`<button type="button" class="tg mout on" data-faimoff="${esc(id)}" aria-pressed="true" title="Aimed: tap if it moves">aiming</button>`);
     const n = CMath.rowNotes(r, C);
     if (n.outnumbered) {
       const off = Boolean(r.outnumberedOff);
@@ -921,28 +923,38 @@
     RP.focusTo(attr('data-fmdice', `${rowId}|${delta}`));
   }
   // ---- CoC's Shoot strip (Task 19): the range, the chips, the dive, the malfunction number, then Roll or a PC's tap ----
-  // The chips a strip sends: the range past regular, the chips on, and the passed dive.
+  // The chips a strip sends: the range past regular, the chips on (the aimed chip only while the shooter's aim counts),
+  // and the passed dive. A passed dive stays on this shooter's later shots at the target this round: the target is in
+  // cover until it moves (KR p113).
   function shotChips(sh) {
+    const f = state().fight;
     const out = sh.range && sh.range !== 'regular' ? [sh.range] : [];
-    for (const [k, on] of Object.entries(sh.chips)) if (on) out.push(k);
+    for (const [k, on] of Object.entries(sh.chips)) if (on && (k !== 'aim' || CMath.aimReady(rowById(sh.shooter), f && f.round))) out.push(k);
     if (sh.dive && sh.dive.passed) out.push('dive');
     return out;
   }
   const gunOfShot = (sh) => { const g = CMath.gunsOf(rowById(sh.shooter)); return sh.gun === null ? null : g[sh.gun] || null; };
-  // The malfunction box's number: a typed one, null for none, undefined for words that are none.
-  const malOf = (sh) => {
-    const t = String(sh.mal == null ? '' : sh.mal).trim();
-    if (!t) return null;
-    const n = Number(t);
-    return Number.isInteger(n) && n >= 1 && n <= 100 ? n : undefined;
+  // The strip's state kept for the turn by shooter and target: its chips, gun, malfunction words, the dive (so a strip
+  // closed and opened again offers no second dive) and the Prone statuses last read.
+  const rememberShot = (sh) => {
+    ui.shotMem[`${sh.shooter}|${sh.target}`] = { range: sh.range, chips: { ...sh.chips }, gun: sh.gun, mal: sh.mal, dive: sh.dive, seen: { ...sh.seen } };
   };
-  const remember2 = (sh) => { ui.shotMem[`${sh.shooter}|${sh.target}`] = { range: sh.range, chips: { ...sh.chips }, gun: sh.gun, mal: sh.mal }; };
+  // The Prone chips follow the statuses: a status that changed since the strip last read it sets its chip again.
+  function proneSync(sh) {
+    const C = cocRules();
+    const seen = { proneTarget: CMath.proneOn(rowById(sh.target), C), proneShooter: CMath.proneOn(rowById(sh.shooter), C) };
+    let moved = false;
+    for (const k of Object.keys(seen)) if (!sh.seen || sh.seen[k] !== seen[k]) { sh.chips[k] = seen[k]; moved = true; }
+    sh.seen = seen;
+    if (moved) rememberShot(sh);
+  }
   function shotHTML(sh) {
     const C = cocRules();
     const F = C && C.firearm;
     const A = viewRow(sh.shooter);
     const D = viewRow(sh.target);
     if (!F || !A || !D) return '';
+    const f = state().fight;
     const name = (x) => x.gmName || x.name;
     const SA = rowById(sh.shooter);
     const SD = rowById(sh.target);
@@ -954,29 +966,35 @@
     const t = sh.target;
     const lock = sh.rolling || sh.diveRolling ? ' disabled' : '';
     const tg = (data, on, label, title, dis) => `<button type="button" class="tg${on ? ' on' : ''}" ${data} aria-pressed="${Boolean(on)}"${dis || lock}${title ? ` title="${esc(title)}"` : ''}>${esc(label)}</button>`;
+    const head = (w) => `<span class="sxh">${esc(w)}:</span>`;
+    const build = SD && isNum(SD.build) ? SD.build : null;
+    const chip = (c) => {
+      if (c.key === 'aim' && !CMath.aimReady(SA, f.round)) return tg(`data-fshc="${esc(`${t}|${c.key}`)}"`, false, c.short, 'Aimed: declare the aim on its turn first', ' disabled');
+      return tg(`data-fshc="${esc(`${t}|${c.key}`)}"`, sh.chips[c.key] && (c.key !== 'aim' || CMath.aimReady(SA, f.round)), c.short, c.label);
+    };
+    const group = (g) => F.chips.filter((c) => (c.group || '') === g);
     let h = `<span class="sx" role="group" aria-label="${esc(`${name(A)} shoots at ${name(D)}`)}"><span>${esc(`${name(A)} shoots${gun ? `, ${gun.name}` : ''}${pc ? '' : `, Firearms ${isNum(skill) ? skill : '?'}`}:`)}</span>`;
     if (guns.length > 1) h += guns.map((g, i) => tg(`data-fshgun="${esc(`${t}|${i}`)}"`, sh.gun === i, g.name, 'The weapon')).join('');
-    h += F.ranges.map((r) => tg(`data-fshr="${esc(`${t}|${r.key}`)}"`, (sh.range || 'regular') === r.key, r.label, `${CMath.levelName(r.difficulty)} to hit`)).join('');
-    const build = SD && isNum(SD.build) ? SD.build : null;
-    h += F.chips.map((c) => {
-      if (c.size && build !== null) {
-        const on = c.key === 'large' ? build >= F.size.large : build <= F.size.small;
-        return tg(`data-fshc="${esc(`${t}|${c.key}`)}"`, on, c.label, `From ${name(D)}'s Build ${build}`, ' disabled');
-      }
-      return tg(`data-fshc="${esc(`${t}|${c.key}`)}"`, sh.chips[c.key], c.label, `${c.bonus ? '+1 bonus die' : '+1 penalty die'}`);
-    }).join('');
-    // the dive: the target's answer, rolled for an NPC, a tap for a PC
+    h += `<span class="sxg">${head('range')}${F.ranges.map((r) => tg(`data-fshr="${esc(`${t}|${r.key}`)}"`, (sh.range || 'regular') === r.key, r.short, r.label)).join('')}</span>`;
+    // the target's size: one note when its Build decides it, else the two chips
+    const size = build === null ? group('target').filter((c) => c.size).map(chip).join('')
+      : `<span class="mnote">${esc(`${build >= F.size.large ? 'large' : build <= F.size.small ? 'small' : 'size'} (Build ${build})`)}</span>`;
+    h += `<span class="sxg">${head('target')}${size}${group('target').filter((c) => !c.size).map(chip).join('')}</span>`;
+    h += `<span class="sxg">${head('shooter')}${group('shooter').map(chip).join('')}</span>`;
+    h += `<span class="sxg">${group('').map(chip).join('')}</span>`;
+    // the dive: the target's answer, rolled for an NPC, a tap for a PC; once a turn
     if (sh.dive) h += `<span class="mnote">${esc(`dived: ${sh.dive.passed ? 'passed, +1 penalty die' : 'failed'}`)}</span>`;
     else if (sh.diveAsk) h += `<span class="mlv" role="group" aria-label="${esc(`${name(D)}'s Dodge to dive`)}">${['passed', 'failed'].map((k) => `<button type="button" class="tg" data-fshdv="${esc(`${t}|${k}`)}">${k === 'passed' ? 'Dive passed' : 'Dive failed'}</button>`).join('')}</span>`;
-    else h += `<button type="button" class="tg" data-fshdive="${esc(t)}"${lock} title="${esc(`${name(D)} dives for cover: ${SD.kind === 'pc' ? 'tap the player\'s Dodge' : 'its Dodge is rolled'}; it loses its next attack`)}">${sh.diveRolling ? 'rolling\u2026' : 'Dive'}</button>`;
-    h += `<label class="mlab">malf <input class="malf" data-fshmal="${esc(t)}" value="${esc(sh.mal == null ? '' : sh.mal)}" inputmode="numeric" autocomplete="off" size="3" aria-label="Malfunction number" placeholder="\u2014"></label>`;
+    else h += `<button type="button" class="tg" data-fshdive="${esc(t)}"${lock} title="Dive for cover">${sh.diveRolling ? 'rolling…' : 'Dive'}</button>`;
+    // the malfunction number: an NPC's roll only (a PC's player checks their own)
+    if (!pc) h += `<label class="mlab">malf <input class="malf" data-fshmal="${esc(t)}" value="${esc(sh.mal == null ? '' : sh.mal)}" inputmode="numeric" autocomplete="off" size="3" aria-label="Malfunction number" placeholder="—"></label>`;
     h += `<span class="mnote">${esc(`${CMath.levelName(d.difficulty)}${CMath.shotDiceText(d) ? `, ${CMath.shotDiceText(d)}` : ''}`)}</span>`;
-    if (SA.reload) h += `<span class="mnote">${esc(CMath.reloadText(SA.reload))}</span>`;
     if (pc) {
       h += `<span class="mlv" role="group" aria-label="${esc(`${name(A)}'s level`)}">${CMath.TAP_LEVELS.map((l) => `<button type="button" class="tg" data-fshlvl="${esc(`${t}|${l}`)}"${lock}>${esc(CMath.levelName(l))}</button>`).join('')}</span>`;
-    } else h += `<button type="button" class="offer" data-fshroll="${esc(t)}"${lock}>${sh.rolling ? 'rolling\u2026' : 'Roll'}</button>`;
+    } else h += `<button type="button" class="offer" data-fshroll="${esc(t)}"${lock}>${sh.rolling ? 'rolling…' : 'Roll'}</button>`;
+    h += `<button type="button" class="tg mback" data-fshx="${esc(t)}" title="Close: nothing is logged" aria-label="Close the shot">✕</button>`;
     if (sh.last) h += `<b class="mres">${esc(sh.last)}</b>`;
-    return `${h}<button type="button" class="tg mback" data-fshx="${esc(t)}" title="Close: nothing is logged" aria-label="Close the shot">\u2715</button></span>`;
+    return `${h}</span>`;
   }
   // Shoot tapped on the target's row: the strip opens (again: it closes), with the chips last used on this target this
   // turn, else the aim and Prone from the rows, the first gun and its malfunction number.
@@ -993,9 +1011,12 @@
     const guns = CMath.gunsOf(A);
     const chips = {};
     for (const k of CMath.shotChipsFrom(A, D, f.round, C)) chips[k] = true;
+    const base = { fight: f.id, turn: f.turn, shooter: A.id, target: rowId, diveAsk: false, rolling: false, last: '' };
     ui.shot = mem
-      ? { fight: f.id, turn: f.turn, shooter: A.id, target: rowId, range: mem.range, chips: { ...mem.chips }, gun: mem.gun, mal: mem.mal, dive: null, diveAsk: false, rolling: false, last: '' }
-      : { fight: f.id, turn: f.turn, shooter: A.id, target: rowId, range: 'regular', chips, gun: guns.length ? 0 : null, mal: guns.length && isNum(guns[0].malfunction) ? String(guns[0].malfunction) : '', dive: null, diveAsk: false, rolling: false, last: '' };
+      ? { ...base, range: mem.range, chips: { ...mem.chips }, gun: mem.gun, mal: mem.mal, dive: mem.dive, seen: { ...mem.seen } }
+      : { ...base, range: 'regular', chips, gun: guns.length ? 0 : null, mal: guns.length && isNum(guns[0].malfunction) ? String(guns[0].malfunction) : '', dive: null, seen: null };
+    proneSync(ui.shot);
+    rememberShot(ui.shot);
     RP.render();
     RP.focusTo(sel);
   }
@@ -1011,12 +1032,12 @@
       const g = CMath.gunsOf(rowById(sh.shooter))[Number(key)];
       if (g) { sh.gun = Number(key); sh.mal = isNum(g.malfunction) ? String(g.malfunction) : ''; sel = attr('data-fshgun', `${rowId}|${key}`); }
     }
-    remember2(sh);
+    rememberShot(sh);
     RP.render();
     if (sel) RP.focusTo(sel);
   }
   // Dive tapped: an NPC's Dodge is rolled by the server; a PC's waits for the GM's Passed or Failed tap. Either way the
-  // dive goes to the reducer (the lost attack); a pass puts its die on this shot.
+  // dive goes to the reducer (the lost attack); a pass puts its die on this shooter's shots at the target this turn.
   function shotDive(rowId, tap) {
     const sh = ui.shot;
     const f = state().fight;
@@ -1027,6 +1048,7 @@
       if (!tap) { sh.diveAsk = true; RP.render(); RP.focusTo(attr('data-fshdv', `${rowId}|passed`)); return; }
       sh.dive = { passed: tap === 'passed' };
       sh.diveAsk = false;
+      rememberShot(sh);
       F({ type: 'dive', row: rowId, result: { tap } });
       RP.focusTo(attr('data-fshoot', rowId));
       return;
@@ -1045,12 +1067,14 @@
         return;
       }
       sh.dive = { passed: CMath.RANK[res.level] >= 1 };
+      rememberShot(sh);
       F({ type: 'dive', row: rowId, result: res });
       RP.focusTo(attr('data-fshroll', rowId));
     }, (e) => { if (ui.shot === sh) sh.diveRolling = false; rollFailed(e); RP.render(); RP.focusTo(sel); });
   }
   // Roll (an NPC shooter): the server's d100 against the gun's skill or Firearms, at the range's difficulty, with the
-  // net dice; or a PC's level tapped. The shot goes to the reducer; the strip stays open with the line, for a next shot.
+  // net dice; or a PC's level tapped. The shot goes to the reducer; the strip stays open with the line, for a next shot,
+  // its aim spent.
   function shotFire(rowId, level) {
     const sh = ui.shot;
     const f = state().fight;
@@ -1060,9 +1084,10 @@
     const D = rowById(rowId);
     if (!A || !D) return;
     const sel = level ? attr('data-fshlvl', `${rowId}|${level}`) : attr('data-fshroll', rowId);
-    const mal = malOf(sh);
-    if (mal === undefined) { RP.note(`Malfunction: type a number from 1 to 100, or leave it empty.`, { kind: 'bad', id: `shot:mal:${rowId}` }); RP.focusTo(attr('data-fshmal', rowId)); return; }
     const gun = gunOfShot(sh);
+    // a PC's shot carries no malfunction number (its box is not drawn)
+    const mal = A.kind === 'pc' ? CMath.malfunctionOf(null, gun) : CMath.malfunctionOf(sh.mal, gun);
+    if (mal === undefined) { RP.note('Malfunction: type a number from 1 to 100 (00 is 100), or leave it empty.', { kind: 'bad', id: `shot:mal:${rowId}` }); RP.focusTo(attr('data-fshmal', rowId)); return; }
     const skill = CMath.shotSkill(A, gun);
     const chips = shotChips(sh);
     const d = CMath.shotDice(chips, A, D, C);
@@ -1070,7 +1095,10 @@
     const send = (extra, line, hit) => {
       if (hit) ui.dmgMine = `${f.id}:${(isNum(f.meleeN) ? f.meleeN : 0) + 1}`;
       sh.last = line;
-      F({ type: 'shot', shooter: A.id, target: rowId, chips, gun: sh.gun, malfunction: mal, ...extra });
+      // the aim is spent by this shot: the next one from this strip is not aimed
+      delete sh.chips.aim;
+      rememberShot(sh);
+      F({ type: 'shot', shooter: A.id, target: rowId, chips, gun: sh.gun, malfunction: A.kind === 'pc' ? null : sh.mal, ...extra });
       RP.focusTo(sel);
     };
     if (A.kind === 'pc') {
@@ -1095,10 +1123,10 @@
         RP.focusTo(sel);
         return;
       }
-      const flag = CMath.malfunctionFlag(r.kept, mal !== null ? mal : (gun ? gun.malfunction : null), C);
+      const flag = CMath.malfunctionFlag(r.kept, mal, C);
       const hit = flag !== 'malfunction' && CMath.shotHits(r.level, d.difficulty);
       const cite = C.firearm.malfunction && C.firearm.malfunction.cite;
-      send({ result: res }, CMath.shotLine(names, { dice: d, skill, roll: r, hit, flag, malfunction: mal !== null ? mal : (gun ? gun.malfunction : null), cite }), hit);
+      send({ result: res }, CMath.shotLine(names, { dice: d, skill, roll: r, hit, flag, malfunction: mal, cite }), hit);
     }, (e) => { if (ui.shot === sh) sh.rolling = false; rollFailed(e); RP.render(); RP.focusTo(sel); });
   }
 
@@ -1672,7 +1700,7 @@
       'data-fshockset', 'data-fdef', 'data-fpdef', 'data-fretreat', 'data-fman', 'data-fmand', 'data-fmanrow',
       'data-fmelee', 'data-fmdice', 'data-fmlvl', 'data-fmx', 'data-fmout', 'data-fdmgdb', 'data-fdmgimp', 'data-fdmgx', 'data-fdmgclose',
       'data-fdmgpick', 'data-fshoot', 'data-fshr', 'data-fshc', 'data-fshgun', 'data-fshdive', 'data-fshdv', 'data-fshroll', 'data-fshlvl', 'data-fshx',
-      'data-fshmal', 'data-faim', 'data-faimoff', ...PANEL_KEYS.map((k) => `data-fs-${k}`)],
+      'data-fshmal', 'data-faim', 'data-faimoff', 'data-freload', ...PANEL_KEYS.map((k) => `data-fs-${k}`)],
     // Fight here on a place tile or a place's drawer (plan 6a Task 7); nothing while a fight runs
     placeButtons(note) {
       if (!allowed() || state().fight || !(model().placeKeys || {})[note]) return '';
@@ -1890,6 +1918,7 @@
     if (d.fshroll) { shotFire(d.fshroll, null); return true; }
     if (d.fshlvl) { const [rid, l] = split(d.fshlvl); shotFire(rid, l); return true; }
     if (d.fshx) { if (ui.shot && !ui.shot.rolling) ui.shot = null; RP.render(); RP.focusTo(attr('data-fshoot', d.fshx)); return true; }
+    if (d.freload) { const [rid, g] = split(d.freload); F({ type: 'reload', row: rid, gun: Number(g), clear: true }); return true; }
     if (d.faim) { F({ type: 'aim', row: d.faim, on: true }); return true; }
     if (d.faimoff) { F({ type: 'aim', row: d.faimoff, on: false }); return true; }
     if (d.fdmgx) { dmgExtreme(d.fdmgx); return true; }
@@ -2217,7 +2246,7 @@
     if (t.id === 'fAddCount') ui.addCount = t.value;
     if (t.id === 'fAreaDmg') ui.areaDmg = t.value;
     // the Shoot strip's malfunction number, kept through redraws (Task 19)
-    if (t.dataset && t.dataset.fshmal !== undefined && ui.shot && ui.shot.target === t.dataset.fshmal) { ui.shot.mal = t.value; remember2(ui.shot); }
+    if (t.dataset && t.dataset.fshmal !== undefined && ui.shot && ui.shot.target === t.dataset.fshmal) { ui.shot.mal = t.value; rememberShot(ui.shot); }
   });
 
   // A redraw from another window puts a half-typed number back into a new box, which then fires no `change`

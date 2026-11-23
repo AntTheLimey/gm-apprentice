@@ -451,7 +451,7 @@
       meleeDefences: 0, outnumberedOff: false,
       // CoC's firearms (Task 19): the guns its block or sheet lists, a declared aim ({ round }), the attack it loses
       // for diving for cover ({ attacks, on }: `on` once its next turn has started), and a slow weapon's counter
-      // ({ left, of, weapon }: rounds until it is ready again)
+      // (a list, one per slow gun: { gun, weapon, left, of }: its index, its name, rounds until it is ready again)
       guns: null, aiming: null, lostAttack: null, reload: null,
       // and whether it casts (GURPS: its FP shows as ✦FP, Task 10)
       // GURPS's last hit (its working, Task 12) and the places crippled

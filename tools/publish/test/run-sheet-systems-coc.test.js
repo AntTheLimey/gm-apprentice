@@ -132,16 +132,36 @@ for (const crlf of [false, true]) {
       assert.equal(readNumbers('**HP** 10\r\n- Brawl 40% (20/8), damage 1D3+DB').guns, null);
       assert.deepEqual(read(dir, 'Dock Cultist').nums.guns.map((g) => [g.name, g.malfunction, g.reload, g.impales]), [['Flintlock pistol', 95, 4, false]]);
     });
+    it('gun names: a calibre, a kind of gun, a make are Firearms; an axe and a Gunsmith are not (Task 19)', () => {
+      for (const name of ['.45 Automatic', 'Colt .45', 'Thompson', '.30-06 Bolt-action', 'Lee-Enfield', 'Webley', 'Luger', 'Brown Bess',
+        '9mm pistol', 'Semi-automatic pistol', 'Lever-action rifle', 'Matchlock', 'Mauser', 'Winchester', 'Remington', 'Springfield', 'Baker rifle', 'SMG', 'Machine gun']) {
+        const n = readNumbers(`**HP** 10\n- ${name} 40% (20/8), damage 1D10`);
+        assert.deepEqual([n.firearms, n.fighting], [40, null], name);
+      }
+      for (const name of ['2-handed axe', 'Gunsmith', 'Cleaver']) {
+        const n = readNumbers(`**HP** 10\n- ${name} 40% (20/8), damage 1D6`);
+        assert.deepEqual([n.firearms, n.fighting], [null, 40], name);
+      }
+      // a skill line stays a skill
+      assert.deepEqual([readNumbers('- Firearms (Handgun) 45%').firearms, readNumbers('- Fighting (Brawl) 45%').fighting], [45, 45]);
+    });
+    it('malfunction 00 is 100; a number outside 1-100 is none (Task 19)', () => {
+      const g = (t) => readNumbers(`- Flintlock pistol 30%, damage 1D6, ${t}`).guns[0].malfunction;
+      assert.deepEqual([g('malf 00'), g('malfunction 100'), g('malfunction 150'), g('malf. 95')], [100, 100, null, 95]);
+    });
     it('a PC sheet\'s Combat table gives its guns (Task 19)', () => {
       const { coc } = require('../lib/run-sheet/systems/coc');
       // Iris's fixture sheet with a Combat table added
       const sheet = fs.readFileSync(path.join(dir, 'Characters/PCs/Iris Calder.md'), 'utf8').replace(/\r\n/g, '\n');
       const fm = { name: 'Iris Calder' };
       const body = `${sheet.replace(/^---[\s\S]*?\n---\n/, '')}\n## Combat\n\n${['| Weapon | Skill % | Damage | Attacks | Range | Ammo | Malf |', '|---|---|---|---|---|---|---|',
-        '| Unarmed | 25 | 1D3+DB | 1 | — | — | — |', '| Pistol (Double-Barreled), Flintlock | Firearms (Pistol) 45 | 1D6+1 | 1/4 | 10 yds | 2 | 90 |'].join('\n')}\n`.replace(/\n/g, '\r\n');
+        '| Unarmed | 25 | 1D3+DB | 1 | — | — | — |', '| Pistol (Double-Barreled), Flintlock | Firearms (Pistol) 45 | 1D6+1 | 1/4 | 10 yds | 2 | 90 |',
+        '| Old revolver | Firearms (Handgun) 40 | 1D8 | 1 | 15 yds | 6 | 00 |', '| Rusty rifle | Firearms (Rifle) 35 | 2D6 | 1 | 90 yds | 5 | 120 |'].join('\n')}\n`.replace(/\n/g, '\r\n');
       const out = coc.readPc({ body, fm });
       assert.equal(out.note, undefined, 'read by the sheet reader');
-      assert.deepEqual(out.numbers.guns, [{ name: 'Pistol (Double-Barreled), Flintlock', skill: 45, damage: '1D6+1', malfunction: 90, reload: 4, impales: false }]);
+      assert.deepEqual(out.numbers.guns, [{ name: 'Pistol (Double-Barreled), Flintlock', skill: 45, damage: '1D6+1', malfunction: 90, reload: 4, impales: false },
+        { name: 'Old revolver', skill: 40, damage: '1D8', malfunction: 100, reload: null, impales: null },
+        { name: 'Rusty rifle', skill: 35, damage: '2D6', malfunction: null, reload: null, impales: null }]);
     });
     it('CoC and Regency are CoC, and fight (Task 7)', () => {
       for (const [id, label] of [['coc-7e', 'Call of Cthulhu 7e'], ['coc-7e-regency', null]]) {

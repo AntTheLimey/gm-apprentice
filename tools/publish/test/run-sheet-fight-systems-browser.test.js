@@ -1448,6 +1448,12 @@ describe('CoC firearms on the GM page (step 6b Task 19), by real input', { skip:
         // the strip wraps rather than clip: nothing past its right edge, ✕ in view
         assert.strictEqual(await page.evaluate(`(() => { const l = document.querySelector('li[data-row2=${q(c2)}]'); return l.scrollWidth > l.clientWidth + 1; })()`), false, 'line 2 clipped');
         assert.strictEqual(await page.evaluate(`(() => { const b = document.querySelector('[data-fshx=${q(c2)}]').getBoundingClientRect(); const l = document.querySelector('li[data-row2=${q(c2)}]').getBoundingClientRect(); return b.left >= l.left && b.right <= l.right; })()`), true, '✕ in view');
+        // the strip's chips grouped under short headings; Build 1 decides the size: one note, no size chips
+        assert.match(await row2(page, c2), /range:regularlongvery longtarget:size \(Build 1\)pronecoverfastshooter:aimedproneloadingpoint blankinto melee2-3 shots/);
+        assert.strictEqual(await page.evaluate(`Boolean(document.querySelector('[data-fshc=${q(`${c2}|large`)}]'))`), false);
+        const lines = await page.evaluate(`(() => { const x = document.querySelector('li[data-row2=${q(c2)}] .sx'); const tops = []; for (const e of x.querySelectorAll('button, input, .mnote, .mres, .sxh, :scope > span:not(.sxg):not(.mlv)')) { const t = Math.round(e.getBoundingClientRect().top); if (!tops.some((v) => Math.abs(v - t) < 6)) tops.push(t); } return tops.length; })()`);
+        console.log('STRIPLINES', w, lines);
+        assert.ok(lines <= 2, `${w}: the strip takes ${lines} lines`);
         sane(p, `${w} the strip open`);
         await shot(page, `t19-${w}-strip`);
 
@@ -1458,11 +1464,16 @@ describe('CoC firearms on the GM page (step 6b Task 19), by real input', { skip:
         assert.match(await row2(page, c2), re(want));
         // a shot is no melee defence; the flintlock's counter is on the shooter's row; the damage box has its dice, no DB
         assert.strictEqual(named(p, 'Dock Cultist 2').meleeDefences, 0);
-        assert.deepStrictEqual(named(p, 'Dock Cultist 1').reload, { left: 4, of: 4, weapon: 'Flintlock pistol' });
-        assert.match(await row2(page, c1), /Flintlock pistol: ready again in 4 rounds/);
+        assert.deepStrictEqual(named(p, 'Dock Cultist 1').reload, [{ gun: 0, weapon: 'Flintlock pistol', left: 4, of: 4 }]);
+        assert.strictEqual(await text(page, `[data-freload="${c1}|0"]`), 'Flintlock pistol: ready again in 4 rounds');
+        assert.strictEqual(await attrOf(page, `[data-freload="${c1}|0"]`, 'title'), 'Tap: ready now');
         assert.deepStrictEqual([p.fight.dmg.on, p.fight.dmg.by, p.fight.dmg.entry, p.fight.dmg.mode], [c2, c1, '1D6+1', 'none']);
         sane(p, `${w} after the shot`);
         await shot(page, `t19-${w}-shot`);
+        // the counter, tapped: ready now, logged
+        await tap(page, `[data-freload="${c1}|0"]`);
+        p = await until(page, `!p.fight.rows.find((r) => r.id === ${q(c1)}).reload && p.saved === "Saved" && p.pending === 0`);
+        assert.deepStrictEqual((await logOf(run)).slice(-1), ['Dock Cultist 1: ready.']);
       });
     });
   }
@@ -1481,8 +1492,18 @@ describe('CoC firearms on the GM page (step 6b Task 19), by real input', { skip:
       p = await until(page, `p.fight.shot && p.fight.shot.dive && p.fight.rows.find((r) => r.id === ${q(c2)}).lostAttack && p.saved === "Saved" && p.pending === 0`);
       assert.deepStrictEqual((await logOf(run)).slice(-1), ['Dock Cultist 2 dives for cover: Dodge rolled 5, Hard: a penalty die on the shot; loses its next 2 attacks.']);
       assert.strictEqual(named(p, 'Dock Cultist 2').meleeDefences, 0);
-      // Iris's level is a tap: no Roll for a PC
-      assert.strictEqual(await page.evaluate(`Boolean(document.querySelector('[data-fshroll=${q(c2)}]'))`), false);
+      // Iris's level is a tap: no Roll and no malfunction box for a PC; the dive taken once this turn, even reopened
+      assert.strictEqual(await page.evaluate(`Boolean(document.querySelector('[data-fshroll=${q(c2)}]') || document.querySelector('[data-fshmal=${q(c2)}]'))`), false);
+      await tap(page, `[data-fshoot="${c2}"]`);
+      p = await until(page, '!p.fight.shot');
+      await tap(page, `[data-fshoot="${c2}"]`);
+      p = await until(page, 'p.fight.shot && p.fight.shot.dive');
+      assert.strictEqual(await page.evaluate(`Boolean(document.querySelector('[data-fshdive=${q(c2)}]'))`), false, 'no second dive');
+      // a status set in another window while the strip is open turns its Prone chip on
+      await fromOther(run, [{ type: 'status', fight: p.fight.id, row: c2, add: 'Prone' }]);
+      p = await until(page, 'p.fight.shot && p.fight.shot.chips.includes("proneTarget") && p.saved === "Saved" && p.pending === 0');
+      await fromOther(run, [{ type: 'status', fight: p.fight.id, row: c2, remove: 'Prone' }]);
+      p = await until(page, 'p.fight.shot && !p.fight.shot.chips.includes("proneTarget") && p.saved === "Saved" && p.pending === 0');
       await tap(page, `[data-fshlvl="${c2}|regular"]`);
       p = await until(page, 'p.fight.shot && p.fight.shot.last && p.saved === "Saved" && p.pending === 0');
       assert.deepStrictEqual((await logOf(run)).slice(-1), ['Iris Calder shoots Dock Cultist 2 (dived for cover), −1 penalty die: Regular needed: Regular: a hit.']);
