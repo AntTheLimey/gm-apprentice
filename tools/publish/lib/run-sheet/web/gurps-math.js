@@ -160,6 +160,8 @@
 
   // A line's target: the row's HT plus its modifier; null with no HT (the card asks for it first) or no roll (dead).
   const lineTarget = (l, row) => (l && l.kind !== 'dead' && row && isNum(row.ht) ? row.ht + l.mod : null);
+  // The row's figure a line rolls (the card's box asks for it when missing): HT, none for the dead line.
+  const lineStat = (l) => (l && l.kind !== 'dead' ? 'ht' : null);
   const minus = (n) => `−${Math.abs(n)}`;
   // a figure, a negative one with U+2212
   const fig = (n) => (n < 0 ? minus(n) : String(n));
@@ -207,13 +209,14 @@
   }
   const offerOf = (C, o) => (C && C.offers && C.offers[o]) || null;
   const ending = (l, C) => (l.taken ? [l.taken] : l.offers).some((o) => { const x = offerOf(C, o); return Boolean(x && x.ends); });
-  // The card's next line to roll: the first not rolled (a dead line has no roll), unless a line before it offers or
+  // The card's next line to roll: the first not rolled (a dead line has no roll, nor a line marked `noRoll`: CoC's
+  // offers that need none, Task 18), unless a line before it offers or
   // took what ends the card (an Out, an Unconscious): then -1, as when every line is rolled.
   function nextLine(card, C) {
     const lines = (card && card.lines) || [];
     for (let i = 0; i < lines.length; i++) {
       if (ending(lines[i], C)) return -1;
-      if (!lines[i].result && lines[i].kind !== 'dead') return i;
+      if (!lines[i].result && lines[i].kind !== 'dead' && !lines[i].noRoll) return i;
     }
     return -1;
   }
@@ -299,7 +302,7 @@
 
   return {
     liveDefences, retreatOf, defenceText, defenceMoved, DEFENCE_KEYS,
-    deriveGurps, gurpsInjury, drFigure, shockOf, cardForHit, cardsAtTurnStart, cardsAtTurnEnd, lineTarget, lineName, lineText, resultText,
+    deriveGurps, gurpsInjury, drFigure, shockOf, cardForHit, cardsAtTurnStart, cardsAtTurnEnd, lineTarget, lineStat, lineName, lineText, resultText,
     offersFor, rollResult, nextLine, cardDone, pending, offerOf,
   };
 }));

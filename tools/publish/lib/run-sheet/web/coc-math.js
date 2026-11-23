@@ -287,7 +287,100 @@
     return RANK[x.level] >= RANK.extreme;
   }
 
+  // ---- what a hit and a SAN loss owe (Task 18): one card of prompts, never an outcome ----
+  // `rules` is the fight's: `prompts` (majorWoundAt, insanityAt) and `coc.cards`, the names and offers
+  // (systems/coc.js, each cited there). A card is Task 13's shape, { kind, lines, what?, standing? }, run by the same
+  // actions and gurps-math's nextLine, pending and cardDone: a line is { kind, mod: 0, stat?, noRoll?, result, offers,
+  // taken }, rolled against the row's `stat` (CON, INT) when it has one, its offers set at once when it has no roll.
+  // `standing` names offers the card holds besides its lines (the Dying reminder's Stabilised).
+  const cardTable = (rules) => (rules && rules.coc && rules.coc.cards && typeof rules.coc.cards === 'object' ? rules.coc.cards : null);
+  const cline = (kind, more) => ({ kind, mod: 0, ...(more || {}), result: null, offers: [], taken: null });
+  const offerLine = (kind) => ({ ...cline(kind, { noRoll: true }), offers: [kind] });
+  const promptOf = (rules, key) => (rules && rules.prompts && isNum(rules.prompts[key]) ? rules.prompts[key] : null);
+
+  // A hit's card (KR p119, p120): `row` as the hit left it (hp, max, majorWound), `hit` { damage, before }. Only the
+  // first that applies: over max HP is dead; to 0 HP with the Major Wound box ticked (by this hit or before) is Dying;
+  // a Major Wound otherwise is its CON roll; to 0 HP without it is Unconscious. A row already at 0 owes nothing but
+  // the dead line. `major`: this hit ticks the box. No lines: no card.
+  function cocCardForHit(row, hit, rules) {
+    const out = { major: false, lines: [] };
+    const at = promptOf(rules, 'majorWoundAt');
+    if (!cardTable(rules) || !row || !hit || at === null) return out;
+    const max = isNum(row.max) && row.max > 0 ? row.max : null;
+    const dmg = hit.damage;
+    if (max === null || !isNum(dmg) || dmg <= 0) return out;
+    const major = dmg * at >= max;
+    if (dmg > max) return { major, lines: [offerLine('dead')] };
+    if (!isNum(hit.before) || hit.before <= 0 || !isNum(row.hp)) return out;
+    out.major = major;
+    if (row.hp <= 0) out.lines.push(offerLine(row.majorWound || major ? 'dying' : 'unconscious'));
+    else if (major) out.lines.push(cline('major', { stat: 'con' }));
+    return out;
+  }
+  // The Dying reminders a round's end owes (KR p120): a CON roll for each row in the fight, not Out, that has been Dying
+  // since an earlier round (`dyingRound` < `round`, the round ending), with Stabilised standing. [{ row, card }]
+  function cocCardsAtRoundEnd(rows, round, rules) {
+    const K = cardTable(rules);
+    if (!K || !Array.isArray(rows) || !isNum(round)) return [];
+    const dying = (K.status && K.status.dying) || 'Dying';
+    return rows.filter((r) => r && r.in && !r.out && r.kind !== 'lair' && Array.isArray(r.conds) && r.conds.includes(dying)
+      && isNum(r.dyingRound) && r.dyingRound < round)
+      .map((r) => ({ row: r.id, card: { kind: 'dying', lines: [cline('dyingCon', { stat: 'con' })], standing: ['stabilised'], what: `end of round ${round}` } }));
+  }
+  // A SAN loss in one entry (KR p155): `insanityAt` or more brings the INT roll's card; else null.
+  function sanCard(row, loss, rules) {
+    const at = promptOf(rules, 'insanityAt');
+    if (!cardTable(rules) || !row || at === null || !isNum(loss) || loss < at) return null;
+    return { kind: 'int', lines: [cline('int', { stat: 'int' })], what: `SAN −${loss}` };
+  }
+
+  // A line's figure: the row's CON or INT; null with none (an NPC's card asks for it first) or no roll.
+  const lineTarget = (l, row) => (l && l.stat && !l.noRoll && row && isNum(row[l.stat]) ? row[l.stat] : null);
+  const lineStat = (l) => (l && l.stat && !l.noRoll ? l.stat : null);
+  const lineName = (l, K) => ((K && K.lines) || {})[l.kind] || l.kind;
+  // "Major wound: CON 60", "Dying: CON ?", "Over max HP"; `log` gives the log's form ("Major wound, CON 60").
+  function lineText(l, row, K, log) {
+    const name = lineName(l, K);
+    if (!lineStat(l)) return name;
+    const v = row && isNum(row[l.stat]) ? row[l.stat] : '?';
+    return `${name}${log ? ',' : ':'} ${((K && K.stats) || {})[l.stat] || l.stat.toUpperCase()} ${v}`;
+  }
+  // A line's result as the reducer takes it: a PC's is the GM's tap of the player's roll ({ tap: 'passed' | 'failed' });
+  // any other row's is the server's d100 (rollPercent's) at Regular with no dice. Null when it is neither, or the wrong
+  // one for the row (the sheet never rolls for a PC).
+  function rollResult(x, row) {
+    if (!x || typeof x !== 'object') return null;
+    const pc = Boolean(row && row.kind === 'pc');
+    if (x.tap === 'passed' || x.tap === 'failed') return pc ? { tapped: true, passed: x.tap === 'passed' } : null;
+    if (pc || !isLevel(x.level) || !isNum(x.kept) || !isNum(x.target) || (x.difficulty || 'regular') !== 'regular') return null;
+    const asked = x.asked && typeof x.asked === 'object' ? x.asked : { bonus: x.bonus || 0, penalty: x.penalty || 0 };
+    if (asked.bonus || asked.penalty) return null;
+    return { kept: x.kept, target: x.target, level: x.level, passed: RANK[x.level] >= 1 };
+  }
+  // "rolled 34, Regular", "passed", "failed"
+  const resultText = (res) => (res.tapped ? (res.passed ? 'passed' : 'failed') : `rolled ${res.kept}, ${levelName(res.level)}`);
+  // What a rolled line offers: the Major Wound's Prone, folded with Unconscious on a failure; a failed Dying CON
+  // death; a passed INT roll temporary insanity.
+  function offersFor(l, res) {
+    if (l.kind === 'major') return [res.passed ? 'prone' : 'proneOut'];
+    if (l.kind === 'dyingCon') return res.passed ? [] : ['dead'];
+    if (l.kind === 'int') return res.passed ? ['insane'] : [];
+    return [];
+  }
+  // The bout's rounds from the server's die ({ sides, mod, die, total }, lib/dice roll), the sides the table names;
+  // null when it is not that.
+  function boutRoll(x, rules) {
+    const K = cardTable(rules);
+    const sides = K && K.bout && isNum(K.bout.sides) ? K.bout.sides : null;
+    if (!x || typeof x !== 'object' || sides === null || x.sides !== sides || (x.mod || 0) !== 0) return null;
+    return Number.isInteger(x.die) && x.die >= 1 && x.die <= sides && x.total === x.die ? x.die : null;
+  }
+  // "bout: 7 rounds", "bout: 1 round"; '' with none.
+  const boutText = (b) => (b && isNum(b.left) && b.left > 0 ? `bout: ${b.left} round${b.left === 1 ? '' : 's'}` : '');
+
   return {
+    cocCardForHit, cocCardsAtRoundEnd, sanCard, lineTarget, lineStat, lineName, lineText, rollResult, resultText, offersFor,
+    boutRoll, boutText,
     DB_MODES, DB_WORDS, dbModeOf, dbTerm, halfTerm, damageRoll, cocDamage, extremeOffer,
     topOf, combatOf, TAP_LEVELS, LEVEL_NAMES, RANK, isLevel, levelName, RESPONSES, RESPONSE_WORDS, RESPONSE_NAMES,
     opposedMelee, skillOf, skillName, outnumbered, proneOn, attackDice, defenceAfter, diceOfNet, diceIn, netOf, autoIn, diceText,

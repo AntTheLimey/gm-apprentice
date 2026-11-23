@@ -56,7 +56,7 @@ function readNumbers(stats) {
   const lines = attackLines(stats);
   const db = firstOf(ps, 'db');
   const nums = { hp: n('hp'), mp: n('mp'), san: n('san'), dex: n('dex'), luck: n('luck'), armour: null,
-    str: n('str'), con: n('con'), siz: n('siz'), pow: n('pow'),
+    str: n('str'), con: n('con'), siz: n('siz'), pow: n('pow'), int: n('int'),
     fighting: highest(all('fighting').concat(lines.fighting)), firearms: highest(all('firearms').concat(lines.firearms)),
     dodge: n('dodge'), db: db === null ? null : (clean(db).replace(/\s*[·|].*$/, '') || null), build: n('build'), attacks: leadingNumber(String(firstOf(ps, 'attacks') || '').replace(/^per round\s*:?\s*/i, '')), from: {} };
   const armour = firstOf(ps, 'armour');
@@ -115,6 +115,13 @@ function sheetCombat(model) {
   });
 }
 
+// CON and INT from the sheet's characteristics, only those it writes (Task 18's cards show them; a PC's roll is the
+// player's, so they are shown, never rolled).
+const sheetChars = (model) => {
+  const c = (model && model.chars) || {};
+  return present({ con: c.CON ? num(c.CON.reg) : null, int: c.INT ? num(c.INT.reg) : null });
+};
+
 function readPc({ body, fm }) {
   try {
     const text = String(body == null ? '' : body).replace(/\r\n?/g, '\n');
@@ -125,19 +132,44 @@ function readPc({ body, fm }) {
     if (d) {
       const now = (o) => (num(o.cur) !== null ? o.cur : (num(o.max) !== null ? o.max : null));
       return { numbers: { ...NONE, hpMax: d.hp.max, hpNow: now(d.hp), mpMax: num(d.mp.max), mpNow: now(d.mp),
-        sanMax: num(d.san.max), sanNow: now(d.san), luck: num(d.luck.cur), dex: num(d.dex), ...sheetCombat(model) } };
+        sanMax: num(d.san.max), sanNow: now(d.san), luck: num(d.luck.cur), dex: num(d.dex), ...sheetCombat(model), ...sheetChars(model) } };
     }
     const block = statSection(text);
     const nums = readNumbers(`${block ? block.md : ''}\n${statusBlock(text)}`);
     if (nums.hp === null) return { numbers: { ...NONE }, note: NO_HP };
     return { numbers: { ...NONE, hpNow: nums.hp, hpMax: nums.hp, mpNow: nums.mp, mpMax: nums.mp, sanNow: nums.san, sanMax: nums.san,
-      luck: nums.luck, dex: nums.dex, ...present(combatOfNums(nums)) }, note: 'numbers from a one-line sheet (current = max)' };
+      luck: nums.luck, dex: nums.dex, ...present(combatOfNums(nums)), ...present({ con: nums.con, int: nums.int }) }, note: 'numbers from a one-line sheet (current = max)' };
   } catch (e) {
     return { numbers: { ...NONE }, note: `the sheet could not be read: ${firstLine(e)}` };
   }
 }
 
-// Placeholders until later tasks fill them in: `vitals`, `prompts`, `wounding`, `consequences`, `defences`,
+// The cards a hit and a SAN loss raise (Task 18), read by coc-math's cocCardForHit, cocCardsAtRoundEnd and sanCard and
+// by the card actions Task 13 built for GURPS. Names, figures and page cites only: death over max HP (KR p119, p120);
+// the Major Wound, Prone and its CON roll (KR p119, p120); Unconscious and Dying at 0 HP, Dying's CON rolls (KR p120);
+// stabilising (KR p120, p65); the INT roll (KR p155); the bout's rounds (KR p156) and its tables (KR p157).
+const COC_CARDS = {
+  status: { major: 'Major wound', dying: 'Dying' },
+  // the lines' names on the cards and in the log
+  lines: { dead: 'Over max HP', dying: '0 HP, Major wound', unconscious: '0 HP', major: 'Major wound', dyingCon: 'Dying', int: 'SAN loss' },
+  stats: { con: 'CON', int: 'INT' },
+  offers: {
+    dead: { label: 'Out (dead)', out: true, ends: true },
+    dying: { label: 'Dying, Unconscious', add: ['Dying', 'Unconscious'], ends: true },
+    unconscious: { label: 'Unconscious', add: ['Unconscious'], ends: true },
+    // the Major Wound's roll folds Prone in: a PC's Passed or Failed tap takes it in the same tap (`tap`)
+    prone: { label: 'Prone', add: ['Prone'], tap: true },
+    proneOut: { label: 'Prone, Unconscious', add: ['Prone', 'Unconscious'], ends: true, tap: true },
+    // the bout's rounds are the Keeper's 1D10, rolled by the server when it is taken
+    insane: { label: 'Temporary insanity', add: ['Temporary insanity'], bout: true },
+    stabilised: { label: 'Stabilised', remove: ['Dying'] },
+  },
+  bout: { sides: 10 },
+  // what a card names besides its lines: the bout's tables stay in the book
+  notes: { int: 'bout tables: KR p157' },
+};
+
+// Placeholders until later tasks fill them in: `vitals`, `wounding`, `consequences`, `defences`,
 // `manoeuvres` keep D&D's shape (CoC-safe empties where D&D words would show).
 function describeCoc(id) {
   const r = describeAs(id, id === 'coc-7e' ? 'Call of Cthulhu 7e' : SYSTEM_NAMES[id], true);
@@ -153,9 +185,15 @@ function describeCoc(id) {
     // the same cap as lib/dice rollPercent's net of bonus and penalty dice (KR p91, p407): change both together
     maxDice: 2,
     defaultResponse: 'fightBack',
+    // what a hit and a SAN loss owe, as cards of prompts (Task 18): names and figures only. The card's numbers are
+    // `prompts` below; a line rolls the row's `stat`; each offer adds or removes statuses by name.
+    cards: COC_CARDS,
   };
+  // a Major Wound is a hit of at least max HP over `majorWoundAt` (KR p119, p120); a SAN loss of `insanityAt` or more
+  // in one entry asks for the INT roll (KR p155)
   const fight = {
     initiative: 'dex', initDecimals: 0, hpFloor: 0, autoOut: false, firearmBonus: 50, coc,
+    prompts: { majorWoundAt: 2, insanityAt: 5 },
     pools: [
       { key: 'mp', prefix: 'm', label: 'MP', max: 'mpMax', floor: 0 },
       { key: 'san', prefix: 's', label: 'SAN', max: 'sanMax', floor: 0, cap: 99 },
@@ -185,7 +223,7 @@ function describeCoc(id) {
 }
 
 // The row's own fields: initiative is DEX.
-const foeRow = (n) => ({ init: n.dex, mp: n.mp, mpMax: n.mp, san: n.san, sanMax: n.san, dex: n.dex, armour: n.armour, from: n.from,
+const foeRow = (n) => ({ init: n.dex, mp: n.mp, mpMax: n.mp, san: n.san, sanMax: n.san, dex: n.dex, con: n.con, int: n.int, armour: n.armour, from: n.from,
   fighting: n.fighting, firearms: n.firearms, dodge: n.dodge, db: n.db, build: n.build, attacks: n.attacks });
 
 const make = (id) => ({ ...dnd, id, fights: true, readFoe, readPc, foeRow, stockNoActions: undefined, describe: () => describeCoc(id) });

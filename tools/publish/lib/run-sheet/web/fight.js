@@ -292,13 +292,15 @@
     st: ['st'], ht: ['ht'], dx: ['dx'], dex: ['dex'], speed: ['speed'], hp: ['max'], fp: ['fpMax'], mp: ['mpMax'],
     san: ['san', 'sanMax'], dodge: ['dodge'], parry: ['parry'], block: ['block'], dr: ['dr'],
     fighting: ['fighting'], firearms: ['firearms'], db: ['db'], armour: ['armour'], build: ['build'], attacks: ['attacks'],
+    // CoC's CON and INT, typed in a card's box when the row has none (Task 18)
+    con: ['con'], int: ['int'],
   };
-  // The keys setStat takes, by the rules' initiative: GURPS's stats, pools and defences; CoC's DEX, MP, SAN, HP and
-  // combat figures; none for D&D (its panel has setMax and setAc).
+  // The keys setStat takes, by the rules' initiative: GURPS's stats, pools and defences; CoC's DEX, MP, SAN, HP,
+  // combat figures, CON and INT; none for D&D (its panel has setMax and setAc).
   function setStatKeysOf(rules) {
     const ru = FM.rulesOf({ rules });
     if (ru.initiative === 'speed') return ['st', 'ht', 'dx', 'hp', 'fp', 'speed', 'dodge', 'parry', 'block', 'dr'];
-    if (ru.initiative === 'dex') return ['dex', 'mp', 'san', 'hp', 'fighting', 'firearms', 'dodge', 'db', 'armour', 'build', 'attacks'];
+    if (ru.initiative === 'dex') return ['dex', 'mp', 'san', 'hp', 'fighting', 'firearms', 'dodge', 'db', 'armour', 'build', 'attacks', 'con', 'int'];
     return [];
   }
   // DR and CoC's damage bonus may be words (`2 (face 0)`, `+1D4`); Build and a damage bonus may be below 0.
@@ -336,6 +338,10 @@
     r.poolAt = at;
     if (was > 0 && next <= 0) say(s, f, at, `${nameOf(s, f, r)}: ${pool.label || pool.key} ${next === 0 && isNum(pool.floor) && pool.floor === 0 ? '0' : '0 or less'}.`);
     settleTired(s, f, r, at);
+    // CoC (Task 18): a SAN loss this big in one entry brings the INT roll's card
+    const K = kitOf(f);
+    const c = K && K.coc && pool.key === 'san' && e.kind === 'damage' ? CM.sanCard(r, e.n, FM.rulesOf(f)) : null;
+    if (c) addCard(f, r, c.kind, c.lines, c.what);
   }
 
   // A hit (GURPS, Task 12): GM.gurpsInjury's injury to HP (a `fat` hit's to FP), `r.hit` { line, injury, location,
@@ -367,22 +373,24 @@
     return C && typeof C === 'object' && GM && typeof GM.cardForHit === 'function' ? C : null;
   };
   const cardsOf = (r) => { if (!Array.isArray(r.cards)) r.cards = []; return r.cards; };
-  // A card's id is the fight's count, so a replay makes the same ids.
-  function addCard(f, r, kind, lines, what) {
+  // A card's id is the fight's count, so a replay makes the same ids. `standing`: offers the card holds besides its
+  // lines (CoC's Stabilised).
+  function addCard(f, r, kind, lines, what, standing) {
     f.cardN = (isNum(f.cardN) ? f.cardN : 0) + 1;
-    cardsOf(r).push({ id: `k${f.cardN}`, kind, lines, ...(what ? { what } : {}) });
+    cardsOf(r).push({ id: `k${f.cardN}`, kind, lines, ...(what ? { what } : {}), ...(standing && standing.length ? { standing } : {}) });
   }
-  // A card of this kind (a turn's start or end) replaces the row's last one, answered or not.
+  // A card of this kind (a turn's start or end, a round's end) replaces the row's last one, answered or not.
   function replaceCards(f, r, kind, cards) {
     if (!cards.length && !(Array.isArray(r.cards) && r.cards.some((c) => c.kind === kind))) return;
     r.cards = cardsOf(r).filter((c) => c.kind !== kind);
-    for (const c of cards) addCard(f, r, c.kind, c.lines);
+    for (const c of cards) addCard(f, r, c.kind, c.lines, c.what, c.standing);
   }
   // Injury a row took (a typed hit, a raw number, an area's share): its shock (B419), added to any still on, and a
   // card when it owes more than shock. `shockEnds` counts the row's turn ends left. `hit` is null for raw injury.
   function owed(f, r, before, injury, hit) {
     const C = consequencesOf(f);
-    if (!C || !isNum(injury) || injury <= 0) return;
+    if (!C) { cocOwed(f, r, before, injury); return; }
+    if (!isNum(injury) || injury <= 0) return;
     const out = GM.cardForHit(r, { injury, before, location: hit ? hit.location : null, crippled: Boolean(hit && hit.crippled) }, C);
     if (out.shock > 0) {
       const cap = C.shock && isNum(C.shock.cap) ? C.shock.cap : out.shock;
@@ -390,6 +398,97 @@
       r.shockEnds = f.turn === r.id ? 2 : 1;
     }
     if (out.lines.length) addCard(f, r, 'hit', out.lines, `${injury} injury${hit && hit.place ? `, ${hit.place}` : ''}`);
+  }
+  // ---- CoC's cards (Task 18): Task 13's card and its actions, with coc-math's lines; never an outcome ----
+  // The fight's card kit: GURPS's consequences table and gurps-math's line helpers, or CoC's card table (rules.coc.cards)
+  // and coc-math's. nextLine, pending, cardDone and offerOf are gurps-math's for both: they read only the table's
+  // offers. Null where there are no cards (D&D).
+  function kitOf(f) {
+    const C = consequencesOf(f);
+    if (C) return { C, M: GM, coc: false };
+    const coc = cocOf(f);
+    const K = coc && coc.cards;
+    return K && typeof K === 'object' && GM && typeof CM.cocCardForHit === 'function' ? { C: K, M: CM, coc: true } : null;
+  }
+  // A CoC hit's damage (after armour), on the row as it left it: the Major Wound box ticked when it was one (its status
+  // with it, so every place that lists statuses shows it), and one card for the first consequence that applies.
+  function cocOwed(f, r, before, damage) {
+    const K = kitOf(f);
+    if (!K || !K.coc || !isNum(damage) || damage <= 0) return;
+    const out = CM.cocCardForHit(r, { damage, before }, FM.rulesOf(f));
+    if (out.major) {
+      r.majorWound = true;
+      const st = K.C.status.major;
+      if (!r.conds.includes(st)) r.conds.push(st);
+    }
+    if (out.lines.length) addCard(f, r, 'hit', out.lines, `${damage} damage`);
+  }
+  // Healing from 0 in CoC (First Aid's point): the Dying and Unconscious offers go, a Dying status already set is
+  // cleared (logged), and with it the round reminders (settleCoc).
+  function cocHealed(s, f, r, before, at) {
+    const K = kitOf(f);
+    if (!K || !K.coc || before !== 0 || !isNum(r.hp) || r.hp <= 0) return;
+    const gone = (c) => c.kind === 'dying' || c.lines.some((l) => GM.pending(l) && l.offers.some((o) => o === 'dying' || o === 'unconscious'));
+    if (Array.isArray(r.cards) && r.cards.some(gone)) r.cards = r.cards.filter((c) => !gone(c));
+    const dying = K.C.status.dying;
+    if (!r.conds.includes(dying)) return;
+    r.conds = r.conds.filter((c) => c !== dying);
+    say(s, f, at, `${nameOf(s, f, r)}: ${K.C.offers.stabilised.label}.`);
+  }
+  // A round's end in CoC: each row Dying since an earlier round gets its CON reminder (replacing the last), and each
+  // bout of madness counts down a round, logged when it ends.
+  function cocRoundEnds(s, f, at) {
+    const K = kitOf(f);
+    if (!K || !K.coc) return;
+    for (const { row, card } of CM.cocCardsAtRoundEnd(f.rows, f.round, FM.rulesOf(f))) replaceCards(f, rowOf(f, row), 'dying', [card]);
+    for (const r of f.rows) {
+      if (!r.bout || !isNum(r.bout.left)) continue;
+      const left = r.bout.left - 1;
+      touch(r, at);
+      if (left > 0) { r.bout = { ...r.bout, left }; continue; }
+      say(s, f, at, `${nameOf(s, f, r)}: the bout of madness ends (${r.bout.of} rounds).`);
+      r.bout = null;
+    }
+  }
+  // After every action on a CoC fight: the Major Wound box follows its status (ticked by a hit, or set or cleared by
+  // hand), and the round Dying was set is kept while the row is Dying; a row no longer Dying owes no reminder.
+  function settleCoc(f) {
+    const K = kitOf(f);
+    if (!K || !K.coc) return;
+    const { major, dying } = K.C.status;
+    for (const r of f.rows) {
+      if (!Array.isArray(r.conds)) continue;
+      const mw = r.conds.includes(major);
+      if (Boolean(r.majorWound) !== mw) r.majorWound = mw;
+      if (r.conds.includes(dying)) { if (!isNum(r.dyingRound)) r.dyingRound = f.round; continue; }
+      if (r.dyingRound !== null && r.dyingRound !== undefined) r.dyingRound = null;
+      if (Array.isArray(r.cards) && r.cards.some((c) => c.kind === 'dying')) r.cards = r.cards.filter((c) => c.kind !== 'dying');
+    }
+  }
+  // An offer taken on a card: from a line (`l`), or one the card holds standing (`l` null). Its statuses added and
+  // removed, Out when it says so, and a bout started from the server's 1D10 (`a.bout`; refused without one). One log
+  // line. False when it could not be taken.
+  function takeOffer(s, f, r, K, l, take, a, at) {
+    const o = GM.offerOf(K.C, take);
+    if (!o) return false;
+    let bout = null;
+    if (o.bout) { bout = CM.boutRoll(a.bout, FM.rulesOf(f)); if (bout === null) return false; }
+    if (l) l.taken = take;
+    for (const st of o.add || []) if (!r.conds.includes(st)) r.conds.push(st);
+    if (o.remove) r.conds = r.conds.filter((c) => !o.remove.includes(c));
+    if (o.out) r.out = true;
+    if (bout !== null) r.bout = { left: bout, of: bout };
+    touch(r, at);
+    say(s, f, at, `${nameOf(s, f, r)}: ${l ? `${K.M.lineName(l, K.C, true)}: ` : ''}${o.label}${bout !== null ? `, a bout of ${bout} round${bout === 1 ? '' : 's'}` : ''}.`);
+    return true;
+  }
+  // A round ends, the one place (Task 18): its roster line, then what the round's end owes (CoC's Dying reminders and
+  // bouts), then the next round, its melee defences from 0.
+  function roundEnds(s, f, at) {
+    sayRoster(s, f, at, `Round ${f.round} ends: `, rosterItems(s, f), '.');
+    cocRoundEnds(s, f, at);
+    f.round += 1;
+    meleeRound(f);
   }
   // A row's turn ends: its shock counts down, and HT to recover while it is Stunned.
   function turnEnds(f, r, at) {
@@ -410,13 +509,13 @@
     if (C && r) replaceCards(f, r, 'conscious', GM.cardsAtTurnStart(r, C));
   }
   // Already Mortal wound for line `i`: the row has the status, or an earlier line of this card offers or took it.
-  const mortalBefore = (r, card, C, i) => (r.conds || []).includes(C.mortalStatus)
+  const mortalBefore = (r, card, C, i) => (C.mortalStatus ? (r.conds || []).includes(C.mortalStatus) : false)
     || card.lines.slice(0, i).some((x) => x.taken === 'mortal' || (GM.pending(x) && x.offers.includes('mortal')));
   // Rolled lines from `from` on that nobody has answered take their offers again as things stand now.
-  function reoffer(r, card, C, from) {
+  function reoffer(r, card, K, from) {
     for (let i = from; i < card.lines.length; i++) {
       const l = card.lines[i];
-      if (l.result && !l.taken && !l.declined) l.offers = GM.offersFor(l, l.result, C, mortalBefore(r, card, C, i));
+      if (l.result && !l.taken && !l.declined) l.offers = K.M.offersFor(l, l.result, K.C, mortalBefore(r, card, K.C, i));
     }
   }
   // ---- active defences (GURPS, Task 14): the live figure is gurps-math's liveDefences; the roll is the server's ----
@@ -479,6 +578,7 @@
     say(s, f, at, `${nameOf(s, f, r)}${who}: ${out.line}.`);
     touchIfHp(r, at, before, r.max);
     afterHp(s, f, r, before, at, { over: overOf(took, temp, before) });
+    owed(f, r, before, out.damage, null);
     return true;
   }
   const cardOf = (r, id) => (Array.isArray(r.cards) ? r.cards.find((c) => c.id === id) || null : null);
@@ -645,11 +745,7 @@
       const { row, wrapped } = FM.nextLive(f.rows, f.turn);
       if (!row) return;
       turnEnds(f, ending, at);
-      if (wrapped) {
-        sayRoster(s, f, at, `Round ${f.round} ends: `, rosterItems(s, f), '.');
-        f.round += 1;
-        meleeRound(f);
-      }
+      if (wrapped) roundEnds(s, f, at);
       // an exchange's damage is owed on its own turn only: a box left unapplied never opens on a later one
       f.melee = null;
       f.turn = row.id;
@@ -681,33 +777,43 @@
       else if (e.kind === 'heal') { if (!isNum(r.hp)) return; r.hp = FM.afterHeal({ hp: r.hp, max: r.max }, e.n); } else { took = hurt(f, r, e.n, r.half); over = overOf(took, temp, before); r.half = false; }
       touchIfHp(r, at, before, r.max);
       afterHp(s, f, r, before, at, { over });
-      // raw injury (`-9`, a bare `2d+1`) owes its shock and the lines it crosses (GURPS)
+      // raw injury (`-9`, a bare `2d+1`) owes its shock and the lines it crosses (GURPS), raw damage its card (CoC)
       if (took !== null) owed(f, r, before, took, null);
+      if (e.kind === 'heal') cocHealed(s, f, r, before, at);
     }),
     half: onRow((s, f, r, a, at) => { r.half = !!a.on; touch(r, at); }),
     // A card's line rolled (GURPS, Task 13): the server's result onto the card's next line (the reducer never rolls,
     // so a replay is the same). Dropped when the line is not the next, or HT changed since the roll was asked.
+    // CoC's too (Task 18): an NPC's line is the server's d100 against the row's CON or INT; a PC's is the GM's Passed or
+    // Failed tap of the player's roll (`result: { tap }`), and an offer the rule gives no choice about (the Major
+    // Wound's Prone) is taken with that tap.
     cardRolled: onRow((s, f, r, a, at) => {
-      const C = consequencesOf(f);
-      const card = C && cardOf(r, a.card);
+      const K = kitOf(f);
+      const card = K && cardOf(r, a.card);
       if (!card) return;
+      const C = K.C;
       const i = GM.nextLine(card, C);
-      const res = GM.rollResult(a.result);
+      const res = K.M.rollResult(a.result, r);
       if (i < 0 || a.line !== i || !res) return;
       const l = card.lines[i];
-      if (GM.lineTarget(l, r) !== res.target) return;
+      if (!res.tapped && K.M.lineTarget(l, r) !== res.target) return;
       l.result = res;
-      l.offers = GM.offersFor(l, res, C, mortalBefore(r, card, C, i));
+      l.offers = K.M.offersFor(l, res, C, mortalBefore(r, card, C, i));
       touch(r, at);
-      say(s, f, at, `${nameOf(s, f, r)}: ${GM.lineText(l, r, C, true)}, ${GM.resultText(res)}.`);
+      say(s, f, at, `${nameOf(s, f, r)}: ${K.M.lineText(l, r, C, true)}, ${K.M.resultText(res)}.`);
+      const only = l.offers.length === 1 ? GM.offerOf(C, l.offers[0]) : null;
+      if (res.tapped && only && only.tap) takeOffer(s, f, r, K, l, l.offers[0], a, at);
       if (GM.cardDone(card, C)) dropCard(r, card.id);
     }),
     // A card answered: one of a line's offers applied (`line`, `take`), the card's standing Out (`take: 'out'`), or the
     // card dismissed (`take: 'dismiss'`, no log line). Each applied tap is one log line.
+    // A standing offer (`take` one of the card's `standing`, no line: CoC's Stabilised) is taken and the card goes. A
+    // bout's offer carries the server's 1D10 (`bout`).
     card: onRow((s, f, r, a, at) => {
-      const C = consequencesOf(f);
-      const card = C && cardOf(r, a.card);
+      const K = kitOf(f);
+      const card = K && cardOf(r, a.card);
       if (!card) return;
+      const C = K.C;
       // a dismissed line: its offers declined, nothing logged; the lines after it that were rolled are offered again
       // as they stand now (a declined Mortal wound no longer counts for them)
       if (a.take === 'dismiss' && a.line !== undefined && a.line !== null) {
@@ -715,7 +821,7 @@
         if (!l || !GM.pending(l)) return;
         l.offers = [];
         l.declined = true;
-        reoffer(r, card, C, a.line + 1);
+        reoffer(r, card, K, a.line + 1);
         touch(r, at);
         if (GM.cardDone(card, C)) dropCard(r, card.id);
         return;
@@ -727,15 +833,13 @@
         if (!r.out) { r.out = true; say(s, f, at, `${nameOf(s, f, r)} is out of the fight.`); }
         return;
       }
+      if ((a.line === undefined || a.line === null) && Array.isArray(card.standing) && card.standing.includes(a.take)) {
+        if (takeOffer(s, f, r, K, null, a.take, a, at)) dropCard(r, card.id);
+        return;
+      }
       const l = card.lines[a.line];
-      const o = GM.offerOf(C, a.take);
-      if (!l || !o || !GM.pending(l) || !l.offers.includes(a.take)) return;
-      l.taken = a.take;
-      for (const st of o.add || []) if (!r.conds.includes(st)) r.conds.push(st);
-      if (o.remove) r.conds = r.conds.filter((c) => !o.remove.includes(c));
-      if (o.out) r.out = true;
-      touch(r, at);
-      say(s, f, at, `${nameOf(s, f, r)}: ${GM.lineName(l, C, true)}: ${o.label}.`);
+      if (!l || !GM.pending(l) || !l.offers.includes(a.take)) return;
+      if (!takeOffer(s, f, r, K, l, a.take, a, at)) return;
       if (GM.cardDone(card, C)) dropCard(r, card.id);
     }),
     // The shock chip tapped (GURPS): its size set, 1 to the cap, or 0 to clear; a new one lasts to the end of the row's
@@ -1172,6 +1276,7 @@
       const before = new Map(rows.map((r) => [r, statusesOf(r).join('\n')]));
       fn(s, a, at);
       for (const [r, was] of before) if (statusesOf(r).join('\n') !== was) r.condAt = at;
+      if (s.fight && Array.isArray(s.fight.rows)) settleCoc(s.fight);
       // a row Out, by any route, owes nothing more: its cards go, with no line
       for (const r of s.fight && Array.isArray(s.fight.rows) ? s.fight.rows : []) if (r.out && Array.isArray(r.cards) && r.cards.length) r.cards = [];
     };

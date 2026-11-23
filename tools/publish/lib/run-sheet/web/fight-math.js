@@ -442,6 +442,9 @@
       // GURPS row holds its place in the fixed order (`fixed`) or waits for placeHeld (`held`)
       fp: null, fpMax: null, mp: null, mpMax: null, san: null, sanMax: null, luck: null, er: null, erMax: null,
       dex: null, st: null, ht: null, dx: null, speed: null, dodge: null, parry: null, block: null, dr: null, faceOpen: false, drByLocation: null,
+      // CoC's CON and INT, for Task 18's cards; its Major Wound box (it stays ticked), the round Dying was set (its
+      // reminders start the round after), and a bout of madness ({ left, of } rounds; `bout`)
+      con: null, int: null, majorWound: false, dyingRound: null,
       armour: null, fighting: null, firearms: null, combat: null, db: null, build: null, attacks: 1, defended: 0, bout: null,
       // CoC's melee (Task 16): the row's melee defences this round (reset at the round's start) and its outnumbered
       // switch (off: never outnumbered)
@@ -487,6 +490,7 @@
       fpMax: num(foe.fpMax !== undefined ? foe.fpMax : foe.fp), mpMax: num(foe.mpMax !== undefined ? foe.mpMax : foe.mp),
       sanMax: num(foe.sanMax !== undefined ? foe.sanMax : foe.san), erMax: num(foe.erMax !== undefined ? foe.erMax : foe.er),
       dex: num(foe.dex), st: num(foe.st), ht: num(foe.ht), dx: num(foe.dx), speed: num(foe.speed), dodge: num(foe.dodge),
+      con: num(foe.con), int: num(foe.int),
       parry: num(foe.parry), block: num(foe.block), dr: foe.dr === undefined ? null : foe.dr, faceOpen: foe.faceOpen === true, armour: armourOf(foe.armour),
       fighting: foe.fighting === undefined ? null : foe.fighting, firearms: foe.firearms === undefined ? null : foe.firearms,
       db: foe.db === undefined ? null : foe.db, build: num(foe.build), caster: foe.caster === true,
@@ -510,6 +514,7 @@
     return {
       fp: fp.now, fpMax: fp.max, mp: mp.now, mpMax: mp.max, san: san.now, sanMax: san.max, er: er.now, erMax: er.max,
       luck: num(pc.luck), dex: num(pc.dex), st: num(pc.st), ht: num(pc.ht), dx: num(pc.dx), speed: num(pc.speed),
+      con: num(pc.con), int: num(pc.int),
       dodge: num(pc.dodge), parry: num(pc.parry), block: num(pc.block), dr: pc.dr === undefined ? null : pc.dr,
       drByLocation: pc.drByLocation && typeof pc.drByLocation === 'object' ? { ...pc.drByLocation } : null,
       fighting: pc.fighting === undefined ? null : pc.fighting, firearms: pc.firearms === undefined ? null : pc.firearms,

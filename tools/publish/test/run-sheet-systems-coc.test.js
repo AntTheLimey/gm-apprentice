@@ -20,8 +20,8 @@ for (const crlf of [false, true]) {
     const dir = copyFixture('run-sheet-coc', { crlf });
     it('reads a template line plus a characteristics table', () => {
       const r = read(dir, 'Warden Hale');
-      // Task 16 added the combat figures (fighting to attacks) on purpose
-      assert.deepEqual(r.nums, { hp: 13, mp: 12, san: 55, dex: 50, luck: 45, armour: 'none', str: 60, con: 65, siz: 70, pow: 60,
+      // Task 16 added the combat figures (fighting to attacks) on purpose; Task 18 INT, for its INT roll's card
+      assert.deepEqual(r.nums, { hp: 13, mp: 12, san: 55, dex: 50, luck: 45, armour: 'none', str: 60, con: 65, siz: 70, pow: 60, int: 55,
         fighting: 55, firearms: null, dodge: 35, db: '+1D4', build: 1, attacks: null, from: {} });
       assert.deepEqual(r.lacks, []);
       assert.equal(r.hpStart, null);
@@ -131,7 +131,10 @@ for (const crlf of [false, true]) {
         assert.equal(d.autoOut, false);
         assert.equal(d.fight.initiative, 'dex');
         // Task 16: CoC's melee numbers as data, on the model's rules and the fight's
-        assert.deepEqual(d.coc, { tie: { dodge: 'defender', fightBack: 'attacker' }, outnumbered: { bonus: 1 }, prone: { status: 'Prone', meleeBonus: 1 }, maxDice: 2, defaultResponse: 'fightBack' });
+        // Task 18 added the cards' table on purpose (its own tests are in run-sheet-coc-math.test.js)
+        const { cards, ...melee } = d.coc;
+        assert.equal(typeof cards, 'object');
+        assert.deepEqual(melee, { tie: { dodge: 'defender', fightBack: 'attacker' }, outnumbered: { bonus: 1 }, prone: { status: 'Prone', meleeBonus: 1 }, maxDice: 2, defaultResponse: 'fightBack' });
         assert.deepEqual(d.fight.coc, d.coc);
         assert.equal(d.words.buildHint, 'Manoeuvre: compare Builds');
         assert.ok(d.statuses.includes('Prone'));
@@ -208,8 +211,9 @@ for (const crlf of [false, true]) {
       return systemFor(system).readPc({ notePath: note, index, fm: r.fm, body: r.body });
     };
     it('a Derived table gives current and maximum, Luck and DEX', () => {
-      // Task 16: the sheet's Combat table adds Dodge, Build and the damage bonus (no Fighting or Firearms written)
-      assert.deepEqual(readPc('Iris Calder'), { numbers: { hpNow: 9, hpMax: 11, mpNow: 13, mpMax: 13, sanNow: 62, sanMax: 99, luck: 55, dex: 55, dodge: 27, build: 0, db: '0' } });
+      // Task 16: the sheet's Combat table adds Dodge, Build and the damage bonus (no Fighting or Firearms written); Task 18
+      // CON and INT from its characteristics, for the cards
+      assert.deepEqual(readPc('Iris Calder'), { numbers: { hpNow: 9, hpMax: 11, mpNow: 13, mpMax: 13, sanNow: 62, sanMax: 99, luck: 55, dex: 55, dodge: 27, build: 0, db: '0', con: 60, int: 75 } });
       assert.deepEqual(readPc('Iris Calder', 'coc-7e-regency').numbers.hpMax, 11);
     });
     it('a one-line sheet falls back to its line, current = max, with a quiet note', () => {

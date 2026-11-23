@@ -265,12 +265,13 @@ License: SJG Online Policy
 Transformation: names and numbers used in a sum, each with its
 page reference in a code comment. Names and numbers only.
 
-**`tools/publish/lib/run-sheet/systems/coc.js`, `tools/publish/lib/run-sheet/web/coc-math.js`** (the run sheet's fight figures: DEX order, firearm bonus, pool limits; melee: dodge or fight back, comparing levels and their ties, the outnumbered and Prone bonus dice, the dice cap; damage: the damage bonus in full, half or none, armour, the Extreme hit's maximum and impaling roll)
+**`tools/publish/lib/run-sheet/systems/coc.js`, `tools/publish/lib/run-sheet/web/coc-math.js`** (the run sheet's fight figures: DEX order, firearm bonus, pool limits; melee: dodge or fight back, comparing levels and their ties, the outnumbered and Prone bonus dice, the dice cap; damage: the damage bonus in full, half or none, armour, the Extreme hit's maximum and impaling roll; a hit's card: the Major Wound, Dying and its CON rolls, death over max HP, Unconscious, stabilising; the SAN loss's INT roll and the bout's rounds)
 BRP combat foundation: *Basic Roleplaying: Universal Game Engine*,
 ORC License (see above). CoC 7e adaptation (fight back, comparing
 success levels, bonus and penalty dice, the outnumbered die, the Prone
 die, the damage bonus by weapon kind, the Extreme hit's damage and
-impales): our own descriptions of
+impales, the Major Wound and Dying, the INT roll after a large SAN
+loss and its bout of madness): our own descriptions of
 uncopyrightable game mechanics, with *Keeper Rulebook* page
 references in code comments. Not Chaosium text.
 

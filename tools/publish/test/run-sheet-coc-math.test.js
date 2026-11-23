@@ -264,3 +264,115 @@ describe('coc-math: damage (Task 17)', () => {
     }
   });
 });
+
+describe('coc-math: a hit\'s card and the SAN bout (Task 18)', () => {
+  const RULES = systemFor('coc-7e').describe().fight;
+  const GMath = require('../lib/run-sheet/web/gurps-math');
+  const K = RULES.coc.cards;
+  // a made-up row as a hit left it
+  const after = (hp, max, more) => ({ id: 'r1', name: 'Vera Holm', kind: 'npc', in: true, out: false, conds: [], hp, max, ...more });
+  const kinds = (out) => out.lines.map((l) => l.kind);
+  const d100 = (kept, target, level) => ({ kept, target, level, difficulty: 'regular', asked: { bonus: 0, penalty: 0 } });
+
+  it('the numbers are data with the system: 2 for the Major Wound, 5 for the INT roll, a 10-sided bout', () => {
+    assert.deepEqual(RULES.prompts, { majorWoundAt: 2, insanityAt: 5 });
+    assert.equal(K.bout.sides, 10);
+    assert.deepEqual(systemFor('coc-7e-regency').describe().fight.prompts, RULES.prompts);
+  });
+  it('15 HP: a 7 brings no card, an 8 does', () => {
+    assert.deepEqual(C.cocCardForHit(after(8, 15), { damage: 7, before: 15 }, RULES), { major: false, lines: [] });
+    const out = C.cocCardForHit(after(7, 15), { damage: 8, before: 15 }, RULES);
+    assert.equal(out.major, true);
+    assert.deepEqual(kinds(out), ['major']);
+    assert.equal(out.lines[0].stat, 'con');
+  });
+  it('17 on 16 -> dead; 16 on 16 -> dying; 2 to 0 with the box -> dying; 2 to 0 without -> unconscious; 8 on 16 -> major', () => {
+    assert.deepEqual(kinds(C.cocCardForHit(after(0, 16), { damage: 17, before: 16 }, RULES)), ['dead']);
+    // exactly max HP is no death: a Major Wound, and Dying at 0
+    let out = C.cocCardForHit(after(0, 16), { damage: 16, before: 16 }, RULES);
+    assert.deepEqual([out.major, kinds(out)], [true, ['dying']]);
+    out = C.cocCardForHit(after(0, 16, { majorWound: true }), { damage: 2, before: 2 }, RULES);
+    assert.deepEqual([out.major, kinds(out)], [false, ['dying']]);
+    assert.deepEqual(kinds(C.cocCardForHit(after(0, 16), { damage: 2, before: 2 }, RULES)), ['unconscious']);
+    assert.deepEqual(kinds(C.cocCardForHit(after(8, 16), { damage: 8, before: 16 }, RULES)), ['major']);
+  });
+  it('9 on a row at 0 -> nothing; 20 on a row at 0 -> dead', () => {
+    assert.deepEqual(C.cocCardForHit(after(0, 16, { majorWound: true }), { damage: 9, before: 0 }, RULES), { major: false, lines: [] });
+    assert.deepEqual(kinds(C.cocCardForHit(after(0, 16), { damage: 20, before: 0 }, RULES)), ['dead']);
+  });
+  it('no max HP, no damage, or D&D\'s rules -> nothing', () => {
+    assert.deepEqual(kinds(C.cocCardForHit(after(3, null), { damage: 9, before: 12 }, RULES)), []);
+    assert.deepEqual(kinds(C.cocCardForHit(after(3, 16), { damage: 0, before: 3 }, RULES)), []);
+    assert.deepEqual(kinds(C.cocCardForHit(after(3, 16), { damage: 9, before: 12 }, FM.rulesOf(null))), []);
+  });
+  it('offers set at once on the lines with no roll, and gurps-math\'s nextLine passes them', () => {
+    for (const [dmg, hp, offer] of [[17, 0, 'dead'], [16, 0, 'dying'], [2, 0, 'unconscious']]) {
+      const out = C.cocCardForHit(after(hp, 16), { damage: dmg, before: dmg === 2 ? 2 : 16 }, RULES);
+      assert.deepEqual(out.lines[0].offers, [offer]);
+      assert.equal(GMath.nextLine({ lines: out.lines }, K), -1);
+    }
+    const major = C.cocCardForHit(after(8, 16), { damage: 8, before: 16 }, RULES);
+    assert.equal(GMath.nextLine({ lines: major.lines }, K), 0);
+  });
+  it('Dying set in round 3: no reminder at the end of round 3; reminders at the ends of rounds 4 and 5', () => {
+    const rows = [after(0, 16, { conds: ['Dying', 'Unconscious'], dyingRound: 3 }), after(5, 16, { id: 'r2' })];
+    assert.deepEqual(C.cocCardsAtRoundEnd(rows, 3, RULES), []);
+    for (const round of [4, 5]) {
+      const got = C.cocCardsAtRoundEnd(rows, round, RULES);
+      assert.equal(got.length, 1);
+      assert.equal(got[0].row, 'r1');
+      assert.deepEqual([got[0].card.kind, got[0].card.lines.map((l) => [l.kind, l.stat]), got[0].card.standing], ['dying', [['dyingCon', 'con']], ['stabilised']]);
+    }
+    assert.deepEqual(C.cocCardsAtRoundEnd([{ ...rows[0], out: true }], 5, RULES), [], 'an Out row owes nothing');
+  });
+  it('s-6: the INT card; s-4: nothing', () => {
+    const c = C.sanCard(after(5, 16), 6, RULES);
+    assert.deepEqual([c.kind, c.lines.map((l) => [l.kind, l.stat]), c.what], ['int', [['int', 'int']], 'SAN −6']);
+    assert.equal(C.sanCard(after(5, 16), 4, RULES), null);
+    assert.ok(C.sanCard(after(5, 16), 5, RULES));
+  });
+  it('a roll: an NPC\'s is the server\'s d100 at Regular with no dice; a PC\'s is a tap, never a roll', () => {
+    const npc = after(8, 16);
+    const pc = after(8, 16, { kind: 'pc' });
+    assert.deepEqual(C.rollResult(d100(34, 55, 'regular'), npc), { kept: 34, target: 55, level: 'regular', passed: true });
+    assert.equal(C.rollResult(d100(78, 55, 'fail'), npc).passed, false);
+    assert.equal(C.rollResult(d100(99, 55, 'fumble'), npc).passed, false);
+    assert.equal(C.rollResult({ ...d100(34, 55, 'regular'), difficulty: 'hard' }, npc), null);
+    assert.equal(C.rollResult({ ...d100(34, 55, 'regular'), asked: { bonus: 1, penalty: 0 } }, npc), null);
+    assert.equal(C.rollResult({ tap: 'passed' }, npc), null);
+    assert.deepEqual(C.rollResult({ tap: 'failed' }, pc), { tapped: true, passed: false });
+    assert.equal(C.rollResult(d100(34, 55, 'regular'), pc), null);
+  });
+  it('major: pass -> prone, fail -> proneOut; dyingCon: pass -> none, fail -> dead; int: pass -> insane, fail -> none', () => {
+    const ok = { passed: true };
+    const no = { passed: false };
+    assert.deepEqual([C.offersFor({ kind: 'major' }, ok), C.offersFor({ kind: 'major' }, no)], [['prone'], ['proneOut']]);
+    assert.deepEqual([C.offersFor({ kind: 'dyingCon' }, ok), C.offersFor({ kind: 'dyingCon' }, no)], [[], ['dead']]);
+    assert.deepEqual([C.offersFor({ kind: 'int' }, ok), C.offersFor({ kind: 'int' }, no)], [['insane'], []]);
+    assert.deepEqual(K.offers.proneOut.add, ['Prone', 'Unconscious']);
+    assert.equal(K.offers.prone.tap, true);
+  });
+  it('the line\'s words are names and figures: "Major wound: CON 55", "SAN loss: INT ?", "Over max HP"', () => {
+    const major = C.cocCardForHit(after(8, 16), { damage: 8, before: 16 }, RULES).lines[0];
+    assert.equal(C.lineText(major, after(8, 16, { con: 55 }), K), 'Major wound: CON 55');
+    assert.equal(C.lineText(major, after(8, 16, { con: 55 }), K, true), 'Major wound, CON 55');
+    assert.equal(C.lineText(C.sanCard(after(5, 16), 6, RULES).lines[0], after(5, 16), K), 'SAN loss: INT ?');
+    assert.equal(C.lineText(C.cocCardForHit(after(0, 16), { damage: 17, before: 16 }, RULES).lines[0], after(0, 16), K), 'Over max HP');
+    assert.equal(C.lineTarget(major, after(8, 16, { con: 55 })), 55);
+    assert.equal(C.lineTarget(major, after(8, 16)), null);
+    assert.deepEqual([C.resultText({ tapped: true, passed: true }), C.resultText({ kept: 34, level: 'hard' })], ['passed', 'rolled 34, Hard']);
+  });
+  it('the bout\'s rounds come from the server\'s d10; "bout: 7 rounds", "bout: 1 round"', () => {
+    assert.equal(C.boutRoll({ sides: 10, mod: 0, die: 7, total: 7 }, RULES), 7);
+    assert.equal(C.boutRoll({ sides: 6, mod: 0, die: 4, total: 4 }, RULES), null);
+    assert.equal(C.boutRoll({ sides: 10, mod: 0, die: 11, total: 11 }, RULES), null);
+    assert.equal(C.boutRoll(null, RULES), null);
+    assert.deepEqual([C.boutText({ left: 7, of: 7 }), C.boutText({ left: 1, of: 7 }), C.boutText(null)], ['bout: 7 rounds', 'bout: 1 round', '']);
+  });
+  it('no card text quotes the book: names, figures and a page', () => {
+    for (const v of Object.values(K.lines).concat(Object.values(K.offers).map((o) => o.label), Object.values(K.notes))) {
+      assert.ok(v.length <= 24, `short: ${v}`);
+    }
+    assert.match(K.notes.int, /KR p\d+/);
+  });
+});

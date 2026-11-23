@@ -87,6 +87,14 @@
   const defences = () => (GMath && typeof GMath.liveDefences === 'function' ? (rules().fight || rules()).defences || null : null);
   // CoC's melee numbers (rules.coc, Task 16); null where there are none
   const cocRules = () => (CMath ? (rules().fight || rules()).coc || null : null);
+  // The cards' kit (Task 13's cards, CoC's too from Task 18): the system's table and its line helpers (gurps-math's or
+  // coc-math's); nextLine, pending and offerOf are gurps-math's for both. Null where there are no cards (D&D).
+  const cardKit = () => {
+    const G = consequences();
+    if (G) return { C: G, M: GMath, coc: false };
+    const c = cocRules();
+    return c && c.cards && GMath && typeof CMath.lineText === 'function' ? { C: c.cards, M: CMath, coc: true } : null;
+  };
   const rolled = () => !rules().initiative || rules().initiative === 'roll';
   // the panel's boxes the page can draw ({ key, label } items; D&D's list names its counters, drawn as before)
   const panelBoxes = () => (rules().panelBoxes || []).filter((b) => b && typeof b === 'object' && STAT[boxStat(b.key)]);
@@ -335,9 +343,13 @@
   // (those are the panel's track and Task 13's cards).
   const marksOn = (r) => (r.marks || []).concat(r.tired && rules().tiredAt ? [rules().tiredAt.name || 'Tired'] : [],
     (r.crippled || []).map((p) => `crippled (${p})`));
-  // GURPS's shock and a card waiting (Task 13), on the row's strip
+  // GURPS's shock (Task 13), CoC's bout of madness (Task 18) and a card waiting, on the row's strip
   const CARD_WAITING = 'card waiting';
-  const owedChips = (r) => (consequences() ? [].concat(isNum(r.shock) && r.shock > 0 ? [`Shock \u2212${r.shock}`] : [], (r.cards || []).length ? [CARD_WAITING] : []) : []);
+  const owedChips = (r) => {
+    if (!cardKit()) return [];
+    const bout = CMath && typeof CMath.boutText === 'function' && cocRules() ? CMath.boutText(r.bout) : '';
+    return [].concat(consequences() && isNum(r.shock) && r.shock > 0 ? [`Shock \u2212${r.shock}`] : [], bout ? [bout] : [], (r.cards || []).length ? [CARD_WAITING] : []);
+  };
   function chips(r, bloodied) {
     const one = (label) => `<button type="button" class="chip" data-fun="${esc(`${r.id}|${statusKey(label)}`)}" title="Remove ${esc(label)}">${esc(label)} ✕</button>`;
     const all = Fight.statusesOf(r);
@@ -1055,55 +1067,81 @@
     }, (err) => { rollFailed(err); back(); });
   }
 
-  // ---- GURPS's cards (Task 13): prompts, one per hit, and a turn's start and end; nothing here decides an outcome ----
+  // ---- the cards (GURPS's, Task 13; CoC's, Task 18): prompts, one per hit, a turn's start and end, a round's end, a
+  // SAN loss; nothing here decides an outcome ----
   function cardsHTML(f) {
-    const C = consequences();
-    if (!C) return '';
+    const K = cardKit();
+    if (!K) return '';
     const out = [];
-    for (const r of f.view.rows) for (const c of r.cards || []) out.push(cardHTML(r, c, C));
+    for (const r of f.view.rows) for (const c of r.cards || []) out.push(cardHTML(r, c, K));
     return out.length ? `<div class="fcards">${out.join('')}</div>` : '';
   }
-  // A card's buttons each carry `data-fcbtn` "row|card|line|take" (take: an offer, `out`, `dismiss` or `roll`).
+  // A card's buttons each carry `data-fcbtn` "row|card|line|take" (take: an offer, `out`, `dismiss`, `roll`, or a PC's
+  // `passed` and `failed`).
   const cardBtn = (r, c, line, take) => `data-fcbtn="${esc([r.id, c.id, line, take].join('|'))}"`;
   const CARD_WHAT = { conscious: 'turn start', recover: 'turn end' };
-  function cardHTML(r, c, C) {
+  // The figure a card waits for before its Roll (GURPS's HT; an NPC's CON or INT in CoC): its key, or null. A PC's CoC
+  // card never rolls, so it never asks.
+  function cardWants(r, c, K, next) {
+    if (K.coc) {
+      const l = next >= 0 ? c.lines[next] : null;
+      const k = l && r.kind !== 'pc' ? K.M.lineStat(l) : null;
+      return k && !isNum(r[k]) ? k : null;
+    }
+    return !isNum(r.ht) && c.lines.some((l) => l.kind !== 'dead') ? 'ht' : null;
+  }
+  const statLabel = (K, k) => (K.coc ? ((K.C.stats || {})[k] || k.toUpperCase()) : 'HT');
+  function cardHTML(r, c, K) {
+    const C = K.C;
     const next = GMath.nextLine(c, C);
-    const noHt = !isNum(r.ht) && c.lines.some((l) => l.kind !== 'dead');
-    const what = c.kind === 'hit' ? (c.what || 'hit') : (CARD_WHAT[c.kind] || '');
+    const want = cardWants(r, c, K, next);
+    const what = c.what || CARD_WHAT[c.kind] || (c.kind === 'hit' ? 'hit' : '');
+    const note = K.coc && C.notes && C.notes[c.kind] ? `<span class="cite">${esc(C.notes[c.kind])}</span>` : '';
+    const standing = (c.standing || []).map((o) => `<button type="button" class="tg stand" ${cardBtn(r, c, '', o)}>${esc((GMath.offerOf(C, o) || {}).label || o)}</button>`).join('');
     let h = `<div class="fcard" data-fcard="${esc(c.id)}" data-fcrow="${esc(r.id)}"><div class="fch">`
       + `<button type="button" class="nm" data-fcardpick="${esc(r.id)}" title="Show ${esc(r.gmName)}'s panel">${esc(r.gmName)}</button>`
-      + `<span class="what">${esc(what)}</span><span class="sp"></span>`
+      + `<span class="what">${esc(what)}</span>${note}<span class="sp"></span>${standing}`
       + `<button type="button" class="tg" ${cardBtn(r, c, '', 'out')} title="Out of the fight now, whatever the rolls">Out</button>`
       + `<button type="button" class="x" ${cardBtn(r, c, '', 'dismiss')} title="Dismiss: nothing applied, nothing logged" aria-label="Dismiss this card">\u2715</button></div>`;
-    if (noHt) h += `<label class="cht"><span class="lab">HT</span><input data-fcardht="${esc(r.id)}" inputmode="numeric" autocomplete="off" placeholder="HT" aria-label="HT for ${esc(r.gmName)}"><span class="note">first, then Roll</span></label>`;
+    if (want) {
+      const lab = statLabel(K, want);
+      h += `<label class="cht"><span class="lab">${esc(lab)}</span><input data-fcardstat="${esc(`${r.id}|${want}`)}" inputmode="numeric" autocomplete="off" placeholder="${esc(lab)}" aria-label="${esc(lab)} for ${esc(r.gmName)}"><span class="note">first, then Roll</span></label>`;
+    }
     h += `<ol class="clines">${c.lines.map((l, i) => {
       const cls = [i === next ? 'next' : '', l.result || l.taken ? 'rolled' : ''].join(' ').trim();
-      const res = l.result ? `<span class="res">${esc(GMath.resultText(l.result))}</span>` : '';
+      const res = l.result ? `<span class="res">${esc(K.M.resultText(l.result))}</span>` : '';
       // each offer, and a decline for the line (nothing applied, nothing logged)
       const offers = GMath.pending(l) ? l.offers.map((o) => `<button type="button" class="offer" ${cardBtn(r, c, i, o)}>${esc((GMath.offerOf(C, o) || {}).label || o)}</button>`).join('')
         + `<button type="button" class="decline" ${cardBtn(r, c, i, 'dismiss')} title="Decline: nothing applied, nothing logged" aria-label="Decline this line's offer">\u2715</button>` : '';
       const took = l.taken ? `<span class="took">${esc((GMath.offerOf(C, l.taken) || {}).label || l.taken)}</span>` : '';
-      return `<li${cls ? ` class="${cls}"` : ''}><span class="lt">${esc(GMath.lineText(l, r, C))}</span>${res}${offers}${took}</li>`;
+      return `<li${cls ? ` class="${cls}"` : ''}><span class="lt">${esc(K.M.lineText(l, r, C))}</span>${res}${offers}${took}</li>`;
     }).join('')}</ol>`;
-    if (next >= 0) {
-      const wait = noHt || ui.rolling[c.id];
-      h += `<button type="button" class="primary roll" ${cardBtn(r, c, next, 'roll')} ${wait ? 'disabled' : ''} title="${noHt ? 'Type HT first' : 'Roll 3d6 against the next line'}">Roll</button>`;
+    if (next >= 0 && K.coc && r.kind === 'pc') {
+      // a PC's roll is the player's: the GM taps what it was
+      const wait = ui.rolling[c.id] ? 'disabled' : '';
+      h += `<span class="taps" role="group" aria-label="The player's roll"><button type="button" class="primary pass" ${cardBtn(r, c, next, 'passed')} ${wait} title="The player's roll passed">Passed</button>`
+        + `<button type="button" class="primary fail" ${cardBtn(r, c, next, 'failed')} ${wait} title="The player's roll failed">Failed</button></span>`;
+    } else if (next >= 0) {
+      const wait = want || ui.rolling[c.id];
+      const tip = want ? `Type ${statLabel(K, want)} first` : K.coc ? 'Roll d100 against the next line' : 'Roll 3d6 against the next line';
+      h += `<button type="button" class="primary roll" ${cardBtn(r, c, next, 'roll')} ${wait ? 'disabled' : ''} title="${esc(tip)}">Roll</button>`;
     }
     return `${h}</div>`;
   }
-  // The server rolls the card's next line against the row's HT and its modifier; the result goes on that line.
+  // The server rolls the card's next line: GURPS's 3d6 against HT and its modifier, CoC's d100 against CON or INT; the
+  // result goes on that line.
   function rollCard(rowId, cardId) {
     const f = state().fight;
-    const C = consequences();
+    const K = cardKit();
     const r = rowById(rowId);
     const c = r && (r.cards || []).find((x) => x.id === cardId);
-    if (!f || !C || !c || ui.rolling[cardId]) return;
-    const line = GMath.nextLine(c, C);
-    const target = line < 0 ? null : GMath.lineTarget(c.lines[line], r);
+    if (!f || !K || !c || ui.rolling[cardId] || (K.coc && r.kind === 'pc')) return;
+    const line = GMath.nextLine(c, K.C);
+    const target = line < 0 ? null : K.M.lineTarget(c.lines[line], r);
     if (target === null) return;
     ui.rolling[cardId] = true;
     RP.render();
-    roll([{ against: target }]).then(([res]) => {
+    roll([K.coc ? { d100: { target } } : { against: target }]).then(([res]) => {
       delete ui.rolling[cardId];
       const now = state().fight;
       if (now && now.id === f.id) {
@@ -1112,10 +1150,32 @@
       } else RP.render();
     }, (e) => { delete ui.rolling[cardId]; rollFailed(e); RP.render(); });
   }
-  // After a roll, focus stays on the card: its Roll for the next line, else its first offer, else its first control.
+  // A PC's line answered by the GM's tap of the player's roll (CoC): the result goes on the line, as a roll's does.
+  function tapCard(rowId, cardId, line, tap) {
+    F({ type: 'cardRolled', row: rowId, card: cardId, line, result: { tap } });
+    focusCard(rowId, cardId);
+  }
+  // An offer taken. A bout's offer (CoC's Temporary insanity) first has the server roll its rounds (the Keeper's 1D10).
+  function takeCard(rowId, cardId, line, take) {
+    const K = cardKit();
+    const o = K && GMath.offerOf(K.C, take);
+    const send = (more) => F({ type: 'card', row: rowId, card: cardId, ...(line === '' ? {} : { line: Number(line) }), take, ...(more || {}) });
+    if (!o || !o.bout) { send(); return; }
+    const f = state().fight;
+    if (!f || ui.rolling[cardId]) return;
+    ui.rolling[cardId] = true;
+    RP.render();
+    roll([{ sides: (K.C.bout && K.C.bout.sides) || 10 }]).then(([res]) => {
+      delete ui.rolling[cardId];
+      const now = state().fight;
+      if (now && now.id === f.id) { send({ bout: res }); focusCard(rowId, cardId); } else RP.render();
+    }, (e) => { delete ui.rolling[cardId]; rollFailed(e); RP.render(); });
+  }
+  // After a roll, focus stays on the card: its Roll (or a PC's Passed) for the next line, else its first offer, else its
+  // first control.
   function focusCard(rowId, cardId) {
     const el = document.querySelector(`#acting .fcard${attr('data-fcard', cardId)}${attr('data-fcrow', rowId)}`);
-    const to = el && (el.querySelector('button.roll:not([disabled])') || el.querySelector('button.offer') || el.querySelector('[data-fcbtn]'));
+    const to = el && (el.querySelector('button.roll:not([disabled]), button.pass:not([disabled])') || el.querySelector('button.offer') || el.querySelector('[data-fcbtn]'));
     if (to) { RP.focusTo(attr('data-fcbtn', to.dataset.fcbtn)); return; }
     // the card settled and went: the row's entry box, else the panel's first box, else its first button; never the page
     const box = document.querySelector(attr('data-fhp', rowId));
@@ -1391,7 +1451,7 @@
     focusAttrs: ['data-fini', 'data-fhp', 'data-fmax', 'data-fac', 'data-ffpmax', 'data-fother', 'data-fstatus', 'data-ftick', 'data-fsel',
       'data-fseen', 'data-fhalf', 'data-fahalf', 'data-fres', 'data-fout', 'data-fgun', 'data-fds', 'data-flr', 'data-fla', 'data-frch',
       'data-fun', 'data-fsame', 'data-fside', 'data-fundo', 'data-faddgroup', 'data-faddbeat', 'data-faddpick', 'data-faddnew',
-      'data-fspend', 'data-fafter', 'data-fjot', 'data-fight', 'data-fplace', 'data-fcbtn', 'data-fcardpick', 'data-fcardht', 'data-fshock',
+      'data-fspend', 'data-fafter', 'data-fjot', 'data-fight', 'data-fplace', 'data-fcbtn', 'data-fcardpick', 'data-fcardstat', 'data-fshock',
       'data-fshockset', 'data-fdef', 'data-fpdef', 'data-fretreat', 'data-fman', 'data-fmand', 'data-fmanrow',
       'data-fmelee', 'data-fmdice', 'data-fmlvl', 'data-fmx', 'data-fmout', 'data-fdmgdb', 'data-fdmgimp', 'data-fdmgx', 'data-fdmgclose', ...PANEL_KEYS.map((k) => `data-fs-${k}`)],
     // Fight here on a place tile or a place's drawer (plan 6a Task 7); nothing while a fight runs
@@ -1571,7 +1631,8 @@
       const card = parts.pop();
       const row = parts.join('|');
       if (take === 'roll') rollCard(row, card);
-      else F({ type: 'card', row, card, ...(line === '' ? {} : { line: Number(line) }), take });
+      else if (take === 'passed' || take === 'failed') tapCard(row, card, Number(line), take);
+      else takeCard(row, card, line, take);
       return true;
     }
     if (d.fshock) { ui.shockPick = ui.shockPick === d.fshock ? null : d.fshock; RP.render(); return true; }
@@ -1782,12 +1843,16 @@
       return;
     }
     if (ev.key !== 'Enter') return;
-    // a card's HT box (Task 13): the row's HT, as the panel's box takes it
-    if (d.fcardht !== undefined) {
+    // a card's figure box (GURPS's HT, Task 13; an NPC's CON or INT in CoC, Task 18): the row's figure, as the panel's
+    // box takes it
+    if (d.fcardstat !== undefined) {
       ev.preventDefault();
+      const cut = d.fcardstat.lastIndexOf('|');
+      const rid = d.fcardstat.slice(0, cut);
+      const key = d.fcardstat.slice(cut + 1);
       const v = t.value.trim();
-      if (!/^\d{1,2}$/.test(v)) { t.setAttribute('aria-invalid', 'true'); return; }
-      F({ type: 'setStat', row: d.fcardht, key: 'ht', value: Number(v) });
+      if (!/^\d{1,3}$/.test(v)) { t.setAttribute('aria-invalid', 'true'); return; }
+      F({ type: 'setStat', row: rid, key, value: Number(v) });
       return;
     }
     if (d.fhp !== undefined) {

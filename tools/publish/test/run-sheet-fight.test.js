@@ -3282,3 +3282,301 @@ describe('CoC damage (step 6b Task 17)', () => {
     assert.doesNotMatch(text, /1D6|armour|hit by|maxHp|"hit"/i);
   });
 });
+
+describe('CoC cards: one per hit, Dying\'s reminders and the SAN bout (step 6b Task 18)', () => {
+  const { systemFor } = require('../lib/run-sheet/systems');
+  const { rollDamage } = require('../lib/dice');
+  const COC = systemFor('coc-7e').describe().fight;
+  const begin = (list) => RS.reduce(fresh(), { id: 'f1', type: 'fightStart', title: 'T', rules: COC, rows: list.map((o, i) => M.blankRow({ id: `r${i + 1}`, ...o })) }, now());
+  const G = (s, a) => RS.reduce(s, { id: nextId(), fight: 'f1', ...a }, now());
+  const named = (s, name) => s.fight.rows.find((r) => r.name === name);
+  const typeIn = (s, name, entry) => G(s, { type: 'hp', row: named(s, name).id, entry });
+  const go = (s) => G(s, { type: 'fightNext', from: s.fight.turn, round: s.fight.round });
+  // Next until the round given has started
+  const toRound = (s, n) => { let x = s; while (x.fight.round < n) x = go(x); return x; };
+  const lines = (s) => s.events.filter((e) => e.fight).map((e) => e.text);
+  const cards = (s, name) => named(s, name).cards || [];
+  const d100 = (kept, target, level) => ({ tens: [Math.floor(kept / 10) * 10], units: kept % 10, kept, target, difficulty: 'regular', needed: target, level, passed: level !== 'fail' && level !== 'fumble', fumbleFrom: 96, bonus: 0, penalty: 0, asked: { bonus: 0, penalty: 0 } });
+  const rolled = (s, name, result, card = cards(s, name)[0]) => G(s, { type: 'cardRolled', row: named(s, name).id, card: card.id, line: 0, result });
+  const take = (s, name, what, more, card = cards(s, name)[0]) => G(s, { type: 'card', row: named(s, name).id, card: card.id, take: what, ...more });
+  const offers = (s, name) => cards(s, name).map((c) => c.lines.map((l) => [l.kind, l.offers]));
+  // made-up people: Vera Holm an NPC, Tom Reyes a PC
+  const rows = () => [
+    { name: 'Vera Holm', ini: 60, dex: 60, hp: 16, max: 16, con: 50, int: 65 },
+    { name: 'Tom Reyes', kind: 'pc', ini: 40, dex: 40, hp: 12, max: 12, con: 55, int: 70, san: 45, sanMax: 45 },
+  ];
+
+  it('15 HP: a 7 brings no card, an 8 does', () => {
+    let s = go(begin([{ name: 'Vera Holm', ini: 60, dex: 60, hp: 15, max: 15, con: 50 }]));
+    s = typeIn(s, 'Vera Holm', '-7');
+    assert.deepEqual(cards(s, 'Vera Holm'), []);
+    assert.equal(named(s, 'Vera Holm').majorWound, false);
+    s = G(s, { type: 'hp', row: named(s, 'Vera Holm').id, entry: '+7' });
+    s = typeIn(s, 'Vera Holm', '-8');
+    assert.equal(cards(s, 'Vera Holm').length, 1);
+  });
+
+  it('−8 on 16 HP on an NPC: the box ticked, one card to Roll CON; a failure offers Prone, Unconscious; a pass offers Prone', () => {
+    let s = go(begin(rows()));
+    s = typeIn(s, 'Vera Holm', '-8');
+    const v = named(s, 'Vera Holm');
+    assert.equal(v.hp, 8);
+    assert.equal(v.majorWound, true);
+    assert.ok(v.conds.includes('Major wound'));
+    assert.deepEqual(offers(s, 'Vera Holm'), [[['major', []]]]);
+    assert.equal(cards(s, 'Vera Holm')[0].what, '8 damage');
+    // a roll for a figure that is not CON now is dropped
+    const was = clone(s.fight);
+    s = rolled(s, 'Vera Holm', d100(70, 40, 'fail'));
+    assert.deepEqual(s.fight, was);
+    // the review's fold: the failure's offer is Prone and Unconscious together, one tap
+    let failed = rolled(s, 'Vera Holm', d100(70, 50, 'fail'));
+    assert.deepEqual(offers(failed, 'Vera Holm'), [[['major', ['proneOut']]]]);
+    assert.deepEqual(lines(failed).slice(-1), ['Vera Holm: Major wound, CON 50, rolled 70, Fail.']);
+    assert.deepEqual(named(failed, 'Vera Holm').conds, ['Major wound'], 'offered, not applied');
+    failed = take(failed, 'Vera Holm', 'proneOut', { line: 0 });
+    assert.deepEqual(named(failed, 'Vera Holm').conds, ['Major wound', 'Prone', 'Unconscious']);
+    assert.deepEqual(cards(failed, 'Vera Holm'), []);
+    assert.deepEqual(lines(failed).slice(-1), ['Vera Holm: Major wound: Prone, Unconscious.']);
+    const passed = rolled(s, 'Vera Holm', d100(34, 50, 'regular'));
+    assert.deepEqual(offers(passed, 'Vera Holm'), [[['major', ['prone']]]]);
+  });
+
+  it('−8 on 16 HP, then −3, −3, −2 to 0: Dying (the box stays ticked)', () => {
+    let s = go(begin(rows()));
+    s = typeIn(s, 'Vera Holm', '-8');
+    s = take(s, 'Vera Holm', 'dismiss');
+    for (const n of ['-3', '-3']) {
+      s = typeIn(s, 'Vera Holm', n);
+      assert.deepEqual(cards(s, 'Vera Holm'), [], `${n}: small hits owe nothing`);
+    }
+    // healing never clears the box
+    s = typeIn(s, 'Vera Holm', '+1');
+    s = typeIn(s, 'Vera Holm', '-1');
+    assert.equal(named(s, 'Vera Holm').majorWound, true);
+    s = typeIn(s, 'Vera Holm', '-2');
+    assert.equal(named(s, 'Vera Holm').hp, 0);
+    assert.deepEqual(offers(s, 'Vera Holm'), [[['dying', ['dying']]]]);
+    s = take(s, 'Vera Holm', 'dying', { line: 0 });
+    assert.deepEqual(named(s, 'Vera Holm').conds, ['Major wound', 'Dying', 'Unconscious']);
+    assert.equal(named(s, 'Vera Holm').dyingRound, 1);
+    assert.deepEqual(lines(s).slice(-1), ['Vera Holm: 0 HP, Major wound: Dying, Unconscious.']);
+  });
+
+  it('−9 to 0 with a Major Wound that hit: Dying', () => {
+    let s = go(begin([{ name: 'Vera Holm', ini: 60, dex: 60, hp: 9, max: 16, con: 50 }]));
+    s = typeIn(s, 'Vera Holm', '-9');
+    assert.equal(named(s, 'Vera Holm').majorWound, true);
+    assert.deepEqual(offers(s, 'Vera Holm'), [[['dying', ['dying']]]]);
+  });
+
+  it('Dying set in round 3: no reminder at the end of round 3; reminders at the ends of rounds 4 and 5; a failure offers Out', () => {
+    let s = toRound(go(begin(rows())), 3);
+    s = typeIn(s, 'Vera Holm', '-16');
+    s = take(s, 'Vera Holm', 'dying', { line: 0 });
+    assert.equal(named(s, 'Vera Holm').dyingRound, 3);
+    s = toRound(s, 4);
+    assert.deepEqual(cards(s, 'Vera Holm'), [], 'none at the end of round 3');
+    s = toRound(s, 5);
+    assert.deepEqual(offers(s, 'Vera Holm'), [[['dyingCon', []]]]);
+    assert.deepEqual([cards(s, 'Vera Holm')[0].what, cards(s, 'Vera Holm')[0].standing], ['end of round 4', ['stabilised']]);
+    // passed: the card goes; the next round's end brings another
+    s = rolled(s, 'Vera Holm', d100(20, 50, 'regular'));
+    assert.deepEqual(cards(s, 'Vera Holm'), []);
+    assert.deepEqual(lines(s).slice(-1), ['Vera Holm: Dying, CON 50, rolled 20, Regular.']);
+    s = toRound(s, 6);
+    assert.equal(cards(s, 'Vera Holm')[0].what, 'end of round 5');
+    s = rolled(s, 'Vera Holm', d100(80, 50, 'fail'));
+    assert.deepEqual(offers(s, 'Vera Holm'), [[['dyingCon', ['dead']]]]);
+    s = take(s, 'Vera Holm', 'dead', { line: 0 });
+    assert.equal(named(s, 'Vera Holm').out, true);
+    assert.deepEqual(lines(s).slice(-1), ['Vera Holm: Dying: Out (dead).']);
+  });
+
+  it('a reminder left unanswered is replaced by the next round\'s, never two', () => {
+    let s = go(begin(rows()));
+    s = typeIn(s, 'Vera Holm', '-16');
+    s = take(s, 'Vera Holm', 'dying', { line: 0 });
+    s = toRound(s, 4);
+    assert.equal(cards(s, 'Vera Holm').length, 1);
+    assert.equal(cards(s, 'Vera Holm')[0].what, 'end of round 3');
+  });
+
+  it('+1 after Dying clears it and stops the reminders; the reminder offers Stabilised', () => {
+    let s = go(begin(rows()));
+    s = typeIn(s, 'Vera Holm', '-16');
+    s = take(s, 'Vera Holm', 'dying', { line: 0 });
+    s = toRound(s, 3);
+    assert.equal(cards(s, 'Vera Holm').length, 1);
+    // Stabilised, tapped: Dying goes, and the card with it
+    let t = take(s, 'Vera Holm', 'stabilised');
+    assert.deepEqual(named(t, 'Vera Holm').conds, ['Major wound', 'Unconscious']);
+    assert.deepEqual(cards(t, 'Vera Holm'), []);
+    assert.deepEqual(lines(t).slice(-1), ['Vera Holm: Stabilised.']);
+    t = toRound(t, 5);
+    assert.deepEqual(cards(t, 'Vera Holm'), [], 'no reminder once stabilised');
+    // First Aid's point instead: the same
+    t = typeIn(s, 'Vera Holm', '+1');
+    assert.equal(named(t, 'Vera Holm').hp, 1);
+    assert.deepEqual(named(t, 'Vera Holm').conds, ['Major wound', 'Unconscious']);
+    assert.equal(named(t, 'Vera Holm').dyingRound, null);
+    assert.deepEqual(cards(t, 'Vera Holm'), []);
+    assert.deepEqual(lines(t).slice(-1), ['Vera Holm: Stabilised.']);
+    t = toRound(t, 5);
+    assert.deepEqual(cards(t, 'Vera Holm'), []);
+  });
+
+  it('+1 before the Dying offer is taken takes the offer away', () => {
+    let s = go(begin(rows()));
+    s = typeIn(s, 'Vera Holm', '-16');
+    assert.equal(cards(s, 'Vera Holm').length, 1);
+    s = typeIn(s, 'Vera Holm', '+1');
+    assert.deepEqual(cards(s, 'Vera Holm'), []);
+    assert.ok(!named(s, 'Vera Holm').conds.includes('Dying'));
+  });
+
+  it('0 in small hits: Unconscious', () => {
+    let s = go(begin(rows()));
+    for (const n of ['-5', '-5', '-5']) s = typeIn(s, 'Vera Holm', n);
+    assert.deepEqual(cards(s, 'Vera Holm'), []);
+    s = typeIn(s, 'Vera Holm', '-5');
+    assert.equal(named(s, 'Vera Holm').hp, 0);
+    assert.equal(named(s, 'Vera Holm').majorWound, false);
+    assert.deepEqual(offers(s, 'Vera Holm'), [[['unconscious', ['unconscious']]]]);
+    s = take(s, 'Vera Holm', 'unconscious', { line: 0 });
+    assert.deepEqual(named(s, 'Vera Holm').conds, ['Unconscious']);
+  });
+
+  it('−16 on 16 HP: Dying, not dead; −17 on 16 HP in one hit: dead, Out offered', () => {
+    let s = go(begin(rows()));
+    s = typeIn(s, 'Vera Holm', '-16');
+    assert.deepEqual(offers(s, 'Vera Holm'), [[['dying', ['dying']]]]);
+    s = go(begin(rows()));
+    s = typeIn(s, 'Vera Holm', '-17');
+    assert.deepEqual(offers(s, 'Vera Holm'), [[['dead', ['dead']]]]);
+    s = take(s, 'Vera Holm', 'dead', { line: 0 });
+    assert.equal(named(s, 'Vera Holm').out, true);
+    assert.deepEqual(lines(s).slice(-1), ['Vera Holm: Over max HP: Out (dead).']);
+  });
+
+  it('a hit on a row at 0 that is not over max raises nothing; HP never below 0', () => {
+    let s = go(begin(rows()));
+    s = typeIn(s, 'Vera Holm', '-16');
+    s = take(s, 'Vera Holm', 'dismiss');
+    s = typeIn(s, 'Vera Holm', '-9');
+    assert.equal(named(s, 'Vera Holm').hp, 0);
+    assert.deepEqual(cards(s, 'Vera Holm'), []);
+    s = typeIn(s, 'Vera Holm', '-20');
+    assert.equal(named(s, 'Vera Holm').hp, 0);
+    assert.deepEqual(offers(s, 'Vera Holm'), [[['dead', ['dead']]]]);
+  });
+
+  it('dice damage raises its card too: 1D6+DB of 8 after armour on 16 HP', () => {
+    let s = go(begin([...rows(), { name: 'Cultist', ini: 30, dex: 30, hp: 12, max: 12, db: '+1D4' }]));
+    const roll = rollDamage('1D6+1D4', { floor: 0, randomInt: (() => { const f = [5, 3]; let i = 0; return () => f[i++]; })() });
+    s = G(s, { type: 'hp', row: named(s, 'Vera Holm').id, entry: '1D6+DB', by: named(s, 'Cultist').id, mode: 'full', roll });
+    assert.equal(named(s, 'Vera Holm').hp, 8);
+    assert.deepEqual(offers(s, 'Vera Holm'), [[['major', []]]]);
+  });
+
+  it('s-6: the INT card; a pass starts a bout of the rolled rounds, counting down per round; s-4: nothing', () => {
+    let s = go(begin(rows()));
+    s = typeIn(s, 'Tom Reyes', 's-4');
+    assert.deepEqual(cards(s, 'Tom Reyes'), []);
+    s = typeIn(s, 'Tom Reyes', 's-6');
+    assert.equal(named(s, 'Tom Reyes').san, 35);
+    assert.deepEqual(offers(s, 'Tom Reyes'), [[['int', []]]]);
+    assert.equal(cards(s, 'Tom Reyes')[0].what, 'SAN −6');
+    s = rolled(s, 'Tom Reyes', { tap: 'passed' });
+    assert.deepEqual(offers(s, 'Tom Reyes'), [[['int', ['insane']]]]);
+    assert.deepEqual(lines(s).slice(-1), ['Tom Reyes: SAN loss, INT 70, passed.']);
+    // the bout needs the server's d10: refused without it
+    const was = clone(s.fight);
+    s = take(s, 'Tom Reyes', 'insane', { line: 0 });
+    assert.deepEqual(s.fight, was);
+    s = take(s, 'Tom Reyes', 'insane', { line: 0, bout: { sides: 10, mod: 0, die: 2, total: 2 } });
+    assert.deepEqual(named(s, 'Tom Reyes').bout, { left: 2, of: 2 });
+    assert.ok(named(s, 'Tom Reyes').conds.includes('Temporary insanity'));
+    assert.deepEqual(lines(s).slice(-1), ['Tom Reyes: SAN loss: Temporary insanity, a bout of 2 rounds.']);
+    s = toRound(s, 2);
+    assert.deepEqual(named(s, 'Tom Reyes').bout, { left: 1, of: 2 });
+    s = toRound(s, 3);
+    assert.equal(named(s, 'Tom Reyes').bout, null);
+    assert.ok(lines(s).includes('Tom Reyes: the bout of madness ends (2 rounds).'));
+    assert.ok(named(s, 'Tom Reyes').conds.includes('Temporary insanity'), 'the insanity outlasts the bout');
+  });
+
+  it('a failed INT roll offers nothing and the card goes', () => {
+    let s = go(begin(rows()));
+    s = typeIn(s, 'Vera Holm', 's-6');
+    assert.deepEqual(cards(s, 'Vera Holm'), [], 'a row with no SAN takes no loss');
+    s = typeIn(s, 'Tom Reyes', 's-7');
+    s = rolled(s, 'Tom Reyes', { tap: 'failed' });
+    assert.deepEqual(cards(s, 'Tom Reyes'), []);
+    assert.ok(!named(s, 'Tom Reyes').conds.includes('Temporary insanity'));
+  });
+
+  it('a PC\'s CON and INT lines take Passed and Failed, never a roll; Failed on a Major Wound gives Prone and Unconscious in the tap', () => {
+    let s = go(begin(rows()));
+    s = typeIn(s, 'Tom Reyes', '-6');
+    assert.deepEqual(offers(s, 'Tom Reyes'), [[['major', []]]]);
+    const was = clone(s.fight);
+    s = rolled(s, 'Tom Reyes', d100(20, 55, 'regular'));
+    assert.deepEqual(s.fight, was, 'the sheet never rolls for a PC');
+    s = rolled(s, 'Tom Reyes', { tap: 'failed' });
+    assert.deepEqual(named(s, 'Tom Reyes').conds, ['Major wound', 'Prone', 'Unconscious']);
+    assert.deepEqual(cards(s, 'Tom Reyes'), []);
+    assert.deepEqual(lines(s).slice(-2), ['Tom Reyes: Major wound, CON 55, failed.', 'Tom Reyes: Major wound: Prone, Unconscious.']);
+    // an NPC's line is never a tap
+    s = typeIn(s, 'Vera Holm', '-8');
+    const npc = clone(s.fight);
+    s = rolled(s, 'Vera Holm', { tap: 'passed' });
+    assert.deepEqual(s.fight, npc);
+  });
+
+  it('a dismissed card writes no log line', () => {
+    let s = go(begin(rows()));
+    s = typeIn(s, 'Vera Holm', '-8');
+    const n = lines(s).length;
+    s = take(s, 'Vera Holm', 'dismiss');
+    assert.deepEqual(cards(s, 'Vera Holm'), []);
+    assert.equal(lines(s).length, n);
+    // a line declined, the same
+    s = typeIn(s, 'Tom Reyes', 's-6');
+    s = rolled(s, 'Tom Reyes', { tap: 'passed' });
+    const m = lines(s).length;
+    s = take(s, 'Tom Reyes', 'dismiss', { line: 0 });
+    assert.deepEqual(cards(s, 'Tom Reyes'), []);
+    assert.equal(lines(s).length, m);
+  });
+
+  it('the Major Wound box follows its status: set by hand ticks it, removed by hand clears it; a row entering Dying keeps its round', () => {
+    let s = go(begin(rows()));
+    s = G(s, { type: 'status', row: named(s, 'Vera Holm').id, add: 'Major wound' });
+    assert.equal(named(s, 'Vera Holm').majorWound, true);
+    s = G(s, { type: 'status', row: named(s, 'Vera Holm').id, remove: 'Major wound' });
+    assert.equal(named(s, 'Vera Holm').majorWound, false);
+    s = begin([{ name: 'Vera Holm', ini: 60, dex: 60, hp: 0, max: 16, con: 50, conds: ['Major wound', 'Dying'] }]);
+    assert.deepEqual([named(s, 'Vera Holm').majorWound, named(s, 'Vera Holm').dyingRound], [true, 0]);
+    s = toRound(go(s), 2);
+    assert.equal(cards(s, 'Vera Holm').length, 1);
+    // Dying removed by hand: its reminder goes
+    s = G(s, { type: 'status', row: named(s, 'Vera Holm').id, remove: 'Dying' });
+    assert.deepEqual(cards(s, 'Vera Holm'), []);
+  });
+
+  it('a card\'s CON box: setStat takes con and int on a CoC row', () => {
+    let s = go(begin([{ name: 'Vera Holm', ini: 60, dex: 60, hp: 16, max: 16 }]));
+    s = G(s, { type: 'setStat', row: named(s, 'Vera Holm').id, key: 'con', value: 45 });
+    s = G(s, { type: 'setStat', row: named(s, 'Vera Holm').id, key: 'int', value: 60 });
+    assert.deepEqual([named(s, 'Vera Holm').con, named(s, 'Vera Holm').int], [45, 60]);
+  });
+
+  it('D&D raises no CoC card; Task 6\'s CoC prompts were never built, so nothing else is retired', () => {
+    let s = RS.reduce(fresh(), { id: 'f1', type: 'fightStart', title: 'T', rows: [M.blankRow({ id: 'r1', name: 'Orc', ini: 10, hp: 16, max: 16 })] }, now());
+    s = go(s);
+    s = typeIn(s, 'Orc', '-8');
+    assert.equal(named(s, 'Orc').cards, undefined);
+    assert.equal(named(s, 'Orc').majorWound, false);
+  });
+});

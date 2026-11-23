@@ -226,9 +226,11 @@ describe('CoC and GURPS fights on the GM page, by real input', { skip: browserSk
       const entry = `[data-fhp="${id}"]`;
       assert.strictEqual(await attrOf(page, entry, 'placeholder'), '-7 / +3 / m-2 / s-5');
       p = await typeInto(page, entry, '-8');
-      assert.deepStrictEqual([named(p, 'Cultist').hp, named(p, 'Cultist').out, named(p, 'Cultist').conds], [8, false, []]);
+      // Task 18 changed this on purpose: 8 on 16 HP is a Major Wound, so its box is ticked (shown as its status) and a
+      // card offers the CON roll; -20 is over max HP, so a card offers Out, and nothing is Out until the GM taps it
+      assert.deepStrictEqual([named(p, 'Cultist').hp, named(p, 'Cultist').out, named(p, 'Cultist').conds], [8, false, ['Major wound']]);
       p = await typeInto(page, entry, '-20');
-      assert.deepStrictEqual([named(p, 'Cultist').hp, named(p, 'Cultist').out, named(p, 'Cultist').conds], [0, false, []]);
+      assert.deepStrictEqual([named(p, 'Cultist').hp, named(p, 'Cultist').out, named(p, 'Cultist').conds], [0, false, ['Major wound']]);
       assert.ok(p.fight.rows.every((r) => !r.out), 'nobody is Out');
       // the pools' letters: Hale's MP 12 less 2, shown on his row
       const hale = named(p, 'Warden Hale').id;
@@ -1270,6 +1272,107 @@ describe('CoC damage on the hit row (step 6b Task 17), by real input', { skip: b
       assert.doesNotMatch(await row2(page, jonas), /exchange is over/);
       assert.strictEqual(await text(page, '#hnotes'), notes, 'no note');
       assert.strictEqual(named(p, 'Jonas Finch').hp, hpJonas);
+    });
+  });
+});
+
+describe('CoC cards on the GM page (step 6b Task 18), by real input', { skip: browserSkip() }, () => {
+  const boxOf = (id) => `[data-fhp="${id}"]`;
+  // Iris attacks `id`, which Fights Back (rolled 33 against Fighting 40, Regular); Iris's level a tap
+  async function exchange(page, id, level) {
+    await tap(page, `[data-fmelee="${id}|fightBack"]`);
+    await until(page, 'p.fight.melee && !p.fight.melee.rolling');
+    await tap(page, `[data-fmlvl="${id}|attack|${level}"]`);
+    return until(page, 'p.fight.melee === null && p.fight.dmg && p.saved === "Saved" && p.pending === 0');
+  }
+  // both of the card's edges in the window and in the panel's own scroll box
+  async function inView(page, card, label) {
+    const e = await page.evaluate(`(() => { const c = document.querySelector(${q(card)}).getBoundingClientRect(); const a = document.querySelector('#acting').getBoundingClientRect();
+      return { top: c.top, bottom: c.bottom, left: c.left, right: c.right, h: innerHeight, w: innerWidth, aTop: a.top, aBottom: a.bottom }; })()`);
+    assert.ok(e.top >= 0 && e.bottom <= e.h && e.left >= 0 && e.right <= e.w && e.top >= e.aTop - 1 && e.bottom <= e.aBottom + 1, `${label}: ${JSON.stringify(e)}`);
+  }
+
+  for (const [w, h] of SIZES) {
+    it(`${w}: the Cultist's 1D6+1D4 on Iris is a Major Wound: the card at the top of the panel names Iris and offers Passed and Failed for her player's CON roll, no Roll; a held click on Failed gives Prone and Unconscious`, async () => {
+      // every die a 3: a d100 of 33, a 1D6 of 3, a 1D4 of 3
+      const run = await start('coc', { randomInt: () => 3 });
+      await withPage({ width: w, height: h }, async (page) => {
+        let p = await netLoft(page, run);
+        const iris = named(p, 'Iris Calder').id;
+        const c1 = named(p, 'Dock Cultist 1').id;
+        // Dock Cultist 1 wins its Fight Back; its 1D6+1D4 of 6 on Iris's 11 HP is a Major Wound
+        p = await exchange(page, c1, 'fail');
+        await typeInto(page, boxOf(iris), '1D6+DB');
+        const card = `#acting .fcard[data-fcrow="${iris}"]`;
+        p = await until(page, `p.fight.rows.find((r) => r.id === ${q(iris)}).hp === 3 && document.querySelector(${q(card)}) && p.saved === "Saved" && p.pending === 0`);
+        // the panel is still Iris's turn's; the card is its first child and names her
+        assert.strictEqual(await page.evaluate('document.querySelector("#acting").firstElementChild.className'), 'fcards');
+        assert.strictEqual(await text(page, `${card} .fch .nm`), 'Iris Calder');
+        assert.strictEqual(await text(page, `${card} .fch .what`), '6 damage');
+        assert.deepStrictEqual(await texts(page, `${card} .clines .lt`), ['Major wound: CON 60']);
+        assert.deepStrictEqual(await texts(page, `${card} .taps button`), ['Passed', 'Failed']);
+        assert.strictEqual(await page.evaluate(`document.querySelectorAll(${q(`${card} button.roll`)}).length`), 0, 'a PC\'s card never rolls');
+        // the box ticked shows as its status; the strip says a card waits
+        const strip = await texts(page, `li[data-frow="${iris}"] .chips > .chip, li[data-row2="${iris}"] .chip`);
+        assert.ok(strip.includes('card waiting'), JSON.stringify(strip));
+        assert.ok(strip.some((x) => /^Major wound/.test(x)), JSON.stringify(strip));
+        await inView(page, card, `${w} the card`);
+        sane(p, `${w} the card`);
+        await shot(page, `t18-${w}-card`);
+        await tap(page, `${card} button.fail`);
+        p = await until(page, `p.fight.rows.find((r) => r.id === ${q(iris)}).conds.includes("Unconscious") && p.saved === "Saved" && p.pending === 0`);
+        assert.deepStrictEqual(named(p, 'Iris Calder').conds, ['Major wound', 'Prone', 'Unconscious']);
+        assert.strictEqual(await page.evaluate(`Boolean(document.querySelector(${q(card)}))`), false, 'the card goes');
+        assert.deepStrictEqual((await logOf(run)).slice(-2), ['Iris Calder: Major wound, CON 60, failed.', 'Iris Calder: Major wound: Prone, Unconscious.']);
+        // the card settled and went: focus goes to Iris's entry box, never the page
+        await page.waitFor(`document.activeElement === document.querySelector(${q(boxOf(iris))})`, 3000);
+        sane(p, `${w} after`);
+      });
+    });
+  }
+
+  it('an NPC\'s card is rolled; a PC\'s SAN loss brings the INT card, and Temporary insanity starts the bout the server rolls, shown on the row', async () => {
+    const run = await start('coc', { randomInt: () => 3 });
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await netLoft(page, run);
+      const iris = named(p, 'Iris Calder').id;
+      const c2 = named(p, 'Dock Cultist 2').id;
+      // Iris's 7 on Dock Cultist 2 is 6 after its armour: a Major Wound on its 12 HP
+      p = await exchange(page, c2, 'regular');
+      await typeInto(page, boxOf(c2), '7');
+      const card = `#acting .fcard[data-fcrow="${c2}"]`;
+      p = await until(page, `p.fight.rows.find((r) => r.id === ${q(c2)}).hp === 6 && document.querySelector(${q(card)}) && p.saved === "Saved" && p.pending === 0`);
+      assert.deepStrictEqual(await texts(page, `${card} .clines .lt`), ['Major wound: CON 55']);
+      assert.strictEqual(await page.evaluate(`document.querySelectorAll(${q(`${card} .taps`)}).length`), 0, 'an NPC has no Passed and Failed');
+      await inView(page, card, 'the NPC card');
+      await tap(page, `${card} button.roll`);
+      p = await until(page, `p.fight.rows.find((r) => r.id === ${q(c2)}).cards[0].lines[0].result && p.saved === "Saved" && p.pending === 0`);
+      assert.deepStrictEqual(await texts(page, `${card} .clines .offer`), ['Prone']);
+      assert.deepStrictEqual(named(p, 'Dock Cultist 2').conds, ['Major wound'], 'offered, not applied');
+      await tap(page, `${card} .clines .offer`);
+      p = await until(page, `p.fight.rows.find((r) => r.id === ${q(c2)}).conds.includes("Prone") && p.saved === "Saved" && p.pending === 0`);
+      assert.deepStrictEqual((await logOf(run)).slice(-2), ['Dock Cultist 2: Major wound, CON 55, rolled 33, Regular.', 'Dock Cultist 2: Major wound: Prone.']);
+
+      // s-6 on Iris: the INT card; Passed offers Temporary insanity; its tap rolls the bout (a 3) and the row shows it
+      await typeInto(page, boxOf(iris), 's-6');
+      const icard = `#acting .fcard[data-fcrow="${iris}"]`;
+      p = await until(page, `document.querySelector(${q(icard)}) && p.saved === "Saved" && p.pending === 0`);
+      assert.deepStrictEqual(await texts(page, `${icard} .clines .lt`), ['SAN loss: INT 75']);
+      assert.strictEqual(await text(page, `${icard} .fch .cite`), 'bout tables: KR p157');
+      await tap(page, `${icard} button.pass`);
+      p = await until(page, `p.fight.rows.find((r) => r.id === ${q(iris)}).cards[0].lines[0].result && p.saved === "Saved" && p.pending === 0`);
+      await tap(page, `${icard} .clines .offer`);
+      p = await until(page, `(p.fight.rows.find((r) => r.id === ${q(iris)}).cards || []).length === 0 && p.saved === "Saved" && p.pending === 0`);
+      const st = (await (await fetch(`${run.base}/api/state`)).json()).state;
+      assert.deepStrictEqual(st.fight.rows.find((r) => r.id === iris).bout, { left: 3, of: 3 });
+      assert.deepStrictEqual((await logOf(run)).slice(-2), ['Iris Calder: SAN loss, INT 75, passed.', 'Iris Calder: SAN loss: Temporary insanity, a bout of 3 rounds.']);
+      const strip = await texts(page, `li[data-frow="${iris}"] .chips > .chip, li[data-row2="${iris}"] .chip`);
+      assert.ok(strip.includes('bout: 3 rounds'), JSON.stringify(strip));
+      sane(p, 'the bout');
+      // the players' screen gets the status, never the bout or a card
+      const pv = JSON.stringify(await (await fetch(`${run.base}/api/players/view`)).json());
+      assert.match(pv, /Temporary insanity/);
+      assert.doesNotMatch(pv, /"bout"|"cards"|bout: |card waiting/);
     });
   });
 });
