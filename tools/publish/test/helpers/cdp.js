@@ -3,13 +3,14 @@
 // `--dump-dom` route in browser.js cannot do this: its virtual time stands still while any request
 // is open, and a page with an event stream always has one. Here Chrome runs in real time on a pipe
 // (`--remote-debugging-pipe`), and the test clicks, types, reloads and takes screenshots itself.
-// Launches take the same lock as every other test browser (withChromeLock) and leave nothing behind:
-// the browser is closed (killed if it will not go), its helpers stopped, its profile removed.
+// Each page takes the same lock as every other test browser (withChromeLock). One Chrome serves every page a test
+// process opens, each in a browser context of its own (its own storage, cookies and tabs), so a file's tests do not
+// each pay a launch; it leaves nothing behind: killed with its helpers when the process exits, its profile removed.
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
-const { findChrome, chromeEnv, stopChrome, chromeTempNow, removeNewChromeTemp } = require('../../lib/chrome');
+const { findChrome, chromeEnv, stopChrome, chromeTempNow } = require('../../lib/chrome');
 const { withChromeLock, PROFILE_PREFIX, LOCK_DIR } = require('./browser');
 
 const STEP_MS = 30000;
@@ -20,7 +21,6 @@ function connect(child, stepMs = STEP_MS) {
   let id = 0;
   let buf = '';
   const waiting = new Map();
-  const events = [];
   let closed = null;
   // one decoder for the pipe: a character split across two chunks arrives whole
   inp.setEncoding('utf8');
@@ -36,7 +36,7 @@ function connect(child, stepMs = STEP_MS) {
         clearTimeout(w.timer);
         if (msg.error) w.reject(new Error(`${w.method}: ${msg.error.message}`));
         else w.resolve(msg.result);
-      } else if (msg.method) events.push(msg);
+      }
     }
   });
   // The first cause is kept: once the browser is gone every command fails at once with it.
@@ -56,7 +56,7 @@ function connect(child, stepMs = STEP_MS) {
     waiting.set(n, { resolve, reject, timer, method });
     out.write(`${JSON.stringify({ id: n, method, params, ...(sessionId ? { sessionId } : {}) })}\0`);
   });
-  return { send, events };
+  return { send };
 }
 
 const sleep = (ms) => new Promise((r) => { setTimeout(r, ms); });
@@ -96,51 +96,76 @@ const INPUT_LOG = `(() => {
     if (now - last > 100) { last = now; keep(ev); } }, true);
 })()`;
 
-// Runs `fn(page)` in a fresh headless Chrome of the given size and returns what it returns.
+// The test process's one Chrome: { child, profile, send, chrome, stepMs, ours }. `ours` names the Chrome temp files
+// (lib/chrome.js's CHROME_TEMP) that appeared during this process's own turns with the lock: only those are removed.
+let shared = null;
+let exitHooked = false;
+const alive = (b) => Boolean(b) && b.child.exitCode === null && !b.child.signalCode;
+function removeOurs(b) {
+  for (const name of b.ours) {
+    try { fs.rmSync(path.join(os.tmpdir(), name), { recursive: true, force: true }); } catch { /* gone, or held: left */ }
+  }
+}
+function launchShared(chrome, stepMs) {
+  const profile = fs.mkdtempSync(path.join(os.tmpdir(), PROFILE_PREFIX));
+  // Recorded beside the lock (as launchChrome does), so a stale lock's reaper can end this Chrome;
+  // a launch that could not be recorded does not start.
+  try { fs.writeFileSync(path.join(LOCK_DIR, 'profile'), profile); } catch (e) {
+    fs.rmSync(profile, { recursive: true, force: true, maxRetries: 3 });
+    throw e;
+  }
+  const child = spawn(chrome, ['--headless=new', '--disable-gpu', '--no-sandbox', '--no-first-run', '--hide-scrollbars',
+    `--user-data-dir=${profile}`, '--remote-debugging-pipe', 'about:blank'],
+  { stdio: ['ignore', 'ignore', 'ignore', 'pipe', 'pipe'], env: chromeEnv(profile) });
+  const { send } = connect(child, stepMs);
+  // An idle browser must not keep the test process alive: a command waiting for its answer holds the process
+  // through its timer, and the `exit` handler below ends the browser.
+  child.unref();
+  for (const io of [child.stdio[3], child.stdio[4]]) if (io && io.unref) io.unref();
+  shared = { child, profile, send, chrome, stepMs, ours: new Set() };
+  if (!exitHooked) {
+    exitHooked = true;
+    // `exit` handlers run synchronously: the browser is killed outright, then its helpers and files go.
+    process.on('exit', () => {
+      const b = shared;
+      shared = null;
+      if (!b) return;
+      try { b.child.kill('SIGKILL'); } catch { /* gone */ }
+      try { stopChrome(b.profile); } catch { /* gone */ }
+      removeOurs(b);
+      try { fs.rmSync(b.profile, { recursive: true, force: true, maxRetries: 3 }); } catch { /* left */ }
+    });
+  }
+  return shared;
+}
+// The browser closed (killed if it will not go), its helpers stopped, its files and profile removed.
+async function stopShared() {
+  const b = shared;
+  shared = null;
+  if (!b) return;
+  await new Promise((resolve) => {
+    if (!alive(b)) { resolve(); return; }
+    const t = setTimeout(() => { try { b.child.kill('SIGKILL'); } catch { /* gone */ } resolve(); }, 5000);
+    b.child.once('exit', () => { clearTimeout(t); resolve(); });
+    try { b.child.kill(); } catch { /* gone */ }
+  });
+  stopChrome(b.profile);
+  removeOurs(b);
+  fs.rmSync(b.profile, { recursive: true, force: true, maxRetries: 3 });
+}
+
+// Runs `fn(page)` in a fresh browser context of the test process's Chrome, at the given size, and returns what it
+// returns; the context (its storage and every tab it opened) is thrown away after.
 // `page`: goto(url), reload(), evaluate(expr), waitFor(expr, ms), screenshot(file), sleep(ms), key(name, { shift }),
 // newTab(url) -> page, resize(width, height); real pointer and text: mouse(type, x, y, { buttons }), click(sel, { holdMs }), drag(x1, y1, x2, y2, steps),
 // wheel(x, y, dy), type(text), box(sel), clickAt(x, y, { holdMs }), colorScheme('light'|'dark').
 async function withPage({ width = 1449, height = 762, chrome = findChrome(), stepMs = STEP_MS } = {}, fn) {
   if (!chrome) throw new Error('no browser');
   return withChromeLock(async () => {
-    let child = null;
-    let profile = null;
-    let before = null;
+    const turnBefore = chromeTempNow();
     let send = null;
-    const launch = () => {
-      profile = fs.mkdtempSync(path.join(os.tmpdir(), PROFILE_PREFIX));
-      // Recorded beside the lock (as launchChrome does), so a stale lock's reaper can end this Chrome;
-      // a launch that could not be recorded does not start.
-      try { fs.writeFileSync(path.join(LOCK_DIR, 'profile'), profile); } catch (e) {
-        fs.rmSync(profile, { recursive: true, force: true, maxRetries: 3 });
-        profile = null;
-        throw e;
-      }
-      before = chromeTempNow();
-      child = spawn(chrome, ['--headless=new', '--disable-gpu', '--no-sandbox', '--no-first-run', '--hide-scrollbars',
-        `--user-data-dir=${profile}`, '--remote-debugging-pipe', `--window-size=${width},${height}`, 'about:blank'],
-      { stdio: ['ignore', 'ignore', 'ignore', 'pipe', 'pipe'], env: chromeEnv(profile) });
-      ({ send } = connect(child, stepMs));
-    };
-    // The browser closed (killed if it will not go), its helpers stopped, its profile removed.
-    const stop = async () => {
-      if (child) {
-        const c = child;
-        await new Promise((resolve) => {
-          if (c.exitCode !== null || c.signalCode) { resolve(); return; }
-          const t = setTimeout(() => { try { c.kill('SIGKILL'); } catch { /* gone */ } resolve(); }, 5000);
-          c.once('exit', () => { clearTimeout(t); resolve(); });
-          try { c.kill(); } catch { /* gone */ }
-        });
-      }
-      if (profile) {
-        stopChrome(profile);
-        removeNewChromeTemp(before);
-        fs.rmSync(profile, { recursive: true, force: true, maxRetries: 3 });
-      }
-      child = null;
-      profile = null;
-    };
+    let ctx = null;
+    let browser = null;
     try {
       // One page object per attached target; `newTab` makes another on the same pipe.
       const makePage = async (sessionId) => {
@@ -285,7 +310,7 @@ async function withPage({ width = 1449, height = 762, chrome = findChrome(), ste
           async newTab(url) {
             let tab = null;
             for (let attempt = 1; !tab; attempt++) {
-              const { targetId } = await send('Target.createTarget', { url: 'about:blank' });
+              const { targetId } = await send('Target.createTarget', { url: 'about:blank', browserContextId: ctx, width, height });
               try {
                 const att = await send('Target.attachToTarget', { targetId, flatten: true });
                 tab = await makePage(att.sessionId);
@@ -301,26 +326,36 @@ async function withPage({ width = 1449, height = 762, chrome = findChrome(), ste
         return page;
       };
       // A fresh Chrome on a busy macOS runner now and then never answers its first commands (Runtime.enable: no
-      // answer in 30 s, #852). Nothing of the test has run yet, so that launch is stopped and one more is made.
+      // answer in 30 s, #852), and a Chrome can die between pages. Nothing of the test has run yet, so that browser is
+      // stopped and one more is launched.
       let page = null;
       for (let attempt = 1; !page; attempt++) {
-        launch();
         try {
-          const { targetInfos } = await send('Target.getTargets');
-          let target = targetInfos.find((t) => t.type === 'page');
-          if (!target) target = { targetId: (await send('Target.createTarget', { url: 'about:blank' })).targetId };
-          const { sessionId } = await send('Target.attachToTarget', { targetId: target.targetId, flatten: true });
+          if (!alive(shared) || shared.chrome !== chrome || shared.stepMs !== stepMs) {
+            await stopShared();
+            launchShared(chrome, stepMs);
+          } else {
+            // a new turn's lock folder names the running Chrome too, for the same reaper
+            try { fs.writeFileSync(path.join(LOCK_DIR, 'profile'), shared.profile); } catch { /* it dies with this process anyway */ }
+          }
+          browser = shared;
+          send = browser.send;
+          ({ browserContextId: ctx } = await send('Target.createBrowserContext', { disposeOnDetach: false }));
+          const { targetId } = await send('Target.createTarget', { url: 'about:blank', browserContextId: ctx, width, height });
+          const { sessionId } = await send('Target.attachToTarget', { targetId, flatten: true });
           page = await makePage(sessionId);
         } catch (e) {
-          await stop();
+          ctx = null;
+          await stopShared();
           if (attempt >= 2) throw new Error(`${e.message} (the browser's setup failed on two launches)`);
         }
       }
-      const result = await fn(page);
-      try { await send('Browser.close'); } catch { /* gone already */ }
-      return result;
+      return await fn(page);
     } finally {
-      await stop();
+      if (ctx && alive(browser) && shared === browser) {
+        try { await send('Target.disposeBrowserContext', { browserContextId: ctx }); } catch { await stopShared(); }
+      }
+      if (shared) for (const name of chromeTempNow()) if (!turnBefore.has(name)) shared.ours.add(name);
     }
   });
 }

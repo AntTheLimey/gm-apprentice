@@ -9,7 +9,13 @@ const os = require('os');
 const path = require('path');
 const { VARIANTS, buildVariant, mainBlocks } = require('./variants');
 
-const libRoot = path.resolve(process.argv[2] || '');
+// No path, no run: a bare `node --test` picks this file up (Node's default patterns take every .js under test/),
+// and falling back to the current folder rewrote the goldens from the current tool, twice in one day (#852 work).
+if (!process.argv[2]) {
+  console.error('usage: node generate.js <path to an old tools/publish>');
+  process.exit(1);
+}
+const libRoot = path.resolve(process.argv[2]);
 if (!fs.existsSync(path.join(libRoot, 'lib', 'build.js'))) {
   console.error('usage: node generate.js <path to an old tools/publish>');
   process.exit(1);
