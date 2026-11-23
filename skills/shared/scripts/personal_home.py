@@ -220,7 +220,7 @@ def build_parser() -> argparse.ArgumentParser:
         description="Where the GM's personal reference files live, and what is there. "
                     "Copies any left in the plugin's own folders into it first.",
         epilog="Example: gma personal --system fitd")
-    ap.add_argument("--system", help="list this system's files (fitd, gurps-4e, coc-7e, dnd-5e-2024, pf2e)")
+    ap.add_argument("--system", help="list this system's files (fitd, gurps-4e, coc-7e, dnd-5e-2024, pf2e, or generic for any other game)")
     ap.add_argument("--json", action="store_true", help="print the result as JSON")
     return ap
 
