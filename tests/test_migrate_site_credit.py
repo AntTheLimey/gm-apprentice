@@ -1,5 +1,5 @@
 """The `site-credit` check (#849): a vault with a site is told once that its
-pages now carry a "Powered by GM-Apprentice" line, and how to take it out.
+pages now credit GM-Apprentice, and how to take that out.
 Every case reads a real vault's settings with the publish tool."""
 
 import sys
@@ -45,7 +45,7 @@ class SiteCreditTests(unittest.TestCase):
 
     def test_a_site_that_says_nothing_is_told(self):
         line = self.line("publish: true; folder: ../site")
-        self.assertIn("your site's pages now end", line)
+        self.assertIn("your site's pages now credit GM-Apprentice", line)
         self.assertIn("Powered by GM-Apprentice", line)
         self.assertIn("player_site.credit", line)
 
@@ -53,7 +53,7 @@ class SiteCreditTests(unittest.TestCase):
         line = self.line("publish: false; folder: ../site",
                          "gm_site:\n  publish: true\n  folder: ../gm\n")
         self.assertIn("your player site is off", line)
-        self.assertNotIn("now end", line)
+        self.assertNotIn("now credit", line)
 
     def test_no_site_is_nothing(self):
         self.assertEqual(

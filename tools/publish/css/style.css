@@ -368,6 +368,49 @@ img {
   .nav-color-mode-btn .to-dark, .mobile-color-mode-btn .to-dark { display: inline; }
 }
 
+/* The credit's mark: computer widths only, as tall as the light/dark button. What it says shows on hover and focus. */
+.nav-credit {
+  display: none;
+  position: relative;
+  align-items: center;
+  justify-content: center;
+  width: 1.8rem;
+  height: 1.7rem;
+  margin-left: var(--space-500);
+  color: var(--text-muted-on-header, var(--text-muted));
+}
+.nav-credit .credit-raven { width: 1.2rem; height: 1.2rem; }
+.nav-credit:hover,
+.nav-credit:focus-visible { color: var(--text-on-header, var(--text)); }
+.nav-credit:hover::after,
+.nav-credit:focus-visible::after {
+  content: attr(aria-label);
+  position: absolute;
+  top: calc(100% + 0.6rem);
+  right: 0;
+  padding: 0.3rem 0.55rem;
+  background: var(--bg-header);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-375);
+  color: var(--text-on-header, var(--text));
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  line-height: 1.3;
+  white-space: nowrap;
+  z-index: 1;
+}
+.mobile-credit {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 44px;
+  margin-top: var(--space-1500);
+  border-top: 1px solid var(--border);
+  color: var(--text-muted-on-header, var(--text-muted));
+  font-size: 0.85rem;
+}
+.mobile-credit .credit-raven { width: 1.1rem; height: 1.1rem; }
+
 /* Phone-width search trigger (#267): the text button above is desktop-only. */
 .nav-search-icon-btn {
   background: none;
@@ -395,6 +438,10 @@ img {
   .nav-search-icon-btn { display: none; }
   .nav-search-btn { display: block; }
   .nav-color-mode-btn { display: block; }
+}
+/* Wider than the menu's own breakpoint: below it a long title and menu leave the mark no room. */
+@media (min-width: 960px) {
+  .nav-credit { display: inline-flex; }
 }
 
 /* ===== BREADCRUMBS ===== */
@@ -4992,8 +5039,33 @@ button.dnd5e-chip { font: inherit; color: var(--text); cursor: pointer; text-ali
   border-top: 1px solid var(--border);
   margin-top: 3rem;
 }
-.site-credit { margin: 0.5rem 0 0; }
-.site-credit a { color: var(--text); text-decoration: underline; }
+/* The credit (player_site.credit, #862): the raven in the header, at the page's end and in the phone menu. It is a
+   mask filled with the text colour around it, so it takes every theme's own. */
+.site-footer.credit-only { border-top: none; margin-top: 0; }
+.site-credit {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 1rem 0 0;
+  color: var(--text);
+}
+.site-credit .credit-raven { color: var(--text-muted); }
+.site-footer.credit-only .site-credit { margin-top: 0; }
+.site-credit a { color: inherit; text-decoration: none; border-bottom: 1px solid var(--text-muted); }
+.site-credit a:hover { border-bottom-color: currentColor; }
+.credit-raven {
+  display: inline-block;
+  flex: none;
+  width: 1.625rem;
+  height: 1.625rem;
+  background-color: currentColor;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1000 1000'%3E%3Cpath fill-rule='evenodd' d='M926,222 926,225 924,225 908,217 887,211 861,207 813,206 799,208 776,213 751,224 736,234 718,257 711,271 708,283 708,307 717,333 744,381 759,420 766,463 767,491 766,512 761,540 749,575 746,558 739,544 737,566 733,583 716,628 689,678 669,705 674,673 674,647 672,647 664,667 655,681 621,728 586,765 550,794 547,794 568,745 575,720 562,734 523,772 465,816 412,848 375,868 321,893 304,899 326,860 355,817 384,778 388,775 390,771 413,745 416,739 445,710 483,677 536,638 560,623 549,595 539,562 530,511 530,474 535,444 542,417 552,395 550,394 539,405 526,426 503,453 476,479 456,496 424,517 394,535 367,547 373,594 374,632 373,657 368,693 362,720 346,768 322,817 296,854 281,870 259,889 241,901 226,909 256,868 257,864 267,850 283,820 293,793 262,824 237,844 202,868 157,894 108,919 60,940 74,905 92,871 113,838 141,802 160,781 198,743 259,689 294,653 259,670 208,699 153,734 116,762 79,797 88,765 100,734 118,698 141,660 181,607 206,580 233,556 285,517 354,474 308,486 248,512 195,544 174,561 150,584 156,565 169,539 186,508 206,478 243,433 277,398 317,363 349,340 380,321 403,286 433,249 444,239 444,238 442,238 427,243 405,257 420,231 444,200 474,170 497,155 493,154 471,159 435,174 453,150 478,126 497,110 526,90 553,77 573,70 595,64 629,60 658,61 681,64 709,72 736,86 759,103 778,123 797,126 828,133 852,142 873,153 887,163 904,180 914,194ZM739,142 738,140 728,132 706,123 667,118 648,118 641,119 652,122 667,128 672,132 680,146 686,151 697,157 711,157 717,155ZM654,439 653,412 650,398 637,363 618,336 609,326 588,310 567,299 544,292 508,290 478,298 448,316 447,317 484,312 520,315 552,324 582,340 599,352 613,366 631,391 637,404 645,424 650,458ZM521,450 518,464 493,533 476,574 482,581 486,590 487,600 485,608 477,619 466,625 452,626 443,622 434,615 430,608 428,600 430,587 435,579 442,572 459,568 484,512 509,468Z'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+@media (forced-colors: active) {
+  .credit-raven { forced-color-adjust: none; background-color: LinkText; }
+}
 
 /* ===== BACK TO TOP ===== */
 .back-to-top {

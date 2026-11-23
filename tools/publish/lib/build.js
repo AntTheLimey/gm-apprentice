@@ -870,6 +870,9 @@ function buildSite(options) {
     ensureDir(dest);
     if (copyOut(path.join(__dirname, '../js', file), dest)) console.log(`  wrote js/${file}`);
   }
+  function siteCssHasCredit() {
+    try { return fs.readFileSync(path.join(outputDir, 'css', 'style.css'), 'utf8').includes('.credit-raven'); } catch (_) { return false; }
+  }
   function copyJS() {
     // A sheets-only build writes pages whose header leaves its menu clicks to js/nav.js, so it
     // refreshes that one script: the site may still hold the older one (#439).
@@ -1835,7 +1838,9 @@ function buildSite(options) {
   configureLinkPreviews(publishConfig.link_previews);
   configureConnections(publishConfig.connections);
   // The player site's alone: the GM site is the GM's own copy.
-  configureCredit(!gm && publishConfig.credit === true);
+  // A sheets-only build writes pages beside the stylesheet the last full build left: one from before the credit's marks
+  // would show them unstyled, so they wait for the next full build.
+  configureCredit(!gm && publishConfig.credit === true && (writes !== 'sheets' || siteCssHasCredit()));
   copyCSS();
   writeGmFiles();
   copyJS();

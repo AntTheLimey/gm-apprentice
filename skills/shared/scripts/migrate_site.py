@@ -511,20 +511,21 @@ CREDIT = "player_site.credit"
 
 
 def find_site_credit(vault: Path) -> list[Item]:
-    """The site's pages gained a "Powered by GM-Apprentice" line, on unless
-    turned off. Players see it, so the GM of a vault with a site is told
-    once, unless the vault already says either way."""
+    """The site's pages gained a credit to GM-Apprentice, on unless turned
+    off. Players see it, so the GM of a vault with a site is told once,
+    unless the vault already says either way."""
     if _site_folder(vault) is None:
         return []
     if vault_settings(vault).origins[CREDIT] != "default":
         return []
-    pages = ("your site's pages now end, from the next build,"
+    pages = ("your site's pages now credit GM-Apprentice, from the next build:"
              if vault_settings(vault).get("player_site.publish") is not False
-             else "your player site is off; if you turn it on, its pages end")
+             else "your player site is off; if you turn it on, its pages credit GM-Apprentice:")
     return [Item("site-credit", PERSON,
-                 [f"{pages} with a small \"Powered by GM-Apprentice\" line, "
-                  "linked to gmapprentice.com; to take it out, turn "
-                  f"{CREDIT} off or ask me to"],
+                 [f"{pages} a small raven in the header, \"Powered by "
+                  "GM-Apprentice\" at the end of each page and a line in the "
+                  "phone menu, linked to gmapprentice.com; to take them out, "
+                  f"turn {CREDIT} off or ask me to"],
                  notice=True)]
 
 
@@ -560,10 +561,10 @@ SITE_CHECKS: list[Check] = [
           plain=("Added Dormant Threads to the headings your site hides, so the threads you have parked for the GM never show on the site."),
           ask=("Adds Dormant Threads to the headings your site hides, so the threads you have parked for the GM never show on the site."),
           left=("Kept your list of hidden headings without Dormant Threads, so your parked threads can show on your site. Your answer is recorded in player_site.hide.declined, so the build does not warn about it.")),
-    Check("site-credit", "1.12.132", 2, "the credit line on the site",
+    Check("site-credit", "1.12.132", 2, "the credit on the site",
           find_site_credit,
           kind="bookkeeping",
-          plain=("Told you about the credit line your site's pages now carry.")),
+          plain=("Told you about the credit to GM-Apprentice your site's pages now carry.")),
     Check("gm-leak", None, 4, "sections the site withholds are nested under "
           "GM Notes", find_gm_leak, asks_site=True,
           kind="bookkeeping",

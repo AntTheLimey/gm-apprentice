@@ -256,7 +256,7 @@ const REGISTRY = [
   },
   {
     name: 'player_site.credit', type: 'switch', default: true, onFault: false, group: 'site',
-    does: 'The small "Powered by GM-Apprentice" line at the foot of every page, with a link to gmapprentice.com. It sits under your own footer. Never on the GM site, nor on a handout\'s own styled page',
+    does: 'The site\'s credit to GM-Apprentice, linked to gmapprentice.com: a small raven at the end of the header on a computer, the raven and a line at the end of every page, under your own footer, and a line at the foot of the phone menu. Never on the GM site, nor on a handout\'s own styled page',
     left_out: 'On',
   },
   {
