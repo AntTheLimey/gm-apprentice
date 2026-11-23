@@ -155,7 +155,8 @@ const COC_CARDS = {
   stats: { con: 'CON', int: 'INT' },
   offers: {
     dead: { label: 'Out (dead)', out: true, ends: true },
-    dying: { label: 'Dying, Unconscious', add: ['Dying', 'Unconscious'], ends: true },
+    // the hit that takes a row to 0 with the box ticked may be the Major Wound itself: Prone comes with it
+    dying: { label: 'Dying, Unconscious, Prone', add: ['Dying', 'Unconscious', 'Prone'], ends: true },
     unconscious: { label: 'Unconscious', add: ['Unconscious'], ends: true },
     // the Major Wound's roll folds Prone in: a PC's Passed or Failed tap takes it in the same tap (`tap`)
     prone: { label: 'Prone', add: ['Prone'], tap: true },

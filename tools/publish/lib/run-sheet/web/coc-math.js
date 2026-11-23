@@ -343,6 +343,8 @@
     const name = lineName(l, K);
     if (!lineStat(l)) return name;
     const v = row && isNum(row[l.stat]) ? row[l.stat] : '?';
+    // the log names no figure it does not have: "Major wound, failed"
+    if (log && v === '?') return name;
     return `${name}${log ? ',' : ':'} ${((K && K.stats) || {})[l.stat] || l.stat.toUpperCase()} ${v}`;
   }
   // A line's result as the reducer takes it: a PC's is the GM's tap of the player's roll ({ tap: 'passed' | 'failed' });
@@ -375,12 +377,14 @@
     if (!x || typeof x !== 'object' || sides === null || x.sides !== sides || (x.mod || 0) !== 0) return null;
     return Number.isInteger(x.die) && x.die >= 1 && x.die <= sides && x.total === x.die ? x.die : null;
   }
+  // "7 rounds", "1 round": the one place a bout's length is worded (the chip and the log)
+  const roundsText = (n) => `${n} round${n === 1 ? '' : 's'}`;
   // "bout: 7 rounds", "bout: 1 round"; '' with none.
-  const boutText = (b) => (b && isNum(b.left) && b.left > 0 ? `bout: ${b.left} round${b.left === 1 ? '' : 's'}` : '');
+  const boutText = (b) => (b && isNum(b.left) && b.left > 0 ? `bout: ${roundsText(b.left)}` : '');
 
   return {
     cocCardForHit, cocCardsAtRoundEnd, sanCard, lineTarget, lineStat, lineName, lineText, rollResult, resultText, offersFor,
-    boutRoll, boutText,
+    boutRoll, boutText, roundsText,
     DB_MODES, DB_WORDS, dbModeOf, dbTerm, halfTerm, damageRoll, cocDamage, extremeOffer,
     topOf, combatOf, TAP_LEVELS, LEVEL_NAMES, RANK, isLevel, levelName, RESPONSES, RESPONSE_WORDS, RESPONSE_NAMES,
     opposedMelee, skillOf, skillName, outnumbered, proneOn, attackDice, defenceAfter, diceOfNet, diceIn, netOf, autoIn, diceText,

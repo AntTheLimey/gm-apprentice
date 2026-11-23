@@ -443,7 +443,7 @@
       fp: null, fpMax: null, mp: null, mpMax: null, san: null, sanMax: null, luck: null, er: null, erMax: null,
       dex: null, st: null, ht: null, dx: null, speed: null, dodge: null, parry: null, block: null, dr: null, faceOpen: false, drByLocation: null,
       // CoC's CON and INT, for Task 18's cards; its Major Wound box (it stays ticked), the round Dying was set (its
-      // reminders start the round after), and a bout of madness ({ left, of } rounds; `bout`)
+      // reminders start the round after), and a bout of madness ({ left, of, from }: rounds left, its length, the round it started; `bout`)
       con: null, int: null, majorWound: false, dyingRound: null,
       armour: null, fighting: null, firearms: null, combat: null, db: null, build: null, attacks: 1, defended: 0, bout: null,
       // CoC's melee (Task 16): the row's melee defences this round (reset at the round's start) and its outnumbered

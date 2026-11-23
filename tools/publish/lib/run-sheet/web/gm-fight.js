@@ -1165,7 +1165,7 @@
     if (!f || ui.rolling[cardId]) return;
     ui.rolling[cardId] = true;
     RP.render();
-    roll([{ sides: (K.C.bout && K.C.bout.sides) || 10 }]).then(([res]) => {
+    roll([{ sides: K.C.bout.sides }]).then(([res]) => {
       delete ui.rolling[cardId];
       const now = state().fight;
       if (now && now.id === f.id) { send({ bout: res }); focusCard(rowId, cardId); } else RP.render();

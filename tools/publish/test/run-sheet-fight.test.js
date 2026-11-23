@@ -3358,9 +3358,9 @@ describe('CoC cards: one per hit, Dying\'s reminders and the SAN bout (step 6b T
     assert.equal(named(s, 'Vera Holm').hp, 0);
     assert.deepEqual(offers(s, 'Vera Holm'), [[['dying', ['dying']]]]);
     s = take(s, 'Vera Holm', 'dying', { line: 0 });
-    assert.deepEqual(named(s, 'Vera Holm').conds, ['Major wound', 'Dying', 'Unconscious']);
+    assert.deepEqual(named(s, 'Vera Holm').conds, ['Major wound', 'Dying', 'Unconscious', 'Prone']);
     assert.equal(named(s, 'Vera Holm').dyingRound, 1);
-    assert.deepEqual(lines(s).slice(-1), ['Vera Holm: 0 HP, Major wound: Dying, Unconscious.']);
+    assert.deepEqual(lines(s).slice(-1), ['Vera Holm: 0 HP, Major wound: Dying, Unconscious, Prone.']);
   });
 
   it('−9 to 0 with a Major Wound that hit: Dying', () => {
@@ -3410,7 +3410,7 @@ describe('CoC cards: one per hit, Dying\'s reminders and the SAN bout (step 6b T
     assert.equal(cards(s, 'Vera Holm').length, 1);
     // Stabilised, tapped: Dying goes, and the card with it
     let t = take(s, 'Vera Holm', 'stabilised');
-    assert.deepEqual(named(t, 'Vera Holm').conds, ['Major wound', 'Unconscious']);
+    assert.deepEqual(named(t, 'Vera Holm').conds, ['Major wound', 'Unconscious', 'Prone']);
     assert.deepEqual(cards(t, 'Vera Holm'), []);
     assert.deepEqual(lines(t).slice(-1), ['Vera Holm: Stabilised.']);
     t = toRound(t, 5);
@@ -3418,7 +3418,7 @@ describe('CoC cards: one per hit, Dying\'s reminders and the SAN bout (step 6b T
     // First Aid's point instead: the same
     t = typeIn(s, 'Vera Holm', '+1');
     assert.equal(named(t, 'Vera Holm').hp, 1);
-    assert.deepEqual(named(t, 'Vera Holm').conds, ['Major wound', 'Unconscious']);
+    assert.deepEqual(named(t, 'Vera Holm').conds, ['Major wound', 'Unconscious', 'Prone']);
     assert.equal(named(t, 'Vera Holm').dyingRound, null);
     assert.deepEqual(cards(t, 'Vera Holm'), []);
     assert.deepEqual(lines(t).slice(-1), ['Vera Holm: Stabilised.']);
@@ -3495,15 +3495,49 @@ describe('CoC cards: one per hit, Dying\'s reminders and the SAN bout (step 6b T
     s = take(s, 'Tom Reyes', 'insane', { line: 0 });
     assert.deepEqual(s.fight, was);
     s = take(s, 'Tom Reyes', 'insane', { line: 0, bout: { sides: 10, mod: 0, die: 2, total: 2 } });
-    assert.deepEqual(named(s, 'Tom Reyes').bout, { left: 2, of: 2 });
+    assert.deepEqual(named(s, 'Tom Reyes').bout, { left: 2, of: 2, from: 1 });
     assert.ok(named(s, 'Tom Reyes').conds.includes('Temporary insanity'));
     assert.deepEqual(lines(s).slice(-1), ['Tom Reyes: SAN loss: Temporary insanity, a bout of 2 rounds.']);
+    // the round it started in does not count: two full rounds after it
     s = toRound(s, 2);
-    assert.deepEqual(named(s, 'Tom Reyes').bout, { left: 1, of: 2 });
+    assert.deepEqual(named(s, 'Tom Reyes').bout, { left: 2, of: 2, from: 1 });
     s = toRound(s, 3);
+    assert.deepEqual(named(s, 'Tom Reyes').bout, { left: 1, of: 2, from: 1 });
+    s = toRound(s, 4);
     assert.equal(named(s, 'Tom Reyes').bout, null);
     assert.ok(lines(s).includes('Tom Reyes: the bout of madness ends (2 rounds).'));
     assert.ok(named(s, 'Tom Reyes').conds.includes('Temporary insanity'), 'the insanity outlasts the bout');
+  });
+
+  it('a bout of 1 started in round 3 ends at the end of round 4; Out and benched rows count down too', () => {
+    const insane = (s, name, die) => {
+      let x = typeIn(s, name, 's-6');
+      x = rolled(x, name, { tap: 'passed' });
+      return take(x, name, 'insane', { line: 0, bout: { sides: 10, mod: 0, die, total: die } });
+    };
+    const three = [...rows(), { name: 'Ada Vale', kind: 'pc', ini: 30, dex: 30, hp: 10, max: 10, int: 60, san: 50, sanMax: 50 },
+      { name: 'Ned Gray', kind: 'pc', ini: 20, dex: 20, hp: 10, max: 10, int: 60, san: 50, sanMax: 50 }];
+    let s = toRound(go(begin(three)), 3);
+    s = insane(s, 'Tom Reyes', 1);
+    s = insane(s, 'Ada Vale', 2);
+    s = insane(s, 'Ned Gray', 2);
+    s = G(s, { type: 'out', row: named(s, 'Ada Vale').id, on: true });
+    s = G(s, { type: 'fightTick', row: named(s, 'Ned Gray').id, in: false });
+    s = toRound(s, 4);
+    assert.deepEqual(['Tom Reyes', 'Ada Vale', 'Ned Gray'].map((n) => named(s, n).bout.left), [1, 2, 2], 'none at the end of round 3');
+    s = toRound(s, 5);
+    assert.equal(named(s, 'Tom Reyes').bout, null);
+    assert.ok(lines(s).includes('Tom Reyes: the bout of madness ends (1 round).'));
+    assert.deepEqual(['Ada Vale', 'Ned Gray'].map((n) => named(s, n).bout.left), [1, 1], 'Out and benched count down');
+    s = toRound(s, 6);
+    assert.deepEqual(['Ada Vale', 'Ned Gray'].map((n) => named(s, n).bout), [null, null]);
+  });
+
+  it('a PC with no CON on the sheet logs the result with no figure', () => {
+    let s = go(begin([{ name: 'Ada Vale', kind: 'pc', ini: 30, dex: 30, hp: 10, max: 10 }]));
+    s = typeIn(s, 'Ada Vale', '-5');
+    s = rolled(s, 'Ada Vale', { tap: 'failed' });
+    assert.deepEqual(lines(s).slice(-2), ['Ada Vale: Major wound, failed.', 'Ada Vale: Major wound: Prone, Unconscious.']);
   });
 
   it('a failed INT roll offers nothing and the card goes', () => {

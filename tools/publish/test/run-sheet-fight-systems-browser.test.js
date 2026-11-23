@@ -1331,6 +1331,38 @@ describe('CoC cards on the GM page (step 6b Task 18), by real input', { skip: br
     });
   }
 
+  it('an NPC with no CON: its card asks for CON in a box, Roll waits; CON typed, Roll rolls it', async () => {
+    const run = await start('coc', { randomInt: () => 3 });
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await fightOn(page, run, 0);
+      p = await addNew(page, 'Cultist');
+      const id = named(p, 'Cultist').id;
+      p = await typeInto(page, `[data-fmax="${id}"]`, 16);
+      p = await typeInto(page, `[data-fhp="${id}"]`, '-8');
+      const card = `#acting .fcard[data-fcrow="${id}"]`;
+      p = await until(page, `document.querySelector(${q(card)}) && p.saved === "Saved" && p.pending === 0`);
+      // the probe carries no CON: the server's state does
+      const conOf = async () => (await (await fetch(`${run.base}/api/state`)).json()).state.fight.rows.find((r) => r.id === id).con;
+      assert.strictEqual(await conOf(), null);
+      assert.deepStrictEqual(await texts(page, `${card} .clines .lt`), ['Major wound: CON ?']);
+      const stat = `${card} [data-fcardstat="${id}|con"]`;
+      assert.strictEqual(await text(page, `${card} .cht .lab`), 'CON');
+      assert.strictEqual(await attrOf(page, `${card} button.roll`, 'disabled'), '', 'Roll waits for CON');
+      assert.strictEqual(await attrOf(page, `${card} button.roll`, 'title'), 'Type CON first');
+      await inView(page, card, 'the CON box card');
+      p = await typeInto(page, stat, '50');
+      await page.waitFor(`document.querySelector(${q(`${card} button.roll`)}) && !document.querySelector(${q(`${card} button.roll`)}).disabled`, 3000);
+      assert.strictEqual(await page.evaluate(`Boolean(document.querySelector(${q(stat)}))`), false, 'the box goes once CON is known');
+      assert.deepStrictEqual(await texts(page, `${card} .clines .lt`), ['Major wound: CON 50']);
+      assert.strictEqual(await conOf(), 50);
+      await tap(page, `${card} button.roll`);
+      p = await until(page, `p.fight.rows.find((r) => r.id === ${q(id)}).cards[0].lines[0].result && p.saved === "Saved" && p.pending === 0`);
+      assert.deepStrictEqual((await logOf(run)).slice(-1), ['Cultist: Major wound, CON 50, rolled 33, Regular.']);
+      assert.deepStrictEqual(await texts(page, `${card} .clines .offer`), ['Prone']);
+      sane(p, 'the CON box');
+    });
+  });
+
   it('an NPC\'s card is rolled; a PC\'s SAN loss brings the INT card, and Temporary insanity starts the bout the server rolls, shown on the row', async () => {
     const run = await start('coc', { randomInt: () => 3 });
     await withPage({ width: 1449, height: 762 }, async (page) => {
@@ -1364,7 +1396,7 @@ describe('CoC cards on the GM page (step 6b Task 18), by real input', { skip: br
       await tap(page, `${icard} .clines .offer`);
       p = await until(page, `(p.fight.rows.find((r) => r.id === ${q(iris)}).cards || []).length === 0 && p.saved === "Saved" && p.pending === 0`);
       const st = (await (await fetch(`${run.base}/api/state`)).json()).state;
-      assert.deepStrictEqual(st.fight.rows.find((r) => r.id === iris).bout, { left: 3, of: 3 });
+      assert.deepStrictEqual(st.fight.rows.find((r) => r.id === iris).bout, { left: 3, of: 3, from: 1 });
       assert.deepStrictEqual((await logOf(run)).slice(-2), ['Iris Calder: SAN loss, INT 75, passed.', 'Iris Calder: SAN loss: Temporary insanity, a bout of 3 rounds.']);
       const strip = await texts(page, `li[data-frow="${iris}"] .chips > .chip, li[data-row2="${iris}"] .chip`);
       assert.ok(strip.includes('bout: 3 rounds'), JSON.stringify(strip));

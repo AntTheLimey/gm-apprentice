@@ -350,12 +350,14 @@ describe('coc-math: a hit\'s card and the SAN bout (Task 18)', () => {
     assert.deepEqual([C.offersFor({ kind: 'dyingCon' }, ok), C.offersFor({ kind: 'dyingCon' }, no)], [[], ['dead']]);
     assert.deepEqual([C.offersFor({ kind: 'int' }, ok), C.offersFor({ kind: 'int' }, no)], [['insane'], []]);
     assert.deepEqual(K.offers.proneOut.add, ['Prone', 'Unconscious']);
+    assert.deepEqual(K.offers.dying.add, ['Dying', 'Unconscious', 'Prone']);
     assert.equal(K.offers.prone.tap, true);
   });
   it('the line\'s words are names and figures: "Major wound: CON 55", "SAN loss: INT ?", "Over max HP"', () => {
     const major = C.cocCardForHit(after(8, 16), { damage: 8, before: 16 }, RULES).lines[0];
     assert.equal(C.lineText(major, after(8, 16, { con: 55 }), K), 'Major wound: CON 55');
     assert.equal(C.lineText(major, after(8, 16, { con: 55 }), K, true), 'Major wound, CON 55');
+    assert.equal(C.lineText(major, after(8, 16), K, true), 'Major wound', 'the log names no figure it lacks');
     assert.equal(C.lineText(C.sanCard(after(5, 16), 6, RULES).lines[0], after(5, 16), K), 'SAN loss: INT ?');
     assert.equal(C.lineText(C.cocCardForHit(after(0, 16), { damage: 17, before: 16 }, RULES).lines[0], after(0, 16), K), 'Over max HP');
     assert.equal(C.lineTarget(major, after(8, 16, { con: 55 })), 55);
@@ -368,10 +370,11 @@ describe('coc-math: a hit\'s card and the SAN bout (Task 18)', () => {
     assert.equal(C.boutRoll({ sides: 10, mod: 0, die: 11, total: 11 }, RULES), null);
     assert.equal(C.boutRoll(null, RULES), null);
     assert.deepEqual([C.boutText({ left: 7, of: 7 }), C.boutText({ left: 1, of: 7 }), C.boutText(null)], ['bout: 7 rounds', 'bout: 1 round', '']);
+    assert.deepEqual([C.roundsText(1), C.roundsText(3)], ['1 round', '3 rounds']);
   });
   it('no card text quotes the book: names, figures and a page', () => {
     for (const v of Object.values(K.lines).concat(Object.values(K.offers).map((o) => o.label), Object.values(K.notes))) {
-      assert.ok(v.length <= 24, `short: ${v}`);
+      assert.ok(v.length <= 30, `short: ${v}`);
     }
     assert.match(K.notes.int, /KR p\d+/);
   });

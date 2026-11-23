@@ -436,17 +436,19 @@
     say(s, f, at, `${nameOf(s, f, r)}: ${K.C.offers.stabilised.label}.`);
   }
   // A round's end in CoC: each row Dying since an earlier round gets its CON reminder (replacing the last), and each
-  // bout of madness counts down a round, logged when it ends.
+  // bout of madness counts down a round, logged when it ends. A bout counts from the end of the round after the one it
+  // started in (`from`), as Dying's reminders do, so a bout of N rounds runs N full rounds; it counts for every row,
+  // Out or benched too, since time passes for them.
   function cocRoundEnds(s, f, at) {
     const K = kitOf(f);
     if (!K || !K.coc) return;
     for (const { row, card } of CM.cocCardsAtRoundEnd(f.rows, f.round, FM.rulesOf(f))) replaceCards(f, rowOf(f, row), 'dying', [card]);
     for (const r of f.rows) {
-      if (!r.bout || !isNum(r.bout.left)) continue;
+      if (!r.bout || !isNum(r.bout.left) || (isNum(r.bout.from) && r.bout.from >= f.round)) continue;
       const left = r.bout.left - 1;
       touch(r, at);
       if (left > 0) { r.bout = { ...r.bout, left }; continue; }
-      say(s, f, at, `${nameOf(s, f, r)}: the bout of madness ends (${r.bout.of} rounds).`);
+      say(s, f, at, `${nameOf(s, f, r)}: the bout of madness ends (${CM.roundsText(r.bout.of)}).`);
       r.bout = null;
     }
   }
@@ -477,9 +479,9 @@
     for (const st of o.add || []) if (!r.conds.includes(st)) r.conds.push(st);
     if (o.remove) r.conds = r.conds.filter((c) => !o.remove.includes(c));
     if (o.out) r.out = true;
-    if (bout !== null) r.bout = { left: bout, of: bout };
+    if (bout !== null) r.bout = { left: bout, of: bout, from: f.round };
     touch(r, at);
-    say(s, f, at, `${nameOf(s, f, r)}: ${l ? `${K.M.lineName(l, K.C, true)}: ` : ''}${o.label}${bout !== null ? `, a bout of ${bout} round${bout === 1 ? '' : 's'}` : ''}.`);
+    say(s, f, at, `${nameOf(s, f, r)}: ${l ? `${K.M.lineName(l, K.C, true)}: ` : ''}${o.label}${bout !== null ? `, a bout of ${CM.roundsText(bout)}` : ''}.`);
     return true;
   }
   // A round ends, the one place (Task 18): its roster line, then what the round's end owes (CoC's Dying reminders and
