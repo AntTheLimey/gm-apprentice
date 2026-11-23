@@ -62,7 +62,8 @@
     if (!isNum(cur)) return null;
     const max = row[pool.max];
     if (e.kind === 'heal') {
-      const top = isNum(pool.cap) ? pool.cap : (isNum(max) ? max : null);
+      // the lower of the pool's cap and the row's own max (SAN: 99, and a row's lower max, 99 less its Mythos)
+      const top = isNum(pool.cap) && isNum(max) ? Math.min(pool.cap, max) : isNum(pool.cap) ? pool.cap : (isNum(max) ? max : null);
       return top === null ? cur + e.n : Math.max(cur, Math.min(top, cur + e.n));
     }
     const floor = isNum(pool.floor) ? pool.floor : (isNum(pool.floorTimes) && isNum(max) ? pool.floorTimes * max : null);
@@ -144,16 +145,15 @@
     if (ru.initiative === 'speed') return isNum(r.speed) ? r.speed : null;
     return null;
   }
-  // At a tie on CoC's DEX the higher combat skill, on GURPS's Speed the higher DX (B363); a row without the
-  // figure falls through to the next tie-break. 0 when neither row decides.
+  // At a tie on CoC's DEX the higher combat skill, on GURPS's Speed the higher DX (B363), compared only when both
+  // rows have the figure: when either lacks it the tie falls through to PCs first (coordinator's ruling, so a PC
+  // with no figures never loses every tie to a block that has one). 0 when the figure does not decide.
   function tieOf(x, y, ru) {
     const by = ru.initiative === 'dex' ? combatOf : ru.initiative === 'speed' ? (r) => (isNum(r.dx) ? r.dx : null) : null;
     if (!by) return 0;
     const a = by(x);
     const b = by(y);
-    if (isNum(a) && isNum(b) && a !== b) return b - a;
-    if (isNum(a) !== isNum(b)) return isNum(a) ? -1 : 1;
-    return 0;
+    return isNum(a) && isNum(b) && a !== b ? b - a : 0;
   }
 
   // Ticked first; initiative high to low with an empty box last; at a tie the Lair row after the others,

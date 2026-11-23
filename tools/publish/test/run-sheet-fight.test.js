@@ -1787,7 +1787,8 @@ describe('fight maths by system (step 6b Task 6)', () => {
     s = typeIn(s, 'Cultist', 's-6');
     assert.equal(named(s, 'Cultist').san, 34);
     s = typeIn(s, 'Cultist', 's+90');
-    assert.equal(named(s, 'Cultist').san, 99, 'SAN stops at 99 (KR p155)');
+    // fix round 1: a gain stops at the lower of 99 and the row's own max (here 40)
+    assert.equal(named(s, 'Cultist').san, 40, 's+90 at 34/40 SAN leaves 40');
     assert.ok(!lines(s).some((t) => /drops|Down|Bloodied/.test(t)));
   });
 
@@ -1830,7 +1831,7 @@ describe('fight maths by system (step 6b Task 6)', () => {
     s = typeIn(s, 'Kev', 'f-1');
     assert.equal(lines(s).filter((t) => t === 'Kev: Tired.').length, 1);
     s = typeIn(s, 'Kev', 'f-40');
-    assert.equal(named(s, 'Kev').fp, -12, 'FP never below minus its max (B426)');
+    assert.equal(named(s, 'Kev').fp, -12, 'f-40 at 3/12 FP leaves -12');
     s = typeIn(s, 'Kev', 'f+30');
     assert.deepEqual([named(s, 'Kev').fp, named(s, 'Kev').tired], [12, false]);
     assert.equal(named(s, 'Kev').hp, 12, 'FP never touches HP');
@@ -2016,9 +2017,9 @@ describe('fight maths by system (step 6b Task 6)', () => {
     assert.deepEqual(r.typedKeys, { ini: true, max: true, ac: true, speed: true, fpMax: true, dodge: true });
     assert.deepEqual([r.speed, r.ini, r.fpMax, r.fp, r.dodge, r.typed], [6.25, 6.25, 11, 11, 9, true]);
     let c = begin(COC, [{ name: 'Q', ini: null }]);
-    for (const [key, value] of [['dex', 55], ['mp', 8], ['san', 45], ['st', 12]]) c = G(c, { type: 'setStat', row: 'r1', key, value });
+    for (const [key, value] of [['dex', 55], ['mp', 8], ['san', 45]]) c = G(c, { type: 'setStat', row: 'r1', key, value });
     const q = named(c, 'Q');
-    assert.deepEqual(q.typedKeys, { dex: true, ini: true, mpMax: true, san: true, sanMax: true, st: true });
+    assert.deepEqual(q.typedKeys, { dex: true, ini: true, mpMax: true, san: true, sanMax: true });
     assert.deepEqual([q.dex, q.ini, q.mpMax, q.mp, q.san, q.sanMax], [55, 55, 8, 8, 45, 45]);
     c = G(c, { type: 'setStat', row: 'r1', key: 'nonsense', value: 3 });
     c = G(c, { type: 'setStat', row: 'r1', key: 'dex', value: 'abc' });
@@ -2047,5 +2048,75 @@ describe('fight maths by system: a typed initiative and other stats (step 6b Tas
     assert.equal(G({ type: 'setStat', key: 'st', value: 13 }).ini, 6);
     assert.equal(G({ type: 'setStat', key: 'ht', value: 12 }).ini, 6, 'a block-stated Speed is not worked out again');
     assert.equal(G({ type: 'setStat', key: 'speed', value: 5.75 }).ini, 5.75);
+  });
+});
+
+describe('fight maths by system: fix round 1 (step 6b Task 6)', () => {
+  const { systemFor } = require('../lib/run-sheet/systems');
+  const COC = systemFor('coc-7e').describe().fight;
+  const GURPS = systemFor('gurps-4e').describe().fight;
+  const begin = (rules, list) => RS.reduce(fresh(), { id: 'f1', type: 'fightStart', title: 'T', ...(rules ? { rules } : {}), rows: list.map((o, i) => M.blankRow({ id: `r${i + 1}`, ...o })) }, now());
+  const G = (s, a) => RS.reduce(s, { id: nextId(), fight: 'f1', ...a }, now());
+  const named = (s, name) => s.fight.rows.find((r) => r.name === name);
+  const order = (s) => s.fight.rows.filter((r) => r.in).map((r) => r.name);
+  const go = (s) => G(s, { type: 'fightNext', from: s.fight.turn, round: s.fight.round });
+  const turnName = (s) => s.fight.rows.find((r) => r.id === s.fight.turn).name;
+  const lines = (s) => s.events.filter((e) => e.fight).map((e) => e.text);
+
+  it('a GURPS row benched at Start and ticked in after it takes its place, then holds it', () => {
+    let s = begin(GURPS, [{ name: 'A', ini: 6, speed: 6 }, { name: 'B', ini: 5, speed: 5 }, { name: 'Late', ini: 7, speed: 7, in: false }]);
+    s = go(s);
+    assert.equal(named(s, 'Late').fixed, false, 'a benched row has no place at Start');
+    s = G(s, { type: 'fightTick', row: named(s, 'Late').id, in: true });
+    assert.deepEqual(order(s), ['Late', 'A', 'B']);
+    assert.equal(turnName(s), 'A', 'the turn is kept');
+    s = G(s, { type: 'setStat', row: named(s, 'Late').id, key: 'speed', value: 4 });
+    assert.deepEqual(order(s), ['Late', 'A', 'B'], 'then it is fixed');
+    assert.ok(lines(s).includes('Late: Speed 4; the order stays as it started.'));
+    // ticked in through a join's tick too
+    let j = begin(GURPS, [{ name: 'A', ini: 6, speed: 6 }, { name: 'B', ini: 5, speed: 5 }, { name: 'Mid', ini: 5.5, speed: 5.5, in: false }]);
+    j = go(j);
+    j = G(j, { type: 'fightJoin', rows: [], tick: [named(j, 'Mid').id], label: 'Mid' });
+    assert.deepEqual(order(j), ['A', 'Mid', 'B']);
+    assert.equal(named(j, 'Mid').fixed, true);
+  });
+
+  it('a GURPS row blank and benched at Start, ticked in, waits last for its first Speed', () => {
+    let s = begin(GURPS, [{ name: 'A', ini: 6, speed: 6 }, { name: 'B', ini: 5, speed: 5 }, { name: 'Blank', ini: null, in: false }]);
+    s = go(s);
+    s = G(s, { type: 'fightTick', row: named(s, 'Blank').id, in: true });
+    assert.deepEqual(order(s), ['A', 'B', 'Blank']);
+    s = G(s, { type: 'setStat', row: named(s, 'Blank').id, key: 'speed', value: 5.5 });
+    assert.deepEqual(order(s), ['A', 'Blank', 'B']);
+    assert.equal(turnName(s), 'A');
+  });
+
+  it('a SAN gain stops at the lower of 99 and the row\'s own max', () => {
+    let s = begin(COC, [{ name: 'Ann', kind: 'pc', san: 50, sanMax: 80 }, { name: 'Bo', kind: 'pc', san: 50, sanMax: null }]);
+    s = G(s, { type: 'hp', row: named(s, 'Ann').id, entry: 's+40' });
+    s = G(s, { type: 'hp', row: named(s, 'Bo').id, entry: 's+60' });
+    assert.deepEqual([named(s, 'Ann').san, named(s, 'Bo').san], [80, 99]);
+  });
+
+  it('typedKeys.ini: DEX or Speed typed records it even at the same figure; a worked-out Speed that replaces it clears it', () => {
+    let c = begin(COC, [{ name: 'Q', ini: 50, dex: 50 }]);
+    c = G(c, { type: 'setStat', row: 'r1', key: 'dex', value: 50 });
+    assert.equal(named(c, 'Q').typedKeys.ini, true);
+    let g = begin(GURPS, [{ name: 'R', ini: null }]);
+    for (const [key, value] of [['dx', 12], ['ht', 10]]) g = G(g, { type: 'setStat', row: 'r1', key, value });
+    assert.equal(named(g, 'R').ini, 5.5);
+    g = G(g, { type: 'setInit', row: 'r1', ini: 7 });
+    assert.equal(named(g, 'R').typedKeys.ini, true);
+    g = G(g, { type: 'setStat', row: 'r1', key: 'dx', value: 14 });
+    assert.deepEqual([named(g, 'R').ini, named(g, 'R').typedKeys.ini], [6, undefined]);
+  });
+
+  it('setStat takes only the system\'s keys: D&D refuses hp, GURPS refuses dex, CoC refuses st', () => {
+    for (const [rules, key] of [[null, 'hp'], [GURPS, 'dex'], [COC, 'st']]) {
+      const s = begin(rules, [{ name: 'X', ini: 4, hp: 5, max: 5 }]);
+      const t = G(s, { type: 'setStat', row: 'r1', key, value: 9 });
+      assert.deepEqual(t.fight.rows, s.fight.rows, `${key} refused`);
+      assert.equal(t.events.length, s.events.length);
+    }
   });
 });

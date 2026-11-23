@@ -275,14 +275,30 @@
     f.rows = FM.placeRow(f.rows, r.id, rules);
     if (f.rows.indexOf(r) !== was && !o.quiet) say(s, f, at, `${nameOf(s, f, r)} moves in the order: initiative ${isNum(r.ini) ? r.ini : 'cleared'}.`);
   }
-  // Every row with a number holds its place in a fixed order (at Start, and at a Sort after it).
-  const fixAll = (f) => { if (FM.rulesOf(f).orderFixed) for (const r of f.rows) if (isNum(r.ini)) r.fixed = true; };
+  // Every ticked-in row with a number holds its place in a fixed order (at Start, and at a Sort after it). A row
+  // benched then has no place yet: ticked in later, it takes one (placeLate).
+  const fixAll = (f) => { if (FM.rulesOf(f).orderFixed) for (const r of f.rows) if (r.in && isNum(r.ini)) r.fixed = true; };
+  // In a fixed order after Start, a ticked-in row with a number and no place yet (it joined, or was ticked in, after
+  // Start) takes its sorted place by one insert, the turn kept, and holds it from then on.
+  function placeLate(f, r) {
+    if (!f.started || !FM.rulesOf(f).orderFixed || !r.in || r.fixed || r.kind === 'lair' || !isNum(r.ini)) return;
+    f.rows = FM.placeRow(f.rows, r.id, FM.rulesOf(f));
+    r.fixed = true;
+  }
 
   // The stats setStat takes, each to its row fields (the brief's one map); `ini` follows from DEX and Speed.
   const STAT_FIELDS = {
     st: ['st'], ht: ['ht'], dx: ['dx'], dex: ['dex'], speed: ['speed'], hp: ['max'], fp: ['fpMax'], mp: ['mpMax'],
     san: ['san', 'sanMax'], dodge: ['dodge'], parry: ['parry'], block: ['block'], dr: ['dr'],
   };
+  // The keys setStat takes, by the rules' initiative: GURPS's stats, pools and defences; CoC's DEX, MP, SAN and HP;
+  // none for D&D (its panel has setMax and setAc).
+  function setStatKeysOf(rules) {
+    const ru = FM.rulesOf({ rules });
+    if (ru.initiative === 'speed') return ['st', 'ht', 'dx', 'hp', 'fp', 'speed', 'dodge', 'parry', 'block', 'dr'];
+    if (ru.initiative === 'dex') return ['dex', 'mp', 'san', 'hp'];
+    return [];
+  }
   // A worked-out figure's `from` key, cleared when the GM types the figure itself.
   const FROM_KEY = { max: 'hp', fpMax: 'fp', mpMax: 'mp', speed: 'speed' };
 
@@ -374,9 +390,7 @@
       for (const [note, name] of Object.entries(a.carried || {})) if (!f.carried[note]) f.carried[note] = name;
       // newcomers go to the bottom until the next Sort; the turn stays with its row. In a fixed order after Start
       // (GURPS), a newcomer with its Speed takes its place by one insert and holds it; one without waits for it.
-      if (f.started && FM.rulesOf(f).orderFixed) {
-        for (const r of fresh) if (r.in && isNum(r.ini) && r.kind !== 'lair') { f.rows = FM.placeRow(f.rows, r.id, FM.rulesOf(f)); r.fixed = true; }
-      }
+      for (const r of fresh.concat(ticked)) placeLate(f, r);
       for (const r of fresh) { settleMarks(s, f, r, at, true); settleTired(s, f, r, at, true); }
       numberUnseen(f);
       lairOf(f);
@@ -394,6 +408,7 @@
     fightTick: onRow((s, f, r, a, at) => {
       r.in = !!a.in;
       touch(r, at);
+      placeLate(f, r);
       numberUnseen(f);
       // an owner ticked in later gets the fight's Lair row when it has none
       if (r.in && r.lair && r.kind !== 'lair' && !f.rows.some((x) => x.kind === 'lair')) f.rows.push({ ...FM.lairRow([r], r.group), id: `${a.id || f.id}-lair` });
@@ -520,8 +535,8 @@
     // places; DR may be text), or blank to clear it. GURPS works out the figures not typed (deriveStats); a new DEX
     // or Speed replaces the initiative and re-places the row (replace), a blank one never clears it. `hold` as setInit.
     setStat: onRow((s, f, r, a, at) => {
-      if (r.kind === 'lair' || typeof a.key !== 'string' || !has(STAT_FIELDS, a.key)) return;
       const rules = FM.rulesOf(f);
+      if (r.kind === 'lair' || typeof a.key !== 'string' || !has(STAT_FIELDS, a.key) || !setStatKeysOf(rules).includes(a.key)) return;
       const clear = a.value === null || a.value === '' || a.value === undefined;
       let v = null;
       if (!clear) {
@@ -548,10 +563,13 @@
       const own = a.key === 'dex' || a.key === 'speed';
       if (ini !== null && ini !== r.ini && (own || ini !== iniBefore)) {
         r.ini = ini;
-        if (a.key === 'dex' || a.key === 'speed') typedKey(r, 'ini', true);
+        // a worked-out Speed that replaces a typed initiative leaves it untyped
+        if (!own) typedKey(r, 'ini', false);
         if (!(f.started && rules.orderFixed && r.fixed)) say(s, f, at, `${nameOf(s, f, r)}: initiative ${ini} from the typed stats.`);
         replace(s, f, r, at, { hold: a.hold, quiet: true });
       }
+      // DEX or Speed typed with a number is a typed initiative, even when it equals the one the row had
+      if (own && ini !== null) typedKey(r, 'ini', true);
       afterHp(s, f, r, before, at);
       settleTired(s, f, r, at);
     }),
@@ -806,5 +824,5 @@
     };
   }
 
-  return { FIGHT_HANDLERS, statusesOf, STAT_KEYS, statKeysOf };
+  return { FIGHT_HANDLERS, statusesOf, STAT_KEYS, statKeysOf, setStatKeysOf };
 }));

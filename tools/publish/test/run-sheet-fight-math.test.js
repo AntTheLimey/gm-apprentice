@@ -828,20 +828,26 @@ test('sort: GURPS ties by DX then PCs; CoC ties by the higher combat skill, then
     row({ id: 'off', in: false, ini: 9 }),
   ];
   assert.deepEqual(ids(g, GURPS), ['fast', 'foeDx13', 'pcDx11', 'foeDx11', 'slow', 'blank', 'off']);
+  // fix round 1 changed this on purpose (coordinator's ruling): the combat skill or DX decides a tie only when both
+  // rows have it; when either lacks it the tie goes to PCs first, so a PC with no figures never loses every tie
+  const pcNoDx = [row({ id: 'foeDx14', ini: 5.5, dx: 14 }), row({ id: 'pcNoDx', kind: 'pc', ini: 5.5 })];
+  assert.deepEqual(ids(pcNoDx, GURPS), ['pcNoDx', 'foeDx14']);
   const c = [
-    row({ id: 'none', ini: 60 }),
-    row({ id: 'pcNone', kind: 'pc', ini: 60 }),
     row({ id: 'fighter', ini: 60, fighting: 55, firearms: 20 }),
     row({ id: 'gunman', ini: 60, fighting: 25, firearms: 70 }),
     // a PC takes its highest specialisation
     row({ id: 'pcSpec', kind: 'pc', ini: 60, fighting: { Brawl: 40, Sword: 65 }, firearms: { Handgun: 30 } }),
+    row({ id: 'foeFig', ini: 50, fighting: 80 }),
+    row({ id: 'pcNone', kind: 'pc', ini: 50 }),
+    row({ id: 'foeA', ini: 40 }),
+    row({ id: 'foeB', ini: 40, fighting: 30 }),
     row({ id: 'blank', ini: null, fighting: 90 }),
     row({ id: 'quick', ini: 75 }),
   ];
-  assert.deepEqual(ids(c, COC), ['quick', 'gunman', 'pcSpec', 'fighter', 'pcNone', 'none', 'blank']);
+  assert.deepEqual(ids(c, COC), ['quick', 'gunman', 'pcSpec', 'fighter', 'pcNone', 'foeFig', 'foeA', 'foeB', 'blank']);
   // the combat skill is worked out on read: a figure typed since counts
-  const typed = c.map((r) => (r.id === 'none' ? { ...r, fighting: 99 } : r));
-  assert.deepEqual(ids(typed, COC).slice(0, 2), ['quick', 'none']);
+  const typed = c.map((r) => (r.id === 'pcNone' ? { ...r, fighting: 70 } : r));
+  assert.deepEqual(ids(typed, COC).slice(4, 6), ['foeFig', 'pcNone']);
   // D&D: the modifier, then PCs, as before; DX and combat skills mean nothing
   const d = [row({ id: 'a', ini: 12, mod: 1, dx: 18 }), row({ id: 'b', ini: 12, mod: 3 }), row({ id: 'p', kind: 'pc', ini: 12, mod: 1, fighting: 99 })];
   assert.deepEqual(ids(d), ['b', 'p', 'a']);
