@@ -521,6 +521,18 @@ describe('run sheet foes: Then links and Entities lines', () => {
     assert.ok(!r.warnings.some((w) => /Arriver (One|Bare):/.test(w.text)));
   });
 
+  it('a dead creature in the Entities gives no row and no warning', () => {
+    const { index } = setup(null, { ...FILES, 'Creatures/Arriver Husk.md': note('Arriver Husk', 'creature', STATS).replace('type: creature', 'type: creature\nstatus: dead') });
+    const r = foesFor(beat({ type: 'combat', entities: ['Creatures/Arriver Husk.md', P('Arriver One')] }), index);
+    assert.deepStrictEqual([r.foes.map((f) => f.name), r.warnings.filter((w) => /Husk/.test(w.text))], [['Arriver One'], []]);
+  });
+
+  it('a dead statless NPC linked from a Then line gives no row and no warning', () => {
+    const { index } = setup(null, { ...FILES, 'Characters/NPCs/Arriver Gone.md': note('Arriver Gone', 'npc').replace('type: npc', 'type: npc\nstatus: dead') });
+    const r = foesFor(beat({ contingency: true, then: '[[Arriver Gone]] and [[Arriver One]] come in.' }), index);
+    assert.deepStrictEqual([r.foes.map((f) => f.name), r.warnings.filter((w) => /Gone/.test(w.text))], [['Arriver One'], []]);
+  });
+
   it('a social beat\'s Entities give none', () => {
     const r = rowsOf(beat({ type: 'social', entities: [P('Arriver One'), 'Creatures/Arriver Beast.md'] }));
     assert.deepStrictEqual([r.foes, r.warnings], [[], []]);

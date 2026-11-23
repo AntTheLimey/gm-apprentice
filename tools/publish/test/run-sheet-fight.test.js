@@ -354,6 +354,18 @@ describe('the fight in the state', () => {
     assert.equal(RS.derive(model, gateFight()).fight.view.beatGone, false);
   });
 
+  it('a labelled join of only benched newcomers logs nothing', () => {
+    let s = move(fresh(), ADA, GATE);
+    s = fightAt(s, GATE);
+    const before = texts(s).length;
+    const id = nextId();
+    const j = M.joinRows({ model, derived: RS.derive(model, s), state: s, fight: s.fight, add: { group: SPOT }, idBase: id });
+    const benched = j.rows.filter((r) => r.in === false && r.kind !== 'pc');
+    assert.ok(benched.length, 'the spot brings a benched person');
+    s = RS.reduce(s, { id, type: 'fightJoin', fight: s.fight.id, rows: benched, tick: [], groups: [], thresholds: [], label: 'Sister Fen' }, now());
+    assert.equal(texts(s).length, before, 'no line for nobody coming in');
+  });
+
   it('changed means differs from the start', () => {
     let s = gateFight();
     s = hit(s, ADA, '-5');

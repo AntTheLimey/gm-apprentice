@@ -4,6 +4,7 @@
 // has: a foe whose stat block lacks numbers is still a foe, with null numbers and a warning; nothing here throws.
 
 const path = require('node:path');
+const fate = require('../fate');
 const { itemKeys } = require('./keys');
 const { bullets, links } = require('./plan-text');
 const { startingSide } = require('./sides');
@@ -98,7 +99,7 @@ function entry(notePath, index, count, add, canFight = true, sides = null, whoTe
 // creature or a count above 1. A beat with no type (no field, or an empty one) can.
 function beatCanFight(beat, index) {
   if (beat.type === undefined || beat.type === null || !String(beat.type).trim() || beat.contingency) return true;
-  if (/\b(?:combat|fight|battle|ambush)\b/.test(beat.type)) return true;
+  if (/\b(?:combat|fight|battle|ambush)\b/.test(String(beat.type))) return true;
   return (beat.who || []).some((w) => (w.count || 1) > 1 || (w.note && index.has(w.note) && String((index.read(w.note).fm || {}).type || '').toLowerCase() === 'creature'));
 }
 
@@ -176,8 +177,10 @@ function foesFor(beat, index, seen = new Set(), carried = null, sides = null, sy
     for (const b of bullets(e.info.treasure)) texts.push({ text: b.text, box: b.box });
   }
   if (!(beat.who || []).length) {
-    const kindOf = (p) => (index.has(p) ? String(index.read(p).fm.type || '').toLowerCase() : '');
-    const people = (paths) => [...new Set(paths)].filter((p) => p && ['npc', 'creature'].includes(kindOf(p)));
+    const kindOf = (p) => (index.has(p) ? String((index.read(p).fm || {}).type || '').toLowerCase() : '');
+    // the dead are bodies, never fighters (the who path's rule, lib/fate.js): no row, no warning
+    const living = (p) => !fate.isDeadBody(index.read(p).body, index.read(p).fm);
+    const people = (paths) => [...new Set(paths)].filter((p) => p && ['npc', 'creature'].includes(kindOf(p)) && living(p));
     if (beat.contingency) {
       // no NPCs block: its Then lines name the people who arrive, so they are ticked, statless ones too (they
       // get a blank row and the warning), minus anyone a planned beat already lists
