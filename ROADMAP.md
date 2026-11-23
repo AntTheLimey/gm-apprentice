@@ -121,7 +121,7 @@ decision rather than pure score.
 
 ## Completed
 
-- ~~Python tests across all cores with pytest-xdist~~ — the browser tests share one Chrome per test process; `pytest -n auto` is the local default, about 4 minutes in place of 9 (#819, #866)
+- ~~Python tests across all cores with pytest-xdist~~ — the browser tests that drive a page (`withPage`) share one Chrome per test process, while a `measure` check still starts its own; `pytest -n auto` is the local default, about 4 minutes in place of 9 (#819, #866)
 - ~~`stamp --set` of the same list reports WOULD-STAMP~~ — the same items leave the note UNCHANGED (#778, v1.12.90)
 - ~~Prep asks for a stat block for a dead NPC the Plan names~~ — dead is left out in every mode, a hidden fate beating `status` (#776, v1.12.89)
 - ~~A workaround answered `retire` reads as retired when it is not~~ — the report says nothing is retired yet and names the retire command (#774, v1.12.88)
