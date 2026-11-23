@@ -228,7 +228,7 @@ the GM typed under `Advancement` is one bullet; an ally's copies are
 unmasking turned off tonight is `- [[Note]] masked again`. `Sides set` is carried
 to the next session as that note's starting side; `Improvised beats` holds
 `- New place: <name>` for a place the GM typed tonight (no note yet: wrap-up
-may offer to make one) and a bare `[[Place]]` link for a known place the
+offers to make one) and a bare `[[Place]]` link for a known place the
 party was at (moved there, or fought there), which wrap-up's reveal pass
 reads to offer publishing it. `Places the party went` links every known
 place a PC stood at, even one they moved on from; a place typed tonight
