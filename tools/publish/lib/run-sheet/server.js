@@ -489,9 +489,9 @@ function createTableServer({ vaultPath, session, party = [], stateFile, fileLog 
       path: '/api/roll',
       handle: (req, res) => {
         withJson(req, res, (msg) => {
-          if (!msg || !Array.isArray(msg.rolls) || msg.rolls.length > MAX_ROLLS) { json(res, 400, { error: `the body needs { rolls: [{ sides, mod }] }, at most ${MAX_ROLLS}` }); return; }
+          if (!msg || !Array.isArray(msg.rolls) || msg.rolls.length > MAX_ROLLS) { json(res, 400, { error: `the body needs { rolls: [...] }, each { sides, mod }, { against: N }, { d100: { target } } or { damage: "2d+1" }, at most ${MAX_ROLLS}` }); return; }
           let results;
-          try { results = dice.rollMany(msg.rolls); } catch (err) { json(res, 400, { error: String(err.message).split('\n')[0] }); return; }
+          try { results = dice.rollSpecs(msg.rolls); } catch (err) { json(res, 400, { error: String(err.message).split('\n')[0] }); return; }
           json(res, 200, { results });
         });
       },

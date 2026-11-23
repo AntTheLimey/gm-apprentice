@@ -271,6 +271,18 @@ ORC License (see above). CoC 7e adaptation: our own descriptions of
 uncopyrightable game mechanics, with *Keeper Rulebook* page
 references in code comments. Not Chaosium text.
 
+**`tools/publish/lib/dice/index.js`** (the run sheet's dice: 3d6 and d100 against a target, damage dice)
+GURPS: *GURPS Basic Set 4th Edition* (Steve Jackson Games).
+License: SJG Online Policy
+(https://www.sjgames.com/general/online_policy.html).
+Transformation: the critical ranges and the damage floor are numbers
+in a sum, each with its page reference in a code comment. Numbers only.
+CoC: BRP foundation, *Basic Roleplaying: Universal Game Engine*, ORC
+License (see above). CoC 7e adaptation (difficulty levels, bonus and
+penalty dice, the fumble range): our own descriptions of
+uncopyrightable game mechanics, with *Keeper Rulebook* page references
+in code comments. Not Chaosium text.
+
 ## D&D Beyond
 
 D&D Beyond is a service of Wizards of the Coast LLC. This project is

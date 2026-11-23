@@ -88,7 +88,7 @@
     if (!res.ok) throw new Error((out && out.error) || `${url}: ${res.status}`);
     return out;
   }
-  // The server's dice: d`sides` + mod for each, at most 64 a request.
+  // The server's dice (a die, 3d6 against a target, a d100, damage dice), at most 64 a request.
   async function roll(specs) {
     const out = [];
     for (let i = 0; i < specs.length; i += 64) {

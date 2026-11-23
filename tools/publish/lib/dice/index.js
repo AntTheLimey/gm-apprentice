@@ -18,4 +18,122 @@ function roll(spec, { randomInt = crypto.randomInt } = {}) {
 
 const rollMany = (list, opts) => list.map((spec) => roll(spec, opts));
 
-module.exports = { SIDES, roll, rollMany };
+const isInt = (v) => Number.isInteger(v);
+const three = (randomInt) => [randomInt(1, 7), randomInt(1, 7), randomInt(1, 7)];
+
+// ---- GURPS: 3d6 against a target ----
+// The critical ranges are numbers with their pages: success 3-4, 5 at 15+, 6 at 16+; failure 18, 17 at 15 or
+// less, or 10 over the target (GURPS Basic Set B348, B556). A target under 3 still rolls.
+const AGAINST_LIMIT = 99;
+
+function rollAgainst(spec, { randomInt = crypto.randomInt } = {}) {
+  const target = spec && typeof spec === 'object' ? spec.target : undefined;
+  if (!isInt(target) || target < -AGAINST_LIMIT || target > AGAINST_LIMIT) throw new RangeError(`a target is a whole number from -${AGAINST_LIMIT} to ${AGAINST_LIMIT}`);
+  const dice = three(randomInt);
+  const total = dice[0] + dice[1] + dice[2];
+  let outcome;
+  if (total <= 4 || (total === 5 && target >= 15) || (total === 6 && target >= 16)) outcome = 'critical success';
+  else if (total === 18 || (total === 17 && target <= 15) || total >= target + 10) outcome = 'critical failure';
+  else outcome = total <= target ? 'success' : 'failure';
+  return { dice, total, target, margin: target - total, outcome };
+}
+
+// ---- damage dice: GURPS `2d+1` (a bare d is six-sided) and CoC sums of standard dice `1D8+1D4` ----
+const DAMAGE_SIDES = [3, ...SIDES]; // CoC's fists are 1D3
+const DAMAGE_DICE_LIMIT = 50;
+const DAMAGE_MOD_LIMIT = 99;
+
+function parseDamage(notation) {
+  const bad = () => new RangeError('damage is dice like 2d+1, 3d, 1d-1, 1D6+1D4 or 2D6+2');
+  if (typeof notation !== 'string') throw bad();
+  const text = notation.replace(/\s+/g, '');
+  if (!/^[+-]?[0-9dD+-]+$/.test(text) || /[+-]$/.test(text)) throw bad();
+  const terms = text.match(/[+-]?[^+-]+/g);
+  if (!terms || terms.join('') !== text) throw bad();
+  const groups = [];
+  let mod = 0;
+  for (const raw of terms) {
+    const sign = raw[0] === '-' ? -1 : 1;
+    const body = raw.replace(/^[+-]/, '');
+    let m;
+    if (/^[0-9]+$/.test(body)) { mod += sign * Number(body); continue; }
+    if (!(m = /^([0-9]+)[dD]([0-9]*)$/.exec(body)) || sign < 0) throw bad();
+    const count = Number(m[1]);
+    const sides = m[2] === '' ? 6 : Number(m[2]);
+    if (count < 1 || !DAMAGE_SIDES.includes(sides)) throw bad();
+    groups.push({ count, sides });
+  }
+  if (!groups.length || groups.reduce((n, g) => n + g.count, 0) > DAMAGE_DICE_LIMIT || Math.abs(mod) > DAMAGE_MOD_LIMIT) throw bad();
+  return { groups, mod };
+}
+
+// The floor: a result of 0 or less is 0 for crushing and 1 for any other type (GURPS Basic Set B378); no type
+// is crushing's. CoC's floor is 0 and is passed in.
+const damageFloor = (type, floor) => (isInt(floor) ? floor : (type === undefined || type === null || /^cr(ushing)?$/i.test(String(type)) ? 0 : 1));
+
+function rollDamage(notation, { type, floor, randomInt = crypto.randomInt } = {}) {
+  if (type !== undefined && type !== null && (typeof type !== 'string' || type.length > 16)) throw new RangeError('a damage type is a short word like cr, cut or imp');
+  if (floor !== undefined && !isInt(floor)) throw new RangeError('a damage floor is a whole number');
+  const { groups, mod } = parseDamage(notation);
+  const dice = [];
+  for (const g of groups) for (let i = 0; i < g.count; i++) dice.push(randomInt(1, g.sides + 1));
+  const raw = dice.reduce((a, b) => a + b, 0) + mod;
+  return { notation, type: type === undefined ? null : type, dice, mod, total: Math.max(damageFloor(type, floor), raw) };
+}
+
+// The highest total the notation can make (an Extreme hit in CoC), with the same floor.
+function maxDamage(notation, { type, floor } = {}) {
+  const { groups, mod } = parseDamage(notation);
+  return Math.max(damageFloor(type, floor), groups.reduce((n, g) => n + g.count * g.sides, 0) + mod);
+}
+
+// ---- CoC 7e: the d100 against a target ----
+// Levels by the target's fractions, halves and fifths rounded down (Keeper Rulebook p32, p90); bonus and
+// penalty dice cancel one for one and the net stops at two (p91, p407); the fumble range goes by the number the
+// difficulty asks for: 100 from 50 up, 96-100 below (p89). Our own description of the mechanics.
+const LEVELS = ['fail', 'regular', 'hard', 'extreme', 'critical'];
+const DIFFICULTIES = ['regular', 'hard', 'extreme'];
+const PERCENT_LIMIT = 999;
+const BONUS_LIMIT = 9;
+
+function rollPercent(spec, { randomInt = crypto.randomInt } = {}) {
+  const s = spec && typeof spec === 'object' ? spec : {};
+  const { target, difficulty = 'regular', bonus = 0, penalty = 0 } = s;
+  if (!isInt(target) || target < 0 || target > PERCENT_LIMIT) throw new RangeError(`a skill is a whole number from 0 to ${PERCENT_LIMIT}`);
+  if (!DIFFICULTIES.includes(difficulty)) throw new RangeError(`a difficulty is ${DIFFICULTIES.join(', ')}`);
+  for (const n of [bonus, penalty]) if (!isInt(n) || n < 0 || n > BONUS_LIMIT) throw new RangeError(`bonus and penalty dice are whole numbers from 0 to ${BONUS_LIMIT}`);
+  const net = bonus - penalty;
+  const rolledBonus = net > 0 ? Math.min(2, net) : 0;
+  const rolledPenalty = net < 0 ? Math.min(2, -net) : 0;
+  const tens = Array.from({ length: 1 + rolledBonus + rolledPenalty }, () => randomInt(0, 10) * 10);
+  const units = randomInt(0, 10);
+  const results = tens.map((t) => (t + units === 0 ? 100 : t + units));
+  const kept = rolledBonus ? Math.min(...results) : rolledPenalty ? Math.max(...results) : results[0];
+  const needed = difficulty === 'regular' ? target : Math.floor(target / (difficulty === 'hard' ? 2 : 5));
+  const fumbleFrom = needed >= 50 ? 100 : 96;
+  let level;
+  if (kept >= fumbleFrom) level = 'fumble';
+  else if (kept === 1) level = 'critical';
+  else if (kept <= Math.floor(target / 5)) level = 'extreme';
+  else if (kept <= Math.floor(target / 2)) level = 'hard';
+  else if (kept <= target) level = 'regular';
+  else level = 'fail';
+  const passed = LEVELS.indexOf(level) >= 1 && LEVELS.indexOf(level) >= LEVELS.indexOf(difficulty);
+  return { tens, units, kept, target, difficulty, needed, level, passed, fumbleFrom, bonus: rolledBonus, penalty: rolledPenalty, asked: { bonus, penalty } };
+}
+
+// ---- the one dispatcher: a spec rolls by its kind ----
+const KINDS = 'a roll is { sides, mod }, { against: N }, { d100: { target } } or { damage: "2d+1" }';
+
+function rollSpec(spec, opts) {
+  if (!spec || typeof spec !== 'object' || Array.isArray(spec)) throw new RangeError(KINDS);
+  if ('against' in spec) return rollAgainst({ target: spec.against }, opts);
+  if ('d100' in spec) return rollPercent(spec.d100, opts);
+  if ('damage' in spec) return rollDamage(spec.damage, { ...opts, type: spec.type, floor: spec.floor });
+  if ('sides' in spec) return roll(spec, opts);
+  throw new RangeError(KINDS);
+}
+
+const rollSpecs = (list, opts) => list.map((spec) => rollSpec(spec, opts));
+
+module.exports = { SIDES, roll, rollMany, rollAgainst, rollDamage, maxDamage, rollPercent, rollSpec, rollSpecs };
