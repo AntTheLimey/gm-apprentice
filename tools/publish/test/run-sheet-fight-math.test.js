@@ -914,3 +914,31 @@ test('the rows take the system\'s fields: initiative from DEX or Speed, the pool
   assert.deepEqual([dpc.ini, dpc.mod, dfoe.ini, dfoe.mod], [null, 2, null, 3]);
   assert.deepEqual(dfoe.start, { hp: 11, max: 11, conds: [], exhaustion: 0, conc: false }, 'a D&D row starts as before');
 });
+
+test('a tie group decides its figure as a whole (fix round 2): mixed goes PCs first, all-figure by figure, stable', () => {
+  const ids = (rows, rules) => M.sortRows(rows, rules).map((r) => r.id);
+  const perms = (a) => (a.length <= 1 ? [a] : a.flatMap((x, i) => perms(a.slice(0, i).concat(a.slice(i + 1))).map((p) => [x, ...p])));
+  // a mixed group of three: two with DX, one PC without; every input order puts the PC first, and the other two
+  // keep their input order (no figure decides a mixed group)
+  const mixed = [row({ id: 'foe14', ini: 5.5, dx: 14 }), row({ id: 'pcNoDx', kind: 'pc', ini: 5.5 }), row({ id: 'pc12', kind: 'pc', ini: 5.5, dx: 12 })];
+  for (const p of perms(mixed)) {
+    const got = ids(p, GURPS);
+    assert.deepEqual(got.slice().sort(), ['foe14', 'pc12', 'pcNoDx']);
+    assert.deepEqual(got.slice(0, 2).sort(), ['pc12', 'pcNoDx'], `PCs first from ${p.map((r) => r.id)}`);
+    assert.equal(got[2], 'foe14');
+    const pcs = p.filter((r) => r.kind === 'pc').map((r) => r.id);
+    assert.deepEqual(got.slice(0, 2), pcs, 'the PCs keep their input order');
+  }
+  // the same for CoC's combat skill
+  const cmix = [row({ id: 'foe80', ini: 60, fighting: 80 }), row({ id: 'pcNone', kind: 'pc', ini: 60 }), row({ id: 'pc50', kind: 'pc', ini: 60, firearms: 50 })];
+  for (const p of perms(cmix)) assert.equal(ids(p, COC)[2], 'foe80');
+  // an all-figure group orders by its figure, then PCs first, whatever the input order
+  const all = [row({ id: 'dx10', ini: 6, dx: 10 }), row({ id: 'pcDx13', kind: 'pc', ini: 6, dx: 13 }), row({ id: 'dx13', ini: 6, dx: 13 }), row({ id: 'dx15', ini: 6, dx: 15 })];
+  for (const p of perms(all)) assert.deepEqual(ids(p, GURPS), ['dx15', 'pcDx13', 'dx13', 'dx10']);
+  // stable across repeated sorts, and placeRow agrees with the sort inside a mixed group
+  let once = M.sortRows(mixed.concat(all), GURPS);
+  for (let k = 0; k < 3; k++) { const again = M.sortRows(once, GURPS); assert.deepEqual(again.map((r) => r.id), once.map((r) => r.id)); once = again; }
+  // (a tie goes after the rows already there: placing pcNoDx from the top puts it after pc12)
+  const placed = M.placeRow([mixed[1], mixed[2], mixed[0]], 'pcNoDx', GURPS).map((r) => r.id);
+  assert.deepEqual(placed, ['pc12', 'pcNoDx', 'foe14']);
+});

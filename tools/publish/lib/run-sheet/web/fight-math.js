@@ -145,23 +145,37 @@
     if (ru.initiative === 'speed') return isNum(r.speed) ? r.speed : null;
     return null;
   }
-  // At a tie on CoC's DEX the higher combat skill, on GURPS's Speed the higher DX (B363), compared only when both
-  // rows have the figure: when either lacks it the tie falls through to PCs first (coordinator's ruling, so a PC
-  // with no figures never loses every tie to a block that has one). 0 when the figure does not decide.
-  function tieOf(x, y, ru) {
-    const by = ru.initiative === 'dex' ? combatOf : ru.initiative === 'speed' ? (r) => (isNum(r.dx) ? r.dx : null) : null;
-    if (!by) return 0;
-    const a = by(x);
-    const b = by(y);
-    return isNum(a) && isNum(b) && a !== b ? b - a : 0;
+  // The figure that breaks a tie: CoC's combat skill (KR p102), GURPS's DX (B363); none for D&D.
+  const tieFigureOf = (ru) => (ru.initiative === 'dex' ? combatOf : ru.initiative === 'speed' ? (r) => (isNum(r.dx) ? r.dx : null) : null);
+  // The tie figure each row sorts by, decided for its whole tie group (rows ticked alike with an equal initiative;
+  // the Lair row aside), never pair by pair, so the order is transitive (coordinator's ruling, fix round 2): when
+  // every row of the group has the figure, each sorts by its own; when any lacks it, none does, and the group
+  // goes PCs first. Row index -> figure.
+  function tieFigures(rows, ru, ini) {
+    const out = new Map();
+    const by = tieFigureOf(ru);
+    if (!by) return out;
+    const groups = new Map();
+    rows.forEach((r, i) => {
+      if (r.kind === 'lair') return;
+      const k = `${r.in ? 1 : 0}|${ini(r)}`;
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k).push(i);
+    });
+    for (const idx of groups.values()) {
+      const vals = idx.map((i) => by(rows[i]));
+      if (vals.every(isNum)) idx.forEach((i, j) => out.set(i, vals[j]));
+    }
+    return out;
   }
 
   // Ticked first; initiative high to low with an empty box last; at a tie the Lair row after the others,
-  // then the higher modifier (D&D) or the system's tie figure (tieOf), then PCs. Stable: equal rows keep their
-  // order. `rules` is the fight's (rulesOf).
+  // then the system's tie figure where the whole tie group has it (tieFigures), then the higher modifier (D&D),
+  // then PCs. Stable: equal rows keep their order. `rules` is the fight's (rulesOf).
   function sortRows(rows, rules = DND_FIGHT_RULES) {
     const ru = rulesOf({ rules });
     const ini = (r) => (isNum(r.ini) ? r.ini : -Infinity);
+    const figs = tieFigures(rows, ru, ini);
     return rows.map((r, i) => ({ r, i })).sort((a, b) => {
       const x = a.r;
       const y = b.r;
@@ -170,8 +184,9 @@
       const dy = ini(y);
       if (dx !== dy) return dx > dy ? -1 : 1;
       if ((x.kind === 'lair') !== (y.kind === 'lair')) return x.kind === 'lair' ? 1 : -1;
-      const tie = tieOf(x, y, ru);
-      if (tie) return tie;
+      const fx = figs.has(a.i) ? figs.get(a.i) : null;
+      const fy = figs.has(b.i) ? figs.get(b.i) : null;
+      if (fx !== null && fy !== null && fx !== fy) return fy - fx;
       const mx = x.mod || 0;
       const my = y.mod || 0;
       if (mx !== my) return my - mx;
@@ -835,13 +850,16 @@
   const groupMates = (rows, r) => (r && r.kind !== 'pc' && r.kind !== 'lair' ? rows.filter((x) => x.kind !== 'pc' && x.kind !== 'lair' && groupKey(x) === groupKey(r)) : []);
 
   // One insert (plan 6a "latest entry wins"): the row goes above the first row it beats, at the place the
-  // sort would give it; the rest keep the order they have. A tie goes after the rows already there.
+  // sort would give it; the rest keep the order they have. A tie goes after the rows already there. "Beats" is
+  // the whole sort's word (the row and the rest, the row last), so a tie group's rule (tieFigures) holds here too.
   function placeRow(rows, id, rules = DND_FIGHT_RULES) {
     const i = rows.findIndex((r) => r.id === id);
     if (i < 0) return rows;
     const row = rows[i];
     const rest = rows.filter((_, k) => k !== i);
-    let at = rest.findIndex((x) => sortRows([x, row], rules)[0] === row);
+    const sorted = sortRows(rest.concat(row), rules);
+    const after = new Set(sorted.slice(sorted.indexOf(row) + 1));
+    let at = rest.findIndex((x) => after.has(x));
     if (at < 0) at = rest.length;
     return rest.slice(0, at).concat(row, rest.slice(at));
   }
