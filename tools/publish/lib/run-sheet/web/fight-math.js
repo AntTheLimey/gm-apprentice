@@ -449,6 +449,10 @@
       // CoC's melee (Task 16): the row's melee defences this round (reset at the round's start) and its outnumbered
       // switch (off: never outnumbered)
       meleeDefences: 0, outnumberedOff: false,
+      // CoC's firearms (Task 19): the guns its block or sheet lists, a declared aim ({ round }), the attack it loses
+      // for diving for cover ({ attacks, on }: `on` once its next turn has started), and a slow weapon's counter
+      // ({ left, of, weapon }: rounds until it is ready again)
+      guns: null, aiming: null, lostAttack: null, reload: null,
       // and whether it casts (GURPS: its FP shows as ✦FP, Task 10)
       // GURPS's last hit (its working, Task 12) and the places crippled
       // Set by a manoeuvre pick, absent until one: `manFrom` holds the Aim and Evaluate counts from before this turn's
@@ -496,6 +500,7 @@
       db: foe.db === undefined ? null : foe.db, build: num(foe.build), caster: foe.caster === true,
       // a block's attacks figure (CoC); a row with none keeps 1
       ...(num(foe.attacks) !== null ? { attacks: num(foe.attacks) } : {}),
+      guns: gunsIn(foe.guns),
       from: foe.from && typeof foe.from === 'object' ? { ...foe.from } : {},
     };
     out.fp = startAt(foe.fpStart, out.fpMax);
@@ -520,7 +525,18 @@
       fighting: pc.fighting === undefined ? null : pc.fighting, firearms: pc.firearms === undefined ? null : pc.firearms,
       caster: pc.caster === true, build: num(pc.build), db: pc.db === undefined ? null : pc.db,
       ...(num(pc.attacks) !== null ? { attacks: num(pc.attacks) } : {}),
+      guns: gunsIn(pc.guns),
     };
+  }
+  // CoC's firearms as the reader gave them (Task 19): { name, skill, damage, malfunction, reload, impales }, copied;
+  // null with none.
+  function gunsIn(list) {
+    if (!Array.isArray(list)) return null;
+    const out = list.filter((g) => g && typeof g === 'object' && typeof g.name === 'string').map((g) => ({
+      name: g.name, skill: num(g.skill), damage: typeof g.damage === 'string' && g.damage ? g.damage : null,
+      malfunction: num(g.malfunction), reload: num(g.reload), impales: typeof g.impales === 'boolean' ? g.impales : null,
+    }));
+    return out.length ? out : null;
   }
   // Initiative where the system works it out, and no D&D modifier then.
   const withInit = (ctx, row) => (ctx.rules.initiative === 'roll' ? row : { ...row, ini: initOf(row, ctx.rules), mod: 0 });

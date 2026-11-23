@@ -382,7 +382,131 @@
   // "bout: 7 rounds", "bout: 1 round"; '' with none.
   const boutText = (b) => (b && isNum(b.left) && b.left > 0 ? `bout: ${roundsText(b.left)}` : '');
 
+  // ---- a shot (Task 19): the range, the chips, Prone, the dive; the roll is the server's, a PC's level the GM's tap ----
+  // `rules` is rules.coc, or the fight's rules holding it; its `firearm` table (systems/coc.js) holds every number.
+  const fireOf = (rules) => {
+    const C = rules && rules.coc && typeof rules.coc === 'object' ? rules.coc : rules;
+    return C && C.firearm && typeof C.firearm === 'object' ? { C, F: C.firearm } : null;
+  };
+  // Every chip key a shot may carry: the ranges past regular, the chips, and the passed dive.
+  function shotKeys(rules) {
+    const x = fireOf(rules);
+    return x ? x.F.ranges.filter((r) => r.difficulty !== 'regular').map((r) => r.key).concat(x.F.chips.map((c) => c.key), ['dive']) : [];
+  }
+  const onSet = (chips) => new Set(Array.isArray(chips) ? chips : Object.keys(chips || {}).filter((k) => chips[k]));
+  // The farthest range chip on, else the regular one.
+  function rangeOf(on, F) {
+    const far = F.ranges.slice().reverse().find((r) => on.has(r.key));
+    return far || F.ranges.find((r) => r.difficulty === 'regular') || F.ranges[0];
+  }
+  // Whether a size chip holds: by the target's Build when it has one (KR p113, p410), else as the GM set it.
+  function sizeOn(c, on, target, F) {
+    if (!c.size || !target || !isNum(target.build)) return on.has(c.key);
+    return c.key === 'large' ? target.build >= F.size.large : target.build <= F.size.small;
+  }
+  // A shot's dice (KR p91, p112-113, p128): `chips` the keys on (an array or { key: true }). { range, rangeLabel,
+  // difficulty, net, asked: { bonus, penalty } (the net, one side 0, uncapped: what the server is asked), rolled (capped
+  // at maxDice), over (more asked than rolled), why: the chips' labels that count }. Null where there is no table.
+  function shotDice(chips, shooter, target, rules) {
+    const x = fireOf(rules);
+    if (!x) return null;
+    const { C, F } = x;
+    const on = onSet(chips);
+    const range = rangeOf(on, F);
+    let net = 0;
+    const why = range.difficulty === 'regular' ? [] : [range.label];
+    for (const c of F.chips) {
+      if (!sizeOn(c, on, target, F) || (c.notWith && on.has(c.notWith))) continue;
+      net += (c.bonus || 0) - (c.penalty || 0);
+      why.push(c.label);
+    }
+    if (on.has('dive') && F.dive) { net -= F.dive.penalty || 0; why.push(F.dive.label); }
+    const cap = maxDiceOf(C);
+    const asked = { bonus: net > 0 ? net : 0, penalty: net < 0 ? -net : 0 };
+    const rolled = { bonus: Math.min(cap, asked.bonus), penalty: Math.min(cap, asked.penalty) };
+    return { range: range.key, rangeLabel: range.label, difficulty: range.difficulty, net, asked, rolled, over: Math.abs(net) > cap, why };
+  }
+  // The chips a shot opens with: aimed when the shooter declared its aim the round before, and Prone from the statuses
+  // (KR p128). `round` the fight's round now.
+  function shotChipsFrom(shooter, target, round, rules) {
+    const x = fireOf(rules);
+    if (!x) return [];
+    const out = [];
+    if (shooter && shooter.aiming && isNum(shooter.aiming.round) && isNum(round) && shooter.aiming.round === round - 1) out.push('aim');
+    if (proneOn(target, x.C)) out.push('proneTarget');
+    if (proneOn(shooter, x.C)) out.push('proneShooter');
+    return out;
+  }
+  // A row's firearms (the reader's list), and the figure a shot rolls: the gun's own skill, else the row's Firearms.
+  const gunsOf = (row) => (row && Array.isArray(row.guns) ? row.guns : []);
+  const shotSkill = (row, gun) => (gun && isNum(gun.skill) ? gun.skill : topOf(row && row.firearms));
+  // Whether a row may shoot: a PC (the player rolls), or a row with a Firearms figure or a gun.
+  const canShoot = (row) => Boolean(row) && (row.kind === 'pc' || topOf(row.firearms) !== null || gunsOf(row).length > 0);
+  // A level that hits at the difficulty (KR p112): at least Regular, and at least the difficulty.
+  const shotHits = (level, difficulty) => isLevel(level) && RANK[level] >= Math.max(1, RANK[difficulty] || 1);
+  // An NPC's shot as the server rolled it: against `skill` at the shot's difficulty with the dice asked. { level, kept,
+  // tens, needed } or null.
+  function shotRoll(x, skill, dice) {
+    if (!x || typeof x !== 'object' || !dice || !isNum(skill) || x.target !== skill) return null;
+    if (!isLevel(x.level) || !isNum(x.kept) || (x.difficulty || 'regular') !== dice.difficulty) return null;
+    const asked = x.asked && typeof x.asked === 'object' ? x.asked : null;
+    if (!asked || (asked.bonus || 0) !== dice.asked.bonus || (asked.penalty || 0) !== dice.asked.penalty) return null;
+    return { level: x.level, kept: x.kept, tens: Array.isArray(x.tens) ? x.tens.filter(isNum) : [], needed: isNum(x.needed) ? x.needed : null };
+  }
+  // A kept roll against the malfunction number (KR p118): 'malfunction' at or over it; with no number, 'check' from the
+  // table's hint; else ''.
+  function malfunctionFlag(kept, number, rules) {
+    const x = fireOf(rules);
+    if (!isNum(kept)) return '';
+    if (isNum(number)) return kept >= number ? 'malfunction' : '';
+    const from = x && x.F.malfunction && isNum(x.F.malfunction.hintFrom) ? x.F.malfunction.hintFrom : null;
+    return from !== null && kept >= from ? 'check' : '';
+  }
+  // A weapon's damage as the box's typed choices: `2D6/1D6` (by range) is two; one is one; none is none.
+  const damageChoices = (text) => (typeof text === 'string' && text ? text.split('/').map((t) => t.trim()).filter(Boolean) : []);
+  // "+1 bonus die", "−2 penalty dice (6 penalty dice asked: 2 rolled (KR p91))"; '' for none.
+  function shotDiceText(d) {
+    if (!d || !d.net) return '';
+    const n = Math.abs(d.net);
+    const kind = d.net > 0 ? 'bonus' : 'penalty';
+    const r = d.net > 0 ? d.rolled.bonus : d.rolled.penalty;
+    const dice = (k) => `${k === 1 ? 'die' : 'dice'}`;
+    return `${d.net > 0 ? '+' : '\u2212'}${r} ${kind} ${dice(r)}${d.over ? ` (${n} ${kind} ${dice(n)} asked: ${r} rolled (KR p91))` : ''}`;
+  }
+  // The shot's line, for the log and the strip: "Dock Cultist 1 shoots Dock Cultist 2 (long range, point blank), +1
+  // bonus die: Firearms 30 at Hard (15): rolled 33 (tens 30, 40): Fail: a miss." A PC's: "...: Hard needed: Regular: a
+  // miss." `x` { dice, skill, roll (shotRoll's) or level, hit, flag, malfunction }.
+  function shotLine(names, x) {
+    const d = x.dice;
+    const dt = shotDiceText(d);
+    const head = `${names.shooter} shoots ${names.target}${d.why.length ? ` (${d.why.join(', ')})` : ''}${dt ? `, ${dt}` : ''}`;
+    const diff = levelName(d.difficulty);
+    const r = x.roll;
+    const level = r ? r.level : x.level;
+    const at = r ? `${isNum(x.skill) ? `Firearms ${x.skill} ` : ''}at ${diff}${isNum(r.needed) ? ` (${r.needed})` : ''}: rolled ${r.kept}${r.tens.length > 1 ? ` (tens ${r.tens.join(', ')})` : ''}` : `${diff} needed`;
+    let tail = x.hit ? 'a hit' : 'a miss';
+    if (x.flag === 'malfunction') tail = `malfunction (${x.malfunction})`;
+    else if (x.flag === 'check') tail += `; check malfunction (${x.cite || 'KR p118'})`;
+    return `${head}: ${at}: ${levelName(level)}: ${tail}.`;
+  }
+  // The dive's line: "Dock Cultist 2 dives for cover: Dodge rolled 15, Hard: a penalty die on the shot; loses its next
+  // attack." A PC's: "... dives for cover: passed: ...".
+  function diveLine(name, res, attacks) {
+    const what = res.tapped ? (res.passed ? 'passed' : 'failed') : `Dodge rolled ${res.kept}, ${levelName(res.level)}`;
+    return `${name} dives for cover: ${what}${res.passed ? ': a penalty die on the shot' : ''}; ${attacks > 1 ? `loses its next ${attacks} attacks` : 'loses its next attack'}.`;
+  }
+  // The row's marks: the lost attack (on its turn, and before it), the slow weapon's counter, the declared aim.
+  function lostText(m) {
+    if (!m) return '';
+    const n = isNum(m.attacks) && m.attacks > 1 ? m.attacks : 1;
+    if (m.on) return n > 1 ? `loses all ${n} attacks: dived for cover` : 'loses this attack: dived for cover';
+    return n > 1 ? `dived for cover: loses its next ${n} attacks` : 'dived for cover: loses its next attack';
+  }
+  const reloadText = (r) => (r && isNum(r.left) && r.left > 0 ? `${r.weapon ? `${r.weapon}: ` : ''}ready again in ${roundsText(r.left)}` : '');
+
   return {
+    shotKeys, shotDice, shotChipsFrom, gunsOf, shotSkill, canShoot, shotHits, shotRoll, malfunctionFlag, damageChoices,
+    shotDiceText, shotLine, diveLine, lostText, reloadText,
     cocCardForHit, cocCardsAtRoundEnd, sanCard, lineTarget, lineStat, lineName, lineText, rollResult, resultText, offersFor,
     boutRoll, boutText, roundsText,
     DB_MODES, DB_WORDS, dbModeOf, dbTerm, halfTerm, damageRoll, cocDamage, extremeOffer,

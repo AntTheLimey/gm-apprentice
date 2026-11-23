@@ -36,12 +36,35 @@ function keyOf(raw) {
 // The name may hold digits (`.38 Revolver`, `12-gauge shotgun`): it runs to the ` NN%` figure.
 const ATTACK_LINE = /^\s*[-*+]\s+(?:\*\*)?([^%*\s][^%]*?)(?:\*\*)?\s+(\d{1,3})\s*%.*\bdamage\b/i;
 const FIREARM = /\b(?:firearms?|handgun|pistol|revolver|rifle|shotgun|carbine|smg|submachine|machine[- ]gun|musket|flintlock|blunderbuss|derringer|guns?)\b/i;
+// A firearm line may say more (Task 19): its damage (`damage 2D6/1D6`, by range), its malfunction number (`malfunction
+// 95`, `malf. 90`, `95 malf`), a slow reload (`1 per 4 rounds`, `1/4 rnds`) and whether it impales. Flintlocks and the
+// blunderbuss never impale (RC p187); a line that says `impales` does; any other is not known (null).
+const DAMAGE_OF = /\bdamage\s*:?\s*(\d*d\d+(?:\s*[+\-/]\s*(?:\d*d\d+|\d+|DB))*)/i;
+const MALF_OF = /\bmalf(?:unction)?\.?\s*:?\s*(\d{2,3})\b|\b(\d{2,3})\+?\s*malf/i;
+const RELOAD_OF = /\b1\s*(?:per|\/)\s*(\d{1,2})\s*(?:rounds?|rnds?)\b/i;
+const NO_IMPALE = /\b(?:flintlock|blunderbuss|musket)\b|\b(?:does not|doesn't|never|no|non-?)\s*impal/i;
+const IMPALES = /\bimpal(?:e|es|ing)\b/i;
+const malfOf = (text) => { const m = MALF_OF.exec(String(text || '')); return m ? Number(m[1] || m[2]) : null; };
+const reloadOf = (text) => {
+  const t = String(text || '').trim();
+  const m = RELOAD_OF.exec(t) || /^1\s*(?:per|\/)\s*(\d{1,2})$/.exec(t);
+  const n = m ? Number(m[1]) : null;
+  return n !== null && n > 1 ? n : null;
+};
+const impalesOf = (text) => (NO_IMPALE.test(text) ? false : IMPALES.test(text) ? true : null);
+// One firearm: { name, skill, damage, malfunction, reload, impales }, each null where the line does not say.
+function gunOf(name, skill, line) {
+  const d = DAMAGE_OF.exec(line);
+  return { name: clean(name), skill, damage: d ? d[1].replace(/\s+/g, '').toUpperCase() : null, malfunction: malfOf(line), reload: reloadOf(line), impales: impalesOf(line) };
+}
 function attackLines(stats) {
-  const out = { fighting: [], firearms: [] };
+  const out = { fighting: [], firearms: [], guns: [] };
   for (const line of String(stats == null ? '' : stats).replace(/\r\n?/g, '\n').split('\n')) {
     const m = ATTACK_LINE.exec(line);
     if (!m || keyOf(m[1])) continue;
-    out[FIREARM.test(m[1]) ? 'firearms' : 'fighting'].push(Number(m[2]));
+    const gun = FIREARM.test(m[1]);
+    out[gun ? 'firearms' : 'fighting'].push(Number(m[2]));
+    if (gun) out.guns.push(gunOf(m[1], Number(m[2]), line));
   }
   return out;
 }
@@ -58,7 +81,8 @@ function readNumbers(stats) {
   const nums = { hp: n('hp'), mp: n('mp'), san: n('san'), dex: n('dex'), luck: n('luck'), armour: null,
     str: n('str'), con: n('con'), siz: n('siz'), pow: n('pow'), int: n('int'),
     fighting: highest(all('fighting').concat(lines.fighting)), firearms: highest(all('firearms').concat(lines.firearms)),
-    dodge: n('dodge'), db: db === null ? null : (clean(db).replace(/\s*[·|].*$/, '') || null), build: n('build'), attacks: leadingNumber(String(firstOf(ps, 'attacks') || '').replace(/^per round\s*:?\s*/i, '')), from: {} };
+    dodge: n('dodge'), db: db === null ? null : (clean(db).replace(/\s*[·|].*$/, '') || null), build: n('build'), attacks: leadingNumber(String(firstOf(ps, 'attacks') || '').replace(/^per round\s*:?\s*/i, '')),
+    guns: lines.guns.length ? lines.guns : null, from: {} };
   const armour = firstOf(ps, 'armour');
   if (armour) nums.armour = clean(armour).replace(/\s*[·|].*$/, '') || null;
   if (nums.hp === null && nums.con !== null && nums.siz !== null) { nums.hp = Math.floor((nums.con + nums.siz) / 10); nums.from.hp = 'from CON+SIZ'; }
@@ -102,7 +126,7 @@ function statusBlock(body) {
 
 // The combat figures a PC's sheet writes (Task 16), only those it has: Fighting and Firearms its highest
 // specialisations, Dodge, Build and the damage bonus from the Combat table.
-const COMBAT_KEYS = ['fighting', 'firearms', 'dodge', 'db', 'build', 'attacks'];
+const COMBAT_KEYS = ['fighting', 'firearms', 'dodge', 'db', 'build', 'attacks', 'guns'];
 const present = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== null && v !== undefined && v !== ''));
 const combatOfNums = (nums) => Object.fromEntries(COMBAT_KEYS.map((k) => [k, nums[k]]));
 function sheetCombat(model) {
@@ -111,8 +135,22 @@ function sheetCombat(model) {
   const c = model.combat || {};
   return present({
     fighting: of(/^(?:Fighting\b|Brawl$)/i), firearms: of(/^Firearms?\b/i), dodge: of(/^Dodge$/i),
-    build: leadingNumber(c.build), db: c.db ? clean(c.db) : null,
+    build: leadingNumber(c.build), db: c.db ? clean(c.db) : null, guns: sheetGuns(model),
   });
+}
+// The sheet's firearms (Task 19), from its Combat table (Weapon, Skill %, Damage, Attacks, Range, Ammo, Malf): a row
+// whose weapon or skill names a firearm. Its skill is the table's figure, its slow reload the Attacks column's
+// `1/4`; null with none.
+function sheetGuns(model) {
+  const rows = Array.isArray(model.weapons) ? model.weapons : [];
+  const guns = rows.filter((w) => w && (FIREARM.test(String(w.weapon || '')) || /firearm/i.test(String(w.skill || '')))).map((w) => {
+    const sk = /(\d{1,3})\s*%?\s*$/.exec(clean(w.skill));
+    const d = DAMAGE_OF.exec(`damage ${clean(w.damage)}`);
+    const all = `${clean(w.weapon)} ${clean(w.damage)}`;
+    return { name: clean(w.weapon), skill: sk ? Number(sk[1]) : null, damage: d ? d[1].replace(/\s+/g, '').toUpperCase() : null,
+      malfunction: leadingNumber(clean(w.malf)), reload: reloadOf(clean(w.attacks)), impales: impalesOf(all) };
+  });
+  return guns.length ? guns : null;
 }
 
 // CON and INT from the sheet's characteristics, only those it writes (Task 18's cards show them; a PC's roll is the
@@ -170,6 +208,40 @@ const COC_CARDS = {
   notes: { int: 'bout tables: KR p157' },
 };
 
+// A shot's numbers (Task 19), read by coc-math's shotDice and the Shoot strip: names, dice and page cites only. The
+// range sets the difficulty (KR p112); each chip is one bonus or penalty die (KR p113, p119, p410): aiming the round
+// before, point blank, a large or small target (by Build when the target has one), partial concealment, a fast mover,
+// firing into melee, loading and firing in one round, and one die on every shot when two or three are fired in a round.
+// Prone (KR p128): a die against a Prone target unless point blank, one for a Prone shooter. A dive for cover that
+// passes is a die on the shot (KR p113). A kept roll at or over the weapon's malfunction number is flagged (KR p118),
+// and with no number, a roll of `hintFrom` or more says to check it. Regency's flintlocks (malfunction 95, the
+// double-barreled pistol 90, one shot per 4 rounds, never impaling; the blunderbuss's damage by range) are read from the
+// weapon line (RC p187).
+const FIREARM_RULES = {
+  ranges: [
+    { key: 'regular', label: 'regular range', difficulty: 'regular' },
+    { key: 'long', label: 'long range', difficulty: 'hard' },
+    { key: 'veryLong', label: 'very long range', difficulty: 'extreme' },
+  ],
+  chips: [
+    { key: 'aim', label: 'aimed', bonus: 1 },
+    { key: 'pointBlank', label: 'point blank', bonus: 1 },
+    { key: 'large', label: 'large target', bonus: 1, size: true },
+    { key: 'small', label: 'small target', penalty: 1, size: true },
+    { key: 'cover', label: 'partly concealed', penalty: 1 },
+    { key: 'fast', label: 'fast mover', penalty: 1 },
+    { key: 'intoMelee', label: 'into melee', penalty: 1 },
+    { key: 'loading', label: 'loading', penalty: 1 },
+    { key: 'shots', label: '2-3 shots this round', penalty: 1 },
+    { key: 'proneTarget', label: 'target prone', penalty: 1, notWith: 'pointBlank' },
+    { key: 'proneShooter', label: 'shooter prone', bonus: 1 },
+  ],
+  // a target's Build that makes it large or small (KR p113, p410)
+  size: { large: 4, small: -2 },
+  dive: { label: 'dived for cover', penalty: 1 },
+  malfunction: { hintFrom: 95, cite: 'KR p118' },
+};
+
 // Placeholders until later tasks fill them in: `vitals`, `wounding`, `consequences`, `defences`,
 // `manoeuvres` keep D&D's shape (CoC-safe empties where D&D words would show).
 function describeCoc(id) {
@@ -189,6 +261,8 @@ function describeCoc(id) {
     // what a hit and a SAN loss owe, as cards of prompts (Task 18): names and figures only. The card's numbers are
     // `prompts` below; a line rolls the row's `stat`; each offer adds or removes statuses by name.
     cards: COC_CARDS,
+    // a shot (Task 19): the range, the chips, Prone, the dive and the malfunction flag
+    firearm: FIREARM_RULES,
   };
   // a Major Wound is a hit of at least max HP over `majorWoundAt` (KR p119, p120); a SAN loss of `insanityAt` or more
   // in one entry asks for the INT roll (KR p155)
@@ -225,7 +299,7 @@ function describeCoc(id) {
 
 // The row's own fields: initiative is DEX.
 const foeRow = (n) => ({ init: n.dex, mp: n.mp, mpMax: n.mp, san: n.san, sanMax: n.san, dex: n.dex, con: n.con, int: n.int, armour: n.armour, from: n.from,
-  fighting: n.fighting, firearms: n.firearms, dodge: n.dodge, db: n.db, build: n.build, attacks: n.attacks });
+  fighting: n.fighting, firearms: n.firearms, dodge: n.dodge, db: n.db, build: n.build, attacks: n.attacks, guns: n.guns || null });
 
 const make = (id) => ({ ...dnd, id, fights: true, readFoe, readPc, foeRow, stockNoActions: undefined, describe: () => describeCoc(id) });
 

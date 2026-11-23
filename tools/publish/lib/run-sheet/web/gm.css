@@ -476,3 +476,13 @@ ol.to > li.row2 > .dmgbox { display: flex; flex: 1 1 100%; min-width: 0; flex-wr
 ol.to > li.row2 .dmgbox .tg { padding: 0 5px; }
 ol.to > li.row2 .dmgbox .offer { font: 650 .72rem var(--mono); padding: 0 8px; border-color: var(--bad); color: var(--bad); background: var(--bg); }
 ol.to input.hpin.dmg { border-color: var(--bad); }
+/* CoC's Shoot strip (Task 19): on the target's second line, the range and the chips (each a condition's name), the
+   dive, the malfunction number, the difficulty and dice, then Roll or the PC's level; the marks a dive and a slow
+   weapon leave on a row */
+ol.to > li.row2 > .sx { display: flex; flex: 1 1 100%; min-width: 0; flex-wrap: wrap; gap: 2px 4px; align-items: center; font: 500 .72rem var(--mono); }
+ol.to > li.row2 .sx .tg { padding: 0 5px; white-space: nowrap; }
+ol.to > li.row2 .sx .tg:not(.on) { color: var(--muted); }
+ol.to > li.row2 .sx .offer { font: 650 .72rem var(--mono); padding: 0 8px; }
+ol.to > li.row2 .sx .mlab { color: var(--muted); white-space: nowrap; }
+ol.to > li.row2 .sx input.malf { width: 3.2ch; font: 500 .72rem var(--mono); padding: 0 2px; }
+ol.to > li.row2 .mnote.lost.now { color: var(--bad); font-weight: 650; }

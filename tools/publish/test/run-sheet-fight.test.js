@@ -3614,3 +3614,221 @@ describe('CoC cards: one per hit, Dying\'s reminders and the SAN bout (step 6b T
     assert.equal(named(s, 'Orc').majorWound, false);
   });
 });
+
+describe('CoC firearms: the aim, the shot, the dive, the reload (step 6b Task 19)', () => {
+  const { systemFor } = require('../lib/run-sheet/systems');
+  const { rollPercent, rollDamage } = require('../lib/dice');
+  const CM = require('../lib/run-sheet/web/coc-math');
+  const COC = systemFor('coc-7e-regency').describe().fight;
+  const begin = (list) => RS.reduce(fresh(), { id: 'f1', type: 'fightStart', title: 'T', rules: COC, rows: list.map((o, i) => M.blankRow({ id: `r${i + 1}`, ...o })) }, now());
+  const G = (s, a) => RS.reduce(s, { id: nextId(), fight: 'f1', ...a }, now());
+  const named = (s, name) => s.fight.rows.find((r) => r.name === name);
+  const go = (s) => G(s, { type: 'fightNext', from: s.fight.turn, round: s.fight.round });
+  const toTurn = (s, name) => { let x = s; for (let i = 0; i < 20 && !(x.fight.started && x.fight.turn === named(x, name).id); i++) x = go(x); return x; };
+  const lines = (s) => s.events.filter((e) => e.fight).map((e) => e.text);
+  // the server's d100 for a shot, its faces given: tens faces, then the units face
+  const faces = (...f) => { let i = 0; return () => f[i++]; };
+  // a shot as the page sends it: the chips, the gun, the server's roll for an NPC (made here with the dice the shot
+  // holds) or a PC's level tapped
+  const shoot = (s, from, to, chips, { gun = null, f: fc = [3, 3], level, malfunction } = {}) => {
+    const A = named(s, from);
+    const D = named(s, to);
+    const d = CM.shotDice(chips, A, D, COC);
+    const result = A.kind === 'pc' ? undefined : rollPercent({ target: CM.shotSkill(A, gun === null ? null : A.guns[gun]), difficulty: d.difficulty, ...d.asked }, { randomInt: faces(...fc) });
+    return G(s, { type: 'shot', shooter: A.id, target: D.id, chips, gun, ...(result ? { result } : { level }), ...(malfunction !== undefined ? { malfunction } : {}) });
+  };
+  const dodge = (kept, target, level) => ({ tens: [Math.floor(kept / 10) * 10], units: kept % 10, kept, target, difficulty: 'regular', needed: target, level, passed: level !== 'fail' && level !== 'fumble', fumbleFrom: 96, bonus: 0, penalty: 0, asked: { bonus: 0, penalty: 0 } });
+  const FLINTLOCK = { name: 'Flintlock pistol', skill: 50, damage: '1D6+1', malfunction: 95, reload: 4, impales: false };
+  const BLUNDERBUSS = { name: 'Blunderbuss', skill: 45, damage: '2D6/1D6', malfunction: 95, reload: 4, impales: false };
+  // made-up people: Iris a PC, the Wharf Hands NPCs, a two-attack Hound
+  const rows = () => [
+    { name: 'Iris', kind: 'pc', ini: 70, dex: 70, hp: 11, max: 11, dodge: 35 },
+    { name: 'Wharf Hand 1', ini: 60, dex: 60, hp: 12, max: 12, firearms: 50, dodge: 30, guns: [FLINTLOCK, BLUNDERBUSS], db: '+1D4' },
+    { name: 'Wharf Hand 2', ini: 50, dex: 50, hp: 12, max: 12, fighting: 40, dodge: 30, build: 1 },
+    { name: 'Hound', ini: 40, dex: 40, hp: 14, max: 14, fighting: 45, dodge: 25, attacks: 2 },
+  ];
+
+  it('an NPC\'s shot is the server\'s roll at the range\'s difficulty; a hit opens a shot\'s damage; no melee defence counts', () => {
+    let s = toTurn(begin(rows()), 'Wharf Hand 1');
+    s = shoot(s, 'Wharf Hand 1', 'Wharf Hand 2', ['long', 'pointBlank'], { gun: 0, f: [1, 2, 0] });
+    assert.deepEqual(lines(s).slice(-1), ['Wharf Hand 1 shoots Wharf Hand 2 (long range, point blank), +1 bonus die: Firearms 50 at Hard (25): rolled 10 (tens 10, 20): Extreme: a hit.']);
+    const m = s.fight.melee;
+    assert.deepEqual([m.kind, m.side, m.level, m.by, m.on, m.impales, m.damage, m.offer], ['shot', 'attacker', 'extreme', named(s, 'Wharf Hand 1').id, named(s, 'Wharf Hand 2').id, false, '1D6+1', true]);
+    assert.equal(named(s, 'Wharf Hand 2').meleeDefences, 0);
+    // a shot at a row that has defended gets no outnumbered die
+    assert.equal(CM.shotDice([], named(s, 'Wharf Hand 1'), { ...named(s, 'Wharf Hand 2'), meleeDefences: 3 }, COC).net, 0);
+    // a miss opens nothing
+    s = shoot(s, 'Wharf Hand 1', 'Wharf Hand 2', ['long'], { gun: 0, f: [8, 0] });
+    assert.equal(s.fight.melee, null);
+    assert.match(lines(s).slice(-1)[0], /rolled 80: Fail: a miss\.$/);
+  });
+
+  it('a roll against another figure, difficulty or dice is dropped; a gun the row does not hold too', () => {
+    let s = toTurn(begin(rows()), 'Wharf Hand 1');
+    const was = clone(s);
+    const A = named(s, 'Wharf Hand 1');
+    const D = named(s, 'Wharf Hand 2');
+    const wrongDice = rollPercent({ target: 50, difficulty: 'hard' }, { randomInt: faces(3, 3) });
+    s = G(s, { type: 'shot', shooter: A.id, target: D.id, chips: ['long', 'pointBlank'], gun: 0, result: wrongDice });
+    s = G(s, { type: 'shot', shooter: A.id, target: D.id, chips: ['long'], gun: 0, result: rollPercent({ target: 50 }, { randomInt: faces(3, 3) }) });
+    s = G(s, { type: 'shot', shooter: A.id, target: D.id, chips: [], gun: 5, result: rollPercent({ target: 50 }, { randomInt: faces(3, 3) }) });
+    s = G(s, { type: 'shot', shooter: A.id, target: D.id, chips: ['nonsense'], gun: 0, result: rollPercent({ target: 50 }, { randomInt: faces(3, 3) }) });
+    assert.deepEqual(s.fight, was.fight);
+  });
+
+  it('a PC shooter is tapped, never rolled', () => {
+    let s = go(begin(rows()));
+    const was = clone(s.fight);
+    s = G(s, { type: 'shot', shooter: named(s, 'Iris').id, target: named(s, 'Wharf Hand 2').id, chips: ['long'], gun: null, result: rollPercent({ target: 50, difficulty: 'hard' }, { randomInt: faces(1, 1) }) });
+    assert.deepEqual(s.fight, was, 'a roll for a PC is dropped');
+    s = shoot(s, 'Iris', 'Wharf Hand 2', ['long'], { level: 'regular' });
+    assert.deepEqual(lines(s).slice(-1), ['Iris shoots Wharf Hand 2 (long range): Hard needed: Regular: a miss.']);
+    s = shoot(s, 'Iris', 'Wharf Hand 2', ['long'], { level: 'hard' });
+    assert.deepEqual([s.fight.melee.kind, s.fight.melee.level], ['shot', 'hard']);
+  });
+
+  it('aim then shoot next round: +1 bonus die; moving clears it, logged', () => {
+    let s = toTurn(begin(rows()), 'Wharf Hand 1');
+    s = G(s, { type: 'aim', row: named(s, 'Wharf Hand 1').id });
+    assert.deepEqual(named(s, 'Wharf Hand 1').aiming, { round: 1 });
+    assert.deepEqual(lines(s).slice(-1), ['Wharf Hand 1 aims.']);
+    // another row cannot declare it off its turn
+    s = G(s, { type: 'aim', row: named(s, 'Iris').id });
+    assert.equal(named(s, 'Iris').aiming, null);
+    s = go(s);
+    s = toTurn(s, 'Wharf Hand 1');
+    assert.equal(s.fight.round, 2);
+    const chips = CM.shotChipsFrom(named(s, 'Wharf Hand 1'), named(s, 'Wharf Hand 2'), s.fight.round, COC);
+    assert.deepEqual(chips, ['aim']);
+    s = shoot(s, 'Wharf Hand 1', 'Wharf Hand 2', chips, { gun: 0, f: [3, 4, 3] });
+    assert.match(lines(s).slice(-1)[0], /^Wharf Hand 1 shoots Wharf Hand 2 \(aimed\), \+1 bonus die: /);
+    assert.equal(named(s, 'Wharf Hand 1').aiming, null, 'the shot spends it');
+    // declared again, then a move tap takes it, logged
+    s = toTurn(go(s), 'Wharf Hand 1');
+    s = G(s, { type: 'aim', row: named(s, 'Wharf Hand 1').id });
+    s = G(s, { type: 'aim', row: named(s, 'Wharf Hand 1').id, on: false });
+    assert.equal(named(s, 'Wharf Hand 1').aiming, null);
+    assert.deepEqual(lines(s).slice(-1), ['Wharf Hand 1: moves, the aim is lost.']);
+  });
+
+  it('aim lost to a hit, logged; one never shot lapses at the next round\'s end', () => {
+    let s = toTurn(begin(rows()), 'Wharf Hand 1');
+    s = G(s, { type: 'aim', row: named(s, 'Wharf Hand 1').id });
+    s = G(s, { type: 'hp', row: named(s, 'Wharf Hand 1').id, entry: '-3' });
+    assert.equal(named(s, 'Wharf Hand 1').aiming, null);
+    assert.ok(lines(s).includes('Wharf Hand 1: hit, the aim is lost.'));
+    s = toTurn(go(s), 'Wharf Hand 1');
+    s = G(s, { type: 'aim', row: named(s, 'Wharf Hand 1').id });
+    assert.deepEqual(named(s, 'Wharf Hand 1').aiming, { round: 2 });
+    s = toTurn(go(s), 'Iris');
+    assert.equal(s.fight.round, 3);
+    assert.deepEqual(named(s, 'Wharf Hand 1').aiming, { round: 2 }, 'still good in round 3');
+    s = toTurn(go(s), 'Iris');
+    assert.equal(named(s, 'Wharf Hand 1').aiming, null, 'gone at round 3\'s end');
+  });
+
+  it('three shots this round: each rolled with one penalty die', () => {
+    let s = toTurn(begin(rows()), 'Wharf Hand 1');
+    for (let i = 0; i < 3; i++) {
+      s = shoot(s, 'Wharf Hand 1', 'Wharf Hand 2', ['shots'], { f: [2, 6, 5] });
+      assert.match(lines(s).slice(-1)[0], /^Wharf Hand 1 shoots Wharf Hand 2 \(2-3 shots this round\), −1 penalty die: Firearms 50 at Regular \(50\): rolled 65 \(tens 20, 60\): Fail: a miss\.$/, `shot ${i + 1}`);
+    }
+  });
+
+  it('a dive: an NPC diver\'s Dodge is rolled; only a pass adds the penalty die; either way the lost-attack mark shows on its next turn and clears when that turn ends; a two-attack creature loses both', () => {
+    let s = toTurn(begin(rows()), 'Wharf Hand 1');
+    s = G(s, { type: 'dive', row: named(s, 'Hound').id, result: dodge(15, 25, 'hard') });
+    assert.deepEqual(lines(s).slice(-1), ['Hound dives for cover: Dodge rolled 15, Hard: a penalty die on the shot; loses its next 2 attacks.']);
+    assert.deepEqual(named(s, 'Hound').lostAttack, { attacks: 2, on: false });
+    assert.equal(named(s, 'Hound').meleeDefences, 0, 'a dive is no melee defence');
+    // the page adds the passed dive's die to the shot
+    assert.equal(CM.shotDice(['dive'], named(s, 'Wharf Hand 1'), named(s, 'Hound'), COC).net, -1);
+    s = shoot(s, 'Wharf Hand 1', 'Hound', ['dive'], { f: [2, 6, 5] });
+    assert.match(lines(s).slice(-1)[0], /\(dived for cover\), −1 penalty die/);
+    // a failed dive: no die, still the lost attack
+    s = G(s, { type: 'dive', row: named(s, 'Wharf Hand 2').id, result: dodge(77, 30, 'fail') });
+    assert.deepEqual(lines(s).slice(-1), ['Wharf Hand 2 dives for cover: Dodge rolled 77, Fail; loses its next attack.']);
+    assert.deepEqual(named(s, 'Wharf Hand 2').lostAttack, { attacks: 1, on: false });
+    // a dive rolled against a figure that is not its Dodge is dropped
+    const was = clone(s.fight);
+    s = G(s, { type: 'dive', row: named(s, 'Hound').id, result: dodge(15, 40, 'hard') });
+    assert.deepEqual(s.fight, was);
+    // its next turn: the mark is on; the turn's end clears it
+    s = toTurn(s, 'Wharf Hand 2');
+    assert.deepEqual(named(s, 'Wharf Hand 2').lostAttack, { attacks: 1, on: true });
+    assert.equal(CM.lostText(named(s, 'Wharf Hand 2').lostAttack), 'loses this attack: dived for cover');
+    s = toTurn(s, 'Hound');
+    assert.equal(named(s, 'Wharf Hand 2').lostAttack, null);
+    assert.equal(CM.lostText(named(s, 'Hound').lostAttack), 'loses all 2 attacks: dived for cover');
+    s = go(s);
+    assert.equal(named(s, 'Hound').lostAttack, null);
+  });
+
+  it('a PC diver is tapped, never rolled', () => {
+    let s = toTurn(begin(rows()), 'Wharf Hand 1');
+    const was = clone(s.fight);
+    s = G(s, { type: 'dive', row: named(s, 'Iris').id, result: dodge(15, 35, 'hard') });
+    assert.deepEqual(s.fight, was);
+    s = G(s, { type: 'dive', row: named(s, 'Iris').id, result: { tap: 'passed' } });
+    assert.deepEqual(lines(s).slice(-1), ['Iris dives for cover: passed: a penalty die on the shot; loses its next attack.']);
+    // an NPC's dive is never a tap
+    const before = clone(s.fight);
+    s = G(s, { type: 'dive', row: named(s, 'Hound').id, result: { tap: 'passed' } });
+    assert.deepEqual(s.fight, before);
+  });
+
+  it('a long shot at skill 55: Hard, and a 96 is a fumble', () => {
+    let s = toTurn(begin([{ name: 'Iris', kind: 'pc', ini: 70, dex: 70, hp: 11, max: 11 }, { name: 'Marksman', ini: 60, dex: 60, hp: 12, max: 12, firearms: 55 }]), 'Marksman');
+    s = shoot(s, 'Marksman', 'Iris', ['long'], { f: [9, 6] });
+    assert.deepEqual(lines(s).slice(-1), ['Marksman shoots Iris (long range): Firearms 55 at Hard (27): rolled 96: Fumble: a miss; check malfunction (KR p118).']);
+  });
+
+  it('a kept 96 with malfunction 95 is flagged and fires nothing; 94 is not; a typed number wins over the gun\'s', () => {
+    let s = toTurn(begin(rows()), 'Wharf Hand 1');
+    s = shoot(s, 'Wharf Hand 1', 'Iris', [], { gun: 0, f: [9, 6] });
+    assert.match(lines(s).slice(-1)[0], /rolled 96: Fail: malfunction \(95\)\.$/);
+    assert.equal(s.fight.melee, null);
+    s = shoot(s, 'Wharf Hand 1', 'Iris', [], { gun: 0, f: [9, 4] });
+    assert.match(lines(s).slice(-1)[0], /rolled 94: Fail: a miss\.$/);
+    s = shoot(s, 'Wharf Hand 1', 'Iris', [], { gun: 0, f: [9, 1], malfunction: 90 });
+    assert.match(lines(s).slice(-1)[0], /rolled 91: Fail: malfunction \(90\)\.$/);
+    const was = clone(s.fight);
+    s = shoot(s, 'Wharf Hand 1', 'Iris', [], { gun: 0, malfunction: 'lots' });
+    assert.deepEqual(s.fight.rows, was.rows, 'a typed number that is none is dropped');
+  });
+
+  it('a one-per-four-rounds weapon fired in round 2 shows ready again in 4, counting down', () => {
+    let s = toTurn(go(toTurn(begin(rows()), 'Iris')), 'Iris');
+    s = toTurn(s, 'Wharf Hand 1');
+    assert.equal(s.fight.round, 2);
+    s = shoot(s, 'Wharf Hand 1', 'Iris', [], { gun: 0, f: [8, 8] });
+    assert.deepEqual(named(s, 'Wharf Hand 1').reload, { left: 4, of: 4, weapon: 'Flintlock pistol' });
+    assert.equal(CM.reloadText(named(s, 'Wharf Hand 1').reload), 'Flintlock pistol: ready again in 4 rounds');
+    const left = [];
+    for (let round = 3; round <= 6; round++) { s = toTurn(go(s), 'Iris'); assert.equal(s.fight.round, round); left.push(named(s, 'Wharf Hand 1').reload && named(s, 'Wharf Hand 1').reload.left); }
+    assert.deepEqual(left, [3, 2, 1, null], 'ready again in round 6');
+  });
+
+  it('a flintlock\'s impaling toggle cannot be turned on: its exchange says it never impales; the blunderbuss\'s carries its two damages', () => {
+    let s = toTurn(begin(rows()), 'Wharf Hand 1');
+    s = shoot(s, 'Wharf Hand 1', 'Wharf Hand 2', [], { gun: 1, f: [0, 2] });
+    assert.deepEqual([s.fight.melee.level, s.fight.melee.offer, s.fight.melee.impales, s.fight.melee.damage], ['extreme', true, false, '2D6/1D6']);
+    assert.deepEqual(CM.damageChoices(s.fight.melee.damage), ['2D6', '1D6']);
+    // a shot's damage takes no DB, whatever is typed with the box
+    const roll = rollDamage('1D6', { floor: 0, randomInt: () => 4 });
+    s = G(s, { type: 'hp', row: named(s, 'Wharf Hand 2').id, entry: '1D6', by: named(s, 'Wharf Hand 1').id, mode: 'none', exchange: s.fight.melee.n, roll });
+    assert.equal(named(s, 'Wharf Hand 2').hp, 8);
+  });
+
+  it('D&D and GURPS take no shot, aim or dive', () => {
+    for (const rules of [null, systemFor('gurps-4e').describe().fight]) {
+      let s = RS.reduce(fresh(), { id: 'f1', type: 'fightStart', title: 'T', ...(rules ? { rules } : {}), rows: rows().map((o, i) => M.blankRow({ id: `r${i + 1}`, ...o })) }, now());
+      s = go(s);
+      const was = clone(s.fight);
+      s = G(s, { type: 'aim', row: s.fight.turn });
+      s = G(s, { type: 'dive', row: named(s, 'Iris').id, result: { tap: 'passed' } });
+      s = G(s, { type: 'shot', shooter: named(s, 'Wharf Hand 1').id, target: named(s, 'Iris').id, chips: [], gun: null, result: rollPercent({ target: 50 }, { randomInt: faces(3, 3) }) });
+      assert.deepEqual(s.fight, was);
+    }
+  });
+});

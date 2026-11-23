@@ -1074,6 +1074,9 @@ describe('CoC melee on the target\'s row (step 6b Task 16), by real input', { sk
         await tap(page, `[data-fout="${c1}"]`);
         p = await until(page, `p.fight.rows.find((r) => r.id === ${q(c1)}).out && p.saved === "Saved" && p.pending === 0`);
         assert.deepStrictEqual(named(p, 'Dock Cultist 1').meleeButtons, []);
+        // and no Shoot (Task 19)
+        assert.strictEqual(named(p, 'Dock Cultist 1').shoot, false);
+        assert.strictEqual(named(p, 'Dock Cultist 2').shoot, true);
         sane(p, `${w} the end`);
       });
     });
@@ -1405,6 +1408,118 @@ describe('CoC cards on the GM page (step 6b Task 18), by real input', { skip: br
       const pv = JSON.stringify(await (await fetch(`${run.base}/api/players/view`)).json());
       assert.match(pv, /Temporary insanity/);
       assert.doesNotMatch(pv, /"bout"|"cards"|bout: |card waiting/);
+    });
+  });
+});
+
+describe('CoC firearms on the GM page (step 6b Task 19), by real input', { skip: browserSkip() }, () => {
+  // the server's d10s in a fixed cycle
+  const seq = (...v) => { let i = 0; return () => v[i++ % v.length]; };
+  const re = (t) => new RegExp(t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+
+  for (const [w, h] of SIZES) {
+    it(`${w}: Shoot on the Cultist's row, long range, point blank, roll: the level against Hard is shown with both tens dice`, async () => {
+      // the d10s 1, 4, 2: tens 10 and 40, units 2: a d100 of 12 with a bonus die
+      const run = await start('coc', { randomInt: seq(1, 4, 2) });
+      await withPage({ width: w, height: h }, async (page) => {
+        let p = await netLoft(page, run);
+        // Iris acting (a PC: the player rolls): Shoot on every other live row, none on hers; her aim beside
+        assert.deepStrictEqual(p.fight.rows.filter((r) => r.shoot).map((r) => r.name), ['Dock Cultist 1', 'Dock Cultist 2', 'Jonas Finch', 'Mabel Quill']);
+        assert.deepStrictEqual([named(p, 'Iris Calder').shoot, named(p, 'Iris Calder').aimButton], [false, true]);
+        sane(p, `${w} Shoot on the rows`);
+        await shot(page, `t19-${w}-rows`);
+
+        await tap(page, '#fNext');
+        p = await until(page, 'p.fight.rows.find((r) => r.id === p.fight.turn).name === "Dock Cultist 1" && p.saved === "Saved" && p.pending === 0');
+        assert.deepStrictEqual(named(p, 'Dock Cultist 1').guns, ['Flintlock pistol']);
+        assert.deepStrictEqual(p.fight.rows.filter((r) => r.shoot).map((r) => r.name), ['Iris Calder', 'Dock Cultist 2', 'Jonas Finch', 'Mabel Quill']);
+        sane(p, `${w} Shoot on the rows, a cultist acting`);
+        const c1 = named(p, 'Dock Cultist 1').id;
+        const c2 = named(p, 'Dock Cultist 2').id;
+        await tap(page, `[data-fshoot="${c2}"]`);
+        p = await until(page, `p.fight.shot && p.fight.shot.target === ${q(c2)}`);
+        // the flintlock's malfunction number is in its box, from the weapon line
+        assert.deepStrictEqual([p.fight.shot.shooter, p.fight.shot.gun, p.fight.shot.mal, p.fight.shot.chips], [c1, 0, '95', []]);
+        await tap(page, `[data-fshr="${c2}|long"]`);
+        await tap(page, `[data-fshc="${c2}|pointBlank"]`);
+        p = await until(page, 'p.fight.shot && p.fight.shot.chips.join() === "long,pointBlank"');
+        assert.match(await row2(page, c2), /Dock Cultist 1 shoots, Flintlock pistol, Firearms 30:/);
+        assert.match(await row2(page, c2), /Hard, \+1 bonus die/);
+        // the strip wraps rather than clip: nothing past its right edge, ✕ in view
+        assert.strictEqual(await page.evaluate(`(() => { const l = document.querySelector('li[data-row2=${q(c2)}]'); return l.scrollWidth > l.clientWidth + 1; })()`), false, 'line 2 clipped');
+        assert.strictEqual(await page.evaluate(`(() => { const b = document.querySelector('[data-fshx=${q(c2)}]').getBoundingClientRect(); const l = document.querySelector('li[data-row2=${q(c2)}]').getBoundingClientRect(); return b.left >= l.left && b.right <= l.right; })()`), true, '✕ in view');
+        sane(p, `${w} the strip open`);
+        await shot(page, `t19-${w}-strip`);
+
+        await tap(page, `[data-fshroll="${c2}"]`);
+        p = await until(page, 'p.fight.shot && p.fight.shot.last && !p.fight.shot.rolling && p.fight.dmg && p.saved === "Saved" && p.pending === 0');
+        const want = 'Dock Cultist 1 shoots Dock Cultist 2 (long range, point blank), +1 bonus die: Firearms 30 at Hard (15): rolled 12 (tens 10, 40): Hard: a hit.';
+        assert.deepStrictEqual((await logOf(run)).slice(-1), [want]);
+        assert.match(await row2(page, c2), re(want));
+        // a shot is no melee defence; the flintlock's counter is on the shooter's row; the damage box has its dice, no DB
+        assert.strictEqual(named(p, 'Dock Cultist 2').meleeDefences, 0);
+        assert.deepStrictEqual(named(p, 'Dock Cultist 1').reload, { left: 4, of: 4, weapon: 'Flintlock pistol' });
+        assert.match(await row2(page, c1), /Flintlock pistol: ready again in 4 rounds/);
+        assert.deepStrictEqual([p.fight.dmg.on, p.fight.dmg.by, p.fight.dmg.entry, p.fight.dmg.mode], [c2, c1, '1D6+1', 'none']);
+        sane(p, `${w} after the shot`);
+        await shot(page, `t19-${w}-shot`);
+      });
+    });
+  }
+
+  it('a dive, a PC\'s shot tapped, the lost attacks on the diver\'s turn, a flintlock that never impales, and the aim', async () => {
+    // every d100 a 05
+    const run = await start('coc', { randomInt: seq(0, 5) });
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await netLoft(page, run);
+      const iris = named(p, 'Iris Calder').id;
+      const c2 = named(p, 'Dock Cultist 2').id;
+      // Iris shoots; the cultist dives: its Dodge 20 rolled, 05, a pass: a penalty die on the shot
+      await tap(page, `[data-fshoot="${c2}"]`);
+      p = await until(page, 'p.fight.shot');
+      await tap(page, `[data-fshdive="${c2}"]`);
+      p = await until(page, `p.fight.shot && p.fight.shot.dive && p.fight.rows.find((r) => r.id === ${q(c2)}).lostAttack && p.saved === "Saved" && p.pending === 0`);
+      assert.deepStrictEqual((await logOf(run)).slice(-1), ['Dock Cultist 2 dives for cover: Dodge rolled 5, Hard: a penalty die on the shot; loses its next 2 attacks.']);
+      assert.strictEqual(named(p, 'Dock Cultist 2').meleeDefences, 0);
+      // Iris's level is a tap: no Roll for a PC
+      assert.strictEqual(await page.evaluate(`Boolean(document.querySelector('[data-fshroll=${q(c2)}]'))`), false);
+      await tap(page, `[data-fshlvl="${c2}|regular"]`);
+      p = await until(page, 'p.fight.shot && p.fight.shot.last && p.saved === "Saved" && p.pending === 0');
+      assert.deepStrictEqual((await logOf(run)).slice(-1), ['Iris Calder shoots Dock Cultist 2 (dived for cover), −1 penalty die: Regular needed: Regular: a hit.']);
+      assert.strictEqual(p.fight.dmg.on, c2);
+      sane(p, 'after the dive and the shot');
+
+      // the aim: declared on her turn, then a move takes it, logged
+      await tap(page, `[data-faim="${iris}"]`);
+      p = await until(page, `p.fight.rows.find((r) => r.id === ${q(iris)}).aiming && p.saved === "Saved" && p.pending === 0`);
+      assert.match(await row2(page, iris), /aiming/);
+      await tap(page, `[data-faimoff="${iris}"]`);
+      p = await until(page, `!p.fight.rows.find((r) => r.id === ${q(iris)}).aiming && p.saved === "Saved" && p.pending === 0`);
+      assert.deepStrictEqual((await logOf(run)).slice(-1), ['Iris Calder: moves, the aim is lost.']);
+
+      // Dock Cultist 1 shoots Iris: 05 against the flintlock's 30 is Extreme on its turn, but the flintlock never impales
+      await tap(page, '#fNext');
+      p = await until(page, 'p.fight.rows.find((r) => r.id === p.fight.turn).name === "Dock Cultist 1" && p.saved === "Saved" && p.pending === 0');
+      assert.match(await row2(page, c2), /dived for cover: loses its next 2 attacks/);
+      await tap(page, `[data-fshoot="${iris}"]`);
+      p = await until(page, 'p.fight.shot');
+      await tap(page, `[data-fshroll="${iris}"]`);
+      p = await until(page, `p.fight.shot && p.fight.shot.last && p.fight.dmg && p.fight.dmg.on === ${q(iris)} && p.saved === "Saved" && p.pending === 0`);
+      assert.match((await logOf(run)).slice(-1)[0], /rolled 5: Extreme: a hit\.$/);
+      assert.deepStrictEqual([p.fight.dmg.offer, p.fight.dmg.impale, p.fight.dmg.entry], [true, false, '1D6+1']);
+      assert.strictEqual(await attrOf(page, `[data-fdmgimp="${iris}"]`, 'disabled'), '', 'the impaling toggle cannot be turned on');
+      assert.strictEqual(await attrOf(page, `[data-fdmgimp="${iris}"]`, 'title'), 'This weapon never impales');
+      sane(p, 'the flintlock\'s Extreme');
+
+      // the diver's next turn: its lost attacks shown on it; gone when the turn ends
+      await tap(page, '#fNext');
+      p = await until(page, 'p.fight.rows.find((r) => r.id === p.fight.turn).name === "Dock Cultist 2" && p.saved === "Saved" && p.pending === 0');
+      assert.deepStrictEqual(named(p, 'Dock Cultist 2').lostAttack, { attacks: 2, on: true });
+      assert.match(await row2(page, c2), /loses all 2 attacks: dived for cover/);
+      sane(p, 'the lost attacks on the diver\'s turn');
+      await tap(page, '#fNext');
+      p = await until(page, `p.fight.rows.find((r) => r.id === p.fight.turn).name === "Jonas Finch" && p.saved === "Saved" && p.pending === 0`);
+      assert.strictEqual(named(p, 'Dock Cultist 2').lostAttack, null);
     });
   });
 });

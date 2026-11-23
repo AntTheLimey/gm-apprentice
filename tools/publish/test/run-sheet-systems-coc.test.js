@@ -2,6 +2,8 @@
 // The CoC foe reader (step 6b Task 3): HP, MP, SAN and DEX from the five block shapes real vaults use.
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const { buildIndex } = require('../lib/run-sheet/notes');
 const { systemFor } = require('../lib/run-sheet/systems');
 const { pairs } = require('../lib/run-sheet/systems/pairs');
@@ -20,9 +22,10 @@ for (const crlf of [false, true]) {
     const dir = copyFixture('run-sheet-coc', { crlf });
     it('reads a template line plus a characteristics table', () => {
       const r = read(dir, 'Warden Hale');
-      // Task 16 added the combat figures (fighting to attacks) on purpose; Task 18 INT, for its INT roll's card
+      // Task 16 added the combat figures (fighting to attacks) on purpose; Task 18 INT, for its INT roll's card; Task 19
+      // the guns (none here)
       assert.deepEqual(r.nums, { hp: 13, mp: 12, san: 55, dex: 50, luck: 45, armour: 'none', str: 60, con: 65, siz: 70, pow: 60, int: 55,
-        fighting: 55, firearms: null, dodge: 35, db: '+1D4', build: 1, attacks: null, from: {} });
+        fighting: 55, firearms: null, dodge: 35, db: '+1D4', build: 1, attacks: null, guns: null, from: {} });
       assert.deepEqual(r.lacks, []);
       assert.equal(r.hpStart, null);
     });
@@ -86,7 +89,8 @@ for (const crlf of [false, true]) {
     });
     it('readFoe gives Fighting 40, Dodge 20, DB +1D4, Build 1, armour 1 and attacks 2 from a fixture block', () => {
       const n = read(dir, 'Dock Cultist').nums;
-      assert.deepEqual([n.fighting, n.firearms, n.dodge, n.db, n.build, n.attacks], [40, null, 20, '+1D4', 1, 2]);
+      // Task 19 gave the fixture a flintlock pistol at 30 on purpose (its Firearms; Brawl 40 stays the tie figure)
+      assert.deepEqual([n.fighting, n.firearms, n.dodge, n.db, n.build, n.attacks], [40, 30, 20, '+1D4', 1, 2]);
       const index = buildIndex(dir);
       const foe = foesOf(`${NPCS}Dock Cultist.md`, index, 1, 'k', new Set(), null, null, systemFor('coc-7e')).foes[0];
       assert.deepEqual([foe.fighting, foe.dodge, foe.db, foe.build, foe.armour, foe.attacks], [40, 20, '+1D4', 1, '1 (oilskin coat)', 2]);
@@ -117,6 +121,28 @@ for (const crlf of [false, true]) {
       // a fighting weapon with a digit stays Fighting
       assert.deepEqual([readNumbers('- 2-handed axe 40% (20/8), damage 1D8+DB').fighting, readNumbers('- 2-handed axe 40% (20/8), damage 1D8+DB').firearms], [40, null]);
     });
+    it('a firearm line\'s damage, malfunction, slow reload and impaling (Task 19): a Regency flintlock and blunderbuss', () => {
+      const n = readNumbers('**HP** 10\n- Flintlock pistol 45% (22/9), damage 1D6+1, 1 per 4 rounds, malfunction 95\n- Blunderbuss 40% (20/8), damage 2D6/1D6, 1/4 rnds, malf. 95\n- .38 Revolver 50% (25/10), damage 1D10, impales\n- Tommy gun 35%, damage 1D10+2\n- Brawl 40% (20/8), damage 1D3+DB');
+      assert.deepEqual(n.guns, [
+        { name: 'Flintlock pistol', skill: 45, damage: '1D6+1', malfunction: 95, reload: 4, impales: false },
+        { name: 'Blunderbuss', skill: 40, damage: '2D6/1D6', malfunction: 95, reload: 4, impales: false },
+        { name: '.38 Revolver', skill: 50, damage: '1D10', malfunction: null, reload: null, impales: true },
+        { name: 'Tommy gun', skill: 35, damage: '1D10+2', malfunction: null, reload: null, impales: null },
+      ]);
+      assert.equal(readNumbers('**HP** 10\r\n- Brawl 40% (20/8), damage 1D3+DB').guns, null);
+      assert.deepEqual(read(dir, 'Dock Cultist').nums.guns.map((g) => [g.name, g.malfunction, g.reload, g.impales]), [['Flintlock pistol', 95, 4, false]]);
+    });
+    it('a PC sheet\'s Combat table gives its guns (Task 19)', () => {
+      const { coc } = require('../lib/run-sheet/systems/coc');
+      // Iris's fixture sheet with a Combat table added
+      const sheet = fs.readFileSync(path.join(dir, 'Characters/PCs/Iris Calder.md'), 'utf8').replace(/\r\n/g, '\n');
+      const fm = { name: 'Iris Calder' };
+      const body = `${sheet.replace(/^---[\s\S]*?\n---\n/, '')}\n## Combat\n\n${['| Weapon | Skill % | Damage | Attacks | Range | Ammo | Malf |', '|---|---|---|---|---|---|---|',
+        '| Unarmed | 25 | 1D3+DB | 1 | — | — | — |', '| Pistol (Double-Barreled), Flintlock | Firearms (Pistol) 45 | 1D6+1 | 1/4 | 10 yds | 2 | 90 |'].join('\n')}\n`.replace(/\n/g, '\r\n');
+      const out = coc.readPc({ body, fm });
+      assert.equal(out.note, undefined, 'read by the sheet reader');
+      assert.deepEqual(out.numbers.guns, [{ name: 'Pistol (Double-Barreled), Flintlock', skill: 45, damage: '1D6+1', malfunction: 90, reload: 4, impales: false }]);
+    });
     it('CoC and Regency are CoC, and fight (Task 7)', () => {
       for (const [id, label] of [['coc-7e', 'Call of Cthulhu 7e'], ['coc-7e-regency', null]]) {
         const d = systemFor(id).describe();
@@ -132,8 +158,10 @@ for (const crlf of [false, true]) {
         assert.equal(d.fight.initiative, 'dex');
         // Task 16: CoC's melee numbers as data, on the model's rules and the fight's
         // Task 18 added the cards' table on purpose (its own tests are in run-sheet-coc-math.test.js)
-        const { cards, ...melee } = d.coc;
+        // Task 19 added the firearm table on purpose (its own tests are in run-sheet-coc-math.test.js)
+        const { cards, firearm, ...melee } = d.coc;
         assert.equal(typeof cards, 'object');
+        assert.equal(typeof firearm, 'object');
         assert.deepEqual(melee, { tie: { dodge: 'defender', fightBack: 'attacker' }, outnumbered: { bonus: 1 }, prone: { status: 'Prone', meleeBonus: 1 }, maxDice: 2, defaultResponse: 'fightBack' });
         assert.deepEqual(d.fight.coc, d.coc);
         assert.equal(d.words.buildHint, 'Manoeuvre: compare Builds');

@@ -379,3 +379,106 @@ describe('coc-math: a hit\'s card and the SAN bout (Task 18)', () => {
     assert.match(K.notes.int, /KR p\d+/);
   });
 });
+
+describe('coc-math: a shot\'s dice (Task 19)', () => {
+  const { rollPercent } = require('../lib/dice');
+  const shooter = { kind: 'npc', firearms: 55, conds: [] };
+  const target = { kind: 'pc', conds: [] };
+  const dice = (chips, a = shooter, d = target) => C.shotDice(chips, a, d, COC);
+  const net = (chips, a, d) => dice(chips, a, d).net;
+  // the server's d100 with its dice faces given: tens faces then the units face, as lib/dice draws them
+  const faces = (...f) => { let i = 0; return () => f[i++]; };
+
+  it('the chip numbers are data with the system, the same for Regency', () => {
+    assert.deepEqual(systemFor('coc-7e-regency').describe().fight.coc.firearm, COC.firearm);
+    assert.deepEqual(COC.firearm.ranges.map((r) => r.difficulty), ['regular', 'hard', 'extreme']);
+    for (const c of COC.firearm.chips) assert.ok(c.label.length <= 22, `a chip names a condition: ${c.label}`);
+  });
+  it('each chip\'s die', () => {
+    const want = { aim: 1, pointBlank: 1, large: 1, small: -1, cover: -1, fast: -1, intoMelee: -1, loading: -1, shots: -1, proneTarget: -1, proneShooter: 1, dive: -1 };
+    for (const [k, n] of Object.entries(want)) assert.equal(net([k]), n, k);
+    assert.equal(net([]), 0);
+  });
+  it('the range sets the difficulty: regular, long Hard, very long Extreme', () => {
+    assert.deepEqual([dice([]).difficulty, dice(['long']).difficulty, dice(['veryLong']).difficulty], ['regular', 'hard', 'extreme']);
+    assert.deepEqual(dice(['long', 'pointBlank']).why, ['long range', 'point blank']);
+  });
+  it('point blank and a small target cancel', () => {
+    const d = dice(['pointBlank', 'small']);
+    assert.deepEqual([d.net, d.asked, d.rolled], [0, { bonus: 0, penalty: 0 }, { bonus: 0, penalty: 0 }]);
+  });
+  it('2-3 shots this round: one penalty die on each shot, the first included; it does not grow with the count', () => {
+    for (let shot = 1; shot <= 3; shot++) assert.equal(net(['shots']), -1, `shot ${shot}`);
+  });
+  it('a Prone target: +1 penalty die, not at point blank; a Prone shooter: +1 bonus die', () => {
+    assert.equal(net(['proneTarget']), -1);
+    assert.equal(net(['proneTarget', 'pointBlank']), 1, 'only the point blank die');
+    assert.equal(net(['proneShooter']), 1);
+    // the strip turns them on from the statuses
+    assert.deepEqual(C.shotChipsFrom({ conds: ['Prone'] }, { conds: ['Prone'] }, 2, COC), ['proneTarget', 'proneShooter']);
+  });
+  it('aim then shoot next round: the aimed chip is on; the round it was declared, or two rounds on, it is not', () => {
+    assert.deepEqual(C.shotChipsFrom({ conds: [], aiming: { round: 1 } }, target, 2, COC), ['aim']);
+    assert.deepEqual(C.shotChipsFrom({ conds: [], aiming: { round: 2 } }, target, 2, COC), []);
+    assert.deepEqual(C.shotChipsFrom({ conds: [], aiming: { round: 1 } }, target, 3, COC), []);
+  });
+  it('a Build 4 target gives the bonus die without a chip; Build -2 the penalty die; a known Build overrides a size chip', () => {
+    assert.equal(net([], shooter, { build: 4 }), 1);
+    assert.equal(net([], shooter, { build: -2 }), -1);
+    assert.equal(net(['large'], shooter, { build: 1 }), 0);
+    assert.equal(net(['small'], shooter, {}), -1, 'no Build: the chip');
+  });
+  it('six penalty chips: two rolled, and the roll line says six were asked', () => {
+    const d = dice(['small', 'cover', 'fast', 'intoMelee', 'loading', 'shots']);
+    assert.deepEqual([d.net, d.asked, d.rolled, d.over], [-6, { bonus: 0, penalty: 6 }, { bonus: 0, penalty: 2 }, true]);
+    assert.equal(C.shotDiceText(d), '−2 penalty dice (6 penalty dice asked: 2 rolled (KR p91))');
+    // the server takes the six and rolls two, keeping what was asked
+    const x = rollPercent({ target: 55, ...d.asked }, { randomInt: faces(1, 4, 7, 3) });
+    assert.deepEqual([x.tens.length, x.asked, C.shotRoll(x, 55, d).kept], [3, { bonus: 0, penalty: 6 }, 73]);
+  });
+  it('a long shot at skill 55: Hard, and a 96 is a fumble', () => {
+    const d = dice(['long']);
+    const x = rollPercent({ target: 55, difficulty: d.difficulty, ...d.asked }, { randomInt: faces(9, 6) });
+    const r = C.shotRoll(x, 55, d);
+    assert.deepEqual([r.kept, r.level, r.needed], [96, 'fumble', 27]);
+    assert.equal(C.shotHits(r.level, d.difficulty), false);
+    // a Regular 40 misses at Hard; a Hard 20 hits
+    assert.deepEqual([C.shotHits('regular', 'hard'), C.shotHits('hard', 'hard'), C.shotHits('regular', 'regular'), C.shotHits('fail', 'regular')], [false, true, true, false]);
+  });
+  it('a roll against another figure, difficulty or dice than the shot holds is not taken', () => {
+    const d = dice(['long', 'pointBlank']);
+    const x = rollPercent({ target: 55, difficulty: 'hard', bonus: 1 }, { randomInt: faces(3, 4, 3) });
+    assert.ok(C.shotRoll(x, 55, d));
+    assert.equal(C.shotRoll(x, 50, d), null);
+    assert.equal(C.shotRoll({ ...x, difficulty: 'regular' }, 55, d), null);
+    assert.equal(C.shotRoll(x, 55, dice(['long'])), null);
+  });
+  it('a kept 96 with malfunction 95 is flagged; 94 is not; with no number, 95 shows the hint', () => {
+    assert.deepEqual([C.malfunctionFlag(96, 95, COC), C.malfunctionFlag(95, 95, COC), C.malfunctionFlag(94, 95, COC)], ['malfunction', 'malfunction', '']);
+    assert.deepEqual([C.malfunctionFlag(95, null, COC), C.malfunctionFlag(94, null, COC)], ['check', '']);
+    assert.equal(C.malfunctionFlag(90, 90, COC), 'malfunction', 'the double-barreled pistol');
+  });
+  it('the blunderbuss\'s damage box offers 2D6 and 1D6 as typed choices', () => {
+    assert.deepEqual(C.damageChoices('2D6/1D6'), ['2D6', '1D6']);
+    assert.deepEqual([C.damageChoices('1D6+1'), C.damageChoices(null)], [['1D6+1'], []]);
+  });
+  it('the shot\'s figure: the gun\'s own skill, else Firearms; who may shoot', () => {
+    assert.equal(C.shotSkill({ firearms: 40 }, { skill: 30 }), 30);
+    assert.equal(C.shotSkill({ firearms: { Handgun: 45, Rifle: 50 } }, null), 50);
+    assert.deepEqual([C.canShoot({ kind: 'pc' }), C.canShoot({ kind: 'foe', firearms: 30 }), C.canShoot({ kind: 'foe', guns: [{ name: 'x' }] }), C.canShoot({ kind: 'foe' })], [true, true, true, false]);
+  });
+  it('the lines: a shot rolled, a PC\'s tapped, a malfunction; the dive; the marks', () => {
+    const d = dice(['long', 'pointBlank']);
+    const roll = { level: 'fail', kept: 33, tens: [30, 40], needed: 27 };
+    assert.equal(C.shotLine({ shooter: 'Cultist 1', target: 'Cultist 2' }, { dice: d, skill: 55, roll, hit: false, flag: '' }),
+      'Cultist 1 shoots Cultist 2 (long range, point blank), +1 bonus die: Firearms 55 at Hard (27): rolled 33 (tens 30, 40): Fail: a miss.');
+    assert.equal(C.shotLine({ shooter: 'Iris', target: 'Cultist 2' }, { dice: dice([]), level: 'regular', hit: true, flag: '' }), 'Iris shoots Cultist 2: Regular needed: Regular: a hit.');
+    assert.match(C.shotLine({ shooter: 'A', target: 'B' }, { dice: dice([]), skill: 30, roll: { level: 'fumble', kept: 97, tens: [90], needed: 30 }, hit: false, flag: 'malfunction', malfunction: 95 }), /: Fumble: malfunction \(95\)\.$/);
+    assert.match(C.shotLine({ shooter: 'A', target: 'B' }, { dice: dice([]), skill: 30, roll: { level: 'fumble', kept: 97, tens: [90], needed: 30 }, hit: false, flag: 'check' }), /a miss; check malfunction \(KR p118\)\.$/);
+    assert.equal(C.diveLine('Cultist 2', { kept: 15, level: 'hard', passed: true }, 1), 'Cultist 2 dives for cover: Dodge rolled 15, Hard: a penalty die on the shot; loses its next attack.');
+    assert.equal(C.diveLine('Iris', { tapped: true, passed: false }, 1), 'Iris dives for cover: failed; loses its next attack.');
+    assert.deepEqual([C.lostText({ attacks: 1, on: true }), C.lostText({ attacks: 2, on: true }), C.lostText({ attacks: 1, on: false })],
+      ['loses this attack: dived for cover', 'loses all 2 attacks: dived for cover', 'dived for cover: loses its next attack']);
+    assert.equal(C.reloadText({ left: 4, weapon: 'Flintlock pistol' }), 'Flintlock pistol: ready again in 4 rounds');
+  });
+});

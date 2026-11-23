@@ -27,6 +27,7 @@ Mends nets on the quay and never looks up at the light.
 **Combat**
 - Brawl 40% (20/8), damage 1D3+DB
 - Gutting knife 35% (17/7), damage 1D4+DB
+- Flintlock pistol 30% (15/6), damage 1D6+1, 1 per 4 rounds, malfunction 95
 - Dodge 20% (10/4)
 
 **Skills:** Swim 60%, Spot Hidden 40%

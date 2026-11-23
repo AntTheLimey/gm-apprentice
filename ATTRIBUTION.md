@@ -265,15 +265,20 @@ License: SJG Online Policy
 Transformation: names and numbers used in a sum, each with its
 page reference in a code comment. Names and numbers only.
 
-**`tools/publish/lib/run-sheet/systems/coc.js`, `tools/publish/lib/run-sheet/web/coc-math.js`** (the run sheet's fight figures: DEX order, firearm bonus, pool limits; melee: dodge or fight back, comparing levels and their ties, the outnumbered and Prone bonus dice, the dice cap; damage: the damage bonus in full, half or none, armour, the Extreme hit's maximum and impaling roll; a hit's card: the Major Wound, Dying and its CON rolls, death over max HP, Unconscious, stabilising; the SAN loss's INT roll and the bout's rounds)
+**`tools/publish/lib/run-sheet/systems/coc.js`, `tools/publish/lib/run-sheet/web/coc-math.js`** (the run sheet's fight figures: DEX order, firearm bonus, pool limits; melee: dodge or fight back, comparing levels and their ties, the outnumbered and Prone bonus dice, the dice cap; damage: the damage bonus in full, half or none, armour, the Extreme hit's maximum and impaling roll; a hit's card: the Major Wound, Dying and its CON rolls, death over max HP, Unconscious, stabilising; the SAN loss's INT roll and the bout's rounds; a shot: the range's difficulty, the firearm bonus and penalty dice, aiming, the dive for cover, malfunction, a weapon line's slow reload)
 BRP combat foundation: *Basic Roleplaying: Universal Game Engine*,
 ORC License (see above). CoC 7e adaptation (fight back, comparing
 success levels, bonus and penalty dice, the outnumbered die, the Prone
 die, the damage bonus by weapon kind, the Extreme hit's damage and
 impales, the Major Wound and Dying, the INT roll after a large SAN
-loss and its bout of madness): our own descriptions of
-uncopyrightable game mechanics, with *Keeper Rulebook* page
-references in code comments. Not Chaosium text.
+loss and its bout of madness, firearm modifiers, the dive for cover,
+malfunction): our own descriptions of uncopyrightable game mechanics,
+with *Keeper Rulebook* page references in code comments. Not Chaosium
+text. Regency figures (flintlocks' malfunction 95, the double-barreled
+pistol's 90, one shot per 4 rounds, never impaling; the blunderbuss's
+damage by range) from *Regency Cthulhu* (Chaosium, 2022) p187: names
+and numbers only, read from the GM's own weapon lines, with the page
+reference in a code comment.
 
 **`tools/publish/lib/dice/index.js`** (the run sheet's dice: 3d6 and d100 against a target, damage dice)
 GURPS: *GURPS Basic Set 4th Edition* (Steve Jackson Games).

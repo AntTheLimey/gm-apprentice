@@ -135,6 +135,8 @@
   // none of D&D's follows: the marks are set and the thresholds light.
   // `opts.over` is the damage left after temp HP and HP.
   function afterHp(s, f, r, before, at, opts) {
+    // a hit takes a declared aim away (CoC, Task 19: KR p113)
+    if (opts && isNum(before) && isNum(r.hp) && r.hp < before) aimLost(s, f, r, at, 'hit');
     if (FM.rulesOf(f).autoOut === false) {
       settleMarks(s, f, r, at);
       lightThresholds(s, f, r, at);
@@ -489,11 +491,14 @@
   function roundEnds(s, f, at) {
     sayRoster(s, f, at, `Round ${f.round} ends: `, rosterItems(s, f), '.');
     cocRoundEnds(s, f, at);
+    shotRoundEnds(f, at);
     f.round += 1;
     meleeRound(f);
   }
   // A row's turn ends: its shock counts down, and HT to recover while it is Stunned.
   function turnEnds(f, r, at) {
+    // the attack a dive for cover lost: its mark goes when the turn it was shown on ends (CoC, Task 19)
+    if (r && r.lostAttack && r.lostAttack.on) { r.lostAttack = null; touch(r, at); }
     // Aim and Evaluate count turns in a row: a turn that ends with neither picked starts them again (Task 15)
     if (r && defencesOf(f) && r.manoeuvre !== 'aim' && r.manoeuvre !== 'evaluate' && (r.aim || r.evaluate)) { r.aim = 0; r.evaluate = 0; touch(r, at); }
     const C = consequencesOf(f);
@@ -507,6 +512,8 @@
   }
   // A row's turn starts: HT to stay conscious at 0 HP or less.
   function turnStarts(f, r) {
+    // a diver's next turn: its lost attack shows on it (CoC, Task 19)
+    if (r && r.lostAttack && !r.lostAttack.on) r.lostAttack = { ...r.lostAttack, on: true };
     const C = consequencesOf(f);
     if (C && r) replaceCards(f, r, 'conscious', GM.cardsAtTurnStart(r, C));
   }
@@ -547,11 +554,38 @@
   // who hits whom, the exchange's kind (Task 16's 'melee'; Task 19's shot is 'shot', a very long one `veryLong`),
   // which side hit, at which level, and whether it offers the Extreme maximum. Cleared at every turn's start and
   // once its damage is applied.
-  function exchangeOf(f, by, on, { kind, side, level, veryLong = false }) {
+  // A shot's (Task 19) also carries its gun's `impales` (false: the toggle stays off) and `damage` (the box's choices)
+  // when the gun's line gives them.
+  function exchangeOf(f, by, on, { kind, side, level, veryLong = false, impales = null, damage = null }) {
     f.meleeN = (isNum(f.meleeN) ? f.meleeN : 0) + 1;
     const offer = CM.extremeOffer({ side, level, veryLong, onTurn: by.id === f.turn });
-    return { n: f.meleeN, by: by.id, on: on.id, round: f.round, kind, side, level, ...(veryLong ? { veryLong: true } : {}), offer };
+    return { n: f.meleeN, by: by.id, on: on.id, round: f.round, kind, side, level, ...(veryLong ? { veryLong: true } : {}), offer,
+      ...(typeof impales === 'boolean' ? { impales } : {}), ...(damage ? { damage } : {}) };
   }
+  // ---- CoC firearms (Task 19): the aim, the shot, the dive; the d100 the server's, a PC's level the GM's tap ----
+  const fireOf = (f) => { const C = cocOf(f); return C && C.firearm && typeof C.firearm === 'object' ? C : null; };
+  // A declared aim lost (`why`: 'hit' or 'moved'), logged.
+  function aimLost(s, f, r, at, why) {
+    if (!r.aiming || !fireOf(f)) return;
+    r.aiming = null;
+    touch(r, at);
+    say(s, f, at, `${nameOf(s, f, r)}: ${why === 'hit' ? 'hit' : 'moves'}, the aim is lost.`);
+  }
+  // A round's end: a slow weapon's counter goes down a round (gone at 0); an aim declared before the round now ending
+  // and never shot with lapses, quietly. Every row, Out or benched too: time passes for them.
+  function shotRoundEnds(f, at) {
+    if (!fireOf(f)) return;
+    for (const r of f.rows) {
+      if (r.reload && isNum(r.reload.left)) { const left = r.reload.left - 1; r.reload = left > 0 ? { ...r.reload, left } : null; touch(r, at); }
+      if (r.aiming && isNum(r.aiming.round) && r.aiming.round < f.round) { r.aiming = null; touch(r, at); }
+    }
+  }
+  // A typed malfunction number: 1 to 100; null for none; undefined when it is not one.
+  const malIn = (v) => {
+    if (v === null || v === undefined || v === '') return null;
+    const n = Number(v);
+    return Number.isInteger(n) && n >= 1 && n <= 100 ? n : undefined;
+  };
   // A CoC damage entry (Task 17): dice the page rolled with the attacker's DB put in (`by`, `mode`, `roll`), an
   // Extreme hit's maximum (`extreme`, `roll` maxRoll's, `extra` the impaling weapon roll), or a bare number in the box
   // an exchange opened (`exchange`, its `n`), taken as rolled. The target's armour comes off; the working line goes
@@ -959,6 +993,75 @@
       if (!!r.outnumberedOff === off) return;
       r.outnumberedOff = off;
       touch(r, at);
+    }),
+    // The aim (CoC, Task 19): declared on the row's own turn (`on` true), for a shot next round; taken back as a move
+    // (`on` false), logged. A hit takes it too (afterHp), the shot uses it, and a round's end lapses it (shotRoundEnds).
+    aim: onRow((s, f, r, a, at) => {
+      if (!fireOf(f) || r.kind === 'lair' || !r.in || r.out) return;
+      if (a.on === false) { aimLost(s, f, r, at, 'moved'); return; }
+      if (!f.started || f.turn !== r.id || (r.aiming && r.aiming.round === f.round)) return;
+      r.aiming = { round: f.round };
+      touch(r, at);
+      say(s, f, at, `${nameOf(s, f, r)} aims.`);
+    }),
+    // A shot (CoC, Task 19): `shooter` at `target`, with the chips on (`chips`: the range past regular and the
+    // modifiers, 'dive' when the target's dive passed) and the gun picked (`gun`, its index in the shooter's list, or
+    // null). An NPC's d100 is the server's (`result`, at the range's difficulty with the dice asked); a PC's level the
+    // GM's tap (`level`): the sheet never rolls for a PC. Dropped when the roll is not against the figure and dice the
+    // shot holds now. A hit opens its damage (`f.melee`, kind 'shot'); a kept roll at or over the malfunction number
+    // (`malfunction`, typed, else the gun's) is flagged and fires nothing. The gun's slow reload starts its counter;
+    // the shooter's aim is spent. Never a melee defence (KR p108). One log line.
+    shot(s, a, at) {
+      const f = running(s, a);
+      const C = f && fireOf(f);
+      if (!C) return;
+      const A = rowOf(f, a.shooter);
+      const D = rowOf(f, a.target);
+      if (!A || !D || A === D || [A, D].some((r) => r.kind === 'lair' || !r.in || r.out)) return;
+      const keys = CM.shotKeys(C);
+      if (!Array.isArray(a.chips) || a.chips.some((k) => !keys.includes(k))) return;
+      const guns = CM.gunsOf(A);
+      const noGun = a.gun === null || a.gun === undefined;
+      if (!noGun && !(Number.isInteger(a.gun) && guns[a.gun])) return;
+      const gun = noGun ? null : guns[a.gun];
+      const typed = malIn(a.malfunction);
+      if (typed === undefined) return;
+      const dice = CM.shotDice(a.chips, A, D, C);
+      const skill = CM.shotSkill(A, gun);
+      let level;
+      let roll = null;
+      if (A.kind === 'pc') {
+        if (!CM.isLevel(a.level) || a.result !== undefined) return;
+        level = a.level;
+      } else {
+        roll = CM.shotRoll(a.result, skill, dice);
+        if (!roll) return;
+        level = roll.level;
+      }
+      const mal = typed !== null ? typed : (gun ? gun.malfunction : null);
+      const flag = roll ? CM.malfunctionFlag(roll.kept, mal, C) : '';
+      const hit = flag !== 'malfunction' && CM.shotHits(level, dice.difficulty);
+      touch(A, at);
+      touch(D, at);
+      if (A.aiming) A.aiming = null;
+      if (gun && isNum(gun.reload) && gun.reload > 1) A.reload = { left: gun.reload, of: gun.reload, weapon: gun.name };
+      f.melee = hit ? exchangeOf(f, A, D, { kind: 'shot', side: 'attacker', level, veryLong: dice.range === 'veryLong',
+        impales: gun ? gun.impales : null, damage: gun ? gun.damage : null }) : null;
+      const cite = C.firearm.malfunction && C.firearm.malfunction.cite;
+      say(s, f, at, CM.shotLine({ shooter: nameOf(s, f, A), target: nameOf(s, f, D) }, { dice, skill, roll, level, hit, flag, malfunction: mal, cite }));
+    },
+    // A dive for cover (CoC, Task 19): the target's answer to a shot. An NPC's is the server's d100 against its Dodge
+    // (`result`, Regular, no dice); a PC's the GM's Passed or Failed tap (`result: { tap }`). Pass or fail, the diver
+    // loses its next attack (all of a creature's): a mark on its next turn, gone when that turn ends. The page adds the
+    // passed dive's die to the shot. Never a melee defence (KR p108, p113). One log line.
+    dive: onRow((s, f, r, a, at) => {
+      if (!fireOf(f) || r.kind === 'lair' || !r.in || r.out) return;
+      const res = CM.rollResult(a.result, r);
+      if (!res || (!res.tapped && res.target !== r.dodge)) return;
+      const attacks = CM.limitOf(r);
+      r.lostAttack = { attacks, on: false };
+      touch(r, at);
+      say(s, f, at, CM.diveLine(nameOf(s, f, r), res, attacks));
     }),
     resisted: onRow((s, f, r, a, at) => { r.resisted = !!a.on; touch(r, at); }),
     // the face-open toggle (GURPS, Task 12), read by GM.gurpsInjury
