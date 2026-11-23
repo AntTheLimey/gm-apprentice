@@ -707,7 +707,7 @@ describe('CoC and GURPS fights on the GM page, by real input', { skip: browserSk
   const focusIs = (page, sel) => page.waitFor(`document.activeElement === document.querySelector(${q(sel)})`, 3000);
 
   for (const [width, height] of SIZES) {
-    it(`GURPS at ${width}: with Bouncer 1 acting, a held click on Bouncer 2's Parry readout rolls it and logs, with no click on its name; the next Parry reads −4`, async () => {
+    it(`GURPS at ${width}: with Bouncer 1 acting, a held click on Bouncer 2's Parry readout rolls it and logs, with no click on its name; the next Parry reads 5`, async () => {
       const run = await start('gurps', { randomInt: () => 4 });
       await withPage({ width, height }, async (page) => {
         let p = await bouncers(page, run, [['st', 11], ['ht', 10], ['dx', 10], ['parry', 9], ['block', 8]]);
@@ -724,7 +724,7 @@ describe('CoC and GURPS fights on the GM page, by real input', { skip: browserSk
         p = await until(page, `p.fight.rows.find((r) => r.id === ${q(b2)}).parries === 1 && p.saved === "Saved" && p.pending === 0`);
         assert.strictEqual(p.fight.actingName, 'Bouncer 1', 'no click on its name: the panel is still Bouncer 1\'s');
         assert.deepStrictEqual((await logOf(run)).slice(-1), ['Bouncer 2: Parry 9, rolled 12, failed by 3.']);
-        // the next Parry reads −4, its cause in the title; focus stays on the button
+        // the next Parry reads 5, its cause in the title; focus stays on the button
         await page.waitFor(`document.querySelector(${q(parry)}) && document.querySelector(${q(parry)}).textContent === "Parry 5"`, 3000);
         assert.strictEqual(await attrOf(page, parry, 'title'), 'Parry 9 → 5: parry 2 −4. Tap: roll it');
         await focusIs(page, parry);
@@ -746,7 +746,7 @@ describe('CoC and GURPS fights on the GM page, by real input', { skip: browserSk
     });
   }
 
-  it('GURPS: the panel\'s Retreat adds its bonus; a used Block asks once, then rolls again; Stunned turns Retreat off', async () => {
+  it('GURPS: the panel\'s Retreat on gives Dodge 11; a used Block asks once, then rolls again; Stunned greys Retreat', async () => {
     const run = await start('gurps', { randomInt: () => 4 });
     await withPage({ width: 1449, height: 762 }, async (page) => {
       let p = await bouncers(page, run, [['st', 11], ['ht', 10], ['dx', 10], ['parry', 9], ['block', 8]]);
@@ -773,7 +773,7 @@ describe('CoC and GURPS fights on the GM page, by real input', { skip: browserSk
         'Bouncer 2: Block 8 → 9 (retreat +1), rolled 12, failed by 3.',
         'Bouncer 2: Block 8 → 9 (retreat +1), again, rolled 12, failed by 3.',
       ]);
-      // Stunned, from another window: −4, and Retreat is off and greyed
+      // Stunned, from another window: Dodge 4, Parry 5, Retreat greyed
       await fromOther(run, [{ type: 'status', fight: p.fight.id, row: b2, add: 'Stunned' }]);
       p = await until(page, `p.fight.rows.find((r) => r.id === ${q(b2)}).conds.includes("Stunned") && p.saved === "Saved" && p.pending === 0`);
       await page.waitFor(`document.querySelector('#acting [data-fretreat="${b2}"]').disabled`, 3000);
@@ -793,6 +793,36 @@ describe('CoC and GURPS fights on the GM page, by real input', { skip: browserSk
       assert.strictEqual(await page.evaluate(`document.querySelectorAll('li[data-frow="${sela}"] [data-fdef]').length`), 0);
       // a foe with a block's defences has its buttons: Mara Quint
       assert.ok((await texts(page, `li[data-frow="${named(p, 'Mara Quint').id}"] .defs .def`)).length > 0);
+      // a Dodge typed in the fight is no longer the sheet's: it says typed
+      p = await typeInto(page, box(p, 'Sela Drake', 'dodge'), 11);
+      await page.waitFor('document.querySelectorAll("#acting .pdefs.pc .pcdef").length === 1', 3000);
+      assert.deepStrictEqual(await texts(page, '#acting .pdefs.pc .sheetdef'), ['Parry 10', 'Block 9']);
+      assert.deepStrictEqual(await texts(page, '#acting .pdefs.pc .pcdef'), ['Dodge 11 (typed)']);
+    });
+  });
+
+  it('GURPS: a Parry whose figure moves while its roll is out is not logged; a note says "Parry moved to 5: tap again"', async () => {
+    const run = await start('gurps', { randomInt: () => 4 });
+    // the dice answer waits until the test lets it go
+    let release;
+    const gate = new Promise((ok) => { release = ok; });
+    const route = run.routes.find((r) => r.path === '/api/roll');
+    const roll = route.handle;
+    route.handle = (req, res) => { gate.then(() => roll(req, res)); };
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await bouncers(page, run, [['st', 11], ['ht', 10], ['dx', 10], ['parry', 9]]);
+      const b2 = named(p, 'Bouncer 2').id;
+      const parry = `[data-fdef="${b2}|parry"]`;
+      await tap(page, parry);
+      // Stunned from another window while the roll is out: Parry 9 reads 5
+      await fromOther(run, [{ type: 'status', fight: p.fight.id, row: b2, add: 'Stunned' }]);
+      p = await until(page, `p.fight.rows.find((r) => r.id === ${q(b2)}).conds.includes("Stunned") && p.saved === "Saved" && p.pending === 0`);
+      release();
+      await page.waitFor('Array.from(document.querySelectorAll("#hnotes .hnote"), (n) => n.textContent).some((t) => t.includes("Bouncer 2: Parry moved to 5: tap again."))', 3000);
+      p = await settled(page);
+      assert.strictEqual(named(p, 'Bouncer 2').parries, 0);
+      assert.ok(!(await logOf(run)).some((t) => /Parry 9/.test(t)), 'nothing logged');
+      await page.waitFor(`document.querySelector(${q(parry)}).textContent === "Parry 5" && !document.querySelector(${q(parry)}).disabled`, 3000);
     });
   });
 
@@ -801,7 +831,7 @@ describe('CoC and GURPS fights on the GM page, by real input', { skip: browserSk
     await withPage({ width: 1449, height: 762 }, async (page) => {
       let p = await bouncers(page, run, [['st', 11], ['ht', 13], ['dr', 1]]);
       const b2 = named(p, 'Bouncer 2').id;
-      // 2 cr face: 1 injury, a head hit with shock: one knockdown line at HT 13, which 12 makes
+      // 2 cr face: a card of one line at HT 13, which 12 makes
       p = await typeInto(page, `[data-fhp="${b2}"]`, '2 cr face');
       const card = `#acting .fcard[data-fcrow="${b2}"]`;
       p = await until(page, `document.querySelector(${q(card)}) && p.saved === "Saved" && p.pending === 0`);

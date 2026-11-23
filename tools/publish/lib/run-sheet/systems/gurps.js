@@ -83,7 +83,7 @@ const CONSEQUENCES = {
 // row's state; the page shows what moved it by name and number, and the GM can ignore all of it.
 const DEFENCES = {
   names: { dodge: 'Dodge', parry: 'Parry', block: 'Block' },
-  halve: { marks: ['Reeling'], tired: 'tired' }, // B419, B426; the two in turn when both (the server's reading)
+  halve: { marks: ['Reeling'], tired: 'tired' }, // B419, B426
   statuses: { Stunned: -4, Prone: -3, Kneeling: -2 }, // B420, B551
   noRetreat: ['Stunned', 'Kneeling'], // B377, B420
   retreat: { dodge: 3, parry: 1, block: 1 }, // B377
@@ -294,7 +294,7 @@ function drByLocationOf(model) {
 
 // A PC's Dodge, Parry and Block from the sheet's Active Defenses (for the panel, for reference: the sheet never
 // rolls for a PC): Dodge's figure, and the first Parry and Block listed.
-function defencesOf(model) {
+function sheetDefences(model) {
   const d = (model && model.defenses) || {};
   const at = (list) => (Array.isArray(list) && list.length ? firstFigure(list[0] && list[0].value) : null);
   const dodge = firstFigure(d.dodge != null ? d.dodge : ((model && model.attributes) || {}).dodge);
@@ -312,7 +312,7 @@ function readPc({ body, fm }) {
     const magic = magicOf(model, text);
     const drByLocation = drByLocationOf(model);
     return { numbers: { hpNow: v.hp.cur, hpMax: v.hp.max, fpNow: v.fp.cur, fpMax: v.fp.max,
-      speed: figure(v.basicSpeed), dx: figure(v.dx), ht: figure(ht && ht.value), ...defencesOf(model), ...magic.numbers, ...(drByLocation ? { drByLocation } : {}) },
+      speed: figure(v.basicSpeed), dx: figure(v.dx), ht: figure(ht && ht.value), ...sheetDefences(model), ...magic.numbers, ...(drByLocation ? { drByLocation } : {}) },
     ...(magic.spells ? { spells: magic.spells } : {}) };
   } catch (e) {
     return { numbers: { ...NONE }, note: `the sheet could not be read: ${firstLine(e)}` };

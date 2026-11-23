@@ -1292,57 +1292,57 @@ test('plain: Dodge 9, Parry 9, Block 8 as typed, no causes', () => {
   assert.equal(live({ parry: null }).parry.value, null, 'no figure, no value');
 });
 
-test('Stunned: −4, Retreat off and refused', () => {
+test('Stunned: Dodge 9 reads 5, Retreat off', () => {
   const d = live({ conds: ['Stunned'], retreat: true });
   assert.deepEqual([d.dodge.value, d.parry.value, d.block.value], [5, 5, 4]);
   assert.equal(d.dodge.title, 'Dodge 9 → 5: stunned −4');
   assert.deepEqual(d.retreat, { on: false, allowed: false, why: 'stunned' });
 });
 
-test('Stunned and Prone: −4 and −3', () => {
+test('Stunned and Prone: Parry 9 reads 2', () => {
   const d = live({ conds: ['Stunned', 'Prone'] });
   assert.deepEqual([d.dodge.value, d.parry.value], [2, 2]);
   assert.equal(d.parry.title, 'Parry 9 → 2: stunned −4, prone −3');
 });
 
-test('Kneeling −2, and no retreat', () => {
+test('Kneeling: Dodge 9 reads 7, Retreat off', () => {
   const d = live({ conds: ['Kneeling'], retreat: true });
   assert.deepEqual([d.dodge.value, d.block.value], [7, 6]);
   assert.deepEqual([d.retreat.allowed, d.retreat.why], [false, 'kneeling']);
 });
 
-test('Reeling halves Dodge 9 to 5', () => {
+test('Reeling: Dodge 9 reads 5', () => {
   const d = live({ marks: ['Reeling'] });
   assert.deepEqual([d.dodge.value, d.parry.value], [5, 9]);
   assert.equal(d.dodge.title, 'Dodge 9 → 5: reeling');
   assert.equal(fig({ dodge: 8, marks: ['Reeling'] }, 'dodge'), 4);
 });
 
-test('Tired halves Dodge; Tired and Reeling halve it twice, 9 to 3', () => {
+test('Tired: Dodge 9 reads 5; Tired and Reeling: 3', () => {
   assert.equal(fig({ tired: true }, 'dodge'), 5);
   assert.equal(live({ tired: true }).dodge.title, 'Dodge 9 → 5: tired');
   assert.equal(fig({ tired: true }, 'parry'), 9);
   const both = live({ tired: true, marks: ['Reeling'] }).dodge;
   assert.deepEqual([both.value, both.title], [3, 'Dodge 9 → 3: reeling, tired']);
-  // halved first, then the rest: 9 to 5, stunned to 1
+  // Reeling and Stunned: 1
   assert.equal(fig({ marks: ['Reeling'], conds: ['Stunned'] }, 'dodge'), 1);
 });
 
-test('All-Out Attack: no defence until its next turn', () => {
+test('All-Out Attack: Dodge, Parry and Block read none', () => {
   const d = live({ manoeuvre: 'all-out attack' });
   assert.deepEqual([d.dodge.value, d.parry.value, d.block.value], [null, null, null]);
   assert.ok(d.dodge.none);
   assert.equal(d.dodge.title, 'Dodge 9 → none: all-out attack');
 });
 
-test('Move and Attack: no Parry, no retreat', () => {
+test('Move and Attack: Parry none, Retreat off', () => {
   const d = live({ manoeuvre: 'move and attack', retreat: true });
   assert.deepEqual([d.dodge.value, d.parry.value, d.block.value], [9, null, 8]);
   assert.equal(d.parry.title, 'Parry 9 → none: move and attack');
   assert.deepEqual(d.retreat, { on: false, allowed: false, why: 'move and attack' });
 });
 
-test('All-Out Defence (Dodge) gives +2 to Dodge only', () => {
+test('All-Out Defence (Dodge): Dodge 11, the rest as typed', () => {
   const d = live({ manoeuvre: 'all-out defence', aodDefence: 'dodge' });
   assert.deepEqual([d.dodge.value, d.parry.value, d.block.value], [11, 9, 8]);
   assert.equal(d.dodge.title, 'Dodge 9 → 11: all-out defence +2');
@@ -1350,7 +1350,7 @@ test('All-Out Defence (Dodge) gives +2 to Dodge only', () => {
   assert.deepEqual([fig({ manoeuvre: 'all-out defence' }, 'dodge'), fig({ aodDefence: 'dodge' }, 'dodge')], [9, 9], 'neither alone');
 });
 
-test('Retreat adds its bonus: Dodge +3, Parry +1, Block +1', () => {
+test('Retreat on: Dodge 12, Parry 10, Block 9', () => {
   const d = live({ retreat: true });
   assert.deepEqual([d.dodge.value, d.parry.value, d.block.value], [12, 10, 9]);
   assert.equal(d.dodge.title, 'Dodge 9 → 12: retreat +3');
@@ -1368,6 +1368,12 @@ test('a Block counted: Block reads used, its figure kept', () => {
   const d = live({ blocks: 1 }).block;
   assert.deepEqual([d.used, d.value, d.title], [true, 8, 'Block 8: used this turn']);
   assert.equal(live({}).block.used, false);
+});
+
+test('a roll against Parry 9 after it moved to 5 says "Parry moved to 5: tap again"; Parry none says so', () => {
+  assert.equal(GC.defenceMoved(live({ parries: 1 }).parry, 9), 'Parry moved to 5: tap again');
+  assert.equal(GC.defenceMoved(live({ parries: 1 }).parry, 5), null);
+  assert.equal(GC.defenceMoved(live({ manoeuvre: 'move and attack' }).parry, 9), 'Parry: none now');
 });
 
 test('defence log text: "Parry 9 → 5 (parry 2 −4)" and "Dodge 9"', () => {

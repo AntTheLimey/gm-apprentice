@@ -618,12 +618,18 @@
     const live = GMath.liveDefences(r, D);
     const all = GMath.DEFENCE_KEYS.map((k) => live[k]);
     if (r.kind === 'pc') {
+      // "From the sheet" only for what the sheet holds; a figure worked out or typed in the fight says so instead
       const had = all.filter((d) => d.base !== null);
-      return had.length ? `<div class="pdefs pc"><span class="lab">From the sheet:</span>${had.map((d) => `<span class="sheetdef">${esc(`${d.label} ${d.base}`)}</span>`).join('')}</div>` : '';
+      const typed = (d) => Boolean(r.typedKeys && r.typedKeys[d.key]);
+      const sheet = had.filter((d) => !d.from && !typed(d));
+      const other = had.filter((d) => d.from || typed(d));
+      if (!had.length) return '';
+      return `<div class="pdefs pc">${sheet.length ? `<span class="lab">From the sheet:</span>${sheet.map((d) => `<span class="sheetdef">${esc(`${d.label} ${d.base}`)}</span>`).join('')}` : ''}`
+        + `${other.map((d) => `<span class="pcdef">${esc(`${d.label} ${d.base} (${d.from || 'typed'})`)}</span>`).join('')}</div>`;
     }
     const rt = live.retreat;
     const retreat = `<button type="button" class="tg retreat ${rt.on ? 'on' : ''}" data-fretreat="${esc(r.id)}" aria-pressed="${rt.on}" ${rt.allowed ? '' : 'disabled'}`
-      + ` title="${esc(rt.allowed ? 'Retreat: its bonus on each defence until its turn' : `No retreat: ${rt.why}`)}">Retreat</button>`;
+      + ` title="${esc(rt.allowed ? 'Retreat: tap to turn on, until its turn' : `No retreat: ${rt.why}`)}">Retreat</button>`;
     return `<div class="pdefs" role="group" aria-label="Defend"><span class="lab">Defend:</span>${all.map((d) => defenceButton(r, d, 'data-fpdef')).join('')}${retreat}</div>`;
   }
   // A defence tapped: the server rolls it against the figure as it stands; the result is logged by the reducer. A
@@ -645,7 +651,11 @@
     roll([{ against: d.value }]).then(([res]) => {
       delete ui.defRolling[k];
       const now = state().fight;
-      if (now && now.id === f.id) {
+      const x = now && now.id === f.id ? rowById(rowId) : null;
+      // the figure moved while the roll was out (a status, another window): the roll is not sent, and the page says so
+      const moved = x ? GMath.defenceMoved(GMath.liveDefences(x, D)[key], res && res.target) : null;
+      if (moved) { RP.note(`${viewName(rowId) || x.name}: ${moved}.`, { kind: 'bad' }); RP.render(); RP.focusTo(sel); return; }
+      if (x) {
         RP.dispatch({ fight: f.id, type: 'defendRolled', row: rowId, defence: key, result: res, ...(again ? { again: true } : {}) });
         RP.focusTo(sel);
       } else RP.render();
@@ -1083,6 +1093,8 @@
   }
 
   // ------------------------------------------------------------------ events
+  // a row's name as the GM sees it now (unmasked, numbered)
+  const viewName = (id) => { const f = RP.derived().fight; const v = f && f.view && f.view.rows.find((r) => r.id === id); return v ? v.gmName : null; };
   const rowById = (id) => { const f = state().fight; return f ? f.rows.find((r) => r.id === id) || null : null; };
   const split = (v) => { const i = String(v).indexOf('|'); return [v.slice(0, i), v.slice(i + 1)]; };
 

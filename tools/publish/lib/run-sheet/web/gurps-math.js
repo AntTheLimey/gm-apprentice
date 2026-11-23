@@ -289,9 +289,16 @@
   }
   // The log's form: "Parry 9 → 5 (parry 2 −4)", "Dodge 8".
   const defenceText = (d) => `${d.label} ${d.base}${d.causes.length ? ` \u2192 ${d.value} (${d.causes.join(', ')})` : ''}`;
+  // A roll that came back against a figure that has moved since it was asked (another window, a status): what the page
+  // says, "Parry moved to 5: tap again", or null when the figure is still the roll's target.
+  function defenceMoved(d, target) {
+    if (d && d.value === target) return null;
+    if (!d || d.value === null) return `${d ? d.label : 'That defence'}: none now`;
+    return `${d.label} moved to ${d.value}: tap again`;
+  }
 
   return {
-    liveDefences, retreatOf, defenceText, DEFENCE_KEYS,
+    liveDefences, retreatOf, defenceText, defenceMoved, DEFENCE_KEYS,
     deriveGurps, gurpsInjury, drFigure, shockOf, cardForHit, cardsAtTurnStart, cardsAtTurnEnd, lineTarget, lineName, lineText, resultText,
     offersFor, rollResult, nextLine, cardDone, pending, offerOf,
   };

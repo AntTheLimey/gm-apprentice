@@ -2645,7 +2645,7 @@ describe('GURPS defences as they stand this turn (step 6b Task 14)', () => {
     { name: 'Kev', kind: 'pc', ini: 4, speed: 4, hp: 12, max: 12, ht: 11, dodge: 8, parry: 10, block: 9 },
   ];
 
-  it('two parries in a round: the second at −4; the count resets on the row\'s turn', () => {
+  it('two parries: Parry 9 then 5; 9 again on the row\'s turn', () => {
     let s = begin(rows());
     s = go(s); // Bouncer 1 acts
     s = defend(s, 'Bouncer 2', 'parry', 12);
@@ -2672,7 +2672,7 @@ describe('GURPS defences as they stand this turn (step 6b Task 14)', () => {
     assert.deepEqual(s.fight.rows, was, 'Parry is 5 now, not 9');
   });
 
-  it('a second Block in a turn asks first: dropped without again, taken with it', () => {
+  it('a second Block: dropped without again, taken with it', () => {
     let s = begin(rows());
     s = go(s);
     s = defend(s, 'Bouncer 2', 'block');
@@ -2703,7 +2703,7 @@ describe('GURPS defences as they stand this turn (step 6b Task 14)', () => {
     assert.equal(named(s, 'Bouncer 2').retreat, false);
   });
 
-  it('Move and Attack: a Parry roll is dropped, a Dodge taken; the manoeuvre ends at the row\'s next turn', () => {
+  it('Move and Attack: a Parry roll is dropped, a Dodge taken; the manoeuvre is cleared on the row\'s next turn', () => {
     let s = begin(rows().map((r) => (r.name === 'Bouncer 2' ? { ...r, manoeuvre: 'move and attack' } : r)));
     s = go(s);
     s = G(s, { type: 'defendRolled', row: named(s, 'Bouncer 2').id, defence: 'parry', result: rolled(5, 9) });
@@ -2715,7 +2715,7 @@ describe('GURPS defences as they stand this turn (step 6b Task 14)', () => {
     assert.equal(live(s, 'Bouncer 2').parry.value, 9);
   });
 
-  it('All-Out Attack: every defence roll is dropped until its next turn', () => {
+  it('All-Out Attack: Dodge, Parry and Block rolls are dropped', () => {
     let s = begin(rows().map((r) => (r.name === 'Bouncer 2' ? { ...r, manoeuvre: 'all-out attack' } : r)));
     s = go(s);
     for (const k of ['dodge', 'parry', 'block']) s = G(s, { type: 'defendRolled', row: named(s, 'Bouncer 2').id, defence: k, result: rolled(5, 8) });
