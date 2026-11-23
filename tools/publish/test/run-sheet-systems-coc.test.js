@@ -145,6 +145,38 @@ for (const crlf of [false, true]) {
       // a skill line stays a skill
       assert.deepEqual([readNumbers('- Firearms (Handgun) 45%').firearms, readNumbers('- Fighting (Brawl) 45%').fighting], [45, 45]);
     });
+    it('Regency block shapes (Task 19 fix round 2): a Firearms skill line with damage, a skill-only gun, damage with no word', () => {
+      const g = (t) => readNumbers(`**HP** 10\n${t}`).guns;
+      assert.deepEqual(g('- Firearms (Rifle/Musket) 60% (30/12), damage 1D10+4, 1 shot per 4 rounds (Brown Bess)'),
+        [{ name: 'Brown Bess', skill: 60, damage: '1D10+4', malfunction: null, reload: 4, impales: false }]);
+      assert.deepEqual(g('- Firearms (Musket) 50% (25/10), damage 1D10+4, one shot per 4 rounds'),
+        [{ name: 'Firearms (Musket)', skill: 50, damage: '1D10+4', malfunction: null, reload: 4, impales: false }]);
+      assert.deepEqual(g('- Firearms (Pistol) 45% (22/9), damage 1D6+1'), [{ name: 'Firearms (Pistol)', skill: 45, damage: '1D6+1', malfunction: null, reload: null, impales: null }]);
+      // a skill only: a gun of unknown damage, its kind from the specialisation and the Equipment line
+      const only = readNumbers('**HP** 10\n- **Firearms (Pistol)** 55%\n**Equipment:** a flintlock pistol and a short sabre');
+      assert.deepEqual([only.firearms, only.guns], [55, [{ name: 'Firearms (Pistol)', skill: 55, damage: null, malfunction: null, reload: null, impales: false }]]);
+      // a Firearms figure inside a run of skills
+      const run = readNumbers('**Skills:** Persuade 75%, Firearms (Handgun) 40%, Dodge 30%');
+      assert.deepEqual([run.firearms, run.guns[0].name, run.guns[0].skill], [40, 'Firearms (Handgun)', 40]);
+      // damage written without the word
+      const nw = readNumbers('* **Pistol (flintlock)** 45% — 1D10+2, 1/3 rounds\n- Knife: 35%, 1D4+2\n* **Dodge** 50%');
+      assert.deepEqual([nw.firearms, nw.fighting, nw.dodge], [45, 35, 50]);
+      assert.deepEqual(nw.guns, [{ name: 'Pistol (flintlock)', skill: 45, damage: '1D10+2', malfunction: null, reload: 3, impales: false }]);
+    });
+    it('reload and malfunction phrasings the vaults use (Task 19 fix round 2)', () => {
+      const r = (t) => readNumbers(`- Flintlock pistol 40%, damage 1D6, ${t}`).guns[0];
+      for (const [t, n] of [['1 per 4 rounds', 4], ['1 shot per 4 rounds', 4], ['one shot per 4 rounds', 4], ['1 shot/4 rounds', 4], ['one per four rounds', 4],
+        ['reload 4 rounds', 4], ['1/3 rounds', 3], ['1/4 rounds to reload', 4], ['3 rounds to reload', 3], ['reload their flintlocks in **2 rounds**', 2],
+        ['(1/3, slow reload)', 3], ['1/4 rnds', 4], ['1 round to reload', null], ['slow reload', null]]) assert.equal(r(t).reload, n, t);
+      assert.deepEqual([r('misfire 5%').malfunction, r('malf 95').malfunction, r('95 malf').malfunction], [96, 95, 95]);
+    });
+    it('a make that is also a name: a possessive is a melee weapon; Baker is no make (Task 19 fix round 2)', () => {
+      for (const name of ['Baker\'s knife', 'Thompson\'s cleaver', 'Colt\'s cane', 'Remington\'s poker', 'Winchester\'s club', 'Springfield\'s axe']) {
+        const n = readNumbers(`- ${name} 40% (20/8), damage 1D6`);
+        assert.deepEqual([n.firearms, n.fighting], [null, 40], name);
+      }
+      assert.equal(readNumbers('- Thompson 40% (20/8), damage 1D10+2').firearms, 40);
+    });
     it('malfunction 00 is 100; a number outside 1-100 is none (Task 19)', () => {
       const g = (t) => readNumbers(`- Flintlock pistol 30%, damage 1D6, ${t}`).guns[0].malfunction;
       assert.deepEqual([g('malf 00'), g('malfunction 100'), g('malfunction 150'), g('malf. 95')], [100, 100, null, 95]);
@@ -156,12 +188,14 @@ for (const crlf of [false, true]) {
       const fm = { name: 'Iris Calder' };
       const body = `${sheet.replace(/^---[\s\S]*?\n---\n/, '')}\n## Combat\n\n${['| Weapon | Skill % | Damage | Attacks | Range | Ammo | Malf |', '|---|---|---|---|---|---|---|',
         '| Unarmed | 25 | 1D3+DB | 1 | — | — | — |', '| Pistol (Double-Barreled), Flintlock | Firearms (Pistol) 45 | 1D6+1 | 1/4 | 10 yds | 2 | 90 |',
-        '| Old revolver | Firearms (Handgun) 40 | 1D8 | 1 | 15 yds | 6 | 00 |', '| Rusty rifle | Firearms (Rifle) 35 | 2D6 | 1 | 90 yds | 5 | 120 |'].join('\n')}\n`.replace(/\n/g, '\r\n');
+        '| Old revolver | Firearms (Handgun) 40 | 1D8 | 1 | 15 yds | 6 | 00 |', '| Rusty rifle | Firearms (Rifle) 35 | 2D6 | 1 | 90 yds | 5 | 120 |',
+        '| Long musket | 55/27/11 | 1d10+4 | 3 rounds to reload | 100 yds | 1 | 95+ |'].join('\n')}\n`.replace(/\n/g, '\r\n');
       const out = coc.readPc({ body, fm });
       assert.equal(out.note, undefined, 'read by the sheet reader');
       assert.deepEqual(out.numbers.guns, [{ name: 'Pistol (Double-Barreled), Flintlock', skill: 45, damage: '1D6+1', malfunction: 90, reload: 4, impales: false },
         { name: 'Old revolver', skill: 40, damage: '1D8', malfunction: 100, reload: null, impales: null },
-        { name: 'Rusty rifle', skill: 35, damage: '2D6', malfunction: null, reload: null, impales: null }]);
+        { name: 'Rusty rifle', skill: 35, damage: '2D6', malfunction: null, reload: null, impales: null },
+        { name: 'Long musket', skill: 55, damage: '1D10+4', malfunction: 95, reload: 3, impales: false }]);
     });
     it('CoC and Regency are CoC, and fight (Task 7)', () => {
       for (const [id, label] of [['coc-7e', 'Call of Cthulhu 7e'], ['coc-7e-regency', null]]) {

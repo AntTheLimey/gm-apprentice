@@ -3858,6 +3858,19 @@ describe('CoC firearms: the aim, the shot, the dive, the reload (step 6b Task 19
     assert.equal(named(s, 'Wharf Hand 2').hp, 8);
   });
 
+  it('a gun read from the skill alone: rolled against Firearms, its damage typed, a musket never impales (fix round 2)', () => {
+    const { readNumbers } = require('../lib/run-sheet/systems/coc');
+    const n = readNumbers('**HP** 12\n- **Firearms (Musket)** 55%\n- Dodge 30%');
+    const rs = rows();
+    rs[1] = { name: 'Wharf Hand 1', ini: 60, dex: 60, hp: 12, max: 12, firearms: n.firearms, dodge: 30, guns: n.guns };
+    let s = toTurn(begin(rs), 'Wharf Hand 1');
+    assert.equal(CM.canShoot(named(s, 'Wharf Hand 1')), true);
+    s = shoot(s, 'Wharf Hand 1', 'Wharf Hand 2', [], { gun: 0, f: [0, 5] });
+    assert.match(lines(s).slice(-1)[0], /^Wharf Hand 1 shoots Wharf Hand 2: Firearms 55 at Regular \(55\): rolled 5: Extreme: a hit\.$/);
+    assert.deepEqual([s.fight.melee.impales, s.fight.melee.damage], [false, undefined]);
+    assert.equal(named(s, 'Wharf Hand 1').reload, null, 'no reload written: none');
+  });
+
   it('D&D and GURPS take no shot, aim or dive', () => {
     for (const rules of [null, systemFor('gurps-4e').describe().fight]) {
       let s = RS.reduce(fresh(), { id: 'f1', type: 'fightStart', title: 'T', ...(rules ? { rules } : {}), rows: rows().map((o, i) => M.blankRow({ id: `r${i + 1}`, ...o })) }, now());

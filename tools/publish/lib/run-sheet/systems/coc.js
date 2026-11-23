@@ -34,49 +34,98 @@ function keyOf(raw) {
 
 // An attack line a block writes with a name of its own (`- Boat hook 45% (22/9), damage 1D6+DB`): its name and skill.
 // A firearm's name says so (`Pocket pistol`); any other is Fighting. Dodge and the named skills are pairs' (keyOf).
-// The name may hold digits (`.38 Revolver`, `12-gauge shotgun`): it runs to the ` NN%` figure.
-const ATTACK_LINE = /^\s*[-*+]\s+(?:\*\*)?([^%*\s][^%]*?)(?:\*\*)?\s+(\d{1,3})\s*%.*\bdamage\b/i;
-// A firearm's name says so: a calibre (`.45`, `.30-06`, `9mm`), a kind of gun, or a common make (Task 19 widened it:
-// `Colt .45`, `Thompson`, `Lee-Enfield`, `Brown Bess`). `Gunsmith` and `2-handed axe` are not guns.
+// The name may hold digits (`.38 Revolver`, `12-gauge shotgun`): it runs to the ` NN%` figure. The damage may be
+// written without the word, as Canticle's blocks do (`- Knife: 35%, 1D4+2`, `* **Pistol (flintlock)** 45% — 1D10+2`):
+// a dice figure after the percentage counts (Task 19 fix round 2).
+const ATTACK_LINE = /^\s*[-*+]\s+(?:\*\*)?([^%*\s][^%]*?)(?:\*\*)?\s+(\d{1,3})\s*%(?=.*(?:\bdamage\b|\b\d*d\d+\b))/i;
+// A firearm's name says so: a calibre (`.45`, `.30-06`, `9mm`), a kind of gun, or a make (Task 19 widened it:
+// `Colt .45`, `Thompson`, `Lee-Enfield`, `Brown Bess`). A make that is also a surname or a place (Colt, Thompson,
+// Winchester, Remington, Springfield) never counts as a possessive (`Thompson's cleaver`). `Gunsmith`, `2-handed axe`
+// and `Baker's knife` are not guns.
+const MAKES = ['colt', 'webley', 'luger', 'mauser', 'enfield', 'lee-enfield', 'winchester', 'remington', 'thompson', 'springfield', 'brown bess'];
 const FIREARM = new RegExp([
   '(?:^|[\\s(])\\.\\d{2,3}(?:-\\d{2,3})?\\b',
   '\\b\\d{1,2}(?:\\.\\d{1,2})?\\s?mm\\b',
   `\\b(?:${['firearms?', 'handguns?', 'pistols?', 'revolvers?', 'rifles?', 'shotguns?', 'carbines?', 'smgs?', 'submachine', 'machine[- ]?guns?',
     'muskets?', 'flintlocks?', 'matchlocks?', 'blunderbuss(?:es)?', 'derringers?', 'guns?', 'automatics?', 'semi-automatics?', 'bolt-action',
-    'lever-action', 'colt', 'webley', 'luger', 'mauser', 'enfield', 'lee-enfield', 'winchester', 'remington', 'thompson', 'springfield',
-    'brown bess', 'baker'].join('|')})\\b`,
+    'lever-action'].join('|')})\\b`,
+  `\\b(?:${MAKES.join('|')})\\b(?!['’]s\\b)`,
 ].join('|'), 'i');
-// A firearm line may say more (Task 19): its damage (`damage 2D6/1D6`, by range), its malfunction number (`malfunction
-// 95`, `malf. 90`, `95 malf`), a slow reload (`1 per 4 rounds`, `1/4 rnds`) and whether it impales. Flintlocks and the
-// blunderbuss never impale (RC p187); a line that says `impales` does; any other is not known (null).
+// A firearm line may say more (Task 19): its damage (`damage 2D6/1D6`, by range, or the dice after the percentage),
+// its malfunction number (`malfunction 95`, `malf. 90`, `95 malf`, `misfire 5%`: 96), a slow reload and whether it
+// impales. Flintlocks, muskets and the blunderbuss never impale (RC p187); a line that says `impales` does; any other
+// is not known (null).
 const DAMAGE_OF = /\bdamage\s*:?\s*(\d*d\d+(?:\s*[+\-/]\s*(?:\d*d\d+|\d+|DB))*)/i;
+const DICE_AFTER = /\d\s*%[^%]*?(?:^|[^\w/])(\d*d\d+(?:\s*[+\-/]\s*(?:\d*d\d+|\d+|DB))*)/i;
 const MALF_OF = /\bmalf(?:unction)?\.?\s*:?\s*(\d{2,3})\b|\b(\d{2,3})\+?\s*malf/i;
-const RELOAD_OF = /\b1\s*(?:per|\/)\s*(\d{1,2})\s*(?:rounds?|rnds?)\b/i;
-const NO_IMPALE = /\b(?:flintlock|blunderbuss|musket)\b|\b(?:does not|doesn't|never|no|non-?)\s*impal/i;
+const MISFIRE_OF = /\bmisfires?\s*:?\s*(\d{1,2})\s*%/i;
+// A slow reload as the vaults write it, giving the rounds until the next shot (one per round is none): `1 per 4
+// rounds`, `1 shot per 4 rounds`, `one shot per 4 rounds`, `1 shot/4 rounds`, `one per four rounds`, `1/3 rounds`,
+// `1/4 rounds to reload`, `reload 4 rounds`, `reload their flintlocks in 2 rounds`, `3 rounds to reload`,
+// `(1/3, slow reload)`; a table's Attacks column `1/4`.
+const WORD_N = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 };
+const N = `(\\d{1,2}|${Object.keys(WORD_N).join('|')})`;
+const ROUNDS = '(?:rounds?|rnds?)';
+const RELOADS = [
+  new RegExp(`\\b(?:1|one)\\s*(?:shot\\s*)?(?:per|/|every)\\s*${N}\\s*${ROUNDS}\\b`, 'i'),
+  new RegExp(`\\breload(?:s|ing)?\\b[^,;.]{0,30}?\\b${N}\\W{0,3}\\s*${ROUNDS}\\b`, 'i'),
+  new RegExp(`\\b${N}\\s*${ROUNDS}\\s*to\\s*reload\\b`, 'i'),
+  /\(\s*1\s*\/\s*(\d{1,2})\s*,\s*slow reload/i,
+];
+const NO_IMPALE = /\b(?:flintlocks?|blunderbuss|muskets?|brown bess)\b|\b(?:does not|doesn't|never|no|non-?)\s*impal/i;
 const IMPALES = /\bimpal(?:e|es|ing)\b/i;
-const malfOf = (text) => { const m = MALF_OF.exec(String(text || '')); return m ? malNumber(m[1] || m[2]) : null; };
+const malfOf = (text) => {
+  const t = String(text || '');
+  const m = MALF_OF.exec(t);
+  if (m) return malNumber(m[1] || m[2]);
+  const x = MISFIRE_OF.exec(t);
+  return x && Number(x[1]) >= 1 ? malNumber(String(101 - Number(x[1]))) : null;
+};
+const numOf = (v) => (v === undefined ? null : WORD_N[String(v).toLowerCase()] || Number(v));
 const reloadOf = (text) => {
-  const t = String(text || '').trim();
-  const m = RELOAD_OF.exec(t) || /^1\s*(?:per|\/)\s*(\d{1,2})$/.exec(t);
-  const n = m ? Number(m[1]) : null;
+  const t = clean(text);
+  let n = null;
+  for (const re of RELOADS) { const m = re.exec(t); if (m) { n = numOf(m[1]); break; } }
+  if (n === null) { const m = /^1\s*(?:per|\/)\s*(\d{1,2})$/.exec(t); n = m ? Number(m[1]) : null; }
   return n !== null && n > 1 ? n : null;
 };
 const impalesOf = (text) => (NO_IMPALE.test(text) ? false : IMPALES.test(text) ? true : null);
+const damageOf = (line) => { const d = DAMAGE_OF.exec(line) || DICE_AFTER.exec(line); return d ? d[1].replace(/\s+/g, '').toUpperCase() : null; };
 // One firearm: { name, skill, damage, malfunction, reload, impales }, each null where the line does not say.
 function gunOf(name, skill, line) {
-  const d = DAMAGE_OF.exec(line);
-  return { name: clean(name), skill, damage: d ? d[1].replace(/\s+/g, '').toUpperCase() : null, malfunction: malfOf(line), reload: reloadOf(line), impales: impalesOf(line) };
+  return { name: clean(name).replace(/:$/, ''), skill, damage: damageOf(line), malfunction: malfOf(line), reload: reloadOf(line), impales: impalesOf(line) };
+}
+// A Firearms skill line with a damage figure (`- Firearms (Rifle/Musket) 65% (32/13), damage 1D10+4, 1 shot per 4
+// rounds (Brown Bess)`) is a gun too: named by a firearm in its last brackets, else by the skill.
+function skillGunName(name, line) {
+  const tail = /\(([^()]+)\)\s*\**\s*$/.exec(line.replace(/\s+$/, ''));
+  return tail && FIREARM.test(tail[1]) && !/^\s*\d/.test(tail[1]) ? tail[1] : name;
 }
 function attackLines(stats) {
   const out = { fighting: [], firearms: [], guns: [] };
   for (const line of String(stats == null ? '' : stats).replace(/\r\n?/g, '\n').split('\n')) {
     const m = ATTACK_LINE.exec(line);
-    if (!m || keyOf(m[1])) continue;
+    if (!m) continue;
+    const key = keyOf(m[1]);
+    if (key === 'firearms') { out.guns.push(gunOf(skillGunName(m[1], line), Number(m[2]), line)); continue; }
+    if (key) continue;
     const gun = FIREARM.test(m[1]);
     out[gun ? 'firearms' : 'fighting'].push(Number(m[2]));
     if (gun) out.guns.push(gunOf(m[1], Number(m[2]), line));
   }
   return out;
+}
+// A block that writes Firearms only as a skill (`Firearms (Musket) 50%`, no weapon line): one gun of unknown damage
+// from its highest specialisation, its kind, reload and malfunction read from the specialisation and the block's
+// Weapons or Equipment lines (`**Equipment:** … a flintlock pistol …`), so a musket still never impales.
+function skillGun(stats, figure) {
+  if (figure === null) return null;
+  const text = String(stats == null ? '' : stats).replace(/\r\n?/g, '\n');
+  let spec = null;
+  for (const m of text.matchAll(/Firearms?\s*(?:\(([^)]+)\))?\**\s*:?\s*\**\s*(\d{1,3})\s*%/gi)) if (Number(m[2]) === figure) { spec = m[1] || ''; break; }
+  const kit = text.split('\n').filter((l) => /\b(?:weapons?|equipment|gear|armed with|carries)\b/i.test(l)).join(' ');
+  const kind = `${spec || ''} ${kit}`;
+  return { name: spec ? `Firearms (${clean(spec)})` : 'Firearms', skill: figure, damage: null, malfunction: malfOf(kit), reload: reloadOf(kit), impales: impalesOf(kind) };
 }
 const highest = (list) => { const ok = list.filter((v) => typeof v === 'number' && Number.isFinite(v)); return ok.length ? Math.max(...ok) : null; };
 
@@ -92,7 +141,15 @@ function readNumbers(stats) {
     str: n('str'), con: n('con'), siz: n('siz'), pow: n('pow'), int: n('int'),
     fighting: highest(all('fighting').concat(lines.fighting)), firearms: highest(all('firearms').concat(lines.firearms)),
     dodge: n('dodge'), db: db === null ? null : (clean(db).replace(/\s*[·|].*$/, '') || null), build: n('build'), attacks: leadingNumber(String(firstOf(ps, 'attacks') || '').replace(/^per round\s*:?\s*/i, '')),
-    guns: lines.guns.length ? lines.guns : null, from: {} };
+    guns: null, from: {} };
+  // a Firearms figure written inside a run of skills (`**Skills:** Persuade 75%, Firearms (Pistol) 55%`), which
+  // pairs does not split: the highest, when nothing else gave one
+  if (nums.firearms === null) {
+    const inline = [...String(stats == null ? '' : stats).matchAll(/\bFirearms?\s*(?:\([^)]*\))?\**\s*:?\s*\**\s*(\d{1,3})\s*%/gi)].map((m) => Number(m[1]));
+    nums.firearms = highest(inline);
+  }
+  const sg = lines.guns.length ? null : skillGun(stats, nums.firearms);
+  nums.guns = lines.guns.length ? lines.guns : (sg ? [sg] : null);
   const armour = firstOf(ps, 'armour');
   if (armour) nums.armour = clean(armour).replace(/\s*[·|].*$/, '') || null;
   if (nums.hp === null && nums.con !== null && nums.siz !== null) { nums.hp = Math.floor((nums.con + nums.siz) / 10); nums.from.hp = 'from CON+SIZ'; }
@@ -154,11 +211,13 @@ function sheetCombat(model) {
 function sheetGuns(model) {
   const rows = Array.isArray(model.weapons) ? model.weapons : [];
   const guns = rows.filter((w) => w && (FIREARM.test(String(w.weapon || '')) || /firearm/i.test(String(w.skill || '')))).map((w) => {
-    const sk = /(\d{1,3})\s*%?\s*$/.exec(clean(w.skill));
+    // the skill cell's first figure: `55`, `55/27/11`, `60% (30/12)`, `Firearms (Pistol) 55%`
+    const sk = /(?:^|[^\w(/])(\d{1,3})(?=\s*%|\s*\/|\s*$|\s*\()/.exec(clean(w.skill));
     const d = DAMAGE_OF.exec(`damage ${clean(w.damage)}`);
     const all = `${clean(w.weapon)} ${clean(w.damage)}`;
+    const cells = [w.attacks, w.range, w.ammo].map(clean);
     return { name: clean(w.weapon), skill: sk ? Number(sk[1]) : null, damage: d ? d[1].replace(/\s+/g, '').toUpperCase() : null,
-      malfunction: malNumber((/^\s*(\d{1,3})/.exec(clean(w.malf)) || [])[1]), reload: reloadOf(clean(w.attacks)), impales: impalesOf(all) };
+      malfunction: malNumber((/^\s*(\d{1,3})/.exec(clean(w.malf)) || [])[1]), reload: reloadOf(cells[0]) || reloadOf(cells.join(' ')), impales: impalesOf(all) };
   });
   return guns.length ? guns : null;
 }
