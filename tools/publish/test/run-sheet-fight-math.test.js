@@ -330,6 +330,20 @@ test('shownEver starts a row seen', () => {
   assert.equal(r.rows.find((x) => x.note === 'Creatures/Imp.md').seen, false);
 });
 
+// S6-D7: the reader gives a fight beat blank foes (benched for a single statless NPC); the fight builds them as rows
+test('a fight beat gives blank rows: a statless NPC benched, a no-note counted line ticked in', () => {
+  const blank = (o) => ({ ally: false, ac: null, hp: null, init: null, ...o });
+  const beat = { ...gate, foes: [
+    blank({ key: 'b1.foe.plain', note: 'NPCs/Plain.md', name: 'Plain Person', benched: true }),
+    blank({ key: 'b1.foe.g1', note: null, name: 'Foam guards 1' }), blank({ key: 'b1.foe.g2', note: null, name: 'Foam guards 2' }),
+  ] };
+  const r = M.rowsForFight({ model, derived: derivedOf({ beats: [beat, hub] }), state: here, beatKey: 'b1', idBase: 'a' });
+  const plain = r.rows.find((x) => x.name === 'Plain Person');
+  assert.deepEqual([plain.in, plain.hp, plain.max, plain.note], [false, null, null, 'NPCs/Plain.md']);
+  const guards = r.rows.filter((x) => /^Foam guards/.test(x.name));
+  assert.deepEqual(guards.map((x) => [x.in, x.hp, x.note, M.sideOfRow(x)]), [[true, null, null, 'foe'], [true, null, null, 'foe']]);
+});
+
 test('Fight on an improvised beat brings the people brought in; on a Plan beat they are unticked', () => {
   const brought = { b1: [{ note: 'NPCs/Gilt.md' }, { note: 'NPCs/Plain.md' }], i1: [{ note: 'Creatures/Mephit.md' }, { note: 'Creatures/Mephit.md' }] };
   const impro = { key: 'i1', title: 'Ambush', impro: true, spots: [], foes: [] };
@@ -675,7 +689,8 @@ test('a copy switched to ally still counts towards its word; an unseen ally is n
     const s2 = { ...s, sides: { [FEN]: 'ally' } };
     const fen = M.rowsForFight({ model: m, derived: RS.derive(m, s2), state: s2, beatKey: m.placeKeys[YARD], idBase: 'f3' }).rows.find((x) => x.note === FEN);
     assert.deepEqual([fen.kind, fen.seen, fen.sideFrom], ['ally', true, 'you set it']);
-    // a Plan beat's statless people stay as 5b has them: no row
+    // a Plan beat's statless people get no row unless the beat can fight (S6-D7 changed 5b's "never": a fight beat's
+    // statless single NPC is a benched blank row, see 'a fight beat gives blank rows')
     const plan = M.rowsForFight({ model: m, derived: RS.derive(m, s), state: s, beatKey: base.beats[0].key, idBase: 'f4' });
     assert.ok(!plan.rows.some((r) => r.note === FEN));
   });

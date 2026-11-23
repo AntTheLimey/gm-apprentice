@@ -19,9 +19,13 @@ const FIXTURE = path.join(__dirname, 'fixtures', 'run-sheet');
 const GMA = path.join(__dirname, '..', '..', '..', 'skills', 'shared', 'scripts', 'gma.py');
 const PLAN = 'Chapters/Chapter 1/Sessions/Session 02/Session 02 - The Test - Plan.md';
 
-function setup(edit) {
+function setup(edit, files = {}) {
   const dir = mkTmp('rs-');
   fs.cpSync(FIXTURE, dir, { recursive: true });
+  for (const [f, text] of Object.entries(files)) {
+    fs.mkdirSync(path.dirname(path.join(dir, f)), { recursive: true });
+    fs.writeFileSync(path.join(dir, f), text);
+  }
   if (edit) {
     const p = path.join(dir, PLAN);
     fs.writeFileSync(p, edit(readText(p)));
@@ -132,6 +136,63 @@ describe('run sheet foes', () => {
     const { beats, index: ix } = setup((t) => t.replace('- **[[Missing Person]]:** watching from the trees', '- **[[Hollow Stalker]]:** watching from the trees'));
     const c = beats.find((b) => b.contingency);
     assert.ok(foesFor(c, ix).warnings.some((w) => w.kind === 'no-stats' && w.note === 'Creatures/Hollow Stalker.md'));
+    // S6-D7: the warning says what to do, and no row is dropped
+    assert.ok(foesFor(c, ix).warnings.some((w) => w.text === 'Hollow Stalker: no numbers in the vault: type them in the fight, or fill them in prep'));
+  });
+
+  // S6-D7: a beat that can fight gives blank rows to type into: a creature or counted entry with no stats, a counted
+  // line with no note, a counted link to a group note; a single statless NPC is a benched blank row (D4).
+  describe('blank rows in a fight beat', () => {
+    const WARDENS = { 'Factions/Gate Wardens.md': '---\nname: Gate Wardens\ntype: faction\n---\n\nThe gate\'s keepers.\n' };
+    const withLines = (lines) => (t) => t.replace('- **[[Lucan Grey]] (Lucan):** helps\n', `- **[[Lucan Grey]] (Lucan):** helps\n${lines}\n`);
+    const gate = (beats) => beats.find((b) => b.title === 'The Gate');
+    const foesOfGate = (lines, files) => { const { index, beats } = setup(withLines(lines), files); return foesFor(gate(beats), index); };
+    const NO_NUMBERS = (n) => `${n}: no numbers in the vault: type them in the fight, or fill them in prep`;
+
+    it('a no-note counted line gives four numbered rows', () => {
+      const r = foesOfGate('- **Foam-covered guards \u00d74:** rifles');
+      const rows = r.foes.filter((f) => /^Foam/.test(f.name));
+      assert.deepStrictEqual(rows.map((f) => [f.name, f.note, f.hp]), [1, 2, 3, 4].map((i) => [`Foam-covered guards ${i}`, null, null]));
+      assert.strictEqual(new Set(rows.map((f) => f.key)).size, 4);
+      assert.ok(r.warnings.some((w) => w.text === NO_NUMBERS('Foam-covered guards')));
+    });
+
+    it('"four guards" counts', () => {
+      const r = foesOfGate('- **four guards:** rifles');
+      assert.deepStrictEqual(r.foes.filter((f) => /^guards/.test(f.name)).map((f) => f.name), ['guards 1', 'guards 2', 'guards 3', 'guards 4']);
+    });
+
+    it('a counted faction link gives four rows carrying the faction note', () => {
+      const r = foesOfGate('- **[[Gate Wardens|Warden guards]] \u00d74:** hold the door', WARDENS);
+      const rows = r.foes.filter((f) => f.note === 'Factions/Gate Wardens.md');
+      assert.deepStrictEqual(rows.map((f) => f.name), [1, 2, 3, 4].map((i) => `Warden guards ${i}`));
+      assert.ok(rows.every((f) => f.ally === false && !f.benched));
+    });
+
+    it('a single statless NPC is a benched blank row', () => {
+      const r = foesOfGate('- **[[Sister Fen]]:** hides');
+      const fen = r.foes.find((f) => f.note === 'Characters/NPCs/Sister Fen.md');
+      assert.deepStrictEqual([fen.name, fen.benched, fen.hp, fen.ac], ['Sister Fen', true, null, null]);
+    });
+
+    it('a social beat (no fight type, nobody counted) gives no rows for statless people', () => {
+      const { index, beats } = setup((t) => t.replace('**Starts it:** The bell has rung and the wolves are quiet.\n', '**Starts it:** The bell has rung and the wolves are quiet.\n**NPCs**\n- **[[Sister Fen]]:** watching\n'));
+      const social = beats.filter((b) => b.title === 'The Gate')[1];
+      assert.deepStrictEqual(social.who.map((w) => w.name), ['Sister Fen']);
+      assert.deepStrictEqual(foesFor(social, index), { foes: [], treasure: [], warnings: [] });
+    });
+
+    it('a dead person in a fight beat gets no blank row', () => {
+      const dead = { 'Characters/NPCs/Quiet Dead.md': '---\nname: Quiet Dead\ntype: npc\nstatus: dead\n---\n\nGone.\n' };
+      const r = foesOfGate('- **[[Quiet Dead]]:** lies there', dead);
+      assert.ok(!r.foes.some((f) => f.name === 'Quiet Dead'));
+    });
+
+    it('the warning names only ticked rows', () => {
+      const r = foesOfGate('- **[[Sister Fen]]:** hides\n- **Foam-covered guards \u00d74:** rifles');
+      const no = r.warnings.filter((w) => /no numbers in the vault: type them in the fight/.test(w.text)).map((w) => w.text);
+      assert.deepStrictEqual(no, [NO_NUMBERS('Foam-covered guards')], 'the benched person raises none');
+    });
   });
 
   it('Armor Class reads as AC, and each missing figure warns on its own', () => {

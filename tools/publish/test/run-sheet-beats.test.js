@@ -726,6 +726,31 @@ describe('run sheet beats: the Plan shape', () => {
       assert.deepStrictEqual(wren.beats[0].who.map((w) => [w.name, w.wants]), [['Sister Wren', 'keeper of the Silver Votive Lamp: counts the wicks']]);
     });
 
+    // S6-D7: a counted line with no note and a counted link to a group note are who entries, so a fight can run them
+    it('a no-note line keeps its count: the symbol, a digit, or a number word before lower-case words', () => {
+      for (const [line, name] of [['- **Foam-covered guards ×4:** rifles', 'Foam-covered guards'], ['- **Foam-covered guards x4:** rifles', 'Foam-covered guards'],
+        ['- **4 foam-covered guards:** rifles', 'foam-covered guards'], ['- **Four foam-covered guards:** rifles', 'foam-covered guards']]) {
+        const r = npcs(line, '');
+        assert.deepStrictEqual(r.beats[0].who.map((w) => [w.name, w.count, w.note || null]), [[name, 4, null]], line);
+      }
+      const four = npcs('- **four guards:** rifles', '');
+      assert.deepStrictEqual(four.beats[0].who.map((w) => [w.name, w.count]), [['guards', 4]]);
+      // a capitalised number word is a name, and a plain name keeps count 1
+      const fingers = npcs('- **Three Fingers:** a thief', '');
+      assert.deepStrictEqual(fingers.beats[0].who.map((w) => [w.name, w.count]), [['Three Fingers', 1]]);
+    });
+
+    it('a counted link to a faction note is one group entry carrying the note', () => {
+      const notes = { ...MORE, 'Factions/Gate Wardens.md': note('faction', 'Gate Wardens') };
+      for (const line of ['- **[[Gate Wardens|Warden guards]] ×4:** hold the door', '- **[[Gate Wardens|Warden guards]] (4):** hold the door']) {
+        const r = bothSides(SCENE(`**Entities:** [[Gate Wardens]]\n**NPCs**\n${line}\n`), notes);
+        assert.deepStrictEqual(r.beats[0].who.map((w) => [w.name, w.knownAs, w.count, w.note]), [['Gate Wardens', 'Warden guards', 4, 'Factions/Gate Wardens.md']], line);
+      }
+      // an uncounted faction link is no person
+      const plain = bothSides(SCENE('**Entities:** [[Gate Wardens]]\n**NPCs**\n- **[[Gate Wardens|Warden guards]] watching:** hold the door\n'), notes);
+      assert.deepStrictEqual(plain.beats[0].who, []);
+    });
+
     it('a two-link lead makes people of npcs and creatures only (an item or a PC is not one)', () => {
       const r = npcs('- **[[Sister Wren]] and [[Silver Votive Lamp]]:** polish it\n- **[[Oswin]] and [[Pip Callow]]:** argue');
       assert.deepStrictEqual(r.beats[0].who.map((w) => w.name), ['Sister Wren', 'Pip Callow']);

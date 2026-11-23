@@ -10,6 +10,8 @@ const { startingSide } = require('./sides');
 const { systemFor } = require('./systems');
 
 const DND = systemFor(null);
+// The notes that stand for several people at once (beats.js): a counted link to one gives rows.
+const GROUP_TYPES = new Set(['faction', 'organization', 'npc_group']);
 
 // What a note gives a fight row: null for a note the index lacks; `stats` '' when it has none. The system reads the
 // stat block and its numbers (`readFoe`), so the place a block is found is one place.
@@ -49,20 +51,34 @@ function warner(seen, warnings) {
   };
 }
 
+// The note-less numbers of a blank row: nothing to read, so every figure is null for the GM to type.
+const BLANK_NUMS = () => ({ ac: null, hp: null, init: null, from: {} });
+const NO_NUMBERS = (name) => `${name}: no numbers in the vault: type them in the fight, or fill them in prep`;
+
+// A blank row's entry: no stat block, so no numbers, for a fight beat the GM types them into (S6-D7). `label` is
+// what its rows are called; `notePath` is null for a line with no note. `benched` rows start unticked (D4).
+function blankEntry(notePath, label, type, n, side, benched) {
+  return { notePath, n, info: { name: label, type, stats: '', treasure: '' }, nums: BLANK_NUMS(), hpStart: null, fpStart: null, prepNote: null, side, benched };
+}
+
 // One who entry read for a fight: its note's numbers and how many, or null when it makes no foe. A
-// creature with no Stats, or any entry counted more than once with none, is a fight the sheet
-// cannot run: it warns `no-stats`. An NPC listed once with no Stats is a social NPC: no warning.
+// creature with no Stats, or any entry counted more than once with none, warns `no-stats`; so does an
+// entry for a beat that `blank`s its statless entries (`blank` is `{ label }`, the name a group note's
+// rows go by, or null), which gives them rows with blank numbers instead of none: a creature or counted
+// entry ticked in, a single statless NPC benched with no warning. Any other single entry with no Stats is a
+// social one: no row, no warning.
 // `canFight` is false for a beat that cannot fight (see beatCanFight): the numbers it lacks then go
 // into the row's `prepNote` instead of a warning, for the Fight to say when it is wanted (5b).
-function entry(notePath, index, count, add, canFight = true, sides = null, whoText = null, system = DND) {
+function entry(notePath, index, count, add, canFight = true, sides = null, whoText = null, system = DND, blank = null) {
   const info = inspect(notePath, index, system);
   if (!info) return null;
   const n = Number.isInteger(count) && count > 0 ? count : 1;
   if (!info.stats) {
-    if (info.type === 'creature' || n > 1) {
-      add('no-stats', notePath, `${info.name} has no ### Stats under ## GM Notes: no fight row for ${n > 1 ? 'them' : 'it'}`);
-    }
-    return null;
+    const crowd = info.type === 'creature' || n > 1;
+    const label = blank && GROUP_TYPES.has(info.type) && blank.label ? blank.label : info.name;
+    if (crowd) add('no-stats', notePath, NO_NUMBERS(label));
+    if (!blank || !(crowd || info.type === 'npc')) return null;
+    return blankEntry(notePath, label, info.type, crowd ? n : 1, sideOf(notePath, index, sides, whoText, ''), !crowd);
   }
   const { nums, lacks: missing } = info.read;
   let prepNote = null;
@@ -90,26 +106,28 @@ function beatCanFight(beat, index) {
 // or null) when it has a figure: `hpNow` is that figure and `carriedFrom` the log; `hp` stays the
 // note's. A foe never carries, and an ally with no figure has both null.
 function rows(entries, beatKey, carried = null, system = DND) {
-  const paths = entries.flatMap((e) => Array(e.n).fill(e.notePath));
+  const idOf = (e) => e.notePath || `name:${e.info.name}`;
+  const paths = entries.flatMap((e) => Array(e.n).fill(idOf(e)));
   const keys = itemKeys(beatKey, 'foe', paths);
   const total = new Map();
   for (const p of paths) total.set(p, (total.get(p) || 0) + 1);
   const at = new Map();
   let k = 0;
   return entries.flatMap((e) => Array.from({ length: e.n }, () => {
-    const i = (at.get(e.notePath) || 0) + 1;
-    at.set(e.notePath, i);
+    const i = (at.get(idOf(e)) || 0) + 1;
+    at.set(idOf(e), i);
     const { info, nums } = e;
-    const got = e.side.ally && carried ? carried.of(e.notePath, i) : null;
+    const got = e.side.ally && carried && e.notePath ? carried.of(e.notePath, i) : null;
     const hpNow = got && got.hp !== null ? got.hp : null;
     return {
-      key: keys[k++], note: e.notePath, name: total.get(e.notePath) > 1 ? `${info.name} ${i}` : info.name,
+      key: keys[k++], note: e.notePath || null, name: total.get(idOf(e)) > 1 ? `${info.name} ${i}` : info.name,
       ally: e.side.ally, allyFrom: e.side.allyFrom, allyBy: e.side.allyBy, ac: nums.ac, hp: nums.hp, init: nums.init,
       legendaryResistance: nums.legendaryResistance, legendaryActions: nums.legendaryActions,
       recharge: nums.recharge, rechargeAt: nums.rechargeAt, lair: nums.lair, lairActions: nums.lairActions, stats: info.stats,
       ...system.foeRow(nums),
       hpNow, carriedFrom: hpNow === null ? null : got.log, prepNote: e.prepNote, hpStart: e.hpStart,
       ...(e.fpStart == null ? {} : { fpStart: e.fpStart }),
+      ...(e.benched ? { benched: true } : {}),
     };
   }));
 }
@@ -119,6 +137,15 @@ function foesOf(notePath, index, count = 1, beatKey, seen = new Set(), carried =
   const warnings = [];
   const e = entry(notePath, index, count, warner(seen, warnings), true, sides, null, system);
   return { foes: e ? rows([e], beatKey, carried, system) : [], warnings };
+}
+
+// A counted line with no note (`Foam-covered guards x4`): blank rows named and numbered by the line's words, which
+// are all there is to read its side from.
+function noteless(w, whoText, sides, add) {
+  const label = w.name;
+  add('no-stats', null, NO_NUMBERS(label));
+  const side = startingSide({ whoText, quickRefText: '', statsText: '', fm: {}, partyNotes: ((sides || {}).partyNotes) || [], resolve: null });
+  return blankEntry(null, label, '', w.count, side, false);
 }
 
 // Every `who` entry of a beat, planned or contingency. `seen` carries one Plan's warnings across beats;
@@ -131,7 +158,12 @@ function foesFor(beat, index, seen = new Set(), carried = null, sides = null, sy
   const doneNotes = new Set();
   const canFight = beatCanFight(beat, index);
   for (const w of beat.who || []) {
-    const e = entry(w.note, index, w.count, add, canFight, sides, `${w.wants || ''} ${w.knownAs || ''}`.trim(), system);
+    const wants = `${w.wants || ''} ${w.knownAs || ''}`.trim();
+    // a fight beat's statless entries get blank rows: a group note's rows go by the line's own words
+    // (the dead are bodies, never fighters: they get none)
+    const blank = canFight && !w.dead ? { label: w.knownAs && w.knownAs !== w.name ? w.knownAs : '' } : null;
+    const e = w.note ? entry(w.note, index, w.count, add, canFight, sides, wants, system, blank)
+      : canFight && w.count > 1 ? noteless(w, wants, sides, add) : null;
     if (!e) continue;
     entries.push(e);
     if (doneNotes.has(w.note)) continue;
