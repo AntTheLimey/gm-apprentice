@@ -16,6 +16,8 @@
   const FM = window.RunSheetFightMath;
   const RS = window.RunSheetState;
   const Fight = window.RunSheetFight;
+  // GURPS's cards (Task 13): their lines, targets and offers, the reducer's own helpers
+  const GMath = window.RunSheetGurpsMath || null;
   if (!RP || !FM || !RS || !Fight) return;
   const { esc } = RP;
   const $ = (s) => document.querySelector(s);
@@ -47,6 +49,9 @@
     // the hit chips' memory (GURPS, Task 12): row id -> { type, location } last sent, listed first; the page's only,
     // for the night (never the vault or the Table Log)
     lastHit: {},
+    // GURPS's cards (Task 13): a card whose roll is out at the server (card id -> true), the row whose shock chip is
+    // open for a size, and the cards already brought into view once
+    rolling: {}, shockPick: null, cardsSeen: new Set(),
   };
 
   const model = () => RP.model();
@@ -62,6 +67,8 @@
   const rowNumbers = () => rules().rowNumbers || ['ini', 'hp', 'max', 'ac'];
   // the system's wounding table (GURPS's, Task 12): a hit typed as damage, type and place; null where there is none
   const wounding = () => (rules().fight || rules()).wounding || null;
+  // the system's consequences table (GURPS's, Task 13): what a hit and a turn owe, as cards; null where there is none
+  const consequences = () => (GMath ? (rules().fight || rules()).consequences || null : null);
   const rolled = () => !rules().initiative || rules().initiative === 'roll';
   // the panel's boxes the page can draw ({ key, label } items; D&D's list names its counters, drawn as before)
   const panelBoxes = () => (rules().panelBoxes || []).filter((b) => b && typeof b === 'object' && STAT[boxStat(b.key)]);
@@ -310,13 +317,18 @@
   // (those are the panel's track and Task 13's cards).
   const marksOn = (r) => (r.marks || []).concat(r.tired && rules().tiredAt ? [rules().tiredAt.name || 'Tired'] : [],
     (r.crippled || []).map((p) => `crippled (${p})`));
+  // GURPS's shock and a card waiting (Task 13), on the row's strip
+  const CARD_WAITING = 'card waiting';
+  const owedChips = (r) => (consequences() ? [].concat(isNum(r.shock) && r.shock > 0 ? [`Shock \u2212${r.shock}`] : [], (r.cards || []).length ? [CARD_WAITING] : []) : []);
   function chips(r, bloodied) {
     const one = (label) => `<button type="button" class="chip" data-fun="${esc(`${r.id}|${statusKey(label)}`)}" title="Remove ${esc(label)}">${esc(label)} ✕</button>`;
     const all = Fight.statusesOf(r);
     const bl = bloodied && words().bloodied !== '' ? (words().bloodied || 'Bloodied') : '';
     const marks = marksOn(r);
-    const h = (bl ? `<span class="chip auto">${esc(bl)}</span>` : '') + marks.map((m) => `<span class="chip auto mark">${esc(m)}</span>`).join('') + all.map(one).join('');
-    const names = (bl ? [bl] : []).concat(marks, all);
+    const owe = owedChips(r);
+    const h = (bl ? `<span class="chip auto">${esc(bl)}</span>` : '') + marks.map((m) => `<span class="chip auto mark">${esc(m)}</span>`).join('')
+      + owe.map((m) => `<span class="chip auto owe">${esc(m)}</span>`).join('') + all.map(one).join('');
+    const names = (bl ? [bl] : []).concat(marks, owe, all);
     // always there, empty or not, so a first status never moves the row's other items (or the order's width)
     return `<span class="chips"${names.length ? ` title="${esc(names.join(', '))}"` : ''}>${h}</span>`;
   }
@@ -504,7 +516,9 @@
   function actingHTML(d) {
     const f = d.fight;
     const { row: r, why } = actingOf(f);
-    if (!r) return '<div class="act" id="acting"><p class="note">The acting creature\'s panel shows here once a foe is in the fight.</p></div>';
+    // the cards owed, every row's, at the top of the panel whichever row it shows (Task 13)
+    const open = `<div class="act" id="acting">${cardsHTML(f)}`;
+    if (!r) return `${open}<p class="note">The acting creature\'s panel shows here once a foe is in the fight.</p></div>`;
     const cur = f.view.rows.find((x) => x.id === f.turn);
     const whyText = {
       picked: 'picked',
@@ -516,7 +530,7 @@
     const head = (title) => `<div class="ah"><span class="why">${esc(whyText)}</span><h3>${esc(title)}</h3>${r.note ? RP.link(r.note, 'note') : ''}</div>`;
     if (r.kind === 'lair') {
       const owners = (r.of || []).map((id) => f.view.rows.find((x) => x.id === id)).filter(Boolean);
-      return `<div class="act" id="acting">${head('Lair action')}<p class="note">Initiative 20, losing ties.</p>${owners.map((o) => {
+      return `${open}${head('Lair action')}<p class="note">Initiative 20, losing ties.</p>${owners.map((o) => {
         const info = foeInfo(o, d);
         return `<div class="stats"><h4 class="lab">${esc(o.gmName)}'s lair</h4>${(info && info.lairActionsHtml) || '<p class="warn">The block names lair actions but lists none the sheet can find.</p>'}</div>`;
       }).join('') || '<p class="warn">No foe with lair actions is in the fight.</p>'}</div>`;
@@ -535,6 +549,7 @@
     const nums = reads.map((x) => `<span>${esc(x)}</span>`);
     if (f.view.bloodied.has(r.id) && w.bloodied !== '') nums.push(`<span class="bl">${esc(w.bloodied || 'Bloodied')}</span>`);
     for (const m of marksOn(r)) nums.push(`<span class="mk">${esc(m)}</span>`);
+    nums.push(...shockHTML(r));
     // every status, the ones the row's strip had no room for too; a click removes it, as on the row
     for (const x of Fight.statusesOf(r)) nums.push(`<button type="button" class="st" data-fun="${esc(`${r.id}|${statusKey(x)}`)}" title="Remove ${esc(x)}">${esc(x)} ✕</button>`);
     const ctr = counters(r, true);
@@ -568,8 +583,84 @@
       // D&D says when a row with numbers has no block; CoC and GURPS do not: a row with HP is complete (D3d)
       else if (!nonum && w.noBlock) body += `<p class="warn">${esc(w.noBlock)}</p>`;
     }
-    return `<div class="act" id="acting">${head(r.gmName)}<div class="nums">${nums.join('')}</div>${ctr ? `<div class="nums ctr">${ctr}</div>` : ''}${boxesHTML(r)}${hitChipsHTML(r)}${trackHTML(r)}${body}</div>`;
+    return `${open}${head(r.gmName)}<div class="nums">${nums.join('')}</div>${ctr ? `<div class="nums ctr">${ctr}</div>` : ''}${boxesHTML(r)}${hitChipsHTML(r)}${trackHTML(r)}${body}</div>`;
   }
+  // ---- GURPS's cards (Task 13): prompts, one per hit, and a turn's start and end; nothing here decides an outcome ----
+  function cardsHTML(f) {
+    const C = consequences();
+    if (!C) return '';
+    const out = [];
+    for (const r of f.view.rows) for (const c of r.cards || []) out.push(cardHTML(r, c, C));
+    return out.length ? `<div class="fcards">${out.join('')}</div>` : '';
+  }
+  // A card's buttons each carry `data-fcbtn` "row|card|line|take" (take: an offer, `out`, `dismiss` or `roll`).
+  const cardBtn = (r, c, line, take) => `data-fcbtn="${esc([r.id, c.id, line, take].join('|'))}"`;
+  const CARD_WHAT = { conscious: 'turn start', recover: 'turn end' };
+  function cardHTML(r, c, C) {
+    const next = GMath.nextLine(c, C);
+    const noHt = !isNum(r.ht) && c.lines.some((l) => l.kind !== 'dead');
+    const what = c.kind === 'hit' ? (c.what || 'hit') : (CARD_WHAT[c.kind] || '');
+    let h = `<div class="fcard" data-fcard="${esc(c.id)}" data-fcrow="${esc(r.id)}"><div class="fch">`
+      + `<button type="button" class="nm" data-fcardpick="${esc(r.id)}" title="Show ${esc(r.gmName)}'s panel">${esc(r.gmName)}</button>`
+      + `<span class="what">${esc(what)}</span><span class="sp"></span>`
+      + `<button type="button" class="tg" ${cardBtn(r, c, '', 'out')} title="Out of the fight now, whatever the rolls">Out</button>`
+      + `<button type="button" class="x" ${cardBtn(r, c, '', 'dismiss')} title="Dismiss: nothing applied, nothing logged" aria-label="Dismiss this card">\u2715</button></div>`;
+    if (noHt) h += `<label class="cht"><span class="lab">HT</span><input data-fcardht="${esc(r.id)}" inputmode="numeric" autocomplete="off" placeholder="HT" aria-label="HT for ${esc(r.gmName)}"><span class="note">first, then Roll</span></label>`;
+    h += `<ol class="clines">${c.lines.map((l, i) => {
+      const cls = [i === next ? 'next' : '', l.result || l.taken ? 'rolled' : ''].join(' ').trim();
+      const res = l.result ? `<span class="res">${esc(GMath.resultText(l.result))}</span>` : '';
+      const offers = GMath.pending(l) ? l.offers.map((o) => `<button type="button" class="offer" ${cardBtn(r, c, i, o)}>${esc((GMath.offerOf(C, o) || {}).label || o)}</button>`).join('') : '';
+      const took = l.taken ? `<span class="took">${esc((GMath.offerOf(C, l.taken) || {}).label || l.taken)}</span>` : '';
+      return `<li${cls ? ` class="${cls}"` : ''}><span class="lt">${esc(GMath.lineText(l, r, C))}</span>${res}${offers}${took}</li>`;
+    }).join('')}</ol>`;
+    if (next >= 0) {
+      const wait = noHt || ui.rolling[c.id];
+      h += `<button type="button" class="primary roll" ${cardBtn(r, c, next, 'roll')} ${wait ? 'disabled' : ''} title="${noHt ? 'Type HT first' : 'Roll 3d6 against the next line'}">Roll</button>`;
+    }
+    return `${h}</div>`;
+  }
+  // The server rolls the card's next line against the row's HT and its modifier; the result goes on that line.
+  function rollCard(rowId, cardId) {
+    const f = state().fight;
+    const C = consequences();
+    const r = rowById(rowId);
+    const c = r && (r.cards || []).find((x) => x.id === cardId);
+    if (!f || !C || !c || ui.rolling[cardId]) return;
+    const line = GMath.nextLine(c, C);
+    const target = line < 0 ? null : GMath.lineTarget(c.lines[line], r);
+    if (target === null) return;
+    ui.rolling[cardId] = true;
+    RP.render();
+    roll([{ against: target }]).then(([res]) => {
+      delete ui.rolling[cardId];
+      const now = state().fight;
+      if (now && now.id === f.id) RP.dispatch({ fight: f.id, type: 'cardRolled', row: rowId, card: cardId, line, result: res });
+      else RP.render();
+    }, (e) => { delete ui.rolling[cardId]; rollFailed(e); RP.render(); });
+  }
+  // The panel's shock chip: its size, tapped open for −1 to the cap, or clear (a hit worked out on paper).
+  function shockHTML(r) {
+    const C = consequences();
+    if (!C || r.kind === 'lair') return [];
+    const on = isNum(r.shock) && r.shock > 0;
+    const out = [`<button type="button" class="tg shock ${on ? 'on' : ''}" data-fshock="${esc(r.id)}" aria-expanded="${ui.shockPick === r.id}" title="Shock: tap to set its size">${on ? `Shock \u2212${r.shock}` : 'Shock'}</button>`];
+    if (ui.shockPick === r.id) {
+      const cap = C.shock && isNum(C.shock.cap) ? C.shock.cap : 4;
+      const sizes = Array.from({ length: cap }, (_, i) => i + 1).map((n) => `<button type="button" data-fshockset="${esc(`${r.id}|${n}`)}" aria-pressed="${r.shock === n}">\u2212${n}</button>`);
+      out.push(`<span class="shockset" role="group" aria-label="Shock">${sizes.join('')}<button type="button" data-fshockset="${esc(`${r.id}|0`)}">clear</button></span>`);
+    }
+    return out;
+  }
+  // A card new to this page is brought into view once (its row is seldom the one the panel shows).
+  function showNewCards() {
+    document.querySelectorAll('#acting .fcard').forEach((el) => {
+      const k = `${el.dataset.fcrow}|${el.dataset.fcard}`;
+      if (ui.cardsSeen.has(k)) return;
+      ui.cardsSeen.add(k);
+      el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    });
+  }
+
   // The hit chips (GURPS, Task 12): the damage types and places, the row's last used of each first. A tap writes its
   // word into the row's entry box for this entry only (the box empties after it), so nothing is ever a default.
   function hitChipsHTML(r) {
@@ -811,7 +902,8 @@
     focusAttrs: ['data-fini', 'data-fhp', 'data-fmax', 'data-fac', 'data-ffpmax', 'data-fother', 'data-fstatus', 'data-ftick', 'data-fsel',
       'data-fseen', 'data-fhalf', 'data-fahalf', 'data-fres', 'data-fout', 'data-fgun', 'data-fds', 'data-flr', 'data-fla', 'data-frch',
       'data-fun', 'data-fsame', 'data-fside', 'data-fundo', 'data-faddgroup', 'data-faddbeat', 'data-faddpick', 'data-faddnew',
-      'data-fspend', 'data-fafter', 'data-fjot', 'data-fight', 'data-fplace', ...PANEL_KEYS.map((k) => `data-fs-${k}`)],
+      'data-fspend', 'data-fafter', 'data-fjot', 'data-fight', 'data-fplace', 'data-fcbtn', 'data-fcardpick', 'data-fcardht', 'data-fshock',
+      'data-fshockset', ...PANEL_KEYS.map((k) => `data-fs-${k}`)],
     // Fight here on a place tile or a place's drawer (plan 6a Task 7); nothing while a fight runs
     placeButtons(note) {
       if (!allowed() || state().fight || !(model().placeKeys || {})[note]) return '';
@@ -859,7 +951,7 @@
     },
     click(ev) { return onClick(ev); },
     // after every layout pass (gm.js applyLayout): the rows' status strips fit their room
-    afterLayout() { fitChips(); },
+    afterLayout() { fitChips(); showNewCards(); },
     probe() {
       const d = RP.derived();
       const out = { fight: null, after: d.afterFight, layout: layout() };
@@ -878,6 +970,7 @@
             fp: r.fp, fpMax: r.fpMax, mp: r.mp, mpMax: r.mpMax, san: r.san, sanMax: r.sanMax, dex: r.dex, st: r.st, ht: r.ht, dx: r.dx,
             speed: r.speed, fighting: r.fighting, marks: r.marks, deepest: r.deepest, tired: r.tired, gun: r.gun, from: r.from,
             er: r.er, erMax: r.erMax, caster: r.caster, dr: r.dr, faceOpen: r.faceOpen, hit: r.hit, crippled: r.crippled,
+            shock: r.shock || 0, cards: r.cards || [],
           })),
         };
       }
@@ -959,6 +1052,19 @@
     if (d.fjot) { RP.dispatch({ type: 'jot', beat: f.beat, text: d.fjot, title: f.title }); return true; }
     if (d.fpeek) { ui.peek = ui.peek === d.fpeek ? null : d.fpeek; RP.render(); return true; }
     if (d.fhtype || d.fhloc) { const [rid, v] = split(d.fhtype || d.fhloc); tapHitChip(rid, d.fhtype ? 'type' : 'location', v); return true; }
+    if (d.fcardpick) { ui.peek = d.fcardpick; RP.render(); return true; }
+    if (d.fcbtn) {
+      const parts = d.fcbtn.split('|');
+      const take = parts.pop();
+      const line = parts.pop();
+      const card = parts.pop();
+      const row = parts.join('|');
+      if (take === 'roll') rollCard(row, card);
+      else F({ type: 'card', row, card, ...(line === '' ? {} : { line: Number(line) }), take });
+      return true;
+    }
+    if (d.fshock) { ui.shockPick = ui.shockPick === d.fshock ? null : d.fshock; RP.render(); return true; }
+    if (d.fshockset) { const [rid, n] = split(d.fshockset); ui.shockPick = null; F({ type: 'setShock', row: rid, n: Number(n) }); return true; }
     if (d.fface) { const x = rowById(d.fface); if (x) F({ type: 'faceOpen', row: x.id, on: !x.faceOpen }); return true; }
     const id = d.ftick || d.fsel || d.fahalf || d.fhalf || d.fres || d.fseen || d.fout || d.flr;
     const r = rowById(id || '');
@@ -1148,6 +1254,14 @@
       return;
     }
     if (ev.key !== 'Enter') return;
+    // a card's HT box (Task 13): the row's HT, as the panel's box takes it
+    if (d.fcardht !== undefined) {
+      ev.preventDefault();
+      const v = t.value.trim();
+      if (!/^\d{1,2}$/.test(v)) { t.setAttribute('aria-invalid', 'true'); return; }
+      F({ type: 'setStat', row: d.fcardht, key: 'ht', value: Number(v) });
+      return;
+    }
     if (d.fhp !== undefined) {
       ev.preventDefault();
       const e = FM.parseEntry(t.value, FM.rulesOf(state().fight));

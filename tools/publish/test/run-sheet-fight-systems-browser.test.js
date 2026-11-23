@@ -38,13 +38,13 @@ after(async () => {
   for (const d of made) removeFixture(d);
 });
 
-async function start(which) {
+async function start(which, more) {
   const v = VAULTS[which];
   const vault = copyFixture(v.fixture);
   made.push(vault);
   const picked = pickSession(listSessions(vault), v.session, vault);
   assert.ok(picked.session, picked.error);
-  const t = createTableServer({ vaultPath: vault, session: picked.session, party: v.party, deps: { delayMs: 20, log: () => {} } });
+  const t = createTableServer({ vaultPath: vault, session: picked.session, party: v.party, deps: { delayMs: 20, log: () => {}, ...(more || {}) } });
   const port = await listenLocal(t.server, 0);
   servers.push(t);
   const base = `http://127.0.0.1:${port}`;
@@ -284,9 +284,10 @@ describe('CoC and GURPS fights on the GM page, by real input', { skip: browserSk
       p = await typeInto(page, `[data-fhp="${id}"]`, '-77');
       assert.deepStrictEqual([named(p, 'Kev').hp, named(p, 'Kev').max, named(p, 'Kev').out], [-65, 12, false]);
       assert.deepStrictEqual(named(p, 'Kev').marks, ['Reeling', '0 or less']);
-      // the row's chips, shown or moved to its second line: the two marks, no minus-HP line
+      // the row's chips, shown or moved to its second line: the two marks, no minus-HP line. Task 13 changed this on
+      // purpose: the hit's shock and its card (−5×HP: dead) are on the row's strip too
       const chips = await texts(page, `li[data-frow="${id}"] .chips > .chip`);
-      assert.deepStrictEqual(chips, ['Reeling', '0 or less']);
+      assert.deepStrictEqual(chips, ['Reeling', '0 or less', 'Shock \u22124', 'card waiting']);
       assert.strictEqual(await page.evaluate(`document.querySelector('li[data-frow="${id}"]').textContent.includes('×HP')`), false);
       // the panel (still Kev's) and its track: every mark, all passed, −5×HP the deepest
       assert.strictEqual(p.fight.actingName, 'Kev');
@@ -580,6 +581,96 @@ describe('CoC and GURPS fights on the GM page, by real input', { skip: browserSk
       await page.key('Enter');
       p = await until(page, `p.fight.rows.find((r) => r.id === ${q(vex)}).hp === 8`);
       assert.strictEqual(named(p, 'Vex Harrow').hit.line, '5 cr \u2212 DR 0 (face open) = 5');
+    });
+  });
+  // Task 13: the dice always land 4 (a fixed source handed to the server), so every 3d6 is 12
+  for (const [width, height] of SIZES) {
+    it(`GURPS at ${width}: with Bouncer 1 acting, 9 imp vitals on Bouncer 2 puts one card at the top of the panel, its death check rolled first and its knockdown second, then applied`, async () => {
+      const run = await start('gurps', { randomInt: () => 4 });
+      await withPage({ width, height }, async (page) => {
+        let p = await fightOn(page, run, 1);
+        await tap(page, '#fAddCount');
+        await page.type('2');
+        await tap(page, '#fAddName');
+        await page.type('Bouncer');
+        await page.waitFor('document.querySelector("[data-faddnew]")');
+        await tap(page, '[data-faddnew]');
+        p = await until(page, 'p.fight.rows.some((r) => r.name === "Bouncer 2") && p.saved === "Saved" && p.pending === 0');
+        // Bouncer 1 is fastest; Bouncer 2 has HT 10, 11 HP (from ST) and DR 1
+        p = await peek(page, p, 'Bouncer 1');
+        p = await typeInto(page, box(p, 'Bouncer 1', 'speed'), '9');
+        p = await peek(page, p, 'Bouncer 2');
+        p = await typeInto(page, box(p, 'Bouncer 2', 'st'), 11);
+        p = await typeInto(page, box(p, 'Bouncer 2', 'ht'), 10);
+        p = await typeInto(page, box(p, 'Bouncer 2', 'dr'), 1);
+        await tap(page, '#fNext');
+        if (await page.evaluate('Boolean(document.querySelector("#fStartAnyway"))')) await tap(page, '#fStartAnyway');
+        p = await until(page, 'p.fight.started && p.saved === "Saved" && p.pending === 0');
+        const b1 = named(p, 'Bouncer 1').id;
+        const b2 = named(p, 'Bouncer 2').id;
+        assert.equal(p.fight.turn, b1);
+        assert.strictEqual(p.fight.actingName, 'Bouncer 1');
+        assert.deepStrictEqual([named(p, 'Bouncer 2').hp, named(p, 'Bouncer 2').ht, named(p, 'Bouncer 2').dr], [11, 10, 1]);
+        // 9 imp vitals: 8 x 3 = 24, to -13
+        p = await typeInto(page, `[data-fhp="${b2}"]`, '9 imp vitals');
+        const card = `#acting .fcard[data-fcrow="${b2}"]`;
+        p = await until(page, `p.fight.rows.find((r) => r.id === ${q(b2)}).hp === -13 && document.querySelector(${q(card)})`);
+        // no click on its name: the panel is still Bouncer 1's, the card at its top naming Bouncer 2
+        assert.strictEqual(p.fight.actingName, 'Bouncer 1');
+        assert.strictEqual(await page.evaluate('document.querySelector("#acting").firstElementChild.className'), 'fcards');
+        assert.strictEqual(await text(page, `${card} .fch .nm`), 'Bouncer 2');
+        assert.deepStrictEqual(await texts(page, `${card} .clines .lt`), ['Death check (−1×HP): HT 10', 'Knockdown: HT 10 −5 = 5']);
+        assert.ok((await texts(page, `li[data-frow="${b2}"] .chips > .chip, li[data-row2="${b2}"] .chip`)).includes('card waiting'));
+        assert.strictEqual(named(p, 'Bouncer 2').shock, 4);
+        // the card's top and bottom edges are in view, in the window and in the panel's own scroll box
+        const edges = await page.evaluate(`(() => { const c = document.querySelector(${q(card)}).getBoundingClientRect(); const a = document.querySelector('#acting').getBoundingClientRect();
+          return { top: c.top, bottom: c.bottom, h: innerHeight, aTop: a.top, aBottom: a.bottom }; })()`);
+        assert.ok(edges.top >= 0 && edges.bottom <= edges.h && edges.top >= edges.aTop - 1 && edges.bottom <= edges.aBottom + 1, `${width}: ${JSON.stringify(edges)}`);
+        sane(p, `card ${width}`);
+        await shot(page, `gurps-card-${width}`);
+        // the first held click on Roll rolls the death check: 12 against 10, Mortal wound offered
+        const rollBtn = `${card} button.roll`;
+        await tap(page, rollBtn);
+        p = await until(page, `p.fight.rows.find((r) => r.id === ${q(b2)}).cards[0].lines[0].result && p.saved === "Saved" && p.pending === 0`);
+        assert.deepStrictEqual(await texts(page, `${card} .clines li:nth-child(1) .offer`), ['Mortal wound']);
+        // the second the knockdown: 12 against 5, Unconscious offered
+        await page.waitFor(`document.querySelector(${q(rollBtn)}) && !document.querySelector(${q(rollBtn)}).disabled`);
+        await tap(page, rollBtn);
+        p = await until(page, `p.fight.rows.find((r) => r.id === ${q(b2)}).cards[0].lines[1].result && p.saved === "Saved" && p.pending === 0`);
+        assert.deepStrictEqual(await texts(page, `${card} .clines li:nth-child(2) .offer`), ['Unconscious']);
+        assert.strictEqual(await page.evaluate(`Boolean(document.querySelector(${q(rollBtn)}))`), false, 'nothing left to roll');
+        assert.deepStrictEqual(named(p, 'Bouncer 2').conds, [], 'nothing applied until the tap');
+        // Apply: Unconscious, then the Mortal wound still offered; the card goes
+        await tap(page, `${card} .clines li:nth-child(2) .offer`);
+        p = await until(page, `p.fight.rows.find((r) => r.id === ${q(b2)}).conds.includes("Unconscious") && p.saved === "Saved" && p.pending === 0`);
+        await tap(page, `${card} .clines li:nth-child(1) .offer`);
+        p = await until(page, `p.fight.rows.find((r) => r.id === ${q(b2)}).cards.length === 0 && p.saved === "Saved" && p.pending === 0`);
+        assert.deepStrictEqual(named(p, 'Bouncer 2').conds, ['Unconscious', 'Mortal wound']);
+        assert.strictEqual(await page.evaluate(`Boolean(document.querySelector(${q(card)}))`), false);
+        const log = (await (await fetch(`${run.base}/api/state`)).json()).state.events.filter((e) => e.fight).map((e) => e.text);
+        assert.deepStrictEqual(log.slice(-4), [
+          'Bouncer 2: death check (−1×HP), HT 10, rolled 12, failed by 2.',
+          'Bouncer 2: knockdown, HT 10 −5 = 5, rolled 12, failed by 7.',
+          'Bouncer 2: knockdown: Unconscious.',
+          'Bouncer 2: death check (−1×HP): Mortal wound.',
+        ]);
+        sane(p, `after ${width}`);
+      });
+    });
+  }
+
+  it('GURPS: the panel\'s shock chip, tapped, sets Shock −2', async () => {
+    const run = await start('gurps');
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await fightOn(page, run, 2);
+      p = await peek(page, p, 'Vex Harrow');
+      const vex = named(p, 'Vex Harrow').id;
+      assert.strictEqual(await text(page, `#acting [data-fshock="${vex}"]`), 'Shock');
+      await tap(page, `#acting [data-fshock="${vex}"]`);
+      await tap(page, `#acting [data-fshockset="${vex}|2"]`);
+      p = await until(page, `p.fight.rows.find((r) => r.id === ${q(vex)}).shock === 2 && p.saved === "Saved" && p.pending === 0`);
+      assert.strictEqual(await text(page, `#acting [data-fshock="${vex}"]`), 'Shock −2');
+      assert.ok((await texts(page, `li[data-frow="${vex}"] .chips > .chip, li[data-row2="${vex}"] .chip`)).includes('Shock −2'));
     });
   });
 });

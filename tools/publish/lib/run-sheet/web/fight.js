@@ -355,7 +355,58 @@
       if (!had.includes(out.place)) { r.crippled = had.concat(out.place); say(s, f, at, `${nameOf(s, f, r)}: ${mark}.`); }
     }
     afterHp(s, f, r, before, at, { over });
+    owed(f, r, before, out.injury, { location: out.location, place: out.place, crippled: out.crippled });
   }
+
+  // ---- what a hit and a turn owe (GURPS, Task 13): the shock chip and cards of prompts, never an outcome ----
+  // The system's consequences table (model.rules.fight.consequences); null where there is none (D&D, CoC).
+  const consequencesOf = (f) => {
+    const C = FM.rulesOf(f).consequences;
+    return C && typeof C === 'object' && GM && typeof GM.cardForHit === 'function' ? C : null;
+  };
+  const cardsOf = (r) => { if (!Array.isArray(r.cards)) r.cards = []; return r.cards; };
+  // A card's id is the fight's count, so a replay makes the same ids.
+  function addCard(f, r, kind, lines, what) {
+    f.cardN = (isNum(f.cardN) ? f.cardN : 0) + 1;
+    cardsOf(r).push({ id: `k${f.cardN}`, kind, lines, ...(what ? { what } : {}) });
+  }
+  // A card of this kind (a turn's start or end) replaces the row's last one, answered or not.
+  function replaceCards(f, r, kind, cards) {
+    if (!cards.length && !(Array.isArray(r.cards) && r.cards.some((c) => c.kind === kind))) return;
+    r.cards = cardsOf(r).filter((c) => c.kind !== kind);
+    for (const c of cards) addCard(f, r, c.kind, c.lines);
+  }
+  // Injury a row took (a typed hit, a raw number, an area's share): its shock (B419), added to any still on, and a
+  // card when it owes more than shock. `shockEnds` counts the row's turn ends left. `hit` is null for raw injury.
+  function owed(f, r, before, injury, hit) {
+    const C = consequencesOf(f);
+    if (!C || !isNum(injury) || injury <= 0) return;
+    const out = GM.cardForHit(r, { injury, before, location: hit ? hit.location : null, crippled: Boolean(hit && hit.crippled) }, C);
+    if (out.shock > 0) {
+      const cap = C.shock && isNum(C.shock.cap) ? C.shock.cap : out.shock;
+      r.shock = Math.min(cap, (isNum(r.shock) ? r.shock : 0) + out.shock);
+      r.shockEnds = f.turn === r.id ? 2 : 1;
+    }
+    if (out.lines.length) addCard(f, r, 'hit', out.lines, `${injury} injury${hit && hit.place ? `, ${hit.place}` : ''}`);
+  }
+  // A row's turn ends: its shock counts down, and HT to recover while it is Stunned.
+  function turnEnds(f, r, at) {
+    const C = consequencesOf(f);
+    if (!C || !r) return;
+    if (isNum(r.shock) && r.shock > 0) {
+      r.shockEnds = (isNum(r.shockEnds) ? r.shockEnds : 1) - 1;
+      if (r.shockEnds <= 0) { r.shock = 0; r.shockEnds = 0; }
+      touch(r, at);
+    }
+    replaceCards(f, r, 'recover', GM.cardsAtTurnEnd(r, C));
+  }
+  // A row's turn starts: HT to stay conscious at 0 HP or less.
+  function turnStarts(f, r) {
+    const C = consequencesOf(f);
+    if (C && r) replaceCards(f, r, 'conscious', GM.cardsAtTurnStart(r, C));
+  }
+  const cardOf = (r, id) => (Array.isArray(r.cards) ? r.cards.find((c) => c.id === id) || null : null);
+  const dropCard = (r, id) => { r.cards = cardsOf(r).filter((c) => c.id !== id); };
 
   const FIGHT_HANDLERS = {
     fightStart(s, a, at) {
@@ -508,16 +559,20 @@
         const order = f.rows.filter((r) => FM.takesTurn(r, f.rows)).map((r) => ({ id: r.id, text: `${nameOf(s, f, r, true)}${isNum(r.ini) ? ` ${r.ini}` : ''}` }));
         sayRoster(s, f, at, 'Round 1: ', order, '.');
         turnStart(f, first, at);
+        turnStarts(f, first);
         return;
       }
+      const ending = rowOf(f, f.turn);
       const { row, wrapped } = FM.nextLive(f.rows, f.turn);
       if (!row) return;
+      turnEnds(f, ending, at);
       if (wrapped) {
         sayRoster(s, f, at, `Round ${f.round} ends: `, rosterItems(s, f), '.');
         f.round += 1;
       }
       f.turn = row.id;
       turnStart(f, row, at);
+      turnStarts(f, row);
     },
     // `rolled` is the server's total for an entry of dice (`2d+1 imp vitals`): the page rolls, never the reducer.
     hp: onRow((s, f, r, a, at) => {
@@ -537,12 +592,70 @@
       const before = r.hp;
       const temp = r.temp;
       let over = null;
+      let took = null;
       if (e.kind === 'temp') r.temp = e.n;
-      else if (e.kind === 'heal') { if (!isNum(r.hp)) return; r.hp = FM.afterHeal({ hp: r.hp, max: r.max }, e.n); } else { over = overOf(hurt(f, r, e.n, r.half), temp, before); r.half = false; }
+      else if (e.kind === 'heal') { if (!isNum(r.hp)) return; r.hp = FM.afterHeal({ hp: r.hp, max: r.max }, e.n); } else { took = hurt(f, r, e.n, r.half); over = overOf(took, temp, before); r.half = false; }
       touchIfHp(r, at, before, r.max);
       afterHp(s, f, r, before, at, { over });
+      // raw injury (`-9`, a bare `2d+1`) owes its shock and the lines it crosses (GURPS)
+      if (took !== null) owed(f, r, before, took, null);
     }),
     half: onRow((s, f, r, a, at) => { r.half = !!a.on; touch(r, at); }),
+    // A card's line rolled (GURPS, Task 13): the server's result onto the card's next line (the reducer never rolls,
+    // so a replay is the same). Dropped when the line is not the next, or HT changed since the roll was asked.
+    cardRolled: onRow((s, f, r, a, at) => {
+      const C = consequencesOf(f);
+      const card = C && cardOf(r, a.card);
+      if (!card) return;
+      const i = GM.nextLine(card, C);
+      const res = GM.rollResult(a.result);
+      if (i < 0 || a.line !== i || !res) return;
+      const l = card.lines[i];
+      if (GM.lineTarget(l, r) !== res.target) return;
+      // already Mortal wound, or an earlier line of this card offered or took it
+      const mortal = (r.conds || []).includes(C.mortalStatus) || card.lines.slice(0, i).some((x) => x.taken === 'mortal' || (GM.pending(x) && x.offers.includes('mortal')));
+      l.result = res;
+      l.offers = GM.offersFor(l, res, C, mortal);
+      touch(r, at);
+      say(s, f, at, `${nameOf(s, f, r)}: ${GM.lineText(l, r, C, true)}, ${GM.resultText(res)}.`);
+      if (GM.cardDone(card, C)) dropCard(r, card.id);
+    }),
+    // A card answered: one of a line's offers applied (`line`, `take`), the card's standing Out (`take: 'out'`), or the
+    // card dismissed (`take: 'dismiss'`, no log line). Each applied tap is one log line.
+    card: onRow((s, f, r, a, at) => {
+      const C = consequencesOf(f);
+      const card = C && cardOf(r, a.card);
+      if (!card) return;
+      if (a.take === 'dismiss') { dropCard(r, card.id); touch(r, at); return; }
+      if (a.take === 'out') {
+        dropCard(r, card.id);
+        touch(r, at);
+        if (!r.out) { r.out = true; say(s, f, at, `${nameOf(s, f, r)} is out of the fight.`); }
+        return;
+      }
+      const l = card.lines[a.line];
+      const o = GM.offerOf(C, a.take);
+      if (!l || !o || !GM.pending(l) || !l.offers.includes(a.take)) return;
+      l.taken = a.take;
+      for (const st of o.add || []) if (!r.conds.includes(st)) r.conds.push(st);
+      if (o.remove) r.conds = r.conds.filter((c) => !o.remove.includes(c));
+      if (o.out) r.out = true;
+      touch(r, at);
+      say(s, f, at, `${nameOf(s, f, r)}: ${GM.lineName(l, C, true)}: ${o.label}.`);
+      if (GM.cardDone(card, C)) dropCard(r, card.id);
+    }),
+    // The shock chip tapped (GURPS): its size set, 1 to the cap, or 0 to clear; a new one lasts to the end of the row's
+    // next turn.
+    setShock: onRow((s, f, r, a, at) => {
+      const C = consequencesOf(f);
+      const n = int(a.n);
+      const cap = C && C.shock && isNum(C.shock.cap) ? C.shock.cap : null;
+      if (!C || n === null || n < 0 || (cap !== null && n > cap) || Number(a.n) !== n) return;
+      if (!(isNum(r.shock) && r.shock > 0) && n > 0) r.shockEnds = f.turn === r.id ? 2 : 1;
+      r.shock = n;
+      if (n === 0) r.shockEnds = 0;
+      touch(r, at);
+    }),
     resisted: onRow((s, f, r, a, at) => { r.resisted = !!a.on; touch(r, at); }),
     // the face-open toggle (GURPS, Task 12), read by GM.gurpsInjury
     faceOpen: onRow((s, f, r, a, at) => { if (r.kind === 'lair') return; r.faceOpen = !!a.on; touch(r, at); }),
@@ -756,7 +869,7 @@
       if (!hits.length && !spent) return;
       const list = hits.map((x) => `${nameOf(s, f, x.r)} ${x.took}${x.half ? ' (half)' : ''}`).join(', ');
       say(s, f, at, `${spent ? `${spent}: ` : 'Area: '}${n} damage${list ? ` to ${list}` : ''}.`);
-      for (const x of hits) afterHp(s, f, x.r, x.before, at, { over: x.over });
+      for (const x of hits) { afterHp(s, f, x.r, x.before, at, { over: x.over }); owed(f, x.r, x.before, x.took, null); }
     },
     // A foe's, or an ally's (one the reader inferred starts unseen): the GM's tick is kept apart as `seenTick`,
     // so a side switched later leaves it standing.

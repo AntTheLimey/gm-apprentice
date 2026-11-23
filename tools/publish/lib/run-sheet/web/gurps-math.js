@@ -94,5 +94,129 @@
     return { ...out, injury, line };
   }
 
-  return { deriveGurps, gurpsInjury, drFigure };
+  // ---- what a hit and a turn owe (Task 13): prompts on one card, never an outcome ----
+  // `C` is the system's consequences table (systems/gurps.js, B419-B423). A card is { kind, lines }; a line is
+  // { kind, mod, times?, place?, result, offers, taken }: its target is the row's HT plus `mod` at the moment it is
+  // rolled, `result` the server's roll (the reducer never rolls), `offers` what the GM may apply, `taken` what was.
+  const line = (kind, mod, more) => ({ kind, mod, ...(more || {}), result: null, offers: [], taken: null });
+
+  // The shock a hit's injury gives, by the row's max HP; 0 for none.
+  function shockOf(injury, max, C) {
+    const s = (C && C.shock) || {};
+    if (!isNum(injury) || injury <= 0) return 0;
+    let n = Math.floor(injury);
+    const big = isNum(max) && isNum(s.bigHp) && isNum(s.per) && max >= s.bigHp;
+    if (big) n = Math.floor(injury / Math.floor(max / s.per));
+    return isNum(s.cap) ? Math.min(s.cap, n) : n;
+  }
+  const majorWound = (injury, max, crippled, C) => Boolean(crippled) || (isNum(max) && max > 0 && isNum(C.major) && injury * C.major > max);
+
+  // A hit's shock and its card's lines, in the order they settle: the death checks for each minus-HP line crossed
+  // (or the one dead line), then the one knockdown roll. `row` is the row after the hit (hp, max); `hit` { injury,
+  // before (HP before), location (null for raw injury), crippled }. No lines: a shock chip and no card.
+  function cardForHit(row, hit, C) {
+    const out = { shock: 0, lines: [] };
+    const r = row || {};
+    const h = hit || {};
+    if (!C || !isNum(h.injury) || h.injury <= 0) return out;
+    const max = isNum(r.max) && r.max > 0 ? r.max : null;
+    out.shock = shockOf(h.injury, max, C);
+    if (max !== null && isNum(h.before) && isNum(r.hp)) {
+      const crossed = (n) => h.before > -n * max && r.hp <= -n * max;
+      if (isNum(C.dead) && crossed(C.dead)) { out.lines.push({ ...line('dead', 0, { times: C.dead }), offers: ['dead'] }); return out; }
+      for (const n of C.death || []) if (crossed(n)) out.lines.push(line('death', 0, { times: n }));
+    }
+    const k = C.knockdown || {};
+    const place = h.location || null;
+    const major = majorWound(h.injury, max, h.crippled, C);
+    if (major || (place && (k.places || []).includes(place) && out.shock > 0)) {
+      const mod = major && place && k.major && isNum(k.major[place]) ? k.major[place] : 0;
+      out.lines.push(line('knockdown', mod, place ? { place } : {}));
+    }
+    return out;
+  }
+
+  const has = (r, status) => Array.isArray(r.conds) && r.conds.includes(status);
+  // A row's turn starts: HT to stay conscious (B419), its modifier from the row's HP and max HP. None for a row
+  // Unconscious, Out or not in, or whose `manoeuvre` is 'do nothing' with `defended` false or 0 (Task 15's; one
+  // missing asks).
+  function cardsAtTurnStart(row, C) {
+    const r = row || {};
+    if (!C || !r.in || r.out || !isNum(r.hp) || r.hp > 0 || has(r, C.unconscious)) return [];
+    if (r.manoeuvre === 'do nothing' && (r.defended === false || r.defended === 0)) return [];
+    const max = isNum(r.max) && r.max > 0 ? r.max : null;
+    const mod = max === null ? 0 : -Math.floor(-r.hp / max) || 0;
+    return [{ kind: 'conscious', lines: [line('conscious', mod)] }];
+  }
+  // A row's turn ends while Stunned: HT to recover (B420).
+  function cardsAtTurnEnd(row, C) {
+    const r = row || {};
+    if (!C || !r.in || r.out || !has(r, C.stunned)) return [];
+    return [{ kind: 'recover', lines: [line('recover', 0)] }];
+  }
+
+  // A line's target: the row's HT plus its modifier; null with no HT (the card asks for it first) or no roll (dead).
+  const lineTarget = (l, row) => (l && l.kind !== 'dead' && row && isNum(row.ht) ? row.ht + l.mod : null);
+  const minus = (n) => `−${Math.abs(n)}`;
+  // A line's name: "Knockdown", "Death check (−1×HP)", "−5×HP"; `log` gives the log's lower case.
+  function lineName(l, C, log) {
+    const names = (C && C.lines) || {};
+    if (l.kind === 'dead') return `${minus(l.times)}\u00d7HP`;
+    const name = names[l.kind] || l.kind;
+    return `${log && /^[A-Z][a-z]/.test(name) ? name.charAt(0).toLowerCase() + name.slice(1) : name}${l.kind === 'death' ? ` (${minus(l.times)}\u00d7HP)` : ''}`;
+  }
+  // A line's name and figures: "Knockdown: HT 10 −5 = 5", "Death check (−1×HP): HT 10", "−5×HP: dead"; `log` gives
+  // the log's form ("knockdown, HT 10 −5 = 5").
+  function lineText(l, row, C, log) {
+    if (l.kind === 'dead') return `${lineName(l, C, log)}: ${((C && C.lines) || {}).dead || 'dead'}`;
+    const ht = row && isNum(row.ht) ? row.ht : null;
+    const mod = l.mod ? ` ${l.mod > 0 ? '+' : '\u2212'}${Math.abs(l.mod)}` : '';
+    const fig = ht === null ? `HT ?${mod}` : `HT ${ht}${mod}${l.mod ? ` = ${ht + l.mod}` : ''}`;
+    return `${lineName(l, C, log)}${log ? ',' : ':'} ${fig}`;
+  }
+  const OUTCOMES = ['success', 'critical success', 'failure', 'critical failure'];
+  const failed = (res) => res.outcome === 'failure' || res.outcome === 'critical failure';
+  // "rolled 12, failed by 7"; a critical says so.
+  function resultText(res) {
+    const by = Math.abs(res.total - res.target);
+    const crit = /^critical/.test(res.outcome) ? `${res.outcome}, ` : '';
+    return `rolled ${res.total}, ${crit}${failed(res) ? `failed by ${Math.max(1, by)}` : `made it by ${res.target - res.total}`}`;
+  }
+  // What a rolled line offers (B420, B423), by its margin. `mortal`: the row is Mortal wound already, or an earlier
+  // line of this card offered or took it.
+  function offersFor(l, res, C, mortal) {
+    if (!failed(res)) return l.kind === 'recover' ? ['recover'] : [];
+    const by = Math.max(1, res.total - res.target);
+    if (l.kind === 'death') return !mortal && isNum(C.mortal) && by <= C.mortal ? ['mortal'] : ['dead'];
+    if (l.kind === 'knockdown') return res.outcome === 'critical failure' || (isNum(C.knockdown && C.knockdown.out) && by >= C.knockdown.out) ? ['unconscious'] : ['stunned'];
+    if (l.kind === 'conscious') return ['unconscious'];
+    return [];
+  }
+  // A roll result as the server gives it, or null.
+  function rollResult(res) {
+    if (!res || typeof res !== 'object' || !isNum(res.total) || !isNum(res.target) || !OUTCOMES.includes(res.outcome)) return null;
+    const dice = Array.isArray(res.dice) ? res.dice.filter(isNum).slice(0, 3) : [];
+    return { dice, total: res.total, target: res.target, margin: res.target - res.total, outcome: res.outcome };
+  }
+  const offerOf = (C, o) => (C && C.offers && C.offers[o]) || null;
+  const ending = (l, C) => (l.taken ? [l.taken] : l.offers).some((o) => { const x = offerOf(C, o); return Boolean(x && x.ends); });
+  // The card's next line to roll: the first not rolled (a dead line has no roll), unless a line before it offers or
+  // took what ends the card (an Out, an Unconscious): then -1, as when every line is rolled.
+  function nextLine(card, C) {
+    const lines = (card && card.lines) || [];
+    for (let i = 0; i < lines.length; i++) {
+      if (ending(lines[i], C)) return -1;
+      if (!lines[i].result && lines[i].kind !== 'dead') return i;
+    }
+    return -1;
+  }
+  // A line still offering something nobody took.
+  const pending = (l) => !l.taken && l.offers.length > 0;
+  // Settled: nothing to roll and nothing offered.
+  const cardDone = (card, C) => nextLine(card, C) < 0 && !card.lines.some(pending);
+
+  return {
+    deriveGurps, gurpsInjury, drFigure, shockOf, cardForHit, cardsAtTurnStart, cardsAtTurnEnd, lineTarget, lineName, lineText, resultText,
+    offersFor, rollResult, nextLine, cardDone, pending, offerOf,
+  };
 }));

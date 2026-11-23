@@ -349,6 +349,30 @@ ol.to .hitline { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ell
 .act .mtrack li { border: 1px dashed var(--line); border-radius: 4px; padding: 0 5px; color: var(--muted); }
 .act .mtrack li.lit { border-style: solid; border-color: var(--bad); color: var(--bad); }
 .act .mtrack li.deep { background: var(--bad); color: var(--panel); }
+/* GURPS's cards (Task 13): what a hit and a turn owe, at the top of the panel, each naming its row */
+.chip.auto.owe { border-color: var(--ice); color: var(--ice); }
+.act .fcards { display: flex; flex-direction: column; gap: 6px; margin: 0 0 8px; }
+.act .fcard { border: 1px solid var(--bad); border-left-width: 4px; border-radius: 6px; background: var(--bad-soft); padding: 4px 8px 6px; }
+.act .fcard .fch { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.act .fcard .fch .nm { font: 650 .9rem var(--display); background: none; border: 0; padding: 0; color: inherit; text-decoration: underline dotted; cursor: pointer; }
+.act .fcard .fch .what { font: 500 .7rem var(--mono); color: var(--muted); }
+.act .fcard .fch .sp { flex: 1; }
+.act .fcard .fch button.tg, .act .fcard .fch .x { font-size: .72rem; padding: 0 6px; }
+.act .fcard .cht { display: inline-flex; align-items: center; gap: 4px; margin: 4px 0 0; font: 500 .72rem var(--mono); }
+.act .fcard .cht input { width: 3rem; font: 600 .8rem var(--mono); padding: 1px 3px; text-align: center; }
+.act .fcard .cht .note { color: var(--muted); }
+.act .fcard .clines { list-style: none; margin: 4px 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.act .fcard .clines li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font: 600 .78rem var(--mono); color: var(--muted); }
+.act .fcard .clines li.next { color: var(--ink); }
+.act .fcard .clines li.next .lt::before { content: '\25B8 '; color: var(--bad); }
+.act .fcard .clines li.rolled { color: inherit; }
+.act .fcard .clines .res { font-weight: 500; }
+.act .fcard .clines .offer { font: 650 .74rem var(--mono); padding: 1px 8px; border-color: var(--bad); color: var(--bad); background: var(--bg); }
+.act .fcard .clines .took { color: var(--bad); }
+.act .fcard .roll { font-size: .8rem; padding: 2px 14px; }
+.act .nums .shock.on { color: var(--ice); border-color: var(--ice); }
+.act .nums .shockset { display: inline-flex; gap: 2px; border: 0; padding: 0; background: none; }
+.act .nums .shockset button { font-size: .72rem; padding: 0 6px; }
 .act .nums .st { color: var(--bad); border: 1px solid var(--bad); border-radius: 5px; padding: 0 6px; background: var(--bg); font: inherit; }
 .act .nums.ctr button { font-size: .75rem; padding: 1px 6px; }
 .act .stats { font-size: .9rem; border-top: 1px solid var(--line); margin-top: 6px; padding-top: 4px; }

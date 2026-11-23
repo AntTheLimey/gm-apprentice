@@ -73,6 +73,8 @@ function createTableServer({ vaultPath, session, party = [], stateFile, fileLog 
   const vaultRoot = path.resolve(vaultPath);
   const reduce = deps.reduce || RS.reduce;
   const buildPlayers = deps.forPlayers || forPlayers;
+  // the dice's random source: crypto's, or a fixed one a test hands in (lib/dice takes it for tests only)
+  const diceOpts = typeof deps.randomInt === 'function' ? { randomInt: deps.randomInt } : undefined;
 
   const clients = new Set();
   // The players' half: its own stream clients, the last good view, and the picture ids of the current
@@ -491,7 +493,7 @@ function createTableServer({ vaultPath, session, party = [], stateFile, fileLog 
         withJson(req, res, (msg) => {
           if (!msg || !Array.isArray(msg.rolls) || msg.rolls.length > MAX_ROLLS) { json(res, 400, { error: `the body needs { rolls: [...] }, each { sides, mod }, { against: N }, { d100: { target } } or { damage: "2d+1" }, at most ${MAX_ROLLS}` }); return; }
           let results;
-          try { results = dice.rollSpecs(msg.rolls); } catch (err) { json(res, 400, { error: String(err.message).split('\n')[0] }); return; }
+          try { results = dice.rollSpecs(msg.rolls, diceOpts); } catch (err) { json(res, 400, { error: String(err.message).split('\n')[0] }); return; }
           json(res, 200, { results });
         });
       },

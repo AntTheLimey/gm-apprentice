@@ -52,6 +52,33 @@ const WOUNDING = {
   locationChips: ['torso', 'vitals', 'skull', 'face', 'eye', 'neck', 'groin', 'arm', 'leg', 'hand', 'foot'],
 };
 
+// What a hit and a turn's start and end owe (Task 13), names and numbers only, read by gurps-math's cardForHit,
+// cardsAtTurnStart and cardsAtTurnEnd. The page offers each as a prompt; nothing here decides an outcome.
+const CONSEQUENCES = {
+  shock: { cap: 4, bigHp: 20, per: 10 }, // B419
+  major: 2, // B420; a crippled place counts too, B420, B421
+  knockdown: {
+    places: ['skull', 'face', 'eye', 'vitals'], // B420
+    major: { face: -5, vitals: -5, groin: -5, skull: -10, eye: -10 }, // B420
+    out: 5, // B420
+  },
+  death: [1, 2, 3, 4], // B419
+  dead: 5, // B419
+  mortal: 2, // B423
+  // the names on the cards and in the log
+  lines: { death: 'Death check', dead: 'dead', knockdown: 'Knockdown', conscious: 'HT to stay conscious', recover: 'HT to recover' },
+  offers: {
+    mortal: { label: 'Mortal wound', add: ['Mortal wound'] },
+    dead: { label: 'Out (dead)', out: true, ends: true },
+    stunned: { label: 'Stunned and Prone', add: ['Stunned', 'Prone'] },
+    unconscious: { label: 'Unconscious', add: ['Unconscious'], ends: true },
+    recover: { label: 'clear Stunned', remove: ['Stunned'] },
+  },
+  mortalStatus: 'Mortal wound',
+  stunned: 'Stunned',
+  unconscious: 'Unconscious',
+};
+
 // The attribute names are exact (a lower-case `st` is a word); the rest ignore case.
 const ALIASES = {
   st: /^ST$/, dx: /^DX$/, iq: /^IQ$/, ht: /^HT$/, dr: /^DR$/,
@@ -259,7 +286,7 @@ function readPc({ body, fm }) {
   }
 }
 
-// Placeholders until later tasks fill them in: `vitals`, `prompts`, `consequences`, `defences`,
+// Placeholders until later tasks fill them in: `vitals`, `prompts`, `defences`,
 // `manoeuvres`, `firearmBonus` keep D&D's shape (GURPS-safe empties where D&D words would show).
 function describeGurps(id) {
   const r = describeAs(id, 'GURPS 4e', true);
@@ -278,6 +305,8 @@ function describeGurps(id) {
     pools: [{ key: 'fp', prefix: 'f', label: 'FP', max: 'fpMax', floorTimes: -1 }, { key: 'er', prefix: 'e', label: 'Energy Reserve', max: 'erMax', floor: 0 }],
     // a hit typed as damage, type and place (Task 12)
     wounding: WOUNDING,
+    // what a hit and a turn's start and end owe, as prompts (Task 13)
+    consequences: CONSEQUENCES,
   };
   Object.assign(r, { family: 'gurps', ...JSON.parse(JSON.stringify(fight)) });
   Object.assign(r.fight, fight);
@@ -315,4 +344,4 @@ const foeRow = (n) => ({ init: n.speed, fp: n.fp, fpMax: n.fp, speed: n.speed, d
 
 const gurps = { ...dnd, id: 'gurps-4e', fights: true, readFoe, readPc, foeRow, stockNoActions: undefined, describe: () => describeGurps('gurps-4e') };
 
-module.exports = { gurps, readNumbers, keyOf, lacks, energyReserve, hasSpellList, isCaster, WOUNDING, drByLocationOf };
+module.exports = { gurps, readNumbers, keyOf, lacks, energyReserve, hasSpellList, isCaster, WOUNDING, CONSEQUENCES, drByLocationOf };

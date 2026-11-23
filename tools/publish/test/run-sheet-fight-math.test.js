@@ -1130,3 +1130,125 @@ test('the dice\'s working starts with the roll', () => {
   const out = gurpsInjury({ ...e.hit, n: 9, dice: e.dice }, foe(), W);
   assert.deepEqual([out.injury, out.line], [24, '2d+1 = 9 imp − DR 1 = 8 × 3 = 24']);
 });
+
+// ---- what a hit and a turn owe (step 6b Task 13): gurps-math's cards, with fixed roll results ----
+
+const GC = require('../lib/run-sheet/web/gurps-math');
+const C = GURPS.consequences;
+// a roll result as the server gives it
+const rolled = (total, target, crit) => ({ dice: [1, 1, 1], total, target, margin: target - total,
+  outcome: crit || (total <= target ? 'success' : 'failure') });
+const kinds = (out) => out.lines.map((l) => `${l.kind}${l.times ? ` ${l.times}` : ''}${l.mod ? ` ${l.mod}` : ''}`);
+
+test('an injury of 4 on a 12 HP row gives Shock 4; 7 gives 4; 5 on 25 HP gives 2; 1 on 25 HP gives none', () => {
+  assert.equal(GC.shockOf(4, 12, C), 4);
+  assert.equal(GC.shockOf(7, 12, C), 4);
+  assert.equal(GC.shockOf(5, 25, C), 2);
+  assert.equal(GC.shockOf(1, 25, C), 0);
+  assert.equal(GC.shockOf(3, null, C), 3, 'no max HP: the injury, capped');
+});
+
+test('an injury of 7 on 12 HP is a major wound; 6 is not', () => {
+  assert.deepEqual(kinds(GC.cardForHit({ hp: 5, max: 12 }, { injury: 7, before: 12, location: 'torso' }, C)), ['knockdown']);
+  assert.deepEqual(kinds(GC.cardForHit({ hp: 6, max: 12 }, { injury: 6, before: 12, location: 'torso' }, C)), []);
+  assert.deepEqual(kinds(GC.cardForHit({ hp: 9, max: 12 }, { injury: 3, before: 12, location: 'arm', crippled: true }, C)), ['knockdown'], 'crippled');
+});
+
+test('a major wound to the vitals: one knockdown line at HT −5; a failure by 7 offers Unconscious; a failure by 2 offers Stunned and Prone; a success settles it', () => {
+  const out = GC.cardForHit({ hp: -1, max: 11 }, { injury: 12, before: 11, location: 'vitals' }, C);
+  assert.deepEqual(kinds(out), ['knockdown -5']);
+  const l = out.lines[0];
+  assert.equal(GC.lineText(l, { ht: 10 }, C), 'Knockdown: HT 10 −5 = 5');
+  assert.equal(GC.lineTarget(l, { ht: 10 }), 5);
+  assert.deepEqual(GC.offersFor(l, rolled(12, 5), C), ['unconscious']);
+  assert.deepEqual(GC.offersFor(l, rolled(7, 5), C), ['stunned']);
+  assert.deepEqual(GC.offersFor(l, rolled(17, 16, 'critical failure'), C), ['unconscious'], 'critical failure');
+  assert.deepEqual(GC.offersFor(l, rolled(5, 5), C), []);
+  assert.deepEqual(C.offers.stunned.add, ['Stunned', 'Prone']);
+});
+
+test('a skull hit with shock that is not a major wound: one knockdown line at HT unmodified', () => {
+  const out = GC.cardForHit({ hp: 9, max: 12 }, { injury: 3, before: 12, location: 'skull' }, C);
+  assert.deepEqual(kinds(out), ['knockdown']);
+  assert.equal(GC.lineText(out.lines[0], { ht: 11 }, C), 'Knockdown: HT 11');
+  assert.equal(out.shock, 3);
+  // a major wound to the eye is −10, the face −5
+  assert.deepEqual(kinds(GC.cardForHit({ hp: 2, max: 12 }, { injury: 10, before: 12, location: 'eye' }, C)), ['knockdown -10']);
+  assert.deepEqual(kinds(GC.cardForHit({ hp: 2, max: 12 }, { injury: 10, before: 12, location: 'face' }, C)), ['knockdown -5']);
+});
+
+test('a torso hit that is not a major wound: no card, a shock chip only', () => {
+  const out = GC.cardForHit({ hp: 8, max: 12 }, { injury: 4, before: 12, location: 'torso' }, C);
+  assert.deepEqual([out.shock, out.lines], [4, []]);
+  // a groin hit is not a head or vitals hit
+  assert.deepEqual(GC.cardForHit({ hp: 8, max: 12 }, { injury: 4, before: 12, location: 'groin' }, C).lines, []);
+});
+
+test('raw injury 9 on 11 HP from 5: shock, the death check it crosses and an unmodified knockdown', () => {
+  const out = GC.cardForHit({ hp: -14, max: 11 }, { injury: 19, before: 5, location: null }, C);
+  assert.deepEqual([out.shock, kinds(out)], [4, ['death 1', 'knockdown']]);
+});
+
+test('a death check missed by 2 offers Mortal wound; missed by 4 offers Out (dead); a Mortal wound row missing by 1 is offered Out (dead)', () => {
+  const l = GC.cardForHit({ hp: -12, max: 11 }, { injury: 13, before: 1, location: null }, C).lines[0];
+  assert.equal(GC.lineText(l, { ht: 10 }, C), 'Death check (−1×HP): HT 10');
+  assert.deepEqual(GC.offersFor(l, rolled(12, 10), C, false), ['mortal']);
+  assert.deepEqual(GC.offersFor(l, rolled(14, 10), C, false), ['dead']);
+  assert.deepEqual(GC.offersFor(l, rolled(11, 10), C, true), ['dead']);
+  assert.deepEqual(GC.offersFor(l, rolled(10, 10), C, true), []);
+  assert.equal(C.offers.dead.label, 'Out (dead)');
+});
+
+test('−5×HP: "dead" with Out, and no other line', () => {
+  const out = GC.cardForHit({ hp: -55, max: 11 }, { injury: 60, before: 5, location: 'vitals' }, C);
+  assert.deepEqual(kinds(out), ['dead 5']);
+  assert.deepEqual(out.lines[0].offers, ['dead']);
+  assert.equal(GC.lineText(out.lines[0], { ht: 10 }, C), '−5×HP: dead');
+  assert.equal(GC.lineTarget(out.lines[0], { ht: 10 }), null);
+});
+
+test('turn start at −13/12 brings HT −1 to stay conscious; −12/12 is −1; 0/12 is HT; above 0 none', () => {
+  const at = (hp, more) => GC.cardsAtTurnStart({ in: true, hp, max: 12, conds: [], ...more }, C);
+  assert.deepEqual(at(-13).map((c) => [c.kind, c.lines[0].mod]), [['conscious', -1]]);
+  assert.equal(GC.lineText(at(-13)[0].lines[0], { ht: 10 }, C), 'HT to stay conscious: HT 10 −1 = 9');
+  assert.equal(at(-12)[0].lines[0].mod, -1);
+  assert.equal(at(0)[0].lines[0].mod, 0);
+  assert.deepEqual(at(1), []);
+  assert.deepEqual(at(-5, { conds: ['Unconscious'] }), []);
+  assert.deepEqual(at(-5, { out: true }), []);
+  // failure offers Unconscious
+  assert.deepEqual(GC.offersFor(at(-13)[0].lines[0], rolled(12, 9), C), ['unconscious']);
+});
+
+test('a Do Nothing row that made no defence roll is not asked; one that defended, or with no record, is', () => {
+  const at = (more) => GC.cardsAtTurnStart({ in: true, hp: -3, max: 12, conds: [], ...more }, C);
+  assert.deepEqual(at({ manoeuvre: 'do nothing', defended: false }), []);
+  assert.deepEqual(at({ manoeuvre: 'do nothing', defended: 0 }), []);
+  assert.equal(at({ manoeuvre: 'do nothing', defended: true }).length, 1);
+  assert.equal(at({ manoeuvre: 'do nothing' }).length, 1, 'no defence record: asked');
+  assert.equal(at({ manoeuvre: 'attack', defended: false }).length, 1);
+});
+
+test('turn end while Stunned brings HT to recover; a success offers clear Stunned, a failure nothing', () => {
+  const [card] = GC.cardsAtTurnEnd({ in: true, hp: 5, max: 12, conds: ['Stunned', 'Prone'] }, C);
+  assert.equal(GC.lineText(card.lines[0], { ht: 12 }, C), 'HT to recover: HT 12');
+  assert.deepEqual(GC.offersFor(card.lines[0], rolled(9, 12), C), ['recover']);
+  assert.deepEqual(GC.offersFor(card.lines[0], rolled(14, 12), C), []);
+  assert.deepEqual(C.offers.recover.remove, ['Stunned']);
+  assert.deepEqual(GC.cardsAtTurnEnd({ in: true, hp: 5, max: 12, conds: ['Prone'] }, C), []);
+});
+
+test('no HT on the row: the line has no target and reads HT ?', () => {
+  const l = GC.cardForHit({ hp: -1, max: 11 }, { injury: 12, before: 11, location: 'vitals' }, C).lines[0];
+  assert.equal(GC.lineTarget(l, { ht: null }), null);
+  assert.equal(GC.lineText(l, { ht: null }, C), 'Knockdown: HT ? −5');
+});
+
+test('the card statuses are in the GURPS status list', () => {
+  const statuses = systemFor('gurps-4e').describe().statuses;
+  for (const o of Object.values(C.offers)) for (const st of (o.add || []).concat(o.remove || [])) assert.ok(statuses.includes(st), st);
+  assert.ok(statuses.includes(C.mortalStatus) && statuses.includes(C.unconscious) && statuses.includes(C.stunned));
+  // D&D and CoC have none
+  assert.equal(systemFor('dnd-5e-2024').describe().fight.consequences, null);
+  assert.equal(COC.consequences, null);
+});

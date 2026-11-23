@@ -2353,3 +2353,222 @@ describe('GURPS hits on the row (step 6b Task 12)', () => {
     assert.deepEqual([named(s, 'Wolf').hp, named(s, 'Wolf').hit], [11, null]);
   });
 });
+
+describe('GURPS consequence cards and turn upkeep (step 6b Task 13)', () => {
+  const { systemFor } = require('../lib/run-sheet/systems');
+  const GURPS = systemFor('gurps-4e').describe().fight;
+  const begin = (list, rules = GURPS) => RS.reduce(fresh(), { id: 'f1', type: 'fightStart', title: 'T', ...(rules ? { rules } : {}), rows: list.map((o, i) => M.blankRow({ id: `r${i + 1}`, ...o })) }, now());
+  const G = (s, a) => RS.reduce(s, { id: nextId(), fight: 'f1', ...a }, now());
+  const named = (s, name) => s.fight.rows.find((r) => r.name === name);
+  const typeIn = (s, name, entry) => G(s, { type: 'hp', row: named(s, name).id, entry });
+  const go = (s) => G(s, { type: 'fightNext', from: s.fight.turn, round: s.fight.round });
+  const lines = (s) => s.events.filter((e) => e.fight).map((e) => e.text);
+  const turnName = (s) => s.fight.rows.find((r) => r.id === s.fight.turn).name;
+  const cards = (s, name) => named(s, name).cards || [];
+  // a roll result as the server gives it
+  const rolled = (total, target, crit) => ({ dice: [4, 4, 4], total, target, margin: target - total, outcome: crit || (total <= target ? 'success' : 'failure') });
+  const roll = (s, name, total, target, crit) => {
+    const c = cards(s, name)[0];
+    const i = require('../lib/run-sheet/web/gurps-math').nextLine(c, GURPS.consequences);
+    return G(s, { type: 'cardRolled', row: named(s, name).id, card: c.id, line: i, result: rolled(total, target, crit) });
+  };
+  const take = (s, name, line, what) => G(s, { type: 'card', row: named(s, name).id, card: cards(s, name)[0].id, ...(line === null ? {} : { line }), take: what });
+  const twoRows = () => [{ name: 'Kev', kind: 'pc', ini: 6, speed: 6, hp: 12, max: 12, ht: 11 }, { name: 'Guard', ini: 5, speed: 5, hp: 11, max: 11, ht: 10, dr: 1 }];
+
+  it('an injury of 4 on a 12 HP row gives Shock −4; it clears at the end of the row\'s next turn, not before', () => {
+    let s = begin(twoRows());
+    s = go(s); // Kev acts
+    s = typeIn(s, 'Kev', '-4');
+    assert.equal(named(s, 'Kev').shock, 4);
+    assert.deepEqual(cards(s, 'Kev'), [], 'a plain hit: no card');
+    s = go(s); // Kev's turn ends: the hit came in it, so the shock stays for the next one
+    assert.equal(named(s, 'Kev').shock, 4);
+    s = go(s); // Kev's next turn starts
+    assert.equal(named(s, 'Kev').shock, 4);
+    s = go(s); // and ends
+    assert.equal(named(s, 'Kev').shock, 0);
+    // Guard acts now: a hit in its own turn lasts through that turn's end and the whole of its next one
+    assert.equal(turnName(s), 'Guard');
+    s = typeIn(s, 'Guard', '-3');
+    s = go(s);
+    assert.equal(named(s, 'Guard').shock, 3);
+    s = go(s);
+    s = go(s);
+    assert.equal(named(s, 'Guard').shock, 0);
+    s = typeIn(s, 'Kev', '-2');
+    s = typeIn(s, 'Kev', '-3');
+    assert.equal(named(s, 'Kev').shock, 4, 'two hits add, capped');
+  });
+
+  it('a tap on the chip sets Shock −2; 0 clears it; 5 is refused', () => {
+    let s = begin(twoRows());
+    s = G(s, { type: 'setShock', row: named(s, 'Guard').id, n: 2 });
+    assert.equal(named(s, 'Guard').shock, 2);
+    s = G(s, { type: 'setShock', row: named(s, 'Guard').id, n: 5 });
+    assert.equal(named(s, 'Guard').shock, 2);
+    s = G(s, { type: 'setShock', row: named(s, 'Guard').id, n: 0 });
+    assert.equal(named(s, 'Guard').shock, 0);
+  });
+
+  it('12 imp vitals on an 11 HP, DR 1, HT 10 guard: one card, its lines death check, death check, knockdown, in that order; Roll settles them one at a time and stops at an Out', () => {
+    let s = begin(twoRows());
+    s = typeIn(s, 'Guard', '12 imp vitals');
+    assert.equal(named(s, 'Guard').hp, -22);
+    assert.equal(named(s, 'Guard').shock, 4);
+    assert.equal(cards(s, 'Guard').length, 1);
+    const c = cards(s, 'Guard')[0];
+    assert.deepEqual(c.lines.map((l) => [l.kind, l.times || null, l.mod]), [['death', 1, 0], ['death', 2, 0], ['knockdown', null, -5]]);
+    const before = lines(s).length;
+    // the first death check missed by 2: Mortal wound offered, and the next line rolls
+    s = roll(s, 'Guard', 12, 10);
+    assert.deepEqual(cards(s, 'Guard')[0].lines[0].offers, ['mortal']);
+    // a roll for a line that is not the next is dropped
+    const stale = G(s, { type: 'cardRolled', row: named(s, 'Guard').id, card: c.id, line: 0, result: rolled(3, 10) });
+    assert.deepEqual(stale.fight.rows, s.fight.rows);
+    // the second missed by 1: an earlier line offers Mortal wound, so Out (dead); the knockdown is not rolled
+    s = roll(s, 'Guard', 11, 10);
+    assert.deepEqual(cards(s, 'Guard')[0].lines[1].offers, ['dead']);
+    assert.equal(require('../lib/run-sheet/web/gurps-math').nextLine(cards(s, 'Guard')[0], GURPS.consequences), -1);
+    assert.deepEqual(lines(s).slice(before), ['Guard: death check (−1×HP), HT 10, rolled 12, failed by 2.', 'Guard: death check (−2×HP), HT 10, rolled 11, failed by 1.']);
+    // nothing is Out until the tap
+    assert.equal(named(s, 'Guard').out, false);
+    s = take(s, 'Guard', 1, 'dead');
+    assert.equal(named(s, 'Guard').out, true);
+    assert.equal(lines(s).at(-1), 'Guard: death check (−2×HP): Out (dead).');
+    // the Mortal wound the first line offered is still there to take, then the card goes
+    assert.equal(cards(s, 'Guard').length, 1);
+    s = take(s, 'Guard', 0, 'mortal');
+    assert.ok(named(s, 'Guard').conds.includes('Mortal wound'));
+    assert.deepEqual(cards(s, 'Guard'), []);
+  });
+
+  it('a major wound to the vitals: a knockdown failed by 7 then Unconscious, failed by 2 then Stunned and Prone, a success settles it', () => {
+    for (const [total, want] of [[12, ['Unconscious']], [7, ['Stunned', 'Prone']], [5, []]]) {
+      let s = begin(twoRows());
+      s = typeIn(s, 'Guard', '4 imp vitals'); // 3 x 3 = 9: a major wound, above 0
+      assert.deepEqual(cards(s, 'Guard')[0].lines.map((l) => [l.kind, l.mod]), [['knockdown', -5]]);
+      s = roll(s, 'Guard', total, 5);
+      if (want.length) {
+        assert.equal(named(s, 'Guard').conds.length, 0, 'nothing until the tap');
+        s = take(s, 'Guard', 0, cards(s, 'Guard')[0].lines[0].offers[0]);
+      }
+      assert.deepEqual(named(s, 'Guard').conds, want);
+      assert.deepEqual(cards(s, 'Guard'), [], `${total}: the card is settled`);
+      if (total === 12) assert.equal(lines(s).slice(-2).join(' | '), 'Guard: knockdown, HT 10 −5 = 5, rolled 12, failed by 7. | Guard: knockdown: Unconscious.');
+    }
+  });
+
+  it('a skull hit with shock that is not a major wound: one knockdown line at HT unmodified; a torso hit that is not a major wound: no card, a shock chip only', () => {
+    let s = begin(twoRows());
+    s = typeIn(s, 'Guard', '2 cr skull'); // 2 - DR 3 = 0: nothing
+    assert.deepEqual([named(s, 'Guard').shock || 0, cards(s, 'Guard')], [0, []]);
+    s = typeIn(s, 'Kev', '3 cr skull'); // Kev has DR 0, the skull 2: 1 x 4 = 4
+    assert.deepEqual(cards(s, 'Kev')[0].lines.map((l) => [l.kind, l.mod]), [['knockdown', 0]]);
+    s = typeIn(s, 'Guard', '4 cr torso');
+    assert.deepEqual([named(s, 'Guard').shock, cards(s, 'Guard')], [3, []]);
+  });
+
+  it('a fatigue hit raises no shock and no card', () => {
+    let s = begin([{ name: 'Guard', hp: 11, max: 11, ht: 10, fp: 10, fpMax: 10 }]);
+    s = typeIn(s, 'Guard', '9 fat vitals');
+    assert.deepEqual([named(s, 'Guard').fp, named(s, 'Guard').shock || 0, cards(s, 'Guard')], [1, 0, []]);
+  });
+
+  it('raw injury −9 on 11 HP at 5: shock, one death check and an unmodified knockdown', () => {
+    let s = begin([{ name: 'Guard', hp: 5, max: 11, ht: 10 }]);
+    s = typeIn(s, 'Guard', '-19');
+    assert.equal(named(s, 'Guard').shock, 4);
+    assert.deepEqual(cards(s, 'Guard')[0].lines.map((l) => [l.kind, l.mod]), [['death', 0], ['knockdown', 0]]);
+  });
+
+  it('the card\'s standing Out puts the row Out with one log line', () => {
+    let s = begin(twoRows());
+    s = typeIn(s, 'Guard', '12 imp vitals');
+    const n = lines(s).length;
+    s = take(s, 'Guard', null, 'out');
+    assert.equal(named(s, 'Guard').out, true);
+    assert.deepEqual(lines(s).slice(n), ['Guard is out of the fight.']);
+    assert.deepEqual(cards(s, 'Guard'), []);
+  });
+
+  it('a dismissed card writes no log line', () => {
+    let s = begin(twoRows());
+    s = typeIn(s, 'Guard', '12 imp vitals');
+    const n = lines(s).length;
+    s = take(s, 'Guard', null, 'dismiss');
+    assert.deepEqual([cards(s, 'Guard'), lines(s).length, named(s, 'Guard').out], [[], n, false]);
+  });
+
+  it('a death check missed by 4 offers Out (dead); a Mortal wound row missing by 1 is offered Out (dead); −5×HP: "dead" with Out', () => {
+    let s = begin([{ name: 'Guard', hp: 1, max: 11, ht: 10 }]);
+    s = typeIn(s, 'Guard', '-13');
+    s = roll(s, 'Guard', 14, 10);
+    assert.deepEqual(cards(s, 'Guard')[0].lines[0].offers, ['dead']);
+    let m = begin([{ name: 'Guard', hp: 1, max: 11, ht: 10, conds: ['Mortal wound'] }]);
+    m = typeIn(m, 'Guard', '-13');
+    m = roll(m, 'Guard', 11, 10);
+    assert.deepEqual(cards(m, 'Guard')[0].lines[0].offers, ['dead']);
+    let d = begin([{ name: 'Guard', hp: 1, max: 11, ht: 10 }]);
+    d = typeIn(d, 'Guard', '-60');
+    assert.deepEqual(cards(d, 'Guard')[0].lines.map((l) => [l.kind, l.offers]), [['dead', ['dead']]]);
+    assert.equal(named(d, 'Guard').out, false, 'nothing is Out until the tap');
+    d = take(d, 'Guard', 0, 'dead');
+    assert.equal(named(d, 'Guard').out, true);
+    assert.equal(lines(d).at(-1), 'Guard: −5×HP: Out (dead).');
+  });
+
+  it('turn start at −13/12 brings HT −1 to stay conscious; a failure offers Unconscious', () => {
+    let s = begin([{ name: 'Kev', kind: 'pc', ini: 6, speed: 6, hp: -13, max: 12, ht: 11 }, { name: 'Guard', ini: 5, speed: 5, hp: 11, max: 11, ht: 10 }]);
+    s = go(s);
+    assert.equal(turnName(s), 'Kev');
+    const [c] = cards(s, 'Kev');
+    assert.deepEqual([c.kind, c.lines[0].mod], ['conscious', -1]);
+    s = roll(s, 'Kev', 12, 10);
+    assert.deepEqual(cards(s, 'Kev')[0].lines[0].offers, ['unconscious']);
+    s = take(s, 'Kev', 0, 'unconscious');
+    assert.ok(named(s, 'Kev').conds.includes('Unconscious'));
+    // Unconscious: not asked again
+    s = go(s);
+    s = go(s);
+    assert.deepEqual(cards(s, 'Kev'), []);
+  });
+
+  it('a Do Nothing row that made no defence roll is not asked', () => {
+    let s = begin([{ name: 'Kev', kind: 'pc', ini: 6, speed: 6, hp: -3, max: 12, ht: 11, manoeuvre: 'do nothing', defended: false }, { name: 'Guard', ini: 5, speed: 5, hp: 11, max: 11 }]);
+    s = go(s);
+    assert.deepEqual(cards(s, 'Kev'), []);
+  });
+
+  it('turn end while Stunned brings HT to recover; success clears Stunned', () => {
+    let s = begin([{ name: 'Kev', kind: 'pc', ini: 6, speed: 6, hp: 10, max: 12, ht: 11, conds: ['Stunned', 'Prone'] }, { name: 'Guard', ini: 5, speed: 5, hp: 11, max: 11 }]);
+    s = go(s);
+    assert.deepEqual(cards(s, 'Kev'), [], 'not at the start');
+    s = go(s);
+    const [c] = cards(s, 'Kev');
+    assert.equal(c.kind, 'recover');
+    s = roll(s, 'Kev', 9, 11);
+    assert.deepEqual(named(s, 'Kev').conds, ['Stunned', 'Prone'], 'nothing until the tap');
+    s = take(s, 'Kev', 0, 'recover');
+    assert.deepEqual(named(s, 'Kev').conds, ['Prone']);
+    assert.equal(lines(s).at(-1), 'Kev: HT to recover: clear Stunned.');
+    assert.deepEqual(cards(s, 'Kev'), []);
+  });
+
+  it('no HT on the row: the card waits for HT; a roll made before it is dropped', () => {
+    let s = begin([{ name: 'Guard', hp: 11, max: 11 }]);
+    s = typeIn(s, 'Guard', '4 imp vitals');
+    const c = cards(s, 'Guard')[0];
+    const was = s.fight.rows;
+    s = G(s, { type: 'cardRolled', row: named(s, 'Guard').id, card: c.id, line: 0, result: rolled(9, 5) });
+    assert.deepEqual(s.fight.rows, was);
+    s = G(s, { type: 'setStat', row: named(s, 'Guard').id, key: 'ht', value: 10 });
+    s = roll(s, 'Guard', 9, 5);
+    assert.deepEqual(cards(s, 'Guard')[0].lines[0].offers, ['stunned']);
+  });
+
+  it('D&D takes no shock and no card', () => {
+    let s = begin([{ name: 'Wolf', hp: 11, max: 11 }], null);
+    s = typeIn(s, 'Wolf', '-20');
+    assert.deepEqual([named(s, 'Wolf').shock, named(s, 'Wolf').cards], [undefined, undefined]);
+  });
+});
