@@ -9,6 +9,12 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.142] — 2026-11-23
+
+### Changed
+
+- Wrap-up offers a location note for each place you typed into the run sheet during play (a Table Log's New place line), yes or no each (#840).
+
 ## [1.12.141] — 2026-11-23
 
 ### Fixed
