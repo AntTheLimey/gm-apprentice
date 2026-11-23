@@ -10,7 +10,7 @@
 // on the entries it was not asked to touch. It writes _meta/publish-list.yaml.
 const fs = require('fs');
 const path = require('path');
-const { scanVaultReport, dirIsExcluded, scanAllNotes } = require('./scanner');
+const { scanVaultReport, dirIsExcluded, scanAllNotes, mapFolder } = require('./scanner');
 const { isAgentFile } = require('./agent-files');
 const { resolveConfig, assertNoStops, vaultRelPath, loadVaultConfig, scanConfigFor } = require('./config');
 const { loadManifest, loadPublishList, canonicalPath, counts, listText } = require('./manifest');
@@ -121,7 +121,9 @@ function surveyVault(options, deps) {
   const pagesByRel = new Map(report.pages.map((p) => [vaultRelPath(vaultPath, p.sourcePath), p]));
   const untyped = new Set(report.untyped.map(canonicalPath));
   const neverPublish = new Set(report.neverPublish.map(canonicalPath));
-  const unmappedDirs = new Set(report.unmapped.map((u) => canonicalPath(u.dir)));
+  // The scanner's own test of a folder, not its unmapped warning: that warning leaves out notes it keeps quiet
+  // about (an adventure brief, issue 839), which still do not publish from an unmapped folder.
+  const unmappedDir = (dir) => dir !== '' && !mapFolder(dir, scanConfig.folderMap || {});
   // A file gray-matter could not parse at all never produced a scanner page, and
   // decidePage would read that the same as "no `type:`" (NO_TYPE) — the wrong verdict,
   // since there is no frontmatter to have a type. Both `manifest diff` and `explain`
@@ -144,7 +146,7 @@ function surveyVault(options, deps) {
         publishConfig,
         manifest,
         pageIndex: pagesByRel,
-        folderMapped: page ? true : !(unmappedDirs.has(dir) && !untyped.has(rel)),
+        folderMapped: page ? true : !(unmappedDir(dir) && !untyped.has(rel)),
       }));
   }
 

@@ -104,7 +104,8 @@ async function runExplain(options, deps) {
   const dir = dirOf(target);
   const page = pagesByRel.get(target);
   const untyped = new Set(report.untyped.map(canonicalPath));
-  const unmappedDirs = new Set(report.unmapped.map((u) => canonicalPath(u.dir)));
+  // Whether the folder is mapped comes from folder_map itself, not the scanner's unmapped warning: that warning
+  // leaves out notes it keeps quiet about (an adventure brief, #839), which still do not publish from there.
   const mappedTo = dir ? mapFolder(dir, config.folderMap || {}) : '';
 
   // excludeDirs is the scanner's rule, not decidePage's — decidePage only knows the
@@ -130,7 +131,7 @@ async function runExplain(options, deps) {
         publishConfig,
         manifest,
         pageIndex: pagesByRel,
-        folderMapped: page ? true : !(unmappedDirs.has(dir) && !untyped.has(target)),
+        folderMapped: page ? true : !(dir && !mappedTo && !untyped.has(target)),
       }));
 
   const frontmatter = (page && page.frontmatter) || null;
