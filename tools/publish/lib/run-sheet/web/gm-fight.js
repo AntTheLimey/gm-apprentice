@@ -609,7 +609,9 @@
     h += `<ol class="clines">${c.lines.map((l, i) => {
       const cls = [i === next ? 'next' : '', l.result || l.taken ? 'rolled' : ''].join(' ').trim();
       const res = l.result ? `<span class="res">${esc(GMath.resultText(l.result))}</span>` : '';
-      const offers = GMath.pending(l) ? l.offers.map((o) => `<button type="button" class="offer" ${cardBtn(r, c, i, o)}>${esc((GMath.offerOf(C, o) || {}).label || o)}</button>`).join('') : '';
+      // each offer, and a decline for the line (nothing applied, nothing logged)
+      const offers = GMath.pending(l) ? l.offers.map((o) => `<button type="button" class="offer" ${cardBtn(r, c, i, o)}>${esc((GMath.offerOf(C, o) || {}).label || o)}</button>`).join('')
+        + `<button type="button" class="decline" ${cardBtn(r, c, i, 'dismiss')} title="Decline: nothing applied, nothing logged" aria-label="Decline this line's offer">\u2715</button>` : '';
       const took = l.taken ? `<span class="took">${esc((GMath.offerOf(C, l.taken) || {}).label || l.taken)}</span>` : '';
       return `<li${cls ? ` class="${cls}"` : ''}><span class="lt">${esc(GMath.lineText(l, r, C))}</span>${res}${offers}${took}</li>`;
     }).join('')}</ol>`;
@@ -634,9 +636,17 @@
     roll([{ against: target }]).then(([res]) => {
       delete ui.rolling[cardId];
       const now = state().fight;
-      if (now && now.id === f.id) RP.dispatch({ fight: f.id, type: 'cardRolled', row: rowId, card: cardId, line, result: res });
-      else RP.render();
+      if (now && now.id === f.id) {
+        RP.dispatch({ fight: f.id, type: 'cardRolled', row: rowId, card: cardId, line, result: res });
+        focusCard(rowId, cardId);
+      } else RP.render();
     }, (e) => { delete ui.rolling[cardId]; rollFailed(e); RP.render(); });
+  }
+  // After a roll, focus stays on the card: its Roll for the next line, else its first offer, else its first control.
+  function focusCard(rowId, cardId) {
+    const el = document.querySelector(`#acting .fcard${attr('data-fcard', cardId)}${attr('data-fcrow', rowId)}`);
+    const to = el && (el.querySelector('button.roll:not([disabled])') || el.querySelector('button.offer') || el.querySelector('[data-fcbtn]'));
+    if (to) RP.focusTo(attr('data-fcbtn', to.dataset.fcbtn));
   }
   // The panel's shock chip: its size, tapped open for −1 to the cap, or clear (a hit worked out on paper).
   function shockHTML(r) {

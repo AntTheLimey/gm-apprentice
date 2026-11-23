@@ -2400,6 +2400,17 @@ describe('GURPS consequence cards and turn upkeep (step 6b Task 13)', () => {
     assert.equal(named(s, 'Kev').shock, 4, 'two hits add, capped');
   });
 
+  it('a hit on Guard in Kev\'s turn keeps its shock past Kev\'s turn end and clears at the end of Guard\'s next turn', () => {
+    let s = begin(twoRows());
+    s = go(s); // Kev acts
+    s = typeIn(s, 'Guard', '-3');
+    assert.equal(named(s, 'Guard').shock, 3);
+    s = go(s); // Kev's turn ends; Guard's starts
+    assert.equal(named(s, 'Guard').shock, 3);
+    s = go(s); // Guard's turn ends
+    assert.equal(named(s, 'Guard').shock, 0);
+  });
+
   it('a tap on the chip sets Shock −2; 0 clears it; 5 is refused', () => {
     let s = begin(twoRows());
     s = G(s, { type: 'setShock', row: named(s, 'Guard').id, n: 2 });
@@ -2425,7 +2436,7 @@ describe('GURPS consequence cards and turn upkeep (step 6b Task 13)', () => {
     // a roll for a line that is not the next is dropped
     const stale = G(s, { type: 'cardRolled', row: named(s, 'Guard').id, card: c.id, line: 0, result: rolled(3, 10) });
     assert.deepEqual(stale.fight.rows, s.fight.rows);
-    // the second missed by 1: an earlier line offers Mortal wound, so Out (dead); the knockdown is not rolled
+    // line 1 missed by 1 after line 0 offered Mortal wound: Out (dead); the knockdown is not rolled
     s = roll(s, 'Guard', 11, 10);
     assert.deepEqual(cards(s, 'Guard')[0].lines[1].offers, ['dead']);
     assert.equal(require('../lib/run-sheet/web/gurps-math').nextLine(cards(s, 'Guard')[0], GURPS.consequences), -1);
@@ -2435,11 +2446,9 @@ describe('GURPS consequence cards and turn upkeep (step 6b Task 13)', () => {
     s = take(s, 'Guard', 1, 'dead');
     assert.equal(named(s, 'Guard').out, true);
     assert.equal(lines(s).at(-1), 'Guard: death check (−2×HP): Out (dead).');
-    // the Mortal wound the first line offered is still there to take, then the card goes
-    assert.equal(cards(s, 'Guard').length, 1);
-    s = take(s, 'Guard', 0, 'mortal');
-    assert.ok(named(s, 'Guard').conds.includes('Mortal wound'));
+    // Out: the card goes, the Mortal wound line 0 offered with it
     assert.deepEqual(cards(s, 'Guard'), []);
+    assert.deepEqual(named(s, 'Guard').conds, []);
   });
 
   it('a major wound to the vitals: a knockdown failed by 7 then Unconscious, failed by 2 then Stunned and Prone, a success settles it', () => {
@@ -2479,6 +2488,48 @@ describe('GURPS consequence cards and turn upkeep (step 6b Task 13)', () => {
     s = typeIn(s, 'Guard', '-19');
     assert.equal(named(s, 'Guard').shock, 4);
     assert.deepEqual(cards(s, 'Guard')[0].lines.map((l) => [l.kind, l.mod]), [['death', 0], ['knockdown', 0]]);
+  });
+
+  it('a declined Mortal wound line writes no log line, and line 1 missed by 1 is then offered Mortal wound, not Out (dead)', () => {
+    let s = begin(twoRows());
+    s = typeIn(s, 'Guard', '12 imp vitals');
+    s = roll(s, 'Guard', 12, 10);
+    s = roll(s, 'Guard', 11, 10);
+    assert.deepEqual(cards(s, 'Guard')[0].lines[1].offers, ['dead']);
+    const n = lines(s).length;
+    s = take(s, 'Guard', 0, 'dismiss');
+    const c = cards(s, 'Guard')[0];
+    assert.deepEqual([c.lines[0].offers, c.lines[1].offers, lines(s).length], [[], ['mortal'], n]);
+    assert.deepEqual(named(s, 'Guard').conds, []);
+    // the knockdown rolls now: nothing ends the card
+    s = roll(s, 'Guard', 12, 5);
+    assert.deepEqual(cards(s, 'Guard')[0].lines[2].offers, ['unconscious']);
+  });
+
+  it('a declined Mortal wound before line 1 is rolled: line 1 missed by 1 offers Mortal wound', () => {
+    let s = begin(twoRows());
+    s = typeIn(s, 'Guard', '12 imp vitals');
+    s = roll(s, 'Guard', 12, 10);
+    s = take(s, 'Guard', 0, 'dismiss');
+    s = roll(s, 'Guard', 11, 10);
+    assert.deepEqual(cards(s, 'Guard')[0].lines[1].offers, ['mortal']);
+  });
+
+  it('a row put Out by its Out button loses its other cards, with no line for them', () => {
+    let s = begin(twoRows());
+    s = typeIn(s, 'Guard', '4 imp vitals');
+    s = typeIn(s, 'Guard', '4 imp vitals');
+    assert.equal(cards(s, 'Guard').length, 2);
+    const n = lines(s).length;
+    s = G(s, { type: 'out', row: named(s, 'Guard').id, on: true });
+    assert.deepEqual([cards(s, 'Guard'), lines(s).slice(n)], [[], ['Guard is out of the fight.']]);
+    // and by a card's Out (dead): the other card goes too
+    let d = begin(twoRows());
+    d = typeIn(d, 'Guard', '4 imp vitals');
+    d = typeIn(d, 'Guard', '-60');
+    const dead = cards(d, 'Guard').find((x) => x.lines[0].kind === 'dead');
+    d = G(d, { type: 'card', row: named(d, 'Guard').id, card: dead.id, line: 0, take: 'dead' });
+    assert.deepEqual(cards(d, 'Guard'), []);
   });
 
   it('the card\'s standing Out puts the row Out with one log line', () => {

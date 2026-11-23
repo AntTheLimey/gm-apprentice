@@ -1145,6 +1145,7 @@ test('an injury of 4 on a 12 HP row gives Shock 4; 7 gives 4; 5 on 25 HP gives 2
   assert.equal(GC.shockOf(7, 12, C), 4);
   assert.equal(GC.shockOf(5, 25, C), 2);
   assert.equal(GC.shockOf(1, 25, C), 0);
+  assert.equal(GC.shockOf(7, 25, C), 2, '7 on 25 HP');
   assert.equal(GC.shockOf(3, null, C), 3, 'no max HP: the injury, capped');
 });
 
@@ -1162,7 +1163,7 @@ test('a major wound to the vitals: one knockdown line at HT −5; a failure by 7
   assert.equal(GC.lineTarget(l, { ht: 10 }), 5);
   assert.deepEqual(GC.offersFor(l, rolled(12, 5), C), ['unconscious']);
   assert.deepEqual(GC.offersFor(l, rolled(7, 5), C), ['stunned']);
-  assert.deepEqual(GC.offersFor(l, rolled(17, 16, 'critical failure'), C), ['unconscious'], 'critical failure');
+  assert.deepEqual(GC.offersFor(l, rolled(18, 16, 'critical failure'), C), ['unconscious'], 'critical failure');
   assert.deepEqual(GC.offersFor(l, rolled(5, 5), C), []);
   assert.deepEqual(C.offers.stunned.add, ['Stunned', 'Prone']);
 });
@@ -1236,6 +1237,15 @@ test('turn end while Stunned brings HT to recover; a success offers clear Stunne
   assert.deepEqual(GC.offersFor(card.lines[0], rolled(14, 12), C), []);
   assert.deepEqual(C.offers.recover.remove, ['Stunned']);
   assert.deepEqual(GC.cardsAtTurnEnd({ in: true, hp: 5, max: 12, conds: ['Prone'] }, C), []);
+});
+
+test('a critical success over a target of −2 reads only critical success; HT 3 −5 reads = −2', () => {
+  const l = GC.cardForHit({ hp: -1, max: 11 }, { injury: 12, before: 11, location: 'vitals' }, C).lines[0];
+  assert.equal(GC.lineText(l, { ht: 3 }, C), 'Knockdown: HT 3 \u22125 = \u22122');
+  assert.equal(GC.resultText(rolled(4, -2, 'critical success')), 'rolled 4, critical success');
+  assert.equal(GC.resultText(rolled(3, 10, 'critical success')), 'rolled 3, critical success, made it by 7');
+  assert.equal(GC.resultText(rolled(18, 16, 'critical failure')), 'rolled 18, critical failure, failed by 2');
+  assert.equal(GC.resultText(rolled(9, 10)), 'rolled 9, made it by 1');
 });
 
 test('no HT on the row: the line has no target and reads HT ?', () => {

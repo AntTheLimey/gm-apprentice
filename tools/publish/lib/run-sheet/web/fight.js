@@ -405,6 +405,16 @@
     const C = consequencesOf(f);
     if (C && r) replaceCards(f, r, 'conscious', GM.cardsAtTurnStart(r, C));
   }
+  // Already Mortal wound for line `i`: the row has the status, or an earlier line of this card offers or took it.
+  const mortalBefore = (r, card, C, i) => (r.conds || []).includes(C.mortalStatus)
+    || card.lines.slice(0, i).some((x) => x.taken === 'mortal' || (GM.pending(x) && x.offers.includes('mortal')));
+  // Rolled lines from `from` on that nobody has answered take their offers again as things stand now.
+  function reoffer(r, card, C, from) {
+    for (let i = from; i < card.lines.length; i++) {
+      const l = card.lines[i];
+      if (l.result && !l.taken && !l.declined) l.offers = GM.offersFor(l, l.result, C, mortalBefore(r, card, C, i));
+    }
+  }
   const cardOf = (r, id) => (Array.isArray(r.cards) ? r.cards.find((c) => c.id === id) || null : null);
   const dropCard = (r, id) => { r.cards = cardsOf(r).filter((c) => c.id !== id); };
 
@@ -612,10 +622,8 @@
       if (i < 0 || a.line !== i || !res) return;
       const l = card.lines[i];
       if (GM.lineTarget(l, r) !== res.target) return;
-      // already Mortal wound, or an earlier line of this card offered or took it
-      const mortal = (r.conds || []).includes(C.mortalStatus) || card.lines.slice(0, i).some((x) => x.taken === 'mortal' || (GM.pending(x) && x.offers.includes('mortal')));
       l.result = res;
-      l.offers = GM.offersFor(l, res, C, mortal);
+      l.offers = GM.offersFor(l, res, C, mortalBefore(r, card, C, i));
       touch(r, at);
       say(s, f, at, `${nameOf(s, f, r)}: ${GM.lineText(l, r, C, true)}, ${GM.resultText(res)}.`);
       if (GM.cardDone(card, C)) dropCard(r, card.id);
@@ -626,6 +634,18 @@
       const C = consequencesOf(f);
       const card = C && cardOf(r, a.card);
       if (!card) return;
+      // a dismissed line: its offers declined, nothing logged; the lines after it that were rolled are offered again
+      // as they stand now (a declined Mortal wound no longer counts for them)
+      if (a.take === 'dismiss' && a.line !== undefined && a.line !== null) {
+        const l = card.lines[a.line];
+        if (!l || !GM.pending(l)) return;
+        l.offers = [];
+        l.declined = true;
+        reoffer(r, card, C, a.line + 1);
+        touch(r, at);
+        if (GM.cardDone(card, C)) dropCard(r, card.id);
+        return;
+      }
       if (a.take === 'dismiss') { dropCard(r, card.id); touch(r, at); return; }
       if (a.take === 'out') {
         dropCard(r, card.id);
@@ -974,6 +994,8 @@
       const before = new Map(rows.map((r) => [r, statusesOf(r).join('\n')]));
       fn(s, a, at);
       for (const [r, was] of before) if (statusesOf(r).join('\n') !== was) r.condAt = at;
+      // a row Out, by any route, owes nothing more: its cards go, with no line
+      for (const r of s.fight && Array.isArray(s.fight.rows) ? s.fight.rows : []) if (r.out && Array.isArray(r.cards) && r.cards.length) r.cards = [];
     };
   }
 

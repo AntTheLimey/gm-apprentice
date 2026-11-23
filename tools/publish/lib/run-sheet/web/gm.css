@@ -369,6 +369,7 @@ ol.to .hitline { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ell
 .act .fcard .clines .res { font-weight: 500; }
 .act .fcard .clines .offer { font: 650 .74rem var(--mono); padding: 1px 8px; border-color: var(--bad); color: var(--bad); background: var(--bg); }
 .act .fcard .clines .took { color: var(--bad); }
+.act .fcard .clines .decline { font-size: .7rem; padding: 0 5px; }
 .act .fcard .roll { font-size: .8rem; padding: 2px 14px; }
 .act .nums .shock.on { color: var(--ice); border-color: var(--ice); }
 .act .nums .shockset { display: inline-flex; gap: 2px; border: 0; padding: 0; background: none; }

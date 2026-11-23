@@ -106,7 +106,7 @@
     if (!isNum(injury) || injury <= 0) return 0;
     let n = Math.floor(injury);
     const big = isNum(max) && isNum(s.bigHp) && isNum(s.per) && max >= s.bigHp;
-    if (big) n = Math.floor(injury / Math.floor(max / s.per));
+    if (big) n = Math.floor((injury * s.per) / max);
     return isNum(s.cap) ? Math.min(s.cap, n) : n;
   }
   const majorWound = (injury, max, crippled, C) => Boolean(crippled) || (isNum(max) && max > 0 && isNum(C.major) && injury * C.major > max);
@@ -158,6 +158,8 @@
   // A line's target: the row's HT plus its modifier; null with no HT (the card asks for it first) or no roll (dead).
   const lineTarget = (l, row) => (l && l.kind !== 'dead' && row && isNum(row.ht) ? row.ht + l.mod : null);
   const minus = (n) => `−${Math.abs(n)}`;
+  // a figure, a negative one with U+2212
+  const fig = (n) => (n < 0 ? minus(n) : String(n));
   // A line's name: "Knockdown", "Death check (−1×HP)", "−5×HP"; `log` gives the log's lower case.
   function lineName(l, C, log) {
     const names = (C && C.lines) || {};
@@ -171,16 +173,18 @@
     if (l.kind === 'dead') return `${lineName(l, C, log)}: ${((C && C.lines) || {}).dead || 'dead'}`;
     const ht = row && isNum(row.ht) ? row.ht : null;
     const mod = l.mod ? ` ${l.mod > 0 ? '+' : '\u2212'}${Math.abs(l.mod)}` : '';
-    const fig = ht === null ? `HT ?${mod}` : `HT ${ht}${mod}${l.mod ? ` = ${ht + l.mod}` : ''}`;
-    return `${lineName(l, C, log)}${log ? ',' : ':'} ${fig}`;
+    const figs = ht === null ? `HT ?${mod}` : `HT ${fig(ht)}${mod}${l.mod ? ` = ${fig(ht + l.mod)}` : ''}`;
+    return `${lineName(l, C, log)}${log ? ',' : ':'} ${figs}`;
   }
   const OUTCOMES = ['success', 'critical success', 'failure', 'critical failure'];
   const failed = (res) => res.outcome === 'failure' || res.outcome === 'critical failure';
-  // "rolled 12, failed by 7"; a critical says so.
+  // "rolled 12, failed by 7"; a critical says so, and a critical success over the target says only that.
   function resultText(res) {
-    const by = Math.abs(res.total - res.target);
-    const crit = /^critical/.test(res.outcome) ? `${res.outcome}, ` : '';
-    return `rolled ${res.total}, ${crit}${failed(res) ? `failed by ${Math.max(1, by)}` : `made it by ${res.target - res.total}`}`;
+    const head = `rolled ${res.total}, `;
+    if (failed(res)) return `${head}${res.outcome === 'critical failure' ? 'critical failure, ' : ''}failed by ${Math.max(1, res.total - res.target)}`;
+    const by = res.target - res.total;
+    if (res.outcome === 'critical success') return `${head}critical success${by >= 0 ? `, made it by ${by}` : ''}`;
+    return `${head}made it by ${by}`;
   }
   // What a rolled line offers (B420, B423), by its margin. `mortal`: the row is Mortal wound already, or an earlier
   // line of this card offered or took it.

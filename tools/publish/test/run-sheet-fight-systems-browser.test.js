@@ -61,9 +61,17 @@ async function tap(page, sel) {
   assert.ok(r.inView && r.hit, `click ${sel}: ${JSON.stringify(r)}`);
   return r;
 }
-// A box clicked (which selects what it holds), the text typed, Enter.
+// A box clicked (which selects what it holds), the text typed, Enter. The text waits until the box has focus, and the
+// test fails saying where focus is when the click did not give it (Task 13 fix round: a flake where Enter came
+// without the typed text).
 async function typeInto(page, sel, text) {
   await tap(page, sel);
+  try {
+    await page.waitFor(`document.activeElement === document.querySelector(${q(sel)})`, 2000);
+  } catch (e) {
+    const at = await page.evaluate(`(() => { const a = document.activeElement; return a ? a.outerHTML.slice(0, 160) : 'nothing'; })()`);
+    throw new Error(`typeInto ${sel}: the click left focus on ${at}, not the box`);
+  }
   await page.type(String(text));
   await page.key('Enter');
   return settled(page);
@@ -633,6 +641,8 @@ describe('CoC and GURPS fights on the GM page, by real input', { skip: browserSk
         await tap(page, rollBtn);
         p = await until(page, `p.fight.rows.find((r) => r.id === ${q(b2)}).cards[0].lines[0].result && p.saved === "Saved" && p.pending === 0`);
         assert.deepStrictEqual(await texts(page, `${card} .clines li:nth-child(1) .offer`), ['Mortal wound']);
+        // focus stays on the card: its Roll, for the next line
+        await page.waitFor(`document.activeElement === document.querySelector(${q(rollBtn)})`, 3000);
         // the second the knockdown: 12 against 5, Unconscious offered
         await page.waitFor(`document.querySelector(${q(rollBtn)}) && !document.querySelector(${q(rollBtn)}).disabled`);
         await tap(page, rollBtn);
