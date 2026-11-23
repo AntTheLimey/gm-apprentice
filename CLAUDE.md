@@ -201,7 +201,7 @@ scripts work locally. For publish tool changes, run the publish tool test suite.
 - Publish tool tests: `cd tools/publish && npx -y -p node@22 npm test`, as
   CI runs them on Node 22. Never a bare `node --test`: it also runs every
   helper and fixture script under `test/`. The browser tests share one
-  Chrome per test file
+  Chrome per test process (`node --test` runs each file in its own)
 - Benchmarks live in `tests/benchmark-campaign/` and `tests/benchmark-questions/`
   — do not delete these
 - One benchmark run is enough; fix issues before benchmarking; use A/B

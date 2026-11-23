@@ -27,8 +27,13 @@ import tempfile
 # betaenrollmentagent and diagnosticextensionsd: macOS services on the runner make
 # these whenever they wake, tests or not (they failed macOS jobs whose tests all
 # passed, Nov 2026).
+# com.google.GoogleUpdater.*: Google's updater service, which a Chrome left running for a
+# whole test file wakes (#866); it writes its own fetch files on its own schedule, and
+# they can't be told from the ones it makes for the GM's own Chrome, so they are not ours
+# to delete.
 ALLOWED = ("node-compile-cache", "pytest-of-*", "com.apple.*", "systemd-private-*",
-           "scoped_dir*", "contentlinkingd", "betaenrollmentagent", "diagnosticextensionsd")
+           "scoped_dir*", "contentlinkingd", "betaenrollmentagent", "diagnosticextensionsd",
+           "com.google.GoogleUpdater.*")
 
 
 def entries() -> set[str]:
