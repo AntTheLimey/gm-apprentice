@@ -42,9 +42,14 @@
   // `-37` and a bare `37` are damage, `+8` heals, everywhere. A pool's letter first (`m-4`, `s+1`, `f-8`, a bare
   // `f8` a loss) is that pool's, and only in a system that has it. `t5` sets temp HP, D&D's only: a system with
   // pools of its own has none. Integers 0-9999 only. `rules` is the fight's (rulesOf).
+  //
+  // A system with a wounding table (GURPS) also takes a hit (Task 12): damage, then its type and place in any order
+  // (`9 imp vitals`, `9 imp v`, `9i` to the torso, `7 pi+ left arm`), or dice the server rolls (`2d+1 imp vitals`,
+  // and a bare `2d+1` raw injury). A hit is `{ pool: 'hp', kind: 'damage', n, hit: { type, location, side } }`, with
+  // `dice` (and `n` null) for dice. A place needs a type; a type alone is to the torso. A bare number stays raw.
   function parseEntry(text, rules = DND_FIGHT_RULES) {
     const m = /^\s*([a-z])?\s*([+-])?\s*(\d+)\s*$/i.exec(String(text === null || text === undefined ? '' : text));
-    if (!m) return null;
+    if (!m) return parseHit(text, rules);
     const n = Number(m[3]);
     if (n > 9999) return null;
     const letter = (m[1] || '').toLowerCase();
@@ -54,6 +59,54 @@
     const pool = poolsOf(rules).find((p) => p.prefix === letter);
     return pool ? { pool: pool.key, kind, n } : null;
   }
+
+  // A hit's words, read against the wounding table (`rules.wounding`): { amount, dice, n, type, location, side, rest }
+  // where `rest` holds the words that are none of them. `amount` is the damage as typed (`9`, `-9`, `2d+1`), or ''.
+  const DICE = /^-?\d+d\d*(?:[+-]\d+)?/i;
+  function hitWords(text, rules) {
+    const w = rulesOf({ rules }).wounding;
+    const out = { amount: '', dice: null, n: null, type: null, location: null, side: null, rest: [] };
+    let t = String(text === null || text === undefined ? '' : text).trim();
+    const a = DICE.exec(t) || /^-?\d+/.exec(t);
+    if (a) {
+      out.amount = a[0];
+      t = t.slice(a[0].length);
+      const bare = a[0].replace(/^-/, '');
+      if (/d/i.test(bare)) out.dice = bare.toLowerCase(); else out.n = Number(bare);
+    }
+    if (!w) { out.rest = t.trim() ? t.trim().split(/\s+/) : []; return out; }
+    const words = t.trim() ? t.trim().toLowerCase().split(/\s+/) : [];
+    const typeOf = (x) => (w.types[x] !== undefined ? x : (w.typeWords || {})[x] || null);
+    const placeOf = (x) => (w.locations[x] ? x : (w.locationWords || {})[x] || null);
+    for (let i = 0; i < words.length; i++) {
+      const x = words[i];
+      const next = words[i + 1];
+      const nextPlace = next ? placeOf(next) : null;
+      if (!out.side && (w.sides || []).includes(x) && nextPlace && w.locations[nextPlace].sided) { out.side = x; continue; }
+      // a word that is both (`t`: toxic or the torso) is the type until there is one
+      if (!out.type && typeOf(x)) { out.type = typeOf(x); continue; }
+      if (!out.location && placeOf(x)) { out.location = placeOf(x); continue; }
+      out.rest.push(x);
+    }
+    if (out.side && !out.location) { out.rest.unshift(out.side); out.side = null; }
+    return out;
+  }
+  // The words back in the box's order: amount, type, side, place, then anything else typed.
+  const hitText = (h) => [h.amount, h.type, h.side, h.location, ...(h.rest || [])].filter(Boolean).join(' ');
+
+  function parseHit(text, rules) {
+    if (!rulesOf({ rules }).wounding) return null;
+    const h = hitWords(text, rules);
+    if (!h.amount || h.rest.length || (h.location && !h.type)) return null;
+    if (h.n !== null && h.n > 9999) return null;
+    const hit = h.type ? { type: h.type, location: h.location || 'torso', side: h.side } : null;
+    if (h.dice) return { pool: 'hp', kind: 'damage', n: null, dice: h.dice, hit };
+    // a bare number was the raw entry above; here it has a type
+    return hit ? { pool: 'hp', kind: 'damage', n: h.n, hit } : null;
+  }
+
+  // The hit chips in their order for a row: the one last used first, then the rest as the table lists them.
+  const chipOrder = (all, last) => (last && all.includes(last) ? [last, ...all.filter((x) => x !== last)] : all.slice());
 
   // A pool after an entry: a loss stops at the pool's floor (a number, or `floorTimes` its max), a gain at its cap
   // or its max. A row with no figure in the pool answers null.
@@ -375,10 +428,11 @@
       // typed (`typedKeys`), the marks lit, the deepest minus-HP line passed, Tired, the CoC firearm, and whether a
       // GURPS row holds its place in the fixed order (`fixed`) or waits for placeHeld (`held`)
       fp: null, fpMax: null, mp: null, mpMax: null, san: null, sanMax: null, luck: null, er: null, erMax: null,
-      dex: null, st: null, ht: null, dx: null, speed: null, dodge: null, parry: null, block: null, dr: null, faceOpen: false,
+      dex: null, st: null, ht: null, dx: null, speed: null, dodge: null, parry: null, block: null, dr: null, faceOpen: false, drByLocation: null,
       armour: null, fighting: null, firearms: null, combat: null, db: null, build: null, attacks: 1, defended: 0, bout: null,
       // and whether it casts (GURPS: its FP shows as ✦FP, Task 10)
-      from: {}, typedKeys: {}, marks: [], deepest: 0, tired: false, gun: false, fixed: false, held: false, caster: false, ...over,
+      // GURPS's last hit (its working, Task 12) and the places crippled
+      from: {}, typedKeys: {}, marks: [], deepest: 0, tired: false, gun: false, fixed: false, held: false, caster: false, hit: null, crippled: [], ...over,
     };
   }
 
@@ -415,7 +469,7 @@
       fpMax: num(foe.fpMax !== undefined ? foe.fpMax : foe.fp), mpMax: num(foe.mpMax !== undefined ? foe.mpMax : foe.mp),
       sanMax: num(foe.sanMax !== undefined ? foe.sanMax : foe.san), erMax: num(foe.erMax !== undefined ? foe.erMax : foe.er),
       dex: num(foe.dex), st: num(foe.st), ht: num(foe.ht), dx: num(foe.dx), speed: num(foe.speed), dodge: num(foe.dodge),
-      parry: num(foe.parry), block: num(foe.block), dr: foe.dr === undefined ? null : foe.dr, armour: armourOf(foe.armour),
+      parry: num(foe.parry), block: num(foe.block), dr: foe.dr === undefined ? null : foe.dr, faceOpen: foe.faceOpen === true, armour: armourOf(foe.armour),
       fighting: foe.fighting === undefined ? null : foe.fighting, firearms: foe.firearms === undefined ? null : foe.firearms,
       db: foe.db === undefined ? null : foe.db, build: num(foe.build), caster: foe.caster === true,
       from: foe.from && typeof foe.from === 'object' ? { ...foe.from } : {},
@@ -437,6 +491,7 @@
       fp: fp.now, fpMax: fp.max, mp: mp.now, mpMax: mp.max, san: san.now, sanMax: san.max, er: er.now, erMax: er.max,
       luck: num(pc.luck), dex: num(pc.dex), st: num(pc.st), ht: num(pc.ht), dx: num(pc.dx), speed: num(pc.speed),
       dodge: num(pc.dodge), parry: num(pc.parry), block: num(pc.block), dr: pc.dr === undefined ? null : pc.dr,
+      drByLocation: pc.drByLocation && typeof pc.drByLocation === 'object' ? { ...pc.drByLocation } : null,
       fighting: pc.fighting === undefined ? null : pc.fighting, firearms: pc.firearms === undefined ? null : pc.firearms,
       caster: pc.caster === true,
     };
@@ -897,7 +952,7 @@
 
   return {
     DND_STATUSES, EXHAUSTION_MAX, DND_FIGHT_RULES, rulesOf, fightGroupKeys,
-    parseEntry, damageTaken, afterDamage, afterHeal, isBloodied, poolsOf, poolOf, afterPool,
+    parseEntry, hitWords, hitText, chipOrder, damageTaken, afterDamage, afterHeal, isBloodied, poolsOf, poolOf, afterPool,
     combatOf, initOf, marksOf, tiredOf,
     thresholdOf, isLit, sortRows, takesTurn, nextLive, actingRow,
     gmName, lairRow, unseenKey, unseenNumbers, unseenLabels, rowsForFight, joinRows, blankRow,

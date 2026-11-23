@@ -337,6 +337,14 @@ ol.to .ds { font: 500 .7rem var(--mono); white-space: nowrap; }
 .act .pb input[data-fs-db], .act .pb input[data-fs-dr] { width: 4.6rem; }
 .act .pb input[aria-invalid="true"] { outline: 2px solid var(--bad); outline-offset: 1px; }
 .act .pb .from { color: var(--muted); font-size: .66rem; }
+/* GURPS's hit chips (Task 12): the damage types, then the places; a tapped one is pressed while its word is in the box */
+.act .pboxes .tg.faceopen { white-space: nowrap; }
+.act .hitchips { display: flex; flex-direction: column; gap: 3px; margin: 4px 0 6px; }
+.act .hitchips .hrow { display: flex; flex-wrap: wrap; gap: 3px; }
+.act .hchip { font: 600 .7rem var(--mono); padding: 1px 6px; border-radius: 10px; }
+.act .hchip[aria-pressed="true"] { background: var(--ice); color: var(--panel); border-color: var(--ice); }
+/* the last hit's working on the row's second line: one line, clipped, its full text in the title */
+ol.to .hitline { flex: 1 1 100%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 500 .7rem var(--mono); color: var(--muted); }
 .act .mtrack { list-style: none; display: flex; flex-wrap: wrap; gap: 3px; margin: 4px 0 6px; padding: 0; font: 600 .72rem var(--mono); }
 .act .mtrack li { border: 1px dashed var(--line); border-radius: 4px; padding: 0 5px; color: var(--muted); }
 .act .mtrack li.lit { border-style: solid; border-color: var(--bad); color: var(--bad); }

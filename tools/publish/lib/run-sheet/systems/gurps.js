@@ -17,6 +17,44 @@ const { sections } = require('../plan-text');
 
 const FOE_TYPES = new Set(['npc', 'creature']);
 
+// The wounding table (Task 12): names and numbers only, each beside its page. `types` are the damage types'
+// multipliers (B379). A location gives its multiplier only to the types listed in `by`, or to every type but those
+// in `except` (`all`); `only` marks a location the book lets only the `by` types aim at (the box takes any, and says
+// so). `dr` is the location's extra DR, `face` its use of a foe's "face open", `cripple` the share of max HP a blow
+// must pass to cripple it (over HP/N), and `cap` the injury held to the least that cripples (B420).
+const PIERCING = ['pi-', 'pi', 'pi+', 'pi++'];
+const each = (keys, v) => Object.fromEntries(keys.map((k) => [k, v]));
+const LIMB_DOWN = { 'pi+': 1, 'pi++': 1, imp: 1 }; // B398, B552
+const WOUNDING = {
+  types: { 'pi-': 0.5, pi: 1, 'pi+': 1.5, 'pi++': 2, cut: 1.5, imp: 2, cr: 1, burn: 1, tbb: 1, cor: 1, tox: 1, fat: 1 }, // B379
+  // the long names and one-letter forms a GM types (`tbb` is tight-beam burning)
+  typeWords: {
+    c: 'cr', i: 'imp', p: 'pi', b: 'burn', t: 'tox', f: 'fat', crushing: 'cr', cutting: 'cut', impaling: 'imp',
+    piercing: 'pi', burning: 'burn', corrosion: 'cor', toxic: 'tox', fatigue: 'fat',
+  },
+  locations: {
+    torso: {}, // B398
+    vitals: { by: { ...each(PIERCING, 3), imp: 3, tbb: 2 }, only: true }, // B398, B552
+    eye: { by: { ...each(PIERCING, 4), imp: 4, tbb: 4 }, only: true, face: true, cripple: 10, sided: true }, // B398, B552
+    skull: { all: 4, except: ['tox'], dr: 2 }, // B398, B552
+    face: { by: { cor: 1.5 }, face: true }, // B398, B552
+    neck: { by: { cut: 2, cr: 1.5, cor: 1.5 } }, // B398, B552
+    groin: {}, // B398, B552
+    arm: { by: LIMB_DOWN, cripple: 2, cap: true, sided: true }, // B398, B552; the cap B420
+    leg: { by: LIMB_DOWN, cripple: 2, cap: true, sided: true }, // B398, B552; the cap B420
+    hand: { by: LIMB_DOWN, cripple: 3, cap: true, sided: true }, // B398, B552; the cap B420
+    foot: { by: LIMB_DOWN, cripple: 3, cap: true, sided: true }, // B398, B552; the cap B420
+  },
+  locationWords: {
+    v: 'vitals', sk: 'skull', head: 'skull', e: 'eye', eyes: 'eye', n: 'neck', t: 'torso', g: 'groin', a: 'arm', arms: 'arm',
+    l: 'leg', legs: 'leg', h: 'hand', hands: 'hand', ft: 'foot', feet: 'foot',
+  },
+  sides: ['left', 'right'],
+  // the chips' order before any is used on a row
+  typeChips: ['cr', 'cut', 'imp', 'pi-', 'pi', 'pi+', 'pi++', 'burn', 'tbb', 'cor', 'tox', 'fat'],
+  locationChips: ['torso', 'vitals', 'skull', 'face', 'eye', 'neck', 'groin', 'arm', 'leg', 'hand', 'foot'],
+};
+
 // The attribute names are exact (a lower-case `st` is a word); the rest ignore case.
 const ALIASES = {
   st: /^ST$/, dx: /^DX$/, iq: /^IQ$/, ht: /^HT$/, dr: /^DR$/,
@@ -38,14 +76,22 @@ function maxOf(v) {
   return m ? Number(m[2]) : leadingNumber(v);
 }
 
+// A DR figure: its first whole number (`3`, `2*`, `(2)`, `2 (leather)`), or null when it has none.
+const drFigure = (v) => { const m = /\d+/.exec(String(v == null ? '' : v)); return m ? Number(m[0]) : null; };
+// `face 0`, `face open`, `open face`, `bare face`, `face bare`, `face unarmoured`, on the DR's own line
+const FACE_BARE = /\bface\s*(?::\s*)?(?:0\b|open\b|bare\b|none\b|unarmou?red\b)|\b(?:open|bare)[ -]face/i;
+
 // A block's numbers: hp and fp are maxima; a value that is no number (`n/a`, a dash) is null.
 function readNumbers(stats) {
   const ps = pairs(stats, keyOf);
   const n = (k) => maxOf(firstOf(ps, k));
   const nums = { hp: maxOf(firstOf(ps, 'hp')), fp: maxOf(firstOf(ps, 'fp')), speed: n('speed'), dx: n('dx'), st: n('st'), ht: n('ht'),
     dodge: n('dodge'), dr: null, from: {} };
+  // DR is its leading figure (`2 (leather)` is 2); a block that says the face is bare (`DR 2 (face 0)`) opens it
   const dr = clean(firstOf(ps, 'dr') || '');
-  if (dr && !/^[-–—]+$/.test(dr)) nums.dr = dr;
+  if (dr && !/^[-–—]+$/.test(dr)) nums.dr = drFigure(dr);
+  const drLines = String(stats == null ? '' : stats).replace(/\r\n?/g, '\n').split('\n').filter((l) => /\bDR\b/.test(l));
+  if (drLines.some((l) => FACE_BARE.test(l))) nums.faceOpen = true;
   const d = deriveGurps(nums, { max: nums.hp !== null, fpMax: nums.fp !== null, speed: nums.speed !== null });
   if (d.max !== undefined) nums.hp = d.max;
   if (d.fpMax !== undefined) nums.fp = d.fpMax;
@@ -170,6 +216,32 @@ function magicOf(model, text) {
   return { numbers: out, spells: sec && sec.text ? sec.text : null };
 }
 
+// A PC's DR by location, from the sheet's `DR by Hit Location` table (parseGurps's model.defenses.hitLocations):
+// each row's place (`Skull`, `Arms`, `Left Arm`, `Arms/Legs`, `Head`) to the table's own location names, its DR
+// (`3`, `2*`) to its leading figure. A side named keeps its own key (`left arm`) and fills the plain one if empty.
+// null when no row reads.
+function drByLocationOf(model) {
+  const rows = ((model && model.defenses) || {}).hitLocations || [];
+  const out = {};
+  const put = (k, v) => { if (!(k in out)) out[k] = v; };
+  for (const row of rows) {
+    const dr = drFigure(row && row.dr);
+    if (dr === null) continue;
+    for (const part of String((row && row.location) || '').toLowerCase().split(/\s*(?:\/|,|&|\band\b)\s*/)) {
+      const words = part.replace(/[^a-z ]/g, ' ').trim().split(/\s+/).filter(Boolean);
+      const side = WOUNDING.sides.find((x) => words.includes(x)) || null;
+      const name = words.filter((x) => x !== side).join(' ');
+      const loc = WOUNDING.locations[name] ? name : WOUNDING.locationWords[name];
+      if (!loc || name.length < 3) continue;
+      if (side) put(`${side} ${loc}`, dr);
+      put(loc, dr);
+      // a `Head` row covers the face too
+      if (name === 'head') put('face', dr);
+    }
+  }
+  return Object.keys(out).length ? out : null;
+}
+
 function readPc({ body, fm }) {
   try {
     const text = String(body == null ? '' : body).replace(/\r\n?/g, '\n');
@@ -178,15 +250,16 @@ function readPc({ body, fm }) {
     if (!v) return { numbers: { ...NONE }, note: NO_POOLS };
     const ht = ((model.attributes || {}).primary || {}).HT;
     const magic = magicOf(model, text);
+    const drByLocation = drByLocationOf(model);
     return { numbers: { hpNow: v.hp.cur, hpMax: v.hp.max, fpNow: v.fp.cur, fpMax: v.fp.max,
-      speed: figure(v.basicSpeed), dx: figure(v.dx), ht: figure(ht && ht.value), ...magic.numbers },
+      speed: figure(v.basicSpeed), dx: figure(v.dx), ht: figure(ht && ht.value), ...magic.numbers, ...(drByLocation ? { drByLocation } : {}) },
     ...(magic.spells ? { spells: magic.spells } : {}) };
   } catch (e) {
     return { numbers: { ...NONE }, note: `the sheet could not be read: ${firstLine(e)}` };
   }
 }
 
-// Placeholders until later tasks fill them in: `vitals`, `prompts`, `wounding`, `consequences`, `defences`,
+// Placeholders until later tasks fill them in: `vitals`, `prompts`, `consequences`, `defences`,
 // `manoeuvres`, `firearmBonus` keep D&D's shape (GURPS-safe empties where D&D words would show).
 function describeGurps(id) {
   const r = describeAs(id, 'GURPS 4e', true);
@@ -203,10 +276,12 @@ function describeGurps(id) {
     tiredAt: { name: 'Tired', part: 3 },
     // the Energy Reserve pays spells only, never below 0; the GM picks which pool a spell comes from (Task 10)
     pools: [{ key: 'fp', prefix: 'f', label: 'FP', max: 'fpMax', floorTimes: -1 }, { key: 'er', prefix: 'e', label: 'Energy Reserve', max: 'erMax', floor: 0 }],
+    // a hit typed as damage, type and place (Task 12)
+    wounding: WOUNDING,
   };
   Object.assign(r, { family: 'gurps', ...JSON.parse(JSON.stringify(fight)) });
   Object.assign(r.fight, fight);
-  r.toggles = { ...r.toggles, half: false, resisted: false, temp: false, deathSaves: false, concentration: false, exhaustion: false, counters: false, longRest: false };
+  r.toggles = { ...r.toggles, hitChips: true, half: false, resisted: false, temp: false, deathSaves: false, concentration: false, exhaustion: false, counters: false, longRest: false };
   // Reeling and Shock are marks, set by the fight itself, so neither is in the list
   r.statuses = ['Stunned', 'Prone', 'Kneeling', 'Unconscious', 'Mortal wound'];
   // the acting panel's boxes, in Tab order (the one list, Task 7 [P-C19]); `readout` ones are shown beside HP too.
@@ -222,7 +297,8 @@ function describeGurps(id) {
     entryPlaceholder: '-7 / +3 / f-2',
     // a caster's box: a spell is paid with f-3 (FP) or e-3 (Energy Reserve)
     casterPlaceholder: '\u2726 f-3',
-    entryInvalid: 'Type -7 or 7 (damage), +3 (healing), f-2 (FP) or e-2 (Energy Reserve)',
+    entryInvalid: 'Type -7 or 7 (injury), 9 imp vitals or 2d+1 cr (a hit), +3 (healing), f-2 (FP) or e-2 (Energy Reserve)',
+    faceOpen: 'face open', faceOpenTitle: 'The face is bare: a hit to the face or an eye ignores DR',
     noReserve: 'No Energy Reserve: f-N pays from FP',
     noFp: 'No FP on this row: type its max FP or HT',
     casterTitle: 'A caster: f-3 pays a spell from FP', reserveTitle: 'e-3 spends it',
@@ -233,9 +309,10 @@ function describeGurps(id) {
 // The row's own fields: initiative is Basic Speed.
 // An Energy Reserve and a caster only where the block has them.
 const foeRow = (n) => ({ init: n.speed, fp: n.fp, fpMax: n.fp, speed: n.speed, dx: n.dx, st: n.st, ht: n.ht, dodge: n.dodge, dr: n.dr, from: n.from,
+  ...(n.faceOpen ? { faceOpen: true } : {}),
   ...(n.er == null ? {} : { er: n.er, erMax: n.er, ...(n.erStart == null ? {} : { erStart: n.erStart }) }),
   ...(n.caster ? { caster: true } : {}) });
 
 const gurps = { ...dnd, id: 'gurps-4e', fights: true, readFoe, readPc, foeRow, stockNoActions: undefined, describe: () => describeGurps('gurps-4e') };
 
-module.exports = { gurps, readNumbers, keyOf, lacks, energyReserve, hasSpellList, isCaster };
+module.exports = { gurps, readNumbers, keyOf, lacks, energyReserve, hasSpellList, isCaster, WOUNDING, drByLocationOf };

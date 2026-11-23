@@ -25,10 +25,11 @@ for (const crlf of [false, true]) {
       assert.equal(r.hpStart, null);
       assert.equal(r.fpStart, null);
     });
-    it('full figures win over worked-out ones, DR text kept', () => {
+    // Task 12 changed DR on purpose: the brief makes it the DR text's figure, a number the hit's sum takes off
+    it('full figures win over worked-out ones, DR read as its figure', () => {
       const r = read(dir, 'Vex Harrow');
-      assert.deepEqual(r.nums, { hp: 13, fp: 10, speed: 5.25, dx: 11, st: 13, ht: 10, dodge: 8, dr: '1', from: {} });
-      assert.equal(read(dir, 'Mara Quint').nums.dr, '0');
+      assert.deepEqual(r.nums, { hp: 13, fp: 10, speed: 5.25, dx: 11, st: 13, ht: 10, dodge: 8, dr: 1, from: {} });
+      assert.equal(read(dir, 'Mara Quint').nums.dr, 0);
       assert.equal(read(dir, 'Mara Quint').nums.speed, 5.25);
     });
     it('HP 6/9 starts at 6 with 9 as the maximum', () => {
@@ -105,7 +106,8 @@ describe('GURPS block words', () => {
     const a = readNumbers('| ST | DX | IQ | HT |\n|---|---|---|---|\n| 9 | 12 | 10 | 10 |');
     assert.deepEqual([a.st, a.dx, a.ht, a.hp, a.speed], [9, 12, 10, 9, 5.5]);
     const b = readNumbers('| HP | 14 |\n| FP | 9 |\n| DR | 2 (leather) |');
-    assert.deepEqual([b.hp, b.fp, b.dr], [14, 9, '2 (leather)']);
+    // Task 12 (on purpose): DR is its figure
+    assert.deepEqual([b.hp, b.fp, b.dr], [14, 9, 2]);
   });
   it('a value that is no number is null', () => {
     const n = readNumbers('HP n/a · FP — · Basic Speed not tracked · DR —');
@@ -138,8 +140,9 @@ describe('a bracket before a value', () => {
   it('a bracketed number is the value; a bracketed word is an alias, LF and CRLF', () => {
     for (const eol of ['\n', '\r\n']) {
       const n = readNumbers(`DR (2)${eol}Basic Speed (5.25)${eol}ST 10`);
-      assert.deepEqual([n.dr, n.speed], ['(2)', 5.25]);
-      assert.equal(readNumbers('DR (2 vs piercing)').dr, '(2 vs piercing)');
+      // Task 12 (on purpose): DR is its figure
+      assert.deepEqual([n.dr, n.speed], [2, 5.25]);
+      assert.equal(readNumbers('DR (2 vs piercing)').dr, 2);
       assert.equal(readNumbers(`**ST (Strength)** 12${eol}`).st, 12);
     }
   });
@@ -165,7 +168,9 @@ for (const crlf of [false, true]) {
       // Task 10: Lysa's Energy Reserve and her spells (changed on purpose)
       assert.deepEqual(readPc('Lysa Venn').numbers, { hpNow: 9, hpMax: 9, fpNow: 10, fpMax: 10, speed: 5, dx: 10, ht: 10, erNow: 6, erMax: 6, caster: true });
       assert.deepEqual(readPc('Orrin Tate').numbers, { hpNow: 12, hpMax: 12, fpNow: 11, fpMax: 11, speed: 5.5, dx: 11, ht: 11 });
-      assert.deepEqual(readPc('Sela Drake').numbers, { hpNow: 12, hpMax: 12, fpNow: 10, fpMax: 10, speed: 5.25, dx: 11, ht: 10 });
+      // Task 12 (on purpose): Sela's sheet has a DR by Hit Location table
+      assert.deepEqual(readPc('Sela Drake').numbers, { hpNow: 12, hpMax: 12, fpNow: 10, fpMax: 10, speed: 5.25, dx: 11, ht: 10,
+        drByLocation: { skull: 4, face: 0, neck: 2, torso: 3, arm: 2, hand: 1, leg: 2, foot: 1 } });
     });
     it('max from Secondary Characteristics, current from Current Status (the Dead End shape)', () => {
       const body = '## Current Status\n\n**HP:** 9/11\n**FP:** 10/12\n\n## Stat Sheet\n\n### Primary Attributes\n\n| Attribute | Score |\n|---|---|\n| ST | 11 |\n| DX | 12 |\n| IQ | 10 |\n| HT | 12 |\n\n### Secondary Characteristics\n\n| Characteristic | Value |\n|---|---|\n| HP | 11 |\n| FP | 12 |\n| Basic Speed | 6.00 |\n';
@@ -246,5 +251,38 @@ describe('GURPS magic in a block (Task 10)', () => {
     assert.deepEqual(d.fight.pools.map((p) => [p.key, p.prefix, p.max]), [['fp', 'f', 'fpMax'], ['er', 'e', 'erMax']]);
     assert.equal(d.words.casterPlaceholder, '\u2726 f-3');
     assert.match(d.words.entryInvalid, /e-2 \(Energy Reserve\)/);
+  });
+});
+
+// ---- the damage helper (step 6b Task 12) ----
+describe('GURPS hits: the readers', () => {
+  const { WOUNDING, drByLocationOf } = require('../lib/run-sheet/systems/gurps');
+  it('a block that says the face is bare opens it; a plain DR does not', () => {
+    assert.equal(readNumbers('DR 2 (face 0)').faceOpen, true);
+    assert.equal(readNumbers('ST 10 · DR 3 (open face)').faceOpen, true);
+    assert.equal(readNumbers('DR 2 (face 0)').dr, 2);
+    assert.equal(readNumbers('DR 2').faceOpen, undefined);
+    assert.equal(readNumbers('A bare face and a scowl.\nDR 2').faceOpen, undefined, 'only the DR line speaks for the face');
+    const index = buildIndex(copyFixture('run-sheet-gurps'));
+    const row = foesOf(`${NPCS}Vex Harrow.md`, index, 1, 'k', new Set(), null, null, systemFor('gurps-4e')).foes[0];
+    assert.deepEqual([row.dr, 'faceOpen' in row], [1, false]);
+  });
+  it('a sheet\'s DR rows: plural, sided, shared and starred places', () => {
+    const model = { defenses: { hitLocations: [
+      { location: 'Left Arm', dr: '3' }, { location: 'Arms/Legs', dr: '2*' }, { location: 'Head', dr: '4' },
+      { location: 'Torso', dr: '—' }, { location: 'Vitals', dr: '5' }, { location: 'Tail', dr: '9' },
+    ] } };
+    assert.deepEqual(drByLocationOf(model), { 'left arm': 3, arm: 3, leg: 2, skull: 4, face: 4, vitals: 5 });
+    assert.equal(drByLocationOf({ defenses: { hitLocations: [] } }), null);
+    assert.equal(drByLocationOf({}), null);
+  });
+  it('the description carries the wounding table and the chips', () => {
+    const d = systemFor('gurps-4e').describe();
+    assert.equal(d.toggles.hitChips, true);
+    assert.deepEqual(d.fight.wounding, WOUNDING);
+    assert.equal(systemFor('dnd-5e-2024').describe().fight.wounding, null);
+    assert.equal(systemFor('coc-7e').describe().fight.wounding, null);
+    assert.deepEqual(d.fight.wounding.typeChips.slice().sort(), Object.keys(WOUNDING.types).sort());
+    assert.deepEqual(d.fight.wounding.locationChips.slice().sort(), Object.keys(WOUNDING.locations).sort());
   });
 });

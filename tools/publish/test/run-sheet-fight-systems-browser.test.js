@@ -487,4 +487,90 @@ describe('CoC and GURPS fights on the GM page, by real input', { skip: browserSk
       assert.strictEqual(await text(page, why), null);
     });
   });
+  // Task 12: a hit typed as damage, type and place; Vex Harrow (Tower Stair) has DR 1 and 13 HP
+  for (const width of [1449, 1100]) {
+    it(`GURPS: 9 imp vitals Enter on a DR 1 foe takes 24 and shows the working at ${width}`, async () => {
+      const run = await start('gurps');
+      await withPage({ width, height: 762 }, async (page) => {
+        let p = await fightOn(page, run, 2);
+        const vex = named(p, 'Vex Harrow').id;
+        p = await typeInto(page, `[data-fhp="${vex}"]`, '9 imp vitals');
+        p = await until(page, `p.fight.rows.find((r) => r.id === ${q(vex)}).hp === -11`);
+        const line = `li[data-row2="${vex}"] .hitline`;
+        await page.waitFor(`document.querySelector(${q(line)})`);
+        assert.strictEqual(await text(page, line), '9 imp − DR 1 = 8 × 3 = 24');
+        assert.strictEqual(await attrOf(page, line, 'title'), '9 imp − DR 1 = 8 × 3 = 24');
+        assert.deepStrictEqual(named(p, 'Vex Harrow').hit, { line: '9 imp − DR 1 = 8 × 3 = 24', injury: 24, location: 'vitals', side: null, type: 'imp' });
+        // one line, inside the row's width
+        const box = await page.evaluate(`(() => { const e = document.querySelector(${q(line)}); const r = e.getBoundingClientRect(); const li = e.closest('li').getBoundingClientRect(); return { h: r.height, right: r.right, liRight: li.right }; })()`);
+        assert.ok(box.h <= 20 && box.right <= box.liRight + 1, JSON.stringify(box));
+        sane(p, `hit ${width}`);
+        await shot(page, `gurps-hit-${width}`);
+      });
+    });
+  }
+
+  it('GURPS: the cut and arm chips then 9 Enter is a hit to the arm; 9 Enter again is raw injury; the chips list them first', async () => {
+    const run = await start('gurps');
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await fightOn(page, run, 2);
+      p = await peek(page, p, 'Vex Harrow');
+      const vex = named(p, 'Vex Harrow').id;
+      const types = () => texts(page, `#acting [data-fhits="${vex}"] [data-fhtype]`);
+      const places = () => texts(page, `#acting [data-fhits="${vex}"] [data-fhloc]`);
+      assert.strictEqual((await types())[0], 'cr');
+      assert.strictEqual((await places())[0], 'torso');
+      await tap(page, `[data-fhtype="${vex}|cut"]`);
+      await tap(page, `[data-fhloc="${vex}|arm"]`);
+      assert.strictEqual(await page.evaluate(`document.querySelector('[data-fhp="${vex}"]').value`), ' cut arm');
+      assert.deepStrictEqual(await texts(page, `#acting [data-fhits="${vex}"] [aria-pressed="true"]`), ['cut', 'arm']);
+      // the box has focus with the caret before the words: the damage is typed next
+      await page.type('9');
+      await page.key('Enter');
+      // 9 cut to a 13 HP arm through DR 1: 12, held at 7, crippled
+      p = await until(page, `p.fight.rows.find((r) => r.id === ${q(vex)}).hp === 6 && p.saved === "Saved" && p.pending === 0`);
+      assert.deepStrictEqual([named(p, 'Vex Harrow').hit.location, named(p, 'Vex Harrow').hit.type, named(p, 'Vex Harrow').crippled], ['arm', 'cut', ['arm']]);
+      // the chips reset, the last used listed first
+      assert.deepStrictEqual(await texts(page, `#acting [data-fhits="${vex}"] [aria-pressed="true"]`), []);
+      assert.strictEqual((await types())[0], 'cut');
+      assert.strictEqual((await places())[0], 'arm');
+      // the crippled mark is on the row and in the panel
+      assert.ok((await texts(page, '#acting .nums .mk')).includes('crippled (arm)'));
+      // a bare 9 is raw injury, never the last hit's type or place
+      p = await typeInto(page, `[data-fhp="${vex}"]`, '9');
+      p = await until(page, `p.fight.rows.find((r) => r.id === ${q(vex)}).hp === -3`);
+      assert.strictEqual(named(p, 'Vex Harrow').hit, null);
+      assert.strictEqual(await text(page, `li[data-row2="${vex}"] .hitline`), null);
+    });
+  });
+
+  it('GURPS: a hit with no type is refused on the row\'s second line, the words kept; face open beside DR', async () => {
+    const run = await start('gurps');
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await fightOn(page, run, 2);
+      const vex = named(p, 'Vex Harrow').id;
+      await typeInto(page, `[data-fhp="${vex}"]`, '9 vitals');
+      const why = `li[data-row2="${vex}"] .refnum`;
+      await page.waitFor(`document.querySelector(${q(why)})`);
+      assert.strictEqual(await text(page, why), run.model.rules.words.entryInvalid);
+      assert.strictEqual(await page.evaluate(`document.querySelector('[data-fhp="${vex}"]').value`), '9 vitals');
+      p = await settled(page);
+      assert.strictEqual(named(p, 'Vex Harrow').hp, 13);
+      // the face toggle sits beside the panel's DR box (a foe has one DR)
+      p = await peek(page, p, 'Vex Harrow');
+      const face = `#acting [data-fface="${vex}"]`;
+      assert.strictEqual(await page.evaluate(`document.querySelector(${q(face)}).previousElementSibling.querySelector('[data-fs-dr]') !== null`), true);
+      await tap(page, face);
+      p = await until(page, `p.fight.rows.find((r) => r.id === ${q(vex)}).faceOpen === true && p.saved === "Saved" && p.pending === 0`);
+      assert.strictEqual(await attrOf(page, face, 'aria-pressed'), 'true');
+      // Esc empties the refused box; 5 cr to the open face takes no DR
+      await tap(page, `[data-fhp="${vex}"]`);
+      await page.key('Escape');
+      await page.waitFor(`!document.querySelector(${q(why)})`);
+      await page.type('5 cr face');
+      await page.key('Enter');
+      p = await until(page, `p.fight.rows.find((r) => r.id === ${q(vex)}).hp === 8`);
+      assert.strictEqual(named(p, 'Vex Harrow').hit.line, '5 cr \u2212 DR 0 (face open) = 5');
+    });
+  });
 });

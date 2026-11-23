@@ -336,6 +336,28 @@
     settleTired(s, f, r, at);
   }
 
+  // A hit (GURPS, Task 12): the injury from the fight's wounding table (GM.gurpsInjury), its working on the row
+  // (`r.hit`: { line, injury, location, side, type }, what Task 13 reads) and in the log; fatigue's to FP, the rest
+  // to HP as any damage; a blow past a place's crippling share adds its mark, logged. DR that stops it all is 0.
+  function hitEntry(s, f, r, e, at) {
+    const out = GM.gurpsInjury({ ...e.hit, n: e.n, dice: e.dice || null }, r, FM.rulesOf(f).wounding);
+    r.hit = { line: out.line, injury: out.injury, location: out.location, side: out.side, type: out.type };
+    touch(r, at);
+    say(s, f, at, `${nameOf(s, f, r)}, ${out.place}: ${out.line}.`);
+    if (out.injury <= 0) return;
+    if (out.type === 'fat') { poolEntry(s, f, r, { pool: 'fp', kind: 'damage', n: out.injury }, at); return; }
+    const before = r.hp;
+    const temp = r.temp;
+    const over = overOf(hurt(f, r, out.injury, false), temp, before);
+    touchIfHp(r, at, before, r.max);
+    if (out.crippled) {
+      const mark = `crippled (${out.place})`;
+      const had = Array.isArray(r.crippled) ? r.crippled : [];
+      if (!had.includes(out.place)) { r.crippled = had.concat(out.place); say(s, f, at, `${nameOf(s, f, r)}: ${mark}.`); }
+    }
+    afterHp(s, f, r, before, at, { over });
+  }
+
   const FIGHT_HANDLERS = {
     fightStart(s, a, at) {
       if (s.fight || a.id == null || !Array.isArray(a.rows)) return;
@@ -498,10 +520,20 @@
       f.turn = row.id;
       turnStart(f, row, at);
     },
+    // `rolled` is the server's total for an entry of dice (`2d+1 imp vitals`): the page rolls, never the reducer.
     hp: onRow((s, f, r, a, at) => {
       if (r.kind === 'lair') return;
       const e = FM.parseEntry(a.entry, FM.rulesOf(f));
       if (!e) return;
+      if (e.dice) {
+        const n = int(a.rolled);
+        if (n === null || n < 0 || n > 9999 || Number(a.rolled) !== n) return;
+        e.n = n;
+      }
+      // the last hit's working stays on the row until the next entry
+      if (r.hit) { r.hit = null; touch(r, at); }
+      if (e.hit) { hitEntry(s, f, r, e, at); return; }
+      if (e.dice) say(s, f, at, `${nameOf(s, f, r)}: ${e.dice} = ${e.n}.`);
       if (e.pool !== 'hp' && e.pool !== 'temp') { poolEntry(s, f, r, e, at); return; }
       const before = r.hp;
       const temp = r.temp;
@@ -513,6 +545,8 @@
     }),
     half: onRow((s, f, r, a, at) => { r.half = !!a.on; touch(r, at); }),
     resisted: onRow((s, f, r, a, at) => { r.resisted = !!a.on; touch(r, at); }),
+    // a foe's bare face (GURPS): a hit to its face or eyes takes no DR
+    faceOpen: onRow((s, f, r, a, at) => { if (r.kind === 'lair') return; r.faceOpen = !!a.on; touch(r, at); }),
     // A max typed on a row with no numbers sets its HP too, so a stock creature runs once its HP is typed; a row that
     // was full stays full, and HP never goes above the maximum (SRD) (fitMax).
     setMax: onRow((s, f, r, a, at) => {

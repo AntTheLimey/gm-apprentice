@@ -44,6 +44,9 @@
     refused: {},
     // the PCs whose spells fold is open (GURPS, Task 10): note -> true
     spellsOpen: {},
+    // the hit chips' memory (GURPS, Task 12): row id -> { type, location } last sent, listed first; the page's only,
+    // for the night (never the vault or the Table Log)
+    lastHit: {},
   };
 
   const model = () => RP.model();
@@ -57,6 +60,8 @@
   // the fallback is D&D's toggles as systems/dnd.js describeAs sets them (dnd.js:135-138), for a model with none
   const toggles = () => rules().toggles || { half: true, resisted: true, temp: true, deathSaves: true, concentration: true, exhaustion: true, counters: true };
   const rowNumbers = () => rules().rowNumbers || ['ini', 'hp', 'max', 'ac'];
+  // the system's wounding table (GURPS's, Task 12): a hit typed as damage, type and place; null where there is none
+  const wounding = () => (rules().fight || rules()).wounding || null;
   const rolled = () => !rules().initiative || rules().initiative === 'roll';
   // the panel's boxes the page can draw ({ key, label } items; D&D's list names its counters, drawn as before)
   const panelBoxes = () => (rules().panelBoxes || []).filter((b) => b && typeof b === 'object' && STAT[boxStat(b.key)]);
@@ -303,7 +308,8 @@
   const statusKey = (label) => (/^Exhaustion /.test(label) ? 'Exhaustion' : label);
   // The marks the fight sets (GURPS's Reeling and 0 or less, Tired) go in the same strip, never the minus-HP lines
   // (those are the panel's track and Task 13's cards).
-  const marksOn = (r) => (r.marks || []).concat(r.tired && rules().tiredAt ? [rules().tiredAt.name || 'Tired'] : []);
+  const marksOn = (r) => (r.marks || []).concat(r.tired && rules().tiredAt ? [rules().tiredAt.name || 'Tired'] : [],
+    (r.crippled || []).map((p) => `crippled (${p})`));
   function chips(r, bloodied) {
     const one = (label) => `<button type="button" class="chip" data-fun="${esc(`${r.id}|${statusKey(label)}`)}" title="Remove ${esc(label)}">${esc(label)} ✕</button>`;
     const all = Fight.statusesOf(r);
@@ -350,6 +356,9 @@
     }
     if (ui.refused[id]) out.push(`<span class="badnum refnum" role="status">${esc(ui.refused[id].why)}</span>`);
     else if (ui.pending[id]) out.push(`<span class="pendnum" role="status" title="Damage or healing typed, not applied yet">${PENDING}</span>`);
+    // the last hit's working (GURPS, Task 12): one line, clipped, all of it in the title
+    const hit = (rowById(id) || {}).hit;
+    if (hit && hit.line) out.push(`<span class="hitline" title="${esc(hit.line)}">${esc(hit.line)}</span>`);
     const st = (li && li.dataset.l2st) || '';
     if (st) out.push(`<span class="l2st">${st}</span>`);
     return out.join('');
@@ -559,7 +568,53 @@
       // D&D says when a row with numbers has no block; CoC and GURPS do not: a row with HP is complete (D3d)
       else if (!nonum && w.noBlock) body += `<p class="warn">${esc(w.noBlock)}</p>`;
     }
-    return `<div class="act" id="acting">${head(r.gmName)}<div class="nums">${nums.join('')}</div>${ctr ? `<div class="nums ctr">${ctr}</div>` : ''}${boxesHTML(r)}${trackHTML(r)}${body}</div>`;
+    return `<div class="act" id="acting">${head(r.gmName)}<div class="nums">${nums.join('')}</div>${ctr ? `<div class="nums ctr">${ctr}</div>` : ''}${boxesHTML(r)}${hitChipsHTML(r)}${trackHTML(r)}${body}</div>`;
+  }
+  // The hit chips (GURPS, Task 12): the damage types and places, the row's last used of each first. A tap writes its
+  // word into the row's entry box for this entry only (the box empties after it), so nothing is ever a default.
+  function hitChipsHTML(r) {
+    const w = wounding();
+    if (!w || !toggles().hitChips || !r.in || !isNum(r.hp)) return '';
+    const last = ui.lastHit[r.id] || {};
+    const now = boxHit(r.id);
+    const chip = (kind, v, on) => `<button type="button" class="hchip" data-fh${kind}="${esc(`${r.id}|${v}`)}" aria-pressed="${on}">${esc(v)}</button>`;
+    const types = FM.chipOrder(w.typeChips || Object.keys(w.types), last.type).map((v) => chip('type', v, now.type === v));
+    const places = FM.chipOrder(w.locationChips || Object.keys(w.locations), last.location).map((v) => chip('loc', v, now.location === v));
+    return `<div class="hitchips" data-fhits="${esc(r.id)}"><div class="hrow" role="group" aria-label="Damage type">${types.join('')}</div><div class="hrow" role="group" aria-label="Hit location">${places.join('')}</div></div>`;
+  }
+  // The hit words in a row's entry box now (its box, else the words kept for it).
+  function boxHit(id) {
+    const box = document.querySelector(attr('data-fhp', id));
+    const v = box ? box.value : (ui.pending[id] || (ui.refused[id] && ui.refused[id].words) || '');
+    return FM.hitWords(v, rules().fight || rules());
+  }
+  // The chips' pressed state follows the box's words.
+  function syncHitChips(id) {
+    const now = boxHit(id);
+    document.querySelectorAll(`#acting .hitchips${attr('data-fhits', id)} .hchip`).forEach((b) => {
+      const [, v] = split(b.dataset.fhtype || b.dataset.fhloc);
+      b.setAttribute('aria-pressed', String(b.dataset.fhtype ? now.type === v : now.location === v));
+    });
+  }
+  // A chip tapped: its word into (or, tapped again, out of) the box's words, the GM's damage kept; the caret after
+  // the damage, so what is typed next is the damage.
+  function tapHitChip(id, kind, v) {
+    const box = document.querySelector(attr('data-fhp', id));
+    if (!box) return;
+    const h = FM.hitWords(box.value, rules().fight || rules());
+    if (kind === 'type') h.type = h.type === v ? null : v;
+    else {
+      h.location = h.location === v ? null : v;
+      const loc = h.location && wounding().locations[h.location];
+      if (!loc || !loc.sided) h.side = null;
+    }
+    const tail = FM.hitText({ ...h, amount: '' });
+    box.value = h.amount ? `${h.amount}${tail ? ` ${tail}` : ''}` : (tail ? ` ${tail}` : '');
+    markPending(box);
+    box.focus();
+    const at = h.amount.length;
+    box.setSelectionRange(at, at);
+    syncHitChips(id);
   }
   // The panel's boxes (rules.panelBoxes, in Tab order), each a typed figure for setStat; a worked-out one keeps its tag.
   function boxesHTML(r) {
@@ -570,7 +625,12 @@
       const v = shownFigure(r[Fight.STAT_FIELDS[b.key][0]]);
       const mode = st.words ? 'text' : st.decimal ? 'decimal' : 'numeric';
       const t = fromTag(r, b.key);
-      return `<label class="pb"${t ? ` title="${esc(`${b.label}${t}`)}"` : ''}><span class="lab">${esc(b.label)}</span>${statBox(st.k, r, v, `class="pbox" inputmode="${mode}" autocomplete="off" aria-label="${esc(b.label)} for ${esc(r.gmName)}"`)}${t ? `<span class="from">${esc(t.trim())}</span>` : ''}</label>`;
+      const box = `<label class="pb"${t ? ` title="${esc(`${b.label}${t}`)}"` : ''}><span class="lab">${esc(b.label)}</span>${statBox(st.k, r, v, `class="pbox" inputmode="${mode}" autocomplete="off" aria-label="${esc(b.label)} for ${esc(r.gmName)}"`)}${t ? `<span class="from">${esc(t.trim())}</span>` : ''}</label>`;
+      // a foe has one DR; its face may be bare (GURPS, Task 12): the toggle sits beside it
+      const w = words();
+      const face = b.key === 'dr' && wounding() && r.kind !== 'pc' && w.faceOpen
+        ? `<button type="button" class="tg faceopen ${r.faceOpen ? 'on' : ''}" data-fface="${esc(r.id)}" aria-pressed="${!!r.faceOpen}" title="${esc(w.faceOpenTitle || '')}">${esc(w.faceOpen)}</button>` : '';
+      return box + face;
     }).join('')}</div>`;
   }
   // GURPS's mark track: every mark the system names, the passed ones lit, the deepest minus-HP line passed marked.
@@ -817,7 +877,7 @@
             // the systems' figures (step 6b)
             fp: r.fp, fpMax: r.fpMax, mp: r.mp, mpMax: r.mpMax, san: r.san, sanMax: r.sanMax, dex: r.dex, st: r.st, ht: r.ht, dx: r.dx,
             speed: r.speed, fighting: r.fighting, marks: r.marks, deepest: r.deepest, tired: r.tired, gun: r.gun, from: r.from,
-            er: r.er, erMax: r.erMax, caster: r.caster,
+            er: r.er, erMax: r.erMax, caster: r.caster, dr: r.dr, faceOpen: r.faceOpen, hit: r.hit, crippled: r.crippled,
           })),
         };
       }
@@ -898,6 +958,8 @@
     }
     if (d.fjot) { RP.dispatch({ type: 'jot', beat: f.beat, text: d.fjot, title: f.title }); return true; }
     if (d.fpeek) { ui.peek = ui.peek === d.fpeek ? null : d.fpeek; RP.render(); return true; }
+    if (d.fhtype || d.fhloc) { const [rid, v] = split(d.fhtype || d.fhloc); tapHitChip(rid, d.fhtype ? 'type' : 'location', v); return true; }
+    if (d.fface) { const x = rowById(d.fface); if (x) F({ type: 'faceOpen', row: x.id, on: !x.faceOpen }); return true; }
     const id = d.ftick || d.fsel || d.fahalf || d.fhalf || d.fres || d.fseen || d.fout || d.flr;
     const r = rowById(id || '');
     if (d.ftick && r) { F({ type: 'fightTick', row: r.id, in: t.checked }); return true; }
@@ -969,6 +1031,14 @@
     if (on) t.setAttribute('aria-invalid', 'true'); else t.removeAttribute('aria-invalid');
     syncLine2(t.dataset[f]);
   }
+  // An entry the row cannot take: its words stay in the box, the reason on the row's second line, selected so what
+  // the GM types next replaces it (Task 10's path; Task 12's hit words a system cannot read too).
+  function refuse(t, why) {
+    ui.refused[t.dataset.fhp] = { words: t.value, why };
+    markPending(t);
+    t.select();
+  }
+
   // Damage typed into a row's box and not applied (P4.1): marked until Enter applies it or the box is emptied.
   // Never applied on leaving the box: a slip would hurt a row.
   function markPending(t) {
@@ -1081,6 +1151,8 @@
     if (d.fhp !== undefined) {
       ev.preventDefault();
       const e = FM.parseEntry(t.value, FM.rulesOf(state().fight));
+      // a system that reads hits (GURPS) keeps words it cannot read in the box, its reason on the row's second line
+      if (!e && wounding()) { refuse(t, words().entryInvalid || INVALID); return; }
       if (!e) { t.setCustomValidity(words().entryInvalid || INVALID); t.reportValidity(); return; }
       // the GM picks the pool: an entry into a pool the row has no figure in (e-3 with no Energy Reserve, f-3 with no
       // FP) is refused, never paid from another pool instead
@@ -1089,16 +1161,25 @@
       if (pool && row && !isNum(row[pool.key])) {
         const w = words();
         const own = { er: w.noReserve, fp: w.noFp }[pool.key];
-        ui.refused[d.fhp] = { words: t.value, why: own || `No ${pool.label || pool.key} on this row` };
-        markPending(t);
-        // selected, so what the GM types next replaces it
-        t.select();
+        refuse(t, own || `No ${pool.label || pool.key} on this row`);
         return;
       }
       const entry = t.value;
       t.value = '';
       markPending(t);
-      F({ type: 'hp', row: d.fhp, entry });
+      if (e.hit) ui.lastHit[d.fhp] = { type: e.hit.type, location: e.hit.location };
+      if (!e.dice) { F({ type: 'hp', row: d.fhp, entry }); return; }
+      // dice are the server's: the hit goes with the roll (the reducer never rolls)
+      const f = state().fight;
+      roll([{ damage: e.dice, ...(e.hit ? { type: e.hit.type } : {}) }]).then(([res]) => {
+        const now = state().fight;
+        if (now && f && now.id === f.id) RP.dispatch({ fight: f.id, type: 'hp', row: d.fhp, entry, rolled: res.total });
+      }, (err) => {
+        rollFailed(err);
+        // the words go back in the box, as typed
+        ui.pending[d.fhp] = entry;
+        RP.render();
+      });
       return;
     }
     if (d.fother !== undefined) {
@@ -1171,7 +1252,7 @@
       const key = badKey(STAT[f].k, t.dataset[f]);
       if (ui.bad[key]) ui.bad[key].words = t.value;
     }
-    if (t.dataset && t.dataset.fhp !== undefined) markPending(t);
+    if (t.dataset && t.dataset.fhp !== undefined) { markPending(t); syncHitChips(t.dataset.fhp); }
     if (t.id === 'fAddName') {
       ui.addText = t.value;
       ui.addHits = FM.addChoices(model().cast || [], t.value, RS.castSearch);

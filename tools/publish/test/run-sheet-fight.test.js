@@ -2202,3 +2202,144 @@ describe('GURPS magic: the GM picks the pool (step 6b Task 10)', () => {
     assert.equal(named(s, 'Bram').er, 3);
   });
 });
+
+describe('GURPS hits on the row (step 6b Task 12)', () => {
+  const { systemFor } = require('../lib/run-sheet/systems');
+  const GURPS = systemFor('gurps-4e').describe().fight;
+  const begin = (list) => RS.reduce(fresh(), { id: 'f1', type: 'fightStart', title: 'T', rules: GURPS, rows: list.map((o, i) => M.blankRow({ id: `r${i + 1}`, ...o })) }, now());
+  const G = (s, a) => RS.reduce(s, { id: nextId(), fight: 'f1', ...a }, now());
+  const named = (s, name) => s.fight.rows.find((r) => r.name === name);
+  const typeIn = (s, name, entry, extra) => G(s, { type: 'hp', row: named(s, name).id, entry, ...(extra || {}) });
+  const lines = (s) => s.events.filter((e) => e.fight).map((e) => e.text);
+
+  it('9 imp vitals on DR 1 takes 24, the working on the row and in the log', () => {
+    let s = begin([{ name: 'Vex', hp: 13, max: 13, dr: 1 }]);
+    s = typeIn(s, 'Vex', '9 imp vitals');
+    const v = named(s, 'Vex');
+    assert.equal(v.hp, -11);
+    assert.deepEqual(v.hit, { line: '9 imp − DR 1 = 8 × 3 = 24', injury: 24, location: 'vitals', side: null, type: 'imp' });
+    assert.ok(lines(s).includes('Vex, vitals: 9 imp − DR 1 = 8 × 3 = 24.'), lines(s).join('\n'));
+    // the marks follow as any damage (Task 6)
+    assert.deepEqual(v.marks, ['Reeling', '0 or less']);
+  });
+
+  it('the players\' screen never sees the working, even an ally\'s', () => {
+    // a GURPS fight at the Gate as the page builds it, its wolf made an ally and hit
+    const gm = { ...model, rules: { ...model.rules, fight: GURPS } };
+    let p = move(fresh(), ADA, GATE);
+    const fid = nextId();
+    const b = M.rowsForFight({ model: gm, derived: RS.derive(gm, p), state: p, beatKey: GATE.key, idBase: fid });
+    p = RS.reduce(p, { id: fid, type: 'fightStart', beat: GATE.key, title: GATE.title, groups: b.groups, rows: b.rows, thresholds: b.thresholds, rules: GURPS }, now());
+    const wolf = row(p, WOLF);
+    p = F(p, { type: 'setSide', row: wolf.id, side: 'ally' });
+    p = F(p, { type: 'hp', row: wolf.id, entry: '9 imp vitals' });
+    p = next(p);
+    assert.ok(row(p, WOLF).hit.line.startsWith('9 imp'));
+    const seen = JSON.stringify(require('../lib/run-sheet/players').forPlayers(model, p, { withheldWords: model.withheldWords, picId: () => null }));
+    assert.ok(seen.includes(`"hp":"${row(p, WOLF).hp}/`), `the ally's HP is there: ${seen}`);
+    assert.ok(!/DR \d|× \d|vitals|imp/.test(seen), seen);
+  });
+
+  it('a bare 9 and -10 stay raw injury, even right after a hit; the last working goes', () => {
+    let s = begin([{ name: 'Vex', hp: 40, max: 40, dr: 1 }]);
+    s = typeIn(s, 'Vex', '9 imp vitals');
+    s = typeIn(s, 'Vex', '9');
+    assert.deepEqual([named(s, 'Vex').hp, named(s, 'Vex').hit], [7, null]);
+    s = typeIn(s, 'Vex', '-10');
+    assert.equal(named(s, 'Vex').hp, -3);
+    s = typeIn(s, 'Vex', '+3');
+    assert.equal(named(s, 'Vex').hp, 0);
+  });
+
+  it('9i is impaling to the torso', () => {
+    let s = begin([{ name: 'Vex', hp: 20, max: 20, dr: 1 }]);
+    s = typeIn(s, 'Vex', '9i');
+    assert.deepEqual([named(s, 'Vex').hp, named(s, 'Vex').hit.line, named(s, 'Vex').hit.location], [4, '9 imp − DR 1 = 8 × 2 = 16', 'torso']);
+  });
+
+  it('4 cr torso on DR 5 is 0: nothing changes and nothing follows', () => {
+    let s = begin([{ name: 'Knight', hp: 12, max: 12, dr: 5 }]);
+    const before = lines(s).length;
+    s = typeIn(s, 'Knight', '4 cr torso');
+    const k = named(s, 'Knight');
+    assert.deepEqual([k.hp, k.marks, k.crippled, k.hit.injury], [12, [], [], 0]);
+    assert.deepEqual(lines(s).slice(before), ['Knight, torso: 4 cr − DR 5 = 0.']);
+  });
+
+  it('an arm hit is capped and crippled, logged once; the mark stays through healing', () => {
+    let s = begin([{ name: 'Vex', hp: 12, max: 12, dr: 1 }]);
+    s = typeIn(s, 'Vex', '9 cut left arm');
+    let v = named(s, 'Vex');
+    assert.deepEqual([v.hp, v.crippled, v.hit.injury], [5, ['left arm'], 7]);
+    assert.ok(lines(s).includes('Vex: crippled (left arm).'));
+    s = typeIn(s, 'Vex', '9 cut left arm');
+    assert.equal(lines(s).filter((t) => t === 'Vex: crippled (left arm).').length, 1);
+    s = typeIn(s, 'Vex', '+20');
+    v = named(s, 'Vex');
+    assert.deepEqual([v.hp, v.crippled], [12, ['left arm']]);
+  });
+
+  it('large piercing to the arm at ×1', () => {
+    let s = begin([{ name: 'Vex', hp: 30, max: 30, dr: 1 }]);
+    s = typeIn(s, 'Vex', '7 pi+ arm');
+    assert.deepEqual([named(s, 'Vex').hp, named(s, 'Vex').hit.line], [24, '7 pi+ − DR 1 = 6']);
+  });
+
+  it('face open: a toggle on the row, a foe\'s face hit then takes no DR', () => {
+    let s = begin([{ name: 'Vex', hp: 30, max: 30, dr: 3 }]);
+    s = typeIn(s, 'Vex', '9 cr face');
+    assert.equal(named(s, 'Vex').hp, 24);
+    s = G(s, { type: 'faceOpen', row: named(s, 'Vex').id, on: true });
+    assert.equal(named(s, 'Vex').faceOpen, true);
+    s = typeIn(s, 'Vex', '9 cr face');
+    assert.deepEqual([named(s, 'Vex').hp, named(s, 'Vex').hit.line], [15, '9 cr − DR 0 (face open) = 9']);
+    s = typeIn(s, 'Vex', '9 cr torso');
+    assert.equal(named(s, 'Vex').hp, 9, 'the torso keeps its DR');
+  });
+
+  it('dice: the server\'s roll is sent with the entry, and the working starts with it', () => {
+    let s = begin([{ name: 'Vex', hp: 13, max: 13, dr: 1 }]);
+    s = typeIn(s, 'Vex', '2d+1 imp vitals', { rolled: 9 });
+    assert.deepEqual([named(s, 'Vex').hp, named(s, 'Vex').hit.line], [-11, '2d+1 = 9 imp − DR 1 = 8 × 3 = 24']);
+    // a bare roll is raw injury, logged with its dice
+    s = typeIn(s, 'Vex', '2d+1', { rolled: 6 });
+    assert.equal(named(s, 'Vex').hp, -17);
+    assert.ok(lines(s).includes('Vex: 2d+1 = 6.'), lines(s).join('\n'));
+    // dice with no roll, or a roll that is no whole number, change nothing
+    for (const rolled of [undefined, null, 'x', 2.5, -1]) {
+      const t = typeIn(s, 'Vex', '2d+1 imp', rolled === undefined ? {} : { rolled });
+      assert.equal(named(t, 'Vex').hp, -17, String(rolled));
+    }
+  });
+
+  it('fatigue goes to FP after DR; a PC uses its sheet\'s DR by place', () => {
+    let s = begin([{ name: 'Mage', hp: 10, max: 10, fp: 10, fpMax: 10, dr: 1 },
+      { name: 'Sela', kind: 'pc', hp: 12, max: 12, drByLocation: { torso: 3, arm: 2, skull: 4 } }]);
+    s = typeIn(s, 'Mage', '5 fat');
+    assert.deepEqual([named(s, 'Mage').fp, named(s, 'Mage').hp], [6, 10]);
+    s = typeIn(s, 'Sela', '9 cr');
+    assert.equal(named(s, 'Sela').hp, 6, 'torso DR 3');
+    s = typeIn(s, 'Sela', '4 cr arm');
+    assert.equal(named(s, 'Sela').hp, 4, 'arm DR 2');
+  });
+
+  it('a PC row from the fixture sheet carries its DR by place', () => {
+    const dir = require('./helpers/systems-fixture').copyFixture('run-sheet-gurps');
+    try {
+      const m = readRunSheet(dir, 'Chapters/Chapter 1/Sessions/Session 01/Session 01 - Crates - Plan.md', { party: ['Characters/PCs/Sela Drake.md'] });
+      const sela = m.pcs.find((p) => p.name === 'Sela Drake');
+      assert.deepEqual(sela.drByLocation, { skull: 4, face: 0, neck: 2, torso: 3, arm: 2, hand: 1, leg: 2, foot: 1 });
+      // the beat's fight row for her, as Fight builds it
+      const st = RS.emptyState({ stateId: 's', session: 'x', plan: 'p' });
+      const beat = m.beats.find((x) => /Tower Stair/.test(x.title));
+      const b = M.rowsForFight({ model: m, derived: RS.derive(m, st), state: st, beatKey: beat.key, idBase: 'f1' });
+      assert.deepEqual(b.rows.find((r) => r.name === 'Sela Drake').drByLocation, sela.drByLocation);
+    } finally { require('./helpers/systems-fixture').removeFixture(dir); }
+  });
+
+  it('D&D and CoC take no hit: the words change nothing', () => {
+    let s = RS.reduce(fresh(), { id: 'f1', type: 'fightStart', title: 'T', rows: [M.blankRow({ id: 'r1', name: 'Wolf', hp: 11, max: 11 })] }, now());
+    s = typeIn(s, 'Wolf', '9 imp vitals');
+    assert.deepEqual([named(s, 'Wolf').hp, named(s, 'Wolf').hit], [11, null]);
+  });
+});
