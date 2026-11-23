@@ -910,8 +910,17 @@ describe("each system's vitals columns (Task 20)", () => {
       assert.deepStrictEqual([edda.hpNow, edda.mpNow, edda.sanNow, edda.carriedFrom], [7, 4, 44, log]);
       // the night's vitals start from them, and so does a fight
       const m1 = readRunSheet(dir, COC_PLAN, {});
-      const row = RS.derive(m1, s0(COC_PLAN)).vitals.find((v) => v.rowId === EDDA);
+      const d1 = RS.derive(m1, s0(COC_PLAN));
+      const row = d1.vitals.find((v) => v.rowId === EDDA);
       assert.deepStrictEqual([row.hp, row.mp, row.mpMax, row.san], [7, 4, 10, 44]);
+      // her fight row starts from them: through the night's vitals, and from the reader's carried figures alone
+      const FM = require('../lib/run-sheet/web/fight-math');
+      const beat = m1.beats.find((b) => b.foes.some((f) => f.note === EDDA && f.ally));
+      const fightRow = (derived) => FM.rowsForFight({ model: m1, derived, state: s0(COC_PLAN), beatKey: beat.key, idBase: 'f' }).rows.find((r) => r.note === EDDA);
+      const withVitals = fightRow(d1);
+      assert.deepStrictEqual([withVitals.kind, withVitals.hp, withVitals.mp, withVitals.mpMax, withVitals.san], ['ally', 7, 4, 10, 44]);
+      const noVitals = fightRow({ ...d1, vitals: d1.vitals.filter((v) => v.rowId !== EDDA) });
+      assert.deepStrictEqual([noVitals.hp, noVitals.mp, noVitals.mpMax, noVitals.san], [7, 4, 10, 44]);
 
       // an old log with only HP: HP carries, the pools start from the note
       const dir2 = copy(COC_FX, COC_PLAN, '**[[Edda Voss]]:** keeps the stove hot', 'with the party');

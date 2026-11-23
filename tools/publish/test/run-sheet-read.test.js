@@ -627,7 +627,8 @@ describe('run sheet reader: allies start from the last Table Log', () => {
     assert.strictEqual(w.length, 1, JSON.stringify(w));
     assert.strictEqual(w[0].kind, 'table-log');
     assert.strictEqual(w[0].note, S1_LOG);
-    assert.match(w[0].text, /Who|HP/);
+    // step 6b Task 20: the sheet reads more columns than Who, HP and Conditions, so the warning names none of them
+    assert.match(w[0].text, /names no column the sheet reads/);
   });
 
   it('a header row puts the HP column where it says', () => {

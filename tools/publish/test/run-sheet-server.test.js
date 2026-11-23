@@ -1123,7 +1123,8 @@ describe('run sheet server: rolls and actions', () => {
     assert.strictEqual(r.status, 200);
     const [a, b, c, d] = r.json.results;
     assert.ok(a.die >= 1 && b.dice.length === 3 && b.margin === 12 - b.total);
-    assert.ok(c.dice.length === 2 && c.type === 'imp' && c.total >= 4);
+    // 2d+1 is 3 at the least (two 1s): `>= 4` failed one run in 36
+    assert.ok(c.dice.length === 2 && c.type === 'imp' && c.total >= 3 && c.total === c.dice.reduce((x, y) => x + y, 0) + 1, JSON.stringify(c));
     assert.ok(d.needed === 25 && d.asked.bonus === 0);
     const bad = await post(run, '/api/roll', { rolls: [{ sides: 6 }, { foo: 1 }] });
     assert.strictEqual(bad.status, 400);

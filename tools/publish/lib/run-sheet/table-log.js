@@ -5,6 +5,7 @@
 
 const pt = require('./plan-text');
 const { canonicalNfc } = require('../unicode');
+const { SYSTEM_VITALS } = require('../shared-lists');
 
 const low = (s) => canonicalNfc(String(s == null ? '' : s)).trim().toLowerCase();
 
@@ -20,16 +21,27 @@ const VITALS = 'Vitals at the end';
 // below zero (a dying ally, GURPS), written with a hyphen or a typed minus sign (U+2212).
 const HP_CELL = /^(-?\d+)\s*(?:(?:\/|\bof\b)\s*(\d+))?\s*(?:hp\b)?\s*(?:\([^)]*\))?$/i;
 // The columns a header row names (any case): Who, HP and Conditions, and the pools a system adds (step 6b, the
-// ontology's `run_sheet.vitals`: CoC's MP, SAN and Luck, GURPS's FP). A table with no header row is read by position,
-// Who, HP, Conditions, in every system: it is someone's hand-written log, and its third cell is never a pool.
-const COLUMNS = {
-  who: /^who$/, hp: /^(?:hp|hit points)$/, conditions: /^conditions?$/,
-  mp: /^(?:mp|magic points)$/, san: /^(?:san|sanity)$/, luck: /^luck$/, fp: /^(?:fp|fatigue points)$/,
-};
+// ontology's `run_sheet.vitals` of every system: CoC's MP, SAN and Luck, GURPS's FP), by their column word or the long
+// name a hand-writer may use. A table with no header row is read by position, Who, HP, Conditions, in every system:
+// it is someone's hand-written log, and its third cell is never a pool.
+const LONG = { hp: 'hit points', mp: 'magic points', san: 'sanity', fp: 'fatigue points' };
+const escRe = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+// Each pool column once (the first system to name it), with its max field: { field, column, max }.
+const POOL_COLUMNS = [];
+for (const cols of Object.values(SYSTEM_VITALS)) {
+  for (const c of cols) {
+    if (c.field === 'hp' || c.field === 'conditions' || POOL_COLUMNS.some((x) => x.field === c.field)) continue;
+    POOL_COLUMNS.push({ field: c.field, column: c.column, max: c.max || null });
+  }
+}
+const COLUMNS = { who: /^who$/, hp: /^(?:hp|hit points)$/, conditions: /^conditions?$/ };
+for (const c of POOL_COLUMNS) {
+  COLUMNS[c.field] = new RegExp(`^(?:${[c.column, LONG[c.field]].filter(Boolean).map((w) => escRe(w.toLowerCase())).join('|')})$`);
+}
 const BY_POSITION = { who: 0, hp: 1, conditions: 2 };
-// Each pool column's figures on a vitals entry, named as a PC sheet's readers name them: `current` and `max`
-// (null when the cell gives none); Luck has no max.
-const POOLS = { mp: ['mpNow', 'mpMax'], san: ['sanNow', 'sanMax'], luck: ['luck', null], fp: ['fpNow', 'fpMax'] };
+// A pool's figure on a vitals entry is named as a PC sheet's readers name it: `mpNow`, `sanNow`, `fpNow`, and Luck's
+// `luck`; its max is the column's `max` field (`mpMax`), null when the cell gives none. Luck has no max.
+const nowName = (field) => (field === 'luck' ? 'luck' : `${field}Now`);
 
 // A Who cell's note: its first link's target (a pipe alias dropped), else the cell's own text.
 function whoOf(cell) {
@@ -97,7 +109,8 @@ function readTableLog(text) {
         hpNow: hp ? Number(hp[1]) : null,
         hpMax: hp && hp[2] !== undefined ? Number(hp[2]) : null,
       };
-      for (const [field, [now, max]] of Object.entries(POOLS)) {
+      for (const { field, max } of POOL_COLUMNS) {
+        const now = nowName(field);
         if (columns[field] === undefined) continue;
         const text = cell(cells, columns[field]);
         const m = HP_CELL.exec(text.replace(/\u2212/g, '-'));

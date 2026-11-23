@@ -82,7 +82,8 @@
     pending: [], answered: [], inflight: false, clientId: randomId(), seq: 0, switching: false,
     down: false, putFailing: false, saveFailed: false, putRev: 0, savedRev: 0, heardRev: 0,
     retry: null, resyncTimer: null, notes: [], drafts: {},
-    // badVital: an end-panel figure refused (`rowId|field` -> { text, why }), kept as typed and never saved
+    // badVital: an end-panel figure refused (`rowId|field` -> { text, why, saved }), kept as typed and never saved, until
+    // the saved figure changes by another route
     ui: { focus: null, focusGroup: null, armed: null, record: '', copyMsg: '', hits: {}, badVital: {} },
     modelAt: 0,
     view: null, viewTicket: 0, drawerNote: null,
@@ -846,8 +847,7 @@
       if (o.kind === 'vitals') {
         const v = o.value;
         const hp = v.hp !== null ? `HP ${v.hp}${v.max !== null ? `/${v.max}` : ''}` : v.max !== null ? `HP max ${v.max}` : '';
-        const pools = vitalColumns().filter((c) => c.field !== 'hp' && c.field !== 'conditions' && v[c.field] !== undefined && v[c.field] !== null && v[c.field] !== '')
-          .map((c) => `${c.column} ${v[c.field]}`);
+        const pools = RS.poolWords(G.model, v);
         return `Vitals for ${esc(nameOf(o.note))}${o.copy > 1 ? ` ${o.copy}` : ''}: ${esc([hp, ...pools, v.conditions].filter(Boolean).join(', '))} (no longer on the end panel)`;
       }
       return `Beat "${esc(o.text || o.key)}": ${esc([].concat(o.value).map((v) => String(v).replace(/^stood: (.*)$/, (x, p) => `${nameOf(p)} stood there`)).join(', '))}`;
@@ -1074,12 +1074,9 @@
     if (w.status === 'off') return 'off-screen';
     return w.title || '';
   };
-  // The vitals columns after Who (model.rules.vitals); D&D's when the model has none of that shape.
-  const DND_VITALS = [{ column: 'HP', field: 'hp', shape: 'current/max' }, { column: 'Conditions', field: 'conditions', shape: 'text' }];
-  function vitalColumns() {
-    const v = G.model.rules && G.model.rules.vitals;
-    return Array.isArray(v) && v.length && v.every((c) => c && typeof c === 'object' && c.field) ? v : DND_VITALS;
-  }
+  // The vitals columns after Who: the system's, from the ontology (model.rules.vitals; the reader gives D&D's for a
+  // vault with no system of its own).
+  const vitalColumns = () => RS.vitalColumns(G.model);
   function endHTML(d) {
     let h = '<p class="note">Prefilled from the sheet. Change anything after rests: only a row you change, or a long rest, goes into the record.</p>';
     if (pcs().length) {
@@ -1093,7 +1090,14 @@
       const nums = cols.filter((c) => c.field !== 'conditions');
       const hasCond = cols.some((c) => c.field === 'conditions');
       const pooled = nums.some((c) => c.field !== 'hp');
-      const bad = (v, field) => G.ui.badVital[`${v.rowId}|${field}`];
+      // a refused figure stands until the saved one changes by another route (another window, a long rest): then the
+      // box shows what is saved
+      const bad = (v, field) => {
+        const key = `${v.rowId}|${field}`;
+        const b = G.ui.badVital[key];
+        if (b && String(b.saved ?? '') !== String(v[field] ?? '')) { delete G.ui.badVital[key]; return undefined; }
+        return b;
+      };
       // a figure refused (over the sheet's max, or below 0): kept as typed, marked, never saved
       const box = (v, field, attrs, label) => {
         const b = bad(v, field);
@@ -1111,7 +1115,7 @@
         table = `<table class="vt"><thead><tr><th>Who</th>${head}<th></th></tr></thead><tbody>${d.vitals.map((v) => `<tr><td>${who(v)}</td>${cols.map((c) => (c.field === 'hp'
           ? `<td>${numBox(v, c)}</td><td>${esc(v.max ?? '?')}</td>` : `<td>${condBox(v)}</td>`)).join('')}<td>${rec(v)}</td></tr>`).join('')}</tbody></table>`;
       } else {
-        const maxOf = (v, c) => (c.shape !== 'current/max' ? null : c.field === 'hp' ? v.max : v[`${c.field}Max`]);
+        const maxOf = (v, c) => (c.shape === 'current/max' && c.max ? v[c.max] : null);
         const cell = (v, c) => {
           // Luck is a PC's alone
           if (c.pcs_only && v.ally) return '<td></td>';
@@ -1986,7 +1990,12 @@
       const value = v === '' ? undefined : (Number.isFinite(n) ? n : v);
       const key = `${row}|${field}`;
       const why = RS.endFigureProblem(G.model, row, field, value);
-      if (why) { G.ui.badVital[key] = { text: t.value, why }; update(); return; }
+      if (why) {
+        const now = D().vitals.find((x) => x.rowId === row);
+        G.ui.badVital[key] = { text: t.value, why, saved: now ? now[field] : undefined };
+        update();
+        return;
+      }
       delete G.ui.badVital[key];
       act({ type: 'endSet', vitals: { [row]: { [field]: value } } });
       return;

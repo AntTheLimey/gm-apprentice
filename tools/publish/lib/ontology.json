@@ -473,17 +473,20 @@
           {
             "column": "HP",
             "field": "hp",
-            "shape": "current/max"
+            "shape": "current/max",
+            "max": "max"
           },
           {
             "column": "MP",
             "field": "mp",
-            "shape": "current/max"
+            "shape": "current/max",
+            "max": "mpMax"
           },
           {
             "column": "SAN",
             "field": "san",
-            "shape": "current"
+            "shape": "current",
+            "max": "sanMax"
           },
           {
             "column": "Luck",
@@ -511,17 +514,20 @@
           {
             "column": "HP",
             "field": "hp",
-            "shape": "current/max"
+            "shape": "current/max",
+            "max": "max"
           },
           {
             "column": "MP",
             "field": "mp",
-            "shape": "current/max"
+            "shape": "current/max",
+            "max": "mpMax"
           },
           {
             "column": "SAN",
             "field": "san",
-            "shape": "current"
+            "shape": "current",
+            "max": "sanMax"
           },
           {
             "column": "Luck",
@@ -549,12 +555,14 @@
           {
             "column": "HP",
             "field": "hp",
-            "shape": "current/max"
+            "shape": "current/max",
+            "max": "max"
           },
           {
             "column": "FP",
             "field": "fp",
-            "shape": "current/max"
+            "shape": "current/max",
+            "max": "fpMax"
           },
           {
             "column": "Conditions",
@@ -579,7 +587,8 @@
           {
             "column": "HP",
             "field": "hp",
-            "shape": "current/max"
+            "shape": "current/max",
+            "max": "max"
           },
           {
             "column": "Conditions",

@@ -531,7 +531,7 @@
         if (r.kind === 'pc') rowId = partyNoteOf(model, r);
         else if (r.kind === 'ally' && r.note) {
           rowId = r.copy > 1 ? `${r.note}#${r.copy}` : r.note;
-          if (!allies.has(rowId)) allies.set(rowId, { rowId, ally: true, copy: r.copy || 1, note: r.note, name: r.name, base: { hp: (r.start || {}).hp ?? r.max ?? null, max: r.max ?? null, ...poolBase(r.start || {}, r) } });
+          if (!allies.has(rowId)) allies.set(rowId, { rowId, ally: true, copy: r.copy || 1, note: r.note, name: r.name, base: { hp: (r.start || {}).hp ?? r.max ?? null, max: r.max ?? null, ...poolBase(r.start || {}, r, poolColumns(model)) } });
         }
         // HP and max at their own time, conditions at theirs (Review H1); a row from before them reads `at`
         const at = r.at || f.endedAt || f.startedAt || null;
@@ -565,25 +565,48 @@
       .filter((c) => !gone.has(c) && !(tired && /^Exhaustion\b/i.test(c))).join(', ');
   }
 
-  // The pools a vitals row holds beyond HP (step 6b): each with its max where it has one. Luck has none.
-  const VITAL_POOLS = ['mp', 'san', 'luck', 'fp', 'er'];
-  const POOL_MAX = { mp: 'mpMax', san: 'sanMax', fp: 'fpMax', er: 'erMax', luck: null };
-  const numOr = (...xs) => { for (const x of xs) if (typeof x === 'number' && Number.isFinite(x)) return x; return null; };
-  // A PC's pools from its sheet's numbers (`mpNow`/`mpMax`, `sanNow`/`sanMax`, `luck`, `fpNow`/`fpMax`, `erNow`/`erMax`).
-  function pcPools(p) {
-    return { mp: numOr(p.mpNow, p.mpMax), mpMax: numOr(p.mpMax), san: numOr(p.sanNow, p.sanMax), sanMax: numOr(p.sanMax),
-      luck: numOr(p.luck), fp: numOr(p.fpNow, p.fpMax), fpMax: numOr(p.fpMax), er: numOr(p.erNow, p.erMax), erMax: numOr(p.erMax) };
+  // The system's vitals columns (model.rules.vitals: the ontology's `run_sheet.vitals`, each { column, field, shape,
+  // max?, pcs_only? }), and the pools among them (step 6b: CoC's MP, SAN and Luck, GURPS's FP). Each pool's max is
+  // the field its column names (`max`); a model with none has no pools, as D&D.
+  function vitalColumns(model) {
+    const v = model && model.rules && model.rules.vitals;
+    return Array.isArray(v) ? v.filter((c) => c && typeof c === 'object' && typeof c.field === 'string') : [];
   }
-  // An ally's from its fight row as the reader gave it: the block's figures, a carried one first (`mpNow`, `sanNow`,
-  // `fpNow`: the last Table Log's) and a block's stated start (`fpStart`, `erStart`).
-  function allyPools(f) {
-    return { mp: numOr(f.mpNow, f.mp, f.mpMax), mpMax: numOr(f.mpMax, f.mp), san: numOr(f.sanNow, f.san, f.sanMax), sanMax: numOr(f.sanMax, f.san),
-      luck: null, fp: numOr(f.fpNow, f.fpStart, f.fp, f.fpMax), fpMax: numOr(f.fpMax, f.fp), er: numOr(f.erStart, f.er, f.erMax), erMax: numOr(f.erMax, f.er) };
+  const poolColumns = (model) => vitalColumns(model).filter((c) => c.field !== 'hp' && c.field !== 'conditions');
+  const numOr = (...xs) => { for (const x of xs) if (typeof x === 'number' && Number.isFinite(x)) return x; return null; };
+  // A pool's current figure as the readers name it: `mpNow`, `sanNow`, `fpNow` (a PC's sheet, a carried figure);
+  // Luck is `luck`.
+  const nowOf = (o, k) => (k === 'luck' ? o.luck : o[`${k}Now`]);
+  // A PC's pools from its sheet's numbers.
+  function pcPools(p, cols) {
+    const out = {};
+    for (const c of cols) { out[c.field] = numOr(nowOf(p, c.field), c.max && p[c.max]); if (c.max) out[c.max] = numOr(p[c.max]); }
+    return out;
+  }
+  // An ally's from its fight row as the reader gave it: a carried figure first (the last Table Log's), then a block's
+  // stated start (`fpStart`), then the block's figure. Luck is a PC's alone.
+  function allyPools(f, cols) {
+    const out = {};
+    for (const c of cols) {
+      out[c.field] = c.pcs_only ? null : numOr(nowOf(f, c.field), f[`${c.field}Start`], f[c.field], c.max && f[c.max]);
+      if (c.max) out[c.max] = numOr(f[c.max], f[c.field]);
+    }
+    return out;
   }
   // A fought ally's (one only a fight held), from the fight row: where it started, and its maxima.
-  function poolBase(start, r) {
-    return { mp: numOr(start.mp, r.mpMax), mpMax: numOr(r.mpMax), san: numOr(start.san, r.sanMax), sanMax: numOr(r.sanMax), luck: null,
-      fp: numOr(start.fp, r.fpMax), fpMax: numOr(r.fpMax), er: numOr(start.er, r.erMax), erMax: numOr(r.erMax) };
+  function poolBase(start, r, cols) {
+    const out = {};
+    for (const c of cols) {
+      out[c.field] = c.pcs_only ? null : numOr(start[c.field], c.max && r[c.max]);
+      if (c.max) out[c.max] = numOr(r[c.max]);
+    }
+    return out;
+  }
+  // The pools an end-panel vitals entry holds, as `MP 4` (its column word and figure), for a line about vitals kept for
+  // someone the Plan no longer has (the record's Changed since play started, and the end panel's).
+  function poolWords(model, v) {
+    return poolColumns(model).filter((c) => v && v[c.field] !== undefined && v[c.field] !== null && v[c.field] !== '')
+      .map((c) => `${c.column} ${String(v[c.field]).replace(/\s+/g, ' ').trim()}`);
   }
 
   // Ally rows: one per ally note, a copy row for each extra number a beat holds (`Guard 2`), and any ally a
@@ -591,8 +614,9 @@
   // a long rest (decision 17). `source` says where the HP came from.
   function vitalRows(model, state, beats, reached) {
     const rows = [];
+    const cols = poolColumns(model);
     for (const p of model.pcs || []) {
-      rows.push({ rowId: p.note, ally: false, copy: 1, note: p.note, name: p.name, base: { hp: p.hpNow ?? p.hpMax ?? null, max: p.hpMax ?? null, ...pcPools(p) } });
+      rows.push({ rowId: p.note, ally: false, copy: 1, note: p.note, name: p.name, base: { hp: p.hpNow ?? p.hpMax ?? null, max: p.hpMax ?? null, ...pcPools(p, cols) } });
     }
     const allies = new Map();
     const inPlay = new Set();
@@ -606,7 +630,7 @@
         seen.set(f.note, copy);
         if (!allies.has(f.note)) allies.set(f.note, []);
         const list = allies.get(f.note);
-        if (!list[copy - 1]) list[copy - 1] = { rowId: copy === 1 ? f.note : `${f.note}#${copy}`, ally: true, copy, note: f.note, name: f.name, base: { hp: f.hpNow ?? f.hp ?? null, max: f.hp ?? null, ...allyPools(f) } };
+        if (!list[copy - 1]) list[copy - 1] = { rowId: copy === 1 ? f.note : `${f.note}#${copy}`, ally: true, copy, note: f.note, name: f.name, base: { hp: f.hpNow ?? f.hp ?? null, max: f.hp ?? null, ...allyPools(f, cols) } };
       }
     }
     for (const list of allies.values()) for (const r of list) if (r) rows.push(r);
@@ -630,19 +654,24 @@
       // each pool (CoC's MP, SAN and Luck, GURPS's FP, Energy Reserve) is a figure of its own, with its own source
       // and time, replayed as HP is: the note's, then each fight that moved it, then the end panel
       const pool = {};
-      for (const k of VITAL_POOLS) pool[k] = { fig: r.base[k] ?? null, source: 'note' };
       const maxima = {};
-      for (const k of VITAL_POOLS) if (POOL_MAX[k]) maxima[POOL_MAX[k]] = r.base[POOL_MAX[k]] ?? null;
+      for (const c of cols) {
+        pool[c.field] = { fig: r.base[c.field] ?? null, source: 'note' };
+        if (c.max) maxima[c.max] = r.base[c.max] ?? null;
+      }
       const steps = [];
       const ffs = figures.get(r.rowId) || [];
       for (const ff of ffs) {
         if (ff.changed) {
           steps.push({ t: ord(ff.hpAt), k: 0, run: () => Object.assign(fig, { hp: ff.hp, max: ff.max ?? fig.max, source: 'fight', at: ff.hpAt }) });
-          for (const k of ff.poolsMoved || []) {
-            if (!VITAL_POOLS.includes(k) || typeof ff[k] !== 'number') continue;
-            steps.push({ t: ord(ff.poolAt || ff.hpAt), k: 0, run: () => {
+          for (const c of cols) {
+            const k = c.field;
+            if (!(ff.poolsMoved || []).includes(k) || typeof ff[k] !== 'number') continue;
+            // each pool at the time it moved (fight.js stamps `poolAt` per pool; an older row holds one time for all)
+            const pa = ff.poolAt && typeof ff.poolAt === 'object' ? ff.poolAt[k] : ff.poolAt;
+            steps.push({ t: ord(pa || ff.hpAt), k: 0, run: () => {
               pool[k] = { fig: ff[k], source: 'fight' };
-              if (POOL_MAX[k] && typeof ff[POOL_MAX[k]] === 'number') maxima[POOL_MAX[k]] = ff[POOL_MAX[k]];
+              if (c.max && typeof ff[c.max] === 'number') maxima[c.max] = ff[c.max];
             } });
           }
           // the text is the row's now: a status cleared since is gone already, and its clear below takes it off
@@ -676,12 +705,12 @@
       }
       // a long rest moves the HP the GM had set aside, so an HP still set was typed after it
       if (setHp) steps.push({ t: covered ? [ord(when('hp')), ord(state.end.longRestAt)].sort().pop() : ord(when('hp')), k: 3, run: () => Object.assign(fig, { hp: o.hp, source: 'end', at: when('hp') || null }) });
-      for (const k of VITAL_POOLS) {
+      for (const { field: k } of cols) {
         if (o[k] !== undefined && o[k] !== '') steps.push({ t: ord(when(k)), k: 3, run: () => { pool[k] = { fig: o[k], source: 'end' }; } });
       }
       steps.sort((x, y) => (x.t < y.t ? -1 : x.t > y.t ? 1 : x.k - y.k)).forEach((x) => x.run());
       const pools = {};
-      for (const k of VITAL_POOLS) { pools[k] = pool[k].fig; pools[`${k}Source`] = pool[k].source; }
+      for (const { field: k } of cols) { pools[k] = pool[k].fig; pools[`${k}Source`] = pool[k].source; }
       return { restSkipped, rowId: r.rowId, ally: r.ally, copy: r.copy, note: r.note, name: r.name,
         hp: fig.hp, max: fig.max, conditions: fig.conditions, ...pools, ...maxima,
         set: has(state.end.vitals, r.rowId), rest: fig.source === 'rest', setHp: fig.source === 'end',
@@ -693,13 +722,15 @@
   // the sheet's maximum, so HP, MP, SAN and FP are held to the maxima the site's readers give the PC (`hpMax`, `mpMax`,
   // `sanMax`, `fpMax`), and to 0 below, except GURPS's HP and FP, which go below 0. An ally, a blank or a figure
   // that is not a number (kept as typed, as before), and D&D (as before 6b) are never refused.
-  const SHEET_MAX = { hp: 'hpMax', mp: 'mpMax', san: 'sanMax', fp: 'fpMax' };
   function endFigureProblem(model, rowId, field, value) {
     const rules = (model && model.rules) || {};
     if (!rules.family || rules.family === 'dnd' || typeof value !== 'number' || !Number.isFinite(value)) return null;
     const pc = ((model && model.pcs) || []).find((p) => p.note === rowId);
     if (!pc) return null;
-    const max = SHEET_MAX[field] ? pc[SHEET_MAX[field]] : null;
+    // the column's max field; HP's is `max` on a vitals row and `hpMax` on a PC's sheet
+    const col = vitalColumns(model).find((c) => c.field === field);
+    const sheetMax = col && col.max ? (col.max === 'max' ? 'hpMax' : col.max) : null;
+    const max = sheetMax ? pc[sheetMax] : null;
     if (typeof max === 'number' && value > max) return `over the sheet's max (${max}): not saved`;
     const below = rules.family === 'gurps' && (field === 'hp' || field === 'fp');
     if (value < 0 && !below) return 'below 0: not saved';
@@ -762,12 +793,13 @@
       .map((v) => {
         // a pool goes into the record only when a fight or the end panel set it, as HP; its max goes with it
         const pools = {};
-        for (const k of VITAL_POOLS) {
+        for (const c of poolColumns(model)) {
+          const k = c.field;
           if (v[`${k}Source`] === 'note' || v[k] === null || v[k] === undefined) continue;
-          // Luck is a PC's alone (the ontology's `pcs_only`): never an ally's
-          if (k === 'luck' && v.ally) continue;
+          // a `pcs_only` column (Luck) is never an ally's
+          if (c.pcs_only && v.ally) continue;
           pools[k] = v[k];
-          if (POOL_MAX[k]) pools[POOL_MAX[k]] = v[POOL_MAX[k]] ?? null;
+          if (c.max) pools[c.max] = v[c.max] ?? null;
         }
         return { rowId: v.rowId, ally: v.ally, copy: v.copy, note: v.note, name: v.name,
           hp: v.source === 'note' ? null : v.hp, max: v.max, conditions: v.conditions, source: v.source, at: v.at, ...pools };
@@ -902,5 +934,5 @@
     return left.length ? { fight: f.id, title: f.title || '', rows: left } : null;
   }
 
-  return { emptyState, upgrade, reduce, derive, cyclePoint, armClick, castSearch, handoutName, planTarget, placeInFight, fightFigures, endFigureProblem };
+  return { emptyState, upgrade, reduce, derive, cyclePoint, armClick, castSearch, handoutName, planTarget, placeInFight, fightFigures, endFigureProblem, vitalColumns, poolWords };
 }));

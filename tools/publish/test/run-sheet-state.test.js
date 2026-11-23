@@ -768,6 +768,25 @@ describe("vitals: each system's pools (Task 20)", () => {
     assert.strictEqual(rowOf(COC, s, IRIS).mp, 1);
   });
 
+  it("one time per pool: the fight moves MP, the end panel then sets MP, the fight then moves SAN: the end panel's MP holds", () => {
+    const FM = require('../lib/run-sheet/web/fight-math');
+    let s = RS.reduce(empty(), act({ type: 'move', pc: IRIS, to: { beat: COC.beats[0].key, spot: null, title: COC.beats[0].title } }), at2(0));
+    const built = FM.rowsForFight({ model: COC, derived: RS.derive(COC, s), state: s, beatKey: COC.beats[0].key, idBase: 'f1' });
+    s = RS.reduce(s, act({ id: 'f1', type: 'fightStart', beat: COC.beats[0].key, title: 'T', rules: COC.rules.fight, groups: built.groups, rows: built.rows, thresholds: [] }), at2(1));
+    const row = s.fight.rows.find((r) => r.note === IRIS);
+    s = RS.reduce(s, act({ type: 'hp', fight: 'f1', row: row.id, entry: 'm-3' }), at2(2));
+    s = RS.reduce(s, act({ type: 'endSet', vitals: { [IRIS]: { mp: 6 } } }), at2(3));
+    s = RS.reduce(s, act({ type: 'hp', fight: 'f1', row: row.id, entry: 's-2' }), at2(4));
+    const r = s.fight.rows.find((x) => x.note === IRIS);
+    assert.deepStrictEqual(r.poolAt, { mp: at2(2), san: at2(4) }, 'fight.js stamps each pool at its own time');
+    const v = rowOf(COC, s, IRIS);
+    assert.deepStrictEqual([v.mp, v.mpSource, v.san, v.sanSource], [6, 'end', 60, 'fight']);
+    // a row saved before 6b's fix round held one time for all its pools: still read, for every pool
+    const old = JSON.parse(JSON.stringify(s));
+    old.fight.rows.find((x) => x.note === IRIS).poolAt = at2(4);
+    assert.deepStrictEqual([rowOf(COC, old, IRIS).mp, rowOf(COC, old, IRIS).mpSource], [10, 'fight']);
+  });
+
   it('a GURPS fight that took FP below 0 is recorded with its max', () => {
     const s = fought(empty(), ORRIN, { hp: 12, max: 12, fp: 11, fpMax: 11 }, { hp: -3, fp: -2 }, at2(3));
     const v = recOf(GURPS, s, ORRIN);

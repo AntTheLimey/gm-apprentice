@@ -123,14 +123,15 @@ function rows(entries, beatKey, carried = null, system = DND) {
     const { info, nums } = e;
     const got = e.side.ally && carried && e.notePath ? carried.of(e.notePath, i) : null;
     const hpNow = got && got.hp !== null ? got.hp : null;
+    const sysRow = system.foeRow(nums);
     return {
       key: keys[k++], note: e.notePath || null, name: total.get(idOf(e)) > 1 ? `${info.name} ${i}` : info.name,
       ally: e.side.ally, allyFrom: e.side.allyFrom, allyBy: e.side.allyBy, ac: nums.ac, hp: nums.hp, init: nums.init,
       legendaryResistance: nums.legendaryResistance, legendaryActions: nums.legendaryActions,
       recharge: nums.recharge, rechargeAt: nums.rechargeAt, lair: nums.lair, lairActions: nums.lairActions, stats: info.stats,
-      ...system.foeRow(nums),
+      ...sysRow,
       hpNow, carriedFrom: hpNow === null ? null : got.log, prepNote: e.prepNote, hpStart: e.hpStart,
-      ...carriedPools(got, system.foeRow(nums)),
+      ...carriedPools(got, sysRow),
       ...(e.fpStart == null ? {} : { fpStart: e.fpStart }),
       ...(e.benched ? { benched: true } : {}),
     };

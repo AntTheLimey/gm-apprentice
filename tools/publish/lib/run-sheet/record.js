@@ -32,10 +32,10 @@ const vitalsHead = (cols) => {
   const names = ['Who', ...cols.map((c) => c.column)];
   return `| ${names.join(' | ')} |\n|${' --- |'.repeat(names.length)}`;
 };
-const columnsOf = (model) => (model && model.rules && Array.isArray(model.rules.vitals) && model.rules.vitals.every((c) => c && typeof c === 'object')
-  ? model.rules.vitals : vitalsColumns(model && model.system));
-// A pool's max, by its field (Luck has none).
-const MAX_OF = { hp: 'max', mp: 'mpMax', san: 'sanMax', fp: 'fpMax' };
+const columnsOf = (model) => {
+  const cols = RS.vitalColumns(model);
+  return cols.length ? cols : vitalsColumns(model && model.system);
+};
 
 const lf = (s) => String(s == null ? '' : s).replace(/\r\n?/g, '\n');
 const one = (s) => String(s == null ? '' : s).replace(/\s+/g, ' ').trim();
@@ -114,8 +114,7 @@ function tableLogBody(model, state, { linkFor: link, timeOf = localTime } = {}) 
       const v = o.value;
       const hp = v.hp !== null ? `HP ${one(v.hp)}${v.max !== null ? `/${one(v.max)}` : ''}` : v.max !== null ? `HP max ${one(v.max)}` : '';
       // the system's pools the GM set on the end panel (MP, SAN, Luck, FP), by their column words
-      const pools = columnsOf(model).filter((c) => c.field !== 'hp' && c.field !== 'conditions' && v[c.field] !== undefined && v[c.field] !== null && v[c.field] !== '')
-        .map((c) => `${c.column} ${one(v[c.field])}`);
+      const pools = RS.poolWords(model, v);
       return `Vitals for ${link(o.note)}${o.copy > 1 ? ` ${o.copy}` : ''}: ${[hp, ...pools, one(v.conditions)].filter(Boolean).join(', ')}; no longer in the Plan`;
     }
     const uses = o.value.map((v) => (v.startsWith('stood: ') ? `${link(v.slice(7))} stood there` : v));
@@ -181,7 +180,7 @@ function tableLogBody(model, state, { linkFor: link, timeOf = localTime } = {}) 
       if (c.pcs_only && v.ally) return '';
       const now = v[c.field];
       if (!set(now)) return '';
-      const max = MAX_OF[c.field] && v[MAX_OF[c.field]];
+      const max = c.max && v[c.max];
       let out = c.shape === 'current/max' && set(max) ? `${figure(now)}/${figure(max)}` : figure(now);
       // a figure from a fight says when it was taken; one set on the end panel or by a long rest is bare (decision 17)
       if (c.field === 'hp' && v.source === 'fight' && v.at) out += ` (after the fight, ${timeOf(v.at)})`;

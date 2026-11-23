@@ -594,7 +594,7 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
         const blank = {};
         for (const f of CARRIED) { figs[f] = new Map(); blank[f] = new Set(); }
         const t = readTableLog(index.read(log).body);
-        if (t.unnamed) warnings.push({ kind: 'table-log', note: log, text: `${VITALS}: a table's header row names none of Who, HP or Conditions, so it is not read: nobody starts from it` });
+        if (t.unnamed) warnings.push({ kind: 'table-log', note: log, text: `${VITALS}: a table's header row names no column the sheet reads, so it is not read: nobody starts from it` });
         // An empty HP cell is nothing recorded: the walk goes on past it. An unreadable one stops it,
         // for its own ally and copy only.
         const rowKey = (who, copy) => `${low(who)}#${copy > 1 ? copy : 1}`;

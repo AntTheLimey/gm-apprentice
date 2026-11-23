@@ -1606,6 +1606,11 @@ describe("the end panel's vitals columns per system (step 6b Task 20), by real i
         await until(page, 'p.saved === "Saved"');
         await page.sleep(400);
         assert.strictEqual(await page.evaluate(`document.querySelector(${q(hp)}).value`), '12');
+        // the saved HP changed by another route (another window sets 8): the refused 12 goes, the box shows what is saved
+        await fromOther(run, [{ type: 'endSet', vitals: { [IRIS]: { hp: 8 } } }]);
+        await page.waitFor(`document.querySelector(${q(hp)}).value === '8'`, 3000);
+        assert.strictEqual(await page.evaluate(`document.querySelector(${q(hp)}).getAttribute('aria-invalid')`), null);
+        assert.strictEqual(await text(page, '#sheet .vt .badnum'), null);
         // a figure in range clears the mark and is saved
         await typeVital(page, hp, '9');
         await settled(page);

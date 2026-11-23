@@ -328,6 +328,17 @@
     if (d.dodge !== undefined) { r.dodge = d.dodge; r.from.dodge = d.from.dodge; }
   }
 
+  // When each pool on a row last moved: `poolAt` is { fp, mp, san, luck, er } -> time, one per pool, so the vitals
+  // replay each at its own time (state.js vitalRows). A row saved before held one time for all, a string: it is
+  // kept for the pools this entry does not move.
+  const POOL_KEYS = ['fp', 'mp', 'san', 'luck', 'er'];
+  function stampPool(r, key, at) {
+    const was = r.poolAt;
+    const own = was && typeof was === 'object' ? { ...was } : (typeof was === 'string' ? Object.fromEntries(POOL_KEYS.map((k) => [k, was])) : {});
+    own[key] = at;
+    r.poolAt = own;
+  }
+
   // An entry into a pool other than HP (CoC's `m-4`, `s-6`; GURPS's `f-8`): it stops at the pool's floor and cap
   // (FM.afterPool); reaching 0 is logged, and GURPS's Tired follows FP. A row with no figure in the pool is unchanged.
   function poolEntry(s, f, r, e, at) {
@@ -337,7 +348,7 @@
     const was = r[pool.key];
     r[pool.key] = next;
     touch(r, at);
-    r.poolAt = at;
+    stampPool(r, pool.key, at);
     if (was > 0 && next <= 0) say(s, f, at, `${nameOf(s, f, r)}: ${pool.label || pool.key} ${next === 0 && isNum(pool.floor) && pool.floor === 0 ? '0' : '0 or less'}.`);
     settleTired(s, f, r, at);
     // CoC (Task 18): a SAN loss this big in one entry brings the INT roll's card
@@ -1120,7 +1131,7 @@
       }
       const before = r.hp;
       const maxBefore = r.max;
-      const fpBefore = r.fp;
+      const poolsBefore = POOL_KEYS.map((k) => r[k]);
       const iniBefore = FM.initOf(r, rules);
       for (const k of STAT_FIELDS[a.key]) {
         if (has(FOLLOWS, k)) fitMax(r, k, v); else r[k] = v;
@@ -1130,7 +1141,7 @@
       if (rules.initiative === 'speed') deriveStats(r);
       r.typed = true;
       if (r.hp !== before || r.max !== maxBefore) touchHp(r, at); else touch(r, at);
-      if (r.fp !== fpBefore) r.poolAt = at;
+      POOL_KEYS.forEach((k, i) => { if (r[k] !== poolsBefore[i]) stampPool(r, k, at); });
       // DEX or Speed typed is the latest initiative entry; another stat changes the initiative only when the figure
       // it is worked out from moved (an ST typed never undoes a typed initiative)
       const ini = FM.initOf(r, rules);
