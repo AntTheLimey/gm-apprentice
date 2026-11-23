@@ -49,6 +49,8 @@ const DAMAGE_SIDES_MAX = 1000;
 const DAMAGE_DICE_LIMIT = 50;
 const DAMAGE_MOD_LIMIT = 99;
 const REFUSAL = "damage is dice like 2d6+1, d8, 1D8+1D4, 2d6-1d4, d% or GURPS's 2d+1";
+// A well-shaped entry over a limit says which limit (U+2212 is the minus sign).
+const OVER_LIMIT = 'damage is at most 50 dice, with a number from \u221299 to +99';
 
 // -> { groups: [{ count, sides, sign }], mod }
 function parseDamage(notation) {
@@ -72,7 +74,8 @@ function parseDamage(notation) {
     if (count < 1 || sides < DAMAGE_SIDES_MIN || sides > DAMAGE_SIDES_MAX) throw bad();
     groups.push({ count, sides, sign });
   }
-  if (!groups.length || groups.reduce((n, g) => n + g.count, 0) > DAMAGE_DICE_LIMIT || Math.abs(mod) > DAMAGE_MOD_LIMIT) throw bad();
+  if (!groups.length) throw bad();
+  if (groups.reduce((n, g) => n + g.count, 0) > DAMAGE_DICE_LIMIT || Math.abs(mod) > DAMAGE_MOD_LIMIT) throw new RangeError(OVER_LIMIT);
   return { groups, mod };
 }
 

@@ -123,6 +123,11 @@ describe('dice: damage dice', () => {
     for (const bad of ['d', '', '0d6', 'd1', 'd1001', '51d6', '2d6+100', '4d6kh3', '2d6+', 'banana', '2x+1', '3', '3-1', '3d%x', 'd%%', null, 7]) assert.throws(() => rollDamage(bad), RangeError, String(bad));
     assert.throws(() => rollDamage('2d', { type: 7 }), RangeError);
   });
+  it('a well-shaped entry over a limit says which limit; ill-shaped text names the forms', () => {
+    const limit = 'damage is at most 50 dice, with a number from \u221299 to +99';
+    for (const over of ['51d6', '30d6+21d4', '2d6+100', '2d6-100', '100+d6']) assert.throws(() => rollDamage(over), { message: limit }, over);
+    for (const ill of ['d', '0d6', 'd1', 'd1001', '2d6+', 'banana', '4d6kh3', '3']) assert.throws(() => rollDamage(ill), { message: /^damage is dice like 2d6\+1,/ }, ill);
+  });
   it('the refusal names the accepted forms', () => {
     assert.throws(() => rollDamage('banana'), { message: "damage is dice like 2d6+1, d8, 1D8+1D4, 2d6-1d4, d% or GURPS's 2d+1" });
   });

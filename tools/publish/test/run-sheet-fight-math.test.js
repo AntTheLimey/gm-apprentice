@@ -1417,11 +1417,11 @@ test('the manoeuvre chips: nine names, every key the defences and Do Nothing rea
 test('the page and the server read the same dice', () => {
   const { parseDamage } = require('../lib/dice');
   const hit = (t) => M.parseEntry(t, GURPS);
-  const both = ['2d6+1', 'd8', 'D20', '1D8+1D4', '2d6-1d4', 'd%', 'D%', '3d%', '2d', '2d+1', '1d-1', '3d', 'd6+2', '1d8+1d4+2', '3-1d4', '2+d6', 'd2', 'd1000', '50d6'];
+  const both = ['-d6', '2+3d6', '2d6+1d', '2d6+1', 'd8', 'D20', '1D8+1D4', '2d6-1d4', 'd%', 'D%', '3d%', '2d', '2d+1', '1d-1', '3d', 'd6+2', '1d8+1d4+2', '3-1d4', '2+d6', 'd2', 'd1000', '50d6'];
   for (const t of both) {
     assert.doesNotThrow(() => parseDamage(t), `server reads ${t}`);
     assert.equal(M.hitWords(`${t} cr torso`, GURPS).amount, t, `page takes ${t}`);
-    assert.deepEqual(hit(`${t} cr torso`), { pool: 'hp', kind: 'damage', n: null, dice: t.toLowerCase(), hit: { type: 'cr', location: 'torso', side: null } }, `hit ${t}`);
+    assert.deepEqual(hit(`${t} cr torso`), { pool: 'hp', kind: 'damage', n: null, dice: t.toLowerCase().replace(/^-/, ''), hit: { type: 'cr', location: 'torso', side: null } }, `hit ${t}`); // a leading minus is the damage sign, as for -9
   }
   // the page sends these on; the server answers with its sentence
   for (const t of ['d1', 'd1001', '51d6', '2d6+100', '0d6']) {
@@ -1431,4 +1431,30 @@ test('the page and the server read the same dice', () => {
   // not dice at all: the page keeps them out, so the server never hears them
   for (const t of ['d', '2d6+', '4d6kh3', 'banana']) assert.equal(hit(`${t} cr`), null, `page keeps ${t}`);
   assert.equal(M.parseEntry('d6'), null);
+});
+
+// Generated: every shape of count, sides, second term and number. The page never keeps out a form the server accepts,
+// and what the page sends the server either reads or refuses with one of its two sentences.
+test('the page and the server agree on every generated dice shape', () => {
+  const { parseDamage } = require('../lib/dice');
+  const FORMS = "damage is dice like 2d6+1, d8, 1D8+1D4, 2d6-1d4, d% or GURPS's 2d+1";
+  const LIMIT = 'damage is at most 50 dice, with a number from \u221299 to +99';
+  const counts = ['', '1', '2', '50', '51'];
+  const sides = ['', '2', '6', '100', '1000', '1001', '%'];
+  let n = 0;
+  let accepted = 0;
+  for (const lead of ['', '2+']) for (const c of counts) for (const sd of sides) for (const second of ['', '+d4', '-d4']) for (const tail of ['', '+3', '-3']) {
+    const t = `${lead}${c}d${sd}${second}${tail}`;
+    n++;
+    let ok = true;
+    let said = null;
+    try { parseDamage(t); } catch (e) { ok = false; said = e.message; assert.ok(e instanceof RangeError, t); assert.ok([FORMS, LIMIT].includes(said), `${t}: ${said}`); }
+    const w = M.hitWords(`${t} cr`, GURPS);
+    const taken = w.dice !== null && w.amount === t && w.rest.length === 0;
+    if (ok) { accepted++; assert.ok(taken, `the page keeps out ${t}, which the server reads`); }
+    // taken by the page and refused by the server is fine: the server's sentence reaches the GM
+    if (!taken) assert.equal(ok, false, `${t}: the page keeps it out, so the server must refuse it`);
+  }
+  assert.equal(n, 2 * 5 * 7 * 3 * 3);
+  assert.ok(accepted > 100, `${accepted} accepted shapes`);
 });
