@@ -198,8 +198,10 @@ scripts work locally. For publish tool changes, run the publish tool test suite.
   runs them. It needs `pytest-xdist>=3,<4` (CI installs the same); one core
   takes about three times as long. Without it `-n auto` is an error, and
   `| tail` hides it and exits 0, so pipe only under `set -o pipefail`
-- Publish tool tests: `cd tools/publish && npx -y -p node@22 node --test`,
-  on CI's Node 22. The browser tests share one Chrome per test file
+- Publish tool tests: `cd tools/publish && npx -y -p node@22 npm test`, as
+  CI runs them on Node 22. Never a bare `node --test`: it also runs every
+  helper and fixture script under `test/`. The browser tests share one
+  Chrome per test file
 - Benchmarks live in `tests/benchmark-campaign/` and `tests/benchmark-questions/`
   — do not delete these
 - One benchmark run is enough; fix issues before benchmarking; use A/B

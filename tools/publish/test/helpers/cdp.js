@@ -305,12 +305,13 @@ async function withPage({ width = 1449, height = 762, chrome = findChrome(), ste
           },
           // Text into whatever has focus (Input.insertText: one insert, as a paste or an input method gives).
           type: (text) => s('Input.insertText', { text }),
-          // Another tab in the same browser, opened on `url` (its own event streams, its own page).
+          // Another window in the same browser context, opened on `url` (its own event streams, its own page, the
+          // same storage). A window, as Chrome sizes only a new window: a second tab in the context refuses width.
           // A tab that never answers its setup (as a fresh launch can, #852) is closed and made once more.
           async newTab(url) {
             let tab = null;
             for (let attempt = 1; !tab; attempt++) {
-              const { targetId } = await send('Target.createTarget', { url: 'about:blank', browserContextId: ctx, width, height });
+              const { targetId } = await send('Target.createTarget', { url: 'about:blank', browserContextId: ctx, newWindow: true, width, height });
               try {
                 const att = await send('Target.attachToTarget', { targetId, flatten: true });
                 tab = await makePage(att.sessionId);
