@@ -2943,3 +2943,175 @@ describe('GURPS manoeuvre chip (step 6b Task 15)', () => {
     }
   });
 });
+
+describe('CoC melee on the target\'s row (step 6b Task 16)', () => {
+  const { systemFor } = require('../lib/run-sheet/systems');
+  const CM = require('../lib/run-sheet/web/coc-math');
+  const COC = systemFor('coc-7e').describe().fight;
+  const begin = (list, rules = COC) => RS.reduce(fresh(), { id: 'f1', type: 'fightStart', title: 'T', ...(rules ? { rules } : {}), rows: list.map((o, i) => M.blankRow({ id: `r${i + 1}`, ...o })) }, now());
+  const G = (s, a) => RS.reduce(s, { id: nextId(), fight: 'f1', ...a }, now());
+  const named = (s, name) => s.fight.rows.find((r) => r.name === name);
+  const go = (s) => G(s, { type: 'fightNext', from: s.fight.turn, round: s.fight.round });
+  const lines = (s) => s.events.filter((e) => e.fight).map((e) => e.text);
+  // the server's d100 as rollPercent gives it, against `target` with the dice asked
+  const d100 = (kept, target, level, dice = { bonus: 0, penalty: 0 }) => ({ tens: [Math.floor(kept / 10) * 10], units: kept % 10, kept, target, difficulty: 'regular', needed: target, level, passed: level !== 'fail' && level !== 'fumble', fumbleFrom: 96, bonus: dice.bonus, penalty: dice.penalty, asked: dice });
+  // an exchange as the page sends it: the dice the stepper shows (the row's own, unless given)
+  const melee = (s, from, to, response, attack, defence, net) => {
+    const D = named(s, to);
+    const n = net === undefined ? CM.attackDice(D, COC.coc).net : net;
+    return G(s, { type: 'melee', attacker: named(s, from).id, defender: D.id, response, dice: CM.diceOfNet(n, COC.coc), attack, defence });
+  };
+  const rows = () => [
+    { name: 'Iris', kind: 'pc', ini: 55, dex: 55, hp: 11, max: 11, dodge: 27 },
+    { name: 'Cultist 1', ini: 50, dex: 50, hp: 12, max: 12, fighting: 40, dodge: 20, attacks: 1 },
+    { name: 'Cultist 2', ini: 45, dex: 45, hp: 12, max: 12, fighting: 40, dodge: 20, attacks: 1 },
+    { name: 'Walker', ini: 40, dex: 40, hp: 14, max: 14, fighting: 45, dodge: 25, attacks: 2 },
+  ];
+
+  it('Iris taps Regular, Cultist 2 Fights Back 31 Regular: a tie, Iris hits, one line', () => {
+    let s = go(begin(rows()));
+    s = melee(s, 'Iris', 'Cultist 2', 'fightBack', { level: 'regular' }, d100(31, 40, 'regular'));
+    assert.deepEqual(lines(s).slice(-1), ['Iris: Regular; Cultist 2 Fights Back: Regular (31): a tie: Iris hits Cultist 2.']);
+    assert.equal(named(s, 'Cultist 2').meleeDefences, 1);
+    assert.deepEqual(s.fight.melee, { by: named(s, 'Iris').id, on: named(s, 'Cultist 2').id, round: 1 });
+  });
+
+  it('Fight Back won by the defender opens its damage; a won Dodge opens none', () => {
+    let s = go(begin(rows()));
+    s = melee(s, 'Iris', 'Cultist 1', 'fightBack', { level: 'regular' }, d100(15, 40, 'hard'));
+    assert.deepEqual(s.fight.melee, { by: named(s, 'Cultist 1').id, on: named(s, 'Iris').id, round: 1 });
+    assert.equal(lines(s).slice(-1)[0], 'Iris: Regular; Cultist 1 Fights Back: Hard (15): Cultist 1 hits Iris.');
+    s = melee(s, 'Iris', 'Cultist 2', 'dodge', { level: 'regular' }, d100(20, 20, 'regular'));
+    assert.equal(s.fight.melee, null);
+    assert.equal(lines(s).slice(-1)[0], 'Iris: Regular; Cultist 2 Dodges: Regular (20): a tie: Cultist 2 dodges.');
+  });
+
+  it('both fail: nothing, and the defence still counts', () => {
+    let s = go(begin(rows()));
+    s = melee(s, 'Iris', 'Cultist 1', 'fightBack', { level: 'fail' }, d100(88, 40, 'fail'));
+    assert.equal(s.fight.melee, null);
+    assert.equal(lines(s).slice(-1)[0], 'Iris: Fail; Cultist 1 Fights Back: Fail (88): both fail: nothing happens.');
+    assert.equal(named(s, 'Cultist 1').meleeDefences, 1);
+    assert.deepEqual([named(s, 'Iris').hp, named(s, 'Cultist 1').hp], [11, 12]);
+  });
+
+  it('outnumbered: the second defence in a round puts +1 bonus die on, by default; the line names it', () => {
+    let s = go(begin(rows()));
+    s = melee(s, 'Iris', 'Cultist 2', 'dodge', { level: 'regular' }, d100(50, 20, 'fail'));
+    assert.deepEqual(CM.attackDice(named(s, 'Cultist 2'), COC.coc), { net: 1, why: ['outnumbered'] });
+    s = go(s); // Cultist 1 acts
+    s = melee(s, 'Cultist 1', 'Cultist 2', 'fightBack', d100(30, 40, 'regular', { bonus: 1, penalty: 0 }), d100(60, 40, 'fail'));
+    assert.equal(lines(s).slice(-1)[0], 'Cultist 1, +1 bonus die (outnumbered): Regular (30); Cultist 2 Fights Back: Fail (60): Cultist 1 hits Cultist 2.');
+  });
+
+  it('the result line names the dice given: set by hand, more or none', () => {
+    let s = go(begin(rows()));
+    s = melee(s, 'Iris', 'Cultist 2', 'dodge', { level: 'regular' }, d100(50, 20, 'fail'), 2);
+    assert.equal(lines(s).slice(-1)[0], 'Iris, +2 bonus dice (set by hand): Regular; Cultist 2 Dodges: Fail (50): Iris hits Cultist 2.');
+    s = melee(s, 'Iris', 'Cultist 2', 'dodge', { level: 'regular' }, d100(50, 20, 'fail'), 0);
+    assert.equal(lines(s).slice(-1)[0], 'Iris, no dice (set by hand): Regular; Cultist 2 Dodges: Fail (50): Iris hits Cultist 2.');
+  });
+
+  it('one tap turns outnumbered off for that row, and on again', () => {
+    let s = go(begin(rows()));
+    s = melee(s, 'Iris', 'Cultist 2', 'dodge', { level: 'regular' }, d100(50, 20, 'fail'));
+    s = G(s, { type: 'outnumbered', row: named(s, 'Cultist 2').id, off: true });
+    assert.equal(named(s, 'Cultist 2').outnumberedOff, true);
+    assert.equal(CM.attackDice(named(s, 'Cultist 2'), COC.coc).net, 0);
+    s = G(s, { type: 'outnumbered', row: named(s, 'Cultist 2').id, off: false });
+    assert.equal(CM.attackDice(named(s, 'Cultist 2'), COC.coc).net, 1);
+    assert.equal(named(s, 'Cultist 1').outnumberedOff, false);
+  });
+
+  it('a two-attack creature defends twice first', () => {
+    let s = go(begin(rows()));
+    s = melee(s, 'Iris', 'Walker', 'fightBack', { level: 'fail' }, d100(70, 45, 'fail'));
+    assert.equal(CM.attackDice(named(s, 'Walker'), COC.coc).net, 0);
+    s = melee(s, 'Iris', 'Walker', 'fightBack', { level: 'fail' }, d100(70, 45, 'fail'));
+    assert.equal(CM.attackDice(named(s, 'Walker'), COC.coc).net, 1);
+  });
+
+  it('the count resets at the round\'s start, not on the row\'s turn', () => {
+    let s = go(begin(rows())); // Iris
+    s = melee(s, 'Iris', 'Cultist 2', 'dodge', { level: 'fail' }, d100(70, 20, 'fail'));
+    s = go(go(s)); // Cultist 2's own turn
+    assert.equal(s.fight.turn, named(s, 'Cultist 2').id);
+    assert.equal(named(s, 'Cultist 2').meleeDefences, 1, 'its turn keeps the count');
+    s = go(s); // Walker
+    s = go(s); // round 2, Iris
+    assert.equal(s.fight.round, 2);
+    assert.equal(named(s, 'Cultist 2').meleeDefences, 0);
+  });
+
+  it('a shot does not add to defended: damage typed on the row leaves the count and the dice', () => {
+    let s = go(begin(rows()));
+    s = G(s, { type: 'hp', row: named(s, 'Cultist 2').id, entry: '-5' });
+    assert.equal(named(s, 'Cultist 2').meleeDefences, 0);
+    assert.equal(CM.attackDice(named(s, 'Cultist 2'), COC.coc).net, 0);
+  });
+
+  it('a Prone row\'s next melee attacker gets +1 bonus die', () => {
+    let s = go(begin(rows()));
+    s = G(s, { type: 'status', row: named(s, 'Cultist 1').id, add: 'Prone' });
+    assert.deepEqual(named(s, 'Cultist 1').conds, ['Prone']);
+    s = melee(s, 'Iris', 'Cultist 1', 'fightBack', { level: 'hard' }, d100(35, 40, 'regular'));
+    assert.equal(lines(s).slice(-1)[0], 'Iris, +1 bonus die (prone): Hard; Cultist 1 Fights Back: Regular (35): Iris hits Cultist 1.');
+  });
+
+  it('a PC side is never rolled: its level is a tap', () => {
+    let s = go(begin(rows()));
+    const was = clone(s.fight);
+    // a d100 sent for Iris is dropped, and so is a tap for the cultist
+    s = melee(s, 'Iris', 'Cultist 1', 'fightBack', d100(20, 50, 'regular'), d100(35, 40, 'regular'));
+    s = melee(s, 'Iris', 'Cultist 1', 'fightBack', { level: 'hard' }, { level: 'hard' });
+    // Cultist 1 attacks Iris, who Dodges: the cultist's roll, Iris's tap
+    s = melee(s, 'Iris', 'Cultist 1', 'fightBack', { level: 'great' }, d100(35, 40, 'regular'));
+    assert.deepEqual(s.fight, was);
+    s = melee(s, 'Cultist 1', 'Iris', 'dodge', d100(35, 40, 'regular'), { level: 'extreme' });
+    assert.equal(lines(s).slice(-1)[0], 'Cultist 1: Regular (35); Iris Dodges: Extreme: Iris dodges.');
+  });
+
+  it('a roll against a figure that moved, an Out or benched side, itself, or dice over 2 is dropped', () => {
+    let s = go(begin(rows()));
+    const was = clone(s.fight);
+    s = melee(s, 'Iris', 'Cultist 1', 'fightBack', { level: 'hard' }, d100(35, 45, 'regular'));
+    s = melee(s, 'Iris', 'Cultist 1', 'dodge', { level: 'hard' }, d100(35, 40, 'regular'));
+    s = melee(s, 'Cultist 1', 'Cultist 1', 'dodge', d100(35, 40, 'regular'), d100(15, 20, 'regular'));
+    s = G(s, { type: 'melee', attacker: named(s, 'Cultist 1').id, defender: named(s, 'Iris').id, response: 'dodge', dice: { bonus: 3, penalty: 0 }, attack: d100(35, 40, 'regular', { bonus: 3, penalty: 0 }), defence: { level: 'hard' } });
+    assert.deepEqual(s.fight, was);
+    s = G(s, { type: 'out', row: named(s, 'Cultist 2').id, on: true });
+    const out = clone(s.fight);
+    s = melee(s, 'Iris', 'Cultist 2', 'dodge', { level: 'hard' }, d100(15, 20, 'regular'));
+    assert.deepEqual(s.fight, out);
+  });
+
+  it('D&D and GURPS take no melee or outnumbered action', () => {
+    for (const rules of [null, systemFor('gurps-4e').describe().fight]) {
+      let s = begin(rows(), rules);
+      const was = s.fight.rows;
+      s = melee(s, 'Iris', 'Cultist 1', 'fightBack', { level: 'hard' }, d100(35, 40, 'regular'), 0);
+      s = G(s, { type: 'outnumbered', row: named(s, 'Cultist 1').id, off: true });
+      assert.deepEqual(s.fight.rows, was);
+    }
+  });
+
+  it('GURPS\'s defended is left alone by a CoC exchange', () => {
+    let s = go(begin(rows()));
+    s = melee(s, 'Iris', 'Cultist 1', 'fightBack', { level: 'hard' }, d100(35, 40, 'regular'));
+    assert.equal(named(s, 'Cultist 1').defended, 0);
+  });
+
+  it('melee state stays off the players\' screen', () => {
+    const { forPlayers } = require('../lib/run-sheet/players');
+    // Iris is the fixture's Ada, standing at the Gate, so her group shows the order
+    const list = rows().map((o) => (o.name === 'Iris' ? { ...o, note: ADA, name: 'Ada Moss' } : o));
+    let s = move(fresh(), ADA, GATE);
+    s = RS.reduce(s, { id: 'f1', type: 'fightStart', title: 'T', rules: COC, rows: list.map((o, i) => M.blankRow({ id: `r${i + 1}`, ...o })) }, now());
+    s = go(s);
+    s = melee(s, 'Ada Moss', 'Cultist 1', 'fightBack', { level: 'hard' }, d100(35, 40, 'regular'));
+    s = G(s, { type: 'outnumbered', row: named(s, 'Cultist 1').id, off: true });
+    const text = JSON.stringify(forPlayers(model, s, { withheldWords: model.withheldWords, picId: () => null }));
+    assert.match(text, /"order":\{"round":1/, 'the order is there');
+    assert.doesNotMatch(text, /meleeDefences|outnumbered|melee|Fights Back|attacks|fighting|dodge/i);
+  });
+});

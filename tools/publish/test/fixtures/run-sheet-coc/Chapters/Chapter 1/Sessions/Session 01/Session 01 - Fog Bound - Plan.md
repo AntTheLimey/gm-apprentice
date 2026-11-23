@@ -69,6 +69,12 @@ The investigators land on the skerry at dusk and find the light dark.
 **Situation:** An older note of the fight.
 **Entities:** [[Warden Hale]], [[Brine Walker]]
 
+### Scene 5: The Net Loft
+**Place:** [[The Landing]]
+**Situation:** Two net menders put down their needles.
+**NPCs**
+- **[[Dock Cultist]] (2):** knives in their belts
+
 ## Contingency Scenes
 
 Scenes that fire on a player choice or a clock, not by default.

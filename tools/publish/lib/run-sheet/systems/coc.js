@@ -1,6 +1,7 @@
 'use strict';
 // Call of Cthulhu 7e (and the Regency variant) for the run sheet: a foe's HP, MP, SAN and DEX from any of the five
-// block shapes real vaults use (step 6b Task 3). No rules text ships; the two sums are the only rules here.
+// block shapes real vaults use (step 6b Task 3), and its combat figures (Task 16). No rules text ships; the two sums
+// are the only rules here, and `rules.coc`'s numbers are data with their page cites.
 // It fights (Task 7): `describe()` is D&D's shape with CoC's values for what is known so far.
 
 const path = require('node:path');
@@ -19,6 +20,8 @@ const ALIASES = {
   luck: /^Luck$/i, armour: /^(?:Armour|Armor)$/i, str: /^(?:STR|Strength)$/i, con: /^(?:CON|Constitution)$/i,
   siz: /^(?:SIZ|Size)$/i, pow: /^(?:POW|Power|Willpower)$/i, mov: /^(?:MOV|Move)$/i, int: /^(?:INT|Intelligence)$/i,
   app: /^(?:APP|Appearance)$/i, edu: /^(?:EDU|Education)$/i, db: /^(?:DB|Damage Bonus)$/i, build: /^Build$/i,
+  // the combat figures (Task 16): `Fighting (Brawl) 40`, `Brawl 40%`, `Firearms (Handgun) 30`, `Dodge 20%`
+  fighting: /^(?:Fighting|Brawl)$/i, firearms: /^Firearms?$/i, dodge: /^Dodge$/i, attacks: /^(?:Attacks|Attacks per round|Attacks\/round)$/i,
 };
 
 // `STR (Strength)` is STR; a key that is no CoC word is null.
@@ -28,12 +31,33 @@ function keyOf(raw) {
   return null;
 }
 
+// An attack line a block writes with a name of its own (`- Boat hook 45% (22/9), damage 1D6+DB`): its name and skill.
+// A firearm's name says so (`Pocket pistol`); any other is Fighting. Dodge and the named skills are pairs' (keyOf).
+const ATTACK_LINE = /^\s*[-*+]\s+(?:\*\*)?([^%\d*][^%\d]*?)(?:\*\*)?\s+(\d{1,3})\s*%.*\bdamage\b/i;
+const FIREARM = /\b(?:firearms?|handgun|pistol|revolver|rifle|shotgun|carbine|smg|submachine|machine[- ]gun|musket|flintlock|blunderbuss|derringer)\b/i;
+function attackLines(stats) {
+  const out = { fighting: [], firearms: [] };
+  for (const line of String(stats == null ? '' : stats).replace(/\r\n?/g, '\n').split('\n')) {
+    const m = ATTACK_LINE.exec(line);
+    if (!m || keyOf(m[1])) continue;
+    out[FIREARM.test(m[1]) ? 'firearms' : 'fighting'].push(Number(m[2]));
+  }
+  return out;
+}
+const highest = (list) => { const ok = list.filter((v) => typeof v === 'number' && Number.isFinite(v)); return ok.length ? Math.max(...ok) : null; };
+
 // A block's numbers: hp, mp and san are maxima; a value that is no number (`not tracked`, `n/a`, a dash) is null.
+// Fighting and Firearms are the highest the block writes; DB stays words (`+1D4`).
 function readNumbers(stats) {
   const ps = pairs(stats, keyOf);
   const n = (k) => leadingNumber(firstOf(ps, k));
+  const all = (k) => ps.filter(([key]) => key === k).map(([, v]) => leadingNumber(v));
+  const lines = attackLines(stats);
+  const db = firstOf(ps, 'db');
   const nums = { hp: n('hp'), mp: n('mp'), san: n('san'), dex: n('dex'), luck: n('luck'), armour: null,
-    str: n('str'), con: n('con'), siz: n('siz'), pow: n('pow'), from: {} };
+    str: n('str'), con: n('con'), siz: n('siz'), pow: n('pow'),
+    fighting: highest(all('fighting').concat(lines.fighting)), firearms: highest(all('firearms').concat(lines.firearms)),
+    dodge: n('dodge'), db: db === null ? null : (clean(db).replace(/\s*[·|].*$/, '') || null), build: n('build'), attacks: leadingNumber(String(firstOf(ps, 'attacks') || '').replace(/^per round\s*:?\s*/i, '')), from: {} };
   const armour = firstOf(ps, 'armour');
   if (armour) nums.armour = clean(armour).replace(/\s*[·|].*$/, '') || null;
   if (nums.hp === null && nums.con !== null && nums.siz !== null) { nums.hp = Math.floor((nums.con + nums.siz) / 10); nums.from.hp = 'from CON+SIZ'; }
@@ -75,22 +99,38 @@ function statusBlock(body) {
   return m ? m[1] : '';
 }
 
+// The combat figures a PC's sheet writes (Task 16), only those it has: Fighting and Firearms its highest
+// specialisations, Dodge, Build and the damage bonus from the Combat table.
+const COMBAT_KEYS = ['fighting', 'firearms', 'dodge', 'db', 'build', 'attacks'];
+const present = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== null && v !== undefined && v !== ''));
+const combatOfNums = (nums) => Object.fromEntries(COMBAT_KEYS.map((k) => [k, nums[k]]));
+function sheetCombat(model) {
+  const skills = Array.isArray(model.skills) ? model.skills : [];
+  const of = (re) => highest(skills.filter((s) => re.test(String(s.name || ''))).map((s) => num(s.reg)));
+  const c = model.combat || {};
+  return present({
+    fighting: of(/^(?:Fighting\b|Brawl$)/i), firearms: of(/^Firearms?\b/i), dodge: of(/^Dodge$/i),
+    build: leadingNumber(c.build), db: c.db ? clean(c.db) : null,
+  });
+}
+
 function readPc({ body, fm }) {
   try {
     const text = String(body == null ? '' : body).replace(/\r\n?/g, '\n');
-    const model = parseCoC(fm || {}, extractSections(text), 'coc-7e');
+    // the sheet's own skills only (no built-in list), so a figure is one the sheet writes
+    const model = parseCoC(fm || {}, extractSections(text), 'coc-7e', { skillList: false });
     const live = buildCoCLiveData(model, { campaignId: 'run-sheet', pcSlug: 'run-sheet' });
     const d = (live && live.hp && num(live.hp.max) !== null) ? live : null;
     if (d) {
       const now = (o) => (num(o.cur) !== null ? o.cur : (num(o.max) !== null ? o.max : null));
       return { numbers: { ...NONE, hpMax: d.hp.max, hpNow: now(d.hp), mpMax: num(d.mp.max), mpNow: now(d.mp),
-        sanMax: num(d.san.max), sanNow: now(d.san), luck: num(d.luck.cur), dex: num(d.dex) } };
+        sanMax: num(d.san.max), sanNow: now(d.san), luck: num(d.luck.cur), dex: num(d.dex), ...sheetCombat(model) } };
     }
     const block = statSection(text);
     const nums = readNumbers(`${block ? block.md : ''}\n${statusBlock(text)}`);
     if (nums.hp === null) return { numbers: { ...NONE }, note: NO_HP };
     return { numbers: { ...NONE, hpNow: nums.hp, hpMax: nums.hp, mpNow: nums.mp, mpMax: nums.mp, sanNow: nums.san, sanMax: nums.san,
-      luck: nums.luck, dex: nums.dex }, note: 'numbers from a one-line sheet (current = max)' };
+      luck: nums.luck, dex: nums.dex, ...present(combatOfNums(nums)) }, note: 'numbers from a one-line sheet (current = max)' };
   } catch (e) {
     return { numbers: { ...NONE }, note: `the sheet could not be read: ${firstLine(e)}` };
   }
@@ -102,8 +142,18 @@ function describeCoc(id) {
   const r = describeAs(id, id === 'coc-7e' ? 'Call of Cthulhu 7e' : SYSTEM_NAMES[id], true);
   // the order is DEX, plus 50 with a firearm ready (KR p409); HP never below 0 (KR p120); the entry box's pools:
   // MP never below 0 (KR p386), SAN never above 99 (KR p155, less Cthulhu Mythos, which the row does not hold)
+  // melee (Task 16): the tie winners by response (KR p103), the outnumbered die (KR p108), the Prone die on a melee
+  // attack (KR p128), the dice cap (KR p91, p407); Fight Back first on an NPC's or creature's row [CCx]. Tasks 17-19
+  // add to it.
+  const coc = {
+    tie: { dodge: 'defender', fightBack: 'attacker' },
+    outnumbered: { bonus: 1 },
+    prone: { status: 'Prone', meleeBonus: 1 },
+    maxDice: 2,
+    defaultResponse: 'fightBack',
+  };
   const fight = {
-    initiative: 'dex', initDecimals: 0, hpFloor: 0, autoOut: false, firearmBonus: 50,
+    initiative: 'dex', initDecimals: 0, hpFloor: 0, autoOut: false, firearmBonus: 50, coc,
     pools: [
       { key: 'mp', prefix: 'm', label: 'MP', max: 'mpMax', floor: 0 },
       { key: 'san', prefix: 's', label: 'SAN', max: 'sanMax', floor: 0, cap: 99 },
@@ -126,12 +176,15 @@ function describeCoc(id) {
     entryPlaceholder: '-7 / +3 / m-2 / s-5',
     entryInvalid: 'Type -7 or 7 (damage), +3 (healing), m-2 (MP) or s-5 (SAN)',
     gun: 'gun', gunTitle: `Firearm ready: +${fight.firearmBonus} to DEX for the order`,
+    // the melee exchange on the target's row (Task 16): a hint in our words, beside the buttons
+    buildHint: 'Manoeuvre: compare Builds',
   };
   return r;
 }
 
 // The row's own fields: initiative is DEX.
-const foeRow = (n) => ({ init: n.dex, mp: n.mp, mpMax: n.mp, san: n.san, sanMax: n.san, dex: n.dex, armour: n.armour, from: n.from });
+const foeRow = (n) => ({ init: n.dex, mp: n.mp, mpMax: n.mp, san: n.san, sanMax: n.san, dex: n.dex, armour: n.armour, from: n.from,
+  fighting: n.fighting, firearms: n.firearms, dodge: n.dodge, db: n.db, build: n.build, attacks: n.attacks });
 
 const make = (id) => ({ ...dnd, id, fights: true, readFoe, readPc, foeRow, stockNoActions: undefined, describe: () => describeCoc(id) });
 

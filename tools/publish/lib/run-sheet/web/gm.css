@@ -453,3 +453,16 @@ ol.to .tg.man:not(.on) { color: var(--muted); }
 .act .pman { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin: 6px 0; font: 500 .72rem var(--mono); }
 .act .pman .lab { color: var(--muted); }
 .act .pman .tg { padding: 1px 6px; }
+/* CoC's melee on the target's row (Task 16): Fight Back and Dodge (an NPC's usual one first, its edge solid), the
+   dice on the attack between − and +; the second line holds the exchange, the outnumbered and Prone notes */
+ol.to .melee { display: inline-flex; gap: 2px; align-items: center; }
+ol.to .tg.mel { padding: 0 4px; white-space: nowrap; }
+ol.to .tg.mel:not(.dflt):not(.on) { color: var(--muted); border-style: dashed; }
+ol.to .mdice { display: inline-flex; align-items: center; gap: 1px; }
+ol.to .mdice button { padding: 0 3px; min-width: 1.2rem; }
+ol.to .mdn { font: 650 .72rem var(--mono); min-width: 1.4rem; text-align: center; color: var(--muted); }
+ol.to .mdn.some { color: var(--ink); }
+ol.to > li.row2 > .mx { display: flex; flex: 1 1 100%; min-width: 0; flex-wrap: wrap; gap: 2px 4px; align-items: center; font: 500 .72rem var(--mono); }
+ol.to > li.row2 .mlv { display: inline-flex; flex-wrap: wrap; gap: 2px; }
+ol.to > li.row2 .mres { font-weight: 650; }
+ol.to > li.row2 .mhint, ol.to > li.row2 .mnote { font: 500 .7rem var(--mono); color: var(--muted); white-space: nowrap; }

@@ -20,7 +20,9 @@ for (const crlf of [false, true]) {
     const dir = copyFixture('run-sheet-coc', { crlf });
     it('reads a template line plus a characteristics table', () => {
       const r = read(dir, 'Warden Hale');
-      assert.deepEqual(r.nums, { hp: 13, mp: 12, san: 55, dex: 50, luck: 45, armour: 'none', str: 60, con: 65, siz: 70, pow: 60, from: {} });
+      // Task 16 added the combat figures (fighting to attacks) on purpose
+      assert.deepEqual(r.nums, { hp: 13, mp: 12, san: 55, dex: 50, luck: 45, armour: 'none', str: 60, con: 65, siz: 70, pow: 60,
+        fighting: 55, firearms: null, dodge: 35, db: '+1D4', build: 1, attacks: null, from: {} });
       assert.deepEqual(r.lacks, []);
       assert.equal(r.hpStart, null);
     });
@@ -82,6 +84,28 @@ for (const crlf of [false, true]) {
       const w = foesOf(`${NPCS}Warden Hale.md`, index, 1, 'k', new Set(), null, null, systemFor('coc-7e')).foes[0];
       assert.deepEqual([w.init, w.dex, w.armour], [50, 50, 'none']);
     });
+    it('readFoe gives Fighting 40, Dodge 20, DB +1D4, Build 1, armour 1 and attacks 2 from a fixture block', () => {
+      const n = read(dir, 'Dock Cultist').nums;
+      assert.deepEqual([n.fighting, n.firearms, n.dodge, n.db, n.build, n.attacks], [40, null, 20, '+1D4', 1, 2]);
+      const index = buildIndex(dir);
+      const foe = foesOf(`${NPCS}Dock Cultist.md`, index, 1, 'k', new Set(), null, null, systemFor('coc-7e')).foes[0];
+      assert.deepEqual([foe.fighting, foe.dodge, foe.db, foe.build, foe.armour, foe.attacks], [40, 20, '+1D4', 1, '1 (oilskin coat)', 2]);
+      // the fight's rows: armour a number, attacks carried (Fight on the Net Loft, as the page builds it)
+      const M = require('../lib/run-sheet/web/fight-math');
+      const RS = require('../lib/run-sheet/web/state');
+      const { readRunSheet } = require('../lib/run-sheet/read');
+      const m = readRunSheet(dir, 'Chapters/Chapter 1/Sessions/Session 01/Session 01 - Fog Bound - Plan.md');
+      const b = m.beats.find((x) => /Net Loft/.test(x.title));
+      const s = RS.emptyState({ stateId: 's', session: 'x', plan: 'p' });
+      const row = M.rowsForFight({ model: m, derived: RS.derive(m, s), state: s, beatKey: b.key, idBase: 'f' }).rows.find((r) => r.name === 'Dock Cultist');
+      assert.deepEqual([row.fighting, row.dodge, row.db, row.build, row.armour, row.attacks, row.meleeDefences], [40, 20, '+1D4', 1, 1, 2, 0]);
+    });
+    it('attack lines: a firearm\'s name is Firearms, any other is Fighting; the highest of each', () => {
+      const n = readNumbers('**HP** 10\n- Pocket pistol 40% (20/8), damage 1D8\n- Cleaver 30% (15/6), damage 1D6\n- Fighting (Brawl) 45%\n- Dodge 22% (11/4)\n**Skills:** Swim 60%');
+      assert.deepEqual([n.fighting, n.firearms, n.dodge, n.attacks], [45, 40, 22, null]);
+      assert.deepEqual([read(dir, 'Marcus Lowe').nums.firearms, read(dir, 'Marcus Lowe').nums.fighting], [40, null]);
+      assert.deepEqual([read(dir, 'Tobias Reed').nums.fighting, read(dir, 'Creatures/Brine Walker.md').nums.attacks], [45, 1]);
+    });
     it('CoC and Regency are CoC, and fight (Task 7)', () => {
       for (const [id, label] of [['coc-7e', 'Call of Cthulhu 7e'], ['coc-7e-regency', null]]) {
         const d = systemFor(id).describe();
@@ -95,6 +119,11 @@ for (const crlf of [false, true]) {
         assert.equal(d.hpFloor, 0);
         assert.equal(d.autoOut, false);
         assert.equal(d.fight.initiative, 'dex');
+        // Task 16: CoC's melee numbers as data, on the model's rules and the fight's
+        assert.deepEqual(d.coc, { tie: { dodge: 'defender', fightBack: 'attacker' }, outnumbered: { bonus: 1 }, prone: { status: 'Prone', meleeBonus: 1 }, maxDice: 2, defaultResponse: 'fightBack' });
+        assert.deepEqual(d.fight.coc, d.coc);
+        assert.equal(d.words.buildHint, 'Manoeuvre: compare Builds');
+        assert.ok(d.statuses.includes('Prone'));
         if (label) assert.equal(d.label, label); else assert.match(d.label, /Regency/);
       }
       assert.equal(systemFor('coc').id, 'coc-7e');
@@ -168,7 +197,8 @@ for (const crlf of [false, true]) {
       return systemFor(system).readPc({ notePath: note, index, fm: r.fm, body: r.body });
     };
     it('a Derived table gives current and maximum, Luck and DEX', () => {
-      assert.deepEqual(readPc('Iris Calder'), { numbers: { hpNow: 9, hpMax: 11, mpNow: 13, mpMax: 13, sanNow: 62, sanMax: 99, luck: 55, dex: 55 } });
+      // Task 16: the sheet's Combat table adds Dodge, Build and the damage bonus (no Fighting or Firearms written)
+      assert.deepEqual(readPc('Iris Calder'), { numbers: { hpNow: 9, hpMax: 11, mpNow: 13, mpMax: 13, sanNow: 62, sanMax: 99, luck: 55, dex: 55, dodge: 27, build: 0, db: '0' } });
       assert.deepEqual(readPc('Iris Calder', 'coc-7e-regency').numbers.hpMax, 11);
     });
     it('a one-line sheet falls back to its line, current = max, with a quiet note', () => {
@@ -185,6 +215,16 @@ for (const crlf of [false, true]) {
       const body = '## Stat Sheet\n\n### Derived\n\n| Attribute | Max | Current |\n|---|---|---|\n| HP | 12 | |\n| MP | 8 | |\n| Sanity | 70 | |\n';
       const r = systemFor('coc-7e').readPc({ notePath: 'x.md', index: null, fm: { type: 'pc' }, body });
       assert.deepEqual([r.numbers.hpNow, r.numbers.hpMax, r.numbers.mpNow, r.numbers.sanNow, r.numbers.sanMax], [12, 12, 8, 70, 70]);
+    });
+    it('combatOf takes the highest PC specialisation and counts a typed figure', () => {
+      const body = '## Stat Sheet\n\n### Derived\n\n| Attribute | Max | Current |\n|---|---|---|\n| HP | 12 | |\n\n'
+        + '## Skills\n\n| Skill | Base | Regular | Half | Fifth |\n|---|---|---|---|---|\n| Fighting (Brawl) | 25 | 40 | 20 | 8 |\n'
+        + '| Fighting (Sword) | 20 | 65 | 32 | 13 |\n| Firearms (Handgun) | 20 | 30 | 15 | 6 |\n| Dodge | 25 | 35 | 17 | 7 |\n';
+      const n = systemFor('coc-7e').readPc({ notePath: 'x.md', index: null, fm: { type: 'pc' }, body }).numbers;
+      assert.deepEqual([n.fighting, n.firearms, n.dodge], [65, 30, 35]);
+      const CM = require('../lib/run-sheet/web/coc-math');
+      assert.equal(CM.combatOf(n), 65);
+      assert.equal(CM.combatOf({ ...n, fighting: 70 }), 70);
     });
     it('a body that makes the reader throw gives a note, never a throw', () => {
       const r = systemFor('coc-7e').readPc({ notePath: 'x.md', index: null, fm: null, body: { toString() { throw new Error('boom\nsecond'); } } });

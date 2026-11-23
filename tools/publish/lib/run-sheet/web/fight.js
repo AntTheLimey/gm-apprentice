@@ -8,9 +8,9 @@
 // `afterClear` actions name an ended fight instead. Rows, groups and thresholds come in the action, built by
 // the page with fight-math's `rowsForFight`/`joinRows`, so `reduce` never sees the model.
 (function (root, factory) {
-  if (typeof module === 'object' && module.exports) module.exports = factory(require('./fight-math'), require('./gurps-math'));
-  else root.RunSheetFight = factory(root.RunSheetFightMath, root.RunSheetGurpsMath);
-}(typeof self !== 'undefined' ? self : this, function (FM, GM) {
+  if (typeof module === 'object' && module.exports) module.exports = factory(require('./fight-math'), require('./gurps-math'), require('./coc-math'));
+  else root.RunSheetFight = factory(root.RunSheetFightMath, root.RunSheetGurpsMath, root.RunSheetCocMath);
+}(typeof self !== 'undefined' ? self : this, function (FM, GM, CM) {
   const clone = (v) => (typeof structuredClone === 'function' ? structuredClone(v) : JSON.parse(JSON.stringify(v)));
   const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
   const int = (v) => (isNum(Number(v)) && v !== null && v !== '' ? Math.trunc(Number(v)) : null);
@@ -435,6 +435,13 @@
     r.manoeuvre = null;
     r.aodDefence = null;
   }
+  // ---- CoC melee (Task 16): the levels compared by coc-math, the d100s the server's, a PC's level the GM's tap ----
+  const cocOf = (f) => { const C = FM.rulesOf(f).coc; return C && typeof C === 'object' && CM ? C : null; };
+  // A round starts: every row's melee defences count from 0 again (KR p108), on the round, never on a row's turn.
+  function meleeRound(f) {
+    if (!cocOf(f)) return;
+    for (const r of f.rows) if (r.meleeDefences) r.meleeDefences = 0;
+  }
   const cardOf = (r, id) => (Array.isArray(r.cards) ? r.cards.find((c) => c.id === id) || null : null);
   const dropCard = (r, id) => { r.cards = cardsOf(r).filter((c) => c.id !== id); };
 
@@ -585,6 +592,7 @@
         fixAll(f);
         f.started = true;
         f.round = 1;
+        meleeRound(f);
         f.turn = first.id;
         const order = f.rows.filter((r) => FM.takesTurn(r, f.rows)).map((r) => ({ id: r.id, text: `${nameOf(s, f, r, true)}${isNum(r.ini) ? ` ${r.ini}` : ''}` }));
         sayRoster(s, f, at, 'Round 1: ', order, '.');
@@ -600,6 +608,7 @@
       if (wrapped) {
         sayRoster(s, f, at, `Round ${f.round} ends: `, rosterItems(s, f), '.');
         f.round += 1;
+        meleeRound(f);
       }
       f.turn = row.id;
       turnStart(f, row, at);
@@ -760,6 +769,43 @@
       if (own >= 0) s.events[own].text = text; else say(s, f, at, text);
       r.manTurn = turn;
       r.manLine = text;
+    }),
+    // A melee exchange (CoC, Task 16): `attacker` attacks `defender`, which Dodges or Fights Back (`response`). Each
+    // side is the server's d100 for an NPC or creature (`attack` with the `dice` the stepper gave, `defence` with none)
+    // or the GM's tap of a PC's level ({ level }): the sheet never rolls for a PC and the reducer never rolls. Dropped
+    // when a roll's target is not the figure now. The defender's melee defences count one more; the side whose damage
+    // is owed is `f.melee` (Task 17 opens its box). One log line; a dismissed exchange sends nothing.
+    melee(s, a, at) {
+      const f = running(s, a);
+      const C = f && cocOf(f);
+      if (!C) return;
+      const A = rowOf(f, a.attacker);
+      const D = rowOf(f, a.defender);
+      if (!A || !D || A === D || !CM.RESPONSES.includes(a.response)) return;
+      if ([A, D].some((r) => r.kind === 'lair' || !r.in || r.out)) return;
+      const dice = CM.diceIn(a.dice, C);
+      if (!dice) return;
+      const atk = CM.sideIn(A, a.attack, CM.skillOf(A, 'attack'), dice);
+      const def = CM.sideIn(D, a.defence, CM.skillOf(D, a.response), { bonus: 0, penalty: 0 });
+      if (!atk || !def) return;
+      const out = CM.opposedMelee(atk.level, def.level, a.response, C);
+      // the dice the row's state gave before this defence counts, so the line says which were set by hand
+      const auto = CM.attackDice(D, C, 'melee');
+      const net = CM.netOf(dice);
+      D.meleeDefences = CM.defenceAfter(D, 'melee');
+      touch(A, at);
+      touch(D, at);
+      f.melee = out.hits ? { by: out.hits === 'attacker' ? A.id : D.id, on: out.hits === 'attacker' ? D.id : A.id, round: f.round } : null;
+      const why = net > 0 && auto.net > 0 ? auto.why : [];
+      say(s, f, at, CM.meleeLine({ attacker: nameOf(s, f, A), defender: nameOf(s, f, D) }, a.response, { net, why, byHand: net !== auto.net }, atk, def, out));
+    },
+    // The row's outnumbered switch (CoC): `off` true, its attackers never get the outnumbered die (KR p108).
+    outnumbered: onRow((s, f, r, a, at) => {
+      if (!cocOf(f) || r.kind === 'lair') return;
+      const off = !!a.off;
+      if (!!r.outnumberedOff === off) return;
+      r.outnumberedOff = off;
+      touch(r, at);
     }),
     resisted: onRow((s, f, r, a, at) => { r.resisted = !!a.on; touch(r, at); }),
     // the face-open toggle (GURPS, Task 12), read by GM.gurpsInjury

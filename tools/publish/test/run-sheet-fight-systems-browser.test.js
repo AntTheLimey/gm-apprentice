@@ -959,3 +959,125 @@ describe('CoC and GURPS fights on the GM page, by real input', { skip: browserSk
     });
   });
 });
+
+describe('CoC melee on the target\'s row (step 6b Task 16), by real input', { skip: browserSkip() }, () => {
+  const logOf = async (run) => (await (await fetch(`${run.base}/api/state`)).json()).state.events.filter((e) => e.fight).map((e) => e.text);
+  const row2 = (page, id) => page.evaluate(`(() => { const l = document.querySelector('li[data-row2=${q(id)}]'); return l ? l.textContent : ''; })()`);
+  const focusOn = (page) => page.evaluate('(() => { const a = document.activeElement; return a && a !== document.body ? a.outerHTML.slice(0, 120) : "body"; })()');
+  // the Net Loft (fixture Scene 5): Iris (DEX 55), two Dock Cultists (DEX 50, Fighting 40, Dodge 20, 2 attacks), Jonas, Mabel
+  async function netLoft(page, run) {
+    const at = run.model.beats.findIndex((b) => /Net Loft/.test(b.title));
+    let p = await fightOn(page, run, at);
+    assert.deepStrictEqual(order(p), ['Iris Calder', 'Dock Cultist 1', 'Dock Cultist 2', 'Jonas Finch', 'Mabel Quill']);
+    // Jonas and Mabel have no DEX: Start asks, and Start anyway starts
+    await tap(page, '#fNext');
+    await page.waitFor('document.querySelector("#fStartAnyway")', 3000);
+    await tap(page, '#fStartAnyway');
+    p = await until(page, 'p.fight.started && p.saved === "Saved" && p.pending === 0');
+    assert.strictEqual(p.fight.rows.find((r) => r.id === p.fight.turn).name, 'Iris Calder');
+    return p;
+  }
+
+  for (const [w, h] of SIZES) {
+    it(`${w}: with Iris acting, a held click on Dock Cultist 2's Fight Back, tap Iris's level, and the result line names the winner`, async () => {
+      // every d10 a 3: a d100 of 33
+      const run = await start('coc', { randomInt: () => 3 });
+      await withPage({ width: w, height: h }, async (page) => {
+        let p = await netLoft(page, run);
+        const c1 = named(p, 'Dock Cultist 1').id;
+        const c2 = named(p, 'Dock Cultist 2').id;
+        // NPCs show Fight Back as the default; PCs show both; the acting row shows none
+        assert.deepStrictEqual(named(p, 'Dock Cultist 2').meleeButtons, [{ text: 'Fight Back', dflt: true }, { text: 'Dodge', dflt: false }]);
+        assert.deepStrictEqual(named(p, 'Jonas Finch').meleeButtons, [{ text: 'Dodge', dflt: false }, { text: 'Fight Back', dflt: false }]);
+        assert.deepStrictEqual(named(p, 'Iris Calder').meleeButtons, []);
+        assert.strictEqual(named(p, 'Dock Cultist 2').meleeDice, '0');
+        sane(p, `${w} with the buttons`);
+        await shot(page, `t16-${w}-buttons`);
+
+        // the cultist's Fighting 40 is rolled (33, Regular); Iris's level is a tap
+        await tap(page, `[data-fmelee="${c2}|fightBack"]`);
+        p = await until(page, 'p.fight.melee && !p.fight.melee.rolling');
+        assert.match(await row2(page, c2), /Iris Calder:CriticalExtremeHardRegularFailFumble· Dock Cultist 2 Fights Back:Regular \(33\)Manoeuvre: compare Builds/);
+        // the exchange's line wraps rather than clip: nothing past its right edge, ✕ in view
+        assert.strictEqual(await page.evaluate(`(() => { const l = document.querySelector('li[data-row2=${q(c2)}]'); return l.scrollWidth > l.clientWidth + 1; })()`), false, 'line 2 clipped');
+        assert.strictEqual(await page.evaluate(`(() => { const b = document.querySelector('[data-fmx=${q(c2)}]').getBoundingClientRect(); const l = document.querySelector('li[data-row2=${q(c2)}]').getBoundingClientRect(); return b.left >= l.left && b.right <= l.right; })()`), true, '✕ in view');
+        sane(p, `${w} the exchange open`);
+        await shot(page, `t16-${w}-exchange`);
+        await tap(page, `[data-fmlvl="${c2}|attack|regular"]`);
+        p = await until(page, `p.fight.melee === null && p.fight.rows.find((r) => r.id === ${q(c2)}).meleeDefences === 1 && p.saved === "Saved" && p.pending === 0`);
+        assert.deepStrictEqual((await logOf(run)).slice(-1), ['Iris Calder: Regular; Dock Cultist 2 Fights Back: Regular (33): a tie: Iris Calder hits Dock Cultist 2.']);
+        assert.match(await focusOn(page), /data-fmelee/);
+
+        // two attacks: one defence leaves it at 1 of 2, no die yet
+        assert.strictEqual(named(p, 'Dock Cultist 2').meleeDice, '0');
+        assert.match(await row2(page, c2), /defended 1× of 2/);
+
+        // the stepper adds and takes a die, and clears after the exchange
+        await tap(page, `[data-fmdice="${c2}|1"]`);
+        await tap(page, `[data-fmdice="${c2}|1"]`);
+        p = await until(page, `p.fight.rows.find((r) => r.id === ${q(c2)}).meleeDice === "+2"`);
+        assert.strictEqual(await attrOf(page, `[data-fmdice="${c2}|1"]`, 'disabled'), '', 'no third bonus die');
+        await tap(page, `[data-fmdice="${c2}|-1"]`);
+        p = await until(page, `p.fight.rows.find((r) => r.id === ${q(c2)}).meleeDice === "+1"`);
+        await tap(page, `[data-fmdice="${c2}|1"]`);
+        p = await until(page, `p.fight.rows.find((r) => r.id === ${q(c2)}).meleeDice === "+2"`);
+        await tap(page, `[data-fmelee="${c2}|dodge"]`);
+        p = await until(page, 'p.fight.melee && !p.fight.melee.rolling');
+        await tap(page, `[data-fmlvl="${c2}|attack|hard"]`);
+        p = await until(page, `p.fight.melee === null && p.fight.rows.find((r) => r.id === ${q(c2)}).meleeDefences === 2 && p.saved === "Saved" && p.pending === 0`);
+        assert.deepStrictEqual((await logOf(run)).slice(-1), ['Iris Calder, +2 bonus dice (set by hand): Hard; Dock Cultist 2 Dodges: Fail (33): Iris Calder hits Dock Cultist 2.']);
+        // the stepper's +2 is gone; its two defences spent, the row's own +1 (outnumbered) shows, with its note and switch
+        assert.strictEqual(named(p, 'Dock Cultist 2').meleeDice, '+1');
+        assert.match(await row2(page, c2), /defended 2× → next attack \+1 bonus die/);
+        await tap(page, `[data-fmout="${c2}"]`);
+        p = await until(page, `p.fight.rows.find((r) => r.id === ${q(c2)}).outnumberedOff === true && p.saved === "Saved" && p.pending === 0`);
+        assert.strictEqual(named(p, 'Dock Cultist 2').meleeDice, '0');
+        assert.match(await row2(page, c2), /outnumbered off/);
+        sane(p, `${w} after two exchanges`);
+
+        // a dismissed exchange writes no line and leaves the count
+        const before = (await logOf(run)).length;
+        await tap(page, `[data-fmelee="${c1}|dodge"]`);
+        p = await until(page, 'p.fight.melee && !p.fight.melee.rolling');
+        await tap(page, `[data-fmx="${c1}"]`);
+        p = await until(page, 'p.fight.melee === null');
+        p = await settled(page);
+        assert.strictEqual((await logOf(run)).length, before);
+        assert.strictEqual(named(p, 'Dock Cultist 1').meleeDefences, 0);
+
+        // an Out row shows none
+        await tap(page, `[data-fout="${c1}"]`);
+        p = await until(page, `p.fight.rows.find((r) => r.id === ${q(c1)}).out && p.saved === "Saved" && p.pending === 0`);
+        assert.deepStrictEqual(named(p, 'Dock Cultist 1').meleeButtons, []);
+        sane(p, `${w} the end`);
+      });
+    });
+  }
+
+  it('a cultist attacks a PC: its roll with the dice, the PC\'s Dodge a tap; the round\'s start clears the count', async () => {
+    const run = await start('coc', { randomInt: () => 3 });
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await netLoft(page, run);
+      await tap(page, '#fNext');
+      p = await until(page, `p.fight.rows.find((r) => r.id === p.fight.turn).name === "Dock Cultist 1" && p.saved === "Saved" && p.pending === 0`);
+      const iris = named(p, 'Iris Calder').id;
+      assert.deepStrictEqual(named(p, 'Iris Calder').meleeButtons, [{ text: 'Dodge', dflt: false }, { text: 'Fight Back', dflt: false }]);
+      await tap(page, `[data-fmelee="${iris}|dodge"]`);
+      p = await until(page, 'p.fight.melee && !p.fight.melee.rolling');
+      await tap(page, `[data-fmlvl="${iris}|defence|extreme"]`);
+      p = await until(page, `p.fight.melee === null && p.fight.rows.find((r) => r.id === ${q(iris)}).meleeDefences === 1 && p.saved === "Saved" && p.pending === 0`);
+      assert.deepStrictEqual((await logOf(run)).slice(-1), ['Dock Cultist 1: Regular (33); Iris Calder Dodges: Extreme: Iris Calder dodges.']);
+      // the next attacker on Iris gets the die: shown on her row before the roll
+      await tap(page, '#fNext');
+      p = await until(page, `p.fight.rows.find((r) => r.id === p.fight.turn).name === "Dock Cultist 2" && p.saved === "Saved" && p.pending === 0`);
+      assert.strictEqual(named(p, 'Iris Calder').meleeDice, '+1');
+      // round 2 starts: the count is 0 again
+      for (const name of ['Jonas Finch', 'Mabel Quill', 'Iris Calder']) {
+        await tap(page, '#fNext');
+        p = await until(page, `p.fight.rows.find((r) => r.id === p.fight.turn).name === ${q(name)} && p.saved === "Saved" && p.pending === 0`);
+      }
+      assert.strictEqual(p.fight.round, 2);
+      assert.strictEqual(named(p, 'Iris Calder').meleeDefences, 0);
+    });
+  });
+});

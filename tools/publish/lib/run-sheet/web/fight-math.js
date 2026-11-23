@@ -1,11 +1,11 @@
 'use strict';
 // The run sheet's fight arithmetic, as pure helpers. UMD like state.js: `module.exports` under node,
-// `window.RunSheetFightMath` in a page. No DOM, no fetch, no clock, no dice: dice live in lib/dice and
-// the page asks the server. Nothing here changes its input; every function returns something new.
+// `window.RunSheetFightMath` in a page, where coc-math.js loads first. No DOM, no fetch, no clock, no dice: dice live
+// in lib/dice and the page asks the server. Nothing here changes its input; every function returns something new.
 (function (root, factory) {
-  if (typeof module === 'object' && module.exports) module.exports = factory();
-  else root.RunSheetFightMath = factory();
-}(typeof self !== 'undefined' ? self : this, function () {
+  if (typeof module === 'object' && module.exports) module.exports = factory(require('./coc-math'));
+  else root.RunSheetFightMath = factory(root.RunSheetCocMath);
+}(typeof self !== 'undefined' ? self : this, function (CM) {
   // Status names only, no rules text (§3). Exhaustion is a value 0-6, Bloodied is worked out and never
   // stored, and a typed status is free text, so none of the three is in the list.
   const DND_STATUSES = ['Blinded', 'Charmed', 'Deafened', 'Frightened', 'Grappled', 'Incapacitated', 'Invisible',
@@ -177,18 +177,8 @@
 
   // ---- order and turns ----
 
-  // The higher of a figure that may be one number or a PC's specialisations ({ Brawl: 40, Sword: 65 } or a list).
-  const topOf = (v) => {
-    const all = isNum(v) ? [v] : (v && typeof v === 'object' ? Object.values(v).filter(isNum) : []);
-    return all.length ? Math.max(...all) : null;
-  };
-  // A CoC row's combat skill for a DEX tie (KR p102): the higher of its Fighting and Firearms, worked out each time
-  // it is read, so a figure typed in the panel counts; a row with neither may carry `combat` itself; else null.
-  function combatOf(r) {
-    const best = [topOf(r && r.fighting), topOf(r && r.firearms)].filter(isNum);
-    if (best.length) return Math.max(...best);
-    return r && isNum(r.combat) ? r.combat : null;
-  }
+  // A CoC row's combat skill for a DEX tie (KR p102): coc-math's, the one copy (Task 16).
+  const { combatOf } = CM;
   // A row's initiative worked out from its stats: CoC's DEX (plus `firearmBonus` while `gun` is on), GURPS's Basic
   // Speed. Null in D&D (it is rolled) and for a row whose stat is blank.
   function initOf(r, rules = DND_FIGHT_RULES) {
@@ -430,6 +420,9 @@
       fp: null, fpMax: null, mp: null, mpMax: null, san: null, sanMax: null, luck: null, er: null, erMax: null,
       dex: null, st: null, ht: null, dx: null, speed: null, dodge: null, parry: null, block: null, dr: null, faceOpen: false, drByLocation: null,
       armour: null, fighting: null, firearms: null, combat: null, db: null, build: null, attacks: 1, defended: 0, bout: null,
+      // CoC's melee (Task 16): the row's melee defences this round (reset at the round's start) and its outnumbered
+      // switch (off: never outnumbered)
+      meleeDefences: 0, outnumberedOff: false,
       // and whether it casts (GURPS: its FP shows as ✦FP, Task 10)
       // GURPS's last hit (its working, Task 12) and the places crippled
       // Set by a manoeuvre pick, absent until one: `manFrom` holds the Aim and Evaluate counts from before this turn's
@@ -474,6 +467,8 @@
       parry: num(foe.parry), block: num(foe.block), dr: foe.dr === undefined ? null : foe.dr, faceOpen: foe.faceOpen === true, armour: armourOf(foe.armour),
       fighting: foe.fighting === undefined ? null : foe.fighting, firearms: foe.firearms === undefined ? null : foe.firearms,
       db: foe.db === undefined ? null : foe.db, build: num(foe.build), caster: foe.caster === true,
+      // a block's attacks figure (CoC); a row with none keeps 1
+      ...(num(foe.attacks) !== null ? { attacks: num(foe.attacks) } : {}),
       from: foe.from && typeof foe.from === 'object' ? { ...foe.from } : {},
     };
     out.fp = startAt(foe.fpStart, out.fpMax);
@@ -495,7 +490,8 @@
       dodge: num(pc.dodge), parry: num(pc.parry), block: num(pc.block), dr: pc.dr === undefined ? null : pc.dr,
       drByLocation: pc.drByLocation && typeof pc.drByLocation === 'object' ? { ...pc.drByLocation } : null,
       fighting: pc.fighting === undefined ? null : pc.fighting, firearms: pc.firearms === undefined ? null : pc.firearms,
-      caster: pc.caster === true,
+      caster: pc.caster === true, build: num(pc.build), db: pc.db === undefined ? null : pc.db,
+      ...(num(pc.attacks) !== null ? { attacks: num(pc.attacks) } : {}),
     };
   }
   // Initiative where the system works it out, and no D&D modifier then.

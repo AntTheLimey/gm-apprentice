@@ -18,6 +18,8 @@
   const Fight = window.RunSheetFight;
   // GURPS's cards (Task 13): their lines, targets and offers, the reducer's own helpers
   const GMath = window.RunSheetGurpsMath || null;
+  // CoC's melee (Task 16): the levels, the dice on an attack and the result line, the reducer's own helpers
+  const CMath = window.RunSheetCocMath || null;
   if (!RP || !FM || !RS || !Fight) return;
   const { esc } = RP;
   const $ = (s) => document.querySelector(s);
@@ -55,6 +57,10 @@
     // GURPS's defences (Task 14): a defence whose roll is out at the server ("row|dodge" -> true), and the row whose
     // used Block was tapped once, so the next tap rolls it again
     defRolling: {}, blockAsk: null, aodAsk: null,
+    // CoC's melee (Task 16), the page's only until the exchange is sent: the stepper's dice for an attack on a row
+    // (row id -> net, bonus above 0; none means the row's own: outnumbered, Prone), cleared when the turn moves; the
+    // open exchange ({ fight, turn, target, attacker, response, dice, net, why, byHand, attack, defence, rolling })
+    mdice: {}, melee: null, meleeTurn: null,
   };
 
   const model = () => RP.model();
@@ -74,6 +80,8 @@
   const consequences = () => (GMath ? (rules().fight || rules()).consequences || null : null);
   // the system's defences table (GURPS's, Task 14): each defence as it stands this turn; null where there is none
   const defences = () => (GMath && typeof GMath.liveDefences === 'function' ? (rules().fight || rules()).defences || null : null);
+  // CoC's melee numbers (rules.coc, Task 16); null where there are none
+  const cocRules = () => (CMath ? (rules().fight || rules()).coc || null : null);
   const rolled = () => !rules().initiative || rules().initiative === 'roll';
   // the panel's boxes the page can draw ({ key, label } items; D&D's list names its counters, drawn as before)
   const panelBoxes = () => (rules().panelBoxes || []).filter((b) => b && typeof b === 'object' && STAT[boxStat(b.key)]);
@@ -376,6 +384,7 @@
     // the last hit's working (GURPS, Task 12): one line, clipped, all of it in the title
     const hit = (rowById(id) || {}).hit;
     if (hit && hit.line) out.push(`<span class="hitline" title="${esc(hit.line)}">${esc(hit.line)}</span>`);
+    out.push(meleeLine2(id));
     const st = (li && li.dataset.l2st) || '';
     if (st) out.push(`<span class="l2st">${st}</span>`);
     return out.join('');
@@ -496,6 +505,7 @@
     h += poolsHTML(r);
     h += rowDefencesHTML(r);
     h += rowManoeuvreHTML(r, cur);
+    h += rowMeleeHTML(r, view);
     if (tg.gun) h += `<button type="button" class="tg ${r.gun ? 'on' : ''}" data-fgun="${esc(r.id)}" aria-pressed="${!!r.gun}" title="${esc(w.gunTitle || '')}">${esc(w.gun || 'gun')}</button>`;
     h += chips(r, view.bloodied.has(r.id));
     h += statusSelect(r);
@@ -695,6 +705,174 @@
       } else RP.render();
     }, (e) => { delete ui.defRolling[k]; rollFailed(e); RP.render(); });
   }
+  // ---- CoC's melee on the target's row (Task 16): Dodge or Fight Back, the dice before the roll, the levels compared ----
+  // The attacker: the row picked (its panel shown), else the one whose turn it is; a live row, or none.
+  function attackerOf(rows, f) {
+    const live = (r) => Boolean(r) && r.in && !r.out && r.kind !== 'lair';
+    const picked = ui.peek ? rows.find((x) => x.id === ui.peek) : null;
+    if (live(picked)) return picked;
+    const cur = rows.find((x) => x.id === f.turn);
+    return live(cur) ? cur : null;
+  }
+  // The dice on a melee attack on the row now: the GM's stepper, else the row's own (outnumbered, Prone).
+  function diceNow(r, C) {
+    const auto = CMath.attackDice(r, C, 'melee');
+    const set = ui.mdice[r.id];
+    const net = isNum(set) ? set : auto.net;
+    return { net, why: net > 0 && auto.net > 0 ? auto.why : [], byHand: net !== auto.net };
+  }
+  const diceShort = (n) => (n > 0 ? `+${n}` : n < 0 ? `\u2212${-n}` : '0');
+  // A turn moved or the fight changed: the stepper's dice go, and an open exchange closes (nothing is logged).
+  function syncMelee(f) {
+    if (ui.meleeTurn !== `${f.id}:${f.turn}`) { ui.mdice = {}; ui.melee = null; ui.meleeTurn = `${f.id}:${f.turn}`; }
+    const m = ui.melee;
+    if (!m) return;
+    const live = (id) => { const x = rowById(id); return x && x.in && !x.out; };
+    if (m.fight !== f.id || !live(m.target) || !live(m.attacker)) ui.melee = null;
+  }
+  // The target's buttons: Dodge and Fight Back (an NPC's or creature's default first, marked; a PC's both, neither
+  // marked), and the − / + stepper with the dice on the attack. None on the attacker's row, an Out row or a benched one.
+  function rowMeleeHTML(r, view) {
+    const C = cocRules();
+    if (!C || r.kind === 'lair' || !r.in || r.out) return '';
+    const f = state().fight;
+    const A = attackerOf(view.rows, f);
+    if (!A || A.id === r.id) return '';
+    const m = ui.melee && ui.melee.target === r.id ? ui.melee : null;
+    const dflt = r.kind === 'pc' ? null : (C.defaultResponse || 'fightBack');
+    const order = dflt ? [dflt, ...CMath.RESPONSES.filter((k) => k !== dflt)] : CMath.RESPONSES.slice();
+    const btn = (k) => {
+      const on = Boolean(m && m.response === k);
+      const title = `${A.gmName} attacks; ${r.gmName} ${CMath.RESPONSE_WORDS[k].toLowerCase()}${k === dflt ? ' (the usual for an NPC or creature)' : ''}`;
+      return `<button type="button" class="tg mel${k === dflt ? ' dflt' : ''}${on ? ' on' : ''}" data-fmelee="${esc(`${r.id}|${k}`)}" aria-pressed="${on}"`
+        + `${m && m.rolling ? ' disabled' : ''} title="${esc(title)}">${esc(CMath.RESPONSE_NAMES[k])}</button>`;
+    };
+    const d = m ? { net: m.net, why: m.why, byHand: m.byHand } : diceNow(r, C);
+    const cap = isNum(C.maxDice) ? C.maxDice : 2;
+    const words = CMath.diceText(d.net, d.why, d.byHand) || 'no bonus or penalty dice';
+    const lock = m ? ' disabled' : '';
+    const step = `<span class="mdice" role="group" aria-label="${esc(`Dice on a melee attack on ${r.gmName}`)}">`
+      + `<button type="button" data-fmdice="${esc(`${r.id}|-1`)}"${d.net <= -cap ? ' disabled' : lock} aria-label="${esc(`One die less on an attack on ${r.gmName}`)}" title="A penalty die, or one bonus die less">\u2212</button>`
+      + `<span class="mdn${d.net ? ' some' : ''}" title="${esc(`${words} on the next melee attack on ${r.gmName}`)}">${esc(diceShort(d.net))}</span>`
+      + `<button type="button" data-fmdice="${esc(`${r.id}|1`)}"${d.net >= cap ? ' disabled' : lock} aria-label="${esc(`One die more on an attack on ${r.gmName}`)}" title="A bonus die, or one penalty die less">+</button></span>`;
+    return `<span class="melee">${order.map(btn).join('')}${step}</span>`;
+  }
+  // The row's second line: its outnumbered and Prone notes, and the exchange while one is open on it.
+  function meleeLine2(id) {
+    const C = cocRules();
+    const r = rowById(id);
+    if (!C || !r || !r.in || r.out || r.kind === 'lair') return '';
+    const out = [];
+    if (ui.melee && ui.melee.target === id) out.push(exchangeHTML(ui.melee));
+    const n = CMath.rowNotes(r, C);
+    if (n.outnumbered) {
+      const off = Boolean(r.outnumberedOff);
+      out.push(`<span class="mnote">${esc(n.outnumbered)}</span><button type="button" class="tg mout" data-fmout="${esc(id)}" aria-pressed="${!off}"`
+        + ` title="${esc(off ? 'Outnumbered is off for this one: tap to give its attackers the bonus die again' : 'This one is never outnumbered: tap to stop the bonus die')}">${off ? 'outnumbered on' : 'off'}</button>`);
+    }
+    if (n.prone) out.push(`<span class="mnote">${esc(n.prone)}</span>`);
+    return out.join('');
+  }
+  const viewRow = (id) => { const f = RP.derived().fight; return (f && f.view && f.view.rows.find((x) => x.id === id)) || rowById(id); };
+  // The exchange: who attacks with which dice, each side's roll or the PC's level buttons, the Build hint, and ✕.
+  function exchangeHTML(m) {
+    const A = viewRow(m.attacker);
+    const D = viewRow(m.target);
+    if (!A || !D) return '';
+    const name = (x) => x.gmName || x.name;
+    const dt = CMath.diceText(m.net, m.why, m.byHand);
+    const side = (part, row, res) => {
+      if (row.kind === 'pc') {
+        return `<span class="mlv" role="group" aria-label="${esc(`${name(row)}'s level`)}">${CMath.TAP_LEVELS.map((l) => `<button type="button" class="tg${res && res.level === l ? ' on' : ''}"`
+          + ` data-fmlvl="${esc(`${m.target}|${part}|${l}`)}" aria-pressed="${Boolean(res && res.level === l)}">${esc(CMath.levelName(l))}</button>`).join('')}</span>`;
+      }
+      return `<b class="mres">${m.rolling ? 'rolling\u2026' : res ? esc(CMath.sideText(res)) : ''}</b>`;
+    };
+    const builds = [A, D].map((x) => `${name(x)} ${isNum(x.build) ? x.build : '?'}`).join(', ');
+    return `<span class="mx" role="group" aria-label="Melee exchange"><span>${esc(`${name(A)}${dt ? `, ${dt}` : ''}:`)}</span>${side('attack', A, m.attack)}`
+      + `<span>${esc(`\u00b7 ${name(D)} ${CMath.RESPONSE_WORDS[m.response]}:`)}</span>${side('defence', D, m.defence)}`
+      + `<span class="mhint" title="${esc(`Build: ${builds}`)}">${esc(words().buildHint || '')}</span>`
+      + `<button type="button" class="tg mback" data-fmx="${esc(m.target)}" title="Back out: nothing is logged" aria-label="Back out of this exchange">\u2715</button></span>`;
+  }
+  // A response tapped on the target's row: the exchange opens with the stepper's dice; the server rolls each NPC's or
+  // creature's side (the attacker's Fighting with the dice, the defender's Dodge or Fighting), and a PC's side waits
+  // for the GM's tap. With every side in, the exchange is sent.
+  function meleeStart(rowId, response) {
+    const f = state().fight;
+    const C = cocRules();
+    const D = rowById(rowId);
+    const A = f && attackerOf(f.rows, f);
+    if (!f || !C || !D || !A || A.id === D.id || !CMath.RESPONSES.includes(response)) return;
+    if (ui.melee && ui.melee.rolling) return;
+    const sel = attr('data-fmelee', `${rowId}|${response}`);
+    // an NPC side needs its figure: said, nothing opens
+    const lacking = [[A, 'attack'], [D, response]].filter(([x, p]) => x.kind !== 'pc' && CMath.skillOf(x, p) === null);
+    if (lacking.length) {
+      for (const [x, p] of lacking) RP.note(`${viewName(x.id) || x.name} has no ${CMath.skillName(p)}: type it in its panel.`, { kind: 'bad', id: `melee:${x.id}:${p}` });
+      RP.focusTo(sel);
+      return;
+    }
+    const d = diceNow(D, C);
+    const dice = CMath.diceOfNet(d.net, C);
+    const m = { fight: f.id, turn: f.turn, target: rowId, attacker: A.id, response, dice, net: d.net, why: d.why, byHand: d.byHand, attack: null, defence: null, rolling: false };
+    const asks = [];
+    if (A.kind !== 'pc') asks.push(['attack', { d100: { target: CMath.skillOf(A, 'attack'), ...dice } }]);
+    if (D.kind !== 'pc') asks.push(['defence', { d100: { target: CMath.skillOf(D, response) } }]);
+    m.rolling = asks.length > 0;
+    ui.melee = m;
+    RP.render();
+    RP.focusTo(sel);
+    if (!asks.length) return;
+    roll(asks.map((x) => x[1])).then((results) => {
+      if (ui.melee !== m) return;
+      m.rolling = false;
+      // a figure that moved while the dice were out: the roll is not sent, and the page says so
+      const now = { attack: rowById(m.attacker), defence: rowById(m.target) };
+      for (let i = 0; i < asks.length; i++) {
+        const part = asks[i][0];
+        const x = now[part];
+        const want = x ? CMath.skillOf(x, part === 'attack' ? 'attack' : response) : null;
+        if (!results[i] || want !== results[i].target) {
+          ui.melee = null;
+          RP.note(`${viewName(m[part === 'attack' ? 'attacker' : 'target']) || ''}: its ${CMath.skillName(part === 'attack' ? 'attack' : response)} changed while the dice were out: tap ${CMath.RESPONSE_NAMES[response]} again.`, { kind: 'bad' });
+          RP.render();
+          RP.focusTo(sel);
+          return;
+        }
+        m[part] = results[i];
+      }
+      meleeSend(m);
+    }, (e) => { if (ui.melee === m) ui.melee = null; rollFailed(e); RP.render(); RP.focusTo(sel); });
+  }
+  // A PC's level tapped (a tap again on the same level takes it back while the other side waits).
+  function meleeTap(target, part, level) {
+    const m = ui.melee;
+    if (!m || m.target !== target || m.rolling || !CMath.isLevel(level)) return;
+    const row = rowById(part === 'attack' ? m.attacker : m.target);
+    if (!row || row.kind !== 'pc') return;
+    m[part] = m[part] && m[part].level === level ? null : { level };
+    if (!meleeSend(m)) { RP.render(); RP.focusTo(attr('data-fmlvl', `${target}|${part}|${level}`)); }
+  }
+  // Both sides in: the exchange goes to the reducer, which compares and logs it; the stepper clears. True when sent.
+  function meleeSend(m) {
+    if (!m.attack || !m.defence) { RP.render(); return false; }
+    ui.melee = null;
+    delete ui.mdice[m.target];
+    RP.dispatch({ fight: m.fight, type: 'melee', attacker: m.attacker, defender: m.target, response: m.response, dice: m.dice, attack: m.attack, defence: m.defence });
+    RP.focusTo(attr('data-fmelee', `${m.target}|${m.response}`));
+    return true;
+  }
+  // The stepper: one die more or less, within the cap; the row's own again once it matches them.
+  function meleeDice(rowId, delta) {
+    const C = cocRules();
+    const r = rowById(rowId);
+    if (!C || !r || (ui.melee && ui.melee.target === rowId)) return;
+    const cap = isNum(C.maxDice) ? C.maxDice : 2;
+    const net = Math.max(-cap, Math.min(cap, diceNow(r, C).net + delta));
+    if (net === CMath.attackDice(r, C, 'melee').net) delete ui.mdice[rowId]; else ui.mdice[rowId] = net;
+    RP.render();
+    RP.focusTo(attr('data-fmdice', `${rowId}|${delta}`));
+  }
   // ---- GURPS's cards (Task 13): prompts, one per hit, and a turn's start and end; nothing here decides an outcome ----
   function cardsHTML(f) {
     const C = consequences();
@@ -868,6 +1046,7 @@
   function sideHTML(d) {
     const f = d.fight;
     const view = f.view;
+    syncMelee(f);
     let h = '<div class="fview"><div class="fo" id="fOrder"><div class="fotop">';
     h += `<div class="fh"><b>${f.started ? `Round ${esc(f.round)}` : 'Setting up'}</b>`
       // a system that works the order out (CoC's DEX, GURPS's Basic Speed) has nothing to roll
@@ -1030,7 +1209,8 @@
       'data-fseen', 'data-fhalf', 'data-fahalf', 'data-fres', 'data-fout', 'data-fgun', 'data-fds', 'data-flr', 'data-fla', 'data-frch',
       'data-fun', 'data-fsame', 'data-fside', 'data-fundo', 'data-faddgroup', 'data-faddbeat', 'data-faddpick', 'data-faddnew',
       'data-fspend', 'data-fafter', 'data-fjot', 'data-fight', 'data-fplace', 'data-fcbtn', 'data-fcardpick', 'data-fcardht', 'data-fshock',
-      'data-fshockset', 'data-fdef', 'data-fpdef', 'data-fretreat', 'data-fman', 'data-fmand', 'data-fmanrow', ...PANEL_KEYS.map((k) => `data-fs-${k}`)],
+      'data-fshockset', 'data-fdef', 'data-fpdef', 'data-fretreat', 'data-fman', 'data-fmand', 'data-fmanrow',
+      'data-fmelee', 'data-fmdice', 'data-fmlvl', 'data-fmx', 'data-fmout', ...PANEL_KEYS.map((k) => `data-fs-${k}`)],
     // Fight here on a place tile or a place's drawer (plan 6a Task 7); nothing while a fight runs
     placeButtons(note) {
       if (!allowed() || state().fight || !(model().placeKeys || {})[note]) return '';
@@ -1100,7 +1280,12 @@
             shock: r.shock || 0, cards: r.cards || [],
             dodge: r.dodge, parry: r.parry, block: r.block, parries: r.parries || 0, blocks: r.blocks || 0, defended: r.defended || 0, retreat: Boolean(r.retreat),
             manoeuvre: r.manoeuvre || null, aodDefence: r.aodDefence || null, aim: r.aim || 0, evaluate: r.evaluate || 0,
+            // CoC's melee (Task 16): the count, the switch, and what the row's buttons and stepper show
+            meleeDefences: r.meleeDefences || 0, outnumberedOff: Boolean(r.outnumberedOff), attacks: r.attacks, build: r.build, db: r.db,
+            meleeButtons: Array.from(document.querySelectorAll(`li[data-frow="${CSS.escape(r.id)}"] [data-fmelee]`), (b) => ({ text: b.textContent, dflt: b.classList.contains('dflt') })),
+            meleeDice: (() => { const e = document.querySelector(`li[data-frow="${CSS.escape(r.id)}"] .mdn`); return e ? e.textContent : null; })(),
           })),
+          melee: ui.melee ? { target: ui.melee.target, attacker: ui.melee.attacker, response: ui.melee.response, rolling: ui.melee.rolling, net: ui.melee.net } : null,
         };
       }
       return out;
@@ -1201,6 +1386,11 @@
     if (d.fmand) { const [rid, k] = split(d.fmand); pickManoeuvre(rid, 'all-out defence', k); return true; }
     if (d.fmanrow) { ui.peek = f.turn === d.fmanrow ? null : d.fmanrow; RP.render(); RP.focusTo(attr('data-fmanrow', d.fmanrow)); return true; }
     if (d.fretreat) { const x = rowById(d.fretreat); if (x) F({ type: 'retreat', row: x.id, on: !x.retreat }); return true; }
+    if (d.fmelee) { const [rid, k] = split(d.fmelee); meleeStart(rid, k); return true; }
+    if (d.fmdice) { const [rid, n] = split(d.fmdice); meleeDice(rid, Number(n)); return true; }
+    if (d.fmlvl) { const parts = d.fmlvl.split('|'); const level = parts.pop(); const side = parts.pop(); meleeTap(parts.join('|'), side, level); return true; }
+    if (d.fmx) { const m = ui.melee; ui.melee = null; RP.render(); if (m) RP.focusTo(attr('data-fmelee', `${m.target}|${m.response}`)); return true; }
+    if (d.fmout) { const x = rowById(d.fmout); if (x) F({ type: 'outnumbered', row: x.id, off: !x.outnumberedOff }); RP.focusTo(attr('data-fmout', d.fmout)); return true; }
     if (d.fface) { const x = rowById(d.fface); if (x) F({ type: 'faceOpen', row: x.id, on: !x.faceOpen }); return true; }
     const id = d.ftick || d.fsel || d.fahalf || d.fhalf || d.fres || d.fseen || d.fout || d.flr;
     const r = rowById(id || '');
