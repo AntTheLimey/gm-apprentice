@@ -85,9 +85,14 @@ const noType = (type) => type === undefined || type === null || type === '';
 const damageFloor = (type, floor) => (isInt(floor) ? floor : (noType(type) || /^cr(ushing)?$/i.test(String(type)) ? 0 : 1));
 
 // `dice` are the faces rolled, a taken-away die as a negative number, so they add up with `mod` to the raw total.
-function rollDamage(notation, { type, floor, randomInt = crypto.randomInt } = {}) {
+// A damage roll's type and floor, checked: one validator for rollDamage and maxRoll.
+function damageOpts(type, floor) {
   if (type !== undefined && type !== null && (typeof type !== 'string' || type.length > 16)) throw new RangeError('a damage type is a short word like cr, cut or imp');
   if (floor !== undefined && !isInt(floor)) throw new RangeError('a damage floor is a whole number');
+}
+
+function rollDamage(notation, { type, floor, randomInt = crypto.randomInt } = {}) {
+  damageOpts(type, floor);
   const { groups, mod } = parseDamage(notation);
   const dice = [];
   for (const g of groups) for (let i = 0; i < g.count; i++) dice.push(g.sign * randomInt(1, g.sides + 1));
@@ -99,7 +104,7 @@ function rollDamage(notation, { type, floor, randomInt = crypto.randomInt } = {}
 // taken-away dice at their bottom (one each). `maxRoll` answers in rollDamage's shape, its `dice` the faces at the
 // top, so a working line reads the same either way; `maxDamage` is its total.
 function maxRoll(notation, { type, floor } = {}) {
-  if (floor !== undefined && !isInt(floor)) throw new RangeError('a damage floor is a whole number');
+  damageOpts(type, floor);
   const { groups, mod } = parseDamage(notation);
   const dice = [];
   for (const g of groups) for (let i = 0; i < g.count; i++) dice.push(g.sign > 0 ? g.sides : -1);

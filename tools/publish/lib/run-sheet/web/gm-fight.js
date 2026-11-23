@@ -896,22 +896,33 @@
   }
   // the damage box's hint: the attacker's dice, or the total a player rolled (the box is as wide as the system's)
   const DMG_PLACEHOLDER = '1D6+DB or 7';
-  const DB_TITLES = { full: 'Full DB (melee)', half: 'Half DB (thrown weapons, bows)', none: 'No DB (firearms, crossbows)' };
-  // A weapon's impaling toggle: by the attacker's group and the box's dice, off unless tapped.
-  const weaponOf = (g) => { const e = FM.parseEntry(g.entry, rules().fight || rules()); return e && e.dice ? e.dice.toUpperCase() : ''; };
+  const DB_TITLES = { full: 'Full DB', half: 'Half DB', none: 'No DB' };
+  // A weapon's impaling toggle: by the attacker's group and the dice the box opened with (so a tap before or after
+  // typing keeps it), off unless tapped.
+  const weaponOf = (g) => { const e = FM.parseEntry(g.opened, rules().fight || rules()); return e && e.dice ? e.dice.toUpperCase() : ''; };
   const impaleKey = (g) => { const A = rowById(g.by); return `${A ? groupKeyOf(A) : g.by}|${weaponOf(g)}`; };
   const impaleOn = (g) => Boolean(ui.impale[impaleKey(g)]);
   // A new exchange that owes damage opens its box on the row hit, with the attacker's last entry (Enter alone
   // repeats it) and the DB setting its kind starts at (a shot's none); none owed, or the turn moved on, and it shuts.
+  // A box whose exchange ended elsewhere (another window's Next) while the GM was typing in it stays, marked over,
+  // so the words are not taken as damage typed cold; Enter says so, and ✕ or Esc shuts it.
   function syncDmg(f) {
     const m = cocRules() ? f.melee : null;
-    if (!m) { ui.dmg = null; return; }
+    const g = ui.dmg;
+    if (g && m && g.fight === f.id && g.n === m.n) return;
+    let keep = null;
+    if (g && g.fight === f.id && !g.sent) {
+      const box = document.querySelector(attr('data-fhp', g.on));
+      if (g.stale || (box && document.activeElement === box)) { g.stale = true; g.rolling = false; keep = g; }
+    }
+    ui.dmg = keep;
+    // none owed: this page's exchange missed (or none is open), so a later one from another window takes no focus
+    if (!m) { ui.dmgMine = null; return; }
     const key = `${f.id}:${m.n}`;
-    if (ui.dmg && ui.dmg.fight === f.id && ui.dmg.n === m.n) return;
-    ui.dmg = null;
     if (ui.dmgSeen === key) return;
     ui.dmgSeen = key;
-    ui.dmg = { fight: f.id, n: m.n, by: m.by, on: m.on, mode: CMath.dbModeOf(m.kind), entry: remembered(rowById(m.by)), offer: Boolean(m.offer), rolling: false };
+    const entry = remembered(rowById(m.by));
+    ui.dmg = { fight: f.id, n: m.n, by: m.by, on: m.on, mode: CMath.dbModeOf(m.kind), entry, opened: entry, offer: Boolean(m.offer), rolling: false };
     delete ui.pending[m.on];
     delete ui.refused[m.on];
     if (ui.dmgMine === key) ui.dmgFocus = m.on;
@@ -924,15 +935,17 @@
     const A = viewRow(g.by);
     if (!A) return '';
     const name = A.gmName || A.name;
+    const shut = `<button type="button" class="tg dback" data-fdmgclose="${esc(id)}" aria-label="${esc(`Close ${name}'s damage box`)}" title="No damage: close">\u2715</button>`;
+    if (g.stale) return `<span class="dmgbox" role="group" aria-label="${esc(`Damage from ${name}`)}"><span class="mnote">${esc(`${name}'s damage: that exchange is over, not applied`)}</span>${shut}</span>`;
     const db = CMath.dbTerm(A.db);
     const modes = CMath.DB_MODES.map((k) => `<button type="button" class="tg dbm${g.mode === k ? ' on' : ''}" data-fdmgdb="${esc(`${id}|${k}`)}" aria-pressed="${g.mode === k}" title="${esc(DB_TITLES[k])}">${esc(k)}</button>`).join('');
     let h = `<span class="dmgbox" role="group" aria-label="${esc(`Damage from ${name}`)}"><span>${esc(`${name}'s damage, DB ${db === null ? String(A.db) : db || 'none'}:`)}</span>${modes}`;
     if (g.offer) {
       const imp = impaleOn(g);
-      h += `<button type="button" class="tg imp${imp ? ' on' : ''}" data-fdmgimp="${esc(id)}" aria-pressed="${imp}" title="This weapon impales: one more weapon roll on top">impaling</button>`
-        + `<button type="button" class="offer" data-fdmgx="${esc(id)}"${g.rolling ? ' disabled' : ''} title="An Extreme hit on its own turn: maximum damage and DB">Extreme: max</button>`;
+      h += `<button type="button" class="tg imp${imp ? ' on' : ''}" data-fdmgimp="${esc(id)}" aria-pressed="${imp}" title="Impaling weapon">impaling</button>`
+        + `<button type="button" class="offer" data-fdmgx="${esc(id)}"${g.rolling ? ' disabled' : ''} title="Extreme hit: maximum">Extreme: max</button>`;
     }
-    return `${h}<button type="button" class="tg dback" data-fdmgclose="${esc(id)}" aria-label="${esc(`Close ${name}'s damage box`)}" title="No damage: close">\u2715</button></span>`;
+    return `${h}${shut}</span>`;
   }
   // The attacker for dice typed cold into a row's box: the row whose panel shows, else the one whose turn it is.
   function coldAttacker(f, id) {
@@ -958,8 +971,14 @@
     const e = FM.parseEntry(entry, FM.rulesOf(f));
     if (!e || e.pool !== 'hp' || e.kind !== 'damage' || (!e.dice && !g)) return false;
     if (g && g.rolling) return true;
+    // the exchange went stale in another window (its damage applied, the turn moved on): said, never sent
+    if (g && (g.stale || !(f.melee && f.melee.n === g.n))) {
+      RP.note(`${entry}: that exchange is over (the turn moved on): not applied.`, { kind: 'bad', id: `dmg:over:${id}` });
+      return true;
+    }
     const by = g ? g.by : coldAttacker(f, id);
     if (!e.dice) {
+      g.sent = true;
       t.value = '';
       markPending(t);
       F({ type: 'hp', row: id, entry, by, exchange: g.n });
@@ -981,7 +1000,7 @@
     const g = ui.dmg;
     const f = state().fight;
     const t = document.querySelector(attr('data-fhp', id));
-    if (!f || !g || g.on !== id || !g.offer || g.rolling || !t) return;
+    if (!f || !g || g.on !== id || !g.offer || g.rolling || g.stale || !t) return;
     const entry = t.value.trim();
     const e = FM.parseEntry(entry, FM.rulesOf(f));
     if (!e || !e.dice) { refuse(t, 'Extreme: type the weapon\'s dice first, like 1D6+DB'); return; }
@@ -1022,7 +1041,7 @@
         back();
         return;
       }
-      if (g && ui.dmg === g) g.rolling = false;
+      if (g) { g.rolling = false; g.sent = true; }
       F({ type: 'hp', row: id, entry: x.entry, by: x.by, mode: x.mode, roll: res[0], ...(g ? { exchange: g.n } : {}), ...(x.extreme ? { extreme: true, ...(res[1] ? { extra: res[1] } : {}) } : {}) });
       RP.focusTo(attr('data-fhp', id));
     }, (err) => { rollFailed(err); back(); });
@@ -1720,6 +1739,7 @@
     // Esc empties a damage or healing box that was typed in and not applied (PRENTICE's PR review 2, D3)
     if (ev.key === 'Escape' && d.fhp !== undefined) {
       ev.preventDefault();
+      if (ui.dmg && ui.dmg.on === d.fhp && ui.dmg.stale) { ui.dmg = null; t.value = ''; markPending(t); RP.render(); RP.focusTo(attr('data-fhp', d.fhp)); return; }
       t.setCustomValidity('');
       t.value = '';
       markPending(t);

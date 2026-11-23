@@ -3181,7 +3181,7 @@ describe('CoC damage (step 6b Task 17)', () => {
     assert.deepEqual(s.fight, was);
   });
 
-  it('HP never below 0; half DB halves it; none adds none', () => {
+  it('12 against 11 HP leaves 0; half and none in the log', () => {
     let s = go(begin(rows()));
     s = G(s, { type: 'hp', row: named(s, 'Iris').id, entry: '1D10+DB', by: named(s, 'Cultist 1').id, mode: 'half', roll: rolled('1D10+1D2', 10, 2) });
     s = G(s, { type: 'hp', row: named(s, 'Iris').id, entry: '1D4+DB', by: named(s, 'Cultist 1').id, mode: 'none', roll: rolled('1D4', 3) });

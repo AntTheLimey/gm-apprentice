@@ -181,6 +181,8 @@ describe('dice: damage dice', () => {
     assert.deepStrictEqual(rollSpec({ damage: '1D6+1D4', floor: 0, max: true }), { notation: '1D6+1D4', type: null, dice: [6, 4], mod: 0, total: 10, max: true });
     assert.deepStrictEqual(rollSpec({ damage: '1D3-1D4-3', floor: 0, max: true }), { notation: '1D3-1D4-3', type: null, dice: [3, -1], mod: -3, total: 0, max: true });
     assert.throws(() => rollSpec({ damage: '1D6', floor: 0.5, max: true }), RangeError);
+    assert.throws(() => rollSpec({ damage: '1D6', type: 7, max: true }), /a damage type is a short word/);
+    assert.throws(() => maxDamage('1D6', { type: 'a-very-long-damage-type' }), /a damage type is a short word/);
   });
 });
 

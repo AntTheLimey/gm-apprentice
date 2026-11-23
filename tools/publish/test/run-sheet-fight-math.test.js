@@ -1477,3 +1477,51 @@ test('the page and the server read the same CoC dice, with the attacker\'s DB pu
   assert.equal(M.parseEntry('1D8+DB'), null);
   assert.equal(M.parseEntry('1D8+DB', GURPS), null);
 });
+
+// Generated, CoC (Task 17 review): the shapes above with a leading minus and `+DB`, through parseEntry and damageRoll
+// in every DB mode. What the page takes, the server reads (or refuses with its sentence); what the server reads, the
+// page takes, except a count with no sides (`2d`), GURPS's, which CoC keeps out on purpose.
+test('the page and the server agree on every generated CoC dice shape, with DB put in', () => {
+  const { parseDamage, maxRoll } = require('../lib/dice');
+  const CM = require('../lib/run-sheet/web/coc-math');
+  const COC_RULES = systemFor('coc-7e').describe().fight;
+  const FORMS = "damage is dice like 2d6+1, d8, 1D8+1D4, 2d6-1d4, d% or GURPS's 2d+1";
+  const LIMIT = 'damage is at most 50 dice, with a number from −99 to +99';
+  const reads = (t) => { try { parseDamage(t); return true; } catch (e) { assert.ok([FORMS, LIMIT].includes(e.message), `${t}: ${e.message}`); return false; } };
+  let n = 0;
+  let taken = 0;
+  for (const sign of ['', '-']) for (const lead of ['', '2+']) for (const c of ['', '1', '2', '50', '51']) for (const sd of ['', '3', '6', '100', '1001', '%'])
+    for (const second of ['', '+d4', '-d4']) for (const db of ['', '+DB']) for (const tail of ['', '+1', '-1']) {
+      const core = `${lead}${c}d${sd}${second}${tail}`;
+      const t = `${sign}${core}${db}`;
+      n++;
+      const e = M.parseEntry(t, COC_RULES);
+      const serverReads = reads(core);
+      if (serverReads && sd !== '') assert.ok(e && e.dice, `the page keeps out ${t}, whose dice the server reads`);
+      if (sd === '') assert.equal(e, null, `${t}: a count with no sides is GURPS's`);
+      if (!e) continue;
+      taken++;
+      assert.equal(e.db, db === '+DB', t);
+      for (const dbv of ['+1D4', '-1', '+2D6', 0, '1D6']) for (const mode of CM.DB_MODES) {
+        const spec = CM.damageRoll(e, { db: dbv }, mode);
+        if (reads(spec.notation)) assert.ok(maxRoll(spec.notation, { floor: 0 }).total >= 0, spec.notation);
+        assert.equal(reads(spec.weapon), serverReads, `${t}: ${spec.weapon}`);
+      }
+    }
+  assert.equal(n, 2 * 2 * 5 * 6 * 3 * 2 * 3);
+  assert.ok(taken > 300, `${taken} taken`);
+});
+
+test('CoC: a die with no count is one (d6, D3, d100, d6+DB); pool entries are unchanged in every system', () => {
+  const COC_RULES = systemFor('coc-7e').describe().fight;
+  assert.deepEqual(M.parseEntry('d6', COC_RULES), { pool: 'hp', kind: 'damage', n: null, dice: 'd6', db: false });
+  assert.deepEqual(M.parseEntry('D3', COC_RULES), { pool: 'hp', kind: 'damage', n: null, dice: 'd3', db: false });
+  assert.deepEqual(M.parseEntry('d100', COC_RULES), { pool: 'hp', kind: 'damage', n: null, dice: 'd100', db: false });
+  assert.deepEqual(M.parseEntry('d6+DB', COC_RULES), { pool: 'hp', kind: 'damage', n: null, dice: 'd6', db: true });
+  assert.deepEqual(M.parseEntry('m-2', COC_RULES), { pool: 'mp', kind: 'damage', n: 2 });
+  assert.deepEqual(M.parseEntry('s+1', COC_RULES), { pool: 'san', kind: 'heal', n: 1 });
+  assert.deepEqual(M.parseEntry('f-2', GURPS), { pool: 'fp', kind: 'damage', n: 2 });
+  assert.deepEqual(M.parseEntry('t5'), { pool: 'temp', kind: 'temp', n: 5 });
+  assert.equal(M.parseEntry('d6'), null);
+  assert.equal(M.parseEntry('d6', GURPS), null);
+});

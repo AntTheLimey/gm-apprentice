@@ -48,8 +48,11 @@
   // and a bare `2d+1` raw injury). A hit is `{ pool: 'hp', kind: 'damage', n, hit: { type, location, side } }`, with
   // `dice` (and `n` null) for dice. A place needs a type; a type alone is to the torso. A bare number stays raw.
   function parseEntry(text, rules = DND_FIGHT_RULES) {
+    // CoC's dice first: a bare `d6` would otherwise read as a pool letter and a number
+    const coc = parseCocDice(text, rules);
+    if (coc) return coc;
     const m = /^\s*([a-z])?\s*([+-])?\s*(\d+)\s*$/i.exec(String(text === null || text === undefined ? '' : text));
-    if (!m) return parseHit(text, rules) || parseCocDice(text, rules);
+    if (!m) return parseHit(text, rules);
     const n = Number(m[3]);
     if (n > 9999) return null;
     const letter = (m[1] || '').toLowerCase();
