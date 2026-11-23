@@ -495,7 +495,7 @@
     if (rn.includes('ac')) h += `<span class="acv">AC${statBox('data-fac', r, isNum(r.ac) ? r.ac : '', `inputmode="numeric" autocomplete="off" aria-label="AC for ${esc(r.gmName)}"`)}</span>`;
     h += poolsHTML(r);
     h += rowDefencesHTML(r);
-    h += rowManoeuvreHTML(r);
+    h += rowManoeuvreHTML(r, cur);
     if (tg.gun) h += `<button type="button" class="tg ${r.gun ? 'on' : ''}" data-fgun="${esc(r.id)}" aria-pressed="${!!r.gun}" title="${esc(w.gunTitle || '')}">${esc(w.gun || 'gun')}</button>`;
     h += chips(r, view.bloodied.has(r.id));
     h += statusSelect(r);
@@ -607,13 +607,14 @@
   // ---- GURPS's manoeuvre chip (Task 15): the row's word (a tap shows its panel), the panel's one button per manoeuvre ----
   const chipsOf = () => { const D = defences(); return D && Array.isArray(D.chips) ? D.chips : null; };
   const counted = (r) => (r.manoeuvre === 'aim' && r.aim > 1 ? ` ${r.aim}` : r.manoeuvre === 'evaluate' && r.evaluate > 1 ? ` ${r.evaluate}` : '');
-  function rowManoeuvreHTML(r) {
+  function rowManoeuvreHTML(r, acting) {
     const cs = chipsOf();
     if (!cs || r.kind === 'lair' || !r.in || r.out) return '';
     const c = cs.find((x) => x.key === r.manoeuvre);
-    const text = c ? `${c.short}${counted(r)}` : 'Man.';
+    if (!c && !acting) return '';
+    const text = c ? `${c.short}${counted(r)}` : '+ manoeuvre';
     const full = c ? `${c.name}${r.aodDefence ? ` (${r.aodDefence})` : ''}${counted(r)}` : '';
-    return `<button type="button" class="tg man ${c ? 'on' : ''}" data-fmanrow="${esc(r.id)}" title="${esc(c ? `${full}. Tap: show its panel to change it` : "Manoeuvre: tap to show the panel, where it is chosen")}" aria-label="${esc(`Manoeuvre for ${r.gmName}: ${c ? full : 'none'}`)}">${esc(text)}</button>`;
+    return `<button type="button" class="tg man ${c ? 'on' : ''}" data-fmanrow="${esc(r.id)}" title="${esc(c ? `${full}. Tap: show its panel to change it` : "Manoeuvre: tap to choose it in the panel")}" aria-label="${esc(`Manoeuvre for ${r.gmName}: ${c ? full : 'none'}`)}">${esc(text)}</button>`;
   }
   function panelManoeuvreHTML(r) {
     const cs = chipsOf();

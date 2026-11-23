@@ -2881,7 +2881,23 @@ describe('GURPS manoeuvre chip (step 6b Task 15)', () => {
     assert.equal(named(s, 'Bouncer 1').aim, 2, 'the first Aim turn came before');
     s = pick(s, 'Bouncer 1', null);
     assert.deepEqual([named(s, 'Bouncer 1').manoeuvre, named(s, 'Bouncer 1').aim], [null, 1]);
+    assert.equal(lines(s).length, before);
+  });
+
+  it('a pick taken back in its turn takes its log line; taken back in a later turn the log stays', () => {
+    let s = go(begin(rows()));
+    const before = lines(s).length;
+    s = pick(s, 'Bouncer 1', 'all-out attack');
+    s = pick(s, 'Bouncer 1', null);
+    assert.equal(lines(s).length, before);
+    assert.equal(named(s, 'Bouncer 1').manoeuvre, null);
+    s = pick(s, 'Bouncer 1', 'feint');
     assert.equal(lines(s).length, before + 1);
+    s = go(s);
+    const was = lines(s).length;
+    s = pick(s, 'Bouncer 1', null);
+    assert.equal(lines(s).length, was, 'a turn on: nothing changes');
+    assert.equal(lines(s).includes('Bouncer 1: Feint.'), true);
   });
 
   it('a pick is logged as "Bouncer 1: All-Out Attack."', () => {

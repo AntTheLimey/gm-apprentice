@@ -747,40 +747,43 @@ describe('CoC and GURPS fights on the GM page, by real input', { skip: browserSk
   }
 
   for (const [width, height] of SIZES) {
-    it(`GURPS at ${width}: a held click on Bouncer 2's chip, pick All-Out Attack: the row reads AoA and its Dodge "no defence"`, async () => {
+    it(`GURPS at ${width}: a held click on the acting row's "+ manoeuvre", pick All-Out Attack: the row reads AoA and its Dodge "no defence"`, async () => {
       const run = await start('gurps', { randomInt: () => 4 });
       await withPage({ width, height }, async (page) => {
         let p = await bouncers(page, run, [['st', 11], ['ht', 10], ['dx', 10], ['parry', 9], ['block', 8]]);
+        const b1 = named(p, 'Bouncer 1').id;
         const b2 = named(p, 'Bouncer 2').id;
-        const chip = `li[data-frow="${b2}"] [data-fmanrow="${b2}"]`;
-        assert.strictEqual(await text(page, chip), 'Man.');
+        assert.equal(p.fight.turn, b1);
+        const chip = `li[data-frow="${b1}"] [data-fmanrow="${b1}"]`;
+        assert.strictEqual(await text(page, chip), '+ manoeuvre');
+        assert.strictEqual(await page.evaluate(`document.querySelectorAll('li[data-frow="${b2}"] [data-fmanrow]').length`), 0, 'no empty chip off its turn');
         await tap(page, chip);
-        await page.waitFor('document.querySelector("#acting h3") && document.querySelector("#acting h3").textContent === "Bouncer 2"', 3000);
-        const aoa = `#acting [data-fman="${b2}|all-out attack"]`;
+        const aoa = `#acting [data-fman="${b1}|all-out attack"]`;
         await tap(page, aoa);
-        p = await until(page, `p.fight.rows.find((r) => r.id === ${q(b2)}).manoeuvre === "all-out attack" && p.saved === "Saved" && p.pending === 0`);
+        p = await until(page, `p.fight.rows.find((r) => r.id === ${q(b1)}).manoeuvre === "all-out attack" && p.saved === "Saved" && p.pending === 0`);
         assert.strictEqual(await text(page, chip), 'AoA');
-        assert.deepStrictEqual(await texts(page, `li[data-frow="${b2}"] .defs .def`), ['Dodge –', 'Parry –', 'Block –']);
+        assert.deepStrictEqual(await texts(page, `li[data-frow="${b1}"] .defs .def`), ['Dodge –']);
         assert.strictEqual(await attrOf(page, aoa, 'aria-pressed'), 'true');
         await focusIs(page, aoa);
-        assert.deepStrictEqual((await logOf(run)).slice(-1), ['Bouncer 2: All-Out Attack.']);
+        assert.deepStrictEqual((await logOf(run)).slice(-1), ['Bouncer 1: All-Out Attack.']);
         sane(p, `manoeuvre ${width}`);
         if (width === 1449) {
-          const row = p.layout.rows.find((r) => r.name === 'Bouncer 2');
-          assert.ok(row && row.h <= 40, `1449: Bouncer 2 is one line with its chip (${row && row.h} px)`);
-          const other = p.layout.rows.find((r) => r.name === 'Bouncer 1');
-          assert.ok(other && other.h <= 40, `1449: Bouncer 1 is one line with its chip (${other && other.h} px)`);
+          for (const n of ['Bouncer 1', 'Bouncer 2']) {
+            const row = p.layout.rows.find((r) => r.name === n);
+            assert.ok(row && row.h <= 40, `1449: ${n} is one line (${row && row.h} px)`);
+          }
         }
         await shot(page, `gurps-manoeuvre-${width}`);
-        // tapped again, it is taken back
+        // tapped again in the same turn, it is taken back and its log line goes
         await tap(page, aoa);
-        p = await until(page, `p.fight.rows.find((r) => r.id === ${q(b2)}).manoeuvre === null && p.saved === "Saved" && p.pending === 0`);
-        assert.strictEqual(await text(page, chip), 'Man.');
+        p = await until(page, `p.fight.rows.find((r) => r.id === ${q(b1)}).manoeuvre === null && p.saved === "Saved" && p.pending === 0`);
+        assert.strictEqual(await text(page, chip), '+ manoeuvre');
+        assert.ok(!(await logOf(run)).includes('Bouncer 1: All-Out Attack.'));
       });
     });
   }
 
-  it('GURPS: All-Out Defence waits for a defence, then Parry reads 11 and Dodge stays; a PC takes a chip too', async () => {
+  it('GURPS: All-Out Defence waits for a defence, then Parry reads 11 and Dodge stays; a PC takes a note from its panel', async () => {
     const run = await start('gurps', { randomInt: () => 4 });
     await withPage({ width: 1449, height: 762 }, async (page) => {
       let p = await bouncers(page, run, [['st', 11], ['ht', 10], ['dx', 10], ['parry', 9], ['block', 8]]);
@@ -796,8 +799,7 @@ describe('CoC and GURPS fights on the GM page, by real input', { skip: browserSk
       assert.deepStrictEqual((await logOf(run)).slice(-1), ['Bouncer 2: All-Out Defence (Parry).']);
       // a PC: the chip is a note, the sheet's figures do not move
       const sela = named(p, 'Sela Drake').id;
-      await tap(page, `li[data-frow="${sela}"] [data-fmanrow="${sela}"]`);
-      await page.waitFor('document.querySelector("#acting h3").textContent === "Sela Drake"', 3000);
+      p = await peek(page, p, 'Sela Drake');
       await tap(page, `#acting [data-fman="${sela}|aim"]`);
       p = await until(page, `p.fight.rows.find((r) => r.id === ${q(sela)}).manoeuvre === "aim" && p.saved === "Saved" && p.pending === 0`);
       assert.strictEqual(await text(page, `li[data-frow="${sela}"] [data-fmanrow]`), 'Aim');

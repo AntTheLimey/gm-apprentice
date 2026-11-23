@@ -748,11 +748,15 @@
       r.manoeuvre = key;
       r.aodDefence = defence;
       touch(r, at);
-      if (key === null) return;
-      const text = `${nameOf(s, f, r)}: ${chip.name}${defence ? ` (${D.names[defence] || defence})` : ''}.`;
       const turn = `${f.round}:${f.turn}`;
-      const old = r.manTurn === turn ? s.events.findLast((e) => e.fight && e.text === r.manLine) : null;
-      if (old) old.text = text; else say(s, f, at, text);
+      const own = r.manTurn === turn ? s.events.findLastIndex((e) => e.fight && e.text === r.manLine) : -1;
+      if (key === null) {
+        // taken back in the turn it was picked: its line goes; in a later turn the log stays as it was
+        if (own >= 0) { s.events.splice(own, 1); r.manTurn = null; r.manLine = null; }
+        return;
+      }
+      const text = `${nameOf(s, f, r)}: ${chip.name}${defence ? ` (${D.names[defence] || defence})` : ''}.`;
+      if (own >= 0) s.events[own].text = text; else say(s, f, at, text);
       r.manTurn = turn;
       r.manLine = text;
     }),
