@@ -1403,3 +1403,10 @@ test('a PC: the sheet\'s Dodge 8, Parry 10 and Block 9 are read', () => {
   const n = gurpsSystem.readPc({ body: content, fm: data }).numbers;
   assert.deepEqual([n.dodge, n.parry, n.block], [8, 10, 9]);
 });
+
+test('the manoeuvre chips: nine names, every key the defences and Do Nothing read, caps of 3', () => {
+  assert.deepEqual(DEF.chips.map((c) => c.name), ['Attack', 'All-Out Attack', 'All-Out Defence', 'Move and Attack', 'Aim', 'Evaluate', 'Feint', 'Ready', 'Do Nothing']);
+  for (const k of [...Object.keys(DEF.manoeuvres), 'do nothing']) assert.ok(DEF.chips.some((c) => c.key === k), k);
+  assert.deepEqual(DEF.caps, { aim: 3, evaluate: 3 });
+  assert.equal(COC.defences, null);
+});

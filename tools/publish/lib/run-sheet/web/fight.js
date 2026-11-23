@@ -393,6 +393,8 @@
   }
   // A row's turn ends: its shock counts down, and HT to recover while it is Stunned.
   function turnEnds(f, r, at) {
+    // Aim and Evaluate count turns in a row: a turn that ends with neither picked starts them again (Task 15)
+    if (r && defencesOf(f) && r.manoeuvre !== 'aim' && r.manoeuvre !== 'evaluate' && (r.aim || r.evaluate)) { r.aim = 0; r.evaluate = 0; touch(r, at); }
     const C = consequencesOf(f);
     if (!C || !r) return;
     if (isNum(r.shock) && r.shock > 0) {
@@ -721,6 +723,38 @@
       if (!!r.retreat === on) return;
       r.retreat = on;
       touch(r, at);
+    }),
+    // The manoeuvre chip (GURPS, Task 15): a note of the row's choice for this turn, `null` to take it back. It feeds
+    // the defences, the Do Nothing check and the Aim and Evaluate counts; it never rolls. A PC may carry one (the to-hit
+    // dialog reads it). The turn's start clears it (defencesTurn). The log writes one line a turn: a second pick in the
+    // same turn rewrites it. All-Out Defence names the one defence it helps.
+    manoeuvre: onRow((s, f, r, a, at) => {
+      const D = defencesOf(f);
+      if (!D || r.kind === 'lair' || !Array.isArray(D.chips)) return;
+      const key = a.name === null ? null : String(a.name);
+      const chip = key === null ? null : D.chips.find((c) => c.key === key);
+      if (key !== null && !chip) return;
+      const aod = key === 'all-out defence';
+      if (aod && !GM.DEFENCE_KEYS.includes(a.defence)) return;
+      const defence = aod ? a.defence : null;
+      if (key === (r.manoeuvre || null) && defence === (r.aodDefence || null)) return;
+      // the counts before this turn's pick, kept while a pick stands so a second pick counts from the same place
+      const count = (v) => (isNum(v) && v > 0 ? Math.floor(v) : 0);
+      if (!r.manoeuvre) r.manFrom = { aim: count(r.aim), evaluate: count(r.evaluate) };
+      const from = r.manFrom || { aim: 0, evaluate: 0 };
+      const caps = D.caps || {};
+      const grow = (k) => (key === k ? Math.min(isNum(caps[k]) ? caps[k] : 3, from[k] + 1) : 0);
+      if (key === null) { r.aim = from.aim; r.evaluate = from.evaluate; } else { r.aim = grow('aim'); r.evaluate = grow('evaluate'); }
+      r.manoeuvre = key;
+      r.aodDefence = defence;
+      touch(r, at);
+      if (key === null) return;
+      const text = `${nameOf(s, f, r)}: ${chip.name}${defence ? ` (${D.names[defence] || defence})` : ''}.`;
+      const turn = `${f.round}:${f.turn}`;
+      const old = r.manTurn === turn ? s.events.findLast((e) => e.fight && e.text === r.manLine) : null;
+      if (old) old.text = text; else say(s, f, at, text);
+      r.manTurn = turn;
+      r.manLine = text;
     }),
     resisted: onRow((s, f, r, a, at) => { r.resisted = !!a.on; touch(r, at); }),
     // the face-open toggle (GURPS, Task 12), read by GM.gurpsInjury

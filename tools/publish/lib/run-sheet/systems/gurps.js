@@ -95,6 +95,20 @@ const DEFENCES = {
     'move and attack': { none: ['parry'], noRetreat: true }, // B365, B551
     'all-out defence': { chosen: 2 }, // B366
   },
+  // The chip's names (Task 15), in the panel's order; `short` is the row's word. Aim and Evaluate count turns in a
+  // row, each to its cap (B364); any other manoeuvre, or a turn with neither, starts them again.
+  chips: [
+    { key: 'attack', name: 'Attack', short: 'Atk' },
+    { key: 'all-out attack', name: 'All-Out Attack', short: 'AoA' },
+    { key: 'all-out defence', name: 'All-Out Defence', short: 'AoD' },
+    { key: 'move and attack', name: 'Move and Attack', short: 'M&A' },
+    { key: 'aim', name: 'Aim', short: 'Aim' },
+    { key: 'evaluate', name: 'Evaluate', short: 'Eval' },
+    { key: 'feint', name: 'Feint', short: 'Feint' },
+    { key: 'ready', name: 'Ready', short: 'Ready' },
+    { key: 'do nothing', name: 'Do Nothing', short: 'Nothing' },
+  ],
+  caps: { aim: 3, evaluate: 3 }, // B364
 };
 
 // The attribute names are exact (a lower-case `st` is a word); the rest ignore case.

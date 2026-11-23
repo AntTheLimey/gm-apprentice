@@ -746,6 +746,65 @@ describe('CoC and GURPS fights on the GM page, by real input', { skip: browserSk
     });
   }
 
+  for (const [width, height] of SIZES) {
+    it(`GURPS at ${width}: a held click on Bouncer 2's chip, pick All-Out Attack: the row reads AoA and its Dodge "no defence"`, async () => {
+      const run = await start('gurps', { randomInt: () => 4 });
+      await withPage({ width, height }, async (page) => {
+        let p = await bouncers(page, run, [['st', 11], ['ht', 10], ['dx', 10], ['parry', 9], ['block', 8]]);
+        const b2 = named(p, 'Bouncer 2').id;
+        const chip = `li[data-frow="${b2}"] [data-fmanrow="${b2}"]`;
+        assert.strictEqual(await text(page, chip), 'Man.');
+        await tap(page, chip);
+        await page.waitFor('document.querySelector("#acting h3") && document.querySelector("#acting h3").textContent === "Bouncer 2"', 3000);
+        const aoa = `#acting [data-fman="${b2}|all-out attack"]`;
+        await tap(page, aoa);
+        p = await until(page, `p.fight.rows.find((r) => r.id === ${q(b2)}).manoeuvre === "all-out attack" && p.saved === "Saved" && p.pending === 0`);
+        assert.strictEqual(await text(page, chip), 'AoA');
+        assert.deepStrictEqual(await texts(page, `li[data-frow="${b2}"] .defs .def`), ['Dodge –', 'Parry –', 'Block –']);
+        assert.strictEqual(await attrOf(page, aoa, 'aria-pressed'), 'true');
+        await focusIs(page, aoa);
+        assert.deepStrictEqual((await logOf(run)).slice(-1), ['Bouncer 2: All-Out Attack.']);
+        sane(p, `manoeuvre ${width}`);
+        if (width === 1449) {
+          const row = p.layout.rows.find((r) => r.name === 'Bouncer 2');
+          assert.ok(row && row.h <= 40, `1449: Bouncer 2 is one line with its chip (${row && row.h} px)`);
+          const other = p.layout.rows.find((r) => r.name === 'Bouncer 1');
+          assert.ok(other && other.h <= 40, `1449: Bouncer 1 is one line with its chip (${other && other.h} px)`);
+        }
+        await shot(page, `gurps-manoeuvre-${width}`);
+        // tapped again, it is taken back
+        await tap(page, aoa);
+        p = await until(page, `p.fight.rows.find((r) => r.id === ${q(b2)}).manoeuvre === null && p.saved === "Saved" && p.pending === 0`);
+        assert.strictEqual(await text(page, chip), 'Man.');
+      });
+    });
+  }
+
+  it('GURPS: All-Out Defence waits for a defence, then Parry reads 11 and Dodge stays; a PC takes a chip too', async () => {
+    const run = await start('gurps', { randomInt: () => 4 });
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await bouncers(page, run, [['st', 11], ['ht', 10], ['dx', 10], ['parry', 9], ['block', 8]]);
+      const b2 = named(p, 'Bouncer 2').id;
+      p = await peek(page, p, 'Bouncer 2');
+      await tap(page, `#acting [data-fman="${b2}|all-out defence"]`);
+      await page.waitFor(`document.querySelector('#acting [data-fmand="${b2}|parry"]')`, 3000);
+      assert.strictEqual(named(await settled(page), 'Bouncer 2').manoeuvre, null, 'nothing is set until a defence is named');
+      await tap(page, `#acting [data-fmand="${b2}|parry"]`);
+      p = await until(page, `p.fight.rows.find((r) => r.id === ${q(b2)}).aodDefence === "parry" && p.saved === "Saved" && p.pending === 0`);
+      assert.deepStrictEqual(await texts(page, `li[data-frow="${b2}"] .defs .def`), ['Dodge 8', 'Parry 11', 'Block 8']);
+      assert.strictEqual(await text(page, `li[data-frow="${b2}"] [data-fmanrow]`), 'AoD');
+      assert.deepStrictEqual((await logOf(run)).slice(-1), ['Bouncer 2: All-Out Defence (Parry).']);
+      // a PC: the chip is a note, the sheet's figures do not move
+      const sela = named(p, 'Sela Drake').id;
+      await tap(page, `li[data-frow="${sela}"] [data-fmanrow="${sela}"]`);
+      await page.waitFor('document.querySelector("#acting h3").textContent === "Sela Drake"', 3000);
+      await tap(page, `#acting [data-fman="${sela}|aim"]`);
+      p = await until(page, `p.fight.rows.find((r) => r.id === ${q(sela)}).manoeuvre === "aim" && p.saved === "Saved" && p.pending === 0`);
+      assert.strictEqual(await text(page, `li[data-frow="${sela}"] [data-fmanrow]`), 'Aim');
+      assert.deepStrictEqual(await texts(page, '#acting .pdefs.pc .sheetdef'), ['Dodge 8', 'Parry 10', 'Block 9']);
+    });
+  });
+
   it('GURPS: the panel\'s Retreat on gives Dodge 11; a used Block asks once, then rolls again; Stunned greys Retreat', async () => {
     const run = await start('gurps', { randomInt: () => 4 });
     await withPage({ width: 1449, height: 762 }, async (page) => {

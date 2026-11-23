@@ -447,3 +447,9 @@ ol.to .hitline { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ell
 .act .sideSw button[aria-pressed="true"] { background: var(--ice); color: var(--panel); border-color: var(--ice); }
 .act .nums > span.sideSw { border: 0; background: none; padding: 0; }
 #coloursBtn .keptmark { color: var(--lamp); font-size: .7rem; }
+/* GURPS's manoeuvre chip (Task 15): a small word on the row, a row of buttons in the panel */
+ol.to .tg.man { padding: 0 5px; white-space: nowrap; }
+ol.to .tg.man:not(.on) { color: var(--muted); }
+.act .pman { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin: 6px 0; font: 500 .72rem var(--mono); }
+.act .pman .lab { color: var(--muted); }
+.act .pman .tg { padding: 1px 6px; }

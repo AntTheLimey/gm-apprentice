@@ -258,7 +258,7 @@ License: SJG Online Policy
 Transformation: modifier names and numbers used in a sum, each
 with its page reference in a code comment. Names and numbers only.
 
-**`tools/publish/lib/run-sheet/systems/gurps.js`** (the run sheet's fight figures: turn order, marks, Tired, FP, the wounding table, the consequences of a hit and a turn: shock, major wound, knockdown, death checks; the active defences: Dodge from Basic Speed, posture, stunned, reeling and tired, retreat, repeat parry, one Block a turn, the manoeuvres' limits)
+**`tools/publish/lib/run-sheet/systems/gurps.js`** (the run sheet's fight figures: turn order, marks, Tired, FP, the wounding table, the consequences of a hit and a turn: shock, major wound, knockdown, death checks; the active defences: Dodge from Basic Speed, posture, stunned, reeling and tired, retreat, repeat parry, one Block a turn, the manoeuvres' limits, the manoeuvre names and the Aim and Evaluate counts)
 Source: *GURPS Basic Set 4th Edition* (Steve Jackson Games).
 License: SJG Online Policy
 (https://www.sjgames.com/general/online_policy.html).

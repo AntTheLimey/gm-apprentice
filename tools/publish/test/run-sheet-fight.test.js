@@ -2775,3 +2775,145 @@ describe('GURPS defences as they stand this turn (step 6b Task 14)', () => {
     }
   });
 });
+
+describe('GURPS manoeuvre chip (step 6b Task 15)', () => {
+  const { systemFor } = require('../lib/run-sheet/systems');
+  const GURPS = systemFor('gurps-4e').describe().fight;
+  const GM = require('../lib/run-sheet/web/gurps-math');
+  const begin = (list, rules = GURPS) => RS.reduce(fresh(), { id: 'f1', type: 'fightStart', title: 'T', ...(rules ? { rules } : {}), rows: list.map((o, i) => M.blankRow({ id: `r${i + 1}`, ...o })) }, now());
+  const G = (s, a) => RS.reduce(s, { id: nextId(), fight: 'f1', ...a }, now());
+  const named = (s, name) => s.fight.rows.find((r) => r.name === name);
+  const go = (s) => G(s, { type: 'fightNext', from: s.fight.turn, round: s.fight.round });
+  const lines = (s) => s.events.filter((e) => e.fight).map((e) => e.text);
+  const pick = (s, name, key, defence) => G(s, { type: 'manoeuvre', row: named(s, name).id, name: key, ...(defence ? { defence } : {}) });
+  const live = (s, name) => GM.liveDefences(named(s, name), GURPS.defences);
+  const rows = () => [
+    { name: 'Bouncer 1', ini: 6, speed: 6, hp: 11, max: 11, ht: 10, dodge: 9, parry: 9, block: 8 },
+    { name: 'Bouncer 2', ini: 5, speed: 5, hp: 11, max: 11, ht: 10, dodge: 8, parry: 9, block: 8 },
+    { name: 'Kev', kind: 'pc', ini: 4, speed: 4, hp: 12, max: 12, ht: 11, dodge: 8, parry: 10, block: 9 },
+  ];
+  // Bouncer 1 acts; a full round on from here is three goes
+  const round = (s) => go(go(go(s)));
+
+  it('All-Out Attack picked: Dodge and Parry and Block read none; the chip is clear on the row\'s next turn', () => {
+    let s = go(begin(rows()));
+    s = pick(s, 'Bouncer 1', 'all-out attack');
+    assert.equal(named(s, 'Bouncer 1').manoeuvre, 'all-out attack');
+    assert.deepEqual(['dodge', 'parry', 'block'].map((k) => live(s, 'Bouncer 1')[k].value), [null, null, null]);
+    s = go(go(s)); // Kev; the round wraps to Bouncer 1 only after Kev
+    assert.equal(named(s, 'Bouncer 1').manoeuvre, 'all-out attack', 'still on until its own turn');
+    s = go(s);
+    assert.equal(s.fight.turn, named(s, 'Bouncer 1').id);
+    assert.deepEqual([named(s, 'Bouncer 1').manoeuvre, named(s, 'Bouncer 1').aodDefence], [null, null]);
+    assert.equal(live(s, 'Bouncer 1').dodge.value, 9);
+  });
+
+  it('All-Out Defence with no defence is dropped; with Parry, Parry gets +2 and Dodge and Block stay', () => {
+    let s = go(begin(rows()));
+    const was = s.fight.rows;
+    s = pick(s, 'Bouncer 1', 'all-out defence');
+    assert.deepEqual(s.fight.rows, was);
+    s = pick(s, 'Bouncer 1', 'all-out defence', 'parry');
+    assert.deepEqual(['dodge', 'parry', 'block'].map((k) => live(s, 'Bouncer 1')[k].value), [9, 11, 8]);
+    s = pick(s, 'Bouncer 1', 'all-out defence', 'block');
+    assert.deepEqual(['dodge', 'parry', 'block'].map((k) => live(s, 'Bouncer 1')[k].value), [9, 9, 10]);
+  });
+
+  it('Move and Attack picked: Parry reads none and Retreat is refused', () => {
+    let s = go(begin(rows()));
+    s = pick(s, 'Bouncer 1', 'move and attack');
+    assert.equal(live(s, 'Bouncer 1').parry.value, null);
+    s = G(s, { type: 'retreat', row: named(s, 'Bouncer 1').id, on: true });
+    assert.ok(!named(s, 'Bouncer 1').retreat);
+  });
+
+  it('Aim picked twice in a row counts 2; Attack then resets it to 0', () => {
+    let s = go(begin(rows()));
+    s = pick(s, 'Bouncer 1', 'aim');
+    assert.equal(named(s, 'Bouncer 1').aim, 1);
+    s = round(s);
+    s = pick(s, 'Bouncer 1', 'aim');
+    assert.equal(named(s, 'Bouncer 1').aim, 2);
+    s = round(s);
+    s = pick(s, 'Bouncer 1', 'attack');
+    assert.deepEqual([named(s, 'Bouncer 1').aim, named(s, 'Bouncer 1').evaluate], [0, 0]);
+  });
+
+  it('Evaluate picked six turns in a row counts to 3', () => {
+    let s = go(begin(rows()));
+    const seen = [];
+    for (let i = 0; i < 6; i++) { s = pick(s, 'Bouncer 1', 'evaluate'); seen.push(named(s, 'Bouncer 1').evaluate); s = round(s); }
+    assert.deepEqual(seen, [1, 2, 3, 3, 3, 3]);
+  });
+
+  it('Aim then Evaluate in the next turn: Aim goes to 0, Evaluate to 1', () => {
+    let s = go(begin(rows()));
+    s = pick(s, 'Bouncer 1', 'aim');
+    s = round(s);
+    s = pick(s, 'Bouncer 1', 'evaluate');
+    assert.deepEqual([named(s, 'Bouncer 1').aim, named(s, 'Bouncer 1').evaluate], [0, 1]);
+  });
+
+  it('a turn that ends with no pick resets Aim and Evaluate; one that ends on Aim keeps them', () => {
+    let s = go(begin(rows()));
+    s = pick(s, 'Bouncer 1', 'aim');
+    s = round(s);
+    // Bouncer 1's turn again with no pick; its turn ends
+    s = go(s);
+    assert.equal(named(s, 'Bouncer 1').aim, 0, 'the turn with no pick ended');
+    let t = go(begin(rows()));
+    t = pick(t, 'Bouncer 1', 'evaluate');
+    t = go(t);
+    assert.equal(named(t, 'Bouncer 1').evaluate, 1, 'ended on Evaluate');
+  });
+
+  it('a second pick in the same turn writes no second log line and counts from the same place', () => {
+    let s = go(begin(rows()));
+    s = pick(s, 'Bouncer 1', 'aim');
+    s = round(s);
+    const before = lines(s).length;
+    s = pick(s, 'Bouncer 1', 'aim');
+    s = pick(s, 'Bouncer 1', 'evaluate');
+    s = pick(s, 'Bouncer 1', 'all-out defence', 'dodge');
+    assert.equal(lines(s).length, before + 1);
+    assert.equal(lines(s).slice(-1)[0], 'Bouncer 1: All-Out Defence (Dodge).');
+    s = pick(s, 'Bouncer 1', 'aim');
+    assert.equal(named(s, 'Bouncer 1').aim, 2, 'the first Aim turn came before');
+    s = pick(s, 'Bouncer 1', null);
+    assert.deepEqual([named(s, 'Bouncer 1').manoeuvre, named(s, 'Bouncer 1').aim], [null, 1]);
+    assert.equal(lines(s).length, before + 1);
+  });
+
+  it('a pick is logged as "Bouncer 1: All-Out Attack."', () => {
+    let s = go(begin(rows()));
+    s = pick(s, 'Bouncer 1', 'all-out attack');
+    assert.equal(lines(s).slice(-1)[0], 'Bouncer 1: All-Out Attack.');
+  });
+
+  it('a name that is no manoeuvre is dropped; a PC may carry one but its sheet stays', () => {
+    let s = go(begin(rows()));
+    const was = s.fight.rows;
+    s = pick(s, 'Bouncer 1', 'dance');
+    assert.deepEqual(s.fight.rows, was);
+    s = pick(s, 'Kev', 'all-out attack');
+    assert.equal(named(s, 'Kev').manoeuvre, 'all-out attack');
+    assert.deepEqual([named(s, 'Kev').dodge, named(s, 'Kev').parry], [8, 10]);
+  });
+
+  it('Do Nothing picked, no defence rolled: the row at 0 HP is not asked HT next turn', () => {
+    let s = go(begin([{ name: 'Bouncer 1', ini: 6, speed: 6, hp: 11, max: 11, ht: 10 }, { name: 'Bouncer 2', ini: 5, speed: 5, hp: -2, max: 11, ht: 10, dodge: 8 }]));
+    s = go(s);
+    s = pick(s, 'Bouncer 2', 'do nothing');
+    s = go(go(s));
+    assert.deepEqual(named(s, 'Bouncer 2').cards || [], []);
+  });
+
+  it('D&D and CoC take no manoeuvre', () => {
+    for (const rules of [null, systemFor('coc-7e').describe().fight]) {
+      let s = begin([{ name: 'Wolf', hp: 11, max: 11 }], rules);
+      const was = s.fight.rows;
+      s = G(s, { type: 'manoeuvre', row: named(s, 'Wolf').id, name: 'aim' });
+      assert.deepEqual(s.fight.rows, was);
+    }
+  });
+});

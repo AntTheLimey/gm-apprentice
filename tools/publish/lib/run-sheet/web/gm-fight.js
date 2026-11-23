@@ -54,7 +54,7 @@
     rolling: {}, shockPick: null, cardsSeen: new Set(),
     // GURPS's defences (Task 14): a defence whose roll is out at the server ("row|dodge" -> true), and the row whose
     // used Block was tapped once, so the next tap rolls it again
-    defRolling: {}, blockAsk: null,
+    defRolling: {}, blockAsk: null, aodAsk: null,
   };
 
   const model = () => RP.model();
@@ -495,6 +495,7 @@
     if (rn.includes('ac')) h += `<span class="acv">AC${statBox('data-fac', r, isNum(r.ac) ? r.ac : '', `inputmode="numeric" autocomplete="off" aria-label="AC for ${esc(r.gmName)}"`)}</span>`;
     h += poolsHTML(r);
     h += rowDefencesHTML(r);
+    h += rowManoeuvreHTML(r);
     if (tg.gun) h += `<button type="button" class="tg ${r.gun ? 'on' : ''}" data-fgun="${esc(r.id)}" aria-pressed="${!!r.gun}" title="${esc(w.gunTitle || '')}">${esc(w.gun || 'gun')}</button>`;
     h += chips(r, view.bloodied.has(r.id));
     h += statusSelect(r);
@@ -589,7 +590,7 @@
       // D&D says when a row with numbers has no block; CoC and GURPS do not: a row with HP is complete (D3d)
       else if (!nonum && w.noBlock) body += `<p class="warn">${esc(w.noBlock)}</p>`;
     }
-    return `${open}${head(r.gmName)}<div class="nums">${nums.join('')}</div>${ctr ? `<div class="nums ctr">${ctr}</div>` : ''}${boxesHTML(r)}${panelDefencesHTML(r)}${hitChipsHTML(r)}${trackHTML(r)}${body}</div>`;
+    return `${open}${head(r.gmName)}<div class="nums">${nums.join('')}</div>${ctr ? `<div class="nums ctr">${ctr}</div>` : ''}${boxesHTML(r)}${panelManoeuvreHTML(r)}${panelDefencesHTML(r)}${hitChipsHTML(r)}${trackHTML(r)}${body}</div>`;
   }
   // ---- GURPS's defences (Task 14): each as it stands this turn, and a tap rolls it; the GM can ignore all of it ----
   // A defence's button: "Parry 9" (the figure now), "Block used", "Block again?" once a used Block was tapped. `at` is
@@ -602,6 +603,37 @@
     const tail = d.value === null ? '' : ask ? '. Tap again: roll a second Block' : d.used ? '. Tap: asks before a second Block' : '. Tap: roll it';
     const cls = ['def', d.causes.length ? 'moved' : '', d.used ? 'used' : '', ask ? 'ask' : ''].filter(Boolean).join(' ');
     return `<button type="button" class="${cls}" ${at}="${esc(key)}" ${off ? 'disabled' : ''} title="${esc(`${d.title}${tail}`)}" aria-label="${esc(`${text} for ${r.gmName}`)}">${esc(text)}</button>`;
+  }
+  // ---- GURPS's manoeuvre chip (Task 15): the row's word (a tap shows its panel), the panel's one button per manoeuvre ----
+  const chipsOf = () => { const D = defences(); return D && Array.isArray(D.chips) ? D.chips : null; };
+  const counted = (r) => (r.manoeuvre === 'aim' && r.aim > 1 ? ` ${r.aim}` : r.manoeuvre === 'evaluate' && r.evaluate > 1 ? ` ${r.evaluate}` : '');
+  function rowManoeuvreHTML(r) {
+    const cs = chipsOf();
+    if (!cs || r.kind === 'lair' || !r.in || r.out) return '';
+    const c = cs.find((x) => x.key === r.manoeuvre);
+    const text = c ? `${c.short}${counted(r)}` : 'Man.';
+    const full = c ? `${c.name}${r.aodDefence ? ` (${r.aodDefence})` : ''}${counted(r)}` : '';
+    return `<button type="button" class="tg man ${c ? 'on' : ''}" data-fmanrow="${esc(r.id)}" title="${esc(c ? `${full}. Tap: show its panel to change it` : "Manoeuvre: tap to show the panel, where it is chosen")}" aria-label="${esc(`Manoeuvre for ${r.gmName}: ${c ? full : 'none'}`)}">${esc(text)}</button>`;
+  }
+  function panelManoeuvreHTML(r) {
+    const cs = chipsOf();
+    const D = defences();
+    if (!cs || r.kind === 'lair') return '';
+    const on = (k) => r.manoeuvre === k;
+    const btn = (c) => `<button type="button" class="tg ${on(c.key) ? 'on' : ''}" data-fman="${esc(`${r.id}|${c.key}`)}" aria-pressed="${on(c.key)}" title="${esc(on(c.key) ? `${c.name}: tap to take it back` : c.name)}">${esc(c.name)}${on(c.key) ? esc(counted(r)) : ''}</button>`;
+    const aod = on('all-out defence') || ui.aodAsk === r.id;
+    const which = aod ? `<span class="lab">Which defence:</span>${GMath.DEFENCE_KEYS.map((k) => `<button type="button" class="tg ${on('all-out defence') && r.aodDefence === k ? 'on' : ''}" data-fmand="${esc(`${r.id}|${k}`)}" aria-pressed="${on('all-out defence') && r.aodDefence === k}">${esc(D.names[k] || k)}</button>`).join('')}` : '';
+    return `<div class="pman" role="group" aria-label="Manoeuvre"><span class="lab">Manoeuvre:</span>${cs.map(btn).join('')}${which}</div>`;
+  }
+  // A manoeuvre tapped: the pick again takes it back; All-Out Defence waits for its defence.
+  function pickManoeuvre(rowId, key, defence) {
+    const r = rowById(rowId);
+    if (!r) return;
+    const same = r.manoeuvre === key && (key !== 'all-out defence' || !defence || r.aodDefence === defence);
+    ui.aodAsk = key === 'all-out defence' && !same && !defence ? rowId : null;
+    if (key === 'all-out defence' && !defence && !same) { RP.render(); RP.focusTo(attr('data-fman', `${rowId}|${key}`)); return; }
+    F({ type: 'manoeuvre', row: rowId, name: same ? null : key, ...(defence && !same ? { defence } : {}) });
+    RP.focusTo(attr(defence ? 'data-fmand' : 'data-fman', defence ? `${rowId}|${defence}` : `${rowId}|${key}`));
   }
   // The row's readout: a foe's or an ally's defences that have a figure, each its own Defend button [H2]. A PC has none.
   function rowDefencesHTML(r) {
@@ -996,7 +1028,7 @@
       'data-fseen', 'data-fhalf', 'data-fahalf', 'data-fres', 'data-fout', 'data-fgun', 'data-fds', 'data-flr', 'data-fla', 'data-frch',
       'data-fun', 'data-fsame', 'data-fside', 'data-fundo', 'data-faddgroup', 'data-faddbeat', 'data-faddpick', 'data-faddnew',
       'data-fspend', 'data-fafter', 'data-fjot', 'data-fight', 'data-fplace', 'data-fcbtn', 'data-fcardpick', 'data-fcardht', 'data-fshock',
-      'data-fshockset', 'data-fdef', 'data-fpdef', 'data-fretreat', ...PANEL_KEYS.map((k) => `data-fs-${k}`)],
+      'data-fshockset', 'data-fdef', 'data-fpdef', 'data-fretreat', 'data-fman', 'data-fmand', 'data-fmanrow', ...PANEL_KEYS.map((k) => `data-fs-${k}`)],
     // Fight here on a place tile or a place's drawer (plan 6a Task 7); nothing while a fight runs
     placeButtons(note) {
       if (!allowed() || state().fight || !(model().placeKeys || {})[note]) return '';
@@ -1065,6 +1097,7 @@
             er: r.er, erMax: r.erMax, caster: r.caster, dr: r.dr, faceOpen: r.faceOpen, hit: r.hit, crippled: r.crippled,
             shock: r.shock || 0, cards: r.cards || [],
             dodge: r.dodge, parry: r.parry, block: r.block, parries: r.parries || 0, blocks: r.blocks || 0, defended: r.defended || 0, retreat: Boolean(r.retreat),
+            manoeuvre: r.manoeuvre || null, aodDefence: r.aodDefence || null, aim: r.aim || 0, evaluate: r.evaluate || 0,
           })),
         };
       }
@@ -1162,6 +1195,9 @@
     if (d.fshock) { ui.shockPick = ui.shockPick === d.fshock ? null : d.fshock; RP.render(); return true; }
     if (d.fshockset) { const [rid, n] = split(d.fshockset); ui.shockPick = null; F({ type: 'setShock', row: rid, n: Number(n) }); return true; }
     if (d.fdef || d.fpdef) { const [rid, k] = split(d.fdef || d.fpdef); defend(rid, k, d.fdef ? 'data-fdef' : 'data-fpdef'); return true; }
+    if (d.fman) { const [rid, k] = split(d.fman); pickManoeuvre(rid, k, null); return true; }
+    if (d.fmand) { const [rid, k] = split(d.fmand); pickManoeuvre(rid, 'all-out defence', k); return true; }
+    if (d.fmanrow) { ui.peek = f.turn === d.fmanrow ? null : d.fmanrow; RP.render(); RP.focusTo(attr('data-fmanrow', d.fmanrow)); return true; }
     if (d.fretreat) { const x = rowById(d.fretreat); if (x) F({ type: 'retreat', row: x.id, on: !x.retreat }); return true; }
     if (d.fface) { const x = rowById(d.fface); if (x) F({ type: 'faceOpen', row: x.id, on: !x.faceOpen }); return true; }
     const id = d.ftick || d.fsel || d.fahalf || d.fhalf || d.fres || d.fseen || d.fout || d.flr;
