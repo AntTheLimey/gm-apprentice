@@ -2312,14 +2312,14 @@ describe('GURPS hits on the row (step 6b Task 12)', () => {
     }
   });
 
-  it('5 fat on DR 1 takes 4 FP, 12 fat skull 9 FP; a PC uses its sheet\'s DR by place', () => {
+  it('5 fat on DR 1 takes 4 FP, 12 fat skull 11 FP; a PC uses its sheet\'s DR by place', () => {
     let s = begin([{ name: 'Mage', hp: 10, max: 10, fp: 10, fpMax: 10, dr: 1 },
       { name: 'Sela', kind: 'pc', hp: 12, max: 12, drByLocation: { torso: 3, arm: 2, skull: 4 } }]);
     s = typeIn(s, 'Mage', '5 fat');
     assert.deepEqual([named(s, 'Mage').fp, named(s, 'Mage').hp], [6, 10]);
     s = typeIn(s, 'Mage', '12 fat skull');
-    assert.deepEqual([named(s, 'Mage').fp, named(s, 'Mage').hp, named(s, 'Mage').crippled], [-3, 10, []]);
-    assert.equal(named(s, 'Mage').hit.line, '12 fat skull − DR 3 (skull +2) = 9 (fatigue: no location multiplier)');
+    assert.deepEqual([named(s, 'Mage').fp, named(s, 'Mage').hp, named(s, 'Mage').crippled], [-5, 10, []]);
+    assert.equal(named(s, 'Mage').hit.line, '12 fat skull − DR 1 = 11 (fatigue: no location effects)');
     s = typeIn(s, 'Sela', '9 cr');
     assert.equal(named(s, 'Sela').hp, 6, 'torso DR 3');
     s = typeIn(s, 'Sela', '4 cr arm');

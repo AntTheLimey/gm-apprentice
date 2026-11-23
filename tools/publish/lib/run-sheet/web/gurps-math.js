@@ -68,7 +68,8 @@
     if (isNum(loc.all) && !left(type)) mult = loc.all;
     else if (loc.by && isNum(loc.by[type])) mult = loc.by[type];
     else if (loc.only || left(type)) note = ` (${location}: as torso for ${type})`;
-    const extra = isNum(loc.dr) && !left(type) ? loc.dr : 0;
+    // `fat` (B398)
+    const extra = isNum(loc.dr) && !left(type) && type !== 'fat' ? loc.dr : 0;
     const at = drAt(r, location, side, loc);
     const dr = at.dr + extra;
     const drText = extra ? `${dr} (${location} +${extra})` : at.open ? `${dr} (face open)` : String(dr);
@@ -78,7 +79,7 @@
     const out = { injury: 0, location, side, type, place, crippled: false };
     if (through <= 0) return { ...out, line: `${head} = 0` };
     // `fat` (B398)
-    if (fat) return { ...out, injury: through, line: `${head} = ${through} (fatigue: no location multiplier)` };
+    if (fat) return { ...out, injury: through, line: `${head} = ${through} (fatigue: no location effects)` };
     const raw = Math.floor(through * mult);
     let injury = Math.max(1, raw);
     let line = `${head} = ${through}${mult !== 1 || note ? ` \u00d7 ${times(mult)}${note} = ${raw}` : ''}`;

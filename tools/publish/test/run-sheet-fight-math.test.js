@@ -1056,9 +1056,9 @@ test('12 cr skull on DR 1 takes 36, 12 tox skull 11 with its line', () => {
   const s = hitOn('12 cr skull', foe());
   assert.deepEqual([s.injury, s.line], [36, '12 cr − DR 3 (skull +2) = 9 × 4 = 36']);
   for (const t of ['pi-', 'cut', 'imp', 'burn']) assert.equal(hitOn(`12 ${t} skull`, foe()).injury, 36, t);
-  // fat: the place's DR, then FP (ruling, fix round 1)
+  // fat: the row's DR for the place, then FP (ruling, fix round 2)
   const fat = hitOn('12 fat skull', foe());
-  assert.deepEqual([fat.injury, fat.line, fat.crippled], [9, '12 fat skull − DR 3 (skull +2) = 9 (fatigue: no location multiplier)', false]);
+  assert.deepEqual([fat.injury, fat.line, fat.crippled], [11, '12 fat skull − DR 1 = 11 (fatigue: no location effects)', false]);
   assert.deepEqual([hitOn('12 fat arm', foe()).injury, hitOn('12 fat arm', foe()).crippled], [11, false], '12 fat arm at 12 HP');
   const tox = hitOn('12 tox skull', foe());
   assert.deepEqual([tox.injury, tox.line], [11, '12 tox − DR 1 = 11 × 1 (skull: as torso for tox) = 11']);
