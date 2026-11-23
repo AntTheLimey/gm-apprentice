@@ -179,7 +179,7 @@
     return rows.map((r, i) => ({ r, i })).sort((a, b) => {
       const x = a.r;
       const y = b.r;
-      if (x.in !== y.in) return x.in ? -1 : 1;
+      if (!x.in !== !y.in) return x.in ? -1 : 1;
       const dx = ini(x);
       const dy = ini(y);
       if (dx !== dy) return dx > dy ? -1 : 1;

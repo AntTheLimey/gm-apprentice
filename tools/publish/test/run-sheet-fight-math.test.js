@@ -942,3 +942,14 @@ test('a tie group decides its figure as a whole (fix round 2): mixed goes PCs fi
   const placed = M.placeRow([mixed[1], mixed[2], mixed[0]], 'pcNoDx', GURPS).map((r) => r.id);
   assert.deepEqual(placed, ['pc12', 'pcNoDx', 'foe14']);
 });
+
+test('a tie group leaves the Lair row out, and an unset tick sorts as unticked', () => {
+  const ids = (rows, rules) => M.sortRows(rows, rules).map((r) => r.id);
+  // the Lair row has no DX, yet the rest of the group still sorts by DX, and the Lair row goes last at the tie
+  const g = [row({ id: 'lair', kind: 'lair', ini: 6 }), row({ id: 'dx10', ini: 6, dx: 10 }), row({ id: 'dx14', ini: 6, dx: 14 })];
+  assert.deepEqual(ids(g, GURPS), ['dx14', 'dx10', 'lair']);
+  // `in` undefined and `in` false are the same: both unticked, so the comparator is consistent either way round
+  const u = [row({ id: 'off', in: false, ini: 5, dx: 9 }), row({ id: 'unset', in: undefined, ini: 5, dx: 12 }), row({ id: 'on', ini: 1 })];
+  assert.deepEqual(ids(u, GURPS), ['on', 'unset', 'off']);
+  assert.deepEqual(ids([u[1], u[0], u[2]], GURPS), ['on', 'unset', 'off']);
+});
