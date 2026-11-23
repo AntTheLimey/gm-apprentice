@@ -179,6 +179,23 @@ def test_scene_embed_goes_after_its_paragraph(vault):
     assert (vault / "_attachments/scenes/session-03-mill.jpg").is_file()
 
 
+def test_a_scene_on_a_session_note_embeds_in_its_own_recap(vault):
+    # #837: a played session that keeps its own recap takes the picture there.
+    (vault / "Sessions/Session 01.md").write_text(
+        "---\ntype: session\nstatus: played\n---\n# Session 01\n"
+        "## Narrative Recap\nThe party reached the mill.\n\nNobody slept.\n",
+        encoding="utf-8")
+    e = entry(1, "Sessions/Session 01.md", "scene",
+              "_attachments/scenes/session-01-mill", after="The party reached",
+              shape="16:9")
+    job = make_job(vault, [e])
+    assert run(vault, job, "--keep", "1", "--write") == 0
+    text = (vault / "Sessions/Session 01.md").read_text(encoding="utf-8")
+    assert ("The party reached the mill.\n\n![[session-01-mill.jpg]]\n\n"
+            "Nobody slept.\n") in text
+    assert (vault / "_attachments/scenes/session-01-mill.jpg").is_file()
+
+
 def test_embed_after_unit():
     out = image_place.embed_after(RECAP, "The miller said   nothing", "a b.jpg")
     assert out is not None and "first.\n\n![[a b.jpg]]\n\nThe miller then" in out

@@ -34,6 +34,7 @@ import image_money
 import ingest_images
 import section
 import tool_cache
+import schema_rules
 import vault_write as vw
 import vaultlib as vl
 
@@ -782,11 +783,87 @@ def _read_note(ctx: _Ctx, e: Entry, raw: str) -> tuple[str, dict[str, Any] | Non
     fm = vl.extract_frontmatter(text)
     etype = vl.entity_type(fm)
     e.kind = "scene" if etype in vl.WRAP_UP_TYPES else etype
+    if etype == "session" and not _session_takes_scenes(ctx, e, text, fm):
+        return None
+    if etype == "session":
+        e.kind = "scene"
     if e.kind not in SHAPES:
         _refuse(e, f"pictures for a {e.kind or 'plain'} note are not supported yet")
         return None
     e.shape = SHAPES[e.kind]
     return text, fm
+
+
+def _session_wrap_up(ctx: _Ctx, rel: str, text: str) -> str | None:
+    """The Wrap-Up the site pairs with the session note at `rel`, as its
+    Story page does: the note's `documents.wrap_up`, a Wrap-Up whose
+    `session:` names it, or the one Wrap-Up in its folder when that names no
+    session. A link to a note not written yet is no Wrap-Up."""
+    def resolved(raw: Any) -> str | None:      # a frontmatter value: a link, a number, None
+        target = vl.wikilink_target(raw) if isinstance(raw, str) else ""
+        if not target.strip():
+            return None
+        try:
+            return section.resolve_note(ctx.batch, target, ctx.names)
+        except vw.WriteError:
+            return None
+    own = resolved(vl.nested_mapping(text, "documents").get("wrap_up", ""))
+    if own:
+        return own
+    def folder_of(path: str) -> str:
+        return path.rsplit("/", 1)[0] if "/" in path else ""
+    sessions: set[str] = set()                 # every session note
+    claimed: set[str] = set()                  # Wrap-Ups a session's documents.wrap_up names
+    in_folder: list[tuple[str, str | None]] = []   # (path, the note its session: names)
+    for other, body in vl.vault_files(ctx.vault):
+        fm = vl.extract_frontmatter(body) or {}
+        etype = vl.entity_type(fm)
+        if etype == "session":
+            sessions.add(other)
+            named = resolved(vl.nested_mapping(body, "documents").get("wrap_up", ""))
+            if named:
+                claimed.add(named)
+            continue
+        if etype not in vl.WRAP_UP_TYPES:
+            continue
+        back = resolved(fm.get("session"))
+        if back == rel:
+            return other
+        if folder_of(other) == folder_of(rel):
+            in_folder.append((other, back))
+    # The folder's one Wrap-Up stands in only when it is linked to no session, as the
+    # publisher's isLinkedWrapUp reads it: a `session:` naming no session note (a bare
+    # number, a stale title) links nothing.
+    if len(in_folder) == 1:
+        wrap, back = in_folder[0]
+        if back not in sessions and wrap not in claimed:
+            return wrap
+    return None
+
+
+def _session_takes_scenes(ctx: _Ctx, e: Entry, text: str,
+                          fm: dict[str, Any] | None) -> bool:
+    """A session note keeps its own Narrative Recap when it has no Wrap-Up
+    (#837), and its Story page shows that recap: a scene picture goes there
+    as in a Wrap-Up's. Refused, with the reason, for a session not yet
+    played (the picture would show prep on the players' site), one with a
+    Wrap-Up (whose recap the Story page shows) and one with no recap."""
+    fm = fm or {}
+    status = str(fm.get("status") or "").strip().lower()
+    if status in schema_rules.SESSION_NOT_YET_RUN:
+        _refuse(e, f"this session is not played yet (status: {status}), so "
+                "its pictures would show prep on the players' site")
+        return False
+    wrap_rel = _session_wrap_up(ctx, e.note, text)
+    if wrap_rel:
+        _refuse(e, f"this session has a Wrap-Up ({wrap_rel}), whose "
+                "recap its Story page shows: plan the picture on the Wrap-Up")
+        return False
+    if recap_spans(text) is None:
+        _refuse(e, "this session note has no Narrative Recap section; a scene "
+                "picture goes after a paragraph of a recap")
+        return False
+    return True
 
 
 def _check_unprompted(ctx: _Ctx, e: Entry) -> bool:
@@ -841,7 +918,7 @@ def _check_scene_place(e: Entry, text: str) -> bool:
     """Rule 6: `after` must open exactly one paragraph of the recap."""
     spans = recap_spans(text)
     if spans is None:
-        _refuse(e, "this Wrap-Up has no Narrative Recap section")
+        _refuse(e, "this note has no Narrative Recap section")
         return False
     hits = after_hits(spans, e.after or "")
     if len(hits) != 1:
