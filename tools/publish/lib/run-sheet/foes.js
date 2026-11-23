@@ -5,7 +5,7 @@
 
 const path = require('node:path');
 const { itemKeys } = require('./keys');
-const { bullets } = require('./plan-text');
+const { bullets, links } = require('./plan-text');
 const { startingSide } = require('./sides');
 const { systemFor } = require('./systems');
 const { lairActionsOf } = require('./systems/dnd');
@@ -154,7 +154,8 @@ function noteless(w, whoText, sides, add) {
 
 // Every `who` entry of a beat, planned or contingency. `seen` carries one Plan's warnings across beats;
 // `carried` is the allies' carried vitals, as `rows` reads them.
-function foesFor(beat, index, seen = new Set(), carried = null, sides = null, system = DND) {
+// `others` is every beat of the Plan: a contingency's Then links skip people a planned beat already lists.
+function foesFor(beat, index, seen = new Set(), carried = null, sides = null, system = DND, others = []) {
   const warnings = [];
   const add = warner(seen, warnings);
   const entries = [];
@@ -173,6 +174,32 @@ function foesFor(beat, index, seen = new Set(), carried = null, sides = null, sy
     if (doneNotes.has(w.note)) continue;
     doneNotes.add(w.note);
     for (const b of bullets(e.info.treasure)) texts.push({ text: b.text, box: b.box });
+  }
+  if (!(beat.who || []).length) {
+    const kindOf = (p) => (index.has(p) ? String(index.read(p).fm.type || '').toLowerCase() : '');
+    const people = (paths) => [...new Set(paths)].filter((p) => p && ['npc', 'creature'].includes(kindOf(p)));
+    if (beat.contingency) {
+      // no NPCs block: its Then lines name the people who arrive, so they are ticked, statless ones too (they
+      // get a blank row and the warning), minus anyone a planned beat already lists
+      const planned = new Set(others.filter((o) => o !== beat && !o.contingency).flatMap((o) => (o.who || []).map((w) => w.note)));
+      for (const p of people(links(beat.then || '').map((l) => index.resolve(l))).filter((p) => !planned.has(p))) {
+        const e = entry(p, index, 1, add, true, sides, '', system, { label: '' });
+        if (!e) continue;
+        if (e.benched) { e.benched = false; add('no-stats', p, NO_NUMBERS(e.info.name)); }
+        entries.push(e);
+      }
+      if (entries.length) add('who-from-then', null, `${beat.title}: no NPCs block; its rows come from the people its Then lines link`);
+    } else if (canFight || !beat.type) {
+      // (an untyped parsed beat has type '': beatCanFight only knows the undefined of a hand-built one)
+      // an older Plan's fight names its people in Entities only: creatures ticked, NPCs benched
+      for (const p of people(beat.entities || [])) {
+        const e = entry(p, index, 1, add, true, sides, '', system, { label: '' });
+        if (!e) continue;
+        if (e.info.type === 'npc') e.benched = true;
+        entries.push(e);
+      }
+      if (entries.length) add('who-from-entities', beat.sceneNote || null, `${beat.title}: no NPCs list; the fight rows come from its Entities line (NPCs unticked)`);
+    }
   }
   const foes = rows(entries, beat.key, carried, system);
   // A scene that lists its own treasure stands alone: a note's hoard is the same loot in other words.

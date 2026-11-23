@@ -245,7 +245,7 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
   for (const b of beats) for (const w of b.who || []) if (w.note) who.set(w.note, `${who.get(w.note) || ''} ${w.wants || ''} ${w.knownAs || ''}`.trim());
   const sides = { quickRef, partyNotes: own.party, who };
   for (const beat of beats) {
-    const r = foesFor(beat, index, seen, carried, sides, sys);
+    const r = foesFor(beat, index, seen, carried, sides, sys, beats);
     beat.foes = r.foes;
     beat.treasure.push(...r.treasure);
     add(r.warnings);

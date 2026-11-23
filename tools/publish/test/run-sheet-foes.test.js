@@ -470,3 +470,63 @@ describe('run sheet foes: recharge forms and lair actions (5b)', () => {
     assert.strictEqual(noteWith('AC 11 HP 9 Initiative +1\n\nLair actions work here, recast.\n\n- ***Lair Actions*** (on 20):\n  - Fog.').lairActions, '- Fog.', 'a prose mention before the real line');
   });
 });
+
+// Task 9: rows from a contingency's Then links and from an older Plan's Entities line.
+describe('run sheet foes: Then links and Entities lines', () => {
+  const note = (name, type, extra = '') => `---\nname: ${name}\ntype: ${type}\n---\n\n${extra}`;
+  const STATS = '## Stats\n\nAC 12, Hit Points 9, Initiative +1\n';
+  const FILES = {
+    'Characters/NPCs/Arriver One.md': note('Arriver One', 'npc', STATS),
+    'Characters/NPCs/Arriver Bare.md': note('Arriver Bare', 'npc'),
+    'Creatures/Arriver Beast.md': note('Arriver Beast', 'creature', STATS),
+    'Locations/Arriver Hall.md': note('Arriver Hall', 'location'),
+    'Items/Arriver Lamp.md': note('Arriver Lamp', 'item'),
+    'Chapters/Scene Note.md': note('Scene Note', 'scene'),
+  };
+  const P = (n) => `Characters/NPCs/${n}.md`;
+  const beat = (extra) => ({ key: 'b-x', title: 'The arrival', type: '', contingency: false, who: [], then: '', entities: [], ...extra });
+  const rowsOf = (b, others = []) => { const { index } = setup(null, FILES); return foesFor(b, index, new Set(), null, null, undefined, others); };
+
+  it('Then links give ticked rows', () => {
+    const r = rowsOf(beat({ contingency: true, then: 'The [[Arriver One]], [[Arriver Beast]] and [[Arriver Bare]] come in. See [[Arriver Hall]].' }));
+    assert.deepStrictEqual(r.foes.map((f) => [f.name, !f.benched, f.hp]), [['Arriver One', true, 9], ['Arriver Beast', true, 9], ['Arriver Bare', true, null]]);
+    assert.ok(r.warnings.some((w) => w.kind === 'who-from-then' && w.text === 'The arrival: no NPCs block; its rows come from the people its Then lines link'));
+    assert.ok(r.warnings.some((w) => w.text === 'Arriver Bare: no numbers in the vault: type them in the fight, or fill them in prep'));
+    assert.ok(!r.warnings.some((w) => /Arriver One:/.test(w.text)));
+  });
+
+  it('a person already in the fight it joins is skipped', () => {
+    const planned = beat({ who: [{ note: P('Arriver One'), count: 1 }] });
+    const c = beat({ contingency: true, then: '[[Arriver One]] and [[Arriver Beast]] come in.' });
+    assert.deepStrictEqual(rowsOf(c, [planned, c]).foes.map((f) => f.name), ['Arriver Beast']);
+  });
+
+  it('a contingency with an NPCs block ignores its Then links', () => {
+    const c = beat({ contingency: true, who: [{ note: P('Arriver One'), count: 1 }], then: '[[Arriver Beast]] comes in.' });
+    const r = rowsOf(c);
+    assert.deepStrictEqual(r.foes.map((f) => f.name), ['Arriver One']);
+    assert.ok(!r.warnings.some((w) => w.kind === 'who-from-then'));
+  });
+
+  it('Entities give rows: creature ticked, NPC benched', () => {
+    const r = rowsOf(beat({ type: 'combat', sceneNote: 'Chapters/Scene Note.md', entities: ['Creatures/Arriver Beast.md', P('Arriver One')] }));
+    assert.deepStrictEqual(r.foes.map((f) => [f.name, !!f.benched]), [['Arriver Beast', false], ['Arriver One', true]]);
+    assert.ok(r.warnings.some((w) => w.kind === 'who-from-entities' && w.note === 'Chapters/Scene Note.md'));
+  });
+
+  it('an untyped beat\'s Entities give rows, NPCs benched', () => {
+    const r = rowsOf(beat({ type: '', entities: [P('Arriver One'), P('Arriver Bare'), 'Creatures/Arriver Beast.md'] }));
+    assert.deepStrictEqual(r.foes.map((f) => [f.name, !!f.benched]), [['Arriver One', true], ['Arriver Bare', true], ['Arriver Beast', false]]);
+    assert.ok(!r.warnings.some((w) => /Arriver (One|Bare):/.test(w.text)));
+  });
+
+  it('a social beat\'s Entities give none', () => {
+    const r = rowsOf(beat({ type: 'social', entities: [P('Arriver One'), 'Creatures/Arriver Beast.md'] }));
+    assert.deepStrictEqual([r.foes, r.warnings], [[], []]);
+  });
+
+  it('a place, an item and the scene note among the Entities give no row', () => {
+    const r = rowsOf(beat({ type: 'combat', entities: ['Locations/Arriver Hall.md', 'Items/Arriver Lamp.md', 'Chapters/Scene Note.md', P('Arriver One')] }));
+    assert.deepStrictEqual(r.foes.map((f) => f.name), ['Arriver One']);
+  });
+});
