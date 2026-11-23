@@ -301,6 +301,7 @@ ol.to .hpv input { width: 2.6rem; }
 ol.to .acv input { width: 2.3rem; margin-left: 2px; }
 /* CoC and GURPS rows (step 6b Task 7): FP now/[max], MP · SAN (the entry box takes its placeholder's width) */
 ol.to .fpv input { width: 2.3rem; }
+ol.to .fpv .er { color: var(--muted); }
 ol.to .pools { font: 600 .74rem var(--mono); color: var(--muted); white-space: nowrap; }
 ol.to input[aria-invalid="true"], ol.to input.pending { outline: 2px solid var(--bad); outline-offset: 1px; }
 /* a row's second line (gm-fight.js syncLine2): a box's words and the statuses the row has no room for; it wraps, and

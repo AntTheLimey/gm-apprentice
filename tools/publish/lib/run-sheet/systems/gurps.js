@@ -13,6 +13,7 @@ const { deriveGurps } = require('../web/gurps-math');
 const { extractSections } = require('../../processor');
 const { parseGurps } = require('../../templates/gurps/parse');
 const { buildVitals } = require('../../templates/gurps/live-data');
+const { sections } = require('../plan-text');
 
 const FOE_TYPES = new Set(['npc', 'creature']);
 
@@ -50,8 +51,66 @@ function readNumbers(stats) {
   if (d.fpMax !== undefined) nums.fp = d.fpMax;
   if (d.speed !== undefined) nums.speed = d.speed;
   nums.from = d.from;
+  const er = energyReserve(stats);
+  if (er) { nums.er = er.max; if (er.now !== er.max) nums.erStart = er.now; }
+  if (isCaster(stats)) nums.caster = true;
   return nums;
 }
+
+// ---- magic (Task 10): who casts, and the Energy Reserve. Names only: the spell list itself is shown as written. ----
+
+// An Energy Reserve, written three ways: `FP 11 (+4 Energy Reserve)`, a trait `Energy Reserve 4`, or a current over a
+// maximum (`Energy Reserve 6/6`, a Current Status table row `| Energy Reserve | 6/6 |` too). { now, max } or null.
+// A table row's other cells (a cost) are never the figure: only the current-over-maximum form reads across a `|`.
+function energyReserve(text) {
+  const t = String(text == null ? '' : text).replace(/\r\n?/g, '\n');
+  const pair = /\bEnergy Reserve\b[ \t*:|]*(\d+)[ \t]*\/[ \t]*(\d+)/i.exec(t);
+  if (pair) return { now: Math.min(Number(pair[1]), Number(pair[2])), max: Number(pair[2]) };
+  const one = /\(\s*\+\s*(\d+)\s*Energy Reserve\b/i.exec(t) || /\bEnergy Reserve[ \t*:]*(\d+)\b(?![ \t]*\/)/i.exec(t);
+  return one ? { now: Number(one[1]), max: Number(one[1]) } : null;
+}
+
+const DASHES = /^[\s\-–—]*$/;
+// `Light-15`, `Create Fire (15)`, `Sense Foes 15`: a name with a skill level after it
+const LEVELLED = /[A-Za-z)][ \t]*(?:[-–][ \t]*\d{1,2}\b|\([ \t]*\d{1,2}[ \t]*\)|[ \t]\d{1,2}\b)/;
+const cellsOf = (line) => line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((c) => c.replace(/[*_`]/g, '').trim());
+const SEPARATOR = /^\s*\|?[\s:|-]+\|?\s*$/;
+// A table row that names a spell: its first cell is a name (not a dash, nor the header's word), and a cell holds a level.
+const spellRow = (line) => {
+  if (!/^\s*\|/.test(line) || SEPARATOR.test(line)) return false;
+  const c = cellsOf(line);
+  return !DASHES.test(c[0]) && !/^(?:name|spells?)$/i.test(c[0]) && c.slice(1).some((x) => /^\d{1,2}$/.test(x));
+};
+// A block's spell list with skill levels: a `Spells` label or heading with levelled names on its line, or the
+// bullets or table rows under it; or a table whose header's first cell is `Spell`.
+function hasSpellList(md) {
+  const lines = String(md == null ? '' : md).replace(/\r\n?/g, '\n').split('\n');
+  let under = false;
+  let spellTable = false;
+  for (const line of lines) {
+    const plain = line.replace(/[*_`]/g, '').trim();
+    const head = /^(?:#{1,6}[ \t]+|[-*+][ \t]+)?Spells?\b[^:]*?(?::|$)(.*)$/i.exec(plain);
+    if (head && !/^\|/.test(plain)) {
+      if (LEVELLED.test(head[1])) return true;
+      under = !head[1].trim();
+      spellTable = false;
+      continue;
+    }
+    if (/^\s*\|/.test(line)) {
+      const c = cellsOf(line);
+      if (!SEPARATOR.test(line) && /^spells?$/i.test(c[0])) { spellTable = true; continue; }
+      if ((under || spellTable) && spellRow(line)) return true;
+      continue;
+    }
+    spellTable = false;
+    if (!plain) continue;
+    if (under && /^[-*+]\s/.test(line.trim()) && LEVELLED.test(plain)) return true;
+    if (under && !/^[-*+]\s/.test(line.trim())) under = false;
+  }
+  return false;
+}
+// An NPC casts with Magery 1 or more (Magery 0 cannot cast), or a spell list with skill levels.
+const isCaster = (md) => /\bMagery\b[ \t*:]*\+?0*[1-9]/i.test(String(md == null ? '' : md)) || hasSpellList(md);
 
 const hasNumbers = (nums) => ['hp', 'fp', 'speed', 'dx', 'st', 'ht', 'dodge'].some((k) => nums[k] !== null) || nums.dr !== null;
 
@@ -96,14 +155,31 @@ const NO_POOLS = 'no HP or FP on the sheet: type them in the fight';
 const firstLine = (e) => String((e && e.message) || e).split('\n')[0];
 const figure = (v) => { const n = parseFloat(String(v == null ? '' : v)); return Number.isFinite(n) ? n : null; };
 
+// A PC casts when the sheet's Spells table lists a spell: the site's reader keeps an empty table's
+// `| — | … | No spells |` row as a spell named "—", which does not count. Its `## Spells` section, as written, is the
+// panel's fold; its Energy Reserve (any of the three forms, a Current Status row's current first) is the row's.
+function magicOf(model, text) {
+  const out = {};
+  const er = energyReserve(text);
+  if (er) Object.assign(out, { erNow: er.now, erMax: er.max });
+  const listed = (model.spells || []).some((x) => x && !DASHES.test(String(x.name == null ? '' : x.name)));
+  if (!listed) return { numbers: out, spells: null };
+  out.caster = true;
+  const sec = sections(text, 2).find((x) => /^spells\b/i.test(x.title.replace(/[*_`]/g, '').trim()));
+  return { numbers: out, spells: sec && sec.text ? sec.text : null };
+}
+
 function readPc({ body, fm }) {
   try {
-    const model = parseGurps(fm || {}, extractSections(String(body == null ? '' : body).replace(/\r\n?/g, '\n')));
+    const text = String(body == null ? '' : body).replace(/\r\n?/g, '\n');
+    const model = parseGurps(fm || {}, extractSections(text));
     const v = buildVitals(model);
     if (!v) return { numbers: { ...NONE }, note: NO_POOLS };
     const ht = ((model.attributes || {}).primary || {}).HT;
+    const magic = magicOf(model, text);
     return { numbers: { hpNow: v.hp.cur, hpMax: v.hp.max, fpNow: v.fp.cur, fpMax: v.fp.max,
-      speed: figure(v.basicSpeed), dx: figure(v.dx), ht: figure(ht && ht.value) } };
+      speed: figure(v.basicSpeed), dx: figure(v.dx), ht: figure(ht && ht.value), ...magic.numbers },
+    ...(magic.spells ? { spells: magic.spells } : {}) };
   } catch (e) {
     return { numbers: { ...NONE }, note: `the sheet could not be read: ${firstLine(e)}` };
   }
@@ -124,7 +200,8 @@ function describeGurps(id) {
       ...[1, 2, 3, 4, 5].map((n) => ({ key: `minus${n}`, name: `\u2212${n}\u00d7HP`, times: n })),
     ],
     tiredAt: { name: 'Tired', part: 3 },
-    pools: [{ key: 'fp', prefix: 'f', label: 'FP', max: 'fpMax', floorTimes: -1 }],
+    // the Energy Reserve pays spells only, never below 0; the GM picks which pool a spell comes from (Task 10)
+    pools: [{ key: 'fp', prefix: 'f', label: 'FP', max: 'fpMax', floorTimes: -1 }, { key: 'er', prefix: 'e', label: 'Energy Reserve', max: 'erMax', floor: 0 }],
   };
   Object.assign(r, { family: 'gurps', ...JSON.parse(JSON.stringify(fight)) });
   Object.assign(r.fight, fight);
@@ -142,14 +219,21 @@ function describeGurps(id) {
   r.words = {
     ...r.words, hp: 'HP', ac: '', temp: '', initiative: 'Basic Speed', initBox: 'Spd', longRest: '', advancement: '', bloodied: '', noBlock: '',
     entryPlaceholder: '-7 / +3 / f-2',
-    entryInvalid: 'Type -7 or 7 (damage), +3 (healing) or f-2 (FP)',
+    // a caster's box: a spell is paid with f-3 (FP) or e-3 (Energy Reserve)
+    casterPlaceholder: '\u2726 f-3',
+    entryInvalid: 'Type -7 or 7 (damage), +3 (healing), f-2 (FP) or e-2 (Energy Reserve)',
+    noReserve: 'No Energy Reserve: f-N pays from FP',
+    casterTitle: 'A caster: f-3 pays a spell from FP', reserveTitle: 'e-3 spends it',
   };
   return r;
 }
 
 // The row's own fields: initiative is Basic Speed.
-const foeRow = (n) => ({ init: n.speed, fp: n.fp, fpMax: n.fp, speed: n.speed, dx: n.dx, st: n.st, ht: n.ht, dodge: n.dodge, dr: n.dr, from: n.from });
+// An Energy Reserve and a caster only where the block has them.
+const foeRow = (n) => ({ init: n.speed, fp: n.fp, fpMax: n.fp, speed: n.speed, dx: n.dx, st: n.st, ht: n.ht, dodge: n.dodge, dr: n.dr, from: n.from,
+  ...(n.er == null ? {} : { er: n.er, erMax: n.er, ...(n.erStart == null ? {} : { erStart: n.erStart }) }),
+  ...(n.caster ? { caster: true } : {}) });
 
 const gurps = { ...dnd, id: 'gurps-4e', fights: true, readFoe, readPc, foeRow, stockNoActions: undefined, describe: () => describeGurps('gurps-4e') };
 
-module.exports = { gurps, readNumbers, keyOf, lacks };
+module.exports = { gurps, readNumbers, keyOf, lacks, energyReserve, hasSpellList, isCaster };

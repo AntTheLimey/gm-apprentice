@@ -111,6 +111,8 @@ function readPcs(planBody, index, party, system = systemFor(null)) {
       role: '', moment: '', touch: '', arc: '',
       thread: threadOf(body),
       ...read.numbers,
+      // a caster's spells as the sheet writes them, for the fight panel's fold (GURPS, Task 10)
+      ...(typeof read.spells === 'string' && read.spells ? { spells: read.spells } : {}),
       ...(read.note ? { prepNote: read.note } : {}),
     });
   }

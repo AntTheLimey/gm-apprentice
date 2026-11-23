@@ -350,4 +350,104 @@ describe('CoC and GURPS fights on the GM page, by real input', { skip: browserSk
       }
     });
   }
+
+  // Task 10: the Tower Stair holds a caster NPC with a reserve (Ilse), a reserve with no caster (Bram), Magery 0 (Dova),
+  // a caster PC with a reserve and spells (Lysa) and a PC whose Spells table is empty (Orrin)
+  it('GURPS: a caster\'s row shows ✦FP and +4 on one line at 1449, 1280 and 1100', async () => {
+    for (const [width, height] of SIZES) {
+      const run = await start('gurps');
+      await withPage({ width, height }, async (page) => {
+        const p = await fightOn(page, run, 2);
+        const fpv = (name) => text(page, `li[data-frow="${named(p, name).id}"] .fpv`);
+        const ph = (name) => attrOf(page, `[data-fhp="${named(p, name).id}"]`, 'placeholder');
+        assert.strictEqual(await fpv('Ilse Verrin'), '\u2726FP 10/ +4', `${width}`);
+        assert.strictEqual(await ph('Ilse Verrin'), '\u2726 f-3');
+        assert.strictEqual(await fpv('Lysa Venn'), '\u2726FP 10/ +6');
+        assert.strictEqual(await ph('Lysa Venn'), '\u2726 f-3');
+        assert.strictEqual(await fpv('Bram Holt'), 'FP 11/ +4', 'a reserve with no Magery: no ✦');
+        const ilseRow = `li[data-frow="${named(p, 'Ilse Verrin').id}"]`;
+        assert.strictEqual(await attrOf(page, `${ilseRow} .fpv`, 'title'), 'A caster: f-3 pays a spell from FP');
+        assert.strictEqual(await attrOf(page, `${ilseRow} .fpv .er`, 'title'), 'Energy Reserve 4/4: e-3 spends it');
+        assert.strictEqual(await ph('Bram Holt'), '-7 / +3 / f-2');
+        for (const n of ['Dova Lang', 'Orrin Tate']) {
+          assert.strictEqual(await fpv(n), `FP ${named(p, n).fpMax}/`, n);
+          assert.strictEqual(await ph(n), '-7 / +3 / f-2', n);
+        }
+        // the readout and its +4 share one line, inside a row of one line
+        const id = named(p, 'Ilse Verrin').id;
+        const box = await page.evaluate(`(() => { const s = document.querySelector('li[data-frow="${id}"] .fpv'); const e = s.querySelector('.er'); const a = s.getBoundingClientRect(); const b = e.getBoundingClientRect(); return { h: a.height, dTop: Math.abs(b.top - a.top), dBottom: Math.abs(b.bottom - a.bottom) }; })()`);
+        assert.ok(box.h <= 24 && box.dTop <= 6 && box.dBottom <= 6, `${width}: ${JSON.stringify(box)}`);
+        const row = p.layout.rows.find((r) => r.id === id);
+        assert.ok(row && row.h <= 40, `${width}: Ilse's row is one line (${row && row.h} px)`);
+        sane(p, `gurps magic ${width}`);
+        await shot(page, `gurps-magic-${width}`);
+      });
+    }
+  });
+
+  it('GURPS: e-3 spends the reserve and f-3 FP, typed; e-3 on a row with no reserve is refused on its second line', async () => {
+    const run = await start('gurps');
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await fightOn(page, run, 2);
+      const ilse = named(p, 'Ilse Verrin').id;
+      p = await typeInto(page, `[data-fhp="${ilse}"]`, 'e-3');
+      assert.deepStrictEqual([named(p, 'Ilse Verrin').er, named(p, 'Ilse Verrin').fp], [1, 10]);
+      assert.strictEqual(await text(page, `li[data-frow="${ilse}"] .fpv`), '\u2726FP 10/ +1');
+      p = await typeInto(page, `[data-fhp="${ilse}"]`, 'f-3');
+      assert.deepStrictEqual([named(p, 'Ilse Verrin').er, named(p, 'Ilse Verrin').fp], [1, 7]);
+      p = await peek(page, p, 'Ilse Verrin');
+      const reads = await texts(page, '#acting .nums > span');
+      assert.ok(reads.includes('FP 7/10') && reads.includes('Energy Reserve 1/4'), reads.join(' | '));
+      // the NPC's spells, as its block writes them
+      assert.match(await text(page, '#acting .stats'), /Light-15; Create Fire-15; Sense Foes-15/);
+      // Dova has no reserve: e-3 is refused, the words stay in the box with the reason, nothing changes
+      const dova = named(p, 'Dova Lang').id;
+      const before = named(p, 'Dova Lang');
+      await typeInto(page, `[data-fhp="${dova}"]`, 'e-3');
+      const why = `li[data-row2="${dova}"] .refnum`;
+      await page.waitFor(`document.querySelector(${q(why)})`);
+      assert.strictEqual(await text(page, why), 'No Energy Reserve: f-N pays from FP');
+      assert.strictEqual(await page.evaluate(`document.querySelector('[data-fhp="${dova}"]').value`), 'e-3');
+      p = await settled(page);
+      assert.deepStrictEqual([named(p, 'Dova Lang').fp, named(p, 'Dova Lang').er, named(p, 'Dova Lang').hp], [before.fp, before.er, before.hp]);
+      assert.ok(!(await texts(page, `li[data-row2="${dova}"] .pendnum`)).length, 'not "Enter applies"');
+      // a redraw keeps the refusal, the GM's own f-3 replaces it
+      await fromOther(run, [{ type: 'hp', fight: p.fight.id, row: ilse, entry: '-1' }]);
+      p = await until(page, `p.fight.rows.find((r) => r.id === ${q(ilse)}).hp === 8 && p.saved === "Saved" && p.pending === 0`);
+      assert.strictEqual(await text(page, why), 'No Energy Reserve: f-N pays from FP');
+      // Esc empties the box (and its reason); the GM types f-3 instead
+      await tap(page, `[data-fhp="${dova}"]`);
+      await page.key('Escape');
+      await page.waitFor(`!document.querySelector(${q(why)})`);
+      await page.type('f-3');
+      await page.key('Enter');
+      p = await until(page, `p.fight.rows.find((r) => r.id === ${q(dova)}).fp === ${before.fp - 3} && p.saved === "Saved" && p.pending === 0`);
+      assert.strictEqual(await text(page, why), null);
+    });
+  });
+
+  it('GURPS: the PC\'s spells fold opens with a held click and stays open through a redraw', async () => {
+    const run = await start('gurps');
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await fightOn(page, run, 2);
+      p = await peek(page, p, 'Orrin Tate');
+      assert.strictEqual(await page.evaluate('Boolean(document.querySelector("#acting details.spells"))'), false, 'an empty Spells table: no fold');
+      p = await peek(page, p, 'Lysa Venn');
+      const fold = '#acting details[data-fspells]';
+      assert.strictEqual(await text(page, `${fold} > summary`), "Spells (from Lysa's sheet)");
+      assert.strictEqual(await page.evaluate(`document.querySelector(${q(fold)}).open`), false);
+      await tap(page, `${fold} > summary`);
+      await page.waitFor(`document.querySelector(${q(fold)}).open`);
+      const cells = await texts(page, `${fold} td`);
+      assert.ok(cells.includes('Create Fire') && cells.includes('Light'), cells.join(' | '));
+      // another window's action redraws the panel: the fold stays open
+      await fromOther(run, [{ type: 'hp', fight: p.fight.id, row: named(p, 'Lysa Venn').id, entry: 'e-2' }]);
+      p = await until(page, `p.fight.rows.find((r) => r.name === 'Lysa Venn').er === 4 && p.saved === "Saved" && p.pending === 0`);
+      assert.strictEqual(await page.evaluate(`document.querySelector(${q(fold)}).open`), true);
+      const reads = await texts(page, '#acting .nums > span');
+      assert.ok(reads.includes('Energy Reserve 4/6'), reads.join(' | '));
+      await tap(page, `${fold} > summary`);
+      await page.waitFor(`!document.querySelector(${q(fold)}).open`);
+    });
+  });
 });

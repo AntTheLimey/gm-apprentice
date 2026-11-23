@@ -2149,3 +2149,56 @@ describe('fight maths by system: fix round 1 (step 6b Task 6)', () => {
     }
   });
 });
+
+describe('GURPS magic: the GM picks the pool (step 6b Task 10)', () => {
+  const { systemFor } = require('../lib/run-sheet/systems');
+  const GURPS = systemFor('gurps-4e').describe().fight;
+  const begin = (list) => RS.reduce(fresh(), { id: 'f1', type: 'fightStart', title: 'T', rules: GURPS, rows: list.map((o, i) => M.blankRow({ id: `r${i + 1}`, ...o })) }, now());
+  const G = (s, a) => RS.reduce(s, { id: nextId(), fight: 'f1', ...a }, now());
+  const named = (s, name) => s.fight.rows.find((r) => r.name === name);
+  const typeIn = (s, name, entry) => G(s, { type: 'hp', row: named(s, name).id, entry });
+  const lines = (s) => s.events.filter((e) => e.fight).map((e) => e.text);
+
+  it('e-3 spends the reserve, not FP; f-3 spends FP', () => {
+    let s = begin([{ name: 'Wenna', kind: 'pc', hp: 10, max: 10, fp: 11, fpMax: 14, er: 4, erMax: 4, caster: true }]);
+    s = typeIn(s, 'Wenna', 'e-3');
+    assert.deepEqual([named(s, 'Wenna').er, named(s, 'Wenna').fp], [1, 11]);
+    s = typeIn(s, 'Wenna', 'f-3');
+    assert.deepEqual([named(s, 'Wenna').er, named(s, 'Wenna').fp], [1, 8]);
+    s = typeIn(s, 'Wenna', 'e-3');
+    assert.equal(named(s, 'Wenna').er, 0, 'never below 0');
+    assert.ok(lines(s).includes('Wenna: Energy Reserve 0.'), lines(s).join('\n'));
+    s = typeIn(s, 'Wenna', 'e+9');
+    assert.equal(named(s, 'Wenna').er, 4, 'e+9 stops at its max');
+    assert.deepEqual([named(s, 'Wenna').fp, named(s, 'Wenna').hp], [8, 10]);
+  });
+
+  it('e-3 on a row with no reserve changes nothing', () => {
+    const s = begin([{ name: 'Kev', kind: 'pc', hp: 10, max: 10, fp: 10, fpMax: 10 }]);
+    const t = typeIn(s, 'Kev', 'e-3');
+    assert.deepEqual(t.fight.rows, s.fight.rows);
+    assert.equal(t.events.length, s.events.length);
+  });
+
+  it('rows from the GURPS vault carry the reserve and whether each one casts', () => {
+    assert.equal(M.blankRow({}).caster, false);
+    const GFIX = path.join(__dirname, 'fixtures', 'run-sheet-gurps');
+    const GPLAN = 'Chapters/Chapter 1/Sessions/Session 01/Session 01 - Crates - Plan.md';
+    const gm = readRunSheet(GFIX, GPLAN, { party: ['Characters/PCs/Lysa Venn.md', 'Characters/PCs/Orrin Tate.md'] });
+    const st = RS.emptyState({ stateId: 's', session: 'x', plan: GPLAN });
+    const stair = gm.beats.find((b) => /Tower Stair/.test(b.title));
+    const b = M.rowsForFight({ model: gm, derived: RS.derive(gm, st), state: st, beatKey: stair.key, idBase: 'g1' });
+    const by = (name) => b.rows.find((r) => r.name === name);
+    const got = (name) => [by(name).er, by(name).erMax, by(name).caster];
+    assert.deepEqual(got('Bram Holt'), [4, 4, false]);
+    assert.deepEqual(got('Ilse Verrin'), [4, 4, true], 'a trait Energy Reserve 4');
+    assert.deepEqual(got('Dova Lang'), [null, null, false]);
+    assert.deepEqual(got('Lysa Venn'), [6, 6, true]);
+    assert.deepEqual(got('Orrin Tate'), [null, null, false]);
+    assert.equal(gm.pcs.find((p) => p.name === 'Orrin Tate').spells, undefined, 'an empty Spells table gives no fold');
+    assert.match(gm.pcs.find((p) => p.name === 'Lysa Venn').spells, /\| Create Fire \| Fire \| 13 \|/);
+    let s = begin([{ name: 'Bram', hp: 12, max: 12, fp: 11, fpMax: 11, er: 2, erMax: 4 }]);
+    s = typeIn(s, 'Bram', 'e+1');
+    assert.equal(named(s, 'Bram').er, 3);
+  });
+});

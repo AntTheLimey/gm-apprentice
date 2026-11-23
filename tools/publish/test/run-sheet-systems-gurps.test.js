@@ -4,7 +4,7 @@ const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
 const { buildIndex } = require('../lib/run-sheet/notes');
 const { systemFor } = require('../lib/run-sheet/systems');
-const { readNumbers, keyOf, lacks } = require('../lib/run-sheet/systems/gurps');
+const { readNumbers, keyOf, lacks, energyReserve, isCaster } = require('../lib/run-sheet/systems/gurps');
 const { foesOf } = require('../lib/run-sheet/foes');
 const { copyFixture, removeFixture } = require('./helpers/systems-fixture');
 
@@ -38,13 +38,22 @@ for (const crlf of [false, true]) {
       assert.equal(r.nums.speed, 5.5);
       assert.equal('hpStart' in r.nums, false);
     });
-    it('FP keeps its figure and leaves the reserve text alone', () => {
+    it('FP keeps its figure; the reserve after it is the Energy Reserve', () => {
       const r = read(dir, 'Bram Holt');
-      assert.deepEqual([r.nums.hp, r.nums.fp, r.nums.speed], [12, 11, 5.25]);
+      assert.deepEqual([r.nums.hp, r.nums.fp, r.nums.speed, r.nums.er], [12, 11, 5.25, 4]);
       assert.equal('reserve' in r.nums, false);
+      assert.equal(r.nums.caster, undefined, 'a reserve alone is no caster');
     });
-    it('a magery line adds nothing', () => {
-      for (const n of ['Ilse Verrin', 'Dova Lang']) assert.deepEqual(Object.keys(read(dir, n).nums).sort(), ['dodge', 'dr', 'dx', 'fp', 'from', 'hp', 'ht', 'speed', 'st']);
+    // Task 4 read Magery as nothing; Task 10 reads who casts (changed on purpose)
+    it('Magery 2 is a caster, Magery 0 is not', () => {
+      assert.equal(read(dir, 'Ilse Verrin').nums.caster, true);
+      assert.equal(read(dir, 'Ilse Verrin').nums.er, 4, 'a trait Energy Reserve 4 beside Magery');
+      assert.deepEqual(Object.keys(read(dir, 'Dova Lang').nums).sort(), ['dodge', 'dr', 'dx', 'fp', 'from', 'hp', 'ht', 'speed', 'st']);
+      const index = buildIndex(dir);
+      const row = (n) => foesOf(`${NPCS}${n}.md`, index, 1, 'k', new Set(), null, null, systemFor('gurps-4e')).foes[0];
+      assert.equal(row('Ilse Verrin').caster, true);
+      assert.equal('caster' in row('Dova Lang'), false);
+      assert.equal('er' in row('Rafe Kell'), false, 'no reserve, no key');
     });
     it('a note with no stat block reads as none', () => {
       assert.deepEqual(read(dir, 'Ned Pike'), { stats: '', statsHeading: null, nums: null, lacks: [], hpStart: null, fpStart: null });
@@ -153,7 +162,8 @@ for (const crlf of [false, true]) {
     };
     it('each fixture PC reads HP, FP, Basic Speed, DX and HT', () => {
       assert.deepEqual(readPc('Corin Ash'), { numbers: { hpNow: 10, hpMax: 10, fpNow: 11, fpMax: 11, speed: 5.25, dx: 10, ht: 11 } });
-      assert.deepEqual(readPc('Lysa Venn').numbers, { hpNow: 9, hpMax: 9, fpNow: 10, fpMax: 10, speed: 5, dx: 10, ht: 10 });
+      // Task 10: Lysa's Energy Reserve and her spells (changed on purpose)
+      assert.deepEqual(readPc('Lysa Venn').numbers, { hpNow: 9, hpMax: 9, fpNow: 10, fpMax: 10, speed: 5, dx: 10, ht: 10, erNow: 6, erMax: 6, caster: true });
       assert.deepEqual(readPc('Orrin Tate').numbers, { hpNow: 12, hpMax: 12, fpNow: 11, fpMax: 11, speed: 5.5, dx: 11, ht: 11 });
       assert.deepEqual(readPc('Sela Drake').numbers, { hpNow: 12, hpMax: 12, fpNow: 10, fpMax: 10, speed: 5.25, dx: 11, ht: 10 });
     });
@@ -161,6 +171,23 @@ for (const crlf of [false, true]) {
       const body = '## Current Status\n\n**HP:** 9/11\n**FP:** 10/12\n\n## Stat Sheet\n\n### Primary Attributes\n\n| Attribute | Score |\n|---|---|\n| ST | 11 |\n| DX | 12 |\n| IQ | 10 |\n| HT | 12 |\n\n### Secondary Characteristics\n\n| Characteristic | Value |\n|---|---|\n| HP | 11 |\n| FP | 12 |\n| Basic Speed | 6.00 |\n';
       const r = systemFor('gurps-4e').readPc({ notePath: 'x.md', index: null, fm: { type: 'pc' }, body });
       assert.deepEqual(r.numbers, { hpNow: 9, hpMax: 11, fpNow: 10, fpMax: 12, speed: 6, dx: 12, ht: 12 });
+    });
+    it('an empty Spells table is no caster', () => {
+      const orrin = readPc('Orrin Tate');
+      assert.equal(orrin.numbers.caster, undefined);
+      assert.equal(orrin.spells, undefined);
+      const lysa = readPc('Lysa Venn');
+      assert.match(lysa.spells, /^\| Name \| College \| Skill Level/);
+      assert.match(lysa.spells, /\| Create Fire \| Fire \| 13 \|/);
+      assert.doesNotMatch(lysa.spells, /\r/);
+      for (const p of ['Corin Ash', 'Sela Drake']) assert.equal(readPc(p).numbers.caster, undefined, p);
+    });
+    it('Magery 0 with no spells on a sheet is no caster; a dash row beside a real one still casts', () => {
+      const sheet = (rows) => `## Current Status\n\n**HP:** 10/10\n**FP:** 10/10\n\n## Advantages\n\n| Name | Points |\n|---|---|\n| Magery 0 | 5 |\n\n## Stat Sheet\n\n### Primary Attributes\n\n| Attribute | Score |\n|---|---|\n| ST | 10 |\n| DX | 10 |\n| IQ | 10 |\n| HT | 10 |\n\n### Secondary Characteristics\n\n| Characteristic | Value |\n|---|---|\n| HP | 10 |\n| FP | 10 |\n| Basic Speed | 5.00 |\n\n## Spells\n\n| Name | Skill Level |\n|---|---|\n${rows}\n`;
+      const pc = (rows) => systemFor('gurps-4e').readPc({ notePath: 'x.md', index: null, fm: { type: 'pc' }, body: sheet(rows) });
+      assert.equal(pc('| — | — |').numbers.caster, undefined);
+      assert.equal(pc('| - | - |').numbers.caster, undefined);
+      assert.equal(pc('| — | — |\n| Light | 12 |').numbers.caster, true);
     });
     it('a sheet with no attributes says to type HP and FP in the fight', () => {
       const r = systemFor('gurps-4e').readPc({ notePath: 'x.md', index: null, fm: { type: 'pc' }, body: 'Nothing here.\n' });
@@ -174,3 +201,42 @@ for (const crlf of [false, true]) {
     });
   });
 }
+
+describe('GURPS magic in a block (Task 10)', () => {
+  it('Energy Reserve read three ways', () => {
+    for (const eol of ['\n', '\r\n']) {
+      assert.deepEqual(energyReserve(`HP 12 · FP 11 (+4 Energy Reserve) · Basic Speed 5.25${eol}`), { now: 4, max: 4 });
+      assert.deepEqual(energyReserve(`**Advantages:** Magery 1, Energy Reserve 3 (Magical) [9]${eol}`), { now: 3, max: 3 });
+      assert.deepEqual(energyReserve(`| Track | Value |${eol}|---|---|${eol}| Energy Reserve | 4/6 |${eol}`), { now: 4, max: 6 });
+    }
+    assert.deepEqual(energyReserve('**Energy Reserve:** 5/5'), { now: 5, max: 5 });
+    assert.equal(energyReserve('| Energy Reserve (Magical) | 18 |'), null, 'a table row\'s cost is never the reserve');
+    assert.deepEqual(energyReserve('| Energy Reserve 6 (Magic only) | 18 |'), { now: 6, max: 6 });
+    assert.equal(energyReserve('FP 10 · no reserve'), null);
+    const n = readNumbers('HP 9 · FP 10 · Energy Reserve 2/5');
+    assert.deepEqual([n.fp, n.er, n.erStart], [10, 5, 2]);
+    const row = systemFor('gurps-4e').foeRow(n);
+    assert.deepEqual([row.er, row.erMax, row.erStart], [5, 5, 2]);
+  });
+  it('who casts: Magery 1 or more, or a spell list with levels', () => {
+    assert.equal(isCaster('Magery 1'), true);
+    assert.equal(isCaster('**Magery** 3'), true);
+    assert.equal(isCaster('Magery 0'), false);
+    assert.equal(isCaster('Advantages: Magery 0 (sense only)'), false);
+    assert.equal(isCaster('**Spells (IQ+Magery = 12):** Light-12; Seek Earth-12'), true);
+    assert.equal(isCaster('Spells: none'), false);
+    assert.equal(isCaster('#### Spells\n\n- Light-13\n- Shape Water-13'), true);
+    assert.equal(isCaster('#### Spells\n\n| Name | Level |\n|---|---|\n| — | — |'), false);
+    assert.equal(isCaster('#### Spells\n\n| Name | Level |\n|---|---|\n| Haste | 14 |'), true);
+    assert.equal(isCaster('| Spell | Level |\n|---|---|\n| Haste | 14 |'), true);
+    // a stat table is no spell list
+    assert.equal(isCaster('| HP | 14 |\n| FP | 9 |\n| DR | 2 |'), false);
+    assert.equal(isCaster('ST 10 | DX 12 | IQ 10 | HT 11'), false);
+  });
+  it('the description has the reserve\'s pool and the caster\'s box words', () => {
+    const d = systemFor('gurps-4e').describe();
+    assert.deepEqual(d.fight.pools.map((p) => [p.key, p.prefix, p.max]), [['fp', 'f', 'fpMax'], ['er', 'e', 'erMax']]);
+    assert.equal(d.words.casterPlaceholder, '\u2726 f-3');
+    assert.match(d.words.entryInvalid, /e-2 \(Energy Reserve\)/);
+  });
+});

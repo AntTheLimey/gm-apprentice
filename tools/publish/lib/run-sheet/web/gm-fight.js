@@ -39,6 +39,11 @@
     bad: {},
     // a damage box holding words not yet applied (final review P4.1): row id -> the words, kept through redraws
     pending: {},
+    // an entry the row cannot take (GURPS's e-3 on a row with no Energy Reserve): row id -> { words, why }, kept in
+    // the box with the reason on the row's second line until the box changes
+    refused: {},
+    // the PCs whose spells fold is open (GURPS, Task 10): note -> true
+    spellsOpen: {},
   };
 
   const model = () => RP.model();
@@ -343,7 +348,8 @@
     for (const f of Object.keys(STAT)) {
       if (ui.bad[badKey(STAT[f].k, id)]) out.push(`<span class="badnum" role="status" data-badfor="${f}" title="${esc(statName(f))}">${BAD_NUMBER}</span>`);
     }
-    if (ui.pending[id]) out.push(`<span class="pendnum" role="status" title="Damage or healing typed, not applied yet">${PENDING}</span>`);
+    if (ui.refused[id]) out.push(`<span class="badnum refnum" role="status">${esc(ui.refused[id].why)}</span>`);
+    else if (ui.pending[id]) out.push(`<span class="pendnum" role="status" title="Damage or healing typed, not applied yet">${PENDING}</span>`);
     const st = (li && li.dataset.l2st) || '';
     if (st) out.push(`<span class="l2st">${st}</span>`);
     return out.join('');
@@ -385,18 +391,24 @@
     return `<input ${k}="${esc(r.id)}" value="${esc(bad.words)}" aria-invalid="true" ${rest}>`;
   }
 
-  // A row's pools: GURPS's FP now/[max] (an Energy Reserve inside it: `11/14 +4`), CoC's `MP 12 · SAN 55`. Only
-  // the pools the row holds a figure in.
-  // One boxed pool is all a system has today (GURPS's FP, `data-ffpmax`); a second boxed pool needs its own attribute
-  // and STAT entry (Task 10's Energy Reserve, if it gets a box).
+  // A row's pools: GURPS's FP now/[max] (a caster's `✦FP`, an Energy Reserve inside it: `11/14 +4`), CoC's
+  // `MP 12 · SAN 55`. Only the pools the row holds a figure in.
+  // One boxed pool is all a system has today (GURPS's FP, `data-ffpmax`); the Energy Reserve has no box (its max is
+  // the sheet's), so a second boxed pool would still need its own attribute and STAT entry.
+  const hasReserve = (r) => isNum(r.er) || isNum(r.erMax);
   function poolsHTML(r) {
     const { boxed, read } = poolsShown();
     let h = '';
     for (const p of boxed) {
       if (!isNum(r[p.key]) && !isNum(r[p.max])) continue;
-      const er = isNum(r.er) ? ` +${r.er}` : '';
-      const t = fromTag(r, p.max) ? ` title="${esc(`Max ${p.label} ${r[p.max]}${fromTag(r, p.max)}`)}"` : '';
-      h += `<span class="hpv fpv"${t}>${esc(p.label)} ${esc(isNum(r[p.key]) ? r[p.key] : '?')}/${statBox('data-ffpmax', r, isNum(r[p.max]) ? r[p.max] : '', `inputmode="numeric" autocomplete="off" aria-label="Maximum ${esc(p.label)} for ${esc(r.gmName)}"`)}${esc(er)}</span>`;
+      const fp = p.key === 'fp';
+      // the reserve's words are the system's (its pool's label, rules.words)
+      const erPool = FM.poolOf(rules().fight || rules(), 'er');
+      const er = fp && erPool && hasReserve(r) ? `<span class="er" title="${esc(`${erPool.label} ${isNum(r.er) ? r.er : '?'}/${isNum(r.erMax) ? r.erMax : '?'}${words().reserveTitle ? `: ${words().reserveTitle}` : ''}`)}"> +${esc(isNum(r.er) ? r.er : '?')}</span>` : '';
+      const titles = [fromTag(r, p.max) ? `Max ${p.label} ${r[p.max]}${fromTag(r, p.max)}` : '', fp && r.caster ? (words().casterTitle || '') : ''].filter(Boolean);
+      const t = titles.length ? ` title="${esc(titles.join('. '))}"` : '';
+      const label = fp && r.caster ? `\u2726${p.label}` : p.label;
+      h += `<span class="hpv fpv${fp && r.caster ? ' cast' : ''}"${t}>${esc(label)} ${esc(isNum(r[p.key]) ? r[p.key] : '?')}/${statBox('data-ffpmax', r, isNum(r[p.max]) ? r[p.max] : '', `inputmode="numeric" autocomplete="off" aria-label="Maximum ${esc(p.label)} for ${esc(r.gmName)}"`)}${er}</span>`;
     }
     const ro = read.filter((p) => isNum(r[p.key])).map((p) => `${p.label} ${r[p.key]}`);
     if (ro.length) h += `<span class="pools">${esc(ro.join(' · '))}</span>`;
@@ -442,8 +454,10 @@
     if (isNum(r.hp)) {
       const half = ui.area ? !!ui.ahalf[r.id] : r.half;
       // damage typed and left unapplied keeps its words and its mark, "Enter applies" (final review P4.1)
-      const pend = ui.pending[r.id];
-      const ph = w.entryPlaceholder || '-37/+8/t5';
+      // as does an entry the row refused (e-3 with no Energy Reserve), its reason on the second line
+      const pend = ui.pending[r.id] || (ui.refused[r.id] && ui.refused[r.id].words);
+      // a caster's box says how a spell is paid (GURPS's `✦ f-3`)
+      const ph = (r.caster && w.casterPlaceholder) || w.entryPlaceholder || '-37/+8/t5';
       // with no ½ or Res beside it, the box is as wide as the system's placeholder, so all of it shows
       const wide = tg.half ? '' : ` style="width: calc(${ph.length}ch + 8px)" title="${esc(ph)}"`;
       h += `<input class="hpin${pend ? ' pending' : ''}" data-fhp="${esc(r.id)}" value="${esc(pend || '')}" placeholder="${esc(ph)}"${wide} autocomplete="off" aria-label="Damage or healing for ${esc(r.gmName)}">`;
@@ -529,7 +543,12 @@
       nums.push(`<span class="sideSw" role="group" aria-label="Side"><span class="lab">Side:</span>${FM.SIDES.map((x) => `<button type="button" class="tg" data-fside="${x}" data-fsiderow="${esc(r.id)}" aria-pressed="${x === now}" title="${esc(SIDE_TITLES[x])}">${x}</button>`).join('')}</span>`);
     }
     let body = '';
-    if (r.kind === 'pc') body = '<p class="note">Players run their own sheets.</p>';
+    if (r.kind === 'pc') {
+      body = '<p class="note">Players run their own sheets.</p>';
+      // a caster PC's spells as the sheet writes them, folded (the acting panel is where the GM looks mid-cast)
+      const pc = (model().pcs || []).find((x) => x.note === r.note);
+      if (pc && pc.spellsHtml) body += `<details class="fold spells" data-fspells="${esc(pc.note)}" ${ui.spellsOpen[pc.note] ? 'open' : ''}><summary>Spells (from ${esc(first(pc.name))}'s sheet)</summary><div class="stats">${pc.spellsHtml}</div></details>`;
+    }
     else {
       const info = foeInfo(r, d);
       // a row with no note (typed in the fight) has no vault to fill: its numbers are typed here (final review O4)
@@ -638,6 +657,13 @@
     if (ui.addHits.length && !(ev.target.closest && ev.target.closest(ADD_PARTS))) closeOwed = true;
   }, true);
   window.addEventListener('click', () => setTimeout(closeIfOwed, 0));
+  // a PC's spells fold stays as the GM left it through redraws
+  document.addEventListener('toggle', (ev) => {
+    const el = ev.target;
+    if (el instanceof HTMLDetailsElement && el.dataset.fspells !== undefined) {
+      if (el.open) ui.spellsOpen[el.dataset.fspells] = true; else delete ui.spellsOpen[el.dataset.fspells];
+    }
+  }, true);
   // A box that still holds typed words opens its list again when it is pressed or tabbed back into, as the Move box
   // does (PRENTICE's PR review 2)
   function reopenAddList(t) {
@@ -791,6 +817,7 @@
             // the systems' figures (step 6b)
             fp: r.fp, fpMax: r.fpMax, mp: r.mp, mpMax: r.mpMax, san: r.san, sanMax: r.sanMax, dex: r.dex, st: r.st, ht: r.ht, dx: r.dx,
             speed: r.speed, fighting: r.fighting, marks: r.marks, deepest: r.deepest, tired: r.tired, gun: r.gun, from: r.from,
+            er: r.er, erMax: r.erMax, caster: r.caster,
           })),
         };
       }
@@ -947,7 +974,9 @@
   function markPending(t) {
     const id = t.dataset.fhp;
     const v = t.value;
-    if (v.trim()) ui.pending[id] = v; else delete ui.pending[id];
+    // a refused entry stays refused while its words are in the box; any change clears the reason
+    if (ui.refused[id] && ui.refused[id].words !== v) delete ui.refused[id];
+    if (v.trim() && !ui.refused[id]) ui.pending[id] = v; else delete ui.pending[id];
     t.classList.toggle('pending', Boolean(v.trim()));
     syncLine2(id);
   }
@@ -1051,7 +1080,17 @@
     if (ev.key !== 'Enter') return;
     if (d.fhp !== undefined) {
       ev.preventDefault();
-      if (!FM.parseEntry(t.value, FM.rulesOf(state().fight))) { t.setCustomValidity(words().entryInvalid || INVALID); t.reportValidity(); return; }
+      const e = FM.parseEntry(t.value, FM.rulesOf(state().fight));
+      if (!e) { t.setCustomValidity(words().entryInvalid || INVALID); t.reportValidity(); return; }
+      // the GM picks the pool: e-3 on a row with no Energy Reserve is refused, never paid from FP instead
+      const row = rowById(d.fhp);
+      if (e.pool === 'er' && row && !hasReserve(row)) {
+        ui.refused[d.fhp] = { words: t.value, why: words().noReserve || 'Not on this row' };
+        markPending(t);
+        // selected, so what the GM types next replaces it
+        t.select();
+        return;
+      }
       const entry = t.value;
       t.value = '';
       markPending(t);

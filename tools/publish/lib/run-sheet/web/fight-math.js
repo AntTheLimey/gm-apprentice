@@ -377,7 +377,8 @@
       fp: null, fpMax: null, mp: null, mpMax: null, san: null, sanMax: null, luck: null, er: null, erMax: null,
       dex: null, st: null, ht: null, dx: null, speed: null, dodge: null, parry: null, block: null, dr: null, faceOpen: false,
       armour: null, fighting: null, firearms: null, combat: null, db: null, build: null, attacks: 1, defended: 0, bout: null,
-      from: {}, typedKeys: {}, marks: [], deepest: 0, tired: false, gun: false, fixed: false, held: false, ...over,
+      // and whether it casts (GURPS: its FP shows as ✦FP, Task 10)
+      from: {}, typedKeys: {}, marks: [], deepest: 0, tired: false, gun: false, fixed: false, held: false, caster: false, ...over,
     };
   }
 
@@ -416,13 +417,13 @@
       dex: num(foe.dex), st: num(foe.st), ht: num(foe.ht), dx: num(foe.dx), speed: num(foe.speed), dodge: num(foe.dodge),
       parry: num(foe.parry), block: num(foe.block), dr: foe.dr === undefined ? null : foe.dr, armour: armourOf(foe.armour),
       fighting: foe.fighting === undefined ? null : foe.fighting, firearms: foe.firearms === undefined ? null : foe.firearms,
-      db: foe.db === undefined ? null : foe.db, build: num(foe.build),
+      db: foe.db === undefined ? null : foe.db, build: num(foe.build), caster: foe.caster === true,
       from: foe.from && typeof foe.from === 'object' ? { ...foe.from } : {},
     };
     out.fp = startAt(foe.fpStart, out.fpMax);
     out.mp = out.mpMax;
     out.san = num(foe.san);
-    out.er = out.erMax;
+    out.er = startAt(foe.erStart, out.erMax);
     return out;
   }
   // A PC's, from its sheet's flat numbers (`hpNow`/`hpMax` are HP's, as today).
@@ -437,6 +438,7 @@
       luck: num(pc.luck), dex: num(pc.dex), st: num(pc.st), ht: num(pc.ht), dx: num(pc.dx), speed: num(pc.speed),
       dodge: num(pc.dodge), parry: num(pc.parry), block: num(pc.block), dr: pc.dr === undefined ? null : pc.dr,
       fighting: pc.fighting === undefined ? null : pc.fighting, firearms: pc.firearms === undefined ? null : pc.firearms,
+      caster: pc.caster === true,
     };
   }
   // Initiative where the system works it out, and no D&D modifier then.

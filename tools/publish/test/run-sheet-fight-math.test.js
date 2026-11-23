@@ -815,7 +815,10 @@ test('parseEntry by system', () => {
   assert.deepEqual(M.parseEntry('f+2', GURPS), { pool: 'fp', kind: 'heal', n: 2 });
   // a prefix the system lacks is invalid
   for (const bad of ['t5', 'f-8', 'e-3']) assert.equal(M.parseEntry(bad, COC), null, bad);
-  for (const bad of ['t5', 'm-4', 's-6', 'e-3']) assert.equal(M.parseEntry(bad, GURPS), null, bad);
+  for (const bad of ['t5', 'm-4', 's-6']) assert.equal(M.parseEntry(bad, GURPS), null, bad);
+  // Task 10 (on purpose): e-3 is GURPS's Energy Reserve
+  assert.deepEqual(M.parseEntry('e-3', GURPS), { pool: 'er', kind: 'damage', n: 3 });
+  assert.deepEqual(M.parseEntry('e+2', GURPS), { pool: 'er', kind: 'heal', n: 2 });
   for (const bad of ['m-4', 's-6', 'f-8']) assert.equal(M.parseEntry(bad), null, `${bad} in D&D`);
   assert.deepEqual(M.parseEntry('t5'), { pool: 'temp', kind: 'temp', n: 5 });
   const both = { ...GURPS, pools: GURPS.pools.concat(COC.pools) };
