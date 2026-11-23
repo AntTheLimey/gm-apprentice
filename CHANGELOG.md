@@ -9,6 +9,12 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.141] — 2026-11-23
+
+### Fixed
+
+- A site with a long title or extra menu entries no longer scrolls sideways on a tablet or phone: the title is cut short first, and a menu still too wide for the bar folds into the phone menu (#863). Publish tool 1.70.59.
+
 ## [1.12.140] — 2026-11-23
 
 ### Changed

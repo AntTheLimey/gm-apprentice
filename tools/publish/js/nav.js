@@ -32,6 +32,31 @@
   var topNav = document.querySelector('.top-nav');
   var marked = !!topNav && topNav.getAttribute('data-nav') === 'js';
 
+  // A long title and many menu entries can be wider than a tablet (#863). The stylesheet cuts the title short first;
+  // when that leaves it under 9rem, or the bar still runs past the window, the bar takes the phone menu instead.
+  // Measured with the menu shown, again whenever the window's width changes, and once the site's fonts have loaded.
+  function fitBar() {
+    if (!topNav) return;
+    topNav.classList.remove('nav-crowded');
+    var groups = topNav.querySelector('.nav-groups');
+    if (!groups || getComputedStyle(groups).display === 'none') return;
+    var brand = topNav.querySelector('.nav-brand');
+    var floor = 9 * parseFloat(getComputedStyle(document.documentElement).fontSize);
+    var cut = !!brand && brand.scrollWidth > brand.clientWidth && brand.clientWidth < floor;
+    if (cut || topNav.scrollWidth > topNav.clientWidth) {
+      closeGroups();
+      topNav.classList.add('nav-crowded');
+    }
+  }
+  fitBar();
+  var fitWidth = window.innerWidth;
+  window.addEventListener('resize', function() {
+    if (window.innerWidth === fitWidth) return;
+    fitWidth = window.innerWidth;
+    fitBar();
+  });
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitBar);
+
   if (marked) document.querySelectorAll('.nav-group-toggle').forEach(function(btn) {
     btn.addEventListener('click', function() {
       var group = btn.parentElement;

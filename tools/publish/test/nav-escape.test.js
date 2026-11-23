@@ -67,7 +67,9 @@ function page(marked = true) {
     if (type === 'keydown') doc.listeners.push(fn);
     if (type === 'click') doc.clickers.push(fn);
   };
-  vm.runInNewContext(SOURCE, { document: doc });
+  // The bar's width check (#863) listens for resizes; this bar has no menu groups, so it measures nothing.
+  const window = { innerWidth: 1280, addEventListener() {} };
+  vm.runInNewContext(SOURCE, { document: doc, window });
   const press = (key) => doc.listeners.forEach((fn) => fn({ key, preventDefault() {} }));
   return { doc, story, world, mobileNav, mobileToggle, mobileLink, mobileClose, press };
 }
