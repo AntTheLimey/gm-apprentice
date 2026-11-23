@@ -10,6 +10,9 @@ const { readerFrom, readError } = require('./vault-reader');
 const { publishMode } = require('./processor');
 const { isAgentFile } = require('./agent-files');
 
+// Note types whose folder the site leaves unmapped by design, so the scanner does not warn that they will not publish.
+const QUIET_UNMAPPED_TYPES = new Set(['adventure-brief']);
+
 // A listing or a read through `rd`, with a failure named by its vault-relative path.
 function listing(rd, vaultPath, dir) {
   try { return rd.readdir(dir); } catch (err) { throw readError(toPosix(path.relative(vaultPath, dir)) || '.', err); }
@@ -159,6 +162,9 @@ function scanVaultReport(config, { quiet = false, deps } = {}) {
         const dirRel = path.relative(vaultPath, dir);
         const outputDir = mapFolder(dirRel, folderMap);
         if (!outputDir && dirRel !== '') {
+          // The Midwife's adventure brief (Adventures/<Name>/) stays off the site until the GM maps its folder (#678),
+          // so it is not a page the GM is told will not publish: only other notes there are (issue 839).
+          if (QUIET_UNMAPPED_TYPES.has(String(frontmatter.type).trim().toLowerCase())) continue;
           const dirKey = toPosix(dirRel);
           let entry = unmappedByDir.get(dirKey);
           if (!entry) {

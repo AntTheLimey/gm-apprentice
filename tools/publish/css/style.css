@@ -5158,7 +5158,8 @@ button.dnd5e-chip { font: inherit; color: var(--text); cursor: pointer; text-ali
 .cx-line, .cx-sess { display: block; min-width: 0; overflow-wrap: anywhere; color: var(--cx-muted); }
 .cx-plain .cx-line { font-size: 0.92rem; }
 .cx-sess { font-size: 0.85rem; font-variant-numeric: tabular-nums; }
-.cx-from { color: var(--cx-muted); }
+/* the page a tie was written on: a line of its own under the tie's line, never run on from it (issue 824) */
+.cx-from { display: block; color: var(--cx-muted); font-size: 0.85em; font-style: italic; }
 .cx-kind { display: inline-block; font-size: 0.7rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--cx-muted); border: 1px solid var(--border); border-radius: 3px; padding: 0 5px; margin-left: 6px; font-weight: 600; line-height: 1.5; vertical-align: baseline; }
 .cx-tone { font-weight: 600; }
 .cx-tone.cx-warm { color: var(--cx-warm-ink); }

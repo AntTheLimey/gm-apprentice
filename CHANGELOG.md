@@ -9,11 +9,41 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
-## [1.12.139] — 2026-11-22
+## [1.12.140] — 2026-11-23
 
 ### Changed
 
-- A campaign site credits GM-Apprentice more quietly, in three small parts in place of the footer line: a raven at the end of the header on a computer, the raven and a line at the end of every page, and a line at the foot of the phone menu. All take the site's own colours; `player_site.credit` off removes all three (#862)
+- A campaign site credits GM-Apprentice more quietly, in three small parts in place of the footer line: a raven at the end of the header on a computer, the raven and a line at the end of every page, and a line at the foot of the phone menu. All take the site's own colours; `player_site.credit` off removes all three (#862). Publish tool 1.70.58.
+
+## [1.12.138] — 2026-11-23
+
+### Fixed
+
+- Player builds stop warning that the Midwife's `Adventures/` folder is "not in player_site.folder_map" (#839). The adventure brief stays off the site until you map the folder, as before; other notes put there are still warned about, and `explain` names the unmapped folder as the reason. Publish tool 1.70.56.
+
+## [1.12.137] — 2026-11-22
+
+### Fixed
+
+- The personal reference files guide and `gma personal --system` now name the `generic/` folder for games without their own, and the guide says each system's folder appears when the first file is saved there (#844).
+
+## [1.12.136] — 2026-11-22
+
+### Fixed
+
+- The run sheet no longer loses a click made just after a slow one (#852). When a click took a moment to handle, the next press could lose its hold, and a redraw under the pointer ate the click; on a slow machine a fold, Fight or Start could do nothing. Publish tool 1.70.55.
+
+## [1.12.135] — 2026-11-22
+
+### Fixed
+
+- `gma image draw --redo` now redraws a picture you held with `place --hold`, instead of saying it "has not been drawn yet" (#835). The redrawn picture waits for a new keep-or-hold verdict; redoing a picture already kept says to plan it again.
+
+## [1.12.134] — 2026-11-22
+
+### Fixed
+
+- On the Connections panel, "From <Name>'s page" now sits on its own line in smaller italics under a tie written on the other note, so it no longer reads as part of the tie's sentence (#824). Publish tool 1.70.54.
 
 ## [1.12.133] — 2026-11-22
 

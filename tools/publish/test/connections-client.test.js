@@ -386,8 +386,8 @@ test('the tree: every item a link in island order, no preview, and the strip fil
   for (const bit of ['Ann', 'PC', 'Family', 'hostile', 'Mine.', 'Theirs.', '2 sessions, Session 1 to Session 3']) assert.ok(text.includes(bit), bit);
   const froms = strip.querySelectorAll('span.cx-from');
   assert.strictEqual(froms.length, 1, 'only the line past f');
-  assert.strictEqual(froms[0].textContent, ' from Ann’s page');
-  assert.strictEqual(froms[0].parent.textContent, 'Theirs. from Ann’s page');
+  assert.strictEqual(froms[0].textContent, 'From Ann’s page');
+  assert.strictEqual(froms[0].parent.textContent, 'Theirs.From Ann’s page', 'the tie text, then the source as its own span');
   const open = strip.querySelector('a.cx-open');
   assert.strictEqual(open.textContent, 'Open page');
   assert.strictEqual(open.getAttribute('href'), 'ann.html');
@@ -447,6 +447,26 @@ test('cards: the name link follows without a preview block, a portrait shows as 
   assert.deepStrictEqual(imgs.map((i) => i.getAttribute('src')), ['images/ann.png']);
   assert.strictEqual(s.querySelector('div.cx-strip'), null, 'cards have no strip');
   assert.ok(s.querySelector('span.cx-name'), 'an item with no page is text');
+});
+
+test('cards: a tie written on the other note names its page in a span of its own (#824)', () => {
+  const t = tab('people', 'People', [grp('Served by', item('Anton', { l: ['Mine.', 'Utterly loyal to Herzfeld.'], f: 1, o: 'w' }))]);
+  const s = setup([{ mode: 'cards', json: island([t]) }]).secs[0];
+  const card = s.querySelector('div.cx-card');
+  assert.ok(card, 'a card');
+  const froms = card.querySelectorAll('span.cx-from');
+  assert.strictEqual(froms.length, 1, 'only the line past f');
+  assert.strictEqual(froms[0].textContent, 'From Anton’s page');
+  assert.strictEqual(froms[0].parent.querySelector('span.cx-line-text').textContent, 'Utterly loyal to Herzfeld.');
+});
+
+test('the source of a tie sits on its own line in every treatment (#824)', () => {
+  const css = require('fs').readFileSync(require('path').join(__dirname, '..', 'css', 'style.css'), 'utf8');
+  const rule = css.match(/^\.cx-from\s*\{([^}]*)\}/m);
+  assert.ok(rule, 'a .cx-from rule');
+  assert.match(rule[1], /display:\s*block/);
+  assert.match(rule[1], /font-style:\s*italic/);
+  assert.ok(!/^[^{}]*\.cx-from[^{}]*\{[^}]*display:\s*inline/m.test(css), 'nothing sets it back inline');
 });
 
 test('an item with no page is text in every treatment', () => {

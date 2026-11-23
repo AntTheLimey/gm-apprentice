@@ -11,7 +11,7 @@ gma personal [options]
 
 | Argument | Value | Help |
 |---|---|---|
-| `--system` | `SYSTEM` | list this system's files (fitd, gurps-4e, coc-7e, dnd-5e-2024, pf2e) |
+| `--system` | `SYSTEM` | list this system's files (fitd, gurps-4e, coc-7e, dnd-5e-2024, pf2e, or generic for any other game) |
 | `--json` |  | print the result as JSON |
 
 Example: `gma personal --system fitd`

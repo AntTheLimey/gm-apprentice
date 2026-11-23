@@ -14,7 +14,7 @@ const { withChromeLock, PROFILE_PREFIX, LOCK_DIR } = require('./browser');
 
 const STEP_MS = 30000;
 
-function connect(child) {
+function connect(child, stepMs = STEP_MS) {
   const out = child.stdio[3];
   const inp = child.stdio[4];
   let id = 0;
@@ -52,7 +52,7 @@ function connect(child) {
   const send = (method, params = {}, sessionId) => new Promise((resolve, reject) => {
     if (closed) { reject(closed); return; }
     const n = ++id;
-    const timer = setTimeout(() => { waiting.delete(n); reject(new Error(`${method}: no answer in ${STEP_MS / 1000} s`)); }, STEP_MS);
+    const timer = setTimeout(() => { waiting.delete(n); reject(new Error(`${method}: no answer in ${stepMs / 1000} s`)); }, stepMs);
     waiting.set(n, { resolve, reject, timer, method });
     out.write(`${JSON.stringify({ id: n, method, params, ...(sessionId ? { sessionId } : {}) })}\0`);
   });
@@ -61,36 +61,98 @@ function connect(child) {
 
 const sleep = (ms) => new Promise((r) => { setTimeout(r, ms); });
 
+// What the page received (#852): the last pointer, click, key and scroll events, each with its target and where
+// the page stood, kept on every page from its first script on. A wait that times out prints it beside the
+// helper's own last moves, so a lost input says whether it never arrived, landed elsewhere, or did nothing.
+const INPUT_LOG = `(() => {
+  const log = window.__inputLog = [];
+  const name = (e) => { if (!e || !e.tagName) return String(e && e.nodeName || e);
+    let s = e.tagName.toLowerCase() + (e.id ? '#' + e.id : '');
+    if (typeof e.className === 'string' && e.className.trim()) s += '.' + e.className.trim().split(/\\s+/).slice(0, 2).join('.');
+    for (const k of Object.keys(e.dataset || {}).slice(0, 2)) s += '[data-' + k + ']';
+    return s + (e.isConnected ? '' : '(gone)'); };
+  const sheet = () => { const e = document.getElementById('sheet'); return e ? Math.round(e.scrollTop) : null; };
+  const keep = (ev) => { log.push({ t: Math.round(performance.now()), type: ev.type, x: ev.clientX, y: ev.clientY, key: ev.key,
+    target: name(ev.target), scrollY: Math.round(scrollY), sheet: sheet() }); if (log.length > 40) log.shift(); };
+  for (const t of ['pointerdown', 'pointerup', 'click', 'keydown', 'wheel']) window.addEventListener(t, keep, true);
+  // A click needs its press and release on one element: a redraw that removes the pressed element between them
+  // eats the click. While a press is held, any innerHTML write that removes it is logged with who made it.
+  let down = null;
+  window.addEventListener('pointerdown', (ev) => { down = ev.target; }, true);
+  window.addEventListener('pointerup', () => { const d = down; const e = log[log.length - 1];
+    if (e && e.type === 'pointerup' && d) e.downGone = !d.isConnected; setTimeout(() => { if (down === d) down = null; }, 0); }, true);
+  const html = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML');
+  Object.defineProperty(Element.prototype, 'innerHTML', { configurable: true, get: html.get, set(v) {
+    const held = down && down.isConnected && this.contains(down);
+    html.set.call(this, v);
+    if (held) { log.push({ t: Math.round(performance.now()), type: 'pressed element replaced', target: name(this),
+      by: String(new Error().stack || '').split('\\n').slice(2, 7).map((s) => s.trim().replace(/https?:\\/\\/[^/]+/, '')).join(' < ') });
+      if (log.length > 40) log.shift(); }
+  } });
+  let last = 0;
+  window.__scrollN = 0;
+  window.__scrollAt = 0;
+  window.addEventListener('scroll', (ev) => { const now = performance.now(); window.__scrollN++; window.__scrollAt = now;
+    if (now - last > 100) { last = now; keep(ev); } }, true);
+})()`;
+
 // Runs `fn(page)` in a fresh headless Chrome of the given size and returns what it returns.
 // `page`: goto(url), reload(), evaluate(expr), waitFor(expr, ms), screenshot(file), sleep(ms), key(name, { shift }),
 // newTab(url) -> page, resize(width, height); real pointer and text: mouse(type, x, y, { buttons }), click(sel, { holdMs }), drag(x1, y1, x2, y2, steps),
 // wheel(x, y, dy), type(text), box(sel), clickAt(x, y, { holdMs }), colorScheme('light'|'dark').
-async function withPage({ width = 1449, height = 762, chrome = findChrome() } = {}, fn) {
+async function withPage({ width = 1449, height = 762, chrome = findChrome(), stepMs = STEP_MS } = {}, fn) {
   if (!chrome) throw new Error('no browser');
   return withChromeLock(async () => {
-    const profile = fs.mkdtempSync(path.join(os.tmpdir(), PROFILE_PREFIX));
-    // Recorded beside the lock (as launchChrome does), so a stale lock's reaper can end this Chrome;
-    // a launch that could not be recorded does not start.
-    try { fs.writeFileSync(path.join(LOCK_DIR, 'profile'), profile); } catch (e) {
-      fs.rmSync(profile, { recursive: true, force: true, maxRetries: 3 });
-      throw e;
-    }
-    const before = chromeTempNow();
-    const child = spawn(chrome, ['--headless=new', '--disable-gpu', '--no-sandbox', '--no-first-run', '--hide-scrollbars',
-      `--user-data-dir=${profile}`, '--remote-debugging-pipe', `--window-size=${width},${height}`, 'about:blank'],
-    { stdio: ['ignore', 'ignore', 'ignore', 'pipe', 'pipe'], env: chromeEnv(profile) });
+    let child = null;
+    let profile = null;
+    let before = null;
+    let send = null;
+    const launch = () => {
+      profile = fs.mkdtempSync(path.join(os.tmpdir(), PROFILE_PREFIX));
+      // Recorded beside the lock (as launchChrome does), so a stale lock's reaper can end this Chrome;
+      // a launch that could not be recorded does not start.
+      try { fs.writeFileSync(path.join(LOCK_DIR, 'profile'), profile); } catch (e) {
+        fs.rmSync(profile, { recursive: true, force: true, maxRetries: 3 });
+        profile = null;
+        throw e;
+      }
+      before = chromeTempNow();
+      child = spawn(chrome, ['--headless=new', '--disable-gpu', '--no-sandbox', '--no-first-run', '--hide-scrollbars',
+        `--user-data-dir=${profile}`, '--remote-debugging-pipe', `--window-size=${width},${height}`, 'about:blank'],
+      { stdio: ['ignore', 'ignore', 'ignore', 'pipe', 'pipe'], env: chromeEnv(profile) });
+      ({ send } = connect(child, stepMs));
+    };
+    // The browser closed (killed if it will not go), its helpers stopped, its profile removed.
+    const stop = async () => {
+      if (child) {
+        const c = child;
+        await new Promise((resolve) => {
+          if (c.exitCode !== null || c.signalCode) { resolve(); return; }
+          const t = setTimeout(() => { try { c.kill('SIGKILL'); } catch { /* gone */ } resolve(); }, 5000);
+          c.once('exit', () => { clearTimeout(t); resolve(); });
+          try { c.kill(); } catch { /* gone */ }
+        });
+      }
+      if (profile) {
+        stopChrome(profile);
+        removeNewChromeTemp(before);
+        fs.rmSync(profile, { recursive: true, force: true, maxRetries: 3 });
+      }
+      child = null;
+      profile = null;
+    };
     try {
-      const { send } = connect(child);
-      const { targetInfos } = await send('Target.getTargets');
-      let target = targetInfos.find((t) => t.type === 'page');
-      if (!target) target = { targetId: (await send('Target.createTarget', { url: 'about:blank' })).targetId };
-      const { sessionId } = await send('Target.attachToTarget', { targetId: target.targetId, flatten: true });
       // One page object per attached target; `newTab` makes another on the same pipe.
       const makePage = async (sessionId) => {
         const s = (method, params) => send(method, params, sessionId);
         await s('Page.enable');
         await s('Runtime.enable');
         await s('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+        await s('Page.addScriptToEvaluateOnNewDocument', { source: INPUT_LOG });
+        // The helper's own last moves, for a timed-out wait to print beside what the page received.
+        const t0Page = Date.now();
+        const moves = [];
+        const moved = (m) => { moves.push({ t: Date.now() - t0Page, ...m }); if (moves.length > 12) moves.shift(); };
         const evaluate = async (expression) => {
           const r = await s('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true });
           if (r.exceptionDetails) throw new Error(`in the page: ${(r.exceptionDetails.exception && r.exceptionDetails.exception.description) || r.exceptionDetails.text}`);
@@ -102,7 +164,11 @@ async function withPage({ width = 1449, height = 762, chrome = findChrome() } = 
             let v = null;
             try { v = await evaluate(expression); } catch { /* the page is loading */ }
             if (v) return v;
-            if (Date.now() - t0 > ms) throw new Error(`timed out after ${ms} ms waiting for: ${expression}`);
+            if (Date.now() - t0 > ms) {
+              let got = null;
+              try { got = await evaluate('window.__inputLog ? window.__inputLog.slice(-15) : null'); } catch { /* the page is gone */ }
+              throw new Error(`timed out after ${ms} ms waiting for: ${expression}\n  the helper's last moves (ms since the page opened): ${JSON.stringify(moves)}\n  what the page received (ms since it loaded): ${JSON.stringify(got)}`);
+            }
             await sleep(50);
           }
         };
@@ -130,6 +196,7 @@ async function withPage({ width = 1449, height = 762, chrome = findChrome() } = 
           // A real key press (keyDown, then keyUp) on whatever has focus: Enter, Tab, Escape, or one character.
           // `shift` holds Shift down, so `key('Tab', { shift: true })` goes backwards.
           async key(name, { shift = false } = {}) {
+            moved({ act: 'key', name });
             const named = { Enter: [13, '\r'], Tab: [9, ''], Escape: [27, ''], Backspace: [8, ''] };
             const one = String(name).length === 1;
             if (!named[name] && !one) throw new Error(`key: no such key ${name}`);
@@ -159,6 +226,9 @@ async function withPage({ width = 1449, height = 762, chrome = findChrome() } = 
           // A real click at (x, y): move, press, hold `holdMs` (a quick press can slip past code that a real
           // hand's press does not), release.
           async clickAt(x, y, { holdMs = 90 } = {}) {
+            // No question to the page here: it would wait for the page to go idle before the press, and a press that
+            // comes while the page is busy is the case #852 was about. The page's own log says what the press met.
+            moved({ act: 'click', x: Math.round(x), y: Math.round(y) });
             await page.mouse('mouseMoved', x, y);
             await page.mouse('mousePressed', x, y, { buttons: 1 });
             await sleep(holdMs);
@@ -181,6 +251,7 @@ async function withPage({ width = 1449, height = 762, chrome = findChrome() } = 
           },
           // A real drag: press at the start, `steps` moves with the button held, release at the end.
           async drag(fromX, fromY, toX, toY, steps = 8) {
+            moved({ act: 'drag', from: [Math.round(fromX), Math.round(fromY)], to: [Math.round(toX), Math.round(toY)] });
             await page.mouse('mouseMoved', fromX, fromY);
             await page.mouse('mousePressed', fromX, fromY, { buttons: 1 });
             for (let i = 1; i <= steps; i++) {
@@ -189,38 +260,67 @@ async function withPage({ width = 1449, height = 762, chrome = findChrome() } = 
             }
             await page.mouse('mouseReleased', toX, toY);
           },
-          // A real wheel turn over (x, y); positive `dy` scrolls down.
+          // A real wheel turn over (x, y); positive `dy` scrolls down. It returns once the scroll it started has
+          // stopped, as a hand waits to see where the page went (#852): on a slow machine the scroll lands after the
+          // turn, and a box measured before then puts the next click on whatever scrolled under it. A turn that
+          // scrolls nothing (the page at its end) returns after 300 ms.
           async wheel(x, y, dy) {
+            moved({ act: 'wheel', x, y, dy });
+            const count = () => evaluate('[window.__scrollN || 0, performance.now() - (window.__scrollAt || 0)]').catch(() => [0, Infinity]);
+            const [n0] = await count();
             await page.mouse('mouseMoved', x, y);
             await page.mouse('mouseWheel', x, y, { deltaY: dy });
+            const t0 = Date.now();
+            for (;;) {
+              const [n, quiet] = await count();
+              if (n === n0 ? Date.now() - t0 > 300 : quiet > 100) return;
+              if (Date.now() - t0 > 3000) return;
+              await sleep(20);
+            }
           },
           // Text into whatever has focus (Input.insertText: one insert, as a paste or an input method gives).
           type: (text) => s('Input.insertText', { text }),
           // Another tab in the same browser, opened on `url` (its own event streams, its own page).
+          // A tab that never answers its setup (as a fresh launch can, #852) is closed and made once more.
           async newTab(url) {
-            const { targetId } = await send('Target.createTarget', { url: 'about:blank' });
-            const att = await send('Target.attachToTarget', { targetId, flatten: true });
-            const tab = await makePage(att.sessionId);
+            let tab = null;
+            for (let attempt = 1; !tab; attempt++) {
+              const { targetId } = await send('Target.createTarget', { url: 'about:blank' });
+              try {
+                const att = await send('Target.attachToTarget', { targetId, flatten: true });
+                tab = await makePage(att.sessionId);
+              } catch (e) {
+                try { await send('Target.closeTarget', { targetId }); } catch { /* gone already */ }
+                if (attempt >= 2) throw e;
+              }
+            }
             await tab.goto(url);
             return tab;
           },
         };
         return page;
       };
-      const page = await makePage(sessionId);
+      // A fresh Chrome on a busy macOS runner now and then never answers its first commands (Runtime.enable: no
+      // answer in 30 s, #852). Nothing of the test has run yet, so that launch is stopped and one more is made.
+      let page = null;
+      for (let attempt = 1; !page; attempt++) {
+        launch();
+        try {
+          const { targetInfos } = await send('Target.getTargets');
+          let target = targetInfos.find((t) => t.type === 'page');
+          if (!target) target = { targetId: (await send('Target.createTarget', { url: 'about:blank' })).targetId };
+          const { sessionId } = await send('Target.attachToTarget', { targetId: target.targetId, flatten: true });
+          page = await makePage(sessionId);
+        } catch (e) {
+          await stop();
+          if (attempt >= 2) throw new Error(`${e.message} (the browser's setup failed on two launches)`);
+        }
+      }
       const result = await fn(page);
       try { await send('Browser.close'); } catch { /* gone already */ }
       return result;
     } finally {
-      await new Promise((resolve) => {
-        if (child.exitCode !== null || child.signalCode) { resolve(); return; }
-        const t = setTimeout(() => { try { child.kill('SIGKILL'); } catch { /* gone */ } resolve(); }, 5000);
-        child.once('exit', () => { clearTimeout(t); resolve(); });
-        try { child.kill(); } catch { /* gone */ }
-      });
-      stopChrome(profile);
-      removeNewChromeTemp(before);
-      fs.rmSync(profile, { recursive: true, force: true, maxRetries: 3 });
+      await stop();
     }
   });
 }

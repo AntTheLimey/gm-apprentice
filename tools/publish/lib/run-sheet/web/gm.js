@@ -616,23 +616,28 @@
   // The commit's action goes at once; the redraw waits until after the click (or a release with no click,
   // a cancelled press or the window losing focus), and then focus goes where the click put it. However long
   // the press is held: only a release that never comes is cut off, after 2 s.
-  const press = { on: false, owed: false, timer: null };
+  // `n` counts presses: a timer set for one press never ends the next (#852). On a slow machine a click's handler
+  // can run long enough for the next press to be waiting; the browser takes that press before the timer the last
+  // release set, and the timer would then drop the new press's hold, so a redraw mid-press ate its click.
+  const press = { on: false, owed: false, timer: null, n: 0 };
   function endHold() {
     clearTimeout(press.timer);
     press.on = false;
     if (press.owed) { press.owed = false; update(); }
   }
+  const endHoldOf = (n) => () => { if (press.n === n) endHold(); };
   document.addEventListener('pointerdown', (ev) => {
     if (ev.button !== 0) return;
     press.on = true;
+    press.n++;
     clearTimeout(press.timer);
-    press.timer = setTimeout(endHold, 2000);
+    press.timer = setTimeout(endHoldOf(press.n), 2000);
   }, true);
   // the click's own handlers redraw as usual (capture, before them); a redraw still owed comes after them
   window.addEventListener('click', () => { press.on = false; }, true);
   window.addEventListener('click', endHold);
   // a release with no click: the click, when there is one, comes in the same task as the release
-  document.addEventListener('pointerup', () => { if (press.on) setTimeout(endHold, 0); }, true);
+  document.addEventListener('pointerup', () => { if (press.on) setTimeout(endHoldOf(press.n), 0); }, true);
   document.addEventListener('pointercancel', endHold, true);
   window.addEventListener('blur', () => { if (press.on) endHold(); });
 

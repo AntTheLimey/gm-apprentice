@@ -484,6 +484,28 @@ describe('explain', () => {
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
+  // The scanner keeps quiet about an adventure brief in an unmapped folder (issue 839); explain still says the folder
+  // is why it does not publish, not that it has no `type:`.
+  it('an adventure brief in an unmapped folder is DIR_UNMAPPED, not NO_TYPE', async () => {
+    const vault = makeVault();
+    write(vault, 'Adventures/The Long Tide/The Long Tide.md', '---\ntype: adventure-brief\n---\n# The Long Tide\n');
+    // A folder holding only the brief is the one the scanner's warning never names; another note beside it would.
+    write(vault, 'Adventures/Salt Road/Salt Road.md', '---\ntype: adventure-brief\n---\n# Salt Road\n');
+    write(vault, 'Adventures/The Long Tide/Keeper.md', '---\ntype: npc\n---\n# Keeper\n');
+    const configPath = siteFor(vault);
+    for (const target of ['Adventures/Salt Road/Salt Road.md', 'Adventures/The Long Tide/The Long Tide.md', 'Adventures/The Long Tide/Keeper.md']) {
+      const j = capture();
+      await runExplain({ configPath, target, json: true }, j.deps);
+      assert.strictEqual(JSON.parse(j.out.join('')).verdict.code, 'DIR_UNMAPPED', target);
+    }
+    const t = capture();
+    await runExplain({ configPath, target: 'Adventures/Salt Road/Salt Road.md' }, t.deps);
+    assert.match(t.text(), /not in player_site\.folder_map/);
+    assert.doesNotMatch(t.text(), /no `type:`/);
+    fs.rmSync(vault, { recursive: true, force: true });
+    fs.rmSync(path.dirname(configPath), { recursive: true, force: true });
+  });
+
   // Review follow-up: explain used to read the raw vault.config.json `excludeDirs` only,
   // so a folder excluded exclusively via vault-config.md's `publish.exclude_dirs` was
   // reported as publishable here while the real build actually dropped it — the two

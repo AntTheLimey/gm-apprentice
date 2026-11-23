@@ -11,6 +11,7 @@ const { createTableServer, listenLocal } = require('../lib/run-sheet/server');
 const { listSessions, pickSession } = require('../lib/run-sheet/sessions');
 const { browserSkip } = require('./helpers/browser');
 const { withPage } = require('./helpers/cdp');
+const { findChrome } = require('../lib/chrome');
 
 const PAGE = `<!doctype html><meta charset="utf-8"><body style="margin:0">
 <button id="b" style="position:absolute;left:40px;top:40px;width:120px;height:40px">go</button>
@@ -57,6 +58,40 @@ describe('real-input page helpers', { skip: browserSkip() }, () => {
       assert.deepStrictEqual([r.x, r.y, r.width, r.height], [40, 40, 120, 40]);
       assert.deepStrictEqual([r.left, r.top, r.right, r.bottom], [40, 40, 160, 80]);
     });
+  });
+
+  it('a wheel turn returns once its scroll has landed, however late (#852)', async () => {
+    // A page whose wheel scroll lands 150 ms late, as a slow machine's does: the box measured after the turn
+    // must already be where the click will find it.
+    const late = `<!doctype html><body style="margin:0"><div style="height:3000px"></div><script>
+      addEventListener('wheel', (e) => { e.preventDefault(); const dy = e.deltaY; setTimeout(() => scrollBy(0, dy), 150); }, { passive: false });
+      </script></body>`;
+    await withPage({ width: 600, height: 400 }, async (page) => {
+      await page.goto(`data:text/html;charset=utf-8,${encodeURIComponent(late)}`);
+      await page.waitFor('document.body');
+      await page.wheel(300, 200, 300);
+      assert.strictEqual(await page.evaluate('scrollY'), 300);
+      const t0 = Date.now();
+      await page.wheel(300, 200, 0); // scrolls nothing: back after the wait for a scroll that never starts
+      assert.ok(Date.now() - t0 < 2000, `${Date.now() - t0} ms`);
+    });
+  });
+
+  it('a Chrome that never answers its setup is stopped and launched once more (#852)', { skip: process.platform === 'win32' && 'a shell stand-in' }, async () => {
+    // The macOS runner's "Runtime.enable: no answer in 30 s": a stand-in that says nothing on its first launch and
+    // starts the real Chrome on its second.
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rs-silent-'));
+    try {
+      const mark = path.join(dir, 'launched');
+      const stand = path.join(dir, 'chrome.sh');
+      fs.writeFileSync(stand, `#!/bin/sh\nif [ ! -f '${mark}' ]; then : > '${mark}'; exec sleep 60; fi\nexec '${findChrome()}' "$@"\n`, { mode: 0o755 });
+      const got = await withPage({ width: 600, height: 400, chrome: stand, stepMs: 3000 }, async (page) => {
+        await page.goto(URL_);
+        return page.waitFor('document.getElementById("b") && "opened"');
+      });
+      assert.strictEqual(got, 'opened');
+      assert.ok(fs.existsSync(mark), 'the silent first launch happened');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
 
   it('a drag moves a test element by the distance dragged', async () => {
@@ -811,6 +846,35 @@ describe('10c: the folds', { skip: browserSkip() }, () => {
   });
 });
 
+describe('a press held while the last click is still being handled (#852)', { skip: browserSkip() }, () => {
+  // The macOS runner's lost clicks: a click whose handler runs long (a big redraw on a slow machine) leaves the
+  // next press waiting; the browser takes that press before the timer the last release set, and the timer ended
+  // the new press's hold, so a redraw mid-press (the server's answer to an earlier action) replaced the button and
+  // no click fired. Here a click handler is made to run 300 ms, and the next press is sent while it runs.
+  it('the next press keeps its hold, and its click lands through a redraw', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await page.goto(`${run.base}/?probe=1`);
+      await settled(page);
+      await page.evaluate(`window.addEventListener('click', (e) => { if (e.target.id === 'ttl') { const end = performance.now() + 300; while (performance.now() < end); } })`);
+      const ttl = await page.box('#ttl');
+      const fold = await page.box('#railFold');
+      const [x, y] = [fold.left + fold.width / 2, fold.top + fold.height / 2];
+      assert.strictEqual((await until(page, 'true')).layout.railFolded, false);
+      await page.mouse('mouseMoved', ttl.left + 5, ttl.top + 5);
+      await page.mouse('mousePressed', ttl.left + 5, ttl.top + 5, { buttons: 1 });
+      // the release and the next press go together, so the press waits behind the busy click
+      await Promise.all([page.mouse('mouseReleased', ttl.left + 5, ttl.top + 5), page.mouse('mouseMoved', x, y), page.mouse('mousePressed', x, y, { buttons: 1 })]);
+      await page.sleep(30);
+      await page.evaluate('window.RunSheetPage.render()'); // a redraw mid-press, as the server's answer gives
+      await page.sleep(60);
+      await page.mouse('mouseReleased', x, y);
+      const p = await until(page, 'p.layout.railFolded', 3000);
+      assert.deepStrictEqual(p.errors, []);
+    });
+  });
+});
+
 describe('10d: the players\' preview', { skip: browserSkip() }, () => {
   const inView = (p, top) => {
     assert.ok(p.layout.pvOpen, 'open');
@@ -1560,6 +1624,8 @@ describe('stat boxes keep the mouse and the keyboard', { skip: browserSkip() }, 
       await until(page, `p.saved === "Saved" && p.pending === 0 && p.fight.rows.find((r) => r.id === ${JSON.stringify(foe.id)}).max === 20`);
       assert.strictEqual(await active(page), `fmax:${foe.id}`, 'still in the box');
       await tap(page, box, { offsetX: 12 });
+      // as a hand types only after the click: the page's re-select (a timer after the release) has run first (#852)
+      await page.waitFor(`(() => { const e = document.querySelector('${box}'); return e.selectionStart === 0 && e.selectionEnd === e.value.length; })()`);
       await page.type('21');
       assert.strictEqual(await page.evaluate(`document.querySelector('${box}').value`), '21');
       await page.key('Enter');
