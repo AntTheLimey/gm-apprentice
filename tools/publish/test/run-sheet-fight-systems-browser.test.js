@@ -683,4 +683,132 @@ describe('CoC and GURPS fights on the GM page, by real input', { skip: browserSk
       assert.ok((await texts(page, `li[data-frow="${vex}"] .chips > .chip, li[data-row2="${vex}"] .chip`)).includes('Shock −2'));
     });
   });
+
+  // Task 14: two Bouncers added with the Add box's count, their numbers typed in the panel; Bouncer 1 is fastest.
+  // `more` types further boxes on Bouncer 2 ([key, value] pairs). The dice always land 4, so every 3d6 is 12.
+  async function bouncers(page, run, more) {
+    let p = await fightOn(page, run, 1);
+    await tap(page, '#fAddCount');
+    await page.type('2');
+    await tap(page, '#fAddName');
+    await page.type('Bouncer');
+    await page.waitFor('document.querySelector("[data-faddnew]")');
+    await tap(page, '[data-faddnew]');
+    p = await until(page, 'p.fight.rows.some((r) => r.name === "Bouncer 2") && p.saved === "Saved" && p.pending === 0');
+    p = await peek(page, p, 'Bouncer 1');
+    p = await typeInto(page, box(p, 'Bouncer 1', 'speed'), '9');
+    p = await peek(page, p, 'Bouncer 2');
+    for (const [key, value] of more) p = await typeInto(page, box(p, 'Bouncer 2', key), value);
+    await tap(page, '#fNext');
+    if (await page.evaluate('Boolean(document.querySelector("#fStartAnyway"))')) await tap(page, '#fStartAnyway');
+    return until(page, 'p.fight.started && p.saved === "Saved" && p.pending === 0');
+  }
+  const logOf = async (run) => (await (await fetch(`${run.base}/api/state`)).json()).state.events.filter((e) => e.fight).map((e) => e.text);
+  const focusIs = (page, sel) => page.waitFor(`document.activeElement === document.querySelector(${q(sel)})`, 3000);
+
+  for (const [width, height] of SIZES) {
+    it(`GURPS at ${width}: with Bouncer 1 acting, a held click on Bouncer 2's Parry readout rolls it and logs, with no click on its name; the next Parry reads −4`, async () => {
+      const run = await start('gurps', { randomInt: () => 4 });
+      await withPage({ width, height }, async (page) => {
+        let p = await bouncers(page, run, [['st', 11], ['ht', 10], ['dx', 10], ['parry', 9], ['block', 8]]);
+        const b1 = named(p, 'Bouncer 1').id;
+        const b2 = named(p, 'Bouncer 2').id;
+        assert.equal(p.fight.turn, b1);
+        assert.strictEqual(p.fight.actingName, 'Bouncer 1');
+        // Bouncer 2's row: its Dodge from Speed 5, its typed Parry and Block, each a button
+        const defs = `li[data-frow="${b2}"] .defs .def`;
+        assert.deepStrictEqual(await texts(page, defs), ['Dodge 8', 'Parry 9', 'Block 8']);
+        assert.strictEqual(await attrOf(page, `[data-fdef="${b2}|dodge"]`, 'title'), 'Dodge 8 (from Speed). Tap: roll it');
+        const parry = `[data-fdef="${b2}|parry"]`;
+        await tap(page, parry);
+        p = await until(page, `p.fight.rows.find((r) => r.id === ${q(b2)}).parries === 1 && p.saved === "Saved" && p.pending === 0`);
+        assert.strictEqual(p.fight.actingName, 'Bouncer 1', 'no click on its name: the panel is still Bouncer 1\'s');
+        assert.deepStrictEqual((await logOf(run)).slice(-1), ['Bouncer 2: Parry 9, rolled 12, failed by 3.']);
+        // the next Parry reads −4, its cause in the title; focus stays on the button
+        await page.waitFor(`document.querySelector(${q(parry)}) && document.querySelector(${q(parry)}).textContent === "Parry 5"`, 3000);
+        assert.strictEqual(await attrOf(page, parry, 'title'), 'Parry 9 → 5: parry 2 −4. Tap: roll it');
+        await focusIs(page, parry);
+        sane(p, `defend ${width}`);
+        if (width === 1449) {
+          const row = p.layout.rows.find((r) => r.name === 'Bouncer 2');
+          assert.ok(row && row.h <= 40, `1449: Bouncer 2 is one line (${row && row.h} px)`);
+        }
+        await shot(page, `gurps-defend-${width}`);
+        // its own turn: the count starts again
+        for (let i = 0; i < 12 && p.fight.turn !== b2; i++) {
+          const was = p.fight.turn;
+          await tap(page, '#fNext');
+          p = await until(page, `p.fight.turn !== ${q(was)} && p.saved === "Saved" && p.pending === 0`);
+        }
+        assert.equal(p.fight.turn, b2);
+        await page.waitFor(`document.querySelector(${q(parry)}).textContent === "Parry 9"`, 3000);
+      });
+    });
+  }
+
+  it('GURPS: the panel\'s Retreat adds its bonus; a used Block asks once, then rolls again; Stunned turns Retreat off', async () => {
+    const run = await start('gurps', { randomInt: () => 4 });
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await bouncers(page, run, [['st', 11], ['ht', 10], ['dx', 10], ['parry', 9], ['block', 8]]);
+      const b2 = named(p, 'Bouncer 2').id;
+      p = await peek(page, p, 'Bouncer 2');
+      assert.deepStrictEqual(await texts(page, '#acting .pdefs .def'), ['Dodge 8', 'Parry 9', 'Block 8']);
+      await tap(page, `#acting [data-fretreat="${b2}"]`);
+      p = await until(page, `p.fight.rows.find((r) => r.id === ${q(b2)}).retreat && p.saved === "Saved" && p.pending === 0`);
+      assert.deepStrictEqual(await texts(page, '#acting .pdefs .def'), ['Dodge 11', 'Parry 10', 'Block 9']);
+      const block = `#acting [data-fpdef="${b2}|block"]`;
+      await tap(page, block);
+      p = await until(page, `p.fight.rows.find((r) => r.id === ${q(b2)}).blocks === 1 && p.saved === "Saved" && p.pending === 0`);
+      await page.waitFor(`document.querySelector(${q(block)}).textContent === "Block used"`, 3000);
+      await focusIs(page, block);
+      // the second tap asks; nothing is rolled
+      await tap(page, block);
+      await page.waitFor(`document.querySelector(${q(block)}).textContent === "Block again?"`, 3000);
+      await focusIs(page, block);
+      assert.strictEqual(named(await settled(page), 'Bouncer 2').blocks, 1);
+      // the third rolls it again
+      await tap(page, block);
+      p = await until(page, `p.fight.rows.find((r) => r.id === ${q(b2)}).blocks === 2 && p.saved === "Saved" && p.pending === 0`);
+      assert.deepStrictEqual((await logOf(run)).slice(-2), [
+        'Bouncer 2: Block 8 → 9 (retreat +1), rolled 12, failed by 3.',
+        'Bouncer 2: Block 8 → 9 (retreat +1), again, rolled 12, failed by 3.',
+      ]);
+      // Stunned, from another window: −4, and Retreat is off and greyed
+      await fromOther(run, [{ type: 'status', fight: p.fight.id, row: b2, add: 'Stunned' }]);
+      p = await until(page, `p.fight.rows.find((r) => r.id === ${q(b2)}).conds.includes("Stunned") && p.saved === "Saved" && p.pending === 0`);
+      await page.waitFor(`document.querySelector('#acting [data-fretreat="${b2}"]').disabled`, 3000);
+      assert.deepStrictEqual((await texts(page, '#acting .pdefs .def')).slice(0, 2), ['Dodge 4', 'Parry 5']);
+      assert.strictEqual(await attrOf(page, `#acting [data-fretreat="${b2}"]`, 'title'), 'No retreat: stunned');
+    });
+  });
+
+  it('GURPS: a PC shows the sheet\'s defences and has no Defend button', async () => {
+    const run = await start('gurps');
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await fightOn(page, run, 1);
+      const sela = named(p, 'Sela Drake').id;
+      p = await peek(page, p, 'Sela Drake');
+      assert.deepStrictEqual(await texts(page, '#acting .pdefs.pc .sheetdef'), ['Dodge 8', 'Parry 10', 'Block 9']);
+      assert.strictEqual(await page.evaluate('document.querySelectorAll("#acting [data-fpdef], #acting [data-fretreat]").length'), 0);
+      assert.strictEqual(await page.evaluate(`document.querySelectorAll('li[data-frow="${sela}"] [data-fdef]').length`), 0);
+      // a foe with a block's defences has its buttons: Mara Quint
+      assert.ok((await texts(page, `li[data-frow="${named(p, 'Mara Quint').id}"] .defs .def`)).length > 0);
+    });
+  });
+
+  it('GURPS: a card whose last roll settles it goes, and focus goes to its row\'s entry box, never the page', async () => {
+    const run = await start('gurps', { randomInt: () => 4 });
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await bouncers(page, run, [['st', 11], ['ht', 13], ['dr', 1]]);
+      const b2 = named(p, 'Bouncer 2').id;
+      // 2 cr face: 1 injury, a head hit with shock: one knockdown line at HT 13, which 12 makes
+      p = await typeInto(page, `[data-fhp="${b2}"]`, '2 cr face');
+      const card = `#acting .fcard[data-fcrow="${b2}"]`;
+      p = await until(page, `document.querySelector(${q(card)}) && p.saved === "Saved" && p.pending === 0`);
+      await tap(page, `${card} button.roll`);
+      p = await until(page, `p.fight.rows.find((r) => r.id === ${q(b2)}).cards.length === 0 && p.saved === "Saved" && p.pending === 0`);
+      await focusIs(page, `[data-fhp="${b2}"]`);
+      assert.notStrictEqual(await page.evaluate('document.activeElement === document.body'), true);
+    });
+  });
 });

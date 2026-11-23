@@ -52,6 +52,9 @@
     // GURPS's cards (Task 13): a card whose roll is out at the server (card id -> true), the row whose shock chip is
     // open for a size, and the cards already brought into view once
     rolling: {}, shockPick: null, cardsSeen: new Set(),
+    // GURPS's defences (Task 14): a defence whose roll is out at the server ("row|dodge" -> true), and the row whose
+    // used Block was tapped once, so the next tap rolls it again
+    defRolling: {}, blockAsk: null,
   };
 
   const model = () => RP.model();
@@ -69,6 +72,8 @@
   const wounding = () => (rules().fight || rules()).wounding || null;
   // the system's consequences table (GURPS's, Task 13): what a hit and a turn owe, as cards; null where there is none
   const consequences = () => (GMath ? (rules().fight || rules()).consequences || null : null);
+  // the system's defences table (GURPS's, Task 14): each defence as it stands this turn; null where there is none
+  const defences = () => (GMath && typeof GMath.liveDefences === 'function' ? (rules().fight || rules()).defences || null : null);
   const rolled = () => !rules().initiative || rules().initiative === 'roll';
   // the panel's boxes the page can draw ({ key, label } items; D&D's list names its counters, drawn as before)
   const panelBoxes = () => (rules().panelBoxes || []).filter((b) => b && typeof b === 'object' && STAT[boxStat(b.key)]);
@@ -489,6 +494,7 @@
     h += `<span class="hpv"${maxTitle}>${esc(isNum(r.hp) ? r.hp : '?')}/${statBox('data-fmax', r, isNum(r.max) ? r.max : '', `inputmode="numeric" autocomplete="off" aria-label="Maximum HP for ${esc(r.gmName)}"`)}</span>`;
     if (rn.includes('ac')) h += `<span class="acv">AC${statBox('data-fac', r, isNum(r.ac) ? r.ac : '', `inputmode="numeric" autocomplete="off" aria-label="AC for ${esc(r.gmName)}"`)}</span>`;
     h += poolsHTML(r);
+    h += rowDefencesHTML(r);
     if (tg.gun) h += `<button type="button" class="tg ${r.gun ? 'on' : ''}" data-fgun="${esc(r.id)}" aria-pressed="${!!r.gun}" title="${esc(w.gunTitle || '')}">${esc(w.gun || 'gun')}</button>`;
     h += chips(r, view.bloodied.has(r.id));
     h += statusSelect(r);
@@ -583,7 +589,67 @@
       // D&D says when a row with numbers has no block; CoC and GURPS do not: a row with HP is complete (D3d)
       else if (!nonum && w.noBlock) body += `<p class="warn">${esc(w.noBlock)}</p>`;
     }
-    return `${open}${head(r.gmName)}<div class="nums">${nums.join('')}</div>${ctr ? `<div class="nums ctr">${ctr}</div>` : ''}${boxesHTML(r)}${hitChipsHTML(r)}${trackHTML(r)}${body}</div>`;
+    return `${open}${head(r.gmName)}<div class="nums">${nums.join('')}</div>${ctr ? `<div class="nums ctr">${ctr}</div>` : ''}${boxesHTML(r)}${panelDefencesHTML(r)}${hitChipsHTML(r)}${trackHTML(r)}${body}</div>`;
+  }
+  // ---- GURPS's defences (Task 14): each as it stands this turn, and a tap rolls it; the GM can ignore all of it ----
+  // A defence's button: "Parry 9" (the figure now), "Block used", "Block again?" once a used Block was tapped. `at` is
+  // its attribute: `data-fdef` on the row, `data-fpdef` in the panel, each "row|defence".
+  function defenceButton(r, d, at) {
+    const key = `${r.id}|${d.key}`;
+    const ask = d.key === 'block' && d.used && ui.blockAsk === r.id;
+    const text = ask ? `${d.label} again?` : d.used ? `${d.label} used` : `${d.label} ${d.value === null ? '\u2013' : d.value}`;
+    const off = d.value === null || ui.defRolling[key];
+    const tail = d.value === null ? '' : ask ? '. Tap again: roll a second Block' : d.used ? '. Tap: asks before a second Block' : '. Tap: roll it';
+    const cls = ['def', d.causes.length ? 'moved' : '', d.used ? 'used' : '', ask ? 'ask' : ''].filter(Boolean).join(' ');
+    return `<button type="button" class="${cls}" ${at}="${esc(key)}" ${off ? 'disabled' : ''} title="${esc(`${d.title}${tail}`)}" aria-label="${esc(`${text} for ${r.gmName}`)}">${esc(text)}</button>`;
+  }
+  // The row's readout: a foe's or an ally's defences that have a figure, each its own Defend button [H2]. A PC has none.
+  function rowDefencesHTML(r) {
+    const D = defences();
+    if (!D || r.kind === 'pc' || r.kind === 'lair' || !r.in || r.out) return '';
+    const live = GMath.liveDefences(r, D);
+    const shown = GMath.DEFENCE_KEYS.map((k) => live[k]).filter((d) => d.base !== null);
+    return shown.length ? `<span class="defs">${shown.map((d) => defenceButton(r, d, 'data-fdef')).join('')}</span>` : '';
+  }
+  // The panel's: every defence's button and the retreat toggle; a PC's sheet figures, for reference, with no button.
+  function panelDefencesHTML(r) {
+    const D = defences();
+    if (!D || r.kind === 'lair') return '';
+    const live = GMath.liveDefences(r, D);
+    const all = GMath.DEFENCE_KEYS.map((k) => live[k]);
+    if (r.kind === 'pc') {
+      const had = all.filter((d) => d.base !== null);
+      return had.length ? `<div class="pdefs pc"><span class="lab">From the sheet:</span>${had.map((d) => `<span class="sheetdef">${esc(`${d.label} ${d.base}`)}</span>`).join('')}</div>` : '';
+    }
+    const rt = live.retreat;
+    const retreat = `<button type="button" class="tg retreat ${rt.on ? 'on' : ''}" data-fretreat="${esc(r.id)}" aria-pressed="${rt.on}" ${rt.allowed ? '' : 'disabled'}`
+      + ` title="${esc(rt.allowed ? 'Retreat: its bonus on each defence until its turn' : `No retreat: ${rt.why}`)}">Retreat</button>`;
+    return `<div class="pdefs" role="group" aria-label="Defend"><span class="lab">Defend:</span>${all.map((d) => defenceButton(r, d, 'data-fpdef')).join('')}${retreat}</div>`;
+  }
+  // A defence tapped: the server rolls it against the figure as it stands; the result is logged by the reducer. A
+  // used Block asks once ("Block again?"), then the next tap rolls it. Focus stays on the button tapped.
+  function defend(rowId, key, at) {
+    const f = state().fight;
+    const D = defences();
+    const r = rowById(rowId);
+    if (!f || !D || !r || r.kind === 'pc') return;
+    const d = GMath.liveDefences(r, D)[key];
+    const k = `${rowId}|${key}`;
+    if (!d || d.value === null || ui.defRolling[k]) return;
+    const sel = attr(at, k);
+    if (d.used && ui.blockAsk !== rowId) { ui.blockAsk = rowId; RP.render(); RP.focusTo(sel); return; }
+    const again = d.used;
+    ui.blockAsk = null;
+    ui.defRolling[k] = true;
+    RP.render();
+    roll([{ against: d.value }]).then(([res]) => {
+      delete ui.defRolling[k];
+      const now = state().fight;
+      if (now && now.id === f.id) {
+        RP.dispatch({ fight: f.id, type: 'defendRolled', row: rowId, defence: key, result: res, ...(again ? { again: true } : {}) });
+        RP.focusTo(sel);
+      } else RP.render();
+    }, (e) => { delete ui.defRolling[k]; rollFailed(e); RP.render(); });
   }
   // ---- GURPS's cards (Task 13): prompts, one per hit, and a turn's start and end; nothing here decides an outcome ----
   function cardsHTML(f) {
@@ -646,7 +712,14 @@
   function focusCard(rowId, cardId) {
     const el = document.querySelector(`#acting .fcard${attr('data-fcard', cardId)}${attr('data-fcrow', rowId)}`);
     const to = el && (el.querySelector('button.roll:not([disabled])') || el.querySelector('button.offer') || el.querySelector('[data-fcbtn]'));
-    if (to) RP.focusTo(attr('data-fcbtn', to.dataset.fcbtn));
+    if (to) { RP.focusTo(attr('data-fcbtn', to.dataset.fcbtn)); return; }
+    // the card settled and went: the row's entry box, else the panel's first box, else its first button; never the page
+    const box = document.querySelector(attr('data-fhp', rowId));
+    if (box) { RP.focusTo(attr('data-fhp', rowId)); return; }
+    const next = document.querySelector('#acting .pbox, #acting button:not([disabled])');
+    const a = next && Array.from(next.attributes).find((x) => x.name.startsWith('data-f'));
+    if (a) RP.focusTo(attr(a.name, a.value));
+    else if (next && next.id) RP.focusTo(`#${CSS.escape(next.id)}`);
   }
   // The panel's shock chip: its size, tapped open for −1 to the cap, or clear (a hit worked out on paper).
   function shockHTML(r) {
@@ -913,7 +986,7 @@
       'data-fseen', 'data-fhalf', 'data-fahalf', 'data-fres', 'data-fout', 'data-fgun', 'data-fds', 'data-flr', 'data-fla', 'data-frch',
       'data-fun', 'data-fsame', 'data-fside', 'data-fundo', 'data-faddgroup', 'data-faddbeat', 'data-faddpick', 'data-faddnew',
       'data-fspend', 'data-fafter', 'data-fjot', 'data-fight', 'data-fplace', 'data-fcbtn', 'data-fcardpick', 'data-fcardht', 'data-fshock',
-      'data-fshockset', ...PANEL_KEYS.map((k) => `data-fs-${k}`)],
+      'data-fshockset', 'data-fdef', 'data-fpdef', 'data-fretreat', ...PANEL_KEYS.map((k) => `data-fs-${k}`)],
     // Fight here on a place tile or a place's drawer (plan 6a Task 7); nothing while a fight runs
     placeButtons(note) {
       if (!allowed() || state().fight || !(model().placeKeys || {})[note]) return '';
@@ -981,6 +1054,7 @@
             speed: r.speed, fighting: r.fighting, marks: r.marks, deepest: r.deepest, tired: r.tired, gun: r.gun, from: r.from,
             er: r.er, erMax: r.erMax, caster: r.caster, dr: r.dr, faceOpen: r.faceOpen, hit: r.hit, crippled: r.crippled,
             shock: r.shock || 0, cards: r.cards || [],
+            dodge: r.dodge, parry: r.parry, block: r.block, parries: r.parries || 0, blocks: r.blocks || 0, defended: r.defended || 0, retreat: Boolean(r.retreat),
           })),
         };
       }
@@ -1075,6 +1149,8 @@
     }
     if (d.fshock) { ui.shockPick = ui.shockPick === d.fshock ? null : d.fshock; RP.render(); return true; }
     if (d.fshockset) { const [rid, n] = split(d.fshockset); ui.shockPick = null; F({ type: 'setShock', row: rid, n: Number(n) }); return true; }
+    if (d.fdef || d.fpdef) { const [rid, k] = split(d.fdef || d.fpdef); defend(rid, k, d.fdef ? 'data-fdef' : 'data-fpdef'); return true; }
+    if (d.fretreat) { const x = rowById(d.fretreat); if (x) F({ type: 'retreat', row: x.id, on: !x.retreat }); return true; }
     if (d.fface) { const x = rowById(d.fface); if (x) F({ type: 'faceOpen', row: x.id, on: !x.faceOpen }); return true; }
     const id = d.ftick || d.fsel || d.fahalf || d.fhalf || d.fres || d.fseen || d.fout || d.flr;
     const r = rowById(id || '');

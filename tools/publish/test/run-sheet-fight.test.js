@@ -1962,7 +1962,9 @@ describe('fight maths by system (step 6b Task 6)', () => {
     for (const [key, value] of [['st', 11], ['ht', 10], ['dx', 12]]) s = G(s, { type: 'setStat', row: id, key, value });
     const b = named(s, 'Bouncer');
     assert.deepEqual([b.st, b.ht, b.dx, b.max, b.hp, b.fpMax, b.fp, b.speed, b.ini], [11, 10, 12, 11, 11, 10, 10, 5.5, 5.5]);
-    assert.deepEqual(b.from, { hp: 'from ST', fp: 'from HT', speed: 'from DX and HT' });
+    // step 6b Task 14 changed this on purpose: Dodge is worked out from the worked-out Speed too, and marked
+    assert.deepEqual(b.from, { hp: 'from ST', fp: 'from HT', speed: 'from DX and HT', dodge: 'from Speed' });
+    assert.equal(b.dodge, 8);
     assert.deepEqual(order(s), ['Bouncer', 'Kev']);
     assert.ok(lines(s).includes('Bouncer: initiative 5.5 from the typed stats.'), lines(s).join('\n'));
     // a stat typed later works the figures out again
@@ -2621,5 +2623,155 @@ describe('GURPS consequence cards and turn upkeep (step 6b Task 13)', () => {
     let s = begin([{ name: 'Wolf', hp: 11, max: 11 }], null);
     s = typeIn(s, 'Wolf', '-20');
     assert.deepEqual([named(s, 'Wolf').shock, named(s, 'Wolf').cards], [undefined, undefined]);
+  });
+});
+
+describe('GURPS defences as they stand this turn (step 6b Task 14)', () => {
+  const { systemFor } = require('../lib/run-sheet/systems');
+  const GURPS = systemFor('gurps-4e').describe().fight;
+  const GM = require('../lib/run-sheet/web/gurps-math');
+  const begin = (list, rules = GURPS) => RS.reduce(fresh(), { id: 'f1', type: 'fightStart', title: 'T', ...(rules ? { rules } : {}), rows: list.map((o, i) => M.blankRow({ id: `r${i + 1}`, ...o })) }, now());
+  const G = (s, a) => RS.reduce(s, { id: nextId(), fight: 'f1', ...a }, now());
+  const named = (s, name) => s.fight.rows.find((r) => r.name === name);
+  const go = (s) => G(s, { type: 'fightNext', from: s.fight.turn, round: s.fight.round });
+  const lines = (s) => s.events.filter((e) => e.fight).map((e) => e.text);
+  const rolled = (total, target) => ({ dice: [4, 4, 4], total, target, margin: target - total, outcome: total <= target ? 'success' : 'failure' });
+  const live = (s, name) => GM.liveDefences(named(s, name), GURPS.defences);
+  // a defence rolled as the page does: against the figure as it stands, the server's total
+  const defend = (s, name, defence, total = 12, more) => G(s, { type: 'defendRolled', row: named(s, name).id, defence, result: rolled(total, live(s, name)[defence].value), ...(more || {}) });
+  const rows = () => [
+    { name: 'Bouncer 1', ini: 6, speed: 6, hp: 11, max: 11, ht: 10, dodge: 9, parry: 9, block: 8 },
+    { name: 'Bouncer 2', ini: 5, speed: 5, hp: 11, max: 11, ht: 10, dodge: 8, parry: 9, block: 8 },
+    { name: 'Kev', kind: 'pc', ini: 4, speed: 4, hp: 12, max: 12, ht: 11, dodge: 8, parry: 10, block: 9 },
+  ];
+
+  it('two parries in a round: the second at −4; the count resets on the row\'s turn', () => {
+    let s = begin(rows());
+    s = go(s); // Bouncer 1 acts
+    s = defend(s, 'Bouncer 2', 'parry', 12);
+    assert.equal(named(s, 'Bouncer 2').parries, 1);
+    assert.equal(live(s, 'Bouncer 2').parry.value, 5);
+    s = defend(s, 'Bouncer 2', 'parry', 4);
+    assert.equal(named(s, 'Bouncer 2').parries, 2);
+    assert.equal(live(s, 'Bouncer 2').parry.value, 1);
+    assert.deepEqual(lines(s).slice(-2), [
+      'Bouncer 2: Parry 9, rolled 12, failed by 3.',
+      'Bouncer 2: Parry 9 → 5 (parry 2 −4), rolled 4, made it by 1.',
+    ]);
+    s = go(s); // Bouncer 2's turn
+    assert.deepEqual([named(s, 'Bouncer 2').parries, named(s, 'Bouncer 2').defended], [0, 0]);
+    assert.equal(live(s, 'Bouncer 2').parry.value, 9);
+  });
+
+  it('a roll against a stale figure is dropped', () => {
+    let s = begin(rows());
+    s = go(s);
+    s = defend(s, 'Bouncer 2', 'parry');
+    const was = s.fight.rows;
+    s = G(s, { type: 'defendRolled', row: named(s, 'Bouncer 2').id, defence: 'parry', result: rolled(12, 9) });
+    assert.deepEqual(s.fight.rows, was, 'Parry is 5 now, not 9');
+  });
+
+  it('a second Block in a turn asks first: dropped without again, taken with it', () => {
+    let s = begin(rows());
+    s = go(s);
+    s = defend(s, 'Bouncer 2', 'block');
+    assert.equal(named(s, 'Bouncer 2').blocks, 1);
+    assert.equal(live(s, 'Bouncer 2').block.used, true);
+    const n = lines(s).length;
+    s = defend(s, 'Bouncer 2', 'block');
+    assert.deepEqual([named(s, 'Bouncer 2').blocks, lines(s).length], [1, n], 'no again: nothing');
+    s = defend(s, 'Bouncer 2', 'block', 12, { again: true });
+    assert.equal(named(s, 'Bouncer 2').blocks, 2);
+    assert.equal(lines(s).at(-1), 'Bouncer 2: Block 8, again, rolled 12, failed by 4.');
+    s = go(s);
+    assert.equal(live(s, 'Bouncer 2').block.used, false, 'its turn: Block again');
+  });
+
+  it('Stunned: Retreat refused; on otherwise, then off at the row\'s turn', () => {
+    let s = begin(rows());
+    s = G(s, { type: 'status', row: named(s, 'Bouncer 2').id, add: 'Stunned' });
+    s = G(s, { type: 'retreat', row: named(s, 'Bouncer 2').id, on: true });
+    assert.equal(named(s, 'Bouncer 2').retreat, undefined);
+    assert.equal(live(s, 'Bouncer 2').dodge.value, 4);
+    s = G(s, { type: 'status', row: named(s, 'Bouncer 2').id, remove: 'Stunned' });
+    s = G(s, { type: 'retreat', row: named(s, 'Bouncer 2').id, on: true });
+    assert.equal(named(s, 'Bouncer 2').retreat, true);
+    assert.equal(live(s, 'Bouncer 2').dodge.value, 11);
+    s = go(s);
+    s = go(s); // Bouncer 2's turn
+    assert.equal(named(s, 'Bouncer 2').retreat, false);
+  });
+
+  it('Move and Attack: a Parry roll is dropped, a Dodge taken; the manoeuvre ends at the row\'s next turn', () => {
+    let s = begin(rows().map((r) => (r.name === 'Bouncer 2' ? { ...r, manoeuvre: 'move and attack' } : r)));
+    s = go(s);
+    s = G(s, { type: 'defendRolled', row: named(s, 'Bouncer 2').id, defence: 'parry', result: rolled(5, 9) });
+    assert.equal(named(s, 'Bouncer 2').parries, undefined);
+    s = defend(s, 'Bouncer 2', 'dodge', 5);
+    assert.equal(lines(s).at(-1), 'Bouncer 2: Dodge 8, rolled 5, made it by 3.');
+    s = go(s);
+    assert.equal(named(s, 'Bouncer 2').manoeuvre, null);
+    assert.equal(live(s, 'Bouncer 2').parry.value, 9);
+  });
+
+  it('All-Out Attack: every defence roll is dropped until its next turn', () => {
+    let s = begin(rows().map((r) => (r.name === 'Bouncer 2' ? { ...r, manoeuvre: 'all-out attack' } : r)));
+    s = go(s);
+    for (const k of ['dodge', 'parry', 'block']) s = G(s, { type: 'defendRolled', row: named(s, 'Bouncer 2').id, defence: k, result: rolled(5, 8) });
+    assert.equal(named(s, 'Bouncer 2').defended, 0);
+  });
+
+  it('a PC shows the sheet\'s defences and has no Defend: its roll is dropped, its retreat refused', () => {
+    let s = begin(rows());
+    s = go(s);
+    assert.deepEqual([named(s, 'Kev').dodge, named(s, 'Kev').parry, named(s, 'Kev').block], [8, 10, 9]);
+    const was = s.fight.rows;
+    s = G(s, { type: 'defendRolled', row: named(s, 'Kev').id, defence: 'dodge', result: rolled(5, 8) });
+    s = G(s, { type: 'retreat', row: named(s, 'Kev').id, on: true });
+    assert.deepEqual(s.fight.rows, was);
+  });
+
+  it('a Do Nothing row at 0 HP that defended is asked HT to stay conscious; one that did not is not (Task 13\'s link)', () => {
+    const list = () => [
+      { name: 'Bouncer 1', ini: 6, speed: 6, hp: 11, max: 11, ht: 10 },
+      { name: 'Bouncer 2', ini: 5, speed: 5, hp: -2, max: 11, ht: 10, dodge: 8, manoeuvre: 'do nothing' },
+    ];
+    let s = begin(list());
+    s = go(s); // Bouncer 1 acts
+    s = defend(s, 'Bouncer 2', 'dodge');
+    assert.equal(named(s, 'Bouncer 2').defended, 1);
+    s = go(s); // Bouncer 2's turn: it defended, so it is asked
+    assert.deepEqual((named(s, 'Bouncer 2').cards || []).map((c) => c.kind), ['conscious']);
+    assert.equal(named(s, 'Bouncer 2').defended, 0, 'reset on its turn');
+    let t = begin(list());
+    t = go(t);
+    t = go(t);
+    assert.deepEqual(named(t, 'Bouncer 2').cards || [], [], 'no defence roll: not asked');
+  });
+
+  it('Same for all copies Dodge, Parry, Block and DR; a typed Dodge is kept through a new Speed', () => {
+    let s = begin([{ name: 'Bouncer 1', ini: null, hp: null, max: null, group: 'g', note: 'n', copy: 1 }, { name: 'Bouncer 2', ini: null, hp: null, max: null, group: 'g', note: 'n', copy: 2 }]);
+    const id = named(s, 'Bouncer 1').id;
+    s = G(s, { type: 'setStat', row: id, key: 'speed', value: 5.5 });
+    assert.deepEqual([named(s, 'Bouncer 1').dodge, named(s, 'Bouncer 1').from.dodge], [8, 'from Speed']);
+    s = G(s, { type: 'setStat', row: id, key: 'dodge', value: 9 });
+    s = G(s, { type: 'setStat', row: id, key: 'speed', value: 7 });
+    assert.deepEqual([named(s, 'Bouncer 1').dodge, named(s, 'Bouncer 1').from.dodge, named(s, 'Bouncer 1').typedKeys.dodge], [9, undefined, true]);
+    for (const [key, value] of [['parry', 10], ['block', 9], ['dr', 2], ['hp', 12]]) s = G(s, { type: 'setStat', row: id, key, value });
+    assert.deepEqual(['parry', 'block', 'dr'].map((k) => named(s, 'Bouncer 1').typedKeys[k]), [true, true, true]);
+    s = G(s, { type: 'sameForAll', row: id });
+    const b2 = named(s, 'Bouncer 2');
+    assert.deepEqual([b2.dodge, b2.parry, b2.block, b2.dr, b2.speed], [9, 10, 9, 2, 7]);
+  });
+
+  it('D&D and CoC take no defence roll and no retreat', () => {
+    for (const rules of [null, systemFor('coc-7e').describe().fight]) {
+      let s = begin([{ name: 'Wolf', hp: 11, max: 11, dodge: 9 }], rules);
+      const was = s.fight.rows;
+      s = G(s, { type: 'defendRolled', row: named(s, 'Wolf').id, defence: 'dodge', result: rolled(5, 9) });
+      s = G(s, { type: 'retreat', row: named(s, 'Wolf').id, on: true });
+      assert.deepEqual(s.fight.rows, was);
+    }
   });
 });

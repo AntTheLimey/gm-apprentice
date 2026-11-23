@@ -343,6 +343,17 @@ ol.to .ds { font: 500 .7rem var(--mono); white-space: nowrap; }
 .act .hitchips .hrow { display: flex; flex-wrap: wrap; gap: 3px; }
 .act .hchip { font: 600 .7rem var(--mono); padding: 1px 6px; border-radius: 10px; }
 .act .hchip[aria-pressed="true"] { background: var(--ice); color: var(--panel); border-color: var(--ice); }
+/* GURPS's defences (Task 14): each as it stands this turn, a tap rolls it; moved by a cause it is underlined, its
+   causes in the title; a used Block is struck through, and asks once before a second */
+ol.to .defs { display: inline-flex; gap: 2px; }
+.def { font: 600 .7rem var(--mono); white-space: nowrap; }
+.def.moved { text-decoration: underline dotted; text-underline-offset: 2px; }
+.def.used { opacity: .6; text-decoration: line-through; }
+.def.ask { opacity: 1; text-decoration: none; border-color: var(--bad); color: var(--bad); }
+.act .pdefs { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin: 6px 0; font: 500 .72rem var(--mono); }
+.act .pdefs .lab { color: var(--muted); }
+.act .pdefs .def, .act .pdefs .tg.retreat { padding: 1px 6px; }
+.act .pdefs .sheetdef { border: 1px solid var(--line); border-radius: 5px; padding: 0 6px; font-weight: 600; }
 /* the last hit's working on the row's second line: one line, clipped, its full text in the title */
 ol.to .hitline { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 500 .7rem var(--mono); color: var(--muted); }
 .act .mtrack { list-style: none; display: flex; flex-wrap: wrap; gap: 3px; margin: 4px 0 6px; padding: 0; font: 600 .72rem var(--mono); }

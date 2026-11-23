@@ -1262,3 +1262,138 @@ test('the card statuses are in the GURPS status list', () => {
   assert.equal(systemFor('dnd-5e-2024').describe().fight.consequences, null);
   assert.equal(COC.consequences, null);
 });
+
+// ---- Task 14: active defences as they stand this turn ----
+const DEF = GURPS.defences;
+const { readNumbers: gurpsNumbers, gurps: gurpsSystem } = require('../lib/run-sheet/systems/gurps');
+const live = (o) => GC.liveDefences({ dodge: 9, parry: 9, block: 8, conds: [], marks: [], ...o }, DEF);
+const fig = (o, k) => live(o)[k].value;
+
+test('Dodge from Speed 5.5 is 8, marked; a typed 9 wins', () => {
+  assert.deepEqual([GC.deriveGurps({ speed: 5.5 }, {}).dodge, GC.deriveGurps({ speed: 5.5 }, {}).from.dodge], [8, 'from Speed']);
+  assert.equal(GC.deriveGurps({ dx: 11, ht: 11 }, {}).dodge, 8, 'Speed 5.5 from DX 11 and HT 11');
+  assert.equal(GC.deriveGurps({ speed: 5.5, dodge: 9 }, { dodge: true }).dodge, undefined);
+  assert.deepEqual([gurpsNumbers('Basic Speed 5.5').dodge, gurpsNumbers('Basic Speed 5.5').from.dodge], [8, 'from Speed']);
+  assert.deepEqual([gurpsNumbers('Basic Speed 5.5 · Dodge 9').dodge, gurpsNumbers('Basic Speed 5.5 · Dodge 9').from.dodge], [9, undefined]);
+  assert.equal(live({ dodge: 8, from: { dodge: 'from Speed' } }).dodge.title, 'Dodge 8 (from Speed)');
+});
+
+test('Dodge 8/9 reads 8; Parry 10 and Block 9 read from the block; HP 6/11 still reads 11', () => {
+  const n = gurpsNumbers('HP 6/11 · Dodge 8/9 · Parry 10 (Broadsword) · Block 9');
+  assert.deepEqual([n.hp, n.dodge, n.parry, n.block], [11, 8, 10, 9]);
+  assert.deepEqual([gurpsNumbers('Parry: 9').parry, gurpsNumbers('Block -').block], [9, null]);
+});
+
+test('plain: Dodge 9, Parry 9, Block 8 as typed, no causes', () => {
+  const d = live({});
+  assert.deepEqual([d.dodge.value, d.parry.value, d.block.value], [9, 9, 8]);
+  assert.deepEqual([d.dodge.title, d.block.title], ['Dodge 9', 'Block 8']);
+  assert.deepEqual(d.retreat, { on: false, allowed: true, why: null });
+  assert.equal(live({ parry: null }).parry.value, null, 'no figure, no value');
+});
+
+test('Stunned: −4, Retreat off and refused', () => {
+  const d = live({ conds: ['Stunned'], retreat: true });
+  assert.deepEqual([d.dodge.value, d.parry.value, d.block.value], [5, 5, 4]);
+  assert.equal(d.dodge.title, 'Dodge 9 → 5: stunned −4');
+  assert.deepEqual(d.retreat, { on: false, allowed: false, why: 'stunned' });
+});
+
+test('Stunned and Prone: −4 and −3', () => {
+  const d = live({ conds: ['Stunned', 'Prone'] });
+  assert.deepEqual([d.dodge.value, d.parry.value], [2, 2]);
+  assert.equal(d.parry.title, 'Parry 9 → 2: stunned −4, prone −3');
+});
+
+test('Kneeling −2, and no retreat', () => {
+  const d = live({ conds: ['Kneeling'], retreat: true });
+  assert.deepEqual([d.dodge.value, d.block.value], [7, 6]);
+  assert.deepEqual([d.retreat.allowed, d.retreat.why], [false, 'kneeling']);
+});
+
+test('Reeling halves Dodge 9 to 5', () => {
+  const d = live({ marks: ['Reeling'] });
+  assert.deepEqual([d.dodge.value, d.parry.value], [5, 9]);
+  assert.equal(d.dodge.title, 'Dodge 9 → 5: reeling');
+  assert.equal(fig({ dodge: 8, marks: ['Reeling'] }, 'dodge'), 4);
+});
+
+test('Tired halves Dodge; Tired and Reeling halve it twice, 9 to 3', () => {
+  assert.equal(fig({ tired: true }, 'dodge'), 5);
+  assert.equal(live({ tired: true }).dodge.title, 'Dodge 9 → 5: tired');
+  assert.equal(fig({ tired: true }, 'parry'), 9);
+  const both = live({ tired: true, marks: ['Reeling'] }).dodge;
+  assert.deepEqual([both.value, both.title], [3, 'Dodge 9 → 3: reeling, tired']);
+  // halved first, then the rest: 9 to 5, stunned to 1
+  assert.equal(fig({ marks: ['Reeling'], conds: ['Stunned'] }, 'dodge'), 1);
+});
+
+test('All-Out Attack: no defence until its next turn', () => {
+  const d = live({ manoeuvre: 'all-out attack' });
+  assert.deepEqual([d.dodge.value, d.parry.value, d.block.value], [null, null, null]);
+  assert.ok(d.dodge.none);
+  assert.equal(d.dodge.title, 'Dodge 9 → none: all-out attack');
+});
+
+test('Move and Attack: no Parry, no retreat', () => {
+  const d = live({ manoeuvre: 'move and attack', retreat: true });
+  assert.deepEqual([d.dodge.value, d.parry.value, d.block.value], [9, null, 8]);
+  assert.equal(d.parry.title, 'Parry 9 → none: move and attack');
+  assert.deepEqual(d.retreat, { on: false, allowed: false, why: 'move and attack' });
+});
+
+test('All-Out Defence (Dodge) gives +2 to Dodge only', () => {
+  const d = live({ manoeuvre: 'all-out defence', aodDefence: 'dodge' });
+  assert.deepEqual([d.dodge.value, d.parry.value, d.block.value], [11, 9, 8]);
+  assert.equal(d.dodge.title, 'Dodge 9 → 11: all-out defence +2');
+  assert.equal(fig({ manoeuvre: 'all-out defence', aodDefence: 'block' }, 'block'), 10);
+  assert.deepEqual([fig({ manoeuvre: 'all-out defence' }, 'dodge'), fig({ aodDefence: 'dodge' }, 'dodge')], [9, 9], 'neither alone');
+});
+
+test('Retreat adds its bonus: Dodge +3, Parry +1, Block +1', () => {
+  const d = live({ retreat: true });
+  assert.deepEqual([d.dodge.value, d.parry.value, d.block.value], [12, 10, 9]);
+  assert.equal(d.dodge.title, 'Dodge 9 → 12: retreat +3');
+  assert.equal(d.retreat.on, true);
+});
+
+test('parries counted 1 and 2: Parry 9 reads 5 and 1', () => {
+  assert.equal(fig({ parries: 1 }, 'parry'), 5);
+  assert.equal(live({ parries: 1 }).parry.title, 'Parry 9 → 5: parry 2 −4');
+  assert.equal(fig({ parries: 2 }, 'parry'), 1);
+  assert.equal(fig({ parries: 1 }, 'dodge'), 9);
+});
+
+test('a Block counted: Block reads used, its figure kept', () => {
+  const d = live({ blocks: 1 }).block;
+  assert.deepEqual([d.used, d.value, d.title], [true, 8, 'Block 8: used this turn']);
+  assert.equal(live({}).block.used, false);
+});
+
+test('defence log text: "Parry 9 → 5 (parry 2 −4)" and "Dodge 9"', () => {
+  assert.equal(GC.defenceText(live({ parries: 1 }).parry), 'Parry 9 → 5 (parry 2 −4)');
+  assert.equal(GC.defenceText(live({}).dodge), 'Dodge 9');
+});
+
+test('the defences table: GURPS has one; D&D and CoC none; Kneeling is a GURPS status only', () => {
+  assert.ok(DEF && DEF.names && DEF.manoeuvres['all-out attack']);
+  assert.equal(GC.liveDefences({ dodge: 9 }, null), null);
+  assert.equal(systemFor('dnd-5e-2024').describe().fight.defences, null);
+  assert.equal(COC.defences, null);
+  assert.ok(systemFor('gurps-4e').describe().statuses.includes('Kneeling'));
+  assert.ok(!systemFor('dnd-5e-2024').describe().statuses.includes('Kneeling'));
+  assert.ok(!systemFor('coc-7e').describe().statuses.includes('Kneeling'));
+  for (const st of Object.keys(DEF.statuses).concat(DEF.noRetreat)) assert.ok(systemFor('gurps-4e').describe().statuses.includes(st), st);
+  assert.equal(systemFor('gurps-4e').describe().toggles.defences, true);
+  assert.equal(systemFor('coc-7e').describe().toggles.defences, false);
+});
+
+test('a PC: the sheet\'s Dodge 8, Parry 10 and Block 9 are read', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const file = path.join(__dirname, 'fixtures', 'run-sheet-gurps', 'Characters', 'PCs', 'Sela Drake.md');
+  const raw = fs.readFileSync(file, 'utf8').replace(/\r\n?/g, '\n');
+  const { data, content } = require('../lib/frontmatter').parseNote(raw);
+  const n = gurpsSystem.readPc({ body: content, fm: data }).numbers;
+  assert.deepEqual([n.dodge, n.parry, n.block], [8, 10, 9]);
+});

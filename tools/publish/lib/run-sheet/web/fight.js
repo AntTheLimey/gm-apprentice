@@ -227,7 +227,7 @@
   function statKeysOf(rules) {
     const ru = FM.rulesOf({ rules });
     if (ru.initiative === 'dex') return ['max', 'mpMax', 'sanMax', 'dex'];
-    if (ru.initiative === 'speed') return ['max', 'fpMax', 'st', 'ht', 'dx', 'speed', 'dodge', 'parry', 'block'];
+    if (ru.initiative === 'speed') return ['max', 'fpMax', 'st', 'ht', 'dx', 'speed', 'dodge', 'parry', 'block', 'dr'];
     return STAT_KEYS;
   }
   // A pool's current figure that follows its max: HP its `max`, FP and MP theirs.
@@ -305,7 +305,7 @@
   const WORDS_OK = new Set(['dr', 'db']);
   const SIGNED = new Set(['build', 'db']);
   // A worked-out figure's `from` key, cleared when the GM types the figure itself.
-  const FROM_KEY = { max: 'hp', fpMax: 'fp', mpMax: 'mp', speed: 'speed' };
+  const FROM_KEY = { max: 'hp', fpMax: 'fp', mpMax: 'mp', speed: 'speed', dodge: 'dodge' };
 
   // GURPS's worked-out figures (gurps-math's deriveGurps, the one copy): HP from ST, FP from HT, Basic Speed from
   // DX and HT, each only where the GM did not type it and the row's own block did not state it, marked in `from`.
@@ -314,12 +314,14 @@
     const from = r.from && typeof r.from === 'object' && !Array.isArray(r.from) ? r.from : {};
     const stated = (field) => isNum(r[field]) && !from[FROM_KEY[field]];
     const tk = r.typedKeys || {};
-    const keep = { max: Boolean(tk.max) || stated('max'), fpMax: Boolean(tk.fpMax) || stated('fpMax'), speed: Boolean(tk.speed) || stated('speed') };
+    const keep = { max: Boolean(tk.max) || stated('max'), fpMax: Boolean(tk.fpMax) || stated('fpMax'), speed: Boolean(tk.speed) || stated('speed'),
+      dodge: Boolean(tk.dodge) || stated('dodge') };
     const d = GM.deriveGurps(r, keep);
     r.from = { ...from };
     if (d.max !== undefined) { fitMax(r, 'max', d.max); r.from.hp = d.from.hp; }
     if (d.fpMax !== undefined) { fitMax(r, 'fpMax', d.fpMax); r.from.fp = d.from.fp; }
     if (d.speed !== undefined) { r.speed = d.speed; r.from.speed = d.from.speed; }
+    if (d.dodge !== undefined) { r.dodge = d.dodge; r.from.dodge = d.from.dodge; }
   }
 
   // An entry into a pool other than HP (CoC's `m-4`, `s-6`; GURPS's `f-8`): it stops at the pool's floor and cap
@@ -414,6 +416,22 @@
       const l = card.lines[i];
       if (l.result && !l.taken && !l.declined) l.offers = GM.offersFor(l, l.result, C, mortalBefore(r, card, C, i));
     }
+  }
+  // ---- active defences (GURPS, Task 14): the live figure is gurps-math's liveDefences; the roll is the server's ----
+  const defencesOf = (f) => {
+    const D = FM.rulesOf(f).defences;
+    return D && typeof D === 'object' && GM && typeof GM.liveDefences === 'function' ? D : null;
+  };
+  // A row's turn starts: what it counted since its last turn starts again (the defence rolls, parries, Blocks), its
+  // retreat goes off, and the manoeuvre it chose last turn (Task 15's) is over. After turnStarts, which reads them.
+  function defencesTurn(f, r) {
+    if (!defencesOf(f) || !r) return;
+    r.defended = 0;
+    r.parries = 0;
+    r.blocks = 0;
+    r.retreat = false;
+    r.manoeuvre = null;
+    r.aodDefence = null;
   }
   const cardOf = (r, id) => (Array.isArray(r.cards) ? r.cards.find((c) => c.id === id) || null : null);
   const dropCard = (r, id) => { r.cards = cardsOf(r).filter((c) => c.id !== id); };
@@ -570,6 +588,7 @@
         sayRoster(s, f, at, 'Round 1: ', order, '.');
         turnStart(f, first, at);
         turnStarts(f, first);
+        defencesTurn(f, first);
         return;
       }
       const ending = rowOf(f, f.turn);
@@ -583,6 +602,7 @@
       f.turn = row.id;
       turnStart(f, row, at);
       turnStarts(f, row);
+      defencesTurn(f, row);
     },
     // `rolled` is the server's total for an entry of dice (`2d+1 imp vitals`): the page rolls, never the reducer.
     hp: onRow((s, f, r, a, at) => {
@@ -674,6 +694,32 @@
       if (!(isNum(r.shock) && r.shock > 0) && n > 0) r.shockEnds = f.turn === r.id ? 2 : 1;
       r.shock = n;
       if (n === 0) r.shockEnds = 0;
+      touch(r, at);
+    }),
+    // A defence rolled (GURPS, Task 14): the server's roll against the figure as it stands now (the page posts, the
+    // reducer never rolls). Dropped for a PC (the sheet never rolls for one), a defence with no figure, a roll whose
+    // target is not the figure now, and a second Block in a turn unless the GM said again. It counts toward the parry
+    // and Block counts, and `defended` (Task 13's turn-start check), until the row's turn.
+    defendRolled: onRow((s, f, r, a, at) => {
+      const D = defencesOf(f);
+      if (!D || r.kind === 'pc' || r.kind === 'lair' || !GM.DEFENCE_KEYS.includes(a.defence)) return;
+      const d = GM.liveDefences(r, D)[a.defence];
+      const res = GM.rollResult(a.result);
+      if (!d || d.value === null || !res || res.target !== d.value || (d.used && a.again !== true)) return;
+      r.defended = (isNum(r.defended) ? r.defended : 0) + 1;
+      if (a.defence === 'parry') r.parries = (isNum(r.parries) ? r.parries : 0) + 1;
+      if (a.defence === 'block') r.blocks = (isNum(r.blocks) ? r.blocks : 0) + 1;
+      touch(r, at);
+      say(s, f, at, `${nameOf(s, f, r)}: ${GM.defenceText(d)}${d.used ? ', again' : ''}, ${GM.resultText(res)}.`);
+    }),
+    // The retreat toggle (GURPS): on for the row's defences until its turn; refused where the row may not retreat.
+    retreat: onRow((s, f, r, a, at) => {
+      const D = defencesOf(f);
+      if (!D || r.kind === 'pc' || r.kind === 'lair') return;
+      const on = !!a.on;
+      if (on && !GM.retreatOf(r, D).allowed) return;
+      if (!!r.retreat === on) return;
+      r.retreat = on;
       touch(r, at);
     }),
     resisted: onRow((s, f, r, a, at) => { r.resisted = !!a.on; touch(r, at); }),

@@ -1,9 +1,9 @@
 'use strict';
-// GURPS 4e for the run sheet: a foe's HP, FP, Basic Speed, ST, DX, HT, Dodge and DR from any of the five block
-// shapes real vaults use (step 6b Task 4). A block may hold very little (a campaign with no NPC numbers at all), so
-// HP comes from ST, FP from HT and Basic Speed from DX and HT when the block lacks them, each marked; the sums live
-// once in web/gurps-math.js. Names and numbers only. It fights (Task 7): `describe()` is D&D's shape with
-// GURPS's values for what is known so far.
+// GURPS 4e for the run sheet: a foe's HP, FP, Basic Speed, ST, DX, HT, Dodge, Parry, Block and DR from any of the
+// five block shapes real vaults use (step 6b Task 4). A block may hold very little (a campaign with no NPC numbers at
+// all), so HP comes from ST, FP from HT, Basic Speed from DX and HT and Dodge from Basic Speed when the block lacks
+// them, each marked; the sums live once in web/gurps-math.js. Names and numbers only. It fights (Task 7):
+// `describe()` is D&D's shape with GURPS's values for what is known so far.
 
 const path = require('node:path');
 const { dnd, describeAs } = require('./dnd');
@@ -79,11 +79,29 @@ const CONSEQUENCES = {
   unconscious: 'Unconscious',
 };
 
+// The active defences (Task 14), names and numbers only, read by gurps-math's liveDefences. Each figure follows the
+// row's state; the page shows what moved it by name and number, and the GM can ignore all of it.
+const DEFENCES = {
+  names: { dodge: 'Dodge', parry: 'Parry', block: 'Block' },
+  halve: { marks: ['Reeling'], tired: 'tired' }, // B419, B426; the two in turn when both (the server's reading)
+  statuses: { Stunned: -4, Prone: -3, Kneeling: -2 }, // B420, B551
+  noRetreat: ['Stunned', 'Kneeling'], // B377, B420
+  retreat: { dodge: 3, parry: 1, block: 1 }, // B377
+  repeatParry: -4, // B376
+  blocks: 1, // B327, B375
+  // `row.manoeuvre` (Task 15's chip); All-Out Defence's +2 goes to `row.aodDefence`
+  manoeuvres: {
+    'all-out attack': { none: ['dodge', 'parry', 'block'] }, // B365, B551
+    'move and attack': { none: ['parry'], noRetreat: true }, // B365, B551
+    'all-out defence': { chosen: 2 }, // B366
+  },
+};
+
 // The attribute names are exact (a lower-case `st` is a word); the rest ignore case.
 const ALIASES = {
   st: /^ST$/, dx: /^DX$/, iq: /^IQ$/, ht: /^HT$/, dr: /^DR$/,
   hp: /^(?:HP|Hit Points)$/i, fp: /^(?:FP|Fatigue Points)$/i, speed: /^(?:Basic Speed|Speed)$/i,
-  move: /^(?:Basic Move|Move)$/i, dodge: /^Dodge$/i, will: /^Will$/i, per: /^Per$/i,
+  move: /^(?:Basic Move|Move)$/i, dodge: /^Dodge$/i, parry: /^Parry$/i, block: /^Block$/i, will: /^Will$/i, per: /^Per$/i,
 };
 
 // `ST (Strength)` is ST; a key that is no GURPS word is null.
@@ -103,21 +121,26 @@ function maxOf(v) {
 // `face 0`, `face open`, `open face`, `bare face`, `face bare`, `face unarmoured`, on the DR's own line
 const FACE_BARE = /\bface\s*(?::\s*)?(?:0\b|open\b|bare\b|none\b|unarmou?red\b)|\b(?:open|bare)[ -]face/i;
 
-// A block's numbers: hp and fp are maxima; a value that is no number (`n/a`, a dash) is null.
+// A figure that is no pool: its first number (`Dodge 8/9` is 8; `(5.25)` is 5.25).
+const firstFigure = (v) => leadingNumber(String(v == null ? '' : v).replace(/^\(\s*/, ''));
+
+// A block's numbers: hp and fp are maxima; the rest their first figure; a value that is no number (`n/a`, a dash) is
+// null.
 function readNumbers(stats) {
   const ps = pairs(stats, keyOf);
-  const n = (k) => maxOf(firstOf(ps, k));
+  const n = (k) => firstFigure(firstOf(ps, k));
   const nums = { hp: maxOf(firstOf(ps, 'hp')), fp: maxOf(firstOf(ps, 'fp')), speed: n('speed'), dx: n('dx'), st: n('st'), ht: n('ht'),
-    dodge: n('dodge'), dr: null, from: {} };
+    dodge: n('dodge'), parry: n('parry'), block: n('block'), dr: null, from: {} };
   // DR is its leading figure (`2 (leather)` is 2); a block that says the face is bare (`DR 2 (face 0)`) opens it
   const dr = clean(firstOf(ps, 'dr') || '');
   if (dr && !/^[-–—]+$/.test(dr)) nums.dr = drFigure(dr);
   const drLines = String(stats == null ? '' : stats).replace(/\r\n?/g, '\n').split('\n').filter((l) => /\bDR\b/.test(l));
   if (drLines.some((l) => FACE_BARE.test(l))) nums.faceOpen = true;
-  const d = deriveGurps(nums, { max: nums.hp !== null, fpMax: nums.fp !== null, speed: nums.speed !== null });
+  const d = deriveGurps(nums, { max: nums.hp !== null, fpMax: nums.fp !== null, speed: nums.speed !== null, dodge: nums.dodge !== null });
   if (d.max !== undefined) nums.hp = d.max;
   if (d.fpMax !== undefined) nums.fp = d.fpMax;
   if (d.speed !== undefined) nums.speed = d.speed;
+  if (d.dodge !== undefined) nums.dodge = d.dodge;
   nums.from = d.from;
   const er = energyReserve(stats);
   if (er) { nums.er = er.max; if (er.now !== er.max) nums.erStart = er.now; }
@@ -181,7 +204,7 @@ function hasSpellList(md) {
 // An NPC casts with Magery 1 or more (Magery 0 cannot cast), or a spell list with skill levels.
 const isCaster = (md) => /\bMagery\b(?:[ \t]*\([^)\n|]*\))?[ \t*:]*\+?0*[1-9]/i.test(String(md == null ? '' : md)) || hasSpellList(md);
 
-const hasNumbers = (nums) => ['hp', 'fp', 'speed', 'dx', 'st', 'ht', 'dodge'].some((k) => nums[k] !== null) || nums.dr !== null;
+const hasNumbers = (nums) => ['hp', 'fp', 'speed', 'dx', 'st', 'ht', 'dodge', 'parry', 'block'].some((k) => nums[k] !== null) || nums.dr !== null;
 
 function lacks(name, nums) {
   if (!hasNumbers(nums)) return [{ kind: 'no-numbers', text: `${name} names a stat block with no numbers in the vault: type ST, HT and DX in the fight, or fill them in prep` }];
@@ -269,6 +292,16 @@ function drByLocationOf(model) {
   return Object.keys(out).length ? out : null;
 }
 
+// A PC's Dodge, Parry and Block from the sheet's Active Defenses (for the panel, for reference: the sheet never
+// rolls for a PC): Dodge's figure, and the first Parry and Block listed.
+function defencesOf(model) {
+  const d = (model && model.defenses) || {};
+  const at = (list) => (Array.isArray(list) && list.length ? firstFigure(list[0] && list[0].value) : null);
+  const dodge = firstFigure(d.dodge != null ? d.dodge : ((model && model.attributes) || {}).dodge);
+  const out = { dodge, parry: at(d.parry), block: at(d.block) };
+  return Object.fromEntries(Object.entries(out).filter(([, v]) => v !== null));
+}
+
 function readPc({ body, fm }) {
   try {
     const text = String(body == null ? '' : body).replace(/\r\n?/g, '\n');
@@ -279,7 +312,7 @@ function readPc({ body, fm }) {
     const magic = magicOf(model, text);
     const drByLocation = drByLocationOf(model);
     return { numbers: { hpNow: v.hp.cur, hpMax: v.hp.max, fpNow: v.fp.cur, fpMax: v.fp.max,
-      speed: figure(v.basicSpeed), dx: figure(v.dx), ht: figure(ht && ht.value), ...magic.numbers, ...(drByLocation ? { drByLocation } : {}) },
+      speed: figure(v.basicSpeed), dx: figure(v.dx), ht: figure(ht && ht.value), ...defencesOf(model), ...magic.numbers, ...(drByLocation ? { drByLocation } : {}) },
     ...(magic.spells ? { spells: magic.spells } : {}) };
   } catch (e) {
     return { numbers: { ...NONE }, note: `the sheet could not be read: ${firstLine(e)}` };
@@ -307,10 +340,12 @@ function describeGurps(id) {
     wounding: WOUNDING,
     // what a hit and a turn's start and end owe, as prompts (Task 13)
     consequences: CONSEQUENCES,
+    // the active defences as they stand this turn (Task 14)
+    defences: DEFENCES,
   };
   Object.assign(r, { family: 'gurps', ...JSON.parse(JSON.stringify(fight)) });
   Object.assign(r.fight, fight);
-  r.toggles = { ...r.toggles, hitChips: true, half: false, resisted: false, temp: false, deathSaves: false, concentration: false, exhaustion: false, counters: false, longRest: false };
+  r.toggles = { ...r.toggles, hitChips: true, defences: true, half: false, resisted: false, temp: false, deathSaves: false, concentration: false, exhaustion: false, counters: false, longRest: false };
   // Reeling and Shock are marks, set by the fight itself, so neither is in the list
   r.statuses = ['Stunned', 'Prone', 'Kneeling', 'Unconscious', 'Mortal wound'];
   // the acting panel's boxes, in Tab order (the one list, Task 7 [P-C19]); `readout` ones are shown beside HP too.
@@ -337,11 +372,11 @@ function describeGurps(id) {
 
 // The row's own fields: initiative is Basic Speed.
 // An Energy Reserve and a caster only where the block has them.
-const foeRow = (n) => ({ init: n.speed, fp: n.fp, fpMax: n.fp, speed: n.speed, dx: n.dx, st: n.st, ht: n.ht, dodge: n.dodge, dr: n.dr, from: n.from,
+const foeRow = (n) => ({ init: n.speed, fp: n.fp, fpMax: n.fp, speed: n.speed, dx: n.dx, st: n.st, ht: n.ht, dodge: n.dodge, parry: n.parry, block: n.block, dr: n.dr, from: n.from,
   ...(n.faceOpen ? { faceOpen: true } : {}),
   ...(n.er == null ? {} : { er: n.er, erMax: n.er, ...(n.erStart == null ? {} : { erStart: n.erStart }) }),
   ...(n.caster ? { caster: true } : {}) });
 
 const gurps = { ...dnd, id: 'gurps-4e', fights: true, readFoe, readPc, foeRow, stockNoActions: undefined, describe: () => describeGurps('gurps-4e') };
 
-module.exports = { gurps, readNumbers, keyOf, lacks, energyReserve, hasSpellList, isCaster, WOUNDING, CONSEQUENCES, drByLocationOf };
+module.exports = { gurps, readNumbers, keyOf, lacks, energyReserve, hasSpellList, isCaster, WOUNDING, CONSEQUENCES, DEFENCES, drByLocationOf };

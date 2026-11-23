@@ -19,8 +19,9 @@ for (const crlf of [false, true]) {
     const dir = copyFixture('run-sheet-gurps', { crlf });
     it('a block of four attributes gets HP, FP and Basic Speed, each marked', () => {
       const r = read(dir, 'Rafe Kell');
-      assert.deepEqual(r.nums, { hp: 10, fp: 11, speed: 5.75, dx: 12, st: 10, ht: 11, dodge: null, dr: null,
-        from: { hp: 'from ST', fp: 'from HT', speed: 'from DX and HT' } });
+      // step 6b Task 14 changed this on purpose: Dodge is worked out from Basic Speed, marked; Parry and Block are read
+      assert.deepEqual(r.nums, { hp: 10, fp: 11, speed: 5.75, dx: 12, st: 10, ht: 11, dodge: 8, parry: null, block: null, dr: null,
+        from: { hp: 'from ST', fp: 'from HT', speed: 'from DX and HT', dodge: 'from Speed' } });
       assert.deepEqual(r.lacks, []);
       assert.equal(r.hpStart, null);
       assert.equal(r.fpStart, null);
@@ -28,7 +29,8 @@ for (const crlf of [false, true]) {
     // Task 12 changed DR on purpose: the brief makes it the DR text's figure, a number the hit's sum takes off
     it('full figures win over worked-out ones, DR read as its figure', () => {
       const r = read(dir, 'Vex Harrow');
-      assert.deepEqual(r.nums, { hp: 13, fp: 10, speed: 5.25, dx: 11, st: 13, ht: 10, dodge: 8, dr: 1, from: {} });
+      // step 6b Task 14 (on purpose): Parry and Block are read
+      assert.deepEqual(r.nums, { hp: 13, fp: 10, speed: 5.25, dx: 11, st: 13, ht: 10, dodge: 8, parry: 10, block: 9, dr: 1, from: {} });
       assert.equal(read(dir, 'Mara Quint').nums.dr, 0);
       assert.equal(read(dir, 'Mara Quint').nums.speed, 5.25);
     });
@@ -49,7 +51,8 @@ for (const crlf of [false, true]) {
     it('Magery 2 is a caster, Magery 0 is not', () => {
       assert.equal(read(dir, 'Ilse Verrin').nums.caster, true);
       assert.equal(read(dir, 'Ilse Verrin').nums.er, 4, 'a trait Energy Reserve 4 beside Magery');
-      assert.deepEqual(Object.keys(read(dir, 'Dova Lang').nums).sort(), ['dodge', 'dr', 'dx', 'fp', 'from', 'hp', 'ht', 'speed', 'st']);
+      // step 6b Task 14 (on purpose): Parry and Block are read
+      assert.deepEqual(Object.keys(read(dir, 'Dova Lang').nums).sort(), ['block', 'dodge', 'dr', 'dx', 'fp', 'from', 'hp', 'ht', 'parry', 'speed', 'st']);
       const index = buildIndex(dir);
       const row = (n) => foesOf(`${NPCS}${n}.md`, index, 1, 'k', new Set(), null, null, systemFor('gurps-4e')).foes[0];
       assert.equal(row('Ilse Verrin').caster, true);
@@ -62,8 +65,9 @@ for (const crlf of [false, true]) {
     it('the foe row carries Basic Speed as its initiative, and the marks', () => {
       const index = buildIndex(dir);
       const row = foesOf(`${NPCS}Rafe Kell.md`, index, 1, 'k', new Set(), null, null, systemFor('gurps-4e')).foes[0];
-      assert.deepEqual([row.hp, row.init, row.speed, row.fp, row.fpMax, row.dx, row.st, row.ht, row.dodge, row.dr], [10, 5.75, 5.75, 11, 11, 12, 10, 11, null, null]);
-      assert.deepEqual(row.from, { hp: 'from ST', fp: 'from HT', speed: 'from DX and HT' });
+      // step 6b Task 14 changed this on purpose: Dodge is worked out from Basic Speed, marked
+      assert.deepEqual([row.hp, row.init, row.speed, row.fp, row.fpMax, row.dx, row.st, row.ht, row.dodge, row.dr], [10, 5.75, 5.75, 11, 11, 12, 10, 11, 8, null]);
+      assert.deepEqual(row.from, { hp: 'from ST', fp: 'from HT', speed: 'from DX and HT', dodge: 'from Speed' });
       const tam = foesOf(`${NPCS}Tam Osier.md`, index, 1, 'k', new Set(), null, null, systemFor('gurps-4e')).foes[0];
       assert.deepEqual([tam.hp, tam.hpStart], [9, 6]);
     });
@@ -99,7 +103,8 @@ describe('GURPS block words', () => {
     for (const eol of ['\n', '\r\n']) {
       const n = readNumbers(`**ST** 10 | **DX** 10 | **IQ** 10 | **HT** 10${eol}`);
       assert.deepEqual([n.hp, n.fp, n.speed], [10, 10, 5]);
-      assert.deepEqual(n.from, { hp: 'from ST', fp: 'from HT', speed: 'from DX and HT' });
+      // step 6b Task 14 changed this on purpose: Dodge is worked out from Basic Speed, marked
+      assert.deepEqual(n.from, { hp: 'from ST', fp: 'from HT', speed: 'from DX and HT', dodge: 'from Speed' });
     }
   });
   it('a header table and a vertical table read too', () => {
@@ -168,8 +173,8 @@ for (const crlf of [false, true]) {
       // Task 10: Lysa's Energy Reserve and her spells (changed on purpose)
       assert.deepEqual(readPc('Lysa Venn').numbers, { hpNow: 9, hpMax: 9, fpNow: 10, fpMax: 10, speed: 5, dx: 10, ht: 10, erNow: 6, erMax: 6, caster: true });
       assert.deepEqual(readPc('Orrin Tate').numbers, { hpNow: 12, hpMax: 12, fpNow: 11, fpMax: 11, speed: 5.5, dx: 11, ht: 11 });
-      // Task 12 (on purpose): Sela's sheet has a DR by Hit Location table
-      assert.deepEqual(readPc('Sela Drake').numbers, { hpNow: 12, hpMax: 12, fpNow: 10, fpMax: 10, speed: 5.25, dx: 11, ht: 10,
+      // Task 12 (on purpose): Sela's sheet has a DR by Hit Location table; Task 14 (on purpose): its Active Defenses
+      assert.deepEqual(readPc('Sela Drake').numbers, { hpNow: 12, hpMax: 12, fpNow: 10, fpMax: 10, speed: 5.25, dx: 11, ht: 10, dodge: 8, parry: 10, block: 9,
         drByLocation: { skull: 4, face: 0, neck: 2, torso: 3, arm: 2, hand: 1, leg: 2, foot: 1 } });
     });
     it('max from Secondary Characteristics, current from Current Status (the Dead End shape)', () => {

@@ -25,6 +25,9 @@
       out.speed = Math.round(((r.dx + r.ht) / 4) * 100) / 100;
       out.from.speed = 'from DX and HT';
     }
+    // Dodge from Basic Speed (B17, B374), the worked-out Speed when there is one
+    const speed = out.speed !== undefined ? out.speed : r.speed;
+    if (isNum(speed) && !wasTyped(typed, 'dodge')) { out.dodge = Math.floor(speed + 3); out.from.dodge = 'from Speed'; }
     return out;
   }
 
@@ -219,7 +222,76 @@
   // Settled: nothing to roll and nothing offered.
   const cardDone = (card, C) => nextLine(card, C) < 0 && !card.lines.some(pending);
 
+  // ---- active defences (Task 14): each as it stands this turn, from the row's state and the system's table ----
+  // `D` is the defences table in systems/gurps.js (B365-B366, B374-B377, B419, B420, B426, B551). The row's fields:
+  // `dodge`, `parry`, `block` (the figures), `conds`, `marks`, `tired`, `manoeuvre` and `aodDefence` (Task 15's),
+  // `retreat` (the toggle), `parries` and `blocks` (counted since the row's turn). Each defence is { key, label, base,
+  // value, causes, none, used, from, title }: `value` null when there is no figure or no defence; `causes` name what
+  // moved it ("reeling", "stunned −4"); `title` is "Dodge 8 → 4: reeling".
+  const DEFENCE_KEYS = ['dodge', 'parry', 'block'];
+  const signed = (n) => `${n < 0 ? '\u2212' : '+'}${Math.abs(n)}`;
+  const lower = (x) => String(x).toLowerCase();
+  // Whether the row may retreat now: { allowed, why } (why: what stops it, by name).
+  function retreatOf(row, D) {
+    const r = row || {};
+    const conds = Array.isArray(r.conds) ? r.conds : [];
+    const m = (D.manoeuvres || {})[r.manoeuvre] || {};
+    const status = (D.noRetreat || []).find((x) => conds.includes(x));
+    if (status) return { allowed: false, why: lower(status) };
+    if (m.noRetreat) return { allowed: false, why: r.manoeuvre };
+    return { allowed: true, why: null };
+  }
+  function liveDefences(row, D) {
+    const r = row || {};
+    const out = {};
+    if (!D || typeof D !== 'object') return null;
+    const conds = Array.isArray(r.conds) ? r.conds : [];
+    const marks = Array.isArray(r.marks) ? r.marks : [];
+    const man = (D.manoeuvres || {})[r.manoeuvre] || {};
+    const ret = retreatOf(r, D);
+    const retreating = Boolean(r.retreat) && ret.allowed;
+    const counted = (k) => (isNum(r[k]) && r[k] > 0 ? Math.floor(r[k]) : 0);
+    for (const key of DEFENCE_KEYS) {
+      const label = (D.names && D.names[key]) || key;
+      const base = isNum(r[key]) ? r[key] : null;
+      const from = key === 'dodge' && r.from && r.from.dodge ? r.from.dodge : null;
+      const d = { key, label, base, value: base, causes: [], none: false, used: false, from };
+      if ((man.none || []).includes(key)) { d.none = true; d.value = null; d.causes.push(r.manoeuvre); }
+      else if (base !== null) {
+        let v = base;
+        if (key === 'dodge') {
+          const h = D.halve || {};
+          for (const mk of h.marks || []) if (marks.includes(mk)) { v = Math.ceil(v / 2); d.causes.push(lower(mk)); }
+          if (h.tired && r.tired) { v = Math.ceil(v / 2); d.causes.push(h.tired === true ? 'tired' : String(h.tired)); }
+        }
+        for (const [st, mod] of Object.entries(D.statuses || {})) if (conds.includes(st) && isNum(mod)) { v += mod; d.causes.push(`${lower(st)} ${signed(mod)}`); }
+        if (isNum(man.chosen) && r.aodDefence === key) { v += man.chosen; d.causes.push(`${r.manoeuvre} ${signed(man.chosen)}`); }
+        if (retreating && D.retreat && isNum(D.retreat[key])) { v += D.retreat[key]; d.causes.push(`retreat ${signed(D.retreat[key])}`); }
+        if (key === 'parry' && isNum(D.repeatParry) && counted('parries') > 0) {
+          const n = counted('parries');
+          v += D.repeatParry * n;
+          d.causes.push(`parry ${n + 1} ${signed(D.repeatParry * n)}`);
+        }
+        d.value = v;
+      }
+      if (key === 'block' && isNum(D.blocks) && counted('blocks') >= D.blocks) d.used = true;
+      d.title = defenceTitle(d);
+      out[key] = d;
+    }
+    out.retreat = { on: retreating, allowed: ret.allowed, why: ret.why };
+    return out;
+  }
+  // "Dodge 8 → 4: reeling", "Parry 9 → none: move and attack", "Dodge 8 (from Speed)", "Block 8: used this turn".
+  function defenceTitle(d) {
+    const head = `${d.label} ${d.base === null ? '?' : d.base}${d.from ? ` (${d.from})` : ''}`;
+    const moved = d.causes.length ? ` \u2192 ${d.value === null ? 'none' : d.value}: ${d.causes.join(', ')}` : '';
+    return `${head}${moved}${d.used ? `${moved ? ';' : ':'} used this turn` : ''}`;
+  }
+  // The log's form: "Parry 9 → 5 (parry 2 −4)", "Dodge 8".
+  const defenceText = (d) => `${d.label} ${d.base}${d.causes.length ? ` \u2192 ${d.value} (${d.causes.join(', ')})` : ''}`;
+
   return {
+    liveDefences, retreatOf, defenceText, DEFENCE_KEYS,
     deriveGurps, gurpsInjury, drFigure, shockOf, cardForHit, cardsAtTurnStart, cardsAtTurnEnd, lineTarget, lineName, lineText, resultText,
     offersFor, rollResult, nextLine, cardDone, pending, offerOf,
   };
