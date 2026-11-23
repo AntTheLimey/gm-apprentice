@@ -21,7 +21,7 @@ function browserSkip({ platform = process.platform, env = process.env, chrome = 
   return chrome() || env.CI ? false : 'no Chrome or Chromium found (set GM_TEST_CHROME to point at one)';
 }
 
-// One Chrome at a time (#516). `node --test` runs the test files in separate processes at once, and a dozen
+// One Chrome at work at a time (#516); a cdp.js test process keeps its own Chrome idle between its turns. `node --test` runs the test files in separate processes at once, and a dozen
 // headless Chromes starting beside the other suites' work are slow enough to pass the old per-file timeouts. Every
 // launch goes through runChrome: it takes a lock shared by all the test processes, gives the browser its own profile
 // folder, and uses one timeout, so a test waits its turn instead of racing the rest for the machine. A test that

@@ -10,7 +10,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
-const { findChrome, chromeEnv, stopChrome, chromeTempNow } = require('../../lib/chrome');
+const { findChrome, chromeEnv, stopChrome, chromeTempNow, removeNewChromeTemp } = require('../../lib/chrome');
 const { withChromeLock, PROFILE_PREFIX, LOCK_DIR } = require('./browser');
 
 const STEP_MS = 30000;
@@ -106,15 +106,44 @@ function removeOurs(b) {
     try { fs.rmSync(path.join(os.tmpdir(), name), { recursive: true, force: true }); } catch { /* gone, or held: left */ }
   }
 }
+// The file in a shared Chrome's profile naming the test process that owns it. Between that process's turns the lock
+// folder is gone, so a stale-lock reaper never learns of this Chrome: a process killed then (Ctrl-C, a harness
+// timeout, SIGKILL; no `exit` handler runs) would leave its profile for good. The next launch, inside its own turn,
+// ends the Chrome of any profile whose owner is dead and removes it.
+const OWNER_FILE = 'gm-owner-pid';
+const pidAlive = (pid) => {
+  try { process.kill(pid, 0); return true; } catch (e) { return e.code === 'EPERM'; }
+};
+function reapOrphanProfiles(dir = os.tmpdir()) {
+  let names = [];
+  try { names = fs.readdirSync(dir).filter((name) => name.startsWith(PROFILE_PREFIX)); } catch { return; }
+  for (const name of names) {
+    const profile = path.join(dir, name);
+    let pid;
+    // No owner file: a runChrome launch's profile, which the lock's own reaper looks after.
+    try { pid = Number(fs.readFileSync(path.join(profile, OWNER_FILE), 'utf8')); } catch { continue; }
+    if (!Number.isInteger(pid) || pid <= 0 || pidAlive(pid)) continue;
+    try { stopChrome(profile); } catch { /* none left */ }
+    try { fs.rmSync(profile, { recursive: true, force: true, maxRetries: 3 }); } catch { /* left for the next launch */ }
+  }
+}
 function launchShared(chrome, stepMs) {
+  reapOrphanProfiles();
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), PROFILE_PREFIX));
+  try { fs.writeFileSync(path.join(profile, OWNER_FILE), String(process.pid)); } catch (e) {
+    fs.rmSync(profile, { recursive: true, force: true, maxRetries: 3 });
+    throw e;
+  }
   // Recorded beside the lock (as launchChrome does), so a stale lock's reaper can end this Chrome;
   // a launch that could not be recorded does not start.
   try { fs.writeFileSync(path.join(LOCK_DIR, 'profile'), profile); } catch (e) {
     fs.rmSync(profile, { recursive: true, force: true, maxRetries: 3 });
     throw e;
   }
+  // No component updates or background fetches: an idle Chrome between turns would otherwise keep writing temp
+  // files nobody's turn records, and the exit SIGKILL can catch one mid-write.
   const child = spawn(chrome, ['--headless=new', '--disable-gpu', '--no-sandbox', '--no-first-run', '--hide-scrollbars',
+    '--disable-component-update', '--disable-background-networking',
     `--user-data-dir=${profile}`, '--remote-debugging-pipe', 'about:blank'],
   { stdio: ['ignore', 'ignore', 'ignore', 'pipe', 'pipe'], env: chromeEnv(profile) });
   const { send } = connect(child, stepMs);
@@ -356,7 +385,13 @@ async function withPage({ width = 1449, height = 762, chrome = findChrome(), ste
       if (ctx && alive(browser) && shared === browser) {
         try { await send('Target.disposeBrowserContext', { browserContextId: ctx }); } catch { await stopShared(); }
       }
-      if (shared) for (const name of chromeTempNow()) if (!turnBefore.has(name)) shared.ours.add(name);
+      // The turn's new Chrome temp files go with the browser at exit; a browser stopped in this turn already went,
+      // so they are removed now, as a per-turn launch would.
+      if (shared && shared === browser) {
+        for (const name of chromeTempNow()) if (!turnBefore.has(name)) shared.ours.add(name);
+      } else {
+        removeNewChromeTemp(turnBefore);
+      }
     }
   });
 }
