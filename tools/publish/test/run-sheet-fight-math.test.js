@@ -1410,3 +1410,25 @@ test('the manoeuvre chips: nine names, every key the defences and Do Nothing rea
   assert.deepEqual(DEF.caps, { aim: 3, evaluate: 3 });
   assert.equal(COC.defences, null);
 });
+
+// The page recognises dice with its own pattern and the server reads them with lib/dice: one list holds the two to
+// the same answer (what the page takes as dice, the server rolls; what the server refuses, the page may still send
+// only when it looks like dice, so those are the ones listed as refused-by-the-server).
+test('the page and the server read the same dice', () => {
+  const { parseDamage } = require('../lib/dice');
+  const hit = (t) => M.parseEntry(t, GURPS);
+  const both = ['2d6+1', 'd8', 'D20', '1D8+1D4', '2d6-1d4', 'd%', 'D%', '3d%', '2d', '2d+1', '1d-1', '3d', 'd6+2', '1d8+1d4+2', '3-1d4', '2+d6', 'd2', 'd1000', '50d6'];
+  for (const t of both) {
+    assert.doesNotThrow(() => parseDamage(t), `server reads ${t}`);
+    assert.equal(M.hitWords(`${t} cr torso`, GURPS).amount, t, `page takes ${t}`);
+    assert.deepEqual(hit(`${t} cr torso`), { pool: 'hp', kind: 'damage', n: null, dice: t.toLowerCase(), hit: { type: 'cr', location: 'torso', side: null } }, `hit ${t}`);
+  }
+  // the page sends these on; the server answers with its sentence
+  for (const t of ['d1', 'd1001', '51d6', '2d6+100', '0d6']) {
+    assert.equal(M.hitWords(`${t} cr`, GURPS).dice, t.toLowerCase(), `page sends ${t}`);
+    assert.throws(() => parseDamage(t), RangeError, t);
+  }
+  // not dice at all: the page keeps them out, so the server never hears them
+  for (const t of ['d', '2d6+', '4d6kh3', 'banana']) assert.equal(hit(`${t} cr`), null, `page keeps ${t}`);
+  assert.equal(M.parseEntry('d6'), null);
+});

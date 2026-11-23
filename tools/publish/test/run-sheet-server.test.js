@@ -1129,6 +1129,11 @@ describe('run sheet server: rolls and actions', () => {
     assert.strictEqual(bad.status, 400);
     assert.match(bad.json.error, /against.*d100.*damage/);
     assert.strictEqual((await post(run, '/api/roll', { rolls: [{ damage: '2d6x' }] })).status, 400);
+    const core = await post(run, '/api/roll', { rolls: [{ damage: 'd6+2', type: 'cr' }, { damage: '2d6-1d4' }, { damage: 'd%' }] });
+    assert.strictEqual(core.status, 200);
+    assert.ok(core.json.results[0].dice.length === 1 && core.json.results[0].total >= 3 && core.json.results[0].total <= 8);
+    assert.strictEqual(core.json.results[1].dice.length, 3);
+    assert.match((await post(run, '/api/roll', { rolls: [{ damage: 'd' }] })).json.error, /d% or GURPS's 2d\+1/);
     assert.strictEqual((await post(run, '/api/roll', { rolls: [{ against: 100 }] })).status, 400);
   });
 

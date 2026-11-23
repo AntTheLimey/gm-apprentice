@@ -62,12 +62,17 @@
 
   // A hit's words, read against the wounding table (`rules.wounding`): { amount, dice, n, type, location, side, rest }
   // where `rest` holds the words that are none of them. `amount` is the damage as typed (`9`, `-9`, `2d+1`), or ''.
-  const DICE = /^-?\d+d\d*(?:[+-]\d+)?/i;
+  // Dice are recognised here, never rolled or added: the server's reader (lib/dice `parseDamage`) is the one that
+  // reads them. A die is `NdS`, `dS`, `d%`, or `Nd` (a count alone); terms join with + or -, any order. A bare `d`
+  // is not dice. test/dice.test.js holds this pattern and the server's reader to one list of cases.
+  const DICE_TERM = /(?:\d+d(?:\d+|%)?|d(?:\d+|%)|\d+)/i.source;
+  const DICE = new RegExp(`^-?${DICE_TERM}(?:[+-]${DICE_TERM})*`, 'i');
   function hitWords(text, rules) {
     const w = rulesOf({ rules }).wounding;
     const out = { amount: '', dice: null, n: null, type: null, location: null, side: null, rest: [] };
     let t = String(text === null || text === undefined ? '' : text).trim();
-    const a = DICE.exec(t) || /^-?\d+/.exec(t);
+    const chain = DICE.exec(t);
+    const a = chain && /d/i.test(chain[0]) ? chain : /^-?\d+/.exec(t);
     if (a) {
       out.amount = a[0];
       t = t.slice(a[0].length);

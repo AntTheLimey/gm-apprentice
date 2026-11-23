@@ -38,16 +38,24 @@ function rollAgainst(spec, { randomInt = crypto.randomInt } = {}) {
   return { dice, total, target, margin: target - total, outcome };
 }
 
-// ---- damage dice: GURPS `2d+1` (a bare d is six-sided) and CoC sums of standard dice `1D8+1D4` ----
-const DAMAGE_SIDES = [3, ...SIDES]; // CoC's fists are 1D3
+// ---- damage dice: the core of standard dice notation, plus GURPS's `2d+1` ----
+// NdS (d or D), a missing count is one (`d6`), any 2-1000 sides, `d%` is d100, a count with no sides is six-sided
+// (GURPS's `2d`, `2d+1`; a bare `d` is refused), and dice groups and numbers add and subtract in any order
+// (`2d6+1d8`, `2d6-1d4`, `3-1d4`) with at least one group. Keep/drop, exploding and the rest are refused.
+// The run sheet's page recognises a typed entry as dice with its own pattern (web/fight-math.js `DICE`); a test
+// holds the two to one list of cases.
+const DAMAGE_SIDES_MIN = 2;
+const DAMAGE_SIDES_MAX = 1000;
 const DAMAGE_DICE_LIMIT = 50;
 const DAMAGE_MOD_LIMIT = 99;
+const REFUSAL = "damage is dice like 2d6+1, d8, 1D8+1D4, 2d6-1d4, d% or GURPS's 2d+1";
 
+// -> { groups: [{ count, sides, sign }], mod }
 function parseDamage(notation) {
-  const bad = () => new RangeError('damage is dice like 2d+1, 3d, 1d-1, 1D6+1D4 or 2D6+2');
+  const bad = () => new RangeError(REFUSAL);
   if (typeof notation !== 'string') throw bad();
   const text = notation.replace(/\s+/g, '');
-  if (!/^[+-]?[0-9dD+-]+$/.test(text) || /[+-]$/.test(text)) throw bad();
+  if (!/^[+-]?[0-9dD%+-]+$/.test(text) || /[+-]$/.test(text)) throw bad();
   const terms = text.match(/[+-]?[^+-]+/g);
   if (!terms || terms.join('') !== text) throw bad();
   const groups = [];
@@ -57,34 +65,38 @@ function parseDamage(notation) {
     const body = raw.replace(/^[+-]/, '');
     let m;
     if (/^[0-9]+$/.test(body)) { mod += sign * Number(body); continue; }
-    if (!(m = /^([0-9]+)[dD]([0-9]*)$/.exec(body)) || sign < 0) throw bad();
-    const count = Number(m[1]);
-    const sides = m[2] === '' ? 6 : Number(m[2]);
-    if (count < 1 || !DAMAGE_SIDES.includes(sides)) throw bad();
-    groups.push({ count, sides });
+    if (!(m = /^([0-9]*)[dD]([0-9]+|%)?$/.exec(body))) throw bad();
+    if (m[1] === '' && m[2] === undefined) throw bad(); // a bare d
+    const count = m[1] === '' ? 1 : Number(m[1]);
+    const sides = m[2] === undefined ? 6 : m[2] === '%' ? 100 : Number(m[2]);
+    if (count < 1 || sides < DAMAGE_SIDES_MIN || sides > DAMAGE_SIDES_MAX) throw bad();
+    groups.push({ count, sides, sign });
   }
   if (!groups.length || groups.reduce((n, g) => n + g.count, 0) > DAMAGE_DICE_LIMIT || Math.abs(mod) > DAMAGE_MOD_LIMIT) throw bad();
   return { groups, mod };
 }
 
 // The floor: a result of 0 or less is 0 for crushing and 1 for any other type (GURPS Basic Set B378); no type
-// is crushing's. CoC's floor is 0 and is passed in.
-const damageFloor = (type, floor) => (isInt(floor) ? floor : (type === undefined || type === null || /^cr(ushing)?$/i.test(String(type)) ? 0 : 1));
+// (or an empty one) is crushing's. CoC's floor is 0 and is passed in.
+const noType = (type) => type === undefined || type === null || type === '';
+const damageFloor = (type, floor) => (isInt(floor) ? floor : (noType(type) || /^cr(ushing)?$/i.test(String(type)) ? 0 : 1));
 
+// `dice` are the faces rolled, a taken-away die as a negative number, so they add up with `mod` to the raw total.
 function rollDamage(notation, { type, floor, randomInt = crypto.randomInt } = {}) {
   if (type !== undefined && type !== null && (typeof type !== 'string' || type.length > 16)) throw new RangeError('a damage type is a short word like cr, cut or imp');
   if (floor !== undefined && !isInt(floor)) throw new RangeError('a damage floor is a whole number');
   const { groups, mod } = parseDamage(notation);
   const dice = [];
-  for (const g of groups) for (let i = 0; i < g.count; i++) dice.push(randomInt(1, g.sides + 1));
+  for (const g of groups) for (let i = 0; i < g.count; i++) dice.push(g.sign * randomInt(1, g.sides + 1));
   const raw = dice.reduce((a, b) => a + b, 0) + mod;
   return { notation, type: type === undefined ? null : type, dice, mod, total: Math.max(damageFloor(type, floor), raw) };
 }
 
-// The highest total the notation can make (an Extreme hit in CoC), with the same floor.
+// The highest total the notation can make (an Extreme hit in CoC), with the same floor: added dice at their top,
+// taken-away dice at their bottom (one each).
 function maxDamage(notation, { type, floor } = {}) {
   const { groups, mod } = parseDamage(notation);
-  return Math.max(damageFloor(type, floor), groups.reduce((n, g) => n + g.count * g.sides, 0) + mod);
+  return Math.max(damageFloor(type, floor), groups.reduce((n, g) => n + (g.sign > 0 ? g.count * g.sides : -g.count), 0) + mod);
 }
 
 // ---- CoC 7e: the d100 against a target ----
@@ -136,4 +148,4 @@ function rollSpec(spec, opts) {
 
 const rollSpecs = (list, opts) => list.map((spec) => rollSpec(spec, opts));
 
-module.exports = { SIDES, roll, rollMany, rollAgainst, rollDamage, maxDamage, rollPercent, rollSpec, rollSpecs };
+module.exports = { SIDES, roll, rollMany, rollAgainst, rollDamage, maxDamage, parseDamage, rollPercent, rollSpec, rollSpecs };

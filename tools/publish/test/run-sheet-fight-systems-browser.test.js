@@ -528,6 +528,25 @@ describe('CoC and GURPS fights on the GM page, by real input', { skip: browserSk
     });
   }
 
+  // Task 11b: a die with no count is one die; the page sends it to the server, which rolls it
+  it('GURPS: d6+2 cr torso Enter reaches the server and shows its working line', async () => {
+    const run = await start('gurps');
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await fightOn(page, run, 2);
+      const vex = named(p, 'Vex Harrow').id;
+      const was = named(p, 'Vex Harrow').hp;
+      p = await typeInto(page, `[data-fhp="${vex}"]`, 'd6+2 cr torso');
+      p = await until(page, `p.fight.rows.find((r) => r.id === ${q(vex)}).hp < ${was}`);
+      const line = `li[data-row2="${vex}"] .hitline`;
+      await page.waitFor(`document.querySelector(${q(line)})`);
+      const said = await text(page, line);
+      // d6+2 is 3 to 8; DR 1 takes one off, a crushing torso hit counts once
+      assert.match(said, /^d6\+2 = [3-8] cr \u2212 DR 1 = [2-7]$/, said);
+      const lost = was - named(p, 'Vex Harrow').hp;
+      assert.ok(lost >= 2 && lost <= 7, `lost ${lost}`);
+    });
+  });
+
   it('GURPS: the cut and arm chips then 9 Enter is a hit to the arm; 9 Enter again is raw injury; the chips list them first', async () => {
     const run = await start('gurps');
     await withPage({ width: 1449, height: 762 }, async (page) => {

@@ -120,8 +120,57 @@ describe('dice: damage dice', () => {
     assert.strictEqual(maxDamage('1d-9'), 0);
   });
   it('refuses what is not dice', () => {
-    for (const bad of ['d', '', '2d+100', '2d+', '1d7', '0d6', '2d6-1d4', 'banana', '2x+1', null, 7]) assert.throws(() => rollDamage(bad), RangeError, String(bad));
+    for (const bad of ['d', '', '0d6', 'd1', 'd1001', '51d6', '2d6+100', '4d6kh3', '2d6+', 'banana', '2x+1', '3', '3-1', '3d%x', 'd%%', null, 7]) assert.throws(() => rollDamage(bad), RangeError, String(bad));
     assert.throws(() => rollDamage('2d', { type: 7 }), RangeError);
+  });
+  it('the refusal names the accepted forms', () => {
+    assert.throws(() => rollDamage('banana'), { message: "damage is dice like 2d6+1, d8, 1D8+1D4, 2d6-1d4, d% or GURPS's 2d+1" });
+  });
+  it('a missing count is one, in either case', () => {
+    assert.deepStrictEqual(rollDamage('d6', { randomInt: feed(4) }), { notation: 'd6', type: null, dice: [4], mod: 0, total: 4 });
+    assert.strictEqual(rollDamage('D20', { randomInt: feed(17) }).total, 17);
+    assert.strictEqual(rollDamage('d6+2', { type: 'cr', randomInt: feed(4) }).total, 6);
+  });
+  it('any number of sides from 2 to 1000', () => {
+    assert.strictEqual(rollDamage('d3', { randomInt: feed(2) }).total, 2);
+    assert.strictEqual(rollDamage('2d7', { randomInt: feed(7, 5) }).total, 12);
+    assert.strictEqual(rollDamage('d30', { randomInt: feed(30) }).total, 30);
+    assert.strictEqual(rollDamage('d2', { randomInt: feed(1) }).total, 1);
+    const seen = [];
+    rollDamage('d1000', { randomInt: (lo, hi) => { seen.push([lo, hi]); return hi - 1; } });
+    assert.deepStrictEqual(seen, [[1, 1001]]);
+    assert.strictEqual(maxDamage('d1000'), 1000);
+  });
+  it('d% is d100, with a count too', () => {
+    const seen = [];
+    const r = rollDamage('d%', { randomInt: (lo, hi) => { seen.push([lo, hi]); return 57; } });
+    assert.deepStrictEqual([seen, r.total], [[[1, 101]], 57]);
+    assert.strictEqual(rollDamage('3D%', { randomInt: feed(10, 20, 30) }).total, 60);
+    assert.strictEqual(maxDamage('3d%'), 300);
+    for (let i = 0; i < 2000; i++) { const t = rollDamage('d%').total; assert.ok(t >= 1 && t <= 100, String(t)); }
+  });
+  it('groups and numbers add and subtract in any order', () => {
+    assert.strictEqual(rollDamage('2d6+1d8', { randomInt: feed(3, 4, 5) }).total, 12);
+    assert.deepStrictEqual(rollDamage('2d6-1d4', { randomInt: feed(3, 4, 2) }), { notation: '2d6-1d4', type: null, dice: [3, 4, -2], mod: 0, total: 5 });
+    assert.strictEqual(rollDamage('1d8+1d4+2', { randomInt: feed(5, 3) }).total, 10);
+    assert.strictEqual(rollDamage('1D8+1D4', { randomInt: feed(5, 3) }).total, 8);
+    assert.strictEqual(rollDamage('2 + d6', { randomInt: feed(3) }).total, 5, 'spaces are ignored');
+  });
+  it('a leading number is allowed beside a die, and the floor applies', () => {
+    assert.strictEqual(rollDamage('3-1d4', { randomInt: feed(1) }).total, 2);
+    assert.strictEqual(rollDamage('3-1d4', { type: 'cr', randomInt: feed(4) }).total, 0);
+    assert.strictEqual(rollDamage('3-1d4', { type: 'cut', randomInt: feed(4) }).total, 1);
+    assert.strictEqual(rollDamage('3-1d4', { floor: 0, randomInt: feed(4) }).total, 0);
+    assert.strictEqual(maxDamage('3-1d4'), 2);
+  });
+  it('an empty type counts as no type: floor 0', () => {
+    assert.strictEqual(rollDamage('1d-1', { type: '', randomInt: feed(1) }).total, 0);
+    assert.strictEqual(maxDamage('1d-9', { type: '' }), 0);
+  });
+  it('maxDamage takes subtracted dice at their bottom', () => {
+    assert.strictEqual(maxDamage('2d6-1d4'), 11);
+    assert.strictEqual(maxDamage('2d6-3d4'), 9);
+    assert.strictEqual(maxDamage('d6+d8+2'), 16);
   });
 });
 
