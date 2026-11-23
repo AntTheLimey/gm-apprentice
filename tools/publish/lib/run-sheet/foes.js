@@ -95,9 +95,9 @@ function entry(notePath, index, count, add, canFight = true, sides = null, whoTe
 }
 
 // Can this beat fight: its Type is combat, fight, battle or ambush, or it is a contingency, or its who holds a
-// creature or a count above 1. A beat with no `type` field (one built by hand) can.
+// creature or a count above 1. A beat with no type (no field, or an empty one) can.
 function beatCanFight(beat, index) {
-  if (beat.type === undefined || beat.contingency) return true;
+  if (beat.type === undefined || beat.type === null || !String(beat.type).trim() || beat.contingency) return true;
   if (/\b(?:combat|fight|battle|ambush)\b/.test(beat.type)) return true;
   return (beat.who || []).some((w) => (w.count || 1) > 1 || (w.note && index.has(w.note) && String((index.read(w.note).fm || {}).type || '').toLowerCase() === 'creature'));
 }
@@ -189,8 +189,7 @@ function foesFor(beat, index, seen = new Set(), carried = null, sides = null, sy
         entries.push(e);
       }
       if (entries.length) add('who-from-then', null, `${beat.title}: no NPCs block; its rows come from the people its Then lines link`);
-    } else if (canFight || !beat.type) {
-      // (an untyped parsed beat has type '': beatCanFight only knows the undefined of a hand-built one)
+    } else if (canFight) {
       // an older Plan's fight names its people in Entities only: creatures ticked, NPCs benched
       for (const p of people(beat.entities || [])) {
         const e = entry(p, index, 1, add, true, sides, '', system, { label: '' });
@@ -210,4 +209,4 @@ function foesFor(beat, index, seen = new Set(), carried = null, sides = null, sy
   return { foes, treasure, warnings };
 }
 
-module.exports = { foesOf, foesFor, sideOf };
+module.exports = { foesOf, foesFor, sideOf, beatCanFight };

@@ -8,7 +8,7 @@ const { spawnSync } = require('node:child_process');
 const { readText } = require('./helpers/run-sheet-lines');
 const { buildIndex } = require('../lib/run-sheet/notes');
 const { readBeats } = require('../lib/run-sheet/beats');
-const { foesOf, foesFor } = require('../lib/run-sheet/foes');
+const { foesOf, foesFor, beatCanFight } = require('../lib/run-sheet/foes');
 
 // Every scratch dir is removed when the file's tests finish.
 const made = [];
@@ -194,8 +194,9 @@ describe('run sheet foes', () => {
       assert.ok(!r.warnings.some((w) => /Old Bones/.test(w.text)));
     });
 
-    it('a social beat (no fight type, nobody counted) gives no rows for statless people', () => {
-      const { index, beats } = setup((t) => t.replace('**Starts it:** The bell has rung and the wolves are quiet.\n', '**Starts it:** The bell has rung and the wolves are quiet.\n**NPCs**\n- **[[Sister Fen]]:** watching\n'));
+    // S6-D7: a beat with no Type at all can fight, so this one is typed social to stay a beat that cannot
+    it('a social beat (typed social, nobody counted) gives no rows for statless people', () => {
+      const { index, beats } = setup((t) => t.replace('**Starts it:** The bell has rung and the wolves are quiet.\n', '**Starts it:** The bell has rung and the wolves are quiet.\n**Type:** social\n**NPCs**\n- **[[Sister Fen]]:** watching\n'));
       const social = beats.filter((b) => b.title === 'The Gate')[1];
       assert.deepStrictEqual(social.who.map((w) => w.name), ['Sister Fen']);
       assert.deepStrictEqual(foesFor(social, index), { foes: [], treasure: [], warnings: [] });
@@ -528,5 +529,14 @@ describe('run sheet foes: Then links and Entities lines', () => {
   it('a place, an item and the scene note among the Entities give no row', () => {
     const r = rowsOf(beat({ type: 'combat', entities: ['Locations/Arriver Hall.md', 'Items/Arriver Lamp.md', 'Chapters/Scene Note.md', P('Arriver One')] }));
     assert.deepStrictEqual(r.foes.map((f) => f.name), ['Arriver One']);
+  });
+});
+
+describe('beatCanFight with no type', () => {
+  it('an empty, blank or missing type can fight; a social type cannot', () => {
+    const { index } = setup();
+    const b = (type) => ({ contingency: false, who: [], ...(type === undefined ? {} : { type }) });
+    assert.deepStrictEqual([undefined, '', '  ', null].map((t) => beatCanFight(b(t), index)), [true, true, true, true]);
+    assert.strictEqual(beatCanFight(b('social'), index), false);
   });
 });

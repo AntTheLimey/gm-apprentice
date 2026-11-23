@@ -172,6 +172,8 @@ describe('run sheet reader', () => {
     // a reader that took the Who line whole and lost Sister Fen from it
     for (const b of edited.beats) {
       b.who = b.who.filter((w) => w.name !== 'Sister Fen');
+      // S6-D7: an untyped beat can fight, so Sister Fen's who entry also made a benched row; the lost reader lost that too
+      b.foes = b.foes.filter((f) => f.name !== 'Sister Fen');
       b.extra = b.extra.replace(/^\*\*Who:\*\*.*$/m, '');
     }
     const rows = completeness(body, edited).filter((w) => w.kind === 'not-on-page');
@@ -1129,4 +1131,16 @@ describe('side colours', () => {
     assert.strictEqual(notes.length, 2);
     assert.match(notes[0].text, /#rrggbb/);
   });
+
+  it('a contingency with no NPCs block skips a Then-linked person a planned beat lists, matched by note path', () => {
+    const dir = copy();
+    const p = path.join(dir, PLAN);
+    fs.writeFileSync(p, readText(p).replace(/(### The Wolves Return\n\*\*Trigger:\*\* The bell rings twice\.\n)\*\*Then\*\*\n- The pack comes down from the ridge\.\n\*\*NPCs\*\*\n- .*\n- .*\n/,
+      '$1**Then**\n- [[Brother Ash]] and [[Ice Mephit]] come down from the ridge.\n'));
+    const m = readRunSheet(dir, PLAN, { party: PARTY });
+    const c = m.beats.find((x) => x.contingency && x.title === 'The Wolves Return');
+    assert.deepStrictEqual(c.foes.map((f) => [f.name, !f.benched]), [['Ice Mephit', true]]);
+    assert.ok(m.warnings.some((w) => w.kind === 'who-from-then'));
+  });
+
 });

@@ -400,7 +400,8 @@
       numberUnseen(f);
       lairOf(f);
       if (!fresh.length && !ticked.length && !groups.length) return;
-      const who = fresh.concat(ticked).filter((r) => r.kind !== 'lair');
+      // a benched newcomer (a statless NPC, an Entities NPC) sits out until ticked: the line names who is in
+      const who = fresh.concat(ticked).filter((r) => r.kind !== 'lair' && r.in !== false);
       const label = String(a.label || '').trim() || who.map((r) => nameOf(s, f, r, true)).join(', ');
       if (label) say(s, f, at, `${label} ${who.length > 1 ? 'join' : 'joins'} the fight.`);
       // a join that only added rows can be taken back: its line and its rows carry the join's id, for Undo. A group
