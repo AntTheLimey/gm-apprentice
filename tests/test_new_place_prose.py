@@ -34,8 +34,11 @@ class NewPlaceProseTests(unittest.TestCase):
                                  "### 4. Update the World").split())
         self.assertIn("`- New place: <name>`", step4)
         self.assertIn("`Improvised beats`", step4)
-        self.assertIn("offer a location note for each", step4)
+        self.assertIn("offer a location note", step4)
         self.assertIn("`--type location`", step4)
+        # One saved mid-session is not made twice; one the Play Notes or the Export also name is offered once.
+        self.assertIn("is an updated entity", step4)
+        self.assertIn("the Play Notes or the Export", step4)
 
     def test_document_chain_says_wrapup_offers_it(self):
         chain = " ".join(read("shared/session-document-chain.md").split())

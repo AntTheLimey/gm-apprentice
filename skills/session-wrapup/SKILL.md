@@ -278,9 +278,11 @@ locations and NPC relationships when creating entities.
 
 - **New entities:** each `- New place: <name>` line under the Table
   Log's `Improvised beats` is a place the GM typed in play, with no
-  note yet: offer a location note for each, yes or no each (a place
-  the Play Notes also name is offered once); a yes is a `--type
-  location` block, from what the records say of it. For any new entity,
+  note then. One the vault has a note for by now (session-play may
+  have saved it) is an updated entity. For each other, offer a
+  location note, yes or no each, once even when the Play Notes or the
+  Export name it too; a yes is a `--type location` block, from what
+  the records say of it. For any new entity,
   read `_Templates/_Template_{Type}.md` for its
   fields and section names, then a
   `=== entity-new --type <type> --name "<Name>" --date <play date>
