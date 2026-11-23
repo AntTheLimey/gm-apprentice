@@ -385,7 +385,7 @@ async function withPage({ width = 1449, height = 762, chrome = findChrome(), ste
             }
           },
           // Text into whatever has focus (Input.insertText: one insert, as a paste or an input method gives).
-          type: (text) => s('Input.insertText', { text }),
+          type: (text) => { moved({ act: 'type', text: String(text).slice(0, 20) }); return s('Input.insertText', { text }); },
           // Another window in the same browser context, opened on `url` (its own event streams, its own page, the
           // same storage). A window, as Chrome sizes only a new window: a second tab in the context refuses width.
           // A tab that never answers its setup (as a fresh launch can, #852) is closed and made once more.

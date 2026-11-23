@@ -64,7 +64,8 @@ async function tap(page, sel) {
 // A box clicked (which selects what it holds), the text typed, Enter. The text waits until the box has focus, and the
 // test fails saying where focus is when the click did not give it (Task 13 fix round: a flake where Enter came
 // without the typed text).
-async function typeInto(page, sel, text) {
+// `enter: false` leaves the text unsent; `settle: false` skips the wait for a save (a refused entry saves nothing).
+async function typeInto(page, sel, text, { enter = true, settle = true } = {}) {
   await tap(page, sel);
   try {
     await page.waitFor(`document.activeElement === document.querySelector(${q(sel)})`, 2000);
@@ -73,8 +74,8 @@ async function typeInto(page, sel, text) {
     throw new Error(`typeInto ${sel}: the click left focus on ${at}, not the box`);
   }
   await page.type(String(text));
-  await page.key('Enter');
-  return settled(page);
+  if (enter) await page.key('Enter');
+  return settle ? settled(page) : until(page, 'true');
 }
 const named = (p, name) => p.fight.rows.find((r) => r.name === name);
 const order = (p) => p.fight.rows.filter((r) => r.in).map((r) => r.name);
@@ -253,9 +254,9 @@ describe('CoC and GURPS fights on the GM page, by real input', { skip: browserSk
       const lysa = named(p, 'Lysa Venn').id;
       p = await typeInto(page, `[data-fini="${lysa}"]`, '6.25');
       assert.deepStrictEqual([order(p)[0], named(p, 'Lysa Venn').ini], ['Lysa Venn', 6.25]);
-      await tap(page, `[data-fini="${lysa}"]`);
-      await page.type('6.255');
-      await page.key('Enter');
+      // the 6.25 entry is placed and saved (Lysa first, the server's echo in) before the next one is typed
+      await until(page, `p.fight.rows.filter((r) => r.in)[0].name === 'Lysa Venn' && p.saved === "Saved" && p.pending === 0`);
+      await typeInto(page, `[data-fini="${lysa}"]`, '6.255', { settle: false });
       p = await until(page, `p.layout.rows.some((r) => r.id === ${q(lysa)} && r.line2 && r.line2.includes('Not a number'))`);
       assert.strictEqual(named(p, 'Lysa Venn').ini, 6.25);
       // FP now/[max] on the row, the entry box GURPS's
@@ -278,9 +279,7 @@ describe('CoC and GURPS fights on the GM page, by real input', { skip: browserSk
       assert.deepStrictEqual([named(p, 'Kev').fp, named(p, 'Kev').fpMax], [11, 11]);
       assert.strictEqual(await attrOf(page, `li[data-frow="${id}"] .fpv`, 'title'), 'Max FP 11 (from HT)');
       // words in a panel box are refused: the box is marked, the row says so, DX stays blank
-      await tap(page, box(p, 'Kev', 'dx'));
-      await page.type('twelve');
-      await page.key('Enter');
+      await typeInto(page, box(p, 'Kev', 'dx'), 'twelve', { settle: false });
       const line2 = `li[data-row2="${id}"] .badnum[title="DX"]`;
       await page.waitFor(`document.querySelector(${q(line2)})`);
       assert.strictEqual(await text(page, line2), 'Not a number: kept as typed');
@@ -516,8 +515,7 @@ describe('CoC and GURPS fights on the GM page, by real input', { skip: browserSk
         // an entry typed after the hit, not applied: "Enter applies" shares the line with the working
         const h2 = () => page.evaluate(`document.querySelector('li[data-row2="${vex}"]').getBoundingClientRect().height`);
         const before = await h2();
-        await tap(page, `[data-fhp="${vex}"]`);
-        await page.type('-2');
+        await typeInto(page, `[data-fhp="${vex}"]`, '-2', { enter: false, settle: false });
         await page.waitFor(`document.querySelector('li[data-row2="${vex}"] .pendnum')`);
         assert.strictEqual(await h2(), before, `${width}: the second line stays one line`);
         assert.strictEqual(await text(page, line), '9 imp \u2212 DR 1 = 8 \u00d7 3 = 24');
