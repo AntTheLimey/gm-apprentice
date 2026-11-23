@@ -172,6 +172,11 @@ img {
   white-space: nowrap;
   text-decoration: none;
   margin-right: var(--space-2000);
+  /* The title gives way first when the bar is too narrow for it and the menu: cut short, not pushing the page wider (#863). */
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .nav-brand:hover {
   color: var(--accent-on-header);
@@ -442,6 +447,16 @@ img {
 /* Wider than the menu's own breakpoint: below it a long title and menu leave the mark no room. */
 @media (min-width: 960px) {
   .nav-credit { display: inline-flex; }
+}
+/* A menu too wide for the bar even with the title cut short: js/nav.js marks the bar crowded, and it shows the
+   phone menu's buttons instead, whose menu holds every entry (#863). */
+@media (min-width: 768px) {
+  .top-nav.nav-crowded .nav-groups,
+  .top-nav.nav-crowded .nav-search-btn,
+  .top-nav.nav-crowded .nav-color-mode-btn,
+  .top-nav.nav-crowded .nav-credit { display: none; }
+  .top-nav.nav-crowded .nav-search-icon-btn { display: flex; }
+  .top-nav.nav-crowded .nav-mobile-toggle { display: inline-block; }
 }
 
 /* ===== BREADCRUMBS ===== */
