@@ -2955,11 +2955,12 @@ describe('CoC melee on the target\'s row (step 6b Task 16)', () => {
   const lines = (s) => s.events.filter((e) => e.fight).map((e) => e.text);
   // the server's d100 as rollPercent gives it, against `target` with the dice asked
   const d100 = (kept, target, level, dice = { bonus: 0, penalty: 0 }) => ({ tens: [Math.floor(kept / 10) * 10], units: kept % 10, kept, target, difficulty: 'regular', needed: target, level, passed: level !== 'fail' && level !== 'fumble', fumbleFrom: 96, bonus: dice.bonus, penalty: dice.penalty, asked: dice });
-  // an exchange as the page sends it: the dice the stepper shows (the row's own, unless given)
+  // an exchange as the page sends it: the dice the stepper shows (the row's own, unless given) and the row's own dice
   const melee = (s, from, to, response, attack, defence, net) => {
     const D = named(s, to);
-    const n = net === undefined ? CM.attackDice(D, COC.coc).net : net;
-    return G(s, { type: 'melee', attacker: named(s, from).id, defender: D.id, response, dice: CM.diceOfNet(n, COC.coc), attack, defence });
+    const auto = CM.attackDice(D, COC.coc);
+    const n = net === undefined ? auto.net : net;
+    return G(s, { type: 'melee', attacker: named(s, from).id, defender: D.id, response, dice: CM.diceOfNet(n, COC.coc), auto, attack, defence });
   };
   const rows = () => [
     { name: 'Iris', kind: 'pc', ini: 55, dex: 55, hp: 11, max: 11, dodge: 27 },
@@ -3010,6 +3011,27 @@ describe('CoC melee on the target\'s row (step 6b Task 16)', () => {
     assert.equal(lines(s).slice(-1)[0], 'Iris, +2 bonus dice (set by hand): Regular; Cultist 2 Dodges: Fail (50): Iris hits Cultist 2.');
     s = melee(s, 'Iris', 'Cultist 2', 'dodge', { level: 'regular' }, d100(50, 20, 'fail'), 0);
     assert.equal(lines(s).slice(-1)[0], 'Iris, no dice (set by hand): Regular; Cultist 2 Dodges: Fail (50): Iris hits Cultist 2.');
+  });
+
+  it('the row\'s dice change in another window while the exchange is open: not "set by hand"', () => {
+    let s = go(begin(rows()));
+    // the page opened it with Cultist 1's own dice 0; Prone came from another window before the level tap
+    const auto = CM.attackDice(named(s, 'Cultist 1'), COC.coc);
+    s = G(s, { type: 'status', row: named(s, 'Cultist 1').id, add: 'Prone' });
+    s = G(s, { type: 'melee', attacker: named(s, 'Iris').id, defender: named(s, 'Cultist 1').id, response: 'fightBack', dice: { bonus: 0, penalty: 0 }, auto, attack: { level: 'regular' }, defence: d100(35, 40, 'regular') });
+    assert.equal(lines(s).slice(-1)[0], 'Iris: Regular; Cultist 1 Fights Back: Regular (35): a tie: Iris hits Cultist 1.');
+    // the reverse: the page saw the Walker Prone (+1) and sent it; Prone went meanwhile: still the row's own, named
+    s = G(s, { type: 'status', row: named(s, 'Walker').id, add: 'Prone' });
+    const seen = CM.attackDice(named(s, 'Walker'), COC.coc);
+    assert.deepEqual(seen, { net: 1, why: ['prone'] });
+    s = G(s, { type: 'status', row: named(s, 'Walker').id, remove: 'Prone' });
+    s = G(s, { type: 'melee', attacker: named(s, 'Iris').id, defender: named(s, 'Walker').id, response: 'fightBack', dice: { bonus: 1, penalty: 0 }, auto: seen, attack: { level: 'regular' }, defence: d100(35, 45, 'regular') });
+    assert.equal(lines(s).slice(-1)[0], 'Iris, +1 bonus die (prone): Regular; Walker Fights Back: Regular (35): a tie: Iris hits Walker.');
+    // the GM's own change is still "set by hand"; an action with no `auto` reads the row as it stands
+    s = G(s, { type: 'melee', attacker: named(s, 'Iris').id, defender: named(s, 'Cultist 2').id, response: 'dodge', dice: { bonus: 1, penalty: 0 }, auto: { net: 0, why: [] }, attack: { level: 'regular' }, defence: d100(50, 20, 'fail') });
+    assert.equal(lines(s).slice(-1)[0], 'Iris, +1 bonus die (set by hand): Regular; Cultist 2 Dodges: Fail (50): Iris hits Cultist 2.');
+    s = G(s, { type: 'melee', attacker: named(s, 'Iris').id, defender: named(s, 'Cultist 2').id, response: 'dodge', dice: { bonus: 1, penalty: 0 }, attack: { level: 'regular' }, defence: d100(50, 20, 'fail') });
+    assert.equal(lines(s).slice(-1)[0], 'Iris, +1 bonus die (outnumbered): Regular; Cultist 2 Dodges: Fail (50): Iris hits Cultist 2.');
   });
 
   it('one tap turns outnumbered off for that row, and on again', () => {
@@ -3064,9 +3086,9 @@ describe('CoC melee on the target\'s row (step 6b Task 16)', () => {
     // a d100 sent for Iris is dropped, and so is a tap for the cultist
     s = melee(s, 'Iris', 'Cultist 1', 'fightBack', d100(20, 50, 'regular'), d100(35, 40, 'regular'));
     s = melee(s, 'Iris', 'Cultist 1', 'fightBack', { level: 'hard' }, { level: 'hard' });
-    // Cultist 1 attacks Iris, who Dodges: the cultist's roll, Iris's tap
     s = melee(s, 'Iris', 'Cultist 1', 'fightBack', { level: 'great' }, d100(35, 40, 'regular'));
     assert.deepEqual(s.fight, was);
+    // Cultist 1 attacks Iris, who Dodges: the cultist's roll, Iris's tap
     s = melee(s, 'Cultist 1', 'Iris', 'dodge', d100(35, 40, 'regular'), { level: 'extreme' });
     assert.equal(lines(s).slice(-1)[0], 'Cultist 1: Regular (35); Iris Dodges: Extreme: Iris dodges.');
   });

@@ -772,7 +772,8 @@
     }),
     // A melee exchange (CoC, Task 16): `attacker` attacks `defender`, which Dodges or Fights Back (`response`). Each
     // side is the server's d100 for an NPC or creature (`attack` with the `dice` the stepper gave, `defence` with none)
-    // or the GM's tap of a PC's level ({ level }): the sheet never rolls for a PC and the reducer never rolls. Dropped
+    // or the GM's tap of a PC's level ({ level }): the sheet never rolls for a PC and the reducer never rolls. `auto` is
+    // the row's own dice the page showed ({ net, why }). Dropped
     // when a roll's target is not the figure now. The defender's melee defences count one more; the side whose damage
     // is owed is `f.melee` (Task 17 opens its box). One log line; a dismissed exchange sends nothing.
     melee(s, a, at) {
@@ -789,8 +790,9 @@
       const def = CM.sideIn(D, a.defence, CM.skillOf(D, a.response), { bonus: 0, penalty: 0 });
       if (!atk || !def) return;
       const out = CM.opposedMelee(atk.level, def.level, a.response, C);
-      // the dice the row's state gave before this defence counts, so the line says which were set by hand
-      const auto = CM.attackDice(D, C, 'melee');
+      // the row's own dice as the page saw them when the exchange opened (another window may have changed the row since),
+      // so "set by hand" means the GM's taps only; an action without them falls back to the row as it stands
+      const auto = CM.autoIn(a.auto, C) || CM.attackDice(D, C, 'melee');
       const net = CM.netOf(dice);
       D.meleeDefences = CM.defenceAfter(D, 'melee');
       touch(A, at);

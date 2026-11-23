@@ -33,8 +33,9 @@ function keyOf(raw) {
 
 // An attack line a block writes with a name of its own (`- Boat hook 45% (22/9), damage 1D6+DB`): its name and skill.
 // A firearm's name says so (`Pocket pistol`); any other is Fighting. Dodge and the named skills are pairs' (keyOf).
-const ATTACK_LINE = /^\s*[-*+]\s+(?:\*\*)?([^%\d*][^%\d]*?)(?:\*\*)?\s+(\d{1,3})\s*%.*\bdamage\b/i;
-const FIREARM = /\b(?:firearms?|handgun|pistol|revolver|rifle|shotgun|carbine|smg|submachine|machine[- ]gun|musket|flintlock|blunderbuss|derringer)\b/i;
+// The name may hold digits (`.38 Revolver`, `12-gauge shotgun`): it runs to the ` NN%` figure.
+const ATTACK_LINE = /^\s*[-*+]\s+(?:\*\*)?([^%*\s][^%]*?)(?:\*\*)?\s+(\d{1,3})\s*%.*\bdamage\b/i;
+const FIREARM = /\b(?:firearms?|handgun|pistol|revolver|rifle|shotgun|carbine|smg|submachine|machine[- ]gun|musket|flintlock|blunderbuss|derringer|guns?)\b/i;
 function attackLines(stats) {
   const out = { fighting: [], firearms: [] };
   for (const line of String(stats == null ? '' : stats).replace(/\r\n?/g, '\n').split('\n')) {
@@ -149,6 +150,7 @@ function describeCoc(id) {
     tie: { dodge: 'defender', fightBack: 'attacker' },
     outnumbered: { bonus: 1 },
     prone: { status: 'Prone', meleeBonus: 1 },
+    // the same cap as lib/dice rollPercent's net of bonus and penalty dice (KR p91, p407): change both together
     maxDice: 2,
     defaultResponse: 'fightBack',
   };

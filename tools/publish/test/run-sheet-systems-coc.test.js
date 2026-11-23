@@ -106,6 +106,17 @@ for (const crlf of [false, true]) {
       assert.deepEqual([read(dir, 'Marcus Lowe').nums.firearms, read(dir, 'Marcus Lowe').nums.fighting], [40, null]);
       assert.deepEqual([read(dir, 'Tobias Reed').nums.fighting, read(dir, 'Creatures/Brine Walker.md').nums.attacks], [45, 1]);
     });
+    it('attack names with digits, and a gun: .38 Revolver, 12-gauge shotgun, Tommy gun, elephant gun are Firearms', () => {
+      for (const [line, want] of [
+        ['- .38 Revolver 45% (22/9), damage 1D10', 45], ['- 12-gauge shotgun 50% (25/10), damage 4D6/2D6/1D6', 50],
+        ['- Tommy gun 35% (17/7), damage 1D10+2', 35], ['- **Elephant gun** 60% (30/12), damage 3D6+4', 60],
+      ]) {
+        const n = readNumbers(`**HP** 10\n${line}`);
+        assert.deepEqual([n.firearms, n.fighting], [want, null], line);
+      }
+      // a fighting weapon with a digit stays Fighting
+      assert.deepEqual([readNumbers('- 2-handed axe 40% (20/8), damage 1D8+DB').fighting, readNumbers('- 2-handed axe 40% (20/8), damage 1D8+DB').firearms], [40, null]);
+    });
     it('CoC and Regency are CoC, and fight (Task 7)', () => {
       for (const [id, label] of [['coc-7e', 'Call of Cthulhu 7e'], ['coc-7e-regency', null]]) {
         const d = systemFor(id).describe();

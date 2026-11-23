@@ -1029,10 +1029,14 @@ describe('CoC melee on the target\'s row (step 6b Task 16), by real input', { sk
         // the stepper's +2 is gone; its two defences spent, the row's own +1 (outnumbered) shows, with its note and switch
         assert.strictEqual(named(p, 'Dock Cultist 2').meleeDice, '+1');
         assert.match(await row2(page, c2), /defended 2× → next attack \+1 bonus die/);
+        // one fixed label; pressed means never outnumbered
+        assert.deepStrictEqual([await text(page, `[data-fmout="${c2}"]`), await attrOf(page, `[data-fmout="${c2}"]`, 'aria-pressed'), await attrOf(page, `[data-fmout="${c2}"]`, 'title')],
+          ['never outnumbered', 'false', 'Tap if this one is never outnumbered']);
         await tap(page, `[data-fmout="${c2}"]`);
         p = await until(page, `p.fight.rows.find((r) => r.id === ${q(c2)}).outnumberedOff === true && p.saved === "Saved" && p.pending === 0`);
         assert.strictEqual(named(p, 'Dock Cultist 2').meleeDice, '0');
         assert.match(await row2(page, c2), /outnumbered off/);
+        assert.deepStrictEqual([await text(page, `[data-fmout="${c2}"]`), await attrOf(page, `[data-fmout="${c2}"]`, 'aria-pressed')], ['never outnumbered', 'true']);
         sane(p, `${w} after two exchanges`);
 
         // a dismissed exchange writes no line and leaves the count
@@ -1078,6 +1082,16 @@ describe('CoC melee on the target\'s row (step 6b Task 16), by real input', { sk
       }
       assert.strictEqual(p.fight.round, 2);
       assert.strictEqual(named(p, 'Iris Calder').meleeDefences, 0);
+      // Iris attacks Dock Cultist 1 (no dice of its own); another window makes it Prone while the exchange is open:
+      // the dice stay as opened, and the line does not call them "set by hand"
+      const c1 = named(p, 'Dock Cultist 1').id;
+      await tap(page, `[data-fmelee="${c1}|fightBack"]`);
+      p = await until(page, 'p.fight.melee && !p.fight.melee.rolling');
+      await fromOther(run, [{ type: 'status', fight: p.fight.id, row: c1, add: 'Prone' }]);
+      p = await until(page, `p.fight.rows.find((r) => r.id === ${q(c1)}).conds.includes("Prone") && p.fight.melee && p.saved === "Saved" && p.pending === 0`);
+      await tap(page, `[data-fmlvl="${c1}|attack|regular"]`);
+      p = await until(page, `p.fight.melee === null && p.fight.rows.find((r) => r.id === ${q(c1)}).meleeDefences === 1 && p.saved === "Saved" && p.pending === 0`);
+      assert.deepStrictEqual((await logOf(run)).slice(-1), ['Iris Calder: Regular; Dock Cultist 1 Fights Back: Regular (33): a tie: Iris Calder hits Dock Cultist 1.']);
     });
   });
 });

@@ -767,8 +767,8 @@
     const n = CMath.rowNotes(r, C);
     if (n.outnumbered) {
       const off = Boolean(r.outnumberedOff);
-      out.push(`<span class="mnote">${esc(n.outnumbered)}</span><button type="button" class="tg mout" data-fmout="${esc(id)}" aria-pressed="${!off}"`
-        + ` title="${esc(off ? 'Outnumbered is off for this one: tap to give its attackers the bonus die again' : 'This one is never outnumbered: tap to stop the bonus die')}">${off ? 'outnumbered on' : 'off'}</button>`);
+      out.push(`<span class="mnote">${esc(n.outnumbered)}</span><button type="button" class="tg mout${off ? ' on' : ''}" data-fmout="${esc(id)}" aria-pressed="${off}"`
+        + ' title="Tap if this one is never outnumbered">never outnumbered</button>');
     }
     if (n.prone) out.push(`<span class="mnote">${esc(n.prone)}</span>`);
     return out.join('');
@@ -814,7 +814,8 @@
     }
     const d = diceNow(D, C);
     const dice = CMath.diceOfNet(d.net, C);
-    const m = { fight: f.id, turn: f.turn, target: rowId, attacker: A.id, response, dice, net: d.net, why: d.why, byHand: d.byHand, attack: null, defence: null, rolling: false };
+    const own = CMath.attackDice(D, C, 'melee');
+    const m = { fight: f.id, turn: f.turn, target: rowId, attacker: A.id, response, dice, net: d.net, why: d.why, byHand: d.byHand, auto: own, attack: null, defence: null, rolling: false };
     const asks = [];
     if (A.kind !== 'pc') asks.push(['attack', { d100: { target: CMath.skillOf(A, 'attack'), ...dice } }]);
     if (D.kind !== 'pc') asks.push(['defence', { d100: { target: CMath.skillOf(D, response) } }]);
@@ -858,7 +859,7 @@
     if (!m.attack || !m.defence) { RP.render(); return false; }
     ui.melee = null;
     delete ui.mdice[m.target];
-    RP.dispatch({ fight: m.fight, type: 'melee', attacker: m.attacker, defender: m.target, response: m.response, dice: m.dice, attack: m.attack, defence: m.defence });
+    RP.dispatch({ fight: m.fight, type: 'melee', attacker: m.attacker, defender: m.target, response: m.response, dice: m.dice, auto: m.auto, attack: m.attack, defence: m.defence });
     RP.focusTo(attr('data-fmelee', `${m.target}|${m.response}`));
     return true;
   }

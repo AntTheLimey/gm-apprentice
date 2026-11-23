@@ -112,6 +112,15 @@
     return { bonus, penalty };
   }
   const netOf = (d) => (d ? d.bonus - d.penalty : 0);
+  const REASONS = ['outnumbered', 'prone'];
+  // The row's own dice as the page saw them when the exchange opened ({ net, why }), checked; null when not.
+  function autoIn(x, coc) {
+    if (!x || typeof x !== 'object') return null;
+    const cap = maxDiceOf(coc);
+    if (!Number.isInteger(x.net) || Math.abs(x.net) > cap || !Array.isArray(x.why)) return null;
+    if (x.why.some((w) => !REASONS.includes(w))) return null;
+    return { net: x.net, why: x.why.slice() };
+  }
   // "+1 bonus die (outnumbered)", "+2 bonus dice (outnumbered, prone)", "−1 penalty die (set by hand)"; '' for none,
   // unless the GM took the row's dice off ("no dice (set by hand)").
   function diceText(net, why, byHand) {
@@ -166,7 +175,7 @@
 
   return {
     topOf, combatOf, TAP_LEVELS, LEVEL_NAMES, RANK, isLevel, levelName, RESPONSES, RESPONSE_WORDS, RESPONSE_NAMES,
-    opposedMelee, skillOf, skillName, outnumbered, proneOn, attackDice, defenceAfter, diceOfNet, diceIn, netOf, diceText,
+    opposedMelee, skillOf, skillName, outnumbered, proneOn, attackDice, defenceAfter, diceOfNet, diceIn, netOf, autoIn, diceText,
     rowNotes, sideIn, sideText, meleeLine, limitOf,
   };
 }));
