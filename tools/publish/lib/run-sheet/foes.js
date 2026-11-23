@@ -8,6 +8,7 @@ const { itemKeys } = require('./keys');
 const { bullets } = require('./plan-text');
 const { startingSide } = require('./sides');
 const { systemFor } = require('./systems');
+const { lairActionsOf } = require('./systems/dnd');
 
 const DND = systemFor(null);
 // The notes that stand for several people at once (beats.js): a counted link to one gives rows.
@@ -52,7 +53,7 @@ function warner(seen, warnings) {
 }
 
 // The note-less numbers of a blank row: nothing to read, so every figure is null for the GM to type.
-const BLANK_NUMS = () => ({ ac: null, hp: null, init: null, from: {} });
+const BLANK_NUMS = () => ({ ac: null, hp: null, init: null, from: {}, legendaryResistance: 0, legendaryActions: 0, recharge: [], rechargeAt: {}, lair: false, lairActions: lairActionsOf('') });
 const NO_NUMBERS = (name) => `${name}: no numbers in the vault: type them in the fight, or fill them in prep`;
 
 // A blank row's entry: no stat block, so no numbers, for a fight beat the GM types them into (S6-D7). `label` is
@@ -76,7 +77,8 @@ function entry(notePath, index, count, add, canFight = true, sides = null, whoTe
   if (!info.stats) {
     const crowd = info.type === 'creature' || n > 1;
     const label = blank && GROUP_TYPES.has(info.type) && blank.label ? blank.label : info.name;
-    if (crowd) add('no-stats', notePath, NO_NUMBERS(label));
+    // `blank` false is a beat that makes no row for this one (the dead): nothing to type into, so no warning
+    if (crowd && blank !== false) add('no-stats', notePath, NO_NUMBERS(label));
     if (!blank || !(crowd || info.type === 'npc')) return null;
     return blankEntry(notePath, label, info.type, crowd ? n : 1, sideOf(notePath, index, sides, whoText, ''), !crowd);
   }
@@ -139,13 +141,15 @@ function foesOf(notePath, index, count = 1, beatKey, seen = new Set(), carried =
   return { foes: e ? rows([e], beatKey, carried, system) : [], warnings };
 }
 
-// A counted line with no note (`Foam-covered guards x4`): blank rows named and numbered by the line's words, which
-// are all there is to read its side from.
+// A line with no note: counted (`Foam-covered guards x4`), blank rows named and numbered by the line's words, which
+// are all there is to read its side from; single (`The shikarri`), one benched row with no warning, as D4 gives a
+// statless NPC.
 function noteless(w, whoText, sides, add) {
   const label = w.name;
-  add('no-stats', null, NO_NUMBERS(label));
+  const single = !(w.count > 1);
+  if (!single) add('no-stats', null, NO_NUMBERS(label));
   const side = startingSide({ whoText, quickRefText: '', statsText: '', fm: {}, partyNotes: ((sides || {}).partyNotes) || [], resolve: null });
-  return blankEntry(null, label, '', w.count, side, false);
+  return blankEntry(null, label, '', single ? 1 : w.count, side, single);
 }
 
 // Every `who` entry of a beat, planned or contingency. `seen` carries one Plan's warnings across beats;
@@ -161,9 +165,9 @@ function foesFor(beat, index, seen = new Set(), carried = null, sides = null, sy
     const wants = `${w.wants || ''} ${w.knownAs || ''}`.trim();
     // a fight beat's statless entries get blank rows: a group note's rows go by the line's own words
     // (the dead are bodies, never fighters: they get none)
-    const blank = canFight && !w.dead ? { label: w.knownAs && w.knownAs !== w.name ? w.knownAs : '' } : null;
+    const blank = canFight ? (w.dead ? false : { label: w.knownAs && w.knownAs !== w.name ? w.knownAs : '' }) : null;
     const e = w.note ? entry(w.note, index, w.count, add, canFight, sides, wants, system, blank)
-      : canFight && w.count > 1 ? noteless(w, wants, sides, add) : null;
+      : canFight && !w.dead ? noteless(w, wants, sides, add) : null;
     if (!e) continue;
     entries.push(e);
     if (doneNotes.has(w.note)) continue;

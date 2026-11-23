@@ -175,6 +175,25 @@ describe('run sheet foes', () => {
       assert.deepStrictEqual([fen.name, fen.benched, fen.hp, fen.ac], ['Sister Fen', true, null, null]);
     });
 
+    it('a single no-note line is one benched blank row with no warning', () => {
+      const r = foesOfGate('- **The shikarri:** wants a clean drive');
+      const row = r.foes.filter((f) => f.name === 'The shikarri');
+      assert.deepStrictEqual(row.map((f) => [f.note, f.benched, f.hp]), [[null, true, null]]);
+      assert.ok(!r.warnings.some((w) => /shikarri/.test(w.text)));
+    });
+
+    it('a capitalised number word stays a name: one benched row, not four', () => {
+      const r = foesOfGate('- **Four Guards:** rifles');
+      assert.deepStrictEqual(r.foes.filter((f) => /Guards/.test(f.name)).map((f) => [f.name, f.benched]), [['Four Guards', true]]);
+    });
+
+    it('a dead creature in a fight beat raises no warning: there is no row to type into', () => {
+      const dead = { 'Creatures/Old Bones.md': '---\nname: Old Bones\ntype: creature\nstatus: dead\n---\n\nGone.\n' };
+      const r = foesOfGate('- **[[Old Bones]]:** lies there', dead);
+      assert.ok(!r.foes.some((f) => f.name === 'Old Bones'));
+      assert.ok(!r.warnings.some((w) => /Old Bones/.test(w.text)));
+    });
+
     it('a social beat (no fight type, nobody counted) gives no rows for statless people', () => {
       const { index, beats } = setup((t) => t.replace('**Starts it:** The bell has rung and the wolves are quiet.\n', '**Starts it:** The bell has rung and the wolves are quiet.\n**NPCs**\n- **[[Sister Fen]]:** watching\n'));
       const social = beats.filter((b) => b.title === 'The Gate')[1];
@@ -258,7 +277,8 @@ describe('run sheet foes', () => {
     const { index, beats } = setup();
     const c = beats.find((b) => b.contingency);
     const { foes } = foesFor(c, index);
-    assert.deepStrictEqual(foes.map((f) => f.name), ['Frost Wolf 1', 'Frost Wolf 2']);
+    // S6-D7 (single no-note line): the person whose link matches no note is one benched blank row, after the wolves
+    assert.deepStrictEqual(foes.map((f) => [f.name, !!f.benched]), [['Frost Wolf 1', false], ['Frost Wolf 2', false], ['Missing Person', true]]);
   });
 
   it('a foe note\'s treasure joins the beat once', () => {

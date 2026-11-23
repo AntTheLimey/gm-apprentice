@@ -738,6 +738,8 @@ describe('run sheet beats: the Plan shape', () => {
       // a capitalised number word is a name, and a plain name keeps count 1
       const fingers = npcs('- **Three Fingers:** a thief', '');
       assert.deepStrictEqual(fingers.beats[0].who.map((w) => [w.name, w.count]), [['Three Fingers', 1]]);
+      const caps = npcs('- **Four Guards:** rifles', '');
+      assert.deepStrictEqual(caps.beats[0].who.map((w) => [w.name, w.count]), [['Four Guards', 1]]);
     });
 
     it('a counted link to a faction note is one group entry carrying the note', () => {
