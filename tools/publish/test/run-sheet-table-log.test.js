@@ -139,4 +139,41 @@ describe('readTableLog', () => {
       + '| [[Lucan Grey]] | fine | |\n| [[Ada Moss]] | | prone |\n| [[Ben Hart]] | 4/9 | |\n';
     assert.deepStrictEqual(readTableLog(text).unread, [{ who: 'Lucan Grey', copy: null, cell: 'fine' }]);
   });
+
+  // Task 20: each system's own columns, found by name; a log without them reads as before
+  describe("each system's vitals columns (Task 20)", () => {
+    const COC = '## Vitals at the end\n\n| Who | HP | MP | SAN | Luck | Conditions |\n| --- | --- | --- | --- | --- | --- |\n'
+      + '| [[Iris Calder]] | 9/11 | 10/12 | 48 | 50 | Major wound |\n| [[Edda Voss]] | 7/10 | 4/10 | 50 |  |  |\n';
+    it('table-log reads the CoC columns back', () => {
+      assert.deepStrictEqual(readTableLog(COC).vitals, [
+        { who: 'Iris Calder', copy: null, hpNow: 9, hpMax: 11, mpNow: 10, mpMax: 12, sanNow: 48, sanMax: null, luck: 50, conditions: 'Major wound' },
+        { who: 'Edda Voss', copy: null, hpNow: 7, hpMax: 10, mpNow: 4, mpMax: 10, sanNow: 50, sanMax: null, luck: null, conditions: '' },
+      ]);
+    });
+
+    it('the GURPS columns, and -3/12 reads back as -3 (an ASCII minus or a typed one)', () => {
+      const r = readTableLog('## Vitals at the end\n\n| Who | HP | FP | Conditions |\n| --- | --- | --- | --- |\n'
+        + '| [[Orrin Tate]] | -3/12 | 6/12 | Stunned |\n| [[Bram Holt]] | \u22122/12 | \u22121/11 |  |\n');
+      assert.deepStrictEqual(r.vitals, [
+        { who: 'Orrin Tate', copy: null, hpNow: -3, hpMax: 12, fpNow: 6, fpMax: 12, conditions: 'Stunned' },
+        { who: 'Bram Holt', copy: null, hpNow: -2, hpMax: 12, fpNow: -1, fpMax: 11, conditions: '' },
+      ]);
+    });
+
+    it('an old HP-only log still reads, with no pool figures', () => {
+      assert.deepStrictEqual(readTableLog(LOG).vitals[0], { who: 'Lucan Grey', copy: null, hpNow: 9, hpMax: 27, conditions: 'poisoned' });
+    });
+
+    it('a headerless table is still read Who, HP, Conditions, however many cells (a CoC vault too)', () => {
+      const r = readTableLog('## Vitals at the end\n\n| [[Iris Calder]] | 9/11 | winded | 48 | 50 |\n');
+      assert.deepStrictEqual(r.vitals, [{ who: 'Iris Calder', copy: null, hpNow: 9, hpMax: 11, conditions: 'winded' }]);
+    });
+
+    it('a pool cell that holds no number reads null and is listed by its column; an empty one is not', () => {
+      const r = readTableLog('## Vitals at the end\n\n| Who | HP | MP | SAN | Conditions |\n| --- | --- | --- | --- | --- |\n'
+        + '| [[Edda Voss]] | 7/10 | lots | | |\n');
+      assert.deepStrictEqual([r.vitals[0].mpNow, r.vitals[0].sanNow], [null, null]);
+      assert.deepStrictEqual(r.unread, [{ who: 'Edda Voss', copy: null, cell: 'lots', field: 'mp' }]);
+    });
+  });
 });

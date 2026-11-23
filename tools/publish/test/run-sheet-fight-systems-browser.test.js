@@ -1544,3 +1544,106 @@ describe('CoC firearms on the GM page (step 6b Task 19), by real input', { skip:
     });
   });
 });
+
+describe("the end panel's vitals columns per system (step 6b Task 20), by real input", { skip: browserSkip() }, () => {
+  const IRIS = 'Characters/PCs/Iris Calder.md';
+  const ORRIN = 'Characters/PCs/Orrin Tate.md';
+  const saved = async (run) => (await (await fetch(`${run.base}/api/state`)).json()).state.end.vitals;
+  const heads = (page) => texts(page, '#sheet table.vt thead th');
+  // the vitals table is whole inside the sheet's width, with no sideways scroll of its own or the page's
+  const fits = (page) => page.evaluate(`(() => { const s = document.querySelector('#sheet').getBoundingClientRect();
+    const tw = document.querySelector('#sheet .vt').closest('.tw'); const w = tw.getBoundingClientRect();
+    return w.left >= s.left - 1 && w.right <= s.right + 1 && tw.scrollWidth <= tw.clientWidth + 1 && document.documentElement.scrollWidth <= innerWidth; })()`);
+  // a click at the box's right end puts the caret after its figure; Backspace takes the figure off, then the new one
+  // is typed and Tab leaves the box (its change saves it)
+  const typeVital = async (page, sel, v) => {
+    const r = await page.box(sel);
+    const at = await page.click(sel, { offsetX: r.width - 3 });
+    assert.ok(at.inView && at.hit, `click ${sel}: ${JSON.stringify(at)}`);
+    await page.waitFor(`document.activeElement === document.querySelector(${q(sel)})`, 2000);
+    const n = await page.evaluate(`document.querySelector(${q(sel)}).value.length`);
+    for (let i = 0; i < n; i++) await page.key('Backspace');
+    assert.strictEqual(await page.evaluate(`document.querySelector(${q(sel)}).value`), '', sel);
+    await page.type(String(v));
+    await page.key('Tab');
+  };
+
+  for (const [w, h] of SIZES) {
+    it(`CoC at ${w}: HP, MP, SAN, Luck, then Conditions under them; typed figures saved; an HP over the sheet's max refused, kept and never saved`, async () => {
+      const run = await start('coc');
+      await withPage({ width: w, height: h }, async (page) => {
+        await page.focusEvents();
+        await page.goto(`${run.base}/?probe=1`);
+        await settled(page);
+        assert.deepStrictEqual(await heads(page), ['Who', 'HP', 'MP', 'SAN', 'Luck']);
+        // Conditions has a line of its own under each row's figures
+        assert.ok(await page.evaluate(`Boolean(document.querySelector('#sheet .vt tr.vc [data-vcond=${q(IRIS)}]'))`));
+        assert.ok(await fits(page), `the vitals table fits at ${w}`);
+        const mp = `#sheet [data-vkey="${IRIS}|mp"]`;
+        await typeVital(page, mp, '10');
+        await settled(page);
+        await typeVital(page, `#sheet [data-vkey="${IRIS}|san"]`, '48');
+        await settled(page);
+        await typeVital(page, `#sheet [data-vkey="${IRIS}|luck"]`, '50');
+        await settled(page);
+        let v = (await saved(run))[IRIS];
+        assert.deepStrictEqual([v.mp, v.san, v.luck], [10, 48, 50]);
+        // HP and MP show their max beside the box
+        assert.match(await page.evaluate(`document.querySelector('#sheet [data-vhp=${q(IRIS)}]').parentElement.textContent`), /\/ 11/);
+        assert.match(await page.evaluate(`document.querySelector(${q(mp)}).parentElement.textContent`), /\/ 13/);
+        // HP 12 on an 11 sheet: marked, kept as typed, not saved
+        const hp = `#sheet [data-vhp="${IRIS}"]`;
+        await typeVital(page, hp, '12');
+        await page.waitFor(`document.querySelector(${q(hp)}).getAttribute('aria-invalid') === 'true'`, 3000);
+        assert.strictEqual(await page.evaluate(`document.querySelector(${q(hp)}).value`), '12');
+        assert.strictEqual(await text(page, '#sheet .vt .badnum'), "HP 12: over the sheet's max (11): not saved");
+        assert.ok(await fits(page), `the message fits at ${w}`);
+        await page.sleep(300);
+        v = (await saved(run))[IRIS];
+        assert.strictEqual(v.hp, undefined, 'never saved');
+        // another window's change redraws the page: the refused figure is still there as typed
+        await fromOther(run, [{ type: 'endSet', advancement: 'one line' }]);
+        await until(page, 'p.saved === "Saved"');
+        await page.sleep(400);
+        assert.strictEqual(await page.evaluate(`document.querySelector(${q(hp)}).value`), '12');
+        // a figure in range clears the mark and is saved
+        await typeVital(page, hp, '9');
+        await settled(page);
+        assert.strictEqual((await saved(run))[IRIS].hp, 9);
+        assert.strictEqual(await page.evaluate(`document.querySelector(${q(hp)}).getAttribute('aria-invalid')`), null);
+        assert.ok(await fits(page), `still fits at ${w}`);
+      });
+    });
+  }
+
+  it('GURPS: HP and FP, then Conditions; HP -3 and FP below 0 saved, FP over its max refused', async () => {
+    const run = await start('gurps');
+    for (const [w, h] of SIZES) {
+      await withPage({ width: w, height: h }, async (page) => {
+        await page.focusEvents();
+        await page.goto(`${run.base}/?probe=1`);
+        await settled(page);
+        assert.deepStrictEqual(await heads(page), ['Who', 'HP', 'FP'], String(w));
+        assert.ok(await fits(page), `the vitals table fits at ${w}`);
+      });
+    }
+    await withPage({ width: 1100, height: 762 }, async (page) => {
+      await page.focusEvents();
+      await page.goto(`${run.base}/?probe=1`);
+      await settled(page);
+      const hp = `#sheet [data-vhp="${ORRIN}"]`;
+      const fp = `#sheet [data-vkey="${ORRIN}|fp"]`;
+      await typeVital(page, hp, '-3');
+      await settled(page);
+      await typeVital(page, fp, '-2');
+      await settled(page);
+      let v = (await saved(run))[ORRIN];
+      assert.deepStrictEqual([v.hp, v.fp], [-3, -2]);
+      await typeVital(page, fp, '12');
+      await page.waitFor(`document.querySelector(${q(fp)}).getAttribute('aria-invalid') === 'true'`, 3000);
+      await page.sleep(300);
+      v = (await saved(run))[ORRIN];
+      assert.strictEqual(v.fp, -2, 'the refused 12 is never saved');
+    });
+  });
+});

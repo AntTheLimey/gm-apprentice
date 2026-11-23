@@ -188,6 +188,15 @@ button.mini { padding: 0 5px; font-size: .72rem; line-height: 1.4; }
 .vt input { width: 4.5rem; }
 .vt input.c { width: 100%; min-width: 10rem; }
 .vt .rec { font: 600 .7rem var(--mono); color: var(--ok); }
+/* a system with pools (step 6b): two lines a row, the figures and then Conditions, to fit the sheet at 1100 wide */
+.vt.pools input { width: 3rem; }
+.vt.pools .vn td { white-space: nowrap; }
+.vt.pools .vn td:first-child { white-space: normal; }
+.vt.pools .of { margin-left: .25rem; color: var(--muted, inherit); font-size: .8rem; }
+.vt.pools .vc input.c { width: 100%; min-width: 0; box-sizing: border-box; }
+.vt.pools tr.vc td { padding-top: 0; }
+.vt input[aria-invalid="true"] { outline: 2px solid var(--bad); outline-offset: 1px; }
+.vt .badnum { display: block; color: var(--bad); font: 600 .7rem var(--mono); white-space: normal; }
 .where input { width: 100%; min-width: 14rem; }
 textarea#advance { width: 100%; min-height: 4.5rem; }
 pre.notes { white-space: pre-wrap; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px; font: 500 .78rem var(--mono); max-height: 460px; overflow: auto; }

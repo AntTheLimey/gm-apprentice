@@ -43,6 +43,15 @@ function systemId(raw) {
   return Object.prototype.hasOwnProperty.call(SYSTEM_ALIASES, key) ? SYSTEM_ALIASES[key] : null;
 }
 
+// The Table Log's vitals columns per system, after Who (`run_sheet.vitals`): each { column, field, shape, pcs_only? }.
+// A system with none of its own (PF2e, FitD, an unknown one, none) takes D&D's. schema_rules.vitals_columns is Python's.
+const VITALS_DEFAULT_SYSTEM = 'dnd-5e-2024';
+const SYSTEM_VITALS = Object.fromEntries(data.game_systems.filter((s) => s.run_sheet).map((s) => [s.id, s.run_sheet.vitals]));
+function vitalsColumns(raw) {
+  const id = systemId(raw);
+  return (id && SYSTEM_VITALS[id] ? SYSTEM_VITALS[id] : SYSTEM_VITALS[VITALS_DEFAULT_SYSTEM]).map((c) => ({ ...c }));
+}
+
 // The type folders, in order: { folder, types, site }.
 const VAULT_FOLDERS = data.vault_folders.map((f) => ({ folder: f.folder, types: [...f.types], site: f.site }));
 // The plugin's own working folders at the top of a vault: the Midwife's drafts, QA reports and the ingest inbox.
@@ -51,6 +60,6 @@ const WORKSPACE_FOLDERS = [...data.workspace_folders];
 module.exports = {
   SESSION_NOT_YET_RUN, SESSION_PLAYED, STAGE_HIDES, CHAPTER_STATUSES, CHAPTER_STATUS_ALIASES, chapterStatusOf,
   WRAP_UP_TYPE, WRAP_UP_TYPES,
-  SYSTEM_IDS, SYSTEM_NAMES, SYSTEM_ALIASES, systemId,
+  SYSTEM_IDS, SYSTEM_NAMES, SYSTEM_ALIASES, systemId, SYSTEM_VITALS, vitalsColumns,
   VAULT_FOLDERS, WORKSPACE_FOLDERS,
 };

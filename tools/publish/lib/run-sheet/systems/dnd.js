@@ -6,7 +6,7 @@
 const path = require('node:path');
 const { SIGNED_SOURCE, toNumber } = require('../signed');
 const { tableRows } = require('../plan-text');
-const { SYSTEM_NAMES } = require('../../shared-lists');
+const { SYSTEM_NAMES, vitalsColumns } = require('../../shared-lists');
 const FM = require('../web/fight-math');
 const { statSection, currentOf } = require('./stat-section');
 
@@ -147,8 +147,8 @@ function describeAs(id, label, fights) {
       longRest: 'Long rest: everyone to full',
       advancement: 'One line each, e.g. level 6 for the dragon (milestone)',
     },
-    // the end panel's vitals columns (Task 16 moves them to the ontology)
-    vitals: ['hp', 'max', 'conditions'],
+    // the Table Log's and the end panel's vitals columns after Who, the ontology's `run_sheet.vitals` for this system
+    vitals: vitalsColumns(id),
     fight: JSON.parse(JSON.stringify(f)),
   };
 }

@@ -107,7 +107,8 @@ function beatCanFight(beat, index) {
 // note across the list (two lines of one creature give `Wolf 1` to `Wolf 5`). An ally starts from
 // `carried` (the reader's `{ of(note) }`: `{ hp, log }` from the latest Table Log naming the ally,
 // or null) when it has a figure: `hpNow` is that figure and `carriedFrom` the log; `hp` stays the
-// note's. A foe never carries, and an ally with no figure has both null.
+// note's. A foe never carries, and an ally with no figure has both null. An ally's carried MP, SAN or FP
+// (step 6b) is `mpNow`, `sanNow` or `fpNow`, on the row only when carried and the row has that pool.
 function rows(entries, beatKey, carried = null, system = DND) {
   const idOf = (e) => e.notePath || `name:${e.info.name}`;
   const paths = entries.flatMap((e) => Array(e.n).fill(idOf(e)));
@@ -129,10 +130,19 @@ function rows(entries, beatKey, carried = null, system = DND) {
       recharge: nums.recharge, rechargeAt: nums.rechargeAt, lair: nums.lair, lairActions: nums.lairActions, stats: info.stats,
       ...system.foeRow(nums),
       hpNow, carriedFrom: hpNow === null ? null : got.log, prepNote: e.prepNote, hpStart: e.hpStart,
+      ...carriedPools(got, system.foeRow(nums)),
       ...(e.fpStart == null ? {} : { fpStart: e.fpStart }),
       ...(e.benched ? { benched: true } : {}),
     };
   }));
+}
+
+// The pools an ally carried from an earlier Table Log, for those its row holds: { mpNow, sanNow, fpNow }.
+function carriedPools(got, row) {
+  const out = {};
+  if (!got) return out;
+  for (const k of ['mp', 'san', 'fp']) if (typeof got[k] === 'number' && row[k] !== undefined && row[k] !== null) out[`${k}Now`] = got[k];
+  return out;
 }
 
 // One note's foes, `count` of them. Exported for the Fight's Add (step 5).

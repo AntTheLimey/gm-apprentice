@@ -3981,15 +3981,27 @@ TABLE_LOG_SECTIONS: tuple[str, ...] = (
     "Log", "Loot",
     "Vitals at the end", "Advancement",
 )
+# D&D's vitals header, and a vault's with no system or none of its own: the
+# run sheet's reader takes a table with no header row as these three columns.
 TABLE_LOG_VITALS_HEAD = "\n| Who | HP | Conditions |\n| --- | --- | --- |\n"
+
+
+def table_log_vitals_head(system: str | None) -> str:
+    """The vitals table's header and separator rows for the vault's system:
+    Who, then the system's columns (the ontology's run_sheet.vitals)."""
+    cols = ["Who", *(c["column"] for c in schema_rules.vitals_columns(system))]
+    return ("\n| " + " | ".join(cols) + " |\n|" + " --- |" * len(cols)
+            + "\n")
 
 
 def record_text(key: str, stem: str, n: int, chapter_raw: str | None,
                 campaign_raw: str | None, play_date: str | None,
                 export_path: str | None = None, export: str = "",
-                created_by: str = "manual") -> str:
-    """A play record for the session index `stem`: Play Notes (empty), or
-    an Export holding the export whole and unedited."""
+                created_by: str = "manual", *,
+                system: str | None) -> str:
+    """A play record for the session index `stem`: Play Notes (empty), an
+    Export holding the export whole and unedited, or a Table Log's empty
+    sections, its vitals header the vault's `system`'s columns."""
     _label, suffix, rtype = PLAY_RECORDS[key]
     note_fm = [f"type: {rtype}", f'session: "[[{stem}]]"',
                f"session_number: {n}"]
@@ -4009,7 +4021,8 @@ def record_text(key: str, stem: str, n: int, chapter_raw: str | None,
             f"# {stem} - {suffix}\n")
     if key == "table_log":
         # The vitals table's header row gives a hand-writer its columns.
-        text += "".join(f"\n## {name}\n" + (TABLE_LOG_VITALS_HEAD if name == "Vitals at the end" else "")
+        head = table_log_vitals_head(system)
+        text += "".join(f"\n## {name}\n" + (head if name == "Vitals at the end" else "")
                         for name in TABLE_LOG_SECTIONS)
     if export_path:
         text += "\n" + export
@@ -4072,10 +4085,14 @@ def file_record(batch: Batch, index: str, key: str, play_date: str | None,
     folder = index.rpartition("/")[0]
     rec_stem = f"{stem} - {suffix}"
     rec_rel = f"{folder}/{rec_stem}.md" if folder else f"{rec_stem}.md"
+    system = None
+    if key == "table_log":
+        from migrate_vault import vault_system   # only a Table Log has vitals
+        system = vault_system(batch.vault)
     rec_text = record_text(
         key, stem, n, chapter_raw, campaign_raw,
         played if ISO_DATE_RE.fullmatch(played) else None,
-        export_path, export, created_by)
+        export_path, export, created_by, system=system)
     batch.create(rec_rel, rec_text)
     schema_check(batch, rec_rel, rec_text)
 
@@ -4269,9 +4286,10 @@ def cmd_session_new(batch: Batch, args: argparse.Namespace,
     index_text = "---\n" + "\n".join(fm + carried) + "\n---\n" + body
     batch.create(index_rel, index_text)
     schema_check(batch, index_rel, index_text)
+    # Play Notes have no vitals table: the system goes unused
     notes_text = record_text("play_notes", stem, n, chapter_raw,
                              campaign_raw, args.play_date,
-                             created_by=args.created_by)
+                             created_by=args.created_by, system=None)
     if not upcoming:
         batch.create(notes_rel, notes_text)
         schema_check(batch, notes_rel, notes_text)

@@ -509,6 +509,15 @@
     out.er = startAt(foe.erStart, out.erMax);
     return out;
   }
+  // A row's pools set from the night's vitals (state.js vitalRows: mp, san, luck, fp, er), each one the row holds and
+  // the vitals give a number for; a figure set above its max starts at the max, as HP's start is held to it.
+  function startPools(sys, v) {
+    for (const k of POOL_FIELDS) {
+      if (sys[k] === null || sys[k] === undefined || num(v[k]) === null) continue;
+      const max = num(sys[`${k}Max`]);
+      sys[k] = max !== null ? Math.min(num(v[k]), max) : num(v[k]);
+    }
+  }
   // A PC's, from its sheet's flat numbers (`hpNow`/`hpMax` are HP's, as today).
   function pcSystemFields(pc) {
     const pair = (now, max) => ({ now: num(now) !== null ? num(now) : num(max), max: num(max) });
@@ -585,7 +594,13 @@
         hp = num(v.hp) !== null ? num(v.hp) : (num(foe.hpNow) !== null ? num(foe.hpNow) : hp);
         conds = read.conds;
         exhaustion = read.exhaustion;
-      } else if (num(foe.hpNow) !== null) hp = num(foe.hpNow);
+        // the pools as the night's vitals hold them (a carried figure, an earlier fight's, the end panel's), as HP
+        startPools(sys, v);
+      } else {
+        if (num(foe.hpNow) !== null) hp = num(foe.hpNow);
+        // a carried MP, SAN or FP (the reader's `mpNow`, `sanNow`, `fpNow`)
+        startPools(sys, { mp: foe.mpNow, san: foe.sanNow, fp: foe.fpNow });
+      }
     } else if (type === 'npc') {
       const last = ctx.lastFightRow(foe.note);
       if (last) {
@@ -632,8 +647,10 @@
     const read = readConditions(v && v.conditions);
     const max = v && num(v.max) !== null ? num(v.max) : num(pc.hpMax);
     const hp = v && num(v.hp) !== null ? num(v.hp) : (num(pc.hpNow) !== null ? num(pc.hpNow) : max);
+    const sys = pcSystemFields(pc);
+    if (v) startPools(sys, v);
     return withStart(withInit(ctx, blankRow({
-      ...pcSystemFields(pc),
+      ...sys,
       kind: 'pc', note: pc.note, type: 'pc', name: pc.name, in: on, group, mod: num(pc.init) || 0, ac: num(pc.ac),
       hp, max, conds: read.conds, exhaustion: read.exhaustion, seen: true,
     })));

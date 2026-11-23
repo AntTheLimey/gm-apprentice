@@ -467,7 +467,37 @@
         "coc",
         "coc7e",
         "cthulhu"
-      ]
+      ],
+      "run_sheet": {
+        "vitals": [
+          {
+            "column": "HP",
+            "field": "hp",
+            "shape": "current/max"
+          },
+          {
+            "column": "MP",
+            "field": "mp",
+            "shape": "current/max"
+          },
+          {
+            "column": "SAN",
+            "field": "san",
+            "shape": "current"
+          },
+          {
+            "column": "Luck",
+            "field": "luck",
+            "shape": "current",
+            "pcs_only": true
+          },
+          {
+            "column": "Conditions",
+            "field": "conditions",
+            "shape": "text"
+          }
+        ]
+      }
     },
     {
       "id": "coc-7e-regency",
@@ -475,7 +505,37 @@
       "aliases": [
         "regency-cthulhu"
       ],
-      "rules": "coc-7e/regency"
+      "rules": "coc-7e/regency",
+      "run_sheet": {
+        "vitals": [
+          {
+            "column": "HP",
+            "field": "hp",
+            "shape": "current/max"
+          },
+          {
+            "column": "MP",
+            "field": "mp",
+            "shape": "current/max"
+          },
+          {
+            "column": "SAN",
+            "field": "san",
+            "shape": "current"
+          },
+          {
+            "column": "Luck",
+            "field": "luck",
+            "shape": "current",
+            "pcs_only": true
+          },
+          {
+            "column": "Conditions",
+            "field": "conditions",
+            "shape": "text"
+          }
+        ]
+      }
     },
     {
       "id": "gurps-4e",
@@ -483,7 +543,26 @@
       "aliases": [
         "gurps",
         "gurps4e"
-      ]
+      ],
+      "run_sheet": {
+        "vitals": [
+          {
+            "column": "HP",
+            "field": "hp",
+            "shape": "current/max"
+          },
+          {
+            "column": "FP",
+            "field": "fp",
+            "shape": "current/max"
+          },
+          {
+            "column": "Conditions",
+            "field": "conditions",
+            "shape": "text"
+          }
+        ]
+      }
     },
     {
       "id": "dnd-5e-2024",
@@ -494,7 +573,21 @@
         "dnd5e",
         "5e",
         "d&d"
-      ]
+      ],
+      "run_sheet": {
+        "vitals": [
+          {
+            "column": "HP",
+            "field": "hp",
+            "shape": "current/max"
+          },
+          {
+            "column": "Conditions",
+            "field": "conditions",
+            "shape": "text"
+          }
+        ]
+      }
     },
     {
       "id": "pf2e",

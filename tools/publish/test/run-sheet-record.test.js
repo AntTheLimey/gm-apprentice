@@ -97,8 +97,9 @@ describe('the Table Log writer', () => {
     assert.ok(R.isEmptySkeleton(R.recordBodyOf(text)));
     assert.strictEqual(R.needsBackup(text, null), false);
     assert.strictEqual(R.needsBackup(text, 'abc'), false);
-    // the same shape, built from record_text's loop, has the header-only table
-    assert.match(PY, /text \+= "".join\(f"\\n## \{name\}\\n" \+ \(TABLE_LOG_VITALS_HEAD if name == "Vitals at the end" else ""\)/);
+    // the same shape, built from record_text's loop, has the header-only table (since step 6b Task 20 the header is
+    // the vault's system's, `table_log_vitals_head(system)`: D&D's is still TABLE_LOG_VITALS_HEAD, pinned above)
+    assert.match(PY, /head = table_log_vitals_head\(system\)\n\s+text \+= "".join\(f"\\n## \{name\}\\n" \+ \(head if name == "Vitals at the end" else ""\)/);
     const bullet = text.replace('## Log\n', '## Log\n\n- 21:00 hi\n');
     assert.strictEqual(R.isEmptySkeleton(R.recordBodyOf(bullet)), false);
     assert.strictEqual(R.needsBackup(bullet, null), true);
@@ -787,5 +788,166 @@ describe('places in the record (fix round 1)', () => {
     assert.strictEqual(RS.derive(model, s).whereEnded[0].status, 'spot');
     // a place the Plan has no beat for has no target: it gets its pl- beat
     assert.strictEqual(RS.planTarget(model, fresh(), 'Locations/North/index.md'), null);
+  });
+});
+
+// Step 6b Task 20: the vitals table has the vault's system's columns (the ontology's `run_sheet.vitals`).
+describe("each system's vitals columns (Task 20)", () => {
+  const os = require('node:os');
+  const { writeSettings } = require('./helpers/vault-files');
+  const { after } = require('node:test');
+  const made = [];
+  after(() => { for (const d of made) fs.rmSync(d, { recursive: true, force: true }); });
+  const COC_FX = path.join(__dirname, 'fixtures', 'run-sheet-coc');
+  const GURPS_FX = path.join(__dirname, 'fixtures', 'run-sheet-gurps');
+  const COC_PLAN = 'Chapters/Chapter 1/Sessions/Session 01/Session 01 - Fog Bound - Plan.md';
+  const GURPS_PLAN = 'Chapters/Chapter 1/Sessions/Session 01/Session 01 - Crates - Plan.md';
+  const IRIS = 'Characters/PCs/Iris Calder.md';
+  const ORRIN = 'Characters/PCs/Orrin Tate.md';
+  const EDDA = 'Characters/NPCs/Edda Voss.md';
+  const RAFE = 'Characters/NPCs/Rafe Kell.md';
+  const stemLink = (p) => `[[${path.posix.basename(p, '.md')}]]`;
+  const write = (dir, rel, text) => { fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true }); fs.writeFileSync(path.join(dir, rel), text); };
+  const lf = (s) => s.replace(/\r\n/g, '\n');
+  // a copy of a fixture vault, with an ally made of one of its who lines (the Plan's own words)
+  const copy = (fx, plan, who, words) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rs-t20-'));
+    made.push(dir);
+    fs.cpSync(fx, dir, { recursive: true });
+    if (who) {
+      const p = path.join(dir, plan);
+      const text = lf(fs.readFileSync(p, 'utf8'));
+      assert.ok(text.includes(who), who);
+      fs.writeFileSync(p, text.replace(who, `${who} ${words}`));
+    }
+    return dir;
+  };
+  const vitalsOf = (b) => readTableLog(b).sections.get('Vitals at the end');
+  const s0 = (plan) => RS.emptyState({ stateId: 's', plan });
+
+  it('record writes CoC rows HP 9/11 | MP 10/12 | SAN 48 | Luck 50', () => {
+    const m0 = readRunSheet(COC_FX, COC_PLAN, {});
+    const m = { ...m0, pcs: m0.pcs.map((p) => (p.note === IRIS ? { ...p, mpMax: 12, mpNow: 12 } : p)) };
+    const s = RS.reduce(s0(COC_PLAN), { id: 'a', type: 'endSet', vitals: { [IRIS]: { hp: 9, mp: 10, san: 48, luck: 50, conditions: 'Major wound' } } }, T0);
+    assert.strictEqual(vitalsOf(R.tableLogBody(m, s, { linkFor: stemLink, timeOf })), [
+      '| Who | HP | MP | SAN | Luck | Conditions |',
+      '| --- | --- | --- | --- | --- | --- |',
+      '| [[Iris Calder]] | 9/11 | 10/12 | 48 | 50 | Major wound |',
+    ].join('\n'));
+  });
+
+  it('a Regency vault writes the CoC columns, never a Reputation one', () => {
+    const dir = copy(COC_FX, COC_PLAN);
+    writeSettings(dir, { 'vault.system': 'coc-7e-regency' });
+    const m = readRunSheet(dir, COC_PLAN, {});
+    const s = RS.reduce(s0(COC_PLAN), { id: 'a', type: 'endSet', vitals: { [IRIS]: { san: 40 } } }, T0);
+    assert.match(vitalsOf(R.tableLogBody(m, s, { linkFor: stemLink, timeOf })), /^\| Who \| HP \| MP \| SAN \| Luck \| Conditions \|\n.*\n\| \[\[Iris Calder\]\] \|  \|  \| 40 \|  \|  \|$/);
+  });
+
+  it('GURPS rows with HP -3/12 and FP 6/12, written with an ASCII minus', () => {
+    const m0 = readRunSheet(GURPS_FX, GURPS_PLAN, {});
+    const m = { ...m0, pcs: m0.pcs.map((p) => (p.note === ORRIN ? { ...p, fpMax: 12, fpNow: 12 } : p)) };
+    // the page sends a number; a typed minus sign that reached the state as text is written as a hyphen-minus too
+    for (const hp of [-3, '−3']) {
+      const s = RS.reduce(s0(GURPS_PLAN), { id: 'a', type: 'endSet', vitals: { [ORRIN]: { hp, fp: 6 } } }, T0);
+      const v = vitalsOf(R.tableLogBody(m, s, { linkFor: stemLink, timeOf }));
+      assert.strictEqual(v, ['| Who | HP | FP | Conditions |', '| --- | --- | --- | --- |', '| [[Orrin Tate]] | -3/12 | 6/12 |  |'].join('\n'));
+      assert.doesNotMatch(v, /−/);
+      // and -3/12 reads back as -3
+      assert.deepStrictEqual(readTableLog(`## Vitals at the end\n\n${v}\n`).vitals.map((x) => [x.hpNow, x.hpMax, x.fpNow, x.fpMax]), [[-3, 12, 6, 12]]);
+    }
+  });
+
+  it('D&D keeps its three columns', () => {
+    const s = run([{ type: 'endSet', vitals: { [ADA]: { hp: 9 } } }]);
+    assert.match(sectionsOf(body(s)).get('Vitals at the end'), /^\| Who \| HP \| Conditions \|\n\| --- \| --- \| --- \|\n/);
+  });
+
+  it("the skeleton for a CoC or GURPS vault is empty, and the writer's header is vault_write's", () => {
+    const { execFileSync } = require('node:child_process');
+    const py = execFileSync('python3', ['-c', [
+      'import sys; sys.path.insert(0, "skills/shared/scripts"); import vault_write as vw',
+      'for s in ("coc-7e", "coc-7e-regency", "gurps-4e", "dnd-5e-2024", None): print(repr(vw.table_log_vitals_head(s)))',
+    ].join('\n')], { cwd: path.join(__dirname, '..', '..', '..'), encoding: 'utf8' }).trim().split('\n');
+    const { systemFor } = require('../lib/run-sheet/systems');
+    ['coc-7e', 'coc-7e-regency', 'gurps-4e', 'dnd-5e-2024', null].forEach((sys, i) => {
+      const m = { ...model, rules: systemFor(sys).describe() };
+      const s = RS.reduce(fresh(), { id: 'a', type: 'endSet', vitals: { [ADA]: { conditions: 'x' } } }, T0);
+      const head = vitalsOf(R.tableLogBody(m, s, OPTS)).split('\n').slice(0, 2).join('\n');
+      assert.strictEqual(`'\\n${head.replace(/\n/g, '\\n')}\\n'`, py[i], String(sys));
+      const sk = FM + R.TABLE_LOG_SECTIONS.map((x) => `\n## ${x}\n${x === 'Vitals at the end' ? `\n${head}\n` : ''}`).join('');
+      assert.ok(R.isEmptySkeleton(R.recordBodyOf(sk)), String(sys));
+    });
+  });
+
+  it('Luck is never written for an ally', () => {
+    const dir = copy(COC_FX, COC_PLAN, '**[[Edda Voss]]:** keeps the stove hot', 'with the party');
+    const m = readRunSheet(dir, COC_PLAN, {});
+    assert.ok(m.beats.some((b) => (b.foes || []).some((f) => f.note === EDDA && f.ally)), 'Edda is an ally');
+    const s = RS.reduce(s0(COC_PLAN), { id: 'a', type: 'endSet', vitals: { [EDDA]: { hp: 7, mp: 4, luck: 40 }, [IRIS]: { luck: 30 } } }, T0);
+    const v = vitalsOf(R.tableLogBody(m, s, { linkFor: stemLink, timeOf }));
+    assert.match(v, /\| \[\[Edda Voss\]\] \| 7\/10 \| 4\/10 \|  \|  \|  \|/);
+    assert.match(v, /\| \[\[Iris Calder\]\] \|  \|  \|  \| 30 \|  \|/);
+  });
+
+  describe('an ally carries MP, SAN and FP into the next session', () => {
+    // a played session 0 before the fixture's session 1, its Table Log `logBody`; session 1's Plan is the fixture's own
+    const playedBefore = (dir, ch, logBody, number) => {
+      const s1 = `${ch}/Sessions/Session 00/Session 00 - Before.md`;
+      write(dir, s1, ['---', 'type: session', `session_number: ${number}`, 'chapter: "[[Chapter 1]]"', 'status: played',
+        'documents:', '  table_log: "[[Session 00 - Before - Table Log]]"', '---', '', '# s0', ''].join('\n'));
+      write(dir, `${ch}/Sessions/Session 00/Session 00 - Before - Table Log.md`,
+        R.rewriteTableLog(['---', 'type: session-table-log', 'session: "[[Session 00 - Before]]"', 'publish: false', '---', '', '# t', ''].join('\n'), logBody));
+      return `${ch}/Sessions/Session 00/Session 00 - Before - Table Log.md`;
+    };
+
+    it('CoC: MP and SAN, with HP; the old HP-only log still reads', () => {
+      const dir = copy(COC_FX, COC_PLAN, '**[[Edda Voss]]:** keeps the stove hot', 'with the party');
+      const m0 = readRunSheet(dir, COC_PLAN, {});
+      const s = RS.reduce(s0(COC_PLAN), { id: 'a', type: 'endSet', vitals: { [EDDA]: { hp: 7, mp: 4, san: 44 } } }, T0);
+      const log = playedBefore(dir, 'Chapters/Chapter 1', R.tableLogBody(m0, s, { linkFor: stemLink, timeOf }), 0);
+      const edda = readRunSheet(dir, COC_PLAN, {}).beats.flatMap((b) => b.foes).find((f) => f.note === EDDA);
+      assert.deepStrictEqual([edda.hpNow, edda.mpNow, edda.sanNow, edda.carriedFrom], [7, 4, 44, log]);
+      // the night's vitals start from them, and so does a fight
+      const m1 = readRunSheet(dir, COC_PLAN, {});
+      const row = RS.derive(m1, s0(COC_PLAN)).vitals.find((v) => v.rowId === EDDA);
+      assert.deepStrictEqual([row.hp, row.mp, row.mpMax, row.san], [7, 4, 10, 44]);
+
+      // an old log with only HP: HP carries, the pools start from the note
+      const dir2 = copy(COC_FX, COC_PLAN, '**[[Edda Voss]]:** keeps the stove hot', 'with the party');
+      playedBefore(dir2, 'Chapters/Chapter 1', '## Vitals at the end\n\n| Who | HP | Conditions |\n| --- | --- | --- |\n| [[Edda Voss]] | 6/10 | |\n', 0);
+      const m2 = readRunSheet(dir2, COC_PLAN, {});
+      const e2 = m2.beats.flatMap((b) => b.foes).find((f) => f.note === EDDA);
+      assert.deepStrictEqual([e2.hpNow, e2.mpNow, e2.sanNow], [6, undefined, undefined]);
+      const r2 = RS.derive(m2, s0(COC_PLAN)).vitals.find((v) => v.rowId === EDDA);
+      assert.deepStrictEqual([r2.hp, r2.mp, r2.san], [6, 10, 50]);
+      assert.deepStrictEqual(m2.warnings.filter((w) => w.kind === 'table-log'), []);
+    });
+
+    it('GURPS: FP below 0 too', () => {
+      const dir = copy(GURPS_FX, GURPS_PLAN);
+      const p = path.join(dir, GURPS_PLAN);
+      const text = lf(fs.readFileSync(p, 'utf8'));
+      const line = text.split('\n').find((l) => l.includes('[[Rafe Kell]]') && /^\s*-/.test(l));
+      assert.ok(line, 'a who line for Rafe');
+      fs.writeFileSync(p, text.replace(line, `${line} (with the party)`));
+      const m0 = readRunSheet(dir, GURPS_PLAN, {});
+      assert.ok(m0.beats.some((b) => b.foes.some((f) => f.note === RAFE && f.ally)), 'Rafe is an ally');
+      const s = RS.reduce(s0(GURPS_PLAN), { id: 'a', type: 'endSet', vitals: { [RAFE]: { hp: -2, fp: -1 } } }, T0);
+      playedBefore(dir, 'Chapters/Chapter 1', R.tableLogBody(m0, s, { linkFor: stemLink, timeOf }), 0);
+      // the beat whose who line says so has him as an ally; a foe never carries
+      const rafe = readRunSheet(dir, GURPS_PLAN, {}).beats.flatMap((b) => b.foes).filter((f) => f.note === RAFE && f.ally);
+      assert.ok(rafe.length);
+      for (const f of rafe) assert.deepStrictEqual([f.hpNow, f.fpNow], [-2, -1]);
+    });
+
+    it('a pool cell that holds no number warns, naming its column, and stops that pool only', () => {
+      const dir = copy(COC_FX, COC_PLAN, '**[[Edda Voss]]:** keeps the stove hot', 'with the party');
+      playedBefore(dir, 'Chapters/Chapter 1', '## Vitals at the end\n\n| Who | HP | MP | SAN | Luck | Conditions |\n| --- | --- | --- | --- | --- | --- |\n| [[Edda Voss]] | 6/10 | lots | 41 |  | |\n', 0);
+      const m = readRunSheet(dir, COC_PLAN, {});
+      const e = m.beats.flatMap((b) => b.foes).find((f) => f.note === EDDA);
+      assert.deepStrictEqual([e.hpNow, e.mpNow, e.sanNow], [6, undefined, 41]);
+      assert.ok(m.warnings.some((w) => w.kind === 'table-log' && /the MP cell "lots" for \[\[Edda Voss\]\]/.test(w.text)), JSON.stringify(m.warnings));
+    });
   });
 });

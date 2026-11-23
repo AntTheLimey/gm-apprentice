@@ -127,6 +127,11 @@ function completeness(planBody, model, { resolve } = {}) {
   return out;
 }
 
+// The vitals an ally carries from one session's Table Log to the next (`readCarried`), and the column word a warning
+// names each by. Luck is a PC's alone; Energy Reserve is no Table Log column.
+const CARRIED = ['hp', 'mp', 'san', 'fp'];
+const COLUMN_WORD = { hp: 'HP', mp: 'MP', san: 'SAN', fp: 'FP' };
+
 function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
   const rd = readerFrom(deps);
   const abs = path.resolve(vaultPath, planPath);
@@ -544,7 +549,10 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
 
   // The allies' carried vitals: `{ of(note) }` gives `{ hp, log }`, from the latest Table Log before this
   // session whose vitals name the ally (an empty HP cell is passed over; an unreadable one stops the
-  // walk with `hp` null), or null.
+  // walk with `hp` null), or null. MP, SAN and FP (step 6b: CoC's and GURPS's columns) walk the same way,
+  // each on its own: `mp`, `san` and `fp` are on it when a log gave one (null when its cell was unreadable),
+  // and `hp` and `log` are null when only a pool was found. A log with no such column gives that pool nothing.
+  // Luck is a PC's alone and never carried; Energy Reserve is no column, so it is not carried either.
   // The walk goes back through the sessions before this one in the site's story order (story-spine
   // orderedSessions: chapter, then number), never number alone, and counts only played ones: `status`
   // played (or wrap-up, reviewed), or a Play Notes, Export, Table Log or Wrap-Up linked from
@@ -580,14 +588,18 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
         if (!isPlayed(index, s)) continue;
         const log = logOf(s);
         if (!log) continue;
-        const hp = new Map();
-        const blank = new Set(); // a row with an empty HP cell: this log recorded nothing for that copy
+        // per carried field: Map<row id, figure>, and the rows whose cell is empty (this log recorded nothing
+        // for that copy)
+        const figs = {};
+        const blank = {};
+        for (const f of CARRIED) { figs[f] = new Map(); blank[f] = new Set(); }
         const t = readTableLog(index.read(log).body);
         if (t.unnamed) warnings.push({ kind: 'table-log', note: log, text: `${VITALS}: a table's header row names none of Who, HP or Conditions, so it is not read: nobody starts from it` });
         // An empty HP cell is nothing recorded: the walk goes on past it. An unreadable one stops it,
         // for its own ally and copy only.
         const rowKey = (who, copy) => `${low(who)}#${copy > 1 ? copy : 1}`;
-        const unreadWho = new Set(t.unread.map((u) => rowKey(u.who, u.copy)));
+        const unreadWho = {};
+        for (const f of CARRIED) unreadWho[f] = new Set(t.unread.filter((u) => (u.field || 'hp') === f).map((u) => rowKey(u.who, u.copy)));
         for (const v of t.vitals) {
           const who = index.resolve(v.who);
           if (who === null) {
@@ -598,16 +610,21 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
             continue;
           }
           const id = v.copy > 1 ? `${who}#${v.copy}` : who;
-          if (v.hpNow === null && !unreadWho.has(rowKey(v.who, v.copy))) { blank.add(id); continue; }
-          if (!hp.has(id)) hp.set(id, v.hpNow);
+          for (const f of CARRIED) {
+            const fig = v[`${f}Now`];
+            if ((fig === null || fig === undefined) && !unreadWho[f].has(rowKey(v.who, v.copy))) { blank[f].add(id); continue; }
+            if (!figs[f].has(id)) figs[f].set(id, fig === undefined ? null : fig);
+          }
         }
         const unread = new Set();
         for (const u of t.unread) {
+          const field = u.field || 'hp';
+          if (!CARRIED.includes(field)) continue;
           const who = index.resolve(u.who);
-          const k = `${who}\u0000${low(u.cell)}`;
+          const k = `${who}\u0000${field}\u0000${low(u.cell)}`;
           if (who === null || unread.has(k)) continue;
           unread.add(k);
-          warnings.push({ kind: 'table-log', note: log, text: `${VITALS}: the HP cell "${u.cell}" for [[${u.who}]] holds no number it can read (current/max or current): it starts from its note` });
+          warnings.push({ kind: 'table-log', note: log, text: `${VITALS}: the ${COLUMN_WORD[field]} cell "${u.cell}" for [[${u.who}]] holds no number it can read (current/max or current): it starts from its note` });
         }
         // `Unmasked this session`: `- [[Note]] as Name` unmasks, `- [[Note]] masked again` cancels.
         const unmasked = [];
@@ -630,7 +647,7 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
             warnings.push({ kind: 'table-log', note: log, text: `${SIDES_SET}: "${b.text.trim()}" names no side the sheet reads (foe, ally or neutral); that side is not carried` });
           } else sidesSet.push({ note, side });
         }
-        read.push({ log, hp, blank, unmasked, sidesSet });
+        read.push({ log, figs, blank, unmasked, sidesSet });
         return true;
       }
       return false;
@@ -669,15 +686,22 @@ function readRunSheet(vaultPath, planPath, { party = [], deps } = {}) {
       of(note, copy = 1) {
         const id = copy > 1 ? `${note}#${copy}` : note;
         if (!found.has(id)) {
-          let hit = null;
-          for (let i = 0; hit === null && (i < read.length || readNext()); i++) {
-            const h = read[i].hp;
-            // a blank row of this copy's own: nothing recorded here, never the copy-less row instead
-            if (!h.has(id) && read[i].blank.has(id)) continue;
-            const k = h.has(id) ? id : note;
-            if (h.has(k)) hit = { hp: h.get(k), log: read[i].log };
+          const hit = {};
+          for (const f of CARRIED) {
+            for (let i = 0; !hit[f] && (i < read.length || readNext()); i++) {
+              const h = read[i].figs[f];
+              // a blank row of this copy's own: nothing recorded here, never the copy-less row instead
+              if (!h.has(id) && read[i].blank[f].has(id)) continue;
+              const k = h.has(id) ? id : note;
+              if (h.has(k)) hit[f] = { fig: h.get(k), log: read[i].log };
+            }
           }
-          found.set(id, hit);
+          let got = null;
+          if (Object.keys(hit).length) {
+            got = { hp: hit.hp ? hit.hp.fig : null, log: hit.hp ? hit.hp.log : null };
+            for (const f of CARRIED) if (f !== 'hp' && hit[f]) got[f] = hit[f].fig;
+          }
+          found.set(id, got);
         }
         return found.get(id);
       },

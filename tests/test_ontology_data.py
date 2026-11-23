@@ -37,3 +37,28 @@ class OntologyData(unittest.TestCase):
 
     def test_place_fields(self):
         self.assertEqual({p["field"] for p in ONT["place_fields"]}, {"parent_location", "current_holder"})
+
+    # Task 20: each system the run sheet fights in has its Table Log columns.
+    def test_every_system_with_fights_has_run_sheet_vitals(self):
+        systems = {s["id"]: s for s in ONT["game_systems"]}
+        fields = {"hp", "fp", "mp", "san", "luck", "conditions"}
+        shapes = {"current/max", "current", "text"}
+        for sid in ("dnd-5e-2024", "coc-7e", "coc-7e-regency", "gurps-4e"):
+            vitals = systems[sid]["run_sheet"]["vitals"]
+            self.assertEqual(vitals[0]["field"], "hp", sid)
+            self.assertEqual(vitals[-1]["field"], "conditions", sid)
+            for col in vitals:
+                self.assertIn(col["field"], fields, sid)
+                self.assertIn(col["shape"], shapes, sid)
+                self.assertTrue(col["column"].strip(), sid)
+        cols = lambda sid: [c["column"] for c in systems[sid]["run_sheet"]["vitals"]]
+        self.assertEqual(cols("dnd-5e-2024"), ["HP", "Conditions"])
+        self.assertEqual(cols("coc-7e"), ["HP", "MP", "SAN", "Luck", "Conditions"])
+        # Regency is CoC's own list: SAN kept, no Reputation column (Ant, 2026-11-22)
+        self.assertEqual(cols("coc-7e-regency"), cols("coc-7e"))
+        self.assertEqual(cols("gurps-4e"), ["HP", "FP", "Conditions"])
+        luck = [c for c in systems["coc-7e"]["run_sheet"]["vitals"] if c["field"] == "luck"]
+        self.assertTrue(luck[0]["pcs_only"])
+        # PF2e and FitD keep no Fight, so no columns of their own
+        for sid in ("pf2e", "fitd"):
+            self.assertNotIn("run_sheet", systems[sid])

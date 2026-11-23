@@ -82,7 +82,8 @@
     pending: [], answered: [], inflight: false, clientId: randomId(), seq: 0, switching: false,
     down: false, putFailing: false, saveFailed: false, putRev: 0, savedRev: 0, heardRev: 0,
     retry: null, resyncTimer: null, notes: [], drafts: {},
-    ui: { focus: null, focusGroup: null, armed: null, record: '', copyMsg: '', hits: {} },
+    // badVital: an end-panel figure refused (`rowId|field` -> { text, why }), kept as typed and never saved
+    ui: { focus: null, focusGroup: null, armed: null, record: '', copyMsg: '', hits: {}, badVital: {} },
     modelAt: 0,
     view: null, viewTicket: 0, drawerNote: null,
   };
@@ -598,7 +599,7 @@
 
   // ------------------------------------------------------------------ drawing
   function focusKey(el) {
-    const own = ['data-jot', 'data-bring', 'data-movebox', 'data-vhp', 'data-vcond', 'data-where', 'data-orphan', 'data-pt', 'data-hand', 'data-stop', 'data-fire'];
+    const own = ['data-jot', 'data-bring', 'data-movebox', 'data-vhp', 'data-vkey', 'data-vcond', 'data-where', 'data-orphan', 'data-pt', 'data-hand', 'data-stop', 'data-fire'];
     for (const a of own.concat(...parts.map((p) => p.focusAttrs || []))) {
       const v = el.getAttribute(a);
       if (v) return `[${a}="${CSS.escape(v)}"]`;
@@ -607,7 +608,7 @@
   }
   // An end-panel box saves on `change`, which a redraw would swallow: the box is replaced, its words put
   // back, and leaving it then fires nothing. So a box whose words differ from the saved ones commits first.
-  const COMMIT_ON_CHANGE = '#sheet [data-where], #sheet [data-vhp], #sheet [data-vcond], #sheet #advance';
+  const COMMIT_ON_CHANGE = '#sheet [data-where], #sheet [data-vhp], #sheet [data-vkey], #sheet [data-vcond], #sheet #advance';
   let committing = false;
   let renders = 0;
 
@@ -845,7 +846,9 @@
       if (o.kind === 'vitals') {
         const v = o.value;
         const hp = v.hp !== null ? `HP ${v.hp}${v.max !== null ? `/${v.max}` : ''}` : v.max !== null ? `HP max ${v.max}` : '';
-        return `Vitals for ${esc(nameOf(o.note))}${o.copy > 1 ? ` ${o.copy}` : ''}: ${esc([hp, v.conditions].filter(Boolean).join(', '))} (no longer on the end panel)`;
+        const pools = vitalColumns().filter((c) => c.field !== 'hp' && c.field !== 'conditions' && v[c.field] !== undefined && v[c.field] !== null && v[c.field] !== '')
+          .map((c) => `${c.column} ${v[c.field]}`);
+        return `Vitals for ${esc(nameOf(o.note))}${o.copy > 1 ? ` ${o.copy}` : ''}: ${esc([hp, ...pools, v.conditions].filter(Boolean).join(', '))} (no longer on the end panel)`;
       }
       return `Beat "${esc(o.text || o.key)}": ${esc([].concat(o.value).map((v) => String(v).replace(/^stood: (.*)$/, (x, p) => `${nameOf(p)} stood there`)).join(', '))}`;
     };
@@ -1071,16 +1074,57 @@
     if (w.status === 'off') return 'off-screen';
     return w.title || '';
   };
+  // The vitals columns after Who (model.rules.vitals); D&D's when the model has none of that shape.
+  const DND_VITALS = [{ column: 'HP', field: 'hp', shape: 'current/max' }, { column: 'Conditions', field: 'conditions', shape: 'text' }];
+  function vitalColumns() {
+    const v = G.model.rules && G.model.rules.vitals;
+    return Array.isArray(v) && v.length && v.every((c) => c && typeof c === 'object' && c.field) ? v : DND_VITALS;
+  }
   function endHTML(d) {
     let h = '<p class="note">Prefilled from the sheet. Change anything after rests: only a row you change, or a long rest, goes into the record.</p>';
     if (pcs().length) {
       h += `<h4 class="lab">Where everyone ended</h4><table class="where"><tbody>${d.whereEnded.map((w) => `<tr><td style="width:12rem">${face(w.pc)} ${esc(w.name)}</td><td><input data-where="${esc(w.pc)}" value="${esc(w.text || whereText(w))}" data-default="${esc(whereText(w))}" aria-label="Where ${esc(w.name)} ended"></td></tr>`).join('')}</tbody></table>`;
     }
     if (d.vitals.length) {
-      h += `<h4 class="lab">Vitals</h4><div class="tw"><table class="vt"><thead><tr><th>Who</th><th>HP</th><th>Max</th><th>Conditions</th><th></th></tr></thead><tbody>${d.vitals.map((v) => {
-        const recorded = v.set || v.rest;
-        return `<tr><td>${esc(v.name)}${v.ally ? ' <span class="note">ally</span>' : ''}</td><td><input data-vhp="${esc(v.rowId)}" value="${esc(v.hp ?? '')}" inputmode="numeric" aria-label="${esc(v.name)} HP now"></td><td>${esc(v.max ?? '?')}</td><td><input class="c" data-vcond="${esc(v.rowId)}" value="${esc(v.conditions || '')}" placeholder="conditions that carry" aria-label="${esc(v.name)} conditions"></td><td>${recorded ? '<span class="rec">recorded</span>' : ''}</td></tr>`;
-      }).join('')}</tbody></table></div>`;
+      // the system's vitals columns (model.rules.vitals). D&D's (HP and Conditions) are one line a row, as before 6b: HP,
+      // Max, Conditions. A system with pools (CoC's MP, SAN and Luck, GURPS's FP) gives each row two lines, so the
+      // table fits the sheet's column at 1100 wide: the figures, each with its max beside it, then Conditions under them
+      const cols = vitalColumns();
+      const nums = cols.filter((c) => c.field !== 'conditions');
+      const hasCond = cols.some((c) => c.field === 'conditions');
+      const pooled = nums.some((c) => c.field !== 'hp');
+      const bad = (v, field) => G.ui.badVital[`${v.rowId}|${field}`];
+      // a figure refused (over the sheet's max, or below 0): kept as typed, marked, never saved
+      const box = (v, field, attrs, label) => {
+        const b = bad(v, field);
+        const val = b ? b.text : (v[field] ?? '');
+        return `<input ${attrs} value="${esc(val)}" inputmode="numeric" aria-label="${esc(label)}"${b ? ` aria-invalid="true" title="${esc(b.why)}"` : ''}>`;
+      };
+      const numBox = (v, c) => (c.field === 'hp' ? box(v, 'hp', `data-vhp="${esc(v.rowId)}"`, `${v.name} HP now`)
+        : box(v, c.field, `data-vkey="${esc(`${v.rowId}|${c.field}`)}"`, `${v.name} ${c.column} now`));
+      const condBox = (v) => `<input class="c" data-vcond="${esc(v.rowId)}" value="${esc(v.conditions || '')}" placeholder="conditions that carry" aria-label="${esc(v.name)} conditions">`;
+      const who = (v) => `${esc(v.name)}${v.ally ? ' <span class="note">ally</span>' : ''}`;
+      const rec = (v) => (v.set || v.rest ? '<span class="rec">recorded</span>' : '');
+      let table;
+      if (!pooled) {
+        const head = cols.map((c) => (c.field === 'hp' ? `<th>${esc(c.column)}</th><th>Max</th>` : `<th>${esc(c.column)}</th>`)).join('');
+        table = `<table class="vt"><thead><tr><th>Who</th>${head}<th></th></tr></thead><tbody>${d.vitals.map((v) => `<tr><td>${who(v)}</td>${cols.map((c) => (c.field === 'hp'
+          ? `<td>${numBox(v, c)}</td><td>${esc(v.max ?? '?')}</td>` : `<td>${condBox(v)}</td>`)).join('')}<td>${rec(v)}</td></tr>`).join('')}</tbody></table>`;
+      } else {
+        const maxOf = (v, c) => (c.shape !== 'current/max' ? null : c.field === 'hp' ? v.max : v[`${c.field}Max`]);
+        const cell = (v, c) => {
+          // Luck is a PC's alone
+          if (c.pcs_only && v.ally) return '<td></td>';
+          const max = maxOf(v, c);
+          return `<td>${numBox(v, c)}${max !== null && max !== undefined ? `<span class="of">/ ${esc(max)}</span>` : ''}</td>`;
+        };
+        table = `<table class="vt pools"><thead><tr><th>Who</th>${nums.map((c) => `<th>${esc(c.column)}</th>`).join('')}</tr></thead><tbody>${d.vitals.map((v) => {
+          const why = nums.filter((c) => bad(v, c.field)).map((c) => `<span class="badnum">${esc(c.column)} ${esc(bad(v, c.field).text)}: ${esc(bad(v, c.field).why)}</span>`).join('');
+          return `<tr class="vn"><td${hasCond ? ' rowspan="2"' : ''}>${who(v)}${rec(v) ? `<br>${rec(v)}` : ''}</td>${nums.map((c) => cell(v, c)).join('')}</tr>`
+            + (hasCond ? `<tr class="vc"><td colspan="${nums.length}">${why}${condBox(v)}</td></tr>` : '');
+        }).join('')}</tbody></table>`;
+      }
+      h += `<h4 class="lab">Vitals</h4><div class="tw">${table}</div>`;
       h += `<p><button id="longRest" type="button" class="${G.state.end.longRest ? 'on' : ''}" aria-pressed="${!!G.state.end.longRest}">${G.state.end.longRest ? 'Long rest taken ✓ (click to undo)' : 'Long rest: everyone to full'}</button></p>`;
     }
     h += `<h4 class="lab"><label for="advance">Advancement</label></h4><textarea id="advance" placeholder="One line each, e.g. level 6 for the dragon (milestone)">${esc(G.state.end.advancement || '')}</textarea>`;
@@ -1932,10 +1976,19 @@
       act({ type: 'endSet', where: { [d.where]: v === d.default ? '' : v } });
       return;
     }
-    if (d.vhp) {
-      const v = t.value.trim();
+    if (d.vhp || d.vkey) {
+      const at = d.vkey ? d.vkey.lastIndexOf('|') : -1;
+      const row = d.vhp || d.vkey.slice(0, at);
+      const field = d.vhp ? 'hp' : d.vkey.slice(at + 1);
+      // a typed minus sign (U+2212) is the number's minus
+      const v = t.value.trim().replace(/\u2212/g, '-');
       const n = Number(v);
-      act({ type: 'endSet', vitals: { [d.vhp]: { hp: v === '' ? undefined : (Number.isFinite(n) ? n : v) } } });
+      const value = v === '' ? undefined : (Number.isFinite(n) ? n : v);
+      const key = `${row}|${field}`;
+      const why = RS.endFigureProblem(G.model, row, field, value);
+      if (why) { G.ui.badVital[key] = { text: t.value, why }; update(); return; }
+      delete G.ui.badVital[key];
+      act({ type: 'endSet', vitals: { [row]: { [field]: value } } });
       return;
     }
     if (d.vcond) { act({ type: 'endSet', vitals: { [d.vcond]: { conditions: t.value.trim() } } }); return; }
