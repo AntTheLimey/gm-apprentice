@@ -1958,6 +1958,23 @@ describe('fight maths by system (step 6b Task 6)', () => {
     assert.deepEqual([named(s, 'Bouncer').max, named(s, 'Bouncer').hp], [13, 13]);
   });
 
+  it('setStat takes the CoC panel\'s combat figures: DB as words, Build below 0; a negative Fighting is refused', () => {
+    let c = begin(COC, [{ name: 'Cultist', ini: 50, dex: 50 }]);
+    const id = named(c, 'Cultist').id;
+    for (const [key, value] of [['fighting', 55], ['firearms', 40], ['dodge', 30], ['db', '+1D4'], ['armour', 1], ['build', -1], ['attacks', 2]]) {
+      c = G(c, { type: 'setStat', row: id, key, value });
+    }
+    const r = named(c, 'Cultist');
+    assert.deepEqual([r.fighting, r.firearms, r.dodge, r.db, r.armour, r.build, r.attacks], [55, 40, 30, '+1D4', 1, -1, 2]);
+    assert.deepEqual(r.typedKeys, { fighting: true, firearms: true, dodge: true, db: true, armour: true, build: true, attacks: true });
+    c = G(c, { type: 'setStat', row: id, key: 'fighting', value: -5 });
+    assert.equal(named(c, 'Cultist').fighting, 55);
+    // GURPS has none of them
+    let g = begin(GURPS, [{ name: 'Guard', ini: 5, speed: 5 }]);
+    g = G(g, { type: 'setStat', row: named(g, 'Guard').id, key: 'fighting', value: 50 });
+    assert.equal(named(g, 'Guard').fighting, null);
+  });
+
   it('a typed Speed is not replaced by a later DX; a blank result never clears a typed initiative', () => {
     let s = begin(GURPS, [{ name: 'Bouncer', ini: null, ht: 10 }]);
     const id = named(s, 'Bouncer').id;

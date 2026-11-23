@@ -287,18 +287,23 @@
   }
 
   // The stats setStat takes, each to its row fields (the brief's one map); `ini` follows from DEX and Speed.
+  // CoC's combat figures are the panel's boxes (Task 7); their full use is Tasks 16-17's.
   const STAT_FIELDS = {
     st: ['st'], ht: ['ht'], dx: ['dx'], dex: ['dex'], speed: ['speed'], hp: ['max'], fp: ['fpMax'], mp: ['mpMax'],
     san: ['san', 'sanMax'], dodge: ['dodge'], parry: ['parry'], block: ['block'], dr: ['dr'],
+    fighting: ['fighting'], firearms: ['firearms'], db: ['db'], armour: ['armour'], build: ['build'], attacks: ['attacks'],
   };
-  // The keys setStat takes, by the rules' initiative: GURPS's stats, pools and defences; CoC's DEX, MP, SAN and HP;
-  // none for D&D (its panel has setMax and setAc).
+  // The keys setStat takes, by the rules' initiative: GURPS's stats, pools and defences; CoC's DEX, MP, SAN, HP and
+  // combat figures; none for D&D (its panel has setMax and setAc).
   function setStatKeysOf(rules) {
     const ru = FM.rulesOf({ rules });
     if (ru.initiative === 'speed') return ['st', 'ht', 'dx', 'hp', 'fp', 'speed', 'dodge', 'parry', 'block', 'dr'];
-    if (ru.initiative === 'dex') return ['dex', 'mp', 'san', 'hp'];
+    if (ru.initiative === 'dex') return ['dex', 'mp', 'san', 'hp', 'fighting', 'firearms', 'dodge', 'db', 'armour', 'build', 'attacks'];
     return [];
   }
+  // DR and CoC's damage bonus may be words (`2 (face 0)`, `+1D4`); Build and a damage bonus may be below 0.
+  const WORDS_OK = new Set(['dr', 'db']);
+  const SIGNED = new Set(['build', 'db']);
   // A worked-out figure's `from` key, cleared when the GM types the figure itself.
   const FROM_KEY = { max: 'hp', fpMax: 'fp', mpMax: 'mp', speed: 'speed' };
 
@@ -532,17 +537,18 @@
       touch(r, at);
     }),
     // A stat typed in the panel (latest entry wins): `key` is one of STAT_FIELDS's, `value` a number (Speed to two
-    // places; DR may be text), or blank to clear it. GURPS works out the figures not typed (deriveStats); a new DEX
-    // or Speed replaces the initiative and re-places the row (replace), a blank one never clears it. `hold` as setInit.
+    // places; DR and DB may be text, Build and DB below 0), or blank to clear it. GURPS works out the figures not
+    // typed (deriveStats); a new DEX or Speed replaces the initiative and re-places the row (replace), a blank one
+    // never clears it. `hold` as setInit.
     setStat: onRow((s, f, r, a, at) => {
       const rules = FM.rulesOf(f);
       if (r.kind === 'lair' || typeof a.key !== 'string' || !has(STAT_FIELDS, a.key) || !setStatKeysOf(rules).includes(a.key)) return;
       const clear = a.value === null || a.value === '' || a.value === undefined;
       let v = null;
       if (!clear) {
-        if (a.key === 'dr' && typeof a.value === 'string' && !isNum(Number(a.value))) v = a.value.replace(/\s+/g, ' ').trim().slice(0, 40) || null;
+        if (WORDS_OK.has(a.key) && typeof a.value === 'string' && !isNum(Number(a.value))) v = a.value.replace(/\s+/g, ' ').trim().slice(0, 40) || null;
         else v = figureIn(a.value, a.key === 'speed' ? 2 : 0);
-        if (v === null || (isNum(v) && v < 0)) return;
+        if (v === null || (isNum(v) && v < 0 && !SIGNED.has(a.key))) return;
       }
       const before = r.hp;
       const maxBefore = r.max;
@@ -824,5 +830,5 @@
     };
   }
 
-  return { FIGHT_HANDLERS, statusesOf, STAT_KEYS, statKeysOf, setStatKeysOf };
+  return { FIGHT_HANDLERS, statusesOf, STAT_KEYS, STAT_FIELDS, statKeysOf, setStatKeysOf };
 }));

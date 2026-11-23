@@ -1,8 +1,7 @@
 'use strict';
 // Call of Cthulhu 7e (and the Regency variant) for the run sheet: a foe's HP, MP, SAN and DEX from any of the five
 // block shapes real vaults use (step 6b Task 3). No rules text ships; the two sums are the only rules here.
-// Fights stay off until Task 7 builds the rows and panel; `describe()` is D&D's shape with CoC's values for
-// what is known so far.
+// It fights (Task 7): `describe()` is D&D's shape with CoC's values for what is known so far.
 
 const path = require('node:path');
 const { SYSTEM_NAMES } = require('../../shared-lists');
@@ -97,11 +96,10 @@ function readPc({ body, fm }) {
   }
 }
 
-// Placeholders until later tasks fill them in: `panelBoxes`, `rowNumbers`, `vitals`, `words`, `statuses`,
-// `marks`, `prompts`, `pools`, `wounding`, `consequences`, `defences`, `manoeuvres`, `tiredAt`, `firearmBonus`
-// keep D&D's shape (CoC-safe empties where D&D words would show).
+// Placeholders until later tasks fill them in: `vitals`, `prompts`, `wounding`, `consequences`, `defences`,
+// `manoeuvres` keep D&D's shape (CoC-safe empties where D&D words would show).
 function describeCoc(id) {
-  const r = describeAs(id, id === 'coc-7e' ? 'Call of Cthulhu 7e' : SYSTEM_NAMES[id], false);
+  const r = describeAs(id, id === 'coc-7e' ? 'Call of Cthulhu 7e' : SYSTEM_NAMES[id], true);
   // the order is DEX, plus 50 with a firearm ready (KR p409); HP never below 0 (KR p120); the entry box's pools:
   // MP never below 0 (KR p386), SAN never above 99 (KR p155, less Cthulhu Mythos, which the row does not hold)
   const fight = {
@@ -113,17 +111,28 @@ function describeCoc(id) {
   };
   Object.assign(r, { family: 'coc', ...JSON.parse(JSON.stringify(fight)) });
   Object.assign(r.fight, fight);
-  r.toggles = { ...r.toggles, half: false, resisted: false, temp: false, deathSaves: false, concentration: false, exhaustion: false, counters: false, longRest: false };
+  r.toggles = { ...r.toggles, half: false, resisted: false, temp: false, deathSaves: false, concentration: false, exhaustion: false, counters: false, longRest: false, gun: true };
   r.statuses = ['Major wound', 'Prone', 'Unconscious', 'Dying', 'Temporary insanity', 'Indefinite insanity'];
-  r.panelBoxes = [];
-  r.rowNumbers = [];
-  r.words = { ...r.words, hp: 'HP', ac: '', temp: '', initiative: 'DEX', longRest: '', advancement: '' };
+  // the acting panel's boxes, in Tab order (the one list, Task 7 [P-C19]); `readout` ones are shown beside HP too
+  r.panelBoxes = [
+    { key: 'dex', label: 'DEX', readout: true }, { key: 'mp', label: 'MP' }, { key: 'san', label: 'SAN' },
+    { key: 'fighting', label: 'Fighting' }, { key: 'firearms', label: 'Firearms' }, { key: 'dodge', label: 'Dodge' },
+    { key: 'db', label: 'DB' }, { key: 'armour', label: 'Armour' }, { key: 'build', label: 'Build' }, { key: 'attacks', label: 'Attacks' },
+  ];
+  // the row's own figures: initiative, HP now/[max], MP and SAN as read-outs
+  r.rowNumbers = ['ini', 'hp', 'max', 'mp', 'san'];
+  r.words = {
+    ...r.words, hp: 'HP', ac: '', temp: '', initiative: 'DEX', initBox: 'DEX', longRest: '', advancement: '', bloodied: '',
+    entryPlaceholder: '-7 / +3 / m-2 / s-5',
+    entryInvalid: 'Type -7 or 7 (damage), +3 (healing), m-2 (MP) or s-5 (SAN)',
+    gun: 'gun', gunTitle: `Firearm ready: +${fight.firearmBonus} to DEX for the order`,
+  };
   return r;
 }
 
 // The row's own fields: initiative is DEX.
 const foeRow = (n) => ({ init: n.dex, mp: n.mp, mpMax: n.mp, san: n.san, sanMax: n.san, dex: n.dex, armour: n.armour, from: n.from });
 
-const make = (id) => ({ ...dnd, id, fights: false, readFoe, readPc, foeRow, stockNoActions: undefined, describe: () => describeCoc(id) });
+const make = (id) => ({ ...dnd, id, fights: true, readFoe, readPc, foeRow, stockNoActions: undefined, describe: () => describeCoc(id) });
 
 module.exports = { coc: make('coc-7e'), cocRegency: make('coc-7e-regency'), readNumbers, keyOf, lacks };

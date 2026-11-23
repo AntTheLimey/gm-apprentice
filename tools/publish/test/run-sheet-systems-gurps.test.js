@@ -57,9 +57,12 @@ for (const crlf of [false, true]) {
       const tam = foesOf(`${NPCS}Tam Osier.md`, index, 1, 'k', new Set(), null, null, systemFor('gurps-4e')).foes[0];
       assert.deepEqual([tam.hp, tam.hpStart], [9, 6]);
     });
-    it('fights stay off, and the description has GURPS\'s known values', () => {
+    it('it fights (Task 7), and the description has GURPS\'s known values', () => {
       const d = systemFor('gurps-4e').describe();
-      assert.equal(d.fights, false);
+      assert.equal(d.fights, true);
+      assert.deepEqual(d.panelBoxes.map((b) => b.label), ['ST', 'HT', 'DX', 'Speed', 'Dodge', 'Parry', 'Block', 'DR']);
+      assert.equal(d.words.entryPlaceholder, '-7 / +3 / f-2');
+      assert.equal(d.toggles.gun, false);
       assert.equal(d.family, 'gurps');
       assert.equal(d.label, 'GURPS 4e');
       for (const o of [d, d.fight]) assert.deepEqual([o.initiative, o.initDecimals, o.orderFixed, o.hpFloor, o.autoOut], ['speed', 2, true, null, false]);

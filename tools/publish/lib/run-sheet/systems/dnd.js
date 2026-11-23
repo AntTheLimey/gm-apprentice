@@ -141,7 +141,7 @@ function describeAs(id, label, fights) {
     panelBoxes: ['legendaryResistance', 'legendaryActions', 'recharge', 'lairActions'],
     rowNumbers: ['ini', 'hp', 'max', 'ac'],
     words: {
-      hp: 'HP', ac: 'AC', temp: 'temp HP', initiative: 'initiative',
+      hp: 'HP', ac: 'AC', temp: 'temp HP', initiative: 'initiative', bloodied: 'Bloodied',
       entryPlaceholder: '-37/+8/t5',
       entryInvalid: 'Type -37 or 37 (damage), +8 (healing) or t5 (temp HP)',
       longRest: 'Long rest: everyone to full',

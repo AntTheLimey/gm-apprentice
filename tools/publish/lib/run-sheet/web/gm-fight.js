@@ -24,6 +24,9 @@
   const sign = (n) => (isNum(n) ? (n >= 0 ? `+${n}` : String(n)) : '+0');
   const attr = (k, v) => `[${k}="${CSS.escape(v)}"]`;
   const PT = { '': '', landed: '✓', missed: '✗', overtaken: '⊘' };
+  // the panel boxes' figures, one per key setStat takes (fight.js STAT_FIELDS); each box is `data-fs-<key>`
+  const PANEL_KEYS = ['dex', 'mp', 'san', 'fighting', 'firearms', 'dodge', 'db', 'armour', 'build', 'attacks', 'st', 'ht', 'dx', 'speed', 'parry', 'block', 'dr'];
+  // D&D's, for a model with no words of its own
   const INVALID = 'Type -37 or 37 (damage), +8 (healing) or t5 (temp HP)';
 
   const ui = {
@@ -41,6 +44,25 @@
   const state = () => RP.state();
   // the system's description says whether it fights (systems/index.js: null runs as D&D)
   const allowed = () => { const m = model(); return Boolean(m && m.rules && m.rules.fights); };
+  // What the system's description says the page draws (model.rules): its words, toggles, row numbers and panel
+  // boxes. A model with none draws D&D's row, as before 6b.
+  const rules = () => { const m = model(); return (m && m.rules) || {}; };
+  const words = () => rules().words || {};
+  const toggles = () => rules().toggles || { half: true, resisted: true, temp: true, deathSaves: true, concentration: true, exhaustion: true, counters: true };
+  const rowNumbers = () => rules().rowNumbers || ['ini', 'hp', 'max', 'ac'];
+  const rolled = () => !rules().initiative || rules().initiative === 'roll';
+  // the panel's boxes the page can draw ({ key, label } items; D&D's list names its counters, drawn as before)
+  const panelBoxes = () => (rules().panelBoxes || []).filter((b) => b && typeof b === 'object' && STAT[boxStat(b.key)]);
+  // the pools a row shows: with a max box on the row (GURPS's FP), or as a read-out (CoC's MP and SAN)
+  const poolsShown = () => {
+    const rn = rowNumbers();
+    const all = FM.poolsOf(rules().fight || rules());
+    return { boxed: all.filter((p) => rn.includes(p.max)), read: all.filter((p) => !rn.includes(p.max) && rn.includes(p.key)) };
+  };
+  // A figure worked out from others carries its tag ("from ST"): the row's field to the `from` key it is marked by.
+  const FROM_OF = { max: 'hp', fpMax: 'fp', mpMax: 'mp', ini: 'speed', speed: 'speed' };
+  const fromTag = (r, field) => { const k = FROM_OF[field] || field; return r.from && r.from[k] ? ` (${r.from[k]})` : ''; };
+  const shownFigure = (v) => (isNum(v) ? String(v) : typeof v === 'string' ? v : '');
   const pcName = (note) => { const p = (model().pcs || []).find((x) => x.note === note); return p ? p.name : RP.nameOf(note); };
 
   // Every fight action names the running fight (Review M3).
@@ -259,21 +281,29 @@
   }
 
   // ------------------------------------------------------------------ drawing: the order
+  // The system's statuses (rules.statuses); Concentrating and Exhaustion only where its toggles have them.
   function statusSelect(r) {
     const conds = new Set(r.conds || []);
-    const opts = FM.DND_STATUSES.filter((x) => !conds.has(x)).map((x) => `<option>${esc(x)}</option>`).join('');
-    const ex = Array.from({ length: FM.EXHAUSTION_MAX }, (_, i) => i + 1).filter((n) => n !== r.exhaustion).map((n) => `<option>Exhaustion ${n}</option>`).join('');
-    return `<select data-fstatus="${esc(r.id)}" aria-label="Add a status to ${esc(r.gmName)}"><option value="">+ status</option>${opts}${r.conc ? '' : '<option>Concentrating</option>'}<optgroup label="Exhaustion">${ex}</optgroup><option value="other">other…</option></select>`;
+    const tg = toggles();
+    const opts = (rules().statuses || FM.DND_STATUSES).filter((x) => !conds.has(x)).map((x) => `<option>${esc(x)}</option>`).join('');
+    const ex = tg.exhaustion ? `<optgroup label="Exhaustion">${Array.from({ length: FM.EXHAUSTION_MAX }, (_, i) => i + 1).filter((n) => n !== r.exhaustion).map((n) => `<option>Exhaustion ${n}</option>`).join('')}</optgroup>` : '';
+    const conc = tg.concentration && !r.conc ? '<option>Concentrating</option>' : '';
+    return `<select data-fstatus="${esc(r.id)}" aria-label="Add a status to ${esc(r.gmName)}"><option value="">+ status</option>${opts}${conc}${ex}<option value="other">other…</option></select>`;
   }
   // A row's statuses share one strip that takes the row's leftover width; when they do not all fit, the row gets
   // a second line of its own that lists them by name (fitChips; final review, for the GM's eye: a boss read "+4").
   // So statuses never widen the order (review I1, v8's strip), and the acting panel lists them all too.
   const statusKey = (label) => (/^Exhaustion /.test(label) ? 'Exhaustion' : label);
+  // The marks the fight sets (GURPS's Reeling and 0 or less, Tired) go in the same strip, never the minus-HP lines
+  // (those are the panel's track and Task 13's cards).
+  const marksOn = (r) => (r.marks || []).concat(r.tired && rules().tiredAt ? [rules().tiredAt.name || 'Tired'] : []);
   function chips(r, bloodied) {
     const one = (label) => `<button type="button" class="chip" data-fun="${esc(`${r.id}|${statusKey(label)}`)}" title="Remove ${esc(label)}">${esc(label)} ✕</button>`;
     const all = Fight.statusesOf(r);
-    const h = (bloodied ? '<span class="chip auto">Bloodied</span>' : '') + all.map(one).join('');
-    const names = (bloodied ? ['Bloodied'] : []).concat(all);
+    const bl = bloodied && words().bloodied !== '' ? (words().bloodied || 'Bloodied') : '';
+    const marks = marksOn(r);
+    const h = (bl ? `<span class="chip auto">${esc(bl)}</span>` : '') + marks.map((m) => `<span class="chip auto mark">${esc(m)}</span>`).join('') + all.map(one).join('');
+    const names = (bl ? [bl] : []).concat(marks, all);
     // always there, empty or not, so a first status never moves the row's other items (or the order's width)
     return `<span class="chips"${names.length ? ` title="${esc(names.join(', '))}"` : ''}>${h}</span>`;
   }
@@ -299,10 +329,17 @@
   // least width, the probe's rows and the keyboard pass it by.
   const PENDING = 'Enter applies';
   const STAT_NAMES = { fini: 'Initiative', fmax: 'Max HP', fac: 'AC' };
+  // a box's name for its bad-number line: the row's own, the pool's for its max box, the panel box's label
+  function statName(f) {
+    if (STAT_NAMES[f]) return STAT_NAMES[f];
+    if (f === 'ffpmax') { const p = poolsShown().boxed[0]; return `Max ${p ? p.label : ''}`; }
+    const b = panelBoxes().find((x) => boxStat(x.key) === f);
+    return b ? b.label : f;
+  }
   function line2Html(id, li) {
     const out = [];
-    for (const f of Object.keys(STAT_NAMES)) {
-      if (ui.bad[badKey(STAT[f].k, id)]) out.push(`<span class="badnum" role="status" data-badfor="${f}" title="${esc(STAT_NAMES[f])}">${BAD_NUMBER}</span>`);
+    for (const f of Object.keys(STAT)) {
+      if (ui.bad[badKey(STAT[f].k, id)]) out.push(`<span class="badnum" role="status" data-badfor="${f}" title="${esc(statName(f))}">${BAD_NUMBER}</span>`);
     }
     if (ui.pending[id]) out.push(`<span class="pendnum" role="status" title="Damage or healing typed, not applied yet">${PENDING}</span>`);
     const st = (li && li.dataset.l2st) || '';
@@ -346,6 +383,22 @@
     return `<input ${k}="${esc(r.id)}" value="${esc(bad.words)}" aria-invalid="true" ${rest}>`;
   }
 
+  // A row's pools: GURPS's FP now/[max] (an Energy Reserve inside it: `11/14 +4`), CoC's `MP 12 · SAN 55`. Only
+  // the pools the row holds a figure in.
+  function poolsHTML(r) {
+    const { boxed, read } = poolsShown();
+    let h = '';
+    for (const p of boxed) {
+      if (!isNum(r[p.key]) && !isNum(r[p.max])) continue;
+      const er = isNum(r.er) ? ` +${r.er}` : '';
+      const t = fromTag(r, p.max) ? ` title="${esc(`Max ${p.label} ${r[p.max]}${fromTag(r, p.max)}`)}"` : '';
+      h += `<span class="hpv fpv"${t}>${esc(p.label)} ${esc(isNum(r[p.key]) ? r[p.key] : '?')}/${statBox('data-ffpmax', r, isNum(r[p.max]) ? r[p.max] : '', `inputmode="numeric" autocomplete="off" aria-label="Maximum ${esc(p.label)} for ${esc(r.gmName)}"`)}${esc(er)}</span>`;
+    }
+    const ro = read.filter((p) => isNum(r[p.key])).map((p) => `${p.label} ${r[p.key]}`);
+    if (ro.length) h += `<span class="pools">${esc(ro.join(' · '))}</span>`;
+    return h;
+  }
+
   const SIDE_TITLES = {
     foe: 'An enemy: the players see only what you show',
     neutral: 'Neither side: shown to players like a foe',
@@ -366,12 +419,19 @@
     const tick = ui.area
       ? `<input type="checkbox" data-fsel="${esc(r.id)}" ${ui.sel[r.id] ? 'checked' : ''} ${r.in ? '' : 'disabled'} aria-label="${esc(r.gmName)} is in the area">`
       : `<input type="checkbox" data-ftick="${esc(r.id)}" ${r.in ? 'checked' : ''} aria-label="${esc(r.gmName)} is in this fight" title="In this fight">`;
+    const tg = toggles();
+    const w = words();
+    const rn = rowNumbers();
     const tags = [];
+    // a row with an HP figure, typed or worked out, is complete (D3d)
     if (!isNum(r.hp)) tags.push('no numbers');
-    if (r.temp) tags.push(`+${r.temp} temp`);
+    if (r.temp && tg.temp) tags.push(`+${r.temp} temp`);
     if (r.gone) tags.push('not in the party now');
     let h = `<li class="${cls}" data-frow="${esc(r.id)}"><span class="tk">${tick}</span>`;
-    h += statBox('data-fini', r, isNum(r.ini) ? r.ini : '', `class="ini" placeholder="${r.kind === 'pc' ? 'roll' : esc(sign(r.mod))}" inputmode="numeric" autocomplete="off" aria-label="Initiative for ${esc(r.gmName)}"`);
+    // rolled (D&D): the PC's called-out roll or the foe's modifier; worked out (CoC's DEX, GURPS's Basic Speed): its word
+    const iniHint = rolled() ? (r.kind === 'pc' ? 'roll' : sign(r.mod)) : (w.initBox || w.initiative || '');
+    const iniTitle = rolled() || !isNum(r.ini) ? '' : ` title="${esc(`${w.initiative || 'Initiative'} ${r.ini}${fromTag(r, 'ini')}`)}"`;
+    h += statBox('data-fini', r, isNum(r.ini) ? r.ini : '', `class="ini" placeholder="${esc(iniHint)}" inputmode="${initPlaces() ? 'decimal' : 'numeric'}" autocomplete="off" aria-label="Initiative for ${esc(r.gmName)}"${iniTitle}`);
     h += `${name}${tags.length ? `<span class="tag">${esc(tags.join(' · '))}</span>` : ''}`;
     if (r.kind === 'foe') h += `<button type="button" class="tg ${r.seen ? 'on' : ''}" data-fseen="${esc(r.id)}" aria-pressed="${!!r.seen}" title="${r.seen ? 'The players see its name. Click: back to its unseen word' : 'The players see its unseen word. Click: they have seen it'}">${r.seen ? 'seen' : 'unseen'}</button>`;
     if (!r.in) return `${h}</li>`;
@@ -379,21 +439,27 @@
       const half = ui.area ? !!ui.ahalf[r.id] : r.half;
       // damage typed and left unapplied keeps its words and its mark, "Enter applies" (final review P4.1)
       const pend = ui.pending[r.id];
-      h += `<input class="hpin${pend ? ' pending' : ''}" data-fhp="${esc(r.id)}" value="${esc(pend || '')}" placeholder="-37/+8/t5" autocomplete="off" aria-label="Damage or healing for ${esc(r.gmName)}">`;
-      h += `<button type="button" class="tg ${half ? 'on' : ''}" ${ui.area ? 'data-fahalf' : 'data-fhalf'}="${esc(r.id)}" aria-pressed="${!!half}" title="${ui.area ? 'Half for this area: a save' : 'Half: the next hit only (a save)'}">½</button>`;
-      h += `<button type="button" class="tg ${r.resisted ? 'on' : ''}" data-fres="${esc(r.id)}" aria-pressed="${!!r.resisted}" title="Resisted: every hit halved until turned off">Res</button>`;
+      const ph = w.entryPlaceholder || '-37/+8/t5';
+      // with no ½ or Res beside it, the box is as wide as the system's placeholder, so all of it shows
+      const wide = tg.half ? '' : ` style="width: calc(${ph.length}ch + 8px)" title="${esc(ph)}"`;
+      h += `<input class="hpin${pend ? ' pending' : ''}" data-fhp="${esc(r.id)}" value="${esc(pend || '')}" placeholder="${esc(ph)}"${wide} autocomplete="off" aria-label="Damage or healing for ${esc(r.gmName)}">`;
+      if (tg.half) h += `<button type="button" class="tg ${half ? 'on' : ''}" ${ui.area ? 'data-fahalf' : 'data-fhalf'}="${esc(r.id)}" aria-pressed="${!!half}" title="${ui.area ? 'Half for this area: a save' : 'Half: the next hit only (a save)'}">½</button>`;
+      if (tg.resisted) h += `<button type="button" class="tg ${r.resisted ? 'on' : ''}" data-fres="${esc(r.id)}" aria-pressed="${!!r.resisted}" title="Resisted: every hit halved until turned off">Res</button>`;
     }
-    h += `<span class="hpv">${esc(isNum(r.hp) ? r.hp : '?')}/${statBox('data-fmax', r, isNum(r.max) ? r.max : '', `inputmode="numeric" autocomplete="off" aria-label="Maximum HP for ${esc(r.gmName)}"`)}</span>`;
-    h += `<span class="acv">AC${statBox('data-fac', r, isNum(r.ac) ? r.ac : '', `inputmode="numeric" autocomplete="off" aria-label="AC for ${esc(r.gmName)}"`)}</span>`;
+    const maxTitle = fromTag(r, 'max') ? ` title="${esc(`Max ${w.hp || 'HP'} ${r.max}${fromTag(r, 'max')}`)}"` : '';
+    h += `<span class="hpv"${maxTitle}>${esc(isNum(r.hp) ? r.hp : '?')}/${statBox('data-fmax', r, isNum(r.max) ? r.max : '', `inputmode="numeric" autocomplete="off" aria-label="Maximum HP for ${esc(r.gmName)}"`)}</span>`;
+    if (rn.includes('ac')) h += `<span class="acv">AC${statBox('data-fac', r, isNum(r.ac) ? r.ac : '', `inputmode="numeric" autocomplete="off" aria-label="AC for ${esc(r.gmName)}"`)}</span>`;
+    h += poolsHTML(r);
+    if (tg.gun) h += `<button type="button" class="tg ${r.gun ? 'on' : ''}" data-fgun="${esc(r.id)}" aria-pressed="${!!r.gun}" title="${esc(w.gunTitle || '')}">${esc(w.gun || 'gun')}</button>`;
     h += chips(r, view.bloodied.has(r.id));
     h += statusSelect(r);
     if (ui.other[r.id]) h += `<input class="other" data-fother="${esc(r.id)}" placeholder="${esc(RP.OTHER_STATUS_PLACEHOLDER)}" autocomplete="off" aria-label="A status for ${esc(r.gmName)}, typed">`;
     if (r.kind === 'foe') h += `<button type="button" class="tg ${r.out ? 'on' : ''}" data-fout="${esc(r.id)}" aria-pressed="${!!r.out}">${r.out ? 'Back in' : 'Out'}</button>`;
-    if ((r.kind === 'pc' || r.kind === 'ally') && (r.conds || []).includes('Down')) {
+    if (tg.deathSaves && (r.kind === 'pc' || r.kind === 'ally') && (r.conds || []).includes('Down')) {
       const ds = r.ds || { s: 0, f: 0 };
       h += `<span class="ds">Saves <button type="button" data-fds="${esc(`${r.id}|s`)}" title="Death save successes (click: one more)">✓${ds.s}</button><button type="button" data-fds="${esc(`${r.id}|f`)}" title="Death save failures (click: one more)">✗${ds.f}</button></span>`;
     }
-    h += counters(r, false);
+    if (tg.counters) h += counters(r, false);
     return `${h}</li>`;
   }
 
@@ -428,17 +494,26 @@
         return `<div class="stats"><h4 class="lab">${esc(o.gmName)}'s lair</h4>${(info && info.lairActionsHtml) || '<p class="warn">The block names lair actions but lists none the sheet can find.</p>'}</div>`;
       }).join('') || '<p class="warn">No foe with lair actions is in the fight.</p>'}</div>`;
     }
-    const nums = [
-      `HP ${isNum(r.hp) ? r.hp : '?'}/${isNum(r.max) ? r.max : '?'}${r.temp ? ` +${r.temp}` : ''}`,
-      `AC ${isNum(r.ac) ? r.ac : '?'}`,
-      `Init ${isNum(r.ini) ? r.ini : '—'} (${sign(r.mod)})`,
-    ].map((x) => `<span>${esc(x)}</span>`);
-    if (f.view.bloodied.has(r.id)) nums.push('<span class="bl">Bloodied</span>');
+    const w = words();
+    const q = (v) => (isNum(v) ? v : '?');
+    // the read-outs: HP (its tag when worked out), AC and the rolled initiative where the system has them, each pool,
+    // and the boxes the system reads out (CoC's DEX; GURPS's Basic Speed and Dodge)
+    const reads = [`HP ${q(r.hp)}/${q(r.max)}${r.temp ? ` +${r.temp}` : ''}${fromTag(r, 'max')}`];
+    if (rowNumbers().includes('ac')) reads.push(`AC ${q(r.ac)}`);
+    if (rolled()) reads.push(`Init ${isNum(r.ini) ? r.ini : '—'} (${sign(r.mod)})`);
+    for (const p of FM.poolsOf(rules().fight || rules())) {
+      if (isNum(r[p.key]) || isNum(r[p.max])) reads.push(`${p.label} ${q(r[p.key])}${p.max ? `/${q(r[p.max])}` : ''}${fromTag(r, p.max)}`);
+    }
+    for (const b of panelBoxes().filter((x) => x.readout)) reads.push(`${b.label} ${shownFigure(r[Fight.STAT_FIELDS[b.key][0]]) || '?'}${fromTag(r, b.key)}`);
+    const nums = reads.map((x) => `<span>${esc(x)}</span>`);
+    if (f.view.bloodied.has(r.id) && w.bloodied !== '') nums.push(`<span class="bl">${esc(w.bloodied || 'Bloodied')}</span>`);
+    for (const m of marksOn(r)) nums.push(`<span class="mk">${esc(m)}</span>`);
     // every status, the ones the row's strip had no room for too; a click removes it, as on the row
     for (const x of Fight.statusesOf(r)) nums.push(`<button type="button" class="st" data-fun="${esc(`${r.id}|${statusKey(x)}`)}" title="Remove ${esc(x)}">${esc(x)} ✕</button>`);
     const ctr = counters(r, true);
     // offered while an untouched copy still differs from this row (a copy already made has nothing left to take)
-    const left = FM.groupMates(f.view.rows, r).filter((x) => x !== r && FM.untouched(x, true) && (Fight.STAT_KEYS.some((k) => isNum(r[k]) && x[k] !== r[k]) || (isNum(r.max) && x.hp !== r.max))).length;
+    const keys = Fight.statKeysOf(FM.rulesOf(f));
+    const left = FM.groupMates(f.view.rows, r).filter((x) => x !== r && FM.untouched(x, true) && (keys.some((k) => isNum(r[k]) && x[k] !== r[k]) || (isNum(r.max) && x.hp !== r.max))).length;
     if (left) {
       const all = FM.groupMates(f.view.rows, r).length;
       nums.push(`<button type="button" class="tg same" data-fsame="${esc(r.id)}" title="Copy these numbers (and the HP they give) to the others of this group nobody has typed into, hurt or given a status">Same for all ${all}</button>`);
@@ -458,9 +533,34 @@
         : ((info && info.prepNote) || `${r.name}: no numbers in the vault: type them here, or fill them in prep`);
       if (nonum) body += `<p class="warn">${esc(nonum)}</p>`;
       if (info && info.statsHtml) body += `<div class="stats">${info.statsHtml}</div>`;
-      else if (!nonum) body += '<p class="warn">No stat block in the vault.</p>';
+      // a row typed in the fight has no note to hold a block: once it has HP it is complete (D3d)
+      else if (!nonum && r.note) body += '<p class="warn">No stat block in the vault.</p>';
     }
-    return `<div class="act" id="acting">${head(r.gmName)}<div class="nums">${nums.join('')}</div>${ctr ? `<div class="nums ctr">${ctr}</div>` : ''}${body}</div>`;
+    return `<div class="act" id="acting">${head(r.gmName)}<div class="nums">${nums.join('')}</div>${ctr ? `<div class="nums ctr">${ctr}</div>` : ''}${boxesHTML(r)}${trackHTML(r)}${body}</div>`;
+  }
+  // The panel's boxes (rules.panelBoxes, in Tab order), each a typed figure for setStat; a worked-out one keeps its tag.
+  function boxesHTML(r) {
+    const list = panelBoxes();
+    if (!list.length) return '';
+    return `<div class="pboxes">${list.map((b) => {
+      const st = STAT[boxStat(b.key)];
+      const v = shownFigure(r[Fight.STAT_FIELDS[b.key][0]]);
+      const mode = st.words ? 'text' : st.decimal ? 'decimal' : 'numeric';
+      const t = fromTag(r, b.key);
+      return `<label class="pb"${t ? ` title="${esc(`${b.label}${t}`)}"` : ''}><span class="lab">${esc(b.label)}</span>${statBox(st.k, r, v, `class="pbox" inputmode="${mode}" autocomplete="off" aria-label="${esc(b.label)} for ${esc(r.gmName)}"`)}${t ? `<span class="from">${esc(t.trim())}</span>` : ''}</label>`;
+    }).join('')}</div>`;
+  }
+  // GURPS's mark track: every mark the system names, the passed ones lit, the deepest minus-HP line passed marked.
+  function trackHTML(r) {
+    const marks = (rules().marks || []).filter((m) => m && m.name);
+    if (!marks.length) return '';
+    const on = new Set(r.marks || []);
+    const deepest = isNum(r.deepest) ? r.deepest : 0;
+    return `<ol class="mtrack" aria-label="Marks">${marks.map((m) => {
+      const lit = on.has(m.name) || (isNum(m.times) && deepest >= m.times);
+      const deep = isNum(m.times) && deepest === m.times;
+      return `<li class="${[lit ? 'lit' : '', deep ? 'deep' : ''].join(' ').trim()}" data-mark="${esc(m.key || m.name)}">${esc(m.name)}</li>`;
+    }).join('')}</ol>`;
   }
 
   // ------------------------------------------------------------------ drawing: the right column
@@ -469,7 +569,8 @@
     const view = f.view;
     let h = '<div class="fview"><div class="fo" id="fOrder"><div class="fotop">';
     h += `<div class="fh"><b>${f.started ? `Round ${esc(f.round)}` : 'Setting up'}</b>`
-      + '<button type="button" id="fRoll" title="Roll d20 + modifier for every ticked foe and ally with no number yet (never a PC)">Roll</button>'
+      // a system that works the order out (CoC's DEX, GURPS's Basic Speed) has nothing to roll
+      + (rolled() ? '<button type="button" id="fRoll" title="Roll d20 + modifier for every ticked foe and ally with no number yet (never a PC)">Roll</button>' : '')
       + '<button type="button" id="fSort" title="Sort once by initiative; whose turn it is stays">Sort</button>'
       + `<button type="button" id="fNext" class="primary">${f.started ? 'Next ▸' : 'Start ▸'}</button><span class="sp"></span>`
       + `<button type="button" id="fArea" class="${ui.area ? 'on' : ''}" aria-pressed="${ui.area}" title="Tick several rows, type the damage once">Area</button>`
@@ -617,10 +718,10 @@
     // every focusable control the fight draws that has no id, so a redraw puts focus back on it (proof N1: a status
     // select pressed while a typed number committed lost focus to the page). Controls with an id (the Add box, the
     // count, Roll, Next, the area box…) are found by it.
-    focusAttrs: ['data-fini', 'data-fhp', 'data-fmax', 'data-fac', 'data-fother', 'data-fstatus', 'data-ftick', 'data-fsel',
-      'data-fseen', 'data-fhalf', 'data-fahalf', 'data-fres', 'data-fout', 'data-fds', 'data-flr', 'data-fla', 'data-frch',
+    focusAttrs: ['data-fini', 'data-fhp', 'data-fmax', 'data-fac', 'data-ffpmax', 'data-fother', 'data-fstatus', 'data-ftick', 'data-fsel',
+      'data-fseen', 'data-fhalf', 'data-fahalf', 'data-fres', 'data-fout', 'data-fgun', 'data-fds', 'data-flr', 'data-fla', 'data-frch',
       'data-fun', 'data-fsame', 'data-fside', 'data-fundo', 'data-faddgroup', 'data-faddbeat', 'data-faddpick', 'data-faddnew',
-      'data-fspend', 'data-fafter', 'data-fjot', 'data-fight', 'data-fplace'],
+      'data-fspend', 'data-fafter', 'data-fjot', 'data-fight', 'data-fplace', ...PANEL_KEYS.map((k) => `data-fs-${k}`)],
     // Fight here on a place tile or a place's drawer (plan 6a Task 7); nothing while a fight runs
     placeButtons(note) {
       if (!allowed() || state().fight || !(model().placeKeys || {})[note]) return '';
@@ -683,6 +784,9 @@
             id: r.id, note: r.note, copy: r.copy, kind: r.kind, side: sideWord(r), name: r.gmName, in: r.in, ini: isNum(r.ini) ? r.ini : null, mod: r.mod,
             hp: r.hp, max: r.max, ac: r.ac, temp: r.temp, conds: r.conds, exhaustion: r.exhaustion, conc: r.conc, out: r.out, seen: r.seen,
             recharge: (r.recharge || []).map((x) => ({ name: x.name, ready: x.ready, rolled: x.rolled })),
+            // the systems' figures (step 6b)
+            fp: r.fp, fpMax: r.fpMax, mp: r.mp, mpMax: r.mpMax, san: r.san, sanMax: r.sanMax, dex: r.dex, st: r.st, ht: r.ht, dx: r.dx,
+            speed: r.speed, fighting: r.fighting, marks: r.marks, deepest: r.deepest, tired: r.tired, gun: r.gun, from: r.from,
           })),
         };
       }
@@ -772,6 +876,7 @@
     if (d.fres && r) { F({ type: 'resisted', row: r.id, on: !r.resisted }); return true; }
     if (d.fside && d.fsiderow) { const x = rowById(d.fsiderow); if (x && FM.isSide(d.fside)) F({ type: 'setSide', row: x.id, side: d.fside }); return true; }
     if (d.fseen && r) { F({ type: 'seen', row: r.id, on: !r.seen }); return true; }
+    if (d.fgun) { const x = rowById(d.fgun); if (x) F({ type: 'firearm', row: x.id, on: !x.gun }); return true; }
     if (d.fout && r) { F({ type: 'out', row: r.id, on: !r.out }); return true; }
     if (d.flr && r) { F({ type: 'counter', row: r.id, kind: 'lr', value: r.lr > 0 ? r.lr - 1 : r.lrMax }); return true; }
     if (d.fla) { const [rid, n] = split(d.fla); const x = rowById(rid); if (x) F({ type: 'counter', row: x.id, kind: 'la', value: x.la - Number(n) }); return true; }
@@ -799,14 +904,28 @@
     return false;
   }
 
-  // The stat boxes: which key each is, and what it takes. An empty box clears the number.
+  // The stat boxes: which key each is, and what it takes. An empty box clears the number. The row's: initiative (with
+  // the system's decimals: GURPS's 5.25), max HP, AC, and a pool's max (GURPS's FP); the panel's (rules.panelBoxes),
+  // one per figure setStat takes (`stat`), each `data-fs-<key>`: a number, Speed with two places, Build signed, DR and
+  // DB words or a number.
   const STAT = {
     fini: { k: 'data-fini', ok: /^-?\d{1,3}$/ },
     fmax: { k: 'data-fmax', ok: /^\d{1,4}$/ },
     fac: { k: 'data-fac', ok: /^\d{1,4}$/ },
+    ffpmax: { k: 'data-ffpmax', ok: /^\d{1,4}$/, stat: 'fp' },
   };
+  const PANEL_OK = { speed: /^\d{1,2}(?:\.\d{1,2})?$/, build: /^[+-]?\d{1,2}$/, db: /^\S.{0,39}$/, dr: /^\S.{0,39}$/ };
+  // `data-fs-dex` is `dataset.fsDex`
+  function boxStat(key) { return `fs${String(key).charAt(0).toUpperCase()}${String(key).slice(1)}`; }
+  for (const key of PANEL_KEYS) {
+    STAT[boxStat(key)] = { k: `data-fs-${key}`, ok: PANEL_OK[key] || /^\d{1,3}$/, stat: key, panel: true, words: key === 'db' || key === 'dr', decimal: key === 'speed' };
+  }
+  const initPlaces = () => { const n = rules().initDecimals; return isNum(n) && n > 0 ? Math.floor(n) : 0; };
+  // initiative takes the system's decimals (GURPS's 5.25), never more
+  const okOf = (f) => (f === 'fini' && initPlaces() ? new RegExp(`^-?\\d{1,3}(?:\\.\\d{1,${initPlaces()}})?$`) : STAT[f].ok);
   const FIELD = { fini: 'ini', fmax: 'max', fac: 'ac' };
-  const shown = (r, f) => String(isNum(r[FIELD[f]]) ? r[FIELD[f]] : '');
+  const fieldOf = (f) => FIELD[f] || Fight.STAT_FIELDS[STAT[f].stat][0];
+  const shown = (r, f) => shownFigure(r[fieldOf(f)]);
   const statOf = (t) => { const d = (t && t.dataset) || {}; for (const f of Object.keys(STAT)) if (d[f] !== undefined) return f; return null; };
 
   // Words that are not a number mark the box and stay in it; the state is unchanged, and focus is never
@@ -828,14 +947,21 @@
     syncLine2(id);
   }
 
-  // A stat box sends its number, when it changed: initiative, max HP or AC. False for words that are not one.
+  // A stat box sends its number, when it changed: initiative, max HP, AC, or a figure setStat takes. False for words
+  // that are not one.
   function commitStat(t) {
     const f = statOf(t);
     const r = f && rowById(t.dataset[f]);
     if (!r) return true;
     const v = t.value.trim();
-    if (v !== '' && !STAT[f].ok.test(v)) { markBad(t, f, true); return false; }
+    if (v !== '' && !okOf(f).test(v)) { markBad(t, f, true); return false; }
     markBad(t, f, false);
+    if (STAT[f].stat) {
+      // a figure for setStat: a number where it is one (`+1` is 1), else the words (DR's `2 (face 0)`, DB's `+1D4`)
+      const value = v === '' ? null : /^[+-]?\d+(?:\.\d+)?$/.test(v) ? Number(v) : v;
+      if (shownFigure(value) !== shown(r, f)) F({ type: 'setStat', row: r.id, key: STAT[f].stat, value });
+      return true;
+    }
     const n = v === '' ? null : Number(v);
     if (f === 'fini' && n !== (isNum(r.ini) ? r.ini : null)) F({ type: 'setInit', row: r.id, ini: n });
     if (f === 'fmax' && n !== r.max) F({ type: 'setMax', row: r.id, max: n });
@@ -846,8 +972,9 @@
   // Where Tab goes from a stat box, by row id and field, found in the order as it stands before the commit,
   // so a row the commit re-places (an initiative after Start) never moves the target:
   // - an initiative box walks down the initiative column (spec §6.4 C2, as in 5b);
-  // - max HP goes to the same row's AC, and AC to the next row's max HP (review F4).
-  // Shift reverses both. Past either end: null, and Tab leaves the boxes as it does anywhere.
+  // - max HP goes to the same row's AC (GURPS: its max FP), and that to the next row's max HP (review F4);
+  // - a panel box goes to the next box of the panel, in the system's order (rules.panelBoxes).
+  // Shift reverses each. Past either end: null, and Tab leaves the boxes as it does anywhere.
   function tabTarget(t, f, back) {
     const id = t.dataset[f];
     const col = (k) => Array.from(document.querySelectorAll(`[${k}]`), (b) => b.getAttribute(k));
@@ -856,11 +983,21 @@
       const to = ids[ids.indexOf(id) + (back ? -1 : 1)];
       return to === undefined ? null : attr('data-fini', to);
     }
+    if (STAT[f].panel) {
+      const boxes = Array.from(document.querySelectorAll('#acting .pbox'));
+      const to = boxes[boxes.indexOf(t) + (back ? -1 : 1)];
+      const tf = to && statOf(to);
+      return tf ? attr(STAT[tf].k, id) : null;
+    }
+    // max HP's partner on the row: AC (D&D) or the pool's max (GURPS's FP)
+    const pair = (rid) => ['data-fac', 'data-ffpmax'].find((k) => document.querySelector(attr(k, rid)));
     const rows = col('data-fmax');
     const i = rows.indexOf(id);
     if (f === 'fmax') {
-      if (!back) return document.querySelector(attr('data-fac', id)) ? attr('data-fac', id) : null;
-      return i > 0 ? attr('data-fac', rows[i - 1]) : null;
+      if (!back) { const k = pair(id); return k ? attr(k, id) : null; }
+      if (i <= 0) return null;
+      const k = pair(rows[i - 1]);
+      return attr(k || 'data-fmax', rows[i - 1]);
     }
     if (back) return attr('data-fmax', id);
     return i >= 0 && i + 1 < rows.length ? attr('data-fmax', rows[i + 1]) : null;
@@ -909,7 +1046,7 @@
     if (ev.key !== 'Enter') return;
     if (d.fhp !== undefined) {
       ev.preventDefault();
-      if (!FM.parseEntry(t.value, FM.rulesOf(state().fight))) { t.setCustomValidity(INVALID); t.reportValidity(); return; }
+      if (!FM.parseEntry(t.value, FM.rulesOf(state().fight))) { t.setCustomValidity(words().entryInvalid || INVALID); t.reportValidity(); return; }
       const entry = t.value;
       t.value = '';
       markPending(t);
@@ -940,7 +1077,7 @@
   // (or the 21) instead of making 13 (or 291). A focus handler alone is undone by the press's own caret
   // (review F6), so a box this press focused selects again on the release.
   // A press on a box that already has focus selects too, unless the press dragged out a selection of its own.
-  const NUMBER_BOX = '[data-fini], [data-fmax], [data-fac], #fAddCount';
+  const NUMBER_BOX = '[data-fini], [data-fmax], [data-fac], [data-ffpmax], #acting .pbox, #fAddCount';
   let pressed = null;
   document.addEventListener('pointerdown', (ev) => {
     const b = ev.target.closest && ev.target.closest(NUMBER_BOX);

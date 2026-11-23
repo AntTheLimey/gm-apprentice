@@ -299,6 +299,9 @@ ol.to input.hpin { width: 4.2rem; text-align: left; }
 ol.to .hpv, ol.to .acv { font: 650 .8rem var(--mono); white-space: nowrap; }
 ol.to .hpv input { width: 2.6rem; }
 ol.to .acv input { width: 2.3rem; margin-left: 2px; }
+/* CoC and GURPS rows (step 6b Task 7): FP now/[max], MP · SAN (the entry box takes its placeholder's width) */
+ol.to .fpv input { width: 2.3rem; }
+ol.to .pools { font: 600 .74rem var(--mono); color: var(--muted); white-space: nowrap; }
 ol.to input[aria-invalid="true"], ol.to input.pending { outline: 2px solid var(--bad); outline-offset: 1px; }
 /* a row's second line (gm-fight.js syncLine2): a box's words and the statuses the row has no room for; it wraps, and
    the order's least width never counts it */
@@ -313,6 +316,7 @@ ol.to button { font-size: .72rem; padding: 0 4px; line-height: 1.5; }
 .tg.on { background: var(--ice); color: var(--panel); border-color: var(--ice); }
 .chip { font: 500 .68rem var(--mono); padding: 0 4px; border: 1px solid var(--bad); color: var(--bad); border-radius: 4px; background: transparent; white-space: nowrap; }
 .chip.auto { border-color: var(--lamp); color: var(--lamp); }
+.chip.auto.mark { border-color: var(--bad); color: var(--bad); font-weight: 650; }
 .cnt { font: 500 .7rem var(--mono); white-space: nowrap; }
 .cnt.spent { opacity: .55; text-decoration: line-through; }
 ol.to .ds { font: 500 .7rem var(--mono); white-space: nowrap; }
@@ -323,6 +327,19 @@ ol.to .ds { font: 500 .7rem var(--mono); white-space: nowrap; }
 .act .nums { display: flex; gap: 5px; flex-wrap: wrap; margin: 6px 0; font: 600 .82rem var(--mono); align-items: center; }
 .act .nums > span { border: 1px solid var(--line); border-radius: 5px; padding: 0 6px; background: var(--bg); }
 .act .nums .bl { color: var(--lamp); border-color: var(--lamp); }
+.act .nums .mk { color: var(--bad); border-color: var(--bad); }
+/* the panel's boxes (rules.panelBoxes) and GURPS's mark track */
+.act .pboxes { display: flex; flex-wrap: wrap; gap: 4px 10px; margin: 6px 0; }
+.act .pb { display: inline-flex; align-items: center; gap: 3px; font: 500 .72rem var(--mono); }
+.act .pb .lab { color: var(--muted); }
+.act .pb input { width: 3rem; font: 600 .8rem var(--mono); padding: 1px 3px; text-align: center; }
+.act .pb input[data-fs-db], .act .pb input[data-fs-dr] { width: 4.6rem; }
+.act .pb input[aria-invalid="true"] { outline: 2px solid var(--bad); outline-offset: 1px; }
+.act .pb .from { color: var(--muted); font-size: .66rem; }
+.act .mtrack { list-style: none; display: flex; flex-wrap: wrap; gap: 3px; margin: 4px 0 6px; padding: 0; font: 600 .72rem var(--mono); }
+.act .mtrack li { border: 1px dashed var(--line); border-radius: 4px; padding: 0 5px; color: var(--muted); }
+.act .mtrack li.lit { border-style: solid; border-color: var(--bad); color: var(--bad); }
+.act .mtrack li.deep { background: var(--bad); color: var(--panel); }
 .act .nums .st { color: var(--bad); border: 1px solid var(--bad); border-radius: 5px; padding: 0 6px; background: var(--bg); font: inherit; }
 .act .nums.ctr button { font-size: .75rem; padding: 1px 6px; }
 .act .stats { font-size: .9rem; border-top: 1px solid var(--line); margin-top: 6px; padding-top: 4px; }

@@ -490,12 +490,13 @@ describe('the GM page runs a fight', { skip: browserSkip() }, () => {
     });
   });
 
+  // Changed on purpose in step 6b Task 7: this used CoC, which now fights; PF2e has no fight rows yet.
   it('a system with no fight rows yet has no Fight button; no script errors', async () => {
     const run = await start({ edit: (v) => {
       const f = path.join(v, '_meta', 'vault-config.yaml');
-      fs.writeFileSync(f, lf(fs.readFileSync(f, 'utf8')).replace('system: dnd-5e-2024', 'system: coc-7e'));
+      fs.writeFileSync(f, lf(fs.readFileSync(f, 'utf8')).replace('system: dnd-5e-2024', 'system: pf2e'));
     } });
-    assert.strictEqual(run.model.system, 'coc-7e');
+    assert.strictEqual(run.model.system, 'pf2e');
     await withPage({ width: 1449, height: 762 }, async (page) => {
       await page.goto(`${run.base}/?probe=1`);
       await settled(page);

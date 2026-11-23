@@ -2,8 +2,8 @@
 // GURPS 4e for the run sheet: a foe's HP, FP, Basic Speed, ST, DX, HT, Dodge and DR from any of the five block
 // shapes real vaults use (step 6b Task 4). A block may hold very little (a campaign with no NPC numbers at all), so
 // HP comes from ST, FP from HT and Basic Speed from DX and HT when the block lacks them, each marked; the sums live
-// once in web/gurps-math.js. Names and numbers only. Fights stay off until Task 7; `describe()` is D&D's shape
-// with GURPS's values for what is known so far.
+// once in web/gurps-math.js. Names and numbers only. It fights (Task 7): `describe()` is D&D's shape with
+// GURPS's values for what is known so far.
 
 const path = require('node:path');
 const { dnd, describeAs } = require('./dnd');
@@ -109,11 +109,10 @@ function readPc({ body, fm }) {
   }
 }
 
-// Placeholders until later tasks fill them in: `panelBoxes`, `rowNumbers`, `vitals`, `words`, `statuses`, `marks`,
-// `prompts`, `pools`, `wounding`, `consequences`, `defences`, `manoeuvres`, `tiredAt`, `firearmBonus` keep D&D's
-// shape (GURPS-safe empties where D&D words would show).
+// Placeholders until later tasks fill them in: `vitals`, `prompts`, `wounding`, `consequences`, `defences`,
+// `manoeuvres`, `firearmBonus` keep D&D's shape (GURPS-safe empties where D&D words would show).
 function describeGurps(id) {
-  const r = describeAs(id, 'GURPS 4e', false);
+  const r = describeAs(id, 'GURPS 4e', true);
   // The order is Basic Speed, set at the start (B363); HP goes below 0. Marks are names and numbers for
   // fight-math's marksOf: Reeling (B419) by `part` of max HP, 0 or less (B419), and the minus-HP lines (B419)
   // by `times` max HP. Tired (B426) by `part` of max FP; FP's floor (B426) by `floorTimes` its max.
@@ -132,15 +131,25 @@ function describeGurps(id) {
   r.toggles = { ...r.toggles, half: false, resisted: false, temp: false, deathSaves: false, concentration: false, exhaustion: false, counters: false, longRest: false };
   // Reeling and Shock are marks, set by the fight itself, so neither is in the list
   r.statuses = ['Stunned', 'Prone', 'Kneeling', 'Unconscious', 'Mortal wound'];
-  r.panelBoxes = [];
-  r.rowNumbers = [];
-  r.words = { ...r.words, hp: 'HP', ac: '', temp: '', initiative: 'Basic Speed', longRest: '', advancement: '' };
+  // the acting panel's boxes, in Tab order (the one list, Task 7 [P-C19]); `readout` ones are shown beside HP too.
+  // HP max and FP max are on the row.
+  r.panelBoxes = [
+    { key: 'st', label: 'ST' }, { key: 'ht', label: 'HT' }, { key: 'dx', label: 'DX' }, { key: 'speed', label: 'Speed', readout: true },
+    { key: 'dodge', label: 'Dodge', readout: true }, { key: 'parry', label: 'Parry' }, { key: 'block', label: 'Block' }, { key: 'dr', label: 'DR' },
+  ];
+  // the row's own figures: initiative (Basic Speed), HP now/[max], FP now/[max]
+  r.rowNumbers = ['ini', 'hp', 'max', 'fp', 'fpMax'];
+  r.words = {
+    ...r.words, hp: 'HP', ac: '', temp: '', initiative: 'Basic Speed', initBox: 'Spd', longRest: '', advancement: '', bloodied: '',
+    entryPlaceholder: '-7 / +3 / f-2',
+    entryInvalid: 'Type -7 or 7 (damage), +3 (healing) or f-2 (FP)',
+  };
   return r;
 }
 
 // The row's own fields: initiative is Basic Speed.
 const foeRow = (n) => ({ init: n.speed, fp: n.fp, fpMax: n.fp, speed: n.speed, dx: n.dx, st: n.st, ht: n.ht, dodge: n.dodge, dr: n.dr, from: n.from });
 
-const gurps = { ...dnd, id: 'gurps-4e', fights: false, readFoe, readPc, foeRow, stockNoActions: undefined, describe: () => describeGurps('gurps-4e') };
+const gurps = { ...dnd, id: 'gurps-4e', fights: true, readFoe, readPc, foeRow, stockNoActions: undefined, describe: () => describeGurps('gurps-4e') };
 
 module.exports = { gurps, readNumbers, keyOf, lacks };

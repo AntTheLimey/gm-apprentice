@@ -82,11 +82,14 @@ for (const crlf of [false, true]) {
       const w = foesOf(`${NPCS}Warden Hale.md`, index, 1, 'k', new Set(), null, null, systemFor('coc-7e')).foes[0];
       assert.deepEqual([w.init, w.dex, w.armour], [50, 50, 'none']);
     });
-    it('CoC and Regency are CoC; fights stay off', () => {
+    it('CoC and Regency are CoC, and fight (Task 7)', () => {
       for (const [id, label] of [['coc-7e', 'Call of Cthulhu 7e'], ['coc-7e-regency', null]]) {
         const d = systemFor(id).describe();
         assert.equal(d.family, 'coc');
-        assert.equal(d.fights, false);
+        assert.equal(d.fights, true);
+        assert.equal(d.toggles.gun, true);
+        assert.deepEqual(d.panelBoxes.map((b) => b.label), ['DEX', 'MP', 'SAN', 'Fighting', 'Firearms', 'Dodge', 'DB', 'Armour', 'Build', 'Attacks']);
+        assert.equal(d.words.entryPlaceholder, '-7 / +3 / m-2 / s-5');
         assert.equal(d.initiative, 'dex');
         assert.equal(d.initDecimals, 0);
         assert.equal(d.hpFloor, 0);

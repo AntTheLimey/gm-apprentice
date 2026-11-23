@@ -12,6 +12,7 @@ const { listSessions, pickSession } = require('../lib/run-sheet/sessions');
 const { browserSkip } = require('./helpers/browser');
 const { withPage } = require('./helpers/cdp');
 const { findChrome } = require('../lib/chrome');
+const { sane } = require('./helpers/fight-layout');
 
 const PAGE = `<!doctype html><meta charset="utf-8"><body style="margin:0">
 <button id="b" style="position:absolute;left:40px;top:40px;width:120px;height:40px">go</button>
@@ -383,19 +384,7 @@ describe('the fight: adding anyone, by real input', { skip: browserSkip() }, () 
 // comes from another window's actions or from the page's own storage, never from a synthetic event.
 const WYRM = 'Creatures/Glacier Wyrm.md';
 const SIZES = [[1449, 762], [1280, 762], [1100, 762]];
-// What every layout test holds: no row clipped, no sideways scroll, the probe's layout fields there.
-function sane(p, where = '') {
-  const l = p.layout;
-  assert.ok(l, `${where}: a layout in the probe`);
-  for (const k of ['railW', 'sheetW', 'paneTop']) assert.strictEqual(typeof l[k], 'number', `${where}: layout.${k}`);
-  for (const k of ['folded', 'pvOpen']) assert.strictEqual(typeof l[k], 'boolean', `${where}: layout.${k}`);
-  assert.ok(l.grip && typeof l.grip.shown === 'boolean', `${where}: layout.grip`);
-  assert.ok('pvTop' in l && 'pvBottom' in l && 'cutTop' in l, `${where}: layout.pvTop, pvBottom, cutTop`);
-  const over = (l.rows || []).filter((r) => r.over);
-  assert.deepStrictEqual(over.map((r) => r.name), [], `${where}: rows clipped`);
-  assert.strictEqual(l.wide, false, `${where}: the page scrolls sideways`);
-  assert.deepStrictEqual(p.errors, [], `${where}: script errors`);
-}
+// What every layout test holds (no row clipped, no sideways scroll, the probe's layout fields there): helpers/fight-layout.js.
 // Both PCs to beat 1 (or `at`), then Fight on beat `on` (default the first), by real clicks.
 async function fightAt(page, run, { at = 0, on = 0 } = {}) {
   await page.goto(`${run.base}/?probe=1`);

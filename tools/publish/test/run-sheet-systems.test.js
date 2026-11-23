@@ -106,14 +106,14 @@ describe('run sheet systems', () => {
     assert.equal(systemFor(null).fights, true);
     assert.equal(systemFor(undefined).describe().fights, true);
     assert.equal(systemFor(null).describe().family, 'dnd');
-    // CoC and GURPS have system modules but fights stay off until Task 7: no Fight button, as on main; nor PF2e, FitD or an
-    // unknown system
-    for (const [raw, id] of [['coc', 'coc-7e'], ['coc-7e', 'coc-7e'], ['coc-7e-regency', 'coc-7e-regency'],
-      ['regency-cthulhu', 'coc-7e-regency'], ['gurps4e', 'gurps-4e'], ['gurps-4e', 'gurps-4e'], ['pf2e', 'pf2e'],
-      ['pathfinder', 'pf2e'], ['fitd', 'fitd'], ['blades', 'fitd'], ['nonsense', null], ['', null]]) {
+    // CoC (Regency too) and GURPS fight since Task 7, which built their rows and panel; PF2e, FitD and an unknown
+    // system have no Fight button, as on main
+    for (const [raw, id, fights] of [['coc', 'coc-7e', true], ['coc-7e', 'coc-7e', true], ['coc-7e-regency', 'coc-7e-regency', true],
+      ['regency-cthulhu', 'coc-7e-regency', true], ['gurps4e', 'gurps-4e', true], ['gurps-4e', 'gurps-4e', true], ['pf2e', 'pf2e', false],
+      ['pathfinder', 'pf2e', false], ['fitd', 'fitd', false], ['blades', 'fitd', false], ['nonsense', null, false], ['', null, false]]) {
       const sys = systemFor(raw);
-      assert.equal(sys.fights, false, raw);
-      assert.equal(sys.describe().fights, false, raw);
+      assert.equal(sys.fights, fights, raw);
+      assert.equal(sys.describe().fights, fights, raw);
       assert.equal(sys.describe().id, id, raw);
     }
   });
@@ -168,7 +168,7 @@ describe('run sheet systems', () => {
     assert.equal(seen, Object.keys(MAIN).length);
   });
 
-  it('the model carries its system\'s rules: D&D fights, CoC and GURPS not yet', () => {
+  it('the model carries its system\'s rules: D&D, CoC and GURPS fight', () => {
     const m = readRunSheet(path.join(FIXTURES, 'run-sheet-app'), 'Chapters/Chapter 1/Sessions/Session 02/Session 02 - The Test - Plan.md');
     assert.deepEqual(m.rules, systemFor(m.system).describe());
     assert.equal(m.rules.fights, true);
@@ -176,7 +176,10 @@ describe('run sheet systems', () => {
       const dir = copyFixture(fx);
       try {
         const at = `Chapters/Chapter 1/Sessions/Session 01/${plan}`;
-        assert.equal(readRunSheet(dir, at).rules.fights, false, fx);
+        // Task 7 turned CoC and GURPS fights on (they were off until then)
+        assert.equal(readRunSheet(dir, at).rules.fights, true, fx);
+        withSystem(dir, 'pf2e');
+        assert.equal(readRunSheet(dir, at).rules.fights, false, `${fx} as pf2e`);
         withSystem(dir, 'dnd');
         assert.equal(readRunSheet(dir, at).rules.fights, true, `${fx} as dnd`);
       } finally { removeFixture(dir); }
