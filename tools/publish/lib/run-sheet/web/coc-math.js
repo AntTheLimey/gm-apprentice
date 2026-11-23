@@ -173,7 +173,122 @@
     return `${head}: ${tail}.`;
   }
 
+  // ---- damage (Task 17): the dice and the damage bonus, armour, the Extreme hit's maximum ----
+  // The damage bonus's settings (KR p108, p408): full for melee, half for thrown weapons and bows, none for firearms
+  // and crossbows. What an exchange's kind starts the box at: Task 19's shot is 'shot'.
+  const DB_MODES = ['full', 'half', 'none'];
+  const DB_WORDS = { full: 'full DB', half: 'half DB', none: 'no DB' };
+  const DB_OF_KIND = { melee: 'full', thrown: 'half', shot: 'none' };
+  const dbModeOf = (kind) => DB_OF_KIND[kind] || 'full';
+
+  // A row's DB as a term to add: '+1D4', '-1', '' for none (0, `none`, a dash, or no figure); null when it is
+  // neither one die group nor a whole number (the GM types it in the panel).
+  function dbTerm(v) {
+    if (v === null || v === undefined) return '';
+    if (isNum(v)) { const n = Math.trunc(v); return n > 0 ? `+${n}` : n < 0 ? `-${-n}` : ''; }
+    const t = String(v).replace(/\s+/g, '').replace(/\u2212/g, '-');
+    if (t === '' || /^(?:none|n\/a|[-\u2013\u2014])$/i.test(t)) return '';
+    let m = /^([+-]?)(\d+)$/.exec(t);
+    if (m) { const n = Number(m[2]); return n ? `${m[1] === '-' ? '-' : '+'}${n}` : ''; }
+    m = /^([+-]?)(\d*)d(\d+)$/i.exec(t);
+    if (!m) return null;
+    const count = m[2] === '' ? 1 : Number(m[2]);
+    const sides = Number(m[3]);
+    if (count < 1 || sides < 2) return null;
+    return `${m[1] === '-' ? '-' : '+'}${count}D${sides}`;
+  }
+  // Half a DB term: a number halved toward 0; dice by half the count when it is even (+2D6 is +1D6), else half the
+  // sides (+1D4 is +1D2, +1D6 is +1D3).
+  function halfTerm(term) {
+    if (!term) return '';
+    let m = /^([+-])(\d+)$/.exec(term);
+    if (m) { const n = Math.floor(Number(m[2]) / 2); return n ? `${m[1]}${n}` : ''; }
+    m = /^([+-])(\d+)D(\d+)$/.exec(term);
+    if (!m) return term;
+    const count = Number(m[2]);
+    const sides = Number(m[3]);
+    if (count % 2 === 0) return `${m[1]}${count / 2}D${sides}`;
+    return `${m[1]}${count}D${Math.max(2, Math.floor(sides / 2))}`;
+  }
+
+  // What the server rolls for an entry (fight-math parseEntry's CoC dice: { dice, db }): the weapon's dice, and the
+  // attacker's DB put in where the entry says DB, by the setting, so the server only ever sees dice notation.
+  // { notation, weapon, db }, or { error: 'attacker' } (DB with no attacker) or { error: 'db', db } (a DB that is
+  // not dice or a number); null for an entry that is not dice.
+  function damageRoll(e, attacker, mode = 'full') {
+    if (!e || typeof e.dice !== 'string' || !e.dice) return null;
+    const weapon = e.dice.toUpperCase();
+    if (!e.db) return { notation: weapon, weapon, db: '' };
+    if (!attacker) return { error: 'attacker' };
+    const term = dbTerm(attacker.db);
+    if (term === null) return { error: 'db', db: attacker.db };
+    const db = mode === 'none' ? '' : mode === 'half' ? halfTerm(term) : term;
+    return { notation: `${weapon}${db}`, weapon, db };
+  }
+
+  // A damage roll as the server answers it (lib/dice rollDamage, or maxRoll's), for this notation, its sum holding.
+  const sum = (list) => list.reduce((a, b) => a + b, 0);
+  const rollOk = (x, notation) => Boolean(x) && typeof x === 'object' && x.notation === notation && Array.isArray(x.dice)
+    && x.dice.length > 0 && x.dice.every(Number.isInteger) && Number.isInteger(x.mod) && Number.isInteger(x.total)
+    && x.total >= 0 && x.total <= 9999 && x.total === Math.max(0, sum(x.dice) + x.mod);
+  const minus = (n) => (n < 0 ? `\u2212${-n}` : String(n));
+  // "4+2 = 6", "1\u22122 = 0", "3" (one face, no number: nothing to add)
+  function sumText(x) {
+    const faces = x.dice.map((d, i) => (i && d >= 0 ? `+${d}` : minus(d))).join('') + (x.mod > 0 ? `+${x.mod}` : x.mod < 0 ? minus(x.mod) : '');
+    return faces === String(x.total) ? faces : `${faces} = ${x.total}`;
+  }
+
+  // A hit (Task 17): its total, the target's armour off (KR p108), never below 0 (HP's floor is the reducer's, KR
+  // p120), with the working line: "1D6+1D4 = 4+2 = 6 \u2212 armour 1 = 5". `e` is parseEntry's. `opts`:
+  // - `roll`: the server's roll of damageRoll's notation (with `mode`, the DB setting); for `extreme`, maxRoll's,
+  //   and `extra` the weapon's own roll when it impales;
+  // - `asRolled`: a bare number is the total as rolled (a box an exchange opened), so armour comes off it.
+  // { total, armour, damage, line, notation }, or null when the roll is not this entry's or a bare number is raw.
+  function cocDamage(e, attacker, target, opts = {}) {
+    if (!e || e.pool !== 'hp' || e.kind !== 'damage') return null;
+    const armour = target && isNum(target.armour) && target.armour > 0 ? Math.floor(target.armour) : 0;
+    let total;
+    let line;
+    let notation = null;
+    if (!e.dice) {
+      if (!opts.asRolled || !isNum(e.n)) return null;
+      total = e.n;
+      line = String(e.n);
+    } else {
+      const spec = damageRoll(e, attacker, DB_MODES.includes(opts.mode) ? opts.mode : 'full');
+      if (!spec || spec.error) return null;
+      notation = spec.notation;
+      const x = opts.roll;
+      if (!rollOk(x, spec.notation) || Boolean(opts.extreme) !== (x.max === true)) return null;
+      if (opts.extreme && opts.extra) {
+        const y = opts.extra;
+        if (!rollOk(y, spec.weapon) || y.max) return null;
+        total = x.total + y.total;
+        line = `Extreme, impaling: ${spec.notation} at max = ${sumText(x)}, +${spec.weapon} = ${sumText(y)}: ${total}`;
+      } else if (opts.extreme) {
+        total = x.total;
+        line = `Extreme: ${spec.notation} at max = ${sumText(x)}`;
+      } else {
+        total = x.total;
+        line = `${spec.notation} = ${sumText(x)}`;
+      }
+    }
+    const damage = Math.max(0, total - armour);
+    if (armour) line += ` \u2212 armour ${armour} = ${damage}`;
+    return { total, armour, damage, line, notation };
+  }
+
+  // Whether a hit offers the Extreme maximum (KR p103, p405, p408): the attacking side's own hit, on its own turn, at
+  // Extreme or better; never the defender's (fighting back). A very long shot only on a critical, the 01 (KR p112).
+  // `x`: { side: 'attacker' | 'defender', onTurn, level, veryLong }.
+  function extremeOffer(x) {
+    if (!x || x.side !== 'attacker' || !x.onTurn || !isLevel(x.level)) return false;
+    if (x.veryLong) return x.level === 'critical';
+    return RANK[x.level] >= RANK.extreme;
+  }
+
   return {
+    DB_MODES, DB_WORDS, dbModeOf, dbTerm, halfTerm, damageRoll, cocDamage, extremeOffer,
     topOf, combatOf, TAP_LEVELS, LEVEL_NAMES, RANK, isLevel, levelName, RESPONSES, RESPONSE_WORDS, RESPONSE_NAMES,
     opposedMelee, skillOf, skillName, outnumbered, proneOn, attackDice, defenceAfter, diceOfNet, diceIn, netOf, autoIn, diceText,
     rowNotes, sideIn, sideText, meleeLine, limitOf,

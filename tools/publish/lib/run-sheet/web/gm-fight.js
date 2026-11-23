@@ -61,6 +61,11 @@
     // (row id -> net, bonus above 0; none means the row's own: outnumbered, Prone), cleared when the turn moves; the
     // open exchange ({ fight, turn, target, attacker, response, dice, net, why, byHand, attack, defence, rolling })
     mdice: {}, melee: null, meleeTurn: null,
+    // CoC's damage box (Task 17): the one an exchange opened ({ fight, n, by, on, mode, entry, offer, rolling }), the
+    // last exchange seen (so one closed stays closed), the exchange this page sent (its box takes focus), the row to
+    // focus after the draw; and, page memory for the night, each attacker's and group's last entry and each weapon's
+    // impaling toggle (off unless tapped)
+    dmg: null, dmgSeen: null, dmgMine: null, dmgFocus: null, lastDmg: {}, impale: {},
   };
 
   const model = () => RP.model();
@@ -380,11 +385,12 @@
       if (ui.bad[badKey(STAT[f].k, id)]) out.push(`<span class="badnum" role="status" data-badfor="${f}" title="${esc(statName(f))}">${BAD_NUMBER}</span>`);
     }
     if (ui.refused[id]) out.push(`<span class="badnum refnum" role="status">${esc(ui.refused[id].why)}</span>`);
-    else if (ui.pending[id]) out.push(`<span class="pendnum" role="status" title="Damage or healing typed, not applied yet">${PENDING}</span>`);
+    else if (ui.pending[id] && !(ui.dmg && ui.dmg.on === id)) out.push(`<span class="pendnum" role="status" title="Damage or healing typed, not applied yet">${PENDING}</span>`);
     // the last hit's working (GURPS, Task 12): one line, clipped, all of it in the title
     const hit = (rowById(id) || {}).hit;
     if (hit && hit.line) out.push(`<span class="hitline" title="${esc(hit.line)}">${esc(hit.line)}</span>`);
     out.push(meleeLine2(id));
+    out.push(dmgLine2(id));
     const st = (li && li.dataset.l2st) || '';
     if (st) out.push(`<span class="l2st">${st}</span>`);
     return out.join('');
@@ -490,12 +496,13 @@
       const half = ui.area ? !!ui.ahalf[r.id] : r.half;
       // damage typed and left unapplied keeps its words and its mark, "Enter applies" (final review P4.1)
       // as does an entry the row refused (e-3 with no Energy Reserve), its reason on the second line
-      const pend = ui.pending[r.id] || (ui.refused[r.id] && ui.refused[r.id].words);
+      const dmgOn = Boolean(ui.dmg && ui.dmg.on === r.id);
+      const pend = dmgOn ? ui.dmg.entry : ui.pending[r.id] || (ui.refused[r.id] && ui.refused[r.id].words);
       // a caster's box says how a spell is paid (GURPS's `✦ f-3`)
       const ph = (r.caster && w.casterPlaceholder) || w.entryPlaceholder || '-37/+8/t5';
       // with no ½ or Res beside it, the box is as wide as the system's placeholder, so all of it shows
       const wide = tg.half ? '' : ` style="width: calc(${ph.length}ch + 8px)" title="${esc(ph)}"`;
-      h += `<input class="hpin${pend ? ' pending' : ''}" data-fhp="${esc(r.id)}" value="${esc(pend || '')}" placeholder="${esc(ph)}"${wide} autocomplete="off" aria-label="Damage or healing for ${esc(r.gmName)}">`;
+      h += `<input class="hpin${pend && !dmgOn ? ' pending' : ''}${dmgOn ? ' dmg' : ''}" data-fhp="${esc(r.id)}" value="${esc(pend || '')}" placeholder="${esc(dmgOn ? DMG_PLACEHOLDER : ph)}"${wide} autocomplete="off" aria-label="Damage or healing for ${esc(r.gmName)}">`;
       if (tg.half) h += `<button type="button" class="tg ${half ? 'on' : ''}" ${ui.area ? 'data-fahalf' : 'data-fhalf'}="${esc(r.id)}" aria-pressed="${!!half}" title="${ui.area ? 'Half for this area: a save' : 'Half: the next hit only (a save)'}">½</button>`;
       if (tg.resisted) h += `<button type="button" class="tg ${r.resisted ? 'on' : ''}" data-fres="${esc(r.id)}" aria-pressed="${!!r.resisted}" title="Resisted: every hit halved until turned off">Res</button>`;
     }
@@ -859,6 +866,9 @@
     if (!m.attack || !m.defence) { RP.render(); return false; }
     ui.melee = null;
     delete ui.mdice[m.target];
+    // the damage box this exchange opens takes focus here (the reducer counts exchanges in `meleeN`)
+    const f = state().fight;
+    ui.dmgMine = `${m.fight}:${(f && isNum(f.meleeN) ? f.meleeN : 0) + 1}`;
     RP.dispatch({ fight: m.fight, type: 'melee', attacker: m.attacker, defender: m.target, response: m.response, dice: m.dice, auto: m.auto, attack: m.attack, defence: m.defence });
     RP.focusTo(attr('data-fmelee', `${m.target}|${m.response}`));
     return true;
@@ -874,6 +884,150 @@
     RP.render();
     RP.focusTo(attr('data-fmdice', `${rowId}|${delta}`));
   }
+  // ---- CoC's damage box (Task 17): on the row an exchange hit, the attacker's dice and DB, the Extreme maximum ----
+  // A row's group for the remembered entry: an NPC's or creature's note (its group mates, the copies of one entry or
+  // the same creature listed twice, share it), else its foe entry, else the row.
+  const groupKeyOf = (r) => (r.kind !== 'pc' && (r.note || r.foeKey) ? `group:${r.note || r.foeKey}` : `row:${r.id}`);
+  const remembered = (r) => (r ? ui.lastDmg[`row:${r.id}`] || ui.lastDmg[groupKeyOf(r)] || '' : '');
+  function remember(r, entry) {
+    if (!r) return;
+    ui.lastDmg[`row:${r.id}`] = entry;
+    ui.lastDmg[groupKeyOf(r)] = entry;
+  }
+  // the damage box's hint: the attacker's dice, or the total a player rolled (the box is as wide as the system's)
+  const DMG_PLACEHOLDER = '1D6+DB or 7';
+  const DB_TITLES = { full: 'Full DB (melee)', half: 'Half DB (thrown weapons, bows)', none: 'No DB (firearms, crossbows)' };
+  // A weapon's impaling toggle: by the attacker's group and the box's dice, off unless tapped.
+  const weaponOf = (g) => { const e = FM.parseEntry(g.entry, rules().fight || rules()); return e && e.dice ? e.dice.toUpperCase() : ''; };
+  const impaleKey = (g) => { const A = rowById(g.by); return `${A ? groupKeyOf(A) : g.by}|${weaponOf(g)}`; };
+  const impaleOn = (g) => Boolean(ui.impale[impaleKey(g)]);
+  // A new exchange that owes damage opens its box on the row hit, with the attacker's last entry (Enter alone
+  // repeats it) and the DB setting its kind starts at (a shot's none); none owed, or the turn moved on, and it shuts.
+  function syncDmg(f) {
+    const m = cocRules() ? f.melee : null;
+    if (!m) { ui.dmg = null; return; }
+    const key = `${f.id}:${m.n}`;
+    if (ui.dmg && ui.dmg.fight === f.id && ui.dmg.n === m.n) return;
+    ui.dmg = null;
+    if (ui.dmgSeen === key) return;
+    ui.dmgSeen = key;
+    ui.dmg = { fight: f.id, n: m.n, by: m.by, on: m.on, mode: CMath.dbModeOf(m.kind), entry: remembered(rowById(m.by)), offer: Boolean(m.offer), rolling: false };
+    delete ui.pending[m.on];
+    delete ui.refused[m.on];
+    if (ui.dmgMine === key) ui.dmgFocus = m.on;
+    ui.dmgMine = null;
+  }
+  // The box's line: whose damage and their DB, the DB setting, and on an Extreme hit the impaling toggle and its offer.
+  function dmgLine2(id) {
+    const g = ui.dmg;
+    if (!g || g.on !== id) return '';
+    const A = viewRow(g.by);
+    if (!A) return '';
+    const name = A.gmName || A.name;
+    const db = CMath.dbTerm(A.db);
+    const modes = CMath.DB_MODES.map((k) => `<button type="button" class="tg dbm${g.mode === k ? ' on' : ''}" data-fdmgdb="${esc(`${id}|${k}`)}" aria-pressed="${g.mode === k}" title="${esc(DB_TITLES[k])}">${esc(k)}</button>`).join('');
+    let h = `<span class="dmgbox" role="group" aria-label="${esc(`Damage from ${name}`)}"><span>${esc(`${name}'s damage, DB ${db === null ? String(A.db) : db || 'none'}:`)}</span>${modes}`;
+    if (g.offer) {
+      const imp = impaleOn(g);
+      h += `<button type="button" class="tg imp${imp ? ' on' : ''}" data-fdmgimp="${esc(id)}" aria-pressed="${imp}" title="This weapon impales: one more weapon roll on top">impaling</button>`
+        + `<button type="button" class="offer" data-fdmgx="${esc(id)}"${g.rolling ? ' disabled' : ''} title="An Extreme hit on its own turn: maximum damage and DB">Extreme: max</button>`;
+    }
+    return `${h}<button type="button" class="tg dback" data-fdmgclose="${esc(id)}" aria-label="${esc(`Close ${name}'s damage box`)}" title="No damage: close">\u2715</button></span>`;
+  }
+  // The attacker for dice typed cold into a row's box: the row whose panel shows, else the one whose turn it is.
+  function coldAttacker(f, id) {
+    const A = attackerOf(f.rows, f);
+    return A && A.id !== id ? A.id : null;
+  }
+  // Why an entry's dice cannot go to the server (no attacker for its DB, a DB that is not dice or a number); '' when
+  // they can.
+  function dmgRefusal(spec, A) {
+    if (!spec) return words().entryInvalid || INVALID;
+    if (spec.error === 'attacker') return 'DB: whose? Tap the attacker\'s name first';
+    if (spec.error === 'db') return `${viewName(A.id) || A.name}'s DB is not dice or a number: type it in its panel`;
+    return '';
+  }
+  // Enter in a CoC row's box: dice rolled with the attacker's DB, or a bare number in a box an exchange opened (the
+  // total as rolled). False for anything else, which goes the usual way (a bare number typed cold is raw).
+  function cocEnter(t) {
+    const id = t.dataset.fhp;
+    const f = state().fight;
+    if (!f) return false;
+    const g = ui.dmg && ui.dmg.on === id && ui.dmg.fight === f.id ? ui.dmg : null;
+    const entry = t.value.trim();
+    const e = FM.parseEntry(entry, FM.rulesOf(f));
+    if (!e || e.pool !== 'hp' || e.kind !== 'damage' || (!e.dice && !g)) return false;
+    if (g && g.rolling) return true;
+    const by = g ? g.by : coldAttacker(f, id);
+    if (!e.dice) {
+      t.value = '';
+      markPending(t);
+      F({ type: 'hp', row: id, entry, by, exchange: g.n });
+      RP.focusTo(attr('data-fhp', id));
+      return true;
+    }
+    const A = by ? rowById(by) : null;
+    const mode = g ? g.mode : 'full';
+    const spec = CMath.damageRoll(e, A, mode);
+    const why = dmgRefusal(spec, A);
+    if (why) { refuse(t, why); return true; }
+    remember(A, entry);
+    sendDamage(t, { id, g, e, entry, by, mode, spec, asks: [{ damage: spec.notation, floor: 0 }] });
+    return true;
+  }
+  // The Extreme offer, one tap: the box's dice at their maximum with the maximum DB, and with impaling on one more
+  // roll of the weapon's dice (the server's maxRoll and roll). Rolling instead is Enter, as for any hit.
+  function dmgExtreme(id) {
+    const g = ui.dmg;
+    const f = state().fight;
+    const t = document.querySelector(attr('data-fhp', id));
+    if (!f || !g || g.on !== id || !g.offer || g.rolling || !t) return;
+    const entry = t.value.trim();
+    const e = FM.parseEntry(entry, FM.rulesOf(f));
+    if (!e || !e.dice) { refuse(t, 'Extreme: type the weapon\'s dice first, like 1D6+DB'); return; }
+    const A = rowById(g.by);
+    const spec = CMath.damageRoll(e, A, g.mode);
+    const why = dmgRefusal(spec, A);
+    if (why) { refuse(t, why); return; }
+    remember(A, entry);
+    const impale = impaleOn(g);
+    const asks = [{ damage: spec.notation, floor: 0, max: true }].concat(impale ? [{ damage: spec.weapon, floor: 0 }] : []);
+    sendDamage(t, { id, g, e, entry, by: g.by, mode: g.mode, spec, asks, extreme: true });
+  }
+  // The dice out at the server, then the hit to the reducer. A DB that changed while they were out, an exchange that
+  // ended, or a fight that ended: said, never applied; the words go back in the box.
+  function sendDamage(t, x) {
+    const f = state().fight;
+    const { id, g } = x;
+    t.value = '';
+    markPending(t);
+    if (g) g.rolling = true;
+    const back = () => {
+      if (g && ui.dmg === g) { g.rolling = false; g.entry = x.entry; } else ui.pending[id] = x.entry;
+      RP.render();
+      RP.focusTo(attr('data-fhp', id));
+    };
+    roll(x.asks).then((res) => {
+      const now = state().fight;
+      if (!now || !f || now.id !== f.id) { RP.note(`${x.entry} rolled ${res[0].total}, but that fight has ended: not applied.`, { kind: 'bad', id: `roll:late:${x.entry}` }); return; }
+      const A = x.by ? rowById(x.by) : null;
+      const spec = CMath.damageRoll(x.e, A, x.mode);
+      if (!spec || spec.notation !== x.spec.notation) {
+        RP.note(`${(A && viewName(A.id)) || 'The attacker'}'s DB changed while the dice were out: press Enter again.`, { kind: 'bad', id: `dmg:stale:${id}` });
+        back();
+        return;
+      }
+      if (g && !(now.melee && now.melee.n === g.n)) {
+        RP.note(`${x.entry}: that exchange is over (the turn moved on): not applied.`, { kind: 'bad', id: `dmg:over:${id}` });
+        back();
+        return;
+      }
+      if (g && ui.dmg === g) g.rolling = false;
+      F({ type: 'hp', row: id, entry: x.entry, by: x.by, mode: x.mode, roll: res[0], ...(g ? { exchange: g.n } : {}), ...(x.extreme ? { extreme: true, ...(res[1] ? { extra: res[1] } : {}) } : {}) });
+      RP.focusTo(attr('data-fhp', id));
+    }, (err) => { rollFailed(err); back(); });
+  }
+
   // ---- GURPS's cards (Task 13): prompts, one per hit, and a turn's start and end; nothing here decides an outcome ----
   function cardsHTML(f) {
     const C = consequences();
@@ -1048,6 +1202,7 @@
     const f = d.fight;
     const view = f.view;
     syncMelee(f);
+    syncDmg(f);
     let h = '<div class="fview"><div class="fo" id="fOrder"><div class="fotop">';
     h += `<div class="fh"><b>${f.started ? `Round ${esc(f.round)}` : 'Setting up'}</b>`
       // a system that works the order out (CoC's DEX, GURPS's Basic Speed) has nothing to roll
@@ -1211,7 +1366,7 @@
       'data-fun', 'data-fsame', 'data-fside', 'data-fundo', 'data-faddgroup', 'data-faddbeat', 'data-faddpick', 'data-faddnew',
       'data-fspend', 'data-fafter', 'data-fjot', 'data-fight', 'data-fplace', 'data-fcbtn', 'data-fcardpick', 'data-fcardht', 'data-fshock',
       'data-fshockset', 'data-fdef', 'data-fpdef', 'data-fretreat', 'data-fman', 'data-fmand', 'data-fmanrow',
-      'data-fmelee', 'data-fmdice', 'data-fmlvl', 'data-fmx', 'data-fmout', ...PANEL_KEYS.map((k) => `data-fs-${k}`)],
+      'data-fmelee', 'data-fmdice', 'data-fmlvl', 'data-fmx', 'data-fmout', 'data-fdmgdb', 'data-fdmgimp', 'data-fdmgx', 'data-fdmgclose', ...PANEL_KEYS.map((k) => `data-fs-${k}`)],
     // Fight here on a place tile or a place's drawer (plan 6a Task 7); nothing while a fight runs
     placeButtons(note) {
       if (!allowed() || state().fight || !(model().placeKeys || {})[note]) return '';
@@ -1259,7 +1414,12 @@
     },
     click(ev) { return onClick(ev); },
     // after every layout pass (gm.js applyLayout): the rows' status strips fit their room
-    afterLayout() { fitChips(); showNewCards(); },
+    afterLayout() {
+      fitChips();
+      showNewCards();
+      // a damage box this page's exchange opened takes focus, after the redraw has put focus back where it was
+      if (ui.dmgFocus) { const id = ui.dmgFocus; ui.dmgFocus = null; setTimeout(() => RP.focusTo(attr('data-fhp', id)), 0); }
+    },
     probe() {
       const d = RP.derived();
       const out = { fight: null, after: d.afterFight, layout: layout() };
@@ -1287,6 +1447,7 @@
             meleeDice: (() => { const e = document.querySelector(`li[data-frow="${CSS.escape(r.id)}"] .mdn`); return e ? e.textContent : null; })(),
           })),
           melee: ui.melee ? { target: ui.melee.target, attacker: ui.melee.attacker, response: ui.melee.response, rolling: ui.melee.rolling, net: ui.melee.net } : null,
+          dmg: ui.dmg ? { on: ui.dmg.on, by: ui.dmg.by, mode: ui.dmg.mode, entry: ui.dmg.entry, offer: ui.dmg.offer, rolling: ui.dmg.rolling, impale: impaleOn(ui.dmg) } : null,
         };
       }
       return out;
@@ -1391,6 +1552,10 @@
     if (d.fmdice) { const [rid, n] = split(d.fmdice); meleeDice(rid, Number(n)); return true; }
     if (d.fmlvl) { const parts = d.fmlvl.split('|'); const level = parts.pop(); const side = parts.pop(); meleeTap(parts.join('|'), side, level); return true; }
     if (d.fmx) { const m = ui.melee; ui.melee = null; RP.render(); if (m) RP.focusTo(attr('data-fmelee', `${m.target}|${m.response}`)); return true; }
+    if (d.fdmgdb) { const [rid, k] = split(d.fdmgdb); if (ui.dmg && ui.dmg.on === rid && CMath.DB_MODES.includes(k)) ui.dmg.mode = k; RP.render(); RP.focusTo(attr('data-fhp', rid)); return true; }
+    if (d.fdmgimp) { const g = ui.dmg; if (g && g.on === d.fdmgimp) { const k = impaleKey(g); ui.impale[k] = !ui.impale[k]; } RP.render(); RP.focusTo(attr('data-fhp', d.fdmgimp)); return true; }
+    if (d.fdmgx) { dmgExtreme(d.fdmgx); return true; }
+    if (d.fdmgclose) { if (ui.dmg && ui.dmg.on === d.fdmgclose) ui.dmg = null; RP.render(); RP.focusTo(attr('data-fhp', d.fdmgclose)); return true; }
     if (d.fmout) { const x = rowById(d.fmout); if (x) F({ type: 'outnumbered', row: x.id, off: !x.outnumberedOff }); RP.focusTo(attr('data-fmout', d.fmout)); return true; }
     if (d.fface) { const x = rowById(d.fface); if (x) F({ type: 'faceOpen', row: x.id, on: !x.faceOpen }); return true; }
     const id = d.ftick || d.fsel || d.fahalf || d.fhalf || d.fres || d.fseen || d.fout || d.flr;
@@ -1479,6 +1644,8 @@
     const v = t.value;
     // a refused entry stays refused while its words are in the box; any change clears the reason
     if (ui.refused[id] && ui.refused[id].words !== v) delete ui.refused[id];
+    // the damage box an exchange opened holds its entry as the box's own, never as damage left unapplied
+    if (ui.dmg && ui.dmg.on === id) { ui.dmg.entry = v; delete ui.pending[id]; t.classList.remove('pending'); syncLine2(id); return; }
     if (v.trim() && !ui.refused[id]) ui.pending[id] = v; else delete ui.pending[id];
     t.classList.toggle('pending', Boolean(v.trim()));
     syncLine2(id);
@@ -1591,6 +1758,8 @@
     }
     if (d.fhp !== undefined) {
       ev.preventDefault();
+      // CoC's damage (Task 17): dice with the attacker's DB, or the total as rolled in a box an exchange opened
+      if (cocRules() && cocEnter(t)) return;
       const e = FM.parseEntry(t.value, FM.rulesOf(state().fight));
       // a system that reads hits (GURPS) keeps words it cannot read in the box, its reason on the row's second line
       if (!e && wounding()) { refuse(t, words().entryInvalid || INVALID); return; }

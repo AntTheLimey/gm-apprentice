@@ -1458,3 +1458,22 @@ test('the page and the server agree on every generated dice shape', () => {
   assert.equal(n, 2 * 5 * 7 * 3 * 3);
   assert.ok(accepted > 100, `${accepted} accepted shapes`);
 });
+
+// CoC's damage entries (Task 17): the same DICE pattern, a DB the page puts in before the server hears it.
+test('the page and the server read the same CoC dice, with the attacker\'s DB put in', () => {
+  const { parseDamage } = require('../lib/dice');
+  const CM = require('../lib/run-sheet/web/coc-math');
+  const COC_RULES = systemFor('coc-7e').describe().fight;
+  for (const t of ['1D8', '1D6+1', '1D8+DB', '1D3-1', 'd6+DB', '1D6 + DB + 1', '-1D4+DB', '2D6-1D4', '1D10+DB']) {
+    const e = M.parseEntry(t, COC_RULES);
+    assert.ok(e && e.dice, `page takes ${t}`);
+    for (const db of ['+1D4', '-1', '+2D6', 0]) for (const mode of CM.DB_MODES) {
+      const spec = CM.damageRoll(e, { db }, mode);
+      assert.doesNotThrow(() => parseDamage(spec.notation), `${t}, DB ${db}, ${mode}: ${spec.notation}`);
+    }
+  }
+  for (const t of ['DB', '1D6+DB+DB', '+1D6', '1D6xDB', '4d6kh3+DB', 'd']) assert.equal(M.parseEntry(t, COC_RULES), null, `page keeps ${t}`);
+  // D&D and GURPS read no CoC dice entry
+  assert.equal(M.parseEntry('1D8+DB'), null);
+  assert.equal(M.parseEntry('1D8+DB', GURPS), null);
+});

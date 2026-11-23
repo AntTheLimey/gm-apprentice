@@ -176,7 +176,7 @@ function describeCoc(id) {
   r.words = {
     ...r.words, hp: 'HP', ac: '', temp: '', initiative: 'DEX', initBox: 'DEX', longRest: '', advancement: '', bloodied: '', noBlock: '',
     entryPlaceholder: '-7 / +3 / m-2 / s-5',
-    entryInvalid: 'Type -7 or 7 (damage), +3 (healing), m-2 (MP) or s-5 (SAN)',
+    entryInvalid: 'Type -7 or 7 (damage), 1D6+DB (dice), +3 (healing), m-2 (MP) or s-5 (SAN)',
     gun: 'gun', gunTitle: `Firearm ready: +${fight.firearmBonus} to DEX for the order`,
     // the melee exchange on the target's row (Task 16): a hint in our words, beside the buttons
     buildHint: 'Manoeuvre: compare Builds',

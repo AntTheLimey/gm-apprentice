@@ -1023,7 +1023,8 @@ describe('CoC melee on the target\'s row (step 6b Task 16), by real input', { sk
         await tap(page, `[data-fmlvl="${c2}|attack|regular"]`);
         p = await until(page, `p.fight.melee === null && p.fight.rows.find((r) => r.id === ${q(c2)}).meleeDefences === 1 && p.saved === "Saved" && p.pending === 0`);
         assert.deepStrictEqual((await logOf(run)).slice(-1), ['Iris Calder: Regular; Dock Cultist 2 Fights Back: Regular (33): a tie: Iris Calder hits Dock Cultist 2.']);
-        assert.match(await focusOn(page), /data-fmelee/);
+        // Task 17 changed this on purpose: a hit opens the damage box on the row hit, and focus goes to it
+        await page.waitFor(`document.activeElement === document.querySelector('[data-fhp=${q(c2)}]')`, 3000);
 
         // two attacks: one defence leaves it at 1 of 2, no die yet
         assert.strictEqual(named(p, 'Dock Cultist 2').meleeDice, '0');
@@ -1109,6 +1110,114 @@ describe('CoC melee on the target\'s row (step 6b Task 16), by real input', { sk
       await tap(page, `[data-fmlvl="${c1}|attack|regular"]`);
       p = await until(page, `p.fight.melee === null && p.fight.rows.find((r) => r.id === ${q(c1)}).meleeDefences === 1 && p.saved === "Saved" && p.pending === 0`);
       assert.deepStrictEqual((await logOf(run)).slice(-1), ['Iris Calder: Regular; Dock Cultist 1 Fights Back: Regular (33): a tie: Iris Calder hits Dock Cultist 1.']);
+    });
+  });
+});
+
+describe('CoC damage on the hit row (step 6b Task 17), by real input', { skip: browserSkip() }, () => {
+  const logOf = async (run) => (await (await fetch(`${run.base}/api/state`)).json()).state.events.filter((e) => e.fight).map((e) => e.text);
+  const row2 = (page, id) => page.evaluate(`(() => { const l = document.querySelector('li[data-row2=${q(id)}]'); return l ? l.textContent : ''; })()`);
+  const focusOn = (page) => page.evaluate('(() => { const a = document.activeElement; return a && a !== document.body ? a.outerHTML.slice(0, 120) : "body"; })()');
+  const boxOf = (id) => `[data-fhp="${id}"]`;
+  const focused = (page, id) => page.waitFor(`document.activeElement === document.querySelector(${q(boxOf(id))})`, 3000);
+  const valueOf = (page, id) => page.evaluate(`document.querySelector(${q(boxOf(id))}).value`);
+  // the Net Loft (fixture Scene 5), started: Iris's turn
+  async function netLoft(page, run) {
+    const at = run.model.beats.findIndex((b) => /Net Loft/.test(b.title));
+    await fightOn(page, run, at);
+    await tap(page, '#fNext');
+    await page.waitFor('document.querySelector("#fStartAnyway")', 3000);
+    await tap(page, '#fStartAnyway');
+    return until(page, 'p.fight.started && p.saved === "Saved" && p.pending === 0');
+  }
+  // Iris attacks `id`, which Fights Back (rolled 33 against Fighting 40, Regular); Iris's level a tap
+  async function exchange(page, id, level) {
+    await tap(page, `[data-fmelee="${id}|fightBack"]`);
+    await until(page, 'p.fight.melee && !p.fight.melee.rolling');
+    await tap(page, `[data-fmlvl="${id}|attack|${level}"]`);
+    return until(page, 'p.fight.melee === null && p.fight.dmg && p.saved === "Saved" && p.pending === 0');
+  }
+
+  for (const [w, h] of SIZES) {
+    it(`${w}: after Dock Cultist 2 wins a Fight Back, its damage box is open on Iris; Enter takes the remembered 1D6+DB; the working line shows`, async () => {
+      // every die a 3: a d100 of 33, a 1D6 of 3, a 1D4 of 3
+      const run = await start('coc', { randomInt: () => 3 });
+      await withPage({ width: w, height: h }, async (page) => {
+        let p = await netLoft(page, run);
+        const iris = named(p, 'Iris Calder').id;
+        const c1 = named(p, 'Dock Cultist 1').id;
+        const c2 = named(p, 'Dock Cultist 2').id;
+        const hp0 = named(p, 'Iris Calder').hp;
+
+        // Dock Cultist 1 wins: its box opens on Iris, empty (nothing remembered yet), focused, DB full
+        p = await exchange(page, c1, 'fail');
+        assert.deepStrictEqual([p.fight.dmg.on, p.fight.dmg.by, p.fight.dmg.entry, p.fight.dmg.mode, p.fight.dmg.offer], [iris, c1, '', 'full', false]);
+        await focused(page, iris);
+        assert.match(await row2(page, iris), /Dock Cultist 1's damage, DB \+1D4:fullhalfnone✕/);
+        assert.strictEqual(await attrOf(page, `[data-fdmgdb="${iris}|full"]`, 'aria-pressed'), 'true');
+        sane(p, `${w} the box open`);
+        await shot(page, `t17-${w}-box`);
+        await typeInto(page, boxOf(iris), '1D6+DB');
+        p = await until(page, `p.fight.dmg === null && p.fight.rows.find((r) => r.id === ${q(iris)}).hp === ${hp0 - 6} && p.saved === "Saved" && p.pending === 0`);
+        assert.deepStrictEqual((await logOf(run)).slice(-1), ['Iris Calder, hit by Dock Cultist 1: 1D6+1D4 = 3+3 = 6.']);
+        assert.match(await row2(page, iris), /1D6\+1D4 = 3\+3 = 6/);
+
+        // Dock Cultist 2, its group mate, wins: the box holds 1D6+DB and has focus; Enter alone takes it
+        p = await exchange(page, c2, 'fail');
+        assert.deepStrictEqual([p.fight.dmg.on, p.fight.dmg.by, p.fight.dmg.entry], [iris, c2, '1D6+DB']);
+        await focused(page, iris);
+        assert.strictEqual(await valueOf(page, iris), '1D6+DB');
+        sane(p, `${w} the remembered entry`);
+        await shot(page, `t17-${w}-remembered`);
+        await page.key('Enter');
+        p = await until(page, `p.fight.dmg === null && p.fight.rows.find((r) => r.id === ${q(iris)}).hp === ${Math.max(0, hp0 - 12)} && p.saved === "Saved" && p.pending === 0`);
+        assert.deepStrictEqual((await logOf(run)).slice(-1), ['Iris Calder, hit by Dock Cultist 2: 1D6+1D4 = 3+3 = 6.']);
+        assert.match(await focusOn(page), /data-fhp/);
+
+        // Iris hits Dock Cultist 2 at Extreme on her turn: the offer, impaling off; a bare 7 is her total as rolled,
+        // its armour 1 off
+        p = await exchange(page, c2, 'extreme');
+        assert.deepStrictEqual([p.fight.dmg.on, p.fight.dmg.by, p.fight.dmg.offer, p.fight.dmg.impale], [c2, iris, true, false]);
+        assert.strictEqual(await attrOf(page, `[data-fdmgimp="${c2}"]`, 'aria-pressed'), 'false');
+        assert.match(await row2(page, c2), /Iris Calder's damage, DB none:fullhalfnoneimpalingExtreme: max✕/);
+        sane(p, `${w} the Extreme offer`);
+        await shot(page, `t17-${w}-extreme`);
+        await typeInto(page, boxOf(c2), '7');
+        p = await until(page, `p.fight.dmg === null && p.fight.rows.find((r) => r.id === ${q(c2)}).hp === 6 && p.saved === "Saved" && p.pending === 0`);
+        assert.deepStrictEqual((await logOf(run)).slice(-1), ['Dock Cultist 2, hit by Iris Calder: 7 − armour 1 = 6.']);
+        assert.match(await row2(page, c2), /7 − armour 1 = 6/);
+        sane(p, `${w} the end`);
+      });
+    });
+  }
+
+  it('the Extreme offer is one tap: impaling on, the weapon at its maximum and one more roll; a box left open shuts on the next turn', async () => {
+    const run = await start('coc', { randomInt: () => 3 });
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await netLoft(page, run);
+      const iris = named(p, 'Iris Calder').id;
+      const c1 = named(p, 'Dock Cultist 1').id;
+      const c2 = named(p, 'Dock Cultist 2').id;
+      p = await exchange(page, c1, 'extreme');
+      assert.strictEqual(p.fight.dmg.offer, true);
+      await typeInto(page, boxOf(c1), '1D8', { enter: false, settle: false });
+      await tap(page, `[data-fdmgimp="${c1}"]`);
+      p = await until(page, 'p.fight.dmg && p.fight.dmg.impale === true');
+      await focused(page, c1);
+      await tap(page, `[data-fdmgx="${c1}"]`);
+      p = await until(page, `p.fight.dmg === null && p.fight.rows.find((r) => r.id === ${q(c1)}).hp === 2 && p.saved === "Saved" && p.pending === 0`);
+      assert.deepStrictEqual((await logOf(run)).slice(-1), ['Dock Cultist 1, hit by Iris Calder: Extreme, impaling: 1D8 at max = 8, +1D8 = 3: 11 − armour 1 = 10.']);
+      assert.match(await focusOn(page), /data-fhp/);
+
+      // Dock Cultist 2 wins on Iris; the box is left; Next: it is shut, and the reducer's record with it
+      p = await exchange(page, c2, 'fail');
+      assert.strictEqual(p.fight.dmg.on, iris);
+      await tap(page, '#fNext');
+      p = await until(page, `p.fight.rows.find((r) => r.id === p.fight.turn).name === "Dock Cultist 1" && p.saved === "Saved" && p.pending === 0`);
+      assert.strictEqual(p.fight.dmg, null);
+      assert.doesNotMatch(await row2(page, iris), /damage/);
+      const st = (await (await fetch(`${run.base}/api/state`)).json()).state;
+      assert.strictEqual(st.fight.melee, null);
     });
   });
 });

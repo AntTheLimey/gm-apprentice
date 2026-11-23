@@ -49,7 +49,7 @@
   // `dice` (and `n` null) for dice. A place needs a type; a type alone is to the torso. A bare number stays raw.
   function parseEntry(text, rules = DND_FIGHT_RULES) {
     const m = /^\s*([a-z])?\s*([+-])?\s*(\d+)\s*$/i.exec(String(text === null || text === undefined ? '' : text));
-    if (!m) return parseHit(text, rules);
+    if (!m) return parseHit(text, rules) || parseCocDice(text, rules);
     const n = Number(m[3]);
     if (n > 9999) return null;
     const letter = (m[1] || '').toLowerCase();
@@ -108,6 +108,21 @@
     if (h.dice) return { pool: 'hp', kind: 'damage', n: null, dice: h.dice, hit };
     // a bare number was the raw entry above; here it has a type
     return hit ? { pool: 'hp', kind: 'damage', n: h.n, hit } : null;
+  }
+
+  // CoC's damage dice (Task 17): `1D8`, `1D6+1`, `1D3-1`, `1D8+DB`, a leading minus the damage sign, spaces ignored. DB
+  // is the attacker's, put in by coc-math's damageRoll before the server sees the dice; one DB at most, added.
+  // { pool: 'hp', kind: 'damage', n: null, dice, db }. The dice are the DICE pattern's (the one the server agrees with).
+  function parseCocDice(text, rules) {
+    if (!rulesOf({ rules }).coc) return null;
+    const t = String(text === null || text === undefined ? '' : text).replace(/\s+/g, '').replace(/\u2212/g, '-').replace(/^-/, '');
+    const parts = t.split(/\+db(?=[+-]|$)/i);
+    if (parts.length > 2) return null;
+    const dice = parts.join('');
+    const chain = DICE.exec(dice);
+    // a die with no sides is GURPS's (`2d+1`), never CoC's
+    if (!chain || chain[0] !== dice || !/d/i.test(dice) || /d(?![\d%])/i.test(dice)) return null;
+    return { pool: 'hp', kind: 'damage', n: null, dice: dice.toLowerCase(), db: parts.length === 2 };
   }
 
   // The hit chips in their order for a row: the one last used first, then the rest as the table lists them.

@@ -164,3 +164,103 @@ describe('coc-math: the file', () => {
     assert.deepEqual(systemFor('coc-7e').describe().coc, COC);
   });
 });
+
+describe('coc-math: damage (Task 17)', () => {
+  const { rollDamage, maxRoll, parseDamage } = require('../lib/dice');
+  const RULES = systemFor('coc-7e').describe().fight;
+  const entry = (t) => FM.parseEntry(t, RULES);
+  // the server's roll of the notation, its dice injected in order
+  const rolled = (notation, ...faces) => { let i = 0; return rollDamage(notation, { floor: 0, randomInt: () => faces[i++] }); };
+  const cultist = { db: '+1D4', armour: 1 };
+  const iris = { db: 0, armour: null };
+
+  it('1D6+DB with DB +1D4 and armour 1, injected dice 4 and 2 -> 5, "1D6+1D4 = 4+2 = 6 − armour 1 = 5"', () => {
+    const e = entry('1D6+DB');
+    const spec = C.damageRoll(e, cultist, 'full');
+    assert.deepEqual(spec, { notation: '1D6+1D4', weapon: '1D6', db: '+1D4' });
+    const out = C.cocDamage(e, cultist, cultist, { mode: 'full', roll: rolled(spec.notation, 4, 2) });
+    assert.deepEqual(out, { total: 6, armour: 1, damage: 5, line: '1D6+1D4 = 4+2 = 6 − armour 1 = 5', notation: '1D6+1D4' });
+  });
+  it('DB -2 with 1D3, a 1 rolled -> 0, "1D3-2 = 1−2 = 0"', () => {
+    const e = entry('1D3+DB');
+    const A = { db: -2 };
+    const spec = C.damageRoll(e, A, 'full');
+    assert.equal(spec.notation, '1D3-2');
+    const out = C.cocDamage(e, A, iris, { roll: rolled(spec.notation, 1) });
+    assert.deepEqual([out.damage, out.line], [0, '1D3-2 = 1−2 = 0']);
+  });
+  it('half DB: +1D4 -> +1D2, +2D6 -> +1D6, +1D6 -> +1D3, -2 -> -1, -1 -> none; none adds none', () => {
+    const e = entry('1D6+DB');
+    assert.equal(C.damageRoll(e, { db: '+1D4' }, 'half').notation, '1D6+1D2');
+    assert.equal(C.damageRoll(e, { db: '+2D6' }, 'half').notation, '1D6+1D6');
+    assert.equal(C.damageRoll(e, { db: '+1D6' }, 'half').notation, '1D6+1D3');
+    assert.equal(C.damageRoll(e, { db: -2 }, 'half').notation, '1D6-1');
+    assert.equal(C.damageRoll(e, { db: '-1' }, 'half').notation, '1D6');
+    assert.equal(C.damageRoll(e, { db: '+2D6' }, 'none').notation, '1D6');
+  });
+  it('an exchange\'s kind sets the DB: melee full, thrown half, shot none', () => {
+    assert.deepEqual(['melee', 'thrown', 'shot', undefined].map(C.dbModeOf), ['full', 'half', 'none', 'full']);
+  });
+  it('a DB read as a term: +1D4, 1D4, -1, 0, none, a dash, no figure; words -> null', () => {
+    assert.deepEqual(['+1D4', '1d4', ' +2D6 ', -1, '-1', '−1', 2, 0, '0', 'none', '—', null, undefined].map(C.dbTerm),
+      ['+1D4', '+1D4', '+2D6', '-1', '-1', '-1', '+2', '', '', '', '', '', '']);
+    assert.equal(C.dbTerm('big'), null);
+    assert.equal(C.dbTerm('1D4+1'), null);
+  });
+  it('DB with no attacker, or a DB in words -> an error the page says; dice with no DB need no attacker', () => {
+    assert.deepEqual(C.damageRoll(entry('1D6+DB'), null), { error: 'attacker' });
+    assert.deepEqual(C.damageRoll(entry('1D6+DB'), { db: 'big' }), { error: 'db', db: 'big' });
+    assert.deepEqual(C.damageRoll(entry('1D8+1'), null), { notation: '1D8+1', weapon: '1D8+1', db: '' });
+  });
+  it('armour 3 against a 2 rolled -> 0', () => {
+    const e = entry('1D3');
+    const out = C.cocDamage(e, null, { armour: 3 }, { roll: rolled('1D3', 2) });
+    assert.deepEqual([out.total, out.damage, out.line], [2, 0, '1D3 = 2 − armour 3 = 0']);
+  });
+  it('a bare 7 in a box an exchange opened, against armour 1 -> 6, "7 − armour 1 = 6"', () => {
+    const out = C.cocDamage(entry('7'), cultist, cultist, { asRolled: true });
+    assert.deepEqual([out.damage, out.line], [6, '7 − armour 1 = 6']);
+  });
+  it('a bare 6 typed cold -> null (the reducer takes it raw)', () => {
+    assert.equal(C.cocDamage(entry('6'), null, cultist, {}), null);
+  });
+  it('a roll of other dice (the DB changed while they were out), a sum that does not hold, or a max roll for a plain hit -> null', () => {
+    const e = entry('1D6+DB');
+    assert.equal(C.cocDamage(e, { db: '+1D6', armour: 0 }, iris, { roll: rolled('1D6+1D4', 4, 2) }), null);
+    assert.equal(C.cocDamage(e, cultist, iris, { roll: { ...rolled('1D6+1D4', 4, 2), total: 9 } }), null);
+    assert.equal(C.cocDamage(e, cultist, iris, { roll: maxRoll('1D6+1D4', { floor: 0 }) }), null);
+  });
+  it('Extreme on the attacker\'s turn offers; max damage and max DB; with impaling on, one more weapon roll', () => {
+    assert.equal(C.extremeOffer({ side: 'attacker', onTurn: true, level: 'extreme' }), true);
+    assert.equal(C.extremeOffer({ side: 'attacker', onTurn: true, level: 'critical' }), true);
+    assert.equal(C.extremeOffer({ side: 'attacker', onTurn: true, level: 'hard' }), false);
+    assert.equal(C.extremeOffer({ side: 'attacker', onTurn: false, level: 'extreme' }), false, 'not its turn');
+    const e = entry('1D6+DB');
+    const max = maxRoll('1D6+1D4', { floor: 0 });
+    let out = C.cocDamage(e, cultist, cultist, { roll: max, extreme: true });
+    assert.deepEqual([out.damage, out.line], [9, 'Extreme: 1D6+1D4 at max = 6+4 = 10 − armour 1 = 9']);
+    out = C.cocDamage(e, cultist, cultist, { roll: max, extreme: true, extra: rolled('1D6', 3) });
+    assert.deepEqual([out.damage, out.line], [12, 'Extreme, impaling: 1D6+1D4 at max = 6+4 = 10, +1D6 = 3: 13 − armour 1 = 12']);
+    // a plain roll sent as the maximum is not one
+    assert.equal(C.cocDamage(e, cultist, cultist, { roll: rolled('1D6+1D4', 6, 4), extreme: true }), null);
+  });
+  it('Extreme on a Fight Back offers nothing', () => {
+    assert.equal(C.extremeOffer({ side: 'defender', onTurn: false, level: 'extreme' }), false);
+    assert.equal(C.extremeOffer({ side: 'defender', onTurn: true, level: 'critical' }), false);
+  });
+  it('a very long shot\'s Extreme that is not 01 offers nothing; an 01 does', () => {
+    assert.equal(C.extremeOffer({ side: 'attacker', onTurn: true, level: 'extreme', veryLong: true }), false);
+    assert.equal(C.extremeOffer({ side: 'attacker', onTurn: true, level: 'critical', veryLong: true }), true);
+  });
+  it('every DB-substituted form is notation the server reads', () => {
+    for (const t of ['1D8+DB', '1D6+DB+1', 'd6+DB', '1D3-1+DB', '2D6+DB', '1D4+DB-1', '1D10+DB']) {
+      for (const db of ['+1D4', '1D6', '+2D6', '-1', -2, 0, 3, '+1D3', null, 'none']) {
+        for (const mode of C.DB_MODES) {
+          const spec = C.damageRoll(entry(t), { db }, mode);
+          assert.doesNotThrow(() => parseDamage(spec.notation), `${t} with DB ${db}, ${mode}: ${spec.notation}`);
+          assert.doesNotThrow(() => parseDamage(spec.weapon), `${t}: ${spec.weapon}`);
+        }
+      }
+    }
+  });
+});

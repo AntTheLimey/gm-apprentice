@@ -442,6 +442,45 @@
     if (!cocOf(f)) return;
     for (const r of f.rows) if (r.meleeDefences) r.meleeDefences = 0;
   }
+  // The damage an exchange owes (Task 17), for the page's damage box: `n` the fight's count (a replay makes the same),
+  // who hits whom, the exchange's kind (Task 16's 'melee'; Task 19's shot is 'shot', a very long one `veryLong`),
+  // which side hit, at which level, and whether it offers the Extreme maximum. Cleared at every turn's start and
+  // once its damage is applied.
+  function exchangeOf(f, by, on, { kind, side, level, veryLong = false }) {
+    f.meleeN = (isNum(f.meleeN) ? f.meleeN : 0) + 1;
+    const offer = CM.extremeOffer({ side, level, veryLong, onTurn: by.id === f.turn });
+    return { n: f.meleeN, by: by.id, on: on.id, round: f.round, kind, side, level, ...(veryLong ? { veryLong: true } : {}), offer };
+  }
+  // A CoC damage entry (Task 17): dice the page rolled with the attacker's DB put in (`by`, `mode`, `roll`), an
+  // Extreme hit's maximum (`extreme`, `roll` maxRoll's, `extra` the impaling weapon roll), or a bare number in the box
+  // an exchange opened (`exchange`, its `n`), taken as rolled. The target's armour comes off; the working line goes
+  // on the row (`hit`, with what Task 18's card reads: { damage, maxHp }) and in the log. False when the entry is
+  // not one of these (a bare number typed cold stays raw); true when it was taken, or dropped as not holding.
+  function cocHit(s, f, r, e, a, at) {
+    if (!cocOf(f) || e.pool !== 'hp' || e.kind !== 'damage') return false;
+    const sent = a.exchange !== undefined && a.exchange !== null;
+    const x = sent && f.melee && f.melee.n === a.exchange && f.melee.on === r.id ? f.melee : null;
+    // an exchange that is over (its damage applied, the turn moved on in another window): dropped, never taken raw
+    if (sent && !x) return true;
+    if (!e.dice && !x) return false;
+    const A = a.by === undefined || a.by === null ? null : rowOf(f, a.by);
+    if (x && (!A || A.id !== x.by)) return true;
+    if (a.extreme && !(x && x.offer && e.dice)) return true;
+    const mode = CM.DB_MODES.includes(a.mode) ? a.mode : 'full';
+    const out = CM.cocDamage(e, A, r, { mode, roll: a.roll, extreme: Boolean(a.extreme), extra: a.extreme ? a.extra || null : null, asRolled: Boolean(x) });
+    if (!out) return true;
+    const before = r.hp;
+    const temp = r.temp;
+    const took = hurt(f, r, out.damage, false);
+    r.hit = { line: out.line, damage: out.damage, maxHp: isNum(r.max) ? r.max : null };
+    touch(r, at);
+    if (x) f.melee = null;
+    const who = A && A.id !== r.id ? `, hit by ${nameOf(s, f, A)}${e.db && mode !== 'full' ? ` (${CM.DB_WORDS[mode]})` : ''}` : '';
+    say(s, f, at, `${nameOf(s, f, r)}${who}: ${out.line}.`);
+    touchIfHp(r, at, before, r.max);
+    afterHp(s, f, r, before, at, { over: overOf(took, temp, before) });
+    return true;
+  }
   const cardOf = (r, id) => (Array.isArray(r.cards) ? r.cards.find((c) => c.id === id) || null : null);
   const dropCard = (r, id) => { r.cards = cardsOf(r).filter((c) => c.id !== id); };
 
@@ -593,6 +632,7 @@
         f.started = true;
         f.round = 1;
         meleeRound(f);
+        f.melee = null;
         f.turn = first.id;
         const order = f.rows.filter((r) => FM.takesTurn(r, f.rows)).map((r) => ({ id: r.id, text: `${nameOf(s, f, r, true)}${isNum(r.ini) ? ` ${r.ini}` : ''}` }));
         sayRoster(s, f, at, 'Round 1: ', order, '.');
@@ -610,6 +650,8 @@
         f.round += 1;
         meleeRound(f);
       }
+      // an exchange's damage is owed on its own turn only: a box left unapplied never opens on a later one
+      f.melee = null;
       f.turn = row.id;
       turnStart(f, row, at);
       turnStarts(f, row);
@@ -620,6 +662,7 @@
       if (r.kind === 'lair') return;
       const e = FM.parseEntry(a.entry, FM.rulesOf(f));
       if (!e) return;
+      if (cocOf(f) && (e.dice || a.exchange !== undefined) && cocHit(s, f, r, e, a, at)) return;
       if (e.dice) {
         const n = int(a.rolled);
         if (n === null || n < 0 || n > 9999 || Number(a.rolled) !== n) return;
@@ -797,7 +840,9 @@
       D.meleeDefences = CM.defenceAfter(D, 'melee');
       touch(A, at);
       touch(D, at);
-      f.melee = out.hits ? { by: out.hits === 'attacker' ? A.id : D.id, on: out.hits === 'attacker' ? D.id : A.id, round: f.round } : null;
+      f.melee = out.hits ? exchangeOf(f, out.hits === 'attacker' ? A : D, out.hits === 'attacker' ? D : A, {
+        kind: 'melee', side: out.hits, level: out.hits === 'attacker' ? atk.level : def.level,
+      }) : null;
       const why = net > 0 && auto.net > 0 ? auto.why : [];
       say(s, f, at, CM.meleeLine({ attacker: nameOf(s, f, A), defender: nameOf(s, f, D) }, a.response, { net, why, byHand: net !== auto.net }, atk, def, out));
     },

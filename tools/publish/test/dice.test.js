@@ -177,6 +177,11 @@ describe('dice: damage dice', () => {
     assert.strictEqual(maxDamage('2d6-3d4'), 9);
     assert.strictEqual(maxDamage('d6+d8+2'), 16);
   });
+  it('{ damage, max: true } answers the faces at the top in rollDamage\'s shape, with its floor', () => {
+    assert.deepStrictEqual(rollSpec({ damage: '1D6+1D4', floor: 0, max: true }), { notation: '1D6+1D4', type: null, dice: [6, 4], mod: 0, total: 10, max: true });
+    assert.deepStrictEqual(rollSpec({ damage: '1D3-1D4-3', floor: 0, max: true }), { notation: '1D3-1D4-3', type: null, dice: [3, -1], mod: -3, total: 0, max: true });
+    assert.throws(() => rollSpec({ damage: '1D6', floor: 0.5, max: true }), RangeError);
+  });
 });
 
 describe('dice: the CoC d100', () => {

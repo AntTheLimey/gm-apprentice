@@ -2974,13 +2974,14 @@ describe('CoC melee on the target\'s row (step 6b Task 16)', () => {
     s = melee(s, 'Iris', 'Cultist 2', 'fightBack', { level: 'regular' }, d100(31, 40, 'regular'));
     assert.deepEqual(lines(s).slice(-1), ['Iris: Regular; Cultist 2 Fights Back: Regular (31): a tie: Iris hits Cultist 2.']);
     assert.equal(named(s, 'Cultist 2').meleeDefences, 1);
-    assert.deepEqual(s.fight.melee, { by: named(s, 'Iris').id, on: named(s, 'Cultist 2').id, round: 1 });
+    // Task 17 adds the exchange's count, kind, side and level and the Extreme offer to the record
+    assert.deepEqual(s.fight.melee, { n: 1, by: named(s, 'Iris').id, on: named(s, 'Cultist 2').id, round: 1, kind: 'melee', side: 'attacker', level: 'regular', offer: false });
   });
 
   it('Fight Back won by the defender opens its damage; a won Dodge opens none', () => {
     let s = go(begin(rows()));
     s = melee(s, 'Iris', 'Cultist 1', 'fightBack', { level: 'regular' }, d100(15, 40, 'hard'));
-    assert.deepEqual(s.fight.melee, { by: named(s, 'Cultist 1').id, on: named(s, 'Iris').id, round: 1 });
+    assert.deepEqual(s.fight.melee, { n: 1, by: named(s, 'Cultist 1').id, on: named(s, 'Iris').id, round: 1, kind: 'melee', side: 'defender', level: 'hard', offer: false });
     assert.equal(lines(s).slice(-1)[0], 'Iris: Regular; Cultist 1 Fights Back: Hard (15): Cultist 1 hits Iris.');
     s = melee(s, 'Iris', 'Cultist 2', 'dodge', { level: 'regular' }, d100(20, 20, 'regular'));
     assert.equal(s.fight.melee, null);
@@ -3135,5 +3136,149 @@ describe('CoC melee on the target\'s row (step 6b Task 16)', () => {
     const text = JSON.stringify(forPlayers(model, s, { withheldWords: model.withheldWords, picId: () => null }));
     assert.match(text, /"order":\{"round":1/, 'the order is there');
     assert.doesNotMatch(text, /meleeDefences|outnumbered|melee|Fights Back|attacks|fighting|dodge/i);
+  });
+});
+
+describe('CoC damage (step 6b Task 17)', () => {
+  const { systemFor } = require('../lib/run-sheet/systems');
+  const { rollDamage, maxRoll } = require('../lib/dice');
+  const CM = require('../lib/run-sheet/web/coc-math');
+  const COC = systemFor('coc-7e').describe().fight;
+  const begin = (list) => RS.reduce(fresh(), { id: 'f1', type: 'fightStart', title: 'T', rules: COC, rows: list.map((o, i) => M.blankRow({ id: `r${i + 1}`, ...o })) }, now());
+  const G = (s, a) => RS.reduce(s, { id: nextId(), fight: 'f1', ...a }, now());
+  const named = (s, name) => s.fight.rows.find((r) => r.name === name);
+  const go = (s) => G(s, { type: 'fightNext', from: s.fight.turn, round: s.fight.round });
+  const lines = (s) => s.events.filter((e) => e.fight).map((e) => e.text);
+  const d100 = (kept, target, level) => ({ tens: [Math.floor(kept / 10) * 10], units: kept % 10, kept, target, difficulty: 'regular', needed: target, level, passed: level !== 'fail' && level !== 'fumble', fumbleFrom: 96, bonus: 0, penalty: 0, asked: { bonus: 0, penalty: 0 } });
+  const melee = (s, from, to, response, attack, defence) => {
+    const D = named(s, to);
+    const auto = CM.attackDice(D, COC.coc);
+    return G(s, { type: 'melee', attacker: named(s, from).id, defender: D.id, response, dice: CM.diceOfNet(auto.net, COC.coc), auto, attack, defence });
+  };
+  const rolled = (notation, ...faces) => { let i = 0; return rollDamage(notation, { floor: 0, randomInt: () => faces[i++] }); };
+  // the damage as the page sends it: the entry, who deals it, the DB setting, the server's roll, the exchange's count
+  const hit = (s, on, by, entry, more) => G(s, { type: 'hp', row: named(s, on).id, entry, by: by ? named(s, by).id : null, mode: 'full', ...more });
+  const rows = () => [
+    { name: 'Iris', kind: 'pc', ini: 55, dex: 55, hp: 11, max: 11, dodge: 27, db: 0 },
+    { name: 'Cultist 1', ini: 50, dex: 50, hp: 12, max: 12, fighting: 40, dodge: 20, attacks: 1, db: '+1D4', armour: 1 },
+    { name: 'Cultist 2', ini: 45, dex: 45, hp: 12, max: 12, fighting: 40, dodge: 20, attacks: 1, db: '+1D4', armour: 1 },
+  ];
+
+  it('1D6+DB from Cultist 2 to Cultist 1 (armour 1), dice 4 and 2 -> 5 off, the working line on the row and in the log', () => {
+    let s = go(begin(rows()));
+    s = hit(s, 'Cultist 1', 'Cultist 2', '1D6+DB', { roll: rolled('1D6+1D4', 4, 2) });
+    assert.equal(named(s, 'Cultist 1').hp, 7);
+    assert.deepEqual(named(s, 'Cultist 1').hit, { line: '1D6+1D4 = 4+2 = 6 − armour 1 = 5', damage: 5, maxHp: 12 });
+    assert.deepEqual(lines(s).slice(-1), ['Cultist 1, hit by Cultist 2: 1D6+1D4 = 4+2 = 6 − armour 1 = 5.']);
+  });
+
+  it('a roll for other dice than the attacker\'s DB makes now, or none at all, is dropped', () => {
+    let s = go(begin(rows()));
+    const was = clone(s.fight);
+    s = hit(s, 'Cultist 1', 'Cultist 2', '1D6+DB', { roll: rolled('1D6+1D6', 4, 2) });
+    s = hit(s, 'Cultist 1', 'Cultist 2', '1D6+DB', {});
+    s = hit(s, 'Cultist 1', null, '1D6+DB', { roll: rolled('1D6', 4) });
+    assert.deepEqual(s.fight, was);
+  });
+
+  it('HP never below 0; half DB halves it; none adds none', () => {
+    let s = go(begin(rows()));
+    s = G(s, { type: 'hp', row: named(s, 'Iris').id, entry: '1D10+DB', by: named(s, 'Cultist 1').id, mode: 'half', roll: rolled('1D10+1D2', 10, 2) });
+    s = G(s, { type: 'hp', row: named(s, 'Iris').id, entry: '1D4+DB', by: named(s, 'Cultist 1').id, mode: 'none', roll: rolled('1D4', 3) });
+    assert.equal(named(s, 'Iris').hp, 0);
+    assert.deepEqual(lines(s).slice(-2), ['Iris, hit by Cultist 1 (half DB): 1D10+1D2 = 10+2 = 12.', 'Iris, hit by Cultist 1 (no DB): 1D4 = 3.']);
+  });
+
+  it('Shoot sets none: an exchange of kind shot opens at no DB', () => {
+    let s = go(begin(rows()));
+    // Task 19 writes the shot's record; set here directly
+    s.fight.melee = { n: 1, by: named(s, 'Cultist 1').id, on: named(s, 'Iris').id, round: 1, kind: 'shot', side: 'attacker', level: 'regular', offer: false };
+    assert.equal(CM.dbModeOf(s.fight.melee.kind), 'none');
+    s = G(s, { type: 'hp', row: named(s, 'Iris').id, entry: '1D10', by: named(s, 'Cultist 1').id, mode: 'none', exchange: 1, roll: rolled('1D10', 7) });
+    assert.equal(named(s, 'Iris').hp, 4);
+    assert.equal(s.fight.melee, null);
+  });
+
+  it('a bare 7 in a box an exchange opened, against armour 1, is 6 with its working line; a bare 6 typed cold is raw 6', () => {
+    let s = go(begin(rows())); // Iris
+    s = melee(s, 'Iris', 'Cultist 1', 'fightBack', { level: 'hard' }, d100(33, 40, 'regular'));
+    const n = s.fight.melee.n;
+    assert.equal(s.fight.melee.on, named(s, 'Cultist 1').id);
+    s = hit(s, 'Cultist 1', 'Iris', '7', { exchange: n });
+    assert.equal(named(s, 'Cultist 1').hp, 6);
+    assert.equal(named(s, 'Cultist 1').hit.line, '7 − armour 1 = 6');
+    assert.deepEqual(lines(s).slice(-1), ['Cultist 1, hit by Iris: 7 − armour 1 = 6.']);
+    assert.equal(s.fight.melee, null, 'its damage applied, the exchange is done');
+    // the same exchange again: over, dropped
+    const was = clone(s.fight);
+    s = hit(s, 'Cultist 1', 'Iris', '7', { exchange: n });
+    assert.deepEqual(s.fight, was);
+    // typed cold: raw
+    s = G(s, { type: 'hp', row: named(s, 'Cultist 2').id, entry: '6' });
+    assert.equal(named(s, 'Cultist 2').hp, 6);
+    assert.equal(named(s, 'Cultist 2').hit, null);
+  });
+
+  it('the exchange is cleared at the next turn\'s start, so its box never opens later; a bare number sent for it is dropped', () => {
+    let s = go(begin(rows())); // Iris
+    s = melee(s, 'Iris', 'Cultist 1', 'fightBack', { level: 'fail' }, d100(33, 40, 'regular'));
+    const n = s.fight.melee.n;
+    assert.equal(s.fight.melee.by, named(s, 'Cultist 1').id);
+    s = go(s);
+    assert.equal(s.fight.melee, null);
+    const was = clone(s.fight);
+    s = hit(s, 'Iris', 'Cultist 1', '5', { exchange: n });
+    assert.deepEqual(s.fight, was);
+  });
+
+  it('Extreme on the attacker\'s turn offers max damage and max DB; with impaling on, one more weapon roll', () => {
+    let s = go(begin(rows())); // Iris
+    s = go(s); // Cultist 1's turn
+    s = melee(s, 'Cultist 1', 'Iris', 'dodge', d100(5, 40, 'extreme'), { level: 'fail' });
+    assert.equal(s.fight.melee.offer, true);
+    s = hit(s, 'Iris', 'Cultist 1', '1D6+DB', { exchange: s.fight.melee.n, extreme: true, roll: maxRoll('1D6+1D4', { floor: 0 }), extra: rolled('1D6', 2) });
+    assert.equal(named(s, 'Iris').hp, 0);
+    assert.deepEqual(lines(s).slice(-1), ['Iris, hit by Cultist 1: Extreme, impaling: 1D6+1D4 at max = 6+4 = 10, +1D6 = 2: 12.']);
+    // no impaling: the maximum only
+    s = go(begin(rows()));
+    s = go(s);
+    s = melee(s, 'Cultist 1', 'Cultist 2', 'dodge', d100(5, 40, 'extreme'), d100(50, 20, 'fail'));
+    s = hit(s, 'Cultist 2', 'Cultist 1', '1D6+DB', { exchange: s.fight.melee.n, extreme: true, roll: maxRoll('1D6+1D4', { floor: 0 }) });
+    assert.equal(named(s, 'Cultist 2').hp, 3);
+    assert.equal(named(s, 'Cultist 2').hit.line, 'Extreme: 1D6+1D4 at max = 6+4 = 10 − armour 1 = 9');
+  });
+
+  it('Extreme on a Fight Back, or off the attacker\'s turn, offers nothing, and an Extreme sent for it is dropped', () => {
+    let s = go(begin(rows())); // Iris attacks; Cultist 1 fights back at Extreme
+    s = melee(s, 'Iris', 'Cultist 1', 'fightBack', { level: 'regular' }, d100(5, 40, 'extreme'));
+    assert.deepEqual([s.fight.melee.side, s.fight.melee.level, s.fight.melee.offer], ['defender', 'extreme', false]);
+    const was = clone(s.fight);
+    s = hit(s, 'Iris', 'Cultist 1', '1D6+DB', { exchange: s.fight.melee.n, extreme: true, roll: maxRoll('1D6+1D4', { floor: 0 }) });
+    assert.deepEqual(s.fight, was);
+    // Cultist 2 attacks Cultist 1 on Iris's turn at Extreme: not its own turn
+    s = melee(s, 'Cultist 2', 'Cultist 1', 'dodge', d100(5, 40, 'extreme'), d100(50, 20, 'fail'));
+    assert.equal(s.fight.melee.offer, false);
+  });
+
+  it('D&D and GURPS take no CoC dice entry', () => {
+    for (const rules of [null, systemFor('gurps-4e').describe().fight]) {
+      let s = RS.reduce(fresh(), { id: 'f1', type: 'fightStart', title: 'T', ...(rules ? { rules } : {}), rows: rows().map((o, i) => M.blankRow({ id: `r${i + 1}`, ...o })) }, now());
+      const was = clone(s.fight.rows);
+      s = hit(s, 'Cultist 1', 'Cultist 2', '1D6+DB', { roll: rolled('1D6+1D4', 4, 2) });
+      assert.deepEqual(s.fight.rows, was);
+    }
+  });
+
+  it('the working line stays off the players\' screen', () => {
+    const { forPlayers } = require('../lib/run-sheet/players');
+    const list = rows().map((o) => (o.name === 'Iris' ? { ...o, note: ADA, name: 'Ada Moss' } : o));
+    let s = move(fresh(), ADA, GATE);
+    s = RS.reduce(s, { id: 'f1', type: 'fightStart', title: 'T', rules: COC, rows: list.map((o, i) => M.blankRow({ id: `r${i + 1}`, ...o })) }, now());
+    s = go(s);
+    s = hit(s, 'Ada Moss', 'Cultist 1', '1D6+DB', { roll: rolled('1D6+1D4', 4, 2) });
+    assert.equal(named(s, 'Ada Moss').hp, 5);
+    const text = JSON.stringify(forPlayers(model, s, { withheldWords: model.withheldWords, picId: () => null }));
+    assert.match(text, /"order":\{"round":1/, 'the order is there');
+    assert.doesNotMatch(text, /1D6|armour|hit by|maxHp|"hit"/i);
   });
 });

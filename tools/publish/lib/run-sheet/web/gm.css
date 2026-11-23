@@ -466,3 +466,9 @@ ol.to > li.row2 > .mx { display: flex; flex: 1 1 100%; min-width: 0; flex-wrap: 
 ol.to > li.row2 .mlv { display: inline-flex; flex-wrap: wrap; gap: 2px; }
 ol.to > li.row2 .mres { font-weight: 650; }
 ol.to > li.row2 .mhint, ol.to > li.row2 .mnote { font: 500 .7rem var(--mono); color: var(--muted); white-space: nowrap; }
+/* CoC's damage box (Task 17): on the hit row's second line, who deals it, the DB setting, and on an Extreme hit the
+   impaling toggle and the maximum's one tap */
+ol.to > li.row2 > .dmgbox { display: flex; flex: 1 1 100%; min-width: 0; flex-wrap: wrap; gap: 2px 4px; align-items: center; font: 500 .72rem var(--mono); }
+ol.to > li.row2 .dmgbox .tg { padding: 0 5px; }
+ol.to > li.row2 .dmgbox .offer { font: 650 .72rem var(--mono); padding: 0 8px; border-color: var(--bad); color: var(--bad); background: var(--bg); }
+ol.to input.hpin.dmg { border-color: var(--bad); }

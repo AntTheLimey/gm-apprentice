@@ -95,12 +95,18 @@ function rollDamage(notation, { type, floor, randomInt = crypto.randomInt } = {}
   return { notation, type: type === undefined ? null : type, dice, mod, total: Math.max(damageFloor(type, floor), raw) };
 }
 
-// The highest total the notation can make (an Extreme hit in CoC), with the same floor: added dice at their top,
-// taken-away dice at their bottom (one each).
-function maxDamage(notation, { type, floor } = {}) {
+// The highest the notation can make (an Extreme hit in CoC), with the same floor: added dice at their top,
+// taken-away dice at their bottom (one each). `maxRoll` answers in rollDamage's shape, its `dice` the faces at the
+// top, so a working line reads the same either way; `maxDamage` is its total.
+function maxRoll(notation, { type, floor } = {}) {
+  if (floor !== undefined && !isInt(floor)) throw new RangeError('a damage floor is a whole number');
   const { groups, mod } = parseDamage(notation);
-  return Math.max(damageFloor(type, floor), groups.reduce((n, g) => n + (g.sign > 0 ? g.count * g.sides : -g.count), 0) + mod);
+  const dice = [];
+  for (const g of groups) for (let i = 0; i < g.count; i++) dice.push(g.sign > 0 ? g.sides : -1);
+  const raw = dice.reduce((a, b) => a + b, 0) + mod;
+  return { notation, type: type === undefined ? null : type, dice, mod, total: Math.max(damageFloor(type, floor), raw), max: true };
 }
+const maxDamage = (notation, opts) => maxRoll(notation, opts).total;
 
 // ---- CoC 7e: the d100 against a target ----
 // Levels by the target's fractions, halves and fifths rounded down (Keeper Rulebook p32, p90); bonus and
@@ -138,12 +144,13 @@ function rollPercent(spec, { randomInt = crypto.randomInt } = {}) {
 }
 
 // ---- the one dispatcher: a spec rolls by its kind ----
-const KINDS = 'a roll is { sides, mod }, { against: N }, { d100: { target } } or { damage: "2d+1" }';
+const KINDS = 'a roll is { sides, mod }, { against: N }, { d100: { target } } or { damage: "2d+1" } (with max: true, its highest)';
 
 function rollSpec(spec, opts) {
   if (!spec || typeof spec !== 'object' || Array.isArray(spec)) throw new RangeError(KINDS);
   if ('against' in spec) return rollAgainst({ target: spec.against }, opts);
   if ('d100' in spec) return rollPercent(spec.d100, opts);
+  if ('damage' in spec && spec.max === true) return maxRoll(spec.damage, { type: spec.type, floor: spec.floor });
   if ('damage' in spec) return rollDamage(spec.damage, { ...opts, type: spec.type, floor: spec.floor });
   if ('sides' in spec) return roll(spec, opts);
   throw new RangeError(KINDS);
@@ -151,4 +158,4 @@ function rollSpec(spec, opts) {
 
 const rollSpecs = (list, opts) => list.map((spec) => rollSpec(spec, opts));
 
-module.exports = { SIDES, roll, rollMany, rollAgainst, rollDamage, maxDamage, parseDamage, rollPercent, rollSpec, rollSpecs };
+module.exports = { SIDES, roll, rollMany, rollAgainst, rollDamage, maxDamage, maxRoll, parseDamage, rollPercent, rollSpec, rollSpecs };
