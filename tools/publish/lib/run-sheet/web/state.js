@@ -500,11 +500,23 @@
   const condText = (r) => Fight.statusesOf(r).join(', ');
   // "Changed" means the row differs from where it started; touched and put back is not changed (Review L7).
   // A max corrected in the fight counts (a row from before the start kept its max has none to compare).
+  // A pool the row started with (CoC's MP, SAN and Luck, GURPS's FP: step 6b) that moved counts too.
+  const POOLS = ['fp', 'mp', 'san', 'luck', 'er'];
   function changed(r) {
     const st = r.start || {};
     const same = (x, y) => JSON.stringify((x || []).slice().sort()) === JSON.stringify((y || []).slice().sort());
     return r.hp !== st.hp || (has(st, 'max') && r.max !== st.max) || !same(r.conds, st.conds)
-      || (r.exhaustion || 0) !== (st.exhaustion || 0) || !!r.conc !== !!st.conc;
+      || (r.exhaustion || 0) !== (st.exhaustion || 0) || !!r.conc !== !!st.conc
+      || POOLS.some((k) => has(st, k) && r[k] !== st[k]);
+  }
+  // The pools a fight row holds, by the row's own names (fp/fpMax, mp/mpMax, san/sanMax, luck, er/erMax), for the
+  // vitals Task 20 writes; a pool the row lacks is left out, so a D&D figure is as before.
+  const POOL_FIGURES = ['fp', 'fpMax', 'mp', 'mpMax', 'san', 'sanMax', 'luck', 'er', 'erMax'];
+  function poolFigures(r) {
+    const out = {};
+    for (const k of POOL_FIGURES) if (typeof r[k] === 'number' && Number.isFinite(r[k])) out[k] = r[k];
+    if (Object.keys(out).length && r.poolAt) out.poolAt = r.poolAt;
+    return out;
   }
   // Each PC's and ally's figures from every fight, ended or running, that changed it or had a status cleared
   // after it: vitals rowId -> [figure], oldest fight first. All are replayed, so a rest between two fights
@@ -527,7 +539,7 @@
         const moved = changed(r);
         if (!rowId || (!moved && !clears.length)) continue;
         if (!out.has(rowId)) out.set(rowId, []);
-        out.get(rowId).push({ changed: moved, hp: r.hp, max: r.max, conditions: condText(r), condAt: r.condAt || at, hpAt: r.hpAt || at, clears });
+        out.get(rowId).push({ changed: moved, hp: r.hp, max: r.max, conditions: condText(r), condAt: r.condAt || at, hpAt: r.hpAt || at, clears, ...poolFigures(r) });
       }
     }
     return { figures: out, allies };
@@ -820,5 +832,5 @@
     return left.length ? { fight: f.id, title: f.title || '', rows: left } : null;
   }
 
-  return { emptyState, upgrade, reduce, derive, cyclePoint, armClick, castSearch, handoutName, planTarget, placeInFight };
+  return { emptyState, upgrade, reduce, derive, cyclePoint, armClick, castSearch, handoutName, planTarget, placeInFight, fightFigures };
 }));

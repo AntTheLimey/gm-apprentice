@@ -114,11 +114,24 @@ function readPc({ body, fm }) {
 // shape (GURPS-safe empties where D&D words would show).
 function describeGurps(id) {
   const r = describeAs(id, 'GURPS 4e', false);
-  const fight = { initiative: 'speed', initDecimals: 2, orderFixed: true, hpFloor: null, autoOut: false };
-  Object.assign(r, { family: 'gurps', ...fight });
+  // The order is Basic Speed, set at the start (B363); HP goes below 0. Marks are names and numbers for
+  // fight-math's marksOf: Reeling (B419) by `part` of max HP, 0 or less (B419), and the minus-HP lines (B419)
+  // by `times` max HP. Tired (B426) by `part` of max FP; FP's floor (B426) by `floorTimes` its max.
+  const fight = {
+    initiative: 'speed', initDecimals: 2, orderFixed: true, hpFloor: null, autoOut: false,
+    marks: [
+      { key: 'reeling', name: 'Reeling', part: 3 },
+      { key: 'zero', name: '0 or less', atMost: 0, log: 'HP 0 or less' },
+      ...[1, 2, 3, 4, 5].map((n) => ({ key: `minus${n}`, name: `\u2212${n}\u00d7HP`, times: n })),
+    ],
+    tiredAt: { name: 'Tired', part: 3 },
+    pools: [{ key: 'fp', prefix: 'f', label: 'FP', max: 'fpMax', floorTimes: -1 }],
+  };
+  Object.assign(r, { family: 'gurps', ...JSON.parse(JSON.stringify(fight)) });
   Object.assign(r.fight, fight);
   r.toggles = { ...r.toggles, half: false, resisted: false, temp: false, deathSaves: false, concentration: false, exhaustion: false, counters: false, longRest: false };
-  r.statuses = [];
+  // Reeling and Shock are marks, set by the fight itself, so neither is in the list
+  r.statuses = ['Stunned', 'Prone', 'Kneeling', 'Unconscious', 'Mortal wound'];
   r.panelBoxes = [];
   r.rowNumbers = [];
   r.words = { ...r.words, hp: 'HP', ac: '', temp: '', initiative: 'Basic Speed', longRest: '', advancement: '' };

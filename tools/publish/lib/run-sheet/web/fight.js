@@ -8,13 +8,25 @@
 // `afterClear` actions name an ended fight instead. Rows, groups and thresholds come in the action, built by
 // the page with fight-math's `rowsForFight`/`joinRows`, so `reduce` never sees the model.
 (function (root, factory) {
-  if (typeof module === 'object' && module.exports) module.exports = factory(require('./fight-math'));
-  else root.RunSheetFight = factory(root.RunSheetFightMath);
-}(typeof self !== 'undefined' ? self : this, function (FM) {
+  if (typeof module === 'object' && module.exports) module.exports = factory(require('./fight-math'), require('./gurps-math'));
+  else root.RunSheetFight = factory(root.RunSheetFightMath, root.RunSheetGurpsMath);
+}(typeof self !== 'undefined' ? self : this, function (FM, GM) {
   const clone = (v) => (typeof structuredClone === 'function' ? structuredClone(v) : JSON.parse(JSON.stringify(v)));
   const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
   const int = (v) => (isNum(Number(v)) && v !== null && v !== '' ? Math.trunc(Number(v)) : null);
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  // An initiative or a stat: any finite number, rounded to `places` decimals; one with more places is refused (null),
+  // never truncated (GURPS's Speed keeps 2, the rest none).
+  const figureIn = (v, places) => {
+    if (v === null || v === undefined || v === '' || typeof v === 'boolean' || typeof v === 'object') return null;
+    const n = Number(v);
+    if (!isNum(n)) return null;
+    const k = 10 ** places;
+    const r = Math.round(n * k) / k;
+    return Math.abs(r - n) < 1e-9 ? r : null;
+  };
+  const initPlaces = (rules) => (isNum(rules.initDecimals) && rules.initDecimals > 0 ? Math.floor(rules.initDecimals) : 0);
+  const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 
   // The fight's lines are ordinary Log lines, marked `fight: true` (decision 2).
   const say = (s, f, at, text) => { s.events.push({ at, beat: f.beat || null, text, title: f.title || '', fight: true }); };
@@ -90,11 +102,44 @@
     }
   }
 
+  // The system's marks a row's HP lights (GURPS's Reeling and 0 or less): each logged once as it is crossed, and
+  // gone when healing lifts the row above it; `deepest` keeps the deepest minus-HP line passed (Task 13's). `quiet`
+  // sets them with no line (a row entering the fight). Nothing for a system with no marks.
+  function settleMarks(s, f, r, at, quiet) {
+    const rules = FM.rulesOf(f);
+    if (!Array.isArray(rules.marks) || !rules.marks.length) return;
+    const m = FM.marksOf(r, rules);
+    const was = Array.isArray(r.marks) ? r.marks : [];
+    if (!quiet) {
+      for (const name of m.chips) {
+        if (was.includes(name)) continue;
+        const mark = rules.marks.find((x) => x && x.name === name);
+        say(s, f, at, `${nameOf(s, f, r)}: ${(mark && mark.log) || name}.`);
+      }
+    }
+    r.marks = m.chips;
+    r.deepest = m.deepest ? m.deepest.times : 0;
+  }
+  // The system's Tired (GURPS's, by FP): logged when crossed, gone when FP is back above it.
+  function settleTired(s, f, r, at, quiet) {
+    const rules = FM.rulesOf(f);
+    if (!rules.tiredAt) return;
+    const now = FM.tiredOf(r, rules);
+    if (now && !r.tired && !quiet) say(s, f, at, `${nameOf(s, f, r)}: ${rules.tiredAt.name || 'Tired'}.`);
+    r.tired = now;
+  }
+
   // What follows an HP change: a foe going Bloodied is logged; at 0 a foe (a neutral too: its kind is foe)
   // is Out, a PC or ally is Down, and concentration ends; healing from 0 clears Down, Stable and the death
-  // saves; thresholds light.
+  // saves; thresholds light. Where the rules put nobody Out by themselves (`autoOut: false`, CoC and GURPS),
+  // none of D&D's follows: the marks are set and the thresholds light.
   // `opts.over` is the damage left after temp HP and HP.
   function afterHp(s, f, r, before, at, opts) {
+    if (FM.rulesOf(f).autoOut === false) {
+      settleMarks(s, f, r, at);
+      lightThresholds(s, f, r, at);
+      return;
+    }
     const o = opts || {};
     const was = { ...r, hp: before };
     if (r.kind === 'foe' && FM.isBloodied(r) && !FM.isBloodied(was)) say(s, f, at, `${nameOf(s, f, r)} is Bloodied.`);
@@ -176,15 +221,98 @@
   // Incapacitated and the conditions that include it (SRD 5.2.1): each ends Concentration.
   const INCAPACITATING = new Set(['Incapacitated', 'Paralyzed', 'Petrified', 'Stunned', 'Unconscious']);
 
-  // The stat keys Same for all copies (D&D's); 6b adds the keys a system declares here. Nothing else is copied.
+  // The stat keys Same for all copies (D&D's, `STAT_KEYS`); CoC and GURPS copy their own stats and pool maxima
+  // (statKeysOf, by the rules' initiative). Nothing else is copied.
   const STAT_KEYS = ['max', 'ac', 'mod'];
+  function statKeysOf(rules) {
+    const ru = FM.rulesOf({ rules });
+    if (ru.initiative === 'dex') return ['max', 'mpMax', 'sanMax', 'dex'];
+    if (ru.initiative === 'speed') return ['max', 'fpMax', 'st', 'ht', 'dx', 'speed', 'dodge', 'parry', 'block'];
+    return STAT_KEYS;
+  }
+  // A pool's current figure that follows its max: HP its `max`, FP and MP theirs.
+  const FOLLOWS = { max: 'hp', fpMax: 'fp', mpMax: 'mp', sanMax: 'san', erMax: 'er' };
+  // A max typed (or worked out) on a row: a row with no figure in the pool, or one that was full, takes the new
+  // max (final review P4.3: 21, a slip to 2, then 20 gives 20/20); the figure never goes above it.
+  function fitMax(r, maxKey, n) {
+    const cur = FOLLOWS[maxKey];
+    const was = r[maxKey];
+    r[maxKey] = n;
+    if (!cur || n === null) return;
+    if (!isNum(r[cur])) r[cur] = n;
+    else if (isNum(was) && r[cur] === was) r[cur] = n;
+    if (isNum(r[cur]) && r[cur] > n) r[cur] = n;
+  }
+  const typedKey = (r, k, on) => {
+    if (!r.typedKeys || typeof r.typedKeys !== 'object' || Array.isArray(r.typedKeys)) r.typedKeys = {};
+    if (on) r.typedKeys[k] = true; else delete r.typedKeys[k];
+  };
+  // The word an initiative goes by in the fixed-order line.
+  const initWord = (rules) => (rules.initiative === 'speed' ? 'Speed' : 'initiative');
 
-  // After Start, a row given a number is re-placed by one insert; the log says so when it moved.
-  function replace(s, f, r, at) {
-    if (!f.started) return;
+  // A row given a number is re-placed by one insert, the turn kept: after Start always (ruling "latest entry wins"),
+  // and before Start where the order opens sorted (CoC and GURPS; D&D's Sort is the GM's button). The log says so
+  // after Start when it moved (`quiet` drops that line, for a caller that wrote its own). `hold` sets the number
+  // only and marks the row `held`, for placeHeld. In a fixed order (GURPS after Start, B363) a row with a place keeps
+  // it, with a log line; a row without one (added after Start, or blank at Start) takes its place when its first
+  // number arrives, and is fixed from then on.
+  function replace(s, f, r, at, opts) {
+    const o = opts || {};
+    const rules = FM.rulesOf(f);
+    if (o.hold) { r.held = true; return; }
+    if (r.held) r.held = false;
+    if (!f.started) {
+      if (rules.initiative === 'roll' || rules.initiative === undefined) return;
+      f.rows = FM.placeRow(f.rows, r.id, rules);
+      return;
+    }
+    if (rules.orderFixed) {
+      if (r.fixed) { say(s, f, at, `${nameOf(s, f, r)}: ${initWord(rules)} ${isNum(r.ini) ? r.ini : 'cleared'}; the order stays as it started.`); return; }
+      if (!isNum(r.ini)) return;
+      r.fixed = true;
+    }
     const was = f.rows.indexOf(r);
-    f.rows = FM.placeRow(f.rows, r.id, FM.rulesOf(f));
-    if (f.rows.indexOf(r) !== was) say(s, f, at, `${nameOf(s, f, r)} moves in the order: initiative ${isNum(r.ini) ? r.ini : 'cleared'}.`);
+    f.rows = FM.placeRow(f.rows, r.id, rules);
+    if (f.rows.indexOf(r) !== was && !o.quiet) say(s, f, at, `${nameOf(s, f, r)} moves in the order: initiative ${isNum(r.ini) ? r.ini : 'cleared'}.`);
+  }
+  // Every row with a number holds its place in a fixed order (at Start, and at a Sort after it).
+  const fixAll = (f) => { if (FM.rulesOf(f).orderFixed) for (const r of f.rows) if (isNum(r.ini)) r.fixed = true; };
+
+  // The stats setStat takes, each to its row fields (the brief's one map); `ini` follows from DEX and Speed.
+  const STAT_FIELDS = {
+    st: ['st'], ht: ['ht'], dx: ['dx'], dex: ['dex'], speed: ['speed'], hp: ['max'], fp: ['fpMax'], mp: ['mpMax'],
+    san: ['san', 'sanMax'], dodge: ['dodge'], parry: ['parry'], block: ['block'], dr: ['dr'],
+  };
+  // A worked-out figure's `from` key, cleared when the GM types the figure itself.
+  const FROM_KEY = { max: 'hp', fpMax: 'fp', mpMax: 'mp', speed: 'speed' };
+
+  // GURPS's worked-out figures (gurps-math's deriveGurps, the one copy): HP from ST, FP from HT, Basic Speed from
+  // DX and HT, each only where the GM did not type it and the row's own block did not state it, marked in `from`.
+  function deriveStats(r) {
+    if (!GM || typeof GM.deriveGurps !== 'function') return;
+    const from = r.from && typeof r.from === 'object' && !Array.isArray(r.from) ? r.from : {};
+    const stated = (field) => isNum(r[field]) && !from[FROM_KEY[field]];
+    const tk = r.typedKeys || {};
+    const keep = { max: Boolean(tk.max) || stated('max'), fpMax: Boolean(tk.fpMax) || stated('fpMax'), speed: Boolean(tk.speed) || stated('speed') };
+    const d = GM.deriveGurps(r, keep);
+    r.from = { ...from };
+    if (d.max !== undefined) { fitMax(r, 'max', d.max); r.from.hp = d.from.hp; }
+    if (d.fpMax !== undefined) { fitMax(r, 'fpMax', d.fpMax); r.from.fp = d.from.fp; }
+    if (d.speed !== undefined) { r.speed = d.speed; r.from.speed = d.from.speed; }
+  }
+
+  // An entry into a pool other than HP (CoC's `m-4`, `s-6`; GURPS's `f-8`): it stops at the pool's floor and cap
+  // (FM.afterPool); reaching 0 is logged, and GURPS's Tired follows FP. A row with no figure in the pool is unchanged.
+  function poolEntry(s, f, r, e, at) {
+    const pool = FM.poolOf(FM.rulesOf(f), e.pool);
+    const next = FM.afterPool(r, pool, e);
+    if (next === null) return;
+    const was = r[pool.key];
+    r[pool.key] = next;
+    touch(r, at);
+    r.poolAt = at;
+    if (was > 0 && next <= 0) say(s, f, at, `${nameOf(s, f, r)}: ${pool.label || pool.key} ${next === 0 && isNum(pool.floor) && pool.floor === 0 ? '0' : '0 or less'}.`);
+    settleTired(s, f, r, at);
   }
 
   const FIGHT_HANDLERS = {
@@ -200,6 +328,15 @@
       if (a.rules && typeof a.rules === 'object' && !Array.isArray(a.rules)) f.rules = clone(a.rules);
       numberUnseen(f);
       lairOf(f);
+      // CoC and GURPS sort at Fight (S6-D8), when the order opens prefilled from DEX or Speed, blanks last; D&D's
+      // Sort stays the GM's button. Held rows sort with the rest, and the marks a row enters with are set quietly.
+      const rules = FM.rulesOf(f);
+      if (rules.initiative !== 'roll' && rules.initiative !== undefined) {
+        f.rows = FM.sortRows(f.rows, rules);
+        f.sorted = true;
+        for (const r of f.rows) if (r.held) r.held = false;
+      }
+      for (const r of f.rows) { settleMarks(s, f, r, at, true); settleTired(s, f, r, at, true); }
       // Fight here (plan 6a Task 7, review P3): the place goes behind the focused group's panel until End fight
       const bd = a.backdrop;
       if (bd && typeof bd === 'object' && typeof bd.group === 'string' && bd.group && typeof bd.place === 'string' && bd.place) {
@@ -235,7 +372,12 @@
       let newThresholds = 0;
       for (const t of clone(a.thresholds || [])) if (!have.has(t.key)) { f.thresholds.push(t); have.add(t.key); newThresholds += 1; }
       for (const [note, name] of Object.entries(a.carried || {})) if (!f.carried[note]) f.carried[note] = name;
-      // newcomers go to the bottom until the next Sort; the turn stays with its row
+      // newcomers go to the bottom until the next Sort; the turn stays with its row. In a fixed order after Start
+      // (GURPS), a newcomer with its Speed takes its place by one insert and holds it; one without waits for it.
+      if (f.started && FM.rulesOf(f).orderFixed) {
+        for (const r of fresh) if (r.in && isNum(r.ini) && r.kind !== 'lair') { f.rows = FM.placeRow(f.rows, r.id, FM.rulesOf(f)); r.fixed = true; }
+      }
+      for (const r of fresh) { settleMarks(s, f, r, at, true); settleTired(s, f, r, at, true); }
       numberUnseen(f);
       lairOf(f);
       if (!fresh.length && !ticked.length && !groups.length) return;
@@ -260,13 +402,17 @@
     // Before Start the number is all that changes (Sort stays the GM's button). After Start the latest entry
     // wins (ruling "latest entry wins", step6.md): that one row is re-placed by one insert at its sorted
     // place, the rest are not re-sorted, and `f.turn` stays on the same row.
+    // The number keeps the rules' decimals (GURPS's 5.25), never truncated; more places than that is refused.
+    // `hold` sets the number without moving the row (placeHeld moves it).
     setInit: onRow((s, f, r, a, at) => {
       if (r.kind === 'lair') return;
-      if (a.ini === null || a.ini === '' || a.ini === undefined) r.ini = null;
-      else { const n = int(a.ini); if (n === null) return; r.ini = n; }
+      const clear = a.ini === null || a.ini === '' || a.ini === undefined;
+      if (clear) r.ini = null;
+      else { const n = figureIn(a.ini, initPlaces(FM.rulesOf(f))); if (n === null) return; r.ini = n; }
       r.typed = true;
+      typedKey(r, 'ini', !clear);
       touch(r, at);
-      replace(s, f, r, at);
+      replace(s, f, r, at, { hold: a.hold });
     }),
     // Roll fills only boxes still empty, so a number typed meanwhile wins; a PC's box is never rolled.
     rollInit(s, a, at) {
@@ -274,18 +420,32 @@
       if (!f) return;
       for (const [id, v] of Object.entries(a.values || {})) {
         const r = rowOf(f, id);
-        const n = int(v);
+        const n = figureIn(v, initPlaces(FM.rulesOf(f)));
         if (!r || r.kind === 'pc' || n === null || isNum(r.ini)) continue;
         r.ini = n;
         touch(r, at);
         replace(s, f, r, at);
       }
     },
-    fightSort(s, a) {
+    // In a fixed order after Start (GURPS), Sort is how a mistyped Speed is put right: the whole order once, the
+    // turn kept on its row, with a line naming the new order.
+    fightSort(s, a, at) {
       const f = running(s, a);
       if (!f) return;
       f.rows = FM.sortRows(f.rows, FM.rulesOf(f));
       f.sorted = true;
+      for (const r of f.rows) if (r.held) r.held = false;
+      if (f.started && FM.rulesOf(f).orderFixed) {
+        fixAll(f);
+        const items = f.rows.filter((r) => FM.takesTurn(r, f.rows)).map((r) => ({ id: r.id, text: `${nameOf(s, f, r, true)}${isNum(r.ini) ? ` ${r.ini}` : ''}` }));
+        sayRoster(s, f, at, 'The order is sorted again: ', items, '.');
+      }
+    },
+    // Re-places every held row by one insert each, the turn kept (the page sends it, Task 23).
+    placeHeld(s, a, at) {
+      const f = running(s, a);
+      if (!f) return;
+      for (const r of f.rows.filter((x) => x.held)) replace(s, f, r, at);
     },
     // Built on a turn and a round: a second Next built on the same turn is dropped (Review M3).
     fightNext(s, a, at) {
@@ -293,9 +453,13 @@
       if (!f) return;
       if ((a.from === undefined ? null : a.from) !== f.turn || a.round !== f.round) return;
       if (!f.started) {
+        // Start sorts held rows with the rest: all of them when the order is not sorted yet, else one insert each
         if (!f.sorted) { f.rows = FM.sortRows(f.rows, FM.rulesOf(f)); f.sorted = true; }
+        else for (const r of f.rows.filter((x) => x.held)) f.rows = FM.placeRow(f.rows, r.id, FM.rulesOf(f));
+        for (const r of f.rows) if (r.held) r.held = false;
         const first = FM.nextLive(f.rows, null).row;
         if (!first) return;
+        fixAll(f);
         f.started = true;
         f.round = 1;
         f.turn = first.id;
@@ -317,6 +481,7 @@
       if (r.kind === 'lair') return;
       const e = FM.parseEntry(a.entry, FM.rulesOf(f));
       if (!e) return;
+      if (e.pool !== 'hp' && e.pool !== 'temp') { poolEntry(s, f, r, e, at); return; }
       const before = r.hp;
       const temp = r.temp;
       let over = null;
@@ -327,7 +492,8 @@
     }),
     half: onRow((s, f, r, a, at) => { r.half = !!a.on; touch(r, at); }),
     resisted: onRow((s, f, r, a, at) => { r.resisted = !!a.on; touch(r, at); }),
-    // A max typed on a row with no numbers sets its HP too, so a stock creature runs once its HP is typed.
+    // A max typed on a row with no numbers sets its HP too, so a stock creature runs once its HP is typed; a row that
+    // was full stays full, and HP never goes above the maximum (SRD) (fitMax).
     setMax: onRow((s, f, r, a, at) => {
       if (r.kind === 'lair') return;
       const clear = a.max === null || a.max === '';
@@ -335,13 +501,10 @@
       if (!clear && (n === null || n < 0)) return;
       const before = r.hp;
       const maxBefore = r.max;
-      r.max = n;
+      fitMax(r, 'max', n);
       r.typed = true;
-      if (n !== null && !isNum(r.hp)) r.hp = n;
-      // a row that was full stays full: a corrected max (21, a slip to 2, then 20) gives 20/20 (final review P4.3)
-      else if (n !== null && isNum(maxBefore) && r.hp === maxBefore) r.hp = n;
-      // SRD: HP never goes above the maximum
-      if (n !== null && isNum(r.hp) && r.hp > n) r.hp = n;
+      typedKey(r, 'max', !clear);
+      if (r.from && r.from.hp) { r.from = { ...r.from }; delete r.from.hp; }
       touchIfHp(r, at, before, maxBefore);
       afterHp(s, f, r, before, at);
     }),
@@ -350,7 +513,58 @@
       if (n === null && a.ac !== null && a.ac !== '') return;
       r.ac = n;
       r.typed = true;
+      typedKey(r, 'ac', n !== null);
       touch(r, at);
+    }),
+    // A stat typed in the panel (latest entry wins): `key` is one of STAT_FIELDS's, `value` a number (Speed to two
+    // places; DR may be text), or blank to clear it. GURPS works out the figures not typed (deriveStats); a new DEX
+    // or Speed replaces the initiative and re-places the row (replace), a blank one never clears it. `hold` as setInit.
+    setStat: onRow((s, f, r, a, at) => {
+      if (r.kind === 'lair' || typeof a.key !== 'string' || !has(STAT_FIELDS, a.key)) return;
+      const rules = FM.rulesOf(f);
+      const clear = a.value === null || a.value === '' || a.value === undefined;
+      let v = null;
+      if (!clear) {
+        if (a.key === 'dr' && typeof a.value === 'string' && !isNum(Number(a.value))) v = a.value.replace(/\s+/g, ' ').trim().slice(0, 40) || null;
+        else v = figureIn(a.value, a.key === 'speed' ? 2 : 0);
+        if (v === null || (isNum(v) && v < 0)) return;
+      }
+      const before = r.hp;
+      const maxBefore = r.max;
+      const fpBefore = r.fp;
+      const iniBefore = FM.initOf(r, rules);
+      for (const k of STAT_FIELDS[a.key]) {
+        if (has(FOLLOWS, k)) fitMax(r, k, v); else r[k] = v;
+        typedKey(r, k, !clear);
+        if (FROM_KEY[k] && r.from && r.from[FROM_KEY[k]]) { r.from = { ...r.from }; delete r.from[FROM_KEY[k]]; }
+      }
+      if (rules.initiative === 'speed') deriveStats(r);
+      r.typed = true;
+      if (r.hp !== before || r.max !== maxBefore) touchHp(r, at); else touch(r, at);
+      if (r.fp !== fpBefore) r.poolAt = at;
+      // DEX or Speed typed is the latest initiative entry; another stat changes the initiative only when the figure
+      // it is worked out from moved (an ST typed never undoes a typed initiative)
+      const ini = FM.initOf(r, rules);
+      const own = a.key === 'dex' || a.key === 'speed';
+      if (ini !== null && ini !== r.ini && (own || ini !== iniBefore)) {
+        r.ini = ini;
+        if (a.key === 'dex' || a.key === 'speed') typedKey(r, 'ini', true);
+        if (!(f.started && rules.orderFixed && r.fixed)) say(s, f, at, `${nameOf(s, f, r)}: initiative ${ini} from the typed stats.`);
+        replace(s, f, r, at, { hold: a.hold, quiet: true });
+      }
+      afterHp(s, f, r, before, at);
+      settleTired(s, f, r, at);
+    }),
+    // CoC's firearm ready: its initiative is DEX plus the rules' firearmBonus while it is on, re-placed as a typed
+    // number is (after Start, and before it where the order opened sorted).
+    firearm: onRow((s, f, r, a, at) => {
+      if (r.kind === 'lair') return;
+      const on = !!a.on;
+      if (!!r.gun === on) return;
+      r.gun = on;
+      touch(r, at);
+      const ini = FM.initOf(r, FM.rulesOf(f));
+      if (ini !== null && ini !== r.ini) { r.ini = ini; replace(s, f, r, at, { hold: a.hold }); }
     }),
     // A counted row's typed numbers go to the others of this group nobody has typed into, hurt or given a status
     // (FM.untouched), and their HP is the max. The stat keys come (`STAT_KEYS`: max, ac and mod for D&D);
@@ -358,9 +572,11 @@
     sameForAll: onRow((s, f, r, a, at) => {
       const others = FM.groupMates(f.rows, r).filter((x) => x !== r && FM.untouched(x, true));
       if (!others.length) return;
-      const fields = STAT_KEYS.filter((k) => isNum(r[k]));
+      const fields = statKeysOf(FM.rulesOf(f)).filter((k) => isNum(r[k]));
       for (const x of others) {
         for (const k of fields) x[k] = r[k];
+        // each pool full at the copied max (HP as before)
+        for (const k of fields) if (k !== 'max' && FOLLOWS[k]) x[FOLLOWS[k]] = r[k];
         if (isNum(r.max)) x.hp = r.max;
         x.copied = { hp: x.hp, max: x.max };
         touchHp(x, at);
@@ -590,5 +806,5 @@
     };
   }
 
-  return { FIGHT_HANDLERS, statusesOf, STAT_KEYS };
+  return { FIGHT_HANDLERS, statusesOf, STAT_KEYS, statKeysOf };
 }));

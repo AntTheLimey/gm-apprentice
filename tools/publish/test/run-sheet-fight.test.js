@@ -1743,3 +1743,309 @@ describe('undo is only for a plain add', () => {
     assert.equal(s.fight.rows.filter((r) => r.joinId === id2).length, 2);
   });
 });
+
+describe('fight maths by system (step 6b Task 6)', () => {
+  const { systemFor } = require('../lib/run-sheet/systems');
+  const COC = systemFor('coc-7e').describe().fight;
+  const GURPS = systemFor('gurps-4e').describe().fight;
+  const { forPlayers } = require('../lib/run-sheet/players');
+  // a fight of inline rows, as the page would send them (Task 7 builds the page's)
+  const begin = (rules, list) => {
+    const rowsIn = list.map((o, i) => M.blankRow({ id: `r${i + 1}`, ...o }));
+    return RS.reduce(fresh(), { id: 'f1', type: 'fightStart', title: 'T', ...(rules ? { rules } : {}), rows: rowsIn }, now());
+  };
+  const G = (s, a) => RS.reduce(s, { id: nextId(), fight: 'f1', ...a }, now());
+  const named = (s, name) => s.fight.rows.find((r) => r.name === name);
+  const order = (s) => s.fight.rows.map((r) => r.name);
+  const go = (s) => G(s, { type: 'fightNext', from: s.fight.turn, round: s.fight.round });
+  const typeIn = (s, name, entry) => G(s, { type: 'hp', row: named(s, name).id, entry });
+  const lines = (s) => s.events.filter((e) => e.fight).map((e) => e.text);
+  const turnName = (s) => s.fight.rows.find((r) => r.id === s.fight.turn).name;
+
+  it('GURPS damage goes below 0 and is never Out', () => {
+    let s = begin(GURPS, [{ name: 'Bouncer', hp: 12, max: 12 }, { name: 'Kev', kind: 'pc', hp: 10, max: 10 }, { name: 'Guard', hp: 5, max: 5 }]);
+    s = typeIn(s, 'Bouncer', '-20');
+    s = typeIn(s, 'Kev', '-10');
+    assert.deepEqual([named(s, 'Kev').hp, named(s, 'Kev').conds], [0, []], 'exactly 0: no Down');
+    s = typeIn(s, 'Kev', '-4');
+    s = typeIn(s, 'Guard', '-5');
+    assert.deepEqual([named(s, 'Guard').hp, named(s, 'Guard').out], [0, false], 'exactly 0: not Out');
+    assert.deepEqual([named(s, 'Bouncer').hp, named(s, 'Bouncer').out], [-8, false]);
+    assert.deepEqual([named(s, 'Kev').hp, named(s, 'Kev').conds], [-4, []], 'no Down outside D&D');
+    assert.ok(!lines(s).some((t) => /drops|Down|Bloodied|death save/.test(t)), lines(s).join('\n'));
+  });
+
+  it('CoC: HP stops at 0 and is never Out; MP at 0 is logged', () => {
+    let s = begin(COC, [{ name: 'Cultist', hp: 12, max: 12, mp: 3, mpMax: 9, san: 40, sanMax: 40 }]);
+    s = typeIn(s, 'Cultist', '-20');
+    assert.deepEqual([named(s, 'Cultist').hp, named(s, 'Cultist').out], [0, false]);
+    s = typeIn(s, 'Cultist', 'm-5');
+    assert.equal(named(s, 'Cultist').mp, 0, 'MP stops at 0');
+    assert.ok(lines(s).includes('Cultist: MP 0.'), lines(s).join('\n'));
+    s = typeIn(s, 'Cultist', 'm+20');
+    assert.equal(named(s, 'Cultist').mp, 9, 'MP heals to its max');
+    s = typeIn(s, 'Cultist', 's-6');
+    assert.equal(named(s, 'Cultist').san, 34);
+    s = typeIn(s, 'Cultist', 's+90');
+    assert.equal(named(s, 'Cultist').san, 99, 'SAN stops at 99 (KR p155)');
+    assert.ok(!lines(s).some((t) => /drops|Down|Bloodied/.test(t)));
+  });
+
+  it('D&D unchanged: a foe at 0 drops, a fight with no rules runs as D&D', () => {
+    let s = begin(null, [{ name: 'Wolf', hp: 4, max: 11 }]);
+    assert.equal(s.fight.rules, undefined);
+    s = typeIn(s, 'Wolf', '-9');
+    assert.deepEqual([named(s, 'Wolf').hp, named(s, 'Wolf').out], [0, true]);
+    assert.ok(lines(s).includes('Wolf drops.'));
+    s = typeIn(s, 'Wolf', 'm-2');
+    assert.equal(named(s, 'Wolf').mp, null, 'a pool prefix means nothing in D&D');
+  });
+
+  it('marks: 12 → 3 Reeling → 0 or less, each logged once; +20 clears', () => {
+    let s = begin(GURPS, [{ name: 'Kev', kind: 'pc', hp: 12, max: 12 }]);
+    s = typeIn(s, 'Kev', '-9');
+    assert.deepEqual(named(s, 'Kev').marks, ['Reeling']);
+    s = typeIn(s, 'Kev', '-1');
+    s = typeIn(s, 'Kev', '-2');
+    assert.deepEqual(named(s, 'Kev').marks, ['Reeling', '0 or less']);
+    s = typeIn(s, 'Kev', '-1');
+    assert.deepEqual(lines(s).filter((t) => /^Kev:/.test(t)), ['Kev: Reeling.', 'Kev: HP 0 or less.']);
+    s = typeIn(s, 'Kev', '-64');
+    assert.equal(named(s, 'Kev').deepest, 5, 'the deepest line passed, for Task 13');
+    assert.equal(named(s, 'Kev').out, false);
+    s = typeIn(s, 'Kev', '+70');
+    s = typeIn(s, 'Kev', '+20');
+    assert.deepEqual([named(s, 'Kev').hp, named(s, 'Kev').marks, named(s, 'Kev').deepest], [12, [], 0]);
+    // crossed again, logged again
+    s = typeIn(s, 'Kev', '-10');
+    assert.equal(lines(s).filter((t) => t === 'Kev: Reeling.').length, 2);
+  });
+
+  it('Tired at a third of FP, logged when crossed', () => {
+    let s = begin(GURPS, [{ name: 'Kev', kind: 'pc', hp: 12, max: 12, fp: 12, fpMax: 12 }]);
+    s = typeIn(s, 'Kev', 'f-8');
+    assert.deepEqual([named(s, 'Kev').fp, named(s, 'Kev').tired], [4, false]);
+    s = typeIn(s, 'Kev', 'f-1');
+    assert.deepEqual([named(s, 'Kev').fp, named(s, 'Kev').tired], [3, true]);
+    s = typeIn(s, 'Kev', 'f-1');
+    assert.equal(lines(s).filter((t) => t === 'Kev: Tired.').length, 1);
+    s = typeIn(s, 'Kev', 'f-40');
+    assert.equal(named(s, 'Kev').fp, -12, 'FP never below minus its max (B426)');
+    s = typeIn(s, 'Kev', 'f+30');
+    assert.deepEqual([named(s, 'Kev').fp, named(s, 'Kev').tired], [12, false]);
+    assert.equal(named(s, 'Kev').hp, 12, 'FP never touches HP');
+  });
+
+  it('sort at Fight: CoC and GURPS open sorted, blanks last; D&D waits for Sort', () => {
+    const list = [{ name: 'Blank', ini: null }, { name: 'Slow', ini: 4.5 }, { name: 'Fast', ini: 6 }];
+    assert.deepEqual(order(begin(GURPS, list)), ['Fast', 'Slow', 'Blank']);
+    assert.deepEqual(order(begin(COC, [{ name: 'Blank', ini: null }, { name: 'Slow', ini: 40 }, { name: 'Fast', ini: 70 }])), ['Fast', 'Slow', 'Blank']);
+    assert.deepEqual(order(begin(null, list)), ['Blank', 'Slow', 'Fast']);
+    assert.equal(begin(GURPS, list).fight.sorted, true);
+  });
+
+  it('decimal Speed 5.25 kept through setInit, the sort, Next\'s round line and the players\' order', () => {
+    let s = begin(GURPS, [{ name: 'Kev', kind: 'pc', ini: null, note: ADA }, { name: 'Bouncer', ini: 5.5 }]);
+    s = G(s, { type: 'setInit', row: named(s, 'Kev').id, ini: '5.25' });
+    assert.equal(named(s, 'Kev').ini, 5.25);
+    s = G(s, { type: 'setInit', row: named(s, 'Bouncer').id, ini: 5 });
+    assert.deepEqual(order(s), ['Kev', 'Bouncer'], 'before Start the latest entry re-places');
+    s = go(s);
+    assert.ok(lines(s).includes('Round 1: Kev 5.25, Bouncer 5.'), lines(s).join('\n'));
+    // the players' order, on a fight the page's builders made at the Gate
+    const gm = { ...model, rules: { ...model.rules, fight: GURPS } };
+    let p = move(fresh(), ADA, GATE);
+    const fid = nextId();
+    const b = M.rowsForFight({ model: gm, derived: RS.derive(gm, p), state: p, beatKey: GATE.key, idBase: fid });
+    p = RS.reduce(p, { id: fid, type: 'fightStart', beat: GATE.key, title: GATE.title, groups: b.groups, rows: b.rows, thresholds: b.thresholds, rules: GURPS }, now());
+    p = F(p, { type: 'setInit', row: row(p, ADA).id, ini: 5.25 });
+    p = next(p);
+    const panel = forPlayers(model, p, { withheldWords: model.withheldWords, campaign: model.campaign, picId: () => null }).panels.find((x) => x.order);
+    assert.ok(panel, 'the players see the order');
+    assert.deepEqual(panel.order.rows.filter((r) => !r.lair && r.ini !== null).map((r) => r.ini), [5.25]);
+    // more places than the rules keep is refused; D&D and CoC keep none, never truncated
+    s = G(s, { type: 'setInit', row: named(s, 'Kev').id, ini: 5.255 });
+    assert.equal(named(s, 'Kev').ini, 5.25);
+    let d = begin(null, [{ name: 'Wolf', ini: 3 }]);
+    d = G(d, { type: 'setInit', row: named(d, 'Wolf').id, ini: 5.25 });
+    assert.equal(named(d, 'Wolf').ini, 3, 'a decimal is refused where the rules keep none');
+    d = G(d, { type: 'rollInit', values: { [named(d, 'Wolf').id]: 7 } });
+    assert.equal(named(d, 'Wolf').ini, 3, 'Roll fills an empty box only');
+    let g = begin(GURPS, [{ name: 'Bouncer', ini: null }]);
+    g = G(g, { type: 'rollInit', values: { [named(g, 'Bouncer').id]: 5.75 } });
+    assert.equal(named(g, 'Bouncer').ini, 5.75);
+  });
+
+  it('GURPS after Start: a typed Speed changes the figure, not the place; before Start it re-places', () => {
+    let s = begin(GURPS, [{ name: 'Bouncer 1', ini: 5, speed: 5 }, { name: 'Kev', kind: 'pc', ini: 6, speed: 6 }, { name: 'Bouncer 2', ini: 5.5, speed: 5.5 }]);
+    assert.deepEqual(order(s), ['Kev', 'Bouncer 2', 'Bouncer 1']);
+    s = G(s, { type: 'setStat', row: named(s, 'Bouncer 1').id, key: 'speed', value: 7 });
+    assert.deepEqual(order(s), ['Bouncer 1', 'Kev', 'Bouncer 2'], 'before Start it re-places');
+    s = go(s);
+    s = go(s);
+    assert.equal(turnName(s), 'Kev');
+    s = G(s, { type: 'setStat', row: named(s, 'Bouncer 2').id, key: 'speed', value: 8 });
+    assert.equal(named(s, 'Bouncer 2').ini, 8);
+    assert.deepEqual(order(s), ['Bouncer 1', 'Kev', 'Bouncer 2'], 'the order stays as it started (B363)');
+    assert.equal(turnName(s), 'Kev');
+    assert.ok(lines(s).includes('Bouncer 2: Speed 8; the order stays as it started.'), lines(s).join('\n'));
+    s = G(s, { type: 'setInit', row: named(s, 'Bouncer 1').id, ini: 1 });
+    assert.deepEqual(order(s), ['Bouncer 1', 'Kev', 'Bouncer 2'], 'a typed initiative is the same');
+    // CoC keeps 6a's after-Start re-placing
+    let c = begin(COC, [{ name: 'A', ini: 70, dex: 70 }, { name: 'B', ini: 50, dex: 50 }]);
+    c = go(c);
+    c = G(c, { type: 'setStat', row: named(c, 'B').id, key: 'dex', value: 80 });
+    assert.deepEqual(order(c), ['B', 'A']);
+    assert.equal(turnName(c), 'A');
+  });
+
+  it('a row added after Start takes its place when its first Speed arrives, then stays', () => {
+    let s = begin(GURPS, [{ name: 'Kev', kind: 'pc', ini: 6, speed: 6 }, { name: 'Blank', ini: null }, { name: 'Slow', ini: 4, speed: 4 }]);
+    assert.deepEqual(order(s), ['Kev', 'Slow', 'Blank']);
+    s = go(s);
+    const late = M.blankRow({ id: 'late', name: 'Late', ini: null });
+    s = G(s, { type: 'fightJoin', rows: [late], label: 'Late' });
+    assert.deepEqual(order(s), ['Kev', 'Slow', 'Blank', 'Late']);
+    s = G(s, { type: 'setStat', row: 'late', key: 'speed', value: 5 });
+    assert.deepEqual(order(s), ['Kev', 'Late', 'Slow', 'Blank'], 'its first Speed places it');
+    s = G(s, { type: 'setStat', row: named(s, 'Blank').id, key: 'speed', value: 7 });
+    assert.deepEqual(order(s), ['Blank', 'Kev', 'Late', 'Slow'], 'a row blank at Start takes its place too');
+    assert.equal(turnName(s), 'Kev');
+    s = G(s, { type: 'setStat', row: 'late', key: 'speed', value: 3 });
+    assert.deepEqual(order(s), ['Blank', 'Kev', 'Late', 'Slow'], 'then it is fixed');
+    // a row that joins with its Speed takes its place at once
+    s = G(s, { type: 'fightJoin', rows: [M.blankRow({ id: 'quick', name: 'Quick', ini: 6.5, speed: 6.5 })], label: 'Quick' });
+    assert.deepEqual(order(s), ['Blank', 'Quick', 'Kev', 'Late', 'Slow']);
+  });
+
+  it('Sort after Start re-sorts once, the turn kept', () => {
+    let s = begin(GURPS, [{ name: 'Kev', kind: 'pc', ini: 6, speed: 6 }, { name: 'Slow', ini: 4, speed: 4 }]);
+    s = go(s);
+    s = go(s);
+    assert.equal(turnName(s), 'Slow');
+    s = G(s, { type: 'setStat', row: named(s, 'Slow').id, key: 'speed', value: 9 });
+    assert.deepEqual(order(s), ['Kev', 'Slow']);
+    s = G(s, { type: 'fightSort' });
+    assert.deepEqual(order(s), ['Slow', 'Kev']);
+    assert.equal(turnName(s), 'Slow');
+    assert.ok(lines(s).includes('The order is sorted again: Slow 9, Kev 6.'), lines(s).join('\n'));
+  });
+
+  it('firearm adds 50 and re-places after Start', () => {
+    let s = begin(COC, [{ name: 'Ann', kind: 'pc', ini: 60, dex: 60 }, { name: 'Cultist', ini: 50, dex: 50 }, { name: 'Brute', ini: 40, dex: 40 }]);
+    s = go(s);
+    s = G(s, { type: 'firearm', row: named(s, 'Brute').id, on: true });
+    assert.deepEqual([named(s, 'Brute').gun, named(s, 'Brute').ini], [true, 90]);
+    assert.deepEqual(order(s), ['Brute', 'Ann', 'Cultist']);
+    assert.equal(turnName(s), 'Ann');
+    s = G(s, { type: 'firearm', row: named(s, 'Brute').id, on: false });
+    assert.equal(named(s, 'Brute').ini, 40);
+    assert.deepEqual(order(s), ['Ann', 'Cultist', 'Brute']);
+  });
+
+  it('setStat ST 11 HT 10 DX 12 gives HP 11, FP 10, Speed 5.5, marked, and re-places', () => {
+    let s = begin(GURPS, [{ name: 'Kev', kind: 'pc', ini: 5.25, speed: 5.25 }, { name: 'Bouncer', ini: null }]);
+    const id = named(s, 'Bouncer').id;
+    for (const [key, value] of [['st', 11], ['ht', 10], ['dx', 12]]) s = G(s, { type: 'setStat', row: id, key, value });
+    const b = named(s, 'Bouncer');
+    assert.deepEqual([b.st, b.ht, b.dx, b.max, b.hp, b.fpMax, b.fp, b.speed, b.ini], [11, 10, 12, 11, 11, 10, 10, 5.5, 5.5]);
+    assert.deepEqual(b.from, { hp: 'from ST', fp: 'from HT', speed: 'from DX and HT' });
+    assert.deepEqual(order(s), ['Bouncer', 'Kev']);
+    assert.ok(lines(s).includes('Bouncer: initiative 5.5 from the typed stats.'), lines(s).join('\n'));
+    // a stat typed later works the figures out again
+    s = G(s, { type: 'setStat', row: id, key: 'st', value: 13 });
+    assert.deepEqual([named(s, 'Bouncer').max, named(s, 'Bouncer').hp], [13, 13]);
+  });
+
+  it('a typed Speed is not replaced by a later DX; a blank result never clears a typed initiative', () => {
+    let s = begin(GURPS, [{ name: 'Bouncer', ini: null, ht: 10 }]);
+    const id = named(s, 'Bouncer').id;
+    s = G(s, { type: 'setStat', row: id, key: 'speed', value: 6 });
+    s = G(s, { type: 'setStat', row: id, key: 'dx', value: 14 });
+    assert.deepEqual([named(s, 'Bouncer').speed, named(s, 'Bouncer').ini], [6, 6]);
+    assert.equal(named(s, 'Bouncer').from.speed, undefined);
+    let t = begin(GURPS, [{ name: 'Guard', ini: null }]);
+    const g = named(t, 'Guard').id;
+    t = G(t, { type: 'setInit', row: g, ini: 5.75 });
+    t = G(t, { type: 'setStat', row: g, key: 'dx', value: 12 });
+    assert.equal(named(t, 'Guard').ini, 5.75, 'no HT, no Speed: the typed initiative stays');
+    let c = begin(COC, [{ name: 'Cultist', ini: 50, dex: 50 }]);
+    c = G(c, { type: 'setStat', row: named(c, 'Cultist').id, key: 'dex', value: null });
+    assert.equal(named(c, 'Cultist').ini, 50);
+  });
+
+  it('setInit and setStat with hold set the number without moving the row; placeHeld moves them, the turn kept', () => {
+    let s = begin(GURPS, [{ name: 'A', ini: 6, speed: 6 }, { name: 'B', ini: 5, speed: 5 }, { name: 'C', ini: 4, speed: 4 }]);
+    s = G(s, { type: 'setInit', row: named(s, 'C').id, ini: 9, hold: true });
+    s = G(s, { type: 'setStat', row: named(s, 'B').id, key: 'speed', value: 8, hold: true });
+    assert.deepEqual(order(s), ['A', 'B', 'C']);
+    assert.deepEqual([named(s, 'C').ini, named(s, 'B').ini], [9, 8]);
+    s = G(s, { type: 'placeHeld' });
+    assert.deepEqual(order(s), ['C', 'B', 'A']);
+    assert.ok(s.fight.rows.every((r) => !r.held));
+    // after Start in CoC, the turn kept
+    let c = begin(COC, [{ name: 'A', ini: 70, dex: 70 }, { name: 'B', ini: 50, dex: 50 }, { name: 'C', ini: 40, dex: 40 }]);
+    c = go(c);
+    c = go(c);
+    c = G(c, { type: 'setInit', row: named(c, 'C').id, ini: 90, hold: true });
+    assert.deepEqual(order(c), ['A', 'B', 'C']);
+    c = G(c, { type: 'placeHeld' });
+    assert.deepEqual(order(c), ['C', 'A', 'B']);
+    assert.equal(turnName(c), 'B');
+    // Start sorts held rows with the rest
+    let h = begin(COC, [{ name: 'A', ini: 70 }, { name: 'B', ini: 50 }]);
+    h = G(h, { type: 'setInit', row: named(h, 'B').id, ini: 80, hold: true });
+    h = go(h);
+    assert.deepEqual(order(h), ['B', 'A']);
+    assert.equal(named(h, 'B').held, false);
+  });
+
+  it('setInit, setMax, setAc and setStat each record their typedKeys field; setStat hp sets max, speed sets speed and ini', () => {
+    let s = begin(GURPS, [{ name: 'R', ini: null }]);
+    const id = 'r1';
+    s = G(s, { type: 'setInit', row: id, ini: 5 });
+    s = G(s, { type: 'setMax', row: id, max: 14 });
+    s = G(s, { type: 'setAc', row: id, ac: 3 });
+    assert.deepEqual(named(s, 'R').typedKeys, { ini: true, max: true, ac: true });
+    s = G(s, { type: 'setStat', row: id, key: 'hp', value: 15 });
+    assert.deepEqual([named(s, 'R').max, named(s, 'R').hp], [15, 15]);
+    s = G(s, { type: 'setStat', row: id, key: 'speed', value: 6.25 });
+    s = G(s, { type: 'setStat', row: id, key: 'fp', value: 11 });
+    s = G(s, { type: 'setStat', row: id, key: 'dodge', value: 9 });
+    const r = named(s, 'R');
+    assert.deepEqual(r.typedKeys, { ini: true, max: true, ac: true, speed: true, fpMax: true, dodge: true });
+    assert.deepEqual([r.speed, r.ini, r.fpMax, r.fp, r.dodge, r.typed], [6.25, 6.25, 11, 11, 9, true]);
+    let c = begin(COC, [{ name: 'Q', ini: null }]);
+    for (const [key, value] of [['dex', 55], ['mp', 8], ['san', 45], ['st', 12]]) c = G(c, { type: 'setStat', row: 'r1', key, value });
+    const q = named(c, 'Q');
+    assert.deepEqual(q.typedKeys, { dex: true, ini: true, mpMax: true, san: true, sanMax: true, st: true });
+    assert.deepEqual([q.dex, q.ini, q.mpMax, q.mp, q.san, q.sanMax], [55, 55, 8, 8, 45, 45]);
+    c = G(c, { type: 'setStat', row: 'r1', key: 'nonsense', value: 3 });
+    c = G(c, { type: 'setStat', row: 'r1', key: 'dex', value: 'abc' });
+    assert.equal(named(c, 'Q').dex, 55);
+  });
+
+  it('an old saved fight with no rules runs as D&D', () => {
+    let s = begin(null, [{ name: 'Wolf', ini: null, hp: 11, max: 11 }, { name: 'Ada', kind: 'pc', ini: 12, hp: 5, max: 5 }]);
+    assert.deepEqual(order(s), ['Wolf', 'Ada'], 'not sorted at Fight');
+    s = G(s, { type: 'setInit', row: named(s, 'Wolf').id, ini: 15 });
+    assert.deepEqual(order(s), ['Wolf', 'Ada']);
+    s = go(s);
+    s = typeIn(s, 'Ada', '-6');
+    assert.deepEqual(named(s, 'Ada').conds, ['Down']);
+    assert.equal(named(s, 'Ada').hp, 0);
+  });
+});
+
+describe('fight maths by system: a typed initiative and other stats (step 6b Task 6)', () => {
+  const { systemFor } = require('../lib/run-sheet/systems');
+  const GURPS = systemFor('gurps-4e').describe().fight;
+  it('an ST typed never undoes a typed initiative; a new Speed does', () => {
+    let s = RS.reduce(fresh(), { id: 'f1', type: 'fightStart', title: 'T', rules: GURPS, rows: [M.blankRow({ id: 'r1', name: 'Guard', ini: 5.5, speed: 5.5, dx: 12, ht: 10 })] }, now());
+    const G = (a) => { s = RS.reduce(s, { id: nextId(), fight: 'f1', row: 'r1', ...a }, now()); return s.fight.rows[0]; };
+    G({ type: 'setInit', ini: 6 });
+    assert.equal(G({ type: 'setStat', key: 'st', value: 13 }).ini, 6);
+    assert.equal(G({ type: 'setStat', key: 'ht', value: 12 }).ini, 6, 'a block-stated Speed is not worked out again');
+    assert.equal(G({ type: 'setStat', key: 'speed', value: 5.75 }).ini, 5.75);
+  });
+});

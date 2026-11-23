@@ -8,13 +8,15 @@ const row = (o) => ({
 });
 
 test('entries: -37, 37, +8, t5, T5, spaces; nonsense and 10000 give null', () => {
-  assert.deepEqual(M.parseEntry('-37'), { kind: 'damage', n: 37 });
-  assert.deepEqual(M.parseEntry('37'), { kind: 'damage', n: 37 });
-  assert.deepEqual(M.parseEntry('+8'), { kind: 'heal', n: 8 });
-  assert.deepEqual(M.parseEntry('t5'), { kind: 'temp', n: 5 });
-  assert.deepEqual(M.parseEntry('T5'), { kind: 'temp', n: 5 });
-  assert.deepEqual(M.parseEntry('  -37 '), { kind: 'damage', n: 37 });
-  assert.deepEqual(M.parseEntry('9999'), { kind: 'damage', n: 9999 });
+  // step 6b Task 6 changed this on purpose: the brief names parseEntry's `pool` key (`hp`, or `temp` for t5). The
+  // kinds and numbers, and every refusal below, are as before.
+  assert.deepEqual(M.parseEntry('-37'), { pool: 'hp', kind: 'damage', n: 37 });
+  assert.deepEqual(M.parseEntry('37'), { pool: 'hp', kind: 'damage', n: 37 });
+  assert.deepEqual(M.parseEntry('+8'), { pool: 'hp', kind: 'heal', n: 8 });
+  assert.deepEqual(M.parseEntry('t5'), { pool: 'temp', kind: 'temp', n: 5 });
+  assert.deepEqual(M.parseEntry('T5'), { pool: 'temp', kind: 'temp', n: 5 });
+  assert.deepEqual(M.parseEntry('  -37 '), { pool: 'hp', kind: 'damage', n: 37 });
+  assert.deepEqual(M.parseEntry('9999'), { pool: 'hp', kind: 'damage', n: 9999 });
   for (const bad of ['', 'abc', '10000', '1.5', '--3', 't', '+', 'tt5', '3d6', null, undefined]) assert.equal(M.parseEntry(bad), null, String(bad));
 });
 
@@ -778,4 +780,131 @@ test('hpStart is held to the block\'s HP when it has one, and taken as written w
   assert.deepEqual([over.hp, over.max], [10, 10], 'HP 10 (currently 12) starts at 10');
   const open = start({ ...imp, hp: null, hpStart: 12 });
   assert.deepEqual([open.hp, open.max], [12, null], 'no HP figure: unclamped');
+});
+
+// ---- fight maths by system (step 6b Task 6) ----
+
+const { systemFor } = require('../lib/run-sheet/systems');
+const COC = systemFor('coc-7e').describe().fight;
+const GURPS = systemFor('gurps-4e').describe().fight;
+
+test('parseEntry by system', () => {
+  assert.deepEqual(M.parseEntry('m-4', COC), { pool: 'mp', kind: 'damage', n: 4 });
+  assert.deepEqual(M.parseEntry('M+2', COC), { pool: 'mp', kind: 'heal', n: 2 });
+  assert.deepEqual(M.parseEntry('s-6', COC), { pool: 'san', kind: 'damage', n: 6 });
+  assert.deepEqual(M.parseEntry('s+1', COC), { pool: 'san', kind: 'heal', n: 1 });
+  assert.deepEqual(M.parseEntry('-7', COC), { pool: 'hp', kind: 'damage', n: 7 });
+  assert.deepEqual(M.parseEntry('7', GURPS), { pool: 'hp', kind: 'damage', n: 7 });
+  assert.deepEqual(M.parseEntry('+3', GURPS), { pool: 'hp', kind: 'heal', n: 3 });
+  assert.deepEqual(M.parseEntry('f-8', GURPS), { pool: 'fp', kind: 'damage', n: 8 });
+  assert.deepEqual(M.parseEntry('f+2', GURPS), { pool: 'fp', kind: 'heal', n: 2 });
+  // a prefix the system lacks is invalid
+  for (const bad of ['t5', 'f-8', 'e-3']) assert.equal(M.parseEntry(bad, COC), null, bad);
+  for (const bad of ['t5', 'm-4', 's-6', 'e-3']) assert.equal(M.parseEntry(bad, GURPS), null, bad);
+  for (const bad of ['m-4', 's-6', 'f-8']) assert.equal(M.parseEntry(bad), null, `${bad} in D&D`);
+  assert.deepEqual(M.parseEntry('t5'), { pool: 'temp', kind: 'temp', n: 5 });
+  const both = { ...GURPS, pools: GURPS.pools.concat(COC.pools) };
+  for (const bad of ['m', 'm-', 'mm-4', 'f--8', 'f-1.5', 'f-10000', 'fm-2']) assert.equal(M.parseEntry(bad, both), null, bad);
+  // a bare figure after a pool's letter is a loss, as a bare number is damage
+  assert.deepEqual(M.parseEntry('f8', GURPS), { pool: 'fp', kind: 'damage', n: 8 });
+});
+
+test('afterDamage: a missing floor is 0; only an explicit null floor lets HP go below 0', () => {
+  assert.deepEqual(M.afterDamage({ hp: 3, temp: 0 }, 10, {}), { hp: 0, temp: 0 });
+  assert.deepEqual(M.afterDamage({ hp: 3, temp: 0 }, 10, { hpFloor: null }), { hp: -7, temp: 0 });
+  assert.deepEqual(M.afterDamage({ hp: 3, temp: 0 }, 10, COC), { hp: 0, temp: 0 });
+  assert.deepEqual(M.afterDamage({ hp: 3, temp: 0 }, 10, GURPS), { hp: -7, temp: 0 });
+});
+
+test('sort: GURPS ties by DX then PCs; CoC ties by the higher combat skill, then PCs; blanks last; D&D unchanged', () => {
+  const ids = (rows, rules) => M.sortRows(rows, rules).map((r) => r.id);
+  const g = [
+    row({ id: 'blank', ini: null, dx: 15 }),
+    row({ id: 'slow', ini: 5, dx: 10 }),
+    row({ id: 'foeDx11', ini: 5.5, dx: 11 }),
+    row({ id: 'pcDx11', kind: 'pc', ini: 5.5, dx: 11 }),
+    row({ id: 'foeDx13', ini: 5.5, dx: 13 }),
+    row({ id: 'fast', ini: 6.25, dx: 9 }),
+    row({ id: 'off', in: false, ini: 9 }),
+  ];
+  assert.deepEqual(ids(g, GURPS), ['fast', 'foeDx13', 'pcDx11', 'foeDx11', 'slow', 'blank', 'off']);
+  const c = [
+    row({ id: 'none', ini: 60 }),
+    row({ id: 'pcNone', kind: 'pc', ini: 60 }),
+    row({ id: 'fighter', ini: 60, fighting: 55, firearms: 20 }),
+    row({ id: 'gunman', ini: 60, fighting: 25, firearms: 70 }),
+    // a PC takes its highest specialisation
+    row({ id: 'pcSpec', kind: 'pc', ini: 60, fighting: { Brawl: 40, Sword: 65 }, firearms: { Handgun: 30 } }),
+    row({ id: 'blank', ini: null, fighting: 90 }),
+    row({ id: 'quick', ini: 75 }),
+  ];
+  assert.deepEqual(ids(c, COC), ['quick', 'gunman', 'pcSpec', 'fighter', 'pcNone', 'none', 'blank']);
+  // the combat skill is worked out on read: a figure typed since counts
+  const typed = c.map((r) => (r.id === 'none' ? { ...r, fighting: 99 } : r));
+  assert.deepEqual(ids(typed, COC).slice(0, 2), ['quick', 'none']);
+  // D&D: the modifier, then PCs, as before; DX and combat skills mean nothing
+  const d = [row({ id: 'a', ini: 12, mod: 1, dx: 18 }), row({ id: 'b', ini: 12, mod: 3 }), row({ id: 'p', kind: 'pc', ini: 12, mod: 1, fighting: 99 })];
+  assert.deepEqual(ids(d), ['b', 'p', 'a']);
+  assert.deepEqual(ids(d, M.DND_FIGHT_RULES), ['b', 'p', 'a']);
+});
+
+test('marksOf: Reeling and 0 or less as chips; the deepest negative line passed', () => {
+  const at = (hp, max = 12) => M.marksOf({ hp, max }, GURPS);
+  assert.deepEqual(at(12), { chips: [], deepest: null });
+  assert.deepEqual(at(4).chips, [], 'exactly a third is not yet Reeling (B419)');
+  assert.deepEqual(at(3).chips, ['Reeling']);
+  assert.deepEqual(at(0).chips, ['Reeling', '0 or less']);
+  assert.deepEqual(at(-11).deepest, null);
+  assert.equal(at(-12).deepest.times, 1);
+  assert.equal(at(-30).deepest.times, 2);
+  const dead = at(-65);
+  assert.equal(dead.deepest.times, 5);
+  assert.equal(dead.deepest.name, '−5×HP');
+  assert.deepEqual(dead.chips, ['Reeling', '0 or less']);
+  // a row with no max still knows 0 or less; nothing for D&D or CoC
+  assert.deepEqual(M.marksOf({ hp: -2, max: null }, GURPS), { chips: ['0 or less'], deepest: null });
+  assert.deepEqual(M.marksOf({ hp: -2, max: 12 }), { chips: [], deepest: null });
+  assert.deepEqual(M.marksOf({ hp: 0, max: 12 }, COC), { chips: [], deepest: null });
+  assert.ok(GURPS.marks.every((m) => typeof m.name === 'string' && m.name.length <= 12), 'names and numbers only');
+});
+
+test('Reeling is not in the GURPS status list', () => {
+  const d = systemFor('gurps-4e').describe();
+  assert.deepEqual(d.statuses, ['Stunned', 'Prone', 'Kneeling', 'Unconscious', 'Mortal wound']);
+  assert.ok(!d.statuses.includes('Reeling') && !d.statuses.includes('Shock'));
+  assert.deepEqual(systemFor('coc-7e').describe().statuses, ['Major wound', 'Prone', 'Unconscious', 'Dying', 'Temporary insanity', 'Indefinite insanity']);
+});
+
+test('Tired at a third of FP', () => {
+  assert.equal(M.tiredOf({ fp: 4, fpMax: 12 }, GURPS), false, 'exactly a third is not yet Tired (B426)');
+  assert.equal(M.tiredOf({ fp: 3, fpMax: 12 }, GURPS), true);
+  assert.equal(M.tiredOf({ fp: -3, fpMax: 12 }, GURPS), true);
+  assert.equal(M.tiredOf({ fp: null, fpMax: 12 }, GURPS), false);
+  assert.equal(M.tiredOf({ fp: 1, fpMax: 12 }), false, 'D&D has none');
+  assert.equal(M.tiredOf({ fp: 1, fpMax: 12 }, COC), false);
+});
+
+test('the rows take the system\'s fields: initiative from DEX or Speed, the pools, the readers\' names mapped', () => {
+  const build = (rules, pc, foe) => {
+    const model = { rules: { fight: rules }, pcs: [pc], cast: [], beats: [{ key: 'b1', title: 'B', foes: [foe] }] };
+    return M.rowsForFight({ model, derived: { beats: model.beats, vitals: [] }, state: {}, beatKey: 'b1', idBase: 'x' }).rows;
+  };
+  const [kev, bouncer] = build(GURPS,
+    { note: 'P/Kev.md', name: 'Kev', hpNow: 10, hpMax: 12, fpNow: 9, fpMax: 11, speed: 5.25, dx: 11, ht: 10 },
+    { key: 'b1.f1', note: 'N/Bouncer.md', name: 'Bouncer', hp: 12, hpStart: 10, init: 5.5, fp: 11, fpMax: 11, fpStart: 7, speed: 5.5, dx: 12, st: 12, ht: 10, dodge: 8, dr: '1', from: { fp: 'from HT' } });
+  assert.deepEqual([kev.ini, kev.mod, kev.hp, kev.max, kev.fp, kev.fpMax, kev.speed, kev.dx, kev.ht], [5.25, 0, 10, 12, 9, 11, 5.25, 11, 10]);
+  assert.deepEqual([bouncer.ini, bouncer.mod, bouncer.hp, bouncer.max, bouncer.fp, bouncer.fpMax, bouncer.speed, bouncer.dx, bouncer.st, bouncer.ht, bouncer.dodge, bouncer.dr],
+    [5.5, 0, 10, 12, 7, 11, 5.5, 12, 12, 10, 8, '1']);
+  assert.deepEqual(bouncer.from, { fp: 'from HT' });
+  assert.deepEqual(bouncer.typedKeys, {});
+  assert.deepEqual(bouncer.marks, []);
+  const [ann, cultist] = build(COC,
+    { note: 'P/Ann.md', name: 'Ann', hpNow: 9, hpMax: 11, mpNow: 10, mpMax: 12, sanNow: 55, sanMax: 60, luck: 45, dex: 70 },
+    { key: 'b1.f1', note: 'N/Cultist.md', name: 'Cultist', hp: 12, init: 50, mp: 9, mpMax: 9, san: 40, sanMax: 40, dex: 50, armour: 'none', from: {} });
+  assert.deepEqual([ann.ini, ann.hp, ann.max, ann.mp, ann.mpMax, ann.san, ann.sanMax, ann.luck, ann.dex], [70, 9, 11, 10, 12, 55, 60, 45, 70]);
+  assert.deepEqual([cultist.ini, cultist.mod, cultist.mp, cultist.mpMax, cultist.san, cultist.sanMax, cultist.dex, cultist.armour, cultist.attacks, cultist.gun], [50, 0, 9, 9, 40, 40, 50, 0, 1, false]);
+  // D&D rows keep today's numbers: no initiative until rolled, the block's modifier
+  const [dpc, dfoe] = build(M.DND_FIGHT_RULES, { note: 'P/D.md', name: 'D', hpNow: 5, hpMax: 9, init: 2 }, { key: 'b1.f1', note: 'N/W.md', name: 'W', hp: 11, init: 3 });
+  assert.deepEqual([dpc.ini, dpc.mod, dfoe.ini, dfoe.mod], [null, 2, null, 3]);
+  assert.deepEqual(dfoe.start, { hp: 11, max: 11, conds: [], exhaustion: 0, conc: false }, 'a D&D row starts as before');
 });

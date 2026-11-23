@@ -35,15 +35,38 @@
 
   // ---- the HP box ----
 
-  // `-37` and a bare `37` are damage, `+8` heals, `t5` sets temp HP. Integers 0-9999 only. `rules` is the fight's
-  // (rulesOf); D&D's grammar is every system's until a system adds its own.
+  // A fight's pools beyond HP (`rules.pools`: MP and SAN for CoC, FP for GURPS), each with its entry-box letter.
+  const poolsOf = (rules) => (Array.isArray(rulesOf({ rules }).pools) ? rulesOf({ rules }).pools : []).filter((p) => p && typeof p.key === 'string');
+  const poolOf = (rules, key) => poolsOf(rules).find((p) => p.key === key) || null;
+
+  // `-37` and a bare `37` are damage, `+8` heals, everywhere. A pool's letter first (`m-4`, `s+1`, `f-8`, a bare
+  // `f8` a loss) is that pool's, and only in a system that has it. `t5` sets temp HP, D&D's only: a system with
+  // pools of its own has none. Integers 0-9999 only. `rules` is the fight's (rulesOf).
   function parseEntry(text, rules = DND_FIGHT_RULES) {
-    const m = /^\s*([+-]|t)?\s*(\d+)\s*$/i.exec(String(text === null || text === undefined ? '' : text));
+    const m = /^\s*([a-z])?\s*([+-])?\s*(\d+)\s*$/i.exec(String(text === null || text === undefined ? '' : text));
     if (!m) return null;
-    const n = Number(m[2]);
+    const n = Number(m[3]);
     if (n > 9999) return null;
-    const sign = (m[1] || '').toLowerCase();
-    return { kind: sign === '+' ? 'heal' : sign === 't' ? 'temp' : 'damage', n };
+    const letter = (m[1] || '').toLowerCase();
+    const kind = m[2] === '+' ? 'heal' : 'damage';
+    if (!letter) return { pool: 'hp', kind, n };
+    if (letter === 't') return m[2] || poolsOf(rules).length ? null : { pool: 'temp', kind: 'temp', n };
+    const pool = poolsOf(rules).find((p) => p.prefix === letter);
+    return pool ? { pool: pool.key, kind, n } : null;
+  }
+
+  // A pool after an entry: a loss stops at the pool's floor (a number, or `floorTimes` its max), a gain at its cap
+  // or its max. A row with no figure in the pool answers null.
+  function afterPool(row, pool, e) {
+    const cur = row && pool ? row[pool.key] : null;
+    if (!isNum(cur)) return null;
+    const max = row[pool.max];
+    if (e.kind === 'heal') {
+      const top = isNum(pool.cap) ? pool.cap : (isNum(max) ? max : null);
+      return top === null ? cur + e.n : Math.max(cur, Math.min(top, cur + e.n));
+    }
+    const floor = isNum(pool.floor) ? pool.floor : (isNum(pool.floorTimes) && isNum(max) ? pool.floorTimes * max : null);
+    return floor === null ? cur - e.n : Math.min(cur, Math.max(floor, cur - e.n));
   }
 
   // Half (one-shot) halves first, then resisted (sticky) halves again, each rounding down.
@@ -55,12 +78,14 @@
   }
 
   // Temp HP takes damage first; HP stops at the rules' floor (D&D's 0), or goes on down when the floor is null.
+  // Rules with no `hpFloor` at all floor at 0: only an explicit null (GURPS) means none.
   function afterDamage({ hp, temp }, d, rules = DND_FIGHT_RULES) {
     const t = temp || 0;
     const soak = Math.min(t, d);
     // a row with no HP still loses the temp HP it was given
     if (hp === null || hp === undefined) return { hp: null, temp: t - soak };
-    const floor = rulesOf({ rules }).hpFloor;
+    const given = rulesOf({ rules }).hpFloor;
+    const floor = given === undefined ? 0 : given;
     const left = hp - (d - soak);
     return { hp: isNum(floor) ? Math.max(floor, left) : left, temp: t - soak };
   }
@@ -98,9 +123,44 @@
 
   // ---- order and turns ----
 
+  // The higher of a figure that may be one number or a PC's specialisations ({ Brawl: 40, Sword: 65 } or a list).
+  const topOf = (v) => {
+    const all = isNum(v) ? [v] : (v && typeof v === 'object' ? Object.values(v).filter(isNum) : []);
+    return all.length ? Math.max(...all) : null;
+  };
+  // A CoC row's combat skill for a DEX tie (KR p102): the higher of its Fighting and Firearms, worked out each time
+  // it is read, so a figure typed in the panel counts; a row with neither may carry `combat` itself; else null.
+  function combatOf(r) {
+    const best = [topOf(r && r.fighting), topOf(r && r.firearms)].filter(isNum);
+    if (best.length) return Math.max(...best);
+    return r && isNum(r.combat) ? r.combat : null;
+  }
+  // A row's initiative worked out from its stats: CoC's DEX (plus `firearmBonus` while `gun` is on), GURPS's Basic
+  // Speed. Null in D&D (it is rolled) and for a row whose stat is blank.
+  function initOf(r, rules = DND_FIGHT_RULES) {
+    const ru = rulesOf({ rules });
+    if (!r) return null;
+    if (ru.initiative === 'dex') return isNum(r.dex) ? r.dex + (r.gun && isNum(ru.firearmBonus) ? ru.firearmBonus : 0) : null;
+    if (ru.initiative === 'speed') return isNum(r.speed) ? r.speed : null;
+    return null;
+  }
+  // At a tie on CoC's DEX the higher combat skill, on GURPS's Speed the higher DX (B363); a row without the
+  // figure falls through to the next tie-break. 0 when neither row decides.
+  function tieOf(x, y, ru) {
+    const by = ru.initiative === 'dex' ? combatOf : ru.initiative === 'speed' ? (r) => (isNum(r.dx) ? r.dx : null) : null;
+    if (!by) return 0;
+    const a = by(x);
+    const b = by(y);
+    if (isNum(a) && isNum(b) && a !== b) return b - a;
+    if (isNum(a) !== isNum(b)) return isNum(a) ? -1 : 1;
+    return 0;
+  }
+
   // Ticked first; initiative high to low with an empty box last; at a tie the Lair row after the others,
-  // then the higher modifier, then PCs. Stable: equal rows keep their order. `rules` is the fight's (rulesOf).
+  // then the higher modifier (D&D) or the system's tie figure (tieOf), then PCs. Stable: equal rows keep their
+  // order. `rules` is the fight's (rulesOf).
   function sortRows(rows, rules = DND_FIGHT_RULES) {
+    const ru = rulesOf({ rules });
     const ini = (r) => (isNum(r.ini) ? r.ini : -Infinity);
     return rows.map((r, i) => ({ r, i })).sort((a, b) => {
       const x = a.r;
@@ -110,12 +170,41 @@
       const dy = ini(y);
       if (dx !== dy) return dx > dy ? -1 : 1;
       if ((x.kind === 'lair') !== (y.kind === 'lair')) return x.kind === 'lair' ? 1 : -1;
+      const tie = tieOf(x, y, ru);
+      if (tie) return tie;
       const mx = x.mod || 0;
       const my = y.mod || 0;
       if (mx !== my) return my - mx;
       if ((x.kind === 'pc') !== (y.kind === 'pc')) return x.kind === 'pc' ? -1 : 1;
       return a.i - b.i;
     }).map((o) => o.r);
+  }
+
+  // ---- marks (GURPS) ----
+
+  // The marks a row's HP lights (`rules.marks`, names and numbers from the system): `chips`, the plain marks by
+  // name (Reeling by `part` of max HP, 0 or less by `atMost`), and `deepest`, the deepest minus-HP line passed
+  // ({ times, name }, by `times` max HP) or null. Nothing for a system with no marks.
+  function marksOf(row, rules = DND_FIGHT_RULES) {
+    const marks = rulesOf({ rules }).marks;
+    const out = { chips: [], deepest: null };
+    if (!row || !isNum(row.hp) || !Array.isArray(marks)) return out;
+    const max = isNum(row.max) && row.max > 0 ? row.max : null;
+    for (const m of marks) {
+      if (!m) continue;
+      if (isNum(m.part)) { if (max !== null && row.hp * m.part < max) out.chips.push(m.name); } else if (isNum(m.atMost)) {
+        if (row.hp <= m.atMost) out.chips.push(m.name);
+      } else if (isNum(m.times) && max !== null && row.hp <= -m.times * max && (!out.deepest || m.times > out.deepest.times)) {
+        out.deepest = { times: m.times, name: m.name };
+      }
+    }
+    return out;
+  }
+  // Whether a row's FP lights the system's Tired (`rules.tiredAt`, by `part` of max FP).
+  function tiredOf(row, rules = DND_FIGHT_RULES) {
+    const t = rulesOf({ rules }).tiredAt;
+    if (!t || !isNum(t.part) || !row || !isNum(row.fp) || !isNum(row.fpMax) || row.fpMax <= 0) return false;
+    return row.fp * t.part < row.fpMax;
   }
 
   const live = (r) => Boolean(r) && r.in && !r.out;
@@ -265,7 +354,15 @@
       ini: null, mod: 0, ac: null, hp: null, max: null, temp: 0, conds: [], exhaustion: 0, conc: false,
       ds: { s: 0, f: 0 }, out: false, seen: false, seenTick: null, seenFrom: null, neutral: false, sideFrom: null, half: false, resisted: false,
       lrMax: 0, lr: 0, laMax: 0, la: 0, recharge: [], lair: false, of: [], unseenN: null, word: null,
-      start: { hp: null, max: null, conds: [], exhaustion: 0, conc: false }, at: null, hpAt: null, typed: false, ...over,
+      start: { hp: null, max: null, conds: [], exhaustion: 0, conc: false }, at: null, hpAt: null, typed: false,
+      // the systems' figures (step 6b), null where a system has none: the pools, the stats, CoC's combat figures
+      // (`combat` is worked out on read, combatOf), what a figure was worked out from (`from`), the fields the GM
+      // typed (`typedKeys`), the marks lit, the deepest minus-HP line passed, Tired, the CoC firearm, and whether a
+      // GURPS row holds its place in the fixed order (`fixed`) or waits for placeHeld (`held`)
+      fp: null, fpMax: null, mp: null, mpMax: null, san: null, sanMax: null, luck: null, er: null, erMax: null,
+      dex: null, st: null, ht: null, dx: null, speed: null, dodge: null, parry: null, block: null, dr: null, faceOpen: false,
+      armour: null, fighting: null, firearms: null, combat: null, db: null, build: null, attacks: 1, defended: 0, bout: null,
+      from: {}, typedKeys: {}, marks: [], deepest: 0, tired: false, gun: false, fixed: false, held: false, ...over,
     };
   }
 
@@ -282,9 +379,53 @@
     return { conds, exhaustion };
   }
 
+  // The pools a row's start keeps, by their row names, when the row holds them (a D&D row's start is as before).
+  const POOL_FIELDS = ['fp', 'mp', 'san', 'luck', 'er'];
   function withStart(row) {
-    return { ...row, start: { hp: row.hp, max: row.max, conds: row.conds.slice(), exhaustion: row.exhaustion, conc: row.conc } };
+    const pools = {};
+    for (const k of POOL_FIELDS) if (isNum(row[k])) pools[k] = row[k];
+    return { ...row, start: { hp: row.hp, max: row.max, conds: row.conds.slice(), exhaustion: row.exhaustion, conc: row.conc, ...pools } };
   }
+
+  // A number the reader gave, or null; armour's `none` is 0 (CoC armour is a number on the row).
+  const armourOf = (v) => (isNum(v) ? v : (/^\s*none\s*$/i.test(String(v == null ? '' : v)) ? 0 : num(String(v == null ? '' : v).replace(/^\s*(\d+).*$/, '$1'))));
+  // A start figure clamped to its max, as HP is.
+  const startAt = (start, max) => (num(start) !== null ? (num(max) !== null ? Math.min(num(start), num(max)) : num(start)) : num(max));
+
+  // The system's own fields on a foe's row, from the reader's names (systems/*.js foeRow): the pools at their start,
+  // the stats, and initiative from DEX or Speed where the rules work it out (D&D: none, and the block's modifier).
+  function foeSystemFields(foe) {
+    const out = {
+      fpMax: num(foe.fpMax !== undefined ? foe.fpMax : foe.fp), mpMax: num(foe.mpMax !== undefined ? foe.mpMax : foe.mp),
+      sanMax: num(foe.sanMax !== undefined ? foe.sanMax : foe.san), erMax: num(foe.erMax !== undefined ? foe.erMax : foe.er),
+      dex: num(foe.dex), st: num(foe.st), ht: num(foe.ht), dx: num(foe.dx), speed: num(foe.speed), dodge: num(foe.dodge),
+      parry: num(foe.parry), block: num(foe.block), dr: foe.dr === undefined ? null : foe.dr, armour: armourOf(foe.armour),
+      fighting: foe.fighting === undefined ? null : foe.fighting, firearms: foe.firearms === undefined ? null : foe.firearms,
+      db: foe.db === undefined ? null : foe.db, build: num(foe.build),
+      from: foe.from && typeof foe.from === 'object' ? { ...foe.from } : {},
+    };
+    out.fp = startAt(foe.fpStart, out.fpMax);
+    out.mp = out.mpMax;
+    out.san = num(foe.san);
+    out.er = out.erMax;
+    return out;
+  }
+  // A PC's, from its sheet's flat numbers (`hpNow`/`hpMax` are HP's, as today).
+  function pcSystemFields(pc) {
+    const pair = (now, max) => ({ now: num(now) !== null ? num(now) : num(max), max: num(max) });
+    const fp = pair(pc.fpNow, pc.fpMax);
+    const mp = pair(pc.mpNow, pc.mpMax);
+    const san = pair(pc.sanNow, pc.sanMax);
+    const er = pair(pc.erNow, pc.erMax);
+    return {
+      fp: fp.now, fpMax: fp.max, mp: mp.now, mpMax: mp.max, san: san.now, sanMax: san.max, er: er.now, erMax: er.max,
+      luck: num(pc.luck), dex: num(pc.dex), st: num(pc.st), ht: num(pc.ht), dx: num(pc.dx), speed: num(pc.speed),
+      dodge: num(pc.dodge), parry: num(pc.parry), block: num(pc.block), dr: pc.dr === undefined ? null : pc.dr,
+      fighting: pc.fighting === undefined ? null : pc.fighting, firearms: pc.firearms === undefined ? null : pc.firearms,
+    };
+  }
+  // Initiative where the system works it out, and no D&D modifier then.
+  const withInit = (ctx, row) => (ctx.rules.initiative === 'roll' ? row : { ...row, ini: initOf(row, ctx.rules), mod: 0 });
 
   const castOf = (model, note) => (model.cast || []).find((c) => c.note === note) || null;
   const typeOf = (model, foe) => {
@@ -318,6 +459,7 @@
     // (never above the block's own HP: `HP 10 (currently 12)` starts at 10; with no HP figure it is taken as written)
     let hp = num(foe.hpStart) !== null ? (num(foe.hp) !== null ? Math.min(num(foe.hpStart), num(foe.hp)) : num(foe.hpStart)) : num(foe.hp);
     let max = num(foe.hp);
+    const sys = foeSystemFields(foe);
     let conds = [];
     let exhaustion = 0;
     let out = false;
@@ -337,7 +479,10 @@
         max = num(last.max) !== null ? num(last.max) : max;
         conds = (last.conds || []).slice();
         exhaustion = last.exhaustion || 0;
-        out = hp === 0;
+        // at 0 a D&D foe is Out; nobody is Out by themselves in CoC or GURPS
+        out = hp === 0 && ctx.rules.autoOut !== false;
+        // the pools the last fight left, as its HP
+        for (const k of POOL_FIELDS) if (isNum(last[k])) sys[k] = last[k];
       }
     }
     const at = foe.rechargeAt || {};
@@ -345,7 +490,8 @@
     const shown = Boolean(ctx.state.shownEver && ctx.state.shownEver[foe.note]);
     // seen in an ended fight: a foe starts seen (name only); an inferred ally does not (re-review)
     const seenBefore = Boolean(ctx.state.seenEver && ctx.state.seenEver[foe.note]) && !(ally && !start.byGm);
-    return withStart(blankRow({
+    return withStart(withInit(ctx, blankRow({
+      ...sys,
       kind: ally ? 'ally' : 'foe', neutral: start.side === 'neutral', sideFrom: start.why, seenFrom,
       note: foe.note, foeKey: foe.key, type, name: baseName(ctx.model, foe),
       group: ctx.foeGroup, mod: num(foe.init) || 0, ac: num(foe.ac), hp, max, conds, exhaustion, out,
@@ -355,7 +501,7 @@
       recharge: (foe.recharge || []).map((name) => ({ name, at: isNum(at[name]) ? at[name] : 6, ready: true, rolled: null })),
       // every row the GM can switch keeps its unseen word: an ally may be unseen, or become a foe
       lair: Boolean(foe.lair), word: wordOf(ctx.model, foe.note), ...over,
-    }));
+    })));
   }
 
   // { side, why, byGm } for a foe object: why is "you set it" for a side the GM set, else the reader's
@@ -372,10 +518,11 @@
     const read = readConditions(v && v.conditions);
     const max = v && num(v.max) !== null ? num(v.max) : num(pc.hpMax);
     const hp = v && num(v.hp) !== null ? num(v.hp) : (num(pc.hpNow) !== null ? num(pc.hpNow) : max);
-    return withStart(blankRow({
+    return withStart(withInit(ctx, blankRow({
+      ...pcSystemFields(pc),
       kind: 'pc', note: pc.note, type: 'pc', name: pc.name, in: on, group, mod: num(pc.init) || 0, ac: num(pc.ac),
       hp, max, conds: read.conds, exhaustion: read.exhaustion, seen: true,
-    }));
+    })));
   }
 
   const lairRow = (owners, group) => blankRow({
@@ -410,7 +557,8 @@
     };
     // the sides and seen the rows start from: the state's and the model's, as `reduce` never sees the model
     const obj = (o) => (o && typeof o === 'object' && !Array.isArray(o) ? o : {});
-    return { model, state: st, beats, byKey, vitals, groupOf, inBeat, lastFightRow, foeGroup: null,
+    const rules = rulesOf({ rules: model.rules && model.rules.fight });
+    return { model, rules, state: st, beats, byKey, vitals, groupOf, inBeat, lastFightRow, foeGroup: null,
       sides: obj(st.sides), sidesCarried: obj(model.sidesCarried), seenFrom: obj(model.seenFrom) };
   }
 
@@ -729,7 +877,8 @@
 
   return {
     DND_STATUSES, EXHAUSTION_MAX, DND_FIGHT_RULES, rulesOf, fightGroupKeys,
-    parseEntry, damageTaken, afterDamage, afterHeal, isBloodied,
+    parseEntry, damageTaken, afterDamage, afterHeal, isBloodied, poolsOf, poolOf, afterPool,
+    combatOf, initOf, marksOf, tiredOf,
     thresholdOf, isLit, sortRows, takesTurn, nextLive, actingRow,
     gmName, lairRow, unseenKey, unseenNumbers, unseenLabels, rowsForFight, joinRows, blankRow,
     addChoices, sameName, groupKey, groupMates, placeRow, undoable, untouched,

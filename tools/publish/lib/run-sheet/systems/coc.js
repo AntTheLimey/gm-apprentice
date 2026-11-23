@@ -102,11 +102,19 @@ function readPc({ body, fm }) {
 // keep D&D's shape (CoC-safe empties where D&D words would show).
 function describeCoc(id) {
   const r = describeAs(id, id === 'coc-7e' ? 'Call of Cthulhu 7e' : SYSTEM_NAMES[id], false);
-  const fight = { initiative: 'dex', initDecimals: 0, hpFloor: 0, autoOut: false };
-  Object.assign(r, { family: 'coc', ...fight });
+  // the order is DEX, plus 50 with a firearm ready (KR p409); HP never below 0 (KR p120); the entry box's pools:
+  // MP never below 0 (KR p386), SAN never above 99 (KR p155, less Cthulhu Mythos, which the row does not hold)
+  const fight = {
+    initiative: 'dex', initDecimals: 0, hpFloor: 0, autoOut: false, firearmBonus: 50,
+    pools: [
+      { key: 'mp', prefix: 'm', label: 'MP', max: 'mpMax', floor: 0 },
+      { key: 'san', prefix: 's', label: 'SAN', max: 'sanMax', floor: 0, cap: 99 },
+    ],
+  };
+  Object.assign(r, { family: 'coc', ...JSON.parse(JSON.stringify(fight)) });
   Object.assign(r.fight, fight);
   r.toggles = { ...r.toggles, half: false, resisted: false, temp: false, deathSaves: false, concentration: false, exhaustion: false, counters: false, longRest: false };
-  r.statuses = [];
+  r.statuses = ['Major wound', 'Prone', 'Unconscious', 'Dying', 'Temporary insanity', 'Indefinite insanity'];
   r.panelBoxes = [];
   r.rowNumbers = [];
   r.words = { ...r.words, hp: 'HP', ac: '', temp: '', initiative: 'DEX', longRest: '', advancement: '' };

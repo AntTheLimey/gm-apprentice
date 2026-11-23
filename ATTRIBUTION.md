@@ -258,6 +258,19 @@ License: SJG Online Policy
 Transformation: modifier names and numbers used in a sum, each
 with its page reference in a code comment. Names and numbers only.
 
+**`tools/publish/lib/run-sheet/systems/gurps.js`** (the run sheet's fight figures: turn order, marks, Tired, FP)
+Source: *GURPS Basic Set 4th Edition* (Steve Jackson Games).
+License: SJG Online Policy
+(https://www.sjgames.com/general/online_policy.html).
+Transformation: names and numbers used in a sum, each with its
+page reference in a code comment. Names and numbers only.
+
+**`tools/publish/lib/run-sheet/systems/coc.js`** (the run sheet's fight figures: DEX order, firearm bonus, pool limits)
+BRP combat foundation: *Basic Roleplaying: Universal Game Engine*,
+ORC License (see above). CoC 7e adaptation: our own descriptions of
+uncopyrightable game mechanics, with *Keeper Rulebook* page
+references in code comments. Not Chaosium text.
+
 ## D&D Beyond
 
 D&D Beyond is a service of Wizards of the Coast LLC. This project is

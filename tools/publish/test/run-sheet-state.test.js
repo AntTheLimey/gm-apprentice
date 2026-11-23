@@ -705,3 +705,21 @@ describe('place beats (fix round 1)', () => {
     assert.strictEqual(run([{ type: 'improvise', title: 'Loud' }]).events.length, 1, 'a plain improvise still logs');
   });
 });
+
+describe('fight figures by system (step 6b Task 6)', () => {
+  it('fightFigures records fp, mp, san and luck by their row names', () => {
+    const { systemFor } = require('../lib/run-sheet/systems');
+    const M = require('../lib/run-sheet/web/fight-math');
+    const COC = systemFor('coc-7e').describe().fight;
+    const ada = model.pcs.find((p) => p.note === ADA);
+    const pc = M.blankRow({ id: 'r1', kind: 'pc', note: ADA, name: ada.name, hp: 9, max: 11, mp: 10, mpMax: 12, san: 55, sanMax: 60, luck: 45 });
+    const withStart = { ...pc, start: { hp: 9, max: 11, conds: [], exhaustion: 0, conc: false, mp: 10, san: 55, luck: 45 } };
+    let s = run([{ type: 'fightStart', id: 'f1', title: 'T', rules: COC, rows: [withStart] }]);
+    s = RS.reduce(s, act({ type: 'hp', fight: 'f1', row: 'r1', entry: 's-6' }), at(50));
+    const figures = RS.fightFigures(model, s).figures.get(ADA);
+    assert.ok(figures, 'a SAN loss alone is a change');
+    const f = figures[figures.length - 1];
+    assert.deepStrictEqual([f.hp, f.max, f.mp, f.mpMax, f.san, f.sanMax, f.luck], [9, 11, 10, 12, 49, 60, 45]);
+    assert.strictEqual(f.fp, undefined, 'a pool the row lacks is not recorded');
+  });
+});
