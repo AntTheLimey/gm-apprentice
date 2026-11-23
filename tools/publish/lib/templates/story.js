@@ -118,6 +118,7 @@ function chapterPage(unit, config, publishConfig, navFor) {
   return baseShell({
     pageType: 'story',
     title: unit.title,
+    banner: unit.bannerHtml || '',
     siteTitle: config.siteTitle,
     cssHref: cssPath(unit.outputPath),
     navHtml: navFor(unit.outputPath, config),
@@ -167,6 +168,7 @@ function storyPage(unit, config, publishConfig, navFor) {
   return baseShell({
     pageType: 'story',
     title: unit.title,
+    banner: unit.bannerHtml || '',
     siteTitle: config.siteTitle,
     cssHref: cssPath(unit.outputPath),
     navHtml: navFor(unit.outputPath, config),
