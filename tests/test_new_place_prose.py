@@ -38,7 +38,7 @@ class NewPlaceProseTests(unittest.TestCase):
         self.assertIn("`--type location`", step4)
         # One saved mid-session is not made twice; one the Play Notes or the Export also name is offered once.
         self.assertIn("is an updated entity", step4)
-        self.assertIn("the Play Notes or the Export", step4)
+        self.assertIn("once even when the Play Notes or the Export name it too", step4)
 
     def test_document_chain_says_wrapup_offers_it(self):
         chain = " ".join(read("shared/session-document-chain.md").split())
