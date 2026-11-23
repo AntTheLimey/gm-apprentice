@@ -59,14 +59,15 @@ function readNumbers(stats) {
 
 // ---- magic (Task 10): who casts, and the Energy Reserve. Names only: the spell list itself is shown as written. ----
 
+// A figure may follow a parenthesis (`Energy Reserve (Magical) 6`, `Magery (One College) 2`).
 // An Energy Reserve, written three ways: `FP 11 (+4 Energy Reserve)`, a trait `Energy Reserve 4`, or a current over a
 // maximum (`Energy Reserve 6/6`, a Current Status table row `| Energy Reserve | 6/6 |` too). { now, max } or null.
 // A table row's other cells (a cost) are never the figure: only the current-over-maximum form reads across a `|`.
 function energyReserve(text) {
   const t = String(text == null ? '' : text).replace(/\r\n?/g, '\n');
-  const pair = /\bEnergy Reserve\b[ \t*:|]*(\d+)[ \t]*\/[ \t]*(\d+)/i.exec(t);
+  const pair = /\bEnergy Reserve\b(?:[ \t]*\([^)\n|]*\))?[ \t*:|]*(\d+)[ \t]*\/[ \t]*(\d+)/i.exec(t);
   if (pair) return { now: Math.min(Number(pair[1]), Number(pair[2])), max: Number(pair[2]) };
-  const one = /\(\s*\+\s*(\d+)\s*Energy Reserve\b/i.exec(t) || /\bEnergy Reserve[ \t*:]*(\d+)\b(?![ \t]*\/)/i.exec(t);
+  const one = /\(\s*\+\s*(\d+)\s*Energy Reserve\b/i.exec(t) || /\bEnergy Reserve\b(?:[ \t]*\([^)\n|]*\))?[ \t*:]*(\d+)\b(?![ \t]*\/)/i.exec(t);
   return one ? { now: Number(one[1]), max: Number(one[1]) } : null;
 }
 
@@ -110,7 +111,7 @@ function hasSpellList(md) {
   return false;
 }
 // An NPC casts with Magery 1 or more (Magery 0 cannot cast), or a spell list with skill levels.
-const isCaster = (md) => /\bMagery\b[ \t*:]*\+?0*[1-9]/i.test(String(md == null ? '' : md)) || hasSpellList(md);
+const isCaster = (md) => /\bMagery\b(?:[ \t]*\([^)\n|]*\))?[ \t*:]*\+?0*[1-9]/i.test(String(md == null ? '' : md)) || hasSpellList(md);
 
 const hasNumbers = (nums) => ['hp', 'fp', 'speed', 'dx', 'st', 'ht', 'dodge'].some((k) => nums[k] !== null) || nums.dr !== null;
 
@@ -223,6 +224,7 @@ function describeGurps(id) {
     casterPlaceholder: '\u2726 f-3',
     entryInvalid: 'Type -7 or 7 (damage), +3 (healing), f-2 (FP) or e-2 (Energy Reserve)',
     noReserve: 'No Energy Reserve: f-N pays from FP',
+    noFp: 'No FP on this row: type its max FP or HT',
     casterTitle: 'A caster: f-3 pays a spell from FP', reserveTitle: 'e-3 spends it',
   };
   return r;

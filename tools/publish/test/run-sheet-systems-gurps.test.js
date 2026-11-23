@@ -213,6 +213,11 @@ describe('GURPS magic in a block (Task 10)', () => {
     assert.equal(energyReserve('| Energy Reserve (Magical) | 18 |'), null, 'a table row\'s cost is never the reserve');
     assert.deepEqual(energyReserve('| Energy Reserve 6 (Magic only) | 18 |'), { now: 6, max: 6 });
     assert.equal(energyReserve('FP 10 · no reserve'), null);
+    // a figure after a parenthesis (review); a cost cell after one is still never the reserve
+    assert.deepEqual(energyReserve('Advantages: Energy Reserve (Magical) 6 [18]'), { now: 6, max: 6 });
+    assert.deepEqual(energyReserve('**Energy Reserve (Magical):** 3/6'), { now: 3, max: 6 });
+    assert.equal(energyReserve('| Energy Reserve (Magical) | 18 |'), null);
+    assert.equal(energyReserve('| Energy Reserve (Magical) 6 | 18 |').max, 6);
     const n = readNumbers('HP 9 · FP 10 · Energy Reserve 2/5');
     assert.deepEqual([n.fp, n.er, n.erStart], [10, 5, 2]);
     const row = systemFor('gurps-4e').foeRow(n);
@@ -222,6 +227,9 @@ describe('GURPS magic in a block (Task 10)', () => {
     assert.equal(isCaster('Magery 1'), true);
     assert.equal(isCaster('**Magery** 3'), true);
     assert.equal(isCaster('Magery 0'), false);
+    assert.equal(isCaster('Magery (One College) 2'), true);
+    assert.equal(isCaster('Magery (One College) 0'), false);
+    assert.equal(isCaster('| Magery (One College) | 25 |'), false, 'a cost cell is no level');
     assert.equal(isCaster('Advantages: Magery 0 (sense only)'), false);
     assert.equal(isCaster('**Spells (IQ+Magery = 12):** Light-12; Seek Earth-12'), true);
     assert.equal(isCaster('Spells: none'), false);

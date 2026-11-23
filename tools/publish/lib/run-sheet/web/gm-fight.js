@@ -39,7 +39,7 @@
     bad: {},
     // a damage box holding words not yet applied (final review P4.1): row id -> the words, kept through redraws
     pending: {},
-    // an entry the row cannot take (GURPS's e-3 on a row with no Energy Reserve): row id -> { words, why }, kept in
+    // an entry the row cannot take (a pool it has no figure in: GURPS's e-3 with no Energy Reserve, f-3 with no FP): row id -> { words, why }, kept in
     // the box with the reason on the row's second line until the box changes
     refused: {},
     // the PCs whose spells fold is open (GURPS, Task 10): note -> true
@@ -1082,10 +1082,14 @@
       ev.preventDefault();
       const e = FM.parseEntry(t.value, FM.rulesOf(state().fight));
       if (!e) { t.setCustomValidity(words().entryInvalid || INVALID); t.reportValidity(); return; }
-      // the GM picks the pool: e-3 on a row with no Energy Reserve is refused, never paid from FP instead
+      // the GM picks the pool: an entry into a pool the row has no figure in (e-3 with no Energy Reserve, f-3 with no
+      // FP) is refused, never paid from another pool instead
       const row = rowById(d.fhp);
-      if (e.pool === 'er' && row && !hasReserve(row)) {
-        ui.refused[d.fhp] = { words: t.value, why: words().noReserve || 'Not on this row' };
+      const pool = e.pool !== 'hp' && e.pool !== 'temp' ? FM.poolOf(FM.rulesOf(state().fight), e.pool) : null;
+      if (pool && row && !isNum(row[pool.key])) {
+        const w = words();
+        const own = { er: w.noReserve, fp: w.noFp }[pool.key];
+        ui.refused[d.fhp] = { words: t.value, why: own || `No ${pool.label || pool.key} on this row` };
         markPending(t);
         // selected, so what the GM types next replaces it
         t.select();

@@ -363,6 +363,11 @@ describe('CoC and GURPS fights on the GM page, by real input', { skip: browserSk
         assert.strictEqual(await fpv('Ilse Verrin'), '\u2726FP 10/ +4', `${width}`);
         assert.strictEqual(await ph('Ilse Verrin'), '\u2726 f-3');
         assert.strictEqual(await fpv('Lysa Venn'), '\u2726FP 10/ +6');
+        // the max FP box holds the figure: the readout's text alone leaves it out
+        const maxBox = (name) => page.evaluate(`document.querySelector('[data-ffpmax="${named(p, name).id}"]').value`);
+        assert.strictEqual(await maxBox('Ilse Verrin'), '10');
+        assert.strictEqual(await maxBox('Lysa Venn'), '10');
+        assert.strictEqual(await maxBox('Bram Holt'), '11');
         assert.strictEqual(await ph('Lysa Venn'), '\u2726 f-3');
         assert.strictEqual(await fpv('Bram Holt'), 'FP 11/ +4', 'a reserve with no Magery: no ✦');
         const ilseRow = `li[data-frow="${named(p, 'Ilse Verrin').id}"]`;
@@ -448,6 +453,38 @@ describe('CoC and GURPS fights on the GM page, by real input', { skip: browserSk
       assert.ok(reads.includes('Energy Reserve 4/6'), reads.join(' | '));
       await tap(page, `${fold} > summary`);
       await page.waitFor(`!document.querySelector(${q(fold)}).open`);
+    });
+  });
+
+  it('GURPS: f-3 on a row added mid-fight with no FP is refused on its second line, then taken once HT is typed', async () => {
+    const run = await start('gurps');
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await fightOn(page, run, 2);
+      p = await addNew(page, 'Hob');
+      const id = named(p, 'Hob').id;
+      // HP only, so the entry box shows and FP stays blank
+      p = await typeInto(page, `[data-fmax="${id}"]`, 10);
+      assert.deepStrictEqual([named(p, 'Hob').hp, named(p, 'Hob').fp], [10, null]);
+      await typeInto(page, `[data-fhp="${id}"]`, 'f-3');
+      const why = `li[data-row2="${id}"] .refnum`;
+      await page.waitFor(`document.querySelector(${q(why)})`);
+      assert.strictEqual(await text(page, why), 'No FP on this row: type its max FP or HT');
+      assert.strictEqual(await page.evaluate(`document.querySelector('[data-fhp="${id}"]').value`), 'f-3');
+      p = await settled(page);
+      assert.deepStrictEqual([named(p, 'Hob').hp, named(p, 'Hob').fp], [10, null]);
+      // e-3 on the same row gives the reserve's reason instead
+      await page.key('Escape');
+      await page.type('e-3');
+      await page.key('Enter');
+      await page.waitFor(`(document.querySelector(${q(why)}) || {}).textContent === 'No Energy Reserve: f-N pays from FP'`);
+      // HT typed works FP out; the GM's f-3 then pays
+      await page.key('Escape');
+      p = await peek(page, p, 'Hob');
+      p = await typeInto(page, box(p, 'Hob', 'ht'), 11);
+      assert.strictEqual(named(p, 'Hob').fp, 11);
+      p = await typeInto(page, `[data-fhp="${id}"]`, 'f-3');
+      assert.strictEqual(named(p, 'Hob').fp, 8);
+      assert.strictEqual(await text(page, why), null);
     });
   });
 });
