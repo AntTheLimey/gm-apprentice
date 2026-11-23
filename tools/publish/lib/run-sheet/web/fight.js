@@ -730,7 +730,8 @@
     // same turn rewrites it. All-Out Defence names the one defence it helps.
     manoeuvre: onRow((s, f, r, a, at) => {
       const D = defencesOf(f);
-      if (!D || r.kind === 'lair' || !Array.isArray(D.chips)) return;
+      // only the acting row picks: an off-turn pick would be cleared when its turn starts
+      if (!D || r.kind === 'lair' || !Array.isArray(D.chips) || f.turn !== r.id) return;
       const key = a.name === null ? null : String(a.name);
       const chip = key === null ? null : D.chips.find((c) => c.key === key);
       if (key !== null && !chip) return;

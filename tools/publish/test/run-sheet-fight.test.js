@@ -2900,6 +2900,15 @@ describe('GURPS manoeuvre chip (step 6b Task 15)', () => {
     assert.equal(lines(s).includes('Bouncer 1: Feint.'), true);
   });
 
+  it('a pick for a row that is not acting does nothing', () => {
+    let s = go(begin(rows()));
+    const was = { rows: s.fight.rows, lines: lines(s) };
+    s = pick(s, 'Bouncer 2', 'all-out attack');
+    s = pick(s, 'Kev', 'aim');
+    assert.deepEqual(s.fight.rows, was.rows);
+    assert.deepEqual(lines(s), was.lines);
+  });
+
   it('a pick is logged as "Bouncer 1: All-Out Attack."', () => {
     let s = go(begin(rows()));
     s = pick(s, 'Bouncer 1', 'all-out attack');
@@ -2911,6 +2920,7 @@ describe('GURPS manoeuvre chip (step 6b Task 15)', () => {
     const was = s.fight.rows;
     s = pick(s, 'Bouncer 1', 'dance');
     assert.deepEqual(s.fight.rows, was);
+    s = go(go(s)); // Kev acts
     s = pick(s, 'Kev', 'all-out attack');
     assert.equal(named(s, 'Kev').manoeuvre, 'all-out attack');
     assert.deepEqual([named(s, 'Kev').dodge, named(s, 'Kev').parry], [8, 10]);

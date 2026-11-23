@@ -783,13 +783,29 @@ describe('CoC and GURPS fights on the GM page, by real input', { skip: browserSk
     });
   }
 
-  it('GURPS: All-Out Defence waits for a defence, then Parry reads 11 and Dodge stays; a PC takes a note from its panel', async () => {
+  // Next until the named row acts
+  async function actFor(page, p, name) {
+    const id = named(p, name).id;
+    for (let i = 0; i < 12 && p.fight.turn !== id; i++) {
+      const was = p.fight.turn;
+      await tap(page, '#fNext');
+      p = await until(page, `p.fight.turn !== ${q(was)} && p.saved === "Saved" && p.pending === 0`);
+    }
+    assert.equal(p.fight.turn, id);
+    return p;
+  }
+
+  it('GURPS: off its turn the panel\'s manoeuvre buttons are disabled; on it All-Out Defence waits for a defence, then Parry reads 11; a PC takes a note on its turn', async () => {
     const run = await start('gurps', { randomInt: () => 4 });
     await withPage({ width: 1449, height: 762 }, async (page) => {
       let p = await bouncers(page, run, [['st', 11], ['ht', 10], ['dx', 10], ['parry', 9], ['block', 8]]);
       const b2 = named(p, 'Bouncer 2').id;
       p = await peek(page, p, 'Bouncer 2');
-      await tap(page, `#acting [data-fman="${b2}|all-out defence"]`);
+      const aodBtn = `#acting [data-fman="${b2}|all-out defence"]`;
+      assert.strictEqual(await page.evaluate(`document.querySelectorAll('#acting [data-fman]:not([disabled])').length`), 0);
+      assert.strictEqual(await attrOf(page, aodBtn, 'title'), 'Picked on its turn');
+      p = await actFor(page, p, 'Bouncer 2');
+      await tap(page, aodBtn);
       await page.waitFor(`document.querySelector('#acting [data-fmand="${b2}|parry"]')`, 3000);
       assert.strictEqual(named(await settled(page), 'Bouncer 2').manoeuvre, null, 'nothing is set until a defence is named');
       await tap(page, `#acting [data-fmand="${b2}|parry"]`);
@@ -800,12 +816,52 @@ describe('CoC and GURPS fights on the GM page, by real input', { skip: browserSk
       // a PC: the chip is a note, the sheet's figures do not move
       const sela = named(p, 'Sela Drake').id;
       p = await peek(page, p, 'Sela Drake');
+      assert.strictEqual(await page.evaluate(`document.querySelectorAll('#acting [data-fman]:not([disabled])').length`), 0);
+      p = await actFor(page, p, 'Sela Drake');
+      p = await peek(page, p, 'Sela Drake');
+      await page.waitFor(`document.querySelector('#acting [data-fman="${sela}|aim"]') && !document.querySelector('#acting [data-fman="${sela}|aim"]').disabled`, 3000);
       await tap(page, `#acting [data-fman="${sela}|aim"]`);
       p = await until(page, `p.fight.rows.find((r) => r.id === ${q(sela)}).manoeuvre === "aim" && p.saved === "Saved" && p.pending === 0`);
       assert.strictEqual(await text(page, `li[data-frow="${sela}"] [data-fmanrow]`), 'Aim');
       assert.deepStrictEqual(await texts(page, '#acting .pdefs.pc .sheetdef'), ['Dodge 8', 'Parry 10', 'Block 9']);
     });
   });
+
+  it('GURPS: an All-Out Defence asked for and not answered is not asked again when the row\'s panel returns', async () => {
+    const run = await start('gurps', { randomInt: () => 4 });
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await bouncers(page, run, [['st', 11], ['ht', 10], ['dx', 10], ['parry', 9], ['block', 8]]);
+      const b2 = named(p, 'Bouncer 2').id;
+      p = await actFor(page, p, 'Bouncer 2');
+      await tap(page, `#acting [data-fman="${b2}|all-out defence"]`);
+      await page.waitFor(`document.querySelector('#acting [data-fmand="${b2}|dodge"]')`, 3000);
+      await tap(page, '#fNext');
+      p = await until(page, `p.fight.turn !== ${q(b2)} && p.saved === "Saved" && p.pending === 0`);
+      p = await peek(page, p, 'Bouncer 2');
+      assert.strictEqual(await page.evaluate('document.querySelectorAll("#acting [data-fmand]").length'), 0);
+    });
+  });
+
+  for (const [width, height] of SIZES) {
+    it(`GURPS at ${width}: a foe with Dodge, Parry and Block and a picked chip reads on one line`, async () => {
+      const run = await start('gurps', { randomInt: () => 4 });
+      await withPage({ width, height }, async (page) => {
+        let p = await bouncers(page, run, [['st', 11], ['ht', 10], ['dx', 10], ['parry', 9], ['block', 8]]);
+        const b2 = named(p, 'Bouncer 2').id;
+        p = await actFor(page, p, 'Bouncer 2');
+        await tap(page, `#acting [data-fman="${b2}|move and attack"]`);
+        p = await until(page, `p.fight.rows.find((r) => r.id === ${q(b2)}).manoeuvre === "move and attack" && p.saved === "Saved" && p.pending === 0`);
+        assert.deepStrictEqual(await texts(page, `li[data-frow="${b2}"] .defs .def`), ['Dodge 8', 'Parry –', 'Block 8']);
+        assert.strictEqual(await text(page, `li[data-frow="${b2}"] [data-fmanrow]`), 'M&A');
+        sane(p, `three defences and a chip ${width}`);
+        if (width === 1449) {
+          const row = p.layout.rows.find((r) => r.name === 'Bouncer 2');
+          assert.ok(row && row.h <= 40, `1449: Bouncer 2 is one line (${row && row.h} px)`);
+        }
+        await shot(page, `gurps-manoeuvre-three-${width}`);
+      });
+    });
+  }
 
   it('GURPS: the panel\'s Retreat on gives Dodge 11; a used Block asks once, then rolls again; Stunned greys Retreat', async () => {
     const run = await start('gurps', { randomInt: () => 4 });

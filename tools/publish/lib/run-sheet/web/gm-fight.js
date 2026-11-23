@@ -517,7 +517,7 @@
     return (c && c.foe) || null;
   }
   function actingOf(f) {
-    if (ui.peekTurn !== f.turn) { ui.peek = null; ui.peekTurn = f.turn; }
+    if (ui.peekTurn !== f.turn) { ui.peek = null; ui.aodAsk = null; ui.peekTurn = f.turn; }
     return FM.actingRow({ ...f, rows: f.view.rows }, ui.peek);
   }
   function actingHTML(d) {
@@ -621,9 +621,10 @@
     const D = defences();
     if (!cs || r.kind === 'lair') return '';
     const on = (k) => r.manoeuvre === k;
-    const btn = (c) => `<button type="button" class="tg ${on(c.key) ? 'on' : ''}" data-fman="${esc(`${r.id}|${c.key}`)}" aria-pressed="${on(c.key)}" title="${esc(on(c.key) ? `${c.name}: tap to take it back` : c.name)}">${esc(c.name)}${on(c.key) ? esc(counted(r)) : ''}</button>`;
+    const off = state().fight.turn !== r.id ? ' disabled' : '';
+    const btn = (c) => `<button type="button" class="tg ${on(c.key) ? 'on' : ''}"${off} data-fman="${esc(`${r.id}|${c.key}`)}" aria-pressed="${on(c.key)}" title="${esc(off ? 'Picked on its turn' : on(c.key) ? `${c.name}: tap to take it back` : c.name)}">${esc(c.name)}${on(c.key) ? esc(counted(r)) : ''}</button>`;
     const aod = on('all-out defence') || ui.aodAsk === r.id;
-    const which = aod ? `<span class="lab">Which defence:</span>${GMath.DEFENCE_KEYS.map((k) => `<button type="button" class="tg ${on('all-out defence') && r.aodDefence === k ? 'on' : ''}" data-fmand="${esc(`${r.id}|${k}`)}" aria-pressed="${on('all-out defence') && r.aodDefence === k}">${esc(D.names[k] || k)}</button>`).join('')}` : '';
+    const which = aod ? `<span class="lab">Which defence:</span>${GMath.DEFENCE_KEYS.map((k) => `<button type="button" class="tg ${on('all-out defence') && r.aodDefence === k ? 'on' : ''}" data-fmand="${esc(`${r.id}|${k}`)}" aria-pressed="${on('all-out defence') && r.aodDefence === k}"${off}>${esc(D.names[k] || k)}</button>`).join('')}` : '';
     return `<div class="pman" role="group" aria-label="Manoeuvre"><span class="lab">Manoeuvre:</span>${cs.map(btn).join('')}${which}</div>`;
   }
   // A manoeuvre tapped: the pick again takes it back; All-Out Defence waits for its defence.

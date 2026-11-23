@@ -432,6 +432,8 @@
       armour: null, fighting: null, firearms: null, combat: null, db: null, build: null, attacks: 1, defended: 0, bout: null,
       // and whether it casts (GURPS: its FP shows as ✦FP, Task 10)
       // GURPS's last hit (its working, Task 12) and the places crippled
+      // Set by a manoeuvre pick, absent until one: `manFrom` holds the Aim and Evaluate counts from before this turn's
+      // pick, `manTurn` the round and row turn of the pick's log line, `manLine` that line's text
       from: {}, typedKeys: {}, marks: [], deepest: 0, tired: false, gun: false, fixed: false, held: false, caster: false, hit: null, crippled: [], ...over,
     };
   }
