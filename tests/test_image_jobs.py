@@ -219,7 +219,10 @@ SESSION_RECAP = ("---\ntype: session\nstatus: {status}\n{docs}---\n"
 
 
 def session_note(v, status="played", docs=""):
-    p = v / "Sessions" / "Session 01.md"
+    # Its own folder: the fixture's Session 03 Wrap-Up is the only Wrap-Up in Sessions/,
+    # and links no session note, so beside it the Story page would show its recap.
+    p = v / "Played" / "Session 01.md"
+    p.parent.mkdir(exist_ok=True)
     p.write_text(SESSION_RECAP.format(status=status, docs=docs), encoding="utf-8")
     return {"for": "Session 01", "subject": "the mill at dusk", "name": "mill",
             "after": "The party reached"}
@@ -231,7 +234,7 @@ def test_a_played_session_with_its_own_recap_takes_a_scene_picture(tmp_path):
     _, e = one(v, session_note(v))
     assert e.status == "planned", said(e)
     assert e.kind == "scene" and e.shape == "16:9"
-    assert e.note == "Sessions/Session 01.md"
+    assert e.note == "Played/Session 01.md"
     assert e.dest.startswith("_attachments/scenes/")
 
 
@@ -271,6 +274,40 @@ def test_the_one_unlinked_wrap_up_in_the_session_folder_counts(tmp_path):
     assert e.status == "refused" and "Sessions/S1/Wrap.md" in said(e)
 
 
+def _s1_with_wrap(v, wrap_session_line):
+    (v / "Sessions" / "S1").mkdir()
+    (v / "Sessions" / "S1" / "Session 01.md").write_text(
+        SESSION_RECAP.format(status="played", docs=""), encoding="utf-8")
+    (v / "Sessions" / "S1" / "Wrap.md").write_text(
+        RECAP.replace("session: 3\n", wrap_session_line), encoding="utf-8")
+    return {"for": "Sessions/S1/Session 01.md", "subject": "s", "name": "m",
+            "after": "The party reached"}
+
+
+def test_the_folder_wrap_up_whose_session_names_no_note_still_counts(tmp_path):
+    # The publisher reads a `session:` naming no session note (a bare number, as
+    # older Canticle Wrap-Ups have) as no link, so the Story page shows this one.
+    v = build(tmp_path)
+    _, e = one(v, _s1_with_wrap(v, "session: 3\n"))
+    assert e.status == "refused" and "Sessions/S1/Wrap.md" in said(e)
+
+
+def test_the_folder_wrap_up_linked_to_another_session_does_not_count(tmp_path):
+    v = build(tmp_path)
+    (v / "Sessions" / "Session 02.md").write_text(
+        SESSION_RECAP.format(status="played", docs=""), encoding="utf-8")
+    _, e = one(v, _s1_with_wrap(v, 'session: "[[Session 02]]"\n'))
+    assert e.status == "planned", said(e)
+
+
+def test_the_folder_wrap_up_another_session_claims_does_not_count(tmp_path):
+    v = build(tmp_path)
+    (v / "Sessions" / "Session 02.md").write_text(SESSION_RECAP.format(
+        status="played", docs='documents:\n  wrap_up: "[[Wrap]]"\n'), encoding="utf-8")
+    _, e = one(v, _s1_with_wrap(v, ""))
+    assert e.status == "planned", said(e)
+
+
 def test_a_session_whose_wrap_up_is_not_written_yet_uses_its_own_recap(tmp_path):
     v = build(tmp_path)
     _, e = one(v, session_note(v, docs='documents:\n  wrap_up: "[[Session 01 Wrap-Up]]"\n'))
@@ -279,7 +316,8 @@ def test_a_session_whose_wrap_up_is_not_written_yet_uses_its_own_recap(tmp_path)
 
 def test_a_session_with_no_recap_is_refused_plainly(tmp_path):
     v = build(tmp_path)
-    (v / "Sessions" / "Session 01.md").write_text(note("session", "status: played\n"), encoding="utf-8")
+    (v / "Played").mkdir()
+    (v / "Played" / "Session 01.md").write_text(note("session", "status: played\n"), encoding="utf-8")
     _, e = one(v, {"for": "Session 01", "subject": "s", "name": "m", "after": "x"})
     assert e.status == "refused" and "no Narrative Recap section" in said(e)
     assert "not supported yet" not in said(e)

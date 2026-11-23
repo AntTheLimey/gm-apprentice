@@ -799,7 +799,7 @@ def _session_wrap_up(ctx: _Ctx, rel: str, text: str) -> str | None:
     Story page does: the note's `documents.wrap_up`, a Wrap-Up whose
     `session:` names it, or the one Wrap-Up in its folder when that names no
     session. A link to a note not written yet is no Wrap-Up."""
-    def resolved(raw: str) -> str | None:
+    def resolved(raw: Any) -> str | None:      # a frontmatter value: a link, a number, None
         target = vl.wikilink_target(raw) if isinstance(raw, str) else ""
         if not target.strip():
             return None
@@ -812,19 +812,32 @@ def _session_wrap_up(ctx: _Ctx, rel: str, text: str) -> str | None:
         return own
     def folder_of(path: str) -> str:
         return path.rsplit("/", 1)[0] if "/" in path else ""
-    in_folder: list[tuple[str, Any]] = []      # (path, its session: value)
+    sessions: set[str] = set()                 # every session note
+    claimed: set[str] = set()                  # Wrap-Ups a session's documents.wrap_up names
+    in_folder: list[tuple[str, str | None]] = []   # (path, the note its session: names)
     for other, body in vl.vault_files(ctx.vault):
         fm = vl.extract_frontmatter(body) or {}
-        if vl.entity_type(fm) not in vl.WRAP_UP_TYPES:
+        etype = vl.entity_type(fm)
+        if etype == "session":
+            sessions.add(other)
+            named = resolved(vl.nested_mapping(body, "documents").get("wrap_up", ""))
+            if named:
+                claimed.add(named)
             continue
-        back = fm.get("session")
-        if back and resolved(back) == rel:
+        if etype not in vl.WRAP_UP_TYPES:
+            continue
+        back = resolved(fm.get("session"))
+        if back == rel:
             return other
         if folder_of(other) == folder_of(rel):
             in_folder.append((other, back))
-    # The folder's one Wrap-Up stands in only when it names no session.
-    if len(in_folder) == 1 and not in_folder[0][1]:
-        return in_folder[0][0]
+    # The folder's one Wrap-Up stands in only when it is linked to no session, as the
+    # publisher's isLinkedWrapUp reads it: a `session:` naming no session note (a bare
+    # number, a stale title) links nothing.
+    if len(in_folder) == 1:
+        wrap, back = in_folder[0]
+        if back not in sessions and wrap not in claimed:
+            return wrap
     return None
 
 
