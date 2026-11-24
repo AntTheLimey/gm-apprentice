@@ -3,7 +3,7 @@
 // AC, HP, initiative and boss counters from `### Stats`; the block itself is kept as written). Works with what it
 // has: a foe whose stat block lacks numbers is still a foe, with null numbers and a warning; nothing here throws.
 
-const path = require('node:path');
+const { stemName } = require('./notes');
 const fate = require('../fate');
 const { itemKeys } = require('./keys');
 const { bullets, links } = require('./plan-text');
@@ -21,7 +21,7 @@ function inspect(notePath, index, system = DND) {
   const note = index.read(notePath);
   const fm = note.fm || {};
   const type = String(fm.type || '').toLowerCase();
-  const name = String(fm.name || path.posix.basename(notePath, '.md'));
+  const name = String(fm.name || stemName(notePath));
   const read = system.readFoe({ notePath, index, text: note.body });
   const stats = read.stats;
   return { name, type, stats, read, treasure: stats ? index.gmSection(notePath, 'Treasure') : '' };

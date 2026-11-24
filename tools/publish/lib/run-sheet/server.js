@@ -28,7 +28,7 @@ const http = require('node:http');
 const path = require('node:path');
 const serve = require('../serve');
 const { readRunSheet } = require('./read');
-const { buildIndex, stemOf } = require('./notes');
+const { buildIndex, stemName } = require('./notes');
 const { tableLogOf, stateIdOf } = require('./sessions');
 const { createStore, stampOf } = require('./store');
 const { present, toHtml } = require('./present');
@@ -470,7 +470,7 @@ function createTableServer({ vaultPath, session, party = [], stateFile, fileLog 
         const idx = indexNow();
         if (!p || !idx.has(p)) { json(res, 404, { error: 'no such note' }); return; }
         const { fm, body } = idx.read(p);
-        const name = typeof fm.name === 'string' && fm.name.trim() ? fm.name.trim() : stemOf(p);
+        const name = typeof fm.name === 'string' && fm.name.trim() ? fm.name.trim() : stemName(p);
         json(res, 200, { path: p, name, type: String(fm.type || ''), portrait: idx.portrait(p), withheld: isWithheld(fm), html: toHtml(body, idx) });
       },
     },

@@ -52,6 +52,16 @@ describe('run sheet cast', () => {
     assert.ok(wolf.foe.hp > 0);
   });
 
+  it('a note with no name named from its stem shows spaces, not underscores (Task 34)', () => {
+    const dir = copy();
+    const wolf = fs.readFileSync(path.join(dir, WOLF), 'utf8').replace(/\r\n/g, '\n').replace('name: Frost Wolf\n', '');
+    fs.writeFileSync(path.join(dir, 'Creatures/Ice_Hound.md'), wolf);
+    const index = buildIndex(dir);
+    const hound = readCast(index, { carried: null }).find((c) => c.note === 'Creatures/Ice_Hound.md');
+    assert.equal(hound.name, 'Ice Hound');
+    assert.equal(hound.named, false);
+    assert.deepEqual(foesOf('Creatures/Ice_Hound.md', index, 1, 'b').foes.map((f) => f.name), ['Ice Hound']);
+  });
   it('a pc has no foe and no play-as', () => {
     const ada = readCast(buildIndex(copy()), { carried: null }).find((c) => c.note === ADA);
     assert.deepStrictEqual([ada.type, ada.foe, ada.playAs, ada.wants, ada.status], ['pc', null, '', '', 'alive']);

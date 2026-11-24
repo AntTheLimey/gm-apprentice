@@ -3,7 +3,7 @@
 // note in the vault, whether or not the Plan names them. Each entry keeps its own warnings, so a vault
 // of five hundred people does not bury the Plan's own (read.js attaches the cast after its warnings pass).
 
-const { stemOf } = require('./notes');
+const { stemName } = require('./notes');
 const { foesOf, sideOf } = require('./foes');
 const { playAsOf, wantsOf } = require('./people-from-notes');
 const { nameList, gmAliasList, isWithheld } = require('../processor');
@@ -25,7 +25,7 @@ function readCast(index, { carried = null, sides = null, system } = {}) {
     const side = pc ? { ally: false, allyFrom: null, allyBy: null } : sideOf(p, index, sides, null, foe.foes[0] ? foe.foes[0].stats : '');
     cast.push({
       note: p,
-      name: typeof fm.name === 'string' && fm.name.trim() ? fm.name.trim() : stemOf(p),
+      name: typeof fm.name === 'string' && fm.name.trim() ? fm.name.trim() : stemName(p),
       named: typeof fm.name === 'string' && Boolean(fm.name.trim()),
       type,
       aliases: nameList(fm.aliases),
