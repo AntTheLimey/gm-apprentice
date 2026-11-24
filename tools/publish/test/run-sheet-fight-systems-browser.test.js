@@ -474,6 +474,42 @@ describe('CoC and GURPS fights on the GM page, by real input', { skip: browserSk
     });
   });
 
+  // Task 34 (finding 10): opening the fold brings its spells into view, both edges where the panel holds it all, at every
+  // width; a fold taller than the panel shows from its top
+  for (const [width, height] of SIZES) {
+    for (const [extra, fits] of [[3, true], [12, false]]) {
+      it(`GURPS at ${width}: opening Lysa's spells fold (${extra + 2} spells) scrolls it into view, ${fits ? 'top and bottom' : 'from its top'}`, async () => {
+        const run = await start('gurps', null, (vault) => {
+          const f = path.join(vault, 'Characters/PCs/Lysa Venn.md');
+          const more = Array.from({ length: extra }, (_, i) => `| Practice Charm ${i + 1} | Meta | 12 | 1 | — | |`).join('\n');
+          fs.writeFileSync(f, fs.readFileSync(f, 'utf8').replace(/(\| Create Fire \| Fire \| 13 \| 1 \| 1 \| \|)/, `$1\n${more}`));
+        });
+        await withPage({ width, height }, async (page) => {
+          let p = await fightOn(page, run, 2);
+          p = await peek(page, p, 'Lysa Venn');
+          const fold = '#acting details[data-fspells]';
+          const box = () => page.evaluate(`(() => { const d = document.querySelector(${q(fold)}).getBoundingClientRect(); const a = document.querySelector('#acting').getBoundingClientRect();
+            const bar = document.querySelector('.top').getBoundingClientRect().bottom; return { top: d.top, bottom: d.bottom, h: innerHeight, bar, aTop: a.top, aBottom: a.bottom }; })()`);
+          const shut = await box();
+          await tap(page, `${fold} > summary`);
+          await page.waitFor(`document.querySelector(${q(fold)}).open`);
+          await page.sleep(400);
+          const e = await box();
+          const top = Math.max(e.bar, e.aTop) - 1;
+          const bottom = Math.min(e.h, e.aBottom) + 1;
+          if (fits) {
+            assert.ok(shut.top + (e.bottom - e.top) > bottom, `${width}: the fold would open below the panel's edge ${JSON.stringify(shut)}`);
+            assert.ok(e.top >= top && e.bottom <= bottom, `${width}: the fold in view ${JSON.stringify(e)}`);
+          } else assert.ok(e.top >= top && e.top <= top + 40, `${width}: the fold from its top ${JSON.stringify(e)}`);
+          assert.ok((await texts(page, `${fold} td`)).includes(`Practice Charm ${extra}`));
+          await shot(page, `gurps-spells-fold-${extra}-${width}`);
+          p = await settled(page);
+          sane(p, `spells ${width}`);
+        });
+      });
+    }
+  }
+
   it('GURPS: f-3 on a row added mid-fight with no FP is refused on its second line, then taken once HT is typed', async () => {
     const run = await start('gurps');
     await withPage({ width: 1449, height: 762 }, async (page) => {

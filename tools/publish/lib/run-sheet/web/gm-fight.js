@@ -1753,7 +1753,10 @@
   document.addEventListener('toggle', (ev) => {
     const el = ev.target;
     if (el instanceof HTMLDetailsElement && el.dataset.fspells !== undefined) {
+      const was = Boolean(ui.spellsOpen[el.dataset.fspells]);
       if (el.open) ui.spellsOpen[el.dataset.fspells] = true; else delete ui.spellsOpen[el.dataset.fspells];
+      // opened by the GM (not a redraw of an open one): its spells come into view, top and bottom where they fit
+      if (el.open && !was) el.scrollIntoView({ block: el.offsetHeight < window.innerHeight - topH() ? 'nearest' : 'start' });
     }
   }, true);
   // A box that still holds typed words opens its list again when it is pressed or tabbed back into, as the Move box
