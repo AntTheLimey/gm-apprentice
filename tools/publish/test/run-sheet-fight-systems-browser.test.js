@@ -2264,6 +2264,33 @@ describe('Tab, held rows and Same for all in CoC and GURPS (step 6b Task 23), by
     });
   });
 
+  // Task 23b B7: dice out at the server while another window ends the fight: said, never applied
+  it('GURPS: a hit\'s dice that come back after the fight has ended are said, not applied', async () => {
+    const run = await start('gurps', { randomInt: () => 4 });
+    const handlers = run.server.listeners('request');
+    let slow = 0;
+    run.server.removeAllListeners('request');
+    run.server.on('request', (req, res) => {
+      const go = () => handlers.forEach((h) => h.call(run.server, req, res));
+      if (slow && req.url === '/api/roll') setTimeout(go, slow); else go();
+    });
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await fightOn(page, run, 1);
+      let p = await startNow(page);
+      const foe = p.fight.rows.find((r) => r.kind !== 'pc' && r.in && Number.isFinite(r.hp));
+      slow = 800;
+      await tap(page, `[data-fhp="${foe.id}"]`);
+      await page.type('2d+1 cr torso');
+      await page.key('Enter');
+      await fromOther(run, [{ type: 'fightEnd', fight: p.fight.id }]);
+      await page.waitFor(`document.querySelector('#hnotes').textContent.includes('2d+1 cr torso rolled 9, but that fight has ended: not applied.')`, 5000);
+      slow = 0;
+      const st = (await (await fetch(`${run.base}/api/state`)).json()).state;
+      assert.ok(!st.fight, 'the fight is over');
+      assert.ok(!st.events.some((e) => /hit by|2d\+1/.test(e.text) && e.fight), 'nothing applied');
+    });
+  });
+
   it('CoC, after Start: a DEX typed, then a held click on another row\'s damage box: the row re-places only after the release, and the click lands on the row aimed at', async () => {
     const run = await start('coc');
     await withPage({ width: 1449, height: 762 }, async (page) => {
