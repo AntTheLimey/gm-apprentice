@@ -456,6 +456,27 @@ describe('the fight in the state', () => {
     assert.deepEqual(RS.derive(nm, s).fight.view.rows.filter((r) => /Bouncer|Lookout/.test(r.gmName)).map((r) => r.gmName), ['Bouncer 1', 'Bouncer 2', 'Lookout']);
   });
 
+  // review M3: note-less copies are counted per name ("Thug, Priest, Thug"), not by one counter across every note-less foe
+  it('copies with no note are numbered per name', () => {
+    const nm = clone(model);
+    const plain = (name, i) => ({ key: `g.foe.plain${i}`, note: null, name, ally: false, ac: null, hp: null, init: null });
+    nm.beats[0].foes = [plain('Thug', 1), plain('Priest', 2), plain('Thug', 3)];
+    const s = fightAt(move(fresh(), ADA, GATE), GATE, { m: nm });
+    const names = RS.derive(nm, s).fight.view.rows.filter((r) => !r.note && r.kind === 'foe').map((r) => r.gmName);
+    assert.deepEqual(names, ['Thug 1', 'Priest', 'Thug 2']);
+  });
+
+  // review M4: the Jot chip reads "<acting gmName> dropped.", so a numbered copy's chip carries its number
+  it('the acting row of a numbered copy has the name the Jot chip prints', () => {
+    const nm = clone(model);
+    const foam = (i) => ({ key: `g.foe.foam${i > 1 ? `~${i}` : ''}`, note: null, name: `Foam guards ${i}`, ally: false, ac: null, hp: null, init: 99 - i });
+    nm.beats[0].foes = [foam(1), foam(2)];
+    const s = fightAt(move(fresh(), ADA, GATE), GATE, { m: nm });
+    const acting = RS.derive(nm, s).fight.view.acting;
+    assert.ok(acting && acting.row, 'someone is acting');
+    assert.match(`${acting.row.gmName} dropped.`, /^Foam guards [12] dropped\.$/);
+  });
+
   it('rollInit fills only empty boxes', () => {
     let s = gateFight();
     const [w1, w2] = rows(s, WOLF);

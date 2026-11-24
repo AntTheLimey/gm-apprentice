@@ -106,10 +106,12 @@ function sessionParty({ index, sessionPath, planBody, given, planPath = null }) 
       const m = /^\*\*(.+?)\*\*/.exec(b.text);
       if (!m) continue;
       const subject = items(m[1].replace(/:\s*$/, ''));
-      // a subject that is no PC ("Wen (Sam)", a nickname and the player) takes the one PC its bullet links
-      // ("Sheet: [[Morwenna Trevithick]]"); two PC links name no one
-      const linked = subject[0] || pcOf(null, subject[1]) ? [] : [...new Set(pt.links(b.text).map((l) => index.resolve(l)).filter(isPc))];
-      subjects.push(linked.length === 1 ? [linked[0], null] : subject);
+      // A bullet led by a nickname and its player ("Wen (Sam)") takes the one PC its "Sheet:" link names. Only that
+      // shape: a label ("State:", "Next beat:", "Note:") never does, and a link not after "Sheet:" names no one.
+      const nick = /^[^()]+\([^()]+\)\s*:?$/.test(m[1].trim());
+      const sheet = nick && !subject[0] && !pcOf(null, subject[1]) ? /\bSheet:\s*(\[\[[^\]]+\]\])/i.exec(b.text) : null;
+      const linked = sheet ? index.resolve(pt.links(sheet[1])[0]) : null;
+      subjects.push(linked && isPc(linked) ? [linked, null] : subject);
     }
     const party = collect(subjects, 'the Plan\'s PC Roster', planPath, false);
     if (party.length) return { party, from: 'plan', warnings };

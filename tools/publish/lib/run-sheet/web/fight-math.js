@@ -810,12 +810,15 @@
     return rows;
   }
 
-  // Number the copies of each note, after the highest already taken (`taken`: note -> highest copy).
+  // Number the copies of each note, after the highest already taken (`taken`: copyKey -> highest copy). A foe with no
+  // note ("Thug", "Priest", "Thug") is counted by its name, so each name has its own numbers.
+  const copyKey = (note, name) => note || `name:${stripCopy(name)}`;
   function numberCopies(foes, taken) {
     const seen = new Map(taken);
     return foes.map((x) => {
-      const copy = (seen.get(x.foe.note) || 0) + 1;
-      seen.set(x.foe.note, copy);
+      const key = copyKey(x.foe.note, x.foe.name);
+      const copy = (seen.get(key) || 0) + 1;
+      seen.set(key, copy);
       return copy;
     });
   }
@@ -937,7 +940,11 @@
     }
     if (beat) {
       const taken = new Map();
-      for (const r of have) if (r.note) taken.set(r.note, Math.max(taken.get(r.note) || 0, r.copy || 0));
+      for (const r of have) {
+        if (!r.note && r.kind !== 'foe') continue;
+        const key = copyKey(r.note, r.name);
+        taken.set(key, Math.max(taken.get(key) || 0, r.copy || 0));
+      }
       // A named NPC already in the fight from another beat is the same person: ticked in if benched, never a
       // second row (the rule Add by name keeps). A beat listing a note twice still makes both.
       const foes = beatFoes(ctx, beat).filter((x) => !have.some((r) => r.foeKey === x.foe.key)).filter((x) => {
