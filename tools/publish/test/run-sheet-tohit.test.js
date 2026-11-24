@@ -14,6 +14,7 @@ const { createTableServer, listenLocal } = require('../lib/run-sheet/server');
 const { listSessions, pickSession } = require('../lib/run-sheet/sessions');
 const { pcTohit, typedTohit, servedCss } = require('../lib/run-sheet/tohit');
 const { make } = require('../js/gurps-tohit');
+const { readSettings } = require('../lib/settings/read');
 const { load, dataBlock, El } = require('./helpers/tohit-dom');
 
 const SELA = 'Characters/PCs/Sela Drake.md';
@@ -25,8 +26,12 @@ after(async () => {
 });
 const fixture = (name) => { const d = copyFixture(name); made.push(d); return d; };
 
-async function start(name, session) {
+async function start(name, session, { calculatorOff = false } = {}) {
   const vault = fixture(name);
+  if (calculatorOff) {
+    const file = path.join(vault, '_meta', 'vault-config.yaml');
+    fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace(/^player_site:\r?\n/m, (m) => `${m}  features:\n    tohit_calculator: off\n`));
+  }
   const picked = pickSession(listSessions(vault), session, vault);
   assert.ok(picked.session, picked.error);
   const t = createTableServer({ vaultPath: vault, session: picked.session, party: [], deps: { delayMs: 20, log: () => {} } });
@@ -131,6 +136,15 @@ describe('the to-hit calculator\'s data on the run sheet', () => {
     assert.strictEqual(css.status, 200);
     assert.match(css.headers.get('content-type'), /text\/css/);
     assert.strictEqual(await css.text(), servedCss(fs.readFileSync(path.join(__dirname, '..', 'css', 'tohit.css'), 'utf8')));
+  });
+
+  it("the player site's switch for the calculator does not reach the GM page (D7)", async () => {
+    const run = await start('run-sheet-gurps', 'Session 01 - Crates', { calculatorOff: true });
+    assert.strictEqual(readSettings({ vaultPath: run.vault }).values.player_site.features.tohit_calculator, 'off');
+    const list = await (await fetch(`${run.base}/api/tohit`)).json();
+    assert.strictEqual(list.pcs.length, 2);
+    assert.strictEqual((await fetch(`${run.base}/api/tohit?pc=${encodeURIComponent(SELA)}`)).status, 200);
+    assert.strictEqual((await post(run.base, '/api/tohit/typed', { type: 'ranged', level: 9 })).status, 200);
   });
 
   it('the server answers 404 on a CoC vault', async () => {
