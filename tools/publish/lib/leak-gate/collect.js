@@ -117,7 +117,7 @@ function collectHidden({ configPath, outputDir = null }) {
   const keptBy = player.vault.kept_by;
   // The GM's own words that must never reach players (player_site.never_show): looked for on every kind of vault.
   const neverShow = (player.site.never_show || []).filter((w) => typeof w === 'string' && w.trim());
-  const empty = { sitePath: '/', vaultPath, siteDir, keptBy, neverShow, pieces: [], visible: [], warnings: [], notes: [], published: [], publishedRels: new Set(), linkMap: {}, outOf: () => [], propOwner: new Map(), propFiles: new Set(), madeFiles: new Set(), stateFiles: new Set(), heldProps: [], heldNotePages: [], heldTitles: [], plannedTitles: [], sealedOn: new Map(), collectionAddress: null, siteTakes: () => false, keeps: () => false };
+  const empty = { sitePath: '/', vaultPath, siteDir, keptBy, neverShow, ownCopies: new Map(), pieces: [], visible: [], warnings: [], notes: [], published: [], publishedRels: new Set(), linkMap: {}, outOf: () => [], propOwner: new Map(), propFiles: new Set(), madeFiles: new Set(), stateFiles: new Set(), heldProps: [], heldNotePages: [], heldTitles: [], plannedTitles: [], sealedOn: new Map(), collectionAddress: null, siteTakes: () => false, keeps: () => false };
   if (keptBy === 'player') return empty;
 
   const quiet = () => {};
@@ -500,8 +500,12 @@ function collectHidden({ configPath, outputDir = null }) {
 
   // A note's outputs: its page, then its prop's files.
   const outOf = (rel) => [outputOf.get(rel), ...(propOuts.get(rel) || [])].filter(Boolean);
+  // The GM's own pages (player_site.own_pages, #850): the build moves each to its kept copy and frames it at its
+  // address. A copy's address, by the copy.
+  const { ownFileOf } = require('../templates/own-page');
+  const ownCopies = new Map((playerConfig.own_pages || []).map((address) => [canonicalNfc(ownFileOf(address)), canonicalNfc(address)]));
   return {
-    vaultPath, siteDir, keptBy, neverShow, pieces, visible, warnings, notes, published, publishedRels, linkMap, outOf,
+    vaultPath, siteDir, keptBy, neverShow, ownCopies, pieces, visible, warnings, notes, published, publishedRels, linkMap, outOf,
     propOwner, propFiles: new Set(propOwner.keys()), madeFiles, stateFiles, heldProps, heldNotePages, heldTitles, plannedTitles, sealedOn,
     keeps: (rel) => taken.keeps(rel),
     // The path the site is served under ('/', or '/campaign/' on a project site): a rooted link is read below it.
