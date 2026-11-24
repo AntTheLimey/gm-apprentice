@@ -282,15 +282,19 @@
   // A row ticked in, or joined, with a number and no place yet takes its sorted place by one insert, the turn kept.
   // In a fixed order (GURPS) that is after Start only, and the row holds its place from then on. Where the order
   // opens sorted and later numbers re-place (CoC), it is before or after Start, by DEX with the sort's tie rules,
-  // and `fixed` is not set (a typed DEX still re-places it). A row with no number stays where it is until one
-  // is typed (`replace` places it then). D&D is rolled: its Sort stays the GM's button.
+  // and `fixed` is not set (a typed DEX still re-places it); a CoC row held (its DEX typed, Tab not Enter) waits for
+  // placeHeld. A row with no number stays where it is until one is typed (`replace` places it then). The acting row
+  // is never moved, so ticking it out and in again never changes who is next. D&D is rolled: its Sort stays the
+  // GM's button.
   function placeLate(f, r) {
     const rules = FM.rulesOf(f);
-    if (!r.in || r.kind === 'lair' || r.held || !isNum(r.ini)) return;
+    if (!r.in || r.kind === 'lair' || !isNum(r.ini) || r.id === f.turn) return;
     if (rules.orderFixed) {
       if (!f.started || r.fixed) return;
+      // placed now, so nothing is left held for placeHeld to place again
       r.fixed = true;
-    } else if (rules.initiative === 'roll' || rules.initiative === undefined) return;
+      if (r.held) r.held = false;
+    } else if (rules.initiative === 'roll' || rules.initiative === undefined || r.held) return;
     f.rows = FM.placeRow(f.rows, r.id, rules);
   }
 

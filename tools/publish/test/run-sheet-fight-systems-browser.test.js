@@ -2794,24 +2794,30 @@ describe('CoC rows ticked in or added later are placed by DEX (step 6b Task 33),
     });
   });
 
-  it('a DEX 60 row added after Start lands by DEX, the turn stays; a blank row typed 50 is placed then', async () => {
+  // Task 34 (Task 33 review): the rows come in through the GM's Add box by real input, and the order is pinned
+  it('a Dock Cultist (DEX 50) added after Start through Add lands by DEX, the turn stays; a blank row typed 50 is placed then', async () => {
     const run = await start('coc');
     await withPage({ width: 1449, height: 762 }, async (page) => {
       let p = await fightOn(page, run, 0);
       p = await startNow(page);
       const turn = [p.fight.turn, p.fight.round];
-      await join(run, p, 'Rasul', { ini: 60, dex: 60 }, 'r');
-      await join(run, p, 'Quill', { ini: null }, 'q');
-      p = await until(page, 'p.fight.rows.some((r) => r.name === "Quill") && p.fight.rows.some((r) => r.name === "Rasul")');
-      const o = names(p);
-      assert.strictEqual(o.at(-1), 'Quill', 'a row with no DEX stays last');
-      assert.ok(p.fight.rows.filter((r) => r.in && r.ini !== null && r.name !== 'Rasul').every((r) => (o.indexOf(r.name) < o.indexOf('Rasul')) === (r.ini >= 60)), `by DEX: ${o}`);
+      const before = names(p);
+      await tap(page, '#fAddName');
+      await page.type('Dock Cultist');
+      await page.waitFor('document.querySelector("[data-faddpick]")');
+      await tap(page, '[data-faddpick]');
+      p = await until(page, 'p.fight.rows.some((r) => r.name === "Dock Cultist" && r.in) && p.saved === "Saved" && p.pending === 0');
+      assert.strictEqual(named(p, 'Dock Cultist').ini, 50);
+      // DEX 50 ties: the higher combat skill first (Warden Hale 55, the Brine Walkers 45), so the Cultist's 40 comes after them
+      assert.deepStrictEqual(before, ['Nurse Orla Penn', 'Iris Calder', 'Warden Hale', 'Brine Walker 1', 'Brine Walker 2', 'Tobias Reed', 'Jonas Finch', 'Mabel Quill']);
+      assert.deepStrictEqual(names(p), ['Nurse Orla Penn', 'Iris Calder', 'Warden Hale', 'Brine Walker 1', 'Brine Walker 2', 'Dock Cultist', 'Tobias Reed', 'Jonas Finch', 'Mabel Quill']);
       assert.deepStrictEqual([p.fight.turn, p.fight.round], turn, 'the turn did not move');
-      p = await typeInto(page, `[data-fini="${named(p, 'Quill').id}"]`, 50);
-      const o2 = names(p);
-      const ini = (n) => named(p, n).ini;
-      assert.ok(o2.every((n, i) => i === 0 || ini(o2[i - 1]) === null || ini(n) === null || ini(o2[i - 1]) >= ini(n)), `sorted: ${o2.map((n) => [n, ini(n)])}`);
-      assert.notStrictEqual(o2.at(-1), 'Quill');
+      // a blank row from "+ New", then its DEX typed
+      p = await addNew(page, 'Quill');
+      assert.strictEqual(names(p).at(-1), 'Quill', 'a row with no DEX stays last');
+      p = await typeInto(page, box(p, 'Quill', 'dex'), 50);
+      // no combat skill: last of the DEX 50s
+      assert.deepStrictEqual(names(p), ['Nurse Orla Penn', 'Iris Calder', 'Warden Hale', 'Brine Walker 1', 'Brine Walker 2', 'Dock Cultist', 'Quill', 'Tobias Reed', 'Jonas Finch', 'Mabel Quill']);
       assert.deepStrictEqual([p.fight.turn, p.fight.round], turn);
       assert.deepStrictEqual(p.errors, []);
     });

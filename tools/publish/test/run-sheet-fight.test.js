@@ -2000,6 +2000,54 @@ describe('fight maths by system (step 6b Task 6)', () => {
     assert.equal(turnName(s), 'Ann');
   });
 
+  // Task 33 review minors (Task 34)
+  it('CoC: a row ticked out then in again goes back to its DEX place; the acting row ticked out and in keeps who is next', () => {
+    const ins = (x) => x.fight.rows.filter((r) => r.in).map((r) => r.name);
+    let s = begin(COC, [{ name: 'Ann', kind: 'pc', ini: 60, dex: 60 }, { name: 'Bo', ini: 50, dex: 50 }, { name: 'Cy', ini: 40, dex: 40 }]);
+    s = go(s);
+    assert.equal(turnName(s), 'Ann');
+    for (const name of ['Bo', 'Cy']) {
+      s = G(s, { type: 'fightTick', row: named(s, name).id, in: false });
+      assert.deepEqual(ins(s), ['Ann', 'Bo', 'Cy'].filter((x) => x !== name));
+      s = G(s, { type: 'fightTick', row: named(s, name).id, in: true });
+      assert.deepEqual(ins(s), ['Ann', 'Bo', 'Cy'], name);
+    }
+    assert.equal(turnName(s), 'Ann');
+    // an order that does not follow DEX (as a state from elsewhere may hold it), Ann acting with Cy next: Ann ticked
+    // out and in again is not moved to her DEX place, so Cy is still next
+    s.fight.rows = ['Bo', 'Ann', 'Cy'].map((n) => named(s, n));
+    s = G(s, { type: 'fightTick', row: named(s, 'Ann').id, in: false });
+    s = G(s, { type: 'fightTick', row: named(s, 'Ann').id, in: true });
+    assert.deepEqual(ins(s), ['Bo', 'Ann', 'Cy']);
+    assert.equal(turnName(s), 'Ann');
+    s = go(s);
+    assert.equal(turnName(s), 'Cy');
+  });
+
+  it('CoC: a row ticked in on a full tie with a PC (DEX and combat skill) goes after the PC', () => {
+    const ins = (x) => x.fight.rows.filter((r) => r.in).map((r) => r.name);
+    let s = begin(COC, [{ name: 'Dee', ini: 60, dex: 60, fighting: 50, in: false }, { name: 'Ann', kind: 'pc', ini: 60, dex: 60, fighting: 50 }, { name: 'Cy', ini: 40, dex: 40 }]);
+    s = G(s, { type: 'fightTick', row: named(s, 'Dee').id, in: true });
+    assert.deepEqual(ins(s), ['Ann', 'Dee', 'Cy']);
+  });
+
+  it('GURPS: a held row ticked in after Start is placed at once and holds its place, as before Task 33', () => {
+    let s = begin(GURPS, [{ name: 'Kev', kind: 'pc', ini: 6, speed: 6 }, { name: 'Slow', ini: 4, speed: 4 }]);
+    s = go(s);
+    s = G(s, { type: 'fightJoin', rows: [M.blankRow({ id: 'late', name: 'Late', ini: null })], label: 'Late' });
+    s = G(s, { type: 'setStat', row: 'late', key: 'speed', value: 5, hold: true });
+    assert.equal(named(s, 'Late').held, true);
+    assert.deepEqual(order(s), ['Kev', 'Slow', 'Late'], 'held: not placed yet');
+    s = G(s, { type: 'fightTick', row: 'late', in: false });
+    s = G(s, { type: 'fightTick', row: 'late', in: true });
+    assert.deepEqual(order(s), ['Kev', 'Late', 'Slow']);
+    assert.deepEqual([named(s, 'Late').fixed, Boolean(named(s, 'Late').held)], [true, false]);
+    const before = lines(s).length;
+    s = G(s, { type: 'placeHeld' });
+    assert.equal(lines(s).length, before, 'nothing held is left to place, and nothing is logged');
+    assert.equal(turnName(s), 'Kev');
+  });
+
   it('Sort after Start re-sorts once, the turn kept', () => {
     let s = begin(GURPS, [{ name: 'Kev', kind: 'pc', ini: 6, speed: 6 }, { name: 'Slow', ini: 4, speed: 4 }]);
     s = go(s);
