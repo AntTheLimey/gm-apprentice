@@ -556,8 +556,10 @@
       // a caster's box says how a spell is paid (GURPS's `✦ f-3`)
       const ph = (r.caster && w.casterPlaceholder) || w.entryPlaceholder || '-37/+8/t5';
       // with no ½ or Res beside it, the box is as wide as the system's placeholder, so all of it shows
-      const wide = tg.half ? '' : ` style="width: calc(${ph.length}ch + 8px)" title="${esc(ph)}"`;
-      h += `<input class="hpin${pend && !dmgOn ? ' pending' : ''}${dmgOn ? ' dmg' : ''}" data-fhp="${esc(r.id)}" value="${esc(pend || '')}" placeholder="${esc(dmgOn ? DMG_PLACEHOLDER : ph)}"${wide} autocomplete="off" aria-label="Damage or healing for ${esc(r.gmName)}">`;
+      const wide = tg.half ? '' : ` style="width: calc(${ph.length}ch + 8px)"`;
+      // its title: the words in it, whole (a narrow box clips a long place, Task 25), else what it takes
+      const tip = String(pend || '').trim() || (tg.half ? '' : ph);
+      h += `<input class="hpin${pend && !dmgOn ? ' pending' : ''}${dmgOn ? ' dmg' : ''}" data-fhp="${esc(r.id)}" data-tip="${esc(tg.half ? '' : ph)}" value="${esc(pend || '')}" placeholder="${esc(dmgOn ? DMG_PLACEHOLDER : ph)}"${wide}${tip ? ` title="${esc(tip)}"` : ''} autocomplete="off" aria-label="Damage or healing for ${esc(r.gmName)}">`;
       if (tg.half) h += `<button type="button" class="tg ${half ? 'on' : ''}" ${ui.area ? 'data-fahalf' : 'data-fhalf'}="${esc(r.id)}" aria-pressed="${!!half}" title="${ui.area ? 'Half for this area: a save' : 'Half: the next hit only (a save)'}">½</button>`;
       if (tg.resisted) h += `<button type="button" class="tg ${r.resisted ? 'on' : ''}" data-fres="${esc(r.id)}" aria-pressed="${!!r.resisted}" title="Resisted: every hit halved until turned off">Res</button>`;
     }
@@ -1405,7 +1407,7 @@
       const k = l && r.kind !== 'pc' ? K.M.lineStat(l) : null;
       return k && !isNum(r[k]) ? k : null;
     }
-    return !isNum(r.ht) && c.lines.some((l) => l.kind !== 'dead') ? 'ht' : null;
+    return !isNum(r.ht) && c.lines.some((l) => l.kind !== 'dead' && !l.noRoll) ? 'ht' : null;
   }
   const statLabel = (K, k) => (K.coc ? ((K.C.stats || {})[k] || k.toUpperCase()) : 'HT');
   function cardHTML(r, c, K) {
@@ -2131,6 +2133,45 @@
   }
   // An entry the row cannot take: its words stay in the box, the reason on the row's second line, selected so what
   // the GM types next replaces it (Task 10's path; Task 12's hit words a system cannot read too).
+  // Enter in a row's damage box (or on its hit location list): the entry applied, or refused with its reason.
+  function enterBox(t) {
+    const d = t.dataset;
+    // CoC's damage (Task 17): dice with the attacker's DB, or the total as rolled in a box an exchange opened
+    if (cocRules() && cocEnter(t)) return;
+    const e = FM.parseEntry(t.value, FM.rulesOf(state().fight));
+    // a system that reads hits (GURPS) keeps words it cannot read in the box, its reason on the row's second line
+    if (!e && wounding()) { refuse(t, cannotHit(t.value) || words().entryInvalid || INVALID); return; }
+    if (!e) { t.setCustomValidity(words().entryInvalid || INVALID); t.reportValidity(); return; }
+    // the GM picks the pool: an entry into a pool the row has no figure in (e-3 with no Energy Reserve, f-3 with no
+    // FP) is refused, never paid from another pool instead
+    const row = rowById(d.fhp);
+    const pool = e.pool !== 'hp' && e.pool !== 'temp' ? FM.poolOf(FM.rulesOf(state().fight), e.pool) : null;
+    if (pool && row && !isNum(row[pool.key])) {
+      const w = words();
+      const own = { er: w.noReserve, fp: w.noFp }[pool.key];
+      refuse(t, own || `No ${pool.label || pool.key} on this row`);
+      return;
+    }
+    const entry = t.value;
+    t.value = '';
+    markPending(t);
+    if (e.hit) ui.lastHit[d.fhp] = { type: e.hit.type, location: e.hit.location };
+    if (!e.dice) { F({ type: 'hp', row: d.fhp, entry }); return; }
+    // dice are the server's: the hit goes with the roll (the reducer never rolls)
+    const f = state().fight;
+    roll([{ damage: e.dice, ...(e.hit ? { type: e.hit.type } : {}) }]).then(([res]) => {
+      const now = state().fight;
+      if (now && f && now.id === f.id) RP.dispatch({ fight: f.id, type: 'hp', row: d.fhp, entry, rolled: res.total });
+      // the fight ended (or another began) while the dice were out: said, never applied to the wrong fight
+      else RP.note(`${entry} rolled ${res.total}, but that fight has ended: not applied.`, { kind: 'bad', id: `roll:late:${entry}` });
+    }, (err) => {
+      rollFailed(err);
+      // the words go back in the box, as typed
+      ui.pending[d.fhp] = entry;
+      RP.render();
+    });
+  }
+
   // Why a hit's words are refused when their type cannot target their place (Task 25): "cr cannot target the eye".
   function cannotHit(v) {
     const type = FM.cannotTarget(v, rules().fight || rules());
@@ -2150,6 +2191,9 @@
   function markPending(t) {
     const id = t.dataset.fhp;
     const v = t.value;
+    // the title keeps the words whole as they change (a narrow box clips a long place)
+    const tip = v.trim() || t.dataset.tip || '';
+    if (tip) t.title = tip; else t.removeAttribute('title');
     // a refused entry stays refused while its words are in the box; any change clears the reason
     if (ui.refused[id] && ui.refused[id].words !== v) delete ui.refused[id];
     // the damage box an exchange opened holds its entry as the box's own, never as damage left unapplied
@@ -2335,42 +2379,15 @@
       F({ type: 'setStat', row: rid, key, value: Number(v) });
       return;
     }
+    // Enter on the hit location list (GURPS, Task 25) applies the row's box when it holds damage, as Enter in it does
+    if (d.fhlocsel !== undefined) {
+      const box = document.querySelector(attr('data-fhp', d.fhlocsel));
+      if (box && FM.hitWords(box.value, rules().fight || rules()).amount) { ev.preventDefault(); enterBox(box); }
+      return;
+    }
     if (d.fhp !== undefined) {
       ev.preventDefault();
-      // CoC's damage (Task 17): dice with the attacker's DB, or the total as rolled in a box an exchange opened
-      if (cocRules() && cocEnter(t)) return;
-      const e = FM.parseEntry(t.value, FM.rulesOf(state().fight));
-      // a system that reads hits (GURPS) keeps words it cannot read in the box, its reason on the row's second line
-      if (!e && wounding()) { refuse(t, cannotHit(t.value) || words().entryInvalid || INVALID); return; }
-      if (!e) { t.setCustomValidity(words().entryInvalid || INVALID); t.reportValidity(); return; }
-      // the GM picks the pool: an entry into a pool the row has no figure in (e-3 with no Energy Reserve, f-3 with no
-      // FP) is refused, never paid from another pool instead
-      const row = rowById(d.fhp);
-      const pool = e.pool !== 'hp' && e.pool !== 'temp' ? FM.poolOf(FM.rulesOf(state().fight), e.pool) : null;
-      if (pool && row && !isNum(row[pool.key])) {
-        const w = words();
-        const own = { er: w.noReserve, fp: w.noFp }[pool.key];
-        refuse(t, own || `No ${pool.label || pool.key} on this row`);
-        return;
-      }
-      const entry = t.value;
-      t.value = '';
-      markPending(t);
-      if (e.hit) ui.lastHit[d.fhp] = { type: e.hit.type, location: e.hit.location };
-      if (!e.dice) { F({ type: 'hp', row: d.fhp, entry }); return; }
-      // dice are the server's: the hit goes with the roll (the reducer never rolls)
-      const f = state().fight;
-      roll([{ damage: e.dice, ...(e.hit ? { type: e.hit.type } : {}) }]).then(([res]) => {
-        const now = state().fight;
-        if (now && f && now.id === f.id) RP.dispatch({ fight: f.id, type: 'hp', row: d.fhp, entry, rolled: res.total });
-        // the fight ended (or another began) while the dice were out: said, never applied to the wrong fight
-        else RP.note(`${entry} rolled ${res.total}, but that fight has ended: not applied.`, { kind: 'bad', id: `roll:late:${entry}` });
-      }, (err) => {
-        rollFailed(err);
-        // the words go back in the box, as typed
-        ui.pending[d.fhp] = entry;
-        RP.render();
-      });
+      enterBox(t);
       return;
     }
     if (d.fother !== undefined) {
@@ -2432,6 +2449,16 @@
     if (b && document.activeElement === b) b.select();
   }, true);
   document.addEventListener('focusin', (ev) => { if (ev.target.matches && ev.target.matches(NUMBER_BOX)) ev.target.select(); });
+  // A click into a damage box holding a picked type or place and no damage yet puts the caret before the words, so what
+  // is typed next is the damage (Task 25): a click in a narrow box lands wherever it lands.
+  document.addEventListener('click', (ev) => {
+    const t = ev.target;
+    if (!t || !t.dataset || t.dataset.fhp === undefined || !wounding()) return;
+    const h = FM.hitWords(t.value, rules().fight || rules());
+    if (h.amount || !t.value.trim() || t.selectionStart !== t.selectionEnd) return;
+    if (!/^\s/.test(t.value)) t.value = ` ${t.value}`;
+    t.setSelectionRange(0, 0);
+  });
 
   document.addEventListener('input', (ev) => {
     const t = ev.target;

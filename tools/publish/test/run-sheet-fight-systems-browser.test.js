@@ -578,8 +578,8 @@ describe('CoC and GURPS fights on the GM page, by real input', { skip: browserSk
       await page.choose(sel, 'Arm −2');
       assert.strictEqual(await page.evaluate(`document.querySelector('[data-fhp="${vex}"]').value`), ' cut arm');
       assert.deepStrictEqual(await texts(page, `#acting [data-fhits="${vex}"] [aria-pressed="true"]`), ['cut']);
+      // as a GM does it: click the box, type the damage, Enter
       await tap(page, `[data-fhp="${vex}"]`);
-      await page.key('Home');
       await page.type('9');
       await page.key('Enter');
       // 9 cut arm on Vex (13 HP, DR 1): 7, crippled (arm)
@@ -629,9 +629,9 @@ describe('CoC and GURPS fights on the GM page, by real input', { skip: browserSk
       const vex = named(p, 'Vex Harrow').id;
       const sel = `#acting [data-fhlocsel="${vex}"]`;
       const value = () => page.evaluate(`document.querySelector(${q(sel)}).value`);
+      // as a GM does it: click the box, type the damage, Enter
       const hitWith = async (entry) => {
         await tap(page, `[data-fhp="${vex}"]`);
-        await page.key('Home');
         await page.type(entry);
         await page.key('Enter');
       };
@@ -673,10 +673,15 @@ describe('CoC and GURPS fights on the GM page, by real input', { skip: browserSk
       await hitWith('3');
       p = await until(page, `p.fight.rows.find((r) => r.id === ${q(vex)}).hp === 6 && p.saved === "Saved" && p.pending === 0`);
       assert.strictEqual(named(p, 'Vex Harrow').hit.line, '3 cut − DR 1 = 2 × 2.5 = 5');
-      // a hand joint, crushing: crippled, capped
+      // a hand joint, crushing: the place picked, the damage typed, then back on the list, Enter there applies the box
       await tap(page, `[data-fhtype="${vex}|cr"]`);
       await page.choose(sel, 'Hand joint');
-      await hitWith('9');
+      await tap(page, `[data-fhp="${vex}"]`);
+      await page.type('9');
+      await tap(page, sel);
+      await page.key('Escape');
+      assert.strictEqual(await page.evaluate(`document.activeElement === document.querySelector(${q(sel)})`), true);
+      await page.key('Enter');
       p = await until(page, `p.fight.rows.find((r) => r.id === ${q(vex)}).hp === 2 && p.saved === "Saved" && p.pending === 0`);
       assert.strictEqual(named(p, 'Vex Harrow').hit.line, '9 cr − DR 1 = 8, capped at 4 (hand joint)');
       assert.deepStrictEqual(named(p, 'Vex Harrow').crippled, ['hand joint']);
@@ -694,6 +699,11 @@ describe('CoC and GURPS fights on the GM page, by real input', { skip: browserSk
         await tap(page, `[data-fhtype="${vex}|cut"]`);
         const sel = `#acting [data-fhlocsel="${vex}"]`;
         await page.choose(sel, 'Neck vein');
+        // the narrow box keeps its words whole in its title, kept current as they change
+        assert.strictEqual(await attrOf(page, `[data-fhp="${vex}"]`, 'title'), 'cut neck vein');
+        await tap(page, `[data-fhp="${vex}"]`);
+        await page.type('9');
+        await page.waitFor(`document.querySelector('[data-fhp="${vex}"]').title === '9 cut neck vein'`);
         const box = await page.evaluate(`(() => { const s = document.querySelector(${q(sel)}); const r = s.getBoundingClientRect(); const a = document.querySelector('#acting').getBoundingClientRect();
           const c = document.createElement('canvas').getContext('2d'); c.font = getComputedStyle(s).font;
           return { left: r.left, right: r.right, aLeft: a.left, aRight: a.right, text: c.measureText(s.selectedOptions[0].textContent).width, inner: s.clientWidth }; })()`);
