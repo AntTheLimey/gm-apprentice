@@ -1621,7 +1621,10 @@
     const view = f.view;
     syncMelee(f);
     syncDmg(f);
-    const shown = actingOf(f).row;
+    // the toolbar's To-hit: the PC whose turn it is (the panel then shows a foe: FM.actingRow never gives the turn's
+    // PC), else the row the panel shows
+    const turnRow = f.view.rows.find((x) => x.id === f.turn);
+    const shown = turnRow && turnRow.kind === 'pc' ? turnRow : actingOf(f).row;
     let h = '<div class="fview"><div class="fo" id="fOrder"><div class="fotop">';
     h += `<div class="fh"><b>${f.started ? `Round ${esc(f.round)}` : 'Setting up'}</b>`
       // a system that works the order out (CoC's DEX, GURPS's Basic Speed) has nothing to roll

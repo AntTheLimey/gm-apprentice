@@ -281,6 +281,80 @@ describe('the GURPS to-hit calculator on the GM page, by real input', { skip: br
     });
   });
 
+  // Sela's turn, by Next from Bouncer 1's, with no click on any name: the panel shows a foe (the last or next foe to act).
+  async function selasTurn(page, p) {
+    const sela = named(p, 'Sela Drake').id;
+    for (let i = 0; i < 12 && p.fight.turn !== sela; i++) {
+      const was = p.fight.turn;
+      await tap(page, '#fNext');
+      p = await until(page, `p.fight.turn !== ${q(was)} && p.saved === "Saved" && p.pending === 0`);
+    }
+    assert.strictEqual(p.fight.turn, sela);
+    return p;
+  }
+
+  it("on a PC's own turn, with nothing picked, the toolbar's To-hit opens on that PC's weapons", async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await selasTurn(page, await bouncers(page, run));
+      assert.notStrictEqual(p.fight.actingName, 'Sela Drake', 'the panel shows a foe on a PC\'s turn');
+      await tap(page, '#fToHit');
+      p = await dialogUp(page);
+      assert.strictEqual(p.tohit.from, SELA);
+      assert.strictEqual(p.tohit.row, named(p, 'Sela Drake').id);
+      assert.strictEqual(await valueOf(page, '#thFrom'), SELA);
+      assert.strictEqual(p.tohit.roll, String(pure(await pcData(run, SELA))));
+    });
+  });
+
+  it("a PC's shock and manoeuvre are read from the row at every open: what an earlier open left in the calculator's memory never stays", async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await selasTurn(page, await bouncers(page, run));
+      const sela = named(p, 'Sela Drake').id;
+      const data = await pcData(run, SELA);
+      const reopen = async (want, fields) => {
+        await tap(page, '#fToHit');
+        await rollIs(page, want);
+        assert.deepStrictEqual(await page.evaluate('["#th-man", "#th-shock"].map((s) => document.querySelector(s).value)'), fields);
+        await page.key('Escape');
+        return until(page, '!p.tohit');
+      };
+      p = await peek(page, p, 'Sela Drake');
+      // Shock 2: the calculator opens on −2
+      await tap(page, `#acting [data-fshock="${sela}"]`);
+      await tap(page, `#acting [data-fshockset="${sela}|2"]`);
+      p = await until(page, `p.fight.rows.find((r) => r.id === ${q(sela)}).shock === 2 && p.saved === "Saved" && p.pending === 0`);
+      p = await reopen(pure(data, { shock: -2 }), ['attack', '-2']);
+      // the shock cleared on the row: the next open reads 0, and the roll is back up
+      await tap(page, `#acting [data-fshock="${sela}"]`);
+      await tap(page, `#acting [data-fshockset="${sela}|0"]`);
+      p = await until(page, `p.fight.rows.find((r) => r.id === ${q(sela)}).shock === 0 && p.saved === "Saved" && p.pending === 0`);
+      p = await reopen(pure(data), ['attack', '0']);
+      // All-Out Attack, then Attack
+      await tap(page, `#acting [data-fman="${sela}|all-out attack"]`);
+      p = await until(page, `p.fight.rows.find((r) => r.id === ${q(sela)}).manoeuvre === "all-out attack" && p.saved === "Saved" && p.pending === 0`);
+      p = await reopen(pure(data, { man: 'aod' }), ['aod', '0']);
+      await tap(page, `#acting [data-fman="${sela}|attack"]`);
+      p = await until(page, `p.fight.rows.find((r) => r.id === ${q(sela)}).manoeuvre === "attack" && p.saved === "Saved" && p.pending === 0`);
+      await reopen(pure(data), ['attack', '0']);
+    });
+  });
+
+  it('the dialog opens at once, saying it is loading, before the list of PCs comes back', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await sheetUp(page, run);
+      // what the dialog held at the moment it opened
+      await page.evaluate(`(() => { const d = document.querySelector('#tohitDlg');
+        new MutationObserver(() => { if (d.open && window.__atOpen === undefined) window.__atOpen = d.textContent; }).observe(d, { attributes: true, attributeFilter: ['open'] }); })()`);
+      await tap(page, '#pcsToHit');
+      await dialogUp(page);
+      assert.match(await page.evaluate('window.__atOpen'), /Loading…/);
+      assert.ok(!/Loading…/.test(await text(page, '#tohitDlg')), 'the line goes once it is filled');
+    });
+  });
+
   it('the dialog is 560 px and in the narrow layout: the 3-to-18 strip\'s cells show their numbers whole; the encumbrance line is on screen', async () => {
     const run = await start();
     await withPage({ width: 1449, height: 762 }, async (page) => {

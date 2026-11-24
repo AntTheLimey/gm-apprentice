@@ -56,19 +56,23 @@
 
   // ---- the row the dialog opens for, and what it starts with ----
   const rowOf = (id) => { const f = (RP.state() || {}).fight; return f && id ? (f.rows || []).find((r) => r.id === id) || null : null; };
-  // The calculator's starting state from the row: its manoeuvre, shock, Aim and Evaluate counts, and Prone. A count
-  // the turn's attack pick reset is the one it had before the pick (fight.js manFrom).
+  // The calculator's starting state from the row: every field the row owns, its neutral value too, so what an
+  // earlier open left in the calculator's memory (a shock since cleared, a manoeuvre since changed) never stays.
+  // Its manoeuvre (Attack when it has none the calculator offers), shock, Aim and Evaluate counts, and Prone or
+  // standing. A count the turn's attack pick reset is the one it had before the pick (fight.js manFrom).
   function initialOf(r, data) {
     if (!r) return {};
-    const out = {};
-    if (MAN[r.manoeuvre]) out.man = MAN[r.manoeuvre];
-    if (isNum(r.shock) && r.shock > 0) out.shock = -r.shock;
+    const count = (v) => (isNum(v) && v > 0 ? Math.floor(v) : 0);
     const counts = r.manoeuvre && r.manoeuvre !== 'aim' && r.manoeuvre !== 'evaluate' ? (r.manFrom || {}) : r;
-    if (isNum(counts.aim) && counts.aim > 0) out.aim = counts.aim;
-    if (isNum(counts.evaluate) && counts.evaluate > 0) out.evaluate = counts.evaluate;
     const posture = data && data.rules && data.rules.posture;
-    if ((r.conds || []).includes('Prone') && posture && isNum(posture.prone)) out.posture = posture.prone;
-    return out;
+    const prone = (r.conds || []).includes('Prone') && posture && isNum(posture.prone);
+    return {
+      man: MAN[r.manoeuvre] || 'attack',
+      shock: isNum(r.shock) && r.shock > 0 ? -r.shock : 0,
+      aim: count(counts.aim),
+      evaluate: count(counts.evaluate),
+      posture: prone ? posture.prone : 0,
+    };
   }
 
   // ---- the dialog ----
@@ -93,8 +97,15 @@
     if (!d || !available()) return;
     ui.opener = opener;
     ui.row = rowOf(rowId);
+    const t = ++ui.ticket;
+    // open at once; the list of PCs fills it when it comes
+    d.innerHTML = '<div class="thd-top"><span class="note" role="status">Loading…</span><span class="sp"></span><button type="button" id="thClose">Close ✕</button></div>';
+    ui.open = true;
+    if (!d.open) d.showModal();
+    $('#thClose').focus();
     let pcs = [];
     try { pcs = (await RP.getJson('/api/tohit')).pcs || []; } catch (e) { pcs = []; }
+    if (t !== ui.ticket || !ui.open) return;
     ui.pcs = pcs;
     const r = ui.row;
     const pcHere = r && r.kind === 'pc' && pcs.find((p) => p.note === r.note);
@@ -105,8 +116,6 @@
     $('#thLevel').value = ui.typed.level;
     $('#thType').value = ui.typed.type;
     $('#thName').value = ui.typed.name;
-    ui.open = true;
-    if (!d.open) d.showModal();
     draw();
     $('#thFrom').focus();
     RP.probe();
