@@ -237,6 +237,19 @@ describe('dice: the CoC d100', () => {
     const b = rollPercent({ target: 55, bonus: 4, penalty: 1 }, { randomInt: feed(1, 2, 3, 4) });
     assert.deepStrictEqual([b.tens.length, b.bonus, b.asked], [3, 2, { bonus: 4, penalty: 1 }]);
   });
+  // Task 23b B5: the fumble range goes by the number the difficulty asks for, at Extreme too; a 0 skill still has its 01
+  it('Extreme: needed under 50 fumbles from 96, 50 and over from 100 only', () => {
+    const r = at(96, { target: 100, difficulty: 'extreme' });
+    assert.deepStrictEqual([r.needed, r.fumbleFrom, r.level], [20, 96, 'fumble']);
+    const hi = at(96, { target: 250, difficulty: 'extreme' });
+    assert.deepStrictEqual([hi.needed, hi.fumbleFrom, hi.level], [50, 100, 'hard']);
+    assert.strictEqual(at(100, { target: 250, difficulty: 'extreme' }).level, 'fumble');
+  });
+  it('a skill of 0: everything fails but 01 and the fumbles', () => {
+    assert.deepStrictEqual([1, 2, 50, 95, 96, 100].map((n) => at(n, { target: 0 }).level), ['critical', 'fail', 'fail', 'fail', 'fumble', 'fumble']);
+    const r = at(2, { target: 0, difficulty: 'extreme' });
+    assert.deepStrictEqual([r.needed, r.passed], [0, false]);
+  });
   it('refuses bad input', () => {
     for (const bad of [{ target: -1 }, { target: 1.5 }, {}, { target: 50, difficulty: 'easy' }, { target: 50, bonus: -1 }, { target: 50, penalty: 1.5 }]) assert.throws(() => rollPercent(bad), RangeError, JSON.stringify(bad));
   });
@@ -255,5 +268,13 @@ describe('dice: the dispatcher', () => {
   });
   it('a bad item is refused with a sentence naming the kinds', () => {
     for (const bad of [{}, null, 'x', [], { foo: 1 }]) assert.throws(() => rollSpec(bad), /against.*d100.*damage/);
+  });
+  // Task 23b B5: an item of a known kind with a bad shape says what is wrong with it, not the four kinds again
+  it('a malformed item of a known kind gets its own sentence', () => {
+    const cases = [[{ against: null }, /a target is a whole number/], [{ d100: null }, /a skill is a whole number/], [{ d100: 5 }, /a skill is a whole number/],
+      [{ damage: 5 }, /damage is dice/], [{ damage: '1d6', max: 'yes' }, /max is true or left out/], [{ sides: 'x' }, /a die has/]];
+    for (const [bad, say] of cases) {
+      assert.throws(() => rollSpec(bad), (e) => say.test(e.message) && !/against.*d100.*damage/.test(e.message), JSON.stringify(bad));
+    }
   });
 });

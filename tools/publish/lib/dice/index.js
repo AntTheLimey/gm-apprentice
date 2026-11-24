@@ -155,6 +155,7 @@ function rollSpec(spec, opts) {
   if (!spec || typeof spec !== 'object' || Array.isArray(spec)) throw new RangeError(KINDS);
   if ('against' in spec) return rollAgainst({ target: spec.against }, opts);
   if ('d100' in spec) return rollPercent(spec.d100, opts);
+  if ('damage' in spec && 'max' in spec && typeof spec.max !== 'boolean') throw new RangeError('max is true or left out');
   if ('damage' in spec && spec.max === true) return maxRoll(spec.damage, { type: spec.type, floor: spec.floor });
   if ('damage' in spec) return rollDamage(spec.damage, { ...opts, type: spec.type, floor: spec.floor });
   if ('sides' in spec) return roll(spec, opts);
