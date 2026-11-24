@@ -8,7 +8,7 @@ const path = require('node:path');
 const { SYSTEM_NAMES } = require('../../shared-lists');
 const { dnd, describeAs } = require('./dnd');
 const { statSection, combatSections, currentOf } = require('./stat-section');
-const { pairs, firstOf, leadingNumber, clean, firstLine } = require('./pairs');
+const { pairs, firstOf, leadingNumber, clean, firstLine, cellsOf, isSep, isRow } = require('./pairs');
 const { extractSections } = require('../../processor');
 const { parseCoC } = require('../../templates/coc/parse');
 const { buildCoCLiveData } = require('../../templates/coc/live-data');
@@ -139,12 +139,11 @@ const highest = (list) => { const ok = list.filter((v) => typeof v === 'number' 
 //   malf 95, 1 per 4 rounds` (the Malf and Attacks columns when they hold one). The last Skill column counts, so a
 //   Base column before it does not (`60% (30/12)` is 60, `Fighting (Sword) 85%` 85); a weapon row keeps its other
 //   cells after a `;`, for a gun's reload and impaling. A row whose skill cell is no figure (`—`, `CON 70`), the header
-//   and a table with no Skill column stay as they were.
+//   a row led by any other CoC key (`DB`, `Armour`) and a table with no Skill column stay as they were.
 const SKILL_HEAD = /^(?:skill|skill ?%|%|score|chance)$/;
+const SKILLS = new Set(['fighting', 'firearms', 'dodge']);
 // a skill cell's figure: `55%`, `55`, `60% (30/12)`, `55/27/11`, or one written after the skill's name (`Fighting (Sword) 85%`)
 const SKILL_CELL = /^(\d{1,3})(?=\s*%|\s*\/|\s*\(|\s*$)|^[^\d%]*?\s(\d{1,3})\s*%/;
-const isTableRow = (line) => /^\s*\|/.test(line);
-const tableCells = (line) => line.trim().replace(/^\||\|$/g, '').split('|').map(clean);
 function boldPairs(line) {
   if (/[·|•]/.test(line)) return null;
   const parts = line.trim().split(/\s+(?=\*\*)/);
@@ -155,19 +154,20 @@ function boldPairs(line) {
   });
   return keyed ? parts.join(' · ') : null;
 }
-const blankRow = (cells) => cells.every((x) => /^:?-{2,}:?$/.test(x) || x === '');
 function tableLines(rows) {
-  const at = rows.findIndex((r) => !blankRow(tableCells(r)));
+  const at = rows.findIndex((r) => !isSep(cellsOf(r)));
   if (at < 0) return rows;
-  const head = tableCells(rows[at]).map((x) => x.toLowerCase());
+  const head = cellsOf(rows[at]).map((x) => x.toLowerCase());
   let skill = -1;
   head.forEach((x, n) => { if (n > 0 && SKILL_HEAD.test(x)) skill = n; });
   if (skill < 0) return rows;
   const col = (re) => head.findIndex((x) => re.test(x));
   const [damage, malf, attacks] = [col(/^damage$/), col(/^malf(?:unction)?\.?$/), col(/^(?:attacks|atts?|rof)$/)];
   return rows.map((row, i) => {
-    const cells = tableCells(row);
-    const m = i > at && cells[0] ? SKILL_CELL.exec(cells[skill] || '') : null;
+    const cells = cellsOf(row);
+    // a row led by a CoC key that is no combat skill (`| DB | 0 |`, `| Armour | 2 |`) keeps its old reading
+    const k = keyOf(cells[0]);
+    const m = i > at && cells[0] && (k === null || SKILLS.has(k)) ? SKILL_CELL.exec(cells[skill] || '') : null;
     if (!m) return row;
     let line = `- ${cells[0]} ${m[1] || m[2]}%`;
     if (damage >= 0) {
@@ -187,9 +187,9 @@ function normalise(md) {
   const lines = String(md == null ? '' : md).replace(/\r\n?/g, '\n').split('\n');
   const out = [];
   for (let i = 0; i < lines.length; i++) {
-    if (isTableRow(lines[i])) {
+    if (isRow(lines[i])) {
       const rows = [];
-      while (i < lines.length && isTableRow(lines[i])) rows.push(lines[i++]);
+      while (i < lines.length && isRow(lines[i])) rows.push(lines[i++]);
       i--;
       out.push(...tableLines(rows));
       continue;
@@ -240,6 +240,16 @@ function lacks(name, nums) {
   return out;
 }
 
+const GUN_FILL = ['damage', 'malfunction', 'reload', 'impales'];
+function fillGun(g, others) {
+  if (g.damage !== null || g.malfunction !== null) return g;
+  const o = others.find((x) => x.skill === g.skill && (x.damage !== null || x.malfunction !== null));
+  if (!o) return g;
+  const out = { ...g };
+  for (const k of GUN_FILL) if (out[k] === null && o[k] !== null) out[k] = o[k];
+  return out;
+}
+
 const nameOf = (notePath, fm) => String(fm.name || path.posix.basename(notePath, '.md'));
 
 function readFoe({ notePath, index, text }) {
@@ -253,6 +263,9 @@ function readFoe({ notePath, index, text }) {
   if (beside) {
     const more = readNumbers(beside);
     for (const k of COMBAT_KEYS) if (nums[k] === null && more[k] !== null) nums[k] = more[k];
+    // a gun the block builds from a Firearms skill alone (no damage, no Malf) takes what a Weapons table's gun of the
+    // same skill says: its damage, malfunction, reload and impaling
+    if (nums.guns && more.guns) nums.guns = nums.guns.map((g) => fillGun(g, more.guns));
   }
   return { stats: found.md, statsHeading: found.heading, nums, lacks: lacks(nameOf(notePath, fm), nums), hpStart: currentOf(found.md) };
 }

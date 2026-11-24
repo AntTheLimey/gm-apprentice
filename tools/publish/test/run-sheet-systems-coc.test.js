@@ -400,6 +400,26 @@ for (const crlf of [false, true]) {
       assert.deepEqual(n.guns, [{ name: 'Pistol (flintlock)', skill: 40, damage: '1D10', malfunction: null, reload: 4, impales: false }]);
       assert.deepEqual(r.lacks, []);
     });
+    it('a story heading that starts with Attacks or Weapons is no combat section (fix round)', () => {
+      const tmp = path.join(path.dirname(dir), 'story');
+      fs.mkdirSync(path.join(tmp, 'Characters', 'NPCs'), { recursive: true });
+      try {
+        fs.writeFileSync(path.join(tmp, 'Characters/NPCs/Reed Cutter.md'),
+          '---\nname: Reed Cutter\ntype: npc\n---\n\n## Stats\n\n**HP** 9 · **DEX** 40\n\n## Attacks on the Ferry\n\n| Night | Victim | Chance | Damage |\n|---|---|---|---|\n| 3 | farmer | 40% | 1D6 |\n\n## Weapons Cache\n\n- Boat hook 55%, damage 1D6\n'.replace(/\n/g, crlf ? '\r\n' : '\n'));
+        const n = systemFor('coc-7e').readFoe({ notePath: 'Characters/NPCs/Reed Cutter.md', index: buildIndex(tmp), text: undefined }).nums;
+        assert.deepEqual([n.fighting, n.firearms], [null, null]);
+      } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+    });
+    it('a gun from a Firearms skill alone takes a sibling Weapons table gun\'s damage, Malf, reload and impaling (fix round)', () => {
+      const tmp = path.join(path.dirname(dir), 'skill-gun');
+      fs.mkdirSync(path.join(tmp, 'Characters', 'NPCs'), { recursive: true });
+      try {
+        fs.writeFileSync(path.join(tmp, 'Characters/NPCs/Toll Keeper.md'),
+          '---\nname: Toll Keeper\ntype: npc\n---\n\n## Stats\n\n**HP** 11 · **DEX** 50\n- Firearms (Handgun) 50%\n\n## Weapons\n\n| Weapon | Skill | Damage | Attacks | Malf |\n|---|---|---|---|---|\n| Flintlock Pistol | 50% | 1D6+1 | 1/4 | 95 |\n'.replace(/\n/g, crlf ? '\r\n' : '\n'));
+        const n = systemFor('coc-7e').readFoe({ notePath: 'Characters/NPCs/Toll Keeper.md', index: buildIndex(tmp), text: undefined }).nums;
+        assert.deepEqual(n.guns, [{ name: 'Firearms (Handgun)', skill: 50, damage: '1D6+1', malfunction: 95, reload: 4, impales: false }]);
+      } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+    });
     it('the stat block\'s own figures win over a sibling section\'s', () => {
       const tmp = path.join(path.dirname(dir), 'own-first');
       fs.mkdirSync(path.join(tmp, 'Characters', 'NPCs'), { recursive: true });
@@ -430,6 +450,10 @@ describe('CoC block shapes one line at a time (Task 32)', () => {
     assert.deepEqual([readNumbers('| Stat | Value |\n|---|---|\n| Dodge | 25 |').dodge, readNumbers('| Skill | % |\n|---|---|\n| Dodge | 25% |').dodge], [25, 25]);
     const n = readNumbers('| Weapon | Skill | Damage | Malf |\n|---|---|---|---|\n| Club | n/a | 1D6 | — |\n| Musket | 50% | 1D10+4 | 9x |');
     assert.deepEqual([n.fighting, n.firearms, n.guns], [null, 50, [{ name: 'Musket', skill: 50, damage: '1D10+4', malfunction: null, reload: null, impales: false }]]);
+  });
+  it('a Score table: a DB or Armour row keeps its words; Fighting, Firearms and Dodge rows read (fix round)', () => {
+    const n = readNumbers('| Characteristic | Score |\n|---|---|\n| DB | 0 |\n| Armour | 2 |\n| Dodge | 30 |\n| Fighting (Brawl) | 45% |');
+    assert.deepEqual([n.db, n.armour, n.dodge, n.fighting], ['0', '2', 30, 45]);
   });
   it('a weapon table whose Skill cell names the skill, and a reload in its Notes', () => {
     const n = readNumbers('| Weapon | Skill | Damage | Range | Notes |\n|---|---|---|---|---|\n| Sabre | Fighting (Sword) 65% | 1d8+DB | Touch | Impales on Extreme |\n| Flintlock Pistol | Firearms (Pistol) 50% | 1d6+1 | 10 yds | 1/4 rounds to reload |\n| Hatchet | DEX ÷ 2 | 1d6 | Touch | — |');

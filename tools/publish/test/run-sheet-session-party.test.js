@@ -98,6 +98,15 @@ describe('the session party', () => {
     assert.deepStrictEqual(crlf.party, [BEN, ADA, CY], 'CRLF');
   });
 
+  it('a bare bold subject before the PC headings takes its Sheet link; one under a heading is a label (fix round)', () => {
+    const index = vault({});
+    const plan = '## PC Roster & Arcs\n- **Wen:** Sheet: [[Ada Moss]]\n### [[Ben Hart]]\n- **Note:** Sheet: [[Cy Doe]]\n';
+    const r = sessionParty({ index, sessionPath: SESSION, planBody: plan, given: [] });
+    // headings are read before bullets, as before this task: the order is the reader's, the set is the point
+    assert.deepStrictEqual([...r.party].sort(), [ADA, BEN].sort());
+    assert.ok(!r.party.includes(CY), 'Cy is not added');
+  });
+
   it('a bold-subject bullet with no Sheet link takes nothing, whatever it mentions', () => {
     const index = vault({});
     const plan = '## PC Roster & Arcs\n- **Wen:** arc. Sheet: [[Ada Moss]].\n- **Tam:** arc with [[Ben Hart]] and [[Cy Doe]].\n- **Arc theme:** loyalty, see [[Ben Hart]]\n';

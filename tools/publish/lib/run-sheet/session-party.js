@@ -111,11 +111,12 @@ function sessionParty({ index, sessionPath, planBody, given, planPath = null }) 
       if (!m) continue;
       const subject = items(m[1].replace(/:\s*$/, ''));
       // A bullet whose bold subject names no PC ("Wen (Sam):", "Wen:") takes the one PC its "Sheet:" link names
-      // (`Sheet: [[PC]]`, `**Sheet:** [[PC]]`). A nickname and its player anywhere; a bare subject only as a top-level
-      // bullet before any PC heading, since under a heading a bold word is a label ("State:", "Next beat:", "Note:")
-      // and never adds anyone. A link not after "Sheet:" names no one.
+      // (`Sheet: [[PC]]`, `**Sheet:** [[PC]]`). A nickname and its player anywhere; a bare subject only in a bullet
+      // before any PC heading, since under a heading a bold word is a label ("State:", "Next beat:", "Note:") and never
+      // adds anyone. A link not after "Sheet:" names no one. (`pt.bullets` starts a bullet at column 0 only: an
+      // indented line is its parent's text.)
       const nick = /^[^()]+\([^()]+\)\s*:?$/.test(m[1].trim());
-      const free = (firstHead < 0 || b.start < firstHead) && !/^\s/.test(lines[b.start] || '');
+      const free = firstHead < 0 || b.start < firstHead;
       const sheet = (nick || free) && !subject[0] && !pcOf(null, subject[1]) ? SHEET.exec(b.text) : null;
       const linked = sheet ? index.resolve(pt.links(sheet[1])[0]) : null;
       subjects.push(linked && isPc(linked) ? [linked, null] : subject);

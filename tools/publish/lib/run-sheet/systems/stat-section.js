@@ -28,8 +28,7 @@ function headingsOf(lines) {
 
 // The section a heading opens: to the next heading of its level or higher.
 function runOf(lines, heads, i) {
-  const next = heads.slice(i + 1).find((h) => h.level <= heads[i].level);
-  return { heading: heads[i].title, md: lines.slice(heads[i].at + 1, next ? next.at : lines.length).join('\n').trim() };
+  return { heading: heads[i].title, md: lines.slice(heads[i].at + 1, Math.min(runEnd(heads, i), lines.length)).join('\n').trim() };
 }
 
 const linesOf = (body) => String(body == null ? '' : body).replace(/\r\n?/g, '\n').replace(/<!--[\s\S]*?-->/g, '').split('\n');
@@ -55,9 +54,9 @@ function statSection(body) {
 // Sections beside the stat block that hold a foe's skills and weapons (Task 32: Canticle writes `## Skills`,
 // `### **Combat Skills**`, `### **Weapons**`, `## Combat Skills` next to its block): a heading whose title is Skills,
 // Weapons or Attacks, after up to three qualifying words (`Melee Weapons`, `Investigative & Social Skills`) and before
-// any brackets. A story heading (`The Attack at the Mill`, `Georgiana's Academic Skills`) is not one. Their text joined,
+// any brackets or `&`/`and`. A story heading (`The Attack at the Mill`, `Attacks on the Ferry`, `Weapons Cache`) is not one. Their text joined,
 // or '' with no stat block or none beside it; a section inside the stat block or inside one already taken is skipped.
-const COMBAT_TITLE = /^[^\p{L}]*(?:(?:combat|melee|ranged|professional|investigative|practical|social|other)\s+(?:&\s+|and\s+)?){0,3}(?:skills|weapons|attacks)\b/iu;
+const COMBAT_TITLE = /^[^\p{L}]*(?:(?:combat|melee|ranged|professional|investigative|practical|social|other)\s+(?:&\s+|and\s+)?){0,3}(?:skills|weapons|attacks)(?=\s*(?:$|[(&]|and\b))/iu;
 function combatSections(body) {
   const lines = linesOf(body);
   const heads = headingsOf(lines);

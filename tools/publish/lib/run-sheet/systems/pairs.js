@@ -65,4 +65,4 @@ const leadingNumber = (v) => {
 // The first line of an error's message, for a note that says why a sheet could not be read.
 const firstLine = (e) => String((e && e.message) || e).split('\n')[0];
 
-module.exports = { pairs, firstOf, leadingNumber, clean, firstLine };
+module.exports = { pairs, firstOf, leadingNumber, clean, firstLine, cellsOf, isSep, isRow };
