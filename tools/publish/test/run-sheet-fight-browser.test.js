@@ -773,6 +773,10 @@ describe('sides by colour', { skip: browserSkip() }, () => {
       assert.strictEqual(await title(foe.id), `${foe.name} (neutral: you set it). Show this one's panel`);
       assert.strictEqual(await title(rowOf(p, ADA).id), `${rowOf(p, ADA).name} (PC). Show this one's panel`);
       assert.match(await title(rowOf(p, VENN).id), /\(ally(: .+)?\)\. Show this one's panel$/);
+      // a lair row's title names it too, so a cut name is always whole somewhere (Task 38 fix round, M5: a named D&D change)
+      const lair = p.fight.rows.find((r) => r.kind === 'lair');
+      assert.ok(lair, 'a lair row');
+      assert.strictEqual(await title(lair.id), `${lair.name}. Show this one's panel`);
     });
   });
 

@@ -590,8 +590,9 @@
     const cur = f.turn === r.id;
     const side = sideWord(r);
     const cls = [cur ? 'cur' : '', r.out ? 'out' : '', r.in ? '' : 'bench', ui.area && ui.sel[r.id] ? 'sel' : '', side ? `side-${side}` : ''].join(' ');
-    // the name takes its side's colour; its title keeps the word and the reason, e.g. "Ferrante (neutral: you set it)"
-    const name = `<span class="nm" data-fpeek="${esc(r.id)}" title="${esc(side ? `${r.gmName} (${side === 'pc' ? 'PC' : side}${r.sideFrom ? `: ${r.sideFrom}` : ''}). Show this one's panel` : "Show this one's panel")}">${esc(r.gmName)}</span>`;
+    // the name takes its side's colour; its title keeps the word and the reason, e.g. "Ferrante (neutral: you set it)",
+    // and always the name, a lair's too, so a name cut short is whole there (Task 38 fix round)
+    const name = `<span class="nm" data-fpeek="${esc(r.id)}" title="${esc(side ? `${r.gmName} (${side === 'pc' ? 'PC' : side}${r.sideFrom ? `: ${r.sideFrom}` : ''}). Show this one's panel` : `${r.gmName}. Show this one's panel`)}">${esc(r.gmName)}</span>`;
     if (r.kind === 'lair') {
       const owners = (r.of || []).map((id) => view.rows.find((x) => x.id === id)).filter(Boolean).map((x) => x.gmName);
       return `<li class="${cls} lair" data-frow="${esc(r.id)}"><span class="tk"></span><span class="ini fixed">20</span>${name}<span class="tag">loses ties${owners.length ? ` · ${esc(owners.join(', '))}` : ''}</span></li>`;
