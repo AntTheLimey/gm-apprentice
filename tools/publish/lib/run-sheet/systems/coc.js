@@ -252,6 +252,23 @@ function fillGun(g, others) {
   return out;
 }
 
+// Whether a note names a spell (Task 38 fix round: a row shows MP only for a character with spells). A `Spells:` line
+// with a spell after it (an NPC block's `**Spells:** Contact Deep One`; `none`, a dash or a blank is none), a `Spells`
+// section with anything in it, or a line naming a spell in a section whose heading names spells (a PC sheet's Arcane
+// Tomes & Spells: a tome alone is no spell). The template's `{…}` placeholder and comments are nothing.
+const NO_SPELL = /^(?:none|nil|no|n\/a|nothing|[-\u2013\u2014]+)\.?$/i;
+const plain = (v) => String(v).replace(/[*_`]/g, '').trim();
+const noSpell = (v) => !v || NO_SPELL.test(v) || /^\{.*\}$/.test(v) || /^<!--/.test(v);
+function spellsIn(text) {
+  const t = String(text == null ? '' : text).replace(/\r\n?/g, '\n');
+  for (const m of t.matchAll(/^[ \t]*(?:[-*+][ \t]+)?\**[ \t]*Spells?[ \t]*\**[ \t]*:[ \t]*\**(.*)$/gim)) if (!noSpell(plain(m[1]))) return true;
+  for (const m of t.matchAll(/^#{1,6}[ \t]+([^\n]*\bspells?\b[^\n]*)\n([\s\S]*?)(?=^#{1,6}[ \t]|(?![\s\S]))/gim)) {
+    const lines = m[2].split('\n').map((l) => plain(l.replace(/^[ \t]*[-*+][ \t]+/, ''))).filter((l) => !noSpell(l));
+    if (/^spells?$/i.test(plain(m[1])) ? lines.length > 0 : lines.some((l) => /\bspells?\b/i.test(l) && !/^spells?\s*:/i.test(l))) return true;
+  }
+  return false;
+}
+
 const nameOf = (notePath, fm) => String(fm.name || path.posix.basename(notePath, '.md'));
 
 function readFoe({ notePath, index, text }) {
@@ -269,6 +286,8 @@ function readFoe({ notePath, index, text }) {
     // same skill says: its damage, malfunction, reload and impaling
     if (nums.guns && more.guns) nums.guns = nums.guns.map((g) => fillGun(g, more.guns));
   }
+  // a caster: the note names a spell, in its block or beside it (Task 38 fix round)
+  if (spellsIn(text == null ? index.read(notePath).body : text)) nums.caster = true;
   return { stats: found.md, statsHeading: found.heading, nums, lacks: lacks(nameOf(notePath, fm), nums), hpStart: currentOf(found.md) };
 }
 
@@ -323,6 +342,13 @@ const sheetChars = (model) => {
 };
 
 function readPc({ body, fm }) {
+  const r = readPcNumbers({ body, fm });
+  // a caster: the sheet names a spell (Task 38 fix round), only when it does
+  // (a body that cannot be read already gave its note: no caster, never a throw)
+  try { if (r.numbers && spellsIn(body)) r.numbers = { ...r.numbers, caster: true }; } catch (e) { /* not a caster */ }
+  return r;
+}
+function readPcNumbers({ body, fm }) {
   try {
     const text = String(body == null ? '' : body).replace(/\r\n?/g, '\n');
     // the sheet's own skills only (no built-in list), so a figure is one the sheet writes
@@ -468,7 +494,7 @@ function describeCoc(id) {
 }
 
 // The row's own fields: initiative is DEX.
-const foeRow = (n) => ({ init: n.dex, mp: n.mp, mpMax: n.mp, san: n.san, sanMax: n.san, dex: n.dex, con: n.con, int: n.int, armour: n.armour, from: n.from,
+const foeRow = (n) => ({ ...(n.caster === true ? { caster: true } : {}), init: n.dex, mp: n.mp, mpMax: n.mp, san: n.san, sanMax: n.san, dex: n.dex, con: n.con, int: n.int, armour: n.armour, from: n.from,
   fighting: n.fighting, firearms: n.firearms, dodge: n.dodge, db: n.db, build: n.build, attacks: n.attacks, guns: n.guns || null });
 
 // A gun whose line says nothing about impaling takes the system's reading (`rules.coc.firearm.unknownImpales`:

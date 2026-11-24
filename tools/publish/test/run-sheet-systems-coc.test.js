@@ -20,6 +20,22 @@ function read(dir, note, id = 'coc-7e') {
 for (const crlf of [false, true]) {
   describe(`CoC foe reader${crlf ? ' (CRLF checkout)' : ''}`, () => {
     const dir = copyFixture('run-sheet-coc', { crlf });
+    // Task 38 fix round (Ant's pick): a row shows MP only for a character with spells, so the reader marks a caster
+    it('a Spells line naming a spell marks a caster; "none", a blank or no line does not', () => {
+      const hale = path.join(dir, `${NPCS}Warden Hale.md`);
+      const was = fs.readFileSync(hale, 'utf8');
+      const nl = crlf ? '\r\n' : '\n';
+      try {
+        for (const [line, want] of [['**Spells:** Contact Deep One, Shrivelling', true], ['**Spells:** none', undefined], ['Spells: \u2014', undefined],
+          ['- **Spells**: *Hymn of the Low Tide* (custom, below)', true], ['', undefined]]) {
+          fs.writeFileSync(hale, was.replace(`**Combat**${nl}`, `${line}${nl}${nl}**Combat**${nl}`));
+          assert.equal(read(dir, 'Warden Hale').nums.caster, want, line || 'no line');
+        }
+        // a Spells section of its own, with a spell in it
+        fs.writeFileSync(hale, was.replace('<!-- /gm-only -->', `### Spells${nl}${nl}- Contact Deep One${nl}${nl}<!-- /gm-only -->`));
+        assert.equal(read(dir, 'Warden Hale').nums.caster, true);
+      } finally { fs.writeFileSync(hale, was); }
+    });
     it('reads a template line plus a characteristics table', () => {
       const r = read(dir, 'Warden Hale');
       // Task 16 added the combat figures (fighting to attacks) on purpose; Task 18 INT, for its INT roll's card; Task 19
@@ -352,6 +368,19 @@ for (const crlf of [false, true]) {
       // CON and INT from its characteristics, for the cards
       assert.deepEqual(readPc('Iris Calder'), { numbers: { hpNow: 9, hpMax: 11, mpNow: 13, mpMax: 13, sanNow: 62, sanMax: 99, luck: 55, dex: 55, dodge: 27, build: 0, db: '0', con: 60, int: 75 } });
       assert.deepEqual(readPc('Iris Calder', 'coc-7e-regency').numbers.hpMax, 11);
+    });
+    // Task 38 fix round: a PC's sheet marks a caster from its Arcane Tomes & Spells section or a Spells line
+    it('a sheet naming a spell marks a caster; None, the template\'s placeholder or tomes alone do not', () => {
+      const note = path.join(dir, 'Characters/PCs/Iris Calder.md');
+      const was = fs.readFileSync(note, 'utf8');
+      const nl = crlf ? '\r\n' : '\n';
+      try {
+        for (const [section, want] of [['None.', undefined], ['{Mythos tomes read and spells learned.}', undefined], ['- *Revelations of Glaaki*, read in 1925', undefined],
+          ['- *Revelations of Glaaki*, read in 1925\n- Spells: Contact Deep One', true], ['- Contact Ghoul (spell, from the Glaaki volume)', true]]) {
+          fs.writeFileSync(note, `${was}${nl}## Arcane Tomes & Spells${nl}${nl}${section.replace(/\n/g, nl)}${nl}`);
+          assert.equal(readPc('Iris Calder').numbers.caster, want, section);
+        }
+      } finally { fs.writeFileSync(note, was); }
     });
     it('a one-line sheet falls back to its line, current = max, with a quiet note', () => {
       const r = readPc('Jonas Finch');
