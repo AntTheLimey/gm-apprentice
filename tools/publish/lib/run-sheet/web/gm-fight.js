@@ -595,8 +595,9 @@
       const pend = dmgOn ? ui.dmg.entry : ui.pending[r.id] || (ui.refused[r.id] && ui.refused[r.id].words);
       // a caster's box says how a spell is paid (GURPS's `✦ f-3`)
       const ph = (r.caster && w.casterPlaceholder) || w.entryPlaceholder || '-37/+8/t5';
-      // with no ½ or Res beside it, the box is as wide as the system's placeholder, so all of it shows
-      const wide = tg.half ? '' : ` style="width: calc(${ph.length}ch + 8px)"`;
+      // with no ½ or Res beside it, the box is as wide as the system's placeholder, so all of it shows, with a little
+      // room after its last letter (Task 37 fix round: it ran into the HP figure)
+      const wide = tg.half ? '' : ` style="width: calc(${ph.length}ch + 12px)"`;
       // its title: the words in it, whole (a narrow box clips a long place, Task 25), else what it takes
       const tip = String(pend || '').trim() || (tg.half ? '' : ph);
       h += `<input class="hpin${pend && !dmgOn ? ' pending' : ''}${dmgOn ? ' dmg' : ''}" data-fhp="${esc(r.id)}" data-tip="${esc(tg.half ? '' : ph)}" value="${esc(pend || '')}" placeholder="${esc(dmgOn ? DMG_PLACEHOLDER : ph)}"${wide}${tip ? ` title="${esc(tip)}"` : ''} autocomplete="off" aria-label="Damage or healing for ${esc(r.gmName)}">`;

@@ -3137,3 +3137,55 @@ describe('Physical dice on CoC rows, cards and the Shoot strip (step 6b Task 37)
     });
   });
 });
+
+// Task 37 fix round: the entry box never runs into the HP figure beside it, its focus ring counted, focused or not;
+// its placeholder has room inside it. Seen on a CoC copy at 1449: the focused box's ring over Dell's HP.
+describe('the entry box and the HP figure never overlap (step 6b Task 37 fix round), by real input', { skip: browserSkip() }, () => {
+  // every row's entry box against its HP figure: the box's right edge, with its outline when focused, stays left of
+  // the figure's left edge; and the placeholder's text fits inside the box
+  const clash = (page) => page.evaluate(`(() => {
+    const out = [];
+    for (const box of document.querySelectorAll('#side ol.to > li[data-frow] input.hpin')) {
+      const hp = box.parentElement.querySelector('.hpv:not(.fpv)');
+      if (!hp) continue;
+      const b = box.getBoundingClientRect();
+      const h = hp.getBoundingClientRect();
+      const cs = getComputedStyle(box);
+      const ring = document.activeElement === box && cs.outlineStyle !== 'none' ? parseFloat(cs.outlineWidth) + parseFloat(cs.outlineOffset) : 0;
+      const ctx = document.createElement('canvas').getContext('2d');
+      ctx.font = cs.font;
+      const room = b.width - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - parseFloat(cs.borderLeftWidth) - parseFloat(cs.borderRightWidth);
+      const text = ctx.measureText(box.placeholder || '').width;
+      if (b.right + ring > h.left || text > room + 0.5) out.push({ row: box.dataset.fhp, right: b.right, ring, hpLeft: h.left, text, room });
+    }
+    // the "rolled" boxes' placeholders fit too (a clipped "d10(" on a CoC row)
+    for (const box of document.querySelectorAll('input.typed')) {
+      const cs = getComputedStyle(box);
+      const ctx = document.createElement('canvas').getContext('2d');
+      ctx.font = cs.font;
+      const room = box.getBoundingClientRect().width - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - parseFloat(cs.borderLeftWidth) - parseFloat(cs.borderRightWidth);
+      if (ctx.measureText(box.placeholder).width > room + 0.5) out.push({ typed: box.dataset.ftyped, placeholder: box.placeholder, room });
+    }
+    return out;
+  })()`);
+  for (const [w, h] of SIZES) {
+    it(`${w}: CoC rows after Start, and GURPS rows, with no box focused and with each focused`, async () => {
+      for (const sys of ['coc', 'gurps']) {
+        const run = await start(sys, { randomInt: () => 3 });
+        await withPage({ width: w, height: h }, async (page) => {
+          let p = sys === 'coc' ? await netLoft(page, run) : await fightOn(page, run, 1);
+          assert.deepStrictEqual(await clash(page), [], `${sys} ${w}: nothing focused`);
+          for (const r of p.fight.rows.filter((x) => x.in && x.hp !== null && x.hp !== undefined)) {
+            const sel = `[data-fhp="${r.id}"]`;
+            if (!(await page.evaluate(`Boolean(document.querySelector(${q(sel)}))`))) continue;
+            await tap(page, sel);
+            await page.waitFor(`document.activeElement === document.querySelector(${q(sel)})`, 2000);
+            assert.deepStrictEqual(await clash(page), [], `${sys} ${w}: ${r.name}'s box focused`);
+          }
+          p = await settled(page);
+          sane(p, `${sys} ${w} entry boxes`);
+        });
+      }
+    });
+  }
+});

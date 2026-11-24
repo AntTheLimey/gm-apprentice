@@ -310,6 +310,8 @@ ol.to .ini.fixed { width: 2.6rem; text-align: center; font: 650 .8rem var(--mono
 ol.to .nm { flex: 1 1 4.5rem; min-width: 3.5rem; font-weight: 600; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 ol.to .tag { font: 500 .68rem var(--mono); color: var(--muted); white-space: nowrap; }
 ol.to input.hpin { width: 4.2rem; text-align: left; }
+/* the focus ring (2px, 2px out) clears the HP figure beside the box: the row's 2px gap and this margin (Task 37 fix round) */
+ol.to input.hpin { margin-right: 3px; }
 ol.to .hpv, ol.to .acv { font: 650 .8rem var(--mono); white-space: nowrap; }
 ol.to .hpv input { width: 2.6rem; }
 ol.to .acv input { width: 2.3rem; margin-left: 2px; }
@@ -544,9 +546,9 @@ ol.to > li.row2 .mnote.lost.now { color: var(--bad); font-weight: 650; }
 .thdlg .tohit.th-narrow .th-stick { top: 0; }
 /* A roll made at the table (Task 37): one small "rolled" box beside each Roll (a card's line, a defence, a melee
    side, a shot, a dive, the bout's die); Enter takes it */
-input.typed { width: 5.2ch; font: 500 .72rem var(--mono); padding: 0 2px; text-align: center; }
+input.typed { width: calc(6ch + 8px); font: 500 .72rem var(--mono); padding: 0 2px; text-align: center; }
 input.typed::placeholder { color: var(--muted); }
 input.typed[aria-invalid="true"] { outline: 2px solid var(--bad); outline-offset: 1px; }
 .act .fcard input.typed { font-size: .78rem; padding: 1px 3px; margin-left: 6px; }
 .act .fcard .clines .decline.skip { opacity: .7; }
-input.typed.sm { width: 4.4ch; }
+input.typed.sm { width: calc(4ch + 8px); }
