@@ -32,7 +32,8 @@
   // row's own boxes; each panel box is `data-fs-<key>`
   const PANEL_KEYS = Object.keys(Fight.STAT_FIELDS).filter((k) => k !== 'hp' && k !== 'fp');
   // D&D's, for a model with no words of its own
-  const INVALID = 'Type -37 or 37 (damage), +8 (healing) or t5 (temp HP)';
+  // the entry box's refusal comes from the system (rules.words.entryInvalid); this is only for a model that has none
+  const INVALID = 'Not a number the box takes';
 
   const ui = {
     fightId: null, peek: null, peekTurn: null,
@@ -387,10 +388,11 @@
   // statuses the row has no room for. Only a row that has any gets one; it is not a row (no data-frow), so the order's
   // least width, the probe's rows and the keyboard pass it by.
   const PENDING = 'Enter applies';
-  const STAT_NAMES = { fini: 'Initiative', fmax: 'Max HP', fac: 'AC' };
+  const statNames = () => ({ fini: titled(words().initiative) || 'Initiative', fmax: `Max ${words().hp || 'HP'}`, fac: words().ac || 'AC' });
+  const titled = (w) => (w ? w[0].toUpperCase() + w.slice(1) : '');
   // a box's name for its bad-number line: the row's own, the pool's for its max box, the panel box's label
   function statName(f) {
-    if (STAT_NAMES[f]) return STAT_NAMES[f];
+    if (statNames()[f]) return statNames()[f];
     if (f === 'ffpmax') { const p = poolsShown().boxed[0]; return `Max ${p ? p.label : ''}`; }
     const b = panelBoxes().find((x) => boxStat(x.key) === f);
     return b ? b.label : f;
@@ -524,7 +526,7 @@
     }
     const maxTitle = fromTag(r, 'max') ? ` title="${esc(`Max ${w.hp || 'HP'} ${r.max}${fromTag(r, 'max')}`)}"` : '';
     h += `<span class="hpv"${maxTitle}>${esc(isNum(r.hp) ? r.hp : '?')}/${statBox('data-fmax', r, isNum(r.max) ? r.max : '', `inputmode="numeric" autocomplete="off" aria-label="Maximum HP for ${esc(r.gmName)}"`)}</span>`;
-    if (rn.includes('ac')) h += `<span class="acv">AC${statBox('data-fac', r, isNum(r.ac) ? r.ac : '', `inputmode="numeric" autocomplete="off" aria-label="AC for ${esc(r.gmName)}"`)}</span>`;
+    if (rn.includes('ac')) h += `<span class="acv">${esc(w.ac || 'AC')}${statBox('data-fac', r, isNum(r.ac) ? r.ac : '', `inputmode="numeric" autocomplete="off" aria-label="${esc(w.ac || 'AC')} for ${esc(r.gmName)}"`)}</span>`;
     h += poolsHTML(r);
     h += rowDefencesHTML(r);
     h += rowManoeuvreHTML(r, cur);
@@ -581,7 +583,7 @@
     // the read-outs: HP (its tag when worked out), AC and the rolled initiative where the system has them, each pool,
     // and the boxes the system reads out (CoC's DEX; GURPS's Basic Speed and Dodge)
     const reads = [`HP ${q(r.hp)}/${q(r.max)}${r.temp ? ` +${r.temp}` : ''}${fromTag(r, 'max')}`];
-    if (rowNumbers().includes('ac')) reads.push(`AC ${q(r.ac)}`);
+    if (rowNumbers().includes('ac')) reads.push(`${words().ac || 'AC'} ${q(r.ac)}`);
     if (rolled()) reads.push(`Init ${isNum(r.ini) ? r.ini : '—'} (${sign(r.mod)})`);
     for (const p of FM.poolsOf(rules().fight || rules())) {
       if (isNum(r[p.key]) || isNum(r[p.max])) reads.push(`${p.label} ${q(r[p.key])}${p.max ? `/${q(r[p.max])}` : ''}${fromTag(r, p.max)}`);

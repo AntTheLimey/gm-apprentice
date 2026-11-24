@@ -146,6 +146,8 @@ function describeAs(id, label, fights) {
       entryInvalid: 'Type -37 or 37 (damage), +8 (healing) or t5 (temp HP)',
       longRest: 'Long rest: everyone to full',
       advancement: 'One line each, e.g. level 6 for the dragon (milestone)',
+      // a PC's line in the PCs table: each figure's word, then its fields (a pair reads `now/max`); a missing figure shows ?
+      pcLine: [{ word: 'AC', now: 'ac' }, { word: 'HP', now: 'hpNow', max: 'hpMax' }, { word: 'Init', now: 'init', signed: true }],
     },
     // the Table Log's and the end panel's vitals columns after Who, the ontology's `run_sheet.vitals` for this system
     vitals: vitalsColumns(id),

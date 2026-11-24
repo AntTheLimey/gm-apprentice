@@ -876,10 +876,21 @@
     }).join('')}</ul>`;
   }
 
+  // The rules of the system, as the end panel and the PCs table read them
+  const endRules = () => {
+    const r = (G.model && G.model.rules) || {};
+    return { toggles: r.toggles || {}, words: r.words || {} };
+  };
+  // A PC's figures in the system's own words (rules.words.pcLine): `HP 11/11 · MP 12`; a missing figure is `?`
+  function pcLine(p) {
+    const fig = (v, signed) => (v === null || v === undefined || v === '' ? '?' : (signed && Number(v) >= 0 ? '+' : '') + v);
+    return (endRules().words.pcLine || []).map((c) => `${esc(c.word)} ${esc(fig(p[c.now], c.signed))}${c.max ? `/${esc(fig(p[c.max]))}` : ''}`).join(' · ');
+  }
+
   function pcsHTML() {
     if (!pcs().length) return '<p class="muted">No party given: start the sheet with <code>gma table</code> to have the PCs on it.</p>';
     const src = { index: "the session's list", wrapup: "the session's wrap-up", plan: "the Plan's roster", given: 'the active PCs' }[G.model.partyFrom];
-    return `${src ? `<p class="muted">This session's party, from ${src}.</p>` : ''}<div class="tw"><table><thead><tr><th>PC</th><th>This session</th></tr></thead><tbody>${pcs().map((p) => `<tr><td style="white-space:nowrap">${face(p.note)} ${link(p.note, p.name)}<div class="note">${esc(p.player || '')}${p.role ? ` · ${esc(p.role)}` : ''} · AC ${esc(p.ac ?? '?')} · HP ${esc(p.hpNow ?? '?')}/${esc(p.hpMax ?? '?')} · Init ${p.init == null ? '?' : (p.init >= 0 ? '+' : '') + esc(p.init)}</div></td>
+    return `${src ? `<p class="muted">This session's party, from ${src}.</p>` : ''}<div class="tw"><table><thead><tr><th>PC</th><th>This session</th></tr></thead><tbody>${pcs().map((p) => `<tr><td style="white-space:nowrap">${face(p.note)} ${link(p.note, p.name)}<div class="note">${esc(p.player || '')}${p.role ? ` · ${esc(p.role)}` : ''} · ${pcLine(p)}</div></td>
       <td>${p.moment ? `<b>Moment:</b> ${esc(p.moment)}<br>` : ''}${p.touch ? `<span class="muted">Touchpoint:</span> ${esc(p.touch)}<br>` : ''}${p.arc ? `<span class="muted">Arc:</span> ${esc(p.arc)}` : ''}${p.thread ? `<br><span class="muted">Thread:</span> ${esc(p.thread)}` : ''}</td></tr>`).join('')}</tbody></table></div>`;
   }
 
@@ -1078,7 +1089,7 @@
   // vault with no system of its own).
   const vitalColumns = () => RS.vitalColumns(G.model);
   function endHTML(d) {
-    let h = '<p class="note">Prefilled from the sheet. Change anything after rests: only a row you change, or a long rest, goes into the record.</p>';
+    let h = `<p class="note">Prefilled from the sheet. Change anything after rests: only a row you change${endRules().toggles.longRest ? ', or a long rest,' : ''} goes into the record.</p>`;
     if (pcs().length) {
       h += `<h4 class="lab">Where everyone ended</h4><table class="where"><tbody>${d.whereEnded.map((w) => `<tr><td style="width:12rem">${face(w.pc)} ${esc(w.name)}</td><td><input data-where="${esc(w.pc)}" value="${esc(w.text || whereText(w))}" data-default="${esc(whereText(w))}" aria-label="Where ${esc(w.name)} ended"></td></tr>`).join('')}</tbody></table>`;
     }
@@ -1129,9 +1140,10 @@
         }).join('')}</tbody></table>`;
       }
       h += `<h4 class="lab">Vitals</h4><div class="tw">${table}</div>`;
-      h += `<p><button id="longRest" type="button" class="${G.state.end.longRest ? 'on' : ''}" aria-pressed="${!!G.state.end.longRest}">${G.state.end.longRest ? 'Long rest taken ✓ (click to undo)' : 'Long rest: everyone to full'}</button></p>`;
+      // the rest button is a D&D thing: only a system whose toggles have it, in its own words
+      if (endRules().toggles && endRules().toggles.longRest) h += `<p><button id="longRest" type="button" class="${G.state.end.longRest ? 'on' : ''}" aria-pressed="${!!G.state.end.longRest}">${G.state.end.longRest ? 'Long rest taken ✓ (click to undo)' : esc(endRules().words.longRest || '')}</button></p>`;
     }
-    h += `<h4 class="lab"><label for="advance">Advancement</label></h4><textarea id="advance" placeholder="One line each, e.g. level 6 for the dragon (milestone)">${esc(G.state.end.advancement || '')}</textarea>`;
+    h += `<h4 class="lab"><label for="advance">Advancement</label></h4><textarea id="advance" placeholder="${esc(endRules().words.advancement || '')}">${esc(G.state.end.advancement || '')}</textarea>`;
     h += `<p><button id="copyRecord" class="primary" type="button">Copy the Table Log</button> <span class="note" id="copyMsg">${esc(G.ui.copyMsg)}</span></p>`;
     if (G.ui.record) h += `<pre class="notes" id="recordText">${esc(G.ui.record)}</pre>`;
     return h;

@@ -371,7 +371,8 @@ function describeGurps(id) {
   // the row's own figures: initiative (Basic Speed), HP now/[max], FP now/[max]
   r.rowNumbers = ['ini', 'hp', 'max', 'fp', 'fpMax'];
   r.words = {
-    ...r.words, hp: 'HP', ac: '', temp: '', initiative: 'Basic Speed', initBox: 'Spd', longRest: '', advancement: '', bloodied: '', noBlock: '',
+    ...r.words, hp: 'HP', ac: '', temp: '', initiative: 'Basic Speed', initBox: 'Spd', longRest: '', advancement: 'One line each, e.g. 3 character points', bloodied: '', noBlock: '',
+    pcLine: [{ word: 'HP', now: 'hpNow', max: 'hpMax' }, { word: 'FP', now: 'fpNow', max: 'fpMax' }, { word: 'Speed', now: 'speed' }],
     entryPlaceholder: '-7 / +3 / f-2',
     // a caster's box: a spell is paid with f-3 (FP) or e-3 (Energy Reserve)
     casterPlaceholder: '\u2726 f-3',

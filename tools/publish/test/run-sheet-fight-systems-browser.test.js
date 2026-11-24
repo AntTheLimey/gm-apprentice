@@ -1652,3 +1652,51 @@ describe("the end panel's vitals columns per system (step 6b Task 20), by real i
     });
   });
 });
+
+// The page says nothing in D&D's words (step 6b Task 22). Real input throughout; the probe only reads the DOM.
+describe('CoC and GURPS pages speak their own system (step 6b Task 22), by real input', { skip: browserSkip() }, () => {
+  const DND = /\bAC\b|initiative modifier|stat-fill|Long rest|milestone|temp HP|death save|Exhaustion|Concentrat|Bloodied/i;
+  // what a reader sees and hears: the text, and every title, placeholder and label the markup carries
+  const said = (page) => page.evaluate(`(() => {
+    const out = [document.body.innerText];
+    for (const e of document.querySelectorAll('[title],[placeholder],[aria-label],option,summary')) {
+      for (const a of ['title', 'placeholder', 'aria-label']) if (e.getAttribute(a)) out.push(e.getAttribute(a));
+      out.push(e.textContent);
+    }
+    return out.join('\\n');
+  })()`);
+  const noDnd = async (page, where) => {
+    const t = await said(page);
+    const m = DND.exec(t);
+    assert.ok(!m, `${where}: "${m && m[0]}" in ${m && t.slice(Math.max(0, m.index - 60), m.index + 60)}`);
+  };
+  for (const [which, at, line, advance] of [
+    ['coc', 0, /HP \d+\/\d+ · MP \d+ · SAN \d+ · DEX \d+/, 'One line each, e.g. skill checks to roll'],
+    ['gurps', 1, /HP \d+\/\d+ · FP \d+\/\d+ · Speed [\d.]+/, 'One line each, e.g. 3 character points'],
+  ]) {
+    it(`${which === 'gurps' ? 'GURPS' : 'CoC'}: prep notes, the PCs table, a fight, the panel, the end of the night and the players' screen hold no D&D word`, async () => {
+      for (const [width, height] of SIZES) {
+        const run = await start(which);
+        await withPage({ width, height }, async (page) => {
+          await page.goto(`${run.base}/?probe=1`);
+          await settled(page);
+          await tap(page, '#prep summary');
+          await noDnd(page, `${which} ${width} prep notes and the sheet`);
+          const pcs = await text(page, '#pcs');
+          assert.match(pcs, line, `${which}: the PC line`);
+          assert.ok(!/AC |Init /.test(pcs), `${which}: ${pcs}`);
+          assert.strictEqual(await attrOf(page, '#advance', 'placeholder'), advance);
+          assert.strictEqual(await page.evaluate('document.querySelector("#longRest")'), null, 'no long rest button');
+          let p = await fightOn(page, run, at);
+          sane(p, `${which} ${width} words`);
+          const first = p.fight.rows[0];
+          await peek(page, p, first.name);
+          await noDnd(page, `${which} ${width} the fight and its panel`);
+          await page.goto(`${run.base}/players?probe=1`);
+          await page.waitFor('document.body.innerText.length > 0', 5000);
+          await noDnd(page, `${which} ${width} the players' screen`);
+        });
+      }
+    });
+  }
+});

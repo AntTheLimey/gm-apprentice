@@ -176,6 +176,9 @@ function forPlayers(model, state, { withheldWords, campaign, picId } = {}) {
   function orderOf() {
     const f = st.fight;
     if (!f || typeof f !== 'object' || !Array.isArray(f.rows)) return null;
+    // Bloodied is D&D's condition: a system whose words give none ('') shows none, and a model without words keeps D&D's
+    const w = model.rules && model.rules.words;
+    const bloodiedWord = w && w.bloodied === '' ? '' : ((w && w.bloodied) || 'Bloodied');
     // a PC and the unseen word as the model has them, never as the row says; an ally by the row's side, once
     // seen (an unseen ally is numbered and named as a foe is)
     const kindOf = (r) => {
@@ -221,7 +224,7 @@ function forPlayers(model, state, { withheldWords, campaign, picId } = {}) {
       }
       const hp = isNum(r.hp) ? `${r.hp}${isNum(r.max) ? `/${r.max}` : ''}${r.temp > 0 ? ` +${r.temp}` : ''}` : null;
       const statuses = statusesOf({ conds: Array.isArray(r.conds) ? r.conds : [], exhaustion: r.exhaustion, conc: r.conc }).map(String)
-        .concat(FM.isBloodied(r) ? ['Bloodied'] : []);
+        .concat(bloodiedWord && FM.isBloodied(r) ? [bloodiedWord] : []);
       return { name, ...base, lair: false, hp, statuses };
     });
     return { round: f.started && isNum(f.round) ? f.round : null, paused: Boolean(f.paused), rows };
