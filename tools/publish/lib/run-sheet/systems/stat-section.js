@@ -32,17 +32,51 @@ function runOf(lines, heads, i) {
   return { heading: heads[i].title, md: lines.slice(heads[i].at + 1, next ? next.at : lines.length).join('\n').trim() };
 }
 
-function statSection(body) {
-  const lines = String(body == null ? '' : body).replace(/\r\n?/g, '\n').replace(/<!--[\s\S]*?-->/g, '').split('\n');
-  const heads = headingsOf(lines);
+const linesOf = (body) => String(body == null ? '' : body).replace(/\r\n?/g, '\n').replace(/<!--[\s\S]*?-->/g, '').split('\n');
+
+// The index in `heads` of the stat block's heading, or -1.
+function statAt(heads) {
   const gm = heads.findIndex((h) => h.level === 2 && h.title.toLowerCase() === 'gm notes');
   if (gm >= 0) {
     const end = heads.slice(gm + 1).find((h) => h.level <= 2);
     const at = heads.findIndex((h, i) => i > gm && (!end || h.at < end.at) && h.level === 3 && h.title.toLowerCase() === 'stats');
-    if (at >= 0) return runOf(lines, heads, at);
+    if (at >= 0) return at;
   }
-  const at = heads.findIndex((h) => STAT_WORDS.some((w) => h.title.toLowerCase().includes(w)));
+  return heads.findIndex((h) => STAT_WORDS.some((w) => h.title.toLowerCase().includes(w)));
+}
+
+function statSection(body) {
+  const lines = linesOf(body);
+  const heads = headingsOf(lines);
+  const at = statAt(heads);
   return at >= 0 ? runOf(lines, heads, at) : null;
+}
+
+// Sections beside the stat block that hold a foe's skills and weapons (Task 32: Canticle writes `## Skills`,
+// `### **Combat Skills**`, `### **Weapons**`, `## Combat Skills` next to its block): a heading whose title is Skills,
+// Weapons or Attacks, after up to three qualifying words (`Melee Weapons`, `Investigative & Social Skills`) and before
+// any brackets. A story heading (`The Attack at the Mill`, `Georgiana's Academic Skills`) is not one. Their text joined,
+// or '' with no stat block or none beside it; a section inside the stat block or inside one already taken is skipped.
+const COMBAT_TITLE = /^[^\p{L}]*(?:(?:combat|melee|ranged|professional|investigative|practical|social|other)\s+(?:&\s+|and\s+)?){0,3}(?:skills|weapons|attacks)\b/iu;
+function combatSections(body) {
+  const lines = linesOf(body);
+  const heads = headingsOf(lines);
+  const at = statAt(heads);
+  if (at < 0) return '';
+  const out = [];
+  const taken = [[heads[at].at, runEnd(heads, at)]];
+  for (let i = 0; i < heads.length; i++) {
+    if (taken.some(([a, b]) => heads[i].at >= a && heads[i].at < b)) continue;
+    if (!COMBAT_TITLE.test(heads[i].title)) continue;
+    out.push(runOf(lines, heads, i).md);
+    taken.push([heads[i].at, runEnd(heads, i)]);
+  }
+  return out.join('\n\n');
+}
+// The line a heading's section ends before.
+function runEnd(heads, i) {
+  const next = heads.slice(i + 1).find((h) => h.level <= heads[i].level);
+  return next ? next.at : Infinity;
 }
 
 // The current HP a block states, or null: `HP 10 (currently 4)` is 4, `HP 6/9` is 6 (current over max). The last
@@ -58,4 +92,4 @@ function currentOf(md) {
   return toNumber(found[found.length - 1][1]);
 }
 
-module.exports = { statSection, currentOf, STAT_WORDS };
+module.exports = { statSection, combatSections, currentOf, STAT_WORDS };

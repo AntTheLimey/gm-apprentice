@@ -364,3 +364,76 @@ for (const crlf of [false, true]) {
     });
   });
 }
+
+// Task 32: Canticle-shaped NPC notes give their combat figures. Each fixture copies a real note's shape in made-up words.
+for (const crlf of [false, true]) {
+  describe(`CoC foe reader: Canticle shapes (Task 32)${crlf ? ' (CRLF checkout)' : ''}`, () => {
+    const dir = copyFixture('run-sheet-coc-shapes', { crlf });
+    const foe = (note) => read(dir, note, 'coc-7e-regency');
+    it('a sibling ## Skills list gives Fighting, Firearms and Dodge; a prose section and an "Attack" story heading do not', () => {
+      const r = foe('Sergeant Brask');
+      assert.equal(r.statsHeading, 'Statistics');
+      assert.deepEqual([r.nums.hp, r.nums.dex, r.nums.db], [12, 55, '+1D4']);
+      assert.deepEqual([r.nums.fighting, r.nums.firearms, r.nums.dodge], [50, 70, 30]);
+      assert.deepEqual(r.nums.guns, [{ name: 'Firearms (Rifle/Musket)', skill: 70, damage: null, malfunction: null, reload: null, impales: false }]);
+    });
+    it('a Combat Skills table takes its Skill column, not Base; a Weapons table gives the attacks and the gun, malfunction last', () => {
+      const r = foe('Lieutenant Corve');
+      assert.equal(r.statsHeading, 'Attributes');
+      assert.deepEqual([r.nums.hp, r.nums.mp, r.nums.dex], [12, 10, 65]);
+      // Brawl 55 (not its base 25), the Cutlass 60 the highest; a dash in the Skill column reads as nothing
+      assert.deepEqual([r.nums.fighting, r.nums.firearms, r.nums.dodge, r.nums.db], [60, 45, 35, '+1D4']);
+      assert.deepEqual(r.nums.guns, [{ name: 'Flintlock Pistol', skill: 45, damage: '1D6+1', malfunction: 95, reload: 4, impales: false }]);
+      assert.deepEqual(r.lacks, []);
+    });
+    it('### Attacks per Round: 3 gives Attacks 3, and its attack table gives Fighting', () => {
+      const r = foe('Creatures/Fen Stalker.md');
+      assert.deepEqual([r.nums.attacks, r.nums.fighting, r.nums.firearms, r.nums.guns], [3, 45, null, null]);
+      assert.deepEqual([r.nums.hp, r.nums.mp, r.nums.dex, r.nums.db, r.nums.build], [13, 7, 75, '+1D6', 2]);
+    });
+    it('bold pairs with only spaces between give every characteristic, and a sibling Combat Skills list its figures', () => {
+      const r = foe('Madame Ostrel');
+      const n = r.nums;
+      assert.deepEqual([n.str, n.con, n.siz, n.dex, n.int, n.pow, n.hp, n.mp, n.san, n.luck, n.build],
+        [50, 55, 50, 70, 65, 60, 10, 12, 60, 55, 0]);
+      assert.deepEqual([n.fighting, n.firearms, n.dodge], [70, 40, 45]);
+      assert.deepEqual(n.guns, [{ name: 'Pistol (flintlock)', skill: 40, damage: '1D10', malfunction: null, reload: 4, impales: false }]);
+      assert.deepEqual(r.lacks, []);
+    });
+    it('the stat block\'s own figures win over a sibling section\'s', () => {
+      const tmp = path.join(path.dirname(dir), 'own-first');
+      fs.mkdirSync(path.join(tmp, 'Characters', 'NPCs'), { recursive: true });
+      try {
+        fs.writeFileSync(path.join(tmp, 'Characters/NPCs/Ferry Clerk.md'),
+          '---\nname: Ferry Clerk\ntype: npc\n---\n\n## Stats\n\n**HP** 9 · **DEX** 40\n- Fighting (Brawl) 30%\n- Dodge 20%\n\n## Skills\n\n- Fighting (Brawl) 60%\n- Dodge 50%\n- Firearms (Handgun) 35%\n'.replace(/\n/g, crlf ? '\r\n' : '\n'));
+        const n = systemFor('coc-7e').readFoe({ notePath: 'Characters/NPCs/Ferry Clerk.md', index: buildIndex(tmp), text: undefined }).nums;
+        assert.deepEqual([n.fighting, n.dodge, n.firearms], [30, 20, 35]);
+      } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+    });
+  });
+}
+
+describe('CoC block shapes one line at a time (Task 32)', () => {
+  it('bold pairs: a key inside or outside the bold, a dash, words after a figure', () => {
+    const n = readNumbers('**STR** 45 **DEX** 60\n**HP:** 11 **SAN:** 0 (barely holding on) **Luck:** —');
+    assert.deepEqual([n.str, n.dex, n.hp, n.san, n.luck], [45, 60, 11, 0, null]);
+  });
+  it('a line of bold words that are not all CoC keys is left as it was', () => {
+    const n = readNumbers('**HP** 10\n**Note** 3 **DEX** 50');
+    assert.equal(n.dex, null);
+  });
+  it('a heading that is a key and a number is read; a story heading is not', () => {
+    assert.equal(readNumbers('#### Attacks per round: 2\n| Bite | 40% | 1D4 |').attacks, 2);
+    assert.equal(readNumbers('### The Attack: 3 Nights Later').attacks, null);
+  });
+  it('a table with no Skill column is read as before; a skill cell that is no number is nothing, never a throw', () => {
+    assert.deepEqual([readNumbers('| Stat | Value |\n|---|---|\n| Dodge | 25 |').dodge, readNumbers('| Skill | % |\n|---|---|\n| Dodge | 25% |').dodge], [25, 25]);
+    const n = readNumbers('| Weapon | Skill | Damage | Malf |\n|---|---|---|---|\n| Club | n/a | 1D6 | — |\n| Musket | 50% | 1D10+4 | 9x |');
+    assert.deepEqual([n.fighting, n.firearms, n.guns], [null, 50, [{ name: 'Musket', skill: 50, damage: '1D10+4', malfunction: null, reload: null, impales: false }]]);
+  });
+  it('a weapon table whose Skill cell names the skill, and a reload in its Notes', () => {
+    const n = readNumbers('| Weapon | Skill | Damage | Range | Notes |\n|---|---|---|---|---|\n| Sabre | Fighting (Sword) 65% | 1d8+DB | Touch | Impales on Extreme |\n| Flintlock Pistol | Firearms (Pistol) 50% | 1d6+1 | 10 yds | 1/4 rounds to reload |\n| Hatchet | DEX ÷ 2 | 1d6 | Touch | — |');
+    assert.deepEqual([n.fighting, n.firearms], [65, 50]);
+    assert.deepEqual(n.guns, [{ name: 'Flintlock Pistol', skill: 50, damage: '1D6+1', malfunction: null, reload: 4, impales: false }]);
+  });
+});

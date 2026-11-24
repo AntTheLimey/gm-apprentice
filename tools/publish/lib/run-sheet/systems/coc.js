@@ -7,7 +7,7 @@
 const path = require('node:path');
 const { SYSTEM_NAMES } = require('../../shared-lists');
 const { dnd, describeAs } = require('./dnd');
-const { statSection, currentOf } = require('./stat-section');
+const { statSection, combatSections, currentOf } = require('./stat-section');
 const { pairs, firstOf, leadingNumber, clean, firstLine } = require('./pairs');
 const { extractSections } = require('../../processor');
 const { parseCoC } = require('../../templates/coc/parse');
@@ -130,9 +130,81 @@ function skillGun(stats, figure) {
 }
 const highest = (list) => { const ok = list.filter((v) => typeof v === 'number' && Number.isFinite(v)); return ok.length ? Math.max(...ok) : null; };
 
+// Shapes the readers below do not split, rewritten into ones they do (Task 32, Canticle's notes):
+//   a heading that is a key and a number (`### Attacks per Round: 2`) loses its hashes;
+//   a line of bold pairs with only spaces between (`**STR 55** **CON 60**`, `**HP:** 12 **MP:** 13`), every one a CoC
+//   key, is joined with ` · `;
+//   a table whose header names a Skill column after the first (`| Skill | Base | Skill | Notes |`, `| Weapon | Skill |
+//   Damage | ... | Malf |`) becomes one line a row: `- Name 55%`, and with a Damage column `- Name 45%, damage 1D6+1,
+//   malf 95, 1 per 4 rounds` (the Malf and Attacks columns when they hold one). The last Skill column counts, so a
+//   Base column before it does not (`60% (30/12)` is 60, `Fighting (Sword) 85%` 85); a weapon row keeps its other
+//   cells after a `;`, for a gun's reload and impaling. A row whose skill cell is no figure (`—`, `CON 70`), the header
+//   and a table with no Skill column stay as they were.
+const SKILL_HEAD = /^(?:skill|skill ?%|%|score|chance)$/;
+// a skill cell's figure: `55%`, `55`, `60% (30/12)`, `55/27/11`, or one written after the skill's name (`Fighting (Sword) 85%`)
+const SKILL_CELL = /^(\d{1,3})(?=\s*%|\s*\/|\s*\(|\s*$)|^[^\d%]*?\s(\d{1,3})\s*%/;
+const isTableRow = (line) => /^\s*\|/.test(line);
+const tableCells = (line) => line.trim().replace(/^\||\|$/g, '').split('|').map(clean);
+function boldPairs(line) {
+  if (/[·|•]/.test(line)) return null;
+  const parts = line.trim().split(/\s+(?=\*\*)/);
+  if (parts.length < 2 || !parts.every((p) => /^\*\*[^*]+\*\*[^*]*$/.test(p))) return null;
+  const keyed = parts.every((p) => {
+    const head = clean(p).replace(/\s*:.*$/, '').replace(/\s+[-+\u2212\u2013\u2014]?\d.*$/, '').replace(/\s+[\u2013\u2014-]\s*$/, '');
+    return keyOf(head) !== null;
+  });
+  return keyed ? parts.join(' · ') : null;
+}
+const blankRow = (cells) => cells.every((x) => /^:?-{2,}:?$/.test(x) || x === '');
+function tableLines(rows) {
+  const at = rows.findIndex((r) => !blankRow(tableCells(r)));
+  if (at < 0) return rows;
+  const head = tableCells(rows[at]).map((x) => x.toLowerCase());
+  let skill = -1;
+  head.forEach((x, n) => { if (n > 0 && SKILL_HEAD.test(x)) skill = n; });
+  if (skill < 0) return rows;
+  const col = (re) => head.findIndex((x) => re.test(x));
+  const [damage, malf, attacks] = [col(/^damage$/), col(/^malf(?:unction)?\.?$/), col(/^(?:attacks|atts?|rof)$/)];
+  return rows.map((row, i) => {
+    const cells = tableCells(row);
+    const m = i > at && cells[0] ? SKILL_CELL.exec(cells[skill] || '') : null;
+    if (!m) return row;
+    let line = `- ${cells[0]} ${m[1] || m[2]}%`;
+    if (damage >= 0) {
+      line += `, damage ${cells[damage] || '\u2014'}`;
+      const mf = malf >= 0 ? /^(\d{2,3})$/.exec(cells[malf] || '') : null;
+      if (mf) line += `, malf ${mf[1]}`;
+      const re = attacks >= 0 ? reloadOf(cells[attacks]) : null;
+      if (re) line += `, 1 per ${re} rounds`;
+      // the rest (range, notes) for a gun's reload and impaling (`1/4 rounds to reload`)
+      const rest = cells.filter((c, n) => ![0, skill, damage, malf, attacks].includes(n) && c && !/^[\u2014\u2013-]$/.test(c));
+      if (rest.length) line += `; ${rest.join('; ')}`;
+    }
+    return line;
+  });
+}
+function normalise(md) {
+  const lines = String(md == null ? '' : md).replace(/\r\n?/g, '\n').split('\n');
+  const out = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (isTableRow(lines[i])) {
+      const rows = [];
+      while (i < lines.length && isTableRow(lines[i])) rows.push(lines[i++]);
+      i--;
+      out.push(...tableLines(rows));
+      continue;
+    }
+    const h = /^#{1,6}[ \t]+(.+?):[ \t]*(\d+)[ \t]*#*[ \t]*$/.exec(lines[i]);
+    if (h && keyOf(h[1]) !== null) { out.push(`${clean(h[1])}: ${h[2]}`); continue; }
+    out.push(boldPairs(lines[i]) || lines[i]);
+  }
+  return out.join('\n');
+}
+
 // A block's numbers: hp, mp and san are maxima; a value that is no number (`not tracked`, `n/a`, a dash) is null.
 // Fighting and Firearms are the highest the block writes; DB stays words (`+1D4`).
-function readNumbers(stats) {
+function readNumbers(raw) {
+  const stats = normalise(raw);
   const ps = pairs(stats, keyOf);
   const n = (k) => leadingNumber(firstOf(ps, k));
   const all = (k) => ps.filter(([key]) => key === k).map(([, v]) => leadingNumber(v));
@@ -176,6 +248,12 @@ function readFoe({ notePath, index, text }) {
   const found = FOE_TYPES.has(type) ? statSection(text == null ? index.read(notePath).body : text) : null;
   if (!found || !found.md) return { stats: '', statsHeading: null, nums: null, lacks: [], hpStart: null };
   const nums = readNumbers(found.md);
+  // the combat figures the block does not write, from the Skills and Weapons sections beside it (Task 32)
+  const beside = combatSections(text == null ? index.read(notePath).body : text);
+  if (beside) {
+    const more = readNumbers(beside);
+    for (const k of COMBAT_KEYS) if (nums[k] === null && more[k] !== null) nums[k] = more[k];
+  }
   return { stats: found.md, statsHeading: found.heading, nums, lacks: lacks(nameOf(notePath, fm), nums), hpStart: currentOf(found.md) };
 }
 
