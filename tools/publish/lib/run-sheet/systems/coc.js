@@ -460,9 +460,11 @@ function describeCoc(id) {
   const fight = {
     initiative: 'dex', initDecimals: 0, hpFloor: 0, autoOut: false, firearmBonus: 50, coc,
     prompts: { majorWoundAt: 2, insanityAt: 5 },
+    // on a fight row (Task 38 fix round, Ant's pick): MP only for a character with spells (`onRow: 'caster'`), SAN only
+    // for PCs and allies (`onRow` the sides); the panel shows both for everyone
     pools: [
-      { key: 'mp', prefix: 'm', label: 'MP', max: 'mpMax', floor: 0 },
-      { key: 'san', prefix: 's', label: 'SAN', max: 'sanMax', floor: 0, cap: 99 },
+      { key: 'mp', prefix: 'm', label: 'MP', max: 'mpMax', floor: 0, onRow: 'caster' },
+      { key: 'san', prefix: 's', label: 'SAN', max: 'sanMax', floor: 0, cap: 99, onRow: ['pc', 'ally'] },
     ],
   };
   Object.assign(r, { family: 'coc', ...JSON.parse(JSON.stringify(fight)) });

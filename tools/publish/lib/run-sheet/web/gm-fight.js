@@ -551,6 +551,12 @@
   // the sheet's), so a second boxed pool would still need its own attribute and STAT entry.
   // the reserve's figure is the one an entry spends, so it is what says a row has one (the refusal of e-3 asks the same)
   const hasReserve = (r) => isNum(r.er);
+  // Whether a read-out pool shows on this row (the system's `onRow`, Task 38 fix round): 'caster' for a character with
+  // spells, or the sides it shows for; none, every row
+  function onRow(r, p) {
+    if (p.onRow === 'caster') return r.caster === true;
+    return Array.isArray(p.onRow) ? p.onRow.includes(sideWord(r)) : true;
+  }
   function poolsHTML(r) {
     const { boxed, read } = poolsShown();
     let h = '';
@@ -567,7 +573,7 @@
       const label = fp && r.caster ? `\u2726${p.label}` : p.label;
       h += `<span class="hpv fpv${fp && r.caster ? ' cast' : ''}"${t}>${esc(label)} ${esc(isNum(r[p.key]) ? r[p.key] : '?')}/${statBox('data-ffpmax', r, isNum(r[p.max]) ? r[p.max] : '', `inputmode="numeric" autocomplete="off" aria-label="Maximum ${esc(p.label)} for ${esc(r.gmName)}"`)}${er}</span>`;
     }
-    const ro = read.filter((p) => isNum(r[p.key])).map((p) => `${p.label} ${r[p.key]}`);
+    const ro = read.filter((p) => isNum(r[p.key]) && onRow(r, p)).map((p) => `${p.label} ${r[p.key]}`);
     if (ro.length) h += `<span class="pools">${esc(ro.join(' · '))}</span>`;
     return h;
   }
@@ -2133,11 +2139,13 @@
       const longest = rows.reduce((a, r) => (String(r.gmName || '').length > a.length ? String(r.gmName) : a), '');
       const C = cocRules();
       const block = rows.some((r) => r.kind !== 'pc' && isNum(r.block));
+      // CoC's MP read-out where some row has spells (Task 38 fix round); the measured row is a foe, so no SAN
+      const caster = Boolean(C) && rows.some((r) => r.caster === true);
       const gun = Boolean(C && C.firearm) && rows.some((r) => CMath.canShoot(r));
       // two-digit figures, as a hurt foe's are (`-13/11`, `Parry 13`); the initiative box is a fixed width
       const full = { ...FM.blankRow({ id: '\u2007measure', name: longest }), gmName: longest, kind: 'foe', in: true, seen: false,
         ini: initPlaces() ? 9.99 : 99, hp: -99, max: 99, temp: 0, fp: -9, fpMax: 99, mp: 99, mpMax: 99, san: 99, sanMax: 99,
-        skill: 99, dodge: 99, parry: 99, block: block ? 99 : null, dex: 99, conds: [], cards: [], firearms: gun ? 99 : null };
+        skill: 99, dodge: 99, parry: 99, block: block ? 99 : null, dex: 99, conds: [], cards: [], firearms: gun ? 99 : null, caster };
       // CoC's attacker for the not-acting row: an NPC (so both sides' typed boxes show) that can shoot when any row can
       const attacker = C ? { ...full, id: '\u2007attacker', gmName: 'x' } : null;
       const as = (acting) => {

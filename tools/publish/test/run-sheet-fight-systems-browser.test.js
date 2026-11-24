@@ -242,9 +242,45 @@ describe('CoC and GURPS fights on the GM page, by real input', { skip: browserSk
       const hale = named(p, 'Warden Hale').id;
       p = await typeInto(page, `[data-fhp="${hale}"]`, 'm-2');
       assert.strictEqual(named(p, 'Warden Hale').mp, 10);
-      assert.strictEqual(await text(page, `li[data-frow="${hale}"] .pools`), 'MP 10 · SAN 55');
+      // Task 38 fix round changed this on purpose (Ant's pick): Hale has no spells, so no MP on his row, and SAN shows on
+      // PCs' and allies' rows only; both stay in his panel
+      assert.strictEqual(await text(page, `li[data-frow="${hale}"] .pools`), null);
     });
   });
+
+  // Task 38 fix round (Ant's pick, 2026-11-24): on a CoC row SAN shows for PCs and allies only, MP only for a character
+  // with spells, whatever its side; the panel keeps both for everyone. Real input, at the three widths.
+  for (const [w, h] of SIZES) {
+    it(`CoC at ${w}: MP on a caster's row only, SAN on a PC's or an ally's only; the panel keeps both`, async () => {
+      const run = await start('coc', {}, (vault) => {
+        const add = (rel, from, to) => { const f = path.join(vault, rel); const t = fs.readFileSync(f, 'utf8'); fs.writeFileSync(f, t.replace(from, to)); };
+        add('Characters/NPCs/Warden Hale.md', '**Combat**', '**Spells:** Contact Deep One\n\n**Combat**');
+        add('Characters/PCs/Iris Calder.md', '## Skills', '## Arcane Tomes & Spells\n\n- Spells: Shrivelling\n\n## Skills');
+      });
+      await withPage({ width: w, height: h }, async (page) => {
+        let p = await fightOn(page, run, 0);
+        const pools = (name) => text(page, `li[data-frow="${named(p, name).id}"] .pools`);
+        // a foe with spells: MP, no SAN; a foe without: neither
+        assert.strictEqual(named(p, 'Warden Hale').side, 'foe');
+        assert.strictEqual(await pools('Warden Hale'), 'MP 12');
+        assert.strictEqual(await pools('Brine Walker 1'), null);
+        // a PC with spells: both; a PC without: SAN only
+        assert.strictEqual(await pools('Iris Calder'), 'MP 13 · SAN 62');
+        assert.strictEqual(await pools('Jonas Finch'), 'SAN 60');
+        sane(p, `${w} the pools`);
+        // made an ally by a tap on its panel: SAN shows (no spells: still no MP)
+        p = await peek(page, p, 'Tobias Reed');
+        const reed = named(p, 'Tobias Reed').id;
+        assert.strictEqual(await pools('Tobias Reed'), null);
+        await tap(page, `#acting [data-fside="ally"][data-fsiderow="${reed}"]`);
+        p = await until(page, `p.fight.rows.find((r) => r.id === ${q(reed)}).side === "ally" && p.saved === "Saved" && p.pending === 0`);
+        assert.strictEqual(await pools('Tobias Reed'), 'SAN 45');
+        // the panel keeps MP and SAN for a foe with neither on its row
+        p = await peek(page, p, 'Brine Walker 1');
+        assert.ok(await page.evaluate('Boolean(document.querySelector("#acting [data-fs-mp]")) && Boolean(document.querySelector("#acting [data-fs-san]"))'), 'MP and SAN in the panel');
+      });
+    });
+  }
 
   it('GURPS: Fight sorts by Speed, 5.25 shown as 5.25', async () => {
     const run = await start('gurps');
