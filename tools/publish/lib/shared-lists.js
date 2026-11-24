@@ -43,7 +43,7 @@ function systemId(raw) {
   return Object.prototype.hasOwnProperty.call(SYSTEM_ALIASES, key) ? SYSTEM_ALIASES[key] : null;
 }
 
-// The Table Log's vitals columns per system, after Who (`run_sheet.vitals`): each { column, field, shape, pcs_only? }.
+// The Table Log's vitals columns per system, after Who (`run_sheet.vitals`): each { column, field, shape, max?, pcs_only?, sheet?, both_ways? }; `sheet` is the `sheet set` key wrap-up writes it to.
 // A system with none of its own (PF2e, FitD, an unknown one, none) takes D&D's. schema_rules.vitals_columns is Python's.
 const VITALS_DEFAULT_SYSTEM = 'dnd-5e-2024';
 const SYSTEM_VITALS = Object.fromEntries(data.game_systems.filter((s) => s.run_sheet).map((s) => [s.id, s.run_sheet.vitals]));

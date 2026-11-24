@@ -112,29 +112,33 @@
   "game_systems": [
     {"id": "coc-7e", "name": "Call of Cthulhu", "aliases": ["coc", "coc7e", "cthulhu"],
       "run_sheet": {"vitals": [
-        {"column": "HP", "field": "hp", "shape": "current/max", "max": "max"},
-        {"column": "MP", "field": "mp", "shape": "current/max", "max": "mpMax"},
-        {"column": "SAN", "field": "san", "shape": "current", "max": "sanMax"},
-        {"column": "Luck", "field": "luck", "shape": "current", "pcs_only": true},
-        {"column": "Conditions", "field": "conditions", "shape": "text"}
+        {"column": "HP", "field": "hp", "shape": "current/max", "max": "max", "sheet": "hp"},
+        {"column": "MP", "field": "mp", "shape": "current/max", "max": "mpMax", "sheet": "mp"},
+        {"column": "SAN", "field": "san", "shape": "current", "max": "sanMax", "sheet": "san"},
+        {"column": "Luck", "field": "luck", "shape": "current", "pcs_only": true, "sheet": "luck"},
+        {"column": "Conditions", "field": "conditions", "shape": "text", "both_ways": true,
+          "sheet": {"Major wound": "major-wound", "Unconscious": "unconscious", "Dying": "dying",
+            "Temporary insanity": "temporary-insanity", "Indefinite insanity": "indefinite-insanity"}}
       ]}},
     {"id": "coc-7e-regency", "name": "Regency Cthulhu", "aliases": ["regency-cthulhu"], "rules": "coc-7e/regency",
       "run_sheet": {"vitals": [
-        {"column": "HP", "field": "hp", "shape": "current/max", "max": "max"},
-        {"column": "MP", "field": "mp", "shape": "current/max", "max": "mpMax"},
-        {"column": "SAN", "field": "san", "shape": "current", "max": "sanMax"},
-        {"column": "Luck", "field": "luck", "shape": "current", "pcs_only": true},
-        {"column": "Conditions", "field": "conditions", "shape": "text"}
+        {"column": "HP", "field": "hp", "shape": "current/max", "max": "max", "sheet": "hp"},
+        {"column": "MP", "field": "mp", "shape": "current/max", "max": "mpMax", "sheet": "mp"},
+        {"column": "SAN", "field": "san", "shape": "current", "max": "sanMax", "sheet": "san"},
+        {"column": "Luck", "field": "luck", "shape": "current", "pcs_only": true, "sheet": "luck"},
+        {"column": "Conditions", "field": "conditions", "shape": "text", "both_ways": true,
+          "sheet": {"Major wound": "major-wound", "Unconscious": "unconscious", "Dying": "dying",
+            "Temporary insanity": "temporary-insanity", "Indefinite insanity": "indefinite-insanity"}}
       ]}},
     {"id": "gurps-4e", "name": "GURPS", "aliases": ["gurps", "gurps4e"],
       "run_sheet": {"vitals": [
-        {"column": "HP", "field": "hp", "shape": "current/max", "max": "max"},
-        {"column": "FP", "field": "fp", "shape": "current/max", "max": "fpMax"},
+        {"column": "HP", "field": "hp", "shape": "current/max", "max": "max", "sheet": "hp"},
+        {"column": "FP", "field": "fp", "shape": "current/max", "max": "fpMax", "sheet": "fp"},
         {"column": "Conditions", "field": "conditions", "shape": "text"}
       ]}},
     {"id": "dnd-5e-2024", "name": "D&D 5e 2024", "aliases": ["dnd", "dnd-5e", "dnd5e", "5e", "d&d"],
       "run_sheet": {"vitals": [
-        {"column": "HP", "field": "hp", "shape": "current/max", "max": "max"},
+        {"column": "HP", "field": "hp", "shape": "current/max", "max": "max", "sheet": "hp"},
         {"column": "Conditions", "field": "conditions", "shape": "text"}
       ]}},
     {"id": "pf2e", "name": "Pathfinder", "aliases": ["pathfinder", "pathfinder-2e", "pf2", "pf2e-remaster"]},

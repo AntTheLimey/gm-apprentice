@@ -338,4 +338,4 @@ async function runSheetSet(deps) {
   }
 }
 
-module.exports = { runSheetSet, SheetSetError };
+module.exports = { runSheetSet, SheetSetError, writerFor };

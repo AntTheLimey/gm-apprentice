@@ -474,30 +474,42 @@
             "column": "HP",
             "field": "hp",
             "shape": "current/max",
-            "max": "max"
+            "max": "max",
+            "sheet": "hp"
           },
           {
             "column": "MP",
             "field": "mp",
             "shape": "current/max",
-            "max": "mpMax"
+            "max": "mpMax",
+            "sheet": "mp"
           },
           {
             "column": "SAN",
             "field": "san",
             "shape": "current",
-            "max": "sanMax"
+            "max": "sanMax",
+            "sheet": "san"
           },
           {
             "column": "Luck",
             "field": "luck",
             "shape": "current",
-            "pcs_only": true
+            "pcs_only": true,
+            "sheet": "luck"
           },
           {
             "column": "Conditions",
             "field": "conditions",
-            "shape": "text"
+            "shape": "text",
+            "both_ways": true,
+            "sheet": {
+              "Major wound": "major-wound",
+              "Unconscious": "unconscious",
+              "Dying": "dying",
+              "Temporary insanity": "temporary-insanity",
+              "Indefinite insanity": "indefinite-insanity"
+            }
           }
         ]
       }
@@ -515,30 +527,42 @@
             "column": "HP",
             "field": "hp",
             "shape": "current/max",
-            "max": "max"
+            "max": "max",
+            "sheet": "hp"
           },
           {
             "column": "MP",
             "field": "mp",
             "shape": "current/max",
-            "max": "mpMax"
+            "max": "mpMax",
+            "sheet": "mp"
           },
           {
             "column": "SAN",
             "field": "san",
             "shape": "current",
-            "max": "sanMax"
+            "max": "sanMax",
+            "sheet": "san"
           },
           {
             "column": "Luck",
             "field": "luck",
             "shape": "current",
-            "pcs_only": true
+            "pcs_only": true,
+            "sheet": "luck"
           },
           {
             "column": "Conditions",
             "field": "conditions",
-            "shape": "text"
+            "shape": "text",
+            "both_ways": true,
+            "sheet": {
+              "Major wound": "major-wound",
+              "Unconscious": "unconscious",
+              "Dying": "dying",
+              "Temporary insanity": "temporary-insanity",
+              "Indefinite insanity": "indefinite-insanity"
+            }
           }
         ]
       }
@@ -556,13 +580,15 @@
             "column": "HP",
             "field": "hp",
             "shape": "current/max",
-            "max": "max"
+            "max": "max",
+            "sheet": "hp"
           },
           {
             "column": "FP",
             "field": "fp",
             "shape": "current/max",
-            "max": "fpMax"
+            "max": "fpMax",
+            "sheet": "fp"
           },
           {
             "column": "Conditions",
@@ -588,7 +614,8 @@
             "column": "HP",
             "field": "hp",
             "shape": "current/max",
-            "max": "max"
+            "max": "max",
+            "sheet": "hp"
           },
           {
             "column": "Conditions",
