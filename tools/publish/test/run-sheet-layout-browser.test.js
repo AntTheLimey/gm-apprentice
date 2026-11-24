@@ -1902,7 +1902,9 @@ describe('D&D: Tab, held rows and Same for all (step 6b Task 23), by real input'
         await tap(page, `#rail [data-go="beat:${key}"]`);
         await page.sleep(100);
         l = await landing(page, `[id="beat:${key}"]`);
-        if (l.sheetScroll < l.maxSheet - 1) assert.ok(Math.abs(l.top - (l.sheetTop + l.rbar + 8)) <= 3, `${width} fight: ${JSON.stringify(l)}`);
+        // the pane must have room past the beat, or the offset goes unchecked: fail rather than skip
+        assert.ok(l.sheetScroll < l.maxSheet - 1, `${width} fight: the pane reached its end, the offset is not checked: ${JSON.stringify(l)}`);
+        assert.ok(Math.abs(l.top - (l.sheetTop + l.rbar + 8)) <= 3, `${width} fight: ${JSON.stringify(l)}`);
       });
     });
   }
