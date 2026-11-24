@@ -521,6 +521,9 @@
     // the attack a dive for cover lost: its mark goes when the turn it was shown on ends (CoC, Task 19)
     if (r && r.lostAttack && r.lostAttack.on) { r.lostAttack = null; touch(r, at); }
     // Aim and Evaluate count turns in a row: a turn that ends with neither picked starts them again (Task 15)
+    // the counts as the turn left them are kept (`manBefore`), so an Aim or Evaluate tapped late, after Next, counts on
+    // from them as if tapped on time (Task 37 fix round)
+    if (r && defencesOf(f)) r.manBefore = { aim: isNum(r.aim) && r.aim > 0 ? Math.floor(r.aim) : 0, evaluate: isNum(r.evaluate) && r.evaluate > 0 ? Math.floor(r.evaluate) : 0 };
     if (r && defencesOf(f) && r.manoeuvre !== 'aim' && r.manoeuvre !== 'evaluate' && (r.aim || r.evaluate)) { r.aim = 0; r.evaluate = 0; touch(r, at); }
     const C = consequencesOf(f);
     if (!C || !r) return;
@@ -562,8 +565,9 @@
     r.parries = 0;
     r.blocks = 0;
     r.retreat = false;
-    r.manoeuvre = null;
-    r.aodDefence = null;
+    // a manoeuvre set ahead, off the row's turn, is this turn's (Task 37 fix round): kept now, cleared at the next one
+    if (r.manAhead) r.manAhead = false;
+    else { r.manoeuvre = null; r.aodDefence = null; }
     r.defRoll = null;
   }
   // ---- CoC melee (Task 16): the levels compared by coc-math, the d100s the server's, a PC's level the GM's tap ----
@@ -958,13 +962,17 @@
       if (key === (r.manoeuvre || null) && defence === (r.aodDefence || null)) return;
       // the counts before this turn's pick, kept while a pick stands so a second pick counts from the same place
       const count = (v) => (isNum(v) && v > 0 ? Math.floor(v) : 0);
-      if (!r.manoeuvre) r.manFrom = { aim: count(r.aim), evaluate: count(r.evaluate) };
+      // off the row's turn the pick is its next turn's (`manAhead`, kept when that turn starts), and counts on from
+      // where the row's last turn left Aim and Evaluate, before a turn with no pick put them to 0 (fix round)
+      const off = f.turn !== r.id;
+      if (!r.manoeuvre) r.manFrom = off && r.manBefore ? { aim: count(r.manBefore.aim), evaluate: count(r.manBefore.evaluate) } : { aim: count(r.aim), evaluate: count(r.evaluate) };
       const from = r.manFrom || { aim: 0, evaluate: 0 };
       const caps = D.caps || {};
       const grow = (k) => (key === k ? Math.min(isNum(caps[k]) ? caps[k] : 3, from[k] + 1) : 0);
       if (key === null) { r.aim = from.aim; r.evaluate = from.evaluate; } else { r.aim = grow('aim'); r.evaluate = grow('evaluate'); }
       r.manoeuvre = key;
       r.aodDefence = defence;
+      r.manAhead = key !== null && off;
       touch(r, at);
       const turn = `${f.round}:${f.turn}`;
       const own = r.manTurn === turn ? s.events.findLastIndex((e) => e.fight && e.text === r.manLine) : -1;
@@ -1051,8 +1059,9 @@
       const gun = noGun ? null : guns[a.gun];
       const mal = CM.malfunctionOf(a.malfunction, gun);
       if (mal === undefined) return;
-      // the aimed chip: the page sets it for an aim declared the round before and not yet spent (KR p113), and the GM
-      // may tap it on by hand for an aim the sheet never heard of (Task 37): taken either way
+      // the aimed chip: for an aim declared the round before and not yet spent (KR p113), or the GM's own tap of it
+      // (`aimByHand`, Task 37) for an aim the sheet never heard of; a spent aim sent again is refused
+      if (a.chips.includes('aim') && !CM.aimReady(A, f.round) && a.aimByHand !== true) return;
       const dice = CM.shotDice(a.chips, A, D, C);
       const skill = CM.shotSkill(A, gun);
       let level;

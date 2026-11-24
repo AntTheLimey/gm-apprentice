@@ -234,6 +234,8 @@
     if (l.auto) return `${lineName(l, C, log)}${log ? ',' : ':'} automatic (${l.place} crippled)`;
     const ht = row && isNum(row.ht) ? row.ht : null;
     const mod = l.mod ? ` ${l.mod > 0 ? '+' : '\u2212'}${Math.abs(l.mod)}` : '';
+    // the log names no HT it does not have: "knockdown −5, failed"
+    if (log && ht === null) return `${lineName(l, C, log)}${mod}${l.note ? ` (${l.note})` : ''}`;
     const figs = ht === null ? `HT ?${mod}` : `HT ${fig(ht)}${mod}${l.mod ? ` = ${fig(ht + l.mod)}` : ''}`;
     return `${lineName(l, C, log)}${log ? ',' : ':'} ${figs}${l.note ? ` (${l.note})` : ''}`;
   }
@@ -241,6 +243,7 @@
   const failed = (res) => res.outcome === 'failure' || res.outcome === 'critical failure';
   // "rolled 12, failed by 7"; a critical says so, and a critical success over the target says only that.
   function resultText(res) {
+    if (res.tapped) return res.passed ? 'passed' : 'failed';
     const head = `rolled ${res.total}${res.typed ? ' (typed)' : ''}, `;
     if (failed(res)) return `${head}${res.outcome === 'critical failure' ? 'critical failure, ' : ''}failed by ${Math.max(1, res.total - res.target)}`;
     const by = res.target - res.total;
@@ -250,6 +253,13 @@
   // What a rolled line offers (B420, B423), by its margin. `mortal`: the row is Mortal wound already, or an earlier
   // line of this card offered or took it.
   function offersFor(l, res, C, mortal) {
+    // the GM's Passed or Failed tap (a row with no HT, Task 37 fix round): no margin, so both outcomes a margin picks
+    if (res.tapped) {
+      if (res.passed) return l.kind === 'recover' ? ['recover'] : [];
+      if (l.kind === 'death') return !mortal && isNum(C.mortal) ? ['mortal', 'dead'] : ['dead'];
+      if (l.kind === 'knockdown') return ['stunned', 'unconscious'];
+      return l.kind === 'conscious' ? ['unconscious'] : [];
+    }
     if (!failed(res)) return l.kind === 'recover' ? ['recover'] : [];
     const by = Math.max(1, res.total - res.target);
     if (l.kind === 'death') return !mortal && isNum(C.mortal) && by <= C.mortal ? ['mortal'] : ['dead'];
@@ -257,8 +267,10 @@
     if (l.kind === 'conscious') return ['unconscious'];
     return [];
   }
-  // A roll result as the server gives it, or null.
+  // A roll result as the server gives it, or the GM's tap of a table roll ({ tap: 'passed' | 'failed' }, a row with no
+  // HT: Task 37 fix round), or null.
   function rollResult(res) {
+    if (res && (res.tap === 'passed' || res.tap === 'failed')) return { tapped: true, passed: res.tap === 'passed' };
     if (!res || typeof res !== 'object' || !isNum(res.total) || !isNum(res.target) || !OUTCOMES.includes(res.outcome)) return null;
     const dice = Array.isArray(res.dice) ? res.dice.filter(isNum).slice(0, 3) : [];
     return { dice, total: res.total, target: res.target, margin: res.target - res.total, outcome: res.outcome, ...(res.typed === true ? { typed: true } : {}) };

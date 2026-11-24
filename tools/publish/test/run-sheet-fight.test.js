@@ -3816,12 +3816,12 @@ describe('CoC firearms: the aim, the shot, the dive, the reload (step 6b Task 19
   const faces = (...f) => { let i = 0; return () => f[i++]; };
   // a shot as the page sends it: the chips, the gun, the server's roll for an NPC (made here with the dice the shot
   // holds) or a PC's level tapped
-  const shoot = (s, from, to, chips, { gun = null, f: fc = [3, 3], level, malfunction } = {}) => {
+  const shoot = (s, from, to, chips, { gun = null, f: fc = [3, 3], level, malfunction, byHand } = {}) => {
     const A = named(s, from);
     const D = named(s, to);
     const d = CM.shotDice(chips, A, D, COC);
     const result = A.kind === 'pc' ? undefined : rollPercent({ target: CM.shotSkill(A, gun === null ? null : A.guns[gun]), difficulty: d.difficulty, ...d.asked }, { randomInt: faces(...fc) });
-    return G(s, { type: 'shot', shooter: A.id, target: D.id, chips, gun, ...(result ? { result } : { level }), ...(malfunction !== undefined ? { malfunction } : {}) });
+    return G(s, { type: 'shot', shooter: A.id, target: D.id, chips, gun, ...(result ? { result } : { level }), ...(malfunction !== undefined ? { malfunction } : {}), ...(byHand ? { aimByHand: true } : {}) });
   };
   const dodge = (kept, target, level) => ({ tens: [Math.floor(kept / 10) * 10], units: kept % 10, kept, target, difficulty: 'regular', needed: target, level, passed: level !== 'fail' && level !== 'fumble', fumbleFrom: 96, bonus: 0, penalty: 0, asked: { bonus: 0, penalty: 0 } });
   const FLINTLOCK = { name: 'Flintlock pistol', skill: 50, damage: '1D6+1', malfunction: 95, reload: 4, impales: false };
@@ -4020,13 +4020,16 @@ describe('CoC firearms: the aim, the shot, the dive, the reload (step 6b Task 19
     s = shoot(s, 'Wharf Hand 1', 'Wharf Hand 2', ['aim'], { f: [3, 4, 3] });
     assert.match(lines(s).slice(-1)[0], /\(aimed\)/);
     assert.deepEqual(CM.shotChipsFrom(named(s, 'Wharf Hand 1'), named(s, 'Wharf Hand 2'), s.fight.round, COC), []);
-    // the aim spent: the next shot from the page has no aimed chip
+    // both halves of the aimed chip's rule, Task 37 changing the second on purpose (Ant's no-locked-workflow rule):
+    // the aim spent, a second shot still sending the chip as the declared aim's is refused; the GM's own tap of the
+    // chip (`aimByHand`, an aim the sheet never heard of) is taken
+    const was = clone(s.fight);
+    s = shoot(s, 'Wharf Hand 1', 'Wharf Hand 2', ['aim'], { f: [3, 4, 3] });
+    assert.deepEqual(s.fight, was);
     s = shoot(s, 'Wharf Hand 1', 'Wharf Hand 2', [], { f: [3, 3] });
     assert.doesNotMatch(lines(s).slice(-1)[0], /aimed/);
-    // Task 37 changed this on purpose (Ant's no-locked-workflow rule): an aimed chip the GM taps on with no aim declared
-    // is taken, for an aim the sheet never heard of
     s = toTurn(go(s), 'Iris');
-    s = shoot(s, 'Iris', 'Wharf Hand 2', ['aim'], { level: 'hard' });
+    s = shoot(s, 'Iris', 'Wharf Hand 2', ['aim'], { level: 'hard', byHand: true });
     assert.match(lines(s).slice(-1)[0], /\(aimed\)/);
   });
 
@@ -4152,7 +4155,7 @@ describe('Physical dice count everywhere; nothing settles in order (step 6b Task
   // the state with every `typed` mark taken off, and the log with its " (typed)" words: what must match the server's
   // (and the times: each run's actions are stamped by the clock as they come)
   const unmark = (o) => JSON.parse(JSON.stringify(o, (k, v) => (['typed', 'dice', 'tens', 'units', 'at'].includes(k) || /At$/.test(k) ? undefined : v)));
-  const unsaid = (list) => list.map((t) => t.replace(/ \(typed\)| typed(?= \d)/g, ''));
+  const unsaid = (list) => list.map((t) => t.replace(/ \(typed\)| typed(?= \d)/g, '').replace(/\(typed (\d)/g, '($1'));
   const guards = () => [{ name: 'Kev', kind: 'pc', ini: 6, speed: 6, hp: 12, max: 12, ht: 11 }, { name: 'Guard', ini: 5, speed: 5, hp: 11, max: 11, ht: 10, dr: 1, dodge: 8, parry: 9 }];
   const cardRoll = (s, name, result, line) => {
     const c = cards(s, name)[0];
@@ -4284,7 +4287,7 @@ describe('Physical dice count everywhere; nothing settles in order (step 6b Task
     ];
     let s = go(begin(rows, COC));
     const d = CM.shotDice(['aim'], named(s, 'Iris'), named(s, 'Hand 1'), COC);
-    s = G(s, { type: 'shot', shooter: named(s, 'Iris').id, target: named(s, 'Hand 1').id, chips: ['aim'], gun: null, level: 'hard' });
+    s = G(s, { type: 'shot', shooter: named(s, 'Iris').id, target: named(s, 'Hand 1').id, chips: ['aim'], gun: null, level: 'hard', aimByHand: true });
     assert.equal(d.net, 1);
     assert.match(lines(s).at(-1), /\(aimed\)/);
   });
@@ -4299,7 +4302,95 @@ describe('Physical dice count everywhere; nothing settles in order (step 6b Task
     assert.equal(named(s, 'Bouncer 1').manoeuvre, 'all-out attack');
     assert.equal(GM.liveDefences(named(s, 'Bouncer 1'), GURPS.defences).dodge.value, null);
     assert.equal(lines(s).at(-1), 'Bouncer 1: All-Out Attack.');
-    s = go(s); // Bouncer 1's next turn: over
+    // fix round: a pick off the row's turn is its next turn's, so that turn keeps it; the turn after clears it
+    s = go(s); // Bouncer 1's next turn
+    assert.equal(named(s, 'Bouncer 1').manoeuvre, 'all-out attack');
+    s = go(go(s)); // Bouncer 2, then Bouncer 1's turn after
     assert.equal(named(s, 'Bouncer 1').manoeuvre, null);
+  });
+
+  it('GURPS: All-Out Attack set on Bouncer 2 ahead of its turn is that turn\'s: kept when it starts, cleared when the next starts', () => {
+    const rows = [
+      { name: 'Bouncer 1', ini: 6, speed: 6, hp: 11, max: 11, ht: 10, dodge: 9, parry: 9 },
+      { name: 'Bouncer 2', ini: 5, speed: 5, hp: 11, max: 11, ht: 10, dodge: 8, parry: 9 },
+    ];
+    let s = go(begin(rows, GURPS)); // Bouncer 1 acts
+    s = G(s, { type: 'manoeuvre', row: named(s, 'Bouncer 2').id, name: 'all-out attack' });
+    assert.equal(named(s, 'Bouncer 2').manAhead, true);
+    s = go(s); // Bouncer 2's turn
+    assert.equal(named(s, 'Bouncer 2').manoeuvre, 'all-out attack');
+    assert.equal(named(s, 'Bouncer 2').manAhead, false);
+    s = go(s); // Bouncer 1: Bouncer 2's All-Out Attack still stands, no defence
+    assert.equal(GM.liveDefences(named(s, 'Bouncer 2'), GURPS.defences).parry.value, null);
+    s = go(s); // Bouncer 2's next turn
+    assert.equal(named(s, 'Bouncer 2').manoeuvre, null);
+  });
+
+  it('GURPS: Aim on its turn, forgotten on the next, set by hand after Next: the count is 2, as if tapped on time', () => {
+    const rows = [
+      { name: 'Bouncer 1', ini: 6, speed: 6, hp: 11, max: 11, ht: 10 },
+      { name: 'Bouncer 2', ini: 5, speed: 5, hp: 11, max: 11, ht: 10 },
+    ];
+    let s = go(begin(rows, GURPS)); // Bouncer 1 acts
+    s = G(s, { type: 'manoeuvre', row: named(s, 'Bouncer 1').id, name: 'aim' });
+    assert.equal(named(s, 'Bouncer 1').aim, 1);
+    s = go(go(s)); // Bouncer 2, then Bouncer 1 again: its Aim is not tapped this turn
+    s = go(s); // Bouncer 2 acts; Bouncer 1's turn ended with no pick, so its count went to 0
+    assert.equal(named(s, 'Bouncer 1').aim, 0);
+    s = G(s, { type: 'manoeuvre', row: named(s, 'Bouncer 1').id, name: 'aim' });
+    assert.equal(named(s, 'Bouncer 1').aim, 2);
+  });
+
+  it('CoC: a typed melee side, shot, dive and bout give the state a server roll gives', () => {
+    const rows = [
+      { name: 'Iris', kind: 'pc', ini: 70, dex: 70, hp: 11, max: 11, dodge: 35, con: 50, int: 70, san: 45, sanMax: 45 },
+      { name: 'Hand 1', ini: 60, dex: 60, hp: 16, max: 16, firearms: 50, fighting: 40, dodge: 30, con: 50, int: 65 },
+      { name: 'Hand 2', ini: 50, dex: 50, hp: 12, max: 12, fighting: 40, dodge: 30 },
+    ];
+    const pair = (build) => [build((spec, t, u) => serverD100(spec, t, u)), build((spec, t, u) => typedD100(spec, t * 10 + u || 100))];
+    const same = ([server, typed]) => { assert.deepEqual(unmark(typed.fight), unmark(server.fight)); assert.deepEqual(unsaid(lines(typed)), lines(server)); };
+    // melee: Hand 1 attacks Hand 2 (both sides rolled), 3/1 and 2/2
+    same(pair((r) => {
+      let s = go(go(begin(rows, COC)));
+      const auto = CM.attackDice(named(s, 'Hand 2'), COC.coc);
+      return G(s, { type: 'melee', attacker: named(s, 'Hand 1').id, defender: named(s, 'Hand 2').id, response: 'fightBack', dice: CM.diceOfNet(auto.net, COC.coc), auto, attack: r({ target: 40, ...CM.diceOfNet(auto.net, COC.coc) }, 3, 1), defence: r({ target: 40 }, 2, 2) });
+    }));
+    // a shot by Hand 1 at Iris, then Iris's... Hand 2's dive
+    same(pair((r) => {
+      let s = go(go(begin(rows, COC)));
+      const d = CM.shotDice([], named(s, 'Hand 1'), named(s, 'Hand 2'), COC);
+      s = G(s, { type: 'dive', row: named(s, 'Hand 2').id, result: r({ target: 30 }, 1, 2) });
+      return G(s, { type: 'shot', shooter: named(s, 'Hand 1').id, target: named(s, 'Hand 2').id, chips: [], gun: null, result: r({ target: 50, difficulty: d.difficulty, ...d.asked }, 2, 0) });
+    }));
+    // the bout's 1D10: the server's 7 and a typed 7
+    const bout = (res) => {
+      let s = go(begin(rows, COC));
+      s = G(s, { type: 'hp', row: named(s, 'Iris').id, entry: 's-6' });
+      const ic = cards(s, 'Iris').find((x) => x.lines.some((l) => l.kind === 'int'));
+      s = G(s, { type: 'cardRolled', row: named(s, 'Iris').id, card: ic.id, line: 0, result: { tap: 'passed' } });
+      return G(s, { type: 'card', row: named(s, 'Iris').id, card: ic.id, line: 0, take: 'insane', bout: res });
+    };
+    same([bout(rollSpec({ sides: 10 }, { randomInt: () => 7 })), bout(rollSpec({ sides: 10, typed: 7 }))]);
+  });
+
+  it('GURPS: a foe with no HT settles its card from the GM\'s Passed or Failed tap; a failed death check offers Mortal wound or Dead', () => {
+    let s = begin([{ name: 'Guard', ini: 5, speed: 5, hp: 10, max: 10 }], GURPS);
+    s = G(s, { type: 'hp', row: named(s, 'Guard').id, entry: '-12' }); // to −2: HT to stay conscious on its turn, no death check yet
+    s = G(s, { type: 'hp', row: named(s, 'Guard').id, entry: '-10' }); // to −12: a death check
+    const c = cards(s, 'Guard').find((x) => x.lines.some((l) => l.kind === 'death'));
+    const i = c.lines.findIndex((l) => l.kind === 'death');
+    s = G(s, { type: 'cardRolled', row: named(s, 'Guard').id, card: c.id, line: i, result: { tap: 'failed' } });
+    const l = cards(s, 'Guard').find((x) => x.id === c.id).lines[i];
+    assert.deepEqual(l.offers, ['mortal', 'dead']);
+    assert.equal(lines(s).at(-1), 'Guard: death check (−1×HP), failed.');
+    s = G(s, { type: 'card', row: named(s, 'Guard').id, card: c.id, line: i, take: 'mortal' });
+    assert.deepEqual(named(s, 'Guard').conds, ['Mortal wound']);
+    // a passed knockdown with no HT: nothing offered
+    let t = begin([{ name: 'Guard', ini: 5, speed: 5, hp: 10, max: 10 }], GURPS);
+    t = G(t, { type: 'hp', row: named(t, 'Guard').id, entry: '4 imp vitals' });
+    const k = cards(t, 'Guard')[0];
+    t = G(t, { type: 'cardRolled', row: named(t, 'Guard').id, card: k.id, line: 0, result: { tap: 'passed' } });
+    assert.deepEqual(cards(t, 'Guard'), []);
+    assert.equal(lines(t).at(-1), 'Guard: knockdown −5, passed.');
   });
 });
