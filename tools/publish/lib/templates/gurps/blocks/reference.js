@@ -1,23 +1,30 @@
 // Static rules-reference appendix — collapsible, default closed.
-// Contains Humanoid Hit Location (B552) and Size & Speed/Range (B550) tables.
-// Source: GURPS Basic Set 4th Edition (Steve Jackson Games).
+// Contains Humanoid Hit Location (B552, with Martial Arts's extended locations, MA137) and
+// Size & Speed/Range (B550) tables.
+// Source: GURPS Basic Set 4th Edition and GURPS Martial Arts (Steve Jackson Games).
 // Reproduced as an optional collapsible reference appendix with citation under SJG Online Policy.
 
-const HIT_LOCATION_ROWS = [
-  ['3–4',   'Skull',      '–7'],
-  ['5',     'Face',       '–5'],
-  ['6–7',   'Right Leg',  '–2'],
-  ['8',     'Right Arm',  '–2'],
-  ['9–10',  'Torso',      '—'],
-  ['11',    'Groin',      '–3'],
-  ['12',    'Left Arm',   '–2'],
-  ['13–14', 'Left Leg',   '–2'],
-  ['15',    'Hand',       '–4'],
-  ['16',    'Foot',       '–4'],
-  ['17–18', 'Neck',       '–5'],
-  ['—',     'Vitals',     '–3'],
-  ['—',     'Eye',        '–9'],
-];
+const { LOCATIONS } = require('../hit-locations');
+
+// A penalty as the table prints it: an en dash, or a long dash for none.
+const mod = (n) => (n ? `\u2013${Math.abs(n)}` : '\u2014');
+const firstRoll = (r) => parseInt(String(r), 10);
+
+// [roll, location, mod] from the one hit-location table: the Basic Set's places by their 3d roll (a
+// limb once a side), then the places no roll gives (the vitals and the eye), then Martial Arts's.
+function hitLocationRows() {
+  const rolled = [];
+  const rest = [];
+  const ma = [];
+  for (const l of LOCATIONS) {
+    if (typeof l.roll === 'string') rolled.push([l.roll, l.name, mod(l.penalty)]);
+    else if (l.roll && typeof l.roll === 'object') for (const side of ['right', 'left']) rolled.push([l.roll[side], `${side === 'right' ? 'Right' : 'Left'} ${l.name}`, mod(l.penalty)]);
+    else (/^B/.test(l.cite || '') ? rest : ma).push(['\u2014', l.name, mod(l.penalty)]);
+  }
+  rolled.sort((a, b) => firstRoll(a[0]) - firstRoll(b[0]));
+  return [...rolled, ...rest, ...ma];
+}
+const HIT_LOCATION_ROWS = hitLocationRows();
 
 // [Speed/Range modifier, Size Modifier, Linear Measure]
 const SIZE_SPEED_RANGE_ROWS = [
@@ -50,7 +57,7 @@ function renderReference() {
   <thead><tr><th>Roll</th><th>Location</th><th class="num">Mod</th></tr></thead>
   <tbody>${hlRows}</tbody>
 </table>
-<p class="cite">Source: GURPS Basic Set 4e, p. B552</p>`;
+<p class="cite">Source: GURPS Basic Set 4e, p. B552; GURPS Martial Arts, p. MA137</p>`;
 
   const ssrRows = SIZE_SPEED_RANGE_ROWS.map(([spd, sm, measure]) =>
     `<tr><td class="num">${spd}</td><td class="num">${sm}</td><td>${measure}</td></tr>`

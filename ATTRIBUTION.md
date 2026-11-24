@@ -241,8 +241,9 @@ skills that encumbrance penalises are copied from `gurps_calc.py`; the
 case inputs and results are our own arithmetic. Names and numbers only.
 
 **`tools/publish/lib/templates/gurps/blocks/reference.js`**
-Source: *GURPS Basic Set 4th Edition* (Steve Jackson Games).
-Tables reproduced: Humanoid Hit Location (p. B552) and
+Source: *GURPS Basic Set 4th Edition* and *GURPS Martial Arts* (Steve Jackson Games).
+Tables reproduced: Humanoid Hit Location (p. B552, with the extended
+locations' names and penalties from p. MA137) and
 Size & Speed/Range (p. B550).
 License: SJG Online Policy
 (https://www.sjgames.com/general/online_policy.html).

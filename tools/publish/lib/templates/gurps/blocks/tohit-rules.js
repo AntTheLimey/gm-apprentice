@@ -73,11 +73,11 @@ const TOHIT_RULES = {
 
   // Cover (B407, B548): target only partly exposed -2; light cover or concealment -2; -4 for each
   // figure the shot passes. Target crouching, kneeling, sitting, crawling or lying: -2, but only
-  // against the torso, groin or a leg (B548, B551).
+  // against the torso, groin or a leg (B548, B551), a leg's vein or joint too (MA137).
   cover: { partial: -2, light: -2 },
   behind: -4,
   targetLow: -2,
-  targetLowLocs: ['torso', 'groin', 'leg'],
+  targetLowLocs: ['torso', 'groin', 'leg', 'leg vein', 'leg joint'],
 
   dual: -4,                          // Dual-Weapon Attack, each attack; the foe defends at -1 (B417, MA83)
   dualFoe: -1,
