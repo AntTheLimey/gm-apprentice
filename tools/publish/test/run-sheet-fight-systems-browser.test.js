@@ -3600,7 +3600,11 @@ describe('A GURPS foe made up at the table: the quick figures first (step 6b Tas
           p = await until(page, `p.fight.turn !== ${q(was)} && p.saved === "Saved" && p.pending === 0`);
         }
         assert.strictEqual(p.fight.turn, id);
-        assert.strictEqual(await text(page, `li[data-frow="${id}"] .defs .skill`), null, 'the acting row leaves Skill to its panel');
+        // fix round (coordinator's ruling): the acting row attacks, so it shows Skill in place of its defence buttons (the
+        // panel's Defend line keeps them)
+        assert.strictEqual(await text(page, `li[data-frow="${id}"] .defs .skill`), 'Skill 12', 'the acting row reads its Skill');
+        assert.strictEqual(await page.evaluate(`document.querySelectorAll('li[data-frow="${id}"] [data-fdef]').length`), 0, 'no defence buttons on the acting row');
+        assert.ok(await page.evaluate(`Boolean(document.querySelector('#acting [data-fpdef="${id}|dodge"]'))`), 'the panel keeps its Defend line');
         assert.ok((await texts(page, '#acting .nums > span')).includes('Skill 12'), 'the acting panel reads it out');
         seen.push(await edge('Thug acting'));
         if (w === 1449) await shot(page, 't36-thug-acting-1449');

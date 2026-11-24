@@ -802,15 +802,15 @@
     RP.focusTo(attr(defence ? 'data-fmand' : 'data-fman', defence ? `${rowId}|${defence}` : `${rowId}|${key}`));
   }
   // The row's readout: a foe's or an ally's main combat skill (Task 36), a plain figure the GM rolls against at the
-  // table, and its defences that have a figure, each its own Defend button [H2]. A PC has none. The acting row leaves
-  // its Skill to its panel (the read-out line and the box beside it, and To-hit opens on it), as it leaves its typed
-  // defence box: the acting row is the order's widest, and either there would fold the run list at 1449.
+  // table, and its defences that have a figure, each its own Defend button [H2]. A PC has none. The acting row attacks:
+  // with a Skill it shows that in place of its defence buttons (the panel's Defend line keeps them), so it is no wider
+  // than before (the coordinator's ruling, Task 36 fix round); with none, its defences as before.
   function rowDefencesHTML(r, acting) {
     const D = defences();
     if (!D || r.kind === 'pc' || r.kind === 'lair' || !r.in || r.out) return '';
     const live = GMath.liveDefences(r, D);
-    const shown = GMath.DEFENCE_KEYS.map((k) => live[k]).filter((d) => d.base !== null);
-    const skill = !acting && isNum(r.skill) ? `<span class="skill" title="${esc(`Skill ${r.skill}: its main combat skill; To-hit opens on it`)}">${esc(`Skill ${r.skill}`)}</span>` : '';
+    const shown = acting && isNum(r.skill) ? [] : GMath.DEFENCE_KEYS.map((k) => live[k]).filter((d) => d.base !== null);
+    const skill = isNum(r.skill) ? `<span class="skill" title="${esc(`Skill ${r.skill}: its main combat skill; To-hit opens on it`)}">${esc(`Skill ${r.skill}`)}</span>` : '';
     // one "rolled" box for a defence rolled at the table (Task 37): type it, then tap the defence it was for. Not on the
     // acting row, which attacks rather than defends (its panel has one), so the order needs no more width than before
     const defs = shown.length ? `${shown.map((d) => defenceButton(r, d, 'data-fdef')).join('')}${acting ? '' : defTypedBox(r, 'def')}` : '';
