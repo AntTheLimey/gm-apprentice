@@ -287,3 +287,38 @@ describe('dice: the dispatcher', () => {
     }
   });
 });
+
+// A roll made at the table and typed (Task 37): judged by the same rules as the server's, in the same shape, marked
+// `typed`, so the reducers take it the same.
+describe('dice: a typed table roll', () => {
+  it('3d6 against a target: the total typed, the outcome by the same ranges', () => {
+    for (const [typed, target, outcome] of [[12, 10, 'failure'], [9, 10, 'success'], [4, 3, 'critical success'], [17, 15, 'critical failure'], [17, 16, 'failure'], [16, 6, 'critical failure']]) {
+      const r = rollSpec({ against: target, typed });
+      assert.deepStrictEqual(r, { dice: [], total: typed, target, margin: target - typed, outcome, typed: true }, `${typed} vs ${target}`);
+    }
+  });
+  it('a d100: the kept roll typed, its level, the dice asked kept for the checks', () => {
+    const r = rollSpec({ d100: { target: 50, bonus: 1 }, typed: 24 });
+    assert.strictEqual(r.typed, true);
+    assert.strictEqual(r.kept, 24);
+    assert.strictEqual(r.level, 'hard');
+    assert.strictEqual(r.passed, true);
+    assert.deepStrictEqual(r.asked, { bonus: 1, penalty: 0 });
+    assert.deepStrictEqual([r.tens, r.units], [[20], 4]);
+    assert.strictEqual(rollSpec({ d100: { target: 40 }, typed: 100 }).level, 'fumble');
+    assert.strictEqual(rollSpec({ d100: { target: 40 }, typed: 1 }).level, 'critical');
+    assert.strictEqual(rollSpec({ d100: { target: 40, difficulty: 'hard' }, typed: 25 }).passed, false);
+  });
+  it('a die: the face typed, with its modifier', () => {
+    assert.deepStrictEqual(rollSpec({ sides: 10, typed: 7 }), { sides: 10, mod: 0, die: 7, total: 7, typed: true });
+  });
+  it('a typed number the dice cannot make is refused with a sentence', () => {
+    assert.throws(() => rollSpec({ against: 10, typed: 2 }), /3 to 18/);
+    assert.throws(() => rollSpec({ against: 10, typed: 19 }), /3 to 18/);
+    assert.throws(() => rollSpec({ d100: { target: 40 }, typed: 0 }), /1 to 100/);
+    assert.throws(() => rollSpec({ d100: { target: 40 }, typed: 101 }), /1 to 100/);
+    assert.throws(() => rollSpec({ sides: 10, typed: 11 }), /1 to 10/);
+    assert.throws(() => rollSpec({ against: 10, typed: 9.5 }), /3 to 18/);
+    assert.throws(() => rollSpec({ damage: '2d6', typed: 7 }), /typed/);
+  });
+});

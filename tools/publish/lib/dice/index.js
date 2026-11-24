@@ -30,7 +30,9 @@ function rollAgainst(spec, { randomInt = crypto.randomInt } = {}) {
   const target = spec && typeof spec === 'object' ? spec.target : undefined;
   if (!isInt(target) || target < -AGAINST_LIMIT || target > AGAINST_LIMIT) throw new RangeError(`a target is a whole number from -${AGAINST_LIMIT} to ${AGAINST_LIMIT}`);
   const dice = three(randomInt);
-  const total = dice[0] + dice[1] + dice[2];
+  return judgeAgainst(dice, dice[0] + dice[1] + dice[2], target);
+}
+function judgeAgainst(dice, total, target) {
   let outcome;
   if (total <= 4 || (total === 5 && target >= 15) || (total === 6 && target >= 16)) outcome = 'critical success';
   else if (total === 18 || (total === 17 && target <= 15) || total >= target + 10) outcome = 'critical failure';
@@ -124,7 +126,7 @@ const DIFFICULTIES = ['regular', 'hard', 'extreme'];
 const PERCENT_LIMIT = 999;
 const BONUS_LIMIT = 9;
 
-function rollPercent(spec, { randomInt = crypto.randomInt } = {}) {
+function rollPercent(spec, { randomInt = crypto.randomInt, typed } = {}) {
   const s = spec && typeof spec === 'object' ? spec : {};
   const { target, difficulty = 'regular', bonus = 0, penalty = 0 } = s;
   if (!isInt(target) || target < 0 || target > PERCENT_LIMIT) throw new RangeError(`a skill is a whole number from 0 to ${PERCENT_LIMIT}`);
@@ -133,10 +135,20 @@ function rollPercent(spec, { randomInt = crypto.randomInt } = {}) {
   const net = bonus - penalty;
   const rolledBonus = net > 0 ? Math.min(2, net) : 0;
   const rolledPenalty = net < 0 ? Math.min(2, -net) : 0;
-  const tens = Array.from({ length: 1 + rolledBonus + rolledPenalty }, () => randomInt(0, 10) * 10);
-  const units = randomInt(0, 10);
-  const results = tens.map((t) => (t + units === 0 ? 100 : t + units));
-  const kept = rolledBonus ? Math.min(...results) : rolledPenalty ? Math.max(...results) : results[0];
+  let tens;
+  let units;
+  let kept;
+  if (typed !== undefined) {
+    // the kept roll as the table rolled it: its own tens and units, the bonus or penalty dice already chosen
+    units = typed % 10;
+    tens = [typed === 100 ? 0 : typed - units];
+    kept = typed;
+  } else {
+    tens = Array.from({ length: 1 + rolledBonus + rolledPenalty }, () => randomInt(0, 10) * 10);
+    units = randomInt(0, 10);
+    const results = tens.map((t) => (t + units === 0 ? 100 : t + units));
+    kept = rolledBonus ? Math.min(...results) : rolledPenalty ? Math.max(...results) : results[0];
+  }
   const needed = difficulty === 'regular' ? target : Math.floor(target / (difficulty === 'hard' ? 2 : 5));
   const fumbleFrom = needed >= 50 ? 100 : 96;
   let level;
@@ -147,7 +159,30 @@ function rollPercent(spec, { randomInt = crypto.randomInt } = {}) {
   else if (kept <= target) level = 'regular';
   else level = 'fail';
   const passed = LEVELS.indexOf(level) >= 1 && LEVELS.indexOf(level) >= LEVELS.indexOf(difficulty);
-  return { tens, units, kept, target, difficulty, needed, level, passed, fumbleFrom, bonus: rolledBonus, penalty: rolledPenalty, asked: { bonus, penalty } };
+  return { tens, units, kept, target, difficulty, needed, level, passed, fumbleFrom, bonus: rolledBonus, penalty: rolledPenalty, asked: { bonus, penalty }, ...(typed !== undefined ? { typed: true } : {}) };
+}
+
+// ---- a roll made at the table and typed (Task 37): judged here by the same rules, in the same shape, marked `typed` ----
+// `{ against: N, typed: T }` (3d6, its total), `{ d100: {...}, typed: T }` (the kept roll), `{ sides, mod, typed: T }`
+// (the die's face). The page never judges a roll: it sends what the table rolled.
+function typedRoll(spec) {
+  const t = spec.typed;
+  const whole = (lo, hi, what) => { if (!isInt(t) || t < lo || t > hi) throw new RangeError(`a typed ${what} is a whole number from ${lo} to ${hi}`); };
+  if ('against' in spec) {
+    const target = spec.against;
+    if (!isInt(target) || target < -AGAINST_LIMIT || target > AGAINST_LIMIT) throw new RangeError(`a target is a whole number from -${AGAINST_LIMIT} to ${AGAINST_LIMIT}`);
+    whole(3, 18, '3d6 roll');
+    return { ...judgeAgainst([], t, target), typed: true };
+  }
+  if ('d100' in spec) { whole(1, 100, 'd100 roll'); return rollPercent(spec.d100, { typed: t }); }
+  if ('sides' in spec && !('damage' in spec)) {
+    const { sides, mod = 0 } = spec;
+    if (!SIDES.includes(sides)) throw new RangeError(`a die has ${SIDES.join(', ')} sides, not ${String(sides)}`);
+    if (!Number.isInteger(mod) || mod < -MOD_LIMIT || mod > MOD_LIMIT) throw new RangeError(`a modifier is a whole number from -${MOD_LIMIT} to ${MOD_LIMIT}`);
+    whole(1, sides, `d${sides} roll`);
+    return { sides, mod, die: t, total: t + mod, typed: true };
+  }
+  throw new RangeError('a typed roll is 3d6 against a target, a d100 or one die; damage is typed in its box');
 }
 
 // ---- the one dispatcher: a spec rolls by its kind ----
@@ -155,6 +190,7 @@ const KINDS = 'a roll is { sides, mod }, { against: N }, { d100: { target } } or
 
 function rollSpec(spec, opts) {
   if (!spec || typeof spec !== 'object' || Array.isArray(spec)) throw new RangeError(KINDS);
+  if ('typed' in spec) return typedRoll(spec);
   if ('against' in spec) return rollAgainst({ target: spec.against }, opts);
   if ('d100' in spec) return rollPercent(spec.d100, opts);
   if ('damage' in spec && 'max' in spec && typeof spec.max !== 'boolean') throw new RangeError('max is true or left out');
