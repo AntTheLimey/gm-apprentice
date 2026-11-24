@@ -624,7 +624,8 @@
     }
     for (const b of panelBoxes().filter((x) => x.readout)) reads.push(`${b.label} ${shownFigure(r[Fight.STAT_FIELDS[b.key][0]]) || '?'}${fromTag(r, b.key)}`);
     const nums = reads.map((x) => `<span>${esc(x)}</span>`);
-    if (f.view.bloodied.has(r.id) && FM.bloodiedWord(w)) nums.push(`<span class="bl">${esc(FM.bloodiedWord(w))}</span>`);
+    const blWord = f.view.bloodied.has(r.id) ? FM.bloodiedWord(w) : '';
+    if (blWord) nums.push(`<span class="bl">${esc(blWord)}</span>`);
     for (const m of marksOn(r)) nums.push(`<span class="mk">${esc(m)}</span>`);
     nums.push(...shockHTML(r));
     // every status, the ones the row's strip had no room for too; a click removes it, as on the row
