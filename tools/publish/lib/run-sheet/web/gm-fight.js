@@ -158,20 +158,37 @@
     return `<input class="typed${sm ? ' sm' : ''}" data-ftyped="${esc(key)}" value="${esc(ui.typed[key] || '')}" inputmode="numeric" autocomplete="off" size="3"`
       + ` placeholder="${esc(ph)}" aria-label="${esc(label)}" title="${esc(title)}"${bad ? ' aria-invalid="true"' : ''}${off ? ' disabled' : ''}>`;
   }
-  // The box's number: null when it is empty, undefined when it holds something other than a whole number. A d100's
-  // 00 (or 0) is 100.
-  function typedNumber(key, d100) {
+  // What a box's dice are, by its key: a card's line (CoC's d100, GURPS's 3d6), a defence (3d6), the bout's die, the
+  // rest CoC's d100.
+  function typedKind(key) {
+    const k = key.split('|')[0];
+    if (k === 'card') { const K = cardKit(); return K && K.coc ? 'd100' : '3d6'; }
+    if (k === 'def' || k === 'pdef') return '3d6';
+    return k === 'bout' ? 'die' : 'd100';
+  }
+  // The box's number: null when it is empty, undefined when it holds something other than a whole number. As the dice
+  // read: a d100's 00 is 100, a d10's 0 is 10. A lone 0 on a d100 is sent as 0, for the server to refuse in its words
+  // (the page never judges a roll's range).
+  function typedNumber(key) {
     const v = String(ui.typed[key] || '').trim();
     if (!v) return null;
     if (!/^\d{1,3}$/.test(v)) return undefined;
-    const n = Number(v);
-    return d100 && n === 0 ? 100 : n;
+    const kind = typedKind(key);
+    if (kind === 'd100' && v === '00') return 100;
+    if (kind === 'die' && Number(v) === 0) return 10;
+    return Number(v);
+  }
+  // A box holding something other than a whole number: marked, and said in a sentence (fix round).
+  function typedBad(key) {
+    const b = document.querySelector(attr('data-ftyped', key));
+    if (b) b.setAttribute('aria-invalid', 'true');
+    RP.note(`Not taken: "${String(ui.typed[key] || '').trim()}" is not a roll; type the number the dice show.`, { kind: 'bad', id: `typed:${key}` });
   }
   // The spec with the box's number on it (`typed`), or as it was for the server to roll; null when the box holds
-  // something that is not a number (marked, nothing sent).
-  function withTyped(spec, key, d100) {
-    const n = typedNumber(key, d100);
-    if (n === undefined) { const b = document.querySelector(attr('data-ftyped', key)); if (b) b.setAttribute('aria-invalid', 'true'); return null; }
+  // something that is not a number (marked and said, nothing sent).
+  function withTyped(spec, key) {
+    const n = typedNumber(key);
+    if (n === undefined) { typedBad(key); return null; }
     return n === null ? spec : { ...spec, typed: n };
   }
   const rowOfKey = (key, n) => key.split('|').slice(n).join('|');
@@ -750,7 +767,8 @@
     if (!c && !acting) return '';
     const text = c ? `${c.short}${counted(r)}` : '+ manoeuvre';
     const full = c ? `${c.name}${r.aodDefence ? ` (${r.aodDefence})` : ''}${counted(r)}` : '';
-    return `<button type="button" class="tg man ${c ? 'on' : ''}" data-fmanrow="${esc(r.id)}" title="${esc(c ? `${full}. Tap: show its panel to change it` : "Manoeuvre: tap to choose it in the panel")}" aria-label="${esc(`Manoeuvre for ${r.gmName}: ${c ? full : 'none'}`)}">${esc(text)}</button>`;
+    const ahead = c && r.manAhead ? ', set off its turn: for its next turn' : '';
+    return `<button type="button" class="tg man ${c ? 'on' : ''}" data-fmanrow="${esc(r.id)}" title="${esc(c ? `${full}${ahead}. Tap: show its panel to change it` : "Manoeuvre: tap to choose it in the panel")}" aria-label="${esc(`Manoeuvre for ${r.gmName}: ${c ? full : 'none'}`)}">${esc(text)}</button>`;
   }
   function panelManoeuvreHTML(r) {
     const cs = chipsOf();
@@ -816,7 +834,9 @@
     const open = GMath.DEFENCE_KEYS.map((k) => GMath.liveDefences(r, D)[k]).filter((d) => d.value !== null && d.base !== null);
     const data = at === 'def' ? 'data-fdef' : 'data-fpdef';
     if (open.length === 1) { defend(rowId, open[0].key, data); return; }
-    if (open.length) RP.focusTo(attr(data, `${rowId}|${open[0].key}`));
+    // several open: which one is the GM's to say. Focus stays in the box (a second Enter can fire nothing), one line says so
+    const v = String(ui.typed[`${at}|${rowId}`] || '').trim();
+    if (open.length) RP.note(`${v}: tap the defence it was for.`, { id: `typed:def:${rowId}:${v}` });
   }
   // A defence tapped: the server rolls it against the figure as it stands; the result is logged by the reducer. A
   // used Block asks once ("Block again?"), then the next tap rolls it. Focus stays on the button tapped.
@@ -926,11 +946,15 @@
       busy, npc.length > 1 ? (k === 'matk' ? 'atk' : 'def') : 'd100', true)).join('');
     return `<span class="melee">${order.map(btn).join('')}${step}${typed}${shoot}</span>`;
   }
-  // Enter in a melee "rolled" box: an NPC's or creature's usual response takes it; a PC's waits for the GM's tap.
-  function meleeTypedEnter(rowId) {
+  // Enter in a melee "rolled" box: an NPC's or creature's usual response takes it; a PC's waits for the GM's tap. With
+  // both sides' boxes drawn (NPC against NPC) and the other empty, focus goes to it first: the quieter way to wait for
+  // both, so a side rolled at the table is never rolled again by the server (fix round).
+  function meleeTypedEnter(rowId, kind) {
     const C = cocRules();
     const r = rowById(rowId);
     if (!C || !r) return;
+    const other = `${kind === 'matk' ? 'mdef' : 'matk'}|${rowId}`;
+    if (document.querySelector(attr('data-ftyped', other)) && typedNumber(other) === null) { RP.focusTo(attr('data-ftyped', other)); return; }
     if (r.kind !== 'pc') { meleeStart(rowId, C.defaultResponse || 'fightBack'); return; }
     RP.focusTo(attr('data-fmelee', `${rowId}|${CMath.RESPONSES[0]}`));
   }
@@ -1010,8 +1034,8 @@
     const asks = [];
     // a side typed at the table (Task 37) goes to the server to be judged, as a roll goes to be rolled
     const keys = { attack: `matk|${rowId}`, defence: `mdef|${rowId}` };
-    if (A.kind !== 'pc') asks.push(['attack', withTyped({ d100: { target: CMath.skillOf(A, 'attack'), ...dice } }, keys.attack, true)]);
-    if (D.kind !== 'pc') asks.push(['defence', withTyped({ d100: { target: CMath.skillOf(D, response) } }, keys.defence, true)]);
+    if (A.kind !== 'pc') asks.push(['attack', withTyped({ d100: { target: CMath.skillOf(A, 'attack'), ...dice } }, keys.attack)]);
+    if (D.kind !== 'pc') asks.push(['defence', withTyped({ d100: { target: CMath.skillOf(D, response) } }, keys.defence)]);
     if (asks.some((x) => !x[1])) { RP.focusTo(sel); return; }
     const typed = asks.filter((x) => x[1].typed !== undefined).map((x) => keys[x[0]]);
     m.rolling = asks.length > 0;
@@ -1215,7 +1239,7 @@
     }
     if (!isNum(D.dodge)) { RP.note(`${viewName(rowId) || D.name} has no Dodge: type it in its panel.`, { kind: 'bad', id: `dive:${rowId}` }); RP.focusTo(sel); return; }
     const key = `dive|${rowId}`;
-    const spec = withTyped({ d100: { target: D.dodge } }, key, true);
+    const spec = withTyped({ d100: { target: D.dodge } }, key);
     if (!spec) return;
     const typed = spec.typed !== undefined;
     sh.diveRolling = true;
@@ -1263,7 +1287,9 @@
       // the aim is spent by this shot: the next one from this strip is not aimed
       delete sh.chips.aim;
       rememberShot(sh);
-      F({ type: 'shot', shooter: A.id, target: rowId, chips, gun: sh.gun, malfunction: A.kind === 'pc' ? null : sh.mal, ...extra });
+      // the aimed chip on with no aim the sheet knows of: the GM's own tap (Task 37)
+      const byHand = chips.includes('aim') && !CMath.aimReady(A, f.round);
+      F({ type: 'shot', shooter: A.id, target: rowId, chips, gun: sh.gun, malfunction: A.kind === 'pc' ? null : sh.mal, ...(byHand ? { aimByHand: true } : {}), ...extra });
       RP.focusTo(sel);
     };
     if (A.kind === 'pc') {
@@ -1274,7 +1300,7 @@
     }
     if (!isNum(skill)) { RP.note(`${names.shooter} has no Firearms: type it in its panel.`, { kind: 'bad', id: `shot:skill:${A.id}` }); RP.focusTo(sel); return; }
     const key = `shot|${rowId}`;
-    const spec = withTyped({ d100: { target: skill, difficulty: d.difficulty, ...d.asked } }, key, true);
+    const spec = withTyped({ d100: { target: skill, difficulty: d.difficulty, ...d.asked } }, key);
     if (!spec) return;
     const typed = spec.typed !== undefined;
     sh.rolling = true;
@@ -1546,7 +1572,7 @@
       + `<button type="button" class="x" ${cardBtn(r, c, '', 'dismiss')} title="Dismiss: nothing applied, nothing logged" aria-label="Dismiss this card">\u2715</button></div>`;
     if (want) {
       const lab = statLabel(K, want);
-      h += `<label class="cht"><span class="lab">${esc(lab)}</span><input data-fcardstat="${esc(`${r.id}|${want}`)}" inputmode="numeric" autocomplete="off" placeholder="${esc(lab)}" aria-label="${esc(lab)} for ${esc(r.gmName)}"><span class="note">first, then Roll</span></label>`;
+      h += `<label class="cht"><span class="lab">${esc(lab)}</span><input data-fcardstat="${esc(`${r.id}|${want}`)}" inputmode="numeric" autocomplete="off" placeholder="${esc(lab)}" aria-label="${esc(lab)} for ${esc(r.gmName)}"><span class="note">${K.coc ? 'first, then Roll' : 'for Roll, or tap Passed or Failed'}</span></label>`;
     }
     h += `<ol class="clines">${c.lines.map((l, i) => {
       const cls = [i === next ? 'next' : '', l.result || l.taken ? 'rolled' : ''].join(' ').trim();
@@ -1571,6 +1597,13 @@
         + `<button type="button" class="primary fail" ${cardBtn(r, c, next, 'failed')} ${wait} title="The player's roll failed">Failed</button></span>`;
     } else if (next >= 0) {
       const wait = want || ui.rolling[c.id];
+      // a GURPS row with no HT (a foe made up at the table): the GM's Passed or Failed tap of the table roll settles the
+      // line at once; the HT box stays, for Roll, never a gate (fix round)
+      if (want && !K.coc) {
+        const tw = ui.rolling[c.id] ? 'disabled' : '';
+        h += `<span class="taps" role="group" aria-label="The roll at the table"><button type="button" class="primary pass" ${cardBtn(r, c, next, 'passed')} ${tw} title="The roll at the table passed">Passed</button>`
+          + `<button type="button" class="primary fail" ${cardBtn(r, c, next, 'failed')} ${tw} title="The roll at the table failed">Failed</button></span>`;
+      }
       const tip = want ? `Type ${statLabel(K, want)} first` : K.coc ? 'Roll d100 against the next line' : 'Roll 3d6 against the next line';
       h += `<button type="button" class="primary roll" ${cardBtn(r, c, next, 'roll')} ${wait ? 'disabled' : ''} title="${esc(tip)}">Roll</button>`;
       // or the roll made at the table, typed (Task 37): a PC's in GURPS too (its player rolled it)
@@ -1592,7 +1625,7 @@
     const target = line < 0 ? null : K.M.lineTarget(c.lines[line], r);
     if (target === null) return;
     const key = `card|${cardId}|${rowId}`;
-    const spec = withTyped(K.coc ? { d100: { target } } : { against: target }, key, K.coc);
+    const spec = withTyped(K.coc ? { d100: { target } } : { against: target }, key);
     if (!spec) return;
     const typed = spec.typed !== undefined;
     ui.rolling[cardId] = true;
@@ -1619,6 +1652,8 @@
     const K = cardKit();
     const o = K && GMath.offerOf(K.C, take);
     const send = (more) => F({ type: 'card', row: rowId, card: cardId, ...(line === '' ? {} : { line: Number(line) }), take, ...(more || {}) });
+    // a line skipped or answered: a number typed for it goes with it, never onto the next line (fix round)
+    if (line !== '' && line !== undefined) delete ui.typed[`card|${cardId}|${rowId}`];
     // an offer taken may settle the card and drop it: focus goes on, never to the page
     if (!o || !o.bout) { send(); focusCard(rowId, cardId); return; }
     const f = state().fight;
@@ -2599,15 +2634,15 @@
     if (t.id === 'fAreaDmg') { ev.preventDefault(); applyArea(); }
   });
   function typedEnter(key) {
-    const n = typedNumber(key, true);
-    if (n === undefined) { const b = document.querySelector(attr('data-ftyped', key)); if (b) b.setAttribute('aria-invalid', 'true'); return; }
+    const n = typedNumber(key);
+    if (n === undefined) { typedBad(key); return; }
     if (n === null) return;
     const p = key.split('|');
     const kind = p[0];
     if (kind === 'card') rollCard(rowOfKey(key, 2), p[1]);
     else if (kind === 'bout') takeCard(rowOfKey(key, 4), p[1], p[2], p[3]);
     else if (kind === 'def' || kind === 'pdef') defTypedEnter(kind, rowOfKey(key, 1));
-    else if (kind === 'matk' || kind === 'mdef') meleeTypedEnter(rowOfKey(key, 1));
+    else if (kind === 'matk' || kind === 'mdef') meleeTypedEnter(rowOfKey(key, 1), kind);
     else if (kind === 'shot') shotFire(rowOfKey(key, 1), null);
     else if (kind === 'dive') shotDive(rowOfKey(key, 1), null);
   }

@@ -3138,6 +3138,119 @@ describe('Physical dice on CoC rows, cards and the Shoot strip (step 6b Task 37)
   });
 });
 
+describe('Typed rolls, fix round (step 6b Task 37), by real input', { skip: browserSkip() }, () => {
+  const notes = (page) => texts(page, '#hnotes .hnote span');
+  const focusIs = (page, sel) => page.waitFor(`document.activeElement === document.querySelector(${q(sel)})`, 3000);
+  // two Bouncers, Bouncer 1 fastest; `more` typed on Bouncer 2 in its panel
+  async function bouncers(page, run, more) {
+    let p = await fightOn(page, run, 1);
+    await tap(page, '#fAddCount');
+    await page.type('2');
+    await tap(page, '#fAddName');
+    await page.type('Bouncer');
+    await page.waitFor('document.querySelector("[data-faddnew]")');
+    await tap(page, '[data-faddnew]');
+    p = await until(page, 'p.fight.rows.some((r) => r.name === "Bouncer 2") && p.saved === "Saved" && p.pending === 0');
+    p = await peek(page, p, 'Bouncer 1');
+    p = await typeInto(page, box(p, 'Bouncer 1', 'speed'), '9');
+    p = await peek(page, p, 'Bouncer 2');
+    for (const [key, value] of more) p = await typeInto(page, box(p, 'Bouncer 2', key), value);
+    await tap(page, '#fNext');
+    if (await page.evaluate('Boolean(document.querySelector("#fStartAnyway"))')) await tap(page, '#fStartAnyway');
+    return until(page, 'p.fight.started && p.saved === "Saved" && p.pending === 0');
+  }
+
+  it('GURPS: 7 Enter Enter in a row\'s box with Dodge and Parry open logs nothing and keeps focus; "12a" is refused in words; a number typed for a skipped line goes with it; a manoeuvre set ahead shows on the row', async () => {
+    const run = await start('gurps', { randomInt: () => 4 });
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await bouncers(page, run, [['st', 11], ['ht', 10], ['dx', 10], ['parry', 9]]);
+      const b2 = named(p, 'Bouncer 2').id;
+      const dbox = `li[data-frow="${b2}"] .defs input.typed`;
+      const before = (await logOf(run)).length;
+      await typeInto(page, dbox, '7', { settle: false });
+      await page.key('Enter');
+      await page.sleep(300);
+      await focusIs(page, dbox);
+      assert.strictEqual((await logOf(run)).length, before, 'nothing rolled');
+      assert.ok((await notes(page)).includes('7: tap the defence it was for.'), JSON.stringify(await notes(page)));
+      await typeInto(page, dbox, '12a', { settle: false });
+      await page.waitFor('Array.from(document.querySelectorAll("#hnotes .hnote span")).some((n) => n.textContent === \'Not taken: "12a" is not a roll; type the number the dice show.\')', 3000);
+      assert.strictEqual(await attrOf(page, dbox, 'aria-invalid'), 'true');
+      assert.strictEqual((await logOf(run)).length, before);
+      // a card: 9 typed beside Roll and not sent, then the line skipped: the 9 goes with it
+      p = await typeInto(page, `[data-fhp="${b2}"]`, '9 imp vitals');
+      const card = `#acting .fcard[data-fcrow="${b2}"]`;
+      await page.waitFor(`document.querySelector(${q(card)})`, 3000);
+      await typeInto(page, `${card} input.typed`, '9', { enter: false, settle: false });
+      await tap(page, `${card} .clines li:nth-child(1) .decline.skip`);
+      p = await until(page, `p.fight.rows.find((r) => r.id === ${q(b2)}).cards[0].lines[0].declined && p.saved === "Saved" && p.pending === 0`);
+      assert.strictEqual(await page.evaluate(`document.querySelector(${q(`${card} input.typed`)}).value`), '');
+      // Bouncer 2's All-Out Attack set ahead, from its panel: its row shows it, for its next turn
+      p = await peek(page, p, 'Bouncer 2');
+      await tap(page, `#acting [data-fman="${b2}|all-out attack"]`);
+      p = await until(page, `p.fight.rows.find((r) => r.id === ${q(b2)}).manoeuvre === "all-out attack" && p.saved === "Saved" && p.pending === 0`);
+      assert.strictEqual(await text(page, `li[data-frow="${b2}"] [data-fmanrow]`), 'AoA');
+      assert.match(await attrOf(page, `li[data-frow="${b2}"] [data-fmanrow]`, 'title'), /set off its turn: for its next turn/);
+      for (let i = 0; i < 12 && p.fight.turn !== b2; i++) {
+        const was = p.fight.turn;
+        await tap(page, '#fNext');
+        p = await until(page, `p.fight.turn !== ${q(was)} && p.saved === "Saved" && p.pending === 0`);
+      }
+      assert.equal(p.fight.turn, b2);
+      assert.strictEqual(await text(page, `li[data-frow="${b2}"] [data-fmanrow]`), 'AoA', 'kept on its turn');
+    });
+  });
+
+  for (const [w, h] of SIZES) {
+    it(`GURPS at ${w}: a made-up foe with no HT: its card offers Passed and Failed; Failed on the death check offers Mortal wound and Dead`, async () => {
+      const run = await start('gurps', { randomInt: () => 4 });
+      await withPage({ width: w, height: h }, async (page) => {
+        let p = await bouncers(page, run, [['st', 11], ['dx', 10], ['parry', 9]]);
+        const b2 = named(p, 'Bouncer 2').id;
+        assert.strictEqual(named(p, 'Bouncer 2').ht, null);
+        p = await typeInto(page, `[data-fhp="${b2}"]`, '9 imp vitals');
+        const card = `#acting .fcard[data-fcrow="${b2}"]`;
+        p = await until(page, `document.querySelector(${q(card)}) && p.saved === "Saved" && p.pending === 0`);
+        assert.strictEqual(await attrOf(page, `${card} button.roll`, 'disabled'), '', 'Roll still waits for HT');
+        assert.strictEqual(await text(page, `${card} .cht .note`), 'for Roll, or tap Passed or Failed');
+        await tap(page, `${card} button.fail`);
+        p = await until(page, `p.fight.rows.find((r) => r.id === ${q(b2)}).cards[0].lines[0].result && p.saved === "Saved" && p.pending === 0`);
+        assert.deepStrictEqual(named(p, 'Bouncer 2').cards[0].lines[0].offers, ['mortal', 'dead']);
+        assert.deepStrictEqual((await logOf(run)).slice(-1), ['Bouncer 2: death check (−1×HP), failed.']);
+        // the knockdown is next: the taps again
+        await page.waitFor(`document.querySelector(${q(`${card} button.pass:not([disabled])`)})`, 3000);
+        sane(p, `no-HT card ${w}`);
+        await tap(page, `${card} .clines li:nth-child(1) .offer`);
+        p = await until(page, `p.fight.rows.find((r) => r.id === ${q(b2)}).conds.includes("Mortal wound") && p.saved === "Saved" && p.pending === 0`);
+      });
+    });
+  }
+
+  it('CoC: NPC against NPC, Enter in "atk" with "def" empty goes to "def"; both typed, one exchange; "0" on a d100 is refused in the server\'s words', async () => {
+    const run = await start('coc', { randomInt: () => 3 });
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await netLoft(page, run);
+      await tap(page, '#fNext');
+      p = await until(page, 'p.fight.rows.find((r) => r.id === p.fight.turn).name === "Dock Cultist 1" && p.saved === "Saved" && p.pending === 0');
+      const c2 = named(p, 'Dock Cultist 2').id;
+      const atk = `[data-ftyped="matk|${c2}"]`;
+      const def = `[data-ftyped="mdef|${c2}"]`;
+      const before = (await logOf(run)).length;
+      await typeInto(page, atk, '0', { settle: false });
+      // Enter in atk with def empty: focus to def, nothing sent
+      await focusIs(page, def);
+      assert.strictEqual(p.fight.melee, null);
+      await typeInto(page, def, '22', { settle: false });
+      // atk holds 0: refused by the server in its own words, nothing logged
+      await page.waitFor('Array.from(document.querySelectorAll("#hnotes .hnote span")).some((n) => /Not taken: a typed d100 roll is a whole number from 1 to 100/.test(n.textContent))', 3000);
+      assert.strictEqual((await logOf(run)).length, before);
+      await typeInto(page, atk, '31', { settle: false });
+      p = await until(page, `p.fight.melee === null && p.saved === "Saved" && p.pending === 0 && p.fight.rows.find((r) => r.id === ${q(c2)}).meleeDefences === 1`);
+      assert.deepStrictEqual((await logOf(run)).slice(-1), ['Dock Cultist 1: Regular (typed 31); Dock Cultist 2 Fights Back: Regular (typed 22): a tie: Dock Cultist 1 hits Dock Cultist 2.']);
+    });
+  });
+});
+
 // Task 37 fix round: the entry box never runs into the HP figure beside it, its focus ring counted, focused or not;
 // its placeholder has room inside it. Seen on a CoC copy at 1449: the focused box's ring over Dell's HP.
 describe('the entry box and the HP figure never overlap (step 6b Task 37 fix round), by real input', { skip: browserSkip() }, () => {
