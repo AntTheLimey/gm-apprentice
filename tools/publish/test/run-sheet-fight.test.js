@@ -4348,6 +4348,26 @@ describe('Physical dice count everywhere; nothing settles in order (step 6b Task
     assert.equal(named(s, 'Bouncer 1').aim, 3);
   });
 
+  it('GURPS: the round\'s last row aims, forgets next round, Next into a new round, late Aim: 2; its next turn starts clear, Aim: 3 (fix round 3)', () => {
+    const rows = [
+      { name: 'Bouncer 1', ini: 6, speed: 6, hp: 11, max: 11, ht: 10 },
+      { name: 'Bouncer 2', ini: 5, speed: 5, hp: 11, max: 11, ht: 10 },
+    ];
+    let s = go(go(begin(rows, GURPS))); // round 1, Bouncer 2 (last) acts
+    s = G(s, { type: 'manoeuvre', row: named(s, 'Bouncer 2').id, name: 'aim' });
+    s = go(go(s)); // round 2: Bouncer 1, then Bouncer 2, its Aim forgotten
+    s = go(s); // round 3 starts with Bouncer 1: Bouncer 2's turn is the one that just ended
+    assert.equal(s.fight.round, 3);
+    assert.equal(named(s, 'Bouncer 2').aim, 0);
+    s = G(s, { type: 'manoeuvre', row: named(s, 'Bouncer 2').id, name: 'aim' });
+    assert.equal(named(s, 'Bouncer 2').aim, 2);
+    assert.equal(named(s, 'Bouncer 2').manAhead, false, 'a late correction across the round\'s end');
+    s = go(s); // Bouncer 2's turn
+    assert.equal(named(s, 'Bouncer 2').manoeuvre, null);
+    s = G(s, { type: 'manoeuvre', row: named(s, 'Bouncer 2').id, name: 'aim' });
+    assert.equal(named(s, 'Bouncer 2').aim, 3);
+  });
+
   it('CoC: a typed melee side, shot, dive and bout give the state a server roll gives', () => {
     const rows = [
       { name: 'Iris', kind: 'pc', ini: 70, dex: 70, hp: 11, max: 11, dodge: 35, con: 50, int: 70, san: 45, sanMax: 45 },

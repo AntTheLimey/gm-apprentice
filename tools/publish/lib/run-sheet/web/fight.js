@@ -523,8 +523,8 @@
     // Aim and Evaluate count turns in a row: a turn that ends with neither picked starts them again (Task 15)
     // the counts as the turn left them are kept (`manBefore`), so an Aim or Evaluate tapped late, after Next, counts on
     // from them as if tapped on time (Task 37 fix round)
-    // and the round it acted in (`actedRound`), which tells a late pick from one set ahead (fix round 2)
-    if (r && defencesOf(f)) r.actedRound = f.round;
+    // and whose turn ended last (`lastEnded`), which tells a late pick from one set ahead, across a round's end too
+    if (r && defencesOf(f)) f.lastEnded = r.id;
     if (r && defencesOf(f)) r.manBefore = { aim: isNum(r.aim) && r.aim > 0 ? Math.floor(r.aim) : 0, evaluate: isNum(r.evaluate) && r.evaluate > 0 ? Math.floor(r.evaluate) : 0 };
     if (r && defencesOf(f) && r.manoeuvre !== 'aim' && r.manoeuvre !== 'evaluate' && (r.aim || r.evaluate)) { r.aim = 0; r.evaluate = 0; touch(r, at); }
     const C = consequencesOf(f);
@@ -967,9 +967,10 @@
       // off the row's turn the pick is its next turn's (`manAhead`, kept when that turn starts), and counts on from
       // where the row's last turn left Aim and Evaluate, before a turn with no pick put them to 0 (fix round)
       const off = f.turn !== r.id;
-      // off its turn, a row that has acted this round gets a late pick, a correction to the turn just gone (it clears
-      // when the row's next turn starts, as one made on time does); one yet to act gets its next turn's (fix round 2)
-      const late = off && r.actedRound === f.round;
+      // off its turn, the previous actor (its turn the one that just ended, no other ended since, a round's end or not)
+      // gets a late pick, a correction to the turn just gone: it clears when the row's next turn starts, as one made on
+      // time does. Any other row gets its next turn's (fix rounds 2 and 3)
+      const late = off && f.lastEnded === r.id;
       if (!r.manoeuvre) r.manFrom = off && r.manBefore ? { aim: count(r.manBefore.aim), evaluate: count(r.manBefore.evaluate) } : { aim: count(r.aim), evaluate: count(r.evaluate) };
       const from = r.manFrom || { aim: 0, evaluate: 0 };
       const caps = D.caps || {};

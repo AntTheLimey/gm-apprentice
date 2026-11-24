@@ -3271,7 +3271,9 @@ describe('Typed rolls, fix round 2 (step 6b Task 37), by real input', { skip: br
     });
   });
 
-  it('GURPS: Aim, forgotten next turn, set late after Next (2); on its next turn the usual tap on Aim makes 3', async () => {
+  // `speed` 9 puts the Bouncer first in the round; 1 puts it last, so the Next after its forgotten turn starts a new
+  // round (fix round 3: the late pick is the previous actor's, across a round's end)
+  const lateAim = (speed) => async () => {
     const run = await start('gurps', { randomInt: () => 4 });
     await withPage({ width: 1449, height: 762 }, async (page) => {
       let p = await fightOn(page, run, 1);
@@ -3281,11 +3283,13 @@ describe('Typed rolls, fix round 2 (step 6b Task 37), by real input', { skip: br
       await tap(page, '[data-faddnew]');
       p = await until(page, 'p.fight.rows.some((r) => r.name === "Bouncer") && p.saved === "Saved" && p.pending === 0');
       p = await peek(page, p, 'Bouncer');
-      p = await typeInto(page, box(p, 'Bouncer', 'speed'), '9');
+      p = await typeInto(page, box(p, 'Bouncer', 'speed'), String(speed));
       await tap(page, '#fNext');
       if (await page.evaluate('Boolean(document.querySelector("#fStartAnyway"))')) await tap(page, '#fStartAnyway');
       p = await until(page, 'p.fight.started && p.saved === "Saved" && p.pending === 0');
       const b = named(p, 'Bouncer').id;
+      const live = p.fight.rows.filter((r) => r.in && !r.out).map((r) => r.id);
+      assert.strictEqual(speed === 1 ? live[live.length - 1] : live[0], b, `the Bouncer is ${speed === 1 ? 'last' : 'first'} in the order`);
       const aimOf = async () => (await (await fetch(`${run.base}/api/state`)).json()).state.fight.rows.find((r) => r.id === b).aim;
       // Next until the turn is the Bouncer's (`n` times round), or just past it
       const toTurn = async (past) => {
@@ -3306,7 +3310,9 @@ describe('Typed rolls, fix round 2 (step 6b Task 37), by real input', { skip: br
       assert.strictEqual(await aimOf(), 1);
       await toTurn(true); // its aim turn ends
       await toTurn(false); // its next turn: the Aim is forgotten
+      const round = p.fight.round;
       await toTurn(true); // and ends with no pick
+      if (speed === 1) assert.strictEqual(p.fight.round, round + 1, 'the Next after the last row starts a new round');
       assert.strictEqual(await aimOf(), 0);
       p = await peek(page, p, 'Bouncer');
       await tap(page, aimBtn);
@@ -3319,7 +3325,9 @@ describe('Typed rolls, fix round 2 (step 6b Task 37), by real input', { skip: br
       p = await until(page, `p.saved === "Saved" && p.pending === 0`);
       assert.strictEqual(await aimOf(), 3);
     });
-  });
+  };
+  it('GURPS: Aim, forgotten next turn, set late after Next (2); on its next turn the usual tap on Aim makes 3', lateAim(9));
+  it('GURPS: the round\'s last row: Aim, forgotten, Next into a new round, late Aim (2); its next turn unlit, Aim makes 3 (fix round 3)', lateAim(1));
 });
 
 // Task 37 fix round: the entry box never runs into the HP figure beside it, its focus ring counted, focused or not;
