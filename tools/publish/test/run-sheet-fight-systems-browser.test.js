@@ -553,31 +553,42 @@ describe('CoC and GURPS fights on the GM page, by real input', { skip: browserSk
     });
   });
 
-  it('GURPS: the cut and arm chips then 9 Enter is a hit to the arm; 9 Enter again is raw injury; the chips list them first', async () => {
+  // Task 25: the location chips became one list, Torso at the top and picked for every new hit
+  it('GURPS: the cut chip and the Arm location then 9 Enter is a hit to the arm; the list goes back to Torso; 9 Enter again is raw injury', async () => {
     const run = await start('gurps');
     await withPage({ width: 1449, height: 762 }, async (page) => {
       let p = await fightOn(page, run, 2);
       p = await peek(page, p, 'Vex Harrow');
       const vex = named(p, 'Vex Harrow').id;
+      const sel = `#acting [data-fhlocsel="${vex}"]`;
       const types = () => texts(page, `#acting [data-fhits="${vex}"] [data-fhtype]`);
-      const places = () => texts(page, `#acting [data-fhits="${vex}"] [data-fhloc]`);
+      const value = () => page.evaluate(`document.querySelector(${q(sel)}).value`);
+      const labels = () => page.evaluate(`Array.from(document.querySelector(${q(sel)}).options).map((o) => o.textContent + (o.disabled ? ' (off)' : ''))`);
       assert.strictEqual((await types())[0], 'cr');
-      assert.strictEqual((await places())[0], 'torso');
+      assert.strictEqual(await value(), 'torso');
+      // mildest first; no type yet: names and penalties only
+      assert.deepStrictEqual((await labels()).slice(0, 5), ['Torso 0', 'Arm −2', 'Leg −2', 'Groin −3', 'Vitals −3']);
+      assert.strictEqual((await labels()).length, 22);
       await tap(page, `[data-fhtype="${vex}|cut"]`);
-      await tap(page, `[data-fhloc="${vex}|arm"]`);
+      // the cut chip relabels the list at once: each place's multiplier for cut, the places cut cannot hit turned off
+      const cut = await labels();
+      assert.ok(cut.includes('Neck −5 · ×2'), cut.join(' | '));
+      assert.ok(cut.includes('Vitals −3 · not for cut (off)'), cut.join(' | '));
+      assert.ok(cut.includes('Eye −9 · not for cut (off)'), cut.join(' | '));
+      await page.choose(sel, 'Arm −2');
       assert.strictEqual(await page.evaluate(`document.querySelector('[data-fhp="${vex}"]').value`), ' cut arm');
-      assert.deepStrictEqual(await texts(page, `#acting [data-fhits="${vex}"] [aria-pressed="true"]`), ['cut', 'arm']);
-      // the box has focus with the caret before the words: the damage is typed next
+      assert.deepStrictEqual(await texts(page, `#acting [data-fhits="${vex}"] [aria-pressed="true"]`), ['cut']);
+      await tap(page, `[data-fhp="${vex}"]`);
+      await page.key('Home');
       await page.type('9');
       await page.key('Enter');
       // 9 cut arm on Vex (13 HP, DR 1): 7, crippled (arm)
       p = await until(page, `p.fight.rows.find((r) => r.id === ${q(vex)}).hp === 6 && p.saved === "Saved" && p.pending === 0`);
       assert.deepStrictEqual([named(p, 'Vex Harrow').hit.location, named(p, 'Vex Harrow').hit.type, named(p, 'Vex Harrow').crippled], ['arm', 'cut', ['arm']]);
-      // the chips reset, the last used listed first
+      // the next hit starts on Torso, never on the place last used; the type chips keep the last used first
+      assert.strictEqual(await value(), 'torso');
       assert.deepStrictEqual(await texts(page, `#acting [data-fhits="${vex}"] [aria-pressed="true"]`), []);
       assert.strictEqual((await types())[0], 'cut');
-      assert.strictEqual((await places())[0], 'arm');
-      // the crippled mark is on the row and in the panel
       assert.ok((await texts(page, '#acting .nums .mk')).includes('crippled (arm)'));
       // a bare 9 is raw injury, never the last hit's type or place
       p = await typeInto(page, `[data-fhp="${vex}"]`, '9');
@@ -586,6 +597,114 @@ describe('CoC and GURPS fights on the GM page, by real input', { skip: browserSk
       assert.strictEqual(await text(page, `li[data-row2="${vex}"] .hitline`), null);
     });
   });
+
+  it('GURPS: typed words set the location list; a type that cannot hit the place is refused with its reason', async () => {
+    const run = await start('gurps');
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await fightOn(page, run, 2);
+      p = await peek(page, p, 'Vex Harrow');
+      const vex = named(p, 'Vex Harrow').id;
+      const sel = `#acting [data-fhlocsel="${vex}"]`;
+      const value = () => page.evaluate(`document.querySelector(${q(sel)}).value`);
+      await typeInto(page, `[data-fhp="${vex}"]`, '2d imp v', { enter: false, settle: false });
+      await page.waitFor(`document.querySelector(${q(sel)}).value === 'vitals'`);
+      assert.strictEqual(await page.evaluate(`document.querySelector(${q(sel)}).selectedOptions[0].textContent`), 'Vitals −3 · ×3');
+      await page.key('Escape');
+      await page.waitFor(`document.querySelector(${q(sel)}).value === 'torso'`);
+      await typeInto(page, `[data-fhp="${vex}"]`, '9 cr eye');
+      const why = `li[data-row2="${vex}"] .refnum`;
+      await page.waitFor(`document.querySelector(${q(why)})`);
+      assert.strictEqual(await text(page, why), 'cr cannot target the eye');
+      assert.strictEqual(await value(), 'eye');
+      p = await settled(page);
+      assert.strictEqual(named(p, 'Vex Harrow').hp, 13);
+    });
+  });
+
+  it('GURPS: a jaw hit, a neck vein and a hand joint each give their injury, picked by keyboard and mouse', async () => {
+    const run = await start('gurps');
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await fightOn(page, run, 2);
+      p = await peek(page, p, 'Vex Harrow');
+      const vex = named(p, 'Vex Harrow').id;
+      const sel = `#acting [data-fhlocsel="${vex}"]`;
+      const value = () => page.evaluate(`document.querySelector(${q(sel)}).value`);
+      const hitWith = async (entry) => {
+        await tap(page, `[data-fhp="${vex}"]`);
+        await page.key('Home');
+        await page.type(entry);
+        await page.key('Enter');
+      };
+      // keyboard: Tab from the last type chip to the list, then the arrows (Torso, Arm, Leg), where a closed list takes
+      // them (Windows and Linux; a Mac's opens instead), and the letters everywhere
+      await tap(page, `[data-fhtype="${vex}|cr"]`);
+      await tap(page, sel);
+      await page.key('Escape');
+      await page.key('Tab', { shift: true });
+      assert.strictEqual(await page.evaluate('document.activeElement.dataset.fhtype || ""'), `${vex}|fat`);
+      await page.key('Tab');
+      assert.strictEqual(await page.evaluate(`document.activeElement === document.querySelector(${q(sel)})`), true);
+      if (process.platform !== 'darwin') {
+        await page.key('ArrowDown');
+        await page.key('ArrowDown');
+        await page.waitFor(`document.querySelector(${q(sel)}).value === 'leg'`);
+        assert.strictEqual(await page.evaluate(`document.querySelector('[data-fhp="${vex}"]').value`), ' cr leg');
+        await page.key('ArrowUp');
+        await page.waitFor(`document.querySelector(${q(sel)}).value === 'arm'`);
+      }
+      await page.sleep(1100);
+      for (const ch of 'Leg') await page.key(ch);
+      await page.waitFor(`document.querySelector(${q(sel)}).value === 'leg'`);
+      assert.strictEqual(await page.evaluate(`document.querySelector('[data-fhp="${vex}"]').value`), ' cr leg');
+      assert.strictEqual(await page.evaluate(`document.activeElement === document.querySelector(${q(sel)})`), true, 'focus stays on the list');
+      // the browser's type-to-select keeps letters for a second: the next pick starts afresh, from the box
+      await page.sleep(1100);
+      await tap(page, `[data-fhp="${vex}"]`);
+      // the mouse: the jaw, crushing (13 HP, DR 1)
+      await page.choose(sel, 'Jaw');
+      await hitWith('3');
+      p = await until(page, `p.fight.rows.find((r) => r.id === ${q(vex)}).hp === 11 && p.saved === "Saved" && p.pending === 0`);
+      assert.strictEqual(named(p, 'Vex Harrow').hit.line, '3 cr − DR 1 = 2');
+      assert.strictEqual(named(p, 'Vex Harrow').hit.location, 'jaw');
+      assert.strictEqual(await value(), 'torso');
+      // a neck vein, cutting
+      await tap(page, `[data-fhtype="${vex}|cut"]`);
+      await page.choose(sel, 'Neck vein');
+      await hitWith('3');
+      p = await until(page, `p.fight.rows.find((r) => r.id === ${q(vex)}).hp === 6 && p.saved === "Saved" && p.pending === 0`);
+      assert.strictEqual(named(p, 'Vex Harrow').hit.line, '3 cut − DR 1 = 2 × 2.5 = 5');
+      // a hand joint, crushing: crippled, capped
+      await tap(page, `[data-fhtype="${vex}|cr"]`);
+      await page.choose(sel, 'Hand joint');
+      await hitWith('9');
+      p = await until(page, `p.fight.rows.find((r) => r.id === ${q(vex)}).hp === 2 && p.saved === "Saved" && p.pending === 0`);
+      assert.strictEqual(named(p, 'Vex Harrow').hit.line, '9 cr − DR 1 = 8, capped at 4 (hand joint)');
+      assert.deepStrictEqual(named(p, 'Vex Harrow').crippled, ['hand joint']);
+      assert.strictEqual(await value(), 'torso');
+    });
+  });
+
+  for (const [width, height] of SIZES) {
+    it(`GURPS at ${width}: the location list fits the panel with no clipping, its widest label whole`, async () => {
+      const run = await start('gurps');
+      await withPage({ width, height }, async (page) => {
+        let p = await fightOn(page, run, 2);
+        p = await peek(page, p, 'Vex Harrow');
+        const vex = named(p, 'Vex Harrow').id;
+        await tap(page, `[data-fhtype="${vex}|cut"]`);
+        const sel = `#acting [data-fhlocsel="${vex}"]`;
+        await page.choose(sel, 'Neck vein');
+        const box = await page.evaluate(`(() => { const s = document.querySelector(${q(sel)}); const r = s.getBoundingClientRect(); const a = document.querySelector('#acting').getBoundingClientRect();
+          const c = document.createElement('canvas').getContext('2d'); c.font = getComputedStyle(s).font;
+          return { left: r.left, right: r.right, aLeft: a.left, aRight: a.right, text: c.measureText(s.selectedOptions[0].textContent).width, inner: s.clientWidth }; })()`);
+        assert.ok(box.left >= box.aLeft - 1 && box.right <= box.aRight + 1, `${width}: ${JSON.stringify(box)}`);
+        // the chosen label fits inside the select (less its arrow)
+        assert.ok(box.text <= box.inner - 16, `${width}: ${JSON.stringify(box)}`);
+        sane(await settled(page), `location list ${width}`);
+        await shot(page, `gurps-location-${width}`);
+      });
+    });
+  }
 
   it('GURPS: a hit with no type is refused on the row\'s second line, the words kept; face open beside DR', async () => {
     const run = await start('gurps');

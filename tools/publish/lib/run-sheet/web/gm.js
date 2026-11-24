@@ -1930,7 +1930,9 @@
       }
     }
     if (ev.key === 'Escape') { if (menuIsOpen()) { menuOpen(false); const b = document.getElementById('coloursBtn'); if (b) b.focus(); ev.preventDefault(); return; } if ($('#drawer').classList.contains('open')) { closeDrawer(); ev.preventDefault(); } return; }
-    if (!typing && (ev.key === 'j' || ev.key === 'J') && !ev.metaKey && !ev.ctrlKey && !ev.altKey) { ev.preventDefault(); $('#hjot').focus(); return; }
+    // the hit location list (GURPS, Task 25) is picked by its letters (J for Jaw): J stays in it
+    const picking = t.matches && t.matches('select[data-fhlocsel]');
+    if (!typing && !picking && (ev.key === 'j' || ev.key === 'J') && !ev.metaKey && !ev.ctrlKey && !ev.altKey) { ev.preventDefault(); $('#hjot').focus(); return; }
     // a letter on a closed status list never picks a status by the browser's type-ahead: a status is chosen, not typed
     if (t.matches && t.matches('select[data-fstatus]') && ev.key.length === 1 && ev.key !== ' ' && !ev.metaKey && !ev.ctrlKey && !ev.altKey) { ev.preventDefault(); return; }
     if (ev.key === 'Enter' && t.tagName === 'A' && d.note) { openNote(d.note); return; }

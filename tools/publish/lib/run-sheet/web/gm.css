@@ -357,6 +357,9 @@ ol.to .ds { font: 500 .7rem var(--mono); white-space: nowrap; }
 .act .hitchips .hrow { display: flex; flex-wrap: wrap; gap: 3px; }
 .act .hchip { font: 600 .7rem var(--mono); padding: 1px 6px; border-radius: 10px; }
 .act .hchip[aria-pressed="true"] { background: var(--ice); color: var(--panel); border-color: var(--ice); }
+.act .hitchips .hloc { display: flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; }
+.act .hitchips .hloc .lab { font-size: .7rem; color: var(--muted); white-space: nowrap; }
+.act .hitchips .hloc select { font: 600 .72rem var(--mono); min-width: 0; max-width: 100%; }
 /* GURPS's defences (Task 14): each as it stands this turn, a tap rolls it; moved by a cause it is underlined, its
    causes in the title; a used Block is struck through, and asks once before a second */
 ol.to .defs { display: inline-flex; gap: 2px; }

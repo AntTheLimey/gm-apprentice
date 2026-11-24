@@ -451,10 +451,13 @@
     const id = li.dataset.frow;
     const html = line2Html(id, li);
     let l2 = li.nextElementSibling && li.nextElementSibling.dataset.row2 === id ? li.nextElementSibling : null;
-    if (!html) { if (l2) l2.remove(); return; }
-    if (!l2) { l2 = document.createElement('li'); l2.dataset.row2 = id; li.after(l2); }
+    // the test probe reads the second lines: a change here refreshes it (probe() is nothing without ?probe=1)
+    if (!html) { if (l2) { l2.remove(); RP.probe(); } return; }
+    let changed = false;
+    if (!l2) { l2 = document.createElement('li'); l2.dataset.row2 = id; li.after(l2); changed = true; }
     l2.className = ['row2', ...Array.from(li.classList).filter((c) => L2_CLASSES.test(c))].join(' ');
-    if (l2.dataset.h !== html) { l2.innerHTML = html; l2.dataset.h = html; }
+    if (l2.dataset.h !== html) { l2.innerHTML = html; l2.dataset.h = html; changed = true; }
+    if (changed) RP.probe();
   }
   function counters(r, long) {
     const c = [];
@@ -1536,8 +1539,10 @@
     });
   }
 
-  // The hit chips (GURPS, Task 12): the damage types and places, the row's last used of each first. A tap writes its
-  // word into the row's entry box for this entry only (the box empties after it), so nothing is ever a default.
+  // The hit chips (GURPS, Task 12): the damage types, the row's last used first; and the hit location list (Task 25),
+  // every place in the one table, mildest penalty first, each labelled with the picked type's multiplier (a place the
+  // type cannot hit turned off, saying so). A chip tap or a pick writes its word into the row's entry box for this
+  // entry only (the box empties after it): the list shows Torso whenever the words name no place.
   function hitChipsHTML(r) {
     const w = wounding();
     if (!w || !toggles().hitChips || !r.in || !isNum(r.hp)) return '';
@@ -1545,42 +1550,70 @@
     const now = boxHit(r.id);
     const chip = (kind, v, on) => `<button type="button" class="hchip" data-fh${kind}="${esc(`${r.id}|${v}`)}" aria-pressed="${on}">${esc(v)}</button>`;
     const types = FM.chipOrder(w.typeChips || Object.keys(w.types), last.type).map((v) => chip('type', v, now.type === v));
-    const places = FM.chipOrder(w.locationChips || Object.keys(w.locations), last.location).map((v) => chip('loc', v, now.location === v));
-    return `<div class="hitchips" data-fhits="${esc(r.id)}"><div class="hrow" role="group" aria-label="Damage type">${types.join('')}</div><div class="hrow" role="group" aria-label="Hit location">${places.join('')}</div></div>`;
+    const at = now.location || 'torso';
+    const opts = locationOrder(w).map((k) => {
+      const o = locationOption(w, k, now.type);
+      return `<option value="${esc(k)}"${k === at ? ' selected' : ''}${o.disabled ? ' disabled' : ''}>${esc(o.label)}</option>`;
+    });
+    return `<div class="hitchips" data-fhits="${esc(r.id)}"><div class="hrow" role="group" aria-label="Damage type">${types.join('')}</div>`
+      + `<label class="hloc"><span class="lab">Hit location</span><select data-fhlocsel="${esc(r.id)}" aria-label="Hit location for ${esc(r.gmName)}">${opts.join('')}</select></label></div>`;
   }
+  const locationOrder = (w) => w.locationOrder || Object.keys(w.locations);
+  const locationOption = (w, k, type) => (GMath && typeof GMath.locationOption === 'function' ? GMath.locationOption(w, k, type) : { label: k, disabled: false });
   // The hit words in a row's entry box now (its box, else the words kept for it).
   function boxHit(id) {
     const box = document.querySelector(attr('data-fhp', id));
     const v = box ? box.value : (ui.pending[id] || (ui.refused[id] && ui.refused[id].words) || '');
     return FM.hitWords(v, rules().fight || rules());
   }
-  // The chips' pressed state follows the box's words.
+  // The chips' pressed state and the location list follow the box's words: the place they name (Torso for none), each
+  // option relabelled for the type they name.
   function syncHitChips(id) {
     const now = boxHit(id);
     document.querySelectorAll(`#acting .hitchips${attr('data-fhits', id)} .hchip`).forEach((b) => {
-      const [, v] = split(b.dataset.fhtype || b.dataset.fhloc);
-      b.setAttribute('aria-pressed', String(b.dataset.fhtype ? now.type === v : now.location === v));
+      const [, v] = split(b.dataset.fhtype);
+      b.setAttribute('aria-pressed', String(now.type === v));
     });
+    const sel = document.querySelector(`#acting select${attr('data-fhlocsel', id)}`);
+    const w = wounding();
+    if (!sel || !w) return;
+    for (const o of Array.from(sel.options)) {
+      const opt = locationOption(w, o.value, now.type);
+      if (o.textContent !== opt.label) o.textContent = opt.label;
+      if (o.disabled !== opt.disabled) o.disabled = opt.disabled;
+    }
+    const at = now.location || 'torso';
+    if (sel.value !== at) sel.value = at;
   }
-  // A chip tapped: its word into (or, tapped again, out of) the box's words, the GM's damage kept; the caret after
-  // the damage, so what is typed next is the damage.
-  function tapHitChip(id, kind, v) {
-    const box = document.querySelector(attr('data-fhp', id));
-    if (!box) return;
+  // A hit's words with one part changed: the type (a chip; tapped again, out) or the place (the list; Torso is no place
+  // word), the GM's damage kept. Answers the caret's place, after the damage.
+  function setHitWords(box, kind, v) {
     const h = FM.hitWords(box.value, rules().fight || rules());
     if (kind === 'type') h.type = h.type === v ? null : v;
     else {
-      h.location = h.location === v ? null : v;
+      h.location = v && v !== 'torso' ? v : null;
       const loc = h.location && wounding().locations[h.location];
       if (!loc || !loc.sided) h.side = null;
     }
     const tail = FM.hitText({ ...h, amount: '' });
     box.value = h.amount ? `${h.amount}${tail ? ` ${tail}` : ''}` : (tail ? ` ${tail}` : '');
+    // markPending syncs the chips and the list
     markPending(box);
+    return h.amount.length;
+  }
+  // A type chip tapped: its word into (or out of) the box; the caret after the damage, so what is typed next is it.
+  function tapHitChip(id, v) {
+    const box = document.querySelector(attr('data-fhp', id));
+    if (!box) return;
+    const at = setHitWords(box, 'type', v);
     box.focus();
-    const at = h.amount.length;
     box.setSelectionRange(at, at);
-    syncHitChips(id);
+  }
+  // A place picked from the list: its word into the box. Focus stays on the list, so the arrows go on through it.
+  function pickLocation(id, v) {
+    const box = document.querySelector(attr('data-fhp', id));
+    if (!box) return;
+    setHitWords(box, 'location', v);
   }
   // The panel's boxes (rules.panelBoxes, in Tab order), each a typed figure for setStat; a worked-out one keeps its tag.
   function boxesHTML(r) {
@@ -1975,7 +2008,7 @@
       RP.render();
       return true;
     }
-    if (d.fhtype || d.fhloc) { const [rid, v] = split(d.fhtype || d.fhloc); tapHitChip(rid, d.fhtype ? 'type' : 'location', v); return true; }
+    if (d.fhtype) { const [rid, v] = split(d.fhtype); tapHitChip(rid, v); return true; }
     if (d.fcardpick) { ui.peek = d.fcardpick; RP.render(); return true; }
     if (d.fcbtn) {
       const parts = d.fcbtn.split('|');
@@ -2098,6 +2131,14 @@
   }
   // An entry the row cannot take: its words stay in the box, the reason on the row's second line, selected so what
   // the GM types next replaces it (Task 10's path; Task 12's hit words a system cannot read too).
+  // Why a hit's words are refused when their type cannot target their place (Task 25): "cr cannot target the eye".
+  function cannotHit(v) {
+    const type = FM.cannotTarget(v, rules().fight || rules());
+    if (!type) return null;
+    const h = FM.hitWords(v, rules().fight || rules());
+    const loc = wounding().locations[h.location] || {};
+    return `${type} cannot target the ${String(loc.name || h.location).toLowerCase()}`;
+  }
   function refuse(t, why) {
     ui.refused[t.dataset.fhp] = { words: t.value, why };
     markPending(t);
@@ -2112,10 +2153,12 @@
     // a refused entry stays refused while its words are in the box; any change clears the reason
     if (ui.refused[id] && ui.refused[id].words !== v) delete ui.refused[id];
     // the damage box an exchange opened holds its entry as the box's own, never as damage left unapplied
-    if (ui.dmg && ui.dmg.on === id) { ui.dmg.entry = v; delete ui.pending[id]; t.classList.remove('pending'); syncLine2(id); return; }
+    if (ui.dmg && ui.dmg.on === id) { ui.dmg.entry = v; delete ui.pending[id]; t.classList.remove('pending'); syncLine2(id); syncHitChips(id); return; }
     if (v.trim() && !ui.refused[id]) ui.pending[id] = v; else delete ui.pending[id];
     t.classList.toggle('pending', Boolean(v.trim()));
     syncLine2(id);
+    // the hit chips and the location list follow the words (Esc empties the box: Torso again)
+    syncHitChips(id);
   }
 
   // A stat box sends its number, when it changed: initiative, max HP, AC, or a figure setStat takes. False for words
@@ -2298,7 +2341,7 @@
       if (cocRules() && cocEnter(t)) return;
       const e = FM.parseEntry(t.value, FM.rulesOf(state().fight));
       // a system that reads hits (GURPS) keeps words it cannot read in the box, its reason on the row's second line
-      if (!e && wounding()) { refuse(t, words().entryInvalid || INVALID); return; }
+      if (!e && wounding()) { refuse(t, cannotHit(t.value) || words().entryInvalid || INVALID); return; }
       if (!e) { t.setCustomValidity(words().entryInvalid || INVALID); t.reportValidity(); return; }
       // the GM picks the pool: an entry into a pool the row has no figure in (e-3 with no Energy Reserve, f-3 with no
       // FP) is refused, never paid from another pool instead
@@ -2400,7 +2443,7 @@
       const key = badKey(STAT[f].k, t.dataset[f]);
       if (ui.bad[key]) ui.bad[key].words = t.value;
     }
-    if (t.dataset && t.dataset.fhp !== undefined) { markPending(t); syncHitChips(t.dataset.fhp); }
+    if (t.dataset && t.dataset.fhp !== undefined) markPending(t);
     if (t.id === 'fAddName') {
       ui.addText = t.value;
       ui.addHits = FM.addChoices(model().cast || [], t.value, RS.castSearch);
@@ -2459,6 +2502,7 @@
       commitStat(t);
       return;
     }
+    if (d.fhlocsel !== undefined) { pickLocation(d.fhlocsel, t.value); return; }
     if (d.fstatus !== undefined) {
       const v = t.value;
       t.value = '';

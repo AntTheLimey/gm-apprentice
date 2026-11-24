@@ -252,11 +252,11 @@ async function withPage({ width = 1449, height = 762, chrome = findChrome(), ste
             const r = await s('Page.captureScreenshot', { format: 'png', captureBeyondViewport: full });
             fs.writeFileSync(file, Buffer.from(r.data, 'base64'));
           },
-          // A real key press (keyDown, then keyUp) on whatever has focus: Enter, Tab, Escape, Backspace, ArrowDown, ArrowUp, or one character.
+          // A real key press (keyDown, then keyUp) on whatever has focus: Enter, Tab, Escape, Backspace, ArrowDown, ArrowUp, Home, or one character.
           // `shift` holds Shift down, so `key('Tab', { shift: true })` goes backwards.
           async key(name, { shift = false } = {}) {
             moved({ act: 'key', name });
-            const named = { Enter: [13, '\r'], Tab: [9, ''], Escape: [27, ''], Backspace: [8, ''], ArrowDown: [40, ''], ArrowUp: [38, ''] };
+            const named = { Enter: [13, '\r'], Tab: [9, ''], Escape: [27, ''], Backspace: [8, ''], ArrowDown: [40, ''], ArrowUp: [38, ''], Home: [36, ''] };
             const one = String(name).length === 1;
             if (!named[name] && !one) throw new Error(`key: no such key ${name}`);
             const [vk, text] = named[name] || [String(name).toUpperCase().charCodeAt(0), name];
