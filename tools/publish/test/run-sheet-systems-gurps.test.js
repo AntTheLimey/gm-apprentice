@@ -182,6 +182,16 @@ for (const crlf of [false, true]) {
       const r = systemFor('gurps-4e').readPc({ notePath: 'x.md', index: null, fm: { type: 'pc' }, body });
       assert.deepEqual(r.numbers, { hpNow: 9, hpMax: 11, fpNow: 10, fpMax: 12, speed: 6, dx: 12, ht: 12 });
     });
+    // Task 23b B8: the PC's defences come from the note's Active Defenses; several Parry lines leave the first (Task 28's
+    // real-vault proof checks how the Dead Air PCs write theirs)
+    it('a PC with several Parry lines reads the first; one with no Active Defenses reads none', () => {
+      const base = '## Current Status\n\n**HP:** 10/10\n**FP:** 10/10\n\n## Stat Sheet\n\n### Primary Attributes\n\n| Attribute | Score |\n|---|---|\n| ST | 10 |\n| DX | 10 |\n| IQ | 10 |\n| HT | 10 |\n\n### Secondary Characteristics\n\n| Characteristic | Value |\n|---|---|\n| HP | 10 |\n| FP | 10 |\n| Basic Speed | 5.00 |\n';
+      const read = (extra) => systemFor('gurps-4e').readPc({ notePath: 'x.md', index: null, fm: { type: 'pc' }, body: base + extra }).numbers;
+      const n = read('\n## Active Defenses\n\n| Defense | Value | Source |\n|---|---|---|\n| Dodge | 8 | Basic Speed |\n| Parry | 10 | Broadsword |\n| Parry | 9 | Main-Gauche |\n| Block | 9 | Shield |\n');
+      assert.deepEqual([n.dodge, n.parry, n.block], [8, 10, 9]);
+      const none = read('');
+      assert.deepEqual([none.dodge, none.parry, none.block], [undefined, undefined, undefined]);
+    });
     it('an empty Spells table is no caster', () => {
       const orrin = readPc('Orrin Tate');
       assert.equal(orrin.numbers.caster, undefined);
