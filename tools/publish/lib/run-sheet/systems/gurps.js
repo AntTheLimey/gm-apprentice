@@ -302,7 +302,8 @@ function drByLocationOf(model) {
 
 // A PC's Dodge, Parry and Block from the sheet's Active Defenses (for the panel, for reference: the sheet never
 // rolls for a PC): Dodge's figure, and the first Parry and Block listed. A sheet with several Parry lines also gives
-// each as its name and figure (`Parry (Karate) | 12` is `Karate 12`), for the panel's "From the sheet" line.
+// each as its name and figure (`Parry (Karate) | 12` is `Karate 12`; `Parry | 10 | Broadsword` is `Broadsword 10`), for the
+// panel's "From the sheet" line.
 function sheetDefences(model) {
   const d = (model && model.defenses) || {};
   const at = (list) => (Array.isArray(list) && list.length ? firstFigure(list[0] && list[0].value) : null);
@@ -310,7 +311,9 @@ function sheetDefences(model) {
   const out = { dodge, parry: at(d.parry), block: at(d.block) };
   const lines = (Array.isArray(d.parry) ? d.parry : []).map((p) => {
     const fig = firstFigure(p && p.value);
-    const name = String((p && p.label) || '').replace(/^\s*parry\s*/i, '').replace(/^\((.*)\)$/, '$1').trim();
+    let name = String((p && p.label) || '').replace(/^\s*parry\s*/i, '').replace(/^\((.*)\)$/, '$1').trim();
+    // a label with no name: the next cell's first words (`Broadsword`; `Knife, off hand` is Knife), a figure dropped
+    if (!name && p && p.source) name = String(p.source).split(/[,;(]/)[0].replace(/[\s\-\u2212\u2013]*\d+\s*$/, '').trim();
     return fig === null ? null : `${name ? `${name[0].toUpperCase()}${name.slice(1)} ` : ''}${fig}`;
   }).filter(Boolean);
   if (lines.length > 1) out.parryLines = lines;

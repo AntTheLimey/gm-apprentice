@@ -184,6 +184,9 @@ for (const crlf of [false, true]) {
       const body = sela.replace(/^---[\s\S]*?\n---\n/, '').replace('| Parry | 10 | Broadsword |', '| Parry (axe) | 13 | Axe/Mace |\n| Parry (Karate) | 12 | Karate |\n| Parry (Judo) | 12 | Judo |');
       const n = systemFor('gurps-4e').readPc({ notePath: 'x.md', index: null, fm: { type: 'pc' }, body }).numbers;
       assert.deepEqual([n.parry, n.parryLines], [13, ['Axe 13', 'Karate 12', 'Judo 12']]);
+      // Sela's own shape: no name in the label, the weapon in the next column (Task 34 fix round)
+      const own = sela.replace(/^---[\s\S]*?\n---\n/, '').replace('| Parry | 10 | Broadsword |', '| Parry | 10 | Broadsword |\n| Parry | 9 | Knife, off hand |');
+      assert.deepEqual(systemFor('gurps-4e').readPc({ notePath: 'x.md', index: null, fm: { type: 'pc' }, body: own }).numbers.parryLines, ['Broadsword 10', 'Knife 9']);
       assert.equal(readPc('Sela Drake').numbers.parryLines, undefined);
     });
     it('max from Secondary Characteristics, current from Current Status (the Dead End shape)', () => {
