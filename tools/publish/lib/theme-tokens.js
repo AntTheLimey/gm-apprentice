@@ -49,7 +49,7 @@ const TOKENS = [
   T('palette', '--danger', '#f85149', 'Warnings that matter, wounds, low numbers'),
   T('palette', '--warning', '#d29922', 'Cautions, stubs, the GM site\'s band'),
   T('palette', '--success', '#3fb950', 'Good news, live markers'),
-  T('header', '--accent-on-header', 'var(--accent)', 'The accent on the dark menu bar and landing title area'),
+  T('header', '--accent-on-header', 'var(--accent)', 'The accent on the dark menu bar, landing title area and entity banner. A custom palette sets it: its accent, made lighter or darker until it reads there'),
   T('header', '--text-on-header', 'var(--text)', 'Words on the menu bar and landing title area', { scope: 'unset' }),
   T('header', '--text-muted-on-header', 'var(--text-muted)', 'Quieter words there: the menu\'s group names, the search button', { scope: 'unset' }),
   T('fonts', '--font-heading', 'system-ui, -apple-system, sans-serif', 'Headings and the site\'s name'),

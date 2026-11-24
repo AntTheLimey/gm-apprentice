@@ -9,6 +9,12 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.143] — 2026-11-24
+
+### Fixed
+
+- An NPC or location page with no picture shows its name, details and badges clearly in light mode: the banner keeps the header's colour, and a custom palette whose accent is too dark for its header gets a lighter shade of it there, the same hue (#868). Publish tool 1.70.60.
+
 ## [1.12.142] — 2026-11-23
 
 ### Changed
