@@ -305,10 +305,16 @@ function runLeakGate({ configPath, outputDir }) {
   // A GM's own page moves to its kept copy when the build frames it (map/index.html -> map/index.own.html, #850): a
   // sentence accepted on its address also covers the copy, so an accept written before the page was framed still
   // stands (#878).
-  const atAddress = (f) => (hidden.ownCopies.has(f.page) ? findingKey({ ...f, page: hidden.ownCopies.get(f.page) }) : null);
+  // Both sides in one Unicode form: a name with accents may be written either way in the settings, on disk or in the list.
+  const nfcKey = (a) => acceptedKey({ ...a, page: canonicalNfc(a.page) });
+  const acceptedNfc = new Set(accepted.map(nfcKey));
+  const atAddress = (f) => {
+    const address = hidden.ownCopies.get(canonicalNfc(f.page));
+    return address === undefined ? null : findingKey({ ...f, page: address });
+  };
   const onCopies = new Set([...raw.values()].map(atAddress).filter(Boolean));
-  const findings = [...raw.values()].filter((f) => !acceptedKeys.has(findingKey(f)) && !coveredByPage(f) && !acceptedKeys.has(atAddress(f))).sort(byPageText);
-  const unneeded = [...accepted.filter((a) => !raw.has(acceptedKey(a)) && !onCopies.has(acceptedKey(a)) && !(a.note !== NEVER_NOTE && inEntries.has(keyOf(a.page, a.text)))),
+  const findings = [...raw.values()].filter((f) => !acceptedKeys.has(findingKey(f)) && !coveredByPage(f) && !acceptedNfc.has(atAddress(f))).sort(byPageText);
+  const unneeded = [...accepted.filter((a) => !raw.has(acceptedKey(a)) && !onCopies.has(nfcKey(a)) && !(a.note !== NEVER_NOTE && inEntries.has(keyOf(a.page, a.text)))),
     ...everyAccepted.filter((a) => isSettledHeading(a) && settledHeadingGone(hidden.vaultPath, a))];
   return done({ findings, unneeded, warnings, files: files.length });
 }

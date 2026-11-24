@@ -45,6 +45,18 @@ describe('leak gate: a GM\'s own page under the menu', () => {
     } finally { s.cleanup(); }
   });
 
+  it('an address with accents covers its copy whichever Unicode form the settings, the page or the accept use', () => {
+    const decomposed = 'cafe\u0301.html';      // e + combining accent
+    const composed = 'caf\u00e9.html';         // é
+    const s = leakSite(NOTES, settings([decomposed]));
+    try {
+      ownCopy(s, 'cafe\u0301.own.html');
+      writeAccepted(path.join(s.root, 'vault'), [{ page: composed, text: TEXT, note: 'NPCs/Baker.md' }]);
+      const r = gate(s);
+      assert.deepEqual([r.findings, r.unneeded], [[], []]);
+    } finally { s.cleanup(); }
+  });
+
   it('a page named like a copy that is not one listed is not covered by its look-alike address', () => {
     const s = leakSite(NOTES, settings([]));
     try {
