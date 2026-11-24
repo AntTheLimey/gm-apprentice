@@ -1689,6 +1689,16 @@ describe('CoC and GURPS pages speak their own system (step 6b Task 22), by real 
           assert.strictEqual(await page.evaluate('document.querySelector("#longRest")'), null, 'no long rest button');
           // each panel the brief names, opened by a real click, then the pattern over the page
           const key = run.model.beats[at].key;
+          // as a GM gets to a beat: the rail's link scrolls it, then both edges of its header must be below the sticky bar
+          await tap(page, `[data-go="beat:${key}"]`);
+          const bh = `[id="beat:${key}"] .bh`;
+          const edges = await page.evaluate(`(() => { const r = document.querySelector(${q(bh)}).getBoundingClientRect(); const top = document.querySelector('.top').getBoundingClientRect().bottom; return { top: r.top, bottom: r.bottom, bar: top, h: innerHeight }; })()`);
+          assert.ok(edges.top >= edges.bar && edges.bottom <= edges.h, `${which} ${width}: the beat header sits below the sticky bar ${JSON.stringify(edges)}`);
+          await tap(page, bh);
+          const fold = `[id="beat:${key}"] details[data-fold] > summary`;
+          assert.ok(await page.evaluate(`Boolean(document.querySelector(${q(fold)}))`), `${which}: the beat has a fold to open`);
+          await tap(page, fold);
+          await page.waitFor(`document.querySelector(${q(fold)}).parentElement.open`, 3000);
           await noDnd(page, `${which} ${width} Who's here (the beat's panel)`);
           assert.ok(/Who's here/.test(await text(page, `[id="beat:${key}"]`)), `${which}: the beat shows Who's here`);
           await tap(page, '[data-go="end"]');
