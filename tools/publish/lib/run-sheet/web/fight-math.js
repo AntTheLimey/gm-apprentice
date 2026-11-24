@@ -580,6 +580,8 @@
       luck: num(pc.luck), dex: num(pc.dex), st: num(pc.st), ht: num(pc.ht), dx: num(pc.dx), speed: num(pc.speed),
       con: num(pc.con), int: num(pc.int),
       dodge: num(pc.dodge), parry: num(pc.parry), block: num(pc.block), dr: pc.dr === undefined ? null : pc.dr,
+      // a sheet's several Parry lines (`Karate 12`), for the panel's "From the sheet" (GURPS, Task 34)
+      ...(Array.isArray(pc.parryLines) && pc.parryLines.length > 1 ? { parryLines: pc.parryLines.map(String) } : {}),
       drByLocation: pc.drByLocation && typeof pc.drByLocation === 'object' ? { ...pc.drByLocation } : null,
       fighting: pc.fighting === undefined ? null : pc.fighting, firearms: pc.firearms === undefined ? null : pc.firearms,
       caster: pc.caster === true, build: num(pc.build), db: pc.db === undefined ? null : pc.db,

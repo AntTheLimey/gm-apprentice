@@ -754,7 +754,9 @@
       const sheet = had.filter((d) => !d.from && !typed(d));
       const other = had.filter((d) => d.from || typed(d));
       if (!had.length) return '';
-      return `<div class="pdefs pc">${sheet.length ? `<span class="lab">From the sheet:</span>${sheet.map((d) => `<span class="sheetdef">${esc(`${d.label} ${d.base}`)}</span>`).join('')}` : ''}`
+      // a sheet with several Parry lines shows them all (`Parry: Axe 13, Karate 12`)
+      const words = (d) => (d.key === 'parry' && Array.isArray(r.parryLines) && r.parryLines.length > 1 ? `${d.label}: ${r.parryLines.join(', ')}` : `${d.label} ${d.base}`);
+      return `<div class="pdefs pc">${sheet.length ? `<span class="lab">From the sheet:</span>${sheet.map((d) => `<span class="sheetdef">${esc(words(d))}</span>`).join('')}` : ''}`
         + `${other.map((d) => `<span class="pcdef">${esc(`${d.label} ${d.base} (${d.from || 'typed'})`)}</span>`).join('')}</div>`;
     }
     const rt = live.retreat;

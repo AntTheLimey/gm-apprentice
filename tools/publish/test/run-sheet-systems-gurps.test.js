@@ -2,6 +2,8 @@
 // The GURPS foe reader (step 6b Task 4): HP, FP and Basic Speed, worked out from ST, HT and DX when a block lacks them.
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const { buildIndex } = require('../lib/run-sheet/notes');
 const { systemFor } = require('../lib/run-sheet/systems');
 const { readNumbers, keyOf, lacks, energyReserve, isCaster } = require('../lib/run-sheet/systems/gurps');
@@ -176,6 +178,13 @@ for (const crlf of [false, true]) {
       // Task 12 (on purpose): Sela's sheet has a DR by Hit Location table; Task 14 (on purpose): its Active Defenses
       assert.deepEqual(readPc('Sela Drake').numbers, { hpNow: 12, hpMax: 12, fpNow: 10, fpMax: 10, speed: 5.25, dx: 11, ht: 10, dodge: 8, parry: 10, block: 9,
         drByLocation: { skull: 4, face: 0, neck: 2, torso: 3, arm: 2, hand: 1, leg: 2, foot: 1 } });
+    });
+    it('a sheet with several Parry lines keeps every one, by its name (Task 34); one Parry line adds nothing', () => {
+      const sela = fs.readFileSync(path.join(dir, 'Characters/PCs/Sela Drake.md'), 'utf8').replace(/\r\n/g, '\n');
+      const body = sela.replace(/^---[\s\S]*?\n---\n/, '').replace('| Parry | 10 | Broadsword |', '| Parry (axe) | 13 | Axe/Mace |\n| Parry (Karate) | 12 | Karate |\n| Parry (Judo) | 12 | Judo |');
+      const n = systemFor('gurps-4e').readPc({ notePath: 'x.md', index: null, fm: { type: 'pc' }, body }).numbers;
+      assert.deepEqual([n.parry, n.parryLines], [13, ['Axe 13', 'Karate 12', 'Judo 12']]);
+      assert.equal(readPc('Sela Drake').numbers.parryLines, undefined);
     });
     it('max from Secondary Characteristics, current from Current Status (the Dead End shape)', () => {
       const body = '## Current Status\n\n**HP:** 9/11\n**FP:** 10/12\n\n## Stat Sheet\n\n### Primary Attributes\n\n| Attribute | Score |\n|---|---|\n| ST | 11 |\n| DX | 12 |\n| IQ | 10 |\n| HT | 12 |\n\n### Secondary Characteristics\n\n| Characteristic | Value |\n|---|---|\n| HP | 11 |\n| FP | 12 |\n| Basic Speed | 6.00 |\n';

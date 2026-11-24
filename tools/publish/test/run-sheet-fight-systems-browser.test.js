@@ -39,10 +39,11 @@ after(async () => {
   for (const d of made) removeFixture(d);
 });
 
-async function start(which, more) {
+async function start(which, more, edit) {
   const v = VAULTS[which];
   const vault = copyFixture(v.fixture);
   made.push(vault);
+  if (edit) edit(vault);
   const picked = pickSession(listSessions(vault), v.session, vault);
   assert.ok(picked.session, picked.error);
   const t = createTableServer({ vaultPath: vault, session: picked.session, party: v.party, deps: { delayMs: 20, log: () => {}, ...(more || {}) } });
@@ -1172,6 +1173,18 @@ describe('CoC and GURPS fights on the GM page, by real input', { skip: browserSk
       await page.waitFor(`document.querySelector('#acting [data-fretreat="${b2}"]').disabled`, 3000);
       assert.deepStrictEqual((await texts(page, '#acting .pdefs .def')).slice(0, 2), ['Dodge 4', 'Parry 5']);
       assert.strictEqual(await attrOf(page, `#acting [data-fretreat="${b2}"]`, 'title'), 'No retreat: stunned');
+    });
+  });
+
+  it('GURPS: a PC with several Parry lines shows every one in From the sheet (Task 34)', async () => {
+    const run = await start('gurps', null, (vault) => {
+      const f = path.join(vault, 'Characters/PCs/Sela Drake.md');
+      fs.writeFileSync(f, fs.readFileSync(f, 'utf8').replace(/\| Parry \| 10 \| Broadsword \|/, '| Parry (axe) | 13 | Axe/Mace |\n| Parry (Karate) | 12 | Karate |\n| Parry (Judo) | 12 | Judo |'));
+    });
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await fightOn(page, run, 1);
+      p = await peek(page, p, 'Sela Drake');
+      assert.deepStrictEqual(await texts(page, '#acting .pdefs.pc .sheetdef'), ['Dodge 8', 'Parry: Axe 13, Karate 12, Judo 12', 'Block 9']);
     });
   });
 
