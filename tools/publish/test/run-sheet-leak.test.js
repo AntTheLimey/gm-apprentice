@@ -967,10 +967,11 @@ describe('the players\' screen in a CoC and a GURPS fight (plan 6b Task 26)', ()
     for (const e of edits) edit(vault, ...e);
     const model = readRunSheet(vault, plan, { party });
     assert.equal(model.rules.id, system);
+    // the server's dice are fixed (every die a 4), so no random figure lands on a sentinel and fails a run by luck
     const lines = [];
     const picked = pickSession(listSessions(vault), session, vault);
     assert.ok(picked.session, picked.error);
-    const run = createTableServer({ vaultPath: vault, session: picked.session, party, deps: { delayMs: 20, retryMs: [20], pingMs: 40, log: (l) => lines.push(l) } });
+    const run = createTableServer({ vaultPath: vault, session: picked.session, party, deps: { delayMs: 20, retryMs: [20], pingMs: 40, log: (l) => lines.push(l), randomInt: () => 4 } });
     const port = await listenLocal(run.server, 0);
     const stateId = stateIdOf(picked.session);
     const sandbox = { self: {} };
@@ -1084,7 +1085,7 @@ describe('the players\' screen in a CoC and a GURPS fight (plan 6b Task 26)', ()
           assert.equal(row.current, r.id === f.turn, `${where}: ${row.name} current`);
           assert.equal(row.ini, typeof r.ini === 'number' ? r.ini : null, `${where}: ${row.name} ini`);
           if ('hp' in row) {
-            assert.equal(row.hp, `${r.hp}/${r.max}${r.temp > 0 ? ` +${r.temp}` : ''}`, `${where}: ${row.name} HP is the HP and its max, nothing more`);
+            assert.equal(row.hp, typeof r.hp === 'number' ? `${r.hp}${typeof r.max === 'number' ? `/${r.max}` : ''}${r.temp > 0 ? ` +${r.temp}` : ''}` : null, `${where}: ${row.name} HP is the HP and its max, nothing more`);
             assert.deepEqual(row.statuses, r.conds, `${where}: ${row.name}'s statuses are the statuses set on it`);
             for (const st of row.statuses) assert.ok(sysStatuses.has(st), `${where}: "${st}" is not one of the system's status words`);
           }
@@ -1311,6 +1312,25 @@ describe('the players\' screen in a CoC and a GURPS fight (plan 6b Task 26)', ()
       s = await act(t, 'retreat', 'Mara Quint', { on: true });
       look = await t.look('Mara retreats');
 
+      // dice rolled on the server for a typed hit; typed defences; the Martial Arts places
+      const roll = await req(t.port, 'POST', '/api/roll', { rolls: [{ damage: '2d+1', type: 'imp' }] });
+      assert.equal(roll.status, 200, roll.text);
+      s = await act(t, 'hp', 'Corin Ash', { entry: '2d+1 imp torso', rolled: roll.json.results[0].total });
+      const corin = rowNamed(s, 'Corin Ash');
+      assert.ok(/^2d\+1 = \d+ imp/.test(corin.hit.line), corin.hit.line);
+      await t.arm('a dice hit\'s working', corin.hit.line);
+      await t.look('Corin hit with dice');
+      s = await act(t, 'hp', 'Corin Ash', { entry: '1 imp ear' });
+      assert.equal(rowNamed(s, 'Corin Ash').hit.location, 'ear');
+      await t.arm('a Martial Arts place', 'ear', { short: true });
+      s = await act(t, 'hp', 'Sela Drake', { entry: '3 cr nose' });
+      assert.equal(rowNamed(s, 'Sela Drake').hit.location, 'nose');
+      await t.arm('another Martial Arts place', 'nose', { short: true });
+      s = await act(t, 'setStat', 'Rafe Kell', { key: 'parry', value: 16 });
+      assert.equal(rowNamed(s, 'Rafe Kell').parry, 16);
+      await t.arm('a typed Parry', '16', { short: true });
+      look = await t.look('places and typed figures');
+
       // the to-hit calculator: its data, a typed skill, none of it on the state or the players' screen
       const before = (await req(t.port, 'GET', '/api/state')).text;
       const list = await req(t.port, 'GET', '/api/tohit');
@@ -1340,6 +1360,201 @@ describe('the players\' screen in a CoC and a GURPS fight (plan 6b Task 26)', ()
       await t.send([{ type: 'fightEnd', fight: s.fight.id }]);
       look = await t.look('after End fight');
       assert.ok(look.view.panels.every((q) => q.order === null));
+      assert.ok(t.checked.length > 100, 'the test looked at what the players were sent');
+    } finally { await t.stop(); }
+  });
+
+  it('CoC: nothing of a worked-out fight reaches the players but a name, an ally\'s HP and the order', { timeout: 120000 }, async () => {
+    const CPLAN = 'Chapters/Chapter 1/Sessions/Session 01/Session 01 - Fog Bound - Plan.md';
+    const t = await start({
+      fixture: 'run-sheet-coc', plan: CPLAN, session: 'Session 01 - Fog Bound', system: 'coc-7e',
+      party: ['Characters/PCs/Iris Calder.md', 'Characters/PCs/Jonas Finch.md', 'Characters/PCs/Mabel Quill.md'],
+      edits: [
+        // a PC's SAN 47, MP 17 and Luck 38; a foe's MP 29, SAN 31 and Luck 33; CON 67 and INT 59; armour 4
+        ['Characters/PCs/Iris Calder.md', '| Sanity | 99 | 62 (starting 65) |', '| Sanity | 99 | 47 (starting 65) |'],
+        ['Characters/PCs/Iris Calder.md', '| MP | 13 | 13 |', '| MP | 17 | 17 |'],
+        ['Characters/PCs/Iris Calder.md', '| Luck | — | 55 |', '| Luck | — | 38 |'],
+        ['Characters/NPCs/Tobias Reed.md', '| MP | 9 |', '| MP | 29 |'],
+        ['Characters/NPCs/Tobias Reed.md', '| SAN | 45 |', '| SAN | 31 |'],
+        ['Characters/NPCs/Tobias Reed.md', '| Luck | 40 |', '| Luck | 33 |'],
+        ['Characters/NPCs/Warden Hale.md', '| 60  | 65  | 70  | 50  | 55  | 45  | 60  | 50  |', '| 60  | 67  | 70  | 50  | 59  | 45  | 60  | 50  |'],
+        ['Characters/NPCs/Warden Hale.md', '**Armour** none', '**Armour** 4'],
+      ],
+    });
+    try {
+      let s = await t.state();
+      await t.look('before the fight');
+      s = await fightAt(t, 'The Dark Light');
+      const iris0 = rowNamed(s, 'Iris Calder');
+      assert.deepEqual([iris0.san, iris0.mp, iris0.luck, iris0.con, iris0.int], [47, 17, 38, 60, 75]);
+      assert.deepEqual([rowNamed(s, 'Tobias Reed').mp, rowNamed(s, 'Tobias Reed').san], [29, 31]); // a foe's Luck is only on its note
+      assert.deepEqual([rowNamed(s, 'Warden Hale').con, rowNamed(s, 'Warden Hale').int, rowNamed(s, 'Warden Hale').armour], [67, 59, 4]);
+      for (const [key, n] of [['a PC\'s SAN', '47'], ['a PC\'s MP', '17'], ['a PC\'s Luck', '38'], ['a foe\'s MP', '29'], ['a foe\'s SAN', '31'], ['a foe\'s Luck', '33'], ['a foe\'s CON', '67'], ['a foe\'s INT', '59']]) await t.arm(key, n, { short: true });
+      await t.look('the fight set up');
+      s = await turnNext(t);
+      assert.ok(s.fight.started);
+      await t.look('Round 1 starts');
+
+      const COC = t.model.rules.fight;
+      const faces = (...f) => { let i = 0; return () => f[i++]; };
+      const dmg = (notation, ...f) => rollDamage(notation, { floor: 0, randomInt: faces(...f) });
+      let look;
+      // an opposed melee exchange: Iris's tapped level against a Brine Walker's Fight Back, the server's d100 for the walker
+      let walker = rowNamed(s, 'Brine Walker', 1);
+      let auto = CM.attackDice(walker, COC.coc);
+      const fighting = CM.skillOf(walker, 'fightBack');
+      assert.ok(fighting > 0, 'the walker fights');
+      s = await t.send([{ type: 'melee', fight: s.fight.id, attacker: rowNamed(s, 'Iris Calder').id, defender: walker.id, response: 'fightBack', dice: CM.diceOfNet(auto.net, COC.coc), auto, attack: { level: 'regular' }, defence: d100(91, fighting, 'fail') }]);
+      assert.ok(s.fight.melee && s.fight.melee.side === 'attacker', 'Iris won the exchange');
+      await t.arm('an opposed roll', eventsOf(s).slice(-1)[0]);
+      await t.arm('a d100 result', '91', { short: true });
+      await t.look('Iris hits a walker in melee');
+      // its damage, the damage bonus and armour worked out on the row: the working line stays on the GM's page
+      s = await act(t, 'hp', 'Brine Walker', { entry: '1D6', by: rowNamed(s, 'Iris Calder').id, mode: 'full', roll: dmg('1D6', 5), exchange: s.fight.melee.n }, 1);
+      walker = rowNamed(s, 'Brine Walker', 1);
+      assert.ok(walker.hit && walker.hit.line, 'a working line on the row');
+      await t.arm('a damage working line', walker.hit.line);
+      await t.look('Iris\'s damage worked out');
+      // the walker hits back at Iris: its d100 against the PC's tapped dodge; its damage bonus and Iris's HP
+      auto = CM.attackDice(rowNamed(s, 'Iris Calder'), COC.coc);
+      s = await t.send([{ type: 'melee', fight: s.fight.id, attacker: walker.id, defender: rowNamed(s, 'Iris Calder').id, response: 'dodge', dice: CM.diceOfNet(auto.net, COC.coc), auto, attack: d100(93, CM.skillOf(walker, 'attack'), 'regular'), defence: { level: 'fail' } }]);
+      assert.ok(s.fight.melee && s.fight.melee.side === 'attacker', 'the walker hit Iris');
+      await t.arm('a dodge tapped', eventsOf(s).slice(-1)[0]);
+      s = await act(t, 'hp', 'Iris Calder', { entry: '1D6+DB', by: walker.id, mode: 'full', roll: dmg('1D6+1D4', 2, 2), exchange: s.fight.melee.n });
+      const iris = rowNamed(s, 'Iris Calder');
+      assert.ok(iris.hit && iris.hp < 9, `Iris is hurt: ${iris.hp}`);
+      await t.arm('a hit on a PC, worked out', iris.hit.line);
+      look = await t.look('the walker hits Iris');
+      assert.equal(look.view.panels[0].order.rows.find((r) => r.name === 'Iris').hp, `${iris.hp}/11`);
+      s = await act(t, 'outnumbered', 'Brine Walker', { off: true }, 2);
+      assert.equal(rowNamed(s, 'Brine Walker', 2).outnumberedOff, true);
+      look = await t.look('outnumbered turned off');
+
+      // a Major Wound: one card, a CON roll, Prone and Unconscious offered and taken; the box stays ticked
+      s = await act(t, 'hp', 'Brine Walker', { entry: '-8' }, 2);
+      walker = rowNamed(s, 'Brine Walker', 2);
+      assert.equal(walker.majorWound, true);
+      let card = walker.cards[0];
+      await t.arm('a card\'s words', card.what);
+      look = await t.look('a Major Wound card raised');
+      s = await act(t, 'cardRolled', 'Brine Walker', { card: card.id, line: 0, result: d100(88, CM.lineTarget(card.lines[0], walker), 'fail') }, 2);
+      await t.arm('a CON roll', eventsOf(s).slice(-1)[0]);
+      walker = rowNamed(s, 'Brine Walker', 2);
+      assert.deepEqual(walker.cards[0].lines[0].offers, ['proneOut']);
+      s = await act(t, 'card', 'Brine Walker', { card: card.id, line: 0, take: 'proneOut' }, 2);
+      assert.ok(rowNamed(s, 'Brine Walker', 2).conds.includes('Unconscious'));
+      look = await t.look('the Major Wound card answered');
+      // down to 0 HP with the box ticked: Dying, offered and taken; a reminder at each round's end
+      s = await act(t, 'hp', 'Brine Walker', { entry: '-6' }, 2);
+      walker = rowNamed(s, 'Brine Walker', 2);
+      assert.equal(walker.hp, 0);
+      card = walker.cards[0];
+      s = await act(t, 'card', 'Brine Walker', { card: card.id, line: 0, take: 'dying' }, 2);
+      assert.ok(rowNamed(s, 'Brine Walker', 2).conds.includes('Dying'));
+      assert.ok(Number.isInteger(rowNamed(s, 'Brine Walker', 2).dyingRound));
+      look = await t.look('a walker Dying');
+      // Iris loses SAN: an INT card, her roll a tap, temporary insanity offered and its bout rolled by the server
+      s = await act(t, 'hp', 'Iris Calder', { entry: 's-5' });
+      let irisNow = rowNamed(s, 'Iris Calder');
+      assert.equal(irisNow.san, 42);
+      card = irisNow.cards[0];
+      await t.arm('a SAN loss', eventsOf(s).filter((l) => /Iris/.test(l)).slice(-1)[0]);
+      await t.arm('a SAN card', card.what);
+      look = await t.look('Iris loses SAN');
+      s = await act(t, 'cardRolled', 'Iris Calder', { card: card.id, line: 0, result: { tap: 'passed' } });
+      irisNow = rowNamed(s, 'Iris Calder');
+      assert.deepEqual(irisNow.cards[0].lines[0].offers, ['insane']);
+      const bout = await req(t.port, 'POST', '/api/roll', { rolls: [{ sides: 10, mod: 0 }] });
+      assert.equal(bout.status, 200, bout.text);
+      s = await act(t, 'card', 'Iris Calder', { card: irisNow.cards[0].id, line: 0, take: 'insane', bout: bout.json.results[0] });
+      irisNow = rowNamed(s, 'Iris Calder');
+      assert.ok(irisNow.conds.includes('Temporary insanity'));
+      await t.arm('a bout', eventsOf(s).filter((l) => /Iris/.test(l)).slice(-1)[0]);
+      look = await t.look('Iris temporarily insane');
+      assert.deepEqual(look.view.panels[0].order.rows.find((r) => r.name === 'Iris').statuses, irisNow.conds);
+      s = await act(t, 'hp', 'Iris Calder', { entry: 'm-3' });
+      assert.equal(rowNamed(s, 'Iris Calder').mp, 14);
+      await t.arm('MP spent', eventsOf(s).filter((l) => /Iris/.test(l)).slice(-1)[0]);
+      look = await t.look('Iris spends MP');
+
+      // Nurse Orla, a foe made an ally: her name and her HP, and a Major Wound only as the status it is
+      s = await act(t, 'setSide', 'Nurse Orla Penn', { side: 'ally' });
+      t.show('Nurse Orla Penn');
+      look = await t.look('Orla an ally');
+      assert.equal(look.view.panels[0].order.rows.find((r) => r.name === 'Nurse Orla Penn').hp, '10/10');
+      s = await act(t, 'hp', 'Nurse Orla Penn', { entry: '-6' });
+      let orla = rowNamed(s, 'Nurse Orla Penn');
+      assert.equal(orla.majorWound, true);
+      await t.arm('an ally\'s card', orla.cards[0].what);
+      look = await t.look('Orla hurt');
+      assert.deepEqual(look.view.panels[0].order.rows.find((r) => r.name === 'Nurse Orla Penn').statuses, orla.conds);
+      s = await act(t, 'hp', 'Nurse Orla Penn', { entry: '-4' });
+      orla = rowNamed(s, 'Nurse Orla Penn');
+      assert.equal(orla.hp, 0);
+      await t.look('Orla at 0');
+      s = await act(t, 'card', 'Nurse Orla Penn', { card: orla.cards[0].id, take: 'out' });
+      assert.equal(rowNamed(s, 'Nurse Orla Penn').out, true);
+      look = await t.look('Orla out');
+      const orlaOut = look.view.panels[0].order.rows.find((r) => r.name === 'Nurse Orla Penn');
+      assert.deepEqual([orlaOut.out, keys(orlaOut)], [true, PC_ROW]);
+
+      // rounds go by: Dying's reminders, the bout counting down, an Out after the failed CON roll
+      for (let i = 0; i < 24; i++) await turnNext(t);
+      s = await t.state();
+      assert.ok(s.fight.round >= 4, `rounds went by: ${s.fight.round}`);
+      look = await t.look('rounds later');
+      walker = rowNamed(s, 'Brine Walker', 2);
+      const reminder = walker.cards && walker.cards.find((c) => c.lines.some((l) => l.kind === 'dyingCon'));
+      assert.ok(reminder, 'a Dying reminder on the walker');
+      await t.arm('a Dying reminder', reminder.what);
+      s = await act(t, 'cardRolled', 'Brine Walker', { card: reminder.id, line: 0, result: d100(97, CM.lineTarget(reminder.lines[0], walker), 'fail') }, 2);
+      s = await act(t, 'card', 'Brine Walker', { card: reminder.id, line: 0, take: 'dead' }, 2);
+      assert.equal(rowNamed(s, 'Brine Walker', 2).out, true);
+      look = await t.look('the walker dead');
+      await t.send([{ type: 'fightEnd', fight: s.fight.id }]);
+      look = await t.look('after End fight');
+      assert.ok(look.view.panels.every((q) => q.order === null));
+
+      // a second fight, with guns: a gun made ready, an aim declared, a shot with its chips, a dive, a reload counter
+      s = await fightAt(t, 'The Net Loft');
+      const fid = s.fight.id;
+      s = await act(t, 'setStat', 'Dock Cultist', { key: 'mp', value: 52 }, 1);
+      assert.equal(rowNamed(s, 'Dock Cultist', 1).mpMax, 52);
+      s = await act(t, 'sameForAll', 'Dock Cultist', {}, 1);
+      assert.equal(rowNamed(s, 'Dock Cultist', 2).mpMax, 52, 'the same figures copied');
+      await t.arm('a typed MP copied to its group', '52', { short: true });
+      s = await act(t, 'firearm', 'Dock Cultist', { on: true }, 1);
+      assert.equal(rowNamed(s, 'Dock Cultist', 1).gun, true);
+      look = await t.look('a gun made ready');
+      s = await turnNext(t);
+      s = await turnTo(t, 'Dock Cultist', 1);
+      s = await act(t, 'aim', 'Dock Cultist', {}, 1);
+      assert.ok(rowNamed(s, 'Dock Cultist', 1).aiming, 'aiming');
+      await t.arm('an aim', eventsOf(s).slice(-1)[0]);
+      look = await t.look('a cultist aims');
+      s = await turnTo(t, 'Dock Cultist', 1); // the next round: the aim is ready
+      s = await turnTo(t, 'Dock Cultist', 1);
+      const A = rowNamed(s, 'Dock Cultist', 1);
+      const D = rowNamed(s, 'Iris Calder');
+      const chips = s.fight.round >= 2 ? ['aim'] : [];
+      assert.ok(Array.isArray(A.guns) && A.guns.length >= 1, 'a gun on the row');
+      const dice = CM.shotDice(chips, A, D, COC);
+      const result = rollPercent({ target: CM.shotSkill(A, A.guns[0]), difficulty: dice.difficulty, ...dice.asked }, { randomInt: faces(3, 3) });
+      s = await t.send([{ type: 'shot', fight: fid, shooter: A.id, target: D.id, chips, gun: 0, result }]);
+      const shotLine = eventsOf(s).slice(-1)[0];
+      assert.match(shotLine, /Dock Cultist/);
+      await t.arm('a shot\'s line', shotLine);
+      assert.ok(rowNamed(s, 'Dock Cultist', 1).reload, 'a slow gun starts its reload counter');
+      look = await t.look('a cultist shoots Iris');
+      s = await act(t, 'dive', 'Iris Calder', { result: { tap: 'passed' } });
+      await t.arm('a dive', eventsOf(s).slice(-1)[0]);
+      look = await t.look('Iris dives');
+      s = await act(t, 'reload', 'Dock Cultist', { clear: true }, 1);
+      await t.arm('a gun made ready', eventsOf(s).slice(-1)[0]);
+      s = await act(t, 'status', 'Iris Calder', { add: 'Prone' });
+      look = await t.look('Iris prone');
+      assert.deepEqual(look.view.panels[0].order.rows.find((r) => r.name === 'Iris').statuses, rowNamed(s, 'Iris Calder').conds);
+      assert.ok(rowNamed(s, 'Iris Calder').conds.includes('Prone'));
       assert.ok(t.checked.length > 100, 'the test looked at what the players were sent');
     } finally { await t.stop(); }
   });
