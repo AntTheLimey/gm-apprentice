@@ -36,6 +36,8 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 - The combat reference corrects GURPS wounding, stun and knockdown, and Call of Cthulhu's Dying, several shots and Prone (#874, #875).
 - A Call of Cthulhu NPC's combat figures are read from a Skills or Weapons section beside its stat block, from skill and weapon tables (a flintlock's malfunction included), an Attacks per Round heading, and bold pairs on one line.
 - A Plan's PC roster seats a PC from its `Sheet:` link however the bold falls (`**Sheet:** [[PC]]`), and after a bold name with no player in brackets.
+- The newest card leads the fight's card strip, the panel's Dodge matches the row's, a picked row stays picked, and focus and the pane split hold still.
+- A Regency gun with no malfunction figure uses the book's 95; a PC's several Parry lines, its Thread's bold and links, and note names with underscores show as they should.
 
 ## [1.12.148] — 2026-11-25
 
