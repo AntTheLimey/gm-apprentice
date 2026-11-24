@@ -3,7 +3,7 @@ const { describe, it } = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
-const { SIDES, roll, rollMany, rollAgainst, rollDamage, maxDamage, rollPercent, rollSpec, rollSpecs } = require('../lib/dice');
+const { SIDES, roll, rollMany, rollAgainst, rollDamage, maxDamage, parseDamage, rollPercent, rollSpec, rollSpecs } = require('../lib/dice');
 
 describe('dice', () => {
   it('every die stays in range', () => {
@@ -126,7 +126,9 @@ describe('dice: damage dice', () => {
   it('a well-shaped entry over a limit says which limit; ill-shaped text names the forms', () => {
     const limit = 'damage is at most 50 dice, with a number from \u221299 to +99';
     for (const over of ['51d6', '30d6+21d4', '2d6+100', '2d6-100', '100+d6']) assert.throws(() => rollDamage(over), { message: limit }, over);
-    for (const ill of ['d', '0d6', 'd1', 'd1001', '2d6+', 'banana', '4d6kh3', '3']) assert.throws(() => rollDamage(ill), { message: /^damage is dice like 2d6\+1,/ }, ill);
+    for (const ill of ['d', '0d6', '2d6+', 'banana', '4d6kh3', '3']) assert.throws(() => rollDamage(ill), { message: /^damage is dice like 2d6\+1,/ }, ill);
+    // Task 23b B6: a die with too few or too many sides names the sides allowed
+    for (const sides of ['d1', 'd1001']) assert.throws(() => rollDamage(sides), { message: 'a damage die has 2 to 1000 sides' }, sides);
   });
   it('the refusal names the accepted forms', () => {
     assert.throws(() => rollDamage('banana'), { message: "damage is dice like 2d6+1, d8, 1D8+1D4, 2d6-1d4, d% or GURPS's 2d+1" });
@@ -252,6 +254,13 @@ describe('dice: the CoC d100', () => {
   });
   it('refuses bad input', () => {
     for (const bad of [{ target: -1 }, { target: 1.5 }, {}, { target: 50, difficulty: 'easy' }, { target: 50, bonus: -1 }, { target: 50, penalty: 1.5 }]) assert.throws(() => rollPercent(bad), RangeError, JSON.stringify(bad));
+  });
+});
+
+describe('dice: damage sides', () => {
+  it('a die with too few or too many sides says the allowed sides, a count of 0 the forms', () => {
+    for (const bad of ['d1', 'd1001', '2d1001', '1d6+d1']) assert.throws(() => parseDamage(bad), /a damage die has 2 to 1000 sides/, bad);
+    assert.throws(() => parseDamage('0d6'), /damage is dice like/);
   });
 });
 

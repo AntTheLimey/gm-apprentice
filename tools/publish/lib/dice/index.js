@@ -50,6 +50,7 @@ const DAMAGE_DICE_LIMIT = 50;
 const DAMAGE_MOD_LIMIT = 99;
 const REFUSAL = "damage is dice like 2d6+1, d8, 1D8+1D4, 2d6-1d4, d% or GURPS's 2d+1";
 // A well-shaped entry over a limit says which limit (U+2212 is the minus sign).
+const BAD_SIDES = `a damage die has ${DAMAGE_SIDES_MIN} to ${DAMAGE_SIDES_MAX} sides`;
 const OVER_LIMIT = 'damage is at most 50 dice, with a number from \u221299 to +99';
 
 // -> { groups: [{ count, sides, sign }], mod }
@@ -71,7 +72,8 @@ function parseDamage(notation) {
     if (m[1] === '' && m[2] === undefined) throw bad(); // a bare d
     const count = m[1] === '' ? 1 : Number(m[1]);
     const sides = m[2] === undefined ? 6 : m[2] === '%' ? 100 : Number(m[2]);
-    if (count < 1 || sides < DAMAGE_SIDES_MIN || sides > DAMAGE_SIDES_MAX) throw bad();
+    if (count < 1) throw bad();
+    if (sides < DAMAGE_SIDES_MIN || sides > DAMAGE_SIDES_MAX) throw new RangeError(BAD_SIDES);
     groups.push({ count, sides, sign });
   }
   if (!groups.length) throw bad();

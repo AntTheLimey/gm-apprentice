@@ -69,7 +69,7 @@
   // reads them. A die is `NdS`, `dS`, `d%`, or `Nd` (a count alone); terms join with + or -, any order. A bare `d`
   // is not dice. test/run-sheet-fight-math.test.js holds this pattern and the server's reader to one list of cases.
   const DICE_TERM = /(?:\d+d(?:\d+|%)?|d(?:\d+|%)|\d+)/i.source;
-  const DICE = new RegExp(`^-?${DICE_TERM}(?:[+-]${DICE_TERM})*`, 'i');
+  const DICE = new RegExp(`^[+-]?${DICE_TERM}(?:[+-]${DICE_TERM})*`, 'i');
   function hitWords(text, rules) {
     const w = rulesOf({ rules }).wounding;
     const out = { amount: '', dice: null, n: null, type: null, location: null, side: null, rest: [] };
@@ -79,7 +79,7 @@
     if (a) {
       out.amount = a[0];
       t = t.slice(a[0].length);
-      const bare = a[0].replace(/^-/, '');
+      const bare = a[0].replace(/^[+-]/, '');
       if (/d/i.test(bare)) out.dice = bare.toLowerCase(); else out.n = Number(bare);
     }
     if (!w) { out.rest = t.trim() ? t.trim().split(/\s+/) : []; return out; }
@@ -106,6 +106,8 @@
     if (!rulesOf({ rules }).wounding) return null;
     const h = hitWords(text, rules);
     if (!h.amount || h.rest.length || (h.location && !h.type)) return null;
+    // a leading plus on dice is the server's reading of a hit; with no type it would be healing's sign, so it is no hit
+    if (h.dice && h.amount[0] === '+' && !h.type) return null;
     if (h.n !== null && h.n > 9999) return null;
     const hit = h.type ? { type: h.type, location: h.location || 'torso', side: h.side } : null;
     if (h.dice) return { pool: 'hp', kind: 'damage', n: null, dice: h.dice, hit };
@@ -119,6 +121,7 @@
   function parseCocDice(text, rules) {
     if (!rulesOf({ rules }).coc) return null;
     const t = String(text === null || text === undefined ? '' : text).replace(/\s+/g, '').replace(/\u2212/g, '-').replace(/^-/, '');
+    if (t[0] === '+') return null;
     const parts = t.split(/\+db(?=[+-]|$)/i);
     if (parts.length > 2) return null;
     const dice = parts.join('');
