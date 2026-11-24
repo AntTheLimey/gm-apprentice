@@ -267,6 +267,13 @@ describe('GURPS magic in a block (Task 10)', () => {
     assert.equal(d.words.casterPlaceholder, '\u2726 f-3');
     assert.match(d.words.entryInvalid, /e-2 \(Energy Reserve\)/);
   });
+  it('the box\'s hint shows a side going before the limb (Task 34), the order the box reads', () => {
+    const d = systemFor('gurps-4e').describe();
+    assert.match(d.words.entryInvalid, /9 cut left arm/);
+    const FM = require('../lib/run-sheet/web/fight-math');
+    assert.ok(FM.parseEntry('9 cut left arm', d.fight));
+    assert.equal(FM.parseEntry('9 cut arm left', d.fight), null);
+  });
 });
 
 // ---- the damage helper (step 6b Task 12) ----

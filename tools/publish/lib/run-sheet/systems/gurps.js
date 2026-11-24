@@ -370,7 +370,7 @@ function describeGurps(id) {
     entryPlaceholder: '-7 / +3 / f-2',
     // a caster's box: a spell is paid with f-3 (FP) or e-3 (Energy Reserve)
     casterPlaceholder: '\u2726 f-3',
-    entryInvalid: 'Type -7 or 7 (injury), 9 imp vitals or 2d+1 cr (a hit), +3 (healing), f-2 (FP) or e-2 (Energy Reserve)',
+    entryInvalid: 'Type -7 or 7 (injury), 9 imp vitals, 9 cut left arm (the side first) or 2d+1 cr (a hit), +3 (healing), f-2 (FP) or e-2 (Energy Reserve)',
     faceOpen: 'face open', faceOpenTitle: 'Face open: DR 0 for a hit to the face or an eye',
     noReserve: 'No Energy Reserve: f-N pays from FP',
     noFp: 'No FP on this row: type its max FP or HT',
