@@ -259,7 +259,10 @@ describe('CoC and GURPS fights on the GM page, by real input', { skip: browserSk
       // the 6.25 entry is placed and saved (Lysa first, the server's echo in) before the next one is typed
       await until(page, `p.fight.rows.filter((r) => r.in)[0].name === 'Lysa Venn' && p.saved === "Saved" && p.pending === 0`);
       await typeInto(page, `[data-fini="${lysa}"]`, '6.255', { settle: false });
-      p = await until(page, `p.layout.rows.some((r) => r.id === ${q(lysa)} && r.line2 && r.line2.includes('Not a number'))`);
+      // the row's second line is written into the page when the box is marked; the probe is not rewritten for that, so the
+      // wait reads the page itself (a probe wait here timed out with the line on screen and aria-invalid set)
+      await page.waitFor(`(() => { const e = document.querySelector('li[data-row2=${q(lysa)}]'); return Boolean(e) && e.textContent.includes('Not a number'); })()`);
+      p = await until(page, 'true');
       assert.strictEqual(named(p, 'Lysa Venn').ini, 6.25);
       // FP now/[max] on the row, the entry box GURPS's
       assert.strictEqual(await attrOf(page, `[data-fhp="${corin}"]`, 'placeholder'), '-7 / +3 / f-2');

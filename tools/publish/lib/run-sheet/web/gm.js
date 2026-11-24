@@ -2057,7 +2057,11 @@
       jots: Array.from(document.querySelectorAll('#sheet ul.jots li > span:not(.tm)'), (el) => el.textContent),
       requests: { ...requests }, view: G.view, focusGroup: G.state ? focusedGroup() : null,
     };
-    for (const part of parts) if (part.probe) Object.assign(out, part.probe());
+    // one part's probe throwing must not freeze the rest: its message goes to dataset.probeError (tests only)
+    for (const part of parts) {
+      if (!part.probe) continue;
+      try { Object.assign(out, part.probe()); } catch (e) { document.body.dataset.probeError = String((e && e.stack) || e).slice(0, 600); }
+    }
     document.body.dataset.probe = JSON.stringify(out);
   }
 

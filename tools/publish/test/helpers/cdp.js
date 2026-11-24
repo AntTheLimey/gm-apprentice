@@ -221,12 +221,16 @@ async function withPage({ width = 1449, height = 762, chrome = findChrome(), ste
             if (Date.now() - t0 > ms) {
               let got = null;
               try { got = await evaluate('window.__inputLog ? window.__inputLog.slice(-15) : null'); } catch { /* the page is gone */ }
-              throw new Error(`timed out after ${ms} ms waiting for: ${expression}\n  the helper's last moves (ms since the page opened): ${JSON.stringify(moves)}\n  what the page received (ms since it loaded): ${JSON.stringify(got)}`);
+              // what the page shows now: the Saved indicator, the probe as it stands, and any error its probe threw
+              let live = null;
+              try { live = await evaluate(`({ saved: (document.getElementById('saved') || {}).textContent, probe: (document.body.dataset.probe || '').slice(0, 1500), probeError: document.body.dataset.probeError || null, focus: (() => { const a = document.activeElement; return a ? { tag: a.tagName, id: a.id || undefined, value: a.value, selection: [a.selectionStart, a.selectionEnd], invalid: a.getAttribute('aria-invalid'), committed: a.dataset ? a.dataset.committed : undefined } : null; })(), secondLines: Array.from(document.querySelectorAll('li[data-row2]'), (e) => e.dataset.row2 + ': ' + e.textContent).slice(0, 12) })`); } catch { /* the page is gone */ }
+              throw new Error(`timed out after ${ms} ms waiting for: ${expression}\n  the page now (#saved text, body.dataset.probe, body.dataset.probeError, the focused box, the rows' second lines): ${JSON.stringify(live)}\n  the helper's last moves (ms since the page opened): ${JSON.stringify(moves)}\n  what the page received (ms since it loaded): ${JSON.stringify(got)}`);
             }
             await sleep(50);
           }
         };
         let lastChosen = 0; // when `choose` last typed
+        let lastClick = 0; // when a click last released
         const page = {
           async goto(url) {
             const r = await s('Page.navigate', { url });
@@ -339,6 +343,7 @@ async function withPage({ width = 1449, height = 762, chrome = findChrome(), ste
             await page.mouse('mousePressed', x, y, { buttons: 1 });
             await sleep(holdMs);
             await page.mouse('mouseReleased', x, y);
+            lastClick = Date.now();
           },
           // A real click on an element: scrolls it into view first (scrollIntoView, as a hand would scroll),
           // then clicks its centre, or `offsetX`/`offsetY` from its top-left corner. Throws if the point is
@@ -385,7 +390,24 @@ async function withPage({ width = 1449, height = 762, chrome = findChrome(), ste
             }
           },
           // Text into whatever has focus (Input.insertText: one insert, as a paste or an input method gives).
-          type: (text) => { moved({ act: 'type', text: String(text).slice(0, 20) }); return s('Input.insertText', { text }); },
+          // A number box selects its text in a timer after the click's mouseup, so text typed straight after a click
+          // would land before it: when a click released a moment ago on a box that holds text, it waits for that timer
+          // (and up to 400 ms more; a box that does not select on a click just goes on) until the selection covers
+          // the whole value.
+          async type(text) {
+            moved({ act: 'type', text: String(text).slice(0, 20) });
+            if (Date.now() - lastClick < 1000) {
+              // The box is selected at the release too, then the browser collapses that selection once the click is
+              // done and the page's timer selects it again: a full selection seen before that timer has run proves
+              // nothing. A timer of the page's own, queued after it, runs after it.
+              try { await evaluate('new Promise((r) => setTimeout(r, 30))'); } catch { /* the page is loading */ }
+              try {
+                await waitFor(`(() => { const a = document.activeElement; if (!a || typeof a.value !== 'string' || typeof a.selectionStart !== 'number' || !a.value) return true;
+                  return a.selectionStart === 0 && a.selectionEnd === a.value.length; })()`, 400);
+              } catch { /* this box keeps its caret on a click */ }
+            }
+            return s('Input.insertText', { text });
+          },
           // Another window in the same browser context, opened on `url` (its own event streams, its own page, the
           // same storage). A window, as Chrome sizes only a new window: a second tab in the context refuses width.
           // A tab that never answers its setup (as a fresh launch can, #852) is closed and made once more.
