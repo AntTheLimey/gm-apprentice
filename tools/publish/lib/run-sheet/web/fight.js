@@ -522,12 +522,12 @@
   function turnEnds(f, r, at) {
     // the attack a dive for cover lost: its mark goes when the turn it was shown on ends (CoC, Task 19)
     if (r && r.lostAttack && r.lostAttack.on) { r.lostAttack = null; touch(r, at); }
-    // Aim and Evaluate count turns in a row: a turn that ends with neither picked starts them again (Task 15)
-    // the counts as the turn left them are kept (`manBefore`), so an Aim or Evaluate tapped late, after Next, counts on
-    // from them as if tapped on time (Task 37 fix round)
-    // and whose turn ended last (`lastEnded`), which tells a late pick from one set ahead, across a round's end too
+    // whose turn ended last, which tells a late pick from one set ahead, across a round's end too (Task 37 fix round)
     if (r && defencesOf(f)) f.lastEnded = r.id;
+    // the Aim and Evaluate counts as the turn left them, so one tapped late, after Next, counts on from them as if tapped
+    // on time (Task 37 fix round)
     if (r && defencesOf(f)) r.manBefore = { aim: isNum(r.aim) && r.aim > 0 ? Math.floor(r.aim) : 0, evaluate: isNum(r.evaluate) && r.evaluate > 0 ? Math.floor(r.evaluate) : 0 };
+    // Aim and Evaluate count turns in a row: a turn that ends with neither picked starts them again (Task 15)
     if (r && defencesOf(f) && r.manoeuvre !== 'aim' && r.manoeuvre !== 'evaluate' && (r.aim || r.evaluate)) { r.aim = 0; r.evaluate = 0; touch(r, at); }
     const C = consequencesOf(f);
     if (!C || !r) return;

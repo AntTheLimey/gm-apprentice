@@ -158,3 +158,24 @@ describe('the CoC references say what the code does', () => {
     assert.match(read('mechanics.md'), /\| Melee \| full DB \| \| Thrown weapon, or a bow drawn by the wielder \| half DB \| \| Firearm \| no DB \|/);
   });
 });
+
+// Task 35 review minors (step 6b Task 36): the notes that state a figure are written from the place's own fields, and
+// which places a miss by 1 leaves where they were is pinned
+describe('the hit locations\' notes and misses (Task 35 review)', () => {
+  const at = (key) => LOCATIONS.find((l) => l.key === key);
+  it('the groin\'s note says what its `male` field holds; the face\'s and skull\'s say their `behind`', () => {
+    const g = at('groin');
+    assert.deepEqual(g.male, { shock: 2, shockMax: 8, shockTypes: ['cr'], knockdown: -5 });
+    assert.equal(g.note, 'a male target: double shock from crushing (max 8), knockdown −5');
+    assert.equal(CONSEQUENCES.knockdown.male.groin, g.male);
+    assert.deepEqual([at('face').behind, at('face').note], [-7, 'from behind −7']);
+    assert.deepEqual([at('skull').behind, at('skull').note], [-5, 'from behind −5']);
+  });
+  it('a miss by 1 lands elsewhere for every place but torso, arm, leg, hand and foot; a vein or joint on its limb', () => {
+    assert.deepEqual(LOCATIONS.filter((l) => !l.miss).map((l) => l.key).sort(), ['arm', 'foot', 'hand', 'leg', 'torso']);
+    const elsewhere = Object.fromEntries(LOCATIONS.filter((l) => l.miss && l.miss !== 'torso').map((l) => [l.key, l.miss]));
+    assert.deepEqual(elsewhere, {
+      'arm vein': 'arm', 'leg vein': 'leg', 'arm joint': 'arm', 'leg joint': 'leg', 'hand joint': 'hand', 'foot joint': 'foot', 'neck vein': 'neck',
+    });
+  });
+});

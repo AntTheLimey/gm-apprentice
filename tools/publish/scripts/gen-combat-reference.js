@@ -38,7 +38,10 @@ function drCell(key, loc) {
 }
 
 // Which types can target a place, said the short way: "only imp, pi" or "not imp, burn"; '' when every type can.
-function targetsNote(loc, can) {
+// The split is about half of the 11 types: a place that takes 6 or fewer lists them ("only"), one that takes 7 or more
+// lists the 4 or fewer it does not ("not"). At 6 the "only" list is one longer than "not" would be; it is kept there,
+// as a list of what can hit reads more plainly.
+function targetsNote(can) {
   const ok = TYPES.filter((t) => can(t));
   if (ok.length === TYPES.length) return '';
   const no = TYPES.filter((t) => !can(t));
@@ -67,7 +70,7 @@ function multiplierNote(key) {
 function notesCell(key, loc) {
   const out = [];
   const can = (t) => woundingAt(WOUNDING, key, t).can;
-  for (const part of [targetsNote(loc, can), multiplierNote(key)]) if (part) out.push(part);
+  for (const part of [targetsNote(can), multiplierNote(key)]) if (part) out.push(part);
   if (loc.cripple) out.push(`crippled over ${loc.cripple === 1 ? 'HP' : `HP/${loc.cripple}`}${loc.cap ? ', excess lost' : ''}`);
   const k = loc.knockdown;
   if (k) {

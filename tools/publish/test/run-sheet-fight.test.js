@@ -4302,7 +4302,7 @@ describe('Physical dice count everywhere; nothing settles in order (step 6b Task
     assert.equal(named(s, 'Bouncer 1').manoeuvre, 'all-out attack');
     assert.equal(GM.liveDefences(named(s, 'Bouncer 1'), GURPS.defences).dodge.value, null);
     assert.equal(lines(s).at(-1), 'Bouncer 1: All-Out Attack.');
-    // fix round 2: Bouncer 1 has acted this round, so the pick is late, a correction to the turn just gone: it clears
+    // Bouncer 1's turn was the last to end, so the pick is late, a correction to the turn just gone: it clears
     // when Bouncer 1's next turn starts, as a pick made on time does, and never blocks that turn's defences
     assert.equal(named(s, 'Bouncer 1').manAhead, false);
     s = go(s); // Bouncer 1's next turn
@@ -4325,6 +4325,21 @@ describe('Physical dice count everywhere; nothing settles in order (step 6b Task
     assert.equal(GM.liveDefences(named(s, 'Bouncer 2'), GURPS.defences).parry.value, null);
     s = go(s); // Bouncer 2's next turn
     assert.equal(named(s, 'Bouncer 2').manoeuvre, null);
+  });
+
+  // Task 37 re-review 2: the set-ahead test above runs before any turn has ended; this one runs once one has
+  it('GURPS: three rows, A\'s turn ended and B\'s running: All-Out Attack tapped on C is set ahead and kept when C\'s turn starts', () => {
+    const rows = [
+      { name: 'A', ini: 7, speed: 7, hp: 11, max: 11, ht: 10, dodge: 9, parry: 9 },
+      { name: 'B', ini: 6, speed: 6, hp: 11, max: 11, ht: 10, dodge: 9, parry: 9 },
+      { name: 'C', ini: 5, speed: 5, hp: 11, max: 11, ht: 10, dodge: 8, parry: 9 },
+    ];
+    let s = go(go(begin(rows, GURPS))); // A acts, then B: A's turn is the last to end
+    assert.equal(s.fight.lastEnded, named(s, 'A').id);
+    s = G(s, { type: 'manoeuvre', row: named(s, 'C').id, name: 'all-out attack' });
+    assert.equal(named(s, 'C').manAhead, true, 'C is not the row whose turn last ended: set ahead');
+    s = go(s); // C's turn
+    assert.deepEqual([named(s, 'C').manoeuvre, named(s, 'C').manAhead], ['all-out attack', false]);
   });
 
   it('GURPS: Aim on its turn, forgotten on the next, set by hand after Next: the count is 2, as if tapped on time', () => {

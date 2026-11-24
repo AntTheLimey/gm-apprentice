@@ -30,7 +30,7 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 - Tab stops at Start or stays put, rows hold still while a figure is typed, and Same for all copies what is filled and says how many it reached.
 - The player site's GURPS reference block and to-hit calculator list Martial Arts's hit places, the calculator in the run sheet's order (mildest first).
 - A D&D initiative typed with decimals is refused, not cut short.
-- Nothing in a fight waits on anything else: any card line can be skipped, an open Dead or Unconscious offer holds up no later line, the Aimed chip can be tapped on by hand, and a GURPS manoeuvre can be set on any row at any time.
+- Nothing in a fight waits on anything else: any card line can be skipped, an open Dead or Unconscious offer holds up no later line, the Aimed chip can be tapped on by hand, and a GURPS manoeuvre can be set on any row at any time (in a two-row fight, a pick off the other row's turn counts as a correction of its last turn).
 - A Call of Cthulhu fight's rows fit one line, so the run list stays open beside them at 1449 wide: a shorter entry-box hint (the whole of it on hover), one dice button that opens the stepper, the attacker's typed roll once on its own row, and a long name cut short.
 - A GURPS foe made up at the table takes its quick figures first: Speed, Skill (its main combat skill, shown on its row, which To-hit opens on), Dodge, Parry, Block and HP, then ST, HT and DX only if wanted.
 
