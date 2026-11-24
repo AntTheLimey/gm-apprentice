@@ -20,7 +20,7 @@ const WRANGLER_DEPLOY_TIMEOUT_MS = 10 * 60 * 1000;
 // 20.12.2): so `npx wrangler@4 whoami` and every deploy failed there. They run through cmd.exe, as one line with each
 // argument that needs it in double quotes (#877).
 const WINDOWS_SCRIPTS = new Set(['npx', 'npm']);
-const windowsQuote = (arg) => (/^[\w\-.=:/\\@,+]+$/.test(arg) ? arg : `"${String(arg).replace(/"/g, '\\"')}"`);
+const windowsQuote = (arg) => (/^[\w\-.=:/\\@,+]+$/.test(arg) ? arg : `"${arg}"`);
 
 function runCommand(cmd, args, { timeoutMs = 30000, cwd, stdio, shell, maxBuffer, platform = process.platform } = {}) {
   const options = {
@@ -28,6 +28,12 @@ function runCommand(cmd, args, { timeoutMs = 30000, cwd, stdio, shell, maxBuffer
     ...(stdio ? { stdio } : {}), ...(shell ? { shell } : {}), ...(maxBuffer ? { maxBuffer } : {}),
   };
   const viaCmd = platform === 'win32' && !shell && WINDOWS_SCRIPTS.has(cmd);
+  // cmd.exe reads `"` and `%NAME%` even inside double quotes, and a line break ends the command: an argument with one
+  // (a project name or folder from the settings) is refused, never passed on changed or as a second command.
+  const unsafe = viaCmd && (args || []).find((a) => /["%\r\n]/.test(String(a)));
+  if (unsafe !== undefined && unsafe !== false) {
+    return { code: 1, stdout: '', stderr: `Not run: on Windows, ${cmd} cannot be given "${unsafe}" safely (it has a ", a % or a line break). Change that name or folder in the settings.`, error: 'EUNSAFEARG', signal: null };
+  }
   const res = viaCmd
     ? spawnSync([cmd, ...(args || [])].map(windowsQuote).join(' '), { ...options, shell: true })
     : spawnSync(cmd, args, options);

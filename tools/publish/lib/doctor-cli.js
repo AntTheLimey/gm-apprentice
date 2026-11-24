@@ -8,7 +8,8 @@ const FIXES = {
   node: 'Install Node 22 LTS from https://nodejs.org (choose the LTS build).',
   git: 'Install git (macOS: `xcode-select --install`; Linux: your package manager; Windows: https://git-scm.com).',
   gh: 'Install the GitHub CLI (https://cli.github.com), then run `gh auth login`.',
-  wrangler: 'Create a Cloudflare API token (Account · Cloudflare Pages · Edit), then run `gm-publish doctor --set-cloudflare-creds` in your own terminal window: it asks for the token and hides it.',
+  // A function: the line names this tool by its full path (no `gm-publish` command is on anyone's PATH).
+  wrangler: () => `Create a Cloudflare API token (Account · Cloudflare Pages · Edit), then in your own terminal window run \`${ownTerminalLine()}\`: it asks for the token and hides it.`,
 };
 
 function parseArgs(argv) {
@@ -30,14 +31,14 @@ function humanReport(out, result) {
   const row = (key, label, extra = '') => {
     const c = result[key];
     out(`  ${mark(c.ok)} ${label}${c.version ? ` (${c.version})` : ''}${extra}`);
-    if (!c.ok && FIXES[key]) out(`      → ${FIXES[key]}`);
+    if (!c.ok && FIXES[key]) out(`      → ${typeof FIXES[key] === 'function' ? FIXES[key]() : FIXES[key]}`);
   };
   row('node', 'Node ≥ 22');
   row('git', 'git');
   if (result.host === 'github-pages') {
     row('gh', 'GitHub CLI', result.gh.ok ? (result.gh.authed ? ' — authenticated' : ' — NOT authenticated: run `gh auth login`') : '');
   } else {
-    row('wrangler', 'wrangler', result.wrangler.ok ? (result.wrangler.authed ? ` — authenticated${result.wrangler.accountId ? `, account ${result.wrangler.accountId}` : ''}` : ' — NOT authenticated: run `gm-publish doctor --set-cloudflare-creds` in your own terminal window') : '');
+    row('wrangler', 'wrangler', result.wrangler.ok ? (result.wrangler.authed ? ` — authenticated${result.wrangler.accountId ? `, account ${result.wrangler.accountId}` : ''}` : ` — NOT authenticated: in your own terminal window, run \`${ownTerminalLine()}\``) : '');
   }
   out(result.ok ? 'All required checks passed.' : 'Some required checks failed — see fixes above.');
 }

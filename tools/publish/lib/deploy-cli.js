@@ -27,8 +27,9 @@ const SAME_PAGE_WAIT_MS = 10000;
 const FETCH_TIMEOUT_MS = 15000;
 const MAX_REDIRECTS = 5;
 
+// The line names this tool by its full path: no `gm-publish` command is on anyone's PATH (#877).
 const CLOUDFLARE_AUTH_FIX =
-  'Cloudflare credentials are not set up. Run `gm-publish doctor --set-cloudflare-creds` in your own terminal window ' +
+  `Cloudflare credentials are not set up. In your own terminal window, run \`${require('./doctor-cli').ownTerminalLine()}\` ` +
   'and paste an API token with the Account · Cloudflare Pages · Edit permission when it asks (it hides it), then re-run deploy.';
 
 // A Cloudflare Pages project name is lowercase alphanumerics and hyphens.

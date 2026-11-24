@@ -86,6 +86,17 @@ describe('runCommand: npx and npm on Windows', () => {
     assert.strictEqual(calls[0][1].shell, true);
   });
 
+  it('refuses an argument cmd.exe would read: a quote, a %NAME% or a line break, running nothing', () => {
+    for (const bad of ['x"& echo hi & rem "', 'C:\\%TEMP%\\docs', 'a\nb']) {
+      let res;
+      const calls = capture((m) => { res = m.runCommand('npx', ['wrangler@4', 'pages', 'deploy', `--project-name=${bad}`], { platform: 'win32' }); });
+      assert.deepStrictEqual(calls, [], `nothing run for ${JSON.stringify(bad)}`);
+      assert.strictEqual(res.code, 1);
+      assert.strictEqual(res.error, 'EUNSAFEARG');
+      assert.match(res.stderr, /cannot be given/);
+    }
+  });
+
   it('leaves other commands, and npx off Windows, as they were', () => {
     const calls = capture((m) => { m.runCommand('setx', ['A', 'b'], { platform: 'win32' }); m.runCommand('npx', ['wrangler@4'], { platform: 'linux' }); });
     assert.deepStrictEqual(calls.map((c) => [c[0], c[1], c[2].shell]), [['setx', ['A', 'b'], undefined], ['npx', ['wrangler@4'], undefined]]);
