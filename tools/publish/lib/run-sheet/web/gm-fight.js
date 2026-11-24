@@ -704,7 +704,7 @@
     const off = state().fight.turn !== r.id ? ' disabled' : '';
     const btn = (c) => `<button type="button" class="tg ${on(c.key) ? 'on' : ''}"${off} data-fman="${esc(`${r.id}|${c.key}`)}" aria-pressed="${on(c.key)}" title="${esc(off ? 'Picked on its turn' : on(c.key) ? `${c.name}: tap to take it back` : c.name)}">${esc(c.name)}${on(c.key) ? esc(counted(r)) : ''}</button>`;
     const aod = on('all-out defence') || ui.aodAsk === r.id;
-    const which = aod ? `<span class="lab">Which defence:</span>${GMath.DEFENCE_KEYS.map((k) => `<button type="button" class="tg ${on('all-out defence') && r.aodDefence === k ? 'on' : ''}" data-fmand="${esc(`${r.id}|${k}`)}" aria-pressed="${on('all-out defence') && r.aodDefence === k}"${off}>${esc(D.names[k] || k)}</button>`).join('')}` : '';
+    const which = aod ? `<span class="lab">Which defence:</span>${GMath.DEFENCE_KEYS.map((k) => `<button type="button" class="tg ${on('all-out defence') && r.aodDefence === k ? 'on' : ''}" data-fmand="${esc(`${r.id}|${k}`)}" aria-pressed="${on('all-out defence') && r.aodDefence === k}"${off}${off ? ' title="Picked on its turn"' : ''}>${esc(D.names[k] || k)}</button>`).join('')}` : '';
     return `<div class="pman" role="group" aria-label="Manoeuvre"><span class="lab">Manoeuvre:</span>${cs.map(btn).join('')}${which}</div>`;
   }
   // A manoeuvre tapped: the pick again takes it back; All-Out Defence waits for its defence.
@@ -1290,6 +1290,9 @@
     }
     const by = g ? g.by : coldAttacker(f, id);
     if (!e.dice) {
+      // `sent` goes up before the dispatch, not after: the reducer runs inside it and redraws at once, and syncDmg
+      // would take the emptied box for words typed over a finished exchange. The check above has already seen the
+      // exchange is the reducer's open one, so the hit is not turned away.
       g.sent = true;
       t.value = '';
       markPending(t);
@@ -1360,6 +1363,7 @@
         }
         return;
       }
+      // before the dispatch, for the reason cocEnter gives: its redraw runs syncDmg, and the exchange was checked just above
       if (g) { g.rolling = false; g.sent = true; }
       F({ type: 'hp', row: id, entry: x.entry, by: x.by, mode: x.mode, roll: res[0], ...(g ? { exchange: g.n } : {}), ...(x.extreme ? { extreme: true, ...(res[1] ? { extra: res[1] } : {}) } : {}) });
       RP.focusTo(attr('data-fhp', id));

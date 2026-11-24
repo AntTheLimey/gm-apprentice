@@ -850,6 +850,28 @@ describe('CoC and GURPS fights on the GM page, by real input', { skip: browserSk
     });
   });
 
+  // Task 23b B9: the which-defence buttons say why they are disabled, as the manoeuvre buttons do
+  it('GURPS: once the turn has moved on, the Which defence buttons are disabled and say they are picked on its turn', async () => {
+    const run = await start('gurps', { randomInt: () => 4 });
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await bouncers(page, run, [['st', 11], ['ht', 10], ['dx', 10], ['parry', 9], ['block', 8]]);
+      const b2 = named(p, 'Bouncer 2').id;
+      p = await actFor(page, p, 'Bouncer 2');
+      await tap(page, `#acting [data-fman="${b2}|all-out defence"]`);
+      await page.waitFor(`document.querySelector('#acting [data-fmand="${b2}|parry"]')`, 3000);
+      assert.strictEqual(await page.evaluate(`document.querySelector('#acting [data-fmand="${b2}|parry"]').disabled`), false, 'on its turn they work');
+      await tap(page, `#acting [data-fmand="${b2}|parry"]`);
+      await until(page, `p.fight.rows.find((r) => r.id === ${q(b2)}).aodDefence === "parry" && p.saved === "Saved" && p.pending === 0`);
+      await tap(page, '#fNext');
+      p = await until(page, `p.fight.turn !== ${q(b2)} && p.saved === "Saved" && p.pending === 0`);
+      p = await peek(page, p, 'Bouncer 2');
+      const which = `#acting [data-fmand="${b2}|parry"]`;
+      await page.waitFor(`document.querySelector(${q(which)})`, 3000);
+      assert.strictEqual(await page.evaluate(`document.querySelector(${q(which)}).disabled`), true);
+      assert.strictEqual(await attrOf(page, which, 'title'), 'Picked on its turn');
+    });
+  });
+
   it('GURPS: an All-Out Defence asked for and not answered is not asked again when the row\'s panel returns', async () => {
     const run = await start('gurps', { randomInt: () => 4 });
     await withPage({ width: 1449, height: 762 }, async (page) => {
