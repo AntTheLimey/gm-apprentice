@@ -4302,11 +4302,12 @@ describe('Physical dice count everywhere; nothing settles in order (step 6b Task
     assert.equal(named(s, 'Bouncer 1').manoeuvre, 'all-out attack');
     assert.equal(GM.liveDefences(named(s, 'Bouncer 1'), GURPS.defences).dodge.value, null);
     assert.equal(lines(s).at(-1), 'Bouncer 1: All-Out Attack.');
-    // fix round: a pick off the row's turn is its next turn's, so that turn keeps it; the turn after clears it
+    // fix round 2: Bouncer 1 has acted this round, so the pick is late, a correction to the turn just gone: it clears
+    // when Bouncer 1's next turn starts, as a pick made on time does, and never blocks that turn's defences
+    assert.equal(named(s, 'Bouncer 1').manAhead, false);
     s = go(s); // Bouncer 1's next turn
-    assert.equal(named(s, 'Bouncer 1').manoeuvre, 'all-out attack');
-    s = go(go(s)); // Bouncer 2, then Bouncer 1's turn after
     assert.equal(named(s, 'Bouncer 1').manoeuvre, null);
+    assert.equal(GM.liveDefences(named(s, 'Bouncer 1'), GURPS.defences).dodge.value, 9);
   });
 
   it('GURPS: All-Out Attack set on Bouncer 2 ahead of its turn is that turn\'s: kept when it starts, cleared when the next starts', () => {
@@ -4339,6 +4340,12 @@ describe('Physical dice count everywhere; nothing settles in order (step 6b Task
     assert.equal(named(s, 'Bouncer 1').aim, 0);
     s = G(s, { type: 'manoeuvre', row: named(s, 'Bouncer 1').id, name: 'aim' });
     assert.equal(named(s, 'Bouncer 1').aim, 2);
+    // fix round 2: a late pick, not set ahead; its next turn starts clear, and the usual tap on Aim counts on to 3
+    assert.equal(named(s, 'Bouncer 1').manAhead, false);
+    s = go(s); // Bouncer 1's turn
+    assert.equal(named(s, 'Bouncer 1').manoeuvre, null);
+    s = G(s, { type: 'manoeuvre', row: named(s, 'Bouncer 1').id, name: 'aim' });
+    assert.equal(named(s, 'Bouncer 1').aim, 3);
   });
 
   it('CoC: a typed melee side, shot, dive and bout give the state a server roll gives', () => {
