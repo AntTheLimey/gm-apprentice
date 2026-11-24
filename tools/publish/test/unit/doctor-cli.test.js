@@ -84,6 +84,108 @@ describe('runDoctor --set-cloudflare-creds', () => {
   });
 });
 
+// #877: the token is never taken in a chat. In a terminal the command asks for it, hidden, on every OS; run where
+// no one can type (an assistant's shell), it says the line to run in the GM's own terminal.
+describe('runDoctor --set-cloudflare-creds in a terminal', () => {
+  const { PassThrough } = require('node:stream');
+  const { promptHidden, ownTerminalLine, WINDOWS_RESTART } = require('../../lib/doctor-cli');
+  const terminal = () => { const input = new PassThrough(); input.isTTY = true; const shown = []; const output = { write: (c) => { shown.push(String(c)); return true; } }; return { input, output, shown: () => shown.join('') }; };
+
+  it('asks for the token with the prompt showing and the token not', async () => {
+    const t = terminal();
+    const answer = promptHidden('Token: ', { input: t.input, output: t.output });
+    t.input.write('abc_DEF-123');
+    t.input.write('\r');
+    assert.strictEqual(await answer, 'abc_DEF-123');
+    assert.ok(t.shown().includes('Token: '), 'the prompt shows');
+    assert.ok(!t.shown().includes('abc'), 'nothing typed or pasted shows');
+  });
+
+  it('a token pasted with a trailing CR/LF, or edited with backspace, never shows: the output is the prompt and a new line', async () => {
+    const t = terminal();
+    const answer = promptHidden('Token: ', { input: t.input, output: t.output });
+    t.input.write('abX\u007fc_123\r\n');
+    assert.strictEqual(await answer, 'abc_123');
+    assert.strictEqual(t.shown().replace(/\u001b\[[0-9;]*[A-Za-z]/g, ''), 'Token: \n', 'only the prompt, its cursor codes aside');
+  });
+
+  it('a pipe left open with nothing in it answers nothing after a moment; one with a token reads it to its end', async () => {
+    const { defaultReadStdin } = require('../../lib/doctor-cli');
+    const open = new PassThrough();
+    assert.strictEqual(await defaultReadStdin(open, 50), '');
+    const piped = new PassThrough();
+    const read = defaultReadStdin(piped, 50);
+    piped.write('piped-token');
+    setTimeout(() => piped.end('\n'), 120);
+    assert.strictEqual(await read, 'piped-token\n');
+  });
+
+  it('Ctrl-C or the end of input answers nothing', async () => {
+    const t = terminal();
+    const answer = promptHidden('Token: ', { input: t.input, output: t.output });
+    t.input.write('abc\u0003');
+    assert.strictEqual(await answer, '');
+    const u = terminal();
+    const ended = promptHidden('Token: ', { input: u.input, output: u.output });
+    u.input.end();
+    assert.strictEqual(await ended, '');
+  });
+
+  it('in a terminal it asks, saves and never prints the token', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-doc-tty-'));
+    const lines = []; const asked = [];
+    const rc = await runDoctor(['--set-cloudflare-creds'], {
+      out: (s) => lines.push(String(s)), runCommand: wranglerAllGood(),
+      stdinIsTTY: true, promptToken: async (p) => { asked.push(p); return 'tty-secret-token\n'; },
+      env: { SHELL: '/bin/zsh' }, platform: 'darwin', homedir: dir,
+    });
+    assert.strictEqual(rc, 0);
+    assert.match(asked[0], /Cloudflare API token \(it will not show\)/);
+    assert.ok(fs.readFileSync(path.join(dir, '.zshenv'), 'utf8').includes('export CLOUDFLARE_API_TOKEN="tty-secret-token"'));
+    assert.ok(!lines.join('\n').includes('tty-secret-token'));
+    assert.ok(!lines.join('\n').includes(WINDOWS_RESTART), 'no restart needed: every new shell reads ~/.zshenv');
+  });
+
+  it('nothing entered in a terminal: nothing written', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-doc-tty2-'));
+    const lines = [];
+    const rc = await runDoctor(['--set-cloudflare-creds'], {
+      out: (s) => lines.push(String(s)), runCommand: wranglerAllGood(), stdinIsTTY: true, promptToken: async () => '',
+      env: { SHELL: '/bin/bash' }, platform: 'linux', homedir: dir,
+    });
+    assert.strictEqual(rc, 1);
+    assert.match(lines.join('\n'), /No token entered\. Nothing written\./);
+    assert.ok(!fs.existsSync(path.join(dir, '.bashrc')));
+  });
+
+  it('run where no one can type, it gives the line to run in the GM\'s own terminal, the tool by its full path under node', async () => {
+    const lines = [];
+    const rc = await runDoctor(['--set-cloudflare-creds'], {
+      out: (s) => lines.push(String(s)), runCommand: wranglerAllGood(), stdinIsTTY: false, readStdin: async () => '',
+      env: {}, platform: 'linux', homedir: os.tmpdir(),
+    });
+    assert.strictEqual(rc, 1);
+    const line = ownTerminalLine();
+    assert.ok(lines.some((l) => l.trim() === line), lines.join('\n'));
+    const script = /^node "([^"]+)" doctor --set-cloudflare-creds$/.exec(line);
+    assert.ok(script && path.isAbsolute(script[1]) && fs.existsSync(script[1]), line);
+    assert.strictEqual(path.basename(script[1]), 'gm-publish.js');
+  });
+
+  it('on Windows it saves with setx and says to restart the programs already open', async () => {
+    const lines = []; const setx = [];
+    const run = (cmd, args) => { if (cmd === 'setx') { setx.push(args[0]); return { code: 0, stdout: '', stderr: '' }; } return wranglerAllGood()(cmd, args); };
+    const rc = await runDoctor(['--set-cloudflare-creds'], {
+      out: (s) => lines.push(String(s)), runCommand: run, stdinIsTTY: true, promptToken: async () => 'win-token',
+      env: {}, platform: 'win32', homedir: os.tmpdir(),
+    });
+    assert.strictEqual(rc, 0);
+    assert.deepStrictEqual(setx, ['CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID']);
+    assert.ok(lines.includes(WINDOWS_RESTART), lines.join('\n'));
+    assert.ok(!lines.join('\n').includes('win-token'));
+  });
+});
+
 const { writeSiteConfig } = require('../helpers/vault-files');
 
 describe('runDoctor --site', () => {

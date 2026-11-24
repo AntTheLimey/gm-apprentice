@@ -1,4 +1,5 @@
 const os = require('os');
+const path = require('path');
 const { runChecks } = require('./doctor');
 const { setPersistentEnv } = require('./shell-env');
 const { runCommand: defaultRunCommand } = require('./run-command');
@@ -7,7 +8,7 @@ const FIXES = {
   node: 'Install Node 22 LTS from https://nodejs.org (choose the LTS build).',
   git: 'Install git (macOS: `xcode-select --install`; Linux: your package manager; Windows: https://git-scm.com).',
   gh: 'Install the GitHub CLI (https://cli.github.com), then run `gh auth login`.',
-  wrangler: 'Create a Cloudflare API token (Account · Cloudflare Pages · Edit), then run `gm-publish doctor --set-cloudflare-creds` and paste it.',
+  wrangler: 'Create a Cloudflare API token (Account · Cloudflare Pages · Edit), then run `gm-publish doctor --set-cloudflare-creds` in your own terminal window: it asks for the token and hides it.',
 };
 
 function parseArgs(argv) {
@@ -36,7 +37,7 @@ function humanReport(out, result) {
   if (result.host === 'github-pages') {
     row('gh', 'GitHub CLI', result.gh.ok ? (result.gh.authed ? ' — authenticated' : ' — NOT authenticated: run `gh auth login`') : '');
   } else {
-    row('wrangler', 'wrangler', result.wrangler.ok ? (result.wrangler.authed ? ` — authenticated${result.wrangler.accountId ? `, account ${result.wrangler.accountId}` : ''}` : ' — NOT authenticated: `gm-publish doctor --set-cloudflare-creds`') : '');
+    row('wrangler', 'wrangler', result.wrangler.ok ? (result.wrangler.authed ? ` — authenticated${result.wrangler.accountId ? `, account ${result.wrangler.accountId}` : ''}` : ' — NOT authenticated: run `gm-publish doctor --set-cloudflare-creds` in your own terminal window') : '');
   }
   out(result.ok ? 'All required checks passed.' : 'Some required checks failed — see fixes above.');
 }
@@ -58,9 +59,17 @@ async function runDoctor(argv, deps = {}) {
   }
 
   if (opts.setCreds) {
-    const readStdin = deps.readStdin || defaultReadStdin;
-    const token = String(await readStdin()).trim();
-    if (!token) { out('No token received on stdin. Nothing written.'); return 1; }
+    // In a terminal it asks for the token, hidden as it is pasted or typed: the one way in that works the same on
+    // macOS, Linux and Windows, and keeps the token out of a chat (#877). Piped in, it reads it from stdin (scripts).
+    const tty = deps.stdinIsTTY !== undefined ? deps.stdinIsTTY : (!deps.readStdin && Boolean(process.stdin.isTTY));
+    const token = String(await (tty ? (deps.promptToken || promptHidden)(TOKEN_PROMPT) : (deps.readStdin || defaultReadStdin)())).trim();
+    if (!token) {
+      if (tty) { out('No token entered. Nothing written.'); return 1; }
+      // Run where no one can type (an assistant's shell): say the line to run in a terminal of the GM's own.
+      out('No token received. Nothing written. To save it, run this in your own terminal window; it asks for the token and hides it as you paste:');
+      out(`  ${ownTerminalLine()}`);
+      return 1;
+    }
     // A Cloudflare API token is [A-Za-z0-9_-]. Reject anything else BEFORE it can
     // reach the shell-sourced env file. Never echo the token in the error.
     if (!/^[A-Za-z0-9_-]+$/.test(token)) {
@@ -77,6 +86,8 @@ async function runDoctor(argv, deps = {}) {
     const where = tgt.kind === 'setx' ? 'your Windows user environment' : tgt.path;
     out(`Cloudflare token saved to ${where}${accountId ? ` (account ${accountId})` : ''}.`);
     out(verified ? 'Verified with wrangler whoami.' : 'Warning: could not verify with wrangler whoami — re-open your terminal and run `npx wrangler@4 whoami`.');
+    // setx saves for programs started from now on: one already open (the assistant's app, a terminal) still lacks it.
+    if (tgt.kind === 'setx') out(WINDOWS_RESTART);
     return verified ? 0 : 1;
   }
 
@@ -86,14 +97,51 @@ async function runDoctor(argv, deps = {}) {
   return result.ok ? 0 : 1;
 }
 
-function defaultReadStdin() {
+const TOKEN_PROMPT = 'Paste your Cloudflare API token (it will not show), then press Enter: ';
+const WINDOWS_RESTART = 'On Windows, close and reopen the app your assistant runs in, and any terminal windows, before you publish: programs that were already open do not see the saved token until they start again.';
+
+// The line a GM runs in a terminal of their own: this tool by its full path, under node (which publishing needs
+// anyway, on every OS, where python3 may not be a command).
+function ownTerminalLine() {
+  return `node "${path.resolve(__dirname, '..', 'bin', 'gm-publish.js')}" doctor --set-cloudflare-creds`;
+}
+
+// Ask for one line with nothing echoed: the prompt shows, what is typed or pasted does not. Ctrl-C or the end of
+// input answers ''.
+function promptHidden(prompt, { input = process.stdin, output = process.stdout } = {}) {
+  const readline = require('readline');
+  const { Writable } = require('stream');
   return new Promise((resolve) => {
-    let data = '';
-    process.stdin.setEncoding('utf8');
-    process.stdin.on('data', (c) => { data += c; });
-    process.stdin.on('end', () => resolve(data));
-    if (process.stdin.isTTY) resolve(''); // no piped input
+    let muted = false;
+    const sink = new Writable({ write(chunk, encoding, cb) { if (!muted) output.write(chunk, encoding); cb(); } });
+    const rl = readline.createInterface({ input, output: sink, terminal: true });
+    let done = false;
+    const finish = (answer) => {
+      if (done) return;
+      done = true;
+      rl.close();
+      output.write('\n');
+      resolve(answer);
+    };
+    rl.on('SIGINT', () => finish(''));
+    rl.on('close', () => finish(''));
+    rl.question(prompt, finish);
+    muted = true;
   });
 }
 
-module.exports = { runDoctor, parseArgs };
+// Piped input, to its end. A pipe left open with nothing in it (a shell that never closes stdin) answers '' after a
+// moment rather than waiting forever, so the line for the GM's own terminal still prints.
+function defaultReadStdin(stdin = process.stdin, idleMs = 2000) {
+  return new Promise((resolve) => {
+    let data = '';
+    let settled = false;
+    const settle = (v) => { if (settled) return; settled = true; clearTimeout(idle); stdin.pause(); resolve(v); };
+    const idle = setTimeout(() => { if (!data) settle(''); }, idleMs);
+    stdin.setEncoding('utf8');
+    stdin.on('data', (c) => { data += c; });
+    stdin.on('end', () => settle(data));
+  });
+}
+
+module.exports = { runDoctor, parseArgs, promptHidden, ownTerminalLine, defaultReadStdin, WINDOWS_RESTART };

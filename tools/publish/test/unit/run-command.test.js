@@ -68,3 +68,32 @@ describe('failureDetail', () => {
     assert.equal(failureDetail({ code: 3, stdout: '', stderr: '', error: null }), 'exit 3');
   });
 });
+
+// #877: on Windows npx and npm are .cmd scripts that spawn cannot start alone, so every wrangler call failed there.
+describe('runCommand: npx and npm on Windows', () => {
+  const cp = require('node:child_process');
+  const modPath = require.resolve('../../lib/run-command');
+  const capture = (fn) => {
+    const real = cp.spawnSync; const calls = [];
+    cp.spawnSync = (...a) => { calls.push(a); return { status: 0, signal: null, stdout: '', stderr: '' }; };
+    delete require.cache[modPath];
+    try { fn(require('../../lib/run-command')); return calls; } finally { cp.spawnSync = real; delete require.cache[modPath]; }
+  };
+
+  it('runs npx through the shell as one line, a path with spaces quoted', () => {
+    const calls = capture((m) => m.runCommand('npx', ['wrangler@4', 'pages', 'deploy', 'C:\\My Sites\\docs', '--branch=main'], { platform: 'win32' }));
+    assert.strictEqual(calls[0][0], 'npx wrangler@4 pages deploy "C:\\My Sites\\docs" --branch=main');
+    assert.strictEqual(calls[0][1].shell, true);
+  });
+
+  it('leaves other commands, and npx off Windows, as they were', () => {
+    const calls = capture((m) => { m.runCommand('setx', ['A', 'b'], { platform: 'win32' }); m.runCommand('npx', ['wrangler@4'], { platform: 'linux' }); });
+    assert.deepStrictEqual(calls.map((c) => [c[0], c[1], c[2].shell]), [['setx', ['A', 'b'], undefined], ['npx', ['wrangler@4'], undefined]]);
+  });
+
+  it('really starts npx on this machine (on the Windows runner too)', () => {
+    const res = runCommand('npx', ['--version'], { timeoutMs: 60000 });
+    assert.strictEqual(res.code, 0, `npx --version failed: ${res.error || res.stderr}`);
+    assert.match(res.stdout.trim(), /^\d+\.\d+\.\d+/);
+  });
+});

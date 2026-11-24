@@ -137,8 +137,10 @@ A GM copy, a copy for the table: `references/gm-site.md`.
 4. `gma publish deploy --verify --config <dir>/vault.config.json`
    — relay its final line verbatim. On a non-zero exit, go to
    capability 3. Missing Cloudflare credentials are explained
-   inline by `deploy`; to set them directly, run
-   `gma publish doctor --set-cloudflare-creds`. If it stopped on the leak
+   inline by `deploy`; to save them, run
+   `gma publish doctor --set-cloudflare-creds` and hand the GM the line it
+   prints for their own terminal (never take the token in chat;
+   `references/cloudflare-pages.md` Step 2). If it stopped on the leak
    check (the JSON has `refused: true` and `leaks.findings`), read
    `references/leak-findings.md` and take the GM through each finding.
    If a message says the leak check could not run, show it word for

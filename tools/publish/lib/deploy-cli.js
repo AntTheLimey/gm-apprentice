@@ -28,8 +28,8 @@ const FETCH_TIMEOUT_MS = 15000;
 const MAX_REDIRECTS = 5;
 
 const CLOUDFLARE_AUTH_FIX =
-  'Cloudflare credentials are not set up. Run `gm-publish doctor --set-cloudflare-creds` and paste ' +
-  'an API token with the Account · Cloudflare Pages · Edit permission, then re-run deploy.';
+  'Cloudflare credentials are not set up. Run `gm-publish doctor --set-cloudflare-creds` in your own terminal window ' +
+  'and paste an API token with the Account · Cloudflare Pages · Edit permission when it asks (it hides it), then re-run deploy.';
 
 // A Cloudflare Pages project name is lowercase alphanumerics and hyphens.
 function projectNameFor(config, siteRoot) {

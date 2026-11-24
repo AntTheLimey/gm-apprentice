@@ -741,8 +741,11 @@ report lists 20 rows per note-fault code; --json has them all.
   --vault <dir>              With --site: audit this vault through the site's
                              rules instead of the vault the config names
   --json                     Machine-readable report instead of the checklist
-  --set-cloudflare-creds     Read a Cloudflare API token from stdin, verify it,
-                             and save it (plus the account id) to your shell env
+  --set-cloudflare-creds     Ask for a Cloudflare API token (hidden as you paste;
+                             piped, read from stdin), verify it, and save it
+                             (plus the account id) to your shell env. With no
+                             terminal and nothing piped, print the line to run
+                             in your own terminal
   --help, -h                 Show this help
 `,
   'setup-status-bar': `

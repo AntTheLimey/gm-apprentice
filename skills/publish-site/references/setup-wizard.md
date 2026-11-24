@@ -167,19 +167,17 @@ For each check that is `false`, apply the one-line fix and re-run
      Mention the optional one-tick **Workers KV Storage · Edit** row —
      if the GM might ever want the live status bar or the inbox, adding
      it now means never touching the token again.
-  2. Save the token with the painless default (it writes the token to
-     the right shell file, derives and saves the Account ID for you, and
-     never prints the token back):
-
-     ```bash
-     gma publish doctor --set-cloudflare-creds
-     ```
-
-     A GM who'd rather the token never passes through the assistant can
-     run the exact same command in their own terminal — see
-     `cloudflare-pages.md` Step 2 for that one-line variant.
+  2. Save the token in the GM's own terminal, never in the chat: run
+     `gma publish doctor --set-cloudflare-creds` yourself. It saves
+     nothing and prints the line for the GM's terminal, with the full
+     path filled in. Hand the GM that line as printed; it asks for the
+     token with nothing showing, saves it where every shell reads it,
+     and works out the Account ID (`cloudflare-pages.md` Step 2 has the
+     words to give the GM, and what to do if they paste a token into
+     the chat anyway).
   3. Re-run `gma publish doctor --json --host cloudflare-pages` and
-     confirm `wrangler.authed: true` with a non-null `accountId`.
+     confirm `wrangler.authed: true` with a non-null `accountId`. On
+     Windows the GM must first close and reopen the app you run in.
 - **GitHub · `gh.ok: false` or `gh.authed: false`** → offer
   `gh auth login` to install/authenticate the GitHub CLI, **or** record
   that the GM will use the manual repo-creation path in Phase E (that
@@ -547,7 +545,7 @@ already exists," skip it and run `deploy` directly.
 probes the deployment wrangler printed in one step (exit 1 when it
 cannot tell which build is served) — relay its final line to the GM
 verbatim. If it fails on authentication, re-check the token dance
-(Phase A, Step 5): `gma publish doctor --set-cloudflare-creds`. A
+(Phase A, Step 5): the `--set-cloudflare-creds` line in the GM's own terminal. A
 deploy failure otherwise routes to `troubleshooting.md` (and
 `cloudflare-pages.md` → "Troubleshooting"). Then continue to Phase F.
 
