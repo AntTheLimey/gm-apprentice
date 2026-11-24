@@ -1621,6 +1621,28 @@ describe('stat boxes keep the mouse and the keyboard', { skip: browserSkip() }, 
     });
   });
 
+  // Task 31: a click into D&D's End of the night HP box selects its number too. This changes D&D on purpose
+  // (coordinator's ruling, 2026-11-24: the fault was the same in every system): before, the click left the caret
+  // where it landed and a typed 3 made 93.
+  it('a click into D&D\'s End of the night HP box selects the number: click, then 3 replaces it', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await page.focusEvents();
+      await page.goto(`${run.base}/?probe=1`);
+      await settled(page);
+      const id = await page.evaluate('document.querySelector("#sheet [data-vhp]").dataset.vhp');
+      const box = `#sheet [data-vhp="${id}"]`;
+      const before = await page.evaluate(`document.querySelector(${JSON.stringify(box)}).value`);
+      assert.ok(before.length >= 1, 'the box is prefilled');
+      const at = await page.click(box);
+      assert.ok(at.inView && at.hit, JSON.stringify(at));
+      await page.type('3');
+      await page.key('Tab');
+      await settled(page);
+      assert.strictEqual(await page.evaluate(`document.querySelector(${JSON.stringify(box)}).value`), '3');
+    });
+  });
+
   // fix round 1, M4: a click into the box that already has focus selects it too
   it('a click into the focused max box selects it: 20 Enter, click, 21 gives 21', async () => {
     const run = await start();

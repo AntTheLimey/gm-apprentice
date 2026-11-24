@@ -31,6 +31,7 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ### Fixed
 
+- A click into a Table Log figure selects its number, so typing replaces it (D&D's too), and Call of Cthulhu's Luck is refused above 99.
 - The combat reference corrects GURPS wounding, stun and knockdown, and Call of Cthulhu's Dying, several shots and Prone (#874, #875).
 
 ## [1.12.148] — 2026-11-25

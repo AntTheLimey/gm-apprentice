@@ -807,6 +807,10 @@ describe("vitals: each system's pools (Task 20)", () => {
     assert.match(RS.endFigureProblem(COC, IRIS, 'mp', 14), /max \(13\)/);
     assert.match(RS.endFigureProblem(COC, IRIS, 'san', 100), /max \(99\)/);
     assert.match(RS.endFigureProblem(GURPS, ORRIN, 'fp', 12), /max \(11\)/);
+    // Luck has no max on the sheet but a ceiling of its own (Task 31)
+    assert.match(RS.endFigureProblem(COC, IRIS, 'luck', 100), /over Luck's ceiling \(99\): not saved/);
+    assert.match(RS.endFigureProblem(COC, IRIS, 'luck', 5550), /ceiling \(99\)/);
+    assert.strictEqual(RS.endFigureProblem(COC, IRIS, 'luck', 99), null);
     for (const [m, id, f, v] of [[COC, IRIS, 'hp', 11], [COC, IRIS, 'san', 0], [GURPS, ORRIN, 'hp', -3], [GURPS, ORRIN, 'fp', -1], [COC, IRIS, 'hp', 'fine'], [COC, IRIS, 'hp', undefined]]) {
       assert.strictEqual(RS.endFigureProblem(m, id, f, v), null, `${f} ${v}`);
     }

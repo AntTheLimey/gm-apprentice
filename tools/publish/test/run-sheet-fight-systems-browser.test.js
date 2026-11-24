@@ -2002,6 +2002,64 @@ describe("the end panel's vitals columns per system (step 6b Task 20), by real i
     });
   }
 
+  // Task 31 (proof finding 3): a click into a prefilled box selects its number, as the fight's boxes do, so typing 50
+  // into Luck 55 gives 50 and not 5550. No Backspace here: the click alone must do it.
+  const clickType = async (page, sel, v) => {
+    const at = await page.click(sel);
+    assert.ok(at.inView && at.hit, `click ${sel}: ${JSON.stringify(at)}`);
+    await page.waitFor(`document.activeElement === document.querySelector(${q(sel)})`, 2000);
+    await page.type(String(v));
+    await page.key('Tab');
+  };
+
+  it('CoC: a click into Luck, SAN and MP selects the number; Luck 100 is refused, kept as typed and never saved; Luck 99 is saved', async () => {
+    const run = await start('coc');
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await page.focusEvents();
+      await page.goto(`${run.base}/?probe=1`);
+      await settled(page);
+      const luck = `#sheet [data-vkey="${IRIS}|luck"]`;
+      const san = `#sheet [data-vkey="${IRIS}|san"]`;
+      assert.strictEqual(await page.evaluate(`document.querySelector(${q(luck)}).value`), '55');
+      await clickType(page, luck, '50');
+      await settled(page);
+      assert.strictEqual(await page.evaluate(`document.querySelector(${q(luck)}).value`), '50');
+      await clickType(page, san, '48');
+      await settled(page);
+      assert.strictEqual(await page.evaluate(`document.querySelector(${q(san)}).value`), '48');
+      let v = (await saved(run))[IRIS];
+      assert.deepStrictEqual([v.san, v.luck], [48, 50]);
+      // 100: refused as SAN's over-the-max is
+      await clickType(page, luck, '100');
+      await page.waitFor(`document.querySelector(${q(luck)}).getAttribute('aria-invalid') === 'true'`, 3000);
+      assert.strictEqual(await page.evaluate(`document.querySelector(${q(luck)}).value`), '100');
+      assert.strictEqual(await text(page, '#sheet .vt .badnum'), "Luck 100: over Luck's ceiling (99): not saved");
+      await page.sleep(300);
+      assert.strictEqual((await saved(run))[IRIS].luck, 50, 'the refused 100 is never saved');
+      // 99: accepted, the mark gone
+      await clickType(page, luck, '99');
+      await settled(page);
+      v = (await saved(run))[IRIS];
+      assert.strictEqual(v.luck, 99);
+      assert.strictEqual(await page.evaluate(`document.querySelector(${q(luck)}).getAttribute('aria-invalid')`), null);
+    });
+  });
+
+  it('GURPS: a click into FP selects the number', async () => {
+    const run = await start('gurps');
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await page.focusEvents();
+      await page.goto(`${run.base}/?probe=1`);
+      await settled(page);
+      const fp = `#sheet [data-vkey="${ORRIN}|fp"]`;
+      assert.strictEqual(await page.evaluate(`document.querySelector(${q(fp)}).value`), '11');
+      await clickType(page, fp, '7');
+      await settled(page);
+      assert.strictEqual(await page.evaluate(`document.querySelector(${q(fp)}).value`), '7');
+      assert.strictEqual((await saved(run))[ORRIN].fp, 7);
+    });
+  });
+
   it('GURPS: HP and FP, then Conditions; HP -3 and FP below 0 saved, FP over its max refused', async () => {
     const run = await start('gurps');
     for (const [w, h] of SIZES) {
