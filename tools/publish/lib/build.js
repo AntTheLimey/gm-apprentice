@@ -3496,7 +3496,13 @@ function buildSite(options) {
   if (runningSteps && errorCount === 0 && publishConfig.steps.after.length) runSteps(publishConfig.steps.after, { cwd: configDir, label: 'after_build', log: options.stepsLog, stdio: options.stepsStdio, extraEnv: stepEnv });
   // Not on a build that writes nothing (doctor, explain --shown) or into a preview folder, where no step runs: neither
   // has the GM's page to frame. A sheets-only build runs the steps, which put the bare page back, so it frames it.
-  if (errorCount === 0 && writes !== 'none' && !options.outputDirOverride) frameOwnPages(navFor, runningSteps);
+  // A page a step put under a link in the site folder is not framed, and that is an error of the build too.
+  if (errorCount === 0 && writes !== 'none' && !options.outputDirOverride) {
+    const counted = linkRefusals.length;
+    frameOwnPages(navFor, runningSteps);
+    errorCount += linkRefusals.length - counted;
+    renderErrors.push(...linkRefusals.slice(counted));
+  }
   if (!gm) for (const pc of tohitRows) audit.calculator(pc.rel, pc.rows);
   if (!gm) for (const t of tableRows) audit.calculator(t.rel, t.rows);
   if (audit && propPlan) for (const r of propPlan.problems) audit.calculator(r.rel, [r]);

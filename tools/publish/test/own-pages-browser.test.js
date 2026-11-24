@@ -2,7 +2,7 @@
 // A page of the GM's own under the site's menu bar (player_site.own_pages, #850), in a real browser over http, with
 // real clicks, keys and wheel turns: the page fills the window below the bar and resizes with it; the bar's menus
 // open over it, and Esc and the wheel in them never reach it; a link in it that leaves it opens in the whole window;
-// the address's #fragment reaches it; and on a phone the bar takes its folded menu. Skipped without Chrome or
+// a download link in it downloads; the address's ?query and #fragment reach it; and on a phone the bar takes its folded menu. Skipped without Chrome or
 // Chromium (set GM_TEST_CHROME to point at one), except on CI.
 const { describe, it, before, after } = require('node:test');
 const assert = require('node:assert/strict');
@@ -122,7 +122,12 @@ describe('a page of the GM\'s own under the menu bar, in a browser', { skip }, (
       await open(page);
       const box = await page.evaluate(`(() => { const f = document.querySelector('.own-page-frame').getBoundingClientRect();
         const pick = (id) => { const r = ${FRAME}.document.getElementById(id).getBoundingClientRect(); return { x: f.left + r.left + r.width / 2, y: f.top + r.top + r.height / 2 }; };
-        return { here: pick('here'), home: pick('home') }; })()`);
+        return { here: pick('here'), home: pick('home'), save: pick('save') }; })()`);
+      // A download link downloads: the site page stays as it is.
+      await page.clickAt(box.save.x, box.save.y);
+      await page.sleep(300);
+      assert.equal(await page.evaluate('location.pathname'), '/map/index.html', 'a download link leaves the site page where it is');
+      assert.equal(await page.evaluate('!!document.querySelector(".own-page-frame")'), true);
       await page.clickAt(box.here.x, box.here.y);
       await page.waitFor(`${FRAME}.system() === "Eris"`);
       assert.equal(await page.evaluate('location.pathname'), '/map/index.html', 'a link within the page keeps the site page');
@@ -132,10 +137,11 @@ describe('a page of the GM\'s own under the menu bar, in a browser', { skip }, (
     });
   });
 
-  it('the address\'s #fragment reaches the page, and a new one follows', async () => {
+  it('the address\'s ?query and #fragment reach the page, and a new fragment follows', async () => {
     await withPage({ width: 1280, height: 800 }, async (page) => {
-      await open(page, '#Eris%20Belt');
+      await open(page, '?view=table#Eris%20Belt');
       assert.equal(await page.evaluate(`${FRAME}.system()`), 'Eris Belt');
+      assert.equal(await page.evaluate(`${FRAME}.query()`), '?view=table');
       await page.evaluate('location.hash = "#Vale"');
       await page.waitFor(`${FRAME}.system() === "Vale"`);
     });

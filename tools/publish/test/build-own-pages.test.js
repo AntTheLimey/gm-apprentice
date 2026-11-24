@@ -140,3 +140,29 @@ test('the GM site frames its own page too, its GM band in the site page above th
     assert.ok(fs.existsSync(path.join(gmDir, 'map', 'index.own.html')));
   } finally { s.cleanup(); }
 });
+
+test('atlas.htm and atlas.html each keep a copy of their own', () => {
+  const s = scratch({ after_build: [step('atlas.htm'), step('atlas.html')], own_pages: ['atlas.htm', 'atlas.html'] });
+  try {
+    buildIn(s);
+    assert.match(s.read('atlas.htm'), /data-src="atlas\.own\.htm"/);
+    assert.match(s.read('atlas.html'), /data-src="atlas\.own\.html"/);
+    assert.match(s.read('atlas.own.htm'), /<div id="app"><\/div>/);
+    assert.match(s.read('atlas.own.html'), /<div id="app"><\/div>/);
+  } finally { s.cleanup(); }
+});
+
+test('a page a step puts under a link in the site folder is not framed, and the build says it failed', (t) => {
+  const s = scratch({ keep: ['map'], after_build: [step('map/index.html')], own_pages: ['map/index.html'] });
+  try {
+    const outside = path.join(s.root, 'outside');
+    fs.mkdirSync(outside);
+    fs.mkdirSync(s.docs(), { recursive: true });
+    try { fs.symlinkSync(outside, s.docs('map'), 'dir'); } catch { t.skip('this system cannot make a link'); return; }
+    let err;
+    try { buildIn(s); } catch (e) { err = e; }
+    assert.ok(err && err.errorCount >= 1, 'the build reports an error');
+    assert.doesNotMatch(fs.readFileSync(path.join(outside, 'index.html'), 'utf8'), /own-page-frame/, 'the page behind the link is not framed');
+    assert.equal(fs.existsSync(path.join(outside, 'index.own.html')), false);
+  } finally { s.cleanup(); }
+});

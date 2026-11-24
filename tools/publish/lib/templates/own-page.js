@@ -12,14 +12,16 @@ const { escapeHtml } = require('../processor');
 // framing the frame.
 const FRAME_MARK = '<meta name="gm-apprentice-own-page">';
 
-// Where the GM's page is kept: next to the address, `.own.html` for `.html`.
+// Where the GM's page is kept: next to the address, `.own.html` for `.html` (`.own.htm` for `.htm`, so `atlas.htm`
+// and `atlas.html` keep a copy each).
 function ownFileOf(address) {
-  return address.replace(/\.html?$/i, '') + '.own.html';
+  return address.replace(/(\.html?)$/i, '.own$1');
 }
 
-// In the site page: the frame opens at the address's #fragment (the GM's page may read one, as the star map reads a
-// system's name) and follows it when it changes. A link in the GM's page that leaves it opens in the whole window,
-// as it would without the frame; a link within it (a #fragment) and a link with a target of its own are left alone.
+// In the site page: the frame opens at the address's ?query and #fragment (the GM's page may read one, as the star
+// map reads a system's name) and follows the fragment when it changes. A link in the GM's page that leaves it opens in
+// the whole window, as it would without the frame; a link within it (a #fragment), a link with a target of its own and
+// a download link are left alone.
 // A browser that keeps the two pages apart (a file opened from disk) keeps such links in the frame. The frame takes the
 // keyboard when it loads, and may go full screen.
 const FRAME_SCRIPT = `<script>
@@ -27,7 +29,7 @@ const FRAME_SCRIPT = `<script>
   var frame = document.querySelector('.own-page-frame');
   if (!frame) return;
   var src = frame.getAttribute('data-src');
-  function open() { frame.src = src + location.hash; }
+  function open() { frame.src = src + location.search + location.hash; }
   open();
   window.addEventListener('hashchange', open);
   frame.addEventListener('load', function() {
@@ -40,7 +42,7 @@ const FRAME_SCRIPT = `<script>
       if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
       var a = e.target && e.target.closest ? e.target.closest('a[href]') : null;
       var target = a && a.getAttribute('target');
-      if (!a || (target && target !== '_self')) return;
+      if (!a || a.hasAttribute('download') || (target && target !== '_self')) return;
       var to = new URL(a.getAttribute('href'), doc.baseURI);
       if (!/^(https?|file):$/.test(to.protocol)) return;
       var here = frame.contentWindow.location;
