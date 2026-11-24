@@ -350,7 +350,8 @@ describe('the GM page in a browser', { skip: browserSkip() }, () => {
     made.push(src);
     fs.cpSync(FIXTURE, src, { recursive: true });
     const ben = path.join(src, 'Characters/PCs/Ben Hart.md');
-    fs.writeFileSync(ben, fs.readFileSync(ben, 'utf8').replace(/\*\*Open threads:\*\* —/, '**Open threads:** the debt on **the salt barge** owed to [[Ada Moss]]'));
+    // raw HTML in a Thread stays text (Task 34 fix round): no element made, no script run
+    fs.writeFileSync(ben, fs.readFileSync(ben, 'utf8').replace(/\*\*Open threads:\*\* —/, '**Open threads:** the debt on **the salt barge** owed to [[Ada Moss]] <script>window.__threadRan = 1</script><b>loud</b>'));
     const own = await start(src, 'Session 02 - The Test');
     await withPage({ width: 1449, height: 762 }, async (page) => {
       await page.goto(`${own.base}?probe=1`);
@@ -358,8 +359,10 @@ describe('the GM page in a browser', { skip: browserSkip() }, () => {
       const cell = await page.evaluate(`(() => { const td = Array.from(document.querySelectorAll('td')).find((t) => /Thread:/.test(t.textContent) && /salt barge/.test(t.textContent));
         return td ? { text: td.textContent.replace(/\\s+/g, ' ').trim(), bold: Array.from(td.querySelectorAll('strong, b'), (b) => b.textContent), link: Array.from(td.querySelectorAll('a[data-note]'), (a) => a.textContent) } : null; })()`);
       assert.ok(cell, 'the PCs table has the thread');
-      assert.match(cell.text, /Thread: the debt on the salt barge owed to Ada Moss$/);
-      assert.ok(cell.bold.includes('the salt barge'), JSON.stringify(cell));
+      assert.match(cell.text, /Thread: the debt on the salt barge owed to Ada Moss <script>window.__threadRan = 1<\/script><b>loud<\/b>$/);
+      assert.strictEqual(await page.evaluate(`Array.from(document.querySelectorAll('td')).some((t) => t.querySelector('script'))`), false);
+      assert.strictEqual(await page.evaluate('window.__threadRan === undefined'), true);
+      assert.deepStrictEqual(cell.bold, ['the salt barge'], 'the raw <b> made no bold');
       assert.deepStrictEqual(cell.link, ['Ada Moss']);
     });
   });
