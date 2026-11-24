@@ -71,8 +71,6 @@
     // target, range, chips: { key: true }, gun, mal (the malfunction box's words), dive: { passed } | null, diveAsk,
     // diveRolling, rolling, last: the last shot's line }), and the chips last used by shooter and target this turn
     shot: null, shotMem: {},
-    // the row the page picked for its panel on reaching a blank row (Task 23, D3a), until the GM clicks a name
-    autoPick: null,
   };
 
   const model = () => RP.model();
@@ -181,8 +179,6 @@
     const r = ids.map(rowById).find(noNumbers);
     if (!r) return;
     pickRow(r.id);
-    // the page picked it, not the GM: a click on its name later shows it, never takes the pick back
-    ui.autoPick = r.id;
   }
   function pickRow(id) {
     const f = state().fight;
@@ -2023,11 +2019,10 @@
     }
     if (d.fjot) { RP.dispatch({ type: 'jot', beat: f.beat, text: d.fjot, title: f.title }); return true; }
     if (d.fpeek) {
-      // a blank row's name picks it and puts the cursor in its panel's first empty box; a second click keeps both (D3a)
+      // a blank row's name picks it and puts the cursor in its panel's first empty box; a second click keeps both (D3a).
+      // Any row's second click keeps it picked (Task 34): another row's name, or the turn moving on, moves the panel.
       if (panelBoxes().length && noNumbers(rowById(d.fpeek))) { pickRow(d.fpeek); return true; }
-      const auto = ui.autoPick === d.fpeek;
-      ui.autoPick = null;
-      ui.peek = ui.peek === d.fpeek && !auto ? null : d.fpeek;
+      ui.peek = d.fpeek;
       RP.render();
       return true;
     }

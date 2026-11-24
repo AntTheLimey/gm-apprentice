@@ -921,6 +921,24 @@ describe('CoC and GURPS fights on the GM page, by real input', { skip: browserSk
     });
   }
 
+  // Task 34 (finding 8): a second click on a picked row's name keeps it picked, numbers or none; another name moves it
+  it('GURPS: a second click on Bouncer 2\'s name, which has numbers, keeps its panel; a click on Bouncer 1\'s moves it', async () => {
+    const run = await start('gurps', { randomInt: () => 4 });
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await bouncers(page, run, [['st', 11], ['ht', 10], ['dx', 10], ['parry', 9]]);
+      const b2 = named(p, 'Bouncer 2').id;
+      assert.strictEqual(p.fight.actingName, 'Bouncer 1');
+      p = await peek(page, p, 'Bouncer 2');
+      await tap(page, `[data-fpeek="${b2}"]`);
+      await page.sleep(150);
+      p = await settled(page);
+      assert.strictEqual(p.fight.actingName, 'Bouncer 2', 'the second click keeps the pick');
+      assert.strictEqual(await page.evaluate(`Boolean(document.querySelector('#acting [data-fs-parry="${b2}"]'))`), true);
+      p = await peek(page, p, 'Bouncer 1');
+      assert.strictEqual(p.fight.actingName, 'Bouncer 1');
+    });
+  });
+
   // Task 34 (finding 11): the panel's Dodge read-out is the row's figure, Tired halving it there too
   it('GURPS: a Tired Bouncer 2 reads the same Dodge on its row and in its panel\'s header', async () => {
     const run = await start('gurps', { randomInt: () => 4 });
