@@ -1008,23 +1008,20 @@ describe('sides by colour', { skip: browserSkip() }, () => {
   });
 });
 
-// Task 37 fix round 2: D&D's entry box keeps its own spacing (the CoC/GURPS margin is not D&D's), and the box, ½ and
-// Res never overlap, focused or not.
+// Task 37 fix rounds 2 and 3: the box, ½ and Res never overlap, focused or not, and the box's focus ring clears ½.
+// Fix round 3 moved ½ and Res 3px on purpose (a named D&D change): on main the ring reached 2px over ½'s border.
 describe('D&D entry box, ½ and Res never overlap (step 6b Task 37 fix round 2)', { skip: browserSkip() }, () => {
   const clash = (page) => page.evaluate(`(() => {
     const out = [];
     for (const box of document.querySelectorAll('#side ol.to > li[data-frow] input.hpin')) {
       const cs = getComputedStyle(box);
-      if (cs.marginRight !== '0px') out.push({ row: box.dataset.fhp, margin: cs.marginRight });
       const ring = document.activeElement === box && cs.outlineStyle !== 'none' ? parseFloat(cs.outlineWidth) + parseFloat(cs.outlineOffset) : 0;
       const half = box.parentElement.querySelector('[data-fhalf]');
       const res = box.parentElement.querySelector('[data-fres]');
       const b = box.getBoundingClientRect();
       if (half && b.right > half.getBoundingClientRect().left) out.push({ row: box.dataset.fhp, box: b.right, half: half.getBoundingClientRect().left });
       if (half && res && half.getBoundingClientRect().right > res.getBoundingClientRect().left) out.push({ row: box.dataset.fhp, half: half.getBoundingClientRect().right, res: res.getBoundingClientRect().left });
-      // the ring itself is not checked here: on D&D (as on main) it reaches 2px over ½'s border, a finding left for the
-      // coordinator, since D&D's rows are not to change in this task
-      void ring;
+      if (ring && half && b.right + ring > half.getBoundingClientRect().left) out.push({ ringOver: b.right + ring - half.getBoundingClientRect().left, row: box.dataset.fhp });
     }
     return out;
   })()`);

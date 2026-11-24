@@ -617,7 +617,7 @@
       const wide = tg.half ? '' : ` style="width: calc(${ph.length}ch + 12px)"`;
       // its title: the words in it, whole (a narrow box clips a long place, Task 25), else what it takes
       const tip = String(pend || '').trim() || (tg.half ? '' : ph);
-      h += `<input class="hpin${tg.half ? '' : ' fit'}${pend && !dmgOn ? ' pending' : ''}${dmgOn ? ' dmg' : ''}" data-fhp="${esc(r.id)}" data-tip="${esc(tg.half ? '' : ph)}" value="${esc(pend || '')}" placeholder="${esc(dmgOn ? DMG_PLACEHOLDER : ph)}"${wide}${tip ? ` title="${esc(tip)}"` : ''} autocomplete="off" aria-label="Damage or healing for ${esc(r.gmName)}">`;
+      h += `<input class="hpin${pend && !dmgOn ? ' pending' : ''}${dmgOn ? ' dmg' : ''}" data-fhp="${esc(r.id)}" data-tip="${esc(tg.half ? '' : ph)}" value="${esc(pend || '')}" placeholder="${esc(dmgOn ? DMG_PLACEHOLDER : ph)}"${wide}${tip ? ` title="${esc(tip)}"` : ''} autocomplete="off" aria-label="Damage or healing for ${esc(r.gmName)}">`;
       if (tg.half) h += `<button type="button" class="tg ${half ? 'on' : ''}" ${ui.area ? 'data-fahalf' : 'data-fhalf'}="${esc(r.id)}" aria-pressed="${!!half}" title="${ui.area ? 'Half for this area: a save' : 'Half: the next hit only (a save)'}">½</button>`;
       if (tg.resisted) h += `<button type="button" class="tg ${r.resisted ? 'on' : ''}" data-fres="${esc(r.id)}" aria-pressed="${!!r.resisted}" title="Resisted: every hit halved until turned off">Res</button>`;
     }
