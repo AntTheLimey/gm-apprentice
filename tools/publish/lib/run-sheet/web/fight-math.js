@@ -399,6 +399,15 @@
   // ---- names ----
 
   // What the GM sees: the unmasked name when there is one, then the copy number once there are two.
+  // How many rows share a row's name run, for gmName's copy number: a note's rows (not PCs), or, for a counted line
+  // with no note ("Foam-covered guards ×4"), the note-less rows of that name that carry a copy number. A "+ New" row
+  // has its number in its name and no copy, so it counts alone.
+  function copiesOf(rows, row) {
+    if (row.note) return rows.filter((x) => x.note === row.note && x.kind !== 'pc').length;
+    if (!row.copy) return 1;
+    return rows.filter((x) => !x.note && x.copy && x.kind === row.kind && x.name === row.name).length;
+  }
+
   function gmName(row, unmaskOf, copies) {
     if (row.kind === 'lair') return 'Lair action';
     const base = (unmaskOf && row.note && unmaskOf(row.note)) || row.name;
@@ -1082,7 +1091,7 @@
     parseEntry, hitWords, hitText, cannotTarget, chipOrder, damageTaken, afterDamage, afterHeal, isBloodied, bloodiedWord, DND_LONG_REST, DND_NO_BLOCK, poolsOf, poolOf, afterPool,
     combatOf, initOf, marksOf, tiredOf,
     thresholdOf, isLit, sortRows, takesTurn, nextLive, actingRow,
-    gmName, lairRow, unseenKey, unseenNumbers, unseenLabels, rowsForFight, joinRows, blankRow,
+    gmName, copiesOf, lairRow, unseenKey, unseenNumbers, unseenLabels, rowsForFight, joinRows, blankRow,
     addChoices, sameName, groupKey, groupMates, placeRow, undoable, untouched, copyHolds, copyFields, sameForAllTakers, sameForAllCount, FROM_KEY, SAME_KEYS,
     SIDES, isSide, noteSide, sideOfRow, isFoe,
   };

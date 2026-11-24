@@ -914,7 +914,7 @@
   // The GM's name for a fight row: unmasked when Unmask is on (this session or carried), then the copy number.
   function namer(rows, unmaskedNow) {
     const unmasked = new Map(unmaskedNow.map((u) => [u.note, u.name]));
-    return (r) => FM.gmName(r, (note) => unmasked.get(note) || null, r.note ? rows.filter((x) => x.note === r.note && x.kind !== 'pc').length : 1);
+    return (r) => FM.gmName(r, (note) => unmasked.get(note) || null, FM.copiesOf(rows, r));
   }
 
   // The running fight with what the page draws from it: rows (a PC row whose note left the party marked

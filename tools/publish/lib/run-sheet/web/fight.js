@@ -38,8 +38,7 @@
     if (!quiet) r.logged = true;
     const u = s.unmask && r.note ? s.unmask[r.note] : null;
     const unmasked = u ? (u.on ? u.name : null) : ((f.carried && r.note && f.carried[r.note]) || null);
-    const copies = r.note ? f.rows.filter((x) => x.note === r.note && x.kind !== 'pc').length : 1;
-    return FM.gmName(r, () => unmasked, copies);
+    return FM.gmName(r, () => unmasked, FM.copiesOf(f.rows, r));
   }
 
   // Statuses as added, then exhaustion, then concentration: `Down, Prone, Exhaustion 2, Concentrating`.

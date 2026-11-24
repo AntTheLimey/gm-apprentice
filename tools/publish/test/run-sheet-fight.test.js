@@ -438,6 +438,24 @@ describe('the fight in the state', () => {
     assert.equal(rec.find((v) => v.rowId === GUARD).hp, 10);
   });
 
+  // Task 28 proof (Dead End): a counted line with no note ("Foam-covered guards ×4") gives rows with copies and no
+  // note; the GM's name and the log number them as a note's copies are, never four rows of one bare name.
+  it('copies of a counted line with no note are numbered', () => {
+    const nm = clone(model);
+    const foam = (i) => ({ key: `g.foe.foam${i > 1 ? `~${i}` : ''}`, note: null, name: `Foam guards ${i}`, ally: false, ac: null, hp: null, init: null });
+    nm.beats[0].foes = [foam(1), foam(2)];
+    let s = fightAt(move(fresh(), ADA, GATE), GATE, { m: nm });
+    const foams = s.fight.rows.filter((r) => !r.note && r.kind === 'foe');
+    assert.deepEqual(foams.map((r) => r.copy), [1, 2]);
+    assert.deepEqual(RS.derive(nm, s).fight.view.rows.filter((r) => !r.note && r.kind === 'foe').map((r) => r.gmName), ['Foam guards 1', 'Foam guards 2']);
+    s = F(s, { type: 'out', row: foams[1].id, on: true });
+    assert.equal(texts(s).at(-1), 'Foam guards 2 is out of the fight.');
+    // a lone "+ New" row and a numbered "+ New" run keep the names they were given
+    s = join(s, { name: 'Bouncer', count: 2 }, nm);
+    s = join(s, { name: 'Lookout', count: 1 }, nm);
+    assert.deepEqual(RS.derive(nm, s).fight.view.rows.filter((r) => /Bouncer|Lookout/.test(r.gmName)).map((r) => r.gmName), ['Bouncer 1', 'Bouncer 2', 'Lookout']);
+  });
+
   it('rollInit fills only empty boxes', () => {
     let s = gateFight();
     const [w1, w2] = rows(s, WOLF);
