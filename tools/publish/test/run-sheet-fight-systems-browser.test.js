@@ -3403,3 +3403,78 @@ describe('the entry box and the HP figure never overlap (step 6b Task 37 fix rou
     });
   }
 });
+
+// Task 38: a CoC row fits one line. The entry box's placeholder is short with the whole hint in its title and
+// description; the dice are one button that opens the stepper on the row's second line; the attacker's "atk" is one box
+// on its own row; a long name's reserved width stops at 11 rem. Real input only.
+describe('CoC fight rows on one line (step 6b Task 38), by real input', { skip: browserSkip() }, () => {
+  const LONG = 'Bartholomew Featherstonehaugh the Younger';
+  for (const [w, h] of SIZES) {
+    it(`${w}: the split holds from Fight through Start, a turn, the dice set in two taps and a typed attack; the hint is reachable; a long name is capped`, async () => {
+      const run = await start('coc', { randomInt: () => 3 });
+      await withPage({ width: w, height: h }, async (page) => {
+        const edge = async (label) => { const p = await settled(page); return [label, p.layout.paneBox.left, p.layout.folded, p.layout.railFolded, p.layout.orderMin]; };
+        const seen = [];
+        const at = run.model.beats.findIndex((b) => /Net Loft/.test(b.title));
+        let p = await fightOn(page, run, at);
+        seen.push(await edge('fight'));
+        const iris = named(p, 'Iris Calder').id;
+        const c1 = named(p, 'Dock Cultist 1').id;
+        const c2 = named(p, 'Dock Cultist 2').id;
+        // the hint: short on the box, whole in its title and its description
+        const hint = 'Damage -7, healing +3, MP m-2, SAN s-5';
+        assert.deepStrictEqual([await attrOf(page, `[data-fhp="${c2}"]`, 'placeholder'), await attrOf(page, `[data-fhp="${c2}"]`, 'title'), await attrOf(page, `[data-fhp="${c2}"]`, 'aria-description')],
+          ['-7 / +3…', hint, hint]);
+        await tap(page, '#fNext');
+        await page.waitFor('document.querySelector("#fStartAnyway")', 3000);
+        await tap(page, '#fStartAnyway');
+        p = await until(page, 'p.fight.started && p.saved === "Saved" && p.pending === 0');
+        seen.push(await edge('start'));
+        assert.strictEqual(p.fight.turn, iris);
+        // a bonus die in two taps: the ± button, then the stepper's +, which has focus
+        const dice = `[data-fmdopen="${c2}"]`;
+        assert.deepStrictEqual([await text(page, dice), await attrOf(page, dice, 'aria-pressed')], ['±', 'false']);
+        await tap(page, dice);
+        await page.waitFor(`document.activeElement === document.querySelector('[data-fmdice="${c2}|1"]')`, 3000);
+        assert.strictEqual(await attrOf(page, dice, 'aria-pressed'), 'true');
+        await tap(page, `[data-fmdice="${c2}|1"]`);
+        p = await until(page, `p.fight.rows.find((r) => r.id === ${q(c2)}).meleeDice === "+1"`);
+        assert.match(await attrOf(page, dice, 'title'), /bonus die/);
+        seen.push(await edge('a bonus die'));
+        // a tap on the button shuts the stepper, the die kept, focus on the button
+        await tap(page, dice);
+        await page.waitFor(`document.activeElement === document.querySelector(${q(dice)}) && !document.querySelector('[data-fmdice="${c2}|1"]')`, 3000);
+        p = await until(page, `p.fight.rows.find((r) => r.id === ${q(c2)}).meleeDice === "+1"`);
+        // the next turn: Dock Cultist 1 attacks; its "atk" is on its own row, the one on the page; typed, then Dodge on
+        // Iris's row: the typed roll goes to the server marked typed, and the log says so
+        await tap(page, '#fNext');
+        p = await until(page, `p.fight.turn === ${q(c1)} && p.saved === "Saved" && p.pending === 0`);
+        seen.push(await edge('a turn'));
+        assert.strictEqual(await page.evaluate(`document.querySelectorAll('[data-ftyped^="matk|"]').length`), 1);
+        assert.strictEqual(await page.evaluate(`document.querySelector('[data-ftyped="matk|${c1}"]').closest('li').dataset.frow`), c1);
+        assert.strictEqual(await page.evaluate(`Boolean(document.querySelector('[data-ftyped="mdef|${iris}"]'))`), false, 'a PC has no def box');
+        await page.evaluate(`(() => { window.__rolls = []; const of = window.fetch; window.fetch = (u, o) => { if (String(u).includes('/api/roll')) window.__rolls.push(JSON.parse(o.body)); return of(u, o); }; return true; })()`);
+        await typeInto(page, `[data-ftyped="matk|${c1}"]`, '44', { settle: false });
+        assert.strictEqual(p.fight.melee, null, 'Enter in atk waits for the tap on the row it attacks');
+        await tap(page, `[data-fmelee="${iris}|dodge"]`);
+        p = await until(page, 'p.fight.melee && !p.fight.melee.rolling');
+        const sent = JSON.parse(await page.evaluate('JSON.stringify(window.__rolls)'));
+        assert.deepStrictEqual(sent.map((b) => b.rolls.map((x) => x.typed)), [[44]], JSON.stringify(sent));
+        await tap(page, `[data-fmlvl="${iris}|defence|fail"]`);
+        p = await until(page, 'p.fight.melee === null && p.saved === "Saved" && p.pending === 0');
+        assert.match((await logOf(run)).slice(-1)[0], /^Dock Cultist 1: Fail \(typed 44\); Iris Calder Dodges: Fail/);
+        seen.push(await edge('a typed attack'));
+        assert.strictEqual(new Set(seen.map((x) => `${x[1]}|${x[2]}|${x[3]}|${x[4]}`)).size, 1, `${w}: the split moved ${JSON.stringify(seen)}`);
+        if (w === 1449) assert.strictEqual(seen[0][3], false, '1449: the run list stays open');
+        sane(p, `t38 ${w}`);
+        // a long name: cut on the row past 11 rem, whole in its title; the order reserves no more than 11 rem for it
+        p = await addNew(page, LONG);
+        const nm = await page.evaluate(`(() => { const n = Array.from(document.querySelectorAll('#side ol.to > li > .nm')).find((x) => x.textContent === ${q(LONG)}); return [n.title.startsWith(${q(LONG)}), parseFloat(n.style.minWidth || '0'), 11 * parseFloat(getComputedStyle(document.documentElement).fontSize)]; })()`);
+        assert.strictEqual(nm[0], true, 'the whole name in its title');
+        assert.ok(nm[1] > 0 && nm[1] <= nm[2], `its reserved width ${nm[1]} is at most 11 rem (${nm[2]})`);
+        sane(p, `t38 long name ${w}`);
+        await shot(page, `t38-coc-${w}`);
+      });
+    });
+  }
+});
