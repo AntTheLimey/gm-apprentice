@@ -418,6 +418,9 @@ describe('CoC and GURPS fights on the GM page, by real input', { skip: browserSk
       // Dova has no reserve: e-3 is refused, the words stay in the box with the reason, nothing changes
       const dova = named(p, 'Dova Lang').id;
       const before = named(p, 'Dova Lang');
+      // the chip and the refusal agree on who has a reserve (Task 23b B4): Ilse shows one, Dova none
+      assert.ok(await page.evaluate(`Boolean(document.querySelector('li[data-frow="${ilse}"] .fpv .er'))`), 'Ilse shows her reserve');
+      assert.strictEqual(await page.evaluate(`Boolean(document.querySelector('li[data-frow="${dova}"] .fpv .er'))`), false, 'Dova shows none');
       await typeInto(page, `[data-fhp="${dova}"]`, 'e-3');
       const why = `li[data-row2="${dova}"] .refnum`;
       await page.waitFor(`document.querySelector(${q(why)})`);

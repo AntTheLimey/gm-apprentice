@@ -485,7 +485,8 @@
   // `MP 12 · SAN 55`. Only the pools the row holds a figure in.
   // One boxed pool is all a system has today (GURPS's FP, `data-ffpmax`); the Energy Reserve has no box (its max is
   // the sheet's), so a second boxed pool would still need its own attribute and STAT entry.
-  const hasReserve = (r) => isNum(r.er) || isNum(r.erMax);
+  // the reserve's figure is the one an entry spends, so it is what says a row has one (the refusal of e-3 asks the same)
+  const hasReserve = (r) => isNum(r.er);
   function poolsHTML(r) {
     const { boxed, read } = poolsShown();
     let h = '';
@@ -496,7 +497,7 @@
       const fp = p.key === 'fp';
       // the reserve's words are the system's (its pool's label, rules.words)
       const erPool = FM.poolOf(rules().fight || rules(), 'er');
-      const er = fp && erPool && hasReserve(r) ? `<span class="er" title="${esc(`${erPool.label} ${isNum(r.er) ? r.er : '?'}/${isNum(r.erMax) ? r.erMax : '?'}${words().reserveTitle ? `: ${words().reserveTitle}` : ''}`)}"> +${esc(isNum(r.er) ? r.er : '?')}</span>` : '';
+      const er = fp && erPool && hasReserve(r) ? `<span class="er" title="${esc(`${erPool.label} ${r.er}/${isNum(r.erMax) ? r.erMax : '?'}${words().reserveTitle ? `: ${words().reserveTitle}` : ''}`)}"> +${esc(r.er)}</span>` : '';
       const titles = [fromTag(r, p.max) ? `Max ${p.label} ${r[p.max]}${fromTag(r, p.max)}` : '', fp && r.caster ? (words().casterTitle || '') : ''].filter(Boolean);
       const t = titles.length ? ` title="${esc(titles.join('. '))}"` : '';
       const label = fp && r.caster ? `\u2726${p.label}` : p.label;
