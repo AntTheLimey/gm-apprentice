@@ -617,7 +617,7 @@
       const wide = tg.half ? '' : ` style="width: calc(${ph.length}ch + 12px)"`;
       // its title: the words in it, whole (a narrow box clips a long place, Task 25), else what it takes
       const tip = String(pend || '').trim() || (tg.half ? '' : ph);
-      h += `<input class="hpin${pend && !dmgOn ? ' pending' : ''}${dmgOn ? ' dmg' : ''}" data-fhp="${esc(r.id)}" data-tip="${esc(tg.half ? '' : ph)}" value="${esc(pend || '')}" placeholder="${esc(dmgOn ? DMG_PLACEHOLDER : ph)}"${wide}${tip ? ` title="${esc(tip)}"` : ''} autocomplete="off" aria-label="Damage or healing for ${esc(r.gmName)}">`;
+      h += `<input class="hpin${tg.half ? '' : ' fit'}${pend && !dmgOn ? ' pending' : ''}${dmgOn ? ' dmg' : ''}" data-fhp="${esc(r.id)}" data-tip="${esc(tg.half ? '' : ph)}" value="${esc(pend || '')}" placeholder="${esc(dmgOn ? DMG_PLACEHOLDER : ph)}"${wide}${tip ? ` title="${esc(tip)}"` : ''} autocomplete="off" aria-label="Damage or healing for ${esc(r.gmName)}">`;
       if (tg.half) h += `<button type="button" class="tg ${half ? 'on' : ''}" ${ui.area ? 'data-fahalf' : 'data-fhalf'}="${esc(r.id)}" aria-pressed="${!!half}" title="${ui.area ? 'Half for this area: a save' : 'Half: the next hit only (a save)'}">½</button>`;
       if (tg.resisted) h += `<button type="button" class="tg ${r.resisted ? 'on' : ''}" data-fres="${esc(r.id)}" aria-pressed="${!!r.resisted}" title="Resisted: every hit halved until turned off">Res</button>`;
     }
@@ -941,8 +941,12 @@
     // Back; "rolled" when there is one, "atk" and "def" when both are
     const npc = [A.kind !== 'pc' ? 'matk' : null, r.kind !== 'pc' ? 'mdef' : null].filter(Boolean);
     const busy = Boolean(m && m.rolling);
+    // with both drawn, Enter in one waits for the other (fix round): "def" says so, and how to have it rolled instead
+    const title = (k) => (npc.length > 1 && k === 'mdef'
+      ? `Rolled at the table? Type ${r.gmName}'s d100 (Enter in atk waits for it), or leave it empty and tap Dodge or Fight Back to have it rolled`
+      : `Rolled at the table: type ${k === 'matk' ? `${A.gmName}'s` : `${r.gmName}'s`} d100, then tap Dodge or Fight Back${dflt ? ` (Enter: ${CMath.RESPONSE_NAMES[dflt]})` : ''}`);
     const typed = npc.map((k) => typedBox(`${k}|${r.id}`, k === 'matk' ? `${A.gmName}'s attack on ${r.gmName}, rolled at the table` : `${r.gmName}'s defence, rolled at the table`,
-      `Rolled at the table: type ${k === 'matk' ? `${A.gmName}'s` : `${r.gmName}'s`} d100, then tap Dodge or Fight Back${dflt ? ` (Enter: ${CMath.RESPONSE_NAMES[dflt]})` : ''}`,
+      title(k),
       busy, npc.length > 1 ? (k === 'matk' ? 'atk' : 'def') : 'd100', true)).join('');
     return `<span class="melee">${order.map(btn).join('')}${step}${typed}${shoot}</span>`;
   }

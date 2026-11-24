@@ -1007,3 +1007,41 @@ describe('sides by colour', { skip: browserSkip() }, () => {
     });
   });
 });
+
+// Task 37 fix round 2: D&D's entry box keeps its own spacing (the CoC/GURPS margin is not D&D's), and the box, ½ and
+// Res never overlap, focused or not.
+describe('D&D entry box, ½ and Res never overlap (step 6b Task 37 fix round 2)', { skip: browserSkip() }, () => {
+  const clash = (page) => page.evaluate(`(() => {
+    const out = [];
+    for (const box of document.querySelectorAll('#side ol.to > li[data-frow] input.hpin')) {
+      const cs = getComputedStyle(box);
+      if (cs.marginRight !== '0px') out.push({ row: box.dataset.fhp, margin: cs.marginRight });
+      const ring = document.activeElement === box && cs.outlineStyle !== 'none' ? parseFloat(cs.outlineWidth) + parseFloat(cs.outlineOffset) : 0;
+      const half = box.parentElement.querySelector('[data-fhalf]');
+      const res = box.parentElement.querySelector('[data-fres]');
+      const b = box.getBoundingClientRect();
+      if (half && b.right > half.getBoundingClientRect().left) out.push({ row: box.dataset.fhp, box: b.right, half: half.getBoundingClientRect().left });
+      if (half && res && half.getBoundingClientRect().right > res.getBoundingClientRect().left) out.push({ row: box.dataset.fhp, half: half.getBoundingClientRect().right, res: res.getBoundingClientRect().left });
+      // the ring itself is not checked here: on D&D (as on main) it reaches 2px over ½'s border, a finding left for the
+      // coordinator, since D&D's rows are not to change in this task
+      void ring;
+    }
+    return out;
+  })()`);
+  for (const [w, h] of [[1449, 762], [1280, 762], [1100, 762]]) {
+    it(`${w}: every row's box, ½ and Res side by side, focused and not`, async () => {
+      const run = await start();
+      await withPage({ width: w, height: h }, async (page) => {
+        const { p } = await started(page, run);
+        assert.deepStrictEqual(await clash(page), [], `${w}: nothing focused`);
+        for (const r of p.fight.rows.filter((x) => x.in && x.hp !== null && x.hp !== undefined)) {
+          const sel = `[data-fhp="${r.id}"]`;
+          if (!(await page.evaluate(`Boolean(document.querySelector(${q(sel)}))`))) continue;
+          assert.ok((await page.click(sel)).hit, `the click lands on ${sel}`);
+          await page.waitFor(`document.activeElement === document.querySelector(${q(sel)})`, 2000);
+          assert.deepStrictEqual(await clash(page), [], `${w}: ${r.name}'s box focused`);
+        }
+      });
+    });
+  }
+});

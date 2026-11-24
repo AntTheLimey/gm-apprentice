@@ -3235,6 +3235,7 @@ describe('Typed rolls, fix round (step 6b Task 37), by real input', { skip: brow
       const c2 = named(p, 'Dock Cultist 2').id;
       const atk = `[data-ftyped="matk|${c2}"]`;
       const def = `[data-ftyped="mdef|${c2}"]`;
+      assert.match(await attrOf(page, def, 'title'), /Enter in atk waits for it/);
       const before = (await logOf(run)).length;
       await typeInto(page, atk, '0', { settle: false });
       // Enter in atk with def empty: focus to def, nothing sent
@@ -3247,6 +3248,76 @@ describe('Typed rolls, fix round (step 6b Task 37), by real input', { skip: brow
       await typeInto(page, atk, '31', { settle: false });
       p = await until(page, `p.fight.melee === null && p.saved === "Saved" && p.pending === 0 && p.fight.rows.find((r) => r.id === ${q(c2)}).meleeDefences === 1`);
       assert.deepStrictEqual((await logOf(run)).slice(-1), ['Dock Cultist 1: Regular (typed 31); Dock Cultist 2 Fights Back: Regular (typed 22): a tie: Dock Cultist 1 hits Dock Cultist 2.']);
+    });
+  });
+});
+
+describe('Typed rolls, fix round 2 (step 6b Task 37), by real input', { skip: browserSkip() }, () => {
+  it('CoC: the bout\'s die typed "0" is a 10', async () => {
+    const run = await start('coc', { randomInt: () => 3 });
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await netLoft(page, run);
+      const iris = named(p, 'Iris Calder').id;
+      await typeInto(page, `[data-fhp="${iris}"]`, 's-6');
+      const icard = `#acting .fcard[data-fcrow="${iris}"]`;
+      p = await until(page, `document.querySelector(${q(icard)}) && p.saved === "Saved" && p.pending === 0`);
+      await tap(page, `${icard} button.pass`);
+      p = await until(page, `p.fight.rows.find((r) => r.id === ${q(iris)}).cards[0].lines[0].result && p.saved === "Saved" && p.pending === 0`);
+      await typeInto(page, `${icard} input.typed`, '0');
+      p = await until(page, `(p.fight.rows.find((r) => r.id === ${q(iris)}).cards || []).length === 0 && p.saved === "Saved" && p.pending === 0`);
+      const st = (await (await fetch(`${run.base}/api/state`)).json()).state;
+      assert.deepStrictEqual(st.fight.rows.find((r) => r.id === iris).bout, { left: 10, of: 10, from: 1 });
+      assert.deepStrictEqual((await logOf(run)).slice(-1), ['Iris Calder: SAN loss: Temporary insanity, a bout of 10 rounds (typed).']);
+    });
+  });
+
+  it('GURPS: Aim, forgotten next turn, set late after Next (2); on its next turn the usual tap on Aim makes 3', async () => {
+    const run = await start('gurps', { randomInt: () => 4 });
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await fightOn(page, run, 1);
+      await tap(page, '#fAddName');
+      await page.type('Bouncer');
+      await page.waitFor('document.querySelector("[data-faddnew]")');
+      await tap(page, '[data-faddnew]');
+      p = await until(page, 'p.fight.rows.some((r) => r.name === "Bouncer") && p.saved === "Saved" && p.pending === 0');
+      p = await peek(page, p, 'Bouncer');
+      p = await typeInto(page, box(p, 'Bouncer', 'speed'), '9');
+      await tap(page, '#fNext');
+      if (await page.evaluate('Boolean(document.querySelector("#fStartAnyway"))')) await tap(page, '#fStartAnyway');
+      p = await until(page, 'p.fight.started && p.saved === "Saved" && p.pending === 0');
+      const b = named(p, 'Bouncer').id;
+      const aimOf = async () => (await (await fetch(`${run.base}/api/state`)).json()).state.fight.rows.find((r) => r.id === b).aim;
+      // Next until the turn is the Bouncer's (`n` times round), or just past it
+      const toTurn = async (past) => {
+        for (let i = 0; i < 20; i++) {
+          if (p.fight.turn === b && !past) return;
+          const was = p.fight.turn;
+          await tap(page, '#fNext');
+          p = await until(page, `p.fight.turn !== ${q(was)} && p.saved === "Saved" && p.pending === 0`);
+          if (past && was === b) return;
+        }
+        throw new Error('the turn never came round');
+      };
+      const aimBtn = `#acting [data-fman="${b}|aim"]`;
+      await toTurn(false);
+      p = await peek(page, p, 'Bouncer');
+      await tap(page, aimBtn);
+      p = await until(page, `p.saved === "Saved" && p.pending === 0`);
+      assert.strictEqual(await aimOf(), 1);
+      await toTurn(true); // its aim turn ends
+      await toTurn(false); // its next turn: the Aim is forgotten
+      await toTurn(true); // and ends with no pick
+      assert.strictEqual(await aimOf(), 0);
+      p = await peek(page, p, 'Bouncer');
+      await tap(page, aimBtn);
+      p = await until(page, `p.saved === "Saved" && p.pending === 0`);
+      assert.strictEqual(await aimOf(), 2, 'the late Aim counts on');
+      await toTurn(false); // its next turn starts clear: the late pick was the turn just gone's
+      p = await peek(page, p, 'Bouncer');
+      await page.waitFor(`document.querySelector(${q(aimBtn)}) && document.querySelector(${q(aimBtn)}).getAttribute('aria-pressed') === 'false'`, 3000);
+      await tap(page, aimBtn);
+      p = await until(page, `p.saved === "Saved" && p.pending === 0`);
+      assert.strictEqual(await aimOf(), 3);
     });
   });
 });
