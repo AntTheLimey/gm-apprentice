@@ -997,7 +997,7 @@ describe('CoC and GURPS fights on the GM page, by real input', { skip: browserSk
         const seen = [];
         let p = await fightOn(page, run, 1);
         seen.push(await edge('fight'));
-        p = await bouncers(page, run, [['st', 11], ['ht', 10], ['dx', 10], ['parry', 9], ['block', 8], ['dr', 2]], true);
+        p = await bouncers(page, run, [['st', 11], ['ht', 10], ['dx', 10], ['parry', 9], ['dr', 2]], true);
         seen.push(await edge('numbers and Start'));
         const b2 = named(p, 'Bouncer 2').id;
         p = await typeInto(page, `[data-fhp="${b2}"]`, '-7');
@@ -1008,7 +1008,47 @@ describe('CoC and GURPS fights on the GM page, by real input', { skip: browserSk
         // open or folded, the pane is as it was at Fight: where the order needs the room, it folds then, not mid-fight
         assert.strictEqual(new Set(seen.map((x) => `${x[1]}|${x[2]}`)).size, 1, `${width}: the split moved ${JSON.stringify(seen)}`);
         if (width >= 1280) assert.strictEqual(seen[0][2], false, `${width}: the pane is open`);
+        // no foe here had a Block: the first one typed may move it once (the coordinator's ruling), then it holds
+        p = await peek(page, p, 'Bouncer 2');
+        p = await typeInto(page, box(p, 'Bouncer 2', 'block'), 8);
+        const after = [await edge('block')];
+        p = await typeInto(page, `[data-fhp="${named(p, 'Sela Drake').id}"]`, 'f-1');
+        after.push(await edge('after the block'));
+        assert.strictEqual(new Set(after.map((x) => `${x[1]}|${x[2]}`)).size, 1, `${width}: it moved again ${JSON.stringify(after)}`);
         sane(p, `split ${width}`);
+      });
+    });
+  }
+
+  // Task 34 fix round: the CoC twin. The order is measured as if an attacker were acting, so Start and a turn passing
+  // from one who can shoot to one who cannot move nothing
+  for (const [width, height] of SIZES) {
+    it(`CoC at ${width}: the right pane's left edge stays put from Fight through an added row, Start, turns passing and a card`, async () => {
+      const run = await start('coc', { randomInt: () => 4 });
+      await withPage({ width, height }, async (page) => {
+        const edge = async (label) => { const p = await settled(page); return [label, p.layout.paneBox.left, p.layout.folded]; };
+        const seen = [];
+        let p = await fightOn(page, run, 0);
+        seen.push(await edge('fight'));
+        p = await addNew(page, 'Quill');
+        p = await typeInto(page, box(p, 'Quill', 'dex'), 50);
+        seen.push(await edge('added'));
+        await tap(page, '#fNext');
+        if (await page.evaluate('Boolean(document.querySelector("#fStartAnyway"))')) await tap(page, '#fStartAnyway');
+        p = await until(page, 'p.fight.started && p.saved === "Saved" && p.pending === 0');
+        seen.push(await edge(`start: ${p.fight.actingName}`));
+        for (let i = 0; i < 3; i++) {
+          const was = p.fight.turn;
+          await tap(page, '#fNext');
+          p = await until(page, `p.fight.turn !== ${q(was)} && p.saved === "Saved" && p.pending === 0`);
+          seen.push(await edge(`turn: ${p.fight.actingName}`));
+        }
+        const bw = named(p, 'Brine Walker 1').id;
+        p = await typeInto(page, `[data-fhp="${bw}"]`, '-8');
+        await page.waitFor(`document.querySelector('#acting .fcard[data-fcrow="${bw}"]')`, 3000);
+        seen.push(await edge('card'));
+        assert.strictEqual(new Set(seen.map((x) => `${x[1]}|${x[2]}`)).size, 1, `${width}: the split moved ${JSON.stringify(seen)}`);
+        sane(p, `coc split ${width}`);
       });
     });
   }

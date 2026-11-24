@@ -744,7 +744,7 @@
     renderSide(d);
     if (G.pane && wasPane) $('#sheet').scrollTop = sheetTop;
     document.querySelectorAll('[data-keepscroll]').forEach((el) => { if (kept[el.dataset.keepscroll]) el.scrollTop = kept[el.dataset.keepscroll]; });
-    G.om = G.pane ? orderMin() : ORDER_FLOOR;
+    G.om = G.pane ? orderMin(d) : ORDER_FLOOR;
     applyLayout();
     document.querySelectorAll('[data-mhits]').forEach(placeMoveList);
     drawerShow();
@@ -1445,7 +1445,7 @@
   const fightLayout = () => Boolean(G.pane) && window.innerWidth > NARROW;
   // The order's least width: its widest row with every item as tight as it goes (a chip at its 2.4 rem, the name
   // whole up to 14 rem), plus the order box's padding, the scroll box's gutter and the column's border. Never under 560.
-  function orderMin() {
+  function orderMin(d) {
     const ol = document.querySelector('#side ol.to');
     const fo = ol && ol.closest('.fo');
     if (!ol || !fo) return ORDER_FLOOR;
@@ -1453,7 +1453,7 @@
     // the rows a part measures with as well (gm-fight.js measureRows: a row with every figure), taken out again below
     const extra = [];
     for (const part of parts) {
-      for (const html of (part.measureRows && part.measureRows()) || []) {
+      for (const html of (part.measureRows && part.measureRows(d)) || []) {
         const t = document.createElement('template');
         t.innerHTML = String(html).trim();
         const li = t.content.firstElementChild;

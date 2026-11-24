@@ -73,6 +73,8 @@
     // target, range, chips: { key: true }, gun, mal (the malfunction box's words), dive: { passed } | null, diveAsk,
     // diveRolling, rolling, last: the last shot's line }), and the chips last used by shooter and target this turn
     shot: null, shotMem: {},
+    // while the order's measure row is drawn (measureRows): { attacker }, the attacker it is drawn against
+    measure: null,
   };
 
   const model = () => RP.model();
@@ -853,6 +855,8 @@
   // ---- CoC's melee on the target's row (Task 16): Dodge or Fight Back, the dice before the roll, the levels compared ----
   // The attacker: the row picked (its panel shown), else the one whose turn it is; a live row, or none.
   function attackerOf(rows, f) {
+    // the order's measure (measureRows) names its own attacker
+    if (ui.measure) return ui.measure.attacker;
     const live = (r) => Boolean(r) && r.in && !r.out && r.kind !== 'lair';
     const picked = ui.peek ? rows.find((x) => x.id === ui.peek) : null;
     if (live(picked)) return picked;
@@ -933,7 +937,7 @@
   function rowAimHTML(r, cur) {
     const C = cocRules();
     const f = state().fight;
-    if (!C || !C.firearm || !cur || !f.started || r.kind === 'lair' || !r.in || r.out || !CMath.canShoot(r)) return '';
+    if (!C || !C.firearm || !cur || !(f.started || ui.measure) || r.kind === 'lair' || !r.in || r.out || !CMath.canShoot(r)) return '';
     if (r.aiming && r.aiming.round === f.round) return '';
     return `<button type="button" class="tg mel" data-faim="${esc(r.id)}" title="Aimed">aim</button>`;
   }
@@ -2016,20 +2020,33 @@
       return d.afterFight ? afterHTML(d) : '';
     },
     click(ev) { return onClick(ev); },
-    // Rows the order's least width is measured with as well as its own (gm.js orderMin, Task 34): a foe row with every
-    // figure filled and the fight's longest name, once acting and once not, so the order's column is as wide from the
-    // start as its rows can grow, and the split beside it holds still as they gain numbers. CoC and GURPS only (D&D's
-    // rows keep today's measure).
-    measureRows() {
-      const d = RP.derived();
+    // Rows the order's least width is measured with as well as its own (gm.js orderMin, Task 34): a foe row with the
+    // fight's longest name and two-digit figures, once acting and once not, so the order's column is as wide from Fight
+    // as its rows can grow and the split beside it holds still as they gain numbers. It reserves only what this fight
+    // can show: a Block where some foe or ally has one, a gun's Shoot and aim where some row can shoot. CoC measures it
+    // as if an attacker were acting (the melee strip and its typed boxes), so Start and a turn passing move nothing.
+    // Deliberately, a kind of figure that first appears mid-fight (a Block typed later) moves the split once: reserving
+    // every kind would cost the run list at 1449 in every fight (the coordinator's ruling, Task 34 fix round). CoC and
+    // GURPS only (D&D's rows keep today's measure). `d` is the render's own.
+    measureRows(d) {
       const f = d && d.fight;
       if (!f || f.paused || !panelBoxes().length) return [];
-      const longest = f.view.rows.reduce((a, r) => (String(r.gmName || '').length > a.length ? String(r.gmName) : a), '');
+      const rows = f.view.rows.filter((r) => r.kind !== 'lair');
+      const longest = rows.reduce((a, r) => (String(r.gmName || '').length > a.length ? String(r.gmName) : a), '');
+      const C = cocRules();
+      const block = rows.some((r) => r.kind !== 'pc' && isNum(r.block));
+      const gun = Boolean(C && C.firearm) && rows.some((r) => CMath.canShoot(r));
       // two-digit figures, as a hurt foe's are (`-13/11`, `Parry 13`); the initiative box is a fixed width
       const full = { ...FM.blankRow({ id: '\u2007measure', name: longest }), gmName: longest, kind: 'foe', in: true, seen: false,
         ini: initPlaces() ? 9.99 : 99, hp: -99, max: 99, temp: 0, fp: -9, fpMax: 99, mp: 99, mpMax: 99, san: 99, sanMax: 99,
-        dodge: 99, parry: 99, block: 99, dex: 99, conds: [], cards: [] };
-      return [rowHTML(full, { ...f, turn: full.id }, f.view), rowHTML(full, f, f.view)];
+        dodge: 99, parry: 99, block: block ? 99 : null, dex: 99, conds: [], cards: [], firearms: gun ? 99 : null };
+      // CoC's attacker for the not-acting row: an NPC (so both sides' typed boxes show) that can shoot when any row can
+      const attacker = C ? { ...full, id: '\u2007attacker', gmName: 'x' } : null;
+      const as = (acting) => {
+        ui.measure = { attacker: acting ? full : attacker };
+        try { return rowHTML(full, { ...f, turn: acting ? full.id : (attacker ? attacker.id : null) }, f.view); } finally { ui.measure = null; }
+      };
+      return [as(true), as(false)];
     },
     // after every layout pass (gm.js applyLayout): the rows' status strips fit their room
     afterLayout() {
