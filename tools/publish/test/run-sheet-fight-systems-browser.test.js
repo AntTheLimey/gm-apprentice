@@ -1465,6 +1465,58 @@ describe('CoC cards on the GM page (step 6b Task 18), by real input', { skip: br
     });
   });
 
+  // Task 23b B11: the longest offer's label inside its card, both edges, at every width
+  for (const [w, h] of SIZES) {
+    it(`${w}: the "Dying, Unconscious, Prone" offer sits inside its card, both edges in the panel and the window`, async () => {
+      const run = await start('coc', { randomInt: () => 3 });
+      await withPage({ width: w, height: h }, async (page) => {
+        let p = await fightOn(page, run, 0);
+        p = await addNew(page, 'Cultist');
+        const id = named(p, 'Cultist').id;
+        p = await typeInto(page, `[data-fmax="${id}"]`, 16);
+        p = await typeInto(page, `[data-fhp="${id}"]`, '-16');
+        const card = `#acting .fcard[data-fcrow="${id}"]`;
+        p = await until(page, `document.querySelector(${q(card)}) && p.saved === "Saved" && p.pending === 0`);
+        const offer = `${card} .clines .offer`;
+        assert.ok((await texts(page, offer)).includes('Dying, Unconscious, Prone'), JSON.stringify(await texts(page, offer)));
+        const e = await page.evaluate(`(() => { const c = document.querySelector(${q(card)}).getBoundingClientRect(); const a = document.querySelector('#acting').getBoundingClientRect();
+          const o = Array.from(document.querySelectorAll(${q(offer)})).find((b) => b.textContent === 'Dying, Unconscious, Prone'); o.scrollIntoView({ block: 'nearest' });
+          const r = o.getBoundingClientRect(); return { top: r.top, bottom: r.bottom, left: r.left, right: r.right, h: innerHeight, w: innerWidth, c: { top: c.top, bottom: c.bottom, left: c.left, right: c.right }, a: { top: a.top, bottom: a.bottom } }; })()`);
+        assert.ok(e.left >= e.c.left - 1 && e.right <= e.c.right + 1 && e.top >= e.c.top - 1 && e.bottom <= e.c.bottom + 1 && e.left >= 0 && e.right <= e.w && e.top >= e.a.top - 1 && e.bottom <= e.a.bottom + 1, `${w}: ${JSON.stringify(e)}`);
+      });
+    });
+  }
+
+  // Task 23b B11: the fight ends while the bout's rounds are out: nothing is applied and the page carries on
+  it('a fight that ends while the bout is being rolled applies no bout and leaves no error', async () => {
+    const run = await start('coc', { randomInt: () => 3 });
+    const handlers = run.server.listeners('request');
+    let slow = 0;
+    run.server.removeAllListeners('request');
+    run.server.on('request', (req, res) => {
+      const go = () => handlers.forEach((hd) => hd.call(run.server, req, res));
+      if (slow && req.url === '/api/roll') setTimeout(go, slow); else go();
+    });
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await netLoft(page, run);
+      const iris = named(p, 'Iris Calder').id;
+      await typeInto(page, boxOf(iris), 's-6');
+      const icard = `#acting .fcard[data-fcrow="${iris}"]`;
+      p = await until(page, `document.querySelector(${q(icard)}) && p.saved === "Saved" && p.pending === 0`);
+      await tap(page, `${icard} button.pass`);
+      await until(page, `p.fight.rows.find((r) => r.id === ${q(iris)}).cards[0].lines[0].result && p.saved === "Saved" && p.pending === 0`);
+      slow = 800;
+      await tap(page, `${icard} .clines .offer`);
+      await fromOther(run, [{ type: 'fightEnd', fight: p.fight.id }]);
+      await page.waitFor(`JSON.parse(document.body.dataset.probe).fight === null`, 5000);
+      await page.sleep(1200);
+      slow = 0;
+      p = await settled(page);
+      assert.deepStrictEqual(p.errors, []);
+      assert.ok(!(await logOf(run)).some((t) => /bout of/.test(t)), 'no bout started');
+    });
+  });
+
   it('an NPC\'s card is rolled; a PC\'s SAN loss brings the INT card, and Temporary insanity starts the bout the server rolls, shown on the row', async () => {
     const run = await start('coc', { randomInt: () => 3 });
     await withPage({ width: 1449, height: 762 }, async (page) => {
