@@ -1895,10 +1895,18 @@ describe('D&D: Tab, held rows and Same for all (step 6b Task 23), by real input'
         await settled(page);
         await tap(page, `[id="beat:${run.model.beats[0].key}"] [data-fight]`);
         await until(page, 'p.fight && p.saved === "Saved" && p.pending === 0');
-        const railLink = await page.evaluate(`(() => { const e = document.querySelector('#rail [data-go="beat:${key}"]'); if (!e) return 'none'; const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 ? 'shown' : 'folded'; })()`);
-        // the fight's layout folds the rail by itself below 1449 at this height: the pane's half is checked where it shows
+        const railState = () => page.evaluate(`(() => { const e = document.querySelector('#rail [data-go="beat:${key}"]'); if (!e) return 'none'; const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 ? 'shown' : 'folded'; })()`);
+        let railLink = await railState();
+        // the fight's layout folds the rail by itself below 1449 at this height (still the pane's own scroll, not the page's); the GM's way to a jump there is to open it
         if (width === 1449) assert.strictEqual(railLink, 'shown', 'the rail shows in a fight at 1449');
-        if (railLink !== 'shown') return;
+        else {
+          assert.strictEqual(railLink, 'folded', `${width}: the rail starts folded in a fight`);
+          await tap(page, '#railOpen');
+          await page.sleep(200);
+          railLink = await railState();
+        }
+        // an opened rail that cannot show is a failure, not a skipped check (Task 23b A3)
+        assert.strictEqual(railLink, 'shown', `${width}: the GM's tap on the rail's opener shows its beats`);
         await tap(page, `#rail [data-go="beat:${key}"]`);
         await page.sleep(100);
         l = await landing(page, `[id="beat:${key}"]`);
