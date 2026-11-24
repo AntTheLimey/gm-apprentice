@@ -2589,6 +2589,32 @@ describe('Tab, held rows and Same for all in CoC and GURPS (step 6b Task 23), by
     });
   });
 
+  // Task 34 (finding 12): focus never drops to the page after Same for all disables itself, or after End fight
+  it('GURPS: Same for all that leaves nothing to copy puts focus on Start; End fight puts it on a live control, never the page', async () => {
+    const run = await start('gurps');
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await page.focusEvents();
+      await fightOn(page, run, 1);
+      let p = await addMany(page, 'Bouncer', 2);
+      const b1 = named(p, 'Bouncer 1').id;
+      p = await peek(page, p, 'Bouncer 1');
+      p = await typeInto(page, box(p, 'Bouncer 1', 'st'), 11);
+      await tap(page, `#acting [data-fsame="${b1}"]`);
+      p = await until(page, 'p.saved === "Saved" && p.pending === 0 && p.fight.rows.find((r) => r.name === "Bouncer 2").st === 11');
+      await page.sleep(100);
+      assert.strictEqual(await page.evaluate(`document.querySelector('#acting [data-fsame="${b1}"]').disabled`), true);
+      assert.strictEqual(await where(page), '#fNext');
+      await tap(page, '#fEnd');
+      await tap(page, '#fEnd');
+      p = await until(page, '!p.fight && p.saved === "Saved" && p.pending === 0');
+      await page.sleep(150);
+      const at = await page.evaluate(`(() => { const a = document.activeElement; if (!a || a === document.body) return null;
+        const b = a.getBoundingClientRect(); return { tag: a.tagName, text: a.textContent.trim(), disabled: Boolean(a.disabled), shown: b.width > 0 && b.height > 0 }; })()`);
+      assert.ok(at && !at.disabled && at.shown, `after End fight focus is on ${JSON.stringify(at)}`);
+      assert.deepStrictEqual(p.errors, []);
+    });
+  });
+
   // Task 23b A2 changed this on purpose: the column and the panel are one place for holding, so the click into the panel
   // places nothing; Enter in the panel's box (focus leaving both, or Start, would do the same) does
   it('GURPS, before Start: a Speed typed in the column, then a click on a blank row\'s name: the row stays held while the cursor is in that row\'s panel, and is placed on Enter there', async () => {

@@ -2016,8 +2016,11 @@
     if (t.id === 'fEnd') {
       RP.armed('fightEnd', () => {
         RP.ui.pane = 'cut';
+        const beat = f.beat;
         F({ type: 'fightEnd' });
         scrollTo($('#afterFight'));
+        // focus to a live control, never the page (RF1): the after-fight box's Clear all, else the beat's Fight
+        RP.focusTo(['#fAfterAll', `[id="beat:${beat}"] [data-fight]`, '#hjot'].find((k) => document.querySelector(k)));
       });
       return true;
     }
@@ -2030,7 +2033,13 @@
     if (d.faddpick) { addByName(d.faddpick); return true; }
     if (d.faddnew) { addByName(null, d.faddnew); return true; }
     if (d.fundo) { F({ type: 'undoAdd', join: d.fundo }); return true; }
-    if (d.fsame) { F({ type: 'sameForAll', row: d.fsame }); return true; }
+    if (d.fsame) {
+      F({ type: 'sameForAll', row: d.fsame });
+      // a button that went disabled (nothing left to copy) gives focus to Start or Next, never the page (RF1)
+      const b = document.querySelector(attr('data-fsame', d.fsame));
+      RP.focusTo(b && !b.disabled ? attr('data-fsame', d.fsame) : '#fNext');
+      return true;
+    }
     if (d.faddcast) { addTo({ cast: d.faddcast, count: 1 }); return true; }
     if (d.faddgroup) { addTo({ group: d.faddgroup }, `${groupWho(d.faddgroup)} at ${RP.groupLabel(d.faddgroup)}`); return true; }
     if (d.fspend !== undefined) {
