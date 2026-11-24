@@ -1408,8 +1408,12 @@
   function cardsHTML(f) {
     const K = cardKit();
     if (!K) return '';
-    const out = [];
-    for (const r of f.view.rows) for (const c of r.cards || []) out.push(cardHTML(r, c, K));
+    // newest first (Task 34): the card for the hit just typed leads the strip, in view; each names its row. A card's
+    // id counts up through the fight (`k12`); one without a count keeps its place after the counted ones.
+    const n = (c) => { const m = /^k(\d+)$/.exec(String(c.id)); return m ? Number(m[1]) : -1; };
+    const all = [];
+    for (const r of f.view.rows) for (const c of r.cards || []) all.push([r, c]);
+    const out = all.map((x, i) => [x, i]).sort((a, b) => n(b[0][1]) - n(a[0][1]) || a[1] - b[1]).map(([[r, c]]) => cardHTML(r, c, K));
     return out.length ? `<div class="fcards">${out.join('')}</div>` : '';
   }
   // A card's buttons each carry `data-fcbtn` "row|card|line|take" (take: an offer, `out`, `dismiss`, `roll`, or a PC's

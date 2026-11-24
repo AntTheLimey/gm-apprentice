@@ -921,6 +921,36 @@ describe('CoC and GURPS fights on the GM page, by real input', { skip: browserSk
     });
   }
 
+  // Task 34 (finding 7): the newest card leads the strip, in view at every width; its Roll settles its own lines only
+  for (const [width, height] of SIZES) {
+    it(`GURPS at ${width}: Sela's card then Bouncer 2's: Bouncer 2's, the newest, is first and in view; its Roll leaves Sela's alone`, async () => {
+      const run = await start('gurps', { randomInt: () => 4 });
+      await withPage({ width, height }, async (page) => {
+        let p = await bouncers(page, run, [['st', 11], ['ht', 10]]);
+        const b2 = named(p, 'Bouncer 2').id;
+        const sela = named(p, 'Sela Drake').id;
+        assert.ok(order(p).indexOf('Sela Drake') < order(p).indexOf('Bouncer 2'), 'Sela is above Bouncer 2 in the order');
+        p = await typeInto(page, `[data-fhp="${sela}"]`, '-8');
+        await page.waitFor(`document.querySelector('#acting .fcard[data-fcrow="${sela}"]')`, 3000);
+        p = await typeInto(page, `[data-fhp="${b2}"]`, '-7');
+        await page.waitFor(`document.querySelector('#acting .fcard[data-fcrow="${b2}"]')`, 3000);
+        assert.deepStrictEqual(await page.evaluate(`Array.from(document.querySelectorAll('#acting .fcard'), (c) => c.dataset.fcrow)`), [b2, sela]);
+        const card = `#acting .fcard[data-fcrow="${b2}"]`;
+        const edges = await page.evaluate(`(() => { const c = document.querySelector(${q(card)}).getBoundingClientRect(); const a = document.querySelector('#acting').getBoundingClientRect();
+          const bar = document.querySelector('.top').getBoundingClientRect().bottom; return { top: c.top, bottom: c.bottom, h: innerHeight, bar, aTop: a.top, aBottom: a.bottom }; })()`);
+        assert.ok(edges.top >= edges.bar && edges.bottom <= edges.h && edges.top >= edges.aTop - 1 && edges.bottom <= edges.aBottom + 1, `${width}: ${JSON.stringify(edges)}`);
+        await shot(page, `gurps-cards-newest-${width}`);
+        const selaLines = () => page.evaluate(`Array.from(document.querySelectorAll('#acting .fcard[data-fcrow="${sela}"] .clines li'), (l) => l.className + '|' + l.textContent)`);
+        const was = await selaLines();
+        await tap(page, `${card} button.roll`);
+        await page.waitFor(`document.querySelector(${q(card)} + ' .clines .res') || !document.querySelector(${q(card)})`, 3000);
+        p = await settled(page);
+        assert.deepStrictEqual(await selaLines(), was, 'Sela\'s card is untouched');
+        sane(p, `cards ${width}`);
+      });
+    });
+  }
+
   // Task 34 (finding 8): a second click on a picked row's name keeps it picked, numbers or none; another name moves it
   it('GURPS: a second click on Bouncer 2\'s name, which has numbers, keeps its panel; a click on Bouncer 1\'s moves it', async () => {
     const run = await start('gurps', { randomInt: () => 4 });
