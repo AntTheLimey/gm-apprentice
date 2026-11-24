@@ -163,6 +163,17 @@ for (const crlf of [false, true]) {
       assert.deepEqual([nw.firearms, nw.fighting, nw.dodge], [45, 35, 50]);
       assert.deepEqual(nw.guns, [{ name: 'Pistol (flintlock)', skill: 45, damage: '1D10+2', malfunction: null, reload: 3, impales: false }]);
     });
+    // Task 23b B12: dice with no `damage` word count only right after the percentage
+    it('a skill line with dice further along is no attack; dice right after the percentage still are', () => {
+      const n = (t) => readNumbers(`**HP** 10\n${t}`);
+      assert.deepEqual([n('- First Aid 60%: restores 1D3').fighting, n('- First Aid 60%: restores 1D3').firearms], [null, null]);
+      assert.equal(n('- Medicine 55%, heals 1D4 HP').fighting, null);
+      assert.equal(n('- Knife 35% 1D4+2').fighting, 35);
+      assert.equal(n('- Knife: 35%, 1D4+2').fighting, 35);
+      assert.equal(n('* **Sabre** 45% \u2014 1D6+2').fighting, 45);
+      assert.equal(n('* **Sabre** 45% \u2013 1D6+2').fighting, 45);
+      assert.equal(n('- Boat hook 45% (22/9), damage 1D6+DB').fighting, 45);
+    });
     it('reload and malfunction phrasings the vaults use (Task 19 fix round 2)', () => {
       const r = (t) => readNumbers(`- Flintlock pistol 40%, damage 1D6, ${t}`).guns[0];
       for (const [t, n] of [['1 per 4 rounds', 4], ['1 shot per 4 rounds', 4], ['one shot per 4 rounds', 4], ['1 shot/4 rounds', 4], ['one per four rounds', 4],
