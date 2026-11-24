@@ -945,10 +945,15 @@ describe('the players\' screen in a CoC and a GURPS fight (plan 6b Task 26)', ()
   // What may never be on the players' screen, as words: the pools, the marks, the working of a hit, a defence, a
   // manoeuvre, a CoC roll, a derived figure's tag, the calculator. Matched on the view and its markup with the
   // statuses taken out (a status is checked on its own against the system's list).
+  const { LOCATIONS, LOCATION_WORDS } = require('../lib/templates/gurps/hit-locations');
+  const PLACE_WORDS = [...new Set(LOCATIONS.flatMap((l) => l.key.split(' ')).concat(Object.keys(LOCATION_WORDS).flatMap((k) => k.split(' ')), Object.values(LOCATION_WORDS).flatMap((v) => v.split(' '))))].filter((w) => w.length >= 3);
   const WORDS = new RegExp([
     '\\b(?:SAN|Sanity|MP|FP|Luck|Energy|Reserve|Reeling|Shock|Knockdown|knockdown|crippled|Crippled|Death|Parry|Block|Dodge|Retreat|retreat|Manoeuvre|manoeuvre',
     'All-Out|Evaluate|Feint|Dying|Mortal|insanity|bout|Bout|CON|INT|DR|DB|armour|Armour|outnumbered|Outnumbered|d100|calculator|Calculator|to-hit|tohit',
-    'vitals|skull|torso|groin|neck|spine|jaw|artery|vein|imp|cut|cr|burn|tox|fat|ST|HT|DX|IQ|Basic|Speed|Fight Back|Fights Back|margin|aim|Aim|Shoot|dive|Dive|reload|Reload)\\b',
+    'imp|cut|cr|burn|tox|fat|ST|HT|DX|IQ|Basic|Speed|Fight Back|Fights Back|margin|aim|Aim|Shoot|dive|Dive|reload|Reload',
+    'bonus|penalty|die|dice|Bonus|Penalty|Extreme|Hard|Regular|joint|artery|vein)\\b',
+    // every hit place the table knows, by its own words, so a new place cannot slip by unchecked
+    `\\b(?:${PLACE_WORDS.join('|')})\\b`,
     'from (?:ST|HT|Speed|DX)',
     '[=−×]',
     '\\b\\d*[dD]\\d+\\b',
@@ -1262,11 +1267,27 @@ describe('the players\' screen in a CoC and a GURPS fight (plan 6b Task 26)', ()
       s = await act(t, 'hp', 'Orrin Tate', { entry: '9 cut spine' });
       let orrin = rowNamed(s, 'Orrin Tate');
       assert.equal(orrin.hit.location, 'spine');
-      assert.ok(orrin.crippled.length >= 0);
       await t.arm('a PC\'s hit working', orrin.hit.line);
       await t.arm('a spine hit', 'spine', { short: true });
       look = await t.look('Orrin hit in the spine');
       assert.equal(look.view.panels[0].order.rows.find((r) => r.name === 'Orrin').hp, `${orrin.hp}/12`);
+      // a limb past half HP is crippled; a spine past HP is crippled and knocks down and stuns outright
+      s = await act(t, 'hp', 'Lysa Venn', { entry: '7 cut arm' });
+      const corinHurt = rowNamed(s, 'Lysa Venn');
+      assert.ok(corinHurt.crippled.length > 0, `a crippled limb: ${JSON.stringify(corinHurt.crippled)}`);
+      await t.arm('a crippled mark', corinHurt.crippled[0]);
+      await t.arm('a crippling hit\'s working', corinHurt.hit.line);
+      await t.look('Lysa\'s arm crippled');
+      s = await act(t, 'hp', 'Orrin Tate', { entry: '20 cut spine' });
+      orrin = rowNamed(s, 'Orrin Tate');
+      assert.ok(orrin.crippled.includes('spine'), `a crippled spine: ${JSON.stringify(orrin.crippled)}`);
+      const autoCard = orrin.cards.find((c) => c.lines.some((l) => l.place === 'spine'));
+      assert.ok(autoCard, 'a card for the spine');
+      const auto = JSON.stringify(autoCard);
+      assert.match(auto, /auto|Auto|stun|Stun|knock/, `the automatic knockdown on the card: ${auto}`);
+      await t.arm('a spine card', autoCard.what);
+      await t.arm('a crippled spine', orrin.hit.line);
+      await t.look('Orrin\'s spine crippled');
       s = await act(t, 'status', 'Orrin Tate', { add: 'Stunned' });
       look = await t.look('Orrin Stunned');
       assert.deepEqual(look.view.panels[0].order.rows.find((r) => r.name === 'Orrin').statuses, ['Stunned']);
@@ -1430,6 +1451,23 @@ describe('the players\' screen in a CoC and a GURPS fight (plan 6b Task 26)', ()
       s = await act(t, 'outnumbered', 'Brine Walker', { off: true }, 2);
       assert.equal(rowNamed(s, 'Brine Walker', 2).outnumberedOff, true);
       look = await t.look('outnumbered turned off');
+
+      // a bonus die and a penalty die on Iris's attacks on Warden Hale, then a hit that goes through his armour
+      const hale0 = rowNamed(s, 'Warden Hale');
+      const haleFight = CM.skillOf(hale0, 'fightBack');
+      for (const [net, word] of [[1, 'bonus'], [-1, 'penalty']]) {
+        auto = CM.attackDice(hale0, COC.coc);
+        s = await t.send([{ type: 'melee', fight: s.fight.id, attacker: rowNamed(s, 'Iris Calder').id, defender: hale0.id, response: 'fightBack', dice: CM.diceOfNet(net, COC.coc), auto, attack: { level: 'regular' }, defence: d100(90, haleFight, 'fail') }]);
+        const diceLine = eventsOf(s).slice(-1)[0];
+        assert.match(diceLine, new RegExp(`${word} die`), diceLine);
+        await t.arm(`a ${word} die`, diceLine);
+      }
+      look = await t.look('bonus and penalty dice');
+      s = await act(t, 'hp', 'Warden Hale', { entry: '1D6', by: rowNamed(s, 'Iris Calder').id, mode: 'full', roll: dmg('1D6', 6), exchange: s.fight.melee ? s.fight.melee.n : undefined });
+      const hale = rowNamed(s, 'Warden Hale');
+      assert.match(hale.hit.line, /armour 4/, hale.hit.line);
+      await t.arm('armour worked into a hit', hale.hit.line);
+      look = await t.look('a hit through armour');
 
       // a Major Wound: one card, a CON roll, Prone and Unconscious offered and taken; the box stays ticked
       s = await act(t, 'hp', 'Brine Walker', { entry: '-8' }, 2);
