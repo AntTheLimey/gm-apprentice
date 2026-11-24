@@ -179,6 +179,11 @@
     return Boolean(row) && row.kind !== 'lair' && Boolean(row.max) && isNum(row.hp) && row.hp > 0 && row.hp <= row.max / 2;
   }
 
+  // The word a system gives a row at half HP or less: '' (CoC, GURPS) for none, else its word, D&D's when it gives none.
+  const bloodiedWord = (words) => (words && words.bloodied === '' ? '' : (words && words.bloodied) || 'Bloodied');
+  // D&D's end-of-night rest button, the one copy: dnd.js's words and a model with no rules both read it
+  const DND_LONG_REST = 'Long rest: everyone to full';
+
   // ---- thresholds ----
 
   // `N HP or less` wins over the word Bloodied: `Bloodied (91 HP or less)` is 91.
@@ -1011,7 +1016,7 @@
 
   return {
     DND_STATUSES, EXHAUSTION_MAX, DND_FIGHT_RULES, rulesOf, fightGroupKeys,
-    parseEntry, hitWords, hitText, chipOrder, damageTaken, afterDamage, afterHeal, isBloodied, poolsOf, poolOf, afterPool,
+    parseEntry, hitWords, hitText, chipOrder, damageTaken, afterDamage, afterHeal, isBloodied, bloodiedWord, DND_LONG_REST, poolsOf, poolOf, afterPool,
     combatOf, initOf, marksOf, tiredOf,
     thresholdOf, isLit, sortRows, takesTurn, nextLive, actingRow,
     gmName, lairRow, unseenKey, unseenNumbers, unseenLabels, rowsForFight, joinRows, blankRow,

@@ -26,7 +26,7 @@ function sayings(model) {
     else if (v && typeof v === 'object') for (const k of Object.keys(v)) walk(v[k], `${where}.${k}`);
   };
   walk(model.rules.words, 'rules.words');
-  walk(model.rules.toggles && model.rules.statuses, 'rules.statuses');
+  walk(model.rules.statuses, 'rules.statuses');
   walk(model.rules.vitals, 'rules.vitals');
   walk(model.warnings, 'warnings');
   const prep = (v, where) => {

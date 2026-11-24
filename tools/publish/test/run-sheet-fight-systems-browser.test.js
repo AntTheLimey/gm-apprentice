@@ -1687,6 +1687,14 @@ describe('CoC and GURPS pages speak their own system (step 6b Task 22), by real 
           assert.ok(!/AC |Init /.test(pcs), `${which}: ${pcs}`);
           assert.strictEqual(await attrOf(page, '#advance', 'placeholder'), advance);
           assert.strictEqual(await page.evaluate('document.querySelector("#longRest")'), null, 'no long rest button');
+          // each panel the brief names, opened by a real click, then the pattern over the page
+          const key = run.model.beats[at].key;
+          await noDnd(page, `${which} ${width} Who's here (the beat's panel)`);
+          assert.ok(/Who's here/.test(await text(page, `[id="beat:${key}"]`)), `${which}: the beat shows Who's here`);
+          await tap(page, '[data-go="end"]');
+          await page.waitFor('document.querySelector("#end") && document.querySelector("#end").getBoundingClientRect().height > 0', 3000);
+          await noDnd(page, `${which} ${width} End of the night`);
+          assert.ok(/Advancement/.test(await text(page, '#end')), `${which}: the End of the night panel is open`);
           let p = await fightOn(page, run, at);
           sane(p, `${which} ${width} words`);
           const first = p.fight.rows[0];

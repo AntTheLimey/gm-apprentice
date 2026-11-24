@@ -358,7 +358,7 @@
   function chips(r, bloodied) {
     const one = (label) => `<button type="button" class="chip" data-fun="${esc(`${r.id}|${statusKey(label)}`)}" title="Remove ${esc(label)}">${esc(label)} ✕</button>`;
     const all = Fight.statusesOf(r);
-    const bl = bloodied && words().bloodied !== '' ? (words().bloodied || 'Bloodied') : '';
+    const bl = bloodied ? FM.bloodiedWord(words()) : '';
     const marks = marksOn(r);
     const owe = owedChips(r);
     const h = (bl ? `<span class="chip auto">${esc(bl)}</span>` : '') + marks.map((m) => `<span class="chip auto mark">${esc(m)}</span>`).join('')
@@ -590,7 +590,7 @@
     }
     for (const b of panelBoxes().filter((x) => x.readout)) reads.push(`${b.label} ${shownFigure(r[Fight.STAT_FIELDS[b.key][0]]) || '?'}${fromTag(r, b.key)}`);
     const nums = reads.map((x) => `<span>${esc(x)}</span>`);
-    if (f.view.bloodied.has(r.id) && w.bloodied !== '') nums.push(`<span class="bl">${esc(w.bloodied || 'Bloodied')}</span>`);
+    if (f.view.bloodied.has(r.id) && FM.bloodiedWord(w)) nums.push(`<span class="bl">${esc(FM.bloodiedWord(w))}</span>`);
     for (const m of marksOn(r)) nums.push(`<span class="mk">${esc(m)}</span>`);
     nums.push(...shockHTML(r));
     // every status, the ones the row's strip had no room for too; a click removes it, as on the row

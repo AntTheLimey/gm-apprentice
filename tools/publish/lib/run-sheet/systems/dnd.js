@@ -144,7 +144,7 @@ function describeAs(id, label, fights) {
       hp: 'HP', ac: 'AC', temp: 'temp HP', initiative: 'initiative', bloodied: 'Bloodied', noBlock: 'No stat block in the vault.',
       entryPlaceholder: '-37/+8/t5',
       entryInvalid: 'Type -37 or 37 (damage), +8 (healing) or t5 (temp HP)',
-      longRest: 'Long rest: everyone to full',
+      longRest: FM.DND_LONG_REST,
       advancement: 'One line each, e.g. level 6 for the dragon (milestone)',
       // a PC's line in the PCs table: each figure's word, then its fields (a pair reads `now/max`); a missing figure shows ?
       pcLine: [{ word: 'AC', now: 'ac' }, { word: 'HP', now: 'hpNow', max: 'hpMax' }, { word: 'Init', now: 'init', signed: true }],

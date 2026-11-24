@@ -879,7 +879,8 @@
   // The rules of the system, as the end panel and the PCs table read them
   const endRules = () => {
     const r = (G.model && G.model.rules) || {};
-    return { toggles: r.toggles || {}, words: r.words || {} };
+    // a model with no rules is D&D's, as gm-fight.js reads it
+    return { toggles: r.toggles || { longRest: true }, words: { longRest: FM.DND_LONG_REST, ...(r.words || {}) } };
   };
   // A PC's figures in the system's own words (rules.words.pcLine): `HP 11/11 · MP 12`; a missing figure is `?`
   function pcLine(p) {
@@ -1141,7 +1142,7 @@
       }
       h += `<h4 class="lab">Vitals</h4><div class="tw">${table}</div>`;
       // the rest button is a D&D thing: only a system whose toggles have it, in its own words
-      if (endRules().toggles && endRules().toggles.longRest) h += `<p><button id="longRest" type="button" class="${G.state.end.longRest ? 'on' : ''}" aria-pressed="${!!G.state.end.longRest}">${G.state.end.longRest ? 'Long rest taken ✓ (click to undo)' : esc(endRules().words.longRest || '')}</button></p>`;
+      if (endRules().toggles.longRest) h += `<p><button id="longRest" type="button" class="${G.state.end.longRest ? 'on' : ''}" aria-pressed="${!!G.state.end.longRest}">${G.state.end.longRest ? 'Long rest taken ✓ (click to undo)' : esc(endRules().words.longRest)}</button></p>`;
     }
     h += `<h4 class="lab"><label for="advance">Advancement</label></h4><textarea id="advance" placeholder="${esc(endRules().words.advancement || '')}">${esc(G.state.end.advancement || '')}</textarea>`;
     h += `<p><button id="copyRecord" class="primary" type="button">Copy the Table Log</button> <span class="note" id="copyMsg">${esc(G.ui.copyMsg)}</span></p>`;
