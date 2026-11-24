@@ -2482,6 +2482,16 @@ describe('GURPS consequence cards and turn upkeep (step 6b Task 13)', () => {
     assert.deepEqual([named(s, 'Guard').shock, cards(s, 'Guard')], [3, []]);
   });
 
+  it('Task 25 fix 1: 14 cut to the spine at 10 HP: crippled, one card offering Stunned and Prone with no roll', () => {
+    let s = begin([{ name: 'Guard', hp: 10, max: 10, ht: 10, dr: 0 }]);
+    s = typeIn(s, 'Guard', '14 cut spine');
+    const g = named(s, 'Guard');
+    assert.deepEqual([g.hp, g.crippled], [-6, ['spine']]);
+    const c = cards(s, 'Guard');
+    assert.equal(c.length, 1);
+    assert.deepEqual(c[0].lines.map((l) => [l.kind, l.noRoll, l.offers]), [['knockdown', true, ['stunned']]]);
+  });
+
   it('a fatigue hit raises no shock and no card', () => {
     let s = begin([{ name: 'Guard', hp: 11, max: 11, ht: 10, fp: 10, fpMax: 10 }]);
     // step 6b Task 25 changed this on purpose: fatigue cannot target the vitals (B398), so the skull, a knockdown place too

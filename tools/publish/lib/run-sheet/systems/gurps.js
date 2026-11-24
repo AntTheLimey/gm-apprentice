@@ -49,6 +49,12 @@ const CONSEQUENCES = {
     places: KNOCKDOWN.filter((l) => l.knockdown.shock).map((l) => l.key), // B420, MA137
     major: Object.fromEntries(KNOCKDOWN.filter((l) => l.knockdown.major).map((l) => [l.key, l.knockdown.major])), // B420, MA137
     extra: Object.fromEntries(KNOCKDOWN.filter((l) => l.knockdown.extra).map((l) => [l.key, l.knockdown.extra])), // MA137
+    // the types a place's `except` leaves out of its knockdown modifier too (the skull's toxic, B398)
+    except: Object.fromEntries(KNOCKDOWN.filter((l) => l.except).map((l) => [l.key, l.except])), // B398
+    // crippling these knocks down and stuns outright (MA137)
+    auto: KNOCKDOWN.filter((l) => l.knockdown.crippledAuto).map((l) => l.key), // MA137
+    // what a male target takes, said on the card and never applied (B398, B552)
+    male: Object.fromEntries(LOCATIONS.filter((l) => l.male).map((l) => [l.key, l.male])), // B398, B552
     out: 5, // B420
   },
   death: [1, 2, 3, 4], // B419

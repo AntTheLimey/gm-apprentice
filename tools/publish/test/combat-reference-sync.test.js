@@ -56,6 +56,11 @@ describe('the hit locations in code: one table', () => {
     assert.deepEqual(k.places.slice().sort(), LOCATIONS.filter((l) => l.knockdown && l.knockdown.shock).map((l) => l.key).sort());
     for (const l of LOCATIONS) assert.equal(k.major[l.key], l.knockdown && l.knockdown.major, l.key);
     assert.deepEqual(k.extra, { jaw: { cr: -1 } });
+    // fix round 1: the skull's toxic keeps no -10; a crippled spine knocks down outright; the groin's male figures
+    assert.deepEqual(k.except, { skull: ['tox'] });
+    assert.deepEqual(k.auto, ['spine']);
+    assert.deepEqual(Object.keys(k.male), ['groin']);
+    assert.equal(k.major.groin, undefined, 'the groin\'s -5 is for a male target only: said, never applied');
   });
   it('the player site\'s reference block lists every place, row for row, with the table\'s penalty', () => {
     const named = new Map();

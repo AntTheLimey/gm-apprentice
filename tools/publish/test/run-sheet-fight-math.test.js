@@ -1428,6 +1428,8 @@ test('the page and the server read the same dice', () => {
   for (const t of both) {
     assert.doesNotThrow(() => parseDamage(t), `server reads ${t}`);
     assert.equal(M.hitWords(`${t} cr torso`, GURPS).amount, t, `page takes ${t}`);
+    // the same dice typed last (Task 25 fix round 1)
+    assert.equal(M.hitWords(`cr torso ${t}`, GURPS).amount, t.toLowerCase(), `page takes ${t} last`);
     assert.deepEqual(hit(`${t} cr torso`), { pool: 'hp', kind: 'damage', n: null, dice: t.toLowerCase().replace(/^[+-]/, ''), hit: { type: 'cr', location: 'torso', side: null } }, `hit ${t}`); // a leading minus is the damage sign, as for -9; a leading plus is read as the server reads it
   }
   // the page sends these on; the server answers with its sentence
@@ -1465,6 +1467,9 @@ test('the page and the server agree on every generated dice shape', () => {
     if (ok) { accepted++; assert.ok(taken, `the page keeps out ${t}, which the server reads`); }
     // taken by the page and refused by the server is fine: the server's sentence reaches the GM
     if (!taken) assert.equal(ok, false, `${t}: the page keeps it out, so the server must refuse it`);
+    // typed last, the page takes the same shapes (Task 25 fix round 1)
+    const last = M.hitWords(`cr ${t}`, GURPS);
+    assert.equal(last.dice !== null && last.amount === t.toLowerCase() && last.rest.length === 0, taken, `${t} last`);
   }
   assert.equal(n, 3 * 5 * 7 * 3 * 3);
   assert.ok(accepted > 100, `${accepted} accepted shapes`);
@@ -1677,4 +1682,55 @@ test('Task 25: for every type and place, the label\'s multiplier is the one the 
       assert.equal(Number(m[1]), at.mult, `${type} ${place}`);
     }
   }
+});
+
+// ---- Task 25 fix round 1 ----
+
+test('Task 25 fix 1: a crippled spine offers Stunned and Prone outright, with no roll', () => {
+  // 14 cut to the spine at 10 HP: DR 3 from the vertebrae, 11 x 1.5 = 16, over 10
+  const hit = hitOn('14 cut spine', foe({ dr: 0, max: 10 }));
+  assert.deepEqual([hit.injury, hit.crippled], [16, true]);
+  const out = GC.cardForHit({ hp: -6, max: 10 }, { injury: 16, before: 10, location: 'spine', type: 'cut', crippled: true }, C);
+  const k = out.lines.find((l) => l.kind === 'knockdown');
+  assert.ok(k, JSON.stringify(out.lines));
+  assert.deepEqual(k.offers, ['stunned']);
+  assert.equal(k.noRoll, true);
+  assert.equal(GC.lineTarget(k, { ht: 10 }), null);
+  assert.equal(GC.lineStat(k), null);
+  assert.equal(GC.lineText(k, { ht: 10 }, C), 'Knockdown: automatic (spine crippled)');
+  // nothing to roll; the card waits on its offer
+  assert.deepEqual(out.lines.map((l) => l.kind), ['knockdown']);
+  assert.equal(GC.nextLine({ lines: out.lines }, C), -1);
+  assert.equal(GC.cardDone({ lines: out.lines }, C), false);
+  // not crippled: the roll at −5 as before
+  assert.deepEqual(kinds(GC.cardForHit({ hp: 2, max: 12 }, { injury: 10, before: 12, location: 'spine', type: 'cut' }, C)), ['knockdown -5']);
+});
+
+test('Task 25 fix 1: a groin hit names what a male target takes; nothing is applied to every target', () => {
+  const cr = hitOn('9 cr groin', foe({ max: 100 }));
+  assert.equal(cr.line, '9 cr − DR 1 = 8 (groin, crushing: a male target takes double shock (max 8) and knockdown −5)');
+  assert.equal(hitOn('9 cut groin', foe({ max: 100 })).line, '9 cut − DR 1 = 8 × 1.5 = 12 (groin: a male target has knockdown −5)');
+  // shock is the usual for every target
+  assert.equal(GC.cardForHit({ hp: 96, max: 100 }, { injury: 4, before: 100, location: 'groin', type: 'cr' }, C).shock, 0);
+  assert.equal(GC.cardForHit({ hp: 8, max: 12 }, { injury: 4, before: 12, location: 'groin', type: 'cr' }, C).shock, 4);
+  // a major wound to the groin: the roll unmodified, its line saying what a male target takes
+  const out = GC.cardForHit({ hp: 2, max: 12 }, { injury: 10, before: 12, location: 'groin', type: 'cr' }, C);
+  assert.deepEqual(kinds(out), ['knockdown']);
+  assert.equal(GC.lineText(out.lines[0], { ht: 10 }, C), 'Knockdown: HT 10 (groin, crushing: a male target takes double shock (max 8) and knockdown −5)');
+});
+
+test('Task 25 fix 1: toxic damage to the skull gets no −10 to knockdown', () => {
+  assert.deepEqual(kinds(GC.cardForHit({ hp: 2, max: 12 }, { injury: 10, before: 12, location: 'skull', type: 'tox' }, C)), ['knockdown']);
+  assert.deepEqual(kinds(GC.cardForHit({ hp: 2, max: 12 }, { injury: 10, before: 12, location: 'skull', type: 'cr' }, C)), ['knockdown -10']);
+});
+
+test('Task 25 fix 1: the damage may come last when none leads', () => {
+  const hit = (t) => M.parseEntry(t, GURPS);
+  assert.deepEqual(hit(' cr jaw 3'), { pool: 'hp', kind: 'damage', n: 3, hit: { type: 'cr', location: 'jaw', side: null } });
+  assert.deepEqual(hit('cut left hand joint 2d+1'), { pool: 'hp', kind: 'damage', n: null, dice: '2d+1', hit: { type: 'cut', location: 'hand joint', side: 'left' } });
+  assert.deepEqual(hit('imp vitals 9'), hit('9 imp vitals'));
+  // one amount only; a place with no type still refused
+  for (const bad of ['9 cr jaw 3', 'jaw 3', 'cr jaw 3 4']) assert.equal(hit(bad), null, bad);
+  // the words back with the amount first
+  assert.equal(M.hitText(M.hitWords('cr jaw 3', GURPS)), '3 cr jaw');
 });

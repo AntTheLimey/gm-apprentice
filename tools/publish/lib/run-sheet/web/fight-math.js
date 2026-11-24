@@ -64,7 +64,8 @@
   }
 
   // A hit's words, read against the wounding table (`rules.wounding`): { amount, dice, n, type, location, side, rest }
-  // where `rest` holds the words that are none of them. `amount` is the damage as typed (`9`, `-9`, `2d+1`), or ''.
+  // where `rest` holds the words that are none of them. `amount` is the damage as typed (`9`, `-9`, `2d+1`), or '';
+  // first, or, when none leads, last (Task 25 fix round 1).
   // Dice are recognised here, never rolled or added: the server's reader (lib/dice `parseDamage`) is the one that
   // reads them. A die is `NdS`, `dS`, `d%`, or `Nd` (a count alone); terms join with + or -, any order, and the first may carry a leading + or -. A bare `d`
   // is not dice. test/run-sheet-fight-math.test.js holds this pattern and the server's reader to one list of cases.
@@ -84,6 +85,18 @@
     }
     if (!w) { out.rest = t.trim() ? t.trim().split(/\s+/) : []; return out; }
     const words = t.trim() ? t.trim().toLowerCase().split(/\s+/) : [];
+    // with none leading, the damage may come last (`cr jaw 3`: a place picked, then the damage typed after it)
+    if (!out.amount && words.length > 1) {
+      const end = words[words.length - 1];
+      const dice = DICE.exec(end);
+      const whole = dice && dice[0] === end && /d/.test(end) ? end : /^-?\d+$/.test(end) ? end : null;
+      if (whole) {
+        words.pop();
+        out.amount = whole;
+        const bare = whole.replace(/^[+-]/, '');
+        if (/d/.test(bare)) out.dice = bare; else out.n = Number(bare);
+      }
+    }
     const typeOf = (x) => (w.types[x] !== undefined ? x : (w.typeWords || {})[x] || null);
     const placeOf = (x) => (w.locations[x] ? x : (w.locationWords || {})[x] || null);
     // the place that starts at word i: two words (`neck vein`, `hand joint`) before one; { place, len } or null

@@ -85,6 +85,19 @@
     return { label: `${head} \u00b7 \u00d7${times(at.mult)}`, disabled: false };
   }
 
+  // What a male target takes at a place (`male` in the hit-location table), said and never applied: the run sheet
+  // knows no row's sex. "groin, crushing: a male target takes double shock (max 8) and knockdown −5"; '' for none.
+  const LONG = { cr: 'crushing', cut: 'cutting', imp: 'impaling', burn: 'burning', tbb: 'tight-beam burning', cor: 'corrosion', tox: 'toxic', 'pi-': 'piercing', pi: 'piercing', 'pi+': 'piercing', 'pi++': 'piercing' };
+  function maleNote(place, type, male) {
+    if (!male || !place) return '';
+    const shock = (male.shockTypes || []).includes(type) && isNum(male.shock);
+    const parts = [];
+    if (shock) parts.push(`takes ${male.shock === 2 ? 'double' : `\u00d7${male.shock}`} shock${isNum(male.shockMax) ? ` (max ${male.shockMax})` : ''}`);
+    if (isNum(male.knockdown)) parts.push(`${shock ? '' : 'has '}knockdown ${minusSign(male.knockdown)}`);
+    if (!parts.length) return '';
+    return `${place}${shock ? `, ${LONG[type] || type}` : ''}: a male target ${parts.join(' and ')}`;
+  }
+
   // A hit's injury (Task 12). `hit` { n, type, location, side, dice }, `row` { dr, drByLocation, typedKeys, faceOpen,
   // max }, `wounding` the table in systems/gurps.js (B377-381, B398, B420, B552, MA137). Answers { injury, line,
   // location, side, type, place, crippled }; `line` is the working. A type that cannot target the place (the entry's
@@ -125,6 +138,8 @@
       const cap = Math.floor(max / loc.cripple) + 1;
       if (loc.cap && injury > cap) { injury = cap; line += `, capped at ${cap} (${place})`; }
     }
+    const male = at.can ? maleNote(location, type, loc.male) : '';
+    if (male) line += ` (${male})`;
     return { ...out, injury, line };
   }
 
@@ -164,9 +179,16 @@
     const place = h.location || null;
     const major = majorWound(h.injury, max, h.crippled, C);
     if (major || (place && (k.places || []).includes(place) && out.shock > 0)) {
+      // crippling the spine knocks down and stuns outright (MA137): the offer, no roll
+      if (h.crippled && place && (k.auto || []).includes(place)) {
+        out.lines.push({ ...line('knockdown', 0, { place, auto: true, noRoll: true }), offers: ['stunned'] });
+        return out;
+      }
+      const left = place && h.type && k.except && (k.except[place] || []).includes(h.type);
       const extra = place && h.type && k.extra && k.extra[place] && isNum(k.extra[place][h.type]) ? k.extra[place][h.type] : 0;
-      const mod = (major && place && k.major && isNum(k.major[place]) ? k.major[place] : 0) + extra;
-      out.lines.push(line('knockdown', mod, place ? { place } : {}));
+      const mod = (major && place && !left && k.major && isNum(k.major[place]) ? k.major[place] : 0) + extra;
+      const male = maleNote(place, h.type, k.male && k.male[place]);
+      out.lines.push(line('knockdown', mod, { ...(place ? { place } : {}), ...(male ? { note: male } : {}) }));
     }
     return out;
   }
@@ -191,9 +213,10 @@
   }
 
   // A line's target: the row's HT plus its modifier; null with no HT (the card asks for it first) or no roll (dead).
-  const lineTarget = (l, row) => (l && l.kind !== 'dead' && row && isNum(row.ht) ? row.ht + l.mod : null);
-  // The row's figure a line rolls (the card's box asks for it when missing): HT, none for the dead line.
-  const lineStat = (l) => (l && l.kind !== 'dead' ? 'ht' : null);
+  const lineTarget = (l, row) => (l && l.kind !== 'dead' && !l.noRoll && row && isNum(row.ht) ? row.ht + l.mod : null);
+  // The row's figure a line rolls (the card's box asks for it when missing): HT, none for the dead line or one with
+  // no roll (a crippled spine's knockdown).
+  const lineStat = (l) => (l && l.kind !== 'dead' && !l.noRoll ? 'ht' : null);
   const minus = (n) => `−${Math.abs(n)}`;
   // a figure, a negative one with U+2212
   const fig = (n) => (n < 0 ? minus(n) : String(n));
@@ -208,10 +231,11 @@
   // the log's form ("knockdown, HT 10 −5 = 5").
   function lineText(l, row, C, log) {
     if (l.kind === 'dead') return `${lineName(l, C, log)}: ${((C && C.lines) || {}).dead || 'dead'}`;
+    if (l.auto) return `${lineName(l, C, log)}${log ? ',' : ':'} automatic (${l.place} crippled)`;
     const ht = row && isNum(row.ht) ? row.ht : null;
     const mod = l.mod ? ` ${l.mod > 0 ? '+' : '\u2212'}${Math.abs(l.mod)}` : '';
     const figs = ht === null ? `HT ?${mod}` : `HT ${fig(ht)}${mod}${l.mod ? ` = ${fig(ht + l.mod)}` : ''}`;
-    return `${lineName(l, C, log)}${log ? ',' : ':'} ${figs}`;
+    return `${lineName(l, C, log)}${log ? ',' : ':'} ${figs}${l.note ? ` (${l.note})` : ''}`;
   }
   const OUTCOMES = ['success', 'critical success', 'failure', 'critical failure'];
   const failed = (res) => res.outcome === 'failure' || res.outcome === 'critical failure';
