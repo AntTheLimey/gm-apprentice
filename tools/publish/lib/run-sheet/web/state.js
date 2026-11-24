@@ -729,6 +729,8 @@
     });
   }
 
+  // Luck has no max on a sheet, but a ceiling of its own: Keeper Rulebook p99 (Recovering Luck points). A click into
+  // a prefilled box once typed 50 into 55 as 5550 (proof finding 3).
   const LUCK_CEILING = 99;
   // Why an end-panel figure for a PC cannot be saved, or null when it can (step 6b). `sheet set` takes no figure over
   // the sheet's maximum, so HP, MP, SAN and FP are held to the maxima the site's readers give the PC (`hpMax`, `mpMax`,
@@ -743,8 +745,6 @@
     // vitals row's own max field (`max`, for HP) is another name
     const col = vitalColumns(model).find((c) => c.field === field);
     const sheetMax = col && col.max ? (typeof col.sheet === 'string' ? `${col.sheet}Max` : col.max) : null;
-    // Luck has no max on a sheet, but a ceiling of its own: Keeper Rulebook p99 (Recovering Luck points). A click into
-    // a prefilled box once typed 50 into 55 as 5550 (proof finding 3).
     if (field === 'luck' && value > LUCK_CEILING) return `over Luck's ceiling (${LUCK_CEILING}): not saved`;
     const max = sheetMax ? pc[sheetMax] : null;
     if (typeof max === 'number' && value > max) return `over the sheet's max (${max}): not saved`;

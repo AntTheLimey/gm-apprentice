@@ -2046,6 +2046,27 @@ describe("the end panel's vitals columns per system (step 6b Task 20), by real i
     });
   });
 
+  it('CoC: Tab from SAN into Luck selects its number: typing 50 gives 50, not 5550', async () => {
+    const run = await start('coc');
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await page.focusEvents();
+      await page.goto(`${run.base}/?probe=1`);
+      await settled(page);
+      const luck = `#sheet [data-vkey="${IRIS}|luck"]`;
+      const san = `#sheet [data-vkey="${IRIS}|san"]`;
+      assert.strictEqual(await page.evaluate(`document.querySelector(${q(luck)}).value`), '55');
+      await tap(page, san);
+      await page.waitFor(`document.activeElement === document.querySelector(${q(san)})`, 2000);
+      await page.key('Tab');
+      await page.waitFor(`document.activeElement === document.querySelector(${q(luck)})`, 2000);
+      await page.type('50');
+      await page.key('Tab');
+      await settled(page);
+      assert.strictEqual(await page.evaluate(`document.querySelector(${q(luck)}).value`), '50');
+      assert.strictEqual((await saved(run))[IRIS].luck, 50);
+    });
+  });
+
   it('GURPS: a click into FP selects the number', async () => {
     const run = await start('gurps');
     await withPage({ width: 1449, height: 762 }, async (page) => {

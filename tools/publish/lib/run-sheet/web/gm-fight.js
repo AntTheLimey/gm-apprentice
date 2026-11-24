@@ -2423,8 +2423,8 @@
   // Every number box selects what it holds when it is clicked or tabbed into, so a typed 3 replaces the 1
   // (or the 21) instead of making 13 (or 291). A focus handler alone is undone by the press's own caret
   // (review F6), so a box this press focused selects again on the release.
-  // End of the night's figures (`data-vhp`, `data-vkey`) are in the list too (Task 31).
   // A press on a box that already has focus selects too, unless the press dragged out a selection of its own.
+  // End of the night's figures (`data-vhp`, `data-vkey`) are in the list too (Task 31).
   const NUMBER_BOX = '[data-fini], [data-fmax], [data-fac], [data-ffpmax], #acting .pbox, #fAddCount, [data-vhp], [data-vkey]';
   let pressed = null;
   document.addEventListener('pointerdown', (ev) => {
