@@ -85,9 +85,29 @@ describe('the session party', () => {
     assert.deepStrictEqual(r.party, [ADA], 'Cy is not mapped to Ben');
   });
 
+  // Task 32 (Task 29 re-review): the Sheet link is the signal, written `**Sheet:** [[PC]]` too, after a bold subject
+  // with no player in brackets
+  it('a roster bullet takes its PC from **Sheet:** with the colon inside the bold, and after a subject with no player', () => {
+    const index = vault({});
+    const plan = '## PC Roster & Arcs\n- **Bo (Sam):** arc; next beat: the cart. **Sheet:** [[Ben Hart]]\n'
+      + '- **Wen:** arc, with [[Vic Vane]] close by. Sheet: [[Ada Moss]].\n'
+      + '- **Tam:** arc. **Sheet**: [[Cy Doe]]\n';
+    const r = sessionParty({ index, sessionPath: SESSION, planBody: plan, given: [] });
+    assert.deepStrictEqual(r, { party: [BEN, ADA, CY], from: 'plan', warnings: [] });
+    const crlf = sessionParty({ index, sessionPath: SESSION, planBody: plan.replace(/\n/g, '\r\n'), given: [] });
+    assert.deepStrictEqual(crlf.party, [BEN, ADA, CY], 'CRLF');
+  });
+
+  it('a bold-subject bullet with no Sheet link takes nothing, whatever it mentions', () => {
+    const index = vault({});
+    const plan = '## PC Roster & Arcs\n- **Wen:** arc. Sheet: [[Ada Moss]].\n- **Tam:** arc with [[Ben Hart]] and [[Cy Doe]].\n- **Arc theme:** loyalty, see [[Ben Hart]]\n';
+    const r = sessionParty({ index, sessionPath: SESSION, planBody: plan, given: [] });
+    assert.deepStrictEqual(r.party, [ADA]);
+  });
+
   it('a label sub-bullet under a PC heading never adds the PC it mentions', () => {
     const index = vault({});
-    const plan = '## PC Roster & Arcs\n### [[Ada Moss]]\n- **State:** standing over [[Ben Hart]]\'s body\n- **Next beat:** Sheet: [[Ben Hart]]\n- **Note:** Jay plays [[Ben Hart]]\n';
+    const plan = '## PC Roster & Arcs\n### [[Ada Moss]]\n- **State:** standing over [[Ben Hart]]\'s body\n- **Next beat:** Sheet: [[Ben Hart]]\n- **Note:** **Sheet:** [[Ben Hart]]\n- **Note:** Jay plays [[Ben Hart]]\n';
     const r = sessionParty({ index, sessionPath: SESSION, planBody: plan, given: [] });
     assert.deepStrictEqual(r.party, [ADA], 'Ben is not added');
   });

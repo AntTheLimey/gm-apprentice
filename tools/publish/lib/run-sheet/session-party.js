@@ -21,6 +21,8 @@ const { wrapUpOf } = require('./sessions');
 const { displayTitleOf } = require('../scanner');
 const { canonicalNfc } = require('../unicode');
 
+// A roster bullet's sheet link, the colon inside or outside the bold: `Sheet: [[PC]]`, `**Sheet:** [[PC]]`, `**Sheet**: [[PC]]`.
+const SHEET = /\bSheet(?:\*\*|__)?\s*:\s*(?:\*\*|__)?\s*(\[\[[^\]]+\]\])/i;
 const FIELDS = ['pcs', 'party', 'players_present', 'present', 'attendance', 'characters'];
 const low = (s) => canonicalNfc(String(s == null ? '' : s)).replace(/[_*`]/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
 
@@ -102,14 +104,19 @@ function sessionParty({ index, sessionPath, planBody, given, planPath = null }) 
     const subjects = [];
     for (const h of roster.text.split('\n').filter((l) => /^#{3,}\s/.test(l))) subjects.push(items(h.replace(/^#+\s+/, '').split(/\s[—–-]\s|\s\(/)[0]));
     for (const cells of pt.tableRows(roster.text)) if (cells[0]) subjects.push(items(cells[0].replace(/[*]/g, '')));
+    const lines = pt.cleanText(roster.text).split('\n');
+    const firstHead = lines.findIndex((l) => /^#{3,}\s/.test(l));
     for (const b of pt.bullets(roster.text)) {
       const m = /^\*\*(.+?)\*\*/.exec(b.text);
       if (!m) continue;
       const subject = items(m[1].replace(/:\s*$/, ''));
-      // A bullet led by a nickname and its player ("Wen (Sam)") takes the one PC its "Sheet:" link names. Only that
-      // shape: a label ("State:", "Next beat:", "Note:") never does, and a link not after "Sheet:" names no one.
+      // A bullet whose bold subject names no PC ("Wen (Sam):", "Wen:") takes the one PC its "Sheet:" link names
+      // (`Sheet: [[PC]]`, `**Sheet:** [[PC]]`). A nickname and its player anywhere; a bare subject only as a top-level
+      // bullet before any PC heading, since under a heading a bold word is a label ("State:", "Next beat:", "Note:")
+      // and never adds anyone. A link not after "Sheet:" names no one.
       const nick = /^[^()]+\([^()]+\)\s*:?$/.test(m[1].trim());
-      const sheet = nick && !subject[0] && !pcOf(null, subject[1]) ? /\bSheet:\s*(\[\[[^\]]+\]\])/i.exec(b.text) : null;
+      const free = (firstHead < 0 || b.start < firstHead) && !/^\s/.test(lines[b.start] || '');
+      const sheet = (nick || free) && !subject[0] && !pcOf(null, subject[1]) ? SHEET.exec(b.text) : null;
       const linked = sheet ? index.resolve(pt.links(sheet[1])[0]) : null;
       subjects.push(linked && isPc(linked) ? [linked, null] : subject);
     }
