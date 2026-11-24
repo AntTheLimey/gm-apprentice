@@ -2513,8 +2513,11 @@
     if (STAT[f].stat) {
       // a figure for setStat: a number where it is one (`+1` is 1), else the words (DR's `2 (face 0)`, DB's `+1D4`)
       const value = v === '' ? null : /^[+-]?\d+(?:\.\d+)?$/.test(v) ? Number(v) : v;
-      // a figure typed as the one worked out is the GM's own now: sent, so it loses its "from" tag (Task 36)
-      if (shownFigure(value) !== shown(r, f) || (value !== null && fromTag(r, STAT[f].stat))) {
+      // a figure typed as the one worked out is the GM's own now: sent, so it loses its "from" tag (Task 36). Only when
+      // the box was typed in (`dirty`): a Tab past a worked-out figure leaves it worked out (fix round)
+      const typedSame = t.dataset.dirty !== undefined && value !== null && fromTag(r, STAT[f].stat);
+      delete t.dataset.dirty;
+      if (shownFigure(value) !== shown(r, f) || typedSame) {
         if (STAT[f].panel) heldIn = HOLD;
         F({ type: 'setStat', row: r.id, key: STAT[f].stat, value, ...(STAT[f].panel ? { hold: true } : {}) });
       }
@@ -2784,6 +2787,8 @@
     const f = statOf(t);
     if (f) {
       delete t.dataset.committed;
+      // typed in since it was drawn or last committed (commitStat; a redraw draws the box anew, unmarked)
+      t.dataset.dirty = '';
       // a marked box keeps its words through a redraw while they are worked on
       const key = badKey(STAT[f].k, t.dataset[f]);
       if (ui.bad[key]) ui.bad[key].words = t.value;

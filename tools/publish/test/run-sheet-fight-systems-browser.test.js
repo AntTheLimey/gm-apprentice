@@ -3497,6 +3497,33 @@ describe('CoC fight rows on one line (step 6b Task 38), by real input', { skip: 
 // benefit is simply tracking turn order, and remaining HP, and whether they are still in the fight."
 describe('A GURPS foe made up at the table: the quick figures first (step 6b Task 36), by real input', { skip: browserSkip() }, () => {
   const MEASURED = {};
+  // fix round (review Important 1): a Tab past a worked-out figure, nothing typed, keeps it worked out
+  it('GURPS: Tab through Rafe Kell\'s worked-out Speed, Dodge and HP without typing keeps their tags; ST typed then moves HP; 8 typed over a worked-out 8 drops it', async () => {
+    const run = await start('gurps');
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await fightOn(page, run, 1);
+      p = await peek(page, p, 'Rafe Kell');
+      const id = named(p, 'Rafe Kell').id;
+      assert.deepStrictEqual(Object.keys(named(p, 'Rafe Kell').from).sort(), ['dodge', 'fp', 'hp', 'speed']);
+      await tap(page, box(p, 'Rafe Kell', 'speed'));
+      const went = [];
+      for (let i = 0; i < 6; i++) { await page.key('Tab'); went.push(await where(page)); }
+      assert.deepStrictEqual(went, ['skill', 'dodge', 'parry', 'block', 'hp', 'st'].map((k) => `data-fs-${k}=${id}`));
+      p = await settled(page);
+      const r = named(p, 'Rafe Kell');
+      assert.deepStrictEqual(Object.keys(r.from).sort(), ['dodge', 'fp', 'hp', 'speed'], 'every tag stays');
+      await page.type('13');
+      await page.key('Enter');
+      p = await until(page, `p.saved === "Saved" && p.pending === 0 && p.fight.rows.find((r) => r.id === ${q(id)}).st === 13`);
+      assert.deepStrictEqual([named(p, 'Rafe Kell').max, named(p, 'Rafe Kell').from.hp], [13, 'from ST'], 'HP follows ST');
+      // a Dodge typed as the 8 Speed gives is the GM's own: its tag goes
+      p = await typeInto(page, box(p, 'Rafe Kell', 'dodge'), '8');
+      assert.strictEqual(named(p, 'Rafe Kell').from.dodge, undefined);
+      assert.strictEqual(named(p, 'Rafe Kell').dodge, 8);
+      assert.deepStrictEqual(p.errors, []);
+    });
+  });
+
   // the CoC panel, checked for the same and changed: DEX, Fighting, Dodge and HP first
   it('CoC: Add "Cultist", 60 Tab 50 Tab 30 Tab 12: DEX, Fighting, Dodge and HP, placed by DEX', async () => {
     const run = await start('coc');
