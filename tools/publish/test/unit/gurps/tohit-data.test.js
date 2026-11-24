@@ -289,8 +289,9 @@ describe('buildTohitData: base, free fall, locations, bands', () => {
   it('locations carry stable keys with numeric penalties, from the hit-location table', () => {
     const d = buildTohitData(model({ ranged: [rangedRow()] }), META);
     assert.deepStrictEqual(d.locations.map(l => l[0]),
-      ['torso', 'vitals', 'arm', 'leg', 'extremity', 'groin', 'face', 'neck', 'skull', 'eye',
-        'arm vein', 'leg vein', 'arm joint', 'leg joint', 'jaw', 'ear', 'nose', 'extremity joint', 'spine', 'neck vein']);
+      // Task 34 on purpose: the run sheet's order, mildest penalty first (LOCATION_ORDER)
+      ['torso', 'arm', 'leg', 'groin', 'vitals', 'extremity', 'face', 'neck', 'arm vein', 'leg vein', 'arm joint', 'leg joint',
+        'jaw', 'skull', 'ear', 'nose', 'extremity joint', 'spine', 'neck vein', 'eye']);
     const pen = Object.fromEntries(d.locations.map(([k, , p]) => [k, p]));
     assert.deepStrictEqual(pen, { torso: 0, vitals: -3, arm: -2, leg: -2, extremity: -4, groin: -3, face: -5, neck: -5, skull: -7, eye: -9,
       'arm vein': -5, 'leg vein': -5, 'arm joint': -5, 'leg joint': -5, jaw: -6, ear: -7, nose: -7, 'extremity joint': -7, spine: -8, 'neck vein': -8 });

@@ -89,6 +89,12 @@ describe('the hit locations in code: one table', () => {
     // a low target's places are the calculator's
     for (const k of TOHIT_RULES.targetLowLocs) assert.ok(LOCATION_KEYS.some(([key]) => key === k), k);
   });
+  it('the to-hit calculator lists its places in the run sheet\'s order (Task 34)', () => {
+    const model = { attributes: {}, skills: [], techniques: [], traits: [], ranged: [{ weapon: 'Pistol', skill: 'Guns (Pistol)-12', acc: '2', range: '100', rof: '1', shots: '6', bulk: '-2', rcl: '2' }] };
+    const d = buildTohitData(model, { pcSlug: 'x', campaignId: 'x' });
+    const first = (key) => LOCATION_KEYS.find(([k]) => k === key)[2][0];
+    assert.deepEqual(d.locations.map(([k]) => first(k)), LOCATION_ORDER.filter((k) => d.locations.some(([key]) => first(key) === k)));
+  });
   it('a place\'s multiplier for each type is one figure, from one function', () => {
     // the generated table, the run sheet's labels and its working all ask woundingAt; spot-check the book's figures
     const m = (k, t) => woundingAt(WOUNDING, k, t);

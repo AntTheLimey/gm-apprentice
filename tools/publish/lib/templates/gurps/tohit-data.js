@@ -8,7 +8,7 @@
 // The calculator's own rules numbers ride in the block as `rules` (blocks/tohit-rules.js, #420).
 
 const { SIZE_SPEED_RANGE_ROWS } = require('./blocks/reference');
-const { LOCATIONS } = require('./hit-locations');
+const { LOCATIONS, LOCATION_ORDER } = require('./hit-locations');
 const { TOHIT_RULES } = require('./blocks/tohit-rules');
 const { levelAtEnd } = require('./weapon-level');
 const { gravityDx } = require('../../../js/gurps-live');
@@ -82,9 +82,12 @@ const norm = (s) => str(s).toLowerCase().replace(/\s+/g, ' ').trim();
 const slug = (s) => norm(s).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'x';
 const firstInt = (s, dflt) => { const m = /\d+/.exec(str(s)); return m ? parseInt(m[0], 10) : dflt; };
 
+// In the run sheet's order (LOCATION_ORDER, mildest penalty first), each key placed by its first place, so the
+// calculator's list and the run sheet's dropdown read alike.
 function buildLocations() {
   const out = [];
-  for (const [key, label, places] of LOCATION_KEYS) {
+  const at = (places) => LOCATION_ORDER.indexOf(places[0]);
+  for (const [key, label, places] of LOCATION_KEYS.slice().sort((a, b) => at(a[2]) - at(b[2]))) {
     const loc = LOCATIONS.find(x => x.key === places[0]);
     if (loc) out.push([key, label, loc.penalty]);
   }
