@@ -9,6 +9,12 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.145] — 2026-11-24
+
+### Fixed
+
+- Turning on `player_site.own_pages` for a page no longer stops the next deploy on leak findings you had already accepted there: an accept on the page's address now also covers its kept copy (#878). Publish tool 1.70.62.
+
 ## [1.12.144] — 2026-11-24
 
 ### Added
