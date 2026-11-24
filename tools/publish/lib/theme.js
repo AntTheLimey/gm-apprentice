@@ -182,9 +182,10 @@ function accentOnHeader(accent, header, headerText, headerIsLight, min = 5) {
   const reads = (c) => grounds.every((g) => contrast(c, g) >= min);
   if (reads(accent)) return accent;
   const hsl = toHsl(accent);
-  // From the accent's own lightness, a hundredth at a time, away from the header's.
-  for (let l = hsl.l; l >= 0 && l <= 1; l += headerIsLight ? -0.01 : 0.01) {
-    const c = fromHsl({ ...hsl, l });
+  // From the accent's own lightness, a hundredth at a time, away from the header's, to black or white itself.
+  const from = Math.round(hsl.l * 100);
+  for (let k = from; k >= 0 && k <= 100; k += headerIsLight ? -1 : 1) {
+    const c = fromHsl({ ...hsl, l: k / 100 });
     if (reads(c)) return c;
   }
   return headerText;
@@ -258,7 +259,8 @@ function generateThemeCSS(config, opts = {}) {
   // style.css's dark-first default would give a light palette dark controls.
   vars.push(`  color-scheme: ${paletteScheme(pal)};`);
 
-  const headerIsLight = luminance(primary) > 0.5;
+  // The header's words: dark or light, whichever stands out more on the header (a mid-grey header reads in dark).
+  const headerIsLight = contrast('#1a1a1a', primary) > contrast('#e0e4e8', primary);
   const headerText = headerIsLight ? '#1a1a1a' : '#e0e4e8';
   vars.push(`  --text-on-header: ${headerText};`);
   vars.push(`  --text-muted-on-header: ${headerIsLight ? '#555' : '#9da5ae'};`);

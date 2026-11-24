@@ -50,6 +50,17 @@ describe('generateThemeCSS: a custom palette\'s accent on the header (#868)', ()
     assert.ok(ratio(a, '#e8d9b0') >= 5 && lum(a) < lum('#c08a5a'), `got ${a}`);
   });
 
+  it('the search reaches white itself: a grey accent on a grey header can end at #ffffff', () => {
+    const css = generateThemeCSS({ palette: { primary: '#656565', accent: '#656565' } });
+    assert.equal(varOf(css, '--accent-on-header'), '#ffffff');
+  });
+
+  it('a mid-grey header takes whichever words stand out more on it: dark ones', () => {
+    const css = generateThemeCSS({ palette: { primary: '#7f7f7f', accent: '#3366cc' } });
+    assert.equal(varOf(css, '--text-on-header'), '#1a1a1a');
+    assert.ok(ratio('#1a1a1a', '#7f7f7f') > ratio('#e0e4e8', '#7f7f7f'));
+  });
+
   it('a colour that is not hex leaves the accent to style.css (var(--accent))', () => {
     const css = generateThemeCSS({ palette: { primary: 'navy', accent: '#58a6ff' } });
     assert.ok(!css.includes('--accent-on-header'));
