@@ -423,8 +423,9 @@ function describeCoc(id) {
     // `prompts` below; a line rolls the row's `stat`; each offer adds or removes statuses by name.
     cards: COC_CARDS,
     // a shot (Task 19): the range, the chips, Prone, the dive and the malfunction flag
-    // Regency (RC p187): every gun is a flintlock, so one whose line does not say reads as never impaling
-    firearm: id === 'coc-7e-regency' ? { ...FIREARM_RULES, unknownImpales: false } : FIREARM_RULES,
+    // Regency (RC p187): every gun is a flintlock, so one whose line does not say reads as never impaling, and one
+    // with no malfunction figure takes the book's (95; the double-barrelled pistol 90, RC p187)
+    firearm: id === 'coc-7e-regency' ? { ...FIREARM_RULES, unknownImpales: false, unknownMalfunction: { any: 95, doubleBarrel: 90 } } : FIREARM_RULES,
   };
   // a Major Wound is a hit of at least max HP over `majorWoundAt` (KR p119, p120); a SAN loss of `insanityAt` or more
   // in one entry asks for the INT roll (KR p155)
@@ -465,10 +466,19 @@ const foeRow = (n) => ({ init: n.dex, mp: n.mp, mpMax: n.mp, san: n.san, sanMax:
   fighting: n.fighting, firearms: n.firearms, dodge: n.dodge, db: n.db, build: n.build, attacks: n.attacks, guns: n.guns || null });
 
 // A gun whose line says nothing about impaling takes the system's reading (`rules.coc.firearm.unknownImpales`:
-// Regency's false); a line that says it wins. Plain CoC leaves it null.
+// Regency's false); a line that says it wins. Plain CoC leaves it null. A gun with no malfunction figure takes
+// `unknownMalfunction` the same way (Regency's only), a double-barrelled one by its name.
+const DOUBLE_BARREL = /\bdouble[- ]?barrel/i;
 function settleGuns(guns, firearm) {
-  if (!Array.isArray(guns) || !firearm || typeof firearm.unknownImpales !== 'boolean') return guns;
-  return guns.map((g) => (g.impales === null ? { ...g, impales: firearm.unknownImpales } : g));
+  if (!Array.isArray(guns) || !firearm) return guns;
+  const imp = typeof firearm.unknownImpales === 'boolean' ? firearm.unknownImpales : null;
+  const mal = firearm.unknownMalfunction || null;
+  if (imp === null && !mal) return guns;
+  return guns.map((g) => ({
+    ...g,
+    impales: g.impales === null && imp !== null ? imp : g.impales,
+    malfunction: g.malfunction === null && mal ? (DOUBLE_BARREL.test(g.name) ? mal.doubleBarrel : mal.any) : g.malfunction,
+  }));
 }
 // The readers with the system's own rules object, the one describe() gives (no second lookup).
 const make = (id) => {

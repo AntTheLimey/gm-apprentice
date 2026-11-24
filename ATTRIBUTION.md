@@ -287,11 +287,11 @@ with *Keeper Rulebook* page references in code comments. Not Chaosium
 text. Regency figures from *Regency Cthulhu* (Chaosium, 2022) p187,
 names and numbers only, with the page reference in a code comment:
 the code holds that flintlocks, the blunderbuss and the musket never
-impale (and, from the *Keeper Rulebook*, a malfunction hint at a kept
-95 when no number is known); the malfunction numbers (95,
-the double-barreled pistol's 90), one shot per 4 rounds and the
-blunderbuss's damage by range are read from the GM's own weapon
-lines.
+impale, and that a Regency gun with no malfunction number in its
+note has 95 (the double-barreled pistol 90); a number the GM's line
+gives wins. One shot per 4 rounds and the blunderbuss's damage by
+range are read from the GM's own weapon lines. From the *Keeper
+Rulebook*: a malfunction hint at a kept 95 when no number is known.
 
 **`tools/publish/lib/dice/index.js`** (the run sheet's dice: 3d6 and d100 against a target, damage dice)
 GURPS: *GURPS Basic Set 4th Edition* (Steve Jackson Games).

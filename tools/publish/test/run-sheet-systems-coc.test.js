@@ -211,6 +211,21 @@ for (const crlf of [false, true]) {
           systemFor('coc-7e').readPc({ body, fm: { name: 'Iris Calder' } }).numbers.guns[0].impales], [false, null]);
       } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
     });
+    it('a Regency gun with no malfunction figure reads the book\'s (Task 34): 95, a double-barrelled one 90; plain CoC leaves it blank', () => {
+      const { buildIndex } = require('../lib/run-sheet/notes');
+      const tmp = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'coc-malf-'));
+      try {
+        fs.mkdirSync(path.join(tmp, 'Characters', 'NPCs'), { recursive: true });
+        const block = (gun) => `---\nname: Officer\ntype: npc\n---\n\n## GM Notes\n\n### Stats\n\n**HP** 12 · **DEX** 60\n\n**Combat**\n- ${gun}\n- Dodge 25% (12/5)\n`;
+        fs.writeFileSync(path.join(tmp, 'Characters/NPCs/Officer D.md'), block('Firearms (Rifle/Musket) 65% (32/13), damage 1D10+4, 1 shot per 4 rounds (Brown Bess)'));
+        fs.writeFileSync(path.join(tmp, 'Characters/NPCs/Officer E.md'), block('Double-barrelled flintlock pistol 45% (22/9), damage 1D6+1'));
+        fs.writeFileSync(path.join(tmp, 'Characters/NPCs/Officer F.md'), block('Flintlock pistol 45% (22/9), damage 1D6+1, malf 92'));
+        const index = buildIndex(tmp);
+        const mal = (id, who) => systemFor(id).readFoe({ notePath: `Characters/NPCs/${who}.md`, index, text: undefined }).nums.guns.map((g) => g.malfunction);
+        assert.deepEqual(['Officer D', 'Officer E', 'Officer F'].map((w) => mal('coc-7e-regency', w)), [[95], [90], [92]]);
+        assert.deepEqual(['Officer D', 'Officer E', 'Officer F'].map((w) => mal('coc-7e', w)), [[null], [null], [92]]);
+      } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+    });
     it('malfunction 00 is 100; a number outside 1-100 is none (Task 19)', () => {
       const g = (t) => readNumbers(`- Flintlock pistol 30%, damage 1D6, ${t}`).guns[0].malfunction;
       assert.deepEqual([g('malf 00'), g('malfunction 100'), g('malfunction 150'), g('malf. 95')], [100, 100, null, 95]);
@@ -375,7 +390,8 @@ for (const crlf of [false, true]) {
       assert.equal(r.statsHeading, 'Statistics');
       assert.deepEqual([r.nums.hp, r.nums.dex, r.nums.db], [12, 55, '+1D4']);
       assert.deepEqual([r.nums.fighting, r.nums.firearms, r.nums.dodge], [50, 70, 30]);
-      assert.deepEqual(r.nums.guns, [{ name: 'Firearms (Rifle/Musket)', skill: 70, damage: null, malfunction: null, reload: null, impales: false }]);
+      // Task 34 on purpose: a Regency gun with no Malf takes the book's 95 (RC p187)
+      assert.deepEqual(r.nums.guns, [{ name: 'Firearms (Rifle/Musket)', skill: 70, damage: null, malfunction: 95, reload: null, impales: false }]);
     });
     it('a Combat Skills table takes its Skill column, not Base; a Weapons table gives the attacks and the gun, malfunction last', () => {
       const r = foe('Lieutenant Corve');
@@ -397,7 +413,8 @@ for (const crlf of [false, true]) {
       assert.deepEqual([n.str, n.con, n.siz, n.dex, n.int, n.pow, n.hp, n.mp, n.san, n.luck, n.build],
         [50, 55, 50, 70, 65, 60, 10, 12, 60, 55, 0]);
       assert.deepEqual([n.fighting, n.firearms, n.dodge], [70, 40, 45]);
-      assert.deepEqual(n.guns, [{ name: 'Pistol (flintlock)', skill: 40, damage: '1D10', malfunction: null, reload: 4, impales: false }]);
+      // Task 34 on purpose: a Regency gun with no Malf takes the book's 95 (RC p187)
+      assert.deepEqual(n.guns, [{ name: 'Pistol (flintlock)', skill: 40, damage: '1D10', malfunction: 95, reload: 4, impales: false }]);
       assert.deepEqual(r.lacks, []);
     });
     it('a story heading that starts with Attacks or Weapons is no combat section (fix round)', () => {

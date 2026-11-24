@@ -162,7 +162,8 @@ describe('coc-math: the file', () => {
   it('the Regency id carries the same coc rules', () => {
     // but for Regency's guns that do not say, which never impale (Task 19 fix round 3, on purpose)
     const reg = systemFor('coc-7e-regency').describe().fight.coc;
-    assert.deepEqual({ ...reg, firearm: { ...reg.firearm, unknownImpales: undefined } }, { ...COC, firearm: { ...COC.firearm, unknownImpales: undefined } });
+    // and Task 34: Regency's guns with no malfunction figure take the book's (RC p187)
+    assert.deepEqual({ ...reg, firearm: { ...reg.firearm, unknownImpales: undefined, unknownMalfunction: undefined } }, { ...COC, firearm: { ...COC.firearm, unknownImpales: undefined, unknownMalfunction: undefined } });
     assert.deepEqual(systemFor('coc-7e').describe().coc, COC);
   });
 });
@@ -393,8 +394,10 @@ describe('coc-math: a shot\'s dice (Task 19)', () => {
 
   it('the chip numbers are data with the system, the same for Regency', () => {
     // fix round 3 on purpose: Regency's guns that do not say read as never impaling (RC p187); the rest is the same
-    const { unknownImpales, ...regency } = systemFor('coc-7e-regency').describe().fight.coc.firearm;
+    // Task 34 on purpose: and those with no malfunction figure take the book's, 95, a double-barrelled one 90 (RC p187)
+    const { unknownImpales, unknownMalfunction, ...regency } = systemFor('coc-7e-regency').describe().fight.coc.firearm;
     assert.deepEqual([regency, unknownImpales, COC.firearm.unknownImpales], [COC.firearm, false, undefined]);
+    assert.deepEqual([unknownMalfunction, COC.firearm.unknownMalfunction], [{ any: 95, doubleBarrel: 90 }, undefined]);
     assert.deepEqual(COC.firearm.ranges.map((r) => r.difficulty), ['regular', 'hard', 'extreme']);
     for (const c of COC.firearm.chips) assert.ok(c.label.length <= 22 && c.short.length <= 12, `a chip names a condition: ${c.label}, ${c.short}`);
   });
