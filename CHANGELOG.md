@@ -27,7 +27,7 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 - The Table Log's vitals have each system's columns: Call of Cthulhu HP, MP, SAN and Luck, GURPS HP and FP. Wrap-up writes them onto the sheet, and the Energy Reserve is held through the night.
 - A Call of Cthulhu or GURPS run sheet speaks its own system: no AC, initiative modifier, stat-fill or long rest.
 - Tab stops at Start or stays put, rows hold still while a figure is typed, and Same for all copies what is filled and says how many it reached.
-- The player site's GURPS reference block and to-hit calculator list Martial Arts's hit places.
+- The player site's GURPS reference block and to-hit calculator list Martial Arts's hit places, the calculator in the run sheet's order (mildest first).
 - A D&D initiative typed with decimals is refused, not cut short.
 - Nothing in a fight waits on anything else: any card line can be skipped, an open Dead or Unconscious offer holds up no later line, the Aimed chip can be tapped on by hand, and a GURPS manoeuvre can be set on any row at any time.
 
