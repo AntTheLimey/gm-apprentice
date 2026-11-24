@@ -17,7 +17,7 @@
 //
 // The seam (`window.RunSheetPage`): `dispatch`, `model()`, `state()`, `derived()`, `ui`, `render()`
 // and `parts`, an array of { beatButtons(beat) -> html, side() -> html|null, click(event) -> bool,
-// probe() -> object, sheetTop(derived) -> html, beforeBeat(beat) -> html, focusAttrs: [attribute],
+// probe() -> object, sheetTop(derived) -> html, beforeBeat(beat) -> html, sectionButtons(id) -> html, focusAttrs: [attribute],
 // pane(derived) -> { title, beat, cut } | null }. A part's `pane` makes `#sheet` the fight's right pane
 // (plan 6a Task 10): the cut, the whole beat or the whole sheet under a bar, in its own scroll.
 // Scripts loaded after this one push parts in (the fight view, gm-fight.js); the page calls them on
@@ -801,7 +801,11 @@
 
   // What a part puts above a beat (the After the fight box).
   const beforeBeat = (b) => parts.map((p) => (p.beforeBeat && p.beforeBeat(b)) || '').join('');
-  const sec = (id, title, body) => `<section class="s" id="${id}"><h2>${title}</h2>${body}</section>`;
+  // A section's buttons from the parts (`sectionButtons(id)`: the GURPS to-hit calculator's on the PCs) sit on its bar.
+  const sec = (id, title, body) => {
+    const btns = parts.map((p) => (p.sectionButtons && p.sectionButtons(id)) || '').join('');
+    return `<section class="s" id="${id}">${btns ? `<div class="sbar"><h2>${title}</h2>${btns}</div>` : `<h2>${title}</h2>`}${body}</section>`;
+  };
   const BRIEF_LABELS = { overview: 'Overview', world: 'World', stops: 'Good places to stop' };
 
   // The right pane in a fight: a strip for when it is folded, a bar (the fight's title, the way back, Fold ⟩), then

@@ -37,3 +37,8 @@ status: alive
 |------|-----------|----------------|--------|------|---------|
 | Brawling | DX/E | +1 | 2 | 11 | 11 |
 
+## Melee Attacks
+
+| Weapon | Skill | Damage | Reach | Parry |
+|--------|-------|--------|-------|-------|
+| Punch | Brawling-11 | 1d-2 cr | C | 8 |

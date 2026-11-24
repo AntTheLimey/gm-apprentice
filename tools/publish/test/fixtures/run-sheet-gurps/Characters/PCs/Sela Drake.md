@@ -38,6 +38,14 @@ status: alive
 | Broadsword | DX/A | +1 | 4 | 12 | 12 |
 | Shield | DX/E | +1 | 2 | 12 | 12 |
 
+## Melee Attacks
+
+| Weapon | Skill | Damage | Reach | Parry |
+|--------|-------|--------|-------|-------|
+| Broadsword (swing) | Broadsword-12 | 2d cut | 1 | 10 |
+| Broadsword (thrust) | Broadsword-12 | 1d+2 cr | 1 | 10 |
+| Shield bash | Shield-12 | 1d cr | 1 | — |
+
 ## Active Defenses
 
 | Defense | Value | Source |

@@ -640,7 +640,7 @@
     }
     let body = '';
     if (r.kind === 'pc') {
-      body = '<p class="note">Players run their own sheets.</p>';
+      body = `<p class="note">Players run their own sheets. ${toHitButton('acToHit', r.id)}</p>`;
       // a caster PC's spells as the sheet writes them, folded (the acting panel is where the GM looks mid-cast)
       const pc = (model().pcs || []).find((x) => x.note === r.note);
       if (pc && pc.spellsHtml) body += `<details class="fold spells" data-fspells="${esc(pc.note)}" ${ui.spellsOpen[pc.note] ? 'open' : ''}><summary>Spells (from ${esc(first(pc.name))}'s sheet)</summary><div class="stats">${pc.spellsHtml}</div></details>`;
@@ -1613,11 +1613,15 @@
   }
 
   // ------------------------------------------------------------------ drawing: the right column
+  // The GURPS to-hit calculator's button (Task 24, gm-tohit.js opens it): `data-tohit` names the row it opens for.
+  const TH = () => (window.RunSheetToHit && window.RunSheetToHit.available() ? window.RunSheetToHit : null);
+  const toHitButton = (id, rowId) => (TH() ? `<button type="button" id="${id}" data-tohit="${esc(rowId || '')}" title="${esc(TH().title)}">To-hit</button>` : '');
   function sideHTML(d) {
     const f = d.fight;
     const view = f.view;
     syncMelee(f);
     syncDmg(f);
+    const shown = actingOf(f).row;
     let h = '<div class="fview"><div class="fo" id="fOrder"><div class="fotop">';
     h += `<div class="fh"><b>${f.started ? `Round ${esc(f.round)}` : 'Setting up'}</b>`
       // a system that works the order out (CoC's DEX, GURPS's Basic Speed) has nothing to roll
@@ -1625,6 +1629,7 @@
       + '<button type="button" id="fSort" title="Sort once by initiative; whose turn it is stays">Sort</button>'
       + `<button type="button" id="fNext" class="primary">${f.started ? 'Next ▸' : 'Start ▸'}</button><span class="sp"></span>`
       + `<button type="button" id="fArea" class="${ui.area ? 'on' : ''}" aria-pressed="${ui.area}" title="Tick several rows, type the damage once">Area</button>`
+      + toHitButton('fToHit', shown && shown.kind !== 'lair' ? shown.id : '')
       + '<button type="button" id="fPause" title="Play the beat on (a bargain, a parley); every number is kept">Pause</button>'
       + `${RP.armBtn('fightEnd', 'End fight', 'id="fEnd"', 'End the fight: two clicks. Every status is kept')}`
       + `${RP.layout.pv ? '' : '<button type="button" id="fPvShow" title="Bring the players\' screen preview back">Players\' screen ▸</button>'}</div>`;

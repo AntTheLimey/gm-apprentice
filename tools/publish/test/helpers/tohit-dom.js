@@ -142,7 +142,8 @@ function load(data, opts = {}) {
   const set = (sel, v) => { const el = $(sel); assert.ok(el, sel); if (el.attrs.type === 'checkbox') el.checked = v; else el.value = String(v); fire(el, 'input'); fire(el, 'change'); return el; };
   const names = () => body.querySelectorAll('.th-gname').map((n) => n.textContent);
   const saved = () => { const raw = store.get('tohit-calc:' + data.pc); return raw ? JSON.parse(raw) : null; };
-  return { flushTimers, body, box, $, all: (s) => body.querySelectorAll(s), fire, set, names, store, saved, rows, sheetRows, observers, blob, tab };
+  // `api`: what the script put on the window (make, and mountIn for a box of the caller's own)
+  return { flushTimers, body, box, $, all: (s) => body.querySelectorAll(s), fire, set, names, store, saved, rows, sheetRows, observers, blob, tab, api: win.__gurpsTohit };
 }
 
 // The drawn calculator as plain data: every element's tag, attributes, own text, value, flags and
