@@ -626,6 +626,9 @@
     clearTimeout(press.timer);
     press.on = false;
     if (press.owed) { press.owed = false; update(); }
+    // what a part owes the release, after the click has landed and the redraw has come (Task 23, D3c: the fight's held
+    // rows are placed now, never on the press, so nothing moves under the pointer)
+    for (const p of parts) if (p.afterPress) p.afterPress();
   }
   const endHoldOf = (n) => () => { if (press.n === n) endHold(); };
   document.addEventListener('pointerdown', (ev) => {

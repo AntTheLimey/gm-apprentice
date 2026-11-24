@@ -23,6 +23,8 @@
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
+/* Tab onto a link or box inside a beat or section lands below the sticky header, never under it (Task 23) */
+html { scroll-padding-top: calc(var(--toph) + 8px); }
 body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 var(--body); }
 button { font: inherit; color: inherit; cursor: pointer; border: 1px solid var(--line); background: var(--panel); border-radius: 6px; padding: 3px 9px; }
 button:disabled { opacity: .45; cursor: default; }
@@ -497,3 +499,6 @@ ol.to > li.row2 .sx .sxg { display: inline-flex; flex-wrap: nowrap; gap: 2px; al
 ol.to > li.row2 .sx .sxh { color: var(--muted); }
 ol.to > li.row2 .sx input.malf { width: 3.2ch; font: 500 .72rem var(--mono); padding: 0 2px; }
 ol.to > li.row2 .mnote.lost.now { color: var(--bad); font-weight: 650; }
+/* Same for all with nothing to copy yet: disabled, its reason written beside it (Task 23, D3) */
+.act .nums > span.samebox { border: 0; background: none; padding: 0; display: inline-flex; align-items: center; gap: 6px; }
+.act .samewhy { color: var(--muted); font-size: .8rem; }

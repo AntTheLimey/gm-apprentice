@@ -676,6 +676,8 @@ describe('CoC and GURPS fights on the GM page, by real input', { skip: browserSk
         p = await until(page, `p.fight.rows.find((r) => r.id === ${q(b2)}).cards.length === 0 && p.saved === "Saved" && p.pending === 0`);
         assert.deepStrictEqual(named(p, 'Bouncer 2').conds, ['Unconscious', 'Mortal wound']);
         assert.strictEqual(await page.evaluate(`Boolean(document.querySelector(${q(card)}))`), false);
+        // Task 23: the card settled and went; focus is on the row's entry box, never the page
+        await page.waitFor(`document.activeElement === document.querySelector('[data-fhp=${q(b2)}]')`, 3000);
         const log = (await (await fetch(`${run.base}/api/state`)).json()).state.events.filter((e) => e.fight).map((e) => e.text);
         assert.deepStrictEqual(log.slice(-4), [
           'Bouncer 2: death check (−1×HP), HT 10, rolled 12, failed by 2.',
@@ -1717,4 +1719,401 @@ describe('CoC and GURPS pages speak their own system (step 6b Task 22), by real 
       }
     });
   }
+});
+
+// ---- step 6b Task 23: Tab walks (D2), rows that hold still while typed (D3c), reaching a blank row (D3a) and Same for
+// all field by field (D3), in CoC and GURPS. D&D's are in run-sheet-layout-browser.test.js.
+describe('Tab, held rows and Same for all in CoC and GURPS (step 6b Task 23), by real input', { skip: browserSkip() }, () => {
+  const AT = { coc: 0, gurps: 1 };
+  const W = (which) => (which === 'gurps' ? 'GURPS' : 'CoC');
+  // where focus is: the control's first data-f attribute and its value, its id, or 'body'
+  const where = (page) => page.evaluate(`(() => { const a = document.activeElement; if (!a || a === document.body) return 'body';
+    const x = Array.from(a.attributes).find((n) => n.name.startsWith('data-f')); return x ? x.name + '=' + x.value : (a.id ? '#' + a.id : a.tagName); })()`);
+  // the focused box's words and selection
+  const picked = (page) => page.evaluate('(() => { const a = document.activeElement; return a && typeof a.selectionStart === "number" ? [a.value, a.selectionStart, a.selectionEnd] : null; })()');
+  // "+ New" with a count: the count box first, then the name
+  async function addMany(page, name, n) {
+    await tap(page, '#fAddCount');
+    await page.type(String(n));
+    await tap(page, '#fAddName');
+    await page.type(name);
+    await page.waitFor('document.querySelector("[data-faddnew]")');
+    await tap(page, '[data-faddnew]');
+    return until(page, `p.fight.rows.filter((r) => r.name.startsWith(${q(`${name} `)})).length === ${n} && p.saved === "Saved" && p.pending === 0`);
+  }
+  async function startNow(page) {
+    await tap(page, '#fNext');
+    await page.waitFor('document.querySelector("#fStartAnyway") || JSON.parse(document.body.dataset.probe || "null").fight.started');
+    if (await page.evaluate('Boolean(document.querySelector("#fStartAnyway"))')) await tap(page, '#fStartAnyway');
+    return until(page, 'p.fight.started && p.saved === "Saved" && p.pending === 0');
+  }
+  const pcFigures = (p) => p.fight.rows.filter((r) => r.kind === 'pc').map((r) => [r.name, r.ini, r.hp, r.max, r.speed, r.dex]);
+  const ids = (p) => p.fight.rows.map((r) => r.id);
+  const log = async (run) => (await (await fetch(`${run.base}/api/state`)).json()).state.events.filter((e) => e.fight).map((e) => e.text);
+  const serverRows = async (run) => (await (await fetch(`${run.base}/api/state`)).json()).state.fight.rows;
+  // the in-rows' initiatives from the top, numbers only: high to low
+  const sortedDown = (p) => { const n = p.fight.rows.filter((r) => r.in && r.ini !== null).map((r) => r.ini); return n.every((v, i) => i === 0 || n[i - 1] >= v); };
+  // a held press on an element (scrolled into view first, as page.click does), with a look at the server mid-press
+  async function heldPress(page, sel, during) {
+    await page.evaluate(`document.querySelector(${q(sel)}).scrollIntoView({ block: 'nearest', inline: 'nearest' })`);
+    const r = await page.box(sel);
+    const x = r.left + r.width / 2;
+    const y = r.top + r.height / 2;
+    assert.ok(await page.evaluate(`document.elementFromPoint(${x}, ${y}) === document.querySelector(${q(sel)})`), `${sel} is under the pointer`);
+    await page.mouse('mouseMoved', x, y);
+    await page.mouse('mousePressed', x, y, { buttons: 1 });
+    await page.sleep(90);
+    await during();
+    await page.mouse('mouseReleased', x, y);
+  }
+
+  for (const which of ['coc', 'gurps']) {
+    it(`${W(which)}: Add Bouncer ×3, then 10 Tab 9 Tab 8 Tab in their initiative boxes before Start: focus on Start, every PC's figure unchanged, no seen button focused`, async () => {
+      const run = await start(which);
+      await withPage({ width: 1449, height: 762 }, async (page) => {
+        let p = await fightOn(page, run, AT[which]);
+        p = await addMany(page, 'Bouncer', 3);
+        const pcs = pcFigures(p);
+        const b = [1, 2, 3].map((i) => named(p, `Bouncer ${i}`).id);
+        await tap(page, `[data-fini="${b[0]}"]`);
+        const went = [];
+        for (const v of ['10', '9', '8']) { await page.type(v); await page.key('Tab'); went.push(await where(page)); }
+        assert.deepStrictEqual(went, [`data-fini=${b[1]}`, `data-fini=${b[2]}`, '#fNext']);
+        p = await until(page, `p.saved === "Saved" && p.pending === 0 && p.fight.rows.find((r) => r.id === ${q(b[2])}).ini === 8`);
+        assert.deepStrictEqual(b.map((id) => p.fight.rows.find((r) => r.id === id).ini), [10, 9, 8]);
+        assert.deepStrictEqual(pcFigures(p), pcs, 'no PC figure changed');
+        assert.strictEqual(p.fight.started, false);
+        assert.deepStrictEqual(p.errors, []);
+      });
+    });
+
+    it(`${W(which)}: the same after Start: focus stays on the last box with its number selected; Enter commits it and ends no turn`, async () => {
+      const run = await start(which);
+      await withPage({ width: 1449, height: 762 }, async (page) => {
+        await fightOn(page, run, AT[which]);
+        let p = await startNow(page);
+        p = await addMany(page, 'Bouncer', 3);
+        const turn = [p.fight.turn, p.fight.round];
+        const b = [1, 2, 3].map((i) => named(p, `Bouncer ${i}`).id);
+        await tap(page, `[data-fini="${b[0]}"]`);
+        const went = [];
+        for (const v of ['10', '9', '8']) { await page.type(v); await page.key('Tab'); went.push(await where(page)); }
+        assert.deepStrictEqual(went, [`data-fini=${b[1]}`, `data-fini=${b[2]}`, `data-fini=${b[2]}`]);
+        assert.deepStrictEqual(await picked(page), ['8', 0, 1], 'its number selected');
+        await page.key('Enter');
+        p = await until(page, `p.saved === "Saved" && p.pending === 0 && p.fight.rows.find((r) => r.id === ${q(b[2])}).ini === 8 && p.fight.rows.every((r) => !r.held)`);
+        assert.deepStrictEqual([p.fight.turn, p.fight.round], turn, 'no turn ended');
+        assert.deepStrictEqual(b.map((id) => p.fight.rows.find((r) => r.id === id).ini), [10, 9, 8]);
+        assert.strictEqual(await where(page), `data-fini=${b[2]}`);
+        assert.deepStrictEqual(p.errors, []);
+      });
+    });
+
+    it(`${W(which)}: with the source blank Same for all is disabled and "Type a number first" is on screen beside it; the copies' typed initiatives are kept`, async () => {
+      const run = await start(which);
+      await withPage({ width: 1449, height: 762 }, async (page) => {
+        let p = await fightOn(page, run, AT[which]);
+        p = await addMany(page, 'Bouncer', 3);
+        const b = [1, 2, 3].map((i) => named(p, `Bouncer ${i}`).id);
+        p = await typeInto(page, `[data-fini="${b[1]}"]`, 9);
+        p = await typeInto(page, `[data-fini="${b[2]}"]`, 8);
+        p = await peek(page, p, 'Bouncer 1');
+        assert.strictEqual(await page.evaluate(`document.querySelector('#acting [data-fsame="${b[0]}"]').disabled`), true);
+        assert.match(await page.evaluate('document.querySelector("#acting .samebox").innerText'), /Same for all\s*Type a number first/);
+        assert.ok((await page.evaluate('document.querySelector("#acting").innerText')).includes('Type a number first'));
+        assert.deepStrictEqual([named(p, 'Bouncer 2').ini, named(p, 'Bouncer 3').ini], [9, 8]);
+        assert.deepStrictEqual(p.errors, []);
+      });
+    });
+
+    it(`${W(which)}: a held number is placed before Start sorts (Start pressed straight from the column)`, async () => {
+      const run = await start(which);
+      await withPage({ width: 1449, height: 762 }, async (page) => {
+        await fightOn(page, run, AT[which]);
+        let p = await addNew(page, 'Bouncer');
+        const id = named(p, 'Bouncer').id;
+        await tap(page, `[data-fini="${id}"]`);
+        await page.type('7');
+        p = await startNow(page);
+        assert.strictEqual(named(p, 'Bouncer').ini, 7);
+        assert.ok(sortedDown(p), `sorted: ${JSON.stringify(p.fight.rows.filter((r) => r.in).map((r) => [r.name, r.ini]))}`);
+        assert.ok(p.fight.rows.every((r) => !r.held));
+        assert.deepStrictEqual(p.errors, []);
+      });
+    });
+  }
+
+  it('GURPS: Tab never lands on a PC\'s sheet Speed', async () => {
+    const run = await start('gurps');
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      const p = await fightOn(page, run, 1);
+      const column = await page.evaluate('Array.from(document.querySelectorAll("[data-fini]"), (b) => b.dataset.fini)');
+      const first = column.find((id) => p.fight.rows.find((r) => r.id === id).kind !== 'pc');
+      const sheet = (id) => { const r = p.fight.rows.find((x) => x.id === id); return r.kind === 'pc' && r.ini !== null; };
+      const passed = column.slice(column.indexOf(first)).filter(sheet);
+      assert.ok(passed.length > 0, 'a PC with a sheet Speed lies on the walk');
+      await tap(page, `[data-fini="${first}"]`);
+      const went = [];
+      for (let i = 0; i < 40; i++) {
+        await page.key('Tab');
+        const w = await where(page);
+        went.push(w);
+        if (!w.startsWith('data-fini=')) break;
+      }
+      assert.strictEqual(went.at(-1), '#fNext', `the walk ends on Start: ${went}`);
+      for (const id of passed) assert.ok(!went.includes(`data-fini=${id}`), `passed ${id}`);
+      assert.ok(!went.some((w) => w.startsWith('data-fseen')), 'never a seen button');
+    });
+  });
+
+  it('GURPS: a row\'s own boxes: 12 Tab 10 Tab 11 gives HP max 12, FP max 10, then the next row\'s HP max 11; Shift-Tab walks back', async () => {
+    const run = await start('gurps');
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await fightOn(page, run, 1);
+      let p = await addMany(page, 'Bouncer', 2);
+      const [b1, b2] = [1, 2].map((i) => named(p, `Bouncer ${i}`).id);
+      await tap(page, `[data-fmax="${b1}"]`);
+      await page.type('12');
+      await page.key('Tab');
+      assert.strictEqual(await where(page), `data-ffpmax=${b1}`);
+      await page.type('10');
+      await page.key('Tab');
+      assert.strictEqual(await where(page), `data-fmax=${b2}`);
+      await page.type('11');
+      await page.key('Enter');
+      p = await until(page, `p.saved === "Saved" && p.pending === 0 && p.fight.rows.find((r) => r.id === ${q(b2)}).max === 11`);
+      assert.deepStrictEqual([named(p, 'Bouncer 1').max, named(p, 'Bouncer 1').fpMax, named(p, 'Bouncer 2').max], [12, 10, 11]);
+      // Shift-Tab walks each step back: the next row's HP max to this row's FP max, then its HP max, each selected
+      await page.key('Tab', { shift: true });
+      assert.strictEqual(await where(page), `data-ffpmax=${b1}`);
+      assert.deepStrictEqual(await picked(page), ['10', 0, 2]);
+      await page.key('Tab', { shift: true });
+      assert.strictEqual(await where(page), `data-fmax=${b1}`);
+      assert.deepStrictEqual(await picked(page), ['12', 0, 2]);
+      assert.deepStrictEqual(p.errors, []);
+    });
+  });
+
+  it('CoC: a row\'s own boxes: 11 Tab 9 fills two rows\' HP max', async () => {
+    const run = await start('coc');
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await fightOn(page, run, 0);
+      let p = await addMany(page, 'Bouncer', 2);
+      const [b1, b2] = [1, 2].map((i) => named(p, `Bouncer ${i}`).id);
+      await tap(page, `[data-fmax="${b1}"]`);
+      await page.type('11');
+      await page.key('Tab');
+      assert.strictEqual(await where(page), `data-fmax=${b2}`);
+      await page.type('9');
+      await page.key('Enter');
+      p = await until(page, `p.saved === "Saved" && p.pending === 0 && p.fight.rows.find((r) => r.id === ${q(b2)}).max === 9`);
+      assert.deepStrictEqual([named(p, 'Bouncer 1').max, named(p, 'Bouncer 1').hp, named(p, 'Bouncer 2').max], [11, 11, 9]);
+    });
+  });
+
+  for (const [width, height] of SIZES) {
+    it(`GURPS at ${width}: Add Bouncer ×3 puts the cursor in Bouncer 1's ST box with no click, in view; a click on Bouncer 2's name puts it in Bouncer 2's first empty box; a second click keeps both`, async () => {
+      const run = await start('gurps');
+      await withPage({ width, height }, async (page) => {
+        await fightOn(page, run, 1);
+        let p = await addMany(page, 'Bouncer', 3);
+        const [b1, b2] = [1, 2].map((i) => named(p, `Bouncer ${i}`).id);
+        await page.waitFor(`document.activeElement === document.querySelector('#acting [data-fs-st="${b1}"]')`, 3000);
+        assert.strictEqual(p.fight.actingName, 'Bouncer 1');
+        const edges = await page.evaluate(`(() => { const b = document.activeElement.getBoundingClientRect(); const bar = document.querySelector('.top').getBoundingClientRect().bottom;
+          const c = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2); return { top: b.top, bottom: b.bottom, bar, h: innerHeight, hit: c === document.activeElement }; })()`);
+        assert.ok(edges.top >= edges.bar && edges.bottom <= edges.h && edges.hit, `${width}: the ST box in view ${JSON.stringify(edges)}`);
+        await tap(page, `[data-fpeek="${b2}"]`);
+        p = await until(page, 'p.fight.actingName === "Bouncer 2"');
+        await page.waitFor(`document.activeElement === document.querySelector('#acting [data-fs-st="${b2}"]')`, 3000);
+        await tap(page, `[data-fpeek="${b2}"]`);
+        await page.sleep(150);
+        p = await until(page, 'p.fight.actingName === "Bouncer 2"');
+        assert.strictEqual(await where(page), `data-fs-st=${b2}`, 'the second click keeps the pick and the cursor');
+        sane(p, `pick ${width}`);
+      });
+    });
+  }
+
+  it('GURPS: 11 Tab 10 Tab 12 then Same for all: "Same for all 2"; all three HP 11, FP 10, Speed 5.5; a Bouncer whose initiative was typed keeps it', async () => {
+    const run = await start('gurps');
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await fightOn(page, run, 1);
+      let p = await addMany(page, 'Bouncer', 3);
+      const b = [1, 2, 3].map((i) => named(p, `Bouncer ${i}`).id);
+      p = await typeInto(page, `[data-fini="${b[1]}"]`, 10);
+      p = await peek(page, p, 'Bouncer 1');
+      await page.waitFor(`document.activeElement === document.querySelector('#acting [data-fs-st="${b[0]}"]')`, 3000);
+      await page.type('11');
+      await page.key('Tab');
+      await page.type('10');
+      await page.key('Tab');
+      await page.type('12');
+      await page.key('Enter');
+      p = await until(page, `p.saved === "Saved" && p.pending === 0 && p.fight.rows.find((r) => r.id === ${q(b[0])}).dx === 12`);
+      assert.strictEqual(await text(page, `#acting [data-fsame="${b[0]}"]`), 'Same for all 2');
+      await tap(page, `#acting [data-fsame="${b[0]}"]`);
+      p = await until(page, `p.saved === "Saved" && p.pending === 0 && p.fight.rows.find((r) => r.id === ${q(b[2])}).hp === 11`);
+      for (const id of b) {
+        const r = p.fight.rows.find((x) => x.id === id);
+        assert.deepStrictEqual([r.hp, r.max, r.fp, r.fpMax, r.speed], [11, 11, 10, 10, 5.5], r.name);
+      }
+      assert.strictEqual(named(p, 'Bouncer 2').ini, 10, 'the typed initiative is kept');
+      assert.deepStrictEqual(p.errors, []);
+    });
+  });
+
+  it('GURPS, before Start: typing Speed down three blank rows: no row moves until Tab leaves the column, then each takes its sorted place', async () => {
+    const run = await start('gurps');
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await fightOn(page, run, 1);
+      let p = await addMany(page, 'Bouncer', 3);
+      const was = ids(p);
+      const b = [1, 2, 3].map((i) => named(p, `Bouncer ${i}`).id);
+      await tap(page, `[data-fini="${b[0]}"]`);
+      for (const v of ['6', '7']) { await page.type(v); await page.key('Tab'); }
+      p = await until(page, `p.saved === "Saved" && p.pending === 0 && p.fight.rows.find((r) => r.id === ${q(b[1])}).ini === 7`);
+      assert.deepStrictEqual(ids(p), was, 'nothing moved while typing');
+      await page.type('8');
+      await page.key('Tab');
+      assert.strictEqual(await where(page), '#fNext');
+      p = await until(page, `p.saved === "Saved" && p.pending === 0 && p.fight.rows.every((r) => !r.held) && p.fight.rows.find((r) => r.id === ${q(b[2])}).ini === 8`);
+      const at = (id) => ids(p).indexOf(id);
+      assert.ok(at(b[2]) < at(b[1]) && at(b[1]) < at(b[0]), 'each in its sorted place');
+      assert.ok(sortedDown(p), `sorted: ${JSON.stringify(p.fight.rows.filter((r) => r.in).map((r) => [r.name, r.ini]))}`);
+    });
+  });
+
+  it('GURPS, after Start: a row that had a Speed at Start, given a new one, keeps its place; every other row stays put and the log says the order stays', async () => {
+    const run = await start('gurps');
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await fightOn(page, run, 1);
+      let p = await startNow(page);
+      const was = ids(p);
+      const pc = p.fight.rows.find((r) => r.kind === 'pc' && r.in && r.ini !== null && r.ini < 9);
+      p = await typeInto(page, `[data-fini="${pc.id}"]`, 9);
+      p = await until(page, `p.fight.rows.find((r) => r.id === ${q(pc.id)}).ini === 9 && p.saved === "Saved" && p.pending === 0`);
+      assert.deepStrictEqual(ids(p), was);
+      assert.match((await log(run)).at(-1), /: Speed 9; the order stays as it started\.$/);
+    });
+  });
+
+  it('GURPS, after Start: Add Bouncer (blank), type its first Speed, then a held click on another row\'s damage box: only the Bouncer moves, after the release; focus and -4 go to that row', async () => {
+    const run = await start('gurps');
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await page.focusEvents();
+      await fightOn(page, run, 1);
+      let p = await startNow(page);
+      p = await addNew(page, 'Bouncer');
+      const id = named(p, 'Bouncer').id;
+      const was = ids(p);
+      const other = p.fight.rows.find((r) => r.kind !== 'pc' && r.in && r.id !== id && Number.isFinite(r.hp));
+      await tap(page, `[data-fini="${id}"]`);
+      await page.type('9');
+      await heldPress(page, `[data-fhp="${other.id}"]`, async () => {
+        // mid-press: the number is in, the row has not moved
+        let rows = null;
+        for (let i = 0; i < 20; i++) { rows = await serverRows(run); if (rows.find((r) => r.id === id).ini === 9) break; await page.sleep(40); }
+        assert.strictEqual(rows.find((r) => r.id === id).ini, 9, 'committed on the press');
+        assert.deepStrictEqual(rows.map((r) => r.id), was, 'nothing moves under the pointer');
+      });
+      p = await until(page, `p.saved === "Saved" && p.pending === 0 && p.fight.rows.every((r) => !r.held) && p.fight.rows.findIndex((r) => r.id === ${q(id)}) !== ${was.indexOf(id)}`);
+      assert.deepStrictEqual(ids(p).filter((x) => x !== id), was.filter((x) => x !== id), 'every other row stays put');
+      // at its sorted place among the rows with a number: none above it slower, none below it faster
+      const nums = p.fight.rows.filter((r) => r.in && r.ini !== null);
+      const k = nums.findIndex((r) => r.id === id);
+      assert.ok(nums.slice(0, k).every((r) => r.ini >= 9) && nums.slice(k + 1).every((r) => r.ini <= 9), `placed: ${JSON.stringify(nums.map((r) => [r.name, r.ini]))}`);
+      assert.strictEqual(await where(page), `data-fhp=${other.id}`, 'the click\'s focus is in the box aimed at');
+      await page.type('-4');
+      await page.key('Enter');
+      p = await until(page, `p.saved === "Saved" && p.pending === 0 && p.fight.rows.find((r) => r.id === ${q(other.id)}).hp === ${other.hp - 4}`);
+      assert.deepStrictEqual(p.errors, []);
+    });
+  });
+
+  it('GURPS, after Start: a row blank at Start, its first Speed typed in the last box and Enter, takes its place, the turn kept and focus on the box; a second Speed leaves it where it is', async () => {
+    const run = await start('gurps');
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await fightOn(page, run, 1);
+      let p = await addNew(page, 'Bouncer');
+      const id = named(p, 'Bouncer').id;
+      p = await startNow(page);
+      const turn = [p.fight.turn, p.fight.round];
+      await tap(page, `[data-fini="${id}"]`);
+      await page.type('6');
+      await page.key('Enter');
+      p = await until(page, `p.saved === "Saved" && p.pending === 0 && p.fight.rows.find((r) => r.id === ${q(id)}).ini === 6 && p.fight.rows.every((r) => !r.held)`);
+      assert.deepStrictEqual([p.fight.turn, p.fight.round], turn);
+      assert.ok(sortedDown(p), `in its place: ${JSON.stringify(p.fight.rows.filter((r) => r.in).map((r) => [r.name, r.ini]))}`);
+      assert.strictEqual(await where(page), `data-fini=${id}`);
+      assert.deepStrictEqual(await picked(page), ['6', 0, 1]);
+      const placed = ids(p);
+      await page.type('4');
+      await page.key('Enter');
+      p = await until(page, `p.saved === "Saved" && p.pending === 0 && p.fight.rows.find((r) => r.id === ${q(id)}).ini === 4`);
+      assert.deepStrictEqual(ids(p), placed, 'a second Speed leaves it where it is');
+      assert.match((await log(run)).at(-1), /: Speed 4; the order stays as it started\.$/);
+    });
+  });
+
+  // Task 23: a roll back from the server takes focus to its card only when focus is on the page or in that card. The
+  // test holds the server's answer to /api/roll back (its request handler, wrapped here) so the GM can move on meanwhile.
+  it('GURPS: a card\'s roll that comes back after the GM clicked into another box leaves focus in that box', async () => {
+    const run = await start('gurps', { randomInt: () => 4 });
+    const handlers = run.server.listeners('request');
+    let slow = 0;
+    run.server.removeAllListeners('request');
+    run.server.on('request', (req, res) => {
+      const go = () => handlers.forEach((h) => h.call(run.server, req, res));
+      if (slow && req.url === '/api/roll') setTimeout(go, slow); else go();
+    });
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await page.focusEvents();
+      await fightOn(page, run, 1);
+      let p = await addMany(page, 'Bouncer', 2);
+      p = await peek(page, p, 'Bouncer 1');
+      p = await typeInto(page, box(p, 'Bouncer 1', 'speed'), '9');
+      p = await peek(page, p, 'Bouncer 2');
+      p = await typeInto(page, box(p, 'Bouncer 2', 'st'), 11);
+      p = await typeInto(page, box(p, 'Bouncer 2', 'ht'), 10);
+      p = await startNow(page);
+      const b2 = named(p, 'Bouncer 2').id;
+      p = await typeInto(page, `[data-fhp="${b2}"]`, '9 imp vitals');
+      const card = `#acting .fcard[data-fcrow="${b2}"]`;
+      await until(page, `document.querySelector(${q(card)} + ' button.roll')`);
+      slow = 800;
+      await tap(page, `${card} button.roll`);
+      // while the dice are out, the GM goes on to the Add box
+      await tap(page, '#fAddName');
+      p = await until(page, `p.fight.rows.find((r) => r.id === ${q(b2)}).cards[0].lines[0].result && p.saved === "Saved" && p.pending === 0`, 5000);
+      await page.sleep(150);
+      assert.strictEqual(await where(page), '#fAddName', 'focus stays where the GM put it');
+      slow = 0;
+    });
+  });
+
+  it('CoC, after Start: a DEX typed, then a held click on another row\'s damage box: the row re-places only after the release, and the click lands on the row aimed at', async () => {
+    const run = await start('coc');
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await page.focusEvents();
+      await fightOn(page, run, 0);
+      let p = await startNow(page);
+      p = await peek(page, p, 'Warden Hale');
+      const hale = named(p, 'Warden Hale').id;
+      const was = ids(p);
+      const other = p.fight.rows.find((r) => r.kind !== 'pc' && r.in && r.id !== hale && Number.isFinite(r.hp));
+      await tap(page, box(p, 'Warden Hale', 'dex'));
+      await page.type('90');
+      await heldPress(page, `[data-fhp="${other.id}"]`, async () => {
+        let rows = null;
+        for (let i = 0; i < 20; i++) { rows = await serverRows(run); if (rows.find((r) => r.id === hale).dex === 90) break; await page.sleep(40); }
+        assert.strictEqual(rows.find((r) => r.id === hale).dex, 90, 'committed on the press');
+        assert.deepStrictEqual(rows.map((r) => r.id), was, 'nothing moves under the pointer');
+      });
+      p = await until(page, `p.saved === "Saved" && p.pending === 0 && p.fight.rows.findIndex((r) => r.id === ${q(hale)}) === 0`);
+      assert.deepStrictEqual(ids(p).filter((x) => x !== hale), was.filter((x) => x !== hale));
+      assert.strictEqual(await where(page), `data-fhp=${other.id}`);
+      assert.deepStrictEqual(p.errors, []);
+    });
+  });
 });

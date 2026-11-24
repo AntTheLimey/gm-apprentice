@@ -369,7 +369,8 @@ describe('the fight: adding anyone, by real input', { skip: browserSkip() }, () 
       p = await until(page, 'p.saved === "Saved" && p.pending === 0 && p.fight.rows.some((r) => r.name === "Bouncer 1" && r.max === 30)');
       await tap(page, `[data-fpeek="${one.id}"]`);
       await page.waitFor('document.querySelector("[data-fsame]")');
-      assert.match(await page.evaluate('document.querySelector("[data-fsame]").textContent'), /^Same for all 3$/);
+      // step 6b Task 23 changed this on purpose (D3): the number is how many will take something, the two copies
+      assert.match(await page.evaluate('document.querySelector("[data-fsame]").textContent'), /^Same for all 2$/);
       await tap(page, '[data-fsame]');
       p = await until(page, 'p.saved === "Saved" && p.pending === 0 && p.fight.rows.filter((r) => /^Bouncer/.test(r.name) && r.max === 30).length === 3');
       assert.deepStrictEqual(['Bouncer 2', 'Bouncer 3'].map((n) => named(p, n).hp), [30, 30]);
@@ -1745,6 +1746,166 @@ describe('Esc and J, from the review of the fixes', { skip: browserSkip() }, () 
       await tap(page, '#fAddName');
       await page.waitFor('document.querySelector("#fHits button")');
       assert.strictEqual(await page.evaluate('document.querySelector("#fAddName").value'), 'Ben', 'the words stay');
+    });
+  });
+});
+
+// ---- step 6b Task 23 for D&D: Tab past the end (D2), rows held while typed (D3c), Same for all field by field (D3).
+// CoC's and GURPS's are in run-sheet-fight-systems-browser.test.js.
+describe('D&D: Tab, held rows and Same for all (step 6b Task 23), by real input', { skip: browserSkip() }, () => {
+  const where = (page) => page.evaluate(`(() => { const a = document.activeElement; if (!a || a === document.body) return 'body';
+    const x = Array.from(a.attributes).find((n) => n.name.startsWith('data-f')); return x ? x.name + '=' + x.value : (a.id ? '#' + a.id : a.tagName); })()`);
+  const picked = (page) => page.evaluate('(() => { const a = document.activeElement; return a && typeof a.selectionStart === "number" ? [a.value, a.selectionStart, a.selectionEnd] : null; })()');
+  const pcFigures = (p) => p.fight.rows.filter((r) => r.kind === 'pc').map((r) => [r.name, r.ini, r.hp, r.max, r.ac]);
+  async function setUp(page, run) {
+    await page.goto(`${run.base}/?probe=1`);
+    await settled(page);
+    const b = run.model.beats[0];
+    await tap(page, `[id="beat:${b.key}"] [data-all]`);
+    await settled(page);
+    await tap(page, `[id="beat:${b.key}"] [data-fight]`);
+    return until(page, 'p.fight && p.fight.rows.length > 0 && p.saved === "Saved" && p.pending === 0');
+  }
+  const bouncers = async (page, n) => {
+    await addNew(page, 'Bouncer', n);
+    return until(page, `p.saved === "Saved" && p.pending === 0 && p.fight.rows.filter((r) => /^Bouncer /.test(r.name)).length === ${n}`);
+  };
+  async function typeIn(page, s, v, key = 'Enter') {
+    await tap(page, s);
+    await page.waitFor(`document.activeElement === document.querySelector(${JSON.stringify(s)})`, 2000);
+    await page.type(String(v));
+    await page.key(key);
+    return settled(page);
+  }
+
+  it('Add Bouncer ×3, then 10 Tab 9 Tab 8 Tab before Start: focus on Start, no PC figure changed, never a seen button', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await setUp(page, run);
+      let p = await bouncers(page, 3);
+      const pcs = pcFigures(p);
+      const b = [1, 2, 3].map((i) => named(p, `Bouncer ${i}`).id);
+      await tap(page, sel('data-fini', b[0]));
+      const went = [];
+      for (const v of ['10', '9', '8']) { await page.type(v); await page.key('Tab'); went.push(await where(page)); }
+      assert.deepStrictEqual(went, [`data-fini=${b[1]}`, `data-fini=${b[2]}`, '#fNext']);
+      p = await until(page, `p.saved === "Saved" && p.pending === 0 && p.fight.rows.find((r) => r.id === ${JSON.stringify(b[2])}).ini === 8`);
+      assert.deepStrictEqual(b.map((id) => p.fight.rows.find((r) => r.id === id).ini), [10, 9, 8]);
+      assert.deepStrictEqual(pcFigures(p), pcs);
+      assert.strictEqual(p.fight.started, false);
+    });
+  });
+
+  it('the same after Start: focus stays on the last box with its number selected; Enter commits it and ends no turn', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await startedFight(page, run);
+      let p = await bouncers(page, 3);
+      const turn = [p.fight.turn, p.fight.round];
+      const b = [1, 2, 3].map((i) => named(p, `Bouncer ${i}`).id);
+      await tap(page, sel('data-fini', b[0]));
+      const went = [];
+      for (const v of ['10', '9', '8']) { await page.type(v); await page.key('Tab'); went.push(await where(page)); }
+      assert.deepStrictEqual(went, [`data-fini=${b[1]}`, `data-fini=${b[2]}`, `data-fini=${b[2]}`]);
+      assert.deepStrictEqual(await picked(page), ['8', 0, 1]);
+      await page.key('Enter');
+      p = await until(page, `p.saved === "Saved" && p.pending === 0 && p.fight.rows.find((r) => r.id === ${JSON.stringify(b[2])}).ini === 8 && p.fight.rows.every((r) => !r.held)`);
+      assert.deepStrictEqual([p.fight.turn, p.fight.round], turn, 'no turn ended');
+      assert.strictEqual(await where(page), `data-fini=${b[2]}`);
+    });
+  });
+
+  it('with the source blank Same for all is disabled and "Type a number first" is on screen beside it; the copies\' typed initiatives are kept', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await startedFight(page, run);
+      let p = await bouncers(page, 3);
+      const b = [1, 2, 3].map((i) => named(p, `Bouncer ${i}`).id);
+      p = await typeIn(page, sel('data-fini', b[1]), 9);
+      p = await typeIn(page, sel('data-fini', b[2]), 8);
+      await tap(page, `[data-fpeek="${b[0]}"]`);
+      await until(page, 'p.fight.actingName === "Bouncer 1"');
+      assert.strictEqual(await page.evaluate(`document.querySelector('#acting [data-fsame="${b[0]}"]').disabled`), true);
+      assert.match(await page.evaluate('document.querySelector("#acting .samebox").innerText'), /Same for all\s*Type a number first/);
+      p = await settled(page);
+      assert.deepStrictEqual([named(p, 'Bouncer 2').ini, named(p, 'Bouncer 3').ini], [9, 8]);
+    });
+  });
+
+  // D3 and review Part 2: once the copies had a typed initiative, Same for all was not offered at all (initiative first is
+  // the natural order at a table); now it is, counts them, and copies the rest
+  it('copies with typed initiatives: Same for all is offered, counts them, and each takes the source\'s max HP and AC', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await startedFight(page, run);
+      let p = await bouncers(page, 3);
+      const b = [1, 2, 3].map((i) => named(p, `Bouncer ${i}`).id);
+      p = await typeIn(page, sel('data-fini', b[1]), 9);
+      p = await typeIn(page, sel('data-fini', b[2]), 8);
+      p = await typeIn(page, sel('data-fmax', b[0]), 22, 'Tab');
+      assert.strictEqual(await where(page), `data-fac=${b[0]}`);
+      await page.type('13');
+      await page.key('Enter');
+      p = await until(page, `p.saved === "Saved" && p.pending === 0 && p.fight.rows.find((r) => r.id === ${JSON.stringify(b[0])}).ac === 13`);
+      await tap(page, `[data-fpeek="${b[0]}"]`);
+      await until(page, 'p.fight.actingName === "Bouncer 1"');
+      assert.strictEqual(await page.evaluate(`document.querySelector('#acting [data-fsame="${b[0]}"]').textContent`), 'Same for all 2');
+      await tap(page, `#acting [data-fsame="${b[0]}"]`);
+      p = await until(page, `p.saved === "Saved" && p.pending === 0 && p.fight.rows.find((r) => r.id === ${JSON.stringify(b[2])}).max === 22`);
+      assert.deepStrictEqual(['Bouncer 2', 'Bouncer 3'].map((n) => [named(p, n).ini, named(p, n).max, named(p, n).hp, named(p, n).ac]), [[9, 22, 22, 13], [8, 22, 22, 13]]);
+      assert.strictEqual(await page.evaluate('document.querySelectorAll("#acting [data-fsame]").length'), 0, 'nothing left to copy');
+    });
+  });
+
+  it('a held number is placed before Start sorts (Start pressed straight from the column)', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await setUp(page, run);
+      await addNew(page, 'Bouncer');
+      let p = await until(page, 'p.saved === "Saved" && p.pending === 0 && p.fight.rows.some((r) => r.name === "Bouncer")');
+      await tap(page, sel('data-fini', named(p, 'Bouncer').id));
+      await page.type('30');
+      await tap(page, '#fNext');
+      await page.waitFor('document.querySelector("#fStartAnyway") || JSON.parse(document.body.dataset.probe).fight.started');
+      if (await page.evaluate('Boolean(document.querySelector("#fStartAnyway"))')) await tap(page, '#fStartAnyway');
+      p = await until(page, 'p.fight.started && p.saved === "Saved" && p.pending === 0');
+      assert.strictEqual(named(p, 'Bouncer').ini, 30);
+      const n = p.fight.rows.filter((r) => r.in && r.ini !== null).map((r) => r.ini);
+      assert.ok(n.every((v, i) => i === 0 || n[i - 1] >= v), `sorted: ${n}`);
+      assert.strictEqual(p.fight.rows.filter((r) => r.in && r.kind !== 'lair')[0].name, 'Bouncer');
+    });
+  });
+
+  // Task 23: the page's scroll-padding-top keeps a box or link reached by Tab below the sticky bar
+  it('1100: Shift-Tab onto a link under the sticky bar brings it below the bar', async () => {
+    const run = await start();
+    await withPage({ width: 1100, height: 762 }, async (page) => {
+      await page.goto(`${run.base}/?probe=1`);
+      await settled(page);
+      // a beat's Bring box and the control Tab reaches just before it, a little above it (read only: nothing is set)
+      const ALL = `Array.from(document.querySelectorAll('#sheet a[tabindex="0"], #sheet button, #sheet input, #sheet select, #sheet summary')).filter((e) => e.offsetParent && !e.disabled)`;
+      const pair = await page.evaluate(`(() => { const all = ${ALL};
+        for (let i = 1; i < all.length; i++) {
+          const b = all[i]; const a = all[i - 1];
+          if (!b.matches('input[data-bring]')) continue;
+          const gap = b.getBoundingClientRect().top - a.getBoundingClientRect().top;
+          if (gap > 40 && gap < 300) return { i: i - 1, bring: b.dataset.bring };
+        }
+        return null; })()`);
+      assert.ok(pair, 'a Bring box with a control above it');
+      const jot = `#sheet input[data-bring="${pair.bring}"]`;
+      const boxA = () => page.evaluate(`(() => { const r = (${ALL})[${pair.i}].getBoundingClientRect(); return { top: r.top, bottom: r.bottom }; })()`);
+      const bar = await page.evaluate('document.querySelector(".top").getBoundingClientRect().bottom');
+      // the wheel puts the control above the box under the bar, the box in view
+      const a0 = await boxA();
+      await page.wheel(500, 400, Math.round(a0.top - bar / 2));
+      const a1 = await boxA();
+      assert.ok(a1.top < bar, `the control is under the bar before: ${a1.top} < ${bar}`);
+      await tap(page, jot);
+      await page.key('Tab', { shift: true });
+      assert.ok(await page.evaluate(`document.activeElement === (${ALL})[${pair.i}]`), 'Shift-Tab reached it');
+      const a2 = await boxA();
+      assert.ok(a2.top >= bar && a2.bottom <= 762, `below the bar: ${JSON.stringify(a2)} bar ${bar}`);
     });
   });
 });

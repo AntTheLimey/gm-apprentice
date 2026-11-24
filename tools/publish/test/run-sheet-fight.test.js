@@ -9,6 +9,7 @@ const path = require('node:path');
 const { readRunSheet } = require('../lib/run-sheet/read');
 const RS = require('../lib/run-sheet/web/state');
 const M = require('../lib/run-sheet/web/fight-math');
+const Fight = require('../lib/run-sheet/web/fight');
 
 const FIXTURE = path.join(__dirname, 'fixtures', 'run-sheet-app');
 const PLAN = 'Chapters/Chapter 1/Sessions/Session 02/Session 02 - The Test - Plan.md';
@@ -556,9 +557,11 @@ describe('the fight in the state', () => {
       assert.equal(get(id).ini, null, 'initiative is not copied');
       assert.equal(get(id).typed, false, 'copying is not typing');
     }
-    assert.equal(get(b2.id).ac, 9, 'a row someone typed into is left alone');
-    assert.equal(get(b2.id).max, null);
-    assert.match(texts(s).at(-1), /Bouncer 3, Bouncer 4.*Bouncer 1/);
+    // step 6b Task 23 changed this on purpose (D3, review Part 2): Same for all copies field by field, so a row someone
+    // typed into keeps what was typed (its AC) and still takes the rest (the max, the HP, the modifier)
+    assert.equal(get(b2.id).ac, 9, 'a typed figure is left alone');
+    assert.deepEqual([get(b2.id).max, get(b2.id).hp, get(b2.id).mod], [30, 30, 3], 'and the rest is copied');
+    assert.match(texts(s).at(-1), /Bouncer 2, Bouncer 3, Bouncer 4.*Bouncer 1/);
     // another group and a PC are never touched
     assert.equal(row(s, WOLF, 1).max === 30, false);
     // nothing untouched: nothing happens, nothing is said
@@ -3881,5 +3884,66 @@ describe('CoC firearms: the aim, the shot, the dive, the reload (step 6b Task 19
       s = G(s, { type: 'shot', shooter: named(s, 'Wharf Hand 1').id, target: named(s, 'Iris').id, chips: [], gun: null, result: rollPercent({ target: 50 }, { randomInt: faces(3, 3) }) });
       assert.deepEqual(s.fight, was);
     }
+  });
+});
+
+describe('Same for all, field by field (step 6b Task 23, D3)', () => {
+  const { systemFor } = require('../lib/run-sheet/systems');
+  const COC = systemFor('coc-7e').describe().fight;
+  const GURPS = systemFor('gurps-4e').describe().fight;
+  const begin = (rules, list) => RS.reduce(fresh(), { id: 'f1', type: 'fightStart', title: 'T', ...(rules ? { rules } : {}),
+    rows: list.map((o, i) => M.blankRow({ id: `r${i + 1}`, ...o })) }, now());
+  const G = (s, a) => RS.reduce(s, { id: nextId(), fight: 'f1', ...a }, now());
+  const named = (s, name) => s.fight.rows.find((r) => r.name === name);
+  const three = () => ['Bouncer 1', 'Bouncer 2', 'Bouncer 3'].map((name, i) => ({ name, note: 'n', copy: i + 1, ini: null, hp: null, max: null }));
+
+  it('GURPS: ST, HT and DX copied; each copy works out its HP, FP and Speed; a typed initiative is kept', () => {
+    let s = begin(GURPS, three());
+    s = G(s, { type: 'setInit', row: named(s, 'Bouncer 2').id, ini: 10 });
+    const id = named(s, 'Bouncer 1').id;
+    for (const [key, value] of [['st', 11], ['ht', 10], ['dx', 12]]) s = G(s, { type: 'setStat', row: id, key, value });
+    assert.equal(M.sameForAllCount(s.fight.rows, named(s, 'Bouncer 1'), Fight.statKeysOf(GURPS)), 2);
+    s = G(s, { type: 'sameForAll', row: id });
+    for (const n of ['Bouncer 1', 'Bouncer 2', 'Bouncer 3']) {
+      const r = named(s, n);
+      assert.deepEqual([r.hp, r.max, r.fp, r.fpMax, r.speed], [11, 11, 10, 10, 5.5], n);
+    }
+    assert.equal(named(s, 'Bouncer 2').ini, 10, 'the typed initiative stays');
+    assert.equal(named(s, 'Bouncer 3').ini, 5.5, 'an untyped one follows the copied figures');
+    assert.equal(named(s, 'Bouncer 3').from.hp, 'from ST', 'worked out on the copy');
+    assert.equal(M.sameForAllCount(s.fight.rows, named(s, 'Bouncer 1'), Fight.statKeysOf(GURPS)), 0, 'nothing left to take');
+  });
+
+  it('D&D: copies with typed initiatives take the max, HP and AC; a typed AC is kept', () => {
+    let s = begin(null, three());
+    for (const [n, v] of [['Bouncer 2', 9], ['Bouncer 3', 8]]) s = G(s, { type: 'setInit', row: named(s, n).id, ini: v });
+    s = G(s, { type: 'setAc', row: named(s, 'Bouncer 3').id, ac: 15 });
+    const id = named(s, 'Bouncer 1').id;
+    s = G(s, { type: 'setMax', row: id, max: 22 });
+    s = G(s, { type: 'setAc', row: id, ac: 13 });
+    assert.equal(M.sameForAllCount(s.fight.rows, named(s, 'Bouncer 1')), 2);
+    s = G(s, { type: 'sameForAll', row: id });
+    assert.deepEqual(['Bouncer 2', 'Bouncer 3'].map((n) => [named(s, n).ini, named(s, n).max, named(s, n).hp, named(s, n).ac]), [[9, 22, 22, 13], [8, 22, 22, 15]]);
+  });
+
+  it('CoC: DEX, HP, MP and SAN copied; the copy takes the initiative its DEX gives', () => {
+    let s = begin(COC, three());
+    const id = named(s, 'Bouncer 1').id;
+    for (const [key, value] of [['dex', 55], ['hp', 12], ['mp', 9], ['san', 40]]) s = G(s, { type: 'setStat', row: id, key, value });
+    s = G(s, { type: 'sameForAll', row: id });
+    const r = named(s, 'Bouncer 3');
+    assert.deepEqual([r.dex, r.ini, r.max, r.hp, r.mpMax, r.mp, r.sanMax, r.san], [55, 55, 12, 12, 9, 9, 40, 40]);
+  });
+
+  it('a source with nothing to copy holds nothing; a copy hurt or given a status takes nothing', () => {
+    let s = begin(GURPS, three());
+    assert.equal(M.copyHolds(named(s, 'Bouncer 1'), Fight.statKeysOf(GURPS)), false);
+    s = G(s, { type: 'setInit', row: named(s, 'Bouncer 1').id, ini: 6 });
+    assert.equal(M.copyHolds(named(s, 'Bouncer 1'), Fight.statKeysOf(GURPS)), false, 'an initiative is not copied');
+    s = G(s, { type: 'setStat', row: named(s, 'Bouncer 2').id, key: 'hp', value: 10 });
+    s = G(s, { type: 'hp', row: named(s, 'Bouncer 2').id, entry: '-3' });
+    s = G(s, { type: 'status', row: named(s, 'Bouncer 3').id, add: 'Prone' });
+    s = G(s, { type: 'setStat', row: named(s, 'Bouncer 1').id, key: 'st', value: 13 });
+    assert.equal(M.sameForAllCount(s.fight.rows, named(s, 'Bouncer 1'), Fight.statKeysOf(GURPS)), 0);
   });
 });

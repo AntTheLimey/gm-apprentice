@@ -71,6 +71,8 @@
     // target, range, chips: { key: true }, gun, mal (the malfunction box's words), dive: { passed } | null, diveAsk,
     // diveRolling, rolling, last: the last shot's line }), and the chips last used by shooter and target this turn
     shot: null, shotMem: {},
+    // the row the page picked for its panel on reaching a blank row (Task 23, D3a), until the GM clicks a name
+    autoPick: null,
   };
 
   const model = () => RP.model();
@@ -166,6 +168,32 @@
     RP.dispatch({ type: 'fightStart', beat: key, title: b.title, groups: built.groups, rows: built.rows, thresholds: built.thresholds, carried: carried(d), rules: model().rules.fight, ...(backdrop ? { backdrop } : {}) });
     // the pane opens at its top, whatever the run sheet's scroll was (review F3)
     RP.paneTop();
+    const g = state().fight;
+    if (g && g.id === id) pickBlank(g.rows.map((r) => r.id));
+  }
+  // A blank row reached (Task 23, D3a): Add with blank rows, or Fight bringing them in, picks the first for the panel
+  // and puts the cursor in that panel's first empty box, in view. Only where the panel has boxes (CoC, GURPS): D&D's
+  // blank row is typed on its row, as before.
+  const noNumbers = (r) => Boolean(r) && r.kind !== 'pc' && r.kind !== 'lair' && !isNum(r.hp);
+  function pickBlank(ids) {
+    const f = state().fight;
+    if (!f || !panelBoxes().length) return;
+    const r = ids.map(rowById).find(noNumbers);
+    if (!r) return;
+    pickRow(r.id);
+    // the page picked it, not the GM: a click on its name later shows it, never takes the pick back
+    ui.autoPick = r.id;
+  }
+  function pickRow(id) {
+    const f = state().fight;
+    ui.peek = id;
+    ui.peekTurn = f ? f.turn : null;
+    RP.render();
+    const boxes = Array.from(document.querySelectorAll('#acting .pbox'));
+    const b = boxes.find((x) => x.value.trim() === '') || boxes[0];
+    const k = b && statOf(b);
+    const el = k ? RP.focusTo(attr(STAT[k].k, b.dataset[k])) : null;
+    if (el) el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }
   // Fight here at a place (plan 6a Task 7): its place beat first (the reader's key, so a second Fight here
   // finds it again), then the fight. Nobody moves.
@@ -191,6 +219,7 @@
     if (j.refused) { RP.note(j.refused, { id: `refused:${id}` }); return; }
     if (!j.rows.length && !j.tick.length && !j.groups.length) return;
     RP.dispatch({ type: 'fightJoin', fight: f.id, rows: j.rows, tick: j.tick, groups: j.groups, thresholds: j.thresholds, label: label || '', carried: carried(d), planned: Boolean(add.group || add.beat) });
+    pickBlank(j.rows.map((r) => r.id));
   }
   // The Add box's way in: a cast note (`note`), or a typed name nobody has (`name`: a blank row, no note).
   function addByName(note, name) {
@@ -221,8 +250,10 @@
 
   // Start (the first Next) asks once per fight about ticked PCs with no initiative; the GM can still start.
   function next(force) {
+    if (!state().fight) return;
+    // a number held in a box is placed before Start sorts (D3c)
+    placeHeld();
     const f = state().fight;
-    if (!f) return;
     if (!f.started && !force && missingInit(f).length && !ui.asked[f.id]) {
       ui.asked[f.id] = true;
       ui.ask = f.id;
@@ -459,7 +490,9 @@
     const { boxed, read } = poolsShown();
     let h = '';
     for (const p of boxed) {
-      if (!isNum(r[p.key]) && !isNum(r[p.max])) continue;
+      // a foe's or an ally's box is always drawn, so a blank row's walk is HP max then FP max (Task 23, D2); a PC's only
+      // when its sheet holds the pool
+      if (r.kind === 'pc' && !isNum(r[p.key]) && !isNum(r[p.max])) continue;
       const fp = p.key === 'fp';
       // the reserve's words are the system's (its pool's label, rules.words)
       const erPool = FM.poolOf(rules().fight || rules(), 'er');
@@ -596,13 +629,7 @@
     // every status, the ones the row's strip had no room for too; a click removes it, as on the row
     for (const x of Fight.statusesOf(r)) nums.push(`<button type="button" class="st" data-fun="${esc(`${r.id}|${statusKey(x)}`)}" title="Remove ${esc(x)}">${esc(x)} ✕</button>`);
     const ctr = counters(r, true);
-    // offered while an untouched copy still differs from this row (a copy already made has nothing left to take)
-    const keys = Fight.statKeysOf(FM.rulesOf(f));
-    const left = FM.groupMates(f.view.rows, r).filter((x) => x !== r && FM.untouched(x, true) && (keys.some((k) => isNum(r[k]) && x[k] !== r[k]) || (isNum(r.max) && x.hp !== r.max))).length;
-    if (left) {
-      const all = FM.groupMates(f.view.rows, r).length;
-      nums.push(`<button type="button" class="tg same" data-fsame="${esc(r.id)}" title="Copy these numbers (and the HP they give) to the others of this group nobody has typed into, hurt or given a status">Same for all ${all}</button>`);
-    }
+    nums.push(sameHTML(f, r));
     // Three direct buttons, never a cycle: foe to neutral by one click must not pass through ally (an ally that
     // is seen shows its name and HP on the players' screen). Ally is last, each says what it does (P-A3).
     if (r.kind !== 'pc') {
@@ -628,6 +655,19 @@
     }
     return `${open}${head(r.gmName)}<div class="nums">${nums.join('')}</div>${ctr ? `<div class="nums ctr">${ctr}</div>` : ''}${boxesHTML(r)}${panelManoeuvreHTML(r)}${panelDefencesHTML(r)}${hitChipsHTML(r)}${trackHTML(r)}${body}</div>`;
   }
+  // Same for all (Task 23, D3): its number is how many of the group will take something (FM.sameForAllCount, field by
+  // field); disabled, with its reason written beside it, while this row has nothing to copy; gone once every copy holds
+  // what it would take.
+  function sameHTML(f, r) {
+    if (r.kind === 'pc' || r.kind === 'lair' || !FM.groupMates(f.view.rows, r).some((x) => x !== r)) return '';
+    const keys = Fight.statKeysOf(FM.rulesOf(f));
+    if (!FM.copyHolds(r, keys)) {
+      return `<span class="samebox"><button type="button" class="tg same" data-fsame="${esc(r.id)}" disabled title="Nothing to copy yet: type a number on this row first">Same for all</button><span class="samewhy">${SAME_FIRST}</span></span>`;
+    }
+    const n = FM.sameForAllCount(f.view.rows, r, keys);
+    return n ? `<button type="button" class="tg same" data-fsame="${esc(r.id)}" title="Copy these numbers (and the HP they give) to the others of this group nobody has typed into, hurt or given a status">Same for all ${n}</button>` : '';
+  }
+  const SAME_FIRST = 'Type a number first';
   // ---- GURPS's defences (Task 14): each as it stands this turn, and a tap rolls it; the GM can ignore all of it ----
   // A defence's button: "Parry 9" (the figure now), "Block used", "Block again?" once a used Block was tapped. `at` is
   // its attribute: `data-fdef` on the row, `data-fpdef` in the panel, each "row|defence".
@@ -1392,8 +1432,9 @@
       delete ui.rolling[cardId];
       const now = state().fight;
       if (now && now.id === f.id) {
+        const mine = focusOnCard(rowId, cardId);
         RP.dispatch({ fight: f.id, type: 'cardRolled', row: rowId, card: cardId, line, result: res });
-        focusCard(rowId, cardId);
+        if (mine) focusCard(rowId, cardId);
       } else RP.render();
     }, (e) => { delete ui.rolling[cardId]; rollFailed(e); RP.render(); });
   }
@@ -1407,7 +1448,8 @@
     const K = cardKit();
     const o = K && GMath.offerOf(K.C, take);
     const send = (more) => F({ type: 'card', row: rowId, card: cardId, ...(line === '' ? {} : { line: Number(line) }), take, ...(more || {}) });
-    if (!o || !o.bout) { send(); return; }
+    // an offer taken may settle the card and drop it: focus goes on, never to the page
+    if (!o || !o.bout) { send(); focusCard(rowId, cardId); return; }
     const f = state().fight;
     if (!f || ui.rolling[cardId]) return;
     ui.rolling[cardId] = true;
@@ -1415,8 +1457,16 @@
     roll([{ sides: K.C.bout.sides }]).then(([res]) => {
       delete ui.rolling[cardId];
       const now = state().fight;
-      if (now && now.id === f.id) { send({ bout: res }); focusCard(rowId, cardId); } else RP.render();
+      if (now && now.id === f.id) { const mine = focusOnCard(rowId, cardId); send({ bout: res }); if (mine) focusCard(rowId, cardId); } else RP.render();
     }, (e) => { delete ui.rolling[cardId]; rollFailed(e); RP.render(); });
+  }
+  // A roll back from the server moves focus only when it is on the page or still in that card: a GM who went on to
+  // another box during the round trip keeps it (Task 23).
+  function focusOnCard(rowId, cardId) {
+    const a = document.activeElement;
+    if (!a || a === document.body) return true;
+    const c = a.closest && a.closest('.fcard');
+    return Boolean(c) && c.dataset.fcard === cardId && c.dataset.fcrow === rowId;
   }
   // After a roll, focus stays on the card: its Roll (or a PC's Passed) for the next line, else its first offer, else its
   // first control.
@@ -1840,7 +1890,7 @@
     if (t.id === 'fAfterAll') { const lf = lastFight(); if (lf) RP.dispatch({ type: 'afterClearAll', fight: lf.id }); return true; }
     if (!f) return false;
     if (t.id === 'fRoll') { rollInit(); return true; }
-    if (t.id === 'fSort') { F({ type: 'fightSort' }); return true; }
+    if (t.id === 'fSort') { placeHeld(); F({ type: 'fightSort' }); return true; }
     if (t.id === 'fNext') { next(false); return true; }
     if (t.id === 'fStartAnyway') { next(true); return true; }
     if (t.id === 'fAskNo') { ui.ask = null; RP.render(); return true; }
@@ -1876,7 +1926,15 @@
       return true;
     }
     if (d.fjot) { RP.dispatch({ type: 'jot', beat: f.beat, text: d.fjot, title: f.title }); return true; }
-    if (d.fpeek) { ui.peek = ui.peek === d.fpeek ? null : d.fpeek; RP.render(); return true; }
+    if (d.fpeek) {
+      // a blank row's name picks it and puts the cursor in its panel's first empty box; a second click keeps both (D3a)
+      if (panelBoxes().length && noNumbers(rowById(d.fpeek))) { pickRow(d.fpeek); return true; }
+      const auto = ui.autoPick === d.fpeek;
+      ui.autoPick = null;
+      ui.peek = ui.peek === d.fpeek && !auto ? null : d.fpeek;
+      RP.render();
+      return true;
+    }
     if (d.fhtype || d.fhloc) { const [rid, v] = split(d.fhtype || d.fhloc); tapHitChip(rid, d.fhtype ? 'type' : 'location', v); return true; }
     if (d.fcardpick) { ui.peek = d.fcardpick; RP.render(); return true; }
     if (d.fcbtn) {
@@ -2022,6 +2080,8 @@
 
   // A stat box sends its number, when it changed: initiative, max HP, AC, or a figure setStat takes. False for words
   // that are not one.
+  // The initiative column's and the panel's commits are sent held (Task 23, D3c): the number is set and the row stays
+  // where it is while the GM types; placeHeld moves it once focus leaves them (`placeHeld` below).
   function commitStat(t) {
     const f = statOf(t);
     const r = f && rowById(t.dataset[f]);
@@ -2032,49 +2092,79 @@
     if (STAT[f].stat) {
       // a figure for setStat: a number where it is one (`+1` is 1), else the words (DR's `2 (face 0)`, DB's `+1D4`)
       const value = v === '' ? null : /^[+-]?\d+(?:\.\d+)?$/.test(v) ? Number(v) : v;
-      if (shownFigure(value) !== shown(r, f)) F({ type: 'setStat', row: r.id, key: STAT[f].stat, value });
+      if (shownFigure(value) !== shown(r, f)) F({ type: 'setStat', row: r.id, key: STAT[f].stat, value, ...(STAT[f].panel ? { hold: true } : {}) });
       return true;
     }
     const n = v === '' ? null : Number(v);
-    if (f === 'fini' && n !== (isNum(r.ini) ? r.ini : null)) F({ type: 'setInit', row: r.id, ini: n });
+    if (f === 'fini' && n !== (isNum(r.ini) ? r.ini : null)) F({ type: 'setInit', row: r.id, ini: n, hold: true });
     if (f === 'fmax' && n !== r.max) F({ type: 'setMax', row: r.id, max: n });
     if (f === 'fac' && n !== r.ac) F({ type: 'setAc', row: r.id, ac: n });
     return true;
   }
 
-  // Where Tab goes from a stat box, by row id and field, found in the order as it stands before the commit,
-  // so a row the commit re-places (an initiative after Start) never moves the target:
-  // - an initiative box walks down the initiative column (spec §6.4 C2, as in 5b);
-  // - max HP goes to the same row's AC (GURPS: its max FP), and that to the next row's max HP (review F4);
-  // - a panel box goes to the next box of the panel, in the system's order (rules.panelBoxes).
-  // Shift reverses each. Past either end: null, and Tab leaves the boxes as it does anywhere.
+  // Where Tab goes from a stat box, by row id and field, found in the order as it stands before the commit (held
+  // commits move no row until focus leaves, Task 23):
+  // - an initiative box walks down the initiative column; in CoC and GURPS it passes a PC whose figure is the sheet's;
+  // - a row's own boxes: max HP to the same row's AC (D&D) or max FP (GURPS), then the next row's max HP; CoC's max HP
+  //   to the next row's (Task 23, D2);
+  // - a panel box goes to the next box of the panel, in the system's order (rules.panelBoxes), then Same for all while
+  //   it is enabled.
+  // Shift reverses each. Past either end (D2): before Start, the Start button (`#fNext`); in a running fight, 'stay':
+  // focus stays on the box, its number selected. Never Next, never a seen button.
+  const STAY = 'stay';
   function tabTarget(t, f, back) {
     const id = t.dataset[f];
+    const fight = state().fight;
+    const pastEnd = () => (fight && fight.started ? STAY : '#fNext');
     const col = (k) => Array.from(document.querySelectorAll(`[${k}]`), (b) => b.getAttribute(k));
     if (f === 'fini') {
-      const ids = col('data-fini');
+      const sheets = (rid) => { const r = rowById(rid); return !rolled() && Boolean(r) && r.kind === 'pc' && isNum(r.ini) && !(r.typedKeys && r.typedKeys.ini); };
+      const ids = col('data-fini').filter((x) => x === id || !sheets(x));
       const to = ids[ids.indexOf(id) + (back ? -1 : 1)];
-      return to === undefined ? null : attr('data-fini', to);
+      return to === undefined ? pastEnd() : attr('data-fini', to);
     }
     if (STAT[f].panel) {
       const boxes = Array.from(document.querySelectorAll('#acting .pbox'));
       const to = boxes[boxes.indexOf(t) + (back ? -1 : 1)];
       const tf = to && statOf(to);
-      return tf ? attr(STAT[tf].k, id) : null;
+      if (tf) return attr(STAT[tf].k, id);
+      const same = !back && document.querySelector('#acting [data-fsame]:not([disabled])');
+      return same ? attr('data-fsame', same.dataset.fsame) : pastEnd();
     }
-    // max HP's partner on the row: AC (D&D) or the pool's max (GURPS's FP)
+    // max HP's partner on the row: AC (D&D) or the pool's max (GURPS's FP); CoC's has none
     const pair = (rid) => ['data-fac', 'data-ffpmax'].find((k) => document.querySelector(attr(k, rid)));
     const rows = col('data-fmax');
     const i = rows.indexOf(id);
+    const nextMax = () => (i >= 0 && i + 1 < rows.length ? attr('data-fmax', rows[i + 1]) : pastEnd());
     if (f === 'fmax') {
-      if (!back) { const k = pair(id); return k ? attr(k, id) : null; }
-      if (i <= 0) return null;
+      if (!back) { const k = pair(id); return k ? attr(k, id) : nextMax(); }
+      if (i <= 0) return pastEnd();
       const k = pair(rows[i - 1]);
       return attr(k || 'data-fmax', rows[i - 1]);
     }
     if (back) return attr('data-fmax', id);
-    return i >= 0 && i + 1 < rows.length ? attr('data-fmax', rows[i + 1]) : null;
+    return nextMax();
   }
+  // The boxes whose commits are held (the initiative column and the panel's): the rows stay put while focus is in them.
+  const inHold = (el) => Boolean(el && el.matches && el.matches('[data-fini], #acting .pbox'));
+  // Held rows placed (D3c): on Enter in those boxes, when focus leaves them by the keyboard, before Start and Sort,
+  // and on the release of a press that took focus out of them (afterPress), never on the press.
+  function placeHeld() {
+    const f = state().fight;
+    if (f && f.rows.some((r) => r.held)) F({ type: 'placeHeld' });
+  }
+  let pressing = false;
+  // a press gm.js holds the redraws for (the main button), so its release comes back through afterPress
+  document.addEventListener('pointerdown', (ev) => { if (ev.button === 0) pressing = true; }, true);
+  part.afterPress = () => {
+    pressing = false;
+    if (!inHold(document.activeElement)) placeHeld();
+  };
+  document.addEventListener('focusout', (ev) => {
+    if (!inHold(ev.target)) return;
+    // after the redraw that may be under way (it puts focus back into a box it drew again)
+    setTimeout(() => { if (!pressing && !inHold(document.activeElement)) placeHeld(); }, 0);
+  });
 
   document.addEventListener('keydown', (ev) => {
     const t = ev.target;
@@ -2110,11 +2200,31 @@
     }
     if (f && (ev.key === 'Enter' || ev.key === 'Tab')) {
       const to = ev.key === 'Tab' ? tabTarget(t, f, ev.shiftKey) : null;
-      if (ev.key === 'Enter' || to) ev.preventDefault();
+      ev.preventDefault();
       // committed here: the browser's `change` when focus leaves sends nothing and redraws nothing again
       t.dataset.committed = t.value;
+      const self = attr(STAT[f].k, t.dataset[f]);
+      if (ev.key === 'Enter' || to === STAY) {
+        commitStat(t);
+        // Enter places the held rows (D3c); Tab past the end in a running fight keeps them held (focus is still here)
+        if (ev.key === 'Enter') placeHeld();
+        RP.focusTo(self);
+        return;
+      }
+      // the focus moves first and the redraw comes after it, so focus never falls to the page (D2)
+      RP.focusTo(to);
       commitStat(t);
-      if (to) RP.focusTo(to);
+      if (!inHold(document.activeElement)) placeHeld();
+      return;
+    }
+    // Same for all reached by Tab from the panel's last box: Shift-Tab goes back to that box; Tab before Start goes on to
+    // Start (D2)
+    if (d.fsame !== undefined && ev.key === 'Tab') {
+      const boxes = document.querySelectorAll('#acting .pbox');
+      const last = boxes[boxes.length - 1];
+      const fight = state().fight;
+      if (ev.shiftKey && last) { ev.preventDefault(); RP.focusTo(attr(STAT[statOf(last)].k, last.dataset[statOf(last)])); return; }
+      if (!ev.shiftKey && fight && !fight.started) { ev.preventDefault(); RP.focusTo('#fNext'); return; }
       return;
     }
     if (ev.key !== 'Enter') return;

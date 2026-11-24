@@ -990,15 +990,41 @@
   // `forCopy` is Same for all's question: a line naming the row (its own copy line, a roster) or a turn it has had
   // changes none of its numbers, so neither blocks a copy; typed numbers, HP, temp HP, statuses, Out and death saves do.
   // The figures a copy itself gave (`copied`) are not a touch, so a second copy may overwrite the first.
+  // For a copy, typing is asked field by field (`typedKeys`, copyFields), not of the row (Task 23, D3): a row with a
+  // typed initiative still takes the HP, and a row at full HP is not hurt, whatever its max came from.
   function untouched(r, forCopy) {
     const st = r.start || {};
     const nul = (a) => (a === undefined || a === null ? null : a);
     const c = r.copied || {};
-    const hpOk = nul(r.hp) === nul(st.hp) || (c.hp !== undefined && nul(r.hp) === nul(c.hp));
-    const maxOk = nul(r.max) === nul(st.max) || (c.max !== undefined && nul(r.max) === nul(c.max));
-    return !r.typed && (forCopy || (!r.turned && !r.logged)) && hpOk && maxOk && !r.temp && !r.out
+    const hpOk = nul(r.hp) === nul(st.hp) || (c.hp !== undefined && nul(r.hp) === nul(c.hp)) || (forCopy && isNum(r.max) && r.hp === r.max);
+    const maxOk = forCopy || nul(r.max) === nul(st.max) || (c.max !== undefined && nul(r.max) === nul(c.max));
+    return (forCopy || !r.typed) && (forCopy || (!r.turned && !r.logged)) && hpOk && maxOk && !r.temp && !r.out
       && !(r.conds || []).length && !r.exhaustion && !r.conc && !(r.ds && (r.ds.s || r.ds.f));
   }
+  // Same for all, field by field (Task 23, D3). A worked-out figure's `from` key: a source's figure worked out from
+  // others is not copied itself; its inputs are, and the copy works it out again.
+  const COPY_FROM = { max: 'hp', fpMax: 'fp', mpMax: 'mp', speed: 'speed', dodge: 'dodge' };
+  const SAME_KEYS = ['max', 'ac', 'mod'];
+  const holds = (v) => isNum(v) || (typeof v === 'string' && v.trim() !== '');
+  // Whether a row holds anything Same for all could copy (else its button is disabled: "Type a number first").
+  // D&D's modifier of 0 is a blank row's own, never a number typed: alone it is nothing to copy.
+  const copyHolds = (src, keys = SAME_KEYS) => keys.some((k) => holds(src[k]) && !(k === 'mod' && src[k] === 0));
+  // What a copy takes from the source: each field the source holds, the copy has not typed and does not hold already
+  // (`fields`), and its HP to the source's max (`hp`) when its max is not typed and the HP differs.
+  function copyFields(src, x, keys = SAME_KEYS) {
+    const typed = (x.typedKeys && typeof x.typedKeys === 'object') ? x.typedKeys : {};
+    const from = (src.from && typeof src.from === 'object') ? src.from : {};
+    const derived = (k) => Boolean(COPY_FROM[k] && from[COPY_FROM[k]]);
+    const fields = keys.filter((k) => holds(src[k]) && !typed[k] && !derived(k) && x[k] !== src[k]);
+    const hp = isNum(src.max) && !typed.max && !derived('max') && x.hp !== src.max;
+    return { fields, hp };
+  }
+  // The copies Same for all will give something to: the source's group mates, not hurt or given a status, that take a
+  // field. The button's number.
+  function sameForAllTakers(rows, src, keys = SAME_KEYS) {
+    return groupMates(rows, src).filter((x) => x !== src && untouched(x, true)).filter((x) => { const c = copyFields(src, x, keys); return c.fields.length > 0 || c.hp; });
+  }
+  const sameForAllCount = (rows, src, keys = SAME_KEYS) => sameForAllTakers(rows, src, keys).length;
   // Whether the join's rows can still be taken back: there are some, and none has been touched.
   function undoable(fight, join) {
     const mine = ((fight && fight.rows) || []).filter((r) => join != null && r.joinId === join);
@@ -1020,7 +1046,7 @@
     combatOf, initOf, marksOf, tiredOf,
     thresholdOf, isLit, sortRows, takesTurn, nextLive, actingRow,
     gmName, lairRow, unseenKey, unseenNumbers, unseenLabels, rowsForFight, joinRows, blankRow,
-    addChoices, sameName, groupKey, groupMates, placeRow, undoable, untouched,
+    addChoices, sameName, groupKey, groupMates, placeRow, undoable, untouched, copyHolds, copyFields, sameForAllTakers, sameForAllCount,
     SIDES, isSide, noteSide, sideOfRow, isFoe,
   };
 }));

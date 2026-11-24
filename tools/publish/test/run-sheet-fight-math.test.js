@@ -1525,3 +1525,22 @@ test('CoC: a die with no count is one (d6, D3, d100, d6+DB); pool entries are un
   assert.equal(M.parseEntry('d6'), null);
   assert.equal(M.parseEntry('d6', GURPS), null);
 });
+
+// step 6b Task 23 (D3): Same for all asks about typing field by field
+test('Same for all: a copy takes each field the source holds and it has not typed; the count is the copies that take one', () => {
+  const src = row({ id: 'a', name: 'Bouncer 1', copy: 1, hp: 22, max: 22, ac: 13, mod: 1, typed: true, typedKeys: { max: true, ac: true } });
+  const typedIni = row({ id: 'b', name: 'Bouncer 2', copy: 2, hp: null, max: null, ini: 9, typed: true, typedKeys: { ini: true } });
+  const typedAc = row({ id: 'c', name: 'Bouncer 3', copy: 3, hp: null, max: null, ac: 15, typed: true, typedKeys: { ac: true } });
+  const hurt = row({ id: 'd', name: 'Bouncer 4', copy: 4, hp: 5, max: 22, start: { hp: 22, max: 22 } });
+  const rows = [src, typedIni, typedAc, hurt];
+  assert.deepEqual(M.copyFields(src, typedIni), { fields: ['max', 'ac', 'mod'], hp: true });
+  assert.deepEqual(M.copyFields(src, typedAc), { fields: ['max', 'mod'], hp: true }, 'its typed AC is kept');
+  assert.equal(M.untouched(typedIni, true), true, 'a typed initiative does not keep a copy from taking the rest');
+  assert.equal(M.untouched(typedIni, false), false, 'but it is still a touch for Undo');
+  assert.equal(M.untouched(hurt, true), false, 'a hurt copy takes nothing');
+  assert.equal(M.sameForAllCount(rows, src), 2);
+  assert.equal(M.copyHolds(row({ hp: null, max: null, ac: null, mod: null })), false);
+  // a figure the source worked out is not copied itself: its inputs are
+  const g = row({ id: 'e', name: 'Guard 1', copy: 1, max: 11, st: 11, from: { hp: 'from ST' } });
+  assert.deepEqual(M.copyFields(g, row({ id: 'f', name: 'Guard 2', copy: 2, hp: null, max: null }), ['max', 'st']), { fields: ['st'], hp: false });
+});

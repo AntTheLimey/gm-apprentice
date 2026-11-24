@@ -177,15 +177,16 @@ describe('the GM page runs a fight', { skip: browserSkip() }, () => {
       assert.strictEqual(await focused(page), ada, 'Shift+Tab goes back');
       now = await until(page, `p.fight.rows.find((r) => r.id === ${q(nextBox)}).ini === 25`);
       assert.deepStrictEqual(now.fight.rows.map((r) => r.id), order, 'nothing re-sorts until Sort or Start');
-      // past the last box, and before the first, Tab leaves the boxes for the page's other controls
+      // step 6b Task 23 changed this on purpose (D2): past the last box, and before the first, Tab goes to Start
+      // before the fight starts (never Next, never a seen button)
       const last = boxes.at(-1);
       await fill(page, `[data-fini="${last}"]`, '4');
       await page.key('Tab');
-      assert.ok(!boxes.includes(await focused(page)), 'Tab past the last box leaves the boxes');
+      assert.strictEqual(await page.evaluate('document.activeElement.id'), 'fNext', 'Tab past the last box goes to Start');
       await until(page, `p.fight.rows.find((r) => r.id === ${q(last)}).ini === 4`);
-      await page.evaluate(`document.querySelector('[data-fini="${boxes[0]}"]').focus()`);
+      assert.ok((await page.click(`[data-fini="${boxes[0]}"]`)).hit, 'a real click on the first box');
       await page.key('Tab', { shift: true });
-      assert.ok(!boxes.includes(await focused(page)), 'Shift+Tab before the first leaves them too');
+      assert.strictEqual(await page.evaluate('document.activeElement.id'), 'fNext', 'Shift+Tab before the first goes to Start too');
       await click(page, '#fSort');
       now = await until(page, `p.fight.rows[0].id === ${q(nextBox)}`);
       assert.deepStrictEqual(now.errors, []);

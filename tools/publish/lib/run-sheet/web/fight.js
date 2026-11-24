@@ -1169,23 +1169,36 @@
       const ini = FM.initOf(r, FM.rulesOf(f));
       if (ini !== null && ini !== r.ini) { r.ini = ini; replace(s, f, r, at, { hold: a.hold }); }
     }),
-    // A counted row's typed numbers go to the others of this group nobody has typed into, hurt or given a status
-    // (FM.untouched), and their HP is the max. The stat keys come (`STAT_KEYS`: max, ac and mod for D&D);
-    // nothing else does (not HP, initiative, side, seen or typed).
+    // Same for all, field by field (Task 23, D3): each of this group's others not hurt or given a status
+    // (FM.untouched) takes each figure the source holds and it has not typed itself (FM.copyFields): the stat keys
+    // (`statKeysOf`: max, ac and mod for D&D), each pool full at its copied max, the HP at the max. A figure the source
+    // worked out is not copied; its inputs are, and GURPS works the copy's out again (deriveStats). A copy with no typed
+    // initiative takes the one its figures give (CoC's DEX, GURPS's Speed), placed as a typed one is. Nothing else is
+    // copied (not HP lost, side, seen or typed).
     sameForAll: onRow((s, f, r, a, at) => {
-      const others = FM.groupMates(f.rows, r).filter((x) => x !== r && FM.untouched(x, true));
-      if (!others.length) return;
-      const fields = statKeysOf(FM.rulesOf(f)).filter((k) => isNum(r[k]));
-      for (const x of others) {
-        for (const k of fields) x[k] = r[k];
-        // each pool full at the copied max (HP as before)
-        for (const k of fields) if (k !== 'max' && FOLLOWS[k]) x[FOLLOWS[k]] = r[k];
-        if (isNum(r.max)) x.hp = r.max;
+      const rules = FM.rulesOf(f);
+      const keys = statKeysOf(rules);
+      const takers = FM.sameForAllTakers(f.rows, r, keys);
+      if (!takers.length) return;
+      for (const x of takers) {
+        const c = FM.copyFields(r, x, keys);
+        const tk = x.typedKeys || {};
+        for (const k of c.fields) {
+          x[k] = r[k];
+          if (FOLLOWS[k]) x[FOLLOWS[k]] = r[k];
+          if (FROM_KEY[k] && x.from && x.from[FROM_KEY[k]]) { x.from = { ...x.from }; delete x.from[FROM_KEY[k]]; }
+        }
+        if (rules.initiative === 'speed') deriveStats(x);
+        if (!tk.max && isNum(x.max) && (c.hp || c.fields.length)) x.hp = x.max;
+        if (!tk.ini) {
+          const ini = FM.initOf(x, rules);
+          if (ini !== null && ini !== x.ini) { x.ini = ini; replace(s, f, x, at, { quiet: true }); }
+        }
         x.copied = { hp: x.hp, max: x.max };
         touchHp(x, at);
       }
       // naming the copies in this line marks them touched, rightly: copying numbers onto them is an act on them
-      say(s, f, at, `${others.map((x) => nameOf(s, f, x)).join(', ')}: the same numbers as ${nameOf(s, f, r)}.`);
+      say(s, f, at, `${takers.map((x) => nameOf(s, f, x)).join(', ')}: the same numbers as ${nameOf(s, f, r)}.`);
     }),
     // Takes back the rows one join added, while none has been touched. One line says so; the join's own line
     // goes with its rows, so no line of the fight names an undone row (the Table Log never will).
