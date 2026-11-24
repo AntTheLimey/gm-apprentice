@@ -31,7 +31,7 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 - The player site's GURPS reference block and to-hit calculator list Martial Arts's hit places, the calculator in the run sheet's order (mildest first).
 - A D&D initiative typed with decimals is refused, not cut short.
 - Nothing in a fight waits on anything else: any card line can be skipped, an open Dead or Unconscious offer holds up no later line, the Aimed chip can be tapped on by hand, and a GURPS manoeuvre can be set on any row at any time (in a two-row fight, a pick off the other row's turn counts as a correction of its last turn).
-- A Call of Cthulhu fight's rows fit one line, so the run list stays open beside them at 1449 wide: a shorter entry-box hint (the whole of it on hover), one dice button that opens the stepper, the attacker's typed roll once on its own row, and a long name cut short.
+- Call of Cthulhu fight rows fit one line, so the run list stays open beside them at 1449 wide: SAN shows on PCs' and allies' rows and MP only for characters with spells (both stay in the panel), the entry box has a shorter hint (all of it on hover), the dice are one button, an attacker's typed roll sits once on its own row, and a long name is cut with "…". D&D and GURPS rows are unchanged, except that a D&D lair row's title now names it.
 - A GURPS foe made up at the table takes its quick figures first: Speed, Skill (its main combat skill, shown on its row, which To-hit opens on), Dodge, Parry, Block and HP, then ST, HT and DX only if wanted. A Call of Cthulhu foe's panel likewise starts DEX, Fighting, Dodge and HP.
 
 ### Fixed
