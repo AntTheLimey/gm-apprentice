@@ -213,9 +213,13 @@ Every section is a bulleted list (links where a note exists) except
 14. `Handouts handed over`
 15. `Log`: bullets, `- HH:MM text`
 16. `Loot`: bullets, `- [[Item]] to [[Who]]`
-17. `Vitals at the end`: a table `| Who | HP | Conditions |`; the Who cell
+17. `Vitals at the end`: a table `| Who | HP | Conditions |`, with the
+    columns the system's `game_systems` entry lists under
+    `run_sheet.vitals` (Call of Cthulhu: `| Who | HP | MP | SAN | Luck |
+    Conditions |`; GURPS: `| Who | HP | FP | Conditions |`); the Who cell
     is a bare wikilink (`[[Name]]`, no pipe: Obsidian's table rule) and
-    the HP cell is `current/max` or `current`
+    the HP cell is `current/max` or `current`. MP and FP are
+    `current/max`; SAN and Luck are bare numbers
 18. `Advancement`
 
 How the run sheet writes them: `Log` is `- HH:MM Beat title: text`, or

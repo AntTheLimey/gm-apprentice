@@ -9,6 +9,30 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [UNRELEASED-6b]
+
+### Added
+
+- Call of Cthulhu and GURPS games get the Fight button on the run sheet (#556 step 6b). Each system has its own rows, statuses and words, and sorts by its own order: DEX for Call of Cthulhu, Basic Speed for GURPS, fixed after Start. Foes are never put Out at 0, and the sheet raises what a hit owes on one card (wounds, death checks, the knockdown roll, SAN and its bout) without ruling on it.
+- A GURPS hit can be typed as damage, type and place; the sheet takes off DR, multiplies, caps a limb and shows its working. The damage box also rolls dice, and a Call of Cthulhu hit takes dice, damage bonus and armour.
+- Call of Cthulhu melee compares levels on the target's row (Dodge or Fight Back, with the outnumbered die), and its firearm chips cover range, aim, point blank, size, several shots and Regency flintlocks.
+- GURPS rows show Dodge, Parry and Block as they stand this turn, a manoeuvre chip on the acting row, and spells paid from FP or the Energy Reserve.
+- Foes and allies a fight beat names without a stat block get a blank row to type into, in every system; a person only a Then line names arrives ticked in.
+- A GURPS PC's weapon or a typed skill opens the to-hit calculator on the run sheet, on the PC whose turn it is (it never follows the player site's switch).
+- Hit location on the run sheet is one list, Torso first, using Martial Arts's extended places (ear, nose, jaw, spine, veins and arteries, joints), each showing the damage type's multiplier.
+
+### Changed
+
+- The Table Log's vitals have each system's columns: Call of Cthulhu HP, MP, SAN and Luck, GURPS HP and FP. Wrap-up writes them onto the sheet, and the Energy Reserve is held through the night.
+- A Call of Cthulhu or GURPS run sheet speaks its own system: no AC, initiative modifier, stat-fill or long rest.
+- Tab stops at Start or stays put, rows hold still while a figure is typed, and Same for all copies what is filled and says how many it reached.
+- The player site's GURPS reference block and to-hit calculator list Martial Arts's hit places.
+- A D&D initiative typed with decimals is refused, not cut short.
+
+### Fixed
+
+- The combat reference corrects GURPS wounding, stun and knockdown, and Call of Cthulhu's Dying, several shots and Prone (#874, #875).
+
 ## [1.12.148] — 2026-11-25
 
 ### Fixed
