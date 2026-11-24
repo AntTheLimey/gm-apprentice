@@ -921,6 +921,22 @@ describe('CoC and GURPS fights on the GM page, by real input', { skip: browserSk
     });
   }
 
+  // Task 34 (finding 11): the panel's Dodge read-out is the row's figure, Tired halving it there too
+  it('GURPS: a Tired Bouncer 2 reads the same Dodge on its row and in its panel\'s header', async () => {
+    const run = await start('gurps', { randomInt: () => 4 });
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await bouncers(page, run, [['st', 11], ['ht', 10], ['dx', 10], ['parry', 9]]);
+      const b2 = named(p, 'Bouncer 2').id;
+      p = await typeInto(page, `[data-fhp="${b2}"]`, 'f-8');
+      p = await until(page, `p.fight.rows.find((r) => r.id === ${q(b2)}).fp === 2 && p.saved === "Saved" && p.pending === 0`);
+      await page.waitFor(`document.querySelector('[data-fdef="${b2}|dodge"]').textContent === "Dodge 4"`, 3000);
+      p = await peek(page, p, 'Bouncer 2');
+      const dodge = (await texts(page, '#acting .nums > span')).filter((t) => /^Dodge /.test(t));
+      assert.deepStrictEqual(dodge, ['Dodge 4 (from Speed)']);
+      assert.strictEqual(await text(page, `[data-fdef="${b2}|dodge"]`), 'Dodge 4');
+    });
+  });
+
   // Task 30: the last defence roll on the row's second line, information only (nothing waits on it)
   for (const [width, height] of SIZES) {
     it(`GURPS at ${width}: a Parry made then failed shows on Bouncer 2's second line, the second replacing the first; one line high; its seen toggle and Next still work; its turn clears it; the players see none of it`, async () => {

@@ -637,8 +637,17 @@
     for (const p of FM.poolsOf(rules().fight || rules())) {
       if (isNum(r[p.key]) || isNum(r[p.max])) reads.push(`${p.label} ${q(r[p.key])}${p.max ? `/${q(r[p.max])}` : ''}${fromTag(r, p.max)}`);
     }
-    for (const b of panelBoxes().filter((x) => x.readout)) reads.push(`${b.label} ${shownFigure(r[Fight.STAT_FIELDS[b.key][0]]) || '?'}${fromTag(r, b.key)}`);
-    const nums = reads.map((x) => `<span>${esc(x)}</span>`);
+    // a defence read out (GURPS's Dodge) is the figure as it stands, the row's readout's (Tired halves it here too)
+    const D = defences();
+    const live = D && r.kind !== 'lair' ? GMath.liveDefences(r, D) : null;
+    const titles = [];
+    for (const b of panelBoxes().filter((x) => x.readout)) {
+      const d = live && live[b.key];
+      const fig = d && d.base !== null ? (d.value === null ? '\u2013' : d.value) : shownFigure(r[Fight.STAT_FIELDS[b.key][0]]) || '?';
+      reads.push(`${b.label} ${fig}${fromTag(r, b.key)}`);
+      titles[reads.length - 1] = d && d.base !== null && d.causes.length ? d.title : '';
+    }
+    const nums = reads.map((x, i) => `<span${titles[i] ? ` title="${esc(titles[i])}"` : ''}>${esc(x)}</span>`);
     const blWord = f.view.bloodied.has(r.id) ? FM.bloodiedWord(w) : '';
     if (blWord) nums.push(`<span class="bl">${esc(blWord)}</span>`);
     for (const m of marksOn(r)) nums.push(`<span class="mk">${esc(m)}</span>`);
