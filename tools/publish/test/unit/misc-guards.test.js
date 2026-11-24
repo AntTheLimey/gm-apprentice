@@ -45,10 +45,16 @@ const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
 
-const css = fs.readFileSync(path.join(__dirname, '..', '..', 'css', 'style.css'), 'utf8');
+const { joinTohitCss } = require('../../lib/build');
+// the stylesheet as the site build writes it: css/tohit.css joined in at its marker line
+const read = (f) => fs.readFileSync(path.join(__dirname, '..', '..', 'css', f), 'utf8');
+const css = joinTohitCss(read('style.css'), read('tohit.css'));
 const block = css.slice(css.indexOf('/* === To-hit calculator'), css.indexOf('/* === Combat action chains'));
 
 describe('the to-hit calculator stylesheet', () => {
+  it('is found in the joined stylesheet (an empty block would pass the checks below for nothing)', () => {
+    assert.ok(block.length > 1000 && block.includes('.th-gsum'), `block of ${block.length} characters`);
+  });
   it('holds no colour literal and no new font', () => {
     assert.doesNotMatch(block, /#[0-9a-fA-F]{3,8}\b|rgba?\(|hsla?\(|font-family/);
   });
