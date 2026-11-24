@@ -241,7 +241,7 @@
   const failed = (res) => res.outcome === 'failure' || res.outcome === 'critical failure';
   // "rolled 12, failed by 7"; a critical says so, and a critical success over the target says only that.
   function resultText(res) {
-    const head = `rolled ${res.total}, `;
+    const head = `rolled ${res.total}${res.typed ? ' (typed)' : ''}, `;
     if (failed(res)) return `${head}${res.outcome === 'critical failure' ? 'critical failure, ' : ''}failed by ${Math.max(1, res.total - res.target)}`;
     const by = res.target - res.total;
     if (res.outcome === 'critical success') return `${head}critical success${by >= 0 ? `, made it by ${by}` : ''}`;
@@ -261,21 +261,24 @@
   function rollResult(res) {
     if (!res || typeof res !== 'object' || !isNum(res.total) || !isNum(res.target) || !OUTCOMES.includes(res.outcome)) return null;
     const dice = Array.isArray(res.dice) ? res.dice.filter(isNum).slice(0, 3) : [];
-    return { dice, total: res.total, target: res.target, margin: res.target - res.total, outcome: res.outcome };
+    return { dice, total: res.total, target: res.target, margin: res.target - res.total, outcome: res.outcome, ...(res.typed === true ? { typed: true } : {}) };
   }
   const offerOf = (C, o) => (C && C.offers && C.offers[o]) || null;
-  const ending = (l, C) => (l.taken ? [l.taken] : l.offers).some((o) => { const x = offerOf(C, o); return Boolean(x && x.ends); });
-  // The card's next line to roll: the first not rolled (a dead line has no roll, nor a line marked `noRoll`: CoC's
-  // offers that need none, Task 18), unless a line before it offers or
-  // took what ends the card (an Out, an Unconscious): then -1, as when every line is rolled.
+  // A line whose taken offer ends the card (an Out, an Unconscious). One only offered holds nothing up (Task 37).
+  const ending = (l, C) => Boolean(l.taken) && Boolean((offerOf(C, l.taken) || {}).ends);
+  // The card's next line to roll: the first not rolled and not skipped (a dead line has no roll, nor a line marked
+  // `noRoll`: CoC's offers that need none, Task 18), unless a line before it took what ends the card: then -1, as when
+  // every line is rolled. Nothing waits on an offer still open (Task 37: nothing settles in order).
   function nextLine(card, C) {
     const lines = (card && card.lines) || [];
     for (let i = 0; i < lines.length; i++) {
       if (ending(lines[i], C)) return -1;
-      if (!lines[i].result && lines[i].kind !== 'dead' && !lines[i].noRoll) return i;
+      if (!lines[i].result && !lines[i].declined && lines[i].kind !== 'dead' && !lines[i].noRoll) return i;
     }
     return -1;
   }
+  // A line the GM may skip (Task 37): one not rolled yet (nothing to roll is not skipped: its offer has its own ✕).
+  const skippable = (l) => Boolean(l) && !l.result && !l.declined && !l.taken && l.kind !== 'dead' && !l.noRoll;
   // A line still offering something nobody took.
   const pending = (l) => !l.taken && l.offers.length > 0;
   // Settled: nothing to roll and nothing offered.
@@ -357,13 +360,13 @@
   }
   // A row's last defence roll (Task 30), kept on the row until its turn: { label, value, again, total, target,
   // outcome }, its text "Parry 10: rolled 9, made it by 1" and whether it was made.
-  const defRollOf = (d, res, again) => ({ label: d.label, value: d.value, again: Boolean(again), total: res.total, target: res.target, outcome: res.outcome });
+  const defRollOf = (d, res, again) => ({ label: d.label, value: d.value, again: Boolean(again), total: res.total, target: res.target, outcome: res.outcome, ...(res.typed ? { typed: true } : {}) });
   const defRollText = (x) => `${x.label} ${x.value}${x.again ? ' again' : ''}: ${resultText(x)}`;
   const defRollMade = (x) => !failed(x);
 
   return {
     liveDefences, retreatOf, defenceText, defenceMoved, defRollOf, defRollText, defRollMade, DEFENCE_KEYS,
     deriveGurps, gurpsInjury, woundingAt, locationOption, drFigure, shockOf, cardForHit, cardsAtTurnStart, cardsAtTurnEnd, lineTarget, lineStat, lineName, lineText, resultText,
-    offersFor, rollResult, nextLine, cardDone, pending, offerOf,
+    offersFor, rollResult, nextLine, cardDone, pending, offerOf, skippable,
   };
 }));

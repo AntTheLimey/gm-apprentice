@@ -2555,10 +2555,11 @@ describe('GURPS consequence cards and turn upkeep (step 6b Task 13)', () => {
     // a roll for a line that is not the next is dropped
     const stale = G(s, { type: 'cardRolled', row: named(s, 'Guard').id, card: c.id, line: 0, result: rolled(3, 10) });
     assert.deepEqual(stale.fight.rows, s.fight.rows);
-    // line 1 missed by 1 after line 0 offered Mortal wound: Out (dead); the knockdown is not rolled
+    // line 1 missed by 1 after line 0 offered Mortal wound: Out (dead) offered. Task 37 changed this on purpose: an
+    // offer still open holds nothing up, so the knockdown is next until Dead is taken (Ant's no-locked-workflow rule)
     s = roll(s, 'Guard', 11, 10);
     assert.deepEqual(cards(s, 'Guard')[0].lines[1].offers, ['dead']);
-    assert.equal(require('../lib/run-sheet/web/gurps-math').nextLine(cards(s, 'Guard')[0], GURPS.consequences), -1);
+    assert.equal(require('../lib/run-sheet/web/gurps-math').nextLine(cards(s, 'Guard')[0], GURPS.consequences), 2);
     assert.deepEqual(lines(s).slice(before), ['Guard: death check (−1×HP), HT 10, rolled 12, failed by 2.', 'Guard: death check (−2×HP), HT 10, rolled 11, failed by 1.']);
     // nothing is Out until the tap
     assert.equal(named(s, 'Guard').out, false);
@@ -3081,10 +3082,14 @@ describe('GURPS manoeuvre chip (step 6b Task 15)', () => {
     assert.equal(lines(s).includes('Bouncer 1: Feint.'), true);
   });
 
-  it('a pick for a row that is not acting does nothing', () => {
+  // Task 37 changed this on purpose (Ant's no-locked-workflow rule): a pick is taken on any row at any time; a row
+  // not in the fight or Out still takes none
+  it('a pick for a row that is not acting is taken; one for a row Out is not', () => {
     let s = go(begin(rows()));
-    const was = { rows: s.fight.rows, lines: lines(s) };
     s = pick(s, 'Bouncer 2', 'all-out attack');
+    assert.equal(named(s, 'Bouncer 2').manoeuvre, 'all-out attack');
+    s = G(s, { type: 'out', row: named(s, 'Kev').id, on: true });
+    const was = { rows: s.fight.rows, lines: lines(s) };
     s = pick(s, 'Kev', 'aim');
     assert.deepEqual(s.fight.rows, was.rows);
     assert.deepEqual(lines(s), was.lines);
@@ -4015,17 +4020,14 @@ describe('CoC firearms: the aim, the shot, the dive, the reload (step 6b Task 19
     s = shoot(s, 'Wharf Hand 1', 'Wharf Hand 2', ['aim'], { f: [3, 4, 3] });
     assert.match(lines(s).slice(-1)[0], /\(aimed\)/);
     assert.deepEqual(CM.shotChipsFrom(named(s, 'Wharf Hand 1'), named(s, 'Wharf Hand 2'), s.fight.round, COC), []);
-    // the aim spent: a second shot still sending it is refused
-    const was = clone(s.fight);
-    s = shoot(s, 'Wharf Hand 1', 'Wharf Hand 2', ['aim'], { f: [3, 4, 3] });
-    assert.deepEqual(s.fight, was);
+    // the aim spent: the next shot from the page has no aimed chip
     s = shoot(s, 'Wharf Hand 1', 'Wharf Hand 2', [], { f: [3, 3] });
     assert.doesNotMatch(lines(s).slice(-1)[0], /aimed/);
-    // an aimed chip with no aim declared is refused too
+    // Task 37 changed this on purpose (Ant's no-locked-workflow rule): an aimed chip the GM taps on with no aim declared
+    // is taken, for an aim the sheet never heard of
     s = toTurn(go(s), 'Iris');
-    const before = clone(s.fight);
     s = shoot(s, 'Iris', 'Wharf Hand 2', ['aim'], { level: 'hard' });
-    assert.deepEqual(s.fight, before);
+    assert.match(lines(s).slice(-1)[0], /\(aimed\)/);
   });
 
   it('a flintlock\'s impaling toggle cannot be turned on: its exchange says it never impales; the blunderbuss\'s carries its two damages', () => {
@@ -4123,5 +4125,181 @@ describe('Same for all, field by field (step 6b Task 23, D3)', () => {
     s = G(s, { type: 'status', row: named(s, 'Bouncer 3').id, add: 'Prone' });
     s = G(s, { type: 'setStat', row: named(s, 'Bouncer 1').id, key: 'st', value: 13 });
     assert.equal(M.sameForAllCount(s.fight.rows, named(s, 'Bouncer 1'), Fight.statKeysOf(GURPS)), 0);
+  });
+});
+
+// Ant, 2026-11-24: the GM may roll physical dice, skip any line and settle nothing in order. A typed table roll is
+// judged by lib/dice in the server's shape, marked `typed`; the reducers take it as they take a server roll.
+describe('Physical dice count everywhere; nothing settles in order (step 6b Task 37)', () => {
+  const { systemFor } = require('../lib/run-sheet/systems');
+  const { rollSpec } = require('../lib/dice');
+  const GM = require('../lib/run-sheet/web/gurps-math');
+  const CM = require('../lib/run-sheet/web/coc-math');
+  const GURPS = systemFor('gurps-4e').describe().fight;
+  const COC = systemFor('coc-7e-regency').describe().fight;
+  const begin = (list, rules) => RS.reduce(fresh(), { id: 'f1', type: 'fightStart', title: 'T', rules, rows: list.map((o, i) => M.blankRow({ id: `r${i + 1}`, ...o })) }, now());
+  const G = (s, a) => RS.reduce(s, { id: nextId(), fight: 'f1', ...a }, now());
+  const named = (s, name) => s.fight.rows.find((r) => r.name === name);
+  const go = (s) => G(s, { type: 'fightNext', from: s.fight.turn, round: s.fight.round });
+  const lines = (s) => s.events.filter((e) => e.fight).map((e) => e.text);
+  const cards = (s, name) => named(s, name).cards || [];
+  // the server's 3d6 with its faces fixed, and the same total typed
+  const faces = (...f) => { let i = 0; return () => f[i++]; };
+  const server3d6 = (target, a, b, c) => rollSpec({ against: target }, { randomInt: faces(a, b, c) });
+  const typed3d6 = (target, total) => rollSpec({ against: target, typed: total });
+  const serverD100 = (spec, tens, units) => rollSpec({ d100: spec }, { randomInt: faces(tens, units) });
+  const typedD100 = (spec, kept) => rollSpec({ d100: spec, typed: kept });
+  // the state with every `typed` mark taken off, and the log with its " (typed)" words: what must match the server's
+  // (and the times: each run's actions are stamped by the clock as they come)
+  const unmark = (o) => JSON.parse(JSON.stringify(o, (k, v) => (['typed', 'dice', 'tens', 'units', 'at'].includes(k) || /At$/.test(k) ? undefined : v)));
+  const unsaid = (list) => list.map((t) => t.replace(/ \(typed\)| typed(?= \d)/g, ''));
+  const guards = () => [{ name: 'Kev', kind: 'pc', ini: 6, speed: 6, hp: 12, max: 12, ht: 11 }, { name: 'Guard', ini: 5, speed: 5, hp: 11, max: 11, ht: 10, dr: 1, dodge: 8, parry: 9 }];
+  const cardRoll = (s, name, result, line) => {
+    const c = cards(s, name)[0];
+    return G(s, { type: 'cardRolled', row: named(s, name).id, card: c.id, line: line === undefined ? GM.nextLine(c, GURPS.consequences) : line, result });
+  };
+
+  it('GURPS: a death check and a knockdown typed give the card and the log a server roll gives, the log saying typed', () => {
+    const run = (r1, r2) => {
+      let s = begin(guards(), GURPS);
+      s = G(s, { type: 'hp', row: named(s, 'Guard').id, entry: '4 imp vitals' }); // a major wound: knockdown at HT 5
+      s = cardRoll(s, 'Guard', r1);
+      return s;
+    };
+    const server = run(server3d6(5, 4, 4, 4));
+    const typed = run(typed3d6(5, 12));
+    assert.deepEqual(unmark(typed.fight), unmark(server.fight));
+    assert.deepEqual(cards(typed, 'Guard')[0].lines[0].offers, ['unconscious']);
+    assert.equal(lines(typed).at(-1), 'Guard: knockdown, HT 10 −5 = 5, rolled 12 (typed), failed by 7.');
+    assert.deepEqual(unsaid(lines(typed)), lines(server));
+    // a PC's card takes a typed roll too (its player rolled it)
+    let s = begin(guards(), GURPS);
+    s = G(s, { type: 'hp', row: named(s, 'Kev').id, entry: '5 imp vitals' });
+    s = cardRoll(s, 'Kev', typed3d6(6, 6));
+    assert.equal(lines(s).at(-1), 'Kev: knockdown, HT 11 −5 = 6, rolled 6 (typed), made it by 0.');
+    assert.deepEqual(cards(s, 'Kev'), []);
+  });
+
+  it('GURPS: a typed Parry counts toward the next Parry, sets the result line and logs as a rolled one does', () => {
+    const run = (res) => {
+      let s = go(begin(guards(), GURPS)); // Kev acts
+      return G(s, { type: 'defendRolled', row: named(s, 'Guard').id, defence: 'parry', result: res });
+    };
+    const server = run(server3d6(9, 6, 5, 1));
+    const typed = run(typed3d6(9, 12));
+    assert.deepEqual(unmark(typed.fight), unmark(server.fight));
+    assert.equal(named(typed, 'Guard').parries, 1);
+    assert.equal(GM.liveDefences(named(typed, 'Guard'), GURPS.defences).parry.value, 5);
+    assert.equal(GM.defRollText(named(typed, 'Guard').defRoll), 'Parry 9: rolled 12 (typed), failed by 3');
+    assert.equal(lines(typed).at(-1), 'Guard: Parry 9, rolled 12 (typed), failed by 3.');
+    // the next typed Parry is against 5
+    const again = G(typed, { type: 'defendRolled', row: named(typed, 'Guard').id, defence: 'parry', result: typed3d6(5, 5) });
+    assert.equal(named(again, 'Guard').parries, 2);
+    assert.equal(lines(again).at(-1), 'Guard: Parry 9 → 5 (parry 2 −4), rolled 5 (typed), made it by 0.');
+  });
+
+  it('CoC: an NPC\'s CON typed, its melee side, a shot, a dive and the bout\'s 1D10 typed all count, the log saying typed', () => {
+    const rows = [
+      { name: 'Iris', kind: 'pc', ini: 70, dex: 70, hp: 11, max: 11, dodge: 35, con: 50, int: 70, san: 45, sanMax: 45 },
+      { name: 'Hand 1', ini: 60, dex: 60, hp: 16, max: 16, firearms: 50, fighting: 40, dodge: 30, con: 50, int: 65 },
+      { name: 'Hand 2', ini: 50, dex: 50, hp: 12, max: 12, fighting: 40, dodge: 30 },
+    ];
+    let s = go(begin(rows, COC)); // Iris acts
+    // a card's CON: server 34 and typed 34 give the same card
+    const hurt = G(s, { type: 'hp', row: named(s, 'Hand 1').id, entry: '-8' });
+    const c = cards(hurt, 'Hand 1')[0];
+    const byServer = G(hurt, { type: 'cardRolled', row: named(hurt, 'Hand 1').id, card: c.id, line: 0, result: serverD100({ target: 50 }, 3, 4) });
+    s = G(hurt, { type: 'cardRolled', row: named(hurt, 'Hand 1').id, card: c.id, line: 0, result: typedD100({ target: 50 }, 34) });
+    assert.deepEqual(unmark(s.fight), unmark(byServer.fight));
+    assert.match(lines(s).at(-1), /rolled 34 \(typed\), Regular\.$/);
+    // Iris attacks Hand 2, which Fights Back with a typed 31
+    const auto = CM.attackDice(named(s, 'Hand 2'), COC.coc);
+    s = G(s, { type: 'melee', attacker: named(s, 'Iris').id, defender: named(s, 'Hand 2').id, response: 'fightBack', dice: CM.diceOfNet(auto.net, COC.coc), auto, attack: { level: 'regular' }, defence: typedD100({ target: 40 }, 31) });
+    assert.equal(lines(s).at(-1), 'Iris: Regular; Hand 2 Fights Back: Regular (typed 31): a tie: Iris hits Hand 2.');
+    assert.equal(named(s, 'Hand 2').meleeDefences, 1);
+    // Hand 1's turn: it shoots Iris with a typed 20; Iris's player rolls a dive (a tap), and Hand 2's dive is typed
+    s = go(s);
+    const d = CM.shotDice([], named(s, 'Hand 1'), named(s, 'Iris'), COC);
+    s = G(s, { type: 'shot', shooter: named(s, 'Hand 1').id, target: named(s, 'Iris').id, chips: [], gun: null, result: typedD100({ target: 50, difficulty: d.difficulty, ...d.asked }, 20) });
+    assert.match(lines(s).at(-1), /rolled 20 \(typed\): Hard: a hit\.$/);
+    s = G(s, { type: 'dive', row: named(s, 'Hand 2').id, result: typedD100({ target: 30 }, 12) });
+    assert.equal(lines(s).at(-1), 'Hand 2 dives for cover: Dodge rolled 12 (typed), Hard: a penalty die on the shot; loses its next attack.');
+    // Iris's SAN: the INT card, its Temporary insanity with a typed 1D10 of 7
+    s = G(s, { type: 'hp', row: named(s, 'Iris').id, entry: 's-6' });
+    const ic = cards(s, 'Iris').find((x) => x.lines.some((l) => l.kind === 'int'));
+    assert.ok(ic, 'the INT card');
+    s = G(s, { type: 'cardRolled', row: named(s, 'Iris').id, card: ic.id, line: 0, result: { tap: 'passed' } });
+    s = G(s, { type: 'card', row: named(s, 'Iris').id, card: ic.id, line: 0, take: 'insane', bout: rollSpec({ sides: 10, typed: 7 }) });
+    assert.deepEqual(named(s, 'Iris').bout, { left: 7, of: 7, from: s.fight.round });
+    assert.match(lines(s).at(-1), /a bout of 7 rounds \(typed\)\.$/);
+  });
+
+  it('a pending Dead offer does not hold up the knockdown after it; a TAKEN ending does', () => {
+    let s = begin(guards(), GURPS);
+    s = G(s, { type: 'hp', row: named(s, 'Guard').id, entry: '12 imp vitals' }); // death, death, knockdown
+    s = cardRoll(s, 'Guard', typed3d6(10, 12));
+    s = cardRoll(s, 'Guard', typed3d6(10, 11));
+    assert.deepEqual(cards(s, 'Guard')[0].lines[1].offers, ['dead']);
+    assert.equal(GM.nextLine(cards(s, 'Guard')[0], GURPS.consequences), 2, 'the knockdown is next while Dead waits');
+    s = cardRoll(s, 'Guard', typed3d6(5, 9));
+    assert.deepEqual(cards(s, 'Guard')[0].lines[2].offers, ['stunned']);
+    // Unconscious taken on a knockdown ends the card's later lines
+    let t = begin([{ name: 'Guard', ini: 5, speed: 5, hp: 11, max: 11, ht: 10 }], GURPS);
+    t = G(t, { type: 'hp', row: named(t, 'Guard').id, entry: '12 imp vitals' });
+    const k = cards(t, 'Guard')[0];
+    t = G(t, { type: 'card', row: named(t, 'Guard').id, card: k.id, line: 0, take: 'dismiss' });
+    t = G(t, { type: 'card', row: named(t, 'Guard').id, card: k.id, line: 1, take: 'dismiss' });
+    t = cardRoll(t, 'Guard', typed3d6(5, 17));
+    t = G(t, { type: 'card', row: named(t, 'Guard').id, card: k.id, line: 2, take: 'unconscious' });
+    assert.deepEqual(named(t, 'Guard').conds, ['Unconscious']);
+  });
+
+  it('any unrolled line can be skipped: declined, passed over by the next Roll, nothing logged; the last one skipped settles the card', () => {
+    let s = begin(guards(), GURPS);
+    s = G(s, { type: 'hp', row: named(s, 'Guard').id, entry: '12 imp vitals' });
+    const c = cards(s, 'Guard')[0];
+    const before = lines(s);
+    s = G(s, { type: 'card', row: named(s, 'Guard').id, card: c.id, line: 0, take: 'dismiss' });
+    assert.equal(cards(s, 'Guard')[0].lines[0].declined, true);
+    assert.equal(GM.nextLine(cards(s, 'Guard')[0], GURPS.consequences), 1);
+    s = G(s, { type: 'card', row: named(s, 'Guard').id, card: c.id, line: 2, take: 'dismiss' });
+    s = cardRoll(s, 'Guard', typed3d6(10, 9));
+    assert.deepEqual(lines(s).slice(before.length), ['Guard: death check (−2×HP), HT 10, rolled 9 (typed), made it by 1.']);
+    assert.deepEqual(cards(s, 'Guard'), [], 'every line skipped or settled: the card goes');
+    // a line already rolled and answered cannot be skipped
+    let t = begin(guards(), GURPS);
+    t = G(t, { type: 'hp', row: named(t, 'Guard').id, entry: '4 imp vitals' });
+    const k = cards(t, 'Guard')[0];
+    t = cardRoll(t, 'Guard', typed3d6(5, 12));
+    t = G(t, { type: 'card', row: named(t, 'Guard').id, card: k.id, line: 0, take: 'unconscious' });
+    const was = clone(t.fight);
+    t = G(t, { type: 'card', row: named(t, 'Guard').id, card: k.id, line: 0, take: 'dismiss' });
+    assert.deepEqual(t.fight, was);
+  });
+
+  it('CoC: the Aimed chip set by hand with no aim declared is taken, and the shot says aimed', () => {
+    const rows = [
+      { name: 'Iris', kind: 'pc', ini: 70, dex: 70, hp: 11, max: 11, dodge: 35 },
+      { name: 'Hand 1', ini: 60, dex: 60, hp: 12, max: 12, firearms: 50, dodge: 30 },
+    ];
+    let s = go(begin(rows, COC));
+    const d = CM.shotDice(['aim'], named(s, 'Iris'), named(s, 'Hand 1'), COC);
+    s = G(s, { type: 'shot', shooter: named(s, 'Iris').id, target: named(s, 'Hand 1').id, chips: ['aim'], gun: null, level: 'hard' });
+    assert.equal(d.net, 1);
+    assert.match(lines(s).at(-1), /\(aimed\)/);
+  });
+
+  it('GURPS: a manoeuvre set on a row off its turn stands until that row\'s next turn, logged once', () => {
+    const rows = [
+      { name: 'Bouncer 1', ini: 6, speed: 6, hp: 11, max: 11, ht: 10, dodge: 9, parry: 9 },
+      { name: 'Bouncer 2', ini: 5, speed: 5, hp: 11, max: 11, ht: 10, dodge: 8, parry: 9 },
+    ];
+    let s = go(go(begin(rows, GURPS))); // Bouncer 2 acts: Bouncer 1's turn is over, its All-Out Attack forgotten
+    s = G(s, { type: 'manoeuvre', row: named(s, 'Bouncer 1').id, name: 'all-out attack' });
+    assert.equal(named(s, 'Bouncer 1').manoeuvre, 'all-out attack');
+    assert.equal(GM.liveDefences(named(s, 'Bouncer 1'), GURPS.defences).dodge.value, null);
+    assert.equal(lines(s).at(-1), 'Bouncer 1: All-Out Attack.');
+    s = go(s); // Bouncer 1's next turn: over
+    assert.equal(named(s, 'Bouncer 1').manoeuvre, null);
   });
 });

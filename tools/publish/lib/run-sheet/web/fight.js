@@ -504,7 +504,7 @@
     if (o.out) r.out = true;
     if (bout !== null) r.bout = { left: bout, of: bout, from: f.round };
     touch(r, at);
-    say(s, f, at, `${nameOf(s, f, r)}: ${l ? `${K.M.lineName(l, K.C, true)}: ` : ''}${o.label}${bout !== null ? `, a bout of ${CM.roundsText(bout)}` : ''}.`);
+    say(s, f, at, `${nameOf(s, f, r)}: ${l ? `${K.M.lineName(l, K.C, true)}: ` : ''}${o.label}${bout !== null ? `, a bout of ${CM.roundsText(bout)}${a.bout.typed === true ? ' (typed)' : ''}` : ''}.`);
     return true;
   }
   // A round ends, the one place (Task 18): its roster line, then what the round's end owes (CoC's Dying reminders and
@@ -872,10 +872,11 @@
       if (!card) return;
       const C = K.C;
       // a dismissed line: its offers declined, nothing logged; the lines after it that were rolled are offered again
-      // as they stand now (a declined Mortal wound no longer counts for them)
+      // as they stand now (a declined Mortal wound no longer counts for them). A line not rolled yet is skipped the
+      // same way (Task 37): declined, and the next Roll passes over it.
       if (a.take === 'dismiss' && a.line !== undefined && a.line !== null) {
         const l = card.lines[a.line];
-        if (!l || !GM.pending(l)) return;
+        if (!l || !(GM.pending(l) || GM.skippable(l))) return;
         l.offers = [];
         l.declined = true;
         reoffer(r, card, K, a.line + 1);
@@ -945,8 +946,9 @@
     // same turn rewrites it. All-Out Defence names the one defence it helps.
     manoeuvre: onRow((s, f, r, a, at) => {
       const D = defencesOf(f);
-      // only the acting row picks: an off-turn pick would be cleared when its turn starts
-      if (!D || r.kind === 'lair' || !Array.isArray(D.chips) || f.turn !== r.id) return;
+      // any row in the fight, at any time (Task 37): a pick off the row's turn is the one it is on now (a manoeuvre
+      // forgotten before Next), and like any pick it stands until the row's next turn starts
+      if (!D || r.kind === 'lair' || !Array.isArray(D.chips) || !r.in || r.out) return;
       const key = a.name === null ? null : String(a.name);
       const chip = key === null ? null : D.chips.find((c) => c.key === key);
       if (key !== null && !chip) return;
@@ -1049,8 +1051,8 @@
       const gun = noGun ? null : guns[a.gun];
       const mal = CM.malfunctionOf(a.malfunction, gun);
       if (mal === undefined) return;
-      // the aimed chip only for an aim declared the round before and not yet spent (KR p113)
-      if (a.chips.includes('aim') && !CM.aimReady(A, f.round)) return;
+      // the aimed chip: the page sets it for an aim declared the round before and not yet spent (KR p113), and the GM
+      // may tap it on by hand for an aim the sheet never heard of (Task 37): taken either way
       const dice = CM.shotDice(a.chips, A, D, C);
       const skill = CM.shotSkill(A, gun);
       let level;

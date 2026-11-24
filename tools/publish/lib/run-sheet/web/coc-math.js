@@ -153,10 +153,10 @@
     if ((x.difficulty || 'regular') !== 'regular') return null;
     const asked = x.asked && typeof x.asked === 'object' ? x.asked : { bonus: x.bonus || 0, penalty: x.penalty || 0 };
     if ((asked.bonus || 0) !== dice.bonus || (asked.penalty || 0) !== dice.penalty) return null;
-    return { level: x.level, kept: x.kept };
+    return { level: x.level, kept: x.kept, ...(x.typed === true ? { typed: true } : {}) };
   }
-  // "Regular" for a tap, "Hard (18)" for a roll.
-  const sideText = (s) => `${levelName(s.level)}${isNum(s.kept) ? ` (${s.kept})` : ''}`;
+  // "Regular" for a tap, "Hard (18)" for a roll, "Hard (typed 18)" for one rolled at the table.
+  const sideText = (s) => `${levelName(s.level)}${isNum(s.kept) ? ` (${s.typed ? 'typed ' : ''}${s.kept})` : ''}`;
 
   // The exchange's log line: "Gus, +1 bonus die (outnumbered): Regular; Cultist 2 Fights Back: Regular (31): a tie:
   // Gus hits Cultist 2." `names` { attacker, defender }; `out` opposedMelee's answer.
@@ -357,10 +357,10 @@
     if (pc || !isLevel(x.level) || !isNum(x.kept) || !isNum(x.target) || (x.difficulty || 'regular') !== 'regular') return null;
     const asked = x.asked && typeof x.asked === 'object' ? x.asked : { bonus: x.bonus || 0, penalty: x.penalty || 0 };
     if (asked.bonus || asked.penalty) return null;
-    return { kept: x.kept, target: x.target, level: x.level, passed: RANK[x.level] >= 1 };
+    return { kept: x.kept, target: x.target, level: x.level, passed: RANK[x.level] >= 1, ...(x.typed === true ? { typed: true } : {}) };
   }
-  // "rolled 34, Regular", "passed", "failed"
-  const resultText = (res) => (res.tapped ? (res.passed ? 'passed' : 'failed') : `rolled ${res.kept}, ${levelName(res.level)}`);
+  // "rolled 34, Regular", "rolled 34 (typed), Regular", "passed", "failed"
+  const resultText = (res) => (res.tapped ? (res.passed ? 'passed' : 'failed') : `rolled ${res.kept}${res.typed ? ' (typed)' : ''}, ${levelName(res.level)}`);
   // What a rolled line offers: the Major Wound's Prone, folded with Unconscious on a failure; a failed Dying CON
   // death; a passed INT roll temporary insanity.
   function offersFor(l, res) {
@@ -451,7 +451,7 @@
     if (!isLevel(x.level) || !isNum(x.kept) || (x.difficulty || 'regular') !== dice.difficulty) return null;
     const asked = x.asked && typeof x.asked === 'object' ? x.asked : null;
     if (!asked || (asked.bonus || 0) !== dice.asked.bonus || (asked.penalty || 0) !== dice.asked.penalty) return null;
-    return { level: x.level, kept: x.kept, tens: Array.isArray(x.tens) ? x.tens.filter(isNum) : [], needed: isNum(x.needed) ? x.needed : null };
+    return { level: x.level, kept: x.kept, tens: Array.isArray(x.tens) ? x.tens.filter(isNum) : [], needed: isNum(x.needed) ? x.needed : null, ...(x.typed === true ? { typed: true } : {}) };
   }
   // A malfunction number as written (a weapon line, a sheet's Malf column, the strip's box): 1 to 100, `00` read as
   // 100; anything else null.
@@ -500,7 +500,7 @@
     const diff = levelName(d.difficulty);
     const r = x.roll;
     const level = r ? r.level : x.level;
-    const at = r ? `${isNum(x.skill) ? `Firearms ${x.skill} ` : ''}at ${diff}${isNum(r.needed) ? ` (${r.needed})` : ''}: rolled ${r.kept}${r.tens.length > 1 ? ` (tens ${r.tens.join(', ')})` : ''}` : `${diff} needed`;
+    const at = r ? `${isNum(x.skill) ? `Firearms ${x.skill} ` : ''}at ${diff}${isNum(r.needed) ? ` (${r.needed})` : ''}: rolled ${r.kept}${r.typed ? ' (typed)' : r.tens.length > 1 ? ` (tens ${r.tens.join(', ')})` : ''}` : `${diff} needed`;
     let tail = x.hit ? 'a hit' : 'a miss';
     if (x.flag === 'malfunction') tail = `malfunction (${x.malfunction})`;
     else if (x.flag === 'check') tail += `; check malfunction (${x.cite || 'KR p118'})`;
@@ -509,7 +509,7 @@
   // The dive's line: "Dock Cultist 2 dives for cover: Dodge rolled 15, Hard: a penalty die on the shot; loses its next
   // attack." A PC's: "... dives for cover: passed: ...".
   function diveLine(name, res, attacks) {
-    const what = res.tapped ? (res.passed ? 'passed' : 'failed') : `Dodge rolled ${res.kept}, ${levelName(res.level)}`;
+    const what = res.tapped ? (res.passed ? 'passed' : 'failed') : `Dodge rolled ${res.kept}${res.typed ? ' (typed)' : ''}, ${levelName(res.level)}`;
     return `${name} dives for cover: ${what}${res.passed ? ': a penalty die on the shot' : ''}; ${attacks > 1 ? `loses its next ${attacks} attacks` : 'loses its next attack'}.`;
   }
   // The row's marks: the lost attack (on its turn, and before it), the slow weapon's counter, the declared aim.
