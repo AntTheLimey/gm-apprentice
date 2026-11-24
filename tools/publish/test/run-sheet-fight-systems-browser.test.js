@@ -3585,6 +3585,10 @@ describe('A GURPS foe made up at the table: the quick figures first (step 6b Tas
         assert.deepStrictEqual([hurt.hp, hurt.out, order(p).includes('Thug')], [-11, false, true]);
         assert.ok(hurt.marks.includes('0 or less') && hurt.marks.includes('Reeling'), JSON.stringify(hurt.marks));
         assert.ok(await page.evaluate(`Boolean(document.querySelector('#side ol.to li[data-frow="${id}"]'))`), 'its row is in the order');
+        // the panel's Shock chip, lit, can be read: its words are not the colour of its fill
+        const chip = await page.evaluate(`(() => { const b = document.querySelector('#acting [data-fshock="${id}"]'); const c = getComputedStyle(b); return [b.textContent, c.color, c.backgroundColor]; })()`);
+        assert.match(chip[0], /^Shock \u2212\d$/);
+        assert.notStrictEqual(chip[1], chip[2], `the Shock chip's words and fill: ${JSON.stringify(chip)}`);
         seen.push(await edge('Thug hurt'));
         if (w === 1449) await shot(page, 't36-thug-damaged-1449');
         // Out by a tap

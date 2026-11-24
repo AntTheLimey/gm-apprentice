@@ -413,7 +413,7 @@ ol.to .defres.failed { color: var(--bad); }
 .act .fcard .taps { display: inline-flex; gap: 6px; }
 .act .fcard .taps button { font-size: .8rem; padding: 2px 12px; }
 .act .fcard .fch .cite { font: 500 .7rem var(--mono); color: var(--muted); font-style: italic; }
-.act .nums .shock.on { color: var(--ice); border-color: var(--ice); }
+.act .nums .shock.on { color: var(--ice); border-color: var(--ice); background: none; }
 .act .nums .shockset { display: inline-flex; gap: 2px; border: 0; padding: 0; background: none; }
 .act .nums .shockset button { font-size: .72rem; padding: 0 6px; }
 .act .nums .st { color: var(--bad); border: 1px solid var(--bad); border-radius: 5px; padding: 0 6px; background: var(--bg); font: inherit; }
