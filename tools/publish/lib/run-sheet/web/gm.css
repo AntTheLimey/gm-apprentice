@@ -542,3 +542,11 @@ ol.to > li.row2 .mnote.lost.now { color: var(--bad); font-weight: 650; }
 .thdlg .tohit h2 { display: flex; align-items: center; gap: 8px; margin: 0; padding: 8px 12px; border-bottom: 1px solid var(--line); font: 650 .95rem var(--display); }
 /* the answer line sticks to the top of the dialog's own scroll, not under the site's header */
 .thdlg .tohit.th-narrow .th-stick { top: 0; }
+/* A roll made at the table (Task 37): one small "rolled" box beside each Roll (a card's line, a defence, a melee
+   side, a shot, a dive, the bout's die); Enter takes it */
+input.typed { width: 5.2ch; font: 500 .72rem var(--mono); padding: 0 2px; text-align: center; }
+input.typed::placeholder { color: var(--muted); }
+input.typed[aria-invalid="true"] { outline: 2px solid var(--bad); outline-offset: 1px; }
+.act .fcard input.typed { font-size: .78rem; padding: 1px 3px; margin-left: 6px; }
+.act .fcard .clines .decline.skip { opacity: .7; }
+input.typed.sm { width: 4.4ch; }

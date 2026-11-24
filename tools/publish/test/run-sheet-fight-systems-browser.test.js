@@ -1176,15 +1176,16 @@ describe('CoC and GURPS fights on the GM page, by real input', { skip: browserSk
     return p;
   }
 
-  it('GURPS: off its turn the panel\'s manoeuvre buttons are disabled; on it All-Out Defence waits for a defence, then Parry reads 11; a PC takes a note on its turn', async () => {
+  // Task 37 changed this on purpose (Ant's no-locked-workflow rule): off its turn the buttons work too
+  it('GURPS: off its turn the panel\'s manoeuvre buttons are live; on it All-Out Defence waits for a defence, then Parry reads 11; a PC takes a note', async () => {
     const run = await start('gurps', { randomInt: () => 4 });
     await withPage({ width: 1449, height: 762 }, async (page) => {
       let p = await bouncers(page, run, [['st', 11], ['ht', 10], ['dx', 10], ['parry', 9], ['block', 8]]);
       const b2 = named(p, 'Bouncer 2').id;
       p = await peek(page, p, 'Bouncer 2');
       const aodBtn = `#acting [data-fman="${b2}|all-out defence"]`;
-      assert.strictEqual(await page.evaluate(`document.querySelectorAll('#acting [data-fman]:not([disabled])').length`), 0);
-      assert.strictEqual(await attrOf(page, aodBtn, 'title'), 'Picked on its turn');
+      assert.strictEqual(await page.evaluate(`document.querySelectorAll('#acting [data-fman][disabled]').length`), 0);
+      assert.strictEqual(await attrOf(page, aodBtn, 'title'), 'All-Out Defence');
       p = await actFor(page, p, 'Bouncer 2');
       await tap(page, aodBtn);
       await page.waitFor(`document.querySelector('#acting [data-fmand="${b2}|parry"]')`, 3000);
@@ -1197,7 +1198,7 @@ describe('CoC and GURPS fights on the GM page, by real input', { skip: browserSk
       // a PC: the chip is a note, the sheet's figures do not move
       const sela = named(p, 'Sela Drake').id;
       p = await peek(page, p, 'Sela Drake');
-      assert.strictEqual(await page.evaluate(`document.querySelectorAll('#acting [data-fman]:not([disabled])').length`), 0);
+      assert.strictEqual(await page.evaluate(`document.querySelectorAll('#acting [data-fman][disabled]').length`), 0);
       p = await actFor(page, p, 'Sela Drake');
       p = await peek(page, p, 'Sela Drake');
       await page.waitFor(`document.querySelector('#acting [data-fman="${sela}|aim"]') && !document.querySelector('#acting [data-fman="${sela}|aim"]').disabled`, 3000);
@@ -1208,8 +1209,8 @@ describe('CoC and GURPS fights on the GM page, by real input', { skip: browserSk
     });
   });
 
-  // Task 23b B9: the which-defence buttons say why they are disabled, as the manoeuvre buttons do
-  it('GURPS: once the turn has moved on, the Which defence buttons are disabled and say they are picked on its turn', async () => {
+  // Task 23b B9's, changed on purpose by Task 37 (Ant's no-locked-workflow rule): the turn moved on, the buttons still work
+  it('GURPS: once the turn has moved on, the Which defence buttons still work: Dodge picked after Next', async () => {
     const run = await start('gurps', { randomInt: () => 4 });
     await withPage({ width: 1449, height: 762 }, async (page) => {
       let p = await bouncers(page, run, [['st', 11], ['ht', 10], ['dx', 10], ['parry', 9], ['block', 8]]);
@@ -1223,10 +1224,12 @@ describe('CoC and GURPS fights on the GM page, by real input', { skip: browserSk
       await tap(page, '#fNext');
       p = await until(page, `p.fight.turn !== ${q(b2)} && p.saved === "Saved" && p.pending === 0`);
       p = await peek(page, p, 'Bouncer 2');
-      const which = `#acting [data-fmand="${b2}|parry"]`;
+      const which = `#acting [data-fmand="${b2}|dodge"]`;
       await page.waitFor(`document.querySelector(${q(which)})`, 3000);
-      assert.strictEqual(await page.evaluate(`document.querySelector(${q(which)}).disabled`), true);
-      assert.strictEqual(await attrOf(page, which, 'title'), 'Picked on its turn');
+      assert.strictEqual(await page.evaluate(`document.querySelector(${q(which)}).disabled`), false);
+      await tap(page, which);
+      p = await until(page, `p.fight.rows.find((r) => r.id === ${q(b2)}).aodDefence === "dodge" && p.saved === "Saved" && p.pending === 0`);
+      assert.deepStrictEqual((await logOf(run)).slice(-1), ['Bouncer 2: All-Out Defence (Dodge).']);
     });
   });
 
@@ -1371,6 +1374,80 @@ describe('CoC and GURPS fights on the GM page, by real input', { skip: browserSk
       p = await until(page, `p.fight.rows.find((r) => r.id === ${q(b2)}).cards.length === 0 && p.saved === "Saved" && p.pending === 0`);
       await focusIs(page, `[data-fhp="${b2}"]`);
       assert.notStrictEqual(await page.evaluate('document.activeElement === document.body'), true);
+    });
+  });
+
+  // Task 37 (Ant's no-locked-workflow rule): a roll made with real dice is typed in the small box beside Roll; an open
+  // Dead offer holds up nothing; any unrolled line is skipped; a defence rolled at the table counts. Dice fixed at 4.
+  for (const [width, height] of SIZES) {
+    it(`GURPS at ${width}: a death check typed 16 offers Dead and the knockdown still rolls; the knockdown skipped, Dead declined, the card goes; a Parry typed 7 counts`, async () => {
+      const run = await start('gurps', { randomInt: () => 4 });
+      await withPage({ width, height }, async (page) => {
+        let p = await bouncers(page, run, [['st', 11], ['ht', 10], ['dx', 10], ['parry', 9]]);
+        const b2 = named(p, 'Bouncer 2').id;
+        const card = `#acting .fcard[data-fcrow="${b2}"]`;
+        p = await typeInto(page, `[data-fhp="${b2}"]`, '9 imp vitals');
+        p = await until(page, `document.querySelector(${q(card)}) && p.saved === "Saved" && p.pending === 0`);
+        const box2 = `${card} input.typed`;
+        assert.strictEqual(await attrOf(page, box2, 'placeholder'), 'rolled');
+        // the death check typed: 16 against 10, failed by 6, Dead offered
+        p = await typeInto(page, box2, '16');
+        p = await until(page, `p.fight.rows.find((r) => r.id === ${q(b2)}).cards[0].lines[0].result && p.saved === "Saved" && p.pending === 0`);
+        assert.deepStrictEqual(named(p, 'Bouncer 2').cards[0].lines[0].offers, ['dead']);
+        assert.strictEqual(await text(page, `${card} .clines li:nth-child(1) .res`), 'rolled 16 (typed), failed by 6');
+        // focus is back in the box for the next line, empty; the knockdown's Roll is live while Dead waits
+        await focusIs(page, box2);
+        assert.strictEqual(await page.evaluate(`document.querySelector(${q(box2)}).value`), '');
+        assert.strictEqual(await page.evaluate(`Boolean(document.querySelector(${q(`${card} button.roll:not([disabled])`)}))`), true);
+        sane(p, `typed card ${width}`);
+        await shot(page, `t37-gurps-card-${width}`);
+        // the knockdown skipped: nothing rolled, nothing logged; then Dead declined: the card goes, nothing applied
+        await tap(page, `${card} .clines li:nth-child(2) .decline.skip`);
+        p = await until(page, `p.fight.rows.find((r) => r.id === ${q(b2)}).cards[0].lines[1].declined && p.saved === "Saved" && p.pending === 0`);
+        assert.strictEqual(await page.evaluate(`Boolean(document.querySelector(${q(`${card} button.roll`)}))`), false);
+        await tap(page, `${card} .clines li:nth-child(1) .decline`);
+        p = await until(page, `p.fight.rows.find((r) => r.id === ${q(b2)}).cards.length === 0 && p.saved === "Saved" && p.pending === 0`);
+        assert.deepStrictEqual([named(p, 'Bouncer 2').conds, named(p, 'Bouncer 2').out], [[], false]);
+        assert.deepStrictEqual((await logOf(run)).slice(-1), ['Bouncer 2: death check (−1×HP), HT 10, rolled 16 (typed), failed by 6.']);
+        // a Parry rolled at the table: 7 typed in the row's box, then the Parry tapped
+        const dbox = `li[data-frow="${b2}"] .defs input.typed`;
+        assert.strictEqual(await attrOf(page, dbox, 'placeholder'), '3d6');
+        await typeInto(page, dbox, '7', { enter: false, settle: false });
+        await tap(page, `[data-fdef="${b2}|parry"]`);
+        p = await until(page, `p.fight.rows.find((r) => r.id === ${q(b2)}).parries === 1 && p.saved === "Saved" && p.pending === 0`);
+        assert.deepStrictEqual((await logOf(run)).slice(-1), ['Bouncer 2: Parry 9, rolled 7 (typed), made it by 2.']);
+        await page.waitFor(`document.querySelector('[data-fdef="${b2}|parry"]').textContent === "Parry 5" && document.querySelector(${q(dbox)}).value === ""`, 3000);
+        sane(p, `typed defence ${width}`);
+        if (width === 1449) {
+          const row = p.layout.rows.find((r) => r.name === 'Bouncer 2');
+          assert.ok(row && row.h <= 40, `1449: Bouncer 2 is one line with its box (${row && row.h} px)`);
+        }
+      });
+    });
+  }
+
+  it('GURPS: a PC\'s card takes a typed roll; a number the dice cannot make is not taken and the page says so; a manoeuvre set off its turn', async () => {
+    const run = await start('gurps', { randomInt: () => 4 });
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await bouncers(page, run, [['st', 11], ['ht', 10], ['dx', 10], ['parry', 9]]);
+      const sela = named(p, 'Sela Drake').id;
+      const card = `#acting .fcard[data-fcrow="${sela}"]`;
+      p = await typeInto(page, `[data-fhp="${sela}"]`, '-8');
+      p = await until(page, `document.querySelector(${q(card)}) && p.saved === "Saved" && p.pending === 0`);
+      // 19 cannot be 3d6: refused by the server, the note says so, nothing logged
+      const before = (await logOf(run)).length;
+      await typeInto(page, `${card} input.typed`, '19', { settle: false });
+      await page.waitFor('Array.from(document.querySelectorAll("#hnotes .hnote")).some((n) => /Not taken: a typed 3d6 roll is a whole number from 3 to 18/.test(n.textContent))', 3000);
+      assert.strictEqual((await logOf(run)).length, before);
+      await typeInto(page, `${card} input.typed`, '9');
+      p = await until(page, `(p.fight.rows.find((r) => r.id === ${q(sela)}).cards.length === 0 || p.fight.rows.find((r) => r.id === ${q(sela)}).cards[0].lines[0].result) && p.saved === "Saved" && p.pending === 0`);
+      assert.match((await logOf(run)).slice(-1)[0], /^Sela Drake: .*rolled 9 \(typed\)/);
+      // Bouncer 1 acts; Bouncer 2's All-Out Attack, forgotten on its turn, set from its panel now
+      const b2 = named(p, 'Bouncer 2').id;
+      p = await peek(page, p, 'Bouncer 2');
+      await tap(page, `#acting [data-fman="${b2}|all-out attack"]`);
+      p = await until(page, `p.fight.rows.find((r) => r.id === ${q(b2)}).manoeuvre === "all-out attack" && p.saved === "Saved" && p.pending === 0`);
+      assert.deepStrictEqual((await logOf(run)).slice(-1), ['Bouncer 2: All-Out Attack.']);
     });
   });
 });
@@ -2938,6 +3015,85 @@ describe('CoC rows ticked in or added later are placed by DEX (step 6b Task 33),
       assert.deepStrictEqual(names(p), ['Nurse Orla Penn', 'Iris Calder', 'Warden Hale', 'Brine Walker 1', 'Brine Walker 2', 'Dock Cultist', 'Quill', 'Tobias Reed', 'Jonas Finch', 'Mabel Quill']);
       assert.deepStrictEqual([p.fight.turn, p.fight.round], turn);
       assert.deepStrictEqual(p.errors, []);
+    });
+  });
+});
+
+describe('Physical dice on CoC rows, cards and the Shoot strip (step 6b Task 37), by real input', { skip: browserSkip() }, () => {
+  const seq = (...v) => { let i = 0; return () => v[i++ % v.length]; };
+  for (const [w, h] of SIZES) {
+    it(`${w}: Dock Cultist 2's Fight Back typed 31 on its row, its CON typed 70, Iris's bout typed 7: each logged as typed`, async () => {
+      const run = await start('coc', { randomInt: () => 3 });
+      await withPage({ width: w, height: h }, async (page) => {
+        let p = await netLoft(page, run);
+        const iris = named(p, 'Iris Calder').id;
+        const c2 = named(p, 'Dock Cultist 2').id;
+        // Iris acts (a PC: no box for her side); the cultist's own box on its row, typed, Enter: its usual Fight Back
+        const mbox = `[data-ftyped="mdef|${c2}"]`;
+        assert.strictEqual(await attrOf(page, mbox, 'placeholder'), 'd100');
+        assert.strictEqual(await page.evaluate(`Boolean(document.querySelector('[data-ftyped="matk|${c2}"]'))`), false);
+        sane(p, `${w} the melee box on the rows`);
+        await typeInto(page, mbox, '31', { settle: false });
+        p = await until(page, `p.fight.melee && !p.fight.melee.rolling && p.fight.melee.response === "fightBack"`);
+        await tap(page, `[data-fmlvl="${c2}|attack|regular"]`);
+        p = await until(page, `p.fight.melee === null && p.fight.dmg && p.saved === "Saved" && p.pending === 0`);
+        assert.deepStrictEqual((await logOf(run)).slice(-1), ['Iris Calder: Regular; Dock Cultist 2 Fights Back: Regular (typed 31): a tie: Iris Calder hits Dock Cultist 2.']);
+        assert.strictEqual(named(p, 'Dock Cultist 2').meleeDefences, 1);
+        // 7 damage, 6 after armour: a Major Wound; its CON rolled at the table, 70, typed beside Roll
+        await typeInto(page, `[data-fhp="${c2}"]`, '7');
+        const card = `#acting .fcard[data-fcrow="${c2}"]`;
+        p = await until(page, `document.querySelector(${q(card)}) && p.saved === "Saved" && p.pending === 0`);
+        await typeInto(page, `${card} input.typed`, '70');
+        p = await until(page, `p.fight.rows.find((r) => r.id === ${q(c2)}).cards[0].lines[0].result && p.saved === "Saved" && p.pending === 0`);
+        assert.deepStrictEqual((await logOf(run)).slice(-1), ['Dock Cultist 2: Major wound, CON 55, rolled 70 (typed), Fail.']);
+        assert.deepStrictEqual(await texts(page, `${card} .clines .offer`), ['Prone, Unconscious']);
+        sane(p, `${w} the typed card`);
+        // Iris's SAN: Passed tapped, and the bout's 1D10 rolled at the table: 7 typed beside Temporary insanity
+        await typeInto(page, `[data-fhp="${iris}"]`, 's-6');
+        const icard = `#acting .fcard[data-fcrow="${iris}"]`;
+        p = await until(page, `document.querySelector(${q(icard)}) && p.saved === "Saved" && p.pending === 0`);
+        await tap(page, `${icard} button.pass`);
+        p = await until(page, `p.fight.rows.find((r) => r.id === ${q(iris)}).cards[0].lines[0].result && p.saved === "Saved" && p.pending === 0`);
+        await typeInto(page, `${icard} input.typed`, '7');
+        p = await until(page, `(p.fight.rows.find((r) => r.id === ${q(iris)}).cards || []).length === 0 && p.saved === "Saved" && p.pending === 0`);
+        const st = (await (await fetch(`${run.base}/api/state`)).json()).state;
+        assert.deepStrictEqual(st.fight.rows.find((r) => r.id === iris).bout, { left: 7, of: 7, from: 1 });
+        assert.deepStrictEqual((await logOf(run)).slice(-1), ['Iris Calder: SAN loss: Temporary insanity, a bout of 7 rounds (typed).']);
+        sane(p, `${w} the typed bout`);
+        await shot(page, `t37-coc-${w}`);
+      });
+    });
+  }
+
+  it('a dive typed 12, the Aimed chip tapped on by hand, and a cultist\'s shot typed 20', async () => {
+    const run = await start('coc', { randomInt: seq(0, 5) });
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await netLoft(page, run);
+      const iris = named(p, 'Iris Calder').id;
+      const c2 = named(p, 'Dock Cultist 2').id;
+      await tap(page, `[data-fshoot="${c2}"]`);
+      p = await until(page, 'p.fight.shot');
+      // the cultist's Dodge to dive, rolled at the table
+      await typeInto(page, `[data-ftyped="dive|${c2}"]`, '12');
+      p = await until(page, `p.fight.shot && p.fight.shot.dive && p.fight.rows.find((r) => r.id === ${q(c2)}).lostAttack && p.saved === "Saved" && p.pending === 0`);
+      assert.deepStrictEqual((await logOf(run)).slice(-1), ['Dock Cultist 2 dives for cover: Dodge rolled 12 (typed), Regular: a penalty die on the shot; loses its next 2 attacks.']);
+      // Iris aimed last round and nobody tapped it: the Aimed chip is live, and tapped on it counts
+      const aim = `[data-fshc="${c2}|aim"]`;
+      assert.strictEqual(await page.evaluate(`document.querySelector(${q(aim)}).disabled`), false);
+      await tap(page, aim);
+      p = await until(page, 'p.fight.shot && p.fight.shot.chips.includes("aim")');
+      await tap(page, `[data-fshlvl="${c2}|regular"]`);
+      p = await until(page, 'p.fight.shot && p.fight.shot.last && p.saved === "Saved" && p.pending === 0');
+      assert.match((await logOf(run)).slice(-1)[0], /aimed/);
+      // Dock Cultist 1's shot at Iris, rolled at the table: 20 typed beside Roll
+      await tap(page, '#fNext');
+      p = await until(page, 'p.fight.rows.find((r) => r.id === p.fight.turn).name === "Dock Cultist 1" && p.saved === "Saved" && p.pending === 0');
+      await tap(page, `[data-fshoot="${iris}"]`);
+      p = await until(page, 'p.fight.shot');
+      await typeInto(page, `[data-ftyped="shot|${iris}"]`, '20');
+      p = await until(page, `p.fight.shot && p.fight.shot.last && p.fight.dmg && p.saved === "Saved" && p.pending === 0`);
+      assert.match((await logOf(run)).slice(-1)[0], /rolled 20 \(typed\): Regular: a hit\.$/);
+      sane(p, 'the typed shot');
     });
   });
 });
