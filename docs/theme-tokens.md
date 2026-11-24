@@ -95,7 +95,7 @@ The menu bar and the landing title area stay dark in both palettes, so their wor
 
 | Token | What it sets | Default |
 |-------|--------------|---------|
-| `--accent-on-header` | The accent on the dark menu bar and landing title area | `var(--accent)` |
+| `--accent-on-header` | The accent on the dark menu bar, landing title area and entity banner. A custom palette sets it: its accent, made lighter or darker until it reads there | `var(--accent)` |
 | `--text-on-header` | Words on the menu bar and landing title area | Unset: `var(--text)` |
 | `--text-muted-on-header` | Quieter words there: the menu's group names, the search button | Unset: `var(--text-muted)` |
 

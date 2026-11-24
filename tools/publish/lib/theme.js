@@ -142,6 +142,54 @@ function mixColors(hex1, hex2, weight) {
   return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
 }
 
+// WCAG contrast between two hex colours (1 to 21).
+function contrast(hex1, hex2) {
+  const rel = (hex) => {
+    const lin = (v) => { v /= 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+    const { r, g, b } = parseHex(hex);
+    return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+  };
+  const [a, b] = [rel(hex1), rel(hex2)];
+  return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+}
+
+const HEX = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i;
+// A hex colour as HSL: hue in sixths of the wheel (0 to 6), saturation and lightness 0 to 1.
+function toHsl(hex) {
+  const { r, g, b } = parseHex(hex);
+  const [R, G, B] = [r / 255, g / 255, b / 255];
+  const max = Math.max(R, G, B), min = Math.min(R, G, B), d = max - min, l = (max + min) / 2;
+  const s = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1));
+  let h = 0;
+  if (d) h = max === R ? (((G - B) / d) % 6 + 6) % 6 : max === G ? (B - R) / d + 2 : (R - G) / d + 4;
+  return { h, s, l };
+}
+
+function fromHsl({ h, s, l }) {
+  const c = (1 - Math.abs(2 * l - 1)) * s, x = c * (1 - Math.abs((h % 2) - 1)), m = l - c / 2;
+  const [r, g, b] = [[c, x, 0], [x, c, 0], [0, c, x], [0, x, c], [x, 0, c], [c, 0, x]][Math.min(5, Math.floor(h))];
+  return '#' + [r, g, b].map((v) => Math.round((v + m) * 255).toString(16).padStart(2, '0')).join('');
+}
+
+// The palette's accent as small words on the header colour: the accent itself when it reads there, else made lighter
+// (on a dark header) or darker (on a light one), same hue and saturation, just far enough to read (#868). The menu bar
+// and the hero banner carry small labels in it, and a dark accent on a dark header (the built-in palette's) could
+// hardly be seen. It must read on the header and on the no-picture banner's far corner (style.css: 8% of the way to
+// the header's text); 5:1 leaves room for a badge's faint accent tint. Null for a colour that isn't hex.
+function accentOnHeader(accent, header, headerText, headerIsLight, min = 5) {
+  if (![accent, header, headerText].every((c) => HEX.test(String(c).trim()))) return null;
+  const grounds = [header, mixColors(header, headerText, 0.08)];
+  const reads = (c) => grounds.every((g) => contrast(c, g) >= min);
+  if (reads(accent)) return accent;
+  const hsl = toHsl(accent);
+  // From the accent's own lightness, a hundredth at a time, away from the header's.
+  for (let l = hsl.l; l >= 0 && l <= 1; l += headerIsLight ? -0.01 : 0.01) {
+    const c = fromHsl({ ...hsl, l });
+    if (reads(c)) return c;
+  }
+  return headerText;
+}
+
 function hexToRgba(hex, alpha) {
   const { r, g, b } = parseHex(hex);
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
@@ -211,8 +259,11 @@ function generateThemeCSS(config, opts = {}) {
   vars.push(`  color-scheme: ${paletteScheme(pal)};`);
 
   const headerIsLight = luminance(primary) > 0.5;
-  vars.push(`  --text-on-header: ${headerIsLight ? '#1a1a1a' : '#e0e4e8'};`);
+  const headerText = headerIsLight ? '#1a1a1a' : '#e0e4e8';
+  vars.push(`  --text-on-header: ${headerText};`);
   vars.push(`  --text-muted-on-header: ${headerIsLight ? '#555' : '#9da5ae'};`);
+  const headerAccent = accentOnHeader(accent, primary, headerText, headerIsLight);
+  if (headerAccent) vars.push(`  --accent-on-header: ${headerAccent};`);
 
   if (fonts.heading) vars.push(`  --font-heading: ${cssFontValue(fonts.heading, 'serif')};`);
   // A PC's backstory and hook are read in a heading face the GM chose; a generic one (the

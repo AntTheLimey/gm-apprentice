@@ -13,6 +13,49 @@ describe('genre presets', () => {
   });
 });
 
+describe('generateThemeCSS: a custom palette\'s accent on the header (#868)', () => {
+  const lum = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255)
+    .map((v) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)).reduce((a, v, i) => a + v * [0.2126, 0.7152, 0.0722][i], 0);
+  const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+  const mix = (a, b, w) => '#' + [1, 3, 5].map((i) => Math.round(parseInt(a.slice(i, i + 2), 16) * (1 - w) + parseInt(b.slice(i, i + 2), 16) * w)
+    .toString(16).padStart(2, '0')).join('');
+  const varOf = (css, name) => (css.match(new RegExp(`${name}: (#[0-9a-f]{6});`)) || [])[1];
+
+  it('the built-in palette\'s dark accent is lightened until it reads on the header and the banner\'s far corner', () => {
+    const css = generateThemeCSS({ palette: { primary: '#1a2f3a', accent: '#3d8a7a', background: '#e8f0f3', text: '#1a1a1a' } });
+    const a = varOf(css, '--accent-on-header');
+    const text = varOf(css, '--text-on-header');
+    assert.ok(a && a !== '#3d8a7a', `the accent is moved (got ${a})`);
+    assert.ok(ratio(a, '#1a2f3a') >= 5, `on the header ${ratio(a, '#1a2f3a').toFixed(2)}`);
+    assert.ok(ratio(a, mix('#1a2f3a', text, 0.08)) >= 5, 'on the banner\'s far corner');
+    assert.ok(ratio('#3d8a7a', '#1a2f3a') < 4.5, 'the case is real: the accent itself does not read on the header');
+  });
+
+  it('the accent keeps its hue: a dark amber on a dark header becomes a light amber, not beige', () => {
+    const css = generateThemeCSS({ palette: { primary: '#1f2a36', accent: '#a35f12', background: '#eef1f4' } });
+    const a = varOf(css, '--accent-on-header');
+    const [r, g, b] = [1, 3, 5].map((i) => parseInt(a.slice(i, i + 2), 16));
+    assert.ok(ratio(a, '#1f2a36') >= 5, `reads (${a})`);
+    assert.ok(r > g && g > b && r - b > 120, `still a saturated amber (${a})`);
+  });
+
+  it('an accent that already reads on the header is kept as it is', () => {
+    const css = generateThemeCSS({ palette: { primary: '#0d1117', accent: '#58a6ff' } });
+    assert.equal(varOf(css, '--accent-on-header'), '#58a6ff');
+  });
+
+  it('a light header takes a darker accent', () => {
+    const css = generateThemeCSS({ palette: { primary: '#e8d9b0', accent: '#c08a5a', background: '#faf6ea', text: '#222222' } });
+    const a = varOf(css, '--accent-on-header');
+    assert.ok(ratio(a, '#e8d9b0') >= 5 && lum(a) < lum('#c08a5a'), `got ${a}`);
+  });
+
+  it('a colour that is not hex leaves the accent to style.css (var(--accent))', () => {
+    const css = generateThemeCSS({ palette: { primary: 'navy', accent: '#58a6ff' } });
+    assert.ok(!css.includes('--accent-on-header'));
+  });
+});
+
 describe('generateThemeCSS', () => {
   it('returns empty :root when no overrides', () => {
     const css = generateThemeCSS({});
