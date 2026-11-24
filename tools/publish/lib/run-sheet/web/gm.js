@@ -910,11 +910,13 @@
     return (endRules().words.pcLine || []).map((c) => `${esc(c.word)} ${esc(fig(p[c.now], c.signed))}${c.max ? `/${esc(fig(p[c.max]))}` : ''}`).join(' · ');
   }
 
+  // a field the server rendered (present.js `fHtml`), else its words escaped
+  const md = (o, f) => (typeof o[`${f}Html`] === 'string' ? o[`${f}Html`] : esc(o[f]));
   function pcsHTML() {
     if (!pcs().length) return '<p class="muted">No party given: start the sheet with <code>gma table</code> to have the PCs on it.</p>';
     const src = { index: "the session's list", wrapup: "the session's wrap-up", plan: "the Plan's roster", given: 'the active PCs' }[G.model.partyFrom];
     return `${src ? `<p class="muted">This session's party, from ${src}.</p>` : ''}<div class="tw"><table><thead><tr><th>PC</th><th>This session</th></tr></thead><tbody>${pcs().map((p) => `<tr><td style="white-space:nowrap">${face(p.note)} ${link(p.note, p.name)}<div class="note">${esc(p.player || '')}${p.role ? ` · ${esc(p.role)}` : ''} · ${pcLine(p)}</div></td>
-      <td>${p.moment ? `<b>Moment:</b> ${esc(p.moment)}<br>` : ''}${p.touch ? `<span class="muted">Touchpoint:</span> ${esc(p.touch)}<br>` : ''}${p.arc ? `<span class="muted">Arc:</span> ${esc(p.arc)}` : ''}${p.thread ? `<br><span class="muted">Thread:</span> ${esc(p.thread)}` : ''}</td></tr>`).join('')}</tbody></table></div>`;
+      <td>${p.moment ? `<b>Moment:</b> ${md(p, 'moment')}<br>` : ''}${p.touch ? `<span class="muted">Touchpoint:</span> ${md(p, 'touch')}<br>` : ''}${p.arc ? `<span class="muted">Arc:</span> ${md(p, 'arc')}` : ''}${p.thread ? `<br><span class="muted">Thread:</span> ${md(p, 'thread')}` : ''}</td></tr>`).join('')}</tbody></table></div>`;
   }
 
   const PT = { '': '', landed: '✓', missed: '✗', overtaken: '⊘' };
