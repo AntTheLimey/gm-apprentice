@@ -22,7 +22,7 @@ const SYSTEMS = path.join(__dirname, '..', '..', '..', 'skills', 'ttrpg-expert',
 const GURPS_COMBAT = path.join(SYSTEMS, 'gurps-4e', 'combat.md');
 const COC_MECHANICS = path.join(SYSTEMS, 'coc-7e', 'mechanics.md');
 
-// the damage types in the table's columns; fatigue has no location effects, said below the table
+// the damage types the notes name; fatigue has no location effects, said above the table
 const TYPES = ['cr', 'cut', 'imp', 'pi-', 'pi', 'pi+', 'pi++', 'burn', 'tbb', 'cor', 'tox'];
 const fig = (n) => (n < 0 ? `-${Math.abs(n)}` : n > 0 ? `+${n}` : '0');
 const times = (x) => `x${Math.round(x * 100) / 100}`;
@@ -37,31 +37,59 @@ function drCell(key, loc) {
   return parts.join('; ') || '--';
 }
 
-// A place's notes: crippling, knockdown, then its own short note.
+// Which types can target a place, said the short way: "only imp, pi" or "not imp, burn"; '' when every type can.
+function targetsNote(loc, can) {
+  const ok = TYPES.filter((t) => can(t));
+  if (ok.length === TYPES.length) return '';
+  const no = TYPES.filter((t) => !can(t));
+  return ok.length <= 6 ? `only ${ok.join(', ')}` : `not ${no.join(', ')}`;
+}
+
+// What differs from a torso hit: the multipliers, found by comparing each type's with the torso's. Types that share a
+// figure go together ("imp, pi+, pi++ x1"); one figure for every type the place takes reads as the bare figure.
+function multiplierNote(key) {
+  const groups = new Map();
+  for (const t of TYPES) {
+    const at = woundingAt(WOUNDING, key, t);
+    if (!at.can) continue;
+    const base = woundingAt(WOUNDING, 'torso', t).mult;
+    if (at.mult === base) continue;
+    if (!groups.has(at.mult)) groups.set(at.mult, []);
+    groups.get(at.mult).push(t);
+  }
+  const all = [...groups.values()].flat().length;
+  if (groups.size === 1 && all >= 6) return times([...groups.keys()][0]);
+  return [...groups].map(([m, types]) => `${types.join(', ')} ${times(m)}`).join('; ');
+}
+
+// A place's notes, in the order a GM asks: who may target it, how it wounds differently, crippling, knockdown, where a
+// miss by 1 lands, its own short note, and whether its extras skip a type.
 function notesCell(key, loc) {
   const out = [];
+  const can = (t) => woundingAt(WOUNDING, key, t).can;
+  for (const part of [targetsNote(loc, can), multiplierNote(key)]) if (part) out.push(part);
   if (loc.cripple) out.push(`crippled over ${loc.cripple === 1 ? 'HP' : `HP/${loc.cripple}`}${loc.cap ? ', excess lost' : ''}`);
   const k = loc.knockdown;
   if (k) {
     const major = k.major ? `${fig(k.major)} on a major wound` : '';
     const extra = Object.entries(k.extra || {}).map(([t, n]) => `${t} ${fig(n)} more`).join(', ');
     out.push(`knockdown${k.shock ? ' on any shock' : ''}${major ? `${k.shock ? ', ' : ' '}${major}` : ''}${extra ? `, ${extra}` : ''}`);
+    if (k.crippledAuto) out.push('crippling it knocks down and stuns outright');
   }
+  if (loc.miss) out.push(`miss by 1 hits the ${loc.miss}`);
   if (loc.note) out.push(loc.note);
+  if ((loc.except || []).length) out.push(`none of this for ${loc.except.join(', ')}`);
   // the file's own signs: a hyphen for minus, an x for times
-  return out.join('; ').replace(/\u2212/g, '-').replace(/\u00d7/g, 'x') || '--';
+  return out.join('; ').replace(/−/g, '-').replace(/×/g, 'x') || '--';
 }
 
+// The book's shape: one row a place, no column a damage type (the notes name what differs from the torso).
 function hitLocationTable() {
-  const head = ['Location', 'Penalty', 'DR', ...TYPES, 'Notes', 'Page'];
+  const head = ['Location', 'Penalty', 'DR', 'Notes', 'Page'];
   const lines = [`| ${head.join(' | ')} |`, `|${head.map(() => '---').join('|')}|`];
   for (const key of WOUNDING.locationOrder) {
     const loc = WOUNDING.locations[key];
-    const cells = TYPES.map((t) => {
-      const at = woundingAt(WOUNDING, key, t);
-      return at.can ? times(at.mult) : '--';
-    });
-    lines.push(`| ${[loc.name, fig(loc.penalty), drCell(key, loc), ...cells, notesCell(key, loc), loc.cite].join(' | ')} |`);
+    lines.push(`| ${[loc.name, fig(loc.penalty), drCell(key, loc), notesCell(key, loc), loc.cite].join(' | ')} |`);
   }
   return lines.join('\n');
 }
@@ -106,4 +134,4 @@ function main(argv) {
 
 if (require.main === module) main(process.argv.slice(2));
 
-module.exports = { render, FILES, hitLocationTable, damageBonusTable };
+module.exports = { render, FILES, hitLocationTable, damageBonusTable, TYPES };

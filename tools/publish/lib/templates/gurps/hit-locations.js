@@ -16,6 +16,7 @@
 //              types); extra: by type; crippledAuto: crippling it knocks down and stuns outright, no roll }
 //   `male`     what a male target takes there, which the run sheet says and never applies (it knows no sex):
 //              shock times `shock` (at most `shockMax`) from `shockTypes`, `knockdown` to the knockdown roll
+//   `miss`     where an attack that misses by 1 lands (B552, MA137), when it lands anywhere but the place aimed at
 //   `note`     a short note; `cite` its pages.
 // The order is the table's: a stable sort by penalty gives the run sheet's list, mildest first.
 
@@ -33,25 +34,25 @@ const LOCATIONS = [
   { key: 'torso', name: 'Torso', penalty: 0, roll: '9–10', cite: 'B398, B552' },
   { key: 'arm', name: 'Arm', penalty: -2, roll: { right: '8', left: '12' }, by: LIMB_DOWN, cripple: 2, cap: true, sided: true, note: 'shield arm −4', cite: 'B398, B552' },
   { key: 'leg', name: 'Leg', penalty: -2, roll: { right: '6–7', left: '13–14' }, by: LIMB_DOWN, cripple: 2, cap: true, sided: true, cite: 'B398, B552' },
-  { key: 'groin', name: 'Groin', penalty: -3, roll: '11', male: { shock: 2, shockMax: 8, shockTypes: ['cr'], knockdown: -5 }, note: 'a male target: double shock from crushing (max 8), knockdown −5', cite: 'B398, B552' },
-  { key: 'vitals', name: 'Vitals', penalty: -3, roll: null, by: { ...each(PIERCING, 3), imp: 3, tbb: 2 }, targets: ['cr', ...POINTED], knockdown: { shock: true, major: -5 }, note: 'crushing ×1', cite: 'B398, B552, MA137' },
+  { key: 'groin', name: 'Groin', penalty: -3, roll: '11', male: { shock: 2, shockMax: 8, shockTypes: ['cr'], knockdown: -5 }, note: 'a male target: double shock from crushing (max 8), knockdown −5', miss: 'torso', cite: 'B398, B552' },
+  { key: 'vitals', name: 'Vitals', penalty: -3, roll: null, by: { ...each(PIERCING, 3), imp: 3, tbb: 2 }, targets: ['cr', ...POINTED], knockdown: { shock: true, major: -5 }, note: 'crushing may aim here, at ×1', miss: 'torso', cite: 'B398, B552, MA137' },
   { key: 'hand', name: 'Hand', penalty: -4, roll: '15', by: LIMB_DOWN, cripple: 3, cap: true, sided: true, note: 'shield hand −8', cite: 'B398, B552' },
   { key: 'foot', name: 'Foot', penalty: -4, roll: '16', by: LIMB_DOWN, cripple: 3, cap: true, sided: true, cite: 'B398, B552' },
-  { key: 'face', name: 'Face', penalty: -5, roll: '5', by: { cor: 1.5 }, face: true, knockdown: { shock: true, major: -5 }, note: 'from behind −7', cite: 'B398, B552, MA137' },
-  { key: 'neck', name: 'Neck', penalty: -5, roll: '17–18', by: { cut: 2, cr: 1.5, cor: 1.5 }, cite: 'B398, B552' },
-  { key: 'arm vein', name: 'Arm vein or artery', penalty: -5, roll: null, as: 'arm', plus: 0.5, targets: VEIN, sided: true, note: 'no crippling', cite: 'MA137' },
-  { key: 'leg vein', name: 'Leg vein or artery', penalty: -5, roll: null, as: 'leg', plus: 0.5, targets: VEIN, sided: true, note: 'no crippling', cite: 'MA137' },
-  { key: 'arm joint', name: 'Arm joint', penalty: -5, roll: null, as: 'arm', targets: JOINT, cripple: 3, cap: true, sided: true, cite: 'MA137' },
-  { key: 'leg joint', name: 'Leg joint', penalty: -5, roll: null, as: 'leg', targets: JOINT, cripple: 3, cap: true, sided: true, cite: 'MA137' },
-  { key: 'jaw', name: 'Jaw', penalty: -6, roll: null, as: 'face', face: true, knockdown: { shock: true, major: -5, extra: { cr: -1 } }, note: 'front only', cite: 'MA137' },
-  { key: 'skull', name: 'Skull', penalty: -7, roll: '3–4', all: 4, except: ['tox'], dr: 2, knockdown: { shock: true, major: -10 }, note: 'from behind −5', cite: 'B398, B552, MA137' },
-  { key: 'ear', name: 'Ear', penalty: -7, roll: null, as: 'face', face: true, sided: true, knockdown: { shock: true, major: -5 }, note: 'a cut to take it off: MA137', cite: 'MA137' },
-  { key: 'nose', name: 'Nose', penalty: -7, roll: null, as: 'face', face: true, cripple: 4, knockdown: { shock: true, major: -5 }, note: 'front only', cite: 'MA137' },
-  { key: 'hand joint', name: 'Hand joint', penalty: -7, roll: null, as: 'hand', targets: JOINT, cripple: 4, cap: true, sided: true, cite: 'MA137' },
-  { key: 'foot joint', name: 'Foot joint', penalty: -7, roll: null, as: 'foot', targets: JOINT, cripple: 4, cap: true, sided: true, cite: 'MA137' },
-  { key: 'spine', name: 'Spine', penalty: -8, roll: null, targets: SPINE, dr: 3, cripple: 1, knockdown: { shock: true, major: -5, crippledAuto: true }, note: 'from behind only', cite: 'MA137' },
-  { key: 'neck vein', name: 'Neck vein or artery', penalty: -8, roll: null, as: 'neck', plus: 0.5, targets: VEIN, cite: 'MA137' },
-  { key: 'eye', name: 'Eye', penalty: -9, roll: null, by: { ...each(PIERCING, 4), imp: 4, tbb: 4 }, targets: POINTED, face: true, drAs: 'face', cripple: 10, sided: true, knockdown: { shock: true, major: -10 }, note: 'front or side', cite: 'B398, B552' },
+  { key: 'face', name: 'Face', penalty: -5, roll: '5', by: { cor: 1.5 }, face: true, knockdown: { shock: true, major: -5 }, note: 'from behind −7', miss: 'torso', cite: 'B398, B552, MA137' },
+  { key: 'neck', name: 'Neck', penalty: -5, roll: '17–18', by: { cut: 2, cr: 1.5, cor: 1.5 }, miss: 'torso', cite: 'B398, B552' },
+  { key: 'arm vein', name: 'Arm vein or artery', penalty: -5, roll: null, as: 'arm', plus: 0.5, targets: VEIN, sided: true, note: 'no crippling', miss: 'arm', cite: 'MA137' },
+  { key: 'leg vein', name: 'Leg vein or artery', penalty: -5, roll: null, as: 'leg', plus: 0.5, targets: VEIN, sided: true, note: 'no crippling', miss: 'leg', cite: 'MA137' },
+  { key: 'arm joint', name: 'Arm joint', penalty: -5, roll: null, as: 'arm', targets: JOINT, cripple: 3, cap: true, sided: true, miss: 'arm', cite: 'MA137' },
+  { key: 'leg joint', name: 'Leg joint', penalty: -5, roll: null, as: 'leg', targets: JOINT, cripple: 3, cap: true, sided: true, miss: 'leg', cite: 'MA137' },
+  { key: 'jaw', name: 'Jaw', penalty: -6, roll: null, as: 'face', face: true, knockdown: { shock: true, major: -5, extra: { cr: -1 } }, note: 'front only', miss: 'torso', cite: 'MA137' },
+  { key: 'skull', name: 'Skull', penalty: -7, roll: '3–4', all: 4, except: ['tox'], dr: 2, knockdown: { shock: true, major: -10 }, note: 'from behind −5', miss: 'torso', cite: 'B398, B552, MA137' },
+  { key: 'ear', name: 'Ear', penalty: -7, roll: null, as: 'face', face: true, sided: true, knockdown: { shock: true, major: -5 }, note: 'a cut can take it off', miss: 'torso', cite: 'MA137' },
+  { key: 'nose', name: 'Nose', penalty: -7, roll: null, as: 'face', face: true, cripple: 4, knockdown: { shock: true, major: -5 }, note: 'front only', miss: 'torso', cite: 'MA137' },
+  { key: 'hand joint', name: 'Hand joint', penalty: -7, roll: null, as: 'hand', targets: JOINT, cripple: 4, cap: true, sided: true, miss: 'hand', cite: 'MA137' },
+  { key: 'foot joint', name: 'Foot joint', penalty: -7, roll: null, as: 'foot', targets: JOINT, cripple: 4, cap: true, sided: true, miss: 'foot', cite: 'MA137' },
+  { key: 'spine', name: 'Spine', penalty: -8, roll: null, targets: SPINE, dr: 3, cripple: 1, knockdown: { shock: true, major: -5, crippledAuto: true }, note: 'from behind only', miss: 'torso', cite: 'MA137' },
+  { key: 'neck vein', name: 'Neck vein or artery', penalty: -8, roll: null, as: 'neck', plus: 0.5, targets: VEIN, miss: 'neck', cite: 'MA137' },
+  { key: 'eye', name: 'Eye', penalty: -9, roll: null, by: { ...each(PIERCING, 4), imp: 4, tbb: 4 }, targets: POINTED, face: true, drAs: 'face', cripple: 10, sided: true, knockdown: { shock: true, major: -10 }, note: 'front or side', miss: 'torso', cite: 'B398, B552' },
 ];
 
 // mildest penalty first, ties in the table's order

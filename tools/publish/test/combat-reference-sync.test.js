@@ -7,7 +7,7 @@ const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 
-const { render, FILES } = require('../scripts/gen-combat-reference');
+const { render, FILES, TYPES } = require('../scripts/gen-combat-reference');
 const { LOCATIONS, LOCATION_ORDER, LOCATION_WORDS } = require('../lib/templates/gurps/hit-locations');
 const { WOUNDING, CONSEQUENCES } = require('../lib/run-sheet/systems/gurps');
 const { HIT_LOCATION_ROWS } = require('../lib/templates/gurps/blocks/reference');
@@ -33,6 +33,26 @@ describe('the generated tables', () => {
     const edited = text.replace('| Face | -5 |', '| Face | -4 |');
     assert.notEqual(edited, text);
     assert.equal(render(edited, blocks), text);
+  });
+  it('the hit-location table is the book\'s shape: Location, Penalty, DR, Notes, Page, with no damage-type column', () => {
+    const text = lf(fs.readFileSync(FILES[0].file, 'utf8'));
+    const block = text.slice(text.indexOf('<!-- generated: hit-locations -->'), text.indexOf('<!-- /generated -->')).split('\n');
+    const cells = (l) => l.split('|').slice(1, -1).map((c) => c.trim());
+    assert.deepEqual(cells(block[1]), ['Location', 'Penalty', 'DR', 'Notes', 'Page']);
+    const rows = block.slice(3).filter((l) => l.startsWith('|'));
+    assert.equal(rows.length, LOCATIONS.length);
+    for (const r of rows) assert.equal(cells(r).length, 5, r);
+    for (const t of TYPES) assert.ok(!cells(block[1]).includes(t), `a ${t} column`);
+  });
+  it('the notes name what differs from a torso hit, from the code', () => {
+    const text = lf(fs.readFileSync(FILES[0].file, 'utf8'));
+    const row = (name) => text.split('\n').find((l) => l.startsWith(`| ${name} |`));
+    // the skull's extras skip toxic; the spine's crippling is automatic; a miss by 1 lands on the torso
+    assert.match(row('Skull'), /x4;.*none of this for tox/);
+    assert.match(row('Spine'), /crippling it knocks down and stuns outright/);
+    assert.match(row('Vitals'), /miss by 1 hits the torso/);
+    assert.match(row('Arm'), /imp, pi\+, pi\+\+ x1/);
+    assert.equal(row('Torso').split('|')[4].trim(), '--');
   });
   it('a missing marker is an error, never a quiet skip', () => {
     assert.throws(() => render('# no markers\n', FILES[0].blocks), /no <!-- generated: hit-locations -->/);

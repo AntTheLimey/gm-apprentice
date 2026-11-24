@@ -104,40 +104,42 @@ it. Useful when your back is to a wall.
 ## Hit Locations
 
 Every location the Basic Set (B398, B552) and Martial Arts
-(MA137) give a humanoid, mildest penalty first. Each type
-column is the wounding multiplier for that damage type there;
-`--` means the type cannot target it. Fatigue damage ignores
-location effects. Excess injury past a crippling threshold is
-lost where the notes say so.
+(MA137) give a humanoid, mildest penalty first. Notes name only
+what differs from a torso hit: the damage types that may target
+the place, the wounding multipliers that change (types sharing a
+figure are grouped; anything not named wounds as the torso does),
+crippling, knockdown, and where a miss by 1 lands. Fatigue damage
+ignores location effects. Excess injury past a crippling
+threshold is lost where the notes say so.
 
 <!-- The table between the markers is written by
 `node tools/publish/scripts/gen-combat-reference.js --write`
 from the run sheet's hit-location table; edit that, not this. -->
 <!-- generated: hit-locations -->
-| Location | Penalty | DR | cr | cut | imp | pi- | pi | pi+ | pi++ | burn | tbb | cor | tox | Notes | Page |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| Torso | 0 | -- | x1 | x1.5 | x2 | x0.5 | x1 | x1.5 | x2 | x1 | x1 | x1 | x1 | -- | B398, B552 |
-| Arm | -2 | -- | x1 | x1.5 | x1 | x0.5 | x1 | x1 | x1 | x1 | x1 | x1 | x1 | crippled over HP/2, excess lost; shield arm -4 | B398, B552 |
-| Leg | -2 | -- | x1 | x1.5 | x1 | x0.5 | x1 | x1 | x1 | x1 | x1 | x1 | x1 | crippled over HP/2, excess lost | B398, B552 |
-| Groin | -3 | -- | x1 | x1.5 | x2 | x0.5 | x1 | x1.5 | x2 | x1 | x1 | x1 | x1 | a male target: double shock from crushing (max 8), knockdown -5 | B398, B552 |
-| Vitals | -3 | -- | x1 | -- | x3 | x3 | x3 | x3 | x3 | -- | x2 | -- | -- | knockdown on any shock, -5 on a major wound; crushing x1 | B398, B552, MA137 |
-| Hand | -4 | -- | x1 | x1.5 | x1 | x0.5 | x1 | x1 | x1 | x1 | x1 | x1 | x1 | crippled over HP/3, excess lost; shield hand -8 | B398, B552 |
-| Foot | -4 | -- | x1 | x1.5 | x1 | x0.5 | x1 | x1 | x1 | x1 | x1 | x1 | x1 | crippled over HP/3, excess lost | B398, B552 |
-| Face | -5 | open face: none | x1 | x1.5 | x2 | x0.5 | x1 | x1.5 | x2 | x1 | x1 | x1.5 | x1 | knockdown on any shock, -5 on a major wound; from behind -7 | B398, B552, MA137 |
-| Neck | -5 | -- | x1.5 | x2 | x2 | x0.5 | x1 | x1.5 | x2 | x1 | x1 | x1.5 | x1 | -- | B398, B552 |
-| Arm vein or artery | -5 | as arm | -- | x2 | x1.5 | x1 | x1.5 | x1.5 | x1.5 | -- | x1.5 | -- | -- | no crippling | MA137 |
-| Leg vein or artery | -5 | as leg | -- | x2 | x1.5 | x1 | x1.5 | x1.5 | x1.5 | -- | x1.5 | -- | -- | no crippling | MA137 |
-| Arm joint | -5 | as arm | x1 | x1.5 | -- | x0.5 | x1 | x1 | x1 | -- | x1 | -- | -- | crippled over HP/3, excess lost | MA137 |
-| Leg joint | -5 | as leg | x1 | x1.5 | -- | x0.5 | x1 | x1 | x1 | -- | x1 | -- | -- | crippled over HP/3, excess lost | MA137 |
-| Jaw | -6 | as face | x1 | x1.5 | x2 | x0.5 | x1 | x1.5 | x2 | x1 | x1 | x1.5 | x1 | knockdown on any shock, -5 on a major wound, cr -1 more; front only | MA137 |
-| Skull | -7 | +2 (not tox) | x4 | x4 | x4 | x4 | x4 | x4 | x4 | x4 | x4 | x4 | x1 | knockdown on any shock, -10 on a major wound; from behind -5 | B398, B552, MA137 |
-| Ear | -7 | as face | x1 | x1.5 | x2 | x0.5 | x1 | x1.5 | x2 | x1 | x1 | x1.5 | x1 | knockdown on any shock, -5 on a major wound; a cut to take it off: MA137 | MA137 |
-| Nose | -7 | as face | x1 | x1.5 | x2 | x0.5 | x1 | x1.5 | x2 | x1 | x1 | x1.5 | x1 | crippled over HP/4; knockdown on any shock, -5 on a major wound; front only | MA137 |
-| Hand joint | -7 | as hand | x1 | x1.5 | -- | x0.5 | x1 | x1 | x1 | -- | x1 | -- | -- | crippled over HP/4, excess lost | MA137 |
-| Foot joint | -7 | as foot | x1 | x1.5 | -- | x0.5 | x1 | x1 | x1 | -- | x1 | -- | -- | crippled over HP/4, excess lost | MA137 |
-| Spine | -8 | +3 | x1 | x1.5 | x2 | x0.5 | x1 | x1.5 | x2 | -- | x1 | -- | -- | crippled over HP; knockdown on any shock, -5 on a major wound; from behind only | MA137 |
-| Neck vein or artery | -8 | as neck | -- | x2.5 | x2.5 | x1 | x1.5 | x2 | x2.5 | -- | x1.5 | -- | -- | -- | MA137 |
-| Eye | -9 | as face | -- | -- | x4 | x4 | x4 | x4 | x4 | -- | x4 | -- | -- | crippled over HP/10; knockdown on any shock, -10 on a major wound; front or side | B398, B552 |
+| Location | Penalty | DR | Notes | Page |
+|---|---|---|---|---|
+| Torso | 0 | -- | -- | B398, B552 |
+| Arm | -2 | -- | imp, pi+, pi++ x1; crippled over HP/2, excess lost; shield arm -4 | B398, B552 |
+| Leg | -2 | -- | imp, pi+, pi++ x1; crippled over HP/2, excess lost | B398, B552 |
+| Groin | -3 | -- | miss by 1 hits the torso; a male target: double shock from crushing (max 8), knockdown -5 | B398, B552 |
+| Vitals | -3 | -- | not cut, burn, cor, tox; imp, pi-, pi, pi+, pi++ x3; tbb x2; knockdown on any shock, -5 on a major wound; miss by 1 hits the torso; crushing may aim here, at x1 | B398, B552, MA137 |
+| Hand | -4 | -- | imp, pi+, pi++ x1; crippled over HP/3, excess lost; shield hand -8 | B398, B552 |
+| Foot | -4 | -- | imp, pi+, pi++ x1; crippled over HP/3, excess lost | B398, B552 |
+| Face | -5 | open face: none | cor x1.5; knockdown on any shock, -5 on a major wound; miss by 1 hits the torso; from behind -7 | B398, B552, MA137 |
+| Neck | -5 | -- | cr, cor x1.5; cut x2; miss by 1 hits the torso | B398, B552 |
+| Arm vein or artery | -5 | as arm | not cr, burn, cor, tox; cut x2; imp, pi, pi++, tbb x1.5; pi- x1; miss by 1 hits the arm; no crippling | MA137 |
+| Leg vein or artery | -5 | as leg | not cr, burn, cor, tox; cut x2; imp, pi, pi++, tbb x1.5; pi- x1; miss by 1 hits the leg; no crippling | MA137 |
+| Arm joint | -5 | as arm | not imp, burn, cor, tox; pi+, pi++ x1; crippled over HP/3, excess lost; miss by 1 hits the arm | MA137 |
+| Leg joint | -5 | as leg | not imp, burn, cor, tox; pi+, pi++ x1; crippled over HP/3, excess lost; miss by 1 hits the leg | MA137 |
+| Jaw | -6 | as face | cor x1.5; knockdown on any shock, -5 on a major wound, cr -1 more; miss by 1 hits the torso; front only | MA137 |
+| Skull | -7 | +2 (not tox) | x4; knockdown on any shock, -10 on a major wound; miss by 1 hits the torso; from behind -5; none of this for tox | B398, B552, MA137 |
+| Ear | -7 | as face | cor x1.5; knockdown on any shock, -5 on a major wound; miss by 1 hits the torso; a cut can take it off | MA137 |
+| Nose | -7 | as face | cor x1.5; crippled over HP/4; knockdown on any shock, -5 on a major wound; miss by 1 hits the torso; front only | MA137 |
+| Hand joint | -7 | as hand | not imp, burn, cor, tox; pi+, pi++ x1; crippled over HP/4, excess lost; miss by 1 hits the hand | MA137 |
+| Foot joint | -7 | as foot | not imp, burn, cor, tox; pi+, pi++ x1; crippled over HP/4, excess lost; miss by 1 hits the foot | MA137 |
+| Spine | -8 | +3 | not burn, cor, tox; crippled over HP; knockdown on any shock, -5 on a major wound; crippling it knocks down and stuns outright; miss by 1 hits the torso; from behind only | MA137 |
+| Neck vein or artery | -8 | as neck | not cr, burn, cor, tox; cut, imp, pi++ x2.5; pi- x1; pi, tbb x1.5; pi+ x2; miss by 1 hits the neck | MA137 |
+| Eye | -9 | as face | only imp, pi-, pi, pi+, pi++, tbb; x4; crippled over HP/10; knockdown on any shock, -10 on a major wound; miss by 1 hits the torso; front or side | B398, B552 |
 <!-- /generated -->
 
 Chinks in armour (B400): impaling, piercing and tight-beam

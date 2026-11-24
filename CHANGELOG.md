@@ -24,6 +24,7 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ### Changed
 
+- The GURPS hit-location table in the skill's combat reference reads as the book's does: one row a place (penalty, DR, notes, page), the notes naming what differs from a torso hit, with no column for each damage type.
 - The Table Log's vitals have each system's columns: Call of Cthulhu HP, MP, SAN and Luck, GURPS HP and FP. Wrap-up writes them onto the sheet, and the Energy Reserve is held through the night.
 - A Call of Cthulhu or GURPS run sheet speaks its own system: no AC, initiative modifier, stat-fill or long rest.
 - Tab stops at Start or stays put, rows hold still while a figure is typed, and Same for all copies what is filled and says how many it reached.
