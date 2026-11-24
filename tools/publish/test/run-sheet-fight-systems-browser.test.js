@@ -2063,7 +2063,9 @@ describe('Tab, held rows and Same for all in CoC and GURPS (step 6b Task 23), by
     });
   });
 
-  it('GURPS, before Start: a Speed typed in the column, then a click on a blank row\'s name: the held row is placed on the release, the cursor in that row\'s panel', async () => {
+  // Task 23b A2 changed this on purpose: the column and the panel are one place for holding, so the click into the panel
+  // places nothing; Enter in the panel's box (focus leaving both, or Start, would do the same) does
+  it('GURPS, before Start: a Speed typed in the column, then a click on a blank row\'s name: the row stays held while the cursor is in that row\'s panel, and is placed on Enter there', async () => {
     const run = await start('gurps');
     await withPage({ width: 1449, height: 762 }, async (page) => {
       await page.focusEvents();
@@ -2074,10 +2076,42 @@ describe('Tab, held rows and Same for all in CoC and GURPS (step 6b Task 23), by
       await tap(page, `[data-fini="${b[2]}"]`);
       await page.type('9');
       await tap(page, `[data-fpeek="${b[0]}"]`);
-      p = await until(page, `p.saved === "Saved" && p.pending === 0 && p.fight.rows.find((r) => r.id === ${q(b[2])}).ini === 9 && p.fight.rows.every((r) => !r.held)`);
-      assert.ok(ids(p).indexOf(b[2]) < was, 'placed once focus left the column');
-      assert.ok(sortedDown(p), `sorted: ${JSON.stringify(p.fight.rows.filter((r) => r.in).map((r) => [r.name, r.ini]))}`);
+      p = await until(page, `p.saved === "Saved" && p.pending === 0 && p.fight.rows.find((r) => r.id === ${q(b[2])}).ini === 9`);
+      assert.strictEqual(ids(p).indexOf(b[2]), was, 'held while the cursor is in the panel');
       assert.strictEqual(await where(page), `data-fs-st=${b[0]}`);
+      await page.key('Enter');
+      p = await until(page, `p.saved === "Saved" && p.pending === 0 && p.fight.rows.every((r) => !r.held)`);
+      assert.ok(ids(p).indexOf(b[2]) < was, 'placed on Enter');
+      assert.ok(sortedDown(p), `sorted: ${JSON.stringify(p.fight.rows.filter((r) => r.in).map((r) => [r.name, r.ini]))}`);
+    });
+  });
+
+  // Task 23b A2: the panel and the initiative column are one place for holding
+  it('GURPS, before Start: a Speed typed in the panel, then a click into a column initiative box: no row moves and the cursor is in that box; Tab out of the column places the rows', async () => {
+    const run = await start('gurps');
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await page.focusEvents();
+      await fightOn(page, run, 1);
+      let p = await addMany(page, 'Bouncer', 3);
+      const b = [1, 2, 3].map((i) => named(p, `Bouncer ${i}`).id);
+      const was = ids(p);
+      p = await peek(page, p, 'Bouncer 3');
+      await tap(page, `#acting [data-fs-speed="${b[2]}"]`);
+      await page.type('9');
+      await tap(page, `[data-fini="${b[0]}"]`);
+      p = await until(page, `p.saved === "Saved" && p.pending === 0 && p.fight.rows.find((r) => r.id === ${q(b[2])}).ini === 9`);
+      await page.sleep(300);
+      p = await until(page, 'true');
+      assert.deepStrictEqual(ids(p), was, 'no row moves');
+      assert.ok(p.fight.rows.some((r) => r.held), 'still held');
+      assert.strictEqual(await where(page), `data-fini=${b[0]}`, 'the cursor is in the clicked box');
+      // down the column to the last box, still holding; the next Tab leaves it
+      for (const to of [b[1], b[2]]) { await page.key('Tab'); assert.strictEqual(await where(page), `data-fini=${to}`); assert.ok((await until(page, 'true')).fight.rows.some((r) => r.held), 'held in the column'); }
+      await page.key('Tab');
+      assert.strictEqual(await where(page), '#fNext');
+      p = await until(page, 'p.saved === "Saved" && p.pending === 0 && p.fight.rows.every((r) => !r.held)');
+      assert.ok(ids(p).indexOf(b[2]) < was.indexOf(b[2]), 'placed once focus left both');
+      assert.ok(sortedDown(p), `sorted: ${JSON.stringify(p.fight.rows.filter((r) => r.in).map((r) => [r.name, r.ini]))}`);
     });
   });
 

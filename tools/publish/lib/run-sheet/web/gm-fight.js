@@ -1834,7 +1834,7 @@
           ask: Boolean($('.fask')), actingName: acting ? acting.textContent : null,
           actingStatuses: Array.from(document.querySelectorAll('#acting .nums .st'), (b) => b.textContent.replace(/ ✕$/, '')),
           rows: f.view.rows.map((r) => ({
-            id: r.id, note: r.note, copy: r.copy, kind: r.kind, side: sideWord(r), name: r.gmName, in: r.in, ini: isNum(r.ini) ? r.ini : null, mod: r.mod,
+            id: r.id, note: r.note, copy: r.copy, kind: r.kind, side: sideWord(r), name: r.gmName, in: r.in, held: Boolean(r.held), ini: isNum(r.ini) ? r.ini : null, mod: r.mod,
             hp: r.hp, max: r.max, ac: r.ac, temp: r.temp, conds: r.conds, exhaustion: r.exhaustion, conc: r.conc, out: r.out, seen: r.seen,
             recharge: (r.recharge || []).map((x) => ({ name: x.name, ready: x.ready, rolled: x.rolled })),
             // the systems' figures (step 6b)
@@ -2104,13 +2104,13 @@
       // a figure for setStat: a number where it is one (`+1` is 1), else the words (DR's `2 (face 0)`, DB's `+1D4`)
       const value = v === '' ? null : /^[+-]?\d+(?:\.\d+)?$/.test(v) ? Number(v) : v;
       if (shownFigure(value) !== shown(r, f)) {
-        if (STAT[f].panel) heldIn = HOLD_PANEL;
+        if (STAT[f].panel) heldIn = HOLD;
         F({ type: 'setStat', row: r.id, key: STAT[f].stat, value, ...(STAT[f].panel ? { hold: true } : {}) });
       }
       return true;
     }
     const n = v === '' ? null : Number(v);
-    if (f === 'fini' && n !== (isNum(r.ini) ? r.ini : null)) { heldIn = HOLD_COLUMN; F({ type: 'setInit', row: r.id, ini: n, hold: true }); }
+    if (f === 'fini' && n !== (isNum(r.ini) ? r.ini : null)) { heldIn = HOLD; F({ type: 'setInit', row: r.id, ini: n, hold: true }); }
     if (f === 'fmax' && n !== r.max) F({ type: 'setMax', row: r.id, max: n });
     if (f === 'fac' && n !== r.ac) F({ type: 'setAc', row: r.id, ac: n });
     return true;
@@ -2159,11 +2159,12 @@
     if (back) return attr('data-fmax', id);
     return nextMax();
   }
-  // The zones whose commits are held (the initiative column, the panel's boxes): the rows stay put while focus is in
-  // the zone the last held commit came from (`heldIn`), and are placed once it is not (focus moved from the column to a
-  // panel box places the column's).
+  // The place whose commits are held: the initiative column and the panel's boxes are one. The rows stay put while
+  // focus is anywhere in it, so moving between the column and the panel places nothing (`heldIn` is set by the last
+  // held commit); they are placed once focus is outside both.
   const HOLD_COLUMN = '[data-fini]';
   const HOLD_PANEL = '#acting .pbox';
+  const HOLD = `${HOLD_COLUMN}, ${HOLD_PANEL}`;
   let heldIn = null;
   const inHold = (el) => Boolean(heldIn && el && el.matches && el.matches(heldIn));
   // Held rows placed (D3c): on Enter in those boxes, when focus leaves the zone by the keyboard, before Start and Sort,
