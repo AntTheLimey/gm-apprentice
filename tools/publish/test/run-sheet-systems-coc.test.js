@@ -170,6 +170,8 @@ for (const crlf of [false, true]) {
       assert.equal(n('- Medicine 55%, heals 1D4 HP').fighting, null);
       assert.equal(n('- Knife 35% 1D4+2').fighting, 35);
       assert.equal(n('- Knife: 35%, 1D4+2').fighting, 35);
+      assert.equal(n('- Knife 35% (17/7), 1D4+2').fighting, 35);
+      assert.equal(n('- First Aid 60% (30/12): restores 1D3').fighting, null);
       assert.equal(n('* **Sabre** 45% \u2014 1D6+2').fighting, 45);
       assert.equal(n('* **Sabre** 45% \u2013 1D6+2').fighting, 45);
       assert.equal(n('- Boat hook 45% (22/9), damage 1D6+DB').fighting, 45);

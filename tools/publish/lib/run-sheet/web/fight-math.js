@@ -66,7 +66,7 @@
   // A hit's words, read against the wounding table (`rules.wounding`): { amount, dice, n, type, location, side, rest }
   // where `rest` holds the words that are none of them. `amount` is the damage as typed (`9`, `-9`, `2d+1`), or ''.
   // Dice are recognised here, never rolled or added: the server's reader (lib/dice `parseDamage`) is the one that
-  // reads them. A die is `NdS`, `dS`, `d%`, or `Nd` (a count alone); terms join with + or -, any order. A bare `d`
+  // reads them. A die is `NdS`, `dS`, `d%`, or `Nd` (a count alone); terms join with + or -, any order, and the first may carry a leading + or -. A bare `d`
   // is not dice. test/run-sheet-fight-math.test.js holds this pattern and the server's reader to one list of cases.
   const DICE_TERM = /(?:\d+d(?:\d+|%)?|d(?:\d+|%)|\d+)/i.source;
   const DICE = new RegExp(`^[+-]?${DICE_TERM}(?:[+-]${DICE_TERM})*`, 'i');

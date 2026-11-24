@@ -36,9 +36,9 @@ function keyOf(raw) {
 // A firearm's name says so (`Pocket pistol`); any other is Fighting. Dodge and the named skills are pairs' (keyOf).
 // The name may hold digits (`.38 Revolver`, `12-gauge shotgun`): it runs to the ` NN%` figure. The damage may be
 // written without the word, as Canticle's blocks do (`- Knife: 35%, 1D4+2`, `* **Pistol (flintlock)** 45% — 1D10+2`):
-// a dice figure right after the percentage counts, with only `,` `:` `—` `–` and spaces between (`First Aid 60%: restores
+// a dice figure right after the percentage counts, with only `,` `:` `—` `–` and spaces between, after the half and fifth group `(17/7)` if there is one (`First Aid 60%: restores
 // 1D3` is a skill, not an attack).
-const ATTACK_LINE = /^\s*[-*+]\s+(?:\*\*)?([^%*\s][^%]*?)(?:\*\*)?\s+(\d{1,3})\s*%(?=.*\bdamage\b|[\s,:\u2014\u2013]*\d*d\d+\b)/i;
+const ATTACK_LINE = /^\s*[-*+]\s+(?:\*\*)?([^%*\s][^%]*?)(?:\*\*)?\s+(\d{1,3})\s*%(?=.*\bdamage\b|(?:\s*\(\d{1,3}\s*\/\s*\d{1,3}\))?[\s,:\u2014\u2013]*\d*d\d+\b)/i;
 // A firearm's name says so: a calibre (`.45`, `.30-06`, `9mm`), a kind of gun, or a make (Task 19 widened it:
 // `Colt .45`, `Thompson`, `Lee-Enfield`, `Brown Bess`). A make that is also a surname or a place (Colt, Thompson,
 // Winchester, Remington, Springfield) never counts as a possessive (`Thompson's cleaver`). `Gunsmith`, `2-handed axe`

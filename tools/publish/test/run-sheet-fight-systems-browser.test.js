@@ -1514,6 +1514,7 @@ describe('CoC cards on the GM page (step 6b Task 18), by real input', { skip: br
       p = await settled(page);
       assert.deepStrictEqual(p.errors, []);
       assert.ok(!(await logOf(run)).some((t) => /bout of/.test(t)), 'no bout started');
+      assert.match(await text(page, '#hnotes'), /Bout of madness for Iris Calder rolled 3, but that fight has ended: not applied\./);
     });
   });
 
@@ -1603,7 +1604,6 @@ describe('CoC firearms on the GM page (step 6b Task 19), by real input', { skip:
         assert.match(await row2(page, c2), /range:regularlongvery longtarget:size \(Build 1\)pronecoverfastshooter:aimedproneloadingpoint blankinto melee2-3 shots/);
         assert.strictEqual(await page.evaluate(`Boolean(document.querySelector('[data-fshc=${q(`${c2}|large`)}]'))`), false);
         const lines = await page.evaluate(`(() => { const x = document.querySelector('li[data-row2=${q(c2)}] .sx'); const tops = []; for (const e of x.querySelectorAll('button, input, .mnote, .mres, .sxh, :scope > span:not(.sxg):not(.mlv)')) { const t = Math.round(e.getBoundingClientRect().top); if (!tops.some((v) => Math.abs(v - t) < 6)) tops.push(t); } return tops.length; })()`);
-        console.log('STRIPLINES', w, lines);
         assert.ok(lines <= 2, `${w}: the strip takes ${lines} lines`);
         sane(p, `${w} the strip open`);
         await shot(page, `t19-${w}-strip`);
@@ -2339,6 +2339,24 @@ describe('Tab, held rows and Same for all in CoC and GURPS (step 6b Task 23), by
   });
 
   // Task 23b B7: dice out at the server while another window ends the fight: said, never applied
+  // Task 23b fix round 1, M1: words typed in a damage box when another window ends the fight are said, not lost
+  it('CoC: words typed in a damage box when another window ends the fight are said', async () => {
+    const run = await start('coc', { randomInt: () => 3 });
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await netLoft(page, run);
+      const iris = named(p, 'Iris Calder').id;
+      await tap(page, '#fNext');
+      p = await until(page, `p.fight.rows.find((r) => r.id === p.fight.turn).name === "Dock Cultist 1" && p.saved === "Saved" && p.pending === 0`);
+      await tap(page, `[data-fmelee="${iris}|fightBack"]`);
+      await until(page, 'p.fight.melee && !p.fight.melee.rolling');
+      await tap(page, `[data-fmlvl="${iris}|defence|fail"]`);
+      p = await until(page, `p.fight.melee === null && p.fight.dmg && p.fight.dmg.on === ${q(iris)} && p.saved === "Saved" && p.pending === 0`);
+      await typeInto(page, `[data-fhp="${iris}"]`, '7', { enter: false, settle: false });
+      await fromOther(run, [{ type: 'fightEnd', fight: p.fight.id }]);
+      await page.waitFor(`document.querySelector('#hnotes').textContent.includes('Not sent: 7 (Iris Calder): that fight has ended.')`, 5000);
+    });
+  });
+
   it('GURPS: a hit\'s dice that come back after the fight has ended are said, not applied', async () => {
     const run = await start('gurps', { randomInt: () => 4 });
     const handlers = run.server.listeners('request');

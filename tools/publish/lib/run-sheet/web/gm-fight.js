@@ -1206,6 +1206,16 @@
   // marked over, so the words are not taken as damage typed cold; Enter says so, and ✕ or Esc shuts it. A new exchange
   // says the words it replaced. A box holding only what it opened with (nothing typed, or typed and put back) just
   // shuts, and empties, so its remembered entry is never sent cold.
+  // The fight is gone (another window ended it) while a damage box was open: words typed in it are said, never lost.
+  // Runs before the redraw takes the box away, so its value is still there.
+  function lostDmg() {
+    const g = ui.dmg;
+    if (!g) return;
+    ui.dmg = null;
+    const box = document.querySelector(attr('data-fhp', g.on));
+    const words = (box ? box.value : g.entry || '').trim();
+    if (words && words !== (g.opened || '').trim()) RP.note(`Not sent: ${words} (${g.name || 'a damage box'}): that fight has ended.`, { kind: 'bad', id: `dmg:ended:${g.on}` });
+  }
   function syncDmg(f) {
     const m = cocRules() ? f.melee : null;
     const g = ui.dmg;
@@ -1231,7 +1241,7 @@
     // a shot's gun with one damage opens with it; one with a damage by range opens empty, its choices beside (Task 19)
     const choices = CMath.damageChoices(m.damage);
     const entry = choices.length > 1 ? '' : choices[0] || remembered(rowById(m.by));
-    ui.dmg = { fight: f.id, n: m.n, by: m.by, on: m.on, mode: CMath.dbModeOf(m.kind), entry, opened: entry, offer: Boolean(m.offer), rolling: false,
+    ui.dmg = { fight: f.id, n: m.n, by: m.by, on: m.on, name: viewName(m.on) || '', mode: CMath.dbModeOf(m.kind), entry, opened: entry, offer: Boolean(m.offer), rolling: false,
       ...(typeof m.impales === 'boolean' ? { impales: m.impales } : {}), choices };
     delete ui.pending[m.on];
     delete ui.refused[m.on];
@@ -1470,11 +1480,15 @@
     const f = state().fight;
     if (!f || ui.rolling[cardId]) return;
     ui.rolling[cardId] = true;
+    const who = viewName(rowId) || 'a character';
     RP.render();
     roll([{ sides: K.C.bout.sides }]).then(([res]) => {
       delete ui.rolling[cardId];
       const now = state().fight;
-      if (now && now.id === f.id) { const mine = focusOnCard(rowId, cardId); send({ bout: res }); if (mine) focusCard(rowId, cardId); } else RP.render();
+      if (now && now.id === f.id) { const mine = focusOnCard(rowId, cardId); send({ bout: res }); if (mine) focusCard(rowId, cardId); } else {
+        RP.note(`Bout of madness for ${who} rolled ${res.total}, but that fight has ended: not applied.`, { kind: 'bad', id: `roll:late:bout:${cardId}` });
+        RP.render();
+      }
     }, (e) => { delete ui.rolling[cardId]; rollFailed(e); RP.render(); });
   }
   // A roll back from the server moves focus only when it is on the page or still in that card: a GM who went on to
@@ -1797,6 +1811,7 @@
     // The right pane in a fight (plan 6a Task 10): the cut, under the fight's title; nothing paused or after.
     pane(d) {
       const f = state().fight;
+      if (!f) lostDmg();
       if (!f || f.paused) return null;
       const b = d.beats.find((x) => x.key === f.beat);
       return { title: b ? b.title : f.title, beat: f.beat, cut: cutHTML(d) };
