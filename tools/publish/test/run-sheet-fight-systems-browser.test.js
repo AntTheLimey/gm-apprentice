@@ -322,7 +322,9 @@ describe('CoC and GURPS fights on the GM page, by real input', { skip: browserSk
   // skill is 12, his dodge is 8 and parry is 9, his HP is 10")
   for (const [which, at, name, want] of [
     ['gurps', 1, 'Mara Quint', ['Speed', 'Skill', 'Dodge', 'Parry', 'Block', 'HP', 'ST', 'HT', 'DX', 'DR']],
-    ['coc', 0, 'Warden Hale', ['DEX', 'MP', 'SAN', 'Fighting', 'Firearms', 'Dodge', 'DB', 'Armour', 'Build', 'Attacks']],
+    // Task 36 changed this on purpose: the quick figures first, as GURPS's (Ant, 2026-11-24: "the NPC speed is 5.0, main
+    // combat skill is 12, his dodge is 8 and parry is 9, his HP is 10"): DEX, Fighting, Dodge and HP, then the rest
+    ['coc', 0, 'Warden Hale', ['DEX', 'Fighting', 'Dodge', 'HP', 'Firearms', 'MP', 'SAN', 'DB', 'Armour', 'Build', 'Attacks']],
   ]) {
     it(`${which === 'gurps' ? 'GURPS' : 'CoC'}: the panel's boxes are ${want.join(', ')}, in that order, and Tab walks them`, async () => {
       const run = await start(which);
@@ -3495,6 +3497,29 @@ describe('CoC fight rows on one line (step 6b Task 38), by real input', { skip: 
 // benefit is simply tracking turn order, and remaining HP, and whether they are still in the fight."
 describe('A GURPS foe made up at the table: the quick figures first (step 6b Task 36), by real input', { skip: browserSkip() }, () => {
   const MEASURED = {};
+  // the CoC panel, checked for the same and changed: DEX, Fighting, Dodge and HP first
+  it('CoC: Add "Cultist", 60 Tab 50 Tab 30 Tab 12: DEX, Fighting, Dodge and HP, placed by DEX', async () => {
+    const run = await start('coc');
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await fightOn(page, run, 0);
+      let p = await addNew(page, 'Cultist');
+      const id = named(p, 'Cultist').id;
+      await page.waitFor(`document.activeElement === document.querySelector('#acting [data-fs-dex="${id}"]')`, 3000);
+      const went = [];
+      for (const k of ['60', 'Tab', '50', 'Tab', '30', 'Tab', '12']) {
+        if (k === 'Tab') { await page.key('Tab'); went.push(await where(page)); } else await page.type(k);
+      }
+      assert.deepStrictEqual(went, ['fighting', 'dodge', 'hp'].map((k) => `data-fs-${k}=${id}`));
+      await page.key('Enter');
+      p = await until(page, `p.saved === "Saved" && p.pending === 0 && p.fight.rows.every((r) => !r.held) && p.fight.rows.find((r) => r.id === ${q(id)}).max === 12`);
+      const c = named(p, 'Cultist');
+      assert.deepStrictEqual([c.dex, c.ini, c.fighting, c.dodge, c.hp, c.max], [60, 60, 50, 30, 12, 12]);
+      const n = p.fight.rows.filter((r) => r.in).map((r) => (r.ini === null ? -Infinity : r.ini));
+      assert.ok(n.every((v, i) => i === 0 || n[i - 1] >= v), `sorted: ${JSON.stringify(n)}`);
+      assert.deepStrictEqual(p.errors, []);
+    });
+  });
+
   after(() => { if (Object.keys(MEASURED).length) process.stdout.write(`# Task 36 measured ${JSON.stringify(MEASURED)}\n`); });
   for (const [w, h] of SIZES) {
     it(`${w}: Add "Thug", 5 Tab 12 Tab 8 Tab 9 Tab Tab 10: Speed, Skill, Dodge, Parry and HP with no ST, HT or DX, placed by Speed; To-hit opens on 12; below 0 it stays in the order; Out by a tap`, async () => {

@@ -443,10 +443,12 @@ function describeCoc(id) {
   Object.assign(r.fight, fight);
   r.toggles = { ...r.toggles, half: false, resisted: false, temp: false, deathSaves: false, concentration: false, exhaustion: false, counters: false, longRest: false, gun: true };
   r.statuses = ['Major wound', 'Prone', 'Unconscious', 'Dying', 'Temporary insanity', 'Indefinite insanity'];
-  // the acting panel's boxes, in Tab order (the one list, Task 7 [P-C19]); `readout` ones are shown beside HP too
+  // the acting panel's boxes, in Tab order (the one list, Task 7 [P-C19]); `readout` ones are shown beside HP too. The
+  // quick figures a Keeper makes up at the table come first, as GURPS's do (Task 36): DEX, Fighting, Dodge and HP max
+  // (the row's own max too), then the rest
   r.panelBoxes = [
-    { key: 'dex', label: 'DEX', readout: true }, { key: 'mp', label: 'MP' }, { key: 'san', label: 'SAN' },
-    { key: 'fighting', label: 'Fighting' }, { key: 'firearms', label: 'Firearms' }, { key: 'dodge', label: 'Dodge' },
+    { key: 'dex', label: 'DEX', readout: true }, { key: 'fighting', label: 'Fighting' }, { key: 'dodge', label: 'Dodge' }, { key: 'hp', label: 'HP' },
+    { key: 'firearms', label: 'Firearms' }, { key: 'mp', label: 'MP' }, { key: 'san', label: 'SAN' },
     { key: 'db', label: 'DB' }, { key: 'armour', label: 'Armour' }, { key: 'build', label: 'Build' }, { key: 'attacks', label: 'Attacks' },
   ];
   // the row's own figures: initiative, HP now/[max], MP and SAN as read-outs

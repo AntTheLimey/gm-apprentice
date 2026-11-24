@@ -254,7 +254,9 @@ for (const crlf of [false, true]) {
         assert.equal(d.family, 'coc');
         assert.equal(d.fights, true);
         assert.equal(d.toggles.gun, true);
-        assert.deepEqual(d.panelBoxes.map((b) => b.label), ['DEX', 'MP', 'SAN', 'Fighting', 'Firearms', 'Dodge', 'DB', 'Armour', 'Build', 'Attacks']);
+        // Task 36 changed this on purpose: the quick figures first, as GURPS's (Ant, 2026-11-24: "the NPC speed is 5.0, main
+        // combat skill is 12, his dodge is 8 and parry is 9, his HP is 10"): DEX, Fighting, Dodge and HP, then the rest
+        assert.deepEqual(d.panelBoxes.map((b) => b.label), ['DEX', 'Fighting', 'Dodge', 'HP', 'Firearms', 'MP', 'SAN', 'DB', 'Armour', 'Build', 'Attacks']);
         // Task 38 changed this on purpose: a short placeholder keeps the row on one line; the whole hint is its own word
         assert.equal(d.words.entryPlaceholder, '-7 / +3\u2026');
         assert.equal(d.words.entryHint, 'Damage -7, healing +3, MP m-2, SAN s-5');
