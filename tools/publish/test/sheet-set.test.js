@@ -5,7 +5,8 @@ const os = require('node:os');
 const path = require('node:path');
 const { execFileSync, spawnSync } = require('node:child_process');
 const matter = require('gray-matter');
-const { runSheetSet } = require('../lib/sheet-set');
+const { runSheetSet, COC_CONDITIONS } = require('../lib/sheet-set');
+const { vitalsColumns } = require('../lib/shared-lists');
 const { liveSheet } = require('../lib/flush/dnd-writeback');
 
 // `sheet set` (#749): the wrap-up's end-of-session vitals go into the Stat Sheet by the
@@ -330,3 +331,15 @@ test('CLI: usage errors exit 1 before anything is read', () => {
   }
   assert.equal(fs.readFileSync(note, 'utf8'), BRANNOC);
 });
+
+// Task 23b B14: the run sheet's CoC conditions (the ontology's) and the keys `sheet set` writes are one list: a sixth on
+// either side would pass silently otherwise
+for (const id of ['coc-7e', 'coc-7e-regency']) {
+  test(`${id}: the ontology's five status keys are all of sheet set's status keys`, () => {
+    const col = vitalsColumns(id).find((c) => c.field === 'conditions');
+    const ontology = Object.values(col.sheet).sort();
+    const written = COC_CONDITIONS.map((c) => c[0]).sort();
+    assert.strictEqual(ontology.length, 5);
+    assert.deepStrictEqual(ontology, written);
+  });
+}

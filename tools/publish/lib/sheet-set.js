@@ -338,4 +338,4 @@ async function runSheetSet(deps) {
   }
 }
 
-module.exports = { runSheetSet, SheetSetError, writerFor };
+module.exports = { runSheetSet, SheetSetError, writerFor, COC_CONDITIONS };
