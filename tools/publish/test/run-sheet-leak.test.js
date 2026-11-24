@@ -1183,6 +1183,7 @@ describe('the players\' screen in a CoC and a GURPS fight (plan 6b Task 26)', ()
       await t.arm('a foe\'s Parry', '15', { short: true });
       await t.arm('a foe\'s Block', '14', { short: true });
       await t.arm('a foe\'s Dodge', '18', { short: true });
+      await t.arm('a PC\'s spell list', 'Create Fire');
       await t.look('the fight set up');
 
       // Start: sorted by Speed at Fight, fixed after Start. Rafe acts first.
