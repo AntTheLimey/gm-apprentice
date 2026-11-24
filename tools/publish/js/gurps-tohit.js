@@ -656,15 +656,32 @@
   const pctWord = (x) => (x * 100).toFixed(x > 0.9995 || x < 0.0005 ? 0 : 1);
   const pct = (x) => (x * 100).toFixed(x > 0.9995 || x < 0.0005 ? 0 : 1) + '%';
 
+  // The site's sheet: its box and its data block, remembered under the site's key for this character.
   function mount() {
     const box = document.getElementById('tohit-calc');
     const blob = document.getElementById('gurps-tohit-data');
     if (!box || !blob) return;
     let data = null;
     try { data = JSON.parse(blob.textContent); } catch (e) { return; }
-    if (!isObj(data) || !Array.isArray(data.weapons) || !isObj(data.rules)) return;
+    if (!isObj(data)) return;
+    // Per campaign, so two sites on one origin with a character of the same name keep apart. A
+    // setup saved under the key from before campaigns were in it is read once, then saved under the new one.
+    const oldKey = 'tohit-calc:' + String(data.pc);
+    const storageKey = typeof data.campaign === 'string' && data.campaign ? 'tohit-calc:' + data.campaign + ':' + String(data.pc) : oldKey;
+    mountIn(box, data, { storageKey, oldKey });
+  }
+
+  // The calculator drawn into `box` (cleared first) from a data block. `storageKey`: where the setup is remembered,
+  // in this browser only (null or none: nothing is read or written); `oldKey`: a key read once when `storageKey`
+  // holds nothing. `narrow: true` gives the box its one-column layout whatever the window's width (the class
+  // th-narrow). `initial`: a starting state laid over the remembered or default one, through cleanState, so a value
+  // no control offers is dropped, never trusted. Returns whether it drew.
+  function mountIn(box, data, opts) {
+    const o = isObj(opts) ? opts : {};
+    if (!box || !isObj(data) || !Array.isArray(data.weapons) || !isObj(data.rules)) return false;
     data.weapons = data.weapons.filter((w) => isObj(w) && typeof w.key === 'string');
-    if (!data.weapons.length) return;
+    if (!data.weapons.length) return false;
+    if (o.narrow === true) box.classList.add('th-narrow');
     const R = data.rules;
     const { effective, outcome, odds, rangePenalty, aidsFor, conflicts, defaultState, cleanState, shotsFor, rclFor, DECEPTIVE_OFFERED, LOW, HIGH } = make(R);
     const DICE_WORD = R.dice + 'd6';
@@ -687,12 +704,11 @@
     }
 
     // ----- what is remembered: in this browser only, and never trusted -----
-    // Per campaign, so two sites on one origin with a character of the same name keep apart. A
-    // setup saved under the key from before campaigns were in it is read once, then saved under the new one.
-    const OLD_KEY = 'tohit-calc:' + String(data.pc);
-    const KEY = typeof data.campaign === 'string' && data.campaign ? 'tohit-calc:' + data.campaign + ':' + String(data.pc) : OLD_KEY;
+    const KEY = typeof o.storageKey === 'string' && o.storageKey ? o.storageKey : null;
+    const OLD_KEY = typeof o.oldKey === 'string' && o.oldKey ? o.oldKey : KEY;
     let fromOldKey = false;
     function readSaved() {
+      if (!KEY) return null;
       try {
         let raw = root.localStorage.getItem(KEY);
         if (raw === null || raw === undefined) { raw = root.localStorage.getItem(OLD_KEY); fromOldKey = KEY !== OLD_KEY && !!raw; }
@@ -701,10 +717,12 @@
       } catch (e) { return null; }
     }
     const saved = readSaved();
-    let state = cleanState(data, saved && saved.state);
+    const was = saved && saved.state;
+    let state = cleanState(data, isObj(o.initial) ? Object.assign({}, isObj(was) && !Array.isArray(was) ? was : {}, o.initial) : was);
     let open = {};
     if (saved && isObj(saved.open)) for (const g of Object.keys(TITLES)) if (typeof saved.open[g] === 'boolean') open[g] = saved.open[g];
     function write() {
+      if (!KEY) return;
       try { root.localStorage.setItem(KEY, JSON.stringify({ v: 1, state, open })); } catch (e) { /* storage is off: nothing is remembered */ }
     }
 
@@ -1190,7 +1208,9 @@
         if (cell) obs.observe(cell, { childList: true, characterData: true, subtree: true });
       }
     }
+    return true;
   }
+  api.mountIn = mountIn;
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount);
   else mount();
