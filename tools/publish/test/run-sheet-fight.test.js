@@ -1973,6 +1973,33 @@ describe('fight maths by system (step 6b Task 6)', () => {
     assert.deepEqual(order(s), ['Blank', 'Quick', 'Kev', 'Late', 'Slow']);
   });
 
+  it('CoC: a benched row ticked in, or a row joined, is placed by DEX with the CoC tie rules, before and after Start, the turn kept', () => {
+    const ins = (x) => x.fight.rows.filter((r) => r.in).map((r) => r.name);
+    let s = begin(COC, [{ name: 'Ann', kind: 'pc', ini: 60, dex: 60, fighting: 50 }, { name: 'Blank', ini: null }, { name: 'Bench', ini: 70, dex: 70, in: false }]);
+    assert.deepEqual(ins(s), ['Ann', 'Blank'], 'the benched row sits out');
+    s = G(s, { type: 'fightTick', row: named(s, 'Bench').id, in: true });
+    assert.deepEqual(ins(s), ['Bench', 'Ann', 'Blank'], 'ticked in before Start it takes its DEX place');
+    s = go(s);
+    assert.equal(turnName(s), 'Bench');
+    s = go(s);
+    assert.equal(turnName(s), 'Ann');
+    // joined after Start with a DEX: placed once, the turn stays
+    s = G(s, { type: 'fightJoin', rows: [M.blankRow({ id: 'late', name: 'Late', ini: 65, dex: 65 })], label: 'Late' });
+    assert.deepEqual(ins(s), ['Bench', 'Late', 'Ann', 'Blank']);
+    assert.equal(turnName(s), 'Ann');
+    // a row with no DEX stays last until one is typed, then is placed
+    s = G(s, { type: 'fightJoin', rows: [M.blankRow({ id: 'none', name: 'None', ini: null })], label: 'None' });
+    assert.deepEqual(ins(s), ['Bench', 'Late', 'Ann', 'Blank', 'None']);
+    s = G(s, { type: 'setStat', row: 'none', key: 'dex', value: 50 });
+    assert.deepEqual(ins(s), ['Bench', 'Late', 'Ann', 'None', 'Blank']);
+    assert.equal(turnName(s), 'Ann');
+    // benched after Start, ticked in: placed with the tie rules (equal DEX: combat skill, then PCs first)
+    s = G(s, { type: 'fightJoin', rows: [M.blankRow({ id: 'b2', name: 'Bench 2', ini: 60, dex: 60, fighting: 70, in: false })], label: 'Bench 2' });
+    s = G(s, { type: 'fightTick', row: 'b2', in: true });
+    assert.deepEqual(ins(s), ['Bench', 'Late', 'Bench 2', 'Ann', 'None', 'Blank'], 'a higher combat skill acts before an equal DEX');
+    assert.equal(turnName(s), 'Ann');
+  });
+
   it('Sort after Start re-sorts once, the turn kept', () => {
     let s = begin(GURPS, [{ name: 'Kev', kind: 'pc', ini: 6, speed: 6 }, { name: 'Slow', ini: 4, speed: 4 }]);
     s = go(s);

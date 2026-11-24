@@ -12,6 +12,7 @@ const { listSessions, pickSession } = require('../lib/run-sheet/sessions');
 const { browserSkip } = require('./helpers/browser');
 const { withPage } = require('./helpers/cdp');
 const { copyFixture, removeFixture } = require('./helpers/systems-fixture');
+const { blankRow } = require('../lib/run-sheet/web/fight-math');
 const { sane, where, picked, landing } = require('./helpers/fight-layout');
 
 const SHOTS = process.env.RS_SHOTS || '';
@@ -2692,6 +2693,58 @@ describe('Tab, held rows and Same for all in CoC and GURPS (step 6b Task 23), by
       p = await until(page, `p.saved === "Saved" && p.pending === 0 && p.fight.rows.findIndex((r) => r.id === ${q(hale)}) === 0`);
       assert.deepStrictEqual(ids(p).filter((x) => x !== hale), was.filter((x) => x !== hale));
       assert.strictEqual(await where(page), `data-fhp=${other.id}`);
+      assert.deepStrictEqual(p.errors, []);
+    });
+  });
+});
+
+describe('CoC rows ticked in or added later are placed by DEX (step 6b Task 33), by real input', { skip: browserSkip() }, () => {
+  const names = (p) => p.fight.rows.filter((r) => r.in).map((r) => r.name);
+  async function startNow(page) {
+    await tap(page, '#fNext');
+    await page.waitFor('document.querySelector("#fStartAnyway") || JSON.parse(document.body.dataset.probe || "null").fight.started');
+    if (await page.evaluate('Boolean(document.querySelector("#fStartAnyway"))')) await tap(page, '#fStartAnyway');
+    return until(page, 'p.fight.started && p.saved === "Saved" && p.pending === 0');
+  }
+  const join = (run, p, name, over, k) => fromOther(run, [{ type: 'fightJoin', fight: p.fight.id, label: name, rows: [blankRow({ id: `t33-${k}`, name, ...over })] }]);
+
+  it('a benched DEX 70 row ticked in below a blank row takes its place and acts first at Start', async () => {
+    const run = await start('coc');
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await fightOn(page, run, 0);
+      await join(run, p, 'Varrio', { ini: null }, 'v');
+      await join(run, p, 'Ferrante', { ini: 70, dex: 70, in: false }, 'f');
+      p = await until(page, 'p.fight.rows.some((r) => r.name === "Ferrante") && p.fight.rows.some((r) => r.name === "Varrio")');
+      assert.ok(!names(p).includes('Ferrante'), 'benched');
+      await tap(page, `[data-ftick="${named(p, 'Ferrante').id}"]`);
+      p = await until(page, `p.fight.rows.find((r) => r.name === "Ferrante").in && p.saved === "Saved" && p.pending === 0`);
+      assert.strictEqual(names(p)[0], 'Ferrante', `placed: ${names(p)}`);
+      assert.ok(names(p).indexOf('Ferrante') < names(p).indexOf('Varrio'));
+      p = await startNow(page);
+      assert.strictEqual(p.fight.turn, named(p, 'Ferrante').id, 'it acts first');
+      assert.deepStrictEqual(p.errors, []);
+    });
+  });
+
+  it('a DEX 60 row added after Start lands by DEX, the turn stays; a blank row typed 50 is placed then', async () => {
+    const run = await start('coc');
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await fightOn(page, run, 0);
+      p = await startNow(page);
+      const turn = [p.fight.turn, p.fight.round];
+      await join(run, p, 'Rasul', { ini: 60, dex: 60 }, 'r');
+      await join(run, p, 'Quill', { ini: null }, 'q');
+      p = await until(page, 'p.fight.rows.some((r) => r.name === "Quill") && p.fight.rows.some((r) => r.name === "Rasul")');
+      const o = names(p);
+      assert.strictEqual(o.at(-1), 'Quill', 'a row with no DEX stays last');
+      assert.ok(p.fight.rows.filter((r) => r.in && r.ini !== null && r.name !== 'Rasul').every((r) => (o.indexOf(r.name) < o.indexOf('Rasul')) === (r.ini >= 60)), `by DEX: ${o}`);
+      assert.deepStrictEqual([p.fight.turn, p.fight.round], turn, 'the turn did not move');
+      p = await typeInto(page, `[data-fini="${named(p, 'Quill').id}"]`, 50);
+      const o2 = names(p);
+      const ini = (n) => named(p, n).ini;
+      assert.ok(o2.every((n, i) => i === 0 || ini(o2[i - 1]) === null || ini(n) === null || ini(o2[i - 1]) >= ini(n)), `sorted: ${o2.map((n) => [n, ini(n)])}`);
+      assert.notStrictEqual(o2.at(-1), 'Quill');
+      assert.deepStrictEqual([p.fight.turn, p.fight.round], turn);
       assert.deepStrictEqual(p.errors, []);
     });
   });

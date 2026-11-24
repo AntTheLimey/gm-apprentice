@@ -31,6 +31,7 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ### Fixed
 
+- A Call of Cthulhu row ticked in or added after the fight starts takes its place by DEX at once, with the turn kept.
 - A click into a Table Log figure selects its number, so typing replaces it (D&D's too), and Call of Cthulhu's Luck is refused above 99.
 - The combat reference corrects GURPS wounding, stun and knockdown, and Call of Cthulhu's Dying, several shots and Prone (#874, #875).
 - A Call of Cthulhu NPC's combat figures are read from a Skills or Weapons section beside its stat block, from skill and weapon tables (a flintlock's malfunction included), an Attacks per Round heading, and bold pairs on one line.

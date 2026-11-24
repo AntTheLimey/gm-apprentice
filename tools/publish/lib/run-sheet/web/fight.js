@@ -279,12 +279,19 @@
   // Every ticked-in row with a number holds its place in a fixed order (at Start, and at a Sort after it). A row
   // benched then has no place yet: ticked in later, it takes one (placeLate).
   const fixAll = (f) => { if (FM.rulesOf(f).orderFixed) for (const r of f.rows) if (r.in && isNum(r.ini)) r.fixed = true; };
-  // In a fixed order after Start, a ticked-in row with a number and no place yet (it joined, or was ticked in, after
-  // Start) takes its sorted place by one insert, the turn kept, and holds it from then on.
+  // A row ticked in, or joined, with a number and no place yet takes its sorted place by one insert, the turn kept.
+  // In a fixed order (GURPS) that is after Start only, and the row holds its place from then on. Where the order
+  // opens sorted and later numbers re-place (CoC), it is before or after Start, by DEX with the sort's tie rules,
+  // and `fixed` is not set (a typed DEX still re-places it). A row with no number stays where it is until one
+  // is typed (`replace` places it then). D&D is rolled: its Sort stays the GM's button.
   function placeLate(f, r) {
-    if (!f.started || !FM.rulesOf(f).orderFixed || !r.in || r.fixed || r.kind === 'lair' || !isNum(r.ini)) return;
-    f.rows = FM.placeRow(f.rows, r.id, FM.rulesOf(f));
-    r.fixed = true;
+    const rules = FM.rulesOf(f);
+    if (!r.in || r.kind === 'lair' || r.held || !isNum(r.ini)) return;
+    if (rules.orderFixed) {
+      if (!f.started || r.fixed) return;
+      r.fixed = true;
+    } else if (rules.initiative === 'roll' || rules.initiative === undefined) return;
+    f.rows = FM.placeRow(f.rows, r.id, rules);
   }
 
   // The stats setStat takes, each to its row fields (the brief's one map); `ini` follows from DEX and Speed.
