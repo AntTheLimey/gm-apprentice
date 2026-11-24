@@ -243,8 +243,10 @@ function lacks(name, nums) {
 const GUN_FILL = ['damage', 'malfunction', 'reload', 'impales'];
 function fillGun(g, others) {
   if (g.damage !== null || g.malfunction !== null) return g;
-  const o = others.find((x) => x.skill === g.skill && (x.damage !== null || x.malfunction !== null));
-  if (!o) return g;
+  // only when exactly one table gun has the skill's figure: two or more at it, and which one it is is anyone's guess
+  const same = others.filter((x) => x.skill === g.skill && (x.damage !== null || x.malfunction !== null));
+  if (same.length !== 1) return g;
+  const o = same[0];
   const out = { ...g };
   for (const k of GUN_FILL) if (out[k] === null && o[k] !== null) out[k] = o[k];
   return out;

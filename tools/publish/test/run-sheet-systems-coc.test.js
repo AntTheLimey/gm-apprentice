@@ -437,6 +437,16 @@ for (const crlf of [false, true]) {
         assert.deepEqual(n.guns, [{ name: 'Firearms (Handgun)', skill: 50, damage: '1D6+1', malfunction: 95, reload: 4, impales: false }]);
       } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
     });
+    it('a gun from a Firearms skill alone stays as it is when two Weapons table guns share its figure (Task 32 re-review)', () => {
+      const tmp = path.join(path.dirname(dir), 'skill-gun-two');
+      fs.mkdirSync(path.join(tmp, 'Characters', 'NPCs'), { recursive: true });
+      try {
+        fs.writeFileSync(path.join(tmp, 'Characters/NPCs/Bridge Warden.md'),
+          '---\nname: Bridge Warden\ntype: npc\n---\n\n## Stats\n\n**HP** 11 · **DEX** 50\n- Firearms (Handgun) 50%\n\n## Weapons\n\n| Weapon | Skill | Damage | Attacks | Malf |\n|---|---|---|---|---|\n| Flintlock Pistol | 50% | 1D6+1 | 1/4 | 95 |\n| Hunting Rifle | 50% | 2D6+4 | 1 | 98 |\n'.replace(/\n/g, crlf ? '\r\n' : '\n'));
+        const n = systemFor('coc-7e').readFoe({ notePath: 'Characters/NPCs/Bridge Warden.md', index: buildIndex(tmp), text: undefined }).nums;
+        assert.deepEqual(n.guns, [{ name: 'Firearms (Handgun)', skill: 50, damage: null, malfunction: null, reload: null, impales: null }]);
+      } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+    });
     it('the stat block\'s own figures win over a sibling section\'s', () => {
       const tmp = path.join(path.dirname(dir), 'own-first');
       fs.mkdirSync(path.join(tmp, 'Characters', 'NPCs'), { recursive: true });
