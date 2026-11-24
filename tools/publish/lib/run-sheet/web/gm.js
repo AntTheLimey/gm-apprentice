@@ -663,11 +663,24 @@
   document.addEventListener('focusin', (ev) => { if (wantFocus && ev.target.getAttribute && focusKey(ev.target) !== wantFocus) wantFocus = null; });
 
   // Every change: redraw, then put focus, caret and half-typed words back.
+  // A refused end-panel figure stands until the saved one changes by another route (another window, a long rest): then
+  // the box shows what is saved. Pruned here, where the figure changes, not while the panel is drawn.
+  function pruneBadVitals() {
+    const keys = Object.keys(G.ui.badVital);
+    if (!keys.length || !G.model || !G.state) return;
+    const rows = D().vitals;
+    for (const key of keys) {
+      const at = key.lastIndexOf('|');
+      const v = rows.find((x) => x.rowId === key.slice(0, at));
+      if (!v || String(G.ui.badVital[key].saved ?? '') !== String(v[key.slice(at + 1)] ?? '')) delete G.ui.badVital[key];
+    }
+  }
   function update() {
     if (press.on) { press.owed = true; return; }
     // called from inside a redraw (a box the redraw removes fires blur and change): once it is done
     if (drawing) { drawAgain = true; return; }
     press.owed = false;
+    pruneBadVitals();
     let a = document.activeElement;
     if ((!a || a === document.body) && wantFocus) a = document.querySelector(wantFocus) || a;
     if (!committing && a && a.matches && a.matches(COMMIT_ON_CHANGE) && a.value.trim() !== a.defaultValue.trim()) {
@@ -1107,14 +1120,8 @@
       const nums = cols.filter((c) => c.field !== 'conditions');
       const hasCond = cols.some((c) => c.field === 'conditions');
       const pooled = nums.some((c) => c.field !== 'hp');
-      // a refused figure stands until the saved one changes by another route (another window, a long rest): then the
-      // box shows what is saved
-      const bad = (v, field) => {
-        const key = `${v.rowId}|${field}`;
-        const b = G.ui.badVital[key];
-        if (b && String(b.saved ?? '') !== String(v[field] ?? '')) { delete G.ui.badVital[key]; return undefined; }
-        return b;
-      };
+      // a refused figure stands until the saved one changes by another route (`pruneBadVitals`, on every update)
+      const bad = (v, field) => G.ui.badVital[`${v.rowId}|${field}`];
       // a figure refused (over the sheet's max, or below 0): kept as typed, marked, never saved
       const box = (v, field, attrs, label) => {
         const b = bad(v, field);

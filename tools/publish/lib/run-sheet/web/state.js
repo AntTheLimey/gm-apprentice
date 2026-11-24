@@ -738,9 +738,10 @@
     if (!rules.family || rules.family === 'dnd' || typeof value !== 'number' || !Number.isFinite(value)) return null;
     const pc = ((model && model.pcs) || []).find((p) => p.note === rowId);
     if (!pc) return null;
-    // the column's max field; HP's is `max` on a vitals row and `hpMax` on a PC's sheet
+    // the column's max on a PC's sheet: the ontology's `sheet` name with Max (hp: `hpMax`, mp: `mpMax`), where the
+    // vitals row's own max field (`max`, for HP) is another name
     const col = vitalColumns(model).find((c) => c.field === field);
-    const sheetMax = col && col.max ? (col.max === 'max' ? 'hpMax' : col.max) : null;
+    const sheetMax = col && col.max ? (typeof col.sheet === 'string' ? `${col.sheet}Max` : col.max) : null;
     const max = sheetMax ? pc[sheetMax] : null;
     if (typeof max === 'number' && value > max) return `over the sheet's max (${max}): not saved`;
     const below = rules.family === 'gurps' && (field === 'hp' || field === 'fp');
