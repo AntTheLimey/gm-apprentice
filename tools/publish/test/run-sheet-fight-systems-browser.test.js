@@ -12,7 +12,7 @@ const { listSessions, pickSession } = require('../lib/run-sheet/sessions');
 const { browserSkip } = require('./helpers/browser');
 const { withPage } = require('./helpers/cdp');
 const { copyFixture, removeFixture } = require('./helpers/systems-fixture');
-const { sane } = require('./helpers/fight-layout');
+const { sane, where, picked, landing } = require('./helpers/fight-layout');
 
 const SHOTS = process.env.RS_SHOTS || '';
 async function shot(page, name) {
@@ -1726,11 +1726,6 @@ describe('CoC and GURPS pages speak their own system (step 6b Task 22), by real 
 describe('Tab, held rows and Same for all in CoC and GURPS (step 6b Task 23), by real input', { skip: browserSkip() }, () => {
   const AT = { coc: 0, gurps: 1 };
   const W = (which) => (which === 'gurps' ? 'GURPS' : 'CoC');
-  // where focus is: the control's first data-f attribute and its value, its id, or 'body'
-  const where = (page) => page.evaluate(`(() => { const a = document.activeElement; if (!a || a === document.body) return 'body';
-    const x = Array.from(a.attributes).find((n) => n.name.startsWith('data-f')); return x ? x.name + '=' + x.value : (a.id ? '#' + a.id : a.tagName); })()`);
-  // the focused box's words and selection
-  const picked = (page) => page.evaluate('(() => { const a = document.activeElement; return a && typeof a.selectionStart === "number" ? [a.value, a.selectionStart, a.selectionEnd] : null; })()');
   // "+ New" with a count: the count box first, then the name
   async function addMany(page, name, n) {
     await tap(page, '#fAddCount');
@@ -1935,7 +1930,7 @@ describe('Tab, held rows and Same for all in CoC and GURPS (step 6b Task 23), by
     });
   }
 
-  it('GURPS: 11 Tab 10 Tab 12 then Same for all: "Same for all 2"; all three HP 11, FP 10, Speed 5.5; a Bouncer whose initiative was typed keeps it', async () => {
+  it('GURPS: 11 Tab 10 Tab 12, Parry, Block and DR, then Same for all: "Same for all 2", reached by Tab from the last box and on to Start; all three HP 11, FP 10, Speed 5.5 and the typed defences; a typed initiative is kept', async () => {
     const run = await start('gurps');
     await withPage({ width: 1449, height: 762 }, async (page) => {
       await fightOn(page, run, 1);
@@ -1944,24 +1939,92 @@ describe('Tab, held rows and Same for all in CoC and GURPS (step 6b Task 23), by
       p = await typeInto(page, `[data-fini="${b[1]}"]`, 10);
       p = await peek(page, p, 'Bouncer 1');
       await page.waitFor(`document.activeElement === document.querySelector('#acting [data-fs-st="${b[0]}"]')`, 3000);
-      await page.type('11');
+      // ST, HT, DX; past Speed and Dodge (worked out); Parry, Block, DR: the panel's last box
+      for (const v of ['11', '10', '12', null, null, '9', '8', '2']) {
+        if (v !== null) await page.type(v);
+        await page.key('Tab');
+      }
+      const same = `#acting [data-fsame="${b[0]}"]`;
+      assert.strictEqual(await where(page), `data-fsame=${b[0]}`, 'Tab from the last box goes to Same for all');
+      p = await until(page, `p.saved === "Saved" && p.pending === 0 && p.fight.rows.find((r) => r.id === ${q(b[0])}).dr === 2`);
+      assert.strictEqual(await text(page, same), 'Same for all 2');
+      await page.key('Tab', { shift: true });
+      assert.strictEqual(await where(page), `data-fs-dr=${b[0]}`, 'Shift-Tab goes back to the last box');
       await page.key('Tab');
-      await page.type('10');
+      assert.strictEqual(await where(page), `data-fsame=${b[0]}`);
       await page.key('Tab');
-      await page.type('12');
-      await page.key('Enter');
-      p = await until(page, `p.saved === "Saved" && p.pending === 0 && p.fight.rows.find((r) => r.id === ${q(b[0])}).dx === 12`);
-      assert.strictEqual(await text(page, `#acting [data-fsame="${b[0]}"]`), 'Same for all 2');
-      await tap(page, `#acting [data-fsame="${b[0]}"]`);
+      assert.strictEqual(await where(page), '#fNext', 'and on to Start before Start');
+      await tap(page, same);
       p = await until(page, `p.saved === "Saved" && p.pending === 0 && p.fight.rows.find((r) => r.id === ${q(b[2])}).hp === 11`);
       for (const id of b) {
         const r = p.fight.rows.find((x) => x.id === id);
-        assert.deepStrictEqual([r.hp, r.max, r.fp, r.fpMax, r.speed], [11, 11, 10, 10, 5.5], r.name);
+        assert.deepStrictEqual([r.hp, r.max, r.fp, r.fpMax, r.speed, r.parry, r.block, r.dr], [11, 11, 10, 10, 5.5, 9, 8, 2], r.name);
       }
       assert.strictEqual(named(p, 'Bouncer 2').ini, 10, 'the typed initiative is kept');
       assert.deepStrictEqual(p.errors, []);
     });
   });
+
+  it('GURPS: Tab from the panel\'s last box to a Same for all its own commit leaves nothing to copy goes to Start, never the page; the button says why', async () => {
+    const run = await start('gurps');
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await page.focusEvents();
+      await fightOn(page, run, 1);
+      let p = await addMany(page, 'Bouncer', 2);
+      const [b1] = [1, 2].map((i) => named(p, `Bouncer ${i}`).id);
+      p = await peek(page, p, 'Bouncer 1');
+      p = await typeInto(page, box(p, 'Bouncer 1', 'st'), 11);
+      await tap(page, `#acting [data-fsame="${b1}"]`);
+      p = await until(page, 'p.saved === "Saved" && p.pending === 0 && p.fight.rows.find((r) => r.name === "Bouncer 2").st === 11');
+      p = await typeInto(page, box(p, 'Bouncer 1', 'dr'), 3);
+      assert.strictEqual(await text(page, `#acting [data-fsame="${b1}"]`), 'Same for all 1');
+      // the DR taken out again: the only thing left to copy goes with the commit Tab makes
+      await tap(page, box(p, 'Bouncer 1', 'dr'));
+      await page.key('Backspace');
+      await page.key('Tab');
+      p = await until(page, `p.saved === "Saved" && p.pending === 0 && p.fight.rows.find((r) => r.id === ${q(b1)}).dr === null`);
+      await page.sleep(100);
+      assert.strictEqual(await where(page), '#fNext');
+      assert.strictEqual(await page.evaluate(`document.querySelector('#acting [data-fsame="${b1}"]').disabled`), true);
+      assert.match(await page.evaluate('document.querySelector("#acting .samebox").innerText'), /Same for all\s*No copy can take these/);
+      assert.deepStrictEqual(p.errors, []);
+    });
+  });
+
+  it('GURPS, before Start: a Speed typed in the column, then a click on a blank row\'s name: the held row is placed on the release, the cursor in that row\'s panel', async () => {
+    const run = await start('gurps');
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await page.focusEvents();
+      await fightOn(page, run, 1);
+      let p = await addMany(page, 'Bouncer', 3);
+      const b = [1, 2, 3].map((i) => named(p, `Bouncer ${i}`).id);
+      const was = ids(p).indexOf(b[2]);
+      await tap(page, `[data-fini="${b[2]}"]`);
+      await page.type('9');
+      await tap(page, `[data-fpeek="${b[0]}"]`);
+      p = await until(page, `p.saved === "Saved" && p.pending === 0 && p.fight.rows.find((r) => r.id === ${q(b[2])}).ini === 9 && p.fight.rows.every((r) => !r.held)`);
+      assert.ok(ids(p).indexOf(b[2]) < was, 'placed once focus left the column');
+      assert.ok(sortedDown(p), `sorted: ${JSON.stringify(p.fight.rows.filter((r) => r.in).map((r) => [r.name, r.ini]))}`);
+      assert.strictEqual(await where(page), `data-fs-st=${b[0]}`);
+    });
+  });
+
+  // Task 23 fix round 1: a rail jump lands the beat's top at the sticky bar plus 8 (the page's scroll-padding only)
+  for (const [width, height] of SIZES) {
+    it(`CoC at ${width}: a rail jump puts the beat's top at the sticky bar plus 8`, async () => {
+      const run = await start('coc');
+      await withPage({ width, height }, async (page) => {
+        await page.goto(`${run.base}/?probe=1`);
+        await settled(page);
+        const key = run.model.beats[1].key;
+        await tap(page, `#rail [data-go="beat:${key}"]`);
+        await page.sleep(100);
+        const l = await landing(page, `[id="beat:${key}"]`);
+        if (l.scrollY < l.maxY - 1) assert.ok(Math.abs(l.top - (l.bar + 8)) <= 3, `${width}: ${JSON.stringify(l)}`);
+        else assert.ok(l.top >= l.bar + 5, `${width} at the page's end: ${JSON.stringify(l)}`);
+      });
+    });
+  }
 
   it('GURPS, before Start: typing Speed down three blank rows: no row moves until Tab leaves the column, then each takes its sorted place', async () => {
     const run = await start('gurps');

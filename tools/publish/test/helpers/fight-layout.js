@@ -16,4 +16,16 @@ function sane(p, where = '') {
   assert.deepStrictEqual(p.errors, [], `${where}: script errors`);
 }
 
-module.exports = { sane };
+// Where focus is: the control's first data-f attribute and its value ("data-fini=<id>"), else '#<id>', its tag, or 'body'.
+const where = (page) => page.evaluate(`(() => { const a = document.activeElement; if (!a || a === document.body) return 'body';
+  const x = Array.from(a.attributes).find((n) => n.name.startsWith('data-f')); return x ? x.name + '=' + x.value : (a.id ? '#' + a.id : a.tagName); })()`);
+// The focused box's words and selection: [value, selectionStart, selectionEnd], or null.
+const picked = (page) => page.evaluate('(() => { const a = document.activeElement; return a && typeof a.selectionStart === "number" ? [a.value, a.selectionStart, a.selectionEnd] : null; })()');
+// A rail jump's landing (Task 23 fix round 1): the target's top against the sticky bar's bottom, and in a fight the
+// pane's top under its own bar.
+const landing = (page, sel) => page.evaluate(`(() => { const e = document.querySelector(${JSON.stringify(sel)}); const bar = document.querySelector('.top').getBoundingClientRect().bottom;
+  const sheet = document.querySelector('#sheet'); const rbar = sheet && sheet.querySelector('.rbar');
+  return { top: e.getBoundingClientRect().top, bar, sheetTop: sheet.getBoundingClientRect().top, rbar: rbar ? rbar.offsetHeight : 0,
+    scrollY, sheetScroll: sheet.scrollTop, maxY: document.documentElement.scrollHeight - innerHeight, maxSheet: sheet.scrollHeight - sheet.clientHeight }; })()`);
+
+module.exports = { sane, where, picked, landing };

@@ -636,6 +636,8 @@
     press.on = true;
     press.n++;
     clearTimeout(press.timer);
+    // A release that never comes is cut off after 2 s. A press held that long ends its hold here, mid-press: the
+    // redraw owed comes, and afterPress may place the fight's held rows (Task 23) while the button is still down.
     press.timer = setTimeout(endHoldOf(press.n), 2000);
   }, true);
   // the click's own handlers redraw as usual (capture, before them); a redraw still owed comes after them
@@ -2060,6 +2062,8 @@
     ui: G.ui,
     render: update,
     drawing: () => drawing,
+    // a press of the main button is held (its redraws wait for the release): the one press state parts read
+    pressing: () => press.on,
     focusTo,
     parts,
     // helpers the parts share with the page

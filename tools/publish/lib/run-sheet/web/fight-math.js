@@ -1001,9 +1001,10 @@
     return (forCopy || !r.typed) && (forCopy || (!r.turned && !r.logged)) && hpOk && maxOk && !r.temp && !r.out
       && !(r.conds || []).length && !r.exhaustion && !r.conc && !(r.ds && (r.ds.s || r.ds.f));
   }
-  // Same for all, field by field (Task 23, D3). A worked-out figure's `from` key: a source's figure worked out from
-  // others is not copied itself; its inputs are, and the copy works it out again.
-  const COPY_FROM = { max: 'hp', fpMax: 'fp', mpMax: 'mp', speed: 'speed', dodge: 'dodge' };
+  // A worked-out figure's `from` key (the one copy; fight.js reads it): a figure the GM types clears it, and Same for all
+  // (Task 23, D3) never copies a source's worked-out figure itself, only its inputs, so the copy works it out again.
+  const FROM_KEY = { max: 'hp', fpMax: 'fp', mpMax: 'mp', speed: 'speed', dodge: 'dodge' };
+  // The stat keys Same for all copies for D&D (the one copy; fight.js's statKeysOf gives them for a D&D fight).
   const SAME_KEYS = ['max', 'ac', 'mod'];
   const holds = (v) => isNum(v) || (typeof v === 'string' && v.trim() !== '');
   // Whether a row holds anything Same for all could copy (else its button is disabled: "Type a number first").
@@ -1014,7 +1015,7 @@
   function copyFields(src, x, keys = SAME_KEYS) {
     const typed = (x.typedKeys && typeof x.typedKeys === 'object') ? x.typedKeys : {};
     const from = (src.from && typeof src.from === 'object') ? src.from : {};
-    const derived = (k) => Boolean(COPY_FROM[k] && from[COPY_FROM[k]]);
+    const derived = (k) => Boolean(FROM_KEY[k] && from[FROM_KEY[k]]);
     const fields = keys.filter((k) => holds(src[k]) && !typed[k] && !derived(k) && x[k] !== src[k]);
     const hp = isNum(src.max) && !typed.max && !derived('max') && x.hp !== src.max;
     return { fields, hp };
@@ -1046,7 +1047,7 @@
     combatOf, initOf, marksOf, tiredOf,
     thresholdOf, isLit, sortRows, takesTurn, nextLive, actingRow,
     gmName, lairRow, unseenKey, unseenNumbers, unseenLabels, rowsForFight, joinRows, blankRow,
-    addChoices, sameName, groupKey, groupMates, placeRow, undoable, untouched, copyHolds, copyFields, sameForAllTakers, sameForAllCount,
+    addChoices, sameName, groupKey, groupMates, placeRow, undoable, untouched, copyHolds, copyFields, sameForAllTakers, sameForAllCount, FROM_KEY, SAME_KEYS,
     SIDES, isSide, noteSide, sideOfRow, isFoe,
   };
 }));

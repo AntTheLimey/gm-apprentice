@@ -225,7 +225,7 @@
 
   // The stat keys Same for all copies (D&D's, `STAT_KEYS`); CoC and GURPS copy their own stats and pool maxima
   // (statKeysOf, by the rules' initiative). Nothing else is copied.
-  const STAT_KEYS = ['max', 'ac', 'mod'];
+  const STAT_KEYS = FM.SAME_KEYS;
   function statKeysOf(rules) {
     const ru = FM.rulesOf({ rules });
     if (ru.initiative === 'dex') return ['max', 'mpMax', 'sanMax', 'dex'];
@@ -309,7 +309,7 @@
   const WORDS_OK = new Set(['dr', 'db']);
   const SIGNED = new Set(['build', 'db']);
   // A worked-out figure's `from` key, cleared when the GM types the figure itself.
-  const FROM_KEY = { max: 'hp', fpMax: 'fp', mpMax: 'mp', speed: 'speed', dodge: 'dodge' };
+  const FROM_KEY = FM.FROM_KEY;
 
   // GURPS's worked-out figures (gurps-math's deriveGurps, the one copy): HP from ST, FP from HT, Basic Speed from
   // DX and HT, each only where the GM did not type it and the row's own block did not state it, marked in `from`.

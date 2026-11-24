@@ -656,8 +656,7 @@
     return `${open}${head(r.gmName)}<div class="nums">${nums.join('')}</div>${ctr ? `<div class="nums ctr">${ctr}</div>` : ''}${boxesHTML(r)}${panelManoeuvreHTML(r)}${panelDefencesHTML(r)}${hitChipsHTML(r)}${trackHTML(r)}${body}</div>`;
   }
   // Same for all (Task 23, D3): its number is how many of the group will take something (FM.sameForAllCount, field by
-  // field); disabled, with its reason written beside it, while this row has nothing to copy; gone once every copy holds
-  // what it would take.
+  // field); disabled, with its reason written beside it, while this row has nothing to copy or no copy can take it.
   function sameHTML(f, r) {
     if (r.kind === 'pc' || r.kind === 'lair' || !FM.groupMates(f.view.rows, r).some((x) => x !== r)) return '';
     const keys = Fight.statKeysOf(FM.rulesOf(f));
@@ -665,9 +664,13 @@
       return `<span class="samebox"><button type="button" class="tg same" data-fsame="${esc(r.id)}" disabled title="Nothing to copy yet: type a number on this row first">Same for all</button><span class="samewhy">${SAME_FIRST}</span></span>`;
     }
     const n = FM.sameForAllCount(f.view.rows, r, keys);
-    return n ? `<button type="button" class="tg same" data-fsame="${esc(r.id)}" title="Copy these numbers (and the HP they give) to the others of this group nobody has typed into, hurt or given a status">Same for all ${n}</button>` : '';
+    if (!n) {
+      return `<span class="samebox"><button type="button" class="tg same" data-fsame="${esc(r.id)}" disabled title="Every copy holds these numbers already, typed its own, or is hurt or given a status">Same for all</button><span class="samewhy">${SAME_NONE}</span></span>`;
+    }
+    return `<button type="button" class="tg same" data-fsame="${esc(r.id)}" title="Copy these numbers (and the HP they give) to the others of this group nobody has typed into, hurt or given a status">Same for all ${n}</button>`;
   }
   const SAME_FIRST = 'Type a number first';
+  const SAME_NONE = 'No copy can take these';
   // ---- GURPS's defences (Task 14): each as it stands this turn, and a tap rolls it; the GM can ignore all of it ----
   // A defence's button: "Parry 9" (the figure now), "Block used", "Block again?" once a used Block was tapped. `at` is
   // its attribute: `data-fdef` on the row, `data-fpdef` in the panel, each "row|defence".
@@ -2092,11 +2095,14 @@
     if (STAT[f].stat) {
       // a figure for setStat: a number where it is one (`+1` is 1), else the words (DR's `2 (face 0)`, DB's `+1D4`)
       const value = v === '' ? null : /^[+-]?\d+(?:\.\d+)?$/.test(v) ? Number(v) : v;
-      if (shownFigure(value) !== shown(r, f)) F({ type: 'setStat', row: r.id, key: STAT[f].stat, value, ...(STAT[f].panel ? { hold: true } : {}) });
+      if (shownFigure(value) !== shown(r, f)) {
+        if (STAT[f].panel) heldIn = HOLD_PANEL;
+        F({ type: 'setStat', row: r.id, key: STAT[f].stat, value, ...(STAT[f].panel ? { hold: true } : {}) });
+      }
       return true;
     }
     const n = v === '' ? null : Number(v);
-    if (f === 'fini' && n !== (isNum(r.ini) ? r.ini : null)) F({ type: 'setInit', row: r.id, ini: n, hold: true });
+    if (f === 'fini' && n !== (isNum(r.ini) ? r.ini : null)) { heldIn = HOLD_COLUMN; F({ type: 'setInit', row: r.id, ini: n, hold: true }); }
     if (f === 'fmax' && n !== r.max) F({ type: 'setMax', row: r.id, max: n });
     if (f === 'fac' && n !== r.ac) F({ type: 'setAc', row: r.id, ac: n });
     return true;
@@ -2145,25 +2151,27 @@
     if (back) return attr('data-fmax', id);
     return nextMax();
   }
-  // The boxes whose commits are held (the initiative column and the panel's): the rows stay put while focus is in them.
-  const inHold = (el) => Boolean(el && el.matches && el.matches('[data-fini], #acting .pbox'));
-  // Held rows placed (D3c): on Enter in those boxes, when focus leaves them by the keyboard, before Start and Sort,
-  // and on the release of a press that took focus out of them (afterPress), never on the press.
+  // The zones whose commits are held (the initiative column, the panel's boxes): the rows stay put while focus is in
+  // the zone the last held commit came from (`heldIn`), and are placed once it is not (focus moved from the column to a
+  // panel box places the column's).
+  const HOLD_COLUMN = '[data-fini]';
+  const HOLD_PANEL = '#acting .pbox';
+  let heldIn = null;
+  const inHold = (el) => Boolean(heldIn && el && el.matches && el.matches(heldIn));
+  // Held rows placed (D3c): on Enter in those boxes, when focus leaves the zone by the keyboard, before Start and Sort,
+  // and on the release of a press that took focus out of it (afterPress), never on the press.
   function placeHeld() {
+    heldIn = null;
     const f = state().fight;
     if (f && f.rows.some((r) => r.held)) F({ type: 'placeHeld' });
   }
-  let pressing = false;
-  // a press gm.js holds the redraws for (the main button), so its release comes back through afterPress
-  document.addEventListener('pointerdown', (ev) => { if (ev.button === 0) pressing = true; }, true);
-  part.afterPress = () => {
-    pressing = false;
-    if (!inHold(document.activeElement)) placeHeld();
-  };
+  // the release of a press (gm.js endHold), after its click has landed and its redraw has come
+  part.afterPress = () => { if (!inHold(document.activeElement)) placeHeld(); };
   document.addEventListener('focusout', (ev) => {
     if (!inHold(ev.target)) return;
-    // after the redraw that may be under way (it puts focus back into a box it drew again)
-    setTimeout(() => { if (!pressing && !inHold(document.activeElement)) placeHeld(); }, 0);
+    // after the redraw that may be under way (it puts focus back into a box it drew again); a press's own leave waits
+    // for its release (gm.js's press state, the one there is)
+    setTimeout(() => { if (!RP.pressing() && !inHold(document.activeElement)) placeHeld(); }, 0);
   });
 
   document.addEventListener('keydown', (ev) => {
@@ -2213,7 +2221,13 @@
       }
       // the focus moves first and the redraw comes after it, so focus never falls to the page (D2)
       RP.focusTo(to);
+      const fight = state().fight;
       commitStat(t);
+      // Same for all chosen, then gone or disabled by the commit (nothing left to take): past the end instead
+      const a = document.activeElement;
+      if (to.startsWith('[data-fsame') && !(a && a.matches && a.matches('[data-fsame]:not([disabled])'))) {
+        RP.focusTo(fight && fight.started ? self : '#fNext');
+      }
       if (!inHold(document.activeElement)) placeHeld();
       return;
     }

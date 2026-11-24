@@ -12,7 +12,7 @@ const { listSessions, pickSession } = require('../lib/run-sheet/sessions');
 const { browserSkip } = require('./helpers/browser');
 const { withPage } = require('./helpers/cdp');
 const { findChrome } = require('../lib/chrome');
-const { sane } = require('./helpers/fight-layout');
+const { sane, where, picked, landing } = require('./helpers/fight-layout');
 
 const PAGE = `<!doctype html><meta charset="utf-8"><body style="margin:0">
 <button id="b" style="position:absolute;left:40px;top:40px;width:120px;height:40px">go</button>
@@ -374,7 +374,9 @@ describe('the fight: adding anyone, by real input', { skip: browserSkip() }, () 
       await tap(page, '[data-fsame]');
       p = await until(page, 'p.saved === "Saved" && p.pending === 0 && p.fight.rows.filter((r) => /^Bouncer/.test(r.name) && r.max === 30).length === 3');
       assert.deepStrictEqual(['Bouncer 2', 'Bouncer 3'].map((n) => named(p, n).hp), [30, 30]);
-      assert.strictEqual(await page.evaluate('document.querySelectorAll("[data-fsame]").length'), 0, 'nothing left to copy to');
+      // step 6b Task 23 fix round 1 changed this on purpose: the button stays, disabled, saying why
+      assert.strictEqual(await page.evaluate('document.querySelector("[data-fsame]").disabled'), true, 'nothing left to copy to');
+      assert.match(await page.evaluate('document.querySelector("#acting .samebox").innerText'), /No copy can take these/);
       assert.deepStrictEqual(p.errors, []);
     });
   });
@@ -1753,9 +1755,6 @@ describe('Esc and J, from the review of the fixes', { skip: browserSkip() }, () 
 // ---- step 6b Task 23 for D&D: Tab past the end (D2), rows held while typed (D3c), Same for all field by field (D3).
 // CoC's and GURPS's are in run-sheet-fight-systems-browser.test.js.
 describe('D&D: Tab, held rows and Same for all (step 6b Task 23), by real input', { skip: browserSkip() }, () => {
-  const where = (page) => page.evaluate(`(() => { const a = document.activeElement; if (!a || a === document.body) return 'body';
-    const x = Array.from(a.attributes).find((n) => n.name.startsWith('data-f')); return x ? x.name + '=' + x.value : (a.id ? '#' + a.id : a.tagName); })()`);
-  const picked = (page) => page.evaluate('(() => { const a = document.activeElement; return a && typeof a.selectionStart === "number" ? [a.value, a.selectionStart, a.selectionEnd] : null; })()');
   const pcFigures = (p) => p.fight.rows.filter((r) => r.kind === 'pc').map((r) => [r.name, r.ini, r.hp, r.max, r.ac]);
   async function setUp(page, run) {
     await page.goto(`${run.base}/?probe=1`);
@@ -1853,7 +1852,8 @@ describe('D&D: Tab, held rows and Same for all (step 6b Task 23), by real input'
       await tap(page, `#acting [data-fsame="${b[0]}"]`);
       p = await until(page, `p.saved === "Saved" && p.pending === 0 && p.fight.rows.find((r) => r.id === ${JSON.stringify(b[2])}).max === 22`);
       assert.deepStrictEqual(['Bouncer 2', 'Bouncer 3'].map((n) => [named(p, n).ini, named(p, n).max, named(p, n).hp, named(p, n).ac]), [[9, 22, 22, 13], [8, 22, 22, 13]]);
-      assert.strictEqual(await page.evaluate('document.querySelectorAll("#acting [data-fsame]").length'), 0, 'nothing left to copy');
+      assert.strictEqual(await page.evaluate('document.querySelector("#acting [data-fsame]").disabled'), true, 'nothing left to copy');
+      assert.match(await page.evaluate('document.querySelector("#acting .samebox").innerText'), /Same for all\s*No copy can take these/);
     });
   });
 
@@ -1875,6 +1875,37 @@ describe('D&D: Tab, held rows and Same for all (step 6b Task 23), by real input'
       assert.strictEqual(p.fight.rows.filter((r) => r.in && r.kind !== 'lair')[0].name, 'Bouncer');
     });
   });
+
+  // Task 23 fix round 1: the page's scroll-padding-top is the one offset a rail jump gets (the beats' own scroll-margin
+  // went): the beat's top lands on the sticky bar's bottom plus 8, and in a fight the pane's offset is not doubled
+  for (const [width, height] of SIZES) {
+    it(`${width}: a rail jump puts the beat's top at the sticky bar plus 8; in a fight the pane's beat sits under its own bar`, async () => {
+      const run = await start();
+      await withPage({ width, height }, async (page) => {
+        await page.goto(`${run.base}/?probe=1`);
+        await settled(page);
+        const key = run.model.beats[1].key;
+        await tap(page, `#rail [data-go="beat:${key}"]`);
+        await page.sleep(100);
+        let l = await landing(page, `[id="beat:${key}"]`);
+        if (l.scrollY < l.maxY - 1) assert.ok(Math.abs(l.top - (l.bar + 8)) <= 3, `${width}: ${JSON.stringify(l)}`);
+        else assert.ok(l.top >= l.bar + 5, `${width} at the page's end: ${JSON.stringify(l)}`);
+        // in a fight the pane scrolls by itself, its beat under the pane's bar plus 8
+        await tap(page, `[id="beat:${run.model.beats[0].key}"] [data-all]`);
+        await settled(page);
+        await tap(page, `[id="beat:${run.model.beats[0].key}"] [data-fight]`);
+        await until(page, 'p.fight && p.saved === "Saved" && p.pending === 0');
+        const railLink = await page.evaluate(`(() => { const e = document.querySelector('#rail [data-go="beat:${key}"]'); if (!e) return 'none'; const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 ? 'shown' : 'folded'; })()`);
+        // the fight's layout folds the rail by itself below 1449 at this height: the pane's half is checked where it shows
+        if (width === 1449) assert.strictEqual(railLink, 'shown', 'the rail shows in a fight at 1449');
+        if (railLink !== 'shown') return;
+        await tap(page, `#rail [data-go="beat:${key}"]`);
+        await page.sleep(100);
+        l = await landing(page, `[id="beat:${key}"]`);
+        if (l.sheetScroll < l.maxSheet - 1) assert.ok(Math.abs(l.top - (l.sheetTop + l.rbar + 8)) <= 3, `${width} fight: ${JSON.stringify(l)}`);
+      });
+    });
+  }
 
   // Task 23: the page's scroll-padding-top keeps a box or link reached by Tab below the sticky bar
   it('1100: Shift-Tab onto a link under the sticky bar brings it below the bar', async () => {
