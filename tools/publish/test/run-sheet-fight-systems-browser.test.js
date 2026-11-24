@@ -3516,11 +3516,17 @@ describe('CoC fight rows on one line (step 6b Task 38), by real input', { skip: 
         assert.strictEqual(new Set(seen.map((x) => `${x[1]}|${x[2]}|${x[3]}|${x[4]}`)).size, 1, `${w}: the split moved ${JSON.stringify(seen)}`);
         if (w === 1449) assert.strictEqual(seen[0][3], false, '1449: the run list stays open');
         sane(p, `t38 ${w}`);
-        // a long name: cut on the row past 11 rem, whole in its title; the order reserves no more than 11 rem for it
+        // a long name (Task 38 fix round): CoC's row name reserves at most 11 rem, cut with "…" past it, whole in its
+        // title; the folds stay as they were, so at 1449 the run list stays open
+        const folds = [p.layout.railFolded, p.layout.folded];
         p = await addNew(page, LONG);
-        const nm = await page.evaluate(`(() => { const n = Array.from(document.querySelectorAll('#side ol.to > li > .nm')).find((x) => x.textContent === ${q(LONG)}); return [n.title.startsWith(${q(LONG)}), parseFloat(n.style.minWidth || '0'), 11 * parseFloat(getComputedStyle(document.documentElement).fontSize)]; })()`);
+        const nm = await page.evaluate(`(() => { const n = Array.from(document.querySelectorAll('#side ol.to > li > .nm')).find((x) => x.textContent === ${q(LONG)}); return [n.title.startsWith(${q(LONG)}), parseFloat(n.style.minWidth || '0'), 11 * parseFloat(getComputedStyle(document.documentElement).fontSize), getComputedStyle(n).textOverflow]; })()`);
         assert.strictEqual(nm[0], true, 'the whole name in its title');
         assert.ok(nm[1] > 0 && nm[1] <= nm[2], `its reserved width ${nm[1]} is at most 11 rem (${nm[2]})`);
+        assert.strictEqual(nm[3], 'ellipsis');
+        p = await settled(page);
+        assert.deepStrictEqual([p.layout.railFolded, p.layout.folded], folds, `${w}: the long name moved the folds`);
+        if (w === 1449) assert.strictEqual(p.layout.railFolded, false, '1449: the run list stays open with the long name');
         sane(p, `t38 long name ${w}`);
         await shot(page, `t38-coc-${w}`);
       });

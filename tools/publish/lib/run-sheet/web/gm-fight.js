@@ -2132,6 +2132,13 @@
     // Deliberately, a kind of figure that first appears mid-fight (a Block typed later) moves the split once: reserving
     // every kind would cost the run list at 1449 in every fight (the coordinator's ruling, Task 34 fix round). CoC and
     // GURPS only (D&D's rows keep today's measure). `d` is the render's own.
+    // the rem a row's name may reserve in the order's least width, where the system sets one (CoC's 11, Task 38 fix
+    // round); none keeps gm.js's own
+    nameCap(d) {
+      const f = d && d.fight;
+      const fr = rules().fight || rules();
+      return f && isNum(fr.nameCap) ? fr.nameCap : null;
+    },
     measureRows(d) {
       const f = d && d.fight;
       if (!f || f.paused || !panelBoxes().length) return [];

@@ -1444,7 +1444,7 @@
   G.om = ORDER_FLOOR;
   const fightLayout = () => Boolean(G.pane) && window.innerWidth > NARROW;
   // The order's least width: its widest row with every item as tight as it goes (a chip at its 2.4 rem, the name
-  // whole up to 11 rem), plus the order box's padding, the scroll box's gutter and the column's border. Never under 560.
+  // whole up to 14 rem), plus the order box's padding, the scroll box's gutter and the column's border. Never under 560.
   function orderMin(d) {
     const ol = document.querySelector('#side ol.to');
     const fo = ol && ol.closest('.fo');
@@ -1462,10 +1462,11 @@
     }
     let row = 0;
     // a row's second line (statuses that do not fit, a box's words) is never measured: it wraps
-    // a name longer than its 6 rem least keeps its whole width (up to 11 rem) as its least, so a font wider than a
-    // Mac's never cuts it: the row's other items shrink first. Past 11 rem it is cut with an ellipsis, whole in its
-    // title and its panel, so one long foe name never folds the run list (Task 38; it was 14 rem)
-    const cap = 11 * parseFloat(getComputedStyle(document.documentElement).fontSize || '16');
+    // a name longer than its 6 rem least keeps its whole width (up to 14 rem) as its least, so a font wider than a
+    // Mac's never cuts it: the row's other items shrink first
+    // (a part may set its own: CoC's 11 rem, Task 38 fix round)
+    const rem = parts.map((part) => part.nameCap && part.nameCap(d)).find((x) => typeof x === 'number' && x > 0) || 14;
+    const cap = rem * parseFloat(getComputedStyle(document.documentElement).fontSize || '16');
     for (const nm of ol.querySelectorAll(':scope > li > .nm')) {
       nm.style.minWidth = '';
       if (nm.scrollWidth > nm.clientWidth + 1) nm.style.minWidth = `${Math.ceil(Math.min(nm.scrollWidth, cap))}px`;

@@ -459,6 +459,9 @@ function describeCoc(id) {
   // in one entry asks for the INT roll (KR p155)
   const fight = {
     initiative: 'dex', initDecimals: 0, hpFloor: 0, autoOut: false, firearmBonus: 50, coc,
+    // a row's name reserves at most 11 rem in the order, cut with "…" past it (whole in its title and the panel): the
+    // most a CoC row can take and keep the run list open at 1449 (Task 38 fix round; every other system keeps 14)
+    nameCap: 11,
     prompts: { majorWoundAt: 2, insanityAt: 5 },
     // on a fight row (Task 38 fix round, Ant's pick): MP only for a character with spells (`onRow: 'caster'`), SAN only
     // for PCs and allies (`onRow` the sides); the panel shows both for everyone
