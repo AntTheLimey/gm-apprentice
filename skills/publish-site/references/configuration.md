@@ -110,6 +110,22 @@ address; a link to a note with no page is left out of the menu, with a
 build warning. `settings remove player_site.menu_extra Gazetteer`
 takes one out by its label.
 
+### A page of your own under the site's menu
+
+A page an `after_build` step puts on the site (a star map, a gazetteer)
+is a bare page: no menu bar, search or theme. List its address and the
+build shows it under the site's menu bar, the page itself unchanged in
+a frame filling the window below the bar:
+
+```bash
+gma publish settings add player_site.own_pages map/index.html --config <dir>/vault.config.json
+gma publish settings add player_site.menu_extra label="Star Map" link=map/index.html group=World --config <dir>/vault.config.json
+```
+
+The page moves to `map/index.own.html`, which still works opened on its
+own. Links in it that leave it open in the whole window. An address the
+steps leave empty is a build warning.
+
 ### Landing banner
 
 ```bash

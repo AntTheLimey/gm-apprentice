@@ -1026,6 +1026,36 @@ function buildSite(options) {
     if (writeHtml(path.join(outputDir, '404.html'), html)) console.log('  wrote 404.html');
   }
 
+  // The GM's own pages (player_site.own_pages, #850), each put under the site's menu bar once the after_build steps
+  // have put it on the site: the page moves aside to `<name>.own.html` and a site page framing it takes its address.
+  // A page already framed (a rebuild whose steps left it as it was) is framed again from the kept copy, so its menu
+  // is this build's.
+  function frameOwnPages(navFor, stepsRan) {
+    const { ownPageTemplate, ownPageTitle, ownFileOf, FRAME_MARK } = require('./templates/own-page');
+    for (const address of publishConfig.own_pages || []) {
+      const parts = address.split('/');
+      if (!/\.html?$/i.test(address) || address.startsWith('/') || address.includes('\\') || parts.some((s) => s === '' || s === '.' || s === '..')) {
+        console.warn(`  WARNING: ${nm('player_site.own_pages')} lists "${address}", which is not an address on the site ending in .html (such as map/index.html) — left as it is`);
+        continue;
+      }
+      const at = path.join(outputDir, ...parts);
+      const ownAt = path.join(outputDir, ...ownFileOf(address).split('/'));
+      if (!fs.existsSync(at)) {
+        // Only worth a word when the steps ran: a build without them has nothing there to frame.
+        if (stepsRan) console.warn(`  WARNING: ${nm('player_site.own_pages')} lists "${address}", but the build and its after_build steps put no page there — no page to put under the menu`);
+        continue;
+      }
+      if (linkOnPath(at) || linkOnPath(ownAt)) { refuseLinked(linkOnPath(at) ? at : ownAt); continue; }
+      if (!fs.readFileSync(at, 'utf8').includes(FRAME_MARK)) fs.renameSync(at, ownAt);
+      else if (!fs.existsSync(ownAt)) {
+        console.warn(`  WARNING: ${nm('player_site.own_pages')}: "${address}" is a framed page whose own page (${ownFileOf(address)}) is gone — left as it is`);
+        continue;
+      }
+      const title = ownPageTitle(fs.readFileSync(ownAt, 'utf8'), address, config.siteTitle);
+      if (writeHtml(at, ownPageTemplate(address, title, navFor, config, publishConfig))) console.log(`  wrote ${address} (your page ${ownFileOf(address)} under the site's menu)`);
+    }
+  }
+
   // An unclosed <!-- comment -->, gm-only or spoiler marker strips the rest of the file to
   // EOF. That is the right behavior — never leak the block — but it must not be silent, or
   // an author who forgot a `-->` loses the tail of the page with no signal.
@@ -1277,10 +1307,11 @@ function buildSite(options) {
   });
   publishConfig._props = propPlan;
   // What else the site serves at an address, for the links the GM writes (resolveSiteLink): each shipping prop's
-  // files and the props page, and the kept folders.
+  // files and the props page, the GM's own pages (player_site.own_pages, which the after_build steps put there, so a
+  // link to `map/index.html` is that page, not a note named `index`), and the kept folders.
   const siteLinks = {
     addresses: [...(propPlan ? propPlan.props.filter((p) => p.ships).flatMap((p) => p.files.map((f) => f.out)) : []),
-      ...(collection ? [collection.address] : [])],
+      ...(collection ? [collection.address] : []), ...(publishConfig.own_pages || [])],
     kept: keptDirs,
   };
   for (const r of propPlan ? propPlan.problems : []) console.warn(`  WARNING: ${r.rel}: ${r.detail} — ${r.fix}`);
@@ -3463,6 +3494,9 @@ function buildSite(options) {
   errorCount += linkRefusals.length;
   renderErrors.push(...linkRefusals);
   if (runningSteps && errorCount === 0 && publishConfig.steps.after.length) runSteps(publishConfig.steps.after, { cwd: configDir, label: 'after_build', log: options.stepsLog, stdio: options.stepsStdio, extraEnv: stepEnv });
+  // Not on a build that writes nothing (doctor, explain --shown) or into a preview folder, where no step runs: neither
+  // has the GM's page to frame. A sheets-only build runs the steps, which put the bare page back, so it frames it.
+  if (errorCount === 0 && writes !== 'none' && !options.outputDirOverride) frameOwnPages(navFor, runningSteps);
   if (!gm) for (const pc of tohitRows) audit.calculator(pc.rel, pc.rows);
   if (!gm) for (const t of tableRows) audit.calculator(t.rel, t.rows);
   if (audit && propPlan) for (const r of propPlan.problems) audit.calculator(r.rel, [r]);

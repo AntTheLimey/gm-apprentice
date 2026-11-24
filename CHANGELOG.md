@@ -9,6 +9,12 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.144] — 2026-11-24
+
+### Added
+
+- A page of your own that an after_build step puts on the site, such as a star map, can show the site's menu bar: list its address under `player_site.own_pages` and the build puts it under the bar, unchanged, in a frame filling the window. Add its menu entry with `player_site.menu_extra` (#850). Publish tool 1.70.61.
+
 ## [1.12.143] — 2026-11-24
 
 ### Fixed

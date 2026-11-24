@@ -207,6 +207,8 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}, warn = console.wa
     menuExtra.push({ label: item.label.trim(), link: item.link.trim(), ...(item.group ? { group: item.group.trim() } : {}) });
   }
   Object.defineProperty(merged, 'menu_extra', { value: menuExtra, enumerable: false });
+  // The GM's own pages to put under the menu bar (#850), blanks left out. Not listed, like `menu_extra`.
+  Object.defineProperty(merged, 'own_pages', { value: (p.own_pages || []).map((s) => String(s).trim()).filter(Boolean), enumerable: false });
 
   // The landing banner's four texts (null when unset). Not listed, like `menu_extra`: a site that sets none
   // builds as it did. The build replaces `image` and `link` with what it resolved.

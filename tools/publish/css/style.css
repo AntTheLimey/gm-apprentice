@@ -483,6 +483,37 @@ img {
   padding: var(--space-1500) var(--space-1000) 3rem;
 }
 
+/* A page of the GM's own under the menu bar (player_site.own_pages, #850): the bar, then the GM's page in a frame
+   filling the rest of the window. The page doesn't scroll: the frame does whatever the GM's page does. */
+body.own-page {
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding-bottom: 0;   /* a phone's room for the back-to-top button: this page has none */
+}
+body.own-page > main.content {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;   /* the GM site's band above the frame, not beside it */
+  min-height: 0;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+}
+.own-page-frame {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  border: 0;
+  display: block;
+}
+body.own-page > .site-footer,
+body.own-page > .back-to-top {
+  display: none;
+}
+
 /* ===== TYPOGRAPHY ===== */
 .page-title {
   font-size: 1.75rem;
