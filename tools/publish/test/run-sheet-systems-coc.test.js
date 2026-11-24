@@ -220,10 +220,12 @@ for (const crlf of [false, true]) {
         fs.writeFileSync(path.join(tmp, 'Characters/NPCs/Officer D.md'), block('Firearms (Rifle/Musket) 65% (32/13), damage 1D10+4, 1 shot per 4 rounds (Brown Bess)'));
         fs.writeFileSync(path.join(tmp, 'Characters/NPCs/Officer E.md'), block('Double-barrelled flintlock pistol 45% (22/9), damage 1D6+1'));
         fs.writeFileSync(path.join(tmp, 'Characters/NPCs/Officer F.md'), block('Flintlock pistol 45% (22/9), damage 1D6+1, malf 92'));
+        // the book's 90 is the double-barrelled pistol's; its fowling piece is 95 (Task 34 fix round)
+        fs.writeFileSync(path.join(tmp, 'Characters/NPCs/Officer G.md'), block('Double-barrelled shotgun 40% (20/8), damage 2D6'));
         const index = buildIndex(tmp);
         const mal = (id, who) => systemFor(id).readFoe({ notePath: `Characters/NPCs/${who}.md`, index, text: undefined }).nums.guns.map((g) => g.malfunction);
-        assert.deepEqual(['Officer D', 'Officer E', 'Officer F'].map((w) => mal('coc-7e-regency', w)), [[95], [90], [92]]);
-        assert.deepEqual(['Officer D', 'Officer E', 'Officer F'].map((w) => mal('coc-7e', w)), [[null], [null], [92]]);
+        assert.deepEqual(['Officer D', 'Officer E', 'Officer F', 'Officer G'].map((w) => mal('coc-7e-regency', w)), [[95], [90], [92], [95]]);
+        assert.deepEqual(['Officer D', 'Officer E', 'Officer F', 'Officer G'].map((w) => mal('coc-7e', w)), [[null], [null], [92], [null]]);
       } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
     });
     it('malfunction 00 is 100; a number outside 1-100 is none (Task 19)', () => {

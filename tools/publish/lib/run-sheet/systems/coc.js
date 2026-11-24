@@ -469,7 +469,8 @@ const foeRow = (n) => ({ init: n.dex, mp: n.mp, mpMax: n.mp, san: n.san, sanMax:
 
 // A gun whose line says nothing about impaling takes the system's reading (`rules.coc.firearm.unknownImpales`:
 // Regency's false); a line that says it wins. Plain CoC leaves it null. A gun with no malfunction figure takes
-// `unknownMalfunction` the same way (Regency's only), a double-barrelled one by its name.
+// `unknownMalfunction` the same way (Regency's only), a double-barrelled pistol by its name (the book's 90 is the
+// pistol's; its double-barrelled fowling piece is 95, RC p187).
 const DOUBLE_BARREL = /\bdouble[- ]?barrel/i;
 function settleGuns(guns, firearm) {
   if (!Array.isArray(guns) || !firearm) return guns;
@@ -479,7 +480,7 @@ function settleGuns(guns, firearm) {
   return guns.map((g) => ({
     ...g,
     impales: g.impales === null && imp !== null ? imp : g.impales,
-    malfunction: g.malfunction === null && mal ? (DOUBLE_BARREL.test(g.name) ? mal.doubleBarrel : mal.any) : g.malfunction,
+    malfunction: g.malfunction === null && mal ? (DOUBLE_BARREL.test(g.name) && /\bpistols?\b/i.test(g.name) ? mal.doubleBarrel : mal.any) : g.malfunction,
   }));
 }
 // The readers with the system's own rules object, the one describe() gives (no second lookup).
