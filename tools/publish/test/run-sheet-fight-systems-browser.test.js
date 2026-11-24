@@ -2102,7 +2102,9 @@ describe('CoC firearms on the GM page (step 6b Task 19), by real input', { skip:
         assert.match(await row2(page, c2), /range:regularlongvery longtarget:size \(Build 1\)pronecoverfastshooter:aimedproneloadingpoint blankinto melee2-3 shots/);
         assert.strictEqual(await page.evaluate(`Boolean(document.querySelector('[data-fshc=${q(`${c2}|large`)}]'))`), false);
         const lines = await page.evaluate(`(() => { const x = document.querySelector('li[data-row2=${q(c2)}] .sx'); const tops = []; for (const e of x.querySelectorAll('button, input, .mnote, .mres, .sxh, :scope > span:not(.sxg):not(.mlv)')) { const t = Math.round(e.getBoundingClientRect().top); if (!tops.some((v) => Math.abs(v - t) < 6)) tops.push(t); } return tops.length; })()`);
-        assert.ok(lines <= 2, `${w}: the strip takes ${lines} lines`);
+        // Task 38 changed this on purpose: the order is narrower (893 px on the Hollow Quay fight, the run list open at
+        // 1449), so the strip has less room and may take a third line; it still wraps, never clips
+        assert.ok(lines <= 3, `${w}: the strip takes ${lines} lines`);
         sane(p, `${w} the strip open`);
         await shot(page, `t19-${w}-strip`);
 
