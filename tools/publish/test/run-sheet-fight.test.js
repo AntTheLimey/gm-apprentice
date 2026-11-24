@@ -2483,6 +2483,7 @@ describe('GURPS consequence cards and turn upkeep (step 6b Task 13)', () => {
   });
 
   it('Task 25 fix 1: 14 cut to the spine at 10 HP: crippled, one card offering Stunned and Prone with no roll', () => {
+    const C = systemFor('gurps-4e').describe().fight.consequences;
     let s = begin([{ name: 'Guard', hp: 10, max: 10, ht: 10, dr: 0 }]);
     s = typeIn(s, 'Guard', '14 cut spine');
     const g = named(s, 'Guard');
@@ -2490,6 +2491,8 @@ describe('GURPS consequence cards and turn upkeep (step 6b Task 13)', () => {
     const c = cards(s, 'Guard');
     assert.equal(c.length, 1);
     assert.deepEqual(c[0].lines.map((l) => [l.kind, l.noRoll, l.offers]), [['knockdown', true, ['stunned']]]);
+    // the offer is Stunned and Prone, by name
+    assert.deepEqual([C.offers.stunned.label, C.offers.stunned.add], ['Stunned and Prone', ['Stunned', 'Prone']]);
   });
 
   it('a fatigue hit raises no shock and no card', () => {

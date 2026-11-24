@@ -598,6 +598,24 @@ describe('CoC and GURPS fights on the GM page, by real input', { skip: browserSk
     });
   });
 
+  it('GURPS: a click into a box holding healing or a pool entry leaves its words and the caret where the click put it', async () => {
+    const run = await start('gurps');
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await fightOn(page, run, 2);
+      const vex = named(p, 'Vex Harrow').id;
+      const bx = `[data-fhp="${vex}"]`;
+      const caret = () => page.evaluate(`(() => { const b = document.querySelector('${bx}'); return [b.value, b.selectionStart, b.selectionEnd]; })()`);
+      for (const words of ['+8', 'f-3']) {
+        await typeInto(page, bx, words, { enter: false, settle: false });
+        // away, then back by a click: a short entry in the box, so the click lands after it
+        await tap(page, '#fAddName');
+        await tap(page, bx);
+        assert.deepStrictEqual(await caret(), [words, words.length, words.length], words);
+        await page.key('Escape');
+      }
+    });
+  });
+
   it('GURPS: typed words set the location list; a type that cannot hit the place is refused with its reason', async () => {
     const run = await start('gurps');
     await withPage({ width: 1449, height: 762 }, async (page) => {

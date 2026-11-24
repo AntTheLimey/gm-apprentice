@@ -2131,8 +2131,6 @@
     if (on) t.setAttribute('aria-invalid', 'true'); else t.removeAttribute('aria-invalid');
     syncLine2(t.dataset[f]);
   }
-  // An entry the row cannot take: its words stay in the box, the reason on the row's second line, selected so what
-  // the GM types next replaces it (Task 10's path; Task 12's hit words a system cannot read too).
   // Enter in a row's damage box (or on its hit location list): the entry applied, or refused with its reason.
   function enterBox(t) {
     const d = t.dataset;
@@ -2180,6 +2178,8 @@
     const loc = wounding().locations[h.location] || {};
     return `${type} cannot target the ${String(loc.name || h.location).toLowerCase()}`;
   }
+  // An entry the row cannot take: its words stay in the box, the reason on the row's second line, selected so what
+  // the GM types next replaces it (Task 10's path; Task 12's hit words a system cannot read too).
   function refuse(t, why) {
     ui.refused[t.dataset.fhp] = { words: t.value, why };
     markPending(t);
@@ -2454,8 +2454,11 @@
   document.addEventListener('click', (ev) => {
     const t = ev.target;
     if (!t || !t.dataset || t.dataset.fhp === undefined || !wounding()) return;
-    const h = FM.hitWords(t.value, rules().fight || rules());
-    if (h.amount || !t.value.trim() || t.selectionStart !== t.selectionEnd) return;
+    const v = t.value;
+    // an entry the box reads (healing, a pool's `f-3`) or one that starts as one (`+`, a pool letter) is the GM's to edit
+    if (FM.parseEntry(v, FM.rulesOf(state().fight)) || /^\s*(?:\+|[a-z]-?\d)/i.test(v)) return;
+    const h = FM.hitWords(v, rules().fight || rules());
+    if (h.amount || !v.trim() || t.selectionStart !== t.selectionEnd) return;
     if (!/^\s/.test(t.value)) t.value = ` ${t.value}`;
     t.setSelectionRange(0, 0);
   });
