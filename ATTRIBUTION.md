@@ -208,8 +208,10 @@ is discussed.
 - Active defenses — `mechanics.md`, `combat.md`,
   `character-sheet.md`: B373; quick reference B556.
 - Combat maneuvers — `combat.md`, `session-procedures.md`: B363.
-- Hit locations, with penalty and DR modifier — `combat.md`: B552,
-  discussed at B399.
+- Hit locations, with penalty, DR, wounding by damage type and short
+  notes — `combat.md`: B552, discussed at B398-B399, with *GURPS
+  Martial Arts*'s extended locations (MA137); generated from
+  `tools/publish/lib/templates/gurps/hit-locations.js`.
 - Damage types and abbreviations — `combat.md`: B268.
 - Size, speed and range modifiers — `combat.md`: B550.
 - Encumbrance levels and Basic Lift — `equipment-armor.md`,

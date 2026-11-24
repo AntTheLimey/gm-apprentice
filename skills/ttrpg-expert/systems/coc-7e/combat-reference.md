@@ -37,7 +37,9 @@ are the Keeper Rulebook's.
    a bonus die (see Outnumbered).
 
 4. **End of Round** -- Apply ongoing effects, check for
-   unconsciousness, dying, or death.
+   unconsciousness, dying, or death. A Dying character's
+   first CON roll comes at the end of the **next** round, then
+   one every round; a failure is death (p.120).
 
 ## Attack vs Defence Resolution
 
@@ -63,6 +65,24 @@ Armour is subtracted as normal.
 Combat rolls (Fighting, Firearms) cannot be pushed (p.104).
 Monsters and NPCs fight back by default and dodge only when
 trying to escape.
+
+## Wounds, Unconscious and Dying
+
+- **Major Wound**: one hit of at least half max HP (p.119): the
+  target falls prone and makes a CON roll or falls unconscious
+  (p.120).
+- **0 HP alone** is Unconscious; **Dying** needs a Major Wound
+  as well (p.120). Dying: a CON roll at the end of the next
+  round and every round after; only First Aid stabilises
+  (p.120).
+
+## Prone
+
+A prone target gives melee attacks on it one bonus die, and
+shots at it one penalty die unless point-blank; a prone
+shooter gains one bonus die (p.128). Standing up comes free
+with a successful dodge or fight back, or on the character's
+turn before it acts (p.128).
 
 ## Fumbles
 
@@ -181,6 +201,11 @@ fire, the one with the lowest Luck. A shooter within point-blank
 range (a fifth of their DEX in feet) gains a bonus die, which
 cancels the penalty die, but a foe in reach may attack or disarm
 them (Keeper Rulebook pp.113-114).
+
+### Several Handgun Shots
+A handgun may fire two or three shots in a round; when it does,
+every shot, the first included, takes one penalty die, each
+rolled on its own (p.113).
 
 ### Burst and Full Auto
 Declare the bullets fired first (p.114, summary p.410). Full

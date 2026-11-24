@@ -114,12 +114,14 @@ combat-reference.md).
 
 ### Damage and Injury
 
-- Damage reduces HP. At 0 HP, the character is dying.
-- **Major Wound**: If damage taken in a single hit equals or
-  exceeds half the character's max HP, it is a major wound.
-  The character must make a CON roll or fall unconscious.
-  Major wounds require First Aid within one round and extended
-  medical treatment.
+- Damage reduces HP. At 0 HP alone the character is
+  Unconscious; Dying needs a Major Wound as well (Keeper
+  Rulebook p.120).
+- **Major Wound**: If damage taken in a single hit is at least
+  half the character's max HP, it is a major wound (p.119). The
+  character falls prone and makes a CON roll or falls
+  unconscious (p.120). First Aid must come within one hour to
+  help; only First Aid stabilises a dying character (p.120).
 - **Armor**: Subtracts from damage (e.g., heavy leather = 1
   point, bulletproof vest = 8 points).
 
@@ -198,11 +200,12 @@ listed in the Keeper Rulebook and published scenarios.
 
 ### Bouts of Madness
 
-- **Temporary**: Losing 5+ SAN in one event triggers a bout
-  of temporary madness (lasts 1D10 hours or until treated).
-- **Indefinite**: Losing 20% or more of current SAN in one
-  game session triggers indefinite insanity (requires
-  extended treatment).
+- **Temporary**: Losing 5 or more SAN from one roll calls for
+  an INT roll; a success means temporary insanity (1D10 hours)
+  (Keeper Rulebook p.155).
+- **Indefinite**: Losing a fifth or more of current SAN in one
+  game day triggers indefinite insanity (requires extended
+  treatment) (p.155).
 - **Permanent**: Reaching 0 SAN. The investigator is retired
   as permanently and incurably insane.
 
