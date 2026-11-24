@@ -20,6 +20,7 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 - Foes and allies a fight beat names without a stat block get a blank row to type into, in every system; a person only a Then line names arrives ticked in.
 - A GURPS PC's weapon or a typed skill opens the to-hit calculator on the run sheet, on the PC whose turn it is (it never follows the player site's switch).
 - Hit location on the run sheet is one list, Torso first, using Martial Arts's extended places (ear, nose, jaw, spine, veins and arteries, joints), each showing the damage type's multiplier.
+- Physical dice count in a fight: a small box beside every Roll (a card's line, a GURPS defence, a Call of Cthulhu melee side, shot, dive or bout) takes the number rolled at the table, judged as a server roll and logged as typed.
 
 ### Changed
 
@@ -28,6 +29,7 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 - Tab stops at Start or stays put, rows hold still while a figure is typed, and Same for all copies what is filled and says how many it reached.
 - The player site's GURPS reference block and to-hit calculator list Martial Arts's hit places.
 - A D&D initiative typed with decimals is refused, not cut short.
+- Nothing in a fight waits on anything else: any card line can be skipped, an open Dead or Unconscious offer holds up no later line, the Aimed chip can be tapped on by hand, and a GURPS manoeuvre can be set on any row at any time.
 
 ### Fixed
 
