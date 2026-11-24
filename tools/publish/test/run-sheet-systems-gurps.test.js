@@ -187,6 +187,10 @@ for (const crlf of [false, true]) {
       // Sela's own shape: no name in the label, the weapon in the next column (Task 34 fix round)
       const own = sela.replace(/^---[\s\S]*?\n---\n/, '').replace('| Parry | 10 | Broadsword |', '| Parry | 10 | Broadsword |\n| Parry | 9 | Knife, off hand |');
       assert.deepEqual(systemFor('gurps-4e').readPc({ notePath: 'x.md', index: null, fm: { type: 'pc' }, body: own }).numbers.parryLines, ['Broadsword 10', 'Knife 9']);
+      // a third column holding a working, not a weapon (the template's Source, Task 34 Minor B): no name from it; a
+      // weapon's hyphen and apostrophe are kept (the sheet reader curls the apostrophe)
+      const sums = sela.replace(/^---[\s\S]*?\n---\n/, '').replace('| Parry | 10 | Broadsword |', "| Parry | 10 | Skill/2 + 3 |\n| Parry | 9 | 3 + Skill |\n| Parry | 8 | Main-Gauche |\n| Parry | 7 | Bo'sun's Hook |");
+      assert.deepEqual(systemFor('gurps-4e').readPc({ notePath: 'x.md', index: null, fm: { type: 'pc' }, body: sums }).numbers.parryLines, ['10', '9', 'Main-Gauche 8', 'Bo\u2019sun\u2019s Hook 7']);
       assert.equal(readPc('Sela Drake').numbers.parryLines, undefined);
     });
     it('max from Secondary Characteristics, current from Current Status (the Dead End shape)', () => {
