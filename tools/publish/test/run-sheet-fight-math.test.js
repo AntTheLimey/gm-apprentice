@@ -1007,7 +1007,9 @@ test('hit grammar: damage, type and place in GURPS; a bare number stays raw', ()
   assert.deepEqual(hit('9t').hit, { type: 'tox', location: 'torso', side: null });
   assert.deepEqual(hit('9 cut t').hit, { type: 'cut', location: 'torso', side: null });
   assert.deepEqual(hit('9 t t').hit, { type: 'tox', location: 'torso', side: null });
-  assert.equal(hit('9 t vitals').hit.type, 'tox');
+  // step 6b Task 25 changed this on purpose: toxic cannot target the vitals, so the case moved to the neck
+  assert.equal(hit('9 t neck').hit.type, 'tox');
+  assert.equal(hit('9 t vitals'), null);
   // only a system with a wounding table reads hits
   for (const t of ['9 imp vitals', '9i', '2d+1']) { assert.equal(M.parseEntry(t), null, `${t} in D&D`); assert.equal(M.parseEntry(t, COC), null, `${t} in CoC`); }
 });
@@ -1029,23 +1031,28 @@ test('9 of each type to the torso on DR 1', () => {
   assert.equal(hitOn('9 cut', foe()).line, '9 cut − DR 1 = 8 × 1.5 = 12');
 });
 
-test('9 imp vitals on DR 1 takes 24, 9 tbb vitals 16, 9 cut vitals 12 with its line', () => {
+test('9 imp vitals on DR 1 takes 24, 9 tbb vitals 16, 9 cr vitals 8', () => {
   const v = hitOn('9 imp vitals', foe());
   assert.deepEqual([v.injury, v.line, v.location, v.type], [24, '9 imp − DR 1 = 8 × 3 = 24', 'vitals', 'imp']);
   for (const t of ['pi-', 'pi', 'pi+', 'pi++']) assert.equal(hitOn(`9 ${t} vitals`, foe()).injury, 24, t);
   assert.equal(hitOn('9 tbb vitals', foe()).injury, 16);
-  const cut = hitOn('9 cut vitals', foe());
+  // step 6b Task 25 changed this on purpose: crushing may target the vitals (MA137), other types are refused by the
+  // reader (Ant: never silently allowed); the working still says so if one reaches it
+  assert.equal(hitOn('9 cr vitals', foe()).line, '9 cr − DR 1 = 8');
+  assert.equal(M.parseEntry('9 cut vitals', GURPS), null);
+  const cut = gurpsInjury({ type: 'cut', location: 'vitals', n: 9 }, foe(), W);
   assert.deepEqual([cut.injury, cut.line], [12, '9 cut − DR 1 = 8 × 1.5 (vitals: as torso for cut) = 12']);
-  assert.equal(hitOn('9 cr vitals', foe()).line, '9 cr − DR 1 = 8 × 1 (vitals: as torso for cr) = 8');
 });
 
-test('9 imp eye on DR 1 takes 32, 9 cr eye 8 with its line; 9 imp left eye at 12 HP is marked', () => {
+test('9 imp eye on DR 1 takes 32; 9 cr eye is refused; 9 imp left eye at 12 HP is marked', () => {
   for (const t of ['imp', 'pi-', 'pi', 'pi+', 'pi++', 'tbb']) {
     const e = hitOn(`9 ${t} eye`, foe({ max: 100 }));
     assert.equal(e.injury, 32, t);
     assert.equal(e.line, `9 ${t} − DR 1 = 8 × 4 = 32`, t);
   }
-  const cr = hitOn('9 cr eye', foe({ max: 100 }));
+  // step 6b Task 25 changed this on purpose: the reader refuses a type that cannot target the place
+  assert.equal(M.parseEntry('9 cr eye', GURPS), null);
+  const cr = gurpsInjury({ type: 'cr', location: 'eye', n: 9 }, foe({ max: 100 }), W);
   assert.deepEqual([cr.injury, cr.line, cr.crippled], [8, '9 cr − DR 1 = 8 × 1 (eye: as torso for cr) = 8', false]);
   // 12 HP
   const blind = hitOn('9 imp left eye', foe({ max: 12 }));
@@ -1548,4 +1555,126 @@ test('Same for all: a copy takes each field the source holds and it has not type
   // a figure the source worked out is not copied itself: its inputs are
   const g = row({ id: 'e', name: 'Guard 1', copy: 1, max: 11, st: 11, from: { hp: 'from ST' } });
   assert.deepEqual(M.copyFields(g, row({ id: 'f', name: 'Guard 2', copy: 2, hp: null, max: null }), ['max', 'st']), { fields: ['st'], hp: false });
+});
+
+// ---- the extended hit locations and the location list (step 6b Task 25) ----
+
+test('Task 25: two-word places, their other words and a side read from the box', () => {
+  const hit = (t) => M.parseEntry(t, GURPS);
+  assert.deepEqual(hit('9 cut neck vein').hit, { type: 'cut', location: 'neck vein', side: null });
+  assert.deepEqual(hit('9 cut jugular').hit, { type: 'cut', location: 'neck vein', side: null });
+  assert.deepEqual(hit('9 cr left hand joint').hit, { type: 'cr', location: 'hand joint', side: 'left' });
+  assert.deepEqual(hit('9 cr wrist').hit, { type: 'cr', location: 'hand joint', side: null });
+  assert.deepEqual(hit('9 cut right leg artery').hit, { type: 'cut', location: 'leg vein', side: 'right' });
+  assert.deepEqual(hit('9 cr jaw').hit, { type: 'cr', location: 'jaw', side: null });
+  assert.deepEqual(hit('9 cr left ear').hit, { type: 'cr', location: 'ear', side: 'left' });
+  assert.deepEqual(hit('9 imp spine').hit, { type: 'imp', location: 'spine', side: null });
+  assert.deepEqual(hit('9 cr nose').hit, { type: 'cr', location: 'nose', side: null });
+  // the box's words back: the place's two words kept together
+  assert.equal(M.hitText(M.hitWords('9 cut left arm vein', GURPS)), '9 cut left arm vein');
+  // a plain place still reads alone
+  assert.deepEqual(hit('9 cut arm').hit, { type: 'cut', location: 'arm', side: null });
+});
+
+test('Task 25: a type that cannot hit the place is no hit', () => {
+  const hit = (t) => M.parseEntry(t, GURPS);
+  for (const bad of ['9 cr eye', '9 cut vitals', '9 burn vitals', '9 cr neck vein', '9 imp hand joint', '9 burn spine', '9 fat eye']) assert.equal(hit(bad), null, bad);
+  assert.deepEqual(hit('9 cr vitals').hit, { type: 'cr', location: 'vitals', side: null });
+  assert.equal(M.cannotTarget('9 cr eye', GURPS), 'cr');
+  assert.equal(M.cannotTarget('9 cr vitals', GURPS), null);
+  assert.equal(M.cannotTarget('9 cr', GURPS), null);
+});
+
+test('Task 25: a jaw, a neck vein and a hand joint each work out their injury', () => {
+  // the jaw: the face's DR and multipliers
+  assert.equal(hitOn('9 cr jaw', foe({ dr: 3 })).line, '9 cr − DR 3 = 6');
+  assert.equal(hitOn('9 cr jaw', foe({ dr: 3, faceOpen: true })).line, '9 cr − DR 0 (face open) = 9');
+  assert.equal(hitOn('9 cor jaw', foe({ dr: 1 })).line, '9 cor − DR 1 = 8 × 1.5 = 12');
+  // the neck vein: the neck's multiplier and a half
+  const vein = hitOn('9 cut neck vein', foe({ max: 100 }));
+  assert.deepEqual([vein.injury, vein.line, vein.place], [20, '9 cut − DR 1 = 8 × 2.5 = 20', 'neck vein']);
+  assert.equal(hitOn('9 imp neck vein', foe({ max: 100 })).injury, 20);
+  assert.equal(hitOn('9 pi- neck vein', foe({ max: 100 })).injury, 8);
+  // an arm vein: never crippled, never capped
+  const arm = hitOn('9 cut left arm vein', foe({ max: 12 }));
+  assert.deepEqual([arm.injury, arm.crippled, arm.place], [16, false, 'left arm vein']);
+  assert.equal(hitOn('9 imp leg vein', foe({ max: 100 })).injury, 12);
+  // a hand joint at 12 HP: crippled over 3, capped at 4
+  const joint = hitOn('9 cr left hand joint', foe({ max: 12 }));
+  assert.deepEqual([joint.injury, joint.crippled, joint.place, joint.line], [4, true, 'left hand joint', '9 cr − DR 1 = 8, capped at 4 (left hand joint)']);
+  assert.deepEqual([hitOn('4 cr hand joint', foe({ max: 12 })).injury, hitOn('4 cr hand joint', foe({ max: 12 })).crippled], [3, false]);
+  const knee = hitOn('9 cut leg joint', foe({ max: 12 }));
+  assert.deepEqual([knee.injury, knee.crippled], [5, true]);
+});
+
+test('Task 25: the spine takes DR 3 more; the nose and the spine are marked crippled', () => {
+  const s = hitOn('12 cr spine', foe({ max: 100 }));
+  assert.deepEqual([s.injury, s.line], [8, '12 cr − DR 4 (spine +3) = 8']);
+  assert.equal(hitOn('12 imp spine', foe({ max: 100 })).injury, 16);
+  assert.equal(hitOn('20 cr spine', foe({ max: 12 })).crippled, true);
+  assert.equal(hitOn('12 cr spine', foe({ max: 12 })).crippled, false);
+  const nose = hitOn('5 cr nose', foe({ max: 12 }));
+  assert.deepEqual([nose.injury, nose.crippled], [4, true]);
+  assert.equal(hitOn('4 cr nose', foe({ max: 12 })).crippled, false);
+  // the ear: a face hit
+  assert.equal(hitOn('9 cr right ear', foe({ dr: 3, faceOpen: true })).line, '9 cr − DR 0 (face open) = 9');
+});
+
+test('Task 25: a PC\'s DR for a new place is the place it sits in', () => {
+  const sela = { max: 100, drByLocation: { skull: 4, face: 1, neck: 2, torso: 3, arm: 2, 'left hand': 5, hand: 1 } };
+  assert.equal(hitOn('9 cr jaw', sela).line, '9 cr − DR 1 = 8');
+  assert.equal(hitOn('9 cut neck vein', sela).line, '9 cut − DR 2 = 7 × 2.5 = 17');
+  assert.equal(hitOn('9 cr left hand joint', sela).line, '9 cr − DR 5 = 4');
+  assert.equal(hitOn('9 cr right hand joint', sela).line, '9 cr − DR 1 = 8');
+  assert.equal(hitOn('9 cr spine', sela).line, '9 cr − DR 6 (spine +3) = 3');
+});
+
+test('Task 25: knockdown from the jaw, the nose and the spine', () => {
+  // shock alone calls the roll at these places
+  for (const place of ['jaw', 'nose', 'ear', 'spine']) assert.deepEqual(kinds(GC.cardForHit({ hp: 9, max: 12 }, { injury: 3, before: 12, location: place, type: 'cut' }, C)), ['knockdown'], place);
+  // a major wound there
+  assert.deepEqual(kinds(GC.cardForHit({ hp: 2, max: 12 }, { injury: 10, before: 12, location: 'spine', type: 'cut' }, C)), ['knockdown -5']);
+  assert.deepEqual(kinds(GC.cardForHit({ hp: 2, max: 12 }, { injury: 10, before: 12, location: 'nose', type: 'cut' }, C)), ['knockdown -5']);
+  // crushing to the jaw: one more
+  assert.deepEqual(kinds(GC.cardForHit({ hp: 9, max: 12 }, { injury: 3, before: 12, location: 'jaw', type: 'cr' }, C)), ['knockdown -1']);
+  assert.deepEqual(kinds(GC.cardForHit({ hp: 2, max: 12 }, { injury: 10, before: 12, location: 'jaw', type: 'cr' }, C)), ['knockdown -6']);
+  // a neck vein is not a head hit
+  assert.deepEqual(kinds(GC.cardForHit({ hp: 9, max: 12 }, { injury: 3, before: 12, location: 'neck vein', type: 'cut' }, C)), []);
+});
+
+test('Task 25: the location list, mildest first, Torso first', () => {
+  const names = W.locationOrder.map((k) => `${W.locations[k].name} ${W.locations[k].penalty}`);
+  assert.deepEqual(names, ['Torso 0', 'Arm -2', 'Leg -2', 'Groin -3', 'Vitals -3', 'Hand -4', 'Foot -4', 'Face -5', 'Neck -5',
+    'Arm vein or artery -5', 'Leg vein or artery -5', 'Arm joint -5', 'Leg joint -5', 'Jaw -6', 'Skull -7', 'Ear -7', 'Nose -7',
+    'Hand joint -7', 'Foot joint -7', 'Spine -8', 'Neck vein or artery -8', 'Eye -9']);
+  assert.deepEqual(W.locationOrder.slice().sort(), Object.keys(W.locations).sort());
+});
+
+test('Task 25: each place\'s label carries the type\'s multiplier, or says the type cannot hit it', () => {
+  assert.deepEqual(GC.locationOption(W, 'neck', 'cut'), { label: 'Neck −5 · ×2', disabled: false });
+  assert.deepEqual(GC.locationOption(W, 'neck', 'cr'), { label: 'Neck −5 · ×1.5', disabled: false });
+  assert.deepEqual(GC.locationOption(W, 'vitals', 'imp'), { label: 'Vitals −3 · ×3', disabled: false });
+  assert.deepEqual(GC.locationOption(W, 'eye', 'cr'), { label: 'Eye −9 · not for cr', disabled: true });
+  assert.deepEqual(GC.locationOption(W, 'torso', null), { label: 'Torso 0', disabled: false });
+  assert.deepEqual(GC.locationOption(W, 'torso', 'cr'), { label: 'Torso 0 · ×1', disabled: false });
+});
+
+test('Task 25: for every type and place, the label\'s multiplier is the one the working uses', () => {
+  for (const type of Object.keys(W.types)) {
+    for (const place of W.locationOrder) {
+      const opt = GC.locationOption(W, place, type);
+      const at = GC.woundingAt(W, place, type);
+      if (opt.disabled) { assert.equal(at.can, false, `${type} ${place}`); assert.equal(M.parseEntry(`99 ${type} ${place}`, GURPS), null, `${type} ${place}`); continue; }
+      const m = /×([\d.]+)$/.exec(opt.label);
+      assert.ok(m, `${type} ${place}: ${opt.label}`);
+      // DR 0, no max: the working's injury is the damage times the label's figure
+      const out = gurpsInjury({ type, location: place, n: 100 }, { dr: 0, max: null }, W);
+      // the skull's and the spine's own DR comes off first
+      const loc = W.locations[place];
+      const extra = loc.dr && type !== 'fat' && !(loc.except || []).includes(type) ? loc.dr : 0;
+      const want = type === 'fat' ? 100 : Math.floor((100 - extra) * Number(m[1]));
+      assert.equal(out.injury, want, `${type} ${place}: ${opt.label} / ${out.line}`);
+      assert.equal(Number(m[1]), at.mult, `${type} ${place}`);
+    }
+  }
 });

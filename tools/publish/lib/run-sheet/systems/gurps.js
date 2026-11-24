@@ -17,11 +17,10 @@ const { sections } = require('../plan-text');
 
 const FOE_TYPES = new Set(['npc', 'creature']);
 
-// The wounding table (Task 12), names and numbers only. Fields: `types` (B379); per location `by`, `all`, `except`,
-// `only`, `dr`, `face`, `sided`, `cripple`, `cap` (B398, B420, B552).
-const PIERCING = ['pi-', 'pi', 'pi+', 'pi++'];
-const each = (keys, v) => Object.fromEntries(keys.map((k) => [k, v]));
-const LIMB_DOWN = { 'pi+': 1, 'pi++': 1, imp: 1 }; // B552
+// The wounding table (Task 12), names and numbers only. Fields: `types` (B379); the locations, their words, their
+// order and their fields are the one hit-location table's (templates/gurps/hit-locations.js: B398, B420, B552, MA137).
+const { LOCATIONS, LOCATION_ORDER, LOCATION_WORDS } = require('../../templates/gurps/hit-locations');
+
 const WOUNDING = {
   types: { 'pi-': 0.5, pi: 1, 'pi+': 1.5, 'pi++': 2, cut: 1.5, imp: 2, cr: 1, burn: 1, tbb: 1, cor: 1, tox: 1, fat: 1 }, // B379
   // the long names and one-letter forms a GM types (`tbb` is tight-beam burning)
@@ -29,28 +28,17 @@ const WOUNDING = {
     c: 'cr', i: 'imp', p: 'pi', b: 'burn', t: 'tox', f: 'fat', crushing: 'cr', cutting: 'cut', impaling: 'imp',
     piercing: 'pi', burning: 'burn', corrosion: 'cor', toxic: 'tox', fatigue: 'fat',
   },
-  locations: {
-    torso: {}, // B398
-    vitals: { by: { ...each(PIERCING, 3), imp: 3, tbb: 2 }, only: true }, // B398, B552
-    eye: { by: { ...each(PIERCING, 4), imp: 4, tbb: 4 }, only: true, face: true, cripple: 10, sided: true }, // B398, B552
-    skull: { all: 4, except: ['tox'], dr: 2 }, // B398, B552
-    face: { by: { cor: 1.5 }, face: true }, // B398, B552
-    neck: { by: { cut: 2, cr: 1.5, cor: 1.5 } }, // B398, B552
-    groin: {}, // B398, B552
-    arm: { by: LIMB_DOWN, cripple: 2, cap: true, sided: true }, // B398, B552; the cap B420
-    leg: { by: LIMB_DOWN, cripple: 2, cap: true, sided: true }, // B398, B552; the cap B420
-    hand: { by: LIMB_DOWN, cripple: 3, cap: true, sided: true }, // B398, B552; the cap B420
-    foot: { by: LIMB_DOWN, cripple: 3, cap: true, sided: true }, // B398, B552; the cap B420
-  },
-  locationWords: {
-    v: 'vitals', sk: 'skull', head: 'skull', e: 'eye', eyes: 'eye', n: 'neck', t: 'torso', g: 'groin', a: 'arm', arms: 'arm',
-    l: 'leg', legs: 'leg', h: 'hand', hands: 'hand', ft: 'foot', feet: 'foot',
-  },
+  locations: Object.fromEntries(LOCATIONS.map(({ key, ...loc }) => [key, loc])),
+  locationWords: LOCATION_WORDS,
   sides: ['left', 'right'],
-  // the chips' order before any is used on a row
+  // the type chips' order before any is used on a row
   typeChips: ['cr', 'cut', 'imp', 'pi-', 'pi', 'pi+', 'pi++', 'burn', 'tbb', 'cor', 'tox', 'fat'],
-  locationChips: ['torso', 'vitals', 'skull', 'face', 'eye', 'neck', 'groin', 'arm', 'leg', 'hand', 'foot'],
+  // the location list's order: mildest penalty first (Torso, the default, at the top)
+  locationOrder: LOCATION_ORDER,
 };
+
+// The knockdown places and modifiers, from the hit-location table (B420, MA137).
+const KNOCKDOWN = LOCATIONS.filter((l) => l.knockdown);
 
 // What a hit and a turn's start and end owe (Task 13), names and numbers only, read by gurps-math's cardForHit,
 // cardsAtTurnStart and cardsAtTurnEnd. The page offers each as a prompt; nothing here decides an outcome.
@@ -58,8 +46,9 @@ const CONSEQUENCES = {
   shock: { cap: 4, bigHp: 20, per: 10 }, // B419
   major: 2, // B420; a crippled place counts too, B420, B421
   knockdown: {
-    places: ['skull', 'face', 'eye', 'vitals'], // B420
-    major: { face: -5, vitals: -5, groin: -5, skull: -10, eye: -10 }, // B420
+    places: KNOCKDOWN.filter((l) => l.knockdown.shock).map((l) => l.key), // B420, MA137
+    major: Object.fromEntries(KNOCKDOWN.filter((l) => l.knockdown.major).map((l) => [l.key, l.knockdown.major])), // B420, MA137
+    extra: Object.fromEntries(KNOCKDOWN.filter((l) => l.knockdown.extra).map((l) => [l.key, l.knockdown.extra])), // MA137
     out: 5, // B420
   },
   death: [1, 2, 3, 4], // B419

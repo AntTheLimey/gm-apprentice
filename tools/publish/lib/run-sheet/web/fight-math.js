@@ -86,14 +86,21 @@
     const words = t.trim() ? t.trim().toLowerCase().split(/\s+/) : [];
     const typeOf = (x) => (w.types[x] !== undefined ? x : (w.typeWords || {})[x] || null);
     const placeOf = (x) => (w.locations[x] ? x : (w.locationWords || {})[x] || null);
+    // the place that starts at word i: two words (`neck vein`, `hand joint`) before one; { place, len } or null
+    const placeAt = (i) => {
+      const two = i + 1 < words.length ? placeOf(`${words[i]} ${words[i + 1]}`) : null;
+      if (two) return { place: two, len: 2 };
+      const one = i < words.length ? placeOf(words[i]) : null;
+      return one ? { place: one, len: 1 } : null;
+    };
     for (let i = 0; i < words.length; i++) {
       const x = words[i];
-      const next = words[i + 1];
-      const nextPlace = next ? placeOf(next) : null;
-      if (!out.side && (w.sides || []).includes(x) && nextPlace && w.locations[nextPlace].sided) { out.side = x; continue; }
+      const next = placeAt(i + 1);
+      if (!out.side && (w.sides || []).includes(x) && next && w.locations[next.place].sided) { out.side = x; continue; }
+      const here = placeAt(i);
       // a word that is both (`t`: toxic or the torso) is the type until there is one
-      if (!out.type && typeOf(x)) { out.type = typeOf(x); continue; }
-      if (!out.location && placeOf(x)) { out.location = placeOf(x); continue; }
+      if (!out.type && typeOf(x) && !(here && here.len === 2)) { out.type = typeOf(x); continue; }
+      if (!out.location && here) { out.location = here.place; i += here.len - 1; continue; }
       out.rest.push(x);
     }
     if (out.side && !out.location) { out.rest.unshift(out.side); out.side = null; }
@@ -102,10 +109,21 @@
   // The words back in the box's order: amount, type, side, place, then anything else typed.
   const hitText = (h) => [h.amount, h.type, h.side, h.location, ...(h.rest || [])].filter(Boolean).join(' ');
 
+  // The type a hit's words name when it cannot target the place they name (the table's `targets`: cr at the eye), else
+  // null: the page says why it refuses the entry.
+  function cannotTarget(text, rules) {
+    const w = rulesOf({ rules }).wounding;
+    if (!w) return null;
+    const h = hitWords(text, rules);
+    const loc = h.location && w.locations[h.location];
+    return h.type && loc && Array.isArray(loc.targets) && !loc.targets.includes(h.type) ? h.type : null;
+  }
+
   function parseHit(text, rules) {
     if (!rulesOf({ rules }).wounding) return null;
     const h = hitWords(text, rules);
     if (!h.amount || h.rest.length || (h.location && !h.type)) return null;
+    if (cannotTarget(text, rules)) return null;
     // a leading plus on dice is the server's reading of a hit; with no type it would be healing's sign, so it is no hit
     if (h.dice && h.amount[0] === '+' && !h.type) return null;
     if (h.n !== null && h.n > 9999) return null;
@@ -131,7 +149,7 @@
     return { pool: 'hp', kind: 'damage', n: null, dice: dice.toLowerCase(), db: parts.length === 2 };
   }
 
-  // The hit chips in their order for a row: the one last used first, then the rest as the table lists them.
+  // The type chips in their order for a row: the one last used first, then the rest as the table lists them.
   const chipOrder = (all, last) => (last && all.includes(last) ? [last, ...all.filter((x) => x !== last)] : all.slice());
 
   // A pool after an entry: a loss stops at the pool's floor (a number, or `floorTimes` its max), a gain at its cap
@@ -1048,7 +1066,7 @@
 
   return {
     DND_STATUSES, EXHAUSTION_MAX, DND_FIGHT_RULES, rulesOf, fightGroupKeys,
-    parseEntry, hitWords, hitText, chipOrder, damageTaken, afterDamage, afterHeal, isBloodied, bloodiedWord, DND_LONG_REST, DND_NO_BLOCK, poolsOf, poolOf, afterPool,
+    parseEntry, hitWords, hitText, cannotTarget, chipOrder, damageTaken, afterDamage, afterHeal, isBloodied, bloodiedWord, DND_LONG_REST, DND_NO_BLOCK, poolsOf, poolOf, afterPool,
     combatOf, initOf, marksOf, tiredOf,
     thresholdOf, isLit, sortRows, takesTurn, nextLive, actingRow,
     gmName, lairRow, unseenKey, unseenNumbers, unseenLabels, rowsForFight, joinRows, blankRow,

@@ -35,15 +35,16 @@
   const drFigure = (v) => { if (isNum(v)) return Math.max(0, Math.floor(v)); const m = /\d+/.exec(String(v == null ? '' : v)); return m ? Number(m[0]) : null; };
   const placeName = (location, side) => (side ? `${side} ${location}` : location);
   // The row's DR where the hit lands: a DR the GM typed in the fight first (armour put on mid-fight), then a PC's
-  // sheet DR for the place (its side's first; an eye's is the face's), else its torso's; else the row's one DR.
-  // `faceOpen` makes the face and the eyes 0.
+  // sheet DR for the place (its side's first), then for the place it sits in (`as` or `drAs`: an eye's is the face's,
+  // a hand joint's the hand's), else its torso's; else the row's one DR. `faceOpen` makes the face's places 0.
   function drAt(row, location, side, loc) {
     const typed = row.typedKeys && row.typedKeys.dr ? drFigure(row.dr) : null;
     if (row.faceOpen && loc.face) return { dr: 0, open: true };
     if (typed !== null) return { dr: typed, open: false };
     const by = row.drByLocation && typeof row.drByLocation === 'object' ? row.drByLocation : null;
     if (by) {
-      for (const k of [side ? placeName(location, side) : null, location, location === 'eye' ? 'face' : null, 'torso']) {
+      const within = loc.drAs || loc.as || null;
+      for (const k of [side ? placeName(location, side) : null, location, within && side ? placeName(within, side) : null, within, 'torso']) {
         if (k && isNum(by[k])) return { dr: by[k], open: false };
       }
     }
@@ -52,30 +53,60 @@
   }
   const times = (x) => String(Math.round(x * 100) / 100);
 
+  // What a type does at a place (Task 25), from the one hit-location table: { can, mult, note }. `can` false: the type
+  // cannot target it (`targets`). `mult` the place's figure for the type (`by`, `all` but `except`, or the place it
+  // sits in, `as`, plus `plus`), else the type's usual one; fatigue is 1 (no location effects). `note` says when the
+  // place's own figure is left out for the type (the skull's for toxic).
+  function woundingAt(wounding, location, type) {
+    const w = wounding || {};
+    const locs = w.locations || {};
+    const loc = locs[location] || {};
+    if (Array.isArray(loc.targets) && !loc.targets.includes(type)) return { can: false, mult: null, note: '' };
+    if (type === 'fat') return { can: true, mult: 1, note: '' };
+    const base = (loc.as && locs[loc.as]) || loc;
+    const left = (base.except || []).includes(type);
+    let mult = isNum((w.types || {})[type]) ? w.types[type] : 1;
+    let note = '';
+    if (isNum(base.all) && !left) mult = base.all;
+    else if (base.by && isNum(base.by[type])) mult = base.by[type];
+    else if (left) note = ` (${location}: as torso for ${type})`;
+    if (isNum(loc.plus)) mult += loc.plus;
+    return { can: true, mult, note };
+  }
+  const minusSign = (n) => (n < 0 ? `\u2212${Math.abs(n)}` : String(n));
+  // A place in the location list (Task 25): its name and penalty, and with a type picked the multiplier the working will
+  // use, or, for a type that cannot target it, that it is not for that type (disabled). { label, disabled }
+  function locationOption(wounding, location, type) {
+    const loc = ((wounding || {}).locations || {})[location] || {};
+    const head = `${loc.name || location} ${minusSign(isNum(loc.penalty) ? loc.penalty : 0)}`;
+    if (!type) return { label: head, disabled: false };
+    const at = woundingAt(wounding, location, type);
+    if (!at.can) return { label: `${head} \u00b7 not for ${type}`, disabled: true };
+    return { label: `${head} \u00b7 \u00d7${times(at.mult)}`, disabled: false };
+  }
+
   // A hit's injury (Task 12). `hit` { n, type, location, side, dice }, `row` { dr, drByLocation, typedKeys, faceOpen,
-  // max }, `wounding` the table in systems/gurps.js (B377-381, B398, B420, B552). Answers { injury, line, location,
-  // side, type, place, crippled }; `line` is the working.
+  // max }, `wounding` the table in systems/gurps.js (B377-381, B398, B420, B552, MA137). Answers { injury, line,
+  // location, side, type, place, crippled }; `line` is the working. A type that cannot target the place (the entry's
+  // reader refuses it first) is worked out as a torso hit, and the line says so.
   function gurpsInjury(hit, row, wounding) {
     const w = wounding || {};
     const r = row || {};
     const location = w.locations && w.locations[hit.location] ? hit.location : 'torso';
     const loc = (w.locations && w.locations[location]) || {};
     const type = hit.type;
-    const usual = isNum((w.types || {})[type]) ? w.types[type] : 1;
     const side = loc.sided && hit.side ? hit.side : null;
     const place = placeName(location, side);
     const n = isNum(hit.n) ? Math.max(0, Math.floor(hit.n)) : 0;
     const left = (except) => (loc.except || []).includes(except);
-    let mult = usual;
-    let note = '';
-    if (isNum(loc.all) && !left(type)) mult = loc.all;
-    else if (loc.by && isNum(loc.by[type])) mult = loc.by[type];
-    else if (loc.only || left(type)) note = ` (${location}: as torso for ${type})`;
+    const at = woundingAt(w, location, type);
+    const mult = at.can ? at.mult : woundingAt(w, 'torso', type).mult;
+    const note = at.can ? at.note : ` (${location}: as torso for ${type})`;
     // `fat` (B398)
     const extra = isNum(loc.dr) && !left(type) && type !== 'fat' ? loc.dr : 0;
-    const at = drAt(r, location, side, loc);
-    const dr = at.dr + extra;
-    const drText = extra ? `${dr} (${location} +${extra})` : at.open ? `${dr} (face open)` : String(dr);
+    const drHere = drAt(r, location, side, loc);
+    const dr = drHere.dr + extra;
+    const drText = extra ? `${dr} (${location} +${extra})` : drHere.open ? `${dr} (face open)` : String(dr);
     const fat = type === 'fat';
     const head = `${hit.dice ? `${hit.dice} = ` : ''}${n} ${type}${fat ? ` ${place}` : ''} \u2212 DR ${drText}`;
     const through = n - dr;
@@ -87,9 +118,9 @@
     let injury = Math.max(1, raw);
     let line = `${head} = ${through}${mult !== 1 || note ? ` \u00d7 ${times(mult)}${note} = ${raw}` : ''}`;
     if (injury !== raw) line += `, at least ${injury}`;
-    // `cripple` and `cap` (B420, B552)
+    // `cripple` and `cap` (B420, B552, MA137)
     const max = isNum(r.max) && r.max > 0 ? r.max : null;
-    if (isNum(loc.cripple) && !note && max !== null && injury * loc.cripple > max) {
+    if (isNum(loc.cripple) && at.can && max !== null && injury * loc.cripple > max) {
       out.crippled = true;
       const cap = Math.floor(max / loc.cripple) + 1;
       if (loc.cap && injury > cap) { injury = cap; line += `, capped at ${cap} (${place})`; }
@@ -116,7 +147,7 @@
 
   // A hit's shock and its card's lines, in the order they settle: the death checks for each minus-HP line crossed
   // (or the one dead line), then the one knockdown roll. `row` is the row after the hit (hp, max); `hit` { injury,
-  // before (HP before), location (null for raw injury), crippled }. No lines: a shock chip and no card.
+  // before (HP before), location (null for raw injury), type, crippled }. No lines: a shock chip and no card.
   function cardForHit(row, hit, C) {
     const out = { shock: 0, lines: [] };
     const r = row || {};
@@ -133,7 +164,8 @@
     const place = h.location || null;
     const major = majorWound(h.injury, max, h.crippled, C);
     if (major || (place && (k.places || []).includes(place) && out.shock > 0)) {
-      const mod = major && place && k.major && isNum(k.major[place]) ? k.major[place] : 0;
+      const extra = place && h.type && k.extra && k.extra[place] && isNum(k.extra[place][h.type]) ? k.extra[place][h.type] : 0;
+      const mod = (major && place && k.major && isNum(k.major[place]) ? k.major[place] : 0) + extra;
       out.lines.push(line('knockdown', mod, place ? { place } : {}));
     }
     return out;
@@ -302,7 +334,7 @@
 
   return {
     liveDefences, retreatOf, defenceText, defenceMoved, DEFENCE_KEYS,
-    deriveGurps, gurpsInjury, drFigure, shockOf, cardForHit, cardsAtTurnStart, cardsAtTurnEnd, lineTarget, lineStat, lineName, lineText, resultText,
+    deriveGurps, gurpsInjury, woundingAt, locationOption, drFigure, shockOf, cardForHit, cardsAtTurnStart, cardsAtTurnEnd, lineTarget, lineStat, lineName, lineText, resultText,
     offersFor, rollResult, nextLine, cardDone, pending, offerOf,
   };
 }));

@@ -298,13 +298,15 @@ describe('GURPS hits: the readers', () => {
     assert.equal(drByLocationOf({ defenses: { hitLocations: [] } }), null);
     assert.equal(drByLocationOf({}), null);
   });
-  it('the description carries the wounding table and the chips', () => {
+  it('the description carries the wounding table, the type chips and the location list', () => {
     const d = systemFor('gurps-4e').describe();
     assert.equal(d.toggles.hitChips, true);
     assert.deepEqual(d.fight.wounding, WOUNDING);
     assert.equal(systemFor('dnd-5e-2024').describe().fight.wounding, null);
     assert.equal(systemFor('coc-7e').describe().fight.wounding, null);
     assert.deepEqual(d.fight.wounding.typeChips.slice().sort(), Object.keys(WOUNDING.types).sort());
-    assert.deepEqual(d.fight.wounding.locationChips.slice().sort(), Object.keys(WOUNDING.locations).sort());
+    // step 6b Task 25 changed this on purpose: the location chips became one list, every place in it
+    assert.deepEqual(d.fight.wounding.locationOrder.slice().sort(), Object.keys(WOUNDING.locations).sort());
+    assert.equal(d.fight.wounding.locationChips, undefined);
   });
 });

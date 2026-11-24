@@ -2484,7 +2484,8 @@ describe('GURPS consequence cards and turn upkeep (step 6b Task 13)', () => {
 
   it('a fatigue hit raises no shock and no card', () => {
     let s = begin([{ name: 'Guard', hp: 11, max: 11, ht: 10, fp: 10, fpMax: 10 }]);
-    s = typeIn(s, 'Guard', '9 fat vitals');
+    // step 6b Task 25 changed this on purpose: fatigue cannot target the vitals (B398), so the skull, a knockdown place too
+    s = typeIn(s, 'Guard', '9 fat skull');
     assert.deepEqual([named(s, 'Guard').fp, named(s, 'Guard').shock || 0, cards(s, 'Guard')], [1, 0, []]);
   });
 

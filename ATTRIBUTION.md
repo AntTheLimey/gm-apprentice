@@ -258,6 +258,13 @@ License: SJG Online Policy
 Transformation: modifier names and numbers used in a sum, each
 with its page reference in a code comment. Names and numbers only.
 
+**`tools/publish/lib/templates/gurps/hit-locations.js`** (the one hit-location table: each location's penalty, B552 roll, wounding multipliers by damage type, extra DR, crippling, knockdown modifiers and a short note; Martial Arts's extended locations: ear, nose, jaw, spine, veins and arteries, joints; chinks in armour)
+Source: *GURPS Basic Set 4th Edition* and *GURPS Martial Arts* (Steve Jackson Games).
+License: SJG Online Policy
+(https://www.sjgames.com/general/online_policy.html).
+Transformation: names and numbers used in a sum, with short notes, each
+with its page reference (B398, B400, B420, B552, MA137). Names and numbers only.
+
 **`tools/publish/lib/run-sheet/systems/gurps.js`** (the run sheet's fight figures: turn order, marks, Tired, FP, the wounding table, the consequences of a hit and a turn: shock, major wound, knockdown, death checks; the active defences: Dodge from Basic Speed, posture, stunned, reeling and tired, retreat, repeat parry, one Block a turn, the manoeuvres' limits, the manoeuvre names and the Aim and Evaluate counts)
 Source: *GURPS Basic Set 4th Edition* (Steve Jackson Games).
 License: SJG Online Policy

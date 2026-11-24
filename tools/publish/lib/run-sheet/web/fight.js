@@ -376,7 +376,7 @@
       if (!had.includes(out.place)) { r.crippled = had.concat(out.place); say(s, f, at, `${nameOf(s, f, r)}: ${mark}.`); }
     }
     afterHp(s, f, r, before, at, { over });
-    owed(f, r, before, out.injury, { location: out.location, place: out.place, crippled: out.crippled });
+    owed(f, r, before, out.injury, { location: out.location, type: out.type, place: out.place, crippled: out.crippled });
   }
 
   // ---- what a hit and a turn owe (GURPS, Task 13): the shock chip and cards of prompts, never an outcome ----
@@ -404,7 +404,7 @@
     const C = consequencesOf(f);
     if (!C) { cocOwed(f, r, before, injury); return; }
     if (!isNum(injury) || injury <= 0) return;
-    const out = GM.cardForHit(r, { injury, before, location: hit ? hit.location : null, crippled: Boolean(hit && hit.crippled) }, C);
+    const out = GM.cardForHit(r, { injury, before, location: hit ? hit.location : null, type: hit ? hit.type : null, crippled: Boolean(hit && hit.crippled) }, C);
     if (out.shock > 0) {
       const cap = C.shock && isNum(C.shock.cap) ? C.shock.cap : out.shock;
       r.shock = Math.min(cap, (isNum(r.shock) ? r.shock : 0) + out.shock);
