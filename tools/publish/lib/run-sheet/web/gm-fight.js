@@ -2170,9 +2170,11 @@
     if (d.fundo) { F({ type: 'undoAdd', join: d.fundo }); return true; }
     if (d.fsame) {
       F({ type: 'sameForAll', row: d.fsame });
-      // a button that went disabled (nothing left to copy) gives focus to Start or Next, never the page (RF1)
+      // a button that went disabled (nothing left to copy) gives focus to Start or Next, else the row's initiative box
+      // in the order, else the header jot: never the page (RF1)
       const b = document.querySelector(attr('data-fsame', d.fsame));
-      RP.focusTo(b && !b.disabled ? attr('data-fsame', d.fsame) : '#fNext');
+      const live = (k) => { const el = document.querySelector(k); return el && !el.disabled; };
+      RP.focusTo([b && !b.disabled ? attr('data-fsame', d.fsame) : null, '#fNext', `${attr('data-frow', d.fsame)} [data-fini]`, '#hjot'].find((k) => k && live(k)));
       return true;
     }
     if (d.faddcast) { addTo({ cast: d.faddcast, count: 1 }); return true; }
