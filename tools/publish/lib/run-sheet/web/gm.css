@@ -491,6 +491,11 @@ ol.to .mdice { display: inline-flex; align-items: center; gap: 1px; }
 ol.to .mdice button { padding: 0 3px; min-width: 1.2rem; }
 ol.to .mdn { font: 650 .72rem var(--mono); min-width: 1.4rem; text-align: center; color: var(--muted); }
 ol.to .mdn.some { color: var(--ink); }
+/* the dice button (Task 38): one fixed width whatever it shows (± or a net such as −2), so the row never moves */
+ol.to .mdopen { width: 1.9rem; padding: 0 3px; font: 650 .72rem var(--mono); color: var(--muted); }
+ol.to .mdopen.some { color: var(--ink); }
+ol.to .mdopen.on { border-color: var(--ice); }
+ol.to > li.row2 .mdice .mnote { margin-right: 3px; }
 ol.to > li.row2 > .mx { display: flex; flex: 1 1 100%; min-width: 0; flex-wrap: wrap; gap: 2px 4px; align-items: center; font: 500 .72rem var(--mono); }
 ol.to > li.row2 .mlv { display: inline-flex; flex-wrap: wrap; gap: 2px; }
 ol.to > li.row2 .mres { font-weight: 650; }

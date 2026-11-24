@@ -1553,7 +1553,12 @@ describe('CoC melee on the target\'s row (step 6b Task 16), by real input', { sk
         assert.strictEqual(named(p, 'Dock Cultist 2').meleeDice, '0');
         assert.match(await row2(page, c2), /defended 1× of 2/);
 
-        // the stepper adds and takes a die, and clears after the exchange
+        // the stepper adds and takes a die, and clears after the exchange. Task 38 changed this on purpose: the row holds
+        // one dice button (± at none); a tap opens the stepper on the row's second line with focus on its +
+        assert.deepStrictEqual([await text(page, `li[data-frow="${c2}"] [data-fmdopen]`), await page.evaluate(`Boolean(document.querySelector('li[data-frow="${c2}"] [data-fmdice]'))`)], ['\u00b1', false]);
+        await tap(page, `[data-fmdopen="${c2}"]`);
+        await page.waitFor(`document.activeElement === document.querySelector('[data-fmdice="${c2}|1"]')`, 3000);
+        assert.strictEqual(await page.evaluate(`Boolean(document.querySelector('li[data-row2="${c2}"] [data-fmdice="${c2}|1"]'))`), true, 'the stepper is on line 2');
         await tap(page, `[data-fmdice="${c2}|1"]`);
         await tap(page, `[data-fmdice="${c2}|1"]`);
         p = await until(page, `p.fight.rows.find((r) => r.id === ${q(c2)}).meleeDice === "+2"`);

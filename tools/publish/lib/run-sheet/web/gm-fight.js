@@ -64,6 +64,8 @@
     // (row id -> net, bonus above 0; none means the row's own: outnumbered, Prone), cleared when the turn moves; the
     // open exchange ({ fight, turn, target, attacker, response, dice, net, why, byHand, attack, defence, rolling })
     mdice: {}, melee: null, meleeTurn: null,
+    // the rows whose dice stepper is open on their second line (Task 38), shut when the turn moves
+    mdOpen: {},
     // the row whose "def" Enter sent focus to the attacker's empty "atk" (Task 38): Enter there goes on with that row
     atkFor: null,
     // CoC's damage box (Task 17): the one an exchange opened ({ fight, n, by, on, mode, entry, offer, rolling }), the
@@ -901,7 +903,7 @@
   // A turn moved or the fight changed: the stepper's dice go, and an open exchange closes (nothing is logged).
   function syncMelee(f) {
     if (ui.meleeTurn !== `${f.id}:${f.turn}`) {
-      ui.mdice = {}; ui.melee = null; ui.shot = null; ui.shotMem = {}; ui.atkFor = null; ui.meleeTurn = `${f.id}:${f.turn}`;
+      ui.mdice = {}; ui.melee = null; ui.shot = null; ui.shotMem = {}; ui.atkFor = null; ui.mdOpen = {}; ui.meleeTurn = `${f.id}:${f.turn}`;
       // a roll typed at the table for a defence, a melee side, a shot or a dive and never sent is this turn's only
       // (Task 37): it never lands on a later one. A card's box goes with its card.
       for (const k of Object.keys(ui.typed)) if (!/^(?:card|bout)\|/.test(k)) delete ui.typed[k];
@@ -939,14 +941,14 @@
       return `<button type="button" class="tg mel${k === dflt ? ' dflt' : ''}${on ? ' on' : ''}" data-fmelee="${esc(`${r.id}|${k}`)}" aria-pressed="${on}"`
         + `${m && m.rolling ? ' disabled' : ''} title="${esc(title)}">${esc(CMath.RESPONSE_NAMES[k])}</button>`;
     };
-    const d = m ? { net: m.net, why: m.why, byHand: m.byHand } : diceNow(r, C);
-    const cap = isNum(C.maxDice) ? C.maxDice : 2;
-    const words = CMath.diceText(d.net, d.why, d.byHand) || 'no bonus or penalty dice';
-    const lock = m ? ' disabled' : '';
-    const step = `<span class="mdice" role="group" aria-label="${esc(`Dice on a melee attack on ${r.gmName}`)}">`
-      + `<button type="button" data-fmdice="${esc(`${r.id}|-1`)}"${d.net <= -cap ? ' disabled' : lock} aria-label="${esc(`One die less on an attack on ${r.gmName}`)}" title="A penalty die, or one bonus die less">\u2212</button>`
-      + `<span class="mdn${d.net ? ' some' : ''}" title="${esc(`${words} on the next melee attack on ${r.gmName}`)}">${esc(diceShort(d.net))}</span>`
-      + `<button type="button" data-fmdice="${esc(`${r.id}|1`)}"${d.net >= cap ? ' disabled' : lock} aria-label="${esc(`One die more on an attack on ${r.gmName}`)}" title="A bonus die, or one penalty die less">+</button></span>`;
+    // the dice (Task 38): one fixed-width button with the net on it (± at none); a tap opens the − n + stepper on the
+    // row's second line, so the row is as wide with dice as without and the split never moves. The order's measure
+    // draws the widest figure, −2.
+    const { d, cap, words } = diceShown(r, C);
+    const shown = ui.measure ? -cap : d.net;
+    const open = Boolean(ui.mdOpen[r.id]);
+    const step = `<button type="button" class="mdopen${shown ? ' some' : ''}${open ? ' on' : ''}" data-fmdopen="${esc(r.id)}" aria-pressed="${open}"`
+      + ` aria-label="${esc(`Dice on a melee attack on ${r.gmName}: ${words}`)}" title="${esc(`${words}. Tap: set the dice`)}">${shown ? esc(diceShort(shown)) : '\u00b1'}</button>`;
     // Shoot (Task 19): the strip of chips opens on the second line; an attacker that can shoot only
     const shoot = C.firearm && CMath.canShoot(A)
       ? `<button type="button" class="tg mel shoot${ui.shot && ui.shot.target === r.id ? ' on' : ''}" data-fshoot="${esc(r.id)}" aria-pressed="${Boolean(ui.shot && ui.shot.target === r.id)}" title="${esc(`${A.gmName} shoots at ${r.gmName}`)}">Shoot</button>`
@@ -960,6 +962,22 @@
       `Rolled at the table? Type ${r.gmName}'s d100, then tap Dodge or Fight Back${dflt ? ` (Enter: ${CMath.RESPONSE_NAMES[dflt]}${waits})` : ''}; or leave it empty to have it rolled`,
       busy, 'def', true) : '';
     return `<span class="melee">${order.map(btn).join('')}${step}${typed}${shoot}</span>`;
+  }
+  // The dice on a melee attack on the row: the open exchange's, else the stepper's or the row's own.
+  function diceShown(r, C) {
+    const m = ui.melee && ui.melee.target === r.id ? ui.melee : null;
+    const d = m ? { net: m.net, why: m.why, byHand: m.byHand } : diceNow(r, C);
+    return { m, d, cap: isNum(C.maxDice) ? C.maxDice : 2, words: CMath.diceText(d.net, d.why, d.byHand) || 'no bonus or penalty dice' };
+  }
+  // The − n + stepper, opened from the row's dice button onto its second line (Task 38); held still while the row's
+  // exchange is open.
+  function diceStepHTML(r, C) {
+    const { m, d, cap, words } = diceShown(r, C);
+    const lock = m ? ' disabled' : '';
+    return `<span class="mdice" role="group" aria-label="${esc(`Dice on a melee attack on ${r.gmName}`)}"><span class="mnote">dice</span>`
+      + `<button type="button" data-fmdice="${esc(`${r.id}|-1`)}"${d.net <= -cap ? ' disabled' : lock} aria-label="${esc(`One die less on an attack on ${r.gmName}`)}" title="A penalty die, or one bonus die less">\u2212</button>`
+      + `<span class="mdn${d.net ? ' some' : ''}" title="${esc(`${words} on the next melee attack on ${r.gmName}`)}">${esc(diceShort(d.net))}</span>`
+      + `<button type="button" data-fmdice="${esc(`${r.id}|1`)}"${d.net >= cap ? ' disabled' : lock} aria-label="${esc(`One die more on an attack on ${r.gmName}`)}" title="A bonus die, or one penalty die less">+</button></span>`;
   }
   // Enter in a melee box. In a target's "def": with the attacker's "atk" drawn and empty (NPC against NPC), focus goes
   // to it first, the quieter way to wait for both, so a side rolled at the table is never rolled again by the server
@@ -999,6 +1017,12 @@
     const r = rowById(id);
     if (!C || !r || !r.in || r.out || r.kind === 'lair') return '';
     const out = [];
+    // the dice stepper its button opened (Task 38), while the row is a target
+    if (ui.mdOpen[id]) {
+      const f = state().fight;
+      const A = f && attackerOf(f.rows, f);
+      if (A && A.id !== id) out.push(diceStepHTML(viewRow(id), C));
+    }
     if (ui.melee && ui.melee.target === id) out.push(exchangeHTML(ui.melee));
     if (ui.shot && ui.shot.target === id) out.push(shotHTML(ui.shot));
     // the firearm marks (Task 19): the attack a dive lost, a slow weapon's counter, a declared aim (tapped: it moved)
@@ -2037,7 +2061,7 @@
       'data-fun', 'data-fsame', 'data-fside', 'data-fundo', 'data-faddgroup', 'data-faddbeat', 'data-faddpick', 'data-faddnew',
       'data-fspend', 'data-fafter', 'data-fjot', 'data-fight', 'data-fplace', 'data-fcbtn', 'data-fcardpick', 'data-fcardstat', 'data-fshock',
       'data-fshockset', 'data-fdef', 'data-fpdef', 'data-fretreat', 'data-fman', 'data-fmand', 'data-fmanrow',
-      'data-fmelee', 'data-fmdice', 'data-fmlvl', 'data-fmx', 'data-fmout', 'data-fdmgdb', 'data-fdmgimp', 'data-fdmgx', 'data-fdmgclose',
+      'data-fmelee', 'data-fmdice', 'data-fmdopen', 'data-fmlvl', 'data-fmx', 'data-fmout', 'data-fdmgdb', 'data-fdmgimp', 'data-fdmgx', 'data-fdmgclose',
       'data-fdmgpick', 'data-fshoot', 'data-fshr', 'data-fshc', 'data-fshgun', 'data-fshdive', 'data-fshdv', 'data-fshroll', 'data-fshlvl', 'data-fshx',
       'data-fshmal', 'data-faim', 'data-faimoff', 'data-freload', 'data-ftyped', ...PANEL_KEYS.map((k) => `data-fs-${k}`)],
     // Fight here on a place tile or a place's drawer (plan 6a Task 7); nothing while a fight runs
@@ -2152,7 +2176,8 @@
             // CoC's melee (Task 16): the count, the switch, and what the row's buttons and stepper show
             meleeDefences: r.meleeDefences || 0, outnumberedOff: Boolean(r.outnumberedOff), attacks: r.attacks, build: r.build, db: r.db,
             meleeButtons: Array.from(document.querySelectorAll(`li[data-frow="${CSS.escape(r.id)}"] [data-fmelee]`), (b) => ({ text: b.textContent, dflt: b.classList.contains('dflt') })),
-            meleeDice: (() => { const e = document.querySelector(`li[data-frow="${CSS.escape(r.id)}"] .mdn`); return e ? e.textContent : null; })(),
+            // the dice button's net (Task 38: it carries the net; ± is none)
+            meleeDice: (() => { const e = document.querySelector(`li[data-frow="${CSS.escape(r.id)}"] [data-fmdopen]`); return e ? e.textContent.replace('\u00b1', '0') : null; })(),
             // CoC's firearms (Task 19): the Shoot and aim buttons drawn, the marks
             shoot: Boolean(document.querySelector(`li[data-frow="${CSS.escape(r.id)}"] [data-fshoot]`)),
             aimButton: Boolean(document.querySelector(`li[data-frow="${CSS.escape(r.id)}"] [data-faim]`)),
@@ -2283,6 +2308,16 @@
     if (d.fretreat) { const x = rowById(d.fretreat); if (x) F({ type: 'retreat', row: x.id, on: !x.retreat }); return true; }
     if (d.fmelee) { const [rid, k] = split(d.fmelee); meleeStart(rid, k); return true; }
     if (d.fmdice) { const [rid, n] = split(d.fmdice); meleeDice(rid, Number(n)); return true; }
+    // the dice button (Task 38): opens the stepper with focus on its +, so a bonus die is two taps; shuts it again
+    if (d.fmdopen) {
+      const id = d.fmdopen;
+      if (ui.mdOpen[id]) delete ui.mdOpen[id]; else ui.mdOpen[id] = true;
+      RP.render();
+      // its − when the + is spent (two bonus dice already)
+      const plus = document.querySelector(attr('data-fmdice', `${id}|1`));
+      RP.focusTo(!ui.mdOpen[id] ? attr('data-fmdopen', id) : attr('data-fmdice', `${id}|${plus && plus.disabled ? -1 : 1}`));
+      return true;
+    }
     if (d.fmlvl) { const parts = d.fmlvl.split('|'); const level = parts.pop(); const side = parts.pop(); meleeTap(parts.join('|'), side, level); return true; }
     if (d.fmx) { const m = ui.melee; ui.melee = null; RP.render(); if (m) RP.focusTo(attr('data-fmelee', `${m.target}|${m.response}`)); return true; }
     if (d.fdmgdb) { const [rid, k] = split(d.fdmgdb); if (ui.dmg && ui.dmg.on === rid && CMath.DB_MODES.includes(k)) ui.dmg.mode = k; RP.render(); RP.focusTo(attr('data-fhp', rid)); return true; }
