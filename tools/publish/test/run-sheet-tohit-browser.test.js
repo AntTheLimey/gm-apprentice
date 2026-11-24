@@ -257,11 +257,18 @@ describe('the GURPS to-hit calculator on the GM page, by real input', { skip: br
       await tap(page, '#fToHit');
       await dialogUp(page, { drawn: false });
       await tap(page, '#thLevel');
-      await page.type('13');
+      // fix round: written once, on commit (Enter, leaving the box, or closing), never a Skill 1 on the way to 13
+      await page.type('1');
+      await rollIs(page, 1);
+      await page.type('3');
       await rollIs(page, 13);
-      p = await until(page, `p.fight.rows.find((r) => r.id === ${q(b1)}).skill === 13 && p.saved === "Saved" && p.pending === 0`);
+      p = await settled(page);
+      const serverSkill = async () => (await (await fetch(`${run.base}/api/state`)).json()).state.fight.rows.find((r) => r.id === b1).skill;
+      assert.strictEqual(named(p, 'Bouncer 1').skill, null, 'nothing written while typing');
+      assert.strictEqual(await serverSkill(), null);
       await page.key('Escape');
-      p = await until(page, '!p.tohit');
+      p = await until(page, `!p.tohit && p.fight.rows.find((r) => r.id === ${q(b1)}).skill === 13 && p.saved === "Saved" && p.pending === 0`);
+      assert.strictEqual(await serverSkill(), 13, 'written on close');
       // the panel's Skill, typed: the dialog opens on it, over what was typed for the row before
       p = await peek(page, p, 'Bouncer 1');
       p = await typeInto(page, box(p, 'Bouncer 1', 'skill'), '15');
@@ -278,6 +285,31 @@ describe('the GURPS to-hit calculator on the GM page, by real input', { skip: br
       await page.key('Escape');
       p = await until(page, '!p.tohit && p.saved === "Saved" && p.pending === 0');
       assert.strictEqual(named(p, 'Bouncer 1').skill, 15);
+      assert.deepStrictEqual(p.errors, []);
+    });
+  });
+
+  // fix round: Enter in the level box writes it too, once
+  it('Enter in the level box writes a foe\'s Skill when it had none; one more keystroke writes nothing until the next commit', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await bouncers(page, run);
+      const b1 = named(p, 'Bouncer 1').id;
+      await tap(page, '#fToHit');
+      await dialogUp(page, { drawn: false });
+      await tap(page, '#thLevel');
+      await page.type('12');
+      await rollIs(page, 12);
+      await page.key('Enter');
+      p = await until(page, `p.fight.rows.find((r) => r.id === ${q(b1)}).skill === 12 && p.saved === "Saved" && p.pending === 0`);
+      assert.ok(p.tohit && p.tohit.open, 'Enter leaves the dialog open');
+      await page.key('Backspace');
+      await page.type('4');
+      await rollIs(page, 14);
+      p = await settled(page);
+      assert.strictEqual(named(p, 'Bouncer 1').skill, 12, 'not yet');
+      await page.key('Enter');
+      p = await until(page, `p.fight.rows.find((r) => r.id === ${q(b1)}).skill === 14 && p.saved === "Saved" && p.pending === 0`);
       assert.deepStrictEqual(p.errors, []);
     });
   });

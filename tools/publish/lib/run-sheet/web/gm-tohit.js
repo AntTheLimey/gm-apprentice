@@ -11,9 +11,10 @@
 // overwrites one. The row's manoeuvre, shock, aim and evaluate counts and Prone are the calculator's starting state
 // (`initial`), which it cleans as it cleans its own memory; the GM changes any of them there, and none goes back to the
 // row. A PC's setup is remembered under the calculator's own key,
-// `tohit-calc:gm-table:<campaign>:<pc>`; a typed skill's calculator remembers nothing, and its level, type and name
-// live in this page and the tab's sessionStorage only, never the run sheet's state or the Table Log. Nothing of it
-// reaches the players' screen. Not gated by player_site.features.tohit_calculator (D7).
+// `tohit-calc:gm-table:<campaign>:<pc>`; a typed skill's calculator remembers nothing. Its type and name live in this
+// page and the tab's sessionStorage only, never the run sheet's state or the Table Log; its level does too, and becomes
+// the row's Skill only as said above (on Enter, leaving the box or closing the dialog). Nothing of it reaches the
+// players' screen. Not gated by player_site.features.tohit_calculator (D7).
 (function () {
   const RP = window.RunSheetPage;
   const TH = window.__gurpsTohit;
@@ -78,8 +79,9 @@
   }
 
   // ---- the dialog ----
-  // `fills`: the row had no Skill as the dialog opened, so a level typed here becomes it (Task 36)
-  const ui = { open: false, opener: null, row: null, from: null, pcs: [], typed: { level: '', type: 'melee', name: '' }, ticket: 0, said: '', mounted: null, fills: false };
+  // `fills`: the row had no Skill as the dialog opened, so a level typed here becomes it (Task 36); `wrote`: the level
+  // last written to it, so a commit writes only a change
+  const ui = { open: false, opener: null, row: null, from: null, pcs: [], typed: { level: '', type: 'melee', name: '' }, ticket: 0, said: '', mounted: null, fills: false, wrote: null };
   const dlg = () => $('#tohitDlg');
 
   function frame() {
@@ -118,6 +120,7 @@
     const skill = r && r.kind !== 'pc' ? (rowOf(r.id) || r).skill : null;
     if (isNum(skill)) ui.typed = { ...ui.typed, level: String(skill) };
     ui.fills = Boolean(r) && r.kind !== 'pc' && r.kind !== 'lair' && !isNum(skill);
+    ui.wrote = null;
     d.innerHTML = frame();
     $('#thFrom').value = ui.from;
     $('#thLevel').value = ui.typed.level;
@@ -167,11 +170,24 @@
     RP.probe();
   }
 
+  // A row with no Skill as the dialog opened takes the level typed, once it is committed: Enter, leaving the box, or
+  // closing the dialog (the latest commit wins while the dialog is open). Never on each keystroke.
+  function commitSkill() {
+    const keep = cleanTyped(ui.typed);
+    const f = (RP.state() || {}).fight;
+    if (!keep || Number(keep.level) < 1 || !ui.fills || ui.from !== TYPED || !f || !ui.row || !rowOf(ui.row.id)) return;
+    const n = Number(keep.level);
+    if (n === ui.wrote) return;
+    ui.wrote = n;
+    RP.dispatch({ fight: f.id, type: 'setStat', row: ui.row.id, key: 'skill', value: n });
+  }
+
   function close() {
     const d = dlg();
     if (d && d.open) d.close();
   }
   function closed() {
+    commitSkill();
     ui.open = false;
     ui.ticket++;
     const back = ui.opener && document.querySelector(ui.opener);
@@ -205,12 +221,15 @@
       const t = ev.target;
       if (t.id === 'thFrom') { ui.from = t.value; draw(); return; }
       if (t.id === 'thType' || t.id === 'thName') { typedChanged(); return; }
+      // the level box left (or Enter): its level committed
+      if (t.id === 'thLevel') { commitSkill(); return; }
       RP.probe();
     });
     d.addEventListener('input', (ev) => { if (ev.target.id === 'thLevel') typedChanged(); else RP.probe(); });
     // the page's own keys (J to jot, Tab through the fight's panel) stay out of the dialog; Tab wraps inside it
     d.addEventListener('keydown', (ev) => {
       ev.stopPropagation();
+      if (ev.key === 'Enter' && ev.target.id === 'thLevel') { commitSkill(); return; }
       if (ev.key !== 'Tab') return;
       const list = focusables();
       if (!list.length) return;
@@ -222,9 +241,6 @@
     ui.typed = { level: $('#thLevel').value, type: $('#thType').value === 'ranged' ? 'ranged' : 'melee', name: $('#thName').value };
     const keep = cleanTyped(ui.typed);
     if (keep && Number(keep.level) >= 1 && ui.row && ui.row.kind !== 'pc') remember(ui.row, keep);
-    // a row with no Skill as the dialog opened takes the level typed (latest wins while the dialog is open)
-    const f = (RP.state() || {}).fight;
-    if (keep && Number(keep.level) >= 1 && ui.fills && f && rowOf(ui.row.id)) RP.dispatch({ fight: f.id, type: 'setStat', row: ui.row.id, key: 'skill', value: Number(keep.level) });
     draw();
   }
 
