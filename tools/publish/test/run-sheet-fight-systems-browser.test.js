@@ -3622,6 +3622,28 @@ describe('A GURPS foe made up at the table: the quick figures first (step 6b Tas
     });
   });
 
+  // Task 36 re-review M1 (in the Task 38 fix round): Esc takes the typing back, the dirty mark with it, so a Tab after
+  // it sends nothing and the worked-out figure keeps its tag
+  it('GURPS: 8 typed over Rafe Kell\'s worked-out Dodge 8, Esc, Tab: the tag stays', async () => {
+    const run = await start('gurps');
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await fightOn(page, run, 1);
+      p = await peek(page, p, 'Rafe Kell');
+      const id = named(p, 'Rafe Kell').id;
+      assert.strictEqual(named(p, 'Rafe Kell').dodge, 8);
+      assert.ok(named(p, 'Rafe Kell').from.dodge, 'Dodge is worked out');
+      const dodge = box(p, 'Rafe Kell', 'dodge');
+      await tap(page, dodge);
+      await page.type('8');
+      await page.key('Escape');
+      await page.key('Tab');
+      assert.strictEqual(await where(page), `data-fs-parry=${id}`);
+      p = await settled(page);
+      assert.ok(named(p, 'Rafe Kell').from.dodge, 'the tag stays');
+      assert.deepStrictEqual(p.errors, []);
+    });
+  });
+
   // the CoC panel, checked for the same and changed: DEX, Fighting, Dodge and HP first
   it('CoC: Add "Cultist", 60 Tab 50 Tab 30 Tab 12: DEX, Fighting, Dodge and HP, placed by DEX', async () => {
     const run = await start('coc');

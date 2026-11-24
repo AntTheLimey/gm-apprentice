@@ -2653,6 +2653,8 @@
       markBad(t, f, false);
       t.value = shown(r, f);
       t.dataset.committed = t.value;
+      // and the typing with it: a Tab after this sends nothing, so a worked-out figure keeps its tag (Task 36 re-review M1)
+      delete t.dataset.dirty;
       t.select();
       return;
     }
