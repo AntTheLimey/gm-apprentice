@@ -1200,9 +1200,10 @@
   };
   // A new exchange that owes damage opens its box on the row hit, with the attacker's last entry (Enter alone
   // repeats it) and the DB setting its kind starts at (a shot's none); none owed, or the turn moved on, and it shuts.
-  // A box whose exchange ended elsewhere (another window's Next) while the GM was typing in it stays, marked over,
-  // so the words are not taken as damage typed cold; Enter says so, and ✕ or Esc shuts it. A box holding only what
-  // it opened with (nothing typed) just shuts, and empties, so its remembered entry is never sent cold.
+  // A box whose exchange ended elsewhere (another window's Next, a new exchange) after the GM typed in it stays,
+  // marked over, so the words are not taken as damage typed cold; Enter says so, and ✕ or Esc shuts it. A new exchange
+  // says the words it replaced. A box holding only what it opened with (nothing typed, or typed and put back) just
+  // shuts, and empties, so its remembered entry is never sent cold.
   function syncDmg(f) {
     const m = cocRules() ? f.melee : null;
     const g = ui.dmg;
@@ -1210,9 +1211,9 @@
     let keep = null;
     if (g && g.fight === f.id && !g.sent) {
       const box = document.querySelector(attr('data-fhp', g.on));
-      const focused = Boolean(box) && document.activeElement === box;
+      // judged on whether the GM typed in it (its words differ from what the page put there), never on focus
       const typed = (box ? box.value : g.entry).trim() !== (g.opened || '').trim();
-      if (g.stale || (focused && typed)) { g.stale = true; g.rolling = false; keep = g; } else if (focused) ui.dmgClear = g.on;
+      if (g.stale || typed) { g.stale = true; g.rolling = false; keep = g; } else ui.dmgClear = g.on;
     }
     ui.dmg = keep;
     // none owed: this page's exchange missed (or none is open), so a later one from another window takes no focus
@@ -1222,7 +1223,7 @@
     ui.dmgSeen = key;
     // a new exchange replaces a box marked over: its typed words are said, never dropped quietly
     if (keep && keep.entry.trim()) {
-      const said = `${viewName(keep.on) || ''}: ${keep.entry.trim()} not applied: that exchange is over.`;
+      const said = `Not sent: ${keep.entry.trim()} (${viewName(keep.on) || 'a damage box'}): that exchange is over.`;
       setTimeout(() => RP.note(said, { kind: 'bad', id: `dmg:dropped:${keep.on}:${keep.n}` }), 0);
     }
     // a shot's gun with one damage opens with it; one with a damage by range opens empty, its choices beside (Task 19)
@@ -1243,7 +1244,7 @@
     if (!A) return '';
     const name = A.gmName || A.name;
     const shut = `<button type="button" class="tg dback" data-fdmgclose="${esc(id)}" aria-label="${esc(`Close ${name}'s damage box`)}" title="No damage: close">\u2715</button>`;
-    if (g.stale) return `<span class="dmgbox" role="group" aria-label="${esc(`Damage from ${name}`)}"><span class="mnote">${esc(`${name}'s damage: that exchange is over, not applied: Esc to clear`)}</span>${shut}</span>`;
+    if (g.stale) return `<span class="dmgbox" role="group" aria-label="${esc(`Damage from ${name}`)}"><span class="mnote">${esc(`${name}'s damage: that exchange is over, not applied: Esc or \u2715 to clear`)}</span>${shut}</span>`;
     const db = CMath.dbTerm(A.db);
     const modes = CMath.DB_MODES.map((k) => `<button type="button" class="tg dbm${g.mode === k ? ' on' : ''}" data-fdmgdb="${esc(`${id}|${k}`)}" aria-pressed="${g.mode === k}" title="${esc(DB_TITLES[k])}">${esc(k)}</button>`).join('');
     let h = `<span class="dmgbox" role="group" aria-label="${esc(`Damage from ${name}`)}"><span>${esc(`${name}'s damage, DB ${db === null ? String(A.db) : db || 'none'}:`)}</span>${modes}`;
@@ -1283,7 +1284,7 @@
     if (g && g.rolling) return true;
     // the exchange went stale in another window (its damage applied, the turn moved on): said, never sent
     if (g && (g.stale || !(f.melee && f.melee.n === g.n))) {
-      RP.note(`${entry}: that exchange is over (the turn moved on), not applied: Esc to clear.`, { kind: 'bad', id: `dmg:over:${id}` });
+      RP.note(`${entry}: that exchange is over (the turn moved on), not applied: Esc or \u2715 to clear.`, { kind: 'bad', id: `dmg:over:${id}` });
       return true;
     }
     const by = g ? g.by : coldAttacker(f, id);
@@ -1347,8 +1348,15 @@
         return;
       }
       if (g && !(now.melee && now.melee.n === g.n)) {
-        RP.note(`${x.entry}: that exchange is over (the turn moved on), not applied: Esc to clear.`, { kind: 'bad', id: `dmg:over:${id}` });
-        back();
+        // the box is still there: its words go back, with how to clear them. It shut or was replaced meanwhile: the
+        // words are said and nothing is left to clear
+        if (ui.dmg === g) {
+          RP.note(`${x.entry}: that exchange is over (the turn moved on), not applied: Esc or \u2715 to clear.`, { kind: 'bad', id: `dmg:over:${id}` });
+          back();
+        } else {
+          RP.note(`Not sent: ${x.entry} (${viewName(id) || 'a damage box'}): that exchange is over.`, { kind: 'bad', id: `dmg:over:${id}` });
+          RP.render();
+        }
         return;
       }
       if (g) { g.rolling = false; g.sent = true; }

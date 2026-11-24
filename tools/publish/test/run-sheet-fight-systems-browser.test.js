@@ -1228,11 +1228,11 @@ describe('CoC damage on the hit row (step 6b Task 17), by real input', { skip: b
       await typeInto(page, boxOf(iris), '5', { enter: false, settle: false });
       await fromOther(run, [{ type: 'fightNext', fight: p.fight.id, from: p.fight.turn, round: p.fight.round }]);
       p = await until(page, `p.fight.rows.find((r) => r.id === p.fight.turn).name === "Dock Cultist 2" && p.saved === "Saved" && p.pending === 0`);
-      assert.match(await row2(page, iris), /that exchange is over, not applied: Esc to clear/);
+      assert.match(await row2(page, iris), /that exchange is over, not applied: Esc or \u2715 to clear/);
       assert.strictEqual(await valueOf(page, iris), '5');
       await focused(page, iris);
       await page.key('Enter');
-      await page.waitFor(`document.querySelector('#hnotes').textContent.includes('5: that exchange is over (the turn moved on), not applied: Esc to clear.')`, 3000);
+      await page.waitFor(`document.querySelector('#hnotes').textContent.includes('5: that exchange is over (the turn moved on), not applied: Esc or \u2715 to clear.')`, 3000);
       p = await settled(page);
       assert.strictEqual(named(p, 'Iris Calder').hp, hpIris);
       assert.strictEqual(await valueOf(page, iris), '5');
@@ -1256,7 +1256,7 @@ describe('CoC damage on the hit row (step 6b Task 17), by real input', { skip: b
       p = await until(page, 'p.fight.melee && !p.fight.melee.rolling');
       await tap(page, `[data-fmlvl="${c2}|attack|fail"]`);
       p = await until(page, `p.fight.melee === null && p.fight.dmg && p.fight.dmg.on === ${q(jonas)} && p.saved === "Saved" && p.pending === 0`);
-      await page.waitFor(`document.querySelector('#hnotes').textContent.includes('Iris Calder: 7 not applied: that exchange is over.')`, 3000);
+      await page.waitFor(`document.querySelector('#hnotes').textContent.includes('Not sent: 7 (Iris Calder): that exchange is over.')`, 3000);
       assert.doesNotMatch(await row2(page, iris), /exchange is over/);
       assert.strictEqual(named(p, 'Iris Calder').hp, hpIris);
 
@@ -1276,6 +1276,78 @@ describe('CoC damage on the hit row (step 6b Task 17), by real input', { skip: b
       await page.waitFor(`document.querySelector(${q(boxOf(jonas))}).value === ''`, 3000);
       assert.doesNotMatch(await row2(page, jonas), /exchange is over/);
       assert.strictEqual(await text(page, '#hnotes'), notes, 'no note');
+      assert.strictEqual(named(p, 'Jonas Finch').hp, hpJonas);
+    });
+  });
+
+  // Task 23b A1: a box whose exchange is over is judged on whether the GM typed in it, never on focus
+  it('a damage box over: typed words keep it open, even unfocused; untouched or edited back it shuts quietly; the tap on its close shuts it', async () => {
+    const run = await start('coc', { randomInt: () => 3 });
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await netLoft(page, run);
+      const iris = named(p, 'Iris Calder').id;
+      const c2 = named(p, 'Dock Cultist 2').id;
+      const jonas = named(p, 'Jonas Finch').id;
+      const away = () => tap(page, '#acting h3');
+      const wins = async (target, who, side) => {
+        await tap(page, `[data-fmelee="${target}|fightBack"]`);
+        await until(page, 'p.fight.melee && !p.fight.melee.rolling');
+        await tap(page, `[data-fmlvl="${target}|${side}|fail"]`);
+        return until(page, `p.fight.melee === null && p.fight.dmg && p.fight.dmg.on === ${q(who)} && p.saved === "Saved" && p.pending === 0`);
+      };
+      await tap(page, '#fNext');
+      p = await until(page, `p.fight.rows.find((r) => r.id === p.fight.turn).name === "Dock Cultist 1" && p.saved === "Saved" && p.pending === 0`);
+
+      // typed, then focus leaves, then the turn moves elsewhere: the box stays, marked over, the words kept; the close shuts it
+      p = await wins(iris, iris, 'defence');
+      const hpIris = named(p, 'Iris Calder').hp;
+      await typeInto(page, boxOf(iris), '5', { enter: false, settle: false });
+      await away();
+      assert.doesNotMatch(await focusOn(page), /data-fhp/);
+      await fromOther(run, [{ type: 'fightNext', fight: p.fight.id, from: p.fight.turn, round: p.fight.round }]);
+      p = await until(page, `p.fight.rows.find((r) => r.id === p.fight.turn).name === "Dock Cultist 2" && p.saved === "Saved" && p.pending === 0`);
+      assert.ok(p.fight.dmg && p.fight.dmg.on === iris, 'the box stays');
+      assert.match(await row2(page, iris), /that exchange is over, not applied: Esc or \u2715 to clear/);
+      assert.strictEqual(await valueOf(page, iris), '5');
+      await tap(page, `[data-fdmgclose="${iris}"]`);
+      p = await until(page, 'p.fight.dmg === null');
+      assert.strictEqual(await valueOf(page, iris), '');
+      assert.doesNotMatch(await row2(page, iris), /exchange is over/);
+      assert.strictEqual(named(p, 'Iris Calder').hp, hpIris);
+
+      // typed, focus leaves, a new exchange replaces it: its note carries the words
+      p = await wins(iris, iris, 'defence');
+      await typeInto(page, boxOf(iris), '7', { enter: false, settle: false });
+      await away();
+      await fromOther(run, [{ type: 'fightNext', fight: p.fight.id, from: p.fight.turn, round: p.fight.round }]);
+      p = await until(page, `p.fight.rows.find((r) => r.id === p.fight.turn).name === "Jonas Finch" && p.fight.dmg && p.fight.dmg.on === ${q(iris)} && p.saved === "Saved" && p.pending === 0`);
+      await tap(page, `[data-fmelee="${c2}|fightBack"]`);
+      await until(page, 'p.fight.melee && !p.fight.melee.rolling');
+      await tap(page, `[data-fmlvl="${c2}|attack|fail"]`);
+      p = await until(page, `p.fight.melee === null && p.fight.dmg && p.fight.dmg.on === ${q(jonas)} && p.saved === "Saved" && p.pending === 0`);
+      await page.waitFor(`document.querySelector('#hnotes').textContent.includes('Not sent: 7')`, 3000);
+      assert.doesNotMatch(await row2(page, iris), /exchange is over/);
+
+      // untouched (the remembered entry), one letter typed and taken back, focus away: another window moves the turn, the box
+      // shuts, and no note follows
+      await typeInto(page, boxOf(jonas), '1D4+DB');
+      p = await until(page, 'p.fight.dmg === null && p.saved === "Saved" && p.pending === 0');
+      await tap(page, `[data-fmelee="${c2}|fightBack"]`);
+      await until(page, 'p.fight.melee && !p.fight.melee.rolling');
+      await tap(page, `[data-fmlvl="${c2}|attack|fail"]`);
+      p = await until(page, `p.fight.melee === null && p.fight.dmg && p.fight.dmg.entry === "1D4+DB" && p.saved === "Saved" && p.pending === 0`);
+      await tap(page, boxOf(jonas));
+      await page.type('9');
+      await page.key('Backspace');
+      assert.strictEqual(await valueOf(page, jonas), '1D4+DB');
+      await away();
+      const hpJonas = named(p, 'Jonas Finch').hp;
+      const notes = await text(page, '#hnotes');
+      await fromOther(run, [{ type: 'fightNext', fight: p.fight.id, from: p.fight.turn, round: p.fight.round }]);
+      p = await until(page, `p.fight.rows.find((r) => r.id === p.fight.turn).name === "Mabel Quill" && p.fight.dmg === null && p.saved === "Saved" && p.pending === 0`);
+      await page.waitFor(`document.querySelector(${q(boxOf(jonas))}).value === ''`, 3000);
+      assert.doesNotMatch(await row2(page, jonas), /exchange is over/);
+      assert.strictEqual(await text(page, '#hnotes'), notes, 'no note, and none that says Esc');
       assert.strictEqual(named(p, 'Jonas Finch').hp, hpJonas);
     });
   });
