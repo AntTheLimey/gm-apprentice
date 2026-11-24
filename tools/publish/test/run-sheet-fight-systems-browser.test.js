@@ -3524,6 +3524,23 @@ describe('A GURPS foe made up at the table: the quick figures first (step 6b Tas
     });
   });
 
+  // review Minor 1: the row's HP max box and the panel's are one figure
+  it('GURPS: HP max typed in the row\'s box shows in the panel\'s, and the reverse', async () => {
+    const run = await start('gurps');
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await fightOn(page, run, 1);
+      let p = await addNew(page, 'Thug');
+      const id = named(p, 'Thug').id;
+      const values = () => page.evaluate(`[document.querySelector('[data-fmax="${id}"]').value, document.querySelector('#acting [data-fs-hp="${id}"]').value]`);
+      p = await typeInto(page, `[data-fmax="${id}"]`, '14');
+      assert.deepStrictEqual(await values(), ['14', '14']);
+      p = await typeInto(page, `#acting [data-fs-hp="${id}"]`, '11');
+      p = await until(page, `p.saved === "Saved" && p.pending === 0 && p.fight.rows.find((r) => r.id === ${q(id)}).max === 11`);
+      assert.deepStrictEqual(await values(), ['11', '11']);
+      assert.deepStrictEqual([named(p, 'Thug').hp, named(p, 'Thug').max], [11, 11]);
+    });
+  });
+
   // the CoC panel, checked for the same and changed: DEX, Fighting, Dodge and HP first
   it('CoC: Add "Cultist", 60 Tab 50 Tab 30 Tab 12: DEX, Fighting, Dodge and HP, placed by DEX', async () => {
     const run = await start('coc');
@@ -3617,9 +3634,18 @@ describe('A GURPS foe made up at the table: the quick figures first (step 6b Tas
         assert.ok(hurt.marks.includes('0 or less') && hurt.marks.includes('Reeling'), JSON.stringify(hurt.marks));
         assert.ok(await page.evaluate(`Boolean(document.querySelector('#side ol.to li[data-frow="${id}"]'))`), 'its row is in the order');
         // the panel's Shock chip, lit, can be read: its words are not the colour of its fill
-        const chip = await page.evaluate(`(() => { const b = document.querySelector('#acting [data-fshock="${id}"]'); const c = getComputedStyle(b); return [b.textContent, c.color, c.backgroundColor]; })()`);
-        assert.match(chip[0], /^Shock \u2212\d$/);
-        assert.notStrictEqual(chip[1], chip[2], `the Shock chip's words and fill: ${JSON.stringify(chip)}`);
+        // fix round: against the background actually painted under it (its own fill, else the nearest ancestor's)
+        const chip = await page.evaluate(`(() => {
+          const b = document.querySelector('#acting [data-fshock="${id}"]');
+          const rgb = (v) => (v.match(/[\\d.]+/g) || []).map(Number);
+          let el = b; let bg = null;
+          while (el && !bg) { const c = rgb(getComputedStyle(el).backgroundColor); if (c.length >= 3 && (c.length < 4 || c[3] > 0)) bg = c; el = el.parentElement; }
+          const lum = (c) => { const [r, g, bl] = c.slice(0, 3).map((x) => { x /= 255; return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; }); return 0.2126 * r + 0.7152 * g + 0.0722 * bl; };
+          const fg = rgb(getComputedStyle(b).color); const [hi, lo] = [lum(fg), lum(bg)].sort((x, y) => y - x);
+          return { text: b.textContent, fg, bg, ratio: (hi + 0.05) / (lo + 0.05) };
+        })()`);
+        assert.match(chip.text, /^Shock \u2212\d$/);
+        assert.ok(chip.ratio >= 3, `the Shock chip's words against what is painted under them: ${JSON.stringify(chip)}`);
         seen.push(await edge('Thug hurt'));
         if (w === 1449) await shot(page, 't36-thug-damaged-1449');
         // Out by a tap
