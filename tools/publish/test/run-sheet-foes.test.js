@@ -9,6 +9,7 @@ const { readText } = require('./helpers/run-sheet-lines');
 const { buildIndex } = require('../lib/run-sheet/notes');
 const { readBeats } = require('../lib/run-sheet/beats');
 const { foesOf, foesFor, beatCanFight } = require('../lib/run-sheet/foes');
+const { systemFor } = require('../lib/run-sheet/systems');
 
 // Every scratch dir is removed when the file's tests finish.
 const made = [];
@@ -201,6 +202,24 @@ describe('run sheet foes', () => {
       assert.deepStrictEqual(social.who.map((w) => w.name), ['Sister Fen']);
       assert.deepStrictEqual(foesFor(social, index), { foes: [], treasure: [], warnings: [] });
     });
+
+    it('a dead counted creature gives no rows and no warning', () => {
+      const dead = { 'Creatures/Old Bones.md': '---\nname: Old Bones\ntype: creature\nstatus: dead\n---\n\nGone.\n' };
+      const r = foesOfGate('- **[[Old Bones]] \u00d73:** lie there', dead);
+      assert.ok(!r.foes.some((f) => /Old Bones/.test(f.name)));
+      assert.ok(!r.warnings.some((w) => /Old Bones/.test(w.text)));
+    });
+
+    // Task 23b B3: a blank row's figures are all null in every system, never undefined
+    for (const [id, keys] of [['coc-7e', ['init', 'dex']], ['gurps-4e', ['init', 'speed']]]) {
+      it(`a blank ${id} row carries null for its initiative figures`, () => {
+        const { index, beats } = setup(withLines('- **Four Guards:** rifles'));
+        const r = foesFor(gate(beats), index, new Set(), null, null, systemFor(id));
+        const blank = r.foes.find((f) => /Guards/.test(f.name));
+        assert.ok(blank, 'the blank row');
+        for (const k of ['ac', 'hp', ...keys]) assert.strictEqual(blank[k], null, k);
+      });
+    }
 
     it('a dead person in a fight beat gets no blank row', () => {
       const dead = { 'Characters/NPCs/Quiet Dead.md': '---\nname: Quiet Dead\ntype: npc\nstatus: dead\n---\n\nGone.\n' };

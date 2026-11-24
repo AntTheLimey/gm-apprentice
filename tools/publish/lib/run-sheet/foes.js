@@ -9,7 +9,6 @@ const { itemKeys } = require('./keys');
 const { bullets, links } = require('./plan-text');
 const { startingSide } = require('./sides');
 const { systemFor } = require('./systems');
-const { lairActionsOf } = require('./systems/dnd');
 
 const DND = systemFor(null);
 // The notes that stand for several people at once (beats.js): a counted link to one gives rows.
@@ -54,7 +53,7 @@ function warner(seen, warnings) {
 }
 
 // The note-less numbers of a blank row: nothing to read, so every figure is null for the GM to type.
-const BLANK_NUMS = () => ({ ac: null, hp: null, init: null, from: {}, legendaryResistance: 0, legendaryActions: 0, recharge: [], rechargeAt: {}, lair: false, lairActions: lairActionsOf('') });
+const BLANK_NUMS = () => ({ ac: null, hp: null, init: null, from: {}, legendaryResistance: 0, legendaryActions: 0, recharge: [], rechargeAt: {}, lair: false, lairActions: '', dex: null, speed: null });
 const NO_NUMBERS = (name) => `${name}: no numbers in the vault: type them in the fight, or fill them in prep`;
 
 // A blank row's entry: no stat block, so no numbers, for a fight beat the GM types them into (S6-D7). `label` is
