@@ -2788,6 +2788,20 @@ describe('GURPS defences as they stand this turn (step 6b Task 14)', () => {
     assert.deepEqual(s.fight.rows, was);
   });
 
+  it('a PC row and a lair row never get a defRoll from a defendRolled action', () => {
+    let s = begin(rows());
+    s = go(s);
+    const bouncer = named(s, 'Bouncer 2');
+    // a lair row is only ever D&D's; here one of the GURPS rows is turned into one to put the reducer's guard to the test
+    s = { ...s, fight: { ...s.fight, rows: s.fight.rows.map((r) => (r.id === bouncer.id ? { ...r, kind: 'lair' } : r)) } };
+    const was = s.fight.rows;
+    for (const who of ['Kev', 'Bouncer 2']) {
+      s = G(s, { type: 'defendRolled', row: s.fight.rows.find((r) => r.name === who).id, defence: 'dodge', result: rolled(5, 8) });
+    }
+    assert.deepEqual(s.fight.rows, was, 'no row changed');
+    for (const r of s.fight.rows.filter((x) => x.name === 'Kev' || x.name === 'Bouncer 2')) assert.ok(!r.defRoll, `${r.name} has no defRoll`);
+  });
+
   it('a Do Nothing row at 0 HP that defended is asked HT to stay conscious; one that did not is not (Task 13\'s link)', () => {
     const list = () => [
       { name: 'Bouncer 1', ini: 6, speed: 6, hp: 11, max: 11, ht: 10 },

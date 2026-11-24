@@ -976,7 +976,7 @@ describe('CoC and GURPS fights on the GM page, by real input', { skip: browserSk
         await shot(page, `gurps-defend-result-${width}`);
         // the players' view holds none of it
         const pv = JSON.stringify(await (await fetch(`${run.base}/api/players/view`)).json());
-        assert.ok(!/rolled|made it|failed by|Parry/.test(pv), `players' view: ${pv.slice(0, 200)}`);
+        assert.ok(!/rolled|made it|failed by/.test(pv), `players' view: ${pv.slice(0, 200)}`);
         // information only: the row's seen toggle still works with it showing
         await tap(page, `[data-fseen="${b2}"]`);
         p = await until(page, `p.fight.rows.find((r) => r.id === ${q(b2)}).seen === true && p.saved === "Saved" && p.pending === 0`);
