@@ -3543,6 +3543,8 @@ describe('A GURPS foe made up at the table: the quick figures first (step 6b Tas
         const t = named(p, 'Thug');
         assert.deepStrictEqual([t.speed, t.ini, t.skill, t.dodge, t.parry, t.max, t.hp], [5, 5, 12, 8, 9, 10, 10]);
         assert.deepStrictEqual([t.st, t.ht, t.dx, t.fpMax], [null, null, null, null], 'no ST, HT or DX asked for or made up');
+        // a Dodge typed as the figure Speed gives is the GM's own: no "(from Speed)" tag
+        assert.deepStrictEqual(t.from, {}, 'nothing marked worked out');
         // placed by Speed: the order runs high to low, rows with no Speed last
         const ins = p.fight.rows.filter((r) => r.in);
         const n = ins.map((r) => (r.ini === null ? -Infinity : r.ini));

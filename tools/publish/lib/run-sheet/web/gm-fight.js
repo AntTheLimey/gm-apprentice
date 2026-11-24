@@ -2513,7 +2513,8 @@
     if (STAT[f].stat) {
       // a figure for setStat: a number where it is one (`+1` is 1), else the words (DR's `2 (face 0)`, DB's `+1D4`)
       const value = v === '' ? null : /^[+-]?\d+(?:\.\d+)?$/.test(v) ? Number(v) : v;
-      if (shownFigure(value) !== shown(r, f)) {
+      // a figure typed as the one worked out is the GM's own now: sent, so it loses its "from" tag (Task 36)
+      if (shownFigure(value) !== shown(r, f) || (value !== null && fromTag(r, STAT[f].stat))) {
         if (STAT[f].panel) heldIn = HOLD;
         F({ type: 'setStat', row: r.id, key: STAT[f].stat, value, ...(STAT[f].panel ? { hold: true } : {}) });
       }
