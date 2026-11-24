@@ -862,8 +862,9 @@ describe('CoC and GURPS fights on the GM page, by real input', { skip: browserSk
 
   // Task 14: two Bouncers added with the Add box's count, their numbers typed in the panel; Bouncer 1 is fastest.
   // `more` types further boxes on Bouncer 2 ([key, value] pairs). The dice always land 4, so every 3d6 is 12.
-  async function bouncers(page, run, more) {
-    let p = await fightOn(page, run, 1);
+  // `opened` true: the fight is open already (Fight pressed), so the page is not loaded again
+  async function bouncers(page, run, more, opened = false) {
+    let p = opened ? await settled(page) : await fightOn(page, run, 1);
     await tap(page, '#fAddCount');
     await page.type('2');
     await tap(page, '#fAddName');
@@ -947,6 +948,31 @@ describe('CoC and GURPS fights on the GM page, by real input', { skip: browserSk
         p = await settled(page);
         assert.deepStrictEqual(await selaLines(), was, 'Sela\'s card is untouched');
         sane(p, `cards ${width}`);
+      });
+    });
+  }
+
+  // Task 34 (finding 13): the middle/right split holds still as rows gain numbers, buttons and cards
+  for (const [width, height] of SIZES) {
+    it(`GURPS at ${width}: the right pane's left edge stays put from Fight through added rows, typed numbers, Start and a card`, async () => {
+      const run = await start('gurps', { randomInt: () => 4 });
+      await withPage({ width, height }, async (page) => {
+        const edge = async (label) => { const p = await settled(page); return [label, p.layout.paneBox.left, p.layout.folded]; };
+        const seen = [];
+        let p = await fightOn(page, run, 1);
+        seen.push(await edge('fight'));
+        p = await bouncers(page, run, [['st', 11], ['ht', 10], ['dx', 10], ['parry', 9], ['block', 8], ['dr', 2]], true);
+        seen.push(await edge('numbers and Start'));
+        const b2 = named(p, 'Bouncer 2').id;
+        p = await typeInto(page, `[data-fhp="${b2}"]`, '-7');
+        await page.waitFor(`document.querySelector('#acting .fcard[data-fcrow="${b2}"]')`, 3000);
+        seen.push(await edge('card'));
+        p = await typeInto(page, `[data-fhp="${named(p, 'Sela Drake').id}"]`, 'f-2');
+        seen.push(await edge('more numbers'));
+        // open or folded, the pane is as it was at Fight: where the order needs the room, it folds then, not mid-fight
+        assert.strictEqual(new Set(seen.map((x) => `${x[1]}|${x[2]}`)).size, 1, `${width}: the split moved ${JSON.stringify(seen)}`);
+        if (width >= 1280) assert.strictEqual(seen[0][2], false, `${width}: the pane is open`);
+        sane(p, `split ${width}`);
       });
     });
   }

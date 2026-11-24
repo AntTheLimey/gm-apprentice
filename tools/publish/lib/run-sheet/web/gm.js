@@ -1450,6 +1450,16 @@
     const fo = ol && ol.closest('.fo');
     if (!ol || !fo) return ORDER_FLOOR;
     ol.classList.add('measure');
+    // the rows a part measures with as well (gm-fight.js measureRows: a row with every figure), taken out again below
+    const extra = [];
+    for (const part of parts) {
+      for (const html of (part.measureRows && part.measureRows()) || []) {
+        const t = document.createElement('template');
+        t.innerHTML = String(html).trim();
+        const li = t.content.firstElementChild;
+        if (li) { li.setAttribute('aria-hidden', 'true'); ol.appendChild(li); extra.push(li); }
+      }
+    }
     let row = 0;
     // a row's second line (statuses that do not fit, a box's words) is never measured: it wraps
     // a name longer than its 6 rem least keeps its whole width (up to 14 rem) as its least, so a font wider than a
@@ -1460,6 +1470,7 @@
       if (nm.scrollWidth > nm.clientWidth + 1) nm.style.minWidth = `${Math.ceil(Math.min(nm.scrollWidth, cap))}px`;
     }
     for (const li of ol.children) if (li.dataset.row2 === undefined) row = Math.max(row, li.scrollWidth + li.offsetWidth - li.clientWidth);
+    for (const li of extra) li.remove();
     ol.classList.remove('measure');
     const side = $('#side');
     const round = fo.offsetWidth - ol.clientWidth + (side.offsetWidth - side.clientWidth);

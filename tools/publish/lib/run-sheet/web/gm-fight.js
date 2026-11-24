@@ -1895,6 +1895,21 @@
       return d.afterFight ? afterHTML(d) : '';
     },
     click(ev) { return onClick(ev); },
+    // Rows the order's least width is measured with as well as its own (gm.js orderMin, Task 34): a foe row with every
+    // figure filled and the fight's longest name, once acting and once not, so the order's column is as wide from the
+    // start as its rows can grow, and the split beside it holds still as they gain numbers. CoC and GURPS only (D&D's
+    // rows keep today's measure).
+    measureRows() {
+      const d = RP.derived();
+      const f = d && d.fight;
+      if (!f || f.paused || !panelBoxes().length) return [];
+      const longest = f.view.rows.reduce((a, r) => (String(r.gmName || '').length > a.length ? String(r.gmName) : a), '');
+      // two-digit figures, as a hurt foe's are (`-13/11`, `Parry 13`); the initiative box is a fixed width
+      const full = { ...FM.blankRow({ id: '\u2007measure', name: longest }), gmName: longest, kind: 'foe', in: true, seen: false,
+        ini: initPlaces() ? 9.99 : 99, hp: -99, max: 99, temp: 0, fp: -9, fpMax: 99, mp: 99, mpMax: 99, san: 99, sanMax: 99,
+        dodge: 99, parry: 99, block: 99, dex: 99, conds: [], cards: [] };
+      return [rowHTML(full, { ...f, turn: full.id }, f.view), rowHTML(full, f, f.view)];
+    },
     // after every layout pass (gm.js applyLayout): the rows' status strips fit their room
     afterLayout() {
       fitChips();
