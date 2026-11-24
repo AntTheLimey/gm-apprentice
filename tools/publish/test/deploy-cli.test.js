@@ -155,7 +155,7 @@ describe('deploy: cloudflare-pages', () => {
     const rc = await runDeploy({ configPath: CONFIG }, h.deps);
     assert.strictEqual(rc, 1);
     assert.deepStrictEqual(h.wrangler, [['whoami']]);
-    assert.match(h.text(), /Cloudflare credentials are not set up\. Run `gm-publish doctor --set-cloudflare-creds`/);
+    assert.match(h.text(), /Cloudflare credentials are not set up\. In your own terminal window, run `node "[^"]+gm-publish\.js" doctor --set-cloudflare-creds`/);
   });
 
   it('reports the wrangler failure tail when the deploy fails', async () => {

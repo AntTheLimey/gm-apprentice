@@ -16,11 +16,27 @@ const WRANGLER_DEPLOY_TIMEOUT_MS = 10 * 60 * 1000;
 // `stdio`, `shell` and `maxBuffer` pass through for a long-running child whose output a
 // person should see as it happens (deploy's build hooks): with stdio inherited, stdout and
 // stderr come back empty and a failure is described by its exit code.
-function runCommand(cmd, args, { timeoutMs = 30000, cwd, stdio, shell, maxBuffer } = {}) {
-  const res = spawnSync(cmd, args, {
+// On Windows `npx` and `npm` are .cmd scripts, which spawn cannot start by themselves (ENOENT, or EINVAL since Node
+// 20.12.2): so `npx wrangler@4 whoami` and every deploy failed there. They run through cmd.exe, as one line with each
+// argument that needs it in double quotes (#877).
+const WINDOWS_SCRIPTS = new Set(['npx', 'npm']);
+const windowsQuote = (arg) => (/^[\w\-.=:/\\@,+]+$/.test(arg) ? arg : `"${arg}"`);
+
+function runCommand(cmd, args, { timeoutMs = 30000, cwd, stdio, shell, maxBuffer, platform = process.platform } = {}) {
+  const options = {
     encoding: 'utf8', timeout: timeoutMs, ...(cwd ? { cwd } : {}),
     ...(stdio ? { stdio } : {}), ...(shell ? { shell } : {}), ...(maxBuffer ? { maxBuffer } : {}),
-  });
+  };
+  const viaCmd = platform === 'win32' && !shell && WINDOWS_SCRIPTS.has(cmd);
+  // cmd.exe reads `"` and `%NAME%` even inside double quotes, and a line break ends the command: an argument with one
+  // (a project name or folder from the settings) is refused, never passed on changed or as a second command.
+  const unsafe = viaCmd && (args || []).find((a) => /["%\r\n]/.test(String(a)));
+  if (unsafe !== undefined && unsafe !== false) {
+    return { code: 1, stdout: '', stderr: `Not run: on Windows, ${cmd} cannot be given "${unsafe}" safely (it has a ", a % or a line break). Change that name or folder in the settings.`, error: 'EUNSAFEARG', signal: null };
+  }
+  const res = viaCmd
+    ? spawnSync([cmd, ...(args || [])].map(windowsQuote).join(' '), { ...options, shell: true })
+    : spawnSync(cmd, args, options);
   // A killed child can still report status 0 (`npx` does, when it times out `wrangler`), so a set
   // `error` or `signal` is a failure whatever the status says (#350).
   const killed = !!(res.error || res.signal);
@@ -47,4 +63,4 @@ function failureDetail(res) {
     || ('exit ' + res.code);
 }
 
-module.exports = { runCommand, WRANGLER_TIMEOUT_MS, WRANGLER_DEPLOY_TIMEOUT_MS, failureDetail };
+module.exports = { runCommand, WRANGLER_TIMEOUT_MS, WRANGLER_DEPLOY_TIMEOUT_MS, failureDetail, windowsQuote };

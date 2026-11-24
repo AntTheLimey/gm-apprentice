@@ -344,7 +344,7 @@ test('setup-backend.js and site-doctor.js read no site-folder key off the site f
 // `gma table` hands it, #855; not a build step), steps.js (the steps) and settings/site-tool.js, whose one use runs this tool's own
 // `update-pin --check`. No code runs `npm run <hook>` any more: a package.json prebuild or postbuild stops the build.
 // The two script names appear as code only in the registry (`stepsFrom`); a shell is opened with `shell: true` only by
-// steps.js.
+// steps.js, and by run-command.js for npx and npm on Windows alone (.cmd scripts spawn cannot start by itself, #877).
 test('a build step is run only by the steps module', () => {
   const everywhere = [...sources, ...files(SETTINGS)];
   const grepAll = (re) => everywhere.filter((f) => re.test(code(f))).map(rel).sort();
@@ -358,7 +358,11 @@ test('a build step is run only by the steps module', () => {
   const spawns = code(path.join(SETTINGS, 'site-tool.js')).match(/\bspawnSync\(/g) || [];
   assert.equal(spawns.length, 1, 'site-tool.js: one call');
   assert.match(code(path.join(SETTINGS, 'site-tool.js')), /spawnSync\(process\.execPath, \[bin, 'update-pin', '--check'/);
-  assert.deepEqual(grepAll(/shell:\s*true/), ['lib/settings/steps.js']);
+  assert.deepEqual(grepAll(/shell:\s*true/), ['lib/run-command.js', 'lib/settings/steps.js']);
+  const runner = code(path.join(ROOT, 'lib', 'run-command.js'));
+  assert.equal((runner.match(/shell:\s*true/g) || []).length, 1, 'run-command.js: one shell');
+  assert.match(runner, /const WINDOWS_SCRIPTS = new Set\(\['npx', 'npm'\]\);/);
+  assert.match(runner, /const viaCmd = platform === 'win32' && !shell && WINDOWS_SCRIPTS\.has\(cmd\);/);
   // Nothing runs `npm run <something>`.
   assert.deepEqual(grepAll(/runCommand\(\s*['"]npm['"]\s*,\s*\[\s*['"]run['"]/), []);
   // The two script names, as code, only where the registry maps them to their settings.

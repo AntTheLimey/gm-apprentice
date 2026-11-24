@@ -9,6 +9,16 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.146] — 2026-11-24
+
+### Changed
+
+- Saving your Cloudflare token never goes through the chat: the apprentice gives you one line to run in your own terminal, on a Mac, Linux or Windows, and it asks for the token with nothing showing as you paste. On Windows it reminds you to reopen your apps afterwards. The by-hand route finds your Account ID with `wrangler whoami`, since Cloudflare's dashboard no longer shows it in a sidebar (#877). Publish tool 1.70.63.
+
+### Fixed
+
+- On Windows, the publish tool can now start wrangler: checking your Cloudflare login, saving the token and deploying all failed there before (#877).
+
 ## [1.12.145] — 2026-11-24
 
 ### Fixed

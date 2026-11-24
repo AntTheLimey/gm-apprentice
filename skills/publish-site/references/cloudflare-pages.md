@@ -57,26 +57,43 @@ anything else.
 
 ---
 
-## Step 2: Hand the token to the setup — it does the rest
+## Step 2: Save the token in your own terminal
 
-That's the whole dance now: **create the token (Step 1) → hand it to the
-setup, which saves it and figures out your Account ID for you → done.**
-You never look up the Account ID by hand, and you never edit a shell
-startup file yourself.
+**Never ask for the token in the chat.** Anything pasted there goes to the
+model provider and into the session transcript. The token goes from
+Cloudflare to the GM's own terminal window, and from there to their
+computer only.
 
-Run this from the site directory:
+1. Run `gma publish doctor --set-cloudflare-creds` yourself, from any
+   folder. With no one to type into it, it saves nothing and prints the
+   line for the GM's own terminal: `node`, the publish tool's full path
+   in quotes, then `doctor --set-cloudflare-creds`. It runs as it is in
+   any terminal, on a Mac, Linux or Windows.
 
-```bash
-gma publish doctor --set-cloudflare-creds
-```
+2. Hand the GM that line exactly as it printed, and tell them:
+   - Open a terminal window: Terminal on a Mac, PowerShell or Windows
+     Terminal on Windows, any terminal on Linux.
+   - Paste the line and press Enter.
+   - When it asks, paste the token and press Enter. Nothing shows as
+     you paste: that is on purpose.
 
-Paste your token when it asks. It then:
+It then:
 
-- **saves the token** to the right startup file for your shell
+- **saves the token** to the right place for your computer
   automatically — zsh, bash, or Windows; you don't need to know which,
 - **works out your Account ID from Cloudflare** and saves that too (this
   is why you're never sent hunting for it), and
-- **confirms it worked** — all **without ever printing your token back**.
+- **confirms it worked**, all **without ever printing your token back**.
+
+**On Windows**, it ends by asking the GM to close and reopen the app
+their assistant runs in, and any terminal windows: programs that were
+already open do not see a saved variable until they start again. Until
+then, `doctor` reports wrangler as not authenticated.
+
+**If the GM pastes a token into the chat anyway**, don't use it. Tell them
+it is now in the chat's record, so they should delete that token in
+Cloudflare's API Tokens list, create a new one (Step 1), and run the line
+above.
 
 > **The old foot-gun is gone.** This guide used to warn that credentials
 > put in `~/.zshrc` instead of `~/.zshenv` were the **#1 reason a deploy
@@ -86,24 +103,6 @@ Paste your token when it asks. It then:
 > removes that trap entirely: it always writes the file **every** shell
 > reads (`~/.zshenv` on zsh, `~/.bashrc` on bash, a user environment
 > variable on Windows), so the credentials are always there.
-
-**Prefer your token never passes through the assistant?** Run the same
-command in **your own terminal window**, entering the token at the
-hidden `read` prompt (you can paste it — it stays invisible) so it never
-passes through the assistant. `gma` is not defined in the GM's own
-shell, so hand them the line with `gma` written out in full
-(`python3 "<shared>/scripts/gma.py"`, the real absolute path filled in
-before you hand it over). For example:
-
-```bash
-read -rs CF_TOKEN; printf '%s' "$CF_TOKEN" | python3 "<shared>/scripts/gma.py" publish doctor --set-cloudflare-creds; unset CF_TOKEN
-```
-
-Chain the three with `;` (not `&&`) so `unset CF_TOKEN` always runs and
-clears the token even if the save step exits non-zero (for example when
-`whoami` verification fails). `read -rs` doesn't echo what you type and
-keeps the token out of your shell history; the tool never prints it back
-either way.
 
 ### Only if you'd rather do it by hand
 
@@ -119,32 +118,34 @@ macOS/Linux with zsh (the default on modern macOS) they must go in
 > authenticated" even though the token is set.
 
 Open the file in an editor (this keeps the token out of your shell
-history), and add these two lines with your real values:
+history), and add the token line with your real token:
 
 ```bash
 export CLOUDFLARE_API_TOKEN="paste-your-token-here"
-export CLOUDFLARE_ACCOUNT_ID="paste-your-account-id-here"
 ```
 
-- **zsh (macOS default):** put them in `~/.zshenv`, then run
+- **zsh (macOS default):** put it in `~/.zshenv`, then run
   `source ~/.zshenv`.
 - **Bash (most Linux):** if your shell is Bash rather than zsh (check
-  with `echo $SHELL`), put the same two lines in `~/.bashrc` instead —
+  with `echo $SHELL`), put the line in `~/.bashrc` instead —
   Bash does not read `~/.zshenv`. On some setups a login shell reads
   `~/.bash_profile` rather than `~/.bashrc`; if verification below still
-  fails, add the lines there too. Then run `source ~/.bashrc` (or open a
+  fails, add the line there too. Then run `source ~/.bashrc` (or open a
   new terminal).
-- **Windows:** set the same two variables as user environment variables
+- **Windows:** set `CLOUDFLARE_API_TOKEN` as a user environment variable
   (System Settings → Environment Variables), then open a new terminal.
 
-Doing it by hand means you *do* have to find your Account ID yourself:
-go to https://dash.cloudflare.com, select your account, and copy the
-**Account ID** from the right-hand sidebar (on the account home or the
-**Workers & Pages** overview). Then verify:
+Then find your Account ID: Cloudflare's dashboard pages no longer show it
+in a sidebar, but wrangler prints it once the token is set:
 
 ```bash
 npx wrangler@4 whoami
 ```
+
+Copy the 32-character **Account ID** from its table and add it the same
+way, as `CLOUDFLARE_ACCOUNT_ID` (`export CLOUDFLARE_ACCOUNT_ID="..."` in
+the same file on macOS/Linux, a second user environment variable on
+Windows). Run `npx wrangler@4 whoami` again in a new terminal to check.
 
 You should see your account name and Account ID, and a line noting the
 token was read from `CLOUDFLARE_API_TOKEN`. This command prints your
@@ -468,8 +469,9 @@ of `<project>.pages.dev`:
 The token isn't reaching the command. Almost always the variables are in
 `~/.zshrc` instead of `~/.zshenv` (see Step 2), or you're in a terminal
 opened before you added them — open a new one or run `source ~/.zshenv`.
-Re-running `gma publish doctor --set-cloudflare-creds` fixes this by
-writing the file every shell reads.
+Running the Step 2 line again in the GM's own terminal fixes this by
+writing the file every shell reads. On Windows, the app the assistant runs
+in needs closing and reopening after it.
 Confirm with `npx wrangler@4 whoami`.
 
 **A wrong path (e.g. `/nope`) returns a Cloudflare 5xx instead of the
