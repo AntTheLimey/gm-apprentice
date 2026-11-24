@@ -919,6 +919,86 @@ describe('CoC and GURPS fights on the GM page, by real input', { skip: browserSk
     });
   }
 
+  // Task 30: the last defence roll on the row's second line, information only (nothing waits on it)
+  for (const [width, height] of SIZES) {
+    it(`GURPS at ${width}: a Parry made then failed shows on Bouncer 2's second line, the second replacing the first; one line high; its seen toggle and Next still work; its turn clears it; the players see none of it`, async () => {
+      let die = 2;
+      const run = await start('gurps', { randomInt: () => die });
+      await withPage({ width, height }, async (page) => {
+        let p = await bouncers(page, run, [['st', 11], ['ht', 10], ['dx', 10], ['parry', 9], ['block', 8]]);
+        const b1 = named(p, 'Bouncer 1').id;
+        const b2 = named(p, 'Bouncer 2').id;
+        assert.equal(p.fight.turn, b1);
+        const res = `li[data-row2="${b2}"] .defres`;
+        assert.strictEqual(await page.evaluate('document.querySelectorAll("li.row2 .defres").length'), 0, 'no Defend tapped: no result line');
+        const parry = `[data-fdef="${b2}|parry"]`;
+        const before = await page.evaluate(`document.querySelector(${q(parry)}).getBoundingClientRect().top`);
+        // made: 2+2+2 against Parry 9
+        await tap(page, parry);
+        await page.waitFor(`document.querySelector(${q(res)}) !== null`, 3000);
+        assert.strictEqual(await text(page, res), 'Parry 9: rolled 6, made it by 3');
+        assert.strictEqual(await attrOf(page, res, 'class'), 'defres made');
+        const after = await page.evaluate(`document.querySelector(${q(parry)}).getBoundingClientRect().top`);
+        assert.ok(Math.abs(after - before) < 1, `the tapped row stays put (${before} -> ${after})`);
+        // one line high, wholly inside the order, under the readout's side
+        const box = await page.evaluate(`(() => { const l = document.querySelector('li[data-row2=${q(b2)}]'); const e = document.querySelector(${q(res)}); const o = l.closest('ol.to'); const a = l.getBoundingClientRect(); const b = e.getBoundingClientRect(); const c = o.getBoundingClientRect(); return { h: a.height, left: b.left, right: b.right, oLeft: c.left, oRight: c.right, mid: c.left + c.width / 2, whole: e.scrollWidth <= e.clientWidth + 1 }; })()`);
+        assert.ok(box.h <= 22, `${width}: the second line is one line (${box.h} px)`);
+        assert.ok(box.left >= box.oLeft && box.right <= box.oRight + 1, `${width}: inside the order ${JSON.stringify(box)}`);
+        assert.ok(box.left > box.mid, `${width}: on the readout's side ${JSON.stringify(box)}`);
+        assert.ok(box.whole, `${width}: the whole result shows`);
+        // failed: 4+4+4 against Parry 5 replaces it
+        die = 4;
+        await page.waitFor(`document.querySelector(${q(parry)}).textContent === "Parry 5" && !document.querySelector(${q(parry)}).disabled`, 3000);
+        await tap(page, parry);
+        await page.waitFor(`document.querySelector(${q(res)}) && document.querySelector(${q(res)}).textContent === "Parry 5: rolled 12, failed by 7"`, 3000);
+        assert.strictEqual(await attrOf(page, res, 'class'), 'defres failed');
+        assert.strictEqual(await page.evaluate(`document.querySelectorAll('li[data-row2=${q(b2)}] .defres').length`), 1);
+        // several foes defended: Rafe's Dodge and Mara's Parry too, each one line; Bouncer 2, last, and its line in view
+        for (const [who, k] of [['Rafe Kell', 'dodge'], ['Mara Quint', 'parry']]) {
+          const id = named(p, who).id;
+          await tap(page, `[data-fdef="${id}|${k}"]`);
+          await page.waitFor(`document.querySelector('li[data-row2=${q(id)}] .defres') !== null`, 3000);
+        }
+        p = await settled(page);
+        const seen = await page.evaluate(`(() => {
+          const lines = Array.from(document.querySelectorAll('li.row2'), (l) => l.getBoundingClientRect().height);
+          const ol = document.querySelector('#side ol.to');
+          let sc = ol.parentElement;
+          while (sc && !(/(auto|scroll)/.test(getComputedStyle(sc).overflowY) && sc.scrollHeight > sc.clientHeight)) sc = sc.parentElement;
+          const v = sc ? sc.getBoundingClientRect() : { top: 0, bottom: innerHeight };
+          const inView = (e) => { const r = e.getBoundingClientRect(); return r.top >= Math.max(v.top, 0) - 1 && r.bottom <= Math.min(v.bottom, innerHeight) + 1; };
+          return { lines, results: document.querySelectorAll('li.row2 .defres').length, row: inView(document.querySelector('li[data-frow=${q(b2)}]')), line: inView(document.querySelector(${q(res)})) };
+        })()`);
+        assert.strictEqual(seen.results, 3, `${width}: three results`);
+        for (const h of seen.lines) assert.ok(h <= 22, `${width}: every second line is one line (${seen.lines})`);
+        assert.ok(seen.row && seen.line, `${width}: Bouncer 2 and its result in view (${JSON.stringify(seen)})`);
+        sane(p, `defence result ${width}`);
+        await shot(page, `gurps-defend-result-${width}`);
+        // the players' view holds none of it
+        const pv = JSON.stringify(await (await fetch(`${run.base}/api/players/view`)).json());
+        assert.ok(!/rolled|made it|failed by|Parry/.test(pv), `players' view: ${pv.slice(0, 200)}`);
+        // information only: the row's seen toggle still works with it showing
+        await tap(page, `[data-fseen="${b2}"]`);
+        p = await until(page, `p.fight.rows.find((r) => r.id === ${q(b2)}).seen === true && p.saved === "Saved" && p.pending === 0`);
+        assert.strictEqual(await text(page, res), 'Parry 5: rolled 12, failed by 7', 'still there after another control');
+        // and Next: on to Bouncer 2's turn, where the line goes
+        for (let i = 0; i < 12 && p.fight.turn !== b2; i++) {
+          const was = p.fight.turn;
+          await tap(page, '#fNext');
+          p = await until(page, `p.fight.turn !== ${q(was)} && p.saved === "Saved" && p.pending === 0`);
+        }
+        assert.equal(p.fight.turn, b2);
+        await page.waitFor(`document.querySelector(${q(res)}) === null`, 3000);
+        assert.strictEqual(await text(page, parry), 'Parry 9');
+        // the players' screen itself
+        await page.goto(`${run.base}/players?probe=1`);
+        await page.waitFor('document.body && document.body.textContent.includes("Bouncer")', 5000).catch(() => {});
+        const body = await page.evaluate('document.body.textContent');
+        assert.ok(!/rolled|made it|failed by/.test(body), 'players\' screen');
+      });
+    });
+  }
+
   for (const [width, height] of SIZES) {
     it(`GURPS at ${width}: a held click on the acting row's "+ manoeuvre", pick All-Out Attack: the row reads AoA and its Dodge "no defence"`, async () => {
       const run = await start('gurps', { randomInt: () => 4 });

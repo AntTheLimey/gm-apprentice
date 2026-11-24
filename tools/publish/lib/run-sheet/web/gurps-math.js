@@ -355,9 +355,14 @@
     if (!d || d.value === null) return `${d ? d.label : 'That defence'}: none now`;
     return `${d.label} moved to ${d.value}: tap again`;
   }
+  // A row's last defence roll (Task 30), kept on the row until its turn: { label, value, again, total, target,
+  // outcome }, its text "Parry 10: rolled 9, made it by 1" and whether it was made.
+  const defRollOf = (d, res, again) => ({ label: d.label, value: d.value, again: Boolean(again), total: res.total, target: res.target, outcome: res.outcome });
+  const defRollText = (x) => `${x.label} ${x.value}${x.again ? ' again' : ''}: ${resultText(x)}`;
+  const defRollMade = (x) => !failed(x);
 
   return {
-    liveDefences, retreatOf, defenceText, defenceMoved, DEFENCE_KEYS,
+    liveDefences, retreatOf, defenceText, defenceMoved, defRollOf, defRollText, defRollMade, DEFENCE_KEYS,
     deriveGurps, gurpsInjury, woundingAt, locationOption, drFigure, shockOf, cardForHit, cardsAtTurnStart, cardsAtTurnEnd, lineTarget, lineStat, lineName, lineText, resultText,
     offersFor, rollResult, nextLine, cardDone, pending, offerOf,
   };

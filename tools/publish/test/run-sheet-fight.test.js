@@ -2809,6 +2809,42 @@ describe('GURPS defences as they stand this turn (step 6b Task 14)', () => {
       assert.deepEqual(s.fight.rows, was);
     }
   });
+
+  // Task 30: the row keeps its last defence roll, for its second line, until its own turn or the next roll
+  it('the last defence roll stays on the row: a made Parry, then a failed one replaces it; its turn clears it', () => {
+    let s = begin(rows());
+    s = go(s); // Bouncer 1 acts
+    assert.ok(!named(s, 'Bouncer 2').defRoll, 'none before a roll');
+    s = defend(s, 'Bouncer 2', 'parry', 8);
+    assert.deepEqual(named(s, 'Bouncer 2').defRoll, { label: 'Parry', value: 9, again: false, total: 8, target: 9, outcome: 'success' });
+    assert.equal(GM.defRollText(named(s, 'Bouncer 2').defRoll), 'Parry 9: rolled 8, made it by 1');
+    assert.equal(GM.defRollMade(named(s, 'Bouncer 2').defRoll), true);
+    s = defend(s, 'Bouncer 2', 'parry', 7);
+    assert.equal(GM.defRollText(named(s, 'Bouncer 2').defRoll), 'Parry 5: rolled 7, failed by 2');
+    assert.equal(GM.defRollMade(named(s, 'Bouncer 2').defRoll), false);
+    s = go(s); // Bouncer 2's turn
+    assert.equal(named(s, 'Bouncer 2').defRoll, null);
+  });
+
+  it('a critical says so on the row; a second Block says again', () => {
+    let s = begin(rows());
+    s = go(s);
+    s = G(s, { type: 'defendRolled', row: named(s, 'Bouncer 2').id, defence: 'dodge', result: { dice: [1, 1, 2], total: 4, target: 8, margin: 4, outcome: 'critical success' } });
+    assert.equal(GM.defRollText(named(s, 'Bouncer 2').defRoll), 'Dodge 8: rolled 4, critical success, made it by 4');
+    s = defend(s, 'Bouncer 2', 'block', 5);
+    s = G(s, { type: 'defendRolled', row: named(s, 'Bouncer 2').id, defence: 'block', again: true, result: { dice: [6, 6, 6], total: 18, target: 8, margin: -10, outcome: 'critical failure' } });
+    assert.equal(GM.defRollText(named(s, 'Bouncer 2').defRoll), 'Block 8 again: rolled 18, critical failure, failed by 10');
+    assert.equal(GM.defRollMade(named(s, 'Bouncer 2').defRoll), false);
+  });
+
+  it('a dropped roll leaves the last one in place', () => {
+    let s = begin(rows());
+    s = go(s);
+    s = defend(s, 'Bouncer 2', 'parry', 8);
+    const was = named(s, 'Bouncer 2').defRoll;
+    s = G(s, { type: 'defendRolled', row: named(s, 'Bouncer 2').id, defence: 'parry', result: rolled(12, 9) });
+    assert.deepEqual(named(s, 'Bouncer 2').defRoll, was, 'stale: Parry is 5 now');
+  });
 });
 
 describe('GURPS manoeuvre chip (step 6b Task 15)', () => {

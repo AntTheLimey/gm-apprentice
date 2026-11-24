@@ -373,6 +373,11 @@ ol.to .defs { display: inline-flex; gap: 2px; }
 .act .pdefs .sheetdef, .act .pdefs .pcdef { border: 1px solid var(--line); border-radius: 5px; padding: 0 6px; font-weight: 600; }
 /* the last hit's working on the row's second line: one line, clipped, its full text in the title */
 ol.to .hitline { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 500 .7rem var(--mono); color: var(--muted); }
+/* a foe's last defence roll (Task 30): on the right of the second line, under its readout; one line, the words saying
+   made or failed and the colour as well */
+ol.to .defres { flex: 0 1 auto; margin-left: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 650 .72rem var(--mono); border-left: 3px solid; padding-left: 5px; }
+ol.to .defres.made { color: var(--ok); }
+ol.to .defres.failed { color: var(--bad); }
 .act .mtrack { list-style: none; display: flex; flex-wrap: wrap; gap: 3px; margin: 4px 0 6px; padding: 0; font: 600 .72rem var(--mono); }
 .act .mtrack li { border: 1px dashed var(--line); border-radius: 4px; padding: 0 5px; color: var(--muted); }
 .act .mtrack li.lit { border-style: solid; border-color: var(--bad); color: var(--bad); }

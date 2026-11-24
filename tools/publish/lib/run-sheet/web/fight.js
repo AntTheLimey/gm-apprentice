@@ -543,7 +543,8 @@
     return D && typeof D === 'object' && GM && typeof GM.liveDefences === 'function' ? D : null;
   };
   // A row's turn starts: what it counted since its last turn starts again (the defence rolls, parries, Blocks), its
-  // retreat goes off, and the manoeuvre it chose last turn (Task 15's) is over. After turnStarts, which reads them.
+  // retreat goes off, the manoeuvre it chose last turn (Task 15's) is over, and its last roll's line goes
+  // (Task 30). After turnStarts, which reads them.
   function defencesTurn(f, r) {
     if (!defencesOf(f) || !r) return;
     r.defended = 0;
@@ -552,6 +553,7 @@
     r.retreat = false;
     r.manoeuvre = null;
     r.aodDefence = null;
+    r.defRoll = null;
   }
   // ---- CoC melee (Task 16): the levels compared by coc-math, the d100s the server's, a PC's level the GM's tap ----
   const cocOf = (f) => { const C = FM.rulesOf(f).coc; return C && typeof C === 'object' && CM ? C : null; };
@@ -911,6 +913,8 @@
       r.defended = (isNum(r.defended) ? r.defended : 0) + 1;
       if (a.defence === 'parry') r.parries = (isNum(r.parries) ? r.parries : 0) + 1;
       if (a.defence === 'block') r.blocks = (isNum(r.blocks) ? r.blocks : 0) + 1;
+      // the row's second line shows it (Task 30) until the next roll or the row's turn
+      r.defRoll = GM.defRollOf(d, res, d.used);
       touch(r, at);
       say(s, f, at, `${nameOf(s, f, r)}: ${GM.defenceText(d)}${d.used ? ', again' : ''}, ${GM.resultText(res)}.`);
     }),

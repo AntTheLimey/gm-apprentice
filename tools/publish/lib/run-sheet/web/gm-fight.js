@@ -438,11 +438,21 @@
     // the last hit's working (GURPS, Task 12): one line, clipped, all of it in the title
     const hit = (rowById(id) || {}).hit;
     if (hit && hit.line) out.push(`<span class="hitline" title="${esc(hit.line)}">${esc(hit.line)}</span>`);
+    out.push(defRollLine2(id));
     out.push(meleeLine2(id));
     out.push(dmgLine2(id));
     const st = (li && li.dataset.l2st) || '';
     if (st) out.push(`<span class="l2st">${st}</span>`);
     return out.join('');
+  }
+  // A row's last defence roll (GURPS, Task 30): "Parry 10: rolled 9, made it by 1", the words saying made or failed and
+  // the colour only as well. Information only: nothing waits on it; the row's turn or its next roll replaces it.
+  function defRollLine2(id) {
+    const r = rowById(id);
+    const x = r && r.defRoll;
+    if (!x || !defences() || !r.in || r.out || r.kind === 'pc' || r.kind === 'lair') return '';
+    const t = GMath.defRollText(x);
+    return `<span class="defres ${GMath.defRollMade(x) ? 'made' : 'failed'}" role="status" title="${esc(`${t}. Its last defence, until its turn`)}">${esc(t)}</span>`;
   }
   const L2_CLASSES = /^(?:side-\w+|cur|bench|out)$/;
   function syncLine2(rowOrId) {
