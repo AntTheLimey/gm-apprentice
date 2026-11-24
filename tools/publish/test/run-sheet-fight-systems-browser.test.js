@@ -226,7 +226,11 @@ describe('CoC and GURPS fights on the GM page, by real input', { skip: browserSk
       const id = named(p, 'Cultist').id;
       p = await typeInto(page, `[data-fmax="${id}"]`, 16);
       const entry = `[data-fhp="${id}"]`;
-      assert.strictEqual(await attrOf(page, entry, 'placeholder'), '-7 / +3 / m-2 / s-5');
+      // Task 38 changed this on purpose: the placeholder is short (the row fits one line); the whole hint is the box's
+      // title and its description, so hovering or a screen reader still finds m-2 and s-5
+      assert.strictEqual(await attrOf(page, entry, 'placeholder'), '-7 / +3\u2026');
+      assert.strictEqual(await attrOf(page, entry, 'title'), 'Damage -7, healing +3, MP m-2, SAN s-5');
+      assert.strictEqual(await attrOf(page, entry, 'aria-description'), 'Damage -7, healing +3, MP m-2, SAN s-5');
       p = await typeInto(page, entry, '-8');
       // Task 18 changed this on purpose: 8 on 16 HP is a Major Wound, so its box is ticked (shown as its status) and a
       // card offers the CON roll; -20 is over max HP, so a card offers Out, and nothing is Out until the GM taps it
@@ -268,6 +272,8 @@ describe('CoC and GURPS fights on the GM page, by real input', { skip: browserSk
       assert.strictEqual(named(p, 'Lysa Venn').ini, 6.25);
       // FP now/[max] on the row, the entry box GURPS's
       assert.strictEqual(await attrOf(page, `[data-fhp="${corin}"]`, 'placeholder'), '-7 / +3 / f-2');
+      // GURPS's box is as before Task 38 (CoC's short placeholder and hint only): its title the placeholder, no description
+      assert.deepStrictEqual([await attrOf(page, `[data-fhp="${corin}"]`, 'title'), await attrOf(page, `[data-fhp="${corin}"]`, 'aria-description')], ['-7 / +3 / f-2', null]);
       assert.match(await text(page, `li[data-frow="${corin}"] .fpv`), /^FP 11\//);
       assert.strictEqual(await attrOf(page, `[data-ffpmax="${corin}"]`, 'value'), '11');
     });
@@ -3079,6 +3085,10 @@ describe('Physical dice on CoC rows, cards and the Shoot strip (step 6b Task 37)
         p = await until(page, `p.fight.melee === null && p.fight.dmg && p.saved === "Saved" && p.pending === 0`);
         assert.deepStrictEqual((await logOf(run)).slice(-1), ['Iris Calder: Regular; Dock Cultist 2 Fights Back: Regular (typed 31): a tie: Iris Calder hits Dock Cultist 2.']);
         assert.strictEqual(named(p, 'Dock Cultist 2').meleeDefences, 1);
+        // the damage box the hit opened: the dice as its placeholder, short for the short box, both forms in its title
+        // and description (Task 38)
+        assert.deepStrictEqual(await page.evaluate(`(() => { const b = document.querySelector('[data-fhp="${c2}"]'); return [b.placeholder, b.title, b.getAttribute('aria-description')]; })()`),
+          ['1D6+DB', 'The dice, e.g. 1D6+DB, or the total rolled, e.g. 7', 'The dice, e.g. 1D6+DB, or the total rolled, e.g. 7']);
         // 7 damage, 6 after armour: a Major Wound; its CON rolled at the table, 70, typed beside Roll
         await typeInto(page, `[data-fhp="${c2}"]`, '7');
         const card = `#acting .fcard[data-fcrow="${c2}"]`;

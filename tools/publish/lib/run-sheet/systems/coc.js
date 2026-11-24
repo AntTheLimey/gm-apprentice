@@ -454,7 +454,9 @@ function describeCoc(id) {
   r.words = {
     ...r.words, hp: 'HP', ac: '', temp: '', initiative: 'DEX', initBox: 'DEX', longRest: '', advancement: 'One line each, e.g. skill checks to roll', bloodied: '', noBlock: '',
     pcLine: [{ word: 'HP', now: 'hpNow', max: 'hpMax' }, { word: 'MP', now: 'mpNow' }, { word: 'SAN', now: 'sanNow' }, { word: 'DEX', now: 'dex' }],
-    entryPlaceholder: '-7 / +3 / m-2 / s-5',
+    // a short placeholder keeps the row narrow (Task 38); the whole hint is the box's title and description
+    entryPlaceholder: '-7 / +3\u2026',
+    entryHint: 'Damage -7, healing +3, MP m-2, SAN s-5',
     entryInvalid: 'Type -7 or 7 (damage), 1D6+DB (dice), +3 (healing), m-2 (MP) or s-5 (SAN)',
     gun: 'gun', gunTitle: `Firearm ready: +${fight.firearmBonus} to DEX for the order`,
     // the melee exchange on the target's row (Task 16): a hint in our words, beside the buttons

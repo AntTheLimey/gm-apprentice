@@ -615,9 +615,13 @@
       // with no ½ or Res beside it, the box is as wide as the system's placeholder, so all of it shows, with a little
       // room after its last letter (Task 37 fix round: it ran into the HP figure)
       const wide = tg.half ? '' : ` style="width: calc(${ph.length}ch + 12px)"`;
-      // its title: the words in it, whole (a narrow box clips a long place, Task 25), else what it takes
-      const tip = String(pend || '').trim() || (tg.half ? '' : ph);
-      h += `<input class="hpin${pend && !dmgOn ? ' pending' : ''}${dmgOn ? ' dmg' : ''}" data-fhp="${esc(r.id)}" data-tip="${esc(tg.half ? '' : ph)}" value="${esc(pend || '')}" placeholder="${esc(dmgOn ? DMG_PLACEHOLDER : ph)}"${wide}${tip ? ` title="${esc(tip)}"` : ''} autocomplete="off" aria-label="Damage or healing for ${esc(r.gmName)}">`;
+      // its title: the words in it, whole (a narrow box clips a long place, Task 25), else what it takes: the system's
+      // whole hint where its placeholder is a short one (CoC's `-7 / +3…`), read out as the box's description too, so
+      // hovering or a screen reader finds it (Task 38)
+      const hint = tg.half ? '' : dmgOn ? DMG_HINT : (w.entryHint || ph);
+      const tip = String(pend || '').trim() || hint;
+      const desc = hint && w.entryHint ? ` aria-description="${esc(hint)}"` : '';
+      h += `<input class="hpin${pend && !dmgOn ? ' pending' : ''}${dmgOn ? ' dmg' : ''}" data-fhp="${esc(r.id)}" data-tip="${esc(hint)}" value="${esc(pend || '')}" placeholder="${esc(dmgOn ? DMG_PLACEHOLDER : ph)}"${wide}${tip ? ` title="${esc(tip)}"` : ''}${desc} autocomplete="off" aria-label="Damage or healing for ${esc(r.gmName)}">`;
       if (tg.half) h += `<button type="button" class="tg ${half ? 'on' : ''}" ${ui.area ? 'data-fahalf' : 'data-fhalf'}="${esc(r.id)}" aria-pressed="${!!half}" title="${ui.area ? 'Half for this area: a save' : 'Half: the next hit only (a save)'}">½</button>`;
       if (tg.resisted) h += `<button type="button" class="tg ${r.resisted ? 'on' : ''}" data-fres="${esc(r.id)}" aria-pressed="${!!r.resisted}" title="Resisted: every hit halved until turned off">Res</button>`;
     }
@@ -1340,8 +1344,10 @@
     ui.lastDmg[`row:${r.id}`] = entry;
     ui.lastDmg[groupKeyOf(r)] = entry;
   }
-  // the damage box's hint: the attacker's dice, or the total a player rolled (the box is as wide as the system's)
-  const DMG_PLACEHOLDER = '1D6+DB or 7';
+  // the damage box's hint: the attacker's dice, or the total a player rolled (the box is as wide as the system's). The
+  // placeholder is the dice only, to fit the short box; the title says both (Task 38)
+  const DMG_PLACEHOLDER = '1D6+DB';
+  const DMG_HINT = 'The dice, e.g. 1D6+DB, or the total rolled, e.g. 7';
   const DB_TITLES = { full: 'Full DB', half: 'Half DB', none: 'No DB' };
   // A weapon's impaling toggle: by the attacker's group and the dice the box opened with (so a tap before or after
   // typing keeps it), off unless tapped.

@@ -255,7 +255,9 @@ for (const crlf of [false, true]) {
         assert.equal(d.fights, true);
         assert.equal(d.toggles.gun, true);
         assert.deepEqual(d.panelBoxes.map((b) => b.label), ['DEX', 'MP', 'SAN', 'Fighting', 'Firearms', 'Dodge', 'DB', 'Armour', 'Build', 'Attacks']);
-        assert.equal(d.words.entryPlaceholder, '-7 / +3 / m-2 / s-5');
+        // Task 38 changed this on purpose: a short placeholder keeps the row on one line; the whole hint is its own word
+        assert.equal(d.words.entryPlaceholder, '-7 / +3\u2026');
+        assert.equal(d.words.entryHint, 'Damage -7, healing +3, MP m-2, SAN s-5');
         assert.equal(d.initiative, 'dex');
         assert.equal(d.initDecimals, 0);
         assert.equal(d.hpFloor, 0);
