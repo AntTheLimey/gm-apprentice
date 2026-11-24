@@ -64,6 +64,8 @@
     // (row id -> net, bonus above 0; none means the row's own: outnumbered, Prone), cleared when the turn moves; the
     // open exchange ({ fight, turn, target, attacker, response, dice, net, why, byHand, attack, defence, rolling })
     mdice: {}, melee: null, meleeTurn: null,
+    // the row whose "def" Enter sent focus to the attacker's empty "atk" (Task 38): Enter there goes on with that row
+    atkFor: null,
     // CoC's damage box (Task 17): the one an exchange opened ({ fight, n, by, on, mode, entry, offer, rolling }), the
     // last exchange seen (so one closed stays closed), the exchange this page sent (its box takes focus), the row to
     // focus after the draw; and, page memory for the night, each attacker's and group's last entry and each weapon's
@@ -150,8 +152,8 @@
   // ---- a roll made at the table (Task 37): a small "rolled" box beside a Roll. Enter in it (or the Roll beside it)
   // sends the number to the server, which judges it by the same rules and answers in the same shape, marked typed;
   // the page holds no dice logic. Keys name what the box is for, the row last: `card|<card>|<row>` (a card's next
-  // line), `def|<row>` and `pdef|<row>` (a GURPS defence, the row's and the panel's), `matk|<row>` and `mdef|<row>`
-  // (CoC melee on the row: the attacker's roll and the row's own), `shot|<row>`, `dive|<row>`, `bout|<card>|<line>|<take>|<row>`.
+  // line), `def|<row>` and `pdef|<row>` (a GURPS defence, the row's and the panel's), `matk|<attacker>` and `mdef|<row>`
+  // (CoC melee: the attacker's roll, on its own row since Task 38, and the target row's own), `shot|<row>`, `dive|<row>`, `bout|<card>|<line>|<take>|<row>`.
   // `ph` its placeholder: "rolled", or a shorter word where it sits on a row (`sm`: the order's width is tight)
   function typedBox(key, label, title, off, ph = 'rolled', sm = false) {
     const bad = ui.typed[key] !== undefined && typedNumber(key) === undefined;
@@ -899,7 +901,7 @@
   // A turn moved or the fight changed: the stepper's dice go, and an open exchange closes (nothing is logged).
   function syncMelee(f) {
     if (ui.meleeTurn !== `${f.id}:${f.turn}`) {
-      ui.mdice = {}; ui.melee = null; ui.shot = null; ui.shotMem = {}; ui.meleeTurn = `${f.id}:${f.turn}`;
+      ui.mdice = {}; ui.melee = null; ui.shot = null; ui.shotMem = {}; ui.atkFor = null; ui.meleeTurn = `${f.id}:${f.turn}`;
       // a roll typed at the table for a defence, a melee side, a shot or a dive and never sent is this turn's only
       // (Task 37): it never lands on a later one. A card's box goes with its card.
       for (const k of Object.keys(ui.typed)) if (!/^(?:card|bout)\|/.test(k)) delete ui.typed[k];
@@ -913,13 +915,21 @@
     if (m.fight !== f.id || !live(m.target) || !live(m.attacker)) ui.melee = null;
   }
   // The target's buttons: Dodge and Fight Back (an NPC's or creature's default first, marked; a PC's both, neither
-  // marked), and the − / + stepper with the dice on the attack. None on the attacker's row, an Out row or a benched one.
+  // marked), and the − / + stepper with the dice on the attack. None on an Out row or a benched one. The attacker's
+  // own row holds only its "atk" box, an NPC's or creature's (Task 38): its roll is one roll whichever row it attacks,
+  // so each target's row holds only its own side's box and the row is one box narrower.
   function rowMeleeHTML(r, view) {
     const C = cocRules();
     if (!C || r.kind === 'lair' || !r.in || r.out) return '';
     const f = state().fight;
     const A = attackerOf(view.rows, f);
-    if (!A || A.id === r.id) return '';
+    if (!A) return '';
+    if (A.id === r.id) {
+      if (A.kind === 'pc') return '';
+      return `<span class="melee">${typedBox(`matk|${A.id}`, `${A.gmName}'s attack, rolled at the table`,
+        `Rolled at the table? Type ${A.gmName}'s d100 attack, then tap Dodge or Fight Back on the row it attacks; or leave it empty to have it rolled`,
+        Boolean(ui.melee && ui.melee.rolling), 'atk', true)}</span>`;
+    }
     const m = ui.melee && ui.melee.target === r.id ? ui.melee : null;
     const dflt = r.kind === 'pc' ? null : (C.defaultResponse || 'fightBack');
     const order = dflt ? [dflt, ...CMath.RESPONSES.filter((k) => k !== dflt)] : CMath.RESPONSES.slice();
@@ -941,28 +951,37 @@
     const shoot = C.firearm && CMath.canShoot(A)
       ? `<button type="button" class="tg mel shoot${ui.shot && ui.shot.target === r.id ? ' on' : ''}" data-fshoot="${esc(r.id)}" aria-pressed="${Boolean(ui.shot && ui.shot.target === r.id)}" title="${esc(`${A.gmName} shoots at ${r.gmName}`)}">Shoot</button>`
       : '';
-    // a side rolled at the table (Task 37): a box for each NPC or creature side, typed before the tap on Dodge or Fight
-    // Back; "rolled" when there is one, "atk" and "def" when both are
-    const npc = [A.kind !== 'pc' ? 'matk' : null, r.kind !== 'pc' ? 'mdef' : null].filter(Boolean);
+    // the target's side rolled at the table (Task 37): its "def" box, an NPC's or creature's, typed before the tap on
+    // Dodge or Fight Back; the attacker's "atk" is on the attacker's own row (Task 38). With that one drawn and empty,
+    // Enter here goes to it first, so a side rolled at the table is never rolled again by the server (Task 37 fix round)
     const busy = Boolean(m && m.rolling);
-    // with both drawn, Enter in one waits for the other (fix round): "def" says so, and how to have it rolled instead
-    const title = (k) => (npc.length > 1 && k === 'mdef'
-      ? `Rolled at the table? Type ${r.gmName}'s d100 (Enter in atk waits for it), or leave it empty and tap Dodge or Fight Back to have it rolled`
-      : `Rolled at the table: type ${k === 'matk' ? `${A.gmName}'s` : `${r.gmName}'s`} d100, then tap Dodge or Fight Back${dflt ? ` (Enter: ${CMath.RESPONSE_NAMES[dflt]})` : ''}`);
-    const typed = npc.map((k) => typedBox(`${k}|${r.id}`, k === 'matk' ? `${A.gmName}'s attack on ${r.gmName}, rolled at the table` : `${r.gmName}'s defence, rolled at the table`,
-      title(k),
-      busy, npc.length > 1 ? (k === 'matk' ? 'atk' : 'def') : 'd100', true)).join('');
+    const waits = A.kind !== 'pc' ? `; with ${A.gmName}'s atk empty, Enter goes there first` : '';
+    const typed = r.kind !== 'pc' ? typedBox(`mdef|${r.id}`, `${r.gmName}'s defence, rolled at the table`,
+      `Rolled at the table? Type ${r.gmName}'s d100, then tap Dodge or Fight Back${dflt ? ` (Enter: ${CMath.RESPONSE_NAMES[dflt]}${waits})` : ''}; or leave it empty to have it rolled`,
+      busy, 'def', true) : '';
     return `<span class="melee">${order.map(btn).join('')}${step}${typed}${shoot}</span>`;
   }
-  // Enter in a melee "rolled" box: an NPC's or creature's usual response takes it; a PC's waits for the GM's tap. With
-  // both sides' boxes drawn (NPC against NPC) and the other empty, focus goes to it first: the quieter way to wait for
-  // both, so a side rolled at the table is never rolled again by the server (fix round).
+  // Enter in a melee box. In a target's "def": with the attacker's "atk" drawn and empty (NPC against NPC), focus goes
+  // to it first, the quieter way to wait for both, so a side rolled at the table is never rolled again by the server
+  // (Task 37 fix round); else an NPC's or creature's usual response takes it. In the attacker's "atk" (on its own row
+  // since Task 38): when a "def" sent focus here, Enter goes on with that row; else the number waits for the tap on the
+  // row it attacks, which is the GM's to pick. A PC target waits for the GM's tap.
   function meleeTypedEnter(rowId, kind) {
     const C = cocRules();
+    const f = state().fight;
+    if (!C || !f) return;
+    const A = attackerOf(f.rows, f);
+    if (!A) return;
+    if (kind === 'matk') {
+      // kept until the exchange is sent or the turn moves, so a number the server refused can be typed again
+      const t = ui.atkFor && rowById(ui.atkFor);
+      if (!t || A.id !== rowId || !document.querySelector(attr('data-ftyped', `mdef|${t.id}`))) return;
+      rowId = t.id;
+    }
     const r = rowById(rowId);
-    if (!C || !r) return;
-    const other = `${kind === 'matk' ? 'mdef' : 'matk'}|${rowId}`;
-    if (document.querySelector(attr('data-ftyped', other)) && typedNumber(other) === null) { RP.focusTo(attr('data-ftyped', other)); return; }
+    if (!r || r.id === A.id) return;
+    const atk = `matk|${A.id}`;
+    if (document.querySelector(attr('data-ftyped', atk)) && typedNumber(atk) === null) { ui.atkFor = r.id; RP.focusTo(attr('data-ftyped', atk)); return; }
     if (r.kind !== 'pc') { meleeStart(rowId, C.defaultResponse || 'fightBack'); return; }
     RP.focusTo(attr('data-fmelee', `${rowId}|${CMath.RESPONSES[0]}`));
   }
@@ -1041,7 +1060,8 @@
     const m = { fight: f.id, turn: f.turn, target: rowId, attacker: A.id, response, dice, net: d.net, why: d.why, byHand: d.byHand, auto: own, attack: null, defence: null, rolling: false };
     const asks = [];
     // a side typed at the table (Task 37) goes to the server to be judged, as a roll goes to be rolled
-    const keys = { attack: `matk|${rowId}`, defence: `mdef|${rowId}` };
+    // the attacker's box is on its own row (Task 38)
+    const keys = { attack: `matk|${A.id}`, defence: `mdef|${rowId}` };
     if (A.kind !== 'pc') asks.push(['attack', withTyped({ d100: { target: CMath.skillOf(A, 'attack'), ...dice } }, keys.attack)]);
     if (D.kind !== 'pc') asks.push(['defence', withTyped({ d100: { target: CMath.skillOf(D, response) } }, keys.defence)]);
     if (asks.some((x) => !x[1])) { RP.focusTo(sel); return; }
@@ -1070,6 +1090,7 @@
         m[part] = results[i];
       }
       for (const k of typed) delete ui.typed[k];
+      ui.atkFor = null;
       meleeSend(m);
     }, (e) => { if (ui.melee === m) ui.melee = null; rollFailed(e, typed.length > 0); RP.render(); RP.focusTo(sel); });
   }

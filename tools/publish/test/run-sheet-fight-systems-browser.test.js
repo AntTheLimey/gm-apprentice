@@ -3076,8 +3076,10 @@ describe('Physical dice on CoC rows, cards and the Shoot strip (step 6b Task 37)
         const c2 = named(p, 'Dock Cultist 2').id;
         // Iris acts (a PC: no box for her side); the cultist's own box on its row, typed, Enter: its usual Fight Back
         const mbox = `[data-ftyped="mdef|${c2}"]`;
-        assert.strictEqual(await attrOf(page, mbox, 'placeholder'), 'd100');
-        assert.strictEqual(await page.evaluate(`Boolean(document.querySelector('[data-ftyped="matk|${c2}"]'))`), false);
+        // Task 38 changed this on purpose: the row's box is "def" whatever attacks (the attacker's "atk" is on its own
+        // row), and a PC attacker has no "atk" box at all
+        assert.strictEqual(await attrOf(page, mbox, 'placeholder'), 'def');
+        assert.strictEqual(await page.evaluate(`Boolean(document.querySelector('[data-ftyped^="matk|"]'))`), false);
         sane(p, `${w} the melee box on the rows`);
         await typeInto(page, mbox, '31', { settle: false });
         p = await until(page, `p.fight.melee && !p.fight.melee.rolling && p.fight.melee.response === "fightBack"`);
@@ -3236,22 +3238,27 @@ describe('Typed rolls, fix round (step 6b Task 37), by real input', { skip: brow
     });
   }
 
-  it('CoC: NPC against NPC, Enter in "atk" with "def" empty goes to "def"; both typed, one exchange; "0" on a d100 is refused in the server\'s words', async () => {
+  // Task 38 changed this on purpose: the attacker's "atk" is one box on its own row (key `matk|<attacker>`), so the wait
+  // runs the other way: Enter in a target's "def" with "atk" empty goes to "atk", and Enter there goes on with that row
+  it('CoC: NPC against NPC, Enter in "def" with "atk" empty goes to "atk" on the attacker\'s row; both typed, one exchange; "0" on a d100 is refused in the server\'s words', async () => {
     const run = await start('coc', { randomInt: () => 3 });
     await withPage({ width: 1449, height: 762 }, async (page) => {
       let p = await netLoft(page, run);
       await tap(page, '#fNext');
       p = await until(page, 'p.fight.rows.find((r) => r.id === p.fight.turn).name === "Dock Cultist 1" && p.saved === "Saved" && p.pending === 0');
+      const c1 = named(p, 'Dock Cultist 1').id;
       const c2 = named(p, 'Dock Cultist 2').id;
-      const atk = `[data-ftyped="matk|${c2}"]`;
+      const atk = `[data-ftyped="matk|${c1}"]`;
       const def = `[data-ftyped="mdef|${c2}"]`;
-      assert.match(await attrOf(page, def, 'title'), /Enter in atk waits for it/);
+      assert.strictEqual(await page.evaluate(`document.querySelector(${q(atk)}).closest('li').dataset.frow`), c1, 'atk is on the attacker\'s row');
+      assert.strictEqual(await page.evaluate(`document.querySelectorAll('[data-ftyped^="matk|"]').length`), 1, 'one atk box');
+      assert.match(await attrOf(page, def, 'title'), /with Dock Cultist 1's atk empty, Enter goes there first/);
       const before = (await logOf(run)).length;
-      await typeInto(page, atk, '0', { settle: false });
-      // Enter in atk with def empty: focus to def, nothing sent
-      await focusIs(page, def);
-      assert.strictEqual(p.fight.melee, null);
       await typeInto(page, def, '22', { settle: false });
+      // Enter in def with atk empty: focus to atk, nothing sent
+      await focusIs(page, atk);
+      assert.strictEqual(p.fight.melee, null);
+      await typeInto(page, atk, '0', { settle: false });
       // atk holds 0: refused by the server in its own words, nothing logged
       await page.waitFor('Array.from(document.querySelectorAll("#hnotes .hnote span")).some((n) => /Not taken: a typed d100 roll is a whole number from 1 to 100/.test(n.textContent))', 3000);
       assert.strictEqual((await logOf(run)).length, before);
