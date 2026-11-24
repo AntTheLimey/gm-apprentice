@@ -183,6 +183,8 @@
   const bloodiedWord = (words) => (words && words.bloodied === '' ? '' : (words && words.bloodied) || 'Bloodied');
   // D&D's end-of-night rest button, the one copy: dnd.js's words and a model with no rules both read it
   const DND_LONG_REST = 'Long rest: everyone to full';
+  // and D&D's line for a row with numbers and no stat block
+  const DND_NO_BLOCK = 'No stat block in the vault.';
 
   // ---- thresholds ----
 
@@ -1043,7 +1045,7 @@
 
   return {
     DND_STATUSES, EXHAUSTION_MAX, DND_FIGHT_RULES, rulesOf, fightGroupKeys,
-    parseEntry, hitWords, hitText, chipOrder, damageTaken, afterDamage, afterHeal, isBloodied, bloodiedWord, DND_LONG_REST, poolsOf, poolOf, afterPool,
+    parseEntry, hitWords, hitText, chipOrder, damageTaken, afterDamage, afterHeal, isBloodied, bloodiedWord, DND_LONG_REST, DND_NO_BLOCK, poolsOf, poolOf, afterPool,
     combatOf, initOf, marksOf, tiredOf,
     thresholdOf, isLit, sortRows, takesTurn, nextLive, actingRow,
     gmName, lairRow, unseenKey, unseenNumbers, unseenLabels, rowsForFight, joinRows, blankRow,

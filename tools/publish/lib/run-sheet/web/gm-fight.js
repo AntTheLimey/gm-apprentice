@@ -651,7 +651,7 @@
       if (nonum) body += `<p class="warn">${esc(nonum)}</p>`;
       if (info && info.statsHtml) body += `<div class="stats">${info.statsHtml}</div>`;
       // D&D says when a row with numbers has no block; CoC and GURPS do not: a row with HP is complete (D3d)
-      else if (!nonum && w.noBlock) body += `<p class="warn">${esc(w.noBlock)}</p>`;
+      else if (!nonum && (w.noBlock ?? FM.DND_NO_BLOCK)) body += `<p class="warn">${esc(w.noBlock ?? FM.DND_NO_BLOCK)}</p>`;
     }
     return `${open}${head(r.gmName)}<div class="nums">${nums.join('')}</div>${ctr ? `<div class="nums ctr">${ctr}</div>` : ''}${boxesHTML(r)}${panelManoeuvreHTML(r)}${panelDefencesHTML(r)}${hitChipsHTML(r)}${trackHTML(r)}${body}</div>`;
   }

@@ -8,7 +8,7 @@ const path = require('node:path');
 const { SYSTEM_NAMES } = require('../../shared-lists');
 const { dnd, describeAs } = require('./dnd');
 const { statSection, currentOf } = require('./stat-section');
-const { pairs, firstOf, leadingNumber, clean } = require('./pairs');
+const { pairs, firstOf, leadingNumber, clean, firstLine } = require('./pairs');
 const { extractSections } = require('../../processor');
 const { parseCoC } = require('../../templates/coc/parse');
 const { buildCoCLiveData } = require('../../templates/coc/live-data');
@@ -184,7 +184,6 @@ function readFoe({ notePath, index, text }) {
 const NONE = { hpNow: null, hpMax: null, mpNow: null, mpMax: null, sanNow: null, sanMax: null, luck: null, dex: null };
 const NO_HP = 'no HP on the sheet: type it in the fight';
 const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
-const firstLine = (e) => String((e && e.message) || e).split('\n')[0];
 
 function statusBlock(body) {
   const m = /^#{1,6}[ \t]+Current Status[ \t]*$([\s\S]*?)(?=^#{1,6}[ \t]|(?![\s\S]))/im.exec(body);

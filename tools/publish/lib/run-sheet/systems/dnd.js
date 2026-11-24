@@ -141,7 +141,7 @@ function describeAs(id, label, fights) {
     panelBoxes: ['legendaryResistance', 'legendaryActions', 'recharge', 'lairActions'],
     rowNumbers: ['ini', 'hp', 'max', 'ac'],
     words: {
-      hp: 'HP', ac: 'AC', temp: 'temp HP', initiative: 'initiative', bloodied: 'Bloodied', noBlock: 'No stat block in the vault.',
+      hp: 'HP', ac: 'AC', temp: 'temp HP', initiative: 'initiative', bloodied: 'Bloodied', noBlock: FM.DND_NO_BLOCK,
       entryPlaceholder: '-37/+8/t5',
       entryInvalid: 'Type -37 or 37 (damage), +8 (healing) or t5 (temp HP)',
       longRest: FM.DND_LONG_REST,

@@ -1814,6 +1814,20 @@ describe('D&D: Tab, held rows and Same for all (step 6b Task 23), by real input'
     });
   });
 
+  // Task 23b B2: D&D's line for a row with numbers and no block stays (CoC and GURPS say nothing, their rows are complete)
+  it('a row with HP and no stat block says "No stat block in the vault." in its panel', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      await setUp(page, run);
+      let p = await bouncers(page, 2);
+      const id = named(p, 'Bouncer 1').id;
+      p = await typeIn(page, `[data-fmax="${id}"]`, 10);
+      await tap(page, `[data-fpeek="${id}"]`);
+      await until(page, 'p.fight.actingName === "Bouncer 1"');
+      assert.strictEqual(await page.evaluate(`(() => { const w = document.querySelector('#acting .warn'); return w && w.textContent; })()`), 'No stat block in the vault.');
+    });
+  });
+
   it('with the source blank Same for all is disabled and "Type a number first" is on screen beside it; the copies\' typed initiatives are kept', async () => {
     const run = await start();
     await withPage({ width: 1449, height: 762 }, async (page) => {

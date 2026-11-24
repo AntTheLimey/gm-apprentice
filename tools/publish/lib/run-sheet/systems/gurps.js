@@ -8,7 +8,7 @@
 const path = require('node:path');
 const { dnd, describeAs } = require('./dnd');
 const { statSection } = require('./stat-section');
-const { pairs, firstOf, leadingNumber, clean } = require('./pairs');
+const { pairs, firstOf, leadingNumber, clean, firstLine } = require('./pairs');
 const { deriveGurps, drFigure } = require('../web/gurps-math');
 const { extractSections } = require('../../processor');
 const { parseGurps } = require('../../templates/gurps/parse');
@@ -258,7 +258,6 @@ function readFoe({ notePath, index, text }) {
 // Current Status (`**FP:** 10/12`); a missing current reads as the maximum.
 const NONE = { hpNow: null, hpMax: null, fpNow: null, fpMax: null, speed: null, dx: null, ht: null };
 const NO_POOLS = 'no HP or FP on the sheet: type them in the fight';
-const firstLine = (e) => String((e && e.message) || e).split('\n')[0];
 const figure = (v) => { const n = parseFloat(String(v == null ? '' : v)); return Number.isFinite(n) ? n : null; };
 
 // A PC casts when the sheet's Spells table lists a spell: the site's reader keeps an empty table's
