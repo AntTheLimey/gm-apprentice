@@ -5,10 +5,12 @@
 // section's bar outside a fight. "Start from" is each PC with an attack on the sheet, then a typed skill (level,
 // melee or ranged, an optional name).
 //
-// It opens on the row whose panel is showing: a PC's weapons, or for anyone else a typed skill, filled from what was
-// typed for that row or its counted group tonight. The row's manoeuvre, shock, aim and evaluate counts and Prone are
-// the calculator's starting state (`initial`), which it cleans as it cleans its own memory; the GM changes any of
-// them there, and nothing goes back to the row. A PC's setup is remembered under the calculator's own key,
+// It opens on the row whose panel is showing: a PC's weapons, or for anyone else a typed skill, filled from the row's
+// own Skill (its main combat skill, typed in the panel: Task 36), else from what was typed for that row or its counted
+// group tonight. A level typed here becomes the row's Skill only when the row had none as the dialog opened; it never
+// overwrites one. The row's manoeuvre, shock, aim and evaluate counts and Prone are the calculator's starting state
+// (`initial`), which it cleans as it cleans its own memory; the GM changes any of them there, and none goes back to the
+// row. A PC's setup is remembered under the calculator's own key,
 // `tohit-calc:gm-table:<campaign>:<pc>`; a typed skill's calculator remembers nothing, and its level, type and name
 // live in this page and the tab's sessionStorage only, never the run sheet's state or the Table Log. Nothing of it
 // reaches the players' screen. Not gated by player_site.features.tohit_calculator (D7).
@@ -76,7 +78,8 @@
   }
 
   // ---- the dialog ----
-  const ui = { open: false, opener: null, row: null, from: null, pcs: [], typed: { level: '', type: 'melee', name: '' }, ticket: 0, said: '', mounted: null };
+  // `fills`: the row had no Skill as the dialog opened, so a level typed here becomes it (Task 36)
+  const ui = { open: false, opener: null, row: null, from: null, pcs: [], typed: { level: '', type: 'melee', name: '' }, ticket: 0, said: '', mounted: null, fills: false };
   const dlg = () => $('#tohitDlg');
 
   function frame() {
@@ -111,6 +114,10 @@
     const pcHere = r && r.kind === 'pc' && pcs.find((p) => p.note === r.note);
     ui.from = pcHere ? pcHere.note : r ? TYPED : (pcs[0] ? pcs[0].note : TYPED);
     ui.typed = (r && r.kind !== 'pc' && recalled(r)) || { level: '', type: 'melee', name: '' };
+    // the row's own Skill wins over what was typed for it before (the type and name are kept)
+    const skill = r && r.kind !== 'pc' ? (rowOf(r.id) || r).skill : null;
+    if (isNum(skill)) ui.typed = { ...ui.typed, level: String(skill) };
+    ui.fills = Boolean(r) && r.kind !== 'pc' && r.kind !== 'lair' && !isNum(skill);
     d.innerHTML = frame();
     $('#thFrom').value = ui.from;
     $('#thLevel').value = ui.typed.level;
@@ -215,6 +222,9 @@
     ui.typed = { level: $('#thLevel').value, type: $('#thType').value === 'ranged' ? 'ranged' : 'melee', name: $('#thName').value };
     const keep = cleanTyped(ui.typed);
     if (keep && Number(keep.level) >= 1 && ui.row && ui.row.kind !== 'pc') remember(ui.row, keep);
+    // a row with no Skill as the dialog opened takes the level typed (latest wins while the dialog is open)
+    const f = (RP.state() || {}).fight;
+    if (keep && Number(keep.level) >= 1 && ui.fills && f && rowOf(ui.row.id)) RP.dispatch({ fight: f.id, type: 'setStat', row: ui.row.id, key: 'skill', value: Number(keep.level) });
     draw();
   }
 

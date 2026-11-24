@@ -491,7 +491,7 @@
       // typed (`typedKeys`), the marks lit, the deepest minus-HP line passed, Tired, the CoC firearm, and whether a
       // GURPS row holds its place in the fixed order (`fixed`) or waits for placeHeld (`held`)
       fp: null, fpMax: null, mp: null, mpMax: null, san: null, sanMax: null, luck: null, er: null, erMax: null,
-      dex: null, st: null, ht: null, dx: null, speed: null, dodge: null, parry: null, block: null, dr: null, faceOpen: false, drByLocation: null,
+      dex: null, st: null, ht: null, dx: null, speed: null, skill: null, dodge: null, parry: null, block: null, dr: null, faceOpen: false, drByLocation: null,
       // CoC's CON and INT, for Task 18's cards; its Major Wound box (it stays ticked), the round Dying was set (its
       // reminders start the round after), and a bout of madness ({ left, of, from }: rounds left, its length, the round it started; `bout`)
       con: null, int: null, majorWound: false, dyingRound: null,

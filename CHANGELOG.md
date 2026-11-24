@@ -32,6 +32,7 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 - A D&D initiative typed with decimals is refused, not cut short.
 - Nothing in a fight waits on anything else: any card line can be skipped, an open Dead or Unconscious offer holds up no later line, the Aimed chip can be tapped on by hand, and a GURPS manoeuvre can be set on any row at any time.
 - A Call of Cthulhu fight's rows fit one line, so the run list stays open beside them at 1449 wide: a shorter entry-box hint (the whole of it on hover), one dice button that opens the stepper, the attacker's typed roll once on its own row, and a long name cut short.
+- A GURPS foe made up at the table takes its quick figures first: Speed, Skill (its main combat skill, shown on its row, which To-hit opens on), Dodge, Parry, Block and HP, then ST, HT and DX only if wanted.
 
 ### Fixed
 

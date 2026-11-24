@@ -1351,6 +1351,10 @@ describe('the players\' screen in a CoC and a GURPS fight (plan 6b Task 26)', ()
       s = await act(t, 'setStat', 'Rafe Kell', { key: 'parry', value: 16 });
       assert.equal(rowNamed(s, 'Rafe Kell').parry, 16);
       await t.arm('a typed Parry', '16', { short: true });
+      // a foe's main combat skill, a quick figure typed at the table (Task 36)
+      s = await act(t, 'setStat', 'Rafe Kell', { key: 'skill', value: 83 });
+      assert.equal(rowNamed(s, 'Rafe Kell').skill, 83);
+      await t.arm('a typed Skill', '83', { short: true });
       look = await t.look('places and typed figures');
 
       // the to-hit calculator: its data, a typed skill, none of it on the state or the players' screen

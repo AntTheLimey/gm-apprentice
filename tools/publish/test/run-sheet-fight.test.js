@@ -4421,3 +4421,87 @@ describe('Physical dice count everywhere; nothing settles in order (step 6b Task
     assert.equal(lines(t).at(-1), 'Guard: knockdown −5, passed.');
   });
 });
+
+// Ant, 2026-11-24: "as GM, I frequently simply decide at the table 'the NPC speed is 5.0, main combat skill is 12, his
+// dodge is 8 and parry is 9, his HP is 10' and roll on that ... The real benefit is simply tracking turn order, and
+// remaining HP, and whether they are still in the fight." A foe made up at the table: the quick figures, nothing more.
+describe('A GURPS foe made up at the table: the quick figures first (step 6b Task 36)', () => {
+  const { systemFor } = require('../lib/run-sheet/systems');
+  const GURPS = systemFor('gurps-4e').describe();
+  const begin = (list) => RS.reduce(fresh(), { id: 'f1', type: 'fightStart', title: 'T', rules: GURPS.fight,
+    rows: list.map((o, i) => M.blankRow({ id: `r${i + 1}`, ...o })) }, now());
+  const G = (s, a) => RS.reduce(s, { id: nextId(), fight: 'f1', ...a }, now());
+  const named = (s, name) => s.fight.rows.find((r) => r.name === name);
+  const go = (s) => G(s, { type: 'fightNext', from: s.fight.turn, round: s.fight.round });
+  const set = (s, name, key, value) => G(s, { type: 'setStat', row: named(s, name).id, key, value });
+
+  it('the panel\'s Tab order is Speed, Skill, Dodge, Parry, Block, HP, then ST, HT, DX, DR', () => {
+    assert.deepEqual(GURPS.panelBoxes.map((b) => b.key), ['speed', 'skill', 'dodge', 'parry', 'block', 'hp', 'st', 'ht', 'dx', 'dr']);
+  });
+
+  it('Speed 5, Skill 12, Dodge 8, Parry 9 and HP 10 give a foe with no ST, HT or DX, placed by Speed', () => {
+    let s = begin([{ name: 'Kev', kind: 'pc', ini: 5.25, speed: 5.25 }, { name: 'Mook', ini: 4, speed: 4 }, { name: 'Thug', ini: null }]);
+    for (const [k, v] of [['speed', 5], ['skill', 12], ['dodge', 8], ['parry', 9], ['hp', 10]]) s = set(s, 'Thug', k, v);
+    const t = named(s, 'Thug');
+    assert.deepEqual([t.speed, t.ini, t.skill, t.dodge, t.parry, t.max, t.hp], [5, 5, 12, 8, 9, 10, 10]);
+    assert.deepEqual([t.st, t.ht, t.dx, t.fpMax], [null, null, null, null], 'nothing else is asked for or made up');
+    assert.deepEqual(t.from, {}, 'no figure worked out');
+    assert.deepEqual(s.fight.rows.map((r) => r.name), ['Kev', 'Thug', 'Mook']);
+  });
+
+  it('Skill is a whole number from 1 to 99, latest wins; anything else changes nothing; blank clears it', () => {
+    let s = begin([{ name: 'Thug' }]);
+    s = set(s, 'Thug', 'skill', 12);
+    for (const bad of [0, 100, -3, 12.5, 'twelve']) {
+      s = set(s, 'Thug', 'skill', bad);
+      assert.equal(named(s, 'Thug').skill, 12, String(bad));
+    }
+    s = set(s, 'Thug', 'skill', 14);
+    assert.equal(named(s, 'Thug').skill, 14);
+    s = set(s, 'Thug', 'skill', null);
+    assert.equal(named(s, 'Thug').skill, null);
+  });
+
+  it('Skill goes with Same for all', () => {
+    let s = begin(['Thug 1', 'Thug 2'].map((name, i) => ({ name, note: 'n', copy: i + 1 })));
+    s = set(s, 'Thug 1', 'skill', 12);
+    s = G(s, { type: 'sameForAll', row: named(s, 'Thug 1').id });
+    assert.equal(named(s, 'Thug 2').skill, 12);
+  });
+
+  it('ST typed after the quick figures leaves them as typed and works out only what was not', () => {
+    let s = begin([{ name: 'Thug' }]);
+    for (const [k, v] of [['speed', 5], ['hp', 10], ['st', 13], ['ht', 11], ['dx', 12]]) s = set(s, 'Thug', k, v);
+    const t = named(s, 'Thug');
+    assert.deepEqual([t.speed, t.max, t.fpMax, t.dodge], [5, 10, 11, 8], 'typed Speed and HP win; FP from HT, Dodge from Speed');
+    assert.deepEqual(t.from, { fp: 'from HT', dodge: 'from Speed' });
+  });
+
+  it('damage to 0 and below keeps it in the order with its marks; Out by a tap', () => {
+    let s = begin([{ name: 'Kev', kind: 'pc', ini: 6, speed: 6 }, { name: 'Thug' }]);
+    for (const [k, v] of [['speed', 5], ['hp', 10]]) s = set(s, 'Thug', k, v);
+    s = go(s);
+    s = G(s, { type: 'hp', row: named(s, 'Thug').id, entry: '-10' });
+    assert.deepEqual([named(s, 'Thug').hp, named(s, 'Thug').out, named(s, 'Thug').in], [0, false, true]);
+    s = G(s, { type: 'hp', row: named(s, 'Thug').id, entry: '-11' });
+    const t = named(s, 'Thug');
+    assert.deepEqual([t.hp, t.out, t.in], [-11, false, true]);
+    assert.ok(t.marks.includes('0 or less') && t.marks.includes('Reeling'), JSON.stringify(t.marks));
+    assert.equal(t.deepest, 1, '−1×HP passed');
+    s = G(s, { type: 'out', row: t.id, on: true });
+    assert.equal(named(s, 'Thug').out, true);
+  });
+
+  it('a row with only HP, only Speed, or nothing still runs a round and the fight ends', () => {
+    let s = begin([{ name: 'Kev', kind: 'pc', ini: 6, speed: 6 }, { name: 'Only HP' }, { name: 'Only Speed' }, { name: 'Nothing' }]);
+    s = set(s, 'Only HP', 'hp', 9);
+    s = set(s, 'Only Speed', 'speed', 5);
+    s = go(s);
+    const seen = [];
+    for (let i = 0; i < 5; i++) { seen.push(s.fight.rows.find((r) => r.id === s.fight.turn).name); s = go(s); }
+    assert.deepEqual(seen.slice(0, 4), ['Kev', 'Only Speed', 'Only HP', 'Nothing'], 'no Speed sorts last, in its order');
+    assert.equal(s.fight.round, 2);
+    s = G(s, { type: 'fightEnd' });
+    assert.equal(s.fight, null);
+  });
+});

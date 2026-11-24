@@ -318,8 +318,10 @@ describe('CoC and GURPS fights on the GM page, by real input', { skip: browserSk
     });
   });
 
+  // Task 36 changed GURPS's on purpose: the quick figures first (Ant, 2026-11-24: "the NPC speed is 5.0, main combat
+  // skill is 12, his dodge is 8 and parry is 9, his HP is 10")
   for (const [which, at, name, want] of [
-    ['gurps', 1, 'Mara Quint', ['ST', 'HT', 'DX', 'Speed', 'Dodge', 'Parry', 'Block', 'DR']],
+    ['gurps', 1, 'Mara Quint', ['Speed', 'Skill', 'Dodge', 'Parry', 'Block', 'HP', 'ST', 'HT', 'DX', 'DR']],
     ['coc', 0, 'Warden Hale', ['DEX', 'MP', 'SAN', 'Fighting', 'Firearms', 'Dodge', 'DB', 'Armour', 'Build', 'Attacks']],
   ]) {
     it(`${which === 'gurps' ? 'GURPS' : 'CoC'}: the panel's boxes are ${want.join(', ')}, in that order, and Tab walks them`, async () => {
@@ -2635,24 +2637,26 @@ describe('Tab, held rows and Same for all in CoC and GURPS (step 6b Task 23), by
   });
 
   for (const [width, height] of SIZES) {
-    it(`GURPS at ${width}: Add Bouncer ×3 puts the cursor in Bouncer 1's ST box with no click, in view; a click on Bouncer 2's name puts it in Bouncer 2's first empty box; a second click keeps both`, async () => {
+    // Task 36 changed this on purpose: the cursor starts in Speed, the quick figures first (Ant, 2026-11-24: "the NPC
+    // speed is 5.0, main combat skill is 12, his dodge is 8 and parry is 9, his HP is 10")
+    it(`GURPS at ${width}: Add Bouncer ×3 puts the cursor in Bouncer 1's Speed box with no click, in view; a click on Bouncer 2's name puts it in Bouncer 2's first empty box; a second click keeps both`, async () => {
       const run = await start('gurps');
       await withPage({ width, height }, async (page) => {
         await fightOn(page, run, 1);
         let p = await addMany(page, 'Bouncer', 3);
         const [b1, b2] = [1, 2].map((i) => named(p, `Bouncer ${i}`).id);
-        await page.waitFor(`document.activeElement === document.querySelector('#acting [data-fs-st="${b1}"]')`, 3000);
+        await page.waitFor(`document.activeElement === document.querySelector('#acting [data-fs-speed="${b1}"]')`, 3000);
         assert.strictEqual(p.fight.actingName, 'Bouncer 1');
         const edges = await page.evaluate(`(() => { const b = document.activeElement.getBoundingClientRect(); const bar = document.querySelector('.top').getBoundingClientRect().bottom;
           const c = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2); return { top: b.top, bottom: b.bottom, bar, h: innerHeight, hit: c === document.activeElement }; })()`);
-        assert.ok(edges.top >= edges.bar && edges.bottom <= edges.h && edges.hit, `${width}: the ST box in view ${JSON.stringify(edges)}`);
+        assert.ok(edges.top >= edges.bar && edges.bottom <= edges.h && edges.hit, `${width}: the Speed box in view ${JSON.stringify(edges)}`);
         await tap(page, `[data-fpeek="${b2}"]`);
         p = await until(page, 'p.fight.actingName === "Bouncer 2"');
-        await page.waitFor(`document.activeElement === document.querySelector('#acting [data-fs-st="${b2}"]')`, 3000);
+        await page.waitFor(`document.activeElement === document.querySelector('#acting [data-fs-speed="${b2}"]')`, 3000);
         await tap(page, `[data-fpeek="${b2}"]`);
         await page.sleep(150);
         p = await until(page, 'p.fight.actingName === "Bouncer 2"');
-        assert.strictEqual(await where(page), `data-fs-st=${b2}`, 'the second click keeps the pick and the cursor');
+        assert.strictEqual(await where(page), `data-fs-speed=${b2}`, 'the second click keeps the pick and the cursor');
         sane(p, `pick ${width}`);
       });
     });
@@ -2666,9 +2670,12 @@ describe('Tab, held rows and Same for all in CoC and GURPS (step 6b Task 23), by
       const b = [1, 2, 3].map((i) => named(p, `Bouncer ${i}`).id);
       p = await typeInto(page, `[data-fini="${b[1]}"]`, 10);
       p = await peek(page, p, 'Bouncer 1');
-      await page.waitFor(`document.activeElement === document.querySelector('#acting [data-fs-st="${b[0]}"]')`, 3000);
-      // ST, HT, DX; past Speed and Dodge (worked out); Parry, Block, DR: the panel's last box
-      for (const v of ['11', '10', '12', null, null, '9', '8', '2']) {
+      // Task 36 changed this on purpose: the cursor starts in Speed, the quick figures first (Ant, 2026-11-24: "the NPC
+      // speed is 5.0, main combat skill is 12, his dodge is 8 and parry is 9, his HP is 10"): Speed, Skill, Dodge, Parry,
+      // Block and HP first, then ST, HT, DX and DR
+      await page.waitFor(`document.activeElement === document.querySelector('#acting [data-fs-speed="${b[0]}"]')`, 3000);
+      // past Speed, Skill and Dodge; Parry, Block; past HP (worked out); ST, HT, DX, DR: the panel's last box
+      for (const v of [null, null, null, '9', '8', null, '11', '10', '12', '2']) {
         if (v !== null) await page.type(v);
         await page.key('Tab');
       }
@@ -2760,7 +2767,9 @@ describe('Tab, held rows and Same for all in CoC and GURPS (step 6b Task 23), by
       await tap(page, `[data-fpeek="${b[0]}"]`);
       p = await until(page, `p.saved === "Saved" && p.pending === 0 && p.fight.rows.find((r) => r.id === ${q(b[2])}).ini === 9`);
       assert.strictEqual(ids(p).indexOf(b[2]), was, 'held while the cursor is in the panel');
-      assert.strictEqual(await where(page), `data-fs-st=${b[0]}`);
+      // Task 36 changed this on purpose: the cursor starts in Speed, the quick figures first (Ant, 2026-11-24: "the NPC
+      // speed is 5.0, main combat skill is 12, his dodge is 8 and parry is 9, his HP is 10")
+      assert.strictEqual(await where(page), `data-fs-speed=${b[0]}`);
       await page.key('Enter');
       p = await until(page, `p.saved === "Saved" && p.pending === 0 && p.fight.rows.every((r) => !r.held)`);
       assert.ok(ids(p).indexOf(b[2]) < was, 'placed on Enter');
@@ -3476,6 +3485,89 @@ describe('CoC fight rows on one line (step 6b Task 38), by real input', { skip: 
         assert.ok(nm[1] > 0 && nm[1] <= nm[2], `its reserved width ${nm[1]} is at most 11 rem (${nm[2]})`);
         sane(p, `t38 long name ${w}`);
         await shot(page, `t38-coc-${w}`);
+      });
+    });
+  }
+});
+
+// Ant, 2026-11-24: "as GM, I frequently simply decide at the table 'the NPC speed is 5.0, main combat skill is 12, his
+// dodge is 8 and parry is 9, his HP is 10' and roll on that, and not worry about all the underlying stats ... The real
+// benefit is simply tracking turn order, and remaining HP, and whether they are still in the fight."
+describe('A GURPS foe made up at the table: the quick figures first (step 6b Task 36), by real input', { skip: browserSkip() }, () => {
+  const MEASURED = {};
+  after(() => { if (Object.keys(MEASURED).length) process.stdout.write(`# Task 36 measured ${JSON.stringify(MEASURED)}\n`); });
+  for (const [w, h] of SIZES) {
+    it(`${w}: Add "Thug", 5 Tab 12 Tab 8 Tab 9 Tab Tab 10: Speed, Skill, Dodge, Parry and HP with no ST, HT or DX, placed by Speed; To-hit opens on 12; below 0 it stays in the order; Out by a tap`, async () => {
+      const run = await start('gurps');
+      await withPage({ width: w, height: h }, async (page) => {
+        const edge = async (label) => { const p = await settled(page); return [label, p.layout.paneBox.left, p.layout.folded, p.layout.railFolded, p.layout.orderMin]; };
+        const seen = [];
+        let p = await fightOn(page, run, 1);
+        seen.push(await edge('fight'));
+        p = await addNew(page, 'Thug');
+        const id = named(p, 'Thug').id;
+        // the cursor is in Thug's Speed box with no click
+        await page.waitFor(`document.activeElement === document.querySelector('#acting [data-fs-speed="${id}"]')`, 3000);
+        const went = [];
+        for (const k of ['5', 'Tab', '12', 'Tab', '8', 'Tab', '9', 'Tab', 'Tab', '10']) {
+          if (k === 'Tab') { await page.key('Tab'); went.push(await where(page)); } else await page.type(k);
+        }
+        assert.deepStrictEqual(went, ['skill', 'dodge', 'parry', 'block', 'hp'].map((k) => `data-fs-${k}=${id}`), 'the quick figures in Tab order');
+        await page.key('Enter');
+        p = await until(page, `p.saved === "Saved" && p.pending === 0 && p.fight.rows.every((r) => !r.held) && p.fight.rows.find((r) => r.id === ${q(id)}).max === 10`);
+        const t = named(p, 'Thug');
+        assert.deepStrictEqual([t.speed, t.ini, t.skill, t.dodge, t.parry, t.max, t.hp], [5, 5, 12, 8, 9, 10, 10]);
+        assert.deepStrictEqual([t.st, t.ht, t.dx, t.fpMax], [null, null, null, null], 'no ST, HT or DX asked for or made up');
+        // placed by Speed: the order runs high to low, rows with no Speed last
+        const ins = p.fight.rows.filter((r) => r.in);
+        const n = ins.map((r) => (r.ini === null ? -Infinity : r.ini));
+        assert.ok(n.every((v, i) => i === 0 || n[i - 1] >= v), `sorted: ${JSON.stringify(ins.map((r) => [r.name, r.ini]))}`);
+        // the row reads Skill 12 beside its defences (off its turn; on it, its panel reads it out)
+        assert.strictEqual(await text(page, `li[data-frow="${id}"] .defs .skill`), 'Skill 12');
+        assert.ok((await texts(page, '#acting .nums > span')).includes('Skill 12'), 'the panel reads it out');
+        seen.push(await edge('Thug typed'));
+        if (w === 1449) await shot(page, 't36-thug-setup-1449');
+        // To-hit opens on 12
+        await tap(page, '#fToHit');
+        p = await until(page, 'p.tohit && p.tohit.open && p.tohit.roll !== null');
+        assert.deepStrictEqual([p.tohit.row, p.tohit.from, await page.evaluate('document.querySelector("#thLevel").value')], [id, 'typed', '12']);
+        assert.strictEqual(p.tohit.roll, '12');
+        await page.key('Escape');
+        p = await until(page, '!p.tohit');
+        // Start, and on to Thug's turn
+        await tap(page, '#fNext');
+        await page.waitFor('document.querySelector("#fStartAnyway") || JSON.parse(document.body.dataset.probe || "null").fight.started');
+        if (await page.evaluate('Boolean(document.querySelector("#fStartAnyway"))')) await tap(page, '#fStartAnyway');
+        p = await until(page, 'p.fight.started && p.saved === "Saved" && p.pending === 0');
+        seen.push(await edge('start'));
+        for (let i = 0; i < 12 && p.fight.turn !== id; i++) {
+          const was = p.fight.turn;
+          await tap(page, '#fNext');
+          p = await until(page, `p.fight.turn !== ${q(was)} && p.saved === "Saved" && p.pending === 0`);
+        }
+        assert.strictEqual(p.fight.turn, id);
+        assert.strictEqual(await text(page, `li[data-frow="${id}"] .defs .skill`), null, 'the acting row leaves Skill to its panel');
+        assert.ok((await texts(page, '#acting .nums > span')).includes('Skill 12'), 'the acting panel reads it out');
+        seen.push(await edge('Thug acting'));
+        if (w === 1449) await shot(page, 't36-thug-acting-1449');
+        // to 0, then below: still in the order, with its marks
+        p = await typeInto(page, `[data-fhp="${id}"]`, '-10');
+        assert.deepStrictEqual([named(p, 'Thug').hp, named(p, 'Thug').out, order(p).includes('Thug')], [0, false, true]);
+        p = await typeInto(page, `[data-fhp="${id}"]`, '-11');
+        const hurt = named(p, 'Thug');
+        assert.deepStrictEqual([hurt.hp, hurt.out, order(p).includes('Thug')], [-11, false, true]);
+        assert.ok(hurt.marks.includes('0 or less') && hurt.marks.includes('Reeling'), JSON.stringify(hurt.marks));
+        assert.ok(await page.evaluate(`Boolean(document.querySelector('#side ol.to li[data-frow="${id}"]'))`), 'its row is in the order');
+        seen.push(await edge('Thug hurt'));
+        if (w === 1449) await shot(page, 't36-thug-damaged-1449');
+        // Out by a tap
+        await tap(page, `[data-fout="${id}"]`);
+        p = await until(page, `p.fight.rows.find((r) => r.id === ${q(id)}).out === true && p.saved === "Saved" && p.pending === 0`);
+        assert.strictEqual(new Set(seen.map((x) => `${x[1]}|${x[2]}|${x[3]}|${x[4]}`)).size, 1, `${w}: the split moved ${JSON.stringify(seen)}`);
+        if (w === 1449) assert.strictEqual(seen[0][3], false, '1449: the run list stays open');
+        MEASURED[w] = { orderMin: seen[0][4], railFolded: seen[0][3], paneFolded: seen[0][2] };
+        sane(p, `t36 ${w}`);
+        assert.deepStrictEqual(p.errors, []);
       });
     });
   }

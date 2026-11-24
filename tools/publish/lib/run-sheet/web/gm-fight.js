@@ -28,9 +28,9 @@
   const sign = (n) => (isNum(n) ? (n >= 0 ? `+${n}` : String(n)) : '+0');
   const attr = (k, v) => `[${k}="${CSS.escape(v)}"]`;
   const PT = { '': '', landed: '✓', missed: '✗', overtaken: '⊘' };
-  // the panel boxes' figures: every key setStat takes (fight.js STAT_FIELDS) but max HP and max FP, which are the
-  // row's own boxes; each panel box is `data-fs-<key>`
-  const PANEL_KEYS = Object.keys(Fight.STAT_FIELDS).filter((k) => k !== 'hp' && k !== 'fp');
+  // the panel boxes' figures: every key setStat takes (fight.js STAT_FIELDS) but max FP, which is the row's own box;
+  // each panel box is `data-fs-<key>`. Max HP is the row's box and, in GURPS's panel, one of the quick figures (Task 36)
+  const PANEL_KEYS = Object.keys(Fight.STAT_FIELDS).filter((k) => k !== 'fp');
   // D&D's, for a model with no words of its own
   // the entry box's refusal comes from the system (rules.words.entryInvalid); this is only for a model that has none
   const INVALID = 'Not a number the box takes';
@@ -700,6 +700,8 @@
     for (const b of panelBoxes().filter((x) => x.readout)) {
       const d = live && live[b.key];
       const fig = d && d.base !== null ? (d.value === null ? '\u2013' : d.value) : shownFigure(r[Fight.STAT_FIELDS[b.key][0]]) || '?';
+      // a read-out shown only once it has a figure (GURPS's Skill, Task 36): a foe from the vault seldom has one
+      if (b.readout === 'set' && fig === '?') continue;
       reads.push(`${b.label} ${fig}${fromTag(r, b.key)}`);
       titles[reads.length - 1] = d && d.base !== null && d.causes.length ? d.title : '';
     }
@@ -799,15 +801,20 @@
     F({ type: 'manoeuvre', row: rowId, name: same ? null : key, ...(defence && !same ? { defence } : {}) });
     RP.focusTo(attr(defence ? 'data-fmand' : 'data-fman', defence ? `${rowId}|${defence}` : `${rowId}|${key}`));
   }
-  // The row's readout: a foe's or an ally's defences that have a figure, each its own Defend button [H2]. A PC has none.
+  // The row's readout: a foe's or an ally's main combat skill (Task 36), a plain figure the GM rolls against at the
+  // table, and its defences that have a figure, each its own Defend button [H2]. A PC has none. The acting row leaves
+  // its Skill to its panel (the read-out line and the box beside it, and To-hit opens on it), as it leaves its typed
+  // defence box: the acting row is the order's widest, and either there would fold the run list at 1449.
   function rowDefencesHTML(r, acting) {
     const D = defences();
     if (!D || r.kind === 'pc' || r.kind === 'lair' || !r.in || r.out) return '';
     const live = GMath.liveDefences(r, D);
     const shown = GMath.DEFENCE_KEYS.map((k) => live[k]).filter((d) => d.base !== null);
+    const skill = !acting && isNum(r.skill) ? `<span class="skill" title="${esc(`Skill ${r.skill}: its main combat skill; To-hit opens on it`)}">${esc(`Skill ${r.skill}`)}</span>` : '';
     // one "rolled" box for a defence rolled at the table (Task 37): type it, then tap the defence it was for. Not on the
     // acting row, which attacks rather than defends (its panel has one), so the order needs no more width than before
-    return shown.length ? `<span class="defs">${shown.map((d) => defenceButton(r, d, 'data-fdef')).join('')}${acting ? '' : defTypedBox(r, 'def')}</span>` : '';
+    const defs = shown.length ? `${shown.map((d) => defenceButton(r, d, 'data-fdef')).join('')}${acting ? '' : defTypedBox(r, 'def')}` : '';
+    return skill || defs ? `<span class="defs">${skill}${defs}</span>` : '';
   }
   // The panel's: every defence's button and the retreat toggle; a PC's sheet figures, for reference, with no button.
   function panelDefencesHTML(r) {
@@ -2130,7 +2137,7 @@
       // two-digit figures, as a hurt foe's are (`-13/11`, `Parry 13`); the initiative box is a fixed width
       const full = { ...FM.blankRow({ id: '\u2007measure', name: longest }), gmName: longest, kind: 'foe', in: true, seen: false,
         ini: initPlaces() ? 9.99 : 99, hp: -99, max: 99, temp: 0, fp: -9, fpMax: 99, mp: 99, mpMax: 99, san: 99, sanMax: 99,
-        dodge: 99, parry: 99, block: block ? 99 : null, dex: 99, conds: [], cards: [], firearms: gun ? 99 : null };
+        skill: 99, dodge: 99, parry: 99, block: block ? 99 : null, dex: 99, conds: [], cards: [], firearms: gun ? 99 : null };
       // CoC's attacker for the not-acting row: an NPC (so both sides' typed boxes show) that can shoot when any row can
       const attacker = C ? { ...full, id: '\u2007attacker', gmName: 'x' } : null;
       const as = (acting) => {
@@ -2171,7 +2178,7 @@
             speed: r.speed, fighting: r.fighting, marks: r.marks, deepest: r.deepest, tired: r.tired, gun: r.gun, from: r.from,
             er: r.er, erMax: r.erMax, caster: r.caster, dr: r.dr, faceOpen: r.faceOpen, hit: r.hit, crippled: r.crippled,
             shock: r.shock || 0, cards: r.cards || [],
-            dodge: r.dodge, parry: r.parry, block: r.block, parries: r.parries || 0, blocks: r.blocks || 0, defended: r.defended || 0, retreat: Boolean(r.retreat),
+            skill: r.skill, dodge: r.dodge, parry: r.parry, block: r.block, parries: r.parries || 0, blocks: r.blocks || 0, defended: r.defended || 0, retreat: Boolean(r.retreat),
             manoeuvre: r.manoeuvre || null, aodDefence: r.aodDefence || null, aim: r.aim || 0, evaluate: r.evaluate || 0,
             // CoC's melee (Task 16): the count, the switch, and what the row's buttons and stepper show
             meleeDefences: r.meleeDefences || 0, outnumberedOff: Boolean(r.outnumberedOff), attacks: r.attacks, build: r.build, db: r.db,
@@ -2394,7 +2401,8 @@
     // the one boxed pool's max (GURPS's FP); a second boxed pool needs its own entry (see poolsHTML)
     ffpmax: { k: 'data-ffpmax', ok: /^\d{1,4}$/, stat: 'fp' },
   };
-  const PANEL_OK = { speed: /^\d{1,2}(?:\.\d{1,2})?$/, build: /^[+-]?\d{1,2}$/, db: /^\S.{0,39}$/, dr: /^\S.{0,39}$/ };
+  // a skill is 1 to 99 (Task 36), max HP as the row's box takes it
+  const PANEL_OK = { speed: /^\d{1,2}(?:\.\d{1,2})?$/, build: /^[+-]?\d{1,2}$/, db: /^\S.{0,39}$/, dr: /^\S.{0,39}$/, skill: /^[1-9]\d?$/, hp: /^\d{1,4}$/ };
   // `data-fs-dex` is `dataset.fsDex`
   function boxStat(key) { return `fs${String(key).charAt(0).toUpperCase()}${String(key).slice(1)}`; }
   for (const key of PANEL_KEYS) {

@@ -369,11 +369,15 @@ function describeGurps(id) {
   r.toggles = { ...r.toggles, hitChips: true, defences: true, half: false, resisted: false, temp: false, deathSaves: false, concentration: false, exhaustion: false, counters: false, longRest: false };
   // Reeling and Shock are marks, set by the fight itself, so neither is in the list
   r.statuses = ['Stunned', 'Prone', 'Kneeling', 'Unconscious', 'Mortal wound'];
-  // the acting panel's boxes, in Tab order (the one list, Task 7 [P-C19]); `readout` ones are shown beside HP too.
-  // HP max and FP max are on the row.
+  // the acting panel's boxes, in Tab order (the one list, Task 7 [P-C19]); `readout` ones are shown beside HP too
+  // (`'set'`: once they have a figure).
+  // The quick figures a GM makes up at the table come first (Task 36, Ant 2026-11-24: "the NPC speed is 5.0, main
+  // combat skill is 12, his dodge is 8 and parry is 9, his HP is 10"): Speed, Skill, Dodge, Parry, Block and HP max
+  // (the row's own max too), then ST, HT and DX, which work out what was not typed, and DR. FP max is on the row.
   r.panelBoxes = [
-    { key: 'st', label: 'ST' }, { key: 'ht', label: 'HT' }, { key: 'dx', label: 'DX' }, { key: 'speed', label: 'Speed', readout: true },
-    { key: 'dodge', label: 'Dodge', readout: true }, { key: 'parry', label: 'Parry' }, { key: 'block', label: 'Block' }, { key: 'dr', label: 'DR' },
+    { key: 'speed', label: 'Speed', readout: true }, { key: 'skill', label: 'Skill', readout: 'set' }, { key: 'dodge', label: 'Dodge', readout: true },
+    { key: 'parry', label: 'Parry' }, { key: 'block', label: 'Block' }, { key: 'hp', label: 'HP' },
+    { key: 'st', label: 'ST' }, { key: 'ht', label: 'HT' }, { key: 'dx', label: 'DX' }, { key: 'dr', label: 'DR' },
   ];
   // the row's own figures: initiative (Basic Speed), HP now/[max], FP now/[max]
   r.rowNumbers = ['ini', 'hp', 'max', 'fp', 'fpMax'];

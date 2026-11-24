@@ -366,6 +366,8 @@ ol.to .ds { font: 500 .7rem var(--mono); white-space: nowrap; }
 /* GURPS's defences (Task 14): each as it stands this turn, a tap rolls it; moved by a cause it is underlined, its
    causes in the title; a used Block is struck through, and asks once before a second */
 ol.to .defs { display: inline-flex; gap: 2px; }
+/* a foe's main combat skill (Task 36): a plain figure, read, never tapped */
+ol.to .defs .skill { font: 600 .7rem var(--mono); white-space: nowrap; padding: 0 3px; align-self: center; }
 .def { font: 600 .7rem var(--mono); white-space: nowrap; }
 .def.moved { text-decoration: underline dotted; text-underline-offset: 2px; }
 .def.used { opacity: .6; text-decoration: line-through; }

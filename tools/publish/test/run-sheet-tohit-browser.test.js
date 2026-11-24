@@ -247,6 +247,41 @@ describe('the GURPS to-hit calculator on the GM page, by real input', { skip: br
     });
   });
 
+  // Task 36 (Ant, 2026-11-24: "main combat skill is 12 ... and roll on that"): a foe's Skill, typed in its panel, is what
+  // the dialog opens on; a level typed in the dialog becomes the row's Skill only when it had none
+  it('a level typed for a foe with no Skill becomes its Skill; one with a Skill opens on it, and a level typed then leaves it', async () => {
+    const run = await start();
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await bouncers(page, run);
+      const b1 = named(p, 'Bouncer 1').id;
+      await tap(page, '#fToHit');
+      await dialogUp(page, { drawn: false });
+      await tap(page, '#thLevel');
+      await page.type('13');
+      await rollIs(page, 13);
+      p = await until(page, `p.fight.rows.find((r) => r.id === ${q(b1)}).skill === 13 && p.saved === "Saved" && p.pending === 0`);
+      await page.key('Escape');
+      p = await until(page, '!p.tohit');
+      // the panel's Skill, typed: the dialog opens on it, over what was typed for the row before
+      p = await peek(page, p, 'Bouncer 1');
+      p = await typeInto(page, box(p, 'Bouncer 1', 'skill'), '15');
+      assert.strictEqual(named(p, 'Bouncer 1').skill, 15);
+      await tap(page, '#fToHit');
+      p = await rollIs(page, 15);
+      assert.strictEqual(await valueOf(page, '#thLevel'), '15');
+      // a level typed now is the calculator's only: the row keeps 15
+      await tap(page, '#thLevel');
+      await page.key('Backspace');
+      await page.key('Backspace');
+      await page.type('9');
+      await rollIs(page, 9);
+      await page.key('Escape');
+      p = await until(page, '!p.tohit && p.saved === "Saved" && p.pending === 0');
+      assert.strictEqual(named(p, 'Bouncer 1').skill, 15);
+      assert.deepStrictEqual(p.errors, []);
+    });
+  });
+
   it('a typed skill opens with no choice left from before a reload (no key written)', async () => {
     const run = await start();
     await withPage({ width: 1449, height: 762 }, async (page) => {

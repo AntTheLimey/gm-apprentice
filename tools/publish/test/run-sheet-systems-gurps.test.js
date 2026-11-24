@@ -76,7 +76,9 @@ for (const crlf of [false, true]) {
     it('it fights (Task 7), and the description has GURPS\'s known values', () => {
       const d = systemFor('gurps-4e').describe();
       assert.equal(d.fights, true);
-      assert.deepEqual(d.panelBoxes.map((b) => b.label), ['ST', 'HT', 'DX', 'Speed', 'Dodge', 'Parry', 'Block', 'DR']);
+      // Task 36 changed this on purpose: the quick figures first, Skill and HP added (Ant, 2026-11-24: "the NPC speed is
+      // 5.0, main combat skill is 12, his dodge is 8 and parry is 9, his HP is 10")
+      assert.deepEqual(d.panelBoxes.map((b) => b.label), ['Speed', 'Skill', 'Dodge', 'Parry', 'Block', 'HP', 'ST', 'HT', 'DX', 'DR']);
       assert.equal(d.words.entryPlaceholder, '-7 / +3 / f-2');
       assert.equal(d.toggles.gun, false);
       assert.equal(d.family, 'gurps');

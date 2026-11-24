@@ -228,7 +228,7 @@
   function statKeysOf(rules) {
     const ru = FM.rulesOf({ rules });
     if (ru.initiative === 'dex') return ['max', 'mpMax', 'sanMax', 'dex'];
-    if (ru.initiative === 'speed') return ['max', 'fpMax', 'st', 'ht', 'dx', 'speed', 'dodge', 'parry', 'block', 'dr'];
+    if (ru.initiative === 'speed') return ['max', 'fpMax', 'st', 'ht', 'dx', 'speed', 'skill', 'dodge', 'parry', 'block', 'dr'];
     return STAT_KEYS;
   }
   // A pool's current figure that follows its max: HP its `max`, FP and MP theirs.
@@ -303,6 +303,8 @@
   const STAT_FIELDS = {
     st: ['st'], ht: ['ht'], dx: ['dx'], dex: ['dex'], speed: ['speed'], hp: ['max'], fp: ['fpMax'], mp: ['mpMax'],
     san: ['san', 'sanMax'], dodge: ['dodge'], parry: ['parry'], block: ['block'], dr: ['dr'],
+    // GURPS's main combat skill, a foe's quick figure (Task 36): the To-hit dialog opens on it
+    skill: ['skill'],
     fighting: ['fighting'], firearms: ['firearms'], db: ['db'], armour: ['armour'], build: ['build'], attacks: ['attacks'],
     // CoC's CON and INT, typed in a card's box when the row has none (Task 18)
     con: ['con'], int: ['int'],
@@ -311,7 +313,7 @@
   // combat figures, CON and INT; none for D&D (its panel has setMax and setAc).
   function setStatKeysOf(rules) {
     const ru = FM.rulesOf({ rules });
-    if (ru.initiative === 'speed') return ['st', 'ht', 'dx', 'hp', 'fp', 'speed', 'dodge', 'parry', 'block', 'dr'];
+    if (ru.initiative === 'speed') return ['st', 'ht', 'dx', 'hp', 'fp', 'speed', 'skill', 'dodge', 'parry', 'block', 'dr'];
     if (ru.initiative === 'dex') return ['dex', 'mp', 'san', 'hp', 'fighting', 'firearms', 'dodge', 'db', 'armour', 'build', 'attacks', 'con', 'int'];
     return [];
   }
@@ -1159,6 +1161,8 @@
         if (WORDS_OK.has(a.key) && typeof a.value === 'string' && !isNum(Number(a.value))) v = a.value.replace(/\s+/g, ' ').trim().slice(0, 40) || null;
         else v = figureIn(a.value, a.key === 'speed' ? 2 : 0);
         if (v === null || (isNum(v) && v < 0 && !SIGNED.has(a.key))) return;
+        // a skill is a whole number from 1 to 99, as the To-hit dialog's typed level is (tohit.js)
+        if (a.key === 'skill' && (v < 1 || v > 99)) return;
       }
       const before = r.hp;
       const maxBefore = r.max;
