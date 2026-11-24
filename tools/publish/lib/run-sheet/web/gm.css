@@ -502,3 +502,32 @@ ol.to > li.row2 .mnote.lost.now { color: var(--bad); font-weight: 650; }
 /* Same for all with nothing to copy yet: disabled, its reason written beside it (Task 23, D3) */
 .act .nums > span.samebox { border: 0; background: none; padding: 0; display: inline-flex; align-items: center; gap: 6px; }
 .act .samewhy { color: var(--muted); font-size: .8rem; }
+/* The GURPS to-hit calculator (Task 24): the player site's own calculator (/tohit/tohit.css, its narrow layout on
+   the th-narrow class) in a dialog at the note drawer's 560 px. Its box reads eight variables the site defines; here
+   they are the page's own tokens, so light and dark follow the page. The dialog gives the card: border, padding and
+   the heading row. */
+.thdlg { width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 32px); padding: 0; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--ink); box-shadow: 0 12px 36px rgba(0, 0, 0, .25); overflow: hidden; }
+.thdlg[open] { display: flex; flex-direction: column; }
+.thdlg::backdrop { background: rgba(0, 0, 0, .35); }
+.thdlg .thd-top { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; padding: 10px 14px 8px; border-bottom: 1px solid var(--line); }
+.thdlg .thd-top .sp { flex: 1; }
+.thdlg .thd-top select { min-width: 0; max-width: 100%; }
+.thdlg .thd-lab { font-size: .85rem; color: var(--muted); }
+.thdlg .thd-typed { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; padding: 8px 14px 0; }
+.thdlg .thd-typed[hidden] { display: none; }
+.thdlg .thd-typed label { display: inline-flex; gap: 5px; align-items: center; font-size: .85rem; color: var(--muted); }
+.thdlg .thd-typed input[type="number"] { width: 5ch; }
+.thdlg .thd-typed input[type="text"] { width: 12rem; max-width: 100%; }
+.thdlg .thd-err { color: var(--bad); font-size: .85rem; }
+.thdlg .thd-enc { margin: 6px 14px 0; }
+.thdlg .thd-body { overflow: auto; overscroll-behavior: contain; padding: 8px 14px 14px; min-height: 0; flex: 1 1 auto; }
+.thdlg .thd-empty { margin: 8px 0 0; }
+.thdlg .tohit {
+  --accent: var(--ice); --accent-dim: var(--ice-soft); --bg-card: var(--panel); --border: var(--line);
+  --danger: var(--bad); --success: var(--ok); --text: var(--ink); --text-muted: var(--muted);
+  border: 1px solid var(--line); border-radius: 8px; background: var(--panel);
+}
+.thdlg .tohit:empty { display: none; }
+.thdlg .tohit h2 { display: flex; align-items: center; gap: 8px; margin: 0; padding: 8px 12px; border-bottom: 1px solid var(--line); font: 650 .95rem var(--display); }
+/* the answer line sticks to the top of the dialog's own scroll, not under the site's header */
+.thdlg .tohit.th-narrow .th-stick { top: 0; }

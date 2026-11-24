@@ -750,7 +750,8 @@ function buildSite(options) {
     const src = path.join(__dirname, '../css/style.css');
     const dest = path.join(outputDir, 'css/style.css');
     ensureDir(dest);
-    writeOut(dest, scopeColorScheme(fs.readFileSync(src, 'utf8')));
+    const tohit = fs.readFileSync(path.join(__dirname, '../css/tohit.css'), 'utf8');
+    writeOut(dest, scopeColorScheme(joinTohitCss(fs.readFileSync(src, 'utf8'), tohit)));
   }
 
   // The GM site's own files: the band and mark styles, and a robots.txt that asks every crawler to stay out.
@@ -3545,7 +3546,19 @@ function buildSite(options) {
   return { noteFaults, shown: null, renderErrors, faults: publishConfig.faults };
 }
 
-module.exports = { build, resolveSiteLink, rememberHiddenNames };
+// The to-hit calculator's rules live in css/tohit.css (the run sheet's GM page loads it too); css/style.css holds
+// this marker line where they were cut, and the site's stylesheet is written with them joined back in there, so
+// it comes out as before (step 6b Task 24, D8a). Line ends are the source's own (a CRLF checkout keeps CRLF).
+const TOHIT_MARKER = "/* @join css/tohit.css: the to-hit calculator's rules, joined in here by the site build (lib/build.js copyCSS) */";
+function joinTohitCss(style, tohit) {
+  const at = style.indexOf(TOHIT_MARKER);
+  if (at < 0) throw new Error('css/style.css has lost the line that joins in css/tohit.css');
+  let end = at + TOHIT_MARKER.length;
+  if (style.startsWith('\r\n', end)) end += 2; else if (style[end] === '\n') end += 1;
+  return style.slice(0, at) + tohit + style.slice(end);
+}
+
+module.exports = { build, resolveSiteLink, rememberHiddenNames, TOHIT_MARKER, joinTohitCss };
 
 // Allow running directly: node lib/build.js
 // Prefetches self-hosted fonts first, as the CLI does; build() itself only reads the cache.
