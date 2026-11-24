@@ -69,6 +69,15 @@ describe('the session party', () => {
   });
 
   // final review O3: nobody is dropped without a word
+  // Task 28 proof (Dead Air): the roster's bold subject is a nickname and its player, the sheet a link at the end.
+  it('a roster bullet led by a nickname takes the one PC its text links', () => {
+    const index = vault({});
+    const plan = '## PC Roster & Arcs\n- **Bo (Sam):** arc; next beat: the cart. Sheet: [[Ben Hart]].\n'
+      + '- **Ada (Jay):** arc, with [[Vic Vane]] close by. Sheet: [[Ada Moss]].\n- **Cy (Tom):** arc with [[Ben Hart]] and [[Ada Moss]].\n';
+    const r = sessionParty({ index, sessionPath: SESSION, planBody: plan, given: [] });
+    assert.deepStrictEqual(r, { party: [BEN, ADA], from: 'plan', warnings: [] }, 'two PC links name no one: Cy is not guessed');
+  });
+
   it('a stale roster link gives a warning and the other PCs', () => {
     const index = vault({});
     const plan = '## PC Roster & Arcs\n\n- **[[Ben Hart]]** (Bo): arc\n- **[[Ada Mossy]]** (Jay): arc\n- **Arc theme:** not a PC\n';

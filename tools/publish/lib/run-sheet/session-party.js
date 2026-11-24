@@ -104,7 +104,12 @@ function sessionParty({ index, sessionPath, planBody, given, planPath = null }) 
     for (const cells of pt.tableRows(roster.text)) if (cells[0]) subjects.push(items(cells[0].replace(/[*]/g, '')));
     for (const b of pt.bullets(roster.text)) {
       const m = /^\*\*(.+?)\*\*/.exec(b.text);
-      if (m) subjects.push(items(m[1].replace(/:\s*$/, '')));
+      if (!m) continue;
+      const subject = items(m[1].replace(/:\s*$/, ''));
+      // a subject that is no PC ("Wen (Sam)", a nickname and the player) takes the one PC its bullet links
+      // ("Sheet: [[Morwenna Trevithick]]"); two PC links name no one
+      const linked = subject[0] || pcOf(null, subject[1]) ? [] : [...new Set(pt.links(b.text).map((l) => index.resolve(l)).filter(isPc))];
+      subjects.push(linked.length === 1 ? [linked[0], null] : subject);
     }
     const party = collect(subjects, 'the Plan\'s PC Roster', planPath, false);
     if (party.length) return { party, from: 'plan', warnings };
