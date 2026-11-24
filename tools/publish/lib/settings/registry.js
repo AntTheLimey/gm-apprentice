@@ -320,6 +320,11 @@ const REGISTRY = [
     left_out: 'None',
   },
   {
+    name: 'player_site.own_pages', type: 'list', of: 'addresses on the site', default: [], group: 'site',
+    does: "Pages of your own that an after_build step puts on the site, each by its address on the site (`map/index.html`). Each is shown under the site's menu bar, your page in a frame filling the window below it, with no change to your page: it moves to `<name>.own.html` beside the address. Add its menu entry with `player_site.menu_extra`",
+    left_out: 'None',
+  },
+  {
     name: 'player_site.menu_extra', type: 'listOfMaps', fields: { label: { required: true }, link: { required: true }, group: {} }, same: 'label', default: [], group: 'site',
     does: "Extra entries in the site's menu. `link` is the name of a page, a web address (`https://…`), or an address on the site (`gazetteer/index.html`). `group` puts the entry under one of the menu's groups (`Story`, `Characters`, `World`, `Reference`) or makes a new one; with none it stands on its own after the groups. A link to a note that has no page is left out, with a warning",
     left_out: 'No extra entries',

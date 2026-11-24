@@ -31,9 +31,11 @@ import tempfile
 # whole test file wakes (#866); it writes its own fetch files on its own schedule, and
 # they can't be told from the ones it makes for the GM's own Chrome, so they are not ours
 # to delete.
+# CFNetworkDownload_*.tmp: a download by a macOS service through Apple's network library
+# (failed the macOS job of #871, whose tests all passed and fetch nothing).
 ALLOWED = ("node-compile-cache", "pytest-of-*", "com.apple.*", "systemd-private-*",
            "scoped_dir*", "contentlinkingd", "betaenrollmentagent", "diagnosticextensionsd",
-           "com.google.GoogleUpdater.*")
+           "com.google.GoogleUpdater.*", "CFNetworkDownload_*")
 
 
 def entries() -> set[str]:
