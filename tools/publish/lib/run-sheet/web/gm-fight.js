@@ -66,7 +66,8 @@
     mdice: {}, melee: null, meleeTurn: null,
     // the rows whose dice stepper is open on their second line (Task 38), shut when the turn moves
     mdOpen: {},
-    // the row whose "def" Enter sent focus to the attacker's empty "atk" (Task 38): Enter there goes on with that row
+    // the row whose "def" Enter sent focus to the attacker's empty "atk", and that attacker ({ target, attacker }, Task 38):
+    // Enter there goes on with that row while the attacker still acts and the row's "def" still holds a number
     atkFor: null,
     // CoC's damage box (Task 17): the one an exchange opened ({ fight, n, by, on, mode, entry, offer, rolling }), the
     // last exchange seen (so one closed stays closed), the exchange this page sent (its box takes focus), the row to
@@ -995,8 +996,9 @@
   // Enter in a melee box. In a target's "def": with the attacker's "atk" drawn and empty (NPC against NPC), focus goes
   // to it first, the quieter way to wait for both, so a side rolled at the table is never rolled again by the server
   // (Task 37 fix round); else an NPC's or creature's usual response takes it. In the attacker's "atk" (on its own row
-  // since Task 38): when a "def" sent focus here, Enter goes on with that row; else the number waits for the tap on the
-  // row it attacks, which is the GM's to pick. A PC target waits for the GM's tap.
+  // since Task 38): when a "def" sent focus here, Enter goes on with that row while this attacker still acts and that
+  // "def" still holds a number; else the number waits for the tap on the row it attacks, the GM's to pick, and one line
+  // says so (Task 38 fix round). A PC target waits for the GM's tap.
   function meleeTypedEnter(rowId, kind) {
     const C = cocRules();
     const f = state().fight;
@@ -1005,14 +1007,21 @@
     if (!A) return;
     if (kind === 'matk') {
       // kept until the exchange is sent or the turn moves, so a number the server refused can be typed again
-      const t = ui.atkFor && rowById(ui.atkFor);
-      if (!t || A.id !== rowId || !document.querySelector(attr('data-ftyped', `mdef|${t.id}`))) return;
+      const m = ui.atkFor;
+      const t = m && m.attacker === A.id && A.id === rowId ? rowById(m.target) : null;
+      const def = t ? typedNumber(`mdef|${t.id}`) : null;
+      if (!t || def === null || def === undefined || !document.querySelector(attr('data-ftyped', `mdef|${t.id}`))) {
+        ui.atkFor = null;
+        const v = typedNumber(`matk|${rowId}`);
+        if (isNum(v)) RP.note(`${v}: tap the row it attacks.`, { id: `typed:matk:${rowId}:${v}` });
+        return;
+      }
       rowId = t.id;
     }
     const r = rowById(rowId);
     if (!r || r.id === A.id) return;
     const atk = `matk|${A.id}`;
-    if (document.querySelector(attr('data-ftyped', atk)) && typedNumber(atk) === null) { ui.atkFor = r.id; RP.focusTo(attr('data-ftyped', atk)); return; }
+    if (document.querySelector(attr('data-ftyped', atk)) && typedNumber(atk) === null) { ui.atkFor = { target: r.id, attacker: A.id }; RP.focusTo(attr('data-ftyped', atk)); return; }
     if (r.kind !== 'pc') { meleeStart(rowId, C.defaultResponse || 'fightBack'); return; }
     RP.focusTo(attr('data-fmelee', `${rowId}|${CMath.RESPONSES[0]}`));
   }
@@ -2335,9 +2344,11 @@
       const id = d.fmdopen;
       if (ui.mdOpen[id]) delete ui.mdOpen[id]; else ui.mdOpen[id] = true;
       RP.render();
-      // its − when the + is spent (two bonus dice already)
-      const plus = document.querySelector(attr('data-fmdice', `${id}|1`));
-      RP.focusTo(!ui.mdOpen[id] ? attr('data-fmdopen', id) : attr('data-fmdice', `${id}|${plus && plus.disabled ? -1 : 1}`));
+      // its − when the + is spent (two bonus dice already); the button itself when both are held (the row's exchange
+      // is open, Task 38 fix round): focus never lands on a disabled control
+      const live = (n) => { const b = document.querySelector(attr('data-fmdice', `${id}|${n}`)); return b && !b.disabled; };
+      const to = !ui.mdOpen[id] ? null : live(1) ? 1 : live(-1) ? -1 : null;
+      RP.focusTo(to === null ? attr('data-fmdopen', id) : attr('data-fmdice', `${id}|${to}`));
       return true;
     }
     if (d.fmlvl) { const parts = d.fmlvl.split('|'); const level = parts.pop(); const side = parts.pop(); meleeTap(parts.join('|'), side, level); return true; }

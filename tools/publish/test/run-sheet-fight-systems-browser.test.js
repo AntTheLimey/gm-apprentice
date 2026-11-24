@@ -3505,6 +3505,8 @@ describe('CoC fight rows on one line (step 6b Task 38), by real input', { skip: 
         await page.evaluate(`(() => { window.__rolls = []; const of = window.fetch; window.fetch = (u, o) => { if (String(u).includes('/api/roll')) window.__rolls.push(JSON.parse(o.body)); return of(u, o); }; return true; })()`);
         await typeInto(page, `[data-ftyped="matk|${c1}"]`, '44', { settle: false });
         assert.strictEqual(p.fight.melee, null, 'Enter in atk waits for the tap on the row it attacks');
+        // and one line says so (Task 38 fix round, M2)
+        await page.waitFor('Array.from(document.querySelectorAll("#hnotes .hnote span")).some((n) => n.textContent === "44: tap the row it attacks.")', 3000);
         await tap(page, `[data-fmelee="${iris}|dodge"]`);
         p = await until(page, 'p.fight.melee && !p.fight.melee.rolling');
         const sent = JSON.parse(await page.evaluate('JSON.stringify(window.__rolls)'));
@@ -3532,6 +3534,43 @@ describe('CoC fight rows on one line (step 6b Task 38), by real input', { skip: 
       });
     });
   }
+
+  // Task 38 fix round, M1: Enter in atk goes on with the remembered row only while its def still holds a number; M3:
+  // the stepper opened while the row's exchange is open leaves focus on the dice button, never a disabled one
+  it('NPC against NPC: def emptied after its Enter, atk\'s Enter sends nothing; the stepper during an exchange keeps focus on ±', async () => {
+    const run = await start('coc', { randomInt: () => 3 });
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await netLoft(page, run);
+      await tap(page, '#fNext');
+      p = await until(page, 'p.fight.rows.find((r) => r.id === p.fight.turn).name === "Dock Cultist 1" && p.saved === "Saved" && p.pending === 0');
+      const c1 = named(p, 'Dock Cultist 1').id;
+      const c2 = named(p, 'Dock Cultist 2').id;
+      const atk = `[data-ftyped="matk|${c1}"]`;
+      const def = `[data-ftyped="mdef|${c2}"]`;
+      const before = (await logOf(run)).length;
+      await typeInto(page, def, '22', { settle: false });
+      await page.waitFor(`document.activeElement === document.querySelector(${q(atk)})`, 3000);
+      // the def emptied by keys, then atk typed and Enter: nothing goes, and the line says what to do
+      await tap(page, def);
+      for (let i = 0; i < 3; i++) await page.key('Backspace');
+      assert.strictEqual(await attrOf(page, def, 'value'), '');
+      await typeInto(page, atk, '31', { settle: false });
+      await page.waitFor('Array.from(document.querySelectorAll("#hnotes .hnote span")).some((n) => n.textContent === "31: tap the row it attacks.")', 3000);
+      p = await settled(page);
+      assert.strictEqual(p.fight.melee, null);
+      assert.strictEqual((await logOf(run)).length, before, 'nothing logged');
+      // Iris's turn comes round: her exchange with the cultist open (her level waits), then the stepper opened
+      for (let i = 0; i < 6 && p.fight.rows.find((r) => r.id === p.fight.turn).name !== 'Iris Calder'; i++) {
+        const was = p.fight.turn; await tap(page, '#fNext'); p = await until(page, `p.fight.turn !== ${q(was)} && p.saved === "Saved" && p.pending === 0`);
+      }
+      await tap(page, `[data-fmelee="${c2}|fightBack"]`);
+      p = await until(page, 'p.fight.melee && !p.fight.melee.rolling');
+      await tap(page, `[data-fmdopen="${c2}"]`);
+      await page.waitFor(`document.querySelector('[data-fmdice="${c2}|1"]')`, 3000);
+      assert.deepStrictEqual(await page.evaluate(`[document.querySelector('[data-fmdice="${c2}|1"]').disabled, document.querySelector('[data-fmdice="${c2}|-1"]').disabled]`), [true, true]);
+      await page.waitFor(`document.activeElement === document.querySelector('[data-fmdopen="${c2}"]')`, 3000);
+    });
+  });
 });
 
 // Ant, 2026-11-24: "as GM, I frequently simply decide at the table 'the NPC speed is 5.0, main combat skill is 12, his
