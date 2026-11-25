@@ -596,7 +596,8 @@ It holds every note and shows the parts players do not see (the
 `gm_site.show.*` switches choose which), each one marked with the reason
 players do not see it. It is written to its own
 folder, and it is never put online: you read it on your own computer, or
-serve it to your home network with `gm-apprentice-publish serve`.
+serve it to your home network with `gm-apprentice-publish serve`
+(`serve --background` keeps it running until `serve --stop`).
 
 Turn it on with `gm-apprentice-publish settings set gm_site.publish=on`.
 With no `gm_site.folder` set, this makes a folder beside the player site's

@@ -154,6 +154,10 @@ gm_site.publish=on`, which makes its folder beside the player site's
 (`build --site gm` or `--site player` makes one), and
 `gm-apprentice-publish serve` shows the GM site to phones and tablets on
 your home network (port 4321 unless you pick another with `--port`).
+`serve --background` starts it apart from the terminal, so closing the
+window or the session that started it does not stop it (on Windows,
+unless the program that ran it ends everything it started); `serve --status`
+says whether it is running and where, and `serve --stop` stops it.
 It is never put online: `deploy` refuses a GM site's folder. Its
 settings, and how to give it build steps of its own, are in
 [Site settings](site-settings.md#the-gm-site).

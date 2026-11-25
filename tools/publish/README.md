@@ -235,6 +235,19 @@ the GM site unless `--site player` is given, on port 4321 unless `--port`
 names another (a whole number from 1 to 65535). It prints the addresses
 to open and runs until you stop it with Ctrl+C.
 
+`serve --background` starts the same server as a process of its own and
+returns once it is listening. Closing the terminal, or ending the agent
+session that started it, does not stop it; only `serve --stop` does (or
+the computer restarting). `serve --status` says whether the site is
+being served and at which addresses. `serve --stop` stops the site's
+server however it was started, closing any connection a tablet holds
+open, and says whether the port is free. There is one server per site:
+a second start reports the one already running. The record that lets
+`--status` and `--stop` find it is kept in `~/.gm-apprentice/run`.
+One limit on Windows: if the program that ran the command keeps every
+process it starts in a job that ends with it, the server ends with that
+program too, and nothing the tool does can take it out of that job.
+
 It builds nothing, watches nothing and asks for no passphrase. A folder
 with nothing built in it (no `gm-build.json` for the GM site, no
 `index.html` for the player site) stops it with the build command to run

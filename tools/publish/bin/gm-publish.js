@@ -528,12 +528,21 @@ withholds because its Wrap-Up publishes.
 `,
   serve: `
 gm-apprentice-publish serve [--site gm|player] [--port <n>] [--config <path>]
+gm-apprentice-publish serve --background [--site gm|player] [--port <n>] [--config <path>]
+gm-apprentice-publish serve --status|--stop [--site gm|player] [--config <path>]
 
 Serves an already-built site folder to your home network, read only, so the GM
 site can be opened on a tablet or phone at the table. It builds nothing and
-asks for no passphrase: run build first. It runs until you stop it (Ctrl+C)
-and prints the addresses to open.
+asks for no passphrase: run build first. It prints the addresses to open.
 
+Without --background it runs in this terminal until Ctrl+C. With --background
+it runs as a process of its own: closing the terminal, or the session that
+started it, does not stop it. Only --stop (or the computer restarting) does.
+One server per site: starting another reports the one already running.
+
+  --background       Start it apart from this terminal, then return
+  --status           Say whether the site is being served, and where
+  --stop             Stop the site's server, however it was started
   --site <name>      The GM site (the default) or the player site
   --port <n>         A whole number from 1 to 65535 (default 4321)
   --config <path>    Path to vault.config.json (default: ./vault.config.json)
@@ -1027,7 +1036,8 @@ if (command === 'build') {
 }
 
 if (command === 'serve') {
-  const parsed = parseSubcommandArgs(args.slice(1), {}, { '--site': 'site', '--port': 'port' });
+  const parsed = parseSubcommandArgs(args.slice(1), { '--background': 'background', '--status': 'status', '--stop': 'stop' },
+    { '--site': 'site', '--port': 'port' });
   if (parsed.error) {
     const bad = /^Unknown argument: (.*)$/.exec(parsed.error);
     if (bad) refuseUnknownArgument('serve', bad[1]);
@@ -1039,12 +1049,26 @@ if (command === 'serve') {
     console.error(`Unknown site: ${site}. Use --site player or --site gm.`);
     process.exit(1);
   }
-  // The server keeps the process alive; it stops on Ctrl+C. A refusal exits with the reason.
-  require('../lib/serve.js').runServe({
-    configPath: parsed.configPath,
-    site,
-    ...(parsed.flags.port === undefined ? {} : { port: parsed.flags.port }),
-  }).catch(failAfterFlush);
+  const modes = ['background', 'status', 'stop'].filter((m) => parsed.flags[m]);
+  if (modes.length > 1) {
+    console.error(`Error: give one of --background, --status and --stop, not ${modes.map((m) => `--${m}`).join(' and ')}.`);
+    process.exit(1);
+  }
+  if ((parsed.flags.status || parsed.flags.stop) && parsed.flags.port !== undefined) {
+    console.error(`Error: --${modes[0]} finds the server by its site, so it takes no --port.`);
+    process.exit(1);
+  }
+  const serve = require('../lib/serve.js');
+  const options = { configPath: parsed.configPath, site, ...(parsed.flags.port === undefined ? {} : { port: parsed.flags.port }) };
+  if (parsed.flags.background || parsed.flags.status || parsed.flags.stop) {
+    const run = parsed.flags.background ? serve.startBackground : parsed.flags.status ? serve.serveStatus : serve.serveStop;
+    run(options).then(() => exitAfterFlush(0), failAfterFlush);
+    return;
+  }
+  // The server keeps the process alive until Ctrl+C or `serve --stop`. A refusal exits with the reason.
+  serve.runServe({ ...options, keepRecord: true })
+    .then((result) => result.closed.then(() => exitAfterFlush(0)))
+    .catch(failAfterFlush);
   return;
 }
 

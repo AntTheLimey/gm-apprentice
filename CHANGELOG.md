@@ -9,6 +9,15 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.148] — 2026-11-25
+
+### Fixed
+
+- The GM site served for the table keeps running until you ask for it to
+  stop: `gma publish serve --background` starts it apart from the terminal
+  and from the assistant's session, `serve --status` says where it is, and
+  `serve --stop` stops it and frees the port, on every OS.
+
 ## [1.12.147] — 2026-11-24
 
 ### Fixed
