@@ -1503,7 +1503,8 @@ describe('CoC and GURPS fights on the GM page, by real input', { skip: browserSk
         assert.deepStrictEqual((await logOf(run)).slice(-1), ['Bouncer 2: death check (−1×HP), HT 10, rolled 16 (typed), failed by 6.']);
         // a Parry rolled at the table: 7 typed in the row's box, then the Parry tapped
         const dbox = `li[data-frow="${b2}"] .defs input.typed`;
-        assert.strictEqual(await attrOf(page, dbox, 'placeholder'), '3d6');
+        // PRENTICE review I1 changed this on purpose: the row's box reads as a place to type, as the panel's does
+        assert.strictEqual(await attrOf(page, dbox, 'placeholder'), 'rolled');
         await typeInto(page, dbox, '7', { enter: false, settle: false });
         await tap(page, `[data-fdef="${b2}|parry"]`);
         p = await until(page, `p.fight.rows.find((r) => r.id === ${q(b2)}).parries === 1 && p.saved === "Saved" && p.pending === 0`);
@@ -3232,6 +3233,38 @@ describe('Typed rolls, fix round (step 6b Task 37), by real input', { skip: brow
     if (await page.evaluate('Boolean(document.querySelector("#fStartAnyway"))')) await tap(page, '#fStartAnyway');
     return until(page, 'p.fight.started && p.saved === "Saved" && p.pending === 0');
   }
+
+  // PRENTICE review I1: one typed number per foe. The row's box and the panel's show the same number; a defence tapped
+  // on either takes it, logged typed, counted once, and both boxes empty. Dice fixed at 4 (a server roll is 12).
+  it('GURPS: 7 typed in the panel\'s box, the row\'s Parry tapped: typed, one parry, both boxes empty; and the reverse with Dodge', async () => {
+    const run = await start('gurps', { randomInt: () => 4 });
+    await withPage({ width: 1449, height: 762 }, async (page) => {
+      let p = await bouncers(page, run, [['st', 11], ['ht', 10], ['dx', 10], ['parry', 9]]);
+      const b2 = named(p, 'Bouncer 2').id;
+      p = await peek(page, p, 'Bouncer 2');
+      const rowBox = `li[data-frow="${b2}"] .defs input.typed`;
+      const panelBox = `#acting [data-ftyped="pdef|${b2}"]`;
+      // the row's box reads as a place to type, as the panel's does
+      assert.deepStrictEqual([await attrOf(page, rowBox, 'placeholder'), await attrOf(page, panelBox, 'placeholder')], ['rolled', 'rolled']);
+      const both = () => page.evaluate(`[document.querySelector(${q(rowBox)}).value, document.querySelector(${q(panelBox)}).value]`);
+      await typeInto(page, panelBox, '7', { enter: false, settle: false });
+      assert.deepStrictEqual(await both(), ['7', '7'], 'the row\'s box shows the panel\'s number');
+      await tap(page, `[data-fdef="${b2}|parry"]`);
+      p = await until(page, `p.fight.rows.find((r) => r.id === ${q(b2)}).parries === 1 && p.saved === "Saved" && p.pending === 0`);
+      assert.deepStrictEqual((await logOf(run)).slice(-1), ['Bouncer 2: Parry 9, rolled 7 (typed), made it by 2.']);
+      await page.waitFor(`document.querySelector(${q(rowBox)}).value === "" && document.querySelector(${q(panelBox)}).value === ""`, 3000);
+      assert.strictEqual(named(p, 'Bouncer 2').parries, 1, 'counted once');
+      // the reverse: typed in the row's box, the panel's Dodge tapped
+      await typeInto(page, rowBox, '6', { enter: false, settle: false });
+      assert.deepStrictEqual(await both(), ['6', '6']);
+      const dodge = await page.evaluate(`document.querySelector('[data-fpdef="${b2}|dodge"]').textContent`);
+      await tap(page, `[data-fpdef="${b2}|dodge"]`);
+      p = await settled(page);
+      await page.waitFor(`document.querySelector(${q(rowBox)}).value === "" && document.querySelector(${q(panelBox)}).value === ""`, 3000);
+      assert.match((await logOf(run)).slice(-1)[0], new RegExp(`^Bouncer 2: ${dodge.replace(/[()]/g, '.')}, rolled 6 \\(typed\\)`));
+      assert.deepStrictEqual(p.errors, []);
+    });
+  });
 
   it('GURPS: 7 Enter Enter in a row\'s box with Dodge and Parry open logs nothing and keeps focus; "12a" is refused in words; a number typed for a skipped line goes with it; a manoeuvre set ahead shows on the row', async () => {
     const run = await start('gurps', { randomInt: () => 4 });

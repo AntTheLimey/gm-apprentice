@@ -158,9 +158,13 @@
   // line), `def|<row>` and `pdef|<row>` (a GURPS defence, the row's and the panel's), `matk|<attacker>` and `mdef|<row>`
   // (CoC melee: the attacker's roll, on its own row since Task 38, and the target row's own), `shot|<row>`, `dive|<row>`, `bout|<card>|<line>|<take>|<row>`.
   // `ph` its placeholder: "rolled", or a shorter word where it sits on a row (`sm`: the order's width is tight)
+  // A GURPS foe's two defence boxes, the row's and the panel's, hold one number (PRENTICE review I1): both keep it under
+  // `def|<row>`, so either Dodge, Parry or Block, on the row or in the panel, takes it and empties both.
+  const typedKey = (key) => String(key).replace(/^pdef\|/, 'def|');
   function typedBox(key, label, title, off, ph = 'rolled', sm = false) {
-    const bad = ui.typed[key] !== undefined && typedNumber(key) === undefined;
-    return `<input class="typed${sm ? ' sm' : ''}" data-ftyped="${esc(key)}" value="${esc(ui.typed[key] || '')}" inputmode="numeric" autocomplete="off" size="3"`
+    const v = ui.typed[typedKey(key)];
+    const bad = v !== undefined && typedNumber(key) === undefined;
+    return `<input class="typed${sm ? ' sm' : ''}" data-ftyped="${esc(key)}" value="${esc(v || '')}" inputmode="numeric" autocomplete="off" size="3"`
       + ` placeholder="${esc(ph)}" aria-label="${esc(label)}" title="${esc(title)}"${bad ? ' aria-invalid="true"' : ''}${off ? ' disabled' : ''}>`;
   }
   // What a box's dice are, by its key: a card's line (CoC's d100, GURPS's 3d6), a defence (3d6), the bout's die, the
@@ -175,7 +179,7 @@
   // read: a d100's 00 is 100, a d10's 0 is 10. A lone 0 on a d100 is sent as 0, for the server to refuse in its words
   // (the page never judges a roll's range).
   function typedNumber(key) {
-    const v = String(ui.typed[key] || '').trim();
+    const v = String(ui.typed[typedKey(key)] || '').trim();
     if (!v) return null;
     if (!/^\d{1,3}$/.test(v)) return undefined;
     const kind = typedKind(key);
@@ -187,7 +191,7 @@
   function typedBad(key) {
     const b = document.querySelector(attr('data-ftyped', key));
     if (b) b.setAttribute('aria-invalid', 'true');
-    RP.note(`Not taken: "${String(ui.typed[key] || '').trim()}" is not a roll; type the number the dice show.`, { kind: 'bad', id: `typed:${key}` });
+    RP.note(`Not taken: "${String(ui.typed[typedKey(key)] || '').trim()}" is not a roll; type the number the dice show.`, { kind: 'bad', id: `typed:${key}` });
   }
   // The spec with the box's number on it (`typed`), or as it was for the server to roll; null when the box holds
   // something that is not a number (marked and said, nothing sent).
@@ -847,8 +851,9 @@
       + ` title="${esc(rt.allowed ? 'Retreat: tap to turn on, until its turn' : `No retreat: ${rt.why}`)}">Retreat</button>`;
     return `<div class="pdefs" role="group" aria-label="Defend"><span class="lab">Defend:</span>${all.map((d) => defenceButton(r, d, 'data-fpdef')).join('')}${defTypedBox(r, 'pdef')}${retreat}</div>`;
   }
-  const defTypedBox = (r, at) => typedBox(`${at}|${r.id}`, `A defence rolled at the table for ${r.gmName}`, 'Rolled at the table: type the 3d6 total, then tap the defence (Enter takes it when only one is open)',
-    false, at === 'def' ? '3d6' : 'rolled', at === 'def');
+  // one number for the foe, shown in both boxes; the row's reads as a place to type, as the panel's does (PRENTICE I1)
+  const defTypedBox = (r, at) => typedBox(`${at}|${r.id}`, `A defence rolled at the table for ${r.gmName}`, 'Rolled at the table: type the 3d6 total, then tap Dodge, Parry or Block, here or in the panel (Enter takes it when only one is open)',
+    false, 'rolled', at === 'def');
   // Enter in a defence's "rolled" box: the one defence open takes it; with several, focus goes to the first, for a tap.
   function defTypedEnter(at, rowId) {
     const D = defences();
@@ -858,7 +863,7 @@
     const data = at === 'def' ? 'data-fdef' : 'data-fpdef';
     if (open.length === 1) { defend(rowId, open[0].key, data); return; }
     // several open: which one is the GM's to say. Focus stays in the box (a second Enter can fire nothing), one line says so
-    const v = String(ui.typed[`${at}|${rowId}`] || '').trim();
+    const v = String(ui.typed[`def|${rowId}`] || '').trim();
     if (open.length) RP.note(`${v}: tap the defence it was for.`, { id: `typed:def:${rowId}:${v}` });
   }
   // A defence tapped: the server rolls it against the figure as it stands; the result is logged by the reducer. A
@@ -890,7 +895,7 @@
       const moved = x ? GMath.defenceMoved(GMath.liveDefences(x, D)[key], res && res.target) : null;
       if (moved) { RP.note(`${viewName(rowId) || x.name}: ${moved}.`, { kind: 'bad' }); RP.render(); RP.focusTo(sel); return; }
       if (x) {
-        if (typed) delete ui.typed[tk];
+        if (typed) delete ui.typed[typedKey(tk)];
         RP.dispatch({ fight: f.id, type: 'defendRolled', row: rowId, defence: key, result: res, ...(again ? { again: true } : {}) });
         RP.focusTo(sel);
       } else RP.render();
@@ -2834,7 +2839,13 @@
     // the Shoot strip's malfunction number, kept through redraws (Task 19)
     if (t.dataset && t.dataset.fshmal !== undefined && ui.shot && ui.shot.target === t.dataset.fshmal) { ui.shot.mal = t.value; rememberShot(ui.shot); }
     // a roll typed at the table (Task 37), kept through redraws
-    if (t.dataset && t.dataset.ftyped !== undefined) { ui.typed[t.dataset.ftyped] = t.value; t.removeAttribute('aria-invalid'); }
+    if (t.dataset && t.dataset.ftyped !== undefined) {
+      const k = typedKey(t.dataset.ftyped);
+      ui.typed[k] = t.value;
+      t.removeAttribute('aria-invalid');
+      // a defence's other box (the row's or the panel's) shows the same number as it is typed (PRENTICE review I1)
+      if (k.startsWith('def|')) for (const b of document.querySelectorAll(`${attr('data-ftyped', k)}, ${attr('data-ftyped', `p${k}`)}`)) if (b !== t) b.value = t.value;
+    }
   });
 
   // A redraw from another window puts a half-typed number back into a new box, which then fires no `change`

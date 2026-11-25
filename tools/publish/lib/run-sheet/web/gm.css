@@ -560,3 +560,5 @@ input.typed[aria-invalid="true"] { outline: 2px solid var(--bad); outline-offset
 .act .fcard input.typed { font-size: .78rem; padding: 1px 3px; margin-left: 6px; }
 .act .fcard .clines .decline.skip { opacity: .7; }
 input.typed.sm { width: calc(4ch + 8px); }
+/* a GURPS row's defence box says "rolled", as the panel's does (PRENTICE review I1) */
+ol.to .defs input.typed.sm { width: calc(6ch + 8px); }
